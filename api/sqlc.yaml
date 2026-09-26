@@ -1,0 +1,14 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    # Schema gabungan hasil pg_dump dari DB live `tauthub-go` (159 tabel).
+    # Regenerasi: `make sqlc-schema` (perlu pg_dump + kredensial DB dev).
+    schema: "migrations/schema-full.sql"
+    queries: "queries"
+    gen:
+      go:
+        package: "sqlc"
+        out: "internal/sqlc"
+        sql_package: "pgx/v5"
+        emit_json_tags: false
+        emit_interface: false

@@ -1,0 +1,16 @@
+# env & secrets
+.env
+*.env.local
+
+# Go
+api/bin/
+
+# Node / SvelteKit
+node_modules/
+web/.svelte-kit/
+web/build/
+
+# data & log
+data/
+*.log
+.DS_Store
