@@ -48,30 +48,30 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands` | GET, POST | List/created brand (membership) | [ ] |
-| `/v1/brands/{brandId}` | GET | Detail brand + readiness | [ ] |
-| `/v1/brands/{brandId}/activate` | POST | Aktivasi (skor ≥70) | [ ] |
+| `/v1/brands` | GET, POST | List/created brand (membership) | [x] |
+| `/v1/brands/{brandId}` | GET | Detail brand + readiness | [x] |
+| `/v1/brands/{brandId}/activate` | POST | Aktivasi (skor ≥70) | [x] |
 | `/v1/brands/{brandId}/analytics` | GET | Analitik brand | [ ] |
 | `/v1/brands/{brandId}/analyze/{topic}` | GET | Analisis topik (AI) | [ ] |
 | `/v1/brands/{brandId}/assets` | POST | Upload asset brand | [ ] |
-| `/v1/brands/{brandId}/configuration` | GET | Konfigurasi efektif brand | [ ] |
-| `/v1/brands/{brandId}/dashboard` | GET | Dashboard workspace | [ ] |
-| `/v1/brands/{brandId}/editorial-rules` | PUT | Update rule set editorial | [ ] |
+| `/v1/brands/{brandId}/configuration` | GET | Konfigurasi efektif brand | [x] |
+| `/v1/brands/{brandId}/dashboard` | GET | Dashboard workspace | [x] |
+| `/v1/brands/{brandId}/editorial-rules` | PUT | Update rule set editorial | [x] |
 | `/v1/brands/{brandId}/ga4` | GET | Konfig & data GA4 brand | [ ] |
 | `/v1/brands/{brandId}/overview` | GET | Ringkasan overview | [ ] |
 | `/v1/brands/{brandId}/pr-calculator` | GET | Data PR calculator | [ ] |
-| `/v1/brands/{brandId}/profile` | PUT | Update brand profile | [ ] |
-| `/v1/brands/{brandId}/usage` | GET | Usage AI/quota | [ ] |
-| `/v1/brands/{brandId}/voice` | PUT | Update voice profile | [ ] |
-| `/v1/brands/{brandId}/prompts` | POST | Buat master prompt version | [ ] |
-| `/v1/brands/{brandId}/prompts/{promptId}/activate` | POST | Aktivasi versi prompt | [ ] |
+| `/v1/brands/{brandId}/profile` | PUT | Update brand profile | [x] |
+| `/v1/brands/{brandId}/usage` | GET | Usage AI/quota | [x] |
+| `/v1/brands/{brandId}/voice` | PUT | Update voice profile | [x] |
+| `/v1/brands/{brandId}/prompts` | POST | Buat master prompt version | [x] |
+| `/v1/brands/{brandId}/prompts/{promptId}/activate` | POST | Aktivasi versi prompt | [x] |
 
 ### 3.2 Members (3)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/members` | GET, POST | List/tambah member | [ ] |
-| `/v1/brands/{brandId}/members/{membershipId}` | PUT, DELETE | Ubah role / hapus member | [ ] |
+| `/v1/brands/{brandId}/members` | GET, POST | List/tambah member | [x] |
+| `/v1/brands/{brandId}/members/{membershipId}` | PUT, DELETE | Ubah role / hapus member | [x] |
 
 ### 3.3 Content intakes (8)
 

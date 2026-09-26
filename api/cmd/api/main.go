@@ -16,6 +16,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	authdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/auth"
+	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -102,7 +103,8 @@ func run() error {
 		v1.Post("/auth/google/link", authDeps.GoogleLink)
 		v1.Post("/auth/google/exchange-session", authDeps.GoogleExchangeSession)
 
-		// Butuh Bearer access token.
+		// Brands (fase 2) — butuh Bearer.
+		brands := &brandsdomain.Deps{Pool: database.Pool}
 		v1.Group(func(authed chi.Router) {
 			authed.Use(authDeps.Auth.RequireAuth)
 			authed.Get("/auth/me", authDeps.Me)
@@ -113,6 +115,22 @@ func run() error {
 			authed.Post("/auth/change-password", authDeps.ChangePassword)
 			authed.Get("/me/notification-preferences", authDeps.NotificationPreferencesGet)
 			authed.Put("/me/notification-preferences", authDeps.NotificationPreferencesPut)
+
+			authed.Get("/brands", brands.List)
+			authed.Post("/brands", brands.Create)
+			authed.Get("/brands/{brandId}", brands.Get)
+			authed.Post("/brands/{brandId}/activate", brands.Activate)
+			authed.Put("/brands/{brandId}/profile", brands.UpdateProfile)
+			authed.Put("/brands/{brandId}/voice", brands.UpdateVoice)
+			authed.Put("/brands/{brandId}/editorial-rules", brands.UpdateRules)
+			authed.Get("/brands/{brandId}/configuration", brands.Configuration)
+			authed.Get("/brands/{brandId}/dashboard", brands.Dashboard)
+			authed.Post("/brands/{brandId}/prompts", brands.CreatePrompt)
+			authed.Post("/brands/{brandId}/prompts/{promptId}/activate", brands.ActivatePrompt)
+			authed.Get("/brands/{brandId}/members", brands.MembersList)
+			authed.Post("/brands/{brandId}/members", brands.MembersCreate)
+			authed.Put("/brands/{brandId}/members/{membershipId}", brands.MemberUpdate)
+			authed.Delete("/brands/{brandId}/members/{membershipId}", brands.MemberDelete)
 		})
 
 		// TODO fase 2+: peta lengkap di REWRITE/04_API_ENDPOINTS.md.
