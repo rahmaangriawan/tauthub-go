@@ -3,8 +3,10 @@ package authdomain
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
+	emailqueue "github.com/rahmaangriawan/tauthub-go/internal/email"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -125,11 +127,22 @@ func (d *Deps) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		ok()
 		return
 	}
-	// TODO(fase 12): kirim email "password-reset" via email queue (lib/email).
-	// Kontrak API tetap {ok:true}; link: {APP_PUBLIC_URL}/reset-password?token=<raw>
-	_ = rawToken
 	appURL := d.Cfg.PublicAppURL
-	_ = appURL
+	resetLink := appURL + "/reset-password?token=" + rawToken
+
+	// Parity: template password-reset + dedupe 10 menit + job send_email,
+	// lalu diproses inline (parity processEmailInline di route lama).
+	deliveryID, status, sendErr := emailqueue.SendTransactionalEmail(r.Context(), d.Pool, emailqueue.SendOptions{
+		Template:        "password-reset",
+		To:              userEmail,
+		RecipientUserID: &userID,
+		Event:           "security.password_reset",
+		DedupeKey:       strPtr("password_reset:" + userID),
+		Data:            map[string]string{"email": userEmail, "link": resetLink},
+	})
+	if sendErr == nil && status == "queued" && deliveryID != "" {
+		emailqueue.ProcessEmailInline(r.Context(), d.Pool, d.Cfg.CmsEncryptionSecret, deliveryID)
+	}
 	ok()
 }
 
@@ -209,10 +222,33 @@ func (d *Deps) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	auth.WriteAuditLog(r.Context(), d.Pool, auth.AuditLogInput{
 		ActorUserID: &result.UserID, Action: "auth.password.reset", TargetType: strPtr("user"), TargetID: &result.UserID,
 	})
-	// TODO(fase 12): email konfirmasi "password-changed" (best-effort, parity).
+
+	// Parity: email konfirmasi "password-changed" (best-effort).
+	userID := result.UserID
+	deliveryID, status, sendErr := emailqueue.SendTransactionalEmail(r.Context(), d.Pool, emailqueue.SendOptions{
+		Template:        "password-changed",
+		To:              d.resetTargetEmail(r, result.UserID),
+		RecipientUserID: &userID,
+		Event:           "security.password_changed",
+		DedupeKey:       strPtr("password_changed:" + result.UserID),
+		Data:            map[string]string{"changed_at": time.Now().UTC().Format(time.RFC3339)},
+	})
+	if sendErr == nil && status == "queued" && deliveryID != "" {
+		emailqueue.ProcessEmailInline(r.Context(), d.Pool, d.Cfg.CmsEncryptionSecret, deliveryID)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+// resetTargetEmail: ambil email penerima (best-effort, parity query route lama).
+func (d *Deps) resetTargetEmail(r *http.Request, userID string) string {
+	var email string
+	if err := d.Pool.QueryRow(r.Context(),
+		"SELECT email FROM users WHERE id = $1 LIMIT 1", userID).Scan(&email); err != nil {
+		return ""
+	}
+	return email
 }
 
 func lower(s string) string {
