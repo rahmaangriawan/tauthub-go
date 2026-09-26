@@ -23,23 +23,23 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/auth/2fa/disable` | POST | Nonaktifkan 2FA | [ ] |
-| `/v1/auth/2fa/enable` | POST | Aktifkan 2FA (konfirmasi kode) | [ ] |
-| `/v1/auth/2fa/setup` | POST | Generate secret + QR TOTP | [ ] |
+| `/v1/auth/2fa/disable` | POST | Nonaktifkan 2FA | [x] |
+| `/v1/auth/2fa/enable` | POST | Aktifkan 2FA (konfirmasi kode) | [x] |
+| `/v1/auth/2fa/setup` | POST | Generate secret + QR TOTP | [x] |
 | `/v1/auth/2fa/verify` | POST | Tukar challenge JWT + kode → token | [x] |
 | `/v1/auth/change-password` | POST | Ganti password (revoke sesi) | [ ] |
 | `/v1/auth/forgot-password` | POST | Kirim token reset | [ ] |
-| `/v1/auth/google/callback` | GET | Callback OAuth Google | [ ] |
-| `/v1/auth/google/complete` | POST | Selesaikan provision akun Google | [ ] |
-| `/v1/auth/google/exchange-session` | POST | Tukar kode → session token | [ ] |
-| `/v1/auth/google/link` | POST | Link akun Google ke user eksisting | [ ] |
-| `/v1/auth/google/url` | GET | URL consent OAuth Google | [ ] |
+| `/v1/auth/google/callback` | GET | Callback OAuth Google | [x] |
+| `/v1/auth/google/complete` | POST | Selesaikan provision akun Google | [x] |
+| `/v1/auth/google/exchange-session` | POST | Tukar kode → session token | [x] |
+| `/v1/auth/google/link` | POST | Link akun Google ke user eksisting | [x] |
+| `/v1/auth/google/url` | GET | URL consent OAuth Google | [x] |
 | `/v1/auth/login` | POST | Login (+2FA challenge, lockout, rate limit) | [x] |
 | `/v1/auth/logout` | POST | Revoke sesi (sid) | [x] |
 | `/v1/auth/me` | GET, PATCH | Profil user + update | [x] |
 | `/v1/auth/refresh` | POST | Refresh access token (cookie) | [x] |
-| `/v1/auth/register` | POST | Registrasi (+registration guard) | [ ] |
-| `/v1/auth/reset-password` | POST | Reset via token | [ ] |
+| `/v1/auth/register` | POST | Registrasi (+registration guard) | [x] |
+| `/v1/auth/reset-password` | POST | Reset via token | [x] |
 | `/v1/auth/turnstile` | GET | Config Turnstile untuk client | [x] |
 
 ## 3. `/v1/brands` (133) 🔑 — fase 2–7, 9
@@ -564,7 +564,7 @@
 | `/v1/campaign-reports/{token}` | GET | Laporan publik via share token | [ ] |
 | `/v1/internal/cron/scheduler` | GET, POST | Trigger scheduler (guard CRON_SECRET) | [ ] |
 | `/v1/internal/jobs` | POST | Pull 1 job (guard JOB_RUNNER_KEY) | [ ] |
-| `/v1/me/notification-preferences` | GET, PUT | Preferensi notifikasi user | [ ] |
+| `/v1/me/notification-preferences` | GET, PUT | Preferensi notifikasi user | [x] |
 | `/v1/publishing/callbacks` | POST | Callback publishing (HMAC, Bearer api_key) | [ ] |
 | `/v1/publishing/feed.json` | GET | Feed JSON partner | [ ] |
 | `/v1/tracking/events` | POST | Catat event tracking artikel | [ ] |

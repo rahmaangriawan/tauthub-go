@@ -14,11 +14,11 @@
 | `/login` | Login (+2FA challenge flow) | 1 | [ ] |
 | `/login/google-callback` | Callback OAuth Google client-side | 1 | [ ] |
 | `/login/oauth-link` | Link akun Google | 1 | [ ] |
-| `/register-role` | Pilih peran (klien/mitra) | 1 | [ ] |
-| `/register/klien` | Registrasi klien | 1 | [ ] |
-| `/register/mitra` | Registrasi mitra | 1 | [ ] |
-| `/forgot-password` | Minta reset | 1 | [ ] |
-| `/reset-password` | Reset via token | 1 | [ ] |
+| `/register-role` | Pilih peran (klien/mitra) | 1 | [x] |
+| `/register/klien` | Registrasi klien | 1 | [x] |
+| `/register/mitra` | Registrasi mitra | 1 | [x] |
+| `/forgot-password` | Minta reset | 1 | [x] |
+| `/reset-password` | Reset via token | 1 | [x] |
 | `/berita-acara/{token}` | Dokumen berita acara publik (print/PDF) | 8 | [ ] |
 | `/blogger-pick-blog` | Pilih blog Blogger setelah OAuth | 6 | [ ] |
 | `/docs` | Dokumentasi publishing API partner (publik) | 5 | [ ] |
