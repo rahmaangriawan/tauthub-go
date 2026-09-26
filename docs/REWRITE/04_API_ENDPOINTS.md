@@ -27,7 +27,7 @@
 | `/v1/auth/2fa/enable` | POST | Aktifkan 2FA (konfirmasi kode) | [x] |
 | `/v1/auth/2fa/setup` | POST | Generate secret + QR TOTP | [x] |
 | `/v1/auth/2fa/verify` | POST | Tukar challenge JWT + kode → token | [x] |
-| `/v1/auth/change-password` | POST | Ganti password (revoke sesi) | [ ] |
+| `/v1/auth/change-password` | POST | Ganti password (revoke sesi) | [x] |
 | `/v1/auth/forgot-password` | POST | Kirim token reset | [ ] |
 | `/v1/auth/google/callback` | GET | Callback OAuth Google | [x] |
 | `/v1/auth/google/complete` | POST | Selesaikan provision akun Google | [x] |
