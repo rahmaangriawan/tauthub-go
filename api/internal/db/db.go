@@ -62,3 +62,21 @@ func (d *DB) WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error {
 	}
 	return nil
 }
+
+// WithPoolTx: varian WithTx untuk pool mentah (handler domain memegang Pool).
+func WithPoolTx(ctx context.Context, pool *pgxpool.Pool, fn func(tx pgx.Tx) error) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	if err := fn(tx); err != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
+			return fmt.Errorf("rollback tx: %w (penyebab: %v)", rbErr, err)
+		}
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+	return nil
+}

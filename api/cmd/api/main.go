@@ -42,8 +42,8 @@ func run() error {
 	slog.Info("db terhubung", "host", cfg.DBHost, "name", cfg.DBName)
 
 	authDeps := &authdomain.Deps{
-		Pool:      database.Pool,
-		Cfg:       cfg,
+		Pool: database.Pool,
+		Cfg:  cfg,
 		Turnstile: &auth.Turnstile{
 			Pool:                  database.Pool,
 			TurnstileSiteKeyEnv:   os.Getenv("TURNSTILE_SITE_KEY"),
@@ -54,6 +54,15 @@ func run() error {
 			Pool:   database.Pool,
 			Secret: cfg.Secret,
 			Issuer: cfg.AppName,
+		},
+		Google: &auth.Google{
+			Pool:            database.Pool,
+			AppSecret:       cfg.Secret,
+			CmsSecret:       cfg.CmsEncryptionSecret,
+			EnvClientID:     cfg.GoogleClientID,
+			EnvClientSecret: cfg.GoogleClientSecret,
+			EnvRedirectURI:  cfg.GoogleRedirectURI,
+			IsProduction:    cfg.IsProduction(),
 		},
 	}
 
@@ -82,18 +91,30 @@ func run() error {
 		v1.Post("/auth/login", authDeps.Login)
 		v1.Post("/auth/refresh", authDeps.Refresh)
 		v1.Post("/auth/logout", authDeps.Logout)
+		v1.Post("/auth/register", authDeps.Register)
+		v1.Post("/auth/forgot-password", authDeps.ForgotPassword)
+		v1.Post("/auth/reset-password", authDeps.ResetPassword)
 		v1.Post("/auth/2fa/verify", authDeps.TwoFactorVerify)
 		v1.Get("/auth/turnstile", authDeps.TurnstileConfig)
+		v1.Get("/auth/google/url", authDeps.GoogleURL)
+		v1.Get("/auth/google/callback", authDeps.GoogleCallback)
+		v1.Post("/auth/google/complete", authDeps.GoogleComplete)
+		v1.Post("/auth/google/link", authDeps.GoogleLink)
+		v1.Post("/auth/google/exchange-session", authDeps.GoogleExchangeSession)
 
 		// Butuh Bearer access token.
 		v1.Group(func(authed chi.Router) {
 			authed.Use(authDeps.Auth.RequireAuth)
 			authed.Get("/auth/me", authDeps.Me)
 			authed.Patch("/auth/me", authDeps.MeUpdate)
+			authed.Post("/auth/2fa/setup", authDeps.TwoFactorSetup)
+			authed.Post("/auth/2fa/enable", authDeps.TwoFactorEnable)
+			authed.Post("/auth/2fa/disable", authDeps.TwoFactorDisable)
+			authed.Post("/auth/change-password", authDeps.ChangePassword)
+			authed.Get("/me/notification-preferences", authDeps.NotificationPreferencesGet)
+			authed.Put("/me/notification-preferences", authDeps.NotificationPreferencesPut)
 		})
 
-		// TODO fase 1 lanjutan: register, 2fa setup/enable/disable,
-		// change/forgot/reset password, google oauth, me/notification-preferences.
 		// TODO fase 2+: peta lengkap di REWRITE/04_API_ENDPOINTS.md.
 	})
 

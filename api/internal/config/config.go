@@ -32,9 +32,14 @@ type Config struct {
 
 	AdminEmails []string
 
-	CmsEncryptionSecret    string
-	AuthRateLimitPerMinute int
+	CmsEncryptionSecret     string
+	AuthRateLimitPerMinute  int
 	WriteRateLimitPerMinute int
+
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURI  string
+	PublicAppURL       string
 }
 
 func Load() (*Config, error) {
@@ -78,6 +83,11 @@ func Load() (*Config, error) {
 	if c.WriteRateLimitPerMinute, err = getInt("WRITE_RATE_LIMIT_PER_MINUTE", 120); err != nil {
 		return nil, err
 	}
+
+	c.GoogleClientID = os.Getenv("GOOGLE_CLIENT_ID")
+	c.GoogleClientSecret = os.Getenv("GOOGLE_CLIENT_SECRET")
+	c.GoogleRedirectURI = os.Getenv("GOOGLE_REDIRECT_URI")
+	c.PublicAppURL = strings.TrimRight(getEnv("NEXT_PUBLIC_APP_URL", "https://app.tauthub.com"), "/")
 
 	if len(c.Secret) < 32 {
 		return nil, fmt.Errorf("APP_SECRET wajib >= 32 karakter (dapat %d)", len(c.Secret))

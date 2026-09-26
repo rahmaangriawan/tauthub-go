@@ -21,6 +21,7 @@ type Deps struct {
 	Cfg       *config.Config
 	Turnstile *auth.Turnstile
 	Auth      *httpx.Authenticator
+	Google    *auth.Google
 }
 
 // SessionUser: payload user untuk body respons (parity SessionUserPayload).

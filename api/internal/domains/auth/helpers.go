@@ -9,6 +9,13 @@ import (
 
 // Helper kecil bersama untuk handler auth.
 
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 func authRequestIp(r *http.Request) string {
 	return auth.RequestIp(r.Header)
 }
