@@ -52,7 +52,7 @@
 	let category = $state('');
 	let speedFilter = $state<'' | 'super' | 'fast' | 'standard'>('');
 	let priceFilter = $state<'' | 'low' | 'mid' | 'high'>('');
-	let minDaFilter = $state<'' | '30' | '50' | '70'>('');
+	let minDaFilter = $state<'' | '10' | '20' | '30'>('');
 	let verifiedOnly = $state(false);
 	let dewanPersOnly = $state(false);
 	let bookmarkOnly = $state(false);
@@ -68,6 +68,7 @@
 	let importOpen = $state(false);
 	let importText = $state('');
 	let importError = $state('');
+	let fileInput = $state<HTMLInputElement | undefined>(undefined);
 	let bookmarkOpen = $state(false);
 	let campaignOpen = $state(false);
 	let campaignName = $state('');
@@ -302,6 +303,19 @@
 		URL.revokeObjectURL(url);
 	}
 
+	/** Baca file .csv/.txt: hasil ekspor proposal otomatis dikenali (kolom
+	 *  pertama = nama media). Parity handleFileUpload app lama. */
+	async function handleFileUpload(e: Event) {
+		importError = '';
+		const file = (e.target as HTMLInputElement).files?.[0];
+		if (!file) return;
+		try {
+			importText = await file.text();
+		} catch {
+			importError = 'Gagal membaca file.';
+		}
+	}
+
 	function applyImport() {
 		importError = '';
 		const lines = importText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -487,7 +501,7 @@
 				<div class="advFilterSection">
 					<span class="advFilterSectionLabel">Minimum DA</span>
 					<div class="advFilterChipsGroup">
-						{#each ['30', '50', '70'] as min (min)}
+						{#each ['10', '20', '30'] as min (min)}
 							<button
 								class="advFilterChip {minDaFilter === min ? 'advFilterChipActive' : ''}"
 								type="button"
@@ -516,7 +530,7 @@
 	<!-- Ringkasan filter aktif -->
 	{#if activeFilterCount > 0}
 		<div class="activeFilterBanner">
-			<span>{activeFilterCount} filter aktif · {fmt(filtered.length)} media cocok</span>
+			<span><b class="bannerStrong">Filter Aktif:</b> {activeFilterCount} · {fmt(filtered.length)} media cocok</span>
 			<button class="bookmarkBannerClear" type="button" onclick={resetFilters}>Reset filter</button>
 		</div>
 	{/if}
@@ -740,8 +754,20 @@
 				<h2 class="modalTitle"><Upload size={17} /> Impor Daftar Media</h2>
 				<button class="modalClose" type="button" aria-label="Tutup" onclick={() => (importOpen = false)}><X size={18} /></button>
 			</div>
-			<p class="modalHint">Tempelkan satu nama media, domain, atau ID per baris. Media yang cocok akan langsung terpilih.</p>
-			<textarea class="modalTextarea" rows="8" bind:value={importText} placeholder={'contoh.id\nDetik.com'}></textarea>
+			<button class="importDrop" type="button" onclick={() => fileInput?.click()}>
+				<input
+					bind:this={fileInput}
+					type="file"
+					accept=".csv,.txt"
+					hidden
+					onchange={handleFileUpload}
+				/>
+				<Upload size={24} />
+				<span class="importDropTitle">Pilih file proposal (.csv / .txt)</span>
+				<span class="importDropSub">File CSV hasil unduh ekspor proposal otomatis dikenali</span>
+			</button>
+			<div class="importDivider"><span>Atau Tempel Teks</span></div>
+			<textarea class="modalTextarea" rows="6" bind:value={importText} placeholder={'contoh.id\nDetik.com'}></textarea>
 			{#if importError}<p class="modalError">{importError}</p>{/if}
 			<div class="modalFooter">
 				<button class="advFilterResetBtn" type="button" onclick={() => (importOpen = false)}>Batal</button>
@@ -788,13 +814,15 @@
 	<div class="modalOverlay" role="presentation" onclick={() => (campaignOpen = false)}>
 		<dialog open class="modalCard" aria-label="Buat kampanye" onclick={(e) => e.stopPropagation()}>
 			<div class="modalHeader">
-				<h2 class="modalTitle"><LayoutGrid size={17} /> Buat Kampanye</h2>
+				<h2 class="modalTitle"><LayoutGrid size={17} /> Simpan ke Kampanye</h2>
 				<button class="modalClose" type="button" aria-label="Tutup" onclick={() => (campaignOpen = false)}><X size={18} /></button>
 			</div>
-			<p class="modalHint">{selectedIds.size} media terpilih akan langsung masuk ke kampanye ini.</p>
+			<p class="modalHint">
+				Anda memilih <strong>{selectedIds.size} media</strong>. Beri nama kampanye ini untuk masuk ke mode Dapur Produksi (The Writer).
+			</p>
 			<label class="modalField">
-				<span>Nama kampanye</span>
-				<input class="app-input" bind:value={campaignName} placeholder="mis. Peluncuran Produk Q4" />
+				<span>Nama Kampanye <b class="reqMark">*</b></span>
+				<input class="app-input" bind:value={campaignName} placeholder="Contoh: Launching Produk Q3 2026" />
 			</label>
 			{#if campaignError}<p class="modalError">{campaignError}</p>{/if}
 			<div class="modalFooter">
