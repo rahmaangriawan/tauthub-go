@@ -292,7 +292,7 @@
 			{#if !domains || domains.items.length === 0}
 				<p class="px-4 py-8 text-center text-sm text-muted-foreground">Belum ada domain referral. Bagikan link referral Anda untuk memulai.</p>
 			{:else}
-				<table class="w-full min-w-[820px] text-sm">
+				<table class="w-full text-sm">
 					<thead>
 						<tr class="text-left text-xs text-muted-foreground">
 							<th class="px-4 py-2.5 font-medium">Domain</th>

@@ -179,9 +179,9 @@
 				<thead>
 					<tr class="border-b text-left text-[11px] tracking-wide text-muted-foreground">
 						<th class="px-4 py-2.5 font-semibold">NAMA</th>
-						<th class="px-4 py-2.5 font-semibold">EMAIL</th>
+						<th class="memb-email px-4 py-2.5 font-semibold">EMAIL</th>
 						<th class="px-4 py-2.5 font-semibold">ROLE</th>
-						<th class="px-4 py-2.5 font-semibold">DITAMBAHKAN</th>
+						<th class="memb-added px-4 py-2.5 font-semibold">DITAMBAHKAN</th>
 						<th class="px-4 py-2.5 font-semibold text-right">AKSI</th>
 					</tr>
 				</thead>
@@ -189,7 +189,7 @@
 					{#each members as m (m.id)}
 						<tr class="border-b last:border-0">
 							<td class="px-4 py-2.5 font-medium">{m.display_name || '—'}</td>
-							<td class="px-4 py-2.5 text-muted-foreground">{m.email}</td>
+							<td class="memb-email px-4 py-2.5 text-muted-foreground">{m.email}</td>
 							<td class="px-4 py-2.5">
 								<select
 									class="app-input !w-auto !py-1 !text-xs"
@@ -203,7 +203,7 @@
 									{#each ROLES as r (r.value)}<option value={r.value}>{r.label}</option>{/each}
 								</select>
 							</td>
-							<td class="px-4 py-2.5 text-muted-foreground">{dt(m.created_at)}</td>
+							<td class="memb-added px-4 py-2.5 text-muted-foreground">{dt(m.created_at)}</td>
 							<td class="px-4 py-2.5 text-right">
 								{#if m.role === 'owner'}
 									<span class="text-[11px] text-muted-foreground">Pemilik brand</span>
@@ -230,3 +230,12 @@
 		Hanya admin brand yang dapat mengubah role dan menghapus member.
 	</p>
 </section>
+
+<style>
+	/* Di layar sempit kolom email dan tanggal membungkus supaya tabel 5 kolom
+	   ini tidak memaksa scroll horizontal di dalam kartu. */
+	@media (max-width: 767px) {
+		.memb-email,
+		.memb-added { word-break: break-word; white-space: normal; }
+	}
+</style>

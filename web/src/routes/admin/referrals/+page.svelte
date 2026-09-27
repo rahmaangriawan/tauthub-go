@@ -46,7 +46,7 @@
 
 	{#if loaded}
 		<div class="app-card mt-4 overflow-x-auto">
-			<table class="w-full text-sm" style="min-width: 840px;">
+			<table class="w-full text-sm">
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">Referrer → Referral</th>

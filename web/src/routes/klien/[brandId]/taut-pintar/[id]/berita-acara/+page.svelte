@@ -190,11 +190,11 @@
 			</p>
 
 			<div class="mt-10 flex justify-around gap-6 text-sm">
-				<div class="min-w-[200px] text-center">
+				<div class="min-w-0 flex-1 text-center sm:min-w-[200px] sm:flex-none">
 					<div class="h-16"></div>
 					<div class="border-t pt-2">Pihak klien</div>
 				</div>
-				<div class="min-w-[200px] text-center">
+				<div class="min-w-0 flex-1 text-center sm:min-w-[200px] sm:flex-none">
 					<div class="h-16"></div>
 					<div class="border-t pt-2">Tauthub</div>
 				</div>

@@ -187,7 +187,7 @@
 			<div class="app-card p-4">
 				<h2 class="text-sm font-semibold">Breakdown per Step AI</h2>
 				<div class="mt-2 overflow-x-auto">
-					<table class="w-full text-sm" style="min-width: 1040px;">
+					<table class="w-full text-sm">
 						<thead>
 							<tr class="text-xs text-muted-foreground">
 								<th class="px-3 py-2 text-left font-medium">Step</th>
@@ -245,7 +245,7 @@
 					{/if}
 				</div>
 				<div class="mt-2 overflow-x-auto">
-					<table class="w-full text-sm" style="min-width: 1240px;">
+					<table class="w-full text-sm">
 						<thead>
 							<tr class="text-xs text-muted-foreground">
 								<th class="px-3 py-2 text-left font-medium">Waktu</th>

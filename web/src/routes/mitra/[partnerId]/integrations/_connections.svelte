@@ -144,7 +144,7 @@
 			Belum ada koneksi. Tambahkan koneksi WordPress untuk media ber-integrasi WordPress.
 		</p>
 	{:else}
-		<table class="w-full min-w-[860px] text-sm">
+		<table class="w-full text-sm">
 			<thead>
 				<tr class="text-left text-xs text-muted-foreground">
 					<th class="px-4 py-2.5 font-medium">Koneksi</th>

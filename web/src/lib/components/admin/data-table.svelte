@@ -39,7 +39,7 @@
 	{:else if rows.length === 0}
 		<p class="px-4 py-10 text-center text-sm text-muted-foreground">{empty}</p>
 	{:else}
-		<table class="w-full text-sm" style="min-width: {minWidth};">
+		<table class="admin-table w-full text-sm" style="--admin-table-min: {minWidth};">
 			<thead>
 				<tr class="text-xs text-muted-foreground">
 					{#each columns as col (col.key)}
@@ -70,3 +70,15 @@
 		</table>
 	{/if}
 </div>
+
+<style>
+	/* Lebar minimum hanya berlaku di layar lapang. Di bawah 768px tabel
+	   mengikuti lebar kartu dan sel membungkus, seperti tabel Radix di app
+	   lama, supaya tidak muncul scroll horizontal di dalam kartu. */
+	.admin-table { min-width: var(--admin-table-min, 760px); }
+	@media (max-width: 767px) {
+		.admin-table { min-width: 0; }
+		.admin-table :global(th),
+		.admin-table :global(td) { word-break: break-word; }
+	}
+</style>

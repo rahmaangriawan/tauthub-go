@@ -454,7 +454,7 @@
 				</div>
 			{:else}
 				<div class="mt-3 overflow-x-auto">
-					<table class="w-full min-w-[1000px] text-sm">
+					<table class="w-full text-sm">
 						<thead>
 							<tr class="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
 								<th class="px-3 py-2 font-semibold">Media</th>

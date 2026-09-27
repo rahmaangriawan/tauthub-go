@@ -159,7 +159,7 @@
 		{:else}
 			<div class="mt-2 grid gap-2">
 				{#each jobs as job (job.id)}
-					<div class="app-card p-3">
+					<div class="app-card min-w-0 p-3">
 						<div class="flex items-start justify-between gap-3">
 							<div class="min-w-0">
 								<p class="truncate text-sm font-medium">{job.topic ?? '(tanpa topik)'}</p>

@@ -218,7 +218,7 @@
 		</div>
 
 		<div class="mt-4 overflow-x-auto">
-			<table class="w-full text-sm" style="min-width: 900px;">
+			<table class="w-full text-sm">
 				<thead>
 					<tr class="text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 text-left font-medium">Brand</th>

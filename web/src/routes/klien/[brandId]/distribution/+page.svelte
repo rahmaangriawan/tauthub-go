@@ -129,7 +129,7 @@
 		</div>
 
 		<div class="mt-4 grid gap-3 lg:grid-cols-2">
-			<div class="app-card p-4">
+			<div class="app-card min-w-0 p-4">
 				<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent</p>
 				<h3 class="mt-0.5 text-sm font-semibold">Publikasi terbaru</h3>
 				{#if recent.length === 0}
@@ -155,7 +155,7 @@
 				{/if}
 			</div>
 
-			<div class="app-card p-4">
+			<div class="app-card min-w-0 p-4">
 				<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Campaigns</p>
 				<h3 class="mt-0.5 text-sm font-semibold">Kampanye terbaru</h3>
 				{#if campaigns.length === 0}

@@ -100,7 +100,7 @@
 
 		{#if tab === 'runs'}
 			<div class="app-card overflow-x-auto p-4">
-				<table class="w-full min-w-[900px] text-sm">
+				<table class="w-full text-sm">
 					<thead>
 						<tr class="text-left text-xs text-muted-foreground">
 							<th class="py-1.5 pr-3 font-medium">Waktu</th>
@@ -154,7 +154,7 @@
 				<p class="mb-2 text-xs text-muted-foreground">
 					Semua input klien & hasil agent tersimpan otomatis untuk improvisasi model platform (maks 10 baris per halaman).
 				</p>
-				<table class="w-full min-w-[800px] text-sm">
+				<table class="w-full text-sm">
 					<thead>
 						<tr class="text-left text-xs text-muted-foreground">
 							<th class="py-1.5 pr-3 font-medium">Waktu</th>

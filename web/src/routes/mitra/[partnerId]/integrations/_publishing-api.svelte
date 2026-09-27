@@ -350,7 +350,7 @@
 			<p class="mt-2 text-sm text-muted-foreground">Belum ada API key. Buat kunci untuk media Tauthub Publishing API Anda.</p>
 		</div>
 	{:else}
-		<table class="w-full min-w-[760px] text-sm">
+		<table class="w-full text-sm">
 			<thead>
 				<tr class="text-left text-xs text-muted-foreground">
 					<th class="px-4 py-2.5 font-medium">Label</th>

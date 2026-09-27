@@ -117,7 +117,7 @@
 						<p class="mt-3 text-sm text-muted-foreground">Tidak ada tautan bermasalah. Semua artikel sehat.</p>
 					</div>
 				{:else}
-					<table class="w-full min-w-[820px] text-sm">
+					<table class="w-full text-sm">
 						<thead>
 							<tr class="text-left text-xs text-muted-foreground">
 								<th class="px-4 py-2.5 font-medium">Artikel</th>

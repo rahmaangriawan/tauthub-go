@@ -419,7 +419,7 @@
 					/>
 				</label>
 				<select
-					class="app-input !w-auto"
+					class="app-input !w-auto max-w-full"
 					value={stateFilter}
 					onchange={(e) => {
 						stateFilter = e.currentTarget.value;
@@ -533,7 +533,7 @@
 
 			<form class="mb-3 flex flex-wrap items-center gap-2" onsubmit={(e) => e.preventDefault()}>
 				<select
-					class="app-input !w-auto"
+					class="app-input !w-auto max-w-full"
 					value={healthFilter}
 					onchange={(e) => {
 						healthFilter = e.currentTarget.value;

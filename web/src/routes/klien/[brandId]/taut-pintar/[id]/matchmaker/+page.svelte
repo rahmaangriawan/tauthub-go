@@ -443,7 +443,7 @@
 				</button>
 				{#if aiSectionOpen}
 					<div class="app-card mt-2 overflow-x-auto">
-						<table class="w-full min-w-[900px] text-sm">
+						<table class="w-full text-sm">
 							<thead>
 								<tr class="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
 									<th class="px-3 py-2 font-semibold">Pilih</th>
@@ -520,7 +520,7 @@
 				<div class="mt-4">
 					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tidak direkomendasikan AI</p>
 					<div class="app-card mt-2 overflow-x-auto">
-						<table class="w-full min-w-[700px] text-sm">
+						<table class="w-full text-sm">
 							<tbody>
 								{#each recommendedCards.filter((r) => r.placement.status === 'removed') as { media: m, placement: p } (m.id)}
 									<tr class="border-t" onclick={() => toggleMedia(m.id)}>
@@ -577,7 +577,7 @@
 			<div class="app-card mt-3 px-4 py-10 text-center text-sm text-muted-foreground">Tidak ada media yang cocok dengan filter.</div>
 		{:else}
 			<div class="app-card mt-3 overflow-x-auto">
-				<table class="w-full min-w-[800px] text-sm">
+				<table class="w-full text-sm">
 					<thead>
 						<tr class="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
 							<th class="px-3 py-2 font-semibold">Pilih</th>

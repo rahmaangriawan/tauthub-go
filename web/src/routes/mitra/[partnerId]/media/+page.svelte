@@ -352,7 +352,7 @@
 		</div>
 	{:else}
 		<div class="app-card mt-4 overflow-x-auto">
-			<table class="w-full min-w-[860px] text-sm">
+			<table class="w-full text-sm">
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">Media</th>

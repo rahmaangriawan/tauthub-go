@@ -142,7 +142,7 @@
 	</div>
 
 	<div class="app-card mt-4 overflow-x-auto">
-		<table class="w-full min-w-[960px] text-sm">
+		<table class="w-full text-sm">
 			<thead>
 				<tr class="text-left text-xs text-muted-foreground">
 					<th class="px-4 py-2.5 font-medium">Feed</th>
@@ -251,3 +251,9 @@
 		</div>
 	{/if}
 </section>
+
+<style>
+	/* URL feed bisa sangat panjang; di layar sempit biarkan membungkus supaya
+	   tidak mendorong lebar halaman (blok <pre> tetap punya scroll sendiri). */
+	code.font-mono { overflow-wrap: anywhere; }
+</style>

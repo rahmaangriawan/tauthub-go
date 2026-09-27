@@ -91,7 +91,7 @@
 				<p class="text-sm text-muted-foreground">Belum ada feed sindikasi untuk partner ini.</p>
 			</div>
 		{:else}
-			<table class="w-full min-w-[720px] text-sm">
+			<table class="w-full text-sm">
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">Feed</th>
