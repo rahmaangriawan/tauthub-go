@@ -6,8 +6,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import {
-		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, Newspaper, Receipt,
-		ShieldCheck, TriangleAlert, UserCircle
+		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, MessageSquare, Newspaper, Receipt,
+		BookOpen, ShieldCheck, Sparkles, TriangleAlert, UserCircle
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { swr } from '$lib/swr-cache.svelte';
@@ -71,7 +71,10 @@
 				{ label: t.nav.media_catalog, href: `${base}/media`, icon: Newspaper, active: pathname.includes('/media') },
 				{ label: t.nav.campaigns, href: `${base}/campaigns`, icon: Megaphone, active: pathname.includes('/campaigns') },
 				{ label: t.nav.publications, href: `${base}/publications`, icon: ShieldCheck, active: pathname.includes('/publications') },
-				{ label: 'Pelacak 404', href: `${base}/link-monitor`, icon: TriangleAlert, active: pathname.includes('/link-monitor') }
+				{ label: 'Pelacak 404', href: `${base}/link-monitor`, icon: TriangleAlert, active: pathname.includes('/link-monitor') },
+				{ label: 'Generate Artikel', href: `${base}/generate`, icon: Sparkles, active: pathname.includes('/generate') },
+				{ label: 'Tanya Agen AI', href: `${base}/chat`, icon: MessageSquare, active: pathname.includes('/chat') },
+				{ label: 'Knowledge Base', href: `${base}/knowledge`, icon: BookOpen, active: pathname.includes('/knowledge') }
 			]
 		},
 		{

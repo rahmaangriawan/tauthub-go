@@ -108,7 +108,7 @@ func run() error {
 		// Brands (fase 2) — butuh Bearer.
 		brands := &brandsdomain.Deps{Pool: database.Pool}
 		knowledge := &knowledgedomain.Deps{Pool: database.Pool}
-		contentDeps := &contentdomain.Deps{Pool: database.Pool, JobInline: cfg.JobInline}
+		contentDeps := &contentdomain.Deps{Pool: database.Pool, JobInline: cfg.JobInline, WriteRateLimitPerMinute: cfg.WriteRateLimitPerMinute}
 		v1.Group(func(authed chi.Router) {
 			authed.Use(authDeps.Auth.RequireAuth)
 			authed.Get("/auth/me", authDeps.Me)
@@ -165,6 +165,16 @@ func run() error {
 			authed.Get("/brands/{brandId}/documents/{documentId}", contentDeps.DocumentGet)
 			authed.Put("/brands/{brandId}/documents/{documentId}", contentDeps.DocumentUpdate)
 			authed.Get("/brands/{brandId}/documents/{documentId}/html", contentDeps.DocumentHTML)
+
+			// Content intakes (fase 4 slice B).
+			authed.Get("/brands/{brandId}/content-intake-types", contentDeps.IntakeTypesList)
+			authed.Get("/brands/{brandId}/content-intakes", contentDeps.IntakeList)
+			authed.Post("/brands/{brandId}/content-intakes", contentDeps.IntakeCreate)
+			authed.Get("/brands/{brandId}/content-intakes/{intakeId}", contentDeps.IntakeGet)
+			authed.Put("/brands/{brandId}/content-intakes/{intakeId}", contentDeps.IntakeUpdate)
+			authed.Post("/brands/{brandId}/content-intakes/{intakeId}/analyze", contentDeps.IntakeAnalyze)
+			authed.Post("/brands/{brandId}/content-intakes/{intakeId}/create-job", contentDeps.IntakeCreateJob)
+			authed.Post("/brands/{brandId}/chat", contentDeps.Chat)
 		})
 
 		// TODO fase 2+: peta lengkap di REWRITE/04_API_ENDPOINTS.md.

@@ -77,13 +77,13 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/content-intake-types` | GET | Tipe intake aktif | [ ] |
-| `/v1/brands/{brandId}/content-intakes` | GET, POST | List/buat intake (bahan/artikel) | [ ] |
-| `/v1/brands/{brandId}/content-intakes/{intakeId}` | GET, PUT | Detail/update intake | [ ] |
+| `/v1/brands/{brandId}/content-intake-types` | GET | Tipe intake aktif | [x] |
+| `/v1/brands/{brandId}/content-intakes` | GET, POST | List/buat intake (bahan/artikel) | [x] |
+| `/v1/brands/{brandId}/content-intakes/{intakeId}` | GET, PUT | Detail/update intake | [x] |
 | `/v1/brands/{brandId}/content-intakes/{intakeId}/ai-fill` | POST | AI isi jawaban intake | [ ] |
-| `/v1/brands/{brandId}/content-intakes/{intakeId}/analyze` | POST | Analisis kesiapan | [ ] |
+| `/v1/brands/{brandId}/content-intakes/{intakeId}/analyze` | POST | Analisis kesiapan | [x] |
 | `/v1/brands/{brandId}/content-intakes/{intakeId}/auto-key-messages` | POST | AI ekstrak key messages | [ ] |
-| `/v1/brands/{brandId}/content-intakes/{intakeId}/create-job` | POST | Intake → content job | [ ] |
+| `/v1/brands/{brandId}/content-intakes/{intakeId}/create-job` | POST | Intake → content job | [x] |
 | `/v1/brands/{brandId}/content-intakes/{intakeId}/recommend` | POST | Rekomendasi mode intake | [ ] |
 
 ### 3.4 Content jobs & documents (10)
@@ -122,7 +122,7 @@
 | `/v1/brands/{brandId}/knowledge/sources/{sourceId}` | GET, DELETE | Detail/hapus sumber | [x] |
 | `/v1/brands/{brandId}/knowledge/sources/{sourceId}/content` | GET | Isi sumber | [x] |
 | `/v1/brands/{brandId}/knowledge/sitemap` | GET, POST | Crawl sitemap → sumber | [x] |
-| `/v1/brands/{brandId}/chat` | POST | Chat AI brand (tool-calling) | [ ] |
+| `/v1/brands/{brandId}/chat` | POST | Chat AI brand (tool-calling) | [x] |
 | `/v1/brands/{brandId}/chat-learning` | GET, DELETE | Riwayat/hapus learning chat | [x] |
 
 ### 3.7 Campaigns & flow (14)

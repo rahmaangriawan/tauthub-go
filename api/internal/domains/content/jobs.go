@@ -21,8 +21,9 @@ import (
 )
 
 type Deps struct {
-	Pool      *pgxpool.Pool
-	JobInline bool
+	Pool                    *pgxpool.Pool
+	JobInline               bool
+	WriteRateLimitPerMinute int
 }
 
 func chiParam(r *http.Request, name string) string { return chi.URLParam(r, name) }

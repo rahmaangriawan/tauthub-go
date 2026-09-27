@@ -32,6 +32,18 @@ const (
 	totalAIInputMax = 2000
 )
 
+// ClientSafeMessage: pesan aman untuk klien (parity service.ts).
+func ClientSafeMessage(status string) string {
+	switch status {
+	case "blocked":
+		return "Konten tidak dapat diproses karena terindikasi tidak sesuai dengan kebijakan publikasi Tulisio. Silakan periksa kembali materi yang Anda masukkan."
+	case "review_required":
+		return "Konten sedang menunggu pemeriksaan sebelum dapat diproses."
+	default:
+		return "Konten aman untuk diproses."
+	}
+}
+
 func ClassifyByScore(score int) string {
 	if score <= SafeMax {
 		return "safe"
