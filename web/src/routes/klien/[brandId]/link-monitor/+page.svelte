@@ -314,92 +314,94 @@
 				</p>
 			</div>
 		{:else}
-			<div class="app-card mt-4 overflow-x-auto">
-				<table class="w-full text-sm">
-					<colgroup>
-						<col style="min-width:320px" /><col style="width:170px" /><col style="width:150px" />
-						<col style="width:170px" /><col style="width:180px" />
-					</colgroup>
-					<thead>
-						<tr style="background-color: var(--muted);">
-							<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">
-								<button class="inline-flex items-center gap-1.5" type="button" onclick={() => (sortAsc = !sortAsc)}>
-									<span>Artikel</span><ArrowDownUp size={13} strokeWidth={2.4} />
-								</button>
-							</th>
-							<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Media</th>
-							<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Status</th>
-							<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Terakhir Update</th>
-							<th class="px-5 py-3.5 text-right text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Aksi</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each sortedItems as item (item.id)}
-							{@const meta = metaFor(item.state)}
-							{@const thumb = thumbUrl(item.featured_image_url ?? item.draft_featured_image_url)}
-							<tr class="border-b last:border-0" style="vertical-align: top;">
-								<td class="px-5 py-4">
-									<div class="flex items-center gap-3">
-										{#if thumb && !imgError[item.id]}
-											<img
-												src={thumb}
-												alt={item.document_title ?? 'Cover artikel'}
-												class="h-12 w-[72px] shrink-0 rounded-md object-cover"
-												loading="lazy"
-												onerror={() => (imgError = { ...imgError, [item.id]: true })}
-											/>
-										{:else}
-											<span class="flex h-12 w-[72px] shrink-0 items-center justify-center rounded-md" style="background-color: var(--muted); color: var(--muted-foreground);" title={item.document_title ?? undefined}>
-												<ImageIcon size={20} />
-											</span>
-										{/if}
-										<div class="min-w-0">
-											<p class="truncate font-medium">{item.document_title ?? 'Tanpa judul'}</p>
-											{#if item.published_url}
-												<a class="inline-flex max-w-[320px] items-center gap-1 text-xs" style="color: var(--primary);" href={item.published_url} target="_blank" rel="noreferrer" title={item.published_url}>
-													<span class="truncate">{item.published_url}</span><ExternalLink size={12} />
-												</a>
-											{/if}
-										</div>
-									</div>
-								</td>
-								<td class="px-5 py-4">
-									<p class="font-medium">{item.media_name ?? '—'}</p>
-									<p class="text-xs text-muted-foreground">{mediaSubtitle(item.media_type, item.media_category)}</p>
-								</td>
-								<td class="px-5 py-4">
-									<span
-										class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold"
-										style="color: {meta.text}; background-color: {meta.bg}; border: 1px solid color-mix(in srgb, {meta.dot} 20%, transparent);"
-										title={meta.hint}
-									>
-										<span class="h-1.5 w-1.5 rounded-full" style="background-color: {meta.dot};"></span>
-										<span>{meta.label}</span>
-									</span>
-								</td>
-								<td class="px-5 py-4">
-									<p>{item.last_checked_at ? fmtDateTime(item.last_checked_at) : 'Belum pernah'}</p>
-									<p class="text-xs text-muted-foreground">{formatRelativeTime(item.last_checked_at)}</p>
-								</td>
-								<td class="px-5 py-4 text-right">
-									{#if item.state === 'gone'}
-										<button
-											class="app-btn app-btn-soft !min-h-8 !text-xs"
-											type="button"
-											disabled={requestingId !== null}
-											onclick={() => void requestReplacement(item)}
-										>
-											{#if requestingId === item.id}<LoaderCircle size={14} class="animate-spin" />{:else}<RotateCcw size={14} />{/if}
-											{requestingId === item.id ? 'Mengirim…' : 'Ajukan penggantian'}
-										</button>
-									{:else}
-										<span class="text-[13px]" style="color: var(--muted-foreground);">—</span>
-									{/if}
-								</td>
+			<div class="app-card mt-4">
+				<!-- table-layout fixed + lebar kolom persen: isi kolom dipotong
+				     dengan ellipsis, sehingga tabel tidak pernah melebihi kartu. -->
+					<table class="linkmon-table w-full text-sm">
+						<colgroup>
+							<col style="width:34%" /><col style="width:13%" /><col style="width:13%" />
+							<col style="width:19%" /><col style="width:21%" />
+						</colgroup>
+						<thead>
+							<tr style="background-color: var(--muted);">
+								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">
+									<button class="inline-flex items-center gap-1.5" type="button" onclick={() => (sortAsc = !sortAsc)}>
+										<span>Artikel</span><ArrowDownUp size={13} strokeWidth={2.4} />
+									</button>
+								</th>
+								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Media</th>
+								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Status</th>
+								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Terakhir Update</th>
+								<th class="px-5 py-3.5 text-right text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Aksi</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody>
+							{#each sortedItems as item (item.id)}
+								{@const meta = metaFor(item.state)}
+								{@const thumb = thumbUrl(item.featured_image_url ?? item.draft_featured_image_url)}
+								<tr class="linkmon-row border-b last:border-0" style="vertical-align: top;">
+									<td class="linkmon-cell linkmon-cell-article px-5 py-4">
+										<div class="flex items-center gap-3">
+											{#if thumb && !imgError[item.id]}
+												<img
+													src={thumb}
+													alt={item.document_title ?? 'Cover artikel'}
+													class="h-12 w-[72px] shrink-0 rounded-md object-cover"
+													loading="lazy"
+													onerror={() => (imgError = { ...imgError, [item.id]: true })}
+												/>
+											{:else}
+												<span class="flex h-12 w-[72px] shrink-0 items-center justify-center rounded-md" style="background-color: var(--muted); color: var(--muted-foreground);" title={item.document_title ?? undefined}>
+													<ImageIcon size={20} />
+												</span>
+											{/if}
+											<div class="min-w-0">
+												<p class="linkmon-title font-medium">{item.document_title ?? 'Tanpa judul'}</p>
+												{#if item.published_url}
+													<a class="linkmon-url inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={item.published_url} target="_blank" rel="noreferrer" title={item.published_url}>
+														<span class="truncate">{item.published_url}</span><ExternalLink size={12} />
+													</a>
+												{/if}
+											</div>
+										</div>
+									</td>
+									<td class="linkmon-cell px-5 py-4" data-label="Media">
+										<p class="font-medium">{item.media_name ?? '—'}</p>
+										<p class="text-xs text-muted-foreground">{mediaSubtitle(item.media_type, item.media_category)}</p>
+									</td>
+									<td class="linkmon-cell px-5 py-4" data-label="Status">
+										<span
+											class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold"
+											style="color: {meta.text}; background-color: {meta.bg}; border: 1px solid color-mix(in srgb, {meta.dot} 20%, transparent);"
+											title={meta.hint}
+										>
+											<span class="h-1.5 w-1.5 rounded-full" style="background-color: {meta.dot};"></span>
+											<span>{meta.label}</span>
+										</span>
+									</td>
+									<td class="linkmon-cell px-5 py-4" data-label="Terakhir diperiksa">
+										<p>{item.last_checked_at ? fmtDateTime(item.last_checked_at) : 'Belum pernah'}</p>
+										<p class="text-xs text-muted-foreground">{formatRelativeTime(item.last_checked_at)}</p>
+									</td>
+									<td class="linkmon-cell px-5 py-4 text-right" data-label="Aksi">
+										{#if item.state === 'gone'}
+											<button
+												class="app-btn app-btn-soft linkmon-action !min-h-8 !text-xs"
+												type="button"
+												disabled={requestingId !== null}
+												onclick={() => void requestReplacement(item)}
+											>
+												{#if requestingId === item.id}<LoaderCircle size={14} class="animate-spin" />{:else}<RotateCcw size={14} />{/if}
+												{requestingId === item.id ? 'Mengirim…' : 'Ajukan penggantian'}
+											</button>
+										{:else}
+											<span class="text-[13px]" style="color: var(--muted-foreground);">—</span>
+										{/if}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
 
 				<!-- Footer paginasi -->
 				<div class="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3">
@@ -423,3 +425,58 @@
 		{/if}
 	{/if}
 </section>
+
+<style>
+	/* Tabel Pelacak 404: layout fixed supaya kolom tidak melebar mengikuti
+	   panjang URL. Semua isi panjang dipotong dengan ellipsis, sehingga tidak
+	   pernah muncul scroll horizontal (parity proporsi kolom app lama). */
+	.linkmon-table { table-layout: fixed; }
+
+	.linkmon-title {
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		word-break: break-word;
+	}
+
+	.linkmon-url {
+		max-width: 100%;
+		overflow: hidden;
+	}
+	.linkmon-url span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+	.linkmon-action { max-width: 100%; white-space: normal; line-height: 1.25; }
+
+	/* Di bawah 700px tabel 5 kolom tidak bisa muat walau kolom sudah
+	   dipersempit (header terpanjang saja butuh ~130px). Baris berubah jadi
+	   kartu bertumpuk: tiap sel menampilkan labelnya sendiri lewat data-label,
+	   sehingga tidak ada konten terpotong dan tidak ada scroll horizontal. */
+	@media (max-width: 700px) {
+		.linkmon-table,
+		.linkmon-table tbody,
+		.linkmon-row,
+		.linkmon-cell { display: block; width: 100%; }
+		.linkmon-table colgroup,
+		.linkmon-table thead { display: none; }
+
+		.linkmon-row { padding: 14px 16px; }
+		.linkmon-row:last-child { border-bottom: 0; }
+
+		.linkmon-cell { padding: 0; text-align: left !important; }
+		.linkmon-cell + .linkmon-cell { margin-top: 10px; }
+		.linkmon-cell-article { margin-bottom: 4px; }
+
+		.linkmon-cell[data-label]::before {
+			content: attr(data-label);
+			display: block;
+			margin-bottom: 3px;
+			color: var(--muted-foreground);
+			font-size: 10.5px;
+			font-weight: 700;
+			letter-spacing: 0.06em;
+			text-transform: uppercase;
+		}
+	}
+</style>

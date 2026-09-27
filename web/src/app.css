@@ -244,6 +244,52 @@
     padding: 0 28px;
     background-color: var(--card);
   }
+  .app-utility-actions { display: flex; align-items: center; gap: 8px; min-width: 0; margin-left: auto; }
+
+  /* Tombol hamburger hanya muncul di mobile; di desktop topbar sama seperti
+     app lama (aksi rata kanan, tanpa tombol tambahan). Dua kelas agar menang
+     atas `display: inline-flex` bawaan .app-btn. */
+  .app-btn.app-shell-trigger { display: none; flex: 0 0 auto; }
+
+  .app-drawer { position: fixed; z-index: 60; inset: 0; }
+  .app-drawer-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    padding: 0;
+    background-color: rgba(15, 23, 42, 0.45);
+    cursor: default;
+  }
+  .app-drawer-panel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    width: min(88vw, 300px);
+    height: 100dvh;
+    border-radius: 0 14px 14px 0;
+    background-color: var(--sidebar);
+    color: var(--sidebar-foreground);
+    box-shadow: var(--shadow-md);
+  }
+  .app-drawer-panel:focus { outline: none; }
+  .app-drawer-panel .app-sidebar-inner { padding-top: 14px; }
+  .app-drawer-close {
+    position: absolute;
+    z-index: 2;
+    top: 13px;
+    right: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    color: var(--sidebar-foreground);
+  }
+  .app-drawer-close:hover { background-color: var(--sidebar-hover); }
 
   .app-credit-pill {
     display: inline-flex;
@@ -304,7 +350,18 @@
   .app-btn-soft:hover:not(:disabled) { background-color: color-mix(in srgb, var(--secondary) 80%, var(--border)); }
 
   @media (max-width: 767px) {
-    .app-utility-bar { min-height: 60px; padding: 0 16px; }
+    .app-shell { display: block; }
+    .app-sidebar { display: none; }
+    .app-btn.app-shell-trigger { display: inline-flex; }
+    .app-utility-bar { min-height: 60px; justify-content: space-between; padding: 0 16px; }
     .app-content { min-height: calc(100dvh - 60px); padding: 22px 16px 48px; }
+  }
+
+  /* Di bawah 420px label "Indonesia" + pil kredit + lonceng tidak lagi muat
+     berdampingan; labelnya disembunyikan dan hanya bendera yang tersisa,
+     sesuai pola app lama yang juga menyembunyikan teks di header sempit. */
+  @media (max-width: 419px) {
+    .app-lang-label { display: none; }
+    .app-credit-pill strong { font-size: 11.5px; }
   }
 }

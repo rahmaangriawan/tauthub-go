@@ -416,7 +416,7 @@
 
 						<!-- Utama -->
 						<div class="min-w-0 flex-1">
-							<a class="truncate font-semibold hover:underline" href={`/klien/${brandUrl}/editor/${row.document_id}`}>
+							<a class="pub-title font-semibold hover:underline" href={`/klien/${brandUrl}/editor/${row.document_id}`}>
 								{row.document_title ?? 'Artikel Tanpa Judul'}
 							</a>
 
@@ -695,3 +695,11 @@
 		<CircleAlert size={15} /> {err}
 	</p>
 {/if}
+
+<style>
+	/* Judul publikasi dibuat inline (parity <span className={pubStyles.pubTitle}>
+	   app lama) supaya judul panjang membungkus ke baris berikutnya. Dengan
+	   `truncate` sebagai elemen inline, ellipsis tidak pernah aktif dan teks
+	   justru meluber keluar kartu. */
+	.pub-title { display: inline-block; max-width: 100%; word-break: break-word; }
+</style>

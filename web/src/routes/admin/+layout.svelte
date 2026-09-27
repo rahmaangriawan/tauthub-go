@@ -10,6 +10,7 @@
 		Settings, ShieldCheck, Sparkle, TriangleAlert, Users, Wallet, Zap
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import AppShell from '$lib/components/app-shell.svelte';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
@@ -199,64 +200,34 @@
 	]);
 </script>
 
-<div class="app-shell">
-	<aside class="app-sidebar">
-		<div class="app-sidebar-inner">
-			<div class="app-sidebar-brand">
-				<a href="/admin" class="text-xl font-extrabold tracking-tight" style="color: var(--primary);">
-					taut<span style="color: var(--foreground);">hub</span>
-				</a>
-			</div>
-
-			<nav class="app-sidebar-nav" aria-label="Navigasi admin">
-				{#each groups as group, index (group.label)}
-					<!-- Separator antar grup menu (parity app lama: <Separator size="4" my="3" />). -->
-					{#if index > 0}<span class="app-sidebar-separator" aria-hidden="true"></span>{/if}
-					<span class="app-sidebar-label">{group.label}</span>
-					{#each group.items as item (item.href + item.label)}
-						<a
-							href={item.href}
-							class="app-sidebar-link"
-							data-active={item.active ? 'true' : 'false'}
-							aria-current={item.active ? 'page' : undefined}
-						>
-							<item.icon size={18} strokeWidth={item.active ? 2.4 : 2} />
-							<span>{item.label}</span>
-						</a>
-					{/each}
-				{/each}
-			</nav>
-
-			{#if user}
-				<div class="app-account-trigger">
-					<div
-						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground"
-						style="background-color: var(--primary);"
-					>
-						{initials}
-					</div>
-					<div class="app-account-info">
-						<span class="app-account-name">{user.display_name}</span>
-						<span class="app-account-email">{user.email}</span>
-					</div>
-					<span class="app-role-badge">{isSuper ? 'Super Admin' : 'Admin'}</span>
-					<ChevronDown size={14} class="shrink-0" style="color: var(--sidebar-soft);" />
+<AppShell brandHref="/admin" navLabel="Navigasi admin" {groups}>
+	{#snippet account()}
+		{#if user}
+			<div class="app-account-trigger">
+				<div
+					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground"
+					style="background-color: var(--primary);"
+				>
+					{initials}
 				</div>
-			{/if}
-		</div>
-	</aside>
+				<div class="app-account-info">
+					<span class="app-account-name">{user.display_name}</span>
+					<span class="app-account-email">{user.email}</span>
+				</div>
+				<span class="app-role-badge">{isSuper ? 'Super Admin' : 'Admin'}</span>
+				<ChevronDown size={14} class="shrink-0" style="color: var(--sidebar-soft);" />
+			</div>
+		{/if}
+	{/snippet}
 
-	<div class="flex min-w-0 flex-1 flex-col">
-		<header class="app-utility-bar">
-			<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label="Pilih bahasa">
-				<span>🇮🇩</span> Indonesia <ChevronDown size={14} />
-			</button>
-			<a href="/admin/errors" class="rounded-lg p-2 transition-colors hover:bg-secondary" aria-label="Peringatan sistem">
-				<Bell size={18} />
-			</a>
-		</header>
-		<main class="app-content">
-			{@render children()}
-		</main>
-	</div>
-</div>
+	{#snippet toolbar()}
+		<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label="Pilih bahasa">
+			<span>🇮🇩</span> <span class="app-lang-label">Indonesia</span> <ChevronDown size={14} />
+		</button>
+		<a href="/admin/errors" class="rounded-lg p-2 transition-colors hover:bg-secondary" aria-label="Peringatan sistem">
+			<Bell size={18} />
+		</a>
+	{/snippet}
+
+	{@render children()}
+</AppShell>

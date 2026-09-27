@@ -56,9 +56,9 @@
 			<h1 class="text-2xl font-semibold tracking-tight">Analisis Kinerja</h1>
 			<p class="mt-1 text-sm text-muted-foreground">Event keterbacaan artikel per hari dari pelacakan publikasi.</p>
 		</div>
-		<form class="flex items-end gap-2" onsubmit={(e) => { e.preventDefault(); void load(); }}>
-			<label class="flex flex-col gap-1 text-xs">Dari<input class="app-input !py-1.5" type="date" bind:value={from} /></label>
-			<label class="flex flex-col gap-1 text-xs">Sampai<input class="app-input !py-1.5" type="date" bind:value={to} /></label>
+		<form class="flex w-full flex-wrap items-end gap-2 sm:w-auto" onsubmit={(e) => { e.preventDefault(); void load(); }}>
+			<label class="flex min-w-0 flex-1 flex-col gap-1 text-xs sm:flex-none">Dari<input class="app-input w-full !py-1.5" type="date" bind:value={from} /></label>
+			<label class="flex min-w-0 flex-1 flex-col gap-1 text-xs sm:flex-none">Sampai<input class="app-input w-full !py-1.5" type="date" bind:value={to} /></label>
 			<button class="app-btn app-btn-primary" type="submit">Terapkan</button>
 		</form>
 	</header>
