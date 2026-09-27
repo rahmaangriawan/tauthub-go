@@ -579,9 +579,12 @@ func (d *Deps) payApplyVerifiedPayment(ctx context.Context, provider, externalID
 			return nil
 		}
 
+		// Cast $1::varchar wajib: tanpa itu PostgreSQL menyimpulkan tipe `text`
+		// dari perbandingan `$1 = 'paid'` dan menolak assignment ke kolom
+		// varchar dengan SQLSTATE 42P08 (pengkreditan saldo gagal total).
 		tag, err := dbTx.Exec(ctx,
 			`UPDATE payment_transactions
-			 SET status = $1, raw_callback = $2::jsonb, paid_at = CASE WHEN $1 = 'paid' THEN COALESCE(paid_at, NOW()) ELSE paid_at END, updated_at = NOW()
+			 SET status = $1::varchar, raw_callback = $2::jsonb, paid_at = CASE WHEN $1::varchar = 'paid' THEN COALESCE(paid_at, NOW()) ELSE paid_at END, updated_at = NOW()
 			 WHERE id = $3 AND gateway_provider = $4 AND status IN ('pending', 'processing')`,
 			status, payloadArg, tx.strOr("id", ""), provider)
 		if err != nil {

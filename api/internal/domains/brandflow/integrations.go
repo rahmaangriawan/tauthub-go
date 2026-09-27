@@ -77,11 +77,12 @@ func (d *Deps) CmsConnectionsList(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	rawBrandID := bsRawBrandID(r)
-	if _, err := d.access(r, rawBrandID, user.ID, "viewer"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
+	if err != nil {
 		d.cmsError(w, err)
 		return
 	}
+	rawBrandID := bfBrand.ID
 	items, err := d.queryRows(r.Context(),
 		"SELECT "+cmsConnectionColumns+" FROM cms_connections WHERE brand_id = $1 AND status = 'active' ORDER BY created_at DESC",
 		rawBrandID)
@@ -108,11 +109,12 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Resource not found")
 		return
 	}
-	rawBrandID := bsRawBrandID(r)
-	if _, err := d.access(r, rawBrandID, user.ID, "admin"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "admin")
+	if err != nil {
 		d.cmsError(w, err)
 		return
 	}
+	rawBrandID := bfBrand.ID
 	body := decodeJSON(r)
 
 	// cmsCreateSchema: name 2..120, provider enum wordpress|webhook default
@@ -282,11 +284,12 @@ func (d *Deps) CmsConnectionGet(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	if _, err := d.access(r, bsRawBrandID(r), user.ID, "viewer"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
+	if err != nil {
 		d.cmsError(w, err)
 		return
 	}
-	row, err := d.bsScopedConnection(r.Context(), bsRawBrandID(r), chiParam(r, "connectionId"))
+	row, err := d.bsScopedConnection(r.Context(), bfBrand.ID, chiParam(r, "connectionId"))
 	if err != nil {
 		d.cmsError(w, err)
 		return
@@ -305,11 +308,12 @@ func (d *Deps) CmsConnectionUpdate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Resource not found")
 		return
 	}
-	rawBrandID := bsRawBrandID(r)
-	if _, err := d.access(r, rawBrandID, user.ID, "admin"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "admin")
+	if err != nil {
 		d.cmsError(w, err)
 		return
 	}
+	rawBrandID := bfBrand.ID
 	connectionID := chiParam(r, "connectionId")
 	body := decodeJSON(r)
 
@@ -422,11 +426,12 @@ func (d *Deps) CmsConnectionDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Resource not found")
 		return
 	}
-	rawBrandID := bsRawBrandID(r)
-	if _, err := d.access(r, rawBrandID, user.ID, "admin"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "admin")
+	if err != nil {
 		d.cmsError(w, err)
 		return
 	}
+	rawBrandID := bfBrand.ID
 	connectionID := chiParam(r, "connectionId")
 	if _, err := d.bsScopedConnection(r.Context(), rawBrandID, connectionID); err != nil {
 		d.cmsError(w, err)
@@ -458,11 +463,12 @@ func (d *Deps) CmsConnectionTest(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Resource not found")
 		return
 	}
-	rawBrandID := bsRawBrandID(r)
-	if _, err := d.access(r, rawBrandID, user.ID, "admin"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "admin")
+	if err != nil {
 		d.cmsError(w, err)
 		return
 	}
+	rawBrandID := bfBrand.ID
 	connectionID := chiParam(r, "connectionId")
 	connection, err := d.queryRow(r.Context(),
 		"SELECT * FROM cms_connections WHERE id = $1 AND brand_id = $2 LIMIT 1", connectionID, rawBrandID)
@@ -699,11 +705,12 @@ func (d *Deps) Ga4Get(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	rawBrandID := bsRawBrandID(r)
-	if _, err := d.access(r, rawBrandID, user.ID, "viewer"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	rawBrandID := bfBrand.ID
 	config, err := d.queryRow(r.Context(),
 		"SELECT id, measurement_id, event_mapping, enabled, consent_mode, updated_at FROM ga4_configs WHERE brand_id = $1 LIMIT 1",
 		rawBrandID)

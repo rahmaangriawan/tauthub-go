@@ -518,11 +518,12 @@ func (d *Deps) PackagesList(w http.ResponseWriter, r *http.Request) {
 	}
 	// Parity route lama: authorize(brandId) lalu query memakai param path apa
 	// adanya (bukan id kanonik).
-	brandID := bsRawBrandID(r)
-	if _, err := d.access(r, brandID, user.ID, "viewer"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	brandID := bfBrand.ID
 	q := r.URL.Query()
 	// parity `Math.min(Math.max(Number(limit ?? 100), 1), 500)` dan
 	// `Math.max(Number(offset ?? 0), 0)`.

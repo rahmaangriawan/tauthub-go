@@ -32,13 +32,14 @@ func (d *Deps) CreditsTopupLookup(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	// Parity route lama: authorize(brandId, "writer") lalu lookup memakai
-	// param path apa adanya (bukan id kanonik).
-	rawBrandID := chiParam(r, "brandId")
-	if _, err := d.access(r, rawBrandID, user.ID, "writer"); err != nil {
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	// Lookup memakai id kanonik: baris payment_transactions disimpan dengan
+	// brands.id, sehingga public_id dari URL tidak akan pernah cocok.
+	rawBrandID := brandRow.ID
 	key := strings.TrimSpace(r.URL.Query().Get("idempotency_key"))
 	if key == "" {
 		writeJSON(w, http.StatusOK, map[string]any{"transaction": nil})
@@ -97,13 +98,16 @@ func (d *Deps) CreditsTopupCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	// Parity route lama: authorize(brandId, "writer") memakai param path apa
-	// adanya; createPayment menerima brandId yang sama (bukan id kanonik).
-	brandID := chiParam(r, "brandId")
-	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	// Wajib id kanonik (UUID): createPayment menyimpan brand_id ini lalu webhook
+	// mengkredit credit_wallets/credit_ledger_entries yang ber-join ke
+	// brands.id. Memakai public_id membuat saldo masuk ke baris phantom dan
+	// transaksi tak terlihat oleh klien maupun admin.
+	brandID := brandRow.ID
 	if err := authpkg.CheckWriteRate(r.Context(), d.Pool, "write:topup:"+user.ID, d.Cfg.WriteRateLimitPerMinute); err != nil {
 		bsErr(d, w, err)
 		return
@@ -272,13 +276,14 @@ func (d *Deps) CreditReportsCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	// Parity route lama: authorize(brandId, "viewer") lalu INSERT memakai param
-	// path apa adanya (bukan id kanonik).
-	brandID := bsRawBrandID(r)
-	if _, err := d.access(r, brandID, user.ID, "viewer"); err != nil {
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
+	if err != nil {
 		d.contentErr(w, err)
 		return
 	}
+	// Id kanonik: daftar admin JOIN ke brands.id dan wallet ke brand_id UUID,
+	// jadi laporan ber-public_id tidak akan pernah muncul meski tersimpan.
+	brandID := brandRow.ID
 	body := decodeJSON(r)
 	// reportSchema: claimed_tc int positif max 10_000_000; payment_reference trim
 	// max200 nullable optional; description trim 10..2000.

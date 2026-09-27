@@ -2,6 +2,7 @@ package platform
 
 import (
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -274,6 +275,13 @@ func (d *Deps) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	transaction, applyErr := d.payApplyWebhook(ctx, provider, verification)
 	if applyErr != nil {
 		// 500 → provider retry; transaksi sudah di-rollback (idempoten).
+		// Tanpa log ini penyebab kegagalan kredit tidak bisa dilacak dari luar.
+		externalID := ""
+		if verification.ExternalTransactionID != nil {
+			externalID = *verification.ExternalTransactionID
+		}
+		slog.Error("[payments] gagal menerapkan webhook",
+			"provider", provider, "external_id", externalID, "err", applyErr)
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"detail": "Failed to apply payment"})
 		return
 	}

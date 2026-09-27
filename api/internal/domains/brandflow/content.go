@@ -220,11 +220,12 @@ func (d *Deps) ContentIntakeAIFill(w http.ResponseWriter, r *http.Request) {
 	// Parity route lama: `brand(brandId, ...)` hanya cek membership, lalu
 	// `row.brand_id !== brandId` dibandingkan dengan param path APA ADANYA
 	// (bukan id kanonik) — dipertahankan supaya perilaku identik.
-	brandID := bsRawBrandID(r)
-	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	brandID := bfBrand.ID
 	intakeID := chiParam(r, "intakeId")
 	row, err := d.bsLoadIntakeRow(r.Context(), intakeID)
 	if err != nil {
@@ -565,11 +566,12 @@ func (d *Deps) ContentIntakeAutoKeyMessages(w http.ResponseWriter, r *http.Reque
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID := bsRawBrandID(r)
-	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	brandID := bfBrand.ID
 	intakeID := chiParam(r, "intakeId")
 	row, err := d.bsLoadIntakeRow(r.Context(), intakeID)
 	if err != nil {
@@ -790,11 +792,12 @@ func (d *Deps) ContentIntakeRecommend(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID := bsRawBrandID(r)
-	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	brandID := bfBrand.ID
 	intakeID := chiParam(r, "intakeId")
 	row, err := d.bsLoadIntakeRow(r.Context(), intakeID)
 	if err != nil {
@@ -1090,11 +1093,12 @@ func (d *Deps) ContentDocumentPatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Parity route lama: scopedDocument memakai param path brandId apa adanya.
-	brandID := bsRawBrandID(r)
-	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
 		d.contentErr(w, err)
 		return
 	}
+	brandID := bfBrand.ID
 	documentID := chiParam(r, "documentId")
 	body := decodeJSON(r)
 	// metadataSchema: title 1..300 wajib; slug max300 nullable optional;
@@ -1253,11 +1257,12 @@ func (d *Deps) ContentDocumentStandardCheck(w http.ResponseWriter, r *http.Reque
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID := bsRawBrandID(r)
-	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	brandID := bfBrand.ID
 	documentID := chiParam(r, "documentId")
 	if _, err := d.scopedDocument(r.Context(), brandID, documentID); err != nil {
 		d.writeErr(w, err)
@@ -1352,11 +1357,12 @@ func (d *Deps) ContentDocumentPublish(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID := bsRawBrandID(r)
-	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
 		d.cmsError(w, err)
 		return
 	}
+	brandID := bfBrand.ID
 	if err := authCheckWriteRateOrErr(r, d); err != nil {
 		d.cmsError(w, err)
 		return

@@ -35,9 +35,13 @@ import (
 
 // ---------- error ----------
 
-// bsRawBrandID: param path `brandId` apa adanya. Beberapa route lama memakai
-// nilai ini langsung di SQL (bukan id kanonik dari brand()) — dipertahankan
-// supaya perilaku identik.
+// bsRawBrandID: param path `brandId` apa adanya.
+//
+// PERINGATAN: jangan pakai untuk query/INSERT tabel yang menyimpan brands.id.
+// Parameter path boleh berupa public_id (mis. `cza87b`) maupun UUID, sedangkan
+// kolom brand_id di DB berisi UUID kanonik — memakai nilai mentah membuat baris
+// tidak ditemukan (read) atau tersimpan sebagai baris phantom (write). Pakai
+// hasil d.access(...) / d.brandID(...) untuk mendapatkan id kanonik.
 func bsRawBrandID(r *http.Request) string { return chiParam(r, "brandId") }
 
 // bsErr: writeErr + pemetaan AuthRateLimitError → 429 (parity checkWriteRate).
