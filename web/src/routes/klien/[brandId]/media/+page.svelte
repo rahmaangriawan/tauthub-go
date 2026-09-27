@@ -100,6 +100,33 @@
 	let page_ = $state(1);
 	const pageSize = 24;
 	let advOpen = $state(false);
+	let advBtn = $state<HTMLButtonElement | null>(null);
+	// Panel filter lanjutan mengambang (parity Radix Popover.Content align="end"
+	// sideOffset={8}) — bukan panel inline yang mendorong tabel ke bawah.
+	let advPos = $state<{ left: number; top: number }>({ left: 0, top: 0 });
+
+	function openAdvFilter() {
+		if (advOpen) {
+			advOpen = false;
+			return;
+		}
+		const rect = advBtn?.getBoundingClientRect();
+		const width = 440;
+		const left = rect
+			? Math.min(Math.max(8, rect.right - width), Math.max(8, window.innerWidth - width - 8))
+			: 8;
+		advPos = { left, top: (rect?.bottom ?? 0) + 8 };
+		advOpen = true;
+	}
+
+	$effect(() => {
+		if (!advOpen) return;
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') advOpen = false;
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	});
 	let importOpen = $state(false);
 	let importText = $state('');
 	let importError = $state('');
@@ -459,11 +486,13 @@
 				/>
 			</div>
 
-			<!-- Filter lanjutan -->
+			<!-- Filter lanjutan (popover mengambang) -->
 			<button
+				bind:this={advBtn}
 				class="modernActionBtn {activeFilterCount > 0 ? 'modernActionBtnActive' : ''}"
 				type="button"
-				onclick={() => (advOpen = !advOpen)}
+				aria-expanded={advOpen}
+				onclick={openAdvFilter}
 			>
 				<SlidersHorizontal size={15} />
 				<span>Filter</span>
@@ -488,9 +517,15 @@
 		</div>
 	</div>
 
-	<!-- Panel filter lanjutan -->
+	<!-- Panel filter lanjutan — mengambang di bawah tombol Filter, tidak menggeser tabel -->
 	{#if advOpen}
-		<div class="advFilterPanel">
+		<button
+			type="button"
+			class="advFilterBackdrop"
+			aria-label="Tutup filter"
+			onclick={() => (advOpen = false)}
+		></button>
+		<div class="advFilterPanel" style="left: {advPos.left}px; top: {advPos.top}px;">
 			<div class="advFilterCard">
 				<div class="advFilterHeader">
 					<div class="advFilterTitle"><SlidersHorizontal size={16} /> Filter Lanjutan</div>
