@@ -105,12 +105,18 @@ func (d *Deps) InternalCronScheduler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	maxJobs := clampInt(r.URL.Query().Get("max_jobs"), 20, 1, 200)
-	result, err := d.materializeScheduledPublications(r.Context(), maxJobs)
-	if err != nil {
-		writeErr(w, d, err)
+	if d.RunScheduler == nil {
+		// Scheduler penuh belum terpasang: jalankan minimal materialisasi
+		// publikasi terjadwal supaya cron tetap berguna.
+		result, err := d.materializeScheduledPublications(r.Context(), maxJobs)
+		if err != nil {
+			writeErr(w, d, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, d.RunScheduler(r.Context(), maxJobs, d.Runner))
 }
 
 // ---------- GET /v1/publishing/feed.json ----------
@@ -521,65 +527,21 @@ type jobRunResult struct {
 	Failed bool
 }
 
-// claimAndRunJob: ambil 1 job pending (FOR UPDATE SKIP LOCKED), proses lewat
-// registry job platform, lalu tandai selesai/gagal dengan backoff standar.
+// claimAndRunJob: ambil 1 job (FOR UPDATE SKIP LOCKED) lalu proses lewat
+// dispatcher bersama internal/jobs. Backoff dan penandaan selesai/gagal
+// dikelola Runner supaya semua proses (API, worker, scheduler) seragam.
 func (d *Deps) claimAndRunJob(ctx context.Context, workerID string) (*jobRunResult, error) {
-	job, err := d.queryRow(ctx, `
-		WITH picked AS (
-		  SELECT id FROM jobs
-		  WHERE status = 'pending' AND run_at <= NOW()
-		  ORDER BY run_at
-		  FOR UPDATE SKIP LOCKED
-		  LIMIT 1
-		)
-		UPDATE jobs SET status = 'running', locked_at = NOW(), locked_by = $1, attempts = attempts + 1
-		WHERE id IN (SELECT id FROM picked)
-		RETURNING id, kind, payload, attempts, max_attempts`, workerID)
-	if err != nil {
+	if d.Runner == nil {
+		return nil, errInternal("Job runner belum dikonfigurasi")
+	}
+	job, err := d.Runner.ProcessOnce(ctx, workerID)
+	if err != nil || job == nil {
 		return nil, err
 	}
-	if job == nil {
-		return nil, nil
-	}
-	id := job.strOr("id", "")
-	kind := job.strOr("kind", "")
-	if runErr := d.runJobByKind(ctx, kind, job); runErr != nil {
-		attempts := job.intOr("attempts", 1)
-		maxAttempts := job.intOr("max_attempts", 2)
-		if attempts >= maxAttempts {
-			_ = d.exec(ctx, "UPDATE jobs SET status = 'failed', last_error = $1, updated_at = NOW() WHERE id = $2",
-				truncateBytesStr(runErr.Error(), 500), id)
-		} else {
-			// Backoff parity: min(30s, 1s * 2^attempt).
-			delay := 1 << uint(attempts)
-			if delay > 30 {
-				delay = 30
-			}
-			_ = d.exec(ctx, "UPDATE jobs SET status = 'pending', last_error = $1, run_at = NOW() + make_interval(secs => $2), updated_at = NOW() WHERE id = $3",
-				truncateBytesStr(runErr.Error(), 500), delay, id)
-		}
-		return &jobRunResult{ID: id, Kind: kind, Failed: true}, nil
-	}
-	if err := d.exec(ctx, "UPDATE jobs SET status = 'completed', completed_at = NOW(), updated_at = NOW() WHERE id = $1", id); err != nil {
-		return nil, err
-	}
-	return &jobRunResult{ID: id, Kind: kind}, nil
-}
-
-// runJobByKind: dispatcher job yang sudah punya padanan di paket platform;
-// kind lain dilewati (ditandai sukses agar tidak memblok antrean — worker Go
-// khusus menangani sisanya).
-func (d *Deps) runJobByKind(ctx context.Context, kind string, job rowMap) error {
-	switch kind {
-	case "publication_link_check":
-		payload, _ := job.raw("payload").(map[string]any)
-		if payload == nil {
-			return nil
-		}
-		return nil
-	default:
-		return nil
-	}
+	// Runner sudah menandai status akhir; baca ulang untuk melaporkan hasil.
+	status, sErr := d.queryRow(ctx, "SELECT status FROM jobs WHERE id = $1 LIMIT 1", job.ID)
+	failed := sErr == nil && status != nil && status.strOr("status", "") == "failed"
+	return &jobRunResult{ID: job.ID, Kind: job.Kind, Failed: failed}, nil
 }
 
 // materializeScheduledPublications: scheduler publikasi — publikasi terjadwal

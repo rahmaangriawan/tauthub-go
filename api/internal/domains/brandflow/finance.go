@@ -272,8 +272,10 @@ func (d *Deps) CreditReportsCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
-	if err != nil {
+	// Parity route lama: authorize(brandId, "viewer") lalu INSERT memakai param
+	// path apa adanya (bukan id kanonik).
+	brandID := bsRawBrandID(r)
+	if _, err := d.access(r, brandID, user.ID, "viewer"); err != nil {
 		d.contentErr(w, err)
 		return
 	}
@@ -322,13 +324,13 @@ func (d *Deps) CreditReportsCreate(w http.ResponseWriter, r *http.Request) {
 	if err := d.exec(r.Context(), `
 		INSERT INTO credit_topup_reports (id, brand_id, user_id, claimed_tc, amount_idr, payment_reference, description, status)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')`,
-		id, brandRow.ID, user.ID, claimedTC, amountIDR, paymentReference, description); err != nil {
+		id, brandID, user.ID, claimedTC, amountIDR, paymentReference, description); err != nil {
 		d.contentErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"report": map[string]any{
-			"id": id, "brand_id": brandRow.ID, "claimed_tc": claimedTC,
+			"id": id, "brand_id": brandID, "claimed_tc": claimedTC,
 			"amount_idr": amountIDR, "payment_reference": paymentReference,
 			"status": "pending", "created_at": isoNow(),
 		},
@@ -336,9 +338,6 @@ func (d *Deps) CreditReportsCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------- link-monitor/request-replacement ----------
-
-// bsLinkStates: state yang bisa difilter (selaras migrasi 148).
-var bsLinkStates = map[string]bool{"live": true, "gone": true, "unreachable": true, "no_url": true}
 
 // LinkMonitorRequestReplacement: POST /v1/brands/{brandId}/link-monitor/request-replacement
 func (d *Deps) LinkMonitorRequestReplacement(w http.ResponseWriter, r *http.Request) {
@@ -1032,7 +1031,7 @@ func (d *Deps) bsPrScore(ctx context.Context, campaignID string, recalc bool, us
 		snapshot := map[string]any{
 			"campaign_id": campaignID, "profile_version": profileVersion,
 			"status": "not_ready", "score": nil, "label": nil,
-			"breakdown": map[string]any{"indicators": []any{}}, "calculated_at": nil,
+			"breakdown": map[string]any{"indicators": []any{}}, "calculated_at": isoNow(),
 		}
 		return bsBuildScoreResponse(bsRow(snapshot), weights, thresholds)
 	}
@@ -1107,9 +1106,15 @@ func (d *Deps) bsPrScore(ctx context.Context, campaignID string, recalc bool, us
 	d.bsUpsertCampaignScore(ctx, campaignID, profileID, profileVersion, string(weightsJSON),
 		status, score, label, marshalJSONMap(breakdown), marshalJSONMap(inputs), userID)
 
+	// Snapshot in-memory: nilai harus sudah tipe JSON-native (bukan pointer),
+	// supaya buildScoreResponse membacanya dengan benar.
+	var scoreValue any
+	if score != nil {
+		scoreValue = *score
+	}
 	snapshot := map[string]any{
 		"campaign_id": campaignID, "profile_version": profileVersion, "status": status,
-		"score": score, "label": label, "breakdown": breakdown,
+		"score": scoreValue, "label": label, "breakdown": breakdown,
 		"calculated_at": isoNow(),
 	}
 	return bsBuildScoreResponse(bsRow(snapshot), weights, thresholds)
@@ -1326,8 +1331,25 @@ func bsBuildScoreResponse(row bsRow, weights, thresholds map[string]float64) map
 			"contribution": contribution, "total_weight": totalWeight, "used_weight": usedWeight,
 		},
 		"insights":      bsBuildInsights(indicators, status),
-		"calculated_at": row.timePtr("calculated_at"),
+		"calculated_at": bsTimeOrString(row.raw("calculated_at")),
 	}
+}
+
+// bsTimeOrString: nilai kolom waktu apa pun → ISO string (time.Time) atau nilai
+// yang sudah string (snapshot in-memory memakai isoNow()).
+func bsTimeOrString(v any) any {
+	switch t := v.(type) {
+	case nil:
+		return nil
+	case time.Time:
+		return isoMilli(t)
+	case *time.Time:
+		if t == nil {
+			return nil
+		}
+		return isoMilli(*t)
+	}
+	return v
 }
 
 // bsBuildInsights: parity buildInsights.

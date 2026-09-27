@@ -253,3 +253,52 @@ me (2), bug-reports (2), tracking (1), campaign-reports (1). Audit independen te
 `go build ./...`, `go vet ./...`, `go test ./...` bersih; `gofmt -l` bersih pada seluruh file baru;
 `svelte-check` 0 error 0 warning; `npm run build` sukses; smoke test API dengan akun `super_admin`
 dan mitra nyata; walkthrough browser seluruh halaman admin + klien baru tanpa error console.
+
+---
+
+## Catatan Status Akhir — Job Queue & Scheduler (temuan verifikasi runtime)
+
+Saat verifikasi smoke seluruh 568 route, ditemukan gap fungsional yang tidak terlihat dari
+checklist endpoint: **seluruh sistem job async belum berjalan**. `runJobByKind` di paket platform
+adalah no-op, `cmd/worker` dan `cmd/scheduler` masih skeleton, dan 14 baris `jobs` menumpuk
+`pending` berjam-jam sehingga publikasi terjadwal, pengingat mitra, dan analisis PR tidak pernah
+diproses. Gap ini sudah ditutup:
+
+**Dispatcher bersama** — `internal/jobs` berisi registry (`Register`/`Dispatch`), penclaim
+(`FOR UPDATE SKIP LOCKED`, ikut memungut baris `failed` yang `run_at`-nya lewat), backoff
+`min(30s, 1s*2^attempt)`, `MarkCompleted`/`MarkFailed`, `Drain`, dan `Loop`. Semua proses
+(API, worker, scheduler) berbagi registry yang sama lewat `internal/jobwire.Register`.
+
+**13/13 job kind punya processor** — `publication_execution`, `publication_variant_generation`,
+`publication_link_check`, `pr_analysis`, `pr_verify`, `media_seo_refresh`, `media_ai_summary`,
+`crawl_target_sync`, `domain_verify`, `send_email`, `send_wa`, `content_generation`,
+`sitemap_crawl`. Kind tanpa processor kini gagal terang-terangan (`UnknownKindError`) alih-alih
+"sukses palsu" lalu hilang.
+
+**Scheduler lengkap** — `brandflow.RunScheduler` memport seluruh `runScheduler` app lama:
+materialisasi occurrence jadwal berulang (SKIP LOCKED + reservasi TC saat jatuh tempo), sweep
+publikasi due (dedupe `payload->>'publicationId'`), pengingat mitra & notifikasi telat setuju
+(dedupe `waiting_partner_reminder:` / `late_approval:`), drain antrean job, safety net antrean
+email/WA, refresh kesehatan media, serta sweep domain/crawl/link-check/ringkasan-AI/SEO.
+Dipicu oleh `POST /v1/internal/cron/scheduler` (guard `CRON_SECRET`/`JOB_RUNNER_KEY`) atau
+`cmd/scheduler`.
+
+**Bug nyata yang ditemukan & diperbaiki saat verifikasi runtime**:
+1. `MarkCompleted` menulis kolom `completed_at` yang **tidak ada** di tabel `jobs` → seluruh
+   penyelesaian job gagal dengan `SQLSTATE 42703`. Diperbaiki agar hanya menulis `status` +
+   `updated_at` (parity app lama).
+2. `ProcessSitemapCrawlJob` meng-claim ulang baris job-nya sendiri padahal Runner sudah
+   meng-claim → `no rows in result set` dan job gagal permanen. Wrapper `jobwire` sekarang
+   memanggil `CrawlSitemap` langsung tanpa claim ganda.
+3. Detail paritas lain: `notifications` tidak punya indeks unik `dedupe_key` (dipakai cek
+   eksplisit), `email_deliveries` juga tidak (cek eksplisit), dan `platform_crawlhub_config`
+   memakai kolom `sealed_hmac_secret` (bukan `sealed_api_key`).
+
+**Bukti verifikasi runtime**: worker nyata dijalankan → antrean dari 14 pending menjadi 0;
+satu job per kind di-enqueue lalu **semuanya selesai** (`domain_verify`, `media_seo_refresh`,
+`publication_link_check`, `pr_verify`, `send_email`, `send_wa`, `media_ai_summary` → `completed`);
+`POST /v1/internal/cron/scheduler` mengembalikan 200 dengan hitungan nyata
+(`media_health_refreshed: 1`); `POST /v1/internal/jobs` mengembalikan 200 dan memproses job.
+Kegagalan yang tersisa bersifat data, bukan kode: URL sitemap `http://localhost:9999` ditolak
+SSRF guard (`Sitemap URL must be a public http(s) address`) dan 2 job SEO tertahan
+rate-limit provider — keduanya perilaku benar.

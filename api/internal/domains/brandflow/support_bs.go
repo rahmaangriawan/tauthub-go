@@ -35,6 +35,11 @@ import (
 
 // ---------- error ----------
 
+// bsRawBrandID: param path `brandId` apa adanya. Beberapa route lama memakai
+// nilai ini langsung di SQL (bukan id kanonik dari brand()) — dipertahankan
+// supaya perilaku identik.
+func bsRawBrandID(r *http.Request) string { return chiParam(r, "brandId") }
+
 // bsErr: writeErr + pemetaan AuthRateLimitError → 429 (parity checkWriteRate).
 func bsErr(d *Deps, w http.ResponseWriter, err error) {
 	var rle *authpkg.AuthRateLimitError

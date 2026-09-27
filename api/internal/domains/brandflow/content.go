@@ -217,8 +217,11 @@ func (d *Deps) ContentIntakeAIFill(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID, err := d.brandID(r, user.ID, "writer")
-	if err != nil {
+	// Parity route lama: `brand(brandId, ...)` hanya cek membership, lalu
+	// `row.brand_id !== brandId` dibandingkan dengan param path APA ADANYA
+	// (bukan id kanonik) — dipertahankan supaya perilaku identik.
+	brandID := bsRawBrandID(r)
+	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -562,8 +565,8 @@ func (d *Deps) ContentIntakeAutoKeyMessages(w http.ResponseWriter, r *http.Reque
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID, err := d.brandID(r, user.ID, "writer")
-	if err != nil {
+	brandID := bsRawBrandID(r)
+	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -787,8 +790,8 @@ func (d *Deps) ContentIntakeRecommend(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID, err := d.brandID(r, user.ID, "writer")
-	if err != nil {
+	brandID := bsRawBrandID(r)
+	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -1086,8 +1089,9 @@ func (d *Deps) ContentDocumentPatch(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
-	if err != nil {
+	// Parity route lama: scopedDocument memakai param path brandId apa adanya.
+	brandID := bsRawBrandID(r)
+	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
 		d.contentErr(w, err)
 		return
 	}
@@ -1095,7 +1099,7 @@ func (d *Deps) ContentDocumentPatch(w http.ResponseWriter, r *http.Request) {
 	body := decodeJSON(r)
 	// metadataSchema: title 1..300 wajib; slug max300 nullable optional;
 	// meta_title max255 nullable optional; meta_description max500 nullable optional.
-	title, err := bsZodString(body, "title", 1, 300, false, false)
+	title, err := bsZodStringRaw(body, "title", 1, 300, false, false)
 	if err != nil {
 		d.contentErr(w, err)
 		return
@@ -1115,7 +1119,7 @@ func (d *Deps) ContentDocumentPatch(w http.ResponseWriter, r *http.Request) {
 		d.contentErr(w, err)
 		return
 	}
-	document, err := d.scopedDocument(r.Context(), brandRow.ID, documentID)
+	document, err := d.scopedDocument(r.Context(), brandID, documentID)
 	if err != nil {
 		d.contentErr(w, err)
 		return
@@ -1160,8 +1164,8 @@ func (d *Deps) ContentDocumentPatch(w http.ResponseWriter, r *http.Request) {
 		d.contentErr(w, err)
 		return
 	}
-	d.audit(r.Context(), brandRow.ID, user.ID, "content.document.metadata_updated", "content_document", documentID)
-	out, err := d.bsDocumentJSON(r.Context(), brandRow.ID, documentID)
+	d.audit(r.Context(), brandID, user.ID, "content.document.metadata_updated", "content_document", documentID)
+	out, err := d.bsDocumentJSON(r.Context(), brandID, documentID)
 	if err != nil {
 		d.contentErr(w, err)
 		return
@@ -1249,13 +1253,13 @@ func (d *Deps) ContentDocumentStandardCheck(w http.ResponseWriter, r *http.Reque
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
-	if err != nil {
+	brandID := bsRawBrandID(r)
+	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
 		d.writeErr(w, err)
 		return
 	}
 	documentID := chiParam(r, "documentId")
-	if _, err := d.scopedDocument(r.Context(), brandRow.ID, documentID); err != nil {
+	if _, err := d.scopedDocument(r.Context(), brandID, documentID); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -1289,7 +1293,7 @@ func (d *Deps) ContentDocumentStandardCheck(w http.ResponseWriter, r *http.Reque
 		mediaIDs = append(mediaIDs, s)
 	}
 
-	results, err := d.finalStandardCheckMany(r.Context(), brandRow.ID, documentID, mediaIDs)
+	results, err := d.finalStandardCheckMany(r.Context(), brandID, documentID, mediaIDs)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -1348,8 +1352,8 @@ func (d *Deps) ContentDocumentPublish(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
-	if err != nil {
+	brandID := bsRawBrandID(r)
+	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
 		d.cmsError(w, err)
 		return
 	}
@@ -1358,7 +1362,7 @@ func (d *Deps) ContentDocumentPublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	documentID := chiParam(r, "documentId")
-	document, err := d.scopedDocument(r.Context(), brandRow.ID, documentID)
+	document, err := d.scopedDocument(r.Context(), brandID, documentID)
 	if err != nil {
 		d.cmsError(w, err)
 		return
@@ -1373,7 +1377,7 @@ func (d *Deps) ContentDocumentPublish(w http.ResponseWriter, r *http.Request) {
 		d.cmsError(w, err)
 		return
 	}
-	connection, err := d.bsScopedConnection(r.Context(), brandRow.ID, value.ConnectionID)
+	connection, err := d.bsScopedConnection(r.Context(), brandID, value.ConnectionID)
 	if err != nil {
 		d.cmsError(w, err)
 		return
@@ -1414,12 +1418,12 @@ func (d *Deps) ContentDocumentPublish(w http.ResponseWriter, r *http.Request) {
 	jobID := uuid.NewString()
 	if err := d.exec(r.Context(),
 		"INSERT INTO publication_jobs (id, brand_id, document_id, connection_id, status, publish_status, payload_snapshot, created_by) VALUES ($1, $2, $3, $4, 'queued', $5, $6::jsonb, $7)",
-		jobID, brandRow.ID, documentID, connection.strOr("id", ""), value.PublishStatus,
+		jobID, brandID, documentID, connection.strOr("id", ""), value.PublishStatus,
 		marshalJSONMap(snapshot), user.ID); err != nil {
 		d.cmsError(w, err)
 		return
 	}
-	d.audit(r.Context(), brandRow.ID, user.ID, "content.publication.queued", "content_document", documentID)
+	d.audit(r.Context(), brandID, user.ID, "content.publication.queued", "content_document", documentID)
 	d.bsPublishNow(r.Context(), jobID, documentID, connection, document)
 	payload, err := d.bsPublicationJSON(r.Context(), jobID)
 	if err != nil {
@@ -1445,7 +1449,8 @@ func bsParsePublishSchema(body map[string]any) (cmsPublishInput, error) {
 	}
 	out.ConnectionID = s
 	out.PublishStatus = "draft"
-	if raw, ok := body["publish_status"]; ok && raw != nil {
+	if raw, ok := body["publish_status"]; ok {
+		// default hanya untuk undefined; null tetap ditolak zod.
 		ps, isStr := raw.(string)
 		if !isStr || (ps != "draft" && ps != "publish") {
 			return out, errUnprocessable("Invalid option: expected one of \"draft\"|\"publish\"")

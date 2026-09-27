@@ -77,14 +77,14 @@ func (d *Deps) CmsConnectionsList(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
-	if err != nil {
+	rawBrandID := bsRawBrandID(r)
+	if _, err := d.access(r, rawBrandID, user.ID, "viewer"); err != nil {
 		d.cmsError(w, err)
 		return
 	}
 	items, err := d.queryRows(r.Context(),
 		"SELECT "+cmsConnectionColumns+" FROM cms_connections WHERE brand_id = $1 AND status = 'active' ORDER BY created_at DESC",
-		brandRow.ID)
+		rawBrandID)
 	if err != nil {
 		d.cmsError(w, err)
 		return
@@ -108,8 +108,8 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Resource not found")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "admin")
-	if err != nil {
+	rawBrandID := bsRawBrandID(r)
+	if _, err := d.access(r, rawBrandID, user.ID, "admin"); err != nil {
 		d.cmsError(w, err)
 		return
 	}
@@ -119,25 +119,22 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 	// wordpress, base_url 8..500, username 1..160 nullable optional,
 	// application_password 1..500 optional, secret 16..500 optional,
 	// website_id string nullable optional + superRefine per provider.
-	name, err := bsZodString(body, "name", 2, 120, false, false)
+	name, err := bsZodStringRaw(body, "name", 2, 120, false, false)
 	if err != nil {
 		d.cmsError(w, err)
 		return
 	}
 	provider := "wordpress"
-	if raw, ok := body["provider"]; ok && raw != nil {
+	if raw, ok := body["provider"]; ok {
 		s, isStr := raw.(string)
-		if !isStr {
-			d.cmsError(w, errUnprocessable("Invalid option: expected one of \"wordpress\"|\"webhook\""))
-			return
-		}
-		if s != "wordpress" && s != "webhook" {
+		if !isStr || (s != "wordpress" && s != "webhook") {
+			// null pun ditolak zod (default hanya berlaku untuk undefined).
 			d.cmsError(w, errUnprocessable("Invalid option: expected one of \"wordpress\"|\"webhook\""))
 			return
 		}
 		provider = s
 	}
-	baseURL, err := bsZodString(body, "base_url", 8, 500, false, false)
+	baseURL, err := bsZodStringRaw(body, "base_url", 8, 500, false, false)
 	if err != nil {
 		d.cmsError(w, err)
 		return
@@ -219,7 +216,7 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 
 	if websiteID != nil && *websiteID != "" {
 		site, err := d.queryRow(r.Context(),
-			"SELECT id FROM websites WHERE id = $1 AND brand_id = $2", *websiteID, brandRow.ID)
+			"SELECT id FROM websites WHERE id = $1 AND brand_id = $2", *websiteID, rawBrandID)
 		if err != nil {
 			d.cmsError(w, err)
 			return
@@ -231,7 +228,7 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	if provider == "wordpress" {
 		active, err := d.queryRow(r.Context(),
-			"SELECT id FROM cms_connections WHERE brand_id = $1 AND provider = 'wordpress' AND status = 'active' LIMIT 1", brandRow.ID)
+			"SELECT id FROM cms_connections WHERE brand_id = $1 AND provider = 'wordpress' AND status = 'active' LIMIT 1", rawBrandID)
 		if err != nil {
 			d.cmsError(w, err)
 			return
@@ -256,14 +253,19 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 	if username != nil {
 		usernameArg = strings.TrimSpace(*username)
 	}
+	// Parity `value.website_id ?? null` — string kosong tetap disimpan kosong.
+	var websiteArg any
+	if websiteID != nil {
+		websiteArg = *websiteID
+	}
 	if err := d.exec(r.Context(),
 		"INSERT INTO cms_connections (id, brand_id, website_id, provider, name, base_url, username, sealed_secret, enc_key_ver, status, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, 'active', $9)",
-		connectionID, brandRow.ID, nullIfEmpty(derefPtr(websiteID)), provider, name,
+		connectionID, rawBrandID, websiteArg, provider, name,
 		strings.TrimRight(baseURL, "/"), usernameArg, sealed, user.ID); err != nil {
 		d.cmsError(w, err)
 		return
 	}
-	d.audit(r.Context(), brandRow.ID, user.ID, "cms.connection.created", "cms_connection", connectionID)
+	d.audit(r.Context(), rawBrandID, user.ID, "cms.connection.created", "cms_connection", connectionID)
 	created, err := d.queryRow(r.Context(),
 		"SELECT "+cmsConnectionColumns+" FROM cms_connections WHERE id = $1", connectionID)
 	if err != nil {
@@ -280,12 +282,11 @@ func (d *Deps) CmsConnectionGet(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
-	if err != nil {
+	if _, err := d.access(r, bsRawBrandID(r), user.ID, "viewer"); err != nil {
 		d.cmsError(w, err)
 		return
 	}
-	row, err := d.bsScopedConnection(r.Context(), brandRow.ID, chiParam(r, "connectionId"))
+	row, err := d.bsScopedConnection(r.Context(), bsRawBrandID(r), chiParam(r, "connectionId"))
 	if err != nil {
 		d.cmsError(w, err)
 		return
@@ -304,8 +305,8 @@ func (d *Deps) CmsConnectionUpdate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Resource not found")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "admin")
-	if err != nil {
+	rawBrandID := bsRawBrandID(r)
+	if _, err := d.access(r, rawBrandID, user.ID, "admin"); err != nil {
 		d.cmsError(w, err)
 		return
 	}
@@ -367,7 +368,7 @@ func (d *Deps) CmsConnectionUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := d.bsScopedConnection(r.Context(), brandRow.ID, connectionID); err != nil {
+	if _, err := d.bsScopedConnection(r.Context(), rawBrandID, connectionID); err != nil {
 		d.cmsError(w, err)
 		return
 	}
@@ -396,13 +397,13 @@ func (d *Deps) CmsConnectionUpdate(w http.ResponseWriter, r *http.Request) {
 		args = append(args, sealed)
 		query += ", sealed_secret = $" + itoa(len(args)) + ", enc_key_ver = 1"
 	}
-	args = append(args, connectionID, brandRow.ID)
+	args = append(args, connectionID, rawBrandID)
 	query += " WHERE id = $" + itoa(len(args)-1) + " AND brand_id = $" + itoa(len(args))
 	if err := d.exec(r.Context(), query, args...); err != nil {
 		d.cmsError(w, err)
 		return
 	}
-	refreshed, err := d.bsScopedConnection(r.Context(), brandRow.ID, connectionID)
+	refreshed, err := d.bsScopedConnection(r.Context(), rawBrandID, connectionID)
 	if err != nil {
 		d.cmsError(w, err)
 		return
@@ -421,24 +422,24 @@ func (d *Deps) CmsConnectionDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Resource not found")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "admin")
-	if err != nil {
+	rawBrandID := bsRawBrandID(r)
+	if _, err := d.access(r, rawBrandID, user.ID, "admin"); err != nil {
 		d.cmsError(w, err)
 		return
 	}
 	connectionID := chiParam(r, "connectionId")
-	if _, err := d.bsScopedConnection(r.Context(), brandRow.ID, connectionID); err != nil {
+	if _, err := d.bsScopedConnection(r.Context(), rawBrandID, connectionID); err != nil {
 		d.cmsError(w, err)
 		return
 	}
 	if err := d.exec(r.Context(),
 		"UPDATE cms_connections SET status = 'revoked', name = CONCAT(name, ' (revoked ', LEFT(id, 8), ')') WHERE id = $1 AND brand_id = $2",
-		connectionID, brandRow.ID); err != nil {
+		connectionID, rawBrandID); err != nil {
 		d.cmsError(w, err)
 		return
 	}
-	d.audit(r.Context(), brandRow.ID, user.ID, "cms.connection.revoked", "cms_connection", connectionID)
-	refreshed, err := d.bsScopedConnection(r.Context(), brandRow.ID, connectionID)
+	d.audit(r.Context(), rawBrandID, user.ID, "cms.connection.revoked", "cms_connection", connectionID)
+	refreshed, err := d.bsScopedConnection(r.Context(), rawBrandID, connectionID)
 	if err != nil {
 		d.cmsError(w, err)
 		return
@@ -457,14 +458,14 @@ func (d *Deps) CmsConnectionTest(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Resource not found")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "admin")
-	if err != nil {
+	rawBrandID := bsRawBrandID(r)
+	if _, err := d.access(r, rawBrandID, user.ID, "admin"); err != nil {
 		d.cmsError(w, err)
 		return
 	}
 	connectionID := chiParam(r, "connectionId")
 	connection, err := d.queryRow(r.Context(),
-		"SELECT * FROM cms_connections WHERE id = $1 AND brand_id = $2 LIMIT 1", connectionID, brandRow.ID)
+		"SELECT * FROM cms_connections WHERE id = $1 AND brand_id = $2 LIMIT 1", connectionID, rawBrandID)
 	if err != nil {
 		d.cmsError(w, err)
 		return
@@ -698,14 +699,14 @@ func (d *Deps) Ga4Get(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
-	if err != nil {
+	rawBrandID := bsRawBrandID(r)
+	if _, err := d.access(r, rawBrandID, user.ID, "viewer"); err != nil {
 		d.writeErr(w, err)
 		return
 	}
 	config, err := d.queryRow(r.Context(),
 		"SELECT id, measurement_id, event_mapping, enabled, consent_mode, updated_at FROM ga4_configs WHERE brand_id = $1 LIMIT 1",
-		brandRow.ID)
+		rawBrandID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -760,6 +761,16 @@ func bsZodTypeName(v any) string {
 
 // bsZodString: field string wajib/opsional dengan trim + batas panjang.
 func bsZodString(body map[string]any, key string, min, max int, optional, nullable bool) (string, error) {
+	return bsZodStringMode(body, key, min, max, optional, nullable, true)
+}
+
+// bsZodStringRaw: seperti bsZodString tapi TANPA trim (schema _cms.ts tidak
+// memakai .trim(); nilai disimpan apa adanya).
+func bsZodStringRaw(body map[string]any, key string, min, max int, optional, nullable bool) (string, error) {
+	return bsZodStringMode(body, key, min, max, optional, nullable, false)
+}
+
+func bsZodStringMode(body map[string]any, key string, min, max int, optional, nullable, trim bool) (string, error) {
 	raw, ok := body[key]
 	if !ok {
 		if optional {
@@ -777,17 +788,21 @@ func bsZodString(body map[string]any, key string, min, max int, optional, nullab
 	if !isStr {
 		return "", errUnprocessable("Invalid input: expected string, received " + bsZodTypeName(raw))
 	}
-	trimmed := strings.TrimSpace(s)
-	if min > 0 && len([]rune(trimmed)) < min {
+	value := s
+	if trim {
+		value = strings.TrimSpace(s)
+	}
+	if min > 0 && len([]rune(value)) < min {
 		return "", errUnprocessable("Too small: expected string to have >=" + itoa(min) + " characters")
 	}
-	if max > 0 && len([]rune(trimmed)) > max {
+	if max > 0 && len([]rune(value)) > max {
 		return "", errUnprocessable("Too big: expected string to have <=" + itoa(max) + " characters")
 	}
-	return trimmed, nil
+	return value, nil
 }
 
 // bsZodURL: field string trim url() max 500 (parity z.string().trim().url().max()).
+// Urutan check zod: trim → url → max.
 func bsZodURL(body map[string]any, key string, max int, nullable bool) (string, error) {
 	raw, ok := body[key]
 	if !ok {
@@ -804,11 +819,11 @@ func bsZodURL(body map[string]any, key string, max int, nullable bool) (string, 
 		return "", errUnprocessable("Invalid input: expected string, received " + bsZodTypeName(raw))
 	}
 	trimmed := strings.TrimSpace(s)
-	if len([]rune(trimmed)) > max {
-		return "", errUnprocessable("Too big: expected string to have <=" + itoa(max) + " characters")
-	}
 	if !bsIsURL(trimmed) {
 		return "", errUnprocessable("Invalid URL")
+	}
+	if len([]rune(trimmed)) > max {
+		return "", errUnprocessable("Too big: expected string to have <=" + itoa(max) + " characters")
 	}
 	return trimmed, nil
 }

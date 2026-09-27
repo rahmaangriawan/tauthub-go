@@ -66,11 +66,16 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if err != nil {
 		return writerItemResult{}, err
 	}
-	materials := asMapValue(campaign.jsonField("materials"))
+	materials := asMapValue(campaign.jsonField("editorial_standard_snapshot"))
 	hyperlink := asSliceValue(campaign.jsonField("hyperlink_config"))
 	briefContext, err := d.loadTautBriefContext(ctx, campaignID)
 	if err != nil {
 		return writerItemResult{}, err
+	}
+	backlinkEnabled, smartVariations := d.loadTautBacklinkSettings(ctx, campaignID)
+	smartVariationRule := ""
+	if smartVariations {
+		smartVariationRule = tautSmartVariationRule
 	}
 
 	item, err := d.queryRow(ctx, `
@@ -189,17 +194,21 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		}
 	}
 
+	backlinkFlag := "dari input Writer"
+	if backlinkEnabled {
+		backlinkFlag = "AKTIF dari The Profiler — WAJIB di semua artikel"
+	}
 	linkContext := ""
 	if primaryURL != "" {
 		var b strings.Builder
-		b.WriteString("Konteks tautan kampanye (backlink dari input Writer):\n")
+		b.WriteString("Konteks tautan kampanye (backlink " + backlinkFlag + "):\n")
 		b.WriteString("   Mode pelacakan: " + trackingMode)
 		if trackingMode == "tauthub" {
-			b.WriteString(" — TANAM SHORT LINK di bawah ini persis apa adanya ke href.")
+			b.WriteString(" — TANAM SHORT LINK di bawah ini persis apa adanya ke href (jangan karang path lain; jangan pecah kodenya). Klik tercatat otomatis lalu redirect 301 ke URL asli.")
 		}
 		b.WriteString("\n   Tautan utama (prioritas, WAJIB): " + plantPrimary + " (anchor: \"" + primaryAnchor + "\")")
 		if plantBackup != "" {
-			b.WriteString("\n   Tautan cadangan (pelengkap, hanya bila konteks cocok): " + plantBackup + " (anchor: \"" + backupAnchor + "\")")
+			b.WriteString("\n   Tautan cadangan (pelengkap — HANYA bila konteks cocok): " + plantBackup + " (anchor: \"" + backupAnchor + "\")")
 		}
 		linkContext = b.String()
 	}
@@ -208,16 +217,27 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if allowsLink && primaryURL != "" {
 		relRule := "TANPA atribut rel (dofollow)."
 		if sponsoredMedia {
-			relRule = "DENGAN atribut rel=\"sponsored\"."
+			relRule = "DENGAN atribut rel=\"sponsored\" (link bersponsor)."
+		}
+		primaryObligation := ""
+		if backlinkEnabled {
+			primaryObligation = " Ini backlink wajib dari The Profiler — artikel tanpa tautan ini dianggap gagal."
+		}
+		backupRule := " Media ini hanya mengizinkan 1 tautan — jangan tanam tautan cadangan."
+		if plantBackup != "" {
+			backupRule = " Tautan cadangan (" + plantBackup + ") BUKAN kewajiban — tanam HANYA bila ada kalimat yang konteksnya benar-benar relevan (maksimal 1x), dengan anchor \"" + backupAnchor + "\" dan WAJIB rel=\"nofollow sponsored\"."
 		}
 		linkRule = "ATURAN PENANAMAN LINK (WAJIB):\n" +
-			"   - SEMUA tautan WAJIB berupa <a href=\"URL\">anchor text</a>. DILARANG menulis URL telanjang sebagai teks.\n" +
-			"   - Tautan utama (" + plantPrimary + ") WAJIB ada TEPAT 1x dengan anchor \"" + primaryAnchor + "\" " + relRule + "\n" +
-			"   - Tempatkan tautan secara natural di dalam kalimat.\n" +
-			"   - JANGAN menanam link lain selain yang disediakan."
+			"   - SEMUA tautan WAJIB berupa <a href=\"URL\">anchor text</a>. DILARANG KERAS menulis URL telanjang (https://... atau www....) sebagai teks artikel — setiap URL yang muncul HARUS terbungkus tag <a> dengan anchor text yang diberikan.\n" +
+			"   - Tautan utama (" + plantPrimary + ") WAJIB ada TEPAT 1x di artikel dengan anchor \"" + primaryAnchor + "\" " + relRule + primaryObligation + "\n" +
+			"   -" + backupRule + "\n" +
+			"   - Tempatkan tautan secara natural di dalam kalimat (bukan berdampingan, bukan daftar link).\n" +
+			"   - TEKNIK KONTEKSTUAL (WAJIB): tanamkan link dengan mengubah frasa yang SUDAH ada di kalimat menjadi tautan (sebutan brand/layanan/topik yang sedang dibahas). DILARANG KERAS menambahkan kalimat pembatas seperti \"Baca juga:\", \"Baca selengkapnya di\", \"Lihat juga:\", atau membuat paragraf khusus untuk menampung link.\n" +
+			"   - JANGAN menanam link lain selain yang disediakan di atas."
 	}
 
 	anglePromptBlock := d.loadTautAnglePromptBlock(ctx, campaignID, mediaType)
+	channelInstruction := d.loadTautChannelInstruction(ctx, campaignID, mediaType)
 
 	var identity strings.Builder
 	identity.WriteString("[IDENTITAS MEDIA]\n   Nama: " + name + "\n   Tipe: " + mediaType)
@@ -249,12 +269,14 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		languageBlock,
 		identity.String(),
 		topikBlock,
+		channelInstruction,
 		anglePromptBlock,
 		linkContext,
 		linkRule,
 		spokespersonBlock,
+		smartVariationRule,
 		"Bahan: "+jsonStringify(orEmptyMapValue(materials)),
-		"Aturan hyperlink media: "+jsonStringify(orEmptySliceValue(hyperlink)),
+		"Aturan hyperlink media (bila media tidak mengizinkan, gunakan ATURAN PENANAMAN LINK nol): "+jsonStringify(orEmptySliceValue(hyperlink)),
 		"Kutipan/fakta hanya dari bahan/brief di atas — jangan mengarang angka, nama, atau jabatan.",
 		"Aturan meta deskripsi (WAJIB): sertakan meta_description 120-160 karakter bahasa Indonesia aktif.",
 		"", "Tulis artikel unik utk media ini. Output JSON valid {title, content_html, meta_description}.",

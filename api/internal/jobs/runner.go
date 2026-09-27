@@ -1,0 +1,261 @@
+// Package jobs: runner antrean `jobs` (port lib/jobs/queue.ts) — claim
+// SKIP LOCKED, dispatch per kind, backoff, dan loop worker/scheduler.
+//
+// Processor per kind didaftarkan lewat Register agar pemanggil (cmd/worker,
+// cmd/scheduler, /v1/internal/jobs) berbagi satu dispatcher yang sama.
+package jobs
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// JobRow: baris `jobs` yang di-claim.
+type JobRow struct {
+	ID          string
+	Kind        string
+	Payload     map[string]any
+	Attempts    int
+	MaxAttempts int
+}
+
+// Handler memproses satu job. attempt sudah dinaikkan saat claim.
+type Handler func(ctx context.Context, job JobRow) error
+
+var (
+	mu       sync.RWMutex
+	handlers = map[string]Handler{}
+)
+
+// Register mendaftarkan processor untuk satu kind. Kind yang sama didaftarkan
+// ulang akan menimpa (berguna saat test).
+func Register(kind string, h Handler) {
+	mu.Lock()
+	defer mu.Unlock()
+	handlers[kind] = h
+}
+
+// Registered mengembalikan daftar kind yang sudah punya processor (terurut
+// tidak dijamin) — dipakai endpoint kesehatan ops.
+func Registered() []string {
+	mu.RLock()
+	defer mu.RUnlock()
+	out := make([]string, 0, len(handlers))
+	for k := range handlers {
+		out = append(out, k)
+	}
+	return out
+}
+
+// UnknownKindError: kind tanpa processor. Dicatat sebagai error supaya job
+// tidak "sukses palsu" lalu hilang.
+type UnknownKindError struct{ Kind string }
+
+func (e *UnknownKindError) Error() string { return "job kind tanpa processor: " + e.Kind }
+
+// Runner: klaim + eksekusi job dari tabel `jobs`.
+type Runner struct {
+	Pool *pgxpool.Pool
+
+	mu     sync.Mutex
+	closed bool
+}
+
+// NewRunner membuat runner dengan pool yang diberikan.
+func NewRunner(pool *pgxpool.Pool) *Runner { return &Runner{Pool: pool} }
+
+// backoff: min(30s, 1s * 2^attempt) — parity backoffMs.
+func backoff(attempt int) time.Duration {
+	if attempt < 0 {
+		attempt = 0
+	}
+	shift := attempt
+	if shift > 5 {
+		shift = 5
+	}
+	d := time.Second * time.Duration(1<<uint(shift))
+	if d > 30*time.Second {
+		d = 30 * time.Second
+	}
+	return d
+}
+
+// ClaimNextJob: ambil satu job pending ATAU failed yang waktunya tiba, kunci
+// barisnya (SKIP LOCKED), tandai running, attempts+1. Parity claimNextJob —
+// termasuk ikut memungut baris `failed` yang run_at-nya sudah lewat.
+func (r *Runner) ClaimNextJob(ctx context.Context, workerID string) (*JobRow, error) {
+	row := r.Pool.QueryRow(ctx, `
+		WITH picked AS (
+		  SELECT id FROM jobs
+		  WHERE status IN ('pending','failed') AND run_at <= NOW()
+		  ORDER BY run_at
+		  LIMIT 1
+		  FOR UPDATE SKIP LOCKED
+		)
+		UPDATE jobs SET status = 'running', locked_at = NOW(), locked_by = $1,
+		                attempts = attempts + 1, updated_at = NOW()
+		WHERE id IN (SELECT id FROM picked)
+		RETURNING id, kind, payload, attempts, max_attempts`, workerID)
+	var id, kind string
+	var raw []byte
+	var attempts, maxAttempts int
+	if err := row.Scan(&id, &kind, &raw, &attempts, &maxAttempts); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	payload := map[string]any{}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			slog.Warn("[jobs] payload bukan objek JSON", "id", id, "kind", kind, "err", err)
+		}
+	}
+	return &JobRow{ID: id, Kind: kind, Payload: payload, Attempts: attempts, MaxAttempts: maxAttempts}, nil
+}
+
+// MarkCompleted: tandai job selesai (locked_* dilepas). Parity markCompleted —
+// tabel `jobs` tidak punya kolom completed_at, jadi hanya status + updated_at.
+func (r *Runner) MarkCompleted(ctx context.Context, jobID, workerID string) error {
+	_, err := r.Pool.Exec(ctx,
+		`UPDATE jobs SET status='completed', locked_at=NULL, locked_by=NULL, updated_at=NOW()
+		 WHERE id=$1 AND ($2 = '' OR locked_by=$2)`, jobID, workerID)
+	return err
+}
+
+// MarkFailed: terminal jika attempts >= max_attempts, selain itu kembali
+// pending dengan backoff. Parity markFailed (pesan dipotong 1000).
+func (r *Runner) MarkFailed(ctx context.Context, job JobRow, message, workerID string) error {
+	status := "pending"
+	if job.Attempts >= job.MaxAttempts {
+		status = "failed"
+	}
+	msg := message
+	if len(msg) > 1000 {
+		msg = msg[:1000]
+	}
+	runAt := time.Now().Add(backoff(job.Attempts))
+	_, err := r.Pool.Exec(ctx,
+		`UPDATE jobs SET status=$1, locked_at=NULL, locked_by=NULL, last_error=$2, run_at=$3, updated_at=NOW()
+		 WHERE id=$4 AND ($5 = '' OR locked_by=$5)`, status, msg, runAt, job.ID, workerID)
+	return err
+}
+
+// ProcessOnce: claim satu job lalu proses. Mengembalikan (nil, nil) bila
+// antrean kosong. Error yang dikembalikan adalah kegagalan infra (DB), bukan
+// kegagalan handler — kegagalan handler sudah tercatat ke baris job.
+func (r *Runner) ProcessOnce(ctx context.Context, workerID string) (*JobRow, error) {
+	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return nil, nil
+	}
+	r.mu.Unlock()
+
+	job, err := r.ClaimNextJob(ctx, workerID)
+	if err != nil || job == nil {
+		return nil, err
+	}
+
+	mu.RLock()
+	h := handlers[job.Kind]
+	mu.RUnlock()
+
+	if h == nil {
+		if err := r.MarkFailed(ctx, *job, (&UnknownKindError{Kind: job.Kind}).Error(), workerID); err != nil {
+			return job, err
+		}
+		return job, nil
+	}
+
+	runErr := runHandler(ctx, h, *job)
+	if runErr != nil {
+		if err := r.MarkFailed(ctx, *job, runErr.Error(), workerID); err != nil {
+			return job, err
+		}
+		return job, nil
+	}
+	if err := r.MarkCompleted(ctx, job.ID, workerID); err != nil {
+		return job, err
+	}
+	return job, nil
+}
+
+// runHandler: jalankan handler dengan pemulihan panic supaya satu job rusak
+// tidak mematikan proses worker.
+func runHandler(ctx context.Context, h Handler, job JobRow) (err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			err = fmt.Errorf("panic saat memproses job %s: %v", job.Kind, rec)
+		}
+	}()
+	return h(ctx, job)
+}
+
+// Drain: proses sampai `limit` job atau antrean kosong; mengembalikan jumlah
+// job yang diproses (parity drainJobs — termasuk yang gagal).
+func (r *Runner) Drain(ctx context.Context, limit int, workerID string) (int, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	count := 0
+	for i := 0; i < limit; i++ {
+		job, err := r.ProcessOnce(ctx, workerID)
+		if err != nil {
+			return count, err
+		}
+		if job == nil {
+			break
+		}
+		count++
+	}
+	return count, nil
+}
+
+// Loop: polling periodik sampai ctx dibatalkan (dipakai cmd/worker).
+func (r *Runner) Loop(ctx context.Context, interval time.Duration, workerID string) {
+	if interval <= 0 {
+		interval = 5 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if _, err := r.ProcessOnce(ctx, workerID); err != nil && !errors.Is(err, context.Canceled) {
+				slog.Error("[jobs] worker error", "err", err)
+			}
+		}
+	}
+}
+
+// Dispatch menjalankan handler terdaftar untuk satu job tanpa claim (dipakai
+// pemanggil yang sudah memegang barisnya sendiri).
+func Dispatch(ctx context.Context, job JobRow) error {
+	mu.RLock()
+	h := handlers[job.Kind]
+	mu.RUnlock()
+	if h == nil {
+		return &UnknownKindError{Kind: job.Kind}
+	}
+	return runHandler(ctx, h, job)
+}
+
+// WorkerID: id worker unik per proses.
+func WorkerID(prefix string) string {
+	if prefix == "" {
+		prefix = "worker"
+	}
+	return fmt.Sprintf("%s-%s", prefix, uuid.NewString()[:8])
+}

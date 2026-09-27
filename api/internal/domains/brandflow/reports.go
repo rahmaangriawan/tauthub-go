@@ -37,7 +37,9 @@ func (d *Deps) ReportsGet(w http.ResponseWriter, r *http.Request) {
 	toExclusive := bsDayAfterISO(to)
 	fromISO := from + "T00:00:00.000Z"
 
-	totals, uniqueVisitors := d.bsAnalyticsTotals(r.Context(), canonicalID, from, to)
+	// Parity route lama: analyticsTotals dipanggil dengan param path `brandId`
+	// apa adanya (bukan id kanonik) — dipertahankan supaya perilaku sama.
+	totals, uniqueVisitors := d.bsAnalyticsTotals(r.Context(), chiParam(r, "brandId"), from, to)
 	brandRates := d.bsLoadBrandPrRates(r.Context(), canonicalID)
 
 	publishedRow, err := d.queryRow(r.Context(), `
@@ -313,11 +315,16 @@ func (d *Deps) ReportsLinkClicks(w http.ResponseWriter, r *http.Request) {
 	to := bsNormDate(q.Get("to"), now.Format("2006-01-02"))
 	toExclusive := bsDayAfterISO(to)
 	fromISO := from + "T00:00:00.000Z"
-	// parity `Math.min(Math.max(Number(...) || 100, 1), 300)` — "" → 100.
-	limit := bsNumClampInt(bsQueryNumber(q, "limit", 100), 1, 300)
-	if q.Has("limit") && bsJSNumber(q.Get("limit")) == 0 {
-		limit = 100
+	// parity `Math.min(Math.max(Number(... ?? 100) || 100, 1), 300)` — absen,
+	// kosong, atau NaN → 100.
+	limitValue := 100.0
+	if q.Has("limit") {
+		limitValue = bsJSNumber(q.Get("limit"))
 	}
+	if math.IsNaN(limitValue) || limitValue == 0 {
+		limitValue = 100
+	}
+	limit := bsNumClampInt(limitValue, 1, 300)
 
 	summary, err := d.queryRow(r.Context(), `
 		SELECT COUNT(*)::int AS clicks,

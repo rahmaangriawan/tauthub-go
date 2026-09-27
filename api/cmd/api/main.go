@@ -27,6 +27,8 @@ import (
 	knowledgedomain "github.com/rahmaangriawan/tauthub-go/internal/domains/knowledge"
 	partnerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/partner"
 	platformdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/platform"
+	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
+	"github.com/rahmaangriawan/tauthub-go/internal/jobwire"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -120,6 +122,11 @@ func run() error {
 		brandFlowDeps := &brandflowdomain.Deps{Pool: database.Pool, Cfg: cfg}
 		platformDeps := &platformdomain.Deps{Pool: database.Pool, Cfg: cfg, Admin: &adminshared.Deps{Pool: database.Pool, Cfg: cfg}}
 		partnerDeps := &partnerdomain.Deps{Pool: database.Pool, Cfg: cfg}
+
+		// Dispatcher job bersama (dipakai /v1/internal/jobs dan cmd/worker).
+		jobwire.Register(database.Pool, cfg)
+		jobRunner := jobs.NewRunner(database.Pool)
+		jobwire.WirePlatform(platformDeps, database.Pool, cfg, jobRunner)
 		v1.Group(func(authed chi.Router) {
 			authed.Use(authDeps.Auth.RequireAuth)
 			authed.Get("/auth/me", authDeps.Me)

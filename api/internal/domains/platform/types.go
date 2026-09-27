@@ -24,6 +24,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/adminshared"
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
 )
 
 // Deps: dependensi bersama seluruh modul platform.
@@ -31,6 +32,12 @@ type Deps struct {
 	Pool  *pgxpool.Pool
 	Cfg   *config.Config
 	Admin *adminshared.Deps
+	// Runner: dispatcher job bersama (internal/jobs). Diisi saat boot; nil
+	// berarti endpoint internal job tidak dapat memproses antrean.
+	Runner *jobs.Runner
+	// RunScheduler: hook siklus scheduler lengkap, diisi saat boot oleh
+	// jobwire (menghindari impor silang platform → brandflow).
+	RunScheduler func(ctx context.Context, maxJobs int, runner *jobs.Runner) map[string]any
 }
 
 // ---------- helper parameter & batas ----------

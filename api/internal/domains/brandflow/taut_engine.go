@@ -401,26 +401,6 @@ func (d *Deps) loadTautCampaignRow(ctx context.Context, campaignID, brandID stri
 	return row, nil
 }
 
-// loadTautBriefContext: konteks brief Profiler terbaru (untuk prompt writer/gatekeeper).
-func (d *Deps) loadTautBriefContext(ctx context.Context, campaignID string) (string, error) {
-	row, err := d.queryRow(ctx,
-		"SELECT business_profile, category_input, materials, budget_config FROM campaigns WHERE id = $1 LIMIT 1", campaignID)
-	if err != nil || row == nil {
-		return "", err
-	}
-	parts := []string{}
-	if bp, ok := row.jsonField("business_profile").(map[string]any); ok {
-		business := strings.TrimSpace(mapGetString(bp, "business", ""))
-		if business != "" {
-			parts = append(parts, "Profil bisnis: "+business)
-		}
-	}
-	if ci, ok := row.jsonField("category_input").(map[string]any); ok && len(ci) > 0 {
-		parts = append(parts, "Kategori: "+jsonStringify(ci))
-	}
-	return strings.Join(parts, "\n"), nil
-}
-
 // mediaNameFor: nama media (fallback id).
 func (d *Deps) mediaNameFor(ctx context.Context, mediaID string) string {
 	row, err := d.queryRow(ctx, "SELECT name FROM media WHERE id = $1 LIMIT 1", mediaID)

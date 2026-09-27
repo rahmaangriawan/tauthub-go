@@ -29,9 +29,12 @@ func (d *Deps) MediaRecommendations(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	category := strings.TrimSpace(q.Get("category"))
 	var budget *float64
-	if q.Has("budget") {
-		v := bsJSNumber(q.Get("budget"))
-		budget = &v
+	// parity `searchParams.get("budget") ? Number(...) : null` — param kosong
+	// atau NaN → null (recommendMedia: `budget != null && budget > 0`).
+	if raw := q.Get("budget"); raw != "" {
+		if v := bsJSNumber(raw); !math.IsNaN(v) {
+			budget = &v
+		}
 	}
 	count := bsNumClampInt(bsQueryNumber(q, "count", 10), 1, 50)
 	exclude := []string{}
@@ -449,7 +452,7 @@ func (d *Deps) MediaPackagesList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer"); err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "Gagal memuat media packages")
+		d.writeErr(w, err)
 		return
 	}
 
@@ -513,20 +516,25 @@ func (d *Deps) PackagesList(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
-	if err != nil {
+	// Parity route lama: authorize(brandId) lalu query memakai param path apa
+	// adanya (bukan id kanonik).
+	brandID := bsRawBrandID(r)
+	if _, err := d.access(r, brandID, user.ID, "viewer"); err != nil {
 		d.writeErr(w, err)
 		return
 	}
 	q := r.URL.Query()
+	// parity `Math.min(Math.max(Number(limit ?? 100), 1), 500)` dan
+	// `Math.max(Number(offset ?? 0), 0)`.
 	limit := bsNumClampInt(bsQueryNumber(q, "limit", 100), 1, 500)
-	offset := int(bsQueryNumber(q, "offset", 0))
-	if offset < 0 {
-		offset = 0
+	offsetVal := bsQueryNumber(q, "offset", 0)
+	offset := 0
+	if !math.IsNaN(offsetVal) && offsetVal > 0 {
+		offset = int(offsetVal)
 	}
 
 	countRow, err := d.queryRow(r.Context(),
-		"SELECT COUNT(*) AS count FROM packages WHERE brand_id = $1", brandRow.ID)
+		"SELECT COUNT(*) AS count FROM packages WHERE brand_id = $1", brandID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -534,12 +542,12 @@ func (d *Deps) PackagesList(w http.ResponseWriter, r *http.Request) {
 	items, err := d.queryRows(r.Context(), `
 		SELECT id, name, credit_total, credit_used, price, status, starts_at, ends_at, created_at, updated_at
 		FROM packages WHERE brand_id = $1
-		ORDER BY created_at DESC LIMIT $2 OFFSET $3`, brandRow.ID, limit, offset)
+		ORDER BY created_at DESC LIMIT $2 OFFSET $3`, brandID, limit, offset)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	balance := d.brandCreditBalance(r.Context(), brandRow.ID)
+	balance := d.brandCreditBalance(r.Context(), brandID)
 	packages := make([]map[string]any, 0, len(items))
 	for _, row := range items {
 		creditTotal := row.intOr("credit_total", 0)

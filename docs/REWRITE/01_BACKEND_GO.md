@@ -135,6 +135,18 @@ Tabel `jobs` (kind, payload JSONB, status pending/running/failed/completed, atte
   - `JOB_INLINE=true` → setelah enqueue di handler, panggil `drainJobs(1)` inline (dev parity).
   - Worker pull: `POST /v1/internal/jobs` header `x-job-runner-key: JOB_RUNNER_KEY`, **satu job per call**.
   - `cmd/worker` = loop drain kontinu (pengganti `scheduler-worker.mjs`).
+- **Realisasi Go**: dispatcher bersama di `internal/jobs` (`Register`/`Dispatch`/`Runner`),
+  didaftarkan sekali lewat `internal/jobwire.Register` sehingga API, `cmd/worker`, dan
+  `cmd/scheduler` memakai registry yang sama. **13/13 kind punya processor**:
+  - `internal/domains/brandflow/job_publication_execution.go` (publish ke CMS/webhook/protokol mitra)
+  - `internal/domains/brandflow/job_variant.go` (varian artikel per media + agregat batch)
+  - `internal/domains/brandflow/job_link_check.go` (pelacak 404, ambang 2 gagal berturut)
+  - `internal/domains/platform/job_pr.go` (`pr_analysis` + `pr_verify` + recalc skor & notifikasi)
+  - `internal/domains/platform/job_media.go` (SEO refresh, ringkasan AI, crawl sync, verifikasi domain)
+  - `internal/domains/platform/job_messaging.go` (drain `email_deliveries` + `wa_deliveries`)
+  - `internal/jobwire/content_jobs.go` (`content_generation`, `sitemap_crawl`)
+  - Catatan: `jobs` **tidak punya kolom `completed_at`**; `MarkCompleted` hanya menulis
+    `status` + `updated_at` (parity `markCompleted` app lama).
 - **Dedupe scheduler**: sebelum enqueue publikasi/health/link-check, cek job pending/running via `payload->>'publicationId'` (salin SQL persis, R8).
 
 ---
