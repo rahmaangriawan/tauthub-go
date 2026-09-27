@@ -2,7 +2,8 @@
 	// Fase 2: daftar brand + create (port section klien index).
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { apiRequest, readApiError, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { swr } from '$lib/swr-cache.svelte';
 
 	type BrandRow = {
 		id: string;
@@ -17,7 +18,14 @@
 		websites: Array<{ domain: string; is_primary: boolean }>;
 	};
 
-	let brands = $state<BrandRow[]>([]);
+	const brandList = swr<BrandRow[]>(
+		() => (getStoredSession() ? '/v1/brands' : null),
+		async () => {
+			const res = await apiRequest('/v1/brands');
+			if (!res.ok) throw new Error('Gagal memuat brand');
+			return res.json();
+		}
+	);
 	let loading = $state(true);
 	let showCreate = $state(false);
 	let busy = $state(false);
@@ -31,18 +39,12 @@
 				await goto('/login');
 				return;
 			}
-			await load();
 			loading = false;
 		})();
 		const onExpired = () => void goto('/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 	});
-
-	async function load() {
-		const res = await apiRequest('/v1/brands');
-		if (res.ok) brands = await res.json();
-	}
 
 	async function create(e: SubmitEvent) {
 		e.preventDefault();
@@ -65,7 +67,7 @@
 			if (res.ok) {
 				showCreate = false;
 				form = { name: '', slug: '', ownership_type: 'internal', client_name: '', industry: '', domain: '' };
-				await load();
+				await brandList.mutate(); // invalidasi cache + revalidasi (parity)
 			} else {
 				error = await readApiError(res, 'Gagal membuat brand.');
 			}
@@ -120,13 +122,13 @@
 		</form>
 	{/if}
 
-	{#if loading}
+	{#if loading || (brandList.loading && brandList.data === null)}
 		<p class="mt-6 text-sm text-muted-foreground">Memuat…</p>
-	{:else if brands.length === 0}
+	{:else if (brandList.data ?? []).length === 0}
 		<p class="mt-6 text-sm text-muted-foreground">Belum ada brand. Buat brand pertama Anda.</p>
 	{:else}
 		<div class="mt-6 grid gap-3 sm:grid-cols-2">
-			{#each brands as brand (brand.id)}
+			{#each brandList.data ?? [] as brand (brand.id)}
 				<a
 					class="rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent"
 					href={`/klien/${brand.id}`}

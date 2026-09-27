@@ -5,13 +5,22 @@
 
 ---
 
-## 1. Setup Dasar
+## 1. Setup Dasar — ✅ SELESAI (2026-09-27)
 
-- `npx sv create` (SvelteKit + TypeScript) → adapter **`@sveltejs/adapter-node`** (VPS systemd, port 3000).
-- Tailwind **v4** + `tw-animate-css` (pengganti dependensi animate).
-- shadcn-svelte (`npx shadcn-svelte@latest init`) — komponen copy-paste, basis **bits-ui**.
-- Font: `@fontsource/geist`, `@fontsource/geist-mono`, `@fontsource/instrument-serif`, `@fontsource/inter` (paket yang sama, jalan di Vite).
-- Theme light/dark: **mode-watcher** (port `THEME_LIGHT_DARK_OVERHAUL.md` — token warna via CSS variables, class `.dark`).
+- [x] SvelteKit 5 + TypeScript → adapter **`@sveltejs/adapter-node`** (build ✔)
+- [x] Tailwind **v4** + `tw-animate-css` + token shadcn (light/dark CSS vars)
+- [x] shadcn-svelte init (`components.json`, `cn()` utils, bits-ui)
+- [x] Font: `@fontsource/geist` + `geist-mono` latin-400 (parity layout lama; Inter/Instrument Serif menyusul bersama landing)
+- [x] **KOREKSI PARITY TEMA**: ThemeProvider lama ternyata **memaksa light** ("Dark mode dimatikan: selalu light", hapus `localStorage.aiw-theme`) — port persis begitu, mode-watcher TIDAK dipakai. Class `.dark` & token tetap tersedia bila dark diaktifkan lagi nanti.
+- [x] `ssr.noExternal: ['@lucide/svelte']` (ikon .svelte harus dikompilasi Vite di SSR)
+
+## 1b. Infrastruktur klien — ✅ SELESAI (2026-09-27)
+
+- [x] **`$lib/swr-cache.svelte.ts`** — port `useSwrData` ke runes: Map global, TTL 60s, dedupe, revalidate-on-focus, **error non-destruktif**; terpasang di daftar brand (`/klien`) sebagai konsumen pertama
+- [x] `clearSession()` → `invalidateSwrCache()` (mencegah data tenant bocor antar sesi, parity)
+- [x] **`$lib/i18n/`** — `dictionaries.ts` dibawa utuh (449 baris, key sama) + port provider (storage key `tauthub-locale`, default `id`)
+- [x] **ToastHost** — port `toast-host.tsx` (kanan-bawah, auto tutup 3,5s, ikon lucide, dengar `TOAST_EVENT`)
+- [x] Metadata root (Tauthub, lang="id") + viewport parity
 
 ## 2. Peta Route (mirror dari Next App Router)
 

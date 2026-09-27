@@ -33,6 +33,10 @@ const SESSION_KEY = 'ai_writer_session';
 const REQUEST_TIMEOUT_MS = 12_000;
 const API_BASE = '';
 
+// Cache SWR menyimpan data tenant; tanpa invalidasi, logout → login ulang
+// di tab sama bisa menampilkan data akun sebelumnya (parity auth.ts lama).
+import { invalidateSwrCache } from '$lib/swr-cache.svelte';
+
 let refreshing: Promise<AuthSession | null> | null = null;
 
 export function getAccessToken() {
@@ -96,6 +100,9 @@ export function clearSession() {
 		}
 	})();
 	localStorage.removeItem(SESSION_KEY);
+	// Cache SWR menyimpan data tenant; tanpa ini, logout lalu login ulang di tab yang
+	// sama bisa sempat menampilkan data akun sebelumnya.
+	invalidateSwrCache();
 	// Best-effort server revocation via background fetch (parity).
 	if (old?.refreshToken) {
 		void fetch(`${API_BASE}/v1/auth/logout`, {
@@ -278,6 +285,3 @@ export function authErrorMessage(reason: unknown) {
 	};
 	return messages[reason.message] ?? reason.message;
 }
-
-// Fase 0 stub — diganti port swr-cache saat domain pertama pakai cache (fase 2).
-export function invalidateSwrCache() {}

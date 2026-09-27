@@ -27,5 +27,10 @@ export default defineConfig({
 			'/t': 'http://localhost:8080',
 			'/feed': 'http://localhost:8080'
 		}
+	},
+	ssr: {
+		// @lucide/svelte mengirim ikon sebagai file .svelte — Vite harus
+		// mengompilasinya di SSR, bukan membiarkannya jadi external Node.
+		noExternal: ['@lucide/svelte']
 	}
 });
