@@ -11,6 +11,7 @@
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AppShell from '$lib/components/app-shell.svelte';
+	import AccountDropdown from '$lib/components/account-dropdown.svelte';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
@@ -44,14 +45,6 @@
 
 	const isSuper = $derived(admin?.role === 'super_admin');
 	const can = (key: string) => isSuper || admin?.permissions?.[key] === true;
-	const initials = $derived(
-		(user?.display_name ?? '?')
-			.split(/\s+/)
-			.map((w) => w[0])
-			.slice(0, 2)
-			.join('')
-			.toUpperCase()
-	);
 
 	// Grup nav parity platformGroups di product-shell.tsx. `permission` kosong
 	// berarti selalu tampil untuk admin mana pun.
@@ -203,20 +196,11 @@
 <AppShell brandHref="/admin" navLabel="Navigasi admin" {groups}>
 	{#snippet account()}
 		{#if user}
-			<div class="app-account-trigger">
-				<div
-					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground"
-					style="background-color: var(--primary);"
-				>
-					{initials}
-				</div>
-				<div class="app-account-info">
-					<span class="app-account-name">{user.display_name}</span>
-					<span class="app-account-email">{user.email}</span>
-				</div>
-				<span class="app-role-badge">{isSuper ? 'Super Admin' : 'Admin'}</span>
-				<ChevronDown size={14} class="shrink-0" style="color: var(--sidebar-soft);" />
-			</div>
+			<AccountDropdown
+				user={{ ...user, role: 'admin' }}
+				roleLabel={isSuper ? 'Super Admin' : 'Admin'}
+				profileHref="/admin/konfigurasi"
+			/>
 		{/if}
 	{/snippet}
 

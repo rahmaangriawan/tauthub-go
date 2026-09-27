@@ -14,6 +14,7 @@
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import { setBrandUrlId } from '$lib/brand-url.svelte';
 	import AppShell from '$lib/components/app-shell.svelte';
+	import AccountDropdown from '$lib/components/account-dropdown.svelte';
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
 
@@ -68,14 +69,6 @@
 		};
 	});
 
-	const initials = $derived(
-		(user?.display_name ?? '?')
-			.split(/\s+/)
-			.map((w) => w[0])
-			.slice(0, 2)
-			.join('')
-			.toUpperCase()
-	);
 	const saldo = $derived(overview.data?.wallet?.available_tc ?? 0);
 
 	// Top Up cepat dari utility bar (parity CreditPill app lama). Paket & kurs
@@ -183,25 +176,18 @@
 	]);
 </script>
 
-<AppShell brandHref={base} navLabel="Navigasi Tauthub" {groups}>
-	{#snippet account()}
-		{#if user}
-			<div class="app-account-trigger">
-				<div
-					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground"
-					style="background-color: var(--primary);"
-				>
-					{initials}
-				</div>
-				<div class="app-account-info">
-					<span class="app-account-name">{user.display_name}</span>
-					<span class="app-account-email">{user.email}</span>
-				</div>
-				<span class="app-role-badge">Klien</span>
-				<ChevronDown size={14} class="shrink-0" style="color: var(--sidebar-soft);" />
-			</div>
-		{/if}
-	{/snippet}
+	<AppShell brandHref={base} navLabel="Navigasi Tauthub" {groups}>
+		{#snippet account()}
+			{#if user}
+				<AccountDropdown
+					{user}
+					roleLabel="Klien"
+					profileHref={`${base}/profile`}
+					workspaceSwitchHref={user.role === 'partner' ? '/mitra' : undefined}
+					workspaceSwitchLabel={user.role === 'partner' ? 'Portal Mitra' : undefined}
+				/>
+			{/if}
+		{/snippet}
 
 	{#snippet toolbar()}
 		<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label="Pilih bahasa">

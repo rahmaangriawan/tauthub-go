@@ -154,6 +154,10 @@
   }
   .app-sidebar-inner { display: flex; flex-direction: column; height: 100%; padding: 16px 10px 12px; }
   .app-sidebar-brand { display: flex; align-items: center; min-height: 44px; padding: 0 8px; }
+  /* Logo asli app lama (public/tauthub-logo.webp 140x35) menggantikan wordmark
+     teks; rasio dipertahankan supaya tidak terdistorsi. */
+  .app-brand-link { display: inline-flex; align-items: center; }
+  .app-brand-logo { display: block; width: 140px; height: 35px; object-fit: contain; }
 
   /* gap 4px = Radix <Flex> di app lama (pembungkus nav), sehingga jarak antar
      item (termasuk ke separator) bertambah 4px persis seperti aslinya. */

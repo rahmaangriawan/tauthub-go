@@ -14,6 +14,7 @@
 	import { swr } from '$lib/swr-cache.svelte';
 	import { setPartnerUrlId } from '$lib/partner-url.svelte';
 	import AppShell from '$lib/components/app-shell.svelte';
+	import AccountDropdown from '$lib/components/account-dropdown.svelte';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
@@ -69,15 +70,6 @@
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 	});
 
-	const initials = $derived(
-		(user?.display_name ?? '?')
-			.split(/\s+/)
-			.map((w) => w[0])
-			.slice(0, 2)
-			.join('')
-			.toUpperCase()
-	);
-
 	// Link internal memakai public_id (6 karakter) seperti app lama; UUID tetap
 	// diterima di route sehingga deep-link lama tidak rusak.
 	const partnerUrlId = $derived(me.data?.partner?.public_id ?? partnerId);
@@ -130,25 +122,23 @@
 	]);
 </script>
 
-<AppShell brandHref={base} navLabel="Navigasi portal mitra" {groups}>
-	{#snippet account()}
-		{#if user}
-			<div class="app-account-trigger">
-				<div
-					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground"
-					style="background-color: var(--primary);"
-				>
-					{initials}
-				</div>
-				<div class="app-account-info">
-					<span class="app-account-name">{me.data?.partner?.name ?? user.display_name}</span>
-					<span class="app-account-email">{user.email}</span>
-				</div>
-				<span class="app-role-badge">Mitra</span>
-				<ChevronDown size={14} class="shrink-0" style="color: var(--sidebar-soft);" />
-			</div>
-		{/if}
-	{/snippet}
+	<AppShell brandHref={base} navLabel="Navigasi portal mitra" {groups}>
+		{#snippet account()}
+			{#if user}
+				<AccountDropdown
+					user={{
+						id: user.id,
+						email: user.email,
+						display_name: me.data?.partner?.name || user.display_name,
+						role: user.role
+					}}
+					roleLabel="Mitra"
+					profileHref={`${base}/profile`}
+					workspaceSwitchHref="/klien"
+					workspaceSwitchLabel="Dashboard Klien"
+				/>
+			{/if}
+		{/snippet}
 
 	{#snippet toolbar()}
 		<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label="Pilih bahasa">

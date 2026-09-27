@@ -15,6 +15,7 @@
 	import { apiRequest, ensureValidSession, readApiError, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import MediaDetailModal from './_detail-modal.svelte';
+	import Select from '$lib/components/select.svelte';
 	import './media.css';
 
 	type Media = {
@@ -62,6 +63,40 @@
 	let sortKey = $state<'traffic' | 'da' | 'ai_trust' | 'ai_cited' | 'speed' | 'price' | 'name'>('name');
 	let sortDir = $state<'asc' | 'desc'>('asc');
 	let catPopoverId = $state<string | null>(null);
+	// Popover kategori diposisikan fixed (seperti portal Radix di app lama)
+	// supaya tidak terpotong overflow:hidden milik .modernCard / .tableWrap.
+	let catPopoverPos = $state<{ left: number; top: number }>({ left: 0, top: 0 });
+	let catPopoverCats = $state<string[]>([]);
+
+	function openCategoryPopover(event: MouseEvent, id: string, cats: string[]) {
+		event.stopPropagation();
+		if (catPopoverId === id) {
+			catPopoverId = null;
+			return;
+		}
+		const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+		const width = 280;
+		const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8));
+		catPopoverPos = { left, top: rect.bottom + 4 };
+		catPopoverCats = cats;
+		catPopoverId = id;
+	}
+
+	$effect(() => {
+		if (!catPopoverId) return;
+		const close = () => (catPopoverId = null);
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') close();
+		};
+		window.addEventListener('scroll', close, true);
+		window.addEventListener('resize', close);
+		window.addEventListener('keydown', onKey);
+		return () => {
+			window.removeEventListener('scroll', close, true);
+			window.removeEventListener('resize', close);
+			window.removeEventListener('keydown', onKey);
+		};
+	});
 	let page_ = $state(1);
 	const pageSize = 24;
 	let advOpen = $state(false);
@@ -410,12 +445,18 @@
 		<div class="modernActionsGroup">
 			<!-- Kategori -->
 			<div class="modernSelectWrap">
-				<select class="modernSelect" bind:value={category} onchange={() => (page_ = 1)}>
-					<option value="">Semua Kategori</option>
-					{#each categories as [name, count] (name)}
-						<option value={name}>{name} ({count})</option>
-					{/each}
-				</select>
+				<Select
+					bind:value={category}
+					ariaLabel="Kategori"
+					Icon={LayoutGrid}
+					placeholder="Semua Kategori"
+					minWidth={210}
+					onchange={() => (page_ = 1)}
+					options={[
+						{ value: '', label: 'Semua Kategori', count: rows.length },
+						...categories.map(([name, count]) => ({ value: name, label: name, count }))
+					]}
+				/>
 			</div>
 
 			<!-- Filter lanjutan -->
@@ -661,16 +702,9 @@
 												class="categoryPlusTag"
 												title={`Kategori: ${cats.join(', ')}`}
 												aria-label={`${cats.length} kategori: ${cats.join(', ')}`}
-												onclick={(e) => { e.stopPropagation(); catPopoverId = catPopoverId === m.id ? null : m.id; }}
+												aria-expanded={catPopoverId === m.id}
+												onclick={(e) => openCategoryPopover(e, m.id, cats)}
 											>+{cats.length - 1}</button>
-											{#if catPopoverId === m.id}
-												<div class="categoryPopover" role="presentation" onclick={(e) => e.stopPropagation()}>
-													<div class="categoryPopoverTitle">Semua Kategori</div>
-													<div class="categoryPopoverList">
-														{#each cats as c (c)}<span class="categoryPill">{c}</span>{/each}
-													</div>
-												</div>
-											{/if}
 										{/if}
 									</div>
 								</td>
@@ -838,6 +872,26 @@
 <!-- Modal Detail Media -->
 {#if detail}
 	<MediaDetailModal media={detail} onclose={() => (detail = null)} />
+{/if}
+
+<!-- Popover "Semua Kategori" — fixed agar tidak terpotong kartu tabel. -->
+{#if catPopoverId}
+	<button
+		type="button"
+		class="categoryPopoverBackdrop"
+		aria-label="Tutup daftar kategori"
+		onclick={() => (catPopoverId = null)}
+	></button>
+	<div
+		class="categoryPopover"
+		role="tooltip"
+		style="left: {catPopoverPos.left}px; top: {catPopoverPos.top}px;"
+	>
+		<div class="categoryPopoverTitle">Semua Kategori</div>
+		<div class="categoryPopoverList">
+			{#each catPopoverCats as c (c)}<span class="categoryPill">{c}</span>{/each}
+		</div>
+	</div>
 {/if}
 
 {#if selectedIds.size > 0}<div style="height:74px"></div>{/if}

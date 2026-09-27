@@ -87,8 +87,8 @@
 {#snippet sidebar()}
 	<div class="app-sidebar-inner">
 		<div class="app-sidebar-brand">
-			<a href={brandHref} class="text-xl font-extrabold tracking-tight" style="color: var(--primary);">
-				taut<span style="color: var(--foreground);">hub</span>
+			<a href={brandHref} class="app-brand-link" aria-label="Tauthub">
+				<img src="/tauthub-logo.webp" alt="Tauthub" width="140" height="35" class="app-brand-logo" />
 			</a>
 		</div>
 

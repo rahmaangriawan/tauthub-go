@@ -317,13 +317,53 @@
   font-size: 11px;
   font-weight: 600;
 }
+/* Badge +N yang bisa diklik (tombol) — membuka popover semua kategori. */
+button.categoryPlusTag {
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+button.categoryPlusTag:hover {
+  background: #cbd5e1;
+  color: #0f172a;
+}
+button.categoryPlusTag:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+/* Popover mengambang (parity Radix Popover.Content di app lama): fixed supaya
+   tidak ikut terpotong overflow:hidden .modernCard, dengan animasi masuk. */
 .categoryPopover {
+  position: fixed;
+  z-index: 1200;
   max-width: 280px;
   padding: 10px 12px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  animation: categoryPopoverIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top left;
+}
+.categoryPopoverBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1190;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+@keyframes categoryPopoverIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 .categoryPopoverTitle {
   font-size: 11px;
@@ -337,19 +377,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-.categoryPopoverList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.categoryPopoverTitle {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #64748b;
-  margin-bottom: 8px;
 }
 .container {
   display: flex;
