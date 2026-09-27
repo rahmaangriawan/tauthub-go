@@ -17,6 +17,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	authdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/auth"
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
+	knowledgedomain "github.com/rahmaangriawan/tauthub-go/internal/domains/knowledge"
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -105,6 +106,7 @@ func run() error {
 
 		// Brands (fase 2) — butuh Bearer.
 		brands := &brandsdomain.Deps{Pool: database.Pool}
+		knowledge := &knowledgedomain.Deps{Pool: database.Pool}
 		v1.Group(func(authed chi.Router) {
 			authed.Use(authDeps.Auth.RequireAuth)
 			authed.Get("/auth/me", authDeps.Me)
@@ -131,6 +133,22 @@ func run() error {
 			authed.Post("/brands/{brandId}/members", brands.MembersCreate)
 			authed.Put("/brands/{brandId}/members/{membershipId}", brands.MemberUpdate)
 			authed.Delete("/brands/{brandId}/members/{membershipId}", brands.MemberDelete)
+
+			// Knowledge (fase 3).
+			authed.Get("/brands/{brandId}/knowledge/collections", knowledge.CollectionsList)
+			authed.Post("/brands/{brandId}/knowledge/collections", knowledge.CollectionsCreate)
+			authed.Get("/brands/{brandId}/knowledge/collections/{collectionId}", knowledge.CollectionGet)
+			authed.Put("/brands/{brandId}/knowledge/collections/{collectionId}", knowledge.CollectionUpdate)
+			authed.Delete("/brands/{brandId}/knowledge/collections/{collectionId}", knowledge.CollectionDelete)
+			authed.Get("/brands/{brandId}/knowledge/collections/{collectionId}/sources", knowledge.SourcesList)
+			authed.Post("/brands/{brandId}/knowledge/collections/{collectionId}/sources", knowledge.SourcesCreate)
+			authed.Get("/brands/{brandId}/knowledge/sources/{sourceId}", knowledge.SourceGet)
+			authed.Delete("/brands/{brandId}/knowledge/sources/{sourceId}", knowledge.SourceDelete)
+			authed.Get("/brands/{brandId}/knowledge/sources/{sourceId}/content", knowledge.SourceContent)
+			authed.Post("/brands/{brandId}/knowledge/sitemap", knowledge.SitemapCrawl)
+			authed.Get("/brands/{brandId}/knowledge/sitemap", knowledge.SitemapStatus)
+			authed.Get("/brands/{brandId}/chat-learning", knowledge.ChatLearningList)
+			authed.Delete("/brands/{brandId}/chat-learning", knowledge.ChatLearningDelete)
 		})
 
 		// TODO fase 2+: peta lengkap di REWRITE/04_API_ENDPOINTS.md.

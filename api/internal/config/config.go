@@ -40,6 +40,16 @@ type Config struct {
 	GoogleClientSecret string
 	GoogleRedirectURI  string
 	PublicAppURL       string
+
+	AIProvider          string
+	AIBaseURL           string
+	AIAPIKey            string
+	AIDefaultModel      string
+	AIEconomyModel      string
+	AIPremiumModel      string
+	AIEmbeddingModel    string
+	AIRequestTimeoutSec int
+	AIMaxRetries        int
 }
 
 func Load() (*Config, error) {
@@ -88,6 +98,20 @@ func Load() (*Config, error) {
 	c.GoogleClientSecret = os.Getenv("GOOGLE_CLIENT_SECRET")
 	c.GoogleRedirectURI = os.Getenv("GOOGLE_REDIRECT_URI")
 	c.PublicAppURL = strings.TrimRight(getEnv("NEXT_PUBLIC_APP_URL", "https://app.tauthub.com"), "/")
+
+	c.AIProvider = getEnv("AI_PROVIDER", "sumopod")
+	c.AIBaseURL = os.Getenv("AI_BASE_URL")
+	c.AIAPIKey = os.Getenv("AI_API_KEY")
+	c.AIDefaultModel = os.Getenv("AI_DEFAULT_MODEL")
+	c.AIEconomyModel = os.Getenv("AI_ECONOMY_MODEL")
+	c.AIPremiumModel = os.Getenv("AI_PREMIUM_MODEL")
+	c.AIEmbeddingModel = os.Getenv("AI_EMBEDDING_MODEL")
+	if c.AIRequestTimeoutSec, err = getInt("AI_REQUEST_TIMEOUT_SECONDS", 120); err != nil {
+		return nil, err
+	}
+	if c.AIMaxRetries, err = getInt("AI_MAX_RETRIES", 2); err != nil {
+		return nil, err
+	}
 
 	if len(c.Secret) < 32 {
 		return nil, fmt.Errorf("APP_SECRET wajib >= 32 karakter (dapat %d)", len(c.Secret))

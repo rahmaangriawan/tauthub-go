@@ -116,14 +116,14 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/knowledge/collections` | GET, POST | List/buat koleksi | [ ] |
-| `/v1/brands/{brandId}/knowledge/collections/{collectionId}` | GET, PUT, DELETE | CRUD koleksi | [ ] |
-| `/v1/brands/{brandId}/knowledge/collections/{collectionId}/sources` | GET, POST | List/upload sumber | [ ] |
-| `/v1/brands/{brandId}/knowledge/sources/{sourceId}` | GET, DELETE | Detail/hapus sumber | [ ] |
-| `/v1/brands/{brandId}/knowledge/sources/{sourceId}/content` | GET | Isi sumber | [ ] |
-| `/v1/brands/{brandId}/knowledge/sitemap` | GET, POST | Crawl sitemap → sumber | [ ] |
+| `/v1/brands/{brandId}/knowledge/collections` | GET, POST | List/buat koleksi | [x] |
+| `/v1/brands/{brandId}/knowledge/collections/{collectionId}` | GET, PUT, DELETE | CRUD koleksi | [x] |
+| `/v1/brands/{brandId}/knowledge/collections/{collectionId}/sources` | GET, POST | List/upload sumber | [x] |
+| `/v1/brands/{brandId}/knowledge/sources/{sourceId}` | GET, DELETE | Detail/hapus sumber | [x] |
+| `/v1/brands/{brandId}/knowledge/sources/{sourceId}/content` | GET | Isi sumber | [x] |
+| `/v1/brands/{brandId}/knowledge/sitemap` | GET, POST | Crawl sitemap → sumber | [x] |
 | `/v1/brands/{brandId}/chat` | POST | Chat AI brand (tool-calling) | [ ] |
-| `/v1/brands/{brandId}/chat-learning` | GET, DELETE | Riwayat/hapus learning chat | [ ] |
+| `/v1/brands/{brandId}/chat-learning` | GET, DELETE | Riwayat/hapus learning chat | [x] |
 
 ### 3.7 Campaigns & flow (14)
 

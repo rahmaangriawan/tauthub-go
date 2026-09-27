@@ -48,7 +48,7 @@
 
 ---
 
-## Fase 3 — Knowledge, RAG & Chat
+## Fase 3 — Knowledge, RAG & Chat — **SEBAGIAN BESAR SELESAI** (2026-09-27: 7/9 endpoint ✅ — collections/sources/sitemap/chat-learning lengkap; **embeddings bit-identik teruji silang** (7 vektor×128 dim + 28 cosine + 4 Jaccard, δ≤1e-12) — embedding lama di DB valid tanpa re-index; AI gateway core port (runtime DB+env, retry/backoff, usage ledger, mock); crawler sitemap + job queue claim SKIP LOCKED; UI knowledge page ✅. DEFER: route chat → fase 4 (cabang create_article bergantung runContentJob), platform knowledge-bases + content standards admin → fase 11)
 
 **API** (8 knowledge/chat + 7 platform knowledge-bases + content-type standards admin): collections/sources CRUD, upload (TXT/MD/CSV/PDF/DOCX ≤10MB), sitemap crawl, chat (tool-calling), chat-learning.
 **Wajib**: embeddings lokal 128-dim **bit-identik** (unit test vektor sama dengan Node); hybrid retrieval cosine+Jaccard; prompt compiler snapshot.
