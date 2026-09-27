@@ -229,9 +229,9 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			"price": price, "credit_cost": creditCost, "integration_type": integrationType,
 			"traffic_estimate": trafficEstimate, "media_tier": mediaTier,
 			"media_quality_score": qualityScore, "health_score": healthScore,
-			"health_breakdown": jsonRaw(healthBreakdown, map[string]any{}),
+			"health_breakdown":   jsonRaw(healthBreakdown, map[string]any{}),
 			"health_computed_at": tsOrNil(healthComputedAt),
-			"auto_publish": autoPublish, "dewan_pers_verified": dewanPersVerified,
+			"auto_publish":       autoPublish, "dewan_pers_verified": dewanPersVerified,
 			"dewan_pers_note": dewanPersNote, "dewan_pers_cert_no": dewanPersCertNo,
 			"domain_verified": domainVerified, "status": status, "created_at": isoMilli(createdAt),
 			"media_type": mediaType, "bahasa_artikel": parseMediaBahasa(bahasaArtikel),
@@ -239,7 +239,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			"max_links": maxLinks, "allow_hyperlink": allowHyperlink,
 			"publication_mode": publicationMode, "word_count_mode": wordCountMode, "allow_embed": allowEmbed,
 			"pricing_type": pricingType, "price_status": priceStatus,
-			"categories": categories,
+			"categories":     categories,
 			"markup_percent": pricing["markup_percent"],
 			"markup_amount":  pricing["markup_amount"],
 			"client_price":   pricing["client_price"],
@@ -255,9 +255,9 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			},
 			"effective_quality": effectiveQuality, "quality_source": strOrNil(qualitySource),
 			"sw_visits": swVisits, "sw_snapshot_date": tsOrNil(swSnapshotDate),
-			"gsc_connected": gscConnected,
-			"image_required": standardImageRequired,
-			"is_available": status == "active",
+			"gsc_connected":       gscConnected,
+			"image_required":      standardImageRequired,
+			"is_available":        status == "active",
 			"availability_reason": availabilityReason(status),
 		}
 		items = append(items, item)
@@ -342,7 +342,7 @@ func (d *Deps) MediaDetail(w http.ResponseWriter, r *http.Request) {
 		"media_type": mediaType, "label_sponsor": labelSponsor, "topik_terlarang": parseTopikTerlarang(topikTerlarang),
 		"dewan_pers_verified": dewanPersVerified, "dewan_pers_note": dewanPersNote, "dewan_pers_cert_no": dewanPersCertNo,
 		"domain_verified": domainVerified,
-		"markup_percent": pricing["markup_percent"], "markup_amount": pricing["markup_amount"],
+		"markup_percent":  pricing["markup_percent"], "markup_amount": pricing["markup_amount"],
 		"client_price": pricing["client_price"],
 	})
 }
