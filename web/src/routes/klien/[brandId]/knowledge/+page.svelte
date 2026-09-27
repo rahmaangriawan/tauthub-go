@@ -7,6 +7,7 @@
 	import { Check, ChevronLeft, ChevronRight, Copy, FileText, List, Plus, Trash2, Upload, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import Select from '$lib/components/select.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -395,10 +396,18 @@
 			<label class="mt-3 block text-xs">
 				<span class="text-muted-foreground">Collection {uploadTargetCol ? `(pilih "${collections.find((c) => c.id === uploadTargetCol)?.name ?? uploadTargetCol}")` : 'semua collections'}</span>
 				{#if !uploadTargetCol}
-					<select class="app-input mt-1 w-full" bind:value={uploadTargetCol}>
-						<option value="">Pilih collection</option>
-						{#each collections as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
-					</select>
+					<div class="mt-1">
+						<Select
+							bind:value={uploadTargetCol}
+							ariaLabel="Collection"
+							placeholder="Pilih collection"
+							minWidth={260}
+							options={[
+								{ value: '', label: 'Pilih collection' },
+								...collections.map((c) => ({ value: c.id, label: c.name }))
+							]}
+						/>
+					</div>
 				{/if}
 			</label>
 			<input class="app-input mt-2 w-full" placeholder="Judul" bind:value={uploadTitle} />
@@ -453,10 +462,18 @@
 			</p>
 
 			{#if crawlStatus === 'idle'}
-				<select class="app-input mt-3 w-full" bind:value={sitemapCol}>
-					<option value="">Pilih collection</option>
-					{#each collections as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
-				</select>
+				<div class="mt-3">
+					<Select
+						bind:value={sitemapCol}
+						ariaLabel="Collection"
+						placeholder="Pilih collection"
+						minWidth={260}
+						options={[
+							{ value: '', label: 'Pilih collection' },
+							...collections.map((c) => ({ value: c.id, label: c.name }))
+						]}
+					/>
+				</div>
 				<input class="app-input mt-2 w-full" placeholder="https://example.com/sitemap.xml" bind:value={sitemapUrl} />
 				<div class="mt-4 flex justify-end gap-2">
 					<button class="app-btn app-btn-soft" type="button" onclick={() => { showSitemap = false; sitemapUrl = ''; sitemapCol = ''; }}>Batal</button>

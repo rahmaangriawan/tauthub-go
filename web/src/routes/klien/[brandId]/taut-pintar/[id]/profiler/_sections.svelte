@@ -3,6 +3,7 @@
 	// bahan baku, kendali anggaran. Port profiler/sections.tsx.
 	import { Calculator, ChartLine, ChevronDown, Coins, Info, Link2, Search, Sparkles, Trash, Upload, Users } from '@lucide/svelte';
 	import { apiRequest, getStoredSession } from '$lib/auth';
+	import Select from '$lib/components/select.svelte';
 	import { fmtBytes, fmtIdr } from '../../_shared';
 	import type { ProfilerDraft, DynamicAngleField } from '../../_shared';
 	import {
@@ -440,10 +441,16 @@
 							<div class="mt-3 space-y-3">
 								<label class="block">
 									<span class="text-xs font-medium">Angle Artikel {ch.slug === 'mainstream' ? 'Jurnalistik' : 'Blogger'}</span>
-									<select class="app-input mt-1 w-full" value={selectedAngle} onchange={(e) => setAngle(ch.slug, (e.currentTarget as HTMLSelectElement).value)}>
-										<option value="">Pilih angle…</option>
-										{#each ch.angles as a (a.slug)}<option value={a.slug}>{a.name}</option>{/each}
-									</select>
+									<div class="mt-1">
+										<Select
+											value={selectedAngle}
+											ariaLabel="Angle artikel"
+											placeholder="Pilih angle…"
+											minWidth={200}
+											onchange={(v) => setAngle(ch.slug, v)}
+											options={ch.angles.map((a) => ({ value: a.slug, label: a.name }))}
+										/>
+									</div>
 								</label>
 								{#if ch.slug === 'mainstream'}
 									<div class="rounded-lg border p-3">
@@ -482,10 +489,17 @@
 
 			<div class="flex items-center justify-between">
 				<span class="text-sm font-medium">Bahan Referensi Kampanye</span>
-				<select class="app-input !w-auto" value={draft.materials?.mode ?? 'dynamic'} onchange={(e) => patchMaterials({ mode: (e.currentTarget as HTMLSelectElement).value as 'upload' | 'dynamic' })}>
-					<option value="upload">Saya Punya Dokumen (Upload)</option>
-					<option value="dynamic">Saya Tidak Punya Bahan</option>
-				</select>
+				<Select
+					value={draft.materials?.mode ?? 'dynamic'}
+					ariaLabel="Bahan Referensi Kampanye"
+					minWidth={240}
+					align="end"
+					onchange={(v) => patchMaterials({ mode: v as 'upload' | 'dynamic' })}
+					options={[
+						{ value: 'upload', label: 'Saya Punya Dokumen (Upload)' },
+						{ value: 'dynamic', label: 'Saya Tidak Punya Bahan' }
+					]}
+				/>
 			</div>
 
 			{#if draft.materials?.mode === 'upload'}

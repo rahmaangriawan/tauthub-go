@@ -8,6 +8,7 @@
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtNum } from '$lib/admin-format';
 
@@ -662,11 +663,13 @@
 					<div class="mt-4 flex flex-wrap items-center gap-3">
 						<label class="block">
 							<span class="text-sm font-medium">Provider template</span>
-							<select class="app-input mt-1 w-[240px]" value={template} onchange={(e) => applyTemplate((e.currentTarget as HTMLSelectElement).value)}>
-								{#each Object.entries(PROVIDER_TEMPLATES) as [key, preset] (key)}
-									<option value={key}>{preset.label}</option>
-								{/each}
-							</select>
+							<Select
+								ariaLabel="Provider template"
+								minWidth={240}
+								value={template}
+								onchange={(v) => applyTemplate(v)}
+								options={Object.entries(PROVIDER_TEMPLATES).map(([key, preset]) => ({ value: key, label: preset.label }))}
+							/>
 						</label>
 						<div class="flex-1 rounded-lg border px-3 py-2 text-xs" style="border-color: var(--accent-foreground); color: var(--accent-foreground);">
 							{PROVIDER_TEMPLATES[template]?.hint}
@@ -980,11 +983,17 @@
 						Prompt ini dicatat sebagai admin_test_generation dan tidak masuk workflow produksi.
 					</p>
 					<form class="mt-4 space-y-4" onsubmit={generate}>
-						<select class="app-input w-full" aria-label="Pilih tier" bind:value={testTier}>
-							<option value="default">Default</option>
-							<option value="economy">Economy</option>
-							<option value="premium">Premium</option>
-						</select>
+						<Select
+							ariaLabel="Pilih tier"
+							minWidth={200}
+							value={testTier}
+							onchange={(v) => (testTier = v as ModelTier)}
+							options={[
+								{ value: 'default', label: 'Default' },
+								{ value: 'economy', label: 'Economy' },
+								{ value: 'premium', label: 'Premium' }
+							]}
+						/>
 						<textarea
 							class="app-input w-full"
 							rows="10"
@@ -1097,11 +1106,17 @@
 					</label>
 					<label class="block">
 						<span class="text-sm font-semibold">2. Tingkat Reasoning</span>
-						<select class="app-input mt-2 w-full" bind:value={kReasoning}>
-							<option value="rendah">Rendah (Fast &amp; Simple)</option>
-							<option value="sedang">Sedang (Standard)</option>
-							<option value="tinggi">Tinggi (Deep Reasoning)</option>
-						</select>
+						<Select
+							ariaLabel="Tingkat Reasoning"
+							minWidth={260}
+							value={kReasoning}
+							onchange={(v) => (kReasoning = v)}
+							options={[
+								{ value: 'rendah', label: 'Rendah (Fast & Simple)' },
+								{ value: 'sedang', label: 'Sedang (Standard)' },
+								{ value: 'tinggi', label: 'Tinggi (Deep Reasoning)' }
+							]}
+						/>
 						<span class="mt-1 block text-[11px] text-muted-foreground">Tingkat kedalaman pemikiran logika model.</span>
 					</label>
 				</div>

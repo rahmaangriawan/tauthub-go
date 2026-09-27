@@ -13,6 +13,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDate, fmtNum } from '$lib/admin-format';
 	import { platformError } from '../_platform';
@@ -420,27 +421,63 @@
 			<Search size={15} class="text-muted-foreground" />
 			<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari nama atau email…" aria-label="Cari partner" value={search} oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)} />
 		</label>
-		<select class="app-input !w-auto" value={filterStatus} onchange={(e) => { filterStatus = (e.currentTarget as HTMLSelectElement).value; applyFilters(); }}>
-			<option value="">Semua status</option>
-			<option value="active">Aktif</option>
-			<option value="inactive">Nonaktif</option>
-		</select>
-		<select class="app-input !w-auto" value={filterContact} onchange={(e) => { filterContact = (e.currentTarget as HTMLSelectElement).value; applyFilters(); }}>
-			<option value="">Semua kontak</option>
-			<option value="wa">Punya WA</option>
-			<option value="alt">Punya email alternatif</option>
-			<option value="incomplete">Kontak belum lengkap</option>
-		</select>
-		<select class="app-input !w-auto" value={filterHasMedia} onchange={(e) => { filterHasMedia = (e.currentTarget as HTMLSelectElement).value; applyFilters(); }}>
-			<option value="">Semua media</option>
-			<option value="1">Sudah ada media</option>
-			<option value="0">Belum ada media</option>
-		</select>
-		<select class="app-input !w-auto" value={filterAutoPublish} onchange={(e) => { filterAutoPublish = (e.currentTarget as HTMLSelectElement).value; applyFilters(); }}>
-			<option value="">Semua mode otomatis</option>
-			<option value="1">Diizinkan otomatis</option>
-			<option value="0">Belum diizinkan</option>
-		</select>
+		<Select
+			ariaLabel="Filter status"
+			minWidth={160}
+			value={filterStatus}
+			onchange={(v) => {
+				filterStatus = v;
+				applyFilters();
+			}}
+			options={[
+				{ value: '', label: 'Semua status' },
+				{ value: 'active', label: 'Aktif' },
+				{ value: 'inactive', label: 'Nonaktif' }
+			]}
+		/>
+		<Select
+			ariaLabel="Filter kontak"
+			minWidth={190}
+			value={filterContact}
+			onchange={(v) => {
+				filterContact = v;
+				applyFilters();
+			}}
+			options={[
+				{ value: '', label: 'Semua kontak' },
+				{ value: 'wa', label: 'Punya WA' },
+				{ value: 'alt', label: 'Punya email alternatif' },
+				{ value: 'incomplete', label: 'Kontak belum lengkap' }
+			]}
+		/>
+		<Select
+			ariaLabel="Filter media"
+			minWidth={170}
+			value={filterHasMedia}
+			onchange={(v) => {
+				filterHasMedia = v;
+				applyFilters();
+			}}
+			options={[
+				{ value: '', label: 'Semua media' },
+				{ value: '1', label: 'Sudah ada media' },
+				{ value: '0', label: 'Belum ada media' }
+			]}
+		/>
+		<Select
+			ariaLabel="Filter mode otomatis"
+			minWidth={190}
+			value={filterAutoPublish}
+			onchange={(v) => {
+				filterAutoPublish = v;
+				applyFilters();
+			}}
+			options={[
+				{ value: '', label: 'Semua mode otomatis' },
+				{ value: '1', label: 'Diizinkan otomatis' },
+				{ value: '0', label: 'Belum diizinkan' }
+			]}
+		/>
 		{#if hasFilter}
 			<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={resetFilters}>Reset filter</button>
 		{/if}
@@ -634,10 +671,16 @@
 			</label>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Status</span>
-				<select class="app-input w-full" bind:value={form.status}>
-					<option value="active">active</option>
-					<option value="inactive">inactive</option>
-				</select>
+				<Select
+					ariaLabel="Status"
+					minWidth={200}
+					value={form.status}
+					onchange={(v) => (form.status = v)}
+					options={[
+						{ value: 'active', label: 'active' },
+						{ value: 'inactive', label: 'inactive' }
+					]}
+				/>
 			</label>
 			<div class="mt-1 flex justify-end gap-2 border-t pt-4">
 				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>Batal</button>

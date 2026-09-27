@@ -7,6 +7,7 @@
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	type Brand = { id: string; name: string; slug: string; owner_email: string };
@@ -165,12 +166,17 @@
 		<div class="flex flex-col gap-3">
 			<label class="block">
 				<span class="text-sm font-medium">Pilih Brand</span>
-				<select class="app-input mt-2 w-full" bind:value={selectedId}>
-					<option value="">Pilih brand…</option>
-					{#each brands as b (b.id)}
-						<option value={b.id}>{b.name} ({b.slug})</option>
-					{/each}
-				</select>
+				<Select
+					ariaLabel="Pilih brand"
+					placeholder="Pilih brand…"
+					minWidth={280}
+					value={selectedId}
+					onchange={(v) => (selectedId = v)}
+					options={[
+						{ value: '', label: 'Pilih brand…' },
+						...brands.map((b) => ({ value: b.id, label: `${b.name} (${b.slug})` }))
+					]}
+				/>
 			</label>
 		</div>
 	</div>

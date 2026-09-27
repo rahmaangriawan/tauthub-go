@@ -10,6 +10,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDate, fmtRp, fmtNum } from '$lib/admin-format';
 	import { platformError, isAccessDenied } from '../_platform';
@@ -391,12 +392,16 @@
 		<form class="flex flex-col gap-3" onsubmit={create}>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Partner</span>
-				<select class="app-input w-full" bind:value={form.partner_id}>
-					<option value="">Pilih partner</option>
-					{#each partners as p (p.id)}
-						<option value={p.id}>{p.name ?? p.email}</option>
-					{/each}
-				</select>
+				<Select
+					ariaLabel="Partner"
+					minWidth={260}
+					value={form.partner_id}
+					onchange={(v) => (form.partner_id = v)}
+					options={[
+						{ value: '', label: 'Pilih partner' },
+						...partners.map((p) => ({ value: p.id, label: p.name ?? p.email }))
+					]}
+				/>
 			</label>
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="block">

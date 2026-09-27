@@ -9,6 +9,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	type Config = {
@@ -213,11 +214,14 @@
 		<form id="ga4-create-form" class="space-y-3" onsubmit={save}>
 			<label class="block">
 				<span class="text-sm font-medium">Brand</span>
-				<select class="app-input mt-1 w-full" bind:value={form.brand_id}>
-					{#each brands as b (b.id)}
-						<option value={b.id}>{b.name}</option>
-					{/each}
-				</select>
+				<Select
+					ariaLabel="Brand"
+					minWidth={240}
+					placeholder="Pilih brand"
+					value={form.brand_id}
+					onchange={(v) => (form.brand_id = v)}
+					options={brands.map((b) => ({ value: b.id, label: b.name }))}
+				/>
 			</label>
 			<label class="block">
 				<span class="text-sm font-medium">Measurement ID</span>
@@ -230,17 +234,29 @@
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="block">
 					<span class="text-sm font-medium">Consent mode</span>
-					<select class="app-input mt-1 w-full" bind:value={form.consent_mode}>
-						<option value="required">required</option>
-						<option value="none">none</option>
-					</select>
+					<Select
+						ariaLabel="Consent mode"
+						minWidth={200}
+						value={form.consent_mode}
+						onchange={(v) => (form.consent_mode = v)}
+						options={[
+							{ value: 'required', label: 'required' },
+							{ value: 'none', label: 'none' }
+						]}
+					/>
 				</label>
 				<label class="block">
 					<span class="text-sm font-medium">Status</span>
-					<select class="app-input mt-1 w-full" bind:value={form.enabled}>
-						<option value="true">enabled</option>
-						<option value="false">disabled</option>
-					</select>
+					<Select
+						ariaLabel="Status"
+						minWidth={200}
+						value={form.enabled}
+						onchange={(v) => (form.enabled = v)}
+						options={[
+							{ value: 'true', label: 'enabled' },
+							{ value: 'false', label: 'disabled' }
+						]}
+					/>
 				</label>
 			</div>
 			<label class="block">

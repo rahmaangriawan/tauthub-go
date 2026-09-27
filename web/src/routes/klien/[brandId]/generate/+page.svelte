@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import Select from '$lib/components/select.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -133,12 +134,17 @@
 				<input class="app-input" bind:value={form.goal} minlength={3} required />
 			</label>
 			<label class="flex flex-col gap-1 text-sm">Jenis konten
-				<select class="app-input" bind:value={form.content_type}>
-					<option value="press_release">Press Release</option>
-					<option value="news">News</option>
-					<option value="article">Article</option>
-					<option value="feature">Feature</option>
-				</select>
+				<Select
+					bind:value={form.content_type}
+					ariaLabel="Jenis konten"
+					minWidth={200}
+					options={[
+						{ value: 'press_release', label: 'Press Release' },
+						{ value: 'news', label: 'News' },
+						{ value: 'article', label: 'Article' },
+						{ value: 'feature', label: 'Feature' }
+					]}
+				/>
 			</label>
 			<label class="flex items-center gap-2 self-end text-sm">
 				<input type="checkbox" bind:checked={form.require_outline_approval} />

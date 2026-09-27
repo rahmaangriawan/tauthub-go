@@ -10,6 +10,7 @@
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const PAGE_SIZE = 20;
@@ -256,28 +257,32 @@
 		<form class="space-y-3" onsubmit={create}>
 			<label class="block">
 				<span class="text-xs font-bold text-muted-foreground">Partner</span>
-				<select
-					class="app-input mt-1 w-full"
+				<Select
+					ariaLabel="Partner"
+					minWidth={260}
 					value={form.partner_id}
-					onchange={(e) => {
-						form.partner_id = e.currentTarget.value;
+					onchange={(v) => {
+						form.partner_id = v;
 						form.media_id = '';
 					}}
-				>
-					<option value="">Pilih partner</option>
-					{#each partners as p (p.id)}
-						<option value={p.id}>{p.name ?? p.email}</option>
-					{/each}
-				</select>
+					options={[
+						{ value: '', label: 'Pilih partner' },
+						...partners.map((p) => ({ value: p.id, label: p.name ?? p.email }))
+					]}
+				/>
 			</label>
 			<label class="block">
 				<span class="text-xs font-bold text-muted-foreground">Media partner (opsional)</span>
-				<select class="app-input mt-1 w-full" bind:value={form.media_id}>
-					<option value="">Semua media partner</option>
-					{#each partnerMedia as m (m.id)}
-						<option value={m.id}>{m.name}</option>
-					{/each}
-				</select>
+				<Select
+					ariaLabel="Media partner"
+					minWidth={240}
+					value={form.media_id}
+					onchange={(v) => (form.media_id = v)}
+					options={[
+						{ value: '', label: 'Semua media partner' },
+						...partnerMedia.map((m) => ({ value: m.id, label: m.name }))
+					]}
+				/>
 			</label>
 			<label class="block">
 				<span class="text-xs font-bold text-muted-foreground">Nama feed</span>
@@ -285,10 +290,16 @@
 			</label>
 			<label class="block">
 				<span class="text-xs font-bold text-muted-foreground">Item status</span>
-				<select class="app-input mt-1 w-full" bind:value={form.item_status}>
-					<option value="published">published</option>
-					<option value="draft">draft (perlu approve → queued)</option>
-				</select>
+				<Select
+					ariaLabel="Item status"
+					minWidth={260}
+					value={form.item_status}
+					onchange={(v) => (form.item_status = v)}
+					options={[
+						{ value: 'published', label: 'published' },
+						{ value: 'draft', label: 'draft (perlu approve → queued)' }
+					]}
+				/>
 			</label>
 			{#if error}
 				<p class="text-sm" style="color: var(--destructive);">{error}</p>

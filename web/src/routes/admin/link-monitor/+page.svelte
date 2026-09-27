@@ -9,6 +9,7 @@
 	import DataTable from '$lib/components/admin/data-table.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { fmtDateTime } from '$lib/admin-format';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
@@ -418,22 +419,24 @@
 						bind:value={search}
 					/>
 				</label>
-				<select
-					class="app-input !w-auto max-w-full"
+				<Select
+					ariaLabel="Filter status artikel"
+					minWidth={300}
 					value={stateFilter}
-					onchange={(e) => {
-						stateFilter = e.currentTarget.value;
+					onchange={(v) => {
+						stateFilter = v;
 						notice = '';
 						pubsPage = 1;
 						void load();
 					}}
-				>
-					<option value="">Bermasalah (Hilang + Tak Terjangkau)</option>
-					<option value="gone">Hilang (404) — halaman sudah tidak ada</option>
-					<option value="unreachable">Tak Terjangkau — situs menolak akses atau sedang error</option>
-					<option value="live">Tayang — artikel masih bisa diakses</option>
-					<option value="no_url">Tanpa URL</option>
-				</select>
+					options={[
+						{ value: '', label: 'Bermasalah (Hilang + Tak Terjangkau)' },
+						{ value: 'gone', label: 'Hilang (404) — halaman sudah tidak ada' },
+						{ value: 'unreachable', label: 'Tak Terjangkau — situs menolak akses atau sedang error' },
+						{ value: 'live', label: 'Tayang — artikel masih bisa diakses' },
+						{ value: 'no_url', label: 'Tanpa URL' }
+					]}
+				/>
 				<button
 					type="submit"
 					class="app-btn app-btn-soft"
@@ -532,22 +535,24 @@
 			</div>
 
 			<form class="mb-3 flex flex-wrap items-center gap-2" onsubmit={(e) => e.preventDefault()}>
-				<select
-					class="app-input !w-auto max-w-full"
+				<Select
+					ariaLabel="Filter kesehatan domain"
+					minWidth={300}
 					value={healthFilter}
-					onchange={(e) => {
-						healthFilter = e.currentTarget.value;
+					onchange={(v) => {
+						healthFilter = v;
 						notice = '';
 						domainsPage = 1;
 						void load();
 					}}
-				>
-					<option value="">Perlu perhatian (Mati + Belum Dicek)</option>
-					<option value="unreachable">Domain mati — situs tidak bisa dihubungi</option>
-					<option value="unknown">Belum dicek</option>
-					<option value="token_missing">Token verifikasi hilang — situs hidup, tapi penanda verifikasi tidak ditemukan</option>
-					<option value="live">Hidup</option>
-				</select>
+					options={[
+						{ value: '', label: 'Perlu perhatian (Mati + Belum Dicek)' },
+						{ value: 'unreachable', label: 'Domain mati — situs tidak bisa dihubungi' },
+						{ value: 'unknown', label: 'Belum dicek' },
+						{ value: 'token_missing', label: 'Token verifikasi hilang — situs hidup, tapi penanda verifikasi tidak ditemukan' },
+						{ value: 'live', label: 'Hidup' }
+					]}
+				/>
 				<button
 					type="button"
 					class="app-btn app-btn-soft"

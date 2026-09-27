@@ -4,6 +4,7 @@
 	// contentEditable + execCommand (tanpa dependensi baru).
 	import { Image, Link, List, ListOrdered, LoaderCircle, Quote, Redo2, RotateCcw, TriangleAlert, Upload, Video } from '@lucide/svelte';
 	import type { Component } from 'svelte';
+	import Select from '$lib/components/select.svelte';
 
 	// Fallback saat user memilih "pakai logo Tauthub" sebagai cover (asset publik).
 	const TAUTHUB_FALLBACK_COVER = '/tauthub-logo.webp';
@@ -376,10 +377,15 @@
 			<div class="flex flex-wrap items-center gap-2">
 				<span class="text-xs font-medium text-muted-foreground">Kategori artikel</span>
 				{#if categoryOptions.length > 0}
-					<select class="app-input !w-auto min-w-[200px]" aria-label="Kategori artikel" bind:value={category}>
-						{#if category && !categoryOptions.includes(category)}<option value={category}>{category}</option>{/if}
-						{#each categoryOptions as c (c)}<option value={c}>{c}</option>{/each}
-					</select>
+					<Select
+						bind:value={category}
+						ariaLabel="Kategori artikel"
+						minWidth={200}
+						options={[
+							...(category && !categoryOptions.includes(category) ? [{ value: category, label: category }] : []),
+							...categoryOptions.map((c) => ({ value: c, label: c }))
+						]}
+					/>
 				{:else}
 					<span class="text-xs text-muted-foreground">Media ini belum punya kategori dari mitra — atur di dashboard mitra.</span>
 				{/if}

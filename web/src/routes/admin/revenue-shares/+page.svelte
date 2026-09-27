@@ -9,6 +9,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtRp, fmtNum } from '$lib/admin-format';
 	import { platformError, isAccessDenied } from '../_platform';
@@ -328,29 +329,43 @@
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="block">
 					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Mitra (opsional)</span>
-					<select class="app-input w-full" bind:value={form.partner_id}>
-						<option value="">Semua mitra</option>
-						{#each partners.filter((p) => p.status === 'active') as p (p.id)}
-							<option value={p.id}>{p.name ?? p.email}</option>
-						{/each}
-					</select>
+					<Select
+						ariaLabel="Mitra"
+						minWidth={240}
+						value={form.partner_id}
+						onchange={(v) => (form.partner_id = v)}
+						options={[
+							{ value: '', label: 'Semua mitra' },
+							...partners.filter((p) => p.status === 'active').map((p) => ({ value: p.id, label: p.name ?? p.email }))
+						]}
+					/>
 				</label>
 				<label class="block">
 					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Media (opsional)</span>
-					<select class="app-input w-full" bind:value={form.media_id}>
-						<option value="">Semua media</option>
-						{#each media.filter((m) => m.status === 'active') as m (m.id)}
-							<option value={m.id}>{m.name}</option>
-						{/each}
-					</select>
+					<Select
+						ariaLabel="Media"
+						minWidth={240}
+						value={form.media_id}
+						onchange={(v) => (form.media_id = v)}
+						options={[
+							{ value: '', label: 'Semua media' },
+							...media.filter((m) => m.status === 'active').map((m) => ({ value: m.id, label: m.name }))
+						]}
+					/>
 				</label>
 			</div>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Tipe</span>
-				<select class="app-input w-full" bind:value={form.share_type}>
-					<option value="percentage">Percentage</option>
-					<option value="fixed">Fixed</option>
-				</select>
+				<Select
+					ariaLabel="Tipe"
+					minWidth={200}
+					value={form.share_type}
+					onchange={(v) => (form.share_type = v)}
+					options={[
+						{ value: 'percentage', label: 'Percentage' },
+						{ value: 'fixed', label: 'Fixed' }
+					]}
+				/>
 			</label>
 			{#if form.share_type === 'percentage'}
 				<div class="grid gap-3 sm:grid-cols-2">

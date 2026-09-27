@@ -12,6 +12,7 @@
 	import DataTable from '$lib/components/admin/data-table.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const PAGE_SIZE = 20;
@@ -161,21 +162,22 @@
 	<div class="mt-4 flex flex-wrap items-end gap-3">
 		<label class="block" style="min-width: 180px;">
 			<span class="mb-1 block text-xs text-muted-foreground">Status media</span>
-			<select
-				class="app-input w-full"
+			<Select
+				ariaLabel="Status media"
+				minWidth={200}
 				value={filterStatus || 'all'}
-				onchange={(e) => {
-					const v = e.currentTarget.value;
+				onchange={(v) => {
 					filterStatus = v === 'all' ? '' : v;
 					page = 1;
 					void load();
 				}}
-			>
-				<option value="all">Semua status</option>
-				<option value="active">Aktif</option>
-				<option value="pending_review">Pending</option>
-				<option value="inactive">Nonaktif</option>
-			</select>
+				options={[
+					{ value: 'all', label: 'Semua status' },
+					{ value: 'active', label: 'Aktif' },
+					{ value: 'pending_review', label: 'Pending' },
+					{ value: 'inactive', label: 'Nonaktif' }
+				]}
+			/>
 		</label>
 	</div>
 

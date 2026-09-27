@@ -10,6 +10,7 @@
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const PAGE_SIZE = 20;
@@ -462,42 +463,39 @@
 
 {#snippet ruleEditor(rule: Rule, editable: boolean, index: number)}
 	<div class="rounded-lg border p-3">
-		<div class="mb-2 flex flex-wrap items-center gap-2">
-			<select
-				class="app-input !w-auto"
-				disabled={!editable}
-				value={rule.category}
-				onchange={(e) => patchRule(index, { category: e.currentTarget.value })}
-			>
-				{#each CATEGORY_OPTIONS as c (c)}<option value={c}>{c}</option>{/each}
-			</select>
-			<input
-				class="app-input min-w-[160px] flex-1"
-				disabled={!editable}
-				placeholder="Judul rule"
-				value={rule.title}
-				oninput={(e) => patchRule(index, { title: e.currentTarget.value })}
-			/>
-			<select
-				class="app-input !w-auto"
-				disabled={!editable}
-				value={String(rule.priority)}
-				onchange={(e) => patchRule(index, { priority: Number(e.currentTarget.value) })}
-			>
-				{#each [1, 2, 3, 4, 5, 6, 7, 8] as p (p)}
-					<option value={String(p)}>{PRIORITY_LABELS[p]}</option>
-				{/each}
-			</select>
-			<select
-				class="app-input !w-auto"
-				disabled={!editable}
-				value={rule.status}
-				onchange={(e) => patchRule(index, { status: e.currentTarget.value })}
-			>
-				<option value="active">active</option>
-				<option value="inactive">inactive</option>
-			</select>
-		</div>
+		<div class="mb-2 flex flex-wrap items-center gap-2" class:pointer-events-none={!editable} class:opacity-60={!editable}>
+				<Select
+					ariaLabel="Kategori"
+					minWidth={160}
+					value={rule.category}
+					onchange={(v) => patchRule(index, { category: v })}
+					options={CATEGORY_OPTIONS.map((c) => ({ value: c, label: c }))}
+				/>
+				<input
+					class="app-input min-w-[160px] flex-1"
+					disabled={!editable}
+					placeholder="Judul rule"
+					value={rule.title}
+					oninput={(e) => patchRule(index, { title: e.currentTarget.value })}
+				/>
+				<Select
+					ariaLabel="Prioritas"
+					minWidth={150}
+					value={String(rule.priority)}
+					onchange={(v) => patchRule(index, { priority: Number(v) })}
+					options={[1, 2, 3, 4, 5, 6, 7, 8].map((p) => ({ value: String(p), label: PRIORITY_LABELS[p] }))}
+				/>
+				<Select
+					ariaLabel="Status rule"
+					minWidth={130}
+					value={rule.status}
+					onchange={(v) => patchRule(index, { status: v })}
+					options={[
+						{ value: 'active', label: 'active' },
+						{ value: 'inactive', label: 'inactive' }
+					]}
+				/>
+			</div>
 		<textarea
 			class="app-input w-full"
 			rows="3"
@@ -616,20 +614,19 @@
 				<div class="mt-4">
 					<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
 						<div class="flex flex-wrap items-center gap-2">
-							<select
-								class="app-input !w-auto"
+							<Select
+								ariaLabel="Versi knowledge base"
+								minWidth={220}
 								value={selectedVersion?.id ?? ''}
-								onchange={(e) => {
-									activeVersionId = e.currentTarget.value;
-									void loadRules(e.currentTarget.value);
+								onchange={(v) => {
+									activeVersionId = v;
+									void loadRules(v);
 								}}
-							>
-								{#each detail.versions as v (v.id)}
-									<option value={v.id}
-										>v{v.version} · {v.status}{v.status === 'active' ? ' (dipakai engine)' : ''}</option
-									>
-								{/each}
-							</select>
+								options={detail.versions.map((v) => ({
+									value: v.id,
+									label: `v${v.version} · ${v.status}${v.status === 'active' ? ' (dipakai engine)' : ''}`
+								}))}
+							/>
 							{#if selectedVersion?.status !== 'draft'}
 								<Badge tone="warning" label="Hanya versi draft yang bisa diedit — buat versi baru dulu." />
 							{/if}

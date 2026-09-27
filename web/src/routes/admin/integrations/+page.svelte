@@ -9,6 +9,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	type MediaRow = {
@@ -365,24 +366,45 @@
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<div class="flex flex-1 flex-wrap items-center gap-2">
 						<input class="app-input min-w-[240px] max-w-[360px]" placeholder="Cari media, website, atau mitra…" bind:value={search} oninput={() => (mediaPage = 1)} />
-						<select class="app-input w-auto min-w-[190px]" aria-label="Filter tipe integrasi" bind:value={filterType} onchange={() => (mediaPage = 1)}>
-							{#each INTEGRATION_OPTIONS as opt (opt.value)}
-								<option value={opt.value}>{opt.label}</option>
-							{/each}
-						</select>
-						<select class="app-input w-auto min-w-[180px]" aria-label="Filter mitra" bind:value={filterPartner} onchange={() => (mediaPage = 1)}>
-							<option value="all">Semua Mitra</option>
-							<option value="none">Tanpa Mitra (Platform)</option>
-							{#each partners as p (p.id)}
-								<option value={p.id}>{p.name ?? p.email ?? p.id.slice(0, 8)}</option>
-							{/each}
-						</select>
-						<select class="app-input w-auto min-w-[160px]" aria-label="Filter status" bind:value={filterStatus} onchange={() => (mediaPage = 1)}>
-							<option value="all">Semua Status</option>
-							<option value="active">Aktif</option>
-							<option value="inactive">Inaktif</option>
-							<option value="draft">Draft</option>
-						</select>
+						<Select
+							ariaLabel="Filter tipe integrasi"
+							minWidth={190}
+							value={filterType}
+							onchange={(v) => {
+								filterType = v;
+								mediaPage = 1;
+							}}
+							options={INTEGRATION_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+						/>
+						<Select
+							ariaLabel="Filter mitra"
+							minWidth={200}
+							value={filterPartner}
+							onchange={(v) => {
+								filterPartner = v;
+								mediaPage = 1;
+							}}
+							options={[
+								{ value: 'all', label: 'Semua Mitra' },
+								{ value: 'none', label: 'Tanpa Mitra (Platform)' },
+								...partners.map((p) => ({ value: p.id, label: p.name ?? p.email ?? p.id.slice(0, 8) }))
+							]}
+						/>
+						<Select
+							ariaLabel="Filter status"
+							minWidth={170}
+							value={filterStatus}
+							onchange={(v) => {
+								filterStatus = v;
+								mediaPage = 1;
+							}}
+							options={[
+								{ value: 'all', label: 'Semua Status' },
+								{ value: 'active', label: 'Aktif' },
+								{ value: 'inactive', label: 'Inaktif' },
+								{ value: 'draft', label: 'Draft' }
+							]}
+						/>
 					</div>
 					{#if search || filterType !== 'all' || filterPartner !== 'all' || filterStatus !== 'all'}
 						<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={resetFilters}>Reset Filter</button>
@@ -464,34 +486,40 @@
 			<div class="mt-3 space-y-3">
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<div class="flex flex-wrap items-center gap-2">
-						<select class="app-input w-auto" aria-label="Mode pemilik" value={connMode} onchange={(e) => void switchConnMode((e.currentTarget as HTMLSelectElement).value as 'brand' | 'partner')}>
-							<option value="brand">Brand (Klien)</option>
-							<option value="partner">Partner (Mitra)</option>
-						</select>
+						<Select
+							ariaLabel="Mode pemilik"
+							minWidth={180}
+							value={connMode}
+							onchange={(v) => void switchConnMode(v as 'brand' | 'partner')}
+							options={[
+								{ value: 'brand', label: 'Brand (Klien)' },
+								{ value: 'partner', label: 'Partner (Mitra)' }
+							]}
+						/>
 						{#if connMode === 'brand'}
 							<span class="text-sm text-muted-foreground">Brand:</span>
-							<select
-								class="app-input w-auto min-w-[200px]"
-								aria-label="Pilih brand"
-								bind:value={selectedBrandId}
-								onchange={() => void loadConnections()}
-							>
-								{#each brands as b (b.id)}
-									<option value={b.id}>{b.name}</option>
-								{/each}
-							</select>
+							<Select
+								ariaLabel="Pilih brand"
+								minWidth={200}
+								value={selectedBrandId}
+								onchange={(v) => {
+									selectedBrandId = v;
+									void loadConnections();
+								}}
+								options={brands.map((b) => ({ value: b.id, label: b.name }))}
+							/>
 						{:else}
 							<span class="text-sm text-muted-foreground">Mitra:</span>
-							<select
-								class="app-input w-auto min-w-[200px]"
-								aria-label="Pilih mitra"
-								bind:value={selectedPartnerId}
-								onchange={() => void loadConnections()}
-							>
-								{#each partners as p (p.id)}
-									<option value={p.id}>{p.name ?? p.id.slice(0, 8)}</option>
-								{/each}
-							</select>
+							<Select
+								ariaLabel="Pilih mitra"
+								minWidth={200}
+								value={selectedPartnerId}
+								onchange={(v) => {
+									selectedPartnerId = v;
+									void loadConnections();
+								}}
+								options={partners.map((p) => ({ value: p.id, label: p.name ?? p.id.slice(0, 8) }))}
+							/>
 						{/if}
 					</div>
 					<button class="app-btn app-btn-primary" type="button" disabled={!selectedConnOwner} onclick={() => (createOpen = true)}>Tambah Endpoint</button>
@@ -565,13 +593,19 @@
 			</label>
 			<label class="block">
 				<span class="text-sm font-medium">Tipe Integrasi Publikasi</span>
-				<select class="app-input mt-1 w-full" bind:value={editForm.integration_type}>
-					<option value="manual">Manual (Dikelola oleh Mitra / Tanpa API)</option>
-					<option value="tulisio_api">Tauthub Publishing API (Push Webhook + HMAC)</option>
-					<option value="wordpress">WordPress REST API (CMS Direct Post)</option>
-					<option value="rss">RSS Feed Importer (Sindikasi XML/RSS)</option>
-					<option value="webhook">Web Custom (Webhook Notification)</option>
-				</select>
+				<Select
+					ariaLabel="Tipe Integrasi Publikasi"
+					minWidth={320}
+					value={editForm.integration_type}
+					onchange={(v) => (editForm.integration_type = v)}
+					options={[
+						{ value: 'manual', label: 'Manual (Dikelola oleh Mitra / Tanpa API)' },
+						{ value: 'tulisio_api', label: 'Tauthub Publishing API (Push Webhook + HMAC)' },
+						{ value: 'wordpress', label: 'WordPress REST API (CMS Direct Post)' },
+						{ value: 'rss', label: 'RSS Feed Importer (Sindikasi XML/RSS)' },
+						{ value: 'webhook', label: 'Web Custom (Webhook Notification)' }
+					]}
+				/>
 			</label>
 			{#if editForm.integration_type !== 'manual'}
 				<label class="block">
@@ -582,12 +616,16 @@
 			{/if}
 			<label class="block">
 				<span class="text-sm font-medium">Mitra Pemilik (Partner)</span>
-				<select class="app-input mt-1 w-full" bind:value={editForm.partner_id}>
-					<option value="">Tanpa Mitra (Milik Platform / Direct)</option>
-					{#each partners as p (p.id)}
-						<option value={p.id}>{p.name ?? p.email ?? p.id}</option>
-					{/each}
-				</select>
+				<Select
+					ariaLabel="Mitra Pemilik (Partner)"
+					minWidth={280}
+					value={editForm.partner_id}
+					onchange={(v) => (editForm.partner_id = v)}
+					options={[
+						{ value: '', label: 'Tanpa Mitra (Milik Platform / Direct)' },
+						...partners.map((p) => ({ value: p.id, label: p.name ?? p.email ?? p.id }))
+					]}
+				/>
 			</label>
 		</form>
 		{#snippet footer()}
@@ -602,10 +640,16 @@
 		<form id="create-connection-form" class="space-y-3" onsubmit={createConnection}>
 			<label class="block">
 				<span class="text-sm font-medium">Provider</span>
-				<select class="app-input mt-1 w-full" bind:value={connForm.provider}>
-					<option value="wordpress">WordPress REST API</option>
-					<option value="webhook">Web Custom (API + HMAC)</option>
-				</select>
+				<Select
+					ariaLabel="Provider"
+					minWidth={240}
+					value={connForm.provider}
+					onchange={(v) => (connForm.provider = v)}
+					options={[
+						{ value: 'wordpress', label: 'WordPress REST API' },
+						{ value: 'webhook', label: 'Web Custom (API + HMAC)' }
+					]}
+				/>
 			</label>
 			<label class="block">
 				<span class="text-sm font-medium">Nama Koneksi</span>

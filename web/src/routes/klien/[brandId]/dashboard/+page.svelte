@@ -10,6 +10,7 @@
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import Select from '$lib/components/select.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -510,10 +511,18 @@
 				<div class="mt-4 grid gap-3 sm:grid-cols-2">
 					<label class="block text-sm">
 						<span class="text-xs font-medium text-muted-foreground">Jenis konten</span>
-						<select class="app-input mt-1 w-full" bind:value={typeCode}>
-							<option value="">Pilih jenis konten…</option>
-							{#each types as t (t.code)}<option value={t.code}>{t.name}</option>{/each}
-						</select>
+						<div class="mt-1">
+							<Select
+								bind:value={typeCode}
+								ariaLabel="Jenis konten"
+								placeholder="Pilih jenis konten…"
+								minWidth={200}
+								options={[
+									{ value: '', label: 'Pilih jenis konten…' },
+									...types.map((t) => ({ value: t.code, label: t.name }))
+								]}
+							/>
+						</div>
 						{#if currentType?.description}<span class="mt-1 block text-xs text-muted-foreground">{currentType.description}</span>{/if}
 					</label>
 					<label class="block text-sm">
@@ -534,9 +543,14 @@
 				<div class="mt-4 grid gap-3 sm:grid-cols-2">
 					<label class="block text-sm">
 						<span class="text-xs font-medium text-muted-foreground">Jenis konten</span>
-						<select class="app-input mt-1 w-full" bind:value={typeCode}>
-							{#each types as t (t.code)}<option value={t.code}>{t.name}</option>{/each}
-						</select>
+						<div class="mt-1">
+							<Select
+								bind:value={typeCode}
+								ariaLabel="Jenis konten"
+								minWidth={200}
+								options={types.map((t) => ({ value: t.code, label: t.name }))}
+							/>
+						</div>
 					</label>
 					<label class="block text-sm">
 						<span class="text-xs font-medium text-muted-foreground">Topik / judul kerja</span>
@@ -569,10 +583,19 @@
 											{:else if question.type === 'url'}
 												<input class="app-input mt-1 w-full" type="url" placeholder="https://…" value={String(answers[question.key] ?? '')} oninput={(e) => setAnswer(question.key, (e.currentTarget as HTMLInputElement).value)} />
 											{:else if question.type === 'select'}
-												<select class="app-input mt-1 w-full" value={String(answers[question.key] ?? '')} onchange={(e) => setAnswer(question.key, (e.currentTarget as HTMLSelectElement).value)}>
-													<option value="">Pilih…</option>
-													{#each question.options ?? [] as option (option)}<option value={option}>{option}</option>{/each}
-												</select>
+												<span class="mt-1 block">
+													<Select
+														value={String(answers[question.key] ?? '')}
+														ariaLabel={question.label}
+														placeholder="Pilih…"
+														minWidth={200}
+														onchange={(v) => setAnswer(question.key, v)}
+														options={[
+															{ value: '', label: 'Pilih…' },
+															...(question.options ?? []).map((option) => ({ value: option, label: option }))
+														]}
+													/>
+												</span>
 											{:else if question.type === 'radio'}
 												<span class="mt-1 grid gap-1.5">
 													{#each question.options ?? [] as option (option)}

@@ -7,6 +7,7 @@
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime, fmtRp } from '$lib/admin-format';
 	import { platformError } from '../_platform';
@@ -198,10 +199,16 @@
 					<div class="mt-3 flex flex-col gap-2">
 						<label class="block">
 							<span class="mb-1 block text-xs font-semibold text-muted-foreground">Environment</span>
-							<select class="app-input w-full" value={form?.environment ?? 'sandbox'} onchange={(e) => setEnvironment(gateway.provider, (e.currentTarget as HTMLSelectElement).value)}>
-								<option value="sandbox">Sandbox</option>
-								<option value="production">Production</option>
-							</select>
+							<Select
+								ariaLabel="Environment"
+								minWidth={200}
+								value={form?.environment ?? 'sandbox'}
+								onchange={(v) => setEnvironment(gateway.provider, v)}
+								options={[
+									{ value: 'sandbox', label: 'Sandbox' },
+									{ value: 'production', label: 'Production' }
+								]}
+							/>
 						</label>
 						{#each gateway.credential_fields as field (field.key)}
 							{@const current = gateway.credentials[field.key] ?? ''}

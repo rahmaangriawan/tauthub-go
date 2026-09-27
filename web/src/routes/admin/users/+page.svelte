@@ -14,6 +14,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDate, fmtNum } from '$lib/admin-format';
 	import { platformError } from '../_platform';
@@ -446,11 +447,17 @@
 				</label>
 				<button class="app-btn app-btn-soft" type="submit" disabled={loading}>Cari</button>
 			</form>
-			<select class="app-input !w-auto" aria-label="Filter role pengguna" value={roleFilter} onchange={(e) => changeRoleFilter((e.currentTarget as HTMLSelectElement).value)}>
-				<option value="">Semua role</option>
-				<option value="client">Klien</option>
-				<option value="partner">Mitra</option>
-			</select>
+			<Select
+				ariaLabel="Filter role pengguna"
+				minWidth={170}
+				value={roleFilter}
+				onchange={(v) => changeRoleFilter(v)}
+				options={[
+					{ value: '', label: 'Semua role' },
+					{ value: 'client', label: 'Klien' },
+					{ value: 'partner', label: 'Mitra' }
+				]}
+			/>
 		</div>
 
 		<div class="app-card mt-4 overflow-x-auto">
@@ -666,10 +673,16 @@
 			</label>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Peran</span>
-				<select class="app-input w-full" value={createRole} onchange={(e) => (createRole = (e.currentTarget as HTMLSelectElement).value === 'partner' ? 'partner' : 'client')}>
-					<option value="client">Klien — kelola brand &amp; konten</option>
-					<option value="partner">Mitra — media partner</option>
-				</select>
+				<Select
+					ariaLabel="Peran"
+					minWidth={260}
+					value={createRole}
+					onchange={(v) => (createRole = v === 'partner' ? 'partner' : 'client')}
+					options={[
+						{ value: 'client', label: 'Klien — kelola brand & konten' },
+						{ value: 'partner', label: 'Mitra — media partner' }
+					]}
+				/>
 			</label>
 			{#if isSuperAdmin}
 				<label class="block">
@@ -708,12 +721,17 @@
 				{#if tcBrands.length === 0}
 					<p class="text-xs text-muted-foreground">User ini tidak memiliki brand.</p>
 				{:else}
-					<select class="app-input w-full" bind:value={tcBrandId}>
-						<option value="">Pilih brand…</option>
-						{#each tcBrands as b (b.id)}
-							<option value={b.id}>{b.name} — {fmtNum(b.available_tc)} TC tersedia</option>
-						{/each}
-					</select>
+					<Select
+						ariaLabel="Brand tujuan"
+						placeholder="Pilih brand…"
+						minWidth={260}
+						value={tcBrandId}
+						onchange={(v) => (tcBrandId = v)}
+						options={[
+							{ value: '', label: 'Pilih brand…' },
+							...tcBrands.map((b) => ({ value: b.id, label: `${b.name} — ${fmtNum(b.available_tc)} TC tersedia` }))
+						]}
+					/>
 				{/if}
 			</div>
 			<label class="block">
@@ -789,10 +807,16 @@
 			{/if}
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Peran baru</span>
-				<select class="app-input w-full" aria-label="Peran baru" value={roleNext} onchange={(e) => (roleNext = (e.currentTarget as HTMLSelectElement).value === 'partner' ? 'partner' : 'client')}>
-					<option value="partner">Mitra — media partner</option>
-					<option value="client">Klien — kelola brand &amp; konten</option>
-				</select>
+				<Select
+					ariaLabel="Peran baru"
+					minWidth={260}
+					value={roleNext}
+					onchange={(v) => (roleNext = v === 'partner' ? 'partner' : 'client')}
+					options={[
+						{ value: 'partner', label: 'Mitra — media partner' },
+						{ value: 'client', label: 'Klien — kelola brand & konten' }
+					]}
+				/>
 			</label>
 			{#if roleNext === 'partner'}
 				<label class="flex items-center gap-2 text-sm">

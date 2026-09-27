@@ -7,6 +7,7 @@
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { fmtDateTime } from '$lib/admin-format';
 	import {
 		compactNumber,
@@ -369,17 +370,19 @@
 		</label>
 		<label class="block w-[200px]">
 			<span class="text-xs font-medium text-muted-foreground">Status</span>
-			<select
-				class="app-input mt-1 w-full"
-				bind:value={status}
-				onchange={(e) => void load(search, e.currentTarget.value, includeArchived)}
-			>
-				<option value="">Semua</option>
-				<option value="active">Active</option>
-				<option value="draft">Draft</option>
-				<option value="inactive">Inactive</option>
-				<option value="archived">Archived</option>
-			</select>
+			<Select
+				ariaLabel="Status"
+				minWidth={200}
+				value={status}
+				onchange={(v) => void load(search, v, includeArchived)}
+				options={[
+					{ value: '', label: 'Semua' },
+					{ value: 'active', label: 'Active' },
+					{ value: 'draft', label: 'Draft' },
+					{ value: 'inactive', label: 'Inactive' },
+					{ value: 'archived', label: 'Archived' }
+				]}
+			/>
 		</label>
 		<label class="flex items-center gap-1 pb-2 text-xs text-muted-foreground">
 			<input

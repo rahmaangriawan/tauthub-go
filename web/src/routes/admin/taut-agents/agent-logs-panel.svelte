@@ -5,6 +5,7 @@
 	import { RefreshCw, TriangleAlert } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
+	import Select from '$lib/components/select.svelte';
 
 	const AGENT_LABEL: Record<string, string> = {
 		profiler: 'Profiler',
@@ -76,15 +77,33 @@
 	</div>
 
 	<div class="flex flex-wrap items-center gap-3">
-		<select class="app-input !w-auto min-w-[150px]" aria-label="Filter agent" bind:value={agentFilter} onchange={load}>
-			<option value="all">Semua Agent</option>
-			{#each Object.entries(AGENT_LABEL) as [v, l] (v)}<option value={v}>{l}</option>{/each}
-		</select>
-		<select class="app-input !w-auto min-w-[130px]" aria-label="Filter status" bind:value={statusFilter} onchange={load}>
-			<option value="all">Semua Status</option>
-			<option value="done">Berhasil</option>
-			<option value="failed">Gagal</option>
-		</select>
+		<Select
+			ariaLabel="Filter agent"
+			minWidth={160}
+			value={agentFilter}
+			onchange={(v) => {
+				agentFilter = v;
+				void load();
+			}}
+			options={[
+				{ value: 'all', label: 'Semua Agent' },
+				...Object.entries(AGENT_LABEL).map(([v, l]) => ({ value: v, label: l }))
+			]}
+		/>
+		<Select
+			ariaLabel="Filter status"
+			minWidth={140}
+			value={statusFilter}
+			onchange={(v) => {
+				statusFilter = v;
+				void load();
+			}}
+			options={[
+				{ value: 'all', label: 'Semua Status' },
+				{ value: 'done', label: 'Berhasil' },
+				{ value: 'failed', label: 'Gagal' }
+			]}
+		/>
 		<button class="app-btn app-btn-soft" disabled={loading} onclick={load}><RefreshCw size={14} /> Refresh</button>
 	</div>
 

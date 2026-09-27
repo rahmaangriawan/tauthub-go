@@ -19,6 +19,7 @@
 		align = 'start',
 		menuMaxHeight = 340,
 		variant = 'default',
+		disabled = false,
 		onchange,
 		footer
 	}: {
@@ -31,6 +32,7 @@
 		align?: 'start' | 'end';
 		menuMaxHeight?: number;
 		variant?: 'default' | 'plain';
+		disabled?: boolean;
 		onchange?: (value: string, option: SelectOption | null) => void;
 		footer?: Snippet;
 	} = $props();
@@ -131,6 +133,7 @@
 	aria-haspopup="listbox"
 	aria-expanded={open}
 	aria-label={ariaLabel}
+	disabled={disabled}
 	onclick={() => (open ? closeMenu() : openMenu())}
 	onkeydown={onTriggerKeydown}
 >

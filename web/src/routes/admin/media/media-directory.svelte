@@ -7,6 +7,7 @@
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { fmtDateTime, statusLabel } from '$lib/admin-format';
 	import {
 		compactNumber,
@@ -742,18 +743,22 @@
 				>Bersihkan pencarian</button
 			>
 		{/if}
-		<select
-			class="app-input !w-auto"
-			aria-label="Filter status media"
-			bind:value={statusFilter}
-			onchange={() => (page = 1)}
-		>
-			<option value="">Semua status</option>
-			<option value="active">🟢 Aktif</option>
-			<option value="inactive">Nonaktif</option>
-			<option value="draft">Draf</option>
-			<option value="archived">Arsip</option>
-		</select>
+		<Select
+			ariaLabel="Filter status media"
+			minWidth={170}
+			value={statusFilter}
+			onchange={(v) => {
+				statusFilter = v;
+				page = 1;
+			}}
+			options={[
+				{ value: '', label: 'Semua status' },
+				{ value: 'active', label: '🟢 Aktif' },
+				{ value: 'inactive', label: 'Nonaktif' },
+				{ value: 'draft', label: 'Draf' },
+				{ value: 'archived', label: 'Arsip' }
+			]}
+		/>
 		<div class="flex-1"></div>
 		<Badge tone="accent" value={`${total} media`} />
 		<label class="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1082,9 +1087,13 @@
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Media tier</span>
-					<select class="app-input mt-1 w-full" bind:value={form.media_tier}>
-						{#each MEDIA_TIERS as t (t)}<option value={t}>{t}</option>{/each}
-					</select>
+					<Select
+						ariaLabel="Media tier"
+						minWidth={200}
+						value={form.media_tier}
+						onchange={(v) => (form.media_tier = v)}
+						options={MEDIA_TIERS.map((t) => ({ value: t, label: t }))}
+					/>
 				</label>
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Media quality score (0-100)</span>
@@ -1111,26 +1120,38 @@
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Tipe integrasi</span>
-					<select class="app-input mt-1 w-full" bind:value={form.integration_type}>
-						{#each MEDIA_INTEGRATION_TYPES_UI as t (t)}<option value={t}>{t}</option>{/each}
-					</select>
+					<Select
+						ariaLabel="Tipe integrasi"
+						minWidth={200}
+						value={form.integration_type}
+						onchange={(v) => (form.integration_type = v)}
+						options={MEDIA_INTEGRATION_TYPES_UI.map((t) => ({ value: t, label: t }))}
+					/>
 				</label>
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Status</span>
-					<select class="app-input mt-1 w-full" bind:value={form.status}>
-						{#each MEDIA_STATUSES as s (s)}<option value={s}>{statusLabel(s)}</option>{/each}
-					</select>
+					<Select
+						ariaLabel="Status"
+						minWidth={200}
+						value={form.status}
+						onchange={(v) => (form.status = v)}
+						options={MEDIA_STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))}
+					/>
 				</label>
 			</div>
 
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Mitra (opsional)</span>
-				<select class="app-input mt-1 w-full" bind:value={form.partner_id}>
-					<option value="">Tanpa partner</option>
-					{#each partners.filter((p) => p.status === 'active') as p (p.id)}
-						<option value={p.id}>{p.name ?? p.email}</option>
-					{/each}
-				</select>
+				<Select
+					ariaLabel="Mitra (opsional)"
+					minWidth={220}
+					value={form.partner_id}
+					onchange={(v) => (form.partner_id = v)}
+					options={[
+						{ value: '', label: 'Tanpa partner' },
+						...partners.filter((p) => p.status === 'active').map((p) => ({ value: p.id, label: p.name ?? p.email }))
+					]}
+				/>
 			</label>
 
 			<label class="block">

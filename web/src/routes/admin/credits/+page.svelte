@@ -7,6 +7,7 @@
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtNum, fmtRp } from '$lib/admin-format';
 	import { platformError } from '../_platform';
@@ -161,12 +162,17 @@
 			<div class="mt-3 flex flex-wrap items-end gap-3">
 				<label class="block">
 					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Brand (ID)</span>
-					<select class="app-input !w-[240px]" bind:value={adjBrand}>
-						<option value="">Pilih brand…</option>
-						{#each wallets as w (w.brand_id)}
-							<option value={w.brand_id}>{w.brand_name ?? w.client_name ?? w.brand_id}</option>
-						{/each}
-					</select>
+					<Select
+						ariaLabel="Brand (ID)"
+						placeholder="Pilih brand…"
+						minWidth={240}
+						value={adjBrand}
+						onchange={(v) => (adjBrand = v)}
+						options={[
+							{ value: '', label: 'Pilih brand…' },
+							...wallets.map((w) => ({ value: w.brand_id, label: w.brand_name ?? w.client_name ?? w.brand_id }))
+						]}
+					/>
 				</label>
 				<label class="block">
 					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Jumlah TC</span>
@@ -174,10 +180,16 @@
 				</label>
 				<label class="block">
 					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Arah</span>
-					<select class="app-input !w-auto" value={adjDirection} onchange={(e) => (adjDirection = (e.currentTarget as HTMLSelectElement).value === 'debit' ? 'debit' : 'credit')}>
-						<option value="credit">Kredit (+TC)</option>
-						<option value="debit">Debit (−TC)</option>
-					</select>
+					<Select
+						ariaLabel="Arah"
+						minWidth={170}
+						value={adjDirection}
+						onchange={(v) => (adjDirection = v === 'debit' ? 'debit' : 'credit')}
+						options={[
+							{ value: 'credit', label: 'Kredit (+TC)' },
+							{ value: 'debit', label: 'Debit (−TC)' }
+						]}
+					/>
 				</label>
 				<label class="block">
 					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Alasan</span>

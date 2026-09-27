@@ -11,6 +11,7 @@
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import Select from '$lib/components/select.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
@@ -262,30 +263,50 @@
 				</label>
 				<label class="flex flex-col gap-1">
 					<span class="text-[11px] font-semibold tracking-wide" style="color: var(--muted-foreground);">STATUS</span>
-					<select class="app-input !w-auto min-w-[170px]" bind:value={stateFilter} onchange={applyFilters}>
-						<option value="problematic">• Yang bermasalah</option>
-						<option value="all">Semua Status</option>
-						<option value="gone">Hilang (404)</option>
-						<option value="unreachable">Tak terjangkau</option>
-						<option value="live">Tayang</option>
-						<option value="no_url">Belum ada URL</option>
-					</select>
+					<Select
+						bind:value={stateFilter}
+						ariaLabel="Filter status"
+						minWidth={170}
+						onchange={applyFilters}
+						options={[
+							{ value: 'problematic', label: '• Yang bermasalah' },
+							{ value: 'all', label: 'Semua Status' },
+							{ value: 'gone', label: 'Hilang (404)' },
+							{ value: 'unreachable', label: 'Tak terjangkau' },
+							{ value: 'live', label: 'Tayang' },
+							{ value: 'no_url', label: 'Belum ada URL' }
+						]}
+					/>
 				</label>
 				<label class="flex flex-col gap-1">
 					<span class="text-[11px] font-semibold tracking-wide" style="color: var(--muted-foreground);">MEDIA</span>
-					<select class="app-input !w-auto min-w-[150px]" bind:value={mediaFilter} onchange={applyFilters}>
-						<option value="">Semua Media</option>
-						{#each mediaOptions as m (m)}<option value={m}>{m}</option>{/each}
-					</select>
+					<Select
+						bind:value={mediaFilter}
+						ariaLabel="Filter media"
+						placeholder="Semua Media"
+						minWidth={150}
+						onchange={applyFilters}
+						options={[
+							{ value: '', label: 'Semua Media' },
+							...mediaOptions.map((m) => ({ value: m, label: m }))
+						]}
+					/>
 				</label>
 				<label class="flex flex-col gap-1">
 					<span class="text-[11px] font-semibold tracking-wide" style="color: var(--muted-foreground);">TANGGAL</span>
-					<select class="app-input !w-auto min-w-[150px]" bind:value={daysFilter} onchange={applyFilters}>
-						<option value="">Semua Tanggal</option>
-						<option value="7">7 Hari Terakhir</option>
-						<option value="30">30 Hari Terakhir</option>
-						<option value="90">3 Bulan Terakhir</option>
-					</select>
+					<Select
+						bind:value={daysFilter}
+						ariaLabel="Filter tanggal"
+						placeholder="Semua Tanggal"
+						minWidth={150}
+						onchange={applyFilters}
+						options={[
+							{ value: '', label: 'Semua Tanggal' },
+							{ value: '7', label: '7 Hari Terakhir' },
+							{ value: '30', label: '30 Hari Terakhir' },
+							{ value: '90', label: '3 Bulan Terakhir' }
+						]}
+					/>
 				</label>
 				<button class="app-btn app-btn-soft" type="button" title="Reset semua filter ke kondisi awal" onclick={resetFilters}>
 					<RotateCcw size={14} /> Reset Filter
@@ -407,11 +428,18 @@
 				<div class="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3">
 					<span class="text-sm text-muted-foreground">Menampilkan {startItem}–{endItem} dari {total} artikel</span>
 					<div class="flex flex-wrap items-center gap-2">
-						<select class="app-input !w-auto !min-h-8 !py-0 !text-xs" bind:value={pageSize} onchange={() => { offset = 0; void load(); }}>
-							<option value={10}>10 per halaman</option>
-							<option value={20}>20 per halaman</option>
-							<option value={50}>50 per halaman</option>
-						</select>
+						<Select
+							value={String(pageSize)}
+							ariaLabel="Jumlah per halaman"
+							minWidth={150}
+							align="end"
+							onchange={(v) => { pageSize = Number(v); offset = 0; void load(); }}
+							options={[
+								{ value: '10', label: '10 per halaman' },
+								{ value: '20', label: '20 per halaman' },
+								{ value: '50', label: '50 per halaman' }
+							]}
+						/>
 						<button class="app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs" type="button" disabled={currentPage <= 1 || loading} onclick={() => { offset = Math.max(0, (currentPage - 2) * pageSize); void load(); }}>
 							‹ Sebelumnya
 						</button>

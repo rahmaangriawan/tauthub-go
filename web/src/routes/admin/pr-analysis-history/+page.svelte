@@ -8,6 +8,7 @@
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDate } from '$lib/admin-format';
 
@@ -191,48 +192,86 @@
 			<div class="flex flex-wrap items-end gap-3">
 				<label class="block min-w-[200px]">
 					<span class="text-xs text-muted-foreground">Brand</span>
-					<select class="app-input mt-1 w-full" bind:value={brandId} onchange={() => { campaignId = ''; void load(1); }}>
-						<option value="">Semua brand</option>
-						{#each filters?.brands ?? [] as b (b.id)}
-							<option value={b.id}>{b.name}</option>
-						{/each}
-					</select>
+					<Select
+						ariaLabel="Brand"
+						minWidth={200}
+						value={brandId}
+						onchange={(v) => {
+							brandId = v;
+							campaignId = '';
+							void load(1);
+						}}
+						options={[
+							{ value: '', label: 'Semua brand' },
+							...(filters?.brands ?? []).map((b) => ({ value: b.id, label: b.name }))
+						]}
+					/>
 				</label>
 				<label class="block min-w-[200px]">
 					<span class="text-xs text-muted-foreground">Kampanye</span>
-					<select class="app-input mt-1 w-full" bind:value={campaignId} onchange={() => void load(1)} disabled={visibleCampaigns.length === 0}>
-						<option value="">Semua kampanye</option>
-						{#each visibleCampaigns as c (c.id)}
-							<option value={c.id}>{c.name}</option>
-						{/each}
-					</select>
+					<div class:pointer-events-none={visibleCampaigns.length === 0} class:opacity-60={visibleCampaigns.length === 0}>
+						<Select
+							ariaLabel="Kampanye"
+							minWidth={200}
+							value={campaignId}
+							onchange={(v) => {
+								campaignId = v;
+								void load(1);
+							}}
+							options={[
+								{ value: '', label: 'Semua kampanye' },
+								...visibleCampaigns.map((c) => ({ value: c.id, label: c.name }))
+							]}
+						/>
+					</div>
 				</label>
 				<label class="block min-w-[200px]">
 					<span class="text-xs text-muted-foreground">Media</span>
-					<select class="app-input mt-1 w-full" bind:value={mediaId} onchange={() => void load(1)}>
-						<option value="">Semua media</option>
-						{#each filters?.media ?? [] as m (m.id)}
-							<option value={m.id}>{m.name}</option>
-						{/each}
-					</select>
+					<Select
+						ariaLabel="Media"
+						minWidth={200}
+						value={mediaId}
+						onchange={(v) => {
+							mediaId = v;
+							void load(1);
+						}}
+						options={[
+							{ value: '', label: 'Semua media' },
+							...(filters?.media ?? []).map((m) => ({ value: m.id, label: m.name }))
+						]}
+					/>
 				</label>
 				<label class="block min-w-[170px]">
 					<span class="text-xs text-muted-foreground">Message analysis</span>
-					<select class="app-input mt-1 w-full" bind:value={messageStatus} onchange={() => void load(1)}>
-						<option value="">Semua</option>
-						{#each filters?.message_statuses ?? [] as s (s)}
-							<option value={s}>{MESSAGE_LABEL[s] ?? s}</option>
-						{/each}
-					</select>
+					<Select
+						ariaLabel="Message analysis"
+						minWidth={190}
+						value={messageStatus}
+						onchange={(v) => {
+							messageStatus = v;
+							void load(1);
+						}}
+						options={[
+							{ value: '', label: 'Semua' },
+							...(filters?.message_statuses ?? []).map((s) => ({ value: s, label: MESSAGE_LABEL[s] ?? s }))
+						]}
+					/>
 				</label>
 				<label class="block min-w-[190px]">
 					<span class="text-xs text-muted-foreground">Verifikasi URL</span>
-					<select class="app-input mt-1 w-full" bind:value={complianceStatus} onchange={() => void load(1)}>
-						<option value="">Semua</option>
-						{#each filters?.compliance_statuses ?? [] as s (s)}
-							<option value={s}>{COMPLIANCE_LABEL[s] ?? s}</option>
-						{/each}
-					</select>
+					<Select
+						ariaLabel="Verifikasi URL"
+						minWidth={190}
+						value={complianceStatus}
+						onchange={(v) => {
+							complianceStatus = v;
+							void load(1);
+						}}
+						options={[
+							{ value: '', label: 'Semua' },
+							...(filters?.compliance_statuses ?? []).map((s) => ({ value: s, label: COMPLIANCE_LABEL[s] ?? s }))
+						]}
+					/>
 				</label>
 				<label class="block min-w-[170px]">
 					<span class="text-xs text-muted-foreground">Terbit dari</span>

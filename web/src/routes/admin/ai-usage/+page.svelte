@@ -8,6 +8,7 @@
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	type AgentUsage = {
@@ -131,24 +132,52 @@
 		<p class="mt-6 text-sm text-muted-foreground">Memuat…</p>
 	{:else}
 		<div class="mt-4 flex flex-wrap items-center gap-3">
-			<select class="app-input w-auto min-w-[130px]" aria-label="Rentang waktu" bind:value={days} onchange={() => { page = 1; void load(); }}>
-				<option value="7">7 hari</option>
-				<option value="30">30 hari</option>
-				<option value="90">90 hari</option>
-				<option value="365">1 tahun</option>
-			</select>
-			<select class="app-input w-auto min-w-[150px]" aria-label="Filter step" bind:value={agent} onchange={() => { page = 1; void load(); }}>
-				<option value="all">Semua Step</option>
-				{#each Object.entries(AGENT_META) as [value, meta] (value)}
-					<option value={value}>{meta.label}</option>
-				{/each}
-			</select>
-			<select class="app-input w-auto min-w-[140px]" aria-label="Filter status" bind:value={status} onchange={() => { page = 1; void load(); }}>
-				<option value="all">Semua Status</option>
-				<option value="done">Berhasil</option>
-				<option value="failed">Gagal</option>
-				<option value="running">Berjalan</option>
-			</select>
+			<Select
+				ariaLabel="Rentang waktu"
+				minWidth={140}
+				value={days}
+				onchange={(v) => {
+					days = v;
+					page = 1;
+					void load();
+				}}
+				options={[
+					{ value: '7', label: '7 hari' },
+					{ value: '30', label: '30 hari' },
+					{ value: '90', label: '90 hari' },
+					{ value: '365', label: '1 tahun' }
+				]}
+			/>
+			<Select
+				ariaLabel="Filter step"
+				minWidth={160}
+				value={agent}
+				onchange={(v) => {
+					agent = v;
+					page = 1;
+					void load();
+				}}
+				options={[
+					{ value: 'all', label: 'Semua Step' },
+					...Object.entries(AGENT_META).map(([value, meta]) => ({ value, label: meta.label }))
+				]}
+			/>
+			<Select
+				ariaLabel="Filter status"
+				minWidth={150}
+				value={status}
+				onchange={(v) => {
+					status = v;
+					page = 1;
+					void load();
+				}}
+				options={[
+					{ value: 'all', label: 'Semua Status' },
+					{ value: 'done', label: 'Berhasil' },
+					{ value: 'failed', label: 'Gagal' },
+					{ value: 'running', label: 'Berjalan' }
+				]}
+			/>
 			<form class="flex items-center gap-2" onsubmit={submitSearch}>
 				<input class="app-input w-[240px]" placeholder="Cari nama kampanye…" bind:value={searchInput} />
 				<button class="app-btn app-btn-soft" type="submit"><Search size={14} /> Cari</button>

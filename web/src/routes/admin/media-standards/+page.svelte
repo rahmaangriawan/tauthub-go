@@ -11,6 +11,7 @@
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const PAGE_SIZE = 20;
@@ -324,11 +325,18 @@
 			</label>
 			<label class="block">
 				<span class="text-xs font-bold text-muted-foreground">Media</span>
-				<select class="app-input mt-1 w-full" disabled={!!editing} bind:value={form.media_id}>
-					{#each selectOptions as m (m.id)}
-						<option value={m.id}>{m.name}{withStandard.has(m.id) ? ' (sudah ada standard)' : ''}</option>
-					{/each}
-				</select>
+				<div class="mt-1" class:pointer-events-none={!!editing} class:opacity-60={!!editing}>
+					<Select
+						ariaLabel="Media"
+						minWidth={300}
+						value={form.media_id}
+						onchange={(v) => (form.media_id = v)}
+						options={selectOptions.map((m) => ({
+							value: m.id,
+							label: `${m.name}${withStandard.has(m.id) ? ' (sudah ada standard)' : ''}`
+						}))}
+					/>
+				</div>
 				{#if !editing}
 					<span class="mt-1 block text-xs text-muted-foreground"
 						>Media yang sudah punya standard tetap tampil dan ditandai — membuat standard baru untuk media yang sama
@@ -347,21 +355,33 @@
 				</label>
 				<label class="block">
 					<span class="text-xs font-bold text-muted-foreground">Gaya jurnalistik</span>
-					<select class="app-input mt-1 w-full" bind:value={form.journalistic_style}>
-						<option value="news">News — keras, 5W+1H</option>
-						<option value="feature">Feature — human interest</option>
-						<option value="magazine">Magazine — panjang &amp; analitis</option>
-						<option value="blog">Blog — santai</option>
-					</select>
+					<Select
+						ariaLabel="Gaya jurnalistik"
+						minWidth={280}
+						value={form.journalistic_style}
+						onchange={(v) => (form.journalistic_style = v)}
+						options={[
+							{ value: 'news', label: 'News — keras, 5W+1H' },
+							{ value: 'feature', label: 'Feature — human interest' },
+							{ value: 'magazine', label: 'Magazine — panjang & analitis' },
+							{ value: 'blog', label: 'Blog — santai' }
+						]}
+					/>
 				</label>
 				<label class="block">
 					<span class="text-xs font-bold text-muted-foreground">Toleransi promosi (hard-selling)</span>
-					<select class="app-input mt-1 w-full" bind:value={form.hard_selling_tolerance}>
-						<option value="none">None — tanpa promosi</option>
-						<option value="low">Low</option>
-						<option value="medium">Medium</option>
-						<option value="high">High</option>
-					</select>
+					<Select
+						ariaLabel="Toleransi promosi (hard-selling)"
+						minWidth={240}
+						value={form.hard_selling_tolerance}
+						onchange={(v) => (form.hard_selling_tolerance = v)}
+						options={[
+							{ value: 'none', label: 'None — tanpa promosi' },
+							{ value: 'low', label: 'Low' },
+							{ value: 'medium', label: 'Medium' },
+							{ value: 'high', label: 'High' }
+						]}
+					/>
 				</label>
 				<div>
 					<span class="text-xs font-bold text-muted-foreground">Kutipan narasumber</span>

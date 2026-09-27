@@ -7,6 +7,7 @@
 	import { Archive, ArrowRight, Clock, FileText, LoaderCircle, RotateCcw, Search, Share2, Sparkles, Trash, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import Select from '$lib/components/select.svelte';
 	import { STAGE_LABEL, STAGE_TONE, STATUS_OPTIONS, statusAccent, fmtIdr } from '../taut-pintar/_shared';
 
 	const brandId = $derived(page.params.brandId as string);
@@ -259,9 +260,14 @@
 	</header>
 
 	<div class="app-card mt-4 flex flex-wrap items-center gap-2 p-3">
-		<select class="app-input !w-auto min-w-[160px]" bind:value={statusFilter} onchange={() => (pageNum = 1)}>
-			{#each STATUS_OPTIONS as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
-		</select>
+		<Select
+			bind:value={statusFilter}
+			ariaLabel="Status kampanye"
+			placeholder="Semua Status"
+			minWidth={160}
+			onchange={() => (pageNum = 1)}
+			options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+		/>
 		<label class="app-input flex min-w-[200px] flex-1 items-center gap-2 !py-1.5">
 			<Search size={15} class="text-muted-foreground" />
 			<input

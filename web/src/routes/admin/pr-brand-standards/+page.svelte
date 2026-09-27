@@ -6,6 +6,7 @@
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
 
@@ -147,12 +148,17 @@
 			<div class="mt-3 flex flex-wrap items-end gap-3">
 				<label class="block min-w-[280px] flex-1">
 					<span class="text-sm font-medium">Brand</span>
-					<select class="app-input mt-1 w-full" value={selected} onchange={(e) => pickBrand((e.currentTarget as HTMLSelectElement).value)}>
-						<option value="">Pilih brand…</option>
-						{#each brands as b (b.id)}
-							<option value={b.id}>{b.name}{b.standard ? ' (sudah diatur)' : ''}</option>
-						{/each}
-					</select>
+					<Select
+						ariaLabel="Brand"
+						placeholder="Pilih brand…"
+						minWidth={260}
+						value={selected}
+						onchange={(v) => pickBrand(v)}
+						options={[
+							{ value: '', label: 'Pilih brand…' },
+							...brands.map((b) => ({ value: b.id, label: `${b.name}${b.standard ? ' (sudah diatur)' : ''}` }))
+						]}
+					/>
 				</label>
 				<label class="block w-[170px]">
 					<span class="text-sm font-medium">Rate global (Rp / 1k reach)</span>

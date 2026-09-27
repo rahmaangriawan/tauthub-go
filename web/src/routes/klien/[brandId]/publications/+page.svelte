@@ -12,6 +12,7 @@
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import Select from '$lib/components/select.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
@@ -344,30 +345,55 @@
 				<Search size={15} class="text-muted-foreground" />
 				<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari artikel, media, atau kategori…" bind:value={query} />
 			</label>
-			<select class="app-input !w-auto min-w-[150px]" bind:value={statusFilter}>
-				<option value="">Semua Status</option>
-				<option value="waiting_partner">waiting_partner</option>
-				<option value="published">Published</option>
-				<option value="queued">Queued</option>
-				<option value="processing">Processing</option>
-				<option value="pending_review">pending_review</option>
-				<option value="failed">Failed</option>
-				<option value="cancelled">Cancelled</option>
-			</select>
-			<select class="app-input !w-auto min-w-[150px]" bind:value={mediaFilter}>
-				<option value="">Semua Media</option>
-				{#each mediaOptions as m (m)}<option value={m}>{m}</option>{/each}
-			</select>
-			<select class="app-input !w-auto min-w-[150px]" bind:value={categoryFilter}>
-				<option value="">Semua Kategori</option>
-				{#each categoryOptions as c (c)}<option value={c}>{c}</option>{/each}
-			</select>
-			<select class="app-input !w-auto min-w-[160px]" bind:value={sortOrder}>
-				<option value="newest">⇅ Terbaru</option>
-				<option value="oldest">⇅ Terlama</option>
-				<option value="price_desc">⇅ Harga Tertinggi</option>
-				<option value="price_asc">⇅ Harga Terendah</option>
-			</select>
+			<Select
+				bind:value={statusFilter}
+				ariaLabel="Filter status"
+				placeholder="Semua Status"
+				minWidth={150}
+				options={[
+					{ value: '', label: 'Semua Status' },
+					{ value: 'waiting_partner', label: 'waiting_partner' },
+					{ value: 'published', label: 'Published' },
+					{ value: 'queued', label: 'Queued' },
+					{ value: 'processing', label: 'Processing' },
+					{ value: 'pending_review', label: 'pending_review' },
+					{ value: 'failed', label: 'Failed' },
+					{ value: 'cancelled', label: 'Cancelled' }
+				]}
+			/>
+			<Select
+				bind:value={mediaFilter}
+				ariaLabel="Filter media"
+				placeholder="Semua Media"
+				minWidth={150}
+				options={[
+					{ value: '', label: 'Semua Media' },
+					...mediaOptions.map((m) => ({ value: m, label: m }))
+				]}
+			/>
+			<Select
+				bind:value={categoryFilter}
+				ariaLabel="Filter kategori"
+				placeholder="Semua Kategori"
+				minWidth={150}
+				options={[
+					{ value: '', label: 'Semua Kategori' },
+					...categoryOptions.map((c) => ({ value: c, label: c }))
+				]}
+			/>
+			<Select
+				value={sortOrder}
+				ariaLabel="Urutkan"
+				minWidth={160}
+				align="end"
+				onchange={(v) => (sortOrder = v as 'newest' | 'oldest' | 'price_desc' | 'price_asc')}
+				options={[
+					{ value: 'newest', label: '⇅ Terbaru' },
+					{ value: 'oldest', label: '⇅ Terlama' },
+					{ value: 'price_desc', label: '⇅ Harga Tertinggi' },
+					{ value: 'price_asc', label: '⇅ Harga Terendah' }
+				]}
+			/>
 		</div>
 
 		{#if err}

@@ -6,6 +6,7 @@
 	import { Check, Plus, Trash2, UserPlus, Users } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import Select from '$lib/components/select.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -151,9 +152,14 @@
 				</label>
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Role</span>
-					<select class="app-input mt-1 w-full" bind:value={form.role}>
-						{#each ROLES as r (r.value)}<option value={r.value}>{r.label}</option>{/each}
-					</select>
+					<div class="mt-1">
+						<Select
+							bind:value={form.role}
+							ariaLabel="Role member"
+							minWidth={200}
+							options={ROLES.map((r) => ({ value: r.value, label: r.label }))}
+						/>
+					</div>
 				</label>
 			</div>
 			<div class="mt-3 flex justify-end gap-2">
@@ -191,17 +197,21 @@
 							<td class="px-4 py-2.5 font-medium">{m.display_name || '—'}</td>
 							<td class="memb-email px-4 py-2.5 text-muted-foreground">{m.email}</td>
 							<td class="px-4 py-2.5">
-								<select
-									class="app-input !w-auto !py-1 !text-xs"
-									value={m.role}
-									disabled={busy || m.role === 'owner'}
-									onchange={(e) => void updateRole(m, (e.currentTarget as HTMLSelectElement).value)}
+								<div
+									class={busy || m.role === 'owner' ? 'pointer-events-none opacity-60' : ''}
+									inert={busy || m.role === 'owner'}
 								>
-									{#if m.role === 'owner'}
-										<option value="owner">Owner</option>
-									{/if}
-									{#each ROLES as r (r.value)}<option value={r.value}>{r.label}</option>{/each}
-								</select>
+									<Select
+										value={m.role}
+										ariaLabel={`Role ${m.display_name || m.email}`}
+										minWidth={150}
+										onchange={(v) => void updateRole(m, v)}
+										options={[
+											...(m.role === 'owner' ? [{ value: 'owner', label: 'Owner' }] : []),
+											...ROLES.map((r) => ({ value: r.value, label: r.label }))
+										]}
+									/>
+								</div>
 							</td>
 							<td class="memb-added px-4 py-2.5 text-muted-foreground">{dt(m.created_at)}</td>
 							<td class="px-4 py-2.5 text-right">

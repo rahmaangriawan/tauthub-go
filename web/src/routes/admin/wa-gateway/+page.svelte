@@ -9,6 +9,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
 
@@ -481,32 +482,44 @@
 				<div class="flex flex-wrap items-end gap-3">
 					<label class="block min-w-[165px]">
 						<span class="text-xs text-muted-foreground">Periode</span>
-						<select class="app-input mt-1 w-full" bind:value={monDays} onchange={() => changeMonitorFilter(() => {})}>
-							{#each PERIOD_OPTIONS as o (o.value)}
-								<option value={o.value}>{o.label}</option>
-							{/each}
-						</select>
+						<Select
+							ariaLabel="Periode"
+							minWidth={180}
+							value={monDays}
+							onchange={(v) => changeMonitorFilter(() => (monDays = v))}
+							options={PERIOD_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+						/>
 					</label>
 					<label class="block min-w-[165px]">
 						<span class="text-xs text-muted-foreground">Status</span>
-						<select class="app-input mt-1 w-full" value={monStatus} onchange={(e) => changeMonitorFilter(() => (monStatus = (e.currentTarget as HTMLSelectElement).value))}>
-							<option value="">Semua status</option>
-							<option value="sent">Terkirim</option>
-							<option value="failed">Gagal</option>
-							<option value="queued">Menunggu</option>
-						</select>
+						<Select
+							ariaLabel="Status"
+							minWidth={180}
+							value={monStatus}
+							onchange={(v) => changeMonitorFilter(() => (monStatus = v))}
+							options={[
+								{ value: '', label: 'Semua status' },
+								{ value: 'sent', label: 'Terkirim' },
+								{ value: 'failed', label: 'Gagal' },
+								{ value: 'queued', label: 'Menunggu' }
+							]}
+						/>
 					</label>
 					<label class="block min-w-[200px]">
 						<span class="text-xs text-muted-foreground">Event</span>
-						<select class="app-input mt-1 w-full" value={monEvent} onchange={(e) => changeMonitorFilter(() => (monEvent = (e.currentTarget as HTMLSelectElement).value))}>
-							<option value="">Semua event</option>
-							{#each monitor?.by_event ?? [] as ev (ev.event)}
-								<option value={ev.event}>{ev.label}</option>
-							{/each}
-							{#if monEvent && !(monitor?.by_event ?? []).some((ev) => ev.event === monEvent)}
-								<option value={monEvent}>{monEvent}</option>
-							{/if}
-						</select>
+						<Select
+							ariaLabel="Event"
+							minWidth={200}
+							value={monEvent}
+							onchange={(v) => changeMonitorFilter(() => (monEvent = v))}
+							options={[
+								{ value: '', label: 'Semua event' },
+								...(monitor?.by_event ?? []).map((ev) => ({ value: ev.event, label: ev.label })),
+								...(monEvent && !(monitor?.by_event ?? []).some((ev) => ev.event === monEvent)
+									? [{ value: monEvent, label: monEvent }]
+									: [])
+							]}
+						/>
 					</label>
 					<label class="block min-w-[220px] flex-1">
 						<span class="text-xs text-muted-foreground">Cari</span>

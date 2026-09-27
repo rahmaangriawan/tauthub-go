@@ -5,6 +5,7 @@
 	import { Receipt } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import Select from '$lib/components/select.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -57,13 +58,20 @@
 			<h1 class="text-2xl font-semibold tracking-tight">Invoice &amp; Pajak</h1>
 			<p class="mt-1 text-sm text-muted-foreground">{total} invoice tercatat untuk brand ini.</p>
 		</div>
-		<select class="app-input !w-auto" bind:value={status} onchange={() => load()}>
-			<option value="">Semua status</option>
-			<option value="draft">Draf</option>
-			<option value="issued">Diterbitkan</option>
-			<option value="paid">Lunas</option>
-			<option value="void">Dibatalkan</option>
-		</select>
+		<Select
+			bind:value={status}
+			ariaLabel="Status invoice"
+			placeholder="Semua status"
+			align="end"
+			onchange={() => load()}
+			options={[
+				{ value: '', label: 'Semua status' },
+				{ value: 'draft', label: 'Draf' },
+				{ value: 'issued', label: 'Diterbitkan' },
+				{ value: 'paid', label: 'Lunas' },
+				{ value: 'void', label: 'Dibatalkan' }
+			]}
+		/>
 	</header>
 
 	{#if loading}

@@ -8,6 +8,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtRp, fmtNum } from '$lib/admin-format';
 	import { platformError, isAccessDenied } from '../_platform';
@@ -181,11 +182,14 @@
 		<form class="flex flex-col gap-3" onsubmit={create}>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Brand</span>
-				<select class="app-input w-full" bind:value={form.brand_id}>
-					{#each brands as b (b.id)}
-						<option value={b.id}>{b.name}</option>
-					{/each}
-				</select>
+				<Select
+					ariaLabel="Brand"
+					minWidth={240}
+					placeholder="Pilih brand"
+					value={form.brand_id}
+					onchange={(v) => (form.brand_id = v)}
+					options={brands.map((b) => ({ value: b.id, label: b.name }))}
+				/>
 			</label>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Nama paket</span>

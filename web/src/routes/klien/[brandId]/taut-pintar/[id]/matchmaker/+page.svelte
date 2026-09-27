@@ -8,6 +8,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, humanizeReason, fmtTrafficShort, formatTraffic } from '../../_shared';
 
 	const brandId = $derived(page.params.brandId as string);
@@ -407,17 +408,31 @@
 				<Search size={14} class="text-muted-foreground" />
 				<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari domain media atau niche…" aria-label="Cari domain media atau niche" bind:value={q} />
 			</label>
-			<select class="app-input !w-auto min-w-[170px]" bind:value={typeFilter} aria-label="Filter tipe media">
-				<option value="all">Semua Tipe Media</option>
-				<option value="mainstream">Media Online</option>
-				<option value="blogger">Blog</option>
-			</select>
-			<select class="app-input !w-auto min-w-[170px]" bind:value={sort} aria-label="Urutkan">
-				<option value="recommended">AI Match Score</option>
-				<option value="match">Match % Tertinggi</option>
-				<option value="price">Harga Terendah</option>
-				<option value="reach">Est. Reach Tertinggi</option>
-			</select>
+			<Select
+				bind:value={typeFilter}
+				ariaLabel="Filter tipe media"
+				placeholder="Semua Tipe Media"
+				minWidth={170}
+				align="end"
+				options={[
+					{ value: 'all', label: 'Semua Tipe Media' },
+					{ value: 'mainstream', label: 'Media Online' },
+					{ value: 'blogger', label: 'Blog' }
+				]}
+			/>
+			<Select
+				bind:value={sort}
+				ariaLabel="Urutkan"
+				placeholder="Urutkan"
+				minWidth={170}
+				align="end"
+				options={[
+					{ value: 'recommended', label: 'AI Match Score' },
+					{ value: 'match', label: 'Match % Tertinggi' },
+					{ value: 'price', label: 'Harga Terendah' },
+					{ value: 'reach', label: 'Est. Reach Tertinggi' }
+				]}
+			/>
 		</div>
 
 		{#if loading || running}
@@ -546,17 +561,31 @@
 				<Search size={14} class="text-muted-foreground" />
 				<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari domain media atau niche…" aria-label="Cari domain media atau niche" bind:value={q} />
 			</label>
-			<select class="app-input !w-auto min-w-[170px]" bind:value={typeFilter} aria-label="Filter tipe media">
-				<option value="all">Semua Tipe Media</option>
-				<option value="mainstream">Media Online</option>
-				<option value="blogger">Blog</option>
-			</select>
-			<select class="app-input !w-auto min-w-[170px]" bind:value={sort} aria-label="Urutkan">
-				<option value="recommended">AI Match Score</option>
-				<option value="match">Match % Tertinggi</option>
-				<option value="price">Harga Terendah</option>
-				<option value="reach">Est. Reach Tertinggi</option>
-			</select>
+			<Select
+				bind:value={typeFilter}
+				ariaLabel="Filter tipe media"
+				placeholder="Semua Tipe Media"
+				minWidth={170}
+				align="end"
+				options={[
+					{ value: 'all', label: 'Semua Tipe Media' },
+					{ value: 'mainstream', label: 'Media Online' },
+					{ value: 'blogger', label: 'Blog' }
+				]}
+			/>
+			<Select
+				bind:value={sort}
+				ariaLabel="Urutkan"
+				placeholder="Urutkan"
+				minWidth={170}
+				align="end"
+				options={[
+					{ value: 'recommended', label: 'AI Match Score' },
+					{ value: 'match', label: 'Match % Tertinggi' },
+					{ value: 'price', label: 'Harga Terendah' },
+					{ value: 'reach', label: 'Est. Reach Tertinggi' }
+				]}
+			/>
 			<button class="app-btn app-btn-soft" type="button" onclick={() => (showAdvanced = !showAdvanced)}>
 				<SlidersHorizontal size={14} /> Filter Lanjutan
 			</button>

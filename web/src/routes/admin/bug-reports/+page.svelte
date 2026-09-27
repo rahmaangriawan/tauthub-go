@@ -9,6 +9,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
 
@@ -189,19 +190,20 @@
 				value={query}
 				oninput={(e) => onQueryInput((e.currentTarget as HTMLInputElement).value)}
 			/>
-			<select
-				class="app-input w-auto min-w-[160px]"
-				aria-label="Filter status"
-				bind:value={status}
-				onchange={() => {
+			<Select
+				ariaLabel="Filter status"
+				minWidth={170}
+				value={status}
+				onchange={(v) => {
+					status = v as BugStatus | 'all';
 					page = 1;
 					void load();
 				}}
-			>
-				{#each STATUS_FILTERS as value (value)}
-					<option value={value}>{value === 'all' ? 'Semua' : STATUS_LABELS[value as BugStatus]}</option>
-				{/each}
-			</select>
+				options={STATUS_FILTERS.map((value) => ({
+					value,
+					label: value === 'all' ? 'Semua' : STATUS_LABELS[value as BugStatus]
+				}))}
+			/>
 		</div>
 
 		<div class="app-card mt-4 overflow-x-auto">
@@ -285,17 +287,20 @@
 			{#if detailLoading}<p class="text-xs text-muted-foreground">Memuat detail…</p>{/if}
 		</div>
 		{#snippet footer()}
-			<select
-				class="app-input mr-auto w-auto"
-				aria-label="Ubah status laporan"
-				disabled={!detail}
-				value={detail?.status ?? ''}
-				onchange={(e) => { if (detail) void updateStatus(detail, (e.currentTarget as HTMLSelectElement).value as BugStatus); }}
-			>
-				{#each ['open', 'triage', 'resolved', 'closed'] as value (value)}
-					<option value={value}>{STATUS_LABELS[value as BugStatus]}</option>
-				{/each}
-			</select>
+			<span class="mr-auto" class:pointer-events-none={!detail} class:opacity-60={!detail}>
+				<Select
+					ariaLabel="Ubah status laporan"
+					minWidth={170}
+					value={detail?.status ?? ''}
+					onchange={(v) => {
+						if (detail) void updateStatus(detail, v as BugStatus);
+					}}
+					options={['open', 'triage', 'resolved', 'closed'].map((value) => ({
+						value,
+						label: STATUS_LABELS[value as BugStatus]
+					}))}
+				/>
+			</span>
 			<button class="app-btn app-btn-soft" type="button" onclick={() => (detail = null)}>Tutup</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={notesBusy} onclick={() => void saveNotes()}>
 				{notesBusy ? 'Menyimpan…' : 'Simpan catatan'}

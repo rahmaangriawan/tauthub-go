@@ -9,6 +9,7 @@
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { fmtDateTime } from '$lib/admin-format';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
@@ -199,12 +200,17 @@
 		<div class="flex flex-wrap items-end gap-3">
 			<label class="block min-w-[260px] flex-1">
 				<span class="text-xs font-bold text-muted-foreground">Brand</span>
-				<select class="app-input mt-1 w-full" bind:value={brandFilter}>
-					<option value="">Pilih brand…</option>
-					{#each brands.filter((b) => b.name) as b (b.id)}
-						<option value={b.id}>{b.name}</option>
-					{/each}
-				</select>
+				<Select
+					ariaLabel="Brand"
+					placeholder="Pilih brand…"
+					minWidth={260}
+					value={brandFilter}
+					onchange={(v) => (brandFilter = v)}
+					options={[
+						{ value: '', label: 'Pilih brand…' },
+						...brands.filter((b) => b.name).map((b) => ({ value: b.id, label: b.name }))
+					]}
+				/>
 			</label>
 			<label class="flex items-center gap-2 pb-3">
 				<input type="checkbox" bind:checked={brandEnabled} />

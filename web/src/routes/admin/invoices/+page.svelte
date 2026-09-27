@@ -9,6 +9,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDate, fmtRp, fmtNum } from '$lib/admin-format';
 	import { platformError, isAccessDenied } from '../_platform';
@@ -211,20 +212,27 @@
 		<form class="flex flex-col gap-3" onsubmit={create}>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Brand</span>
-				<select class="app-input w-full" value={form.brand_id} onchange={(e) => void loadCampaigns((e.currentTarget as HTMLSelectElement).value)}>
-					{#each brands as b (b.id)}
-						<option value={b.id}>{b.name}</option>
-					{/each}
-				</select>
+				<Select
+					ariaLabel="Brand"
+					minWidth={240}
+					placeholder="Pilih brand"
+					value={form.brand_id}
+					onchange={(v) => void loadCampaigns(v)}
+					options={brands.map((b) => ({ value: b.id, label: b.name }))}
+				/>
 			</label>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Campaign (opsional — jumlah otomatis)</span>
-				<select class="app-input w-full" value={form.campaign_id} onchange={(e) => (form = { ...form, campaign_id: (e.currentTarget as HTMLSelectElement).value })}>
-					<option value="">Manual (isi jumlah)</option>
-					{#each campaigns as c (c.id)}
-						<option value={c.id}>{c.name} ({c.publication_count} publikasi)</option>
-					{/each}
-				</select>
+				<Select
+					ariaLabel="Campaign"
+					minWidth={260}
+					value={form.campaign_id}
+					onchange={(v) => (form = { ...form, campaign_id: v })}
+					options={[
+						{ value: '', label: 'Manual (isi jumlah)' },
+						...campaigns.map((c) => ({ value: c.id, label: `${c.name} (${c.publication_count} publikasi)` }))
+					]}
+				/>
 			</label>
 			{#if !form.campaign_id}
 				<label class="block">
@@ -235,11 +243,13 @@
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="block">
 					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Status</span>
-					<select class="app-input w-full" bind:value={form.status}>
-						{#each ['draft', 'issued', 'paid', 'void'] as s (s)}
-							<option value={s}>{s}</option>
-						{/each}
-					</select>
+					<Select
+						ariaLabel="Status"
+						minWidth={160}
+						value={form.status}
+						onchange={(v) => (form = { ...form, status: v })}
+						options={['draft', 'issued', 'paid', 'void'].map((s) => ({ value: s, label: s }))}
+					/>
 				</label>
 				<label class="block">
 					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Jatuh tempo</span>

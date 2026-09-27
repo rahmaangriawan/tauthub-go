@@ -7,6 +7,7 @@
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
 
@@ -121,18 +122,26 @@
 					bind:value={searchInput}
 				/>
 			</div>
-			<select class="app-input w-auto min-w-[180px]" aria-label="Filter brand" bind:value={brand} onchange={() => void load(0, pageSize, search, brand, action)}>
-				<option value="">Semua brand</option>
-				{#each brands as b (b.id)}
-					<option value={b.id}>{b.name}</option>
-				{/each}
-			</select>
-			<select class="app-input w-auto min-w-[150px]" aria-label="Filter jenis aksi" bind:value={action} onchange={() => void load(0, pageSize, search, brand, action)}>
-				<option value="">Semua aksi</option>
-				{#each ACTION_OPTIONS as option (option.value)}
-					<option value={option.value}>{option.label}</option>
-				{/each}
-			</select>
+			<Select
+				ariaLabel="Filter brand"
+				minWidth={180}
+				value={brand}
+				onchange={(v) => {
+					brand = v;
+					void load(0, pageSize, search, brand, action);
+				}}
+				options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: b.id, label: b.name }))]}
+			/>
+			<Select
+				ariaLabel="Filter jenis aksi"
+				minWidth={160}
+				value={action}
+				onchange={(v) => {
+					action = v;
+					void load(0, pageSize, search, brand, action);
+				}}
+				options={[{ value: '', label: 'Semua aksi' }, ...ACTION_OPTIONS.map((o) => ({ value: o.value, label: o.label }))]}
+			/>
 			<button class="app-btn app-btn-soft" type="submit" disabled={loading}>Terapkan filter</button>
 			{#if hasActiveFilter}
 				<button class="app-btn app-btn-soft" type="button" disabled={loading} onclick={resetFilters}>Reset</button>
@@ -177,16 +186,13 @@
 				<p class="text-sm text-muted-foreground">
 					{data.total ? `${offset + 1}–${Math.min(offset + pageSize, data.total)} dari ${data.total} events` : '0 events'}
 				</p>
-				<select
-					class="app-input w-auto"
-					aria-label="Baris per halaman"
+				<Select
+					ariaLabel="Baris per halaman"
+					minWidth={140}
 					value={String(pageSize)}
-					onchange={(e) => changePageSize(Number((e.currentTarget as HTMLSelectElement).value))}
-				>
-					{#each PAGE_SIZE_OPTIONS as size (size)}
-						<option value={String(size)}>{size} / halaman</option>
-					{/each}
-				</select>
+					onchange={(v) => changePageSize(Number(v))}
+					options={PAGE_SIZE_OPTIONS.map((size) => ({ value: String(size), label: `${size} / halaman` }))}
+				/>
 			</div>
 			<Pagination total={data.total} limit={pageSize} {offset} onChange={(next) => void load(next, pageSize, search, brand, action)} />
 		</div>

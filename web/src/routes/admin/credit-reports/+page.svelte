@@ -9,6 +9,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDate, fmtRp, fmtNum } from '$lib/admin-format';
 	import { platformError } from '../_platform';
@@ -118,12 +119,19 @@
 		</div>
 	{:else}
 		<div class="mt-4 flex flex-wrap items-center gap-2">
-			<select class="app-input !w-auto" value={statusFilter} onchange={(e) => setStatusFilter((e.currentTarget as HTMLSelectElement).value)}>
-				<option value="">Semua status</option>
-				<option value="pending">Menunggu</option>
-				<option value="approved">Disetujui</option>
-				<option value="rejected">Ditolak</option>
-			</select>
+			<Select
+				ariaLabel="Status laporan"
+				minWidth={200}
+				placeholder="Semua status"
+				value={statusFilter}
+				onchange={(v) => setStatusFilter(v)}
+				options={[
+					{ value: '', label: 'Semua status' },
+					{ value: 'pending', label: 'Menunggu' },
+					{ value: 'approved', label: 'Disetujui' },
+					{ value: 'rejected', label: 'Ditolak' }
+				]}
+			/>
 			{#if statusFilter}
 				<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => setStatusFilter('')}>Bersihkan filter</button>
 			{/if}

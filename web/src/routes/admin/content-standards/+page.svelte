@@ -10,6 +10,7 @@
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
+	import Select from '$lib/components/select.svelte';
 	import { Search } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import EditorialDrawer from './editorial-drawer.svelte';
@@ -335,13 +336,13 @@
 								value={q.key}
 								oninput={(e) => setQuestion(index, { key: e.currentTarget.value })}
 							/>
-							<select
-								class="app-input !w-auto"
+							<Select
+								ariaLabel="Tipe pertanyaan"
+								minWidth={160}
 								value={q.type}
-								onchange={(e) => setQuestion(index, { type: e.currentTarget.value })}
-							>
-								{#each QUESTION_TYPES as t (t)}<option value={t}>{t}</option>{/each}
-							</select>
+								onchange={(v) => setQuestion(index, { type: v })}
+								options={QUESTION_TYPES.map((t) => ({ value: t, label: t }))}
+							/>
 							<label class="flex items-center gap-1.5 whitespace-nowrap text-xs">
 								<input
 									type="checkbox"
