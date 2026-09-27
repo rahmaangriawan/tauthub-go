@@ -323,3 +323,54 @@ Yang diperbaiki:
 
 Bukti: login di browser mendarat langsung di `/klien/cza87b` dan menampilkan dashboard
 ("Selamat datang kembali, …"); akses langsung ke `/klien` juga teralihkan ke dashboard brand.
+
+---
+
+## Audit Integrasi (06_INTEGRATIONS.md) — Status Akhir
+
+Seluruh 14 bagian kontrak integrasi diaudit terhadap implementasi Go. Sebagian besar
+sudah ada sebelum audit: AI gateway (deteksi 7 provider termasuk Gemini via
+`generativelanguage.googleapis.com`, retry/backoff, usage ledger, circuit breaker,
+mock fallback, embeddings 128-dim), 6 payment gateway + webhook (Xendit/Duitku/Midtrans/
+Tripay/SumoPod/Sandbox), email dua layer (SMTP + antrean `email_deliveries`),
+WhatsApp Fonnte, metrik SEO (RapidAPI/PageSpeed/Serpens/ai_trust), Crawlhub
+(HMAC + ingest secret), Turnstile, notification webhooks (`x-tulisio-signature`,
+drift 10 menit), RSS per partner, publishing API keys, Smodin, verifikasi domain,
+tracking link, uploads, dan registration guard.
+
+**Gap nyata yang ditemukan dan ditutup:**
+
+1. **Tracking → `analytics_daily` tidak pernah ditulis.** Event hanya masuk
+   `tracking_events` mentah, padahal halaman Analisis Kinerja klien membaca
+   `analytics_daily`. Kini di-rollup dengan `ON CONFLICT (brand_id, event_date,
+   event_type, COALESCE(publication_id,''))` → `count+1`.
+2. **Daftar event type salah total.** Go memakai `impression/view/read/scroll/click/
+   conversion`, sedangkan CHECK constraint hanya menerima `article_view`,
+   `article_scroll`, `outbound_click`, `cta_click`, `tracking_link_click` — semua
+   event sah ditolak 422.
+3. **Route `/t/{code}` tidak terdaftar** walau proxy Vite sudah mengarahkannya ke
+   API. Kini 301 ke destination/published_url sambil mencatat `tracking_link_click`.
+4. **GA4 tidak mengirim apa pun.** `forwardEventToGa4` (Measurement Protocol v2)
+   diport lengkap: unseal `sealed_api_secret`, `event_mapping` per brand,
+   `consent_mode` required/none, `client_id` deterministik. Diuji 7 unit test
+   termasuk payload/query dan aturan consent.
+5. **Blogger OAuth belum ada** — 4 endpoint partner masih placeholder 503.
+   Kini lengkap: URL OAuth PKCE S256 + `blogger_oauth_states`, daftar blog,
+   simpan blog terpilih (divalidasi ke akun Google), test-connection, dan callback
+   publik `/api/blogger/callback` (seal kredensial v3 per media, `enc_key_ver=1`).
+6. **Callback GSC belum ada** — `GSCConnect` menghasilkan URL tapi tidak ada yang
+   menukar authorization code, sehingga alur OAuth mitra tidak pernah selesai.
+   Ditambahkan `exchangeGscCode`/`listGscSites`/`refreshGscToken` + `GSCCallback`
+   (multi-akun per email, simpan properties, auto-select bila tunggal).
+
+**Bukan gap (diverifikasi di kode app lama):** `consumeNonce`/`isRateLimited` di
+`lib/crawler/store.ts` tidak dipanggil jalur produksi mana pun — anti-replay nonce
+ditangani Cloudflare Worker mitra lewat KV (`worker-template.ts`). Consent
+(`crawlerConsentVersion`, `consent_at`) dan diagnostic crawler sudah ada di Go.
+
+**Bukti runtime:** 4 endpoint Blogger diuji dengan media Blogger nyata (200 berisi URL
+OAuth lengkap dengan `code_challenge_method=S256`; 409 saat belum ada kredensial;
+422 saat `blog_id` kosong; test-connection 200), kedua callback membalas 302,
+`/t/{code}` membalas 301 dan mencatat `tracking_link_click`, dan satu event
+`article_view` terbukti menulis `tracking_events` + `analytics_daily` (dicek langsung
+di DB lalu dibersihkan).
