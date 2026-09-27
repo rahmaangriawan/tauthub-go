@@ -306,6 +306,18 @@
   .app-credit-pill:hover { border-color: var(--primary); background-color: var(--accent); }
   .app-credit-pill svg { flex: 0 0 auto; color: var(--warning); }
   .app-credit-pill strong { font-size: 12.5px; font-weight: 650; white-space: nowrap; }
+  /* Pil kredit kini sebuah <button> (membuka dialog Top Up), bukan tautan.
+     Reset tampilan bawaan tombol supaya visualnya identik dengan versi <a>. */
+  .app-credit-trigger {
+    font: inherit;
+    cursor: pointer;
+    appearance: none;
+  }
+  .app-credit-trigger:focus-visible {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+  }
 
   .app-content { display: block; width: 100%; min-height: calc(100dvh - 64px); padding: 32px 28px 64px; }
 
@@ -364,4 +376,30 @@
     .app-lang-label { display: none; }
     .app-credit-pill strong { font-size: 11.5px; }
   }
+}
+
+/* Tabel data di bawah 1280px: kolom rapat (padding 8px, bukan 16/20px), sel
+   boleh membungkus, dan lebar minimum apapun diabaikan, seperti tabel Radix di
+   app lama. Diletakkan DI LUAR @layer supaya mengalahkan utility
+   `px-3/px-4/px-5`, `truncate`, serta `min-w-[...]` Tailwind (utility berada di
+   layer paling akhir); tanpa ini tabel berkolom banyak memaksa scroll
+   horizontal di dalam kartunya. Di >=1280px semua tabel sudah muat alami,
+   sehingga tampilan desktop lebar tidak berubah. Halaman yang butuh perilaku
+   lain (mis. Pelacak 404 yang berubah jadi kartu bertumpuk) menimpanya lewat
+   gaya scoped masing-masing. */
+@media (max-width: 1279px) {
+  main table { min-width: 0 !important; table-layout: auto; }
+  main table :is(th, td) {
+    padding-left: 8px;
+    padding-right: 8px;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  /* Elemen ber-`truncate` (biasanya judul/URL di sel) memaksa satu baris, dan
+     itulah yang membuat kolom tabel tidak bisa menyusut. Biarkan membungkus. */
+  main table .truncate {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .app-card .app-input { max-width: 100%; }
 }
