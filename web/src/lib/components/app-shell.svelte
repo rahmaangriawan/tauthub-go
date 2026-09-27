@@ -43,16 +43,37 @@
 		drawerOpen = false;
 	});
 
-	// Kunci scroll latar, Escape untuk menutup, dan fokus dipindah ke panel
-	// (lalu dikembalikan ke tombol pemicu) selama drawer terbuka.
+	// Kunci scroll latar, Escape untuk menutup, fokus dipindah ke panel lalu
+	// dikembalikan ke tombol pemicu, dan Tab dijebak di dalam panel selama
+	// drawer terbuka (parity <Dialog.Content> Radix di app lama).
 	$effect(() => {
 		if (!drawerOpen) return;
 		const previous = document.body.style.overflow;
 		const opener = document.activeElement as HTMLElement | null;
 		document.body.style.overflow = 'hidden';
 		panel?.focus();
+		const focusables = () =>
+			Array.from(
+				panel?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? []
+			).filter((el) => el.offsetParent !== null);
 		const onKey = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') drawerOpen = false;
+			if (event.key === 'Escape') {
+				drawerOpen = false;
+				return;
+			}
+			if (event.key !== 'Tab') return;
+			const items = focusables();
+			if (items.length === 0) return;
+			const first = items[0];
+			const last = items[items.length - 1];
+			const active = document.activeElement as HTMLElement | null;
+			if (event.shiftKey && (active === first || active === panel)) {
+				event.preventDefault();
+				last.focus();
+			} else if (!event.shiftKey && active === last) {
+				event.preventDefault();
+				first.focus();
+			}
 		};
 		window.addEventListener('keydown', onKey);
 		return () => {
