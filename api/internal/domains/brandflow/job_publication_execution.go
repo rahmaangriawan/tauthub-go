@@ -548,18 +548,36 @@ func (d *Deps) peResolveCustomWebTarget(media bsRow) *peCustomWebTarget {
 	return &peCustomWebTarget{EndpointURL: strings.TrimRight(endpoint, "/"), APIKey: apiKey}
 }
 
-// peProtocolURL: parity protocolUrl — endpoint /v1/tauthub/{action}.
+// peProtocolURL: parity protocolUrl (lib/publish/custom-web.ts) — dukung
+// protokol baru /v1/tauthub/* DAN legacy /v1/tulisio/*:
+//   - endpoint sudah berisi path publish → dipakai apa adanya
+//   - endpoint berisi path ping → tukar ke path publish (atau normalisasi ping)
+//   - endpoint dasar → tambahkan path publish/ping
 func peProtocolURL(endpointURL, action string) string {
+	const (
+		publishTauthub = "/v1/tauthub/publish"
+		pingTauthub    = "/v1/tauthub/ping"
+		publishLegacy  = "/v1/tulisio/publish"
+		pingLegacy     = "/v1/tulisio/ping"
+	)
 	base := strings.TrimRight(endpointURL, "/")
-	for _, suffix := range []string{"/v1/tauthub/ping", "/v1/tulisio/ping"} {
-		if strings.HasSuffix(base, suffix) {
-			if action == "ping" {
-				return base
-			}
-			return strings.TrimSuffix(base, "/ping") + "/" + action
-		}
+	if strings.HasSuffix(base, publishTauthub) || strings.HasSuffix(base, publishLegacy) {
+		return base
 	}
-	return base + "/v1/tauthub/" + action
+	if strings.HasSuffix(base, pingTauthub) || strings.HasSuffix(base, pingLegacy) {
+		if action == "publish" {
+			suffix := pingTauthub
+			if strings.HasSuffix(base, pingLegacy) {
+				suffix = pingLegacy
+			}
+			return strings.TrimSuffix(base, suffix) + publishTauthub
+		}
+		return strings.TrimSuffix(base, pingLegacy) + pingTauthub
+	}
+	if action == "ping" {
+		return base + pingTauthub
+	}
+	return base + publishTauthub
 }
 
 func (d *Deps) peRunCustomWeb(ctx context.Context, publication, media, document, version bsRow, publicOrigin string, startedAt time.Time, terminal bool) error {
