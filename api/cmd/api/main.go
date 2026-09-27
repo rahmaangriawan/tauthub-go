@@ -17,6 +17,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	authdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/auth"
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
+	contentdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/content"
 	knowledgedomain "github.com/rahmaangriawan/tauthub-go/internal/domains/knowledge"
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
@@ -107,6 +108,7 @@ func run() error {
 		// Brands (fase 2) — butuh Bearer.
 		brands := &brandsdomain.Deps{Pool: database.Pool}
 		knowledge := &knowledgedomain.Deps{Pool: database.Pool}
+		contentDeps := &contentdomain.Deps{Pool: database.Pool, JobInline: cfg.JobInline}
 		v1.Group(func(authed chi.Router) {
 			authed.Use(authDeps.Auth.RequireAuth)
 			authed.Get("/auth/me", authDeps.Me)
@@ -150,6 +152,19 @@ func run() error {
 			authed.Get("/brands/{brandId}/knowledge/sitemap", knowledge.SitemapStatus)
 			authed.Get("/brands/{brandId}/chat-learning", knowledge.ChatLearningList)
 			authed.Delete("/brands/{brandId}/chat-learning", knowledge.ChatLearningDelete)
+
+			// Content pipeline (fase 4).
+			authed.Get("/brands/{brandId}/content-jobs", contentDeps.JobsList)
+			authed.Post("/brands/{brandId}/content-jobs", contentDeps.JobsCreate)
+			authed.Get("/brands/{brandId}/content-jobs/{jobId}", contentDeps.JobGet)
+			authed.Post("/brands/{brandId}/content-jobs/{jobId}/approve-outline", contentDeps.JobApproveOutline)
+			authed.Put("/brands/{brandId}/content-jobs/{jobId}/outline", contentDeps.JobUpdateOutline)
+			authed.Post("/brands/{brandId}/content-jobs/{jobId}/cancel", contentDeps.JobCancel)
+			authed.Get("/brands/{brandId}/documents", contentDeps.DocumentsList)
+			authed.Post("/brands/{brandId}/documents", contentDeps.DocumentsCreate)
+			authed.Get("/brands/{brandId}/documents/{documentId}", contentDeps.DocumentGet)
+			authed.Put("/brands/{brandId}/documents/{documentId}", contentDeps.DocumentUpdate)
+			authed.Get("/brands/{brandId}/documents/{documentId}/html", contentDeps.DocumentHTML)
 		})
 
 		// TODO fase 2+: peta lengkap di REWRITE/04_API_ENDPOINTS.md.

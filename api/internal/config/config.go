@@ -50,6 +50,8 @@ type Config struct {
 	AIEmbeddingModel    string
 	AIRequestTimeoutSec int
 	AIMaxRetries        int
+
+	JobInline bool
 }
 
 func Load() (*Config, error) {
@@ -112,6 +114,7 @@ func Load() (*Config, error) {
 	if c.AIMaxRetries, err = getInt("AI_MAX_RETRIES", 2); err != nil {
 		return nil, err
 	}
+	c.JobInline = strings.EqualFold(getEnv("JOB_INLINE", "true"), "true")
 
 	if len(c.Secret) < 32 {
 		return nil, fmt.Errorf("APP_SECRET wajib >= 32 karakter (dapat %d)", len(c.Secret))

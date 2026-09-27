@@ -90,14 +90,14 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/content-jobs` | GET, POST | List/buat job generasi | [ ] |
-| `/v1/brands/{brandId}/content-jobs/{jobId}` | GET | Status/progress job | [ ] |
-| `/v1/brands/{brandId}/content-jobs/{jobId}/approve-outline` | POST | Setujui outline | [ ] |
-| `/v1/brands/{brandId}/content-jobs/{jobId}/cancel` | POST | Cancel job | [ ] |
-| `/v1/brands/{brandId}/content-jobs/{jobId}/outline` | PUT | Edit outline (approval mode) | [ ] |
-| `/v1/brands/{brandId}/documents` | GET, POST | List/buat dokumen | [ ] |
-| `/v1/brands/{brandId}/documents/{documentId}` | GET, PUT, PATCH | Detail/simpan/autosave versi | [ ] |
-| `/v1/brands/{brandId}/documents/{documentId}/html` | GET | Render HTML dokumen | [ ] |
+| `/v1/brands/{brandId}/content-jobs` | GET, POST | List/buat job generasi | [x] |
+| `/v1/brands/{brandId}/content-jobs/{jobId}` | GET | Status/progress job | [x] |
+| `/v1/brands/{brandId}/content-jobs/{jobId}/approve-outline` | POST | Setujui outline | [x] |
+| `/v1/brands/{brandId}/content-jobs/{jobId}/cancel` | POST | Cancel job | [x] |
+| `/v1/brands/{brandId}/content-jobs/{jobId}/outline` | PUT | Edit outline (approval mode) | [x] |
+| `/v1/brands/{brandId}/documents` | GET, POST | List/buat dokumen | [x] |
+| `/v1/brands/{brandId}/documents/{documentId}` | GET, PUT, PATCH | Detail/simpan/autosave versi | [x] |
+| `/v1/brands/{brandId}/documents/{documentId}/html` | GET | Render HTML dokumen | [x] |
 | `/v1/brands/{brandId}/documents/{documentId}/publish` | POST | Publish draft ke CMS | [ ] |
 | `/v1/brands/{brandId}/documents/{documentId}/standard-check` | POST | Cek standar konten | [ ] |
 

@@ -8,9 +8,8 @@ import (
 	"time"
 )
 
-// Worker drainer — skeleton fase 0.
-// Fase 4+: claim job dari tabel `jobs` pakai FOR UPDATE SKIP LOCKED + backoff
-// min(30s, 1s*2^attempt), port dari src/lib/jobs/queue.ts.
+// Worker drainer: claim job dari tabel `jobs` (FOR UPDATE SKIP LOCKED) lalu
+// dispatch per kind. Fase 4: content_generation + sitemap_crawl.
 // Peta 13 job kind: REWRITE/01_BACKEND_GO.md §6.
 func main() {
 	interval := envDuration("WORKER_POLL_SECONDS", 5)

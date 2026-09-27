@@ -1,0 +1,157 @@
+<script lang="ts">
+	// Fase 4: editor dokumen (port section Editor minimal) — versi, autosave,
+	// status review. Diff/komentar/restore menyusul bersama fase review.
+	import { onMount } from 'svelte';
+	import { page } from '$app/state';
+	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+
+	const brandId = $derived(page.params.brandId as string);
+	const documentId = $derived(page.params.documentId as string);
+
+	type Version = {
+		id: string;
+		version: number;
+		html: string;
+		attribution: string;
+		change_note: string | null;
+		created_at: string;
+	};
+
+	let doc = $state<any>(null);
+	let html = $state('');
+	let loading = $state(true);
+	let busy = $state(false);
+	let msg = $state('');
+	let error = $state('');
+
+	onMount(() => {
+		void (async () => {
+			const fresh = await ensureValidSession();
+			if (!fresh) return;
+			await load();
+			loading = false;
+		})();
+		const onExpired = () => (window.location.href = '/login');
+		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+	});
+
+	async function load() {
+		const res = await apiRequest(`/v1/brands/${brandId}/documents/${documentId}`);
+		if (!res.ok) {
+			error = await readApiError(res, 'Gagal memuat dokumen.');
+			return;
+		}
+		doc = await res.json();
+		html = doc.content?.html ?? '';
+	}
+
+	async function save() {
+		if (!doc) return;
+		busy = true;
+		error = '';
+		msg = '';
+		try {
+			const res = await apiRequest(`/v1/brands/${brandId}/documents/${documentId}`, {
+				method: 'PUT',
+				body: JSON.stringify({
+					html,
+					change_note: 'Edit manual',
+					base_version: doc.current_version
+				})
+			});
+			if (!res.ok) {
+				error = await readApiError(res, 'Gagal menyimpan.');
+				return;
+			}
+			doc = await res.json();
+			html = doc.content?.html ?? '';
+			msg = `Versi ${doc.current_version} tersimpan.`;
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function restoreVersion(v: Version) {
+		busy = true;
+		try {
+			const res = await apiRequest(`/v1/brands/${brandId}/documents/${documentId}`, {
+				method: 'PUT',
+				body: JSON.stringify({ html: v.html, change_note: `Pulihkan v${v.version}`, base_version: doc?.current_version })
+			});
+			if (res.ok) {
+				doc = await res.json();
+				html = doc.content?.html ?? '';
+				msg = `Dokumen dipulihkan dari versi ${v.version}.`;
+			} else {
+				error = await readApiError(res, 'Gagal memulihkan versi.');
+			}
+		} finally {
+			busy = false;
+		}
+	}
+</script>
+
+<main class="mx-auto max-w-6xl">
+	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandId}/generate`}>← Generate</a>
+	{#if loading}
+		<p class="mt-4 text-sm text-muted-foreground">Memuat dokumen…</p>
+	{:else if doc}
+		<div class="mt-2 flex flex-wrap items-center justify-between gap-3">
+			<div>
+				<h1 class="text-xl font-semibold tracking-tight">{doc.title}</h1>
+				<p class="text-xs text-muted-foreground">
+					/{doc.slug} · status <strong>{doc.status}</strong> · versi aktif v{doc.current_version}
+				</p>
+			</div>
+			<div class="flex items-center gap-2">
+				{#if msg}<span class="text-xs text-emerald-600">{msg}</span>{/if}
+				{#if error}<span class="text-xs text-destructive">{error}</span>{/if}
+				<button class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" disabled={busy} onclick={save}>
+					{busy ? 'Menyimpan…' : 'Simpan versi baru'}
+				</button>
+			</div>
+		</div>
+
+		<div class="mt-4 grid gap-4 lg:grid-cols-[2fr_1fr]">
+			<section class="rounded-xl border border-border bg-card p-4">
+				<h2 class="text-sm font-semibold">Konten (HTML)</h2>
+				<textarea
+					class="mt-2 h-[520px] w-full resize-y rounded-md border border-input bg-background p-3 font-mono text-xs"
+					bind:value={html}
+				></textarea>
+			</section>
+
+			<div class="grid gap-4">
+				<section class="rounded-xl border border-border bg-card p-4">
+					<h2 class="text-sm font-semibold">Preview</h2>
+					<div class="prose prose-sm mt-2 max-h-[240px] overflow-y-auto text-sm">
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+						{@html html}
+					</div>
+				</section>
+
+				<section class="rounded-xl border border-border bg-card p-4">
+					<h2 class="text-sm font-semibold">Riwayat versi ({(doc.versions ?? []).length})</h2>
+					<ul class="mt-2 space-y-2 text-xs">
+						{#each doc.versions ?? [] as v (v.id)}
+							<li class="flex items-start justify-between gap-2 border-b border-border/50 pb-2 last:border-0">
+								<div>
+									<p class="font-medium">v{v.version} · {v.attribution}</p>
+									<p class="text-muted-foreground">{v.change_note ?? '—'}</p>
+								</div>
+								{#if v.version !== doc.current_version}
+									<button class="shrink-0 underline" disabled={busy} onclick={() => restoreVersion(v)}>Pulihkan</button>
+								{:else}
+									<span class="shrink-0 text-emerald-600">aktif</span>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				</section>
+			</div>
+		</div>
+	{:else}
+		<p class="mt-4 text-sm text-destructive">{error || 'Dokumen tidak ditemukan.'}</p>
+	{/if}
+</main>

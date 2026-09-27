@@ -60,7 +60,7 @@
 
 ---
 
-## Fase 4 — Content Pipeline (intake → job → dokumen → editor → batch)
+## Fase 4 — Content Pipeline — **SLICE A SELESAI** (2026-09-27: engine + 8/24 endpoint ✅ — prompt compiler jurnalistik penuh, runContentJob (outline & draft + aturan min 300 kata parity), editorial rules loader (content-type standard + KB rules hybrid RAG), moderasi lengkap (normalisasi homoglyph/leet, rule layer, AI classifier, cache content_moderation_results, audit), gate moderasi di pipeline (blocked → job failed tanpa dokumen, terverifikasi), processor content_generation (job states, dokumen + versi html, reset intake), API content-jobs (5) + documents (5), UI Generate + Editor. DEFER ke slice B: content-intakes (8), batches (6), quality rubric det-1 (fase 9), route chat (sekarang sudah unblocked), moderation admin (fase 11))
 
 **API**: content-intake-types (brand+platform), content-intakes (7 + CRUD), content-jobs (5), documents (5 + html/standard-check), batches (6), job `content_generation` + moderation gate + quality rubric det-1.
 **UI**: section `media-standards`/`content-settings`/`moderations` (admin), editor `/klien/{brandId}/editor/{documentId}` (versi, review state machine, autosave, diff/restore), flow intake, halaman batch.
