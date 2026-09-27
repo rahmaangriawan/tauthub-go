@@ -38,7 +38,7 @@
 | `dashboard` | Dashboard analitik + grafik | 2 | [x] |
 | `analytics` | Analitik artikel (views, scroll, klik) | 10 | [x] |
 | `campaigns` | List + detail campaign | 7 | [x] |
-| `distribution` | **File terbesar (4.251 baris)**: publikasi, mitra, status, tracking | 6 | [ ] |
+| `distribution` | **File terbesar (4.251 baris)**: publikasi, mitra, status, tracking | 6 | [x] |
 | `media` | Katalog & pilih media (modal detail 721 baris) | 5 | [x] |
 | `publications` | Publikasi & approval | 6 | [x] |
 | `knowledge` | Knowledge collections & sources | 3 | [x] |
@@ -54,17 +54,17 @@
 | Halaman | Isi | Fase | ✔ |
 |---|---|---|---|
 | `/klien` | Daftar brand + onboarding | 2 | [x] |
-| `/klien/{brandId}/campaigns/{campaignId}/flow` | Wizard campaign (3.749 baris: intake → media → budget → produksi → review) | 7 | [ ] |
+| `/klien/{brandId}/campaigns/{campaignId}/flow` | Wizard campaign (3.749 baris: intake → media → budget → produksi → review) | 7 | [x] |
 | `/klien/{brandId}/editor/{documentId}` | Editor artikel (versi, review, standard check, publish) | 4 | [x] |
-| `/klien/{brandId}/knowledge` | Knowledge center penuh | 3 | [ ] |
-| `/klien/{brandId}/taut-pintar` | Daftar taut campaign | 9 | [ ] |
-| `/klien/{brandId}/taut-pintar/{id}` | Ringkasan agent steps (polling) | 9 | [ ] |
-| `.../{id}/berita-acara` | Berita acara taut | 9 | [ ] |
-| `.../{id}/gatekeeper` | Audit & distribusi (polling) | 9 | [ ] |
-| `.../{id}/matchmaker` | Pencocokan media (1.072 baris) | 9 | [ ] |
-| `.../{id}/profiler`, `/profiler/analyzing`, `/profiler/summary` | Profiler channel 3 layar | 9 | [ ] |
-| `.../{id}/ringkasan` | Ringkasan kampanye | 9 | [ ] |
-| `.../{id}/writer` | Produksi artikel per media | 9 | [ ] |
+| `/klien/{brandId}/knowledge` | Knowledge center penuh | 3 | [x] |
+| `/klien/{brandId}/taut-pintar` | Daftar taut campaign | 9 | [x] |
+| `/klien/{brandId}/taut-pintar/{id}` | Ringkasan agent steps (polling) | 9 | [x] |
+| `.../{id}/berita-acara` | Berita acara taut | 9 | [x] |
+| `.../{id}/gatekeeper` | Audit & distribusi (polling) | 9 | [x] |
+| `.../{id}/matchmaker` | Pencocokan media (1.072 baris) | 9 | [x] |
+| `.../{id}/profiler`, `/profiler/analyzing`, `/profiler/summary` | Profiler channel 3 layar | 9 | [x] |
+| `.../{id}/ringkasan` | Ringkasan kampanye | 9 | [x] |
+| `.../{id}/writer` | Produksi artikel per media | 9 | [x] |
 
 ## 3. Mitra (2 route → 19 section)
 

@@ -11,13 +11,13 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/api/blogger/callback` | GET | OAuth callback Blogger (PKCE) | [ ] |
-| `/api/gsc/callback` | GET | OAuth callback Google Search Console | [ ] |
-| `/feed/partner/{token}` | GET | RSS feed partner (XML) | [ ] |
-| `/feed/partner/{token}/import` | POST | Import artikel dari RSS feed partner | [ ] |
-| `/register` | GET | Halaman/meta registrasi legacy | [ ] |
-| `/t/{code}` | GET | Redirect tracking link + catat event | [ ] |
-| `/uploads/{key}` | GET | Serve file upload (auth refresh cookie) | [ ] |
+| `/api/blogger/callback` | GET | OAuth callback Blogger (PKCE) | [x] |
+| `/api/gsc/callback` | GET | OAuth callback Google Search Console | [x] |
+| `/feed/partner/{token}` | GET | RSS feed partner (XML) | [x] |
+| `/feed/partner/{token}/import` | POST | Import artikel dari RSS feed partner | [x] |
+| `/register` | GET | Halaman/meta registrasi legacy | [x] |
+| `/t/{code}` | GET | Redirect tracking link + catat event | [x] |
+| `/uploads/{key}` | GET | Serve file upload (auth refresh cookie) | [x] |
 
 ## 2. `/v1/auth` (18) 🔑/🌐 — fase 1
 
@@ -28,7 +28,7 @@
 | `/v1/auth/2fa/setup` | POST | Generate secret + QR TOTP | [x] |
 | `/v1/auth/2fa/verify` | POST | Tukar challenge JWT + kode → token | [x] |
 | `/v1/auth/change-password` | POST | Ganti password (revoke sesi) | [x] |
-| `/v1/auth/forgot-password` | POST | Kirim token reset | [ ] |
+| `/v1/auth/forgot-password` | POST | Kirim token reset | [x] |
 | `/v1/auth/google/callback` | GET | Callback OAuth Google | [x] |
 | `/v1/auth/google/complete` | POST | Selesaikan provision akun Google | [x] |
 | `/v1/auth/google/exchange-session` | POST | Tukar kode → session token | [x] |
@@ -52,14 +52,14 @@
 | `/v1/brands/{brandId}` | GET | Detail brand + readiness | [x] |
 | `/v1/brands/{brandId}/activate` | POST | Aktivasi (skor ≥70) | [x] |
 | `/v1/brands/{brandId}/analytics` | GET | Analitik brand | [x] |
-| `/v1/brands/{brandId}/analyze/{topic}` | GET | Analisis topik (AI) | [ ] |
-| `/v1/brands/{brandId}/assets` | POST | Upload asset brand | [ ] |
+| `/v1/brands/{brandId}/analyze/{topic}` | GET | Analisis topik (AI) | [x] |
+| `/v1/brands/{brandId}/assets` | POST | Upload asset brand | [x] |
 | `/v1/brands/{brandId}/configuration` | GET | Konfigurasi efektif brand | [x] |
 | `/v1/brands/{brandId}/dashboard` | GET | Dashboard workspace | [x] |
 | `/v1/brands/{brandId}/editorial-rules` | PUT | Update rule set editorial | [x] |
-| `/v1/brands/{brandId}/ga4` | GET | Konfig & data GA4 brand | [ ] |
+| `/v1/brands/{brandId}/ga4` | GET | Konfig & data GA4 brand | [x] |
 | `/v1/brands/{brandId}/overview` | GET | Ringkasan overview | [x] |
-| `/v1/brands/{brandId}/pr-calculator` | GET | Data PR calculator | [ ] |
+| `/v1/brands/{brandId}/pr-calculator` | GET | Data PR calculator | [x] |
 | `/v1/brands/{brandId}/profile` | PUT | Update brand profile | [x] |
 | `/v1/brands/{brandId}/usage` | GET | Usage AI/quota | [x] |
 | `/v1/brands/{brandId}/voice` | PUT | Update voice profile | [x] |
@@ -80,11 +80,11 @@
 | `/v1/brands/{brandId}/content-intake-types` | GET | Tipe intake aktif | [x] |
 | `/v1/brands/{brandId}/content-intakes` | GET, POST | List/buat intake (bahan/artikel) | [x] |
 | `/v1/brands/{brandId}/content-intakes/{intakeId}` | GET, PUT | Detail/update intake | [x] |
-| `/v1/brands/{brandId}/content-intakes/{intakeId}/ai-fill` | POST | AI isi jawaban intake | [ ] |
+| `/v1/brands/{brandId}/content-intakes/{intakeId}/ai-fill` | POST | AI isi jawaban intake | [x] |
 | `/v1/brands/{brandId}/content-intakes/{intakeId}/analyze` | POST | Analisis kesiapan | [x] |
-| `/v1/brands/{brandId}/content-intakes/{intakeId}/auto-key-messages` | POST | AI ekstrak key messages | [ ] |
+| `/v1/brands/{brandId}/content-intakes/{intakeId}/auto-key-messages` | POST | AI ekstrak key messages | [x] |
 | `/v1/brands/{brandId}/content-intakes/{intakeId}/create-job` | POST | Intake → content job | [x] |
-| `/v1/brands/{brandId}/content-intakes/{intakeId}/recommend` | POST | Rekomendasi mode intake | [ ] |
+| `/v1/brands/{brandId}/content-intakes/{intakeId}/recommend` | POST | Rekomendasi mode intake | [x] |
 
 ### 3.4 Content jobs & documents (10)
 
@@ -98,19 +98,19 @@
 | `/v1/brands/{brandId}/documents` | GET, POST | List/buat dokumen | [x] |
 | `/v1/brands/{brandId}/documents/{documentId}` | GET, PUT, PATCH | Detail/simpan/autosave versi | [x] |
 | `/v1/brands/{brandId}/documents/{documentId}/html` | GET | Render HTML dokumen | [x] |
-| `/v1/brands/{brandId}/documents/{documentId}/publish` | POST | Publish draft ke CMS | [ ] |
-| `/v1/brands/{brandId}/documents/{documentId}/standard-check` | POST | Cek standar konten | [ ] |
+| `/v1/brands/{brandId}/documents/{documentId}/publish` | POST | Publish draft ke CMS | [x] |
+| `/v1/brands/{brandId}/documents/{documentId}/standard-check` | POST | Cek standar konten | [x] |
 
 ### 3.5 Batches (6)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/batches` | GET, POST | List/buat batch (CSV/XLSX) | [ ] |
-| `/v1/brands/{brandId}/batches/{batchId}` | GET | Detail + items | [ ] |
-| `/v1/brands/{brandId}/batches/{batchId}/start` | POST | Mulai batch | [ ] |
-| `/v1/brands/{brandId}/batches/{batchId}/pause` | POST | Pause | [ ] |
-| `/v1/brands/{brandId}/batches/{batchId}/cancel` | POST | Cancel | [ ] |
-| `/v1/brands/{brandId}/batches/{batchId}/retry` | POST | Retry gagal | [ ] |
+| `/v1/brands/{brandId}/batches` | GET, POST | List/buat batch (CSV/XLSX) | [x] |
+| `/v1/brands/{brandId}/batches/{batchId}` | GET | Detail + items | [x] |
+| `/v1/brands/{brandId}/batches/{batchId}/start` | POST | Mulai batch | [x] |
+| `/v1/brands/{brandId}/batches/{batchId}/pause` | POST | Pause | [x] |
+| `/v1/brands/{brandId}/batches/{batchId}/cancel` | POST | Cancel | [x] |
+| `/v1/brands/{brandId}/batches/{batchId}/retry` | POST | Retry gagal | [x] |
 
 ### 3.6 Knowledge & chat (8)
 
@@ -130,122 +130,122 @@
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
 | `/v1/brands/{brandId}/campaigns` | GET, POST | List/buat campaign | [x] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}` | GET, PUT, DELETE | CRUD campaign | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/flow` | GET, POST | State wizard flow | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/analyze` | POST | Analisis brief | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/article-regen` | POST | Regenerasi artikel | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/checkout` | POST | Checkout (reservasi TC) | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media` | POST | Pilih media | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media-type` | POST | Pilih tipe media | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}` | PATCH, DELETE | Ubah/hapus item | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/angle` | POST | Pilih angle | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/angle-options` | GET | Opsi angle | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/paraphrase` | POST | Paraphrase varian | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/publications` | GET, POST | Publikasi campaign | [ ] |
-| `/v1/brands/{brandId}/campaigns/{campaignId}/report/share` | POST | Buat share token laporan | [ ] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}` | GET, PUT, DELETE | CRUD campaign | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/flow` | GET, POST | State wizard flow | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/analyze` | POST | Analisis brief | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/article-regen` | POST | Regenerasi artikel | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/checkout` | POST | Checkout (reservasi TC) | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media` | POST | Pilih media | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media-type` | POST | Pilih tipe media | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}` | PATCH, DELETE | Ubah/hapus item | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/angle` | POST | Pilih angle | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/angle-options` | GET | Opsi angle | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/paraphrase` | POST | Paraphrase varian | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/publications` | GET, POST | Publikasi campaign | [x] |
+| `/v1/brands/{brandId}/campaigns/{campaignId}/report/share` | POST | Buat share token laporan | [x] |
 
 ### 3.8 Publications (13)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/publications` | GET, POST | List/buat publikasi | [ ] |
-| `/v1/brands/{brandId}/publications/{publicationId}` | GET | Detail publikasi | [ ] |
-| `/v1/brands/{brandId}/publications/{publicationId}/accept` | POST | Terima hasil publikasi | [ ] |
-| `/v1/brands/{brandId}/publications/{publicationId}/auto-replace` | POST | Auto-replace media | [ ] |
-| `/v1/brands/{brandId}/publications/{publicationId}/cancel` | POST | Cancel | [ ] |
-| `/v1/brands/{brandId}/publications/{publicationId}/replacement` | GET | Kandidat pengganti | [ ] |
-| `/v1/brands/{brandId}/publications/{publicationId}/request-revision` | POST | Minta revisi mitra | [ ] |
-| `/v1/brands/{brandId}/publications/{publicationId}/request-url` | POST | Minta URL publikasi | [ ] |
-| `/v1/brands/{brandId}/publications/{publicationId}/reset-approval` | POST | Reset approval | [ ] |
-| `/v1/brands/{brandId}/publications/{publicationId}/retry` | POST | Retry publikasi | [ ] |
-| `/v1/brands/{brandId}/publications/{publicationId}/tracking` | GET, POST | Data/trigger tracking | [ ] |
-| `/v1/brands/{brandId}/publications/variants` | GET, POST | List/buat batch varian | [ ] |
-| `/v1/brands/{brandId}/publications/variants/{batchId}` | GET | Detail batch varian | [ ] |
+| `/v1/brands/{brandId}/publications` | GET, POST | List/buat publikasi | [x] |
+| `/v1/brands/{brandId}/publications/{publicationId}` | GET | Detail publikasi | [x] |
+| `/v1/brands/{brandId}/publications/{publicationId}/accept` | POST | Terima hasil publikasi | [x] |
+| `/v1/brands/{brandId}/publications/{publicationId}/auto-replace` | POST | Auto-replace media | [x] |
+| `/v1/brands/{brandId}/publications/{publicationId}/cancel` | POST | Cancel | [x] |
+| `/v1/brands/{brandId}/publications/{publicationId}/replacement` | GET | Kandidat pengganti | [x] |
+| `/v1/brands/{brandId}/publications/{publicationId}/request-revision` | POST | Minta revisi mitra | [x] |
+| `/v1/brands/{brandId}/publications/{publicationId}/request-url` | POST | Minta URL publikasi | [x] |
+| `/v1/brands/{brandId}/publications/{publicationId}/reset-approval` | POST | Reset approval | [x] |
+| `/v1/brands/{brandId}/publications/{publicationId}/retry` | POST | Retry publikasi | [x] |
+| `/v1/brands/{brandId}/publications/{publicationId}/tracking` | GET, POST | Data/trigger tracking | [x] |
+| `/v1/brands/{brandId}/publications/variants` | GET, POST | List/buat batch varian | [x] |
+| `/v1/brands/{brandId}/publications/variants/{batchId}` | GET | Detail batch varian | [x] |
 
 ### 3.9 Publication plans (6)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/publication-plans` | GET, POST | List/buat plan | [ ] |
-| `/v1/brands/{brandId}/publication-plans/{planId}` | GET | Detail plan | [ ] |
-| `/v1/brands/{brandId}/publication-plans/{planId}/cancel` | POST | Cancel plan | [ ] |
-| `/v1/brands/{brandId}/publication-plans/{planId}/pause` | POST | Pause plan | [ ] |
-| `/v1/brands/{brandId}/publication-plans/{planId}/resume` | POST | Resume plan | [ ] |
-| `/v1/brands/{brandId}/publication-plans/occurrences/{occurrenceId}/skip` | POST | Skip occurrence | [ ] |
+| `/v1/brands/{brandId}/publication-plans` | GET, POST | List/buat plan | [x] |
+| `/v1/brands/{brandId}/publication-plans/{planId}` | GET | Detail plan | [x] |
+| `/v1/brands/{brandId}/publication-plans/{planId}/cancel` | POST | Cancel plan | [x] |
+| `/v1/brands/{brandId}/publication-plans/{planId}/pause` | POST | Pause plan | [x] |
+| `/v1/brands/{brandId}/publication-plans/{planId}/resume` | POST | Resume plan | [x] |
+| `/v1/brands/{brandId}/publication-plans/occurrences/{occurrenceId}/skip` | POST | Skip occurrence | [x] |
 
 ### 3.10 CMS connections (3)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/cms-connections` | GET, POST | List/tambah koneksi CMS | [ ] |
-| `/v1/brands/{brandId}/cms-connections/{connectionId}` | GET, PUT, DELETE | CRUD koneksi | [ ] |
-| `/v1/brands/{brandId}/cms-connections/{connectionId}/test` | POST | Tes koneksi | [ ] |
+| `/v1/brands/{brandId}/cms-connections` | GET, POST | List/tambah koneksi CMS | [x] |
+| `/v1/brands/{brandId}/cms-connections/{connectionId}` | GET, PUT, DELETE | CRUD koneksi | [x] |
+| `/v1/brands/{brandId}/cms-connections/{connectionId}/test` | POST | Tes koneksi | [x] |
 
 ### 3.11 Media (brand-side) (4)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
 | `/v1/brands/{brandId}/media` | GET | Katalog media | [x] |
-| `/v1/brands/{brandId}/media/recommendations` | GET | Rekomendasi media (AI) | [ ] |
-| `/v1/brands/{brandId}/media/{mediaId}/crawl-status` | GET | Status crawl media | [ ] |
-| `/v1/brands/{brandId}/media/{mediaId}/seo` | GET | Metrik SEO media | [ ] |
+| `/v1/brands/{brandId}/media/recommendations` | GET | Rekomendasi media (AI) | [x] |
+| `/v1/brands/{brandId}/media/{mediaId}/crawl-status` | GET | Status crawl media | [x] |
+| `/v1/brands/{brandId}/media/{mediaId}/seo` | GET | Metrik SEO media | [x] |
 
 ### 3.12 Credits, invoices, packages (6)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
 | `/v1/brands/{brandId}/credits` | GET | Saldo & ledger TC | [x] |
-| `/v1/brands/{brandId}/credits/topup` | GET, POST | Opsi & buat topup | [ ] |
-| `/v1/brands/{brandId}/credit-reports` | POST | Laporan topup manual | [ ] |
+| `/v1/brands/{brandId}/credits/topup` | GET, POST | Opsi & buat topup | [x] |
+| `/v1/brands/{brandId}/credit-reports` | POST | Laporan topup manual | [x] |
 | `/v1/brands/{brandId}/invoices` | GET | List invoice | [x] |
-| `/v1/brands/{brandId}/packages` | GET | Katalog paket | [ ] |
-| `/v1/brands/{brandId}/media-packages` | GET | Paket media custom | [ ] |
+| `/v1/brands/{brandId}/packages` | GET | Katalog paket | [x] |
+| `/v1/brands/{brandId}/media-packages` | GET | Paket media custom | [x] |
 
 ### 3.13 Reports, notifications, link-monitor (8)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/reports` | GET | Laporan publikasi/analytics | [ ] |
-| `/v1/brands/{brandId}/reports/link-clicks` | GET | Klik outbound link | [ ] |
-| `/v1/brands/{brandId}/notifications` | GET, POST | List/buat notifikasi | [ ] |
-| `/v1/brands/{brandId}/notifications/{notificationId}/read` | POST | Tandai dibaca | [ ] |
-| `/v1/brands/{brandId}/notification-webhooks` | GET, POST | List/daftar webhook | [ ] |
-| `/v1/brands/{brandId}/notification-webhooks/{webhookId}` | PUT, DELETE | Ubah/hapus webhook | [ ] |
+| `/v1/brands/{brandId}/reports` | GET | Laporan publikasi/analytics | [x] |
+| `/v1/brands/{brandId}/reports/link-clicks` | GET | Klik outbound link | [x] |
+| `/v1/brands/{brandId}/notifications` | GET, POST | List/buat notifikasi | [x] |
+| `/v1/brands/{brandId}/notifications/{notificationId}/read` | POST | Tandai dibaca | [x] |
+| `/v1/brands/{brandId}/notification-webhooks` | GET, POST | List/daftar webhook | [x] |
+| `/v1/brands/{brandId}/notification-webhooks/{webhookId}` | PUT, DELETE | Ubah/hapus webhook | [x] |
 | `/v1/brands/{brandId}/link-monitor` | GET | Monitor link | [x] |
-| `/v1/brands/{brandId}/link-monitor/request-replacement` | POST | Minta penggantian link | [ ] |
+| `/v1/brands/{brandId}/link-monitor/request-replacement` | POST | Minta penggantian link | [x] |
 
 ### 3.14 Taut Pintar (28) — fase 9
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/taut/agent-status` | GET | Status agent taut | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns` | GET, POST | List/buat taut campaign | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}` | GET, POST, PUT, DELETE | CRUD + aksi taut campaign | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/advance` | POST | Lanjut tahap agent | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}` | GET, PUT | Artikel per media | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}/upload` | POST | Upload artikel | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/budget-estimate` | GET | Estimasi budget | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/crawl` | POST | Trigger crawl media | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/files` | GET, POST | File kampanye | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/files/{fileId}` | DELETE | Hapus file | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/finish` | POST | Finalisasi | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/audit-all` | POST | Audit semua artikel | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/audits` | GET | Hasil audit | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/distribute` | POST | Distribusi hasil audit | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/placement` | GET, POST, PUT | Penempatan media | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/produce` | POST | Produksi batch | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/produce/{mediaId}` | POST | Produksi per media | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile` | GET, POST, PUT | Profiler channel | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile/analyze` | POST | Analisis profil | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile/draft` | GET, PUT | Draft profil | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile/result` | DELETE | Hapus hasil | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile/results/{resultId}` | GET | Detail hasil profiler | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile/verify` | POST | Verifikasi profil | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profiler/options` | GET | Opsi profiler | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/schedule` | POST | Jadwalkan publikasi | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/submit-final` | GET, POST, PUT, PATCH, DELETE | Submit akhir multi-aksi | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/validate` | GET, POST | Validasi kampanye | [ ] |
-| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/writer-links` | GET, PUT | Link writer | [ ] |
+| `/v1/brands/{brandId}/taut/agent-status` | GET | Status agent taut | [x] |
+| `/v1/brands/{brandId}/taut/campaigns` | GET, POST | List/buat taut campaign | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}` | GET, POST, PUT, DELETE | CRUD + aksi taut campaign | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/advance` | POST | Lanjut tahap agent | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}` | GET, PUT | Artikel per media | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}/upload` | POST | Upload artikel | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/budget-estimate` | GET | Estimasi budget | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/crawl` | POST | Trigger crawl media | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/files` | GET, POST | File kampanye | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/files/{fileId}` | DELETE | Hapus file | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/finish` | POST | Finalisasi | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/audit-all` | POST | Audit semua artikel | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/audits` | GET | Hasil audit | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/distribute` | POST | Distribusi hasil audit | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/placement` | GET, POST, PUT | Penempatan media | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/produce` | POST | Produksi batch | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/produce/{mediaId}` | POST | Produksi per media | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile` | GET, POST, PUT | Profiler channel | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile/analyze` | POST | Analisis profil | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile/draft` | GET, PUT | Draft profil | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile/result` | DELETE | Hapus hasil | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile/results/{resultId}` | GET | Detail hasil profiler | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profile/verify` | POST | Verifikasi profil | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/profiler/options` | GET | Opsi profiler | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/schedule` | POST | Jadwalkan publikasi | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/submit-final` | GET, POST, PUT, PATCH, DELETE | Submit akhir multi-aksi | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/validate` | GET, POST | Validasi kampanye | [x] |
+| `/v1/brands/{brandId}/taut/campaigns/{campaignId}/writer-links` | GET, PUT | Link writer | [x] |
 
 **Subtotal `/v1/brands`: 17+2+8+10+6+8+14+13+6+3+4+6+8+28 = 133 ✓**
 

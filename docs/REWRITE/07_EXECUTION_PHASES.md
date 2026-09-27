@@ -228,3 +228,28 @@ distribution, members, chat-learning, reports, dll).
 nyata (41+ endpoint admin mengembalikan 200 dengan data DB, gate non-admin 404 parity, callback
 publishing HMAC sah 200 / salah 403, feed JSON artikel lengkap, tracking event tercatat, cron/jobs
 403 tanpa secret).
+
+---
+
+## Catatan Status Final (seluruh parity tercapai)
+
+**Backend — 406/406 endpoint `[x]`**: rel platform (265), `/v1/brands` + brand-flow (94 lewat
+`internal/domains/brandflow`), partner (63), auth (18), payments (5), internal (3), publishing (2),
+me (2), bug-reports (2), tracking (1), campaign-reports (1). Audit independen terhadap seluruh
+`route.ts` app lama: **568 endpoint ter-wire di `cmd/api/main.go`, 0 belum ter-wire**.
+
+**UI — 114/114 item `[x]`** dari `05_UI_PAGES.md`, 115 file halaman Svelte:
+- Admin 54, Mitra 21, Klien 20 (termasuk `distribution`, wizard `campaigns/{id}/flow` 15 file,
+  `taut-pintar` 10 sub-halaman), Publik 14, plus 6 stub redirect legacy.
+
+**Keputusan parity yang disengaja** (dicatat agar tidak dianggap deviasi):
+- Guard admin mengembalikan **404 "Resource not found"**, bukan 403 (parity app lama).
+- `kalkulator-media` adalah alias dari `seo-tool` (section yang sama di app lama).
+- `connections` / `publishing-api` / `blogger` redirect ke `/integrations#wordpress|web-custom|blogger`.
+- `/` redirect ke `/register-role`; `/login?mode=register` legacy tetap didukung.
+- Redirect 308 legacy: `/brands`→`/klien`, `/platform`→`/admin`, `/partner`→`/mitra`.
+
+**Verifikasi terpusat akhir** (dijalankan setelah semua pekerjaan selesai, sesuai permintaan):
+`go build ./...`, `go vet ./...`, `go test ./...` bersih; `gofmt -l` bersih pada seluruh file baru;
+`svelte-check` 0 error 0 warning; `npm run build` sukses; smoke test API dengan akun `super_admin`
+dan mitra nyata; walkthrough browser seluruh halaman admin + klien baru tanpa error console.
