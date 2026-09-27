@@ -20,7 +20,7 @@
 	type OverviewTrends = { campaigns: number[]; content: number[]; publications: number[]; credit: number[] };
 	type Campaign = {
 		id: string; name: string; status: string; article_quota: number; budget: number;
-		publication_count: number; content_intake_id?: string | null; campaign_flow_status?: string | null;
+		publication_count: number; content_intake_id?: string | null; taut_status?: string | null;
 		created_at: string; updated_at?: string;
 	};
 	type PublicationItem = {
@@ -132,7 +132,10 @@
 		for (const campaign of campaigns) {
 			const hasDraftIntake = Boolean(campaign.content_intake_id);
 			const isDraftCampaign = campaign.status === 'draft';
-			const hasActiveFlow = Boolean(campaign.campaign_flow_status && campaign.campaign_flow_status !== 'completed');
+			// Alur baru (Taut Pintar): kampanye dianggap berjalan bila taut_status
+			// belum selesai. Nilai terminal: submitted/scheduled/distributed.
+			const tautStatus = (campaign.taut_status ?? '').toLowerCase();
+			const hasActiveFlow = !['submitted', 'scheduled', 'distributed'].includes(tautStatus);
 			if (hasDraftIntake || isDraftCampaign || hasActiveFlow) {
 				if (campaign.content_intake_id) intakeIdsCoveredByCampaigns.add(campaign.content_intake_id);
 				const dateStr = campaign.updated_at || campaign.created_at;
@@ -142,7 +145,7 @@
 					type: 'Draf Kampanye',
 					statusLabel: 'Edit Draf',
 					date: dateStr,
-					actionUrl: `/klien/${brandUrl}/campaigns/${campaign.id}/flow`,
+					actionUrl: `/klien/${brandUrl}/taut-pintar/${campaign.id}`,
 					actionText: 'Lanjutkan Draf',
 					sortTime: dateStr ? new Date(dateStr).getTime() : 0
 				});
@@ -410,7 +413,7 @@
 										<span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--accent); color: var(--accent-foreground);">
 											<Target size={16} />
 										</span>
-										<a class="truncate text-sm font-semibold hover:underline" href={`/klien/${brandUrl}/campaigns/${campaign.id}/flow`}>{campaign.name}</a>
+										<a class="truncate text-sm font-semibold hover:underline" href={`/klien/${brandUrl}/taut-pintar/${campaign.id}`}>{campaign.name}</a>
 									</div>
 									<span class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold" style="background-color: var(--success-soft); color: var(--success);">
 										<span class="h-1.5 w-1.5 rounded-full" style="background-color: var(--success);"></span> Active
@@ -432,7 +435,7 @@
 								</div>
 
 								<div class="mt-3 flex items-center justify-between gap-2">
-									<a class="app-btn app-btn-soft !min-h-8 !text-xs" href={`/klien/${brandUrl}/campaigns/${campaign.id}/flow`}>
+									<a class="app-btn app-btn-soft !min-h-8 !text-xs" href={`/klien/${brandUrl}/taut-pintar/${campaign.id}`}>
 										{campaign.content_intake_id ? 'Edit Draf' : 'Buat Konten'} <ArrowRight size={13} />
 									</a>
 									<a class="text-xs text-muted-foreground underline" href={`/klien/${brandUrl}/campaigns`}>Detail Kampanye</a>
