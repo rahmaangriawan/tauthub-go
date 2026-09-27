@@ -35,7 +35,6 @@
 	let email = $state('');
 	let password = $state('');
 	let displayName = $state('');
-	let partnerCategory = $state('berita');
 
 	let showPassword = $state(false);
 	let busy = $state(false);
@@ -164,7 +163,9 @@
 			password,
 			display_name: displayName.trim(),
 			role,
-			partner_category: role === 'partner' ? partnerCategory : undefined,
+			// App lama tidak lagi menanyakan kategori media; nilai tetap 'lainnya'
+			// karena backend mewajibkannya untuk peran Mitra.
+			partner_category: role === 'partner' ? 'lainnya' : undefined,
 			turnstile_token: turnstileToken
 		};
 		if (ref) payload.referral_code = ref;
@@ -410,17 +411,6 @@
 					</label>
 				</div>
 			</div>
-
-			{#if role === 'partner'}
-				<label class="auth-field">
-					<span class="auth-label">Kategori media</span>
-					<select class="auth-input" bind:value={partnerCategory} required>
-						<option value="berita">Berita</option>
-						<option value="lifestyle">Lifestyle</option>
-						<option value="lainnya">Lainnya</option>
-					</select>
-				</label>
-			{/if}
 		{/if}
 
 		<label class="auth-field">
