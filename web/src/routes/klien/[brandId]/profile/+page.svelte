@@ -125,7 +125,7 @@
 	}
 </script>
 
-<main class="mx-auto max-w-3xl px-4 py-8">
+<section class="mx-auto max-w-3xl px-4 py-8">
 	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandId}`}>← Dashboard</a>
 	<div class="mt-2 flex items-center justify-between">
 		<h1 class="text-2xl font-semibold tracking-tight">Profil Brand</h1>
@@ -134,7 +134,7 @@
 				<span class="text-sm text-muted-foreground">readiness {score}%</span>
 				<span class="rounded-full px-2 py-0.5 text-xs {status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'}">{status}</span>
 			{/if}
-			<button class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={busy} onclick={activate}>
+			<button class="app-btn app-btn-primary" disabled={busy} onclick={activate}>
 				Aktifkan brand
 			</button>
 		</div>
@@ -146,34 +146,34 @@
 		<h2 class="font-medium">Profil</h2>
 		<div class="mt-3 grid gap-3">
 			<label class="flex flex-col gap-1 text-sm">Positioning
-				<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={profile.positioning} />
+				<input class="app-input" bind:value={profile.positioning} />
 			</label>
 			<label class="flex flex-col gap-1 text-sm">Value proposition
-				<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={profile.value_proposition} />
+				<input class="app-input" bind:value={profile.value_proposition} />
 			</label>
 			<label class="flex flex-col gap-1 text-sm">Target audiens
-				<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={profile.target_audience} />
+				<input class="app-input" bind:value={profile.target_audience} />
 			</label>
 		</div>
 		<button class="mt-3 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" type="submit" disabled={busy}>Simpan profil</button>
 	</form>
 
-	<form class="mt-4 rounded-lg border border-border bg-card p-4" onsubmit={saveRules}>
+	<form class="app-card mt-4 p-4" onsubmit={saveRules}>
 		<h2 class="font-medium">Aturan editorial</h2>
 		<div class="mt-3 grid gap-3">
 			<label class="flex flex-col gap-1 text-sm">Aturan wajib (pisah koma)
-				<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={rules.required_rules} />
+				<input class="app-input" bind:value={rules.required_rules} />
 			</label>
 			<label class="flex flex-col gap-1 text-sm">Aturan terlarang (pisah koma)
-				<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={rules.forbidden_rules} />
+				<input class="app-input" bind:value={rules.forbidden_rules} />
 			</label>
 			<label class="flex flex-col gap-1 text-sm">Disclaimer wajib
-				<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={rules.required_disclaimer} />
+				<input class="app-input" bind:value={rules.required_disclaimer} />
 			</label>
 			<label class="flex flex-col gap-1 text-sm">Kebijakan sitasi
-				<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={rules.citation_policy} />
+				<input class="app-input" bind:value={rules.citation_policy} />
 			</label>
 		</div>
 		<button class="mt-3 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" type="submit" disabled={busy}>Simpan aturan</button>
 	</form>
-</main>
+</section>

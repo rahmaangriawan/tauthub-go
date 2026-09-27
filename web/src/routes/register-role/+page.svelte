@@ -10,7 +10,7 @@
 </script>
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
-	<div class="w-full max-w-md rounded-lg border border-border bg-card p-6">
+	<div class="app-card w-full max-w-md p-6">
 		<h1 class="text-xl font-semibold tracking-tight">Daftar sebagai</h1>
 		<div class="mt-4 grid gap-3">
 			<button

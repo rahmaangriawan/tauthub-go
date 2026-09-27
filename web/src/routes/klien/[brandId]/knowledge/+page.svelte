@@ -139,7 +139,7 @@
 	}
 </script>
 
-<main class="mx-auto max-w-4xl px-4 py-8">
+<section class="mx-auto max-w-4xl px-4 py-8">
 	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandId}`}>← Dashboard</a>
 	<h1 class="mt-2 text-2xl font-semibold tracking-tight">Knowledge Base</h1>
 
@@ -151,7 +151,7 @@
 			required
 			minlength={2}
 		/>
-		<button class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" disabled={busy} type="submit">
+		<button class="app-btn app-btn-primary" disabled={busy} type="submit">
 			Buat koleksi
 		</button>
 	</form>
@@ -160,7 +160,7 @@
 		<p class="mt-6 text-sm text-muted-foreground">Memuat…</p>
 	{:else}
 		<div class="mt-6 grid gap-4 md:grid-cols-2">
-			<section class="rounded-lg border border-border bg-card p-4">
+			<section class="app-card p-4">
 				<h2 class="font-medium">Koleksi</h2>
 				<ul class="mt-2 text-sm">
 					{#each collections as c (c.id)}
@@ -180,7 +180,7 @@
 			</section>
 
 			{#if activeCollection}
-				<section class="rounded-lg border border-border bg-card p-4">
+				<section class="app-card p-4">
 					<h2 class="font-medium">Sumber</h2>
 					<ul class="mt-2 text-sm">
 						{#each sources as s (s.id)}
@@ -208,7 +208,7 @@
 		</div>
 
 		{#if activeCollection}
-			<form class="mt-4 rounded-lg border border-border bg-card p-4" onsubmit={addSource}>
+			<form class="app-card mt-4 p-4" onsubmit={addSource}>
 				<h2 class="font-medium">Tambah sumber manual</h2>
 				<input
 					class="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -224,7 +224,7 @@
 				</button>
 			</form>
 
-			<form class="mt-4 rounded-lg border border-border bg-card p-4" onsubmit={startCrawl}>
+			<form class="app-card mt-4 p-4" onsubmit={startCrawl}>
 				<h2 class="font-medium">Import via sitemap</h2>
 				<input
 					class="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -240,4 +240,4 @@
 		{#if msg}<p class="mt-3 text-sm text-emerald-600">{msg}</p>{/if}
 		{#if error}<p class="mt-3 text-sm text-destructive">{error}</p>{/if}
 	{/if}
-</main>
+</section>

@@ -133,25 +133,25 @@
 			Ubah nama tampilan
 		</button>
 
-		<section class="mt-8 rounded-lg border border-border p-4">
+		<section class="app-card mt-8 p-4">
 			<h2 class="font-medium">Ganti password</h2>
 			<form class="mt-3 flex flex-col gap-3" onsubmit={changePassword}>
 				<input
-					class="rounded-md border border-input bg-background px-3 py-2 text-sm"
+					class="app-input"
 					type="password" placeholder="Password saat ini" bind:value={currentPassword} required
 				/>
 				<input
-					class="rounded-md border border-input bg-background px-3 py-2 text-sm"
+					class="app-input"
 					type="password" placeholder="Password baru (min. 10)" bind:value={newPassword} minlength={10} required
 				/>
 				{#if passwordMsg}<p class="text-sm text-muted-foreground">{passwordMsg}</p>{/if}
-				<button class="w-fit rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" type="submit">
+				<button class="app-btn app-btn-primary w-fit" type="submit">
 					Simpan password
 				</button>
 			</form>
 		</section>
 
-		<section class="mt-6 rounded-lg border border-border p-4">
+		<section class="app-card mt-6 p-4">
 			<h2 class="font-medium">Two-Factor Authentication</h2>
 			{#if recoveryCodes.length > 0}
 				<p class="mt-2 text-sm text-emerald-600">2FA aktif. Kode pemulihan (simpan sekarang, hanya sekali):</p>
@@ -175,7 +175,7 @@
 						class="w-32 rounded-md border border-input bg-background px-3 py-2 text-sm"
 						type="text" inputmode="numeric" placeholder="123456" bind:value={totpCode} required
 					/>
-					<button class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" type="submit" disabled={twoFactorBusy}>
+					<button class="app-btn app-btn-primary" type="submit" disabled={twoFactorBusy}>
 						Aktifkan
 					</button>
 				</form>

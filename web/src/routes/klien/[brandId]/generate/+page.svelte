@@ -110,27 +110,27 @@
 		failed: 'bg-red-50 text-red-700',
 		cancelled: 'bg-slate-100 text-slate-600',
 		waiting_outline_approval: 'bg-amber-50 text-amber-700',
-		queued: 'bg-blue-50 text-[#1d4ed8]',
-		running: 'bg-blue-50 text-[#1d4ed8]'
+		queued: 'bg-blue-50 text-primary',
+		running: 'bg-blue-50 text-primary'
 	};
 </script>
 
-<main class="mx-auto max-w-5xl">
+<section class="mx-auto max-w-5xl">
 	<h1 class="text-2xl font-semibold tracking-tight">Generate Artikel</h1>
 	<p class="mt-1 text-sm text-muted-foreground">
 		Pipeline: brief → (opsional approval outline) → draft AI → gate moderasi → dokumen.
 	</p>
 
-	<form class="mt-4 grid gap-3 rounded-xl border border-border bg-card p-4" onsubmit={generate}>
+	<form class="app-card mt-4 grid gap-3 p-4" onsubmit={generate}>
 		<div class="grid gap-3 sm:grid-cols-2">
 			<label class="flex flex-col gap-1 text-sm sm:col-span-2">Topik
-				<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={form.topic} minlength={3} required />
+				<input class="app-input" bind:value={form.topic} minlength={3} required />
 			</label>
 			<label class="flex flex-col gap-1 text-sm sm:col-span-2">Tujuan
-				<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={form.goal} minlength={3} required />
+				<input class="app-input" bind:value={form.goal} minlength={3} required />
 			</label>
 			<label class="flex flex-col gap-1 text-sm">Jenis konten
-				<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={form.content_type}>
+				<select class="app-input" bind:value={form.content_type}>
 					<option value="press_release">Press Release</option>
 					<option value="news">News</option>
 					<option value="article">Article</option>
@@ -144,7 +144,7 @@
 		</div>
 		{#if error}<p class="text-sm text-destructive">{error}</p>{/if}
 		{#if msg}<p class="text-sm text-muted-foreground">{msg}</p>{/if}
-		<button class="w-fit rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" disabled={busy} type="submit">
+		<button class="app-btn app-btn-primary w-fit" disabled={busy} type="submit">
 			{busy ? 'Memproses…' : 'Generate'}
 		</button>
 	</form>
@@ -156,7 +156,7 @@
 		{:else}
 			<div class="mt-2 grid gap-2">
 				{#each jobs as job (job.id)}
-					<div class="rounded-lg border border-border bg-card p-3">
+					<div class="app-card p-3">
 						<div class="flex items-start justify-between gap-3">
 							<div class="min-w-0">
 								<p class="truncate text-sm font-medium">{job.topic ?? '(tanpa topik)'}</p>
@@ -199,4 +199,4 @@
 			</div>
 		{/if}
 	</section>
-</main>
+</section>

@@ -63,7 +63,7 @@
 </script>
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
-	<div class="w-full max-w-[420px] rounded-lg border border-border bg-card p-6" style="margin-top:10vh">
+	<div class="app-card w-full max-w-[420px] p-6" style="margin-top:10vh">
 		{#if error}
 			<p class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
 			<a class="mt-3 inline-block rounded-md bg-muted px-3 py-2 text-sm" href="/login">Kembali ke Login</a>

@@ -35,14 +35,14 @@
 </script>
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
-	<div class="w-full max-w-[440px] rounded-lg border border-border bg-card p-6" style="margin-top:10vh">
+	<div class="app-card w-full max-w-[440px] p-6" style="margin-top:10vh">
 		<h1 class="text-lg font-bold">Hubungkan akun Google</h1>
 		<p class="mt-1 text-sm text-muted-foreground">
 			Akun dengan email <strong>{email}</strong> sudah terdaftar. Hubungkan akun Google ini dengan akun Tauthub Anda?
 		</p>
 		<form class="mt-4 flex flex-col gap-3" onsubmit={link}>
 			<input
-				class="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+				class="app-input"
 				type="password"
 				required
 				placeholder="Kata sandi akun Tauthub Anda"
@@ -54,7 +54,7 @@
 			<div class="flex gap-2">
 				<button
 					type="submit"
-					class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+					class="app-btn app-btn-primary"
 					disabled={busy || !password}
 				>
 					{busy ? 'Menghubungkan…' : 'Hubungkan & Lanjutkan'}

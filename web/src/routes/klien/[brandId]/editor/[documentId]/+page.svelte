@@ -92,7 +92,7 @@
 	}
 </script>
 
-<main class="mx-auto max-w-6xl">
+<section class="mx-auto max-w-6xl">
 	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandId}/generate`}>← Generate</a>
 	{#if loading}
 		<p class="mt-4 text-sm text-muted-foreground">Memuat dokumen…</p>
@@ -107,14 +107,14 @@
 			<div class="flex items-center gap-2">
 				{#if msg}<span class="text-xs text-emerald-600">{msg}</span>{/if}
 				{#if error}<span class="text-xs text-destructive">{error}</span>{/if}
-				<button class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" disabled={busy} onclick={save}>
+				<button class="app-btn app-btn-primary" disabled={busy} onclick={save}>
 					{busy ? 'Menyimpan…' : 'Simpan versi baru'}
 				</button>
 			</div>
 		</div>
 
 		<div class="mt-4 grid gap-4 lg:grid-cols-[2fr_1fr]">
-			<section class="rounded-xl border border-border bg-card p-4">
+			<section class="app-card p-4">
 				<h2 class="text-sm font-semibold">Konten (HTML)</h2>
 				<textarea
 					class="mt-2 h-[520px] w-full resize-y rounded-md border border-input bg-background p-3 font-mono text-xs"
@@ -123,7 +123,7 @@
 			</section>
 
 			<div class="grid gap-4">
-				<section class="rounded-xl border border-border bg-card p-4">
+				<section class="app-card p-4">
 					<h2 class="text-sm font-semibold">Preview</h2>
 					<div class="prose prose-sm mt-2 max-h-[240px] overflow-y-auto text-sm">
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -131,7 +131,7 @@
 					</div>
 				</section>
 
-				<section class="rounded-xl border border-border bg-card p-4">
+				<section class="app-card p-4">
 					<h2 class="text-sm font-semibold">Riwayat versi ({(doc.versions ?? []).length})</h2>
 					<ul class="mt-2 space-y-2 text-xs">
 						{#each doc.versions ?? [] as v (v.id)}
@@ -154,4 +154,4 @@
 	{:else}
 		<p class="mt-4 text-sm text-destructive">{error || 'Dokumen tidak ditemukan.'}</p>
 	{/if}
-</main>
+</section>

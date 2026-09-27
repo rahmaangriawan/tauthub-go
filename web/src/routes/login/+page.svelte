@@ -99,7 +99,7 @@
 				<label class="flex flex-col gap-1 text-sm">
 					Kode verifikasi
 					<input
-						class="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+						class="app-input"
 						type="text"
 						inputmode="numeric"
 						autocomplete="one-time-code"
@@ -112,7 +112,7 @@
 				<label class="flex flex-col gap-1 text-sm">
 					Email
 					<input
-						class="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+						class="app-input"
 						type="email"
 						bind:value={email}
 						placeholder="nama@perusahaan.id"
@@ -123,7 +123,7 @@
 				<label class="flex flex-col gap-1 text-sm">
 					Password
 					<input
-						class="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+						class="app-input"
 						type="password"
 						bind:value={password}
 						autocomplete="current-password"
@@ -139,7 +139,7 @@
 			<button
 				type="submit"
 				disabled={busy}
-				class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-opacity disabled:opacity-50"
+				class="app-btn app-btn-primary w-full"
 			>
 				{busy ? 'Memproses…' : challenge ? 'Verifikasi' : 'Masuk'}
 			</button>

@@ -40,7 +40,7 @@
 </script>
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
-	<div class="w-full max-w-sm rounded-lg border border-border bg-card p-6">
+	<div class="app-card w-full max-w-sm p-6">
 		<h1 class="text-xl font-semibold tracking-tight">Reset password</h1>
 		{#if !token}
 			<p class="mt-4 text-sm text-destructive">Token reset tidak ditemukan. Minta tautan baru.</p>
@@ -51,7 +51,7 @@
 				<label class="flex flex-col gap-1 text-sm">
 					Password baru (min. 10 karakter)
 					<input
-						class="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+						class="app-input"
 						type="password" bind:value={newPassword} minlength={10} required
 					/>
 				</label>
@@ -61,7 +61,7 @@
 				<button
 					type="submit"
 					disabled={busy}
-					class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+					class="app-btn app-btn-primary"
 				>
 					{busy ? 'Menyimpan…' : 'Simpan password baru'}
 				</button>

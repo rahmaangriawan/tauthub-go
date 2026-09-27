@@ -81,7 +81,7 @@
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-semibold tracking-tight">Brand Saya</h1>
 		<button
-			class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+			class="app-btn app-btn-primary"
 			onclick={() => (showCreate = !showCreate)}
 		>
 			{showCreate ? 'Tutup' : '+ Brand Baru'}
@@ -89,34 +89,34 @@
 	</div>
 
 	{#if showCreate}
-		<form class="mt-4 grid gap-3 rounded-lg border border-border bg-card p-4" onsubmit={create}>
+		<form class="app-card mt-4 grid gap-3 p-4" onsubmit={create}>
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="flex flex-col gap-1 text-sm">Nama
-					<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={form.name} minlength={2} required />
+					<input class="app-input" bind:value={form.name} minlength={2} required />
 				</label>
 				<label class="flex flex-col gap-1 text-sm">Slug
-					<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={form.slug} pattern="[a-z0-9]+(-[a-z0-9]+)*" required />
+					<input class="app-input" bind:value={form.slug} pattern="[a-z0-9]+(-[a-z0-9]+)*" required />
 				</label>
 				<label class="flex flex-col gap-1 text-sm">Tipe kepemilikan
-					<select class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={form.ownership_type}>
+					<select class="app-input" bind:value={form.ownership_type}>
 						<option value="internal">Internal</option>
 						<option value="client">Client</option>
 					</select>
 				</label>
 				{#if form.ownership_type === 'client'}
 					<label class="flex flex-col gap-1 text-sm">Nama klien
-						<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={form.client_name} />
+						<input class="app-input" bind:value={form.client_name} />
 					</label>
 				{/if}
 				<label class="flex flex-col gap-1 text-sm">Industri
-					<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={form.industry} />
+					<input class="app-input" bind:value={form.industry} />
 				</label>
 				<label class="flex flex-col gap-1 text-sm">Domain (opsional)
-					<input class="rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={form.domain} />
+					<input class="app-input" bind:value={form.domain} />
 				</label>
 			</div>
 			{#if error}<p class="text-sm text-destructive">{error}</p>{/if}
-			<button class="w-fit rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" disabled={busy} type="submit">
+			<button class="app-btn app-btn-primary w-fit" disabled={busy} type="submit">
 				{busy ? 'Menyimpan…' : 'Buat Brand'}
 			</button>
 		</form>
@@ -130,7 +130,7 @@
 		<div class="mt-6 grid gap-3 sm:grid-cols-2">
 			{#each brandList.data ?? [] as brand (brand.id)}
 				<a
-					class="rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent"
+					class="app-card p-4 transition-colors hover:bg-accent"
 					href={`/klien/${brand.id}`}
 				>
 					<div class="flex items-center justify-between">
