@@ -16,6 +16,7 @@
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import MediaDetailModal from './_detail-modal.svelte';
 	import Select from '$lib/components/select.svelte';
+	import Tooltip from '$lib/components/tooltip.svelte';
 	import './media.css';
 
 	type Media = {
@@ -650,19 +651,41 @@
 							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('da')}>DA{sortIndicator('da')}</th>
 							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_trust')}>
 								<span class="thWithInfo">AI TRUST
-									<span class="infoDot" title="Skor (0-100) kesiapan infrastruktur web (Schema, Speed) untuk dirayapi dan direkomendasikan oleh mesin LLM.">
-										<Info size={14} />
-									</span>
+									<Tooltip label="Keterangan AI Trust Score" maxWidth={260}>
+										{#snippet rich()}
+											<strong>AI Trust Score</strong> — Skor (0-100) kesiapan infrastruktur web
+											(Schema, Speed) untuk dirayapi dan direkomendasikan oleh mesin LLM.
+										{/snippet}
+										<button type="button" class="infoDot" aria-label="Keterangan AI Trust Score" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+									</Tooltip>
 								</span>{sortIndicator('ai_trust')}
 							</th>
 							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_cited')}>
 								<span class="thWithInfo">AI CITED
-									<span class="infoDot" title="Indikator otomatis apakah media ini terdeteksi aktif sebagai rujukan oleh mesin AI.">
-										<Info size={14} />
-									</span>
+									<Tooltip
+										label="Keterangan AI Citation"
+										content="Indikator otomatis via API apakah media ini terdeteksi aktif sebagai rujukan/referensi oleh mesin AI (misal: Perplexity atau AI Overviews)."
+										maxWidth={260}
+									>
+										<button type="button" class="infoDot" aria-label="Keterangan AI Citation" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+									</Tooltip>
 								</span>{sortIndicator('ai_cited')}
 							</th>
-							<th class="modernTh modernThSortable" onclick={() => toggleSort('speed')}>WAKTU RILIS{sortIndicator('speed')}</th>
+							<th class="modernTh modernThSortable" onclick={() => toggleSort('speed')}>
+								<span class="thWithInfo">WAKTU RILIS
+									<Tooltip label="Keterangan estimasi waktu rilis" maxWidth={260}>
+										{#snippet rich()}
+											<span class="tipStack">
+												<strong>Indikator Waktu Rilis</strong>
+												<span><span style="color:#4ade80;font-weight:700;">Super Cepat:</span> &lt; 3 Jam</span>
+												<span><span style="color:#60a5fa;font-weight:700;">Cepat:</span> &lt; 24 Jam</span>
+												<span><span style="color:#d1d5db;font-weight:700;">Standar:</span> 1 - 2 Hari</span>
+											</span>
+										{/snippet}
+										<button type="button" class="infoDot" aria-label="Keterangan estimasi waktu rilis" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+									</Tooltip>
+								</span>{sortIndicator('speed')}
+							</th>
 							<th class="modernTh modernThSortable" onclick={() => toggleSort('price')}>HARGA{sortIndicator('price')}</th>
 							<th class="modernTh" style="text-align:right">AKSI</th>
 						</tr>

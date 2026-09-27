@@ -33,6 +33,7 @@
 	let open = $state(false);
 	let readIds = $state<Set<string>>(new Set());
 	let trigger = $state<HTMLButtonElement | null>(null);
+	let menu = $state<HTMLDivElement | null>(null);
 	let pos = $state({ left: 0, top: 0 });
 
 	function timeAgo(value: string) {
@@ -163,14 +164,21 @@
 		const onKey = (event: KeyboardEvent) => {
 			if (event.key === 'Escape') open = false;
 		};
-		const onScroll = () => (open = false);
+		// Tutup hanya bila halaman yang di-scroll; scroll di dalam daftar
+		// notifikasi harus tetap bisa (menu punya area scroll sendiri).
+		const onScroll = (event: Event) => {
+			const target = event.target as Node | null;
+			if (target && menu && (target === menu || menu.contains(target))) return;
+			open = false;
+		};
+		const onResize = () => (open = false);
 		window.addEventListener('keydown', onKey);
 		window.addEventListener('scroll', onScroll, true);
-		window.addEventListener('resize', onScroll);
+		window.addEventListener('resize', onResize);
 		return () => {
 			window.removeEventListener('keydown', onKey);
 			window.removeEventListener('scroll', onScroll, true);
-			window.removeEventListener('resize', onScroll);
+			window.removeEventListener('resize', onResize);
 		};
 	});
 </script>
@@ -193,6 +201,7 @@
 	<button type="button" class="notif-backdrop" aria-label="Tutup notifikasi" onclick={() => (open = false)}
 	></button>
 	<div
+		bind:this={menu}
 		class="notif-menu"
 		role="menu"
 		aria-label="Notifikasi"

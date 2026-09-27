@@ -114,12 +114,21 @@
 	$effect(() => {
 		if (!open) return;
 		menu?.focus();
-		const onScroll = () => closeMenu();
+		// Tutup hanya bila halaman/induk yang di-scroll. Scroll DI DALAM menu
+		// harus diabaikan — kalau tidak, daftar panjang tak bisa digulir karena
+		// menu menutup dirinya sendiri (listener capture ikut menangkap event
+		// dari menu sendiri).
+		const onScroll = (event: Event) => {
+			const target = event.target as Node | null;
+			if (target && menu && (target === menu || menu.contains(target))) return;
+			closeMenu();
+		};
+		const onResize = () => closeMenu();
 		window.addEventListener('scroll', onScroll, true);
-		window.addEventListener('resize', onScroll);
+		window.addEventListener('resize', onResize);
 		return () => {
 			window.removeEventListener('scroll', onScroll, true);
-			window.removeEventListener('resize', onScroll);
+			window.removeEventListener('resize', onResize);
 		};
 	});
 </script>

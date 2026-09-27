@@ -1175,6 +1175,9 @@ button.categoryPlusTag:focus-visible {
 .modernThSortable:hover { color: #2563eb; }
 .thWithInfo { display: inline-flex; align-items: center; gap: 5px; }
 .infoDot { display: inline-flex; align-items: center; color: #94a3b8; cursor: help; }
+/* Isi tooltip kaya (waktu rilis): baris bertumpuk dengan label berwarna. */
+.tipStack { display: flex; flex-direction: column; gap: 4px; }
+.tipStack strong { margin-bottom: 2px; }
 
 .mediaMetaLine { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #64748b; }
 .domainLink { display: inline-flex; align-items: center; gap: 3px; color: #2563eb; text-decoration: none; font-weight: 500; }
