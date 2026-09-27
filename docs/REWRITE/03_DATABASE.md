@@ -96,11 +96,26 @@
 
 ## 4. Strategi Migration di Repo Baru
 
-1. `api/migrations/` berisi **salinan utuh** `schema.pg.sql` + 172 migration SQL lama (baseline historis).
+1. `api/migrations/` berisi **salinan utuh** `schema.pg.sql` + **172 migration SQL lama** (baseline historis) — diverifikasi identik dengan `apps/web/src/db/migrations/` (172 vs 172, tidak ada selisih).
 2. Untuk DB `tauthub-go` yang sudah live: repo baru TIDAK menjalankan baseline — hanya mencatat versi terakhir (`168`) ke `schema_migrations`.
 3. Migration baru: **additive-only** (CREATE TABLE/ADD COLUMN/CREATE INDEX), satu file satu transaksi, tercatat di `schema_migrations`. Runner Go meniru `migrate-additive.mjs`: toleran error duplicate-object (`42P07, 42701, 42710, 42704, 23505`) dan tetap mencatatnya applied.
 4. Dilarang: `DROP COLUMN/TABLE`, rename kolom, ubah tipe kolom eksisting. Kebutuhan baru = kolom/tabel baru.
 5. DB dev lokal: database `tauthub-go` di Postgres.app (lihat `.env` root repo lama: host 127.0.0.1, user `ai_writer`).
+
+### 4a. Kondisi `schema_migrations` di DB live (diverifikasi 2026-09-27)
+
+- **175 baris tercatat, semuanya unik, semuanya berakhiran `.sql`** — bukan duplikat.
+- **172 baris cocok persis dengan file migration di repo.**
+- **3 baris tanpa file di repo** — migration yang pernah dijalankan lalu filenya dihapus/digabung saat pengembangan:
+
+  | Versi tercatat | Status file |
+  |---|---|
+  | `071_google_oauth.sql` | tidak ada di repo |
+  | `072_oauth_config.sql` | tidak ada di repo |
+  | `150_platform_crawlhub_config.sql` | tidak ada di repo |
+
+  **Konsekuensi untuk runner Go**: `migrate status` akan selalu melaporkan "3 versi tercatat tanpa file" — itu **normal, bukan error**; jangan dihapus dari `schema_migrations` (menghapus = mengundang runner menjalankan ulang efek migration yang sudah diterapkan). Skrip `migrate up` hanya melihat file → tidak terpengaruh.
+- **Jangan menyimpulkan "172 file = 172 baris"**: selisih 3 baris ini permanen dan sengaja dibiarkan.
 
 ## 5. Aturan Kompatibilitas Data (jangan dilanggar)
 
