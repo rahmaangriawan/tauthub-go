@@ -3,6 +3,7 @@ package clientread
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -119,6 +120,21 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 	limit := clampInt(q.Get("limit"), 50, 1, 500)
 	offset := clampInt(q.Get("offset"), 0, 0, 1<<30)
 
+	// Filter daftar (parity app lama). state/problematic khusus: "problematic"
+	// berarti state IS NULL OR state IN ('gone','unreachable').
+	stateFilter := strings.TrimSpace(q.Get("state"))
+	if stateFilter != "" && stateFilter != "all" && stateFilter != "problematic" &&
+		!strIn([]string{"live", "gone", "unreachable", "no_url"}, stateFilter) {
+		httpx.Error(w, http.StatusUnprocessableEntity, "state harus salah satu dari live, gone, unreachable, no_url, problematic")
+		return
+	}
+	searchQ := strings.TrimSpace(q.Get("q"))
+	if len(searchQ) > 120 {
+		searchQ = searchQ[:120]
+	}
+	mediaFilter := strings.TrimSpace(q.Get("media"))
+	daysFilter := clampInt(q.Get("days"), 0, 0, 3650)
+
 	if view == "summary" {
 		var watched, live, gone, unreachable, noURL int
 		_ = d.Pool.QueryRow(r.Context(), `
@@ -140,12 +156,44 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// view=publications (default): daftar artikel dengan status link.
+	clause := "WHERE p.brand_id = $1 AND p.status = 'published' AND p.published_url IS NOT NULL" +
+		" AND p.published_at > NOW() - INTERVAL '12 months'"
+	args := []any{brandID}
+	addArg := func(v any) string {
+		args = append(args, v)
+		return "$" + itoa(len(args))
+	}
+	switch stateFilter {
+	case "":
+		// tanpa filter state
+	case "problematic":
+		clause += " AND (c.state IS NULL OR c.state IN ('gone','unreachable'))"
+	case "all":
+		// semua state
+	default:
+		clause += " AND c.state = " + addArg(stateFilter)
+	}
+	if searchQ != "" {
+		like := "%" + searchQ + "%"
+		clause += " AND (d.title ILIKE " + addArg(like) + " OR m.name ILIKE " + addArg(like) +
+			" OR p.published_url ILIKE " + addArg(like) + ")"
+	}
+	if mediaFilter != "" {
+		clause += " AND m.name = " + addArg(mediaFilter)
+	}
+	if daysFilter > 0 {
+		clause += " AND p.published_at > NOW() - make_interval(days => " + addArg(daysFilter) + ")"
+	}
+
 	var total int
 	_ = d.Pool.QueryRow(r.Context(), `
 		SELECT COUNT(*) FROM publications p
-		WHERE p.brand_id = $1 AND p.status = 'published' AND p.published_url IS NOT NULL
-		  AND p.published_at > NOW() - INTERVAL '12 months'`, brandID).Scan(&total)
+		LEFT JOIN publication_link_checks c ON c.publication_id = p.id
+		JOIN content_documents d ON d.id = p.document_id
+		JOIN media m ON m.id = p.media_id `+clause, args...).Scan(&total)
 
+	limitArg := addArg(limit)
+	offsetArg := addArg(offset)
 	rowsQ, err := d.Pool.Query(r.Context(), `
 		SELECT p.id, p.document_id, p.media_id, p.published_url, p.published_at, d.title, m.name,
 		       COALESCE(c.state, 'no_url') AS state,
@@ -154,10 +202,8 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 		FROM publications p
 		LEFT JOIN publication_link_checks c ON c.publication_id = p.id
 		JOIN content_documents d ON d.id = p.document_id
-		JOIN media m ON m.id = p.media_id
-		WHERE p.brand_id = $1 AND p.status = 'published' AND p.published_url IS NOT NULL
-		  AND p.published_at > NOW() - INTERVAL '12 months'
-		ORDER BY p.published_at DESC LIMIT $2 OFFSET $3`, brandID, limit, offset)
+		JOIN media m ON m.id = p.media_id `+clause+`
+		ORDER BY p.published_at DESC LIMIT `+limitArg+` OFFSET `+offsetArg, args...)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -184,8 +230,11 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
+	// "publications" = nama kunci yang dibaca UI app lama; "items" dipertahankan
+	// untuk pemakai lama.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": items, "total": total, "limit": limit, "offset": offset, "view": view,
+		"publications": items, "items": items, "total": total,
+		"limit": limit, "offset": offset, "view": view,
 	})
 }
 
@@ -292,4 +341,14 @@ func nilIfNilTime(t *time.Time) any {
 		return nil
 	}
 	return isoMilli(*t)
+}
+
+// strIn: cek keanggotaan string dalam slice.
+func strIn(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }

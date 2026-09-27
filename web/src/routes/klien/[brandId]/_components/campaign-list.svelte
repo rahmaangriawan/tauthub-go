@@ -296,11 +296,11 @@
 			</p>
 		</div>
 	{:else}
-		<div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+		<div class="mt-4 grid gap-[14px] sm:grid-cols-2 xl:grid-cols-3">
 			{#each filteredList as c (c.id)}
 				{@const accent = statusAccent(c.taut_status, c.stats.published_media)}
 				{@const totalMedia = Math.max(c.stats.articles, c.stats.published_media)}
-				<div class="app-card flex flex-col p-4" style="border-left: 3px solid {accentColor(accent)};">
+				<div class="app-card flex flex-col" style="padding: 18px 20px 14px; border-radius: 14px; border-left: 3px solid {accentColor(accent)};">
 					<div class="flex flex-wrap items-center justify-between gap-2">
 						<div class="flex flex-wrap items-center gap-2">
 							<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={badgeStyle('accent')}>DIBANTU AI</span>
