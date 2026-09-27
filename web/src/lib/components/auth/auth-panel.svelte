@@ -384,8 +384,21 @@
 			<div class="auth-field">
 				<span class="auth-label">
 					Daftar sebagai
-					<span class="auth-info" title="Klien memproduksi & menyebarkan artikel. Mitra adalah pemilik media yang menerbitkan.">
-						<Info size={13} />
+					<!-- Tooltip penjelas peran: muncul saat hover DAN focus agar dapat
+					     diakses keyboard (parity Tooltip app lama pada label ini). -->
+					<span class="auth-tip">
+						<button
+							type="button"
+							class="auth-info"
+							aria-label="Penjelasan peran Klien dan Mitra"
+							aria-describedby="auth-role-tip"
+						>
+							<Info size={13} />
+						</button>
+						<span class="auth-tip-panel" role="tooltip" id="auth-role-tip">
+							<span class="auth-tip-row"><b>Klien:</b> kelola kampanye, analisis, dan distribusikan lewat mitra.</span>
+							<span class="auth-tip-row"><b>Mitra:</b> terima publikasi dari klien dan hasilkan uang dari distribusi konten.</span>
+						</span>
 					</span>
 				</span>
 				<div class="auth-roles">

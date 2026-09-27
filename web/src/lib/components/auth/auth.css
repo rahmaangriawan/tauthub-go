@@ -612,3 +612,56 @@
   cursor: default;
 }
 .auth-modal { position: relative; z-index: 1; }
+
+/* Tooltip penjelas peran (parity Tooltip app lama). Muncul saat hover dan
+   saat ikon info difokuskan keyboard. */
+.auth-tip { position: relative; display: inline-flex; align-items: center; }
+.auth-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--auth-muted);
+  cursor: help;
+}
+.auth-info:hover, .auth-info:focus-visible { color: var(--auth-primary); }
+.auth-info:focus-visible { outline: 2px solid var(--auth-primary); outline-offset: 1px; }
+
+.auth-tip-panel {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: max-content;
+  max-width: 280px;
+  padding: 9px 11px;
+  border: 1px solid var(--auth-border);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(20, 25, 30, 0.12);
+  color: var(--auth-text);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+  transform: translateX(-50%) translateY(2px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  pointer-events: none;
+}
+.auth-tip:hover .auth-tip-panel,
+.auth-tip:focus-within .auth-tip-panel {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+.auth-tip-row b { font-weight: 600; }
