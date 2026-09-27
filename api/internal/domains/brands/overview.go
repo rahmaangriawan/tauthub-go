@@ -2,6 +2,7 @@ package brands
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -46,12 +47,30 @@ func (d *Deps) Overview(w http.ResponseWriter, r *http.Request) {
 		"available_idr": available * rateIDR, "has_wallet": hasWallet,
 	}
 
-	// --- campaigns (+publication_count, parity query overview) ---
+	// --- campaigns (+agregat parity CAMPAIGN_AGGREGATE_SELECT) ---
 	campaigns := []map[string]any{}
 	cRows, cErr := d.Pool.Query(r.Context(), `
 		SELECT c.id, c.brand_id, c.name, c.description, c.status, c.article_quota, c.budget,
 		       c.order_code, c.starts_at, c.ends_at, c.content_intake_id, c.campaign_flow_status,
-		       (SELECT COUNT(*) FROM publications p WHERE p.campaign_id = c.id AND p.status <> 'cancelled') AS publication_count
+		       c.media_type, c.selected_media_id, c.editorial_standard_snapshot, c.media_locked_at,
+		       c.created_by, c.created_at, c.updated_at,
+		       (SELECT COUNT(*) FROM publications p WHERE p.campaign_id = c.id AND p.status <> 'cancelled') AS publication_count,
+		       (SELECT COUNT(*) FROM campaign_media_items cmi
+		         WHERE cmi.campaign_id = c.id
+		           AND COALESCE(cmi.variant_document_id, cmi.source_document_id) IS NOT NULL
+		           AND cmi.status <> 'cancelled') AS articles_created,
+		       (SELECT COUNT(*) FROM publications p WHERE p.campaign_id = c.id AND p.status = 'published') AS published_count,
+		       (SELECT COUNT(DISTINCT p.media_id) FROM publications p WHERE p.campaign_id = c.id AND p.status = 'published') AS media_published_count,
+		       (SELECT STRING_AGG(DISTINCT m.name, ' · ') FROM publications p JOIN media m ON m.id = p.media_id
+		         WHERE p.campaign_id = c.id AND p.status = 'published') AS published_media_names,
+		       (SELECT COALESCE(SUM(t.used_tc), 0) FROM (
+		          SELECT COALESCE(SUM(CASE WHEN l.ref_type = 'capture' THEN l.amount_tc ELSE 0 END), 0)
+		                 + GREATEST(-COALESCE(SUM(l.amount_tc), 0), 0) AS used_tc
+		          FROM credit_ledger_entries l
+		          WHERE l.brand_id = c.brand_id AND l.ref_type IN ('reserve', 'release', 'capture')
+		            AND EXISTS (SELECT 1 FROM publications p WHERE p.id = l.ref_id AND p.campaign_id = c.id)
+		          GROUP BY l.ref_id
+		        ) t)::int AS tc_used
 		FROM campaigns c WHERE c.brand_id = $1 ORDER BY c.created_at DESC LIMIT 20`, id)
 	if cErr == nil {
 		defer cRows.Close()
@@ -60,22 +79,49 @@ func (d *Deps) Overview(w http.ResponseWriter, r *http.Request) {
 			var description *string
 			var articleQuota int
 			var budget float64
-			var orderCode, startsAt, endsAt, contentIntakeID, flowStatus *string
-			var pubCount int
-			if cRows.Scan(&cid, &cbrandID, &cname, &description, &cstatus, &articleQuota, &budget,
-				&orderCode, &startsAt, &endsAt, &contentIntakeID, &flowStatus, &pubCount) == nil {
-				row := map[string]any{
+			var orderCode, contentIntakeID, flowStatus *string
+			var startsAt, endsAt *time.Time
+			var mediaType, selectedMediaID, createdBy *string
+			var snapshotRaw []byte
+			var mediaLockedAt *time.Time
+			var createdAt, updatedAt time.Time
+			var pubCount, articlesCreated, publishedCount, mediaPublishedCount, tcUsed int
+			var publishedMediaNames *string
+			if scanErr := cRows.Scan(&cid, &cbrandID, &cname, &description, &cstatus, &articleQuota, &budget,
+				&orderCode, &startsAt, &endsAt, &contentIntakeID, &flowStatus,
+				&mediaType, &selectedMediaID, &snapshotRaw, &mediaLockedAt,
+				&createdBy, &createdAt, &updatedAt,
+				&pubCount, &articlesCreated, &publishedCount, &mediaPublishedCount,
+				&publishedMediaNames, &tcUsed); scanErr == nil {
+				campaigns = append(campaigns, map[string]any{
 					"id": cid, "brand_id": cbrandID, "name": cname, "description": description,
 					"status": cstatus, "article_quota": articleQuota, "budget": budget,
-					"order_code": orderCode, "starts_at": startsAt, "ends_at": endsAt,
-					"publication_count": pubCount,
-					"articles_created":  0, "published_count": 0, "media_published_count": 0,
-					"published_media_names": nil, "tc_used": 0,
-					"content_intake_id": contentIntakeID, "campaign_flow_status": flowStatus,
-				}
-				campaigns = append(campaigns, row)
+					"order_code": orderCode, "starts_at": nilIfNilTime(startsAt), "ends_at": nilIfNilTime(endsAt),
+					"publication_count":           pubCount,
+					"articles_created":            articlesCreated,
+					"published_count":             publishedCount,
+					"media_published_count":       mediaPublishedCount,
+					"published_media_names":       publishedMediaNames,
+					"tc_used":                     tcUsed,
+					"content_intake_id":           contentIntakeID,
+					"campaign_flow_status":        flowStatus,
+					"media_type":                  mediaType,
+					"selected_media_id":           selectedMediaID,
+					"editorial_standard_snapshot": jsonRawBytes(snapshotRaw),
+					"media_locked_at":             nilIfNilTime(mediaLockedAt),
+					"created_by":                  createdBy,
+					"created_at":                  isoMilli(createdAt),
+					"updated_at":                  isoMilli(updatedAt),
+				})
+			} else {
+				slog.Error("[brands] scan kampanye overview gagal", "err", scanErr)
 			}
 		}
+		if err := cRows.Err(); err != nil {
+			slog.Error("[brands] iterasi kampanye overview gagal", "err", err)
+		}
+	} else {
+		slog.Error("[brands] query kampanye overview gagal", "err", cErr)
 	}
 
 	// --- intakes (kolom parity) ---
@@ -359,4 +405,12 @@ func derefStr2(p *string) string {
 		return ""
 	}
 	return *p
+}
+
+// nilIfNilTime: *time.Time → ISO-8601 millis atau nil (parity campo `row.starts_at ?? null`).
+func nilIfNilTime(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return isoMilli(*t)
 }

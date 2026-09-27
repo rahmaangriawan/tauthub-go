@@ -1,6 +1,7 @@
 package clientread
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -69,20 +70,22 @@ func (d *Deps) Campaigns(w http.ResponseWriter, r *http.Request) {
 		var description *string
 		var articleQuota int
 		var budget float64
-		var orderCode, startsAt, endsAt, contentIntakeID, flowStatus *string
+		var orderCode, contentIntakeID, flowStatus *string
+		var startsAt, endsAt *time.Time
 		var createdAt time.Time
 		var pubCount, articlesCreated, publishedCount, mediaPublishedCount int
 		var publishedMediaNames *string
 		var tcUsed int
-		if rowsQ.Scan(&id, &brandID, &name, &description, &cstatus, &articleQuota, &budget, &orderCode,
+		if scanErr := rowsQ.Scan(&id, &brandID, &name, &description, &cstatus, &articleQuota, &budget, &orderCode,
 			&startsAt, &endsAt, &contentIntakeID, &flowStatus, &createdAt,
-			&pubCount, &articlesCreated, &publishedCount, &mediaPublishedCount, &publishedMediaNames, &tcUsed) != nil {
+			&pubCount, &articlesCreated, &publishedCount, &mediaPublishedCount, &publishedMediaNames, &tcUsed); scanErr != nil {
+			slog.Error("[clientread] scan kampanye gagal", "err", scanErr)
 			continue
 		}
 		campaigns = append(campaigns, map[string]any{
 			"id": id, "brand_id": brandID, "name": name, "description": description, "status": cstatus,
 			"article_quota": articleQuota, "budget": budget, "order_code": orderCode,
-			"starts_at": startsAt, "ends_at": endsAt, "content_intake_id": contentIntakeID,
+			"starts_at": nilIfNilTime(startsAt), "ends_at": nilIfNilTime(endsAt), "content_intake_id": contentIntakeID,
 			"campaign_flow_status": flowStatus, "created_at": isoMilli(createdAt),
 			"publication_count": pubCount, "articles_created": articlesCreated,
 			"published_count": publishedCount, "media_published_count": mediaPublishedCount,
@@ -269,8 +272,8 @@ func (d *Deps) Analytics(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"from": from, "to": to,
-		"publication_id": nilIfEmpty(publicationID),
-		"totals":         totals,
+		"publication_id":  nilIfEmpty(publicationID),
+		"totals":          totals,
 		"unique_visitors": uniqueVisitors,
 		"daily":           daily,
 	})
@@ -281,4 +284,12 @@ func nilIfEmpty(s string) any {
 		return nil
 	}
 	return s
+}
+
+// nilIfNilTime: *time.Time → ISO-8601 millis atau nil.
+func nilIfNilTime(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return isoMilli(*t)
 }
