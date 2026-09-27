@@ -36,18 +36,18 @@
 |---|---|---|---|
 | `overview` | Ringkasan + poll status | 2 | [ ] |
 | `dashboard` | Dashboard analitik + grafik | 2 | [ ] |
-| `analytics` | Analitik artikel (views, scroll, klik) | 10 | [ ] |
-| `campaigns` | List + detail campaign | 7 | [ ] |
+| `analytics` | Analitik artikel (views, scroll, klik) | 10 | [x] |
+| `campaigns` | List + detail campaign | 7 | [x] |
 | `distribution` | **File terbesar (4.251 baris)**: publikasi, mitra, status, tracking | 6 | [ ] |
-| `media` | Katalog & pilih media (modal detail 721 baris) | 5 | [ ] |
-| `publications` | Publikasi & approval | 6 | [ ] |
+| `media` | Katalog & pilih media (modal detail 721 baris) | 5 | [x] |
+| `publications` | Publikasi & approval | 6 | [x] |
 | `knowledge` | Knowledge collections & sources | 3 | [ ] |
 | `members` | Kelola member brand | 2 | [ ] |
-| `credits` | Saldo TC, topup, ledger | 8 | [ ] |
-| `invoices` | Invoice | 8 | [ ] |
+| `credits` | Saldo TC, topup, ledger | 8 | [x] |
+| `invoices` | Invoice | 8 | [x] |
 | `notifications` | Bell + list (polling) | 12 | [ ] |
 | `pr-calculator` | Kalkulator & skor PR (998 baris) | 10 | [ ] |
-| `profile` | Profil brand, voice, rules, prompts, CMS | 2 | [ ] |
+| `profile` | Profil brand, voice, rules, prompts, CMS | 2 | [x] |
 
 ### 2.2 Halaman khusus klien (9)
 

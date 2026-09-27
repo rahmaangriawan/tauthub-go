@@ -51,7 +51,7 @@
 | `/v1/brands` | GET, POST | List/created brand (membership) | [x] |
 | `/v1/brands/{brandId}` | GET | Detail brand + readiness | [x] |
 | `/v1/brands/{brandId}/activate` | POST | Aktivasi (skor ≥70) | [x] |
-| `/v1/brands/{brandId}/analytics` | GET | Analitik brand | [ ] |
+| `/v1/brands/{brandId}/analytics` | GET | Analitik brand | [x] |
 | `/v1/brands/{brandId}/analyze/{topic}` | GET | Analisis topik (AI) | [ ] |
 | `/v1/brands/{brandId}/assets` | POST | Upload asset brand | [ ] |
 | `/v1/brands/{brandId}/configuration` | GET | Konfigurasi efektif brand | [x] |
@@ -129,7 +129,7 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/campaigns` | GET, POST | List/buat campaign | [ ] |
+| `/v1/brands/{brandId}/campaigns` | GET, POST | List/buat campaign | [x] |
 | `/v1/brands/{brandId}/campaigns/{campaignId}` | GET, PUT, DELETE | CRUD campaign | [ ] |
 | `/v1/brands/{brandId}/campaigns/{campaignId}/flow` | GET, POST | State wizard flow | [ ] |
 | `/v1/brands/{brandId}/campaigns/{campaignId}/flow/analyze` | POST | Analisis brief | [ ] |
@@ -185,7 +185,7 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/media` | GET | Katalog media | [ ] |
+| `/v1/brands/{brandId}/media` | GET | Katalog media | [x] |
 | `/v1/brands/{brandId}/media/recommendations` | GET | Rekomendasi media (AI) | [ ] |
 | `/v1/brands/{brandId}/media/{mediaId}/crawl-status` | GET | Status crawl media | [ ] |
 | `/v1/brands/{brandId}/media/{mediaId}/seo` | GET | Metrik SEO media | [ ] |
@@ -194,10 +194,10 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/brands/{brandId}/credits` | GET | Saldo & ledger TC | [ ] |
+| `/v1/brands/{brandId}/credits` | GET | Saldo & ledger TC | [x] |
 | `/v1/brands/{brandId}/credits/topup` | GET, POST | Opsi & buat topup | [ ] |
 | `/v1/brands/{brandId}/credit-reports` | POST | Laporan topup manual | [ ] |
-| `/v1/brands/{brandId}/invoices` | GET | List invoice | [ ] |
+| `/v1/brands/{brandId}/invoices` | GET | List invoice | [x] |
 | `/v1/brands/{brandId}/packages` | GET | Katalog paket | [ ] |
 | `/v1/brands/{brandId}/media-packages` | GET | Paket media custom | [ ] |
 
@@ -211,7 +211,7 @@
 | `/v1/brands/{brandId}/notifications/{notificationId}/read` | POST | Tandai dibaca | [ ] |
 | `/v1/brands/{brandId}/notification-webhooks` | GET, POST | List/daftar webhook | [ ] |
 | `/v1/brands/{brandId}/notification-webhooks/{webhookId}` | PUT, DELETE | Ubah/hapus webhook | [ ] |
-| `/v1/brands/{brandId}/link-monitor` | GET | Monitor link | [ ] |
+| `/v1/brands/{brandId}/link-monitor` | GET | Monitor link | [x] |
 | `/v1/brands/{brandId}/link-monitor/request-replacement` | POST | Minta penggantian link | [ ] |
 
 ### 3.14 Taut Pintar (28) — fase 9

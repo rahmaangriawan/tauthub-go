@@ -17,6 +17,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	authdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/auth"
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
+	clientreaddomain "github.com/rahmaangriawan/tauthub-go/internal/domains/clientread"
 	contentdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/content"
 	knowledgedomain "github.com/rahmaangriawan/tauthub-go/internal/domains/knowledge"
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
@@ -109,6 +110,7 @@ func run() error {
 		brands := &brandsdomain.Deps{Pool: database.Pool}
 		knowledge := &knowledgedomain.Deps{Pool: database.Pool}
 		contentDeps := &contentdomain.Deps{Pool: database.Pool, JobInline: cfg.JobInline, WriteRateLimitPerMinute: cfg.WriteRateLimitPerMinute}
+		clientRead := &clientreaddomain.Deps{Pool: database.Pool}
 		v1.Group(func(authed chi.Router) {
 			authed.Use(authDeps.Auth.RequireAuth)
 			authed.Get("/auth/me", authDeps.Me)
@@ -175,6 +177,16 @@ func run() error {
 			authed.Post("/brands/{brandId}/content-intakes/{intakeId}/analyze", contentDeps.IntakeAnalyze)
 			authed.Post("/brands/{brandId}/content-intakes/{intakeId}/create-job", contentDeps.IntakeCreateJob)
 			authed.Post("/brands/{brandId}/chat", contentDeps.Chat)
+
+			// Section BACA klien (katalog media, kampanye, pelacak 404, analitik, kredit, invoice).
+			authed.Get("/brands/{brandId}/media", clientRead.MediaCatalog)
+			authed.Get("/brands/{brandId}/media/categories", clientRead.MediaCategories)
+			authed.Get("/brands/{brandId}/media/{mediaId}", clientRead.MediaDetail)
+			authed.Get("/brands/{brandId}/campaigns", clientRead.Campaigns)
+			authed.Get("/brands/{brandId}/link-monitor", clientRead.LinkMonitor)
+			authed.Get("/brands/{brandId}/analytics", clientRead.Analytics)
+			authed.Get("/brands/{brandId}/credits", clientRead.Credits)
+			authed.Get("/brands/{brandId}/invoices", clientRead.Invoices)
 		})
 
 		// TODO fase 2+: peta lengkap di REWRITE/04_API_ENDPOINTS.md.

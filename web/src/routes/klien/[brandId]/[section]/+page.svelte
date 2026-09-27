@@ -1,19 +1,16 @@
 <script lang="ts">
-	// Section belum di-port — sesuai urutan fase (REWRITE/07). Empty state
-	// menyebut sebab + aksi berikutnya, bukan sekadar "belum tersedia".
+	// Fallback untuk section klien yang belum di-port (peta fase di
+	// REWRITE/07_EXECUTION_PHASES.md). Section yang sudah ada punya route
+	// sendiri dan tidak pernah masuk ke sini.
 	import { page } from '$app/state';
 	import { Construction } from '@lucide/svelte';
 
 	const section = $derived(page.params.section as string);
 	const fase: Record<string, string> = {
-		media: '5 — Media & Mitra',
-		campaigns: '7 — Campaigns & Flow',
-		publications: '6 — Publications & Publishing',
-		'link-monitor': '6 — Publications & Publishing',
-		analytics: '10 — PR & Analytics',
-		'audit-publikasi': '10 — PR & Analytics',
-		credits: '8 — Credits, Payments & Finance',
-		invoices: '8 — Credits, Payments & Finance'
+		distribution: '6 — Publications & Publishing',
+		members: '2 — Brands & Workspace',
+		notifications: '12 — Notifications & Comms',
+		'pr-calculator': '10 — PR & Analytics'
 	};
 	const label = $derived(fase[section] ?? 'fase berikutnya');
 	const title = $derived(section.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
