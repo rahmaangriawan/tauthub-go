@@ -11,6 +11,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -440,6 +441,8 @@
 	const fmtDate = (v: string | null | undefined) =>
 		v ? new Date(v).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 </script>
+
+<PageTitle title="Buat Konten Baru" />
 
 <section>
 	<header>

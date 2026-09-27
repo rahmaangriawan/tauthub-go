@@ -7,6 +7,7 @@
 	import { Bell, CircleCheck, Coins, Newspaper, TriangleAlert, Upload } from '@lucide/svelte';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const partnerId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || partnerId}`);
@@ -42,6 +43,8 @@
 	const fmt = (n: number) => (n ?? 0).toLocaleString('id-ID');
 	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID')}`;
 </script>
+
+<PageTitle title="Ringkasan Mitra" />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">

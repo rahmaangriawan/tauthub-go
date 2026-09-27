@@ -10,6 +10,7 @@
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime, fmtNum } from '$lib/admin-format';
 	import { platformError, isAccessDenied } from './_platform';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	type EcosystemStats = {
 		total_users: number; client_users: number; partner_users: number;
@@ -69,6 +70,8 @@
 	const tierLabel = (agent: string) => (agent ? agent.charAt(0).toUpperCase() + agent.slice(1) : agent);
 	const shortModel = (model: string | null) => (model ? model.split('/').pop() : 'default');
 </script>
+
+<PageTitle title="Dasbor Admin" />
 
 <section>
 	<header class="flex flex-wrap items-end justify-between gap-4 border-b pb-5">

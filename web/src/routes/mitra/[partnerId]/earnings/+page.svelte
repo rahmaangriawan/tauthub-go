@@ -7,6 +7,7 @@
 	import { Banknote, Wallet } from '@lucide/svelte';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const partnerId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || partnerId}`);
@@ -103,6 +104,8 @@
 		pending: 'Menunggu cair', settled: 'Siap ditarik', voided: 'Dibatalkan'
 	};
 </script>
+
+<PageTitle title="Penghasilan" />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">

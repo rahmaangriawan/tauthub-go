@@ -6,6 +6,7 @@
 	import { ExternalLink, Search, TriangleAlert } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	type View = 'publications' | 'domains';
 	let view = $state<View>('publications');
@@ -58,6 +59,8 @@
 	const stateLabel: Record<string, string> = { gone: 'Hilang (404)', unreachable: 'Tidak terjangkau', ok: 'Normal', unknown: 'Belum diperiksa' };
 	const healthLabel: Record<string, string> = { live: 'Aktif', unreachable: 'Tidak terjangkau', unknown: 'Belum diperiksa', token_missing: 'Token hilang' };
 </script>
+
+<PageTitle title="Pelacak 404" />
 
 <section>
 	<header>

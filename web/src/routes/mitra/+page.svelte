@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let error = $state('');
 	let loading = $state(true);
@@ -35,6 +36,8 @@
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 	});
 </script>
+
+<PageTitle title="Mitra" />
 
 <section>
 	<div class="app-card p-6 text-center">

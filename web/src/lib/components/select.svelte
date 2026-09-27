@@ -41,6 +41,8 @@
 	let trigger = $state<HTMLButtonElement | null>(null);
 	let menu = $state<HTMLDivElement | null>(null);
 	let pos = $state({ left: 0, top: 0, width: 0 });
+	let placement = $state<'down' | 'up'>('down');
+	let menuHeight = $state(0);
 	let activeIndex = $state(-1);
 
 	const selected = $derived(options.find((o) => o.value === value) ?? null);
@@ -52,7 +54,18 @@
 		const width = Math.max(minWidth, rect.width);
 		const maxLeft = Math.max(8, window.innerWidth - width - 8);
 		const left = align === 'end' ? Math.max(8, rect.right - width) : Math.min(rect.left, maxLeft);
-		pos = { left, top: rect.bottom + 4, width };
+		// Perkirakan tinggi menu dulu (dibatasi menuMaxHeight) supaya tahu apakah
+		// muat ke bawah. Bila tidak, menu dibuka KE ATAS (drop-up) dan tingginya
+		// dipangkas agar tetap di dalam viewport — seperti perilaku Radix.
+		const gap = 4;
+		const estimated = Math.min(options.length * 34 + 10, menuMaxHeight);
+		const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
+		const spaceAbove = rect.top - gap - 8;
+		const placeUp = spaceBelow < Math.min(estimated, 180) && spaceAbove > spaceBelow;
+		const available = placeUp ? spaceAbove : spaceBelow;
+		placement = placeUp ? 'up' : 'down';
+		menuHeight = Math.max(120, Math.min(estimated, available));
+		pos = { left, top: placeUp ? rect.top - gap - menuHeight : rect.bottom + gap, width };
 		activeIndex = Math.max(
 			0,
 			options.findIndex((o) => o.value === value)
@@ -162,10 +175,11 @@
 	<div
 		bind:this={menu}
 		class="zs-select-menu"
+		class:zs-select-menu-up={placement === 'up'}
 		role="listbox"
 		aria-label={ariaLabel}
 		tabindex="-1"
-		style="left: {pos.left}px; top: {pos.top}px; min-width: {pos.width}px; max-height: {menuMaxHeight}px;"
+		style="left: {pos.left}px; top: {pos.top}px; min-width: {pos.width}px; max-height: {menuMaxHeight}px; height: {menuHeight > 0 ? `${menuHeight}px` : 'auto'};"
 		onkeydown={onMenuKeydown}
 	>
 		{#each options as option, index (option.value)}
@@ -287,6 +301,22 @@
 		box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
 		animation: zsSelectIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
 		transform-origin: top center;
+	}
+	/* Drop-up: dibuka ke atas saat ruang di bawah tidak cukup. Animasi dan
+	   titik asal transform dibalik supaya arah geraknya konsisten. */
+	.zs-select-menu-up {
+		transform-origin: bottom center;
+		animation-name: zsSelectInUp;
+	}
+	@keyframes zsSelectInUp {
+		from {
+			opacity: 0;
+			transform: translateY(4px) scale(0.98);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+		}
 	}
 	.zs-select-menu:focus {
 		outline: none;

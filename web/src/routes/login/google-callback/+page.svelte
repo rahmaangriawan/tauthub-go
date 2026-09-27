@@ -3,6 +3,7 @@
 	// lalu redirect per role (admin → /admin, partner → /mitra, klien → brand pertama).
 	import { goto } from '$app/navigation';
 	import { apiRequest, clearSession, getAccessToken, storeSession } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let error = $state('');
 
@@ -61,6 +62,8 @@
 		};
 	});
 </script>
+
+<PageTitle title="Masuk dengan Google" />
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="app-card w-full max-w-[420px] p-6" style="margin-top:10vh">

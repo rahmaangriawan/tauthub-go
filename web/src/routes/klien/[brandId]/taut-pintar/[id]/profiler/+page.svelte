@@ -15,6 +15,7 @@
 	import ProfilerSections from './_sections.svelte';
 	import { emptyDraft, draftFromResponse, validateProfilerDraft } from '../../_shared';
 	import type { ProfilerDraft } from '../../_shared';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);
@@ -292,6 +293,8 @@
 		await goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/profiler/analyzing`, { replaceState: true });
 	}
 </script>
+
+<PageTitle title="Taut Pintar — The Profiler" />
 
 <main>
 	{#if crawling || crawlProgress > 0}

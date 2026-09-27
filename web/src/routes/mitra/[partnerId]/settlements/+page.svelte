@@ -5,6 +5,7 @@
 	import { ExternalLink, Receipt } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let loading = $state(true);
 	let data = $state<any>(null);
@@ -36,6 +37,8 @@
 		paid: 'Dibayar', failed: 'Gagal'
 	};
 </script>
+
+<PageTitle title="Invoice & Penarikan" />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">

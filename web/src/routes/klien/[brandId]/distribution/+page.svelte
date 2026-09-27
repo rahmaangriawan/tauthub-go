@@ -8,6 +8,7 @@
 	import { Coins } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
@@ -83,6 +84,8 @@
 	const tcLabel = (amountIdr: number, rate: number) =>
 		`${fmtNum(Math.round(Number(amountIdr || 0) / Math.max(1, rate)))} TC`;
 </script>
+
+<PageTitle title="Overview Distribusi" />
 
 <section>
 	<header>

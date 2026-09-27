@@ -12,6 +12,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
@@ -210,6 +211,8 @@
 		{ label: 'Tak Terjangkau', value: summary?.unreachable ?? 0, hint: 'Situs menolak akses atau sedang bermasalah', icon: TriangleAlert }
 	]);
 </script>
+
+<PageTitle title="Pelacak 404" />
 
 <section>
 	<header>

@@ -13,6 +13,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
@@ -26,8 +27,10 @@
 		media_categories?: string[] | null; media_status?: string | null; order_code?: string | null;
 		created_at: string; cancel_reason?: string | null;
 		pr_analysis?: {
-			message?: { score: number | null } | null;
-			sentiment?: string | null;
+			message?: { score: number | null; status?: string | null } | null;
+			// sentiment berupa objek {sentiment, confidence, status} — parity
+			// getPublicationPrAnalysis di app lama, bukan string.
+			sentiment?: { sentiment: string; confidence: number | null; status?: string | null } | null;
 			verification?: { status: string; compliance_score: number | null } | null;
 		} | null;
 	};
@@ -311,6 +314,8 @@
 	const trackTotal = $derived(Object.values(trackingCounts).reduce((s, n) => s + n, 0));
 </script>
 
+<PageTitle title="Publikasi" />
+
 <section>
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
@@ -480,7 +485,7 @@
 							{#if row.status === 'published' && row.pr_analysis}
 								<div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
 									{#if row.pr_analysis.sentiment}
-										<span class="rounded px-2 py-0.5" style="background-color: var(--muted);">Sentiment {SENTIMENT_LABEL[row.pr_analysis.sentiment] ?? row.pr_analysis.sentiment}</span>
+										<span class="rounded px-2 py-0.5" style="background-color: var(--muted);">Sentiment {SENTIMENT_LABEL[row.pr_analysis.sentiment.sentiment] ?? row.pr_analysis.sentiment.sentiment}</span>
 									{/if}
 									{#if row.pr_analysis.verification}
 										<span

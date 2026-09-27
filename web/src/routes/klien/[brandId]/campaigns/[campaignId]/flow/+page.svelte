@@ -7,6 +7,7 @@
 	import { page } from '$app/state';
 	import { LoaderCircle } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.campaignId as string);
@@ -16,6 +17,8 @@
 		void goto(base, { replaceState: true });
 	});
 </script>
+
+<PageTitle title="Alur Kampanye" />
 
 <main class="flex min-h-[50vh] items-center justify-center">
 	<p class="flex items-center gap-2 text-sm text-muted-foreground">

@@ -6,6 +6,7 @@
 	import { goto } from '$app/navigation';
 	import { Building } from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	type Brand = { id: string; public_id?: string | null };
 
@@ -80,6 +81,8 @@
 		busy = false;
 	}
 </script>
+
+<PageTitle title="Klien" />
 
 <main class="min-h-screen bg-background px-10 py-10 pb-16">
 	<div>

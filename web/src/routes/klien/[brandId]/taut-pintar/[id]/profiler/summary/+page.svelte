@@ -10,6 +10,7 @@
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../../_agent-steps.svelte';
 	import BriefView from '../_brief-view.svelte';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);
@@ -87,6 +88,8 @@
 		brief = data.brief;
 	}
 </script>
+
+<PageTitle title="Taut Pintar — Executive PR Brief" />
 
 <main>
 	<AgentSteps current={1} />

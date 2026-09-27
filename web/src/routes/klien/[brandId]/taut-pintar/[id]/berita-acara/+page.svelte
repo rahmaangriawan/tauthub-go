@@ -13,6 +13,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { MEDIA_LABEL, BUDGET_LABEL, STAGE_LABEL, fmtDateWib } from '../../_shared';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);
@@ -101,6 +102,8 @@
 	const businessIndustry = $derived(typeof businessProfile?.industry === 'string' ? (businessProfile.industry as string) : '-');
 	const budgetCfgText = $derived(budgetConfig ? JSON.stringify(budgetConfig) : '-');
 </script>
+
+<PageTitle title="Berita Acara Kampanye" />
 
 <main class="py-4">
 	<div class="no-print mb-4 flex items-center justify-between gap-3">

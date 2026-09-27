@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { Rss, TriangleAlert } from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	type Feed = {
 		id: string; media_name: string | null; name: string; item_status: string;
@@ -50,6 +51,8 @@
 	const installColor = (s: string) => (s === 'verified' ? 'var(--success)' : s === 'failed' ? 'var(--destructive)' : 'var(--warning)');
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 </script>
+
+<PageTitle title="Sindikasi Konten" />
 
 <section>
 	<header>

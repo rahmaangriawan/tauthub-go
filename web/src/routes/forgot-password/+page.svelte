@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/page-title.svelte';
 	// Port /forgot-password — selalu netral (anti-enumerasi, parity API).
 	let email = $state('');
 	let busy = $state(false);
@@ -28,6 +29,8 @@
 		}
 	}
 </script>
+
+<PageTitle title="Lupa Password" />
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="app-card w-full max-w-sm p-6">

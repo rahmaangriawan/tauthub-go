@@ -5,6 +5,7 @@
 	import { onMount } from 'svelte';
 	import { Check, Copy, Rss, RefreshCw, Trash2, TriangleAlert } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	type Feed = {
 		id: string; media_id: string | null; media_name: string | null; media_website_url: string | null;
@@ -123,6 +124,8 @@
 	const installColor = (s: string) => (s === 'verified' ? 'var(--success)' : s === 'failed' ? 'var(--destructive)' : 'var(--warning)');
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 </script>
+
+<PageTitle title="RSS Feeds" />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">

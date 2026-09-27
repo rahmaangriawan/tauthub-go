@@ -5,6 +5,7 @@
 	import { page } from '$app/state';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -94,6 +95,8 @@
 		}
 	}
 </script>
+
+<PageTitle title="Editor Artikel" />
 
 <section>
 	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandUrl}/generate`}>← Generate</a>

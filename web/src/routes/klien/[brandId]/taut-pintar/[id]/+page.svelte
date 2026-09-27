@@ -16,6 +16,7 @@
 	import { LoaderCircle } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);
@@ -105,6 +106,8 @@
 		}
 	}
 </script>
+
+<PageTitle title="Taut Pintar — Kampanye" />
 
 <div class="flex items-center gap-2 py-10 text-sm text-muted-foreground">
 	<LoaderCircle size={18} class="animate-spin" />

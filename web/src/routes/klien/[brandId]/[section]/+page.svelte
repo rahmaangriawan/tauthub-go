@@ -4,6 +4,7 @@
 	// sendiri dan tidak pernah masuk ke sini.
 	import { page } from '$app/state';
 	import { Construction } from '@lucide/svelte';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const section = $derived(page.params.section as string);
 	const fase: Record<string, string> = {
@@ -15,6 +16,8 @@
 	const label = $derived(fase[section] ?? 'fase berikutnya');
 	const title = $derived(section.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
 </script>
+
+<PageTitle title="Bagian Klien" />
 
 <section class="app-card px-8 py-10 text-center">
 	<div class="mx-auto flex h-11 w-11 items-center justify-center rounded-xl" style="background-color: var(--accent); color: var(--accent-foreground);">

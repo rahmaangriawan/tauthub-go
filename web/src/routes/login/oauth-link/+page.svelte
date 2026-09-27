@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { apiRequest, authErrorMessage, storeSession } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let password = $state('');
 	let busy = $state(false);
@@ -33,6 +34,8 @@
 		}
 	}
 </script>
+
+<PageTitle title="Hubungkan Akun Google" />
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="app-card w-full max-w-[440px] p-6" style="margin-top:10vh">

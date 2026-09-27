@@ -7,6 +7,7 @@
 	import { page } from '$app/state';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -100,6 +101,8 @@
 	const fmtDate = (v: string | null) =>
 		v ? new Date(v).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 </script>
+
+<PageTitle title="Notifikasi" />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">

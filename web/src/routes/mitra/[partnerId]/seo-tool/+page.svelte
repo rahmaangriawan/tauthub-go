@@ -5,6 +5,7 @@
 	import { Gauge, Search } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let loading = $state(true);
 	let history = $state<any[]>([]);
@@ -82,6 +83,8 @@
 		return 'var(--destructive, #c52b36)';
 	}
 </script>
+
+<PageTitle title="SEO & Performa" />
 
 <section>
 	<header>

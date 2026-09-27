@@ -35,6 +35,8 @@
 	let trigger = $state<HTMLButtonElement | null>(null);
 	let menu = $state<HTMLDivElement | null>(null);
 	let pos = $state({ left: 0, top: 0 });
+	let placement = $state<'down' | 'up'>('down');
+	let menuMaxHeight = $state(440);
 
 	function timeAgo(value: string) {
 		const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
@@ -152,9 +154,18 @@
 		}
 		const rect = trigger?.getBoundingClientRect();
 		const width = Math.min(400, window.innerWidth - 32);
+		// Drop-up bila ruang di bawah tidak cukup untuk daftar (360px) —
+		// supaya menu tidak terpotong di bawah viewport.
+		const gap = 8;
+		const estimated = Math.min(440, window.innerHeight - 24);
+		const spaceBelow = window.innerHeight - (rect?.bottom ?? 0) - gap - 8;
+		const spaceAbove = (rect?.top ?? 0) - gap - 8;
+		const placeUp = spaceBelow < Math.min(estimated, 240) && spaceAbove > spaceBelow;
+		placement = placeUp ? 'up' : 'down';
+		menuMaxHeight = Math.max(160, Math.min(estimated, placeUp ? spaceAbove : spaceBelow));
 		pos = {
 			left: rect ? Math.max(8, rect.right - width) : 8,
-			top: (rect?.bottom ?? 0) + 8
+			top: placeUp && rect ? rect.top - gap - menuMaxHeight : (rect?.bottom ?? 0) + gap
 		};
 		open = true;
 	}
@@ -203,9 +214,10 @@
 	<div
 		bind:this={menu}
 		class="notif-menu"
+		class:notif-menu-up={placement === 'up'}
 		role="menu"
 		aria-label="Notifikasi"
-		style="left: {pos.left}px; top: {pos.top}px; width: min(400px, calc(100vw - 32px));"
+		style="left: {pos.left}px; top: {pos.top}px; width: min(400px, calc(100vw - 32px)); max-height: {menuMaxHeight}px;"
 	>
 		<div class="notif-header">
 			<span class="notif-title">Notifikasi</span>
@@ -315,7 +327,6 @@
 		z-index: 1100;
 		display: flex;
 		flex-direction: column;
-		max-height: min(440px, calc(100vh - 80px));
 		overflow: hidden;
 		border: 1px solid var(--border);
 		border-radius: 12px;
@@ -324,6 +335,21 @@
 		box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
 		animation: notifIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
 		transform-origin: top right;
+	}
+	/* Drop-up: dibuka ke atas saat ruang di bawah tidak cukup. */
+	.notif-menu-up {
+		transform-origin: bottom right;
+		animation-name: notifInUp;
+	}
+	@keyframes notifInUp {
+		from {
+			opacity: 0;
+			transform: translateY(4px) scale(0.98);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+		}
 	}
 	@keyframes notifIn {
 		from {
@@ -377,8 +403,11 @@
 		font-size: 12px;
 	}
 	/* Hanya daftar yang scroll; header & footer tetap. */
+	/* Daftar mengisi sisa tinggi menu (menu sendiri dibatasi via style
+	   max-height sesuai ruang yang tersedia). */
 	.notif-list {
-		max-height: min(360px, calc(100vh - 180px));
+		flex: 1 1 auto;
+		min-height: 0;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		padding: 4px 6px 6px;

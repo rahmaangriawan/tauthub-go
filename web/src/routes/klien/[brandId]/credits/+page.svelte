@@ -8,6 +8,7 @@
 	import { apiRequest, ensureValidSession, readApiError, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -175,6 +176,8 @@
 	const fmt = (n: number) => n.toLocaleString('id-ID');
 	const fmtDate = (v: string) => new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
 </script>
+
+<PageTitle title="Kredit Saldo" />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">

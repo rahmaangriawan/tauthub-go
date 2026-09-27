@@ -5,6 +5,7 @@
 	import { ShieldCheck } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -42,6 +43,8 @@
 	const compliance = $derived(audited.length === 0 ? null : Math.round((healthy / audited.length) * 100));
 	const fmtDate = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '—');
 </script>
+
+<PageTitle title="Audit Publikasi" />
 
 <section>
 	<header>

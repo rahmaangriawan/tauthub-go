@@ -8,6 +8,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -229,6 +230,8 @@
 				? 'background-color: var(--warning-soft); color: var(--warning);'
 				: 'background-color: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive);';
 </script>
+
+<PageTitle title="Knowledge Base" />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">

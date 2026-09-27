@@ -13,6 +13,7 @@
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
@@ -232,6 +233,8 @@
 		return () => clearInterval(timer);
 	});
 </script>
+
+<PageTitle title="Beranda Klien" />
 
 {#snippet statusBadge(status: string, label: string)}
 	{@const color = STATUS_COLORS[status] ?? 'gray'}

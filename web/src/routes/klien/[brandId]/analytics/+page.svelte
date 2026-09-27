@@ -5,6 +5,7 @@
 	import { BarChart3 } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -49,6 +50,8 @@
 	const days = $derived(Object.keys(data?.daily ?? {}).sort().reverse());
 	const fmt = (n: number) => n.toLocaleString('id-ID');
 </script>
+
+<PageTitle title="Analisis Kinerja" />
 
 <section>
 	<header class="flex flex-wrap items-end justify-between gap-3">

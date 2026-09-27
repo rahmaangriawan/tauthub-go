@@ -3,11 +3,14 @@
 	// Port apps/web/src/app/admin/media-intelligence/page.tsx — redirect agar link lama tetap berfungsi.
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	onMount(() => {
 		void goto('/admin/media', { replaceState: true });
 	});
 </script>
+
+<PageTitle title="Media Intelligence" />
 
 <section class="w-full">
 	<p class="mt-6 text-sm text-muted-foreground">

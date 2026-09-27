@@ -8,6 +8,7 @@
 	import Select from '$lib/components/select.svelte';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const partnerId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || partnerId}`);
@@ -230,6 +231,8 @@
 	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID')}`;
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 </script>
+
+<PageTitle title="Publikasi" />
 
 <section>
 	<header>

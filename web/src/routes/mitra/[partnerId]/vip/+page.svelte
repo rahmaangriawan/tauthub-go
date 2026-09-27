@@ -5,6 +5,7 @@
 	import { onMount } from 'svelte';
 	import { Award, Globe } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let loading = $state(true);
 	let vip = $state<any>(null);
@@ -63,6 +64,8 @@
 		seo_tools: 'Alat SEO', keyword_research: 'Riset kata kunci'
 	};
 </script>
+
+<PageTitle title="VIP Dashboard" />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">

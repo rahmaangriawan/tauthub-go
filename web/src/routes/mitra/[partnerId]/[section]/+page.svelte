@@ -4,11 +4,14 @@
 	// tanpa membuat menu baru di luar app lama.
 	import { page } from '$app/state';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const partnerId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || partnerId}`);
 	const section = $derived(page.params.section as string);
 </script>
+
+<PageTitle title="Halaman Tidak Ditemukan" />
 
 <section>
 	<div class="app-card p-6 text-center">

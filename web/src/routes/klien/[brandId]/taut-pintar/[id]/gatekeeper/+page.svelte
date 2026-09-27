@@ -10,6 +10,7 @@
 	import { sanitizeHtml } from '$lib/sanitize-html';
 	import AgentSteps from '../../_agent-steps.svelte';
 	import { MANUAL_PROFILER_REASON, fmtIdr, fmtTrafficFull, toJakartaDisplay, toLocalInput, dt } from '../../_shared';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);
@@ -332,6 +333,8 @@
 					? 'background-color: var(--destructive-foreground, #fdecee); color: var(--destructive);'
 					: 'background-color: var(--muted); color: var(--muted-foreground);';
 </script>
+
+<PageTitle title="Taut Pintar — The Gatekeeper" />
 
 <main>
 	<div class="flex flex-wrap items-center justify-between gap-3">

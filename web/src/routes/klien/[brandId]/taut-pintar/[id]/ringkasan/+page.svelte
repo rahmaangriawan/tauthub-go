@@ -13,6 +13,7 @@
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
 	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, toJakartaDisplay } from '../../_shared';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);
@@ -243,6 +244,8 @@
 	};
 	const AVA = ['var(--accent)', 'var(--success-soft)', 'var(--warning-soft)', 'var(--muted)', 'var(--accent)', 'var(--success-soft)'];
 </script>
+
+<PageTitle title="Taut Pintar — Ringkasan Distribusi" />
 
 <main>
 	<AgentSteps current={4} tone={bannerState === 'published' ? 'published' : bannerState === 'waiting' ? 'waiting' : undefined} extra="ringkasan" lockedSteps={manualFlow ? [1] : undefined} lockedReason={MANUAL_PROFILER_REASON} />

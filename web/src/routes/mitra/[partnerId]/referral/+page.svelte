@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { Check, MousePointerClick, Share2, Users } from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let loading = $state(true);
 	let data = $state<any>(null);
@@ -36,6 +37,8 @@
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '—');
 	const ratePct = $derived(((data?.rate_bps ?? 0) / 100).toFixed(2));
 </script>
+
+<PageTitle title="Referral Mitra" />
 
 <section>
 	<header>

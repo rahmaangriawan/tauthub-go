@@ -2,6 +2,7 @@
 	// Port /reset-password — token dari query, password baru min 10.
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let newPassword = $state('');
 	let busy = $state(false);
@@ -38,6 +39,8 @@
 		}
 	}
 </script>
+
+<PageTitle title="Reset Password" />
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="app-card w-full max-w-sm p-6">

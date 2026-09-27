@@ -10,6 +10,7 @@
 		apiRequest, readApiError, ensureValidSession, getStoredSession,
 		updateStoredUser, AUTH_EXPIRED_EVENT, type AuthUser
 	} from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -181,6 +182,8 @@
 		});
 	}
 </script>
+
+<PageTitle title="Profil & Akun" />
 
 <section>
 	<header>

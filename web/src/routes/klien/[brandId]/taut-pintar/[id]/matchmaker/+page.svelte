@@ -10,6 +10,7 @@
 	import AgentSteps from '../../_agent-steps.svelte';
 	import Select from '$lib/components/select.svelte';
 	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, humanizeReason, fmtTrafficShort, formatTraffic } from '../../_shared';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);
@@ -333,6 +334,8 @@
 				? 'background-color: var(--accent); color: var(--accent-foreground);'
 				: 'background-color: var(--muted); color: var(--muted-foreground);';
 </script>
+
+<PageTitle title="Taut Pintar — The Matchmaker" />
 
 <main>
 	<div class="flex flex-wrap items-center justify-between gap-3">

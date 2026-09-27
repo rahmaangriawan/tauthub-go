@@ -6,6 +6,7 @@
 	import { Bot, Send, Sparkles, User } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -56,6 +57,8 @@
 		}
 	}
 </script>
+
+<PageTitle title="Agen Tauthub" />
 
 <section class="app-card flex h-[calc(100dvh-160px)] flex-col">
 	<header class="flex items-center gap-2.5 border-b px-5 py-3.5">

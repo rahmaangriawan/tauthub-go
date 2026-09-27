@@ -10,6 +10,7 @@
 		updateStoredUser,
 		type AuthUser
 	} from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let user = $state<AuthUser | null>(null);
 
@@ -124,6 +125,8 @@
 		}
 	}
 </script>
+
+<PageTitle title="Profil" />
 
 <main class="px-4 py-8">
 	<h1 class="text-2xl font-semibold tracking-tight">Profil</h1>

@@ -5,6 +5,7 @@
 	import { onMount } from 'svelte';
 	import { Bell, Check, Plus, Trash2, Webhook } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let loading = $state(true);
 	let items = $state<any[]>([]);
@@ -106,6 +107,8 @@
 
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 </script>
+
+<PageTitle title="Notifikasi" />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">

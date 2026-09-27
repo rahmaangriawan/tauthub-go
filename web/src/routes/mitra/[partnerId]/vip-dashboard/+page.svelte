@@ -9,6 +9,7 @@
 		MousePointerClick, Users, Wallet
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	type WalletHistory = {
 		id: string; kind: string; amount: number; client_price: number; status: string;
@@ -159,6 +160,8 @@
 		{ label: 'Estimasi CPA', value: idr((domains?.stats?.approved ?? 0) * (vip?.cpaRate ?? 15000)), icon: Coins, color: 'var(--primary)' }
 	]);
 </script>
+
+<PageTitle title="VIP Dashboard" />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">

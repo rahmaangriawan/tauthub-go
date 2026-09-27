@@ -6,6 +6,7 @@
 	import { FileText, Save, Trash2, Upload } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let loading = $state(true);
 	let partner = $state<any>(null);
@@ -127,6 +128,8 @@
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 	const docStatus: Record<string, string> = { pending: 'Menunggu review', verified: 'Terverifikasi', revision: 'Perlu revisi' };
 </script>
+
+<PageTitle title="Konfigurasi" />
 
 <section>
 	<header>

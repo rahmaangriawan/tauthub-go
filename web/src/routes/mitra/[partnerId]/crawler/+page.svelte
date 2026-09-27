@@ -6,6 +6,7 @@
 	import { Copy, RefreshCw, Server, ShieldCheck, Trash2, Zap } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	let loading = $state(true);
 	let media = $state<any[]>([]);
@@ -91,6 +92,8 @@
 		blocked_origin: 'Diblokir origin', rate_limited: 'Rate limited', signature_rejected: 'Signature ditolak'
 	};
 </script>
+
+<PageTitle title="Akses Crawler" />
 
 <section>
 	<header>

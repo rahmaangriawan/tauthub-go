@@ -6,6 +6,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	const routeId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || routeId}`);
@@ -14,6 +15,8 @@
 		void goto(`${base}/integrations#blogger${page.url.search}`, { replaceState: true });
 	});
 </script>
+
+<PageTitle title="Blogger" />
 
 <section>
 	<div class="app-card p-6 text-center">

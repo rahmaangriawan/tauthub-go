@@ -12,6 +12,7 @@
 	import Connections from './_connections.svelte';
 	import PublishingApi from './_publishing-api.svelte';
 	import Blogger from './_blogger.svelte';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	type TabKey = 'terms' | 'wordpress' | 'web-custom' | 'blogger';
 
@@ -86,6 +87,8 @@
 		history.replaceState(null, '', `${page.url.pathname}${page.url.search}${hash}`);
 	}
 </script>
+
+<PageTitle title="Integrasi" />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">

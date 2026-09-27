@@ -18,6 +18,7 @@
 	import Select from '$lib/components/select.svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
 	import './media.css';
+	import PageTitle from '$lib/components/page-title.svelte';
 
 	type Media = {
 		id: string; name: string; category: string | null; categories?: string[];
@@ -436,6 +437,8 @@
 		}
 	}
 </script>
+
+<PageTitle title="Eksplorasi Media" />
 
 <div class="container">
 	{#if err}<div class="errorBanner">{err}</div>{/if}
