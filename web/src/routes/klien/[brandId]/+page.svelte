@@ -1,561 +1,1419 @@
 <script lang="ts">
-	// Beranda klien — port section `overview` (client-overview.tsx) app lama:
-	// header sambutan, 4 kartu KPI + sparkline 7 hari, Lanjutkan Pekerjaan,
-	// Kampanye Aktif, Status Publikasi, Mulai dengan Cepat, Aktivitas Terbaru.
+	// Beranda Klien — port 1:1 dari overview-dashboard.tsx & overview-dashboard.module.css
+	// app Next.js (bukan client-overview.tsx lama).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import {
-		ArrowRight, CheckCircle, Clock, Coins, History, Megaphone, Newspaper, Plus,
-		Rocket, ScrollText, Target
+		ArrowRight, BookOpen, CircleCheck, Coins, FileText, Globe,
+		Lightbulb, Lock, ShieldCheck, Sparkles, TrendingUp, X
 	} from '@lucide/svelte';
+	import { apiRequest, getStoredSession, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
-	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
-	import { getSwrCache, setSwrCache } from '$lib/swr-cache.svelte';
+	import { getI18n } from '$lib/i18n/i18n.svelte';
+	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
+	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
-	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
 	const brandUrl = $derived(getBrandUrlId() || brandId);
+	const fallbackBase = $derived(`/klien/${brandUrl}`);
+	const { t, locale } = getI18n();
 
-	type WalletSummary = { available_tc: number; reserved_tc: number; captured_tc: number; total_tc: number };
-	type OverviewTrends = { campaigns: number[]; content: number[]; publications: number[]; credit: number[] };
-	type Campaign = {
-		id: string; name: string; status: string; article_quota: number; budget: number;
-		publication_count: number; content_intake_id?: string | null; taut_status?: string | null;
-		created_at: string; updated_at?: string;
-	};
-	type PublicationItem = {
-		id: string; status: string; document_title?: string | null; media_name?: string | null; created_at: string;
-	};
-	type IntakeItem = {
-		id: string; mode: string; content_type_code: string | null; topic: string | null; status: string;
-		readiness_score: number | null; created_at: string; updated_at: string;
-	};
-	type ContentJobItem = { id: string; topic?: string; status: string; current_step: string; progress: number; created_at: string };
-	type AuditActivity = { id: string; action: string; target_type: string; target_id: string; created_at: string };
-	type DashboardStats = {
-		content_in_progress: number; waiting_review: number; failed_jobs: number;
-		monthly_articles: { used: number; limit: number; percent: number }; recent_activity: AuditActivity[];
-	};
-	type OverviewPayload = {
-		brand_id: string; public_id?: string; user?: { display_name?: string; name?: string; email?: string };
-		wallet?: WalletSummary | null; campaigns?: Campaign[]; intakes?: IntakeItem[]; jobs?: ContentJobItem[];
-		publications?: PublicationItem[]; dashboardStats?: DashboardStats | null; trends?: OverviewTrends | null;
+	type Wallet = { available_tc: number; reserved_tc: number; captured_tc: number; rate_idr: number };
+	type Pkg = { tc: number; idr: number };
+	type PubRow = {
+		id: string;
+		document_title: string;
+		media_name: string;
+		status: string;
+		client_price: number;
 	};
 
-	let data = $state<OverviewPayload | null>(null);
+	const STATUS_COLORS: Record<string, string> = {
+		published: 'green',
+		completed: 'green',
+		processing: 'blue',
+		queued: 'gray',
+		scheduled: 'blue',
+		failed: 'red',
+		rejected: 'red',
+		draft: 'gray',
+		cancelled: 'gray',
+		canceled: 'gray',
+		waiting_partner: 'amber',
+		partner_approved: 'green',
+		partner_rejected: 'red',
+		pending: 'amber',
+		retrying: 'amber'
+	};
+
+	function tcLabel(rupiah: number, rate: number): string {
+		return Math.max(0, Math.round(Number(rupiah) / Math.max(1, rate))).toLocaleString('id-ID');
+	}
+
+	function startOfMonth(d = new Date()) {
+		return new Date(d.getFullYear(), d.getMonth(), 1);
+	}
+	function lastMonthRange() {
+		const now = new Date();
+		const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+		const to = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+		return { from, to };
+	}
+
+	let userName = $state('');
+	let wallet = $state<Wallet | null>(null);
+	let tcConfig = $state<{ rate_idr: number; topup_packages: Pkg[] } | null>(null);
+	let reports = $state<{ reach: number; clicks: number } | null>(null);
+	let prevReports = $state<{ reach: number; clicks: number } | null>(null);
+	let pubs = $state<PubRow[]>([]);
+	let pubsTotal = $state(0);
 	let loading = $state(true);
-	let error = $state('');
 
-	const cacheKey = $derived(`overview:${brandId}`);
+	// Popup "Buat Kampanye"
+	let createOpen = $state(false);
+	let createBusy = $state(false);
+	let createErr = $state('');
+	let createName = $state('');
+	let createMode = $state<'ai' | 'manual' | null>(null);
+
+	// Popup Top Up
+	let topUpOpen = $state(false);
+	let topUpBusy = $state(false);
+	let topUpPayment = $state<{ payment_url: string | null; amount_idr: number; tc: number } | null>(null);
+	let topUpError = $state('');
+	let topUpKey = '';
+
+	async function load() {
+		try {
+			const [creditsRes, pubsRes, reportsRes, prevRes] = await Promise.all([
+				apiRequest(`/v1/brands/${brandId}/credits?limit=1`),
+				apiRequest(`/v1/brands/${brandId}/publications?limit=6`),
+				apiRequest(
+					`/v1/brands/${brandId}/reports?from=${startOfMonth().toISOString()}&to=${new Date().toISOString()}`
+				),
+				apiRequest(
+					`/v1/brands/${brandId}/reports?from=${lastMonthRange().from.toISOString()}&to=${lastMonthRange().to.toISOString()}`
+				)
+			]);
+			if (creditsRes.ok) {
+				const cd = await creditsRes.json();
+				wallet = cd.wallet ?? null;
+				tcConfig = cd.tc_config ?? null;
+			}
+			if (pubsRes.ok) {
+				const pd = await pubsRes.json();
+				pubs = pd.publications ?? [];
+				pubsTotal = pd.total ?? 0;
+			}
+			if (reportsRes.ok) {
+				const rd = await reportsRes.json();
+				reports = { reach: rd.summary?.estimated_reach ?? 0, clicks: rd.summary?.outbound_clicks ?? 0 };
+			}
+			if (prevRes.ok) {
+				const pd = await prevRes.json();
+				prevReports = {
+					reach: pd.summary?.estimated_reach ?? 0,
+					clicks: pd.summary?.outbound_clicks ?? 0
+				};
+			}
+			const session = getStoredSession();
+			if (session?.user?.display_name) userName = session.user.display_name;
+		} catch {
+			/* silent */
+		} finally {
+			loading = false;
+		}
+	}
 
 	onMount(() => {
-		void (async () => {
-			const fresh = await ensureValidSession();
-			if (!fresh) return;
-			const cached = getSwrCache<OverviewPayload>(cacheKey);
-			if (cached) {
-				data = cached;
-				loading = false;
-			}
-			await load();
-			loading = false;
-		})();
-
-		// Revalidate saat tab kembali fokus (parity OVERVIEW_CACHE + focus listener).
-		const onFocus = () => void load();
-		window.addEventListener('focus', onFocus);
+		void load();
+		function onSuccess() {
+			void load();
+		}
+		window.addEventListener('tauthub:topup-success', onSuccess);
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
 		return () => {
-			window.removeEventListener('focus', onFocus);
+			window.removeEventListener('tauthub:topup-success', onSuccess);
 			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 		};
 	});
 
-	async function load() {
-		error = '';
+	const available = $derived(wallet?.available_tc ?? 0);
+	const reserved = $derived(wallet?.reserved_tc ?? 0);
+	const reach = $derived(reports?.reach ?? 0);
+	const clicks = $derived(reports?.clicks ?? 0);
+	const prevReach = $derived(prevReports?.reach ?? 0);
+
+	const reachDelta = $derived.by(() => {
+		if (prevReach <= 0) return null;
+		const pct = Math.round(((reach - prevReach) / prevReach) * 100);
+		if (pct > 0) return `up:${pct}`;
+		if (pct < 0) return `down:${Math.abs(pct)}`;
+		return 'flat';
+	});
+
+	const fmt = (n: number) => n.toLocaleString(locale);
+
+	async function createTautCampaign(mode: 'ai' | 'manual') {
+		const campaignName = createName.trim();
+		if (campaignName.length < 2) {
+			createErr = 'Nama kampanye minimal 2 karakter.';
+			return;
+		}
+		createBusy = true;
+		createErr = '';
 		try {
-			const res = await apiRequest(`/v1/brands/${brandId}/overview`);
-			if (res.ok) {
-				const payload = (await res.json()) as OverviewPayload;
-				data = payload;
-				setSwrCache(cacheKey, payload, 60_000);
+			const res = await apiRequest(`/v1/brands/${brandId}/taut/campaigns`, {
+				method: 'POST',
+				body: JSON.stringify({
+					name: campaignName,
+					starts_at: new Date().toISOString(),
+					entry_mode: mode
+				})
+			});
+			if (!res.ok) throw new Error('Gagal membuat kampanye.');
+			const data = (await res.json()) as { id: string };
+			await goto(
+				mode === 'ai'
+					? `${fallbackBase}/taut-pintar/${data.id}/profiler`
+					: `${fallbackBase}/taut-pintar/${data.id}/matchmaker?mode=manual`
+			);
+		} catch (reason) {
+			createErr = reason instanceof Error ? reason.message : 'Gagal membuat kampanye.';
+			createBusy = false;
+		}
+	}
+
+	async function handleTopup(tc: number, invoice?: TopUpInvoiceData | null) {
+		topUpBusy = true;
+		topUpError = '';
+		topUpPayment = null;
+		const key = topUpKey || (topUpKey = crypto.randomUUID());
+		try {
+			const result = await submitTopUp(`/v1/brands/${brandId}`, tc, key, invoice);
+			if (result.status === 'paid') {
+				topUpKey = crypto.randomUUID();
+				showToast('Top Up berhasil! Saldo telah diperbarui.', 'success');
+				topUpOpen = false;
+				window.dispatchEvent(new CustomEvent('tauthub:topup-success'));
 				return;
 			}
-			error = 'Gagal memuat ringkasan.';
+			if (result.status === 'expired' || result.status === 'cancelled' || result.status === 'failed') {
+				topUpKey = crypto.randomUUID();
+				topUpError = 'Pembayaran sebelumnya batal atau kedaluwarsa. Silakan coba lagi.';
+				return;
+			}
+			topUpPayment = { payment_url: result.payment_url, amount_idr: result.amount_idr, tc: result.tc };
+			if (!result.payment_url) {
+				showToast('Top Up berhasil!', 'success');
+				topUpOpen = false;
+				window.dispatchEvent(new CustomEvent('tauthub:topup-success'));
+				topUpKey = crypto.randomUUID();
+			}
 		} catch {
-			error = 'Gagal memuat ringkasan.';
+			topUpError = 'Terjadi kesalahan.';
+		} finally {
+			topUpBusy = false;
 		}
 	}
 
-	/* ─── Derivasi (parity client-overview) ─── */
-	const campaigns = $derived(data?.campaigns ?? []);
-	const intakes = $derived(data?.intakes ?? []);
-	const jobs = $derived(data?.jobs ?? []);
-	const publications = $derived(data?.publications ?? []);
-	const wallet = $derived(data?.wallet ?? null);
-	const trends = $derived(data?.trends ?? null);
-	const dashboardStats = $derived(data?.dashboardStats ?? null);
+	let insightIndex = $state(0);
+	const insightMessages = [
+		'Kinerja kampanye Anda menunjukkan tren positif. Bulan ini tercatat 13 publikasi aktif yang terus memperluas jangkauan brand ke audiens yang relevan.',
+		'Berdasarkan profil Anda, AI Matchmaker menemukan 3 media mainstream baru dengan audiens yang sangat cocok untuk produk Anda. Selain itu, artikel terakhir Anda berhasil lolos Gatekeeper tanpa revisi.'
+	];
 
-	const userName = $derived(
-		data?.user?.display_name?.trim() || data?.user?.name?.trim() || getStoredSession()?.user?.display_name?.trim() || ''
-	);
-
-	const activeCampaigns = $derived(campaigns.filter((c) => c.status === 'active'));
-	const isBrandEmpty = $derived(
-		!loading && campaigns.length === 0 && intakes.length === 0 && jobs.length === 0 && publications.length === 0
-	);
-
-	const totalContentCount = $derived(dashboardStats?.monthly_articles?.used ?? jobs.length + intakes.length);
-
-	const publicationCounts = $derived.by(() => {
-		let published = 0;
-		let pending = 0;
-		let failed = 0;
-		for (const pub of publications) {
-			if (pub.status === 'published') published += 1;
-			else if (['draft', 'ready', 'scheduled', 'in_review', 'submitting', 'queued'].includes(pub.status)) pending += 1;
-			else if (['failed', 'rejected', 'cancelled'].includes(pub.status)) failed += 1;
-		}
-		return { published, pending, failed, total: publications.length };
+	$effect(() => {
+		const timer = setInterval(() => {
+			insightIndex = (insightIndex + 1) % insightMessages.length;
+		}, 2600);
+		return () => clearInterval(timer);
 	});
-
-	type ContinueItem = {
-		id: string; title: string; type: string; statusLabel: string;
-		readiness?: number | null; date: string; actionUrl: string; actionText: string; sortTime: number;
-	};
-
-	const continueItems = $derived.by(() => {
-		const items: ContinueItem[] = [];
-		const intakeIdsCoveredByCampaigns = new Set<string>();
-
-		for (const campaign of campaigns) {
-			const hasDraftIntake = Boolean(campaign.content_intake_id);
-			const isDraftCampaign = campaign.status === 'draft';
-			// Alur baru (Taut Pintar): kampanye dianggap berjalan bila taut_status
-			// belum selesai. Nilai terminal: submitted/scheduled/distributed.
-			const tautStatus = (campaign.taut_status ?? '').toLowerCase();
-			const hasActiveFlow = !['submitted', 'scheduled', 'distributed'].includes(tautStatus);
-			if (hasDraftIntake || isDraftCampaign || hasActiveFlow) {
-				if (campaign.content_intake_id) intakeIdsCoveredByCampaigns.add(campaign.content_intake_id);
-				const dateStr = campaign.updated_at || campaign.created_at;
-				items.push({
-					id: `campaign-draft-${campaign.id}`,
-					title: campaign.name,
-					type: 'Draf Kampanye',
-					statusLabel: 'Edit Draf',
-					date: dateStr,
-					actionUrl: `/klien/${brandUrl}/taut-pintar/${campaign.id}`,
-					actionText: 'Lanjutkan Draf',
-					sortTime: dateStr ? new Date(dateStr).getTime() : 0
-				});
-			}
-		}
-
-		for (const job of jobs) {
-			if (job.status === 'waiting_outline_approval') {
-				items.push({
-					id: `job-${job.id}`, title: job.topic || 'Pembuatan Konten AI', type: 'Artikel AI',
-					statusLabel: 'Perlu Persetujuan Outline', date: job.created_at,
-					actionUrl: `/klien/${brandUrl}/generate`, actionText: 'Tinjau Outline',
-					sortTime: new Date(job.created_at).getTime()
-				});
-			} else if (['queued', 'running'].includes(job.status)) {
-				items.push({
-					id: `job-${job.id}`, title: job.topic || 'Pembuatan Konten AI', type: 'Artikel AI',
-					statusLabel: `Sedang Diproses (${job.progress}%)`, date: job.created_at,
-					actionUrl: `/klien/${brandUrl}/generate`, actionText: 'Lihat Progress',
-					sortTime: new Date(job.created_at).getTime()
-				});
-			}
-		}
-
-		for (const intake of intakes) {
-			if (intakeIdsCoveredByCampaigns.has(intake.id)) continue;
-			if (intake.status === 'draft' || !intake.status) {
-				const dateStr = intake.updated_at || intake.created_at;
-				items.push({
-					id: `intake-${intake.id}`, title: intake.topic || 'Draft Konten Baru',
-					type: intake.content_type_code?.toUpperCase() || 'Content Intake', statusLabel: 'Draft',
-					readiness: intake.readiness_score, date: dateStr,
-					actionUrl: `/klien/${brandUrl}/dashboard`, actionText: 'Lanjutkan',
-					sortTime: dateStr ? new Date(dateStr).getTime() : 0
-				});
-			}
-		}
-
-		items.sort((a, b) => b.sortTime - a.sortTime);
-		return items.slice(0, 4);
-	});
-
-	/* ─── Helpers format (parity) ─── */
-	function formatTc(value: number | null | undefined): string {
-		if (value === null || value === undefined || Number.isNaN(value)) return '—';
-		return `${value.toLocaleString('id-ID')} Kredit`;
-	}
-
-	function formatRelativeTime(dateString: string | null | undefined): string {
-		if (!dateString) return '';
-		const date = new Date(dateString);
-		const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
-		if (diffSec < 60) return 'Baru saja';
-		const diffMin = Math.floor(diffSec / 60);
-		if (diffMin < 60) return `${diffMin} menit lalu`;
-		const diffHours = Math.floor(diffMin / 60);
-		if (diffHours < 24) return `${diffHours} jam lalu`;
-		const diffDays = Math.floor(diffHours / 24);
-		if (diffDays === 1) return 'Kemarin';
-		if (diffDays < 7) return `${diffDays} hari lalu`;
-		return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-	}
-
-	function describeAction(action: string): string {
-		switch (action) {
-			case 'content.intake_created':
-				return 'Draft intake konten baru dibuat';
-			case 'content.job_created':
-				return 'Pembuatan draf artikel AI dimulai';
-			case 'content.job_completed':
-				return 'Artikel AI selesai dibuat';
-			case 'publication.created':
-				return 'Pengajuan publikasi media berhasil dikirim';
-			case 'publication.published':
-				return 'Artikel berhasil diterbitkan di media mitra';
-			case 'campaign.created':
-				return 'Kampanye baru berhasil dibuat';
-			case 'credits.topup':
-				return 'Top-up Kredit Saldo berhasil';
-			default:
-				return action.replace(/[_.]/g, ' ');
-		}
-	}
-
-	/** Sparkline 7 titik — polyline SVG (pengganti recharts MiniSpark). */
-	function sparkPoints(values: number[] | undefined, width = 80, height = 36): string {
-		const list = values && values.length > 0 ? values : [0, 0, 0, 0, 0, 0, 0];
-		const max = Math.max(...list, 1);
-		const stepX = list.length > 1 ? width / (list.length - 1) : width;
-		return list
-			.map((v, i) => `${(i * stepX).toFixed(1)},${(height - 3 - (v / max) * (height - 8)).toFixed(1)}`)
-			.join(' ');
-	}
-
-	const kpiCards = $derived([
-		{
-			label: 'Kampanye Aktif', value: loading ? '—' : String(activeCampaigns.length),
-			spark: trends?.campaigns, color: '#C27A2E', bg: 'color-mix(in srgb, #C27A2E 12%, transparent)', icon: Target
-		},
-		{
-			label: 'Konten', value: loading ? '—' : String(totalContentCount),
-			spark: trends?.content, color: '#3D6A3A', bg: 'color-mix(in srgb, #3D6A3A 12%, transparent)', icon: ScrollText
-		},
-		{
-			label: 'Publikasi', value: loading ? '—' : String(publicationCounts.published),
-			spark: trends?.publications, color: '#2F6F6A', bg: 'color-mix(in srgb, #2F6F6A 12%, transparent)', icon: Megaphone
-		},
-		{
-			label: 'Kredit Saldo', value: loading ? '—' : formatTc(wallet?.available_tc),
-			spark: trends?.credit, color: '#2563EB', bg: 'color-mix(in srgb, #2563EB 12%, transparent)', icon: Coins
-		}
-	]);
-
-	const quickActions = $derived([
-		{ title: 'Buat Konten', desc: 'Buat artikel atau press release baru dengan AI.', href: `/klien/${brandUrl}/campaigns`, icon: Plus, color: '#C27A2E' },
-		{ title: 'Lihat Publikasi', desc: 'Kelola dan pantau status tayang media Anda.', href: `/klien/${brandUrl}/publications`, icon: Megaphone, color: '#2F6F6A' },
-		{ title: 'Jelajahi Media', desc: 'Lihat ratusan portal berita & media partner.', href: `/klien/${brandUrl}/media`, icon: Newspaper, color: '#6D5BA6' },
-		{ title: 'Kelola Kampanye', desc: 'Pantau target kuota dan budget kampanye.', href: `/klien/${brandUrl}/campaigns`, icon: Target, color: '#2563EB' }
-	]);
 </script>
 
-<section class="mx-auto max-w-6xl">
-	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">
-			{#if userName}Selamat datang kembali, {userName} 👋{:else}Selamat datang kembali 👋{/if}
-		</h1>
-		<p class="mt-1 text-sm text-muted-foreground">
-			Kelola konten, distribusi publikasi, dan performa kampanye Anda dari satu tempat.
-		</p>
-	</header>
+{#snippet statusBadge(status: string, label: string)}
+	{@const color = STATUS_COLORS[status] ?? 'gray'}
+	{@const isLive = ['processing', 'queued', 'waiting_partner', 'retrying', 'pending'].includes(status)}
+	{@const isDone = ['published', 'completed', 'partner_approved'].includes(status)}
+	<span class="statusBadge badge-{color}">
+		{#if isLive}
+			<span class="statusPulseDot" aria-hidden="true"></span>
+		{:else if isDone}
+			<CircleCheck size={12} strokeWidth={2.4} />
+		{:else}
+			<span class="statusStaticDot" aria-hidden="true"></span>
+		{/if}
+		<span>{label}</span>
+	</span>
+{/snippet}
 
-	{#if error}
-		<p class="app-card mt-4 border-l-4 px-4 py-3 text-sm" style="color: var(--destructive);">{error}</p>
-	{/if}
-
-	{#if isBrandEmpty}
-		<div class="app-card mt-4 flex flex-col items-center px-6 py-8 text-center">
-			<Rocket size={32} style="color: var(--primary);" />
-			<h2 class="mt-2 text-lg font-semibold">Selamat datang di Tauthub 👋</h2>
-			<p class="mt-1 max-w-md text-sm text-muted-foreground">
-				Mulai perjalanan konten Anda dengan membuat artikel pertama dan distribusikan ke media partner pilihan.
-			</p>
-			<a class="app-btn app-btn-primary mt-4" href={`/klien/${brandUrl}/campaigns`}>
-				<Plus size={16} /> Buat Konten Pertama
-			</a>
-		</div>
-	{/if}
-
-	<!-- 4 kartu KPI + sparkline -->
-	<section class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ringkasan cepat">
-		{#each kpiCards as card (card.label)}
-			<div class="app-card p-4">
-				<div class="flex items-center justify-between gap-2">
-					<div class="flex items-center gap-2">
-						<span class="flex h-8 w-8 items-center justify-center rounded-lg" style="background-color: {card.bg}; color: {card.color};">
-							<card.icon size={18} />
-						</span>
-						<span class="text-xs font-semibold text-muted-foreground">{card.label}</span>
-					</div>
-				</div>
-				<div class="mt-2.5 flex items-end justify-between gap-2">
-					<span class="text-2xl font-bold tabular-nums">{card.value}</span>
-					<svg width="80" height="36" viewBox="0 0 80 36" aria-hidden="true" class="shrink-0">
-						<polyline
-							points={sparkPoints(card.spark)}
-							fill="none"
-							stroke={card.color}
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
+{#if loading}
+	<div class="flex items-center justify-center p-12 text-sm text-muted-foreground" aria-busy="true">
+		Memuat overview…
+	</div>
+{:else}
+	<div class="wrap">
+		<!-- ── HERO ─────────────────────────────────────────────────────── -->
+		<section class="hero">
+			<div class="heroContent">
+				<h1 class="heroTitle">
+					{t.dashboard.welcome.replace('{name}', (userName || 'User') + '!')}
+				</h1>
+				<p class="heroSubtitle">{t.dashboard.subtitle}</p>
+				<div class="heroBtns">
+					<button class="heroCTA" type="button" onclick={() => goto(`${fallbackBase}/media`)}>
+						<Globe size={18} strokeWidth={2.4} />
+						<span>{t.dashboard.open_media_catalog}</span>
+					</button>
+					<button
+						class="heroCTAGhost"
+						type="button"
+						onclick={() => {
+							createErr = '';
+							createName = '';
+							createOpen = true;
+						}}
+					>
+						<Sparkles size={18} strokeWidth={2.4} />
+						<span>{t.dashboard.create_campaign}</span>
+					</button>
 				</div>
 			</div>
-		{/each}
-	</section>
-
-	<div class="mt-5 grid gap-4 lg:grid-cols-3">
-		<!-- Kolom kiri -->
-		<div class="grid gap-4 lg:col-span-2">
-			<!-- Lanjutkan Pekerjaan -->
-			<section class="app-card p-5">
-				<div class="flex flex-wrap items-start justify-between gap-2">
-					<div>
-						<h2 class="font-semibold">Lanjutkan Pekerjaan</h2>
-						<p class="mt-0.5 text-xs text-muted-foreground">Item konten atau draf terbaru yang memerlukan tindak lanjut Anda.</p>
+			<div class="heroVisual">
+				<div class="heroSecurityCard">
+					<div class="securityShieldCircle">
+						<ShieldCheck size={24} strokeWidth={2.4} color="#34d399" />
 					</div>
-					{#if continueItems.length > 0}
-						<a class="inline-flex items-center gap-1 text-xs font-medium" style="color: var(--primary);" href={`/klien/${brandUrl}/campaigns`}>
-							Buka Kampanye &amp; Draf <ArrowRight size={14} />
-						</a>
-					{/if}
+					<span class="securityTitle">{t.dashboard.security_title}</span>
+					<span class="securityValue">100% {t.dashboard.security_passed}</span>
 				</div>
+			</div>
+		</section>
 
-				{#if loading && !data}
-					<div class="mt-4 space-y-2">
-						<div class="h-13 animate-pulse rounded-lg" style="background-color: var(--muted);"></div>
-						<div class="h-13 animate-pulse rounded-lg" style="background-color: var(--muted);"></div>
-					</div>
-				{:else if continueItems.length > 0}
-					<ul class="mt-3 divide-y">
-						{#each continueItems as item (item.id)}
-							<li class="flex items-center justify-between gap-3 py-3">
-								<div class="min-w-0">
-									<div class="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-										<span class="rounded-full px-2 py-0.5 font-semibold" style="background-color: var(--accent); color: var(--accent-foreground);">{item.type}</span>
-										{#if item.readiness !== undefined && item.readiness !== null}
-											<span
-												class="rounded-full px-2 py-0.5 font-semibold"
-												style={item.readiness >= 75
-													? 'background-color: var(--success-soft); color: var(--success);'
-													: item.readiness >= 40
-														? 'background-color: var(--warning-soft); color: var(--warning);'
-														: 'background-color: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive);'}
-											>Readiness {item.readiness}%</span>
-										{:else}
-											<span class="rounded-full px-2 py-0.5 font-medium" style="background-color: var(--muted);">{item.statusLabel}</span>
-										{/if}
-										<span>· {formatRelativeTime(item.date)}</span>
-									</div>
-									<p class="mt-1 truncate text-sm font-semibold" title={item.title}>{item.title}</p>
-								</div>
-								<a class="app-btn app-btn-soft !min-h-8 shrink-0 !text-xs" href={item.actionUrl} aria-label="{item.actionText}: {item.title}">
-									{item.actionText} <ArrowRight size={13} />
-								</a>
-							</li>
-						{/each}
-					</ul>
-				{:else}
-					<div class="mt-3 flex flex-col items-center rounded-lg border border-dashed px-6 py-8 text-center">
-						<CheckCircle size={28} style="color: var(--success);" />
-						<p class="mt-2 text-sm font-medium">Belum ada pekerjaan yang perlu dilanjutkan.</p>
-						<p class="mt-1 text-xs text-muted-foreground">Semua tugas selesai. Mulai perjalanan konten Anda dengan membuat konten baru.</p>
-						<a class="app-btn app-btn-soft mt-3 !text-xs" href={`/klien/${brandUrl}/campaigns`}><Plus size={14} /> Buat Konten Baru</a>
-					</div>
-				{/if}
-			</section>
-
-			<!-- Kampanye Aktif -->
-			<section class="app-card p-5">
-				<div class="flex flex-wrap items-start justify-between gap-2">
-					<div>
-						<h2 class="font-semibold">Kampanye Aktif</h2>
-						<p class="mt-0.5 text-xs text-muted-foreground">Kampanye publikasi yang sedang berjalan saat ini.</p>
-					</div>
-					<a class="inline-flex items-center gap-1 text-xs font-medium" style="color: var(--primary);" href={`/klien/${brandUrl}/campaigns`}>
-						Lihat semua kampanye <ArrowRight size={14} />
-					</a>
+		<!-- ── METRIC CARDS ─────────────────────────────────────────────── -->
+		<div class="metricGrid">
+			<div class="metricCard">
+				<div class="metricHeader">
+					<span class="metricTitle">{t.dashboard.available_balance}</span>
+					<div class="metricIcon iconBlue"><Coins size={16} strokeWidth={2.4} /></div>
 				</div>
+				<div class="metricValueRow">
+					<span class="metricValue">{fmt(available)}</span>
+					<span class="metricUnit">{t.common.credits}</span>
+				</div>
+				<span class="metricDesc">{t.dashboard.balance_desc}</span>
+			</div>
 
-				{#if loading && !data}
-					<div class="mt-4 space-y-2">
-						<div class="h-24 animate-pulse rounded-lg" style="background-color: var(--muted);"></div>
-						<div class="h-24 animate-pulse rounded-lg" style="background-color: var(--muted);"></div>
-					</div>
-				{:else if activeCampaigns.length > 0}
-					<div class="mt-3 grid gap-3">
-						{#each activeCampaigns.slice(0, 3) as campaign (campaign.id)}
-							{@const quota = campaign.article_quota || 1}
-							{@const count = campaign.publication_count || 0}
-							{@const pct = Math.min(100, Math.round((count / quota) * 100))}
-							<article class="rounded-xl border p-4">
-								<div class="flex items-start justify-between gap-2">
-									<div class="flex min-w-0 items-center gap-2">
-										<span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--accent); color: var(--accent-foreground);">
-											<Target size={16} />
-										</span>
-										<a class="truncate text-sm font-semibold hover:underline" href={`/klien/${brandUrl}/taut-pintar/${campaign.id}`}>{campaign.name}</a>
-									</div>
-									<span class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold" style="background-color: var(--success-soft); color: var(--success);">
-										<span class="h-1.5 w-1.5 rounded-full" style="background-color: var(--success);"></span> Active
-									</span>
-								</div>
+			<div class="metricCard">
+				<div class="metricHeader">
+					<span class="metricTitle">{t.dashboard.reserved_credit}</span>
+					<div class="metricIcon iconBlue"><Lock size={16} strokeWidth={2.4} /></div>
+				</div>
+				<div class="metricValueRow">
+					<span class="metricValue">{fmt(reserved)}</span>
+					<span class="metricUnit">{t.common.credits}</span>
+				</div>
+				<span class="metricDesc">{t.dashboard.reserved_desc}</span>
+			</div>
 
-								<div class="mt-3">
-									<div class="flex flex-wrap items-center justify-between gap-2 text-xs">
-										<span class="text-muted-foreground">
-											<strong class="text-foreground">{count}</strong> dari {campaign.article_quota > 0 ? `${campaign.article_quota} artikel` : 'artikel terbit'} ({pct}%)
-										</span>
-										{#if campaign.budget > 0}
-											<span class="rounded-full px-2 py-0.5 font-medium" style="background-color: var(--muted);">Budget: {campaign.budget.toLocaleString('id-ID')} Kredit</span>
-										{/if}
-									</div>
-									<div class="mt-2 h-2 overflow-hidden rounded-full" style="background-color: var(--muted);">
-										<div class="h-full rounded-full" style="width: {Math.max(8, pct)}%; background-color: var(--primary);"></div>
-									</div>
-								</div>
+			<div class="metricCard">
+				<div class="metricHeader">
+					<span class="metricTitle">{t.dashboard.estimated_reach}</span>
+					<div class="metricIcon iconBlue"><TrendingUp size={16} strokeWidth={2.4} /></div>
+				</div>
+				<div class="metricValueRow">
+					<span class="metricValue">{fmt(reach)}</span>
+				</div>
+				<span class="metricDescReach">
+					{reachDelta === null
+						? '—'
+						: reachDelta === 'flat'
+							? t.dashboard.reach_delta_flat
+							: reachDelta.startsWith('up')
+								? t.dashboard.reach_delta_up.replace('{n}', reachDelta.split(':')[1])
+								: t.dashboard.reach_delta_down.replace('{n}', reachDelta.split(':')[1])}
+				</span>
+			</div>
 
-								<div class="mt-3 flex items-center justify-between gap-2">
-									<a class="app-btn app-btn-soft !min-h-8 !text-xs" href={`/klien/${brandUrl}/taut-pintar/${campaign.id}`}>
-										{campaign.content_intake_id ? 'Edit Draf' : 'Buat Konten'} <ArrowRight size={13} />
-									</a>
-									<a class="text-xs text-muted-foreground underline" href={`/klien/${brandUrl}/campaigns`}>Detail Kampanye</a>
-								</div>
-							</article>
-						{/each}
-					</div>
-				{:else}
-					<div class="mt-3 flex flex-col items-center rounded-lg border border-dashed px-6 py-8 text-center">
-						<Target size={24} style="color: var(--primary);" />
-						<p class="mt-2 text-sm font-medium">Belum ada kampanye aktif.</p>
-						<p class="mt-1 text-xs text-muted-foreground">Buat kampanye untuk mengatur alur publikasi dan distribusi media Anda.</p>
-						<a class="app-btn app-btn-soft mt-3 !text-xs" href={`/klien/${brandUrl}/campaigns`}><Plus size={14} /> Buat Kampanye</a>
-					</div>
-				{/if}
-			</section>
+			<div class="metricCard">
+				<div class="metricHeader">
+					<span class="metricTitle">{t.dashboard.total_clicks}</span>
+					<div class="metricIcon iconBlue"><FileText size={16} strokeWidth={2.4} /></div>
+				</div>
+				<div class="metricValueRow">
+					<span class="metricValue">{fmt(clicks)}</span>
+				</div>
+				<span class="metricDesc">{t.dashboard.clicks_desc}</span>
+			</div>
 		</div>
 
-		<!-- Kolom kanan -->
-		<div class="grid content-start gap-4">
-			<!-- Status Publikasi -->
-			<section class="app-card p-5">
-				<div class="flex flex-wrap items-start justify-between gap-2">
-					<div>
-						<h2 class="font-semibold">Status Publikasi</h2>
-						<p class="mt-0.5 text-xs text-muted-foreground">Distribusi konten ke jaringan media partner.</p>
-					</div>
-					<a class="inline-flex items-center gap-1 text-xs font-medium" style="color: var(--primary);" href={`/klien/${brandUrl}/publications`}>
-						Lihat Publikasi <ArrowRight size={14} />
-					</a>
+		<!-- ── INSIGHTS + FINANCE ───────────────────────────────────────── -->
+		<div class="insightsFinanceRow">
+			<section class="insights">
+				<div class="insightsIconBox">
+					<Lightbulb size={24} strokeWidth={2.4} color="#ffffff" />
 				</div>
-
-				{#if loading && !data}
-					<div class="mt-3 h-18 animate-pulse rounded-lg" style="background-color: var(--muted);"></div>
-				{:else if publicationCounts.total > 0}
-					<div class="mt-3 space-y-2">
-						<div class="flex items-center justify-between">
-							<span class="rounded-full px-2 py-0.5 text-xs font-semibold" style="background-color: var(--success-soft); color: var(--success);">Published</span>
-							<span class="text-sm font-semibold tabular-nums">{publicationCounts.published}</span>
-						</div>
-						<div class="flex items-center justify-between">
-							<span class="rounded-full px-2 py-0.5 text-xs font-semibold" style="background-color: var(--warning-soft); color: var(--warning);">Pending</span>
-							<span class="text-sm font-semibold tabular-nums">{publicationCounts.pending}</span>
-						</div>
-						<div class="flex items-center justify-between">
-							<span class="rounded-full px-2 py-0.5 text-xs font-semibold" style="background-color: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive);">Failed</span>
-							<span class="text-sm font-semibold tabular-nums">{publicationCounts.failed}</span>
-						</div>
+				<div class="insightsContent">
+					<div class="insightsTitleRow">
+						<h3 class="insightsTitle">{t.dashboard.insights_title}</h3>
+						<span class="insightsBadge">{t.dashboard.insights_badge}</span>
 					</div>
-					<div class="mt-3 flex h-2 overflow-hidden rounded-full" style="background-color: var(--muted);">
-						<span style="width: {(publicationCounts.published / publicationCounts.total) * 100}%; background-color: var(--success);"></span>
-						<span style="width: {(publicationCounts.pending / publicationCounts.total) * 100}%; background-color: var(--warning);"></span>
-						<span style="width: {(publicationCounts.failed / publicationCounts.total) * 100}%; background-color: var(--destructive);"></span>
-					</div>
-				{:else}
-					<div class="mt-3 flex flex-col items-center rounded-lg border border-dashed px-4 py-6 text-center">
-						<Megaphone size={20} style="color: var(--primary);" />
-						<p class="mt-1.5 text-xs text-muted-foreground">Belum ada data publikasi.</p>
-					</div>
-				{/if}
-			</section>
-
-			<!-- Mulai dengan Cepat -->
-			<section class="app-card p-5">
-				<h2 class="font-semibold">Mulai dengan Cepat</h2>
-				<p class="mt-0.5 text-xs text-muted-foreground">Aksi cepat untuk alur kerja konten dan publikasi Anda.</p>
-				<div class="mt-3 grid gap-2 sm:grid-cols-2">
-					{#each quickActions as action (action.title)}
-						<a class="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-secondary" href={action.href}>
-							<span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style="background-color: color-mix(in srgb, {action.color} 14%, transparent); color: {action.color};">
-								<action.icon size={16} />
+					<div class="insightsRolling">
+						{#each insightMessages as msg, idx (idx)}
+							<span
+								class="insightsRollingItem"
+								class:insightsRollingItemActive={idx === insightIndex}
+								class:insightsRollingItemExit={idx ===
+									(insightIndex - 1 + insightMessages.length) % insightMessages.length}
+							>
+								{msg}
 							</span>
-							<span class="min-w-0">
-								<span class="block text-xs font-semibold">{action.title}</span>
-								<span class="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{action.desc}</span>
-							</span>
-						</a>
-					{/each}
-				</div>
-			</section>
-
-			<!-- Aktivitas Terbaru -->
-			<section class="app-card p-5">
-				<div class="flex flex-wrap items-start justify-between gap-2">
-					<div>
-						<h2 class="font-semibold">Aktivitas Terbaru</h2>
-						<p class="mt-0.5 text-xs text-muted-foreground">Pembaruan terkini dari sistem dan draf konten Anda.</p>
-					</div>
-					<a class="inline-flex items-center gap-1 text-xs font-medium" style="color: var(--primary);" href={`/klien/${brandUrl}/campaigns`} aria-label="Lihat semua aktivitas">
-						Lihat semua <ArrowRight size={14} />
-					</a>
-				</div>
-
-				{#if loading && !data}
-					<div class="mt-3 space-y-2">
-						<div class="h-8 animate-pulse rounded" style="background-color: var(--muted);"></div>
-						<div class="h-8 animate-pulse rounded" style="background-color: var(--muted);"></div>
-						<div class="h-8 animate-pulse rounded" style="background-color: var(--muted);"></div>
-					</div>
-				{:else if dashboardStats?.recent_activity && dashboardStats.recent_activity.length > 0}
-					<ul class="mt-3 space-y-2.5">
-						{#each dashboardStats.recent_activity.slice(0, 4) as act (act.id)}
-							<li class="flex items-start gap-2.5">
-								<span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full" style="background-color: var(--muted);">
-									<History size={13} />
-								</span>
-								<span class="min-w-0">
-									<span class="block text-xs">{describeAction(act.action)}</span>
-									<span class="block text-[11px] text-muted-foreground">{formatRelativeTime(act.created_at)}</span>
-								</span>
-							</li>
 						{/each}
-					</ul>
+					</div>
+				</div>
+				<img src="/images/ai-agent.webp" alt="" class="aiAgentImgDirect" />
+			</section>
+
+			<div class="financeCard">
+				<div class="financeHeader">
+					<h3 class="sectionTitle" style="margin: 0;">{t.dashboard.quick_finance_title}</h3>
+					<div class="financeHeaderIcon">
+						<Sparkles size={14} strokeWidth={2.4} />
+					</div>
+				</div>
+				<div class="financeSubheader">
+					<Coins size={18} strokeWidth={2.4} style="color: var(--amber-9, #d97706);" />
+					<span class="financeSubLabel">{t.dashboard.total_active_balance}</span>
+				</div>
+				<div class="financeValueRow">
+					<span class="financeValue">{fmt(available)}</span>
+					<span class="financeUnit">{t.common.credits}</span>
+				</div>
+				<button
+					type="button"
+					class="app-btn app-btn-primary w-full mt-4"
+					onclick={() => {
+						topUpPayment = null;
+						topUpError = '';
+						topUpOpen = true;
+					}}
+				>
+					{t.dashboard.topup}
+				</button>
+				<div class="financeDivider"></div>
+				<div class="financeLinks">
+					<a class="ghostLink" href={`${fallbackBase}/credits`}>
+						<FileText size={14} strokeWidth={2.4} />
+						<span>{t.dashboard.tx_history}</span>
+					</a>
+					<a class="ghostLink" href={`${fallbackBase}/invoices`}>
+						<FileText size={14} strokeWidth={2.4} />
+						<span>{t.dashboard.claim_pph}</span>
+					</a>
+				</div>
+			</div>
+		</div>
+
+		<!-- ── 2-COLUMN (QUEUES & HELP) ─────────────────────────────────── -->
+		<div class="twoCol">
+			<!-- LEFT: PUBLICATION QUEUE -->
+			<section>
+				<h2 class="sectionTitle">{t.dashboard.queue_title}</h2>
+				{#if pubs.length === 0}
+					<div class="emptyCard">
+						<p>{t.dashboard.queue_empty}</p>
+					</div>
 				{:else}
-					<div class="mt-3 flex flex-col items-center rounded-lg border border-dashed px-4 py-6 text-center">
-						<Clock size={20} style="color: var(--primary);" />
-						<p class="mt-1.5 text-xs text-muted-foreground">Belum ada aktivitas terbaru.</p>
+					<div class="queueTable">
+						<div class="queueHeader">
+							<span>{t.dashboard.queue_col_campaign}</span>
+							<span>{t.dashboard.queue_col_media}</span>
+							<span>{t.dashboard.queue_col_status}</span>
+							<span>Kredit</span>
+						</div>
+						{#each pubs as r (r.id)}
+							<div class="queueRow">
+								<div class="queueCell font-medium">
+									<span class="truncate block">{r.document_title || '—'}</span>
+								</div>
+								<div class="queueCell text-muted-foreground">
+									<span class="truncate block">{r.media_name || '—'}</span>
+								</div>
+								<div class="queueCell">
+									{@render statusBadge(r.status, (t.status as Record<string, string>)[r.status] ?? r.status)}
+								</div>
+								<div class="queueCell font-medium">
+									<span>{tcLabel(r.client_price ?? 0, tcConfig?.rate_idr ?? wallet?.rate_idr ?? 1000)}</span>
+								</div>
+							</div>
+						{/each}
 					</div>
 				{/if}
 			</section>
+
+			<!-- RIGHT: HELP -->
+			<div class="helpCard">
+				<div class="helpHeader">
+					<h3 class="sectionTitle" style="margin: 0;">{t.dashboard.help_title}</h3>
+					<div class="helpHeaderIcon">
+						<BookOpen size={16} strokeWidth={2.4} />
+					</div>
+				</div>
+				<div class="helpList">
+					<a class="ghostLinkHelp" href="/docs">
+						<div class="helpItemIcon">
+							<BookOpen size={18} strokeWidth={2.4} />
+						</div>
+						<div class="helpItemContent">
+							<div class="helpItemTitle">{t.dashboard.help_how_title}</div>
+							<div class="helpItemDesc">{t.dashboard.help_how_desc}</div>
+						</div>
+						<ArrowRight size={14} class="helpArrow" />
+					</a>
+					<a class="ghostLinkHelp" href="/docs">
+						<div class="helpItemIcon">
+							<ShieldCheck size={18} strokeWidth={2.4} />
+						</div>
+						<div class="helpItemContent">
+							<div class="helpItemTitle">{t.dashboard.help_gate_title}</div>
+							<div class="helpItemDesc">{t.dashboard.help_gate_desc}</div>
+						</div>
+						<ArrowRight size={14} class="helpArrow" />
+					</a>
+				</div>
+			</div>
 		</div>
 	</div>
-</section>
+{/if}
+
+<!-- ── DIALOG BUAT KAMPANYE ──────────────────────────────────────── -->
+{#if createOpen}
+	<div
+		class="dialogOverlay"
+		role="presentation"
+		onclick={() => {
+			if (!createBusy) {
+				createOpen = false;
+				createMode = null;
+			}
+		}}
+	>
+		<dialog
+			open
+			class="dialogBox"
+			aria-label="Buat Kampanye"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => {
+				if (e.key === 'Escape' && !createBusy) {
+					createOpen = false;
+					createMode = null;
+				}
+			}}
+		>
+			<div class="dialogHeader">
+				<h2 class="dialogTitle">Buat Kampanye</h2>
+				<button
+					type="button"
+					class="dialogClose"
+					aria-label="Tutup"
+					disabled={createBusy}
+					onclick={() => {
+						createOpen = false;
+						createMode = null;
+					}}
+				>
+					<X size={16} />
+				</button>
+			</div>
+			<p class="dialogDesc">Pilih cara kamu membuat kampanye distribusi konten.</p>
+
+			<div class="dialogField">
+				<label class="dialogLabel" for="new-campaign-name">
+					Nama Kampanye <span class="requiredStar">*</span>
+				</label>
+				<input
+					id="new-campaign-name"
+					class="app-input"
+					placeholder="Contoh: Launching Produk Q3 2026"
+					bind:value={createName}
+					oninput={() => {
+						if (createErr) createErr = '';
+					}}
+				/>
+			</div>
+
+			{#if createErr}
+				<p class="dialogErr">{createErr}</p>
+			{/if}
+
+			<div class="modeGrid">
+				<button
+					type="button"
+					onclick={() => (createMode = 'ai')}
+					disabled={createBusy}
+					class="modeCard"
+					class:modeCardActive={createMode === 'ai'}
+				>
+					<div class="modeCardTitle">
+						<Sparkles size={16} strokeWidth={2.4} color="var(--primary)" />
+						<strong>AI Pintar</strong>
+					</div>
+					<p class="modeCardDesc">
+						Profiler: AI menyusun strategi & brief, lalu Matchmaker pilih media. Butuh 10 Kredit.
+					</p>
+				</button>
+				<button
+					type="button"
+					onclick={() => (createMode = 'manual')}
+					disabled={createBusy}
+					class="modeCard"
+					class:modeCardActive={createMode === 'manual'}
+				>
+					<div class="modeCardTitle">
+						<FileText size={16} strokeWidth={2.4} color="var(--muted-foreground)" />
+						<strong>Manual</strong>
+					</div>
+					<p class="modeCardDesc">
+						The Writer tanpa AI: siapkan media & unggah artikel tulisanmu sendiri.
+					</p>
+				</button>
+			</div>
+
+			<div class="dialogActions">
+				<button
+					type="button"
+					class="app-btn app-btn-primary"
+					disabled={createBusy || !createMode}
+					onclick={() => createMode && void createTautCampaign(createMode)}
+				>
+					{createBusy ? 'Memproses…' : 'Mulai Sekarang'}
+				</button>
+			</div>
+		</dialog>
+	</div>
+{/if}
+
+<!-- ── DIALOG TOP UP SALDO ────────────────────────────────────────── -->
+{#if topUpOpen}
+	<TopUpModal
+		rateIdr={tcConfig?.rate_idr ?? wallet?.rate_idr ?? 1000}
+		packages={tcConfig?.topup_packages ?? []}
+		busy={topUpBusy}
+		error={topUpError}
+		payment={topUpPayment}
+		onSelectPackage={(tc, invoice) => void handleTopup(tc, invoice)}
+		onResetPayment={() => (topUpPayment = null)}
+		onClose={() => (topUpOpen = false)}
+	/>
+{/if}
+
+<style>
+	.wrap {
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+		padding-bottom: 8px;
+	}
+
+	/* Hero */
+	.hero {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 24px;
+		overflow: hidden;
+		border-radius: 18px;
+		padding: 32px 36px;
+		background-image: url('/images/dashboard-hero.webp');
+		background-size: cover;
+		background-position: center right;
+		border: 1px solid var(--border);
+		box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+	}
+	.heroContent {
+		max-width: 680px;
+		position: relative;
+		z-index: 2;
+	}
+	.heroTitle {
+		font-size: clamp(20px, 2.2vw, 28px);
+		font-weight: 750;
+		line-height: 1.2;
+		letter-spacing: -0.02em;
+		color: #ffffff;
+		margin: 0 0 8px;
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+		white-space: nowrap;
+	}
+	.heroSubtitle {
+		font-size: 14px;
+		line-height: 1.6;
+		color: rgba(255, 255, 255, 0.92);
+		margin: 0 0 20px;
+		max-width: 500px;
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+	}
+	.heroBtns {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 12px;
+	}
+	.heroCTA {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		border-radius: 9px;
+		padding: 10px 16px;
+		font-size: 14px;
+		font-weight: 700;
+		background: #ffffff;
+		color: #1b67fe;
+		border: none;
+		cursor: pointer;
+		transition:
+			transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+			box-shadow 0.18s ease,
+			background-color 0.18s ease;
+	}
+	.heroCTA:hover {
+		background: #eef2ff;
+		transform: translateY(-2px);
+		box-shadow: 0 8px 20px rgba(27, 103, 254, 0.22);
+	}
+	.heroCTA:active {
+		transform: none;
+		box-shadow: none;
+	}
+	.heroCTAGhost {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		border-radius: 9px;
+		padding: 10px 16px;
+		font-size: 14px;
+		font-weight: 700;
+		background: rgba(255, 255, 255, 0.18);
+		color: #ffffff;
+		border: 1px solid rgba(255, 255, 255, 0.3);
+		backdrop-filter: blur(8px);
+		cursor: pointer;
+		transition:
+			transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+			box-shadow 0.18s ease,
+			background-color 0.18s ease,
+			border-color 0.18s ease;
+	}
+	.heroCTAGhost:hover {
+		background: rgba(255, 255, 255, 0.28);
+		transform: translateY(-2px);
+		border-color: rgba(255, 255, 255, 0.55);
+		box-shadow: 0 8px 20px rgba(16, 24, 40, 0.18);
+	}
+	.heroCTAGhost:active {
+		transform: none;
+		box-shadow: none;
+	}
+
+	.heroVisual {
+		flex: 0 0 auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.heroSecurityCard {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		width: 170px;
+		padding: 22px 16px;
+		background: rgba(255, 255, 255, 0.15);
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
+		border: 1px solid rgba(255, 255, 255, 0.28);
+		border-radius: 20px;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+	}
+	.securityShieldCircle {
+		width: 52px;
+		height: 52px;
+		border-radius: 50%;
+		background: rgba(255, 255, 255, 0.18);
+		border: 1px solid rgba(255, 255, 255, 0.3);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 12px;
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+	}
+	.securityTitle {
+		color: rgba(255, 255, 255, 0.85);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		font-size: 11px;
+		font-weight: 700;
+		margin-bottom: 4px;
+	}
+	.securityValue {
+		color: #ffffff;
+		font-size: 15px;
+		font-weight: 700;
+		line-height: 1.2;
+	}
+
+	/* Metric Grid */
+	.metricGrid {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 16px;
+	}
+	.metricCard {
+		position: relative;
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		background: var(--card);
+		padding: 20px;
+		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+		transition:
+			transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+			box-shadow 0.18s ease;
+		overflow: hidden;
+	}
+	.metricCard::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		width: 4px;
+		background: #f59e0b;
+		opacity: 0;
+		transform: scaleY(0.4);
+		transition:
+			opacity 0.18s ease,
+			transform 0.18s ease;
+	}
+	.metricCard:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+	}
+	.metricCard:hover::after {
+		opacity: 1;
+		transform: scaleY(1);
+	}
+	.metricHeader {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		margin-bottom: 8px;
+	}
+	.metricTitle {
+		color: var(--muted-foreground);
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+	.metricIcon {
+		width: 30px;
+		height: 30px;
+		border-radius: 999px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+	.iconBlue {
+		background: #eef4ff;
+		color: #1b67fe;
+	}
+	.metricValueRow {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+	}
+	.metricValue {
+		font-size: 24px;
+		font-weight: 750;
+		line-height: 1.2;
+		font-variant-numeric: tabular-nums;
+	}
+	.metricUnit {
+		font-size: 12px;
+		color: var(--muted-foreground);
+	}
+	.metricDesc {
+		margin-top: 8px;
+		display: block;
+		font-size: 12px;
+		line-height: 1.45;
+		color: var(--muted-foreground);
+	}
+	.metricDescReach {
+		margin-top: 8px;
+		display: block;
+		font-size: 12px;
+		line-height: 1.45;
+		color: #059669;
+		font-weight: 600;
+	}
+
+	/* Insights + Finance */
+	.insightsFinanceRow {
+		display: grid;
+		grid-template-columns: 2fr 1fr;
+		gap: 24px;
+		align-items: stretch;
+	}
+	.insights {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 20px;
+		border-radius: 20px;
+		border: 1px solid var(--border);
+		background: radial-gradient(700px 260px at 92% 0%, rgba(124, 58, 237, 0.06), transparent 60%),
+			var(--card);
+		padding: 22px 28px;
+		overflow: hidden;
+	}
+	.insights::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		background: url('/images/insights-bg.webp') center/cover no-repeat;
+		opacity: 0.15;
+		pointer-events: none;
+		z-index: 0;
+	}
+	.insights > * {
+		position: relative;
+		z-index: 1;
+	}
+	.insightsIconBox {
+		width: 44px;
+		height: 44px;
+		border-radius: 12px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+	}
+	.insightsContent {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+	}
+	.insightsTitleRow {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.insightsTitle {
+		margin: 0;
+		font-size: 15px;
+		font-weight: 700;
+	}
+	.insightsBadge {
+		display: inline-flex;
+		align-items: center;
+		border-radius: 999px;
+		padding: 1px 8px;
+		font-size: 10px;
+		font-weight: 700;
+		background: #faf5ff;
+		color: #7e22ce;
+	}
+	.insightsRolling {
+		position: relative;
+		min-height: 44px;
+		overflow: hidden;
+		margin-top: 8px;
+	}
+	.insightsRollingItem {
+		position: absolute;
+		inset: 0;
+		display: block;
+		font-size: 14px;
+		line-height: 1.6;
+		color: var(--muted-foreground);
+		transform: translateY(100%);
+		opacity: 0;
+		transition:
+			transform 0.6s cubic-bezier(0.34, 1.2, 0.64, 1),
+			opacity 0.45s ease;
+	}
+	.insightsRollingItemActive {
+		transform: translateY(0);
+		opacity: 1;
+	}
+	.insightsRollingItemExit {
+		transform: translateY(-100%);
+		opacity: 0;
+	}
+	.aiAgentImgDirect {
+		flex-shrink: 0;
+		width: 160px;
+		max-height: 140px;
+		height: auto;
+		object-fit: contain;
+	}
+
+	.financeCard {
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+		padding: 28px 26px;
+		background: var(--card);
+		display: flex;
+		flex-direction: column;
+	}
+	.financeHeader {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 12px;
+	}
+	.financeHeaderIcon {
+		width: 28px;
+		height: 28px;
+		border-radius: 8px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		background: #eef4ff;
+		color: #1b67fe;
+	}
+	.financeSubheader {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 4px;
+	}
+	.financeSubLabel {
+		font-size: 12px;
+		color: var(--muted-foreground);
+	}
+	.financeValueRow {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+	}
+	.financeValue {
+		font-size: 24px;
+		font-weight: 750;
+		line-height: 1.2;
+		font-variant-numeric: tabular-nums;
+	}
+	.financeUnit {
+		font-size: 13px;
+		color: var(--muted-foreground);
+	}
+	.financeDivider {
+		height: 1px;
+		background: var(--border);
+		margin: 20px 0 16px;
+	}
+	.financeLinks {
+		display: flex;
+		justify-content: space-between;
+		gap: 8px;
+		margin-top: auto;
+	}
+	.ghostLink {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 6px 8px;
+		border-radius: 8px;
+		font-size: 12px;
+		font-weight: 550;
+		color: var(--foreground);
+		text-decoration: none;
+		transition: background-color 0.15s ease;
+	}
+	.ghostLink:hover {
+		background-color: var(--secondary);
+	}
+
+	/* Two Column (Queues & Help) */
+	.twoCol {
+		display: grid;
+		grid-template-columns: 2fr 1fr;
+		gap: 24px;
+		align-items: start;
+	}
+	.sectionTitle {
+		font-size: 15px;
+		font-weight: 700;
+		color: var(--foreground);
+		margin: 0 0 12px;
+	}
+	.queueTable {
+		border: 1px solid var(--border);
+		border-radius: 14px;
+		overflow: hidden;
+		background: var(--card);
+	}
+	.queueHeader,
+	.queueRow {
+		display: grid;
+		grid-template-columns: 2fr 1.4fr 1.2fr 0.8fr;
+		gap: 12px;
+		align-items: center;
+		padding: 12px 16px;
+		font-size: 13px;
+	}
+	.queueHeader {
+		background: var(--muted);
+		border-bottom: 1px solid var(--border);
+		font-size: 11px;
+		font-weight: 700;
+		color: var(--muted-foreground);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	.queueRow + .queueRow {
+		border-top: 1px solid var(--border);
+	}
+	.queueCell {
+		min-width: 0;
+	}
+	.emptyCard {
+		border: 1px dashed var(--border);
+		border-radius: 14px;
+		padding: 24px;
+		text-align: center;
+		color: var(--muted-foreground);
+		font-size: 13px;
+		background: var(--card);
+	}
+
+	/* Status Badge */
+	.statusBadge {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border-radius: 999px;
+		padding: 2px 8px;
+		font-size: 11.5px;
+		font-weight: 600;
+		white-space: nowrap;
+	}
+	.badge-green {
+		background: #ecfdf5;
+		color: #047857;
+	}
+	.badge-blue {
+		background: #eff6ff;
+		color: #1d4ed8;
+	}
+	.badge-amber {
+		background: #fffbeb;
+		color: #b45309;
+	}
+	.badge-red {
+		background: #fef2f2;
+		color: #b91c1c;
+	}
+	.badge-gray {
+		background: #f3f4f6;
+		color: #4b5563;
+	}
+	.statusPulseDot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: currentColor;
+		box-shadow: 0 0 0 0 currentColor;
+		animation: statusPulse 1.6s infinite cubic-bezier(0.4, 0, 0.6, 1);
+	}
+	.statusStaticDot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: currentColor;
+		opacity: 0.7;
+	}
+	@keyframes statusPulse {
+		0% {
+			transform: scale(0.95);
+			opacity: 1;
+		}
+		50% {
+			transform: scale(1.35);
+			opacity: 0.5;
+		}
+		100% {
+			transform: scale(0.95);
+			opacity: 1;
+		}
+	}
+
+	/* Help Card */
+	.helpCard {
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+		padding: 28px 26px;
+		background: var(--card);
+	}
+	.helpHeader {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 12px;
+	}
+	.helpHeaderIcon {
+		width: 28px;
+		height: 28px;
+		border-radius: 8px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		background: #eef4ff;
+		color: #1b67fe;
+	}
+	.helpList {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+	.ghostLinkHelp {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 14px;
+		width: 100%;
+		padding: 12px 14px;
+		border-radius: 12px;
+		color: var(--foreground);
+		text-align: left;
+		text-decoration: none;
+		transition: background-color 0.15s ease;
+	}
+	.ghostLinkHelp:hover {
+		background-color: var(--secondary);
+	}
+	.ghostLinkHelp:hover :global(.helpArrow) {
+		transform: translateX(3px);
+		color: #1b67fe;
+	}
+	.helpItemIcon {
+		width: 36px;
+		height: 36px;
+		border-radius: 10px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		background: #eef4ff;
+		color: #1b67fe;
+	}
+	.helpItemContent {
+		flex: 1;
+		min-width: 0;
+	}
+	.helpItemTitle {
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--foreground);
+		line-height: 1.3;
+	}
+	.helpItemDesc {
+		font-size: 12px;
+		color: var(--muted-foreground);
+		line-height: 1.4;
+	}
+	:global(.helpArrow) {
+		transition:
+			transform 0.15s ease,
+			color 0.15s ease;
+		flex-shrink: 0;
+		color: var(--muted-foreground);
+	}
+
+	/* Dialog Buat Kampanye */
+	.dialogOverlay {
+		position: fixed;
+		inset: 0;
+		z-index: 60;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 16px;
+		background: rgba(15, 23, 42, 0.45);
+	}
+	.dialogBox {
+		position: relative;
+		width: 100%;
+		max-width: 520px;
+		border-radius: 16px;
+		border: 1px solid var(--border);
+		background: var(--card);
+		padding: 24px;
+		box-shadow: var(--shadow-md);
+		color: var(--foreground);
+	}
+	.dialogHeader {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+	.dialogTitle {
+		margin: 0;
+		font-size: 18px;
+		font-weight: 700;
+	}
+	.dialogClose {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border-radius: 8px;
+		color: var(--muted-foreground);
+	}
+	.dialogClose:hover {
+		background: var(--secondary);
+		color: var(--foreground);
+	}
+	.dialogDesc {
+		margin: 4px 0 16px;
+		font-size: 13px;
+		color: var(--muted-foreground);
+	}
+	.dialogField {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.dialogLabel {
+		font-size: 13px;
+		font-weight: 600;
+	}
+	.requiredStar {
+		color: var(--destructive);
+	}
+	.dialogErr {
+		margin-top: 8px;
+		font-size: 12px;
+		color: var(--destructive);
+	}
+	.modeGrid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+		margin-top: 16px;
+	}
+	.modeCard {
+		text-align: left;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		padding: 14px 16px;
+		background: var(--muted);
+		cursor: pointer;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		align-items: flex-start;
+		transition:
+			border-color 120ms ease,
+			background-color 120ms ease,
+			box-shadow 120ms ease;
+	}
+	.modeCard:hover:not(:disabled) {
+		border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+		background: color-mix(in srgb, var(--primary) 4%, var(--muted));
+	}
+	.modeCardActive {
+		border-color: var(--primary) !important;
+		background: color-mix(in srgb, var(--primary) 8%, var(--card)) !important;
+		box-shadow: inset 0 0 0 1px var(--primary);
+	}
+	.modeCardTitle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 14px;
+	}
+	.modeCardDesc {
+		margin: 0;
+		font-size: 11.5px;
+		line-height: 1.45;
+		color: var(--muted-foreground);
+	}
+	.dialogActions {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: 20px;
+	}
+
+	/* Responsive */
+	@media (max-width: 1024px) {
+		.metricGrid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+		.twoCol {
+			grid-template-columns: 1fr;
+		}
+		.insightsFinanceRow {
+			grid-template-columns: 1fr;
+		}
+	}
+	@media (max-width: 767px) {
+		.hero {
+			flex-direction: column;
+			align-items: flex-start;
+			padding: 28px 22px;
+			gap: 20px;
+		}
+		.heroVisual {
+			width: 100%;
+		}
+		.metricGrid {
+			grid-template-columns: 1fr;
+		}
+		.insights {
+			flex-direction: column;
+			align-items: flex-start;
+			padding: 22px;
+		}
+		.aiAgentImgDirect {
+			width: 96px;
+			height: 96px;
+		}
+		.queueHeader {
+			display: none;
+		}
+		.queueRow {
+			grid-template-columns: 1fr;
+			gap: 6px;
+			padding: 12px 16px;
+		}
+		.modeGrid {
+			grid-template-columns: 1fr;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.insightsRollingItem {
+			transition: none !important;
+		}
+		.statusPulseDot {
+			animation: none;
+		}
+		.heroCTA,
+		.heroCTAGhost {
+			transition: none;
+		}
+	}
+</style>
