@@ -122,6 +122,21 @@
   *, ::before, ::after {
     border-color: var(--border);
   }
+  /* <dialog open> membawa gaya bawaan browser (position: absolute; inset: 0;
+     margin: auto) yang MENGALAHKAN pemusatan flex milik overlay-nya, sehingga
+     popup jatuh ke sudut. Reset supaya dialog jadi flex item biasa dan
+     dipusatkan oleh overlay (semua dialog di app ini punya kelas sendiri). */
+  dialog {
+    position: static;
+    inset: auto;
+    margin: 0;
+    max-width: none;
+    max-height: none;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+  }
   html {
     background-color: var(--background);
   }
