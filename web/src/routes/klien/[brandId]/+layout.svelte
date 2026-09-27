@@ -15,6 +15,7 @@
 	import { setBrandUrlId } from '$lib/brand-url.svelte';
 	import AppShell from '$lib/components/app-shell.svelte';
 	import AccountDropdown from '$lib/components/account-dropdown.svelte';
+	import NotificationBell from '$lib/components/notification-bell.svelte';
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
 
@@ -202,9 +203,7 @@
 			<Coins size={15} />
 			<strong>{saldo.toLocaleString('id-ID')} Kredit</strong>
 		</button>
-		<button class="rounded-lg p-2 transition-colors hover:bg-secondary" type="button" aria-label="Notifikasi">
-			<Bell size={18} />
-		</button>
+		<NotificationBell apiBase={`/v1/brands/${brandId}`} fallbackBase={base} />
 	{/snippet}
 
 	{@render children()}

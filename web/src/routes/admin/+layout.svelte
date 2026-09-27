@@ -12,6 +12,7 @@
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AppShell from '$lib/components/app-shell.svelte';
 	import AccountDropdown from '$lib/components/account-dropdown.svelte';
+	import NotificationBell from '$lib/components/notification-bell.svelte';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
@@ -208,9 +209,7 @@
 		<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label="Pilih bahasa">
 			<span>🇮🇩</span> <span class="app-lang-label">Indonesia</span> <ChevronDown size={14} />
 		</button>
-		<a href="/admin/errors" class="rounded-lg p-2 transition-colors hover:bg-secondary" aria-label="Peringatan sistem">
-			<Bell size={18} />
-		</a>
+		<NotificationBell apiBase="/v1/platform/operations" fallbackBase="/admin/errors" readable={false} />
 	{/snippet}
 
 	{@render children()}

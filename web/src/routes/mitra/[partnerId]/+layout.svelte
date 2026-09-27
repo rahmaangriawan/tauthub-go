@@ -15,6 +15,7 @@
 	import { setPartnerUrlId } from '$lib/partner-url.svelte';
 	import AppShell from '$lib/components/app-shell.svelte';
 	import AccountDropdown from '$lib/components/account-dropdown.svelte';
+	import NotificationBell from '$lib/components/notification-bell.svelte';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
@@ -148,9 +149,7 @@
 			<Coins size={15} />
 			<strong>{saldo.toLocaleString('id-ID')} Saldo</strong>
 		</a>
-		<a href={`${base}/notifications`} class="rounded-lg p-2 transition-colors hover:bg-secondary" aria-label="Notifikasi">
-			<Bell size={18} />
-		</a>
+		<NotificationBell apiBase="/v1/partner" fallbackBase={base} />
 	{/snippet}
 
 	{@render children()}
