@@ -2,6 +2,7 @@
 	// Port halaman login (fase 1): email+password, 2FA challenge bila aktif,
 	// redirect per role. Turnstile widget menyusul (config belum enabled).
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import {
 		storeSession,
 		authErrorMessage,
@@ -15,6 +16,14 @@
 	let password = $state('');
 	let busy = $state(false);
 	let error = $state('');
+
+	// Jalur legacy `/login?mode=register` (CTA landing & tautan lama di app lama).
+	// Di app lama ini satu layar gabungan; di SvelteKit pendaftaran punya halaman
+	// sendiri, jadi dialihkan sebelum form login dirender.
+	const wantsRegister = $derived(page.url.searchParams.get('mode') === 'register');
+	$effect(() => {
+		if (wantsRegister) void goto('/register-role', { replaceState: true });
+	});
 
 	// 2FA step-2
 	let challenge = $state<string | null>(null);

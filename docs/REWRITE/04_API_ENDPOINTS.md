@@ -321,10 +321,10 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/payments` | GET, POST | List/buat transaksi pembayaran | [ ] |
-| `/v1/payments/gateway/active` | GET | Gateway aktif | [ ] |
-| `/v1/payments/status/{transactionId}` | GET | Polling status pembayaran | [ ] |
-| `/v1/payments/webhooks/{provider}` | POST | Webhook gateway (Xendit/Duitku/Midtrans/Tripay/SumoPod/Sandbox) | [ ] |
+| `/v1/payments` | GET, POST | List/buat transaksi pembayaran | [x] |
+| `/v1/payments/gateway/active` | GET | Gateway aktif | [x] |
+| `/v1/payments/status/{transactionId}` | GET | Polling status pembayaran | [x] |
+| `/v1/payments/webhooks/{provider}` | POST | Webhook gateway (Xendit/Duitku/Midtrans/Tripay/SumoPod/Sandbox) | [x] |
 
 ## 6. `/v1/platform` (173) 🛡️ — fase 5, 8–11
 
@@ -332,242 +332,242 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/platform/admins` | GET, POST | List/tambah admin | [ ] |
-| `/v1/platform/admins/me` | GET | Profil admin | [ ] |
-| `/v1/platform/admins/{adminId}` | PATCH, DELETE | Ubah/hapus admin | [ ] |
+| `/v1/platform/admins` | GET, POST | List/tambah admin | [x] |
+| `/v1/platform/admins/me` | GET | Profil admin | [x] |
+| `/v1/platform/admins/{adminId}` | PATCH, DELETE | Ubah/hapus admin | [x] |
 
 ### 6.2 AI Gateway (7)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/platform/ai/configuration` | GET, PUT | Config provider (sealed key) | [ ] |
-| `/v1/platform/ai/models` | GET | Daftar model + knowledge | [ ] |
-| `/v1/platform/ai/models/{modelId}/knowledge` | GET, PUT, DELETE | Knowledge per model | [ ] |
-| `/v1/platform/ai/probe` | POST | Probe koneksi provider | [ ] |
-| `/v1/platform/ai/status` | GET | Status/circuit breaker | [ ] |
-| `/v1/platform/ai/test-generation` | POST | Tes generasi | [ ] |
-| `/v1/platform/ai/usage` | GET | Usage ledger | [ ] |
+| `/v1/platform/ai/configuration` | GET, PUT | Config provider (sealed key) | [x] |
+| `/v1/platform/ai/models` | GET | Daftar model + knowledge | [x] |
+| `/v1/platform/ai/models/{modelId}/knowledge` | GET, PUT, DELETE | Knowledge per model | [x] |
+| `/v1/platform/ai/probe` | POST | Probe koneksi provider | [x] |
+| `/v1/platform/ai/status` | GET | Status/circuit breaker | [x] |
+| `/v1/platform/ai/test-generation` | POST | Tes generasi | [x] |
+| `/v1/platform/ai/usage` | GET | Usage ledger | [x] |
 
 ### 6.3 Media admin (18)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/platform/media` | GET, POST | List/tambah media | [ ] |
-| `/v1/platform/media/{mediaId}` | GET, PUT, DELETE | CRUD media | [ ] |
-| `/v1/platform/media/{mediaId}/audit` | GET | Audit media | [ ] |
-| `/v1/platform/media/{mediaId}/recompute-health` | POST | Hitung ulang health | [ ] |
-| `/v1/platform/media/{mediaId}/review` | POST | Review/approve media | [ ] |
-| `/v1/platform/media/{mediaId}/seo` | GET, POST | Metrik SEO | [ ] |
-| `/v1/platform/media/{mediaId}/similarweb` | GET, POST | SimilarWeb | [ ] |
-| `/v1/platform/media/archive-all` | POST | Arsip massal | [ ] |
-| `/v1/platform/media/archive-impact` | GET | Dampak arsip | [ ] |
-| `/v1/platform/media/bulk` | POST, DELETE | Bulk upsert/hapus media | [ ] |
-| `/v1/platform/media/dewan-pers-reviews` | GET | Review Dewan Pers | [ ] |
-| `/v1/platform/media/dewan-pers-reviews/{reviewId}` | POST | Putusan review | [ ] |
-| `/v1/platform/media/intelligence` | GET | Media intelligence | [ ] |
-| `/v1/platform/media/recompute-health` | POST | Recompute massal | [ ] |
-| `/v1/platform/media/restore-archived` | POST | Pulihkan arsip | [ ] |
-| `/v1/platform/media/seo-bulk` | POST | Refresh SEO massal | [ ] |
-| `/v1/platform/media/similarweb-bulk` | POST | SimilarWeb massal | [ ] |
-| `/v1/platform/media/sync-credit-cost` | POST | Sinkron credit_cost | [ ] |
+| `/v1/platform/media` | GET, POST | List/tambah media | [x] |
+| `/v1/platform/media/{mediaId}` | GET, PUT, DELETE | CRUD media | [x] |
+| `/v1/platform/media/{mediaId}/audit` | GET | Audit media | [x] |
+| `/v1/platform/media/{mediaId}/recompute-health` | POST | Hitung ulang health | [x] |
+| `/v1/platform/media/{mediaId}/review` | POST | Review/approve media | [x] |
+| `/v1/platform/media/{mediaId}/seo` | GET, POST | Metrik SEO | [x] |
+| `/v1/platform/media/{mediaId}/similarweb` | GET, POST | SimilarWeb | [x] |
+| `/v1/platform/media/archive-all` | POST | Arsip massal | [x] |
+| `/v1/platform/media/archive-impact` | GET | Dampak arsip | [x] |
+| `/v1/platform/media/bulk` | POST, DELETE | Bulk upsert/hapus media | [x] |
+| `/v1/platform/media/dewan-pers-reviews` | GET | Review Dewan Pers | [x] |
+| `/v1/platform/media/dewan-pers-reviews/{reviewId}` | POST | Putusan review | [x] |
+| `/v1/platform/media/intelligence` | GET | Media intelligence | [x] |
+| `/v1/platform/media/recompute-health` | POST | Recompute massal | [x] |
+| `/v1/platform/media/restore-archived` | POST | Pulihkan arsip | [x] |
+| `/v1/platform/media/seo-bulk` | POST | Refresh SEO massal | [x] |
+| `/v1/platform/media/similarweb-bulk` | POST | SimilarWeb massal | [x] |
+| `/v1/platform/media/sync-credit-cost` | POST | Sinkron credit_cost | [x] |
 
 ### 6.4 Media packages, standards, summaries (6)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/platform/media-packages` | GET, POST | Paket media | [ ] |
-| `/v1/platform/media-packages/{packageId}` | PUT, DELETE | Ubah/hapus paket | [ ] |
-| `/v1/platform/media-standards` | GET, POST | Standar konten media | [ ] |
-| `/v1/platform/media-standards/{mediaId}` | GET, PUT, DELETE | CRUD standar | [ ] |
-| `/v1/platform/media-summaries` | GET | Rangkuman media | [ ] |
-| `/v1/platform/media-summaries/{mediaId}/regenerate` | POST | Regenerate rangkuman | [ ] |
+| `/v1/platform/media-packages` | GET, POST | Paket media | [x] |
+| `/v1/platform/media-packages/{packageId}` | PUT, DELETE | Ubah/hapus paket | [x] |
+| `/v1/platform/media-standards` | GET, POST | Standar konten media | [x] |
+| `/v1/platform/media-standards/{mediaId}` | GET, PUT, DELETE | CRUD standar | [x] |
+| `/v1/platform/media-summaries` | GET | Rangkuman media | [x] |
+| `/v1/platform/media-summaries/{mediaId}/regenerate` | POST | Regenerate rangkuman | [x] |
 
 ### 6.5 Operations (32) — fase 11
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/platform/operations/access` | GET | Matriks akses | [ ] |
-| `/v1/platform/operations/audit` | GET | Audit ringkas | [ ] |
-| `/v1/platform/operations/audit-log` | GET | Log audit | [ ] |
-| `/v1/platform/operations/brands` | GET | Semua brand | [ ] |
-| `/v1/platform/operations/brands/{brandId}/campaigns` | GET | Campaign per brand | [ ] |
-| `/v1/platform/operations/brands/{brandId}/connections` | GET, POST | Koneksi CMS brand | [ ] |
-| `/v1/platform/operations/brands/{brandId}/connections/{connectionId}` | DELETE | Hapus koneksi | [ ] |
-| `/v1/platform/operations/brands/{brandId}/connections/{connectionId}/test` | POST | Tes koneksi | [ ] |
-| `/v1/platform/operations/brands/{brandId}/content-settings` | GET, PUT | Setting konten brand | [ ] |
-| `/v1/platform/operations/credit-adjustment` | POST | Penyesuaian saldo TC | [ ] |
-| `/v1/platform/operations/credit-reports` | GET | Laporan topup | [ ] |
-| `/v1/platform/operations/credit-reports/{reportId}/review` | POST | Review laporan topup | [ ] |
-| `/v1/platform/operations/dead-letters` | GET | Job dead-letter | [ ] |
-| `/v1/platform/operations/dead-letters/{id}/retry` | POST | Retry dead-letter | [ ] |
-| `/v1/platform/operations/errors` | GET | Error terbaru | [ ] |
-| `/v1/platform/operations/generation-switch` | PUT | Kill switch generasi | [ ] |
-| `/v1/platform/operations/notifications` | GET | Notifikasi sistem | [ ] |
-| `/v1/platform/operations/publications` | GET | Semua publikasi | [ ] |
-| `/v1/platform/operations/publications/{publicationId}` | GET | Detail publikasi | [ ] |
-| `/v1/platform/operations/publications/{publicationId}/retry` | POST | Retry publikasi | [ ] |
-| `/v1/platform/operations/running-batches` | GET | Batch berjalan | [ ] |
-| `/v1/platform/operations/summary` | GET | Ringkasan ops | [ ] |
-| `/v1/platform/operations/users` | GET, POST | Kelola user | [ ] |
-| `/v1/platform/operations/users/{userId}/brands` | GET | Brand milik user | [ ] |
-| `/v1/platform/operations/users/{userId}/daily-quota` | GET, PUT | Kuota harian | [ ] |
-| `/v1/platform/operations/users/{userId}/generate-quota` | GET, PUT | Kuota generasi | [ ] |
-| `/v1/platform/operations/users/{userId}/password` | PUT | Reset password | [ ] |
-| `/v1/platform/operations/users/{userId}/role` | PUT | Ubah role | [ ] |
-| `/v1/platform/operations/users/{userId}/status` | PUT | Aktif/nonaktif | [ ] |
-| `/v1/platform/operations/variant-batches` | GET | Batch varian | [ ] |
-| `/v1/platform/operations/variant-batches/{batchId}` | GET | Detail batch | [ ] |
-| `/v1/platform/operations/variant-batches/{batchId}/retry` | POST | Retry batch | [ ] |
+| `/v1/platform/operations/access` | GET | Matriks akses | [x] |
+| `/v1/platform/operations/audit` | GET | Audit ringkas | [x] |
+| `/v1/platform/operations/audit-log` | GET | Log audit | [x] |
+| `/v1/platform/operations/brands` | GET | Semua brand | [x] |
+| `/v1/platform/operations/brands/{brandId}/campaigns` | GET | Campaign per brand | [x] |
+| `/v1/platform/operations/brands/{brandId}/connections` | GET, POST | Koneksi CMS brand | [x] |
+| `/v1/platform/operations/brands/{brandId}/connections/{connectionId}` | DELETE | Hapus koneksi | [x] |
+| `/v1/platform/operations/brands/{brandId}/connections/{connectionId}/test` | POST | Tes koneksi | [x] |
+| `/v1/platform/operations/brands/{brandId}/content-settings` | GET, PUT | Setting konten brand | [x] |
+| `/v1/platform/operations/credit-adjustment` | POST | Penyesuaian saldo TC | [x] |
+| `/v1/platform/operations/credit-reports` | GET | Laporan topup | [x] |
+| `/v1/platform/operations/credit-reports/{reportId}/review` | POST | Review laporan topup | [x] |
+| `/v1/platform/operations/dead-letters` | GET | Job dead-letter | [x] |
+| `/v1/platform/operations/dead-letters/{id}/retry` | POST | Retry dead-letter | [x] |
+| `/v1/platform/operations/errors` | GET | Error terbaru | [x] |
+| `/v1/platform/operations/generation-switch` | PUT | Kill switch generasi | [x] |
+| `/v1/platform/operations/notifications` | GET | Notifikasi sistem | [x] |
+| `/v1/platform/operations/publications` | GET | Semua publikasi | [x] |
+| `/v1/platform/operations/publications/{publicationId}` | GET | Detail publikasi | [x] |
+| `/v1/platform/operations/publications/{publicationId}/retry` | POST | Retry publikasi | [x] |
+| `/v1/platform/operations/running-batches` | GET | Batch berjalan | [x] |
+| `/v1/platform/operations/summary` | GET | Ringkasan ops | [x] |
+| `/v1/platform/operations/users` | GET, POST | Kelola user | [x] |
+| `/v1/platform/operations/users/{userId}/brands` | GET | Brand milik user | [x] |
+| `/v1/platform/operations/users/{userId}/daily-quota` | GET, PUT | Kuota harian | [x] |
+| `/v1/platform/operations/users/{userId}/generate-quota` | GET, PUT | Kuota generasi | [x] |
+| `/v1/platform/operations/users/{userId}/password` | PUT | Reset password | [x] |
+| `/v1/platform/operations/users/{userId}/role` | PUT | Ubah role | [x] |
+| `/v1/platform/operations/users/{userId}/status` | PUT | Aktif/nonaktif | [x] |
+| `/v1/platform/operations/variant-batches` | GET | Batch varian | [x] |
+| `/v1/platform/operations/variant-batches/{batchId}` | GET | Detail batch | [x] |
+| `/v1/platform/operations/variant-batches/{batchId}/retry` | POST | Retry batch | [x] |
 
 ### 6.6 Partners admin (8)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/platform/partners` | GET, POST | Kelola mitra | [ ] |
-| `/v1/platform/partners/{partnerId}` | GET, PUT, DELETE | CRUD mitra | [ ] |
-| `/v1/platform/partners/{partnerId}/vip` | GET, PUT | Status VIP mitra | [ ] |
-| `/v1/platform/partners/{partnerId}/connections` | GET, POST | Koneksi CMS mitra | [ ] |
-| `/v1/platform/partners/{partnerId}/connections/{connectionId}` | PUT, DELETE | Ubah/hapus | [ ] |
-| `/v1/platform/partners/{partnerId}/connections/{connectionId}/test` | POST | Tes | [ ] |
-| `/v1/platform/partners/{partnerId}/documents` | GET | Dokumen mitra | [ ] |
-| `/v1/platform/partners/{partnerId}/documents/{id}` | PUT | Update dokumen | [ ] |
+| `/v1/platform/partners` | GET, POST | Kelola mitra | [x] |
+| `/v1/platform/partners/{partnerId}` | GET, PUT, DELETE | CRUD mitra | [x] |
+| `/v1/platform/partners/{partnerId}/vip` | GET, PUT | Status VIP mitra | [x] |
+| `/v1/platform/partners/{partnerId}/connections` | GET, POST | Koneksi CMS mitra | [x] |
+| `/v1/platform/partners/{partnerId}/connections/{connectionId}` | PUT, DELETE | Ubah/hapus | [x] |
+| `/v1/platform/partners/{partnerId}/connections/{connectionId}/test` | POST | Tes | [x] |
+| `/v1/platform/partners/{partnerId}/documents` | GET | Dokumen mitra | [x] |
+| `/v1/platform/partners/{partnerId}/documents/{id}` | PUT | Update dokumen | [x] |
 
 ### 6.7 Payments admin (4)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/platform/payments/gateways` | GET, POST | Config gateway (sealed) | [ ] |
-| `/v1/platform/payments/gateways/{gatewayId}/activate` | POST | Aktivasi gateway | [ ] |
-| `/v1/platform/payments/gateways/{gatewayId}/test` | POST | Tes gateway | [ ] |
-| `/v1/platform/payments/transactions` | GET | Semua transaksi | [ ] |
+| `/v1/platform/payments/gateways` | GET, POST | Config gateway (sealed) | [x] |
+| `/v1/platform/payments/gateways/{gatewayId}/activate` | POST | Aktivasi gateway | [x] |
+| `/v1/platform/payments/gateways/{gatewayId}/test` | POST | Tes gateway | [x] |
+| `/v1/platform/payments/transactions` | GET | Semua transaksi | [x] |
 
 ### 6.8 PR admin (9)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/platform/pr/analysis-history` | GET | Riwayat analisis | [ ] |
-| `/v1/platform/pr/brand-standards` | GET | Standar PR brand | [ ] |
-| `/v1/platform/pr/brand-standards/{brandId}` | PUT | Update standar | [ ] |
-| `/v1/platform/pr/config` | GET, PUT | Config PR global | [ ] |
-| `/v1/platform/pr/media-rules` | GET, PUT | Aturan media PR | [ ] |
-| `/v1/platform/pr/recompute-scores` | POST | Recompute skor | [ ] |
-| `/v1/platform/pr/rerun-analysis` | POST | Rerun analisis | [ ] |
-| `/v1/platform/pr/scoring-profiles` | GET, POST | Profil skor | [ ] |
-| `/v1/platform/pr/scoring-profiles/{profileId}/activate` | POST | Aktivasi profil | [ ] |
+| `/v1/platform/pr/analysis-history` | GET | Riwayat analisis | [x] |
+| `/v1/platform/pr/brand-standards` | GET | Standar PR brand | [x] |
+| `/v1/platform/pr/brand-standards/{brandId}` | PUT | Update standar | [x] |
+| `/v1/platform/pr/config` | GET, PUT | Config PR global | [x] |
+| `/v1/platform/pr/media-rules` | GET, PUT | Aturan media PR | [x] |
+| `/v1/platform/pr/recompute-scores` | POST | Recompute skor | [x] |
+| `/v1/platform/pr/rerun-analysis` | POST | Rerun analisis | [x] |
+| `/v1/platform/pr/scoring-profiles` | GET, POST | Profil skor | [x] |
+| `/v1/platform/pr/scoring-profiles/{profileId}/activate` | POST | Aktivasi profil | [x] |
 
 ### 6.9 Settings (8)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/platform/settings/email` | GET, PUT | Config SMTP | [ ] |
-| `/v1/platform/settings/email/deliveries` | GET | Log email | [ ] |
-| `/v1/platform/settings/email/test-connection` | POST | Tes SMTP | [ ] |
-| `/v1/platform/settings/email/test-send` | POST | Kirim tes | [ ] |
-| `/v1/platform/settings/pagespeed` | GET, PUT | API key PageSpeed | [ ] |
-| `/v1/platform/settings/pagespeed/test` | POST | Tes PageSpeed | [ ] |
-| `/v1/platform/settings/turnstile` | GET, PUT | Config Turnstile | [ ] |
-| `/v1/platform/settings/turnstile/test` | POST | Tes Turnstile | [ ] |
+| `/v1/platform/settings/email` | GET, PUT | Config SMTP | [x] |
+| `/v1/platform/settings/email/deliveries` | GET | Log email | [x] |
+| `/v1/platform/settings/email/test-connection` | POST | Tes SMTP | [x] |
+| `/v1/platform/settings/email/test-send` | POST | Kirim tes | [x] |
+| `/v1/platform/settings/pagespeed` | GET, PUT | API key PageSpeed | [x] |
+| `/v1/platform/settings/pagespeed/test` | POST | Tes PageSpeed | [x] |
+| `/v1/platform/settings/turnstile` | GET, PUT | Config Turnstile | [x] |
+| `/v1/platform/settings/turnstile/test` | POST | Tes Turnstile | [x] |
 
 ### 6.10 Taut platform (16) + agents (4)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/platform/taut/ai-usage` | GET | Usage AI taut | [ ] |
-| `/v1/platform/taut/angles/{angleId}` | GET, PATCH, DELETE | CRUD angle | [ ] |
-| `/v1/platform/taut/angles/{angleId}/test` | POST | Tes angle | [ ] |
-| `/v1/platform/taut/angles/{angleId}/versions` | GET, POST | Versi angle | [ ] |
-| `/v1/platform/taut/angles/{angleId}/versions/{versionId}` | GET, PATCH, DELETE | CRUD versi | [ ] |
-| `/v1/platform/taut/angles/{angleId}/versions/{versionId}/activate` | POST | Aktivasi versi | [ ] |
-| `/v1/platform/taut/base-prompt` | GET, POST | Base prompt agent | [ ] |
-| `/v1/platform/taut/base-prompt/{versionId}` | GET, PATCH, DELETE | CRUD versi prompt | [ ] |
-| `/v1/platform/taut/base-prompt/{versionId}/activate` | POST | Aktivasi versi | [ ] |
-| `/v1/platform/taut/channels` | GET, POST | Kanal media | [ ] |
-| `/v1/platform/taut/channels/{channelId}` | PATCH, DELETE | Ubah/hapus kanal | [ ] |
-| `/v1/platform/taut/channels/{channelId}/angles` | GET, POST | Angle per kanal | [ ] |
-| `/v1/platform/taut/runs` | GET | Riwayat run agent | [ ] |
-| `/v1/platform/taut/runs/{campaignId}` | GET | Run per campaign | [ ] |
-| `/v1/platform/taut/runs/cleanup` | POST | Bersihkan run | [ ] |
-| `/v1/platform/taut/runs/retry/{runId}` | POST | Retry run | [ ] |
-| `/v1/platform/taut-agents` | GET | Daftar agent | [ ] |
-| `/v1/platform/taut-agents/{agent}` | GET, PUT | Config agent | [ ] |
-| `/v1/platform/taut-agents/{agent}/test` | POST | Tes agent | [ ] |
-| `/v1/platform/taut-agent-logs` | GET | Log agent | [ ] |
+| `/v1/platform/taut/ai-usage` | GET | Usage AI taut | [x] |
+| `/v1/platform/taut/angles/{angleId}` | GET, PATCH, DELETE | CRUD angle | [x] |
+| `/v1/platform/taut/angles/{angleId}/test` | POST | Tes angle | [x] |
+| `/v1/platform/taut/angles/{angleId}/versions` | GET, POST | Versi angle | [x] |
+| `/v1/platform/taut/angles/{angleId}/versions/{versionId}` | GET, PATCH, DELETE | CRUD versi | [x] |
+| `/v1/platform/taut/angles/{angleId}/versions/{versionId}/activate` | POST | Aktivasi versi | [x] |
+| `/v1/platform/taut/base-prompt` | GET, POST | Base prompt agent | [x] |
+| `/v1/platform/taut/base-prompt/{versionId}` | GET, PATCH, DELETE | CRUD versi prompt | [x] |
+| `/v1/platform/taut/base-prompt/{versionId}/activate` | POST | Aktivasi versi | [x] |
+| `/v1/platform/taut/channels` | GET, POST | Kanal media | [x] |
+| `/v1/platform/taut/channels/{channelId}` | PATCH, DELETE | Ubah/hapus kanal | [x] |
+| `/v1/platform/taut/channels/{channelId}/angles` | GET, POST | Angle per kanal | [x] |
+| `/v1/platform/taut/runs` | GET | Riwayat run agent | [x] |
+| `/v1/platform/taut/runs/{campaignId}` | GET | Run per campaign | [x] |
+| `/v1/platform/taut/runs/cleanup` | POST | Bersihkan run | [x] |
+| `/v1/platform/taut/runs/retry/{runId}` | POST | Retry run | [x] |
+| `/v1/platform/taut-agents` | GET | Daftar agent | [x] |
+| `/v1/platform/taut-agents/{agent}` | GET, PUT | Config agent | [x] |
+| `/v1/platform/taut-agents/{agent}/test` | POST | Tes agent | [x] |
+| `/v1/platform/taut-agent-logs` | GET | Log agent | [x] |
 
 ### 6.11 Platform lainnya (70) — fase 10–11
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/platform/auto-replace` | GET, PUT | Config auto-replace | [ ] |
-| `/v1/platform/bug-reports` | GET | Laporan bug | [ ] |
-| `/v1/platform/bug-reports/{reportId}` | GET, PATCH | Detail/penanganan bug | [ ] |
-| `/v1/platform/config/template-url` | GET, PUT | URL template import | [ ] |
-| `/v1/platform/content-intake-types` | GET, POST | Tipe intake | [ ] |
-| `/v1/platform/content-intake-types/{code}` | GET, PUT, DELETE | CRUD tipe intake | [ ] |
-| `/v1/platform/content-intake-types/{code}/standards` | GET, PUT | Standar konten tipe | [ ] |
-| `/v1/platform/content-intake-types/{code}/standards/versions/{versionId}/activate` | POST | Aktivasi versi standar | [ ] |
-| `/v1/platform/crawlhub` | GET, PUT, POST | Config Crawlhub | [ ] |
-| `/v1/platform/crawlhub/targets` | GET, POST | Target crawl | [ ] |
-| `/v1/platform/credits` | GET, PUT, POST | Config TC (tc_config) | [ ] |
-| `/v1/platform/domain-diagnostics` | GET | Diagnostik domain | [ ] |
-| `/v1/platform/domain-diagnostics/recheck` | POST | Recheck domain | [ ] |
-| `/v1/platform/ga4-configs` | GET, POST | Config GA4 | [ ] |
-| `/v1/platform/ga4-configs/{configId}` | GET, PUT, DELETE | CRUD GA4 | [ ] |
-| `/v1/platform/gatekeeper/logs` | GET | Log gatekeeper | [ ] |
-| `/v1/platform/gatekeeper/stats` | GET | Statistik gatekeeper | [ ] |
-| `/v1/platform/gsc-config` | GET, PUT | Config GSC platform | [ ] |
-| `/v1/platform/invoices` | GET, POST | Kelola invoice | [ ] |
-| `/v1/platform/invoices/{invoiceId}` | GET, PUT, DELETE | CRUD invoice | [ ] |
-| `/v1/platform/knowledge-bases` | GET, POST | Knowledge base rules | [ ] |
-| `/v1/platform/knowledge-bases/{knowledgeBaseId}` | GET, PATCH | Detail KB | [ ] |
-| `/v1/platform/knowledge-bases/{knowledgeBaseId}/versions` | GET, POST | Versi KB | [ ] |
-| `/v1/platform/knowledge-bases/{knowledgeBaseId}/versions/{versionId}` | GET, PATCH, DELETE | CRUD versi KB | [ ] |
-| `/v1/platform/knowledge-bases/{knowledgeBaseId}/versions/{versionId}/activate` | POST | Aktivasi versi KB | [ ] |
-| `/v1/platform/knowledge-bases/{knowledgeBaseId}/versions/{versionId}/rules` | POST | Aturan versi KB | [ ] |
-| `/v1/platform/link-clicks` | GET | Klik tracking | [ ] |
-| `/v1/platform/link-monitor` | GET | Monitor link global | [ ] |
-| `/v1/platform/link-monitor/check` | POST | Trigger cek | [ ] |
-| `/v1/platform/link-monitor/replace` | POST | Ganti link | [ ] |
-| `/v1/platform/moderations` | GET | Moderasi konten | [ ] |
-| `/v1/platform/moderations/{auditId}/review` | POST | Keputusan review | [ ] |
-| `/v1/platform/oauth/google` | GET, PUT | OAuth Google platform | [ ] |
-| `/v1/platform/orders` | GET | Order code campaign | [ ] |
-| `/v1/platform/packages` | GET, POST | Paket kredit | [ ] |
-| `/v1/platform/packages/{packageId}` | GET, PUT, DELETE | CRUD paket | [ ] |
-| `/v1/platform/pricing` | GET, PUT | Config pricing | [ ] |
-| `/v1/platform/referral-audit` | GET | Audit referral | [ ] |
-| `/v1/platform/referrals` | GET | Referral global | [ ] |
-| `/v1/platform/referred-domains` | GET, PUT | Domain referral | [ ] |
-| `/v1/platform/revenue-shares` | GET, POST | Aturan revenue share | [ ] |
-| `/v1/platform/revenue-shares/{ruleId}` | GET, PUT, DELETE | CRUD aturan | [ ] |
-| `/v1/platform/rss-feeds` | GET, POST | RSS feed global | [ ] |
-| `/v1/platform/rss-feeds/{feedId}` | GET, PUT, DELETE, POST | CRUD feed | [ ] |
-| `/v1/platform/seo/config` | GET, PUT | Config SEO platform | [ ] |
-| `/v1/platform/seo/diagnose` | GET | Diagnosa SEO | [ ] |
-| `/v1/platform/server-config` | GET, PUT | Server config (IP dll.) | [ ] |
-| `/v1/platform/settlements` | GET, POST | Settlement | [ ] |
-| `/v1/platform/settlements/config` | GET, PUT | Config settlement | [ ] |
-| `/v1/platform/settlements/{settlementId}` | GET, PUT, DELETE | CRUD settlement | [ ] |
-| `/v1/platform/settlements/{settlementId}/receipt` | POST | Upload bukti | [ ] |
-| `/v1/platform/short-link-config` | GET, PUT | Config short link | [ ] |
-| `/v1/platform/vip-partners` | GET | Daftar VIP partner | [ ] |
-| `/v1/platform/vip-partners/{partnerId}/domains` | GET | Domain VIP | [ ] |
-| `/v1/platform/wa/config` | GET, PUT | Config WA Fonnte | [ ] |
-| `/v1/platform/wa/deliveries` | GET | Log WA | [ ] |
-| `/v1/platform/wa/templates` | GET, PUT, DELETE | Template WA | [ ] |
-| `/v1/platform/wa/test` | POST | Tes kirim WA | [ ] |
+| `/v1/platform/auto-replace` | GET, PUT | Config auto-replace | [x] |
+| `/v1/platform/bug-reports` | GET | Laporan bug | [x] |
+| `/v1/platform/bug-reports/{reportId}` | GET, PATCH | Detail/penanganan bug | [x] |
+| `/v1/platform/config/template-url` | GET, PUT | URL template import | [x] |
+| `/v1/platform/content-intake-types` | GET, POST | Tipe intake | [x] |
+| `/v1/platform/content-intake-types/{code}` | GET, PUT, DELETE | CRUD tipe intake | [x] |
+| `/v1/platform/content-intake-types/{code}/standards` | GET, PUT | Standar konten tipe | [x] |
+| `/v1/platform/content-intake-types/{code}/standards/versions/{versionId}/activate` | POST | Aktivasi versi standar | [x] |
+| `/v1/platform/crawlhub` | GET, PUT, POST | Config Crawlhub | [x] |
+| `/v1/platform/crawlhub/targets` | GET, POST | Target crawl | [x] |
+| `/v1/platform/credits` | GET, PUT, POST | Config TC (tc_config) | [x] |
+| `/v1/platform/domain-diagnostics` | GET | Diagnostik domain | [x] |
+| `/v1/platform/domain-diagnostics/recheck` | POST | Recheck domain | [x] |
+| `/v1/platform/ga4-configs` | GET, POST | Config GA4 | [x] |
+| `/v1/platform/ga4-configs/{configId}` | GET, PUT, DELETE | CRUD GA4 | [x] |
+| `/v1/platform/gatekeeper/logs` | GET | Log gatekeeper | [x] |
+| `/v1/platform/gatekeeper/stats` | GET | Statistik gatekeeper | [x] |
+| `/v1/platform/gsc-config` | GET, PUT | Config GSC platform | [x] |
+| `/v1/platform/invoices` | GET, POST | Kelola invoice | [x] |
+| `/v1/platform/invoices/{invoiceId}` | GET, PUT, DELETE | CRUD invoice | [x] |
+| `/v1/platform/knowledge-bases` | GET, POST | Knowledge base rules | [x] |
+| `/v1/platform/knowledge-bases/{knowledgeBaseId}` | GET, PATCH | Detail KB | [x] |
+| `/v1/platform/knowledge-bases/{knowledgeBaseId}/versions` | GET, POST | Versi KB | [x] |
+| `/v1/platform/knowledge-bases/{knowledgeBaseId}/versions/{versionId}` | GET, PATCH, DELETE | CRUD versi KB | [x] |
+| `/v1/platform/knowledge-bases/{knowledgeBaseId}/versions/{versionId}/activate` | POST | Aktivasi versi KB | [x] |
+| `/v1/platform/knowledge-bases/{knowledgeBaseId}/versions/{versionId}/rules` | POST | Aturan versi KB | [x] |
+| `/v1/platform/link-clicks` | GET | Klik tracking | [x] |
+| `/v1/platform/link-monitor` | GET | Monitor link global | [x] |
+| `/v1/platform/link-monitor/check` | POST | Trigger cek | [x] |
+| `/v1/platform/link-monitor/replace` | POST | Ganti link | [x] |
+| `/v1/platform/moderations` | GET | Moderasi konten | [x] |
+| `/v1/platform/moderations/{auditId}/review` | POST | Keputusan review | [x] |
+| `/v1/platform/oauth/google` | GET, PUT | OAuth Google platform | [x] |
+| `/v1/platform/orders` | GET | Order code campaign | [x] |
+| `/v1/platform/packages` | GET, POST | Paket kredit | [x] |
+| `/v1/platform/packages/{packageId}` | GET, PUT, DELETE | CRUD paket | [x] |
+| `/v1/platform/pricing` | GET, PUT | Config pricing | [x] |
+| `/v1/platform/referral-audit` | GET | Audit referral | [x] |
+| `/v1/platform/referrals` | GET | Referral global | [x] |
+| `/v1/platform/referred-domains` | GET, PUT | Domain referral | [x] |
+| `/v1/platform/revenue-shares` | GET, POST | Aturan revenue share | [x] |
+| `/v1/platform/revenue-shares/{ruleId}` | GET, PUT, DELETE | CRUD aturan | [x] |
+| `/v1/platform/rss-feeds` | GET, POST | RSS feed global | [x] |
+| `/v1/platform/rss-feeds/{feedId}` | GET, PUT, DELETE, POST | CRUD feed | [x] |
+| `/v1/platform/seo/config` | GET, PUT | Config SEO platform | [x] |
+| `/v1/platform/seo/diagnose` | GET | Diagnosa SEO | [x] |
+| `/v1/platform/server-config` | GET, PUT | Server config (IP dll.) | [x] |
+| `/v1/platform/settlements` | GET, POST | Settlement | [x] |
+| `/v1/platform/settlements/config` | GET, PUT | Config settlement | [x] |
+| `/v1/platform/settlements/{settlementId}` | GET, PUT, DELETE | CRUD settlement | [x] |
+| `/v1/platform/settlements/{settlementId}/receipt` | POST | Upload bukti | [x] |
+| `/v1/platform/short-link-config` | GET, PUT | Config short link | [x] |
+| `/v1/platform/vip-partners` | GET | Daftar VIP partner | [x] |
+| `/v1/platform/vip-partners/{partnerId}/domains` | GET | Domain VIP | [x] |
+| `/v1/platform/wa/config` | GET, PUT | Config WA Fonnte | [x] |
+| `/v1/platform/wa/deliveries` | GET | Log WA | [x] |
+| `/v1/platform/wa/templates` | GET, PUT, DELETE | Template WA | [x] |
+| `/v1/platform/wa/test` | POST | Tes kirim WA | [x] |
 
 ## 7. `/v1` lainnya (8)
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/bug-reports` | POST | Kirim laporan bug (semua role) | [ ] |
-| `/v1/campaign-reports/{token}` | GET | Laporan publik via share token | [ ] |
-| `/v1/internal/cron/scheduler` | GET, POST | Trigger scheduler (guard CRON_SECRET) | [ ] |
-| `/v1/internal/jobs` | POST | Pull 1 job (guard JOB_RUNNER_KEY) | [ ] |
+| `/v1/bug-reports` | POST | Kirim laporan bug (semua role) | [x] |
+| `/v1/campaign-reports/{token}` | GET | Laporan publik via share token | [x] |
+| `/v1/internal/cron/scheduler` | GET, POST | Trigger scheduler (guard CRON_SECRET) | [x] |
+| `/v1/internal/jobs` | POST | Pull 1 job (guard JOB_RUNNER_KEY) | [x] |
 | `/v1/me/notification-preferences` | GET, PUT | Preferensi notifikasi user | [x] |
-| `/v1/publishing/callbacks` | POST | Callback publishing (HMAC, Bearer api_key) | [ ] |
-| `/v1/publishing/feed.json` | GET | Feed JSON partner | [ ] |
-| `/v1/tracking/events` | POST | Catat event tracking artikel | [ ] |
+| `/v1/publishing/callbacks` | POST | Callback publishing (HMAC, Bearer api_key) | [x] |
+| `/v1/publishing/feed.json` | GET | Feed JSON partner | [x] |
+| `/v1/tracking/events` | POST | Catat event tracking artikel | [x] |
 
 ---
 

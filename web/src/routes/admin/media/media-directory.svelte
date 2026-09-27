@@ -1,0 +1,1248 @@
+<script lang="ts">
+	// Tab Direktori /admin/media — master data media (harga, kredit, tier, integrasi, partner).
+	// Port MediaDirectorySection di apps/web/src/app/admin/media/_sections.tsx.
+	import { onMount } from 'svelte';
+	import { ExternalLink, Plus, RefreshCw, Search, Sparkle } from '@lucide/svelte';
+	import DataTable from '$lib/components/admin/data-table.svelte';
+	import Modal from '$lib/components/admin/modal.svelte';
+	import Badge from '$lib/components/admin/badge.svelte';
+	import Pagination from '$lib/components/admin/pagination.svelte';
+	import { fmtDateTime, statusLabel } from '$lib/admin-format';
+	import {
+		compactNumber,
+		errMessage,
+		idr,
+		isAccessError,
+		mountWithSession,
+		platformRequest,
+		wordCountLabel,
+		scoreTone,
+		MEDIA_INTEGRATION_TYPES_UI,
+		MEDIA_STATUSES,
+		MEDIA_TIERS,
+		categoryText,
+		AUDIT_LABEL,
+		auditTone,
+		type AuditItem,
+		type Media,
+		type Partner
+	} from './_shared';
+
+	let { onPendingRefresh }: { onPendingRefresh?: () => void } = $props();
+
+	const PAGE_SIZE = 20;
+
+	let rows = $state<Media[]>([]);
+	let total = $state(0);
+	let partners = $state<Partner[]>([]);
+	let error = $state('');
+	let loading = $state(true);
+	let createOpen = $state(false);
+	let editing = $state<Media | null>(null);
+	let busy = $state(false);
+	let selectedIds = $state<Set<string>>(new Set());
+	let bulkBusy = $state(false);
+	let bulkDeleteOpen = $state(false);
+	let bulkResult = $state<{ archived: number; blocked: Array<{ name: string; reason: string }> } | null>(null);
+	let tcRate = $state(1000);
+	let markupPercent = $state(15);
+	let search = $state('');
+	let statusFilter = $state('');
+	let page = $state(1);
+	let detailAudit = $state<AuditItem[] | null>(null);
+	let detailLoading = $state(false);
+	let recomputing = $state<string | null>(null);
+	let syncing = $state(false);
+	let swBusyId = $state<string | null>(null);
+	let swBulkBusy = $state(false);
+	let swSummary = $state('');
+	let swVisits = $state<Record<string, number | null>>({});
+	let aiBusyId = $state<string | null>(null);
+	let aiBulkBusy = $state(false);
+	let aiSummary = $state('');
+	let reviewTarget = $state<Media | null>(null);
+	let rejectReason = $state('');
+	let reviewBusy = $state(false);
+	let negoPrice = $state('');
+	let priceConfirmOpen = $state(false);
+	let priceNote = $state('');
+
+	let form = $state({
+		name: '',
+		category: '',
+		website_url: '',
+		price: '0',
+		status: 'active',
+		integration_type: 'manual',
+		partner_id: '',
+		publish_defaults: '',
+		traffic_estimate: '0',
+		media_tier: 'tier3',
+		media_quality_score: '',
+		media_quality_notes: '',
+		pricing_type: 'nett' as 'nett' | 'nego'
+	});
+
+	// Pencarian sisi server (debounced) — cari nama/slug/kategori media.
+	let debouncedSearch = $state('');
+	let searchTimer: ReturnType<typeof setTimeout> | null = null;
+	$effect(() => {
+		const value = search.trim();
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => (debouncedSearch = value), 300);
+		return () => {
+			if (searchTimer) clearTimeout(searchTimer);
+		};
+	});
+
+	let ready = $state(false);
+	onMount(() => mountWithSession(async () => (ready = true)));
+
+	$effect(() => {
+		if (!ready) return;
+		void debouncedSearch;
+		void statusFilter;
+		void page;
+		void load();
+	});
+
+	async function load() {
+		loading = true;
+		error = '';
+		try {
+			const params = new URLSearchParams({
+				limit: String(PAGE_SIZE),
+				offset: String((page - 1) * PAGE_SIZE)
+			});
+			if (debouncedSearch) params.set('search', debouncedSearch);
+			if (statusFilter) params.set('status', statusFilter);
+			const [mediaData, partnerData, creditsData, pricingData] = await Promise.all([
+				platformRequest<{ media: Media[]; total: number }>(`/media?${params}`),
+				platformRequest<{ partners: Partner[] }>('/partners'),
+				platformRequest<{ tc_config?: { rate_idr?: number } }>('/credits'),
+				platformRequest<{ markup_percent?: number }>('/pricing').catch(() => null)
+			]);
+			rows = mediaData.media ?? [];
+			total = mediaData.total ?? 0;
+			partners = partnerData.partners ?? [];
+			const rate = creditsData.tc_config?.rate_idr;
+			if (rate) tcRate = rate;
+			if (pricingData?.markup_percent != null) markupPercent = pricingData.markup_percent;
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			loading = false;
+		}
+	}
+
+	// Pricing engine (server = sumber kebenaran; preview ini hanya bantuan UX):
+	// client_price = harga mitra × (1 + markup/100); kredit dari CLIENT price.
+	const clientPriceFor = (base: number) => Math.round(base * (1 + (markupPercent || 15) / 100));
+	const creditForPrice = (price: number) => {
+		const client = clientPriceFor(price);
+		return client > 0 ? Math.max(1, Math.ceil(client / (tcRate || 1000))) : 0;
+	};
+
+	function openCreate() {
+		editing = null;
+		detailAudit = null;
+		form = {
+			name: '',
+			category: '',
+			website_url: '',
+			price: '0',
+			status: 'active',
+			integration_type: 'manual',
+			partner_id: '',
+			publish_defaults: '',
+			traffic_estimate: '0',
+			media_tier: 'tier3',
+			media_quality_score: '',
+			media_quality_notes: '',
+			pricing_type: 'nett'
+		};
+		createOpen = true;
+	}
+
+	function openEdit(row: Media) {
+		editing = row;
+		form = {
+			name: row.name,
+			category: row.category ?? '',
+			website_url: row.website_url ?? '',
+			price: String(row.price ?? 0),
+			status: row.status,
+			integration_type: row.integration_type,
+			partner_id: row.partner_id ?? '',
+			publish_defaults: row.publish_defaults ? JSON.stringify(row.publish_defaults) : '',
+			traffic_estimate: String(row.traffic_estimate ?? 0),
+			media_tier: row.media_tier,
+			media_quality_score: row.media_quality_score != null ? String(row.media_quality_score) : '',
+			media_quality_notes: row.media_quality_notes ?? '',
+			pricing_type: row.pricing_type ?? 'nett'
+		};
+		detailAudit = null;
+		detailLoading = true;
+		createOpen = true;
+		void platformRequest<{ items: AuditItem[] }>(`/media/${row.id}/audit`)
+			.then((data) => (detailAudit = data.items ?? []))
+			.catch(() => (detailAudit = []))
+			.finally(() => (detailLoading = false));
+	}
+
+	function closeForm() {
+		createOpen = false;
+		editing = null;
+		priceConfirmOpen = false;
+		priceNote = '';
+	}
+
+	async function doSave() {
+		busy = true;
+		error = '';
+		try {
+			let publishDefaults: unknown = null;
+			if (form.publish_defaults.trim()) {
+				try {
+					publishDefaults = JSON.parse(form.publish_defaults);
+				} catch {
+					error = 'publish_defaults bukan JSON yang valid.';
+					return;
+				}
+			}
+			const price = Number(form.price) || 0;
+			const payload: Record<string, unknown> = {
+				name: form.name.trim(),
+				category: form.category.trim() || null,
+				website_url: form.website_url.trim() || null,
+				price,
+				credit_cost: creditForPrice(price),
+				status: form.status,
+				integration_type: form.integration_type,
+				partner_id: form.partner_id || null,
+				publish_defaults: publishDefaults,
+				traffic_estimate: Number(form.traffic_estimate) || 0,
+				media_tier: form.media_tier,
+				media_quality_score: form.media_quality_score === '' ? null : Number(form.media_quality_score),
+				media_quality_notes: form.media_quality_notes.trim() || null,
+				pricing_type: form.pricing_type,
+				price_change_note:
+					form.pricing_type !== (editing?.pricing_type ?? 'nett') ? priceNote.trim() || null : undefined
+			};
+			if (editing) {
+				await platformRequest(`/media/${editing.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+			} else {
+				await platformRequest('/media', { method: 'POST', body: JSON.stringify(payload) });
+			}
+			closeForm();
+			await load();
+			onPendingRefresh?.();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			busy = false;
+		}
+	}
+
+	function onSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		// Media terbit + harga berubah nego↔nett → konfirmasi dulu dengan catatan.
+		if (editing && form.pricing_type !== (editing.pricing_type ?? 'nett')) {
+			priceNote = '';
+			priceConfirmOpen = true;
+			return;
+		}
+		void doSave();
+	}
+
+	async function updateStatus(media: Media, status: string) {
+		error = '';
+		try {
+			await platformRequest(`/media/${media.id}`, { method: 'PUT', body: JSON.stringify({ status }) });
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+		}
+	}
+
+	async function approveMedia(media: Media) {
+		reviewBusy = true;
+		error = '';
+		try {
+			await platformRequest(`/media/${media.id}/review`, {
+				method: 'POST',
+				body: JSON.stringify({ decision: 'approve' })
+			});
+			await load();
+			onPendingRefresh?.();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			reviewBusy = false;
+		}
+	}
+
+	async function rejectMedia() {
+		if (!reviewTarget) return;
+		const reason = rejectReason.trim();
+		if (!reason) {
+			error = 'Alasan penolakan wajib diisi.';
+			return;
+		}
+		reviewBusy = true;
+		error = '';
+		try {
+			await platformRequest(`/media/${reviewTarget.id}/review`, {
+				method: 'POST',
+				body: JSON.stringify({ decision: 'reject', reason })
+			});
+			reviewTarget = null;
+			rejectReason = '';
+			await load();
+			onPendingRefresh?.();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			reviewBusy = false;
+		}
+	}
+
+	async function negotiateMedia() {
+		if (!reviewTarget) return;
+		const price = Number(negoPrice.replace(/\D/g, ''));
+		if (!price) {
+			error = 'Harga negosiasi wajib diisi.';
+			return;
+		}
+		reviewBusy = true;
+		error = '';
+		try {
+			await platformRequest(`/media/${reviewTarget.id}/review`, {
+				method: 'POST',
+				body: JSON.stringify({
+					decision: 'negotiate',
+					reason: rejectReason.trim() || 'Negosiasi harga',
+					negotiated_price: price
+				})
+			});
+			reviewTarget = null;
+			rejectReason = '';
+			negoPrice = '';
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			reviewBusy = false;
+		}
+	}
+
+	async function bulkArchive() {
+		bulkBusy = true;
+		error = '';
+		bulkResult = null;
+		try {
+			const ids = [...selectedIds];
+			const result = await platformRequest<{
+				archived: number;
+				blocked: Array<{ id: string; name: string; reason: string }>;
+			}>('/media/bulk', { method: 'POST', body: JSON.stringify({ ids }) });
+			bulkResult = {
+				archived: result.archived,
+				blocked: (result.blocked ?? []).map((b) => ({ name: b.name, reason: b.reason }))
+			};
+			selectedIds = new Set();
+			bulkDeleteOpen = false;
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			bulkBusy = false;
+		}
+	}
+
+	async function syncCredits() {
+		syncing = true;
+		error = '';
+		try {
+			const result = await platformRequest<{ synced: number; rate_idr: number }>('/media/sync-credit-cost', {
+				method: 'POST'
+			});
+			error = `Sinkronisasi kredit selesai: ${result.synced} media diperbarui (1 TC = Rp${result.rate_idr.toLocaleString('id-ID')}).`;
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			syncing = false;
+		}
+	}
+
+	async function recomputeHealth(media: Media) {
+		error = '';
+		recomputing = media.id;
+		try {
+			await platformRequest(`/media/${media.id}/recompute-health`, { method: 'POST' });
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			recomputing = null;
+		}
+	}
+
+	async function checkSimilarWeb(media: Media) {
+		error = '';
+		swBusyId = media.id;
+		try {
+			const r = await platformRequest<{ visits: number | null; cached: boolean }>(
+				`/media/${media.id}/similarweb`,
+				{ method: 'POST' }
+			);
+			swVisits = { ...swVisits, [media.id]: r.visits };
+			if (r.visits != null) {
+				rows = rows.map((row) => (row.id === media.id ? { ...row, traffic_estimate: r.visits as number } : row));
+			}
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			swBusyId = null;
+		}
+	}
+
+	async function bulkSimilarWeb() {
+		error = '';
+		swBulkBusy = true;
+		swSummary = 'Memeriksa trafik media (maks 25 per klik)…';
+		try {
+			const r = await platformRequest<{
+				candidates: number;
+				checked: number;
+				ok: number;
+				failed: number;
+				results: Array<{ media_id: string; ok: boolean; visits: number | null; detail: string }>;
+			}>('/media/similarweb-bulk', { method: 'POST', body: JSON.stringify({ limit: 25 }) });
+			const next = { ...swVisits };
+			for (const res of r.results ?? []) if (res.ok) next[res.media_id] = res.visits;
+			swVisits = next;
+			swSummary = `Selesai: ${r.ok} berhasil, ${r.failed} gagal, dari ${r.checked} media diperiksa (${r.candidates} kandidat basi/stale). Sisa media menyusul klik berikutnya.`;
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+			swSummary = '';
+		} finally {
+			swBulkBusy = false;
+		}
+	}
+
+	async function checkAiSignals(media: Media) {
+		error = '';
+		aiBusyId = media.id;
+		try {
+			const r = await platformRequest<{
+				da: number | null;
+				ai_trust_score: number | null;
+				ai_citation: boolean | null;
+				checked_at: string;
+			}>(`/media/${media.id}/seo`, { method: 'POST' });
+			rows = rows.map((row) =>
+				row.id === media.id
+					? {
+							...row,
+							seo_da: r.da,
+							seo_ai_trust: r.ai_trust_score,
+							seo_ai_citation: r.ai_citation,
+							seo_checked_at: r.checked_at
+						}
+					: row
+			);
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			aiBusyId = null;
+		}
+	}
+
+	async function bulkAiSignals() {
+		error = '';
+		aiBulkBusy = true;
+		aiSummary = 'Memeriksa sinyal SEO & AI media (maks 25 per klik)…';
+		try {
+			const r = await platformRequest<{ candidates: number; checked: number; ok: number; failed: number }>(
+				'/media/seo-bulk',
+				{ method: 'POST', body: JSON.stringify({ limit: 25 }) }
+			);
+			aiSummary = `Selesai: ${r.ok} berhasil, ${r.failed} gagal, dari ${r.checked} media diperiksa (${r.candidates} kandidat basi >5 bulan). Sisa media menyusul klik berikutnya atau otomatis via scheduler.`;
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+			aiSummary = '';
+		} finally {
+			aiBulkBusy = false;
+		}
+	}
+
+	function toggleSelected(id: string, checked: boolean) {
+		const next = new Set(selectedIds);
+		if (checked) next.add(id);
+		else next.delete(id);
+		selectedIds = next;
+	}
+
+	function toggleSelectAll(checked: boolean) {
+		const next = new Set(selectedIds);
+		for (const row of rows) {
+			if (checked) next.add(row.id);
+			else next.delete(row.id);
+		}
+		selectedIds = next;
+	}
+
+	const allSelected = $derived(rows.length > 0 && rows.every((row) => selectedIds.has(row.id)));
+	const showAccessState = $derived(rows.length === 0 && isAccessError(error));
+</script>
+
+{#snippet selectCell(row: Media)}
+	<input
+		type="checkbox"
+		checked={selectedIds.has(row.id)}
+		aria-label={`Pilih ${row.name}`}
+		onclick={(e) => e.stopPropagation()}
+		onchange={(e) => toggleSelected(row.id, e.currentTarget.checked)}
+	/>
+{/snippet}
+
+{#snippet mediaCell(row: Media)}
+	<div>
+		<div class="flex items-center gap-1">
+			<p class="font-medium">{row.name}</p>
+			{#if row.partner_id}<Badge tone="accent" value="Mitra" />{/if}
+		</div>
+		<p class="text-xs text-muted-foreground">{row.slug ?? row.id.slice(0, 8)}</p>
+		{#if row.contoh_artikel_url}
+			<a
+				class="mt-1 inline-flex items-center gap-1 text-xs"
+				style="color: var(--primary);"
+				href={row.contoh_artikel_url}
+				target="_blank"
+				rel="noreferrer nofollow"
+			>
+				Contoh artikel <ExternalLink size={11} />
+			</a>
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet publicationModeCell(row: Media)}
+	{#if (row.publication_mode ?? 'draft') === 'publish'}
+		<Badge tone="success" label="Terbit" />
+	{:else}
+		<Badge tone="warning" label="Draf" />
+	{/if}
+{/snippet}
+
+{#snippet wordCountCell(row: Media)}
+	<span class="text-xs">{row.word_count_mode ? wordCountLabel(row.word_count_mode) : '—'}</span>
+{/snippet}
+
+{#snippet dewanPersCell(row: Media)}
+	{#if row.dewan_pers_verified}<Badge tone="success" label="Ya" />
+	{:else}<Badge tone="neutral" label="Tidak" />{/if}
+{/snippet}
+
+{#snippet tierCell(row: Media)}
+	<Badge
+		tone={row.media_tier === 'tier1' ? 'accent' : row.media_tier === 'tier2' ? 'warning' : 'neutral'}
+		value={row.media_tier}
+	/>
+{/snippet}
+
+{#snippet priceCell(row: Media)}
+	<div class="tabular-nums">
+		<p>{idr(row.price ?? 0)}</p>
+		{#if row.price > 0}
+			<p class="text-xs text-muted-foreground">klien {idr(row.client_price ?? 0)} · {row.markup_percent ?? 15}%</p>
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet creditCell(row: Media)}
+	<div class="flex flex-wrap items-center gap-1">
+		<span class="tabular-nums">{row.credit_cost}</span>
+		{#if row.price > 0 && row.credit_cost !== creditForPrice(row.price)}
+			<span
+				class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+				style="background-color: var(--warning-soft); color: var(--warning);"
+				title={`Harga klien ${idr(clientPriceFor(row.price))} (dasar ${row.price.toLocaleString('id-ID')} + markup ${markupPercent}%) → kredit ${creditForPrice(row.price)} TC`}
+				>→ {creditForPrice(row.price)}</span
+			>
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet trafficCell(row: Media)}
+	<div class="flex items-center justify-end gap-2">
+		<span class="text-xs">{compactNumber(row.traffic_estimate ?? 0)}</span>
+		<button
+			class="rounded-lg p-1 hover:bg-secondary"
+			title="Cek trafik SimilarWeb"
+			aria-label={`Cek trafik ${row.name}`}
+			disabled={swBusyId === row.id || swBulkBusy}
+			onclick={(e) => {
+				e.stopPropagation();
+				void checkSimilarWeb(row);
+			}}
+		>
+			<RefreshCw size={12} />
+		</button>
+	</div>
+	{#if swVisits[row.id] != null}
+		<p class="text-right text-xs" style="color: var(--primary);">
+			SW: {(swVisits[row.id] ?? 0).toLocaleString('id-ID')}/bln
+		</p>
+	{/if}
+{/snippet}
+
+{#snippet healthCell(row: Media)}
+	{#if row.health_score != null}
+		<Badge tone={scoreTone(row.health_score)} value={`${row.health_score}/100`} />
+	{:else}
+		<Badge tone="neutral" value="—" />
+	{/if}
+{/snippet}
+
+{#snippet aiTrustCell(row: Media)}
+	<span title={row.seo_checked_at ? `Terakhir dicek ${fmtDateTime(row.seo_checked_at)}` : undefined}>
+		{#if row.seo_ai_trust != null}
+			<Badge tone={scoreTone(row.seo_ai_trust)} value={`${row.seo_ai_trust}/100`} />
+		{:else}
+			<Badge tone="neutral" value="—" />
+		{/if}
+	</span>
+	{#if row.seo_da != null}
+		<p class="mt-1 text-xs text-muted-foreground" title="Domain Authority (Ahrefs)">DA {row.seo_da}</p>
+	{/if}
+{/snippet}
+
+{#snippet aiCitedCell(row: Media)}
+	{#if row.seo_ai_citation === true}
+		<span title="Terdeteksi sebagai rujukan AI Overview via SERPens">
+			<Badge tone="accent" label="🤖 Sumber AI" />
+		</span>
+	{:else}
+		<Badge tone="neutral" value="—" />
+	{/if}
+{/snippet}
+
+{#snippet actionsCell(row: Media)}
+	<div class="flex flex-wrap justify-center gap-1">
+		{#if row.status === 'pending_review'}
+			<button
+				class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+				style="color: var(--success);"
+				disabled={reviewBusy}
+				onclick={(e) => {
+					e.stopPropagation();
+					void approveMedia(row);
+				}}>Setujui</button
+			>
+			<button
+				class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+				style="color: var(--destructive);"
+				disabled={reviewBusy}
+				onclick={(e) => {
+					e.stopPropagation();
+					reviewTarget = row;
+					rejectReason = '';
+					error = '';
+				}}>Tolak</button
+			>
+		{/if}
+		<button
+			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+			onclick={(e) => {
+				e.stopPropagation();
+				openEdit(row);
+			}}>Edit</button
+		>
+		<button
+			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+			disabled={recomputing === row.id}
+			onclick={(e) => {
+				e.stopPropagation();
+				void recomputeHealth(row);
+			}}>{recomputing === row.id ? 'Menghitung…' : 'Hitung health'}</button
+		>
+		<button
+			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+			disabled={aiBusyId === row.id || aiBulkBusy}
+			onclick={(e) => {
+				e.stopPropagation();
+				void checkAiSignals(row);
+			}}>{aiBusyId === row.id ? 'Mengecek…' : 'Cek AI'}</button
+		>
+		{#if row.status === 'active'}
+			<button
+				class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+				onclick={(e) => {
+					e.stopPropagation();
+					void updateStatus(row, 'inactive');
+				}}>Nonaktifkan</button
+			>
+		{:else if row.status !== 'pending_review' && row.status !== 'rejected'}
+			<button
+				class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+				style="color: var(--success);"
+				onclick={(e) => {
+					e.stopPropagation();
+					void updateStatus(row, 'active');
+				}}>Aktifkan</button
+			>
+		{/if}
+		{#if row.status !== 'archived'}
+			<button
+				class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+				style="color: var(--destructive);"
+				onclick={(e) => {
+					e.stopPropagation();
+					void updateStatus(row, 'archived');
+				}}>Arsipkan</button
+			>
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet categoryCell(row: Media)}
+	<span class="text-muted-foreground">{categoryText(row)}</span>
+{/snippet}
+
+{#snippet integrationCell(row: Media)}
+	<Badge tone="neutral" value={row.integration_type} />
+{/snippet}
+
+{#if loading && rows.length === 0 && !error}
+	<p class="mt-6 text-sm text-muted-foreground">Memuat direktori media…</p>
+{:else if showAccessState}
+	<div class="app-card mt-6 px-6 py-10 text-center">
+		<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke direktori media.</p>
+	</div>
+{:else}
+	<div class="mt-4 flex flex-wrap items-center gap-2">
+		<label class="app-input flex min-w-[240px] flex-1 items-center gap-2 !py-1.5">
+			<Search size={15} class="text-muted-foreground" />
+			<input
+				class="w-full bg-transparent text-sm outline-none"
+				placeholder="Cari nama, slug, atau kategori…"
+				aria-label="Cari media"
+				bind:value={search}
+				oninput={() => (page = 1)}
+			/>
+		</label>
+		{#if debouncedSearch}
+			<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" onclick={() => (search = '')}
+				>Bersihkan pencarian</button
+			>
+		{/if}
+		<select
+			class="app-input !w-auto"
+			aria-label="Filter status media"
+			bind:value={statusFilter}
+			onchange={() => (page = 1)}
+		>
+			<option value="">Semua status</option>
+			<option value="active">🟢 Aktif</option>
+			<option value="inactive">Nonaktif</option>
+			<option value="draft">Draf</option>
+			<option value="archived">Arsip</option>
+		</select>
+		<div class="flex-1"></div>
+		<Badge tone="accent" value={`${total} media`} />
+		<label class="flex items-center gap-1 text-xs text-muted-foreground">
+			<input type="checkbox" checked={allSelected} onchange={(e) => toggleSelectAll(e.currentTarget.checked)} />
+			Pilih halaman ini
+		</label>
+		{#if selectedIds.size > 0}
+			<button
+				class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+				disabled={bulkBusy}
+				onclick={() => (bulkDeleteOpen = true)}>Arsipkan {selectedIds.size} media</button
+			>
+		{/if}
+		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={syncing} onclick={syncCredits}>
+			<RefreshCw size={15} /> Sinkronkan kredit semua
+		</button>
+		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={swBulkBusy} onclick={bulkSimilarWeb}>
+			<RefreshCw size={15} /> {swBulkBusy ? 'Memeriksa…' : 'Cek Trafik Semua (SimilarWeb)'}
+		</button>
+		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={aiBulkBusy} onclick={bulkAiSignals}>
+			<Sparkle size={15} /> {aiBulkBusy ? 'Memeriksa…' : 'Cek AI & SEO Semua'}
+		</button>
+		<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" onclick={openCreate}>
+			<Plus size={15} /> Tambah media
+		</button>
+	</div>
+
+	{#if swSummary}<p class="mt-2 text-xs text-muted-foreground">{swSummary}</p>{/if}
+	{#if aiSummary}<p class="mt-2 text-xs text-muted-foreground">{aiSummary}</p>{/if}
+	{#if error && !isAccessError(error)}
+		<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>
+	{/if}
+
+	<DataTable
+		columns={[
+			{ key: 'select', label: '', width: '36px', render: selectCell },
+			{ key: 'name', label: 'Media', render: mediaCell },
+			{ key: 'category', label: 'Kategori', render: categoryCell },
+			{ key: 'publication_mode', label: 'Mode Publikasi', render: publicationModeCell },
+			{ key: 'word_count_mode', label: 'Jumlah Kata', render: wordCountCell },
+			{ key: 'dewan_pers', label: 'Dewan Pers', render: dewanPersCell },
+			{ key: 'tier', label: 'Tier', render: tierCell },
+			{ key: 'price', label: 'Harga', render: priceCell },
+			{ key: 'credit', label: 'Kredit', render: creditCell },
+			{ key: 'traffic', label: 'Trafik', align: 'right' as const, render: trafficCell },
+			{ key: 'health', label: 'Health', render: healthCell },
+			{ key: 'ai_trust', label: 'AI Trust', render: aiTrustCell },
+			{ key: 'ai_cited', label: 'AI Cited', render: aiCitedCell },
+			{ key: 'integration', label: 'Integrasi', render: integrationCell },
+			{ key: 'actions', label: 'Aksi', align: 'center' as const, render: actionsCell }
+		]}
+		rows={rows}
+		rowKey={(row: Media) => row.id}
+		{loading}
+		empty="Belum ada media. Tambahkan media pertama."
+		minWidth="1500px"
+		onRowClick={(row: Media) => openEdit(row)}
+	/>
+
+	<Pagination
+		total={total}
+		limit={PAGE_SIZE}
+		offset={(page - 1) * PAGE_SIZE}
+		onChange={(next) => (page = next / PAGE_SIZE + 1)}
+	/>
+
+	{#if bulkResult}
+		<div
+			class="app-card mt-3 px-4 py-2.5 text-sm"
+			style="color: {bulkResult.blocked.length ? 'var(--warning)' : 'var(--success)'};"
+		>
+			{bulkResult.archived} media diarsipkan.
+			{bulkResult.blocked.length > 0
+				? ` Dilewati ${bulkResult.blocked.length} media: ${bulkResult.blocked
+						.slice(0, 3)
+						.map((b) => b.name)
+						.join(', ')}${bulkResult.blocked.length > 3 ? ', …' : ''}.`
+				: ''}
+		</div>
+	{/if}
+{/if}
+
+{#if createOpen}
+	<Modal title={editing ? `Edit media — ${editing.name}` : 'Tambah media'} maxWidth="2xl" onClose={closeForm}>
+		{#if error && !isAccessError(error)}
+			<p class="mb-3 text-sm" style="color: var(--destructive);">{error}</p>
+		{/if}
+		{#if editing}
+			<div class="mb-3 flex flex-wrap items-center gap-4 text-sm">
+				<div class="flex items-center gap-2">
+					<span class="text-xs text-muted-foreground">Status</span>
+					{#if editing.status === 'pending_review'}
+						<Badge tone="warning" label="🟡 Menunggu Review" />
+					{:else if editing.status === 'rejected'}
+						<span title={editing.rejection_reason ?? undefined}
+							><Badge tone="danger" label="🔴 Ditolak" /></span
+						>
+					{:else}
+						<Badge
+							tone={editing.status === 'active' ? 'success' : editing.status === 'draft' ? 'warning' : 'neutral'}
+							value={statusLabel(editing.status)}
+						/>
+					{/if}
+				</div>
+				<div class="flex items-center gap-2">
+					<span class="text-xs text-muted-foreground">Mitra</span>
+					<span>
+						{editing.partner_id
+							? (partners.find((p) => p.id === editing?.partner_id)?.name ??
+								partners.find((p) => p.id === editing?.partner_id)?.email ??
+								'—')
+							: '—'}
+					</span>
+				</div>
+				{#if editing.status === 'rejected' && editing.rejection_reason}
+					<span class="text-xs" style="color: var(--destructive);">Alasan: {editing.rejection_reason}</span>
+				{/if}
+			</div>
+			{#if editing.partner_id}
+				<div
+					class="mb-2 rounded-lg px-3 py-2 text-xs"
+					style="background-color: var(--accent); color: var(--accent-foreground);"
+				>
+					Media ini dikelola mitra
+					<strong
+						>{partners.find((p) => p.id === editing?.partner_id)?.name ??
+							partners.find((p) => p.id === editing?.partner_id)?.email ??
+							'—'}</strong
+					>
+					— perubahan di sini otomatis tersinkron ke dashboard mitra (dan sebaliknya).
+				</div>
+			{/if}
+
+			<div class="app-card mb-3 p-3">
+				<div class="mb-2 flex items-center justify-between">
+					<p class="text-sm font-medium">Health media</p>
+					{#if editing.health_score != null}
+						<Badge tone={scoreTone(editing.health_score)} value={`${editing.health_score}/100`} />
+					{:else}
+						<Badge tone="neutral" label="belum diskor" />
+					{/if}
+				</div>
+				{#if editing.health_breakdown}
+					<div class="flex flex-wrap gap-4">
+						{#each [['Availability', editing.health_breakdown.availability, 15], ['Success rate', editing.health_breakdown.success_rate, 30], ['Publish time', editing.health_breakdown.publish_time, 35], ['Rejection', editing.health_breakdown.rejection_rate, 20]] as [label, value, max] (label)}
+							<div>
+								<p class="text-xs text-muted-foreground">{label}</p>
+								<p class="text-sm font-bold">{Number(value ?? 0)}/{Number(max)}</p>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<p class="text-xs text-muted-foreground">
+						Belum ada breakdown — klik Hitung health di tabel untuk menghitung skor.
+					</p>
+				{/if}
+				{#if editing.health_computed_at}
+					<p class="mt-1 text-xs text-muted-foreground">Dihitung {fmtDateTime(editing.health_computed_at)}</p>
+				{/if}
+			</div>
+
+			<div class="app-card mb-3 p-3">
+				<div class="mb-1 flex items-center gap-2">
+					<p class="text-sm font-medium">Mode Publikasi</p>
+					{#if (editing.publication_mode ?? 'draft') === 'publish'}
+						<Badge tone="success" label="Terbit" />
+					{:else}
+						<Badge tone="warning" label="Draf" />
+					{/if}
+				</div>
+				<p class="text-xs text-muted-foreground">
+					{(editing.publication_mode ?? 'draft') === 'publish'
+						? 'Artikel dari klien langsung diterbitkan ke media tanpa persetujuan manual Mitra.'
+						: 'Artikel dari klien masuk sebagai draft dan menunggu tindakan Mitra. Dikelola mitra lewat halaman Media mitra.'}
+				</p>
+			</div>
+
+			<div class="app-card mb-3 p-3">
+				<div class="mb-1 flex items-center gap-2">
+					<p class="text-sm font-medium">Verifikasi Dewan Pers</p>
+					{#if editing.dewan_pers_verified}<Badge tone="success" label="Ya" />
+					{:else}<Badge tone="neutral" label="Tidak" />{/if}
+				</div>
+				{#if editing.dewan_pers_verified}
+					<div class="space-y-1">
+						{#if editing.dewan_pers_note}<p class="text-xs">{editing.dewan_pers_note}</p>{/if}
+						{#if editing.dewan_pers_cert_no}
+							<p class="text-xs text-muted-foreground">Sertifikat: {editing.dewan_pers_cert_no}</p>
+						{/if}
+						{#if editing.dewan_pers_doc_key}
+							<a
+								class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+								href={`/uploads/${editing.dewan_pers_doc_key}`}
+								target="_blank"
+								rel="noreferrer">Lihat dokumen</a
+							>
+						{:else}
+							<p class="text-xs text-muted-foreground">Tanpa dokumen bukti.</p>
+						{/if}
+					</div>
+				{:else}
+					<p class="text-xs text-muted-foreground">
+						Belum diverifikasi. Status dikelola mitra lewat halaman Media mitra (per media/domain).
+					</p>
+				{/if}
+			</div>
+
+			<div class="mb-3">
+				<p class="mb-1 text-sm font-medium text-muted-foreground">Riwayat audit</p>
+				{#if detailLoading}
+					<p class="text-xs text-muted-foreground">Memuat…</p>
+				{:else if detailAudit === null}
+					<p class="text-xs text-muted-foreground">—</p>
+				{:else if detailAudit.length === 0}
+					<p class="text-xs text-muted-foreground">Belum ada aktivitas untuk media ini.</p>
+				{:else}
+					<div class="max-h-36 space-y-1 overflow-y-auto pr-1">
+						{#each detailAudit as a (a.id)}
+							<div class="flex items-center justify-between gap-2">
+								<Badge tone={auditTone(a.action)} label={AUDIT_LABEL[a.action] ?? a.action} />
+								<span class="text-xs text-muted-foreground">{fmtDateTime(a.created_at)}</span>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
+
+		<form class="space-y-3" onsubmit={onSubmit}>
+			<label class="block">
+				<span class="text-xs font-medium text-muted-foreground">Nama media</span>
+				<input class="app-input mt-1 w-full" required placeholder="Contoh: MediaKita" bind:value={form.name} />
+			</label>
+			<div class="grid gap-3 sm:grid-cols-2">
+				<label class="block">
+					<span class="text-xs font-medium text-muted-foreground">Kategori</span>
+					<input class="app-input mt-1 w-full" placeholder="Teknologi" bind:value={form.category} />
+				</label>
+				<label class="block">
+					<span class="text-xs font-medium text-muted-foreground">Website URL</span>
+					<input class="app-input mt-1 w-full" placeholder="https://media.com" bind:value={form.website_url} />
+				</label>
+				<label class="block">
+					<span class="text-xs font-medium text-muted-foreground">Harga mitra (IDR)</span>
+					<input
+						class="app-input mt-1 w-full"
+						type="text"
+						inputmode="numeric"
+						value={form.price ? Number(form.price).toLocaleString('id-ID') : ''}
+						oninput={(e) => (form.price = e.currentTarget.value.replace(/\D/g, ''))}
+					/>
+					<span class="mt-1 block text-xs text-muted-foreground"
+						>Base price — nominal yang menjadi hak mitra. Harga klien dihitung otomatis oleh pricing
+						engine (ditambah markup Tauthub).</span
+					>
+				</label>
+				<label class="block">
+					<span class="text-xs font-medium text-muted-foreground">Harga klien (IDR)</span>
+					<input
+						class="app-input mt-1 w-full"
+						readonly
+						value={clientPriceFor(Number(form.price) || 0).toLocaleString('id-ID')}
+					/>
+					<span class="mt-1 block text-xs text-muted-foreground"
+						>Harga mitra + markup {markupPercent}% (pricing engine) — kredit dihitung dari harga klien.</span
+					>
+				</label>
+			</div>
+
+			{#if Number(form.price) > 0}
+				<div class="rounded-lg border p-2" style="background-color: var(--secondary);">
+					<p class="mb-1 text-xs text-muted-foreground">Price breakdown</p>
+					<div class="flex justify-between text-sm">
+						<span>Harga Mitra</span><span>{idr(Number(form.price) || 0)}</span>
+					</div>
+					<div class="flex justify-between text-sm"><span>Markup Tauthub</span><span>{markupPercent}%</span></div>
+					<div class="flex justify-between text-sm">
+						<span>Nilai Markup</span>
+						<span>{idr(Math.max(0, clientPriceFor(Number(form.price) || 0) - (Number(form.price) || 0)))}</span>
+					</div>
+					<div class="mt-1 flex justify-between border-t pt-1 text-sm font-bold">
+						<span>Harga Klien</span><span>{idr(clientPriceFor(Number(form.price) || 0))}</span>
+					</div>
+				</div>
+			{/if}
+
+			<div>
+				<span class="text-xs font-medium text-muted-foreground">Model Harga</span>
+				<div class="mt-1 flex gap-2">
+					<button
+						type="button"
+						class="app-btn !min-h-8 !px-3 !text-xs"
+						class:app-btn-primary={form.pricing_type === 'nett'}
+						class:app-btn-soft={form.pricing_type !== 'nett'}
+						onclick={() => (form.pricing_type = 'nett')}>Nett</button
+					>
+					<button
+						type="button"
+						class="app-btn !min-h-8 !px-3 !text-xs"
+						class:app-btn-primary={form.pricing_type === 'nego'}
+						class:app-btn-soft={form.pricing_type !== 'nego'}
+						onclick={() => (form.pricing_type = 'nego')}>Nego</button
+					>
+				</div>
+				<p class="mt-1 text-xs text-muted-foreground">
+					{editing && form.pricing_type !== (editing.pricing_type ?? 'nett')
+						? 'Perubahan model harga pada media yang sudah terbit akan dikonfirmasi dengan catatan ke mitra saat disimpan.'
+						: 'Nett = harga tetap; Nego = harga bisa dinegosiasikan dengan klien.'}
+				</p>
+			</div>
+
+			<label class="block">
+				<span class="text-xs font-medium text-muted-foreground">Biaya kredit (TC)</span>
+				<input class="app-input mt-1 w-full" readonly value={creditForPrice(Number(form.price) || 0).toLocaleString('id-ID')} />
+				<span class="mt-1 block text-xs text-muted-foreground"
+					>Otomatis dari harga klien ÷ rate (1 TC = Rp{tcRate.toLocaleString('id-ID')}) — tidak diisi manual;
+					server menghitung ulang saat disimpan.</span
+				>
+			</label>
+
+			<label class="block">
+				<span class="text-xs font-medium text-muted-foreground">Estimasi trafik bulanan (untuk estimated reach)</span>
+				<input class="app-input mt-1 w-full" type="number" min="0" bind:value={form.traffic_estimate} />
+			</label>
+
+			<div class="grid gap-3 sm:grid-cols-2">
+				<label class="block">
+					<span class="text-xs font-medium text-muted-foreground">Media tier</span>
+					<select class="app-input mt-1 w-full" bind:value={form.media_tier}>
+						{#each MEDIA_TIERS as t (t)}<option value={t}>{t}</option>{/each}
+					</select>
+				</label>
+				<label class="block">
+					<span class="text-xs font-medium text-muted-foreground">Media quality score (0-100)</span>
+					<input
+						class="app-input mt-1 w-full"
+						type="number"
+						min="0"
+						max="100"
+						placeholder="kosong = tidak diset"
+						bind:value={form.media_quality_score}
+					/>
+				</label>
+			</div>
+
+			<label class="block">
+				<span class="text-xs font-medium text-muted-foreground">Catatan kualitas (opsional)</span>
+				<input
+					class="app-input mt-1 w-full"
+					placeholder="Contoh: otoritas tinggi di sektor teknologi"
+					bind:value={form.media_quality_notes}
+				/>
+			</label>
+
+			<div class="grid gap-3 sm:grid-cols-2">
+				<label class="block">
+					<span class="text-xs font-medium text-muted-foreground">Tipe integrasi</span>
+					<select class="app-input mt-1 w-full" bind:value={form.integration_type}>
+						{#each MEDIA_INTEGRATION_TYPES_UI as t (t)}<option value={t}>{t}</option>{/each}
+					</select>
+				</label>
+				<label class="block">
+					<span class="text-xs font-medium text-muted-foreground">Status</span>
+					<select class="app-input mt-1 w-full" bind:value={form.status}>
+						{#each MEDIA_STATUSES as s (s)}<option value={s}>{statusLabel(s)}</option>{/each}
+					</select>
+				</label>
+			</div>
+
+			<label class="block">
+				<span class="text-xs font-medium text-muted-foreground">Mitra (opsional)</span>
+				<select class="app-input mt-1 w-full" bind:value={form.partner_id}>
+					<option value="">Tanpa partner</option>
+					{#each partners.filter((p) => p.status === 'active') as p (p.id)}
+						<option value={p.id}>{p.name ?? p.email}</option>
+					{/each}
+				</select>
+			</label>
+
+			<label class="block">
+				<span class="text-xs font-medium text-muted-foreground">Publish defaults (JSON, opsional)</span>
+				<textarea class="app-input mt-1 w-full font-mono text-xs" rows="4" bind:value={form.publish_defaults}
+				></textarea>
+				<span class="mt-1 block text-xs text-muted-foreground"
+					>{'Contoh: {"author_id": 1, "categories": ["Teknologi"], "featured_image_url": "https://…"}'}</span
+				>
+			</label>
+
+			{#if error && !isAccessError(error)}
+				<p class="text-sm" style="color: var(--destructive);">{error}</p>
+			{/if}
+
+			<div class="flex justify-end gap-2 border-t pt-4">
+				<button type="button" class="app-btn app-btn-soft" onclick={closeForm}>Batal</button>
+				<button type="submit" class="app-btn app-btn-primary" disabled={busy}>
+					{busy ? 'Menyimpan…' : editing ? 'Simpan perubahan' : 'Tambah media'}
+				</button>
+			</div>
+		</form>
+	</Modal>
+{/if}
+
+{#if priceConfirmOpen}
+	<Modal title="Konfirmasi perubahan harga" maxWidth="md" onClose={() => (priceConfirmOpen = false)}>
+		<p class="text-sm text-muted-foreground">
+			Model harga media ini berubah dari
+			<strong>{editing?.pricing_type === 'nego' ? 'Nego' : 'Nett'}</strong> menjadi
+			<strong>{form.pricing_type === 'nego' ? 'Nego' : 'Nett'}</strong>. Perubahan berlaku untuk media yang sudah terbit
+			dan akan tersinkron ke dashboard mitra.
+		</p>
+		<label class="mt-3 block">
+			<span class="text-xs font-medium text-muted-foreground">Catatan untuk mitra (opsional)</span>
+			<textarea
+				class="app-input mt-1 w-full"
+				rows="3"
+				placeholder="Contoh: Harga dikonfirmasi menjadi nett setelah kesepakatan."
+				bind:value={priceNote}
+			></textarea>
+		</label>
+		<div class="mt-3 flex justify-end gap-2">
+			<button class="app-btn app-btn-soft" onclick={() => (priceConfirmOpen = false)}>Batal</button>
+			<button
+				class="app-btn app-btn-primary"
+				onclick={() => {
+					priceConfirmOpen = false;
+					void doSave();
+				}}>Konfirmasi Perubahan</button
+			>
+		</div>
+	</Modal>
+{/if}
+
+{#if reviewTarget}
+	<Modal title="Media Ditolak" maxWidth="md" onClose={() => (reviewTarget = null)}>
+		<p class="text-sm text-muted-foreground">
+			Tolak media <strong>{reviewTarget.name}</strong>? Media tidak dihapus — akan kembali ke mitra dengan alasan ini.
+		</p>
+		<label class="mt-3 block">
+			<span class="text-xs font-medium text-muted-foreground">Alasan Penolakan *</span>
+			<textarea
+				class="app-input mt-1 w-full"
+				rows="4"
+				bind:value={rejectReason}
+				placeholder="Contoh: Harga yang diajukan belum sesuai dengan kualitas dan traffic media. Silakan lakukan penyesuaian harga dan ajukan kembali."
+			></textarea>
+		</label>
+		<div class="mt-3 flex flex-wrap items-end justify-end gap-2">
+			<label class="block">
+				<span class="text-xs font-medium text-muted-foreground">Harga negosiasi (IDR)</span>
+				<input
+					class="app-input mt-1 w-full"
+					type="text"
+					inputmode="numeric"
+					placeholder="45.000"
+					value={negoPrice ? Number(negoPrice).toLocaleString('id-ID') : ''}
+					oninput={(e) => (negoPrice = e.currentTarget.value.replace(/\D/g, ''))}
+				/>
+			</label>
+			<button
+				class="app-btn app-btn-soft"
+				style="color: var(--warning);"
+				disabled={reviewBusy}
+				onclick={negotiateMedia}>{reviewBusy ? 'Menyimpan…' : 'Negosiasi Harga'}</button
+			>
+			<button class="app-btn app-btn-soft" disabled={reviewBusy} onclick={() => (reviewTarget = null)}>Batalkan</button>
+			<button
+				class="app-btn app-btn-primary"
+				style="background-color: var(--destructive);"
+				disabled={reviewBusy}
+				onclick={rejectMedia}>{reviewBusy ? 'Menyimpan…' : 'Tolak Media'}</button
+			>
+		</div>
+	</Modal>
+{/if}
+
+{#if bulkDeleteOpen}
+	<Modal title={`Arsipkan ${selectedIds.size} media?`} maxWidth="md" onClose={() => (bulkDeleteOpen = false)}>
+		<p class="text-sm">
+			Media terpilih akan <strong>dipindahkan ke arsip</strong> (soft delete) — disembunyikan dari portal mitra dan klien.
+			Media bisa dipulihkan kapan saja dari tab Arsip. Tidak ada data yang dihapus permanen.
+		</p>
+		<div class="mt-4 flex justify-end gap-3">
+			<button class="app-btn app-btn-soft" disabled={bulkBusy} onclick={() => (bulkDeleteOpen = false)}>Batal</button>
+			<button
+				class="app-btn app-btn-primary"
+				style="background-color: var(--destructive);"
+				disabled={bulkBusy}
+				onclick={bulkArchive}>{bulkBusy ? 'Mengarsipkan…' : 'Ya, arsipkan'}</button
+			>
+		</div>
+	</Modal>
+{/if}

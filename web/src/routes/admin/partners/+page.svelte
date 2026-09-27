@@ -1,0 +1,1042 @@
+<script lang="ts">
+	// Kelola mitra — port app/admin/partners/page.tsx: direktori mitra dengan
+	// filter praktis (status/kontak/media/mode otomatis), ekspor kontak CSV,
+	// popup media & pengajuan harga, review dokumen Dewan Pers, pengaturan VIP
+	// (VVIP & VIP Reguler), gerbang izin mode otomatis, dan hapus partner.
+	import { onMount } from 'svelte';
+	import {
+		ArrowUpRight, Check, Copy, Ellipsis, FileText, Image as ImageIcon,
+		Newspaper, Search, ShieldCheck, Trash, TriangleAlert, UsersRound
+	} from '@lucide/svelte';
+	import PageHeader from '$lib/components/admin/page-header.svelte';
+	import Feedback from '$lib/components/admin/feedback.svelte';
+	import Badge from '$lib/components/admin/badge.svelte';
+	import Modal from '$lib/components/admin/modal.svelte';
+	import Pagination from '$lib/components/admin/pagination.svelte';
+	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { fmtDate, fmtNum } from '$lib/admin-format';
+	import { platformError } from '../_platform';
+
+	type Partner = {
+		id: string; user_id: string; email: string; name: string | null; status: string;
+		media_count: number; document_status: 'pending' | 'verified' | 'revision' | null;
+		document_count: number; created_at: string; is_vip?: boolean; vip_tier?: string;
+		vip_contract_months?: number | null; vip_contract_days?: number | null;
+		vip_expires_at?: string | null; email_alt1?: string | null; email_alt2?: string | null;
+		wa_number?: string | null; wa_consent?: boolean; price_min?: number | null;
+		price_max?: number | null; auto_publish_enabled?: boolean;
+	};
+	type PartnerDocument = {
+		id: string; partner_id: string; name: string; type: 'pdf' | 'image';
+		size_bytes: number; url: string; status: 'pending' | 'verified' | 'revision';
+		note: string | null; uploaded_at: string; reviewed_at: string | null;
+	};
+	type PartnerMedia = {
+		id: string; name: string; slug: string | null; category: string | null;
+		website_url: string | null; price: number | null; credit_cost: number | null;
+		status: string; integration_type: string; media_tier: string | null;
+		pricing_type: string | null; price_status: string | null;
+		negotiated_price: number | null; dewan_pers_verified?: boolean;
+	};
+
+	const PARTNER_PAGE_SIZE = 20;
+	const MEDIA_DIALOG_PAGE_SIZE = 10;
+
+	const DOC_STATUS_LABEL: Record<string, string> = {
+		pending: 'Menunggu', verified: 'Terverifikasi', revision: 'Perlu Revisi'
+	};
+	const DOC_STATUS_TONE: Record<string, 'warning' | 'success' | 'danger'> = {
+		pending: 'warning', verified: 'success', revision: 'danger'
+	};
+	const PRICE_STATUS_LABEL: Record<string, string> = {
+		menunggu_review: 'Menunggu Review', disetujui: 'Disetujui', negosiasi: 'Negosiasi',
+		ditolak: 'Ditolak', final: 'Final'
+	};
+	const MEDIA_STATUS_LABEL: Record<string, string> = {
+		active: 'Aktif', inactive: 'Nonaktif', draft: 'Draf', pending_review: 'Pending',
+		rejected: 'Ditolak', archived: 'Arsip', hidden: 'Disembunyikan'
+	};
+	const idr = (n: unknown) => `Rp ${Number(n ?? 0).toLocaleString('id-ID')}`;
+
+	let rows = $state<Partner[]>([]);
+	let total = $state(0);
+	let error = $state('');
+	let loading = $state(true);
+	let busy = $state(false);
+
+	let search = $state('');
+	let debouncedSearch = $state('');
+	let filterStatus = $state('');
+	let filterContact = $state('');
+	let filterHasMedia = $state('');
+	let filterAutoPublish = $state('');
+	let pageNum = $state(1);
+	let exporting = $state(false);
+	let busyId = $state<string | null>(null);
+
+	// Tambah partner
+	let createOpen = $state(false);
+	let form = $state({ email: '', name: '', status: 'active' });
+	// Hapus partner
+	let deleting = $state<Partner | null>(null);
+	// Aksi baris
+	let openMenu = $state<string | null>(null);
+	let menuPos = $state({ top: 0, right: 0 });
+	// Dokumen
+	let docsPartner = $state<Partner | null>(null);
+	let docs = $state<PartnerDocument[]>([]);
+	let docsLoading = $state(false);
+	let docsError = $state('');
+	let reviewDoc = $state<PartnerDocument | null>(null);
+	let reviewNote = $state('');
+	let reviewError = $state('');
+	// Media mitra
+	let mediaPartner = $state<Partner | null>(null);
+	let partnerMedia = $state<PartnerMedia[]>([]);
+	let mediaReportedTotal = $state(0);
+	let mediaLoading = $state(false);
+	let mediaError = $state('');
+	let mediaPage = $state(1);
+	let copyFeedback = $state<{ key: string; ok: boolean } | null>(null);
+	// Gerbang mode otomatis
+	let autoPublishTarget = $state<Partner | null>(null);
+	// Pengaturan VIP
+	let vipTarget = $state<Partner | null>(null);
+	let vipSettingsLoading = $state(false);
+	let vipSettingsSaving = $state(false);
+	let vipSettingsError = $state('');
+	let vipSettings = $state({
+		vip_tier: 'brand_ambassador' as 'brand_ambassador' | 'vip_reguler',
+		commission_rate_bp: 500, cpa_rate: 15000, cpa_tier_threshold: 1000,
+		cpa_tier1_rate: 10000, cpa_tier2_rate: 5000,
+		contract_months: null as number | null, contract_days: null as number | null,
+		entitlements: { client_workspace: true, ai_premium: true, seo_tools: true, keyword_research: true }
+	});
+
+	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+	onMount(() => {
+		void (async () => {
+			const fresh = await ensureValidSession();
+			if (!fresh) return;
+			await load();
+		})();
+		const onExpired = () => (window.location.href = '/login');
+		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+	});
+
+	function onSearchInput(value: string) {
+		search = value;
+		if (debounceTimer) clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(() => {
+			debouncedSearch = value.trim();
+			pageNum = 1;
+			void load();
+		}, 300);
+	}
+
+	function applyFilters() {
+		pageNum = 1;
+		void load();
+	}
+
+	async function load() {
+		loading = true;
+		error = '';
+		const params = new URLSearchParams({
+			limit: String(PARTNER_PAGE_SIZE),
+			offset: String((pageNum - 1) * PARTNER_PAGE_SIZE)
+		});
+		if (debouncedSearch) params.set('search', debouncedSearch);
+		if (filterStatus) params.set('status', filterStatus);
+		if (filterContact) params.set('contact', filterContact);
+		if (filterHasMedia) params.set('has_media', filterHasMedia);
+		if (filterAutoPublish) params.set('auto_publish', filterAutoPublish);
+		const res = await apiRequest(`/v1/platform/partners?${params.toString()}`);
+		if (res.ok) {
+			const data = await res.json();
+			rows = data.partners ?? [];
+			total = data.total ?? 0;
+		} else {
+			error = await platformError(res);
+		}
+		loading = false;
+	}
+
+	function resetFilters() {
+		search = '';
+		debouncedSearch = '';
+		filterStatus = '';
+		filterContact = '';
+		filterHasMedia = '';
+		filterAutoPublish = '';
+		applyFilters();
+	}
+
+	function changePage(nextOffset: number) {
+		pageNum = Math.floor(nextOffset / PARTNER_PAGE_SIZE) + 1;
+		void load();
+	}
+
+	async function exportCsv() {
+		exporting = true;
+		error = '';
+		const params = new URLSearchParams({ format: 'csv' });
+		if (debouncedSearch) params.set('search', debouncedSearch);
+		const res = await apiRequest(`/v1/platform/partners?${params.toString()}`);
+		if (!res.ok) {
+			error = await platformError(res);
+			exporting = false;
+			return;
+		}
+		const blob = await res.blob();
+		const a = document.createElement('a');
+		a.href = URL.createObjectURL(blob);
+		a.download = `kontak-mitra-${new Date().toISOString().slice(0, 10)}.csv`;
+		a.click();
+		URL.revokeObjectURL(a.href);
+		exporting = false;
+	}
+
+	async function setAutoPublish(row: Partner, enabled: boolean) {
+		busyId = row.id;
+		error = '';
+		const res = await apiRequest(`/v1/platform/partners/${row.id}`, {
+			method: 'PUT',
+			body: JSON.stringify({ auto_publish_enabled: enabled })
+		});
+		if (!res.ok) {
+			error = await platformError(res);
+			busyId = null;
+			return;
+		}
+		rows = rows.map((p) => (p.id === row.id ? { ...p, auto_publish_enabled: enabled } : p));
+		autoPublishTarget = null;
+		busyId = null;
+	}
+
+	async function create(e: SubmitEvent) {
+		e.preventDefault();
+		busy = true;
+		error = '';
+		const res = await apiRequest('/v1/platform/partners', {
+			method: 'POST',
+			body: JSON.stringify({ email: form.email.trim(), name: form.name.trim() || null, status: form.status })
+		});
+		if (!res.ok) {
+			error = await platformError(res);
+			busy = false;
+			return;
+		}
+		createOpen = false;
+		form = { email: '', name: '', status: 'active' };
+		busy = false;
+		await load();
+	}
+
+	async function setStatus(partner: Partner, status: string) {
+		error = '';
+		const res = await apiRequest(`/v1/platform/partners/${partner.id}`, {
+			method: 'PUT',
+			body: JSON.stringify({ status })
+		});
+		if (!res.ok) {
+			error = await platformError(res);
+			return;
+		}
+		await load();
+	}
+
+	async function setVip(partner: Partner, isVip: boolean, tier?: 'brand_ambassador' | 'vip_reguler') {
+		error = '';
+		const body: Record<string, unknown> = { is_vip: isVip };
+		if (isVip && tier) {
+			body.vip_tier = tier;
+			if (tier === 'vip_reguler') body.contract_days = 60;
+		}
+		const res = await apiRequest(`/v1/platform/partners/${partner.id}/vip`, {
+			method: 'PUT',
+			body: JSON.stringify(body)
+		});
+		if (!res.ok) {
+			error = await platformError(res);
+			return;
+		}
+		await load();
+	}
+
+	async function openVipSettings(partner: Partner) {
+		vipTarget = partner;
+		vipSettingsError = '';
+		vipSettingsLoading = true;
+		const res = await apiRequest(`/v1/platform/partners/${partner.id}/vip`);
+		if (res.ok) {
+			const data = await res.json();
+			vipSettings = {
+				vip_tier: data.vip.tier === 'vip_reguler' ? 'vip_reguler' : 'brand_ambassador',
+				commission_rate_bp: data.vip.commissionRateBp,
+				cpa_rate: data.vip.cpaRate,
+				cpa_tier_threshold: data.vip.cpaTierThreshold,
+				cpa_tier1_rate: data.vip.cpaTier1Rate,
+				cpa_tier2_rate: data.vip.cpaTier2Rate,
+				contract_months: data.vip.vipContractMonths ?? null,
+				contract_days: data.vip.vipContractDays ?? (partner.vip_tier === 'vip_reguler' ? 60 : null),
+				entitlements: data.vip.entitlements
+			};
+		}
+		vipSettingsLoading = false;
+	}
+
+	async function saveVipSettings() {
+		if (!vipTarget) return;
+		vipSettingsSaving = true;
+		vipSettingsError = '';
+		const res = await apiRequest(`/v1/platform/partners/${vipTarget.id}/vip`, {
+			method: 'PUT',
+			body: JSON.stringify({ is_vip: true, ...vipSettings })
+		});
+		if (!res.ok) {
+			vipSettingsError = await platformError(res);
+			vipSettingsSaving = false;
+			return;
+		}
+		vipTarget = null;
+		vipSettingsSaving = false;
+		await load();
+	}
+
+	async function confirmDelete() {
+		if (!deleting) return;
+		busy = true;
+		error = '';
+		const res = await apiRequest(`/v1/platform/partners/${deleting.id}`, { method: 'DELETE' });
+		if (!res.ok) {
+			error = await platformError(res);
+			busy = false;
+			return;
+		}
+		rows = rows.filter((r) => r.id !== deleting!.id);
+		total = Math.max(0, total - 1);
+		deleting = null;
+		busy = false;
+	}
+
+	async function openMedia(partner: Partner) {
+		mediaPartner = partner;
+		partnerMedia = [];
+		mediaReportedTotal = 0;
+		mediaError = '';
+		mediaPage = 1;
+		mediaLoading = true;
+		const res = await apiRequest(`/v1/platform/media?partner_id=${encodeURIComponent(partner.id)}&scope=all&limit=500`);
+		if (res.ok) {
+			const data = await res.json();
+			partnerMedia = data.media ?? [];
+			mediaReportedTotal = data.total ?? 0;
+		} else {
+			mediaError = await platformError(res);
+		}
+		mediaLoading = false;
+	}
+
+	async function copyContact(key: string, value: string) {
+		try {
+			await navigator.clipboard.writeText(value);
+			copyFeedback = { key, ok: true };
+		} catch {
+			copyFeedback = { key, ok: false };
+		}
+		setTimeout(() => {
+			if (copyFeedback?.key === key) copyFeedback = null;
+		}, 2000);
+	}
+
+	async function openDocs(partner: Partner) {
+		docsPartner = partner;
+		docs = [];
+		docsError = '';
+		docsLoading = true;
+		const res = await apiRequest(`/v1/platform/partners/${partner.id}/documents`);
+		if (res.ok) {
+			const data = await res.json();
+			docs = data.documents ?? [];
+		} else {
+			docsError = await platformError(res);
+		}
+		docsLoading = false;
+	}
+
+	function openReview(doc: PartnerDocument) {
+		reviewDoc = doc;
+		reviewNote = doc.note ?? '';
+		reviewError = '';
+	}
+
+	async function submitReview(status: PartnerDocument['status']) {
+		if (!reviewDoc || !docsPartner) return;
+		if (status === 'revision' && reviewNote.trim().length < 5) {
+			reviewError = 'Alasan penolakan wajib diisi (minimal 5 karakter).';
+			return;
+		}
+		busy = true;
+		reviewError = '';
+		docsError = '';
+		const partnerId = docsPartner.id;
+		const res = await apiRequest(`/v1/platform/partners/${partnerId}/documents/${reviewDoc.id}`, {
+			method: 'PUT',
+			body: JSON.stringify({ status, note: reviewNote.trim() || null })
+		});
+		if (!res.ok) {
+			reviewError = await platformError(res);
+			busy = false;
+			return;
+		}
+		reviewDoc = null;
+		reviewNote = '';
+		busy = false;
+		await openDocs(docsPartner!);
+		await load();
+	}
+
+	const mediaPaged = $derived(
+		partnerMedia.slice((mediaPage - 1) * MEDIA_DIALOG_PAGE_SIZE, mediaPage * MEDIA_DIALOG_PAGE_SIZE)
+	);
+	const denied = $derived(Boolean(!loading && rows.length === 0 && error.includes('Akses platform')));
+	const hasFilter = $derived(Boolean(debouncedSearch || filterStatus || filterContact || filterHasMedia || filterAutoPublish));
+</script>
+
+<section class="mx-auto max-w-[1400px]">
+	<PageHeader
+		title="Partners"
+		description="Mitra media (1 akun user = 1 partner). Media milik partner aktif melewati gate persetujuan pada publikasi. Verifikasi Dewan Pers dinilai per domain/media, bukan per akun."
+	>
+		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{fmtNum(total)} partner</span>
+		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><UsersRound size={16} /> Tambah partner</button>
+	</PageHeader>
+
+	<div class="mt-4 flex flex-wrap items-center gap-2">
+		<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
+			<Search size={15} class="text-muted-foreground" />
+			<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari nama atau email…" aria-label="Cari partner" value={search} oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)} />
+		</label>
+		<select class="app-input !w-auto" value={filterStatus} onchange={(e) => { filterStatus = (e.currentTarget as HTMLSelectElement).value; applyFilters(); }}>
+			<option value="">Semua status</option>
+			<option value="active">Aktif</option>
+			<option value="inactive">Nonaktif</option>
+		</select>
+		<select class="app-input !w-auto" value={filterContact} onchange={(e) => { filterContact = (e.currentTarget as HTMLSelectElement).value; applyFilters(); }}>
+			<option value="">Semua kontak</option>
+			<option value="wa">Punya WA</option>
+			<option value="alt">Punya email alternatif</option>
+			<option value="incomplete">Kontak belum lengkap</option>
+		</select>
+		<select class="app-input !w-auto" value={filterHasMedia} onchange={(e) => { filterHasMedia = (e.currentTarget as HTMLSelectElement).value; applyFilters(); }}>
+			<option value="">Semua media</option>
+			<option value="1">Sudah ada media</option>
+			<option value="0">Belum ada media</option>
+		</select>
+		<select class="app-input !w-auto" value={filterAutoPublish} onchange={(e) => { filterAutoPublish = (e.currentTarget as HTMLSelectElement).value; applyFilters(); }}>
+			<option value="">Semua mode otomatis</option>
+			<option value="1">Diizinkan otomatis</option>
+			<option value="0">Belum diizinkan</option>
+		</select>
+		{#if hasFilter}
+			<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={resetFilters}>Reset filter</button>
+		{/if}
+		<span class="flex-1"></span>
+		<button class="app-btn app-btn-soft" type="button" disabled={exporting} onclick={() => void exportCsv()}>
+			{exporting ? 'Mengekspor…' : 'Ekspor kontak (CSV)'}
+		</button>
+	</div>
+
+	{#if denied}
+		<div class="app-card mt-6 px-6 py-10 text-center">
+			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke pengelolaan partner.</p>
+		</div>
+	{:else}
+		<Feedback {loading} {error} loadingText="Memuat partner…" />
+
+		<div class="app-card mt-4 overflow-x-auto">
+			<table class="w-full text-sm" style="min-width: 1280px;">
+				<thead>
+					<tr class="text-left text-xs text-muted-foreground">
+						<th class="px-4 py-2.5 font-medium">Partner</th>
+						<th class="px-4 py-2.5 font-medium">Email</th>
+						<th class="px-4 py-2.5 font-medium">WA</th>
+						<th class="px-4 py-2.5 font-medium">Email Alternatif</th>
+						<th class="px-4 py-2.5 font-medium">Harga Media</th>
+						<th class="px-4 py-2.5 font-medium">Media</th>
+						<th class="px-4 py-2.5 font-medium">Dewan Pers</th>
+						<th class="px-4 py-2.5 font-medium">VIP</th>
+						<th class="px-4 py-2.5 font-medium">Status</th>
+						<th class="px-4 py-2.5 font-medium">Bergabung</th>
+						<th class="px-4 py-2.5 font-medium">Aksi</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each rows as row (row.id)}
+						<tr class="border-t">
+							<td class="px-4 py-3">
+								<div class="flex items-center gap-2">
+									<UsersRound size={16} class="shrink-0 text-muted-foreground" />
+									<div>
+										<p class="font-medium">{row.name ?? row.email}</p>
+										<p class="text-xs text-muted-foreground">{row.id.slice(0, 8)}</p>
+									</div>
+								</div>
+							</td>
+							<td class="whitespace-nowrap px-4 py-3">
+								<a style="color: var(--primary);" href={`mailto:${row.email}`}>{row.email}</a>
+							</td>
+							<td class="px-4 py-3">
+								{#if row.wa_number}
+									<div class="flex flex-col gap-1">
+										<a style="color: var(--primary);" href={`https://wa.me/${row.wa_number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer">{row.wa_number}</a>
+										{#if !row.wa_consent}<Badge label="tanpa izin WA" tone="neutral" />{/if}
+									</div>
+								{:else}
+									<span class="text-xs text-muted-foreground">—</span>
+								{/if}
+							</td>
+							<td class="px-4 py-3">
+								{#if row.email_alt1 || row.email_alt2}
+									<div class="flex flex-col gap-1 text-xs">
+										{#if row.email_alt1}<span>{row.email_alt1}</span>{/if}
+										{#if row.email_alt2}<span>{row.email_alt2}</span>{/if}
+									</div>
+								{:else}
+									<span class="text-xs text-muted-foreground">—</span>
+								{/if}
+							</td>
+							<td class="px-4 py-3">
+								{#if row.price_min != null || row.price_max != null}
+									<span class="whitespace-nowrap text-xs">
+										{row.price_min === row.price_max
+											? idr(row.price_min ?? 0)
+											: `${idr(row.price_min ?? 0)} – ${idr(row.price_max ?? 0)}`}
+									</span>
+								{:else}
+									<span class="text-xs text-muted-foreground">—</span>
+								{/if}
+							</td>
+							<td class="px-4 py-3">
+								{#if row.media_count > 0}
+									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" title="Lihat media & pengajuan harganya" onclick={() => void openMedia(row)}>
+										{row.media_count} media
+									</button>
+								{:else}
+									<span class="text-xs text-muted-foreground">—</span>
+								{/if}
+							</td>
+							<td class="px-4 py-3">
+								{#if row.document_count === 0}
+									<Badge label="Belum upload" tone="neutral" />
+								{:else}
+									<Badge
+										label={`${row.document_status ? DOC_STATUS_LABEL[row.document_status] : '—'} (${row.document_count})`}
+										tone={DOC_STATUS_TONE[row.document_status ?? 'pending'] ?? 'neutral'}
+									/>
+								{/if}
+							</td>
+							<td class="px-4 py-3">
+								{#if row.is_vip}
+									<div class="flex flex-col items-start gap-1">
+										<Badge label={row.vip_tier === 'vip_reguler' ? 'VIP Reguler' : 'VVIP'} tone="accent" />
+										{#if row.vip_contract_months != null}<span class="text-xs text-muted-foreground">Kontrak {row.vip_contract_months} bln</span>{/if}
+										{#if row.vip_expires_at}<span class="text-xs text-muted-foreground">Sampai {fmtDate(row.vip_expires_at)}</span>{/if}
+									</div>
+								{:else}
+									<Badge label="-" tone="neutral" />
+								{/if}
+							</td>
+							<td class="px-4 py-3"><Badge label={row.status} tone={row.status === 'active' ? 'success' : 'neutral'} /></td>
+							<td class="px-4 py-3 text-xs text-muted-foreground">{fmtDate(row.created_at)}</td>
+							<td class="px-4 py-3">
+								<button
+									class="rounded-lg p-1.5 hover:bg-secondary"
+									type="button"
+									aria-label={`Aksi untuk ${row.name ?? row.email}`}
+									onclick={(e) => {
+										const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+										menuPos = { top: rect.bottom + 4, right: window.innerWidth - rect.right };
+										openMenu = openMenu === row.id ? null : row.id;
+									}}
+								><Ellipsis size={19} /></button>
+								{#if openMenu === row.id}
+									<div class="fixed inset-0 z-40" role="presentation" onclick={() => (openMenu = null)}></div>
+									<div
+										class="app-card fixed z-50 min-w-[230px] p-1.5 text-sm shadow-md"
+										style="top: {menuPos.top}px; right: {menuPos.right}px;"
+									>
+											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openDocs(row); }}>
+												<ShieldCheck size={14} /> Dokumen
+											</button>
+											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openVipSettings(row); }}>
+												{row.is_vip ? 'Pengaturan VIP' : 'Jadikan VIP'}
+											</button>
+											{#if !row.is_vip}
+												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void setVip(row, true, 'vip_reguler'); }}>
+													Jadikan VIP Reguler (60 hari)
+												</button>
+											{/if}
+											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; autoPublishTarget = row; }}>
+												{row.auto_publish_enabled ? 'Cabut izin mode otomatis' : 'Izinkan mode otomatis'}
+											</button>
+											{#if row.status === 'active'}
+												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void setStatus(row, 'inactive'); }}>Nonaktifkan</button>
+											{:else}
+												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void setStatus(row, 'active'); }}>Aktifkan</button>
+											{/if}
+											<div class="my-1 border-t"></div>
+											<button
+												class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary"
+												style="color: var(--destructive);"
+												type="button"
+												onclick={() => { openMenu = null; deleting = row; }}
+											><Trash size={14} /> Hapus</button>
+										</div>
+									{/if}
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+			{#if !loading && rows.length === 0}
+				<div class="flex flex-col items-center px-4 py-12 text-center">
+					<UsersRound size={26} class="text-muted-foreground" />
+					<p class="mt-2 text-sm text-muted-foreground">Belum ada partner. Tambahkan partner pertama.</p>
+				</div>
+			{/if}
+			<div class="px-4 pb-4">
+				<Pagination
+					total={total}
+					limit={PARTNER_PAGE_SIZE}
+					offset={(pageNum - 1) * PARTNER_PAGE_SIZE}
+					onChange={changePage}
+				/>
+			</div>
+		</div>
+	{/if}
+</section>
+
+{#if createOpen}
+	<Modal title="Tambah partner" label="Tambah partner" maxWidth="lg" onClose={() => (createOpen = false)}>
+		<p class="text-sm text-muted-foreground">User dengan email ini akan menjadi mitra media Tauthub.</p>
+		<form class="mt-4 flex flex-col gap-3" onsubmit={create}>
+			<label class="block">
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Email user</span>
+				<input class="app-input w-full" type="email" required placeholder="mitra@media.com" bind:value={form.email} />
+			</label>
+			<label class="block">
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Nama (opsional)</span>
+				<input class="app-input w-full" placeholder="Nama media partner" bind:value={form.name} />
+			</label>
+			<label class="block">
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Status</span>
+				<select class="app-input w-full" bind:value={form.status}>
+					<option value="active">active</option>
+					<option value="inactive">inactive</option>
+				</select>
+			</label>
+			<div class="mt-1 flex justify-end gap-2 border-t pt-4">
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>Batal</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Tambah partner'}</button>
+			</div>
+		</form>
+	</Modal>
+{/if}
+
+{#if mediaPartner}
+	<Modal title={`Media mitra — ${mediaPartner.name ?? mediaPartner.email}`} label="Media mitra" maxWidth="2xl" onClose={() => (mediaPartner = null)}>
+		<p class="text-sm text-muted-foreground">Media yang terdeteksi milik mitra ini beserta harga yang mereka ajukan.</p>
+
+		{#if mediaPartner.email || mediaPartner.wa_number || mediaPartner.email_alt1 || mediaPartner.email_alt2}
+			<div class="mt-3 flex flex-wrap gap-5 rounded-lg border p-3">
+				{#if mediaPartner.email}
+					<div class="flex flex-col gap-1">
+						<span class="text-xs font-semibold text-muted-foreground">Email</span>
+						<div class="flex items-center gap-1">
+							<a class="text-xs" style="color: var(--primary);" href={`mailto:${mediaPartner.email}`}>{mediaPartner.email}</a>
+							<button class="rounded p-1 hover:bg-secondary" type="button" aria-label={`Salin email ${mediaPartner.email}`} onclick={() => void copyContact('email', mediaPartner?.email ?? '')}>
+								{#if copyFeedback?.key === 'email' && copyFeedback?.ok}<Check size={14} style="color: var(--success);" />{:else}<Copy size={14} />{/if}
+							</button>
+						</div>
+					</div>
+				{/if}
+				{#if mediaPartner.wa_number}
+					<div class="flex flex-col gap-1">
+						<span class="text-xs font-semibold text-muted-foreground">WhatsApp</span>
+						<div class="flex items-center gap-2">
+							<span class="text-xs">{mediaPartner.wa_number}</span>
+							<a
+								class="inline-flex h-[22px] w-[22px] items-center justify-center rounded"
+								style="color: var(--primary);"
+								href={`https://wa.me/${mediaPartner.wa_number.replace(/[^0-9]/g, '')}`}
+								target="_blank"
+								rel="noreferrer"
+								aria-label={`Buka chat WhatsApp ${mediaPartner.wa_number}`}
+								title="Buka chat WhatsApp"
+							><ArrowUpRight size={14} /></a>
+							<button class="rounded p-1 hover:bg-secondary" type="button" aria-label={`Salin WhatsApp ${mediaPartner.wa_number}`} title="Salin nomor" onclick={() => void copyContact('wa', mediaPartner?.wa_number ?? '')}>
+								{#if copyFeedback?.key === 'wa' && copyFeedback?.ok}<Check size={14} style="color: var(--success);" />{:else}<Copy size={14} />{/if}
+							</button>
+						</div>
+					</div>
+				{/if}
+				{#if mediaPartner.email_alt1 || mediaPartner.email_alt2}
+					<div class="flex flex-col gap-1">
+						<span class="text-xs font-semibold text-muted-foreground">Email alternatif</span>
+						<div class="flex flex-col gap-1">
+							{#each [['alt1', mediaPartner.email_alt1], ['alt2', mediaPartner.email_alt2]] as [key, value] (key)}
+								{#if value}
+									<div class="flex items-center gap-1">
+										<a class="text-xs" style="color: var(--primary);" href={`mailto:${value}`}>{value}</a>
+										<button class="rounded p-1 hover:bg-secondary" type="button" aria-label={`Salin email alternatif ${value}`} onclick={() => void copyContact(String(key), String(value ?? ''))}>
+											{#if copyFeedback?.key === key && copyFeedback?.ok}<Check size={14} style="color: var(--success);" />{:else}<Copy size={14} />{/if}
+										</button>
+									</div>
+								{/if}
+							{/each}
+						</div>
+					</div>
+				{/if}
+				{#if copyFeedback && !copyFeedback?.ok}
+					<span class="self-center text-xs" style="color: var(--warning);">Gagal menyalin — salin manual dari teks di atas.</span>
+				{/if}
+				{#if mediaPartner.wa_number && !mediaPartner.wa_consent}
+					<span class="self-center text-xs text-muted-foreground">Mitra belum menyetujui kontak via WhatsApp.</span>
+				{/if}
+			</div>
+		{/if}
+
+		{#if mediaLoading}
+			<p class="mt-4 text-sm text-muted-foreground">Memuat daftar media mitra…</p>
+		{:else if mediaError}
+			<div class="mt-4 flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{mediaError}</div>
+		{:else if partnerMedia.length === 0}
+			<div class="mt-4 flex flex-col items-center rounded-lg border border-dashed p-6 text-center">
+				<Newspaper size={26} class="text-muted-foreground" />
+				<p class="mt-2 text-sm text-muted-foreground">Mitra ini belum punya media terdaftar. Media muncul di sini setelah mitra melisting lewat portal mitra.</p>
+			</div>
+		{:else}
+			<div class="mt-3 max-h-[420px] overflow-auto">
+				<table class="w-full text-sm" style="min-width: 760px;">
+					<thead>
+						<tr class="text-left text-xs text-muted-foreground">
+							<th class="py-2 pr-3 font-medium">Media</th>
+							<th class="py-2 pr-3 font-medium">Kategori</th>
+							<th class="py-2 pr-3 font-medium">Harga Diajukan</th>
+							<th class="py-2 pr-3 font-medium">Status Harga</th>
+							<th class="py-2 font-medium">Status Media</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each mediaPaged as m (m.id)}
+							<tr class="border-t">
+								<td class="py-2 pr-3">
+									<p class="font-medium">{m.name}</p>
+									{#if m.website_url}
+										<p class="text-xs text-muted-foreground">{m.website_url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</p>
+									{/if}
+								</td>
+								<td class="py-2 pr-3">{m.category ?? '—'}</td>
+								<td class="py-2 pr-3">
+									{m.price != null ? idr(m.price) : '—'}
+									{#if m.pricing_type === 'nego'}<span class="text-xs text-muted-foreground"> · nego</span>{/if}
+								</td>
+								<td class="py-2 pr-3">
+									<Badge label={PRICE_STATUS_LABEL[m.price_status ?? ''] ?? m.price_status ?? '—'} tone="neutral" />
+								</td>
+								<td class="py-2">
+									<Badge label={MEDIA_STATUS_LABEL[m.status] ?? m.status} tone="neutral" />
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+			<Pagination
+				total={partnerMedia.length}
+				limit={MEDIA_DIALOG_PAGE_SIZE}
+				offset={(mediaPage - 1) * MEDIA_DIALOG_PAGE_SIZE}
+				onChange={(next) => (mediaPage = Math.floor(next / MEDIA_DIALOG_PAGE_SIZE) + 1)}
+			/>
+			{#if mediaReportedTotal > partnerMedia.length}
+				<p class="mt-2 text-xs" style="color: var(--warning);">
+					Server melaporkan {mediaReportedTotal} media, {partnerMedia.length} termuat. Sisanya bisa dilihat di halaman Media.
+				</p>
+			{/if}
+		{/if}
+
+		{#snippet footer()}
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (mediaPartner = null)}>Tutup</button>
+		{/snippet}
+	</Modal>
+{/if}
+
+{#if docsPartner}
+	<Modal title={`Dokumen Dewan Pers — ${docsPartner.name ?? 'Mitra'}`} label="Dokumen mitra" maxWidth="2xl" onClose={() => { docsPartner = null; reviewDoc = null; }}>
+		<p class="text-sm text-muted-foreground">Dokumen verifikasi yang diunggah mitra. Tandai terverifikasi agar mitra dapat menambahkan media.</p>
+		<div class="mt-4">
+			{#if docsError}
+				<div class="mb-3 flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{docsError}</div>
+			{/if}
+			{#if docsLoading}
+				<p class="text-sm text-muted-foreground">Memuat dokumen…</p>
+			{:else if docs.length === 0}
+				<div class="flex flex-col items-center rounded-lg border border-dashed p-6 text-center">
+					<ShieldCheck size={26} class="text-muted-foreground" />
+					<p class="mt-2 text-sm text-muted-foreground">Mitra ini belum mengunggah dokumen.</p>
+				</div>
+			{:else}
+				<div class="flex flex-col gap-2">
+					{#each docs as doc (doc.id)}
+						<div class="flex items-center justify-between gap-3 rounded-lg border p-3">
+							<div class="flex min-w-0 items-center gap-2">
+								{#if doc.type === 'pdf'}<FileText size={20} style="color: var(--primary);" />{:else}<ImageIcon size={20} style="color: var(--success);" />{/if}
+								<div class="min-w-0">
+									<p class="truncate text-sm font-medium">{doc.name}</p>
+									<p class="text-xs text-muted-foreground">
+										{doc.size_bytes > 0 ? `${(doc.size_bytes / (1024 * 1024)).toFixed(1)} MB · ` : ''}Diunggah {fmtDate(doc.uploaded_at)}
+									</p>
+									{#if doc.note}<p class="text-xs" style="color: var(--destructive);">{doc.note}</p>{/if}
+								</div>
+							</div>
+							<div class="flex shrink-0 items-center gap-2">
+								<Badge label={DOC_STATUS_LABEL[doc.status]} tone={DOC_STATUS_TONE[doc.status]} />
+								<a class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" href={doc.url} target="_blank" rel="noreferrer">Lihat</a>
+								<button class="app-btn !min-h-7 !px-2.5 !text-xs" style="background-color: var(--accent); color: var(--accent-foreground);" type="button" onclick={() => openReview(doc)}>Review</button>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	</Modal>
+{/if}
+
+{#if reviewDoc}
+	<Modal title="Review Dokumen" label="Review dokumen" maxWidth="md" onClose={() => { reviewDoc = null; reviewError = ''; }}>
+		<p class="text-sm text-muted-foreground">{reviewDoc.name}</p>
+		<div class="mt-4 flex flex-col gap-3">
+			{#if reviewError}
+				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{reviewError}</div>
+			{/if}
+			<label class="block">
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Alasan (wajib saat menolak, opsional saat menyetujui)</span>
+				<textarea
+					class="app-input w-full"
+					rows={3}
+					placeholder="Contoh: sertifikat tidak terbaca, mohon unggah ulang dengan resolusi lebih baik."
+					bind:value={reviewNote}
+					oninput={() => (reviewError = '')}
+				></textarea>
+				<span class="mt-1 block text-xs text-muted-foreground">Alasan ini akan ditampilkan ke mitra di halaman Profil.</span>
+			</label>
+		</div>
+		{#snippet footer()}
+			<button class="app-btn app-btn-soft" type="button" onclick={() => { reviewDoc = null; reviewError = ''; }}>Batal</button>
+			<button class="app-btn app-btn-soft" style="color: var(--destructive);" type="button" disabled={busy} onclick={() => void submitReview('revision')}>
+				{busy ? 'Menyimpan…' : 'Tolak'}
+			</button>
+			<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void submitReview('verified')}>
+				{busy ? 'Menyimpan…' : 'Setujui'}
+			</button>
+		{/snippet}
+	</Modal>
+{/if}
+
+{#if vipTarget}
+	<Modal title={vipTarget.is_vip ? 'Pengaturan VIP' : 'Jadikan VIP'} label="Pengaturan VIP" maxWidth="lg" onClose={() => { vipTarget = null; vipSettingsError = ''; }}>
+		<p class="text-sm text-muted-foreground">Konfigurasi tier VIP untuk {vipTarget.name ?? vipTarget.email}.</p>
+		<div class="mt-4 flex flex-col gap-3">
+			{#if vipSettingsLoading}
+				<p class="text-sm text-muted-foreground">Memuat pengaturan…</p>
+			{:else}
+				<div class="flex items-center justify-between gap-3">
+					<div>
+						<p class="text-sm font-medium">Status VIP</p>
+						<p class="text-xs text-muted-foreground">Aktifkan/nonaktifkan status VIP mitra ini</p>
+					</div>
+					<input
+						type="checkbox"
+						checked={vipTarget.is_vip ?? false}
+						onchange={(e) => {
+							const checked = (e.currentTarget as HTMLInputElement).checked;
+							if (!checked) {
+								const target = vipTarget!;
+								vipTarget = null;
+								void setVip(target, false);
+							} else {
+								vipTarget = { ...vipTarget!, is_vip: true };
+							}
+						}}
+					/>
+				</div>
+				<div class="border-t"></div>
+				<p class="text-sm font-medium">Tipe VIP</p>
+				<div class="flex gap-2">
+					<button
+						class="app-btn !min-h-8 !px-3 !text-xs"
+						class:app-btn-primary={vipSettings.vip_tier === 'brand_ambassador'}
+						class:app-btn-soft={vipSettings.vip_tier !== 'brand_ambassador'}
+						type="button"
+						onclick={() => (vipSettings = { ...vipSettings, vip_tier: 'brand_ambassador' })}
+					>VVIP</button>
+					<button
+						class="app-btn !min-h-8 !px-3 !text-xs"
+						class:app-btn-primary={vipSettings.vip_tier === 'vip_reguler'}
+						class:app-btn-soft={vipSettings.vip_tier !== 'vip_reguler'}
+						type="button"
+						onclick={() => (vipSettings = { ...vipSettings, vip_tier: 'vip_reguler' })}
+					>VIP Reguler</button>
+				</div>
+				<p class="text-xs text-muted-foreground">
+					{vipSettings.vip_tier === 'vip_reguler'
+						? 'Fee affiliate Rp10.000/domain untuk 1000 domain pertama, lalu Rp5.000/domain. Komisi transaksi tetap 1% dan tidak dibatasi kontrak. Tanpa fasilitas Dashboard Klien/AI Premium/SEO Tools.'
+						: 'Komisi transaksi 5% + CPA Rp15.000/domain + fasilitas Dashboard Klien, AI Premium, SEO Tools.'}
+				</p>
+				<div class="border-t"></div>
+
+				{#if vipSettings.vip_tier === 'brand_ambassador'}
+					<p class="text-sm font-medium">Komisi</p>
+					<label class="block">
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Transaction Commission Rate (basis point)</span>
+						<input class="app-input w-full" type="number" min="0" max="10000" value={vipSettings.commission_rate_bp} oninput={(e) => (vipSettings = { ...vipSettings, commission_rate_bp: Number((e.currentTarget as HTMLInputElement).value) })} />
+						<span class="mt-1 block text-xs text-muted-foreground">{(vipSettings.commission_rate_bp / 100).toFixed(1)}% dari nilai transaksi. Default VIP: 500 (5%).</span>
+					</label>
+					<label class="block">
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">CPA Rate (Rp)</span>
+						<input class="app-input w-full" type="number" min="0" value={vipSettings.cpa_rate} oninput={(e) => (vipSettings = { ...vipSettings, cpa_rate: Number((e.currentTarget as HTMLInputElement).value) })} />
+						<span class="mt-1 block text-xs text-muted-foreground">CPA per domain approved. Default VIP: 15000.</span>
+					</label>
+					<label class="block">
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Masa Kontrak (bulan)</span>
+						<input
+							class="app-input w-full"
+							type="number"
+							min="0"
+							max="120"
+							value={vipSettings.contract_months == null ? '' : String(vipSettings.contract_months)}
+							placeholder="mis. 12"
+							oninput={(e) => {
+								const v = (e.currentTarget as HTMLInputElement).value;
+								vipSettings = { ...vipSettings, contract_months: v === '' ? null : Number(v) };
+							}}
+						/>
+						<span class="mt-1 block text-xs text-muted-foreground">Kosongkan (0) untuk tanpa batas. Saat masa kontrak habis, akun mitra otomatis kembali ke status biasa &amp; hak VIP nonaktif.</span>
+					</label>
+					<div class="border-t"></div>
+					<p class="text-sm font-medium">Entitlements</p>
+					{#each [
+						['client_workspace', 'Dashboard Klien'],
+						['ai_premium', 'AI Premium'],
+						['seo_tools', 'SEO Tools'],
+						['keyword_research', 'Keyword Research']
+					] as [key, label] (key)}
+						<div class="flex items-center justify-between gap-3">
+							<span class="text-sm">{label}</span>
+							<input
+								type="checkbox"
+								checked={vipSettings.entitlements[key as keyof typeof vipSettings.entitlements]}
+								onchange={(e) => {
+									const checked = (e.currentTarget as HTMLInputElement).checked;
+									vipSettings = {
+										...vipSettings,
+										entitlements: { ...vipSettings.entitlements, [key]: checked }
+									};
+								}}
+							/>
+						</div>
+					{/each}
+				{:else}
+					<p class="text-sm font-medium">Fee per Domain (bertingkat)</p>
+					<label class="block">
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Batas kuota domain</span>
+						<input class="app-input w-full" type="number" min="0" value={vipSettings.cpa_tier_threshold} oninput={(e) => (vipSettings = { ...vipSettings, cpa_tier_threshold: Number((e.currentTarget as HTMLInputElement).value) })} />
+						<span class="mt-1 block text-xs text-muted-foreground">Jumlah domain yang mendapat fee tier-1 sejak aktivasi.</span>
+					</label>
+					<div class="grid gap-3 sm:grid-cols-2">
+						<label class="block">
+							<span class="mb-1 block text-xs font-semibold text-muted-foreground">Fee domain ke-1..N (Rp)</span>
+							<input class="app-input w-full" type="number" min="0" value={vipSettings.cpa_tier1_rate} oninput={(e) => (vipSettings = { ...vipSettings, cpa_tier1_rate: Number((e.currentTarget as HTMLInputElement).value) })} />
+						</label>
+						<label class="block">
+							<span class="mb-1 block text-xs font-semibold text-muted-foreground">Fee setelah kuota (Rp)</span>
+							<input class="app-input w-full" type="number" min="0" value={vipSettings.cpa_tier2_rate} oninput={(e) => (vipSettings = { ...vipSettings, cpa_tier2_rate: Number((e.currentTarget as HTMLInputElement).value) })} />
+						</label>
+					</div>
+					<label class="block">
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Masa Kontrak (hari)</span>
+						<input
+							class="app-input w-full"
+							type="number"
+							min="0"
+							max="3650"
+							value={vipSettings.contract_days == null ? '' : String(vipSettings.contract_days)}
+							placeholder="mis. 60"
+							oninput={(e) => {
+								const v = (e.currentTarget as HTMLInputElement).value;
+								vipSettings = { ...vipSettings, contract_days: v === '' ? null : Number(v) };
+							}}
+						/>
+						<span class="mt-1 block text-xs text-muted-foreground">Default 60 hari. Setelah kontrak berakhir, hak VIP Reguler (fee per-domain) nonaktif. Domain yang masuk sebelum berakhir tetap dibayar.</span>
+					</label>
+				{/if}
+
+				{#if vipSettingsError}
+					<div class="flex items-start gap-2 text-xs" style="color: var(--destructive);">{vipSettingsError}</div>
+				{/if}
+				<div class="flex justify-end gap-2 border-t pt-4">
+					<button class="app-btn app-btn-soft" type="button" onclick={() => { vipTarget = null; vipSettingsError = ''; }}>Batal</button>
+					<button class="app-btn app-btn-primary" type="button" disabled={vipSettingsSaving} onclick={() => void saveVipSettings()}>
+						{vipSettingsSaving ? 'Menyimpan…' : vipTarget.is_vip ? 'Simpan' : 'Aktifkan VIP'}
+					</button>
+				</div>
+			{/if}
+		</div>
+	</Modal>
+{/if}
+
+{#if autoPublishTarget}
+	<Modal
+		title={autoPublishTarget?.auto_publish_enabled ? 'Cabut izin mode otomatis?' : 'Izinkan mode otomatis?'}
+		label="Konfirmasi izin mode otomatis"
+		maxWidth="md"
+		onClose={() => { if (busyId === null) autoPublishTarget = null; }}
+	>
+		<p class="text-sm text-muted-foreground">
+			{#if autoPublishTarget?.auto_publish_enabled}
+				Mitra <strong>{autoPublishTarget.name ?? autoPublishTarget.email}</strong> tidak lagi bisa menyalakan mode otomatis di medianya. Publikasi berikutnya kembali menunggu ACC mitra.
+			{:else}
+				Mitra <strong>{autoPublishTarget.name ?? autoPublishTarget.email}</strong> boleh menyalakan mode otomatis pada medianya sendiri. Artikel ke media itu akan terbit tanpa ACC mitra.
+			{/if}
+		</p>
+		{#snippet footer()}
+			<button class="app-btn app-btn-soft" type="button" disabled={busyId !== null} onclick={() => (autoPublishTarget = null)}>Batal</button>
+			<button
+				class="app-btn app-btn-primary"
+				type="button"
+				disabled={busyId !== null}
+				onclick={() => { if (autoPublishTarget) void setAutoPublish(autoPublishTarget, !autoPublishTarget?.auto_publish_enabled); }}
+			>{autoPublishTarget?.auto_publish_enabled ? 'Cabut izin' : 'Izinkan'}</button>
+		{/snippet}
+	</Modal>
+{/if}
+
+{#if deleting}
+	<Modal title="Hapus partner?" label="Hapus partner" maxWidth="md" onClose={() => (deleting = null)}>
+		<p class="text-sm text-muted-foreground">
+			Yakin mau hapus <strong>{deleting.name ?? deleting.email}</strong>?
+			Tindakan ini menghapus permanen partner beserta seluruh data turunannya
+			(media, dokumen, publikasi, penarikan, dan lainnya) dan tidak dapat dibatalkan.
+		</p>
+		{#snippet footer()}
+			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => (deleting = null)}>Batal</button>
+			<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void confirmDelete()}>
+				{busy ? 'Menghapus…' : 'Ya, hapus partner'}
+			</button>
+		{/snippet}
+	</Modal>
+{/if}

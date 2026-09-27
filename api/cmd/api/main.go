@@ -14,15 +14,18 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/adminshared"
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	authdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/auth"
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
 	clientreaddomain "github.com/rahmaangriawan/tauthub-go/internal/domains/clientread"
+	clienttautdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/clienttaut"
 	contentdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/content"
 	knowledgedomain "github.com/rahmaangriawan/tauthub-go/internal/domains/knowledge"
 	partnerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/partner"
+	platformdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/platform"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -112,6 +115,8 @@ func run() error {
 		knowledge := &knowledgedomain.Deps{Pool: database.Pool}
 		contentDeps := &contentdomain.Deps{Pool: database.Pool, JobInline: cfg.JobInline, WriteRateLimitPerMinute: cfg.WriteRateLimitPerMinute}
 		clientRead := &clientreaddomain.Deps{Pool: database.Pool}
+		tautDeps := &clienttautdomain.Deps{Pool: database.Pool, Cfg: cfg}
+		platformDeps := &platformdomain.Deps{Pool: database.Pool, Cfg: cfg, Admin: &adminshared.Deps{Pool: database.Pool, Cfg: cfg}}
 		partnerDeps := &partnerdomain.Deps{Pool: database.Pool, Cfg: cfg}
 		v1.Group(func(authed chi.Router) {
 			authed.Use(authDeps.Auth.RequireAuth)
@@ -189,6 +194,60 @@ func run() error {
 			authed.Get("/brands/{brandId}/analytics", clientRead.Analytics)
 			authed.Get("/brands/{brandId}/credits", clientRead.Credits)
 			authed.Get("/brands/{brandId}/invoices", clientRead.Invoices)
+			// ---------- Taut Pintar klien (/v1/brands/{brandId}/taut/*) ----------
+			authed.Get("/brands/{brandId}/taut/campaigns", tautDeps.TautCampaignsList)
+			authed.Post("/brands/{brandId}/taut/campaigns", tautDeps.TautCampaignCreate)
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}", tautDeps.TautCampaignGet)
+			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}", tautDeps.TautCampaignUpdate)
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}", tautDeps.TautCampaignAction)
+			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}", tautDeps.TautCampaignDelete)
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/advance", tautDeps.TautCampaignAdvance)
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/validate", tautDeps.TautCampaignValidateGet)
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/validate", tautDeps.TautCampaignValidatePost)
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/schedule", tautDeps.TautCampaignSchedule)
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/budget-estimate", tautDeps.TautBudgetEstimate)
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/placement", tautDeps.TautPlacementGet)
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/placement", tautDeps.TautPlacementPost)
+			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/placement", tautDeps.TautPlacementPut)
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/finish", tautDeps.TautCampaignFinish)
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profile", tautDeps.TautProfileGet)
+			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/profile", tautDeps.TautProfilePut)
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/profile", tautDeps.TautProfileAnalyzeLegacy)
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/profile/analyze", tautDeps.TautProfileAnalyze)
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profile/draft", tautDeps.TautProfileDraftGet)
+			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/profile/draft", tautDeps.TautProfileDraftPut)
+			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/profile/result", tautDeps.TautProfileResultDelete)
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profile/results/{resultId}", tautDeps.TautProfileResultGet)
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/profile/verify", tautDeps.TautProfileVerify)
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profiler/options", tautDeps.TautProfilerOptions)
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/submit-final", tautDeps.TautSubmitFinal)
+
+		})
+
+		// Berita acara kampanye by token share — PUBLIK (tautan dibagikan ke
+		// pihak ketiga), parity app/v1/campaign-reports/[token].
+		v1.Get("/campaign-reports/{token}", clientRead.CampaignReportGet)
+		// Endpoint publik & infra (§7): feed JSON mitra, tracking event, callback
+		// publishing, laporan bug (butuh login), trigger worker/scheduler.
+		v1.Get("/publishing/feed.json", platformDeps.PublishingFeedJSON)
+		v1.Post("/publishing/callbacks", platformDeps.PublishingCallback)
+		v1.Post("/tracking/events", platformDeps.TrackingEventCreate)
+		v1.Post("/internal/jobs", platformDeps.InternalJobPull)
+		v1.Get("/internal/cron/scheduler", platformDeps.InternalCronScheduler)
+		v1.Post("/internal/cron/scheduler", platformDeps.InternalCronScheduler)
+
+		// ---------- Pembayaran PUBLIK (/v1/payments/*) — port app/v1/payments ----------
+		// Webhook (verifikasi signature provider) + status polling pasca-redirect
+		// gateway: PUBLIK. gateway/active butuh Bearer user biasa.
+		v1.Post("/payments/webhooks/{provider}", platformDeps.PaymentWebhook)
+		v1.Get("/payments/status/{transactionId}", platformDeps.PublicPaymentStatus)
+
+		v1.Group(func(authed chi.Router) {
+			authed.Use(authDeps.Auth.RequireAuth)
+
+			authed.Get("/payments", platformDeps.PublicPaymentsList)
+			authed.Post("/payments", platformDeps.PublicPaymentsCreate)
+			authed.Get("/payments/gateway/active", platformDeps.PublicPaymentGatewayActive)
 
 			// ---------- Portal mitra (/mitra) — port app/v1/partner/* ----------
 			authed.Get("/partner/me", partnerDeps.Me)
@@ -293,6 +352,309 @@ func run() error {
 			authed.Post("/partner/vip/brand", partnerDeps.VipBrand)
 			authed.Get("/partner/vip/domains", partnerDeps.VipDomains)
 			authed.Get("/partner/vip/wallet", partnerDeps.VipWallet)
+
+			// ---------- Kontrol-plane platform (/v1/platform/*) — port app/v1/platform ----------
+
+			// Admins.
+			// Konfigurasi admin (link clicks, OAuth Google, server config, short link).
+			authed.Get("/platform/link-clicks", platformDeps.LinkClicksGet)
+			authed.Get("/platform/oauth/google", platformDeps.OAuthGoogleGet)
+			authed.Put("/platform/oauth/google", platformDeps.OAuthGooglePut)
+			authed.Get("/platform/server-config", platformDeps.ServerConfigGet)
+			authed.Put("/platform/server-config", platformDeps.ServerConfigPut)
+			authed.Get("/platform/short-link-config", platformDeps.ShortLinkConfigGet)
+			authed.Put("/platform/short-link-config", platformDeps.ShortLinkConfigPut)
+			authed.Get("/platform/admins", platformDeps.AdminsList)
+			authed.Post("/platform/admins", platformDeps.AdminsCreate)
+			authed.Get("/platform/admins/me", platformDeps.AdminsMe)
+			authed.Patch("/platform/admins/{adminId}", platformDeps.AdminsUpdate)
+			authed.Delete("/platform/admins/{adminId}", platformDeps.AdminsDelete)
+
+			// AI.
+			authed.Get("/platform/ai/configuration", platformDeps.AIConfigurationGet)
+			authed.Put("/platform/ai/configuration", platformDeps.AIConfigurationPut)
+			authed.Get("/platform/ai/models", platformDeps.AIModelsList)
+			authed.Get("/platform/ai/models/{modelId}/knowledge", platformDeps.AIModelKnowledgeGet)
+			authed.Put("/platform/ai/models/{modelId}/knowledge", platformDeps.AIModelKnowledgePut)
+			authed.Delete("/platform/ai/models/{modelId}/knowledge", platformDeps.AIModelKnowledgeDelete)
+			authed.Post("/platform/ai/probe", platformDeps.AIProbe)
+			authed.Get("/platform/ai/status", platformDeps.AIStatus)
+			authed.Post("/platform/ai/test-generation", platformDeps.AITestGeneration)
+			authed.Get("/platform/ai/usage", platformDeps.AIUsage)
+
+			// Media (segmen literal sebelum {mediaId}).
+			authed.Get("/platform/media", platformDeps.MediaList)
+			authed.Post("/platform/media", platformDeps.MediaCreate)
+			authed.Get("/platform/media/archive-impact", platformDeps.MediaArchiveImpact)
+			authed.Post("/platform/media/archive-all", platformDeps.MediaArchiveAll)
+			authed.Post("/platform/media/bulk", platformDeps.MediaBulkUpsert)
+			authed.Delete("/platform/media/bulk", platformDeps.MediaBulkDelete)
+			authed.Get("/platform/media/dewan-pers-reviews", platformDeps.MediaDewanPersReviews)
+			authed.Post("/platform/media/dewan-pers-reviews/{reviewId}", platformDeps.MediaDewanPersReviewDecide)
+			authed.Get("/platform/media/intelligence", platformDeps.MediaIntelligence)
+			authed.Post("/platform/media/recompute-health", platformDeps.MediaRecomputeHealthBulk)
+			authed.Post("/platform/media/restore-archived", platformDeps.MediaRestoreArchived)
+			authed.Post("/platform/media/seo-bulk", platformDeps.MediaSEOBulk)
+			authed.Post("/platform/media/similarweb-bulk", platformDeps.MediaSimilarWebBulk)
+			authed.Post("/platform/media/sync-credit-cost", platformDeps.MediaSyncCreditCost)
+			authed.Get("/platform/media/{mediaId}", platformDeps.MediaGet)
+			authed.Put("/platform/media/{mediaId}", platformDeps.MediaUpdate)
+			authed.Delete("/platform/media/{mediaId}", platformDeps.MediaDelete)
+			authed.Get("/platform/media/{mediaId}/audit", platformDeps.MediaAudit)
+			authed.Post("/platform/media/{mediaId}/recompute-health", platformDeps.MediaRecomputeHealth)
+			authed.Post("/platform/media/{mediaId}/review", platformDeps.MediaReview)
+			authed.Get("/platform/media/{mediaId}/seo", platformDeps.MediaSEO)
+			authed.Post("/platform/media/{mediaId}/seo", platformDeps.MediaSEO)
+			authed.Get("/platform/media/{mediaId}/similarweb", platformDeps.MediaSimilarWeb)
+			authed.Post("/platform/media/{mediaId}/similarweb", platformDeps.MediaSimilarWeb)
+
+			// Media packages.
+			authed.Get("/platform/media-packages", platformDeps.MediaPackagesList)
+			authed.Post("/platform/media-packages", platformDeps.MediaPackageCreate)
+			authed.Put("/platform/media-packages/{packageId}", platformDeps.MediaPackageUpdate)
+			authed.Delete("/platform/media-packages/{packageId}", platformDeps.MediaPackageDelete)
+
+			// Media standards.
+			authed.Get("/platform/media-standards", platformDeps.MediaStandardsList)
+			authed.Post("/platform/media-standards", platformDeps.MediaStandardCreate)
+			authed.Get("/platform/media-standards/{mediaId}", platformDeps.MediaStandardGet)
+			authed.Put("/platform/media-standards/{mediaId}", platformDeps.MediaStandardUpdate)
+			authed.Delete("/platform/media-standards/{mediaId}", platformDeps.MediaStandardDelete)
+
+			// Media summaries.
+			authed.Get("/platform/media-summaries", platformDeps.MediaSummariesList)
+			authed.Post("/platform/media-summaries/{mediaId}/regenerate", platformDeps.MediaSummaryRegenerate)
+
+			// Operations.
+			authed.Get("/platform/operations/access", platformDeps.OperationsAccess)
+			authed.Get("/platform/operations/summary", platformDeps.OperationsSummary)
+			// audit = alias audit-log di app lama (routes.json: metode kosong).
+			authed.Get("/platform/operations/audit", platformDeps.OperationsAudit)
+			authed.Get("/platform/operations/audit-log", platformDeps.OperationsAuditLog)
+			authed.Get("/platform/operations/brands", platformDeps.OperationsBrands)
+			authed.Get("/platform/operations/brands/{brandId}/campaigns", platformDeps.OperationsBrandCampaigns)
+			authed.Get("/platform/operations/brands/{brandId}/connections", platformDeps.OperationsBrandConnections)
+			authed.Post("/platform/operations/brands/{brandId}/connections", platformDeps.OperationsBrandConnections)
+			authed.Delete("/platform/operations/brands/{brandId}/connections/{connectionId}", platformDeps.OperationsBrandConnectionDelete)
+			authed.Post("/platform/operations/brands/{brandId}/connections/{connectionId}/test", platformDeps.OperationsBrandConnectionTest)
+			authed.Get("/platform/operations/brands/{brandId}/content-settings", platformDeps.OperationsBrandContentSettings)
+			authed.Put("/platform/operations/brands/{brandId}/content-settings", platformDeps.OperationsBrandContentSettings)
+			authed.Post("/platform/operations/credit-adjustment", platformDeps.OperationsCreditAdjustment)
+			authed.Get("/platform/operations/credit-reports", platformDeps.OperationsCreditReports)
+			authed.Post("/platform/operations/credit-reports/{reportId}/review", platformDeps.OperationsCreditReportReview)
+			authed.Get("/platform/operations/dead-letters", platformDeps.OperationsDeadLetters)
+			authed.Post("/platform/operations/dead-letters/{id}/retry", platformDeps.OperationsDeadLetterRetry)
+			authed.Get("/platform/operations/errors", platformDeps.OperationsErrors)
+			authed.Put("/platform/operations/generation-switch", platformDeps.OperationsGenerationSwitch)
+			authed.Get("/platform/operations/notifications", platformDeps.OperationsNotifications)
+			authed.Get("/platform/operations/publications", platformDeps.OperationsPublications)
+			authed.Get("/platform/operations/publications/{publicationId}", platformDeps.OperationsPublicationDetail)
+			authed.Post("/platform/operations/publications/{publicationId}/retry", platformDeps.OperationsPublicationRetry)
+			authed.Get("/platform/operations/running-batches", platformDeps.OperationsRunningBatches)
+			authed.Get("/platform/operations/users", platformDeps.OperationsUsers)
+			authed.Post("/platform/operations/users", platformDeps.OperationsUsers)
+			authed.Get("/platform/operations/users/{userId}/brands", platformDeps.OperationsUserBrands)
+			authed.Get("/platform/operations/users/{userId}/daily-quota", platformDeps.OperationsUserDailyQuota)
+			authed.Put("/platform/operations/users/{userId}/daily-quota", platformDeps.OperationsUserDailyQuota)
+			authed.Get("/platform/operations/users/{userId}/generate-quota", platformDeps.OperationsUserGenerateQuota)
+			authed.Put("/platform/operations/users/{userId}/generate-quota", platformDeps.OperationsUserGenerateQuota)
+			authed.Put("/platform/operations/users/{userId}/password", platformDeps.OperationsUserPassword)
+			authed.Put("/platform/operations/users/{userId}/role", platformDeps.OperationsUserRole)
+			authed.Put("/platform/operations/users/{userId}/status", platformDeps.OperationsUserStatus)
+			authed.Get("/platform/operations/variant-batches", platformDeps.OperationsVariantBatches)
+			authed.Get("/platform/operations/variant-batches/{batchId}", platformDeps.OperationsVariantBatchDetail)
+			authed.Post("/platform/operations/variant-batches/{batchId}/retry", platformDeps.OperationsVariantBatchRetry)
+
+			// Partners.
+			authed.Get("/platform/partners", platformDeps.PartnersList)
+			authed.Post("/platform/partners", platformDeps.PartnerCreate)
+			authed.Get("/platform/partners/{partnerId}", platformDeps.PartnerGet)
+			authed.Put("/platform/partners/{partnerId}", platformDeps.PartnerUpdate)
+			authed.Delete("/platform/partners/{partnerId}", platformDeps.PartnerDelete)
+			authed.Get("/platform/partners/{partnerId}/connections", platformDeps.PartnerConnections)
+			authed.Post("/platform/partners/{partnerId}/connections", platformDeps.PartnerConnections)
+			authed.Put("/platform/partners/{partnerId}/connections/{connectionId}", platformDeps.PartnerConnectionUpdate)
+			authed.Delete("/platform/partners/{partnerId}/connections/{connectionId}", platformDeps.PartnerConnectionDelete)
+			authed.Post("/platform/partners/{partnerId}/connections/{connectionId}/test", platformDeps.PartnerConnectionTest)
+			authed.Get("/platform/partners/{partnerId}/documents", platformDeps.PartnerDocuments)
+			authed.Put("/platform/partners/{partnerId}/documents/{id}", platformDeps.PartnerDocumentUpdate)
+			authed.Get("/platform/partners/{partnerId}/vip", platformDeps.PartnerVipGet)
+			authed.Put("/platform/partners/{partnerId}/vip", platformDeps.PartnerVipUpdate)
+
+			// Payments (admin).
+			authed.Get("/platform/payments/gateways", platformDeps.PaymentsGateways)
+			authed.Post("/platform/payments/gateways", platformDeps.PaymentGatewaySave)
+			authed.Post("/platform/payments/gateways/{gatewayId}/activate", platformDeps.PaymentGatewayActivate)
+			authed.Post("/platform/payments/gateways/{gatewayId}/test", platformDeps.PaymentGatewayTest)
+			authed.Get("/platform/payments/transactions", platformDeps.PaymentTransactions)
+
+			// Settings.
+			authed.Get("/platform/settings/email", platformDeps.SettingsEmailGet)
+			authed.Put("/platform/settings/email", platformDeps.SettingsEmailPut)
+			authed.Get("/platform/settings/email/deliveries", platformDeps.SettingsEmailDeliveries)
+			authed.Post("/platform/settings/email/test-connection", platformDeps.SettingsEmailTestConnection)
+			authed.Post("/platform/settings/email/test-send", platformDeps.SettingsEmailTestSend)
+			authed.Get("/platform/settings/pagespeed", platformDeps.SettingsPageSpeedGet)
+			authed.Put("/platform/settings/pagespeed", platformDeps.SettingsPageSpeedPut)
+			authed.Post("/platform/settings/pagespeed/test", platformDeps.SettingsPageSpeedTest)
+			authed.Get("/platform/settings/turnstile", platformDeps.SettingsTurnstileGet)
+			authed.Put("/platform/settings/turnstile", platformDeps.SettingsTurnstilePut)
+			authed.Post("/platform/settings/turnstile/test", platformDeps.SettingsTurnstileTest)
+
+			// PR.
+			authed.Get("/platform/pr/analysis-history", platformDeps.PRAnalysisHistory)
+			authed.Get("/platform/pr/brand-standards", platformDeps.PRBrandStandards)
+			authed.Put("/platform/pr/brand-standards/{brandId}", platformDeps.PRBrandStandardUpdate)
+			authed.Get("/platform/pr/config", platformDeps.PRConfigGet)
+			authed.Put("/platform/pr/config", platformDeps.PRConfigPut)
+			authed.Get("/platform/pr/media-rules", platformDeps.PRMediaRulesGet)
+			authed.Put("/platform/pr/media-rules", platformDeps.PRMediaRulesPut)
+			authed.Post("/platform/pr/recompute-scores", platformDeps.PRRecomputeScores)
+			authed.Post("/platform/pr/rerun-analysis", platformDeps.PRRerunAnalysis)
+			authed.Get("/platform/pr/scoring-profiles", platformDeps.PRScoringProfiles)
+			authed.Post("/platform/pr/scoring-profiles", platformDeps.PRScoringProfiles)
+			authed.Post("/platform/pr/scoring-profiles/{profileId}/activate", platformDeps.PRScoringProfileActivate)
+
+			// Taut.
+			authed.Get("/platform/taut-agent-logs", platformDeps.TautAgentLogs)
+			authed.Get("/platform/taut-agents", platformDeps.TautAgentsList)
+			authed.Get("/platform/taut-agents/{agent}", platformDeps.TautAgentGet)
+			authed.Put("/platform/taut-agents/{agent}", platformDeps.TautAgentUpdate)
+			authed.Post("/platform/taut-agents/{agent}/test", platformDeps.TautAgentTest)
+			authed.Get("/platform/taut/ai-usage", platformDeps.TautAIUsage)
+			authed.Get("/platform/taut/angles/{angleId}", platformDeps.TautAngleGet)
+			authed.Patch("/platform/taut/angles/{angleId}", platformDeps.TautAngleUpdate)
+			authed.Delete("/platform/taut/angles/{angleId}", platformDeps.TautAngleDelete)
+			authed.Post("/platform/taut/angles/{angleId}/test", platformDeps.TautAngleTest)
+			authed.Get("/platform/taut/angles/{angleId}/versions", platformDeps.TautAngleVersions)
+			authed.Post("/platform/taut/angles/{angleId}/versions", platformDeps.TautAngleVersionCreate)
+			authed.Get("/platform/taut/angles/{angleId}/versions/{versionId}", platformDeps.TautAngleVersionGet)
+			authed.Patch("/platform/taut/angles/{angleId}/versions/{versionId}", platformDeps.TautAngleVersionUpdate)
+			authed.Delete("/platform/taut/angles/{angleId}/versions/{versionId}", platformDeps.TautAngleVersionDelete)
+			authed.Post("/platform/taut/angles/{angleId}/versions/{versionId}/activate", platformDeps.TautAngleVersionActivate)
+			authed.Get("/platform/taut/base-prompt", platformDeps.TautBasePromptGet)
+			authed.Post("/platform/taut/base-prompt", platformDeps.TautBasePromptCreate)
+			authed.Get("/platform/taut/base-prompt/{versionId}", platformDeps.TautBasePromptVersionGet)
+			authed.Patch("/platform/taut/base-prompt/{versionId}", platformDeps.TautBasePromptVersionUpdate)
+			authed.Delete("/platform/taut/base-prompt/{versionId}", platformDeps.TautBasePromptVersionDelete)
+			authed.Post("/platform/taut/base-prompt/{versionId}/activate", platformDeps.TautBasePromptVersionActivate)
+			authed.Get("/platform/taut/channels", platformDeps.TautChannelsList)
+			authed.Post("/platform/taut/channels", platformDeps.TautChannelCreate)
+			authed.Patch("/platform/taut/channels/{channelId}", platformDeps.TautChannelUpdate)
+			authed.Delete("/platform/taut/channels/{channelId}", platformDeps.TautChannelDelete)
+			authed.Get("/platform/taut/channels/{channelId}/angles", platformDeps.TautChannelAngles)
+			authed.Post("/platform/taut/channels/{channelId}/angles", platformDeps.TautAngleCreate)
+			authed.Get("/platform/taut/runs", platformDeps.TautRunsList)
+			authed.Post("/platform/taut/runs/cleanup", platformDeps.TautRunsCleanup)
+			authed.Post("/platform/taut/runs/retry/{runId}", platformDeps.TautRunRetry)
+			authed.Get("/platform/taut/runs/{campaignId}", platformDeps.TautRunsByCampaign)
+
+			// Knowledge / content.
+			authed.Get("/platform/knowledge-bases", platformDeps.KnowledgeBasesList)
+			authed.Post("/platform/knowledge-bases", platformDeps.KnowledgeBaseCreate)
+			authed.Get("/platform/knowledge-bases/{knowledgeBaseId}", platformDeps.KnowledgeBaseGet)
+			authed.Patch("/platform/knowledge-bases/{knowledgeBaseId}", platformDeps.KnowledgeBaseUpdate)
+			authed.Get("/platform/knowledge-bases/{knowledgeBaseId}/versions", platformDeps.KnowledgeBaseVersionsList)
+			authed.Post("/platform/knowledge-bases/{knowledgeBaseId}/versions", platformDeps.KnowledgeBaseVersionCreate)
+			authed.Get("/platform/knowledge-bases/{knowledgeBaseId}/versions/{versionId}", platformDeps.KnowledgeBaseVersionGet)
+			authed.Patch("/platform/knowledge-bases/{knowledgeBaseId}/versions/{versionId}", platformDeps.KnowledgeBaseVersionUpdate)
+			authed.Delete("/platform/knowledge-bases/{knowledgeBaseId}/versions/{versionId}", platformDeps.KnowledgeBaseVersionDelete)
+			authed.Post("/platform/knowledge-bases/{knowledgeBaseId}/versions/{versionId}/activate", platformDeps.KnowledgeBaseVersionActivate)
+			authed.Post("/platform/knowledge-bases/{knowledgeBaseId}/versions/{versionId}/rules", platformDeps.KnowledgeBaseVersionRules)
+			authed.Get("/platform/content-intake-types", platformDeps.ContentIntakeTypesList)
+			authed.Post("/platform/content-intake-types", platformDeps.ContentIntakeTypeCreate)
+			authed.Get("/platform/content-intake-types/{code}", platformDeps.ContentIntakeTypeGet)
+			authed.Put("/platform/content-intake-types/{code}", platformDeps.ContentIntakeTypeUpdate)
+			authed.Delete("/platform/content-intake-types/{code}", platformDeps.ContentIntakeTypeDelete)
+			authed.Get("/platform/content-intake-types/{code}/standards", platformDeps.ContentIntakeTypeStandardsGet)
+			authed.Put("/platform/content-intake-types/{code}/standards", platformDeps.ContentIntakeTypeStandardsPut)
+			authed.Post("/platform/content-intake-types/{code}/standards/versions/{versionId}/activate", platformDeps.ContentIntakeTypeStandardVersionActivate)
+			authed.Get("/platform/moderations", platformDeps.ModerationsList)
+			authed.Post("/platform/moderations/{auditId}/review", platformDeps.ModerationReview)
+
+			// Crawler / GSC / WA / RSS / SEO / GA4.
+			authed.Get("/platform/crawlhub", platformDeps.CrawlhubConfig)
+			authed.Post("/platform/crawlhub", platformDeps.CrawlhubAction)
+			authed.Put("/platform/crawlhub", platformDeps.CrawlhubConfigUpdate)
+			authed.Get("/platform/crawlhub/targets", platformDeps.CrawlhubTargets)
+			authed.Post("/platform/crawlhub/targets", platformDeps.CrawlhubTargetsSync)
+			authed.Get("/platform/gsc-config", platformDeps.GSCConfigGet)
+			authed.Put("/platform/gsc-config", platformDeps.GSCConfigPut)
+			authed.Get("/platform/ga4-configs", platformDeps.GA4ConfigsList)
+			authed.Post("/platform/ga4-configs", platformDeps.GA4ConfigCreate)
+			authed.Get("/platform/ga4-configs/{configId}", platformDeps.GA4ConfigGet)
+			authed.Put("/platform/ga4-configs/{configId}", platformDeps.GA4ConfigUpdate)
+			authed.Delete("/platform/ga4-configs/{configId}", platformDeps.GA4ConfigDelete)
+			authed.Get("/platform/wa/config", platformDeps.WAGatewayConfig)
+			authed.Put("/platform/wa/config", platformDeps.WAGatewayConfigUpdate)
+			authed.Get("/platform/wa/deliveries", platformDeps.WADeliveries)
+			authed.Get("/platform/wa/templates", platformDeps.WATemplates)
+			authed.Put("/platform/wa/templates", platformDeps.WATemplateSave)
+			authed.Delete("/platform/wa/templates", platformDeps.WATemplateReset)
+			authed.Post("/platform/wa/test", platformDeps.WATest)
+			authed.Get("/platform/rss-feeds", platformDeps.RSSFeedsList)
+			authed.Post("/platform/rss-feeds", platformDeps.RSSFeedCreate)
+			authed.Get("/platform/rss-feeds/{feedId}", platformDeps.RSSFeedGet)
+			authed.Put("/platform/rss-feeds/{feedId}", platformDeps.RSSFeedUpdate)
+			authed.Delete("/platform/rss-feeds/{feedId}", platformDeps.RSSFeedDelete)
+			authed.Post("/platform/rss-feeds/{feedId}", platformDeps.RSSFeedRotateToken)
+			authed.Get("/platform/seo/config", platformDeps.SEOConfigGet)
+			authed.Put("/platform/seo/config", platformDeps.SEOConfigPut)
+			authed.Get("/platform/seo/diagnose", platformDeps.SEODiagnose)
+
+			// Credits / invoices / packages / orders / revenue / settlements / referrals / VIP.
+			authed.Get("/platform/credits", platformDeps.CreditsConfigGet)
+			authed.Post("/platform/credits", platformDeps.CreditsAdjust)
+			authed.Put("/platform/credits", platformDeps.CreditsConfigPut)
+			authed.Get("/platform/invoices", platformDeps.InvoicesList)
+			authed.Post("/platform/invoices", platformDeps.InvoiceCreate)
+			authed.Get("/platform/invoices/{invoiceId}", platformDeps.InvoiceGet)
+			authed.Put("/platform/invoices/{invoiceId}", platformDeps.InvoiceUpdate)
+			authed.Delete("/platform/invoices/{invoiceId}", platformDeps.InvoiceVoid)
+			authed.Get("/platform/packages", platformDeps.CreditPackagesList)
+			authed.Post("/platform/packages", platformDeps.CreditPackageCreate)
+			authed.Get("/platform/packages/{packageId}", platformDeps.CreditPackageGet)
+			authed.Put("/platform/packages/{packageId}", platformDeps.CreditPackageUpdate)
+			authed.Delete("/platform/packages/{packageId}", platformDeps.CreditPackageRevoke)
+			authed.Get("/platform/orders", platformDeps.OrdersList)
+			authed.Get("/platform/revenue-shares", platformDeps.RevenueSharesList)
+			authed.Post("/platform/revenue-shares", platformDeps.RevenueShareCreate)
+			authed.Get("/platform/revenue-shares/{ruleId}", platformDeps.RevenueShareGet)
+			authed.Put("/platform/revenue-shares/{ruleId}", platformDeps.RevenueShareUpdate)
+			authed.Delete("/platform/revenue-shares/{ruleId}", platformDeps.RevenueShareArchive)
+			authed.Get("/platform/settlements", platformDeps.SettlementsList)
+			authed.Post("/platform/settlements", platformDeps.SettlementCreate)
+			authed.Get("/platform/settlements/config", platformDeps.SettlementConfigGet)
+			authed.Put("/platform/settlements/config", platformDeps.SettlementConfigPut)
+			authed.Get("/platform/settlements/{settlementId}", platformDeps.SettlementGet)
+			authed.Put("/platform/settlements/{settlementId}", platformDeps.SettlementUpdate)
+			authed.Delete("/platform/settlements/{settlementId}", platformDeps.SettlementVoid)
+			authed.Post("/platform/settlements/{settlementId}/receipt", platformDeps.SettlementReceiptUpload)
+			authed.Get("/platform/referrals", platformDeps.ReferralsList)
+			authed.Get("/platform/referral-audit", platformDeps.ReferralAuditList)
+			authed.Get("/platform/referred-domains", platformDeps.ReferredDomainsList)
+			authed.Put("/platform/referred-domains", platformDeps.ReferredDomainsReview)
+			authed.Get("/platform/vip-partners", platformDeps.VipPartnersList)
+			authed.Get("/platform/vip-partners/{partnerId}/domains", platformDeps.VipPartnerDomains)
+			authed.Get("/platform/pricing", platformDeps.PricingGet)
+			authed.Put("/platform/pricing", platformDeps.PricingPut)
+
+			// Bug reports / auto-replace / config / gatekeeper / diagnostics / link-monitor.
+			authed.Post("/bug-reports", platformDeps.BugReportSubmit)
+			authed.Get("/platform/bug-reports", platformDeps.BugReportsList)
+			authed.Get("/platform/bug-reports/{reportId}", platformDeps.BugReportGet)
+			authed.Patch("/platform/bug-reports/{reportId}", platformDeps.BugReportUpdate)
+			authed.Get("/platform/auto-replace", platformDeps.AutoReplaceGet)
+			authed.Put("/platform/auto-replace", platformDeps.AutoReplacePut)
+			authed.Get("/platform/config/template-url", platformDeps.ConfigTemplateURLGet)
+			authed.Put("/platform/config/template-url", platformDeps.ConfigTemplateURLPut)
+			authed.Get("/platform/gatekeeper/logs", platformDeps.GatekeeperLogs)
+			authed.Get("/platform/gatekeeper/stats", platformDeps.GatekeeperStats)
+			authed.Get("/platform/domain-diagnostics", platformDeps.DomainDiagnosticsList)
+			authed.Post("/platform/domain-diagnostics/recheck", platformDeps.DomainDiagnosticsRecheck)
+			authed.Get("/platform/link-monitor", platformDeps.LinkMonitorGlobal)
+			authed.Post("/platform/link-monitor/check", platformDeps.LinkMonitorCheck)
+			authed.Post("/platform/link-monitor/replace", platformDeps.LinkMonitorReplace)
 		})
 
 		// TODO fase 2+: peta lengkap di REWRITE/04_API_ENDPOINTS.md.

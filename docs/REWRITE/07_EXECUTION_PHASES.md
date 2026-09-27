@@ -198,3 +198,33 @@ Catatan implementasi portal mitra (paket `api/internal/domains/partner/`, 90 rou
 | 7–8 | 15% | wizard + uang (harus presisi) |
 | 9 | 5% | besar tapi sekadar port state machine |
 | 10–12 | 10% | panjang tapi mekanis |
+
+---
+
+## Catatan Status Terkini (port UI menyeluruh)
+
+**Cakupan backend**: 306 dari 406 endpoint tercatat `[x]` di `04_API_ENDPOINTS.md`. Yang selesai:
+auth (18), partner portal (63), payments (4), **seluruh platform (173: operations 32, admins 3, AI 10,
+media 18, media-packages/standards/summaries 6, partners 8, settings 11, PR 12, taut 20, dan sisanya),
+serta 8 endpoint §7 (bug-reports, campaign-reports, internal jobs/cron, publishing callbacks/feed,
+tracking events)**. Sisa 100 endpoint ada di grup `/v1/brands` (fase lanjutan: publications,
+distribution, members, chat-learning, reports, dll).
+
+**Cakupan UI**: 115 halaman Svelte. Yang selesai:
+- **Admin 54 halaman** — seluruh kontrol-plane (shell permission-gated, dashboard, media, publikasi,
+  keuangan, mitra, AI, Taut, PR, operasi, konfigurasi). Terverifikasi render tanpa error console.
+- **Mitra 21 section** — termasuk `connections`/`publishing-api`/`blogger` sebagai 3 tab halaman
+  Integrasi (parity app lama yang me-redirect section lama ke `#hash`).
+- **Klien 18 route** — termasuk dashboard, members, notifications, knowledge.
+- **Publik 14** — landing redirect, login (termasuk `?mode=register` legacy), register, reset password,
+  docs, berita-acara, blogger-pick-blog, 6 halaman payments, redirect legacy (/brands→/klien,
+  /platform→/admin, /partner→/mitra via hooks.server.ts).
+
+**Sisa pekerjaan UI** (11 item di `05_UI_PAGES.md`): section `distribution` klien, wizard
+`campaigns/{id}/flow`, `taut-pintar` klien (10 sub-halaman), dan knowledge center penuh.
+
+**Verifikasi terpusat yang dijalankan**: `go build ./...`, `go vet ./...`, `go test ./...` bersih;
+`svelte-check` 0 error 0 warning; `npm run build` sukses; smoke test API dengan akun admin & mitra
+nyata (41+ endpoint admin mengembalikan 200 dengan data DB, gate non-admin 404 parity, callback
+publishing HMAC sah 200 / salah 403, feed JSON artikel lengkap, tracking event tercatat, cron/jobs
+403 tanpa secret).

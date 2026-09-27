@@ -1,0 +1,200 @@
+<script lang="ts">
+	// Panel log agent: ringkasan 7 hari, filter agent/status, tabel log eksekusi
+	// dan gudang training AI. Port app/admin/taut-agents/agent-logs.tsx.
+	import { onMount } from 'svelte';
+	import { RefreshCw, TriangleAlert } from '@lucide/svelte';
+	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { fmtDateTime } from '$lib/admin-format';
+
+	const AGENT_LABEL: Record<string, string> = {
+		profiler: 'Profiler',
+		matchmaker: 'Matchmaker',
+		writer: 'Writer',
+		gatekeeper: 'Gatekeeper'
+	};
+
+	let loading = $state(true);
+	let error = $state('');
+	let data = $state<any>(null);
+	let agentFilter = $state('all');
+	let statusFilter = $state('all');
+	let tab = $state<'runs' | 'training'>('runs');
+	let runsPage = $state(1);
+	let trainingPage = $state(1);
+
+	onMount(() => {
+		void (async () => {
+			const fresh = await ensureValidSession();
+			if (!fresh) return;
+			await load();
+		})();
+		const onExpired = () => (window.location.href = '/login');
+		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+	});
+
+	async function load() {
+		loading = true;
+		error = '';
+		try {
+			const params = new URLSearchParams();
+			if (agentFilter !== 'all') params.set('agent', agentFilter);
+			if (statusFilter !== 'all') params.set('status', statusFilter);
+			const res = await apiRequest(`/v1/platform/taut-agent-logs?${params.toString()}`);
+			if (!res.ok) {
+				error = await readApiError(res, 'Gagal memuat log agent.');
+				return;
+			}
+			data = await res.json();
+		} finally {
+			loading = false;
+		}
+	}
+
+	const okCount = $derived(
+		(data?.summary_7d ?? []).filter((s: any) => s.status === 'done').reduce((a: number, b: any) => a + b.count, 0)
+	);
+	const failCount = $derived(
+		(data?.summary_7d ?? []).filter((s: any) => s.status === 'failed').reduce((a: number, b: any) => a + b.count, 0)
+	);
+	const runs = $derived<any[]>(data?.runs ?? []);
+	const training = $derived<any[]>(data?.training ?? []);
+	const runsSlice = $derived(runs.slice((runsPage - 1) * 10, runsPage * 10));
+	const trainingSlice = $derived(training.slice((trainingPage - 1) * 10, trainingPage * 10));
+</script>
+
+<div class="flex flex-col gap-4">
+	<div class="flex flex-wrap gap-3">
+		<div class="app-card p-4" style="min-width: 160px;">
+			<p class="text-xs text-muted-foreground">7 hari terakhir — Berhasil</p>
+			<p class="text-2xl font-bold" style="color: var(--success);">{okCount}</p>
+		</div>
+		<div class="app-card p-4" style="min-width: 160px;">
+			<p class="text-xs text-muted-foreground">7 hari terakhir — Gagal</p>
+			<p class="text-2xl font-bold" style="color: {failCount > 0 ? 'var(--destructive)' : 'var(--muted-foreground)'};">{failCount}</p>
+		</div>
+	</div>
+
+	<div class="flex flex-wrap items-center gap-3">
+		<select class="app-input !w-auto min-w-[150px]" aria-label="Filter agent" bind:value={agentFilter} onchange={load}>
+			<option value="all">Semua Agent</option>
+			{#each Object.entries(AGENT_LABEL) as [v, l] (v)}<option value={v}>{l}</option>{/each}
+		</select>
+		<select class="app-input !w-auto min-w-[130px]" aria-label="Filter status" bind:value={statusFilter} onchange={load}>
+			<option value="all">Semua Status</option>
+			<option value="done">Berhasil</option>
+			<option value="failed">Gagal</option>
+		</select>
+		<button class="app-btn app-btn-soft" disabled={loading} onclick={load}><RefreshCw size={14} /> Refresh</button>
+	</div>
+
+	{#if error}<p class="text-sm" style="color: var(--destructive);">{error}</p>{/if}
+
+	{#if loading && !data}
+		<p class="text-sm text-muted-foreground">Memuat log…</p>
+	{:else}
+		<div class="flex gap-2">
+			<button class="app-btn !min-h-8 !px-3 !text-xs" class:app-btn-primary={tab === 'runs'} class:app-btn-soft={tab !== 'runs'} onclick={() => (tab = 'runs')}>Log Eksekusi Agent</button>
+			<button class="app-btn !min-h-8 !px-3 !text-xs" class:app-btn-primary={tab === 'training'} class:app-btn-soft={tab !== 'training'} onclick={() => (tab = 'training')}>Gudang Training AI</button>
+		</div>
+
+		{#if tab === 'runs'}
+			<div class="app-card overflow-x-auto p-4">
+				<table class="w-full min-w-[900px] text-sm">
+					<thead>
+						<tr class="text-left text-xs text-muted-foreground">
+							<th class="py-1.5 pr-3 font-medium">Waktu</th>
+							<th class="py-1.5 pr-3 font-medium">Agent</th>
+							<th class="py-1.5 pr-3 font-medium">Status</th>
+							<th class="py-1.5 pr-3 font-medium">Kampanye / Media</th>
+							<th class="py-1.5 pr-3 font-medium">Model</th>
+							<th class="py-1.5 pr-3 font-medium">Token (in/out)</th>
+							<th class="py-1.5 font-medium">Error</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each runsSlice as r (r.id)}
+							<tr class="border-t">
+								<td class="py-1.5 pr-3 text-xs">{fmtDateTime(r.created_at)}</td>
+								<td class="py-1.5 pr-3">{AGENT_LABEL[r.agent] ?? r.agent}</td>
+								<td class="py-1.5 pr-3">
+									{#if r.status === 'done'}
+										<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--success-soft); color: var(--success);">Berhasil</span>
+									{:else if r.status === 'failed'}
+										<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]" style="background: var(--destructive-soft, #fdecee); color: var(--destructive);">
+											<TriangleAlert size={10} /> Gagal
+										</span>
+									{:else}
+										<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--warning-soft); color: var(--warning);">Berjalan</span>
+									{/if}
+								</td>
+								<td class="py-1.5 pr-3">{r.campaign_name ?? '-'}{r.media_name ? ` / ${r.media_name}` : ''}</td>
+								<td class="py-1.5 pr-3 text-xs">{r.model ?? '-'}</td>
+								<td class="py-1.5 pr-3 text-xs tabular-nums">{r.token_input ?? '-'} / {r.token_output ?? '-'}</td>
+								<td class="max-w-[260px] break-words py-1.5 text-xs">{r.error ?? '-'}</td>
+							</tr>
+						{/each}
+						{#if runs.length === 0}
+							<tr><td class="py-6 text-center text-sm text-muted-foreground" colspan="7">Belum ada log.</td></tr>
+						{/if}
+					</tbody>
+				</table>
+				{#if runs.length > 10}
+					<div class="mt-3 flex items-center justify-between text-sm">
+						<p class="text-muted-foreground">Halaman {runsPage} dari {Math.ceil(runs.length / 10)}</p>
+						<div class="flex gap-2">
+							<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" disabled={runsPage === 1} onclick={() => (runsPage -= 1)}>Sebelumnya</button>
+							<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" disabled={runsPage * 10 >= runs.length} onclick={() => (runsPage += 1)}>Berikutnya</button>
+						</div>
+					</div>
+				{/if}
+			</div>
+		{:else}
+			<div class="app-card overflow-x-auto p-4">
+				<p class="mb-2 text-xs text-muted-foreground">
+					Semua input klien & hasil agent tersimpan otomatis untuk improvisasi model platform (maks 10 baris per halaman).
+				</p>
+				<table class="w-full min-w-[800px] text-sm">
+					<thead>
+						<tr class="text-left text-xs text-muted-foreground">
+							<th class="py-1.5 pr-3 font-medium">Waktu</th>
+							<th class="py-1.5 pr-3 font-medium">Agent</th>
+							<th class="py-1.5 pr-3 font-medium">Status</th>
+							<th class="py-1.5 pr-3 font-medium">Input (preview)</th>
+							<th class="py-1.5 font-medium">Output (preview)</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each trainingSlice as t (t.id)}
+							<tr class="border-t">
+								<td class="py-1.5 pr-3 text-xs">{fmtDateTime(t.created_at)}</td>
+								<td class="py-1.5 pr-3">{AGENT_LABEL[t.agent] ?? t.agent}</td>
+								<td class="py-1.5 pr-3">
+									{#if t.status === 'done'}
+										<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--success-soft); color: var(--success);">Berhasil</span>
+									{:else}
+										<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--destructive-soft, #fdecee); color: var(--destructive);">Gagal</span>
+									{/if}
+								</td>
+								<td class="max-w-[300px] break-words py-1.5 pr-3 text-xs">{t.input_preview ?? '-'}</td>
+								<td class="max-w-[300px] break-words py-1.5 text-xs">{t.output_preview ?? '-'}</td>
+							</tr>
+						{/each}
+						{#if training.length === 0}
+							<tr><td class="py-6 text-center text-sm text-muted-foreground" colspan="5">Belum ada sample training.</td></tr>
+						{/if}
+					</tbody>
+				</table>
+				{#if training.length > 10}
+					<div class="mt-3 flex items-center justify-between text-sm">
+						<p class="text-muted-foreground">Halaman {trainingPage} dari {Math.ceil(training.length / 10)}</p>
+						<div class="flex gap-2">
+							<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" disabled={trainingPage === 1} onclick={() => (trainingPage -= 1)}>Sebelumnya</button>
+							<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" disabled={trainingPage * 10 >= training.length} onclick={() => (trainingPage += 1)}>Berikutnya</button>
+						</div>
+					</div>
+				{/if}
+			</div>
+		{/if}
+	{/if}
+</div>

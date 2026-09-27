@@ -25,8 +25,22 @@ function safeReturnTo(value: string | null | undefined, origin: string): string 
 	return `${target.pathname}${target.search}${target.hash}`;
 }
 
+// Redirect legacy (parity next.config.ts redirects, permanent):
+// /brands → /klien, /platform → /admin, /partner → /mitra.
+const LEGACY_REDIRECTS: Array<[string, string]> = [
+	['/brands', '/klien'],
+	['/platform', '/admin'],
+	['/partner', '/mitra']
+];
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
+
+	for (const [from, to] of LEGACY_REDIRECTS) {
+		if (pathname === from || pathname.startsWith(`${from}/`)) {
+			throw redirect(308, `${to}${pathname.slice(from.length)}${event.url.search}`);
+		}
+	}
 
 	const gated =
 		pathname.startsWith('/admin') || pathname.startsWith('/mitra') || pathname.startsWith('/klien');
