@@ -63,6 +63,13 @@
   text-decoration: none;
 }
 .auth-brand span { color: var(--auth-text); }
+/* Logo asli app lama (tauthub-logo.webp 130x34) menggantikan wordmark teks. */
+.auth-brand-logo {
+  display: block;
+  width: auto;
+  height: 34px;
+  object-fit: contain;
+}
 /* Focus ring konsisten dengan kontrol lain (bukan outline bawaan browser). */
 .auth-brand:focus-visible,
 .auth-mobile-brand:focus-visible {

@@ -450,6 +450,7 @@
 			<Select
 				ariaLabel="Filter role pengguna"
 				minWidth={170}
+				align="end"
 				value={roleFilter}
 				onchange={(v) => changeRoleFilter(v)}
 				options={[

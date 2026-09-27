@@ -325,10 +325,11 @@
 			</label>
 			<label class="block">
 				<span class="text-xs font-bold text-muted-foreground">Media</span>
-				<div class="mt-1" class:pointer-events-none={!!editing} class:opacity-60={!!editing}>
+				<div class="mt-1">
 					<Select
 						ariaLabel="Media"
 						minWidth={300}
+						disabled={!!editing}
 						value={form.media_id}
 						onchange={(v) => (form.media_id = v)}
 						options={selectOptions.map((m) => ({

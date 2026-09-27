@@ -287,10 +287,11 @@
 			{#if detailLoading}<p class="text-xs text-muted-foreground">Memuat detail…</p>{/if}
 		</div>
 		{#snippet footer()}
-			<span class="mr-auto" class:pointer-events-none={!detail} class:opacity-60={!detail}>
+			<span class="mr-auto">
 				<Select
 					ariaLabel="Ubah status laporan"
 					minWidth={170}
+					disabled={!detail}
 					value={detail?.status ?? ''}
 					onchange={(v) => {
 						if (detail) void updateStatus(detail, v as BugStatus);

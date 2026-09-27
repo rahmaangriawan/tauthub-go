@@ -373,6 +373,7 @@
 			<Select
 				ariaLabel="Status"
 				minWidth={200}
+				align="end"
 				value={status}
 				onchange={(v) => void load(search, v, includeArchived)}
 				options={[

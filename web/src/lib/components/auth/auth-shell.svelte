@@ -11,7 +11,9 @@
 	<aside class="auth-marketing">
 		<div class="auth-arc" aria-hidden="true"></div>
 
-		<a class="auth-brand" href="/login">taut<span>hub</span></a>
+		<a class="auth-brand" href="/login" aria-label="Tauthub">
+			<img src="/tauthub-logo.webp" alt="Tauthub" width="130" height="34" class="auth-brand-logo" />
+		</a>
 
 		<div class="auth-marketing-body">
 			<p class="auth-eyebrow">Distribusi konten &amp; PR multi-brand</p>
@@ -29,7 +31,9 @@
 
 	<main class="auth-form-pane">
 		<div class="auth-form-inner">
-			<a class="auth-mobile-brand" href="/login">taut<span>hub</span></a>
+			<a class="auth-mobile-brand" href="/login" aria-label="Tauthub">
+				<img src="/tauthub-logo.webp" alt="Tauthub" width="120" height="30" class="auth-brand-logo" />
+			</a>
 			{@render children()}
 		</div>
 	</main>

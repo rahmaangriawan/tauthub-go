@@ -463,39 +463,42 @@
 
 {#snippet ruleEditor(rule: Rule, editable: boolean, index: number)}
 	<div class="rounded-lg border p-3">
-		<div class="mb-2 flex flex-wrap items-center gap-2" class:pointer-events-none={!editable} class:opacity-60={!editable}>
-				<Select
-					ariaLabel="Kategori"
-					minWidth={160}
-					value={rule.category}
-					onchange={(v) => patchRule(index, { category: v })}
-					options={CATEGORY_OPTIONS.map((c) => ({ value: c, label: c }))}
-				/>
-				<input
-					class="app-input min-w-[160px] flex-1"
-					disabled={!editable}
-					placeholder="Judul rule"
-					value={rule.title}
-					oninput={(e) => patchRule(index, { title: e.currentTarget.value })}
-				/>
-				<Select
-					ariaLabel="Prioritas"
-					minWidth={150}
-					value={String(rule.priority)}
-					onchange={(v) => patchRule(index, { priority: Number(v) })}
-					options={[1, 2, 3, 4, 5, 6, 7, 8].map((p) => ({ value: String(p), label: PRIORITY_LABELS[p] }))}
-				/>
-				<Select
-					ariaLabel="Status rule"
-					minWidth={130}
-					value={rule.status}
-					onchange={(v) => patchRule(index, { status: v })}
-					options={[
-						{ value: 'active', label: 'active' },
-						{ value: 'inactive', label: 'inactive' }
-					]}
-				/>
-			</div>
+		<div class="mb-2 flex flex-wrap items-center gap-2">
+			<Select
+				ariaLabel="Kategori"
+				minWidth={160}
+				disabled={!editable}
+				value={rule.category}
+				onchange={(v) => patchRule(index, { category: v })}
+				options={CATEGORY_OPTIONS.map((c) => ({ value: c, label: c }))}
+			/>
+			<input
+				class="app-input min-w-[160px] flex-1"
+				disabled={!editable}
+				placeholder="Judul rule"
+				value={rule.title}
+				oninput={(e) => patchRule(index, { title: e.currentTarget.value })}
+			/>
+			<Select
+				ariaLabel="Prioritas"
+				minWidth={150}
+				disabled={!editable}
+				value={String(rule.priority)}
+				onchange={(v) => patchRule(index, { priority: Number(v) })}
+				options={[1, 2, 3, 4, 5, 6, 7, 8].map((p) => ({ value: String(p), label: PRIORITY_LABELS[p] }))}
+			/>
+			<Select
+				ariaLabel="Status rule"
+				minWidth={130}
+				disabled={!editable}
+				value={rule.status}
+				onchange={(v) => patchRule(index, { status: v })}
+				options={[
+					{ value: 'active', label: 'active' },
+					{ value: 'inactive', label: 'inactive' }
+				]}
+			/>
+		</div>
 		<textarea
 			class="app-input w-full"
 			rows="3"

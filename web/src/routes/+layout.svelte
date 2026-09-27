@@ -4,7 +4,6 @@
 	import '@fontsource/geist/latin-400.css';
 	import '@fontsource/geist-mono/latin-400.css';
 	import '../app.css';
-	import favicon from '$lib/assets/favicon.svg';
 	import ToastHost from '$lib/components/toast-host.svelte';
 	import { initLocaleFromStorage } from '$lib/i18n/i18n.svelte';
 
@@ -19,7 +18,14 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<!-- Ikon parity app/layout.tsx: favicon.ico (sizes any) + tauthub-icon.png,
+	     apple/shortcut memakai ikon PNG yang sama. -->
+	<link rel="icon" href="/favicon.ico" sizes="any" />
+	<link rel="icon" href="/tauthub-icon.png" type="image/png" />
+	<link rel="apple-touch-icon" href="/tauthub-icon.png" />
+	<link rel="shortcut icon" href="/favicon.ico" />
+	<link rel="manifest" href="/manifest.webmanifest" />
+	<meta name="theme-color" content="#212121" />
 	<title>Tauthub</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<meta

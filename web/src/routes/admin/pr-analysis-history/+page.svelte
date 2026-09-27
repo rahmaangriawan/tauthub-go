@@ -209,10 +209,11 @@
 				</label>
 				<label class="block min-w-[200px]">
 					<span class="text-xs text-muted-foreground">Kampanye</span>
-					<div class:pointer-events-none={visibleCampaigns.length === 0} class:opacity-60={visibleCampaigns.length === 0}>
+					<div>
 						<Select
 							ariaLabel="Kampanye"
 							minWidth={200}
+							disabled={visibleCampaigns.length === 0}
 							value={campaignId}
 							onchange={(v) => {
 								campaignId = v;

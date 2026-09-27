@@ -61,9 +61,13 @@
 		{:else}
 			<article class="app-card p-7">
 				<div class="flex items-center justify-between gap-3">
-					<span class="text-lg font-extrabold tracking-tight" style="color: var(--primary);">
-						taut<span style="color: var(--foreground);">hub</span><span style="color: var(--primary);">.</span>
-					</span>
+					<img
+						src="/tauthub-logo.webp"
+						alt="Tauthub"
+						width="140"
+						height="35"
+						style="display:block; width:auto; height:26px; object-fit:contain;"
+					/>
 					<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={print}>
 						Cetak / Simpan PDF
 					</button>
