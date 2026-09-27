@@ -78,9 +78,21 @@
 **Integrasi**: WordPress publish, custom-web (R7 dual naming), RSS, publishing API keys, Crawlhub, domain verify, bulk media import (excelize).
 **UI**: `/admin/media*`, `/admin/partners`, `/admin/rss-feeds`, `/admin/dewan-pers-reviews`, `/admin/domain-diagnostics`; section mitra: profile, media, connections, rss-feeds, crawler, publishing-api; section klien `media`.
 
-**Verifikasi**: publish draft ke WordPress nyata (test fixture kategori/featured image — E2E script lama); RSS feed XML valid; domain verification staged diagnostics.
+**Status**: ✅ **Portal mitra (63 endpoint + 12 halaman UI) SELESAI.** Sisa Fase 5 (di luar portal mitra) belum: platform media (18), partners admin (8), cms-connections brand (5), registrasi crawler admin, halaman admin terkait.
 
-**DoD**: partner bisa daftar + submit media; publikasi draft WP berhasil dengan metadata sama.
+Catatan implementasi portal mitra (paket `api/internal/domains/partner/`, 90 route di `cmd/api/main.go`):
+- Semua endpoint terverifikasi dengan akun mitra nyata: 25+ endpoint baca, CRUD media, alur publikasi approve→URL→published, kredit (capture/release dengan kunci idempotensi), notifikasi, bulk import XLSX, CMS/webhook test, RSS, publishing API keys, GSC, crawler.
+- **Parser XLSX tanpa dependensi baru** (`archive/zip` + `encoding/xml`) karena modul `excelize` belum tersedia offline — perilaku validasi/alias header sama dengan app lama.
+- **Test kompatibilitas**: `crawler_compat_test.go` memverifikasi tuple canonical, HMAC signature, fingerprint, dan PKCE challenge byte-identik dengan `lib/crawler/verification.test.ts` (Worker Cloudflare mitra memakai format yang sama).
+- **Rahasia tidak bocor**: `publishing-api-keys` tidak pernah mengembalikan `api_key_hash`/`sealed`, webhook tidak mengembalikan `secret`; sealing memakai v2 (`t2:`) untuk API key dan v3 (`t3:` + `enc_key_ver=1`) untuk CMS connection.
+- **2 perbaikan bug laten app lama** (disengaja, didokumentasikan di kode):
+  1. `PUBLICATION_TRANSITIONS.partner_approved` tidak memuat `published`, padahal route `POST /partner/publications/{id}/url` memanggil `transitionPublication(..., "published")` untuk Mode Manual → jalur publish manual selalu gagal. Tabel transisi repo Go menambahkan `published`.
+  2. `csrfViolation` app lama membandingkan Origin ke host request API; arsitektur baru memisahkan web (3001) dan API (8080) sehingga setiap POST dari browser ditolak 500 "CSRF protection: invalid Origin". Repo Go membandingkan ke allowlist origin publik yang sama dengan CORS (`httpx.OriginAllowed`).
+
+**Verifikasi**: publikasi Mode Manual end-to-end di UI (approve → kirim URL → status `published`, `publish_status=publish`, attempt + job `pr_analysis`/`pr_verify` + capture TC); shell mitra terukur sama dengan app lama (sidebar 264px, nav item 40px padding `0 10px` gap 11px radius 9px `13px/550` tanpa margin, topbar 64px, konten `32px 28px 64px`, label `8px 10px 5px` letter-spacing 1.1px; pakai public_id 6 karakter di URL).
+**Sisa**: publish draft ke WordPress nyata (butuh kredensial WP), RSS feed XML valid, domain verification staged diagnostics, Blogger OAuth (butuh Client ID/Secret platform), SimilarWeb & RapidAPI/PageSpeed live (butuh API key) — masing-masing mengembalikan pesan konfigurasi yang jelas sampai kredensial diisi.
+
+**DoD (portal mitra)**: tercapai — mitra bisa kelola media (termasuk bulk XLSX), menyetujui/menolak/menerbitkan artikel, menarik saldo, mengelola integrasi & kredensial.
 
 ---
 

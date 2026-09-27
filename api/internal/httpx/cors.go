@@ -28,3 +28,11 @@ func CORSMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// OriginAllowed: origin terdaftar di allowlist CORS. Dipakai juga oleh cek CSRF
+// domain mitra — di arsitektur baru web dan API punya origin berbeda (dev: 3001
+// vs 8080; produksi: nginx same-origin), jadi pembanding harus allowlist yang
+// sama, bukan host request API.
+func OriginAllowed(origin string) bool {
+	return origin != "" && allowedOrigins[origin]
+}

@@ -56,12 +56,29 @@ Struktur `src/routes/` mengikuti persis daftar di `05_UI_PAGES.md`:
 | `/klien/[brandId]/[[...section]]` | workspace klien — **catch-all section** (overview, analytics, campaigns, distribution, media, publications, knowledge, members, credits, invoices, notifications, pr-calculator, profile, dashboard) |
 | `/klien/editor/[documentId]` | editor dokumen |
 | `/klien/taut-pintar/[id]/*` | 8 sub-halaman taut (page, berita-acara, gatekeeper, matchmaker, profiler*, ringkasan, writer) |
-| `/mitra/[partnerId]/[[...section]]` | portal mitra — **19 section** (blogger, connections, crawler, earnings, integrations, kalkulator-media, link-monitor, media, notifications, profile, publications, publishing-api, referral, rss-feeds, seo-tool, settlements, sindikasi-konten, vip, vip-dashboard) |
+| `/mitra/[partnerId]/<section>` | portal mitra — **12 section terimplementasi** (ringkasan, media, publications, earnings, settlements, link-monitor, seo-tool, referral, notifications, profile, integrations, crawler) + `vip` + `[section]` fallback. Sisa section app lama (blogger, connections, kalkulator-media, publishing-api, rss-feeds, sindikasi-konten, vip-dashboard) tergabung di `integrations`/`crawler` atau masih fallback |
 | `/admin/*` | 54 halaman admin (lihat `05_UI_PAGES.md`) |
 | `/payments/*`, `/berita-acara/[token]`, `/docs`, `/blogger-pick-blog`, `/google-callback`, `/oauth-link` | publik/semua-role |
 | redirects legacy | `/brands→/klien`, `/platform→/admin`, `/partner→/mitra` (permanent, salin dari next.config) |
 
 **Catatan porting penting**: halaman "klien/mitra" bukan 2 halaman — isi aslinya adalah file section raksasa (lihat §7). Ukuran kerja UI = jumlah **section**, bukan jumlah file route.
+
+### 2a. Pola URL publik_id (wajib untuk klien & mitra)
+
+App lama memakai `public_id` pendek di URL (`brandUrlId ?? brandId`, `partnerUrlId ?? partnerId`), bukan UUID. Di SvelteKit pola ini dipertahankan lewat store kecil yang di-set oleh layout shell:
+
+- `src/lib/brand-url.svelte.ts` → `setBrandUrlId` / `getBrandUrlId`
+- `src/lib/partner-url.svelte.ts` → `setPartnerUrlId` / `getPartnerUrlId`
+
+Layout (`/klien/[brandId]/+layout.svelte`, `/mitra/[partnerId]/+layout.svelte`) mengambil `public_id` dari endpoint ringkasan (`/v1/brands/{id}/overview`, `/v1/partner/me`) lalu:
+
+```svelte
+const urlId = $derived(data?.public_id ?? routeId);
+$effect(() => setUrlId(urlId));
+const base = $derived(`/mitra/${urlId}`);
+```
+
+Semua link internal memakai `base` sehingga URL selalu 6 karakter. Route backend tetap menerima UUID **maupun** public_id (`BrandAccess`/`PartnerAccess`: `id = $1 OR public_id = $1`), jadi deep-link lama tidak rusak. Diperlukan karena `partners.public_id` sudah dipakai app lama di URL mitra.
 
 ## 3. Gating & Middleware (R9)
 

@@ -15,13 +15,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
+	"github.com/rahmaangriawan/tauthub-go/internal/config"
+	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	authdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/auth"
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
 	clientreaddomain "github.com/rahmaangriawan/tauthub-go/internal/domains/clientread"
 	contentdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/content"
 	knowledgedomain "github.com/rahmaangriawan/tauthub-go/internal/domains/knowledge"
-	"github.com/rahmaangriawan/tauthub-go/internal/config"
-	"github.com/rahmaangriawan/tauthub-go/internal/db"
+	partnerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/partner"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -111,6 +112,7 @@ func run() error {
 		knowledge := &knowledgedomain.Deps{Pool: database.Pool}
 		contentDeps := &contentdomain.Deps{Pool: database.Pool, JobInline: cfg.JobInline, WriteRateLimitPerMinute: cfg.WriteRateLimitPerMinute}
 		clientRead := &clientreaddomain.Deps{Pool: database.Pool}
+		partnerDeps := &partnerdomain.Deps{Pool: database.Pool, Cfg: cfg}
 		v1.Group(func(authed chi.Router) {
 			authed.Use(authDeps.Auth.RequireAuth)
 			authed.Get("/auth/me", authDeps.Me)
@@ -187,6 +189,110 @@ func run() error {
 			authed.Get("/brands/{brandId}/analytics", clientRead.Analytics)
 			authed.Get("/brands/{brandId}/credits", clientRead.Credits)
 			authed.Get("/brands/{brandId}/invoices", clientRead.Invoices)
+
+			// ---------- Portal mitra (/mitra) — port app/v1/partner/* ----------
+			authed.Get("/partner/me", partnerDeps.Me)
+			authed.Patch("/partner/me", partnerDeps.MeUpdate)
+			authed.Get("/partner/me/vip", partnerDeps.MeVip)
+
+			authed.Get("/partner/media", partnerDeps.MediaList)
+			authed.Post("/partner/media", partnerDeps.MediaCreate)
+			authed.Post("/partner/media/import", partnerDeps.MediaImport)
+			authed.Get("/partner/media/categories", partnerDeps.MediaCategories)
+			authed.Get("/partner/media/template-url", partnerDeps.MediaTemplateURL)
+			authed.Get("/partner/media/{mediaId}", partnerDeps.MediaGet)
+			authed.Put("/partner/media/{mediaId}", partnerDeps.MediaUpdate)
+			authed.Delete("/partner/media/{mediaId}", partnerDeps.MediaDelete)
+			authed.Post("/partner/media/{mediaId}/submit", partnerDeps.MediaSubmit)
+			authed.Patch("/partner/media/{mediaId}/category", partnerDeps.MediaCategory)
+			authed.Get("/partner/media/{mediaId}/negotiation", partnerDeps.MediaNegotiation)
+			authed.Post("/partner/media/{mediaId}/negotiation", partnerDeps.MediaNegotiation)
+			authed.Get("/partner/media/{mediaId}/ai-summary", partnerDeps.MediaAISummary)
+			authed.Get("/partner/media/{mediaId}/similarweb", partnerDeps.MediaSimilarWeb)
+			authed.Post("/partner/media/{mediaId}/similarweb", partnerDeps.MediaSimilarWeb)
+			authed.Get("/partner/media/{mediaId}/domain-verification", partnerDeps.MediaDomainVerification)
+			authed.Post("/partner/media/{mediaId}/domain-verification", partnerDeps.MediaDomainVerification)
+			authed.Post("/partner/media/{mediaId}/dewan-pers-document", partnerDeps.MediaDewanPersDocument)
+			authed.Post("/partner/media/{mediaId}/dewan-pers-verification", partnerDeps.MediaDewanPersVerification)
+			authed.Get("/partner/media/{mediaId}/seo", partnerDeps.MediaSEO)
+			authed.Post("/partner/media/{mediaId}/seo", partnerDeps.MediaSEO)
+			authed.Post("/partner/media/{mediaId}/test-publishing-api", partnerDeps.MediaTestPublishingAPI)
+			authed.Patch("/partner/media/{mediaId}/custom-web", partnerDeps.MediaCustomWeb)
+			authed.Post("/partner/media/{mediaId}/custom-web", partnerDeps.MediaCustomWeb)
+			authed.Post("/partner/media/{mediaId}/custom-web/test-connection", partnerDeps.MediaCustomWebTest)
+			authed.Post("/partner/media/{mediaId}/blogger", partnerDeps.MediaBlogger)
+			authed.Delete("/partner/media/{mediaId}/blogger", partnerDeps.MediaBlogger)
+			authed.Get("/partner/media/{mediaId}/blogger/blogs", partnerDeps.MediaBloggerBlogs)
+			authed.Get("/partner/media/{mediaId}/blogger/connect", partnerDeps.MediaBloggerConnect)
+			authed.Post("/partner/media/{mediaId}/blogger/test-connection", partnerDeps.MediaBloggerTest)
+
+			authed.Get("/partner/publications", partnerDeps.PublicationsList)
+			authed.Get("/partner/publications/{publicationId}", partnerDeps.PublicationGet)
+			authed.Post("/partner/publications/{publicationId}/approve", partnerDeps.PublicationApprove)
+			authed.Post("/partner/publications/{publicationId}/reject", partnerDeps.PublicationReject)
+			authed.Post("/partner/publications/{publicationId}/url", partnerDeps.PublicationURL)
+			authed.Get("/partner/publications/{publicationId}/draft", partnerDeps.PublicationDraft)
+			authed.Put("/partner/publications/{publicationId}/draft", partnerDeps.PublicationDraft)
+			authed.Post("/partner/publications/{publicationId}/draft/image", partnerDeps.PublicationDraftImage)
+			authed.Post("/partner/publications/{publicationId}/rewrite", partnerDeps.PublicationRewrite)
+
+			authed.Get("/partner/link-monitor", partnerDeps.LinkMonitor)
+			authed.Get("/partner/crawler", partnerDeps.Crawler)
+			authed.Post("/partner/crawler", partnerDeps.Crawler)
+
+			authed.Get("/partner/earnings", partnerDeps.Earnings)
+			authed.Get("/partner/settlements", partnerDeps.Settlements)
+			authed.Post("/partner/settlements", partnerDeps.Settlements)
+			authed.Get("/partner/referrals", partnerDeps.Referrals)
+
+			authed.Get("/partner/documents", partnerDeps.Documents)
+			authed.Post("/partner/documents", partnerDeps.Documents)
+			authed.Delete("/partner/documents/{id}", partnerDeps.DocumentDelete)
+
+			authed.Get("/partner/notifications", partnerDeps.Notifications)
+			authed.Post("/partner/notifications", partnerDeps.Notifications)
+			authed.Post("/partner/notifications/{notificationId}/read", partnerDeps.NotificationRead)
+			authed.Get("/partner/notification-preferences", partnerDeps.NotificationPreferences)
+			authed.Put("/partner/notification-preferences", partnerDeps.NotificationPreferences)
+			authed.Get("/partner/notification-webhooks", partnerDeps.NotificationWebhooks)
+			authed.Post("/partner/notification-webhooks", partnerDeps.NotificationWebhooks)
+			authed.Put("/partner/notification-webhooks/{webhookId}", partnerDeps.NotificationWebhookUpdate)
+			authed.Delete("/partner/notification-webhooks/{webhookId}", partnerDeps.NotificationWebhookUpdate)
+
+			authed.Get("/partner/rss-feeds", partnerDeps.RSSFeeds)
+			authed.Delete("/partner/rss-feeds/{feedId}", partnerDeps.RSSFeedDelete)
+			authed.Post("/partner/rss-feeds/{feedId}/rotate", partnerDeps.RSSFeedRotate)
+			authed.Post("/partner/rss-feeds/{feedId}/test", partnerDeps.RSSFeedTest)
+			authed.Post("/partner/rss-feeds/{feedId}/verify", partnerDeps.RSSFeedVerify)
+
+			authed.Get("/partner/publishing-api-keys", partnerDeps.PublishingAPIKeys)
+			authed.Post("/partner/publishing-api-keys", partnerDeps.PublishingAPIKeys)
+			authed.Post("/partner/publishing-api-keys/{keyId}", partnerDeps.PublishingAPIKeyAction)
+			authed.Delete("/partner/publishing-api-keys/{keyId}", partnerDeps.PublishingAPIKeyAction)
+			authed.Get("/partner/publishing-api/docs", partnerDeps.PublishingAPIDocs)
+
+			authed.Get("/partner/seo/check", partnerDeps.SEOCheck)
+			authed.Post("/partner/seo/check", partnerDeps.SEOCheck)
+			authed.Get("/partner/seo/speed-audit", partnerDeps.SpeedAudit)
+			authed.Post("/partner/seo/speed-audit", partnerDeps.SpeedAudit)
+
+			authed.Get("/partner/gsc", partnerDeps.GSC)
+			authed.Post("/partner/gsc", partnerDeps.GSC)
+			authed.Get("/partner/gsc/connect", partnerDeps.GSCConnect)
+			authed.Get("/partner/gsc/properties", partnerDeps.GSCProperties)
+			authed.Post("/partner/gsc/properties", partnerDeps.GSCProperties)
+			authed.Post("/partner/gsc/snapshots", partnerDeps.GSCSnapshots)
+
+			authed.Get("/partner/cms-connections", partnerDeps.CMSConnections)
+			authed.Post("/partner/cms-connections", partnerDeps.CMSConnections)
+			authed.Put("/partner/cms-connections/{connectionId}", partnerDeps.CMSConnectionUpdate)
+			authed.Delete("/partner/cms-connections/{connectionId}", partnerDeps.CMSConnectionUpdate)
+			authed.Post("/partner/cms-connections/{connectionId}/test", partnerDeps.CMSConnectionTest)
+
+			authed.Get("/partner/vip/brand", partnerDeps.VipBrand)
+			authed.Post("/partner/vip/brand", partnerDeps.VipBrand)
+			authed.Get("/partner/vip/domains", partnerDeps.VipDomains)
+			authed.Get("/partner/vip/wallet", partnerDeps.VipWallet)
 		})
 
 		// TODO fase 2+: peta lengkap di REWRITE/04_API_ENDPOINTS.md.

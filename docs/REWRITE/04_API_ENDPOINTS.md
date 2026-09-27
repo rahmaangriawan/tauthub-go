@@ -253,69 +253,69 @@
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
-| `/v1/partner/me` | GET, PATCH | Profil partner | [ ] |
-| `/v1/partner/me/vip` | GET | Status VIP | [ ] |
-| `/v1/partner/media` | GET, POST | List/tambah media mitra | [ ] |
-| `/v1/partner/media/categories` | GET | Kategori media | [ ] |
-| `/v1/partner/media/import` | POST | Import bulk media (template) | [ ] |
-| `/v1/partner/media/template-url` | GET | URL template import | [ ] |
-| `/v1/partner/media/{mediaId}` | GET, PUT, DELETE | CRUD media | [ ] |
-| `/v1/partner/media/{mediaId}/ai-summary` | GET | Rangkuman AI media | [ ] |
-| `/v1/partner/media/{mediaId}/blogger` | POST, DELETE | Hubungkan/hapus Blogger | [ ] |
-| `/v1/partner/media/{mediaId}/blogger/blogs` | GET | Daftar blog Blogger | [ ] |
-| `/v1/partner/media/{mediaId}/blogger/connect` | GET | Mulai OAuth Blogger | [ ] |
-| `/v1/partner/media/{mediaId}/blogger/test-connection` | POST | Tes koneksi Blogger | [ ] |
-| `/v1/partner/media/{mediaId}/category` | PATCH | Ubah kategori | [ ] |
-| `/v1/partner/media/{mediaId}/custom-web` | PATCH, POST | Konfig custom web adapter | [ ] |
-| `/v1/partner/media/{mediaId}/custom-web/test-connection` | POST | Tes custom web | [ ] |
-| `/v1/partner/media/{mediaId}/dewan-pers-document` | POST | Upload dokumen Dewan Pers | [ ] |
-| `/v1/partner/media/{mediaId}/dewan-pers-verification` | POST | Ajukan verifikasi | [ ] |
-| `/v1/partner/media/{mediaId}/domain-verification` | GET, POST | Verifikasi kepemilikan domain | [ ] |
-| `/v1/partner/media/{mediaId}/negotiation` | GET, POST | Negosiasi harga | [ ] |
-| `/v1/partner/media/{mediaId}/seo` | GET, POST | Metrik SEO media | [ ] |
-| `/v1/partner/media/{mediaId}/similarweb` | GET, POST | Data SimilarWeb | [ ] |
-| `/v1/partner/media/{mediaId}/submit` | POST | Submit media untuk review | [ ] |
-| `/v1/partner/media/{mediaId}/test-publishing-api` | POST | Tes Tulisio publishing API | [ ] |
-| `/v1/partner/cms-connections` | GET, POST | Koneksi CMS partner | [ ] |
-| `/v1/partner/cms-connections/{connectionId}` | PUT, DELETE | Ubah/hapus koneksi | [ ] |
-| `/v1/partner/cms-connections/{connectionId}/test` | POST | Tes koneksi | [ ] |
-| `/v1/partner/crawler` | GET, POST | Status/registrasi crawler | [ ] |
-| `/v1/partner/documents` | GET, POST | Dokumen partner | [ ] |
-| `/v1/partner/documents/{id}` | DELETE | Hapus dokumen | [ ] |
-| `/v1/partner/earnings` | GET | Penghasilan mitra | [ ] |
-| `/v1/partner/gsc` | GET, POST | Koneksi & data GSC | [ ] |
-| `/v1/partner/gsc/connect` | GET | Mulai OAuth GSC | [ ] |
-| `/v1/partner/gsc/properties` | GET, POST | Pilih properti GSC | [ ] |
-| `/v1/partner/gsc/snapshots` | POST | Ambil snapshot GSC | [ ] |
-| `/v1/partner/link-monitor` | GET | Monitor link mitra | [ ] |
-| `/v1/partner/notification-preferences` | GET, PUT | Preferensi notifikasi | [ ] |
-| `/v1/partner/notification-webhooks` | GET, POST | Webhook mitra | [ ] |
-| `/v1/partner/notification-webhooks/{webhookId}` | PUT, DELETE | Ubah/hapus webhook | [ ] |
-| `/v1/partner/notifications` | GET, POST | Notifikasi mitra | [ ] |
-| `/v1/partner/notifications/{notificationId}/read` | POST | Tandai dibaca | [ ] |
-| `/v1/partner/publications` | GET | Publikasi masuk | [ ] |
-| `/v1/partner/publications/{publicationId}` | GET | Detail publikasi | [ ] |
-| `/v1/partner/publications/{publicationId}/approve` | POST | Approve publikasi | [ ] |
-| `/v1/partner/publications/{publicationId}/draft` | GET, PUT | Draft artikel (partner edit) | [ ] |
-| `/v1/partner/publications/{publicationId}/draft/image` | POST | Upload gambar draft | [ ] |
-| `/v1/partner/publications/{publicationId}/reject` | POST | Tolak publikasi | [ ] |
-| `/v1/partner/publications/{publicationId}/rewrite` | POST | Rewrite artikel | [ ] |
-| `/v1/partner/publications/{publicationId}/url` | POST | Isi URL hasil publish | [ ] |
-| `/v1/partner/publishing-api/docs` | GET | Docs publishing API | [ ] |
-| `/v1/partner/publishing-api-keys` | GET, POST | Kelola API key | [ ] |
-| `/v1/partner/publishing-api-keys/{keyId}` | DELETE, POST | Hapus/rotate key | [ ] |
-| `/v1/partner/referrals` | GET | Data referral | [ ] |
-| `/v1/partner/rss-feeds` | GET | RSS feed mitra | [ ] |
-| `/v1/partner/rss-feeds/{feedId}` | DELETE | Hapus feed | [ ] |
-| `/v1/partner/rss-feeds/{feedId}/rotate` | POST | Rotasi token feed | [ ] |
-| `/v1/partner/rss-feeds/{feedId}/test` | POST | Tes feed | [ ] |
-| `/v1/partner/rss-feeds/{feedId}/verify` | POST | Verifikasi feed | [ ] |
-| `/v1/partner/seo/check` | GET, POST | SEO tool check | [ ] |
-| `/v1/partner/seo/speed-audit` | GET, POST | Audit PageSpeed | [ ] |
-| `/v1/partner/settlements` | GET, POST | Settlement & request | [ ] |
-| `/v1/partner/vip/brand` | POST | Set brand VIP | [ ] |
-| `/v1/partner/vip/domains` | GET | Domain VIP | [ ] |
-| `/v1/partner/vip/wallet` | GET | Wallet VIP | [ ] |
+| `/v1/partner/me` | GET, PATCH | Profil partner | [x] |
+| `/v1/partner/me/vip` | GET | Status VIP | [x] |
+| `/v1/partner/media` | GET, POST | List/tambah media mitra | [x] |
+| `/v1/partner/media/categories` | GET | Kategori media | [x] |
+| `/v1/partner/media/import` | POST | Import bulk media (template) | [x] |
+| `/v1/partner/media/template-url` | GET | URL template import | [x] |
+| `/v1/partner/media/{mediaId}` | GET, PUT, DELETE | CRUD media | [x] |
+| `/v1/partner/media/{mediaId}/ai-summary` | GET | Rangkuman AI media | [x] |
+| `/v1/partner/media/{mediaId}/blogger` | POST, DELETE | Hubungkan/hapus Blogger | [x] |
+| `/v1/partner/media/{mediaId}/blogger/blogs` | GET | Daftar blog Blogger | [x] |
+| `/v1/partner/media/{mediaId}/blogger/connect` | GET | Mulai OAuth Blogger | [x] |
+| `/v1/partner/media/{mediaId}/blogger/test-connection` | POST | Tes koneksi Blogger | [x] |
+| `/v1/partner/media/{mediaId}/category` | PATCH | Ubah kategori | [x] |
+| `/v1/partner/media/{mediaId}/custom-web` | PATCH, POST | Konfig custom web adapter | [x] |
+| `/v1/partner/media/{mediaId}/custom-web/test-connection` | POST | Tes custom web | [x] |
+| `/v1/partner/media/{mediaId}/dewan-pers-document` | POST | Upload dokumen Dewan Pers | [x] |
+| `/v1/partner/media/{mediaId}/dewan-pers-verification` | POST | Ajukan verifikasi | [x] |
+| `/v1/partner/media/{mediaId}/domain-verification` | GET, POST | Verifikasi kepemilikan domain | [x] |
+| `/v1/partner/media/{mediaId}/negotiation` | GET, POST | Negosiasi harga | [x] |
+| `/v1/partner/media/{mediaId}/seo` | GET, POST | Metrik SEO media | [x] |
+| `/v1/partner/media/{mediaId}/similarweb` | GET, POST | Data SimilarWeb | [x] |
+| `/v1/partner/media/{mediaId}/submit` | POST | Submit media untuk review | [x] |
+| `/v1/partner/media/{mediaId}/test-publishing-api` | POST | Tes Tulisio publishing API | [x] |
+| `/v1/partner/cms-connections` | GET, POST | Koneksi CMS partner | [x] |
+| `/v1/partner/cms-connections/{connectionId}` | PUT, DELETE | Ubah/hapus koneksi | [x] |
+| `/v1/partner/cms-connections/{connectionId}/test` | POST | Tes koneksi | [x] |
+| `/v1/partner/crawler` | GET, POST | Status/registrasi crawler | [x] |
+| `/v1/partner/documents` | GET, POST | Dokumen partner | [x] |
+| `/v1/partner/documents/{id}` | DELETE | Hapus dokumen | [x] |
+| `/v1/partner/earnings` | GET | Penghasilan mitra | [x] |
+| `/v1/partner/gsc` | GET, POST | Koneksi & data GSC | [x] |
+| `/v1/partner/gsc/connect` | GET | Mulai OAuth GSC | [x] |
+| `/v1/partner/gsc/properties` | GET, POST | Pilih properti GSC | [x] |
+| `/v1/partner/gsc/snapshots` | POST | Ambil snapshot GSC | [x] |
+| `/v1/partner/link-monitor` | GET | Monitor link mitra | [x] |
+| `/v1/partner/notification-preferences` | GET, PUT | Preferensi notifikasi | [x] |
+| `/v1/partner/notification-webhooks` | GET, POST | Webhook mitra | [x] |
+| `/v1/partner/notification-webhooks/{webhookId}` | PUT, DELETE | Ubah/hapus webhook | [x] |
+| `/v1/partner/notifications` | GET, POST | Notifikasi mitra | [x] |
+| `/v1/partner/notifications/{notificationId}/read` | POST | Tandai dibaca | [x] |
+| `/v1/partner/publications` | GET | Publikasi masuk | [x] |
+| `/v1/partner/publications/{publicationId}` | GET | Detail publikasi | [x] |
+| `/v1/partner/publications/{publicationId}/approve` | POST | Approve publikasi | [x] |
+| `/v1/partner/publications/{publicationId}/draft` | GET, PUT | Draft artikel (partner edit) | [x] |
+| `/v1/partner/publications/{publicationId}/draft/image` | POST | Upload gambar draft | [x] |
+| `/v1/partner/publications/{publicationId}/reject` | POST | Tolak publikasi | [x] |
+| `/v1/partner/publications/{publicationId}/rewrite` | POST | Rewrite artikel | [x] |
+| `/v1/partner/publications/{publicationId}/url` | POST | Isi URL hasil publish | [x] |
+| `/v1/partner/publishing-api/docs` | GET | Docs publishing API | [x] |
+| `/v1/partner/publishing-api-keys` | GET, POST | Kelola API key | [x] |
+| `/v1/partner/publishing-api-keys/{keyId}` | DELETE, POST | Hapus/rotate key | [x] |
+| `/v1/partner/referrals` | GET | Data referral | [x] |
+| `/v1/partner/rss-feeds` | GET | RSS feed mitra | [x] |
+| `/v1/partner/rss-feeds/{feedId}` | DELETE | Hapus feed | [x] |
+| `/v1/partner/rss-feeds/{feedId}/rotate` | POST | Rotasi token feed | [x] |
+| `/v1/partner/rss-feeds/{feedId}/test` | POST | Tes feed | [x] |
+| `/v1/partner/rss-feeds/{feedId}/verify` | POST | Verifikasi feed | [x] |
+| `/v1/partner/seo/check` | GET, POST | SEO tool check | [x] |
+| `/v1/partner/seo/speed-audit` | GET, POST | Audit PageSpeed | [x] |
+| `/v1/partner/settlements` | GET, POST | Settlement & request | [x] |
+| `/v1/partner/vip/brand` | POST | Set brand VIP | [x] |
+| `/v1/partner/vip/domains` | GET | Domain VIP | [x] |
+| `/v1/partner/vip/wallet` | GET | Wallet VIP | [x] |
 
 ## 5. `/v1/payments` (4) 🔑/🌐 — fase 8
 
