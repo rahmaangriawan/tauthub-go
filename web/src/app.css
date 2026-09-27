@@ -155,13 +155,27 @@
   .app-sidebar-inner { display: flex; flex-direction: column; height: 100%; padding: 16px 10px 12px; }
   .app-sidebar-brand { display: flex; align-items: center; min-height: 44px; padding: 0 8px; }
 
-  .app-sidebar-nav { display: flex; flex-direction: column; min-height: 0; flex: 1; margin-bottom: 10px; overflow-y: auto; }
+  /* gap 4px = Radix <Flex> di app lama (pembungkus nav), sehingga jarak antar
+     item (termasuk ke separator) bertambah 4px persis seperti aslinya. */
+  .app-sidebar-nav { display: flex; flex-direction: column; gap: 4px; min-height: 0; flex: 1; margin-bottom: 10px; overflow-y: auto; }
+
+  /* Separator antar grup menu (parity <Separator size="4" my="3" /> Radix):
+     garis 1px dengan margin 12px atas-bawah. */
+  .app-sidebar-separator {
+    display: block;
+    flex: none;
+    height: 1px;
+    margin: 12px 0;
+    background-color: var(--sidebar-border);
+  }
 
   .app-sidebar-label {
     display: block;
     padding: 8px 10px 5px;
     color: var(--sidebar-soft);
-    font-size: 11px;
+    /* 12px/16px = Radix <Text size="1"> di app lama (navLabel), bukan 11px. */
+    font-size: 12px;
+    line-height: 16px;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;

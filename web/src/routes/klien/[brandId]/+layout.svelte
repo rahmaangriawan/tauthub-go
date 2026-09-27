@@ -111,7 +111,10 @@
 			</div>
 
 			<nav class="app-sidebar-nav" aria-label="Navigasi Tauthub">
-				{#each groups as group (group.label)}
+				{#each groups as group, index (group.label)}
+					<!-- Separator antar grup menu (parity app lama: <Separator size="4" my="3" />,
+					     tinggi 4px + margin 12px, tidak dipasang sebelum grup pertama). -->
+					{#if index > 0}<span class="app-sidebar-separator" aria-hidden="true"></span>{/if}
 					<span class="app-sidebar-label">{group.label}</span>
 					{#each group.items as item (item.href)}
 						<a
