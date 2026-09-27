@@ -22,6 +22,29 @@
 - [x] **ToastHost** — port `toast-host.tsx` (kanan-bawah, auto tutup 3,5s, ikon lucide, dengar `TOAST_EVENT`)
 - [x] Metadata root (Tauthub, lang="id") + viewport parity
 
+## 1c. Metrik Shell (WAJIB dipakai semua section)
+
+Nilai diambil persis dari `apps/web/src/components/shells/product-shell.module.css` +
+`src/styles/tokens.css` — jangan dikira-kira, sudah pernah salah dan ketahuan
+(jarak antar menu jadi tidak konsisten). Semua sudah jadi kelas di `app.css`:
+
+| Elemen | Nilai asli | Kelas |
+|---|---|---|
+| Lebar sidebar | 264px (collapsed 72px) | `.app-sidebar` |
+| Padding inner sidebar | 16px 10px 12px | `.app-sidebar-inner` |
+| Brand area | min-height 44px, padding 0 8px | `.app-sidebar-brand` |
+| Label grup | padding 8px 10px 5px, 11px/600, letter-spacing .1em | `.app-sidebar-label` |
+| Item nav | min-height 40px, padding 0 10px, gap 11px, radius 9px, 13px/550, **tanpa margin antar-item** | `.app-sidebar-link` |
+| Item aktif | bg `--accent-9` + inset 1px rgba(255,255,255,.08) | `.app-sidebar-link[data-active]` |
+| Account trigger | min-height 52px, padding 8px 10px, gap 10px, radius 10px | `.app-account-trigger` |
+| Topbar | min-height 64px, padding 0 28px, border-bottom | `.app-utility-bar` |
+| Credit pill | min-height 32px, radius 999px, padding 0 12px, ikon amber | `.app-credit-pill` |
+| Konten | padding 32px 28px 64px | `.app-content` |
+| Breakpoint mobile | ≤767px: topbar 60px, konten 22px 16px 48px | media query di app.css |
+
+Accent brand **`#2b67ec`** (bukan #1d4ed8). Warna status: `--success #16794b`,
+`--warning #a15c00`, `--danger #c52b36`. Radius: panel 12px, control 10px, button 9px.
+
 ## 2. Peta Route (mirror dari Next App Router)
 
 Struktur `src/routes/` mengikuti persis daftar di `05_UI_PAGES.md`:

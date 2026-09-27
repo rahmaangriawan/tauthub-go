@@ -1,11 +1,12 @@
 <script lang="ts">
-	// Shell klien — parity components/shells/product-shell.tsx: sidebar putih,
-	// grup nav berkaps, ikon terisi saat aktif, topbar (bahasa/kredit/bell),
-	// user chip. Kelas `.app-*` dari app.css (token asli app lama).
+	// Shell klien — struktur & metrik parity product-shell.module.css:
+	// sidebar 264px (inner 16/10/12), nav item min-height 40px TANPA margin
+	// antar-item, label grup 8/10/5, topbar 64px padding 0 28px,
+	// konten 32/28/64.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import {
-		Bell, ChartLine, ChevronDown, Coins, House, Newspaper, Megaphone, Receipt,
+		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, Newspaper, Receipt,
 		ShieldCheck, TriangleAlert, UserCircle
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -77,7 +78,7 @@
 			label: 'ANALITIK & PELAPORAN',
 			items: [
 				{ label: t.nav.analytics, href: `${base}/analytics`, icon: ChartLine, active: pathname.includes('/analytics') },
-				{ label: t.nav.audit, href: `${base}/audit-publikasi`, icon: ShieldCheck, active: pathname.includes('/audit') }
+				{ label: t.nav.audit, href: `${base}/audit-publikasi`, icon: ShieldCheck, active: pathname.includes('/audit-publikasi') }
 			]
 		},
 		{
@@ -94,73 +95,65 @@
 	]);
 </script>
 
-<div class="flex min-h-screen bg-background">
-	<aside
-		class="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r"
-		style="background-color: var(--sidebar); border-color: var(--sidebar-border);"
-	>
-		<div class="px-5 pt-5 pb-1">
-			<a href={base} class="text-xl font-extrabold tracking-tight" style="color: var(--primary);">
-				taut<span style="color: var(--foreground);">hub</span>
-			</a>
-		</div>
+<div class="app-shell">
+	<aside class="app-sidebar">
+		<div class="app-sidebar-inner">
+			<div class="app-sidebar-brand">
+				<a href={base} class="text-xl font-extrabold tracking-tight" style="color: var(--primary);">
+					taut<span style="color: var(--foreground);">hub</span>
+				</a>
+			</div>
 
-		<nav class="mt-2 flex-1 overflow-y-auto px-3 pb-3">
-			{#each groups as group (group.label)}
-				<p class="px-3 pt-4 pb-1 text-[11px] font-semibold tracking-wide" style="color: var(--sidebar-soft);">
-					{group.label}
-				</p>
-				{#each group.items as item (item.href)}
-					<a
-						href={item.href}
-						class="app-sidebar-link mt-0.5"
-						data-active={item.active ? 'true' : 'false'}
-						aria-current={item.active ? 'page' : undefined}
-					>
-						<item.icon size={18} strokeWidth={item.active ? 2.4 : 2} />
-						<span>{item.label}</span>
-					</a>
+			<nav class="app-sidebar-nav" aria-label="Navigasi Tauthub">
+				{#each groups as group (group.label)}
+					<span class="app-sidebar-label">{group.label}</span>
+					{#each group.items as item (item.href)}
+						<a
+							href={item.href}
+							class="app-sidebar-link"
+							data-active={item.active ? 'true' : 'false'}
+							aria-current={item.active ? 'page' : undefined}
+						>
+							<item.icon size={18} strokeWidth={item.active ? 2.4 : 2} />
+							<span>{item.label}</span>
+						</a>
+					{/each}
 				{/each}
-			{/each}
-		</nav>
+			</nav>
 
-		{#if user}
-			<div class="m-3 rounded-xl border p-2.5" style="border-color: var(--sidebar-border); background-color: var(--sidebar-hover);">
-				<div class="flex items-center gap-2.5">
-					<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground" style="background-color: var(--primary);">
+			{#if user}
+				<div class="app-account-trigger">
+					<div
+						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground"
+						style="background-color: var(--primary);"
+					>
 						{initials}
 					</div>
-					<div class="min-w-0 flex-1">
-						<p class="truncate text-sm font-semibold">{user.display_name}</p>
-						<p class="truncate text-xs" style="color: var(--sidebar-soft);">{user.email}</p>
+					<div class="app-account-info">
+						<span class="app-account-name">{user.display_name}</span>
+						<span class="app-account-email">{user.email}</span>
 					</div>
-					<span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold" style="background-color: var(--accent); color: var(--accent-foreground);">
-						Klien
-					</span>
+					<span class="app-role-badge">Klien</span>
 					<ChevronDown size={14} class="shrink-0" style="color: var(--sidebar-soft);" />
 				</div>
-			</div>
-		{/if}
+			{/if}
+		</div>
 	</aside>
 
 	<div class="flex min-w-0 flex-1 flex-col">
-		<header class="sticky top-0 z-10 flex items-center justify-end gap-2 border-b bg-card px-6 py-3">
-			<button class="app-btn app-btn-soft !py-1.5" type="button" aria-label="Pilih bahasa">
+		<header class="app-utility-bar">
+			<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label="Pilih bahasa">
 				<span>🇮🇩</span> Indonesia <ChevronDown size={14} />
 			</button>
-			<a
-				href={`${base}/credits`}
-				class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold"
-				style="background-color: var(--warning-soft); color: var(--warning);"
-			>
+			<a href={`${base}/credits`} class="app-credit-pill">
 				<Coins size={15} />
-				{saldo.toLocaleString('id-ID')} Kredit
+				<strong>{saldo.toLocaleString('id-ID')} Kredit</strong>
 			</a>
 			<button class="rounded-lg p-2 transition-colors hover:bg-secondary" type="button" aria-label="Notifikasi">
 				<Bell size={18} />
 			</button>
 		</header>
-		<main class="min-w-0 flex-1 px-6 py-6">
+		<main class="app-content">
 			{@render children()}
 		</main>
 	</div>
