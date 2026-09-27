@@ -1,196 +1,844 @@
 <script lang="ts">
-	// Katalog media klien — port section media (read-only, media aktif saja).
+	// Katalog media klien — port setia media-section.tsx (Next.js).
+	// Struktur: error banner → header eksplorasi (+stats card) → top bar
+	// (search, kategori, filter lanjutan, impor, bookmark) → banner filter →
+	// tabel 10 kolom + sort + multi-select → paginasi → modal → selection bar.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { ExternalLink, Search, X } from '@lucide/svelte';
+	import { goto } from '$app/navigation';
+	import {
+		ArrowRight, Bookmark, Bot, Check, Clock, FileText, Info, LayoutGrid,
+		Plus, Search, SlidersHorizontal, Trash2, Upload, X, Zap, ExternalLink,
+		ChevronLeft, ChevronRight
+	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
-	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
-
-	const brandId = $derived(page.params.brandId as string);
-	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
-	const brandUrl = $derived(getBrandUrlId() || brandId);
+	import { apiRequest, ensureValidSession, readApiError, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { getI18n } from '$lib/i18n/i18n.svelte';
+	import MediaDetailModal from './_detail-modal.svelte';
+	import './media.css';
 
 	type Media = {
-		id: string; name: string; category: string | null; website_url: string | null;
-		media_tier: string | null; media_type: string | null; traffic_estimate: number;
-		credit_cost: number; client_price: number; markup_percent: number;
-		dewan_pers_verified: boolean; domain_verified: boolean; bahasa_artikel: string[];
-		categories: string[]; max_links: number | null; label_sponsor: string | null;
-		seo: { da: number | null; pa: number | null; spam_score: number | null; ai_trust_score: number | null };
-		description: string | null; topik_terlarang: string[];
+		id: string; name: string; category: string | null; categories?: string[];
+		description: string | null; website_url: string | null;
+		contoh_artikel_url?: string | null; bahasa_artikel?: string[] | null;
+		price: number; pricing_type?: string | null; client_price: number;
+		markup_percent?: number | null; credit_cost: number;
+		integration_type: string; traffic_estimate: number; media_tier: string | null;
+		media_type?: string | null; media_quality_score: number | null;
+		effective_quality: number | null; quality_source: 'media' | 'tier_default' | null;
+		health_score: number | null; health_breakdown: Record<string, unknown> | null;
+		health_computed_at?: string | null;
+		dewan_pers_verified?: boolean | null; domain_verified?: boolean | null;
+		seo_da?: number | null; seo_pa?: number | null; seo_spam_score?: number | null;
+		seo_checked_at?: string | null; seo_ai_trust?: number | null; seo_ai_citation?: boolean | null;
+		sw_visits?: number | null; sw_snapshot_date?: string | null;
+		gsc_connected?: boolean; image_required?: boolean | null;
+		label_sponsor?: string | null; topik_terlarang?: string[];
+		max_links?: number | null; allow_hyperlink?: boolean | null;
+		publication_mode?: string | null; word_count_mode?: string | null;
+		allow_embed?: boolean; pricing_type_raw?: string | null;
 	};
 
-	let items = $state<Media[]>([]);
-	let total = $state(0);
-	let loading = $state(true);
-	let q = $state('');
+	const brandId = $derived(page.params.brandId as string);
+	const brandUrl = $derived(getBrandUrlId() || brandId);
+	const apiBase = $derived(`/v1/brands/${brandId}`);
+	const { t } = getI18n();
+
+	let rows = $state<Media[]>([]);
+	let busy = $state(true);
+	let err = $state('');
+	let search = $state('');
+	let debouncedSearch = $state('');
 	let category = $state('');
-	let tier = $state('');
-	let limit = 24;
-	let offset = $state(0);
-	let categories = $state<Array<{ id: string; name: string }>>([]);
+	let speedFilter = $state<'' | 'super' | 'fast' | 'standard'>('');
+	let priceFilter = $state<'' | 'low' | 'mid' | 'high'>('');
+	let minDaFilter = $state<'' | '30' | '50' | '70'>('');
+	let verifiedOnly = $state(false);
+	let dewanPersOnly = $state(false);
+	let bookmarkOnly = $state(false);
+	let selectedIds = $state<Set<string>>(new Set());
+	let bookmarkedIds = $state<Set<string>>(new Set());
 	let detail = $state<Media | null>(null);
+	let sortKey = $state<'traffic' | 'da' | 'ai_trust' | 'ai_cited' | 'speed' | 'price' | 'name'>('name');
+	let sortDir = $state<'asc' | 'desc'>('asc');
+	let catPopoverId = $state<string | null>(null);
+	let page_ = $state(1);
+	const pageSize = 24;
+	let advOpen = $state(false);
+	let importOpen = $state(false);
+	let importText = $state('');
+	let importError = $state('');
+	let bookmarkOpen = $state(false);
+	let campaignOpen = $state(false);
+	let campaignName = $state('');
+	let campaignError = $state('');
+	let creating = $state(false);
+
+	const BOOKMARK_KEY = 'tauthub_client_bookmarked_media';
+
+	// ── Helper parity media-section.tsx ────────────────────────────────
+	/** Estimasi trafik. CATATAN: tren ↑/↓ di app lama DIREKAYASA dari
+	 *  `Math.abs(val % 31)` — angka palsu, jadi tidak disalin ke sini. */
+	function formatTraffic(swVisits?: number | null, est?: number | null): { text: string; source: string } {
+		const val = swVisits && swVisits > 0 ? swVisits : est && est > 0 ? est : 0;
+		if (!val) return { text: 'Estimasi', source: 'Via Estimasi Media' };
+		let text: string;
+		if (val >= 1_000_000) text = `± ${(val / 1_000_000).toFixed(1).replace(/\.0$/, '')}M / bulan`;
+		else if (val >= 1_000) text = `± ${Math.round(val / 1_000)} rb / bulan`;
+		else text = `± ${val.toLocaleString('id-ID')} / bulan`;
+		return { text, source: swVisits ? 'Via Similarweb' : 'Via Estimasi Media' };
+	}
+
+	const AUTO_TYPES = ['wordpress', 'blogger', 'tulisio_api', 'custom_web', 'webhook'];
+	function getReleaseSpeed(integrationType: string): { cls: string; label: string; sub: string; isSuper: boolean } {
+		if (AUTO_TYPES.includes(integrationType)) {
+			return { cls: 'releaseBadgeSuper', label: 'Super Cepat', sub: '< 3 Jam', isSuper: true };
+		}
+		if (integrationType === 'rss') {
+			return { cls: 'releaseBadgeFast', label: 'Cepat', sub: '< 24 Jam', isSuper: false };
+		}
+		return { cls: 'releaseBadgeStandard', label: 'Standar', sub: '1 - 2 Hari', isSuper: false };
+	}
+
+	function getDa(m: Media): string | number {
+		if (m.seo_da != null && m.seo_da > 0) return m.seo_da;
+		const q = m.effective_quality ?? m.media_quality_score;
+		return q ? Math.max(1, Math.round(q * 0.45)) : '—';
+	}
+	function getAiTrust(m: Media): string | number {
+		if (m.seo_ai_trust != null && m.seo_ai_trust > 0) return m.seo_ai_trust;
+		const q = m.effective_quality ?? m.media_quality_score;
+		return q ? Math.max(1, Math.round(q * 0.9)) : '—';
+	}
+	const fmt = (n: number) => n.toLocaleString('id-ID');
+	const cleanDomain = (m: Media) =>
+		m.website_url ? m.website_url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : m.id.slice(0, 8);
+
+	// ── Muat data ──────────────────────────────────────────────────────
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => {
+		const value = search;
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => {
+			debouncedSearch = value;
+			void load();
+		}, 300);
+		return () => clearTimeout(searchTimer);
+	});
+
+	async function load() {
+		busy = true;
+		err = '';
+		try {
+			const qs = new URLSearchParams({ limit: '250' });
+			if (debouncedSearch) qs.set('q', debouncedSearch);
+			const res = await apiRequest(`${apiBase}/media?${qs}`);
+			if (!res.ok) throw new Error(await readApiError(res, 'Gagal memuat media.'));
+			const data = (await res.json()) as { media?: Media[]; items?: Media[] };
+			rows = data.media ?? data.items ?? [];
+		} catch (reason) {
+			err = reason instanceof Error ? reason.message : 'Gagal memuat media.';
+		} finally {
+			busy = false;
+		}
+	}
 
 	onMount(() => {
 		void (async () => {
 			const fresh = await ensureValidSession();
-			if (!fresh) return;
-			const cats = await apiRequest(`/v1/brands/${brandId}/media/categories`);
-			if (cats.ok) categories = await cats.json();
+			if (!fresh) {
+				await goto('/login');
+				return;
+			}
+			try {
+				const raw = localStorage.getItem(BOOKMARK_KEY);
+				if (raw) bookmarkedIds = new Set(JSON.parse(raw) as string[]);
+			} catch { /* bookmark korup — abaikan */ }
 			await load();
-			loading = false;
 		})();
-		const onExpired = () => (window.location.href = '/login');
+		const onExpired = () => void goto('/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 	});
 
-	async function load(reset = true) {
-		if (reset) offset = 0;
-		const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-		if (q.trim()) params.set('q', q.trim());
-		if (category) params.set('category', category);
-		const res = await apiRequest(`/v1/brands/${brandId}/media?${params}`);
-		if (res.ok) {
-			const data = await res.json();
-			items = data.items ?? [];
-			total = data.total ?? 0;
-		}
+	function persistBookmarks() {
+		try {
+			localStorage.setItem(BOOKMARK_KEY, JSON.stringify([...bookmarkedIds]));
+		} catch { /* penyimpanan penuh — abaikan */ }
+	}
+	function toggleBookmark(id: string, e: Event) {
+		e.stopPropagation();
+		const next = new Set(bookmarkedIds);
+		if (next.has(id)) next.delete(id); else next.add(id);
+		bookmarkedIds = next;
+		persistBookmarks();
+	}
+	function toggleSelectRow(id: string, e: Event) {
+		e.stopPropagation();
+		const next = new Set(selectedIds);
+		if (next.has(id)) next.delete(id); else next.add(id);
+		selectedIds = next;
 	}
 
-	const tierLabel: Record<string, string> = { tier1: 'Tier 1', tier2: 'Tier 2', tier3: 'Tier 3' };
-	const fmt = (n: number) => n.toLocaleString('id-ID');
+	// ── Filter & sort (parity useMemo legacy) ──────────────────────────
+	const filtered = $derived(
+		rows.filter((m) => {
+			if (bookmarkOnly && !bookmarkedIds.has(m.id)) return false;
+			if (category) {
+				const cats = m.categories && m.categories.length ? m.categories : m.category ? [m.category] : [];
+				if (!cats.some((c) => c.toLowerCase() === category.toLowerCase())) return false;
+			}
+			if (verifiedOnly && !m.domain_verified) return false;
+			if (dewanPersOnly && !m.dewan_pers_verified) return false;
+			if (speedFilter) {
+				const speed = getReleaseSpeed(m.integration_type);
+				const bucket = speed.isSuper ? 'super' : m.integration_type === 'rss' ? 'fast' : 'standard';
+				if (bucket !== speedFilter) return false;
+			}
+			if (priceFilter) {
+				const price = m.client_price ?? m.price ?? 0;
+				if (priceFilter === 'low' && !(price > 0 && price <= 500_000)) return false;
+				if (priceFilter === 'mid' && !(price > 500_000 && price <= 2_000_000)) return false;
+				if (priceFilter === 'high' && !(price > 2_000_000)) return false;
+			}
+			if (minDaFilter) {
+				const da = getDa(m);
+				if (typeof da !== 'number' || da < Number(minDaFilter)) return false;
+			}
+			return true;
+		})
+	);
+
+	const sorted = $derived.by(() => {
+		const list = [...filtered];
+		const dir = sortDir === 'asc' ? 1 : -1;
+		const num = (v: string | number) => (typeof v === 'number' ? v : -1);
+		list.sort((a, b) => {
+			let av: number | string = 0;
+			let bv: number | string = 0;
+			switch (sortKey) {
+				case 'traffic': av = a.sw_visits ?? a.traffic_estimate ?? 0; bv = b.sw_visits ?? b.traffic_estimate ?? 0; break;
+				case 'da': av = num(getDa(a)); bv = num(getDa(b)); break;
+				case 'ai_trust': av = num(getAiTrust(a)); bv = num(getAiTrust(b)); break;
+				case 'ai_cited': av = a.seo_ai_citation ? 1 : 0; bv = b.seo_ai_citation ? 1 : 0; break;
+				case 'speed': av = AUTO_TYPES.includes(a.integration_type) ? 2 : 1; bv = AUTO_TYPES.includes(b.integration_type) ? 2 : 1; break;
+				case 'price': av = a.client_price ?? a.price ?? 0; bv = b.client_price ?? b.price ?? 0; break;
+				default: av = a.name.toLowerCase(); bv = b.name.toLowerCase();
+			}
+			if (av < bv) return -1 * dir;
+			if (av > bv) return 1 * dir;
+			return a.name.localeCompare(b.name, 'id');
+		});
+		return list;
+	});
+
+	const totalPages = $derived(Math.max(1, Math.ceil(sorted.length / pageSize)));
+	const visible = $derived(sorted.slice((page_ - 1) * pageSize, page_ * pageSize));
+	$effect(() => { if (page_ > totalPages) page_ = 1; });
+
+	const categories = $derived.by(() => {
+		const map = new Map<string, number>();
+		for (const m of rows) {
+			const cats = m.categories && m.categories.length ? m.categories : m.category ? [m.category] : [];
+			for (const c of cats) map.set(c, (map.get(c) ?? 0) + 1);
+		}
+		return [...map.entries()].sort((a, b) => b[1] - a[1]);
+	});
+
+	const activeFilterCount = $derived(
+		(speedFilter ? 1 : 0) + (priceFilter ? 1 : 0) + (minDaFilter ? 1 : 0) +
+		(verifiedOnly ? 1 : 0) + (dewanPersOnly ? 1 : 0) + (category ? 1 : 0)
+	);
+	const minPrice = $derived(
+		rows.length ? Math.min(...rows.map((m) => m.client_price ?? m.price ?? 0).filter((p) => p > 0)) : 0
+	);
+	const selectedMedia = $derived(rows.filter((m) => selectedIds.has(m.id)));
+	const totalSelectedPrice = $derived(selectedMedia.reduce((s, m) => s + (m.client_price ?? m.price ?? 0), 0));
+	const totalSelectedCredits = $derived(selectedMedia.reduce((s, m) => s + (m.credit_cost ?? 0), 0));
+
+	function toggleSort(key: typeof sortKey) {
+		if (sortKey === key) {
+			sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+		} else {
+			sortKey = key;
+			sortDir = 'desc';
+		}
+	}
+	const sortIndicator = (key: string) => (sortKey !== key ? ' ↕' : sortDir === 'asc' ? ' ↑' : ' ↓');
+
+	function resetFilters() {
+		speedFilter = '';
+		priceFilter = '';
+		minDaFilter = '';
+		verifiedOnly = false;
+		dewanPersOnly = false;
+		category = '';
+	}
+	function toggleSelectAll(e: Event) {
+		e.stopPropagation();
+		const ids = visible.map((m) => m.id);
+		const allSelected = ids.length > 0 && ids.every((id) => selectedIds.has(id));
+		selectedIds = allSelected ? new Set() : new Set(ids);
+	}
+
+	function exportProposal() {
+		const headers = ['Nama Media', 'Website', 'Kategori', 'Kecepatan', 'DA', 'AI Trust', 'AI Cited', 'Harga IDR', 'Kredit TC'];
+		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+		const lines = selectedMedia.map((m) => {
+			const speed = getReleaseSpeed(m.integration_type);
+			const price = m.client_price ?? m.price ?? 0;
+			return [
+				esc(m.name), esc(m.website_url ?? ''), esc(m.category ?? 'Umum'),
+				esc(`${speed.label} (${speed.sub})`), esc(getDa(m)), esc(getAiTrust(m)),
+				esc(m.seo_ai_citation === true ? 'Ya' : 'Tidak'), esc(price), esc(m.credit_cost || Math.ceil(price / 1000))
+			].join(',');
+		});
+		const blob = new Blob([[headers.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `proposal-media-${new Date().toISOString().slice(0, 10)}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function applyImport() {
+		importError = '';
+		const lines = importText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+		if (!lines.length) {
+			importError = 'Tidak ada baris teks yang terbaca.';
+			return;
+		}
+		const matched = new Set<string>();
+		for (const line of lines) {
+			const needle = line.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+			const hit = rows.find(
+				(m) => cleanDomain(m).toLowerCase() === needle || m.name.toLowerCase() === needle || m.id === line
+			);
+			if (hit) matched.add(hit.id);
+		}
+		if (!matched.size) {
+			importError = 'Tidak ada media yang cocok dengan daftar Anda.';
+			return;
+		}
+		selectedIds = new Set([...selectedIds, ...matched]);
+		importOpen = false;
+		importText = '';
+	}
+
+	async function createCampaign() {
+		const name = campaignName.trim();
+		if (name.length < 2) {
+			campaignError = 'Nama kampanye minimal 2 karakter.';
+			return;
+		}
+		campaignError = '';
+		creating = true;
+		try {
+			const res = await apiRequest(`${apiBase}/taut/campaigns`, {
+				method: 'POST',
+				body: JSON.stringify({
+					name,
+					starts_at: new Date().toISOString(),
+					entry_mode: 'manual',
+					media_ids: [...selectedIds]
+				})
+			});
+			if (res.ok) {
+				const data = (await res.json()) as { id: string };
+				campaignOpen = false;
+				campaignName = '';
+				await goto(`/klien/${brandUrl}/taut-pintar/${data.id}/writer`);
+			} else {
+				campaignError = await readApiError(res, 'Gagal membuat kampanye. Coba lagi.');
+			}
+		} catch {
+			campaignError = 'Gagal membuat kampanye. Coba lagi.';
+		} finally {
+			creating = false;
+		}
+	}
 </script>
 
-<section class="mx-auto max-w-6xl">
-	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">Katalog Media</h1>
-		<p class="mt-1 text-sm text-muted-foreground">{fmt(total)} media aktif siap dipilih untuk publikasi.</p>
-	</header>
+<div class="container">
+	{#if err}<div class="errorBanner">{err}</div>{/if}
 
-	<form class="app-card mt-4 flex flex-wrap items-center gap-2 p-3" onsubmit={(e) => { e.preventDefault(); void load(); }}>
-		<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
-			<Search size={15} class="text-muted-foreground" />
-			<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari nama media atau domain…" bind:value={q} />
-		</label>
-		<select class="app-input !w-auto" bind:value={category} onchange={() => load()}>
-			<option value="">Semua kategori</option>
-			{#each categories as c (c.id)}<option value={c.name}>{c.name}</option>{/each}
-		</select>
-		<select class="app-input !w-auto" bind:value={tier} onchange={() => load()}>
-			<option value="">Semua tier</option>
-			<option value="tier1">Tier 1</option>
-			<option value="tier2">Tier 2</option>
-			<option value="tier3">Tier 3</option>
-		</select>
-		<button class="app-btn app-btn-primary" type="submit">Cari</button>
-	</form>
-
-	{#if loading}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat katalog…</p>
-	{:else if items.length === 0}
-		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">
-				{q || category || tier ? 'Tidak ada media yang cocok dengan filter ini.' : 'Belum ada media aktif di katalog.'}
-			</p>
-			{#if q || category || tier}
-				<button class="app-btn app-btn-soft mt-3" onclick={() => { q = ''; category = ''; tier = ''; void load(); }}>Reset filter</button>
-			{/if}
+	<!-- Header Eksplorasi Media -->
+	<div class="explorationHeader">
+		<div class="explorationTitleCol">
+			<h1 class="explorationTitle">Eksplorasi Media</h1>
+			<p class="explorationSubtitle">Temukan publisher terbaik untuk kampanye PR Anda.</p>
 		</div>
-	{:else}
-		<div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-			{#each items as m (m.id)}
-				<button class="app-card p-4 text-left transition-colors hover:bg-secondary" onclick={() => (detail = m)}>
-					<div class="flex items-start justify-between gap-2">
-						<div class="min-w-0">
-							<p class="truncate font-semibold">{m.name}</p>
-							<p class="truncate text-xs text-muted-foreground">{m.website_url ?? m.category ?? '—'}</p>
-						</div>
-						{#if m.media_tier}
-							<span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold" style="background-color: var(--accent); color: var(--accent-foreground);">{tierLabel[m.media_tier] ?? m.media_tier}</span>
-						{/if}
-					</div>
-					<div class="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-						{#if m.dewan_pers_verified}
-							<span class="rounded-full px-2 py-0.5 font-medium" style="background-color: var(--success-soft); color: var(--success);">Dewan Pers</span>
-						{/if}
-						{#if m.domain_verified}
-							<span class="rounded-full px-2 py-0.5 font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">Domain terverifikasi</span>
-						{/if}
-						{#if m.seo?.da != null}
-							<span class="text-muted-foreground">DA {m.seo.da} · PA {m.seo.pa ?? '-'}</span>
-						{/if}
-					</div>
-					<div class="mt-3 flex items-end justify-between border-t pt-2.5">
-						<div>
-							<p class="text-[10px] font-semibold tracking-wide text-muted-foreground">HARGA KLIEN</p>
-							<p class="text-base font-bold tabular-nums">Rp {fmt(m.client_price)}</p>
-						</div>
-						<p class="text-xs text-muted-foreground">{m.credit_cost} kredit</p>
-					</div>
-				</button>
-			{/each}
+		<div class="explorationStatsCard">
+			<div class="explorationStatItem">
+				<span class="explorationStatLabel">TOTAL MEDIA TERSEDIA</span>
+				<span class="explorationStatValueBlue">{fmt(rows.length)}</span>
+			</div>
+			<div class="explorationStatDivider"></div>
+			<div class="explorationStatItem">
+				<span class="explorationStatLabel">RATA-RATA TERBIT</span>
+				<span class="explorationStatValueDark">&lt; 24 Jam</span>
+			</div>
+			<div class="explorationStatDivider"></div>
+			<div class="explorationStatItem">
+				<span class="explorationStatLabel">HARGA MULAI DARI</span>
+				<span class="explorationStatValueDark">Rp {fmt(minPrice)}</span>
+			</div>
 		</div>
+	</div>
 
-		{#if total > limit}
-			<div class="mt-4 flex items-center justify-between text-sm">
-				<p class="text-muted-foreground">Menampilkan {offset + 1}–{Math.min(offset + limit, total)} dari {fmt(total)}</p>
-				<div class="flex gap-2">
-					<button class="app-btn app-btn-soft" disabled={offset === 0} onclick={() => { offset = Math.max(0, offset - limit); void load(false); }}>Sebelumnya</button>
-					<button class="app-btn app-btn-soft" disabled={offset + limit >= total} onclick={() => { offset += limit; void load(false); }}>Berikutnya</button>
+	<!-- Top Search & Filter Bar -->
+	<div class="modernTopBar">
+		<div class="modernSearchWrap">
+			<Search size={18} class="modernSearchIcon" />
+			<input class="modernSearchInput" placeholder="Cari nama media, domain, atau niche..." bind:value={search} />
+		</div>
+		<div class="modernActionsGroup">
+			<!-- Kategori -->
+			<div class="modernSelectWrap">
+				<select class="modernSelect" bind:value={category} onchange={() => (page_ = 1)}>
+					<option value="">Semua Kategori</option>
+					{#each categories as [name, count] (name)}
+						<option value={name}>{name} ({count})</option>
+					{/each}
+				</select>
+			</div>
+
+			<!-- Filter lanjutan -->
+			<button
+				class="modernActionBtn {activeFilterCount > 0 ? 'modernActionBtnActive' : ''}"
+				type="button"
+				onclick={() => (advOpen = !advOpen)}
+			>
+				<SlidersHorizontal size={15} />
+				<span>Filter</span>
+				{#if activeFilterCount > 0}<span class="modernActionBadge">{activeFilterCount}</span>{/if}
+			</button>
+
+			<!-- Impor daftar -->
+			<button class="modernActionBtn" type="button" onclick={() => (importOpen = true)}>
+				<Upload size={15} /><span>Impor List</span>
+			</button>
+
+			<!-- Bookmark -->
+			<button
+				class="modernActionBtn {bookmarkOnly ? 'modernActionBtnActive' : ''}"
+				type="button"
+				onclick={() => (bookmarkOnly = !bookmarkOnly)}
+			>
+				<Bookmark size={15} />
+				<span>Bookmark</span>
+				{#if bookmarkedIds.size > 0}<span class="modernActionBadge">{bookmarkedIds.size}</span>{/if}
+			</button>
+		</div>
+	</div>
+
+	<!-- Panel filter lanjutan -->
+	{#if advOpen}
+		<div class="advFilterPanel">
+			<div class="advFilterCard">
+				<div class="advFilterHeader">
+					<div class="advFilterTitle"><SlidersHorizontal size={16} /> Filter Lanjutan</div>
+					<button class="advFilterResetBtn" type="button" onclick={() => (advOpen = false)} aria-label="Tutup filter">
+						<X size={16} />
+					</button>
+				</div>
+
+				<div class="advFilterSection">
+					<span class="advFilterSectionLabel">Kecepatan Rilis</span>
+					<div class="advFilterChipsGroup">
+						{#each [{ v: 'super', l: 'Super Cepat' }, { v: 'fast', l: 'Cepat' }, { v: 'standard', l: 'Standar' }] as opt (opt.v)}
+							<button
+								class="advFilterChip {speedFilter === opt.v ? 'advFilterChipActive' : ''}"
+								type="button"
+								onclick={() => { speedFilter = speedFilter === opt.v ? '' : (opt.v as typeof speedFilter); page_ = 1; }}
+							>{opt.l}</button>
+						{/each}
+					</div>
+				</div>
+
+				<div class="advFilterSection">
+					<span class="advFilterSectionLabel">Status Verifikasi</span>
+					<div class="advFilterToggleRow">
+						<label class="advFilterToggle">
+							<input type="checkbox" bind:checked={verifiedOnly} onchange={() => (page_ = 1)} />
+							<span>Domain terverifikasi</span>
+						</label>
+						<label class="advFilterToggle">
+							<input type="checkbox" bind:checked={dewanPersOnly} onchange={() => (page_ = 1)} />
+							<span>Dewan Pers</span>
+						</label>
+					</div>
+				</div>
+
+				<div class="advFilterSection">
+					<span class="advFilterSectionLabel">Rentang Harga</span>
+					<div class="advFilterChipsGroup">
+						{#each [{ v: 'low', l: '≤ Rp 500rb' }, { v: 'mid', l: 'Rp 500rb – 2jt' }, { v: 'high', l: '> Rp 2jt' }] as opt (opt.v)}
+							<button
+								class="advFilterChip {priceFilter === opt.v ? 'advFilterChipActive' : ''}"
+								type="button"
+								onclick={() => { priceFilter = priceFilter === opt.v ? '' : (opt.v as typeof priceFilter); page_ = 1; }}
+							>{opt.l}</button>
+						{/each}
+					</div>
+				</div>
+
+				<div class="advFilterSection">
+					<span class="advFilterSectionLabel">Minimum DA</span>
+					<div class="advFilterChipsGroup">
+						{#each ['30', '50', '70'] as min (min)}
+							<button
+								class="advFilterChip {minDaFilter === min ? 'advFilterChipActive' : ''}"
+								type="button"
+								onclick={() => { minDaFilter = minDaFilter === min ? '' : (min as typeof minDaFilter); page_ = 1; }}
+							>DA ≥ {min}</button>
+						{/each}
+					</div>
+				</div>
+
+				<div class="advFilterFooter">
+					<button class="advFilterResetBtn" type="button" onclick={resetFilters}>Reset semua</button>
+					<button class="advFilterApplyBtn" type="button" onclick={() => (advOpen = false)}>Terapkan</button>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Banner bookmark aktif -->
+	{#if bookmarkOnly}
+		<div class="bookmarkFilterBanner">
+			<span>Menampilkan {fmt(bookmarkedIds.size)} media tersimpan</span>
+			<button class="bookmarkBannerClear" type="button" onclick={() => (bookmarkOnly = false)}>Tampilkan semua</button>
+		</div>
+	{/if}
+
+	<!-- Ringkasan filter aktif -->
+	{#if activeFilterCount > 0}
+		<div class="activeFilterBanner">
+			<span>{activeFilterCount} filter aktif · {fmt(filtered.length)} media cocok</span>
+			<button class="bookmarkBannerClear" type="button" onclick={resetFilters}>Reset filter</button>
+		</div>
+	{/if}
+
+	<!-- Tabel -->
+	<div class="modernCard">
+		{#if busy && rows.length === 0}
+			<div class="skeletonList">
+				{#each Array(6) as _, i (i)}
+					<div class="skeletonRow">
+						<div class="skeletonLine" style="width: 35%"></div>
+						<div class="skeletonLine" style="width: 20%; height: 10px"></div>
+						<div class="skeletonLine" style="width: 60px; height: 24px; border-radius: 6px"></div>
+						<div class="skeletonLine" style="width: 50px; height: 24px; border-radius: 6px"></div>
+					</div>
+				{/each}
+			</div>
+		{:else if visible.length === 0}
+			<div class="emptyState">
+				{rows.length === 0
+					? 'Belum ada media aktif di katalog.'
+					: 'Tidak ada media yang cocok dengan filter ini.'}
+			</div>
+		{:else}
+			<div class="tableWrap">
+				<table class="modernTable">
+					<thead>
+						<tr>
+							<th class="modernTh" style="width:36px;padding-right:0">
+								<input
+									type="checkbox"
+									class="modernCheckbox"
+									checked={visible.length > 0 && visible.every((m) => selectedIds.has(m.id))}
+									onclick={toggleSelectAll}
+									aria-label="Pilih semua media di halaman ini"
+								/>
+							</th>
+							<th class="modernTh modernThSortable" onclick={() => toggleSort('name')}>NAMA MEDIA{sortIndicator('name')}</th>
+							<th class="modernTh">KATEGORI</th>
+							<th class="modernTh modernThSortable" onclick={() => toggleSort('traffic')}>TRAFIK (EST){sortIndicator('traffic')}</th>
+							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('da')}>DA{sortIndicator('da')}</th>
+							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_trust')}>
+								<span class="thWithInfo">AI TRUST
+									<span class="infoDot" title="Skor (0-100) kesiapan infrastruktur web (Schema, Speed) untuk dirayapi dan direkomendasikan oleh mesin LLM.">
+										<Info size={14} />
+									</span>
+								</span>{sortIndicator('ai_trust')}
+							</th>
+							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_cited')}>
+								<span class="thWithInfo">AI CITED
+									<span class="infoDot" title="Indikator otomatis apakah media ini terdeteksi aktif sebagai rujukan oleh mesin AI.">
+										<Info size={14} />
+									</span>
+								</span>{sortIndicator('ai_cited')}
+							</th>
+							<th class="modernTh modernThSortable" onclick={() => toggleSort('speed')}>WAKTU RILIS{sortIndicator('speed')}</th>
+							<th class="modernTh modernThSortable" onclick={() => toggleSort('price')}>HARGA{sortIndicator('price')}</th>
+							<th class="modernTh" style="text-align:right">AKSI</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each visible as m (m.id)}
+							{@const traffic = formatTraffic(m.sw_visits, m.traffic_estimate)}
+							{@const speed = getReleaseSpeed(m.integration_type)}
+							{@const cats = m.categories && m.categories.length ? m.categories : m.category ? [m.category] : ['Umum']}
+							<tr
+								class="modernTr"
+								style={selectedIds.has(m.id) ? 'background:#f8faff' : ''}
+								onclick={() => (detail = m)}
+							>
+								<td class="modernTd" style="width:36px;padding-right:0">
+									<input
+										type="checkbox"
+										class="modernCheckbox"
+										checked={selectedIds.has(m.id)}
+										onclick={(e) => toggleSelectRow(m.id, e)}
+										aria-label={`Pilih ${m.name}`}
+									/>
+								</td>
+
+								<td class="modernTd">
+									<div class="mediaRowCol">
+										<div class="mediaTitleLine">
+											<span class="mediaHeading">{m.name}</span>
+											{#if m.domain_verified}
+												<span class="verifiedTick" title="Domain terverifikasi Tauthub" aria-label="Domain Terverifikasi">
+													<svg width="15" height="15" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+														<path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816z" fill="#1D9BF0"/>
+														<path d="M9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z" fill="#FFFFFF"/>
+													</svg>
+												</span>
+											{/if}
+										</div>
+										<div class="mediaMetaLine">
+											{#if m.website_url}
+												<a
+													href={m.website_url}
+													target="_blank"
+													rel="noreferrer"
+													class="domainLink"
+													onclick={(e) => e.stopPropagation()}
+												>{cleanDomain(m)} <ExternalLink size={12} /></a>
+											{:else}
+												<span>{cleanDomain(m)}</span>
+											{/if}
+											{#if m.contoh_artikel_url}
+												<a
+													href={m.contoh_artikel_url}
+													target="_blank"
+													rel="noreferrer nofollow"
+													class="sampleDocLink"
+													onclick={(e) => e.stopPropagation()}
+												><FileText size={13} /><span>Sample</span></a>
+											{/if}
+										</div>
+										{#if m.dewan_pers_verified}
+											<div class="dewanPersBadge"><Check size={13} /><span>Dewan Pers</span></div>
+										{/if}
+									</div>
+								</td>
+
+								<td class="modernTd">
+									<div class="categoryBadgeGroup">
+										<span class="categoryPill">{cats[0]}</span>
+										{#if cats.length > 1}
+											<button
+												type="button"
+												class="categoryPlusTag"
+												title={`Kategori: ${cats.join(', ')}`}
+												aria-label={`${cats.length} kategori: ${cats.join(', ')}`}
+												onclick={(e) => { e.stopPropagation(); catPopoverId = catPopoverId === m.id ? null : m.id; }}
+											>+{cats.length - 1}</button>
+											{#if catPopoverId === m.id}
+												<div class="categoryPopover" role="presentation" onclick={(e) => e.stopPropagation()}>
+													<div class="categoryPopoverTitle">Semua Kategori</div>
+													<div class="categoryPopoverList">
+														{#each cats as c (c)}<span class="categoryPill">{c}</span>{/each}
+													</div>
+												</div>
+											{/if}
+										{/if}
+									</div>
+								</td>
+
+								<td class="modernTd">
+									<div class="trafficStack">
+										<span class="trafficMainVal">{traffic.text}</span>
+										<span class="trafficSourceText">{traffic.source}</span>
+									</div>
+								</td>
+
+								<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getDa(m)}</span></td>
+								<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getAiTrust(m)}</span></td>
+
+								<td class="modernTd" style="text-align:center">
+									{#if m.seo_ai_citation === true}
+										<span class="aiCitationBadge"><Bot size={11} />Sumber AI</span>
+									{:else}
+										<span class="mutedDash">—</span>
+									{/if}
+								</td>
+
+								<td class="modernTd">
+									<div class="releaseStack">
+										<span class={speed.cls}>
+											{#if speed.isSuper}<Zap size={12} />{:else}<Clock size={12} />{/if}
+											<span>{speed.label}</span>
+										</span>
+										<span class="releaseTimeSub">{speed.sub}</span>
+									</div>
+								</td>
+
+								<td class="modernTd"><span class="priceBoldText">Rp {fmt(m.client_price ?? m.price ?? 0)}</span></td>
+
+								<td class="modernTd" style="text-align:right">
+									<div class="actionBtnGroup">
+										<button
+											type="button"
+											class="bookmarkActionBtn {bookmarkedIds.has(m.id) ? 'bookmarkActionBtnActive' : ''}"
+											onclick={(e) => toggleBookmark(m.id, e)}
+											title={bookmarkedIds.has(m.id) ? 'Hapus dari Bookmark' : 'Simpan ke Bookmark'}
+											aria-label="Bookmark"
+										><Bookmark size={18} /></button>
+										<button
+											type="button"
+											class="viewDetailBtn"
+											onclick={(e) => { e.stopPropagation(); detail = m; }}
+										><span>Lihat Detail</span><ArrowRight size={13} /></button>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+
+			<!-- Paginasi -->
+			<div class="modernPaginationBar">
+				<span class="modernPaginationInfo">
+					Menampilkan {(page_ - 1) * pageSize + 1}–{Math.min(page_ * pageSize, sorted.length)} dari {fmt(sorted.length)} media
+				</span>
+				<div class="paginationBtns">
+					<button class="paginationBtn" type="button" disabled={page_ <= 1} onclick={() => (page_ -= 1)}>
+						<ChevronLeft size={15} /> Sebelumnya
+					</button>
+					<span class="paginationPage">Hal {page_} / {totalPages}</span>
+					<button class="paginationBtn" type="button" disabled={page_ >= totalPages} onclick={() => (page_ += 1)}>
+						Berikutnya <ChevronRight size={15} />
+					</button>
 				</div>
 			</div>
 		{/if}
-	{/if}
-</section>
+	</div>
+</div>
 
-{#if detail}
-	<!-- Modal: <dialog> bawaan browser (fokus terkelola, Escape menutup) -->
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center p-4"
-		style="background-color: rgba(0,0,0,.45);"
-		role="presentation"
-	>
-		<dialog
-			open
-			class="app-card max-h-[85vh] w-full max-w-lg overflow-y-auto p-5"
-			aria-label={`Detail media ${detail.name}`}
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => { if (e.key === 'Escape') detail = null; }}
-		>
-			<div class="flex items-start justify-between gap-3">
-				<div>
-					<h2 class="text-lg font-semibold">{detail.name}</h2>
-					{#if detail.website_url}
-						<a class="mt-0.5 inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={detail.website_url} target="_blank" rel="noreferrer">
-							{detail.website_url} <ExternalLink size={12} />
-						</a>
-					{/if}
-				</div>
-				<button class="rounded-lg p-1.5 hover:bg-secondary" aria-label="Tutup detail media" onclick={() => (detail = null)}><X size={18} /></button>
+<!-- Modal Impor List -->
+{#if importOpen}
+	<div class="modalOverlay" role="presentation" onclick={() => (importOpen = false)}>
+		<dialog open class="modalCard" aria-label="Impor daftar media" onclick={(e) => e.stopPropagation()}>
+			<div class="modalHeader">
+				<h2 class="modalTitle"><Upload size={17} /> Impor Daftar Media</h2>
+				<button class="modalClose" type="button" aria-label="Tutup" onclick={() => (importOpen = false)}><X size={18} /></button>
 			</div>
-
-			{#if detail.description}<p class="mt-3 text-sm text-muted-foreground">{detail.description}</p>{/if}
-
-			<dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
-				<div><dt class="text-xs text-muted-foreground">Harga klien</dt><dd class="font-semibold tabular-nums">Rp {fmt(detail.client_price)}</dd></div>
-				<div><dt class="text-xs text-muted-foreground">Biaya kredit</dt><dd class="font-semibold tabular-nums">{detail.credit_cost} TC</dd></div>
-				<div><dt class="text-xs text-muted-foreground">Tier</dt><dd>{tierLabel[detail.media_tier ?? ''] ?? '—'}</dd></div>
-				<div><dt class="text-xs text-muted-foreground">Jangkauan</dt><dd class="tabular-nums">{fmt(detail.traffic_estimate)}</dd></div>
-				<div><dt class="text-xs text-muted-foreground">Maks. link</dt><dd>{detail.max_links ?? '—'}</dd></div>
-				<div><dt class="text-xs text-muted-foreground">Label sponsor</dt><dd>{detail.label_sponsor ?? '—'}</dd></div>
-				{#if detail.seo?.da != null}
-					<div><dt class="text-xs text-muted-foreground">DA / PA</dt><dd>{detail.seo.da} / {detail.seo.pa ?? '—'}</dd></div>
-					<div><dt class="text-xs text-muted-foreground">Spam score</dt><dd>{detail.seo.spam_score ?? '—'}</dd></div>
-				{/if}
-			</dl>
-
-			{#if detail.bahasa_artikel.length > 0}
-				<p class="mt-4 text-xs text-muted-foreground">Bahasa artikel: {detail.bahasa_artikel.join(', ')}</p>
-			{/if}
-			{#if detail.topik_terlarang.length > 0}
-				<p class="mt-2 text-xs" style="color: var(--destructive);">Topik terlarang: {detail.topik_terlarang.join(', ')}</p>
-			{/if}
+			<p class="modalHint">Tempelkan satu nama media, domain, atau ID per baris. Media yang cocok akan langsung terpilih.</p>
+			<textarea class="modalTextarea" rows="8" bind:value={importText} placeholder={'contoh.id\nDetik.com'}></textarea>
+			{#if importError}<p class="modalError">{importError}</p>{/if}
+			<div class="modalFooter">
+				<button class="advFilterResetBtn" type="button" onclick={() => (importOpen = false)}>Batal</button>
+				<button class="advFilterApplyBtn" type="button" onclick={applyImport}>Terapkan</button>
+			</div>
 		</dialog>
+	</div>
+{/if}
+
+<!-- Modal Daftar Bookmark -->
+{#if bookmarkOpen}
+	<div class="modalOverlay" role="presentation" onclick={() => (bookmarkOpen = false)}>
+		<dialog open class="modalCard" aria-label="Media tersimpan" onclick={(e) => e.stopPropagation()}>
+			<div class="modalHeader">
+				<h2 class="modalTitle"><Bookmark size={17} /> Media Tersimpan</h2>
+				<button class="modalClose" type="button" aria-label="Tutup" onclick={() => (bookmarkOpen = false)}><X size={18} /></button>
+			</div>
+			{#if bookmarkedIds.size === 0}
+				<p class="modalHint">Belum ada media tersimpan. Tandai media dengan ikon bookmark untuk menyimpannya.</p>
+			{:else}
+				<ul class="bookmarkList">
+					{#each rows.filter((m) => bookmarkedIds.has(m.id)) as m (m.id)}
+						<li class="bookmarkRow">
+							<span class="bookmarkName">{m.name}</span>
+							<button
+								class="bookmarkRemove"
+								type="button"
+								aria-label={`Hapus ${m.name} dari bookmark`}
+								onclick={(e) => toggleBookmark(m.id, e)}
+							><Trash2 size={15} /></button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+			<div class="modalFooter">
+				<button class="advFilterApplyBtn" type="button" onclick={() => (bookmarkOpen = false)}>Tutup</button>
+			</div>
+		</dialog>
+	</div>
+{/if}
+
+<!-- Modal Nama Kampanye -->
+{#if campaignOpen}
+	<div class="modalOverlay" role="presentation" onclick={() => (campaignOpen = false)}>
+		<dialog open class="modalCard" aria-label="Buat kampanye" onclick={(e) => e.stopPropagation()}>
+			<div class="modalHeader">
+				<h2 class="modalTitle"><LayoutGrid size={17} /> Buat Kampanye</h2>
+				<button class="modalClose" type="button" aria-label="Tutup" onclick={() => (campaignOpen = false)}><X size={18} /></button>
+			</div>
+			<p class="modalHint">{selectedIds.size} media terpilih akan langsung masuk ke kampanye ini.</p>
+			<label class="modalField">
+				<span>Nama kampanye</span>
+				<input class="app-input" bind:value={campaignName} placeholder="mis. Peluncuran Produk Q4" />
+			</label>
+			{#if campaignError}<p class="modalError">{campaignError}</p>{/if}
+			<div class="modalFooter">
+				<button class="advFilterResetBtn" type="button" onclick={() => (campaignOpen = false)}>Batal</button>
+				<button class="advFilterApplyBtn" type="button" disabled={creating} onclick={() => void createCampaign()}>
+					{creating ? 'Membuat…' : 'Buat Kampanye'}
+				</button>
+			</div>
+		</dialog>
+	</div>
+{/if}
+
+<!-- Modal Detail Media -->
+{#if detail}
+	<MediaDetailModal media={detail} onclose={() => (detail = null)} />
+{/if}
+
+{#if selectedIds.size > 0}<div style="height:74px"></div>{/if}
+
+<!-- Selection bar -->
+{#if selectedIds.size > 0}
+	<div class="selectedBottomBar">
+		<div class="selectedBarLeft">
+			<div class="selectedStatItem">
+				<span class="selectedStatLabel">MEDIA TERPILIH</span>
+				<span class="selectedStatDomainVal">{selectedIds.size} Domain</span>
+			</div>
+			<div class="selectedBarDivider"></div>
+			<div class="selectedStatItem">
+				<span class="selectedStatLabel">TOTAL BIAYA PUBLIKASI</span>
+				<div class="selectedStatPriceGroup">
+					<span class="selectedStatPriceVal">Rp {fmt(totalSelectedPrice)}</span>
+					<span class="selectedStatCreditVal">~ {fmt(totalSelectedCredits)} Kredit</span>
+				</div>
+			</div>
+		</div>
+		<div class="selectedBarRight">
+			<button class="selectedCancelBtn" type="button" onclick={() => (selectedIds = new Set())}>Batal</button>
+			<button class="selectedExportBtn" type="button" onclick={exportProposal} title="Unduh proposal ringkasan media terpilih (format CSV)">
+				<FileText size={15} /><span>Ekspor Proposal</span>
+			</button>
+			<button class="selectedCreateBtn" type="button" disabled={creating} onclick={() => { campaignName = ''; campaignError = ''; campaignOpen = true; }}>
+				<Plus size={14} /><span>Buat Kampanye</span>
+			</button>
+		</div>
 	</div>
 {/if}

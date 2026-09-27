@@ -139,9 +139,14 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		       media.publication_mode, media.word_count_mode, media.allow_embed, media.pricing_type, media.price_status,
 		       COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l
 		                 JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = media.id), media.category) AS categories_csv,
-		       sm.da, sm.pa, sm.spam_score, sm.checked_at, sm.ai_trust_score, sm.ai_citation
+		       sm.da, sm.pa, sm.spam_score, sm.checked_at, sm.ai_trust_score, sm.ai_citation,
+		       mcs.image_required AS standard_image_required,
+		       EXISTS (SELECT 1 FROM gsc_connections g WHERE g.partner_id = media.partner_id AND g.status = 'active') AS gsc_connected,
+		       sw.visits AS sw_visits, sw.created_at AS sw_snapshot_date
 		FROM media
 		LEFT JOIN media_seo_metrics sm ON sm.media_id = media.id
+		LEFT JOIN media_content_standards mcs ON mcs.media_id = media.id AND mcs.status = 'active'
+		LEFT JOIN LATERAL (SELECT s.insights->>'visits' AS visits, s.created_at FROM media_similarweb_snapshots s WHERE s.media_id = media.id ORDER BY s.created_at DESC LIMIT 1) sw ON TRUE
 		`+clause+`
 		ORDER BY media.media_tier NULLS LAST, media.name
 		LIMIT `+limitArg+` OFFSET `+offsetArg, args...)
@@ -152,6 +157,20 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 	defer rowsQ.Close()
 
 	markup := d.getMarkupPercent(r)
+	// Baseline kualitas per tier (pr_media_rules.tier_default_quality) — dipakai
+	// saat media belum punya skor sendiri. Default sama dengan app lama.
+	tierDefaults := map[string]float64{"tier1": 90, "tier2": 80, "tier3": 70}
+	var tierRaw []byte
+	if rErr := d.Pool.QueryRow(r.Context(),
+		"SELECT tier_default_quality FROM pr_media_rules WHERE id = 'default' LIMIT 1").Scan(&tierRaw); rErr == nil && len(tierRaw) > 0 {
+		if m, ok := jsonRaw(tierRaw, nil).(map[string]any); ok && len(m) > 0 {
+			for k, v := range m {
+				if f, ok := v.(float64); ok {
+					tierDefaults[k] = f
+				}
+			}
+		}
+	}
 	items := []map[string]any{}
 	for rowsQ.Next() {
 		var id, name, status string
@@ -170,13 +189,18 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		var seoDA, seoPA, seoSpam, seoAITrust *int
 		var seoCheckedAt *time.Time
 		var seoAICitation *bool
+		var standardImageRequired *bool
+		var gscConnected bool
+		var swVisits *int64
+		var swSnapshotDate *time.Time
 		if rowsQ.Scan(&id, &name, &category, &description, &websiteURL, &contohArtikelURL, &price, &creditCost,
 			&integrationType, &trafficEstimate, &mediaTier, &qualityScore, &healthScore, &healthBreakdown,
 			&healthComputedAt, &autoPublish, &dewanPersVerified, &dewanPersNote, &dewanPersCertNo,
 			&domainVerified, &status, &createdAt, &mediaType, &bahasaArtikel,
 			&labelSponsor, &topikTerlarang, &maxLinks, &allowHyperlink,
 			&publicationMode, &wordCountMode, &allowEmbed, &pricingType, &priceStatus,
-			&categoriesCSV, &seoDA, &seoPA, &seoSpam, &seoCheckedAt, &seoAITrust, &seoAICitation) != nil {
+			&categoriesCSV, &seoDA, &seoPA, &seoSpam, &seoCheckedAt, &seoAITrust, &seoAICitation,
+			&standardImageRequired, &gscConnected, &swVisits, &swSnapshotDate) != nil {
 			continue
 		}
 		categories := []string{}
@@ -188,6 +212,17 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		pricing := priceBreakdown(price, markup)
+		// Kualitas efektif: skor media (admin) bila ada; jika tidak, baseline tier
+		// dari pr_media_rules — parity computeEffectiveQuality app lama.
+		var effectiveQuality any
+		qualitySource := ""
+		if qualityScore != nil {
+			effectiveQuality = *qualityScore
+			qualitySource = "media"
+		} else if tq, ok := tierDefaults[derefStrOr(mediaTier, "")]; ok {
+			effectiveQuality = tq
+			qualitySource = "tier_default"
+		}
 		item := map[string]any{
 			"id": id, "name": name, "category": category, "description": description,
 			"website_url": websiteURL, "contoh_artikel_url": contohArtikelURL,
@@ -208,16 +243,30 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			"markup_percent": pricing["markup_percent"],
 			"markup_amount":  pricing["markup_amount"],
 			"client_price":   pricing["client_price"],
+			// Bentuk flat dipertahankan untuk parity kontrak app lama (UI membaca
+			// m.seo_da, m.seo_ai_trust, m.sw_visits, ...), plus bentuk nested `seo`
+			// yang sudah dipakai halaman lain.
+			"seo_da": seoDA, "seo_pa": seoPA, "seo_spam_score": seoSpam,
+			"seo_checked_at": tsOrNil(seoCheckedAt), "seo_ai_trust": seoAITrust,
+			"seo_ai_citation": seoAICitation,
 			"seo": map[string]any{
 				"da": seoDA, "pa": seoPA, "spam_score": seoSpam,
 				"checked_at": tsOrNil(seoCheckedAt), "ai_trust_score": seoAITrust, "ai_citation": seoAICitation,
 			},
+			"effective_quality": effectiveQuality, "quality_source": strOrNil(qualitySource),
+			"sw_visits": swVisits, "sw_snapshot_date": tsOrNil(swSnapshotDate),
+			"gsc_connected": gscConnected,
+			"image_required": standardImageRequired,
+			"is_available": status == "active",
+			"availability_reason": availabilityReason(status),
 		}
 		items = append(items, item)
 	}
 
+	// "media" adalah nama kunci kontrak app lama (UI & flow wizard membacanya);
+	// "items" dipertahankan agar pemakai lama tidak rusak.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": items, "total": total, "limit": limit, "offset": offset,
+		"media": items, "items": items, "total": total, "limit": limit, "offset": offset,
 	})
 }
 
@@ -303,4 +352,28 @@ func tsOrNil(t *time.Time) any {
 		return nil
 	}
 	return isoMilli(*t)
+}
+
+// derefStrOr: *string → string ("" bila nil).
+func derefStrOr(p *string, fallback string) string {
+	if p == nil {
+		return fallback
+	}
+	return *p
+}
+
+// strOrNil: string kosong → nil.
+func strOrNil(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// availabilityReason: alasan media tidak bisa dipilih (parity app lama).
+func availabilityReason(status string) any {
+	if status == "pending_review" {
+		return "Menunggu Review Admin"
+	}
+	return nil
 }
