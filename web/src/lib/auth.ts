@@ -285,3 +285,43 @@ export function authErrorMessage(reason: unknown) {
 	};
 	return messages[reason.message] ?? reason.message;
 }
+
+/**
+ * Tujuan setelah login/registrasi — port routeAfterLogin app lama.
+ *
+ * Klien TIDAK boleh mendarat di halaman pemilih brand: app lama sudah
+ * menghapus halaman "buat/pilih brand" dan langsung mengarahkan ke dashboard
+ * brand pertama. Fallback `/klien` hanya untuk kondisi tanpa brand (halaman
+ * itu sendiri yang mengalihkan / menampilkan state VIP).
+ */
+export async function resolveHomeRoute(role?: string): Promise<string> {
+	if (role === 'admin') return '/admin';
+	if (role === 'partner') return '/mitra';
+	if (role !== 'client') {
+		// Sesi lama tanpa role tersimpan: tanya backend, sama seperti legacy.
+		try {
+			const meRes = await apiRequest('/v1/auth/me');
+			if (meRes.ok) {
+				const me = (await meRes.json()) as { role?: string };
+				if (me.role === 'admin') return '/admin';
+			}
+			const partnerRes = await apiRequest('/v1/partner/me');
+			if (partnerRes.ok) return '/mitra';
+		} catch {
+			// Backend tidak terjangkau → area klien (default legacy).
+		}
+		return '/klien';
+	}
+	try {
+		const res = await apiRequest('/v1/brands');
+		if (res.ok) {
+			const brands = (await res.json()) as Array<{ id: string; public_id?: string | null }>;
+			if (brands[0]) {
+				return `/klien/${brands[0].public_id ?? brands[0].id}`;
+			}
+		}
+	} catch {
+		// Jatuh ke area klien.
+	}
+	return '/klien';
+}

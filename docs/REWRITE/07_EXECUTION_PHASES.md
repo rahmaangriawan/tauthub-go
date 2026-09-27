@@ -302,3 +302,24 @@ satu job per kind di-enqueue lalu **semuanya selesai** (`domain_verify`, `media_
 Kegagalan yang tersisa bersifat data, bukan kode: URL sitemap `http://localhost:9999` ditolak
 SSRF guard (`Sitemap URL must be a public http(s) address`) dan 2 job SEO tertahan
 rate-limit provider — keduanya perilaku benar.
+
+---
+
+## Koreksi Parity — Rute Pasca-Login Klien
+
+Ditemukan deviasi: port Svelte mendarat di **halaman pemilih brand** (`/klien`, "Brand Saya" +
+tombol "+ Brand Baru") setelah login, sedangkan app lama sudah **menghapus** halaman itu.
+Komentar eksplisit di `app/klien/page.tsx` app lama: *"Index klien: langsung arahkan user ke
+dashboard brand pertamanya — halaman 'buat/pilih brand' tidak dipakai lagi."*
+
+Yang diperbaiki:
+- `resolveHomeRoute(role)` di `lib/auth.ts` — port `routeAfterLogin`: admin → `/admin`,
+  partner → `/mitra`, client → `/v1/brands` lalu `/klien/{public_id ?? id}` brand pertama,
+  fallback `/klien`. Dipakai halaman login (termasuk jalur 2FA).
+- `routes/klien/+page.svelte` ditulis ulang menjadi **pengalih otomatis** (skeleton → redirect),
+  bukan pemilih brand. Tanpa brand → tawarkan brand VIP (`POST /v1/partner/vip/brand`) persis
+  seperti legacy; gagal memuat → state error. Halaman "Brand Saya" + tombol "+ Brand Baru" dihapus.
+- Google OAuth callback sudah benar sejak awal (sudah mengarah ke `/klien/{id}`).
+
+Bukti: login di browser mendarat langsung di `/klien/cza87b` dan menampilkan dashboard
+("Selamat datang kembali, …"); akses langsung ke `/klien` juga teralihkan ke dashboard brand.

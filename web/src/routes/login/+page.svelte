@@ -9,6 +9,7 @@
 		apiRequest,
 		readApiError,
 		AUTH_EXPIRED_EVENT,
+		resolveHomeRoute,
 		type AuthUser
 	} from '$lib/auth';
 
@@ -38,11 +39,9 @@
 		user: AuthUser;
 	};
 
-	function homeFor(role?: string) {
-		if (role === 'admin') return '/admin';
-		if (role === 'partner') return '/mitra';
-		return '/klien';
-	}
+	// Tujuan pasca-login mengikuti routeAfterLogin app lama: klien langsung ke
+	// dashboard brand pertamanya, bukan halaman pemilih brand.
+	const home = (role?: string) => resolveHomeRoute(role);
 
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
@@ -63,7 +62,7 @@
 					return;
 				}
 				storeSession(data as TokenResponse);
-				await goto(homeFor((data as TokenResponse).user?.role));
+				await goto(await home((data as TokenResponse).user?.role));
 				return;
 			}
 
@@ -82,7 +81,7 @@
 				return;
 			}
 			storeSession(data as TokenResponse);
-			await goto(homeFor((data as TokenResponse).user?.role));
+			await goto(await home((data as TokenResponse).user?.role));
 		} catch (reason) {
 			error = authErrorMessage(reason);
 		} finally {

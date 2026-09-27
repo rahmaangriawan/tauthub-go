@@ -1,155 +1,127 @@
 <script lang="ts">
-	// Fase 2: daftar brand + create (port section klien index).
+	// Port app/klien/page.tsx: index klien LANGSUNG mengarahkan user ke
+	// dashboard brand pertamanya — halaman "buat/pilih brand" sudah tidak
+	// dipakai. Tanpa brand → tawarkan brand VIP; gagal → state error.
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { apiRequest, readApiError, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
-	import { swr } from '$lib/swr-cache.svelte';
+	import { Building } from '@lucide/svelte';
+	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
-	type BrandRow = {
-		id: string;
-		name: string;
-		slug: string;
-		public_id: string | null;
-		status: string;
-		role: string;
-		ownership_type: string;
-		industry: string | null;
-		readiness_score: number;
-		websites: Array<{ domain: string; is_primary: boolean }>;
-	};
+	type Brand = { id: string; public_id?: string | null };
 
-	const brandList = swr<BrandRow[]>(
-		() => (getStoredSession() ? '/v1/brands' : null),
-		async () => {
-			const res = await apiRequest('/v1/brands');
-			if (!res.ok) throw new Error('Gagal memuat brand');
-			return res.json();
-		}
-	);
-	let loading = $state(true);
-	let showCreate = $state(false);
-	let busy = $state(false);
+	type PickerState = 'loading' | 'empty' | 'error';
+
+	let view = $state('loading' as PickerState);
 	let error = $state('');
-	let form = $state({ name: '', slug: '', ownership_type: 'internal', client_name: '', industry: '', domain: '' });
+	let busy = $state(false);
+
+	async function provisionVipBrand(navigate: boolean): Promise<string | null> {
+		try {
+			const res = await apiRequest('/v1/partner/vip/brand', { method: 'POST' });
+			if (!res.ok) return null;
+			const data = (await res.json()) as { id?: string; public_id?: string | null };
+			const pid = data.public_id ?? data.id ?? null;
+			if (navigate && pid) await goto(`/klien/${pid}`, { replaceState: true });
+			return pid;
+		} catch {
+			return null;
+		}
+	}
 
 	onMount(() => {
+		let cancelled = false;
 		void (async () => {
 			const fresh = await ensureValidSession();
 			if (!fresh) {
 				await goto('/login');
 				return;
 			}
-			loading = false;
+			try {
+				const res = await apiRequest('/v1/brands');
+				if (!res.ok) {
+					if (!cancelled) view = 'error';
+					return;
+				}
+				const brands = (await res.json()) as Brand[];
+				if (cancelled) return;
+				if (brands.length === 0) {
+					const pid = await provisionVipBrand(false);
+					if (pid) {
+						if (!cancelled) await goto(`/klien/${pid}`, { replaceState: true });
+						return;
+					}
+					if (!cancelled) view = 'empty';
+					return;
+				}
+				const first = brands[0];
+				await goto(`/klien/${first.public_id ?? first.id}`, { replaceState: true });
+			} catch {
+				if (!cancelled) view = 'error';
+			}
 		})();
+
 		const onExpired = () => void goto('/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
-		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		return () => {
+			cancelled = true;
+			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		};
 	});
 
-	async function create(e: SubmitEvent) {
-		e.preventDefault();
+	async function createVip() {
 		busy = true;
 		error = '';
-		try {
-			const payload: Record<string, unknown> = {
-				name: form.name.trim(),
-				slug: form.slug.trim(),
-				ownership_type: form.ownership_type,
-				primary_language: 'id-ID'
-			};
-			if (form.client_name.trim()) payload.client_name = form.client_name.trim();
-			if (form.industry.trim()) payload.industry = form.industry.trim();
-			if (form.domain.trim()) payload.domain = form.domain.trim();
-			const res = await apiRequest('/v1/brands', {
-				method: 'POST',
-				body: JSON.stringify(payload)
-			});
-			if (res.ok) {
-				showCreate = false;
-				form = { name: '', slug: '', ownership_type: 'internal', client_name: '', industry: '', domain: '' };
-				await brandList.mutate(); // invalidasi cache + revalidasi (parity)
-			} else {
-				error = await readApiError(res, 'Gagal membuat brand.');
-			}
-		} finally {
+		const pid = await provisionVipBrand(true);
+		if (!pid) {
+			error = 'Gagal membuat brand. Pastikan akun VIP sudah aktif.';
 			busy = false;
+			return;
 		}
+		busy = false;
 	}
 </script>
 
-<main class="mx-auto max-w-5xl px-4 py-8">
-	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-semibold tracking-tight">Brand Saya</h1>
-		<button
-			class="app-btn app-btn-primary"
-			onclick={() => (showCreate = !showCreate)}
-		>
-			{showCreate ? 'Tutup' : '+ Brand Baru'}
-		</button>
-	</div>
+<main class="min-h-screen bg-background px-10 py-10 pb-16">
+	<div class="mx-auto max-w-[1200px]">
+		<header class="mb-8">
+			<p class="text-[11px] font-bold uppercase tracking-[0.12em] text-primary">Tauthub</p>
+			<h1 class="my-2 text-4xl font-bold tracking-tight">Dashboard Klien</h1>
+			<p class="max-w-[620px] text-[15px] leading-relaxed text-muted-foreground">
+				Mengarahkan Anda ke dashboard brand…
+			</p>
+		</header>
 
-	{#if showCreate}
-		<form class="app-card mt-4 grid gap-3 p-4" onsubmit={create}>
-			<div class="grid gap-3 sm:grid-cols-2">
-				<label class="flex flex-col gap-1 text-sm">Nama
-					<input class="app-input" bind:value={form.name} minlength={2} required />
-				</label>
-				<label class="flex flex-col gap-1 text-sm">Slug
-					<input class="app-input" bind:value={form.slug} pattern="[a-z0-9]+(-[a-z0-9]+)*" required />
-				</label>
-				<label class="flex flex-col gap-1 text-sm">Tipe kepemilikan
-					<select class="app-input" bind:value={form.ownership_type}>
-						<option value="internal">Internal</option>
-						<option value="client">Client</option>
-					</select>
-				</label>
-				{#if form.ownership_type === 'client'}
-					<label class="flex flex-col gap-1 text-sm">Nama klien
-						<input class="app-input" bind:value={form.client_name} />
-					</label>
-				{/if}
-				<label class="flex flex-col gap-1 text-sm">Industri
-					<input class="app-input" bind:value={form.industry} />
-				</label>
-				<label class="flex flex-col gap-1 text-sm">Domain (opsional)
-					<input class="app-input" bind:value={form.domain} />
-				</label>
+		{#if view === 'loading'}
+			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+				{#each Array(3) as _, i (i)}
+					<div class="grid h-[78px] content-center gap-2 rounded-xl border border-border bg-card p-3.5">
+						<div class="h-2.5 w-[34%] animate-pulse rounded-md bg-muted"></div>
+						<div class="h-4 w-[62%] animate-pulse rounded-md bg-muted"></div>
+						<div class="h-2.5 w-[48%] animate-pulse rounded-md bg-muted"></div>
+					</div>
+				{/each}
 			</div>
-			{#if error}<p class="text-sm text-destructive">{error}</p>{/if}
-			<button class="app-btn app-btn-primary w-fit" disabled={busy} type="submit">
-				{busy ? 'Menyimpan…' : 'Buat Brand'}
-			</button>
-		</form>
-	{/if}
-
-	{#if loading || (brandList.loading && brandList.data === null)}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat…</p>
-	{:else if (brandList.data ?? []).length === 0}
-		<p class="mt-6 text-sm text-muted-foreground">Belum ada brand. Buat brand pertama Anda.</p>
-	{:else}
-		<div class="mt-6 grid gap-3 sm:grid-cols-2">
-			{#each brandList.data ?? [] as brand (brand.id)}
-				<a
-					class="app-card p-4 transition-colors hover:bg-accent"
-					href={`/klien/${brand.public_id ?? brand.id}`}
+		{:else if view === 'empty'}
+			<div class="rounded-[20px] border border-dashed border-border px-6 py-16 text-center text-muted-foreground">
+				<Building class="mx-auto size-[30px] opacity-60" />
+				<p class="mt-3 text-lg font-semibold text-foreground">Brand VIP belum dibuat</p>
+				<span class="mb-2 mt-1 inline-block rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">
+					VIP Partner
+				</span>
+				<p class="mt-2">Anda dapat membuat brand sendiri untuk mulai menggunakan Dashboard Klien.</p>
+				{#if error}<p class="mt-2 text-sm text-destructive">{error}</p>{/if}
+				<button
+					class="app-btn app-btn-primary mt-3"
+					disabled={busy}
+					onclick={() => void createVip()}
 				>
-					<div class="flex items-center justify-between">
-						<span class="font-medium">{brand.name}</span>
-						<span class="rounded-full px-2 py-0.5 text-xs {brand.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'}">
-							{brand.status}
-						</span>
-					</div>
-					<p class="mt-1 text-sm text-muted-foreground">
-						/{brand.slug} · {brand.ownership_type}{#if brand.industry} · {brand.industry}{/if}
-					</p>
-					<div class="mt-3 flex items-center gap-2">
-						<div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-							<div class="h-full rounded-full bg-primary" style="width:{brand.readiness_score}%"></div>
-						</div>
-						<span class="text-xs text-muted-foreground">readiness {brand.readiness_score}%</span>
-					</div>
-				</a>
-			{/each}
-		</div>
-	{/if}
+					{busy ? 'Membuat…' : 'Buat Brand VIP'}
+				</button>
+			</div>
+		{:else}
+			<div class="rounded-xl border border-destructive/40 bg-destructive/5 px-3.5 py-3 text-sm text-destructive">
+				{error || 'Gagal memuat brand. Silakan muat ulang halaman atau coba lagi nanti.'}
+			</div>
+		{/if}
+	</div>
 </main>

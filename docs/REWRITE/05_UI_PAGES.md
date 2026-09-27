@@ -53,7 +53,7 @@
 
 | Halaman | Isi | Fase | ✔ |
 |---|---|---|---|
-| `/klien` | Daftar brand + onboarding | 2 | [x] |
+| `/klien` | Pengalih otomatis ke dashboard brand pertama (fallback brand VIP bila belum ada) | 2 | [x] |
 | `/klien/{brandId}/campaigns/{campaignId}/flow` | Wizard campaign (3.749 baris: intake → media → budget → produksi → review) | 7 | [x] |
 | `/klien/{brandId}/editor/{documentId}` | Editor artikel (versi, review, standard check, publish) | 4 | [x] |
 | `/klien/{brandId}/knowledge` | Knowledge center penuh | 3 | [x] |
