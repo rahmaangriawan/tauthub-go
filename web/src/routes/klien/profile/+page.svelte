@@ -125,7 +125,7 @@
 	}
 </script>
 
-<main class="mx-auto max-w-2xl px-4 py-8">
+<main class="px-4 py-8">
 	<h1 class="text-2xl font-semibold tracking-tight">Profil</h1>
 	{#if user}
 		<p class="mt-1 text-sm text-muted-foreground">{user.email} · <span class="uppercase">{user.role}</span></p>

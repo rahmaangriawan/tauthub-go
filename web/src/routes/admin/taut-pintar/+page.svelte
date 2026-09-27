@@ -146,7 +146,7 @@
 	const selectedCampaign = $derived(campaigns.find((c) => c.campaign_id === selected) ?? null);
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader title="Taut Pintar — Monitoring" description="Pipeline estafet 4 agent per kampanye + retry per-step." />
 
 	<Feedback {loading} {error} loadingText="Memuat monitoring Taut Pintar…" />

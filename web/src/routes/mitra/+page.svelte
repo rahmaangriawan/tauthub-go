@@ -36,7 +36,7 @@
 	});
 </script>
 
-<section class="mx-auto max-w-lg">
+<section>
 	<div class="app-card p-6 text-center">
 		<h1 class="text-lg font-semibold">Portal Mitra Tauthub</h1>
 		{#if loading}

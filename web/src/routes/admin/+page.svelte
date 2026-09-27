@@ -70,7 +70,7 @@
 	const shortModel = (model: string | null) => (model ? model.split('/').pop() : 'default');
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<header class="flex flex-wrap items-end justify-between gap-4 border-b pb-5">
 		<div>
 			<p class="text-xs font-bold tracking-wide text-muted-foreground">TAUTHUB PLATFORM CONTROL</p>

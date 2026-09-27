@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
 )
 
 // campaign_core.go: port _campaign.ts + lib/campaign/report.ts +
@@ -153,19 +155,14 @@ func prAnalysisFromRow(row bsRow) map[string]any {
 	}
 }
 
-// mediaCategories: kategori media dari CSV (pemisah \u0001).
+// mediaCategories: kategori media dari CSV (pemisah \u0001); nilai yang masih
+// bergabung dengan koma ikut dipisah agar data lama tetap terbaca benar.
 func mediaCategories(row bsRow) []string {
 	if csv := row.strOr("media_categories_csv", ""); csv != "" {
-		out := []string{}
-		for _, s := range strings.Split(csv, "\u0001") {
-			if t := strings.TrimSpace(s); t != "" {
-				out = append(out, t)
-			}
-		}
-		return out
+		return catutil.Split(csv)
 	}
 	if cat := row.strPtr("media_category"); cat != nil && *cat != "" {
-		return []string{*cat}
+		return catutil.Split(*cat)
 	}
 	return []string{}
 }

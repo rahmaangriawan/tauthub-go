@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -203,13 +204,11 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			&standardImageRequired, &gscConnected, &swVisits, &swSnapshotDate) != nil {
 			continue
 		}
+		// Pemisahan ganda: pemisah internal dari string_agg, plus koma untuk
+		// data lama yang menyimpan beberapa kategori dalam satu nilai.
 		categories := []string{}
-		if categoriesCSV != nil && *categoriesCSV != "" {
-			for _, c := range strings.Split(*categoriesCSV, "\u0001") {
-				if t := strings.TrimSpace(c); t != "" {
-					categories = append(categories, t)
-				}
-			}
+		if categoriesCSV != nil {
+			categories = catutil.Split(*categoriesCSV)
 		}
 		pricing := priceBreakdown(price, markup)
 		// Kualitas efektif: skor media (admin) bila ada; jika tidak, baseline tier

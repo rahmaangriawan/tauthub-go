@@ -137,7 +137,7 @@
 	const isNotice = $derived(error.includes('disimpan'));
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<PageHeader
 		title="Auto-Replace"
 		description="Saat partner menolak publikasi, Tauthub otomatis membuat publikasi pengganti ke media rekomendasi terbaik. Atur aktif/nonaktif global atau per brand, dan batas penolakan beruntun."

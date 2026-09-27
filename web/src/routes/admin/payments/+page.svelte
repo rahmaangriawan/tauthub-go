@@ -154,7 +154,7 @@
 	const denied = $derived(Boolean(!loading && gateways.length === 0 && error.includes('Akses platform')));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Payment Gateway"
 		description="Kelola konfigurasi multi-provider (Xendit, Duitku, Midtrans, Tripay). Hanya SATU gateway yang aktif untuk transaksi baru; konfigurasi lain tetap tersimpan saat diganti."

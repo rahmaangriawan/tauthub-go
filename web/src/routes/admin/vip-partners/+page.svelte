@@ -112,7 +112,7 @@
 	const detailTotalPages = $derived(Math.max(1, Math.ceil(domainsTotal / DOMAIN_PAGE_SIZE)));
 </script>
 
-<section class="mx-auto max-w-[1400px]">
+<section>
 	<PageHeader
 		title="Monitoring VIP"
 		description="Tracking & monitoring mitra VVIP dan VIP Reguler: domain referral yang join, domain yang dapat orderan, kuota, kontrak, dan total pencairan."

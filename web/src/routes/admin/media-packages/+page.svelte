@@ -268,7 +268,7 @@
 	</div>
 {/snippet}
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<PageHeader
 		title="Media Packages"
 		description="Bundel media yang bisa dipilih klien satu klik. Diskon persen (0–100) benar-benar dipakai saat billing TC publikasi — setiap media anggota dihitung dengan harga diskon, dan klien melihat 'Hemat X TC' di tombol paket. Paket yang dihapus otomatis hilang dari daftar klien."

@@ -102,7 +102,7 @@
 	const budgetCfgText = $derived(budgetConfig ? JSON.stringify(budgetConfig) : '-');
 </script>
 
-<main class="mx-auto max-w-4xl py-4">
+<main class="py-4">
 	<div class="no-print mb-4 flex items-center justify-between gap-3">
 		<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/taut-pintar/${campaignId}`}>Kembali ke wizard</a>
 		<button class="app-btn app-btn-soft" type="button" onclick={() => window.print()}>

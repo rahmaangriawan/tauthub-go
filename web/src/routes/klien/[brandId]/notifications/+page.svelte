@@ -101,7 +101,7 @@
 		v ? new Date(v).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 </script>
 
-<section class="mx-auto max-w-4xl">
+<section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<p class="text-[11px] font-semibold tracking-wide text-muted-foreground">NOTIFICATIONS</p>

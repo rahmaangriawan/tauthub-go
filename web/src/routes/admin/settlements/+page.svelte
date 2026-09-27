@@ -256,7 +256,7 @@
 	const denied = $derived(Boolean(!loading && rows.length === 0 && isAccessDenied(error)));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Settlements"
 		description="Payout ke partner: create meng-agregasi earnings pending dalam periode dan menguncinya (Phase 6)."

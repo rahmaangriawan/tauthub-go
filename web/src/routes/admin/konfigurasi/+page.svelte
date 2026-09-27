@@ -723,7 +723,7 @@
 	);
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Konfigurasi"
 		description="Kredensial layanan pihak ketiga — key disegel server-side dan tidak pernah tampil plaintext."

@@ -556,7 +556,7 @@
 	</div>
 {/snippet}
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title={detail ? detail.name : 'Knowledge Base'}
 		description="Aturan editorial & gaya penulisan yang diinjeksi ke AI Engine saat content generation. Dikelola Admin, berversi, aktif/nonaktif."

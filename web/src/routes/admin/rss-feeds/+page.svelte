@@ -207,7 +207,7 @@
 	</div>
 {/snippet}
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="RSS Feeds"
 		description="Channel RSS pull per partner (Phase 4). Media feed wajib milik partner; token = otentikasi feed publik."

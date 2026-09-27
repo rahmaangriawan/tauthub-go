@@ -173,7 +173,7 @@
 	const visibleCampaigns = $derived((filters?.campaigns ?? []).filter((c) => !brandId || c.brand_id === brandId));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Riwayat Analisis PR"
 		description="Analisis message consistency, sentiment/tone, dan verifikasi URL untuk seluruh publikasi published lintas brand/kampanye/media."

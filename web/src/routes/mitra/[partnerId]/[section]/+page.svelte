@@ -10,7 +10,7 @@
 	const section = $derived(page.params.section as string);
 </script>
 
-<section class="mx-auto max-w-2xl">
+<section>
 	<div class="app-card p-6 text-center">
 		<h1 class="text-lg font-semibold">Halaman tidak ditemukan</h1>
 		<p class="mt-2 text-sm text-muted-foreground">

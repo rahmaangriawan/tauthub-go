@@ -100,7 +100,7 @@
 	const hasActiveFilter = $derived(Boolean(search || brand || action));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader title="Audit Log" description="Jejak tindakan platform dan brand yang tersimpan di server.">
 		<Badge tone="accent" label="{data.total.toLocaleString('id-ID')} events" />
 	</PageHeader>

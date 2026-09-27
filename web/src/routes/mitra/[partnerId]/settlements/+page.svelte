@@ -37,7 +37,7 @@
 	};
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">Invoice & Penarikan</h1>

@@ -109,7 +109,7 @@
 	</div>
 {/snippet}
 
-<section class="mx-auto max-w-5xl">
+<section>
 	<PageHeader
 		title="Sindikasi Konten (RSS)"
 		description="Kelola mitra yang diizinkan menjalankan Sindikasi Konten. Aktifkan hanya untuk mitra yang telah menyetujui ketentuan RSS feed."

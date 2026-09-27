@@ -57,7 +57,7 @@
 	const denied = $derived(Boolean(!loading && rows.length === 0 && error.includes('Akses platform')));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader title="Brands" description="Daftar brand, ownership, plan, dan status generation.">
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{rows.length} brand</span>
 	</PageHeader>

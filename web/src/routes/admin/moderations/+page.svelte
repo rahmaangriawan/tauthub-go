@@ -139,7 +139,7 @@
 	{/if}
 {/snippet}
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader title="Content Safety" description="Hasil moderasi berlapis — review_required menunggu keputusan admin.">
 		<Badge tone="accent" value={stats ? `${stats.total} total · ${stats.ai_called} AI` : ''} />
 	</PageHeader>

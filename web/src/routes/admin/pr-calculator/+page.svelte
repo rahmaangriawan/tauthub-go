@@ -263,7 +263,7 @@
 	const activeProfile = $derived(profiles.find((p) => p.status === 'active'));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="PR Calculator"
 		description="Scoring profiles (versioned), media quality/relevance rules, dan maintenance analisis — semuanya platform-admin only."

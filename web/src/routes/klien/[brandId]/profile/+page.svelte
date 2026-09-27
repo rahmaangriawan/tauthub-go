@@ -182,7 +182,7 @@
 	}
 </script>
 
-<section class="mx-auto max-w-3xl">
+<section>
 	<header>
 		<h1 class="text-2xl font-semibold tracking-tight">Profil &amp; Akun</h1>
 		<p class="mt-1 text-sm text-muted-foreground">

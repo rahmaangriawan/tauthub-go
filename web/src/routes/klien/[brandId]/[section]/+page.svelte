@@ -16,7 +16,7 @@
 	const title = $derived(section.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
 </script>
 
-<section class="app-card mx-auto max-w-xl px-8 py-10 text-center">
+<section class="app-card px-8 py-10 text-center">
 	<div class="mx-auto flex h-11 w-11 items-center justify-center rounded-xl" style="background-color: var(--accent); color: var(--accent-foreground);">
 		<Construction size={20} />
 	</div>

@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
 )
 
 // taut_extras.go: port endpoint Taut Pintar klien yang belum di-wire —
@@ -167,13 +169,11 @@ func (d *Deps) TautArticlePut(w http.ResponseWriter, r *http.Request) {
 			d.writeErr(w, err)
 			return
 		}
+		// Pemisahan ganda (internal + koma) supaya media dengan kategori lama
+		// bergabung koma tetap mengenali kategori yang dipilih klien.
 		allowed := []string{}
 		if mediaRow != nil {
-			for _, s := range strings.Split(mediaRow.strOr("categories_csv", ""), "\u0001") {
-				if t := strings.TrimSpace(s); t != "" {
-					allowed = append(allowed, t)
-				}
-			}
+			allowed = catutil.Split(mediaRow.strOr("categories_csv", ""))
 		}
 		if !containsString(allowed, category) {
 			httpx.Error(w, http.StatusUnprocessableEntity, "Kategori harus dipilih dari kategori media yang ditentukan mitra.")

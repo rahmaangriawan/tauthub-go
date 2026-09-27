@@ -32,6 +32,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/adminshared"
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
+	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
 	"github.com/rahmaangriawan/tauthub-go/internal/email"
 	"github.com/rahmaangriawan/tauthub-go/internal/moderation"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
@@ -128,20 +129,14 @@ func mpSlugifyMediaName(name string) string {
 	return out
 }
 
-// mpCategoriesArray: string_agg dengan pemisah E'\u0001' → daftar kategori.
+// mpCategoriesArray: string_agg dengan pemisah E'\u0001' → daftar kategori,
+// sekaligus memisah data lama yang menyimpan beberapa kategori dengan koma.
 func mpCategoriesArray(row ptRow) []string {
 	raw, _ := row.str("categories_csv")
 	if strings.TrimSpace(raw) == "" {
 		return []string{}
 	}
-	out := []string{}
-	for _, part := range strings.Split(raw, "\u0001") {
-		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
-			out = append(out, trimmed)
-		}
-	}
-	return out
+	return catutil.Split(raw)
 }
 
 // ---------- pricing engine (port lib/pricing/engine.ts) ----------

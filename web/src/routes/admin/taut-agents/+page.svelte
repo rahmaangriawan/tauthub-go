@@ -139,7 +139,7 @@
 		v === 'failed' ? 'var(--destructive)' : v === 'review_required' ? 'var(--warning)' : 'var(--success)';
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<PageHeader
 		title="Taut Pintar — Agent"
 		description="Per-agent LLM (base_url, api key, model, system prompt). Hanya super admin."

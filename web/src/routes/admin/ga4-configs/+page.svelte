@@ -145,7 +145,7 @@
 	}
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="GA4 Configs"
 		description="Integrasi Google Analytics 4 per brand — Measurement ID + API Secret (Phase 8). Secret tidak pernah ditampilkan."

@@ -176,7 +176,7 @@
 	const fmtDate = (v: string) => new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
 </script>
 
-<section class="mx-auto max-w-5xl">
+<section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">Kredit Saldo</h1>

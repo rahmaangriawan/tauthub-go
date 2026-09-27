@@ -120,7 +120,7 @@
 	const totalTokens = $derived(data?.summary.total_tokens ?? 0);
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="AI Token Usage"
 		description="Pemakaian token AI seluruh step Taut Pintar — Profiler, Matchmaker, Writer, Gatekeeper — dari log eksekusi taut_agent_runs."

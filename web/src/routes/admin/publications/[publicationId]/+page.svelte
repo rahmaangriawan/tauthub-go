@@ -221,7 +221,7 @@
 	const pub = $derived(data?.publication);
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<PageHeader
 		title={pub?.document_title ?? 'Detail publikasi'}
 		description={`Publication ${publicationId}${pub?.campaign_name ? ` · Campaign: ${pub.campaign_name}` : ''}`}

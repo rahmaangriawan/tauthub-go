@@ -43,7 +43,7 @@
 	const fmtDate = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '—');
 </script>
 
-<section class="mx-auto max-w-5xl">
+<section>
 	<header>
 		<h1 class="text-2xl font-semibold tracking-tight">Audit Publikasi</h1>
 		<p class="mt-1 text-sm text-muted-foreground">

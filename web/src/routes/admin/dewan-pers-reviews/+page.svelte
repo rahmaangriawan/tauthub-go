@@ -190,7 +190,7 @@
 	{/if}
 {/snippet}
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Review Verifikasi Dewan Pers"
 		description="Setujui atau tolak pengajuan nomor sertifikat Dewan Pers dari Mitra. Status hanya berubah setelah review Admin — format valid bukan berarti otomatis terverifikasi."

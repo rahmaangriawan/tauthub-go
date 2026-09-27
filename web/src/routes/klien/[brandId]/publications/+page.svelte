@@ -311,7 +311,7 @@
 	const trackTotal = $derived(Object.values(trackingCounts).reduce((s, n) => s + n, 0));
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
 			<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--primary);">PUBLICATIONS</p>

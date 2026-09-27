@@ -614,7 +614,7 @@
 		tier === 'default' ? 'success' : tier === 'premium' ? 'accent' : tier === 'economy' ? 'warning' : 'neutral';
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="AI Management"
 		description="Provider health, routing model, Model Guidelines & RAG Knowledge, isolated testing, dan global safety controls."

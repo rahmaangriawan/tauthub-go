@@ -407,7 +407,7 @@
 	const hasFilter = $derived(Boolean(debouncedSearch || filterStatus || filterContact || filterHasMedia || filterAutoPublish));
 </script>
 
-<section class="mx-auto max-w-[1400px]">
+<section>
 	<PageHeader
 		title="Partners"
 		description="Mitra media (1 akun user = 1 partner). Media milik partner aktif melewati gate persetujuan pada publikasi. Verifikasi Dewan Pers dinilai per domain/media, bukan per akun."

@@ -2,7 +2,8 @@ package clienttaut
 
 import (
 	"context"
-	"strings"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
 )
 
 // Port lib/taut/campaign-stats.ts.
@@ -177,12 +178,7 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 		if i.has("regen_count") {
 			regenCount = i.numOr("regen_count")
 		}
-		categories := []string{}
-		for _, part := range strings.Split(i.strOr("categories_csv", ""), "\u0001") {
-			if trimmed := strings.TrimSpace(part); trimmed != "" {
-				categories = append(categories, trimmed)
-			}
-		}
+		categories := catutil.Split(i.strOr("categories_csv", ""))
 		out = append(out, map[string]any{
 			"media_id":        mediaID,
 			"name":            name,

@@ -128,7 +128,7 @@
 	};
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Standar PR per Brand"
 		description="Standarisasi PR adalah engine internal Tauthub — klien tidak mengatur ini. Override per brand: rate per 1.000 estimasi reach khusus untuk brand ini. Kosong = pakai standar global Tauthub (diatur di menu PR Calculator)."

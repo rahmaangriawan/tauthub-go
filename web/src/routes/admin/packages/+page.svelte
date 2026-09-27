@@ -104,7 +104,7 @@
 	const denied = $derived(Boolean(!loading && rows.length === 0 && isAccessDenied(error)));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Packages"
 		description="Paket kredit per brand; grant langsung tercatat di ledger credit_transactions (Phase 5)."

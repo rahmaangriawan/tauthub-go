@@ -188,7 +188,7 @@
 	<span class="text-xs text-muted-foreground">{fmtDateTime(row.created_at)}</span>
 {/snippet}
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Publikasi"
 		description="Semua publikasi seluruh brand (staff visibility). Klik baris untuk detail lengkap: riwayat attempts, job delivery, dan payload."

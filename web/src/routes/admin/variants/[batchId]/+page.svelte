@@ -128,7 +128,7 @@
 	const meta = $derived(batch ? (BATCH_STATUS_META[batch.status] ?? { label: batch.status, tone: 'neutral' as const }) : null);
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<PageHeader
 		title="Detail batch variant"
 		description={batch

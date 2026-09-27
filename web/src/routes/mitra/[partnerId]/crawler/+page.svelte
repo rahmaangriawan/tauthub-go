@@ -92,7 +92,7 @@
 	};
 </script>
 
-<section class="mx-auto max-w-4xl">
+<section>
 	<header>
 		<h1 class="text-2xl font-semibold tracking-tight">Akses Crawler</h1>
 		<p class="mt-1 text-sm text-muted-foreground">

@@ -321,7 +321,7 @@
 	}
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Listing Media Mitra"
 		description="Daftar seluruh media mitra yang terdaftar di Tauthub lengkap dengan informasi website, nama mitra pemilik, dan tipe integrasi publikasi."

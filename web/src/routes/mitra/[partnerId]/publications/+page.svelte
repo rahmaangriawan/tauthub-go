@@ -231,7 +231,7 @@
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<header>
 		<h1 class="text-2xl font-semibold tracking-tight">Publikasi</h1>
 		<p class="mt-1 text-sm text-muted-foreground">{total} permintaan artikel pada media Anda.</p>

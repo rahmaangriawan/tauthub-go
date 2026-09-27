@@ -88,7 +88,7 @@
 	}
 </script>
 
-<main class="mx-auto max-w-6xl">
+<main>
 	<AgentSteps current={1} />
 	{#if loading}
 		<div class="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">

@@ -267,7 +267,7 @@
 	</div>
 {/snippet}
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<PageHeader
 		title="Media Standards"
 		description="Profil editorial per media (panjang artikel, gaya jurnalistik, kutipan, hard-selling, forbidden content). Final check dijalankan setelah klien memilih media, sebelum publish."

@@ -43,7 +43,7 @@
 	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID')}`;
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">{me?.name ?? 'Ringkasan Mitra'}</h1>

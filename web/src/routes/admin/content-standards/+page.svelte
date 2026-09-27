@@ -419,7 +419,7 @@
 	</div>
 {/snippet}
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Content Standards"
 		description="Kuesioner readiness & pedoman editorial AI (15 standar penulisan) per jenis konten — diindeks sebagai RAG knowledge engine Tauthub."

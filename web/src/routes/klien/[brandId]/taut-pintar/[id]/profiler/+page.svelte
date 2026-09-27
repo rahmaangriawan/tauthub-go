@@ -293,7 +293,7 @@
 	}
 </script>
 
-<main class="mx-auto max-w-5xl">
+<main>
 	{#if crawling || crawlProgress > 0}
 		<div class="app-card mb-3 flex items-center justify-between gap-3 px-4 py-2.5" role="status" aria-live="polite">
 			<span class="flex items-center gap-2 text-sm font-medium">

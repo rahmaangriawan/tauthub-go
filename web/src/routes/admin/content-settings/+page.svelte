@@ -152,7 +152,7 @@
 	const sliderKeys = ['formality', 'enthusiasm', 'directness', 'humor'] as const;
 </script>
 
-<section class="mx-auto max-w-5xl">
+<section>
 	<PageHeader
 		title="Kualitas Konten Brand"
 		description="Atur voice, tone, aturan editorial, dan profil per brand — dikelola admin, bukan klien."

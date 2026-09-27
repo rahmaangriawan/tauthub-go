@@ -219,7 +219,7 @@
 	</div>
 {/snippet}
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Monitoring Kesimpulan Website"
 		description="Tracking AI Tauthub saat menarik data web untuk profil Kesimpulan. Sukses dan gagal semuanya tercatat di sini."

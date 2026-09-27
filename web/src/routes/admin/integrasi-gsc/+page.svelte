@@ -118,7 +118,7 @@
 	}
 </script>
 
-<section class="mx-auto max-w-3xl">
+<section>
 	<div class="flex flex-wrap gap-2">
 		<button class="app-btn {tab === 'gsc' ? 'app-btn-primary' : 'app-btn-soft'} !min-h-8 !px-3 !text-xs" type="button" onclick={() => (tab = 'gsc')}>Search Console (GSC)</button>
 		<button class="app-btn {tab === 'google-signin' ? 'app-btn-primary' : 'app-btn-soft'} !min-h-8 !px-3 !text-xs" type="button" onclick={() => (tab = 'google-signin')}>Google Sign-In</button>

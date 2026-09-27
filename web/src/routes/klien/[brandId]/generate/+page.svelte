@@ -119,7 +119,7 @@
 	};
 </script>
 
-<section class="mx-auto max-w-5xl">
+<section>
 	<h1 class="text-2xl font-semibold tracking-tight">Generate Artikel</h1>
 	<p class="mt-1 text-sm text-muted-foreground">
 		Pipeline: brief → (opsional approval outline) → draft AI → gate moderasi → dokumen.

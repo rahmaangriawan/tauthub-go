@@ -128,7 +128,7 @@
 	const docStatus: Record<string, string> = { pending: 'Menunggu review', verified: 'Terverifikasi', revision: 'Perlu revisi' };
 </script>
 
-<section class="mx-auto max-w-3xl">
+<section>
 	<header>
 		<h1 class="text-2xl font-semibold tracking-tight">Konfigurasi</h1>
 		<p class="mt-1 text-sm text-muted-foreground">Profil mitra, rekening pencairan, dan dokumen verifikasi.</p>

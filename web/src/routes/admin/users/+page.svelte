@@ -420,7 +420,7 @@
 	const dialogMeta = $derived(statusTarget ? statusMeta[statusKind(statusTarget)] : null);
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader title="Klien & Mitra" description="Setujui pendaftaran baru dan kelola status akun serta batas pemakaian harian.">
 		<button class="app-btn app-btn-soft" type="button" onclick={openCreate}>Tambah Pengguna</button>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{rows.length} users</span>

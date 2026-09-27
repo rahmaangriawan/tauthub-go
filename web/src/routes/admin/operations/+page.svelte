@@ -110,7 +110,7 @@
 	const visibleDead = $derived(dead.slice(deadOffset, deadOffset + PAGE_SIZE));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Operations"
 		description="Investigasi alert, batch aktif, dan item yang keluar dari retry pipeline."

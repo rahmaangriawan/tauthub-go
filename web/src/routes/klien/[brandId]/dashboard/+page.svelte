@@ -441,7 +441,7 @@
 		v ? new Date(v).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<header>
 		<p class="text-[11px] font-semibold tracking-wide text-muted-foreground">CONTENT INTAKE</p>
 		<h1 class="mt-1 text-2xl font-semibold tracking-tight">Buat konten baru</h1>

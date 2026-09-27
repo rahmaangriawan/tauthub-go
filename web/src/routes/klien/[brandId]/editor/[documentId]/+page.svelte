@@ -95,7 +95,7 @@
 	}
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandUrl}/generate`}>← Generate</a>
 	{#if loading}
 		<p class="mt-4 text-sm text-muted-foreground">Memuat dokumen…</p>

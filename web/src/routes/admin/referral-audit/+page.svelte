@@ -159,7 +159,7 @@
 	const totalGmv = $derived(referrers.reduce((s, r) => s + Number(r.gmv_published_total || 0), 0));
 </script>
 
-<section class="mx-auto max-w-[1400px]">
+<section>
 	<PageHeader
 		title="Monitoring Non VIP"
 		description="Monitoring referral mitra non-VIP: siapa share kode, berapa klik & pendaftaran, domain yang join, domain yang dapat orderan, dan siapa pemilik tiap domain."

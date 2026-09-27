@@ -105,7 +105,7 @@
 	const denied = $derived(Boolean(!loading && rows.length === 0 && error.includes('Akses platform')));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Laporan Topup Gagal"
 		description="Klien melaporkan topup yang gagal (pembayaran sukses tapi saldo TC tidak masuk). Setujui untuk menambahkan TC manual ke wallet brand."

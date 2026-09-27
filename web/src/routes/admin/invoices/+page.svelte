@@ -126,7 +126,7 @@
 	const denied = $derived(Boolean(!loading && rows.length === 0 && isAccessDenied(error)));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Invoices"
 		description="Tagihan ke brand — manual atau otomatis dari campaign (jumlah = Σ harga publikasi published)."

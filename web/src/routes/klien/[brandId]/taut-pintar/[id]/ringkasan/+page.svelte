@@ -244,7 +244,7 @@
 	const AVA = ['var(--accent)', 'var(--success-soft)', 'var(--warning-soft)', 'var(--muted)', 'var(--accent)', 'var(--success-soft)'];
 </script>
 
-<main class="mx-auto max-w-6xl">
+<main>
 	<AgentSteps current={4} tone={bannerState === 'published' ? 'published' : bannerState === 'waiting' ? 'waiting' : undefined} extra="ringkasan" lockedSteps={manualFlow ? [1] : undefined} lockedReason={MANUAL_PROFILER_REASON} />
 
 	{#if loading}

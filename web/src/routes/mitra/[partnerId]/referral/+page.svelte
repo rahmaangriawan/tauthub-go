@@ -37,7 +37,7 @@
 	const ratePct = $derived(((data?.rate_bps ?? 0) / 100).toFixed(2));
 </script>
 
-<section class="mx-auto max-w-5xl">
+<section>
 	<header>
 		<h1 class="text-2xl font-semibold tracking-tight">Referral Mitra</h1>
 		<p class="mt-1 text-sm text-muted-foreground">Bagikan tautan rujukan Anda dan dapatkan komisi dari setiap transaksi.</p>

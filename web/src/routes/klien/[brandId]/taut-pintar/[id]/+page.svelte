@@ -106,7 +106,7 @@
 	}
 </script>
 
-<div class="mx-auto flex max-w-6xl items-center gap-2 py-10 text-sm text-muted-foreground">
+<div class="flex items-center gap-2 py-10 text-sm text-muted-foreground">
 	<LoaderCircle size={18} class="animate-spin" />
 	{#if error}
 		<span style="color: var(--destructive);">{error}</span>

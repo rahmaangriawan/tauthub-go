@@ -119,7 +119,7 @@
 	const denied = $derived(Boolean(!loading && wallets.length === 0 && error.includes('Akses platform')));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Tauthub Credit"
 		description="Saldo internal Client dalam TC (1 TC = Rp1.000 default). Client melihat TC, Partner melihat Rupiah, Admin melihat keduanya. TC bukan uang yang dapat dicairkan."

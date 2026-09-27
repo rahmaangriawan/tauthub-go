@@ -223,7 +223,7 @@
 	</div>
 {/snippet}
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Variant Batches"
 		description="Monitoring multi-artikel Tauthub: satu bahan/artikel → N artikel per media (sudut pandang diacak, diproses worker). Klik baris untuk audit sudut pandang per media."

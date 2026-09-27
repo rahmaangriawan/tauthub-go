@@ -160,7 +160,7 @@
 	]);
 </script>
 
-<section class="mx-auto max-w-5xl">
+<section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<p class="text-xs font-semibold tracking-wide text-muted-foreground">VIP MITRA</p>

@@ -149,7 +149,7 @@
 	);
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Error Reports"
 		description="Agregasi error distribusi, queue, dan verifikasi RSS. Klien/mitra tidak melihat halaman ini — Tauthub yang bertindak."

@@ -295,7 +295,7 @@
 	const truncate = (value: string, max: number) => (value.length > max ? `${value.slice(0, max)}…` : value);
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="WA Gateway"
 		description="Notifikasi WhatsApp untuk mitra dan klien lewat Fonnte: atur template pesan per event dan koneksi API-nya."

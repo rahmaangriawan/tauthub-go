@@ -57,7 +57,7 @@
 	}
 </script>
 
-<section class="app-card mx-auto flex h-[calc(100dvh-160px)] max-w-3xl flex-col">
+<section class="app-card flex h-[calc(100dvh-160px)] flex-col">
 	<header class="flex items-center gap-2.5 border-b px-5 py-3.5">
 		<div class="flex h-9 w-9 items-center justify-center rounded-xl text-primary-foreground" style="background-color: var(--primary);">
 			<Bot size={18} />

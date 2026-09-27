@@ -82,7 +82,7 @@
 </script>
 
 <main class="min-h-screen bg-background px-10 py-10 pb-16">
-	<div class="mx-auto max-w-[1200px]">
+	<div>
 		<header class="mb-8">
 			<p class="text-[11px] font-bold uppercase tracking-[0.12em] text-primary">Tauthub</p>
 			<h1 class="my-2 text-4xl font-bold tracking-tight">Dashboard Klien</h1>

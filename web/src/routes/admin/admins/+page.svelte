@@ -122,7 +122,7 @@
 	const denied = $derived(Boolean(!loading && rows.length === 0 && error.includes('Akses platform')));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader title="Admins" description="Daftar admin platform dan tambah admin baru dari email user yang sudah terdaftar.">
 		<button class="app-btn app-btn-primary" type="button" onclick={openCreate}><Plus size={16} /> Tambah admin</button>
 	</PageHeader>

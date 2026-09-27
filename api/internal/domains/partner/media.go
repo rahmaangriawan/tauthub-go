@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -38,23 +39,18 @@ const mediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.media_type, 
                 WHERE p2.media_id = m.id AND p2.status = 'published') AS total_harga
         FROM media m LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id`
 
-// categoriesCSV: string_agg dengan E'\u0001' → daftar kategori.
+// categoriesArray: kategori media dari CSV (pemisah E'\u0001'), dengan
+// pemisahan tambahan pada koma untuk data lama yang menyimpan beberapa
+// kategori dalam satu nilai (mis. "News, Ekonomi, Lifestyle").
 func categoriesArray(row rowMap) []string {
 	raw, _ := row.str("categories_csv")
 	if strings.TrimSpace(raw) == "" {
 		if cat, ok := row.str("category"); ok && cat != "" {
-			return []string{cat}
+			return catutil.Split(cat)
 		}
 		return []string{}
 	}
-	parts := strings.Split(raw, "\u0001")
-	out := []string{}
-	for _, p := range parts {
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
+	return catutil.Split(raw)
 }
 
 func (d *Deps) mediaJSON(r *http.Request, row rowMap, markupPercent float64) map[string]any {
@@ -445,15 +441,14 @@ func marshalJSONArr(items []string) string {
 }
 
 // syncMediaCategories: port syncMediaCategories — upsert kategori + link.
+// Nilai yang masih bergabung dengan koma dipisah lebih dulu supaya tersimpan
+// sebagai kategori terpisah, bukan satu label gabungan.
 func (d *Deps) syncMediaCategories(r *http.Request, mediaID string, names []string) {
 	ctx := r.Context()
 	seen := map[string]bool{}
 	ids := []string{}
-	for _, raw := range names {
-		name := strings.TrimSpace(raw)
-		if name == "" {
-			continue
-		}
+	for _, raw := range catutil.SplitAll(names) {
+		name := raw
 		normalized := strings.ToLower(name)
 		if seen[normalized] {
 			continue

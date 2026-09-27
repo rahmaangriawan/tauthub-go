@@ -230,7 +230,7 @@
 				: 'background-color: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive);';
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">Knowledge Base</h1>

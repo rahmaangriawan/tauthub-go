@@ -156,7 +156,7 @@
 	const emptyList = $derived(Boolean(!loading && rows.length === 0 && !error));
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader title="Role Admin" description="Kelola super admin dan admin biasa beserta hak akses menu-nya.">
 		<span class="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
 			<Crown size={14} /> {rows.length} admin

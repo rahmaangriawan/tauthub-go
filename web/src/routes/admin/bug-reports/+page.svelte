@@ -171,7 +171,7 @@
 		value === 'open' ? Clock : value === 'triage' ? TriangleAlert : value === 'resolved' ? CheckCircle2 : XCircle;
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader title="Bug Reports" description="Laporan dari user tentang bug atau hasil AI yang tidak akurat.">
 		<Badge tone="accent" label="{total} laporan" />
 	</PageHeader>

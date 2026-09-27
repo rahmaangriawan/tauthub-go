@@ -107,7 +107,7 @@
 	const denied = $derived(Boolean(!loading && isAccessDenied(error)));
 </script>
 
-<section class="mx-auto max-w-[1400px]">
+<section>
 	<PageHeader
 		title="Monitoring Order"
 		description="Satu baris = satu order distribusi (satu media). Nomor order per media dan nomor kampanye induknya dipakai untuk melacak masalah; detail teknis (attempts, job, retry) ada di halaman publikasi."

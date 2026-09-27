@@ -40,7 +40,7 @@
 		status === 'available' ? 'success' : status === 'paid' ? 'accent' : status === 'reversed' ? 'danger' : 'warning';
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader title="Referral" description="Audit referral · earning → commission 1% direct" />
 	<Feedback loading={!loaded} {error} loadingText="Memuat referral…" />
 

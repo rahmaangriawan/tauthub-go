@@ -260,7 +260,7 @@
 	const archivedVersions = $derived(versions.filter((v) => v.id !== activeVersion?.id));
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<PageHeader title="Taut Prompt Studio" description="Satu angle = satu prompt aktif yang bisa diedit selamanya. Hapus versi lama yang tidak dipakai untuk hemat resource.">
 		<span class="rounded-full px-2.5 py-0.5 text-xs font-medium" style="background: var(--accent); color: var(--primary);">{channels.length} channel</span>
 		<button class="app-btn app-btn-primary" onclick={() => (showChannel = true)}><Plus size={15} /> Buat Channel</button>

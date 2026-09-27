@@ -175,7 +175,7 @@
 	}
 </script>
 
-<main class="mx-auto max-w-2xl">
+<main>
 	<AgentSteps current={1} />
 
 	<div class="mt-6 flex flex-col items-center gap-4 text-center">

@@ -175,7 +175,7 @@
 		row.media_name ? `Media: ${row.media_name}` : row.partner_name ? `Mitra: ${row.partner_name}` : 'Platform (default)';
 </script>
 
-<section class="mx-auto max-w-7xl">
+<section>
 	<PageHeader
 		title="Revenue Shares"
 		description="Pembagian MARKUP Tauthub (client − harga mitra). Mitra selalu dapat harga penuhnya + share markup. Prioritas: media+partner → media → partner → default 75/25."

@@ -15,7 +15,7 @@
 	});
 </script>
 
-<section class="mx-auto max-w-4xl">
+<section>
 	<div class="app-card p-6 text-center">
 		<p class="text-sm text-muted-foreground">Mengarahkan ke Integrasi…</p>
 	</div>

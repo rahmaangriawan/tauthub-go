@@ -241,7 +241,7 @@
 		a === 'success' ? 'var(--success)' : a === 'warning' ? 'var(--warning)' : a === 'accent' ? 'var(--primary)' : 'var(--border)';
 </script>
 
-<section class="mx-auto max-w-6xl">
+<section>
 	<header class="flex flex-wrap items-center justify-between gap-3">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">Manajemen Kampanye</h1>
