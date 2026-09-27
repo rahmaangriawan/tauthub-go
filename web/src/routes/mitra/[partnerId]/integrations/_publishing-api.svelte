@@ -20,6 +20,7 @@
 		TriangleAlert,
 		X
 	} from '@lucide/svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const PAGE_SIZE = 20;
@@ -543,12 +544,16 @@
 				</label>
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Media (opsional)</span>
-					<select class="app-input mt-1 w-full" bind:value={form.media_id}>
-						<option value="">Semua media Tauthub API</option>
-						{#each media as m (m.id)}
-							<option value={m.id}>{m.name}</option>
-						{/each}
-					</select>
+					<Select
+						bind:value={form.media_id}
+						ariaLabel="Media"
+						placeholder="Semua media Tauthub API"
+						minWidth={240}
+						options={[
+							{ value: '', label: 'Semua media Tauthub API' },
+							...media.map((m) => ({ value: m.id, label: m.name }))
+						]}
+					/>
 				</label>
 				<p class="text-[11px] text-muted-foreground">
 					Kunci dibatasi ke partner ini. Untuk media tertentu, artikel ke media tersebut memakai kunci ini

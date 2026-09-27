@@ -5,6 +5,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { ExternalLink, Pencil, Plus, Search, Trash2, Upload, X } from '@lucide/svelte';
+	import Select from '$lib/components/select.svelte';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
@@ -332,14 +333,21 @@
 			<Search size={15} class="text-muted-foreground" />
 			<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari nama media atau domain…" bind:value={q} />
 		</label>
-		<select class="app-input !w-auto" bind:value={statusFilter} onchange={load}>
-			<option value="">Semua status (tanpa arsip)</option>
-			<option value="active">Aktif</option>
-			<option value="pending_review">Menunggu review</option>
-			<option value="rejected">Ditolak</option>
-			<option value="inactive">Nonaktif</option>
-			<option value="archived">Diarsipkan</option>
-		</select>
+		<Select
+			bind:value={statusFilter}
+			ariaLabel="Status media"
+			placeholder="Semua status (tanpa arsip)"
+			align="end"
+			onchange={load}
+			options={[
+				{ value: '', label: 'Semua status (tanpa arsip)' },
+				{ value: 'active', label: 'Aktif' },
+				{ value: 'pending_review', label: 'Menunggu review' },
+				{ value: 'rejected', label: 'Ditolak' },
+				{ value: 'inactive', label: 'Nonaktif' },
+				{ value: 'archived', label: 'Diarsipkan' }
+			]}
+		/>
 	</form>
 
 	{#if loading}
@@ -439,37 +447,61 @@
 					</label>
 					<label class="block">
 						<span class="text-xs font-medium text-muted-foreground">Jenis Media</span>
-						<select class="app-input mt-1 w-full" bind:value={form.media_type}>
-							<option value="mainstream">Media Mainstream</option>
-							<option value="blogger">Media Blogger</option>
-						</select>
+						<Select
+							bind:value={form.media_type}
+							ariaLabel="Jenis Media"
+							placeholder="Media Mainstream"
+							minWidth={220}
+							options={[
+								{ value: 'mainstream', label: 'Media Mainstream' },
+								{ value: 'blogger', label: 'Media Blogger' }
+							]}
+						/>
 					</label>
 					<label class="block">
 						<span class="text-xs font-medium text-muted-foreground">Platform / Integrasi</span>
-						<select class="app-input mt-1 w-full" bind:value={form.integration_type}>
-							<option value="manual">Manual</option>
-							<option value="wordpress">WordPress</option>
-							<option value="blogger">Blogspot</option>
-							<option value="custom_web">Custom Web</option>
-							<option value="tulisio_api">Tulisio API</option>
-							<option value="webhook">Webhook</option>
-							<option value="rss">RSS</option>
-						</select>
+						<Select
+							bind:value={form.integration_type}
+							ariaLabel="Platform / Integrasi"
+							placeholder="Manual"
+							minWidth={220}
+							options={[
+								{ value: 'manual', label: 'Manual' },
+								{ value: 'wordpress', label: 'WordPress' },
+								{ value: 'blogger', label: 'Blogspot' },
+								{ value: 'custom_web', label: 'Custom Web' },
+								{ value: 'tulisio_api', label: 'Tulisio API' },
+								{ value: 'webhook', label: 'Webhook' },
+								{ value: 'rss', label: 'RSS' }
+							]}
+						/>
 					</label>
 					<label class="block">
 						<span class="text-xs font-medium text-muted-foreground">Mode Publikasi</span>
-						<select class="app-input mt-1 w-full" bind:value={form.publication_mode}>
-							<option value="draft">Draf (manual, mitra terbitkan)</option>
-							<option value="publish">Terbit otomatis</option>
-							<option value="rss">RSS</option>
-						</select>
+						<Select
+							bind:value={form.publication_mode}
+							ariaLabel="Mode Publikasi"
+							placeholder="Draf (manual, mitra terbitkan)"
+							minWidth={240}
+							options={[
+								{ value: 'draft', label: 'Draf (manual, mitra terbitkan)' },
+								{ value: 'publish', label: 'Terbit otomatis' },
+								{ value: 'rss', label: 'RSS' }
+							]}
+						/>
 					</label>
 					<label class="block">
 						<span class="text-xs font-medium text-muted-foreground">Sifat Harga</span>
-						<select class="app-input mt-1 w-full" bind:value={form.pricing_type}>
-							<option value="nett">NETT</option>
-							<option value="nego">NEGO</option>
-						</select>
+						<Select
+							bind:value={form.pricing_type}
+							ariaLabel="Sifat Harga"
+							placeholder="NETT"
+							minWidth={140}
+							options={[
+								{ value: 'nett', label: 'NETT' },
+								{ value: 'nego', label: 'NEGO' }
+							]}
+						/>
 					</label>
 					<label class="block">
 						<span class="text-xs font-medium text-muted-foreground">Maks. Link per Artikel</span>
@@ -477,18 +509,30 @@
 					</label>
 					<label class="block">
 						<span class="text-xs font-medium text-muted-foreground">Panjang Artikel</span>
-						<select class="app-input mt-1 w-full" bind:value={form.word_count_mode}>
-							<option value="sesuai_permintaan">Sesuai permintaan klien (bebas)</option>
-							<option value="kata_300_700">300–700 kata</option>
-							<option value="kata_800_1500">800–1500 kata</option>
-						</select>
+						<Select
+							bind:value={form.word_count_mode}
+							ariaLabel="Panjang Artikel"
+							placeholder="Sesuai permintaan klien (bebas)"
+							minWidth={240}
+							options={[
+								{ value: 'sesuai_permintaan', label: 'Sesuai permintaan klien (bebas)' },
+								{ value: 'kata_300_700', label: '300–700 kata' },
+								{ value: 'kata_800_1500', label: '800–1500 kata' }
+							]}
+						/>
 					</label>
 					<label class="block">
 						<span class="text-xs font-medium text-muted-foreground">Label Sponsor</span>
-						<select class="app-input mt-1 w-full" bind:value={form.label_sponsor}>
-							<option value="tidak_ada">Tidak ada</option>
-							<option value="ada_sponsor">Ada sponsor</option>
-						</select>
+						<Select
+							bind:value={form.label_sponsor}
+							ariaLabel="Label Sponsor"
+							placeholder="Tidak ada"
+							minWidth={180}
+							options={[
+								{ value: 'tidak_ada', label: 'Tidak ada' },
+								{ value: 'ada_sponsor', label: 'Ada sponsor' }
+							]}
+						/>
 					</label>
 				</div>
 

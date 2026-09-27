@@ -3,6 +3,7 @@
 	// domain (cache 24 jam) dan audit kecepatan PageSpeed per URL media.
 	import { onMount } from 'svelte';
 	import { Gauge, Search } from '@lucide/svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	let loading = $state(true);
@@ -13,7 +14,7 @@
 	let busy = $state(false);
 	let audit = $state<any>(null);
 	let auditURL = $state('');
-	let auditStrategy = $state<'mobile' | 'desktop'>('mobile');
+	let auditStrategy = $state('mobile');
 
 	onMount(() => {
 		void (async () => {
@@ -155,10 +156,16 @@
 			</label>
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Perangkat</span>
-				<select class="app-input mt-1" bind:value={auditStrategy}>
-					<option value="mobile">Mobile</option>
-					<option value="desktop">Desktop</option>
-				</select>
+				<Select
+					bind:value={auditStrategy}
+					ariaLabel="Perangkat"
+					placeholder="Mobile"
+					minWidth={140}
+					options={[
+						{ value: 'mobile', label: 'Mobile' },
+						{ value: 'desktop', label: 'Desktop' }
+					]}
+				/>
 			</label>
 			<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menganalisis…' : 'Jalankan Audit'}</button>
 		</div>

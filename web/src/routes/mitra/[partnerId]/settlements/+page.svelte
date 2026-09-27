@@ -3,6 +3,7 @@
 	// (settlement) beserta status, nomor invoice, biaya transfer, dan bukti bayar.
 	import { onMount } from 'svelte';
 	import { ExternalLink, Receipt } from '@lucide/svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	let loading = $state(true);
@@ -44,14 +45,21 @@
 				Riwayat penarikan dana Anda. Minimal penarikan {rp(data?.minimum_withdraw_idr ?? 0)}.
 			</p>
 		</div>
-		<select class="app-input !w-auto" bind:value={statusFilter} onchange={load}>
-			<option value="">Semua status</option>
-			<option value="pending">Menunggu review</option>
-			<option value="approved">Disetujui</option>
-			<option value="processing">Diproses</option>
-			<option value="paid">Dibayar</option>
-			<option value="failed">Gagal</option>
-		</select>
+		<Select
+			bind:value={statusFilter}
+			ariaLabel="Status penarikan"
+			placeholder="Semua status"
+			align="end"
+			onchange={load}
+			options={[
+				{ value: '', label: 'Semua status' },
+				{ value: 'pending', label: 'Menunggu review' },
+				{ value: 'approved', label: 'Disetujui' },
+				{ value: 'processing', label: 'Diproses' },
+				{ value: 'paid', label: 'Dibayar' },
+				{ value: 'failed', label: 'Gagal' }
+			]}
+		/>
 	</header>
 
 	{#if loading}

@@ -4,6 +4,7 @@
 	// salinan Cloudflare Worker, dan diagnostik terakhir.
 	import { onMount } from 'svelte';
 	import { Copy, RefreshCw, Server, ShieldCheck, Trash2, Zap } from '@lucide/svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	let loading = $state(true);
@@ -106,10 +107,17 @@
 		<p class="mt-6 text-sm text-muted-foreground">Memuat media…</p>
 	{:else}
 		<div class="app-card mt-4 flex flex-wrap items-center gap-2 p-3">
-			<select class="app-input !w-auto min-w-[240px]" bind:value={selectedMedia} onchange={loadCrawler}>
-				<option value="">Pilih media…</option>
-				{#each media as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
-			</select>
+			<Select
+				bind:value={selectedMedia}
+				ariaLabel="Pilih media"
+				placeholder="Pilih media…"
+				minWidth={240}
+				onchange={loadCrawler}
+				options={[
+					{ value: '', label: 'Pilih media…' },
+					...media.map((m) => ({ value: m.id, label: m.name }))
+				]}
+			/>
 			{#if selectedMedia}
 				<button class="app-btn app-btn-soft" disabled={busy} onclick={() => action('test')}><Zap size={14} /> Uji Koneksi</button>
 			{/if}

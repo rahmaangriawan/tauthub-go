@@ -4,6 +4,7 @@
 	// WordPress REST API; daftar media diambil dari media mitra ber-website_url.
 	import { onMount } from 'svelte';
 	import { Info, Plug, Plus, Trash2 } from '@lucide/svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, authErrorMessage, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const APP_PASSWORD_STEPS = [
@@ -211,12 +212,21 @@
 
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Pilih media</span>
-					<select class="app-input mt-1 w-full" required value={form.website_id} onchange={(e) => pickMedia(e.currentTarget.value)}>
-						<option value="" disabled>{mediaOptions.length > 0 ? 'Pilih media yang akan dikoneksikan' : 'Belum ada media dengan website URL'}</option>
-						{#each mediaOptions as media (media.id)}
-							<option value={media.id}>{media.name} — {media.website_url}</option>
-						{/each}
-					</select>
+					<Select
+						ariaLabel="Pilih media"
+						placeholder={mediaOptions.length > 0 ? 'Pilih media yang akan dikoneksikan' : 'Belum ada media dengan website URL'}
+						minWidth={260}
+						value={form.website_id}
+						onchange={(v) => pickMedia(v)}
+						options={[
+							{
+								value: '',
+								label: mediaOptions.length > 0 ? 'Pilih media yang akan dikoneksikan' : 'Belum ada media dengan website URL',
+								disabled: true
+							},
+							...mediaOptions.map((media) => ({ value: media.id, label: `${media.name} — ${media.website_url}` }))
+						]}
+					/>
 					<p class="mt-1 text-[11px] text-muted-foreground">Daftar diambil dari Media Anda. URL WordPress terisi otomatis.</p>
 				</label>
 

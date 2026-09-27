@@ -4,6 +4,7 @@
 	// media (verifikasi kepemilikan domain).
 	import { onMount } from 'svelte';
 	import { ExternalLink, Search, TriangleAlert } from '@lucide/svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	type View = 'publications' | 'domains';
@@ -101,13 +102,20 @@
 					<Search size={15} class="text-muted-foreground" />
 					<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari judul, media, atau URL…" bind:value={q} />
 				</label>
-				<select class="app-input !w-auto" bind:value={linkState} onchange={loadPublications}>
-					<option value="">Bermasalah (404 / tidak terjangkau)</option>
-					<option value="all">Semua status</option>
-					<option value="gone">Hilang (404)</option>
-					<option value="unreachable">Tidak terjangkau</option>
-					<option value="ok">Normal</option>
-				</select>
+				<Select
+					bind:value={linkState}
+					ariaLabel="Status tautan"
+					placeholder="Bermasalah (404 / tidak terjangkau)"
+					align="end"
+					onchange={loadPublications}
+					options={[
+						{ value: '', label: 'Bermasalah (404 / tidak terjangkau)' },
+						{ value: 'all', label: 'Semua status' },
+						{ value: 'gone', label: 'Hilang (404)' },
+						{ value: 'unreachable', label: 'Tidak terjangkau' },
+						{ value: 'ok', label: 'Normal' }
+					]}
+				/>
 			</form>
 
 			<div class="app-card mt-3 overflow-x-auto">
@@ -156,13 +164,19 @@
 			</div>
 		{:else}
 			<div class="app-card mt-3 flex flex-wrap items-center gap-2 p-3">
-				<select class="app-input !w-auto" bind:value={health} onchange={loadDomains}>
-					<option value="">Perlu perhatian (belum diperiksa / token hilang / down)</option>
-					<option value="live">Aktif</option>
-					<option value="unreachable">Tidak terjangkau</option>
-					<option value="unknown">Belum diperiksa</option>
-					<option value="token_missing">Token hilang</option>
-				</select>
+				<Select
+					bind:value={health}
+					ariaLabel="Kesehatan domain"
+					placeholder="Perlu perhatian (belum diperiksa / token hilang / down)"
+					onchange={loadDomains}
+					options={[
+						{ value: '', label: 'Perlu perhatian (belum diperiksa / token hilang / down)' },
+						{ value: 'live', label: 'Aktif' },
+						{ value: 'unreachable', label: 'Tidak terjangkau' },
+						{ value: 'unknown', label: 'Belum diperiksa' },
+						{ value: 'token_missing', label: 'Token hilang' }
+					]}
+				/>
 			</div>
 
 			<div class="app-card mt-3 overflow-x-auto">

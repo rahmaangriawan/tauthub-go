@@ -5,6 +5,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { Check, ExternalLink, Link2, Search, Sparkles, X, XCircle } from '@lucide/svelte';
+	import Select from '$lib/components/select.svelte';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
@@ -244,16 +245,23 @@
 			<Search size={15} class="text-muted-foreground" />
 			<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari judul, media, atau nomor order…" bind:value={q} />
 		</label>
-		<select class="app-input !w-auto" bind:value={statusFilter} onchange={load}>
-			<option value="">Semua status aktif</option>
-			<option value="waiting_partner">Menunggu persetujuan</option>
-			<option value="partner_approved">Disetujui</option>
-			<option value="partner_rejected">Ditolak</option>
-			<option value="queued">Antrean</option>
-			<option value="processing">Diproses</option>
-			<option value="published">Terbit</option>
-			<option value="failed">Gagal</option>
-		</select>
+		<Select
+			bind:value={statusFilter}
+			ariaLabel="Status publikasi"
+			placeholder="Semua status aktif"
+			align="end"
+			onchange={load}
+			options={[
+				{ value: '', label: 'Semua status aktif' },
+				{ value: 'waiting_partner', label: 'Menunggu persetujuan' },
+				{ value: 'partner_approved', label: 'Disetujui' },
+				{ value: 'partner_rejected', label: 'Ditolak' },
+				{ value: 'queued', label: 'Antrean' },
+				{ value: 'processing', label: 'Diproses' },
+				{ value: 'published', label: 'Terbit' },
+				{ value: 'failed', label: 'Gagal' }
+			]}
+		/>
 	</form>
 
 	{#if loading}

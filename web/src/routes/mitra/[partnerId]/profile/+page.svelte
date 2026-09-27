@@ -4,6 +4,7 @@
 	// dan sindikasi RSS (pengaktifan hanya oleh admin).
 	import { onMount } from 'svelte';
 	import { FileText, Save, Trash2, Upload } from '@lucide/svelte';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	let loading = $state(true);
@@ -157,11 +158,17 @@
 				</label>
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Metode Pencairan</span>
-					<select class="app-input mt-1 w-full" bind:value={form.payout_type}>
-						<option value="bank">Transfer Bank</option>
-						<option value="ewallet">E-Wallet</option>
-						<option value="manual">Manual</option>
-					</select>
+					<Select
+						bind:value={form.payout_type}
+						ariaLabel="Metode Pencairan"
+						placeholder="Transfer Bank"
+						minWidth={200}
+						options={[
+							{ value: 'bank', label: 'Transfer Bank' },
+							{ value: 'ewallet', label: 'E-Wallet' },
+							{ value: 'manual', label: 'Manual' }
+						]}
+					/>
 				</label>
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Nama Bank / E-Wallet</span>
