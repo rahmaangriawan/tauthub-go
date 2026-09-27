@@ -127,6 +127,7 @@ func run() error {
 			authed.Put("/brands/{brandId}/editorial-rules", brands.UpdateRules)
 			authed.Get("/brands/{brandId}/configuration", brands.Configuration)
 			authed.Get("/brands/{brandId}/dashboard", brands.Dashboard)
+			authed.Get("/brands/{brandId}/overview", brands.Overview)
 			authed.Post("/brands/{brandId}/prompts", brands.CreatePrompt)
 			authed.Post("/brands/{brandId}/prompts/{promptId}/activate", brands.ActivatePrompt)
 			authed.Get("/brands/{brandId}/members", brands.MembersList)

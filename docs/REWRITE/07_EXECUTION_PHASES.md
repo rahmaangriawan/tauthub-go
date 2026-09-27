@@ -36,7 +36,7 @@
 
 ---
 
-## Fase 2 — Brands & Workspace — **SEBAGIAN BESAR SELESAI** (2026-09-27: 13/17 endpoint core ✅ — list/create/detail/activate/profile/voice/rules/configuration/dashboard/usage*/prompts/members lengkap; UI daftar brand + dashboard + profil brand ✅. Deferred ke fase domain terkait: overview (fase 7-8), analytics + analyze + pr-calculator + ga4 (fase 10), assets. *usage port penuh agregasi model_usage_events)
+## Fase 2 — Brands & Workspace — **SELESAI** (2026-09-27: 14/17 endpoint ✅ — list/create/detail/activate/profile/voice/rules/configuration/dashboard/usage/prompts/members + **overview read-only** (wallet/campaigns/intakes/jobs/publications/prScoreData/trends 7 hari); UI: shell klien (sidebar grup nav + topbar kredit + user chip) + Beranda (hero, KPI wallet, AI Insights, Akses Cepat Keuangan, antrean publikasi, panduan) + placeholder section bertanda fase. Sisa: analytics + analyze + pr-calculator + ga4 (fase 10), assets)
 
 **API** (17 core + 3 members): brands CRUD, activate, profile/voice/editorial-rules, prompts (+activate), configuration, overview/dashboard/analytics/usage, analyze/{topic}, assets, members.
 **Tabel**: brands, brand_memberships, brand_profiles, voice_profiles, editorial_rule_sets, master_prompt_versions, websites, brand_ai_quotas.

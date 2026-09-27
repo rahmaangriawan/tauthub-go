@@ -58,7 +58,7 @@
 | `/v1/brands/{brandId}/dashboard` | GET | Dashboard workspace | [x] |
 | `/v1/brands/{brandId}/editorial-rules` | PUT | Update rule set editorial | [x] |
 | `/v1/brands/{brandId}/ga4` | GET | Konfig & data GA4 brand | [ ] |
-| `/v1/brands/{brandId}/overview` | GET | Ringkasan overview | [ ] |
+| `/v1/brands/{brandId}/overview` | GET | Ringkasan overview | [x] |
 | `/v1/brands/{brandId}/pr-calculator` | GET | Data PR calculator | [ ] |
 | `/v1/brands/{brandId}/profile` | PUT | Update brand profile | [x] |
 | `/v1/brands/{brandId}/usage` | GET | Usage AI/quota | [x] |
