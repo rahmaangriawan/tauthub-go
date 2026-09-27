@@ -27,9 +27,9 @@ import (
 	knowledgedomain "github.com/rahmaangriawan/tauthub-go/internal/domains/knowledge"
 	partnerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/partner"
 	platformdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/platform"
+	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobwire"
-	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
 func main() {
@@ -94,6 +94,20 @@ func run() error {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "db": "ok", "app": cfg.AppName, "version": cfg.Version})
 	})
 
+	// Deps platform dipakai juga oleh route root (/t/{code} short link), jadi
+	// dibuat di level ini lalu dipakai ulang di dalam grup /v1.
+	platformDeps := &platformdomain.Deps{Pool: database.Pool, Cfg: cfg, Admin: &adminshared.Deps{Pool: database.Pool, Cfg: cfg}}
+	partnerDeps := &partnerdomain.Deps{Pool: database.Pool, Cfg: cfg}
+
+	// Short link distribusi: /t/{code} → 301 ke URL tujuan sambil mencatat
+	// tracking_link_click. Parity app/t/[code]/route.ts (go.tulisio.id/{code}).
+	r.Get("/t/{code}", platformDeps.TrackingRedirect)
+
+	// Callback OAuth Google di root (redirect URI terdaftar di Google Console):
+	// /api/blogger/callback (Blogger) dan /api/gsc/callback (Search Console).
+	r.Get("/api/blogger/callback", partnerDeps.BloggerCallback)
+	r.Get("/api/gsc/callback", partnerDeps.GSCCallback)
+
 	// /v1 — CORS allowlist (port proxy.ts) + route per domain.
 	r.Route("/v1", func(v1 chi.Router) {
 		v1.Use(httpx.CORSMiddleware)
@@ -120,8 +134,6 @@ func run() error {
 		clientRead := &clientreaddomain.Deps{Pool: database.Pool}
 		tautDeps := &clienttautdomain.Deps{Pool: database.Pool, Cfg: cfg}
 		brandFlowDeps := &brandflowdomain.Deps{Pool: database.Pool, Cfg: cfg}
-		platformDeps := &platformdomain.Deps{Pool: database.Pool, Cfg: cfg, Admin: &adminshared.Deps{Pool: database.Pool, Cfg: cfg}}
-		partnerDeps := &partnerdomain.Deps{Pool: database.Pool, Cfg: cfg}
 
 		// Dispatcher job bersama (dipakai /v1/internal/jobs dan cmd/worker).
 		jobwire.Register(database.Pool, cfg)

@@ -1339,8 +1339,62 @@ func (d *Deps) MediaBlogger(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"success": true})
 		return
 	}
-	// Google OAuth platform belum dikonfigurasi di repo Go (fase integrasi).
-	httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi Google OAuth belum diatur Admin.")
+	cfg, cfgErr := d.loadGSCPlatformConfig(r)
+	if cfgErr != nil || cfg.ClientID == "" || cfg.ClientSecret == "" {
+		httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi Google OAuth belum diatur Admin.")
+		return
+	}
+	var body struct {
+		BlogID   string `json:"blog_id"`
+		BlogName string `json:"blog_name"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	blogID := strings.TrimSpace(body.BlogID)
+	blogName := strings.TrimSpace(body.BlogName)
+	if blogID == "" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "blog_id wajib diisi.")
+		return
+	}
+	media, mErr := d.bloggerMedia(r, partner.ID, mediaID)
+	if mErr != nil {
+		d.writeErr(w, mErr)
+		return
+	}
+	cred := d.bloggerResolveTarget(r, media, cfg.ClientID, cfg.ClientSecret)
+	if cred == nil {
+		httpx.Error(w, http.StatusConflict, "Kredensial Blogger tidak valid — hubungkan ulang.")
+		return
+	}
+	blogs, bErr := bloggerListBlogs(cred.AccessToken)
+	if bErr != nil {
+		httpx.Error(w, http.StatusBadGateway, bErr.Error())
+		return
+	}
+	var found *bloggerBlog
+	for i := range blogs {
+		if blogs[i].ID == blogID {
+			found = &blogs[i]
+			break
+		}
+	}
+	if found == nil {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Blog tidak ditemukan di akun Google yang terhubung.")
+		return
+	}
+	finalName := found.Name
+	if finalName == "" {
+		finalName = blogName
+	}
+	if finalName == "" {
+		finalName = found.ID
+	}
+	if err := d.exec(r.Context(),
+		"UPDATE media SET blogger_blog_id = $1, blogger_blog_name = $2, blogger_status = 'connected', blogger_last_test_at = NOW(), blogger_last_test_message = 'Terhubung', updated_at = NOW() WHERE id = $3",
+		found.ID, finalName, mediaID); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "blog_id": found.ID, "blog_name": finalName})
 }
 
 func (d *Deps) MediaBloggerBlogs(w http.ResponseWriter, r *http.Request) {
@@ -1348,11 +1402,27 @@ func (d *Deps) MediaBloggerBlogs(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := d.bloggerMedia(r, partner.ID, chiParam(r, "mediaId")); err != nil {
+	media, err := d.bloggerMedia(r, partner.ID, chiParam(r, "mediaId"))
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi Google OAuth belum diatur Admin.")
+	cfg, cfgErr := d.loadGSCPlatformConfig(r)
+	if cfgErr != nil || cfg.ClientID == "" || cfg.ClientSecret == "" {
+		httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi Google OAuth belum diatur Admin.")
+		return
+	}
+	cred := d.bloggerResolveTarget(r, media, cfg.ClientID, cfg.ClientSecret)
+	if cred == nil {
+		httpx.Error(w, http.StatusConflict, "Kredensial Blogger tidak valid — hubungkan ulang.")
+		return
+	}
+	blogs, bErr := bloggerListBlogs(cred.AccessToken)
+	if bErr != nil {
+		httpx.Error(w, http.StatusBadGateway, bErr.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"blogs": blogs})
 }
 
 func (d *Deps) MediaBloggerConnect(w http.ResponseWriter, r *http.Request) {
@@ -1360,11 +1430,32 @@ func (d *Deps) MediaBloggerConnect(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := d.bloggerMedia(r, partner.ID, chiParam(r, "mediaId")); err != nil {
+	mediaID := chiParam(r, "mediaId")
+	if _, err := d.bloggerMedia(r, partner.ID, mediaID); err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi Google OAuth belum diatur Admin. Hubungi Admin untuk mengisi Client ID/Secret di /admin/integrations (tab GSC).")
+	cfg, cfgErr := d.loadGSCPlatformConfig(r)
+	if cfgErr != nil || cfg.ClientID == "" || cfg.ClientSecret == "" {
+		httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi Google OAuth belum diatur Admin. Hubungi Admin untuk mengisi Client ID/Secret di /admin/integrations (tab GSC).")
+		return
+	}
+	relayURI := d.bloggerRedirectURI(r)
+	state := bloggerRandomToken(16)
+	verifier := bloggerRandomToken(32)
+
+	// Bersihkan state lama partner ini + state kedaluwarsa (parity).
+	_ = d.exec(r.Context(),
+		"DELETE FROM blogger_oauth_states WHERE partner_id = $1 OR created_at < NOW() - INTERVAL '30 minutes'", partner.ID)
+	if err := d.exec(r.Context(),
+		"INSERT INTO blogger_oauth_states (id, partner_id, media_id, state, code_verifier) VALUES (gen_random_uuid(), $1, $2, $3, $4)",
+		partner.ID, mediaID, state, verifier); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"url": bloggerBuildAuthURL(cfg.ClientID, relayURI, state, bloggerPKCEChallenge(verifier)),
+	})
 }
 
 func (d *Deps) MediaBloggerTest(w http.ResponseWriter, r *http.Request) {
@@ -1379,15 +1470,34 @@ func (d *Deps) MediaBloggerTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = d.exec(r.Context(), "UPDATE media SET blogger_status = 'testing', updated_at = NOW() WHERE id = $1", mediaID)
-	message := "Blogger terhubung"
+	message := "Koneksi Blogger gagal."
 	okResult := false
-	if !media.has("blogger_blog_id") {
+
+	blogID := media.strOr("blogger_blog_id", "")
+	if blogID == "" {
 		message = "Belum ada blog dipilih — hubungkan dan pilih blog terlebih dahulu."
-	} else if !media.has("blogger_credentials_sealed") {
+	} else if strings.TrimSpace(media.strOr("blogger_credentials_sealed", "")) == "" {
 		message = "Kredensial Blogger belum tersimpan — hubungkan terlebih dahulu."
+	} else if cfg, cfgErr := d.loadGSCPlatformConfig(r); cfgErr != nil || cfg.ClientID == "" || cfg.ClientSecret == "" {
+		message = "Konfigurasi Google OAuth belum diatur Admin."
+	} else if cred := d.bloggerResolveTarget(r, media, cfg.ClientID, cfg.ClientSecret); cred == nil {
+		message = "Kredensial Blogger tidak valid — perlu hubungkan ulang."
+	} else if blogs, bErr := bloggerListBlogs(cred.AccessToken); bErr != nil {
+		message = bErr.Error()
 	} else {
-		// Verifikasi ke Blogger API butuh OAuth platform (fase integrasi).
-		message = "Koneksi Blogger gagal."
+		found := false
+		for _, b := range blogs {
+			if b.ID == blogID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			message = "Blog tidak ditemukan atau tidak dapat diakses dengan akun ini."
+		} else {
+			okResult = true
+			message = "Blogger terhubung"
+		}
 	}
 	status := "failed"
 	if okResult {

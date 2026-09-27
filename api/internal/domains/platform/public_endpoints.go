@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -377,8 +378,10 @@ func (d *Deps) recordCallbackLog(ctx context.Context, keyID, publicationID, outc
 
 // ---------- POST /v1/tracking/events ----------
 
+// trackingEventTypes: salinan persis TRACKING_EVENT_TYPES (db/models.ts) dan
+// CHECK constraint tracking_events.event_type.
 var trackingEventTypes = []string{
-	"impression", "view", "read", "scroll", "click", "conversion",
+	"article_view", "article_scroll", "outbound_click", "cta_click", "tracking_link_click",
 }
 
 // TrackingEventCreate: catat event tracking artikel (publik, rate limit per IP).
@@ -403,7 +406,7 @@ func (d *Deps) TrackingEventCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	eventType, present := strField(body, "event_type")
 	if !present {
-		writeErr(w, d, errUnprocessable("Invalid input: expected \"impression\"|\"view\"|\"read\"|\"scroll\"|\"click\"|\"conversion\", received undefined"))
+		writeErr(w, d, errUnprocessable(mpZEnum(trackingEventTypes)))
 		return
 	}
 	if !ptContains(trackingEventTypes, eventType) {
@@ -473,17 +476,96 @@ func (d *Deps) TrackingEventCreate(w http.ResponseWriter, r *http.Request) {
 	if metadata != nil {
 		metadataJSON = marshalJSONAny(metadata)
 	}
-	if err := d.exec(ctx, `
-		INSERT INTO tracking_events (id, link_id, publication_id, campaign_id, brand_id, event_type,
-		                             session_id, ip_address, user_agent, referrer, url, metadata)
-		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)`,
-		linkID, nullIfEmpty(publicationID), campaignID, brandID, eventType,
-		nullIfEmpty(sessionID), nullIfEmpty(ip), nullIfEmpty(truncateBytesStr(r.Header.Get("user-agent"), 300)),
-		nullIfEmpty(referrer), nullIfEmpty(pageURL), metadataJSON); err != nil {
+	in := trackingEventInput{
+		EventType: eventType, SessionID: sessionID, IPAddress: ip,
+		UserAgent: r.Header.Get("user-agent"), Referrer: referrer, URL: pageURL,
+	}
+	if s, ok := linkID.(string); ok {
+		in.LinkID = s
+	}
+	in.PublicationID = publicationID
+	if s, ok := campaignID.(string); ok {
+		in.CampaignID = s
+	}
+	if s, ok := brandID.(string); ok {
+		in.BrandID = s
+	}
+	if m, ok := metadata.(map[string]any); ok {
+		in.Metadata = m
+	}
+	// Simpan mentah + rollup analytics_daily + mirror GA4 (best-effort).
+	if err := d.recordTrackingEvent(ctx, in); err != nil {
 		writeErr(w, d, err)
 		return
 	}
+	_ = metadataJSON
 	writeJSON(w, http.StatusCreated, map[string]any{"ok": true})
+}
+
+// TrackingRedirect: GET /t/{code} — short link distribusi; catat
+// tracking_link_click lalu 301 ke destination (atau published_url). Kode
+// tak dikenal / nonaktif → 404 tanpa membocorkan keberadaan link.
+// Parity app/t/[code]/route.ts.
+func (d *Deps) TrackingRedirect(w http.ResponseWriter, r *http.Request) {
+	code := chiParam(r, "code")
+	if code == "" {
+		http.NotFound(w, r)
+		return
+	}
+	link, err := d.queryRow(r.Context(), `
+		SELECT t.id, t.publication_id, t.campaign_id, t.brand_id, t.destination_url, t.status,
+		       p.published_url
+		FROM tracking_links t
+		LEFT JOIN publications p ON p.id = t.publication_id
+		WHERE t.code = $1 LIMIT 1`, code)
+	if err != nil || link == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if status := link.strOr("status", ""); status != "" && status != "active" {
+		http.NotFound(w, r)
+		return
+	}
+	destination := strings.TrimSpace(link.strOr("destination_url", ""))
+	if destination == "" {
+		destination = strings.TrimSpace(link.strOr("published_url", ""))
+	}
+	if destination == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Fire-and-forget: logging klik tidak boleh menggagalkan redirect.
+	in := trackingEventInput{
+		LinkID:        link.strOr("id", ""),
+		PublicationID: link.strOr("publication_id", ""),
+		CampaignID:    link.strOr("campaign_id", ""),
+		BrandID:       link.strOr("brand_id", ""),
+		EventType:     "tracking_link_click",
+		SessionID:     strings.TrimSpace(r.Header.Get("x-tracking-session")),
+		IPAddress:     trackingClientIP(r),
+		UserAgent:     r.Header.Get("user-agent"),
+		Referrer:      r.Header.Get("referer"),
+		URL:           destination,
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if recErr := d.recordTrackingEvent(ctx, in); recErr != nil {
+			slog.Warn("[tracking] logging klik gagal", "code", code, "err", recErr)
+		}
+	}()
+
+	// Redirect permanen (301) — short link hasil distribusi tidak berubah tujuan.
+	http.Redirect(w, r, destination, http.StatusMovedPermanently)
+}
+
+// trackingClientIP: IP pengirim event (x-forwarded-for lalu x-real-ip).
+func trackingClientIP(r *http.Request) string {
+	if fwd := strings.TrimSpace(strings.Split(r.Header.Get("x-forwarded-for"), ",")[0]); fwd != "" {
+		return fwd
+	}
+	return strings.TrimSpace(r.Header.Get("x-real-ip"))
 }
 
 // ---------- helper kecil ----------
