@@ -12,6 +12,7 @@
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { swr } from '$lib/swr-cache.svelte';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
+	import { setBrandUrlId } from '$lib/brand-url.svelte';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
@@ -59,7 +60,12 @@
 	);
 	const saldo = $derived(overview.data?.wallet?.available_tc ?? 0);
 
-	const base = $derived(`/klien/${brandId}`);
+	// Link internal memakai public_id (6 karakter) seperti app lama; UUID tetap
+	// diterima di route sehingga deep-link lama tidak rusak.
+	const brandUrlId = $derived(overview.data?.public_id ?? brandId);
+	$effect(() => setBrandUrlId(brandUrlId));
+
+	const base = $derived(`/klien/${brandUrlId}`);
 	const groups = $derived([
 		{
 			label: 'MENU UTAMA',

@@ -3,9 +3,12 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { ExternalLink, Search, X } from '@lucide/svelte';
+	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const brandId = $derived(page.params.brandId as string);
+	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
+	const brandUrl = $derived(getBrandUrlId() || brandId);
 
 	type Media = {
 		id: string; name: string; category: string | null; website_url: string | null;

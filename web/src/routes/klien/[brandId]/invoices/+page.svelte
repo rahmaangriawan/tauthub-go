@@ -3,9 +3,12 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { Receipt } from '@lucide/svelte';
+	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const brandId = $derived(page.params.brandId as string);
+	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
+	const brandUrl = $derived(getBrandUrlId() || brandId);
 	type Invoice = {
 		id: string; number: string; status: string; amount: number; campaign_name: string | null;
 		issued_at: string | null; due_at: string | null; paid_at: string | null; notes: string | null;

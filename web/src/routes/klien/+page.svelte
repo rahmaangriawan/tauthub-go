@@ -131,7 +131,7 @@
 			{#each brandList.data ?? [] as brand (brand.id)}
 				<a
 					class="app-card p-4 transition-colors hover:bg-accent"
-					href={`/klien/${brand.id}`}
+					href={`/klien/${brand.public_id ?? brand.id}`}
 				>
 					<div class="flex items-center justify-between">
 						<span class="font-medium">{brand.name}</span>

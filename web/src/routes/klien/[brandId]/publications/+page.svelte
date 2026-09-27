@@ -3,9 +3,12 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { ExternalLink, Inbox } from '@lucide/svelte';
+	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const brandId = $derived(page.params.brandId as string);
+	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
+	const brandUrl = $derived(getBrandUrlId() || brandId);
 	type Publication = {
 		id: string; document_id: string; media_id: string; status: string; client_price: number;
 		publish_status: string; published_at: string | null; published_url: string | null;
@@ -83,7 +86,7 @@
 					{#each items as pub (pub.id)}
 						<tr class="border-b last:border-0">
 							<td class="px-4 py-2.5">
-								<a class="max-w-[260px] truncate font-medium hover:underline" href={`/klien/${brandId}/editor/${pub.document_id}`}>
+								<a class="max-w-[260px] truncate font-medium hover:underline" href={`/klien/${brandUrl}/editor/${pub.document_id}`}>
 									{pub.document_title ?? 'Tanpa judul'}
 								</a>
 							</td>

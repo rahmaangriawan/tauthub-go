@@ -3,6 +3,7 @@
 	// Chat UI menyusul fase 4 bersama route chat (dependensi runContentJob).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	type Collection = { id: string; name: string; description: string | null; created_at: string };
@@ -17,6 +18,8 @@
 	};
 
 	const brandId = $derived(page.params.brandId as string);
+	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
+	const brandUrl = $derived(getBrandUrlId() || brandId);
 
 	let collections = $state<Collection[]>([]);
 	let activeCollection = $state<string | null>(null);
@@ -140,7 +143,7 @@
 </script>
 
 <section class="mx-auto max-w-4xl px-4 py-8">
-	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandId}`}>← Dashboard</a>
+	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandUrl}`}>← Dashboard</a>
 	<h1 class="mt-2 text-2xl font-semibold tracking-tight">Knowledge Base</h1>
 
 	<form class="mt-4 flex gap-2" onsubmit={createCollection}>

@@ -3,9 +3,12 @@
 	// status review. Diff/komentar/restore menyusul bersama fase review.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const brandId = $derived(page.params.brandId as string);
+	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
+	const brandUrl = $derived(getBrandUrlId() || brandId);
 	const documentId = $derived(page.params.documentId as string);
 
 	type Version = {
@@ -93,7 +96,7 @@
 </script>
 
 <section class="mx-auto max-w-6xl">
-	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandId}/generate`}>← Generate</a>
+	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandUrl}/generate`}>← Generate</a>
 	{#if loading}
 		<p class="mt-4 text-sm text-muted-foreground">Memuat dokumen…</p>
 	{:else if doc}

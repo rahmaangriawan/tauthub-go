@@ -5,12 +5,15 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { KeyRound, ShieldCheck, UserCircle, Bell } from '@lucide/svelte';
+	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import {
 		apiRequest, readApiError, ensureValidSession, getStoredSession,
 		updateStoredUser, AUTH_EXPIRED_EVENT, type AuthUser
 	} from '$lib/auth';
 
 	const brandId = $derived(page.params.brandId as string);
+	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
+	const brandUrl = $derived(getBrandUrlId() || brandId);
 
 	let user = $state<AuthUser | null>(null);
 	let brand = $state<any>(null);

@@ -6,10 +6,13 @@
 		ArrowUpRight, BookOpen, Coins, CreditCard, Eye, FileText, Lock, Megaphone,
 		MousePointerClick, Receipt, ShieldCheck, Sparkles, Wallet
 	} from '@lucide/svelte';
+	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { swr } from '$lib/swr-cache.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
+	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
+	const brandUrl = $derived(getBrandUrlId() || brandId);
 
 	const overview = swr<any>(
 		() => (getStoredSession() ? `/v1/brands/${brandId}/overview` : null),
@@ -76,14 +79,14 @@
 				</p>
 				<div class="mt-5 flex flex-wrap gap-2.5">
 					<a
-						href={`/klien/${brandId}/media`}
+						href={`/klien/${brandUrl}/media`}
 						class="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold"
 						style="color: var(--primary);"
 					>
 						<Megaphone size={15} /> Buka Katalog Media
 					</a>
 					<a
-						href={`/klien/${brandId}/campaigns`}
+						href={`/klien/${brandUrl}/campaigns`}
 						class="inline-flex items-center gap-2 rounded-lg border border-white/45 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
 					>
 						<Sparkles size={15} /> Buat Kampanye
@@ -153,12 +156,12 @@
 			<p class="text-2xl font-bold tabular-nums">
 				{fmtID(saldo)} <span class="text-sm font-medium text-muted-foreground">Kredit</span>
 			</p>
-			<a href={`/klien/${brandId}/credits`} class="app-btn app-btn-primary mt-3 w-full">Top Up Saldo</a>
+			<a href={`/klien/${brandUrl}/credits`} class="app-btn app-btn-primary mt-3 w-full">Top Up Saldo</a>
 			<div class="mt-2.5 grid grid-cols-2 gap-2 text-xs font-medium">
-				<a class="app-btn app-btn-soft !text-xs" href={`/klien/${brandId}/credits`}>
+				<a class="app-btn app-btn-soft !text-xs" href={`/klien/${brandUrl}/credits`}>
 					<Receipt size={13} /> Riwayat
 				</a>
-				<a class="app-btn app-btn-soft !text-xs" href={`/klien/${brandId}/invoices`}>
+				<a class="app-btn app-btn-soft !text-xs" href={`/klien/${brandUrl}/invoices`}>
 					<FileText size={13} /> Klaim PPh 23
 				</a>
 			</div>
@@ -169,7 +172,7 @@
 		<div class="app-card p-5 lg:col-span-2">
 			<div class="flex items-center justify-between gap-3">
 				<h2 class="font-semibold">Antrean &amp; Status Publikasi Terkini</h2>
-				<a class="inline-flex items-center gap-1 text-xs font-medium" style="color: var(--primary);" href={`/klien/${brandId}/publications`}>
+				<a class="inline-flex items-center gap-1 text-xs font-medium" style="color: var(--primary);" href={`/klien/${brandUrl}/publications`}>
 					Lihat semua <ArrowUpRight size={13} />
 				</a>
 			</div>
@@ -211,7 +214,7 @@
 							<tr>
 								<td colspan="4" class="py-8 text-center text-muted-foreground">
 									Belum ada publikasi. Antrean terisi setelah kampanye berjalan.
-									<a class="ml-1 underline" href={`/klien/${brandId}/campaigns`}>Buat kampanye</a>
+									<a class="ml-1 underline" href={`/klien/${brandUrl}/campaigns`}>Buat kampanye</a>
 								</td>
 							</tr>
 						{/each}

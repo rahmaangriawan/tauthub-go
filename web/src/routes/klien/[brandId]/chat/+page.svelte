@@ -4,9 +4,12 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { Bot, Send, Sparkles, User } from '@lucide/svelte';
+	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const brandId = $derived(page.params.brandId as string);
+	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
+	const brandUrl = $derived(getBrandUrlId() || brandId);
 
 	type Msg = { role: 'user' | 'ai'; text: string; actions?: Array<{ label: string; href: string }> };
 

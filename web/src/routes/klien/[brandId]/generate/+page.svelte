@@ -2,9 +2,12 @@
 	// Fase 4: halaman Generate + daftar job (port section Generate minimal).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const brandId = $derived(page.params.brandId as string);
+	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
+	const brandUrl = $derived(getBrandUrlId() || brandId);
 
 	type Job = {
 		id: string;
@@ -174,7 +177,7 @@
 									{job.status}
 								</span>
 								{#if job.document_id}
-									<a class="text-xs underline" href={`/klien/${brandId}/editor/${job.document_id}`}>Buka editor</a>
+									<a class="text-xs underline" href={`/klien/${brandUrl}/editor/${job.document_id}`}>Buka editor</a>
 								{/if}
 								{#if job.status === 'waiting_outline_approval'}
 									<button class="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground" disabled={busy} onclick={() => approveOutline(job.id)}>

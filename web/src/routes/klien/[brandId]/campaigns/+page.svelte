@@ -3,9 +3,12 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { Megaphone } from '@lucide/svelte';
+	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const brandId = $derived(page.params.brandId as string);
+	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
+	const brandUrl = $derived(getBrandUrlId() || brandId);
 	type Campaign = {
 		id: string; name: string; description: string | null; status: string; order_code: string | null;
 		article_quota: number; budget: number; publication_count: number; articles_created: number;
@@ -79,7 +82,7 @@
 				Kampanye menggabungkan beberapa artikel ke satu rencana distribusi. Sebelum kampanye pertama dibuat,
 				artikel bisa digenerate satu per satu lewat halaman Generate.
 			</p>
-			<a class="app-btn app-btn-primary mt-3" href={`/klien/${brandId}/generate`}>Buka halaman Generate</a>
+			<a class="app-btn app-btn-primary mt-3" href={`/klien/${brandUrl}/generate`}>Buka halaman Generate</a>
 			{#if status}
 				<button class="app-btn app-btn-soft mt-3" onclick={() => { status = ''; void load(); }}>Reset filter</button>
 			{/if}
