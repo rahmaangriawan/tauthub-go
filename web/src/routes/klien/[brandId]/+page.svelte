@@ -258,38 +258,40 @@
 		<!-- ── HERO ─────────────────────────────────────────────────────── -->
 		<section class="hero">
 			<div class="heroContent">
-				<h1 class="heroTitle">
-					{t.dashboard.welcome.replace('{name}', (userName || 'User') + '!')}
-				</h1>
-				<p class="heroSubtitle">{t.dashboard.subtitle}</p>
-				<div class="heroBtns">
-					<button class="heroCTA" type="button" onclick={() => goto(`${fallbackBase}/media`)}>
-						<Globe size={18} strokeWidth={2.4} />
-						<span>{t.dashboard.open_media_catalog}</span>
-					</button>
-					<button
-						class="heroCTAGhost"
-						type="button"
-						onclick={() => {
-							createErr = '';
-							createName = '';
-							createOpen = true;
-						}}
-					>
-						<Sparkles size={18} strokeWidth={2.4} />
-						<span>{t.dashboard.create_campaign}</span>
-					</button>
-				</div>
-			</div>
-			<div class="heroVisual">
-				<div class="heroSecurityCard">
-					<div class="securityShieldCircle">
-						<ShieldCheck size={24} strokeWidth={2.4} color="#34d399" />
+					<h1 class="heroTitle">
+						{t.dashboard.welcome.replace('{name}', userName || 'User')}
+					</h1>
+					<p class="heroSubtitle">{t.dashboard.subtitle}</p>
+					<div class="heroBtns">
+						<button class="heroCTA" type="button" onclick={() => goto(`${fallbackBase}/media`)}>
+							<Globe size={18} strokeWidth={2.4} />
+							<span>{t.dashboard.open_media_catalog}</span>
+						</button>
+						<button
+							class="heroCTAGhost"
+							type="button"
+							onclick={() => {
+								createErr = '';
+								createName = '';
+								createOpen = true;
+							}}
+						>
+							<Sparkles size={18} strokeWidth={2.4} />
+							<span>{t.dashboard.create_campaign}</span>
+						</button>
 					</div>
-					<span class="securityTitle">{t.dashboard.security_title}</span>
-					<span class="securityValue">100% {t.dashboard.security_passed}</span>
 				</div>
-			</div>
+				<div class="heroVisual">
+					<div class="heroSecurityCard">
+						<div class="securityShieldCircle">
+							<ShieldCheck size={24} strokeWidth={2.4} color="#34d399" />
+						</div>
+						<div class="securityTextWrap">
+							<span class="securityTitle">{t.dashboard.security_title}</span>
+							<span class="securityValue">100% {t.dashboard.security_passed}</span>
+						</div>
+					</div>
+				</div>
 		</section>
 
 		<!-- ── METRIC CARDS ─────────────────────────────────────────────── -->
@@ -433,22 +435,23 @@
 							<span>{t.dashboard.queue_col_status}</span>
 							<span>Kredit</span>
 						</div>
-						{#each pubs as r (r.id)}
-							<div class="queueRow">
-								<div class="queueCell font-medium">
-									<span class="truncate block">{r.document_title || '—'}</span>
+							{#each pubs as r (r.id)}
+								<div class="queueRow">
+									<div class="queueCell queueCellTitle font-medium">
+										<span class="truncate block">{r.document_title || '—'}</span>
+									</div>
+									<div class="queueCell queueCellMedia text-muted-foreground">
+										<span class="truncate block">{r.media_name || '—'}</span>
+									</div>
+									<div class="queueCell queueCellStatus">
+										{@render statusBadge(r.status, (t.status as Record<string, string>)[r.status] ?? r.status)}
+									</div>
+									<div class="queueCell queueCellPrice font-medium">
+										<Coins size={13} class="queueCoinIcon" />
+										<span>{tcLabel(r.client_price ?? 0, tcConfig?.rate_idr ?? wallet?.rate_idr ?? 1000)} Kredit</span>
+									</div>
 								</div>
-								<div class="queueCell text-muted-foreground">
-									<span class="truncate block">{r.media_name || '—'}</span>
-								</div>
-								<div class="queueCell">
-									{@render statusBadge(r.status, (t.status as Record<string, string>)[r.status] ?? r.status)}
-								</div>
-								<div class="queueCell font-medium">
-									<span>{tcLabel(r.client_price ?? 0, tcConfig?.rate_idr ?? wallet?.rate_idr ?? 1000)}</span>
-								</div>
-							</div>
-						{/each}
+							{/each}
 					</div>
 				{/if}
 			</section>
@@ -638,68 +641,72 @@
 		position: relative;
 		z-index: 2;
 	}
-	.heroTitle {
-		font-size: clamp(20px, 2.2vw, 28px);
-		font-weight: 750;
-		line-height: 1.2;
-		letter-spacing: -0.02em;
-		color: #ffffff;
-		margin: 0 0 8px;
-		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-		white-space: nowrap;
-	}
-	.heroSubtitle {
-		font-size: 14px;
-		line-height: 1.6;
-		color: rgba(255, 255, 255, 0.92);
-		margin: 0 0 20px;
-		max-width: 500px;
-		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-	}
-	.heroBtns {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 12px;
-	}
-	.heroCTA {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		border-radius: 9px;
-		padding: 10px 16px;
-		font-size: 14px;
-		font-weight: 700;
-		background: #ffffff;
-		color: #1b67fe;
-		border: none;
-		cursor: pointer;
-		transition:
-			transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
-			box-shadow 0.18s ease,
-			background-color 0.18s ease;
-	}
-	.heroCTA:hover {
-		background: #eef2ff;
-		transform: translateY(-2px);
-		box-shadow: 0 8px 20px rgba(27, 103, 254, 0.22);
-	}
-	.heroCTA:active {
-		transform: none;
-		box-shadow: none;
-	}
-	.heroCTAGhost {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		border-radius: 9px;
-		padding: 10px 16px;
-		font-size: 14px;
-		font-weight: 700;
-		background: rgba(255, 255, 255, 0.18);
-		color: #ffffff;
-		border: 1px solid rgba(255, 255, 255, 0.3);
-		backdrop-filter: blur(8px);
-		cursor: pointer;
+		.heroTitle {
+			font-size: clamp(20px, 2.2vw, 28px);
+			font-weight: 750;
+			line-height: 1.25;
+			letter-spacing: -0.02em;
+			color: #ffffff;
+			margin: 0 0 8px;
+			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+			word-break: break-word;
+		}
+		.heroSubtitle {
+			font-size: 14px;
+			line-height: 1.6;
+			color: rgba(255, 255, 255, 0.92);
+			margin: 0 0 20px;
+			max-width: 500px;
+			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+		}
+		.heroBtns {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 12px;
+		}
+		.heroCTA {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			border-radius: 9px;
+			padding: 10px 16px;
+			min-height: 44px;
+			font-size: 14px;
+			font-weight: 700;
+			background: #ffffff;
+			color: #1b67fe;
+			border: none;
+			cursor: pointer;
+			touch-action: manipulation;
+			transition:
+				transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+				box-shadow 0.18s ease,
+				background-color 0.18s ease;
+		}
+		.heroCTA:hover {
+			background: #eef2ff;
+			transform: translateY(-2px);
+			box-shadow: 0 8px 20px rgba(27, 103, 254, 0.22);
+		}
+		.heroCTA:active {
+			transform: none;
+			box-shadow: none;
+		}
+		.heroCTAGhost {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			border-radius: 9px;
+			padding: 10px 16px;
+			min-height: 44px;
+			font-size: 14px;
+			font-weight: 700;
+			background: rgba(255, 255, 255, 0.18);
+			color: #ffffff;
+			border: 1px solid rgba(255, 255, 255, 0.3);
+			backdrop-filter: blur(8px);
+			cursor: pointer;
+			touch-action: manipulation;
 		transition:
 			transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
 			box-shadow 0.18s ease,
@@ -750,21 +757,27 @@
 		margin-bottom: 12px;
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);
-	}
-	.securityTitle {
-		color: rgba(255, 255, 255, 0.85);
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		font-size: 11px;
-		font-weight: 700;
-		margin-bottom: 4px;
-	}
-	.securityValue {
-		color: #ffffff;
-		font-size: 15px;
-		font-weight: 700;
-		line-height: 1.2;
-	}
+		}
+		.securityTextWrap {
+			display: flex;
+			flex-direction: column;
+		}
+		.securityTitle {
+			color: rgba(255, 255, 255, 0.85);
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			font-size: 11px;
+			font-weight: 700;
+			margin-bottom: 4px;
+			display: block;
+		}
+		.securityValue {
+			color: #ffffff;
+			font-size: 15px;
+			font-weight: 700;
+			line-height: 1.2;
+			display: block;
+		}
 
 	/* Metric Grid */
 	.metricGrid {
@@ -1084,10 +1097,19 @@
 	.queueRow + .queueRow {
 		border-top: 1px solid var(--border);
 	}
-	.queueCell {
-		min-width: 0;
-	}
-	.emptyCard {
+		.queueCell {
+			min-width: 0;
+		}
+		.queueCellPrice {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+		}
+		:global(.queueCoinIcon) {
+			color: var(--amber-9, #d97706);
+			flex-shrink: 0;
+		}
+		.emptyCard {
 		border: 1px dashed var(--border);
 		border-radius: 14px;
 		padding: 24px;
@@ -1358,52 +1380,266 @@
 		margin-top: 20px;
 	}
 
-	/* Responsive */
-	@media (max-width: 1024px) {
-		.metricGrid {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
+		/* Responsive */
+		@media (max-width: 1024px) {
+			.metricGrid {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+			}
+			.twoCol {
+				grid-template-columns: 1fr;
+			}
+			.insightsFinanceRow {
+				grid-template-columns: 1fr;
+			}
 		}
-		.twoCol {
-			grid-template-columns: 1fr;
+		@media (max-width: 767px) {
+			.wrap {
+				gap: 16px;
+			}
+			.hero {
+				flex-direction: column;
+				align-items: flex-start;
+				padding: 20px 16px;
+				gap: 16px;
+				border-radius: 16px;
+			}
+			.heroTitle {
+				font-size: clamp(18px, 5.5vw, 24px);
+				line-height: 1.25;
+				margin-bottom: 6px;
+			}
+			.heroSubtitle {
+				font-size: 13px;
+				line-height: 1.5;
+				margin-bottom: 16px;
+			}
+			.heroBtns {
+				flex-direction: column;
+				width: 100%;
+				gap: 10px;
+			}
+			.heroCTA,
+			.heroCTAGhost {
+				width: 100%;
+				min-height: 44px;
+				justify-content: center;
+			}
+			.heroVisual {
+				width: 100%;
+			}
+			.heroSecurityCard {
+				width: 100%;
+				flex-direction: row;
+				align-items: center;
+				justify-content: flex-start;
+				text-align: left;
+				gap: 12px;
+				padding: 10px 14px;
+				border-radius: 14px;
+			}
+			.securityShieldCircle {
+				width: 36px;
+				height: 36px;
+				margin-bottom: 0;
+				flex-shrink: 0;
+			}
+			.securityShieldCircle :global(svg) {
+				width: 18px;
+				height: 18px;
+			}
+			.securityTitle {
+				font-size: 10px;
+				margin-bottom: 1px;
+			}
+			.securityValue {
+				font-size: 13.5px;
+			}
+
+			.metricGrid {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 10px;
+			}
+			.metricCard {
+				padding: 14px 12px;
+				border-radius: 14px;
+			}
+			.metricHeader {
+				margin-bottom: 6px;
+			}
+			.metricTitle {
+				font-size: 10px;
+				letter-spacing: 0.02em;
+			}
+			.metricIcon {
+				width: 26px;
+				height: 26px;
+			}
+			.metricIcon :global(svg) {
+				width: 14px;
+				height: 14px;
+			}
+			.metricValue {
+				font-size: 20px;
+			}
+			.metricUnit {
+				font-size: 11px;
+			}
+			.metricDesc,
+			.metricDescReach {
+				font-size: 11px;
+				margin-top: 4px;
+				line-height: 1.35;
+			}
+
+			.insights {
+				flex-direction: column;
+				align-items: flex-start;
+				padding: 18px 16px;
+				border-radius: 16px;
+				gap: 12px;
+			}
+			.insightsIconBox {
+				width: 36px;
+				height: 36px;
+				border-radius: 10px;
+			}
+			.insightsIconBox :global(svg) {
+				width: 20px;
+				height: 20px;
+			}
+			.insightsTitle {
+				font-size: 14px;
+			}
+			.insightsRolling {
+				min-height: 58px;
+				margin-top: 6px;
+			}
+			.insightsRollingItem {
+				font-size: 13px;
+				line-height: 1.5;
+			}
+			.aiAgentImgDirect {
+				display: none;
+			}
+
+			.financeCard {
+				padding: 18px 16px;
+				border-radius: 16px;
+			}
+			.financeValue {
+				font-size: 22px;
+			}
+			.financeDivider {
+				margin: 16px 0 12px;
+			}
+			.financeLinks {
+				flex-direction: column;
+				gap: 8px;
+			}
+			.ghostLink {
+				width: 100%;
+				min-height: 44px;
+				padding: 10px 14px;
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				justify-content: center;
+				background: var(--muted);
+				touch-action: manipulation;
+			}
+			.ghostLink:active {
+				background: var(--secondary);
+			}
+
+			.queueHeader {
+				display: none;
+			}
+			.queueRow {
+				display: grid;
+				grid-template-columns: 1fr auto;
+				grid-template-areas:
+					'title title'
+					'media media'
+					'status price';
+				gap: 6px 12px;
+				padding: 12px 14px;
+			}
+			.queueCellTitle {
+				grid-area: title;
+				font-size: 13px;
+				font-weight: 600;
+				line-height: 1.35;
+			}
+			.queueCellMedia {
+				grid-area: media;
+				font-size: 11.5px;
+			}
+			.queueCellStatus {
+				grid-area: status;
+				justify-self: start;
+			}
+			.queueCellPrice {
+				grid-area: price;
+				justify-self: end;
+				font-size: 12px;
+				color: var(--primary);
+			}
+
+			.helpCard {
+				padding: 18px 16px;
+				border-radius: 16px;
+			}
+			.ghostLinkHelp {
+				min-height: 44px;
+				padding: 10px 12px;
+				border-radius: 10px;
+				touch-action: manipulation;
+			}
+			.ghostLinkHelp:active {
+				background: var(--border);
+			}
+			.helpItemIcon {
+				width: 32px;
+				height: 32px;
+				border-radius: 8px;
+			}
+			.helpItemIcon :global(svg) {
+				width: 16px;
+				height: 16px;
+			}
+			.helpItemTitle {
+				font-size: 13px;
+			}
+			.helpItemDesc {
+				font-size: 11px;
+			}
+
+			.dialogBox {
+				max-width: calc(100vw - 32px);
+				padding: 20px 16px;
+				border-radius: 16px;
+			}
+			.dialogClose {
+				width: 44px;
+				height: 44px;
+				touch-action: manipulation;
+			}
+			.modeGrid {
+				grid-template-columns: 1fr;
+				gap: 10px;
+			}
+			.modeCard {
+				padding: 12px 14px;
+			}
+			.dialogActions button {
+				width: 100%;
+				min-height: 44px;
+			}
 		}
-		.insightsFinanceRow {
-			grid-template-columns: 1fr;
+		@media (max-width: 340px) {
+			.metricGrid {
+				grid-template-columns: 1fr;
+			}
 		}
-	}
-	@media (max-width: 767px) {
-		.hero {
-			flex-direction: column;
-			align-items: flex-start;
-			padding: 28px 22px;
-			gap: 20px;
-		}
-		.heroVisual {
-			width: 100%;
-		}
-		.metricGrid {
-			grid-template-columns: 1fr;
-		}
-		.insights {
-			flex-direction: column;
-			align-items: flex-start;
-			padding: 22px;
-		}
-		.aiAgentImgDirect {
-			width: 96px;
-			height: 96px;
-		}
-		.queueHeader {
-			display: none;
-		}
-		.queueRow {
-			grid-template-columns: 1fr;
-			gap: 6px;
-			padding: 12px 16px;
-		}
-		.modeGrid {
-			grid-template-columns: 1fr;
-		}
-	}
 	@media (prefers-reduced-motion: reduce) {
 		.insightsRollingItem {
 			transition: none !important;
