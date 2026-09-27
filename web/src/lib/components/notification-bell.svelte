@@ -215,7 +215,14 @@
 				<p class="notif-empty">Belum ada notifikasi.</p>
 			{/if}
 			{#each items as notification (notification.id)}
-				<button class="notif-item" type="button" onclick={() => void markRead(notification.id, notification.link)}>
+				<button
+					class="notif-item"
+					type="button"
+					onclick={() => {
+						open = false;
+						void markRead(notification.id, notification.link);
+					}}
+				>
 					{#if !notification.read_at}<span class="notif-dot"></span>{/if}
 					<span class="notif-item-body">
 						<span class="notif-item-title" class:notif-item-title-unread={!notification.read_at}
