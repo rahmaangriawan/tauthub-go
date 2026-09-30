@@ -40,3 +40,6 @@ api/.data/uploads/*
 !api/.data/uploads/*.jpeg
 !api/.data/uploads/*.gif
 !api/.data/uploads/*.svg
+
+# lockfile npm: proyek web memakai Bun (web/bun.lock)
+package-lock.json
