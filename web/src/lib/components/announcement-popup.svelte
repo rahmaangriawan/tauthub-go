@@ -73,7 +73,7 @@
 </script>
 
 {#if open && item}
-	<div class="fixed inset-0 z-[1200] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.45);" role="presentation" onclick={() => void close()}>
+	<div class="fixed inset-0 z-[1200] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.45);" role="presentation" onclick={() => void close()} onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') void close(); else e.stopPropagation(); }}>
 		<div
 			bind:this={panel}
 			class="app-card w-full max-w-md p-5"
