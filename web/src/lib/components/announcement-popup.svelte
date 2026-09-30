@@ -82,7 +82,6 @@
 			aria-label={tr('Pengumuman')}
 			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
 		>
 			<div class="flex items-start justify-between gap-3">
 				<div class="flex items-center gap-3">
