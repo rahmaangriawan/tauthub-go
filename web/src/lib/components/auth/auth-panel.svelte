@@ -563,7 +563,8 @@
 		>{tr("Kembali ke form masuk")}</button>
 	</p>
 {:else}
-	<!-- TODO: tautkan ke halaman kebijakan privasi setelah halaman itu dibuat
-	     (belum ada di app lama maupun repo ini, jadi sengaja bukan tautan mati). -->
-	<p class="auth-privacy">{tr("Dengan melanjutkan, Anda menyetujui kebijakan privasi.")}</p>
+	<p class="auth-privacy">
+		{tr('Dengan melanjutkan, Anda menyetujui')}
+		<a href="https://tauthub.com/kebijakan-privasi/" target="_blank" rel="noreferrer">{tr('kebijakan privasi')}</a>.
+	</p>
 {/if}
