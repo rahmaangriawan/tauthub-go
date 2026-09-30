@@ -17,6 +17,7 @@
 	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import HelpModal from '$lib/components/help-modal.svelte';
 	
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
@@ -66,6 +67,15 @@
 	}
 
 	let userName = $state('');
+
+	// Popup panduan: kartu "Cara Kerja" dan "Standar Gatekeeper" membuka dialog
+	// yang sama dengan tab awal berbeda.
+	let helpOpen = $state(false);
+	let helpTab = $state<'how' | 'gate'>('how');
+	function openHelp(tab: 'how' | 'gate') {
+		helpTab = tab;
+		helpOpen = true;
+	}
 
 	// Emoji sapaan dipisah dari teksnya agar bisa dianimasikan (lihat .heroWave);
 	// teksnya sendiri tetap berasal dari kamus i18n.
@@ -482,7 +492,7 @@
 					</div>
 				</div>
 				<div class="helpList">
-					<a class="ghostLinkHelp" href="/docs">
+					<button class="ghostLinkHelp" type="button" onclick={() => openHelp('how')}>
 						<div class="helpItemIcon">
 							<BookOpen size={18} strokeWidth={2.4} />
 						</div>
@@ -491,8 +501,8 @@
 							<div class="helpItemDesc">{i18n.t.dashboard.help_how_desc}</div>
 						</div>
 						<ArrowRight size={14} class="helpArrow" />
-					</a>
-					<a class="ghostLinkHelp" href="/docs">
+					</button>
+					<button class="ghostLinkHelp" type="button" onclick={() => openHelp('gate')}>
 						<div class="helpItemIcon">
 							<ShieldCheck size={18} strokeWidth={2.4} />
 						</div>
@@ -501,12 +511,14 @@
 							<div class="helpItemDesc">{i18n.t.dashboard.help_gate_desc}</div>
 						</div>
 						<ArrowRight size={14} class="helpArrow" />
-					</a>
+					</button>
 				</div>
 			</div>
 		</div>
 	</div>
 {/if}
+
+<HelpModal bind:open={helpOpen} tab={helpTab} />
 
 <!-- ── DIALOG BUAT KAMPANYE ──────────────────────────────────────── -->
 {#if createOpen}
@@ -1260,11 +1272,19 @@
 		gap: 14px;
 		width: 100%;
 		padding: 12px 14px;
+		border: none;
+		background: transparent;
+		font: inherit;
 		border-radius: 12px;
 		color: var(--foreground);
 		text-align: left;
 		text-decoration: none;
+		cursor: pointer;
 		transition: background-color 0.15s ease;
+	}
+	.ghostLinkHelp:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
 	}
 	.ghostLinkHelp:hover {
 		background-color: var(--secondary);
