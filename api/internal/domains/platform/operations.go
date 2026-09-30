@@ -1422,22 +1422,30 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 			Body: body, Link: "/admin/operations", ReadAt: nil, CreatedAt: row.strOr("updated_at", ""),
 		})
 	}
-	// Pengumuman broadcast (announcement.*) ditujukan ke admin ini lewat tabel
-	// notifications — diselipkan ke feed supaya admin melihatnya di lonceng.
-	announcements, err := d.queryRows(ctx,
-		`SELECT id, title, body, created_at FROM notifications
-		 WHERE user_id = $1 AND type LIKE 'announcement%' AND created_at > `+opNotificationWindow+`
+	// Riwayat notifikasi admin dari tabel notifications (semua tipe, 7 hari).
+	// Tanpa ini lonceng admin hanya menampilkan masalah "saat ini" dari feed
+	// sintetis dan tidak punya riwayat sama sekali.
+	notifs, err := d.queryRows(ctx,
+		`SELECT id, type, title, body, created_at FROM notifications
+		 WHERE user_id = $1 AND created_at > NOW() - INTERVAL '7 days'
 		 ORDER BY created_at DESC LIMIT 20`, user.ID)
 	if err != nil {
 		writeErr(w, d, err)
 		return
 	}
-	for _, raw := range announcements {
+	for _, raw := range notifs {
 		row := ptRow(ptNormalizeMap(raw))
+		notifType := row.strOr("type", "notification")
+		// Tautan selalu ke halaman admin sendiri: link tersimpan bisa menunjuk
+		// ke halaman klien/mitra yang bukan milik admin ini.
+		link := "/admin/notifikasi"
+		if strings.HasPrefix(notifType, "announcement") {
+			link = "/admin/pengumuman"
+		}
 		items = append(items, opNotifItem{
-			ID: "ann-" + row.strOr("id", ""), Type: row.strOr("type", "announcement.new"),
-			Title: row.strOr("title", ""), Body: row.strOr("body", ""),
-			Link: "/admin/pengumuman", ReadAt: nil, CreatedAt: row.strOr("created_at", ""),
+			ID: "ntf-" + row.strOr("id", ""), Type: notifType,
+			Title: row.strOr("title", ""), Body: row.raw("body"),
+			Link: link, ReadAt: nil, CreatedAt: row.strOr("created_at", ""),
 		})
 	}
 	sortNotificationsDesc(items)

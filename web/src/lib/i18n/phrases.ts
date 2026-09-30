@@ -62,6 +62,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Revisi diterima. Artikel dikirim ulang ke media Anda.": "Revision accepted. The article is being re-sent to your media.",
   "Revisi ditolak. Klien akan memperbaiki artikelnya.": "Revision rejected. The client will fix the article.",
   "Revisi untuk": "Revision for",
+  "Riwayat pemberitahuan operasional, publikasi, dan pengumuman untuk akun admin ini.": "History of operational, publication, and announcement notices for this admin account.",
   "Screenshot (opsional)": "Screenshot (optional)",
   "Semua pengguna": "All users",
   "Semua pengguna (klien + mitra)": "All users (clients + partners)",

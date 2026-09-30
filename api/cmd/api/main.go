@@ -531,6 +531,11 @@ func run() error {
 			authed.Patch("/platform/admins/{adminId}", platformDeps.AdminsUpdate)
 			authed.Delete("/platform/admins/{adminId}", platformDeps.AdminsDelete)
 
+			// Riwayat notifikasi admin (per user admin yang login).
+			authed.Get("/platform/notifications", platformDeps.AdminNotifications)
+			authed.Post("/platform/notifications", platformDeps.AdminNotifications)
+			authed.Post("/platform/notifications/{notificationId}/read", platformDeps.AdminNotificationRead)
+
 			// Pengumuman (sisi admin).
 			authed.Get("/platform/announcements", platformDeps.AdminAnnouncementsList)
 			authed.Post("/platform/announcements", platformDeps.AdminAnnouncementCreate)
