@@ -227,7 +227,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 					: []),
 				// Pengumuman terbuka untuk semua platform admin (guard backend sama).
 				{ label: tr('Kotak Pengumuman'), href: '/admin/pengumuman', icon: Megaphone, active: pathname.startsWith('/admin/pengumuman') },
-				{ label: tr('Notifikasi'), href: '/admin/notifikasi', icon: Bell, active: pathname.startsWith('/admin/notifikasi') }
+				{ label: tr('Notifikasi'), href: '/admin/notifications', icon: Bell, active: pathname.startsWith('/admin/notifications') }
 			]
 		},
 		{
@@ -322,7 +322,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 
 	{#snippet toolbar()}
 		<LangSelector />
-		<NotificationBell apiBase="/v1/platform/operations" fallbackBase="/admin/notifikasi" readable={false} showAnnouncementTab serverCategory={false} />
+		<NotificationBell apiBase="/v1/platform/operations" fallbackBase="/admin" readable={false} showAnnouncementTab serverCategory={false} />
 	{/snippet}
 
 	{@render children()}

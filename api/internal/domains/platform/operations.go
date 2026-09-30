@@ -1438,7 +1438,7 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 		notifType := row.strOr("type", "notification")
 		// Tautan selalu ke halaman admin sendiri: link tersimpan bisa menunjuk
 		// ke halaman klien/mitra yang bukan milik admin ini.
-		link := "/admin/notifikasi"
+		link := "/admin/notifications"
 		if strings.HasPrefix(notifType, "announcement") {
 			link = "/admin/pengumuman"
 		}
