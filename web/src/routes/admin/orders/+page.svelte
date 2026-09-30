@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Monitoring Order — port app/admin/orders/page.tsx: satu baris = satu order
 	// distribusi (satu media). Nomor order per media (ORD-) dan nomor kampanye
 	// induk (CAM-) dipakai melacak masalah; detail teknis ada di publikasi.
@@ -26,11 +28,11 @@
 		partner_approved: 'accent', partner_rejected: 'danger', queued: 'accent',
 		processing: 'accent', failed: 'danger', retrying: 'warning', cancelled: 'neutral'
 	};
-	const STATUS_LABEL: Record<string, string> = {
-		pending: 'Menunggu', waiting_partner: 'Menunggu mitra', partner_approved: 'Disetujui mitra',
-		partner_rejected: 'Ditolak mitra', queued: 'Dalam antrean', processing: 'Diproses',
-		published: 'Terbit', failed: 'Gagal', retrying: 'Dicoba ulang', cancelled: 'Dibatalkan'
-	};
+	const STATUS_LABEL: Record<string, string> = $derived({
+		pending: tr('Menunggu'), waiting_partner: tr('Menunggu mitra'), partner_approved: tr('Disetujui mitra'),
+		partner_rejected: tr('Ditolak mitra'), queued: 'Dalam antrean', processing: 'Diproses',
+		published: tr('Terbit'), failed: tr('Gagal'), retrying: 'Dicoba ulang', cancelled: tr('Dibatalkan')
+	});
 	const PROBLEM_STATUSES = ['failed', 'retrying', 'partner_rejected', 'cancelled'];
 	const PAGE_SIZE = 20;
 
@@ -110,14 +112,14 @@
 <section>
 	<PageHeader
 		title="Monitoring Order"
-		description="Satu baris = satu order distribusi (satu media). Nomor order per media dan nomor kampanye induknya dipakai untuk melacak masalah; detail teknis (attempts, job, retry) ada di halaman publikasi."
+		description={tr("Satu baris = satu order distribusi (satu media). Nomor order per media dan nomor kampanye induknya dipakai untuk melacak masalah; detail teknis (attempts, job, retry) ada di halaman publikasi.")}
 	>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{fmtNum(total)} order</span>
 	</PageHeader>
 
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke monitoring order.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke monitoring order.")}</p>
 		</div>
 	{:else}
 		<Feedback {loading} {error} loadingText="Memuat order…" />
@@ -127,7 +129,7 @@
 				<Search size={16} class="text-muted-foreground" />
 				<input
 					class="w-full bg-transparent text-sm outline-none"
-					placeholder="Cari no. order (ORD-/CAM-), artikel, brand, media…"
+					placeholder={tr("Cari no. order (ORD-/CAM-), artikel, brand, media…")}
 					value={query}
 					oninput={(e) => onQuery((e.currentTarget as HTMLInputElement).value)}
 				/>
@@ -139,7 +141,7 @@
 				style={problemOnly ? 'background-color: var(--destructive-soft, #fdecee); color: var(--destructive);' : undefined}
 				onclick={toggleProblem}
 			>
-				<TriangleAlert size={16} />{problemOnly ? 'Hanya bermasalah' : 'Tampilkan yang bermasalah'}
+				<TriangleAlert size={16} />{problemOnly ? 'Hanya bermasalah' : tr('Tampilkan yang bermasalah')}
 			</button>
 		</div>
 
@@ -150,7 +152,7 @@
 					style="background-color: {status === f ? 'var(--primary)' : 'var(--secondary)'}; color: {status === f ? 'var(--primary-foreground)' : 'var(--muted-foreground)'};"
 					type="button"
 					onclick={() => setStatus(f)}
-				>{f === '' ? 'Semua' : STATUS_LABEL[f] ?? f}</button>
+				>{f === '' ? tr('Semua') : STATUS_LABEL[f] ?? f}</button>
 			{/each}
 		</div>
 
@@ -159,11 +161,11 @@
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">No. Order</th>
-						<th class="px-4 py-2.5 font-medium">Kampanye</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Kampanye")}</th>
 						<th class="px-4 py-2.5 font-medium">Artikel</th>
-						<th class="px-4 py-2.5 font-medium">Klien</th>
-						<th class="px-4 py-2.5 font-medium">Media</th>
-						<th class="px-4 py-2.5 font-medium">Harga</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Klien")}</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Harga")}</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
 						<th class="px-4 py-2.5 font-medium">Waktu</th>
 					</tr>
@@ -198,9 +200,9 @@
 							<td class="px-4 py-2.5">
 								<p class="text-xs text-muted-foreground">{fmtDateTime(row.created_at)}</p>
 								{#if row.published_at}
-									<p class="text-xs" style="color: var(--success);">Terbit {fmtDateTime(row.published_at)}</p>
+									<p class="text-xs" style="color: var(--success);">{tr("Terbit")} {fmtDateTime(row.published_at)}</p>
 								{:else if row.scheduled_at}
-									<p class="text-xs text-muted-foreground">Jadwal {fmtDateTime(row.scheduled_at)}</p>
+									<p class="text-xs text-muted-foreground">{tr("Jadwal")} {fmtDateTime(row.scheduled_at)}</p>
 								{/if}
 							</td>
 						</tr>
@@ -210,13 +212,13 @@
 			{#if !loading && orders.length === 0}
 				<div class="flex flex-col items-center px-4 py-12 text-center">
 					<Receipt size={26} class="text-muted-foreground" />
-					<p class="mt-2 text-sm text-muted-foreground">{problemOnly ? 'Tidak ada order bermasalah pada filter ini.' : 'Tidak ada order untuk filter ini.'}</p>
+					<p class="mt-2 text-sm text-muted-foreground">{problemOnly ? tr('Tidak ada order bermasalah pada filter ini.') : tr('Tidak ada order untuk filter ini.')}</p>
 				</div>
 			{/if}
 		</div>
 
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-			<span>{fmtNum(total)} order · halaman {page} dari {totalPages}</span>
+			<span>{fmtNum(total)} order · halaman {page} {tr("dari")} {totalPages}</span>
 			<div class="flex gap-2">
 				<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={page <= 1 || loading} onclick={() => changePage(Math.max(1, page - 1))}>‹ Sebelumnya</button>
 				<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={page >= totalPages || loading} onclick={() => changePage(page + 1)}>Berikutnya ›</button>

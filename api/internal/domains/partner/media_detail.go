@@ -3,6 +3,7 @@ package partner
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rahmaangriawan/tauthub-go/internal/crypto"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/imageconvert"
 )
 
 // mediaDetailSelect: kolom media untuk GET/PUT detail (parity ownedMedia).
@@ -843,17 +845,24 @@ func (d *Deps) MediaDewanPersDocument(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Format file harus berupa PDF, JPG, atau PNG.")
 		return
 	}
-	ext := "pdf"
-	if !isPDF {
-		ext = sanitizeExt(nameLower, "jpg")
-	}
-	storageKey := uuid.NewString() + "." + ext
 	data, err := readAllLimited(file, maxBytes)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	if err := d.saveUpload(storageKey, data); err != nil {
+	// Gambar dinormalisasi ke WebP; PDF apa adanya.
+	payload := data
+	ext := "pdf"
+	if !isPDF {
+		if converted, ok := imageconvert.ConvertToWebP(data, contentType); ok {
+			payload = converted
+			ext = "webp"
+		} else {
+			ext = sanitizeExt(nameLower, "jpg")
+		}
+	}
+	storageKey := uuid.NewString() + "." + ext
+	if err := d.saveUpload(storageKey, payload); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -1075,7 +1084,8 @@ func (d *Deps) MediaSEO(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodPost {
 		// Refresh metrik SEO butuh RapidAPI key platform (fase integrasi SEO).
-		httpx.Error(w, http.StatusConflict, "RapidAPI SEO belum dikonfigurasi oleh Admin.")
+		slog.Error("[seo] segarkan metrik media ditolak: konfigurasi SEO platform belum siap", "media_id", mediaID)
+		httpx.Error(w, http.StatusConflict, "Konfigurasi integrasi SEO belum siap. Hubungi admin Tauthub.")
 		return
 	}
 	metric, _ := d.queryRow(r.Context(),
@@ -1278,10 +1288,13 @@ func (d *Deps) MediaCustomWebTest(w http.ResponseWriter, r *http.Request) {
 	}
 	apiKey, err := crypto.UnsealV3(sealedKey, d.Cfg.Secret, mediaID)
 	if err != nil {
-		d.updateCustomWebStatus(r, mediaID, "failed", "API key tidak dapat dibuka — simpan ulang kredensial.")
+		slog.Error("[media-credential] API key Custom Web gagal di-unseal (APP_SECRET berubah?)",
+			"media_id", mediaID, "err", err)
+		message := "Kredensial tersimpan tidak dapat dibuka. Hubungi admin Tauthub untuk menyimpan ulang."
+		d.updateCustomWebStatus(r, mediaID, "failed", message)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"success": false, "status": "failed",
-			"message": "API key tidak dapat dibuka — simpan ulang kredensial.",
+			"message": message,
 		})
 		return
 	}
@@ -1341,7 +1354,7 @@ func (d *Deps) MediaBlogger(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg, cfgErr := d.loadGSCPlatformConfig(r)
 	if cfgErr != nil || cfg.ClientID == "" || cfg.ClientSecret == "" {
-		httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi Google OAuth belum diatur Admin.")
+		httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi integrasi Google belum siap. Hubungi admin Tauthub.")
 		return
 	}
 	var body struct {
@@ -1409,7 +1422,7 @@ func (d *Deps) MediaBloggerBlogs(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg, cfgErr := d.loadGSCPlatformConfig(r)
 	if cfgErr != nil || cfg.ClientID == "" || cfg.ClientSecret == "" {
-		httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi Google OAuth belum diatur Admin.")
+		httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi integrasi Google belum siap. Hubungi admin Tauthub.")
 		return
 	}
 	cred := d.bloggerResolveTarget(r, media, cfg.ClientID, cfg.ClientSecret)
@@ -1437,7 +1450,7 @@ func (d *Deps) MediaBloggerConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg, cfgErr := d.loadGSCPlatformConfig(r)
 	if cfgErr != nil || cfg.ClientID == "" || cfg.ClientSecret == "" {
-		httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi Google OAuth belum diatur Admin. Hubungi Admin untuk mengisi Client ID/Secret di /admin/integrations (tab GSC).")
+		httpx.Error(w, http.StatusServiceUnavailable, "Konfigurasi integrasi Google belum siap. Hubungi admin Tauthub.")
 		return
 	}
 	relayURI := d.bloggerRedirectURI(r)
@@ -1479,7 +1492,7 @@ func (d *Deps) MediaBloggerTest(w http.ResponseWriter, r *http.Request) {
 	} else if strings.TrimSpace(media.strOr("blogger_credentials_sealed", "")) == "" {
 		message = "Kredensial Blogger belum tersimpan — hubungkan terlebih dahulu."
 	} else if cfg, cfgErr := d.loadGSCPlatformConfig(r); cfgErr != nil || cfg.ClientID == "" || cfg.ClientSecret == "" {
-		message = "Konfigurasi Google OAuth belum diatur Admin."
+		message = "Konfigurasi integrasi Google belum siap. Hubungi admin Tauthub."
 	} else if cred := d.bloggerResolveTarget(r, media, cfg.ClientID, cfg.ClientSecret); cred == nil {
 		message = "Kredensial Blogger tidak valid — perlu hubungkan ulang."
 	} else if blogs, bErr := bloggerListBlogs(cred.AccessToken); bErr != nil {
@@ -1554,10 +1567,12 @@ func (d *Deps) MediaTestPublishingAPI(w http.ResponseWriter, r *http.Request) {
 	apiKey, errKey := d.unsealT2(key.strOr("api_key_sealed", ""))
 	secret, errSecret := d.unsealT2(key.strOr("secret_sealed", ""))
 	if errKey != nil || errSecret != nil {
+		slog.Error("[media-credential] API key/secret Publishing API gagal di-unseal (APP_SECRET berubah?)",
+			"media_id", mediaID, "err_key", errKey, "err_secret", errSecret)
 		d.auditLog(r.Context(), user.ID, "media.test_connection", "media", mediaID)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok":      false,
-			"message": "API key tidak dapat dibuka — buat ulang API key di menu Publishing API.",
+			"message": "Kredensial tersimpan tidak dapat dibuka. Buat ulang API key di menu Publishing API atau hubungi admin Tauthub.",
 		})
 		return
 	}

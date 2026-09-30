@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Laporan bug — port app/admin/bug-reports/page.tsx.
 	// Daftar laporan bug user + penanganan: ubah status cepat dari tabel dan
 	// buka modal detail (GET /bug-reports/{id}) untuk menambah catatan admin.
@@ -101,7 +103,7 @@
 			rows = data.items ?? [];
 			total = data.total ?? 0;
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		} finally {
 			loading = false;
 		}
@@ -172,7 +174,7 @@
 </script>
 
 <section>
-	<PageHeader title="Bug Reports" description="Laporan dari user tentang bug atau hasil AI yang tidak akurat.">
+	<PageHeader title="Bug Reports" description={tr("Laporan dari user tentang bug atau hasil AI yang tidak akurat.")}>
 		<Badge tone="accent" label="{total} laporan" />
 	</PageHeader>
 
@@ -180,13 +182,13 @@
 
 	{#if rows.length === 0 && error.includes('Akses platform')}
 		<div class="app-card mt-4 px-4 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke laporan masuk.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke laporan masuk.")}</p>
 		</div>
 	{:else}
 		<div class="mt-4 flex flex-wrap items-center gap-3">
 			<input
 				class="app-input w-full max-w-md"
-				placeholder="Cari pesan, user, atau brand…"
+				placeholder={tr("Cari pesan, user, atau brand…")}
 				value={query}
 				oninput={(e) => onQueryInput((e.currentTarget as HTMLInputElement).value)}
 			/>
@@ -201,7 +203,7 @@
 				}}
 				options={STATUS_FILTERS.map((value) => ({
 					value,
-					label: value === 'all' ? 'Semua' : STATUS_LABELS[value as BugStatus]
+					label: value === 'all' ? tr('Semua') : STATUS_LABELS[value as BugStatus]
 				}))}
 			/>
 		</div>
@@ -214,7 +216,7 @@
 						<th class="px-4 py-2.5 text-left font-medium">Pesan</th>
 						<th class="px-4 py-2.5 text-left font-medium">Pengguna</th>
 						<th class="px-4 py-2.5 text-left font-medium">Brand</th>
-						<th class="px-4 py-2.5 text-left font-medium">Dibuat</th>
+						<th class="px-4 py-2.5 text-left font-medium">{tr("Dibuat")}</th>
 						<th class="px-4 py-2.5 text-left font-medium">Aksi</th>
 					</tr>
 				</thead>
@@ -243,7 +245,7 @@
 										<Icon size={13} />
 										{busy === r.id ? '…' : r.status === 'open' ? 'Triage' : 'Resolved'}
 									</button>
-									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => void openDetail(r)}>Detail</button>
+									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => void openDetail(r)}>{tr("Detail")}</button>
 								</div>
 							</td>
 						</tr>
@@ -251,7 +253,7 @@
 				</tbody>
 			</table>
 			{#if !loading && rows.length === 0}
-				<p class="px-4 py-12 text-center text-sm text-muted-foreground">Belum ada laporan masuk.</p>
+				<p class="px-4 py-12 text-center text-sm text-muted-foreground">{tr("Belum ada laporan masuk.")}</p>
 			{/if}
 		</div>
 		<Pagination total={total} limit={PAGE_SIZE} offset={(page - 1) * PAGE_SIZE} onChange={(next) => { page = next / PAGE_SIZE + 1; void load(); }} />
@@ -259,11 +261,11 @@
 </section>
 
 {#if detail}
-	<Modal title="Detail laporan bug" label="Detail laporan bug" maxWidth="xl" onClose={() => (detail = null)}>
+	<Modal title={tr("Detail laporan bug")} label={tr("Detail laporan bug")} maxWidth="xl" onClose={() => (detail = null)}>
 		<div class="space-y-3">
 			<div class="flex flex-wrap items-center gap-2">
 				<Badge tone={STATUS_TONES[detail.status]} label={STATUS_LABELS[detail.status]} />
-				<span class="text-xs text-muted-foreground">Dibuat {fmtDateTime(detail.created_at)}</span>
+				<span class="text-xs text-muted-foreground">{tr("Dibuat")} {fmtDateTime(detail.created_at)}</span>
 				{#if detail.updated_at}<span class="text-xs text-muted-foreground">· Diperbarui {fmtDateTime(detail.updated_at)}</span>{/if}
 			</div>
 			<div class="grid gap-2 text-sm sm:grid-cols-2">
@@ -282,14 +284,14 @@
 			{/if}
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Catatan admin (penanganan)</span>
-				<textarea class="app-input mt-1 w-full" rows="4" bind:value={notes} placeholder="Catatan tindak lanjut…"></textarea>
+				<textarea class="app-input mt-1 w-full" rows="4" bind:value={notes} placeholder={tr("Catatan tindak lanjut…")}></textarea>
 			</label>
-			{#if detailLoading}<p class="text-xs text-muted-foreground">Memuat detail…</p>{/if}
+			{#if detailLoading}<p class="text-xs text-muted-foreground">{tr("Memuat detail…")}</p>{/if}
 		</div>
 		{#snippet footer()}
 			<span class="mr-auto">
 				<Select
-					ariaLabel="Ubah status laporan"
+					ariaLabel={tr("Ubah status laporan")}
 					minWidth={170}
 					disabled={!detail}
 					value={detail?.status ?? ''}
@@ -302,9 +304,9 @@
 					}))}
 				/>
 			</span>
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (detail = null)}>Tutup</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (detail = null)}>{tr("Tutup")}</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={notesBusy} onclick={() => void saveNotes()}>
-				{notesBusy ? 'Menyimpan…' : 'Simpan catatan'}
+				{notesBusy ? 'Menyimpan…' : tr('Simpan catatan')}
 			</button>
 		{/snippet}
 	</Modal>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Detail publikasi admin — riwayat attempts, job delivery, payload, callback
 	// adaptor, analisis PR, auto-replacement, dan variant.
 	// Port apps/web/src/app/admin/publications/[publicationId]/page.tsx.
@@ -147,15 +149,15 @@
 		retrying: 'warning',
 		cancelled: 'neutral'
 	};
-	const ATTEMPT_LABEL: Record<string, string> = {
-		published: 'Terbit',
+	const ATTEMPT_LABEL: Record<string, string> = $derived({
+		published: tr('Terbit'),
 		retrying: 'Mencoba ulang',
-		failed: 'Gagal',
+		failed: tr('Gagal'),
 		queued: 'Diantrekan',
 		processing: 'Diproses',
-		partner_approved: 'Disetujui mitra',
-		waiting_partner: 'Menunggu persetujuan'
-	};
+		partner_approved: tr('Disetujui mitra'),
+		waiting_partner: tr('Menunggu persetujuan')
+	});
 
 	const publicationId = $derived(page.params.publicationId as string);
 
@@ -215,7 +217,7 @@
 	}
 
 	const idr = (n: unknown) =>
-		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(
+		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(
 			Number(n ?? 0)
 		);
 	const pub = $derived(data?.publication);
@@ -223,7 +225,7 @@
 
 <section>
 	<PageHeader
-		title={pub?.document_title ?? 'Detail publikasi'}
+		title={pub?.document_title ?? tr('Detail publikasi')}
 		description={`Publication ${publicationId}${pub?.campaign_name ? ` · Campaign: ${pub.campaign_name}` : ''}`}
 	>
 		{#if pub}<Badge tone={STATUS_TONE[pub.status] ?? 'neutral'} value={pub.status} />{/if}
@@ -232,12 +234,11 @@
 			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
 			style="text-decoration: none;"
 		>
-			<ArrowLeft size={13} /> Kembali ke daftar
-		</a>
+			<ArrowLeft size={13} />{tr("Kembali ke daftar")}</a>
 	</PageHeader>
 
 	{#if loading && !data && !error}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat detail publikasi…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat detail publikasi…")}</p>
 	{:else if error.includes('Akses platform') || error.includes('tidak ditemukan')}
 		<div class="app-card mt-6 px-6 py-10 text-center">
 			<p class="text-sm text-muted-foreground">{error}</p>
@@ -251,8 +252,7 @@
 					class="app-card mt-4 px-4 py-3 text-sm"
 					style="color: var(--destructive);"
 				>
-					<strong>{pub.error_code}</strong> — {pub.error_message ?? 'tidak ada detail'}<br />
-					Gagal pada {pub.updated_at ? fmtDateTime(pub.updated_at) : '—'}
+					<strong>{pub.error_code}</strong> — {pub.error_message ?? 'tidak ada detail'}<br /> {tr("Gagal pada")} {pub.updated_at ? fmtDateTime(pub.updated_at) : '—'}
 				</div>
 			{/if}
 
@@ -276,14 +276,14 @@
 			<div class="app-card mt-4 p-4">
 				<div class="grid gap-3 sm:grid-cols-3">
 					<div>
-						<p class="text-xs text-muted-foreground">Media</p>
+						<p class="text-xs text-muted-foreground">{tr("Media")}</p>
 						<p class="text-sm font-medium">{pub.media_name ?? '—'}</p>
 						<p class="text-xs text-muted-foreground">
 							{pub.media_integration_type ?? '—'}{pub.adapter_url ? ` · ${pub.adapter_url}` : ''}
 						</p>
 					</div>
 					<div>
-						<p class="text-xs text-muted-foreground">Brand / Klien</p>
+						<p class="text-xs text-muted-foreground">{tr("Brand / Klien")}</p>
 						<p class="text-sm font-medium">{pub.brand_name ?? '—'}</p>
 						{#if pub.brand_public_id}<p class="text-xs text-muted-foreground">{pub.brand_public_id}</p>{/if}
 					</div>
@@ -295,7 +295,7 @@
 					<div>
 						<p class="mb-1 text-xs text-muted-foreground">Price breakdown</p>
 						<div class="flex justify-between gap-3 text-xs">
-							<span class="text-muted-foreground">Harga Mitra</span>
+							<span class="text-muted-foreground">{tr("Harga Mitra")}</span>
 							<span>{idr(pub.partner_price ?? pub.client_price)}</span>
 						</div>
 						<div class="flex justify-between gap-3 text-xs">
@@ -307,7 +307,7 @@
 							<span>{idr(Math.max(0, pub.client_price - (pub.partner_price ?? pub.client_price)))}</span>
 						</div>
 						<div class="mt-1 flex justify-between gap-3 border-t pt-1 text-xs font-bold">
-							<span>Harga Klien</span><span>{idr(pub.client_price)}</span>
+							<span>{tr("Harga Klien")}</span><span>{idr(pub.client_price)}</span>
 						</div>
 					</div>
 					<div>
@@ -315,7 +315,7 @@
 						<p class="text-sm font-medium">{pub.publish_status}</p>
 					</div>
 					<div>
-						<p class="text-xs text-muted-foreground">Dibuat oleh</p>
+						<p class="text-xs text-muted-foreground">{tr("Dibuat oleh")}</p>
 						<p class="text-sm font-medium">{pub.created_by_email ?? '—'}</p>
 					</div>
 					{#if pub.scheduled_at}
@@ -326,7 +326,7 @@
 					{/if}
 					{#if pub.published_at}
 						<div>
-							<p class="text-xs text-muted-foreground">Terbit</p>
+							<p class="text-xs text-muted-foreground">{tr("Terbit")}</p>
 							<p class="text-sm font-medium">{fmtDateTime(pub.published_at)}</p>
 						</div>
 					{/if}
@@ -349,8 +349,7 @@
 					</div>
 				{/if}
 				{#if pub.rejection_reason}
-					<p class="mt-3 rounded-lg px-3 py-2 text-xs" style="background-color: var(--destructive-soft, #fdecee); color: var(--destructive);">
-						Ditolak mitra: {pub.rejection_reason}
+					<p class="mt-3 rounded-lg px-3 py-2 text-xs" style="background-color: var(--destructive-soft, #fdecee); color: var(--destructive);"> {tr("Ditolak mitra:")} {pub.rejection_reason}
 					</p>
 				{/if}
 				{#if pub.notes}
@@ -368,9 +367,9 @@
 			</div>
 
 			<div class="app-card mt-4 p-4">
-				<h2 class="mb-2 text-base font-semibold">Riwayat attempts</h2>
+				<h2 class="mb-2 text-base font-semibold">{tr("Riwayat attempts")}</h2>
 				{#if data!.attempts.length === 0}
-					<p class="text-sm text-muted-foreground">Belum ada percobaan pengiriman tercatat.</p>
+					<p class="text-sm text-muted-foreground">{tr("Belum ada percobaan pengiriman tercatat.")}</p>
 				{/if}
 				{#each data!.attempts as attempt (attempt.attempt_number)}
 					<div class="flex items-start justify-between gap-3 border-b py-2 last:border-0">
@@ -397,10 +396,7 @@
 			{#if data!.publication.status === 'published' && data!.pr_analysis && (data!.pr_analysis.message || data!.pr_analysis.sentiment || data!.pr_analysis.verification)}
 				<div class="app-card mt-4 p-4">
 					<h2 class="mb-2 text-base font-semibold">Ringkasan Analisis PR</h2>
-					<p class="mb-3 text-xs text-muted-foreground">
-						Analisis otomatis atas artikel yang terbit (message consistency + tone + verifikasi URL) — bukan AVE, bukan
-						jaminan dampak bisnis.
-					</p>
+					<p class="mb-3 text-xs text-muted-foreground">{tr("Analisis otomatis atas artikel yang terbit (message consistency + tone + verifikasi URL) — bukan AVE, bukan jaminan dampak bisnis.")}</p>
 					{#if data!.pr_analysis.message}
 						<div class="mb-3">
 							<div class="mb-1 flex items-center gap-2">
@@ -499,14 +495,12 @@
 
 			{#if data!.replaces || data!.replaced_by}
 				<div class="app-card mt-4 p-4">
-					<h2 class="mb-2 text-base font-semibold">Riwayat auto-replacement</h2>
+					<h2 class="mb-2 text-base font-semibold">{tr("Riwayat auto-replacement")}</h2>
 					{#if data!.replaces}
 						<div class="flex items-start justify-between gap-3 border-b py-2">
 							<div>
-								<p class="text-sm font-medium">Pengganti dari: {data!.replaces.media_name ?? '—'}</p>
-								<p class="mt-1 text-xs text-muted-foreground">
-									Publikasi ini dibuat otomatis setelah publikasi di media tersebut ditolak (status asli:
-									<Badge tone={STATUS_TONE[data!.replaces.status] ?? 'neutral'} value={data!.replaces.status} />).
+								<p class="text-sm font-medium">{tr("Pengganti dari:")} {data!.replaces.media_name ?? '—'}</p>
+								<p class="mt-1 text-xs text-muted-foreground">{tr("Publikasi ini dibuat otomatis setelah publikasi di media tersebut ditolak (status asli:")}<Badge tone={STATUS_TONE[data!.replaces.status] ?? 'neutral'} value={data!.replaces.status} />).
 								</p>
 								{#if data!.replaces.brand_public_id}
 									<a
@@ -515,7 +509,7 @@
 										rel="noreferrer"
 										class="text-xs font-semibold"
 										style="color: var(--primary);"
-										>Buka di dashboard klien <ExternalLink size={13} class="inline" /></a
+										>{tr("Buka di dashboard klien")}<ExternalLink size={13} class="inline" /></a
 									>
 								{/if}
 							</div>
@@ -525,7 +519,7 @@
 					{#if data!.replaced_by}
 						<div class="flex items-start justify-between gap-3 border-b py-2 last:border-0">
 							<div>
-								<p class="text-sm font-medium">Digantikan oleh: {data!.replaced_by.media_name ?? '—'}</p>
+								<p class="text-sm font-medium">{tr("Digantikan oleh:")} {data!.replaced_by.media_name ?? '—'}</p>
 								<p class="mt-1 text-xs text-muted-foreground">
 									Setelah ditolak, artikel otomatis dialihkan ke media tersebut (status terbaru:
 									<Badge tone={STATUS_TONE[data!.replaced_by.status] ?? 'neutral'} value={data!.replaced_by.status} />
@@ -549,7 +543,7 @@
 										rel="noreferrer"
 										class="text-xs font-semibold"
 										style="color: var(--primary);"
-										>Buka di dashboard klien <ExternalLink size={13} class="inline" /></a
+										>{tr("Buka di dashboard klien")}<ExternalLink size={13} class="inline" /></a
 									>
 								{/if}
 							</div>
@@ -572,11 +566,11 @@
 						<div>
 							<p class="text-xs text-muted-foreground">Mode</p>
 							<p class="text-sm font-medium">
-								{data!.variant.mode === 'generate' ? 'Dibuatkan dari bahan' : 'Parafrase'} · seed {data!.variant.seed}
+								{data!.variant.mode === 'generate' ? tr('Dibuatkan dari bahan') : 'Parafrase'} · seed {data!.variant.seed}
 							</p>
 						</div>
 						<div>
-							<p class="text-xs text-muted-foreground">Status variant</p>
+							<p class="text-xs text-muted-foreground">{tr("Status variant")}</p>
 							<p class="text-sm font-medium">{data!.variant.variant_status}</p>
 						</div>
 						<div>
@@ -584,17 +578,14 @@
 							<code class="text-xs">{data!.variant.batch_id}</code>
 						</div>
 					</div>
-					<p class="mt-2 text-xs text-muted-foreground">
-						Artikel ini dihasilkan dari satu sumber bersama artikel lain, masing-masing dengan sudut pandang berbeda (diacak
-						per batch).
-					</p>
+					<p class="mt-2 text-xs text-muted-foreground">{tr("Artikel ini dihasilkan dari satu sumber bersama artikel lain, masing-masing dengan sudut pandang berbeda (diacak per batch).")}</p>
 				</div>
 			{/if}
 
 			<div class="app-card mt-4 p-4">
-				<h2 class="mb-2 text-base font-semibold">Riwayat callback adaptor</h2>
+				<h2 class="mb-2 text-base font-semibold">{tr("Riwayat callback adaptor")}</h2>
 				{#if data!.callbacks.length === 0}
-					<p class="text-sm text-muted-foreground">Belum ada callback dari adaptor mitra untuk publikasi ini.</p>
+					<p class="text-sm text-muted-foreground">{tr("Belum ada callback dari adaptor mitra untuk publikasi ini.")}</p>
 				{/if}
 				{#each data!.callbacks as callback, index (index)}
 					<div
@@ -626,7 +617,7 @@
 					<h2 class="mb-2 text-base font-semibold">Job delivery</h2>
 					<div class="mb-3 grid gap-3 sm:grid-cols-3">
 						<div>
-							<p class="text-xs text-muted-foreground">Status job</p>
+							<p class="text-xs text-muted-foreground">{tr("Status job")}</p>
 							<p class="text-sm font-medium">{data!.job.status}</p>
 						</div>
 						<div>
@@ -665,7 +656,7 @@
 							target="_blank"
 							rel="noreferrer"
 							class="text-xs font-semibold"
-							style="color: var(--primary);">Buka di dashboard klien <ExternalLink size={13} class="inline" /></a
+							style="color: var(--primary);">{tr("Buka di dashboard klien")}<ExternalLink size={13} class="inline" /></a
 						>
 					{/if}
 					{#if pub.partner_public_id}
@@ -674,7 +665,7 @@
 							target="_blank"
 							rel="noreferrer"
 							class="text-xs font-semibold"
-							style="color: var(--primary);">Buka di portal mitra <ExternalLink size={13} class="inline" /></a
+							style="color: var(--primary);">{tr("Buka di portal mitra")}<ExternalLink size={13} class="inline" /></a
 						>
 					{/if}
 				</div>

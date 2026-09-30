@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Monitoring Kesimpulan Website — daftar event tracking (queued/success/failed)
 	// beserta metrik ringkas. Port apps/web/src/app/admin/media-summaries/page.tsx.
 	import { onMount } from 'svelte';
@@ -52,11 +54,11 @@
 	function statusLabel(status: string, pages: Array<{ ok: boolean }>) {
 		if (status === 'success') {
 			// Semua halaman gagal ditarik → kesimpulan dibuat dari data mitra (fallback).
-			if (pages.length > 0 && pages.every((p) => !p.ok)) return 'Sukses · Data Mitra';
+			if (pages.length > 0 && pages.every((p) => !p.ok)) return tr('Sukses · Data Mitra');
 			return 'Sukses';
 		}
-		if (status === 'failed') return 'Gagal';
-		return 'Menunggu Antrean';
+		if (status === 'failed') return tr('Gagal');
+		return tr('Menunggu Antrean');
 	}
 
 	function statusBadgeTone(status: string, pages: Array<{ ok: boolean }>): 'neutral' | 'success' | 'warning' | 'danger' {
@@ -124,7 +126,7 @@
 				error = await readApiError(res, 'Permintaan gagal.');
 				return;
 			}
-			notice = 'Regenerasi dijadwalkan. Kesimpulan akan diperbarui lewat antrean global AI.';
+			notice = tr('Regenerasi dijadwalkan. Kesimpulan akan diperbarui lewat antrean global AI.');
 			await load(offset, status, search.trim());
 		} finally {
 			busyId = null;
@@ -134,18 +136,18 @@
 	const metrics = $derived([
 		{ label: 'Sukses', value: data.metrics?.success ?? 0, color: 'var(--success)' },
 		{
-			label: 'Gagal',
+			label: tr('Gagal'),
 			value: data.metrics?.failed ?? 0,
 			color: (data.metrics?.failed ?? 0) > 0 ? 'var(--destructive)' : 'var(--muted-foreground)'
 		},
-		{ label: 'Menunggu Antrean', value: data.metrics?.queued_events ?? 0, color: undefined },
+		{ label: tr('Menunggu Antrean'), value: data.metrics?.queued_events ?? 0, color: undefined },
 		{
-			label: 'Job Aktif',
+			label: tr('Job Aktif'),
 			value: (data.metrics?.jobs_pending ?? 0) + (data.metrics?.jobs_running ?? 0),
 			color: undefined
 		},
 		{
-			label: 'Job Gagal Permanen',
+			label: tr('Job Gagal Permanen'),
 			value: data.metrics?.jobs_failed ?? 0,
 			color: (data.metrics?.jobs_failed ?? 0) > 0 ? 'var(--destructive)' : 'var(--muted-foreground)'
 		}
@@ -212,7 +214,7 @@
 		<button
 			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
 			disabled={busyId !== null}
-			title="Hapus kesimpulan lama dan antrekan penerbitan ulang"
+			title={tr("Hapus kesimpulan lama dan antrekan penerbitan ulang")}
 			onclick={() => void regenerate(item.media_id)}
 			>{busyId === item.media_id ? 'Mengantrekan…' : 'Generate ulang'}</button
 		>
@@ -222,7 +224,7 @@
 <section>
 	<PageHeader
 		title="Monitoring Kesimpulan Website"
-		description="Tracking AI Tauthub saat menarik data web untuk profil Kesimpulan. Sukses dan gagal semuanya tercatat di sini."
+		description={tr("Tracking AI Tauthub saat menarik data web untuk profil Kesimpulan. Sukses dan gagal semuanya tercatat di sini.")}
 	/>
 
 	<Feedback {loading} {error} {notice} />
@@ -239,9 +241,9 @@
 	<form class="mt-4 flex flex-wrap items-center gap-2" onsubmit={submitFilters}>
 		<label class="app-input flex w-[280px] items-center gap-2 !py-1.5">
 			<Search size={14} class="text-muted-foreground" />
-			<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari nama media atau website…" bind:value={search} />
+			<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama media atau website…")} bind:value={search} />
 		</label>
-		<input class="app-input" style="width: 220px;" placeholder="Sukses / gagal / queued" bind:value={status} />
+		<input class="app-input" style="width: 220px;" placeholder={tr("Sukses / gagal / queued")} bind:value={status} />
 		<button type="submit" class="app-btn app-btn-soft">Terapkan</button>
 		<button
 			type="button"
@@ -257,23 +259,20 @@
 
 	<DataTable
 		columns={[
-			{ key: 'media', label: 'Media', render: mediaCell },
+			{ key: 'media', label: tr('Media'), render: mediaCell },
 			{ key: 'status', label: 'Status', render: statusCell },
-			{ key: 'pages', label: 'Halaman Ditarik', render: pagesCell },
+			{ key: 'pages', label: tr('Halaman Ditarik'), render: pagesCell },
 			{ key: 'error', label: 'Error', render: errorCell },
 			{ key: 'actions', label: 'Aksi', align: 'right' as const, render: regenCell }
 		]}
 		rows={data.items}
 		rowKey={(item: SummaryEvent) => item.id}
 		{loading}
-		empty="Belum ada event tracking yang cocok."
+		empty={tr("Belum ada event tracking yang cocok.")}
 		minWidth="1000px"
 	/>
 
 	<Pagination total={data.total} limit={LIMIT} {offset} onChange={(next) => void load(next, status, search.trim())} />
 
-	<p class="mt-4 text-xs text-muted-foreground">
-		Kesimpulan dibuat otomatis oleh AI lewat antrean global. Gagal diproses otomatis dicoba ulang oleh sistem; job yang gagal
-		permanen terlihat pada kartu Job Gagal Permanen.
-	</p>
+	<p class="mt-4 text-xs text-muted-foreground">{tr("Kesimpulan dibuat otomatis oleh AI lewat antrean global. Gagal diproses otomatis dicoba ulang oleh sistem; job yang gagal permanen terlihat pada kartu Job Gagal Permanen.")}</p>
 </section>

@@ -495,12 +495,18 @@ func (d *Deps) VipWallet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	sums := map[string]float64{}
-	for _, kind := range []string{"cpa", "transaction_commission", "publication", "referral"} {
-		row, _ := d.queryRow(r.Context(),
-			"SELECT COALESCE(SUM(amount),0) AS s FROM partner_earnings WHERE partner_id = $1 AND kind = $2 AND status != 'voided'",
-			partner.ID, kind)
-		sums[kind] = row.numOr("s")
+	// Satu query GROUP BY untuk semua jenis earning (sebelumnya 4 query).
+	sums := map[string]float64{"cpa": 0, "transaction_commission": 0, "publication": 0, "referral": 0}
+	rows, err := d.queryRows(r.Context(), `
+		SELECT kind, COALESCE(SUM(amount),0) AS s FROM partner_earnings
+		WHERE partner_id = $1 AND kind IN ('cpa','transaction_commission','publication','referral') AND status != 'voided'
+		GROUP BY kind`, partner.ID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	for _, row := range rows {
+		sums[row.strOr("kind", "")] = row.numOr("s")
 	}
 	history, _ := d.queryRows(r.Context(), `
 		SELECT id, kind, amount, client_price, status, created_at, source_referred_domain_id

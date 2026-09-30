@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Content Safety — hasil moderasi berlapis. review_required menunggu keputusan admin.
 	// Port apps/web/src/app/admin/moderations/page.tsx.
 	import { onMount } from 'svelte';
@@ -167,7 +169,7 @@
 					void load(f);
 				}}
 			>
-				{f === '' ? 'Semua' : f}
+				{f === '' ? tr('Semua') : f}
 			</button>
 		{/each}
 	</div>
@@ -183,7 +185,7 @@
 		rows={rows}
 		rowKey={(r: Audit) => r.id}
 		{loading}
-		empty="Tidak ada data untuk filter ini."
+		empty={tr("Tidak ada data untuk filter ini.")}
 		minWidth="900px"
 	/>
 </section>

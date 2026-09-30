@@ -161,7 +161,7 @@ func (d *Deps) GSCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg, cfgErr := d.loadGSCPlatformConfig(r)
 	if cfgErr != nil || cfg.ClientID == "" || cfg.ClientSecret == "" {
-		redirectErr("Konfigurasi Google OAuth belum diatur.")
+		redirectErr("Konfigurasi integrasi Google belum siap. Hubungi admin Tauthub.")
 		return
 	}
 	partnerID := oauth.strOr("partner_id", "")

@@ -83,6 +83,10 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 	limit := clampInt(q.Get("limit"), 100, 1, 500)
 	offset := clampInt(q.Get("offset"), 0, 0, 1<<30)
 
+	// Parity route lama (`/v1/brands/[brandId]/media/route.ts`): klausa persis
+	// `WHERE media.status = 'active'`. Media arsip/nonaktif/hidden/pending_review
+	// tidak pernah tampil — baik di katalog klien maupun di The Matchmaker yang
+	// memakai endpoint yang sama.
 	clause := "WHERE media.status = 'active'"
 	args := []any{}
 	addArg := func(v any) string {

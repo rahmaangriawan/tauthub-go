@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/imageconvert"
 )
 
 // finNonAlnumRe: pembersih ekstensi file (parity replace(/[^a-z0-9]/g, "")).
@@ -1763,9 +1764,14 @@ func (d *Deps) SettlementReceiptUpload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, errUnprocessable("Ukuran file maksimal 10 MB."))
 		return
 	}
+	// Gambar dinormalisasi ke WebP (parity app lama); PDF apa adanya.
+	payload := raw
 	ext := "jpg"
 	if isPDF {
 		ext = "pdf"
+	} else if converted, ok := imageconvert.ConvertToWebP(raw, contentType); ok {
+		payload = converted
+		ext = "webp"
 	} else if idx := strings.LastIndex(lowerName, "."); idx >= 0 {
 		candidate := finNonAlnumRe.ReplaceAllString(lowerName[idx+1:], "")
 		if candidate != "" {
@@ -1774,7 +1780,7 @@ func (d *Deps) SettlementReceiptUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	storageKey := uuid.NewString() + "." + ext
 	receiptURL := "/uploads/" + storageKey
-	if err := d.finSaveUploadFile(storageKey, raw); err != nil {
+	if err := d.finSaveUploadFile(storageKey, payload); err != nil {
 		writeErr(w, d, err)
 		return
 	}

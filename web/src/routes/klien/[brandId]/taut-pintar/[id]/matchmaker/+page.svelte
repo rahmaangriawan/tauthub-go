@@ -1,16 +1,27 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Agent 2: The Matchmaker — kurasi media & alokasi anggaran.
 	// Port app/klien/[brandId]/taut-pintar/[id]/matchmaker/client.tsx.
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Bot, ChevronDown, Clock, Coins, Hand, Search, SlidersHorizontal, Sparkles, Target, X, Zap } from '@lucide/svelte';
+	import {
+		Bot, Check, ChevronDown, Clock, Coins, ExternalLink, FileText, Hand, Info,
+		Search, SlidersHorizontal, Sparkles, Target, X, Zap
+	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
 	import Select from '$lib/components/select.svelte';
+	import Tooltip from '$lib/components/tooltip.svelte';
+	import MediaDetailModal from '../../../media/_detail-modal.svelte';
+	import TautBottomBar from '../../_bottom-bar.svelte';
 	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, humanizeReason, fmtTrafficShort, formatTraffic } from '../../_shared';
 	import PageTitle from '$lib/components/page-title.svelte';
+	// Kelas tabel bersama (port media-intelligence.module.css) — dipakai persis
+	// seperti app lama yang mengimpor modul CSS Katalog Media.
+	import '../../../media/media.css';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);
@@ -23,30 +34,48 @@
 		name: string;
 		category: string | null;
 		categories?: string[];
-		media_type: string | null;
+		media_type?: string | null;
 		description: string | null;
 		website_url: string | null;
-		integration_type: string | null;
-		credit_cost: number | null;
-		client_price: number | null;
-		price: number | null;
-		traffic_estimate: number | null;
+		contoh_artikel_url?: string | null;
+		bahasa_artikel?: string[] | null;
+		integration_type: string;
+		credit_cost: number;
+		client_price: number;
+		price: number;
+		markup_percent?: number | null;
+		pricing_type?: string | null;
+		traffic_estimate: number;
 		sw_visits?: number | null;
 		media_tier: string | null;
 		media_quality_score: number | null;
 		effective_quality: number | null;
+		quality_source: 'media' | 'tier_default' | null;
 		health_score: number | null;
+		health_breakdown?: Record<string, unknown> | null;
+		health_computed_at?: string | null;
 		dewan_pers_verified: boolean | null;
 		domain_verified?: boolean | null;
-		contoh_artikel_url?: string | null;
 		seo_da: number | null;
 		seo_pa: number | null;
 		seo_spam_score: number | null;
+		seo_checked_at?: string | null;
 		seo_ai_trust?: number | null;
 		seo_ai_citation?: boolean | null;
 		status: string;
+		label_sponsor?: string | null;
+		topik_terlarang?: string[] | null;
+		max_links?: number | null;
+		allow_hyperlink?: boolean | null;
+		image_required?: boolean | null;
+		publication_mode?: string | null;
+		word_count_mode?: string | null;
+		allow_embed?: boolean | null;
+		auto_publish?: boolean | null;
+		price_status?: string | null;
 		created_at: string | null;
 	};
+	type MediaTableEntry = { media: MediaRow; matchPercent?: number | null; reason?: string | null };
 	type DraftInfo = {
 		campaignName: string;
 		budgetMode: string | null;
@@ -58,6 +87,14 @@
 	let info = $state<DraftInfo | null>(null);
 	let placement = $state<PlacementRow[]>([]);
 	let library = $state<MediaRow[]>([]);
+	// Lazyload direktori media: halaman pertama 20 baris, sisanya ditarik saat
+	// sentinel di ujung tabel masuk viewport. Server tidak pernah mengirim
+	// seluruh katalog sekaligus, dan DOM tidak menahan ratusan baris.
+	const LIBRARY_PAGE = 20;
+	let libraryTotal = $state(0);
+	let libraryLoading = $state(false);
+	let librarySentinel = $state<HTMLElement | null>(null);
+	const libraryHasMore = $derived(library.length < libraryTotal);
 	let selected = $state<Set<string>>(new Set());
 	let manualPicks = $state<Set<string>>(new Set());
 	let entryMode = $state<'ai' | 'manual' | null>(null);
@@ -74,8 +111,24 @@
 	let daMin = $state('');
 	let spamMax = $state('');
 	let priceMax = $state('');
-	let showAdvanced = $state(false);
 	let detail = $state<MediaRow | null>(null);
+
+	// Ada filter/pencarian aktif? Dipakai untuk memutuskan apakah halaman
+	// direktori berikutnya perlu ikut ditarik supaya hasil tidak kosong palsu.
+	const filterActive = $derived(
+		Boolean(q.trim()) || typeFilter !== 'all' || Boolean(daMin) || Boolean(spamMax) || Boolean(priceMax)
+	);
+
+	// Popover kategori (+N) — fixed seperti portal Radix di app lama agar tidak
+	// terpotong overflow kartu/tabel.
+	let catPopoverId = $state<string | null>(null);
+	let catPopoverPos = $state<{ left: number; top: number }>({ left: 0, top: 0 });
+	let catPopoverCats = $state<string[]>([]);
+
+	// Popover "Filter Lanjutan" (tab Manual) — mengambang, bukan panel inline.
+	let advOpen = $state(false);
+	let advBtn = $state<HTMLButtonElement | null>(null);
+	let advPos = $state<{ left: number; top: number }>({ left: 0, top: 0 });
 
 	// ?mode=manual dari popup Buat Kampanye.
 	const manualMode = $derived(page.url.searchParams.get('mode') === 'manual');
@@ -117,7 +170,7 @@
 			if (res.ok) {
 				const data = await res.json();
 				info = {
-					campaignName: data.campaign?.name ?? 'Kampanye',
+					campaignName: data.campaign?.name ?? tr('Kampanye'),
 					budgetMode: data.draft?.budget?.mode ?? null,
 					budgetAmount: data.draft?.budget?.amount ?? 0,
 					walletAvailable: data.wallet?.available ?? 0,
@@ -139,7 +192,9 @@
 			let data: { media: PlacementRow[] } = { media: [] };
 			if (res.ok) data = await res.json();
 			if (autoRun && data.media.length === 0) {
-				const runRes = await apiRequest(`${apiBase}/placement`, { method: 'POST' });
+				// Matchmaker memanggil LLM (puluhan detik); timeout bawaan 12 dtk
+				// memutus request dan konteks server batal di tengah jalan.
+				const runRes = await apiRequest(`${apiBase}/placement`, { method: 'POST' }, 240_000);
 				if (runRes.ok) {
 					const runData = await runRes.json();
 					data.media = runData.media ?? [];
@@ -158,21 +213,29 @@
 				selected = serverSelected;
 			}
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : 'Gagal memuat rekomendasi.';
+			error = reason instanceof Error ? reason.message : tr('Gagal memuat rekomendasi.');
 		} finally {
 			running = false;
 		}
 	}
 
-	async function loadLibrary() {
+	async function loadLibrary(reset = false) {
+		if (libraryLoading) return;
+		if (!reset && library.length > 0 && !libraryHasMore) return;
+		libraryLoading = true;
+		const offset = reset ? 0 : library.length;
 		try {
-			const res = await apiRequest(`/v1/brands/${brandId}/media?limit=250`);
+			const res = await apiRequest(`/v1/brands/${brandId}/media?limit=${LIBRARY_PAGE}&offset=${offset}`);
 			if (res.ok) {
 				const data = await res.json();
-				library = data.media ?? data.items ?? [];
+				const rows: MediaRow[] = data.media ?? data.items ?? [];
+				library = reset ? rows : [...library, ...rows];
+				if (typeof data.total === 'number') libraryTotal = data.total;
 			}
 		} catch {
 			/* non-blocking */
+		} finally {
+			libraryLoading = false;
 		}
 	}
 
@@ -201,7 +264,7 @@
 			id: p.media_id, name: p.name, category: null, media_type: null,
 			description: null, website_url: null, integration_type: 'manual',
 			credit_cost: 0, client_price: 0, price: 0, traffic_estimate: 0,
-			media_tier: null, media_quality_score: null, effective_quality: null,
+			media_tier: null, media_quality_score: null, effective_quality: null, quality_source: null,
 			health_score: null, dewan_pers_verified: null,
 			seo_da: null, seo_pa: null, seo_spam_score: null,
 			status: 'active', created_at: null
@@ -260,6 +323,63 @@
 		return rows;
 	});
 
+	// Baris tabel per bagian (parity MediaDirectoryTable: entri sama untuk AI,
+	// removed, dan Manual — termasuk kolom AI Trust / AI Cited / Waktu Rilis).
+	const recommendedEntries = $derived<MediaTableEntry[]>(
+		recommendedCards
+			.filter((r) => r.placement.status !== 'removed')
+			.map((r) => ({ media: r.media, matchPercent: r.placement.score, reason: r.placement.reason }))
+	);
+	const removedEntries = $derived<MediaTableEntry[]>(
+		recommendedCards
+			.filter((r) => r.placement.status === 'removed')
+			.map((r) => ({ media: r.media, matchPercent: r.placement.score, reason: r.placement.reason }))
+	);
+	const customEntries = $derived<MediaTableEntry[]>(customCards.map((m) => ({ media: m })));
+
+	// Sentinel ujung tabel: tarik halaman berikutnya begitu terlihat. `library.length`
+	// dibaca agar observer dipasang ulang setelah tiap halaman — kalau viewport
+	// masih tinggi, sentinel tetap terlihat dan halaman berikutnya ikut ditarik
+	// sampai viewport penuh atau katalog habis.
+	$effect(() => {
+		const el = librarySentinel;
+		const loaded = library.length;
+		if (!el || !libraryHasMore || loading) return;
+		if (loaded === 0) return;
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (entries.some((e) => e.isIntersecting)) void loadLibrary();
+			},
+			{ rootMargin: '240px' }
+		);
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
+
+	// Filter/pencarian aktif tapi hasil yang sudah dimuat masih di bawah satu
+	// halaman → teruskan menarik halaman berikutnya (dengan jeda ketik) sampai
+	// ketemu atau katalog habis, supaya pencarian tidak memberi hasil kosong palsu.
+	$effect(() => {
+		const matched = customCards.length;
+		if (!filterActive || libraryLoading || !libraryHasMore || loading) return;
+		if (matched >= LIBRARY_PAGE) return;
+		const timer = setTimeout(() => void loadLibrary(), 250);
+		return () => clearTimeout(timer);
+	});
+
+	// Media rekomendasi AI datang dari `placement`, barisnya dicocokkan ke
+	// direktori. Kalau halamannya belum dimuat, barisnya jatuh ke placeholder
+	// (DA/trafik/harga kosong) dan total biaya & reach di bar bawah jadi salah.
+	// Jadi tarik halaman berikutnya sampai semua media placement ketemu.
+	$effect(() => {
+		if (loading || libraryLoading || !libraryHasMore) return;
+		if (placement.length === 0) return;
+		const missing = placement.some((p) => !mediaById.has(p.media_id));
+		if (!missing) return;
+		const timer = setTimeout(() => void loadLibrary(), 150);
+		return () => clearTimeout(timer);
+	});
+
 	const summary = $derived.by(() => {
 		let reach = 0;
 		let cost = 0;
@@ -288,29 +408,29 @@
 						method: 'PUT',
 						body: JSON.stringify({ add: ids.slice(i, i + 20) })
 					});
-					if (!addRes.ok) throw new Error(await readApiError(addRes, 'Gagal menambahkan media manual.'));
+					if (!addRes.ok) throw new Error(await readApiError(addRes, tr('Gagal menambahkan media manual.')));
 				}
 			}
 			const res = await apiRequest(`${apiBase}/placement`, {
 				method: 'PUT',
 				body: JSON.stringify({ selected: Array.from(picks) })
 			});
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal menyimpan seleksi media.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan seleksi media.')));
 			const advRes = await apiRequest(`${apiBase}/advance`, { method: 'POST', body: JSON.stringify({ target: 'placement' }) });
-			if (!advRes.ok) throw new Error(await readApiError(advRes, 'Gagal mengunci placement.'));
+			if (!advRes.ok) throw new Error(await readApiError(advRes, tr('Gagal mengunci placement.')));
 			await goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/writer${manualFlow ? '?mode=manual' : ''}`);
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : 'Gagal melanjutkan.';
+			error = reason instanceof Error ? reason.message : tr('Gagal melanjutkan.');
 			saving = false;
 		}
 	}
 
-	function getReleaseSpeed(integrationType: string | null) {
+	function getReleaseSpeed(integrationType: string) {
 		const autoTypes = ['wordpress', 'blogger', 'tulisio_api', 'custom_web', 'webhook'];
 		if (integrationType && autoTypes.includes(integrationType))
-			return { label: 'Super Cepat', sub: '< 3 Jam', isSuper: true, tone: 'success' };
-		if (integrationType === 'rss') return { label: 'Cepat', sub: '< 24 Jam', isSuper: false, tone: 'accent' };
-		return { label: 'Standar', sub: '1 - 2 Hari', isSuper: false, tone: 'muted' };
+			return { cls: 'releaseBadgeSuper', label: 'Super Cepat', sub: '< 3 Jam', isSuper: true };
+		if (integrationType === 'rss') return { cls: 'releaseBadgeFast', label: 'Cepat', sub: '< 24 Jam', isSuper: false };
+		return { cls: 'releaseBadgeStandard', label: 'Standar', sub: '1 - 2 Hari', isSuper: false };
 	}
 	function getDa(m: MediaRow): string | number {
 		return m.seo_da != null && m.seo_da > 0
@@ -327,29 +447,217 @@
 	const cleanDomain = (m: MediaRow) =>
 		m.website_url ? m.website_url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : m.id.slice(0, 8);
 
-	const badge = (tone: string) =>
-		tone === 'success'
-			? 'background-color: var(--success-soft); color: var(--success);'
-			: tone === 'accent'
-				? 'background-color: var(--accent); color: var(--accent-foreground);'
-				: 'background-color: var(--muted); color: var(--muted-foreground);';
+	function openCategoryPopover(event: MouseEvent, id: string, cats: string[]) {
+		event.stopPropagation();
+		if (catPopoverId === id) {
+			catPopoverId = null;
+			return;
+		}
+		const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+		const width = 280;
+		const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8));
+		catPopoverPos = { left, top: rect.bottom + 4 };
+		catPopoverCats = cats;
+		catPopoverId = id;
+	}
+
+	function openAdvFilter() {
+		if (advOpen) {
+			advOpen = false;
+			return;
+		}
+		const rect = advBtn?.getBoundingClientRect();
+		const width = 440;
+		const left = rect
+			? Math.min(Math.max(8, rect.right - width), Math.max(8, window.innerWidth - width - 8))
+			: 8;
+		advPos = { left, top: (rect?.bottom ?? 0) + 8 };
+		advOpen = true;
+	}
+
+	$effect(() => {
+		if (!catPopoverId) return;
+		const close = () => (catPopoverId = null);
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') close();
+		};
+		window.addEventListener('scroll', close, true);
+		window.addEventListener('resize', close);
+		window.addEventListener('keydown', onKey);
+		return () => {
+			window.removeEventListener('scroll', close, true);
+			window.removeEventListener('resize', close);
+			window.removeEventListener('keydown', onKey);
+		};
+	});
+
+	$effect(() => {
+		if (!advOpen) return;
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') advOpen = false;
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	});
 </script>
 
-<PageTitle title="Taut Pintar — The Matchmaker" />
+{#snippet mediaTable(entries: MediaTableEntry[], selectedIds: Set<string>, onToggle: (id: string) => void)}
+	<div class="tableWrap">
+		<table class="modernTable">
+			<thead>
+				<tr>
+					<th class="modernTh" style="width:36px;padding-right:0">{tr('Pilih')}</th>
+					<th class="modernTh">{tr('Nama Media')}</th>
+					<th class="modernTh">{tr('Kategori')}</th>
+					<th class="modernTh">{tr('Trafik (Est)')}</th>
+					<th class="modernTh" style="text-align:center">DA</th>
+					<th class="modernTh" style="text-align:center">
+						<span class="thWithInfo">AI TRUST
+							<Tooltip label={tr('Keterangan AI Trust Score')} maxWidth={260}>
+								{#snippet rich()}
+									<strong>AI Trust Score</strong> {tr('— Skor (0-100) kesiapan infrastruktur web (Schema, Speed) untuk dirayapi dan direkomendasikan oleh mesin LLM.')}
+								{/snippet}
+								<button type="button" class="infoDot" aria-label={tr('Keterangan AI Trust Score')} onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+							</Tooltip>
+						</span>
+					</th>
+					<th class="modernTh" style="text-align:center">
+						<span class="thWithInfo">AI CITED
+							<Tooltip label={tr('Keterangan AI Citation')} content={tr('Indikator otomatis via API apakah media ini terdeteksi aktif sebagai rujukan/referensi oleh mesin AI.')} maxWidth={260}>
+								<button type="button" class="infoDot" aria-label={tr('Keterangan AI Citation')} onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+							</Tooltip>
+						</span>
+					</th>
+					<th class="modernTh">
+						<span class="thWithInfo">{tr('Waktu Rilis')}
+							<Tooltip label={tr('Keterangan estimasi waktu rilis')} maxWidth={260}>
+								{#snippet rich()}
+									<span class="tipStack">
+										<strong>{tr('Indikator Waktu Rilis')}</strong>
+										<span><span style="color:#4ade80;font-weight:700;">{tr('Super Cepat:')}</span> &lt; 3 Jam</span>
+										<span><span style="color:#60a5fa;font-weight:700;">{tr('Cepat:')}</span> &lt; 24 Jam</span>
+										<span><span style="color:#d1d5db;font-weight:700;">{tr('Standar:')}</span> 1 - 2 Hari</span>
+									</span>
+								{/snippet}
+								<button type="button" class="infoDot" aria-label={tr('Keterangan estimasi waktu rilis')} onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+							</Tooltip>
+						</span>
+					</th>
+					<th class="modernTh">{tr('Harga')}</th>
+					<th class="modernTh" style="text-align:right">{tr('Aksi')}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each entries as entry (entry.media.id)}
+					{@const m = entry.media}
+					{@const traffic = formatTraffic(m.sw_visits, m.traffic_estimate)}
+					{@const speed = getReleaseSpeed(m.integration_type)}
+					{@const cats = Array.isArray(m.categories) && m.categories.length > 0 ? m.categories : m.category ? [m.category] : ['Umum']}
+					{@const isSel = selectedIds.has(m.id)}
+					<tr class="modernTr" style="background: {isSel ? '#f8faff' : 'transparent'}; cursor:pointer;" onclick={() => onToggle(m.id)}>
+						<td class="modernTd" style="width:36px;padding-right:0" onclick={(e) => e.stopPropagation()}>
+							<input type="checkbox" class="modernCheckbox" checked={isSel} onchange={() => onToggle(m.id)} aria-label={`${tr('Pilih media')} ${m.name}`} />
+						</td>
+						<td class="modernTd">
+							<div class="mediaRowCol">
+								<div class="mediaTitleLine">
+									<span class="mediaHeading">{m.name}</span>
+									{#if m.domain_verified}
+										<span class="verifiedTick" title={tr('Domain terverifikasi Tauthub')} aria-label={tr('Domain Terverifikasi')}>
+											<svg width="15" height="15" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+												<path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816z" fill="#1D9BF0"/>
+												<path d="M9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z" fill="#FFFFFF"/>
+											</svg>
+										</span>
+									{/if}
+									{#if entry.matchPercent != null && entry.matchPercent > 0}
+										<span class="badgeMatch" title={humanizeReason(entry.reason) || tr('Rekomendasi AI')}>★ {Math.round(entry.matchPercent)}% Match</span>
+									{/if}
+								</div>
+								<div class="mediaMetaLine">
+									{#if m.website_url}
+										<a class="domainLink" href={m.website_url.startsWith('http') ? m.website_url : `https://${m.website_url}`} target="_blank" rel="noreferrer noopener" onclick={(e) => e.stopPropagation()}>{cleanDomain(m)} <ExternalLink size={12} /></a>
+									{:else}
+										<span>{cleanDomain(m)}</span>
+									{/if}
+									{#if m.contoh_artikel_url}
+										<a class="sampleDocLink" href={m.contoh_artikel_url} target="_blank" rel="noreferrer nofollow" onclick={(e) => e.stopPropagation()}><FileText size={13} /><span>Sample</span></a>
+									{/if}
+								</div>
+								{#if m.dewan_pers_verified}
+									<div class="dewanPersBadge"><Check size={13} /><span>{tr('Dewan Pers')}</span></div>
+								{/if}
+							</div>
+						</td>
+						<td class="modernTd" onclick={(e) => e.stopPropagation()}>
+							<div class="categoryBadgeGroup">
+								<span class="categoryPill">{cats[0]}</span>
+								{#if cats.length > 1}
+									<button
+										type="button"
+										class="categoryPlusTag"
+										title={`${tr('Kategori')}: ${cats.join(', ')}`}
+										aria-label={`${cats.length} ${tr('kategori')}: ${cats.join(', ')}`}
+										aria-expanded={catPopoverId === m.id}
+										onclick={(e) => openCategoryPopover(e, m.id, cats)}
+									>+{cats.length - 1}</button>
+								{/if}
+							</div>
+						</td>
+						<td class="modernTd">
+							<div class="trafficStack">
+								<div>
+									<!-- Tanpa spasi antar-span: JSX di app lama membuang whitespace
+									     antar-elemen, jadi jarak panah tren murni dari
+									     margin-left 6px, bukan dari spasi teks. -->
+									<span class="trafficMainVal">{traffic.text}</span>{#if traffic.trend}<span class={traffic.trend.isUp ? 'trafficTrendGreen' : 'trafficTrendRed'}>{traffic.trend.isUp ? `↑ ${traffic.trend.val}%` : `↓ ${traffic.trend.val}%`}</span>{/if}
+								</div>
+								<span class="trafficSourceText">{traffic.source}</span>
+							</div>
+						</td>
+						<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getDa(m)}</span></td>
+						<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getAiTrust(m)}</span></td>
+						<td class="modernTd" style="text-align:center">
+							{#if m.seo_ai_citation === true}
+								<span class="aiCitationBadge"><Bot size={11} /> {tr('Sumber AI')}</span>
+							{:else}
+								<span class="mutedDash">—</span>
+							{/if}
+						</td>
+						<td class="modernTd">
+							<div class="releaseStack">
+								<span class={speed.cls}>
+									{#if speed.isSuper}<Zap size={12} />{:else}<Clock size={12} />{/if}<span>{tr(speed.label)}</span>
+								</span>
+								<span class="releaseTimeSub">{tr(speed.sub)}</span>
+							</div>
+						</td>
+						<td class="modernTd"><span class="priceBoldText">Rp {fmtIdr(m.client_price ?? m.price ?? 0)}</span></td>
+						<td class="modernTd" style="text-align:right" onclick={(e) => e.stopPropagation()}>
+							<button class="viewDetailBtn" type="button" onclick={(e) => { e.stopPropagation(); detail = m; }}>{tr('Detail')}</button>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
+{/snippet}
+
+<PageTitle title={tr('Taut Pintar — The Matchmaker')} />
 
 <main>
 	<div class="flex flex-wrap items-center justify-between gap-3">
 		<div class="flex items-center gap-3">
-			<div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background-color: var(--primary);">
+			<div class="flex h-11 w-11 items-center justify-center rounded-xl" style="background-color: var(--primary);">
 				<Target size={22} style="color: #fff;" />
 			</div>
 			<div>
 				<p class="font-bold leading-tight">Agent 2: The Matchmaker</p>
-				<p class="text-sm leading-tight text-muted-foreground">Kurasi Media &amp; Alokasi Anggaran</p>
+				<p class="text-sm leading-tight text-muted-foreground">{tr('Kurasi Media & Alokasi Anggaran')}</p>
 			</div>
 		</div>
-		<div class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium">
-			<span>{fmtIdr(info?.walletAvailable ?? 0)} Kredit</span>
+		<div class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold" style="background-color: var(--success-soft); color: var(--success);">
+			<span>{fmtIdr(info?.walletAvailable ?? 0)} {tr('Kredit')}</span>
 		</div>
 	</div>
 
@@ -358,9 +666,9 @@
 	</div>
 
 	{#if error}
-		<div class="app-card mt-3 flex items-start gap-2 px-4 py-2.5 text-sm" style="color: var(--destructive);">
+		<div class="errorBanner mt-3 flex items-start gap-2">
 			<span class="flex-1">{error}</span>
-			<button class="rounded p-0.5 hover:bg-secondary" type="button" aria-label="Tutup error" onclick={() => (error = '')}><X size={12} /></button>
+			<button class="rounded p-0.5" type="button" aria-label={tr('Tutup error')} onclick={() => (error = '')}><X size={12} /></button>
 		</div>
 	{/if}
 
@@ -368,13 +676,13 @@
 	<div class="mt-4 flex gap-1 border-b">
 		<button
 			class="inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium"
-			style="border-color: {tab === 'ai' ? 'var(--primary)' : 'transparent'}; color: {tab === 'ai' ? 'var(--primary)' : 'inherit'}; {manualFlow ? 'opacity:.42; cursor:not-allowed;' : ''}"
+			style="border-color: {tab === 'ai' ? 'var(--primary)' : 'transparent'}; color: {tab === 'ai' ? 'var(--primary)' : 'inherit'}; {manualFlow ? 'opacity:.42; cursor:not-allowed; filter:grayscale(100%);' : ''}"
 			type="button"
 			disabled={manualFlow}
-			title={manualFlow ? 'Rekomendasi AI dinonaktifkan pada kampanye pemilihan manual' : undefined}
+			title={manualFlow ? tr('Rekomendasi AI dinonaktifkan pada kampanye pemilihan manual') : undefined}
 			onclick={() => { if (!manualFlow || tab === 'custom') tabChoice = 'ai'; }}
 		>
-			<Sparkles size={13} /> Rekomendasi AI Pintar
+			<Sparkles size={13} /> {tr('Rekomendasi AI Pintar')}
 		</button>
 		<button
 			class="inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium"
@@ -382,24 +690,24 @@
 			type="button"
 			onclick={() => (tabChoice = 'custom')}
 		>
-			<Hand size={13} /> Manual
+			<Hand size={13} /> {tr('Manual')}
 		</button>
 	</div>
 
-	<div class="app-card mt-3 flex flex-wrap items-center gap-4 p-3 text-sm">
+	<div class="mt-2 mb-2.5 flex flex-wrap items-center gap-4 text-sm">
 		<span class="inline-flex items-center gap-1 text-muted-foreground">
-			<Target size={14} /> Kampanye: <strong style="color: var(--foreground);">{info?.campaignName ?? '—'}</strong>
+			<Target size={14} />{tr('Kampanye:')}<strong style="color: var(--foreground);">{info?.campaignName ?? '—'}</strong>
 		</span>
 		{#if tab === 'ai'}
 			<span class="inline-flex items-center gap-1 text-muted-foreground">
 				<Coins size={14} style="color: var(--success);" />
-				Mode:
+				{tr('Mode:')}
 				<strong style="color: var(--foreground);">
 					{info?.budgetMode === 'optimal'
-						? 'Optimal (Strategis)'
+						? tr('Optimal (Strategis)')
 						: info?.budgetMode === 'efficient' && (info?.budgetAmount ?? 0) > 0
-							? `Efisien (Max ${fmtIdr(info.budgetAmount)} Kredit)`
-							: 'Efisien'}
+							? `${tr('Efisien')} (${tr('Max')} ${fmtIdr(info.budgetAmount)} ${tr('Kredit')})`
+							: tr('Efisien')}
 				</strong>
 			</span>
 		{/if}
@@ -409,31 +717,31 @@
 		<div class="app-card mt-3 flex flex-wrap items-center gap-2 p-3">
 			<label class="app-input flex min-w-[200px] flex-1 items-center gap-2 !py-1.5">
 				<Search size={14} class="text-muted-foreground" />
-				<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari domain media atau niche…" aria-label="Cari domain media atau niche" bind:value={q} />
+				<input class="w-full bg-transparent text-sm outline-none" placeholder={tr('Cari domain media atau niche…')} aria-label={tr('Cari domain media atau niche')} bind:value={q} />
 			</label>
 			<Select
 				bind:value={typeFilter}
-				ariaLabel="Filter tipe media"
-				placeholder="Semua Tipe Media"
+				ariaLabel={tr('Filter tipe media')}
+				placeholder={tr('Semua Tipe Media')}
 				minWidth={170}
 				align="end"
 				options={[
-					{ value: 'all', label: 'Semua Tipe Media' },
-					{ value: 'mainstream', label: 'Media Online' },
+					{ value: 'all', label: tr('Semua Tipe Media') },
+					{ value: 'mainstream', label: tr('Media Online') },
 					{ value: 'blogger', label: 'Blog' }
 				]}
 			/>
 			<Select
 				bind:value={sort}
-				ariaLabel="Urutkan"
-				placeholder="Urutkan"
+				ariaLabel={tr('Urutkan')}
+				placeholder={tr('Urutkan')}
 				minWidth={170}
 				align="end"
 				options={[
 					{ value: 'recommended', label: 'AI Match Score' },
-					{ value: 'match', label: 'Match % Tertinggi' },
-					{ value: 'price', label: 'Harga Terendah' },
-					{ value: 'reach', label: 'Est. Reach Tertinggi' }
+					{ value: 'match', label: tr('Match % Tertinggi') },
+					{ value: 'price', label: tr('Harga Terendah') },
+					{ value: 'reach', label: tr('Est. Reach Tertinggi') }
 				]}
 			/>
 		</div>
@@ -441,120 +749,33 @@
 		{#if loading || running}
 			<div class="app-card mt-3 flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
 				<div class="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
-				<p>{running ? 'AI Matchmaker sedang mencocokkan media dengan hasil The Profiler…' : 'Memuat rekomendasi…'}</p>
+				<p>{running ? tr('AI Matchmaker sedang mencocokkan media dengan hasil The Profiler…') : tr('Memuat rekomendasi…')}</p>
 			</div>
 		{:else if recommendedCards.length === 0}
-			<div class="app-card mt-3 px-4 py-10 text-center text-sm text-muted-foreground">
-				Belum ada rekomendasi.
-				<button class="ml-1 font-medium" style="color: var(--primary);" type="button" onclick={() => void loadPlacement(true)}>Jalankan ulang Matchmaker</button>
+			<div class="app-card mt-3 px-4 py-10 text-center text-sm text-muted-foreground">{tr('Belum ada rekomendasi.')}<button class="ml-1 font-medium" style="color: var(--primary);" type="button" onclick={() => void loadPlacement(true)}>{tr('Jalankan ulang Matchmaker')}</button>
 			</div>
 		{:else}
-			<div class="mt-3">
-				<button class="app-card flex w-full items-center justify-between gap-2 p-3 text-sm" type="button" aria-expanded={aiSectionOpen} onclick={() => (aiSectionOpen = !aiSectionOpen)}>
-					<span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold" style={badge('accent')}>
-						<Sparkles size={13} /> Pilihan AI
+			<div class="aiSectionGroup mt-3">
+				<button class="aiSectionHeader" type="button" aria-expanded={aiSectionOpen} onclick={() => (aiSectionOpen = !aiSectionOpen)}>
+					<span class="aiSectionBadge">
+						<Sparkles size={13} />
+						{tr('Pilihan AI')}
 					</span>
-					<span class="inline-flex items-center gap-2 text-muted-foreground">
-						{recommendedCards.filter((r) => r.placement.status !== 'removed').length} rekomendasi
+					<span class="aiSectionMeta">
+						{recommendedEntries.length} {tr('rekomendasi')}
 						<ChevronDown size={16} style="transform: {aiSectionOpen ? 'rotate(180deg)' : 'none'}; transition: transform .15s;" />
 					</span>
 				</button>
 				{#if aiSectionOpen}
-					<div class="app-card mt-2 overflow-x-auto">
-						<table class="w-full text-sm">
-							<thead>
-								<tr class="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-									<th class="px-3 py-2 font-semibold">Pilih</th>
-									<th class="px-3 py-2 font-semibold">Nama Media</th>
-									<th class="px-3 py-2 font-semibold">Kategori</th>
-									<th class="px-3 py-2 font-semibold">Trafik (Est)</th>
-									<th class="px-3 py-2 text-center font-semibold">DA</th>
-									<th class="px-3 py-2 text-center font-semibold">AI Trust</th>
-									<th class="px-3 py-2 text-center font-semibold">AI Cited</th>
-									<th class="px-3 py-2 font-semibold">Waktu Rilis</th>
-									<th class="px-3 py-2 font-semibold">Harga</th>
-									<th class="px-3 py-2 text-right font-semibold">Aksi</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each recommendedCards.filter((r) => r.placement.status !== 'removed') as { media: m, placement: p } (m.id)}
-									{@const traffic = formatTraffic(m.sw_visits, m.traffic_estimate)}
-									{@const speed = getReleaseSpeed(m.integration_type)}
-									{@const isSelected = selected.has(m.id)}
-									<tr class="border-t" style="background: {isSelected ? 'var(--accent)' : 'transparent'};" onclick={() => toggleMedia(m.id)}>
-										<td class="px-3 py-2" onclick={(e) => e.stopPropagation()}>
-											<input type="checkbox" checked={isSelected} aria-label={`Pilih media ${m.name}`} onchange={() => toggleMedia(m.id)} />
-										</td>
-										<td class="px-3 py-2">
-											<div class="flex items-center gap-1.5">
-												<span class="font-medium">{m.name}</span>
-												{#if p.score != null && p.score > 0}
-													<span class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={badge('accent')} title={humanizeReason(p.reason) || 'Rekomendasi AI'}>
-														★ {Math.round(p.score)}% Match
-													</span>
-												{/if}
-											</div>
-											{#if m.website_url}
-												<a class="text-xs text-muted-foreground" href={m.website_url.startsWith('http') ? m.website_url : `https://${m.website_url}`} target="_blank" rel="noreferrer noopener" onclick={(e) => e.stopPropagation()}>{cleanDomain(m)}</a>
-											{:else}
-												<span class="text-xs text-muted-foreground">{cleanDomain(m)}</span>
-											{/if}
-										</td>
-										<td class="px-3 py-2">
-											<span class="rounded-full px-2 py-0.5 text-[11px]" style={badge('muted')}>
-												{Array.isArray(m.categories) && m.categories.length > 0 ? m.categories[0] : (m.category ?? 'Umum')}
-											</span>
-										</td>
-										<td class="px-3 py-2">
-											<p>{traffic.text}</p>
-											<p class="text-xs text-muted-foreground">{traffic.source}</p>
-										</td>
-										<td class="px-3 py-2 text-center"><span class="rounded px-1.5 py-0.5" style={badge('muted')}>{getDa(m)}</span></td>
-										<td class="px-3 py-2 text-center"><span class="rounded px-1.5 py-0.5" style={badge('muted')}>{getAiTrust(m)}</span></td>
-										<td class="px-3 py-2 text-center">
-											{#if m.seo_ai_citation === true}
-												<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]" style={badge('accent')}><Bot size={11} /> Sumber AI</span>
-											{:else}—{/if}
-										</td>
-										<td class="px-3 py-2">
-											<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]" style={badge(speed.tone)}>
-												{#if speed.isSuper}<Zap size={12} />{:else}<Clock size={12} />{/if}{speed.label}
-											</span>
-											<p class="text-xs text-muted-foreground">{speed.sub}</p>
-										</td>
-										<td class="px-3 py-2 font-semibold">Rp {fmtIdr(m.client_price ?? m.price ?? 0)}</td>
-										<td class="px-3 py-2 text-right" onclick={(e) => e.stopPropagation()}>
-											<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => (detail = m)}>Detail</button>
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
+					{@render mediaTable(recommendedEntries, selected, toggleMedia)}
 				{/if}
 			</div>
 
-			{#if !running && recommendedCards.some((r) => r.placement.status === 'removed')}
-				<div class="mt-4">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tidak direkomendasikan AI</p>
-					<div class="app-card mt-2 overflow-x-auto">
-						<table class="w-full text-sm">
-							<tbody>
-								{#each recommendedCards.filter((r) => r.placement.status === 'removed') as { media: m, placement: p } (m.id)}
-									<tr class="border-t" onclick={() => toggleMedia(m.id)}>
-										<td class="px-3 py-2" onclick={(e) => e.stopPropagation()}>
-											<input type="checkbox" checked={selected.has(m.id)} aria-label={`Pilih media ${m.name}`} onchange={() => toggleMedia(m.id)} />
-										</td>
-										<td class="px-3 py-2 font-medium">{m.name}</td>
-										<td class="px-3 py-2 text-xs text-muted-foreground">{humanizeReason(p.reason) || 'Tidak direkomendasikan.'}</td>
-										<td class="px-3 py-2 text-right" onclick={(e) => e.stopPropagation()}>
-											<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => (detail = m)}>Detail</button>
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
+			<!-- Media yang ditolak AI (removed) — di LUAR wrapper buka-tutup -->
+			{#if !running && removedEntries.length > 0}
+				<div class="removedSection">
+					<span class="removedLabel">{tr('Tidak direkomendasikan AI')}</span>
+					{@render mediaTable(removedEntries, selected, toggleMedia)}
 				</div>
 			{/if}
 		{/if}
@@ -562,144 +783,245 @@
 		<div class="app-card mt-3 flex flex-wrap items-center gap-2 p-3">
 			<label class="app-input flex min-w-[200px] flex-1 items-center gap-2 !py-1.5">
 				<Search size={14} class="text-muted-foreground" />
-				<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari domain media atau niche…" aria-label="Cari domain media atau niche" bind:value={q} />
+				<input class="w-full bg-transparent text-sm outline-none" placeholder={tr('Cari domain media atau niche…')} aria-label={tr('Cari domain media atau niche')} bind:value={q} />
 			</label>
 			<Select
 				bind:value={typeFilter}
-				ariaLabel="Filter tipe media"
-				placeholder="Semua Tipe Media"
+				ariaLabel={tr('Filter tipe media')}
+				placeholder={tr('Semua Tipe Media')}
 				minWidth={170}
 				align="end"
 				options={[
-					{ value: 'all', label: 'Semua Tipe Media' },
-					{ value: 'mainstream', label: 'Media Online' },
+					{ value: 'all', label: tr('Semua Tipe Media') },
+					{ value: 'mainstream', label: tr('Media Online') },
 					{ value: 'blogger', label: 'Blog' }
 				]}
 			/>
 			<Select
 				bind:value={sort}
-				ariaLabel="Urutkan"
-				placeholder="Urutkan"
+				ariaLabel={tr('Urutkan')}
+				placeholder={tr('Urutkan')}
 				minWidth={170}
 				align="end"
 				options={[
 					{ value: 'recommended', label: 'AI Match Score' },
-					{ value: 'match', label: 'Match % Tertinggi' },
-					{ value: 'price', label: 'Harga Terendah' },
-					{ value: 'reach', label: 'Est. Reach Tertinggi' }
+					{ value: 'match', label: tr('Match % Tertinggi') },
+					{ value: 'price', label: tr('Harga Terendah') },
+					{ value: 'reach', label: tr('Est. Reach Tertinggi') }
 				]}
 			/>
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (showAdvanced = !showAdvanced)}>
-				<SlidersHorizontal size={14} /> Filter Lanjutan
+			<button bind:this={advBtn} class="app-btn app-btn-soft" type="button" aria-expanded={advOpen} onclick={openAdvFilter}>
+				<SlidersHorizontal size={14} /> {tr('Filter Lanjutan')}
 			</button>
-			{#if showAdvanced}
-				<div class="w-full rounded-lg border p-3">
-					<p class="text-xs font-bold">Filter Lanjutan</p>
-					<div class="mt-2 grid gap-3 sm:grid-cols-3">
-						<label class="block"><span class="text-xs text-muted-foreground">DA Score (Minimal)</span><input class="app-input mt-1 w-full" type="number" min="0" max="100" placeholder="0" bind:value={daMin} /></label>
-						<label class="block"><span class="text-xs text-muted-foreground">Spam Score (Maksimal)</span><input class="app-input mt-1 w-full" type="number" min="0" max="100" placeholder="15" bind:value={spamMax} /></label>
-						<label class="block"><span class="text-xs text-muted-foreground">Harga (Kredit, Maksimal)</span><input class="app-input mt-1 w-full" type="number" min="0" placeholder="Tanpa batas" bind:value={priceMax} /></label>
-					</div>
-					<button class="app-btn app-btn-soft mt-2 !min-h-7 !px-2 !text-xs" type="button" onclick={() => { daMin = ''; spamMax = ''; priceMax = ''; }}>Reset Filter</button>
-				</div>
-			{/if}
 		</div>
 
-		{#if customCards.length === 0}
-			<div class="app-card mt-3 px-4 py-10 text-center text-sm text-muted-foreground">Tidak ada media yang cocok dengan filter.</div>
-		{:else}
-			<div class="app-card mt-3 overflow-x-auto">
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-							<th class="px-3 py-2 font-semibold">Pilih</th>
-							<th class="px-3 py-2 font-semibold">Nama Media</th>
-							<th class="px-3 py-2 font-semibold">Kategori</th>
-							<th class="px-3 py-2 font-semibold">Trafik (Est)</th>
-							<th class="px-3 py-2 text-center font-semibold">DA</th>
-							<th class="px-3 py-2 font-semibold">Harga</th>
-							<th class="px-3 py-2 text-right font-semibold">Aksi</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each customCards as m (m.id)}
-							{@const traffic = formatTraffic(m.sw_visits, m.traffic_estimate)}
-							{@const isPicked = manualPicks.has(m.id)}
-							<tr class="border-t" style="background: {isPicked ? 'var(--accent)' : 'transparent'};" onclick={() => toggleManual(m.id)}>
-								<td class="px-3 py-2" onclick={(e) => e.stopPropagation()}>
-									<input type="checkbox" checked={isPicked} aria-label={`Pilih media ${m.name}`} onchange={() => toggleManual(m.id)} />
-								</td>
-								<td class="px-3 py-2">
-									<p class="font-medium">{m.name}</p>
-									{#if m.website_url}<p class="text-xs text-muted-foreground">{cleanDomain(m)}</p>{/if}
-								</td>
-								<td class="px-3 py-2"><span class="rounded-full px-2 py-0.5 text-[11px]" style={badge('muted')}>{m.category ?? 'Umum'}</span></td>
-								<td class="px-3 py-2"><p>{traffic.text}</p><p class="text-xs text-muted-foreground">{traffic.source}</p></td>
-								<td class="px-3 py-2 text-center"><span class="rounded px-1.5 py-0.5" style={badge('muted')}>{getDa(m)}</span></td>
-								<td class="px-3 py-2 font-semibold">Rp {fmtIdr(m.client_price ?? m.price ?? 0)}</td>
-								<td class="px-3 py-2 text-right" onclick={(e) => e.stopPropagation()}>
-									<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => (detail = m)}>Detail</button>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+		{#if advOpen}
+			<button type="button" class="advFilterBackdrop" aria-label={tr('Tutup filter')} onclick={() => (advOpen = false)}></button>
+			<div class="advFilterPanel" style="left: {advPos.left}px; top: {advPos.top}px;">
+				<div class="advFilterCard">
+					<p class="text-xs font-bold">{tr('Filter Lanjutan')}</p>
+					<label class="advFilterField">
+						<span>{tr('DA Score (Minimal)')}</span>
+						<input class="app-input w-full" type="number" min="0" max="100" placeholder="0" bind:value={daMin} />
+					</label>
+					<label class="advFilterField">
+						<span>{tr('Spam Score (Maksimal)')}</span>
+						<input class="app-input w-full" type="number" min="0" max="100" placeholder="15" bind:value={spamMax} />
+					</label>
+					<label class="advFilterField">
+						<span>{tr('Harga (Kredit, Maksimal)')}</span>
+						<input class="app-input w-full" type="number" min="0" placeholder={tr('Tanpa batas')} bind:value={priceMax} />
+					</label>
+					<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => { daMin = ''; spamMax = ''; priceMax = ''; }}>{tr('Reset Filter')}</button>
+				</div>
 			</div>
+		{/if}
+
+		{#if customCards.length === 0}
+			<div class="app-card mt-3 px-4 py-10 text-center text-sm text-muted-foreground">
+				{libraryHasMore ? tr('Memuat media…') : tr('Tidak ada media yang cocok dengan filter.')}
+			</div>
+		{:else}
+			{@render mediaTable(customEntries, manualPicks, toggleManual)}
+			{#if libraryHasMore}
+				<div
+					bind:this={librarySentinel}
+					class="px-4 py-4 text-center text-xs text-muted-foreground"
+					role="status"
+					aria-live="polite"
+				>
+					{#if libraryLoading}{tr('Memuat media…')}{/if}
+				</div>
+			{/if}
 		{/if}
 	{/if}
 
-	<section class="app-card mt-4 p-4">
-		<div class="flex flex-wrap items-end justify-between gap-4">
-			<div class="flex flex-wrap gap-6">
-				<div>
-					<p class="text-xs text-muted-foreground">Media Terpilih</p>
-					<p class="font-bold">{summary.count} Domain</p>
-				</div>
-				<div>
-					<p class="text-xs text-muted-foreground">Est. Reach</p>
-					<p class="font-bold" style="color: var(--primary);">{fmtTrafficShort(summary.reach)}+</p>
-				</div>
-				<div>
-					<p class="text-xs text-muted-foreground">Total Biaya Kampanye</p>
-					<p class="text-xl font-bold">{(info?.rateIdr ?? 0) > 0 ? rpCurrency(summary.cost * (info?.rateIdr ?? 0)) : '—'}</p>
-					<p class="text-xs" style="color: var(--warning);">Jumlah Kredit: {fmtIdr(summary.cost)}</p>
-				</div>
+	<TautBottomBar>
+		<div class="bottomStats">
+			<div class="bottomStat">
+				<span class="bottomStatLabel">{tr('Media Terpilih')}</span>
+				<span class="bottomStatValue">{summary.count} {tr('Domain')}</span>
 			</div>
-			<div class="flex items-center gap-3">
-				<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/profiler`}>Kembali</a>
-				<button class="app-btn app-btn-primary" type="button" disabled={saving || summary.count === 0} onclick={finalize}>
-					{#if saving}<div class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>{/if}
-					{saving ? 'Menyimpan…' : 'Kunci & Lanjutkan Penulisan →'}
-				</button>
+			<div class="bottomStat">
+				<span class="bottomStatLabel">Est. Reach</span>
+				<span class="bottomStatValue" style="color: var(--primary);">{fmtTrafficShort(summary.reach)}+</span>
+			</div>
+			<div class="bottomStat">
+				<span class="bottomStatLabel">{tr('Total Biaya Kampanye')}</span>
+				<span class="bottomStatValue" style="font-size:20px;">{(info?.rateIdr ?? 0) > 0 ? rpCurrency(summary.cost * (info?.rateIdr ?? 0)) : '—'}</span>
+				<span class="bottomStatSub">{tr('Jumlah Kredit:')} {fmtIdr(summary.cost)}</span>
 			</div>
 		</div>
-	</section>
+		<div class="bottomActions">
+			<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/profiler`}>{tr('Kembali')}</a>
+			<button class="app-btn app-btn-primary" type="button" disabled={saving || summary.count === 0} onclick={finalize}>
+				{#if saving}<div class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>{/if}
+				{saving ? tr('Menyimpan…') : tr('Kunci & Lanjutkan Penulisan →')}
+			</button>
+		</div>
+	</TautBottomBar>
 </main>
 
 {#if detail}
-	<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
-		<dialog open class="app-card my-6 w-full max-w-lg p-5" aria-label={`Detail media ${detail.name}`}>
-			<div class="flex items-start justify-between gap-3">
-				<div class="min-w-0">
-					<h2 class="text-lg font-semibold">{detail.name}</h2>
-					{#if detail.website_url}
-						<a class="mt-0.5 inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={detail.website_url} target="_blank" rel="noreferrer">
-							{detail.website_url}
-						</a>
-					{/if}
-				</div>
-				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label="Tutup detail media" onclick={() => (detail = null)}><X size={18} /></button>
-			</div>
-			{#if detail.description}<p class="mt-3 text-sm text-muted-foreground">{detail.description}</p>{/if}
-			<dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
-				<div><dt class="text-xs text-muted-foreground">Harga klien</dt><dd class="font-semibold">Rp {fmtIdr(detail.client_price ?? detail.price ?? 0)}</dd></div>
-				<div><dt class="text-xs text-muted-foreground">Biaya kredit</dt><dd class="font-semibold">{detail.credit_cost ?? 0} TC</dd></div>
-				<div><dt class="text-xs text-muted-foreground">DA / PA</dt><dd>{getDa(detail)} / {detail.seo_pa ?? '—'}</dd></div>
-				<div><dt class="text-xs text-muted-foreground">Jangkauan</dt><dd>{fmtIdr(detail.traffic_estimate ?? 0)}</dd></div>
-			</dl>
-			<div class="mt-4 flex justify-end">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (detail = null)}>Tutup</button>
-			</div>
-		</dialog>
+	<MediaDetailModal media={detail} onclose={() => (detail = null)} />
+{/if}
+
+<!-- Popover kategori (+N) — fixed agar tidak terpotong kartu/wrapper tabel. -->
+{#if catPopoverId}
+	<button type="button" class="categoryPopoverBackdrop" aria-label={tr('Tutup daftar kategori')} onclick={() => (catPopoverId = null)}></button>
+	<div class="categoryPopover" role="tooltip" style="left: {catPopoverPos.left}px; top: {catPopoverPos.top}px;">
+		<div class="categoryPopoverTitle">{tr('Semua Kategori')}</div>
+		<div class="categoryPopoverList">
+			{#each catPopoverCats as c (c)}<span class="categoryPill">{c}</span>{/each}
+		</div>
 	</div>
 {/if}
+
+<style>
+	/* Isi bottom bar tetap (posisi/spacer disediakan TautBottomBar). */
+	.bottomStats {
+		display: flex;
+		align-items: center;
+		gap: 36px;
+		flex-wrap: wrap;
+	}
+	.bottomStat {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.bottomStatLabel {
+		font-size: 10.5px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--muted-foreground);
+	}
+	.bottomStatValue {
+		font-size: 18px;
+		font-weight: 800;
+		color: var(--foreground);
+		font-variant-numeric: tabular-nums;
+	}
+	.bottomStatSub {
+		font-size: 11.5px;
+		font-weight: 600;
+		color: var(--warning);
+	}
+	.bottomActions {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+
+	@media (max-width: 767px) {
+		.bottomStats {
+			justify-content: space-between;
+			width: 100%;
+		}
+		.bottomActions {
+			flex-direction: column;
+			align-items: stretch;
+			width: 100%;
+		}
+		.bottomActions :global(.app-btn) {
+			width: 100%;
+		}
+	}
+
+	/* Badge "% Match" (parity .badgeMatch matchmaker.module.css). */
+	.badgeMatch {
+		font-size: 11px;
+		font-weight: 700;
+		color: var(--primary);
+		padding: 2px 8px;
+		background: var(--accent);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		white-space: nowrap;
+	}
+
+	/* Section "Pilihan AI" — kotak biru bisa buka-tutup (parity .aiSectionGroup). */
+	.aiSectionGroup {
+		border: 2px solid var(--primary);
+		border-radius: 14px;
+		background: var(--accent);
+		overflow: hidden;
+	}
+	.aiSectionHeader {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 12px 16px;
+		background: color-mix(in srgb, var(--primary) 10%, var(--card));
+		border: none;
+		cursor: pointer;
+		font-family: inherit;
+	}
+	.aiSectionHeader:hover {
+		background: color-mix(in srgb, var(--primary) 16%, var(--card));
+	}
+	.aiSectionBadge {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 13px;
+		font-weight: 750;
+		color: var(--primary);
+	}
+	.aiSectionMeta {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 12.5px;
+		color: var(--muted-foreground);
+	}
+
+	/* Media yang ditolak AI — di luar wrapper, tampil redup. */
+	.removedSection {
+		margin-top: 14px;
+	}
+	.removedLabel {
+		display: inline-flex;
+		align-items: center;
+		font-size: 12.5px;
+		font-weight: 700;
+		color: var(--muted-foreground);
+		letter-spacing: 0.02em;
+		text-transform: uppercase;
+		margin-bottom: 8px;
+	}
+
+	/* Field di popover Filter Lanjutan. */
+	.advFilterField {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		font-size: 12.5px;
+		font-weight: 600;
+		color: var(--muted-foreground);
+	}
+
+</style>

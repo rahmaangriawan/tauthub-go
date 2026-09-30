@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Payment gateway & transaksi — port app/admin/payments/page.tsx:
 	// konfigurasi multi-provider (Xendit, Duitku, Midtrans, Tripay, dll) dengan
 	// hanya satu gateway aktif, test koneksi, dan riwayat 50 transaksi terbaru.
@@ -25,15 +27,15 @@
 		payment_method: string | null; has_invoice: boolean; created_at: string; paid_at: string | null;
 	};
 
-	const TX_STATUS_META: Record<string, { label: string; tone: 'success' | 'warning' | 'danger' | 'neutral' }> = {
+	const TX_STATUS_META: Record<string, { label: string; tone: 'success' | 'warning' | 'danger' | 'neutral' }> = $derived({
 		paid: { label: 'Sukses', tone: 'success' },
 		succeeded: { label: 'Sukses', tone: 'success' },
 		settled: { label: 'Sukses', tone: 'success' },
-		pending: { label: 'Menunggu', tone: 'warning' },
-		failed: { label: 'Gagal', tone: 'danger' },
+		pending: { label: tr('Menunggu'), tone: 'warning' },
+		failed: { label: tr('Gagal'), tone: 'danger' },
 		expired: { label: 'Kedaluwarsa', tone: 'neutral' },
-		cancelled: { label: 'Dibatalkan', tone: 'neutral' }
-	};
+		cancelled: { label: tr('Dibatalkan'), tone: 'neutral' }
+	});
 
 	let gateways = $state<Gateway[]>([]);
 	let error = $state('');
@@ -157,17 +159,17 @@
 <section>
 	<PageHeader
 		title="Payment Gateway"
-		description="Kelola konfigurasi multi-provider (Xendit, Duitku, Midtrans, Tripay). Hanya SATU gateway yang aktif untuk transaksi baru; konfigurasi lain tetap tersimpan saat diganti."
+		description={tr("Kelola konfigurasi multi-provider (Xendit, Duitku, Midtrans, Tripay). Hanya SATU gateway yang aktif untuk transaksi baru; konfigurasi lain tetap tersimpan saat diganti.")}
 	>
 		<span
 			class="rounded-full px-3 py-1 text-xs font-medium"
 			style="background-color: {activeProvider ? 'var(--success-soft)' : 'var(--warning-soft)'}; color: {activeProvider ? 'var(--success)' : 'var(--warning)'};"
-		>{activeProvider ? `${activeProvider} aktif` : 'Belum ada gateway aktif'}</span>
+		>{activeProvider ? `${activeProvider} aktif` : tr('Belum ada gateway aktif')}</span>
 	</PageHeader>
 
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke pengelolaan payment gateway.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke pengelolaan payment gateway.")}</p>
 		</div>
 	{:else}
 		<Feedback {loading} {error} loadingText="Memuat payment gateway…" />
@@ -192,7 +194,7 @@
 						<p class="mt-3 text-xs text-muted-foreground">
 							{gateway.last_tested_at
 								? `Terakhir diuji: ${fmtDateTime(gateway.last_tested_at)} · ${gateway.last_test_ok ? 'OK' : 'gagal'}`
-								: 'Belum pernah diuji koneksinya.'}
+								: tr('Belum pernah diuji koneksinya.')}
 						</p>
 					{/if}
 
@@ -217,7 +219,7 @@
 								<input
 									class="app-input w-full"
 									type={field.secret ? 'password' : 'text'}
-									placeholder={field.placeholder ?? (current ? 'Kosongkan untuk mempertahankan nilai tersimpan' : '')}
+									placeholder={field.placeholder ?? (current ? tr('Kosongkan untuk mempertahankan nilai tersimpan') : '')}
 									value={form?.values[field.key] ?? ''}
 									oninput={(e) => setValue(gateway.provider, field.key, (e.currentTarget as HTMLInputElement).value)}
 								/>
@@ -226,7 +228,7 @@
 					</div>
 
 					<div class="mt-4 flex flex-wrap gap-2">
-						<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" disabled={busyId === gateway.id} onclick={() => void save(gateway)}>Simpan konfigurasi</button>
+						<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" disabled={busyId === gateway.id} onclick={() => void save(gateway)}>{tr("Simpan konfigurasi")}</button>
 						{#if gateway.is_configured && !gateway.is_active}
 							<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={busyId === gateway.id} onclick={() => void activate(gateway)}>Aktifkan gateway</button>
 						{/if}
@@ -241,19 +243,19 @@
 		{#if !loading && gateways.length === 0}
 			<div class="flex flex-col items-center px-4 py-12 text-center">
 				<Coins size={26} class="text-muted-foreground" />
-				<p class="mt-2 text-sm text-muted-foreground">Belum ada konfigurasi payment gateway. Simpan kredensial provider untuk mulai.</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada konfigurasi payment gateway. Simpan kredensial provider untuk mulai.")}</p>
 			</div>
 		{/if}
 
 		<div class="app-card mt-6 p-5">
 			<div class="flex items-center justify-between">
-				<h2 class="text-base font-semibold">Riwayat Transaksi</h2>
-				<span class="text-xs text-muted-foreground">50 terbaru · status sukses/gagal dari webhook gateway</span>
+				<h2 class="text-base font-semibold">{tr("Riwayat Transaksi")}</h2>
+				<span class="text-xs text-muted-foreground">{tr("50 terbaru · status sukses/gagal dari webhook gateway")}</span>
 			</div>
 			{#if txs === null}
-				<p class="mt-3 text-sm text-muted-foreground">Memuat log transaksi…</p>
+				<p class="mt-3 text-sm text-muted-foreground">{tr("Memuat log transaksi…")}</p>
 			{:else if txs.length === 0}
-				<p class="mt-3 text-sm text-muted-foreground">Belum ada transaksi pembayaran.</p>
+				<p class="mt-3 text-sm text-muted-foreground">{tr("Belum ada transaksi pembayaran.")}</p>
 			{:else}
 				<div class="mt-3 overflow-x-auto">
 					<table class="w-full text-sm" style="min-width: 1180px;">
@@ -265,7 +267,7 @@
 								<th class="px-4 py-2.5 font-medium">Status</th>
 								<th class="px-4 py-2.5 font-medium">Tujuan</th>
 								<th class="px-4 py-2.5 font-medium">Faktur</th>
-								<th class="px-4 py-2.5 font-medium">Dibuat</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Dibuat")}</th>
 								<th class="px-4 py-2.5 font-medium">Dibayar</th>
 							</tr>
 						</thead>

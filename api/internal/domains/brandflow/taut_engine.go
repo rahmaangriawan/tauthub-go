@@ -180,7 +180,7 @@ func (d *Deps) callAgentLLM(ctx context.Context, agent, userPrompt string, jsonM
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
-	resp, err := (&http.Client{}).Do(req)
+	resp, err := (&http.Client{Timeout: 5 * time.Minute}).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("LLM %s: %w", agent, err)
 	}

@@ -97,8 +97,11 @@ func (t *Turnstile) PublicSiteKey(ctx context.Context) (bool, *string) {
 	return true, &cfg.SiteKey
 }
 
-// RequireToken: enabled tapi secret kosong → lewati (misconfig jangan blokir);
-// token kosong / verifikasi gagal → TurnstileError (port requireTurnstileToken).
+// RequireToken: enabled tapi secret kosong → TOLAK (fail-closed); token kosong
+// atau verifikasi gagal → TurnstileError (port requireTurnstileToken).
+//
+// Sebelumnya misconfig ini dilewati (fail-open) sehingga proteksi bot mati
+// diam-diam saat secret lupa diisi.
 func (t *Turnstile) RequireToken(ctx context.Context, token string, remoteIp string) error {
 	cfg := t.GetConfig(ctx)
 	if !cfg.Enabled {
@@ -106,8 +109,8 @@ func (t *Turnstile) RequireToken(ctx context.Context, token string, remoteIp str
 	}
 	secret := t.resolveSecret(cfg)
 	if secret == "" {
-		slog.Warn("[turnstile] enabled tapi secret belum dikonfigurasi — verifikasi dilewati")
-		return nil
+		slog.Error("[turnstile] enabled tapi secret belum dikonfigurasi — verifikasi ditolak (fail-closed)")
+		return &TurnstileError{Message: "Verifikasi Turnstile belum dikonfigurasi. Hubungi admin."}
 	}
 	value := strings.TrimSpace(token)
 	if value == "" {

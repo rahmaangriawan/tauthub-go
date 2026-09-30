@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Audit log platform — port app/admin/audit-log/page.tsx.
 	// Jejak tindakan platform & brand: filter server-side (search/brand/action) + paginasi offset.
 	import { onMount } from 'svelte';
@@ -74,13 +76,16 @@
 			data = await res.json();
 			offset = nextOffset;
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		} finally {
 			loading = false;
 		}
 	}
 
 	function applyFilters() {
+		// Nilai input yang diketik harus dipindahkan ke state `search` yang dikirim
+		// ke API; tanpa ini kotak pencarian tidak memfilter apa pun.
+		search = searchInput.trim();
 		void load(0, pageSize, search, brand, action);
 	}
 
@@ -101,7 +106,7 @@
 </script>
 
 <section>
-	<PageHeader title="Audit Log" description="Jejak tindakan platform dan brand yang tersimpan di server.">
+	<PageHeader title="Audit Log" description={tr("Jejak tindakan platform dan brand yang tersimpan di server.")}>
 		<Badge tone="accent" label="{data.total.toLocaleString('id-ID')} events" />
 	</PageHeader>
 
@@ -109,7 +114,7 @@
 
 	{#if error.includes('Akses platform')}
 		<div class="app-card mt-4 px-4 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke audit log platform.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke audit log platform.")}</p>
 		</div>
 	{:else}
 		<form class="app-card mt-4 flex flex-wrap items-center gap-3 p-3" onsubmit={(e) => { e.preventDefault(); applyFilters(); }}>
@@ -117,8 +122,8 @@
 				<Search size={14} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
 				<input
 					class="app-input w-full pl-9"
-					placeholder="Cari action, target, atau actor..."
-					aria-label="Cari audit log"
+					placeholder={tr("Cari action, target, atau actor...")}
+					aria-label={tr("Cari audit log")}
 					bind:value={searchInput}
 				/>
 			</div>
@@ -130,7 +135,7 @@
 					brand = v;
 					void load(0, pageSize, search, brand, action);
 				}}
-				options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: b.id, label: b.name }))]}
+				options={[{ value: '', label: tr('Semua brand') }, ...brands.map((b) => ({ value: b.id, label: b.name }))]}
 			/>
 			<Select
 				ariaLabel="Filter jenis aksi"
@@ -140,7 +145,7 @@
 					action = v;
 					void load(0, pageSize, search, brand, action);
 				}}
-				options={[{ value: '', label: 'Semua aksi' }, ...ACTION_OPTIONS.map((o) => ({ value: o.value, label: o.label }))]}
+				options={[{ value: '', label: tr('Semua aksi') }, ...ACTION_OPTIONS.map((o) => ({ value: o.value, label: o.label }))]}
 			/>
 			<button class="app-btn app-btn-soft" type="submit" disabled={loading}>Terapkan filter</button>
 			{#if hasActiveFilter}
@@ -177,7 +182,7 @@
 				</tbody>
 			</table>
 			{#if !loading && data.items.length === 0}
-				<p class="px-4 py-12 text-center text-sm text-muted-foreground">Tidak ada audit event yang cocok.</p>
+				<p class="px-4 py-12 text-center text-sm text-muted-foreground">{tr("Tidak ada audit event yang cocok.")}</p>
 			{/if}
 		</div>
 

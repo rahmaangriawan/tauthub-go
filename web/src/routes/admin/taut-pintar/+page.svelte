@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Monitoring taut campaign — port app/admin/taut-pintar/page.tsx.
 	// Pipeline estafet 4 agent per kampanye + retry per-step, statistik agent run,
 	// dan bersihkan run lama (> 30 hari).
@@ -87,7 +89,7 @@
 			campaigns = data.campaigns ?? [];
 			stats = data.stats ?? null;
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		}
 	}
 
@@ -123,7 +125,7 @@
 	}
 
 	async function cleanupRuns() {
-		if (!confirm('Bersihkan run agent yang lebih tua dari 30 hari?')) return;
+		if (!confirm(tr('Bersihkan run agent yang lebih tua dari 30 hari?'))) return;
 		error = '';
 		const res = await apiRequest('/v1/platform/taut/runs/cleanup', {
 			method: 'POST',
@@ -183,7 +185,7 @@
 
 	<div class="app-card mt-4 p-4">
 		{#if campaigns.length === 0}
-			<p class="py-3 text-sm text-muted-foreground">Belum ada kampanye Taut Pintar.</p>
+			<p class="py-3 text-sm text-muted-foreground">{tr("Belum ada kampanye Taut Pintar.")}</p>
 		{:else}
 			<div class="space-y-1">
 				{#each visibleCampaigns as c (c.campaign_id)}
@@ -199,7 +201,7 @@
 							/>
 							{#if c.failed_runs > 0}<Badge tone="danger" label="{c.failed_runs} gagal" />{/if}
 							<Badge tone="neutral" label="{c.runs} run" />
-							<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => void openDetail(c.campaign_id)}>Detail</button>
+							<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => void openDetail(c.campaign_id)}>{tr("Detail")}</button>
 						</div>
 					</div>
 				{/each}
@@ -212,12 +214,12 @@
 		<div class="app-card mt-4 p-4">
 			<div class="flex flex-wrap items-center gap-2">
 				<h2 class="text-sm font-semibold">Pipeline Agent{selectedCampaign ? ` · ${selectedCampaign.name}` : ''}</h2>
-				<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => { selected = null; detail = null; }}>Tutup</button>
+				<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => { selected = null; detail = null; }}>{tr("Tutup")}</button>
 			</div>
 			{#if detailLoading || !detail}
-				<p class="mt-2 text-sm text-muted-foreground">Memuat…</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Memuat…")}</p>
 			{:else if detail.length === 0}
-				<p class="mt-2 text-sm text-muted-foreground">Belum ada agent run.</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada agent run.")}</p>
 			{:else}
 				<div class="mt-2 space-y-1">
 					{#each detail as r (r.id)}

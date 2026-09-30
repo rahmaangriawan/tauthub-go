@@ -1,6 +1,7 @@
 package authdomain
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -147,7 +148,8 @@ func (d *Deps) TwoFactorVerify(w http.ResponseWriter, r *http.Request) {
 		}
 		found := false
 		for _, h := range stored {
-			if h == hashed {
+			// Perbandingan constant-time: hash tersimpan vs hash dari input.
+			if subtle.ConstantTimeCompare([]byte(h), []byte(hashed)) == 1 {
 				found = true
 				break
 			}

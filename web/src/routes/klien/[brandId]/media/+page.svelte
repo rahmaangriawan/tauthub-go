@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Katalog media klien — port setia media-section.tsx (Next.js).
 	// Struktur: error banner → header eksplorasi (+stats card) → top bar
 	// (search, kategori, filter lanjutan, impor, bookmark) → banner filter →
@@ -12,6 +14,7 @@
 		ChevronLeft, ChevronRight
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
+	import { campaignUrlId } from '$lib/campaign-url';
 	import { apiRequest, ensureValidSession, readApiError, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import MediaDetailModal from './_detail-modal.svelte';
@@ -40,6 +43,7 @@
 		max_links?: number | null; allow_hyperlink?: boolean | null;
 		publication_mode?: string | null; word_count_mode?: string | null;
 		allow_embed?: boolean; pricing_type_raw?: string | null;
+		status?: string | null;
 	};
 
 	const brandId = $derived(page.params.brandId as string);
@@ -62,6 +66,9 @@
 	let selectedIds = $state<Set<string>>(new Set());
 	let bookmarkedIds = $state<Set<string>>(new Set());
 	let detail = $state<Media | null>(null);
+	// Media terarsip (soft delete oleh mitra) tetap tampil sebagai "maintenance"
+	// di katalog klien, tapi tidak bisa dipilih untuk distribusi.
+	const archivedIds = $derived(new Set(rows.filter((m) => m.status === 'archived').map((m) => m.id)));
 	let sortKey = $state<'traffic' | 'da' | 'ai_trust' | 'ai_cited' | 'speed' | 'price' | 'name'>('name');
 	let sortDir = $state<'asc' | 'desc'>('asc');
 	let catPopoverId = $state<string | null>(null);
@@ -198,11 +205,11 @@
 			const qs = new URLSearchParams({ limit: '250' });
 			if (debouncedSearch) qs.set('q', debouncedSearch);
 			const res = await apiRequest(`${apiBase}/media?${qs}`);
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal memuat media.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat media.')));
 			const data = (await res.json()) as { media?: Media[]; items?: Media[] };
 			rows = data.media ?? data.items ?? [];
 		} catch (reason) {
-			err = reason instanceof Error ? reason.message : 'Gagal memuat media.';
+			err = reason instanceof Error ? reason.message : tr('Gagal memuat media.');
 		} finally {
 			busy = false;
 		}
@@ -240,6 +247,7 @@
 	}
 	function toggleSelectRow(id: string, e: Event) {
 		e.stopPropagation();
+		if (archivedIds.has(id)) return; // media maintenance tidak bisa dipilih
 		const next = new Set(selectedIds);
 		if (next.has(id)) next.delete(id); else next.add(id);
 		selectedIds = next;
@@ -341,13 +349,14 @@
 	}
 	function toggleSelectAll(e: Event) {
 		e.stopPropagation();
-		const ids = visible.map((m) => m.id);
+		// Pilih semua melewati media maintenance (terarsip).
+		const ids = visible.filter((m) => !archivedIds.has(m.id)).map((m) => m.id);
 		const allSelected = ids.length > 0 && ids.every((id) => selectedIds.has(id));
 		selectedIds = allSelected ? new Set() : new Set(ids);
 	}
 
 	function exportProposal() {
-		const headers = ['Nama Media', 'Website', 'Kategori', 'Kecepatan', 'DA', 'AI Trust', 'AI Cited', 'Harga IDR', 'Kredit TC'];
+		const headers = [tr('Nama Media'), 'Website', 'Kategori', 'Kecepatan', 'DA', 'AI Trust', 'AI Cited', tr('Harga IDR'), 'Kredit TC'];
 		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 		const lines = selectedMedia.map((m) => {
 			const speed = getReleaseSpeed(m.integration_type);
@@ -376,7 +385,7 @@
 		try {
 			importText = await file.text();
 		} catch {
-			importError = 'Gagal membaca file.';
+			importError = tr('Gagal membaca file.');
 		}
 	}
 
@@ -384,7 +393,7 @@
 		importError = '';
 		const lines = importText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 		if (!lines.length) {
-			importError = 'Tidak ada baris teks yang terbaca.';
+			importError = tr('Tidak ada baris teks yang terbaca.');
 			return;
 		}
 		const matched = new Set<string>();
@@ -396,7 +405,7 @@
 			if (hit) matched.add(hit.id);
 		}
 		if (!matched.size) {
-			importError = 'Tidak ada media yang cocok dengan daftar Anda.';
+			importError = tr('Tidak ada media yang cocok dengan daftar Anda.');
 			return;
 		}
 		selectedIds = new Set([...selectedIds, ...matched]);
@@ -407,7 +416,7 @@
 	async function createCampaign() {
 		const name = campaignName.trim();
 		if (name.length < 2) {
-			campaignError = 'Nama kampanye minimal 2 karakter.';
+			campaignError = tr('Nama kampanye minimal 2 karakter.');
 			return;
 		}
 		campaignError = '';
@@ -423,22 +432,22 @@
 				})
 			});
 			if (res.ok) {
-				const data = (await res.json()) as { id: string };
+				const data = (await res.json()) as { id: string; public_id?: string | null };
 				campaignOpen = false;
 				campaignName = '';
-				await goto(`/klien/${brandUrl}/taut-pintar/${data.id}/writer`);
+				await goto(`/klien/${brandUrl}/taut-pintar/${campaignUrlId(data)}/writer`);
 			} else {
-				campaignError = await readApiError(res, 'Gagal membuat kampanye. Coba lagi.');
+				campaignError = await readApiError(res, tr('Gagal membuat kampanye. Coba lagi.'));
 			}
 		} catch {
-			campaignError = 'Gagal membuat kampanye. Coba lagi.';
+			campaignError = tr('Gagal membuat kampanye. Coba lagi.');
 		} finally {
 			creating = false;
 		}
 	}
 </script>
 
-<PageTitle title="Eksplorasi Media" />
+<PageTitle title={tr("Eksplorasi Media")} />
 
 <div class="container">
 	{#if err}<div class="errorBanner">{err}</div>{/if}
@@ -446,8 +455,8 @@
 	<!-- Header Eksplorasi Media -->
 	<div class="explorationHeader">
 		<div class="explorationTitleCol">
-			<h1 class="explorationTitle">Eksplorasi Media</h1>
-			<p class="explorationSubtitle">Temukan publisher terbaik untuk kampanye PR Anda.</p>
+			<h1 class="explorationTitle">{tr("Eksplorasi Media")}</h1>
+			<p class="explorationSubtitle">{tr("Temukan publisher terbaik untuk kampanye PR Anda.")}</p>
 		</div>
 		<div class="explorationStatsCard">
 			<div class="explorationStatItem">
@@ -471,7 +480,7 @@
 	<div class="modernTopBar">
 		<div class="modernSearchWrap">
 			<Search size={18} class="modernSearchIcon" />
-			<input class="modernSearchInput" placeholder="Cari nama media, domain, atau niche..." bind:value={search} />
+			<input class="modernSearchInput" placeholder={tr("Cari nama media, domain, atau niche...")} bind:value={search} />
 		</div>
 		<div class="modernActionsGroup">
 			<!-- Kategori -->
@@ -480,11 +489,11 @@
 					bind:value={category}
 					ariaLabel="Kategori"
 					Icon={LayoutGrid}
-					placeholder="Semua Kategori"
+					placeholder={tr("Semua Kategori")}
 					minWidth={210}
 					onchange={() => (page_ = 1)}
 					options={[
-						{ value: '', label: 'Semua Kategori', count: rows.length },
+						{ value: '', label: tr('Semua Kategori'), count: rows.length },
 						...categories.map(([name, count]) => ({ value: name, label: name, count }))
 					]}
 				/>
@@ -526,14 +535,14 @@
 		<button
 			type="button"
 			class="advFilterBackdrop"
-			aria-label="Tutup filter"
+			aria-label={tr("Tutup filter")}
 			onclick={() => (advOpen = false)}
 		></button>
 		<div class="advFilterPanel" style="left: {advPos.left}px; top: {advPos.top}px;">
 			<div class="advFilterCard">
 				<div class="advFilterHeader">
 					<div class="advFilterTitle"><SlidersHorizontal size={16} /> Filter Lanjutan</div>
-					<button class="advFilterResetBtn" type="button" onclick={() => (advOpen = false)} aria-label="Tutup filter">
+					<button class="advFilterResetBtn" type="button" onclick={() => (advOpen = false)} aria-label={tr("Tutup filter")}>
 						<X size={16} />
 					</button>
 				</div>
@@ -552,7 +561,7 @@
 				</div>
 
 				<div class="advFilterSection">
-					<span class="advFilterSectionLabel">Status Verifikasi</span>
+					<span class="advFilterSectionLabel">{tr("Status Verifikasi")}</span>
 					<div class="advFilterToggleRow">
 						<label class="advFilterToggle">
 							<input type="checkbox" bind:checked={verifiedOnly} onchange={() => (page_ = 1)} />
@@ -566,7 +575,7 @@
 				</div>
 
 				<div class="advFilterSection">
-					<span class="advFilterSectionLabel">Rentang Harga</span>
+					<span class="advFilterSectionLabel">{tr("Rentang Harga")}</span>
 					<div class="advFilterChipsGroup">
 						{#each [{ v: 'low', l: '≤ Rp 500rb' }, { v: 'mid', l: 'Rp 500rb – 2jt' }, { v: 'high', l: '> Rp 2jt' }] as opt (opt.v)}
 							<button
@@ -602,7 +611,7 @@
 	<!-- Banner bookmark aktif -->
 	{#if bookmarkOnly}
 		<div class="bookmarkFilterBanner">
-			<span>Menampilkan {fmt(bookmarkedIds.size)} media tersimpan</span>
+			<span>{tr("Menampilkan")} {fmt(bookmarkedIds.size)} {tr("media tersimpan")}</span>
 			<button class="bookmarkBannerClear" type="button" onclick={() => (bookmarkOnly = false)}>Tampilkan semua</button>
 		</div>
 	{/if}
@@ -610,7 +619,7 @@
 	<!-- Ringkasan filter aktif -->
 	{#if activeFilterCount > 0}
 		<div class="activeFilterBanner">
-			<span><b class="bannerStrong">Filter Aktif:</b> {activeFilterCount} · {fmt(filtered.length)} media cocok</span>
+			<span><b class="bannerStrong">{tr("Filter Aktif:")}</b> {activeFilterCount} · {fmt(filtered.length)} {tr("media cocok")}</span>
 			<button class="bookmarkBannerClear" type="button" onclick={resetFilters}>Reset filter</button>
 		</div>
 	{/if}
@@ -631,8 +640,8 @@
 		{:else if visible.length === 0}
 			<div class="emptyState">
 				{rows.length === 0
-					? 'Belum ada media aktif di katalog.'
-					: 'Tidak ada media yang cocok dengan filter ini.'}
+					? tr('Belum ada media aktif di katalog.')
+					: tr('Tidak ada media yang cocok dengan filter ini.')}
 			</div>
 		{:else}
 			<div class="tableWrap">
@@ -645,7 +654,7 @@
 									class="modernCheckbox"
 									checked={visible.length > 0 && visible.every((m) => selectedIds.has(m.id))}
 									onclick={toggleSelectAll}
-									aria-label="Pilih semua media di halaman ini"
+									aria-label={tr("Pilih semua media di halaman ini")}
 								/>
 							</th>
 							<th class="modernTh modernThSortable" onclick={() => toggleSort('name')}>NAMA MEDIA{sortIndicator('name')}</th>
@@ -656,9 +665,7 @@
 								<span class="thWithInfo">AI TRUST
 									<Tooltip label="Keterangan AI Trust Score" maxWidth={260}>
 										{#snippet rich()}
-											<strong>AI Trust Score</strong> — Skor (0-100) kesiapan infrastruktur web
-											(Schema, Speed) untuk dirayapi dan direkomendasikan oleh mesin LLM.
-										{/snippet}
+											<strong>AI Trust Score</strong> {tr("— Skor (0-100) kesiapan infrastruktur web (Schema, Speed) untuk dirayapi dan direkomendasikan oleh mesin LLM.")} {/snippet}
 										<button type="button" class="infoDot" aria-label="Keterangan AI Trust Score" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
 									</Tooltip>
 								</span>{sortIndicator('ai_trust')}
@@ -700,7 +707,9 @@
 							{@const cats = m.categories && m.categories.length ? m.categories : m.category ? [m.category] : ['Umum']}
 							<tr
 								class="modernTr"
-								style={selectedIds.has(m.id) ? 'background:#f8faff' : ''}
+								style={archivedIds.has(m.id)
+									? 'opacity:.55;filter:grayscale(.85);'
+									: selectedIds.has(m.id) ? 'background:#f8faff' : ''}
 								onclick={() => (detail = m)}
 							>
 								<td class="modernTd" style="width:36px;padding-right:0">
@@ -708,6 +717,8 @@
 										type="checkbox"
 										class="modernCheckbox"
 										checked={selectedIds.has(m.id)}
+										disabled={archivedIds.has(m.id)}
+										title={archivedIds.has(m.id) ? tr('Media sedang maintenance') : undefined}
 										onclick={(e) => toggleSelectRow(m.id, e)}
 										aria-label={`Pilih ${m.name}`}
 									/>
@@ -750,6 +761,9 @@
 										</div>
 										{#if m.dewan_pers_verified}
 											<div class="dewanPersBadge"><Check size={13} /><span>Dewan Pers</span></div>
+										{/if}
+										{#if archivedIds.has(m.id)}
+											<span class="maintBadge" title={tr('Media sedang diperbaiki oleh mitra')}>{tr('Maintenance')}</span>
 										{/if}
 									</div>
 								</td>
@@ -806,14 +820,14 @@
 											type="button"
 											class="bookmarkActionBtn {bookmarkedIds.has(m.id) ? 'bookmarkActionBtnActive' : ''}"
 											onclick={(e) => toggleBookmark(m.id, e)}
-											title={bookmarkedIds.has(m.id) ? 'Hapus dari Bookmark' : 'Simpan ke Bookmark'}
+											title={bookmarkedIds.has(m.id) ? tr('Hapus dari Bookmark') : tr('Simpan ke Bookmark')}
 											aria-label="Bookmark"
 										><Bookmark size={18} /></button>
 										<button
 											type="button"
 											class="viewDetailBtn"
 											onclick={(e) => { e.stopPropagation(); detail = m; }}
-										><span>Lihat Detail</span><ArrowRight size={13} /></button>
+										><span>{tr("Lihat Detail")}</span><ArrowRight size={13} /></button>
 									</div>
 								</td>
 							</tr>
@@ -824,8 +838,7 @@
 
 			<!-- Paginasi -->
 			<div class="modernPaginationBar">
-				<span class="modernPaginationInfo">
-					Menampilkan {(page_ - 1) * pageSize + 1}–{Math.min(page_ * pageSize, sorted.length)} dari {fmt(sorted.length)} media
+				<span class="modernPaginationInfo"> {tr("Menampilkan")} {(page_ - 1) * pageSize + 1}–{Math.min(page_ * pageSize, sorted.length)} {tr("dari")} {fmt(sorted.length)} media
 				</span>
 				<div class="paginationBtns">
 					<button class="paginationBtn" type="button" disabled={page_ <= 1} onclick={() => (page_ -= 1)}>
@@ -844,10 +857,10 @@
 <!-- Modal Impor List -->
 {#if importOpen}
 	<div class="modalOverlay" role="presentation" onclick={() => (importOpen = false)}>
-		<dialog open class="modalCard" aria-label="Impor daftar media" onclick={(e) => e.stopPropagation()}>
+		<dialog open class="modalCard" aria-label={tr("Impor daftar media")} onclick={(e) => e.stopPropagation()}>
 			<div class="modalHeader">
-				<h2 class="modalTitle"><Upload size={17} /> Impor Daftar Media</h2>
-				<button class="modalClose" type="button" aria-label="Tutup" onclick={() => (importOpen = false)}><X size={18} /></button>
+				<h2 class="modalTitle"><Upload size={17} />{tr("Impor Daftar Media")}</h2>
+				<button class="modalClose" type="button" aria-label={tr("Tutup")} onclick={() => (importOpen = false)}><X size={18} /></button>
 			</div>
 			<button class="importDrop" type="button" onclick={() => fileInput?.click()}>
 				<input
@@ -858,14 +871,14 @@
 					onchange={handleFileUpload}
 				/>
 				<Upload size={24} />
-				<span class="importDropTitle">Pilih file proposal (.csv / .txt)</span>
+				<span class="importDropTitle">{tr("Pilih file proposal (.csv / .txt)")}</span>
 				<span class="importDropSub">File CSV hasil unduh ekspor proposal otomatis dikenali</span>
 			</button>
 			<div class="importDivider"><span>Atau Tempel Teks</span></div>
 			<textarea class="modalTextarea" rows="6" bind:value={importText} placeholder={'contoh.id\nDetik.com'}></textarea>
 			{#if importError}<p class="modalError">{importError}</p>{/if}
 			<div class="modalFooter">
-				<button class="advFilterResetBtn" type="button" onclick={() => (importOpen = false)}>Batal</button>
+				<button class="advFilterResetBtn" type="button" onclick={() => (importOpen = false)}>{tr("Batal")}</button>
 				<button class="advFilterApplyBtn" type="button" onclick={applyImport}>Terapkan</button>
 			</div>
 		</dialog>
@@ -875,13 +888,13 @@
 <!-- Modal Daftar Bookmark -->
 {#if bookmarkOpen}
 	<div class="modalOverlay" role="presentation" onclick={() => (bookmarkOpen = false)}>
-		<dialog open class="modalCard" aria-label="Media tersimpan" onclick={(e) => e.stopPropagation()}>
+		<dialog open class="modalCard" aria-label={tr("Media tersimpan")} onclick={(e) => e.stopPropagation()}>
 			<div class="modalHeader">
-				<h2 class="modalTitle"><Bookmark size={17} /> Media Tersimpan</h2>
-				<button class="modalClose" type="button" aria-label="Tutup" onclick={() => (bookmarkOpen = false)}><X size={18} /></button>
+				<h2 class="modalTitle"><Bookmark size={17} />{tr("Media Tersimpan")}</h2>
+				<button class="modalClose" type="button" aria-label={tr("Tutup")} onclick={() => (bookmarkOpen = false)}><X size={18} /></button>
 			</div>
 			{#if bookmarkedIds.size === 0}
-				<p class="modalHint">Belum ada media tersimpan. Tandai media dengan ikon bookmark untuk menyimpannya.</p>
+				<p class="modalHint">{tr("Belum ada media tersimpan. Tandai media dengan ikon bookmark untuk menyimpannya.")}</p>
 			{:else}
 				<ul class="bookmarkList">
 					{#each rows.filter((m) => bookmarkedIds.has(m.id)) as m (m.id)}
@@ -898,7 +911,7 @@
 				</ul>
 			{/if}
 			<div class="modalFooter">
-				<button class="advFilterApplyBtn" type="button" onclick={() => (bookmarkOpen = false)}>Tutup</button>
+				<button class="advFilterApplyBtn" type="button" onclick={() => (bookmarkOpen = false)}>{tr("Tutup")}</button>
 			</div>
 		</dialog>
 	</div>
@@ -907,23 +920,21 @@
 <!-- Modal Nama Kampanye -->
 {#if campaignOpen}
 	<div class="modalOverlay" role="presentation" onclick={() => (campaignOpen = false)}>
-		<dialog open class="modalCard" aria-label="Buat kampanye" onclick={(e) => e.stopPropagation()}>
+		<dialog open class="modalCard" aria-label={tr("Buat kampanye")} onclick={(e) => e.stopPropagation()}>
 			<div class="modalHeader">
-				<h2 class="modalTitle"><LayoutGrid size={17} /> Simpan ke Kampanye</h2>
-				<button class="modalClose" type="button" aria-label="Tutup" onclick={() => (campaignOpen = false)}><X size={18} /></button>
+				<h2 class="modalTitle"><LayoutGrid size={17} />{tr("Simpan ke Kampanye")}</h2>
+				<button class="modalClose" type="button" aria-label={tr("Tutup")} onclick={() => (campaignOpen = false)}><X size={18} /></button>
 			</div>
-			<p class="modalHint">
-				Anda memilih <strong>{selectedIds.size} media</strong>. Beri nama kampanye ini untuk masuk ke mode Dapur Produksi (The Writer).
-			</p>
+			<p class="modalHint">{tr("Anda memilih")}<strong>{selectedIds.size} media</strong>{tr(". Beri nama kampanye ini untuk masuk ke mode Dapur Produksi (The Writer).")}</p>
 			<label class="modalField">
-				<span>Nama Kampanye <b class="reqMark">*</b></span>
-				<input class="app-input" bind:value={campaignName} placeholder="Contoh: Launching Produk Q3 2026" />
+				<span>{tr("Nama Kampanye")}<b class="reqMark">*</b></span>
+				<input class="app-input" bind:value={campaignName} placeholder={tr("Contoh: Launching Produk Q3 2026")} />
 			</label>
 			{#if campaignError}<p class="modalError">{campaignError}</p>{/if}
 			<div class="modalFooter">
-				<button class="advFilterResetBtn" type="button" onclick={() => (campaignOpen = false)}>Batal</button>
+				<button class="advFilterResetBtn" type="button" onclick={() => (campaignOpen = false)}>{tr("Batal")}</button>
 				<button class="advFilterApplyBtn" type="button" disabled={creating} onclick={() => void createCampaign()}>
-					{creating ? 'Membuat…' : 'Buat Kampanye'}
+					{creating ? 'Membuat…' : tr('Buat Kampanye')}
 				</button>
 			</div>
 		</dialog>
@@ -935,12 +946,12 @@
 	<MediaDetailModal media={detail} onclose={() => (detail = null)} />
 {/if}
 
-<!-- Popover "Semua Kategori" — fixed agar tidak terpotong kartu tabel. -->
+<!-- Popover tr("Semua Kategori") — fixed agar tidak terpotong kartu tabel. -->
 {#if catPopoverId}
 	<button
 		type="button"
 		class="categoryPopoverBackdrop"
-		aria-label="Tutup daftar kategori"
+		aria-label={tr("Tutup daftar kategori")}
 		onclick={() => (catPopoverId = null)}
 	></button>
 	<div
@@ -948,7 +959,7 @@
 		role="tooltip"
 		style="left: {catPopoverPos.left}px; top: {catPopoverPos.top}px;"
 	>
-		<div class="categoryPopoverTitle">Semua Kategori</div>
+		<div class="categoryPopoverTitle">{tr("Semua Kategori")}</div>
 		<div class="categoryPopoverList">
 			{#each catPopoverCats as c (c)}<span class="categoryPill">{c}</span>{/each}
 		</div>
@@ -970,18 +981,33 @@
 				<span class="selectedStatLabel">TOTAL BIAYA PUBLIKASI</span>
 				<div class="selectedStatPriceGroup">
 					<span class="selectedStatPriceVal">Rp {fmt(totalSelectedPrice)}</span>
-					<span class="selectedStatCreditVal">~ {fmt(totalSelectedCredits)} Kredit</span>
+					<span class="selectedStatCreditVal">~ {fmt(totalSelectedCredits)} {tr("Kredit")}</span>
 				</div>
 			</div>
 		</div>
 		<div class="selectedBarRight">
-			<button class="selectedCancelBtn" type="button" onclick={() => (selectedIds = new Set())}>Batal</button>
-			<button class="selectedExportBtn" type="button" onclick={exportProposal} title="Unduh proposal ringkasan media terpilih (format CSV)">
+			<button class="selectedCancelBtn" type="button" onclick={() => (selectedIds = new Set())}>{tr("Batal")}</button>
+			<button class="selectedExportBtn" type="button" onclick={exportProposal} title={tr("Unduh proposal ringkasan media terpilih (format CSV)")}>
 				<FileText size={15} /><span>Ekspor Proposal</span>
 			</button>
 			<button class="selectedCreateBtn" type="button" disabled={creating} onclick={() => { campaignName = ''; campaignError = ''; campaignOpen = true; }}>
-				<Plus size={14} /><span>Buat Kampanye</span>
+				<Plus size={14} /><span>{tr("Buat Kampanye")}</span>
 			</button>
 		</div>
 	</div>
 {/if}
+
+<style>
+.maintBadge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	color: #6b7280;
+	background: #f1f3f6;
+	border: 1px dashed #9aa4b2;
+}
+</style>

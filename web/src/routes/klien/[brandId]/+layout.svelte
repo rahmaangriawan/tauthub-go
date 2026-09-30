@@ -1,4 +1,8 @@
 <script lang="ts">
+	import LangSelector from '$lib/components/lang-selector.svelte';
+
+	import { tr } from '$lib/i18n/phrases';
+
 	// Shell klien — struktur & metrik parity product-shell.module.css:
 	// sidebar 264px (inner 16/10/12), nav item min-height 40px TANPA margin
 	// antar-item, label grup 8/10/5, topbar 64px padding 0 28px,
@@ -14,15 +18,29 @@
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import { setBrandUrlId } from '$lib/brand-url.svelte';
 	import AppShell from '$lib/components/app-shell.svelte';
+import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	import AccountDropdown from '$lib/components/account-dropdown.svelte';
 	import NotificationBell from '$lib/components/notification-bell.svelte';
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
+	import { setToolbarSlot } from '$lib/components/toolbar-slot.svelte';
 	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
+	// Slot sisi kiri utility bar. Pil tahapan Taut Pintar dipindahkan ke sini
+	// oleh halamannya (parity agent-steps.tsx yang mem-portal AgentStepsHeader
+	// ke utilityBar app lama). Halaman tetap pemilik komponennya, jadi props
+	// langkah/tone/locked tidak perlu disalurkan lewat layout.
+	const toolbarSlot = setToolbarSlot();
+	let toolbarLeftEl = $state<HTMLElement | null>(null);
+	$effect(() => {
+		toolbarSlot.el = toolbarLeftEl;
+	});
+
 	const brandId = $derived(page.params.brandId as string);
 	const pathname = $derived(page.url.pathname);
+	// Objek i18n disimpan utuh; `t` dibaca lewat getter agar reaktif.
+	const i18n = $derived(getI18n());
 	const { t } = getI18n();
 
 	let user = $state<{ id: string; email: string; display_name: string; role?: string } | null>(null);
@@ -112,7 +130,7 @@
 				topupKey = crypto.randomUUID();
 				topupPayment = null;
 				topupOpen = false;
-				showToast('Top up ini sudah terbayar. Saldo telah diperbarui.');
+				showToast(tr('Top up ini sudah terbayar. Saldo telah diperbarui.'));
 				void overview.refetch();
 				return;
 			}
@@ -124,7 +142,7 @@
 			}
 			topupPayment = { payment_url: result.payment_url, amount_idr: result.amount_idr, tc: result.tc };
 		} catch (reason) {
-			topupError = reason instanceof Error ? reason.message : 'Gagal membuat pembayaran.';
+			topupError = reason instanceof Error ? reason.message : tr('Gagal membuat pembayaran.');
 		} finally {
 			topupBusy = false;
 		}
@@ -142,37 +160,44 @@
 	$effect(() => setBrandUrlId(brandUrlId));
 
 	const base = $derived(`/klien/${brandUrlId}`);
+	/**
+	 * Menu aktif hanya bila path persis sama atau berada DI BAWAH href-nya.
+	 * Pencocokan per segmen, bukan substring: dengan `pathname.includes`, halaman
+	 * `/taut-pintar/.../profiler` ikut menyalakan menu `/profile` karena kata
+	 * "profiler" memuat "profile".
+	 */
+	const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 	const groups = $derived([
 		{
-			label: 'MENU UTAMA',
-			items: [{ label: t.nav.brand, href: base, icon: House, active: pathname === base }]
+			label: i18n.t.nav.group_main,
+			items: [{ label: i18n.t.nav.brand, href: base, icon: House, active: pathname === base }]
 		},
 		{
-			label: 'RUANG KERJA',
+			label: i18n.t.nav.group_workspace,
 			items: [
-				{ label: t.nav.media_catalog, href: `${base}/media`, icon: Newspaper, active: pathname.includes('/media') },
-				{ label: t.nav.campaigns, href: `${base}/campaigns`, icon: Megaphone, active: pathname.includes('/campaigns') },
-				{ label: t.nav.publications, href: `${base}/publications`, icon: ShieldCheck, active: pathname.includes('/publications') },
-				{ label: 'Pelacak 404', href: `${base}/link-monitor`, icon: TriangleAlert, active: pathname.includes('/link-monitor') }
+				{ label: i18n.t.nav.media_catalog, href: `${base}/media`, icon: Newspaper, active: isActive(`${base}/media`) },
+				{ label: i18n.t.nav.campaigns, href: `${base}/campaigns`, icon: Megaphone, active: isActive(`${base}/campaigns`) },
+				{ label: i18n.t.nav.publications, href: `${base}/publications`, icon: ShieldCheck, active: isActive(`${base}/publications`) },
+				{ label: i18n.t.nav.link_monitor, href: `${base}/link-monitor`, icon: TriangleAlert, active: isActive(`${base}/link-monitor`) }
 			]
 		},
 		{
-			label: 'ANALITIK & PELAPORAN',
+			label: i18n.t.nav.group_analytics,
 			items: [
-				{ label: t.nav.analytics, href: `${base}/analytics`, icon: ChartLine, active: pathname.includes('/analytics') },
-				{ label: t.nav.audit, href: `${base}/audit-publikasi`, icon: ShieldCheck, active: pathname.includes('/audit-publikasi') }
+				{ label: i18n.t.nav.analytics, href: `${base}/analytics`, icon: ChartLine, active: isActive(`${base}/analytics`) },
+				{ label: i18n.t.nav.audit, href: `${base}/audit-publikasi`, icon: ShieldCheck, active: isActive(`${base}/audit-publikasi`) }
 			]
 		},
 		{
-			label: 'KEUANGAN',
+			label: i18n.t.nav.group_finance,
 			items: [
-				{ label: t.nav.credits, href: `${base}/credits`, icon: Coins, active: pathname.includes('/credits') },
-				{ label: t.nav.invoices, href: `${base}/invoices`, icon: Receipt, active: pathname.includes('/invoices') }
+				{ label: i18n.t.nav.credits, href: `${base}/credits`, icon: Coins, active: isActive(`${base}/credits`) },
+				{ label: i18n.t.nav.invoices, href: `${base}/invoices`, icon: Receipt, active: isActive(`${base}/invoices`) }
 			]
 		},
 		{
-			label: 'PENGATURAN',
-			items: [{ label: t.nav.profile, href: `${base}/profile`, icon: UserCircle, active: pathname.includes('/profile') }]
+			label: i18n.t.nav.group_settings,
+			items: [{ label: i18n.t.nav.profile, href: `${base}/profile`, icon: UserCircle, active: isActive(`${base}/profile`) }]
 		}
 	]);
 </script>
@@ -185,15 +210,17 @@
 					roleLabel="Klien"
 					profileHref={`${base}/profile`}
 					workspaceSwitchHref={user.role === 'partner' ? '/mitra' : undefined}
-					workspaceSwitchLabel={user.role === 'partner' ? 'Portal Mitra' : undefined}
+					workspaceSwitchLabel={user.role === 'partner' ? tr('Portal Mitra') : undefined}
 				/>
 			{/if}
 		{/snippet}
 
+	{#snippet toolbarLeft()}
+		<div bind:this={toolbarLeftEl} class="flex min-w-0 flex-wrap items-center gap-2"></div>
+	{/snippet}
+
 	{#snippet toolbar()}
-		<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label="Pilih bahasa">
-			<span>🇮🇩</span> <span class="app-lang-label">Indonesia</span> <ChevronDown size={14} />
-		</button>
+		<LangSelector />
 		<button
 			class="app-credit-pill app-credit-trigger"
 			type="button"
@@ -201,9 +228,9 @@
 			aria-label={`Saldo Tauthub Kredit: ${saldo.toLocaleString('id-ID')} Kredit. Buka top up.`}
 		>
 			<Coins size={15} />
-			<strong>{saldo.toLocaleString('id-ID')} Kredit</strong>
+			<strong>{saldo.toLocaleString('id-ID')} {tr("Kredit")}</strong>
 		</button>
-		<NotificationBell apiBase={`/v1/brands/${brandId}`} fallbackBase={base} />
+		<NotificationBell apiBase={`/v1/brands/${brandId}`} fallbackBase={base} showAnnouncementTab />
 	{/snippet}
 
 	{@render children()}
@@ -220,4 +247,6 @@
 			onClose={() => (topupOpen = false)}
 		/>
 	{/if}
+	<AnnouncementPopup />
+
 </AppShell>

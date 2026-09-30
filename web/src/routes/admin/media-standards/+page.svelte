@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Media Standards — profil editorial per media (panjang artikel, gaya jurnalistik,
 	// kutipan, hard-selling, forbidden content). Final check dijalankan setelah klien
 	// memilih media, sebelum publish.
@@ -262,25 +264,25 @@
 		<button
 			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
 			style="color: var(--destructive);"
-			onclick={() => void remove(row)}>Hapus</button
+			onclick={() => void remove(row)}>{tr("Hapus")}</button
 		>
 	</div>
 {/snippet}
 
 <section>
 	<PageHeader
-		title="Media Standards"
+		title={tr("Media Standards")}
 		description="Profil editorial per media (panjang artikel, gaya jurnalistik, kutipan, hard-selling, forbidden content). Final check dijalankan setelah klien memilih media, sebelum publish."
 	>
 		<Badge tone="accent" value={`${rows.length} standard`} />
-		<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={16} />Buat standard</button>
+		<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={16} />{tr("Buat standard")}</button>
 	</PageHeader>
 
 	<Feedback {loading} {error} />
 
 	<DataTable
 		columns={[
-			{ key: 'media', label: 'Media', render: standardMediaCell },
+			{ key: 'media', label: tr('Media'), render: standardMediaCell },
 			{ key: 'length', label: 'Panjang', render: lengthCell },
 			{ key: 'style', label: 'Gaya', render: styleCell },
 			{ key: 'tolerance', label: 'Toleransi promosi', render: toleranceCell },
@@ -292,7 +294,7 @@
 		rows={visibleRows}
 		rowKey={(row: Standard) => row.id}
 		{loading}
-		empty="Belum ada standard media. Buat yang pertama untuk mengaktifkan final check."
+		empty={tr("Belum ada standard media. Buat yang pertama untuk mengaktifkan final check.")}
 		minWidth="1000px"
 	/>
 
@@ -312,10 +314,10 @@
 	>
 		<form class="space-y-3" onsubmit={save}>
 			<label class="block">
-				<span class="text-xs font-bold text-muted-foreground">Cari media</span>
+				<span class="text-xs font-bold text-muted-foreground">{tr("Cari media")}</span>
 				<input
 					class="app-input mt-1 w-full"
-					placeholder="Cari media…"
+					placeholder={tr("Cari media…")}
 					disabled={!!editing}
 					bind:value={mediaSearch}
 				/>
@@ -324,10 +326,10 @@
 				>
 			</label>
 			<label class="block">
-				<span class="text-xs font-bold text-muted-foreground">Media</span>
+				<span class="text-xs font-bold text-muted-foreground">{tr("Media")}</span>
 				<div class="mt-1">
 					<Select
-						ariaLabel="Media"
+						ariaLabel={tr("Media")}
 						minWidth={300}
 						disabled={!!editing}
 						value={form.media_id}
@@ -340,8 +342,7 @@
 				</div>
 				{#if !editing}
 					<span class="mt-1 block text-xs text-muted-foreground"
-						>Media yang sudah punya standard tetap tampil dan ditandai — membuat standard baru untuk media yang sama
-						akan menambah baris baru (bukan menimpa).</span
+						>{tr("Media yang sudah punya standard tetap tampil dan ditandai — membuat standard baru untuk media yang sama akan menambah baris baru (bukan menimpa).")}</span
 					>
 				{/if}
 			</label>
@@ -425,9 +426,9 @@
 				<p class="text-sm" style="color: var(--destructive);">{error}</p>
 			{/if}
 			<div class="flex justify-end gap-2 border-t pt-4">
-				<button type="button" class="app-btn app-btn-soft" onclick={() => (dialogOpen = false)}>Batal</button>
+				<button type="button" class="app-btn app-btn-soft" onclick={() => (dialogOpen = false)}>{tr("Batal")}</button>
 				<button type="submit" class="app-btn app-btn-primary" disabled={busy}
-					>{busy ? 'Menyimpan…' : editing ? 'Simpan' : 'Buat standard'}</button
+					>{busy ? 'Menyimpan…' : editing ? tr('Simpan') : tr('Buat standard')}</button
 				>
 			</div>
 		</form>

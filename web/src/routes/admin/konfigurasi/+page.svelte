@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Konfigurasi platform — port app/admin/konfigurasi/page.tsx (+ crawlhub-tab, server-tab).
 	// Tab: SEO Metrics (RapidAPI + SimilarWeb + SERPens), API Pagespeed, Email/SMTP,
 	// Turnstile CF, Google Sign-In, Short Link, Crawlhub, Server.
@@ -117,18 +119,18 @@
 	};
 
 	function crawlEmptyReason(row: { last_crawled_at: string | null; last_status: string | null; last_error: string | null }) {
-		if (!row.last_crawled_at) return 'Belum pernah dicrawl';
+		if (!row.last_crawled_at) return tr('Belum pernah dicrawl');
 		switch (row.last_status) {
 			case 'no_source':
 				return 'Tak ada sitemap/feed di situsnya';
 			case 'blocked':
 				return 'Diblokir situs (Cloudflare/robots)';
 			case 'error':
-				return row.last_error ? `Gagal: ${row.last_error}` : 'Gagal dicrawl';
+				return row.last_error ? `Gagal: ${row.last_error}` : tr('Gagal dicrawl');
 			case 'ok':
 				return 'Terbaca, jumlah artikel belum tersedia';
 			default:
-				return 'Belum ada angka dari crawler';
+				return tr('Belum ada angka dari crawler');
 		}
 	}
 
@@ -147,11 +149,13 @@
 
 	let tab = $state<TabKey>('seo');
 
-	async function request<T>(path: string, init: RequestInit = {}): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+	// `fallback` per aksi supaya pesan errornya spesifik seperti app lama
+	// (mis. "Gagal menguji domain."), bukan generik untuk semua tab.
+	async function request<T>(path: string, init: RequestInit = {}, fallback = 'Permintaan platform gagal.'): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
 		try {
 			const res = await apiRequest(`/v1/platform${path}`, init);
 			if (!res.ok) {
-				const detail = await readApiError(res, 'Permintaan platform gagal.');
+				const detail = await readApiError(res, fallback);
 				return {
 					ok: false,
 					error: res.status === 404 && detail === 'Resource not found' ? 'Akses platform administrator tidak tersedia.' : detail
@@ -160,7 +164,7 @@
 			if (res.status === 204) return { ok: true, data: undefined as T };
 			return { ok: true, data: (await res.json()) as T };
 		} catch {
-			return { ok: false, error: 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.' };
+			return { ok: false, error: tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.') };
 		}
 	}
 
@@ -428,7 +432,18 @@
 	}
 
 	// ── Google Sign-In ─────────────────────────────────────────────────────
-	let google = $state<{ client_id: string | null; redirect_uri: string | null; callback_url: string } | null>(null);
+	type GoogleConfig = {
+		client_id: string | null;
+		redirect_uri: string | null;
+		callback_url: string;
+		// Diagnostik admin-only (tidak pernah tampil di halaman publik).
+		configured?: boolean;
+		config_source?: string;
+		config_error?: string;
+		config_error_detail?: string;
+		missing_fields?: string[];
+	};
+	let google = $state<GoogleConfig | null>(null);
 	let googleClientId = $state('');
 	let googleClientSecret = $state('');
 	let googleRedirectUri = $state('');
@@ -436,7 +451,7 @@
 	let googleMsg = $state({ text: '', ok: false });
 
 	async function loadGoogle() {
-		const res = await request<{ client_id: string | null; redirect_uri: string | null; callback_url: string }>('/oauth/google');
+		const res = await request<GoogleConfig>('/oauth/google');
 		if (!res.ok) googleMsg = { text: res.error, ok: false };
 		else {
 			google = res.data;
@@ -495,7 +510,7 @@
 		else {
 			shortDomain = res.data.domain ?? null;
 			shortMsg = {
-				text: res.data.domain ? 'Domain short link tersimpan.' : 'Kembali ke fallback domain utama.',
+				text: res.data.domain ? 'Domain short link tersimpan.' : tr('Kembali ke fallback domain utama.'),
 				ok: true
 			};
 			await loadShortLink();
@@ -533,7 +548,7 @@
 	async function loadCrawlhub() {
 		chLoading = true;
 		chLoadError = '';
-		const res = await request<CrawlhubConfig>('/crawlhub');
+		const res = await request<CrawlhubConfig>('/crawlhub', {}, 'Gagal memuat konfigurasi Crawlhub.');
 		if (res.ok) {
 			chConfig = res.data;
 			chBaseUrl = res.data.base_url;
@@ -546,7 +561,7 @@
 	async function loadMonitor() {
 		monitorLoading = true;
 		monitorError = '';
-		const res = await request<MonitorData>(`/crawlhub/targets?filter=${monitorFilter}&limit=20&offset=${monitorOffset}`);
+		const res = await request<MonitorData>(`/crawlhub/targets?filter=${monitorFilter}&limit=20&offset=${monitorOffset}`, {}, 'Gagal memuat status crawl media.');
 		if (res.ok) {
 			const cutoff = Date.now() - 90 * 24 * 3600 * 1000;
 			monitor = {
@@ -565,7 +580,7 @@
 	async function syncCrawlhub() {
 		syncBusy = true;
 		monitorError = '';
-		const res = await request<{ ok: boolean; enqueued: number; processed: number }>('/crawlhub/targets', { method: 'POST' });
+		const res = await request<{ ok: boolean; enqueued: number; processed: number }>('/crawlhub/targets', { method: 'POST' }, 'Gagal menjalankan sinkronisasi.');
 		if (res.ok) {
 			chNotice = 'Sinkronisasi selesai. Target tanpa data diminta crawl ulang secepatnya.';
 			await loadMonitor();
@@ -580,10 +595,14 @@
 	async function recrawlRow(row: CrawlRow) {
 		refreshingId = row.media_id;
 		monitorError = '';
-		const res = await request<{ ok: boolean }>('/crawlhub', {
-			method: 'POST',
-			body: JSON.stringify({ action: 'crawl_now', mediaId: row.media_id })
-		});
+		const res = await request<{ ok: boolean }>(
+			'/crawlhub',
+			{
+				method: 'POST',
+				body: JSON.stringify({ action: 'crawl_now', mediaId: row.media_id })
+			},
+			'Gagal meminta crawl ulang.'
+		);
 		if (res.ok) {
 			await loadMonitor();
 			chNotice = `Permintaan crawl ulang terkirim untuk ${row.name}. Crawlhub sedang bekerja; angka muncul dalam beberapa detik sampai satu menit.`;
@@ -600,14 +619,18 @@
 		chSaving = true;
 		chSaveError = '';
 		chNotice = '';
-		const res = await request<CrawlhubConfig>('/crawlhub', {
-			method: 'PUT',
-			body: JSON.stringify({
-				base_url: chBaseUrl.trim(),
-				hmac_secret: chHmac.trim() === '' ? null : chHmac.trim(),
-				ingest_secret: chIngest.trim() === '' ? null : chIngest.trim()
-			})
-		});
+		const res = await request<CrawlhubConfig>(
+			'/crawlhub',
+			{
+				method: 'PUT',
+				body: JSON.stringify({
+					base_url: chBaseUrl.trim(),
+					hmac_secret: chHmac.trim() === '' ? null : chHmac.trim(),
+					ingest_secret: chIngest.trim() === '' ? null : chIngest.trim()
+				})
+			},
+			'Gagal menyimpan konfigurasi.'
+		);
 		if (res.ok) {
 			chConfig = res.data;
 			chBaseUrl = res.data.base_url;
@@ -627,10 +650,14 @@
 		chTesting = true;
 		chTestError = '';
 		chTestResult = null;
-		const res = await request<{ ok: boolean; result: CrawlTestResult }>('/crawlhub', {
-			method: 'POST',
-			body: JSON.stringify({ action: 'test', domain: value })
-		});
+		const res = await request<{ ok: boolean; result: CrawlTestResult }>(
+			'/crawlhub',
+			{
+				method: 'POST',
+				body: JSON.stringify({ action: 'test', domain: value })
+			},
+			'Gagal menguji domain.'
+		);
 		if (res.ok) chTestResult = res.data.result;
 		else chTestError = res.error;
 		chTesting = false;
@@ -643,10 +670,14 @@
 		chChecking = true;
 		chTargetError = '';
 		chTarget = null;
-		const res = await request<{ ok: boolean; target: CrawlTarget }>('/crawlhub', {
-			method: 'POST',
-			body: JSON.stringify({ action: 'status', mediaId: value })
-		});
+		const res = await request<{ ok: boolean; target: CrawlTarget }>(
+			'/crawlhub',
+			{
+				method: 'POST',
+				body: JSON.stringify({ action: 'status', mediaId: value })
+			},
+			'Gagal memeriksa status media.'
+		);
 		if (res.ok) chTarget = res.data.target;
 		else chTargetError = res.error;
 		chChecking = false;
@@ -716,10 +747,10 @@
 
 	const serverSourceLabel = $derived(
 		serverCfg?.source === 'dashboard'
-			? 'Diatur dari dashboard ini'
+			? tr('Diatur dari dashboard ini')
 			: serverCfg?.source === 'env'
-				? 'Dari env SERVER_PUBLIC_IP (belum diubah dari dashboard)'
-				: 'Belum diatur — sistem mendeteksi otomatis saat dibutuhkan'
+				? tr('Dari env SERVER_PUBLIC_IP (belum diubah dari dashboard)')
+				: tr('Belum diatur — sistem mendeteksi otomatis saat dibutuhkan')
 	);
 </script>
 
@@ -743,20 +774,16 @@
 	{#if tab === 'seo'}
 		<div class="app-card mt-3 p-4">
 			{#if seoLoading && !seoConfig && !seoError}
-				<p class="text-sm text-muted-foreground">Memuat konfigurasi…</p>
+				<p class="text-sm text-muted-foreground">{tr("Memuat konfigurasi…")}</p>
 			{:else}
 				<div class="space-y-4">
 					<Feedback error={seoError} />
 					<div class="flex flex-wrap items-center gap-2">
 						<KeyRound size={18} />
 						<h2 class="text-base font-semibold">SEO Metrics API (RapidAPI)</h2>
-						<Badge tone={seoConfig?.api_key_configured ? 'success' : 'warning'} label={seoConfig?.api_key_configured ? 'Terhubung' : 'Belum Dikonfigurasi'} />
+						<Badge tone={seoConfig?.api_key_configured ? 'success' : 'warning'} label={seoConfig?.api_key_configured ? 'Terhubung' : tr('Belum Dikonfigurasi')} />
 					</div>
-					<p class="text-sm text-muted-foreground">
-						API server-side untuk fitur <strong>Cek DA/PA</strong> di dashboard Mitra (Domain &amp; Page Authority media).
-						Tanpa key ini, mitra yang klik Cek DA/PA akan melihat pesan &quot;RapidAPI SEO belum dikonfigurasi oleh Admin&quot;.
-						Key tidak pernah ditampilkan atau dikirim ke browser.
-					</p>
+					<p class="text-sm text-muted-foreground">{tr("API server-side untuk fitur")}<strong>Cek DA/PA</strong>{tr("di dashboard Mitra (Domain & Page Authority media). Tanpa key ini, mitra yang klik Cek DA/PA akan melihat pesan \"RapidAPI SEO belum dikonfigurasi oleh Admin\". Key tidak pernah ditampilkan atau dikirim ke browser.")}</p>
 					<div class="rounded-lg border px-3 py-2 text-xs text-muted-foreground">
 						Host: <code class="rounded bg-secondary px-1">{seoConfig?.host ?? 'domain-metrics-check.p.rapidapi.com'}</code>
 						{seoConfig?.api_key_hint ? ` · Key ${seoConfig.api_key_hint}` : ''}
@@ -769,7 +796,7 @@
 								type="password"
 								required={!seoConfig?.api_key_configured}
 								minlength={seoConfig?.api_key_configured ? 0 : 8}
-								placeholder={seoConfig?.api_key_configured ? 'Kosongkan jika tidak diubah' : 'Masukkan RapidAPI key'}
+								placeholder={seoConfig?.api_key_configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan RapidAPI key'}
 								bind:value={seoKey}
 							/>
 						</label>
@@ -779,12 +806,10 @@
 								{seoMsg.text}
 							</div>
 						{/if}
-						<button class="app-btn app-btn-primary" type="submit" disabled={seoBusy}>{seoBusy ? 'Menyimpan…' : 'Simpan RapidAPI Key'}</button>
+						<button class="app-btn app-btn-primary" type="submit" disabled={seoBusy}>{seoBusy ? 'Menyimpan…' : tr('Simpan RapidAPI Key')}</button>
 					</form>
 					{#if !seoConfig?.api_key_configured}
-						<p class="rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">
-							Belum ada key tersimpan — fitur Cek DA/PA nonaktif sampai key diisi.
-						</p>
+						<p class="rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">{tr("Belum ada key tersimpan — fitur Cek DA/PA nonaktif sampai key diisi.")}</p>
 					{/if}
 
 					<hr class="border-t" />
@@ -794,12 +819,9 @@
 						<div class="flex flex-wrap items-center gap-2">
 							<Globe size={18} />
 							<h2 class="text-base font-semibold">SimilarWeb Insights (RapidAPI)</h2>
-							<Badge tone={seoConfig?.similarweb_api_key_configured ? 'success' : 'warning'} label={seoConfig?.similarweb_api_key_configured ? 'Terhubung' : 'Belum Dikonfigurasi'} />
+							<Badge tone={seoConfig?.similarweb_api_key_configured ? 'success' : 'warning'} label={seoConfig?.similarweb_api_key_configured ? 'Terhubung' : tr('Belum Dikonfigurasi')} />
 						</div>
-						<p class="text-sm text-muted-foreground">
-							API untuk <strong>SimilarWeb Insights</strong> (visits, engagement, rank, top keywords) di dashboard Mitra.
-							Key tidak pernah ditampilkan atau dikirim ke browser.
-						</p>
+						<p class="text-sm text-muted-foreground">{tr("API untuk")}<strong>SimilarWeb Insights</strong>{tr("(visits, engagement, rank, top keywords) di dashboard Mitra. Key tidak pernah ditampilkan atau dikirim ke browser.")}</p>
 						<form class="space-y-3" onsubmit={saveSimilarWeb}>
 							<label class="block">
 								<span class="text-sm font-medium">SimilarWeb RapidAPI Key</span>
@@ -808,7 +830,7 @@
 									type="password"
 									required={!seoConfig?.similarweb_api_key_configured}
 									minlength={seoConfig?.similarweb_api_key_configured ? 0 : 8}
-									placeholder={seoConfig?.similarweb_api_key_configured ? 'Kosongkan jika tidak diubah' : 'Masukkan SimilarWeb RapidAPI key'}
+									placeholder={seoConfig?.similarweb_api_key_configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan SimilarWeb RapidAPI key'}
 									bind:value={similarwebKey}
 								/>
 							</label>
@@ -818,7 +840,7 @@
 									{similarwebMsg.text}
 								</div>
 							{/if}
-							<button class="app-btn app-btn-primary" type="submit" disabled={similarwebBusy}>{similarwebBusy ? 'Menyimpan…' : 'Simpan SimilarWeb Key'}</button>
+							<button class="app-btn app-btn-primary" type="submit" disabled={similarwebBusy}>{similarwebBusy ? 'Menyimpan…' : tr('Simpan SimilarWeb Key')}</button>
 						</form>
 					</div>
 
@@ -829,12 +851,9 @@
 						<div class="flex flex-wrap items-center gap-2">
 							<Sparkles size={18} />
 							<h2 class="text-base font-semibold">SERPens — AI Citation (RapidAPI)</h2>
-							<Badge tone={seoConfig?.serpens_api_key_configured ? 'success' : 'warning'} label={seoConfig?.serpens_api_key_configured ? 'Terhubung' : 'Belum Dikonfigurasi'} />
+							<Badge tone={seoConfig?.serpens_api_key_configured ? 'success' : 'warning'} label={seoConfig?.serpens_api_key_configured ? 'Terhubung' : tr('Belum Dikonfigurasi')} />
 						</div>
-						<p class="text-sm text-muted-foreground">
-							API untuk indikator <strong>AI Citation</strong> di Katalog Media: mendeteksi apakah domain media terdeteksi
-							sebagai rujukan Google AI Overview. Opsional — indikator nonaktif sampai key diisi.
-						</p>
+						<p class="text-sm text-muted-foreground">{tr("API untuk indikator")}<strong>AI Citation</strong>{tr("di Katalog Media: mendeteksi apakah domain media terdeteksi sebagai rujukan Google AI Overview. Opsional — indikator nonaktif sampai key diisi.")}</p>
 						<form class="space-y-3" onsubmit={saveSerpens}>
 							<label class="block">
 								<span class="text-sm font-medium">SERPens RapidAPI Key</span>
@@ -843,7 +862,7 @@
 									type="password"
 									required={!seoConfig?.serpens_api_key_configured}
 									minlength={seoConfig?.serpens_api_key_configured ? 0 : 8}
-									placeholder={seoConfig?.serpens_api_key_configured ? 'Kosongkan jika tidak diubah' : 'Masukkan SERPens RapidAPI key'}
+									placeholder={seoConfig?.serpens_api_key_configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan SERPens RapidAPI key'}
 									bind:value={serpensKey}
 								/>
 							</label>
@@ -853,7 +872,7 @@
 									{serpensMsg.text}
 								</div>
 							{/if}
-							<button class="app-btn app-btn-primary" type="submit" disabled={serpensBusy}>{serpensBusy ? 'Menyimpan…' : 'Simpan SERPens Key'}</button>
+							<button class="app-btn app-btn-primary" type="submit" disabled={serpensBusy}>{serpensBusy ? 'Menyimpan…' : tr('Simpan SERPens Key')}</button>
 						</form>
 					</div>
 				</div>
@@ -865,16 +884,14 @@
 	{#if tab === 'pagespeed'}
 		<div class="app-card mt-3 p-4">
 			{#if psLoading && !psConfig}
-				<p class="text-sm text-muted-foreground">Memuat konfigurasi Pagespeed…</p>
+				<p class="text-sm text-muted-foreground">{tr("Memuat konfigurasi Pagespeed…")}</p>
 			{:else}
 				<div class="flex flex-wrap items-center gap-2">
 					<Gauge size={18} />
 					<h2 class="text-base font-semibold">API Pagespeed (Google)</h2>
-					<Badge tone={psConfig?.api_key_configured ? 'success' : 'warning'} label={psConfig?.api_key_configured ? 'Terhubung' : 'Belum Dikonfigurasi'} />
+					<Badge tone={psConfig?.api_key_configured ? 'success' : 'warning'} label={psConfig?.api_key_configured ? 'Terhubung' : tr('Belum Dikonfigurasi')} />
 				</div>
-				<p class="mt-2 text-sm text-muted-foreground">
-					Key Google PageSpeed Insights untuk tab <strong>Kecepatan</strong> di Tool SEO Mitra. Disimpan terenkripsi server-side, tidak pernah tampil plaintext.
-				</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Key Google PageSpeed Insights untuk tab")}<strong>Kecepatan</strong>{tr("di Tool SEO Mitra. Disimpan terenkripsi server-side, tidak pernah tampil plaintext.")}</p>
 				<div class="mt-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
 					Endpoint: <code class="rounded bg-secondary px-1">https://www.googleapis.com/pagespeedonline/v5/runPagespeed</code>
 					{psConfig?.api_key_hint ? ` · Key ${psConfig.api_key_hint}` : ''}
@@ -883,12 +900,12 @@
 					<label class="block">
 						<span class="text-sm font-medium">Google PageSpeed API Key</span>
 						<span class="block text-xs text-muted-foreground">
-							{psConfig?.api_key_configured ? 'Terkonfigurasi ✓ — kosongkan jika tidak diubah' : 'Belum diisi — dapatkan di Google Cloud Console (PageSpeed Insights API)'}
+							{psConfig?.api_key_configured ? tr('Terkonfigurasi ✓ — kosongkan jika tidak diubah') : tr('Belum diisi — dapatkan di Google Cloud Console (PageSpeed Insights API)')}
 						</span>
 						<input
 							class="app-input mt-1 w-full"
 							type="password"
-							placeholder={psConfig?.api_key_configured ? 'Kosongkan jika tidak diubah' : 'Masukkan API key'}
+							placeholder={psConfig?.api_key_configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan API key'}
 							bind:value={psKey}
 						/>
 					</label>
@@ -898,11 +915,11 @@
 							{psMsg.text}
 						</div>
 					{/if}
-					<button class="app-btn app-btn-primary" type="submit" disabled={psBusy}>{psBusy ? 'Menyimpan…' : 'Simpan API Key'}</button>
+					<button class="app-btn app-btn-primary" type="submit" disabled={psBusy}>{psBusy ? 'Menyimpan…' : tr('Simpan API Key')}</button>
 				</form>
 				<hr class="my-4 border-t" />
 				<h3 class="text-sm font-semibold">Test Koneksi</h3>
-				<p class="mt-1 text-sm text-muted-foreground">Uji koneksi ke Google PageSpeed dengan URL https://example.com. Pastikan key valid dan quota tersedia.</p>
+				<p class="mt-1 text-sm text-muted-foreground">{tr("Uji koneksi ke Google PageSpeed dengan URL https://example.com. Pastikan key valid dan quota tersedia.")}</p>
 				<div class="mt-2 flex flex-wrap items-center gap-3">
 					<button class="app-btn app-btn-soft" type="button" disabled={psTestBusy} onclick={() => void testPagespeed()}>
 						{psTestBusy ? 'Menguji…' : 'Test Koneksi API'}
@@ -914,9 +931,7 @@
 					{/if}
 				</div>
 				{#if !psConfig?.api_key_configured}
-					<p class="mt-3 rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">
-						Belum ada key tersimpan — fitur Kecepatan nonaktif sampai key diisi.
-					</p>
+					<p class="mt-3 rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">{tr("Belum ada key tersimpan — fitur Kecepatan nonaktif sampai key diisi.")}</p>
 				{/if}
 			{/if}
 		</div>
@@ -926,22 +941,20 @@
 	{#if tab === 'smtp'}
 		<div class="app-card mt-3 p-4">
 			{#if smtpLoading && !smtp}
-				<p class="text-sm text-muted-foreground">Memuat konfigurasi SMTP…</p>
+				<p class="text-sm text-muted-foreground">{tr("Memuat konfigurasi SMTP…")}</p>
 			{:else}
 				<Feedback error={smtpError} />
 				<div class="flex flex-wrap items-center gap-2">
 					<Mail size={18} />
-					<h2 class="text-base font-semibold">Email &amp; SMTP</h2>
-					<Badge tone={smtp?.enabled ? 'success' : 'warning'} label={smtp?.enabled ? 'Aktif' : 'Nonaktif'} />
+					<h2 class="text-base font-semibold">{tr("Email & SMTP")}</h2>
+					<Badge tone={smtp?.enabled ? 'success' : 'warning'} label={smtp?.enabled ? tr('Aktif') : tr('Nonaktif')} />
 					{#if smtp?.smtp_configured}<Badge tone="success" label="Terkonfigurasi" />{/if}
 				</div>
-				<p class="mt-2 text-sm text-muted-foreground">
-					Konfigurasi Brevo SMTP untuk email transactional. Password disimpan terenkripsi (AES-256-GCM) dan tidak pernah tampil plaintext.
-				</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Konfigurasi Brevo SMTP untuk email transactional. Password disimpan terenkripsi (AES-256-GCM) dan tidak pernah tampil plaintext.")}</p>
 
 				{#if smtp?.last_test_at}
 					<div class="mt-3 rounded-lg border px-3 py-2 text-sm" style="border-color: {smtp.last_test_ok ? 'var(--success)' : 'var(--warning)'};">
-						Test terakhir: {smtp.last_test_ok ? 'Berhasil' : 'Gagal'} — {smtp.last_test_message ?? '-'}
+						Test terakhir: {smtp.last_test_ok ? tr('Berhasil') : tr('Gagal')} — {smtp.last_test_message ?? '-'}
 						<span class="text-xs text-muted-foreground">({fmtDateTime(smtp.last_test_at)})</span>
 					</div>
 				{/if}
@@ -957,14 +970,14 @@
 						</label>
 						<label class="block w-[120px]">
 							<span class="text-sm font-medium">Port</span>
-							<span class="block text-xs text-muted-foreground">587 (STARTTLS) atau 465 (TLS)</span>
+							<span class="block text-xs text-muted-foreground">{tr("587 (STARTTLS) atau 465 (TLS)")}</span>
 							<input class="app-input mt-1 w-full" type="number" placeholder="587" bind:value={smtpPort} />
 						</label>
 						<label class="block">
 							<span class="text-sm font-medium">Secure (TLS)</span>
 							<span class="mt-2 flex items-center gap-2">
 								<input type="checkbox" bind:checked={smtpSecure} />
-								<span class="text-sm text-muted-foreground">{smtpSecure ? 'Ya (port 465)' : 'Tidak (port 587 STARTTLS)'}</span>
+								<span class="text-sm text-muted-foreground">{smtpSecure ? 'Ya (port 465)' : tr('Tidak (port 587 STARTTLS)')}</span>
 							</span>
 						</label>
 					</div>
@@ -974,14 +987,14 @@
 							<input class="app-input mt-1 w-full" placeholder="ops@tauthub.com" bind:value={smtpUsername} />
 						</label>
 						<label class="block min-w-[220px] flex-1">
-							<span class="text-sm font-medium">SMTP Password / Key</span>
+							<span class="text-sm font-medium">{tr("SMTP Password / Key")}</span>
 							<span class="block text-xs text-muted-foreground">
-								{smtp?.password_configured ? 'Terkonfigurasi ✓ — kosongkan jika tidak diubah' : 'Belum diisi'}
+								{smtp?.password_configured ? tr('Terkonfigurasi ✓ — kosongkan jika tidak diubah') : tr('Belum diisi')}
 							</span>
 							<input
 								class="app-input mt-1 w-full"
 								type="password"
-								placeholder={smtp?.password_configured ? 'Kosongkan jika tidak diubah' : 'Masukkan SMTP key'}
+								placeholder={smtp?.password_configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan SMTP key'}
 								bind:value={smtpPassword}
 							/>
 						</label>
@@ -992,15 +1005,15 @@
 							<input class="app-input mt-1 w-full" placeholder="Tauthub" bind:value={smtpFromName} />
 						</label>
 						<label class="block min-w-[220px] flex-1">
-							<span class="text-sm font-medium">From Email</span>
+							<span class="text-sm font-medium">{tr("From Email")}</span>
 							<input class="app-input mt-1 w-full" type="email" placeholder="no-reply@tauthub.com" bind:value={smtpFromEmail} />
 						</label>
 					</div>
 					<hr class="border-t" />
 					<div class="flex flex-wrap items-center justify-between gap-3">
 						<div>
-							<p class="text-sm font-medium">Transactional Email</p>
-							<p class="text-xs text-muted-foreground">Matikan hanya untuk maintenance — security email tetap terkirim.</p>
+							<p class="text-sm font-medium">{tr("Transactional Email")}</p>
+							<p class="text-xs text-muted-foreground">{tr("Matikan hanya untuk maintenance — security email tetap terkirim.")}</p>
 						</div>
 						<input type="checkbox" bind:checked={smtpEnabled} />
 					</div>
@@ -1010,7 +1023,7 @@
 							{smtpMsg.text}
 						</div>
 					{/if}
-					<button class="app-btn app-btn-primary" type="submit" disabled={smtpBusy}>{smtpBusy ? 'Menyimpan…' : 'Simpan Konfigurasi'}</button>
+					<button class="app-btn app-btn-primary" type="submit" disabled={smtpBusy}>{smtpBusy ? 'Menyimpan…' : tr('Simpan Konfigurasi')}</button>
 				</form>
 
 				<hr class="my-4 border-t" />
@@ -1033,9 +1046,7 @@
 					<p class="mt-1 text-sm" style="color: {smtpSendMsg.ok ? 'var(--success)' : 'var(--destructive)'};">{smtpSendMsg.text}</p>
 				{/if}
 				{#if !smtp?.smtp_configured}
-					<p class="mt-3 rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">
-						SMTP belum dikonfigurasi — Tauthub belum dapat mengirim email transactional.
-					</p>
+					<p class="mt-3 rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">{tr("SMTP belum dikonfigurasi — Tauthub belum dapat mengirim email transactional.")}</p>
 				{/if}
 			{/if}
 		</div>
@@ -1045,24 +1056,19 @@
 	{#if tab === 'turnstile'}
 		<div class="app-card mt-3 p-4">
 			{#if tsLoading && !turnstile}
-				<p class="text-sm text-muted-foreground">Memuat konfigurasi Turnstile…</p>
+				<p class="text-sm text-muted-foreground">{tr("Memuat konfigurasi Turnstile…")}</p>
 			{:else}
 				<Feedback error={tsError} />
 				<div class="flex flex-wrap items-center gap-2">
 					<ShieldCheck size={18} />
 					<h2 class="text-base font-semibold">Cloudflare Turnstile</h2>
-					<Badge tone={tsEnabled ? 'success' : 'warning'} label={tsEnabled ? 'Aktif' : 'Nonaktif'} />
+					<Badge tone={tsEnabled ? 'success' : 'warning'} label={tsEnabled ? tr('Aktif') : tr('Nonaktif')} />
 					{#if turnstile?.secret_configured}<Badge tone="success" label="Secret Terkonfigurasi" />{/if}
 				</div>
-				<p class="mt-2 text-sm text-muted-foreground">
-					Proteksi anti-bot untuk <strong>Login, Daftar, dan Lupa Password</strong> di Tauthub. Saat aktif, user wajib
-					menyelesaikan verifikasi Turnstile sebelum submit. Secret key disegel server-side dan tidak pernah tampil.
-				</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Proteksi anti-bot untuk")}<strong>{tr("Login, Daftar, dan Lupa Password")}</strong>{tr("di Tauthub. Saat aktif, user wajib menyelesaikan verifikasi Turnstile sebelum submit. Secret key disegel server-side dan tidak pernah tampil.")}</p>
 				<div class="mt-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
-					Setup: dashboard Cloudflare → <strong>Turnstile</strong> → buat site → salin <strong>Site Key</strong> &amp;
-					<strong>Secret Key</strong>. Di <strong>Allowed Domains</strong> tambahkan <code>app.tauthub.com</code> (dan
-					<code>localhost:3000</code> untuk dev).
-				</div>
+					Setup: dashboard Cloudflare → <strong>Turnstile</strong> → buat site → salin <strong>Site Key</strong> &
+					<strong>Secret Key</strong>. Di <strong>Allowed Domains</strong> tambahkan <code>app.tauthub.com</code>{tr("(dan")}<code>localhost:3000</code>{tr("untuk dev).")}</div>
 				<form class="mt-4 space-y-3" onsubmit={saveTurnstile}>
 					<label class="block">
 						<span class="text-sm font-medium">Site Key</span>
@@ -1072,18 +1078,18 @@
 					<label class="block">
 						<span class="text-sm font-medium">Secret Key</span>
 						<span class="block text-xs text-muted-foreground">
-							{turnstile?.secret_configured ? 'Terkonfigurasi ✓ — kosongkan jika tidak diubah' : 'Belum diisi — wajib saat pertama kali.'}
+							{turnstile?.secret_configured ? tr('Terkonfigurasi ✓ — kosongkan jika tidak diubah') : tr('Belum diisi — wajib saat pertama kali.')}
 						</span>
 						<input
 							class="app-input mt-1 w-full"
 							type="password"
-							placeholder={turnstile?.secret_configured ? 'Kosongkan jika tidak diubah' : 'Masukkan secret key'}
+							placeholder={turnstile?.secret_configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan secret key'}
 							bind:value={tsSecretKey}
 						/>
 					</label>
 					<label class="flex items-center gap-2">
 						<input type="checkbox" bind:checked={tsEnabled} />
-						<span class="text-sm">Aktifkan Turnstile (wajib di login, daftar, &amp; lupa password)</span>
+						<span class="text-sm">Aktifkan Turnstile (wajib di login, daftar, & lupa password)</span>
 					</label>
 					{#if tsMsg.text}
 						<div class="flex items-center gap-2 text-sm" style="color: {tsMsg.ok ? 'var(--success)' : 'var(--destructive)'};">
@@ -1092,7 +1098,7 @@
 						</div>
 					{/if}
 					<div class="flex flex-wrap items-center gap-3">
-						<button class="app-btn app-btn-primary" type="submit" disabled={tsBusy}>{tsBusy ? 'Menyimpan…' : 'Simpan Konfigurasi'}</button>
+						<button class="app-btn app-btn-primary" type="submit" disabled={tsBusy}>{tsBusy ? 'Menyimpan…' : tr('Simpan Konfigurasi')}</button>
 						<button class="app-btn app-btn-soft" type="button" disabled={tsTestBusy} onclick={() => void testTurnstile()}>
 							{tsTestBusy ? 'Menguji…' : 'Test Koneksi'}
 						</button>
@@ -1110,15 +1116,28 @@
 		<div class="app-card mt-3 p-4">
 			<div class="flex flex-wrap items-center gap-2">
 				<h2 class="text-base font-semibold">Google Sign-In</h2>
-				<Badge tone={google?.client_id ? 'success' : 'warning'} label={google?.client_id ? 'Terhubung' : 'Belum Dikonfigurasi'} />
+				<Badge tone={google?.client_id ? 'success' : 'warning'} label={google?.client_id ? 'Terhubung' : tr('Belum Dikonfigurasi')} />
 			</div>
 			<p class="mt-2 text-sm text-muted-foreground">
 				Callback: <code class="text-xs">{google?.callback_url ?? 'https://app.tauthub.com/v1/auth/google/callback'}</code>
 			</p>
 			<div class="mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs" style="border-color: var(--warning);">
 				<TriangleAlert size={15} class="mt-0.5 shrink-0" style="color: var(--warning);" />
-				<p>Daftarkan callback di Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs. Jangan pakai /api/gsc/callback (itu untuk Search Console).</p>
+				<p>{tr("Daftarkan callback di Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs. Jangan pakai /api/gsc/callback (itu untuk Search Console).")}</p>
 			</div>
+			<!-- Diagnostik admin-only: alasan rinci dari server, tidak pernah tampil di halaman publik. -->
+			{#if google && google.configured === false}
+				<div class="mt-3 rounded-lg border px-3 py-2 text-xs" style="border-color: var(--destructive); color: var(--destructive);">
+					<p class="font-medium">{tr("Konfigurasi Google belum lengkap.")}</p>
+					{#if google.config_error_detail}<p class="mt-1">{google.config_error_detail}</p>{/if}
+					{#if google.missing_fields?.length}
+						<p class="mt-1">{tr("Field kurang:")} <code>{google.missing_fields.join(', ')}</code></p>
+					{/if}
+					{#if google.config_error}
+						<p class="mt-1">{tr("Kode:")} <code>{google.config_error}</code> · {tr("sumber:")} <code>{google.config_source}</code></p>
+					{/if}
+				</div>
+			{/if}
 			<form class="mt-4 space-y-3" onsubmit={saveGoogle}>
 				<div class="grid gap-3 md:grid-cols-2">
 					<label class="block">
@@ -1127,7 +1146,7 @@
 					</label>
 					<label class="block">
 						<span class="text-sm font-medium">Client Secret</span>
-						<input class="app-input mt-1 w-full" type="password" placeholder="Kosongkan jika tidak diubah" bind:value={googleClientSecret} />
+						<input class="app-input mt-1 w-full" type="password" placeholder={tr("Kosongkan jika tidak diubah")} bind:value={googleClientSecret} />
 					</label>
 				</div>
 				<label class="block">
@@ -1140,7 +1159,7 @@
 						{googleMsg.text}
 					</div>
 				{/if}
-				<button class="app-btn app-btn-primary" type="submit" disabled={googleBusy}>{googleBusy ? 'Menyimpan…' : 'Simpan Konfigurasi'}</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={googleBusy}>{googleBusy ? 'Menyimpan…' : tr('Simpan Konfigurasi')}</button>
 			</form>
 		</div>
 	{/if}
@@ -1149,7 +1168,7 @@
 	{#if tab === 'shortlink'}
 		<div class="app-card mt-3 p-4">
 			{#if shortLoading && !shortDomain && !shortMsg.text}
-				<p class="text-sm text-muted-foreground">Memuat konfigurasi short link…</p>
+				<p class="text-sm text-muted-foreground">{tr("Memuat konfigurasi short link…")}</p>
 			{:else}
 				<div class="flex flex-wrap items-center gap-2">
 					<Globe size={18} />
@@ -1158,22 +1177,20 @@
 				</div>
 				<p class="mt-2 text-sm text-muted-foreground">
 					Saat klien memilih mode <strong>Tauthub Tracking Link</strong>, artikel menampilkan{' '}
-					<strong>{shortDomain ? `${shortDomain}/[kode]` : '[domain-utama]/t/[kode]'}</strong> dengan kode maks 5 karakter.
-					Klik tercatat di platform lalu pembaca diarahkan ke URL asli yang bersih (tanpa UTM).
-				</p>
+					<strong>{shortDomain ? `${shortDomain}/[kode]` : '[domain-utama]/t/[kode]'}</strong>{tr("dengan kode maks 5 karakter. Klik tercatat di platform lalu pembaca diarahkan ke URL asli yang bersih (tanpa UTM).")}</p>
 				<div class="mt-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
 					<p class="font-semibold">Tutorial pemasangan domain:</p>
 					<p>1. Beli domain (mis. tautan.link) di registrar mana pun.</p>
-					<p>2. DNS: A record <code>@</code> dan <code>www</code> → IP VPS TautHub (sama dengan domain utama).</p>
+					<p>2. DNS: A record <code>@</code>{tr("dan")}<code>www</code> → IP VPS TautHub (sama dengan domain utama).</p>
 					<p>3. CloudPanel → Sites → Add Site → <strong>Reverse Proxy</strong> → isi domain tersebut → target <code>http://127.0.0.1:3000</code> (port app produksi).</p>
 					<p>4. Aktifkan SSL Let&apos;s Encrypt (centang www + redirect http ke https).</p>
-					<p>5. Edit vHost site tersebut, tambahkan di blok location: <code>rewrite ^/(.+)$ /t/$1 last;</code> — agar <code>domain/[kode]</code> langsung memakai route redirect existing tanpa /t/.</p>
+					<p>5. Edit vHost site tersebut, tambahkan di blok location: <code>rewrite ^/(.+)$ /t/$1 last;</code>{tr("— agar")}<code>domain/[kode]</code> langsung memakai route redirect existing tanpa /t/.</p>
 					<p>6. Isi domain di form bawah ini — semua short link langsung memakainya, tanpa deploy ulang.</p>
 				</div>
 				<form class="mt-4 space-y-3" onsubmit={saveShortLink}>
 					<label class="block">
 						<span class="text-sm font-medium">Domain Short Link</span>
-						<span class="block text-xs text-muted-foreground">Hostname saja tanpa https:// — kosongkan untuk fallback domain utama</span>
+						<span class="block text-xs text-muted-foreground">{tr("Hostname saja tanpa https:// — kosongkan untuk fallback domain utama")}</span>
 						<input class="app-input mt-1 w-full" placeholder="tautan.link" bind:value={shortInput} />
 					</label>
 					{#if shortMsg.text}
@@ -1182,12 +1199,10 @@
 							{shortMsg.text}
 						</div>
 					{/if}
-					<button class="app-btn app-btn-primary" type="submit" disabled={shortBusy}>{shortBusy ? 'Menyimpan…' : 'Simpan Domain'}</button>
+					<button class="app-btn app-btn-primary" type="submit" disabled={shortBusy}>{shortBusy ? 'Menyimpan…' : tr('Simpan Domain')}</button>
 				</form>
 				{#if !shortDomain}
-					<p class="mt-3 rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">
-						Belum ada domain custom — short link memakai domain utama via /t/[kode]. Semua fitur tetap berjalan.
-					</p>
+					<p class="mt-3 rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">{tr("Belum ada domain custom — short link memakai domain utama via /t/[kode]. Semua fitur tetap berjalan.")}</p>
 				{/if}
 			{/if}
 		</div>
@@ -1197,7 +1212,7 @@
 	{#if tab === 'crawlhub'}
 		<div class="space-y-4">
 			<div class="flex flex-wrap gap-2">
-				<button class="app-btn {crawlTab === 'endpoint' ? 'app-btn-primary' : 'app-btn-soft'} !min-h-8 !px-3 !text-xs" type="button" onclick={() => (crawlTab = 'endpoint')}>Endpoint &amp; Uji Crawl</button>
+				<button class="app-btn {crawlTab === 'endpoint' ? 'app-btn-primary' : 'app-btn-soft'} !min-h-8 !px-3 !text-xs" type="button" onclick={() => (crawlTab = 'endpoint')}>Endpoint & Uji Crawl</button>
 				<button
 					class="app-btn {crawlTab === 'monitoring' ? 'app-btn-primary' : 'app-btn-soft'} !min-h-8 !px-3 !text-xs"
 					type="button"
@@ -1205,18 +1220,16 @@
 						crawlTab = 'monitoring';
 						void loadMonitor();
 					}}
-				>Status Crawl Media</button>
+				>{tr("Status Crawl Media")}</button>
 			</div>
 
 			{#if crawlTab === 'endpoint'}
 				<div class="app-card p-4">
 					<h2 class="text-base font-semibold">Endpoint Crawlhub</h2>
 					<p class="mt-1 text-sm text-muted-foreground">
-						Domain service crawler. Bisa diganti kapan saja tanpa deploy; env <code>CRAWLHUB_BASE_URL</code> hanya
-						dipakai sebagai nilai awal sebelum disimpan di sini.
-					</p>
+						Domain service crawler. Bisa diganti kapan saja tanpa deploy; env <code>CRAWLHUB_BASE_URL</code>{tr("hanya dipakai sebagai nilai awal sebelum disimpan di sini.")}</p>
 					{#if chLoading}
-						<p class="mt-3 text-sm text-muted-foreground">Memuat konfigurasi…</p>
+						<p class="mt-3 text-sm text-muted-foreground">{tr("Memuat konfigurasi…")}</p>
 					{:else if chLoadError}
 						<div class="mt-3 rounded-lg border px-3 py-2 text-sm" style="color: var(--destructive);">{chLoadError}</div>
 					{:else}
@@ -1237,11 +1250,11 @@
 								</label>
 								<label class="block">
 									<span class="text-sm font-medium">Ingest secret {chConfig?.ingest_secret_configured ? '(terisi)' : ''}</span>
-									<input class="app-input mt-1 w-full" type="password" placeholder="dipakai route penerima hasil di Writer" bind:value={chIngest} />
+									<input class="app-input mt-1 w-full" type="password" placeholder={tr("dipakai route penerima hasil di Writer")} bind:value={chIngest} />
 								</label>
 							</div>
 							<div class="flex flex-wrap items-center gap-3">
-								<button class="app-btn app-btn-primary" type="submit" disabled={chSaving}>{chSaving ? 'Menyimpan…' : 'Simpan'}</button>
+								<button class="app-btn app-btn-primary" type="submit" disabled={chSaving}>{chSaving ? 'Menyimpan…' : tr('Simpan')}</button>
 								<Badge tone={chConfig?.configured ? 'success' : 'warning'} label={chConfig?.configured ? 'siap dipakai' : 'belum lengkap'} />
 								<span class="text-xs text-muted-foreground">Secret disegel server-side, tidak pernah dikembalikan ke browser.</span>
 							</div>
@@ -1253,14 +1266,11 @@
 
 				<div class="app-card p-4">
 					<h2 class="text-base font-semibold">Uji Crawl</h2>
-					<p class="mt-1 text-sm text-muted-foreground">
-						Uji satu domain tanpa menyentuh database dan tanpa mendaftarkannya sebagai target. Cocok untuk memastikan
-						situs mitra bisa dibaca sebelum masuk katalog.
-					</p>
+					<p class="mt-1 text-sm text-muted-foreground">{tr("Uji satu domain tanpa menyentuh database dan tanpa mendaftarkannya sebagai target. Cocok untuk memastikan situs mitra bisa dibaca sebelum masuk katalog.")}</p>
 					<form class="mt-3 flex flex-wrap items-end gap-3" onsubmit={runCrawlTest}>
 						<label class="block min-w-[280px] flex-1">
 							<span class="text-sm font-medium">Domain</span>
-							<input class="app-input mt-1 w-full" placeholder="https://contoh-media.id" bind:value={chDomain} />
+							<input class="app-input mt-1 w-full" placeholder={tr("https://contoh-media.id")} bind:value={chDomain} />
 						</label>
 						<button class="app-btn app-btn-primary" type="submit" disabled={chTesting || !chConfig?.configured}>
 							{chTesting ? 'Mencrawl…' : 'Tes Crawl'}
@@ -1292,7 +1302,7 @@
 									<p class="text-sm">{chTestResult.source ? (CRAWL_SOURCE_LABEL[chTestResult.source] ?? chTestResult.source) : '—'}</p>
 								</div>
 								<div>
-									<p class="text-xs text-muted-foreground">Jumlah request</p>
+									<p class="text-xs text-muted-foreground">{tr("Jumlah request")}</p>
 									<p class="text-sm">{chTestResult.methodDetail?.requests ?? '—'}</p>
 								</div>
 							</div>
@@ -1315,12 +1325,12 @@
 				</div>
 
 				<div class="app-card p-4">
-					<h2 class="text-base font-semibold">Status Media</h2>
-					<p class="mt-1 text-sm text-muted-foreground">Lihat hasil crawl terakhir untuk satu media yang sudah terdaftar sebagai target.</p>
+					<h2 class="text-base font-semibold">{tr("Status Media")}</h2>
+					<p class="mt-1 text-sm text-muted-foreground">{tr("Lihat hasil crawl terakhir untuk satu media yang sudah terdaftar sebagai target.")}</p>
 					<form class="mt-3 flex flex-wrap items-end gap-3" onsubmit={checkCrawlTarget}>
 						<label class="block min-w-[280px] flex-1">
-							<span class="text-sm font-medium">ID media</span>
-							<input class="app-input mt-1 w-full" placeholder="uuid media dari tabel media" bind:value={chMediaId} />
+							<span class="text-sm font-medium">{tr("ID media")}</span>
+							<input class="app-input mt-1 w-full" placeholder={tr("uuid media dari tabel media")} bind:value={chMediaId} />
 						</label>
 						<button class="app-btn app-btn-soft" type="submit" disabled={chChecking || !chConfig?.configured}>
 							{chChecking ? 'Memeriksa…' : 'Cek status'}
@@ -1334,7 +1344,7 @@
 								<p class="text-sm">{chTarget.website_url}</p>
 							</div>
 							<div>
-								<p class="text-xs text-muted-foreground">Status terakhir</p>
+								<p class="text-xs text-muted-foreground">{tr("Status terakhir")}</p>
 								<p class="text-sm">{chTarget.last_status ?? 'belum pernah'}</p>
 							</div>
 							<div>
@@ -1346,9 +1356,7 @@
 								<p class="text-sm">{chTarget.last_crawled_at ? fmtDateTime(chTarget.last_crawled_at) : '—'}</p>
 							</div>
 							{#if chTarget.last_run?.blocked_reason === 'cloudflare_challenge'}
-								<div class="sm:col-span-2 rounded-lg border px-3 py-2 text-sm" style="border-color: var(--warning);">
-									Diblokir Cloudflare, bukan gagal biasa. Media ini tetap tercatat “belum terukur”, tidak dilabeli tidak produktif.
-								</div>
+								<div class="sm:col-span-2 rounded-lg border px-3 py-2 text-sm" style="border-color: var(--warning);">{tr("Diblokir Cloudflare, bukan gagal biasa. Media ini tetap tercatat “belum terukur”, tidak dilabeli tidak produktif.")}</div>
 							{/if}
 						</div>
 					{/if}
@@ -1356,9 +1364,7 @@
 
 				<div class="app-card p-4">
 					<h2 class="text-base font-semibold">API</h2>
-					<p class="mt-1 text-sm text-muted-foreground">
-						Kontrak yang dipakai Writer untuk berbicara dengan Crawlhub. Ini referensi, bukan yang perlu diisi.
-					</p>
+					<p class="mt-1 text-sm text-muted-foreground">{tr("Kontrak yang dipakai Writer untuk berbicara dengan Crawlhub. Ini referensi, bukan yang perlu diisi.")}</p>
 					{#if chConfig?.api}
 						<div class="mt-3 space-y-4 text-sm">
 							<div>
@@ -1392,18 +1398,15 @@
 							</div>
 						</div>
 					{:else}
-						<p class="mt-3 text-sm text-muted-foreground">Memuat referensi API…</p>
+						<p class="mt-3 text-sm text-muted-foreground">{tr("Memuat referensi API…")}</p>
 					{/if}
 				</div>
 			{:else}
 				<div class="app-card p-4">
 					<div class="flex flex-wrap items-center justify-between gap-3">
 						<div>
-							<h2 class="text-base font-semibold">Status Crawl Media</h2>
-							<p class="mt-1 text-sm text-muted-foreground">
-								Hasil crawl otomatis per media mitra aktif. Scheduler mengantre crawl baru tiap menit; gagal diulang
-								setelah 24 jam (maks 2x), dan media yang hasilnya lebih tua dari 3 bulan di-crawl ulang.
-							</p>
+							<h2 class="text-base font-semibold">{tr("Status Crawl Media")}</h2>
+							<p class="mt-1 text-sm text-muted-foreground">{tr("Hasil crawl otomatis per media mitra aktif. Scheduler mengantre crawl baru tiap menit; gagal diulang setelah 24 jam (maks 2x), dan media yang hasilnya lebih tua dari 3 bulan di-crawl ulang.")}</p>
 						</div>
 						<button class="app-btn app-btn-primary" type="button" disabled={syncBusy || monitorLoading} onclick={() => void syncCrawlhub()}>
 							{syncBusy ? 'Menyinkronkan…' : 'Sinkronkan Sekarang'}
@@ -1417,9 +1420,9 @@
 							{#each [
 								{ label: 'Media Dipantau', value: monitor.summary.total },
 								{ label: 'Terdaftar', value: monitor.summary.registered },
-								{ label: 'Menunggu Antrean', value: monitor.summary.pending },
-								{ label: 'Gagal', value: monitor.summary.failed },
-								{ label: 'Belum Terdaftar', value: monitor.summary.unregistered }
+								{ label: tr('Menunggu Antrean'), value: monitor.summary.pending },
+								{ label: tr('Gagal'), value: monitor.summary.failed },
+								{ label: tr('Belum Terdaftar'), value: monitor.summary.unregistered }
 							] as s (s.label)}
 								<div class="app-card min-w-[130px] flex-1 p-3">
 									<p class="text-xs text-muted-foreground">{s.label}</p>
@@ -1433,11 +1436,11 @@
 
 					<div class="mt-4 flex flex-wrap items-center gap-2">
 						{#each [
-							['all', 'Semua'],
+							['all', tr('Semua')],
 							['registered', 'Sudah Terdaftar'],
 							['problem', 'Bermasalah'],
-							['stale', 'Kadaluarsa / Belum Dicek'],
-							['unregistered', 'Belum Terdaftar']
+							['stale', tr('Kadaluarsa / Belum Dicek')],
+							['unregistered', tr('Belum Terdaftar')]
 						] as [value, label] (value)}
 							<button
 								class="app-btn {monitorFilter === value ? 'app-btn-primary' : 'app-btn-soft'} !min-h-7 !px-2.5 !text-xs"
@@ -1455,21 +1458,19 @@
 					</div>
 
 					{#if monitorLoading && !monitor}
-						<p class="mt-3 text-sm text-muted-foreground">Memuat status crawl…</p>
+						<p class="mt-3 text-sm text-muted-foreground">{tr("Memuat status crawl…")}</p>
 					{:else if monitor && monitor.targets.length === 0}
-						<p class="mt-3 text-sm text-muted-foreground">
-							Tidak ada media pada filter ini. Tekan &quot;Sinkronkan Sekarang&quot; untuk mendaftarkan media mitra aktif ke Crawlhub.
-						</p>
+						<p class="mt-3 text-sm text-muted-foreground">{tr("Tidak ada media pada filter ini. Tekan \"Sinkronkan Sekarang\" untuk mendaftarkan media mitra aktif ke Crawlhub.")}</p>
 					{:else if monitor && monitor.targets.length > 0}
 						<div class="mt-3 overflow-x-auto">
 							<table class="w-full text-sm" style="min-width: 1080px;">
 								<thead>
 									<tr class="text-xs text-muted-foreground">
-										<th class="px-3 py-2 text-left font-medium">Media</th>
+										<th class="px-3 py-2 text-left font-medium">{tr("Media")}</th>
 										<th class="px-3 py-2 text-left font-medium">Artikel / 7 Hari</th>
 										<th class="px-3 py-2 text-left font-medium">Sumber</th>
 										<th class="px-3 py-2 text-left font-medium">Terakhir Crawl</th>
-										<th class="px-3 py-2 text-left font-medium">Gagal Berturut</th>
+										<th class="px-3 py-2 text-left font-medium">{tr("Gagal Berturut")}</th>
 										<th class="px-3 py-2 text-left font-medium">Error Terakhir</th>
 										<th class="px-3 py-2 text-left font-medium">Aksi</th>
 									</tr>
@@ -1536,23 +1537,20 @@
 	{#if tab === 'server'}
 		<div class="app-card mt-3 p-4">
 			{#if serverLoading && !serverCfg}
-				<p class="text-sm text-muted-foreground">Memuat konfigurasi server…</p>
+				<p class="text-sm text-muted-foreground">{tr("Memuat konfigurasi server…")}</p>
 			{:else}
 				<form class="space-y-3" onsubmit={saveServer}>
 					<div>
 						<h2 class="text-base font-semibold">IP Publik Server</h2>
-						<p class="mt-1 text-sm text-muted-foreground">
-							IP ini ditampilkan ke mitra ketika Cloudflare/WAF mereka memblokir pengecekan domain, supaya mitra bisa
-							memasukkannya ke daftar izin. Disimpan terenkripsi di database.
-						</p>
+						<p class="mt-1 text-sm text-muted-foreground">{tr("IP ini ditampilkan ke mitra ketika Cloudflare/WAF mereka memblokir pengecekan domain, supaya mitra bisa memasukkannya ke daftar izin. Disimpan terenkripsi di database.")}</p>
 					</div>
 					<label class="block">
 						<span class="text-sm font-medium">IP publik (IPv4 / IPv6)</span>
-						<span class="block text-xs text-muted-foreground">Kosongkan untuk menghapus dan membiarkan sistem mendeteksi otomatis.</span>
+						<span class="block text-xs text-muted-foreground">{tr("Kosongkan untuk menghapus dan membiarkan sistem mendeteksi otomatis.")}</span>
 						<input class="app-input mt-1 w-full font-mono" placeholder="43.156.237.97" bind:value={serverIp} />
 					</label>
 					<div class="flex flex-wrap items-center gap-3">
-						<button class="app-btn app-btn-primary" type="submit" disabled={serverBusy}>{serverBusy ? 'Menyimpan…' : 'Simpan'}</button>
+						<button class="app-btn app-btn-primary" type="submit" disabled={serverBusy}>{serverBusy ? 'Menyimpan…' : tr('Simpan')}</button>
 						<Badge
 							tone={serverCfg?.source === 'dashboard' ? 'success' : serverCfg?.source === 'env' ? 'warning' : 'neutral'}
 							label={serverSourceLabel}
@@ -1561,15 +1559,8 @@
 					</div>
 					{#if serverMsg.text}<p class="text-sm" style="color: var(--success);">{serverMsg.text}</p>{/if}
 					{#if serverError && !serverError.includes('Akses platform')}<p class="text-sm" style="color: var(--destructive);">{serverError}</p>{/if}
-					<div class="rounded-lg border px-3 py-2 text-xs text-muted-foreground">
-						Isi dengan IP publik VPS tempat aplikasi ini berjalan. Kalau dikosongkan, sistem mendeteksi lewat layanan
-						echo IP saat ada mitra yang diblokir — tetapi nilai manual lebih dapat diandalkan karena tidak bergantung
-						layanan luar.
-					</div>
-					<div class="rounded-lg border px-3 py-2 text-xs" style="border-color: var(--warning); color: var(--warning);">
-						Perubahan berlaku langsung pada pengecekan berikutnya. IP yang salah membuat mitra mengizinkan alamat yang
-						tidak berguna, jadi pastikan angkanya sesuai VPS Anda.
-					</div>
+					<div class="rounded-lg border px-3 py-2 text-xs text-muted-foreground">{tr("Isi dengan IP publik VPS tempat aplikasi ini berjalan. Kalau dikosongkan, sistem mendeteksi lewat layanan echo IP saat ada mitra yang diblokir — tetapi nilai manual lebih dapat diandalkan karena tidak bergantung layanan luar.")}</div>
+					<div class="rounded-lg border px-3 py-2 text-xs" style="border-color: var(--warning); color: var(--warning);">{tr("Perubahan berlaku langsung pada pengecekan berikutnya. IP yang salah membuat mitra mengizinkan alamat yang tidak berguna, jadi pastikan angkanya sesuai VPS Anda.")}</div>
 				</form>
 			{/if}
 		</div>

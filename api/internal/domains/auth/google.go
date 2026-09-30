@@ -21,27 +21,33 @@ import (
 func (d *Deps) GoogleURL(w http.ResponseWriter, r *http.Request) {
 	cfg := d.Google.LoadConfig(r.Context())
 	if !d.Google.Configured(r.Context()) {
+		// Diagnostik rinci (tabel/env/APP_SECRET/field kurang) HANYA ke log server
+		// dan endpoint admin (platform/oauth/google). Respons publik ini tidak
+		// boleh membocorkan konfigurasi internal.
 		missing := []string{}
 		if cfg.ClientID == "" {
-			missing = append(missing, "client_id (database platform_oauth_configs atau env GOOGLE_CLIENT_ID)")
+			missing = append(missing, "client_id")
 		}
 		if cfg.RedirectURI == "" {
-			missing = append(missing, "redirect_uri (database platform_oauth_configs atau env GOOGLE_REDIRECT_URI)")
+			missing = append(missing, "redirect_uri")
 		}
 		if len(missing) == 0 {
-			missing = append(missing, "client_secret (database platform_oauth_configs atau env GOOGLE_CLIENT_SECRET)")
+			missing = append(missing, "client_secret")
 		}
 		hint := ""
 		switch cfg.ConfigError {
 		case "table_missing":
-			hint = "Tabel platform_oauth_configs belum ada di database — jalankan migration (migrate-additive)."
+			hint = "tabel platform_oauth_configs belum ada — jalankan migration (migrate-additive)"
 		case "record_empty":
-			hint = "Belum ada record 'google' — simpan konfigurasi di Admin → Integrasi → Google Sign-In."
+			hint = "belum ada record 'google' — simpan konfigurasi di Admin → Integrasi → Google Sign-In"
 		case "secret_decrypt_failed":
-			hint = "Client Secret tersimpan tidak dapat di-decrypt (kemungkinan APP_SECRET berubah) — simpan ulang Client Secret di Admin."
+			hint = "client secret tersimpan tidak dapat di-decrypt (kemungkinan APP_SECRET berubah) — simpan ulang Client Secret di Admin"
 		}
+		slog.Error("[google/url] konfigurasi Google belum lengkap",
+			"source", cfg.Source, "config_error", cfg.ConfigError,
+			"missing", strings.Join(missing, ","), "hint", hint)
 		httpx.Error(w, http.StatusServiceUnavailable,
-			"Google sign-in belum dikonfigurasi. "+hint+" Lengkapi di admin: "+strings.Join(missing, ", ")+" — lalu simpan (cache 30 detik).")
+			"Layanan masuk dengan Google sedang tidak tersedia. Coba lagi nanti.")
 		return
 	}
 

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Minimal /klien/profile — port fungsi profil: ganti password + 2FA setup/
 	// enable/disable. Section profil penuh ada di fase 2.
 	import { onMount } from 'svelte';
@@ -44,7 +46,7 @@
 			currentPassword = '';
 			newPassword = '';
 		} else {
-			passwordMsg = await readApiError(res, 'Gagal mengubah password.');
+			passwordMsg = await readApiError(res, tr('Gagal mengubah password.'));
 		}
 	}
 
@@ -58,7 +60,7 @@
 				twoFactorSecret = data.secret;
 				otpauthUrl = data.otpauth_url;
 			} else {
-				twoFactorMsg = await readApiError(res, 'Gagal memulai setup 2FA.');
+				twoFactorMsg = await readApiError(res, tr('Gagal memulai setup 2FA.'));
 			}
 		} finally {
 			twoFactorBusy = false;
@@ -79,7 +81,7 @@
 				recoveryCodes = data.recovery_codes ?? [];
 				twoFactorSecret = '';
 				totpCode = '';
-				twoFactorMsg = '2FA aktif. Simpan kode pemulihan Anda.';
+				twoFactorMsg = tr('2FA aktif. Simpan kode pemulihan Anda.');
 			} else {
 				twoFactorMsg = await readApiError(res, 'Kode verifikasi salah. Coba lagi.');
 			}
@@ -89,7 +91,7 @@
 	}
 
 	async function disableTwoFactor() {
-		const password = window.prompt('Konfirmasi password untuk menonaktifkan 2FA:');
+		const password = window.prompt(tr('Konfirmasi password untuk menonaktifkan 2FA:'));
 		if (!password) return;
 		twoFactorBusy = true;
 		twoFactorMsg = '';
@@ -103,7 +105,7 @@
 				recoveryCodes = [];
 				twoFactorMsg = '2FA dinonaktifkan.';
 			} else {
-				twoFactorMsg = await readApiError(res, 'Gagal menonaktifkan 2FA.');
+				twoFactorMsg = await readApiError(res, tr('Gagal menonaktifkan 2FA.'));
 			}
 		} finally {
 			twoFactorBusy = false;
@@ -112,7 +114,7 @@
 
 	async function rename() {
 		if (!user) return;
-		const name = window.prompt('Nama tampilan baru:', user.display_name);
+		const name = window.prompt(tr('Nama tampilan baru:'), user.display_name);
 		if (!name || name.trim().length < 2) return;
 		const res = await apiRequest('/v1/auth/me', {
 			method: 'PATCH',
@@ -132,25 +134,21 @@
 	<h1 class="text-2xl font-semibold tracking-tight">Profil</h1>
 	{#if user}
 		<p class="mt-1 text-sm text-muted-foreground">{user.email} · <span class="uppercase">{user.role}</span></p>
-		<button class="mt-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent" onclick={rename}>
-			Ubah nama tampilan
-		</button>
+		<button class="mt-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent" onclick={rename}>{tr("Ubah nama tampilan")}</button>
 
 		<section class="app-card mt-8 p-4">
 			<h2 class="font-medium">Ganti password</h2>
 			<form class="mt-3 flex flex-col gap-3" onsubmit={changePassword}>
 				<input
 					class="app-input"
-					type="password" placeholder="Password saat ini" bind:value={currentPassword} required
+					type="password" placeholder={tr("Password saat ini")} bind:value={currentPassword} required
 				/>
 				<input
 					class="app-input"
-					type="password" placeholder="Password baru (min. 10)" bind:value={newPassword} minlength={10} required
+					type="password" placeholder={tr("Password baru (min. 10)")} bind:value={newPassword} minlength={10} required
 				/>
 				{#if passwordMsg}<p class="text-sm text-muted-foreground">{passwordMsg}</p>{/if}
-				<button class="app-btn app-btn-primary w-fit" type="submit">
-					Simpan password
-				</button>
+				<button class="app-btn app-btn-primary w-fit" type="submit">{tr("Simpan password")}</button>
 			</form>
 		</section>
 
@@ -193,6 +191,6 @@
 			{#if twoFactorMsg}<p class="mt-2 text-sm text-muted-foreground">{twoFactorMsg}</p>{/if}
 		</section>
 	{:else}
-		<p class="mt-2 text-sm text-muted-foreground">Memuat…</p>
+		<p class="mt-2 text-sm text-muted-foreground">{tr("Memuat…")}</p>
 	{/if}
 </main>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Portal mitra — pintu masuk: resolusi partner user lalu arahkan ke
 	// /mitra/{public_id} (parity app lama: public_id 6 karakter di URL).
 	import { onMount } from 'svelte';
@@ -18,14 +20,14 @@
 			}
 			const res = await apiRequest('/v1/partner/me');
 			if (!res.ok) {
-				error = 'Akun ini tidak terhubung ke data mitra. Hubungi admin Tauthub.';
+				error = tr('Akun ini tidak terhubung ke data mitra. Hubungi admin Tauthub.');
 				loading = false;
 				return;
 			}
 			const data = await res.json();
 			const partner = data?.partner;
 			if (!partner) {
-				error = 'Data mitra belum tersedia untuk akun ini.';
+				error = tr('Data mitra belum tersedia untuk akun ini.');
 				loading = false;
 				return;
 			}
@@ -37,16 +39,16 @@
 	});
 </script>
 
-<PageTitle title="Mitra" />
+<PageTitle title={tr("Mitra")} />
 
 <section>
 	<div class="app-card p-6 text-center">
-		<h1 class="text-lg font-semibold">Portal Mitra Tauthub</h1>
+		<h1 class="text-lg font-semibold">{tr("Portal Mitra Tauthub")}</h1>
 		{#if loading}
-			<p class="mt-2 text-sm text-muted-foreground">Memuat data mitra…</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr("Memuat data mitra…")}</p>
 		{:else if error}
 			<p class="mt-2 text-sm" style="color: var(--destructive);">{error}</p>
-			<a class="app-btn app-btn-soft mt-4" href="/klien">Buka area klien</a>
+			<a class="app-btn app-btn-soft mt-4" href="/klien">{tr("Buka area klien")}</a>
 		{/if}
 	</div>
 </section>

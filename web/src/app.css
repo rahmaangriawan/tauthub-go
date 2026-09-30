@@ -148,6 +148,14 @@
   }
 }
 
+/* Semua dialog/popup app-card dipusatkan di viewport; margin auto membuat
+   dialog tinggi tetap bisa di-scroll dari atas tanpa kehilangan centering.
+   Ditulis DI LUAR @layer supaya mengalahkan utility `my-*` Tailwind pada
+   markup dialog lama yang masih rata atas. */
+dialog.app-card {
+  margin: auto;
+}
+
 /* Komponen shell — nilai diambil persis dari apps/web/src/components/shells/
    product-shell.module.css (sidebar 264px, item nav min-height 40px tanpa
    margin antar-item, label grup 8/10/5, topbar 64px padding 0 28px,
@@ -222,6 +230,49 @@
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   }
 
+  /* Kotak pencarian menu (admin): filter live daftar navigasi. */
+  .app-sidebar-search { position: relative; margin: 0 8px 6px; }
+  .app-sidebar-search svg {
+    position: absolute;
+    top: 50%;
+    left: 9px;
+    translate: 0 -50%;
+    color: var(--sidebar-soft);
+    pointer-events: none;
+  }
+  .app-sidebar-search input {
+    width: 100%;
+    min-height: 32px;
+    border: 1px solid var(--sidebar-border);
+    border-radius: 8px;
+    padding: 0 8px 0 30px;
+    background-color: var(--sidebar-hover);
+    color: var(--sidebar-foreground);
+    font-size: 12.5px;
+  }
+  .app-sidebar-search input::placeholder { color: var(--sidebar-soft); }
+  .app-sidebar-search input:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+  .app-sidebar-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+  /* Sub-link bertingkat di bawah item induk (parity navSublinks app lama):
+     menjorok sejajar teks induk, selalu tampil. */
+  .app-sidebar-sublinks { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 4px; padding-left: 31px; }
+  .app-sidebar-sublink {
+    display: block;
+    border-radius: 7px;
+    padding: 5px 9px;
+    color: var(--sidebar-soft);
+    font-size: 12.5px;
+    line-height: 17px;
+    text-decoration: none;
+    transition: background-color 160ms cubic-bezier(0.2, 0.8, 0.2, 1), color 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .app-sidebar-sublink:hover { background-color: var(--sidebar-hover); color: var(--sidebar-foreground); }
+  .app-sidebar-sublink[data-active='true'] {
+    background-color: var(--sidebar-primary);
+    color: var(--sidebar-primary-foreground);
+  }
+
   .app-account-trigger {
     display: flex;
     align-items: center;
@@ -263,7 +314,19 @@
     padding: 0 28px;
     background-color: var(--card);
   }
-  .app-utility-actions { display: flex; align-items: center; gap: 8px; min-width: 0; margin-left: auto; }
+  /* Sisi kiri utility bar — parity `utilityBar > div:first-child` app lama,
+     tempat pill langkah Taut Pintar dirender (sebaris tombol hamburger).
+     `margin-right:auto` + `margin-left:auto` pada aksi = space-between.
+     Sisi kiri menyusut dulu (pill-nya wrap, bar ikut meninggi); sisi kanan
+     (bahasa/kredit/bell) tidak boleh menyusut agar tidak meluber keluar. */
+  .app-utility-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin-right: auto;
+  }
+  .app-utility-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; margin-left: auto; }
 
   /* Tombol hamburger hanya muncul di mobile; di desktop topbar sama seperti
      app lama (aksi rata kanan, tanpa tombol tambahan). Dua kelas agar menang
@@ -324,6 +387,7 @@
   }
   .app-credit-pill:hover { border-color: var(--primary); background-color: var(--accent); }
   .app-credit-pill svg { flex: 0 0 auto; color: var(--warning); }
+  .app-earnings-pill svg { color: var(--success); }
   .app-credit-pill strong { font-size: 12.5px; font-weight: 650; white-space: nowrap; }
   /* Pil kredit kini sebuah <button> (membuka dialog Top Up), bukan tautan.
      Reset tampilan bawaan tombol supaya visualnya identik dengan versi <a>. */
@@ -421,4 +485,98 @@
     overflow-wrap: anywhere;
   }
   .app-card .app-input { max-width: 100%; }
+}
+
+/* Kursor untuk semua elemen yang bisa diklik — parity app/globals.css app lama.
+   Tailwind v4 menghapus `cursor: pointer` bawaan `<button>` (preflight v3
+   memilikinya, v4 tidak), jadi tanpa ini tombol tampil cursor panah biasa.
+   Diletakkan DI LUAR @layer supaya menang atas utility, dan memakai `:where()`
+   agar spesifisitasnya 0 — komponen yang sengaja `cursor: default` (backdrop
+   popup, step terkunci) tetap menang lewat kelasnya sendiri. Aturan disabled
+   ditulis SETELAH aturan pointer: spesifisitasnya sama (0), jadi urutan yang
+   menentukan. */
+:where(
+  button,
+  [role="button"],
+  [role="menuitem"],
+  [role="option"],
+  [role="tab"],
+  [role="radio"],
+  [role="switch"],
+  [role="checkbox"],
+  [role="link"],
+  a[href],
+  summary,
+  label,
+  select,
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="file"],
+  input[type="range"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"]
+) {
+  cursor: pointer;
+}
+
+:where(
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  [aria-disabled="true"]
+) {
+  cursor: not-allowed;
+}
+
+/* ── Isi artikel (`.prose`) ────────────────────────────────────────────────
+   Markup artikel memakai `prose prose-sm` (isi editor The Writer, pratinjau
+   Gatekeeper, editor dokumen), tapi plugin @tailwindcss/typography tidak
+   terpasang sehingga kelasnya tidak berefek sama sekali. Akibatnya Preflight
+   Tailwind membuang margin bawaan paragraf dan artikel tampil menempel tanpa
+   jarak. Jarak minimum ini mengembalikan keterbacaan tanpa menambah
+   dependensi. Ditulis DI LUAR @layer supaya menang atas reset. */
+.prose > :first-child {
+  margin-top: 0;
+}
+.prose > * + * {
+  margin-top: 0.85em;
+}
+.prose h2 {
+  margin-top: 1.5em;
+  font-size: 1.15em;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.prose h3 {
+  margin-top: 1.25em;
+  font-size: 1.05em;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.prose ul,
+.prose ol {
+  padding-left: 1.4em;
+}
+.prose ul {
+  list-style: disc;
+}
+.prose ol {
+  list-style: decimal;
+}
+.prose li + li {
+  margin-top: 0.35em;
+}
+.prose blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 0.9em;
+  color: var(--muted-foreground);
+}
+.prose a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.prose img {
+  border-radius: var(--radius-control);
 }

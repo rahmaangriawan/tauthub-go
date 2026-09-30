@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Invoice — port app/admin/invoices/page.tsx: tagihan ke brand (manual atau
 	// otomatis dari campaign = Σ harga publikasi published). Aksi: Issue,
 	// Tandai bayar, Void. Form buat invoice memuat campaign brand terpilih.
@@ -129,15 +131,15 @@
 <section>
 	<PageHeader
 		title="Invoices"
-		description="Tagihan ke brand — manual atau otomatis dari campaign (jumlah = Σ harga publikasi published)."
+		description={tr("Tagihan ke brand — manual atau otomatis dari campaign (jumlah = Σ harga publikasi published).")}
 	>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{fmtNum(total)} invoice</span>
-		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><Receipt size={16} /> Buat invoice</button>
+		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><Receipt size={16} />{tr("Buat invoice")}</button>
 	</PageHeader>
 
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke invoice.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke invoice.")}</p>
 		</div>
 	{:else}
 		<Feedback {loading} {error} loadingText="Memuat invoice…" />
@@ -149,7 +151,7 @@
 						<th class="px-4 py-2.5 font-medium">Nomor</th>
 						<th class="px-4 py-2.5 font-medium">Brand</th>
 						<th class="px-4 py-2.5 font-medium">Campaign</th>
-						<th class="px-4 py-2.5 font-medium">Jumlah</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Jumlah")}</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
 						<th class="px-4 py-2.5 font-medium">Jatuh tempo</th>
 						<th class="px-4 py-2.5"></th>
@@ -192,7 +194,7 @@
 			{#if !loading && rows.length === 0}
 				<div class="flex flex-col items-center px-4 py-12 text-center">
 					<Receipt size={26} class="text-muted-foreground" />
-					<p class="mt-2 text-sm text-muted-foreground">Belum ada invoice.</p>
+					<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada invoice.")}</p>
 				</div>
 			{/if}
 			<div class="px-4 pb-4">
@@ -208,14 +210,14 @@
 </section>
 
 {#if createOpen}
-	<Modal title="Buat invoice" label="Buat invoice" maxWidth="lg" onClose={() => (createOpen = false)}>
+	<Modal title={tr("Buat invoice")} label={tr("Buat invoice")} maxWidth="lg" onClose={() => (createOpen = false)}>
 		<form class="flex flex-col gap-3" onsubmit={create}>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Brand</span>
 				<Select
 					ariaLabel="Brand"
 					minWidth={240}
-					placeholder="Pilih brand"
+					placeholder={tr("Pilih brand")}
 					value={form.brand_id}
 					onchange={(v) => void loadCampaigns(v)}
 					options={brands.map((b) => ({ value: b.id, label: b.name }))}
@@ -236,7 +238,7 @@
 			</label>
 			{#if !form.campaign_id}
 				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Jumlah (IDR)</span>
+					<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Jumlah (IDR)")}</span>
 					<input class="app-input w-full" type="number" min="0" required value={form.amount} oninput={(e) => (form = { ...form, amount: (e.currentTarget as HTMLInputElement).value })} />
 				</label>
 			{/if}
@@ -264,8 +266,8 @@
 				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{error}</div>
 			{/if}
 			<div class="mt-1 flex justify-end gap-2 border-t pt-4">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>Batal</button>
-				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Buat invoice'}</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Buat invoice')}</button>
 			</div>
 		</form>
 	</Modal>

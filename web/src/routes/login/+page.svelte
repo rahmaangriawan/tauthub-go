@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Halaman Masuk & Daftar (split-screen). Mode ditentukan ?mode=register.
 	// Halaman /register/klien dan /register/mitra memakai panel yang sama dengan
 	// peran terkunci lewat prop lockedRole.
@@ -11,7 +13,7 @@
 </script>
 
 <svelte:head>
-	<title>Masuk · Tauthub</title>
+	<title>{tr("Masuk · Tauthub")}</title>
 	<meta name="description" content="Masuk atau daftar akun Tauthub untuk mengelola distribusi konten dan PR multi-brand." />
 </svelte:head>
 

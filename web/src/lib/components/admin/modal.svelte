@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Modal admin (dialog bawaan browser): fokus terkelola, Escape menutup.
 	import type { Snippet } from 'svelte';
 	import { X } from '@lucide/svelte';
@@ -29,7 +31,7 @@
 </script>
 
 <div
-	class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4"
+	class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4"
 	style="background-color: rgba(0,0,0,.45);"
 	role="presentation"
 	onclick={onClose}
@@ -39,13 +41,13 @@
 >
 	<dialog
 		open
-		class="app-card my-8 w-full {widthClass} p-5"
+		class="app-card w-full {widthClass} p-5"
 		aria-label={label ?? title}
 		onclick={(e) => e.stopPropagation()}
 	>
 		<div class="flex items-start justify-between gap-3">
 			<h2 class="text-lg font-semibold">{title}</h2>
-			<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label="Tutup" onclick={onClose}>
+			<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Tutup")} onclick={onClose}>
 				<X size={18} />
 			</button>
 		</div>

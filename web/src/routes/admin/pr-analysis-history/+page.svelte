@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Riwayat analisis PR — port app/admin/pr-analysis-history/page.tsx.
 	// Analisis message consistency, sentiment/tone, dan verifikasi URL untuk
 	// publikasi published lintas brand/kampanye/media + export CSV.
@@ -42,12 +44,12 @@
 		compliance_statuses: string[];
 	};
 
-	const MESSAGE_LABEL: Record<string, string> = { completed: 'Selesai', failed: 'Gagal' };
-	const COMPLIANCE_LABEL: Record<string, string> = {
+	const MESSAGE_LABEL: Record<string, string> = $derived({ completed: tr('Selesai'), failed: tr('Gagal') });
+	const COMPLIANCE_LABEL: Record<string, string> = $derived({
 		passed: 'URL terverifikasi',
 		failed: 'URL bermasalah',
-		unavailable: 'Tidak tersedia'
-	};
+		unavailable: tr('Tidak tersedia')
+	});
 	const SENTIMENT_LABEL: Record<string, string> = { positive: 'Positif', neutral: 'Netral', negative: 'Negatif' };
 	const STATUS_TONE: Record<string, 'success' | 'neutral' | 'warning' | 'accent' | 'danger'> = {
 		published: 'success',
@@ -105,6 +107,13 @@
 		return params;
 	}
 
+	// Pencarian live ala app lama: 300 ms setelah berhenti mengetik, reset ke halaman 1.
+	let searchTimer: ReturnType<typeof setTimeout> | null = null;
+	function onSearchInput() {
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => void load(1), 300);
+	}
+
 	async function load(targetPage: number) {
 		loading = true;
 		error = '';
@@ -122,7 +131,7 @@
 			if (!filters) filters = data.filters;
 			page = targetPage;
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		} finally {
 			loading = false;
 		}
@@ -157,7 +166,7 @@
 			a.click();
 			URL.revokeObjectURL(a.href);
 		} catch {
-			error = 'Tidak dapat mengunduh CSV. Coba lagi.';
+			error = tr('Tidak dapat mengunduh CSV. Coba lagi.');
 		} finally {
 			exporting = false;
 		}
@@ -175,8 +184,8 @@
 
 <section>
 	<PageHeader
-		title="Riwayat Analisis PR"
-		description="Analisis message consistency, sentiment/tone, dan verifikasi URL untuk seluruh publikasi published lintas brand/kampanye/media."
+		title={tr("Riwayat Analisis PR")}
+		description={tr("Analisis message consistency, sentiment/tone, dan verifikasi URL untuk seluruh publikasi published lintas brand/kampanye/media.")}
 	>
 		<Badge tone="accent" label="{total} publikasi" />
 	</PageHeader>
@@ -185,7 +194,7 @@
 
 	{#if rows.length === 0 && error.includes('Akses platform')}
 		<div class="app-card mt-4 px-4 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke riwayat analisis PR.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke riwayat analisis PR.")}</p>
 		</div>
 	{:else}
 		<div class="app-card mt-4 p-4">
@@ -202,16 +211,16 @@
 							void load(1);
 						}}
 						options={[
-							{ value: '', label: 'Semua brand' },
+							{ value: '', label: tr('Semua brand') },
 							...(filters?.brands ?? []).map((b) => ({ value: b.id, label: b.name }))
 						]}
 					/>
 				</label>
 				<label class="block min-w-[200px]">
-					<span class="text-xs text-muted-foreground">Kampanye</span>
+					<span class="text-xs text-muted-foreground">{tr("Kampanye")}</span>
 					<div>
 						<Select
-							ariaLabel="Kampanye"
+							ariaLabel={tr("Kampanye")}
 							minWidth={200}
 							disabled={visibleCampaigns.length === 0}
 							value={campaignId}
@@ -220,16 +229,16 @@
 								void load(1);
 							}}
 							options={[
-								{ value: '', label: 'Semua kampanye' },
+								{ value: '', label: tr('Semua kampanye') },
 								...visibleCampaigns.map((c) => ({ value: c.id, label: c.name }))
 							]}
 						/>
 					</div>
 				</label>
 				<label class="block min-w-[200px]">
-					<span class="text-xs text-muted-foreground">Media</span>
+					<span class="text-xs text-muted-foreground">{tr("Media")}</span>
 					<Select
-						ariaLabel="Media"
+						ariaLabel={tr("Media")}
 						minWidth={200}
 						value={mediaId}
 						onchange={(v) => {
@@ -237,7 +246,7 @@
 							void load(1);
 						}}
 						options={[
-							{ value: '', label: 'Semua media' },
+							{ value: '', label: tr('Semua media') },
 							...(filters?.media ?? []).map((m) => ({ value: m.id, label: m.name }))
 						]}
 					/>
@@ -253,7 +262,7 @@
 							void load(1);
 						}}
 						options={[
-							{ value: '', label: 'Semua' },
+							{ value: '', label: tr('Semua') },
 							...(filters?.message_statuses ?? []).map((s) => ({ value: s, label: MESSAGE_LABEL[s] ?? s }))
 						]}
 					/>
@@ -269,28 +278,28 @@
 							void load(1);
 						}}
 						options={[
-							{ value: '', label: 'Semua' },
+							{ value: '', label: tr('Semua') },
 							...(filters?.compliance_statuses ?? []).map((s) => ({ value: s, label: COMPLIANCE_LABEL[s] ?? s }))
 						]}
 					/>
 				</label>
 				<label class="block min-w-[170px]">
-					<span class="text-xs text-muted-foreground">Terbit dari</span>
+					<span class="text-xs text-muted-foreground">{tr("Terbit dari")}</span>
 					<input class="app-input mt-1 w-full" type="date" bind:value={from} onchange={() => void load(1)} />
 				</label>
 				<label class="block min-w-[170px]">
-					<span class="text-xs text-muted-foreground">Terbit sampai</span>
+					<span class="text-xs text-muted-foreground">{tr("Terbit sampai")}</span>
 					<input class="app-input mt-1 w-full" type="date" bind:value={to} onchange={() => void load(1)} />
 				</label>
 				<label class="block min-w-[220px]">
-					<span class="text-xs text-muted-foreground">Cari (judul / media / brand)</span>
+					<span class="text-xs text-muted-foreground">{tr("Cari (judul / media / brand)")}</span>
 					<span class="relative mt-1 block">
 						<Search size={14} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-						<input class="app-input w-full pl-9" placeholder="Cari…" bind:value={query} onchange={() => void load(1)} />
+						<input class="app-input w-full pl-9" placeholder={tr("Cari…")} bind:value={query} oninput={onSearchInput} />
 					</span>
 				</label>
 				<button class="app-btn app-btn-soft" type="button" onclick={resetFilters}>Reset</button>
-				<button class="app-btn app-btn-soft" type="button" disabled={exporting || loading} title="Unduh CSV dengan filter yang sedang aktif" onclick={() => void exportCsv()}>
+				<button class="app-btn app-btn-soft" type="button" disabled={exporting || loading} title={tr("Unduh CSV dengan filter yang sedang aktif")} onclick={() => void exportCsv()}>
 					{exporting ? 'Mengekspor…' : 'Export CSV'}
 				</button>
 			</div>
@@ -301,13 +310,13 @@
 				<table class="w-full text-sm" style="min-width: 1180px;">
 					<thead>
 						<tr class="text-xs text-muted-foreground">
-							<th class="px-3 py-2 text-left font-medium">Publikasi</th>
-							<th class="px-3 py-2 text-left font-medium">Brand / Kampanye</th>
-							<th class="px-3 py-2 text-left font-medium">Media</th>
+							<th class="px-3 py-2 text-left font-medium">{tr("Publikasi")}</th>
+							<th class="px-3 py-2 text-left font-medium">{tr("Brand / Kampanye")}</th>
+							<th class="px-3 py-2 text-left font-medium">{tr("Media")}</th>
 							<th class="px-3 py-2 text-left font-medium">Message</th>
 							<th class="px-3 py-2 text-left font-medium">Sentiment</th>
 							<th class="px-3 py-2 text-left font-medium">Compliance</th>
-							<th class="px-3 py-2 text-left font-medium">Terbit</th>
+							<th class="px-3 py-2 text-left font-medium">{tr("Terbit")}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -363,13 +372,11 @@
 					</tbody>
 				</table>
 				{#if rows.length === 0}
-					<p class="px-4 py-12 text-center text-sm text-muted-foreground">Tidak ada data untuk filter ini.</p>
+					<p class="px-4 py-12 text-center text-sm text-muted-foreground">{tr("Tidak ada data untuk filter ini.")}</p>
 				{/if}
 			</div>
 			<Pagination total={total} limit={PAGE_SIZE} offset={(page - 1) * PAGE_SIZE} onChange={(next) => void load(next / PAGE_SIZE + 1)} />
-			<p class="mt-3 text-xs text-muted-foreground">
-				Kolom &ldquo;—&rdquo; berarti analisis belum berjalan atau data tidak tersedia — tidak ada angka palsu.
-			</p>
+			<p class="mt-3 text-xs text-muted-foreground">{tr("Kolom “—” berarti analisis belum berjalan atau data tidak tersedia — tidak ada angka palsu.")}</p>
 		</div>
 	{/if}
 </section>

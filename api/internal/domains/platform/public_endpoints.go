@@ -260,6 +260,10 @@ func (d *Deps) logFeedAccess(ctx context.Context, feedID string, r *http.Request
 // sync). Auth: Bearer api_key + HMAC atas body (timestamp + signature),
 // idempotency key opsional. Ownership: hanya publikasi pada media key itu.
 func (d *Deps) PublishingCallback(w http.ResponseWriter, r *http.Request) {
+	// Batasi percobaan per IP sebelum lookup kredensial (menahan brute force).
+	if !d.pubRateLimit(w, r, "pub-callback", 300) {
+		return
+	}
 	ctx := r.Context()
 	raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
@@ -507,6 +511,10 @@ func (d *Deps) TrackingEventCreate(w http.ResponseWriter, r *http.Request) {
 // tak dikenal / nonaktif → 404 tanpa membocorkan keberadaan link.
 // Parity app/t/[code]/route.ts.
 func (d *Deps) TrackingRedirect(w http.ResponseWriter, r *http.Request) {
+	// Publik: dibatasi per IP (600/menit) supaya tidak bisa dikuras.
+	if !d.pubRateLimit(w, r, "track", 600) {
+		return
+	}
 	code := chiParam(r, "code")
 	if code == "" {
 		http.NotFound(w, r)

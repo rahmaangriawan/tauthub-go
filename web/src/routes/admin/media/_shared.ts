@@ -38,7 +38,7 @@ export function mountWithSession(load: () => unknown): () => void {
 }
 
 export const idr = (n: unknown) =>
-	new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(
+	new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(
 		Number(n ?? 0)
 	);
 

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Fase 4: halaman Generate + daftar job (port section Generate minimal).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -70,7 +72,7 @@
 			});
 			const data = await res.json();
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal membuat job generasi.');
+				error = await readApiError(res, tr('Gagal membuat job generasi.'));
 				return;
 			}
 			msg = `Job ${data.status} — ${data.current_step}`;
@@ -90,7 +92,7 @@
 				msg = 'Outline disetujui, generasi artikel dijalankan.';
 				await load();
 			} else {
-				error = await readApiError(res, 'Gagal menyetujui outline.');
+				error = await readApiError(res, tr('Gagal menyetujui outline.'));
 			}
 		} finally {
 			busy = false;
@@ -120,10 +122,10 @@
 	};
 </script>
 
-<PageTitle title="Generate Artikel" />
+<PageTitle title={tr("Generate Artikel")} />
 
 <section>
-	<h1 class="text-2xl font-semibold tracking-tight">Generate Artikel</h1>
+	<h1 class="text-2xl font-semibold tracking-tight">{tr("Generate Artikel")}</h1>
 	<p class="mt-1 text-sm text-muted-foreground">
 		Pipeline: brief → (opsional approval outline) → draft AI → gate moderasi → dokumen.
 	</p>
@@ -162,9 +164,9 @@
 	</form>
 
 	<section class="mt-6">
-		<h2 class="font-semibold">Riwayat job <span class="text-sm font-normal text-muted-foreground">({total})</span></h2>
+		<h2 class="font-semibold">{tr("Riwayat job")}<span class="text-sm font-normal text-muted-foreground">({total})</span></h2>
 		{#if loading}
-			<p class="mt-2 text-sm text-muted-foreground">Memuat…</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr("Memuat…")}</p>
 		{:else}
 			<div class="mt-2 grid gap-2">
 				{#each jobs as job (job.id)}
@@ -186,7 +188,7 @@
 									{job.status}
 								</span>
 								{#if job.document_id}
-									<a class="text-xs underline" href={`/klien/${brandUrl}/editor/${job.document_id}`}>Buka editor</a>
+									<a class="text-xs underline" href={`/klien/${brandUrl}/editor/${job.document_id}`}>{tr("Buka editor")}</a>
 								{/if}
 								{#if job.status === 'waiting_outline_approval'}
 									<button class="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground" disabled={busy} onclick={() => approveOutline(job.id)}>
@@ -206,7 +208,7 @@
 						{/if}
 					</div>
 				{:else}
-					<p class="text-sm text-muted-foreground">Belum ada job generasi.</p>
+					<p class="text-sm text-muted-foreground">{tr("Belum ada job generasi.")}</p>
 				{/each}
 			</div>
 		{/if}

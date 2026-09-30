@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Kartu konfigurasi satu agent Taut Pintar: base URL, API key (sekali tulis),
 	// model, temperature/max tokens/timeout/rate limit, system prompt, enabled,
 	// plus uji koneksi. Port AgentCard di app/admin/taut-agents/page.tsx.
@@ -78,10 +80,10 @@
 			if (rateLimit.trim()) payload.rate_limit_per_min = Number(rateLimit);
 			await onSave(config.agent, payload);
 			apiKey = '';
-			msg = 'Tersimpan.';
+			msg = tr('Tersimpan.');
 			msgOk = true;
 		} catch (reason) {
-			msg = reason instanceof Error ? reason.message : 'Gagal menyimpan.';
+			msg = reason instanceof Error ? reason.message : tr('Gagal menyimpan.');
 			msgOk = false;
 		} finally {
 			busy = false;
@@ -131,7 +133,7 @@
 			<input
 				class="app-input mt-1 w-full"
 				type="password"
-				placeholder={config.api_key_configured ? 'Kosongkan jika tidak diubah' : 'sk-…'}
+				placeholder={config.api_key_configured ? tr('Kosongkan jika tidak diubah') : 'sk-…'}
 				bind:value={apiKey}
 			/>
 		</label>
@@ -147,7 +149,7 @@
 			</label>
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Max tokens</span>
-				<input class="app-input mt-1 w-full" type="number" placeholder="opsional" bind:value={maxTokens} />
+				<input class="app-input mt-1 w-full" type="number" placeholder={tr("opsional")} bind:value={maxTokens} />
 			</label>
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Timeout (ms)</span>
@@ -156,13 +158,13 @@
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Rate limit (/min)</span>
 				<input class="app-input mt-1 w-full" type="number" min="0" max="600" placeholder="3" bind:value={rateLimit} />
-				<span class="text-[11px] text-muted-foreground">0-600 permintaan per menit. 0 = tanpa batas.</span>
+				<span class="text-[11px] text-muted-foreground">{tr("0-600 permintaan per menit. 0 = tanpa batas.")}</span>
 			</label>
 		</div>
 
 		<label class="block">
 			<span class="text-xs font-medium text-muted-foreground">System Prompt (knowledge)</span>
-			<textarea class="app-input mt-1 w-full font-mono text-xs" rows="10" placeholder="Instruksi agent..." bind:value={systemPrompt}></textarea>
+			<textarea class="app-input mt-1 w-full font-mono text-xs" rows="10" placeholder={tr("Instruksi agent...")} bind:value={systemPrompt}></textarea>
 		</label>
 
 		<label class="flex items-center gap-2 text-sm">
@@ -175,7 +177,7 @@
 		{/if}
 
 		<div class="flex flex-wrap items-center gap-2">
-			<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan'}</button>
+			<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Simpan')}</button>
 			<button class="app-btn app-btn-soft" type="button" disabled={testBusy} onclick={test}>
 				{testBusy ? 'Menguji…' : 'Test koneksi'}
 			</button>
@@ -187,9 +189,7 @@
 
 	{#if !config.configured}
 		<p class="mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-xs" style="background: var(--destructive-soft, #fdecee); color: var(--destructive);">
-			<TriangleAlert size={14} />
-			Belum dikonfigurasi — kampanye akan hard stop saat mencapai agent ini.
-		</p>
+			<TriangleAlert size={14} />{tr("Belum dikonfigurasi — kampanye akan hard stop saat mencapai agent ini.")}</p>
 	{/if}
 	{#if msgOk}
 		<p class="mt-2 flex items-center gap-1 text-xs" style="color: var(--success);"><CheckCircle2 size={12} /> Perubahan tersimpan.</p>

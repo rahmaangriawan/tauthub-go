@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Integrasi platform — port app/admin/integrations/page.tsx.
 	// Tab 1 "Listing Media Mitra": seluruh media + owner mitra + tipe integrasi, dengan filter & modal edit.
 	// Tab 2 "Kredensial & Endpoint CMS": daftar koneksi CMS per brand/mitra + tambah/test/cabut.
@@ -56,14 +58,14 @@
 		manual: { label: 'Manual', desc: 'Publikasi manual tanpa integrasi API', tone: 'neutral', isAuto: false }
 	};
 
-	const INTEGRATION_OPTIONS = [
-		{ value: 'all', label: 'Semua Tipe Integrasi' },
+	const INTEGRATION_OPTIONS = $derived([
+		{ value: 'all', label: tr('Semua Tipe Integrasi') },
 		{ value: 'tulisio_api', label: 'Tauthub Publishing API' },
 		{ value: 'wordpress', label: 'WordPress REST API' },
 		{ value: 'rss', label: 'RSS Feed' },
 		{ value: 'webhook', label: 'Web Custom (Webhook)' },
 		{ value: 'manual', label: 'Manual' }
-	];
+	]);
 
 	const PAGE_SIZE = 25;
 
@@ -129,7 +131,7 @@
 			mediaList = mediaData.media ?? [];
 			if (partnerRes.ok) partners = (await partnerRes.json()).partners ?? [];
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		} finally {
 			loading = false;
 		}
@@ -323,8 +325,8 @@
 
 <section>
 	<PageHeader
-		title="Listing Media Mitra"
-		description="Daftar seluruh media mitra yang terdaftar di Tauthub lengkap dengan informasi website, nama mitra pemilik, dan tipe integrasi publikasi."
+		title={tr("Listing Media Mitra")}
+		description={tr("Daftar seluruh media mitra yang terdaftar di Tauthub lengkap dengan informasi website, nama mitra pemilik, dan tipe integrasi publikasi.")}
 	>
 		<Badge tone="accent" label="{mediaList.length} media mitra" />
 		<button class="app-btn app-btn-soft" type="button" onclick={() => void loadMediaAndPartners()}><RefreshCw size={15} /> Refresh</button>
@@ -334,7 +336,7 @@
 
 	{#if error.includes('Akses platform')}
 		<div class="app-card mt-4 px-4 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke direktori integrasi platform.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke direktori integrasi platform.")}</p>
 		</div>
 	{:else}
 		<div class="mt-4 grid gap-3 sm:grid-cols-4">
@@ -354,10 +356,10 @@
 
 		<div class="mt-4 flex flex-wrap gap-2">
 			<button class="app-btn {tab === 'media' ? 'app-btn-primary' : 'app-btn-soft'} !min-h-8 !px-3 !text-xs" type="button" onclick={() => (tab = 'media')}>
-				<PlugZap size={13} /> Listing Media Mitra ({filteredMedia.length})
+				<PlugZap size={13} /> {tr("Listing Media Mitra (")}{filteredMedia.length})
 			</button>
 			<button class="app-btn {tab === 'connections' ? 'app-btn-primary' : 'app-btn-soft'} !min-h-8 !px-3 !text-xs" type="button" onclick={openConnections}>
-				<PlugZap size={13} /> Kredensial &amp; Endpoint CMS
+				<PlugZap size={13} /> Kredensial & Endpoint CMS
 			</button>
 		</div>
 
@@ -365,7 +367,7 @@
 			<div class="mt-3 space-y-3">
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<div class="flex flex-1 flex-wrap items-center gap-2">
-						<input class="app-input min-w-[240px] max-w-[360px]" placeholder="Cari media, website, atau mitra…" bind:value={search} oninput={() => (mediaPage = 1)} />
+						<input class="app-input min-w-[240px] max-w-[360px]" placeholder={tr("Cari media, website, atau mitra…")} bind:value={search} oninput={() => (mediaPage = 1)} />
 						<Select
 							ariaLabel="Filter tipe integrasi"
 							minWidth={190}
@@ -385,8 +387,8 @@
 								mediaPage = 1;
 							}}
 							options={[
-								{ value: 'all', label: 'Semua Mitra' },
-								{ value: 'none', label: 'Tanpa Mitra (Platform)' },
+								{ value: 'all', label: tr('Semua Mitra') },
+								{ value: 'none', label: tr('Tanpa Mitra (Platform)') },
 								...partners.map((p) => ({ value: p.id, label: p.name ?? p.email ?? p.id.slice(0, 8) }))
 							]}
 						/>
@@ -399,8 +401,8 @@
 								mediaPage = 1;
 							}}
 							options={[
-								{ value: 'all', label: 'Semua Status' },
-								{ value: 'active', label: 'Aktif' },
+								{ value: 'all', label: tr('Semua Status') },
+								{ value: 'active', label: tr('Aktif') },
 								{ value: 'inactive', label: 'Inaktif' },
 								{ value: 'draft', label: 'Draft' }
 							]}
@@ -415,8 +417,8 @@
 					<table class="w-full text-sm" style="min-width: 1080px;">
 						<thead>
 							<tr class="text-xs text-muted-foreground">
-								<th class="px-4 py-2.5 text-left font-medium" style="width:28%;">Media &amp; Website</th>
-								<th class="px-4 py-2.5 text-left font-medium" style="width:22%;">Nama Mitra</th>
+								<th class="px-4 py-2.5 text-left font-medium" style="width:28%;">{tr("Media & Website")}</th>
+								<th class="px-4 py-2.5 text-left font-medium" style="width:22%;">{tr("Nama Mitra")}</th>
 								<th class="px-4 py-2.5 text-left font-medium" style="width:26%;">Integrasi Ke Apa</th>
 								<th class="px-4 py-2.5 text-left font-medium" style="width:12%;">Status</th>
 								<th class="px-4 py-2.5 text-right font-medium" style="width:12%;">Aksi</th>
@@ -448,11 +450,11 @@
 										{#if row.partner_id}
 											<div class="flex items-center gap-1">
 												<Users size={14} class="text-muted-foreground" />
-												<span class="font-medium">{partnerDisplay ?? 'Mitra'}</span>
+												<span class="font-medium">{partnerDisplay ?? tr('Mitra')}</span>
 											</div>
 											<a class="text-[11px] text-muted-foreground" href="/admin/partners">ID: {row.partner_id.slice(0, 8)}…</a>
 										{:else}
-											<Badge tone="neutral" label="Milik Platform (Tanpa Mitra)" />
+											<Badge tone="neutral" label={tr("Milik Platform (Tanpa Mitra)")} />
 										{/if}
 									</td>
 									<td class="px-4 py-2.5">
@@ -463,12 +465,12 @@
 										{/if}
 									</td>
 									<td class="px-4 py-2.5">
-										<span title={row.integration_connected ? 'Integrasi publikasi sudah terhubung' : 'Integrasi publikasi belum terhubung'}>
-											<Badge tone={row.integration_connected ? 'success' : 'warning'} label={row.integration_connected ? 'Aktif' : 'Tidak Aktif'} />
+										<span title={row.integration_connected ? tr('Integrasi publikasi sudah terhubung') : 'Integrasi publikasi belum terhubung'}>
+											<Badge tone={row.integration_connected ? 'success' : 'warning'} label={row.integration_connected ? tr('Aktif') : tr('Tidak Aktif')} />
 										</span>
 									</td>
 									<td class="px-4 py-2.5 text-right">
-										<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" title="Ubah konfigurasi integrasi & mitra" onclick={() => openEditMedia(row)}>
+										<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" title={tr("Ubah konfigurasi integrasi & mitra")} onclick={() => openEditMedia(row)}>
 											<Pencil size={12} /> Edit
 										</button>
 									</td>
@@ -477,7 +479,7 @@
 						</tbody>
 					</table>
 					{#if !loading && filteredMedia.length === 0}
-						<p class="px-4 py-12 text-center text-sm text-muted-foreground">Tidak ada media mitra yang sesuai dengan filter pencarian.</p>
+						<p class="px-4 py-12 text-center text-sm text-muted-foreground">{tr("Tidak ada media mitra yang sesuai dengan filter pencarian.")}</p>
 					{/if}
 				</div>
 				<Pagination total={filteredMedia.length} limit={PAGE_SIZE} offset={(mediaPage - 1) * PAGE_SIZE} onChange={(next) => (mediaPage = next / PAGE_SIZE + 1)} />
@@ -492,14 +494,14 @@
 							value={connMode}
 							onchange={(v) => void switchConnMode(v as 'brand' | 'partner')}
 							options={[
-								{ value: 'brand', label: 'Brand (Klien)' },
-								{ value: 'partner', label: 'Partner (Mitra)' }
+								{ value: 'brand', label: tr('Brand (Klien)') },
+								{ value: 'partner', label: tr('Partner (Mitra)') }
 							]}
 						/>
 						{#if connMode === 'brand'}
 							<span class="text-sm text-muted-foreground">Brand:</span>
 							<Select
-								ariaLabel="Pilih brand"
+								ariaLabel={tr("Pilih brand")}
 								minWidth={200}
 								value={selectedBrandId}
 								onchange={(v) => {
@@ -509,9 +511,9 @@
 								options={brands.map((b) => ({ value: b.id, label: b.name }))}
 							/>
 						{:else}
-							<span class="text-sm text-muted-foreground">Mitra:</span>
+							<span class="text-sm text-muted-foreground">{tr("Mitra:")}</span>
 							<Select
-								ariaLabel="Pilih mitra"
+								ariaLabel={tr("Pilih mitra")}
 								minWidth={200}
 								value={selectedPartnerId}
 								onchange={(v) => {
@@ -522,14 +524,14 @@
 							/>
 						{/if}
 					</div>
-					<button class="app-btn app-btn-primary" type="button" disabled={!selectedConnOwner} onclick={() => (createOpen = true)}>Tambah Endpoint</button>
+					<button class="app-btn app-btn-primary" type="button" disabled={!selectedConnOwner} onclick={() => (createOpen = true)}>{tr("Tambah Endpoint")}</button>
 				</div>
 
 				<div class="app-card overflow-x-auto">
 					<table class="w-full text-sm" style="min-width: 1080px;">
 						<thead>
 							<tr class="text-xs text-muted-foreground">
-								<th class="px-4 py-2.5 text-left font-medium">Nama Koneksi</th>
+								<th class="px-4 py-2.5 text-left font-medium">{tr("Nama Koneksi")}</th>
 								<th class="px-4 py-2.5 text-left font-medium">Provider</th>
 								<th class="px-4 py-2.5 text-left font-medium">Endpoint Base URL</th>
 								<th class="px-4 py-2.5 text-left font-medium">Status</th>
@@ -553,7 +555,7 @@
 									<td class="px-4 py-2.5"><code class="text-xs">{row.base_url}</code></td>
 									<td class="px-4 py-2.5"><Badge tone={row.status === 'active' ? 'success' : 'neutral'} label={row.status} /></td>
 									<td class="px-4 py-2.5 text-xs" style="color: {row.last_test_status === 'ok' ? 'var(--success)' : row.last_test_status === 'error' ? 'var(--destructive)' : 'var(--muted-foreground)'};">
-										{row.last_test_message ?? 'Belum diuji'}
+										{row.last_test_message ?? tr('Belum diuji')}
 									</td>
 									<td class="px-4 py-2.5 text-right">
 										{#if row.status === 'active'}
@@ -569,7 +571,7 @@
 					</table>
 					{#if !connLoading && connections.length === 0}
 						<p class="px-4 py-12 text-center text-sm text-muted-foreground">
-							{connMode === 'brand' ? 'Belum ada koneksi CMS/Webhook untuk brand ini.' : 'Belum ada koneksi CMS/Webhook untuk mitra ini.'}
+							{connMode === 'brand' ? tr('Belum ada koneksi CMS/Webhook untuk brand ini.') : tr('Belum ada koneksi CMS/Webhook untuk mitra ini.')}
 						</p>
 					{/if}
 				</div>
@@ -586,20 +588,20 @@
 		onClose={() => (editingMedia = null)}
 	>
 		<form id="edit-media-form" class="space-y-3" onsubmit={saveMediaEdit}>
-			<p class="text-sm text-muted-foreground">Atur website, kepemilikan mitra, serta tipe dan target endpoint integrasi publikasi.</p>
+			<p class="text-sm text-muted-foreground">{tr("Atur website, kepemilikan mitra, serta tipe dan target endpoint integrasi publikasi.")}</p>
 			<label class="block">
-				<span class="text-sm font-medium">Website / Domain Media</span>
+				<span class="text-sm font-medium">{tr("Website / Domain Media")}</span>
 				<input class="app-input mt-1 w-full" type="url" placeholder="https://suarapublika.com" bind:value={editForm.website_url} />
 			</label>
 			<label class="block">
-				<span class="text-sm font-medium">Tipe Integrasi Publikasi</span>
+				<span class="text-sm font-medium">{tr("Tipe Integrasi Publikasi")}</span>
 				<Select
-					ariaLabel="Tipe Integrasi Publikasi"
+					ariaLabel={tr("Tipe Integrasi Publikasi")}
 					minWidth={320}
 					value={editForm.integration_type}
 					onchange={(v) => (editForm.integration_type = v)}
 					options={[
-						{ value: 'manual', label: 'Manual (Dikelola oleh Mitra / Tanpa API)' },
+						{ value: 'manual', label: tr('Manual (Dikelola oleh Mitra / Tanpa API)') },
 						{ value: 'tulisio_api', label: 'Tauthub Publishing API (Push Webhook + HMAC)' },
 						{ value: 'wordpress', label: 'WordPress REST API (CMS Direct Post)' },
 						{ value: 'rss', label: 'RSS Feed Importer (Sindikasi XML/RSS)' },
@@ -609,34 +611,34 @@
 			</label>
 			{#if editForm.integration_type !== 'manual'}
 				<label class="block">
-					<span class="text-sm font-medium">Endpoint / Adapter URL (Opsional)</span>
-					<span class="block text-xs text-muted-foreground">URL endpoint mitra yang dituju saat mengirim konten publikasi secara otomatis.</span>
+					<span class="text-sm font-medium">{tr("Endpoint / Adapter URL (Opsional)")}</span>
+					<span class="block text-xs text-muted-foreground">{tr("URL endpoint mitra yang dituju saat mengirim konten publikasi secara otomatis.")}</span>
 					<input class="app-input mt-1 w-full" type="url" placeholder="https://suarapublika.com/api/tauthub/publish" bind:value={editForm.adapter_url} />
 				</label>
 			{/if}
 			<label class="block">
-				<span class="text-sm font-medium">Mitra Pemilik (Partner)</span>
+				<span class="text-sm font-medium">{tr("Mitra Pemilik (Partner)")}</span>
 				<Select
-					ariaLabel="Mitra Pemilik (Partner)"
+					ariaLabel={tr("Mitra Pemilik (Partner)")}
 					minWidth={280}
 					value={editForm.partner_id}
 					onchange={(v) => (editForm.partner_id = v)}
 					options={[
-						{ value: '', label: 'Tanpa Mitra (Milik Platform / Direct)' },
+						{ value: '', label: tr('Tanpa Mitra (Milik Platform / Direct)') },
 						...partners.map((p) => ({ value: p.id, label: p.name ?? p.email ?? p.id }))
 					]}
 				/>
 			</label>
 		</form>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (editingMedia = null)}>Batal</button>
-			<button class="app-btn app-btn-primary" type="submit" form="edit-media-form" disabled={editBusy}>{editBusy ? 'Menyimpan…' : 'Simpan Integrasi'}</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (editingMedia = null)}>{tr("Batal")}</button>
+			<button class="app-btn app-btn-primary" type="submit" form="edit-media-form" disabled={editBusy}>{editBusy ? 'Menyimpan…' : tr('Simpan Integrasi')}</button>
 		{/snippet}
 	</Modal>
 {/if}
 
 {#if createOpen}
-	<Modal title="Tambah Endpoint Koneksi CMS" label="Tambah koneksi CMS" maxWidth="lg" onClose={() => (createOpen = false)}>
+	<Modal title={tr("Tambah Endpoint Koneksi CMS")} label={tr("Tambah koneksi CMS")} maxWidth="lg" onClose={() => (createOpen = false)}>
 		<form id="create-connection-form" class="space-y-3" onsubmit={createConnection}>
 			<label class="block">
 				<span class="text-sm font-medium">Provider</span>
@@ -652,8 +654,8 @@
 				/>
 			</label>
 			<label class="block">
-				<span class="text-sm font-medium">Nama Koneksi</span>
-				<input class="app-input mt-1 w-full" required placeholder="Website Utama Mitra" bind:value={connForm.name} />
+				<span class="text-sm font-medium">{tr("Nama Koneksi")}</span>
+				<input class="app-input mt-1 w-full" required placeholder={tr("Website Utama Mitra")} bind:value={connForm.name} />
 			</label>
 			<label class="block">
 				<span class="text-sm font-medium">{connForm.provider === 'wordpress' ? 'URL WordPress' : 'Endpoint URL'}</span>
@@ -667,11 +669,11 @@
 			</label>
 			{#if connForm.provider === 'wordpress'}
 				<label class="block">
-					<span class="text-sm font-medium">Username / Email WordPress</span>
+					<span class="text-sm font-medium">{tr("Username / Email WordPress")}</span>
 					<input class="app-input mt-1 w-full" required bind:value={connForm.username} />
 				</label>
 				<label class="block">
-					<span class="text-sm font-medium">Application Password</span>
+					<span class="text-sm font-medium">{tr("Application Password")}</span>
 					<input class="app-input mt-1 w-full" required type="password" bind:value={connForm.application_password} />
 				</label>
 			{:else}
@@ -682,8 +684,8 @@
 			{/if}
 		</form>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>Batal</button>
-			<button class="app-btn app-btn-primary" type="submit" form="create-connection-form" disabled={connBusy}>{connBusy ? 'Menyimpan…' : 'Simpan Endpoint'}</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
+			<button class="app-btn app-btn-primary" type="submit" form="create-connection-form" disabled={connBusy}>{connBusy ? 'Menyimpan…' : tr('Simpan Endpoint')}</button>
 		{/snippet}
 	</Modal>
 {/if}

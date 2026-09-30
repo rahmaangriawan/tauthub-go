@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// GA4 Configs — port app/admin/ga4-configs/page.tsx.
 	// Integrasi Google Analytics 4 per brand: Measurement ID + API Secret (secret
 	// tidak pernah dikembalikan), consent mode, event mapping JSON.
@@ -78,7 +80,7 @@
 			}
 			page = targetPage;
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		} finally {
 			loading = false;
 		}
@@ -94,7 +96,7 @@
 				try {
 					eventMapping = JSON.parse(form.event_mapping);
 				} catch {
-					error = 'event_mapping bukan JSON yang valid.';
+					error = tr('event_mapping bukan JSON yang valid.');
 					return;
 				}
 			}
@@ -134,7 +136,7 @@
 	}
 
 	async function remove(config: Config) {
-		if (!confirm('Hapus konfigurasi GA4 ini?')) return;
+		if (!confirm(tr('Hapus konfigurasi GA4 ini?'))) return;
 		error = '';
 		const res = await apiRequest(`/v1/platform/ga4-configs/${config.id}`, { method: 'DELETE' });
 		if (!res.ok) {
@@ -151,14 +153,14 @@
 		description="Integrasi Google Analytics 4 per brand — Measurement ID + API Secret (Phase 8). Secret tidak pernah ditampilkan."
 	>
 		<Badge tone="accent" label="{total} config" />
-		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><ChartLine size={15} /> Buat config</button>
+		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><ChartLine size={15} />{tr("Buat config")}</button>
 	</PageHeader>
 
 	<Feedback {loading} {error} loadingText="Memuat konfigurasi GA4…" />
 
 	{#if rows.length === 0 && error.includes('Akses platform')}
 		<div class="app-card mt-4 px-4 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke konfigurasi GA4.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke konfigurasi GA4.")}</p>
 		</div>
 	{:else}
 		<div class="app-card mt-4 overflow-x-auto">
@@ -194,7 +196,7 @@
 									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => void updateStatus(row, !row.enabled)}>
 										{row.enabled ? 'Nonaktifkan' : 'Aktifkan'}
 									</button>
-									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => void remove(row)}>Hapus</button>
+									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => void remove(row)}>{tr("Hapus")}</button>
 								</div>
 							</td>
 						</tr>
@@ -202,7 +204,7 @@
 				</tbody>
 			</table>
 			{#if !loading && rows.length === 0}
-				<p class="px-4 py-12 text-center text-sm text-muted-foreground">Belum ada konfigurasi GA4.</p>
+				<p class="px-4 py-12 text-center text-sm text-muted-foreground">{tr("Belum ada konfigurasi GA4.")}</p>
 			{/if}
 		</div>
 		<Pagination total={total} limit={PAGE_SIZE} offset={(page - 1) * PAGE_SIZE} onChange={(next) => void load(next / PAGE_SIZE + 1)} />
@@ -210,14 +212,14 @@
 </section>
 
 {#if createOpen}
-	<Modal title="Buat konfigurasi GA4" label="Buat konfigurasi GA4" maxWidth="lg" onClose={() => (createOpen = false)}>
+	<Modal title={tr("Buat konfigurasi GA4")} label={tr("Buat konfigurasi GA4")} maxWidth="lg" onClose={() => (createOpen = false)}>
 		<form id="ga4-create-form" class="space-y-3" onsubmit={save}>
 			<label class="block">
 				<span class="text-sm font-medium">Brand</span>
 				<Select
 					ariaLabel="Brand"
 					minWidth={240}
-					placeholder="Pilih brand"
+					placeholder={tr("Pilih brand")}
 					value={form.brand_id}
 					onchange={(v) => (form.brand_id = v)}
 					options={brands.map((b) => ({ value: b.id, label: b.name }))}
@@ -229,7 +231,7 @@
 			</label>
 			<label class="block">
 				<span class="text-sm font-medium">API Secret (server-side, tidak pernah dikembalikan)</span>
-				<input class="app-input mt-1 w-full" type="password" placeholder="Dari GA4 → Data Streams → MP API secrets" bind:value={form.api_secret} />
+				<input class="app-input mt-1 w-full" type="password" placeholder={tr("Dari GA4 → Data Streams → MP API secrets")} bind:value={form.api_secret} />
 			</label>
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="block">
@@ -271,8 +273,8 @@
 			{/if}
 		</form>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>Batal</button>
-			<button class="app-btn app-btn-primary" type="submit" form="ga4-create-form" disabled={busy}>{busy ? 'Menyimpan…' : 'Buat config'}</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
+			<button class="app-btn app-btn-primary" type="submit" form="ga4-create-form" disabled={busy}>{busy ? 'Menyimpan…' : tr('Buat config')}</button>
 		{/snippet}
 	</Modal>
 {/if}

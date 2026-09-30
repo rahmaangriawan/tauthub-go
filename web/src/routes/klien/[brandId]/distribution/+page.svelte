@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port klien section `distribution` (DistributionOverview di
 	// app/klien/[brandId]/[[...section]]/distribution.tsx): ringkasan distribusi
 	// 30 hari — metrik laporan, saldo TC (dengan polling 30 detik), publikasi
@@ -69,7 +71,7 @@
 			apiRequest(`/v1/brands/${brandId}/campaigns?limit=6`)
 		]);
 		if (!reportsRes.ok || !pubsRes.ok || !campsRes.ok) {
-			error = await readApiError(reportsRes, 'Gagal memuat ringkasan distribusi.');
+			error = await readApiError(reportsRes, tr('Gagal memuat ringkasan distribusi.'));
 			return;
 		}
 		summary = (await reportsRes.json()).summary ?? null;
@@ -90,13 +92,11 @@
 <section>
 	<header>
 		<h1 class="text-2xl font-semibold tracking-tight">Overview Distribusi</h1>
-		<p class="mt-1 text-sm text-muted-foreground">
-			Ringkasan publikasi, performa, dan nilai media 30 hari terakhir.
-		</p>
+		<p class="mt-1 text-sm text-muted-foreground">{tr("Ringkasan publikasi, performa, dan nilai media 30 hari terakhir.")}</p>
 	</header>
 
 	{#if error}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>{/if}
-	{#if loading}<p class="mt-6 text-sm text-muted-foreground">Memuat ringkasan distribusi…</p>{/if}
+	{#if loading}<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat ringkasan distribusi…")}</p>{/if}
 
 	{#if !loading && summary}
 		<div class="app-card mt-4 p-4">
@@ -107,17 +107,17 @@
 					<p class="text-[11px] text-muted-foreground">30 hari terakhir</p>
 				</div>
 				<div>
-					<p class="text-xs text-muted-foreground">Nilai media</p>
+					<p class="text-xs text-muted-foreground">{tr("Nilai media")}</p>
 					<p class="text-xl font-bold tabular-nums">{tcLabel(summary.estimated_media_value, wallet?.rate_idr ?? 1000)}</p>
 					<p class="text-[11px] text-muted-foreground">Biaya kampanye {tcLabel(summary.campaign_cost, wallet?.rate_idr ?? 1000)}</p>
 				</div>
 				{#if wallet}
 					<div>
-						<p class="text-xs text-muted-foreground">Saldo TC tersedia</p>
+						<p class="text-xs text-muted-foreground">{tr("Saldo TC tersedia")}</p>
 						<p class="text-xl font-bold tabular-nums">{fmtNum(wallet.available_tc)} TC</p>
-						<p class="text-[11px] text-muted-foreground">bisa dipakai untuk publikasi</p>
+						<p class="text-[11px] text-muted-foreground">{tr("bisa dipakai untuk publikasi")}</p>
 					</div>
-					<div title="TC yang ditahan untuk publikasi yang belum final. Terbit → jadi terpakai; ditolak/batal → kembali ke saldo tersedia.">
+					<div title={tr("TC yang ditahan untuk publikasi yang belum final. Terbit → jadi terpakai; ditolak/batal → kembali ke saldo tersedia.")}>
 						<p class="text-xs text-muted-foreground">Reserved TC ⓘ</p>
 						<p class="text-xl font-bold tabular-nums">{fmtNum(wallet.reserved_tc)} TC</p>
 						<p class="text-[11px] text-muted-foreground">ditahan publikasi belum final</p>
@@ -126,7 +126,7 @@
 			</div>
 			{#if wallet}
 				<div class="mt-4">
-					<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/credits`}><Coins size={15} /> Kelola Kredit Saldo</a>
+					<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/credits`}><Coins size={15} />{tr("Kelola Kredit Saldo")}</a>
 				</div>
 			{/if}
 		</div>
@@ -134,16 +134,16 @@
 		<div class="mt-4 grid gap-3 lg:grid-cols-2">
 			<div class="app-card min-w-0 p-4">
 				<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent</p>
-				<h3 class="mt-0.5 text-sm font-semibold">Publikasi terbaru</h3>
+				<h3 class="mt-0.5 text-sm font-semibold">{tr("Publikasi terbaru")}</h3>
 				{#if recent.length === 0}
-					<p class="mt-3 text-sm text-muted-foreground">Belum ada publikasi. Buat dari halaman Publications.</p>
+					<p class="mt-3 text-sm text-muted-foreground">{tr("Belum ada publikasi. Buat dari halaman Publications.")}</p>
 				{:else}
 					<ul class="mt-2 divide-y">
 						{#each recent as row (row.id)}
 							<li class="flex items-center justify-between gap-3 py-2">
 								<div class="min-w-0">
 									<p class="truncate text-sm font-medium">
-										{row.document_title ?? 'Artikel'} → {row.media_name ?? 'Media'}
+										{row.document_title ?? 'Artikel'} → {row.media_name ?? tr('Media')}
 									</p>
 									<p class="text-[11px] text-muted-foreground">
 										{fmtDate(row.created_at)} · {tcLabel(Number(row.client_price) || 0, wallet?.rate_idr ?? 1000)}
@@ -160,9 +160,9 @@
 
 			<div class="app-card min-w-0 p-4">
 				<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Campaigns</p>
-				<h3 class="mt-0.5 text-sm font-semibold">Kampanye terbaru</h3>
+				<h3 class="mt-0.5 text-sm font-semibold">{tr("Kampanye terbaru")}</h3>
 				{#if campaigns.length === 0}
-					<p class="mt-3 text-sm text-muted-foreground">Belum ada kampanye.</p>
+					<p class="mt-3 text-sm text-muted-foreground">{tr("Belum ada kampanye.")}</p>
 				{:else}
 					<ul class="mt-2 divide-y">
 						{#each campaigns as row (row.id)}

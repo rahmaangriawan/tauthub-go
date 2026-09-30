@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port app/mitra/[partnerId]/[[...section]]/integrations-section.tsx.
 	// Halaman Integrasi mitra = 4 tab dengan gerbang Syarat & Ketentuan:
 	//   terms → wordpress (Koneksi CMS) · web-custom (Publishing API) · blogger.
@@ -54,7 +56,7 @@
 		terms = { ...terms, loading: true, error: '' };
 		const res = await apiRequest('/v1/partner/me');
 		if (!res.ok) {
-			terms = { acceptedAt: null, loading: false, busy: false, error: await readApiError(res, 'Gagal memuat status integrasi.') };
+			terms = { acceptedAt: null, loading: false, busy: false, error: await readApiError(res, tr('Gagal memuat status integrasi.')) };
 			return;
 		}
 		const data = await res.json();
@@ -71,7 +73,7 @@
 			body: JSON.stringify({ accept_integration_terms: true })
 		});
 		if (!res.ok) {
-			terms = { ...terms, busy: false, error: await readApiError(res, 'Gagal menyimpan persetujuan.') };
+			terms = { ...terms, busy: false, error: await readApiError(res, tr('Gagal menyimpan persetujuan.')) };
 			return;
 		}
 		await loadTerms();
@@ -88,15 +90,13 @@
 	}
 </script>
 
-<PageTitle title="Integrasi" />
+<PageTitle title={tr('Integrasi')} />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Integrasi</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
-				Kelola koneksi WordPress, Web Custom, dan Blogger Anda dalam satu tempat.
-			</p>
+			<h1 class="text-2xl font-semibold tracking-tight">{tr('Integrasi')}</h1>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola koneksi WordPress, Web Custom, dan Blogger Anda dalam satu tempat.")}</p>
 		</div>
 		{#if !terms.loading}
 			{#if accepted}
@@ -105,8 +105,7 @@
 				</span>
 			{:else}
 				<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium" style="background: var(--warning-soft); color: var(--warning);">
-					<Lock size={12} /> Belum setuju
-				</span>
+					<Lock size={12} />{tr("Belum setuju")}</span>
 			{/if}
 		{/if}
 	</header>
@@ -116,7 +115,7 @@
 	{/if}
 
 	{#if terms.loading}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat…")}</p>
 	{:else}
 		<div class="mt-4 flex flex-wrap gap-2">
 			{#each [['terms', 'Syarat & Ketentuan'], ['wordpress', 'WordPress'], ['web-custom', 'Web Custom'], ['blogger', 'Blogger']] as item (item[0])}
@@ -137,28 +136,21 @@
 			<div class="app-card mt-4 p-5">
 				<div class="flex items-center gap-2">
 					<Puzzle size={18} />
-					<h2 class="text-sm font-semibold">Syarat & Ketentuan Integrasi</h2>
+					<h2 class="text-sm font-semibold">{tr('Syarat & Ketentuan Integrasi')}</h2>
 				</div>
 				<div class="mt-3 space-y-3 text-sm text-muted-foreground">
-					<p>
-						Dengan menyetujui, Anda memberi Tauthub izin mengirim artikel klien ke akun/website media Anda
-						melalui kanal yang Anda hubungkan di halaman ini (WordPress, Web Custom, atau Blogger).
-					</p>
-					<p>
-						Anda bertanggung jawab memastikan kredensial yang dimasukkan valid dan akun yang terhubung milik
-						media Anda. Tauthub tidak pernah mengubah artikel yang sudah terbit tanpa tindakan Anda.
-					</p>
-					<p>Persetujuan ini dicatat waktunya dan dapat dicabut dengan memutus koneksi di tab terkait.</p>
+					<p>{tr("Dengan menyetujui, Anda memberi Tauthub izin mengirim artikel klien ke akun/website media Anda melalui kanal yang Anda hubungkan di halaman ini (WordPress, Web Custom, atau Blogger).")}</p>
+					<p>{tr("Anda bertanggung jawab memastikan kredensial yang dimasukkan valid dan akun yang terhubung milik media Anda. Tauthub tidak pernah mengubah artikel yang sudah terbit tanpa tindakan Anda.")}</p>
+					<p>{tr("Persetujuan ini dicatat waktunya dan dapat dicabut dengan memutus koneksi di tab terkait.")}</p>
 				</div>
 
 				{#if accepted}
-					<p class="mt-4 text-xs" style="color: var(--success);">
-						Disetujui pada {new Date(terms.acceptedAt as string).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}.
+					<p class="mt-4 text-xs" style="color: var(--success);"> {tr("Disetujui pada")} { new Date(terms.acceptedAt as string).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}.
 					</p>
 				{:else}
 					<label class="mt-4 flex items-start gap-2 text-sm">
 						<input class="mt-0.5" type="checkbox" bind:checked={termsChecked} />
-						<span>Saya menyetujui Syarat & Ketentuan Integrasi Tauthub di atas.</span>
+						<span>{tr('Saya menyetujui Syarat & Ketentuan Integrasi Tauthub di atas.')}</span>
 					</label>
 					<div class="mt-3 flex justify-end">
 						<button class="app-btn app-btn-primary" disabled={!termsChecked || terms.busy} onclick={() => (confirmOpen = true)}>
@@ -179,14 +171,12 @@
 
 {#if confirmOpen}
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
-		<dialog open class="app-card w-full max-w-sm p-5" aria-label="Konfirmasi persetujuan">
-			<h2 class="text-lg font-semibold">Setujui Syarat & Ketentuan?</h2>
-			<p class="mt-2 text-sm text-muted-foreground">
-				Setelah disetujui, tab WordPress, Web Custom, dan Blogger akan terbuka.
-			</p>
+		<dialog open class="app-card w-full max-w-sm p-5" aria-label={tr('Konfirmasi persetujuan')}>
+			<h2 class="text-lg font-semibold">{tr('Setujui Syarat & Ketentuan?')}</h2>
+			<p class="mt-2 text-sm text-muted-foreground">{tr("Setelah disetujui, tab WordPress, Web Custom, dan Blogger akan terbuka.")}</p>
 			<div class="mt-4 flex justify-end gap-2">
-				<button class="app-btn app-btn-soft" onclick={() => (confirmOpen = false)}>Batal</button>
-				<button class="app-btn app-btn-primary" disabled={terms.busy} onclick={acceptTerms}>Ya, Setujui</button>
+				<button class="app-btn app-btn-soft" onclick={() => (confirmOpen = false)}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" disabled={terms.busy} onclick={acceptTerms}>{tr('Ya, Setujui')}</button>
 			</div>
 		</dialog>
 	</div>

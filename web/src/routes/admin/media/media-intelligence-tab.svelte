@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Tab Intelligence /admin/media — health score media dari riwayat publikasi.
 	// Port MediaIntelligenceSection di apps/web/src/app/admin/media/_sections.tsx.
 	import { Activity, Archive, RefreshCw } from '@lucide/svelte';
@@ -61,14 +63,14 @@
 		by_media: { id: string; name: string; total: number; counts: Record<string, number> }[];
 	};
 
-	const PUB_STATUS_LABEL: Record<string, string> = {
+	const PUB_STATUS_LABEL: Record<string, string> = $derived({
 		pending: 'Pending',
-		waiting_partner: 'Menunggu persetujuan mitra',
-		partner_approved: 'Disetujui mitra',
+		waiting_partner: tr('Menunggu persetujuan mitra'),
+		partner_approved: tr('Disetujui mitra'),
 		queued: 'Diantrekan',
 		processing: 'Diproses',
 		retrying: 'Mencoba ulang'
-	};
+	});
 
 	let rows = $state<IntelligenceRow[]>([]);
 	let summary = $state<Summary>(null);
@@ -281,15 +283,15 @@
 				onclick={() => void recomputeOne(row.id)}>Hitung</button
 			>
 		{/if}
-		<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" onclick={() => openDetail(row)}>Detail</button>
+		<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" onclick={() => openDetail(row)}>{tr("Detail")}</button>
 	</div>
 {/snippet}
 
 {#if loading && rows.length === 0 && !error}
-	<p class="mt-6 text-sm text-muted-foreground">Memuat data intelligence media…</p>
+	<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat data intelligence media…")}</p>
 {:else if rows.length === 0 && isAccessError(error)}
 	<div class="app-card mt-6 px-6 py-10 text-center">
-		<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke data intelligence media.</p>
+		<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke data intelligence media.")}</p>
 	</div>
 {:else}
 	<div class="mt-4 flex flex-wrap items-center gap-2">
@@ -328,7 +330,7 @@
 	{#if summary}
 		<div class="mt-4 flex flex-wrap gap-3">
 			<div class="app-card min-w-[140px] flex-1 p-3">
-				<p class="text-sm text-muted-foreground">Total media</p>
+				<p class="text-sm text-muted-foreground">{tr("Total media")}</p>
 				<p class="text-2xl font-bold">{summary.total}</p>
 			</div>
 			<div class="app-card min-w-[140px] flex-1 p-3">
@@ -358,10 +360,10 @@
 
 	<form class="app-card mt-4 flex flex-wrap items-end gap-3 p-3" onsubmit={(e) => e.preventDefault()}>
 		<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
-			<span class="text-xs font-medium text-muted-foreground">Cari</span>
+			<span class="text-xs font-medium text-muted-foreground">{tr("Cari")}</span>
 			<input
 				class="w-full bg-transparent text-sm outline-none"
-				placeholder="Nama / kategori media"
+				placeholder={tr("Nama / kategori media")}
 				bind:value={search}
 				onkeydown={(e) => {
 					if (e.key === 'Enter') void load(search, status, includeArchived);
@@ -377,7 +379,7 @@
 				value={status}
 				onchange={(v) => void load(search, v, includeArchived)}
 				options={[
-					{ value: '', label: 'Semua' },
+					{ value: '', label: tr('Semua') },
 					{ value: 'active', label: 'Active' },
 					{ value: 'draft', label: 'Draft' },
 					{ value: 'inactive', label: 'Inactive' },
@@ -390,9 +392,7 @@
 				type="checkbox"
 				bind:checked={includeArchived}
 				onchange={(e) => void load(search, status, e.currentTarget.checked)}
-			/>
-			Sertakan media terarsip
-		</label>
+			/>{tr("Sertakan media terarsip")}</label>
 		<button
 			type="button"
 			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
@@ -402,7 +402,7 @@
 
 	<DataTable
 		columns={[
-			{ key: 'name', label: 'Media', render: intelligenceMediaCell },
+			{ key: 'name', label: tr('Media'), render: intelligenceMediaCell },
 			{ key: 'category', label: 'Kategori', render: intelligenceCategoryCell },
 			{ key: 'health', label: 'Health', render: healthCell },
 			{ key: 'success', label: 'Success / Tolak', render: successCell },
@@ -414,7 +414,7 @@
 		rows={visibleRows}
 		rowKey={(row: IntelligenceRow) => row.id}
 		{loading}
-		empty="Tidak ada media yang cocok."
+		empty={tr("Tidak ada media yang cocok.")}
 		minWidth="1000px"
 	/>
 
@@ -428,7 +428,7 @@
 
 {#if detailTarget}
 	<Modal title={detailTarget.name} maxWidth="lg" onClose={() => (detailTarget = null)}>
-		<p class="text-sm text-muted-foreground">Breakdown health media — {detailTarget.status}</p>
+		<p class="text-sm text-muted-foreground">{tr("Breakdown health media —")} {detailTarget.status}</p>
 		{#if detailTarget.health_breakdown}
 			<div class="mt-3 flex flex-wrap gap-4">
 				{#each [['Availability', detailTarget.health_breakdown.availability, 15], ['Success rate', detailTarget.health_breakdown.success_rate, 30], ['Publish time', detailTarget.health_breakdown.publish_time, 35], ['Rejection', detailTarget.health_breakdown.rejection_rate, 20]] as [label, value, max] (label)}
@@ -438,7 +438,7 @@
 					</div>
 				{/each}
 				<div>
-					<p class="text-sm text-muted-foreground">Terbit / Tolak / Gagal</p>
+					<p class="text-sm text-muted-foreground">{tr("Terbit / Tolak / Gagal")}</p>
 					<p class="text-xl font-bold">
 						{detailTarget.health_breakdown.published ?? 0} / {detailTarget.health_breakdown.rejected ?? 0} /
 						{detailTarget.health_breakdown.failed ?? 0}
@@ -446,9 +446,7 @@
 				</div>
 			</div>
 		{:else}
-			<p class="mt-3 text-sm text-muted-foreground">
-				Belum ada breakdown — klik Hitung untuk menghitung health score.
-			</p>
+			<p class="mt-3 text-sm text-muted-foreground">{tr("Belum ada breakdown — klik Hitung untuk menghitung health score.")}</p>
 		{/if}
 		{#if detailTarget.warnings.length > 0}
 			<div class="mt-3 flex flex-wrap gap-2">
@@ -456,13 +454,13 @@
 			</div>
 		{/if}
 		<div class="mt-4 border-t pt-3">
-			<p class="mb-2 text-sm font-medium text-muted-foreground">Riwayat audit</p>
+			<p class="mb-2 text-sm font-medium text-muted-foreground">{tr("Riwayat audit")}</p>
 			{#if detailLoading}
-				<p class="text-xs text-muted-foreground">Memuat riwayat audit…</p>
+				<p class="text-xs text-muted-foreground">{tr("Memuat riwayat audit…")}</p>
 			{:else if detailAudit === null}
 				<p class="text-xs text-muted-foreground">—</p>
 			{:else if detailAudit.length === 0}
-				<p class="text-xs text-muted-foreground">Belum ada aktivitas audit untuk media ini.</p>
+				<p class="text-xs text-muted-foreground">{tr("Belum ada aktivitas audit untuk media ini.")}</p>
 			{:else}
 				<div class="max-h-60 space-y-2 overflow-y-auto pr-1">
 					{#each detailAudit as a (a.id)}
@@ -479,19 +477,17 @@
 {/if}
 
 {#if restoreAllOpen}
-	<Modal title="Pulihkan semua media terarsip" maxWidth="md" onClose={() => (restoreAllOpen = false)}>
+	<Modal title={tr("Pulihkan semua media terarsip")} maxWidth="md" onClose={() => (restoreAllOpen = false)}>
 		<p class="text-sm text-muted-foreground">
 			{`${summary?.archived ?? 0} media terarsip akan dikembalikan aktif sekaligus — masing-masing dengan satu catatan audit media.restored.`}
 		</p>
 		<div
 			class="mt-3 rounded-lg px-3 py-2 text-xs"
 			style="background-color: var(--warning-soft); color: var(--warning);"
-		>
-			Publikasi yang masih menunggu akan tetap lanjut diproses, tetapi notifikasi persetujuan yang sudah
-			<strong>kedaluwarsa tidak kembali aktif otomatis</strong>.
+		>{tr("Publikasi yang masih menunggu akan tetap lanjut diproses, tetapi notifikasi persetujuan yang sudah")}<strong>kedaluwarsa tidak kembali aktif otomatis</strong>.
 		</div>
 		<div class="mt-4 flex justify-end gap-2">
-			<button class="app-btn app-btn-soft" onclick={() => (restoreAllOpen = false)}>Batal</button>
+			<button class="app-btn app-btn-soft" onclick={() => (restoreAllOpen = false)}>{tr("Batal")}</button>
 			<button
 				class="app-btn app-btn-primary"
 				style="background-color: var(--success);"
@@ -503,7 +499,7 @@
 {/if}
 
 {#if archiveAllOpen}
-	<Modal title="Arsipkan semua media" maxWidth="lg" onClose={() => (archiveAllOpen = false)}>
+	<Modal title={tr("Arsipkan semua media")} maxWidth="lg" onClose={() => (archiveAllOpen = false)}>
 		<p class="text-sm text-muted-foreground">
 			{`${archiveImpact?.archivable ?? 0} media non-arsip akan diarsipkan sekaligus — masing-masing dengan satu catatan audit media.archived.`}
 		</p>
@@ -512,8 +508,7 @@
 				class="mt-3 rounded-lg px-3 py-2 text-xs"
 				style="background-color: var(--destructive-soft, #fdecee); color: var(--destructive);"
 			>
-				<strong>Arsip massal ditolak.</strong> Masih ada publikasi yang sedang berjalan:
-				<strong
+				<strong>{tr("Arsip massal ditolak.")}</strong>{tr("Masih ada publikasi yang sedang berjalan:")}<strong
 					>{archiveImpact.blocking_statuses
 						.map((s) => `${archiveImpact?.by_status[s] ?? 0} ${PUB_STATUS_LABEL[s] ?? s}`)
 						.join(', ')}</strong
@@ -524,14 +519,11 @@
 				class="mt-3 rounded-lg px-3 py-2 text-xs"
 				style="background-color: var(--destructive-soft, #fdecee); color: var(--destructive);"
 			>
-				<strong>{archiveImpact?.pending_publications ?? 0} publikasi yang masih menunggu</strong> akan terdampak: media
-				tidak menerima publikasi baru dan notifikasi persetujuan mitra ditandai <strong>kedaluwarsa</strong>. Riwayat
-				publikasi tetap tersimpan dan media bisa dipulihkan kembali.
-			</div>
+				<strong>{archiveImpact?.pending_publications ?? 0} {tr("publikasi yang masih menunggu")}</strong>{tr("akan terdampak: media tidak menerima publikasi baru dan notifikasi persetujuan mitra ditandai")}<strong>kedaluwarsa</strong>{tr(". Riwayat publikasi tetap tersimpan dan media bisa dipulihkan kembali.")}</div>
 		{/if}
 		{#if archiveImpact && archiveImpact.by_media.length > 0}
 			<div class="mt-3 border-t pt-3">
-				<p class="mb-2 text-sm font-medium">Publikasi aktif per media</p>
+				<p class="mb-2 text-sm font-medium">{tr("Publikasi aktif per media")}</p>
 				<div class="max-h-56 space-y-2 overflow-y-auto pr-1">
 					{#each archiveImpact.by_media as media (media.id)}
 						<div class="flex flex-wrap items-center justify-between gap-2">
@@ -547,7 +539,7 @@
 			</div>
 		{/if}
 		<div class="mt-4 flex justify-end gap-2">
-			<button class="app-btn app-btn-soft" onclick={() => (archiveAllOpen = false)}>Batal</button>
+			<button class="app-btn app-btn-soft" onclick={() => (archiveAllOpen = false)}>{tr("Batal")}</button>
 			{#if !archiveImpact?.blocked}
 				<button
 					class="app-btn app-btn-primary"
@@ -561,24 +553,22 @@
 {/if}
 
 {#if restoreTarget}
-	<Modal title="Pulihkan media" maxWidth="md" onClose={() => (restoreTarget = null)}>
+	<Modal title={tr("Pulihkan media")} maxWidth="md" onClose={() => (restoreTarget = null)}>
 		<p class="text-sm text-muted-foreground">
 			{'Media "' + (restoreTarget?.name ?? '') + '" akan dikembalikan aktif dan dapat menerima publikasi baru kembali.'}
 		</p>
 		<div
 			class="mt-3 rounded-lg px-3 py-2 text-xs"
 			style="background-color: var(--warning-soft); color: var(--warning);"
-		>
-			Publikasi yang masih menunggu akan tetap lanjut diproses, tetapi notifikasi persetujuan yang sudah
-			<strong>kedaluwarsa tidak kembali aktif otomatis</strong>.
+		>{tr("Publikasi yang masih menunggu akan tetap lanjut diproses, tetapi notifikasi persetujuan yang sudah")}<strong>kedaluwarsa tidak kembali aktif otomatis</strong>.
 		</div>
 		<div class="mt-4 flex justify-end gap-2">
-			<button class="app-btn app-btn-soft" onclick={() => (restoreTarget = null)}>Batal</button>
+			<button class="app-btn app-btn-soft" onclick={() => (restoreTarget = null)}>{tr("Batal")}</button>
 			<button
 				class="app-btn app-btn-primary"
 				style="background-color: var(--success);"
 				disabled={restoreBusy}
-				onclick={restoreMedia}>{restoreBusy ? 'Memulihkan…' : 'Pulihkan media'}</button
+				onclick={restoreMedia}>{restoreBusy ? 'Memulihkan…' : tr('Pulihkan media')}</button
 			>
 		</div>
 	</Modal>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Fase 4: editor dokumen (port section Editor minimal) — versi, autosave,
 	// status review. Diff/komentar/restore menyusul bersama fase review.
 	import { onMount } from 'svelte';
@@ -6,6 +8,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import { sanitizeHtml } from '$lib/sanitize-html';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -23,6 +26,10 @@
 
 	let doc = $state<any>(null);
 	let html = $state('');
+	// Pratinjau WAJIB disanitasi: isi HTML berasal dari dokumen yang bisa diedit
+	// siapa pun yang punya akses tulis, jadi script/handler/iframe jahat tidak
+	// boleh dieksekusi di browser pembaca.
+	const previewHtml = $derived(sanitizeHtml(html));
 	let loading = $state(true);
 	let busy = $state(false);
 	let msg = $state('');
@@ -43,7 +50,7 @@
 	async function load() {
 		const res = await apiRequest(`/v1/brands/${brandId}/documents/${documentId}`);
 		if (!res.ok) {
-			error = await readApiError(res, 'Gagal memuat dokumen.');
+			error = await readApiError(res, tr('Gagal memuat dokumen.'));
 			return;
 		}
 		doc = await res.json();
@@ -65,7 +72,7 @@
 				})
 			});
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal menyimpan.');
+				error = await readApiError(res, tr('Gagal menyimpan.'));
 				return;
 			}
 			doc = await res.json();
@@ -88,7 +95,7 @@
 				html = doc.content?.html ?? '';
 				msg = `Dokumen dipulihkan dari versi ${v.version}.`;
 			} else {
-				error = await readApiError(res, 'Gagal memulihkan versi.');
+				error = await readApiError(res, tr('Gagal memulihkan versi.'));
 			}
 		} finally {
 			busy = false;
@@ -96,12 +103,12 @@
 	}
 </script>
 
-<PageTitle title="Editor Artikel" />
+<PageTitle title={tr("Editor Artikel")} />
 
 <section>
 	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandUrl}/generate`}>← Generate</a>
 	{#if loading}
-		<p class="mt-4 text-sm text-muted-foreground">Memuat dokumen…</p>
+		<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat dokumen…")}</p>
 	{:else if doc}
 		<div class="mt-2 flex flex-wrap items-center justify-between gap-3">
 			<div>
@@ -114,7 +121,7 @@
 				{#if msg}<span class="text-xs text-emerald-600">{msg}</span>{/if}
 				{#if error}<span class="text-xs text-destructive">{error}</span>{/if}
 				<button class="app-btn app-btn-primary" disabled={busy} onclick={save}>
-					{busy ? 'Menyimpan…' : 'Simpan versi baru'}
+					{busy ? 'Menyimpan…' : tr('Simpan versi baru')}
 				</button>
 			</div>
 		</div>
@@ -132,13 +139,12 @@
 				<section class="app-card p-4">
 					<h2 class="text-sm font-semibold">Preview</h2>
 					<div class="prose prose-sm mt-2 max-h-[240px] overflow-y-auto text-sm">
-						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-						{@html html}
+						{@html previewHtml}
 					</div>
 				</section>
 
 				<section class="app-card p-4">
-					<h2 class="text-sm font-semibold">Riwayat versi ({(doc.versions ?? []).length})</h2>
+					<h2 class="text-sm font-semibold">{tr("Riwayat versi (")}{(doc.versions ?? []).length})</h2>
 					<ul class="mt-2 space-y-2 text-xs">
 						{#each doc.versions ?? [] as v (v.id)}
 							<li class="flex items-start justify-between gap-2 border-b border-border/50 pb-2 last:border-0">

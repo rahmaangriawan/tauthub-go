@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port app/payments/success/[brandId]/page.tsx — brandId dari URL dipakai
 	// untuk mengarahkan kembali ke dashboard brand yang benar.
 	import { page } from '$app/state';
@@ -8,6 +10,6 @@
 	const brandId = $derived(page.params.brandId as string);
 </script>
 
-<PageTitle title="Pembayaran Berhasil" />
+<PageTitle title={tr("Pembayaran Berhasil")} />
 
 <PaymentReturn mode="success" {brandId} />

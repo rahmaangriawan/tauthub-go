@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Tab Arsip /admin/media — media terarsip / disembunyikan dari portal mitra.
 	// Port MediaArchiveSection di apps/web/src/app/admin/media/_sections.tsx.
 	import { Archive, EyeOff, RefreshCw, Search, Trash } from '@lucide/svelte';
@@ -142,7 +144,7 @@
 
 {#snippet statusCell(row: ArchiveRow)}
 	{#if row.status === 'hidden'}
-		<Badge tone="danger" label="Disembunyikan dari mitra" />
+		<Badge tone="danger" label={tr("Disembunyikan dari mitra")} />
 	{:else}
 		<Badge tone="warning" label="Terarsip" />
 	{/if}
@@ -165,24 +167,22 @@
 				disabled={busyId === row.id}
 				onclick={() => void changeStatus(row, 'hidden')}
 			>
-				<EyeOff size={13} /> Sembunyikan dari mitra
-			</button>
+				<EyeOff size={13} />{tr("Sembunyikan dari mitra")}</button>
 		{/if}
 		<button
 			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
 			style="color: var(--destructive);"
 			onclick={() => (deleteTarget = row)}
 		>
-			<Trash size={13} /> Hapus permanen
-		</button>
+			<Trash size={13} />{tr("Hapus permanen")}</button>
 	</div>
 {/snippet}
 
 {#if loading && rows.length === 0 && !error}
-	<p class="mt-6 text-sm text-muted-foreground">Memuat arsip media…</p>
+	<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat arsip media…")}</p>
 {:else if rows.length === 0 && isAccessError(error)}
 	<div class="app-card mt-6 px-6 py-10 text-center">
-		<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke arsip media.</p>
+		<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke arsip media.")}</p>
 	</div>
 {:else}
 	<div class="mt-4 flex flex-wrap items-center gap-2">
@@ -190,8 +190,8 @@
 			<Search size={15} class="text-muted-foreground" />
 			<input
 				class="w-full bg-transparent text-sm outline-none"
-				placeholder="Cari nama, slug, atau kategori…"
-				aria-label="Cari media arsip"
+				placeholder={tr("Cari nama, slug, atau kategori…")}
+				aria-label={tr("Cari media arsip")}
 				bind:value={search}
 				oninput={() => (page = 1)}
 			/>
@@ -211,9 +211,9 @@
 
 	<DataTable
 		columns={[
-			{ key: 'name', label: 'Media', render: mediaCell },
+			{ key: 'name', label: tr('Media'), render: mediaCell },
 			{ key: 'category', label: 'Kategori', render: categoryCell },
-			{ key: 'partner', label: 'Mitra', render: partnerCell },
+			{ key: 'partner', label: tr('Mitra'), render: partnerCell },
 			{ key: 'integration', label: 'Integrasi', render: integrationCell },
 			{ key: 'status', label: 'Status', render: statusCell },
 			{ key: 'actions', label: '', align: 'right' as const, render: archiveActions }
@@ -221,7 +221,7 @@
 		rows={rows}
 		rowKey={(row: ArchiveRow) => row.id}
 		{loading}
-		empty="Tidak ada media terarsip atau disembunyikan."
+		empty={tr("Tidak ada media terarsip atau disembunyikan.")}
 		minWidth="900px"
 	/>
 
@@ -234,7 +234,7 @@
 {/if}
 
 {#if deleteTarget}
-	<Modal title="Hapus media permanen" maxWidth="md" onClose={() => (deleteTarget = null)}>
+	<Modal title={tr("Hapus media permanen")} maxWidth="md" onClose={() => (deleteTarget = null)}>
 		<p class="text-sm text-muted-foreground">
 			{'Media "' +
 				(deleteTarget?.name ?? '') +
@@ -243,17 +243,14 @@
 		<div
 			class="mt-3 rounded-lg px-3 py-2 text-xs"
 			style="background-color: var(--destructive-soft, #fdecee); color: var(--destructive);"
-		>
-			Hanya bisa dihapus bila media tidak punya riwayat publikasi, earning, atau rencana publikasi. Data terkait (standar
-			konten, API key, revenue share, keanggotaan paket media) ikut terhapus.
-		</div>
+		>{tr("Hanya bisa dihapus bila media tidak punya riwayat publikasi, earning, atau rencana publikasi. Data terkait (standar konten, API key, revenue share, keanggotaan paket media) ikut terhapus.")}</div>
 		<div class="mt-4 flex justify-end gap-2">
-			<button class="app-btn app-btn-soft" onclick={() => (deleteTarget = null)}>Batal</button>
+			<button class="app-btn app-btn-soft" onclick={() => (deleteTarget = null)}>{tr("Batal")}</button>
 			<button
 				class="app-btn app-btn-primary"
 				style="background-color: var(--destructive);"
 				disabled={deleteBusy}
-				onclick={deleteForever}>{deleteBusy ? 'Menghapus…' : 'Hapus permanen'}</button
+				onclick={deleteForever}>{deleteBusy ? 'Menghapus…' : tr('Hapus permanen')}</button
 			>
 		</div>
 	</Modal>

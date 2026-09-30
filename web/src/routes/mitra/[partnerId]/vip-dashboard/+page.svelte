@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// VIP Dashboard mitra — port penuh section "VIP Dashboard" (vip-dashboard.tsx,
 	// blueprint Mas Aqil): status keanggotaan, dual-wallet (CPA, komisi transaksi,
 	// referral), Performance + Statistik Affiliate, riwayat penghasilan per domain
@@ -64,7 +66,7 @@
 		]);
 		if (vipRes.ok) vip = await vipRes.json();
 		if (walletRes.ok) wallet = await walletRes.json();
-		else error = (await walletRes.json().catch(() => null))?.detail ?? 'Gagal memuat dompet VIP.';
+		else error = tr('Gagal memuat dompet VIP. Coba lagi nanti.');
 		if (domainsRes.ok) domains = await domainsRes.json();
 		if (refRes.ok) referral = await refRes.json();
 	}
@@ -120,10 +122,10 @@
 		return { line, area };
 	}
 
-	const idr = (n: number) => 'Rp' + Number(n || 0).toLocaleString('id-ID');
+	const idr = (n: number) => 'Rp' + Number(n || 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' });
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '—');
-	const KIND_LABEL: Record<string, string> = { cpa: 'CPA', transaction_commission: 'Komisi Transaksi', referral: 'Referral', publication: 'Publikasi' };
-	const STATUS_LABEL: Record<string, string> = { pending: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', available: 'Tersedia', paid: 'Dibayar', reversed: 'Dibalik', settled: 'Selesai', voided: 'Dibatalkan' };
+	const KIND_LABEL: Record<string, string> = $derived({ cpa: 'CPA', transaction_commission: 'Komisi Transaksi', referral: 'Referral', publication: tr('Publikasi') });
+	const STATUS_LABEL: Record<string, string> = $derived({ pending: tr('Menunggu'), approved: tr('Disetujui'), rejected: tr('Ditolak'), available: tr('Tersedia'), paid: 'Dibayar', reversed: 'Dibalik', settled: tr('Selesai'), voided: tr('Dibatalkan') });
 	const statusColor = (s: string) =>
 		s === 'approved' || s === 'paid' || s === 'settled' ? 'var(--success)'
 		: s === 'rejected' || s === 'reversed' ? 'var(--destructive)'
@@ -145,18 +147,18 @@
 	const totalPath = $derived(buildSparkPath(totalSeries));
 
 	const performanceRows = $derived([
-		{ label: 'Total Klik', value: String(referral?.clicks?.total ?? domains?.clicks ?? 0), icon: MousePointerClick, color: 'var(--foreground)' },
-		{ label: 'Total Referral', value: String(referral?.totalReferrals ?? 0), icon: Users, color: 'var(--foreground)' },
+		{ label: tr('Total Klik'), value: String(referral?.clicks?.total ?? domains?.clicks ?? 0), icon: MousePointerClick, color: 'var(--foreground)' },
+		{ label: tr('Total Referral'), value: String(referral?.totalReferrals ?? 0), icon: Users, color: 'var(--foreground)' },
 		{ label: 'Komisi Referral', value: idr(referral?.referral_earning ?? 0), icon: Wallet, color: 'var(--success)' },
 		{ label: 'Komisi Transaksi', value: idr(wallet?.transaction_commission ?? 0), icon: HandCoins, color: 'var(--foreground)' }
 	]);
 
 	const affiliateRows = $derived([
-		{ label: 'Total Klik', value: String(domains?.clicks ?? 0), icon: MousePointerClick, color: 'var(--foreground)' },
+		{ label: tr('Total Klik'), value: String(domains?.clicks ?? 0), icon: MousePointerClick, color: 'var(--foreground)' },
 		{ label: 'Domain Terdaftar', value: String(domains?.stats?.total ?? 0), icon: Globe, color: 'var(--primary)' },
 		{ label: 'Approved', value: String(domains?.stats?.approved ?? 0), icon: CircleCheck, color: 'var(--success)' },
 		{ label: 'Pending', value: String(domains?.stats?.pending ?? 0), icon: Clock, color: 'var(--warning)' },
-		{ label: 'Ditolak', value: String(domains?.stats?.rejected ?? 0), icon: CircleX, color: 'var(--destructive)' },
+		{ label: tr('Ditolak'), value: String(domains?.stats?.rejected ?? 0), icon: CircleX, color: 'var(--destructive)' },
 		{ label: 'Estimasi CPA', value: idr((domains?.stats?.approved ?? 0) * (vip?.cpaRate ?? 15000)), icon: Coins, color: 'var(--primary)' }
 	]);
 </script>
@@ -166,9 +168,9 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<p class="text-xs font-semibold tracking-wide text-muted-foreground">VIP MITRA</p>
+			<p class="text-xs font-semibold tracking-wide text-muted-foreground">{tr('VIP MITRA')}</p>
 			<h1 class="mt-1 text-2xl font-semibold tracking-tight">VIP Dashboard</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Ringkasan affiliate, dual-wallet, dan domain referral Anda.</p>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Ringkasan affiliate, dual-wallet, dan domain referral Anda.")}</p>
 		</div>
 		<div class="flex items-center gap-2">
 			{#if vip}
@@ -176,7 +178,7 @@
 					<Crown size={12} /> {tierLabel}
 				</span>
 			{:else}
-				<span class="rounded-full px-2.5 py-1 text-xs font-medium text-muted-foreground" style="background-color: var(--secondary);">Memuat...</span>
+				<span class="rounded-full px-2.5 py-1 text-xs font-medium text-muted-foreground" style="background-color: var(--secondary);">{tr("Memuat...")}</span>
 			{/if}
 		</div>
 	</header>
@@ -184,15 +186,14 @@
 	{#if error}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>{/if}
 
 	{#if loading}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat VIP Dashboard…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat VIP Dashboard…")}</p>
 	{:else}
 		{#if vip && !vipActive}
 			<div class="app-card mt-3 flex items-start gap-2 px-4 py-3 text-sm" style="border-color: var(--warning); color: var(--warning);">
 				<Clock size={16} class="mt-0.5 shrink-0" />
 				<p>
 					{#if vip.isExpired || vip.vipExpiresAt}
-						Masa kontrak VIP telah berakhir{#if vip.vipContractMonths != null} ({vip.vipContractMonths} bulan, berakhir {vip.vipExpiresAt ? dt(vip.vipExpiresAt) : '—'}){/if}. CPA Balance nonaktif. Hubungi Admin untuk perpanjangan.
-					{:else}
+						Masa kontrak VIP telah berakhir{#if vip.vipContractMonths != null} ({vip.vipContractMonths} bulan, berakhir {vip.vipExpiresAt ? dt(vip.vipExpiresAt) : '—'}){/if}{tr(". CPA Balance nonaktif. Hubungi Admin untuk perpanjangan.")} {:else}
 						Status VIP tidak aktif saat ini.
 					{/if}
 				</p>
@@ -201,7 +202,7 @@
 
 		<!-- ── Saldo ── -->
 		<div class="mt-4 rounded-xl border p-4">
-			<h2 class="text-sm font-semibold">Saldo</h2>
+			<h2 class="text-sm font-semibold">{tr("Saldo")}</h2>
 			<div class="mt-3 grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
 				{#if showCpa}
 					<div class="relative overflow-hidden rounded-lg border px-3.5 py-3">
@@ -215,7 +216,7 @@
 						<p class="mt-1 text-xl font-bold tabular-nums" style="color: var(--success);">{idr(wallet?.cpa ?? 0)}</p>
 						<p class="mt-1 text-xs text-muted-foreground">
 							{#if vip?.tier === 'vip_reguler'}
-								{idr(vip.cpaTier1Rate)}/domain untuk {vip.cpaTierThreshold.toLocaleString('id-ID')} domain pertama, lalu {idr(vip.cpaTier2Rate)}/domain
+								{idr(vip.cpaTier1Rate)}{tr("/domain untuk")} {vip.cpaTierThreshold.toLocaleString('id-ID')} domain pertama, lalu {idr(vip.cpaTier2Rate)}/domain
 							{:else}
 								{idr(vip?.cpaRate ?? 0)} per domain
 							{/if}
@@ -228,9 +229,9 @@
 				{/if}
 				<div class="relative overflow-hidden rounded-lg border px-3.5 py-3">
 					<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--primary);"></div>
-					<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Komisi Transaksi</span>
+					<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Komisi Transaksi')}</span>
 					<p class="mt-1 text-xl font-bold tabular-nums" style="color: var(--primary);">{idr(wallet?.transaction_commission ?? 0)}</p>
-					{#if vip}<p class="mt-1 text-xs text-muted-foreground">{(vip.commissionRateBp / 100).toFixed(1)}% dari transaksi</p>{/if}
+					{#if vip}<p class="mt-1 text-xs text-muted-foreground">{(vip.commissionRateBp / 100).toFixed(1)}{tr("% dari transaksi")}</p>{/if}
 					<svg viewBox="0 0 100 40" preserveAspectRatio="none" width="100%" height="26" aria-hidden="true" class="mt-1.5 block">
 						<path d={komisiPath.area} fill="var(--primary)" fill-opacity="0.1" />
 						<path d={komisiPath.line} fill="none" stroke="var(--primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
@@ -238,7 +239,7 @@
 				</div>
 				<div class="relative overflow-hidden rounded-lg border px-3.5 py-3">
 					<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--muted-foreground);"></div>
-					<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Total</span>
+					<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr("Total")}</span>
 					<p class="mt-1 text-xl font-bold tabular-nums">{idr(totalCpaPaid)}</p>
 					<p class="mt-1 text-xs text-muted-foreground">Akumulasi CPA · {approvedDomains.length} domain disetujui × {idr(vip?.cpaRate ?? 15000)}</p>
 					<svg viewBox="0 0 100 40" preserveAspectRatio="none" width="100%" height="26" aria-hidden="true" class="mt-1.5 block">
@@ -265,7 +266,7 @@
 			</div>
 
 			<div class="overflow-hidden rounded-xl border">
-				<div class="border-b px-4 py-3"><h2 class="text-sm font-semibold">Statistik Affiliate</h2></div>
+				<div class="border-b px-4 py-3"><h2 class="text-sm font-semibold">{tr('Statistik Affiliate')}</h2></div>
 				<div>
 					{#each affiliateRows as row (row.label)}
 						<div class="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
@@ -281,19 +282,18 @@
 		<!-- ── Riwayat Penghasilan Affiliate (per domain sukses) ── -->
 		<div class="app-card mt-3 overflow-x-auto">
 			<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-				<h2 class="text-sm font-semibold">Riwayat Penghasilan Affiliate</h2>
+				<h2 class="text-sm font-semibold">{tr("Riwayat Penghasilan Affiliate")}</h2>
 				<div class="flex items-center gap-2">
 					<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft); color: var(--success);">{approvedDomains.length} domain sukses</span>
 					<span class="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground" style="background-color: var(--secondary);">{domains?.items?.length ?? 0} domain</span>
 				</div>
 			</div>
 			{#if approvedDomains.length > 0}
-				<div class="border-b px-4 py-2.5 text-xs" style="color: var(--success);">
-					Total penghasilan CPA dari {approvedDomains.length} domain approved: <strong>{idr(totalCpaPaid)}</strong> (per domain sukses × {idr(vip?.cpaRate ?? 15000)}).
+				<div class="border-b px-4 py-2.5 text-xs" style="color: var(--success);"> {tr("Total penghasilan CPA dari")} {approvedDomains.length} domain approved: <strong>{idr(totalCpaPaid)}</strong> (per domain sukses × {idr(vip?.cpaRate ?? 15000)}).
 				</div>
 			{/if}
 			{#if !domains || domains.items.length === 0}
-				<p class="px-4 py-8 text-center text-sm text-muted-foreground">Belum ada domain referral. Bagikan link referral Anda untuk memulai.</p>
+				<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada domain referral. Bagikan link referral Anda untuk memulai.")}</p>
 			{:else}
 				<table class="w-full text-sm">
 					<thead>
@@ -302,7 +302,7 @@
 							<th class="px-4 py-2.5 font-medium">Owner</th>
 							<th class="px-4 py-2.5 font-medium">Status</th>
 							<th class="px-4 py-2.5 font-medium">CPA</th>
-							<th class="px-4 py-2.5 font-medium">Tanggal</th>
+							<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -338,19 +338,19 @@
 		<!-- ── Riwayat Earning ── -->
 		<div class="app-card mt-3 overflow-x-auto">
 			<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-				<h2 class="text-sm font-semibold">Riwayat Earning</h2>
+				<h2 class="text-sm font-semibold">{tr("Riwayat Earning")}</h2>
 				<span class="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground" style="background-color: var(--secondary);">{wallet?.history?.length ?? 0} transaksi</span>
 			</div>
 			{#if !wallet || wallet.history.length === 0}
-				<p class="px-4 py-8 text-center text-sm text-muted-foreground">Belum ada riwayat earning.</p>
+				<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada riwayat earning.")}</p>
 			{:else}
 				<table class="w-full text-sm">
 					<thead>
 						<tr class="text-left text-xs text-muted-foreground">
-							<th class="px-4 py-2.5 font-medium">Jenis</th>
-							<th class="px-4 py-2.5 font-medium">Jumlah</th>
+							<th class="px-4 py-2.5 font-medium">{tr('Jenis')}</th>
+							<th class="px-4 py-2.5 font-medium">{tr("Jumlah")}</th>
 							<th class="px-4 py-2.5 font-medium">Status</th>
-							<th class="px-4 py-2.5 font-medium">Tanggal</th>
+							<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
 						</tr>
 					</thead>
 					<tbody>

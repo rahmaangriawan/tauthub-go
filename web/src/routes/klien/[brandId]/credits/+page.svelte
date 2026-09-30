@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Kredit Saldo — wallet, konfigurasi TC, ledger, transaksi (port section
 	// credits app lama). Termasuk aksi Top Up dan laporan topup gagal.
 	import { onMount } from 'svelte';
@@ -9,6 +11,7 @@
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import ComingSoon from '$lib/components/coming-soon.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -99,7 +102,7 @@
 				topupKey = crypto.randomUUID();
 				topupPayment = null;
 				topupOpen = false;
-				showToast('Top up ini sudah terbayar. Saldo telah diperbarui.');
+				showToast(tr('Top up ini sudah terbayar. Saldo telah diperbarui.'));
 				await load();
 				return;
 			}
@@ -111,7 +114,7 @@
 			}
 			topupPayment = { payment_url: result.payment_url, amount_idr: result.amount_idr, tc: result.tc };
 		} catch (reason) {
-			topupError = reason instanceof Error ? reason.message : 'Gagal membuat pembayaran.';
+			topupError = reason instanceof Error ? reason.message : tr('Gagal membuat pembayaran.');
 		} finally {
 			topupBusy = false;
 		}
@@ -137,7 +140,7 @@
 		reportMsg = '';
 		const claimed = Number(reportTc);
 		if (!Number.isFinite(claimed) || claimed <= 0) {
-			reportErr = 'Jumlah TC harus lebih dari 0.';
+			reportErr = tr('Jumlah TC harus lebih dari 0.');
 			return;
 		}
 		if (reportDesc.trim().length < 10) {
@@ -155,7 +158,7 @@
 				})
 			});
 			if (!res.ok) {
-				reportErr = await readApiError(res, 'Gagal mengirim laporan.');
+				reportErr = await readApiError(res, tr('Gagal mengirim laporan.'));
 				return;
 			}
 			reportMsg = 'Laporan terkirim. Tim Tauthub akan memverifikasi dan menambahkan saldo setelah disetujui.';
@@ -163,45 +166,40 @@
 			reportRef = '';
 			reportDesc = '';
 		} catch (reason) {
-			reportErr = reason instanceof Error ? reason.message : 'Gagal mengirim laporan.';
+			reportErr = reason instanceof Error ? reason.message : tr('Gagal mengirim laporan.');
 		} finally {
 			reportBusy = false;
 		}
 	}
 
-	const refLabel: Record<string, string> = {
-		topup: 'Top up', reserve: 'Reservasi', release: 'Pelepasan', capture: 'Pemakaian',
-		refund: 'Refund', adjustment: 'Penyesuaian'
-	};
+	// Catatan: refLabel/fmtDate untuk tabel ledger dihapus karena daftar mutasi
+	// kini digantikan panel Coming Soon. Kembalikan saat fitur ledger dikerjakan.
 	const fmt = (n: number) => n.toLocaleString('id-ID');
-	const fmtDate = (v: string) => new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
 </script>
 
-<PageTitle title="Kredit Saldo" />
+<PageTitle title={tr("Kredit Saldo")} />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Kredit Saldo</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Saldo Tulisio Credit (TC) untuk eksekusi publikasi.</p>
+			<h1 class="text-2xl font-semibold tracking-tight">{tr("Kredit Saldo")}</h1>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Saldo Tulisio Credit (TC) untuk eksekusi publikasi.")}</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			<button class="app-btn app-btn-soft" type="button" onclick={openReport}>
-				<Flag size={15} /> Laporkan Topup Gagal
-			</button>
+				<Flag size={15} />{tr("Laporkan Topup Gagal")}</button>
 			<button class="app-btn app-btn-primary" type="button" onclick={openTopUp}>
-				<Plus size={15} /> Top Up Kredit
-			</button>
+				<Plus size={15} />{tr("Top Up Kredit")}</button>
 		</div>
 	</header>
 
 	{#if loading}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat saldo…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat saldo…")}</p>
 	{:else if data}
 		{#if data.pending_payment}
 			<div class="app-card mt-4 flex flex-wrap items-center justify-between gap-3 border-l-4 p-4" style="border-left-color: var(--warning);">
 				<div>
-					<p class="text-sm font-medium">Ada pembayaran top up yang belum selesai</p>
+					<p class="text-sm font-medium">{tr("Ada pembayaran top up yang belum selesai")}</p>
 					<p class="text-xs text-muted-foreground">
 						{data.pending_payment.tc ?? 0} TC · Rp {fmt(data.pending_payment.amount_idr)} · status {data.pending_payment.status}
 					</p>
@@ -216,7 +214,7 @@
 			<div class="app-card flex items-center gap-3 p-4">
 				<Wallet size={18} style="color: var(--primary);" />
 				<div>
-					<p class="text-xs text-muted-foreground">Saldo tersedia</p>
+					<p class="text-xs text-muted-foreground">{tr("Saldo tersedia")}</p>
 					<p class="text-2xl font-bold tabular-nums">{fmt(data.wallet.available_tc)} <span class="text-sm font-medium text-muted-foreground">TC</span></p>
 				</div>
 			</div>
@@ -230,7 +228,7 @@
 			<div class="app-card flex items-center gap-3 p-4">
 				<Coins size={18} style="color: var(--success);" />
 				<div>
-					<p class="text-xs text-muted-foreground">Total terpakai</p>
+					<p class="text-xs text-muted-foreground">{tr("Total terpakai")}</p>
 					<p class="text-2xl font-bold tabular-nums">{fmt(data.wallet.captured_tc)} <span class="text-sm font-medium text-muted-foreground">TC</span></p>
 				</div>
 			</div>
@@ -242,41 +240,14 @@
 
 		<div class="app-card mt-4 overflow-x-auto">
 			<div class="flex items-center justify-between border-b px-4 py-3">
-				<h2 class="text-sm font-semibold">Riwayat ledger</h2>
+				<h2 class="text-sm font-semibold">{tr("Riwayat ledger")}</h2>
 				<span class="text-xs text-muted-foreground">{fmt(data.ledger_total)} entri</span>
 			</div>
-			{#if data.ledger.length === 0}
-				<p class="px-4 py-8 text-center text-sm text-muted-foreground">
-					Belum ada mutasi saldo. Top up atau publikasi artikel untuk melihat riwayat.
-				</p>
-			{:else}
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="border-b text-left text-[11px] tracking-wide text-muted-foreground">
-							<th class="px-4 py-2.5 font-semibold">JENIS</th>
-							<th class="px-4 py-2.5 font-semibold">REFERENSI</th>
-							<th class="px-4 py-2.5 text-right font-semibold">JUMLAH</th>
-							<th class="px-4 py-2.5 text-right font-semibold">SALDO SETELAH</th>
-							<th class="px-4 py-2.5 font-semibold">WAKTU</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.ledger as row (row.id)}
-							<tr class="border-b last:border-0">
-								<td class="px-4 py-2.5">{refLabel[row.ref_type] ?? row.ref_type}</td>
-								<td class="px-4 py-2.5 text-muted-foreground">
-									{row.document_title ?? row.media_name ?? row.reason ?? '—'}
-								</td>
-								<td class="px-4 py-2.5 text-right tabular-nums" style={row.amount_tc < 0 ? 'color: var(--destructive);' : 'color: var(--success);'}>
-									{row.amount_tc > 0 ? '+' : ''}{fmt(row.amount_tc)}
-								</td>
-								<td class="px-4 py-2.5 text-right tabular-nums">{fmt(row.balance_after_tc)}</td>
-								<td class="px-4 py-2.5 text-xs text-muted-foreground">{fmtDate(row.created_at)}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			{/if}
+			<!-- Fitur belum dirilis — daftar mutasi digantikan panel Coming Soon
+			     (parity distribution.tsx Riwayat Transaksi di project lama). -->
+			<div class="p-4">
+				<ComingSoon message="Riwayat mutasi saldo kredit sedang kami siapkan dan akan segera tersedia di Tauthub." />
+			</div>
 		</div>
 	{/if}
 </section>
@@ -296,15 +267,13 @@
 
 {#if reportOpen}
 	<div class="rp-overlay" role="presentation" onclick={() => (reportOpen = false)}>
-		<dialog open class="rp-dialog" aria-label="Laporkan Topup Gagal" onclick={(e) => e.stopPropagation()}>
+		<dialog open class="rp-dialog" aria-label={tr("Laporkan Topup Gagal")} onclick={(e) => e.stopPropagation()}>
 			<div class="flex items-start justify-between gap-3">
 				<div>
-					<h2 class="text-lg font-semibold">Laporkan Topup Gagal</h2>
-					<p class="mt-1 text-xs text-muted-foreground">
-						Pembayaran sukses tapi saldo TC belum masuk? Laporan akan diverifikasi admin Tauthub, lalu saldo ditambahkan manual setelah disetujui.
-					</p>
+					<h2 class="text-lg font-semibold">{tr("Laporkan Topup Gagal")}</h2>
+					<p class="mt-1 text-xs text-muted-foreground">{tr("Pembayaran sukses tapi saldo TC belum masuk? Laporan akan diverifikasi admin Tauthub, lalu saldo ditambahkan manual setelah disetujui.")}</p>
 				</div>
-				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label="Tutup" onclick={() => (reportOpen = false)}>
+				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Tutup")} onclick={() => (reportOpen = false)}>
 					<X size={18} />
 				</button>
 			</div>
@@ -317,23 +286,21 @@
 					<p class="rounded-lg px-3 py-2 text-sm" style="background-color: color-mix(in srgb, var(--destructive) 10%, var(--card)); color: var(--destructive);">{reportErr}</p>
 				{/if}
 
-				<label class="flex flex-col gap-1 text-sm">
-					Jumlah TC yang dibayar
-					<input class="app-input" type="number" min="1" placeholder="cth: 1000" bind:value={reportTc} />
+				<label class="flex flex-col gap-1 text-sm">{tr("Jumlah TC yang dibayar")}<input class="app-input" type="number" min="1" placeholder={tr("cth: 1000")} bind:value={reportTc} />
 				</label>
 				<label class="flex flex-col gap-1 text-sm">
 					Referensi pembayaran (opsional)
-					<input class="app-input" placeholder="ID transaksi / nomor invoice dari gateway" bind:value={reportRef} />
+					<input class="app-input" placeholder={tr("ID transaksi / nomor invoice dari gateway")} bind:value={reportRef} />
 				</label>
 				<label class="flex flex-col gap-1 text-sm">
 					Deskripsi masalah
-					<textarea class="app-input" rows="3" placeholder="cth: Sudah bayar via QRIS tapi saldo TC tidak bertambah setelah 30 menit" bind:value={reportDesc}></textarea>
+					<textarea class="app-input" rows="3" placeholder={tr("cth: Sudah bayar via QRIS tapi saldo TC tidak bertambah setelah 30 menit")} bind:value={reportDesc}></textarea>
 				</label>
 
 				<div class="flex justify-end gap-2 border-t pt-3">
-					<button class="app-btn app-btn-soft" type="button" onclick={() => (reportOpen = false)}>Batal</button>
+					<button class="app-btn app-btn-soft" type="button" onclick={() => (reportOpen = false)}>{tr("Batal")}</button>
 					<button class="app-btn app-btn-primary" type="button" disabled={reportBusy} onclick={() => void submitReport()}>
-						{reportBusy ? 'Mengirim…' : 'Kirim Laporan'}
+						{reportBusy ? 'Mengirim…' : tr('Kirim Laporan')}
 					</button>
 				</div>
 			</div>

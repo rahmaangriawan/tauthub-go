@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port app/payments/sandbox/[tx]/page.tsx + simulate.tsx — halaman checkout
 	// gateway sandbox lokal. Simulasi mengirim webhook bertanda tangan HMAC ke
 	// /v1/payments/webhooks/sandbox, jalur kode yang sama dengan callback gateway
@@ -16,7 +18,7 @@
 	let result = $state<{ ok: boolean; message: string } | null>(null);
 
 	const idr = (n: number) =>
-		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
+		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(n);
 
 	async function hmacSha256Hex(message: string, secret: string): Promise<string> {
 		const encoder = new TextEncoder();
@@ -68,14 +70,12 @@
 	<div class="w-full max-w-[420px] rounded-2xl border border-white/10 bg-[#141d33] p-7">
 		<div class="text-[13px] font-semibold uppercase tracking-[.08em] text-[#9aa7c0]">Gateway Sandbox Tauthub</div>
 		<h1 class="mt-2 mb-1 text-xl">Simulasi pembayaran</h1>
-		<p class="text-[13px] text-[#9aa7c0]">
-			Halaman ini hanya tersedia untuk pengujian lokal. Klik tombol di bawah untuk mengirim callback
-			<code class="rounded bg-white/10 px-1.5 py-0.5">PAID</code> bertanda tangan HMAC ke webhook Tauthub —
+		<p class="text-[13px] text-[#9aa7c0]">{tr("Halaman ini hanya tersedia untuk pengujian lokal. Klik tombol di bawah untuk mengirim callback")}<code class="rounded bg-white/10 px-1.5 py-0.5">PAID</code> bertanda tangan HMAC ke webhook Tauthub —
 			persis seperti callback gateway asli.
 		</p>
 
 		{#if loading}
-			<p class="mt-5 text-sm text-[#9aa7c0]">Memuat transaksi…</p>
+			<p class="mt-5 text-sm text-[#9aa7c0]">{tr("Memuat transaksi…")}</p>
 		{:else if !tx}
 			<p class="mt-5 text-sm text-[#f87171]">Transaksi sandbox tidak ditemukan.</p>
 		{:else}
@@ -85,11 +85,11 @@
 					<dd class="font-semibold tabular-nums">{tx.reference ?? `PAY-${txId.slice(0, 8).toUpperCase()}`}</dd>
 				</div>
 				<div class="flex justify-between gap-4">
-					<dt class="text-[#9aa7c0]">Jumlah</dt>
+					<dt class="text-[#9aa7c0]">{tr("Jumlah")}</dt>
 					<dd>{idr(Math.round(Number(tx.amount ?? 0)))}</dd>
 				</div>
 				<div class="flex justify-between gap-4">
-					<dt class="text-[#9aa7c0]">Status saat ini</dt>
+					<dt class="text-[#9aa7c0]">{tr("Status saat ini")}</dt>
 					<dd class="font-semibold" style="color: {tx.status === 'paid' ? '#4ade80' : '#fbbf24'};">{tx.status}</dd>
 				</div>
 			</dl>
@@ -101,7 +101,7 @@
 				disabled={busy || tx.status === 'paid'}
 				onclick={simulate}
 			>
-				{busy ? 'Mengirim webhook…' : tx.status === 'paid' ? 'Pembayaran sudah lunas' : 'Simulasikan pembayaran berhasil'}
+				{busy ? 'Mengirim webhook…' : tx.status === 'paid' ? tr('Pembayaran sudah lunas') : 'Simulasikan pembayaran berhasil'}
 			</button>
 
 			{#if result}
@@ -113,8 +113,7 @@
 				</p>
 			{/if}
 
-			<p class="mt-3.5 text-xs text-[#6b7794]">
-				Kembali ke dashboard klien: <a class="text-[#8fb0ff]" href="/klien">klien</a> ·
+			<p class="mt-3.5 text-xs text-[#6b7794]">{tr("Kembali ke dashboard klien:")}<a class="text-[#8fb0ff]" href="/klien">klien</a> ·
 				<a class="text-[#8fb0ff]" href="/admin/credits">admin credits</a>
 			</p>
 		{/if}

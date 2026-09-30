@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Tab Direktori /admin/media — master data media (harga, kredit, tier, integrasi, partner).
 	// Port MediaDirectorySection di apps/web/src/app/admin/media/_sections.tsx.
 	import { onMount } from 'svelte';
@@ -207,7 +209,7 @@
 				try {
 					publishDefaults = JSON.parse(form.publish_defaults);
 				} catch {
-					error = 'publish_defaults bukan JSON yang valid.';
+					error = tr('publish_defaults bukan JSON yang valid.');
 					return;
 				}
 			}
@@ -312,7 +314,7 @@
 		if (!reviewTarget) return;
 		const price = Number(negoPrice.replace(/\D/g, ''));
 		if (!price) {
-			error = 'Harga negosiasi wajib diisi.';
+			error = tr('Harga negosiasi wajib diisi.');
 			return;
 		}
 		reviewBusy = true;
@@ -368,7 +370,7 @@
 			const result = await platformRequest<{ synced: number; rate_idr: number }>('/media/sync-credit-cost', {
 				method: 'POST'
 			});
-			error = `Sinkronisasi kredit selesai: ${result.synced} media diperbarui (1 TC = Rp${result.rate_idr.toLocaleString('id-ID')}).`;
+			error = `Sinkronisasi kredit selesai: ${result.synced} media diperbarui (1 TC = Rp${result.rate_idr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}).`;
 			await load();
 		} catch (reason) {
 			error = errMessage(reason);
@@ -535,7 +537,7 @@
 
 {#snippet publicationModeCell(row: Media)}
 	{#if (row.publication_mode ?? 'draft') === 'publish'}
-		<Badge tone="success" label="Terbit" />
+		<Badge tone="success" label={tr("Terbit")} />
 	{:else}
 		<Badge tone="warning" label="Draf" />
 	{/if}
@@ -547,7 +549,7 @@
 
 {#snippet dewanPersCell(row: Media)}
 	{#if row.dewan_pers_verified}<Badge tone="success" label="Ya" />
-	{:else}<Badge tone="neutral" label="Tidak" />{/if}
+	{:else}<Badge tone="neutral" label={tr("Tidak")} />{/if}
 {/snippet}
 
 {#snippet tierCell(row: Media)}
@@ -573,7 +575,7 @@
 			<span
 				class="rounded-full px-2 py-0.5 text-[11px] font-medium"
 				style="background-color: var(--warning-soft); color: var(--warning);"
-				title={`Harga klien ${idr(clientPriceFor(row.price))} (dasar ${row.price.toLocaleString('id-ID')} + markup ${markupPercent}%) → kredit ${creditForPrice(row.price)} TC`}
+				title={`Harga klien ${idr(clientPriceFor(row.price))} (dasar ${row.price.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })} + markup ${markupPercent}%) → kredit ${creditForPrice(row.price)} TC`}
 				>→ {creditForPrice(row.price)}</span
 			>
 		{/if}
@@ -721,10 +723,10 @@
 {/snippet}
 
 {#if loading && rows.length === 0 && !error}
-	<p class="mt-6 text-sm text-muted-foreground">Memuat direktori media…</p>
+	<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat direktori media…")}</p>
 {:else if showAccessState}
 	<div class="app-card mt-6 px-6 py-10 text-center">
-		<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke direktori media.</p>
+		<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke direktori media.")}</p>
 	</div>
 {:else}
 	<div class="mt-4 flex flex-wrap items-center gap-2">
@@ -732,8 +734,8 @@
 			<Search size={15} class="text-muted-foreground" />
 			<input
 				class="w-full bg-transparent text-sm outline-none"
-				placeholder="Cari nama, slug, atau kategori…"
-				aria-label="Cari media"
+				placeholder={tr("Cari nama, slug, atau kategori…")}
+				aria-label={tr("Cari media")}
 				bind:value={search}
 				oninput={() => (page = 1)}
 			/>
@@ -744,7 +746,7 @@
 			>
 		{/if}
 		<Select
-			ariaLabel="Filter status media"
+			ariaLabel={tr("Filter status media")}
 			minWidth={170}
 			value={statusFilter}
 			onchange={(v) => {
@@ -752,19 +754,17 @@
 				page = 1;
 			}}
 			options={[
-				{ value: '', label: 'Semua status' },
-				{ value: 'active', label: '🟢 Aktif' },
-				{ value: 'inactive', label: 'Nonaktif' },
+				{ value: '', label: tr('Semua status') },
+				{ value: 'active', label: tr('🟢 Aktif') },
+				{ value: 'inactive', label: tr('Nonaktif') },
 				{ value: 'draft', label: 'Draf' },
-				{ value: 'archived', label: 'Arsip' }
+				{ value: 'archived', label: tr('Arsip') }
 			]}
 		/>
 		<div class="flex-1"></div>
 		<Badge tone="accent" value={`${total} media`} />
 		<label class="flex items-center gap-1 text-xs text-muted-foreground">
-			<input type="checkbox" checked={allSelected} onchange={(e) => toggleSelectAll(e.currentTarget.checked)} />
-			Pilih halaman ini
-		</label>
+			<input type="checkbox" checked={allSelected} onchange={(e) => toggleSelectAll(e.currentTarget.checked)} />{tr("Pilih halaman ini")}</label>
 		{#if selectedIds.size > 0}
 			<button
 				class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
@@ -782,8 +782,7 @@
 			<Sparkle size={15} /> {aiBulkBusy ? 'Memeriksa…' : 'Cek AI & SEO Semua'}
 		</button>
 		<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" onclick={openCreate}>
-			<Plus size={15} /> Tambah media
-		</button>
+			<Plus size={15} />{tr("Tambah media")}</button>
 	</div>
 
 	{#if swSummary}<p class="mt-2 text-xs text-muted-foreground">{swSummary}</p>{/if}
@@ -795,14 +794,14 @@
 	<DataTable
 		columns={[
 			{ key: 'select', label: '', width: '36px', render: selectCell },
-			{ key: 'name', label: 'Media', render: mediaCell },
+			{ key: 'name', label: tr('Media'), render: mediaCell },
 			{ key: 'category', label: 'Kategori', render: categoryCell },
-			{ key: 'publication_mode', label: 'Mode Publikasi', render: publicationModeCell },
-			{ key: 'word_count_mode', label: 'Jumlah Kata', render: wordCountCell },
+			{ key: 'publication_mode', label: tr('Mode Publikasi'), render: publicationModeCell },
+			{ key: 'word_count_mode', label: tr('Jumlah Kata'), render: wordCountCell },
 			{ key: 'dewan_pers', label: 'Dewan Pers', render: dewanPersCell },
 			{ key: 'tier', label: 'Tier', render: tierCell },
-			{ key: 'price', label: 'Harga', render: priceCell },
-			{ key: 'credit', label: 'Kredit', render: creditCell },
+			{ key: 'price', label: tr('Harga'), render: priceCell },
+			{ key: 'credit', label: tr('Kredit'), render: creditCell },
 			{ key: 'traffic', label: 'Trafik', align: 'right' as const, render: trafficCell },
 			{ key: 'health', label: 'Health', render: healthCell },
 			{ key: 'ai_trust', label: 'AI Trust', render: aiTrustCell },
@@ -813,7 +812,7 @@
 		rows={rows}
 		rowKey={(row: Media) => row.id}
 		{loading}
-		empty="Belum ada media. Tambahkan media pertama."
+		empty={tr("Belum ada media. Tambahkan media pertama.")}
 		minWidth="1500px"
 		onRowClick={(row: Media) => openEdit(row)}
 	/>
@@ -842,7 +841,7 @@
 {/if}
 
 {#if createOpen}
-	<Modal title={editing ? `Edit media — ${editing.name}` : 'Tambah media'} maxWidth="2xl" onClose={closeForm}>
+	<Modal title={editing ? `Edit media — ${editing.name}` : tr('Tambah media')} maxWidth="2xl" onClose={closeForm}>
 		{#if error && !isAccessError(error)}
 			<p class="mb-3 text-sm" style="color: var(--destructive);">{error}</p>
 		{/if}
@@ -851,10 +850,10 @@
 				<div class="flex items-center gap-2">
 					<span class="text-xs text-muted-foreground">Status</span>
 					{#if editing.status === 'pending_review'}
-						<Badge tone="warning" label="🟡 Menunggu Review" />
+						<Badge tone="warning" label={tr("🟡 Menunggu Review")} />
 					{:else if editing.status === 'rejected'}
 						<span title={editing.rejection_reason ?? undefined}
-							><Badge tone="danger" label="🔴 Ditolak" /></span
+							><Badge tone="danger" label={tr("🔴 Ditolak")} /></span
 						>
 					{:else}
 						<Badge
@@ -864,7 +863,7 @@
 					{/if}
 				</div>
 				<div class="flex items-center gap-2">
-					<span class="text-xs text-muted-foreground">Mitra</span>
+					<span class="text-xs text-muted-foreground">{tr("Mitra")}</span>
 					<span>
 						{editing.partner_id
 							? (partners.find((p) => p.id === editing?.partner_id)?.name ??
@@ -881,20 +880,16 @@
 				<div
 					class="mb-2 rounded-lg px-3 py-2 text-xs"
 					style="background-color: var(--accent); color: var(--accent-foreground);"
-				>
-					Media ini dikelola mitra
-					<strong
+				>{tr("Media ini dikelola mitra")}<strong
 						>{partners.find((p) => p.id === editing?.partner_id)?.name ??
 							partners.find((p) => p.id === editing?.partner_id)?.email ??
 							'—'}</strong
-					>
-					— perubahan di sini otomatis tersinkron ke dashboard mitra (dan sebaliknya).
-				</div>
+					>{tr("— perubahan di sini otomatis tersinkron ke dashboard mitra (dan sebaliknya).")}</div>
 			{/if}
 
 			<div class="app-card mb-3 p-3">
 				<div class="mb-2 flex items-center justify-between">
-					<p class="text-sm font-medium">Health media</p>
+					<p class="text-sm font-medium">{tr("Health media")}</p>
 					{#if editing.health_score != null}
 						<Badge tone={scoreTone(editing.health_score)} value={`${editing.health_score}/100`} />
 					{:else}
@@ -911,9 +906,7 @@
 						{/each}
 					</div>
 				{:else}
-					<p class="text-xs text-muted-foreground">
-						Belum ada breakdown — klik Hitung health di tabel untuk menghitung skor.
-					</p>
+					<p class="text-xs text-muted-foreground">{tr("Belum ada breakdown — klik Hitung health di tabel untuk menghitung skor.")}</p>
 				{/if}
 				{#if editing.health_computed_at}
 					<p class="mt-1 text-xs text-muted-foreground">Dihitung {fmtDateTime(editing.health_computed_at)}</p>
@@ -922,17 +915,17 @@
 
 			<div class="app-card mb-3 p-3">
 				<div class="mb-1 flex items-center gap-2">
-					<p class="text-sm font-medium">Mode Publikasi</p>
+					<p class="text-sm font-medium">{tr("Mode Publikasi")}</p>
 					{#if (editing.publication_mode ?? 'draft') === 'publish'}
-						<Badge tone="success" label="Terbit" />
+						<Badge tone="success" label={tr("Terbit")} />
 					{:else}
 						<Badge tone="warning" label="Draf" />
 					{/if}
 				</div>
 				<p class="text-xs text-muted-foreground">
 					{(editing.publication_mode ?? 'draft') === 'publish'
-						? 'Artikel dari klien langsung diterbitkan ke media tanpa persetujuan manual Mitra.'
-						: 'Artikel dari klien masuk sebagai draft dan menunggu tindakan Mitra. Dikelola mitra lewat halaman Media mitra.'}
+						? tr('Artikel dari klien langsung diterbitkan ke media tanpa persetujuan manual Mitra.')
+						: tr('Artikel dari klien masuk sebagai draft dan menunggu tindakan Mitra. Dikelola mitra lewat halaman Media mitra.')}
 				</p>
 			</div>
 
@@ -940,7 +933,7 @@
 				<div class="mb-1 flex items-center gap-2">
 					<p class="text-sm font-medium">Verifikasi Dewan Pers</p>
 					{#if editing.dewan_pers_verified}<Badge tone="success" label="Ya" />
-					{:else}<Badge tone="neutral" label="Tidak" />{/if}
+					{:else}<Badge tone="neutral" label={tr("Tidak")} />{/if}
 				</div>
 				{#if editing.dewan_pers_verified}
 					<div class="space-y-1">
@@ -953,27 +946,25 @@
 								class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
 								href={`/uploads/${editing.dewan_pers_doc_key}`}
 								target="_blank"
-								rel="noreferrer">Lihat dokumen</a
+								rel="noreferrer">{tr("Lihat dokumen")}</a
 							>
 						{:else}
 							<p class="text-xs text-muted-foreground">Tanpa dokumen bukti.</p>
 						{/if}
 					</div>
 				{:else}
-					<p class="text-xs text-muted-foreground">
-						Belum diverifikasi. Status dikelola mitra lewat halaman Media mitra (per media/domain).
-					</p>
+					<p class="text-xs text-muted-foreground">{tr("Belum diverifikasi. Status dikelola mitra lewat halaman Media mitra (per media/domain).")}</p>
 				{/if}
 			</div>
 
 			<div class="mb-3">
-				<p class="mb-1 text-sm font-medium text-muted-foreground">Riwayat audit</p>
+				<p class="mb-1 text-sm font-medium text-muted-foreground">{tr("Riwayat audit")}</p>
 				{#if detailLoading}
-					<p class="text-xs text-muted-foreground">Memuat…</p>
+					<p class="text-xs text-muted-foreground">{tr("Memuat…")}</p>
 				{:else if detailAudit === null}
 					<p class="text-xs text-muted-foreground">—</p>
 				{:else if detailAudit.length === 0}
-					<p class="text-xs text-muted-foreground">Belum ada aktivitas untuk media ini.</p>
+					<p class="text-xs text-muted-foreground">{tr("Belum ada aktivitas untuk media ini.")}</p>
 				{:else}
 					<div class="max-h-36 space-y-1 overflow-y-auto pr-1">
 						{#each detailAudit as a (a.id)}
@@ -989,41 +980,40 @@
 
 		<form class="space-y-3" onsubmit={onSubmit}>
 			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Nama media</span>
-				<input class="app-input mt-1 w-full" required placeholder="Contoh: MediaKita" bind:value={form.name} />
+				<span class="text-xs font-medium text-muted-foreground">{tr("Nama media")}</span>
+				<input class="app-input mt-1 w-full" required placeholder={tr("Contoh: MediaKita")} bind:value={form.name} />
 			</label>
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Kategori</span>
-					<input class="app-input mt-1 w-full" placeholder="Teknologi" bind:value={form.category} />
+					<input class="app-input mt-1 w-full" placeholder={tr("Teknologi")} bind:value={form.category} />
 				</label>
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Website URL</span>
 					<input class="app-input mt-1 w-full" placeholder="https://media.com" bind:value={form.website_url} />
 				</label>
 				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">Harga mitra (IDR)</span>
+					<span class="text-xs font-medium text-muted-foreground">{tr("Harga mitra (IDR)")}</span>
 					<input
 						class="app-input mt-1 w-full"
 						type="text"
 						inputmode="numeric"
-						value={form.price ? Number(form.price).toLocaleString('id-ID') : ''}
+						value={form.price ? Number(form.price).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }) : ''}
 						oninput={(e) => (form.price = e.currentTarget.value.replace(/\D/g, ''))}
 					/>
 					<span class="mt-1 block text-xs text-muted-foreground"
-						>Base price — nominal yang menjadi hak mitra. Harga klien dihitung otomatis oleh pricing
-						engine (ditambah markup Tauthub).</span
+						>{tr("Base price — nominal yang menjadi hak mitra. Harga klien dihitung otomatis oleh pricing engine (ditambah markup Tauthub).")}</span
 					>
 				</label>
 				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">Harga klien (IDR)</span>
+					<span class="text-xs font-medium text-muted-foreground">{tr("Harga klien (IDR)")}</span>
 					<input
 						class="app-input mt-1 w-full"
 						readonly
 						value={clientPriceFor(Number(form.price) || 0).toLocaleString('id-ID')}
 					/>
 					<span class="mt-1 block text-xs text-muted-foreground"
-						>Harga mitra + markup {markupPercent}% (pricing engine) — kredit dihitung dari harga klien.</span
+						>{tr("Harga mitra + markup")} {markupPercent}{tr("% (pricing engine) — kredit dihitung dari harga klien.")}</span
 					>
 				</label>
 			</div>
@@ -1032,7 +1022,7 @@
 				<div class="rounded-lg border p-2" style="background-color: var(--secondary);">
 					<p class="mb-1 text-xs text-muted-foreground">Price breakdown</p>
 					<div class="flex justify-between text-sm">
-						<span>Harga Mitra</span><span>{idr(Number(form.price) || 0)}</span>
+						<span>{tr("Harga Mitra")}</span><span>{idr(Number(form.price) || 0)}</span>
 					</div>
 					<div class="flex justify-between text-sm"><span>Markup Tauthub</span><span>{markupPercent}%</span></div>
 					<div class="flex justify-between text-sm">
@@ -1040,13 +1030,13 @@
 						<span>{idr(Math.max(0, clientPriceFor(Number(form.price) || 0) - (Number(form.price) || 0)))}</span>
 					</div>
 					<div class="mt-1 flex justify-between border-t pt-1 text-sm font-bold">
-						<span>Harga Klien</span><span>{idr(clientPriceFor(Number(form.price) || 0))}</span>
+						<span>{tr("Harga Klien")}</span><span>{idr(clientPriceFor(Number(form.price) || 0))}</span>
 					</div>
 				</div>
 			{/if}
 
 			<div>
-				<span class="text-xs font-medium text-muted-foreground">Model Harga</span>
+				<span class="text-xs font-medium text-muted-foreground">{tr("Model Harga")}</span>
 				<div class="mt-1 flex gap-2">
 					<button
 						type="button"
@@ -1065,8 +1055,8 @@
 				</div>
 				<p class="mt-1 text-xs text-muted-foreground">
 					{editing && form.pricing_type !== (editing.pricing_type ?? 'nett')
-						? 'Perubahan model harga pada media yang sudah terbit akan dikonfirmasi dengan catatan ke mitra saat disimpan.'
-						: 'Nett = harga tetap; Nego = harga bisa dinegosiasikan dengan klien.'}
+						? tr('Perubahan model harga pada media yang sudah terbit akan dikonfirmasi dengan catatan ke mitra saat disimpan.')
+						: tr('Nett = harga tetap; Nego = harga bisa dinegosiasikan dengan klien.')}
 				</p>
 			</div>
 
@@ -1074,21 +1064,21 @@
 				<span class="text-xs font-medium text-muted-foreground">Biaya kredit (TC)</span>
 				<input class="app-input mt-1 w-full" readonly value={creditForPrice(Number(form.price) || 0).toLocaleString('id-ID')} />
 				<span class="mt-1 block text-xs text-muted-foreground"
-					>Otomatis dari harga klien ÷ rate (1 TC = Rp{tcRate.toLocaleString('id-ID')}) — tidak diisi manual;
+					>{tr("Otomatis dari harga klien ÷ rate (1 TC = Rp")}{tcRate.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}) — tidak diisi manual;
 					server menghitung ulang saat disimpan.</span
 				>
 			</label>
 
 			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Estimasi trafik bulanan (untuk estimated reach)</span>
+				<span class="text-xs font-medium text-muted-foreground">{tr("Estimasi trafik bulanan (untuk estimated reach)")}</span>
 				<input class="app-input mt-1 w-full" type="number" min="0" bind:value={form.traffic_estimate} />
 			</label>
 
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">Media tier</span>
+					<span class="text-xs font-medium text-muted-foreground">{tr("Media tier")}</span>
 					<Select
-						ariaLabel="Media tier"
+						ariaLabel={tr("Media tier")}
 						minWidth={200}
 						value={form.media_tier}
 						onchange={(v) => (form.media_tier = v)}
@@ -1096,13 +1086,13 @@
 					/>
 				</label>
 				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">Media quality score (0-100)</span>
+					<span class="text-xs font-medium text-muted-foreground">{tr("Media quality score (0-100)")}</span>
 					<input
 						class="app-input mt-1 w-full"
 						type="number"
 						min="0"
 						max="100"
-						placeholder="kosong = tidak diset"
+						placeholder={tr("kosong = tidak diset")}
 						bind:value={form.media_quality_score}
 					/>
 				</label>
@@ -1112,7 +1102,7 @@
 				<span class="text-xs font-medium text-muted-foreground">Catatan kualitas (opsional)</span>
 				<input
 					class="app-input mt-1 w-full"
-					placeholder="Contoh: otoritas tinggi di sektor teknologi"
+					placeholder={tr("Contoh: otoritas tinggi di sektor teknologi")}
 					bind:value={form.media_quality_notes}
 				/>
 			</label>
@@ -1141,9 +1131,9 @@
 			</div>
 
 			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Mitra (opsional)</span>
+				<span class="text-xs font-medium text-muted-foreground">{tr("Mitra (opsional)")}</span>
 				<Select
-					ariaLabel="Mitra (opsional)"
+					ariaLabel={tr("Mitra (opsional)")}
 					minWidth={220}
 					value={form.partner_id}
 					onchange={(v) => (form.partner_id = v)}
@@ -1168,9 +1158,9 @@
 			{/if}
 
 			<div class="flex justify-end gap-2 border-t pt-4">
-				<button type="button" class="app-btn app-btn-soft" onclick={closeForm}>Batal</button>
+				<button type="button" class="app-btn app-btn-soft" onclick={closeForm}>{tr("Batal")}</button>
 				<button type="submit" class="app-btn app-btn-primary" disabled={busy}>
-					{busy ? 'Menyimpan…' : editing ? 'Simpan perubahan' : 'Tambah media'}
+					{busy ? 'Menyimpan…' : editing ? tr('Simpan perubahan') : tr('Tambah media')}
 				</button>
 			</div>
 		</form>
@@ -1179,23 +1169,19 @@
 
 {#if priceConfirmOpen}
 	<Modal title="Konfirmasi perubahan harga" maxWidth="md" onClose={() => (priceConfirmOpen = false)}>
-		<p class="text-sm text-muted-foreground">
-			Model harga media ini berubah dari
-			<strong>{editing?.pricing_type === 'nego' ? 'Nego' : 'Nett'}</strong> menjadi
-			<strong>{form.pricing_type === 'nego' ? 'Nego' : 'Nett'}</strong>. Perubahan berlaku untuk media yang sudah terbit
-			dan akan tersinkron ke dashboard mitra.
-		</p>
+		<p class="text-sm text-muted-foreground">{tr("Model harga media ini berubah dari")}<strong>{editing?.pricing_type === 'nego' ? 'Nego' : 'Nett'}</strong> menjadi
+			<strong>{form.pricing_type === 'nego' ? 'Nego' : 'Nett'}</strong>{tr(". Perubahan berlaku untuk media yang sudah terbit dan akan tersinkron ke dashboard mitra.")}</p>
 		<label class="mt-3 block">
-			<span class="text-xs font-medium text-muted-foreground">Catatan untuk mitra (opsional)</span>
+			<span class="text-xs font-medium text-muted-foreground">{tr("Catatan untuk mitra (opsional)")}</span>
 			<textarea
 				class="app-input mt-1 w-full"
 				rows="3"
-				placeholder="Contoh: Harga dikonfirmasi menjadi nett setelah kesepakatan."
+				placeholder={tr("Contoh: Harga dikonfirmasi menjadi nett setelah kesepakatan.")}
 				bind:value={priceNote}
 			></textarea>
 		</label>
 		<div class="mt-3 flex justify-end gap-2">
-			<button class="app-btn app-btn-soft" onclick={() => (priceConfirmOpen = false)}>Batal</button>
+			<button class="app-btn app-btn-soft" onclick={() => (priceConfirmOpen = false)}>{tr("Batal")}</button>
 			<button
 				class="app-btn app-btn-primary"
 				onclick={() => {
@@ -1208,28 +1194,26 @@
 {/if}
 
 {#if reviewTarget}
-	<Modal title="Media Ditolak" maxWidth="md" onClose={() => (reviewTarget = null)}>
-		<p class="text-sm text-muted-foreground">
-			Tolak media <strong>{reviewTarget.name}</strong>? Media tidak dihapus — akan kembali ke mitra dengan alasan ini.
-		</p>
+	<Modal title={tr("Media Ditolak")} maxWidth="md" onClose={() => (reviewTarget = null)}>
+		<p class="text-sm text-muted-foreground">{tr("Tolak media")}<strong>{reviewTarget.name}</strong>{tr("? Media tidak dihapus — akan kembali ke mitra dengan alasan ini.")}</p>
 		<label class="mt-3 block">
 			<span class="text-xs font-medium text-muted-foreground">Alasan Penolakan *</span>
 			<textarea
 				class="app-input mt-1 w-full"
 				rows="4"
 				bind:value={rejectReason}
-				placeholder="Contoh: Harga yang diajukan belum sesuai dengan kualitas dan traffic media. Silakan lakukan penyesuaian harga dan ajukan kembali."
+				placeholder={tr("Contoh: Harga yang diajukan belum sesuai dengan kualitas dan traffic media. Silakan lakukan penyesuaian harga dan ajukan kembali.")}
 			></textarea>
 		</label>
 		<div class="mt-3 flex flex-wrap items-end justify-end gap-2">
 			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Harga negosiasi (IDR)</span>
+				<span class="text-xs font-medium text-muted-foreground">{tr("Harga negosiasi (IDR)")}</span>
 				<input
 					class="app-input mt-1 w-full"
 					type="text"
 					inputmode="numeric"
 					placeholder="45.000"
-					value={negoPrice ? Number(negoPrice).toLocaleString('id-ID') : ''}
+					value={negoPrice ? Number(negoPrice).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }) : ''}
 					oninput={(e) => (negoPrice = e.currentTarget.value.replace(/\D/g, ''))}
 				/>
 			</label>
@@ -1237,7 +1221,7 @@
 				class="app-btn app-btn-soft"
 				style="color: var(--warning);"
 				disabled={reviewBusy}
-				onclick={negotiateMedia}>{reviewBusy ? 'Menyimpan…' : 'Negosiasi Harga'}</button
+				onclick={negotiateMedia}>{reviewBusy ? 'Menyimpan…' : tr('Negosiasi Harga')}</button
 			>
 			<button class="app-btn app-btn-soft" disabled={reviewBusy} onclick={() => (reviewTarget = null)}>Batalkan</button>
 			<button
@@ -1252,12 +1236,9 @@
 
 {#if bulkDeleteOpen}
 	<Modal title={`Arsipkan ${selectedIds.size} media?`} maxWidth="md" onClose={() => (bulkDeleteOpen = false)}>
-		<p class="text-sm">
-			Media terpilih akan <strong>dipindahkan ke arsip</strong> (soft delete) — disembunyikan dari portal mitra dan klien.
-			Media bisa dipulihkan kapan saja dari tab Arsip. Tidak ada data yang dihapus permanen.
-		</p>
+		<p class="text-sm">{tr("Media terpilih akan")}<strong>dipindahkan ke arsip</strong>{tr("(soft delete) — disembunyikan dari portal mitra dan klien. Media bisa dipulihkan kapan saja dari tab Arsip. Tidak ada data yang dihapus permanen.")}</p>
 		<div class="mt-4 flex justify-end gap-3">
-			<button class="app-btn app-btn-soft" disabled={bulkBusy} onclick={() => (bulkDeleteOpen = false)}>Batal</button>
+			<button class="app-btn app-btn-soft" disabled={bulkBusy} onclick={() => (bulkDeleteOpen = false)}>{tr("Batal")}</button>
 			<button
 				class="app-btn app-btn-primary"
 				style="background-color: var(--destructive);"

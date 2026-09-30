@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/adminshared"
+	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
@@ -32,6 +33,9 @@ type Deps struct {
 	Pool  *pgxpool.Pool
 	Cfg   *config.Config
 	Admin *adminshared.Deps
+	// Google: status konfigurasi OAuth Google untuk diagnostik endpoint admin
+	// (platform/oauth/google). Nil = diagnostik dilewati.
+	Google *auth.Google
 	// Runner: dispatcher job bersama (internal/jobs). Diisi saat boot; nil
 	// berarti endpoint internal job tidak dapat memproses antrean.
 	Runner *jobs.Runner
@@ -210,6 +214,22 @@ func (d *Deps) audit(ctx context.Context, actorUserID, action, targetType, targe
 		nullIfEmpty(actorUserID), action, targetType, targetID); err != nil {
 		slog.Warn("[platform] audit gagal", "action", action, "err", err)
 	}
+}
+
+// pubRateLimit: gerbang rate limit berbasis IP untuk endpoint publik (redirect
+// tautan, penyajian unggahan, callback mitra). Ambang sengaja longgar supaya
+// trafik sah tidak terpotong, tetapi cukup menahan pengurasan/brute force.
+func (d *Deps) pubRateLimit(w http.ResponseWriter, r *http.Request, bucket string, perMinute int) bool {
+	ip := auth.RequestIp(r.Header)
+	if ip == "" {
+		ip = "unknown"
+	}
+	if err := auth.CheckAuthRate(r.Context(), d.Pool, bucket+":"+ip, perMinute); err != nil {
+		w.Header().Set("Retry-After", "60")
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{"detail": "Terlalu banyak permintaan. Coba lagi sebentar lagi."})
+		return false
+	}
+	return true
 }
 
 func (d *Deps) exec(ctx context.Context, sql string, args ...any) error {

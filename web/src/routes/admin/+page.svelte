@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Dashboard admin — port app/admin/page.tsx (Executive Overview):
 	// KPI ekosistem, feed publikasi terkini, aktivitas agen AI, kesehatan
 	// AI engine, queue worker, dan pintasan navigasi.
@@ -78,9 +80,7 @@
 		<div>
 			<p class="text-xs font-bold tracking-wide text-muted-foreground">TAUTHUB PLATFORM CONTROL</p>
 			<h1 class="mt-1 text-2xl font-semibold tracking-tight">Executive Overview</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
-				Status operasional real-time, aktivitas publikasi media, dan performa orkestrasi AI.
-			</p>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Status operasional real-time, aktivitas publikasi media, dan performa orkestrasi AI.")}</p>
 		</div>
 		<div class="flex items-center gap-3">
 			<button
@@ -100,10 +100,10 @@
 	</header>
 
 	{#if !loaded}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat platform overview…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat platform overview…")}</p>
 	{:else if denied}
 		<div class="app-card mt-4 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke control plane platform.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke control plane platform.")}</p>
 		</div>
 	{:else}
 		{#if error}
@@ -115,7 +115,7 @@
 		{#if summary?.generation_disabled}
 			<div class="app-card mt-3 flex items-start gap-2 px-4 py-3 text-sm" style="color: var(--destructive);">
 				<TriangleAlert size={18} class="mt-0.5 shrink-0" />
-				<span><strong>Safety Circuit Active:</strong> Generation global sedang dihentikan oleh safety control. Semua agen AI diblokir sementara.</span>
+				<span><strong>Safety Circuit Active:</strong>{tr("Generation global sedang dihentikan oleh safety control. Semua agen AI diblokir sementara.")}</span>
 			</div>
 		{/if}
 		{#each summary?.alerts ?? [] as alert (alert)}
@@ -132,41 +132,39 @@
 					<div class="flex items-center justify-between">
 						<span class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Users size={18} /> Pengguna</span>
 						<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
-							{fmtNum(eco.partner_users)} Mitra
-						</span>
+							{fmtNum(eco.partner_users)} {tr("Mitra")} </span>
 					</div>
 					<p class="mt-2.5 text-3xl font-bold tracking-tight">{fmtNum(eco.total_users)}</p>
 					<div class="mt-auto flex items-center justify-between pt-2">
-						<span class="text-xs text-muted-foreground">{fmtNum(eco.client_users)} Klien terdaftar</span>
-						<a class="text-xs" style="color: var(--primary);" href="/admin/users">Lihat →</a>
+						<span class="text-xs text-muted-foreground">{fmtNum(eco.client_users)} {tr("Klien terdaftar")}</span>
+						<a class="text-xs" style="color: var(--primary);" href="/admin/users">{tr("Lihat →")}</a>
 					</div>
 				</div>
 
 				<div class="app-card flex min-h-[124px] flex-col p-5">
 					<div class="flex items-center justify-between">
-						<span class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Globe size={18} /> Katalog Media</span>
+						<span class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Globe size={18} />{tr("Katalog Media")}</span>
 						<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft); color: var(--success);">
-							{fmtNum(eco.active_media)} Aktif
-						</span>
+							{fmtNum(eco.active_media)} {tr("Aktif")} </span>
 					</div>
 					<p class="mt-2.5 text-3xl font-bold tracking-tight">{fmtNum(eco.total_media)}</p>
 					<div class="mt-auto flex items-center justify-between pt-2">
 						<span class="text-xs text-muted-foreground">{fmtNum(eco.total_media - eco.active_media)} Draft / Non-aktif</span>
-						<a class="text-xs" style="color: var(--primary);" href="/admin/media">Kelola →</a>
+						<a class="text-xs" style="color: var(--primary);" href="/admin/media">{tr("Kelola →")}</a>
 					</div>
 				</div>
 
 				<div class="app-card flex min-h-[124px] flex-col p-5">
 					<div class="flex items-center justify-between">
-						<span class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Newspaper size={18} /> Total Publikasi</span>
+						<span class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Newspaper size={18} />{tr("Total Publikasi")}</span>
 						<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
 							100% Live
 						</span>
 					</div>
 					<p class="mt-2.5 text-3xl font-bold tracking-tight">{fmtNum(eco.total_publications)}</p>
 					<div class="mt-auto flex items-center justify-between pt-2">
-						<span class="text-xs text-muted-foreground">{fmtNum(eco.published_publications)} Terbit di media partner</span>
-						<a class="text-xs" style="color: var(--primary);" href="/admin/publications">Riwayat →</a>
+						<span class="text-xs text-muted-foreground">{fmtNum(eco.published_publications)} {tr("Terbit di media partner")}</span>
+						<a class="text-xs" style="color: var(--primary);" href="/admin/publications">{tr("Riwayat →")}</a>
 					</div>
 				</div>
 
@@ -198,20 +196,18 @@
 				<div class="flex items-center justify-between">
 					<span class="flex items-center gap-2">
 						<Newspaper size={20} class="text-muted-foreground" />
-						<h2 class="text-base font-semibold">Publikasi Media Terkini</h2>
+						<h2 class="text-base font-semibold">{tr("Publikasi Media Terkini")}</h2>
 					</span>
-					<a class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" href="/admin/publications">Lihat Semua</a>
+					<a class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" href="/admin/publications">{tr("Lihat Semua")}</a>
 				</div>
-				<p class="mt-2 text-sm text-muted-foreground">
-					Rilis artikel terbaru yang berhasil didistribusikan ke jaringan media rekanan.
-				</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Rilis artikel terbaru yang berhasil didistribusikan ke jaringan media rekanan.")}</p>
 
 				{#if recentPubs.length > 0}
 					<div class="mt-3 overflow-x-auto">
 						<table class="w-full text-sm">
 							<thead>
 								<tr class="text-left text-xs text-muted-foreground">
-									<th class="py-2 pr-3 font-medium">Media / Brand</th>
+									<th class="py-2 pr-3 font-medium">{tr("Media / Brand")}</th>
 									<th class="py-2 pr-3 font-medium">Status</th>
 									<th class="py-2 text-right font-medium">Tautan</th>
 								</tr>
@@ -220,7 +216,7 @@
 								{#each recentPubs as pub (pub.id)}
 									<tr class="border-t">
 										<td class="py-2 pr-3">
-											<p class="font-medium">{pub.media_name || 'Media'}</p>
+											<p class="font-medium">{pub.media_name || tr('Media')}</p>
 											<p class="text-xs text-muted-foreground">
 												{pub.brand_name || 'Brand'} • {pub.published_at ? fmtDateTime(pub.published_at) : 'Baru'}
 											</p>
@@ -235,7 +231,7 @@
 										</td>
 										<td class="py-2 text-right">
 											{#if pub.published_url}
-												<a class="text-xs" style="color: var(--primary);" href={pub.published_url} target="_blank" rel="noopener noreferrer">Buka URL ↗</a>
+												<a class="text-xs" style="color: var(--primary);" href={pub.published_url} target="_blank" rel="noopener noreferrer">{tr("Buka URL ↗")}</a>
 											{:else}
 												<span class="text-xs text-muted-foreground">—</span>
 											{/if}
@@ -247,7 +243,7 @@
 					</div>
 				{:else}
 					<div class="mt-3 rounded-lg border border-dashed p-6 text-center">
-						<p class="text-sm text-muted-foreground">Belum ada publikasi artikel terbaru yang tercatat.</p>
+						<p class="text-sm text-muted-foreground">{tr("Belum ada publikasi artikel terbaru yang tercatat.")}</p>
 					</div>
 				{/if}
 			</div>
@@ -256,20 +252,18 @@
 				<div class="flex items-center justify-between">
 					<span class="flex items-center gap-2">
 						<Cpu size={20} class="text-muted-foreground" />
-						<h2 class="text-base font-semibold">Aktivitas Taut AI &amp; Gateway</h2>
+						<h2 class="text-base font-semibold">Aktivitas Taut AI & Gateway</h2>
 					</span>
-					<a class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" href="/admin/taut-agents">Detail Run</a>
+					<a class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" href="/admin/taut-agents">{tr("Detail Run")}</a>
 				</div>
-				<p class="mt-2 text-sm text-muted-foreground">
-					Riwayat pemanggilan agen pencocokan, sudut pandang, dan verifikasi otomatis.
-				</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Riwayat pemanggilan agen pencocokan, sudut pandang, dan verifikasi otomatis.")}</p>
 
 				{#if recentAgents.length > 0}
 					<div class="mt-3 overflow-x-auto">
 						<table class="w-full text-sm">
 							<thead>
 								<tr class="text-left text-xs text-muted-foreground">
-									<th class="py-2 pr-3 font-medium">Agent / Kampanye</th>
+									<th class="py-2 pr-3 font-medium">{tr("Agent / Kampanye")}</th>
 									<th class="py-2 pr-3 font-medium">Model</th>
 									<th class="py-2 pr-3 font-medium">Durasi</th>
 									<th class="py-2 text-right font-medium">Status</th>
@@ -280,7 +274,7 @@
 									<tr class="border-t">
 										<td class="py-2 pr-3">
 											<p class="font-medium capitalize">{tierLabel(run.agent)}</p>
-											<p class="text-xs text-muted-foreground">{run.campaign_name || 'Kampanye'}</p>
+											<p class="text-xs text-muted-foreground">{run.campaign_name || tr('Kampanye')}</p>
 										</td>
 										<td class="py-2 pr-3 text-xs text-muted-foreground">{shortModel(run.model)}</td>
 										<td class="py-2 pr-3 text-xs text-muted-foreground">{run.duration_ms ? `${Math.round(run.duration_ms / 1000)}s` : '—'}</td>
@@ -289,7 +283,7 @@
 												class="rounded-full px-2 py-0.5 text-[11px] font-medium"
 												style="background-color: {run.status === 'done' ? 'var(--success-soft)' : run.status === 'failed' ? 'var(--destructive-soft, #fdecee)' : 'var(--warning-soft)'}; color: {run.status === 'done' ? 'var(--success)' : run.status === 'failed' ? 'var(--destructive)' : 'var(--warning)'};"
 											>
-												{run.status === 'done' ? 'Selesai' : run.status === 'failed' ? 'Gagal' : run.status}
+												{run.status === 'done' ? tr('Selesai') : run.status === 'failed' ? tr('Gagal') : run.status}
 											</span>
 										</td>
 									</tr>
@@ -299,7 +293,7 @@
 					</div>
 				{:else}
 					<div class="mt-3 rounded-lg border border-dashed p-6 text-center">
-						<p class="text-sm text-muted-foreground">Belum ada aktivitas agen AI terbaru.</p>
+						<p class="text-sm text-muted-foreground">{tr("Belum ada aktivitas agen AI terbaru.")}</p>
 					</div>
 				{/if}
 			</div>
@@ -312,7 +306,7 @@
 					<Zap size={20} class="text-muted-foreground" />
 					<h3 class="text-base font-semibold">Kesehatan AI Engine</h3>
 				</span>
-				<p class="mt-2 text-sm text-muted-foreground">Infrastruktur provider LLM dan throughput panggilan 24 jam.</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Infrastruktur provider LLM dan throughput panggilan 24 jam.")}</p>
 
 				<div class="mt-3 flex flex-col">
 					<div class="flex items-center justify-between border-b py-1.5 text-sm">
@@ -344,17 +338,16 @@
 					</div>
 				</div>
 
-				<a class="app-btn app-btn-soft mt-4 w-full" href="/admin/ai">
-					Buka AI Gateway <ArrowRight size={14} />
+				<a class="app-btn app-btn-soft mt-4 w-full" href="/admin/ai">{tr("Buka AI Gateway")}<ArrowRight size={14} />
 				</a>
 			</div>
 
 			<div class="app-card flex flex-col p-5">
 				<span class="flex items-center gap-2">
 					<CircleCheck size={20} class="text-muted-foreground" />
-					<h3 class="text-base font-semibold">Background Worker &amp; Queue</h3>
+					<h3 class="text-base font-semibold">Background Worker & Queue</h3>
 				</span>
-				<p class="mt-2 text-sm text-muted-foreground">Pemantauan antrean tugas, batch konten, dan dead letter alert.</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Pemantauan antrean tugas, batch konten, dan dead letter alert.")}</p>
 
 				<div class="mt-3 flex flex-col">
 					<div class="flex items-center justify-between border-b py-1.5 text-sm">
@@ -368,17 +361,16 @@
 						</span>
 					</div>
 					<div class="flex items-center justify-between border-b py-1.5 text-sm">
-						<span class="text-muted-foreground">Status Scheduler</span>
-						<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft); color: var(--success);">Aktif (Cron Worker)</span>
+						<span class="text-muted-foreground">{tr("Status Scheduler")}</span>
+						<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft); color: var(--success);">{tr("Aktif (Cron Worker)")}</span>
 					</div>
 					<div class="flex items-center justify-between py-1.5 text-sm">
 						<span class="text-muted-foreground">Audit Log</span>
-						<a class="text-xs" style="color: var(--primary);" href="/admin/audit-log">Buka Log →</a>
+						<a class="text-xs" style="color: var(--primary);" href="/admin/audit-log">{tr("Buka Log →")}</a>
 					</div>
 				</div>
 
-				<a class="app-btn app-btn-soft mt-4 w-full" href="/admin/operations">
-					Kelola Antrean <ArrowRight size={14} />
+				<a class="app-btn app-btn-soft mt-4 w-full" href="/admin/operations">{tr("Kelola Antrean")}<ArrowRight size={14} />
 				</a>
 			</div>
 
@@ -387,14 +379,14 @@
 					<Globe size={20} class="text-muted-foreground" />
 					<h3 class="text-base font-semibold">Pusat Navigasi Penting</h3>
 				</span>
-				<p class="mt-2 text-sm text-muted-foreground">Pintasan cepat ke modul konfigurasi dan manajemen operasional utama.</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Pintasan cepat ke modul konfigurasi dan manajemen operasional utama.")}</p>
 
 				<div class="mt-3 flex flex-col gap-2">
 					{#each [
-						{ href: '/admin/revenue-shares', label: 'Markup Harga & Bagi Hasil' },
-						{ href: '/admin/konfigurasi', label: 'Pengaturan Platform & Integrasi' },
+						{ href: '/admin/revenue-shares', label: tr('Markup Harga & Bagi Hasil') },
+						{ href: '/admin/konfigurasi', label: tr('Pengaturan Platform & Integrasi') },
 						{ href: '/admin/media-summaries', label: 'Kesimpulan & Crawler Media' },
-						{ href: '/admin/taut-pintar', label: 'Kampanye Taut Pintar' }
+						{ href: '/admin/taut-pintar', label: tr('Kampanye Taut Pintar') }
 					] as link (link.href)}
 						<a
 							class="flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"

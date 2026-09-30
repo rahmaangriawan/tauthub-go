@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Lonceng notifikasi (klien / mitra / admin) — port notification-bell.tsx.
 	// `apiBase` prefix API ter-scope (`/v1/partner`, `/v1/brands/{id}` atau
 	// `/v1/platform/operations`); `fallbackBase` portal bila notifikasi tanpa
@@ -23,14 +25,29 @@
 	let {
 		apiBase,
 		fallbackBase,
-		readable = true
-	}: { apiBase: string; fallbackBase: string; readable?: boolean } = $props();
+		readable = true,
+		showAnnouncementTab = false,
+		// true: server menyaring kategori (klien/mitra). false: feed tak mendukung
+		// parameter kategori (lonceng admin) — penyaringan dilakukan di klien.
+		serverCategory = true
+	}: {
+		apiBase: string;
+		fallbackBase: string;
+		readable?: boolean;
+		showAnnouncementTab?: boolean;
+		serverCategory?: boolean;
+	} = $props();
 
 	let items = $state<Notification[]>([]);
 	let unread = $state(0);
+	// Badge lonceng = unread GLOBAL (semua kategori); `unread` di atas mengikuti
+	// tab yang sedang aktif.
+	let badgeUnread = $state(0);
 	let hasMore = $state(false);
 	let error = $state('');
 	let open = $state(false);
+	// Tab kategori (hanya saat showAnnouncementTab): "Umum" = selain pengumuman.
+	let category = $state<'general' | 'announcement'>('general');
 	let readIds = $state<Set<string>>(new Set());
 	let trigger = $state<HTMLButtonElement | null>(null);
 	let menu = $state<HTMLDivElement | null>(null);
@@ -77,6 +94,13 @@
 
 	async function load() {
 		try {
+			// Dengan tab kategori: badge di-poll dari hitungan global, daftar hanya
+			// di-refresh saat menu terbuka (mengikuti tab aktif).
+			if (showAnnouncementTab) {
+				await loadBadge();
+				if (open) await loadList();
+				return;
+			}
 			const res = await apiRequest(`${apiBase}/notifications?limit=20`, { cache: 'no-store' });
 			if (!res.ok) throw new Error(await readApiError(res, 'Gagal memuat notifikasi.'));
 			const data = (await res.json()) as { notifications: Notification[]; unread: number };
@@ -88,10 +112,57 @@
 			items = visible.slice(0, 3);
 			hasMore = visible.length > 3;
 			unread = readable ? data.unread : visible.length;
+			badgeUnread = unread;
 			error = '';
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : 'Gagal memuat notifikasi.';
 		}
+	}
+
+	// Hitungan badge GLOBAL (semua kategori) — satu query murah, dipakai poll
+	// 60 dtk dan saat lonceng dibuka.
+	async function loadBadge() {
+		try {
+			const badge = await apiRequest(`${apiBase}/notifications?limit=1`, { cache: 'no-store' });
+			if (!badge.ok) return;
+			const data = (await badge.json()) as { unread: number };
+			badgeUnread = data.unread ?? 0;
+		} catch {
+			// Badge tidak kritis: biarkan nilai terakhir.
+		}
+	}
+
+	// Daftar menu ter-filter per tab. Dengan serverCategory penyaringan lewat
+	// parameter kategori; tanpanya (feed admin) disaring di klien berdasarkan
+	// prefiks type announcement.*.
+	async function loadList() {
+		try {
+			const url = serverCategory
+				? `${apiBase}/notifications?limit=20&category=${category}`
+				: `${apiBase}/notifications?limit=20`;
+			const res = await apiRequest(url, { cache: 'no-store' });
+			if (!res.ok) throw new Error(await readApiError(res, 'Gagal memuat notifikasi.'));
+			const data = (await res.json()) as { notifications: Notification[]; unread: number };
+			const expired = data.notifications.filter((n) => !n.expired_at);
+			const currentRead = readable ? new Set<string>() : loadReadState();
+			let visible = expired.filter((n) => !currentRead.has(n.id));
+			if (!serverCategory) {
+				visible = visible.filter((n) => (category === 'announcement') === n.type.startsWith('announcement'));
+			}
+			readIds = currentRead;
+			items = visible.slice(0, 3);
+			hasMore = visible.length > 3;
+			unread = readable ? data.unread : visible.length;
+			error = '';
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : 'Gagal memuat notifikasi.';
+		}
+	}
+
+	function switchCategory(next: 'general' | 'announcement') {
+		if (category === next) return;
+		category = next;
+		void loadList();
 	}
 
 	$effect(() => {
@@ -105,9 +176,15 @@
 		if (!readable) saveReadState(ids);
 	}
 
-	async function markRead(id: string, link: string | null) {
+	async function markRead(id: string, link: string | null, type = '') {
+		// Pengumuman tidak punya deep link ke halaman lain — tujuannya halaman
+		// notifikasi portal masing-masing; feed admin membawa tautannya sendiri
+		// (halaman Kotak Pengumuman).
+		const target = type.startsWith('announcement')
+			? link || `${fallbackBase}/notifications`
+			: link;
 		await openNotificationLink({
-			link,
+			link: target,
 			fallbackLink: `${fallbackBase}/publications`,
 			push: (href) => goto(href),
 			markRead: async () => {
@@ -123,6 +200,7 @@
 					items = items.filter((n) => n.id !== id);
 				}
 				unread = Math.max(0, unread - 1);
+				badgeUnread = Math.max(0, badgeUnread - 1);
 			}
 		});
 	}
@@ -137,6 +215,9 @@
 			}
 			items = items.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() }));
 			unread = 0;
+			badgeUnread = 0;
+			// Tandai-semua menyapu semua kategori; muat ulang agar konsisten.
+			if (showAnnouncementTab) void load();
 		} else {
 			const next = new Set(readIds);
 			for (const n of items) next.add(n.id);
@@ -151,6 +232,15 @@
 		if (open) {
 			open = false;
 			return;
+		}
+		// Saat dibuka: daftar mengikuti tab aktif, dan badge di-refresh juga —
+		// tanpa ini, ping pengumuman baru tidak memunculkan angka merah sampai
+		// polling 60 dtk berjalan.
+		if (showAnnouncementTab) {
+			void loadList();
+			void loadBadge();
+		} else {
+			void load();
 		}
 		const rect = trigger?.getBoundingClientRect();
 		const width = Math.min(400, window.innerWidth - 32);
@@ -198,18 +288,18 @@
 	bind:this={trigger}
 	type="button"
 	class="notif-trigger"
-	aria-label={`Notifikasi${unread > 0 ? ` (${unread} belum dibaca)` : ''}`}
+	aria-label={`Notifikasi${badgeUnread > 0 ? ` (${badgeUnread} belum dibaca)` : ''}`}
 	aria-expanded={open}
 	onclick={toggle}
 >
-	<span class="notif-bell" class:notif-bell-unread={unread > 0}><Bell size={19} /></span>
-	{#if unread > 0}
-		<span class="notif-badge">{unread > 9 ? '9+' : unread}</span>
+	<span class="notif-bell" class:notif-bell-unread={badgeUnread > 0}><Bell size={19} /></span>
+	{#if badgeUnread > 0}
+		<span class="notif-badge">{badgeUnread > 9 ? '9+' : badgeUnread}</span>
 	{/if}
 </button>
 
 {#if open}
-	<button type="button" class="notif-backdrop" aria-label="Tutup notifikasi" onclick={() => (open = false)}
+	<button type="button" class="notif-backdrop" aria-label={tr("Tutup notifikasi")} onclick={() => (open = false)}
 	></button>
 	<div
 		bind:this={menu}
@@ -227,13 +317,19 @@
 				</button>
 			{/if}
 		</div>
+		{#if showAnnouncementTab}
+			<div class="notif-tabs" role="tablist" aria-label={tr('Kategori notifikasi')}>
+				<button class="notif-tab" class:notif-tab-active={category === 'general'} role="tab" aria-selected={category === 'general'} type="button" onclick={() => switchCategory('general')}>{tr('Umum')}</button>
+				<button class="notif-tab" class:notif-tab-active={category === 'announcement'} role="tab" aria-selected={category === 'announcement'} type="button" onclick={() => switchCategory('announcement')}>{tr('Pengumuman')}</button>
+			</div>
+		{/if}
 		<div class="notif-divider"></div>
 		{#if error}
 			<p class="notif-error"><TriangleAlert size={12} /> {error}</p>
 		{/if}
 		<div class="notif-list">
 			{#if items.length === 0 && !error}
-				<p class="notif-empty">Belum ada notifikasi.</p>
+				<p class="notif-empty">{tr("Belum ada notifikasi.")}</p>
 			{/if}
 			{#each items as notification (notification.id)}
 				<button
@@ -241,7 +337,7 @@
 					type="button"
 					onclick={() => {
 						open = false;
-						void markRead(notification.id, notification.link);
+						void markRead(notification.id, notification.link, notification.type);
 					}}
 				>
 					{#if !notification.read_at}<span class="notif-dot"></span>{/if}
@@ -259,7 +355,7 @@
 		</div>
 		{#if hasMore}
 			<div class="notif-footer">
-				<a href={`${fallbackBase}/notifications`} onclick={() => (open = false)}>Lihat semua →</a>
+				<a href={`${fallbackBase}/notifications`} onclick={() => (open = false)}>{tr("Lihat semua →")}</a>
 			</div>
 		{/if}
 	</div>
@@ -392,6 +488,31 @@
 	.notif-divider {
 		height: 1px;
 		background: var(--border);
+	}
+	/* Tab Umum / Pengumuman (klien & mitra). */
+	.notif-tabs {
+		display: flex;
+		gap: 4px;
+		padding: 0 12px 8px;
+	}
+	.notif-tab {
+		flex: 1;
+		border: none;
+		border-radius: 7px;
+		padding: 5px 8px;
+		background: transparent;
+		color: var(--muted-foreground);
+		font: inherit;
+		font-size: 12px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.notif-tab:hover {
+		background: var(--secondary, #eef2f8);
+	}
+	.notif-tab-active {
+		background: var(--secondary, #eef2f8);
+		color: var(--foreground);
 	}
 	.notif-error {
 		display: flex;

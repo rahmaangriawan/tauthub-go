@@ -236,8 +236,16 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			"   - JANGAN menanam link lain selain yang disediakan di atas."
 	}
 
-	anglePromptBlock := d.loadTautAnglePromptBlock(ctx, campaignID, mediaType)
+	// Angle pilihan klien adalah acuan tunggal: pakai instruksi dari brief Profiler
+	// bila ada, kalau tidak pakai prompt resmi angle yang dipilih klien di
+	// submission. Sebelumnya di sini ada blok "[ANGLE TERSEDIA — pilih satu]" yang
+	// hanya memuat 3 angle pertama menurut sort_order, sehingga AI bisa menulis
+	// dengan angle yang berbeda dari pilihan klien.
 	channelInstruction := d.loadTautChannelInstruction(ctx, campaignID, mediaType)
+	anglePromptBlock := ""
+	if channelInstruction == "" {
+		anglePromptBlock = d.loadTautChosenAnglePrompt(ctx, campaignID, mediaType)
+	}
 
 	var identity strings.Builder
 	identity.WriteString("[IDENTITAS MEDIA]\n   Nama: " + name + "\n   Tipe: " + mediaType)
@@ -801,24 +809,55 @@ func normalizeSpokespersons(v any) []map[string]any {
 	return out
 }
 
-// loadTautAnglePromptBlock: blok prompt angle aktif untuk writer.
-func (d *Deps) loadTautAnglePromptBlock(ctx context.Context, campaignID, mediaType string) string {
-	angles, err := d.queryRows(ctx, `
-		SELECT a.slug, a.name, a.description
-		FROM taut_content_angles a JOIN taut_media_channels c ON c.id = a.channel_id
-		WHERE a.active = TRUE AND c.slug = $1 ORDER BY a.sort_order LIMIT 3`, mediaType)
-	if err != nil || len(angles) == 0 {
+// loadTautChosenAnglePrompt: prompt resmi untuk angle yang benar-benar dipilih
+// klien pada jenis media ini.
+//
+// Dua langkah: submission Profiler menyimpan pilihan klien (`channels` jsonb,
+// [{channel, angle_slug}]), lalu slug itu dipetakan ke versi prompt aktif di Taut
+// Prompt Studio (`taut_content_angle_prompt_versions`). Ini juga jalur yang
+// membuat prompt per-angle yang diatur admin akhirnya sampai ke penulisan
+// artikel, bukan hanya ke The Profiler.
+//
+// Dipakai hanya sebagai cadangan saat brief Profiler belum ada, misalnya
+// kampanye jalur Kilat yang tidak menjalankan analisis Profiler.
+func (d *Deps) loadTautChosenAnglePrompt(ctx context.Context, campaignID, mediaType string) string {
+	sub, err := d.queryRow(ctx, `
+		SELECT channels
+		FROM taut_profiler_submissions
+		WHERE campaign_id = $1
+		ORDER BY revision DESC LIMIT 1`, campaignID)
+	if err != nil || sub == nil {
 		return ""
 	}
-	lines := []string{"[ANGLE TERSEDIA — pilih satu yang paling cocok]"}
-	for _, a := range angles {
-		line := "- " + a.strOr("name", "") + " (" + a.strOr("slug", "") + ")"
-		if desc := a.strOr("description", ""); desc != "" {
-			line += ": " + truncateString(desc, 200)
+	angleSlug := ""
+	for _, entry := range asSliceValue(sub.jsonField("channels")) {
+		ch := asMapValue(entry)
+		if ch == nil || mapGetString(ch, "channel", "") != mediaType {
+			continue
 		}
-		lines = append(lines, line)
+		if slug := mapGetString(ch, "angle_slug", ""); slug != "" {
+			angleSlug = slug
+			break
+		}
 	}
-	return strings.Join(lines, "\n")
+	if angleSlug == "" {
+		return ""
+	}
+	row, err := d.queryRow(ctx, `
+		SELECT v.prompt
+		FROM taut_content_angle_prompt_versions v
+		JOIN taut_content_angles a ON a.id = v.content_angle_id
+		JOIN taut_media_channels c ON c.id = a.channel_id
+		WHERE a.slug = $1 AND c.slug = $2 AND v.status = 'active'
+		ORDER BY v.version DESC LIMIT 1`, angleSlug, mediaType)
+	if err != nil || row == nil {
+		return ""
+	}
+	prompt := strings.TrimSpace(row.strOr("prompt", ""))
+	if prompt == "" {
+		return ""
+	}
+	return "[ANGLE PILIHAN KLIEN — " + mediaType + "/" + angleSlug + "]\n" + truncateString(prompt, 1500)
 }
 
 // securityGet: safeFetch GET dengan header (port safeFetch).

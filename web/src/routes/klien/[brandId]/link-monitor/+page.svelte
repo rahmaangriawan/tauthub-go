@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Pelacak 404 klien — port LinkMonitorSection (link-monitor-section.tsx).
 	// Struktur: header → 4 kartu statistik → kartu filter (cari + STATUS/MEDIA/
 	// TANGGAL + Reset) → notice → tabel 5 kolom (Artikel sortable, Media,
@@ -10,6 +12,7 @@
 		Link2Off, LoaderCircle, RotateCcw, Search, TriangleAlert, ClipboardList
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
+	import Tooltip from '$lib/components/tooltip.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -81,29 +84,29 @@
 				apiRequest(`${apiBase}/link-monitor?${params}`)
 			]);
 			if (sRes.ok) summary = (await sRes.json()) as Summary;
-			else error = await readApiError(sRes, 'Gagal memuat ringkasan pelacak.');
+			else error = await readApiError(sRes, tr('Gagal memuat ringkasan pelacak.'));
 			if (lRes.ok) {
 				const data = (await lRes.json()) as { publications?: Item[]; items?: Item[]; total?: number };
 				items = data.publications ?? data.items ?? [];
 				total = data.total ?? 0;
 			} else {
-				error = await readApiError(lRes, 'Gagal memuat daftar artikel.');
+				error = await readApiError(lRes, tr('Gagal memuat daftar artikel.'));
 			}
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : 'Gagal memuat data pelacak.';
+			error = reason instanceof Error ? reason.message : tr('Gagal memuat data pelacak.');
 		} finally {
 			loading = false;
 		}
 	}
 
 	// STATE_META — salinan persis link-monitor-section.tsx.
-	const STATE_META: Record<string, { label: string; text: string; bg: string; dot: string; hint: string }> = {
-		gone: { label: 'Hilang (404)', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)', hint: 'Artikel tidak ditemukan di URL-nya (404/410)' },
-		unreachable: { label: 'Tak terjangkau', text: 'var(--warning)', bg: 'var(--warning-soft)', dot: 'var(--warning)', hint: 'Situs menolak akses atau sedang bermasalah — belum tentu hilang' },
-		live: { label: 'Tayang', text: 'var(--success)', bg: 'var(--success-soft)', dot: 'var(--success)', hint: 'Artikel masih bisa diakses' },
-		no_url: { label: 'Belum ada URL', text: 'var(--muted-foreground)', bg: 'var(--muted)', dot: 'var(--muted-foreground)', hint: 'Belum ada URL terbit yang bisa dicek' }
-	};
-	const FALLBACK_META = { label: 'Belum dicek', text: 'var(--muted-foreground)', bg: 'var(--muted)', dot: 'var(--muted-foreground)', hint: 'Pemeriksaan belum pernah berjalan untuk artikel ini' };
+	const STATE_META: Record<string, { label: string; text: string; bg: string; dot: string; hint: string }> = $derived({
+		gone: { label: '404', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)', hint: tr('404 berarti halaman tidak ditemukan di alamatnya. Penyebab umum: artikel dihapus atau ditarik dari situs media, atau alamat artikelnya berubah. Tautan seperti ini bisa diajukan penggantiannya.') },
+		unreachable: { label: 'Tak terjangkau', text: 'var(--warning)', bg: 'var(--warning-soft)', dot: 'var(--warning)', hint: tr('Situs menolak akses atau sedang bermasalah — belum tentu hilang') },
+		live: { label: 'Tayang', text: 'var(--success)', bg: 'var(--success-soft)', dot: 'var(--success)', hint: tr('Artikel masih bisa diakses') },
+		no_url: { label: tr('Belum ada URL'), text: 'var(--muted-foreground)', bg: 'var(--muted)', dot: 'var(--muted-foreground)', hint: tr('Belum ada URL terbit yang bisa dicek') }
+	});
+	const FALLBACK_META = $derived({ label: tr('Belum dicek'), text: 'var(--muted-foreground)', bg: 'var(--muted)', dot: 'var(--muted-foreground)', hint: tr('Pemeriksaan belum pernah berjalan untuk artikel ini') });
 	function metaFor(state: string | null) {
 		if (!state) return FALLBACK_META;
 		const m = STATE_META[state];
@@ -120,25 +123,25 @@
 
 	/** formatRelativeTime — parity helper yang sama. */
 	function formatRelativeTime(date: string | null): string {
-		if (!date) return 'Belum pernah';
+		if (!date) return tr('Belum pernah');
 		const diff = Date.now() - new Date(date).getTime();
 		const min = Math.floor(diff / 60000);
 		const hour = Math.floor(diff / 3600000);
 		const day = Math.floor(diff / 86400000);
 		if (day === 0) {
-			if (min < 1) return 'Baru saja';
-			if (hour < 1) return `${min} menit yang lalu`;
-			return `${hour} jam yang lalu`;
+			if (min < 1) return tr('Baru saja');
+			if (hour < 1) return tr('{n} menit yang lalu').replace('{n}', String(min));
+			return tr('{n} jam yang lalu').replace('{n}', String(hour));
 		}
-		if (day === 1) return 'Kemarin';
-		if (day < 30) return `${day} hari yang lalu`;
+		if (day === 1) return tr('Kemarin');
+		if (day < 30) return tr('{n} hari yang lalu').replace('{n}', String(day));
 		const months = Math.floor(day / 30);
-		if (months < 12) return `${months} bulan yang lalu`;
-		return `${Math.floor(months / 12)} tahun yang lalu`;
+		if (months < 12) return tr('{n} bulan yang lalu').replace('{n}', String(months));
+		return tr('{n} tahun yang lalu').replace('{n}', String(Math.floor(months / 12)));
 	}
 
 	const fmtDateTime = (v: string | null) =>
-		v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : 'Belum pernah';
+		v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : tr('Belum pernah');
 
 	/** Normalisasi URL thumbnail: origin upload lama → path relatif (parity). */
 	function thumbUrl(url: string | null | undefined): string | null {
@@ -195,10 +198,10 @@
 				method: 'POST',
 				body: JSON.stringify({ publicationId: item.id })
 			});
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal mengirim permintaan penggantian.'));
-			notice = 'Permintaan penggantian terkirim. Tim Tauthub akan menindaklanjuti.';
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengirim permintaan penggantian.')));
+			notice = tr('Permintaan penggantian terkirim. Tim Tauthub akan menindaklanjuti.');
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : 'Gagal mengirim permintaan penggantian.';
+			error = reason instanceof Error ? reason.message : tr('Gagal mengirim permintaan penggantian.');
 		} finally {
 			requestingId = null;
 		}
@@ -206,9 +209,9 @@
 
 	const statCards = $derived([
 		{ label: 'Artikel Dipantau', value: summary?.watched ?? 0, hint: 'Artikel tayang dalam masa garansi 12 bulan', icon: ClipboardList },
-		{ label: 'Tayang', value: summary?.live ?? 0, hint: 'Terverifikasi masih bisa diakses', icon: CircleCheck },
+		{ label: 'Tayang', value: summary?.live ?? 0, hint: tr('Terverifikasi masih bisa diakses'), icon: CircleCheck },
 		{ label: 'Hilang (404)', value: summary?.gone ?? 0, hint: 'URL-nya mengembalikan 404 atau 410', icon: Link2Off },
-		{ label: 'Tak Terjangkau', value: summary?.unreachable ?? 0, hint: 'Situs menolak akses atau sedang bermasalah', icon: TriangleAlert }
+		{ label: 'Tak Terjangkau', value: summary?.unreachable ?? 0, hint: tr('Situs menolak akses atau sedang bermasalah'), icon: TriangleAlert }
 	]);
 </script>
 
@@ -217,18 +220,15 @@
 <section>
 	<header>
 		<h1 class="text-2xl font-semibold tracking-tight">Pelacak 404</h1>
-		<p class="mt-1 text-sm text-muted-foreground">
-			Kami memeriksa berkala artikel Anda yang sudah tayang selama masa garansi 12 bulan.
-		</p>
+		<p class="mt-1 text-sm text-muted-foreground">{tr("Kami memeriksa berkala artikel Anda yang sudah tayang selama masa garansi 12 bulan.")}</p>
 	</header>
 
 	{#if loading && !summary}
 		<p class="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
-			<LoaderCircle size={16} class="animate-spin" /> Memuat Pelacak 404
-		</p>
+			<LoaderCircle size={16} class="animate-spin" />{tr("Memuat Pelacak 404")}</p>
 	{:else if error && !summary}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm font-medium">Halaman tidak dapat dimuat</p>
+			<p class="text-sm font-medium">{tr("Halaman tidak dapat dimuat")}</p>
 			<p class="mt-1 text-sm text-muted-foreground">{error}</p>
 			<button class="app-btn app-btn-soft mt-3" type="button" onclick={() => void load()}>Coba lagi</button>
 		</div>
@@ -258,7 +258,7 @@
 						<Search size={15} class="text-muted-foreground" />
 						<input
 							class="w-full bg-transparent text-sm outline-none"
-							placeholder="Cari artikel, media, atau URL…"
+							placeholder={tr("Cari artikel, media, atau URL…")}
 							bind:value={searchInput}
 							onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitSearch(); } }}
 						/>
@@ -273,11 +273,11 @@
 						onchange={applyFilters}
 						options={[
 							{ value: 'problematic', label: '• Yang bermasalah' },
-							{ value: 'all', label: 'Semua Status' },
-							{ value: 'gone', label: 'Hilang (404)' },
+							{ value: 'all', label: tr('Semua Status') },
+							{ value: 'gone', label: '404' },
 							{ value: 'unreachable', label: 'Tak terjangkau' },
 							{ value: 'live', label: 'Tayang' },
-							{ value: 'no_url', label: 'Belum ada URL' }
+							{ value: 'no_url', label: tr('Belum ada URL') }
 						]}
 					/>
 				</label>
@@ -286,11 +286,11 @@
 					<Select
 						bind:value={mediaFilter}
 						ariaLabel="Filter media"
-						placeholder="Semua Media"
+						placeholder={tr("Semua Media")}
 						minWidth={150}
 						onchange={applyFilters}
 						options={[
-							{ value: '', label: 'Semua Media' },
+							{ value: '', label: tr('Semua Media') },
 							...mediaOptions.map((m) => ({ value: m, label: m }))
 						]}
 					/>
@@ -300,11 +300,11 @@
 					<Select
 						bind:value={daysFilter}
 						ariaLabel="Filter tanggal"
-						placeholder="Semua Tanggal"
+						placeholder={tr("Semua Tanggal")}
 						minWidth={150}
 						onchange={applyFilters}
 						options={[
-							{ value: '', label: 'Semua Tanggal' },
+							{ value: '', label: tr('Semua Tanggal') },
 							{ value: '7', label: '7 Hari Terakhir' },
 							{ value: '30', label: '30 Hari Terakhir' },
 							{ value: '90', label: '3 Bulan Terakhir' }
@@ -331,11 +331,8 @@
 
 		{#if !loading && items.length === 0}
 			<div class="app-card mt-4 px-6 py-12 text-center">
-				<p class="font-medium">Tidak ada masalah pada artikel Anda</p>
-				<p class="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">
-					Semua artikel yang tayang dalam masa garansi 12 bulan terpantau masih bisa diakses. Halaman ini
-					akan menampilkan artikel begitu ada yang hilang atau tidak terjangkau.
-				</p>
+				<p class="font-medium">{tr("Tidak ada masalah pada artikel Anda")}</p>
+				<p class="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">{tr("Semua artikel yang tayang dalam masa garansi 12 bulan terpantau masih bisa diakses. Halaman ini akan menampilkan artikel begitu ada yang hilang atau tidak terjangkau.")}</p>
 			</div>
 		{:else}
 			<div class="app-card mt-4">
@@ -353,7 +350,7 @@
 										<span>Artikel</span><ArrowDownUp size={13} strokeWidth={2.4} />
 									</button>
 								</th>
-								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Media</th>
+								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">{tr("Media")}</th>
 								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Status</th>
 								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Terakhir Update</th>
 								<th class="px-5 py-3.5 text-right text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Aksi</th>
@@ -389,22 +386,30 @@
 											</div>
 										</div>
 									</td>
-									<td class="linkmon-cell px-5 py-4" data-label="Media">
+									<td class="linkmon-cell px-5 py-4" data-label={tr("Media")}>
 										<p class="font-medium">{item.media_name ?? '—'}</p>
 										<p class="text-xs text-muted-foreground">{mediaSubtitle(item.media_type, item.media_category)}</p>
 									</td>
 									<td class="linkmon-cell px-5 py-4" data-label="Status">
-										<span
-											class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold"
-											style="color: {meta.text}; background-color: {meta.bg}; border: 1px solid color-mix(in srgb, {meta.dot} 20%, transparent);"
-											title={meta.hint}
-										>
-											<span class="h-1.5 w-1.5 rounded-full" style="background-color: {meta.dot};"></span>
-											<span>{meta.label}</span>
-										</span>
+										{#snippet statusBadge()}
+											<span
+												class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold"
+												style="color: {meta.text}; background-color: {meta.bg}; border: 1px solid color-mix(in srgb, {meta.dot} 20%, transparent);"
+											>
+												<span class="h-1.5 w-1.5 rounded-full" style="background-color: {meta.dot};"></span>
+												<span>{meta.label}</span>
+											</span>
+										{/snippet}
+										{#if meta.hint}
+											<Tooltip content={meta.hint} label={meta.hint} maxWidth={300}>
+												{@render statusBadge()}
+											</Tooltip>
+										{:else}
+											{@render statusBadge()}
+										{/if}
 									</td>
 									<td class="linkmon-cell px-5 py-4" data-label="Terakhir diperiksa">
-										<p>{item.last_checked_at ? fmtDateTime(item.last_checked_at) : 'Belum pernah'}</p>
+										<p>{item.last_checked_at ? fmtDateTime(item.last_checked_at) : tr('Belum pernah')}</p>
 										<p class="text-xs text-muted-foreground">{formatRelativeTime(item.last_checked_at)}</p>
 									</td>
 									<td class="linkmon-cell px-5 py-4 text-right" data-label="Aksi">
@@ -429,11 +434,11 @@
 
 				<!-- Footer paginasi -->
 				<div class="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3">
-					<span class="text-sm text-muted-foreground">Menampilkan {startItem}–{endItem} dari {total} artikel</span>
+					<span class="text-sm text-muted-foreground">{tr("Menampilkan")} {startItem}–{endItem} {tr("dari")} {total} artikel</span>
 					<div class="flex flex-wrap items-center gap-2">
 						<Select
 							value={String(pageSize)}
-							ariaLabel="Jumlah per halaman"
+							ariaLabel={tr("Jumlah per halaman")}
 							minWidth={150}
 							align="end"
 							onchange={(v) => { pageSize = Number(v); offset = 0; void load(); }}

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Error monitor platform — port app/admin/errors/page.tsx.
 	// Agregasi 5 kategori error (batch variant, publikasi, job distribusi, RSS, queue generic)
 	// dengan pencarian server-side debounce 300ms.
@@ -54,19 +56,19 @@
 		updated_at: string;
 	};
 
-	const ADAPTER_CODE_LABELS: Record<string, string> = {
+	const ADAPTER_CODE_LABELS: Record<string, string> = $derived({
 		adapter_unreachable: 'Adapter tidak terjangkau',
 		adapter_rejected: 'Adapter menolak payload',
 		adapter_error: 'Error adapter (5xx)',
 		adapter_not_accepted: 'Adapter tidak accept',
 		partner_not_ready: 'Partner belum siap',
-		no_connection: 'Tidak ada koneksi',
+		no_connection: tr('Tidak ada koneksi'),
 		media_missing: 'Media tidak ditemukan',
 		document_missing: 'Artikel tidak ditemukan',
 		version_missing: 'Versi konten hilang',
 		connection_secret_missing: 'Koneksi tidak aktif',
-		publish_failed: 'Publikasi gagal'
-	};
+		publish_failed: tr('Publikasi gagal')
+	});
 
 	const PAGE_SIZE = 20;
 
@@ -123,7 +125,7 @@
 			queue = body.queue ?? [];
 			variantBatches = body.variant_batches ?? [];
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		} finally {
 			loading = false;
 		}
@@ -152,7 +154,7 @@
 <section>
 	<PageHeader
 		title="Error Reports"
-		description="Agregasi error distribusi, queue, dan verifikasi RSS. Klien/mitra tidak melihat halaman ini — Tauthub yang bertindak."
+		description={tr("Agregasi error distribusi, queue, dan verifikasi RSS. Klien/mitra tidak melihat halaman ini — Tauthub yang bertindak.")}
 	>
 		<Badge tone={total > 0 ? 'danger' : 'success'} label="{total} error" />
 	</PageHeader>
@@ -160,8 +162,8 @@
 	<div class="mt-4 flex flex-wrap items-center gap-2">
 		<input
 			class="app-input w-full max-w-md"
-			placeholder="Cari brand, media, artikel, atau pesan error…"
-			aria-label="Cari error"
+			placeholder={tr("Cari brand, media, artikel, atau pesan error…")}
+			aria-label={tr("Cari error")}
 			value={search}
 			oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)}
 		/>
@@ -174,12 +176,12 @@
 
 	{#if error.includes('Akses platform')}
 		<div class="app-card mt-4 px-4 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke laporan error.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke laporan error.")}</p>
 		</div>
 	{:else}
 		<div class="mt-4 grid gap-3 sm:grid-cols-5">
 			{#each [
-				{ label: 'Publikasi gagal', value: publications.length },
+				{ label: tr('Publikasi gagal'), value: publications.length },
 				{ label: 'Job distribusi gagal', value: jobs.length },
 				{ label: 'Batch variant gagal', value: variantBatches.length },
 				{ label: 'RSS gagal verifikasi', value: rss.length },
@@ -202,7 +204,7 @@
 							<th class="px-3 py-2 text-left font-medium">Brand</th>
 							<th class="px-3 py-2 text-left font-medium">Mode</th>
 							<th class="px-3 py-2 text-left font-medium">Varian</th>
-							<th class="px-3 py-2 text-left font-medium">Media gagal</th>
+							<th class="px-3 py-2 text-left font-medium">{tr("Media gagal")}</th>
 							<th class="px-3 py-2 text-left font-medium">Status</th>
 							<th class="px-3 py-2 text-left font-medium">Waktu</th>
 							<th class="px-3 py-2 text-left font-medium"></th>
@@ -220,7 +222,7 @@
 								<td class="px-3 py-2"><Badge tone={row.status === 'failed' ? 'danger' : 'warning'} label={row.status} /></td>
 								<td class="px-3 py-2 text-xs text-muted-foreground">{fmtDateTime(row.updated_at)}</td>
 								<td class="px-3 py-2 whitespace-nowrap">
-									<a href={`/admin/variants/${row.id}`} class="text-xs font-semibold" style="color: var(--accent-foreground);">Buka detail</a>
+									<a href={`/admin/variants/${row.id}`} class="text-xs font-semibold" style="color: var(--accent-foreground);">{tr("Buka detail")}</a>
 								</td>
 							</tr>
 						{/each}
@@ -228,21 +230,21 @@
 				</table>
 			</div>
 			{#if !loading && variantBatches.length === 0}
-				<p class="px-4 py-8 text-center text-sm text-muted-foreground">Tidak ada batch variant gagal.</p>
+				<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Tidak ada batch variant gagal.")}</p>
 			{/if}
 			<Pagination total={variantBatches.length} limit={PAGE_SIZE} offset={offsets.variant} onChange={(v) => setOffset('variant', v)} />
 		</div>
 
 		<!-- Publikasi gagal -->
 		<div class="app-card mt-4 p-4">
-			<h2 class="text-sm font-semibold">Publikasi gagal / retry</h2>
+			<h2 class="text-sm font-semibold">{tr("Publikasi gagal / retry")}</h2>
 			<div class="mt-2 overflow-x-auto">
 				<table class="w-full text-sm" style="min-width: 1080px;">
 					<thead>
 						<tr class="text-xs text-muted-foreground">
 							<th class="px-3 py-2 text-left font-medium">Artikel</th>
 							<th class="px-3 py-2 text-left font-medium">Brand</th>
-							<th class="px-3 py-2 text-left font-medium">Media</th>
+							<th class="px-3 py-2 text-left font-medium">{tr("Media")}</th>
 							<th class="px-3 py-2 text-left font-medium">Status</th>
 							<th class="px-3 py-2 text-left font-medium">Error</th>
 							<th class="px-3 py-2 text-left font-medium">Waktu</th>
@@ -268,7 +270,7 @@
 								</td>
 								<td class="px-3 py-2 text-xs text-muted-foreground">{fmtDateTime(row.updated_at)}</td>
 								<td class="px-3 py-2 whitespace-nowrap">
-									<a href={`/admin/publications/${row.id}`} class="text-xs font-semibold" style="color: var(--accent-foreground);">Buka detail</a>
+									<a href={`/admin/publications/${row.id}`} class="text-xs font-semibold" style="color: var(--accent-foreground);">{tr("Buka detail")}</a>
 								</td>
 							</tr>
 						{/each}
@@ -276,7 +278,7 @@
 				</table>
 			</div>
 			{#if !loading && publications.length === 0}
-				<p class="px-4 py-8 text-center text-sm text-muted-foreground">Tidak ada publikasi gagal.</p>
+				<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Tidak ada publikasi gagal.")}</p>
 			{/if}
 			<Pagination total={publications.length} limit={PAGE_SIZE} offset={offsets.publication} onChange={(v) => setOffset('publication', v)} />
 		</div>
@@ -289,7 +291,7 @@
 					<thead>
 						<tr class="text-xs text-muted-foreground">
 							<th class="px-3 py-2 text-left font-medium">Artikel</th>
-							<th class="px-3 py-2 text-left font-medium">Media</th>
+							<th class="px-3 py-2 text-left font-medium">{tr("Media")}</th>
 							<th class="px-3 py-2 text-left font-medium">Attempts</th>
 							<th class="px-3 py-2 text-left font-medium">Error</th>
 							<th class="px-3 py-2 text-left font-medium">Waktu</th>
@@ -315,7 +317,7 @@
 				</table>
 			</div>
 			{#if !loading && jobs.length === 0}
-				<p class="px-4 py-8 text-center text-sm text-muted-foreground">Tidak ada job distribusi gagal.</p>
+				<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Tidak ada job distribusi gagal.")}</p>
 			{/if}
 			<Pagination total={jobs.length} limit={PAGE_SIZE} offset={offsets.job} onChange={(v) => setOffset('job', v)} />
 		</div>
@@ -329,7 +331,7 @@
 						<tr class="text-xs text-muted-foreground">
 							<th class="px-3 py-2 text-left font-medium">Feed</th>
 							<th class="px-3 py-2 text-left font-medium">Partner</th>
-							<th class="px-3 py-2 text-left font-medium">Media</th>
+							<th class="px-3 py-2 text-left font-medium">{tr("Media")}</th>
 							<th class="px-3 py-2 text-left font-medium">Error</th>
 							<th class="px-3 py-2 text-left font-medium">Waktu</th>
 						</tr>
@@ -348,7 +350,7 @@
 				</table>
 			</div>
 			{#if !loading && rss.length === 0}
-				<p class="px-4 py-8 text-center text-sm text-muted-foreground">Tidak ada RSS gagal verifikasi.</p>
+				<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Tidak ada RSS gagal verifikasi.")}</p>
 			{/if}
 			<Pagination total={rss.length} limit={PAGE_SIZE} offset={offsets.rss} onChange={(v) => setOffset('rss', v)} />
 		</div>
@@ -379,7 +381,7 @@
 				</table>
 			</div>
 			{#if !loading && queue.length === 0}
-				<p class="px-4 py-8 text-center text-sm text-muted-foreground">Tidak ada queue gagal.</p>
+				<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Tidak ada queue gagal.")}</p>
 			{/if}
 			<Pagination total={queue.length} limit={PAGE_SIZE} offset={offsets.queue} onChange={(v) => setOffset('queue', v)} />
 		</div>

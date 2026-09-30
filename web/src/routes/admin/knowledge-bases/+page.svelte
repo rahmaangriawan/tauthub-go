@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Knowledge Base — aturan editorial & gaya penulisan yang diinjeksikan ke AI
 	// Engine saat content generation. Dikelola Admin, berversi, aktif/nonaktif.
 	// Port apps/web/src/app/admin/knowledge-bases/page.tsx.
@@ -444,7 +446,7 @@
 
 {#snippet kbActions(row: KbListItem)}
 	<div class="flex items-center gap-2">
-		<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" onclick={() => void openDetail(row.id)}>Kelola</button>
+		<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" onclick={() => void openDetail(row.id)}>{tr("Kelola")}</button>
 		{#if row.status === 'active'}
 			<button
 				class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
@@ -475,7 +477,7 @@
 			<input
 				class="app-input min-w-[160px] flex-1"
 				disabled={!editable}
-				placeholder="Judul rule"
+				placeholder={tr("Judul rule")}
 				value={rule.title}
 				oninput={(e) => patchRule(index, { title: e.currentTarget.value })}
 			/>
@@ -503,7 +505,7 @@
 			class="app-input w-full"
 			rows="3"
 			disabled={!editable}
-			placeholder="Instruksi rule (wajib, min 10 karakter)…"
+			placeholder={tr("Instruksi rule (wajib, min 10 karakter)…")}
 			value={rule.instruction}
 			oninput={(e) => patchRule(index, { instruction: e.currentTarget.value })}
 		></textarea>
@@ -514,19 +516,19 @@
 					class="app-input mt-1 w-full"
 					rows="2"
 					disabled={!editable}
-					placeholder="Contoh yang benar…"
+					placeholder={tr("Contoh yang benar…")}
 					value={rule.examples.join('\n---\n')}
 					oninput={(e) =>
 						patchRule(index, { examples: e.currentTarget.value.split('\n---\n').filter(Boolean) })}
 				></textarea>
 			</label>
 			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Contoh yang dihindari</span>
+				<span class="text-xs font-medium text-muted-foreground">{tr("Contoh yang dihindari")}</span>
 				<textarea
 					class="app-input mt-1 w-full"
 					rows="2"
 					disabled={!editable}
-					placeholder="Contoh yang dilarang…"
+					placeholder={tr("Contoh yang dilarang…")}
 					value={rule.forbidden_examples.join('\n---\n')}
 					oninput={(e) =>
 						patchRule(index, { forbidden_examples: e.currentTarget.value.split('\n---\n').filter(Boolean) })}
@@ -559,13 +561,12 @@
 <section>
 	<PageHeader
 		title={detail ? detail.name : 'Knowledge Base'}
-		description="Aturan editorial & gaya penulisan yang diinjeksi ke AI Engine saat content generation. Dikelola Admin, berversi, aktif/nonaktif."
+		description={tr("Aturan editorial & gaya penulisan yang diinjeksi ke AI Engine saat content generation. Dikelola Admin, berversi, aktif/nonaktif.")}
 	>
 		<Badge tone="accent" value={`${total} KB`} />
 		{#if !detail}
 			<button class="app-btn app-btn-primary" onclick={() => (createOpen = true)}>
-				<Plus size={16} />Buat Knowledge Base
-			</button>
+				<Plus size={16} />{tr("Buat Knowledge Base")}</button>
 		{/if}
 	</PageHeader>
 
@@ -576,8 +577,7 @@
 		<div class="mt-4">
 			<div class="mb-3 flex flex-wrap items-center gap-2">
 				<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" onclick={backToList}>
-					<ArrowLeft size={14} />Kembali
-				</button>
+					<ArrowLeft size={14} />{tr("Kembali")}</button>
 				<p class="text-lg font-bold">{detail.name}</p>
 				<Badge tone={detail.status === 'active' ? 'success' : 'neutral'} value={detail.status} />
 				<Badge tone="accent" label={`${detail.scope}${detail.scope_ref ? ` · ${detail.scope_ref}` : ''}`} />
@@ -631,7 +631,7 @@
 								}))}
 							/>
 							{#if selectedVersion?.status !== 'draft'}
-								<Badge tone="warning" label="Hanya versi draft yang bisa diedit — buat versi baru dulu." />
+								<Badge tone="warning" label={tr("Hanya versi draft yang bisa diedit — buat versi baru dulu.")} />
 							{/if}
 						</div>
 						<div class="flex gap-2">
@@ -640,7 +640,7 @@
 									class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
 									style="color: var(--success);"
 									disabled={editingRules}
-									onclick={saveRules}><Save size={14} />Simpan aturan</button
+									onclick={saveRules}><Save size={14} />{tr("Simpan aturan")}</button
 								>
 								<button
 									class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
@@ -659,10 +659,10 @@
 					</div>
 
 					{#if rulesLoading}
-						<p class="text-sm text-muted-foreground">Memuat aturan…</p>
+						<p class="text-sm text-muted-foreground">{tr("Memuat aturan…")}</p>
 					{:else if grouped.length === 0}
 						<div class="app-card px-6 py-10 text-center">
-							<p class="text-sm text-muted-foreground">Belum ada aturan pada versi ini.</p>
+							<p class="text-sm text-muted-foreground">{tr("Belum ada aturan pada versi ini.")}</p>
 						</div>
 					{:else}
 						<div class="max-h-[560px] overflow-auto">
@@ -694,7 +694,7 @@
 								<th class="px-4 py-2.5 text-left font-medium">Status</th>
 								<th class="px-4 py-2.5 text-left font-medium">Rules</th>
 								<th class="px-4 py-2.5 text-left font-medium">Catatan</th>
-								<th class="px-4 py-2.5 text-left font-medium">Dibuat</th>
+								<th class="px-4 py-2.5 text-left font-medium">{tr("Dibuat")}</th>
 								<th class="px-4 py-2.5 text-left font-medium"></th>
 							</tr>
 						</thead>
@@ -727,7 +727,7 @@
 												<button
 													class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
 													style="color: var(--destructive);"
-													onclick={() => void deleteDraft(v.id)}>Hapus</button
+													onclick={() => void deleteDraft(v.id)}>{tr("Hapus")}</button
 												>
 											{/if}
 										</div>
@@ -768,8 +768,8 @@
 				<Search size={15} class="text-muted-foreground" />
 				<input
 					class="w-full bg-transparent text-sm outline-none"
-					placeholder="Cari nama, kode, atau deskripsi…"
-					aria-label="Cari knowledge base"
+					placeholder={tr("Cari nama, kode, atau deskripsi…")}
+					aria-label={tr("Cari knowledge base")}
 					bind:value={search}
 				/>
 			</label>
@@ -793,7 +793,7 @@
 			rows={rows}
 			rowKey={(row: KbListItem) => row.id}
 			{loading}
-			empty="Belum ada knowledge base. Buat yang pertama."
+			empty={tr("Belum ada knowledge base. Buat yang pertama.")}
 			minWidth="1000px"
 		/>
 
@@ -810,21 +810,19 @@
 </section>
 
 {#if createOpen}
-	<Modal title="Buat Knowledge Base" maxWidth="md" onClose={() => (createOpen = false)}>
-		<p class="mb-3 text-sm text-muted-foreground">
-			Knowledge base baru dibuat dengan versi 1.0 aktif. Aturan diisi dari halaman kelola.
-		</p>
+	<Modal title={tr("Buat Knowledge Base")} maxWidth="md" onClose={() => (createOpen = false)}>
+		<p class="mb-3 text-sm text-muted-foreground">{tr("Knowledge base baru dibuat dengan versi 1.0 aktif. Aturan diisi dari halaman kelola.")}</p>
 		<form class="space-y-3" onsubmit={create}>
 			<label class="block">
 				<span class="text-xs font-bold text-muted-foreground">Kode (slug)</span>
 				<input class="app-input mt-1 w-full" required placeholder="journalistic-writing-id" bind:value={form.code} />
 			</label>
 			<label class="block">
-				<span class="text-xs font-bold text-muted-foreground">Nama</span>
+				<span class="text-xs font-bold text-muted-foreground">{tr("Nama")}</span>
 				<input
 					class="app-input mt-1 w-full"
 					required
-					placeholder="Standar Penulisan Jurnalistik Indonesia"
+					placeholder={tr("Standar Penulisan Jurnalistik Indonesia")}
 					bind:value={form.name}
 				/>
 			</label>
@@ -832,7 +830,7 @@
 				<span class="text-xs font-bold text-muted-foreground">Deskripsi</span>
 				<textarea
 					class="app-input mt-1 w-full"
-					placeholder="Tujuan &amp; cakupan knowledge base…"
+					placeholder={tr("Tujuan & cakupan knowledge base…")}
 					bind:value={form.description}
 				></textarea>
 			</label>
@@ -840,7 +838,7 @@
 				<p class="text-sm" style="color: var(--destructive);">{error}</p>
 			{/if}
 			<div class="flex justify-end gap-2 border-t pt-4">
-				<button type="button" class="app-btn app-btn-soft" onclick={() => (createOpen = false)}>Batal</button>
+				<button type="button" class="app-btn app-btn-soft" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
 				<button type="submit" class="app-btn app-btn-primary" disabled={busy}>{busy ? 'Menyimpan…' : 'Buat KB'}</button>
 			</div>
 		</form>

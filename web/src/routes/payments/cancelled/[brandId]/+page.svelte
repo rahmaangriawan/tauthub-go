@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port app/payments/cancelled/[brandId]/page.tsx
 	import { page } from '$app/state';
 	import PaymentReturn from '$lib/components/payment-return.svelte';
@@ -7,6 +9,6 @@
 	const brandId = $derived(page.params.brandId as string);
 </script>
 
-<PageTitle title="Pembayaran Dibatalkan" />
+<PageTitle title={tr("Pembayaran Dibatalkan")} />
 
 <PaymentReturn mode="cancelled" {brandId} />

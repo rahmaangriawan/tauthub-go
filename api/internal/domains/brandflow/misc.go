@@ -6,6 +6,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/imageconvert"
 )
 
 // misc.go: port analyze/[topic], assets, usage.
@@ -144,24 +145,33 @@ func (d *Deps) AssetsUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Gambar selalu dikonversi ke WebP di app lama. Konverter gambar belum
-	// tersedia di runtime Go → simpan byte asli dengan ekstensi aslinya dan
-	// kembalikan pesan konfigurasi bila format butuh konversi.
+	// Gambar selalu dikonversi ke WebP (parity app lama). PDF/TXT disimpan
+	// apa adanya. Konversi gagal → byte asli tetap disimpan (upload tidak
+	// pernah gagal hanya karena encoder), dengan ekstensi aslinya.
+	payload := buffer
 	ext := assetExtFor(mime, isImage, buffer)
+	if ext == "" && isImage {
+		if converted, ok := imageconvert.ConvertToWebP(buffer, mime); ok {
+			payload = converted
+			ext = "webp"
+		} else {
+			ext = imageExtFallback(mime, buffer)
+		}
+	}
 	if ext == "" {
 		httpx.Error(w, http.StatusUnprocessableEntity,
-			"Konversi gambar ke WebP belum tersedia di backend ini. Unggah berkas WebP/PDF/TXT, atau hubungi admin platform.")
+			"Tipe berkas tidak didukung. Izinkan: gambar (PNG/JPEG/WebP/GIF/BMP), PDF, atau TXT.")
 		return
 	}
 	filenameOut := newUUID() + "." + ext
-	if err := d.saveUpload(filenameOut, buffer); err != nil {
+	if err := d.saveUpload(filenameOut, payload); err != nil {
 		d.writeErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"url":        "/uploads/" + filenameOut,
 		"filename":   filename,
-		"size_bytes": len(buffer),
+		"size_bytes": len(payload),
 	})
 }
 
@@ -179,6 +189,32 @@ func assetExtFor(mime string, isImage bool, buffer []byte) string {
 		return "webp"
 	}
 	return ""
+}
+
+// imageExtFallback: ekstensi dari magic bytes saat konversi WebP tidak tersedia
+// (encoder gagal / gambar korup). Menjaga upload tetap berhasil.
+func imageExtFallback(mime string, buffer []byte) string {
+	switch {
+	case len(buffer) >= 8 && string(buffer[:8]) == "\x89PNG\r\n\x1a\n":
+		return "png"
+	case len(buffer) >= 3 && buffer[0] == 0xff && buffer[1] == 0xd8 && buffer[2] == 0xff:
+		return "jpg"
+	case len(buffer) >= 4 && string(buffer[:4]) == "GIF8":
+		return "gif"
+	case len(buffer) >= 2 && buffer[0] == 'B' && buffer[1] == 'M':
+		return "bmp"
+	}
+	switch mime {
+	case "image/png":
+		return "png"
+	case "image/jpeg", "image/jpg":
+		return "jpg"
+	case "image/gif":
+		return "gif"
+	case "image/bmp":
+		return "bmp"
+	}
+	return "webp"
 }
 
 // ---------- GET /v1/brands/{brandId}/usage ----------

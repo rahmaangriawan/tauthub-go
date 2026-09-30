@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Settlement — port app/admin/settlements/page.tsx: payout ke partner.
 	// Create meng-agregasi earnings pending dalam periode. Review withdraw:
 	// tolak wajib alasan, bayar + nomor referensi & bukti transfer, void.
@@ -125,7 +127,7 @@
 		error = '';
 		const value = Number(minimumWithdrawIdr);
 		if (!Number.isFinite(value) || value < 1) {
-			error = 'Saldo minimal harus angka positif.';
+			error = tr('Saldo minimal harus angka positif.');
 			configBusy = false;
 			return;
 		}
@@ -140,7 +142,7 @@
 		}
 		const data = await res.json();
 		minimumWithdrawIdr = data.minimum_withdraw_idr;
-		configNotice = 'Pengaturan penarikan dana berhasil disimpan.';
+		configNotice = tr('Pengaturan penarikan dana berhasil disimpan.');
 		configBusy = false;
 	}
 
@@ -262,17 +264,17 @@
 		description="Payout ke partner: create meng-agregasi earnings pending dalam periode dan menguncinya (Phase 6)."
 	>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{fmtNum(total)} settlement</span>
-		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><Wallet size={16} /> Buat settlement</button>
+		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><Wallet size={16} />{tr("Buat settlement")}</button>
 	</PageHeader>
 
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke settlement.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke settlement.")}</p>
 		</div>
 	{:else}
 		<div class="mt-4 flex flex-wrap items-center gap-2">
 			<label class="app-input flex min-w-[240px] flex-1 items-center gap-2 !py-1.5" style="max-width: 380px;">
-				<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari nama partner…" aria-label="Cari settlement" value={search} oninput={(e) => onSearch((e.currentTarget as HTMLInputElement).value)} />
+				<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama partner…")} aria-label={tr("Cari settlement")} value={search} oninput={(e) => onSearch((e.currentTarget as HTMLInputElement).value)} />
 			</label>
 			{#if debouncedSearch}
 				<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={clearSearch}>Bersihkan pencarian</button>
@@ -284,14 +286,12 @@
 		<div class="app-card mt-4 p-5">
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div class="min-w-[220px] flex-1">
-					<h2 class="text-sm font-semibold">Pengaturan Penarikan Dana</h2>
-					<p class="mt-1 text-sm text-muted-foreground">
-						Saldo minimal yang harus dimiliki Mitra untuk dapat mengajukan penarikan. Nilai ini ditampilkan di dashboard Mitra dan divalidasi di server.
-					</p>
+					<h2 class="text-sm font-semibold">{tr("Pengaturan Penarikan Dana")}</h2>
+					<p class="mt-1 text-sm text-muted-foreground">{tr("Saldo minimal yang harus dimiliki Mitra untuk dapat mengajukan penarikan. Nilai ini ditampilkan di dashboard Mitra dan divalidasi di server.")}</p>
 				</div>
 				<div class="flex flex-wrap items-end gap-2">
 					<label class="block">
-						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Saldo Minimal Penarikan (IDR)</span>
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Saldo Minimal Penarikan (IDR)")}</span>
 						<input
 							class="app-input !w-[200px]"
 							type="number"
@@ -302,7 +302,7 @@
 						/>
 					</label>
 					<button class="app-btn app-btn-primary" type="button" disabled={configBusy} onclick={() => void saveConfig()}>
-						{configBusy ? 'Menyimpan…' : 'Simpan Pengaturan'}
+						{configBusy ? 'Menyimpan…' : tr('Simpan Pengaturan')}
 					</button>
 				</div>
 			</div>
@@ -314,7 +314,7 @@
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">Partner</th>
 						<th class="px-4 py-2.5 font-medium">Periode</th>
-						<th class="px-4 py-2.5 font-medium">Total</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Total")}</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
 						<th class="px-4 py-2.5 font-medium">Dibayar</th>
 						<th class="px-4 py-2.5"></th>
@@ -372,7 +372,7 @@
 			{#if !loading && rows.length === 0}
 				<div class="flex flex-col items-center px-4 py-12 text-center">
 					<Wallet size={26} class="text-muted-foreground" />
-					<p class="mt-2 text-sm text-muted-foreground">Belum ada settlement.</p>
+					<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada settlement.")}</p>
 				</div>
 			{/if}
 			<div class="px-4 pb-4">
@@ -388,7 +388,7 @@
 </section>
 
 {#if createOpen}
-	<Modal title="Buat settlement" label="Buat settlement" maxWidth="lg" onClose={() => (createOpen = false)}>
+	<Modal title={tr("Buat settlement")} label={tr("Buat settlement")} maxWidth="lg" onClose={() => (createOpen = false)}>
 		<form class="flex flex-col gap-3" onsubmit={create}>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Partner</span>
@@ -398,7 +398,7 @@
 					value={form.partner_id}
 					onchange={(v) => (form.partner_id = v)}
 					options={[
-						{ value: '', label: 'Pilih partner' },
+						{ value: '', label: tr('Pilih partner') },
 						...partners.map((p) => ({ value: p.id, label: p.name ?? p.email }))
 					]}
 				/>
@@ -421,8 +421,8 @@
 				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{error}</div>
 			{/if}
 			<div class="mt-1 flex justify-end gap-2 border-t pt-4">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>Batal</button>
-				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Buat settlement'}</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Buat settlement')}</button>
 			</div>
 		</form>
 	</Modal>
@@ -431,14 +431,13 @@
 {#if rejectTarget}
 	<Modal title="Tolak Withdrawal" label="Tolak withdrawal" maxWidth="md" onClose={() => (rejectTarget = null)}>
 		<p class="text-sm text-muted-foreground">
-			Tolak penarikan <strong>{fmtRp(rejectTarget.total_amount)}</strong>? Saldo earnings akan dikembalikan ke mitra dan alasan ini terlihat olehnya.
-		</p>
+			Tolak penarikan <strong>{fmtRp(rejectTarget.total_amount)}</strong>{tr("? Saldo earnings akan dikembalikan ke mitra dan alasan ini terlihat olehnya.")}</p>
 		<label class="mt-3 block">
 			<span class="mb-1 block text-xs font-semibold text-muted-foreground">Alasan Penolakan *</span>
 			<textarea
 				class="app-input w-full"
 				rows={4}
-				placeholder="Contoh: Nominal tidak sesuai dengan saldo earnings, mohon ajukan ulang."
+				placeholder={tr("Contoh: Nominal tidak sesuai dengan saldo earnings, mohon ajukan ulang.")}
 				bind:value={rejectReason}
 			></textarea>
 		</label>
@@ -454,12 +453,11 @@
 {#if payTarget}
 	<Modal title="Konfirmasi Pembayaran" label="Konfirmasi pembayaran" maxWidth="md" onClose={() => (payTarget = null)}>
 		<p class="text-sm text-muted-foreground">
-			Tandai penarikan <strong>{fmtRp(payTarget.total_amount)}</strong> sebagai PAID setelah transfer manual selesai.
-		</p>
+			Tandai penarikan <strong>{fmtRp(payTarget.total_amount)}</strong>{tr("sebagai PAID setelah transfer manual selesai.")}</p>
 		<div class="mt-3 flex flex-col gap-3">
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Nomor Referensi Transfer (opsional)</span>
-				<input class="app-input w-full" placeholder="Contoh: BRIVA/1234567890" bind:value={payForm.payment_reference} />
+				<input class="app-input w-full" placeholder={tr("Contoh: BRIVA/1234567890")} bind:value={payForm.payment_reference} />
 			</label>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Bukti Pembayaran (opsional)</span>

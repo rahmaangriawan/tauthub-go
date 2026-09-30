@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
 // blogger.go: port lib/publish/blogger.ts + app/api/blogger/callback/route.ts —
@@ -340,7 +342,8 @@ type bloggerHTTPResult struct {
 }
 
 func bloggerDo(req *http.Request) (bloggerHTTPResult, error) {
-	client := &http.Client{Timeout: bloggerHTTPLimit}
+	// Klien dengan guard SSRF (private/loopback/metadata + batas redirect).
+	client := security.SafeClient(bloggerHTTPLimit)
 	resp, err := client.Do(req)
 	if err != nil {
 		return bloggerHTTPResult{}, err
@@ -474,7 +477,7 @@ func (d *Deps) BloggerCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg, cfgErr := d.loadGSCPlatformConfig(r)
 	if cfgErr != nil || cfg.ClientID == "" || cfg.ClientSecret == "" {
-		redirectErr("Konfigurasi Google OAuth belum diatur.")
+		redirectErr("Konfigurasi integrasi Google belum siap. Hubungi admin Tauthub.")
 		return
 	}
 	mediaID := oauth.strOr("media_id", "")

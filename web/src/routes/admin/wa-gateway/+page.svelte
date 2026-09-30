@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// WA Gateway — port app/admin/wa-gateway/page.tsx.
 	// Tab: Template WA (per event, dengan pratinjau variabel), Setup API (token Fonnte),
 	// dan Monitoring (ringkasan + per event + riwayat pengiriman + detail).
@@ -63,22 +65,22 @@
 		days: number;
 	};
 
-	const PERIOD_OPTIONS = [
+	const PERIOD_OPTIONS = $derived([
 		{ value: '1', label: '24 jam terakhir' },
 		{ value: '7', label: '7 hari terakhir' },
 		{ value: '30', label: '30 hari terakhir' },
 		{ value: '0', label: 'Seluruh riwayat' }
-	];
+	]);
 	const STATUS_TONE: Record<string, 'success' | 'danger' | 'neutral'> = {
 		sent: 'success',
 		failed: 'danger',
 		queued: 'neutral'
 	};
-	const STATUS_LABEL: Record<string, string> = {
+	const STATUS_LABEL: Record<string, string> = $derived({
 		sent: 'Terkirim',
-		failed: 'Gagal',
-		queued: 'Menunggu'
-	};
+		failed: tr('Gagal'),
+		queued: tr('Menunggu')
+	});
 
 	let tab = $state<'templates' | 'setup' | 'monitoring'>('templates');
 	let loading = $state(true);
@@ -115,7 +117,7 @@
 			setupEnabled = Boolean(config?.enabled);
 			if (tplRes.ok) templates = (await tplRes.json()).items ?? [];
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		}
 	}
 
@@ -182,7 +184,7 @@
 				tplMsg = { text: await readApiError(res, 'Permintaan platform gagal.'), ok: false };
 				return;
 			}
-			tplMsg = { text: 'Template dikembalikan ke default.', ok: true };
+			tplMsg = { text: tr('Template dikembalikan ke default.'), ok: true };
 			editing = null;
 			await load();
 		} finally {
@@ -254,6 +256,12 @@
 	let monStatus = $state('');
 	let monEvent = $state('');
 	let monSearch = $state('');
+	// Pencarian live ala app lama: 300 ms setelah berhenti mengetik.
+	let monSearchTimer: ReturnType<typeof setTimeout> | null = null;
+	function onMonitorSearchInput() {
+		if (monSearchTimer) clearTimeout(monSearchTimer);
+		monSearchTimer = setTimeout(() => changeMonitorFilter(() => {}), 300);
+	}
 	let monDays = $state('7');
 	let monPage = $state(1);
 	let detail = $state<DeliveryItem | null>(null);
@@ -274,7 +282,7 @@
 			}
 			monitor = await res.json();
 		} catch {
-			monitorError = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			monitorError = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		} finally {
 			monitorLoading = false;
 			monitorLoaded = true;
@@ -298,14 +306,14 @@
 <section>
 	<PageHeader
 		title="WA Gateway"
-		description="Notifikasi WhatsApp untuk mitra dan klien lewat Fonnte: atur template pesan per event dan koneksi API-nya."
+		description={tr("Notifikasi WhatsApp untuk mitra dan klien lewat Fonnte: atur template pesan per event dan koneksi API-nya.")}
 	/>
 
 	<Feedback {loading} {error} loadingText="Memuat WA Gateway…" />
 
 	{#if !config && error.includes('Akses platform')}
 		<div class="app-card mt-4 px-4 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke pengaturan WA Gateway.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke pengaturan WA Gateway.")}</p>
 		</div>
 	{:else}
 		<div class="mt-4 flex flex-wrap gap-2">
@@ -318,21 +326,18 @@
 		{#if tab === 'templates'}
 			<div class="mt-3 space-y-3">
 				{#if templates.length === 0}
-					<p class="app-card px-4 py-12 text-center text-sm text-muted-foreground">Belum ada event yang dipetakan ke WhatsApp.</p>
+					<p class="app-card px-4 py-12 text-center text-sm text-muted-foreground">{tr("Belum ada event yang dipetakan ke WhatsApp.")}</p>
 				{:else}
 					{#if tplMsg.text}
 						<div class="app-card px-4 py-2.5 text-sm" style="color: {tplMsg.ok ? 'var(--success)' : 'var(--destructive)'};">{tplMsg.text}</div>
 					{/if}
-					<div class="app-card px-4 py-2.5 text-xs" style="color: var(--muted-foreground);">
-						Variabel yang bisa dipakai: <strong>{'{nama}'}</strong> nama penerima, <strong>{'{judul}'}</strong> judul artikel/domain,
+					<div class="app-card px-4 py-2.5 text-xs" style="color: var(--muted-foreground);">{tr("Variabel yang bisa dipakai:")}<strong>{'{nama}'}</strong> nama penerima, <strong>{'{judul}'}</strong> judul artikel/domain,
 						<strong>{'{status}'}</strong> keterangan/alasan, <strong>{'{jumlah}'}</strong> nominal rupiah,
 						<strong>{'{link}'}</strong> tautan dashboard.
 					</div>
 					<div class="app-card px-4 py-2.5 text-xs" style="color: var(--accent-foreground);">
-						Event publikasi dikirim ke <strong>mitra dan klien</strong>, masing-masing dengan tautan ke portalnya sendiri
-						(mitra ke <strong>/mitra/…/publications</strong>, klien ke <strong>/klien/…/publications</strong>) yang langsung
-						membuka detail artikel. Event media, pencairan, dan fee referral hanya relevan untuk mitra.
-					</div>
+						Event publikasi dikirim ke <strong>{tr("mitra dan klien")}</strong>, masing-masing dengan tautan ke portalnya sendiri
+						(mitra ke <strong>/mitra/…/publications</strong>, klien ke <strong>/klien/…/publications</strong>{tr(") yang langsung membuka detail artikel. Event media, pencairan, dan fee referral hanya relevan untuk mitra.")}</div>
 
 					{#each templates as t (t.event)}
 						<div class="app-card p-4">
@@ -343,21 +348,21 @@
 								</div>
 								<div class="flex items-center gap-2">
 									{#if t.customized}<Badge tone="accent" label="Dikustom" />{/if}
-									<Badge tone={t.enabled ? 'success' : 'neutral'} label={t.enabled ? 'Aktif' : 'Nonaktif'} />
+									<Badge tone={t.enabled ? 'success' : 'neutral'} label={t.enabled ? tr('Aktif') : tr('Nonaktif')} />
 									<input type="checkbox" checked={t.enabled} disabled={tplBusy} onchange={() => void toggleTemplate(t)} aria-label="Aktifkan template" />
 								</div>
 							</div>
 
 							{#if editing === t.event}
 								<div class="mt-2 space-y-2">
-									<textarea class="app-input w-full" rows="5" placeholder="Tulis isi pesan WhatsApp…" bind:value={draft}></textarea>
+									<textarea class="app-input w-full" rows="5" placeholder={tr("Tulis isi pesan WhatsApp…")} bind:value={draft}></textarea>
 									<p class="text-xs text-muted-foreground">Pratinjau hasil render:</p>
 									<div class="whitespace-pre-wrap rounded-lg px-3 py-2 text-xs" style="background-color: var(--secondary);">{renderPreview(draft)}</div>
 									<div class="flex flex-wrap justify-end gap-2">
-										<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => (editing = null)}>Batal</button>
+										<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => (editing = null)}>{tr("Batal")}</button>
 										<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={tplBusy} onclick={() => void resetTemplate(t)}>Reset ke default</button>
 										<button class="app-btn app-btn-primary !min-h-7 !px-2.5 !text-xs" type="button" disabled={tplBusy} onclick={() => void saveTemplate(t.event, t.enabled, draft)}>
-											<Save size={12} /> {tplBusy ? 'Menyimpan…' : 'Simpan'}
+											<Save size={12} /> {tplBusy ? 'Menyimpan…' : tr('Simpan')}
 										</button>
 									</div>
 								</div>
@@ -381,27 +386,27 @@
 				<div class="app-card p-4">
 					<div class="flex flex-wrap items-center gap-2">
 						<h2 class="text-base font-semibold">Koneksi Fonnte</h2>
-						<Badge tone={config?.configured ? 'success' : 'warning'} label={config?.configured ? 'Token tersimpan' : 'Belum dikonfigurasi'} />
-						<Badge tone={config?.enabled ? 'success' : 'neutral'} label={config?.enabled ? 'Aktif' : 'Nonaktif'} />
+						<Badge tone={config?.configured ? 'success' : 'warning'} label={config?.configured ? 'Token tersimpan' : tr('Belum dikonfigurasi')} />
+						<Badge tone={config?.enabled ? 'success' : 'neutral'} label={config?.enabled ? tr('Aktif') : tr('Nonaktif')} />
 					</div>
 					<form class="mt-3 space-y-3" onsubmit={saveSetup}>
 						<label class="block">
 							<span class="text-sm font-medium">Token Fonnte</span>
 							<span class="block text-xs text-muted-foreground">
-								{config?.token_hint ? `Tersimpan: ${config?.token_hint}. Kosongkan bila tidak diubah.` : 'Ambil dari dashboard Fonnte → Device → Token.'}
+								{config?.token_hint ? `Tersimpan: ${config?.token_hint}. Kosongkan bila tidak diubah.` : tr('Ambil dari dashboard Fonnte → Device → Token.')}
 							</span>
-							<input class="app-input mt-1 w-full" type="password" placeholder={config?.configured ? 'Kosongkan jika tidak diubah' : 'Masukkan token device Fonnte'} bind:value={setupToken} />
+							<input class="app-input mt-1 w-full" type="password" placeholder={config?.configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan token device Fonnte'} bind:value={setupToken} />
 						</label>
 						<label class="block">
-							<span class="text-sm font-medium">Nama pengirim</span>
-							<span class="block text-xs text-muted-foreground">Opsional. Muncul sebagai identitas bila device mendukung.</span>
-							<input class="app-input mt-1 w-full" placeholder="mis. Tauthub" bind:value={setupSenderName} />
+							<span class="text-sm font-medium">{tr("Nama pengirim")}</span>
+							<span class="block text-xs text-muted-foreground">{tr("Opsional. Muncul sebagai identitas bila device mendukung.")}</span>
+							<input class="app-input mt-1 w-full" placeholder={tr("mis. Tauthub")} bind:value={setupSenderName} />
 						</label>
-						<p class="text-xs text-muted-foreground">Kode negara otomatis “62” — nomor 08xx dikonversi ke 628xx saat pengiriman.</p>
+						<p class="text-xs text-muted-foreground">{tr("Kode negara otomatis “62” — nomor 08xx dikonversi ke 628xx saat pengiriman.")}</p>
 						<div class="flex flex-wrap items-center justify-between gap-3">
 							<div>
 								<p class="text-sm font-medium">Aktifkan pengiriman WA</p>
-								<p class="text-xs text-muted-foreground">Bila nonaktif, tidak ada pesan yang dikirim walau template aktif.</p>
+								<p class="text-xs text-muted-foreground">{tr("Bila nonaktif, tidak ada pesan yang dikirim walau template aktif.")}</p>
 							</div>
 							<input type="checkbox" bind:checked={setupEnabled} />
 						</div>
@@ -409,7 +414,7 @@
 							<p class="text-sm" style="color: {setupMsg.ok ? 'var(--success)' : 'var(--destructive)'};">{setupMsg.text}</p>
 						{/if}
 						<div class="flex justify-end">
-							<button class="app-btn app-btn-primary" type="submit" disabled={setupBusy}><Save size={14} /> {setupBusy ? 'Menyimpan…' : 'Simpan konfigurasi'}</button>
+							<button class="app-btn app-btn-primary" type="submit" disabled={setupBusy}><Save size={14} /> {setupBusy ? 'Menyimpan…' : tr('Simpan konfigurasi')}</button>
 						</div>
 					</form>
 				</div>
@@ -419,9 +424,7 @@
 						<Zap size={16} />
 						<h2 class="text-base font-semibold">Test Koneksi</h2>
 					</div>
-					<p class="mt-1 text-xs text-muted-foreground">
-						Mengecek status device dan sisa kuota Fonnte. Isi nomor di bawah bila ingin sekalian mengirim pesan uji.
-					</p>
+					<p class="mt-1 text-xs text-muted-foreground">{tr("Mengecek status device dan sisa kuota Fonnte. Isi nomor di bawah bila ingin sekalian mengirim pesan uji.")}</p>
 					<label class="mt-3 block">
 						<span class="text-sm font-medium">Nomor tujuan uji (opsional)</span>
 						<input class="app-input mt-1 w-full" placeholder="08123456789" bind:value={testTarget} />
@@ -445,7 +448,7 @@
 							</div>
 							<div class="mt-2 space-y-1 text-sm">
 								{#if device.device}<p>Device: <strong>{device.device}</strong></p>{/if}
-								{#if device.name}<p>Nama: {device.name}</p>{/if}
+								{#if device.name}<p>{tr("Nama:")} {device.name}</p>{/if}
 								{#if device.package}<p>Paket: {device.package}</p>{/if}
 								{#if device.quota}<p>Sisa kuota: <strong>{device.quota}</strong> pesan</p>{/if}
 								{#if device.expired}<p>Berlaku sampai: {device.expired}</p>{/if}
@@ -463,10 +466,10 @@
 
 				<div class="flex flex-wrap gap-3">
 					{#each [
-						{ label: 'Total', value: monitor?.summary.total ?? 0 },
+						{ label: tr('Total'), value: monitor?.summary.total ?? 0 },
 						{ label: 'Terkirim', value: monitor?.summary.sent ?? 0 },
-						{ label: 'Gagal', value: monitor?.summary.failed ?? 0 },
-						{ label: 'Menunggu', value: monitor?.summary.queued ?? 0 },
+						{ label: tr('Gagal'), value: monitor?.summary.failed ?? 0 },
+						{ label: tr('Menunggu'), value: monitor?.summary.queued ?? 0 },
 						{ label: 'Tingkat sukses', value: monitor?.summary.success_rate == null ? '—' : `${monitor.summary.success_rate}%` }
 					] as s (s.label)}
 						<div class="app-card min-w-[130px] flex-1 p-3">
@@ -475,15 +478,13 @@
 						</div>
 					{/each}
 				</div>
-				<p class="text-xs text-muted-foreground">
-					Tingkat sukses dihitung dari pesan yang sudah selesai (terkirim + gagal); pesan yang masih menunggu belum punya hasil.
-				</p>
+				<p class="text-xs text-muted-foreground">{tr("Tingkat sukses dihitung dari pesan yang sudah selesai (terkirim + gagal); pesan yang masih menunggu belum punya hasil.")}</p>
 
 				<div class="flex flex-wrap items-end gap-3">
 					<label class="block min-w-[165px]">
 						<span class="text-xs text-muted-foreground">Periode</span>
 						<Select
-							ariaLabel="Periode"
+							ariaLabel="Filter periode"
 							minWidth={180}
 							value={monDays}
 							onchange={(v) => changeMonitorFilter(() => (monDays = v))}
@@ -493,27 +494,27 @@
 					<label class="block min-w-[165px]">
 						<span class="text-xs text-muted-foreground">Status</span>
 						<Select
-							ariaLabel="Status"
+							ariaLabel="Filter status"
 							minWidth={180}
 							value={monStatus}
 							onchange={(v) => changeMonitorFilter(() => (monStatus = v))}
 							options={[
-								{ value: '', label: 'Semua status' },
+								{ value: '', label: tr('Semua status') },
 								{ value: 'sent', label: 'Terkirim' },
-								{ value: 'failed', label: 'Gagal' },
-								{ value: 'queued', label: 'Menunggu' }
+								{ value: 'failed', label: tr('Gagal') },
+								{ value: 'queued', label: tr('Menunggu') }
 							]}
 						/>
 					</label>
 					<label class="block min-w-[200px]">
 						<span class="text-xs text-muted-foreground">Event</span>
 						<Select
-							ariaLabel="Event"
+							ariaLabel="Filter event"
 							minWidth={200}
 							value={monEvent}
 							onchange={(v) => changeMonitorFilter(() => (monEvent = v))}
 							options={[
-								{ value: '', label: 'Semua event' },
+								{ value: '', label: tr('Semua event') },
 								...(monitor?.by_event ?? []).map((ev) => ({ value: ev.event, label: ev.label })),
 								...(monEvent && !(monitor?.by_event ?? []).some((ev) => ev.event === monEvent)
 									? [{ value: monEvent, label: monEvent }]
@@ -522,8 +523,8 @@
 						/>
 					</label>
 					<label class="block min-w-[220px] flex-1">
-						<span class="text-xs text-muted-foreground">Cari</span>
-						<input class="app-input mt-1 w-full" placeholder="Nomor tujuan, isi pesan, atau error" bind:value={monSearch} onchange={() => changeMonitorFilter(() => {})} />
+						<span class="text-xs text-muted-foreground">{tr("Cari")}</span>
+						<input class="app-input mt-1 w-full" placeholder={tr("Nomor tujuan, isi pesan, atau error")} bind:value={monSearch} oninput={onMonitorSearchInput} />
 					</label>
 					<button class="app-btn app-btn-soft" type="button" disabled={monitorLoading} onclick={() => void loadMonitor()}><RefreshCw size={14} /> Muat ulang</button>
 				</div>
@@ -550,9 +551,9 @@
 								<thead>
 									<tr class="text-xs text-muted-foreground">
 										<th class="px-3 py-2 text-left font-medium">Event</th>
-										<th class="px-3 py-2 text-left font-medium">Total</th>
+										<th class="px-3 py-2 text-left font-medium">{tr("Total")}</th>
 										<th class="px-3 py-2 text-left font-medium">Terkirim</th>
-										<th class="px-3 py-2 text-left font-medium">Gagal</th>
+										<th class="px-3 py-2 text-left font-medium">{tr("Gagal")}</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -572,12 +573,12 @@
 
 				<div class="app-card p-4">
 					<div class="flex flex-wrap items-center justify-between gap-3">
-						<h3 class="text-sm font-medium">Riwayat pengiriman</h3>
+						<h3 class="text-sm font-medium">{tr("Riwayat pengiriman")}</h3>
 						<span class="text-xs text-muted-foreground">{monitor?.total_filtered ?? 0} entri</span>
 					</div>
 
 					{#if !monitor || monitor.items.length === 0}
-						<p class="mt-3 text-sm text-muted-foreground">{monitorLoading ? 'Memuat…' : 'Belum ada pengiriman pada filter ini.'}</p>
+						<p class="mt-3 text-sm text-muted-foreground">{monitorLoading ? tr('Memuat…') : tr('Belum ada pengiriman pada filter ini.')}</p>
 					{:else}
 						<div class="mt-2 overflow-x-auto">
 							<table class="w-full text-sm" style="min-width: 900px;">
@@ -625,13 +626,13 @@
 </section>
 
 {#if detail}
-	<Modal title="Detail pengiriman" label="Detail pengiriman WA" maxWidth="xl" onClose={() => (detail = null)}>
+	<Modal title={tr("Detail pengiriman")} label={tr("Detail pengiriman WA")} maxWidth="xl" onClose={() => (detail = null)}>
 		<div class="space-y-3">
 			<p class="text-sm text-muted-foreground">{detail.label} · {detail.target}</p>
 			<div class="flex flex-wrap items-center gap-3">
 				<Badge tone={STATUS_TONE[detail.status] ?? 'neutral'} label={STATUS_LABEL[detail.status] ?? detail.status} />
 				<span class="text-xs text-muted-foreground">Percobaan: {detail.attempts}</span>
-				<span class="text-xs text-muted-foreground">Dibuat: {fmtDateTime(detail.created_at)}</span>
+				<span class="text-xs text-muted-foreground">{tr("Dibuat:")} {fmtDateTime(detail.created_at)}</span>
 				{#if detail.sent_at}<span class="text-xs text-muted-foreground">Terkirim: {fmtDateTime(detail.sent_at)}</span>{/if}
 			</div>
 			{#if detail.reference_id}<p class="text-xs text-muted-foreground">Referensi: {detail.reference_id}</p>{/if}
@@ -646,7 +647,7 @@
 			</div>
 		</div>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (detail = null)}>Tutup</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (detail = null)}>{tr("Tutup")}</button>
 		{/snippet}
 	</Modal>
 {/if}

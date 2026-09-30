@@ -12,6 +12,7 @@ import (
 
 	contentengine "github.com/rahmaangriawan/tauthub-go/internal/content"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
 // Port v1/brands/[brandId]/documents/* (fase 4): list, create-from-job,
@@ -204,15 +205,15 @@ func (d *Deps) DocumentUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	documentID := chiParam(r, "documentId")
 	var body struct {
-		HTML          *string `json:"html"`
-		Content       *string `json:"content"`
-		ContentFormat *string `json:"content_format"`
-		ChangeNote    *string `json:"change_note"`
-		BaseVersion   *int    `json:"base_version"`
-		Slug          *string `json:"slug"`
-		MetaTitle     *string `json:"meta_title"`
+		HTML            *string `json:"html"`
+		Content         *string `json:"content"`
+		ContentFormat   *string `json:"content_format"`
+		ChangeNote      *string `json:"change_note"`
+		BaseVersion     *int    `json:"base_version"`
+		Slug            *string `json:"slug"`
+		MetaTitle       *string `json:"meta_title"`
 		MetaDescription *string `json:"meta_description"`
-		Title         *string `json:"title"`
+		Title           *string `json:"title"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid Input")
@@ -227,6 +228,17 @@ func (d *Deps) DocumentUpdate(w http.ResponseWriter, r *http.Request) {
 	if content == "" || len(content) > 2_000_000 {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid Input")
 		return
+	}
+	// Netralkan konstruk berbahaya (script, event handler, iframe non-embed
+	// tepercaya, skema javascript:/data:) SEBELUM disimpan. Artikel normal tidak
+	// berubah sama sekali — sanitizer punya jalur cepat yang mengembalikan string
+	// apa adanya bila tak ada penanda berbahaya.
+	if safe, changed := security.SanitizeArticleHTML(content); changed {
+		content = safe
+		_, _ = d.Pool.Exec(r.Context(), `
+			INSERT INTO audit_logs (id, brand_id, actor_user_id, action, target_type, target_id)
+			VALUES (gen_random_uuid(), $1, $2, 'content.html_sanitized', 'content_document', $3)`,
+			brandRow.ID, user.ID, documentID)
 	}
 
 	var currentVersion int

@@ -216,7 +216,7 @@ func sendGa4Event(ctx context.Context, measurementID, apiSecret string, mapping 
 		return rErr
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, hErr := http.DefaultClient.Do(req)
+	resp, hErr := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if hErr != nil {
 		return hErr
 	}

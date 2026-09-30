@@ -1,12 +1,19 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Step pill Taut Pintar — penanda posisi user di alur 4 agent.
-	// Port agent-steps.tsx; versi portal ke utility bar tidak bisa dipakai di
-	// sini (bar dimiliki +layout), jadi pill dirender inline di kepala halaman.
+	// Port agent-steps.tsx: sama seperti app lama, pil DIPINDAHKAN ke sisi kiri
+	// utility bar (app lama memakai createPortal ke `utilityBar > div:first-child`;
+	// Svelte tidak punya portal, jadi node-nya dipindahkan ke elemen anchor yang
+	// dibagikan layout lewat getToolbarSlot). Di luar layout klien — atau sebelum
+	// bar ter-mount — pil tetap tampil inline sebagai fallback.
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Check } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
-	import { AGENT_STEPS, AGENT_STEP_ROUTES, MANUAL_PROFILER_REASON } from './_shared';
+	import { getToolbarSlot } from '$lib/components/toolbar-slot.svelte';
+	import { ensureCampaignStep, furthestStep, noteReachedStep, statusStep } from '$lib/agent-steps.svelte';
+	import { AGENT_STEPS, AGENT_STEP_ROUTES } from './_shared';
 
 	let {
 		current,
@@ -26,8 +33,19 @@
 	const campaignId = $derived(page.params.id as string);
 	const base = $derived(`/klien/${getBrandUrlId() || brandId}/taut-pintar/${campaignId}`);
 
-	const steps = $derived(extra === 'ringkasan' ? [...AGENT_STEPS, 'Ringkasan'] : [...AGENT_STEPS]);
-	const cur = $derived(extra === 'ringkasan' ? steps.length : current);
+	// Langkah saat ini dihitung TANPA membaca panjang daftar pil, supaya tidak
+	// terjadi lingkaran dependensi: halaman Ringkasan selalu langkah kelima.
+	const cur = $derived(extra === 'ringkasan' ? AGENT_STEPS.length + 1 : current);
+
+	// Catat langkah terjauh yang sudah dicapai, dan kenali tahap kampanye dari
+	// statusnya. Status dipakai supaya pil Ringkasan tetap tersedia dari halaman
+	// lain setelah kampanye selesai — termasuk setelah halaman dimuat ulang.
+	$effect(() => {
+		noteReachedStep(campaignId, cur);
+		void ensureCampaignStep(brandId, campaignId);
+	});
+	const maxReached = $derived(Math.max(cur, furthestStep(campaignId), statusStep(campaignId)));
+	const steps = $derived(maxReached > AGENT_STEPS.length ? [...AGENT_STEPS, 'Ringkasan'] : [...AGENT_STEPS]);
 
 	function pillClass(n: number, locked: boolean, clickable: boolean): string {
 		const active = n === cur;
@@ -42,16 +60,35 @@
 		return parts.join(' ');
 	}
 
-	const clickable = (n: number, locked: boolean) => n <= cur && !locked;
+	const clickable = (n: number, locked: boolean) => n <= maxReached && !locked;
 
 	function select(n: number, locked: boolean) {
 		if (!clickable(n, locked)) return;
 		const slug = AGENT_STEP_ROUTES[n - 1];
 		if (slug) void goto(`${base}/${slug}`);
 	}
+
+	const toolbarSlot = getToolbarSlot();
+
+	/** Action: pindahkan node ke slot utility bar selama slot-nya tersedia. */
+	function portalToToolbar(node: HTMLElement) {
+		const stop = $effect.root(() => {
+			$effect(() => {
+				const target = toolbarSlot?.el ?? null;
+				if (!target) return;
+				if (node.parentElement !== target) target.appendChild(node);
+			});
+		});
+		return {
+			destroy() {
+				stop();
+				node.remove();
+			}
+		};
+	}
 </script>
 
-<ol class="taut-steps" aria-label="Tahapan Taut Pintar">
+<ol class="taut-steps" aria-label="Tahapan Taut Pintar" use:portalToToolbar>
 	{#each steps as label, i (label)}
 		{@const n = i + 1}
 		{@const locked = Boolean(lockedSteps?.includes(n))}
@@ -78,7 +115,7 @@
 				<span class={cls} aria-current={n === cur ? 'step' : undefined} aria-disabled={locked || undefined} title={tip}>
 					<span class="taut-step-num" aria-hidden="true">
 						<!-- Langkah yang di-bypass tidak pernah selesai — tampilkan nomornya,
-						     bukan centang, supaya tidak terbaca "sudah dikerjakan". -->
+						     bukan centang, supaya tidak terbaca tr("sudah dikerjakan"). -->
 						{#if n < cur && !locked}<Check size={13} strokeWidth={3} />{:else}{n}{/if}
 					</span>
 					<span class="taut-step-label">{label}</span>
@@ -88,15 +125,12 @@
 	{/each}
 </ol>
 
-{#if lockedSteps?.includes(1) && extra !== 'ringkasan'}
-	<p class="mt-2 text-[11px] text-muted-foreground">{MANUAL_PROFILER_REASON}</p>
-{/if}
-
 <style>
 	.taut-steps {
 		display: flex;
 		align-items: center;
-		justify-content: flex-end;
+		justify-content: flex-start;
+		width: fit-content;
 		gap: 8px;
 		flex-wrap: wrap;
 		list-style: none;

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Shell authentication split-screen (brief §1, §3) — panel kiri marketing,
 	// panel kanan form. Panel kiri murni dekoratif/penjelas dan disembunyikan di
 	// mobile (logo dipindah ke atas form).
@@ -16,14 +18,11 @@
 		</a>
 
 		<div class="auth-marketing-body">
-			<p class="auth-eyebrow">Distribusi konten &amp; PR multi-brand</p>
+			<p class="auth-eyebrow">{tr("Distribusi konten & PR multi-brand")}</p>
 			<h1 class="auth-headline">
-				Dari brief sampai artikel<br />terbit di media mitra.
+				{tr("Dari brief sampai artikel")} <br />{tr("terbit di media mitra.")}
 			</h1>
-			<p class="auth-lede">
-				AI bantu susun strategi dan drafnya, Anda yang review dan memutuskan. Kelola semua brand
-				Anda dari satu dasbor.
-			</p>
+			<p class="auth-lede">{tr("AI bantu susun strategi dan drafnya, Anda yang review dan memutuskan. Kelola semua brand Anda dari satu dasbor.")}</p>
 		</div>
 
 		<p class="auth-caption">Grounded writing. Human-reviewed.</p>

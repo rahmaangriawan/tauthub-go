@@ -1,6 +1,7 @@
 package partner
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -142,15 +143,19 @@ func (d *Deps) platformSeoAPIKey(r *http.Request, column string) (string, *Partn
 	row, err := d.queryRow(r.Context(),
 		"SELECT "+column+" FROM platform_seo_config WHERE id = 'default' LIMIT 1")
 	if err != nil {
-		return "", &PartnerError{http.StatusConflict, "RapidAPI SEO belum dikonfigurasi oleh Admin."}
+		slog.Error("[seo] gagal membaca platform_seo_config", "column", column, "err", err)
+		return "", &PartnerError{http.StatusConflict, "Konfigurasi integrasi SEO belum siap. Hubungi admin Tauthub."}
 	}
 	sealed := row.strOr(column, "")
 	if sealed == "" {
-		return "", &PartnerError{http.StatusConflict, "RapidAPI SEO belum dikonfigurasi oleh Admin."}
+		slog.Error("[seo] API key belum dikonfigurasi", "source", "platform_seo_config", "column", column)
+		return "", &PartnerError{http.StatusConflict, "Konfigurasi integrasi SEO belum siap. Hubungi admin Tauthub."}
 	}
 	plain, err := d.unsealT2(sealed)
 	if err != nil {
-		return "", &PartnerError{http.StatusConflict, "RapidAPI SEO key tidak dapat dibuka. Perbarui konfigurasi Admin."}
+		slog.Error("[seo] API key tersimpan gagal di-unseal (APP_SECRET berubah?)",
+			"source", "platform_seo_config", "column", column, "err", err)
+		return "", &PartnerError{http.StatusConflict, "Kredensial tersimpan tidak dapat dibuka. Hubungi admin Tauthub untuk menyimpan ulang."}
 	}
 	return plain, nil
 }
@@ -170,7 +175,8 @@ func (d *Deps) fetchSeoMetrics(r *http.Request, domain, apiKey string) (map[stri
 	if status < 200 || status >= 300 {
 		switch status {
 		case 401, 403:
-			return nil, &PartnerError{http.StatusServiceUnavailable, "Autentikasi provider SEO gagal. Perbarui RapidAPI key."}
+			slog.Error("[seo] provider menolak API key", "status", status)
+			return nil, &PartnerError{http.StatusServiceUnavailable, "Konfigurasi integrasi SEO bermasalah. Hubungi admin Tauthub."}
 		case 429:
 			return nil, &PartnerError{http.StatusServiceUnavailable, "Provider SEO sedang rate-limited. Coba lagi nanti."}
 		case 404:
@@ -528,14 +534,18 @@ func (d *Deps) pageSpeedAPIKey(r *http.Request) (string, *PartnerError) {
 		if sealed != "" {
 			if plain, err := d.unsealT2(sealed); err == nil && plain != "" {
 				return plain, nil
+			} else if err != nil {
+				slog.Error("[pagespeed] API key tersimpan gagal di-unseal (APP_SECRET berubah?)",
+					"source", "platform_pagespeed_config", "err", err)
 			}
 		}
 	}
 	if envKey := strings.TrimSpace(envValue("GOOGLE_PAGESPEED_API_KEY")); envKey != "" {
 		return envKey, nil
 	}
+	slog.Error("[pagespeed] API key belum dikonfigurasi", "source", "platform_pagespeed_config")
 	return "", &PartnerError{http.StatusServiceUnavailable,
-		"API Pagespeed belum dikonfigurasi. Hubungi admin untuk mengatur API key di Konfigurasi → API Pagespeed."}
+		"Konfigurasi integrasi Pagespeed belum siap. Hubungi admin Tauthub."}
 }
 
 func categoryScore(categories map[string]any, key string) any {
@@ -678,13 +688,41 @@ func (d *Deps) GSC(w http.ResponseWriter, r *http.Request) {
 	allProperties := []map[string]any{}
 	allSnapshots := []map[string]any{}
 	connected := false
+	// Properti + snapshot seluruh koneksi diambil sekaligus lalu dikelompokkan
+	// (sebelumnya 2 query per koneksi). Error tetap diabaikan seperti semula:
+	// data pendukung di halaman ini best-effort.
+	connIDs := make([]string, 0, len(connections))
 	for _, conn := range connections {
-		props, _ := d.queryRows(r.Context(),
-			"SELECT id, site_url, permission_level, connection_id FROM gsc_properties WHERE connection_id = $1 ORDER BY site_url ASC",
-			conn.raw("id"))
-		snapshots, _ := d.queryRows(r.Context(), `
-			SELECT s.* FROM gsc_snapshots s WHERE s.property_id IN (SELECT id FROM gsc_properties WHERE connection_id = $1)
-			ORDER BY s.fetched_at DESC LIMIT 10`, conn.raw("id"))
+		connIDs = append(connIDs, conn.strOr("id", ""))
+	}
+	propsByConn := map[string][]rowMap{}
+	propRows, _ := d.queryRows(r.Context(),
+		"SELECT id, site_url, permission_level, connection_id FROM gsc_properties WHERE connection_id = ANY($1) ORDER BY site_url ASC",
+		connIDs)
+	for _, p := range propRows {
+		key := p.strOr("connection_id", "")
+		propsByConn[key] = append(propsByConn[key], p)
+	}
+	// Batas 10 snapshot per koneksi dipertahankan (dulu LIMIT 10 per query).
+	snapsByConn := map[string][]rowMap{}
+	snapRows, _ := d.queryRows(r.Context(), `
+		SELECT s.*, pr.connection_id AS snap_connection_id
+		FROM gsc_snapshots s
+		JOIN gsc_properties pr ON pr.id = s.property_id
+		WHERE pr.connection_id = ANY($1)
+		ORDER BY s.fetched_at DESC`, connIDs)
+	for _, s := range snapRows {
+		key := s.strOr("snap_connection_id", "")
+		if len(snapsByConn[key]) >= 10 {
+			continue
+		}
+		// Kolom bantu pengelompokan dibuang supaya bentuk payload tidak berubah.
+		delete(s, "snap_connection_id")
+		snapsByConn[key] = append(snapsByConn[key], s)
+	}
+	for _, conn := range connections {
+		props := propsByConn[conn.strOr("id", "")]
+		snapshots := snapsByConn[conn.strOr("id", "")]
 		propItems := make([]map[string]any, 0, len(props))
 		for _, p := range props {
 			item := map[string]any{
@@ -775,18 +813,31 @@ func (d *Deps) loadGSCPlatformConfig(r *http.Request) (gscConfig, *PartnerError)
 	if cfg.RedirectURI == "" {
 		base := strings.TrimRight(strings.TrimSpace(d.Cfg.PublicAppURL), "/")
 		if base == "" {
+			slog.Error("[gsc] redirect_uri kosong dan PublicAppURL tidak diatur",
+				"source", "platform_gsc_config", "missing", "redirect_uri")
 			return gscConfig{}, &PartnerError{http.StatusServiceUnavailable,
-				"Konfigurasi Google OAuth belum diatur Admin. Hubungi Admin untuk mengisi Client ID/Secret di /admin/integrations (tab GSC)."}
+				"Konfigurasi integrasi Google belum siap. Hubungi admin Tauthub."}
 		}
 		cfg.RedirectURI = base + "/api/gsc/callback"
 	}
 	if decryptFailed {
+		slog.Error("[gsc] sealed_client_secret gagal di-unseal (APP_SECRET berubah?)",
+			"source", "platform_gsc_config", "config_error", "secret_decrypt_failed")
 		return gscConfig{}, &PartnerError{http.StatusServiceUnavailable,
-			"Secret GSC tersimpan tidak dapat di-decrypt (kemungkinan APP_SECRET berubah). Admin perlu menyimpan ulang Client Secret di /admin/integrations (tab GSC)."}
+			"Kredensial tersimpan tidak dapat dibuka. Hubungi admin Tauthub untuk menyimpan ulang."}
 	}
 	if cfg.ClientID == "" || cfg.ClientSecret == "" {
+		missing := []string{}
+		if cfg.ClientID == "" {
+			missing = append(missing, "client_id")
+		}
+		if cfg.ClientSecret == "" {
+			missing = append(missing, "client_secret")
+		}
+		slog.Error("[gsc] konfigurasi Google OAuth belum lengkap",
+			"source", "platform_gsc_config", "missing", strings.Join(missing, ","))
 		return gscConfig{}, &PartnerError{http.StatusServiceUnavailable,
-			"Konfigurasi Google OAuth belum lengkap: Client Secret belum tersimpan. Hubungi Admin untuk mengisi di /admin/integrations (tab GSC)."}
+			"Konfigurasi integrasi Google belum siap. Hubungi admin Tauthub."}
 	}
 	return cfg, nil
 }
@@ -870,13 +921,16 @@ func (d *Deps) GSCSnapshots(w http.ResponseWriter, r *http.Request) {
 	}
 	refreshToken, unsealErr := d.unsealT2(conn.strOr("sealed_refresh_token", ""))
 	if unsealErr != nil {
+		slog.Error("[gsc] refresh token mitra gagal di-unseal (APP_SECRET berubah?)",
+			"partner_id", partner.ID, "err", unsealErr)
 		_ = d.exec(r.Context(), "UPDATE gsc_connections SET status = 'error', updated_at = NOW() WHERE id = $1", conn.raw("id"))
-		httpx.Error(w, http.StatusInternalServerError, "Gagal membuka credential. Silakan hubungkan ulang.")
+		httpx.Error(w, http.StatusInternalServerError,
+			"Kredensial tersimpan tidak dapat dibuka. Hubungkan ulang Google Search Console atau hubungi admin Tauthub.")
 		return
 	}
 	cfg, cfgErr := d.loadGSCPlatformConfig(r)
 	if cfgErr != nil {
-		httpx.Error(w, cfgErr.Status, "Konfigurasi OAuth belum diatur.")
+		httpx.Error(w, cfgErr.Status, cfgErr.Message)
 		return
 	}
 	accessToken, refreshErr := d.refreshGSCToken(r, refreshToken, cfg.ClientID, cfg.ClientSecret)
@@ -1349,7 +1403,7 @@ func (d *Deps) testWordPress(r *http.Request, baseURL, username, secret string) 
 	target := wpURL(baseURL, "wp/v2/users/me?context=edit")
 	resp, err := wpRequest(r.Context(), target, http.MethodGet, wpHeaders(username, secret), "", 20*time.Second)
 	if err != nil {
-		return map[string]any{"status": "error", "message": truncateRunes(err.Error(), 500)}
+		return map[string]any{"status": "error", "message": truncateRunes(describeWordPressNetErr(err, target), 500)}
 	}
 	if resp.status < 200 || resp.status >= 300 {
 		return map[string]any{"status": "error",

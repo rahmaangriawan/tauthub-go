@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Berita acara kampanye Taut Pintar — dokumen siap cetak.
 	// Port app/klien/[brandId]/taut-pintar/[id]/berita-acara/page.tsx.
 	//
@@ -103,40 +105,38 @@
 	const budgetCfgText = $derived(budgetConfig ? JSON.stringify(budgetConfig) : '-');
 </script>
 
-<PageTitle title="Berita Acara Kampanye" />
+<PageTitle title={tr("Berita Acara Kampanye")} />
 
 <main class="py-4">
 	<div class="no-print mb-4 flex items-center justify-between gap-3">
-		<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/taut-pintar/${campaignId}`}>Kembali ke wizard</a>
+		<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/taut-pintar/${campaignId}`}>{tr("Kembali ke wizard")}</a>
 		<button class="app-btn app-btn-soft" type="button" onclick={() => window.print()}>
 			<Printer size={15} /> Cetak
 		</button>
 	</div>
 
 	{#if loading}
-		<p class="text-sm text-muted-foreground">Memuat berita acara…</p>
+		<p class="text-sm text-muted-foreground">{tr("Memuat berita acara…")}</p>
 	{:else if notFound}
 		<div class="app-card px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Kampanye tidak ditemukan untuk brand ini.</p>
-			<a class="mt-2 inline-block text-sm" style="color: var(--primary);" href={`/klien/${brandUrl}/taut-pintar`}>Kembali ke daftar kampanye</a>
+			<p class="text-sm text-muted-foreground">{tr("Kampanye tidak ditemukan untuk brand ini.")}</p>
+			<a class="mt-2 inline-block text-sm" style="color: var(--primary);" href={`/klien/${brandUrl}/taut-pintar`}>{tr("Kembali ke daftar kampanye")}</a>
 		</div>
 	{:else}
 		<div class="app-card p-8">
-			<h1 class="text-center text-xl font-bold">Berita Acara Kampanye Distribusi Konten</h1>
-			<p class="mt-1 text-center text-sm text-muted-foreground">
-				Taut Pintar · diterbitkan otomatis dari data kampanye saat halaman dibuka
-			</p>
+			<h1 class="text-center text-xl font-bold">{tr("Berita Acara Kampanye Distribusi Konten")}</h1>
+			<p class="mt-1 text-center text-sm text-muted-foreground">{tr("Taut Pintar · diterbitkan otomatis dari data kampanye saat halaman dibuka")}</p>
 
 			<div class="mt-6 grid grid-cols-[minmax(160px,220px)_1fr] gap-x-4 gap-y-2 border-y py-4 text-sm">
-				<span class="font-medium text-muted-foreground">Nama kampanye</span><span>{campaignName}</span>
+				<span class="font-medium text-muted-foreground">{tr("Nama kampanye")}</span><span>{campaignName}</span>
 				<span class="font-medium text-muted-foreground">Brand / klien</span><span>{brandName}</span>
 				<span class="font-medium text-muted-foreground">Profil bisnis</span><span>{businessName}</span>
 				<span class="font-medium text-muted-foreground">Industri</span><span>{businessIndustry}</span>
-				<span class="font-medium text-muted-foreground">Jenis media target</span><span>{MEDIA_LABEL[String(mediaType ?? '')] ?? '-'}</span>
+				<span class="font-medium text-muted-foreground">{tr("Jenis media target")}</span><span>{MEDIA_LABEL[String(mediaType ?? '')] ?? '-'}</span>
 				<span class="font-medium text-muted-foreground">Strategi anggaran</span><span>{BUDGET_LABEL[String(budgetStrategy ?? '')] ?? '-'}</span>
 				<span class="font-medium text-muted-foreground">Nominal / konfigurasi</span><span class="break-all">{budgetCfgText}</span>
-				<span class="font-medium text-muted-foreground">Tahap saat ini</span><span>{STAGE_LABEL[String(tautStatus ?? 'draft')] ?? 'Draft'}</span>
-				<span class="font-medium text-muted-foreground">Dibuat</span><span>{fmtDateWib(null)} WIB</span>
+				<span class="font-medium text-muted-foreground">{tr("Tahap saat ini")}</span><span>{STAGE_LABEL[String(tautStatus ?? 'draft')] ?? 'Draft'}</span>
+				<span class="font-medium text-muted-foreground">{tr("Dibuat")}</span><span>{fmtDateWib(null)} WIB</span>
 				<span class="font-medium text-muted-foreground">Diperbarui</span><span>{fmtDateWib(null)} WIB</span>
 			</div>
 
@@ -146,7 +146,7 @@
 					<p class="text-lg font-bold">{stats?.articles ?? 0}</p>
 				</div>
 				<div class="rounded-lg border p-3 text-center">
-					<p class="text-xs text-muted-foreground">Media terbit</p>
+					<p class="text-xs text-muted-foreground">{tr("Media terbit")}</p>
 					<p class="text-lg font-bold">{stats?.published_media ?? 0}</p>
 				</div>
 				<div class="rounded-lg border p-3 text-center">
@@ -159,15 +159,15 @@
 				<table class="w-full border-collapse text-sm">
 					<thead>
 						<tr class="text-left text-xs text-muted-foreground">
-							<th class="border-b px-2 py-2 font-medium">Media</th>
+							<th class="border-b px-2 py-2 font-medium">{tr("Media")}</th>
 							<th class="border-b px-2 py-2 font-medium">Judul artikel</th>
-							<th class="border-b px-2 py-2 font-medium">Status publikasi</th>
+							<th class="border-b px-2 py-2 font-medium">{tr("Status publikasi")}</th>
 							<th class="border-b px-2 py-2 font-medium">Tayang / URL</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#if placements.length === 0}
-							<tr><td class="border-b px-2 py-2 text-muted-foreground" colspan="4">Belum ada media terpilih untuk kampanye ini.</td></tr>
+							<tr><td class="border-b px-2 py-2 text-muted-foreground" colspan="4">{tr("Belum ada media terpilih untuk kampanye ini.")}</td></tr>
 						{:else}
 							{#each placements as r (r.media_id)}
 								<tr>
@@ -187,10 +187,7 @@
 				</table>
 			</div>
 
-			<p class="mt-4 text-[13px] text-muted-foreground">
-				Dokumen ini dihasilkan dari data sistem pada saat dicetak. Angka artikel, media terbit, dan TC terpakai
-				adalah hasil penjumlahan agregat basis data (publikasi terbit, ledger debit TC) milik kampanye ini.
-			</p>
+			<p class="mt-4 text-[13px] text-muted-foreground">{tr("Dokumen ini dihasilkan dari data sistem pada saat dicetak. Angka artikel, media terbit, dan TC terpakai adalah hasil penjumlahan agregat basis data (publikasi terbit, ledger debit TC) milik kampanye ini.")}</p>
 
 			<div class="mt-10 flex justify-around gap-6 text-sm">
 				<div class="min-w-0 flex-1 text-center sm:min-w-[200px] sm:flex-none">

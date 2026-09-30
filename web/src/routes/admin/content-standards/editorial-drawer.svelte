@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Drawer Pedoman Editorial AI — 15 standar penulisan per jenis konten,
 	// diindeks sebagai RAG knowledge engine.
 	// Port apps/web/src/app/admin/content-standards/_editorial-drawer.tsx.
@@ -91,7 +93,7 @@
 		const preset = DEFAULT_STANDARDS_BY_TYPE[contentTypeCode];
 		if (preset) {
 			sections = { ...preset.sections };
-			changeNote = 'Memuat standar rekomendasi bawaan Tauthub';
+			changeNote = tr('Memuat standar rekomendasi bawaan Tauthub');
 			successMsg = 'Standar rekomendasi berhasil dimuat ke formulir.';
 		}
 	}
@@ -151,14 +153,14 @@
 
 {#if open}
 	<div
-		class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4"
+		class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4"
 		style="background-color: rgba(0,0,0,.45);"
 		role="presentation"
 		onclick={onClose}
 	>
 		<dialog
 			open
-			class="app-card my-6 w-full max-w-5xl p-0"
+			class="app-card w-full max-w-5xl p-0"
 			style="max-height: 90vh; overflow: hidden;"
 			aria-label={contentTypeName || 'Editorial Standard'}
 			onclick={(e) => e.stopPropagation()}
@@ -176,7 +178,7 @@
 							{#if detail?.active_version}
 								<Badge tone="success" label={`Standar AI Aktif (v${detail.active_version})`} />
 							{:else}
-								<Badge tone="warning" label="Belum Ada Standar Aktif" />
+								<Badge tone="warning" label={tr("Belum Ada Standar Aktif")} />
 							{/if}
 							{#if detail?.chunk_count}
 								<Badge tone="accent" label={`${detail.chunk_count} RAG Chunks`} />
@@ -185,12 +187,10 @@
 								<Badge tone="neutral" label={headerBadge} />
 							{/if}
 						</div>
-						<p class="mt-1 text-sm text-muted-foreground">
-							Pedoman penulisan khusus (Editorial Knowledge) yang diindeks ke AI Engine Tauthub untuk menentukan
-							<strong>HOW TO WRITE</strong> jenis konten ini.
+						<p class="mt-1 text-sm text-muted-foreground">{tr("Pedoman penulisan khusus (Editorial Knowledge) yang diindeks ke AI Engine Tauthub untuk menentukan")}<strong>HOW TO WRITE</strong> jenis konten ini.
 						</p>
 					</div>
-					<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label="Tutup" onclick={onClose}>
+					<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Tutup")} onclick={onClose}>
 						<X size={18} />
 					</button>
 				</div>
@@ -224,7 +224,7 @@
 
 				<div class="mt-4 flex-1 overflow-y-auto pr-2">
 					{#if loading}
-						<p class="text-sm text-muted-foreground">Memuat standar…</p>
+						<p class="text-sm text-muted-foreground">{tr("Memuat standar…")}</p>
 					{:else}
 						<div class="space-y-4">
 							{#each sectionsInCurrentGroup as meta (meta.key)}
@@ -254,7 +254,7 @@
 								<p class="mb-1 text-xs font-bold text-muted-foreground">CATATAN PERUBAHAN VERSI (OPSIONAL)</p>
 								<input
 									class="app-input w-full"
-									placeholder="Contoh: Menyesuaikan aturan lead dan atribusi klaim..."
+									placeholder={tr("Contoh: Menyesuaikan aturan lead dan atribusi klaim...")}
 									bind:value={changeNote}
 								/>
 							</div>
@@ -301,18 +301,18 @@
 						<Sparkle size={15} /> Muat Contoh Rekomendasi Tauthub
 					</button>
 					<div class="flex items-center gap-2">
-						<button class="app-btn app-btn-soft" onclick={onClose}>Tutup</button>
+						<button class="app-btn app-btn-soft" onclick={onClose}>{tr("Tutup")}</button>
 						<button
 							class="app-btn app-btn-soft"
 							disabled={saving || loading}
-							onclick={() => void handleSave('draft')}>Simpan Draft</button
+							onclick={() => void handleSave('draft')}>{tr("Simpan Draft")}</button
 						>
 						<button
 							class="app-btn app-btn-primary"
 							disabled={saving || loading}
 							onclick={() => void handleSave('active')}
 						>
-							<Save size={16} /> {saving ? 'Menyimpan & Mengindeks RAG…' : 'Simpan & Aktifkan AI Standard'}
+							<Save size={16} /> {saving ? 'Menyimpan & Mengindeks RAG…' : tr('Simpan & Aktifkan AI Standard')}
 						</button>
 					</div>
 				</div>

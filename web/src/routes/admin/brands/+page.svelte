@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Semua brand — port app/admin/brands/page.tsx: direktori brand platform
 	// (owner, plan, jumlah member, status generation) + pencarian server-side.
 	import { onMount } from 'svelte';
@@ -58,13 +60,13 @@
 </script>
 
 <section>
-	<PageHeader title="Brands" description="Daftar brand, ownership, plan, dan status generation.">
+	<PageHeader title="Brands" description={tr("Daftar brand, ownership, plan, dan status generation.")}>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{rows.length} brand</span>
 	</PageHeader>
 
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke direktori brand platform.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke direktori brand platform.")}</p>
 		</div>
 	{:else}
 		<Feedback {loading} {error} loadingText="Memuat direktori brand…" />
@@ -72,9 +74,9 @@
 		<form class="app-card mt-4 flex flex-wrap items-center gap-2 p-3" role="search" onsubmit={submitSearch}>
 			<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
 				<Search size={15} class="text-muted-foreground" />
-				<input class="w-full bg-transparent text-sm outline-none" name="search" aria-label="Cari brand" placeholder="Cari nama, slug, atau owner..." bind:value={search} />
+				<input class="w-full bg-transparent text-sm outline-none" name="search" aria-label={tr("Cari brand")} placeholder={tr("Cari nama, slug, atau owner...")} bind:value={search} />
 			</label>
-			<button class="app-btn app-btn-soft" type="submit" disabled={loading}>Cari</button>
+			<button class="app-btn app-btn-soft" type="submit" disabled={loading}>{tr("Cari")}</button>
 		</form>
 
 		<div class="app-card mt-4 overflow-x-auto">
@@ -115,7 +117,7 @@
 			{#if !loading && rows.length === 0}
 				<div class="flex flex-col items-center px-4 py-12 text-center">
 					<Building2 size={26} class="text-muted-foreground" />
-					<p class="mt-2 text-sm text-muted-foreground">Tidak ada brand yang cocok.</p>
+					<p class="mt-2 text-sm text-muted-foreground">{tr("Tidak ada brand yang cocok.")}</p>
 				</div>
 			{/if}
 			<div class="px-4 pb-4">

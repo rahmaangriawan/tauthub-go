@@ -337,7 +337,7 @@ func (d *Deps) schSweepPartnerDeadlines(ctx context.Context, limit int, late boo
 
 	rows, err := d.queryRows(ctx, `
 		SELECT p.id, p.scheduled_at, m.name AS media_name, d.title AS document_title,
-		       prt.id AS partner_id, prt.public_id AS partner_public_id,
+		       prt.id AS partner_id, prt.public_id AS partner_public_id, prt.user_id AS partner_user_id,
 		       (SELECT u.email FROM users u WHERE u.id = prt.user_id LIMIT 1) AS partner_email
 		FROM publications p
 		JOIN media m ON m.id = p.media_id
@@ -361,13 +361,8 @@ func (d *Deps) schSweepPartnerDeadlines(ctx context.Context, limit int, late boo
 	sent := 0
 	for _, pub := range rows {
 		publicationID := pub.strOr("id", "")
-		partnerID := pub.strOr("partner_id", "")
-		partnerUserID, pErr := d.queryRow(ctx,
-			"SELECT user_id FROM partners WHERE id = $1 LIMIT 1", partnerID)
-		if pErr != nil || partnerUserID == nil {
-			continue
-		}
-		recipientUserID := partnerUserID.strOr("user_id", "")
+		// user_id mitra sudah ikut di SELECT (sebelumnya satu query per publikasi).
+		recipientUserID := pub.strOr("partner_user_id", "")
 		if recipientUserID == "" {
 			continue
 		}

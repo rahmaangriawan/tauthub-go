@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Integrasi GSC — port app/admin/integrasi-gsc/page.tsx.
 	// Tab Search Console (config OAuth client platform) + Google Sign-In
 	// (dipakai bersama halaman Konfigurasi). Secret disegel server-side.
@@ -8,7 +10,16 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
-	type GscConfig = { client_id: string | null; client_secret_configured: boolean; redirect_uri: string | null; source: string };
+	type GscConfig = {
+		client_id: string | null;
+		client_secret_configured: boolean;
+		redirect_uri: string | null;
+		source: string;
+		client_secret_decryptable?: boolean;
+		config_error?: string;
+		config_error_detail?: string;
+		missing_fields?: string[];
+	};
 
 	let tab = $state<'gsc' | 'google-signin'>('gsc');
 	let loading = $state(true);
@@ -53,7 +64,7 @@
 				client_secret: ''
 			};
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		}
 	}
 
@@ -125,12 +136,12 @@
 	</div>
 
 	{#if loading}
-		<div class="app-card mt-4 p-4"><p class="text-sm text-muted-foreground">Memuat konfigurasi GSC…</p></div>
+		<div class="app-card mt-4 p-4"><p class="text-sm text-muted-foreground">{tr("Memuat konfigurasi GSC…")}</p></div>
 	{:else if tab === 'gsc'}
 		<div class="mt-4">
 			<PageHeader
 				title="Google Search Console"
-				description="Konfigurasi OAuth Client disimpan di database (sealed) — ENV hanya fallback. Redirect URI harus sama dengan Authorized redirect URIs di Google Cloud Console."
+				description={tr("Konfigurasi OAuth Client disimpan di database (sealed) — ENV hanya fallback. Redirect URI harus sama dengan Authorized redirect URIs di Google Cloud Console.")}
 			/>
 
 			{#if error}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>{/if}
@@ -140,14 +151,25 @@
 				<p class="text-xs text-muted-foreground">
 					Source: {config?.source ?? 'none'} {config?.client_secret_configured ? '· Secret tersimpan ✓' : '· Secret belum ada'}
 				</p>
+				{#if config?.config_error_detail}
+					<div class="flex items-start gap-2 rounded-lg border px-3 py-2 text-xs" style="border-color: var(--warning);">
+						<TriangleAlert size={15} class="mt-0.5 shrink-0" style="color: var(--warning);" />
+						<div>
+							<p>{config.config_error_detail}</p>
+							{#if config.missing_fields?.length}
+								<p class="mt-1">{tr("Field kurang:")} <code>{config.missing_fields.join(', ')}</code></p>
+							{/if}
+						</div>
+					</div>
+				{/if}
 				<label class="block">
 					<span class="text-sm font-medium">GOOGLE_CLIENT_ID</span>
-					<span class="block text-xs text-muted-foreground">Dari Google Cloud Console → APIs &amp; Services → Credentials → OAuth client ID (Web application).</span>
+					<span class="block text-xs text-muted-foreground">Dari Google Cloud Console → APIs & Services → Credentials → OAuth client ID (Web application).</span>
 					<input class="app-input mt-1 w-full" required placeholder="xxx.apps.googleusercontent.com" bind:value={form.client_id} />
 				</label>
 				<label class="block">
 					<span class="text-sm font-medium">GOOGLE_CLIENT_SECRET</span>
-					<span class="block text-xs text-muted-foreground">Akan di-seal dengan APP_SECRET dan disimpan di DB. Kosongkan jika tidak ingin mengganti.</span>
+					<span class="block text-xs text-muted-foreground">{tr("Akan di-seal dengan APP_SECRET dan disimpan di DB. Kosongkan jika tidak ingin mengganti.")}</span>
 					<input class="app-input mt-1 w-full" type="password" placeholder="••••••••" bind:value={form.client_secret} />
 				</label>
 				<label class="block">
@@ -156,14 +178,14 @@
 					<input class="app-input mt-1 w-full" required placeholder="http://localhost:3000/api/gsc/callback" bind:value={form.redirect_uri} />
 				</label>
 				<div class="flex justify-end">
-					<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan konfigurasi'}</button>
+					<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Simpan konfigurasi')}</button>
 				</div>
 				<div class="rounded-lg px-3 py-2 text-xs text-muted-foreground" style="background-color: var(--secondary);">
 					<p class="font-medium">Checklist Google Cloud:</p>
-					<p>1. Buat Project → Enable “Search Console API” → OAuth consent screen (External/Internal) → Scopes: https://www.googleapis.com/auth/webmasters.readonly</p>
+					<p>{tr("1. Buat Project → Enable “Search Console API” → OAuth consent screen (External/Internal) → Scopes: https://www.googleapis.com/auth/webmasters.readonly")}</p>
 					<p>2. Credentials → Create OAuth client ID (Web application) → Authorized redirect URIs: masukkan nilai Redirect URI di atas.</p>
 					<p>3. Untuk localhost: tambahkan http://localhost:3000/api/gsc/callback secara eksplisit (Google memperbolehkan localhost tanpa HTTPS).</p>
-					<p>4. Salin Client ID &amp; Secret ke form ini → Simpan. Tidak perlu hardcode di .env (ENV hanya fallback).</p>
+					<p>{tr("4. Salin Client ID & Secret ke form ini → Simpan. Tidak perlu hardcode di .env (ENV hanya fallback).")}</p>
 				</div>
 			</form>
 		</div>
@@ -171,9 +193,9 @@
 		<div class="mt-4">
 			<PageHeader
 				title="Google Sign-In"
-				description="Konfigurasi OAuth untuk login/register. Disimpan di database (sealed) — ENV hanya fallback. Redirect URI harus sama dengan Authorized redirect URIs di Google Cloud Console."
+				description={tr("Konfigurasi OAuth untuk login/register. Disimpan di database (sealed) — ENV hanya fallback. Redirect URI harus sama dengan Authorized redirect URIs di Google Cloud Console.")}
 			>
-				<Badge tone={google?.client_id ? 'success' : 'warning'} label={google?.client_id ? 'Terhubung' : 'Belum Dikonfigurasi'} />
+				<Badge tone={google?.client_id ? 'success' : 'warning'} label={google?.client_id ? 'Terhubung' : tr('Belum Dikonfigurasi')} />
 			</PageHeader>
 
 			<div class="app-card mt-4 space-y-3 p-4">
@@ -182,7 +204,7 @@
 				</p>
 				<div class="flex items-start gap-2 rounded-lg border px-3 py-2 text-xs" style="border-color: var(--warning);">
 					<TriangleAlert size={15} class="mt-0.5 shrink-0" style="color: var(--warning);" />
-					<p>Daftarkan callback di Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs. Jangan pakai /api/gsc/callback (itu untuk Search Console).</p>
+					<p>{tr("Daftarkan callback di Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs. Jangan pakai /api/gsc/callback (itu untuk Search Console).")}</p>
 				</div>
 				<form class="space-y-3" onsubmit={saveGoogle}>
 					<div class="grid gap-3 md:grid-cols-2">
@@ -192,7 +214,7 @@
 						</label>
 						<label class="block">
 							<span class="text-sm font-medium">Client Secret</span>
-							<input class="app-input mt-1 w-full" type="password" placeholder="Kosongkan jika tidak diubah" bind:value={googleForm.client_secret} />
+							<input class="app-input mt-1 w-full" type="password" placeholder={tr("Kosongkan jika tidak diubah")} bind:value={googleForm.client_secret} />
 						</label>
 					</div>
 					<label class="block">
@@ -205,7 +227,7 @@
 							{googleMsg.text}
 						</div>
 					{/if}
-					<button class="app-btn app-btn-primary" type="submit" disabled={googleBusy}>{googleBusy ? 'Menyimpan…' : 'Simpan Konfigurasi'}</button>
+					<button class="app-btn app-btn-primary" type="submit" disabled={googleBusy}>{googleBusy ? 'Menyimpan…' : tr('Simpan Konfigurasi')}</button>
 				</form>
 			</div>
 		</div>

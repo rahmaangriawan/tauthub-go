@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port app/blogger-pick-blog/page.tsx — pilih blog Blogger setelah OAuth
 	// (`?media={mediaId}`). Menyimpan pilihan lalu kembali ke portal mitra.
 	import { onMount } from 'svelte';
@@ -58,7 +60,7 @@
 				method: 'POST',
 				body: JSON.stringify({ blog_id: selected })
 			});
-			if (!res.ok) throw new Error('Gagal menyimpan blog.');
+			if (!res.ok) throw new Error(tr('Gagal menyimpan blog.'));
 			const meRes = await apiRequest('/v1/partner/me');
 			const meData = (await meRes.json().catch(() => ({}))) as { partner?: { public_id?: string; id?: string } };
 			const pid = getPartnerUrlId() || meData.partner?.public_id || meData.partner?.id || '';
@@ -71,24 +73,24 @@
 </script>
 
 <svelte:head>
-	<title>Pilih Blog — Tauthub</title>
+	<title>{tr("Pilih Blog — Tauthub")}</title>
 </svelte:head>
 
 <main class="flex min-h-screen items-center justify-center bg-background p-6">
 	<div class="app-card w-full max-w-[520px] p-6">
-		<h1 class="text-xl font-semibold tracking-tight">Pilih Blog</h1>
-		<p class="mt-1 text-sm text-muted-foreground">Pilih blog Blogger yang ingin diintegrasikan dengan Tauthub.</p>
+		<h1 class="text-xl font-semibold tracking-tight">{tr("Pilih Blog")}</h1>
+		<p class="mt-1 text-sm text-muted-foreground">{tr("Pilih blog Blogger yang ingin diintegrasikan dengan Tauthub.")}</p>
 
 		{#if error}
 			<p class="mt-3 rounded-md px-3 py-2 text-sm" style="background: var(--destructive-soft, #fdecee); color: var(--destructive);">{error}</p>
 		{/if}
 
 		{#if loading}
-			<p class="mt-4 text-sm text-muted-foreground">Memuat daftar blog…</p>
+			<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat daftar blog…")}</p>
 		{:else if blogs.length === 0 && !error}
 			<div class="mt-6 flex flex-col items-center gap-2 py-6 text-center">
 				<Globe size={32} class="text-muted-foreground" />
-				<p class="text-sm text-muted-foreground">Tidak ada blog ditemukan di akun Google ini.</p>
+				<p class="text-sm text-muted-foreground">{tr("Tidak ada blog ditemukan di akun Google ini.")}</p>
 			</div>
 		{:else}
 			<div class="mt-4 flex flex-col gap-2">
@@ -117,7 +119,7 @@
 			</div>
 
 			<div class="mt-4 flex justify-end gap-2">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (window.location.href = '/mitra')}>Batal</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (window.location.href = '/mitra')}>{tr("Batal")}</button>
 				<button class="app-btn app-btn-primary" type="button" disabled={!selected || saving} onclick={save}>
 					{saving ? 'Menyimpan…' : 'Hubungkan Blog'}
 				</button>

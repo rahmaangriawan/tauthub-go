@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Usage AI — port app/admin/ai-usage/page.tsx.
 	// Log pemakaian token AI seluruh step Taut Pintar (taut_agent_runs):
 	// filter rentang/step/status + pencarian kampanye, ringkasan, breakdown, dan log per panggilan.
@@ -94,7 +96,7 @@
 			}
 			data = await res.json();
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		} finally {
 			loading = false;
 		}
@@ -123,13 +125,13 @@
 <section>
 	<PageHeader
 		title="AI Token Usage"
-		description="Pemakaian token AI seluruh step Taut Pintar — Profiler, Matchmaker, Writer, Gatekeeper — dari log eksekusi taut_agent_runs."
+		description={tr("Pemakaian token AI seluruh step Taut Pintar — Profiler, Matchmaker, Writer, Gatekeeper — dari log eksekusi taut_agent_runs.")}
 	/>
 
 	<Feedback {loading} {error} loadingText="Memuat data usage…" />
 
 	{#if loading && !data}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat…")}</p>
 	{:else}
 		<div class="mt-4 flex flex-wrap items-center gap-3">
 			<Select
@@ -158,7 +160,7 @@
 					void load();
 				}}
 				options={[
-					{ value: 'all', label: 'Semua Step' },
+					{ value: 'all', label: tr('Semua Step') },
 					...Object.entries(AGENT_META).map(([value, meta]) => ({ value, label: meta.label }))
 				]}
 			/>
@@ -172,15 +174,15 @@
 					void load();
 				}}
 				options={[
-					{ value: 'all', label: 'Semua Status' },
-					{ value: 'done', label: 'Berhasil' },
-					{ value: 'failed', label: 'Gagal' },
+					{ value: 'all', label: tr('Semua Status') },
+					{ value: 'done', label: tr('Berhasil') },
+					{ value: 'failed', label: tr('Gagal') },
 					{ value: 'running', label: 'Berjalan' }
 				]}
 			/>
 			<form class="flex items-center gap-2" onsubmit={submitSearch}>
-				<input class="app-input w-[240px]" placeholder="Cari nama kampanye…" bind:value={searchInput} />
-				<button class="app-btn app-btn-soft" type="submit"><Search size={14} /> Cari</button>
+				<input class="app-input w-[240px]" placeholder={tr("Cari nama kampanye…")} bind:value={searchInput} />
+				<button class="app-btn app-btn-soft" type="submit"><Search size={14} />{tr("Cari")}</button>
 			</form>
 			<button class="app-btn app-btn-soft" type="button" disabled={loading} onclick={() => void load()}>
 				<RefreshCw size={14} /> Refresh
@@ -190,20 +192,20 @@
 		<div class="mt-4 space-y-4">
 			<div class="flex flex-wrap gap-3">
 				<div class="app-card min-w-[170px] flex-1 p-3">
-					<p class="text-xs text-muted-foreground">Total Panggilan AI</p>
+					<p class="text-xs text-muted-foreground">{tr("Total Panggilan AI")}</p>
 					<p class="text-xl font-bold">{fmtInt(data?.summary.calls)}</p>
 					<p class="text-xs text-muted-foreground">{fmtInt(data?.summary.done_calls)} berhasil · {fmtInt(data?.summary.failed_calls)} gagal</p>
 				</div>
 				<div class="app-card min-w-[170px] flex-1 p-3">
-					<p class="text-xs text-muted-foreground">Token Masuk</p>
+					<p class="text-xs text-muted-foreground">{tr("Token Masuk")}</p>
 					<p class="text-xl font-bold" style="color: var(--accent-foreground);">{fmtInt(data?.summary.token_input)}</p>
 				</div>
 				<div class="app-card min-w-[170px] flex-1 p-3">
-					<p class="text-xs text-muted-foreground">Token Keluar</p>
+					<p class="text-xs text-muted-foreground">{tr("Token Keluar")}</p>
 					<p class="text-xl font-bold" style="color: var(--success);">{fmtInt(data?.summary.token_output)}</p>
 				</div>
 				<div class="app-card min-w-[170px] flex-1 p-3">
-					<p class="text-xs text-muted-foreground">Total Token</p>
+					<p class="text-xs text-muted-foreground">{tr("Total Token")}</p>
 					<p class="text-xl font-bold" style="color: var(--warning);">{fmtInt(totalTokens)}</p>
 				</div>
 				<div class="app-card min-w-[170px] flex-1 p-3">
@@ -221,12 +223,12 @@
 							<tr class="text-xs text-muted-foreground">
 								<th class="px-3 py-2 text-left font-medium">Step</th>
 								<th class="px-3 py-2 text-left font-medium">Panggilan</th>
-								<th class="px-3 py-2 text-left font-medium">Token Masuk</th>
-								<th class="px-3 py-2 text-left font-medium">Token Keluar</th>
-								<th class="px-3 py-2 text-left font-medium">Total Token</th>
+								<th class="px-3 py-2 text-left font-medium">{tr("Token Masuk")}</th>
+								<th class="px-3 py-2 text-left font-medium">{tr("Token Keluar")}</th>
+								<th class="px-3 py-2 text-left font-medium">{tr("Total Token")}</th>
 								<th class="px-3 py-2 text-left font-medium">Porsi Token</th>
 								<th class="px-3 py-2 text-left font-medium">Rata-rata Durasi</th>
-								<th class="px-3 py-2 text-left font-medium">Gagal</th>
+								<th class="px-3 py-2 text-left font-medium">{tr("Gagal")}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -259,7 +261,7 @@
 						</tbody>
 					</table>
 					{#if (data?.by_agent ?? []).length === 0}
-						<p class="px-4 py-8 text-center text-sm text-muted-foreground">Belum ada pemakaian AI pada rentang ini.</p>
+						<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada pemakaian AI pada rentang ini.")}</p>
 					{/if}
 				</div>
 			</div>
@@ -269,7 +271,7 @@
 					<h2 class="text-sm font-semibold">Log Panggilan AI</h2>
 					{#if data && data.total > 0}
 						<p class="text-xs text-muted-foreground">
-							{fmtInt((page - 1) * PAGE_SIZE + 1)}–{fmtInt(Math.min(page * PAGE_SIZE, data.total))} dari {fmtInt(data.total)} run
+							{fmtInt((page - 1) * PAGE_SIZE + 1)}–{fmtInt(Math.min(page * PAGE_SIZE, data.total))} {tr("dari")} {fmtInt(data.total)} run
 						</p>
 					{/if}
 				</div>
@@ -280,11 +282,11 @@
 								<th class="px-3 py-2 text-left font-medium">Waktu</th>
 								<th class="px-3 py-2 text-left font-medium">Step</th>
 								<th class="px-3 py-2 text-left font-medium">Status</th>
-								<th class="px-3 py-2 text-left font-medium">Kampanye / Media</th>
+								<th class="px-3 py-2 text-left font-medium">{tr("Kampanye / Media")}</th>
 								<th class="px-3 py-2 text-left font-medium">Model</th>
-								<th class="px-3 py-2 text-left font-medium">Token Masuk</th>
-								<th class="px-3 py-2 text-left font-medium">Token Keluar</th>
-								<th class="px-3 py-2 text-left font-medium">Total</th>
+								<th class="px-3 py-2 text-left font-medium">{tr("Token Masuk")}</th>
+								<th class="px-3 py-2 text-left font-medium">{tr("Token Keluar")}</th>
+								<th class="px-3 py-2 text-left font-medium">{tr("Total")}</th>
 								<th class="px-3 py-2 text-left font-medium">Durasi</th>
 								<th class="px-3 py-2 text-left font-medium">Error</th>
 							</tr>
@@ -297,7 +299,7 @@
 									<td class="px-3 py-2">
 										<Badge
 											tone={r.status === 'done' ? 'success' : r.status === 'failed' ? 'danger' : 'warning'}
-											label={r.status === 'done' ? 'Berhasil' : r.status === 'failed' ? 'Gagal' : 'Berjalan'}
+											label={r.status === 'done' ? tr('Berhasil') : r.status === 'failed' ? tr('Gagal') : 'Berjalan'}
 										/>
 									</td>
 									<td class="px-3 py-2">{r.campaign_name ?? '-'}{r.media_name ? ` / ${r.media_name}` : ''}</td>
@@ -312,7 +314,7 @@
 						</tbody>
 					</table>
 					{#if (data?.runs ?? []).length === 0}
-						<p class="px-4 py-8 text-center text-sm text-muted-foreground">Belum ada run pada filter ini.</p>
+						<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada run pada filter ini.")}</p>
 					{/if}
 				</div>
 				{#if data && data.total > PAGE_SIZE}

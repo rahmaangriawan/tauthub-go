@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Halaman section mitra yang belum punya layar khusus (mis. tautan lama
 	// /mitra/{id}/kalkulator-media) — arahkan mitra kembali ke menu yang ada
 	// tanpa membuat menu baru di luar app lama.
@@ -11,14 +13,14 @@
 	const section = $derived(page.params.section as string);
 </script>
 
-<PageTitle title="Halaman Tidak Ditemukan" />
+<PageTitle title={tr("Halaman Tidak Ditemukan")} />
 
 <section>
 	<div class="app-card p-6 text-center">
-		<h1 class="text-lg font-semibold">Halaman tidak ditemukan</h1>
+		<h1 class="text-lg font-semibold">{tr("Halaman tidak ditemukan")}</h1>
 		<p class="mt-2 text-sm text-muted-foreground">
 			Bagian "{section}" belum tersedia di portal mitra.
 		</p>
-		<a class="app-btn app-btn-primary mt-4" href={base}>Kembali ke Ringkasan</a>
+		<a class="app-btn app-btn-primary mt-4" href={base}>{tr("Kembali ke Ringkasan")}</a>
 	</div>
 </section>

@@ -105,13 +105,44 @@ func (d *Deps) OAuthGoogleGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"provider":     "google",
 		"client_id":    row.raw("client_id"),
 		"redirect_uri": row.raw("redirect_uri"),
 		"callback_url": googleCallbackURL,
 		"updated_at":   row.timePtr("updated_at"),
-	})
+	}
+	// Diagnostik admin-only: alasan rinci kegagalan konfigurasi (mis.
+	// secret_decrypt_failed) + field yang kurang. Detail ini sengaja TIDAK
+	// pernah dikirim oleh endpoint publik /v1/auth/google/url.
+	if d.Google != nil {
+		cfg := d.Google.LoadConfig(r.Context())
+		missing := make([]string, 0, 3)
+		if cfg.ClientID == "" {
+			missing = append(missing, "client_id")
+		}
+		if cfg.ClientSecret == "" {
+			missing = append(missing, "client_secret")
+		}
+		if cfg.RedirectURI == "" {
+			missing = append(missing, "redirect_uri")
+		}
+		detail := ""
+		switch cfg.ConfigError {
+		case "table_missing":
+			detail = "Tabel platform_oauth_configs belum ada — jalankan migration (migrate-additive)."
+		case "record_empty":
+			detail = "Belum ada record 'google' — simpan konfigurasi di tab ini."
+		case "secret_decrypt_failed":
+			detail = "Client Secret tersimpan tidak dapat di-decrypt (kemungkinan APP_SECRET berubah) — simpan ulang Client Secret di sini."
+		}
+		out["configured"] = len(missing) == 0
+		out["config_source"] = cfg.Source
+		out["config_error"] = cfg.ConfigError
+		out["config_error_detail"] = detail
+		out["missing_fields"] = missing
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (d *Deps) OAuthGooglePut(w http.ResponseWriter, r *http.Request) {

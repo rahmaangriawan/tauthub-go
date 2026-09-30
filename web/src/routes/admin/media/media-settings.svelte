@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Tab Pengaturan /admin/media — konfigurasi media platform (template URL bulk import).
 	// Port MediaSettingsSection di apps/web/src/app/admin/media/_sections.tsx.
 	import { Newspaper } from '@lucide/svelte';
@@ -44,17 +46,15 @@
 </script>
 
 {#if loading}
-	<p class="mt-6 text-sm text-muted-foreground">Memuat pengaturan…</p>
+	<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat pengaturan…")}</p>
 {:else}
 	<div class="app-card mt-4 p-4">
 		<div class="flex flex-col gap-3">
 			<div class="flex items-center gap-2">
 				<Newspaper size={18} />
-				<p class="font-bold">Pengaturan Bulk Import Media</p>
+				<p class="font-bold">{tr("Pengaturan Bulk Import Media")}</p>
 			</div>
-			<p class="text-sm text-muted-foreground">
-				URL template Google Spreadsheet yang digunakan mitra untuk Bulk Import Media. Kosongkan jika belum tersedia.
-			</p>
+			<p class="text-sm text-muted-foreground">{tr("URL template Google Spreadsheet yang digunakan mitra untuk Bulk Import Media. Kosongkan jika belum tersedia.")}</p>
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Template URL (Google Spreadsheet)</span>
 				<input
@@ -63,10 +63,7 @@
 					bind:value={templateUrl}
 				/>
 			</label>
-			<p class="text-xs text-muted-foreground">
-				Mitra akan melihat tombol &quot;Buka Template Spreadsheet&quot; di dialog Bulk Import. Jika kosong, mitra akan
-				melihat pesan bahwa template belum diatur.
-			</p>
+			<p class="text-xs text-muted-foreground">{tr("Mitra akan melihat tombol \"Buka Template Spreadsheet\" di dialog Bulk Import. Jika kosong, mitra akan melihat pesan bahwa template belum diatur.")}</p>
 			{#if error}
 				<div class="text-sm" style="color: var(--destructive);">{error}</div>
 			{/if}
@@ -75,7 +72,7 @@
 			{/if}
 			<div class="flex justify-end gap-2">
 				<button class="app-btn app-btn-primary" disabled={busy} onclick={save}
-					>{busy ? 'Menyimpan…' : 'Simpan'}</button
+					>{busy ? 'Menyimpan…' : tr('Simpan')}</button
 				>
 			</div>
 		</div>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Status Publikasi klien — port PublicationsSection (distribution.tsx).
 	// Legacy memakai CARD LIST (bukan tabel): tiap baris = [cover][utama][sisi].
 	// Layout: header (+eyebrow PUBLICATIONS +tab) → toolbar (cari + STATUS/MEDIA/
@@ -8,11 +10,12 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import {
-		ChartLine, CircleAlert, ExternalLink, Image as ImageIcon, LoaderCircle, RotateCcw, Search, X
+		Calendar, ChartLine, CircleAlert, CircleCheck, Coins, ExternalLink, FileText, Image as ImageIcon, LoaderCircle, PencilLine, RotateCcw, Search, X
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
+	import Tooltip from '$lib/components/tooltip.svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
@@ -104,12 +107,12 @@
 			const params = new URLSearchParams({ limit: String(pageSize), offset: String((pageNum - 1) * pageSize) });
 			if (debouncedQuery) params.set('q', debouncedQuery);
 			const res = await apiRequest(`${apiBase}/publications?${params}`);
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal memuat publikasi.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat publikasi.')));
 			const data = (await res.json()) as { publications?: Pub[]; total?: number };
 			rows = data.publications ?? [];
 			total = data.total ?? 0;
 		} catch (reason) {
-			err = reason instanceof Error ? reason.message : 'Gagal memuat publikasi.';
+			err = reason instanceof Error ? reason.message : tr('Gagal memuat publikasi.');
 		} finally {
 			loading = false;
 		}
@@ -143,7 +146,8 @@
 		failed: { label: 'Failed', dot: 'var(--destructive)', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)' },
 		rejected: { label: 'Rejected', dot: 'var(--destructive)', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)' },
 		draft: { label: 'Draft', dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' },
-		cancelled: { label: 'Cancelled', dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' }
+		cancelled: { label: 'Cancelled', dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' },
+		revision: { label: tr('Perlu Revisi'), dot: 'var(--warning)', text: 'var(--warning)', bg: 'var(--warning-soft)' }
 	};
 	const STATUS_FALLBACK = { dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' };
 	function statusCfg(status: string) {
@@ -219,11 +223,11 @@
 		detailBusy = true;
 		try {
 			const res = await apiRequest(`${apiBase}/publications/${row.id}`);
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal memuat detail publikasi.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat detail publikasi.')));
 			const data = (await res.json()) as { publication?: Detail } & Detail;
 			detail = (data.publication ?? data) as Detail;
 		} catch (reason) {
-			err = reason instanceof Error ? reason.message : 'Gagal memuat detail publikasi.';
+			err = reason instanceof Error ? reason.message : tr('Gagal memuat detail publikasi.');
 		} finally {
 			detailBusy = false;
 		}
@@ -237,13 +241,13 @@
 				method: 'POST',
 				body: JSON.stringify({ reason: cancelReason.trim() || null })
 			});
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal membatalkan publikasi.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal membatalkan publikasi.')));
 			cancelTarget = null;
 			cancelReason = '';
 			detail = null;
 			await load();
 		} catch (reason) {
-			err = reason instanceof Error ? reason.message : 'Gagal membatalkan publikasi.';
+			err = reason instanceof Error ? reason.message : tr('Gagal membatalkan publikasi.');
 		} finally {
 			cancelBusy = false;
 		}
@@ -252,10 +256,10 @@
 	async function retryPublication(id: string) {
 		try {
 			const res = await apiRequest(`${apiBase}/publications/${id}/retry`, { method: 'POST' });
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal mencoba ulang publikasi.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mencoba ulang publikasi.')));
 			await load();
 		} catch (reason) {
-			err = reason instanceof Error ? reason.message : 'Gagal mencoba ulang publikasi.';
+			err = reason instanceof Error ? reason.message : tr('Gagal mencoba ulang publikasi.');
 		}
 	}
 
@@ -263,10 +267,10 @@
 		confirmReset = null;
 		try {
 			const res = await apiRequest(`${apiBase}/publications/${p.id}/reset-approval`, { method: 'POST' });
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal mengembalikan publikasi ke persetujuan.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengembalikan publikasi ke persetujuan.')));
 			await load();
 		} catch (reason) {
-			err = reason instanceof Error ? reason.message : 'Gagal mengembalikan publikasi ke persetujuan.';
+			err = reason instanceof Error ? reason.message : tr('Gagal mengembalikan publikasi ke persetujuan.');
 		}
 	}
 
@@ -277,7 +281,7 @@
 		destinationUrl = '';
 		try {
 			const res = await apiRequest(`${apiBase}/publications/${row.id}/tracking`);
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal memuat data pelacakan.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat data pelacakan.')));
 			const data = (await res.json()) as {
 				tracking?: { tracking_path: string; destination_url: string | null; status: string } | null;
 				counts?: Record<string, number>;
@@ -286,7 +290,7 @@
 			trackingCounts = data.counts ?? {};
 			destinationUrl = data.tracking?.destination_url ?? row.published_url ?? '';
 		} catch (reason) {
-			err = reason instanceof Error ? reason.message : 'Gagal memuat data pelacakan.';
+			err = reason instanceof Error ? reason.message : tr('Gagal memuat data pelacakan.');
 		}
 	}
 
@@ -298,11 +302,11 @@
 				method: 'POST',
 				body: JSON.stringify({ destination_url: destinationUrl.trim() || null })
 			});
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal menyimpan tujuan pelacakan.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan tujuan pelacakan.')));
 			const data = (await res.json()) as { tracking?: { tracking_path: string; destination_url: string | null; status: string } };
 			tracking = data.tracking ?? tracking;
 		} catch (reason) {
-			err = reason instanceof Error ? reason.message : 'Gagal menyimpan tujuan pelacakan.';
+			err = reason instanceof Error ? reason.message : tr('Gagal menyimpan tujuan pelacakan.');
 		} finally {
 			trackingBusy = false;
 		}
@@ -314,17 +318,17 @@
 	const trackTotal = $derived(Object.values(trackingCounts).reduce((s, n) => s + n, 0));
 </script>
 
-<PageTitle title="Publikasi" />
+<PageTitle title={tr("Publikasi")} />
 
 <section>
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
 			<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--primary);">PUBLICATIONS</p>
-			<h1 class="mt-1 text-2xl font-semibold tracking-tight">Publikasi</h1>
+			<h1 class="mt-1 text-2xl font-semibold tracking-tight">{tr("Publikasi")}</h1>
 			<p class="mt-1 text-sm text-muted-foreground">
 				{view === 'publications'
-					? 'Artikel approved yang dikirim ke media — queue worker (Phase 2) atau persetujuan partner (Phase 3).'
-					: 'Jadwal mengirim media ke Mitra sesuai pengaturan — hanya distribusi ke Mitra, waktu terbit aktual dikelola Mitra.'}
+					? tr('Artikel approved yang dikirim ke media — queue worker (Phase 2) atau persetujuan partner (Phase 3).')
+					: tr('Jadwal mengirim media ke Mitra sesuai pengaturan — hanya distribusi ke Mitra, waktu terbit aktual dikelola Mitra.')}
 			</p>
 		</div>
 		<div class="inline-flex rounded-lg border p-0.5" style="background-color: var(--muted);">
@@ -333,13 +337,13 @@
 				style={view === 'publications' ? 'background-color: var(--card); color: var(--foreground);' : 'color: var(--muted-foreground);'}
 				type="button"
 				onclick={() => (view = 'publications')}
-			>Publikasi</button>
+			>{tr("Publikasi")}</button>
 			<button
 				class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
 				style={view === 'plans' ? 'background-color: var(--card); color: var(--foreground);' : 'color: var(--muted-foreground);'}
 				type="button"
 				onclick={() => (view = 'plans')}
-			>Jadwal Terjadwal</button>
+			>{tr("Jadwal Terjadwal")}</button>
 		</div>
 	</header>
 
@@ -348,16 +352,17 @@
 		<div class="app-card mt-4 flex flex-wrap items-center gap-3 p-3">
 			<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
 				<Search size={15} class="text-muted-foreground" />
-				<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari artikel, media, atau kategori…" bind:value={query} />
+				<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari artikel, media, atau kategori…")} bind:value={query} />
 			</label>
 			<Select
 				bind:value={statusFilter}
 				ariaLabel="Filter status"
-				placeholder="Semua Status"
+				placeholder={tr("Semua Status")}
 				minWidth={150}
 				options={[
-					{ value: '', label: 'Semua Status' },
+					{ value: '', label: tr('Semua Status') },
 					{ value: 'waiting_partner', label: 'waiting_partner' },
+					{ value: 'revision', label: tr('Perlu Revisi') },
 					{ value: 'published', label: 'Published' },
 					{ value: 'queued', label: 'Queued' },
 					{ value: 'processing', label: 'Processing' },
@@ -369,20 +374,20 @@
 			<Select
 				bind:value={mediaFilter}
 				ariaLabel="Filter media"
-				placeholder="Semua Media"
+				placeholder={tr("Semua Media")}
 				minWidth={150}
 				options={[
-					{ value: '', label: 'Semua Media' },
+					{ value: '', label: tr('Semua Media') },
 					...mediaOptions.map((m) => ({ value: m, label: m }))
 				]}
 			/>
 			<Select
 				bind:value={categoryFilter}
 				ariaLabel="Filter kategori"
-				placeholder="Semua Kategori"
+				placeholder={tr("Semua Kategori")}
 				minWidth={150}
 				options={[
-					{ value: '', label: 'Semua Kategori' },
+					{ value: '', label: tr('Semua Kategori') },
 					...categoryOptions.map((c) => ({ value: c, label: c }))
 				]}
 			/>
@@ -395,8 +400,8 @@
 				options={[
 					{ value: 'newest', label: '⇅ Terbaru' },
 					{ value: 'oldest', label: '⇅ Terlama' },
-					{ value: 'price_desc', label: '⇅ Harga Tertinggi' },
-					{ value: 'price_asc', label: '⇅ Harga Terendah' }
+					{ value: 'price_desc', label: tr('⇅ Harga Tertinggi') },
+					{ value: 'price_asc', label: tr('⇅ Harga Terendah') }
 				]}
 			/>
 		</div>
@@ -418,9 +423,7 @@
 				{/each}
 			</div>
 		{:else if sorted.length === 0}
-			<div class="app-card mt-4 px-6 py-10 text-center text-sm text-muted-foreground">
-				Belum ada publikasi yang cocok…
-			</div>
+			<div class="app-card mt-4 px-6 py-10 text-center text-sm text-muted-foreground">{tr("Belum ada publikasi yang cocok…")}</div>
 		{:else}
 			<div class="app-card mt-4 flex flex-col">
 				{#each sorted as row (row.id)}
@@ -448,7 +451,7 @@
 						<!-- Utama -->
 						<div class="min-w-0 flex-1">
 							<a class="pub-title font-semibold hover:underline" href={`/klien/${brandUrl}/editor/${row.document_id}`}>
-								{row.document_title ?? 'Artikel Tanpa Judul'}
+								{row.document_title ?? tr('Artikel Tanpa Judul')}
 							</a>
 
 							<div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -456,11 +459,10 @@
 								{#if row.order_code}
 									<span class="rounded px-1.5 py-0.5 font-medium" style="background-color: var(--muted); color: var(--foreground);" title="Nomor order publikasi ini">{row.order_code}</span>
 								{/if}
-								<span>Media: <span style="color: var(--foreground);">{row.media_name ?? 'Media Mitra'}</span></span>
+								<span>{tr("Media:")}<span style="color: var(--foreground);">{row.media_name ?? tr('Media Mitra')}</span></span>
 								<span>{tcLabel(row.client_price, rateIdr)}</span>
 								{#if row.published_url}
-									<a class="inline-flex items-center gap-1" style="color: var(--primary);" href={row.published_url} target="_blank" rel="noreferrer">
-										Lihat terbit <ExternalLink size={13} />
+									<a class="inline-flex items-center gap-1" style="color: var(--primary);" href={row.published_url} target="_blank" rel="noreferrer">{tr("Lihat terbit")}<ExternalLink size={13} />
 									</a>
 								{/if}
 							</div>
@@ -477,30 +479,34 @@
 							{/if}
 
 							{#if row.media_status === 'archived'}
-								<p class="mt-2 text-xs" style="color: var(--warning);">
-									⚠ Media mitra diarsipkan — permintaan tidak akan lanjut sampai media dipulihkan mitra.
-								</p>
+								<p class="mt-2 text-xs" style="color: var(--warning);">{tr("⚠ Media mitra diarsipkan — permintaan tidak akan lanjut sampai media dipulihkan mitra.")}</p>
 							{/if}
 
 							{#if row.status === 'published' && row.pr_analysis}
 								<div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
 									{#if row.pr_analysis.sentiment}
-										<span class="rounded px-2 py-0.5" style="background-color: var(--muted);">Sentiment {SENTIMENT_LABEL[row.pr_analysis.sentiment.sentiment] ?? row.pr_analysis.sentiment.sentiment}</span>
+										<Tooltip content={tr('Nada pemberitaan artikel hasil analisis otomatis setelah terbit: positif, netral, atau negatif. Dipakai untuk mengukur kesan artikel yang sudah tayang di media.')} maxWidth={300}>
+											<span class="rounded px-2 py-0.5" style="background-color: var(--muted);">Sentiment {SENTIMENT_LABEL[row.pr_analysis.sentiment.sentiment] ?? row.pr_analysis.sentiment.sentiment}</span>
+										</Tooltip>
 									{/if}
 									{#if row.pr_analysis.verification}
-										<span
-											class="rounded px-2 py-0.5"
-											style={row.pr_analysis.verification.status === 'passed'
-												? 'background-color: var(--success-soft); color: var(--success);'
-												: row.pr_analysis.verification.status === 'failed'
-													? 'background-color: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive);'
-													: 'background-color: var(--warning-soft); color: var(--warning);'}
-										>
-											URL {row.pr_analysis.verification.status === 'passed' ? '✓' : row.pr_analysis.verification.status === 'failed' ? '✗' : '•'}{row.pr_analysis.verification.compliance_score != null ? ` ${row.pr_analysis.verification.compliance_score}/100` : ''}
-										</span>
+										<Tooltip content={tr('Verifikasi otomatis tautan artikel: URL bisa diakses, judul dan brand muncul di halaman, konten ter-publish, dan domain sesuai media. Tiap check bernilai 20 poin, lulus bila skor mencapai 60. ✓ lulus, ✗ gagal, • belum bisa diperiksa.')} maxWidth={320}>
+											<span
+												class="rounded px-2 py-0.5"
+												style={row.pr_analysis.verification.status === 'passed'
+													? 'background-color: var(--success-soft); color: var(--success);'
+													: row.pr_analysis.verification.status === 'failed'
+														? 'background-color: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive);'
+														: 'background-color: var(--warning-soft); color: var(--warning);'}
+											>
+												URL {row.pr_analysis.verification.status === 'passed' ? '✓' : row.pr_analysis.verification.status === 'failed' ? '✗' : '•'}{row.pr_analysis.verification.compliance_score != null ? ` ${row.pr_analysis.verification.compliance_score}/100` : ''}
+											</span>
+										</Tooltip>
 									{/if}
 									{#if row.pr_analysis.message?.score != null}
-										<span class="rounded px-2 py-0.5" style="background-color: var(--muted);">Message {row.pr_analysis.message.score}/100</span>
+										<Tooltip content={tr('Persentase pesan utama kampanye yang tersampaikan di artikel, diperiksa otomatis setelah terbit. Skor rendah berarti sebagian pesan penting belum masuk ke tulisan.')} maxWidth={300}>
+											<span class="rounded px-2 py-0.5" style="background-color: var(--muted);">Message {row.pr_analysis.message.score}/100</span>
+										</Tooltip>
 									{/if}
 								</div>
 							{/if}
@@ -540,12 +546,12 @@
 									<button
 										class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs"
 										type="button"
-										title="Kembalikan ke tahap persetujuan mitra (tombol setuju muncul lagi)"
+										title={tr("Kembalikan ke tahap persetujuan mitra (tombol setuju muncul lagi)")}
 										onclick={() => (confirmReset = row)}
-									>Kembalikan ke Persetujuan</button>
+									>{tr("Kembalikan ke Persetujuan")}</button>
 								{/if}
 								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => void openDetail(row)}>
-									{detailBusy ? 'Memuat…' : 'Detail'}
+									{detailBusy ? tr('Memuat…') : tr('Detail')}
 								</button>
 								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => void openTracking(row)}>
 									<ChartLine size={14} /> Tracking
@@ -559,8 +565,7 @@
 			<!-- Footer paginasi (custom, parity) -->
 			{#if total > 0}
 				<div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-					<span class="text-sm text-muted-foreground">
-						Menampilkan {(pageNum - 1) * pageSize + 1}–{Math.min(pageNum * pageSize, total)} dari {total}
+					<span class="text-sm text-muted-foreground"> {tr("Menampilkan")} {(pageNum - 1) * pageSize + 1}–{Math.min(pageNum * pageSize, total)} {tr("dari")} {total}
 					</span>
 					<div class="flex items-center gap-2">
 						<button class="app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs" type="button" disabled={pageNum <= 1 || loading} onclick={() => { pageNum -= 1; void load(); }}>‹ Sebelumnya</button>
@@ -574,12 +579,9 @@
 		<!-- Jadwal Terjadwal: dikelola di halaman kampanye Taut Pintar (jadwal
 		     dibuat dari alur distribusi), jadi arahkan ke sana. -->
 		<div class="app-card mt-4 flex flex-col items-center gap-3 px-6 py-12 text-center">
-			<p class="font-medium">Jadwal berulang dikelola dari alur kampanye</p>
-			<p class="max-w-lg text-sm text-muted-foreground">
-				Buat dan pantau jadwal distribusi berulang lewat The Gatekeeper pada kampanye Taut Pintar, supaya
-				media, jadwal, dan kreditnya tercatat dalam satu alur.
-			</p>
-			<a class="app-btn app-btn-primary" href={`/klien/${brandUrl}/campaigns`}>Buka Kampanye</a>
+			<p class="font-medium">{tr("Jadwal berulang dikelola dari alur kampanye")}</p>
+			<p class="max-w-lg text-sm text-muted-foreground">{tr("Buat dan pantau jadwal distribusi berulang lewat The Gatekeeper pada kampanye Taut Pintar, supaya media, jadwal, dan kreditnya tercatat dalam satu alur.")}</p>
+			<a class="app-btn app-btn-primary" href={`/klien/${brandUrl}/campaigns`}>{tr("Buka Kampanye")}</a>
 		</div>
 	{/if}
 </section>
@@ -587,48 +589,73 @@
 <!-- Modal Detail -->
 {#if detail}
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);">
-		<button type="button" aria-label="Tutup" tabindex="-1" style="position:absolute; inset:0; border:none; background:transparent; cursor:default;" onclick={() => (detail = null)}></button>
-		<dialog open class="app-card relative z-10 max-h-[88vh] w-full max-w-2xl overflow-y-auto p-5" aria-label="Detail publikasi" onkeydown={(e) => { if (e.key === 'Escape') detail = null; }}>
-			<div class="flex items-start justify-between gap-3">
-				<div>
-					<h2 class="text-base font-bold">{detail.document_title ?? 'Artikel Tanpa Judul'}</h2>
-					<p class="mt-0.5 text-xs text-muted-foreground">{detail.media_name ?? 'Media Mitra'} · {fmtDate(detail.created_at)}</p>
+		<button type="button" aria-label={tr("Tutup")} tabindex="-1" style="position:absolute; inset:0; border:none; background:transparent; cursor:default;" onclick={() => (detail = null)}></button>
+		<dialog open class="app-card relative z-10 max-h-[88vh] w-full max-w-xl overflow-y-auto" aria-label={tr("Detail publikasi")} onkeydown={(e) => { if (e.key === 'Escape') detail = null; }}>
+			<header class="flex items-start justify-between gap-4 px-6 pt-5">
+				<div class="min-w-0">
+					<h2 class="line-clamp-2 text-[17px] font-semibold leading-snug">{detail.document_title ?? tr('Artikel Tanpa Judul')}</h2>
+					<p class="mt-1 text-xs text-muted-foreground">{detail.media_name ?? tr('Media Mitra')} · {fmtDate(detail.created_at)}</p>
 				</div>
-				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label="Tutup" onclick={() => (detail = null)}><X size={18} /></button>
-			</div>
+				<button class="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary" type="button" aria-label={tr("Tutup")} onclick={() => (detail = null)}><X size={18} /></button>
+			</header>
 
-			<dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
-				<div><dt class="text-xs text-muted-foreground">Status</dt><dd class="font-semibold capitalize">{statusCfg(detail.status).label}</dd></div>
-				<div><dt class="text-xs text-muted-foreground">Biaya</dt><dd class="font-semibold tabular-nums">{tcLabel(detail.client_price, rateIdr)}</dd></div>
-				<div><dt class="text-xs text-muted-foreground">Terbit</dt><dd>{fmtDate(detail.published_at)}</dd></div>
-				{#if detail.order_code}<div><dt class="text-xs text-muted-foreground">Order</dt><dd>{detail.order_code}</dd></div>{/if}
+			<dl class="mt-4 grid grid-cols-1 gap-x-10 gap-y-4 border-t px-6 py-4 text-sm sm:grid-cols-2">
+				<div>
+					<dt class="flex items-center gap-1.5 text-xs text-muted-foreground"><CircleCheck size={13} /> Status</dt>
+					<dd class="mt-1.5">
+						<span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold capitalize" style="color: {statusCfg(detail.status).text}; background-color: {statusCfg(detail.status).bg};">
+							<span class="h-1.5 w-1.5 rounded-full" style="background-color: {statusCfg(detail.status).dot};"></span>
+							{statusCfg(detail.status).label}
+						</span>
+					</dd>
+				</div>
+				<div>
+					<dt class="flex items-center gap-1.5 text-xs text-muted-foreground"><Coins size={13} /> Biaya</dt>
+					<dd class="mt-1.5 font-medium tabular-nums">{tcLabel(detail.client_price, rateIdr)}</dd>
+				</div>
+				<div>
+					<dt class="flex items-center gap-1.5 text-xs text-muted-foreground"><Calendar size={13} /> {tr("Terbit")}</dt>
+					<dd class="mt-1.5 font-medium">{fmtDate(detail.published_at)}</dd>
+				</div>
+				{#if detail.order_code}
+					<div>
+						<dt class="flex items-center gap-1.5 text-xs text-muted-foreground"><FileText size={13} /> Order</dt>
+						<dd class="mt-1.5 font-medium">{detail.order_code}</dd>
+					</div>
+				{/if}
 			</dl>
 
 			{#if detail.verification}
-				<p class="mt-3 rounded-lg px-3 py-2 text-xs" style="background-color: var(--muted);">
-					Verifikasi URL: <strong>{detail.verification.status}</strong>{detail.verification.compliance_score != null ? ` · skor ${detail.verification.compliance_score}/100` : ''}
-					{#if detail.verification.error_message}<span class="block text-muted-foreground">{detail.verification.error_message}</span>{/if}
+				<p class="border-t px-6 py-3 text-xs text-muted-foreground">
+					Verifikasi URL: <span class="font-medium" style="color: var(--foreground);">{detail.verification.status}</span>{detail.verification.compliance_score != null ? ` · skor ${detail.verification.compliance_score}/100` : ''}
+					{#if detail.verification.error_message}<span class="mt-0.5 block">{detail.verification.error_message}</span>{/if}
 				</p>
 			{/if}
 
 			{#if detail.published_url}
-				<a class="mt-3 inline-flex items-center gap-1 text-sm" style="color: var(--primary);" href={detail.published_url} target="_blank" rel="noreferrer">
-					Buka artikel terbit <ExternalLink size={13} />
-				</a>
+				<div class="border-t px-6 py-3">
+					<a class="inline-flex items-center gap-1.5 text-sm font-medium hover:underline" style="color: var(--primary);" href={detail.published_url} target="_blank" rel="noreferrer">
+						<ExternalLink size={14} />
+						{tr("Buka artikel terbit")}
+					</a>
+				</div>
 			{/if}
 
-			<div class="mt-5 flex flex-wrap items-center justify-end gap-2 border-t pt-4">
+			<footer class="flex flex-wrap items-center gap-2 border-t px-6 py-4">
 				{#if CANCELLABLE.has(detail.status)}
-					<button class="app-btn app-btn-soft" style="color: var(--destructive);" type="button" onclick={() => { cancelTarget = detail; cancelReason = ''; }}>Batalkan Publikasi</button>
+					<button class="app-btn app-btn-soft" style="color: var(--destructive);" type="button" onclick={() => { cancelTarget = detail; cancelReason = ''; }}>{tr("Batalkan Publikasi")}</button>
 				{/if}
 				{#if RESETTABLE.has(detail.status)}
-					<button class="app-btn app-btn-soft" type="button" onclick={() => (confirmReset = detail)}>Kembalikan ke Persetujuan</button>
+					<button class="app-btn app-btn-soft" type="button" onclick={() => (confirmReset = detail)}>{tr("Kembalikan ke Persetujuan")}</button>
 				{/if}
 				{#if detail.status === 'failed'}
-					<button class="app-btn app-btn-soft" type="button" onclick={() => void retryPublication(detail!.id)}>Retry Publikasi</button>
+					<button class="app-btn app-btn-soft" type="button" onclick={() => void retryPublication(detail!.id)}>{tr("Retry Publikasi")}</button>
 				{/if}
-				<a class="app-btn app-btn-primary" href={`/klien/${brandUrl}/editor/${detail.document_id}`}>Buka Editor</a>
-			</div>
+				<a class="app-btn app-btn-primary ml-auto" href={`/klien/${brandUrl}/editor/${detail.document_id}`}>
+					<PencilLine size={14} />
+					{tr("Buka Editor")}
+				</a>
+			</footer>
 		</dialog>
 	</div>
 {/if}
@@ -636,18 +663,16 @@
 <!-- Modal Batalkan -->
 {#if cancelTarget}
 	<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);">
-		<button type="button" aria-label="Tutup" tabindex="-1" style="position:absolute; inset:0; border:none; background:transparent; cursor:default;" onclick={() => { if (!cancelBusy) cancelTarget = null; }}></button>
+		<button type="button" aria-label={tr("Tutup")} tabindex="-1" style="position:absolute; inset:0; border:none; background:transparent; cursor:default;" onclick={() => { if (!cancelBusy) cancelTarget = null; }}></button>
 		<dialog open class="app-card relative z-10 w-full max-w-md p-5" aria-label="Batalkan publikasi" onkeydown={(e) => { if (e.key === 'Escape' && !cancelBusy) cancelTarget = null; }}>
 			<h2 class="text-base font-bold">Batalkan publikasi</h2>
-			<p class="mt-2 text-sm text-muted-foreground">
-				Publikasi ke <strong style="color: var(--foreground);">{cancelTarget.media_name ?? 'Media Mitra'}</strong> akan dibatalkan. Kredit (bila ada) otomatis dikembalikan.
-			</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr("Publikasi ke")}<strong style="color: var(--foreground);">{cancelTarget.media_name ?? tr('Media Mitra')}</strong>{tr("akan dibatalkan. Kredit (bila ada) otomatis dikembalikan.")}</p>
 			<label class="mt-3 flex flex-col gap-1 text-sm">
 				Alasan (opsional)
 				<textarea class="app-input" rows="3" bind:value={cancelReason} maxlength={500}></textarea>
 			</label>
 			<div class="mt-4 flex items-center justify-end gap-2">
-				<button class="app-btn app-btn-soft" type="button" disabled={cancelBusy} onclick={() => (cancelTarget = null)}>Batal</button>
+				<button class="app-btn app-btn-soft" type="button" disabled={cancelBusy} onclick={() => (cancelTarget = null)}>{tr("Batal")}</button>
 				<button class="app-btn app-btn-primary" type="button" disabled={cancelBusy} onclick={() => void submitCancel()}>
 					{cancelBusy ? 'Membatalkan…' : 'Batalkan publikasi'}
 				</button>
@@ -659,15 +684,13 @@
 <!-- Konfirmasi Kembalikan ke Persetujuan -->
 {#if confirmReset}
 	<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);">
-		<button type="button" aria-label="Tutup" tabindex="-1" style="position:absolute; inset:0; border:none; background:transparent; cursor:default;" onclick={() => (confirmReset = null)}></button>
-		<dialog open class="app-card relative z-10 w-full max-w-md p-5" aria-label="Kembalikan ke persetujuan" onkeydown={(e) => { if (e.key === 'Escape') confirmReset = null; }}>
-			<h2 class="text-base font-bold">Kembalikan ke persetujuan?</h2>
-			<p class="mt-2 text-sm text-muted-foreground">
-				Kembalikan publikasi ini ke tahap persetujuan mitra? Tombol setuju akan muncul lagi di portal mitra.
-			</p>
+		<button type="button" aria-label={tr("Tutup")} tabindex="-1" style="position:absolute; inset:0; border:none; background:transparent; cursor:default;" onclick={() => (confirmReset = null)}></button>
+		<dialog open class="app-card relative z-10 w-full max-w-md p-5" aria-label={tr("Kembalikan ke persetujuan")} onkeydown={(e) => { if (e.key === 'Escape') confirmReset = null; }}>
+			<h2 class="text-base font-bold">{tr("Kembalikan ke persetujuan?")}</h2>
+			<p class="mt-2 text-sm text-muted-foreground">{tr("Kembalikan publikasi ini ke tahap persetujuan mitra? Tombol setuju akan muncul lagi di portal mitra.")}</p>
 			<div class="mt-4 flex items-center justify-end gap-2">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (confirmReset = null)}>Batal</button>
-				<button class="app-btn app-btn-primary" type="button" onclick={() => void resetToApproval(confirmReset!)}>Kembalikan</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (confirmReset = null)}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="button" onclick={() => void resetToApproval(confirmReset!)}>{tr("Kembalikan")}</button>
 			</div>
 		</dialog>
 	</div>
@@ -676,20 +699,19 @@
 <!-- Modal Tracking -->
 {#if trackingTarget}
 	<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);">
-		<button type="button" aria-label="Tutup" tabindex="-1" style="position:absolute; inset:0; border:none; background:transparent; cursor:default;" onclick={() => (trackingTarget = null)}></button>
+		<button type="button" aria-label={tr("Tutup")} tabindex="-1" style="position:absolute; inset:0; border:none; background:transparent; cursor:default;" onclick={() => (trackingTarget = null)}></button>
 		<dialog open class="app-card relative z-10 w-full max-w-lg p-5" aria-label="Pelacakan publikasi" onkeydown={(e) => { if (e.key === 'Escape') trackingTarget = null; }}>
 			<div class="flex items-start justify-between gap-3">
 				<h2 class="text-base font-bold">Tracking</h2>
-				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label="Tutup" onclick={() => (trackingTarget = null)}><X size={18} /></button>
+				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Tutup")} onclick={() => (trackingTarget = null)}><X size={18} /></button>
 			</div>
-			<p class="mt-1 text-xs text-muted-foreground">{trackingTarget.document_title ?? 'Artikel Tanpa Judul'}</p>
+			<p class="mt-1 text-xs text-muted-foreground">{trackingTarget.document_title ?? tr('Artikel Tanpa Judul')}</p>
 
 			{#if tracking}
 				<div class="mt-3 rounded-lg border p-3">
 					<p class="text-xs text-muted-foreground">Short link</p>
 					<a class="text-sm font-medium" style="color: var(--primary);" href={trackUrl} target="_blank" rel="noreferrer">{trackUrl}</a>
-					<p class="mt-2 text-xs text-muted-foreground">
-						Total klik tercatat: <strong style="color: var(--foreground);" class="tabular-nums">{trackTotal.toLocaleString('id-ID')}</strong>
+					<p class="mt-2 text-xs text-muted-foreground">{tr("Total klik tercatat:")}<strong style="color: var(--foreground);" class="tabular-nums">{trackTotal.toLocaleString('id-ID')}</strong>
 					</p>
 					{#if Object.keys(trackingCounts).length > 0}
 						<div class="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -698,7 +720,7 @@
 					{/if}
 				</div>
 			{:else}
-				<p class="mt-3 text-sm text-muted-foreground">Belum ada tautan pelacakan untuk publikasi ini.</p>
+				<p class="mt-3 text-sm text-muted-foreground">{tr("Belum ada tautan pelacakan untuk publikasi ini.")}</p>
 			{/if}
 
 			<label class="mt-3 flex flex-col gap-1 text-sm">
@@ -707,9 +729,9 @@
 			</label>
 
 			<div class="mt-4 flex items-center justify-end gap-2">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (trackingTarget = null)}>Tutup</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (trackingTarget = null)}>{tr("Tutup")}</button>
 				<button class="app-btn app-btn-primary" type="button" disabled={trackingBusy} onclick={() => void saveTracking()}>
-					{trackingBusy ? 'Menyimpan…' : 'Simpan'}
+					{trackingBusy ? 'Menyimpan…' : tr('Simpan')}
 				</button>
 			</div>
 		</dialog>
@@ -718,8 +740,7 @@
 
 {#if detailBusy}
 	<p class="fixed bottom-4 right-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm shadow" style="background-color: var(--card);" role="status">
-		<LoaderCircle size={15} class="animate-spin" /> Memuat detail…
-	</p>
+		<LoaderCircle size={15} class="animate-spin" />{tr("Memuat detail…")}</p>
 {/if}
 {#if err && rows.length > 0}
 	<p class="fixed bottom-4 right-4 flex max-w-sm items-center gap-2 rounded-lg border px-3 py-2 text-sm" style="background-color: var(--card); color: var(--destructive);" role="status">

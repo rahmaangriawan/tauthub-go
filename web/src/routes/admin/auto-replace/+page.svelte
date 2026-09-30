@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Auto-Replace — saat partner menolak publikasi, Tauthub otomatis membuat
 	// publikasi pengganti ke media rekomendasi terbaik. Atur aktif/nonaktif global
 	// atau per brand, dan batas penolakan beruntun.
@@ -153,11 +155,8 @@
 	<div class="app-card mt-4 p-4">
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<div>
-				<p class="font-medium">Pengaturan global</p>
-				<p class="text-xs text-muted-foreground">
-					Berlaku untuk semua brand yang tidak punya override sendiri. Default: aktif, maksimal 3 penggantian beruntun per
-					publikasi.
-				</p>
+				<p class="font-medium">{tr("Pengaturan global")}</p>
+				<p class="text-xs text-muted-foreground">{tr("Berlaku untuk semua brand yang tidak punya override sendiri. Default: aktif, maksimal 3 penggantian beruntun per publikasi.")}</p>
 			</div>
 			{#if global}
 				<div class="flex flex-wrap items-center gap-4">
@@ -169,7 +168,7 @@
 								if (global) global = { ...global, enabled: e.currentTarget.checked };
 							}}
 						/>
-						<span class="text-sm">Aktif</span>
+						<span class="text-sm">{tr("Aktif")}</span>
 					</label>
 					<label class="block">
 						<span class="text-xs font-bold text-muted-foreground">Maks. penggantian beruntun</span>
@@ -189,7 +188,7 @@
 							}}
 						/>
 					</label>
-					<button class="app-btn app-btn-primary" onclick={saveGlobal} disabled={busy}>Simpan global</button>
+					<button class="app-btn app-btn-primary" onclick={saveGlobal} disabled={busy}>{tr("Simpan global")}</button>
 				</div>
 			{/if}
 		</div>
@@ -202,25 +201,25 @@
 				<span class="text-xs font-bold text-muted-foreground">Brand</span>
 				<Select
 					ariaLabel="Brand"
-					placeholder="Pilih brand…"
+					placeholder={tr("Pilih brand…")}
 					minWidth={260}
 					value={brandFilter}
 					onchange={(v) => (brandFilter = v)}
 					options={[
-						{ value: '', label: 'Pilih brand…' },
+						{ value: '', label: tr('Pilih brand…') },
 						...brands.filter((b) => b.name).map((b) => ({ value: b.id, label: b.name }))
 					]}
 				/>
 			</label>
 			<label class="flex items-center gap-2 pb-3">
 				<input type="checkbox" bind:checked={brandEnabled} />
-				<span class="text-sm">Aktif</span>
+				<span class="text-sm">{tr("Aktif")}</span>
 			</label>
 			<label class="block">
 				<span class="text-xs font-bold text-muted-foreground">Maks. beruntun</span>
 				<input class="app-input mt-1" type="number" min="1" max="10" style="width: 90px;" bind:value={brandMax} />
 			</label>
-			<button class="app-btn app-btn-primary" onclick={saveBrand} disabled={busy || !brandFilter}>Tambah override</button>
+			<button class="app-btn app-btn-primary" onclick={saveBrand} disabled={busy || !brandFilter}>{tr("Tambah override")}</button>
 		</div>
 
 		<div class="mt-4 overflow-x-auto">
@@ -238,7 +237,7 @@
 					{#if perBrand.length === 0}
 						<tr
 							><td colspan="5" class="px-4 py-2.5 text-sm text-muted-foreground"
-								>Belum ada override per brand — semua brand memakai pengaturan global.</td
+								>{tr("Belum ada override per brand — semua brand memakai pengaturan global.")}</td
 							></tr
 						>
 					{/if}
@@ -246,7 +245,7 @@
 						<tr class="border-t">
 							<td class="px-4 py-2.5 font-medium">{row.brand_name ?? row.brand_id}</td>
 							<td class="px-4 py-2.5">
-								<Badge tone={row.enabled ? 'success' : 'danger'} label={row.enabled ? 'Aktif' : 'Nonaktif'} />
+								<Badge tone={row.enabled ? 'success' : 'danger'} label={row.enabled ? tr('Aktif') : tr('Nonaktif')} />
 							</td>
 							<td class="px-4 py-2.5 tabular-nums">{row.max_replaces}</td>
 							<td class="px-4 py-2.5 text-xs">{row.updated_at ? fmtDateTime(row.updated_at) : '—'}</td>
@@ -272,9 +271,5 @@
 	</div>
 
 	<div class="app-card mt-3 p-4 text-xs text-muted-foreground">
-		<Shuffle size={14} class="mr-1 inline align-[-2px]" />
-		Alur: partner menolak → Tauthub mencari media alternatif (media yang sudah dicoba untuk artikel yang sama dieksklusi,
-		standard check tetap dijalankan) → publikasi pengganti dibuat otomatis → klien diberi notifikasi. Jika melebihi batas
-		beruntun atau tidak ada kandidat, publikasi tetap ditolak tanpa penggantian.
-	</div>
+		<Shuffle size={14} class="mr-1 inline align-[-2px]" />{tr("Alur: partner menolak → Tauthub mencari media alternatif (media yang sudah dicoba untuk artikel yang sama dieksklusi, standard check tetap dijalankan) → publikasi pengganti dibuat otomatis → klien diberi notifikasi. Jika melebihi batas beruntun atau tidak ada kandidat, publikasi tetap ditolak tanpa penggantian.")}</div>
 </section>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Media Otomatis — daftar media mitra yang mode otomatisnya sedang menyala.
 	// Port apps/web/src/app/admin/media-otomatis/page.tsx.
 	//
@@ -28,15 +30,15 @@
 		auto_publish: boolean;
 	};
 
-	const STATUS_LABEL: Record<string, string> = {
-		active: 'Aktif',
-		inactive: 'Nonaktif',
+	const STATUS_LABEL: Record<string, string> = $derived({
+		active: tr('Aktif'),
+		inactive: tr('Nonaktif'),
 		draft: 'Draf',
 		pending_review: 'Pending',
-		rejected: 'Ditolak',
-		archived: 'Arsip',
+		rejected: tr('Ditolak'),
+		archived: tr('Arsip'),
 		hidden: 'Disembunyikan'
-	};
+	});
 
 	const INTEGRATION_LABEL: Record<string, string> = {
 		manual: 'Manual',
@@ -149,8 +151,8 @@
 
 <section class="w-full">
 	<PageHeader
-		title="Media Otomatis"
-		description="Media mitra yang artikelnya terbit tanpa persetujuan mitra. Menyalakan mode ini hanya bisa dilakukan mitra yang sudah Anda izinkan, dari portal mitra. Di sini Anda bisa memantau dan mematikannya."
+		title={tr("Media Otomatis")}
+		description={tr("Media mitra yang artikelnya terbit tanpa persetujuan mitra. Menyalakan mode ini hanya bisa dilakukan mitra yang sudah Anda izinkan, dari portal mitra. Di sini Anda bisa memantau dan mematikannya.")}
 	>
 		<button class="app-btn app-btn-soft" onclick={load} disabled={loading}>
 			<RefreshCw size={15} /> Segarkan
@@ -161,9 +163,9 @@
 
 	<div class="mt-4 flex flex-wrap items-end gap-3">
 		<label class="block" style="min-width: 180px;">
-			<span class="mb-1 block text-xs text-muted-foreground">Status media</span>
+			<span class="mb-1 block text-xs text-muted-foreground">{tr("Status media")}</span>
 			<Select
-				ariaLabel="Status media"
+				ariaLabel={tr("Status media")}
 				minWidth={200}
 				value={filterStatus || 'all'}
 				onchange={(v) => {
@@ -172,36 +174,33 @@
 					void load();
 				}}
 				options={[
-					{ value: 'all', label: 'Semua status' },
-					{ value: 'active', label: 'Aktif' },
+					{ value: 'all', label: tr('Semua status') },
+					{ value: 'active', label: tr('Aktif') },
 					{ value: 'pending_review', label: 'Pending' },
-					{ value: 'inactive', label: 'Nonaktif' }
+					{ value: 'inactive', label: tr('Nonaktif') }
 				]}
 			/>
 		</label>
 	</div>
 
 	{#if loading && rows.length === 0}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat media otomatis…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat media otomatis…")}</p>
 	{:else if rows.length === 0}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">
-				Belum ada media dengan mode otomatis. Izinkan mitra lewat kolom 'Izinkan Mode Otomatis' di halaman Mitra, lalu
-				mitra menyalakannya sendiri pada media yang dia pilih. Media itu akan muncul di sini.
-			</p>
+			<p class="text-sm text-muted-foreground">{tr("Belum ada media dengan mode otomatis. Izinkan mitra lewat kolom 'Izinkan Mode Otomatis' di halaman Mitra, lalu mitra menyalakannya sendiri pada media yang dia pilih. Media itu akan muncul di sini.")}</p>
 		</div>
 	{:else}
 		<DataTable
 			columns={[
-				{ key: 'name', label: 'Media', render: mediaCell },
-				{ key: 'partner', label: 'Mitra', render: partnerCell },
+				{ key: 'name', label: tr('Media'), render: mediaCell },
+				{ key: 'partner', label: tr('Mitra'), render: partnerCell },
 				{ key: 'integration', label: 'Platform', render: integrationCell },
 				{ key: 'status', label: 'Status', render: statusCell },
 				{ key: 'auto', label: 'Mode Otomatis', render: autoCell }
 			]}
 			rows={pageRows}
 			rowKey={(row: MediaRow) => row.id}
-			empty="Belum ada media dengan mode otomatis."
+			empty={tr("Belum ada media dengan mode otomatis.")}
 			minWidth="900px"
 		/>
 		<Pagination
@@ -213,8 +212,5 @@
 	{/if}
 
 	<p class="mt-3 flex items-start gap-1.5 text-xs text-muted-foreground">
-		<Unlink size={13} class="mt-0.5 shrink-0" />
-		Mematikan mode otomatis tidak mengubah artikel yang sudah terbit; hanya publikasi berikutnya yang kembali menunggu ACC
-		mitra.
-	</p>
+		<Unlink size={13} class="mt-0.5 shrink-0" />{tr("Mematikan mode otomatis tidak mengubah artikel yang sudah terbit; hanya publikasi berikutnya yang kembali menunggu ACC mitra.")}</p>
 </section>

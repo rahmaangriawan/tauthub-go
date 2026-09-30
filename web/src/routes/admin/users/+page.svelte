@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Kelola user (klien & mitra) — port app/admin/users/page.tsx:
 	// setujui pendaftaran, suspend/reactivate, kuota token harian, jatah
 	// generate Writer, tambah TC manual, set password (super admin),
@@ -32,11 +34,11 @@
 	};
 
 	type StatusKind = 'pending' | 'active' | 'suspended';
-	const statusMeta: Record<StatusKind, { label: string; tone: 'warning' | 'success' | 'danger' }> = {
-		pending: { label: 'Menunggu', tone: 'warning' },
-		active: { label: 'Aktif', tone: 'success' },
+	const statusMeta: Record<StatusKind, { label: string; tone: 'warning' | 'success' | 'danger' }> = $derived({
+		pending: { label: tr('Menunggu'), tone: 'warning' },
+		active: { label: tr('Aktif'), tone: 'success' },
 		suspended: { label: 'Ditangguhkan', tone: 'danger' }
-	};
+	});
 
 	const PAGE_SIZE = 20;
 
@@ -284,7 +286,7 @@
 		}
 		const result = await res.json();
 		createNotice = result.password_set
-			? 'User dibuat dengan password yang Anda tetapkan — akun sudah bisa login sekarang.'
+			? tr('User dibuat dengan password yang Anda tetapkan — akun sudah bisa login sekarang.')
 			: `User dibuat.${result.activation_sent ? ' Email aktivasi terkirim — user mengatur password lewat link tersebut.' : ' Email aktivasi GAGAL dikirim — buat token aktivasi ulang atau bagikan kredensial manual.'}`;
 		createEmail = '';
 		createName = '';
@@ -356,7 +358,7 @@
 		rows = rows.map((item) => (item.id === result.id ? { ...item, role: result.role } : item));
 		const kept = result.retained_brands.length > 0 ? ` Brand yang dipertahankan: ${result.retained_brands.join(', ')}.` : '';
 		roleNotice =
-			`${roleTarget.display_name} sekarang berperan sebagai ${result.role === 'partner' ? 'Mitra' : 'Klien'}.` +
+			`${roleTarget.display_name} sekarang berperan sebagai ${result.role === 'partner' ? tr('Mitra') : tr('Klien')}.` +
 			(result.removed_brands > 0 ? ` ${result.removed_brands} brand kosong dihapus.` : '') +
 			kept +
 			(result.note ? ` ${result.note}` : '');
@@ -383,12 +385,12 @@
 
 	async function submitTcAdjustment() {
 		if (!tcUser || !tcBrandId) {
-			tcError = 'Pilih brand dulu.';
+			tcError = tr('Pilih brand dulu.');
 			return;
 		}
 		const tc = parseInt(tcAmount, 10);
 		if (isNaN(tc) || tc <= 0) {
-			tcError = 'Jumlah TC harus angka positif.';
+			tcError = tr('Jumlah TC harus angka positif.');
 			return;
 		}
 		if (tcReason.trim().length < 3) {
@@ -421,8 +423,8 @@
 </script>
 
 <section>
-	<PageHeader title="Klien & Mitra" description="Setujui pendaftaran baru dan kelola status akun serta batas pemakaian harian.">
-		<button class="app-btn app-btn-soft" type="button" onclick={openCreate}>Tambah Pengguna</button>
+	<PageHeader title={tr("Klien & Mitra")} description="Setujui pendaftaran baru dan kelola status akun serta batas pemakaian harian.">
+		<button class="app-btn app-btn-soft" type="button" onclick={openCreate}>{tr("Tambah Pengguna")}</button>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{rows.length} users</span>
 	</PageHeader>
 
@@ -430,7 +432,7 @@
 
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke direktori user platform.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke direktori user platform.")}</p>
 		</div>
 	{:else}
 		<div class="app-card mt-4 flex flex-wrap items-center gap-3 p-3">
@@ -440,12 +442,12 @@
 					<input
 						class="w-full bg-transparent text-sm outline-none"
 						name="search"
-						aria-label="Cari user"
-						placeholder="Cari nama atau email..."
+						aria-label={tr("Cari user")}
+						placeholder={tr("Cari nama atau email...")}
 						bind:value={searchText}
 					/>
 				</label>
-				<button class="app-btn app-btn-soft" type="submit" disabled={loading}>Cari</button>
+				<button class="app-btn app-btn-soft" type="submit" disabled={loading}>{tr("Cari")}</button>
 			</form>
 			<Select
 				ariaLabel="Filter role pengguna"
@@ -454,9 +456,9 @@
 				value={roleFilter}
 				onchange={(v) => changeRoleFilter(v)}
 				options={[
-					{ value: '', label: 'Semua role' },
-					{ value: 'client', label: 'Klien' },
-					{ value: 'partner', label: 'Mitra' }
+					{ value: '', label: tr('Semua role') },
+					{ value: 'client', label: tr('Klien') },
+					{ value: 'partner', label: tr('Mitra') }
 				]}
 			/>
 		</div>
@@ -490,9 +492,9 @@
 										</p>
 										<p class="text-xs text-muted-foreground">{user.email}</p>
 										{#if user.role === 'partner'}
-											<Badge label="Mitra" tone="accent" />
+											<Badge label={tr("Mitra")} tone="accent" />
 										{:else if user.role === 'client'}
-											<span class="mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">Klien</span>
+											<span class="mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{tr("Klien")}</span>
 										{/if}
 									</div>
 								</div>
@@ -551,7 +553,7 @@
 										type="button"
 										disabled={saving === user.id}
 										onclick={() => {
-											const next = prompt('Jatah generate per artikel (1-999, kosongkan = default 3):', String(user.writer_generate_quota ?? ''));
+											const next = prompt(tr('Jatah generate per artikel (1-999, kosongkan = default 3):'), String(user.writer_generate_quota ?? ''));
 											void updateGenQuota(user.id, next ?? '');
 										}}
 									>{saving === user.id ? '...' : 'Set'}</button>
@@ -585,12 +587,11 @@
 											>
 												{#if user.role === 'client' || user.role === 'partner'}
 													<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; openRoleDialog(user); }}>
-														<ArrowLeftRight size={15} /> Ubah jadi {user.role === 'partner' ? 'Klien' : 'Mitra'}
+														<ArrowLeftRight size={15} /> Ubah jadi {user.role === 'partner' ? tr('Klien') : tr('Mitra')}
 													</button>
 												{/if}
 												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openTcDialog(user); }}>
-													<Coins size={15} /> Tambah TC
-												</button>
+													<Coins size={15} />{tr("Tambah TC")}</button>
 												{#if isSuperAdmin}
 													<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; openPasswordDialog(user); }}>
 														<Key size={15} /> Set password
@@ -614,7 +615,7 @@
 			{#if !loading && rows.length === 0}
 				<div class="flex flex-col items-center px-4 py-12 text-center">
 					<UserRound size={26} class="text-muted-foreground" />
-					<p class="mt-2 text-sm text-muted-foreground">Tidak ada user yang cocok.</p>
+					<p class="mt-2 text-sm text-muted-foreground">{tr("Tidak ada user yang cocok.")}</p>
 				</div>
 			{/if}
 			<div class="px-4 pb-4">
@@ -631,32 +632,30 @@
 
 {#if statusTarget}
 	<Modal
-		title={dialogMeta?.label === 'Menunggu' ? 'Setujui pendaftaran?' : statusTarget?.is_active ? 'Suspend user?' : 'Reactivate user?'}
+		title={dialogMeta?.label === tr('Menunggu') ? 'Setujui pendaftaran?' : statusTarget?.is_active ? 'Suspend user?' : 'Reactivate user?'}
 		label="Konfirmasi status user"
 		maxWidth="md"
 		onClose={() => (statusTarget = null)}
 	>
 		<p class="text-sm text-muted-foreground">
-			{dialogMeta?.label === 'Menunggu'
+			{dialogMeta?.label === tr('Menunggu')
 				? `${statusTarget?.display_name} akan langsung bisa login dan mengakses platform.`
 				: statusTarget?.is_active
 					? `${statusTarget?.display_name} akan langsung ditolak saat memakai token atau login kembali.`
 					: `${statusTarget?.display_name} akan kembali dapat login dan mengakses brand miliknya.`}
 		</p>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (statusTarget = null)}>Batal</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (statusTarget = null)}>{tr("Batal")}</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void updateStatus()}>
-				{busy ? 'Menyimpan...' : dialogMeta?.label === 'Menunggu' ? 'Setujui' : statusTarget?.is_active ? 'Suspend' : 'Reactivate'}
+				{busy ? 'Menyimpan...' : dialogMeta?.label === tr('Menunggu') ? 'Setujui' : statusTarget?.is_active ? 'Suspend' : 'Reactivate'}
 			</button>
 		{/snippet}
 	</Modal>
 {/if}
 
 {#if createOpen}
-	<Modal title="Tambah Pengguna" label="Tambah pengguna" maxWidth="md" onClose={() => (createOpen = false)}>
-		<p class="text-sm text-muted-foreground">
-			Buat akun langsung tanpa pendaftaran umum. Akun langsung aktif; user mengatur password lewat link aktivasi yang dikirim ke emailnya (berlaku 1 jam).
-		</p>
+	<Modal title={tr("Tambah Pengguna")} label={tr("Tambah pengguna")} maxWidth="md" onClose={() => (createOpen = false)}>
+		<p class="text-sm text-muted-foreground">{tr("Buat akun langsung tanpa pendaftaran umum. Akun langsung aktif; user mengatur password lewat link aktivasi yang dikirim ke emailnya (berlaku 1 jam).")}</p>
 		<div class="mt-4 flex flex-col gap-3">
 			{#if createError}
 				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{createError}</div>
@@ -665,36 +664,36 @@
 				<div class="flex items-start gap-2 text-sm" style="color: var(--success);"><CircleCheck size={16} class="mt-0.5 shrink-0" />{createNotice}</div>
 			{/if}
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Email</span>
-				<input class="app-input w-full" type="email" placeholder="nama@perusahaan.com" bind:value={createEmail} />
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Email")}</span>
+				<input class="app-input w-full" type="email" placeholder={tr("nama@perusahaan.com")} bind:value={createEmail} />
 			</label>
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Nama lengkap / nama perusahaan</span>
-				<input class="app-input w-full" placeholder="Nama Anda" bind:value={createName} />
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Nama lengkap / nama perusahaan")}</span>
+				<input class="app-input w-full" placeholder={tr("Nama Anda")} bind:value={createName} />
 			</label>
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Peran</span>
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Peran")}</span>
 				<Select
-					ariaLabel="Peran"
+					ariaLabel={tr("Peran")}
 					minWidth={260}
 					value={createRole}
 					onchange={(v) => (createRole = v === 'partner' ? 'partner' : 'client')}
 					options={[
-						{ value: 'client', label: 'Klien — kelola brand & konten' },
-						{ value: 'partner', label: 'Mitra — media partner' }
+						{ value: 'client', label: tr('Klien — kelola brand & konten') },
+						{ value: 'partner', label: tr('Mitra — media partner') }
 					]}
 				/>
 			</label>
 			{#if isSuperAdmin}
 				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Password awal (opsional)</span>
-					<input class="app-input w-full" type="password" placeholder="Kosongkan untuk kirim link aktivasi via email" bind:value={createPassword} />
-					<span class="mt-1 block text-xs text-muted-foreground">Diisi (min 10 karakter) = akun langsung bisa login tanpa email. Kosong = pakai link aktivasi.</span>
+					<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Password awal (opsional)")}</span>
+					<input class="app-input w-full" type="password" placeholder={tr("Kosongkan untuk kirim link aktivasi via email")} bind:value={createPassword} />
+					<span class="mt-1 block text-xs text-muted-foreground">{tr("Diisi (min 10 karakter) = akun langsung bisa login tanpa email. Kosong = pakai link aktivasi.")}</span>
 				</label>
 			{/if}
 		</div>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>Tutup</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>{tr("Tutup")}</button>
 			<button
 				class="app-btn app-btn-primary"
 				type="button"
@@ -706,10 +705,8 @@
 {/if}
 
 {#if tcUser}
-	<Modal title={`Tambah TC — ${tcUser.display_name}`} label="Tambah TC" maxWidth="lg" onClose={() => (tcUser = null)}>
-		<p class="text-sm text-muted-foreground">
-			Tambahkan Tauthub Credit (TC) manual ke wallet brand milik user ini. Gunakan untuk kompensasi topup gagal atau penyesuaian.
-		</p>
+	<Modal title={`Tambah TC — ${tcUser.display_name}`} label={tr("Tambah TC")} maxWidth="lg" onClose={() => (tcUser = null)}>
+		<p class="text-sm text-muted-foreground">{tr("Tambahkan Tauthub Credit (TC) manual ke wallet brand milik user ini. Gunakan untuk kompensasi topup gagal atau penyesuaian.")}</p>
 		<div class="mt-4 flex flex-col gap-3">
 			{#if tcError}
 				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{tcError}</div>
@@ -724,36 +721,36 @@
 				{:else}
 					<Select
 						ariaLabel="Brand tujuan"
-						placeholder="Pilih brand…"
+						placeholder={tr("Pilih brand…")}
 						minWidth={260}
 						value={tcBrandId}
 						onchange={(v) => (tcBrandId = v)}
 						options={[
-							{ value: '', label: 'Pilih brand…' },
+							{ value: '', label: tr('Pilih brand…') },
 							...tcBrands.map((b) => ({ value: b.id, label: `${b.name} — ${fmtNum(b.available_tc)} TC tersedia` }))
 						]}
 					/>
 				{/if}
 			</div>
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Jumlah TC</span>
-				<input class="app-input w-full" type="number" min="1" placeholder="cth: 1000" value={tcAmount} oninput={(e) => (tcAmount = (e.currentTarget as HTMLInputElement).value)} />
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Jumlah TC")}</span>
+				<input class="app-input w-full" type="number" min="1" placeholder={tr("cth: 1000")} value={tcAmount} oninput={(e) => (tcAmount = (e.currentTarget as HTMLInputElement).value)} />
 			</label>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Alasan (wajib)</span>
 				<textarea
 					class="app-input w-full"
 					rows={3}
-					placeholder="cth: Kompensasi topup gagal — pembayaran sukses tapi saldo tidak masuk"
+					placeholder={tr("cth: Kompensasi topup gagal — pembayaran sukses tapi saldo tidak masuk")}
 					bind:value={tcReason}
 				></textarea>
-				<span class="mt-1 block text-xs text-muted-foreground">Akan tercatat di ledger &amp; audit log brand.</span>
+				<span class="mt-1 block text-xs text-muted-foreground">Akan tercatat di ledger & audit log brand.</span>
 			</label>
 		</div>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (tcUser = null)}>Batal</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (tcUser = null)}>{tr("Batal")}</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={tcBusy || tcBrands.length === 0} onclick={() => void submitTcAdjustment()}>
-				<Coins size={15} />{tcBusy ? 'Menambah…' : 'Tambah TC'}
+				<Coins size={15} />{tcBusy ? 'Menambah…' : tr('Tambah TC')}
 			</button>
 		{/snippet}
 	</Modal>
@@ -761,8 +758,7 @@
 
 {#if pwUser}
 	<Modal title={`Set password — ${pwUser.display_name}`} label="Set password" maxWidth="md" onClose={() => (pwUser = null)}>
-		<p class="text-sm text-muted-foreground">
-			Tetapkan password baru untuk {pwUser.email} tanpa link email. Sesi login lama user otomatis dikeluarkan, dan pemilik akun diberi tahu lewat email.
+		<p class="text-sm text-muted-foreground"> {tr("Tetapkan password baru untuk")} {pwUser.email} tanpa link email. Sesi login lama user otomatis dikeluarkan, dan pemilik akun diberi tahu lewat email.
 		</p>
 		<div class="mt-4 flex flex-col gap-3">
 			{#if pwError}
@@ -772,16 +768,16 @@
 				<div class="flex items-start gap-2 text-sm" style="color: var(--success);"><CircleCheck size={16} class="mt-0.5 shrink-0" />{pwNotice}</div>
 			{/if}
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Password baru</span>
-				<input class="app-input w-full" type="password" placeholder="Minimal 10 karakter" bind:value={pwValue} />
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Password baru")}</span>
+				<input class="app-input w-full" type="password" placeholder={tr("Minimal 10 karakter")} bind:value={pwValue} />
 			</label>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Ulangi password</span>
-				<input class="app-input w-full" type="password" placeholder="Ketik ulang password" bind:value={pwConfirm} />
+				<input class="app-input w-full" type="password" placeholder={tr("Ketik ulang password")} bind:value={pwConfirm} />
 			</label>
 		</div>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (pwUser = null)}>Tutup</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (pwUser = null)}>{tr("Tutup")}</button>
 			<button
 				class="app-btn app-btn-primary"
 				type="button"
@@ -793,11 +789,11 @@
 {/if}
 
 {#if roleTarget}
-	<Modal title={`Ubah peran — ${roleTarget.display_name}`} label="Ubah peran" maxWidth="md" onClose={() => (roleTarget = null)}>
+	<Modal title={`Ubah peran — ${roleTarget.display_name}`} label={tr("Ubah peran")} maxWidth="md" onClose={() => (roleTarget = null)}>
 		<p class="text-sm text-muted-foreground">
 			{roleNext === 'partner'
-				? 'Akun ini akan menjadi Mitra: baris mitra aktif dibuat sehingga bisa mengelola media dan menerima publikasi.'
-				: 'Akun ini akan menjadi Klien: brand default dan profilnya dibuat otomatis.'}
+				? tr('Akun ini akan menjadi Mitra: baris mitra aktif dibuat sehingga bisa mengelola media dan menerima publikasi.')
+				: tr('Akun ini akan menjadi Klien: brand default dan profilnya dibuat otomatis.')}
 		</p>
 		<div class="mt-4 flex flex-col gap-3">
 			{#if roleError}
@@ -807,15 +803,15 @@
 				<div class="flex items-start gap-2 text-sm" style="color: var(--success);"><CircleCheck size={16} class="mt-0.5 shrink-0" />{roleNotice}</div>
 			{/if}
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Peran baru</span>
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Peran baru")}</span>
 				<Select
-					ariaLabel="Peran baru"
+					ariaLabel={tr("Peran baru")}
 					minWidth={260}
 					value={roleNext}
 					onchange={(v) => (roleNext = v === 'partner' ? 'partner' : 'client')}
 					options={[
-						{ value: 'partner', label: 'Mitra — media partner' },
-						{ value: 'client', label: 'Klien — kelola brand & konten' }
+						{ value: 'partner', label: tr('Mitra — media partner') },
+						{ value: 'client', label: tr('Klien — kelola brand & konten') }
 					]}
 				/>
 			</label>
@@ -827,14 +823,14 @@
 			{/if}
 			<p class="text-xs text-muted-foreground">
 				{roleNext === 'partner'
-					? 'Brand kosong tanpa publikasi/transaksi dihapus otomatis. Brand yang sudah dipakai tetap dipertahankan.'
+					? tr('Brand kosong tanpa publikasi/transaksi dihapus otomatis. Brand yang sudah dipakai tetap dipertahankan.')
 					: 'Pengguna perlu login ulang agar sesi memakai peran baru.'}
 			</p>
 		</div>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (roleTarget = null)}>Tutup</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (roleTarget = null)}>{tr("Tutup")}</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={roleBusy} onclick={() => void submitRoleChange()}>
-				{roleBusy ? 'Menyimpan...' : `Ubah jadi ${roleNext === 'partner' ? 'Mitra' : 'Klien'}`}
+				{roleBusy ? 'Menyimpan...' : `Ubah jadi ${roleNext === 'partner' ? tr('Mitra') : tr('Klien')}`}
 			</button>
 		{/snippet}
 	</Modal>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Executive PR Brief view — hasil review kerja The Profiler, bukan form.
 	// Port profiler/summary-render.tsx. Satu-satunya action adalah "Lanjut ke
 	// Matchmaker"; dokumen bersifat locked.
@@ -71,13 +73,13 @@
 	const spokesperson = $derived(
 		brief.spokesperson?.name
 			? `${brief.spokesperson.name}${brief.spokesperson.role ? `, ${brief.spokesperson.role}` : ''}`
-			: 'Belum terkonfirmasi — Perwakilan brand'
+			: tr('Belum terkonfirmasi — Perwakilan brand')
 	);
 	const audience = $derived(
 		[...(brief.audience?.selected ?? []), ...(brief.audience?.custom ? [brief.audience.custom] : [])].map((a) => humanize(a)).join(', ') || '—'
 	);
 	const guardrails = $derived(
-		brief.guardrails?.active ? `Aktif — ${brief.guardrails.summary || 'ada pantangan khusus.'}` : 'Tidak ada pantangan khusus.'
+		brief.guardrails?.active ? `Aktif — ${brief.guardrails.summary || 'ada pantangan khusus.'}` : tr('Tidak ada pantangan khusus.')
 	);
 </script>
 
@@ -86,8 +88,8 @@
 	<section class="app-card flex flex-wrap items-center gap-4 p-5">
 		<CircleCheck size={32} style="color: var(--success);" />
 		<div class="min-w-[220px] flex-1">
-			<p class="text-lg font-bold">Executive PR Brief Selesai</p>
-			<p class="text-sm text-muted-foreground">Dokumen master telah dikunci dan siap diteruskan ke Agent Matchmaker.</p>
+			<p class="text-lg font-bold">{tr("Executive PR Brief Selesai")}</p>
+			<p class="text-sm text-muted-foreground">{tr("Dokumen master telah dikunci dan siap diteruskan ke Agent Matchmaker.")}</p>
 		</div>
 		<div class="flex flex-col items-end gap-2">
 			<button class="app-btn app-btn-primary" type="button" disabled={advancing} onclick={onAdvance}>
@@ -137,7 +139,7 @@
 							</div>
 							<div class="mt-2">
 								<p class="text-xs text-muted-foreground">Instruksi AI</p>
-								<p class="text-sm text-muted-foreground">{c.writing_instruction || 'Instruksi tidak tersedia untuk angle ini.'}</p>
+								<p class="text-sm text-muted-foreground">{c.writing_instruction || tr('Instruksi tidak tersedia untuk angle ini.')}</p>
 							</div>
 						</div>
 					{/each}
@@ -147,7 +149,7 @@
 			<!-- Catatan Strategis & Verifikasi -->
 			{#if (brief.strategic_notes?.length ?? 0) || (brief.needs_verification?.length ?? 0)}
 				<section class="app-card p-5">
-					<p class="text-xs font-bold uppercase tracking-wide text-muted-foreground">Catatan Strategis &amp; Verifikasi</p>
+					<p class="text-xs font-bold uppercase tracking-wide text-muted-foreground">Catatan Strategis & Verifikasi</p>
 					{#if brief.strategic_notes?.length}
 						<div class="mt-3 space-y-2">
 							{#each brief.strategic_notes as n (n)}
@@ -198,7 +200,7 @@
 										{/if}
 										{#if verifyOpen[idx]}
 											<div class="ml-5 mt-2 rounded-lg p-3" style="background-color: var(--warning-soft);">
-												<textarea class="app-input w-full" rows="3" disabled={verifyBusy[idx]} placeholder="Ketikkan jawaban atau klarifikasi verifikasi di sini..." value={verifyDraft[idx] ?? ''} oninput={(e) => (verifyDraft = { ...verifyDraft, [idx]: (e.currentTarget as HTMLTextAreaElement).value })}></textarea>
+												<textarea class="app-input w-full" rows="3" disabled={verifyBusy[idx]} placeholder={tr("Ketikkan jawaban atau klarifikasi verifikasi di sini...")} value={verifyDraft[idx] ?? ''} oninput={(e) => (verifyDraft = { ...verifyDraft, [idx]: (e.currentTarget as HTMLTextAreaElement).value })}></textarea>
 												<div class="mt-2 flex justify-end gap-2">
 													<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" disabled={verifyBusy[idx]} onclick={() => void submitVerify(idx, 'ignored')}>
 														<X size={12} /> Abaiakan
@@ -226,7 +228,7 @@
 					<div class="flex items-start gap-3">
 						<List size={16} style="color: var(--primary);" class="mt-0.5 shrink-0" />
 						<div>
-							<p class="text-xs text-muted-foreground">Channel &amp; Angle</p>
+							<p class="text-xs text-muted-foreground">Channel & Angle</p>
 							{#each brief.channels ?? [] as c (c.channel + '-' + c.angle)}
 								<p class="font-medium">{CHANNEL_LABELS[c.channel] ?? c.channel} · {humanize(c.angle)}</p>
 							{/each}
@@ -243,7 +245,7 @@
 						<FileText size={16} style="color: var(--primary);" class="mt-0.5 shrink-0" />
 						<div>
 							<p class="text-xs text-muted-foreground">Sumber</p>
-							<p class="font-medium">{sources.length > 0 ? `${sources.length} sumber` : 'Tidak ada sumber eksternal'}</p>
+							<p class="font-medium">{sources.length > 0 ? `${sources.length} sumber` : tr('Tidak ada sumber eksternal')}</p>
 						</div>
 					</div>
 				</div>
@@ -254,13 +256,11 @@
 					<Sparkles size={18} style="color: var(--primary);" />
 					<p class="font-bold" style="color: var(--accent-foreground);">Insight Utama</p>
 				</div>
-				<p class="mt-2 text-sm" style="color: var(--accent-foreground);">
-					AI telah merangkum strategi inti kampanye berdasarkan input Anda. Pastikan semua data sudah akurat sebelum melanjutkan ke Agent Matchmaker.
-				</p>
+				<p class="mt-2 text-sm" style="color: var(--accent-foreground);">{tr("AI telah merangkum strategi inti kampanye berdasarkan input Anda. Pastikan semua data sudah akurat sebelum melanjutkan ke Agent Matchmaker.")}</p>
 			</section>
 
 			<section class="app-card p-4">
-				<p class="text-xs font-bold uppercase tracking-wide text-muted-foreground">Detail Sumber ({sources.length})</p>
+				<p class="text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Detail Sumber (")}{sources.length})</p>
 				{#if sources.length > 0}
 					<div class="mt-2 space-y-3">
 						{#each sources as s, i (s + '-' + i)}
@@ -269,7 +269,7 @@
 								{#if i > 0}<hr class="mb-3" />{/if}
 								<div class="flex flex-wrap items-center gap-2">
 									{#if isUrl}<Globe size={14} class="text-muted-foreground" />{:else}<FileText size={14} class="text-muted-foreground" />{/if}
-									<span class="font-medium">{isUrl ? 'Website Resmi' : 'Input Klien'}</span>
+									<span class="font-medium">{isUrl ? 'Website Resmi' : tr('Input Klien')}</span>
 									<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style="background-color: {i === 0 && isUrl ? 'var(--accent)' : 'var(--muted)'}; color: {i === 0 && isUrl ? 'var(--accent-foreground)' : 'var(--muted-foreground)'};">
 										{i === 0 && isUrl ? 'Utama' : 'Pendukung'}
 									</span>
@@ -279,12 +279,12 @@
 								{:else}
 									<p class="text-sm text-muted-foreground">{s}</p>
 								{/if}
-								<p class="text-xs text-muted-foreground">Diakses saat analisis</p>
+								<p class="text-xs text-muted-foreground">{tr("Diakses saat analisis")}</p>
 							</div>
 						{/each}
 					</div>
 				{:else}
-					<p class="mt-2 text-sm text-muted-foreground">Analisis menggunakan input kampanye Anda tanpa sumber eksternal.</p>
+					<p class="mt-2 text-sm text-muted-foreground">{tr("Analisis menggunakan input kampanye Anda tanpa sumber eksternal.")}</p>
 				{/if}
 			</section>
 		</div>
@@ -292,6 +292,6 @@
 
 	<div class="flex items-center justify-center gap-2 py-2">
 		<Lock size={12} class="text-muted-foreground" />
-		<p class="text-xs text-muted-foreground">Dokumen ini dikunci secara otomatis. Perubahan tidak dapat dilakukan setelah diteruskan.</p>
+		<p class="text-xs text-muted-foreground">{tr("Dokumen ini dikunci secara otomatis. Perubahan tidak dapat dilakukan setelah diteruskan.")}</p>
 	</div>
 </div>

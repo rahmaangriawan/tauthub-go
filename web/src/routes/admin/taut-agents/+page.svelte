@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port app/admin/taut-agents/page.tsx — konfigurasi per-agent LLM Taut Pintar
 	// (base_url, api key, model, system prompt, rate limit) + preferensi pengecek
 	// Gatekeeper + aktivitas audit + log/training AI. Hard stop: agent yang belum
@@ -67,7 +69,7 @@
 	async function loadAgents() {
 		const res = await apiRequest('/v1/platform/taut-agents');
 		if (res.ok) agents = (await res.json()).agents ?? [];
-		else error = await readApiError(res, 'Gagal memuat daftar agent.');
+		else error = await readApiError(res, tr('Gagal memuat daftar agent.'));
 	}
 
 	async function loadGatekeeper() {
@@ -109,10 +111,10 @@
 			body: JSON.stringify({ settings: gk })
 		});
 		if (!res.ok) {
-			gkError = await readApiError(res, 'Gagal menyimpan pengaturan Gatekeeper.');
+			gkError = await readApiError(res, tr('Gagal menyimpan pengaturan Gatekeeper.'));
 			return;
 		}
-		gkNotice = 'Pengaturan Gatekeeper tersimpan.';
+		gkNotice = tr('Pengaturan Gatekeeper tersimpan.');
 	}
 
 	async function toggleCategory(key: string) {
@@ -122,7 +124,7 @@
 
 	async function saveAgent(agent: string, form: Record<string, unknown>) {
 		const res = await apiRequest(`/v1/platform/taut-agents/${agent}`, { method: 'PUT', body: JSON.stringify(form) });
-		if (!res.ok) throw new Error(await readApiError(res, 'Gagal menyimpan agent.'));
+		if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan agent.')));
 		await loadAgents();
 	}
 
@@ -134,7 +136,7 @@
 	}
 
 	const verdictLabel = (v: string) =>
-		v === 'failed' ? 'Gagal' : v === 'review_required' ? 'Review' : 'Lulus';
+		v === 'failed' ? tr('Gagal') : v === 'review_required' ? 'Review' : 'Lulus';
 	const verdictTone = (v: string) =>
 		v === 'failed' ? 'var(--destructive)' : v === 'review_required' ? 'var(--warning)' : 'var(--success)';
 </script>
@@ -148,8 +150,7 @@
 	<Feedback {loading} {error} />
 
 	<div class="app-card mt-4 px-4 py-3 text-sm" style="border-color: var(--primary);">
-		<strong>Hard stop:</strong> bila agent belum dikonfigurasi/disabled, wizard Klien berhenti dengan pesan
-		<code>Agent [X] belum dikonfigurasi — hubungi super admin</code>. Pipeline tidak fallback.
+		<strong>Hard stop:</strong>{tr("bila agent belum dikonfigurasi/disabled, wizard Klien berhenti dengan pesan")}<code>Agent [X] belum dikonfigurasi — hubungi super admin</code>. Pipeline tidak fallback.
 	</div>
 
 	<div class="mt-4 flex gap-2">
@@ -228,7 +229,7 @@
 						</div>
 
 						<div class="mt-4 flex justify-end">
-							<button class="app-btn app-btn-primary" onclick={saveGatekeeper}>Simpan Pengaturan</button>
+							<button class="app-btn app-btn-primary" onclick={saveGatekeeper}>{tr("Simpan Pengaturan")}</button>
 						</div>
 					</div>
 				{/if}
@@ -237,15 +238,15 @@
 					<div class="flex items-center justify-between gap-2">
 						<h2 class="text-sm font-semibold">Aktivitas Gatekeeper (20 terakhir)</h2>
 						<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" disabled={logsLoading} onclick={loadLogs}>
-							<RefreshCw size={12} /> {logsLoading ? 'Memuat…' : 'Refresh'}
+							<RefreshCw size={12} /> {logsLoading ? tr('Memuat…') : 'Refresh'}
 						</button>
 					</div>
 					<table class="mt-3 w-full text-sm">
 						<thead>
 							<tr class="text-left text-xs text-muted-foreground">
 								<th class="py-1.5 pr-3 font-medium">Waktu</th>
-								<th class="py-1.5 pr-3 font-medium">Kampanye</th>
-								<th class="py-1.5 pr-3 font-medium">Media</th>
+								<th class="py-1.5 pr-3 font-medium">{tr("Kampanye")}</th>
+								<th class="py-1.5 pr-3 font-medium">{tr("Media")}</th>
 								<th class="py-1.5 pr-3 font-medium">Verdict</th>
 								<th class="py-1.5 font-medium">Status</th>
 							</tr>
@@ -265,7 +266,7 @@
 								</tr>
 							{/each}
 							{#if logs.length === 0}
-								<tr><td class="py-6 text-center text-sm text-muted-foreground" colspan="5">Belum ada audit Gatekeeper.</td></tr>
+								<tr><td class="py-6 text-center text-sm text-muted-foreground" colspan="5">{tr("Belum ada audit Gatekeeper.")}</td></tr>
 							{/if}
 						</tbody>
 					</table>

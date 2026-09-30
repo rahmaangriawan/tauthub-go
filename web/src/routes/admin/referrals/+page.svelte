@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Referral — port app/admin/referrals/page.tsx: audit komisi referral
 	// (earning → commission 1% direct) dari partner_referral_commissions.
 	import { onMount } from 'svelte';
@@ -53,7 +55,7 @@
 						<th class="px-4 py-2.5 font-medium">Rate</th>
 						<th class="px-4 py-2.5 font-medium">Amount</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
-						<th class="px-4 py-2.5 font-medium">Tanggal</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -72,7 +74,7 @@
 				</tbody>
 			</table>
 			{#if rows.length === 0 && !error}
-				<p class="px-4 py-4 text-sm text-muted-foreground">Belum ada komisi referral.</p>
+				<p class="px-4 py-4 text-sm text-muted-foreground">{tr("Belum ada komisi referral.")}</p>
 			{/if}
 		</div>
 	{/if}

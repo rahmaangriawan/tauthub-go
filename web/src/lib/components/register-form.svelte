@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port /register/klien + /register/mitra (satu komponen, role via prop).
 	import { goto } from '$app/navigation';
 	import { authErrorMessage } from '$lib/auth';
@@ -53,28 +55,21 @@
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-sm rounded-lg border border-border bg-card p-6">
-		<h1 class="text-xl font-semibold tracking-tight">
-			Daftar sebagai {role === 'partner' ? 'Mitra Media' : 'Klien'}
+		<h1 class="text-xl font-semibold tracking-tight"> {tr("Daftar sebagai")} {role === 'partner' ? 'Mitra Media' : tr('Klien')}
 		</h1>
 
 		<form class="mt-4 flex flex-col gap-3" onsubmit={submit}>
-			<label class="flex flex-col gap-1 text-sm">
-				Email
-				<input
+			<label class="flex flex-col gap-1 text-sm">{tr("Email")}<input
 					class="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
 					type="email" bind:value={email} required
 				/>
 			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				Password (min. 10 karakter)
-				<input
+			<label class="flex flex-col gap-1 text-sm">{tr("Password (min. 10 karakter)")}<input
 					class="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
 					type="password" bind:value={password} minlength={10} required
 				/>
 			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				Nama
-				<input
+			<label class="flex flex-col gap-1 text-sm">{tr("Nama")}<input
 					class="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
 					type="text" bind:value={displayName} minlength={2} maxlength={120} required
 				/>
@@ -86,7 +81,7 @@
 						class="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
 						bind:value={partnerCategory} required
 					>
-						<option value="" disabled>Pilih kategori</option>
+						<option value="" disabled>{tr("Pilih kategori")}</option>
 						<option value="berita">Berita</option>
 						<option value="lifestyle">Lifestyle</option>
 						<option value="lainnya">Lainnya</option>
@@ -110,11 +105,11 @@
 				disabled={busy}
 				class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
 			>
-				{busy ? 'Mendaftarkan…' : 'Daftar'}
+				{busy ? 'Mendaftarkan…' : tr('Daftar')}
 			</button>
 		</form>
 		<p class="mt-3 text-center text-sm text-muted-foreground">
-			<a class="underline" href="/login">Masuk</a>
+			<a class="underline" href="/login">{tr("Masuk")}</a>
 		</p>
 	</div>
 </main>

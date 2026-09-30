@@ -21,6 +21,7 @@ import (
 	authdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/auth"
 	brandflowdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brandflow"
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
+	campaignsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/campaigns"
 	clientreaddomain "github.com/rahmaangriawan/tauthub-go/internal/domains/clientread"
 	clienttautdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/clienttaut"
 	contentdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/content"
@@ -52,6 +53,18 @@ func run() error {
 	defer database.Close()
 	slog.Info("db terhubung", "host", cfg.DBHost, "name", cfg.DBName)
 
+	// Google service dipakai bersama auth (alur publik) dan platform (diagnostik
+	// config admin) supaya statusnya konsisten.
+	googleSvc := &auth.Google{
+		Pool:            database.Pool,
+		AppSecret:       cfg.Secret,
+		CmsSecret:       cfg.CmsEncryptionSecret,
+		EnvClientID:     cfg.GoogleClientID,
+		EnvClientSecret: cfg.GoogleClientSecret,
+		EnvRedirectURI:  cfg.GoogleRedirectURI,
+		IsProduction:    cfg.IsProduction(),
+	}
+
 	authDeps := &authdomain.Deps{
 		Pool: database.Pool,
 		Cfg:  cfg,
@@ -66,20 +79,15 @@ func run() error {
 			Secret: cfg.Secret,
 			Issuer: cfg.AppName,
 		},
-		Google: &auth.Google{
-			Pool:            database.Pool,
-			AppSecret:       cfg.Secret,
-			CmsSecret:       cfg.CmsEncryptionSecret,
-			EnvClientID:     cfg.GoogleClientID,
-			EnvClientSecret: cfg.GoogleClientSecret,
-			EnvRedirectURI:  cfg.GoogleRedirectURI,
-			IsProduction:    cfg.IsProduction(),
-		},
+		Google: googleSvc,
 	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(httpx.Recover(cfg.AppEnv))
+	// Header keamanan untuk semua respons (nosniff, referrer, frame, subset CSP,
+	// HSTS saat produksi) — murni aditif.
+	r.Use(httpx.SecurityHeaders(cfg.IsProduction()))
 
 	// healthz — cek hidup + DB.
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -96,17 +104,27 @@ func run() error {
 
 	// Deps platform dipakai juga oleh route root (/t/{code} short link), jadi
 	// dibuat di level ini lalu dipakai ulang di dalam grup /v1.
-	platformDeps := &platformdomain.Deps{Pool: database.Pool, Cfg: cfg, Admin: &adminshared.Deps{Pool: database.Pool, Cfg: cfg}}
+	platformDeps := &platformdomain.Deps{Pool: database.Pool, Cfg: cfg, Admin: &adminshared.Deps{Pool: database.Pool, Cfg: cfg}, Google: googleSvc}
 	partnerDeps := &partnerdomain.Deps{Pool: database.Pool, Cfg: cfg}
 
 	// Short link distribusi: /t/{code} → 301 ke URL tujuan sambil mencatat
 	// tracking_link_click. Parity app/t/[code]/route.ts (go.tulisio.id/{code}).
 	r.Get("/t/{code}", platformDeps.TrackingRedirect)
 
+	// Berkas unggahan (sampul artikel, bukti transfer, dokumen dewan pers).
+	// Wajib login via cookie refresh_token; nama berkas dibatasi. Parity
+	// app/uploads/[key]/route.ts.
+	r.Get("/uploads/{key}", platformDeps.UploadsServe)
+
 	// Callback OAuth Google di root (redirect URI terdaftar di Google Console):
 	// /api/blogger/callback (Blogger) dan /api/gsc/callback (Search Console).
 	r.Get("/api/blogger/callback", partnerDeps.BloggerCallback)
 	r.Get("/api/gsc/callback", partnerDeps.GSCCallback)
+
+	// Feed RSS 2.0 mitra (publik; token per feed jadi rahasianya) + callback
+	// status importer mitra — port app/feed/partner/[token]/*.
+	r.Get("/feed/partner/{token}", platformDeps.RSSFeedServe)
+	r.Post("/feed/partner/{token}/import", platformDeps.RSSFeedImport)
 
 	// /v1 — CORS allowlist (port proxy.ts) + route per domain.
 	r.Route("/v1", func(v1 chi.Router) {
@@ -118,9 +136,15 @@ func run() error {
 		v1.Post("/auth/logout", authDeps.Logout)
 		v1.Post("/auth/register", authDeps.Register)
 		v1.Post("/auth/forgot-password", authDeps.ForgotPassword)
+		// Gate SSR non-rotasi (SvelteKit +layout.server): verifikasi refresh_token
+		// tanpa rotasi sesi, kembalikan role/admin/partner/membership.
+		v1.Post("/auth/ssr-gate", authDeps.SSRGate)
 		v1.Post("/auth/reset-password", authDeps.ResetPassword)
 		v1.Post("/auth/2fa/verify", authDeps.TwoFactorVerify)
 		v1.Get("/auth/turnstile", authDeps.TurnstileConfig)
+		// Landing link referral (/register?ref=KODE) — mencatat klik + audit,
+		// dipanggil server-side oleh route SvelteKit /register.
+		v1.Post("/auth/referral/click", authDeps.ReferralClick)
 		v1.Get("/auth/google/url", authDeps.GoogleURL)
 		v1.Get("/auth/google/callback", authDeps.GoogleCallback)
 		v1.Post("/auth/google/complete", authDeps.GoogleComplete)
@@ -135,6 +159,12 @@ func run() error {
 		tautDeps := &clienttautdomain.Deps{Pool: database.Pool, Cfg: cfg}
 		brandFlowDeps := &brandflowdomain.Deps{Pool: database.Pool, Cfg: cfg}
 
+		// Kanonikalisasi {campaignId}: URL boleh memakai public_id 6 karakter,
+		// handler tetap menerima UUID. Diterapkan per rute karena middleware
+		// grup jalan sebelum chi mengisi URLParams, jadi parameternya belum ada.
+		campaignResolver := campaignsdomain.NewResolver(database.Pool)
+		resolveCampaign := campaignResolver.Wrap
+
 		// Dispatcher job bersama (dipakai /v1/internal/jobs dan cmd/worker).
 		jobwire.Register(database.Pool, cfg)
 		jobRunner := jobs.NewRunner(database.Pool)
@@ -143,6 +173,10 @@ func run() error {
 			authed.Use(authDeps.Auth.RequireAuth)
 			authed.Get("/auth/me", authDeps.Me)
 			authed.Patch("/auth/me", authDeps.MeUpdate)
+
+			// Pengumuman (broadcast admin → seluruh pengguna klien/mitra).
+			authed.Get("/announcements", platformDeps.AnnouncementsList)
+			authed.Post("/announcements/{announcementId}/read", platformDeps.AnnouncementMarkRead)
 			authed.Post("/auth/2fa/setup", authDeps.TwoFactorSetup)
 			authed.Post("/auth/2fa/enable", authDeps.TwoFactorEnable)
 			authed.Post("/auth/2fa/disable", authDeps.TwoFactorDisable)
@@ -226,38 +260,38 @@ func run() error {
 			// ---------- Alur brand lanjutan (/v1/brands/{brandId}) — fase 6–11 ----------
 			// Kampanye, publikasi, rencana publikasi, batch/varian, integrasi CMS,
 			// dokumen, laporan, dan Taut Pintar pada tingkat brand.
-			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/angle", brandFlowDeps.CampaignMediaItemAngle)
-			authed.Get("/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/angle-options", brandFlowDeps.CampaignMediaItemAngleOptions)
-			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/paraphrase", brandFlowDeps.CampaignMediaItemParaphrase)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}/upload", brandFlowDeps.TautArticleUpload)
-			authed.Patch("/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}", brandFlowDeps.CampaignMediaItemPatch)
-			authed.Delete("/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}", brandFlowDeps.CampaignMediaItemDelete)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}", brandFlowDeps.TautArticleGet)
-			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}", brandFlowDeps.TautArticlePut)
-			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/files/{fileId}", brandFlowDeps.TautFileDelete)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/audit-all", brandFlowDeps.TautGatekeeperAuditAll)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/audits", brandFlowDeps.TautGatekeeperAudits)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/distribute", brandFlowDeps.TautGatekeeperDistribute)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/produce/{mediaId}", brandFlowDeps.TautProduceOne)
-			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/analyze", brandFlowDeps.CampaignFlowAnalyze)
-			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/article-regen", brandFlowDeps.CampaignFlowArticleRegen)
-			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/checkout", brandFlowDeps.CampaignFlowCheckout)
-			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/media", brandFlowDeps.CampaignFlowMedia)
-			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/media-type", brandFlowDeps.CampaignFlowMediaType)
-			authed.Post("/brands/{brandId}/campaigns/{campaignId}/report/share", brandFlowDeps.CampaignReportShare)
+			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/angle", resolveCampaign(brandFlowDeps.CampaignMediaItemAngle))
+			authed.Get("/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/angle-options", resolveCampaign(brandFlowDeps.CampaignMediaItemAngleOptions))
+			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}/paraphrase", resolveCampaign(brandFlowDeps.CampaignMediaItemParaphrase))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}/upload", resolveCampaign(brandFlowDeps.TautArticleUpload))
+			authed.Patch("/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}", resolveCampaign(brandFlowDeps.CampaignMediaItemPatch))
+			authed.Delete("/brands/{brandId}/campaigns/{campaignId}/flow/media-items/{itemId}", resolveCampaign(brandFlowDeps.CampaignMediaItemDelete))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}", resolveCampaign(brandFlowDeps.TautArticleGet))
+			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}", resolveCampaign(brandFlowDeps.TautArticlePut))
+			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/files/{fileId}", resolveCampaign(brandFlowDeps.TautFileDelete))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/audit-all", resolveCampaign(brandFlowDeps.TautGatekeeperAuditAll))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/audits", resolveCampaign(brandFlowDeps.TautGatekeeperAudits))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/distribute", resolveCampaign(brandFlowDeps.TautGatekeeperDistribute))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/produce/{mediaId}", resolveCampaign(brandFlowDeps.TautProduceOne))
+			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/analyze", resolveCampaign(brandFlowDeps.CampaignFlowAnalyze))
+			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/article-regen", resolveCampaign(brandFlowDeps.CampaignFlowArticleRegen))
+			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/checkout", resolveCampaign(brandFlowDeps.CampaignFlowCheckout))
+			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/media", resolveCampaign(brandFlowDeps.CampaignFlowMedia))
+			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/media-type", resolveCampaign(brandFlowDeps.CampaignFlowMediaType))
+			authed.Post("/brands/{brandId}/campaigns/{campaignId}/report/share", resolveCampaign(brandFlowDeps.CampaignReportShare))
 			authed.Post("/brands/{brandId}/publication-plans/occurrences/{occurrenceId}/skip", brandFlowDeps.PublicationPlanOccurrenceSkip)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/crawl", brandFlowDeps.TautCrawl)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/files", brandFlowDeps.TautFilesList)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/files", brandFlowDeps.TautFilesUpload)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/produce", brandFlowDeps.TautProduce)
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/crawl", resolveCampaign(brandFlowDeps.TautCrawl))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/files", resolveCampaign(brandFlowDeps.TautFilesList))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/files", resolveCampaign(brandFlowDeps.TautFilesUpload))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/produce", resolveCampaign(brandFlowDeps.TautProduce))
 			authed.Post("/brands/{brandId}/batches/{batchId}/cancel", brandFlowDeps.BatchCancel)
 			authed.Post("/brands/{brandId}/batches/{batchId}/pause", brandFlowDeps.BatchPause)
 			authed.Post("/brands/{brandId}/batches/{batchId}/retry", brandFlowDeps.BatchRetry)
 			authed.Post("/brands/{brandId}/batches/{batchId}/start", brandFlowDeps.BatchStart)
-			authed.Get("/brands/{brandId}/campaigns/{campaignId}/flow", brandFlowDeps.CampaignFlowGet)
-			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow", brandFlowDeps.CampaignFlowPost)
-			authed.Get("/brands/{brandId}/campaigns/{campaignId}/publications", brandFlowDeps.CampaignPublicationsList)
-			authed.Post("/brands/{brandId}/campaigns/{campaignId}/publications", brandFlowDeps.CampaignPublicationsCreate)
+			authed.Get("/brands/{brandId}/campaigns/{campaignId}/flow", resolveCampaign(brandFlowDeps.CampaignFlowGet))
+			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow", resolveCampaign(brandFlowDeps.CampaignFlowPost))
+			authed.Get("/brands/{brandId}/campaigns/{campaignId}/publications", resolveCampaign(brandFlowDeps.CampaignPublicationsList))
+			authed.Post("/brands/{brandId}/campaigns/{campaignId}/publications", resolveCampaign(brandFlowDeps.CampaignPublicationsCreate))
 			authed.Post("/brands/{brandId}/cms-connections/{connectionId}/test", brandFlowDeps.CmsConnectionTest)
 			authed.Post("/brands/{brandId}/content-intakes/{intakeId}/ai-fill", brandFlowDeps.ContentIntakeAIFill)
 			authed.Post("/brands/{brandId}/content-intakes/{intakeId}/auto-key-messages", brandFlowDeps.ContentIntakeAutoKeyMessages)
@@ -281,9 +315,9 @@ func run() error {
 			authed.Post("/brands/{brandId}/publications/{publicationId}/tracking", brandFlowDeps.PublicationTrackingPost)
 			authed.Get("/brands/{brandId}/analyze/{topic}", brandFlowDeps.TautAnalyzeTopic)
 			authed.Get("/brands/{brandId}/batches/{batchId}", brandFlowDeps.BatchGet)
-			authed.Get("/brands/{brandId}/campaigns/{campaignId}", brandFlowDeps.CampaignGet)
-			authed.Put("/brands/{brandId}/campaigns/{campaignId}", brandFlowDeps.CampaignUpdate)
-			authed.Delete("/brands/{brandId}/campaigns/{campaignId}", brandFlowDeps.CampaignCancel)
+			authed.Get("/brands/{brandId}/campaigns/{campaignId}", resolveCampaign(brandFlowDeps.CampaignGet))
+			authed.Put("/brands/{brandId}/campaigns/{campaignId}", resolveCampaign(brandFlowDeps.CampaignUpdate))
+			authed.Delete("/brands/{brandId}/campaigns/{campaignId}", resolveCampaign(brandFlowDeps.CampaignCancel))
 			authed.Get("/brands/{brandId}/cms-connections/{connectionId}", brandFlowDeps.CmsConnectionGet)
 			authed.Put("/brands/{brandId}/cms-connections/{connectionId}", brandFlowDeps.CmsConnectionUpdate)
 			authed.Delete("/brands/{brandId}/cms-connections/{connectionId}", brandFlowDeps.CmsConnectionDelete)
@@ -316,36 +350,36 @@ func run() error {
 			authed.Get("/brands/{brandId}/notifications", clientRead.BrandNotifications)
 			authed.Post("/brands/{brandId}/notifications", clientRead.BrandNotifications)
 			authed.Post("/brands/{brandId}/notifications/{notificationId}/read", clientRead.BrandNotificationRead)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/writer-links", brandFlowDeps.TautWriterLinks)
-			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/writer-links", brandFlowDeps.TautWriterLinks)
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/writer-links", resolveCampaign(brandFlowDeps.TautWriterLinks))
+			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/writer-links", resolveCampaign(brandFlowDeps.TautWriterLinks))
 
 			// ---------- Taut Pintar klien (/v1/brands/{brandId}/taut/*) ----------
 			authed.Get("/brands/{brandId}/taut/campaigns", tautDeps.TautCampaignsList)
 			authed.Post("/brands/{brandId}/taut/campaigns", tautDeps.TautCampaignCreate)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}", tautDeps.TautCampaignGet)
-			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}", tautDeps.TautCampaignUpdate)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}", tautDeps.TautCampaignAction)
-			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}", tautDeps.TautCampaignDelete)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/advance", tautDeps.TautCampaignAdvance)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/validate", tautDeps.TautCampaignValidateGet)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/validate", tautDeps.TautCampaignValidatePost)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/schedule", tautDeps.TautCampaignSchedule)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/budget-estimate", tautDeps.TautBudgetEstimate)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/placement", tautDeps.TautPlacementGet)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/placement", tautDeps.TautPlacementPost)
-			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/placement", tautDeps.TautPlacementPut)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/finish", tautDeps.TautCampaignFinish)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profile", tautDeps.TautProfileGet)
-			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/profile", tautDeps.TautProfilePut)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/profile", tautDeps.TautProfileAnalyzeLegacy)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/profile/analyze", tautDeps.TautProfileAnalyze)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profile/draft", tautDeps.TautProfileDraftGet)
-			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/profile/draft", tautDeps.TautProfileDraftPut)
-			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/profile/result", tautDeps.TautProfileResultDelete)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profile/results/{resultId}", tautDeps.TautProfileResultGet)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/profile/verify", tautDeps.TautProfileVerify)
-			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profiler/options", tautDeps.TautProfilerOptions)
-			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/submit-final", tautDeps.TautSubmitFinal)
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}", resolveCampaign(tautDeps.TautCampaignGet))
+			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}", resolveCampaign(tautDeps.TautCampaignUpdate))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}", resolveCampaign(tautDeps.TautCampaignAction))
+			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}", resolveCampaign(tautDeps.TautCampaignDelete))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/advance", resolveCampaign(tautDeps.TautCampaignAdvance))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/validate", resolveCampaign(tautDeps.TautCampaignValidateGet))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/validate", resolveCampaign(tautDeps.TautCampaignValidatePost))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/schedule", resolveCampaign(tautDeps.TautCampaignSchedule))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/budget-estimate", resolveCampaign(tautDeps.TautBudgetEstimate))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/placement", resolveCampaign(tautDeps.TautPlacementGet))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/placement", resolveCampaign(tautDeps.TautPlacementPost))
+			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/placement", resolveCampaign(tautDeps.TautPlacementPut))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/finish", resolveCampaign(tautDeps.TautCampaignFinish))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profile", resolveCampaign(tautDeps.TautProfileGet))
+			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/profile", resolveCampaign(tautDeps.TautProfilePut))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/profile", resolveCampaign(tautDeps.TautProfileAnalyzeLegacy))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/profile/analyze", resolveCampaign(tautDeps.TautProfileAnalyze))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profile/draft", resolveCampaign(tautDeps.TautProfileDraftGet))
+			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/profile/draft", resolveCampaign(tautDeps.TautProfileDraftPut))
+			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/profile/result", resolveCampaign(tautDeps.TautProfileResultDelete))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profile/results/{resultId}", resolveCampaign(tautDeps.TautProfileResultGet))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/profile/verify", resolveCampaign(tautDeps.TautProfileVerify))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profiler/options", resolveCampaign(tautDeps.TautProfilerOptions))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/submit-final", resolveCampaign(tautDeps.TautSubmitFinal))
 
 		})
 
@@ -414,6 +448,8 @@ func run() error {
 			authed.Get("/partner/publications/{publicationId}", partnerDeps.PublicationGet)
 			authed.Post("/partner/publications/{publicationId}/approve", partnerDeps.PublicationApprove)
 			authed.Post("/partner/publications/{publicationId}/reject", partnerDeps.PublicationReject)
+			authed.Post("/partner/publications/{publicationId}/revision/accept", partnerDeps.PublicationRevisionAccept)
+			authed.Post("/partner/publications/{publicationId}/revision/reject", partnerDeps.PublicationRevisionReject)
 			authed.Post("/partner/publications/{publicationId}/url", partnerDeps.PublicationURL)
 			authed.Get("/partner/publications/{publicationId}/draft", partnerDeps.PublicationDraft)
 			authed.Put("/partner/publications/{publicationId}/draft", partnerDeps.PublicationDraft)
@@ -494,6 +530,11 @@ func run() error {
 			authed.Get("/platform/admins/me", platformDeps.AdminsMe)
 			authed.Patch("/platform/admins/{adminId}", platformDeps.AdminsUpdate)
 			authed.Delete("/platform/admins/{adminId}", platformDeps.AdminsDelete)
+
+			// Pengumuman (sisi admin).
+			authed.Get("/platform/announcements", platformDeps.AdminAnnouncementsList)
+			authed.Post("/platform/announcements", platformDeps.AdminAnnouncementCreate)
+			authed.Delete("/platform/announcements/{announcementId}", platformDeps.AdminAnnouncementDelete)
 
 			// AI.
 			authed.Get("/platform/ai/configuration", platformDeps.AIConfigurationGet)
@@ -672,7 +713,7 @@ func run() error {
 			authed.Get("/platform/taut/runs", platformDeps.TautRunsList)
 			authed.Post("/platform/taut/runs/cleanup", platformDeps.TautRunsCleanup)
 			authed.Post("/platform/taut/runs/retry/{runId}", platformDeps.TautRunRetry)
-			authed.Get("/platform/taut/runs/{campaignId}", platformDeps.TautRunsByCampaign)
+			authed.Get("/platform/taut/runs/{campaignId}", resolveCampaign(platformDeps.TautRunsByCampaign))
 
 			// Knowledge / content.
 			authed.Get("/platform/knowledge-bases", platformDeps.KnowledgeBasesList)

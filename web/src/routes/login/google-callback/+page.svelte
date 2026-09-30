@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port /login/google-callback — tukar ticket session Google → token pair,
 	// lalu redirect per role (admin → /admin, partner → /mitra, klien → brand pertama).
 	import { goto } from '$app/navigation';
@@ -54,7 +56,7 @@
 				if (!cancelled) error = 'Sesi Google tidak valid atau kedaluwarsa. Silakan coba lagi.';
 				clearSession();
 			} catch {
-				if (!cancelled) error = 'Gagal membuat sesi. Silakan coba lagi.';
+				if (!cancelled) error = tr('Gagal membuat sesi. Silakan coba lagi.');
 			}
 		})();
 		return () => {
@@ -63,15 +65,15 @@
 	});
 </script>
 
-<PageTitle title="Masuk dengan Google" />
+<PageTitle title={tr("Masuk dengan Google")} />
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="app-card w-full max-w-[420px] p-6" style="margin-top:10vh">
 		{#if error}
 			<p class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
-			<a class="mt-3 inline-block rounded-md bg-muted px-3 py-2 text-sm" href="/login">Kembali ke Login</a>
+			<a class="mt-3 inline-block rounded-md bg-muted px-3 py-2 text-sm" href="/login">{tr("Kembali ke Login")}</a>
 		{:else}
-			<p class="text-sm text-muted-foreground">Masuk dengan Google…</p>
+			<p class="text-sm text-muted-foreground">{tr("Masuk dengan Google…")}</p>
 		{/if}
 	</div>
 </main>

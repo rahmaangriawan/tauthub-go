@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port app/admin/taut-prompts/page.tsx — Taut Prompt Studio.
 	// Hierarki: Channel Media → Content Angle → Versi prompt (satu versi aktif,
 	// bisa diedit selamanya) + uji prompt (generate artikel lalu analisis
@@ -13,7 +15,7 @@
 	import { sanitizeHtml } from '$lib/sanitize-html';
 
 	type Channel = { id: string; name: string; slug: string; description: string | null; active: boolean; angle_count?: number };
-	type Angle = { id: string; channel_id: string; name: string; active: boolean; active_version?: number | null };
+	type Angle = { id: string; channel_id: string; name: string; active: boolean; active_version?: number | null; description?: string | null };
 	type VersionMeta = { id: string; version: number; status: string; change_note: string | null; created_at: string };
 	type VersionDetail = VersionMeta & { prompt: string | null };
 
@@ -32,6 +34,9 @@
 	let showChannel = $state(false);
 	let showAngle = $state(false);
 	let showEditAngle = $state(false);
+	// Baris angle yang diklik untuk diedit — dulu form memakai selectedAngle sehingga
+	// edit bisa tertulis ke angle lain (atau tidak tersimpan sama sekali).
+	let editAngleId = $state<string | null>(null);
 	let channelForm = $state({ name: '', slug: '', description: '' });
 	let angleForm = $state({ name: '', slug: '', description: '' });
 	let editAngleForm = $state({ name: '', description: '', active: true });
@@ -59,19 +64,19 @@
 	async function loadChannels() {
 		const res = await apiRequest('/v1/platform/taut/channels');
 		if (res.ok) channels = (await res.json()).items ?? [];
-		else error = await readApiError(res, 'Gagal memuat channel.');
+		else error = await readApiError(res, tr('Gagal memuat channel.'));
 	}
 
 	async function loadAngles(channelId: string) {
 		const res = await apiRequest(`/v1/platform/taut/channels/${channelId}/angles`);
 		if (res.ok) angles = (await res.json()).items ?? [];
-		else error = await readApiError(res, 'Gagal memuat angle.');
+		else error = await readApiError(res, tr('Gagal memuat angle.'));
 	}
 
 	async function loadVersions(angleId: string) {
 		const res = await apiRequest(`/v1/platform/taut/angles/${angleId}/versions`);
 		if (!res.ok) {
-			error = await readApiError(res, 'Gagal memuat versi prompt.');
+			error = await readApiError(res, tr('Gagal memuat versi prompt.'));
 			return;
 		}
 		versions = (await res.json()).items ?? [];
@@ -104,7 +109,7 @@
 		try {
 			const res = await apiRequest('/v1/platform/taut/channels', { method: 'POST', body: JSON.stringify(channelForm) });
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal membuat channel.');
+				error = await readApiError(res, tr('Gagal membuat channel.'));
 				return;
 			}
 			showChannel = false;
@@ -116,10 +121,10 @@
 	}
 
 	async function deleteChannel(id: string) {
-		if (!confirm('Hapus channel ini? Semua angle di dalamnya ikut terhapus.')) return;
+		if (!confirm(tr('Hapus channel ini? Semua angle di dalamnya ikut terhapus.'))) return;
 		const res = await apiRequest(`/v1/platform/taut/channels/${id}`, { method: 'DELETE' });
 		if (!res.ok) {
-			error = await readApiError(res, 'Gagal menghapus channel.');
+			error = await readApiError(res, tr('Gagal menghapus channel.'));
 			return;
 		}
 		if (selectedChannel?.id === id) selectChannel(null);
@@ -136,7 +141,7 @@
 				body: JSON.stringify(angleForm)
 			});
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal membuat angle.');
+				error = await readApiError(res, tr('Gagal membuat angle.'));
 				return;
 			}
 			showAngle = false;
@@ -148,24 +153,27 @@
 	}
 
 	function openEditAngle(angle: Angle) {
-		editAngleForm = { name: angle.name, description: '', active: angle.active };
+		editAngleId = angle.id;
+		editAngleForm = { name: angle.name, description: angle.description ?? '', active: angle.active };
 		showEditAngle = true;
 	}
 
 	async function saveEditAngle(e: SubmitEvent) {
 		e.preventDefault();
-		if (!selectedAngle) return;
+		const targetId = editAngleId ?? selectedAngle?.id ?? null;
+		if (!targetId) return;
 		busy = true;
 		try {
-			const res = await apiRequest(`/v1/platform/taut/angles/${selectedAngle.id}`, {
+			const res = await apiRequest(`/v1/platform/taut/angles/${targetId}`, {
 				method: 'PATCH',
 				body: JSON.stringify(editAngleForm)
 			});
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal menyimpan angle.');
+				error = await readApiError(res, tr('Gagal menyimpan angle.'));
 				return;
 			}
 			showEditAngle = false;
+			editAngleId = null;
 			if (selectedChannel) await loadAngles(selectedChannel.id);
 		} finally {
 			busy = false;
@@ -173,10 +181,10 @@
 	}
 
 	async function deleteAngle(id: string) {
-		if (!confirm('Hapus angle ini? Prompt-nya ikut terhapus.')) return;
+		if (!confirm(tr('Hapus angle ini? Prompt-nya ikut terhapus.'))) return;
 		const res = await apiRequest(`/v1/platform/taut/angles/${id}`, { method: 'DELETE' });
 		if (!res.ok) {
-			error = await readApiError(res, 'Gagal menghapus angle.');
+			error = await readApiError(res, tr('Gagal menghapus angle.'));
 			return;
 		}
 		if (selectedAngle?.id === id) {
@@ -194,7 +202,7 @@
 			body: JSON.stringify({ prompt: activeVersion.prompt ?? '', change_note: activeVersion.change_note ?? '' })
 		});
 		if (!res.ok) {
-			error = await readApiError(res, 'Gagal menyimpan prompt.');
+			error = await readApiError(res, tr('Gagal menyimpan prompt.'));
 			return;
 		}
 		notice = 'Prompt tersimpan.';
@@ -202,10 +210,10 @@
 
 	async function deleteVersion(versionId: string) {
 		if (!selectedAngle) return;
-		if (!confirm('Hapus versi prompt ini?')) return;
+		if (!confirm(tr('Hapus versi prompt ini?'))) return;
 		const res = await apiRequest(`/v1/platform/taut/angles/${selectedAngle.id}/versions/${versionId}`, { method: 'DELETE' });
 		if (!res.ok) {
-			error = await readApiError(res, 'Gagal menghapus versi.');
+			error = await readApiError(res, tr('Gagal menghapus versi.'));
 			return;
 		}
 		await loadVersions(selectedAngle.id);
@@ -218,7 +226,7 @@
 			body: JSON.stringify({ prompt: newPromptText, change_note: newPromptNote })
 		});
 		if (!res.ok) {
-			error = await readApiError(res, 'Gagal membuat prompt.');
+			error = await readApiError(res, tr('Gagal membuat prompt.'));
 			return;
 		}
 		newPromptText = '';
@@ -261,9 +269,9 @@
 </script>
 
 <section>
-	<PageHeader title="Taut Prompt Studio" description="Satu angle = satu prompt aktif yang bisa diedit selamanya. Hapus versi lama yang tidak dipakai untuk hemat resource.">
+	<PageHeader title="Taut Prompt Studio" description={tr("Satu angle = satu prompt aktif yang bisa diedit selamanya. Hapus versi lama yang tidak dipakai untuk hemat resource.")}>
 		<span class="rounded-full px-2.5 py-0.5 text-xs font-medium" style="background: var(--accent); color: var(--primary);">{channels.length} channel</span>
-		<button class="app-btn app-btn-primary" onclick={() => (showChannel = true)}><Plus size={15} /> Buat Channel</button>
+		<button class="app-btn app-btn-primary" onclick={() => (showChannel = true)}><Plus size={15} />{tr("Buat Channel")}</button>
 	</PageHeader>
 
 	<Feedback {loading} {error} {notice} />
@@ -272,7 +280,7 @@
 		<div class="mt-4 grid gap-3 md:grid-cols-2">
 			<!-- Channel -->
 			<div class="app-card p-4">
-				<h2 class="text-sm font-semibold">Channel Media</h2>
+				<h2 class="text-sm font-semibold">{tr("Channel Media")}</h2>
 				<div class="mt-2 max-h-[380px] overflow-y-auto">
 					<ul class="flex flex-col gap-1">
 						{#each channels as c (c.id)}
@@ -292,7 +300,7 @@
 							</li>
 						{/each}
 						{#if channels.length === 0}
-							<li class="py-6 text-center text-sm text-muted-foreground">Belum ada channel.</li>
+							<li class="py-6 text-center text-sm text-muted-foreground">{tr("Belum ada channel.")}</li>
 						{/if}
 					</ul>
 				</div>
@@ -301,7 +309,7 @@
 			<!-- Angles -->
 			<div class="app-card p-4">
 				<div class="flex items-center justify-between gap-2">
-					<h2 class="text-sm font-semibold">{selectedChannel ? `Angles · ${selectedChannel.name}` : 'Pilih channel dulu'}</h2>
+					<h2 class="text-sm font-semibold">{selectedChannel ? `Angles · ${selectedChannel.name}` : tr('Pilih channel dulu')}</h2>
 					{#if selectedChannel}
 						<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" onclick={() => (showAngle = true)}><Plus size={13} /> Angle</button>
 					{/if}
@@ -331,7 +339,7 @@
 							</li>
 						{/each}
 						{#if angles.length === 0}
-							<li class="py-6 text-center text-sm text-muted-foreground">{selectedChannel ? 'Belum ada angle untuk channel ini.' : '—'}</li>
+							<li class="py-6 text-center text-sm text-muted-foreground">{selectedChannel ? tr('Belum ada angle untuk channel ini.') : '—'}</li>
 						{/if}
 					</ul>
 				</div>
@@ -347,55 +355,50 @@
 						{#if activeVersion}<span class="text-xs text-muted-foreground">v{activeVersion.version}</span>{/if}
 					</div>
 					<button class="app-btn app-btn-primary" disabled={busy || !activeVersion} onclick={saveActivePrompt}>
-						<Save size={15} /> Simpan
-					</button>
+						<Save size={15} />{tr("Simpan")}</button>
 				</div>
 
 				{#if activeVersion}
 					<label class="mt-4 block">
-						<span class="text-xs font-medium text-muted-foreground">Prompt (satu-satunya yang aktif — edit & simpan kapan saja)</span>
+						<span class="text-xs font-medium text-muted-foreground">{tr("Prompt (satu-satunya yang aktif — edit & simpan kapan saja)")}</span>
 						<textarea
 							class="app-input mt-1 w-full font-mono text-xs"
 							rows="14"
-							placeholder="Tulis prompt lengkap angle ini dalam satu kesatuan. Dipakai AI The Writer untuk membuat konten."
+							placeholder={tr("Tulis prompt lengkap angle ini dalam satu kesatuan. Dipakai AI The Writer untuk membuat konten.")}
 							bind:value={activeVersion.prompt}
 						></textarea>
 					</label>
 					<label class="mt-3 block">
 						<span class="text-xs font-medium text-muted-foreground">Catatan perubahan</span>
-						<input class="app-input mt-1 w-full" placeholder="Ringkasan perubahan (opsional)" bind:value={activeVersion.change_note} />
+						<input class="app-input mt-1 w-full" placeholder={tr("Ringkasan perubahan (opsional)")} bind:value={activeVersion.change_note} />
 					</label>
 				{:else}
 					<div class="mt-4 rounded-lg px-3 py-2 text-sm" style="background: var(--warning-soft); color: var(--warning);">
 						Angle ini belum punya prompt aktif — buat prompt pertamanya di sini (kamu super admin).
 					</div>
 					<label class="mt-3 block">
-						<span class="text-xs font-medium text-muted-foreground">Prompt awal (akan langsung jadi versi aktif)</span>
-						<textarea class="app-input mt-1 w-full font-mono text-xs" rows="14" placeholder="Tulis prompt lengkap angle ini…" bind:value={newPromptText}></textarea>
+						<span class="text-xs font-medium text-muted-foreground">{tr("Prompt awal (akan langsung jadi versi aktif)")}</span>
+						<textarea class="app-input mt-1 w-full font-mono text-xs" rows="14" placeholder={tr("Tulis prompt lengkap angle ini…")} bind:value={newPromptText}></textarea>
 					</label>
 					<label class="mt-3 block">
 						<span class="text-xs font-medium text-muted-foreground">Catatan perubahan</span>
-						<input class="app-input mt-1 w-full" placeholder="Versi awal (opsional)" bind:value={newPromptNote} />
+						<input class="app-input mt-1 w-full" placeholder={tr("Versi awal (opsional)")} bind:value={newPromptNote} />
 					</label>
 					<button class="app-btn app-btn-primary mt-3" disabled={!newPromptText.trim()} onclick={createFirstPrompt}>
-						<Plus size={15} /> Buat Prompt Aktif
-					</button>
+						<Plus size={15} />{tr("Buat Prompt Aktif")}</button>
 				{/if}
 
 				<!-- Uji prompt -->
 				<div class="mt-4 rounded-lg border p-3" style="border-color: var(--primary);">
 					<h3 class="text-sm font-semibold">Test Prompt — Bahan & Analisis Kepatuhan</h3>
-					<p class="mt-1 text-xs text-muted-foreground">
-						Isi bahan (fakta/produk/masalah), lalu Test. Artikel digenerate dari prompt angle di atas + bahan,
-						lalu dianalisis apakah artikel benar-benar sesuai angle. Hanya testing — tidak membuat campaign.
-					</p>
+					<p class="mt-1 text-xs text-muted-foreground">{tr("Isi bahan (fakta/produk/masalah), lalu Test. Artikel digenerate dari prompt angle di atas + bahan, lalu dianalisis apakah artikel benar-benar sesuai angle. Hanya testing — tidak membuat campaign.")}</p>
 					<label class="mt-3 block">
 						<span class="text-xs font-medium text-muted-foreground">Bahan uji</span>
 						<textarea
 							class="app-input mt-1 w-full"
 							rows="6"
 							maxlength="8000"
-							placeholder="Tempel bahan / fakta / produk / masalah yang ingin diuji… (maks 8000 karakter)"
+							placeholder={tr("Tempel bahan / fakta / produk / masalah yang ingin diuji… (maks 8000 karakter)")}
 							bind:value={testBahan}
 						></textarea>
 					</label>
@@ -415,7 +418,7 @@
 						{/if}
 					</div>
 					{#if testLoading}
-						<p class="mt-3 text-center text-sm text-muted-foreground">Memanggil writer → lalu gatekeeper untuk analisis…</p>
+						<p class="mt-3 text-center text-sm text-muted-foreground">{tr("Memanggil writer → lalu gatekeeper untuk analisis…")}</p>
 					{/if}
 
 					{#if testResult}
@@ -461,7 +464,7 @@
 
 				{#if archivedVersions.length > 0}
 					<div class="mt-3 rounded-lg border p-3">
-						<p class="text-xs font-semibold text-muted-foreground">Riwayat versi lama — hapus biar hemat</p>
+						<p class="text-xs font-semibold text-muted-foreground">{tr("Riwayat versi lama — hapus biar hemat")}</p>
 						<ul class="mt-2 flex flex-col gap-1">
 							{#each archivedVersions as v (v.id)}
 								<li class="flex items-center justify-between gap-2">
@@ -469,8 +472,7 @@
 										v{v.version} · {v.status} · {fmtDate(v.created_at)}{v.change_note ? ` — ${v.change_note}` : ''}
 									</span>
 									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-[11px]" onclick={() => deleteVersion(v.id)}>
-										<Trash2 size={11} /> Hapus
-									</button>
+										<Trash2 size={11} />{tr("Hapus")}</button>
 								</li>
 							{/each}
 						</ul>
@@ -482,11 +484,11 @@
 </section>
 
 {#if showChannel}
-	<Modal title="Buat Channel Media" label="Buat channel" onClose={() => (showChannel = false)}>
+	<Modal title={tr("Buat Channel Media")} label="Buat channel" onClose={() => (showChannel = false)}>
 		<form class="flex flex-col gap-3" onsubmit={createChannel}>
 			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Nama</span>
-				<input class="app-input mt-1 w-full" required placeholder="Media Mainstream / Nasional" bind:value={channelForm.name} />
+				<span class="text-xs font-medium text-muted-foreground">{tr("Nama")}</span>
+				<input class="app-input mt-1 w-full" required placeholder={tr("Media Mainstream / Nasional")} bind:value={channelForm.name} />
 			</label>
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Slug</span>
@@ -494,23 +496,23 @@
 			</label>
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Deskripsi</span>
-				<textarea class="app-input mt-1 w-full" placeholder="Pendekatan jurnalistik…" bind:value={channelForm.description}></textarea>
+				<textarea class="app-input mt-1 w-full" placeholder={tr("Pendekatan jurnalistik…")} bind:value={channelForm.description}></textarea>
 			</label>
 			<div class="flex justify-end gap-2">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (showChannel = false)}>Batal</button>
-				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>Buat Channel</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (showChannel = false)}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{tr("Buat Channel")}</button>
 			</div>
 		</form>
 	</Modal>
 {/if}
 
 {#if showAngle}
-	<Modal title="Buat Content Angle" label="Buat angle" onClose={() => (showAngle = false)}>
+	<Modal title={tr("Buat Content Angle")} label="Buat angle" onClose={() => (showAngle = false)}>
 		<form class="flex flex-col gap-3" onsubmit={createAngle}>
 			<p class="text-xs text-muted-foreground">Untuk channel: {selectedChannel?.name ?? '—'}</p>
 			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Nama</span>
-				<input class="app-input mt-1 w-full" required placeholder="Peluncuran Produk / Fitur Baru" bind:value={angleForm.name} />
+				<span class="text-xs font-medium text-muted-foreground">{tr("Nama")}</span>
+				<input class="app-input mt-1 w-full" required placeholder={tr("Peluncuran Produk / Fitur Baru")} bind:value={angleForm.name} />
 			</label>
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Slug</span>
@@ -518,11 +520,11 @@
 			</label>
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Deskripsi</span>
-				<textarea class="app-input mt-1 w-full" placeholder="Pengumuman peluncuran produk…" bind:value={angleForm.description}></textarea>
+				<textarea class="app-input mt-1 w-full" placeholder={tr("Pengumuman peluncuran produk…")} bind:value={angleForm.description}></textarea>
 			</label>
 			<div class="flex justify-end gap-2">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (showAngle = false)}>Batal</button>
-				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>Buat Angle</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (showAngle = false)}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{tr("Buat Angle")}</button>
 			</div>
 		</form>
 	</Modal>
@@ -532,7 +534,7 @@
 	<Modal title="Edit Angle" label="Edit angle" onClose={() => (showEditAngle = false)}>
 		<form class="flex flex-col gap-3" onsubmit={saveEditAngle}>
 			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Nama</span>
+				<span class="text-xs font-medium text-muted-foreground">{tr("Nama")}</span>
 				<input class="app-input mt-1 w-full" required bind:value={editAngleForm.name} />
 			</label>
 			<label class="block">
@@ -541,11 +543,11 @@
 			</label>
 			<label class="flex items-center gap-2 text-sm">
 				<input type="checkbox" bind:checked={editAngleForm.active} />
-				{editAngleForm.active ? 'Aktif' : 'Nonaktif'}
+				{editAngleForm.active ? tr('Aktif') : tr('Nonaktif')}
 			</label>
 			<div class="flex justify-end gap-2">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (showEditAngle = false)}>Batal</button>
-				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>Simpan</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (showEditAngle = false)}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{tr("Simpan")}</button>
 			</div>
 		</form>
 	</Modal>

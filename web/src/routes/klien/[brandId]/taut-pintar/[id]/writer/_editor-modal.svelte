@@ -1,13 +1,16 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Modal editor rich untuk Writer — dipakai untuk Preview hasil generate
 	// maupun edit hasil Unggah Artikel. Port writer/editor-modal.tsx.
 	// contentEditable + execCommand (tanpa dependensi baru).
-	import { Image, Link, List, ListOrdered, LoaderCircle, Quote, Redo2, RotateCcw, TriangleAlert, Upload, Video } from '@lucide/svelte';
-	import type { Component } from 'svelte';
+	import { Image, Info, Link, List, ListOrdered, LoaderCircle, Quote, RotateCcw, RotateCw, TriangleAlert, Upload, Video, X } from '@lucide/svelte';
+	import type { Component, Snippet } from 'svelte';
 	import Select from '$lib/components/select.svelte';
+	import { TAUTHUB_FALLBACK_COVER } from '$lib/media/cover';
 
-	// Fallback saat user memilih "pakai logo Tauthub" sebagai cover (asset publik).
-	const TAUTHUB_FALLBACK_COVER = '/tauthub-logo.webp';
+	// Fallback cover "pakai logo Tauthub": konstantanya di $lib/media/cover agar
+	// sama dengan yang dipakai konfirmasi "lanjut tanpa cover" di The Writer.
 
 	let {
 		mediaName,
@@ -25,9 +28,16 @@
 		onSave,
 		onUploadCover,
 		regenDisabled,
-		regenLabel = 'Generate Ulang (2 Kredit)',
+		regenLabel = tr('Generate Ulang (2 Kredit)'),
 		regenTitle,
-		onRegenerate
+		onRegenerate,
+		// Kebijakan yang bisa dilonggarkan konteks lain (mis. modal revisi di
+		// halaman Ringkasan). Default-nya tetap perilaku The Writer.
+		requireCover = true,
+		enforceLinkLimit = true,
+		subtitle = tr('Edit artikel lalu simpan.'),
+		saveLabel = tr('Simpan'),
+		extraFields
 	}: {
 		mediaName: string;
 		initialTitle: string;
@@ -47,6 +57,11 @@
 		regenLabel?: string;
 		regenTitle?: string;
 		onRegenerate?: () => void;
+		requireCover?: boolean;
+		enforceLinkLimit?: boolean;
+		subtitle?: string;
+		saveLabel?: string;
+		extraFields?: Snippet;
 	} = $props();
 
 	function extractH1(html: string): { h1: string; body: string } {
@@ -79,11 +94,72 @@
 	let linkActive = $state(false);
 	let coverConfirmOpen = $state(false);
 	let warnOpen = $state(false);
+	let coverInfoOpen = $state(false);
+	// Ukuran gambar (byte) — cover + gambar di dalam artikel, untuk footer editor.
+	let coverBytes = $state(0);
+	let articleBytes = $state(0);
 	let linkDialog = $state<{ open: boolean; url: string; isEdit: boolean }>({ open: false, url: '', isEdit: false });
 	let embedDialog = $state<{ open: boolean; url: string; error: string }>({ open: false, url: '', error: '' });
 	let savedRange: Range | null = null;
 
 	const linkOverLimit = $derived(linkCount > linkLimit);
+	const totalImageKb = $derived(coverBytes + articleBytes);
+	const fmtKb = (b: number) => (b > 0 ? `${Math.round(b / 1024)}KB` : '0KB');
+
+	async function measureBytes(src: string): Promise<number> {
+		try {
+			const res = await fetch(src, { method: 'GET', credentials: 'include' });
+			if (!res.ok) return 0;
+			return (await res.arrayBuffer()).byteLength;
+		} catch {
+			return 0;
+		}
+	}
+
+	async function measureArticleImages() {
+		const imgs = Array.from(bodyEl?.querySelectorAll('img') ?? [])
+			.map((i) => i.getAttribute('src') ?? '')
+			.filter(Boolean);
+		articleBytes = (await Promise.all(imgs.map(measureBytes))).reduce((a, b) => a + b, 0);
+	}
+
+	// Ukur gambar di dalam artikel setiap isi berubah (words jadi penanda isi).
+	$effect(() => {
+		words;
+		void measureArticleImages();
+	});
+
+	// Ukur cover saat berubah.
+	$effect(() => {
+		let alive = true;
+		const url = coverUrl;
+		if (!url) {
+			coverBytes = 0;
+			return;
+		}
+		void measureBytes(url).then((b) => {
+			if (alive) coverBytes = b;
+		});
+		return () => {
+			alive = false;
+		};
+	});
+
+	// Tempel (Ctrl+V) gambar dari clipboard → jadi cover, bila cover masih kosong.
+	$effect(() => {
+		function onPaste(e: ClipboardEvent) {
+			if (coverUrl || coverBusy) return;
+			const target = e.target as Node | null;
+			if (target && bodyEl?.contains(target)) return;
+			const img = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith('image/'));
+			const file = img?.getAsFile();
+			if (!file) return;
+			e.preventDefault();
+			void pickCover(file);
+		}
+		document.addEventListener('paste', onPaste);
+		return () => document.removeEventListener('paste', onPaste);
+	});
 
 	// Isi body sekali saat mount: ekstrak H1 ke field judul, sisanya jadi body.
 	$effect(() => {
@@ -101,7 +177,7 @@
 	// Escape menutup modal.
 	$effect(() => {
 		function onKey(e: KeyboardEvent) {
-			if (e.key === 'Escape' && !saving) onClose();
+			if (e.key === 'Escape' && !saving && !coverInfoOpen) onClose();
 		}
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);
@@ -115,6 +191,20 @@
 		linkCount = body.querySelectorAll('a').length;
 	}
 
+	/* Klik pada tautan: cegah navigasi, seleksi isi link agar terlihat bedanya. */
+	function handleBodyClick(e: MouseEvent) {
+		const body = bodyEl;
+		const el = e.target instanceof Element ? e.target : null;
+		const anchor = el?.closest('a');
+		if (!body || !anchor || !body.contains(anchor)) return;
+		e.preventDefault();
+		const range = document.createRange();
+		range.selectNodeContents(anchor);
+		const sel = window.getSelection();
+		sel?.removeAllRanges();
+		sel?.addRange(range);
+	}
+
 	function exec(cmd: string, arg?: string) {
 		const body = bodyEl;
 		if (!body) return;
@@ -123,18 +213,18 @@
 		sync();
 	}
 
-	const tools: Array<{ cmd: string; label?: string; icon?: Component; arg?: string; name: string }> = [
-		{ cmd: 'bold', label: 'B', name: 'Tebal' },
-		{ cmd: 'italic', label: 'I', name: 'Miring' },
-		{ cmd: 'underline', label: 'U', name: 'Garis bawah' },
-		{ cmd: 'formatBlock', label: 'H2', arg: 'h2', name: 'Judul bagian' },
-		{ cmd: 'formatBlock', label: 'H3', arg: 'h3', name: 'Sub-judul' },
-		{ cmd: 'formatBlock', arg: 'blockquote', icon: Quote, name: 'Kutipan' },
-		{ cmd: 'insertUnorderedList', icon: List, name: 'Daftar poin' },
-		{ cmd: 'insertOrderedList', icon: ListOrdered, name: 'Daftar bernomor' },
-		{ cmd: 'undo', icon: Redo2, name: 'Urungkan' },
-		{ cmd: 'redo', icon: RotateCcw, name: 'Ulangi' }
-	];
+	const tools: Array<{ cmd: string; label?: string; icon?: Component; arg?: string; name: string }> = $derived([
+		{ cmd: 'bold', label: 'B', name: tr('Tebal') },
+		{ cmd: 'italic', label: 'I', name: tr('Miring') },
+		{ cmd: 'underline', label: 'U', name: tr('Garis bawah') },
+		{ cmd: 'formatBlock', label: 'H2', arg: 'h2', name: tr('Judul bagian') },
+		{ cmd: 'formatBlock', label: 'H3', arg: 'h3', name: tr('Sub-judul') },
+		{ cmd: 'formatBlock', arg: 'blockquote', icon: Quote, name: tr('Kutipan') },
+		{ cmd: 'insertUnorderedList', icon: List, name: tr('Daftar poin') },
+		{ cmd: 'insertOrderedList', icon: ListOrdered, name: tr('Daftar bernomor') },
+		{ cmd: 'undo', icon: RotateCcw, name: tr('Urungkan') },
+		{ cmd: 'redo', icon: RotateCw, name: tr('Ulangi') }
+	]);
 
 	async function pickCover(file: File) {
 		if (!file || coverBusy) return;
@@ -144,7 +234,7 @@
 		try {
 			coverUrl = await onUploadCover(file);
 		} catch {
-			uploadError = 'Gagal mengunggah cover. Periksa koneksi lalu coba lagi.';
+			uploadError = tr('Gagal mengunggah cover. Periksa koneksi lalu coba lagi.');
 		} finally {
 			coverBusy = false;
 			if (coverInput) coverInput.value = '';
@@ -163,7 +253,7 @@
 			document.execCommand('insertImage', false, url);
 			sync();
 		} catch {
-			uploadError = 'Gagal mengunggah gambar artikel.';
+			uploadError = tr('Gagal mengunggah gambar artikel.');
 		} finally {
 			articleBusy = false;
 			if (articleImageInput) articleImageInput.value = '';
@@ -279,7 +369,7 @@
 		}
 		const html = resolveEmbed(embedDialog.url);
 		if (!html) {
-			embedDialog = { ...embedDialog, error: 'Tautan tidak dikenali. Yang didukung: YouTube, Vimeo, Google Maps.' };
+			embedDialog = { ...embedDialog, error: tr('Tautan tidak dikenali. Yang didukung: YouTube, Vimeo, Google Maps.') };
 			return;
 		}
 		// Bangun node dari string hasil resolveEmbed (bukan input mentah).
@@ -287,7 +377,7 @@
 		holder.innerHTML = html;
 		const node = holder.firstElementChild;
 		if (!node) {
-			embedDialog = { ...embedDialog, error: 'Gagal menyiapkan embed.' };
+			embedDialog = { ...embedDialog, error: tr('Gagal menyiapkan embed.') };
 			return;
 		}
 		body.focus();
@@ -312,21 +402,21 @@
 	}
 
 	function handleSave() {
-		if (linkOverLimit) {
+		if (enforceLinkLimit && linkOverLimit) {
 			warnOpen = true;
 			return;
 		}
-		if (!coverUrl?.trim()) {
+		if (requireCover && !coverUrl?.trim()) {
 			coverConfirmOpen = true;
 			return;
 		}
-		onSave(title.trim() || 'Artikel', bodyEl?.innerHTML ?? '', coverUrl, category.trim(), metaDescription.trim());
+		onSave(title.trim() || tr('Artikel'), bodyEl?.innerHTML ?? '', coverUrl, category.trim(), metaDescription.trim());
 	}
 
 	function saveWithFallbackCover() {
 		coverUrl = TAUTHUB_FALLBACK_COVER;
 		coverConfirmOpen = false;
-		onSave(title.trim() || 'Artikel', bodyEl?.innerHTML ?? '', TAUTHUB_FALLBACK_COVER, category.trim(), metaDescription.trim());
+		onSave(title.trim() || tr('Artikel'), bodyEl?.innerHTML ?? '', TAUTHUB_FALLBACK_COVER, category.trim(), metaDescription.trim());
 	}
 
 	// Pantau seleksi: tombol link aktif bila kursor di dalam <a>.
@@ -339,15 +429,26 @@
 	});
 </script>
 
-<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.55);" role="dialog" aria-modal="true" aria-label={`Editor artikel ${mediaName}`}>
-	<div class="app-card my-4 w-full max-w-3xl p-5">
-		<div>
-			<p class="font-bold">{mediaName}</p>
-			<p class="text-xs text-muted-foreground">Edit artikel lalu simpan.</p>
+<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(15, 23, 42, 0.45);" role="dialog" aria-modal="true" aria-label={`${tr('Editor artikel')} ${mediaName}`}>
+	<div class="app-card my-auto w-full max-w-3xl p-5">
+		<div class="flex items-start justify-between gap-3">
+			<div>
+				<p class="font-bold">{mediaName}</p>
+				<p class="text-xs text-muted-foreground">{subtitle}</p>
+			</div>
+			<button
+				class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary"
+				type="button"
+				aria-label={tr('Tutup')}
+				disabled={saving}
+				onclick={onClose}
+			>
+				<X size={18} />
+			</button>
 		</div>
 
 		<div class="mt-3 space-y-3">
-			<input class="app-input w-full text-base font-semibold" aria-label="Judul artikel" maxlength="300" placeholder="Judul artikel" bind:value={title} />
+			<input class="app-input w-full text-base font-semibold" aria-label="Judul artikel" maxlength="300" placeholder={tr("Judul artikel")} bind:value={title} />
 
 			<!-- Cover artikel -->
 			<div>
@@ -360,26 +461,26 @@
 				/>
 				{#if coverUrl}
 					<div class="relative">
-						<img src={coverUrl} alt="Cover artikel" class="max-h-56 w-full rounded-lg object-cover" />
-						<button class="app-btn app-btn-soft absolute right-2 bottom-2 !min-h-7 !px-2 !text-xs" type="button" disabled={coverBusy} onclick={() => coverInput?.click()}>
-							{coverBusy ? 'Mengunggah…' : 'Ganti Cover'}
+						<img src={coverUrl} alt={tr('Cover artikel')} class="max-h-56 w-full rounded-lg object-cover" />
+						<button class="app-btn absolute right-2.5 bottom-2.5 !min-h-7 !px-3 !text-xs" type="button" style="background-color: rgba(15, 23, 42, 0.72); color: #fff;" disabled={coverBusy} onclick={() => coverInput?.click()}>
+							{coverBusy ? tr('Mengunggah…') : tr('Ganti Cover')}
 						</button>
 					</div>
 				{:else}
-					<button class="flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed p-5 text-center" type="button" disabled={coverBusy} onclick={() => coverInput?.click()}>
+					<button class="flex min-h-[132px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-5 text-center" type="button" disabled={coverBusy} onclick={() => coverInput?.click()}>
 						<Upload size={20} class="text-muted-foreground" />
-						<span class="text-sm font-medium">{coverBusy ? 'Mengunggah cover…' : 'Cover artikel belum diunggah'}</span>
-						<span class="text-xs text-muted-foreground">Klik untuk mengunggah, atau tempel gambar (Ctrl+V)</span>
+						<span class="text-sm font-medium">{coverBusy ? tr('Mengunggah cover…') : tr('Cover artikel belum diunggah')}</span>
+						<span class="text-xs text-muted-foreground">{tr("Klik untuk mengunggah, atau tempel gambar (Ctrl+V) · Maksimal 200KB · Lebih dari itu otomatis dikompres & diubah ke WebP oleh sistem TautHub")}</span>
 					</button>
 				{/if}
 			</div>
 
 			<div class="flex flex-wrap items-center gap-2">
-				<span class="text-xs font-medium text-muted-foreground">Kategori artikel</span>
+				<span class="text-xs font-medium text-muted-foreground">{tr('Kategori artikel')}</span>
 				{#if categoryOptions.length > 0}
 					<Select
 						bind:value={category}
-						ariaLabel="Kategori artikel"
+						ariaLabel={tr('Kategori artikel')}
 						minWidth={200}
 						options={[
 							...(category && !categoryOptions.includes(category) ? [{ value: category, label: category }] : []),
@@ -387,19 +488,42 @@
 						]}
 					/>
 				{:else}
-					<span class="text-xs text-muted-foreground">Media ini belum punya kategori dari mitra — atur di dashboard mitra.</span>
+					<span class="text-xs text-muted-foreground">{tr("Media ini belum punya kategori dari mitra — atur di dashboard mitra.")}</span>
 				{/if}
 			</div>
 
 			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Meta deskripsi</span>
-				<textarea class="app-input mt-1 w-full" rows="2" maxlength="500" placeholder="Ringkasan 120-160 karakter untuk hasil pencarian — terisi otomatis oleh AI" bind:value={metaDescription}></textarea>
+				<span class="text-xs font-medium text-muted-foreground">{tr('Meta deskripsi')}</span>
+				<textarea class="app-input mt-1 w-full" rows="2" maxlength="500" placeholder={tr("Ringkasan 120-160 karakter untuk hasil pencarian — terisi otomatis oleh AI")} bind:value={metaDescription}></textarea>
 			</label>
 
 			{#if uploadError}<p class="text-sm" style="color: var(--destructive);">{uploadError}</p>{/if}
 
+			<!-- Info kemampuan editor: caption + bullet, dibuka lewat trigger kecil. -->
+			<div class="relative">
+				<button class="inline-flex items-center gap-1.5 self-start text-xs text-muted-foreground hover:text-foreground" type="button" onclick={() => (coverInfoOpen = !coverInfoOpen)}>
+					<Info size={13} />
+					{tr('Kemampuan editor artikel')}
+				</button>
+				{#if coverInfoOpen}
+					<div class="mt-2 flex max-w-[360px] flex-col gap-2 rounded-lg border p-3" style="background-color: var(--card);">
+						<div class="flex items-center gap-1.5">
+							<Info size={14} style="color: var(--primary);" />
+							<p class="text-sm font-bold">{tr('Kemampuan editor artikel')}</p>
+						</div>
+						<ul class="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+							<li>{tr('Cover adalah gambar utama artikel yang tampil sebagai thumbnail di media')}</li>
+							<li>{tr('Bisa mengubah judul dan seluruh isi teks jika diperlukan')}</li>
+							<li>{tr('Bisa tambahkan gambar dalam artikel')}</li>
+							<li>{tr('Bisa menambah atau mengubah hyperlink jika fitur tersedia')}</li>
+							<li>{tr('Jika cover tidak diisi, artikel memakai gambar fallback bawaan saat ditinjau & didistribusikan')}</li>
+						</ul>
+					</div>
+				{/if}
+			</div>
+
 			<!-- Toolbar -->
-			<div class="flex flex-wrap items-center gap-1 rounded-lg border p-1" role="toolbar" aria-label="Format teks">
+			<div class="flex flex-wrap items-center gap-1 rounded-lg border p-1" role="toolbar" aria-label={tr('Format teks')}>
 				{#each tools as t (t.cmd + (t.arg ?? ''))}
 					{@const ToolIcon = t.icon}
 					<button class="min-h-8 min-w-8 rounded px-2 text-sm font-semibold hover:bg-secondary" type="button" title={t.name} onclick={() => exec(t.cmd, t.arg)}>
@@ -417,7 +541,7 @@
 					class="hidden"
 					onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; if (f) void insertArticleImage(f); }}
 				/>
-				<button class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary" type="button" title={articleBusy ? 'Mengunggah…' : 'Unggah gambar'} disabled={articleBusy} onclick={() => articleImageInput?.click()}>
+				<button class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary" type="button" title={articleBusy ? tr('Mengunggah…') : tr('Unggah gambar')} disabled={articleBusy} onclick={() => articleImageInput?.click()}>
 					{#if articleBusy}<LoaderCircle size={15} class="animate-spin" />{:else}<Image size={15} />{/if}
 				</button>
 				<button
@@ -425,43 +549,59 @@
 					style="color: {linkActive ? 'var(--primary)' : 'inherit'};"
 					type="button"
 					onmousedown={(e: MouseEvent) => e.preventDefault()}
-					title={linkActive ? 'Ubah / hapus tautan' : 'Sisipkan tautan'}
+					title={linkActive ? tr('Ubah / hapus tautan') : tr('Sisipkan tautan')}
 					aria-pressed={linkActive}
 					onclick={openLinkDialog}
 				><Link size={15} /></button>
 				{#if allowEmbed}
-					<button class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary" type="button" onmousedown={(e: MouseEvent) => e.preventDefault()} title="Sisipkan video atau peta" onclick={openEmbedDialog}><Video size={15} /></button>
+					<button class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary" type="button" onmousedown={(e: MouseEvent) => e.preventDefault()} title={tr("Sisipkan video atau peta")} onclick={openEmbedDialog}><Video size={15} /></button>
 				{/if}
 			</div>
 
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<div
 				bind:this={bodyEl}
 				class="prose prose-sm max-h-[46vh] min-h-[200px] overflow-y-auto rounded-lg border p-3 text-sm"
 				contenteditable={!saving}
 				role="textbox"
-				aria-label="Isi artikel"
+				tabindex="0"
+				aria-label={tr('Isi artikel')}
 				oninput={sync}
+				onclick={handleBodyClick}
 			></div>
 
 			{#if saveError}<p class="text-sm" style="color: var(--destructive);">{saveError}</p>{/if}
 			{#if linkOverLimit}
-				<p class="text-sm" style="color: var(--destructive);"><TriangleAlert size={13} class="inline" /> Terlalu banyak link aktif. Maks {linkLimit} tautan per media.</p>
+				<p class="text-sm" style="color: var(--destructive);"><TriangleAlert size={13} class="inline" /> {tr('Terlalu banyak link aktif. Maks')} {linkLimit} {tr("tautan per media.")}</p>
 			{/if}
 		</div>
 
+		{#if extraFields}
+			<div class="mt-4 space-y-3 border-t pt-3">{@render extraFields()}</div>
+		{/if}
+
 		<div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
-			<span class="text-xs text-muted-foreground">
-				{words} kata · Link
-				<span style="color: {linkOverLimit ? 'var(--destructive)' : 'var(--muted-foreground)'}; font-weight: {linkOverLimit ? 700 : 400};">{linkCount}/{linkLimit}</span>
+			<span class="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+				{words} {tr('kata')}
+				<span style="opacity: .6;">·</span>
+				<Image size={13} />
+				<span>{fmtKb(totalImageKb)} ({tr('Cover')} {fmtKb(coverBytes)} · {tr('Artikel')} {fmtKb(articleBytes)})</span>
+				{#if enforceLinkLimit}
+					<span style="opacity: .6;">·</span>
+					<Link size={13} />
+					<span style="color: {linkOverLimit ? 'var(--destructive)' : 'var(--muted-foreground)'}; font-weight: {linkOverLimit ? 700 : 400};">{tr('Link')} {linkCount}/{linkLimit}</span>
+				{/if}
 			</span>
 			<div class="flex flex-wrap items-center gap-2">
-				<button class="app-btn app-btn-soft" type="button" disabled={saving || regenDisabled || !onRegenerate} title={regenDisabled ? regenTitle : undefined} onclick={onRegenerate}>
-					<RotateCcw size={14} /> {regenLabel}
-				</button>
-				<button class="app-btn app-btn-soft" type="button" disabled={saving} onclick={onClose}>Batal</button>
+				{#if onRegenerate}
+					<button class="app-btn app-btn-soft" type="button" disabled={saving || regenDisabled} title={regenDisabled ? regenTitle : undefined} onclick={onRegenerate}>
+						<RotateCcw size={14} /> {regenLabel}
+					</button>
+				{/if}
+				<button class="app-btn app-btn-soft" type="button" disabled={saving} onclick={onClose}>{tr("Batal")}</button>
 				<button class="app-btn app-btn-primary" type="button" disabled={saving} onclick={handleSave}>
 					{#if saving}<LoaderCircle size={14} class="animate-spin" />{/if}
-					{saving ? 'Menyimpan…' : 'Simpan'}
+					{saving ? tr('Menyimpan…') : saveLabel}
 				</button>
 			</div>
 		</div>
@@ -471,14 +611,14 @@
 {#if warnOpen}
 	<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.5);" role="presentation">
 		<div class="app-card w-full max-w-md p-5">
-			<p class="flex items-center gap-2 font-bold" style="color: var(--warning);"><TriangleAlert size={18} /> Link Terlalu Banyak</p>
+			<p class="flex items-center gap-2 font-bold" style="color: var(--warning);"><TriangleAlert size={18} /> {tr('Link Terlalu Banyak')}</p>
 			<p class="mt-2 text-sm">
-				Artikel ini berisi <strong>{linkCount}</strong> tautan aktif, tetapi media ini hanya memperbolehkan maksimal <strong>{linkLimit}</strong> tautan.
-				Kurangi URL aktif ({linkCount - linkLimit} tautan berlebih) sebelum menyimpan.
+				{tr('Artikel ini berisi')} <strong>{linkCount}</strong> {tr("tautan aktif, tetapi media ini hanya memperbolehkan maksimal")} <strong>{linkLimit}</strong> {tr('tautan.')}
+				{tr('Kurangi URL aktif')} ({linkCount - linkLimit} {tr('tautan berlebih')}) {tr('sebelum menyimpan.')}
 			</p>
-			<p class="mt-2 text-xs" style="color: var(--destructive);">Artikel tidak akan tersimpan sampai jumlah link sesuai batas media.</p>
+			<p class="mt-2 text-xs" style="color: var(--destructive);">{tr("Artikel tidak akan tersimpan sampai jumlah link sesuai batas media.")}</p>
 			<div class="mt-4 flex justify-end">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (warnOpen = false)}>Edisi Ulang</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (warnOpen = false)}>{tr("Edisi Ulang")}</button>
 			</div>
 		</div>
 	</div>
@@ -487,14 +627,13 @@
 {#if coverConfirmOpen}
 	<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.5);" role="presentation">
 		<div class="app-card w-full max-w-md p-5">
-			<p class="flex items-center gap-2 font-bold" style="color: var(--destructive);"><TriangleAlert size={18} /> Cover Artikel Masih Kosong</p>
+			<p class="flex items-center gap-2 font-bold" style="color: var(--destructive);"><TriangleAlert size={18} /> {tr('Cover Artikel Masih Kosong')}</p>
 			<p class="mt-2 text-sm" style="color: var(--destructive);">
-				Artikel ini <strong>wajib memiliki gambar cover</strong>. Tanpa cover, artikel akan otomatis memakai thumbnail/logo bawaan Tauthub.
-			</p>
-			<p class="mt-2 text-sm">Lanjutkan tanpa cover (artikel memakai gambar fallback Tauthub), atau tambahkan gambar sekarang?</p>
+				{tr('Artikel ini')} <strong>{tr('wajib memiliki gambar cover')}</strong>{tr(". Tanpa cover, artikel akan otomatis memakai thumbnail/logo bawaan Tauthub.")}</p>
+			<p class="mt-2 text-sm">{tr("Lanjutkan tanpa cover (artikel memakai gambar fallback Tauthub), atau tambahkan gambar sekarang?")}</p>
 			<div class="mt-4 flex justify-end gap-3">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => { coverConfirmOpen = false; coverInput?.click(); }}>Tidak, saya tambah gambar</button>
-				<button class="app-btn app-btn-primary" type="button" onclick={saveWithFallbackCover}>Ya, pakai logo Tauthub</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => { coverConfirmOpen = false; coverInput?.click(); }}>{tr("Tidak, saya tambah gambar")}</button>
+				<button class="app-btn app-btn-primary" type="button" onclick={saveWithFallbackCover}>{tr('Ya, pakai logo Tauthub')}</button>
 			</div>
 		</div>
 	</div>
@@ -503,21 +642,21 @@
 {#if linkDialog.open}
 	<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.5);" role="presentation">
 		<div class="app-card w-full max-w-md p-5">
-			<p class="font-bold">{linkDialog.isEdit ? 'Ubah tautan' : 'Sisipkan tautan'}</p>
+			<p class="font-bold">{linkDialog.isEdit ? tr('Ubah tautan') : tr('Sisipkan tautan')}</p>
 			<p class="mt-1 text-sm text-muted-foreground">
-				{linkDialog.isEdit ? 'Ubah URL di bawah, atau kosongkan untuk melepas tautan.' : 'Masukkan URL untuk teks yang dipilih.'}
+				{linkDialog.isEdit ? tr('Ubah URL di bawah, atau kosongkan untuk melepas tautan.') : tr('Masukkan URL untuk teks yang dipilih.')}
 			</p>
 			<input
 				class="app-input mt-3 w-full"
-				aria-label="URL tautan"
-				placeholder="https://contoh.com/halaman"
+				aria-label={tr('URL tautan')}
+				placeholder={tr("https://contoh.com/halaman")}
 				inputmode="url"
 				bind:value={linkDialog.url}
 				onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyLinkDialog(); } }}
 			/>
 			<div class="mt-4 flex justify-end gap-3">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (linkDialog = { ...linkDialog, open: false })}>Batal</button>
-				<button class="app-btn app-btn-primary" type="button" onclick={applyLinkDialog}>{linkDialog.url.trim() ? 'Terapkan' : 'Lepas tautan'}</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (linkDialog = { ...linkDialog, open: false })}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="button" onclick={applyLinkDialog}>{linkDialog.url.trim() ? tr('Terapkan') : tr('Lepas tautan')}</button>
 			</div>
 		</div>
 	</div>
@@ -526,23 +665,21 @@
 {#if embedDialog.open}
 	<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.5);" role="presentation">
 		<div class="app-card w-full max-w-lg p-5">
-			<p class="font-bold">Sisipkan video atau peta</p>
-			<p class="mt-1 text-sm text-muted-foreground">Tempel tautan video (YouTube/Vimeo) atau tautan embed peta dari Google Maps.</p>
+			<p class="font-bold">{tr("Sisipkan video atau peta")}</p>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Tempel tautan video (YouTube/Vimeo) atau tautan embed peta dari Google Maps.")}</p>
 			<input
 				class="app-input mt-3 w-full"
 				aria-label="URL embed"
-				placeholder="https://www.youtube.com/watch?v=... atau https://www.google.com/maps/...&pb=..."
+				placeholder={tr("https://www.youtube.com/watch?v=... atau https://www.google.com/maps/...&pb=...")}
 				bind:value={embedDialog.url}
 				oninput={() => (embedDialog = { ...embedDialog, error: '' })}
 				onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyEmbedDialog(); } }}
 			/>
 			{#if embedDialog.error}<p class="mt-2 text-xs" style="color: var(--destructive);">{embedDialog.error}</p>{/if}
-			<p class="mt-2 text-xs text-muted-foreground">
-				Embed hanya bisa disisipkan pada media yang mengizinkannya, dan hanya dari penyedia yang didukung.
-			</p>
+			<p class="mt-2 text-xs text-muted-foreground">{tr("Embed hanya bisa disisipkan pada media yang mengizinkannya, dan hanya dari penyedia yang didukung. Setelah disimpan, embed ikut terkirim saat artikel terbit di situs mitra.")}</p>
 			<div class="mt-4 flex justify-end gap-3">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (embedDialog = { ...embedDialog, open: false })}>Batal</button>
-				<button class="app-btn app-btn-primary" type="button" onclick={applyEmbedDialog}>Sisipkan</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (embedDialog = { ...embedDialog, open: false })}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="button" onclick={applyEmbedDialog}>{tr('Sisipkan')}</button>
 			</div>
 		</div>
 	</div>

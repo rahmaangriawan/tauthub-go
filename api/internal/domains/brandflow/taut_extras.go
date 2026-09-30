@@ -9,6 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/security"
+
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
@@ -206,7 +208,7 @@ func (d *Deps) TautArticlePut(w http.ResponseWriter, r *http.Request) {
 		if doc != nil {
 			next = doc.intOr("current_version", 1) + 1
 		}
-		safeHTML := stripDisallowedIframesHTML(contentHTML)
+		safeHTML := sanitizeArticleHTMLForStore(stripDisallowedIframesHTML(contentHTML))
 		if err := d.exec(r.Context(),
 			"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, $3, $4, 'html', 'manual_edit', 'Edit manual Taut Pintar', $5)",
 			uuid.NewString(), documentID, next, safeHTML, user.ID); err != nil {
@@ -298,7 +300,7 @@ func (d *Deps) TautArticleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := d.exec(r.Context(),
 		"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, 1, $3, 'html', 'manual_upload', 'Unggah manual Taut Pintar', $4)",
-		uuid.NewString(), docID, stripDisallowedIframesHTML(contentHTML), user.ID); err != nil {
+		uuid.NewString(), docID, sanitizeArticleHTMLForStore(stripDisallowedIframesHTML(contentHTML)), user.ID); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -638,7 +640,8 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(tcm.price, m.price, 0) AS price,
 		       m.max_links, sm.da, sm.spam_score, m.traffic_estimate,
 		       p.scheduled_at, tcm.article_document_id, d.title AS article_title, d.updated_at AS article_updated_at,
-		       p.id AS pub_id, p.status AS pub_status, p.published_url AS pub_url, p.client_approved_at AS pub_client_approved_at
+		       p.id AS pub_id, p.status AS pub_status, p.published_url AS pub_url, p.client_approved_at AS pub_client_approved_at,
+		       p.featured_image_url AS pub_featured_image_url, tcm.featured_image_url AS media_featured_image_url
 		FROM taut_campaign_media tcm
 		JOIN media m ON m.id = tcm.media_id
 		LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id
@@ -738,14 +741,22 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 			brandVoice = map[string]any{"status": "pending"}
 		}
 
+		// Cover yang dilihat klien di modal revisi: yang sudah terpasang di
+		// publikasi menang, kalau belum ada pakai cover artikel media itu.
+		coverURL := item.strOr("pub_featured_image_url", "")
+		if coverURL == "" {
+			coverURL = item.strOr("media_featured_image_url", "")
+		}
+
 		mediaOut = append(mediaOut, map[string]any{
 			"media_id": item.raw("media_id"), "name": item.raw("name"), "media_type": item.raw("media_type"),
-			"price_idr":     price,
-			"da":            numOrNil(item, "da"),
-			"ss":            numOrNil(item, "spam_score"),
-			"est_traffic":   numOrNil(item, "traffic_estimate"),
-			"link_capacity": numOrNil(item, "max_links"),
-			"scheduled_at":  item.timePtr("scheduled_at"),
+			"featured_image_url": coverURL,
+			"price_idr":          price,
+			"da":                 numOrNil(item, "da"),
+			"ss":                 numOrNil(item, "spam_score"),
+			"est_traffic":        numOrNil(item, "traffic_estimate"),
+			"link_capacity":      numOrNil(item, "max_links"),
+			"scheduled_at":       item.timePtr("scheduled_at"),
 			"article": map[string]any{
 				"title": item.strOr("article_title", ""), "updated_at": item.timePtr("article_updated_at"),
 				"links": map[string]any{"count": anchorCount, "rels": rels},
@@ -1378,6 +1389,14 @@ func numOrNil(row bsRow, key string) any {
 }
 
 // stripDisallowedIframesHTML: buang iframe host tak tepercaya (port embed.ts).
+// sanitizeArticleHTMLForStore: filter iframe lama + netralisasi konstruk
+// berbahaya sebelum HTML manual disimpan (lihat security.SanitizeArticleHTML).
+// Artikel normal tidak berubah; hanya konstruk berbahaya yang dibuang.
+func sanitizeArticleHTMLForStore(html string) string {
+	safe, _ := security.SanitizeArticleHTML(html)
+	return safe
+}
+
 func stripDisallowedIframesHTML(html string) string {
 	if html == "" {
 		return html

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Modal detail media — port 1:1 dari media-detail-modal.tsx & media-intelligence.module.css.
 	// Layout: header (avatar inisial, domain, verified, dewan pers, tombol aksi)
 	// → strip metrik (estimasi trafik, DA, AI Trust Score)
@@ -16,6 +18,7 @@
 	} from '@lucide/svelte';
 	import { apiRequest } from '$lib/auth';
 	import { wordCountLabel, normalizeWordCountMode } from '$lib/media/word-count';
+	import { MEDIA_LABEL } from '../taut-pintar/_shared';
 
 	export type MediaDetailItem = {
 		id: string;
@@ -81,7 +84,7 @@
 	const fmtCompact = (value: number) =>
 		value > 0 ? new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 }).format(value) : null;
 	const idr = (value: number) =>
-		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(value);
+		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(value);
 
 	const autoPath = $derived(Boolean(media.auto_publish));
 	const trafficSw = $derived(media.sw_visits != null && media.sw_visits > 0 ? fmtCompact(media.sw_visits) : null);
@@ -128,7 +131,7 @@
 
 	const score = $derived(media.health_score);
 	const healthLabel = $derived(
-		score == null ? 'Belum Diskor' : score >= 70 ? 'Sangat Sehat' : score >= 40 ? 'Perlu Perhatian' : 'Kondisi Rendah'
+		score == null ? tr('Belum Diskor') : score >= 70 ? 'Sangat Sehat' : score >= 40 ? 'Perlu Perhatian' : 'Kondisi Rendah'
 	);
 
 		const b = $derived((media.health_breakdown ?? {}) as Record<string, unknown>);
@@ -161,23 +164,23 @@
 		maxLinksCount == null
 			? 'Maks. 2 Dofollow'
 			: maxLinksCount === 0
-				? 'Tidak Ada (Tanpa Link)'
+				? tr('Tidak Ada (Tanpa Link)')
 				: `Maks. ${maxLinksCount} ${media.allow_hyperlink ? 'Dofollow' : 'Nofollow'}`
 	);
 
 	const wordCountNote = $derived.by(() => {
 		if (normalizeWordCountMode(media.word_count_mode) !== 'sesuai_permintaan') return null;
 		return media.media_type === 'blogger'
-			? '≈ 500–5.000 kata (mengikuti permintaan klien)'
-			: '≈ mulai 300 kata (mengikuti permintaan klien)';
+			? tr('≈ 500–5.000 kata (mengikuti permintaan klien)')
+			: tr('≈ mulai 300 kata (mengikuti permintaan klien)');
 	});
 
-	const GENERAL_RESTRICTIONS = ['SARA', 'Judi / Kasino', 'Dewasa (Adult)', 'Kripto / Forex'];
+	const GENERAL_RESTRICTIONS = $derived(['SARA', 'Judi / Kasino', 'Dewasa (Adult)', 'Kripto / Forex']);
 	const partnerTopics = $derived((media.topik_terlarang ?? []).map((s) => s.trim()).filter(Boolean));
 	const gatekeeperList = $derived(Array.from(new Set([...GENERAL_RESTRICTIONS, ...partnerTopics])));
 
 	const isOrganic = $derived(media.label_sponsor !== 'ada_sponsor');
-	const sponsorText = $derived(isOrganic ? '✓ Tidak Ada (Organik)' : 'Ada Label Sponsor / Adv');
+	const sponsorText = $derived(isOrganic ? tr('✓ Tidak Ada (Organik)') : 'Ada Label Sponsor / Adv');
 	const isDirectPublish = $derived(media.publication_mode === 'publish');
 	const initialLetter = $derived((media.name || 'M').trim().charAt(0).toUpperCase());
 
@@ -190,6 +193,9 @@
 	);
 	const firstCategory = $derived(cats[0]);
 	const extraCategories = $derived(cats.slice(1));
+	// Jenis media (Blogger / Mainstream) ditampilkan di baris identitas supaya
+	// klien tahu tipe medianya sebelum memesan; kosong bila data tidak ada.
+	const mediaTypeLabel = $derived(media.media_type ? (MEDIA_LABEL[media.media_type] ?? media.media_type) : '');
 
 	function jakartaStamp(iso: string | null | undefined): string {
 		if (!iso) return '—';
@@ -231,7 +237,7 @@
 			`INFORMASI MEDIA: ${media.name.toUpperCase()}`,
 			`Website: ${media.website_url ?? '-'}`,
 			`Kategori: ${media.category ?? 'Umum'}`,
-			`Dewan Pers: ${media.dewan_pers_verified ? 'Terverifikasi' : 'Belum Terverifikasi'}`,
+			`Dewan Pers: ${media.dewan_pers_verified ? 'Terverifikasi' : tr('Belum Terverifikasi')}`,
 			'',
 			'JALUR PUBLIKASI',
 			autoPath
@@ -250,17 +256,17 @@
 			'',
 			'PARAMETER AI & REDAKSI',
 			`Garansi Tayang (SLA): 12 Bulan (jaminan retensi standar platform Tauthub)`,
-			`Label Sponsor / Adv: ${media.label_sponsor === 'ada_sponsor' ? 'Ada Sponsor / Adv' : 'Tidak Ada (Organik)'}`,
+			`Label Sponsor / Adv: ${media.label_sponsor === 'ada_sponsor' ? 'Ada Sponsor / Adv' : tr('Tidak Ada (Organik)')}`,
 			`Batas Tautan Keluar: ${linkPolicy}`,
 			`Panjang Artikel: ${wordCountLabel(media.word_count_mode)}`,
-			`Support Embed (Video/Maps): ${media.allow_embed ? 'Diizinkan' : 'Tidak Diizinkan'}`,
-			`Mode Pengiriman: ${isDirectPublish ? 'Langsung Terbit (otomatis, tanpa langkah terbit manual di media)' : 'Draf (diterbitkan oleh media)'}`,
+			`Support Embed (Video/Maps): ${media.allow_embed ? 'Diizinkan' : tr('Tidak Diizinkan')}`,
+			`Mode Pengiriman: ${isDirectPublish ? tr('Langsung Terbit (otomatis, tanpa langkah terbit manual di media)') : tr('Draf (diterbitkan oleh media)')}`,
 			'',
 			'PEMBATASAN GATEKEEPER',
 			`Topik Dilarang: ${gatekeeperList.join(', ')}`,
 			'',
 			`BIAYA PUBLIKASI: ${idr(media.client_price ?? media.price)} (~ ${media.credit_cost} Kredit)`
-		];
+		];;
 		const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
@@ -317,6 +323,10 @@
 								<span class="detailDomainText">—</span>
 							{/if}
 							<span class="detailDotSeparator">·</span>
+							{#if mediaTypeLabel}
+								<span class="detailCategoryText">{tr('Tipe')}: {mediaTypeLabel}</span>
+								<span class="detailDotSeparator">·</span>
+							{/if}
 							<span class="detailCategoryText">
 								Kategori: {firstCategory}
 								{#if extraCategories.length > 0}
@@ -331,7 +341,7 @@
 										</button>
 										{#if catPopoverOpen}
 											<div class="categoryPopover">
-												<div class="categoryPopoverTitle">Semua Kategori</div>
+												<div class="categoryPopoverTitle">{tr("Semua Kategori")}</div>
 												<div class="categoryPopoverList">
 													{#each cats as c (c)}
 														<span class="categoryPill">{c}</span>
@@ -368,7 +378,7 @@
 						<span>Ekspor Info</span>
 					</button>
 
-					<button class="detailCloseBtn" type="button" aria-label="Tutup" onclick={onclose}>
+					<button class="detailCloseBtn" type="button" aria-label={tr("Tutup")} onclick={onclose}>
 						<X size={18} />
 					</button>
 				</div>
@@ -401,16 +411,10 @@
 								<span class="heroCardEyebrow">JALUR PUBLIKASI</span>
 								{#if autoPath}
 									<h4 class="heroCardTitle">Tauthub Secure Direct™</h4>
-									<p class="heroCardDesc">
-										Artikel langsung terbit ke media target setelah submit pesanan tanpa perlu
-										persetujuan manual, riwayat tayang otomatis akan terpantau di ringkasan kampanye.
-									</p>
+									<p class="heroCardDesc">{tr("Artikel langsung terbit ke media target setelah submit pesanan tanpa perlu persetujuan manual, riwayat tayang otomatis akan terpantau di ringkasan kampanye.")}</p>
 								{:else}
 									<h4 class="heroCardTitle">Editorial Review (SLA Tracked)</h4>
-									<p class="heroCardDesc">
-										Naskah akan ditinjau secara manual oleh redaksi media, seluruh proses antrian
-										penerbitan, revisi dan waktu respon dipantau pada halaman ringkasan kampanye.
-									</p>
+									<p class="heroCardDesc">{tr("Naskah akan ditinjau secara manual oleh redaksi media, seluruh proses antrian penerbitan, revisi dan waktu respon dipantau pada halaman ringkasan kampanye.")}</p>
 								{/if}
 							</div>
 
@@ -432,7 +436,7 @@
 							<div class="perfCardHead">
 								<div class="perfCardTitleGroup">
 									<ChartBar size={20} color="#2563eb" />
-									<span class="perfCardTitle">Indikator Kinerja Mitra</span>
+									<span class="perfCardTitle">{tr("Indikator Kinerja Mitra")}</span>
 									<span class="infoTipAnchor">
 										<button
 											type="button"
@@ -514,7 +518,7 @@
 								</div>
 								<div class="velocityRight">
 									{#if crawlArticles == null}
-										<span class="velocityEmpty">Belum ada data crawl</span>
+										<span class="velocityEmpty">{tr("Belum ada data crawl")}</span>
 									{:else}
 										<div class="velocityValue">
 											{crawlArticles} <span class="velocityValueUnit">artikel</span>
@@ -540,7 +544,7 @@
 						<div class="paramCard">
 							<div class="paramCardHead">
 								<Settings size={20} color="#2563eb" />
-								<span class="paramCardTitle">Parameter AI &amp; Redaksi</span>
+								<span class="paramCardTitle">Parameter AI & Redaksi</span>
 							</div>
 
 							<div class="paramRows">
@@ -563,7 +567,7 @@
 								<div class="paramItemRow">
 									<div class="paramItemLeftGroup">
 										<LinkIcon size={18} class="paramRowIcon" />
-										<span>Batas Tautan Keluar</span>
+										<span>{tr("Batas Tautan Keluar")}</span>
 									</div>
 									<span class="paramValueBold">{linkPolicy}</span>
 								</div>
@@ -571,7 +575,7 @@
 								<div class="paramItemRow">
 									<div class="paramItemLeftGroup">
 										<FileText size={18} class="paramRowIcon" />
-										<span>Panjang Artikel</span>
+										<span>{tr("Panjang Artikel")}</span>
 									</div>
 									<div style="text-align: right;">
 										<span class="paramValueBold">{wordCountLabel(media.word_count_mode)}</span>
@@ -592,7 +596,7 @@
 											Diizinkan
 										</span>
 									{:else}
-										<span class="paramValueMuted">Tidak Diizinkan</span>
+										<span class="paramValueMuted">{tr("Tidak Diizinkan")}</span>
 									{/if}
 								</div>
 							</div>
@@ -605,10 +609,7 @@
 								<span class="gatekeeperTitle">Pembatasan Gatekeeper</span>
 							</div>
 
-							<p class="gatekeeperDesc">
-								Naskah yang mengandung topik berikut akan diblokir otomatis oleh AI Validator sebelum
-								saldo kredit Anda terpotong:
-							</p>
+							<p class="gatekeeperDesc">{tr("Naskah yang mengandung topik berikut akan diblokir otomatis oleh AI Validator sebelum saldo kredit Anda terpotong:")}</p>
 
 							<div class="gatekeeperChips">
 								{#each gatekeeperList as tag (tag)}
@@ -636,8 +637,7 @@
 								{idr(media.client_price ?? media.price)}
 							</span>
 							<span class="detailFooterCredits">
-								~ {media.credit_cost.toLocaleString('id-ID')} Kredit
-							</span>
+								~ {media.credit_cost.toLocaleString('id-ID')} {tr("Kredit")} </span>
 						</div>
 					</div>
 				</div>

@@ -6,6 +6,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
+	import { tr } from '$lib/i18n/phrases';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	const routeId = $derived(page.params.partnerId as string);
@@ -20,6 +21,6 @@
 
 <section>
 	<div class="app-card p-6 text-center">
-		<p class="text-sm text-muted-foreground">Mengarahkan ke Integrasi…</p>
+		<p class="text-sm text-muted-foreground">{tr('Mengarahkan ke Integrasi…')}</p>
 	</div>
 </section>

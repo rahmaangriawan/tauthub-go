@@ -303,8 +303,8 @@ export function textToHtml(text: string): string {
 /* ─── Format ──────────────────────────────────────────────────────────── */
 
 export const fmtIdr = (n: number) => (n ?? 0).toLocaleString('id-ID');
-export const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID')}`;
-const rpFmt = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+export const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
+const rpFmt = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' });
 export const rpCurrency = (n: number) => rpFmt.format(n ?? 0);
 
 export function dt(v: string | null | undefined): string {

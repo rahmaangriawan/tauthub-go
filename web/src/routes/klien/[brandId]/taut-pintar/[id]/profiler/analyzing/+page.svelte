@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Halaman proses analisis Profiler — pemilik tunggal POST /profile/analyze.
 	// Port profiler/analyzing/client.tsx.
 	//   - Datang dari form: status submission masih draft → jalankan analyze.
@@ -112,16 +114,16 @@
 		let payload: Record<string, unknown> | null = null;
 		try {
 			const draftRes = await apiRequest(`${apiBase}/profile/draft`);
-			if (!draftRes.ok) throw new Error('Gagal memuat draft.');
+			if (!draftRes.ok) throw new Error(tr('Gagal memuat draft.'));
 			const draftData = await draftRes.json();
 			payload = draftData.draft ?? null;
 		} catch {
-			error = 'Draft tidak ditemukan. Kembali ke form untuk mengulang.';
+			error = tr('Draft tidak ditemukan. Kembali ke form untuk mengulang.');
 			clearTimers();
 			return;
 		}
 		if (!payload) {
-			error = 'Draft tidak ditemukan. Kembali ke form untuk mengulang.';
+			error = tr('Draft tidak ditemukan. Kembali ke form untuk mengulang.');
 			clearTimers();
 			return;
 		}
@@ -206,11 +208,10 @@
 			{#if error || stalled}
 				<div class="mt-3 flex flex-col items-center gap-2">
 					<p class="text-xs text-muted-foreground">
-						{error || 'Analisis sudah berjalan lama. Periksa koneksi lalu coba lagi.'}
+						{error || tr('Analisis sudah berjalan lama. Periksa koneksi lalu coba lagi.')}
 					</p>
 					<a class="app-btn app-btn-soft" href={formUrl}>
-						<ArrowLeft size={14} /> Kembali ke form
-					</a>
+						<ArrowLeft size={14} />{tr("Kembali ke form")}</a>
 				</div>
 			{:else}
 				<div class="mt-4 h-2 w-full overflow-hidden rounded-full" style="background-color: var(--muted);">
@@ -220,7 +221,7 @@
 		</div>
 
 		{#if !error && !stalled}
-			<p class="text-xs text-muted-foreground">Dokumen Executive PR Brief sedang disusun oleh AI secara otomatis.</p>
+			<p class="text-xs text-muted-foreground">{tr("Dokumen Executive PR Brief sedang disusun oleh AI secara otomatis.")}</p>
 		{/if}
 	</div>
 </main>

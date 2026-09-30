@@ -14,3 +14,11 @@ web/build/
 data/
 *.log
 .DS_Store
+
+# cadangan rahasia jangan pernah ikut ter-commit
+.env.bak*
+*.env.bak*
+
+# artefak runtime lokal (unggahan mitra, berkas sementara) — bukan sumber
+.data/
+api/.data/

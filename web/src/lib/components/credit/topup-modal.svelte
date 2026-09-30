@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Modal Top Up Kredit — port components/credit/topup-modal.tsx.
 	// Struktur & perilaku sama: preset paket + nominal lain, opsi faktur PPN 11%,
 	// ringkasan tagihan, lalu CTA membuat pembayaran lewat gateway aktif.
@@ -33,7 +35,7 @@
 	];
 	const effectivePackages = $derived(packages.length > 0 ? packages : DEFAULT_PACKAGES);
 
-	const fmtIDR = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+	const fmtIDR = (n: number) => `Rp ${n.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 
 	let customTcInput = $state('');
 	let customError = $state('');
@@ -122,7 +124,7 @@
 	<dialog
 		open
 		class="tu-dialog"
-		aria-label="Top Up Saldo (Kredit)"
+		aria-label={tr("Top Up Saldo (Kredit)")}
 		onclick={(e) => e.stopPropagation()}
 	>
 		<div class="tu-header">
@@ -133,12 +135,12 @@
 					</svg>
 				</span>
 				<div>
-					<h3 class="tu-title">Top Up Saldo (Kredit)</h3>
-					<p class="tu-subtitle">1 Kredit = Rp {rateIdr.toLocaleString('id-ID')}</p>
+					<h3 class="tu-title">{tr("Top Up Saldo (Kredit)")}</h3>
+					<p class="tu-subtitle">1 Kredit = Rp {rateIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}</p>
 				</div>
 			</div>
 			{#if onClose}
-				<button type="button" class="tu-close" onclick={onClose} aria-label="Tutup">
+				<button type="button" class="tu-close" onclick={onClose} aria-label={tr("Tutup")}>
 					<X size={18} />
 				</button>
 			{/if}
@@ -154,10 +156,7 @@
 					<p class="tu-payment-title">
 						Pesanan dibuat — {payment.tc.toLocaleString('id-ID')} Kredit · {fmtIDR(payment.amount_idr)}
 					</p>
-					<p class="tu-payment-meta">
-						Menunggu pembayaran diverifikasi payment gateway. Kredit masuk otomatis ke saldo setelah
-						pembayaran lunas.
-					</p>
+					<p class="tu-payment-meta">{tr("Menunggu pembayaran diverifikasi payment gateway. Kredit masuk otomatis ke saldo setelah pembayaran lunas.")}</p>
 				</div>
 				<div class="tu-payment-actions">
 					{#if payment.payment_url}
@@ -165,14 +164,12 @@
 							Bayar Sekarang ({fmtIDR(payment.amount_idr)}) <ExternalLink size={15} />
 						</a>
 					{/if}
-					<button type="button" class="tu-btn-secondary" onclick={onResetPayment}>
-						Saya sudah bayar — Muat ulang saldo
-					</button>
+					<button type="button" class="tu-btn-secondary" onclick={onResetPayment}>{tr("Saya sudah bayar — Muat ulang saldo")}</button>
 				</div>
 			</div>
 		{:else}
 			<div class="tu-section">
-				<span class="tu-label">Pilih Nominal Kredit</span>
+				<span class="tu-label">{tr("Pilih Nominal Kredit")}</span>
 				<div class="tu-presets">
 					{#each effectivePackages as pkg (pkg.tc)}
 						{@const selected = selectedPreset === pkg.tc && !isCustomSelected}
@@ -193,7 +190,7 @@
 								class="tu-coin"
 								aria-hidden="true"
 							/>
-							<span class="tu-preset-tc">{pkg.tc.toLocaleString('id-ID')} Kredit</span>
+							<span class="tu-preset-tc">{pkg.tc.toLocaleString('id-ID')} {tr("Kredit")}</span>
 							<span class="tu-preset-price">{fmtIDR(pkg.idr)}</span>
 						</button>
 					{/each}
@@ -214,15 +211,15 @@
 							class="tu-coin"
 							aria-hidden="true"
 						/>
-						<span class="tu-preset-tc">Nominal Lain</span>
-						<span class="tu-preset-price">Min. 100 Kredit</span>
+						<span class="tu-preset-tc">{tr("Nominal Lain")}</span>
+						<span class="tu-preset-price">{tr("Min. 100 Kredit")}</span>
 					</button>
 				</div>
 			</div>
 
 			{#if showCustomInput}
 				<div class="tu-custom">
-					<label class="tu-label" for="tu-custom-input">Atau masukkan nominal lainnya</label>
+					<label class="tu-label" for="tu-custom-input">{tr("Atau masukkan nominal lainnya")}</label>
 					<form onsubmit={handleCustomSubmit}>
 						<div class="tu-custom-row">
 							<div class="tu-custom-wrap">
@@ -232,12 +229,12 @@
 									type="text"
 									inputmode="numeric"
 									class="tu-input"
-									placeholder="Minimum 100 Kredit"
+									placeholder={tr("Minimum 100 Kredit")}
 									value={customTcInput}
 									oninput={handleCustomTcChange}
 									disabled={busy}
 								/>
-								<span class="tu-custom-suffix">Kredit</span>
+								<span class="tu-custom-suffix">{tr("Kredit")}</span>
 							</div>
 							<button
 								type="submit"
@@ -251,7 +248,7 @@
 							{#if parsedCustomTc > 0}
 								<span>Estimasi: <strong class="tu-custom-calc">{fmtIDR(estimatedCustomPrice)}</strong></span>
 							{:else}
-								<span>1 Kredit = Rp{rateIdr.toLocaleString('id-ID')}</span>
+								<span>1 Kredit = Rp{rateIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}</span>
 							{/if}
 							{#if customError}<span class="tu-invalid">{customError}</span>{/if}
 						</div>
@@ -268,20 +265,18 @@
 					/>
 					<img src="/images/invoice.webp" alt="" width="32" height="32" class="tu-invoice-icon" aria-hidden="true" />
 					<span class="tu-invoice-text">
-						<span class="tu-invoice-title">Saya butuh Faktur Pajak (PPN 11%)</span>
-						<span class="tu-invoice-desc">
-							Tagihan akan diterbitkan atas nama PT Tauthub dengan tambahan PPN 11%.
-						</span>
+						<span class="tu-invoice-title">{tr("Saya butuh Faktur Pajak (PPN 11%)")}</span>
+						<span class="tu-invoice-desc">{tr("Tagihan akan diterbitkan atas nama PT Tauthub dengan tambahan PPN 11%.")}</span>
 					</span>
 					<span class="tu-caret" class:tu-caret-open={needInvoice}><ChevronDown size={14} /></span>
 				</label>
 				{#if needInvoice}
 					<div class="tu-invoice-fields">
-						<label class="tu-field-label" for="tu-inv-company">Nama Perusahaan (Sesuai NPWP) *</label>
+						<label class="tu-field-label" for="tu-inv-company">{tr("Nama Perusahaan (Sesuai NPWP) *")}</label>
 						<input
 							id="tu-inv-company"
 							class="tu-input"
-							placeholder="PT Contoh Sejahtera"
+							placeholder={tr("PT Contoh Sejahtera")}
 							bind:value={invoice.company_name}
 						/>
 						<label class="tu-field-label" for="tu-inv-npwp">Nomor NPWP *</label>
@@ -297,23 +292,23 @@
 							id="tu-inv-address"
 							class="tu-input tu-textarea"
 							rows="2"
-							placeholder="Jl. Contoh No. 123, Jakarta"
+							placeholder={tr("Jl. Contoh No. 123, Jakarta")}
 							bind:value={invoice.npwp_address}
 						></textarea>
 						{#if invoiceError}<span class="tu-invalid">{invoiceError}</span>{/if}
-						<p class="tu-hint">Data faktur akan diteruskan ke tim Finance untuk penerbitan faktur pajak.</p>
+						<p class="tu-hint">{tr("Data faktur akan diteruskan ke tim Finance untuk penerbitan faktur pajak.")}</p>
 					</div>
 				{/if}
 			</div>
 
 			<div class="tu-billing">
 				<div class="tu-billing-left">
-					<span class="tu-label">Ringkasan Tagihan</span>
-					<div class="tu-row"><span>Subtotal</span><span>{fmtIDR(subtotal)}</span></div>
+					<span class="tu-label">{tr("Ringkasan Tagihan")}</span>
+					<div class="tu-row"><span>{tr("Subtotal")}</span><span>{fmtIDR(subtotal)}</span></div>
 					<div class="tu-row"><span>PPN 11%</span><span>{fmtIDR(ppn)}</span></div>
 					<div class="tu-divider"></div>
-					<div class="tu-row tu-row-total"><span>Total Pembayaran</span><span>{fmtIDR(total)}</span></div>
-					<p class="tu-hint">1 Kredit = Rp{rateIdr.toLocaleString('id-ID')} · belum termasuk biaya gateway</p>
+					<div class="tu-row tu-row-total"><span>{tr("Total Pembayaran")}</span><span>{fmtIDR(total)}</span></div>
+					<p class="tu-hint">1 Kredit = Rp{rateIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })} · {tr("belum termasuk biaya gateway")}</p>
 				</div>
 				<img src="/images/billing-summary.webp" alt="" class="tu-billing-image" aria-hidden="true" />
 			</div>
@@ -322,10 +317,7 @@
 				<span class="tu-info-icon"><Info size={16} /></span>
 				<div>
 					<p class="tu-info-title">Punya Bukti Potong PPh 23?</p>
-					<p class="tu-info-desc">
-						Klien korporasi dapat mengklaim bukti potong PPh 23 menjadi tambahan saldo Kredit melalui
-						halaman Invoice setelah pembayaran berhasil.
-					</p>
+					<p class="tu-info-desc">{tr("Klien korporasi dapat mengklaim bukti potong PPh 23 menjadi tambahan saldo Kredit melalui halaman Invoice setelah pembayaran berhasil.")}</p>
 				</div>
 			</div>
 
@@ -341,9 +333,7 @@
 			<div class="tu-disclaimer">
 				<span class="tu-disclaimer-icon"><TriangleAlert size={15} /></span>
 				<p>
-					Kredit hasil Top Up <strong>tidak dapat di-refund / dikembalikan menjadi uang</strong> — hanya
-					untuk layanan Tauthub.
-				</p>
+					{tr("Kredit hasil Top Up")} <strong>{tr("tidak dapat di-refund / dikembalikan menjadi uang")}</strong>{tr("— hanya untuk layanan Tauthub.")}</p>
 			</div>
 		{/if}
 	</dialog>

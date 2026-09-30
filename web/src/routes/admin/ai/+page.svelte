@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// AI gateway — port app/admin/ai/page.tsx + _model-knowledge-drawer.tsx.
 	// Tab: Provider (config sealed key + template), Model Guidelines & RAG,
 	// Routing, Test generation terisolasi, dan Safety Controls (kill switch global).
@@ -109,7 +111,7 @@
 			hint: string;
 			api_key_placeholder?: string;
 		}
-	> = {
+	> = $derived({
 		openai: {
 			label: 'OpenAI (GPT-4o)',
 			base_url: 'https://api.openai.com/v1',
@@ -156,12 +158,12 @@
 			api_key_placeholder: 'gsk_...'
 		},
 		ollama: {
-			label: 'Ollama (Local AI)',
+			label: 'Ollama (Self-hosted)',
 			base_url: 'http://localhost:11434/v1',
 			default_model: 'llama3.2',
 			economy_model: 'llama3.2:1b',
 			premium_model: 'qwen2.5:14b',
-			hint: 'Ollama lokal atau remote. API key boleh diisi sembarang string jika tanpa auth.',
+			hint: tr('Ollama lokal atau remote. API key boleh diisi sembarang string jika tanpa auth.'),
 			api_key_placeholder: 'ollama (bebas)'
 		},
 		custom: {
@@ -173,7 +175,7 @@
 			hint: 'Endpoint OpenAI-compatible kustom (vLLM, LocalAI, Azure, dll).',
 			api_key_placeholder: 'API Key...'
 		}
-	};
+	});
 
 	type ProviderConfigState = {
 		base_url: string;
@@ -245,7 +247,7 @@
 	let drawerBusy = $state(false);
 	let drawerChunks = $state<KnowledgeChunk[]>([]);
 	let drawerExisting = $state<ModelKnowledge | null>(null);
-	let kReasoning = $state('sedang');
+	let kReasoning = $state(tr('sedang'));
 	let kSummary = $state('');
 	let kCharacteristics = $state('');
 	let kSuitableFor = $state('');
@@ -305,7 +307,7 @@
 			}
 			return { ok: true, data: (await res.json()) as T };
 		} catch {
-			return { ok: false, error: 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.' };
+			return { ok: false, error: tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.') };
 		}
 	}
 
@@ -475,7 +477,7 @@
 
 	const knowledgeDefaults: Record<string, string | null> = {};
 	function resetKnowledgeForm() {
-		kReasoning = 'sedang';
+		kReasoning = tr('sedang');
 		kSummary = '';
 		kCharacteristics = '';
 		kSuitableFor = '';
@@ -502,7 +504,7 @@
 			drawerExisting = k;
 			drawerChunks = data.chunks ?? [];
 			if (k) {
-				kReasoning = (k.reasoning_level as string) || 'sedang';
+				kReasoning = (k.reasoning_level as string) || tr('sedang');
 				kSummary = k.summary || '';
 				kCharacteristics = k.characteristics || '';
 				kSuitableFor = k.suitable_for || '';
@@ -627,7 +629,7 @@
 
 	{#if !provider && error.includes('Akses platform')}
 		<div class="app-card mt-4 px-4 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke pengaturan AI platform.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke pengaturan AI platform.")}</p>
 		</div>
 	{:else if provider}
 		<div class="mt-4 flex flex-wrap gap-2">
@@ -653,8 +655,7 @@
 					<div class="flex flex-wrap items-start justify-between gap-3">
 						<div>
 							<h2 class="text-base font-semibold">AI Provider</h2>
-							<p class="mt-1 text-sm text-muted-foreground">
-								Pilih template lalu masukkan endpoint <code class="rounded bg-secondary px-1">/chat/completions</code>. Support OpenAI, Google Gemini, OpenRouter, Cloudflare, Groq, Ollama.
+							<p class="mt-1 text-sm text-muted-foreground">{tr("Pilih template lalu masukkan endpoint")}<code class="rounded bg-secondary px-1">/chat/completions</code>. Support OpenAI, Google Gemini, OpenRouter, Cloudflare, Groq, Ollama.
 							</p>
 						</div>
 						<Badge tone={configuration?.api_key_configured ? 'success' : 'neutral'} label={configuration?.source ?? 'none'} />
@@ -794,8 +795,8 @@
 						</div>
 
 						<div class="mt-4 flex flex-wrap items-center justify-between gap-3">
-							<p class="text-xs text-muted-foreground">Economy dan Premium yang kosong otomatis memakai Default.</p>
-							<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan...' : 'Simpan konfigurasi'}</button>
+							<p class="text-xs text-muted-foreground">{tr("Economy dan Premium yang kosong otomatis memakai Default.")}</p>
+							<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan...' : tr('Simpan konfigurasi')}</button>
 						</div>
 					</form>
 				</div>
@@ -828,7 +829,7 @@
 						<dl class="mt-3 space-y-2 text-sm">
 							<div class="flex gap-3"><dt class="w-[150px] text-muted-foreground">Calls</dt><dd>{fmtNum(usage?.summary.calls)}</dd></div>
 							<div class="flex gap-3"><dt class="w-[150px] text-muted-foreground">Successful</dt><dd>{fmtNum(usage?.summary.successful_calls)}</dd></div>
-							<div class="flex gap-3"><dt class="w-[150px] text-muted-foreground">Total tokens</dt><dd>{fmtNum(usage?.summary.total_tokens)}</dd></div>
+							<div class="flex gap-3"><dt class="w-[150px] text-muted-foreground">{tr("Total tokens")}</dt><dd>{fmtNum(usage?.summary.total_tokens)}</dd></div>
 						</dl>
 					</div>
 				</div>
@@ -842,21 +843,19 @@
 					<div>
 						<div class="flex items-center gap-2">
 							<Brain size={20} style="color: var(--accent-foreground);" />
-							<h2 class="text-sm font-semibold">AI Model Guidelines &amp; RAG Knowledge</h2>
+							<h2 class="text-sm font-semibold">AI Model Guidelines & RAG Knowledge</h2>
 						</div>
-						<p class="mt-1 text-sm text-muted-foreground">
-							Setiap model AI memiliki knowledge khusus (tingkat reasoning, kecocokan tugas, karakteristik, batasan, dan konteks editorial) yang diindeks sebagai semantic RAG chunks.
-						</p>
+						<p class="mt-1 text-sm text-muted-foreground">{tr("Setiap model AI memiliki knowledge khusus (tingkat reasoning, kecocokan tugas, karakteristik, batasan, dan konteks editorial) yang diindeks sebagai semantic RAG chunks.")}</p>
 					</div>
 					<Badge tone="accent" label="{knowledgeCount} / {modelsList.length} Model Memiliki Knowledge" />
 				</div>
 
 				<div class="mt-4 flex flex-wrap items-center justify-between gap-3">
-					<input class="app-input min-w-[260px] flex-1" placeholder="Cari model AI atau kata kunci knowledge..." bind:value={knowledgeSearch} />
+					<input class="app-input min-w-[260px] flex-1" placeholder={tr("Cari model AI atau kata kunci knowledge...")} bind:value={knowledgeSearch} />
 					<div class="flex items-center gap-2">
 						<input
 							class="app-input w-[220px]"
-							placeholder="Model ID kustom..."
+							placeholder={tr("Model ID kustom...")}
 							bind:value={customModelInput}
 							onkeydown={(e) => {
 								if (e.key === 'Enter') {
@@ -866,8 +865,7 @@
 							}}
 						/>
 						<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={!customModelInput.trim()} onclick={handleAddCustomModelKnowledge}>
-							<Plus size={13} /> + Tambah Model
-						</button>
+							<Plus size={13} />{tr("+ Tambah Model")}</button>
 					</div>
 				</div>
 
@@ -878,7 +876,7 @@
 								<th class="px-3 py-2 text-left font-medium" style="width:28%;">Model AI</th>
 								<th class="px-3 py-2 text-left font-medium" style="width:12%;">Provider</th>
 								<th class="px-3 py-2 text-left font-medium" style="width:15%;">Tingkat Reasoning</th>
-								<th class="px-3 py-2 text-left font-medium" style="width:20%;">Status Knowledge</th>
+								<th class="px-3 py-2 text-left font-medium" style="width:20%;">{tr("Status Knowledge")}</th>
 								<th class="px-3 py-2 text-right font-medium" style="width:25%;">Aksi</th>
 							</tr>
 						</thead>
@@ -906,7 +904,7 @@
 										{#if m.has_knowledge}
 											<Badge tone="accent" label="{m.chunk_count} chunks terindeks" />
 										{:else}
-											<span class="text-xs text-muted-foreground">Belum tersedia</span>
+											<span class="text-xs text-muted-foreground">{tr("Belum tersedia")}</span>
 										{/if}
 									</td>
 									<td class="px-3 py-2 text-right">
@@ -914,14 +912,14 @@
 											class="app-btn {m.has_knowledge ? 'app-btn-soft' : 'app-btn-primary'} !min-h-7 !px-2.5 !text-xs"
 											type="button"
 											onclick={() => openKnowledge(m)}
-										><Sparkles size={12} /> {m.has_knowledge ? 'Edit Knowledge' : '+ Tambah Knowledge'}</button>
+										><Sparkles size={12} /> {m.has_knowledge ? 'Edit Knowledge' : tr('+ Tambah Knowledge')}</button>
 									</td>
 								</tr>
 							{/each}
 						</tbody>
 					</table>
 					{#if filteredModels.length === 0}
-						<p class="px-4 py-8 text-center text-sm text-muted-foreground">Tidak ada model AI yang cocok dengan pencarian.</p>
+						<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Tidak ada model AI yang cocok dengan pencarian.")}</p>
 					{/if}
 				</div>
 			</div>
@@ -962,15 +960,13 @@
 										)}
 								>
 									<Sparkles size={12} />
-									{matching?.has_knowledge ? `Knowledge (${matching.chunk_count} chunks)` : '+ Tambah Knowledge'}
+									{matching?.has_knowledge ? `Knowledge (${matching.chunk_count} chunks)` : tr('+ Tambah Knowledge')}
 								</button>
 							{/if}
 						</div>
 					{/each}
 				</dl>
-				<div class="mt-4 rounded-lg border px-3 py-2 text-xs" style="border-color: var(--accent-foreground); color: var(--accent-foreground);">
-					Routing generative dapat diubah pada tab Provider. Job yang sudah dibuat tetap memakai snapshot modelnya.
-				</div>
+				<div class="mt-4 rounded-lg border px-3 py-2 text-xs" style="border-color: var(--accent-foreground); color: var(--accent-foreground);">{tr("Routing generative dapat diubah pada tab Provider. Job yang sudah dibuat tetap memakai snapshot modelnya.")}</div>
 			</div>
 		{/if}
 
@@ -979,12 +975,10 @@
 			<div class="mt-3 grid gap-4 md:grid-cols-2">
 				<div class="app-card p-4">
 					<h2 class="text-sm font-semibold">Isolated test generation</h2>
-					<p class="mt-1 text-sm text-muted-foreground">
-						Prompt ini dicatat sebagai admin_test_generation dan tidak masuk workflow produksi.
-					</p>
+					<p class="mt-1 text-sm text-muted-foreground">{tr("Prompt ini dicatat sebagai admin_test_generation dan tidak masuk workflow produksi.")}</p>
 					<form class="mt-4 space-y-4" onsubmit={generate}>
 						<Select
-							ariaLabel="Pilih tier"
+							ariaLabel={tr("Pilih tier")}
 							minWidth={200}
 							value={testTier}
 							onchange={(v) => (testTier = v as ModelTier)}
@@ -1000,7 +994,7 @@
 							minlength={1}
 							maxlength={4000}
 							required
-							placeholder="Tulis prompt pengujian..."
+							placeholder={tr("Tulis prompt pengujian...")}
 							bind:value={testPrompt}
 						></textarea>
 						<button class="app-btn app-btn-primary w-full" type="submit" disabled={busy || !provider.configured}>
@@ -1018,7 +1012,7 @@
 						</dl>
 						<pre class="mt-3 max-h-[360px] overflow-auto whitespace-pre-wrap rounded-lg border px-3 py-2 text-xs">{result.content}</pre>
 					{:else}
-						<p class="mt-3 rounded-lg border px-3 py-8 text-center text-sm text-muted-foreground">Hasil test akan muncul di sini.</p>
+						<p class="mt-3 rounded-lg border px-3 py-8 text-center text-sm text-muted-foreground">{tr("Hasil test akan muncul di sini.")}</p>
 					{/if}
 				</div>
 			</div>
@@ -1033,7 +1027,7 @@
 							<h2 class="text-sm font-semibold">Global generation switch</h2>
 							<Badge tone={operations?.generation_disabled ? 'danger' : 'success'} label={operations?.generation_disabled ? 'Disabled' : 'Enabled'} />
 						</div>
-						<p class="mt-1 text-sm text-muted-foreground">Mengontrol seluruh generation baru. Job yang sudah berjalan tidak dihapus.</p>
+						<p class="mt-1 text-sm text-muted-foreground">{tr("Mengontrol seluruh generation baru. Job yang sudah berjalan tidak dihapus.")}</p>
 					</div>
 					<button
 						class="app-btn {operations?.generation_disabled ? 'app-btn-primary' : 'app-btn-soft'}"
@@ -1061,13 +1055,11 @@
 		onClose={() => (drawerTarget = null)}
 	>
 		<div class="space-y-4">
-			<p class="text-sm text-muted-foreground">
-				Tambahkan pedoman dan informasi yang akan digunakan Tauthub saat menentukan atau menggunakan model ini.
-			</p>
+			<p class="text-sm text-muted-foreground">{tr("Tambahkan pedoman dan informasi yang akan digunakan Tauthub saat menentukan atau menggunakan model ini.")}</p>
 
 			<div class="grid gap-3 rounded-lg border px-4 py-3 sm:grid-cols-4">
 				<div>
-					<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Nama Model</p>
+					<p class="text-[11px] uppercase tracking-wide text-muted-foreground">{tr("Nama Model")}</p>
 					<p class="mt-1 break-words text-sm font-semibold">{drawerTarget.model_name || drawerTarget.model_id}</p>
 				</div>
 				<div>
@@ -1094,14 +1086,14 @@
 					<CheckCircle2 size={15} /> {drawerNotice}
 				</div>
 			{/if}
-			{#if drawerLoading}<p class="text-sm text-muted-foreground">Memuat knowledge model…</p>{/if}
+			{#if drawerLoading}<p class="text-sm text-muted-foreground">{tr("Memuat knowledge model…")}</p>{/if}
 
 			<form id="model-knowledge-form" class="space-y-4" onsubmit={saveKnowledge}>
 				<div class="grid gap-4 sm:grid-cols-3">
 					<label class="block sm:col-span-2">
 						<span class="text-sm font-semibold">1. Ringkasan Model</span>
 						<textarea class="app-input mt-2 w-full" rows="3" maxlength={2000} bind:value={kSummary}
-							placeholder="Model dengan kemampuan reasoning rendah yang cocok untuk tugas sederhana dan cepat."></textarea>
+							placeholder={tr("Model dengan kemampuan reasoning rendah yang cocok untuk tugas sederhana dan cepat.")}></textarea>
 						<span class="mt-1 block text-right text-[11px] text-muted-foreground">{kSummary.length}/2000 karakter</span>
 					</label>
 					<label class="block">
@@ -1113,7 +1105,7 @@
 							onchange={(v) => (kReasoning = v)}
 							options={[
 								{ value: 'rendah', label: 'Rendah (Fast & Simple)' },
-								{ value: 'sedang', label: 'Sedang (Standard)' },
+								{ value: tr('sedang'), label: 'Sedang (Standard)' },
 								{ value: 'tinggi', label: 'Tinggi (Deep Reasoning)' }
 							]}
 						/>
@@ -1124,7 +1116,7 @@
 				<label class="block">
 					<span class="text-sm font-semibold">3. Karakteristik Model</span>
 					<textarea class="app-input mt-2 w-full" rows="3" maxlength={3000} bind:value={kCharacteristics}
-						placeholder="Karakteristik output, format penulisan, kecepatan, gaya penjelasan, daya tahan konteks..."></textarea>
+						placeholder={tr("Karakteristik output, format penulisan, kecepatan, gaya penjelasan, daya tahan konteks...")}></textarea>
 					<span class="mt-1 block text-right text-[11px] text-muted-foreground">{kCharacteristics.length}/3000 karakter</span>
 				</label>
 
@@ -1136,9 +1128,9 @@
 						<span class="mt-1 block text-right text-[11px] text-muted-foreground">{kSuitableFor.length}/3000 karakter</span>
 					</label>
 					<label class="block">
-						<span class="text-sm font-semibold" style="color: var(--destructive);">5. Tidak Ideal Untuk</span>
+						<span class="text-sm font-semibold" style="color: var(--destructive);">{tr("5. Tidak Ideal Untuk")}</span>
 						<textarea class="app-input mt-2 w-full" rows="4" maxlength={3000} bind:value={kUnsuitableFor}
-							placeholder={'- Reasoning multi-step yang rumit\n- Rantai instruksi bertingkat panjang\n- Analisis perbandingan data masif'}></textarea>
+							placeholder={tr('- Reasoning multi-step yang rumit\n- Rantai instruksi bertingkat panjang\n- Analisis perbandingan data masif')}></textarea>
 						<span class="mt-1 block text-right text-[11px] text-muted-foreground">{kUnsuitableFor.length}/3000 karakter</span>
 					</label>
 				</div>
@@ -1146,27 +1138,27 @@
 				<label class="block">
 					<span class="text-sm font-semibold">6. Pedoman Penggunaan AI</span>
 					<textarea class="app-input mt-2 w-full" rows="4" maxlength={5000} bind:value={kGuidelines}
-						placeholder="Instruksi khusus prompt engineering untuk model ini..."></textarea>
+						placeholder={tr("Instruksi khusus prompt engineering untuk model ini...")}></textarea>
 					<span class="mt-1 block text-right text-[11px] text-muted-foreground">{kGuidelines.length}/5000 karakter</span>
 				</label>
 
 				<label class="block">
 					<span class="text-sm font-semibold">7. Catatan / Limitasi</span>
 					<textarea class="app-input mt-2 w-full" rows="3" maxlength={5000} bind:value={kLimitations}
-						placeholder="Keterbatasan teknis, context window limit, token output maksimum..."></textarea>
+						placeholder={tr("Keterbatasan teknis, context window limit, token output maksimum...")}></textarea>
 					<span class="mt-1 block text-right text-[11px] text-muted-foreground">{kLimitations.length}/5000 karakter</span>
 				</label>
 
 				<label class="block">
 					<span class="text-sm font-semibold">8. RAG Knowledge / Editorial Context</span>
 					<textarea class="app-input mt-2 w-full" rows="4" maxlength={5000} bind:value={kEditorialContext}
-						placeholder="Konteks editorial atau pedoman penulisan khusus saat artikel dihasilkan oleh model ini..."></textarea>
+						placeholder={tr("Konteks editorial atau pedoman penulisan khusus saat artikel dihasilkan oleh model ini...")}></textarea>
 					<span class="mt-1 block text-right text-[11px] text-muted-foreground">{kEditorialContext.length}/5000 karakter</span>
 				</label>
 
 				{#if drawerChunks.length > 0}
 					<div class="rounded-lg border px-3 py-3">
-						<p class="text-xs font-semibold text-muted-foreground">RAG Semantic Chunks yang Terindeks ({drawerChunks.length})</p>
+						<p class="text-xs font-semibold text-muted-foreground">{tr("RAG Semantic Chunks yang Terindeks (")}{drawerChunks.length})</p>
 						<div class="mt-2 space-y-2">
 							{#each drawerChunks as c (c.id)}
 								<div class="rounded-lg border px-2 py-2">
@@ -1186,16 +1178,14 @@
 		{#snippet footer()}
 			<div class="mr-auto">
 				{#if drawerExisting}
-					<button class="app-btn app-btn-soft" type="button" disabled={drawerBusy} onclick={() => void deleteKnowledge()}>
-						Hapus Knowledge
-					</button>
+					<button class="app-btn app-btn-soft" type="button" disabled={drawerBusy} onclick={() => void deleteKnowledge()}>{tr("Hapus Knowledge")}</button>
 				{:else}
-					<span class="text-xs text-muted-foreground">Knowledge model bersifat opsional dan tidak mengubah konfigurasi runtime.</span>
+					<span class="text-xs text-muted-foreground">{tr("Knowledge model bersifat opsional dan tidak mengubah konfigurasi runtime.")}</span>
 				{/if}
 			</div>
-			<button class="app-btn app-btn-soft" type="button" disabled={drawerBusy} onclick={() => (drawerTarget = null)}>Batal</button>
+			<button class="app-btn app-btn-soft" type="button" disabled={drawerBusy} onclick={() => (drawerTarget = null)}>{tr("Batal")}</button>
 			<button class="app-btn app-btn-primary" type="submit" form="model-knowledge-form" disabled={drawerBusy || drawerLoading}>
-				{drawerBusy ? 'Menyimpan...' : drawerExisting ? 'Simpan Perubahan' : 'Simpan Knowledge'}
+				{drawerBusy ? 'Menyimpan...' : drawerExisting ? tr('Simpan Perubahan') : tr('Simpan Knowledge')}
 			</button>
 		{/snippet}
 	</Modal>
@@ -1211,11 +1201,11 @@
 	>
 		<p class="text-sm text-muted-foreground">
 			{operations?.generation_disabled
-				? 'Brand dapat mengirim generation baru setelah kontrol diaktifkan.'
-				: 'Seluruh brand akan ditolak ketika mengirim generation baru sampai kontrol diaktifkan kembali.'}
+				? tr('Brand dapat mengirim generation baru setelah kontrol diaktifkan.')
+				: tr('Seluruh brand akan ditolak ketika mengirim generation baru sampai kontrol diaktifkan kembali.')}
 		</p>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => (switchOpen = false)}>Batal</button>
+			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => (switchOpen = false)}>{tr("Batal")}</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void toggleGeneration()}>
 				{busy ? 'Menyimpan...' : operations?.generation_disabled ? 'Aktifkan' : 'Hentikan'}
 			</button>

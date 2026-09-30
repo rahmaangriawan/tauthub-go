@@ -29,7 +29,22 @@ export function getLocale(): Locale {
 	return locale;
 }
 
-/** t = kamus locale aktif (struktur nested, parity useI18n().t). */
+/**
+ * t = kamus locale aktif (struktur nested, parity useI18n().t).
+ *
+ * Nilai dikembalikan lewat getter, BUKAN properti biasa: `locale` adalah
+ * `$state`, jadi tiap akses harus membaca ulang agar pemakai yang menulis
+ * `$derived(getI18n().t)` ikut reaktif saat bahasa diganti. (Destrukturisasi
+ * `const { t } = getI18n()` akan membekukan snapshot — pakai `$derived`.)
+ */
 export function getI18n(): { locale: Locale; t: Dict; setLocale: (l: Locale) => void } {
-	return { locale, t: dictionaries[locale] as Dict, setLocale };
+	return {
+		get locale() {
+			return locale;
+		},
+		get t() {
+			return dictionaries[locale] as Dict;
+		},
+		setLocale
+	};
 }

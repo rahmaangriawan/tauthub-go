@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port /login/oauth-link — hubungkan Google ke akun password existing (wajib password).
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -21,7 +23,8 @@
 				body: JSON.stringify({ password })
 			});
 			if (!response.ok) {
-				error = authErrorMessage(new Error(((await response.json()) as { detail?: string }).detail ?? 'Gagal menghubungkan akun.'));
+				// Halaman publik: jangan tampilkan pesan server apa adanya.
+				error = tr('Gagal menghubungkan akun. Periksa kata sandi lalu coba lagi.');
 				return;
 			}
 			const data = await response.json();
@@ -35,20 +38,18 @@
 	}
 </script>
 
-<PageTitle title="Hubungkan Akun Google" />
+<PageTitle title={tr("Hubungkan Akun Google")} />
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="app-card w-full max-w-[440px] p-6" style="margin-top:10vh">
 		<h1 class="text-lg font-bold">Hubungkan akun Google</h1>
-		<p class="mt-1 text-sm text-muted-foreground">
-			Akun dengan email <strong>{email}</strong> sudah terdaftar. Hubungkan akun Google ini dengan akun Tauthub Anda?
-		</p>
+		<p class="mt-1 text-sm text-muted-foreground">{tr("Akun dengan email")}<strong>{email}</strong>{tr("sudah terdaftar. Hubungkan akun Google ini dengan akun Tauthub Anda?")}</p>
 		<form class="mt-4 flex flex-col gap-3" onsubmit={link}>
 			<input
 				class="app-input"
 				type="password"
 				required
-				placeholder="Kata sandi akun Tauthub Anda"
+				placeholder={tr("Kata sandi akun Tauthub Anda")}
 				bind:value={password}
 			/>
 			{#if error}
@@ -62,7 +63,7 @@
 				>
 					{busy ? 'Menghubungkan…' : 'Hubungkan & Lanjutkan'}
 				</button>
-				<a class="rounded-md bg-muted px-3 py-2 text-sm" href="/login">Batal</a>
+				<a class="rounded-md bg-muted px-3 py-2 text-sm" href="/login">{tr("Batal")}</a>
 			</div>
 		</form>
 	</div>

@@ -1,4 +1,5 @@
 <script lang="ts" generics="Row = Record<string, unknown>">
+	import { tr } from '$lib/i18n/phrases';
 	// Tabel admin generik: kolom + baris + status loading/kosong + klik baris.
 	// Menjaga tampilan tabel seragam di semua halaman /admin.
 	import type { Snippet } from 'svelte';
@@ -35,7 +36,7 @@
 
 <div class="app-card mt-4 overflow-x-auto">
 	{#if loading}
-		<p class="px-4 py-10 text-center text-sm text-muted-foreground">Memuat data…</p>
+		<p class="px-4 py-10 text-center text-sm text-muted-foreground">{tr("Memuat data…")}</p>
 	{:else if rows.length === 0}
 		<p class="px-4 py-10 text-center text-sm text-muted-foreground">{empty}</p>
 	{:else}

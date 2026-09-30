@@ -5,7 +5,7 @@
 
 export const fmtNum = (n: unknown) => Number(n ?? 0).toLocaleString('id-ID');
 
-export const fmtRp = (n: unknown) => `Rp ${Number(n ?? 0).toLocaleString('id-ID')}`;
+export const fmtRp = (n: unknown) => `Rp ${Number(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 
 export const fmtDate = (v: unknown) =>
 	v ? new Date(v as string).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '—';
@@ -34,6 +34,7 @@ export const STATUS_LABEL: Record<string, string> = {
 	waiting_partner: 'Menunggu mitra',
 	partner_approved: 'Disetujui mitra',
 	partner_rejected: 'Ditolak mitra',
+	revision: 'Perlu revisi',
 	draft: 'Draf',
 	archived: 'Diarsipkan',
 	expired: 'Kedaluwarsa',
@@ -60,6 +61,7 @@ export function statusTone(value: unknown): 'neutral' | 'accent' | 'success' | '
 		case 'pending':
 		case 'pending_review':
 		case 'waiting_partner':
+		case 'revision':
 		case 'queued':
 		case 'processing':
 		case 'retrying':

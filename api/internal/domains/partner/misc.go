@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/imageconvert"
 )
 
 // ---------- /v1/partner/documents (+ DELETE /{id}) ----------
@@ -72,26 +73,33 @@ func (d *Deps) Documents(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Ukuran file maksimal 10 MB.")
 		return
 	}
-	ext := "pdf"
-	docType := "pdf"
-	if !isPDF {
-		ext = sanitizeExt(nameLower, "jpg")
-		docType = "image"
-	}
-	storageKey := uuid.NewString() + "." + ext
 	data, err := readAllLimited(file, maxBytes)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	if err := d.saveUpload(storageKey, data); err != nil {
+	// Gambar dinormalisasi ke WebP (parity app lama); PDF apa adanya.
+	payload := data
+	ext := "pdf"
+	docType := "pdf"
+	if !isPDF {
+		docType = "image"
+		if converted, ok := imageconvert.ConvertToWebP(data, mime); ok {
+			payload = converted
+			ext = "webp"
+		} else {
+			ext = sanitizeExt(nameLower, "jpg")
+		}
+	}
+	storageKey := uuid.NewString() + "." + ext
+	if err := d.saveUpload(storageKey, payload); err != nil {
 		d.writeErr(w, err)
 		return
 	}
 	id := uuid.NewString()
 	if err := d.exec(r.Context(),
 		"INSERT INTO partner_documents (id, partner_id, name, type, size_bytes, storage_key, status) VALUES ($1, $2, $3, $4, $5, $6, 'pending')",
-		id, partner.ID, header.Filename, docType, len(data), storageKey); err != nil {
+		id, partner.ID, header.Filename, docType, len(payload), storageKey); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -160,19 +168,37 @@ func (d *Deps) Notifications(w http.ResponseWriter, r *http.Request) {
 	}
 	limit := clampInt(q.Get("limit"), 30, 1, 200)
 	offset := clampInt(q.Get("offset"), 0, 0, 1<<30)
+	// category=announcement|general: tab "Pengumuman" vs "Umum" di lonceng &
+	// halaman riwayat. Hitungan unread (badge lonceng) sengaja tetap global.
+	category := strings.TrimSpace(q.Get("category"))
+	if category != "" && category != "general" && category != "announcement" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid category filter")
+		return
+	}
 
+	// Badge lonceng (tanpa category) tetap global; halaman riwayat dengan tab
+	// aktif menerima hitungan unread yang ter-filter juga.
+	unreadWhere := " AND read_at IS NULL AND expired_at IS NULL"
+	where := ""
+	switch category {
+	case "announcement":
+		unreadWhere += " AND type LIKE 'announcement%'"
+		where += " AND type LIKE 'announcement%'"
+	case "general":
+		unreadWhere += " AND type NOT LIKE 'announcement%'"
+		where += " AND type NOT LIKE 'announcement%'"
+	}
 	unread, err := d.queryRow(r.Context(),
-		"SELECT COUNT(*) AS count FROM notifications WHERE user_id = $1 AND read_at IS NULL AND expired_at IS NULL", user.ID)
+		"SELECT COUNT(*) AS count FROM notifications WHERE user_id = $1"+unreadWhere, user.ID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	where := ""
 	switch status {
 	case "read":
-		where = "AND read_at IS NOT NULL"
+		where += " AND read_at IS NOT NULL"
 	case "unread":
-		where = "AND read_at IS NULL AND expired_at IS NULL"
+		where += " AND read_at IS NULL AND expired_at IS NULL"
 	}
 	total, err := d.queryRow(r.Context(),
 		"SELECT COUNT(*) AS count FROM notifications WHERE user_id = $1 "+where, user.ID)

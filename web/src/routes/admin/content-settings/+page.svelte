@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Kualitas Konten Brand — atur voice, tone, aturan editorial, dan profil per
 	// brand. Dikelola admin, bukan klien.
 	// Port apps/web/src/app/admin/content-settings/page.tsx.
@@ -143,7 +145,7 @@
 				error = await readApiError(res, 'Permintaan gagal.');
 				return;
 			}
-			saveMsg = 'Pengaturan konten tersimpan.';
+			saveMsg = tr('Pengaturan konten tersimpan.');
 		} finally {
 			saving = false;
 		}
@@ -165,15 +167,15 @@
 	<div class="app-card mt-4 p-4">
 		<div class="flex flex-col gap-3">
 			<label class="block">
-				<span class="text-sm font-medium">Pilih Brand</span>
+				<span class="text-sm font-medium">{tr("Pilih Brand")}</span>
 				<Select
-					ariaLabel="Pilih brand"
-					placeholder="Pilih brand…"
+					ariaLabel={tr("Pilih brand")}
+					placeholder={tr("Pilih brand…")}
 					minWidth={280}
 					value={selectedId}
 					onchange={(v) => (selectedId = v)}
 					options={[
-						{ value: '', label: 'Pilih brand…' },
+						{ value: '', label: tr('Pilih brand…') },
 						...brands.map((b) => ({ value: b.id, label: `${b.name} (${b.slug})` }))
 					]}
 				/>
@@ -184,7 +186,7 @@
 	{#if selectedId && config}
 		<div class="mt-3 flex flex-col gap-3">
 			<div class="app-card p-4">
-				<h2 class="mb-3 text-base font-semibold">Voice &amp; Tone</h2>
+				<h2 class="mb-3 text-base font-semibold">Voice & Tone</h2>
 				<div class="flex flex-col gap-2">
 					<label class="block">
 						<span class="text-xs font-medium text-muted-foreground">Personality (koma)</span>
@@ -224,19 +226,19 @@
 				<div class="flex flex-col gap-2">
 					<textarea
 						class="app-input w-full"
-						placeholder="Wajib — satu per baris"
+						placeholder={tr("Wajib — satu per baris")}
 						value={toArray(config.editorial_rules?.required_rules).join('\n')}
 						oninput={(e) => setRules('required_rules', e.currentTarget.value.split('\n'))}
 					></textarea>
 					<textarea
 						class="app-input w-full"
-						placeholder="Dilarang — satu per baris"
+						placeholder={tr("Dilarang — satu per baris")}
 						value={toArray(config.editorial_rules?.forbidden_rules).join('\n')}
 						oninput={(e) => setRules('forbidden_rules', e.currentTarget.value.split('\n'))}
 					></textarea>
 					<textarea
 						class="app-input w-full"
-						placeholder="Disclaimer wajib"
+						placeholder={tr("Disclaimer wajib")}
 						value={String(config.editorial_rules?.required_disclaimer ?? '')}
 						oninput={(e) => setRules('required_disclaimer', e.currentTarget.value)}
 					></textarea>
@@ -285,7 +287,7 @@
 						/>
 					</label>
 					<div class="flex items-center gap-2">
-						<span class="w-[160px] text-sm">Jumlah kata (admin)</span>
+						<span class="w-[160px] text-sm">{tr("Jumlah kata (admin)")}</span>
 						<input
 							class="app-input flex-1"
 							type="number"
@@ -297,21 +299,19 @@
 						/>
 						<span class="text-sm">300–10.000</span>
 					</div>
-					<p class="text-xs text-muted-foreground">
-						Panjang artikel default per brand — klien tidak bisa ubah (diatur admin di sini).
-					</p>
+					<p class="text-xs text-muted-foreground">{tr("Panjang artikel default per brand — klien tidak bisa ubah (diatur admin di sini).")}</p>
 				</div>
 			</div>
 
 			<div>
 				<button class="app-btn app-btn-primary" disabled={saving} onclick={save}>
-					<Save size={16} />{saving ? 'Menyimpan…' : 'Simpan Pengaturan'}
+					<Save size={16} />{saving ? 'Menyimpan…' : tr('Simpan Pengaturan')}
 				</button>
 			</div>
 		</div>
 	{:else if brands.length === 0 && error.includes('Akses platform')}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses pengaturan konten platform.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses pengaturan konten platform.")}</p>
 		</div>
 	{/if}
 </section>

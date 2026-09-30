@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Invoice & Pajak (read-only; pembuatan invoice dari admin).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -44,7 +46,7 @@
 		}
 	}
 
-	const statusLabel: Record<string, string> = { draft: 'Draf', issued: 'Diterbitkan', paid: 'Lunas', void: 'Dibatalkan' };
+	const statusLabel: Record<string, string> = $derived({ draft: 'Draf', issued: 'Diterbitkan', paid: 'Lunas', void: tr('Dibatalkan') });
 	const stateStyle = (s: string) =>
 		s === 'paid' ? 'background-color: var(--success-soft); color: var(--success);'
 		: s === 'issued' ? 'background-color: var(--warning-soft); color: var(--warning);'
@@ -58,32 +60,32 @@
 <section>
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Invoice &amp; Pajak</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{total} invoice tercatat untuk brand ini.</p>
+			<h1 class="text-2xl font-semibold tracking-tight">Invoice & Pajak</h1>
+			<p class="mt-1 text-sm text-muted-foreground">{total} {tr("invoice tercatat untuk brand ini.")}</p>
 		</div>
 		<Select
 			bind:value={status}
 			ariaLabel="Status invoice"
-			placeholder="Semua status"
+			placeholder={tr("Semua status")}
 			align="end"
 			onchange={() => load()}
 			options={[
-				{ value: '', label: 'Semua status' },
+				{ value: '', label: tr('Semua status') },
 				{ value: 'draft', label: 'Draf' },
 				{ value: 'issued', label: 'Diterbitkan' },
 				{ value: 'paid', label: 'Lunas' },
-				{ value: 'void', label: 'Dibatalkan' }
+				{ value: 'void', label: tr('Dibatalkan') }
 			]}
 		/>
 	</header>
 
 	{#if loading}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat invoice…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat invoice…")}</p>
 	{:else if invoices.length === 0}
 		<div class="app-card mt-6 flex flex-col items-center px-6 py-12 text-center">
 			<Receipt size={22} style="color: var(--primary);" />
-			<p class="mt-2 text-sm font-medium">{status ? 'Tidak ada invoice dengan status ini.' : 'Belum ada invoice.'}</p>
-			<p class="mt-1 text-sm text-muted-foreground">Invoice diterbitkan admin setelah kampanye atau pembelian paket.</p>
+			<p class="mt-2 text-sm font-medium">{status ? tr('Tidak ada invoice dengan status ini.') : tr('Belum ada invoice.')}</p>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Invoice diterbitkan admin setelah kampanye atau pembelian paket.")}</p>
 		</div>
 	{:else}
 		<div class="app-card mt-4 overflow-x-auto">

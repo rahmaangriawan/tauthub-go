@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Agent 4: The Gatekeeper — QC & pembayaran distribusi.
 	// Port app/klien/[brandId]/taut-pintar/[id]/gatekeeper/client.tsx.
 	import { onMount } from 'svelte';
@@ -9,6 +11,7 @@
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { sanitizeHtml } from '$lib/sanitize-html';
 	import AgentSteps from '../../_agent-steps.svelte';
+	import TautBottomBar from '../../_bottom-bar.svelte';
 	import { MANUAL_PROFILER_REASON, fmtIdr, fmtTrafficFull, toJakartaDisplay, toLocalInput, dt } from '../../_shared';
 	import PageTitle from '$lib/components/page-title.svelte';
 
@@ -56,7 +59,7 @@
 		{ key: 'linkHealth', title: 'Link Health Validator', gate: true },
 		{ key: 'brandVoice', title: 'Brand Voice Limits', gate: false }
 	];
-	const DEFAULT_DESC = 'Menunggu pemindaian…';
+	const DEFAULT_DESC = $derived(tr('Menunggu pemindaian…'));
 
 	let data = $state<AuditsData | null>(null);
 	let wallet = $state(0);
@@ -94,7 +97,7 @@
 	const publishMode = $derived(publishModeChoice ?? (Object.keys(savedSchedule).length > 0 ? 'scheduled' : 'now'));
 	const scheduleError = $derived(
 		Object.values(scheduleByMedia).some((v) => v && new Date(v).getTime() <= Date.now())
-			? 'Ada jadwal yang sudah lewat — pilih waktu di masa depan.'
+			? tr('Ada jadwal yang sudah lewat — pilih waktu di masa depan.')
 			: null
 	);
 	const modeError = $derived(
@@ -102,7 +105,7 @@
 			? null
 			: Object.values(scheduleByMedia).some((v) => v != null)
 				? null
-				: 'Pilih jadwal minimal satu media, atau ubah ke Terbitkan Langsung.'
+				: tr('Pilih jadwal minimal satu media, atau ubah ke Terbitkan Langsung.')
 	);
 	const blockingError = $derived(scheduleError ?? modeError);
 
@@ -129,7 +132,7 @@
 				apiRequest(`${apiBase}/gatekeeper/audits`),
 				apiRequest(`${apiBase}/profile/draft`)
 			]);
-			if (!auditsRes.ok) throw new Error(await readApiError(auditsRes, 'Gagal memuat hasil audit.'));
+			if (!auditsRes.ok) throw new Error(await readApiError(auditsRes, tr('Gagal memuat hasil audit.')));
 			const d: AuditsData = await auditsRes.json();
 			data = d;
 			if (!loadedOnce) {
@@ -146,7 +149,7 @@
 				wallet = dd?.wallet?.available ?? 0;
 			}
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : 'Gagal memuat data Gatekeeper.';
+			error = reason instanceof Error ? reason.message : tr('Gagal memuat data Gatekeeper.');
 		} finally {
 			loading = false;
 		}
@@ -188,13 +191,17 @@
 		error = '';
 		topup = null;
 		try {
-			const res = await apiRequest(`${apiBase}/gatekeeper/audit-all`, { method: 'POST', body: JSON.stringify({}) });
+			// audit-all sinkron dan memindai SEMUA media terpilih, jadi durasinya
+			// jauh di atas timeout bawaan apiRequest (12 detik). Tanpa timeout
+			// panjang, koneksi diputus dan konteks request server ikut batal
+			// sehingga loop audit berhenti di tengah jalan.
+			const res = await apiRequest(`${apiBase}/gatekeeper/audit-all`, { method: 'POST', body: JSON.stringify({}) }, 900_000);
 			const d = await res.json().catch(() => ({}));
 			if (res.status === 402 && applyTopup(d)) return;
-			if (!res.ok) throw new Error(d.detail ?? 'Gagal menjalankan audit.');
+			if (!res.ok) throw new Error(d.detail ?? tr('Gagal menjalankan audit.'));
 			await load();
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : 'Gagal menjalankan audit.';
+			error = reason instanceof Error ? reason.message : tr('Gagal menjalankan audit.');
 		} finally {
 			auditing = false;
 		}
@@ -220,10 +227,10 @@
 			});
 			const d = await res.json().catch(() => ({}));
 			if (res.status === 402 && applyTopup(d)) return;
-			if (!res.ok) throw new Error(d.detail ?? 'Gagal mendistribusikan kampanye.');
+			if (!res.ok) throw new Error(d.detail ?? tr('Gagal mendistribusikan kampanye.'));
 			await goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`);
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : 'Gagal mendistribusikan kampanye.';
+			error = reason instanceof Error ? reason.message : tr('Gagal mendistribusikan kampanye.');
 			distributing = false;
 		}
 	}
@@ -260,7 +267,7 @@
 				stats: { imageCount: srcs.length, images: srcs, words }
 			};
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : 'Gagal membuka mockup.';
+			error = reason instanceof Error ? reason.message : tr('Gagal membuka mockup.');
 		}
 	}
 
@@ -305,9 +312,9 @@
 				return DEFAULT_DESC;
 			}
 			case 'brandVoice':
-				if (check.status === 'passed' && check.level === 'minor_drift') return 'Penyimpangan kecil dari suara brand';
+				if (check.status === 'passed' && check.level === 'minor_drift') return tr('Penyimpangan kecil dari suara brand');
 				if (check.status === 'passed') return 'Konsisten dengan suara brand';
-				if (check.status === 'failed') return 'Melenceng dari suara brand';
+				if (check.status === 'failed') return tr('Melenceng dari suara brand');
 				return DEFAULT_DESC;
 		}
 	}
@@ -323,7 +330,7 @@
 						? 'warning'
 						: 'muted';
 	const statusLabel = (s: CheckStatus) =>
-		s === 'running' ? 'Memindai…' : s === 'passed' ? 'Lulus' : s === 'failed' ? 'Gagal' : s === 'review_required' ? 'Perlu Review' : 'Pending';
+		s === 'running' ? 'Memindai…' : s === 'passed' ? 'Lulus' : s === 'failed' ? tr('Gagal') : s === 'review_required' ? 'Perlu Review' : 'Pending';
 	const badgeStyle = (tone: string) =>
 		tone === 'success'
 			? 'background-color: var(--success-soft); color: var(--success);'
@@ -344,12 +351,12 @@
 			</div>
 			<div>
 				<p class="font-bold leading-tight">Agent 4: The Gatekeeper</p>
-				<p class="text-sm leading-tight text-muted-foreground">Quality Control &amp; Pembayaran Distribusi</p>
+				<p class="text-sm leading-tight text-muted-foreground">Quality Control & Pembayaran Distribusi</p>
 			</div>
 		</div>
 		<div class="flex flex-wrap items-center justify-end gap-3">
 			<div class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium">
-				<Wallet size={13} /><span>{fmtIdr(wallet)} Kredit</span>
+				<Wallet size={13} /><span>{fmtIdr(wallet)} {tr("Kredit")}</span>
 			</div>
 		</div>
 	</div>
@@ -361,7 +368,7 @@
 	{#if agentStatus && !agentStatus.configured}
 		<div class="app-card mt-3 flex items-start gap-2 px-4 py-2.5 text-sm" style="color: var(--warning);" role="alert">
 			<TriangleAlert size={16} class="mt-0.5 shrink-0" />
-			<span>AI Gatekeeper belum dikonfigurasi oleh admin. Audit tidak akan berjalan sampai admin mengaktifkannya.</span>
+			<span>{tr("AI Gatekeeper belum dikonfigurasi oleh admin. Audit tidak akan berjalan sampai admin mengaktifkannya.")}</span>
 		</div>
 	{/if}
 
@@ -369,7 +376,7 @@
 		<div class="app-card mt-3 flex items-start gap-2 px-4 py-2.5 text-sm" style="color: var(--destructive);">
 			<TriangleAlert size={16} class="mt-0.5 shrink-0" />
 			<span class="flex-1">{error}</span>
-			<button class="rounded p-0.5 hover:bg-secondary" type="button" aria-label="Tutup error" onclick={() => (error = '')}><X size={12} /></button>
+			<button class="rounded p-0.5 hover:bg-secondary" type="button" aria-label={tr("Tutup error")} onclick={() => (error = '')}><X size={12} /></button>
 		</div>
 	{/if}
 
@@ -377,14 +384,14 @@
 		<section class="app-card mt-3 p-4">
 			<div class="flex items-center gap-2">
 				<TriangleAlert size={16} style="color: var(--warning);" />
-				<p class="text-sm font-bold">Saldo Kredit Tidak Cukup</p>
+				<p class="text-sm font-bold">{tr("Saldo Kredit Tidak Cukup")}</p>
 			</div>
 			<p class="mt-2 text-sm text-muted-foreground">
-				Distribusi butuh <strong>{fmtIdr(topup.needed)} Kredit</strong>, saldo tersedia <strong>{fmtIdr(topup.available)} Kredit</strong>. Silakan top up terlebih dahulu.
+				Distribusi butuh <strong>{fmtIdr(topup.needed)} {tr("Kredit")}</strong>, saldo tersedia <strong>{fmtIdr(topup.available)} {tr("Kredit")}</strong>. Silakan top up terlebih dahulu.
 			</p>
 			<div class="mt-3 flex gap-3">
-				<a class="app-btn app-btn-primary" href={`/klien/${brandUrl}/credits`}>Top Up Kredit</a>
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (topup = null)}>Tutup</button>
+				<a class="app-btn app-btn-primary" href={`/klien/${brandUrl}/credits`}>{tr("Top Up Kredit")}</a>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (topup = null)}>{tr("Tutup")}</button>
 			</div>
 		</section>
 	{/if}
@@ -395,23 +402,18 @@
 		</div>
 		<div>
 			<p class="font-semibold">Kenapa butuh Audit Gatekeeper?</p>
-			<p class="mt-0.5 text-sm text-muted-foreground">
-				Sistem mendeteksi adanya perubahan manual pada artikel di Agent 3. Gatekeeper harus memindai ulang setiap
-				artikel secara individual untuk mencegah penyisipan konten ilegal (Judi, SARA) yang dapat merugikan reputasi media mitra.
-			</p>
+			<p class="mt-0.5 text-sm text-muted-foreground">{tr("Sistem mendeteksi adanya perubahan manual pada artikel di Agent 3. Gatekeeper harus memindai ulang setiap artikel secara individual untuk mencegah penyisipan konten ilegal (Judi, SARA) yang dapat merugikan reputasi media mitra.")}</p>
 		</div>
 	</section>
 
 	{#if loading}
-		<div class="mt-6 flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle size={18} class="animate-spin" /> Memuat The Gatekeeper…</div>
+		<div class="mt-6 flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle size={18} class="animate-spin" />{tr("Memuat The Gatekeeper…")}</div>
 	{:else}
-		<section class="app-card mt-3 p-4" aria-label="Sistem Deep Scan dan QC">
+		<section class="app-card mt-3 p-4" aria-label={tr("Sistem Deep Scan dan QC")}>
 			<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<p class="font-semibold">Sistem Deep Scan &amp; QC</p>
-					<p class="mt-1 text-sm text-muted-foreground">
-						Empat pengecek dijalankan per media. Illegal Content &amp; Link Health adalah gerbang wajib.
-					</p>
+					<p class="font-semibold">Sistem Deep Scan & QC</p>
+					<p class="mt-1 text-sm text-muted-foreground">{tr("Empat pengecek dijalankan per media. Illegal Content & Link Health adalah gerbang wajib.")}</p>
 				</div>
 				<button class="app-btn app-btn-primary" type="button" disabled={auditing || (data?.media.length ?? 0) === 0} onclick={runAudit}>
 					{#if auditing}<LoaderCircle size={16} class="animate-spin" />{:else}<ShieldCheck size={16} />{/if}
@@ -446,13 +448,11 @@
 			</div>
 		</section>
 
-		<section class="app-card mt-3 p-4" aria-label="Matriks media">
-			<p class="font-semibold">Matriks Media Terpilih ({data?.media.length ?? 0})</p>
+		<section class="app-card mt-3 p-4" aria-label={tr("Matriks media")}>
+			<p class="font-semibold">{tr("Matriks Media Terpilih (")}{data?.media.length ?? 0})</p>
 			{#if (data?.media.length ?? 0) === 0}
-				<div class="mt-3 rounded-lg border px-4 py-8 text-center text-sm text-muted-foreground">
-					Belum ada media untuk diaudit. Kembali ke Matchmaker untuk memilih media.
-					<div class="mt-3">
-						<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/matchmaker`}>Kembali ke Matchmaker</a>
+				<div class="mt-3 rounded-lg border px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada media untuk diaudit. Kembali ke Matchmaker untuk memilih media.")}<div class="mt-3">
+						<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/matchmaker`}>{tr("Kembali ke Matchmaker")}</a>
 					</div>
 				</div>
 			{:else}
@@ -460,14 +460,14 @@
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-								<th class="px-3 py-2 font-semibold">Media</th>
+								<th class="px-3 py-2 font-semibold">{tr("Media")}</th>
 								<th class="px-3 py-2 font-semibold">Tipe</th>
-								<th class="px-3 py-2 font-semibold">Status Audit</th>
-								<th class="px-3 py-2 font-semibold">Kredit</th>
+								<th class="px-3 py-2 font-semibold">{tr("Status Audit")}</th>
+								<th class="px-3 py-2 font-semibold">{tr("Kredit")}</th>
 								<th class="px-3 py-2 font-semibold">Otoritas</th>
 								<th class="px-3 py-2 font-semibold">Est. Trafik</th>
 								<th class="px-3 py-2 font-semibold">Link Capacity</th>
-								<th class="px-3 py-2 font-semibold">Jadwal Distribusi</th>
+								<th class="px-3 py-2 font-semibold">{tr("Jadwal Distribusi")}</th>
 								<th class="px-3 py-2 font-semibold"></th>
 							</tr>
 						</thead>
@@ -477,7 +477,7 @@
 									<td class="px-3 py-2">
 										<p class="font-medium">{m.name}</p>
 										<p class="text-xs text-muted-foreground">
-											{m.article.title ? `“${m.article.title.slice(0, 60)}${m.article.title.length > 60 ? '…' : ''}”` : 'Belum ada artikel'}
+											{m.article.title ? `“${m.article.title.slice(0, 60)}${m.article.title.length > 60 ? '…' : ''}”` : tr('Belum ada artikel')}
 										</p>
 									</td>
 									<td class="px-3 py-2">
@@ -491,7 +491,7 @@
 											{statusLabel(m.audit.status)}
 										</span>
 									</td>
-									<td class="px-3 py-2 font-semibold">{Math.round(m.price_idr / Math.max(1, data?.rateIdr ?? 1000))} Kredit</td>
+									<td class="px-3 py-2 font-semibold">{Math.round(m.price_idr / Math.max(1, data?.rateIdr ?? 1000))} {tr("Kredit")}</td>
 									<td class="px-3 py-2">
 										<p class="font-semibold">DA {m.da ?? '—'}</p>
 										<p class="text-xs text-muted-foreground">{m.ss != null ? `SS ${m.ss}%` : 'SS —'}</p>
@@ -508,7 +508,7 @@
 										</button>
 										{#if openSchedule === m.media_id}
 											<div class="mt-2 w-[280px] rounded-lg border p-3">
-												<p class="text-xs font-bold">Jadwal terbit di media mitra</p>
+												<p class="text-xs font-bold">{tr("Jadwal terbit di media mitra")}</p>
 												<input
 													type="datetime-local"
 													class="app-input mt-2 w-full"
@@ -525,7 +525,7 @@
 														<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => setSchedule(m.media_id, new Date(Date.now() + (mins as number) * 60000).toISOString())}>{label}</button>
 													{/each}
 												</div>
-												<p class="mt-2 text-xs text-muted-foreground">Dipakai hanya pada mode Jadwalkan. Kosong = terbit segera setelah pembayaran.</p>
+												<p class="mt-2 text-xs text-muted-foreground">{tr("Dipakai hanya pada mode Jadwalkan. Kosong = terbit segera setelah pembayaran.")}</p>
 											</div>
 										{/if}
 									</td>
@@ -540,9 +540,8 @@
 			{/if}
 		</section>
 
-		<section class="app-card mt-3 p-4">
-			<div class="flex flex-wrap items-start justify-between gap-4">
-				<div class="flex flex-wrap gap-6">
+		<TautBottomBar>
+			<div class="flex flex-wrap gap-6">
 					<div>
 						<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">STATUS KAMPANYE</p>
 						<p class="font-bold" style="color: {data?.canDistribute ? 'var(--success)' : 'var(--warning)'};">
@@ -551,14 +550,14 @@
 						<p class="text-xs text-muted-foreground">
 							{data?.canDistribute
 								? 'Semua hard gate lulus (Illegal Content + Link Health).'
-								: 'Illegal Content & Link Health harus Lulus untuk semua media.'}
+								: tr('Illegal Content & Link Health harus Lulus untuk semua media.')}
 						</p>
 					</div>
 					<div>
 						<p class="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
 							KREDIT TOTAL DISTRIBUSI MEDIA <Wallet size={13} />
 						</p>
-						<p class="text-xl font-bold">{fmtIdr(data?.totalCostTc ?? 0)} Kredit</p>
+						<p class="text-xl font-bold">{fmtIdr(data?.totalCostTc ?? 0)} {tr("Kredit")}</p>
 						<p class="text-xs text-muted-foreground">Setara Rp {fmtIdr(data?.totalCostIdr ?? 0)}</p>
 					</div>
 				</div>
@@ -578,20 +577,19 @@
 						>Jadwalkan</button>
 					</div>
 					{#if blockingError}<p class="text-xs" style="color: var(--destructive);">{blockingError}</p>{/if}
-					<a class="app-btn app-btn-soft" href={backUrl}>Kembali (Revisi)</a>
+					<a class="app-btn app-btn-soft" href={backUrl}>{tr("Kembali (Revisi)")}</a>
 					<button class="app-btn app-btn-primary" type="button" disabled={!data?.canDistribute || distributing || Boolean(blockingError)} onclick={distribute}>
 						{#if distributing}<LoaderCircle size={16} class="animate-spin" />{:else}<ShieldCheck size={16} />{/if}
 						{distributing ? 'Memproses…' : 'Bayar & Distribusikan'}
 					</button>
 				</div>
-			</div>
-		</section>
+		</TautBottomBar>
 	{/if}
 </main>
 
 {#if preview}
-	<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="dialog" aria-modal="true" aria-label={`Mockup artikel ${preview.mediaName}`}>
-		<div class="app-card my-6 w-full max-w-2xl p-5">
+	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="dialog" aria-modal="true" aria-label={`Mockup artikel ${preview.mediaName}`}>
+		<div class="app-card my-auto w-full max-w-2xl p-5">
 			<div class="flex items-start justify-between gap-3">
 				<div class="min-w-0">
 					<p class="break-words font-bold">{preview.title || 'Tanpa judul'}</p>
@@ -599,7 +597,7 @@
 						{preview.mediaName}{preview.updatedAt ? ` · Diperbarui ${dt(preview.updatedAt)}` : ''}
 					</p>
 				</div>
-				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label="Tutup mockup" onclick={() => (preview = null)}><X size={16} /></button>
+				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Tutup mockup")} onclick={() => (preview = null)}><X size={16} /></button>
 			</div>
 			<img
 				class="mt-3 max-h-72 w-full rounded-lg object-cover"
@@ -618,7 +616,7 @@
 					{preview.stats.words.toLocaleString('id-ID')} kata ·{' '}
 					{preview.stats.imageCount > 0 ? `${preview.stats.imageCount} gambar` : 'tanpa gambar'}
 				</p>
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (preview = null)}>Tutup</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (preview = null)}>{tr("Tutup")}</button>
 			</div>
 		</div>
 	</div>

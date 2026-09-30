@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Placeholder shell fase 1 — porting section asli per fase di REWRITE/05.
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -50,14 +52,10 @@
 		<p class="text-sm text-muted-foreground">
 			{user.email} · <span class="uppercase">{user.role}</span>
 		</p>
-		<p class="text-xs text-muted-foreground">
-			Section asli di-port pada fase masing-masing (REWRITE/05_UI_PAGES.md)
-		</p>
+		<p class="text-xs text-muted-foreground">{tr("Section asli di-port pada fase masing-masing (REWRITE/05_UI_PAGES.md)")}</p>
 		<button
 			class="mt-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
 			onclick={logout}
-		>
-			Keluar
-		</button>
+		>{tr("Keluar")}</button>
 	{/if}
 </main>

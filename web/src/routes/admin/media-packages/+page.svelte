@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Media Packages — bundel media yang bisa dipilih klien satu klik.
 	// Port apps/web/src/app/admin/media-packages/page.tsx.
 	import { onMount } from 'svelte';
@@ -114,7 +116,7 @@
 	async function saveDiscount(pkg: MediaPackage) {
 		const raw = Number(drafts[pkg.id]);
 		if (!Number.isFinite(raw)) {
-			error = 'Diskon harus berupa angka.';
+			error = tr('Diskon harus berupa angka.');
 			return;
 		}
 		error = '';
@@ -138,11 +140,11 @@
 		const name = createName.trim();
 		const discount = Math.max(0, Math.min(100, Number(createDiscount) || 0));
 		if (!name) {
-			error = 'Nama paket wajib diisi.';
+			error = tr('Nama paket wajib diisi.');
 			return;
 		}
 		if (createMediaIds.length === 0) {
-			error = 'Pilih minimal 1 media.';
+			error = tr('Pilih minimal 1 media.');
 			return;
 		}
 		error = '';
@@ -254,7 +256,7 @@
 		<button
 			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
 			disabled={savingId === pkg.id}
-			onclick={() => void saveDiscount(pkg)}>{savingId === pkg.id ? 'Menyimpan…' : 'Simpan diskon'}</button
+			onclick={() => void saveDiscount(pkg)}>{savingId === pkg.id ? 'Menyimpan…' : tr('Simpan diskon')}</button
 		>
 		<button
 			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
@@ -270,8 +272,8 @@
 
 <section>
 	<PageHeader
-		title="Media Packages"
-		description="Bundel media yang bisa dipilih klien satu klik. Diskon persen (0–100) benar-benar dipakai saat billing TC publikasi — setiap media anggota dihitung dengan harga diskon, dan klien melihat 'Hemat X TC' di tombol paket. Paket yang dihapus otomatis hilang dari daftar klien."
+		title={tr("Media Packages")}
+		description={tr("Bundel media yang bisa dipilih klien satu klik. Diskon persen (0–100) benar-benar dipakai saat billing TC publikasi — setiap media anggota dihitung dengan harga diskon, dan klien melihat 'Hemat X TC' di tombol paket. Paket yang dihapus otomatis hilang dari daftar klien.")}
 	>
 		<Badge tone="accent" value={`${rows.length} paket`} />
 	</PageHeader>
@@ -280,13 +282,13 @@
 
 	<div class="app-card mt-4 p-4">
 		<div class="flex flex-col gap-3">
-			<p class="font-bold">Buat paket baru</p>
+			<p class="font-bold">{tr("Buat paket baru")}</p>
 			<div class="flex flex-wrap items-end gap-3">
 				<label class="block min-w-[220px] flex-1">
-					<span class="mb-1 block text-xs text-muted-foreground">Nama paket</span>
+					<span class="mb-1 block text-xs text-muted-foreground">{tr("Nama paket")}</span>
 					<input
 						class="app-input w-full"
-						placeholder="cth: Media Nasional Tier 1"
+						placeholder={tr("cth: Media Nasional Tier 1")}
 						maxlength="120"
 						bind:value={createName}
 					/>
@@ -295,7 +297,7 @@
 					<span class="mb-1 block text-xs text-muted-foreground">Deskripsi (opsional)</span>
 					<input
 						class="app-input w-full"
-						placeholder="cth: Detik, Kompas, Tempo"
+						placeholder={tr("cth: Detik, Kompas, Tempo")}
 						maxlength="300"
 						bind:value={createDescription}
 					/>
@@ -305,20 +307,20 @@
 					<input class="app-input w-full" type="number" min="0" max="100" bind:value={createDiscount} />
 				</label>
 				<button class="app-btn app-btn-primary" disabled={creating} onclick={createPackage}>
-					<Plus size={16} />{creating ? 'Menyimpan…' : 'Buat paket'}
+					<Plus size={16} />{creating ? 'Menyimpan…' : tr('Buat paket')}
 				</button>
 			</div>
 			<div class="flex flex-wrap items-center gap-3">
 				<input
 					class="app-input min-w-[220px] flex-1"
-					placeholder="Cari media untuk ditambahkan…"
+					placeholder={tr("Cari media untuk ditambahkan…")}
 					bind:value={mediaQuery}
 				/>
-				<span class="text-xs text-muted-foreground">{createMediaIds.length} media dipilih</span>
+				<span class="text-xs text-muted-foreground">{createMediaIds.length} {tr("media dipilih")}</span>
 			</div>
 			<div class="max-h-[180px] overflow-y-auto rounded-lg border p-2">
 				{#if filteredMedia.length === 0}
-					<p class="text-sm text-muted-foreground">Tidak ada media yang cocok.</p>
+					<p class="text-sm text-muted-foreground">{tr("Tidak ada media yang cocok.")}</p>
 				{/if}
 				<div class="flex flex-wrap gap-2">
 					{#each filteredMedia as m (m.id)}
@@ -338,7 +340,7 @@
 	<DataTable
 		columns={[
 			{ key: 'package', label: 'Paket', render: packageCell },
-			{ key: 'media', label: 'Media', render: mediaCountCell },
+			{ key: 'media', label: tr('Media'), render: mediaCountCell },
 			{ key: 'total', label: 'Total (TC)', render: totalCell },
 			{ key: 'discount', label: 'Diskon %', render: discountCell },
 			{ key: 'savings', label: 'Hemat (TC)', render: savingsCell },
@@ -347,7 +349,7 @@
 		]}
 		rows={visibleRows}
 		rowKey={(pkg: MediaPackage) => pkg.id}
-		empty="Belum ada media package."
+		empty={tr("Belum ada media package.")}
 		minWidth="900px"
 	/>
 
@@ -358,8 +360,5 @@
 		onChange={(next) => (page = next / PAGE_SIZE + 1)}
 	/>
 
-	<p class="mt-2 text-xs text-muted-foreground">
-		Catatan: diskon dihitung per media saat reservasi TC publikasi (pembulatan ke bawah per media, minimal 1 TC bila harga
-		asli &gt; 0). Transaksi lama tidak terpengaruh — hanya publikasi baru yang membawa package_id memakai diskon ini.
-	</p>
+	<p class="mt-2 text-xs text-muted-foreground">{tr("Catatan: diskon dihitung per media saat reservasi TC publikasi (pembulatan ke bawah per media, minimal 1 TC bila harga asli > 0). Transaksi lama tidak terpengaruh — hanya publikasi baru yang membawa package_id memakai diskon ini.")}</p>
 </section>

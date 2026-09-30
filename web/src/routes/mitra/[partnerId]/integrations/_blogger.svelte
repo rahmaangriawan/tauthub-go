@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Tab Blogger — port BloggerSection app lama
 	// (app/mitra/[partnerId]/[[...section]]/sections.tsx baris ~2824): hubungkan
 	// akun Google media Blogger, pilih blog tujuan, uji koneksi, putuskan.
@@ -53,7 +55,7 @@
 		if (connected !== '1' || !mediaId) return;
 		const target = rows.find((m) => m.id === mediaId);
 		if (target && !target.blogger_blog_id) {
-			notice = 'Kredensial Blogger tersimpan. Pilih blog untuk melanjutkan.';
+			notice = tr('Kredensial Blogger tersimpan. Pilih blog untuk melanjutkan.');
 			await openBlogPicker(target);
 		} else if (target?.blogger_blog_id) {
 			notice = `Blog "${target.blogger_blog_name ?? ''}" sudah terhubung.`;
@@ -71,7 +73,7 @@
 		try {
 			const res = await apiRequest('/v1/partner/media?limit=500');
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal memuat media Blogger.');
+				error = await readApiError(res, tr('Gagal memuat media Blogger.'));
 				return;
 			}
 			const all = (await res.json()).media ?? [];
@@ -88,12 +90,12 @@
 		try {
 			const res = await apiRequest(`/v1/partner/media/${item.id}/blogger/connect`);
 			if (!res.ok) {
-				error = await readApiError(res, 'Tidak dapat memulai koneksi Blogger.');
+				error = await readApiError(res, tr('Tidak dapat memulai koneksi Blogger.'));
 				return;
 			}
 			const result = await res.json();
 			if (result.url) window.location.href = result.url;
-			else error = 'Tidak dapat memulai koneksi Blogger.';
+			else error = tr('Tidak dapat memulai koneksi Blogger.');
 		} finally {
 			busyId = null;
 		}
@@ -108,12 +110,12 @@
 		try {
 			const res = await apiRequest(`/v1/partner/media/${item.id}/blogger/blogs`);
 			if (!res.ok) {
-				blogError = await readApiError(res, 'Gagal memuat daftar blog.');
+				blogError = await readApiError(res, tr('Gagal memuat daftar blog.'));
 				return;
 			}
 			const data = await res.json();
 			blogs = data.blogs ?? [];
-			if (blogs.length === 0) blogError = 'Tidak ada blog ditemukan di akun Google ini.';
+			if (blogs.length === 0) blogError = tr('Tidak ada blog ditemukan di akun Google ini.');
 		} finally {
 			blogBusy = false;
 		}
@@ -130,7 +132,7 @@
 				body: JSON.stringify({ blog_id: selectedBlogId, blog_name: blog?.name ?? '' })
 			});
 			if (!res.ok) {
-				blogError = await readApiError(res, 'Gagal menyimpan pilihan blog.');
+				blogError = await readApiError(res, tr('Gagal menyimpan pilihan blog.'));
 				return;
 			}
 			pickTarget = null;
@@ -167,7 +169,7 @@
 		try {
 			const res = await apiRequest(`/v1/partner/media/${item.id}/blogger`, { method: 'DELETE' });
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal memutuskan koneksi Blogger.');
+				error = await readApiError(res, tr('Gagal memutuskan koneksi Blogger.'));
 				return;
 			}
 			notice = 'Koneksi Blogger diputuskan.';
@@ -184,7 +186,7 @@
 				? '✕ Koneksi gagal'
 				: status === 'testing'
 					? 'Menguji…'
-					: 'Belum terhubung';
+					: tr('Belum terhubung');
 	const statusColor = (status: string) =>
 		status === 'connected'
 			? 'var(--success)'
@@ -206,21 +208,17 @@
 			<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--secondary); color: var(--muted-foreground);">{rows.length} media</span>
 		</div>
 	</div>
-	<p class="px-4 pt-3 text-xs text-muted-foreground">
-		Hubungkan akun Google Anda, pilih blog, lalu artikel dari klien terkirim otomatis ke Blogger (draft atau terbit).
-	</p>
+	<p class="px-4 pt-3 text-xs text-muted-foreground">{tr("Hubungkan akun Google Anda, pilih blog, lalu artikel dari klien terkirim otomatis ke Blogger (draft atau terbit).")}</p>
 
 	{#if error}<p class="px-4 pt-2 text-sm" style="color: var(--destructive);">{error}</p>{/if}
 	{#if notice}<p class="px-4 pt-2 text-sm" style="color: var(--success);">{notice}</p>{/if}
 
 	{#if loading && rows.length === 0}
-		<p class="px-4 py-8 text-center text-sm text-muted-foreground">Memuat Blogger…</p>
+		<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Memuat Blogger…")}</p>
 	{:else if rows.length === 0}
 		<div class="px-4 py-8 text-center">
 			<Globe size={26} class="mx-auto" style="color: var(--muted-foreground);" />
-			<p class="mt-2 text-sm text-muted-foreground">
-				Belum ada media platform Blogger. Pilih platform Blogger saat menambah media, lalu hubungkan di sini.
-			</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada media platform Blogger. Pilih platform Blogger saat menambah media, lalu hubungkan di sini.")}</p>
 		</div>
 	{:else}
 		<div class="space-y-3 p-4">
@@ -248,7 +246,7 @@
 								{busyId === item.id ? 'Menghubungkan…' : 'Hubungkan Blogger'}
 							</button>
 						{:else}
-							<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={busyId === item.id} onclick={() => openBlogPicker(item)}>Ganti Blog</button>
+							<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={busyId === item.id} onclick={() => openBlogPicker(item)}>{tr('Ganti Blog')}</button>
 							<button
 								class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
 								type="button"
@@ -266,8 +264,7 @@
 					{/if}
 					{#if !item.blogger_blog_id && item.blogger_connected}
 						<p class="mt-2 text-xs text-muted-foreground">
-							Kredensial tersimpan — pilih tombol <strong>Ganti Blog</strong> untuk menyelesaikan koneksi.
-						</p>
+							Kredensial tersimpan — pilih tombol <strong>{tr('Ganti Blog')}</strong>{tr("untuk menyelesaikan koneksi.")}</p>
 					{/if}
 				</div>
 			{/each}
@@ -276,17 +273,17 @@
 </div>
 
 {#if pickTarget}
-	<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
-		<dialog open class="app-card my-8 w-full max-w-md p-5" aria-label="Pilih Blog Blogger">
+	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
+		<dialog open class="app-card w-full max-w-md p-5" aria-label={tr("Pilih Blog Blogger")}>
 			<div class="flex flex-wrap items-center justify-between gap-2">
-				<h2 class="text-lg font-semibold">Pilih Blog Blogger</h2>
-				<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => (pickTarget = null)}><X size={12} /> Batal</button>
+				<h2 class="text-lg font-semibold">{tr("Pilih Blog Blogger")}</h2>
+				<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => (pickTarget = null)}><X size={12} />{tr("Batal")}</button>
 			</div>
-			<p class="mt-1 text-sm text-muted-foreground">Pilih blog untuk media "{pickTarget.name}".</p>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Pilih blog untuk media \"")}{pickTarget.name}".</p>
 
 			<div class="mt-3 space-y-2">
 				{#if blogBusy}
-					<p class="text-sm text-muted-foreground">Memuat daftar blog…</p>
+					<p class="text-sm text-muted-foreground">{tr("Memuat daftar blog…")}</p>
 				{/if}
 				{#if blogError}
 					<p class="text-sm" style="color: var(--destructive);">{blogError}</p>
@@ -313,7 +310,7 @@
 			</div>
 
 			<div class="mt-4 flex justify-end gap-2 border-t pt-3">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (pickTarget = null)}>Batal</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (pickTarget = null)}>{tr("Batal")}</button>
 				<button class="app-btn app-btn-primary" type="button" disabled={blogBusy || !selectedBlogId} onclick={saveBlog}>
 					{blogBusy ? 'Menyimpan…' : 'Gunakan Blog Ini'}
 				</button>

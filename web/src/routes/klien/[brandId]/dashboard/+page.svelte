@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Dashboard klien — port section `dashboard` app lama (brand-workspace.tsx
 	// merender ContentIntakePanel): wizard intake 4 langkah (Mulai → Jenis &
 	// topik → Lengkapi → Analisis), autosave draft lokal, readiness, rekomendasi
@@ -36,27 +38,27 @@
 		updated_at?: string;
 	};
 
-	const MODES: Array<{ value: string; title: string; desc: string }> = [
-		{ value: 'bahan', title: 'Saya punya bahan', desc: 'Punya data, fakta, atau info mentah — minta dibuatkan artikel.' },
-		{ value: 'artikel', title: 'Saya sudah punya artikel', desc: 'Naskah sudah ada, mau direview, diedit, lalu didistribusikan.' },
-		{ value: 'keduanya', title: 'Saya punya bahan + artikel', desc: 'Artikel lama + bahan terbaru untuk diperbarui/disempurnakan.' },
-		{ value: 'rekomendasi', title: 'Belum punya bahan', desc: 'Minta rekomendasi arah konten dari Tauthub.' }
-	];
+	const MODES: Array<{ value: string; title: string; desc: string }> = $derived([
+		{ value: 'bahan', title: tr('Saya punya bahan'), desc: tr('Punya data, fakta, atau info mentah — minta dibuatkan artikel.') },
+		{ value: 'artikel', title: tr('Saya sudah punya artikel'), desc: tr('Naskah sudah ada, mau direview, diedit, lalu didistribusikan.') },
+		{ value: 'keduanya', title: tr('Saya punya bahan + artikel'), desc: tr('Artikel lama + bahan terbaru untuk diperbarui/disempurnakan.') },
+		{ value: 'rekomendasi', title: tr('Belum punya bahan'), desc: tr('Minta rekomendasi arah konten dari Tauthub.') }
+	]);
 
-	const LEVEL_LABEL: Record<Readiness['level'], string> = {
-		ready: 'Siap diproses', needs_more: 'Perlu dilengkapi', insufficient: 'Belum cukup'
-	};
+	const LEVEL_LABEL: Record<Readiness['level'], string> = $derived({
+		ready: 'Siap diproses', needs_more: 'Perlu dilengkapi', insufficient: tr('Belum cukup')
+	});
 	const LEVEL_COLOR: Record<Readiness['level'], string> = {
 		ready: 'var(--success)', needs_more: 'var(--warning)', insufficient: 'var(--destructive)'
 	};
 
 	/** Pengelompokan VISUAL pertanyaan intake (murni layout — field & validasi tidak berubah). */
-	const QUESTION_GROUPS: Array<{ id: string; title: string; hint: string; keys: string[] }> = [
+	const QUESTION_GROUPS: Array<{ id: string; title: string; hint: string; keys: string[] }> = $derived([
 		{ id: 'inti', title: 'Informasi utama', hint: 'Inti kejadian dan alasan mengapa layak diberitakan.', keys: ['who', 'what', 'why'] },
 		{ id: 'waktu', title: 'Waktu & lokasi', hint: 'Kapan dan di mana hal ini terjadi.', keys: ['when', 'where'] },
-		{ id: 'pihak', title: 'Pihak & entitas', hint: 'Orang, perusahaan, produk, atau acara yang terlibat.', keys: ['event_type', 'company', 'product', 'person'] },
-		{ id: 'dukungan', title: 'Data & dukungan', hint: 'Angka, kutipan, atau ajakan yang memperkuat cerita.', keys: ['data', 'quote', 'cta'] }
-	];
+		{ id: 'pihak', title: 'Pihak & entitas', hint: tr('Orang, perusahaan, produk, atau acara yang terlibat.'), keys: ['event_type', 'company', 'product', 'person'] },
+		{ id: 'dukungan', title: 'Data & dukungan', hint: tr('Angka, kutipan, atau ajakan yang memperkuat cerita.'), keys: ['data', 'quote', 'cta'] }
+	]);
 
 	function isWideQuestion(question: Question) {
 		return ['textarea', 'radio', 'checkbox', 'multi_select'].includes(question.type);
@@ -72,7 +74,7 @@
 		}
 		const result = groups.filter((g) => g.questions.length > 0);
 		if (others.length > 0) {
-			result.push({ id: 'lainnya', title: 'Informasi lainnya', hint: 'Pertanyaan tambahan dari jenis konten ini.', keys: [], questions: others });
+			result.push({ id: 'lainnya', title: 'Informasi lainnya', hint: tr('Pertanyaan tambahan dari jenis konten ini.'), keys: [], questions: others });
 		}
 		return result;
 	}
@@ -150,10 +152,10 @@
 	const showRecommendation = $derived(mode === 'rekomendasi' || (readiness !== null && readiness.score < 80));
 	const questionGroups = $derived(currentType ? groupQuestions(currentType.questions ?? []) : []);
 
-	const GEN_MODES: Array<{ value: 'economy' | 'premium'; title: string; desc: string; icon: typeof Gauge }> = [
-		{ value: 'economy', title: 'Mode Hemat', desc: 'Cepat dan hemat. Cocok untuk draf awal & artikel rutin.', icon: Gauge },
+	const GEN_MODES: Array<{ value: 'economy' | 'premium'; title: string; desc: string; icon: typeof Gauge }> = $derived([
+		{ value: 'economy', title: 'Mode Hemat', desc: tr('Cepat dan hemat. Cocok untuk draf awal & artikel rutin.'), icon: Gauge },
 		{ value: 'premium', title: 'Mode Premium', desc: 'Kualitas terbaik, penalaran mendalam. Untuk konten penting & analitis.', icon: Diamond }
-	];
+	]);
 
 	onMount(() => {
 		void (async () => {
@@ -227,7 +229,7 @@
 	async function nextToForm() {
 		error = '';
 		if (!mode || !typeCode) {
-			error = 'Pilih cara Anda ingin mulai dan jenis kontennya dulu.';
+			error = tr('Pilih cara Anda ingin mulai dan jenis kontennya dulu.');
 			return;
 		}
 		busy = true;
@@ -238,7 +240,7 @@
 					method: 'POST',
 					body: JSON.stringify({ mode, content_type_code: typeCode, topic: topic.trim() || null })
 				});
-				if (!res.ok) throw new Error(await readApiError(res, 'Gagal membuat intake.'));
+				if (!res.ok) throw new Error(await readApiError(res, tr('Gagal membuat intake.')));
 				const created = (await res.json()) as Intake;
 				id = created.id;
 				intake = created;
@@ -247,7 +249,7 @@
 					method: 'PUT',
 					body: JSON.stringify({ content_type_code: typeCode, topic: topic.trim() || null })
 				});
-				if (!res.ok) throw new Error(await readApiError(res, 'Gagal menyimpan intake.'));
+				if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan intake.')));
 				const saved = (await res.json()) as Intake;
 				id = saved.id;
 				intake = saved;
@@ -258,7 +260,7 @@
 			step = 2;
 			void loadRecent();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Gagal menyimpan intake.';
+			error = e instanceof Error ? e.message : tr('Gagal menyimpan intake.');
 		} finally {
 			busy = false;
 		}
@@ -280,7 +282,7 @@
 					key_messages: keyMessagesText.split('\n').map((s) => s.trim()).filter(Boolean)
 				})
 			});
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal menyimpan & menganalisis.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan & menganalisis.')));
 			const payload = (await res.json()) as Intake & { readiness: Readiness };
 			intake = payload;
 			readiness = payload.readiness ?? null;
@@ -292,7 +294,7 @@
 			if (goResult) step = 3;
 			void loadRecent();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Gagal menyimpan & menganalisis.';
+			error = e instanceof Error ? e.message : tr('Gagal menyimpan & menganalisis.');
 		} finally {
 			busy = false;
 		}
@@ -307,12 +309,12 @@
 				method: 'POST',
 				body: '{}'
 			});
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal membuat rekomendasi.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal membuat rekomendasi.')));
 			const payload = (await res.json()) as { recommendation: Recommendation; readiness: Readiness };
 			recommendation = payload.recommendation;
 			readiness = payload.readiness ?? null;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Gagal membuat rekomendasi.';
+			error = e instanceof Error ? e.message : tr('Gagal membuat rekomendasi.');
 		} finally {
 			busy = false;
 		}
@@ -353,11 +355,11 @@
 				method: 'POST',
 				body: JSON.stringify({ model_tier: genMode })
 			});
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal membuat artikel dari intake.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal membuat artikel dari intake.')));
 			const payload = (await res.json()) as { job_id: string; status?: string };
 			window.location.href = `/klien/${brandUrl}/generate?outline=${payload.job_id}`;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Gagal membuat artikel.';
+			error = e instanceof Error ? e.message : tr('Gagal membuat artikel.');
 		} finally {
 			busy = false;
 		}
@@ -373,7 +375,7 @@
 			articleText = articleText ? `${articleText}\n\n${text}` : text;
 			articleFilename = file.name;
 		} catch {
-			error = 'File tidak bisa dibaca sebagai teks.';
+			error = tr('File tidak bisa dibaca sebagai teks.');
 		}
 	}
 
@@ -412,7 +414,7 @@
 		error = '';
 		const res = await apiRequest(`/v1/brands/${brandId}/content-intakes/${target.id}`);
 		if (!res.ok) {
-			error = await readApiError(res, 'Gagal memuat intake.');
+			error = await readApiError(res, tr('Gagal memuat intake.'));
 			return;
 		}
 		const data = (await res.json()) as Intake;
@@ -442,20 +444,17 @@
 		v ? new Date(v).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 </script>
 
-<PageTitle title="Buat Konten Baru" />
+<PageTitle title={tr("Buat Konten Baru")} />
 
 <section>
 	<header>
 		<p class="text-[11px] font-semibold tracking-wide text-muted-foreground">CONTENT INTAKE</p>
-		<h1 class="mt-1 text-2xl font-semibold tracking-tight">Buat konten baru</h1>
-		<p class="mt-1 text-sm text-muted-foreground">
-			Ceritakan dulu apa yang Anda miliki — bahan, artikel, atau belum ada apa-apa. Tauthub menyesuaikan
-			pertanyaan, menilai kelengkapan, lalu mengantar Anda ke AI Writer.
-		</p>
+		<h1 class="mt-1 text-2xl font-semibold tracking-tight">{tr("Buat konten baru")}</h1>
+		<p class="mt-1 text-sm text-muted-foreground">{tr("Ceritakan dulu apa yang Anda miliki — bahan, artikel, atau belum ada apa-apa. Tauthub menyesuaikan pertanyaan, menilai kelengkapan, lalu mengantar Anda ke AI Writer.")}</p>
 	</header>
 
 	{#if loading}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat…")}</p>
 	{:else}
 		<div class="app-card mt-4 p-5">
 			<div class="flex flex-wrap gap-2">
@@ -501,7 +500,7 @@
 						type="button"
 						disabled={busy}
 						onclick={() => {
-							if (!mode) { error = 'Pilih salah satu cara memulai dulu.'; return; }
+							if (!mode) { error = tr('Pilih salah satu cara memulai dulu.'); return; }
 							step = 1;
 						}}
 					>Lanjut <ArrowRight size={16} /></button>
@@ -518,10 +517,10 @@
 							<Select
 								bind:value={typeCode}
 								ariaLabel="Jenis konten"
-								placeholder="Pilih jenis konten…"
+								placeholder={tr("Pilih jenis konten…")}
 								minWidth={200}
 								options={[
-									{ value: '', label: 'Pilih jenis konten…' },
+									{ value: '', label: tr('Pilih jenis konten…') },
 									...types.map((t) => ({ value: t.code, label: t.name }))
 								]}
 							/>
@@ -530,11 +529,11 @@
 					</label>
 					<label class="block text-sm">
 						<span class="text-xs font-medium text-muted-foreground">Topik / judul kerja</span>
-						<input class="app-input mt-1 w-full" bind:value={topic} placeholder="Contoh: Peluncuran layanan baru PT Nusantara" />
+						<input class="app-input mt-1 w-full" bind:value={topic} placeholder={tr("Contoh: Peluncuran layanan baru PT Nusantara")} />
 					</label>
 				</div>
 				<div class="mt-4 flex flex-wrap gap-2">
-					<button class="app-btn app-btn-soft" type="button" onclick={() => (step = 0)}>Kembali</button>
+					<button class="app-btn app-btn-soft" type="button" onclick={() => (step = 0)}>{tr("Kembali")}</button>
 					<button class="app-btn app-btn-primary" type="button" disabled={!typeCode || busy} onclick={() => void nextToForm()}>
 						{busy ? 'Menyimpan…' : 'Lanjut ke pertanyaan'} <ArrowRight size={16} />
 					</button>
@@ -557,16 +556,14 @@
 					</label>
 					<label class="block text-sm">
 						<span class="text-xs font-medium text-muted-foreground">Topik / judul kerja</span>
-						<input class="app-input mt-1 w-full" bind:value={topic} placeholder="Topik artikel" />
+						<input class="app-input mt-1 w-full" bind:value={topic} placeholder={tr("Topik artikel")} />
 					</label>
 				</div>
 
 				{#if questionGroups.length > 0}
 					<div class="mt-5">
-						<h3 class="text-sm font-semibold">{mode === 'rekomendasi' ? 'Isi sebanyak yang Anda tahu' : 'Bahan (informasi mentah)'}</h3>
-						<p class="mt-1 text-xs text-muted-foreground">
-							Jawaban ini dipakai sebagai dasar penulisan artikel. Field bertanda * wajib untuk siap diproses.
-						</p>
+						<h3 class="text-sm font-semibold">{mode === 'rekomendasi' ? tr('Isi sebanyak yang Anda tahu') : 'Bahan (informasi mentah)'}</h3>
+						<p class="mt-1 text-xs text-muted-foreground">{tr("Jawaban ini dipakai sebagai dasar penulisan artikel. Field bertanda * wajib untuk siap diproses.")}</p>
 						{#each questionGroups as group (group.id)}
 							<div class="mt-4">
 								<h4 class="text-xs font-bold tracking-wide text-muted-foreground">{group.title}</h4>
@@ -590,11 +587,11 @@
 													<Select
 														value={String(answers[question.key] ?? '')}
 														ariaLabel={question.label}
-														placeholder="Pilih…"
+														placeholder={tr("Pilih…")}
 														minWidth={200}
 														onchange={(v) => setAnswer(question.key, v)}
 														options={[
-															{ value: '', label: 'Pilih…' },
+															{ value: '', label: tr('Pilih…') },
 															...(question.options ?? []).map((option) => ({ value: option, label: option }))
 														]}
 													/>
@@ -635,24 +632,18 @@
 				{#if mode !== 'rekomendasi'}
 					<div class="mt-4 rounded-xl border p-4">
 						<h3 class="text-sm font-semibold">Key messages (pesan utama)</h3>
-						<p class="mt-1 text-xs text-muted-foreground">
-							Satu pesan per baris. Pesan ini diverifikasi pada artikel yang terbit untuk mengukur
-							message consistency (PR Calculator) — contoh: &quot;Produk X resmi diluncurkan untuk UMKM&quot;.
-						</p>
-						<textarea class="app-input mt-2 w-full" rows={4} bind:value={keyMessagesText} placeholder={"Produk X resmi diluncurkan\nMenggunakan teknologi Y\nDitujukan untuk UMKM"}></textarea>
+						<p class="mt-1 text-xs text-muted-foreground">{tr("Satu pesan per baris. Pesan ini diverifikasi pada artikel yang terbit untuk mengukur message consistency (PR Calculator) — contoh: \"Produk X resmi diluncurkan untuk UMKM\".")}</p>
+						<textarea class="app-input mt-2 w-full" rows={4} bind:value={keyMessagesText} placeholder={tr("Produk X resmi diluncurkan\nMenggunakan teknologi Y\nDitujukan untuk UMKM")}></textarea>
 					</div>
 				{/if}
 
 				{#if showArticle}
 					<div class="mt-4 rounded-xl border p-4">
 						<h3 class="text-sm font-semibold">Artikel existing</h3>
-						<p class="mt-1 text-xs text-muted-foreground">
-							Tempel naskah Anda atau unggah file (teks/.md/.txt paling akurat). Artikel asli tidak diubah —
-							Tauthub memprosesnya sebagai bahan.
-						</p>
-						<textarea class="app-input mt-2 w-full" rows={8} bind:value={articleText} placeholder="Tempel artikel di sini…"></textarea>
+						<p class="mt-1 text-xs text-muted-foreground">{tr("Tempel naskah Anda atau unggah file (teks/.md/.txt paling akurat). Artikel asli tidak diubah — Tauthub memprosesnya sebagai bahan.")}</p>
+						<textarea class="app-input mt-2 w-full" rows={8} bind:value={articleText} placeholder={tr("Tempel artikel di sini…")}></textarea>
 						<div class="mt-2 flex flex-wrap items-center gap-3">
-							<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={() => fileInput?.click()}><FileText size={15} /> Unggah dokumen</button>
+							<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={() => fileInput?.click()}><FileText size={15} />{tr("Unggah dokumen")}</button>
 							{#if articleFilename}<span class="text-[11px] text-muted-foreground">File: {articleFilename} · {articleText.length.toLocaleString('id-ID')} karakter</span>{/if}
 							<input
 								bind:this={fileInput}
@@ -673,9 +664,9 @@
 				{/if}
 
 				<div class="mt-4 flex flex-wrap gap-2">
-					<button class="app-btn app-btn-soft" type="button" onclick={() => (step = 1)}>Kembali</button>
+					<button class="app-btn app-btn-soft" type="button" onclick={() => (step = 1)}>{tr("Kembali")}</button>
 					<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void saveAndAnalyze()}>
-						{busy ? 'Menganalisis…' : 'Simpan & analisis kelengkapan'}
+						{busy ? 'Menganalisis…' : tr('Simpan & analisis kelengkapan')}
 					</button>
 				</div>
 			{/if}
@@ -685,13 +676,11 @@
 				{#if !readiness}
 					<div class="mt-4">
 						<h3 class="text-sm font-semibold">Analisis kelengkapan</h3>
-						<p class="mt-1.5 text-xs text-muted-foreground">
-							Klik &ldquo;Simpan &amp; analisis kelengkapan&rdquo; untuk menilai kesiapan bahan Anda.
-						</p>
+						<p class="mt-1.5 text-xs text-muted-foreground">{tr("Klik “Simpan & analisis kelengkapan” untuk menilai kesiapan bahan Anda.")}</p>
 						<div class="mt-3 flex flex-wrap gap-2">
 							<button class="app-btn app-btn-soft" type="button" onclick={() => (step = 2)}>Edit bahan</button>
 							<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void saveAndAnalyze()}>
-								{busy ? 'Menganalisis…' : 'Simpan & analisis kelengkapan'}
+								{busy ? 'Menganalisis…' : tr('Simpan & analisis kelengkapan')}
 							</button>
 						</div>
 					</div>
@@ -763,7 +752,7 @@
 								{/if}
 								{#if (recommendation.missing_info?.length ?? 0) > 0}
 									<div class="mt-2.5">
-										<strong class="text-xs" style="color: var(--warning);">Informasi yang perlu disiapkan</strong>
+										<strong class="text-xs" style="color: var(--warning);">{tr("Informasi yang perlu disiapkan")}</strong>
 										<ul class="mt-1 list-disc pl-4 text-xs text-muted-foreground">
 											{#each recommendation.missing_info ?? [] as s (s)}<li>{s}</li>{/each}
 										</ul>
@@ -781,7 +770,7 @@
 
 				<div class="mt-4">
 					<p class="text-xs font-semibold text-muted-foreground">
-						Mode AI <span class="font-normal">— pilih kualitas &amp; biaya</span>
+						Mode AI <span class="font-normal">— pilih kualitas & biaya</span>
 					</p>
 					<div class="mt-2 grid gap-2 sm:grid-cols-2">
 						{#each GEN_MODES as gm (gm.value)}
@@ -827,8 +816,7 @@
 								<p class="text-xs text-muted-foreground">
 									{MODES.find((m) => m.value === item.draft.mode)?.title ?? item.draft.mode ?? 'Intake'} ·
 									{types.find((t) => t.code === item.draft.content_type_code)?.name ?? '-'} ·
-									<span class="rounded px-1.5 py-0.5" style="background-color: var(--muted);">draft</span> ·
-									Tersimpan {fmtDate(new Date(item.draft.updated_at).toISOString())}
+									<span class="rounded px-1.5 py-0.5" style="background-color: var(--muted);">draft</span> {tr("· Tersimpan")} {fmtDate(new Date(item.draft.updated_at).toISOString())}
 								</p>
 							</div>
 							<div class="flex shrink-0 items-center gap-1.5">
@@ -838,7 +826,7 @@
 									type="button"
 									style="color: var(--destructive);"
 									onclick={() => { clearDraft(item.intake_id); localDrafts = listDrafts(); if (intake?.id === item.intake_id) draftSavedAt = null; }}
-								>Hapus</button>
+								>{tr("Hapus")}</button>
 							</div>
 						</div>
 					{/each}
@@ -869,7 +857,7 @@
 							</div>
 							<div class="flex shrink-0 items-center gap-1.5">
 								{#if item.job_id}
-									<a class="app-btn app-btn-soft !min-h-7 !text-xs" href={`/klien/${brandUrl}/generate?outline=${item.job_id}`}>Lihat artikel</a>
+									<a class="app-btn app-btn-soft !min-h-7 !text-xs" href={`/klien/${brandUrl}/generate?outline=${item.job_id}`}>{tr("Lihat artikel")}</a>
 								{/if}
 								{#if item.status !== 'job_created'}
 									<button class="app-btn app-btn-soft !min-h-7 !text-xs" type="button" onclick={() => void resume(item)}>Lanjutkan</button>

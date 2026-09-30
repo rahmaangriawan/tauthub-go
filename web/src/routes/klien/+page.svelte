@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port app/klien/page.tsx: index klien LANGSUNG mengarahkan user ke
 	// dashboard brand pertamanya — halaman "buat/pilih brand" sudah tidak
 	// dipakai. Tanpa brand → tawarkan brand VIP; gagal → state error.
@@ -74,7 +76,7 @@
 		error = '';
 		const pid = await provisionVipBrand(true);
 		if (!pid) {
-			error = 'Gagal membuat brand. Pastikan akun VIP sudah aktif.';
+			error = tr('Gagal membuat brand. Pastikan akun VIP sudah aktif.');
 			busy = false;
 			return;
 		}
@@ -82,16 +84,14 @@
 	}
 </script>
 
-<PageTitle title="Klien" />
+<PageTitle title={tr("Klien")} />
 
 <main class="min-h-screen bg-background px-10 py-10 pb-16">
 	<div>
 		<header class="mb-8">
 			<p class="text-[11px] font-bold uppercase tracking-[0.12em] text-primary">Tauthub</p>
-			<h1 class="my-2 text-4xl font-bold tracking-tight">Dashboard Klien</h1>
-			<p class="max-w-[620px] text-[15px] leading-relaxed text-muted-foreground">
-				Mengarahkan Anda ke dashboard brand…
-			</p>
+			<h1 class="my-2 text-4xl font-bold tracking-tight">{tr("Dashboard Klien")}</h1>
+			<p class="max-w-[620px] text-[15px] leading-relaxed text-muted-foreground">{tr("Mengarahkan Anda ke dashboard brand…")}</p>
 		</header>
 
 		{#if view === 'loading'}
@@ -111,7 +111,7 @@
 				<span class="mb-2 mt-1 inline-block rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">
 					VIP Partner
 				</span>
-				<p class="mt-2">Anda dapat membuat brand sendiri untuk mulai menggunakan Dashboard Klien.</p>
+				<p class="mt-2">{tr("Anda dapat membuat brand sendiri untuk mulai menggunakan Dashboard Klien.")}</p>
 				{#if error}<p class="mt-2 text-sm text-destructive">{error}</p>{/if}
 				<button
 					class="app-btn app-btn-primary mt-3"
@@ -123,7 +123,7 @@
 			</div>
 		{:else}
 			<div class="rounded-xl border border-destructive/40 bg-destructive/5 px-3.5 py-3 text-sm text-destructive">
-				{error || 'Gagal memuat brand. Silakan muat ulang halaman atau coba lagi nanti.'}
+				{error || tr('Gagal memuat brand. Silakan muat ulang halaman atau coba lagi nanti.')}
 			</div>
 		{/if}
 	</div>

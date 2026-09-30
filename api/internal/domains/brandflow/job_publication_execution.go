@@ -1374,6 +1374,13 @@ func (d *Deps) peUploadFeaturedImage(ctx context.Context, baseURL string, header
 		}
 		data, contentType, filename = raw, mime, name
 	} else {
+		// Path relatif (mis. aset statis aplikasi "/images/...") tidak punya skema
+		// maupun host, jadi dulu selalu dilewati di sini dan artikel terbit tanpa
+		// featured image. Resolusikan dulu ke origin publik server supaya berkasnya
+		// bisa diunduh seperti URL biasa.
+		if strings.HasPrefix(imageURL, "/") {
+			imageURL = strings.TrimRight(d.pePublicOrigin(), "/") + imageURL
+		}
 		parsed, err := url.Parse(imageURL)
 		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
 			return 0
@@ -1546,6 +1553,14 @@ func (d *Deps) peRecordFinance(ctx context.Context, publication, media bsRow) {
 	}()
 	clientPrice := publication.numOr("client_price")
 	if clientPrice <= 0 {
+		return
+	}
+	// Kirim ulang setelah revisi memakai publikasi yang sama; ledger tidak boleh
+	// dicatat dua kali untuk satu publikasi.
+	priorTx, priorErr := d.queryRow(ctx,
+		"SELECT id FROM transactions WHERE publication_id = $1 AND type = 'publication.revenue' LIMIT 1",
+		publication.strOr("id", ""))
+	if priorErr == nil && priorTx != nil {
 		return
 	}
 	partnerID := media.strOr("partner_id", "")

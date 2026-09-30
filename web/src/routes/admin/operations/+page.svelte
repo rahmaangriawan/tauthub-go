@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Operations center — port app/admin/operations/page.tsx.
 	// Investigasi alert, batch aktif, dan item yang keluar dari retry pipeline.
 	import { onMount } from 'svelte';
@@ -71,7 +73,7 @@
 			}
 			return { ok: true, data: (await res.json()) as T };
 		} catch {
-			return { ok: false, error: 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.' };
+			return { ok: false, error: tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.') };
 		}
 	}
 
@@ -113,7 +115,7 @@
 <section>
 	<PageHeader
 		title="Operations"
-		description="Investigasi alert, batch aktif, dan item yang keluar dari retry pipeline."
+		description={tr("Investigasi alert, batch aktif, dan item yang keluar dari retry pipeline.")}
 	>
 		<Badge tone={(summary?.alerts.length ?? 0) > 0 ? 'warning' : 'success'} label="{summary?.alerts.length ?? 0} alerts" />
 	</PageHeader>
@@ -122,7 +124,7 @@
 
 	{#if !summary && error.includes('Akses platform')}
 		<div class="app-card mt-4 px-4 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke platform operations.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke platform operations.")}</p>
 		</div>
 	{:else if summary}
 		<div class="mt-4 flex flex-wrap gap-2">
@@ -154,8 +156,8 @@
 					{/each}
 				{:else}
 					<div class="app-card px-4 py-12 text-center">
-						<h2 class="text-base font-semibold">Tidak ada alert aktif</h2>
-						<p class="mt-1 text-sm text-muted-foreground">Control plane tidak mendeteksi kondisi yang memerlukan tindakan.</p>
+						<h2 class="text-base font-semibold">{tr("Tidak ada alert aktif")}</h2>
+						<p class="mt-1 text-sm text-muted-foreground">{tr("Control plane tidak mendeteksi kondisi yang memerlukan tindakan.")}</p>
 					</div>
 				{/if}
 			</div>
@@ -186,7 +188,7 @@
 					</tbody>
 				</table>
 				{#if batches.length === 0}
-					<p class="px-4 py-10 text-center text-sm text-muted-foreground">Tidak ada batch yang sedang berjalan.</p>
+					<p class="px-4 py-10 text-center text-sm text-muted-foreground">{tr("Tidak ada batch yang sedang berjalan.")}</p>
 				{/if}
 			</div>
 			<Pagination total={batches.length} limit={PAGE_SIZE} offset={batchOffset} onChange={(v) => (batchOffset = v)} />

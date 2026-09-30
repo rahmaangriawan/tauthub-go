@@ -1,19 +1,25 @@
 <script lang="ts">
+	import LangSelector from '$lib/components/lang-selector.svelte';
+	import { getI18n } from '$lib/i18n/i18n.svelte';
+
+	import { tr } from '$lib/i18n/phrases';
+
 	// Shell mitra — parity components/shells/product-shell.tsx (cabang partner)
 	// dengan metrik product-shell.module.css yang sama seperti shell klien:
 	// sidebar 264px (inner 16/10/12), nav item min-height 40px TANPA margin,
 	// label grup 8/10/5, topbar 64px padding 0 28px, konten 32/28/64.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import {
-		Bell, ChevronDown, Coins, Gauge, House, Link2, Newspaper, PlugZap,
-		Receipt, ScrollText, Server, Settings, Share2, ShieldCheck, TriangleAlert,
-		UserCircle, Wallet
-	} from '@lucide/svelte';
+		import {
+			Bell, ChevronDown, Coins, Gauge, Gift, House, Link2, Newspaper, PlugZap,
+			Receipt, ScrollText, Server, Settings, ShieldCheck, TriangleAlert,
+			UserCircle, Wallet
+		} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { swr } from '$lib/swr-cache.svelte';
 	import { setPartnerUrlId } from '$lib/partner-url.svelte';
 	import AppShell from '$lib/components/app-shell.svelte';
+import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	import AccountDropdown from '$lib/components/account-dropdown.svelte';
 	import NotificationBell from '$lib/components/notification-bell.svelte';
 
@@ -21,6 +27,7 @@
 
 	const partnerId = $derived(page.params.partnerId as string);
 	const pathname = $derived(page.url.pathname);
+	const i18n = $derived(getI18n());
 
 	let user = $state<{ id: string; email: string; display_name: string; role?: string } | null>(null);
 
@@ -80,44 +87,50 @@
 	const isVip = $derived(Boolean(vip.data?.hasVip ?? vip.data?.isVip));
 	const saldo = $derived(earnings.data?.summary?.settled ?? 0);
 
+	/**
+	 * Menu aktif hanya bila path persis sama atau berada DI BAWAH href-nya.
+	 * Pencocokan per segmen, bukan substring: dengan `pathname.includes`,
+	 * `/vip-dashboard` ikut menyalakan menu `/vip`.
+	 */
+	const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 	const groups = $derived([
 		{
-			label: 'RINGKASAN',
+			label: i18n.t.nav_partner.group_summary,
 			items: [
-				{ label: 'Ringkasan', href: base, icon: House, active: pathname === base },
-				...(isVip ? [{ label: 'VIP Dashboard', href: `${base}/vip`, icon: ShieldCheck, active: pathname.includes('/vip') }] : [])
+				{ label: i18n.t.nav_partner.overview, href: base, icon: House, active: pathname === base },
+				...(isVip ? [{ label: i18n.t.nav_partner.vip_dashboard, href: `${base}/vip`, icon: ShieldCheck, active: isActive(`${base}/vip`) }] : [])
 			]
 		},
 		{
-			label: 'MEDIA & PUBLIKASI',
+			label: i18n.t.nav_partner.group_media,
 			items: [
-				{ label: 'Publikasi', href: `${base}/publications`, icon: Newspaper, active: pathname.includes('/publications') },
-				{ label: 'Daftar Media', href: `${base}/media`, icon: ScrollText, active: pathname.includes('/media') },
-				{ label: 'Pelacak 404', href: `${base}/link-monitor`, icon: TriangleAlert, active: pathname.includes('/link-monitor') },
-				{ label: 'Akses Crawler', href: `${base}/crawler`, icon: Server, active: pathname.includes('/crawler') }
+				{ label: tr('Publikasi'), href: `${base}/publications`, icon: Newspaper, active: isActive(`${base}/publications`) },
+				{ label: tr('Daftar Media'), href: `${base}/media`, icon: ScrollText, active: isActive(`${base}/media`) },
+				{ label: i18n.t.nav_partner.link_monitor, href: `${base}/link-monitor`, icon: TriangleAlert, active: isActive(`${base}/link-monitor`) },
+				{ label: i18n.t.nav_partner.crawler, href: `${base}/crawler`, icon: Server, active: isActive(`${base}/crawler`) }
 			]
 		},
 		{
-			label: 'PERALATAN',
-			items: [{ label: 'SEO & Performa', href: `${base}/seo-tool`, icon: Gauge, active: pathname.includes('/seo-tool') }]
+			label: i18n.t.nav_partner.group_tools,
+			items: [{ label: i18n.t.nav_partner.seo_tool, href: `${base}/seo-tool`, icon: Gauge, active: isActive(`${base}/seo-tool`) }]
 		},
 		{
-			label: 'REFERRAL',
-			items: [{ label: 'Referral Mitra', href: `${base}/referral`, icon: Share2, active: pathname.includes('/referral') }]
+			label: i18n.t.nav_partner.group_referral,
+			items: [{ label: tr('Referral Mitra'), href: `${base}/referral`, icon: Gift, active: isActive(`${base}/referral`) }]
 		},
 		{
-			label: 'KEUANGAN',
+			label: i18n.t.nav_partner.group_finance,
 			items: [
-				{ label: 'Penghasilan', href: `${base}/earnings`, icon: Wallet, active: pathname.includes('/earnings') },
-				{ label: 'Invoice', href: `${base}/settlements`, icon: Receipt, active: pathname.includes('/settlements') }
+				{ label: tr('Penghasilan'), href: `${base}/earnings`, icon: Wallet, active: isActive(`${base}/earnings`) },
+				{ label: i18n.t.nav_partner.settlements, href: `${base}/settlements`, icon: Receipt, active: isActive(`${base}/settlements`) }
 			]
 		},
 		{
-			label: 'PENGATURAN',
+			label: i18n.t.nav_partner.group_settings,
 			items: [
-				{ label: 'Integrasi', href: `${base}/integrations`, icon: PlugZap, active: pathname.includes('/integrations') },
-				{ label: 'Konfigurasi', href: `${base}/profile`, icon: Settings, active: pathname.includes('/profile') },
-				{ label: 'Notifikasi', href: `${base}/notifications`, icon: Bell, active: pathname.includes('/notifications') }
+				{ label: i18n.t.nav_partner.integrations, href: `${base}/integrations`, icon: PlugZap, active: isActive(`${base}/integrations`) },
+				{ label: i18n.t.nav_partner.profile, href: `${base}/profile`, icon: Settings, active: isActive(`${base}/profile`) },
+				{ label: i18n.t.nav_partner.notifications, href: `${base}/notifications`, icon: Bell, active: isActive(`${base}/notifications`) }
 			]
 		}
 	]);
@@ -141,16 +154,16 @@
 			{/if}
 		{/snippet}
 
-	{#snippet toolbar()}
-		<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label="Pilih bahasa">
-			<span>🇮🇩</span> <span class="app-lang-label">Indonesia</span> <ChevronDown size={14} />
-		</button>
-		<a href={`${base}/earnings`} class="app-credit-pill">
-			<Coins size={15} />
-			<strong>{saldo.toLocaleString('id-ID')} Saldo</strong>
-		</a>
-		<NotificationBell apiBase="/v1/partner" fallbackBase={base} />
-	{/snippet}
+		{#snippet toolbar()}
+			<LangSelector />
+			<a href={`${base}/earnings`} class="app-credit-pill app-earnings-pill">
+				<Coins size={15} />
+				<strong>Rp{saldo.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}</strong>
+			</a>
+			<NotificationBell apiBase="/v1/partner" fallbackBase={base} showAnnouncementTab />
+		{/snippet}
 
 	{@render children()}
+	<AnnouncementPopup />
+
 </AppShell>

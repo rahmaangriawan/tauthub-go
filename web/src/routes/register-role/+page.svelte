@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// /register-role tetap ada agar tautan lama tidak mati (R-24). Halaman ini
 	// sekarang memakai panel auth yang sama, dimulai pada mode Daftar.
 	import { goto } from '$app/navigation';
@@ -16,7 +18,7 @@
 </script>
 
 <svelte:head>
-	<title>Daftar · Tauthub</title>
+	<title>{tr("Daftar · Tauthub")}</title>
 </svelte:head>
 
 <AuthShell>

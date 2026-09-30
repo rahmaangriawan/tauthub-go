@@ -697,9 +697,14 @@ func (d *Deps) PublicationRequestRevision(w http.ResponseWriter, r *http.Request
 			documentVersion = int(f)
 		}
 	}
+	featuredImageURL, err := optionalString(body, "featuredImageUrl", 500)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
 
 	publication, err := d.queryRow(r.Context(), `
-		SELECT p.id, p.document_id, m.name AS media_name,
+		SELECT p.id, p.status, p.document_id, m.name AS media_name,
 		       d.current_version,
 		       prt.id AS partner_id, prt.public_id AS partner_public_id,
 		       prt.user_id AS partner_user_id
@@ -738,6 +743,28 @@ func (d *Deps) PublicationRequestRevision(w http.ResponseWriter, r *http.Request
 		return
 	}
 	mediaName := publication.strOr("media_name", "media")
+	pubStatus := publication.strOr("status", "")
+	// Publikasi yang sudah tayang dipindah ke status 'revision' supaya pemilik
+	// domain melihat permintaan ini dan memutuskan terima/tolak. Cover baru ikut
+	// disimpan karena CMS memakai publications.featured_image_url saat kirim ulang.
+	if pubStatus == "published" {
+		extra := map[string]any{}
+		if featuredImageURL != "" {
+			extra["featured_image_url"] = featuredImageURL
+		}
+		if err := d.transitionPublicationWith(r.Context(), publicationID, "revision", extra); err != nil {
+			d.writeErr(w, err)
+			return
+		}
+		pubStatus = "revision"
+	} else if featuredImageURL != "" {
+		if err := d.exec(r.Context(),
+			"UPDATE publications SET featured_image_url = $1, updated_at = NOW() WHERE id = $2",
+			featuredImageURL, publicationID); err != nil {
+			d.writeErr(w, err)
+			return
+		}
+	}
 	partnerUserID := publication.strOr("partner_user_id", "")
 	partnerSlug := publication.strOr("partner_public_id", publication.strOr("partner_id", ""))
 	title := "Revisi artikel dari klien"
@@ -754,6 +781,7 @@ func (d *Deps) PublicationRequestRevision(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "publication_id": publicationID, "version": version,
 		"notified_partner": partnerUserID != "",
+		"status":           pubStatus,
 	})
 }
 

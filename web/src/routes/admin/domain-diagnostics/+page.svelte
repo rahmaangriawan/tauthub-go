@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Diagnostik Verifikasi Domain — menjawab "kenapa media ini gagal verifikasi"
 	// dari sisi admin. Port apps/web/src/app/admin/domain-diagnostics/page.tsx.
 	import { onMount } from 'svelte';
@@ -53,14 +55,14 @@
 	 * Bagian mana yang gagal → kalimat + saran tindakan. Ini yang membuat
 	 * diagnostik bisa ditindaklanjuti.
 	 */
-	const STAGE_META: Record<string, { label: string; hint: string }> = {
+	const STAGE_META: Record<string, { label: string; hint: string }> = $derived({
 		no_website: { label: 'Alamat kosong', hint: 'Media belum mengisi Website/Domain. Minta mitra melengkapinya.' },
 		dns: {
-			label: 'Gagal di DNS',
+			label: tr('Gagal di DNS'),
 			hint: 'Nama domain tidak bisa diterjemahkan ke IP. Domain salah ketik, kedaluwarsa, atau DNS-nya bermasalah.'
 		},
 		connect: {
-			label: 'Gagal menyambung',
+			label: tr('Gagal menyambung'),
 			hint: 'Alamat ketemu tapi koneksi/TLS tidak terbentuk. Situs mati, port tertutup, atau koneksi server diblokir.'
 		},
 		http: {
@@ -68,12 +70,12 @@
 			hint: 'Tersambung, tapi server mitra membalas error. Sering 403 dari Cloudflare/WAF yang memblokir akses dari IP server.'
 		},
 		bot_challenge: {
-			label: 'Halaman challenge bot',
+			label: tr('Halaman challenge bot'),
 			hint: 'WAF mengirim halaman verifikasi bot, bukan isi situs. Akses dari IP server ditantang.'
 		},
 		token: { label: 'Kode verifikasi', hint: 'Halaman terbaca normal. Masalahnya di kode: belum dipasang, atau masih kode lama.' },
-		ok: { label: 'Berhasil', hint: 'Kode ditemukan di halaman.' }
-	};
+		ok: { label: tr('Berhasil'), hint: 'Kode ditemukan di halaman.' }
+	});
 
 	let rows = $state<DiagnosticRow[]>([]);
 	let summary = $state<Summary | null>(null);
@@ -167,13 +169,13 @@
 		{#if meta}
 			<Badge tone={meta.tone} label={meta.label} />
 		{:else}
-			<Badge tone="neutral" label="Belum pernah dicek" />
+			<Badge tone="neutral" label={tr("Belum pernah dicek")} />
 		{/if}
 		{#if stage}
-			<p class="mt-1 text-xs text-muted-foreground" title={stage.hint}>Gagal di: <strong>{stage.label}</strong></p>
+			<p class="mt-1 text-xs text-muted-foreground" title={stage.hint}>{tr("Gagal di:")}<strong>{stage.label}</strong></p>
 		{/if}
 		{#if row.domain_check_fail_count > 0}
-			<p class="mt-1 text-xs text-muted-foreground">Gagal {row.domain_check_fail_count}× berturut-turut</p>
+			<p class="mt-1 text-xs text-muted-foreground">{tr("Gagal")} {row.domain_check_fail_count}× berturut-turut</p>
 		{/if}
 	</div>
 {/snippet}
@@ -220,7 +222,7 @@
 <section class="w-full">
 	<PageHeader
 		title="Diagnostik Verifikasi Domain"
-		description="Sebab kegagalan verifikasi domain mitra, tersimpan dari hasil pengecekan terakhir. Pakai ini untuk membedakan situs yang mati, situs yang diblokir, dan kode verifikasi yang salah tempel. Default hanya menampilkan domain yang belum terverifikasi."
+		description={tr("Sebab kegagalan verifikasi domain mitra, tersimpan dari hasil pengecekan terakhir. Pakai ini untuk membedakan situs yang mati, situs yang diblokir, dan kode verifikasi yang salah tempel. Default hanya menampilkan domain yang belum terverifikasi.")}
 	>
 		<button class="app-btn app-btn-soft" onclick={load} disabled={loading}>
 			<RefreshCw size={15} /> Segarkan
@@ -229,7 +231,7 @@
 
 	{#if summary}
 		<div class="mt-4 flex flex-wrap gap-3">
-			{#each [['unreachable', 'Situs tak terjangkau'], ['token_mismatch', 'Kode lama terpasang'], ['token_not_found', 'Kode tidak ditemukan'], ['never_checked', 'Belum pernah dicek']] as [key, label] (key)}
+			{#each [['unreachable', 'Situs tak terjangkau'], ['token_mismatch', 'Kode lama terpasang'], ['token_not_found', 'Kode tidak ditemukan'], ['never_checked', tr('Belum pernah dicek')]] as [key, label] (key)}
 				<div class="app-card min-w-[190px] p-3">
 					<p class="text-xs text-muted-foreground">{label}</p>
 					<p class="text-2xl font-bold">{summary[key as keyof Summary]}</p>
@@ -260,12 +262,12 @@
 			/>
 		</label>
 		<label class="block min-w-[240px] flex-1">
-			<span class="mb-1 block text-xs text-muted-foreground">Cari media, domain, atau mitra</span>
+			<span class="mb-1 block text-xs text-muted-foreground">{tr("Cari media, domain, atau mitra")}</span>
 			<span class="app-input flex items-center gap-2 !py-1.5">
 				<Search size={15} class="text-muted-foreground" />
 				<input
 					class="w-full bg-transparent text-sm outline-none"
-					placeholder="mis. tauthub.com"
+					placeholder={tr("mis. tauthub.com")}
 					bind:value={query}
 					onkeydown={(e) => {
 						if (e.key === 'Enter') {
@@ -291,29 +293,27 @@
 
 	{#if showAccess}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke diagnostik domain.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke diagnostik domain.")}</p>
 		</div>
 	{:else if loading && rows.length === 0}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat diagnostik…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat diagnostik…")}</p>
 	{:else if rows.length === 0}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">
-				Tidak ada domain yang perlu perhatian. Semua media mitra yang punya website sudah terverifikasi.
-			</p>
+			<p class="text-sm text-muted-foreground">{tr("Tidak ada domain yang perlu perhatian. Semua media mitra yang punya website sudah terverifikasi.")}</p>
 		</div>
 	{:else}
 		<DataTable
 			columns={[
-				{ key: 'media', label: 'Media', render: mediaCell },
-				{ key: 'partner', label: 'Mitra', render: partnerCell },
+				{ key: 'media', label: tr('Media'), render: mediaCell },
+				{ key: 'partner', label: tr('Mitra'), render: partnerCell },
 				{ key: 'reason', label: 'Sebab terakhir', render: reasonCell },
-				{ key: 'error', label: 'Detail error', render: errorDetailCell },
+				{ key: 'error', label: tr('Detail error'), render: errorDetailCell },
 				{ key: 'checked', label: 'Dicek', render: checkedCell },
 				{ key: 'actions', label: 'Aksi', render: recheckCell }
 			]}
 			rows={pageRows}
 			rowKey={(row: DiagnosticRow) => row.media_id}
-			empty="Tidak ada domain yang perlu perhatian."
+			empty={tr("Tidak ada domain yang perlu perhatian.")}
 			minWidth="1200px"
 		/>
 		<Pagination
@@ -325,8 +325,5 @@
 	{/if}
 
 	<p class="mt-4 flex items-start gap-1.5 text-xs text-muted-foreground">
-		<TriangleAlert size={13} class="mt-0.5 shrink-0" />
-		Sebab berasal dari pengecekan terakhir (manual oleh mitra, admin, atau sweep mingguan). Tombol Cek Ulang memeriksa saat
-		itu juga tanpa menunggu jadwal.
-	</p>
+		<TriangleAlert size={13} class="mt-0.5 shrink-0" />{tr("Sebab berasal dari pengecekan terakhir (manual oleh mitra, admin, atau sweep mingguan). Tombol Cek Ulang memeriksa saat itu juga tanpa menunggu jadwal.")}</p>
 </section>

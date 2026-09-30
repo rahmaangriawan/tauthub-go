@@ -1298,7 +1298,8 @@ const opNotificationWindow = "NOW() - INTERVAL '24 hours'"
 
 // OperationsNotifications: GET /v1/platform/operations/notifications
 func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := d.adminGuard(w, r, ""); !ok {
+	user, _, ok := d.adminGuard(w, r, "")
+	if !ok {
 		return
 	}
 	ctx := r.Context()
@@ -1419,6 +1420,24 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 		items = append(items, opNotifItem{
 			ID: "queue-" + row.strOr("id", ""), Type: "queue.failed", Title: "Queue job gagal",
 			Body: body, Link: "/admin/operations", ReadAt: nil, CreatedAt: row.strOr("updated_at", ""),
+		})
+	}
+	// Pengumuman broadcast (announcement.*) ditujukan ke admin ini lewat tabel
+	// notifications — diselipkan ke feed supaya admin melihatnya di lonceng.
+	announcements, err := d.queryRows(ctx,
+		`SELECT id, title, body, created_at FROM notifications
+		 WHERE user_id = $1 AND type LIKE 'announcement%' AND created_at > `+opNotificationWindow+`
+		 ORDER BY created_at DESC LIMIT 20`, user.ID)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	for _, raw := range announcements {
+		row := ptRow(ptNormalizeMap(raw))
+		items = append(items, opNotifItem{
+			ID: "ann-" + row.strOr("id", ""), Type: row.strOr("type", "announcement.new"),
+			Title: row.strOr("title", ""), Body: row.strOr("body", ""),
+			Link: "/admin/pengumuman", ReadAt: nil, CreatedAt: row.strOr("created_at", ""),
 		})
 	}
 	sortNotificationsDesc(items)

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port app/docs/page.tsx + docs-content.tsx — dokumentasi publik API Web Custom
 	// (kontrak push artikel, verifikasi HMAC, contoh implementasi).
 	import { Copy, Check } from '@lucide/svelte';
@@ -161,46 +163,46 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, remote_id: "post-" + document?.id });
 }`;
 
-	const EXAMPLES = [
+	const EXAMPLES = $derived([
 		{ key: 'node', label: 'Node.js / Express', code: EXPRESS_EXAMPLE },
 		{ key: 'php', label: 'PHP / Laravel', code: LARAVEL_EXAMPLE },
 		{ key: 'next', label: 'Next.js Route', code: NEXTJS_EXAMPLE }
-	];
+	]);
 	let tab = $state<'node' | 'php' | 'next'>('node');
 	const activeExample = $derived(EXAMPLES.find((e) => e.key === tab) ?? EXAMPLES[0]);
 
-	const HEADERS = [
-		['POST {base_url}', 'Method dan URL yang Anda daftarkan di Integrations'],
+	const HEADERS = $derived([
+		['POST {base_url}', tr('Method dan URL yang Anda daftarkan di Integrations')],
 		['Content-Type: application/json', 'Body selalu JSON'],
 		['x-tulisio-event', 'content.delivered | content.ping'],
-		['x-tulisio-event-id', 'UUID unik per event — untuk idempotency'],
+		['x-tulisio-event-id', tr('UUID unik per event — untuk idempotency')],
 		['x-tulisio-timestamp', 'ISO-8601 waktu pengiriman'],
 		['x-tulisio-signature', 'sha256=hex — HMAC-SHA256, lihat bagian 5']
-	];
-	const RESPONSES = [
-		['200', '{ "ok": true }', 'Berhasil — Tauthub menandai completed'],
-		['200', '{ "ok": true, "remote_id": "post-123" }', 'Berhasil + id artikel di sistem Anda'],
+	]);
+	const RESPONSES = $derived([
+		['200', '{ "ok": true }', tr('Berhasil — Tauthub menandai completed')],
+		['200', '{ "ok": true, "remote_id": "post-123" }', tr('Berhasil + id artikel di sistem Anda')],
 		['4xx', '{ "ok": false }', 'Request ditolak — tidak di-retry, cek error_message'],
 		['5xx / timeout', '—', 'Akan di-retry otomatis (lihat bagian 6)']
-	];
-	const VERIFY_STEPS = [
+	]);
+	const VERIFY_STEPS = $derived([
 		['1', 'Baca raw body mentah (sebelum parse JSON)'],
-		['2', 'Cek x-tulisio-timestamp — tolak bila drift lebih dari 5 menit'],
+		['2', tr('Cek x-tulisio-timestamp — tolak bila drift lebih dari 5 menit')],
 		['3', 'Hitung HMAC dengan rumus di atas lalu bandingkan dengan x-tulisio-signature memakai timing-safe compare'],
 		['4', 'Cek x-tulisio-event-id belum pernah diproses (idempotency)']
-	];
-	const RETRY = [
+	]);
+	const RETRY = $derived([
 		['200 + ok:true', 'Sukses, tidak ada pengiriman ulang'],
-		['4xx', 'Gagal permanen — tidak di-retry, status failed di platform'],
+		['4xx', tr('Gagal permanen — tidak di-retry, status failed di platform')],
 		['5xx / timeout / network', 'Retry hingga 3x dengan jeda 1 menit, 5 menit, 15 menit'],
-		['Retry', 'Mengirim event_id yang SAMA — Anda wajib dedupe agar tidak ada artikel ganda']
-	];
-	const ERRORS = [
-		['200', 'Berhasil — respons harus { ok: true }'],
+		['Retry', tr('Mengirim event_id yang SAMA — Anda wajib dedupe agar tidak ada artikel ganda')]
+	]);
+	const ERRORS = $derived([
+		['200', tr('Berhasil — respons harus { ok: true }')],
 		['401', 'Signature/timestamp tidak valid — periksa secret dan waktu server'],
 		['422', 'Payload tidak sesuai kontrak'],
-		['500', 'Kesalahan internal Tauthub — akan di-retry']
-	];
+		['500', tr('Kesalahan internal Tauthub — akan di-retry')]
+	]);
 </script>
 
 <svelte:head>
@@ -218,38 +220,25 @@ export async function POST(request: Request) {
 			<a href="/" class="text-lg font-extrabold tracking-tight">
 				tauthub<span style="color: var(--primary);">.</span>
 			</a>
-			<a class="text-sm font-medium" style="color: var(--primary);" href="/register/mitra">Daftar Mitra</a>
+			<a class="text-sm font-medium" style="color: var(--primary);" href="/register/mitra">{tr("Daftar Mitra")}</a>
 		</div>
 	</header>
 
 	<main class="mx-auto max-w-3xl px-4 pb-24 pt-10 sm:px-6">
 		<div class="text-xs font-semibold uppercase tracking-widest" style="color: var(--primary);">Dokumentasi Integrasi</div>
-		<h1 class="mt-2 text-3xl font-bold text-gray-900">Web Custom API — Push Artikel ke Website Anda</h1>
-		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">
-			Tauthub mengirim artikel hasil generate ke website custom Anda melalui endpoint yang Anda buat. Anda hanya
-			perlu membuat satu endpoint
-			<code class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[13px] text-gray-800">POST</code>
-			di aplikasi Anda, lalu hubungkan di halaman <strong>Integrations</strong> platform Tauthub.
+		<h1 class="mt-2 text-3xl font-bold text-gray-900">{tr("Web Custom API — Push Artikel ke Website Anda")}</h1>
+		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">{tr("Tauthub mengirim artikel hasil generate ke website custom Anda melalui endpoint yang Anda buat. Anda hanya perlu membuat satu endpoint")}<code class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[13px] text-gray-800">POST</code>{tr("di aplikasi Anda, lalu hubungkan di halaman")}<strong>Integrations</strong> platform Tauthub.
 		</p>
 
 		<h2 class="mt-12 text-xl font-semibold text-gray-900">1. Konsep</h2>
 		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">
-			Ketika pengguna menekan <strong>Kirim ke Web Custom</strong>, Tauthub mengirim <code>content.delivered</code>
-			ke endpoint Anda. Artikel selalu dikirim sebagai <strong>draft</strong> — keputusan publish final ada di
-			website Anda. Setiap request ditandatangani dengan HMAC-SHA256 agar Anda yakin bahwa request benar-benar
-			berasal dari Tauthub.
-		</p>
+			Ketika pengguna menekan <strong>{tr("Kirim ke Web Custom")}</strong>, Tauthub mengirim <code>content.delivered</code>{tr("ke endpoint Anda. Artikel selalu dikirim sebagai")}<strong>draft</strong>{tr("— keputusan publish final ada di website Anda. Setiap request ditandatangani dengan HMAC-SHA256 agar Anda yakin bahwa request benar-benar berasal dari Tauthub.")}</p>
 
 		<h2 class="mt-12 text-xl font-semibold text-gray-900">2. Persiapan</h2>
-		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">
-			Pemilik akun Tauthub memberi Anda dua hal: <strong>Endpoint URL</strong> (contoh
-			<code class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[13px] text-gray-800">https://web-anda.example/api/tauthub/content</code>)
-			dan <strong>Shared Secret</strong>. Simpan secret di environment variable
-			<code class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[13px] text-gray-800">TULISIO_SECRET</code>
-			atau field konfigurasi aplikasi Anda. Jangan pernah menulis secret di kode atau commit ke repository publik.
-		</p>
+		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">{tr("Pemilik akun Tauthub memberi Anda dua hal:")}<strong>Endpoint URL</strong> (contoh
+			<code class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[13px] text-gray-800">https://web-anda.example/api/tauthub/content</code>{tr(") dan")}<strong>Shared Secret</strong>{tr(". Simpan secret di environment variable")}<code class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[13px] text-gray-800">TULISIO_SECRET</code>{tr("atau field konfigurasi aplikasi Anda. Jangan pernah menulis secret di kode atau commit ke repository publik.")}</p>
 
-		<h2 class="mt-12 text-xl font-semibold text-gray-900">3. Endpoint yang Harus Dibuat</h2>
+		<h2 class="mt-12 text-xl font-semibold text-gray-900">{tr("3. Endpoint yang Harus Dibuat")}</h2>
 		<div class="my-4 overflow-x-auto rounded-xl border border-gray-200">
 			<table class="w-full border-collapse text-left text-sm">
 				<thead>
@@ -268,7 +257,7 @@ export async function POST(request: Request) {
 				</tbody>
 			</table>
 		</div>
-		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">Respons yang diharapkan:</p>
+		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">{tr("Respons yang diharapkan:")}</p>
 		<div class="my-4 overflow-x-auto rounded-xl border border-gray-200">
 			<table class="w-full border-collapse text-left text-sm">
 				<thead>
@@ -292,9 +281,7 @@ export async function POST(request: Request) {
 
 		<h2 class="mt-12 text-xl font-semibold text-gray-900">4. Payload</h2>
 		<h3 class="mt-8 text-base font-semibold text-gray-900">content.ping (uji koneksi)</h3>
-		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">
-			Dikirim saat tombol <strong>Test</strong> ditekan di halaman Integrations. Balas dengan ok untuk lulus uji.
-		</p>
+		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">{tr("Dikirim saat tombol")}<strong>Test</strong>{tr("ditekan di halaman Integrations. Balas dengan ok untuk lulus uji.")}</p>
 		<div class="my-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-900">
 			<div class="flex items-center justify-between border-b border-gray-700/60 px-4 py-2">
 				<span class="font-mono text-xs text-gray-400">json</span>
@@ -316,7 +303,7 @@ export async function POST(request: Request) {
 			<pre class="overflow-x-auto p-4 font-mono text-[13px] leading-relaxed text-gray-100">{DELIVERED_PAYLOAD}</pre>
 		</div>
 
-		<h2 class="mt-12 text-xl font-semibold text-gray-900">5. Verifikasi Signature (Wajib)</h2>
+		<h2 class="mt-12 text-xl font-semibold text-gray-900">{tr("5. Verifikasi Signature (Wajib)")}</h2>
 		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">Rumus HMAC:</p>
 		<div class="my-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-900">
 			<div class="flex items-center justify-between border-b border-gray-700/60 px-4 py-2">
@@ -367,7 +354,7 @@ export async function POST(request: Request) {
 			<pre class="overflow-x-auto p-4 font-mono text-[13px] leading-relaxed text-gray-100">{activeExample.code}</pre>
 		</div>
 
-		<h2 class="mt-12 text-xl font-semibold text-gray-900">7. Retry dan Idempotency</h2>
+		<h2 class="mt-12 text-xl font-semibold text-gray-900">{tr("7. Retry dan Idempotency")}</h2>
 		<div class="my-4 overflow-x-auto rounded-xl border border-gray-200">
 			<table class="w-full border-collapse text-left text-sm">
 				<thead>
@@ -387,11 +374,9 @@ export async function POST(request: Request) {
 			</table>
 		</div>
 		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">
-			Karena retry memakai <code>event_id</code> yang sama, simpan daftar event_id yang sudah diproses (misalnya di
-			tabel database) dan langsung balas ok bila event_id sudah pernah diterima.
-		</p>
+			Karena retry memakai <code>event_id</code>{tr("yang sama, simpan daftar event_id yang sudah diproses (misalnya di tabel database) dan langsung balas ok bila event_id sudah pernah diterima.")}</p>
 
-		<h2 class="mt-12 text-xl font-semibold text-gray-900">8. Kode Status Kesalahan</h2>
+		<h2 class="mt-12 text-xl font-semibold text-gray-900">{tr("8. Kode Status Kesalahan")}</h2>
 		<div class="my-4 overflow-x-auto rounded-xl border border-gray-200">
 			<table class="w-full border-collapse text-left text-sm">
 				<thead>
@@ -412,16 +397,14 @@ export async function POST(request: Request) {
 		</div>
 
 		<h2 class="mt-12 text-xl font-semibold text-gray-900">9. FAQ</h2>
-		<h3 class="mt-8 text-base font-semibold text-gray-900">Apakah artikel bisa langsung publish?</h3>
-		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">Tidak di versi ini. Tauthub selalu mengirim draft; Anda yang memutuskan kapan mempublikasikannya.</p>
+		<h3 class="mt-8 text-base font-semibold text-gray-900">{tr("Apakah artikel bisa langsung publish?")}</h3>
+		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">{tr("Tidak di versi ini. Tauthub selalu mengirim draft; Anda yang memutuskan kapan mempublikasikannya.")}</p>
 		<h3 class="mt-8 text-base font-semibold text-gray-900">Secret saya bocor, bagaimana?</h3>
-		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">Hubungi pemilik akun Tauthub untuk mencabut koneksi dan membuat secret baru di halaman Integrations.</p>
+		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">{tr("Hubungi pemilik akun Tauthub untuk mencabut koneksi dan membuat secret baru di halaman Integrations.")}</p>
 		<h3 class="mt-8 text-base font-semibold text-gray-900">Bagaimana cara menguji koneksi?</h3>
 		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">
-			Di halaman Integrations, tekan tombol <strong>Test</strong> pada koneksi Web Custom Anda. Tauthub mengirim
-			<code>content.ping</code> dan menampilkan hasilnya.
-		</p>
-		<h3 class="mt-8 text-base font-semibold text-gray-900">Apakah Tauthub membaca data dari website saya?</h3>
-		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">Tidak. Arah integrasi satu arah: Tauthub hanya mengirim artikel ke endpoint Anda.</p>
+			Di halaman Integrations, tekan tombol <strong>Test</strong>{tr("pada koneksi Web Custom Anda. Tauthub mengirim")}<code>content.ping</code>{tr("dan menampilkan hasilnya.")}</p>
+		<h3 class="mt-8 text-base font-semibold text-gray-900">{tr("Apakah Tauthub membaca data dari website saya?")}</h3>
+		<p class="mt-3 text-[15px] leading-relaxed text-gray-600">{tr("Tidak. Arah integrasi satu arah: Tauthub hanya mengirim artikel ke endpoint Anda.")}</p>
 	</main>
 </div>

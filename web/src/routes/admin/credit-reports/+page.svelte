@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Laporan topup gagal — port app/admin/credit-reports/page.tsx: klien
 	// melaporkan topup gagal (pembayaran sukses tapi saldo TC tidak masuk).
 	// Admin review: setujui (tambah TC manual) atau tolak (wajib catatan).
@@ -23,9 +25,9 @@
 	};
 
 	const PAGE_SIZE = 20;
-	const STATUS_LABEL: Record<CreditReport['status'], string> = {
-		pending: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak'
-	};
+	const STATUS_LABEL: Record<CreditReport['status'], string> = $derived({
+		pending: tr('Menunggu'), approved: tr('Disetujui'), rejected: tr('Ditolak')
+	});
 	const STATUS_TONE: Record<CreditReport['status'], 'warning' | 'success' | 'danger'> = {
 		pending: 'warning', approved: 'success', rejected: 'danger'
 	};
@@ -107,29 +109,29 @@
 
 <section>
 	<PageHeader
-		title="Laporan Topup Gagal"
-		description="Klien melaporkan topup yang gagal (pembayaran sukses tapi saldo TC tidak masuk). Setujui untuk menambahkan TC manual ke wallet brand."
+		title={tr("Laporan Topup Gagal")}
+		description={tr("Klien melaporkan topup yang gagal (pembayaran sukses tapi saldo TC tidak masuk). Setujui untuk menambahkan TC manual ke wallet brand.")}
 	>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{total} laporan</span>
 	</PageHeader>
 
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke laporan topup.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke laporan topup.")}</p>
 		</div>
 	{:else}
 		<div class="mt-4 flex flex-wrap items-center gap-2">
 			<Select
 				ariaLabel="Status laporan"
 				minWidth={200}
-				placeholder="Semua status"
+				placeholder={tr("Semua status")}
 				value={statusFilter}
 				onchange={(v) => setStatusFilter(v)}
 				options={[
-					{ value: '', label: 'Semua status' },
-					{ value: 'pending', label: 'Menunggu' },
-					{ value: 'approved', label: 'Disetujui' },
-					{ value: 'rejected', label: 'Ditolak' }
+					{ value: '', label: tr('Semua status') },
+					{ value: 'pending', label: tr('Menunggu') },
+					{ value: 'approved', label: tr('Disetujui') },
+					{ value: 'rejected', label: tr('Ditolak') }
 				]}
 			/>
 			{#if statusFilter}
@@ -143,12 +145,12 @@
 			<table class="w-full text-sm" style="min-width: 1080px;">
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
-						<th class="px-4 py-2.5 font-medium">Klien</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Klien")}</th>
 						<th class="px-4 py-2.5 font-medium">Brand</th>
 						<th class="px-4 py-2.5 font-medium">Klaim TC</th>
 						<th class="px-4 py-2.5 font-medium">Referensi</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
-						<th class="px-4 py-2.5 font-medium">Dibuat</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Dibuat")}</th>
 						<th class="px-4 py-2.5"></th>
 					</tr>
 				</thead>
@@ -171,7 +173,7 @@
 								{#if row.status === 'pending'}
 									<button class="app-btn !min-h-7 !px-2.5 !text-xs" style="background-color: var(--accent); color: var(--accent-foreground);" type="button" onclick={() => { review = row; reviewNote = ''; reviewError = ''; }}>Review</button>
 								{:else}
-									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => { review = row; reviewNote = row.review_note ?? ''; reviewError = ''; }}>Detail</button>
+									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => { review = row; reviewNote = row.review_note ?? ''; reviewError = ''; }}>{tr("Detail")}</button>
 								{/if}
 							</td>
 						</tr>
@@ -181,7 +183,7 @@
 			{#if !loading && rows.length === 0}
 				<div class="flex flex-col items-center px-4 py-12 text-center">
 					<Coins size={26} class="text-muted-foreground" />
-					<p class="mt-2 text-sm text-muted-foreground">Belum ada laporan topup gagal.</p>
+					<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada laporan topup gagal.")}</p>
 				</div>
 			{/if}
 			<div class="px-4 pb-4">
@@ -203,7 +205,7 @@
 		maxWidth="lg"
 		onClose={() => (review = null)}
 	>
-		<p class="text-sm text-muted-foreground">{review.user_display_name ?? 'Klien'} — {review.brand_name ?? 'Brand'}</p>
+		<p class="text-sm text-muted-foreground">{review.user_display_name ?? tr('Klien')} — {review.brand_name ?? 'Brand'}</p>
 		<div class="mt-4 flex flex-col gap-3">
 			{#if review.status === 'pending' && reviewError}
 				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{reviewError}</div>
@@ -223,7 +225,7 @@
 				<p class="whitespace-pre-wrap text-sm">{review.description ?? '—'}</p>
 			</div>
 			<div>
-				<p class="text-xs font-bold text-muted-foreground">Saldo brand saat ini</p>
+				<p class="text-xs font-bold text-muted-foreground">{tr("Saldo brand saat ini")}</p>
 				<p class="text-sm">{fmtNum(review.available_tc)} TC tersedia</p>
 			</div>
 			{#if review.status !== 'pending'}
@@ -239,26 +241,26 @@
 				{/if}
 			{:else}
 				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Catatan (wajib saat menolak)</span>
+					<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Catatan (wajib saat menolak)")}</span>
 					<textarea
 						class="app-input w-full"
 						rows={3}
-						placeholder="cth: Terverifikasi — TC ditambahkan. / Data tidak cocok dengan transaksi."
+						placeholder={tr("cth: Terverifikasi — TC ditambahkan. / Data tidak cocok dengan transaksi.")}
 						value={reviewNote}
 						oninput={(e) => { reviewNote = (e.currentTarget as HTMLTextAreaElement).value; reviewError = ''; }}
 					></textarea>
-					<span class="mt-1 block text-xs text-muted-foreground">Catatan ini tampil untuk admin &amp; riwayat laporan.</span>
+					<span class="mt-1 block text-xs text-muted-foreground">{tr("Catatan ini tampil untuk admin & riwayat laporan.")}</span>
 				</label>
 			{/if}
 		</div>
 		{#snippet footer()}
 			{#if review?.status === 'pending'}
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (review = null)}>Batal</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (review = null)}>{tr("Batal")}</button>
 				<button class="app-btn app-btn-soft" style="color: var(--destructive);" type="button" disabled={busy} onclick={() => void submitReview('reject')}>
 					<XCircle size={15} />{busy ? 'Menyimpan…' : 'Tolak'}
 				</button>
 				<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void submitReview('approve')}>
-					<CircleCheck size={15} />{busy ? 'Menyimpan…' : 'Setujui & Tambah TC'}
+					<CircleCheck size={15} />{busy ? 'Menyimpan…' : tr('Setujui & Tambah TC')}
 				</button>
 			{/if}
 		{/snippet}

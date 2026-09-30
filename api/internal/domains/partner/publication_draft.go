@@ -11,6 +11,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/content"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/imageconvert"
 )
 
 // ---------- GET/PUT /v1/partner/publications/{publicationId}/draft ----------
@@ -31,7 +32,10 @@ func (d *Deps) PublicationDraft(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := publication.strOr("status", "")
-	if status != "published" && status != "waiting_partner" {
+	// `revision` ikut boleh dipratinjau supaya mitra bisa membaca versi revisi
+	// sebelum memutuskan terima/tolak. Jalur PUT tetap tertutup untuk status ini
+	// (lihat publicationDraftPut) agar editor mitra tidak menimpa revisi klien.
+	if status != "published" && status != "waiting_partner" && status != "revision" {
 		d.writeErr(w, errConflict("Preview hanya untuk artikel yang menunggu atau sudah terkirim ke media Anda."))
 		return
 	}
@@ -79,9 +83,9 @@ func (d *Deps) wpDraftPreview(r *http.Request, publicationID string, publication
 	featured := firstNonNilString(edits["featured_image_url"], publication.raw("featured_image_url"))
 	return map[string]any{
 		"title":              title,
-		"content_html":       contentHTML,
+		"content_html":       relSelfHTMLAny(contentHTML),
 		"meta_description":   metaDescription,
-		"featured_image_url": featured,
+		"featured_image_url": relSelfURLAny(featured),
 		"wp_status":          firstNonNilString(post["status"], "draft"),
 		"edited_at":          edits["edited_at"],
 		"source":             "wp_draft",
@@ -156,9 +160,9 @@ func (d *Deps) clientDocumentPreview(r *http.Request, publicationID string, publ
 	edits := d.partnerEdits(r.Context(), publicationID)
 	return map[string]any{
 		"title":              firstNonNilString(edits["title"], doc.raw("title"), ""),
-		"content_html":       firstNonNilString(edits["content_html"], html),
+		"content_html":       relSelfHTMLAny(firstNonNilString(edits["content_html"], html)),
 		"meta_description":   firstNonNilString(edits["meta_description"], doc.raw("meta_description")),
-		"featured_image_url": firstNonNilString(edits["featured_image_url"], publication.raw("featured_image_url")),
+		"featured_image_url": relSelfURLAny(firstNonNilString(edits["featured_image_url"], publication.raw("featured_image_url"))),
 		"wp_status":          "terbit",
 		"edited_at":          edits["edited_at"],
 		"source":             "client_document",
@@ -342,25 +346,27 @@ func (d *Deps) PublicationDraftImage(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Ukuran gambar maksimal 10 MB.")
 		return
 	}
-	ext := sanitizeExt(strings.ToLower(header.Filename), "png")
-	storageKey := uuid.NewString() + "." + ext
 	data, err := readAllLimited(file, maxBytes)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	compressed, compErr := compressImageIfNeeded(data, mime)
-	if compErr != nil {
-		compressed = data
+	// Selalu ke WebP (parity app lama); gagal → simpan byte asli.
+	payload := data
+	ext := sanitizeExt(strings.ToLower(header.Filename), "png")
+	if converted, ok := imageconvert.ConvertToWebP(data, mime); ok {
+		payload = converted
+		ext = "webp"
 	}
-	if err := d.saveUpload(storageKey, compressed); err != nil {
+	storageKey := uuid.NewString() + "." + ext
+	if err := d.saveUpload(storageKey, payload); err != nil {
 		d.writeErr(w, err)
 		return
 	}
 	d.auditLog(r.Context(), user.ID, "publication.partner_draft_image_uploaded", "publication", publicationID)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"url":        "/uploads/" + storageKey,
-		"size_bytes": len(compressed),
+		"size_bytes": len(payload),
 	})
 }
 

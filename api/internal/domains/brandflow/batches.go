@@ -382,14 +382,16 @@ func (d *Deps) BatchesCreate(w http.ResponseWriter, r *http.Request) {
 			websiteIDs = append(websiteIDs, s)
 		}
 	}
-	for _, siteID := range websiteIDs {
-		existing, err := d.queryRow(r.Context(),
-			"SELECT id FROM websites WHERE id = $1 AND brand_id = $2 LIMIT 1", siteID, brandRow.ID)
+	// Validasi seluruh website_id sekaligus (satu query) — perilakunya sama:
+	// ada satu saja yang bukan milik brand ini, permintaan ditolak 404.
+	if len(websiteIDs) > 0 {
+		found, err := d.queryRows(r.Context(),
+			"SELECT id FROM websites WHERE brand_id = $1 AND id = ANY($2)", brandRow.ID, websiteIDs)
 		if err != nil {
 			d.writeErr(w, err)
 			return
 		}
-		if existing == nil {
+		if len(found) != len(websiteIDs) {
 			httpx.Error(w, http.StatusNotFound, "Website not found")
 			return
 		}
@@ -530,19 +532,14 @@ func (d *Deps) BatchCancel(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
-	jobs, err := d.queryRows(r.Context(),
-		"SELECT job_id FROM content_batch_items WHERE batch_id = $1 AND job_id IS NOT NULL", batchID)
-	if err != nil {
+	// Batalkan seluruh job batch dalam satu UPDATE (sebelumnya satu query per job).
+	if err := d.exec(r.Context(), `
+		UPDATE content_jobs SET cancel_requested = TRUE, status = 'cancelled', current_step = 'cancelled'
+		WHERE status NOT IN ('completed','failed','cancelled')
+		  AND id IN (SELECT job_id FROM content_batch_items WHERE batch_id = $1 AND job_id IS NOT NULL)`,
+		batchID); err != nil {
 		d.writeErr(w, err)
 		return
-	}
-	for _, job := range jobs {
-		if err := d.exec(r.Context(),
-			"UPDATE content_jobs SET cancel_requested = TRUE, status = 'cancelled', current_step = 'cancelled' WHERE id = $1 AND status NOT IN ('completed','failed','cancelled')",
-			job.strOr("job_id", "")); err != nil {
-			d.writeErr(w, err)
-			return
-		}
 	}
 	updated, err := d.scopedBatch(r.Context(), brandRow.ID, batchID)
 	if err != nil {

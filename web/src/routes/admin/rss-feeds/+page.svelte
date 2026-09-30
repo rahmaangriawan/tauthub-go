@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// RSS Feeds — channel RSS pull per partner (Phase 4). Media feed wajib milik
 	// partner; token = otentikasi feed publik.
 	// Port apps/web/src/app/admin/rss-feeds/page.tsx.
@@ -37,11 +39,11 @@
 		pending: 'warning',
 		failed: 'danger'
 	};
-	const INSTALL_LABEL: Record<string, string> = {
+	const INSTALL_LABEL: Record<string, string> = $derived({
 		verified: 'Terpasang',
-		pending: 'Belum dipasang',
-		failed: 'Gagal'
-	};
+		pending: tr('Belum dipasang'),
+		failed: tr('Gagal')
+	});
 	type Partner = { id: string; name: string | null; email: string; status: string };
 	type Media = { id: string; name: string; partner_id: string | null; status: string };
 
@@ -210,23 +212,23 @@
 <section>
 	<PageHeader
 		title="RSS Feeds"
-		description="Channel RSS pull per partner (Phase 4). Media feed wajib milik partner; token = otentikasi feed publik."
+		description={tr("Channel RSS pull per partner (Phase 4). Media feed wajib milik partner; token = otentikasi feed publik.")}
 	>
 		<Badge tone="accent" value={`${total} feed`} />
-		<button class="app-btn app-btn-primary" onclick={() => (createOpen = true)}><Radio size={16} />Buat feed</button>
+		<button class="app-btn app-btn-primary" onclick={() => (createOpen = true)}><Radio size={16} />{tr("Buat feed")}</button>
 	</PageHeader>
 
 	<Feedback {loading} {error} />
 
 	{#if rows.length === 0 && error.includes('Akses platform')}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke RSS feeds.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke RSS feeds.")}</p>
 		</div>
 	{:else}
 		<DataTable
 			columns={[
 				{ key: 'feed', label: 'Feed', render: feedCell },
-				{ key: 'media', label: 'Media', render: mediaCell },
+				{ key: 'media', label: tr('Media'), render: mediaCell },
 				{ key: 'install', label: 'Pemasangan', render: installCell },
 				{ key: 'item', label: 'Item status', render: itemStatusCell },
 				{ key: 'path', label: 'Feed path', render: feedPathCell },
@@ -236,7 +238,7 @@
 			rows={rows}
 			rowKey={(row: Feed) => row.id}
 			{loading}
-			empty="Belum ada RSS feed."
+			empty={tr("Belum ada RSS feed.")}
 			minWidth="1100px"
 		/>
 
@@ -253,7 +255,7 @@
 </section>
 
 {#if createOpen}
-	<Modal title="Buat RSS feed" maxWidth="md" onClose={() => (createOpen = false)}>
+	<Modal title={tr("Buat RSS feed")} maxWidth="md" onClose={() => (createOpen = false)}>
 		<form class="space-y-3" onsubmit={create}>
 			<label class="block">
 				<span class="text-xs font-bold text-muted-foreground">Partner</span>
@@ -266,26 +268,26 @@
 						form.media_id = '';
 					}}
 					options={[
-						{ value: '', label: 'Pilih partner' },
+						{ value: '', label: tr('Pilih partner') },
 						...partners.map((p) => ({ value: p.id, label: p.name ?? p.email }))
 					]}
 				/>
 			</label>
 			<label class="block">
-				<span class="text-xs font-bold text-muted-foreground">Media partner (opsional)</span>
+				<span class="text-xs font-bold text-muted-foreground">{tr("Media partner (opsional)")}</span>
 				<Select
-					ariaLabel="Media partner"
+					ariaLabel={tr("Media partner")}
 					minWidth={240}
 					value={form.media_id}
 					onchange={(v) => (form.media_id = v)}
 					options={[
-						{ value: '', label: 'Semua media partner' },
+						{ value: '', label: tr('Semua media partner') },
 						...partnerMedia.map((m) => ({ value: m.id, label: m.name }))
 					]}
 				/>
 			</label>
 			<label class="block">
-				<span class="text-xs font-bold text-muted-foreground">Nama feed</span>
+				<span class="text-xs font-bold text-muted-foreground">{tr("Nama feed")}</span>
 				<input class="app-input mt-1 w-full" required placeholder="Feed MediaKita" bind:value={form.name} />
 			</label>
 			<label class="block">
@@ -305,8 +307,8 @@
 				<p class="text-sm" style="color: var(--destructive);">{error}</p>
 			{/if}
 			<div class="flex justify-end gap-2 border-t pt-4">
-				<button type="button" class="app-btn app-btn-soft" onclick={() => (createOpen = false)}>Batal</button>
-				<button type="submit" class="app-btn app-btn-primary" disabled={busy}>{busy ? 'Menyimpan…' : 'Buat feed'}</button>
+				<button type="button" class="app-btn app-btn-soft" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
+				<button type="submit" class="app-btn app-btn-primary" disabled={busy}>{busy ? 'Menyimpan…' : tr('Buat feed')}</button>
 			</div>
 		</form>
 	</Modal>

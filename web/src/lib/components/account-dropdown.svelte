@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Menu dropdown akun pada sidebar — port DropdownMenu accountTrigger
 	// dari Next.js product-shell.tsx.
 	// Menampilkan info user, link ke profil akun, alih dashboard/workspace (jika ada),
@@ -63,7 +65,7 @@
 		class="app-account-trigger"
 		onclick={() => (open = !open)}
 		aria-expanded={open}
-		aria-label="Buka menu akun"
+		aria-label={tr("Buka menu akun")}
 	>
 		<div
 			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground"
@@ -120,7 +122,7 @@
 				onclick={logout}
 			>
 				<LogOut size={16} />
-				<span>Keluar</span>
+				<span>{tr("Keluar")}</span>
 			</button>
 		</div>
 	{/if}

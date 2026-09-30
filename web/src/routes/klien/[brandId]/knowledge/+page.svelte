@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Knowledge Base — port knowledge-view.tsx: collections dengan statistik
 	// sumber, buka/tutup daftar sumber (paginasi 50), salin konten, upload file,
 	// crawl/re-crawl sitemap dengan polling status, hapus collection/source.
@@ -95,12 +97,12 @@
 		error = '';
 		try {
 			const res = await apiRequest(`/v1/brands/${brandId}/knowledge/collections?limit=200`);
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal memuat collections'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat collections')));
 			const data = (await res.json()) as Collection[];
 			collections = data;
 			void Promise.allSettled(data.map((c) => fetchSources(c.id)));
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Gagal memuat data knowledge';
+			error = e instanceof Error ? e.message : tr('Gagal memuat data knowledge');
 		} finally {
 			loading = false;
 		}
@@ -125,13 +127,13 @@
 				method: 'POST',
 				body: JSON.stringify({ name: newName.trim(), description: newDesc.trim() || null })
 			});
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal membuat collection'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal membuat collection')));
 			showDialog = false;
 			newName = '';
 			newDesc = '';
 			void loadCollections();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Gagal membuat collection';
+			error = e instanceof Error ? e.message : tr('Gagal membuat collection');
 		} finally {
 			creating = false;
 		}
@@ -146,7 +148,7 @@
 			sources = nextSources;
 			if (openCollection === id) openCollection = null;
 		} else {
-			error = await readApiError(res, 'Gagal menghapus collection');
+			error = await readApiError(res, tr('Gagal menghapus collection'));
 		}
 	}
 
@@ -155,7 +157,7 @@
 		if (res.ok) {
 			sources = { ...sources, [collectionId]: (sources[collectionId] ?? []).filter((s) => s.id !== sourceId) };
 		} else {
-			error = await readApiError(res, 'Gagal menghapus source');
+			error = await readApiError(res, tr('Gagal menghapus source'));
 		}
 	}
 
@@ -211,7 +213,7 @@
 	async function copyMarkdown(source: SourceItem) {
 		const res = await apiRequest(`/v1/brands/${brandId}/knowledge/sources/${source.id}/content`);
 		if (!res.ok) {
-			error = 'Gagal ambil konten';
+			error = tr('Gagal ambil konten');
 			return;
 		}
 		const data = (await res.json()) as { content?: string };
@@ -237,9 +239,7 @@
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
-				Kelola konten, artikel lama, dan sumber eksternal yang dipakai Tauthub saat menjawab atau menulis.
-			</p>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola konten, artikel lama, dan sumber eksternal yang dipakai Tauthub saat menjawab atau menulis.")}</p>
 		</div>
 		<button class="app-btn app-btn-primary" type="button" onclick={() => (showDialog = true)}><Plus size={14} /> Collection</button>
 	</header>
@@ -285,7 +285,7 @@
 								<button class="rounded-lg p-1.5 transition-colors hover:bg-secondary" title="Crawl sitemap" aria-label="Crawl sitemap" onclick={() => { sitemapCol = col.id; showSitemap = true; }}>
 									<List size={16} />
 								</button>
-								<button class="rounded-lg p-1.5 transition-colors hover:bg-secondary" title="Hapus collection" aria-label="Hapus collection" onclick={() => void deleteCollection(col.id)}>
+								<button class="rounded-lg p-1.5 transition-colors hover:bg-secondary" title={tr("Hapus collection")} aria-label={tr("Hapus collection")} onclick={() => void deleteCollection(col.id)}>
 									<Trash2 size={15} style="color: var(--destructive);" />
 								</button>
 							</div>
@@ -294,7 +294,7 @@
 						{#if openCollection === col.id}
 							<div class="mt-3.5">
 								{#if colSources.length === 0}
-									<p class="text-xs text-muted-foreground">Belum ada sumber di collection ini.</p>
+									<p class="text-xs text-muted-foreground">{tr("Belum ada sumber di collection ini.")}</p>
 								{:else}
 									<ul class="grid gap-2">
 										{#each colSources as s (s.id)}
@@ -311,7 +311,7 @@
 														<button class="rounded-lg p-1.5 transition-colors hover:bg-secondary" title="Salin konten teks" aria-label="Salin konten" type="button" onclick={() => void copyMarkdown(s)}>
 															{#if copied === s.id}<Check size={15} />{:else}<Copy size={15} />{/if}
 														</button>
-														<button class="rounded-lg p-1.5 transition-colors hover:bg-secondary" title="Hapus source" aria-label="Hapus sumber" type="button" onclick={() => void deleteSource(col.id, s.id)}>
+														<button class="rounded-lg p-1.5 transition-colors hover:bg-secondary" title={tr("Hapus source")} aria-label={tr("Hapus sumber")} type="button" onclick={() => void deleteSource(col.id, s.id)}>
 															<Trash2 size={14} style="color: var(--destructive);" />
 														</button>
 													</div>
@@ -329,7 +329,7 @@
 											onclick={() => void fetchSources(col.id, (sourcePage[col.id] ?? 0) - 1)}
 										><ChevronLeft size={13} /> Prev</button>
 										<span class="text-xs text-muted-foreground">
-											{Math.min((sourcePage[col.id] ?? 0) * 50 + 1, sourceTotal[col.id] ?? 0)}–{Math.min(((sourcePage[col.id] ?? 0) + 1) * 50, sourceTotal[col.id] ?? 0)} dari {sourceTotal[col.id] ?? 0}
+											{Math.min((sourcePage[col.id] ?? 0) * 50 + 1, sourceTotal[col.id] ?? 0)}–{Math.min(((sourcePage[col.id] ?? 0) + 1) * 50, sourceTotal[col.id] ?? 0)} {tr("dari")} {sourceTotal[col.id] ?? 0}
 										</span>
 										<button
 											class="app-btn app-btn-soft !min-h-8 !text-xs"
@@ -347,7 +347,7 @@
 				{#if collections.length === 0}
 					<div class="app-card flex flex-col items-center px-6 py-10 text-center">
 						<List size={28} class="text-muted-foreground" />
-						<p class="mt-2 text-sm text-muted-foreground">Belum ada collection. Bikin yang pertama di atas.</p>
+						<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada collection. Bikin yang pertama di atas.")}</p>
 					</div>
 				{/if}
 			</div>
@@ -365,7 +365,7 @@
 							onclick={() => { showUpload = true; uploadTargetCol = ''; }}
 						><Upload size={16} /> Upload teks</button>
 						{#if collections.length === 0}
-							<p class="text-xs text-muted-foreground">Buat collection dulu untuk mulai upload atau crawl.</p>
+							<p class="text-xs text-muted-foreground">{tr("Buat collection dulu untuk mulai upload atau crawl.")}</p>
 						{/if}
 					</div>
 				</section>
@@ -379,10 +379,10 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) showDialog = false; }}>
 		<div class="app-card w-full max-w-md p-5" role="dialog" aria-modal="true" aria-label="New Collection">
 			<h3 class="font-semibold">New Collection</h3>
-			<input class="app-input mt-3 w-full" placeholder="Nama collection" bind:value={newName} />
-			<textarea class="app-input mt-2 w-full" placeholder="Deskripsi (opsional)" rows={3} bind:value={newDesc}></textarea>
+			<input class="app-input mt-3 w-full" placeholder={tr("Nama collection")} bind:value={newName} />
+			<textarea class="app-input mt-2 w-full" placeholder={tr("Deskripsi (opsional)")} rows={3} bind:value={newDesc}></textarea>
 			<div class="mt-4 flex justify-end gap-2">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (showDialog = false)}>Batal</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (showDialog = false)}>{tr("Batal")}</button>
 				<button class="app-btn app-btn-primary" type="button" disabled={creating || !newName.trim()} onclick={() => void createCollection()}>
 					{creating ? 'Membuat…' : 'Buat'}
 				</button>
@@ -403,17 +403,17 @@
 						<Select
 							bind:value={uploadTargetCol}
 							ariaLabel="Collection"
-							placeholder="Pilih collection"
+							placeholder={tr("Pilih collection")}
 							minWidth={260}
 							options={[
-								{ value: '', label: 'Pilih collection' },
+								{ value: '', label: tr('Pilih collection') },
 								...collections.map((c) => ({ value: c.id, label: c.name }))
 							]}
 						/>
 					</div>
 				{/if}
 			</label>
-			<input class="app-input mt-2 w-full" placeholder="Judul" bind:value={uploadTitle} />
+			<input class="app-input mt-2 w-full" placeholder={tr("Judul")} bind:value={uploadTitle} />
 			<div class="mt-2">
 				<input
 					id="kb-file-upload"
@@ -427,17 +427,17 @@
 						<span class="flex items-center gap-2">
 							<span class="font-medium text-foreground">{uploadFile.name}</span>
 							<span>{(uploadFile.size / 1024).toFixed(1)} KB</span>
-							<button class="rounded p-0.5 hover:bg-secondary" type="button" title="Hapus file" onclick={(e) => { e.preventDefault(); uploadFile = null; }}><X size={14} /></button>
+							<button class="rounded p-0.5 hover:bg-secondary" type="button" title={tr("Hapus file")} onclick={(e) => { e.preventDefault(); uploadFile = null; }}><X size={14} /></button>
 						</span>
 					{:else}
 						<Upload size={16} />
-						<span>Pilih file atau drag &amp; drop</span>
+						<span>{tr("Pilih file atau drag & drop")}</span>
 						<small>.txt .md .html .json</small>
 					{/if}
 				</label>
 			</div>
 			<div class="mt-4 flex justify-end gap-2">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => { showUpload = false; uploadTitle = ''; uploadFile = null; uploadTargetCol = ''; }}>Batal</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => { showUpload = false; uploadTitle = ''; uploadFile = null; uploadTargetCol = ''; }}>{tr("Batal")}</button>
 				<button class="app-btn app-btn-primary" type="button" disabled={uploading || !uploadTitle.trim() || !uploadFile} onclick={() => void uploadManual()}>
 					{uploading ? 'Mengunggah…' : 'Upload'}
 				</button>
@@ -455,31 +455,28 @@
 				<button
 					class="rounded-lg p-1 transition-colors hover:bg-secondary"
 					type="button"
-					aria-label="Tutup"
+					aria-label={tr("Tutup")}
 					onclick={() => { showSitemap = false; crawlStatus = 'idle'; crawlRunId = null; void loadCollections(); }}
 				><X size={18} /></button>
 			</div>
-			<p class="mt-1 text-xs text-muted-foreground">
-				* Re-crawl akan otomatis menandai sumber lama yang sudah tidak ada di sitemap ini jadi
-				deprecated dan menambahkan yang baru.
-			</p>
+			<p class="mt-1 text-xs text-muted-foreground">{tr("* Re-crawl akan otomatis menandai sumber lama yang sudah tidak ada di sitemap ini jadi deprecated dan menambahkan yang baru.")}</p>
 
 			{#if crawlStatus === 'idle'}
 				<div class="mt-3">
 					<Select
 						bind:value={sitemapCol}
 						ariaLabel="Collection"
-						placeholder="Pilih collection"
+						placeholder={tr("Pilih collection")}
 						minWidth={260}
 						options={[
-							{ value: '', label: 'Pilih collection' },
+							{ value: '', label: tr('Pilih collection') },
 							...collections.map((c) => ({ value: c.id, label: c.name }))
 						]}
 					/>
 				</div>
 				<input class="app-input mt-2 w-full" placeholder="https://example.com/sitemap.xml" bind:value={sitemapUrl} />
 				<div class="mt-4 flex justify-end gap-2">
-					<button class="app-btn app-btn-soft" type="button" onclick={() => { showSitemap = false; sitemapUrl = ''; sitemapCol = ''; }}>Batal</button>
+					<button class="app-btn app-btn-soft" type="button" onclick={() => { showSitemap = false; sitemapUrl = ''; sitemapCol = ''; }}>{tr("Batal")}</button>
 					<button class="app-btn app-btn-primary" type="button" disabled={sitemapLoading || !sitemapUrl.trim() || !sitemapCol} onclick={() => void submitSitemap()}>
 						{sitemapLoading ? 'Menyiapkan…' : 'Crawl'}
 					</button>
@@ -488,7 +485,7 @@
 				<div class="mt-3 grid gap-3">
 					<p class="text-sm">
 						Status: <strong>
-							{crawlStatus === 'pending' ? 'Menunggu queue...' : crawlStatus === 'running' ? 'Sedang mengekstrak sitemap...' : crawlStatus === 'completed' ? 'Selesai!' : 'Gagal'}
+							{crawlStatus === 'pending' ? tr('Menunggu queue...') : crawlStatus === 'running' ? 'Sedang mengekstrak sitemap...' : crawlStatus === 'completed' ? 'Selesai!' : tr('Gagal')}
 						</strong>
 					</p>
 					{#if crawlStatus === 'running' || crawlStatus === 'completed'}

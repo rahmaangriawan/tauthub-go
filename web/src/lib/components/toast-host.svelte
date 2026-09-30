@@ -1,16 +1,23 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port components/toast-host.tsx — satu toast, kanan-bawah, auto tutup 3,5s.
 	import { CheckCircle, XCircle, X } from '@lucide/svelte';
 	import { TOAST_EVENT, type ToastDetail } from '$lib/auth';
 
 	let toast = $state<ToastDetail | null>(null);
+	// Penanda urutan toast (non-reaktif). Membandingkan `toast` (proxy $state)
+	// dengan objek `detail` mentah memakai === tidak pernah cocok, jadi auto-tutup
+	// memakai nomor urut: toast lama tidak menutup toast yang lebih baru.
+	let toastSeq = 0;
 
 	$effect(() => {
 		const onToast = (event: Event) => {
 			const detail = (event as CustomEvent<ToastDetail>).detail;
+			const seq = ++toastSeq;
 			toast = detail;
 			window.setTimeout(() => {
-				if (toast === detail) toast = null;
+				if (toastSeq === seq) toast = null;
 			}, 3500);
 		};
 		window.addEventListener(TOAST_EVENT, onToast);
@@ -32,7 +39,7 @@
 		<span class="flex-1 text-[13px] font-semibold">{toast.message}</span>
 		<button
 			type="button"
-			aria-label="Tutup notifikasi"
+			aria-label={tr("Tutup notifikasi")}
 			class="cursor-pointer rounded p-0.5 text-muted-foreground hover:bg-accent"
 			onclick={() => (toast = null)}
 		>

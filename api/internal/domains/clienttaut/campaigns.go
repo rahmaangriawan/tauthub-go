@@ -117,7 +117,7 @@ func (d *Deps) TautCampaignsList(w http.ResponseWriter, r *http.Request) {
 	}
 	total := totalRow.intOr("n", 0)
 
-	listSQL := "SELECT id, name, taut_status, media_type, budget_strategy, starts_at, created_at FROM campaigns WHERE " +
+	listSQL := "SELECT id, public_id, name, taut_status, taut_entry_mode, media_type, budget_strategy, starts_at, created_at FROM campaigns WHERE " +
 		where + " ORDER BY created_at DESC LIMIT " + itoa(perPage) + " OFFSET " + itoa((page-1)*perPage)
 	list, err := d.queryRows(r.Context(), listSQL, args...)
 	if err != nil {
@@ -140,8 +140,10 @@ func (d *Deps) TautCampaignsList(w http.ResponseWriter, r *http.Request) {
 		id := c.strOr("id", "")
 		entry := map[string]any{
 			"id":              id,
+			"public_id":       c.raw("public_id"),
 			"name":            c.strOr("name", ""),
 			"taut_status":     c.raw("taut_status"),
+			"entry_mode":      c.raw("taut_entry_mode"),
 			"media_type":      c.raw("media_type"),
 			"budget_strategy": c.raw("budget_strategy"),
 			"starts_at":       c.timePtr("starts_at"),
@@ -212,7 +214,7 @@ func (d *Deps) TautCampaignCreate(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	} else if ok {
-		v, enumErr := validateEnum(raw, "ai", "manual")
+		v, enumErr := validateEnum(raw, "ai", "manual", "kilat")
 		if enumErr != nil {
 			d.writeErr(w, enumErr)
 			return
@@ -251,14 +253,19 @@ func (d *Deps) TautCampaignCreate(w http.ResponseWriter, r *http.Request) {
 	if entryMode == "manual" && len(mediaIDs) > 0 {
 		status = "placement"
 	}
-	if err := d.exec(r.Context(),
+	// public_id diisi DEFAULT DB (public._random_short_id, migrasi 170) supaya
+	// insert dari app lama pun ikut dapat; di sini dibaca balik untuk respons.
+	created, err := d.queryRow(r.Context(),
 		`INSERT INTO campaigns (id, brand_id, name, created_by, status,
 		   business_profile, hyperlink_config, starts_at, taut_status, taut_entry_mode, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, 'active', $5::jsonb, $6::jsonb, $7, $8, $9, NOW(), NOW())`,
-		id, brandID, resolvedName, user.ID, "{}", "[]", startsAt, status, entryMode); err != nil {
+		 VALUES ($1, $2, $3, $4, 'active', $5::jsonb, $6::jsonb, $7, $8, $9, NOW(), NOW())
+		 RETURNING public_id`,
+		id, brandID, resolvedName, user.ID, "{}", "[]", startsAt, status, entryMode)
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	publicID := created.strOr("public_id", "")
 
 	added := map[string]any{"added": []string{}, "skipped": []string{}}
 	if entryMode == "manual" && len(mediaIDs) > 0 {
@@ -273,6 +280,7 @@ func (d *Deps) TautCampaignCreate(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":              id,
+		"public_id":       publicID,
 		"name":            resolvedName,
 		"taut_status":     status,
 		"taut_entry_mode": entryMode,
@@ -287,8 +295,8 @@ func (d *Deps) TautCampaignCreate(w http.ResponseWriter, r *http.Request) {
 // (taut_status IS NOT NULL, 404 "Kampanye tidak ditemukan.").
 func (d *Deps) loadTautCampaignForSetup(ctx context.Context, campaignID, brandID string) (rowMap, error) {
 	row, err := d.queryRow(ctx,
-		`SELECT id, name, business_profile, hyperlink_config, media_type, trigger_keywords,
-		        budget_strategy, budget_config, strategy_brief, taut_status,
+		`SELECT id, public_id, name, business_profile, hyperlink_config, media_type, trigger_keywords,
+		        budget_strategy, budget_config, strategy_brief, taut_status, taut_entry_mode,
 		        editorial_standard_snapshot AS materials
 		 FROM campaigns WHERE id = $1 AND brand_id = $2 AND taut_status IS NOT NULL LIMIT 1`,
 		campaignID, brandID)
@@ -408,6 +416,7 @@ func (d *Deps) TautCampaignGet(w http.ResponseWriter, r *http.Request) {
 	}
 	writeNoStore(w, http.StatusOK, map[string]any{
 		"id":               c.strOr("id", ""),
+		"public_id":        c.raw("public_id"),
 		"name":             c.strOr("name", ""),
 		"business_profile": jsonField(c, "business_profile"),
 		"hyperlink_config": jsonField(c, "hyperlink_config"),
@@ -418,6 +427,7 @@ func (d *Deps) TautCampaignGet(w http.ResponseWriter, r *http.Request) {
 		"budget_config":    jsonField(c, "budget_config"),
 		"strategy_brief":   jsonField(c, "strategy_brief"),
 		"taut_status":      c.raw("taut_status"),
+		"entry_mode":       c.raw("taut_entry_mode"),
 		"stats":            stats,
 	})
 }

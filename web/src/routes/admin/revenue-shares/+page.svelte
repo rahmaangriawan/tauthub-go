@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Revenue share — port app/admin/revenue-shares/page.tsx: pembagian MARKUP
 	// Tauthub (client − harga mitra). Prioritas: media+partner → media → partner
 	// → default 75/25. Tab kedua: Markup Harga Klien (pricing_config).
@@ -178,15 +180,15 @@
 <section>
 	<PageHeader
 		title="Revenue Shares"
-		description="Pembagian MARKUP Tauthub (client − harga mitra). Mitra selalu dapat harga penuhnya + share markup. Prioritas: media+partner → media → partner → default 75/25."
+		description={tr("Pembagian MARKUP Tauthub (client − harga mitra). Mitra selalu dapat harga penuhnya + share markup. Prioritas: media+partner → media → partner → default 75/25.")}
 	>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{fmtNum(total)} rule</span>
-		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><Percent size={16} /> Buat rule</button>
+		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><Percent size={16} />{tr("Buat rule")}</button>
 	</PageHeader>
 
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke pengelolaan revenue share.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke pengelolaan revenue share.")}</p>
 		</div>
 	{:else}
 		<Feedback {loading} {error} loadingText="Memuat revenue share…" />
@@ -203,7 +205,7 @@
 				style="border-color: {tab === 'finance' ? 'var(--primary)' : 'transparent'}; color: {tab === 'finance' ? 'var(--primary)' : 'var(--muted-foreground)'};"
 				type="button"
 				onclick={() => (tab = 'finance')}
-			><Coins size={15} /> Markup Harga Klien</button>
+			><Coins size={15} />{tr("Markup Harga Klien")}</button>
 		</div>
 
 		{#if tab === 'rules'}
@@ -251,7 +253,7 @@
 				{#if !loading && rows.length === 0}
 					<div class="flex flex-col items-center px-4 py-12 text-center">
 						<Percent size={26} class="text-muted-foreground" />
-						<p class="mt-2 text-sm text-muted-foreground">Belum ada rule revenue share.</p>
+						<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada rule revenue share.")}</p>
 					</div>
 				{/if}
 				<div class="px-4 pb-4">
@@ -266,14 +268,9 @@
 		{:else}
 			<div class="app-card mt-3 p-5">
 				{#if markupLoading}
-					<p class="text-sm text-muted-foreground">Memuat konfigurasi finance…</p>
+					<p class="text-sm text-muted-foreground">{tr("Memuat konfigurasi finance…")}</p>
 				{:else}
-					<p class="text-sm text-muted-foreground">
-						Harga klien = harga mitra × (1 + markup%). Nilai disimpan sekali di database dan dibaca
-						lewat cache server (bukan query berat tiap halaman) — katalog klien, kredit TC, dan
-						checkout langsung memakai nilai baru begitu disimpan. Publikasi yang sudah dibuat tidak
-						berubah (harganya ter-snapshot saat dibuat).
-					</p>
+					<p class="text-sm text-muted-foreground">{tr("Harga klien = harga mitra × (1 + markup%). Nilai disimpan sekali di database dan dibaca lewat cache server (bukan query berat tiap halaman) — katalog klien, kredit TC, dan checkout langsung memakai nilai baru begitu disimpan. Publikasi yang sudah dibuat tidak berubah (harganya ter-snapshot saat dibuat).")}</p>
 					<div class="my-4 border-t"></div>
 					<form class="flex max-w-[420px] flex-col gap-3" onsubmit={saveMarkup}>
 						<label class="block">
@@ -292,8 +289,7 @@
 								}}
 							/>
 						</label>
-						<p class="text-sm text-muted-foreground">
-							Contoh: media {fmtRp(markupPreviewBase)} → klien <strong>{markupPreview != null ? fmtRp(markupPreview) : '—'}</strong>
+						<p class="text-sm text-muted-foreground"> {tr("Contoh: media")} {fmtRp(markupPreviewBase)} → klien <strong>{markupPreview != null ? fmtRp(markupPreview) : '—'}</strong>
 							{markup != null && markup > 0 ? ` (markup ${markup}%)` : ' (tanpa markup)'}
 						</p>
 						{#if markupMsg}
@@ -304,11 +300,10 @@
 						{/if}
 						<div class="flex items-center gap-2">
 							<button class="app-btn app-btn-primary" type="submit" disabled={markupBusy || markup == null}>
-								{markupBusy ? 'Menyimpan…' : 'Simpan Markup'}
+								{markupBusy ? 'Menyimpan…' : tr('Simpan Markup')}
 							</button>
 							{#if markup != null && markup !== defaultMarkup}
-								<button class="app-btn app-btn-soft" type="button" disabled={markupBusy} onclick={() => (markup = defaultMarkup)}>
-									Kembalikan ke default ({defaultMarkup}%)
+								<button class="app-btn app-btn-soft" type="button" disabled={markupBusy} onclick={() => (markup = defaultMarkup)}> {tr("Kembalikan ke default (")}{defaultMarkup}%)
 								</button>
 							{/if}
 						</div>
@@ -320,35 +315,35 @@
 </section>
 
 {#if createOpen}
-	<Modal title="Buat rule revenue share" label="Buat rule revenue share" maxWidth="lg" onClose={() => (createOpen = false)}>
+	<Modal title={tr("Buat rule revenue share")} label={tr("Buat rule revenue share")} maxWidth="lg" onClose={() => (createOpen = false)}>
 		<form class="flex flex-col gap-3" onsubmit={create}>
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Nama rule</span>
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Nama rule")}</span>
 				<input class="app-input w-full" required placeholder="Default 75/25" bind:value={form.name} />
 			</label>
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Mitra (opsional)</span>
+					<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Mitra (opsional)")}</span>
 					<Select
-						ariaLabel="Mitra"
+						ariaLabel={tr("Mitra")}
 						minWidth={240}
 						value={form.partner_id}
 						onchange={(v) => (form.partner_id = v)}
 						options={[
-							{ value: '', label: 'Semua mitra' },
+							{ value: '', label: tr('Semua mitra') },
 							...partners.filter((p) => p.status === 'active').map((p) => ({ value: p.id, label: p.name ?? p.email }))
 						]}
 					/>
 				</label>
 				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Media (opsional)</span>
+					<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Media (opsional)")}</span>
 					<Select
-						ariaLabel="Media"
+						ariaLabel={tr("Media")}
 						minWidth={240}
 						value={form.media_id}
 						onchange={(v) => (form.media_id = v)}
 						options={[
-							{ value: '', label: 'Semua media' },
+							{ value: '', label: tr('Semua media') },
 							...media.filter((m) => m.status === 'active').map((m) => ({ value: m.id, label: m.name }))
 						]}
 					/>
@@ -374,18 +369,18 @@
 						<input class="app-input w-full" type="number" min="0" max="100" value={form.tulisio_percent} oninput={(e) => (form = { ...form, tulisio_percent: (e.currentTarget as HTMLInputElement).value })} />
 					</label>
 					<label class="block">
-						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Mitra %</span>
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Mitra %")}</span>
 						<input class="app-input w-full" type="number" min="0" max="100" value={form.partner_percent} oninput={(e) => (form = { ...form, partner_percent: (e.currentTarget as HTMLInputElement).value })} />
 					</label>
 				</div>
 			{:else}
 				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Mitra (fixed, IDR) — di-cap di harga client</span>
+					<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Mitra (fixed, IDR) — di-cap di harga client")}</span>
 					<input
 						class="app-input w-full"
 						type="text"
 						inputmode="numeric"
-						value={form.partner_fixed ? Number(form.partner_fixed).toLocaleString('id-ID') : ''}
+						value={form.partner_fixed ? Number(form.partner_fixed).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }) : ''}
 						oninput={(e) => (form = { ...form, partner_fixed: (e.currentTarget as HTMLInputElement).value.replace(/\D/g, '') })}
 					/>
 				</label>
@@ -394,8 +389,8 @@
 				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{error}</div>
 			{/if}
 			<div class="mt-1 flex justify-end gap-2 border-t pt-4">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>Batal</button>
-				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Buat rule'}</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Buat rule')}</button>
 			</div>
 		</form>
 	</Modal>

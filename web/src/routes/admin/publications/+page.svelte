@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Publikasi admin — semua publikasi seluruh brand (staff visibility).
 	// Port apps/web/src/app/admin/publications/page.tsx.
 	import { onMount } from 'svelte';
@@ -29,6 +31,7 @@
 		published: 'success',
 		pending: 'warning',
 		waiting_partner: 'warning',
+		revision: 'warning',
 		partner_approved: 'accent',
 		partner_rejected: 'danger',
 		queued: 'accent',
@@ -42,6 +45,7 @@
 		'',
 		'pending',
 		'waiting_partner',
+		'revision',
 		'queued',
 		'processing',
 		'published',
@@ -131,7 +135,7 @@
 	}
 
 	const idr = (n: unknown) =>
-		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(
+		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(
 			Number(n ?? 0)
 		);
 	const showAccess = $derived(rows.length === 0 && error.includes('Akses platform'));
@@ -190,8 +194,8 @@
 
 <section>
 	<PageHeader
-		title="Publikasi"
-		description="Semua publikasi seluruh brand (staff visibility). Klik baris untuk detail lengkap: riwayat attempts, job delivery, dan payload."
+		title={tr("Publikasi")}
+		description={tr("Semua publikasi seluruh brand (staff visibility). Klik baris untuk detail lengkap: riwayat attempts, job delivery, dan payload.")}
 	>
 		<Badge tone="accent" value={`${total} publikasi`} />
 	</PageHeader>
@@ -203,7 +207,7 @@
 			<Search size={16} class="text-muted-foreground" />
 			<input
 				class="w-full bg-transparent text-sm outline-none"
-				placeholder="Cari artikel, brand, media, campaign, partner, atau ID…"
+				placeholder={tr("Cari artikel, brand, media, campaign, partner, atau ID…")}
 				bind:value={query}
 			/>
 		</label>
@@ -223,35 +227,35 @@
 					filter = f;
 					page = 1;
 					void load();
-				}}>{f === '' ? 'Semua' : f}</button
+				}}>{f === '' ? tr('Semua') : f}</button
 			>
 		{/each}
 	</div>
 
 	{#if showAccess}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke data publikasi.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke data publikasi.")}</p>
 		</div>
 	{:else}
 		<DataTable
 			columns={[
 				{ key: 'article', label: 'Artikel', render: articleCell },
 				{ key: 'brand', label: 'Brand', render: brandCell },
-				{ key: 'media', label: 'Media', render: mediaCell },
-				{ key: 'price', label: 'Harga', render: priceCell },
+				{ key: 'media', label: tr('Media'), render: mediaCell },
+				{ key: 'price', label: tr('Harga'), render: priceCell },
 				{ key: 'status', label: 'Status', render: pubStatusCell },
 				{ key: 'created', label: 'Waktu', render: createdAtCell }
 			]}
 			rows={rows}
 			rowKey={(row: Row) => row.id}
 			{loading}
-			empty="Tidak ada publikasi untuk filter ini."
+			empty={tr("Tidak ada publikasi untuk filter ini.")}
 			minWidth="1100px"
 		/>
 
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 			<p class="text-xs text-muted-foreground">
-				{total} publikasi · halaman {page} dari {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+				{total} publikasi · halaman {page} {tr("dari")} {Math.max(1, Math.ceil(total / PAGE_SIZE))}
 			</p>
 			<div class="flex gap-2">
 				<button

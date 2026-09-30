@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Route flow lama (intake → content → media → review → distribusi) sudah
 	// dipensiunkan. Semua tautan lama diarahkan ke alur Taut Pintar: router
 	// /taut-pintar/{id} menentukan langkah dari taut_status kampanye.
@@ -18,7 +20,7 @@
 	});
 </script>
 
-<PageTitle title="Alur Kampanye" />
+<PageTitle title={tr("Alur Kampanye")} />
 
 <main class="flex min-h-[50vh] items-center justify-center">
 	<p class="flex items-center gap-2 text-sm text-muted-foreground">

@@ -13,13 +13,13 @@
 |---|---|---|---|
 | `/api/blogger/callback` | GET | OAuth callback Blogger (PKCE) | [x] |
 | `/api/gsc/callback` | GET | OAuth callback Google Search Console | [x] |
-| `/feed/partner/{token}` | GET | RSS feed partner (XML) | [x] |
-| `/feed/partner/{token}/import` | POST | Import artikel dari RSS feed partner | [x] |
-| `/register` | GET | Halaman/meta registrasi legacy | [x] |
+| `/feed/partner/{token}` | GET | RSS feed partner (XML) | [ ] |
+| `/feed/partner/{token}/import` | POST | Import artikel dari RSS feed partner | [ ] |
+| `/register` | GET | Landing link referral: catat klik + cookie `tauthub_ref` + redirect | [x] |
 | `/t/{code}` | GET | Redirect tracking link + catat event | [x] |
 | `/uploads/{key}` | GET | Serve file upload (auth refresh cookie) | [x] |
 
-## 2. `/v1/auth` (18) 🔑/🌐 — fase 1
+## 2. `/v1/auth` (19) 🔑/🌐 — fase 1
 
 | Endpoint | Method | Tujuan | ✔ |
 |---|---|---|---|
@@ -39,6 +39,7 @@
 | `/v1/auth/me` | GET, PATCH | Profil user + update | [x] |
 | `/v1/auth/refresh` | POST | Refresh access token (cookie) | [x] |
 | `/v1/auth/register` | POST | Registrasi (+registration guard) | [x] |
+| `/v1/auth/referral/click` | POST | Catat klik link referral (dipanggil `/register`) | [x] |
 | `/v1/auth/reset-password` | POST | Reset via token | [x] |
 | `/v1/auth/turnstile` | GET | Config Turnstile untuk client | [x] |
 

@@ -70,18 +70,37 @@ func (d *Deps) BrandNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	limit := clampInt(q.Get("limit"), 30, 1, 200)
 	offset := clampInt(q.Get("offset"), 0, 0, 1<<30)
+	// category=announcement|general: tab "Pengumuman" vs "Umum" di lonceng &
+	// halaman riwayat. Hitungan unread (badge lonceng) sengaja tetap global.
+	category := q.Get("category")
+	if category != "" && category != "general" && category != "announcement" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid category filter")
+		return
+	}
+
+	// Badge lonceng (tanpa category) tetap global; halaman riwayat dengan tab
+	// aktif menerima hitungan unread yang ter-filter juga.
+	unreadWhere := " AND read_at IS NULL AND expired_at IS NULL"
+	where := ""
+	switch category {
+	case "announcement":
+		unreadWhere += " AND type LIKE 'announcement%'"
+		where += " AND type LIKE 'announcement%'"
+	case "general":
+		unreadWhere += " AND type NOT LIKE 'announcement%'"
+		where += " AND type NOT LIKE 'announcement%'"
+	}
 
 	var unread int
 	_ = d.Pool.QueryRow(r.Context(),
-		"SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND read_at IS NULL AND expired_at IS NULL",
+		"SELECT COUNT(*) FROM notifications WHERE user_id = $1"+unreadWhere,
 		user.ID).Scan(&unread)
 
-	where := ""
 	switch status {
 	case "read":
-		where = " AND read_at IS NOT NULL"
+		where += " AND read_at IS NOT NULL"
 	case "unread":
-		where = " AND read_at IS NULL AND expired_at IS NULL"
+		where += " AND read_at IS NULL AND expired_at IS NULL"
 	}
 
 	var total int

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Agent 1: The Profiler — form Executive PR Brief.
 	// Port app/klien/[brandId]/taut-pintar/[id]/profiler/{page,client}.tsx.
 	//
@@ -12,6 +14,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
+	import TautBottomBar from '../../_bottom-bar.svelte';
 	import ProfilerSections from './_sections.svelte';
 	import { emptyDraft, draftFromResponse, validateProfilerDraft } from '../../_shared';
 	import type { ProfilerDraft } from '../../_shared';
@@ -88,7 +91,7 @@
 				apiRequest(`${apiBase}/profile/draft`),
 				apiRequest(`${apiBase}/profiler/options`)
 			]);
-			if (!draftRes.ok || !optionsRes.ok) throw new Error('Gagal memuat data Profiler.');
+			if (!draftRes.ok || !optionsRes.ok) throw new Error(tr('Gagal memuat data Profiler.'));
 			const draftData = await draftRes.json();
 			const optionsData = await optionsRes.json();
 			// Sudah ada hasil analisis → form menampilkan summary; sekarang URL-nya
@@ -111,7 +114,7 @@
 				patch({ budget: { ...draft.budget, amount: Math.min(100000, Math.max(5000, a)) } });
 			}
 		} catch (reason) {
-			error = reason instanceof Error ? reason.message : 'Gagal memuat data.';
+			error = reason instanceof Error ? reason.message : tr('Gagal memuat data.');
 			loading = false;
 		}
 	}
@@ -143,7 +146,7 @@
 			void (async () => {
 				try {
 					const res = await apiRequest(`${apiBase}/profile/draft`, { method: 'PUT', body: JSON.stringify(payload) });
-					if (!res.ok) throw new Error('Gagal menyimpan draft.');
+					if (!res.ok) throw new Error(tr('Gagal menyimpan draft.'));
 					if (seq === saveSeq) saveStatus = 'saved';
 				} catch {
 					if (seq === saveSeq) saveStatus = 'error';
@@ -172,7 +175,7 @@
 		try {
 			const res = await apiRequest(`${apiBase}/crawl`, { method: 'POST', body: JSON.stringify({ url }) });
 			if (!res.ok) {
-				crawlError = await readApiError(res, 'Gagal menarik data website.');
+				crawlError = await readApiError(res, tr('Gagal menarik data website.'));
 				return;
 			}
 			const data = await res.json();
@@ -270,7 +273,7 @@
 	}
 
 	const saveLabel = $derived(
-		saveStatus === 'saving' ? 'Menyimpan...' : saveStatus === 'saved' ? 'Tersimpan' : saveStatus === 'error' ? 'Gagal' : 'Tersimpan otomatis'
+		saveStatus === 'saving' ? 'Menyimpan...' : saveStatus === 'saved' ? tr('Tersimpan') : saveStatus === 'error' ? tr('Gagal') : tr('Tersimpan otomatis')
 	);
 
 	// Validasi pakai schema yang sama dengan server; saldo dicek terpisah.
@@ -279,7 +282,7 @@
 		if (v) return v;
 		const budget = draft.budget;
 		if (budget?.mode === 'efficient' && budget.amount > walletAvailable)
-			return 'Kredit Saldo tidak mencukupi. Top Up dulu sebelum menjalankan analisis.';
+			return tr('Kredit Saldo tidak mencukupi. Top Up dulu sebelum menjalankan analisis.');
 		return null;
 	});
 
@@ -300,7 +303,7 @@
 	{#if crawling || crawlProgress > 0}
 		<div class="app-card mb-3 flex items-center justify-between gap-3 px-4 py-2.5" role="status" aria-live="polite">
 			<span class="flex items-center gap-2 text-sm font-medium">
-				<LoaderCircle size={16} class="animate-spin" /> Menarik &amp; mengekstrak fakta website… (rata-rata 30–45 dtk)
+				<LoaderCircle size={16} class="animate-spin" /> Menarik & mengekstrak fakta website… (rata-rata 30–45 dtk)
 			</span>
 			<span class="text-sm font-bold" style="color: var(--primary);">{crawlProgress} dtk</span>
 		</div>
@@ -313,15 +316,12 @@
 			</div>
 			<div>
 				<h1 class="font-bold leading-tight">Agent 1: The Profiler</h1>
-				<p class="text-sm leading-tight text-muted-foreground">
-					Susun Executive PR Brief dari konteks bisnis, tujuan kampanye, target media, dan anggaran Anda.
-				</p>
+				<p class="text-sm leading-tight text-muted-foreground">{tr("Susun Executive PR Brief dari konteks bisnis, tujuan kampanye, target media, dan anggaran Anda.")}</p>
 			</div>
 		</div>
 		<div class="flex flex-col items-end gap-1">
 			<div class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium">
-				{walletAvailable.toLocaleString('id-ID')} Kredit
-			</div>
+				{walletAvailable.toLocaleString('id-ID')} {tr("Kredit")} </div>
 			<div class="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
 				<span class="h-2 w-2 rounded-full" style="background-color: var(--success);"></span>{saveLabel}
 			</div>
@@ -337,8 +337,7 @@
 
 	{#if loading}
 		<div class="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-			<LoaderCircle size={18} class="animate-spin" /> Memuat The Profiler…
-		</div>
+			<LoaderCircle size={18} class="animate-spin" />{tr("Memuat The Profiler…")}</div>
 	{:else}
 		<div class="mt-4">
 			<ProfilerSections
@@ -354,13 +353,13 @@
 			/>
 		</div>
 
-		<div class="app-card mt-4 flex flex-wrap items-center justify-between gap-3 p-4">
+		<TautBottomBar>
 			<p class="text-xs" style="color: {blockReason ? 'var(--warning)' : 'var(--muted-foreground)'};">
-				{blockReason ?? 'Semua perubahan disimpan otomatis sebagai draft.'}
+				{blockReason ?? tr('Semua perubahan disimpan otomatis sebagai draft.')}
 			</p>
 			<button class="app-btn app-btn-primary" type="button" disabled={Boolean(blockReason)} onclick={startAnalysis}>
-				Jalankan Analisis Profiler
+				{tr('Jalankan Analisis Profiler')}
 			</button>
-		</div>
+		</TautBottomBar>
 	{/if}
 </main>

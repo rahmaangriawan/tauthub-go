@@ -414,7 +414,8 @@ var opPublicationTransitions = map[string][]string{
 	"partner_rejected": {"cancelled"},
 	"queued":           {"processing", "cancelled"},
 	"processing":       {"published", "failed", "retrying", "cancelled"},
-	"published":        {},
+	"published":        {"revision"},
+	"revision":         {"queued", "cancelled"},
 	"failed":           {"queued", "retrying", "cancelled"},
 	"retrying":         {"queued", "cancelled"},
 	"cancelled":        {},
@@ -1029,6 +1030,7 @@ func opGetArr3(body map[string]any, key string) ([]any, bool, bool) {
 var publicationStatusesForFilter = []string{
 	"pending", "waiting_partner", "partner_approved", "partner_rejected",
 	"queued", "processing", "published", "failed", "retrying", "cancelled",
+	"revision",
 }
 
 // asMaps: []rowMap -> []map[string]any untuk helper yang masih memakai map biasa.

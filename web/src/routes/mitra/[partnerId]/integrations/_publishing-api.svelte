@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Tab Web Custom — port PublishingApiSection app lama
 	// (app/mitra/[partnerId]/[[...section]]/sections.tsx baris ~471): kunci API
 	// publishing media Tulisio API + konfigurasi Custom Web Publishing
@@ -70,7 +72,7 @@
 				apiRequest('/v1/partner/media?limit=500')
 			]);
 			if (!keyRes.ok) {
-				error = await readApiError(keyRes, 'Gagal memuat API key.');
+				error = await readApiError(keyRes, tr('Gagal memuat API key.'));
 				return;
 			}
 			keys = (await keyRes.json()).keys ?? [];
@@ -103,7 +105,7 @@
 				body: JSON.stringify(body)
 			});
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal membuat API key.');
+				error = await readApiError(res, tr('Gagal membuat API key.'));
 				return;
 			}
 			const data = await res.json();
@@ -124,7 +126,7 @@
 		try {
 			const res = await apiRequest(`/v1/partner/publishing-api-keys/${key.id}`, { method: 'POST' });
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal merotasi API key.');
+				error = await readApiError(res, tr('Gagal merotasi API key.'));
 				return;
 			}
 			copied = null;
@@ -142,7 +144,7 @@
 		try {
 			const res = await apiRequest(`/v1/partner/publishing-api-keys/${key.id}`, { method: 'DELETE' });
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal mencabut API key.');
+				error = await readApiError(res, tr('Gagal mencabut API key.'));
 				return;
 			}
 			await load();
@@ -178,10 +180,10 @@
 				body: JSON.stringify(body)
 			});
 			if (!res.ok) {
-				pushCustomWebNotice(item.id, 'error', await readApiError(res, 'Gagal menyimpan konfigurasi.'));
+				pushCustomWebNotice(item.id, 'error', await readApiError(res, tr('Gagal menyimpan konfigurasi.')));
 				return;
 			}
-			pushCustomWebNotice(item.id, 'ok', 'Konfigurasi tersimpan. Jalankan Test Connection untuk memverifikasi.');
+			pushCustomWebNotice(item.id, 'ok', tr('Konfigurasi tersimpan. Jalankan Test Connection untuk memverifikasi.'));
 			await load();
 		} finally {
 			customWebBusyId = null;
@@ -203,7 +205,7 @@
 			pushCustomWebNotice(
 				item.id,
 				result.status === 'connected' ? 'ok' : 'error',
-				result.message || (result.status === 'connected' ? 'Endpoint terhubung.' : 'Gagal terhubung.')
+				result.message || (result.status === 'connected' ? 'Endpoint terhubung.' : tr('Gagal terhubung.'))
 			);
 			await load();
 		} finally {
@@ -218,14 +220,14 @@
 		try {
 			const res = await apiRequest(`/v1/partner/media/${item.id}/custom-web`, { method: 'POST' });
 			if (!res.ok) {
-				pushCustomWebNotice(item.id, 'error', await readApiError(res, 'Gagal membuat API Key baru.'));
+				pushCustomWebNotice(item.id, 'error', await readApiError(res, tr('Gagal membuat API Key baru.')));
 				return;
 			}
 			const result = await res.json();
 			pushCustomWebNotice(
 				item.id,
 				'ok',
-				result.message ?? 'API Key baru telah dibuat. Perbarui konfigurasi di website Anda.'
+				result.message ?? tr('API Key baru telah dibuat. Perbarui konfigurasi di website Anda.')
 			);
 			updateCustomWebForm(item.id, { api_key: '' });
 			await load();
@@ -240,7 +242,7 @@
 			copied = label === 'API key' ? 'key' : 'secret';
 			window.setTimeout(() => (copied = null), 1500);
 		} catch {
-			error = 'Tidak dapat menyalin ke clipboard.';
+			error = tr('Tidak dapat menyalin ke clipboard.');
 		}
 	}
 
@@ -273,10 +275,10 @@
 		status === 'connected'
 			? '✓ Terhubung'
 			: status === 'failed'
-				? '✕ Gagal Terhubung'
+				? tr('✕ Gagal Terhubung')
 				: status === 'testing'
 					? 'Sedang diuji'
-					: 'Belum Terhubung';
+					: tr('Belum Terhubung');
 	const customWebStatusColor = (status: string) =>
 		status === 'connected'
 			? 'var(--success)'
@@ -299,23 +301,19 @@
 				<BookOpenText size={13} /> Dokumentasi
 			</button>
 			<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" onclick={() => (createOpen = true)}>
-				<Plus size={13} /> Buat API key
-			</button>
+				<Plus size={13} />{tr("Buat API key")}</button>
 		</div>
 	</div>
 
-	<p class="px-4 pt-3 text-xs text-muted-foreground">
-		Kelola kunci API dan konfigurasi koneksi website custom Anda. Panduan teknis lengkap ada di halaman Dokumentasi.
-		Kunci terbatas pada partner ini — untuk media <strong>Tulisio API</strong> yang statusnya aktif.
-	</p>
+	<p class="px-4 pt-3 text-xs text-muted-foreground">{tr("Kelola kunci API dan konfigurasi koneksi website custom Anda. Panduan teknis lengkap ada di halaman Dokumentasi. Kunci terbatas pada partner ini — untuk media")}<strong>Tulisio API</strong>{tr("yang statusnya aktif.")}</p>
 
 	{#if error}<p class="px-4 pt-2 text-sm" style="color: var(--destructive);">{error}</p>{/if}
 
 	{#if revealed}
 		<div class="mx-4 mt-3 rounded-lg border p-3" style="border-color: var(--warning);">
 			<div class="flex flex-wrap items-center justify-between gap-2">
-				<p class="text-sm font-semibold" style="color: var(--warning);">Kredensial baru — simpan sekarang</p>
-				<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => (revealed = null)}><X size={12} /> Tutup</button>
+				<p class="text-sm font-semibold" style="color: var(--warning);">{tr('Kredensial baru — simpan sekarang')}</p>
+				<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => (revealed = null)}><X size={12} />{tr("Tutup")}</button>
 			</div>
 			<p class="mt-1 text-xs text-muted-foreground">
 				{revealed.note ?? 'api_key dan secret hanya ditampilkan sekali ini. Salin ke konfigurasi adapter website Anda.'}
@@ -331,7 +329,7 @@
 					</div>
 				</div>
 				<div>
-					<span class="text-[11px] font-medium text-muted-foreground">Secret (untuk verifikasi signature)</span>
+					<span class="text-[11px] font-medium text-muted-foreground">{tr("Secret (untuk verifikasi signature)")}</span>
 					<div class="mt-1 flex gap-2">
 						<input class="app-input w-full font-mono text-xs" readonly value={revealed.secret} />
 						<button class="app-btn app-btn-soft shrink-0" type="button" onclick={() => copy('Secret', revealed.secret)}>
@@ -344,21 +342,21 @@
 	{/if}
 
 	{#if loading && keys.length === 0}
-		<p class="px-4 py-8 text-center text-sm text-muted-foreground">Memuat kunci API…</p>
+		<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Memuat kunci API…")}</p>
 	{:else if keys.length === 0}
 		<div class="px-4 py-8 text-center">
 			<Code size={26} class="mx-auto" style="color: var(--muted-foreground);" />
-			<p class="mt-2 text-sm text-muted-foreground">Belum ada API key. Buat kunci untuk media Tauthub Publishing API Anda.</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada API key. Buat kunci untuk media Tauthub Publishing API Anda.")}</p>
 		</div>
 	{:else}
 		<table class="w-full text-sm">
 			<thead>
 				<tr class="text-left text-xs text-muted-foreground">
 					<th class="px-4 py-2.5 font-medium">Label</th>
-					<th class="px-4 py-2.5 font-medium">Media</th>
+					<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
 					<th class="px-4 py-2.5 font-medium">Status</th>
-					<th class="px-4 py-2.5 font-medium">Terakhir dipakai</th>
-					<th class="px-4 py-2.5 text-right font-medium">Aksi</th>
+					<th class="px-4 py-2.5 font-medium">{tr('Terakhir dipakai')}</th>
+					<th class="px-4 py-2.5 text-right font-medium">{tr('Aksi')}</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -373,7 +371,7 @@
 								</div>
 							</div>
 						</td>
-						<td class="px-4 py-2.5">{row.media_name ?? 'Semua media'}</td>
+						<td class="px-4 py-2.5">{row.media_name ?? tr('Semua media')}</td>
 						<td class="px-4 py-2.5">
 							<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: {row.status === 'active' ? 'var(--success-soft)' : 'var(--secondary)'}; color: {row.status === 'active' ? 'var(--success)' : 'var(--muted-foreground)'};">{row.status}</span>
 						</td>
@@ -381,11 +379,11 @@
 						<td class="px-4 py-2.5">
 							{#if row.status === 'active'}
 								<div class="flex justify-end gap-2">
-									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={busy} onclick={() => rotate(row)}><RefreshCw size={12} /> Rotasi</button>
-									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" style="color: var(--destructive);" disabled={busy} onclick={() => revoke(row)}><Trash2 size={12} /> Cabut</button>
+									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={busy} onclick={() => rotate(row)}><RefreshCw size={12} /> {tr('Rotasi')}</button>
+									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" style="color: var(--destructive);" disabled={busy} onclick={() => revoke(row)}><Trash2 size={12} /> {tr('Cabut')}</button>
 								</div>
 							{:else}
-								<p class="text-right text-xs text-muted-foreground">Dicabut</p>
+								<p class="text-right text-xs text-muted-foreground">{tr('Dicabut')}</p>
 							{/if}
 						</td>
 					</tr>
@@ -394,11 +392,11 @@
 		</table>
 		{#if keys.length > PAGE_SIZE}
 			<div class="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3 text-xs text-muted-foreground">
-				<span>Menampilkan {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, keys.length)} dari {keys.length}</span>
+				<span>{tr("Menampilkan")} {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, keys.length)} {tr("dari")} {keys.length}</span>
 				<div class="flex items-center gap-2">
-					<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={safePage <= 1} onclick={() => (page = safePage - 1)}>‹ Sebelumnya</button>
-					<span>Halaman {safePage} dari {totalPages}</span>
-					<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={safePage >= totalPages} onclick={() => (page = safePage + 1)}>Berikutnya ›</button>
+					<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={safePage <= 1} onclick={() => (page = safePage - 1)}>‹ {tr('Sebelumnya')}</button>
+					<span>{tr("Halaman")} {safePage} {tr("dari")} {totalPages}</span>
+					<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={safePage >= totalPages} onclick={() => (page = safePage + 1)}>{tr('Berikutnya')} ›</button>
 				</div>
 			</div>
 		{/if}
@@ -409,14 +407,11 @@
 	<div class="flex flex-wrap items-center justify-between gap-2">
 		<div class="flex items-center gap-2">
 			<ExternalLink size={16} />
-			<h2 class="text-sm font-semibold">Website Tanpa Endpoint Penerima</h2>
+			<h2 class="text-sm font-semibold">{tr('Website Tanpa Endpoint Penerima')}</h2>
 		</div>
-		<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--secondary); color: var(--muted-foreground);">Alternatif push API</span>
+		<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--secondary); color: var(--muted-foreground);">{tr('Alternatif push API')}</span>
 	</div>
-	<p class="mt-2 text-xs text-muted-foreground">
-		Website statis atau yang tidak bisa membuka endpoint penerima dapat menarik artikel secara terstruktur lewat
-		JSON Pull feed — script atau CI Anda yang mengatur jadwal menarik dan cara menampilkannya.
-	</p>
+	<p class="mt-2 text-xs text-muted-foreground">{tr("Website statis atau yang tidak bisa membuka endpoint penerima dapat menarik artikel secara terstruktur lewat JSON Pull feed — script atau CI Anda yang mengatur jadwal menarik dan cara menampilkannya.")}</p>
 	<button class="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold" style="color: var(--accent);" type="button" onclick={() => openDocs('publishing')}>
 		<BookOpenText size={14} /> Baca panduan teknis di Dokumentasi
 	</button>
@@ -430,20 +425,15 @@
 		</div>
 		<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--secondary); color: var(--muted-foreground);">Publisher Protocol v1</span>
 	</div>
-	<p class="mt-2 text-xs text-muted-foreground">
-		Untuk media ber-platform <strong>Custom Web</strong>: artikel Tauthub terkirim otomatis ke website Anda setelah
-		koneksi berhasil. Cukup isi endpoint URL dan API key di bawah, lalu klik Test Connection.
-		<button class="font-semibold underline" type="button" style="color: var(--accent);" onclick={() => openDocs('protocol')}>Baca panduan teknis di Dokumentasi</button>.
+	<p class="mt-2 text-xs text-muted-foreground">{tr("Untuk media ber-platform")}<strong>Custom Web</strong>{tr(": artikel Tauthub terkirim otomatis ke website Anda setelah koneksi berhasil. Cukup isi endpoint URL dan API key di bawah, lalu klik Test Connection.")}<button class="font-semibold underline" type="button" style="color: var(--accent);" onclick={() => openDocs('protocol')}>Baca panduan teknis di Dokumentasi</button>.
 	</p>
 
 	{#if loading && customWebMedia.length === 0}
-		<p class="mt-3 text-xs text-muted-foreground">Memuat…</p>
+		<p class="mt-3 text-xs text-muted-foreground">{tr("Memuat…")}</p>
 	{:else if customWebMedia.length === 0}
 		<div class="mt-4 py-6 text-center">
 			<Globe size={26} class="mx-auto" style="color: var(--muted-foreground);" />
-			<p class="mt-2 text-sm text-muted-foreground">
-				Belum ada media Custom Web. Pilih platform Custom Web saat menambah media, lalu konfigurasikan di sini.
-			</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada media Custom Web. Pilih platform Custom Web saat menambah media, lalu konfigurasikan di sini.")}</p>
 		</div>
 	{:else}
 		{#each customWebMedia as item (item.id)}
@@ -469,11 +459,11 @@
 						<input
 							class="app-input mt-1 w-full"
 							type="url"
-							placeholder="https://mitra.com/v1/tulisio/publish"
+							placeholder={tr("https://mitra.com/v1/tulisio/publish")}
 							value={formValue.endpoint_url}
 							oninput={(e) => updateCustomWebForm(item.id, { endpoint_url: e.currentTarget.value })}
 						/>
-						<span class="mt-1 block text-[11px] text-muted-foreground">Production wajib HTTPS publik. Contoh: https://mitra.com/v1/tulisio/publish</span>
+						<span class="mt-1 block text-[11px] text-muted-foreground">{tr('Production wajib HTTPS publik. Contoh: https://mitra.com/v1/tulisio/publish')}</span>
 					</label>
 					<label class="block">
 						<span class="text-xs font-medium text-muted-foreground">API Key</span>
@@ -486,14 +476,14 @@
 						/>
 						<span class="mt-1 block text-[11px] text-muted-foreground">
 							{item.custom_web_api_key_configured
-								? 'API Key tersimpan aman (masked). Isi hanya jika ingin mengganti.'
-								: 'API Key dari endpoint Custom Web Anda.'}
+								? tr('API Key tersimpan aman (masked). Isi hanya jika ingin mengganti.')
+								: tr('API Key dari endpoint Custom Web Anda.')}
 						</span>
 					</label>
 
 					<div class="flex flex-wrap items-center gap-2">
 						<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" disabled={customWebBusyId === item.id} onclick={() => saveCustomWeb(item)}>
-							{customWebBusyId === item.id ? 'Menyimpan…' : 'Simpan'}
+							{customWebBusyId === item.id ? 'Menyimpan…' : tr('Simpan')}
 						</button>
 						<button
 							class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
@@ -523,7 +513,7 @@
 					{#if !item.custom_web_endpoint_url}
 						<p class="flex items-start gap-1.5 text-[11px] text-muted-foreground">
 							<Info size={12} class="mt-0.5 shrink-0" />
-							<span>Isi Endpoint URL + API Key lalu Simpan untuk mengaktifkan distribusi ke website custom ini.</span>
+							<span>{tr("Isi Endpoint URL + API Key lalu Simpan untuk mengaktifkan distribusi ke website custom ini.")}</span>
 						</p>
 					{/if}
 				</div>
@@ -533,24 +523,24 @@
 </div>
 
 {#if createOpen}
-	<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
-		<dialog open class="app-card my-8 w-full max-w-lg p-5" aria-label="Buat API key">
-			<h2 class="text-lg font-semibold">Buat API key</h2>
+	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
+		<dialog open class="app-card w-full max-w-lg p-5" aria-label={tr("Buat API key")}>
+			<h2 class="text-lg font-semibold">{tr("Buat API key")}</h2>
 			{#if error}<p class="mt-2 text-sm" style="color: var(--destructive);">{error}</p>{/if}
 			<form class="mt-4 space-y-3" onsubmit={create}>
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Label</span>
-					<input class="app-input mt-1 w-full" required placeholder="Contoh: Website utama" bind:value={form.label} />
+					<input class="app-input mt-1 w-full" required placeholder={tr('Contoh: Website utama')} bind:value={form.label} />
 				</label>
 				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">Media (opsional)</span>
+					<span class="text-xs font-medium text-muted-foreground">{tr("Media (opsional)")}</span>
 					<Select
 						bind:value={form.media_id}
-						ariaLabel="Media"
-						placeholder="Semua media Tauthub API"
+						ariaLabel={tr("Media")}
+						placeholder={tr("Semua media Tauthub API")}
 						minWidth={240}
 						options={[
-							{ value: '', label: 'Semua media Tauthub API' },
+							{ value: '', label: tr('Semua media Tauthub API') },
 							...media.map((m) => ({ value: m.id, label: m.name }))
 						]}
 					/>
@@ -560,7 +550,7 @@
 					(fallback ke kunci partner bila tidak ada).
 				</p>
 				<div class="flex justify-end gap-2 border-t pt-3">
-					<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>Batal</button>
+					<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
 					<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Membuat…' : 'Buat kunci'}</button>
 				</div>
 			</form>
@@ -569,11 +559,11 @@
 {/if}
 
 {#if docsOpen}
-	<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
-		<dialog open class="app-card my-8 w-full max-w-3xl p-5" aria-label="Dokumentasi API">
+	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
+		<dialog open class="app-card w-full max-w-3xl p-5" aria-label={tr('Dokumentasi API')}>
 			<div class="flex flex-wrap items-center justify-between gap-2">
-				<h2 class="text-lg font-semibold">Dokumentasi API</h2>
-				<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => (docsOpen = false)}><X size={12} /> Tutup</button>
+				<h2 class="text-lg font-semibold">{tr('Dokumentasi API')}</h2>
+				<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => (docsOpen = false)}><X size={12} />{tr("Tutup")}</button>
 			</div>
 			<div class="mt-3 flex flex-wrap gap-2">
 				<button
@@ -593,7 +583,7 @@
 			</div>
 
 			{#if docsLoading}
-				<p class="mt-3 text-sm text-muted-foreground">Memuat dokumen…</p>
+				<p class="mt-3 text-sm text-muted-foreground">{tr("Memuat dokumen…")}</p>
 			{:else if docsError}
 				<p class="mt-3 text-sm" style="color: var(--destructive);">{docsError}</p>
 			{:else}

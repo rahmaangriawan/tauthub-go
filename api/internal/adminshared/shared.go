@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -78,13 +79,19 @@ type cachedAdmin struct {
 	expiresAt time.Time
 }
 
+// adminCache dibaca/ditulis dari banyak goroutine handler HTTP sekaligus.
+// Tanpa mutex, Go mematikan proses dengan "fatal error: concurrent map read and
+// map write" (runtime/maps.fatal) — bukan panic yang bisa di-recover.
 var (
+	adminCacheMu  sync.RWMutex
 	adminCache    = map[string]cachedAdmin{}
 	adminCacheTTL = 30 * time.Second
 )
 
 // InvalidateAdminCache: dipakai saat admin diubah/dihapus.
 func InvalidateAdminCache(userID string) {
+	adminCacheMu.Lock()
+	defer adminCacheMu.Unlock()
 	if userID == "" {
 		adminCache = map[string]cachedAdmin{}
 		return
@@ -95,7 +102,10 @@ func InvalidateAdminCache(userID string) {
 // AdminContext: port getAdminContext — platform_admins, fallback env
 // PLATFORM_ADMIN_EMAILS sebagai super admin.
 func (d *Deps) AdminContext(ctx context.Context, userID, email string) *Context {
-	if cached, ok := adminCache[userID]; ok && cached.expiresAt.After(time.Now()) {
+	adminCacheMu.RLock()
+	cached, cachedOK := adminCache[userID]
+	adminCacheMu.RUnlock()
+	if cachedOK && cached.expiresAt.After(time.Now()) {
 		return cached.ctx
 	}
 	var role string
@@ -109,7 +119,9 @@ func (d *Deps) AdminContext(ctx context.Context, userID, email string) *Context 
 			_ = json.Unmarshal(permissions, &parsed)
 		}
 		result := &Context{UserID: userID, Email: email, Role: role, Permissions: parsed, CreatedAt: time.Now()}
+		adminCacheMu.Lock()
 		adminCache[userID] = cachedAdmin{result, time.Now().Add(adminCacheTTL)}
+		adminCacheMu.Unlock()
 		return result
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -122,7 +134,9 @@ func (d *Deps) AdminContext(ctx context.Context, userID, email string) *Context 
 		if equalFold(allowed, email) {
 			result := &Context{UserID: userID, Email: email, Role: "super_admin",
 				Permissions: map[string]bool{}, CreatedAt: time.Now()}
+			adminCacheMu.Lock()
 			adminCache[userID] = cachedAdmin{result, time.Now().Add(adminCacheTTL)}
+			adminCacheMu.Unlock()
 			return result
 		}
 	}

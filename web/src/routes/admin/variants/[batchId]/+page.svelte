@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Detail batch variant — audit sudut pandang per media + riwayat job generasi.
 	// Port apps/web/src/app/admin/variants/[batchId]/page.tsx.
 	import { onMount } from 'svelte';
@@ -60,13 +62,13 @@
 	const BATCH_STATUS_META: Record<
 		string,
 		{ label: string; tone: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' }
-	> = {
+	> = $derived({
 		queued: { label: 'Diantrekan', tone: 'accent' },
 		processing: { label: 'Diproses', tone: 'warning' },
-		completed: { label: 'Selesai', tone: 'success' },
+		completed: { label: tr('Selesai'), tone: 'success' },
 		partial: { label: 'Sebagian gagal', tone: 'warning' },
-		failed: { label: 'Gagal', tone: 'danger' }
-	};
+		failed: { label: tr('Gagal'), tone: 'danger' }
+	});
 	const VARIANT_STATUS_TONE: Record<string, 'neutral' | 'success' | 'warning' | 'danger'> = {
 		queued: 'neutral',
 		processing: 'warning',
@@ -130,19 +132,18 @@
 
 <section>
 	<PageHeader
-		title="Detail batch variant"
+		title={tr("Detail batch variant")}
 		description={batch
-			? `Batch ${batch.batch_id} · ${batch.brand_name ?? '—'} · mode ${batch.mode === 'generate' ? 'dibuatkan dari bahan' : 'parafrase'} · seed ${batch.seed}`
+			? `Batch ${batch.batch_id} · ${batch.brand_name ?? '—'} · mode ${batch.mode === 'generate' ? tr('dibuatkan dari bahan') : 'parafrase'} · seed ${batch.seed}`
 			: `Batch ${batchId}`}
 	>
 		{#if meta}<Badge tone={meta.tone} label={meta.label} />{/if}
 		<a href="/admin/variants" class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" style="text-decoration: none;">
-			<ArrowLeft size={13} /> Kembali ke daftar
-		</a>
+			<ArrowLeft size={13} />{tr("Kembali ke daftar")}</a>
 	</PageHeader>
 
 	{#if loading && !data && !error}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat detail batch variant…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat detail batch variant…")}</p>
 	{:else if error.includes('Akses platform') || error.includes('tidak ditemukan')}
 		<div class="app-card mt-6 px-6 py-10 text-center">
 			<p class="text-sm text-muted-foreground">{error}</p>
@@ -153,7 +154,7 @@
 		<div class="app-card mt-4 p-4">
 			<div class="grid gap-3 sm:grid-cols-3">
 				<div>
-					<p class="text-xs text-muted-foreground">Brand / Klien</p>
+					<p class="text-xs text-muted-foreground">{tr("Brand / Klien")}</p>
 					<p class="text-sm font-medium">{batch.brand_name ?? '—'}</p>
 					{#if batch.brand_public_id}<p class="text-xs text-muted-foreground">{batch.brand_public_id}</p>{/if}
 				</div>
@@ -171,14 +172,14 @@
 				</div>
 				<div>
 					<p class="text-xs text-muted-foreground">Mode</p>
-					<p class="text-sm font-medium">{batch.mode === 'generate' ? 'Dibuatkan dari bahan' : 'Parafrase'}</p>
+					<p class="text-sm font-medium">{batch.mode === 'generate' ? tr('Dibuatkan dari bahan') : 'Parafrase'}</p>
 				</div>
 				<div>
 					<p class="text-xs text-muted-foreground">Seed (PRNG sudut)</p>
 					<code class="text-xs">{batch.seed}</code>
 				</div>
 				<div>
-					<p class="text-xs text-muted-foreground">Dibuat</p>
+					<p class="text-xs text-muted-foreground">{tr("Dibuat")}</p>
 					<p class="text-sm font-medium">{fmtDateTime(batch.created_at)}</p>
 					{#if batch.completed_at}
 						<p class="text-xs text-muted-foreground">selesai {fmtDateTime(batch.completed_at)}</p>
@@ -204,7 +205,7 @@
 					{#if batch.source_material.length > 600}
 						<button
 							class="app-btn app-btn-soft mt-2 !min-h-7 !px-2.5 !text-xs"
-							onclick={() => (showSource = !showSource)}>{showSource ? 'Tutup bahan' : 'Lihat bahan lengkap'}</button
+							onclick={() => (showSource = !showSource)}>{showSource ? 'Tutup bahan' : tr('Lihat bahan lengkap')}</button
 						>
 					{/if}
 				</div>
@@ -217,10 +218,10 @@
 				<table class="w-full text-sm" style="min-width: 1100px;">
 					<thead>
 						<tr class="text-xs text-muted-foreground">
-							<th class="px-4 py-2.5 text-left font-medium">Media</th>
+							<th class="px-4 py-2.5 text-left font-medium">{tr("Media")}</th>
 							<th class="px-4 py-2.5 text-left font-medium">Sudut pandang</th>
 							<th class="px-4 py-2.5 text-left font-medium">Artikel</th>
-							<th class="px-4 py-2.5 text-left font-medium">Publikasi</th>
+							<th class="px-4 py-2.5 text-left font-medium">{tr("Publikasi")}</th>
 							<th class="px-4 py-2.5 text-left font-medium">Status</th>
 							<th class="px-4 py-2.5 text-left font-medium">Waktu</th>
 							<th class="px-4 py-2.5 text-left font-medium"></th>
@@ -229,7 +230,7 @@
 					<tbody>
 						{#if data!.variants.length === 0}
 							<tr
-								><td colspan="7" class="px-4 py-2.5 text-xs text-muted-foreground">Belum ada varian tercatat.</td
+								><td colspan="7" class="px-4 py-2.5 text-xs text-muted-foreground">{tr("Belum ada varian tercatat.")}</td
 								></tr
 							>
 						{/if}
@@ -294,7 +295,7 @@
 								<tr>
 									<td colspan="7" class="px-4 py-3" style="background-color: var(--secondary);">
 										{#if v.jobs.length === 0}
-											<p class="text-xs text-muted-foreground">Belum ada job generasi tercatat.</p>
+											<p class="text-xs text-muted-foreground">{tr("Belum ada job generasi tercatat.")}</p>
 										{/if}
 										{#each v.jobs as j (j.id)}
 											<div class="flex flex-wrap items-start justify-between gap-3 border-b py-2 last:border-0">
@@ -320,10 +321,7 @@
 					</tbody>
 				</table>
 			</div>
-			<p class="mt-3 text-xs text-muted-foreground">
-				Satu batch = satu sumber → satu artikel per media dengan sudut pandang berbeda (PRNG seeded). Klik varian untuk
-				melihat riwayat job generasi di queue.
-			</p>
+			<p class="mt-3 text-xs text-muted-foreground">{tr("Satu batch = satu sumber → satu artikel per media dengan sudut pandang berbeda (PRNG seeded). Klik varian untuk melihat riwayat job generasi di queue.")}</p>
 		</div>
 	{/if}
 </section>

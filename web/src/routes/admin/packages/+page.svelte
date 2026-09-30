@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Paket kredit — port app/admin/packages/page.tsx: paket kredit per brand;
 	// grant langsung tercatat di ledger credit_transactions. Aksi aktif/revoke.
 	import { onMount } from 'svelte';
@@ -110,12 +112,12 @@
 		description="Paket kredit per brand; grant langsung tercatat di ledger credit_transactions (Phase 5)."
 	>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{fmtNum(rows.length)} paket</span>
-		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><Coins size={16} /> Buat paket</button>
+		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><Coins size={16} />{tr("Buat paket")}</button>
 	</PageHeader>
 
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke pengelolaan paket.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke pengelolaan paket.")}</p>
 		</div>
 	{:else}
 		<Feedback {loading} {error} loadingText="Memuat paket kredit…" />
@@ -126,8 +128,8 @@
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">Paket</th>
 						<th class="px-4 py-2.5 font-medium">Brand</th>
-						<th class="px-4 py-2.5 font-medium">Kredit</th>
-						<th class="px-4 py-2.5 font-medium">Harga</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Kredit")}</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Harga")}</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
 						<th class="px-4 py-2.5"></th>
 					</tr>
@@ -162,7 +164,7 @@
 			{#if !loading && rows.length === 0}
 				<div class="flex flex-col items-center px-4 py-12 text-center">
 					<Coins size={26} class="text-muted-foreground" />
-					<p class="mt-2 text-sm text-muted-foreground">Belum ada paket kredit.</p>
+					<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada paket kredit.")}</p>
 				</div>
 			{/if}
 			<div class="px-4 pb-4">
@@ -178,35 +180,35 @@
 </section>
 
 {#if createOpen}
-	<Modal title="Buat paket kredit" label="Buat paket kredit" maxWidth="lg" onClose={() => (createOpen = false)}>
+	<Modal title={tr("Buat paket kredit")} label={tr("Buat paket kredit")} maxWidth="lg" onClose={() => (createOpen = false)}>
 		<form class="flex flex-col gap-3" onsubmit={create}>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Brand</span>
 				<Select
 					ariaLabel="Brand"
 					minWidth={240}
-					placeholder="Pilih brand"
+					placeholder={tr("Pilih brand")}
 					value={form.brand_id}
 					onchange={(v) => (form.brand_id = v)}
 					options={brands.map((b) => ({ value: b.id, label: b.name }))}
 				/>
 			</label>
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Nama paket</span>
-				<input class="app-input w-full" required placeholder="Paket Starter" bind:value={form.name} />
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Nama paket")}</span>
+				<input class="app-input w-full" required placeholder={tr("Paket Starter")} bind:value={form.name} />
 			</label>
 			<div class="grid gap-3 sm:grid-cols-2">
 				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Jumlah kredit</span>
+					<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Jumlah kredit")}</span>
 					<input class="app-input w-full" type="number" min="1" required value={form.credit_total} oninput={(e) => (form = { ...form, credit_total: (e.currentTarget as HTMLInputElement).value })} />
 				</label>
 				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Harga (IDR)</span>
+					<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Harga (IDR)")}</span>
 					<input
 						class="app-input w-full"
 						type="text"
 						inputmode="numeric"
-						value={form.price ? Number(form.price).toLocaleString('id-ID') : ''}
+						value={form.price ? Number(form.price).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }) : ''}
 						oninput={(e) => (form = { ...form, price: (e.currentTarget as HTMLInputElement).value.replace(/\D/g, '') })}
 					/>
 				</label>
@@ -215,8 +217,8 @@
 				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{error}</div>
 			{/if}
 			<div class="mt-1 flex justify-end gap-2 border-t pt-4">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>Batal</button>
-				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Buat paket'}</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Buat paket')}</button>
 			</div>
 		</form>
 	</Modal>

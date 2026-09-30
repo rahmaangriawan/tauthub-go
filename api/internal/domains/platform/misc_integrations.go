@@ -857,16 +857,57 @@ func (d *Deps) GSCConfigGet(w http.ResponseWriter, r *http.Request) {
 	if row != nil {
 		redirectURI = row.strOr("redirect_uri", "")
 	}
+	redirectMissing := false
 	if redirectURI == "" {
-		redirectURI = d.Cfg.PublicAppURL + "/api/gsc/callback"
+		if base := strings.TrimRight(strings.TrimSpace(d.Cfg.PublicAppURL), "/"); base != "" {
+			redirectURI = base + "/api/gsc/callback"
+		} else {
+			redirectMissing = true
+		}
 	}
 	source := "environment"
 	if row != nil && row.strOr("client_id", "") != "" {
 		source = "database"
 	}
+	// Diagnostik admin-only (mirror /v1/platform/oauth/google): alasan rinci
+	// kegagalan konfigurasi + field kurang. Endpoint mitra tidak mengirim ini.
+	secretDecryptable := false
+	configError := ""
+	configErrorDetail := ""
+	missing := []string{}
+	if clientID == "" {
+		missing = append(missing, "client_id")
+	}
+	sealedSecret := ""
+	if row != nil {
+		sealedSecret = row.strOr("sealed_client_secret", "")
+	}
+	if sealedSecret != "" {
+		if plain, uErr := d.unsealT2(sealedSecret); uErr == nil && plain != "" {
+			secretDecryptable = true
+		} else {
+			configError = "secret_decrypt_failed"
+			configErrorDetail = "Client Secret GSC tersimpan tidak dapat di-decrypt (kemungkinan APP_SECRET berubah). Simpan ulang di tab GSC."
+		}
+	} else if strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_SECRET")) != "" {
+		secretDecryptable = true
+	} else {
+		missing = append(missing, "client_secret")
+	}
+	if redirectMissing {
+		missing = append(missing, "redirect_uri")
+	}
+	if configError == "" && len(missing) > 0 {
+		configError = "config_incomplete"
+		configErrorDetail = "Field kurang: " + strings.Join(missing, ", ") + "."
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"client_id": clientID, "client_secret_configured": secretConfigured,
 		"redirect_uri": redirectURI, "source": source,
+		"client_secret_decryptable": secretDecryptable,
+		"config_error":              configError,
+		"config_error_detail":       configErrorDetail,
+		"missing_fields":            missing,
 	})
 }
 
@@ -1617,7 +1658,26 @@ func (d *Deps) SEOConfigGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, igSEOJSON(row))
+	out := igSEOJSON(row)
+	// Diagnostik admin-only: apakah API key tersimpan masih dapat dibuka.
+	configError := ""
+	configErrorDetail := ""
+	decryptable := false
+	if row != nil && row.strOr("sealed_api_key", "") != "" {
+		if plain, uErr := d.unsealT2(row.strOr("sealed_api_key", "")); uErr == nil && plain != "" {
+			decryptable = true
+		} else {
+			configError = "secret_decrypt_failed"
+			configErrorDetail = "API key RapidAPI SEO tersimpan tidak dapat di-decrypt (kemungkinan APP_SECRET berubah). Simpan ulang di tab SEO."
+		}
+	} else {
+		configError = "not_configured"
+		configErrorDetail = "API key RapidAPI SEO belum dikonfigurasi."
+	}
+	out["api_key_decryptable"] = decryptable
+	out["config_error"] = configError
+	out["config_error_detail"] = configErrorDetail
+	writeJSON(w, http.StatusOK, out)
 }
 
 func igSEOJSON(row ptRow) map[string]any {

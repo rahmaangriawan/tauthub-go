@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Panel authentication — satu komponen untuk mode Masuk & Daftar.
 	// Port login-form.tsx: logika bisnis dipertahankan apa adanya (endpoint,
 	// payload, referral code, auto-login setelah daftar, 2FA challenge,
@@ -107,8 +109,8 @@
 
 	function validateRegister(): boolean {
 		const next: typeof fieldErrors = {};
-		if (displayName.trim().length < 2) next.displayName = 'Nama minimal 2 karakter.';
-		if (password.length < 10) next.password = 'Password minimal 10 karakter.';
+		if (displayName.trim().length < 2) next.displayName = tr('Nama minimal 2 karakter.');
+		if (password.length < 10) next.password = tr('Password minimal 10 karakter.');
 		fieldErrors = next;
 		return Object.keys(next).length === 0;
 	}
@@ -119,7 +121,7 @@
 
 		// Guard Turnstile: token wajib sebelum submit (parity legacy).
 		if (turnstileEnabled && !turnstileToken) {
-			error = 'Selesaikan verifikasi keamanan untuk melanjutkan.';
+			error = tr('Selesaikan verifikasi keamanan untuk melanjutkan.');
 			return;
 		}
 		if (mode === 'register' && !validateRegister()) return;
@@ -178,7 +180,7 @@
 			headers,
 			body: JSON.stringify(payload)
 		});
-		if (!res.ok) throw new Error(await readApiError(res, 'Pendaftaran gagal. Periksa isian lalu coba lagi.'));
+		if (!res.ok) throw new Error(await readApiError(res, tr('Pendaftaran gagal. Periksa isian lalu coba lagi.')));
 
 		// Auto-login agar user langsung masuk ke dasbor perannya (parity legacy).
 		const loginRes = await fetch('/v1/auth/login', {
@@ -189,7 +191,7 @@
 		if (!loginRes.ok) {
 			// Akun dibuat tetapi auto-login gagal: arahkan ke mode Masuk.
 			mode = 'login';
-			success = 'Pendaftaran berhasil! Silakan masuk dengan email dan password Anda.';
+			success = tr('Pendaftaran berhasil! Silakan masuk dengan email dan password Anda.');
 			try {
 				const body = (await loginRes.json()) as { detail?: string };
 				if (typeof body.detail === 'string') error = body.detail;
@@ -212,7 +214,7 @@
 				body: JSON.stringify({ challenge, code: twoFactorCode.trim() })
 			});
 			const data = await res.json();
-			if (!res.ok) throw new Error(await readApiError(res, 'Kode verifikasi salah.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Kode verifikasi salah.')));
 			storeSession(data as TokenResponse);
 			await goto(await home((data as TokenResponse).user?.role));
 			return;
@@ -227,7 +229,7 @@
 				turnstile_token: turnstileToken
 			})
 		});
-		if (!res.ok) throw new Error(await readApiError(res, 'Email atau password tidak cocok.'));
+		if (!res.ok) throw new Error(await readApiError(res, tr('Email atau password tidak cocok.')));
 
 		const data = (await res.json()) as TokenResponse & { two_factor_required?: boolean; challenge?: string };
 		if (data.two_factor_required && data.challenge) {
@@ -250,14 +252,13 @@
 	/** Tombol Google: mode Daftar membuka modal peran dulu (brief §6). */
 	function startGoogle() {
 		if (mode === 'login') {
-			window.location.href = googleUrl('login', 'client');
+			void goGoogle('login', 'client');
 			return;
 		}
 		// Halaman peran terkunci (mis. /register/mitra) langsung ke OAuth tanpa
 		// dialog: perannya sudah pasti dari URL.
 		if (lockedRole) {
-			googleBusy = true;
-			window.location.href = googleUrl('register', lockedRole);
+			void goGoogle('register', lockedRole);
 			return;
 		}
 		// Modal peran selalu mulai tanpa pilihan, walau radio form punya default.
@@ -272,10 +273,33 @@
 		return `/v1/auth/google/url?${params}`;
 	}
 
+	/**
+	 * Cek dulu apakah Google Sign-In siap (server balas 302 → opaqueredirect).
+	 * Tanpa ini, konfigurasi yang belum lengkap melempar user ke halaman JSON
+	 * 503 dan mereka buntu tanpa cara kembali selain tombol back.
+	 */
+	async function goGoogle(m: Mode, r: Role) {
+		const url = googleUrl(m, r);
+		googleBusy = true;
+		error = '';
+		try {
+			const probe = await fetch(url, { redirect: 'manual', cache: 'no-store' });
+			if (probe.type !== 'opaqueredirect' && !probe.ok) {
+				// Pesan server tidak pernah ditampilkan ke publik (bisa memuat
+				// detail konfigurasi internal). Tampilkan pesan generik saja.
+				error = tr('Error, coba lagi nanti.');
+				googleBusy = false;
+				return;
+			}
+		} catch {
+			// Pratinjau gagal (mis. CORS) — biarkan navigasi yang menentukan.
+		}
+		window.location.href = url;
+	}
+
 	function continueGoogle() {
 		if (!googleRole) return;
-		googleBusy = true;
-		window.location.href = googleUrl('register', googleRole);
+		void goGoogle('register', googleRole);
 	}
 </script>
 
@@ -292,19 +316,19 @@
 />
 
 <h1 class="auth-title">
-	{challenge ? 'Verifikasi dua langkah' : mode === 'login' ? 'Selamat datang kembali' : 'Buat akun Tauthub'}
+	{challenge ? tr('Verifikasi dua langkah') : mode === 'login' ? tr('Selamat datang kembali') : tr('Buat akun Tauthub')}
 </h1>
 <p class="auth-subtitle">
 	{challenge
-		? 'Masukkan kode 6 digit dari aplikasi autentikator Anda.'
+		? tr('Masukkan kode 6 digit dari aplikasi autentikator Anda.')
 		: mode === 'login'
-			? 'Masuk untuk melanjutkan pekerjaan brand Anda.'
-			: 'Daftar untuk membuat brand pertama Anda.'}
+			? tr('Masuk untuk melanjutkan pekerjaan brand Anda.')
+			: tr('Daftar untuk membuat brand pertama Anda.')}
 </p>
 
 {#if !challenge}
 	<!-- Segmented switch: tetap di posisi yang sama untuk kedua mode (brief §4-§5). -->
-	<div class="auth-switch" role="tablist" aria-label="Pilih Masuk atau Daftar">
+	<div class="auth-switch" role="tablist" aria-label={tr("Pilih Masuk atau Daftar")}>
 		<button
 			type="button"
 			role="tab"
@@ -312,7 +336,7 @@
 			id="tab-masuk"
 			aria-controls="auth-panel"
 			onclick={() => switchMode('login')}
-		>Masuk</button>
+		>{tr("Masuk")}</button>
 		<button
 			type="button"
 			role="tab"
@@ -320,7 +344,7 @@
 			id="tab-daftar"
 			aria-controls="auth-panel"
 			onclick={() => switchMode('register')}
-		>Daftar</button>
+		>{tr("Daftar")}</button>
 	</div>
 
 	<button type="button" class="auth-google" disabled={busy || googleBusy} onclick={startGoogle}>
@@ -330,10 +354,10 @@
 			<path fill="#FBBC05" d="M3.97 10.72a5.41 5.41 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z" />
 			<path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
 		</svg>
-		{mode === 'login' ? 'Masuk dengan Google' : 'Daftar dengan Google'}
+		{mode === 'login' ? tr('Masuk dengan Google') : tr('Daftar dengan Google')}
 	</button>
 
-	<div class="auth-divider"><span>atau</span></div>
+	<div class="auth-divider"><span>{tr("atau")}</span></div>
 {/if}
 
 <!-- aria-label menggantikan role tabpanel: panel ini satu-satunya panel,
@@ -341,16 +365,13 @@
 <form
 	class="auth-form"
 	id="auth-panel"
-	aria-label={mode === 'login' ? 'Form masuk' : 'Form pendaftaran'}
+	aria-label={mode === 'login' ? tr('Form masuk') : tr('Form pendaftaran')}
 	onsubmit={submit}
 >
 	{#if challenge}
-		<div class="auth-2fa-note">
-			Buka aplikasi autentikator (Google Authenticator / Authy) atau gunakan salah satu kode
-			pemulihan Anda.
-		</div>
+		<div class="auth-2fa-note">{tr("Buka aplikasi autentikator (Google Authenticator / Authy) atau gunakan salah satu kode pemulihan Anda.")}</div>
 		<label class="auth-field">
-			<span class="auth-label">Kode verifikasi</span>
+			<span class="auth-label">{tr("Kode verifikasi")}</span>
 			<input
 				class="auth-input"
 				type="text"
@@ -364,12 +385,12 @@
 	{:else}
 		{#if mode === 'register'}
 			<label class="auth-field">
-				<span class="auth-label">Nama lengkap / nama perusahaan</span>
+				<span class="auth-label">{tr("Nama lengkap / nama perusahaan")}</span>
 				<input
 					class="auth-input"
 					type="text"
 					bind:value={displayName}
-					placeholder="Nama Anda"
+					placeholder={tr("Nama Anda")}
 					autocomplete="name"
 					minlength={2}
 					maxlength={120}
@@ -382,22 +403,20 @@
 			</label>
 
 			<div class="auth-field">
-				<span class="auth-label">
-					Daftar sebagai
-					<!-- Tooltip penjelas peran: muncul saat hover DAN focus agar dapat
+				<span class="auth-label">{tr("Daftar sebagai")}<!-- Tooltip penjelas peran: muncul saat hover DAN focus agar dapat
 					     diakses keyboard (parity Tooltip app lama pada label ini). -->
 					<span class="auth-tip">
 						<button
 							type="button"
 							class="auth-info"
-							aria-label="Penjelasan peran Klien dan Mitra"
+							aria-label={tr("Penjelasan peran Klien dan Mitra")}
 							aria-describedby="auth-role-tip"
 						>
 							<Info size={13} />
 						</button>
 						<span class="auth-tip-panel" role="tooltip" id="auth-role-tip">
-							<span class="auth-tip-row"><b>Klien:</b> kelola kampanye, analisis, dan distribusikan lewat mitra.</span>
-							<span class="auth-tip-row"><b>Mitra:</b> terima publikasi dari klien dan hasilkan uang dari distribusi konten.</span>
+							<span class="auth-tip-row"><b>{tr("Klien:")}</b> {tr("kelola kampanye, analisis, dan distribusikan lewat mitra.")}</span>
+							<span class="auth-tip-row"><b>{tr("Mitra:")}</b> {tr("terima publikasi dari klien dan hasilkan uang dari distribusi konten.")}</span>
 						</span>
 					</span>
 				</span>
@@ -409,9 +428,7 @@
 							value="client"
 							checked={role === 'client'}
 							onchange={() => (role = 'client')}
-						/>
-						Klien
-					</label>
+						/>{tr("Klien")}</label>
 					<label class="auth-role" data-checked={role === 'partner'}>
 						<input
 							type="radio"
@@ -419,20 +436,18 @@
 							value="partner"
 							checked={role === 'partner'}
 							onchange={() => (role = 'partner')}
-						/>
-						Mitra
-					</label>
+						/>{tr("Mitra")}</label>
 				</div>
 			</div>
 		{/if}
 
 		<label class="auth-field">
-			<span class="auth-label">Email</span>
+			<span class="auth-label">{tr("Email")}</span>
 			<input
 				class="auth-input"
 				type="email"
 				bind:value={email}
-				placeholder="nama@perusahaan.com"
+				placeholder={tr("nama@perusahaan.com")}
 				autocomplete="email"
 				aria-invalid={fieldErrors.email ? 'true' : undefined}
 				required
@@ -443,13 +458,13 @@
 		</label>
 
 		<label class="auth-field">
-			<span class="auth-label">Password</span>
+			<span class="auth-label">{tr("Password")}</span>
 			<span class="auth-input-wrap">
 				<input
 					class="auth-input has-affix"
 					type={showPassword ? 'text' : 'password'}
 					bind:value={password}
-					placeholder="Masukkan password"
+					placeholder={tr("Masukkan password")}
 					autocomplete={mode === 'register' ? 'new-password' : 'current-password'}
 					minlength={mode === 'register' ? 10 : undefined}
 					aria-invalid={fieldErrors.password ? 'true' : undefined}
@@ -458,7 +473,7 @@
 				<button
 					type="button"
 					class="auth-eye"
-					aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+					aria-label={showPassword ? tr('Sembunyikan password') : tr('Tampilkan password')}
 					aria-pressed={showPassword}
 					onclick={() => (showPassword = !showPassword)}
 				>
@@ -468,14 +483,14 @@
 			{#if fieldErrors.password}
 				<p class="auth-field-error"><CircleAlert size={13} />{fieldErrors.password}</p>
 			{:else if mode === 'register'}
-				<p class="auth-helper">Minimal 10 karakter.</p>
+				<p class="auth-helper">{tr("Minimal 10 karakter.")}</p>
 			{/if}
 		</label>
 
 		{#if mode === 'login'}
 			<div class="auth-row-between">
 				<span></span>
-				<a class="auth-link" href="/forgot-password">Lupa password?</a>
+				<a class="auth-link" href="/forgot-password">{tr("Lupa password?")}</a>
 			</div>
 		{/if}
 	{/if}
@@ -493,9 +508,7 @@
 			{#if verified && turnstileToken}
 				<div class="auth-verify-ok" role="status">
 					<Check size={15} />
-					<div>
-						Berhasil!
-						<small>Verifikasi keamanan berhasil.</small>
+					<div>{tr("Berhasil!")}<small>{tr("Verifikasi keamanan berhasil.")}</small>
 					</div>
 				</div>
 			{:else}
@@ -529,10 +542,10 @@
 					? 'Memproses…'
 					: 'Mendaftarkan…'
 			: challenge
-				? 'Verifikasi & masuk'
+				? tr('Verifikasi & masuk')
 				: mode === 'login'
-					? 'Masuk ke brand'
-					: 'Daftar dan masuk'}
+					? tr('Masuk')
+					: tr('Daftar')}
 	</button>
 </form>
 
@@ -547,10 +560,10 @@
 				error = '';
 				resetTurnstile();
 			}}
-		>Kembali ke form masuk</button>
+		>{tr("Kembali ke form masuk")}</button>
 	</p>
 {:else}
 	<!-- TODO: tautkan ke halaman kebijakan privasi setelah halaman itu dibuat
 	     (belum ada di app lama maupun repo ini, jadi sengaja bukan tautan mati). -->
-	<p class="auth-privacy">Dengan melanjutkan, Anda menyetujui kebijakan privasi.</p>
+	<p class="auth-privacy">{tr("Dengan melanjutkan, Anda menyetujui kebijakan privasi.")}</p>
 {/if}

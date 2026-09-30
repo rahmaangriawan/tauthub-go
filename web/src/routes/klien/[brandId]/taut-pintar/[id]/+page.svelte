@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Router kampanye Taut Pintar — "lanjutkan dari lokasi terakhir".
 	// Port app/klien/[brandId]/taut-pintar/[id]/page.tsx (server redirect) ke
 	// redirect sisi klien: SvelteKit tidak punya server redirect per-data di
@@ -41,7 +43,7 @@
 	async function route() {
 		const res = await apiRequest(`/v1/brands/${brandId}/taut/campaigns/${campaignId}`);
 		if (!res.ok) {
-			error = 'Kampanye tidak ditemukan.';
+			error = tr('Kampanye tidak ditemukan.');
 			return;
 		}
 		const campaign = await res.json();
@@ -79,6 +81,14 @@
 			return;
 		}
 
+		// Kampanye dari jalur Kilat kembali ke halamannya sendiri — statusnya
+		// 'draft' sama seperti kampanye AI Pintar yang belum diisi, jadi penanda
+		// entry_mode yang membedakan (migrasi 169).
+		if (campaign?.entry_mode === 'kilat') {
+			await goto(`${base}/kilat`, { replaceState: true });
+			return;
+		}
+
 		// Status wizard lama (materials/budget/...) dan tanpa status → The Profiler.
 		await goto(`${base}/profiler`, { replaceState: true });
 	}
@@ -107,13 +117,13 @@
 	}
 </script>
 
-<PageTitle title="Taut Pintar — Kampanye" />
+<PageTitle title={tr("Taut Pintar — Kampanye")} />
 
 <div class="flex items-center gap-2 py-10 text-sm text-muted-foreground">
 	<LoaderCircle size={18} class="animate-spin" />
 	{#if error}
 		<span style="color: var(--destructive);">{error}</span>
-		<a class="app-btn app-btn-soft ml-2" href={`/klien/${getBrandUrlId() || brandId}/taut-pintar`}>Kembali ke daftar</a>
+		<a class="app-btn app-btn-soft ml-2" href={`/klien/${getBrandUrlId() || brandId}/taut-pintar`}>{tr("Kembali ke daftar")}</a>
 	{:else}
 		<span>Mengarahkan ke langkah berikutnya…</span>
 	{/if}

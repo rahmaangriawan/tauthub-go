@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Tab Pending /admin/media — media baru menunggu review Admin (pending_review).
 	// Port MediaPendingSection di apps/web/src/app/admin/media/_sections.tsx.
 	import { Search } from '@lucide/svelte';
@@ -183,7 +185,7 @@
 {/snippet}
 
 {#snippet statusCell()}
-	<Badge tone="warning" label="🟡 Menunggu Review" />
+	<Badge tone="warning" label={tr("🟡 Menunggu Review")} />
 {/snippet}
 
 {#snippet pendingActions(row: Media)}
@@ -208,10 +210,10 @@
 {/snippet}
 
 {#if loading && rows.length === 0 && !error}
-	<p class="mt-6 text-sm text-muted-foreground">Memuat media pending…</p>
+	<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat media pending…")}</p>
 {:else if rows.length === 0 && isAccessError(error)}
 	<div class="app-card mt-6 px-6 py-10 text-center">
-		<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke media pending.</p>
+		<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke media pending.")}</p>
 	</div>
 {:else}
 	<div class="mt-4 flex flex-wrap items-center gap-2">
@@ -219,8 +221,8 @@
 			<Search size={15} class="text-muted-foreground" />
 			<input
 				class="w-full bg-transparent text-sm outline-none"
-				placeholder="Cari nama, slug, atau kategori…"
-				aria-label="Cari media pending"
+				placeholder={tr("Cari nama, slug, atau kategori…")}
+				aria-label={tr("Cari media pending")}
 				bind:value={search}
 				oninput={() => (page = 1)}
 			/>
@@ -241,12 +243,12 @@
 
 	<DataTable
 		columns={[
-			{ key: 'name', label: 'Media', render: mediaCell },
+			{ key: 'name', label: tr('Media'), render: mediaCell },
 			{ key: 'changes', label: 'Perubahan', render: changesCell },
 			{ key: 'category', label: 'Kategori', render: categoryCell },
 			{ key: 'website', label: 'Website', render: websiteCell },
-			{ key: 'price', label: 'Harga', render: priceCell },
-			{ key: 'partner', label: 'Mitra', render: partnerCell },
+			{ key: 'price', label: tr('Harga'), render: priceCell },
+			{ key: 'partner', label: tr('Mitra'), render: partnerCell },
 			{ key: 'updated', label: 'Diperbarui', render: updatedCell },
 			{ key: 'status', label: 'Status', render: statusCell },
 			{ key: 'actions', label: '', render: pendingActions }
@@ -254,7 +256,7 @@
 		rows={rows}
 		rowKey={(row: Media) => row.id}
 		{loading}
-		empty="Tidak ada media menunggu review."
+		empty={tr("Tidak ada media menunggu review.")}
 		minWidth="1200px"
 	/>
 
@@ -268,20 +270,18 @@
 
 {#if reviewTarget}
 	<Modal title={`Review media — ${reviewTarget.name}`} maxWidth="md" onClose={() => (reviewTarget = null)}>
-		<p class="text-sm text-muted-foreground">
-			Tolak media ini. Alasan akan dikirim ke mitra. (Negosiasi harga dinonaktifkan — harga ditentukan mitra.)
-		</p>
+		<p class="text-sm text-muted-foreground">{tr("Tolak media ini. Alasan akan dikirim ke mitra. (Negosiasi harga dinonaktifkan — harga ditentukan mitra.)")}</p>
 		<label class="mt-3 block">
 			<span class="text-xs font-medium text-muted-foreground">Alasan / Catatan</span>
 			<textarea
 				class="app-input mt-1 w-full"
 				rows="4"
 				bind:value={rejectReason}
-				placeholder="Contoh: Kualitas konten belum memenuhi standar..."
+				placeholder={tr("Contoh: Kualitas konten belum memenuhi standar...")}
 			></textarea>
 		</label>
 		<div class="mt-3 flex justify-end gap-2">
-			<button class="app-btn app-btn-soft" disabled={reviewBusy} onclick={() => (reviewTarget = null)}>Batal</button>
+			<button class="app-btn app-btn-soft" disabled={reviewBusy} onclick={() => (reviewTarget = null)}>{tr("Batal")}</button>
 			<button
 				class="app-btn app-btn-primary"
 				style="background-color: var(--destructive);"

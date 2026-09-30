@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Monitoring VIP — port app/admin/vip-partners/page.tsx: monitoring mitra
 	// VVIP (Brand Ambassador) & VIP Reguler: kontrak, domain referral yang join,
 	// domain yang dapat orderan, kuota tier, rate, fee dibayar, dan komisi.
@@ -37,9 +39,9 @@
 	};
 
 	const DOMAIN_PAGE_SIZE = 20;
-	const REFERRAL_STATUS_LABEL: Record<string, string> = {
-		pending: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak'
-	};
+	const REFERRAL_STATUS_LABEL: Record<string, string> = $derived({
+		pending: tr('Menunggu'), approved: tr('Disetujui'), rejected: tr('Ditolak')
+	});
 	const REFERRAL_STATUS_TONE: Record<string, 'warning' | 'success' | 'danger' | 'neutral'> = {
 		pending: 'warning', approved: 'success', rejected: 'danger'
 	};
@@ -115,18 +117,18 @@
 <section>
 	<PageHeader
 		title="Monitoring VIP"
-		description="Tracking & monitoring mitra VVIP dan VIP Reguler: domain referral yang join, domain yang dapat orderan, kuota, kontrak, dan total pencairan."
+		description={tr("Tracking & monitoring mitra VVIP dan VIP Reguler: domain referral yang join, domain yang dapat orderan, kuota, kontrak, dan total pencairan.")}
 	/>
 
 	<div class="app-card mt-3 flex items-start gap-2 px-4 py-3 text-xs" style="color: var(--warning);">
 		<TriangleAlert size={16} class="mt-0.5 shrink-0" />
-		<span><strong>Beda konsep:</strong> VVIP (Brand Ambassador) dapat komisi transaksi lebih besar + akses Client Workspace. VIP Reguler hanya fee per-domain bertingkat — tanpa akses Client Workspace.</span>
+		<span><strong>Beda konsep:</strong>{tr("VVIP (Brand Ambassador) dapat komisi transaksi lebih besar + akses Client Workspace. VIP Reguler hanya fee per-domain bertingkat — tanpa akses Client Workspace.")}</span>
 	</div>
 
 	{#if !loaded}
-		<p class="mt-6 text-sm text-muted-foreground">Memuat monitoring VIP…</p>
+		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat monitoring VIP…")}</p>
 	{:else if hasAksesError}
-		<div class="app-card mt-3 px-4 py-3 text-sm text-muted-foreground">Akun ini tidak memiliki akses ke monitoring VIP.</div>
+		<div class="app-card mt-3 px-4 py-3 text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke monitoring VIP.")}</div>
 	{:else}
 		{#if error}
 			<div class="app-card mt-3 px-4 py-3 text-sm" style="color: var(--destructive);">{error}</div>
@@ -134,7 +136,7 @@
 
 		<div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 			<div class="app-card min-h-[92px] p-4">
-				<p class="text-xs text-muted-foreground">Total Mitra VIP</p>
+				<p class="text-xs text-muted-foreground">{tr("Total Mitra VIP")}</p>
 				<p class="mt-1 text-2xl font-bold">{fmtNum(summary?.total ?? 0)}</p>
 				<p class="text-xs text-muted-foreground">{fmtNum(summary?.active ?? 0)} aktif</p>
 			</div>
@@ -159,32 +161,30 @@
 				<p class="text-xs text-muted-foreground">{fmtNum(summary?.orders_published_total ?? 0)} order terbit</p>
 			</div>
 			<div class="app-card min-h-[92px] p-4">
-				<p class="text-xs text-muted-foreground">GMV Order Terbit</p>
+				<p class="text-xs text-muted-foreground">{tr("GMV Order Terbit")}</p>
 				<p class="mt-1 text-2xl font-bold" style="color: var(--success);">{fmtRp(summary?.gmv_published_total ?? 0)}</p>
 			</div>
 			<div class="app-card min-h-[92px] p-4">
-				<p class="text-xs text-muted-foreground">Total Fee Domain</p>
+				<p class="text-xs text-muted-foreground">{tr("Total Fee Domain")}</p>
 				<p class="mt-1 text-2xl font-bold" style="color: var(--success);">{fmtRp(summary?.fee_paid_total ?? 0)}</p>
 			</div>
 			<div class="app-card min-h-[92px] p-4">
-				<p class="text-xs text-muted-foreground">Total Komisi</p>
+				<p class="text-xs text-muted-foreground">{tr("Total Komisi")}</p>
 				<p class="mt-1 text-2xl font-bold" style="color: var(--success);">{fmtRp(summary?.commission_total ?? 0)}</p>
 			</div>
 		</div>
 
 		<div class="app-card mt-4 overflow-x-auto">
 			{#if items.length === 0}
-				<p class="px-4 py-4 text-sm text-muted-foreground">Belum ada mitra VVIP atau VIP Reguler.</p>
+				<p class="px-4 py-4 text-sm text-muted-foreground">{tr("Belum ada mitra VVIP atau VIP Reguler.")}</p>
 			{:else}
-				<p class="px-4 pt-3 text-xs text-muted-foreground">
-					Klik baris mitra untuk melihat daftar domain referral-nya (domain ini referal dari akun siapa &amp; sudah dapat orderan atau belum).
-				</p>
+				<p class="px-4 pt-3 text-xs text-muted-foreground">{tr("Klik baris mitra untuk melihat daftar domain referral-nya (domain ini referal dari akun siapa & sudah dapat orderan atau belum).")}</p>
 				<table class="mt-2 w-full text-sm" style="min-width: 1320px;">
 					<thead>
 						<tr class="text-left text-xs text-muted-foreground">
-							<th class="px-4 py-2.5 font-medium">Mitra</th>
+							<th class="px-4 py-2.5 font-medium">{tr("Mitra")}</th>
 							<th class="px-4 py-2.5 font-medium">Tier</th>
-							<th class="px-4 py-2.5 font-medium">Status Kontrak</th>
+							<th class="px-4 py-2.5 font-medium">{tr("Status Kontrak")}</th>
 							<th class="px-4 py-2.5 font-medium">Domain Join</th>
 							<th class="px-4 py-2.5 font-medium">Domain Order</th>
 							<th class="px-4 py-2.5 font-medium">Kuota Tier</th>
@@ -213,7 +213,7 @@
 								</td>
 								<td class="px-4 py-2.5">
 									{#if p.is_active}
-										<Badge label="Aktif" tone="success" />
+										<Badge label={tr("Aktif")} tone="success" />
 										<p class="mt-1 text-xs text-muted-foreground">
 											{p.days_remaining != null
 												? `${Math.max(0, p.days_remaining)} hari lagi`
@@ -233,7 +233,7 @@
 									<p class="text-xs text-muted-foreground">{fmtNum(p.domains_paid)} fee dibayar</p>
 								</td>
 								<td class="px-4 py-2.5">
-									<p class="font-medium" style={p.domains_with_orders > 0 ? 'color: var(--success);' : undefined}>{fmtNum(p.domains_with_orders)} dapat orderan</p>
+									<p class="font-medium" style={p.domains_with_orders > 0 ? 'color: var(--success);' : undefined}>{fmtNum(p.domains_with_orders)} {tr("dapat orderan")}</p>
 									<p class="text-xs text-muted-foreground">{fmtNum(p.orders_published_total)} order terbit</p>
 									<p class="text-xs text-muted-foreground">GMV {fmtRp(p.gmv_published_total)}</p>
 								</td>
@@ -246,7 +246,7 @@
 											</p>
 										{/if}
 									{:else}
-										<span class="text-xs text-muted-foreground">Tidak berlaku</span>
+										<span class="text-xs text-muted-foreground">{tr("Tidak berlaku")}</span>
 									{/if}
 								</td>
 								<td class="px-4 py-2.5">
@@ -277,17 +277,15 @@
 
 {#if detailTarget}
 	<Modal
-		title={`Domain Referral — ${detailTarget.name ?? detailTarget.email ?? 'Mitra'}`}
+		title={`Domain Referral — ${detailTarget.name ?? detailTarget.email ?? tr('Mitra')}`}
 		label="Domain referral mitra VIP"
 		maxWidth="2xl"
 		onClose={() => { detailTarget = null; domains = []; domainsError = ''; }}
 	>
-		<p class="text-xs text-muted-foreground">
-			Daftar domain yang direferensikan akun ini, lengkap pemilik, media, jumlah order terbit, dan fee yang sudah dibayar.
-		</p>
+		<p class="text-xs text-muted-foreground">{tr("Daftar domain yang direferensikan akun ini, lengkap pemilik, media, jumlah order terbit, dan fee yang sudah dibayar.")}</p>
 
 		<div class="mt-3 flex flex-wrap gap-2">
-			{#each [['', 'Semua Domain'], ['with', 'Sudah Dapat Orderan'], ['without', 'Belum Ada Orderan']] as [key, label] (key || 'all')}
+			{#each [['', 'Semua Domain'], ['with', 'Sudah Dapat Orderan'], ['without', tr('Belum Ada Orderan')]] as [key, label] (key || 'all')}
 				<button
 					class="app-btn !min-h-8 !px-3 !text-xs"
 					class:app-btn-primary={orderFilter === key}
@@ -303,14 +301,14 @@
 		{/if}
 
 		{#if domainsLoading}
-			<p class="mt-3 text-sm text-muted-foreground">Memuat domain…</p>
+			<p class="mt-3 text-sm text-muted-foreground">{tr("Memuat domain…")}</p>
 		{:else if domains.length === 0}
 			<p class="mt-3 text-sm text-muted-foreground">
 				{orderFilter === 'with'
-					? 'Belum ada domain yang mendapat orderan terbit.'
+					? tr('Belum ada domain yang mendapat orderan terbit.')
 					: orderFilter === 'without'
-						? 'Semua domain sudah mendapat orderan terbit.'
-						: 'Belum ada domain referral untuk mitra ini.'}
+						? tr('Semua domain sudah mendapat orderan terbit.')
+						: tr('Belum ada domain referral untuk mitra ini.')}
 			</p>
 		{:else}
 			<div class="mt-3 max-h-[420px] overflow-auto">
@@ -318,9 +316,9 @@
 					<thead>
 						<tr class="text-left text-xs text-muted-foreground">
 							<th class="py-2 pr-3 font-medium">Domain</th>
-							<th class="py-2 pr-3 font-medium">Pemilik (Akun)</th>
-							<th class="py-2 pr-3 font-medium">Media</th>
-							<th class="py-2 pr-3 font-medium">Status Referal</th>
+							<th class="py-2 pr-3 font-medium">{tr("Pemilik (Akun)")}</th>
+							<th class="py-2 pr-3 font-medium">{tr("Media")}</th>
+							<th class="py-2 pr-3 font-medium">{tr("Status Referal")}</th>
 							<th class="py-2 pr-3 font-medium">Order</th>
 							<th class="py-2 pr-3 font-medium">Fee</th>
 							<th class="py-2 pr-3 font-medium">Join</th>
@@ -350,10 +348,10 @@
 								<td class="py-2 pr-3">
 									{#if d.orders_published > 0}
 										<p class="text-sm font-medium" style="color: var(--success);">{fmtNum(d.orders_published)} terbit</p>
-										<p class="text-xs text-muted-foreground">dari {fmtNum(d.orders_total)} order</p>
+										<p class="text-xs text-muted-foreground">{tr("dari")} {fmtNum(d.orders_total)} order</p>
 										<p class="text-xs text-muted-foreground">GMV {fmtRp(d.gmv_published)}</p>
 									{:else}
-										<p class="text-sm text-muted-foreground">Belum ada</p>
+										<p class="text-sm text-muted-foreground">{tr("Belum ada")}</p>
 										{#if d.orders_total > 0}<p class="text-xs text-muted-foreground">{fmtNum(d.orders_total)} order belum terbit</p>{/if}
 									{/if}
 								</td>
@@ -362,7 +360,7 @@
 										<Badge label="Dibayar" tone="success" />
 										{#if d.cpa_amount != null}<p class="mt-1 text-xs text-muted-foreground">{fmtRp(d.cpa_amount)}</p>{/if}
 									{:else}
-										<Badge label="Belum dibayar" tone="neutral" />
+										<Badge label={tr("Belum dibayar")} tone="neutral" />
 									{/if}
 								</td>
 								<td class="py-2 pr-3 text-xs text-muted-foreground">{d.created_at ? fmtDate(d.created_at) : '—'}</td>
@@ -374,7 +372,7 @@
 			</div>
 
 			<div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-				<span>Menampilkan {domainsOffset + 1}–{Math.min(domainsOffset + DOMAIN_PAGE_SIZE, domainsTotal)} dari {fmtNum(domainsTotal)} domain</span>
+				<span>{tr("Menampilkan")} {domainsOffset + 1}–{Math.min(domainsOffset + DOMAIN_PAGE_SIZE, domainsTotal)} {tr("dari")} {fmtNum(domainsTotal)} domain</span>
 				<div class="flex items-center gap-2">
 					<button
 						class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
@@ -394,7 +392,7 @@
 		{/if}
 
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => { detailTarget = null; domains = []; domainsError = ''; }}>Tutup</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => { detailTarget = null; domains = []; domainsError = ''; }}>{tr("Tutup")}</button>
 		{/snippet}
 	</Modal>
 {/if}

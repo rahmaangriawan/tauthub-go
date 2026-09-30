@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Daftar & tambah admin platform — memakai endpoint yang sama dengan
 	// app lama `/admin/roles` (GET/POST /v1/platform/admins). App lama tidak
 	// punya route `/admin/admins`; menu baru di shell memisahkan daftar admin
@@ -24,20 +26,20 @@
 		'users', 'partners', 'brands', 'content', 'pr', 'integrations'
 	] as const;
 
-	const PERMISSION_LABELS: Record<string, string> = {
+	const PERMISSION_LABELS: Record<string, string> = $derived({
 		media: 'Approve & kelola media (domain mitra)',
-		publications: 'Publikasi',
+		publications: tr('Publikasi'),
 		settlements: 'Penarikan penghasilan mitra',
 		payments: 'Pembayaran & gateway',
 		topup: 'Error saldo top-up',
 		errors: 'Error logs & operasional',
-		users: 'Kelola user & persetujuan',
-		partners: 'Mitra',
+		users: tr('Kelola user & persetujuan'),
+		partners: tr('Mitra'),
 		brands: 'Brand & konten',
 		content: 'Konten & kualitas',
 		pr: 'PR & kalkulator',
 		integrations: 'Integrasi & koneksi'
-	};
+	});
 
 	function emptyPermissions(): Record<string, boolean> {
 		const out: Record<string, boolean> = {};
@@ -123,14 +125,14 @@
 </script>
 
 <section>
-	<PageHeader title="Admins" description="Daftar admin platform dan tambah admin baru dari email user yang sudah terdaftar.">
-		<button class="app-btn app-btn-primary" type="button" onclick={openCreate}><Plus size={16} /> Tambah admin</button>
+	<PageHeader title="Admins" description={tr("Daftar admin platform dan tambah admin baru dari email user yang sudah terdaftar.")}>
+		<button class="app-btn app-btn-primary" type="button" onclick={openCreate}><Plus size={16} />{tr("Tambah admin")}</button>
 	</PageHeader>
 
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
 			<h2 class="text-base font-semibold">Khusus Super Admin</h2>
-			<p class="mt-1 text-sm text-muted-foreground">Halaman ini hanya dapat diakses oleh Super Admin.</p>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Halaman ini hanya dapat diakses oleh Super Admin.")}</p>
 			<a class="app-btn app-btn-soft mt-4" href="/admin">Ke Overview</a>
 		</div>
 	{:else}
@@ -142,7 +144,7 @@
 						<th class="px-4 py-2.5 font-medium">Admin</th>
 						<th class="px-4 py-2.5 font-medium">Role</th>
 						<th class="px-4 py-2.5 font-medium">Hak Akses</th>
-						<th class="px-4 py-2.5 font-medium">Dibuat</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Dibuat")}</th>
 						<th class="px-4 py-2.5"></th>
 					</tr>
 				</thead>
@@ -155,7 +157,7 @@
 									{#if admin.user_id === currentUserId}<Badge label="Anda" tone="neutral" />{/if}
 								</p>
 								<p class="text-xs text-muted-foreground">{admin.email}</p>
-								{#if !admin.is_active}<Badge label="Akun nonaktif" tone="danger" />{/if}
+								{#if !admin.is_active}<Badge label={tr("Akun nonaktif")} tone="danger" />{/if}
 							</td>
 							<td class="px-4 py-2.5">
 								<span
@@ -168,9 +170,9 @@
 									<span class="flex items-center gap-2 text-sm text-muted-foreground"><ShieldCheck size={15} /> Akses penuh</span>
 								{:else}
 									<p class="max-w-[420px] text-xs text-muted-foreground">
-										{PERMISSION_KEYS.filter((key) => admin.permissions[key]).map((key) => PERMISSION_LABELS[key]).join(', ') || 'Belum ada hak akses.'}
+										{PERMISSION_KEYS.filter((key) => admin.permissions[key]).map((key) => PERMISSION_LABELS[key]).join(', ') || tr('Belum ada hak akses.')}
 									</p>
-									<a class="text-xs" style="color: var(--primary);" href="/admin/roles">Atur di Role &amp; Akses →</a>
+									<a class="text-xs" style="color: var(--primary);" href="/admin/roles">Atur di Role & Akses →</a>
 								{/if}
 							</td>
 							<td class="px-4 py-2.5 text-xs text-muted-foreground">{fmtDate(admin.created_at)}</td>
@@ -190,18 +192,18 @@
 				</tbody>
 			</table>
 			{#if !loading && rows.length === 0 && !error}
-				<div class="px-4 py-12 text-center text-sm text-muted-foreground">Belum ada admin yang terdaftar.</div>
+				<div class="px-4 py-12 text-center text-sm text-muted-foreground">{tr("Belum ada admin yang terdaftar.")}</div>
 			{/if}
 		</div>
 	{/if}
 </section>
 
 {#if dialogOpen}
-	<Modal title="Tambah admin" label="Tambah admin" maxWidth="lg" onClose={() => (dialogOpen = false)}>
-		<p class="text-sm text-muted-foreground">Cari user berdasarkan email yang sudah terdaftar, lalu beri role dan hak akses menu.</p>
+	<Modal title={tr("Tambah admin")} label={tr("Tambah admin")} maxWidth="lg" onClose={() => (dialogOpen = false)}>
+		<p class="text-sm text-muted-foreground">{tr("Cari user berdasarkan email yang sudah terdaftar, lalu beri role dan hak akses menu.")}</p>
 		<form class="mt-4 flex flex-col gap-3" onsubmit={submitCreate}>
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Email user</span>
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Email user")}</span>
 				<input class="app-input w-full" type="email" required placeholder="pengelola@gmail.com" bind:value={draftEmail} />
 			</label>
 			<div>
@@ -236,22 +238,21 @@
 				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{error}</div>
 			{/if}
 			<div class="mt-1 flex justify-end gap-2 border-t pt-4">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (dialogOpen = false)}>Batal</button>
-				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Tambah admin'}</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (dialogOpen = false)}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Tambah admin')}</button>
 			</div>
 		</form>
 	</Modal>
 {/if}
 
 {#if deleting}
-	<Modal title="Hapus role admin?" label="Hapus role admin" maxWidth="md" onClose={() => (deleting = null)}>
+	<Modal title={tr("Hapus role admin?")} label={tr("Hapus role admin")} maxWidth="md" onClose={() => (deleting = null)}>
 		<p class="text-sm text-muted-foreground">
-			{deleting.display_name || deleting.email} akan kehilangan akses dashboard admin. Akun user itu sendiri tetap ada.
-		</p>
+			{deleting.display_name || deleting.email} {tr("akan kehilangan akses dashboard admin. Akun user itu sendiri tetap ada.")} </p>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => (deleting = null)}>Batal</button>
+			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => (deleting = null)}>{tr("Batal")}</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void confirmDelete()}>
-				{busy ? 'Menghapus…' : 'Hapus'}
+				{busy ? 'Menghapus…' : tr('Hapus')}
 			</button>
 		{/snippet}
 	</Modal>

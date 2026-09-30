@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Kelola mitra — port app/admin/partners/page.tsx: direktori mitra dengan
 	// filter praktis (status/kontak/media/mode otomatis), ekspor kontak CSV,
 	// popup media & pengajuan harga, review dokumen Dewan Pers, pengaturan VIP
@@ -43,21 +45,21 @@
 	const PARTNER_PAGE_SIZE = 20;
 	const MEDIA_DIALOG_PAGE_SIZE = 10;
 
-	const DOC_STATUS_LABEL: Record<string, string> = {
-		pending: 'Menunggu', verified: 'Terverifikasi', revision: 'Perlu Revisi'
-	};
+	const DOC_STATUS_LABEL: Record<string, string> = $derived({
+		pending: tr('Menunggu'), verified: 'Terverifikasi', revision: 'Perlu Revisi'
+	});
 	const DOC_STATUS_TONE: Record<string, 'warning' | 'success' | 'danger'> = {
 		pending: 'warning', verified: 'success', revision: 'danger'
 	};
-	const PRICE_STATUS_LABEL: Record<string, string> = {
-		menunggu_review: 'Menunggu Review', disetujui: 'Disetujui', negosiasi: 'Negosiasi',
-		ditolak: 'Ditolak', final: 'Final'
-	};
-	const MEDIA_STATUS_LABEL: Record<string, string> = {
-		active: 'Aktif', inactive: 'Nonaktif', draft: 'Draf', pending_review: 'Pending',
-		rejected: 'Ditolak', archived: 'Arsip', hidden: 'Disembunyikan'
-	};
-	const idr = (n: unknown) => `Rp ${Number(n ?? 0).toLocaleString('id-ID')}`;
+	const PRICE_STATUS_LABEL: Record<string, string> = $derived({
+		menunggu_review: tr('Menunggu Review'), disetujui: tr('Disetujui'), negosiasi: 'Negosiasi',
+		ditolak: tr('Ditolak'), final: 'Final'
+	});
+	const MEDIA_STATUS_LABEL: Record<string, string> = $derived({
+		active: tr('Aktif'), inactive: tr('Nonaktif'), draft: 'Draf', pending_review: 'Pending',
+		rejected: tr('Ditolak'), archived: tr('Arsip'), hidden: 'Disembunyikan'
+	});
+	const idr = (n: unknown) => `Rp ${Number(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 
 	let rows = $state<Partner[]>([]);
 	let total = $state(0);
@@ -410,16 +412,16 @@
 <section>
 	<PageHeader
 		title="Partners"
-		description="Mitra media (1 akun user = 1 partner). Media milik partner aktif melewati gate persetujuan pada publikasi. Verifikasi Dewan Pers dinilai per domain/media, bukan per akun."
+		description={tr("Mitra media (1 akun user = 1 partner). Media milik partner aktif melewati gate persetujuan pada publikasi. Verifikasi Dewan Pers dinilai per domain/media, bukan per akun.")}
 	>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{fmtNum(total)} partner</span>
-		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><UsersRound size={16} /> Tambah partner</button>
+		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><UsersRound size={16} />{tr("Tambah partner")}</button>
 	</PageHeader>
 
 	<div class="mt-4 flex flex-wrap items-center gap-2">
 		<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
 			<Search size={15} class="text-muted-foreground" />
-			<input class="w-full bg-transparent text-sm outline-none" placeholder="Cari nama atau email…" aria-label="Cari partner" value={search} oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)} />
+			<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama atau email…")} aria-label={tr("Cari partner")} value={search} oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)} />
 		</label>
 		<Select
 			ariaLabel="Filter status"
@@ -430,9 +432,9 @@
 				applyFilters();
 			}}
 			options={[
-				{ value: '', label: 'Semua status' },
-				{ value: 'active', label: 'Aktif' },
-				{ value: 'inactive', label: 'Nonaktif' }
+				{ value: '', label: tr('Semua status') },
+				{ value: 'active', label: tr('Aktif') },
+				{ value: 'inactive', label: tr('Nonaktif') }
 			]}
 		/>
 		<Select
@@ -444,7 +446,7 @@
 				applyFilters();
 			}}
 			options={[
-				{ value: '', label: 'Semua kontak' },
+				{ value: '', label: tr('Semua kontak') },
 				{ value: 'wa', label: 'Punya WA' },
 				{ value: 'alt', label: 'Punya email alternatif' },
 				{ value: 'incomplete', label: 'Kontak belum lengkap' }
@@ -459,9 +461,9 @@
 				applyFilters();
 			}}
 			options={[
-				{ value: '', label: 'Semua media' },
-				{ value: '1', label: 'Sudah ada media' },
-				{ value: '0', label: 'Belum ada media' }
+				{ value: '', label: tr('Semua media') },
+				{ value: '1', label: tr('Sudah ada media') },
+				{ value: '0', label: tr('Belum ada media') }
 			]}
 		/>
 		<Select
@@ -473,9 +475,9 @@
 				applyFilters();
 			}}
 			options={[
-				{ value: '', label: 'Semua mode otomatis' },
+				{ value: '', label: tr('Semua mode otomatis') },
 				{ value: '1', label: 'Diizinkan otomatis' },
-				{ value: '0', label: 'Belum diizinkan' }
+				{ value: '0', label: tr('Belum diizinkan') }
 			]}
 		/>
 		{#if hasFilter}
@@ -489,7 +491,7 @@
 
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke pengelolaan partner.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke pengelolaan partner.")}</p>
 		</div>
 	{:else}
 		<Feedback {loading} {error} loadingText="Memuat partner…" />
@@ -499,11 +501,11 @@
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">Partner</th>
-						<th class="px-4 py-2.5 font-medium">Email</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Email")}</th>
 						<th class="px-4 py-2.5 font-medium">WA</th>
-						<th class="px-4 py-2.5 font-medium">Email Alternatif</th>
-						<th class="px-4 py-2.5 font-medium">Harga Media</th>
-						<th class="px-4 py-2.5 font-medium">Media</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Email Alternatif")}</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Harga Media")}</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
 						<th class="px-4 py-2.5 font-medium">Dewan Pers</th>
 						<th class="px-4 py-2.5 font-medium">VIP</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
@@ -559,7 +561,7 @@
 							</td>
 							<td class="px-4 py-3">
 								{#if row.media_count > 0}
-									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" title="Lihat media & pengajuan harganya" onclick={() => void openMedia(row)}>
+									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" title={tr("Lihat media & pengajuan harganya")} onclick={() => void openMedia(row)}>
 										{row.media_count} media
 									</button>
 								{:else}
@@ -568,7 +570,7 @@
 							</td>
 							<td class="px-4 py-3">
 								{#if row.document_count === 0}
-									<Badge label="Belum upload" tone="neutral" />
+									<Badge label={tr("Belum upload")} tone="neutral" />
 								{:else}
 									<Badge
 										label={`${row.document_status ? DOC_STATUS_LABEL[row.document_status] : '—'} (${row.document_count})`}
@@ -610,7 +612,7 @@
 												<ShieldCheck size={14} /> Dokumen
 											</button>
 											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openVipSettings(row); }}>
-												{row.is_vip ? 'Pengaturan VIP' : 'Jadikan VIP'}
+												{row.is_vip ? tr('Pengaturan VIP') : 'Jadikan VIP'}
 											</button>
 											{#if !row.is_vip}
 												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void setVip(row, true, 'vip_reguler'); }}>
@@ -631,7 +633,7 @@
 												style="color: var(--destructive);"
 												type="button"
 												onclick={() => { openMenu = null; deleting = row; }}
-											><Trash size={14} /> Hapus</button>
+											><Trash size={14} />{tr("Hapus")}</button>
 										</div>
 									{/if}
 							</td>
@@ -642,7 +644,7 @@
 			{#if !loading && rows.length === 0}
 				<div class="flex flex-col items-center px-4 py-12 text-center">
 					<UsersRound size={26} class="text-muted-foreground" />
-					<p class="mt-2 text-sm text-muted-foreground">Belum ada partner. Tambahkan partner pertama.</p>
+					<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada partner. Tambahkan partner pertama.")}</p>
 				</div>
 			{/if}
 			<div class="px-4 pb-4">
@@ -658,16 +660,16 @@
 </section>
 
 {#if createOpen}
-	<Modal title="Tambah partner" label="Tambah partner" maxWidth="lg" onClose={() => (createOpen = false)}>
-		<p class="text-sm text-muted-foreground">User dengan email ini akan menjadi mitra media Tauthub.</p>
+	<Modal title={tr("Tambah partner")} label={tr("Tambah partner")} maxWidth="lg" onClose={() => (createOpen = false)}>
+		<p class="text-sm text-muted-foreground">{tr("User dengan email ini akan menjadi mitra media Tauthub.")}</p>
 		<form class="mt-4 flex flex-col gap-3" onsubmit={create}>
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Email user</span>
-				<input class="app-input w-full" type="email" required placeholder="mitra@media.com" bind:value={form.email} />
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Email user")}</span>
+				<input class="app-input w-full" type="email" required placeholder={tr("mitra@media.com")} bind:value={form.email} />
 			</label>
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Nama (opsional)</span>
-				<input class="app-input w-full" placeholder="Nama media partner" bind:value={form.name} />
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Nama (opsional)")}</span>
+				<input class="app-input w-full" placeholder={tr("Nama media partner")} bind:value={form.name} />
 			</label>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Status</span>
@@ -683,22 +685,22 @@
 				/>
 			</label>
 			<div class="mt-1 flex justify-end gap-2 border-t pt-4">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>Batal</button>
-				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Tambah partner'}</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Tambah partner')}</button>
 			</div>
 		</form>
 	</Modal>
 {/if}
 
 {#if mediaPartner}
-	<Modal title={`Media mitra — ${mediaPartner.name ?? mediaPartner.email}`} label="Media mitra" maxWidth="2xl" onClose={() => (mediaPartner = null)}>
-		<p class="text-sm text-muted-foreground">Media yang terdeteksi milik mitra ini beserta harga yang mereka ajukan.</p>
+	<Modal title={`Media mitra — ${mediaPartner.name ?? mediaPartner.email}`} label={tr("Media mitra")} maxWidth="2xl" onClose={() => (mediaPartner = null)}>
+		<p class="text-sm text-muted-foreground">{tr("Media yang terdeteksi milik mitra ini beserta harga yang mereka ajukan.")}</p>
 
 		{#if mediaPartner.email || mediaPartner.wa_number || mediaPartner.email_alt1 || mediaPartner.email_alt2}
 			<div class="mt-3 flex flex-wrap gap-5 rounded-lg border p-3">
 				{#if mediaPartner.email}
 					<div class="flex flex-col gap-1">
-						<span class="text-xs font-semibold text-muted-foreground">Email</span>
+						<span class="text-xs font-semibold text-muted-foreground">{tr("Email")}</span>
 						<div class="flex items-center gap-1">
 							<a class="text-xs" style="color: var(--primary);" href={`mailto:${mediaPartner.email}`}>{mediaPartner.email}</a>
 							<button class="rounded p-1 hover:bg-secondary" type="button" aria-label={`Salin email ${mediaPartner.email}`} onclick={() => void copyContact('email', mediaPartner?.email ?? '')}>
@@ -719,7 +721,7 @@
 								target="_blank"
 								rel="noreferrer"
 								aria-label={`Buka chat WhatsApp ${mediaPartner.wa_number}`}
-								title="Buka chat WhatsApp"
+								title={tr("Buka chat WhatsApp")}
 							><ArrowUpRight size={14} /></a>
 							<button class="rounded p-1 hover:bg-secondary" type="button" aria-label={`Salin WhatsApp ${mediaPartner.wa_number}`} title="Salin nomor" onclick={() => void copyContact('wa', mediaPartner?.wa_number ?? '')}>
 								{#if copyFeedback?.key === 'wa' && copyFeedback?.ok}<Check size={14} style="color: var(--success);" />{:else}<Copy size={14} />{/if}
@@ -729,7 +731,7 @@
 				{/if}
 				{#if mediaPartner.email_alt1 || mediaPartner.email_alt2}
 					<div class="flex flex-col gap-1">
-						<span class="text-xs font-semibold text-muted-foreground">Email alternatif</span>
+						<span class="text-xs font-semibold text-muted-foreground">{tr("Email alternatif")}</span>
 						<div class="flex flex-col gap-1">
 							{#each [['alt1', mediaPartner.email_alt1], ['alt2', mediaPartner.email_alt2]] as [key, value] (key)}
 								{#if value}
@@ -745,33 +747,33 @@
 					</div>
 				{/if}
 				{#if copyFeedback && !copyFeedback?.ok}
-					<span class="self-center text-xs" style="color: var(--warning);">Gagal menyalin — salin manual dari teks di atas.</span>
+					<span class="self-center text-xs" style="color: var(--warning);">{tr("Gagal menyalin — salin manual dari teks di atas.")}</span>
 				{/if}
 				{#if mediaPartner.wa_number && !mediaPartner.wa_consent}
-					<span class="self-center text-xs text-muted-foreground">Mitra belum menyetujui kontak via WhatsApp.</span>
+					<span class="self-center text-xs text-muted-foreground">{tr("Mitra belum menyetujui kontak via WhatsApp.")}</span>
 				{/if}
 			</div>
 		{/if}
 
 		{#if mediaLoading}
-			<p class="mt-4 text-sm text-muted-foreground">Memuat daftar media mitra…</p>
+			<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat daftar media mitra…")}</p>
 		{:else if mediaError}
 			<div class="mt-4 flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{mediaError}</div>
 		{:else if partnerMedia.length === 0}
 			<div class="mt-4 flex flex-col items-center rounded-lg border border-dashed p-6 text-center">
 				<Newspaper size={26} class="text-muted-foreground" />
-				<p class="mt-2 text-sm text-muted-foreground">Mitra ini belum punya media terdaftar. Media muncul di sini setelah mitra melisting lewat portal mitra.</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Mitra ini belum punya media terdaftar. Media muncul di sini setelah mitra melisting lewat portal mitra.")}</p>
 			</div>
 		{:else}
 			<div class="mt-3 max-h-[420px] overflow-auto">
 				<table class="w-full text-sm" style="min-width: 760px;">
 					<thead>
 						<tr class="text-left text-xs text-muted-foreground">
-							<th class="py-2 pr-3 font-medium">Media</th>
+							<th class="py-2 pr-3 font-medium">{tr("Media")}</th>
 							<th class="py-2 pr-3 font-medium">Kategori</th>
-							<th class="py-2 pr-3 font-medium">Harga Diajukan</th>
-							<th class="py-2 pr-3 font-medium">Status Harga</th>
-							<th class="py-2 font-medium">Status Media</th>
+							<th class="py-2 pr-3 font-medium">{tr("Harga Diajukan")}</th>
+							<th class="py-2 pr-3 font-medium">{tr("Status Harga")}</th>
+							<th class="py-2 font-medium">{tr("Status Media")}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -807,30 +809,29 @@
 			/>
 			{#if mediaReportedTotal > partnerMedia.length}
 				<p class="mt-2 text-xs" style="color: var(--warning);">
-					Server melaporkan {mediaReportedTotal} media, {partnerMedia.length} termuat. Sisanya bisa dilihat di halaman Media.
-				</p>
+					Server melaporkan {mediaReportedTotal} media, {partnerMedia.length} {tr("termuat. Sisanya bisa dilihat di halaman Media.")} </p>
 			{/if}
 		{/if}
 
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => (mediaPartner = null)}>Tutup</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (mediaPartner = null)}>{tr("Tutup")}</button>
 		{/snippet}
 	</Modal>
 {/if}
 
 {#if docsPartner}
-	<Modal title={`Dokumen Dewan Pers — ${docsPartner.name ?? 'Mitra'}`} label="Dokumen mitra" maxWidth="2xl" onClose={() => { docsPartner = null; reviewDoc = null; }}>
-		<p class="text-sm text-muted-foreground">Dokumen verifikasi yang diunggah mitra. Tandai terverifikasi agar mitra dapat menambahkan media.</p>
+	<Modal title={`Dokumen Dewan Pers — ${docsPartner.name ?? tr('Mitra')}`} label="Dokumen mitra" maxWidth="2xl" onClose={() => { docsPartner = null; reviewDoc = null; }}>
+		<p class="text-sm text-muted-foreground">{tr("Dokumen verifikasi yang diunggah mitra. Tandai terverifikasi agar mitra dapat menambahkan media.")}</p>
 		<div class="mt-4">
 			{#if docsError}
 				<div class="mb-3 flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{docsError}</div>
 			{/if}
 			{#if docsLoading}
-				<p class="text-sm text-muted-foreground">Memuat dokumen…</p>
+				<p class="text-sm text-muted-foreground">{tr("Memuat dokumen…")}</p>
 			{:else if docs.length === 0}
 				<div class="flex flex-col items-center rounded-lg border border-dashed p-6 text-center">
 					<ShieldCheck size={26} class="text-muted-foreground" />
-					<p class="mt-2 text-sm text-muted-foreground">Mitra ini belum mengunggah dokumen.</p>
+					<p class="mt-2 text-sm text-muted-foreground">{tr("Mitra ini belum mengunggah dokumen.")}</p>
 				</div>
 			{:else}
 				<div class="flex flex-col gap-2">
@@ -848,7 +849,7 @@
 							</div>
 							<div class="flex shrink-0 items-center gap-2">
 								<Badge label={DOC_STATUS_LABEL[doc.status]} tone={DOC_STATUS_TONE[doc.status]} />
-								<a class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" href={doc.url} target="_blank" rel="noreferrer">Lihat</a>
+								<a class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" href={doc.url} target="_blank" rel="noreferrer">{tr("Lihat")}</a>
 								<button class="app-btn !min-h-7 !px-2.5 !text-xs" style="background-color: var(--accent); color: var(--accent-foreground);" type="button" onclick={() => openReview(doc)}>Review</button>
 							</div>
 						</div>
@@ -867,19 +868,19 @@
 				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{reviewError}</div>
 			{/if}
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Alasan (wajib saat menolak, opsional saat menyetujui)</span>
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Alasan (wajib saat menolak, opsional saat menyetujui)")}</span>
 				<textarea
 					class="app-input w-full"
 					rows={3}
-					placeholder="Contoh: sertifikat tidak terbaca, mohon unggah ulang dengan resolusi lebih baik."
+					placeholder={tr("Contoh: sertifikat tidak terbaca, mohon unggah ulang dengan resolusi lebih baik.")}
 					bind:value={reviewNote}
 					oninput={() => (reviewError = '')}
 				></textarea>
-				<span class="mt-1 block text-xs text-muted-foreground">Alasan ini akan ditampilkan ke mitra di halaman Profil.</span>
+				<span class="mt-1 block text-xs text-muted-foreground">{tr("Alasan ini akan ditampilkan ke mitra di halaman Profil.")}</span>
 			</label>
 		</div>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => { reviewDoc = null; reviewError = ''; }}>Batal</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => { reviewDoc = null; reviewError = ''; }}>{tr("Batal")}</button>
 			<button class="app-btn app-btn-soft" style="color: var(--destructive);" type="button" disabled={busy} onclick={() => void submitReview('revision')}>
 				{busy ? 'Menyimpan…' : 'Tolak'}
 			</button>
@@ -891,15 +892,15 @@
 {/if}
 
 {#if vipTarget}
-	<Modal title={vipTarget.is_vip ? 'Pengaturan VIP' : 'Jadikan VIP'} label="Pengaturan VIP" maxWidth="lg" onClose={() => { vipTarget = null; vipSettingsError = ''; }}>
-		<p class="text-sm text-muted-foreground">Konfigurasi tier VIP untuk {vipTarget.name ?? vipTarget.email}.</p>
+	<Modal title={vipTarget.is_vip ? tr('Pengaturan VIP') : 'Jadikan VIP'} label={tr("Pengaturan VIP")} maxWidth="lg" onClose={() => { vipTarget = null; vipSettingsError = ''; }}>
+		<p class="text-sm text-muted-foreground">{tr("Konfigurasi tier VIP untuk")} {vipTarget.name ?? vipTarget.email}.</p>
 		<div class="mt-4 flex flex-col gap-3">
 			{#if vipSettingsLoading}
-				<p class="text-sm text-muted-foreground">Memuat pengaturan…</p>
+				<p class="text-sm text-muted-foreground">{tr("Memuat pengaturan…")}</p>
 			{:else}
 				<div class="flex items-center justify-between gap-3">
 					<div>
-						<p class="text-sm font-medium">Status VIP</p>
+						<p class="text-sm font-medium">{tr("Status VIP")}</p>
 						<p class="text-xs text-muted-foreground">Aktifkan/nonaktifkan status VIP mitra ini</p>
 					</div>
 					<input
@@ -937,7 +938,7 @@
 				</div>
 				<p class="text-xs text-muted-foreground">
 					{vipSettings.vip_tier === 'vip_reguler'
-						? 'Fee affiliate Rp10.000/domain untuk 1000 domain pertama, lalu Rp5.000/domain. Komisi transaksi tetap 1% dan tidak dibatasi kontrak. Tanpa fasilitas Dashboard Klien/AI Premium/SEO Tools.'
+						? tr('Fee affiliate Rp10.000/domain untuk 1000 domain pertama, lalu Rp5.000/domain. Komisi transaksi tetap 1% dan tidak dibatasi kontrak. Tanpa fasilitas Dashboard Klien/AI Premium/SEO Tools.')
 						: 'Komisi transaksi 5% + CPA Rp15.000/domain + fasilitas Dashboard Klien, AI Premium, SEO Tools.'}
 				</p>
 				<div class="border-t"></div>
@@ -947,7 +948,7 @@
 					<label class="block">
 						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Transaction Commission Rate (basis point)</span>
 						<input class="app-input w-full" type="number" min="0" max="10000" value={vipSettings.commission_rate_bp} oninput={(e) => (vipSettings = { ...vipSettings, commission_rate_bp: Number((e.currentTarget as HTMLInputElement).value) })} />
-						<span class="mt-1 block text-xs text-muted-foreground">{(vipSettings.commission_rate_bp / 100).toFixed(1)}% dari nilai transaksi. Default VIP: 500 (5%).</span>
+						<span class="mt-1 block text-xs text-muted-foreground">{(vipSettings.commission_rate_bp / 100).toFixed(1)}{tr("% dari nilai transaksi. Default VIP: 500 (5%).")}</span>
 					</label>
 					<label class="block">
 						<span class="mb-1 block text-xs font-semibold text-muted-foreground">CPA Rate (Rp)</span>
@@ -968,12 +969,12 @@
 								vipSettings = { ...vipSettings, contract_months: v === '' ? null : Number(v) };
 							}}
 						/>
-						<span class="mt-1 block text-xs text-muted-foreground">Kosongkan (0) untuk tanpa batas. Saat masa kontrak habis, akun mitra otomatis kembali ke status biasa &amp; hak VIP nonaktif.</span>
+						<span class="mt-1 block text-xs text-muted-foreground">{tr("Kosongkan (0) untuk tanpa batas. Saat masa kontrak habis, akun mitra otomatis kembali ke status biasa & hak VIP nonaktif.")}</span>
 					</label>
 					<div class="border-t"></div>
 					<p class="text-sm font-medium">Entitlements</p>
 					{#each [
-						['client_workspace', 'Dashboard Klien'],
+						['client_workspace', tr('Dashboard Klien')],
 						['ai_premium', 'AI Premium'],
 						['seo_tools', 'SEO Tools'],
 						['keyword_research', 'Keyword Research']
@@ -998,7 +999,7 @@
 					<label class="block">
 						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Batas kuota domain</span>
 						<input class="app-input w-full" type="number" min="0" value={vipSettings.cpa_tier_threshold} oninput={(e) => (vipSettings = { ...vipSettings, cpa_tier_threshold: Number((e.currentTarget as HTMLInputElement).value) })} />
-						<span class="mt-1 block text-xs text-muted-foreground">Jumlah domain yang mendapat fee tier-1 sejak aktivasi.</span>
+						<span class="mt-1 block text-xs text-muted-foreground">{tr("Jumlah domain yang mendapat fee tier-1 sejak aktivasi.")}</span>
 					</label>
 					<div class="grid gap-3 sm:grid-cols-2">
 						<label class="block">
@@ -1006,7 +1007,7 @@
 							<input class="app-input w-full" type="number" min="0" value={vipSettings.cpa_tier1_rate} oninput={(e) => (vipSettings = { ...vipSettings, cpa_tier1_rate: Number((e.currentTarget as HTMLInputElement).value) })} />
 						</label>
 						<label class="block">
-							<span class="mb-1 block text-xs font-semibold text-muted-foreground">Fee setelah kuota (Rp)</span>
+							<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Fee setelah kuota (Rp)")}</span>
 							<input class="app-input w-full" type="number" min="0" value={vipSettings.cpa_tier2_rate} oninput={(e) => (vipSettings = { ...vipSettings, cpa_tier2_rate: Number((e.currentTarget as HTMLInputElement).value) })} />
 						</label>
 					</div>
@@ -1024,7 +1025,7 @@
 								vipSettings = { ...vipSettings, contract_days: v === '' ? null : Number(v) };
 							}}
 						/>
-						<span class="mt-1 block text-xs text-muted-foreground">Default 60 hari. Setelah kontrak berakhir, hak VIP Reguler (fee per-domain) nonaktif. Domain yang masuk sebelum berakhir tetap dibayar.</span>
+						<span class="mt-1 block text-xs text-muted-foreground">{tr("Default 60 hari. Setelah kontrak berakhir, hak VIP Reguler (fee per-domain) nonaktif. Domain yang masuk sebelum berakhir tetap dibayar.")}</span>
 					</label>
 				{/if}
 
@@ -1032,9 +1033,9 @@
 					<div class="flex items-start gap-2 text-xs" style="color: var(--destructive);">{vipSettingsError}</div>
 				{/if}
 				<div class="flex justify-end gap-2 border-t pt-4">
-					<button class="app-btn app-btn-soft" type="button" onclick={() => { vipTarget = null; vipSettingsError = ''; }}>Batal</button>
+					<button class="app-btn app-btn-soft" type="button" onclick={() => { vipTarget = null; vipSettingsError = ''; }}>{tr("Batal")}</button>
 					<button class="app-btn app-btn-primary" type="button" disabled={vipSettingsSaving} onclick={() => void saveVipSettings()}>
-						{vipSettingsSaving ? 'Menyimpan…' : vipTarget.is_vip ? 'Simpan' : 'Aktifkan VIP'}
+						{vipSettingsSaving ? 'Menyimpan…' : vipTarget.is_vip ? tr('Simpan') : 'Aktifkan VIP'}
 					</button>
 				</div>
 			{/if}
@@ -1050,14 +1051,11 @@
 		onClose={() => { if (busyId === null) autoPublishTarget = null; }}
 	>
 		<p class="text-sm text-muted-foreground">
-			{#if autoPublishTarget?.auto_publish_enabled}
-				Mitra <strong>{autoPublishTarget.name ?? autoPublishTarget.email}</strong> tidak lagi bisa menyalakan mode otomatis di medianya. Publikasi berikutnya kembali menunggu ACC mitra.
-			{:else}
-				Mitra <strong>{autoPublishTarget.name ?? autoPublishTarget.email}</strong> boleh menyalakan mode otomatis pada medianya sendiri. Artikel ke media itu akan terbit tanpa ACC mitra.
-			{/if}
+			{#if autoPublishTarget?.auto_publish_enabled} {tr("Mitra")} <strong>{autoPublishTarget.name ?? autoPublishTarget.email}</strong> tidak lagi bisa menyalakan mode otomatis di medianya. Publikasi berikutnya kembali menunggu ACC mitra.
+			{:else} {tr("Mitra")} <strong>{autoPublishTarget.name ?? autoPublishTarget.email}</strong> {tr("boleh menyalakan mode otomatis pada medianya sendiri. Artikel ke media itu akan terbit tanpa ACC mitra.")} {/if}
 		</p>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" disabled={busyId !== null} onclick={() => (autoPublishTarget = null)}>Batal</button>
+			<button class="app-btn app-btn-soft" type="button" disabled={busyId !== null} onclick={() => (autoPublishTarget = null)}>{tr("Batal")}</button>
 			<button
 				class="app-btn app-btn-primary"
 				type="button"
@@ -1069,14 +1067,11 @@
 {/if}
 
 {#if deleting}
-	<Modal title="Hapus partner?" label="Hapus partner" maxWidth="md" onClose={() => (deleting = null)}>
+	<Modal title={tr("Hapus partner?")} label={tr("Hapus partner")} maxWidth="md" onClose={() => (deleting = null)}>
 		<p class="text-sm text-muted-foreground">
-			Yakin mau hapus <strong>{deleting.name ?? deleting.email}</strong>?
-			Tindakan ini menghapus permanen partner beserta seluruh data turunannya
-			(media, dokumen, publikasi, penarikan, dan lainnya) dan tidak dapat dibatalkan.
-		</p>
+			Yakin mau hapus <strong>{deleting.name ?? deleting.email}</strong>{tr("? Tindakan ini menghapus permanen partner beserta seluruh data turunannya (media, dokumen, publikasi, penarikan, dan lainnya) dan tidak dapat dibatalkan.")}</p>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => (deleting = null)}>Batal</button>
+			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => (deleting = null)}>{tr("Batal")}</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void confirmDelete()}>
 				{busy ? 'Menghapus…' : 'Ya, hapus partner'}
 			</button>

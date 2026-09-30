@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Kelola member brand — daftar anggota, tambah lewat email, ubah role, hapus.
 	// Endpoint: /v1/brands/{brandId}/members (list/create/update/delete).
 	import { onMount } from 'svelte';
@@ -51,7 +53,7 @@
 		error = '';
 		const res = await apiRequest(`/v1/brands/${brandId}/members`);
 		if (!res.ok) {
-			error = await readApiError(res, 'Gagal memuat daftar member.');
+			error = await readApiError(res, tr('Gagal memuat daftar member.'));
 			return;
 		}
 		members = await res.json();
@@ -68,7 +70,7 @@
 				body: JSON.stringify({ email: form.email.trim(), role: form.role })
 			});
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal menambah member.');
+				error = await readApiError(res, tr('Gagal menambah member.'));
 				return;
 			}
 			const created = (await res.json()) as Member;
@@ -92,7 +94,7 @@
 				body: JSON.stringify({ role })
 			});
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal mengubah role member.');
+				error = await readApiError(res, tr('Gagal mengubah role member.'));
 				return;
 			}
 			notice = `Role ${member.display_name || member.email} diubah menjadi ${roleLabel(role)}.`;
@@ -110,7 +112,7 @@
 		try {
 			const res = await apiRequest(`/v1/brands/${brandId}/members/${member.id}`, { method: 'DELETE' });
 			if (!res.ok) {
-				error = await readApiError(res, 'Gagal menghapus member.');
+				error = await readApiError(res, tr('Gagal menghapus member.'));
 				return;
 			}
 			notice = `${member.display_name || member.email} dihapus dari brand.`;
@@ -130,13 +132,10 @@
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">Member Brand</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
-				Kelola siapa saja yang punya akses ke brand ini beserta perannya.
-			</p>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola siapa saja yang punya akses ke brand ini beserta perannya.")}</p>
 		</div>
 		<button class="app-btn app-btn-primary" type="button" onclick={() => { showAdd = !showAdd; error = ''; }}>
-			<UserPlus size={15} /> Tambah Member
-		</button>
+			<UserPlus size={15} />{tr("Tambah Member")}</button>
 	</header>
 
 	{#if notice}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--success);">{notice}</div>{/if}
@@ -144,14 +143,12 @@
 
 	{#if showAdd}
 		<form class="app-card mt-4 p-4" onsubmit={addMember}>
-			<h2 class="text-sm font-semibold">Tambah member</h2>
-			<p class="mt-0.5 text-xs text-muted-foreground">
-				Masukkan email akun Tauthub yang sudah terdaftar. Role menentukan hak akses di workspace brand ini.
-			</p>
+			<h2 class="text-sm font-semibold">{tr("Tambah member")}</h2>
+			<p class="mt-0.5 text-xs text-muted-foreground">{tr("Masukkan email akun Tauthub yang sudah terdaftar. Role menentukan hak akses di workspace brand ini.")}</p>
 			<div class="mt-3 grid gap-3 sm:grid-cols-2">
 				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">Email pengguna</span>
-					<input class="app-input mt-1 w-full" type="email" required placeholder="nama@perusahaan.com" bind:value={form.email} />
+					<span class="text-xs font-medium text-muted-foreground">{tr("Email pengguna")}</span>
+					<input class="app-input mt-1 w-full" type="email" required placeholder={tr("nama@perusahaan.com")} bind:value={form.email} />
 				</label>
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">Role</span>
@@ -166,9 +163,9 @@
 				</label>
 			</div>
 			<div class="mt-3 flex justify-end gap-2">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (showAdd = false)}>Batal</button>
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (showAdd = false)}>{tr("Batal")}</button>
 				<button class="app-btn app-btn-primary" type="submit" disabled={busy || !form.email.trim()}>
-					{busy ? 'Menyimpan…' : 'Tambah'}
+					{busy ? 'Menyimpan…' : tr('Tambah')}
 				</button>
 			</div>
 		</form>
@@ -176,12 +173,12 @@
 
 	<div class="app-card mt-4 overflow-x-auto">
 		{#if loading}
-			<p class="px-4 py-8 text-center text-sm text-muted-foreground">Memuat member…</p>
+			<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Memuat member…")}</p>
 		{:else if members.length === 0}
 			<div class="flex flex-col items-center px-4 py-10 text-center">
 				<Users size={24} style="color: var(--primary);" />
-				<p class="mt-2 text-sm font-medium">Belum ada member.</p>
-				<p class="mt-1 text-sm text-muted-foreground">Tambahkan rekan tim agar mereka bisa mengelola brand ini.</p>
+				<p class="mt-2 text-sm font-medium">{tr("Belum ada member.")}</p>
+				<p class="mt-1 text-sm text-muted-foreground">{tr("Tambahkan rekan tim agar mereka bisa mengelola brand ini.")}</p>
 			</div>
 		{:else}
 			<table class="w-full text-sm">
@@ -239,9 +236,7 @@
 	</div>
 
 	<p class="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-		<Check size={13} style="color: var(--success);" />
-		Hanya admin brand yang dapat mengubah role dan menghapus member.
-	</p>
+		<Check size={13} style="color: var(--success);" />{tr("Hanya admin brand yang dapat mengubah role dan menghapus member.")}</p>
 </section>
 
 <style>

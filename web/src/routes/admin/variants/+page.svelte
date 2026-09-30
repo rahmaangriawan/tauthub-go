@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Variant Batches — monitoring multi-artikel Tauthub: satu bahan/artikel → N
 	// artikel per media (sudut pandang diacak, diproses worker).
 	// Port apps/web/src/app/admin/variants/page.tsx.
@@ -39,13 +41,13 @@
 		variants: VariantRow[];
 	};
 
-	const STATUS_META: Record<string, { label: string; tone: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' }> = {
+	const STATUS_META: Record<string, { label: string; tone: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' }> = $derived({
 		queued: { label: 'Diantrekan', tone: 'accent' },
 		processing: { label: 'Diproses', tone: 'warning' },
-		completed: { label: 'Selesai', tone: 'success' },
+		completed: { label: tr('Selesai'), tone: 'success' },
 		partial: { label: 'Sebagian gagal', tone: 'warning' },
-		failed: { label: 'Gagal', tone: 'danger' }
-	};
+		failed: { label: tr('Gagal'), tone: 'danger' }
+	});
 
 	const VARIANT_STATUS_TONE: Record<string, 'neutral' | 'success' | 'warning' | 'danger'> = {
 		queued: 'neutral',
@@ -226,7 +228,7 @@
 <section>
 	<PageHeader
 		title="Variant Batches"
-		description="Monitoring multi-artikel Tauthub: satu bahan/artikel → N artikel per media (sudut pandang diacak, diproses worker). Klik baris untuk audit sudut pandang per media."
+		description={tr("Monitoring multi-artikel Tauthub: satu bahan/artikel → N artikel per media (sudut pandang diacak, diproses worker). Klik baris untuk audit sudut pandang per media.")}
 	>
 		<Badge tone="accent" value={`${total} batch`} />
 	</PageHeader>
@@ -238,7 +240,7 @@
 			<Search size={16} class="text-muted-foreground" />
 			<input
 				class="w-full bg-transparent text-sm outline-none"
-				placeholder="Cari brand, email, media, sudut pandang, atau ID batch…"
+				placeholder={tr("Cari brand, email, media, sudut pandang, atau ID batch…")}
 				bind:value={query}
 			/>
 		</label>
@@ -258,14 +260,14 @@
 					filter = f;
 					page = 1;
 					void load();
-				}}>{f === '' ? 'Semua' : (STATUS_META[f]?.label ?? f)}</button
+				}}>{f === '' ? tr('Semua') : (STATUS_META[f]?.label ?? f)}</button
 			>
 		{/each}
 	</div>
 
 	{#if showAccess}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke data batch variant.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke data batch variant.")}</p>
 		</div>
 	{:else}
 		<DataTable
@@ -280,7 +282,7 @@
 			rows={rows}
 			rowKey={(b: BatchRow) => b.batch_id}
 			{loading}
-			empty="Tidak ada batch variant untuk filter ini."
+			empty={tr("Tidak ada batch variant untuk filter ini.")}
 			minWidth="1000px"
 		/>
 
@@ -302,10 +304,10 @@
 					<table class="w-full text-sm" style="min-width: 900px;">
 						<thead>
 							<tr class="text-xs text-muted-foreground">
-								<th class="px-4 py-2.5 text-left font-medium">Media</th>
+								<th class="px-4 py-2.5 text-left font-medium">{tr("Media")}</th>
 								<th class="px-4 py-2.5 text-left font-medium">Sudut pandang</th>
 								<th class="px-4 py-2.5 text-left font-medium">Artikel</th>
-								<th class="px-4 py-2.5 text-left font-medium">Publikasi</th>
+								<th class="px-4 py-2.5 text-left font-medium">{tr("Publikasi")}</th>
 								<th class="px-4 py-2.5 text-left font-medium">Status</th>
 							</tr>
 						</thead>
@@ -313,7 +315,7 @@
 							{#if b.variants.length === 0}
 								<tr
 									><td colspan="5" class="px-4 py-2.5 text-xs text-muted-foreground"
-										>Belum ada varian tercatat.</td
+										>{tr("Belum ada varian tercatat.")}</td
 									></tr
 								>
 							{/if}
@@ -349,7 +351,7 @@
 
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 			<p class="text-xs text-muted-foreground">
-				{total} batch · halaman {page} dari {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+				{total} batch · halaman {page} {tr("dari")} {Math.max(1, Math.ceil(total / PAGE_SIZE))}
 			</p>
 			<div class="flex gap-2">
 				<button

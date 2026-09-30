@@ -6,15 +6,18 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"crypto/sha512"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -955,18 +958,47 @@ func (d *Deps) payAdapterCreatePayment(ctx context.Context, provider, environmen
 
 // ---------- signature webhook (port verifyWebhook per adapter) ----------
 
-const paySandboxSecret = "tauthub-sandbox-secret"
+// paySandboxSecretDefault: hanya dipakai sebagai fallback di non-produksi.
+// Di produksi nilai ini WAJIB berasal dari env TAUTHUB_SANDBOX_SECRET, dan
+// provider "sandbox" ditolak bila APP_ENV=production.
+const paySandboxSecretDefault = "tauthub-sandbox-secret"
+
+// paySandboxSecret: nilai dari env bila ada, jika tidak pakai default dev.
+func paySandboxSecret() string {
+	if v := strings.TrimSpace(os.Getenv("TAUTHUB_SANDBOX_SECRET")); v != "" {
+		return v
+	}
+	return paySandboxSecretDefault
+}
+
+// payIsProduction: deteksi produksi dari env (fungsi murni tanpa akses Deps).
+func payIsProduction() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV"))) {
+	case "production", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
+// paySecureEqual: perbandingan string constant-time (hindari timing side-channel).
+func paySecureEqual(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
 
 // payVerifyWebhook: parity getAdapter(provider).verifyWebhook(rawBody, headers, credentials).
 func payVerifyWebhook(provider, rawBody string, headers http.Header, credentials map[string]string) payWebhookVerification {
 	invalid := payWebhookVerification{}
 	switch provider {
 	case "xendit":
-		if credentials["callback_token"] != "" {
-			token := headers.Get("x-callback-token")
-			if token == "" || token != credentials["callback_token"] {
-				return invalid
-			}
+		// Fail-closed: tanpa callback_token, permintaan tanpa tanda tangan apa pun
+		// tidak boleh dipercaya (sebelumnya verifikasi dilewati).
+		if credentials["callback_token"] == "" {
+			return invalid
+		}
+		token := headers.Get("x-callback-token")
+		if token == "" || !paySecureEqual(token, credentials["callback_token"]) {
+			return invalid
 		}
 		var payload map[string]any
 		if err := json.Unmarshal([]byte(rawBody), &payload); err != nil {
@@ -989,6 +1021,10 @@ func payVerifyWebhook(provider, rawBody string, headers http.Header, credentials
 		if orderID == "" {
 			return invalid
 		}
+		// Fail-closed: tanpa api_key, hash bisa dihitung siapa pun.
+		if credentials["api_key"] == "" {
+			return invalid
+		}
 		merchantCode := payAsString(payload["merchantCode"])
 		if merchantCode == "" {
 			merchantCode = credentials["merchant_code"]
@@ -996,7 +1032,7 @@ func payVerifyWebhook(provider, rawBody string, headers http.Header, credentials
 		sum := md5.Sum([]byte(merchantCode + orderID + payAsString(payload["amount"]) + credentials["api_key"]))
 		expected := hex.EncodeToString(sum[:])
 		signature := strings.ToLower(payAsString(payload["signature"]))
-		if signature == "" || signature != expected {
+		if signature == "" || !paySecureEqual(signature, expected) {
 			return invalid
 		}
 		rawStatus := "FAILED"
@@ -1022,10 +1058,15 @@ func payVerifyWebhook(provider, rawBody string, headers http.Header, credentials
 		if orderID == "" {
 			return invalid
 		}
+		// Fail-closed: tanpa server_key, signature apa pun tidak bisa dipercaya.
+		if credentials["server_key"] == "" {
+			return invalid
+		}
 		// signature_key = SHA512(order_id + status_code + gross_amount + server_key)
 		expected := fmt.Sprintf("%x", sha512.Sum512([]byte(
 			orderID+payAsString(payload["status_code"])+payAsString(payload["gross_amount"])+credentials["server_key"])))
-		if payAsString(payload["signature_key"]) == "" || payAsString(payload["signature_key"]) != expected {
+		given := payAsString(payload["signature_key"])
+		if given == "" || !paySecureEqual(given, expected) {
 			return invalid
 		}
 		rawStatus := payAsString(payload["transaction_status"])
@@ -1037,10 +1078,14 @@ func payVerifyWebhook(provider, rawBody string, headers http.Header, credentials
 		if signature == "" {
 			return invalid
 		}
+		// Fail-closed: tanpa private_key, HMAC tidak bermakna.
+		if credentials["private_key"] == "" {
+			return invalid
+		}
 		mac := hmac.New(sha256.New, []byte(credentials["private_key"]))
 		mac.Write([]byte(rawBody))
 		expected := hex.EncodeToString(mac.Sum(nil))
-		if signature != expected {
+		if !paySecureEqual(signature, expected) {
 			return invalid
 		}
 		var payload map[string]any
@@ -1059,7 +1104,7 @@ func payVerifyWebhook(provider, rawBody string, headers http.Header, credentials
 		tokenOk := false
 		if credentials["webhook_token"] != "" {
 			token := headers.Get("x-webhook-token")
-			if token != "" && token == credentials["webhook_token"] {
+			if token != "" && paySecureEqual(token, credentials["webhook_token"]) {
 				tokenOk = true
 			}
 		}
@@ -1077,7 +1122,7 @@ func payVerifyWebhook(provider, rawBody string, headers http.Header, credentials
 					expected := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 					for _, part := range strings.Split(svixSig, " ") {
 						pieces := strings.Split(part, ",")
-						if len(pieces) > 1 && pieces[1] == expected {
+						if len(pieces) > 1 && paySecureEqual(pieces[1], expected) {
 							svixOk = true
 						}
 					}
@@ -1123,14 +1168,20 @@ func payVerifyWebhook(provider, rawBody string, headers http.Header, credentials
 			RawStatus: ptStrOrNil(rawStatus), Payload: payload}
 
 	case "sandbox":
+		// Sandbox adalah adapter uji: di produksi tidak boleh dipercaya, karena
+		// kunci HMAC-nya bukan rahasia milik mitra (default dev ada di repo).
+		if payIsProduction() {
+			slog.Warn("[payment] webhook sandbox ditolak di produksi")
+			return invalid
+		}
 		signature := headers.Get("x-sandbox-signature")
 		if signature == "" {
 			return invalid
 		}
-		mac := hmac.New(sha256.New, []byte(paySandboxSecret))
+		mac := hmac.New(sha256.New, []byte(paySandboxSecret()))
 		mac.Write([]byte(rawBody))
 		expected := hex.EncodeToString(mac.Sum(nil))
-		if strings.ToLower(signature) != expected {
+		if !paySecureEqual(strings.ToLower(signature), expected) {
 			return invalid
 		}
 		var payload map[string]any

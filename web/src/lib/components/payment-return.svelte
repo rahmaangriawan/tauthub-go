@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Komponen bersama halaman tujuan redirect gateway (success/cancelled).
 	// Parity app/payments/_components/return-page.tsx:
 	//   1. menulis kunci localStorage → tab dashboard klien mendengar event
@@ -47,13 +49,13 @@
 			<path d="M8 12.5l2.5 2.5L16 9.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
 		</svg>
 		<h1 class="text-xl font-bold">Pembayaran berhasil</h1>
-		<p class="text-sm text-muted-foreground">Saldo Tauthub Credit sedang diperbarui…</p>
+		<p class="text-sm text-muted-foreground">{tr("Saldo Tauthub Credit sedang diperbarui…")}</p>
 	{:else}
 		<svg width="56" height="56" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="color: var(--muted-foreground);">
 			<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
 			<path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
 		</svg>
 		<h1 class="text-xl font-bold">Pembayaran dibatalkan</h1>
-		<p class="text-sm text-muted-foreground">Kamu bisa mengulang top-up kapan saja dari dashboard.</p>
+		<p class="text-sm text-muted-foreground">{tr("Kamu bisa mengulang top-up kapan saja dari dashboard.")}</p>
 	{/if}
 </main>

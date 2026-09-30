@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Standar PR per brand — port app/admin/pr-brand-standards/page.tsx.
 	// Override rate per 1.000 estimasi reach khusus brand; kosong = pakai standar global Tauthub.
 	import { onMount } from 'svelte';
@@ -60,7 +62,7 @@
 			}
 			brands = (await res.json()).brands ?? [];
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		} finally {
 			loading = false;
 		}
@@ -97,7 +99,7 @@
 	}
 
 	async function clearBrand(id: string) {
-		if (!confirm('Hapus override brand ini? Brand kembali memakai standar global.')) return;
+		if (!confirm(tr('Hapus override brand ini? Brand kembali memakai standar global.'))) return;
 		busy = true;
 		error = '';
 		notice = '';
@@ -131,7 +133,7 @@
 <section>
 	<PageHeader
 		title="Standar PR per Brand"
-		description="Standarisasi PR adalah engine internal Tauthub — klien tidak mengatur ini. Override per brand: rate per 1.000 estimasi reach khusus untuk brand ini. Kosong = pakai standar global Tauthub (diatur di menu PR Calculator)."
+		description={tr("Standarisasi PR adalah engine internal Tauthub — klien tidak mengatur ini. Override per brand: rate per 1.000 estimasi reach khusus untuk brand ini. Kosong = pakai standar global Tauthub (diatur di menu PR Calculator).")}
 	>
 		<Badge tone="accent" label="{brands.length} brand" />
 	</PageHeader>
@@ -140,7 +142,7 @@
 
 	{#if brands.length === 0 && error.includes('Akses platform')}
 		<div class="app-card mt-4 px-4 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke standar PR.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke standar PR.")}</p>
 		</div>
 	{:else}
 		<div class="app-card mt-4 p-4">
@@ -150,25 +152,23 @@
 					<span class="text-sm font-medium">Brand</span>
 					<Select
 						ariaLabel="Brand"
-						placeholder="Pilih brand…"
+						placeholder={tr("Pilih brand…")}
 						minWidth={260}
 						value={selected}
 						onchange={(v) => pickBrand(v)}
 						options={[
-							{ value: '', label: 'Pilih brand…' },
+							{ value: '', label: tr('Pilih brand…') },
 							...brands.map((b) => ({ value: b.id, label: `${b.name}${b.standard ? ' (sudah diatur)' : ''}` }))
 						]}
 					/>
 				</label>
 				<label class="block w-[170px]">
 					<span class="text-sm font-medium">Rate global (Rp / 1k reach)</span>
-					<input class="app-input mt-1 w-full" type="number" min={0} max={10000000} placeholder="kosong = global" bind:value={formRate} />
+					<input class="app-input mt-1 w-full" type="number" min={0} max={10000000} placeholder={tr("kosong = global")} bind:value={formRate} />
 				</label>
-				<button class="app-btn app-btn-primary" type="button" disabled={busy || !selected} onclick={() => void save()}>Simpan standar brand</button>
+				<button class="app-btn app-btn-primary" type="button" disabled={busy || !selected} onclick={() => void save()}>{tr("Simpan standar brand")}</button>
 			</div>
-			<p class="mt-2 text-xs text-muted-foreground">
-				Catatan: menyimpan standar brand akan mengembalikan rate tier brand ke global Tauthub. Perubahan tidak mengubah angka historis yang sudah dihitung.
-			</p>
+			<p class="mt-2 text-xs text-muted-foreground">{tr("Catatan: menyimpan standar brand akan mengembalikan rate tier brand ke global Tauthub. Perubahan tidak mengubah angka historis yang sudah dihitung.")}</p>
 		</div>
 
 		<div class="app-card mt-4 overflow-x-auto">
@@ -177,7 +177,7 @@
 					<tr class="text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 text-left font-medium">Brand</th>
 						<th class="px-4 py-2.5 text-left font-medium">Rate global</th>
-						<th class="px-4 py-2.5 text-left font-medium">Terakhir diubah oleh</th>
+						<th class="px-4 py-2.5 text-left font-medium">{tr("Terakhir diubah oleh")}</th>
 						<th class="px-4 py-2.5 text-left font-medium"></th>
 					</tr>
 				</thead>
@@ -198,7 +198,7 @@
 							</td>
 							<td class="px-4 py-2.5">
 								{#if row.standard}
-									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={busy} onclick={() => void clearBrand(row.id)}>Hapus override</button>
+									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={busy} onclick={() => void clearBrand(row.id)}>{tr("Hapus override")}</button>
 								{/if}
 							</td>
 						</tr>
@@ -206,16 +206,13 @@
 				</tbody>
 			</table>
 			{#if brands.length === 0}
-				<p class="px-4 py-12 text-center text-sm text-muted-foreground">Belum ada brand.</p>
+				<p class="px-4 py-12 text-center text-sm text-muted-foreground">{tr("Belum ada brand.")}</p>
 			{/if}
 		</div>
 		<Pagination total={brands.length} limit={PAGE_SIZE} offset={(page - 1) * PAGE_SIZE} onChange={(next) => (page = next / PAGE_SIZE + 1)} />
 
 		<div class="app-card mt-3 p-4">
-			<p class="text-xs text-muted-foreground">
-				Estimated PR value = nilai media + Σ(reach ÷ 1.000 × rate). Rate tier global (Tier 1/2/3) dikelola di menu PR Calculator.
-				Skor bukan AVE dan bukan jaminan dampak bisnis.
-			</p>
+			<p class="text-xs text-muted-foreground">{tr("Estimated PR value = nilai media + Σ(reach ÷ 1.000 × rate). Rate tier global (Tier 1/2/3) dikelola di menu PR Calculator. Skor bukan AVE dan bukan jaminan dampak bisnis.")}</p>
 		</div>
 	{/if}
 </section>

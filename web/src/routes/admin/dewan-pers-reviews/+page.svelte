@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Review Verifikasi Dewan Pers — setujui/tolak pengajuan nomor sertifikat dari Mitra.
 	// Port apps/web/src/app/admin/dewan-pers-reviews/page.tsx.
 	import { onMount } from 'svelte';
@@ -34,13 +36,13 @@
 	const STATUS_META: Record<
 		string,
 		{ label: string; tone: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' }
-	> = {
-		pending: { label: 'Menunggu', tone: 'warning' },
+	> = $derived({
+		pending: { label: tr('Menunggu'), tone: 'warning' },
 		verified: { label: 'Terverifikasi', tone: 'success' },
-		rejected: { label: 'Ditolak', tone: 'danger' },
+		rejected: { label: tr('Ditolak'), tone: 'danger' },
 		conflict: { label: 'Konflik', tone: 'warning' },
 		superseded: { label: 'Diganti', tone: 'neutral' }
-	};
+	});
 
 	let statusFilter = $state('all');
 	let rows = $state<ReviewRow[]>([]);
@@ -193,7 +195,7 @@
 <section>
 	<PageHeader
 		title="Review Verifikasi Dewan Pers"
-		description="Setujui atau tolak pengajuan nomor sertifikat Dewan Pers dari Mitra. Status hanya berubah setelah review Admin — format valid bukan berarti otomatis terverifikasi."
+		description={tr("Setujui atau tolak pengajuan nomor sertifikat Dewan Pers dari Mitra. Status hanya berubah setelah review Admin — format valid bukan berarti otomatis terverifikasi.")}
 	>
 		<Badge tone="accent" value={`${total} pengajuan`} />
 	</PageHeader>
@@ -202,7 +204,7 @@
 
 	{#if rows.length === 0 && error.includes('Akses platform')}
 		<div class="app-card mt-6 px-6 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke review Dewan Pers.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke review Dewan Pers.")}</p>
 		</div>
 	{:else}
 		<div class="mt-3 flex flex-wrap gap-2">
@@ -219,7 +221,7 @@
 					}}
 				>
 					{t === 'all'
-						? 'Semua'
+						? tr('Semua')
 						: (STATUS_META[t]?.label ?? t)}
 				</button>
 			{/each}
@@ -227,8 +229,8 @@
 
 		<DataTable
 			columns={[
-				{ key: 'media', label: 'Media', render: mediaCell },
-				{ key: 'partner', label: 'Mitra', render: partnerCell },
+				{ key: 'media', label: tr('Media'), render: mediaCell },
+				{ key: 'partner', label: tr('Mitra'), render: partnerCell },
 				{ key: 'cert', label: 'Nomor Sertifikat', render: certCell },
 				{ key: 'status', label: 'Status', render: reviewStatusCell },
 				{ key: 'submitted', label: 'Pengajuan', render: submittedCell },
@@ -238,7 +240,7 @@
 			rows={rows}
 			rowKey={(row: ReviewRow) => row.id}
 			{loading}
-			empty="Tidak ada pengajuan verifikasi Dewan Pers."
+			empty={tr("Tidak ada pengajuan verifikasi Dewan Pers.")}
 			minWidth="1100px"
 		/>
 
@@ -270,25 +272,23 @@
 					<textarea
 						class="app-input mt-1 w-full"
 						rows="4"
-						placeholder="Alasan penolakan..."
+						placeholder={tr("Alasan penolakan...")}
 						bind:value={reason}
 					></textarea>
-					<span class="mt-1 block text-xs text-muted-foreground">Wajib diisi — alasan ini terlihat oleh Mitra.</span>
+					<span class="mt-1 block text-xs text-muted-foreground">{tr("Wajib diisi — alasan ini terlihat oleh Mitra.")}</span>
 				</label>
 			{:else}
 				<div
 					class="flex items-start gap-2 rounded-lg px-3 py-2 text-sm"
 					style="background-color: var(--success-soft); color: var(--success);"
 				>
-					<Check size={16} class="mt-0.5 shrink-0" />
-					Media akan ditandai Terverifikasi Dewan Pers dan Mitra mendapat notifikasi.
-				</div>
+					<Check size={16} class="mt-0.5 shrink-0" />{tr("Media akan ditandai Terverifikasi Dewan Pers dan Mitra mendapat notifikasi.")}</div>
 			{/if}
 			{#if dialogError}
 				<p class="text-sm" style="color: var(--destructive);">{dialogError}</p>
 			{/if}
 			<div class="flex justify-end gap-2 border-t pt-4">
-				<button type="button" class="app-btn app-btn-soft" onclick={() => (reviewTarget = null)}>Batal</button>
+				<button type="button" class="app-btn app-btn-soft" onclick={() => (reviewTarget = null)}>{tr("Batal")}</button>
 				<button
 					type="submit"
 					class="app-btn app-btn-primary"

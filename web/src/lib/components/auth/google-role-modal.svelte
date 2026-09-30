@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Modal pemilihan jenis akun sebelum OAuth Google (brief §6-§8).
 	// Penting: JANGAN membuat akun di sini. Modal hanya memilih `role`, lalu
 	// pemanggil mengarahkan ke /v1/auth/google/url?mode=register&role=...
@@ -50,7 +52,7 @@
 			bind:this={overlayEl}
 			type="button"
 			class="auth-modal-backdrop"
-			aria-label="Tutup dialog"
+			aria-label={tr("Tutup dialog")}
 			tabindex="-1"
 			onclick={onClose}
 		></button>
@@ -62,11 +64,11 @@
 			aria-labelledby="auth-role-title"
 			tabindex="-1"
 		>
-			<span class="auth-modal-badge">DAFTAR AKUN</span>
-			<h2 class="auth-modal-title" id="auth-role-title">Daftar sebagai apa?</h2>
-			<p class="auth-modal-sub">Pilih jenis akun yang akan Anda buat dengan Google.</p>
+			<span class="auth-modal-badge">{tr("DAFTAR AKUN")}</span>
+			<h2 class="auth-modal-title" id="auth-role-title">{tr("Daftar sebagai apa?")}</h2>
+			<p class="auth-modal-sub">{tr("Pilih jenis akun yang akan Anda buat dengan Google.")}</p>
 
-			<div class="auth-rolecards" role="radiogroup" aria-label="Pilih jenis akun Google">
+			<div class="auth-rolecards" role="radiogroup" aria-label={tr("Pilih jenis akun Google")}>
 				<button
 					type="button"
 					class="auth-rolecard"
@@ -75,10 +77,11 @@
 					onclick={() => onSelect('client')}
 				>
 					<span class="auth-radiodot" aria-hidden="true"></span>
-					<span class="auth-rolecard-title">Klien</span>
-					<span class="auth-rolecard-desc">
-						Untuk perusahaan, tim, atau individu yang ingin menggunakan layanan Tauthub.
+					<span class="auth-rolecard-art" aria-hidden="true">
+						<img src="/images/role-client-v2.webp" alt="" />
 					</span>
+					<span class="auth-rolecard-title">{tr("Klien")}</span>
+					<span class="auth-rolecard-desc">{tr("Untuk perusahaan, tim, atau individu yang ingin menggunakan layanan Tauthub.")}</span>
 				</button>
 
 				<button
@@ -89,23 +92,22 @@
 					onclick={() => onSelect('partner')}
 				>
 					<span class="auth-radiodot" aria-hidden="true"></span>
-					<span class="auth-rolecard-title">Mitra</span>
-					<span class="auth-rolecard-desc">
-						Untuk media partner, penerbit, atau pemilik media yang ingin bekerja sama dengan Tauthub.
+					<span class="auth-rolecard-art" aria-hidden="true">
+						<img src="/images/role-partner-v2.webp" alt="" />
 					</span>
+					<span class="auth-rolecard-title">{tr("Mitra")}</span>
+					<span class="auth-rolecard-desc">{tr("Untuk media partner, penerbit, atau pemilik media yang ingin bekerja sama dengan Tauthub.")}</span>
 				</button>
 			</div>
 
 			<div class="auth-modal-footer">
 				<div class="auth-secure">
 					<ShieldCheck size={16} strokeWidth={2} />
-					<div>
-						Akun Anda aman dengan login Google.
-						<small>Kami tidak akan pernah menyalahgunakan data Anda.</small>
+					<div>{tr("Akun Anda aman dengan login Google.")}<small>{tr("Kami tidak akan pernah menyalahgunakan data Anda.")}</small>
 					</div>
 				</div>
 				<div class="auth-modal-actions">
-					<button type="button" class="auth-btn-ghost" onclick={onClose} disabled={busy}>Batal</button>
+					<button type="button" class="auth-btn-ghost" onclick={onClose} disabled={busy}>{tr("Batal")}</button>
 					<!-- Disabled sampai peran dipilih (brief §8). -->
 					<button
 						type="button"
@@ -113,7 +115,7 @@
 						disabled={!role || busy}
 						onclick={onContinue}
 					>
-						{busy ? 'Menghubungkan…' : 'Lanjut ke Google'}
+						{busy ? tr('Menghubungkan…') : tr('Lanjut ke Google')}
 						<ArrowRight size={14} strokeWidth={2.4} />
 					</button>
 				</div>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Parity app lama (app/mitra/[partnerId]/[[...section]]/page.tsx): section
 	// `connections` dialihkan ke
 	// /integrations#wordpress. Isi aslinya hidup sebagai tab di halaman Integrasi.
@@ -16,10 +18,10 @@
 	});
 </script>
 
-<PageTitle title="Koneksi Media" />
+<PageTitle title={tr("Koneksi Media")} />
 
 <section>
 	<div class="app-card p-6 text-center">
-		<p class="text-sm text-muted-foreground">Mengarahkan ke Integrasi…</p>
+		<p class="text-sm text-muted-foreground">{tr('Mengarahkan ke Integrasi…')}</p>
 	</div>
 </section>

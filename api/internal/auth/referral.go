@@ -3,7 +3,9 @@ package auth
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -122,5 +124,55 @@ type ReferralOpts struct {
 	IPHash        *string
 	DeviceHash    *string
 	SkipSelfCheck bool
+}
+
+// RecordReferralClick: port blok referral_clicks di app/register/route.ts —
+// upsert per (code, fingerprint) yang menaikkan click_count, dipakai landing
+// link referral (/register?ref=KODE). Fingerprint = ip|ua (maks 200) supaya
+// kunjungan berulang dari browser yang sama dihitung sebagai klik tambahan,
+// bukan baris baru. Best-effort: kegagalan tulis tidak membatalkan redirect
+// (parity try/catch app lama), tapi tetap dicatat ke log server.
+//
+// Mengembalikan id partner pemilik kode; ok=false bila kode tak dikenal.
+func RecordReferralClick(ctx context.Context, pool *pgxpool.Pool, code, ip, userAgent string) (partnerID string, ok bool) {
+	partnerID, _, found := ResolveReferralCode(ctx, pool, code)
+	if !found {
+		return "", false
+	}
+	if len(code) > 32 {
+		code = code[:32]
+	}
+	normalized := NormalizeReferralCode(code)
+
+	fingerprint := ip + "|" + userAgent
+	if len(fingerprint) > 200 {
+		fingerprint = fingerprint[:200]
+	}
+	if fingerprint == "|" {
+		fingerprint = "fp:" + normalized + ":" + strconv.FormatInt(time.Now().UnixMilli(), 10)
+	}
+	if len(userAgent) > 500 {
+		userAgent = userAgent[:500]
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO referral_clicks (id, code, referrer_partner_id, fingerprint, last_ip, last_user_agent)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (code, fingerprint) DO UPDATE SET
+		  click_count = referral_clicks.click_count + 1,
+		  last_clicked_at = NOW(),
+		  last_ip = EXCLUDED.last_ip,
+		  last_user_agent = EXCLUDED.last_user_agent`,
+		uuid.NewString(), normalized, partnerID, fingerprint, nilIfBlank(ip), nilIfBlank(userAgent)); err != nil {
+		slog.Error("referral click gagal dicatat", "code", normalized, "err", err)
+	}
+	return partnerID, true
+}
+
+func nilIfBlank(s string) *string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return &s
 }
 

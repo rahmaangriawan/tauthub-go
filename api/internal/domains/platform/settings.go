@@ -2,6 +2,7 @@ package platform
 
 import (
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -390,11 +391,35 @@ func (d *Deps) SettingsPageSpeedGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
+	// Diagnostik admin-only: apakah API key tersimpan masih dapat dibuka.
+	configError := ""
+	configErrorDetail := ""
+	decryptable := false
+	sealed := ""
+	if row != nil {
+		sealed = row.strOr("sealed_api_key", "")
+	}
+	if sealed != "" {
+		if plain, uErr := d.unsealT2(sealed); uErr == nil && plain != "" {
+			decryptable = true
+		} else {
+			configError = "secret_decrypt_failed"
+			configErrorDetail = "API key PageSpeed tersimpan tidak dapat di-decrypt (kemungkinan APP_SECRET berubah). Simpan ulang di tab ini."
+		}
+	} else if strings.TrimSpace(os.Getenv("GOOGLE_PAGESPEED_API_KEY")) != "" {
+		decryptable = true
+	} else {
+		configError = "not_configured"
+		configErrorDetail = "API key PageSpeed belum dikonfigurasi (DB maupun env GOOGLE_PAGESPEED_API_KEY)."
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"provider":           "google-pagespeed",
-		"api_key_configured": row != nil && row.has("sealed_api_key"),
-		"api_key_hint":       ptNullableStr(row, "api_key_hint"),
-		"updated_at":         row.timePtr("updated_at"),
+		"provider":            "google-pagespeed",
+		"api_key_configured":  row != nil && row.has("sealed_api_key"),
+		"api_key_hint":        ptNullableStr(row, "api_key_hint"),
+		"updated_at":          row.timePtr("updated_at"),
+		"api_key_decryptable": decryptable,
+		"config_error":        configError,
+		"config_error_detail": configErrorDetail,
 	})
 }
 

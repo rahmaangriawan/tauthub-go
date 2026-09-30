@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Pendaftaran khusus Mitra: panel auth dengan peran terkunci.
 	import AuthShell from '$lib/components/auth/auth-shell.svelte';
 	import AuthPanel from '$lib/components/auth/auth-panel.svelte';
@@ -6,7 +8,7 @@
 </script>
 
 <svelte:head>
-	<title>Daftar Mitra · Tauthub</title>
+	<title>{tr("Daftar Mitra · Tauthub")}</title>
 </svelte:head>
 
 <AuthShell>

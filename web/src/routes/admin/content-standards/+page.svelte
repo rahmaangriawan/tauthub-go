@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Content Standards — kuesioner readiness & pedoman editorial AI (15 standar
 	// penulisan) per jenis konten.
 	// Port apps/web/src/app/admin/content-standards/page.tsx.
@@ -251,7 +253,7 @@
 		<button
 			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
 			style={row.standard_version ? 'color: var(--primary);' : undefined}
-			title="Buka detail 15 pedoman editorial AI untuk jenis konten ini"
+			title={tr("Buka detail 15 pedoman editorial AI untuk jenis konten ini")}
 			onclick={() => (editorialTarget = row)}
 		>
 			<Sparkle size={13} />
@@ -306,14 +308,14 @@
 		/>
 	</label>
 	<label class="block">
-		<span class="text-xs font-bold text-muted-foreground">Nama</span>
-		<input class="app-input mt-1 w-full" required placeholder="Siaran Pers Umum" bind:value={form.name} />
+		<span class="text-xs font-bold text-muted-foreground">{tr("Nama")}</span>
+		<input class="app-input mt-1 w-full" required placeholder={tr("Siaran Pers Umum")} bind:value={form.name} />
 	</label>
 	<label class="block">
 		<span class="text-xs font-bold text-muted-foreground">Deskripsi</span>
 		<input
 			class="app-input mt-1 w-full"
-			placeholder="Kapan jenis ini dipakai klien…"
+			placeholder={tr("Kapan jenis ini dipakai klien…")}
 			bind:value={form.description}
 		/>
 	</label>
@@ -348,16 +350,14 @@
 									type="checkbox"
 									checked={q.required}
 									onchange={(e) => setQuestion(index, { required: e.currentTarget.checked })}
-								/>
-								Wajib
-							</label>
+								/>{tr("Wajib")}</label>
 							<input
 								class="app-input"
 								type="number"
 								min="0"
 								max="100"
 								style="width: 72px;"
-								placeholder="bobot"
+								placeholder={tr("bobot")}
 								value={q.weight === 0 ? '' : String(q.weight)}
 								oninput={(e) => setQuestion(index, { weight: Number(e.currentTarget.value) })}
 							/>
@@ -365,7 +365,7 @@
 								type="button"
 								class="app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs"
 								style="color: var(--destructive);"
-								aria-label="Hapus pertanyaan"
+								aria-label={tr("Hapus pertanyaan")}
 								onclick={() => (questions = questions.filter((_, i) => i !== index))}
 							>
 								<Trash size={14} />
@@ -373,20 +373,20 @@
 						</div>
 						<input
 							class="app-input w-full"
-							placeholder="Label pertanyaan (tampil ke klien)"
+							placeholder={tr("Label pertanyaan (tampil ke klien)")}
 							value={q.label}
 							oninput={(e) => setQuestion(index, { label: e.currentTarget.value })}
 						/>
 						<div class="flex flex-col gap-2 sm:flex-row">
 							<input
 								class="app-input flex-1"
-								placeholder="Helper text (opsional)"
+								placeholder={tr("Helper text (opsional)")}
 								value={q.helper ?? ''}
 								oninput={(e) => setQuestion(index, { helper: e.currentTarget.value })}
 							/>
 							<input
 								class="app-input flex-1"
-								placeholder="Placeholder (opsional)"
+								placeholder={tr("Placeholder (opsional)")}
 								value={q.placeholder ?? ''}
 								oninput={(e) => setQuestion(index, { placeholder: e.currentTarget.value })}
 							/>
@@ -394,7 +394,7 @@
 						{#if ['select', 'multi_select', 'radio', 'checkbox'].includes(q.type)}
 							<input
 								class="app-input w-full"
-								placeholder="Opsi, pisahkan dengan koma (mis. A, B, C)"
+								placeholder={tr("Opsi, pisahkan dengan koma (mis. A, B, C)")}
 								value={(q.options ?? []).join(', ')}
 								oninput={(e) =>
 									setQuestion(index, {
@@ -414,8 +414,7 @@
 			class="app-btn app-btn-soft mt-2 !min-h-8 !px-3 !text-xs"
 			onclick={() => (questions = [...questions, emptyQuestion()])}
 		>
-			<Plus size={14} /> Tambah pertanyaan
-		</button>
+			<Plus size={14} />{tr("Tambah pertanyaan")}</button>
 	</div>
 {/snippet}
 
@@ -425,7 +424,7 @@
 		description="Kuesioner readiness & pedoman editorial AI (15 standar penulisan) per jenis konten — diindeks sebagai RAG knowledge engine Tauthub."
 	>
 		<Badge tone="accent" value={`${total} jenis`} />
-		<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={16} />Buat jenis konten</button>
+		<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={16} />{tr("Buat jenis konten")}</button>
 	</PageHeader>
 
 	<Feedback {loading} {error} />
@@ -435,8 +434,8 @@
 			<Search size={15} class="text-muted-foreground" />
 			<input
 				class="w-full bg-transparent text-sm outline-none"
-				placeholder="Cari nama, kode, atau deskripsi…"
-				aria-label="Cari jenis konten"
+				placeholder={tr("Cari nama, kode, atau deskripsi…")}
+				aria-label={tr("Cari jenis konten")}
 				bind:value={search}
 			/>
 		</label>
@@ -460,7 +459,7 @@
 		rows={rows}
 		rowKey={(row: IntakeType) => row.id}
 		{loading}
-		empty="Belum ada jenis konten. Buat yang pertama."
+		empty={tr("Belum ada jenis konten. Buat yang pertama.")}
 		minWidth="1000px"
 	/>
 
@@ -485,10 +484,8 @@
 />
 
 {#if createOpen}
-	<Modal title="Buat jenis konten" maxWidth="2xl" onClose={() => (createOpen = false)}>
-		<p class="mb-3 text-sm text-muted-foreground">
-			Definisikan kuesioner &amp; bobot readiness. Total bobot disarankan 100.
-		</p>
+	<Modal title={tr("Buat jenis konten")} maxWidth="2xl" onClose={() => (createOpen = false)}>
+		<p class="mb-3 text-sm text-muted-foreground">{tr("Definisikan kuesioner & bobot readiness. Total bobot disarankan 100.")}</p>
 		<form class="space-y-3" onsubmit={create}>
 			{@render intakeTypeFields(false)}
 			{@render questionEditor()}
@@ -496,7 +493,7 @@
 				<p class="text-sm" style="color: var(--destructive);">{error}</p>
 			{/if}
 			<div class="flex justify-end gap-2 border-t pt-4">
-				<button type="button" class="app-btn app-btn-soft" onclick={() => (createOpen = false)}>Batal</button>
+				<button type="button" class="app-btn app-btn-soft" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
 				<button type="submit" class="app-btn app-btn-primary" disabled={busy}
 					>{busy ? 'Menyimpan…' : 'Buat jenis'}</button
 				>
@@ -514,9 +511,9 @@
 				<p class="text-sm" style="color: var(--destructive);">{error}</p>
 			{/if}
 			<div class="flex justify-end gap-2 border-t pt-4">
-				<button type="button" class="app-btn app-btn-soft" onclick={() => (editTarget = null)}>Batal</button>
+				<button type="button" class="app-btn app-btn-soft" onclick={() => (editTarget = null)}>{tr("Batal")}</button>
 				<button type="submit" class="app-btn app-btn-primary" disabled={busy}
-					>{busy ? 'Menyimpan…' : 'Simpan Kuesioner'}</button
+					>{busy ? 'Menyimpan…' : tr('Simpan Kuesioner')}</button
 				>
 			</div>
 		</form>

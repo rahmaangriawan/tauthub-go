@@ -166,7 +166,8 @@ var publicationTransitions = map[string][]string{
 	"partner_rejected": {"cancelled"},
 	"queued":           {"processing", "cancelled"},
 	"processing":       {"published", "failed", "retrying", "cancelled"},
-	"published":        {},
+	"published":        {"revision"},
+	"revision":         {"queued", "cancelled"},
 	"failed":           {"queued", "retrying", "cancelled"},
 	"retrying":         {"queued", "cancelled"},
 	"cancelled":        {},
@@ -175,6 +176,7 @@ var publicationTransitions = map[string][]string{
 var publicationStatuses = []string{
 	"pending", "waiting_partner", "partner_approved", "partner_rejected",
 	"queued", "processing", "published", "failed", "retrying", "cancelled",
+	"revision",
 }
 
 func validPublicationStatus(s string) bool {

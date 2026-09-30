@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// PR Calculator admin — port app/admin/pr-calculator/page.tsx.
 	// Scoring profiles (versioned, bobot wajib 100%), media quality/relevance rules,
 	// standar PR value internal, dan maintenance (rerun analisis + recompute skor).
@@ -100,7 +102,7 @@
 				prRateTier3 = cfg.rate_tier3 != null ? String(cfg.rate_tier3) : '';
 			}
 		} catch {
-			error = 'Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.';
+			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		} finally {
 			loading = false;
 		}
@@ -129,7 +131,7 @@
 				return;
 			}
 			newName = '';
-			notice = 'Profile versi baru dibuat (status draft). Aktivasi untuk menjadikannya active.';
+			notice = tr('Profile versi baru dibuat (status draft). Aktivasi untuk menjadikannya active.');
 			await load();
 		} finally {
 			busy = false;
@@ -268,27 +270,25 @@
 		title="PR Calculator"
 		description="Scoring profiles (versioned), media quality/relevance rules, dan maintenance analisis — semuanya platform-admin only."
 	>
-		<Badge tone="accent" label={activeProfile ? `Profile v${activeProfile.version} aktif` : 'Belum ada profile aktif'} />
+		<Badge tone="accent" label={activeProfile ? `Profile v${activeProfile.version} aktif` : tr('Belum ada profile aktif')} />
 	</PageHeader>
 
 	<Feedback {loading} {error} {notice} loadingText="Memuat PR Calculator…" />
 
 	{#if profiles.length === 0 && error.includes('Akses platform')}
 		<div class="app-card mt-4 px-4 py-10 text-center">
-			<p class="text-sm text-muted-foreground">Akun ini tidak memiliki akses ke PR Calculator.</p>
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke PR Calculator.")}</p>
 		</div>
 	{:else}
 		<div class="app-card mt-4 p-4">
 			<h2 class="text-sm font-semibold">Scoring profiles</h2>
-			<p class="mt-0.5 text-xs text-muted-foreground">
-				Bobot di versi lama tidak pernah berubah — histori skor kampanye tetap reproducible. Total bobot wajib 100%.
-			</p>
+			<p class="mt-0.5 text-xs text-muted-foreground">{tr("Bobot di versi lama tidak pernah berubah — histori skor kampanye tetap reproducible. Total bobot wajib 100%.")}</p>
 			<div class="mt-2 overflow-x-auto">
 				<table class="w-full text-sm" style="min-width: 900px;">
 					<thead>
 						<tr class="text-xs text-muted-foreground">
 							<th class="px-3 py-2 text-left font-medium">Versi</th>
-							<th class="px-3 py-2 text-left font-medium">Nama</th>
+							<th class="px-3 py-2 text-left font-medium">{tr("Nama")}</th>
 							<th class="px-3 py-2 text-left font-medium">Bobot</th>
 							<th class="px-3 py-2 text-left font-medium">Status</th>
 							<th class="px-3 py-2 text-left font-medium"></th>
@@ -322,7 +322,7 @@
 					</tbody>
 				</table>
 				{#if profiles.length === 0}
-					<p class="px-4 py-8 text-center text-sm text-muted-foreground">Belum ada profile. Buat versi pertama di bawah.</p>
+					<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada profile. Buat versi pertama di bawah.")}</p>
 				{/if}
 			</div>
 			<Pagination total={profiles.length} limit={PAGE_SIZE} offset={(profilePage - 1) * PAGE_SIZE} onChange={(next) => (profilePage = next / PAGE_SIZE + 1)} />
@@ -330,8 +330,8 @@
 			<form class="mt-4" onsubmit={createProfile}>
 				<div class="grid gap-3 md:grid-cols-[1fr_2fr]">
 					<label class="block">
-						<span class="text-sm font-medium">Nama profile baru</span>
-						<input class="app-input mt-1 w-full" required placeholder="Contoh: Baseline v2 — Brand Awareness" bind:value={newName} />
+						<span class="text-sm font-medium">{tr("Nama profile baru")}</span>
+						<input class="app-input mt-1 w-full" required placeholder={tr("Contoh: Baseline v2 — Brand Awareness")} bind:value={newName} />
 					</label>
 					<div class="flex flex-wrap items-end gap-2">
 						{#each INDICATORS as key (key)}
@@ -350,20 +350,16 @@
 					</div>
 				</div>
 				<div class="mt-3 flex flex-wrap items-center gap-3">
-					<p class="text-sm" style="color: {weightsValid ? 'var(--success)' : 'var(--destructive)'};">
-						Total bobot: {Math.round(weightTotal * 100) / 100}% {weightsValid ? '✓' : '(wajib 100%)'}
+					<p class="text-sm" style="color: {weightsValid ? 'var(--success)' : 'var(--destructive)'};"> {tr("Total bobot:")} {Math.round(weightTotal * 100) / 100}% {weightsValid ? '✓' : '(wajib 100%)'}
 					</p>
-					<button class="app-btn app-btn-primary" type="submit" disabled={busy || !weightsValid || newName.trim().length < 2}>Buat profile versi baru</button>
+					<button class="app-btn app-btn-primary" type="submit" disabled={busy || !weightsValid || newName.trim().length < 2}>{tr("Buat profile versi baru")}</button>
 				</div>
 			</form>
 		</div>
 
 		<div class="app-card mt-4 p-4">
-			<h2 class="text-sm font-semibold">Media quality &amp; relevance rules</h2>
-			<p class="mt-0.5 text-xs text-muted-foreground">
-				Default kualitas per tier dipakai saat media belum punya media_quality_score sendiri. Relevance per kategori dipakai
-				kolom Relevansi di tabel per-media (partial match case-insensitive).
-			</p>
+			<h2 class="text-sm font-semibold">{tr("Media quality & relevance rules")}</h2>
+			<p class="mt-0.5 text-xs text-muted-foreground">{tr("Default kualitas per tier dipakai saat media belum punya media_quality_score sendiri. Relevance per kategori dipakai kolom Relevansi di tabel per-media (partial match case-insensitive).")}</p>
 			<form class="mt-3" onsubmit={saveRules}>
 				<div class="flex flex-wrap gap-3">
 					{#each ['tier1', 'tier2', 'tier3'] as tier (tier)}
@@ -384,17 +380,13 @@
 					<span class="text-sm font-medium">Category → relevance (satu per baris: Kategori: skor)</span>
 					<textarea class="app-input mt-1 w-full" rows="5" placeholder={'Teknologi: 95\nLifestyle: 70\nBisnis: 85'} bind:value={relevanceText}></textarea>
 				</label>
-				<button class="app-btn app-btn-soft mt-2" type="submit" disabled={busy}>Simpan media rules</button>
+				<button class="app-btn app-btn-soft mt-2" type="submit" disabled={busy}>{tr("Simpan media rules")}</button>
 			</form>
 		</div>
 
 		<div class="app-card mt-4 p-4">
 			<h2 class="text-sm font-semibold">PR value standard (internal Tauthub)</h2>
-			<p class="mt-0.5 text-xs text-muted-foreground">
-				Standarisasi PR untuk semua dashboard klien — klien tidak mengatur ini, mereka hanya menerima angka.
-				Estimated PR value = nilai media + Σ(reach tier ÷ 1.000 × rate tier). Rate tier kosong = memakai rate global.
-				Diterapkan saat laporan dihitung; angka historis tidak berubah otomatis. Override per brand dikelola di menu
-				<strong>Standar PR per Brand</strong>.
+			<p class="mt-0.5 text-xs text-muted-foreground">{tr("Standarisasi PR untuk semua dashboard klien — klien tidak mengatur ini, mereka hanya menerima angka. Estimated PR value = nilai media + Σ(reach tier ÷ 1.000 × rate tier). Rate tier kosong = memakai rate global. Diterapkan saat laporan dihitung; angka historis tidak berubah otomatis. Override per brand dikelola di menu")}<strong>Standar PR per Brand</strong>.
 			</p>
 			<form class="mt-3" onsubmit={savePrConfig}>
 				<div class="flex flex-wrap items-end gap-3">
@@ -414,29 +406,24 @@
 						<span class="text-xs text-muted-foreground">Tier 3 (kosong = global)</span>
 						<input class="app-input mt-1 w-full" type="number" min={0} max={10000000} bind:value={prRateTier3} />
 					</label>
-					<button class="app-btn app-btn-soft" type="submit" disabled={busy}>Simpan standar PR</button>
+					<button class="app-btn app-btn-soft" type="submit" disabled={busy}>{tr("Simpan standar PR")}</button>
 				</div>
 			</form>
 		</div>
 
 		<div class="app-card mt-4 p-4">
 			<h2 class="text-sm font-semibold">Maintenance</h2>
-			<p class="mt-0.5 text-xs text-muted-foreground">
-				Jalankan ulang analisis (message + sentiment + verifikasi URL) dan hitung ulang skor untuk publikasi published
-				yang sudah ada sebelum fitur ini.
-			</p>
+			<p class="mt-0.5 text-xs text-muted-foreground">{tr("Jalankan ulang analisis (message + sentiment + verifikasi URL) dan hitung ulang skor untuk publikasi published yang sudah ada sebelum fitur ini.")}</p>
 			<div class="mt-3 flex flex-wrap items-center gap-3">
 				<label class="block min-w-[260px]">
-					<span class="text-xs text-muted-foreground">Campaign ID (opsional — kosongkan untuk semua)</span>
-					<input class="app-input mt-1 w-full" placeholder="uuid kampanye" bind:value={rerunCampaign} />
+					<span class="text-xs text-muted-foreground">{tr("Campaign ID (opsional — kosongkan untuk semua)")}</span>
+					<input class="app-input mt-1 w-full" placeholder={tr("uuid kampanye")} bind:value={rerunCampaign} />
 				</label>
-				<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => void rerunAnalysis()}>Rerun analisis (yang belum)</button>
+				<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => void rerunAnalysis()}>{tr("Rerun analisis (yang belum)")}</button>
 				<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => void recomputeScores()}>Hitung ulang skor</button>
 			</div>
 			{#if maintenanceResult}<p class="mt-3 text-sm" style="color: var(--success);">{maintenanceResult}</p>{/if}
-			<p class="mt-3 text-xs text-muted-foreground">
-				Catatan: job analisis/verifikasi diproses oleh queue worker di background. Skor direkalkulasi otomatis setelah tiap job selesai.
-			</p>
+			<p class="mt-3 text-xs text-muted-foreground">{tr("Catatan: job analisis/verifikasi diproses oleh queue worker di background. Skor direkalkulasi otomatis setelah tiap job selesai.")}</p>
 		</div>
 	{/if}
 </section>

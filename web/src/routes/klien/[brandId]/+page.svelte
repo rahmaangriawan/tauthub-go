@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Beranda Klien — port 1:1 dari overview-dashboard.tsx & overview-dashboard.module.css
 	// app Next.js (bukan client-overview.tsx lama).
 	import { onMount } from 'svelte';
@@ -6,19 +8,20 @@
 	import { goto } from '$app/navigation';
 	import {
 		ArrowRight, BookOpen, CircleCheck, Coins, FileText, Globe,
-		Lightbulb, Lock, ShieldCheck, Sparkles, TrendingUp, X
+		Lightbulb, Lock, ShieldCheck, Sparkles, TrendingUp, X, Zap
 	} from '@lucide/svelte';
 	import { apiRequest, getStoredSession, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
+	import { campaignUrlId } from '$lib/campaign-url';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
-
+	
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
 	const fallbackBase = $derived(`/klien/${brandUrl}`);
-	const { t, locale } = getI18n();
+	const i18n = $derived(getI18n());
 
 	type Wallet = { available_tc: number; reserved_tc: number; captured_tc: number; rate_idr: number };
 	type Pkg = { tc: number; idr: number };
@@ -76,7 +79,7 @@
 	let createBusy = $state(false);
 	let createErr = $state('');
 	let createName = $state('');
-	let createMode = $state<'ai' | 'manual' | null>(null);
+	let createMode = $state<'ai' | 'manual' | 'kilat' | null>(null);
 
 	// Popup Top Up
 	let topUpOpen = $state(false);
@@ -155,12 +158,12 @@
 		return 'flat';
 	});
 
-	const fmt = (n: number) => n.toLocaleString(locale);
+	const fmt = (n: number) => n.toLocaleString(i18n.locale);
 
-	async function createTautCampaign(mode: 'ai' | 'manual') {
+	async function createTautCampaign(mode: 'ai' | 'manual' | 'kilat') {
 		const campaignName = createName.trim();
 		if (campaignName.length < 2) {
-			createErr = 'Nama kampanye minimal 2 karakter.';
+			createErr = tr('Nama kampanye minimal 2 karakter.');
 			return;
 		}
 		createBusy = true;
@@ -171,18 +174,24 @@
 				body: JSON.stringify({
 					name: campaignName,
 					starts_at: new Date().toISOString(),
+					// 'kilat' dicatat di kampanye supaya router tahu halaman ini milik
+					// jalur Kilat, bukan The Profiler (lihat migrasi 169).
 					entry_mode: mode
 				})
 			});
-			if (!res.ok) throw new Error('Gagal membuat kampanye.');
-			const data = (await res.json()) as { id: string };
+			if (!res.ok) throw new Error(tr('Gagal membuat kampanye.'));
+			const data = (await res.json()) as { id: string; public_id?: string | null };
+			// URL memakai public_id 6 karakter (migrasi 170); API menerima keduanya.
+			const target = campaignUrlId(data);
 			await goto(
-				mode === 'ai'
-					? `${fallbackBase}/taut-pintar/${data.id}/profiler`
-					: `${fallbackBase}/taut-pintar/${data.id}/matchmaker?mode=manual`
+				mode === 'kilat'
+					? `${fallbackBase}/taut-pintar/${target}/kilat`
+					: mode === 'ai'
+						? `${fallbackBase}/taut-pintar/${target}/profiler`
+						: `${fallbackBase}/taut-pintar/${target}/matchmaker?mode=manual`
 			);
 		} catch (reason) {
-			createErr = reason instanceof Error ? reason.message : 'Gagal membuat kampanye.';
+			createErr = reason instanceof Error ? reason.message : tr('Gagal membuat kampanye.');
 			createBusy = false;
 		}
 	}
@@ -196,7 +205,7 @@
 			const result = await submitTopUp(`/v1/brands/${brandId}`, tc, key, invoice);
 			if (result.status === 'paid') {
 				topUpKey = crypto.randomUUID();
-				showToast('Top Up berhasil! Saldo telah diperbarui.', 'success');
+				showToast(tr('Top Up berhasil! Saldo telah diperbarui.'), 'success');
 				topUpOpen = false;
 				window.dispatchEvent(new CustomEvent('tauthub:topup-success'));
 				return;
@@ -221,10 +230,10 @@
 	}
 
 	let insightIndex = $state(0);
-	const insightMessages = [
-		'Kinerja kampanye Anda menunjukkan tren positif. Bulan ini tercatat 13 publikasi aktif yang terus memperluas jangkauan brand ke audiens yang relevan.',
-		'Berdasarkan profil Anda, AI Matchmaker menemukan 3 media mainstream baru dengan audiens yang sangat cocok untuk produk Anda. Selain itu, artikel terakhir Anda berhasil lolos Gatekeeper tanpa revisi.'
-	];
+	const insightMessages = $derived([
+		tr('Kinerja kampanye Anda menunjukkan tren positif. Bulan ini tercatat 13 publikasi aktif yang terus memperluas jangkauan brand ke audiens yang relevan.'),
+		tr('Berdasarkan profil Anda, AI Matchmaker menemukan 3 media mainstream baru dengan audiens yang sangat cocok untuk produk Anda. Selain itu, artikel terakhir Anda berhasil lolos Gatekeeper tanpa revisi.')
+	]);
 
 	$effect(() => {
 		const timer = setInterval(() => {
@@ -234,7 +243,7 @@
 	});
 </script>
 
-<PageTitle title="Beranda Klien" />
+<PageTitle title={tr("Beranda Klien")} />
 
 {#snippet statusBadge(status: string, label: string)}
 	{@const color = STATUS_COLORS[status] ?? 'gray'}
@@ -253,22 +262,20 @@
 {/snippet}
 
 {#if loading}
-	<div class="flex items-center justify-center p-12 text-sm text-muted-foreground" aria-busy="true">
-		Memuat overview…
-	</div>
+	<div class="flex items-center justify-center p-12 text-sm text-muted-foreground" aria-busy="true">{tr("Memuat overview…")}</div>
 {:else}
 	<div class="wrap">
 		<!-- ── HERO ─────────────────────────────────────────────────────── -->
 		<section class="hero">
 			<div class="heroContent">
 					<h1 class="heroTitle">
-						{t.dashboard.welcome.replace('{name}', userName || 'User')}
+						{i18n.t.dashboard.welcome.replace('{name}', userName || 'User')}
 					</h1>
-					<p class="heroSubtitle">{t.dashboard.subtitle}</p>
+					<p class="heroSubtitle">{i18n.t.dashboard.subtitle}</p>
 					<div class="heroBtns">
 						<button class="heroCTA" type="button" onclick={() => goto(`${fallbackBase}/media`)}>
 							<Globe size={18} strokeWidth={2.4} />
-							<span>{t.dashboard.open_media_catalog}</span>
+							<span>{i18n.t.dashboard.open_media_catalog}</span>
 						</button>
 						<button
 							class="heroCTAGhost"
@@ -280,7 +287,7 @@
 							}}
 						>
 							<Sparkles size={18} strokeWidth={2.4} />
-							<span>{t.dashboard.create_campaign}</span>
+							<span>{i18n.t.dashboard.create_campaign}</span>
 						</button>
 					</div>
 				</div>
@@ -290,8 +297,8 @@
 							<ShieldCheck size={24} strokeWidth={2.4} color="#34d399" />
 						</div>
 						<div class="securityTextWrap">
-							<span class="securityTitle">{t.dashboard.security_title}</span>
-							<span class="securityValue">100% {t.dashboard.security_passed}</span>
+							<span class="securityTitle">{i18n.t.dashboard.security_title}</span>
+							<span class="securityValue">100% {i18n.t.dashboard.security_passed}</span>
 						</div>
 					</div>
 				</div>
@@ -301,31 +308,31 @@
 		<div class="metricGrid">
 			<div class="metricCard">
 				<div class="metricHeader">
-					<span class="metricTitle">{t.dashboard.available_balance}</span>
+					<span class="metricTitle">{i18n.t.dashboard.available_balance}</span>
 					<div class="metricIcon iconBlue"><Coins size={16} strokeWidth={2.4} /></div>
 				</div>
 				<div class="metricValueRow">
 					<span class="metricValue">{fmt(available)}</span>
-					<span class="metricUnit">{t.common.credits}</span>
+					<span class="metricUnit">{i18n.t.common.credits}</span>
 				</div>
-				<span class="metricDesc">{t.dashboard.balance_desc}</span>
+				<span class="metricDesc">{i18n.t.dashboard.balance_desc}</span>
 			</div>
 
 			<div class="metricCard">
 				<div class="metricHeader">
-					<span class="metricTitle">{t.dashboard.reserved_credit}</span>
+					<span class="metricTitle">{i18n.t.dashboard.reserved_credit}</span>
 					<div class="metricIcon iconBlue"><Lock size={16} strokeWidth={2.4} /></div>
 				</div>
 				<div class="metricValueRow">
 					<span class="metricValue">{fmt(reserved)}</span>
-					<span class="metricUnit">{t.common.credits}</span>
+					<span class="metricUnit">{i18n.t.common.credits}</span>
 				</div>
-				<span class="metricDesc">{t.dashboard.reserved_desc}</span>
+				<span class="metricDesc">{i18n.t.dashboard.reserved_desc}</span>
 			</div>
 
 			<div class="metricCard">
 				<div class="metricHeader">
-					<span class="metricTitle">{t.dashboard.estimated_reach}</span>
+					<span class="metricTitle">{i18n.t.dashboard.estimated_reach}</span>
 					<div class="metricIcon iconBlue"><TrendingUp size={16} strokeWidth={2.4} /></div>
 				</div>
 				<div class="metricValueRow">
@@ -335,22 +342,22 @@
 					{reachDelta === null
 						? '—'
 						: reachDelta === 'flat'
-							? t.dashboard.reach_delta_flat
+							? i18n.t.dashboard.reach_delta_flat
 							: reachDelta.startsWith('up')
-								? t.dashboard.reach_delta_up.replace('{n}', reachDelta.split(':')[1])
-								: t.dashboard.reach_delta_down.replace('{n}', reachDelta.split(':')[1])}
+								? i18n.t.dashboard.reach_delta_up.replace('{n}', reachDelta.split(':')[1])
+								: i18n.t.dashboard.reach_delta_down.replace('{n}', reachDelta.split(':')[1])}
 				</span>
 			</div>
 
 			<div class="metricCard">
 				<div class="metricHeader">
-					<span class="metricTitle">{t.dashboard.total_clicks}</span>
+					<span class="metricTitle">{i18n.t.dashboard.total_clicks}</span>
 					<div class="metricIcon iconBlue"><FileText size={16} strokeWidth={2.4} /></div>
 				</div>
 				<div class="metricValueRow">
 					<span class="metricValue">{fmt(clicks)}</span>
 				</div>
-				<span class="metricDesc">{t.dashboard.clicks_desc}</span>
+				<span class="metricDesc">{i18n.t.dashboard.clicks_desc}</span>
 			</div>
 		</div>
 
@@ -362,8 +369,8 @@
 				</div>
 				<div class="insightsContent">
 					<div class="insightsTitleRow">
-						<h3 class="insightsTitle">{t.dashboard.insights_title}</h3>
-						<span class="insightsBadge">{t.dashboard.insights_badge}</span>
+						<h3 class="insightsTitle">{i18n.t.dashboard.insights_title}</h3>
+						<span class="insightsBadge">{i18n.t.dashboard.insights_badge}</span>
 					</div>
 					<div class="insightsRolling">
 						{#each insightMessages as msg, idx (idx)}
@@ -383,18 +390,18 @@
 
 			<div class="financeCard">
 				<div class="financeHeader">
-					<h3 class="sectionTitle" style="margin: 0;">{t.dashboard.quick_finance_title}</h3>
+					<h3 class="sectionTitle" style="margin: 0;">{i18n.t.dashboard.quick_finance_title}</h3>
 					<div class="financeHeaderIcon">
 						<Sparkles size={14} strokeWidth={2.4} />
 					</div>
 				</div>
 				<div class="financeSubheader">
 					<Coins size={18} strokeWidth={2.4} style="color: var(--amber-9, #d97706);" />
-					<span class="financeSubLabel">{t.dashboard.total_active_balance}</span>
+					<span class="financeSubLabel">{i18n.t.dashboard.total_active_balance}</span>
 				</div>
 				<div class="financeValueRow">
 					<span class="financeValue">{fmt(available)}</span>
-					<span class="financeUnit">{t.common.credits}</span>
+					<span class="financeUnit">{i18n.t.common.credits}</span>
 				</div>
 				<button
 					type="button"
@@ -405,17 +412,17 @@
 						topUpOpen = true;
 					}}
 				>
-					{t.dashboard.topup}
+					{i18n.t.dashboard.topup}
 				</button>
 				<div class="financeDivider"></div>
 				<div class="financeLinks">
 					<a class="ghostLink" href={`${fallbackBase}/credits`}>
 						<FileText size={14} strokeWidth={2.4} />
-						<span>{t.dashboard.tx_history}</span>
+						<span>{i18n.t.dashboard.tx_history}</span>
 					</a>
 					<a class="ghostLink" href={`${fallbackBase}/invoices`}>
 						<FileText size={14} strokeWidth={2.4} />
-						<span>{t.dashboard.claim_pph}</span>
+						<span>{i18n.t.dashboard.claim_pph}</span>
 					</a>
 				</div>
 			</div>
@@ -425,18 +432,18 @@
 		<div class="twoCol">
 			<!-- LEFT: PUBLICATION QUEUE -->
 			<section>
-				<h2 class="sectionTitle">{t.dashboard.queue_title}</h2>
+				<h2 class="sectionTitle">{i18n.t.dashboard.queue_title}</h2>
 				{#if pubs.length === 0}
 					<div class="emptyCard">
-						<p>{t.dashboard.queue_empty}</p>
+						<p>{i18n.t.dashboard.queue_empty}</p>
 					</div>
 				{:else}
 					<div class="queueTable">
 						<div class="queueHeader">
-							<span>{t.dashboard.queue_col_campaign}</span>
-							<span>{t.dashboard.queue_col_media}</span>
-							<span>{t.dashboard.queue_col_status}</span>
-							<span>Kredit</span>
+							<span>{i18n.t.dashboard.queue_col_campaign}</span>
+							<span>{i18n.t.dashboard.queue_col_media}</span>
+							<span>{i18n.t.dashboard.queue_col_status}</span>
+							<span>{tr("Kredit")}</span>
 						</div>
 							{#each pubs as r (r.id)}
 								<div class="queueRow">
@@ -447,11 +454,11 @@
 										<span class="truncate block">{r.media_name || '—'}</span>
 									</div>
 									<div class="queueCell queueCellStatus">
-										{@render statusBadge(r.status, (t.status as Record<string, string>)[r.status] ?? r.status)}
+										{@render statusBadge(r.status, (i18n.t.status as Record<string, string>)[r.status] ?? r.status)}
 									</div>
 									<div class="queueCell queueCellPrice font-medium">
 										<Coins size={13} class="queueCoinIcon" />
-										<span>{tcLabel(r.client_price ?? 0, tcConfig?.rate_idr ?? wallet?.rate_idr ?? 1000)} Kredit</span>
+										<span>{tcLabel(r.client_price ?? 0, tcConfig?.rate_idr ?? wallet?.rate_idr ?? 1000)} {tr("Kredit")}</span>
 									</div>
 								</div>
 							{/each}
@@ -462,7 +469,7 @@
 			<!-- RIGHT: HELP -->
 			<div class="helpCard">
 				<div class="helpHeader">
-					<h3 class="sectionTitle" style="margin: 0;">{t.dashboard.help_title}</h3>
+					<h3 class="sectionTitle" style="margin: 0;">{i18n.t.dashboard.help_title}</h3>
 					<div class="helpHeaderIcon">
 						<BookOpen size={16} strokeWidth={2.4} />
 					</div>
@@ -473,8 +480,8 @@
 							<BookOpen size={18} strokeWidth={2.4} />
 						</div>
 						<div class="helpItemContent">
-							<div class="helpItemTitle">{t.dashboard.help_how_title}</div>
-							<div class="helpItemDesc">{t.dashboard.help_how_desc}</div>
+							<div class="helpItemTitle">{i18n.t.dashboard.help_how_title}</div>
+							<div class="helpItemDesc">{i18n.t.dashboard.help_how_desc}</div>
 						</div>
 						<ArrowRight size={14} class="helpArrow" />
 					</a>
@@ -483,8 +490,8 @@
 							<ShieldCheck size={18} strokeWidth={2.4} />
 						</div>
 						<div class="helpItemContent">
-							<div class="helpItemTitle">{t.dashboard.help_gate_title}</div>
-							<div class="helpItemDesc">{t.dashboard.help_gate_desc}</div>
+							<div class="helpItemTitle">{i18n.t.dashboard.help_gate_title}</div>
+							<div class="helpItemDesc">{i18n.t.dashboard.help_gate_desc}</div>
 						</div>
 						<ArrowRight size={14} class="helpArrow" />
 					</a>
@@ -509,7 +516,7 @@
 		<dialog
 			open
 			class="dialogBox"
-			aria-label="Buat Kampanye"
+			aria-label={tr("Buat Kampanye")}
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => {
 				if (e.key === 'Escape' && !createBusy) {
@@ -519,11 +526,11 @@
 			}}
 		>
 			<div class="dialogHeader">
-				<h2 class="dialogTitle">Buat Kampanye</h2>
+				<h2 class="dialogTitle">{tr("Buat Kampanye")}</h2>
 				<button
 					type="button"
 					class="dialogClose"
-					aria-label="Tutup"
+					aria-label={tr("Tutup")}
 					disabled={createBusy}
 					onclick={() => {
 						createOpen = false;
@@ -533,16 +540,15 @@
 					<X size={16} />
 				</button>
 			</div>
-			<p class="dialogDesc">Pilih cara kamu membuat kampanye distribusi konten.</p>
+			<p class="dialogDesc">{tr("Pilih cara kamu membuat kampanye distribusi konten.")}</p>
 
 			<div class="dialogField">
-				<label class="dialogLabel" for="new-campaign-name">
-					Nama Kampanye <span class="requiredStar">*</span>
+				<label class="dialogLabel" for="new-campaign-name">{tr("Nama Kampanye")}<span class="requiredStar">*</span>
 				</label>
 				<input
 					id="new-campaign-name"
 					class="app-input"
-					placeholder="Contoh: Launching Produk Q3 2026"
+					placeholder={tr("Contoh: Launching Produk Q3 2026")}
 					bind:value={createName}
 					oninput={() => {
 						if (createErr) createErr = '';
@@ -566,9 +572,7 @@
 						<Sparkles size={16} strokeWidth={2.4} color="var(--primary)" />
 						<strong>AI Pintar</strong>
 					</div>
-					<p class="modeCardDesc">
-						Profiler: AI menyusun strategi & brief, lalu Matchmaker pilih media. Butuh 10 Kredit.
-					</p>
+					<p class="modeCardDesc">{tr("Profiler: AI menyusun strategi & brief, lalu Matchmaker pilih media. Butuh 10 Kredit.")}</p>
 				</button>
 				<button
 					type="button"
@@ -581,9 +585,20 @@
 						<FileText size={16} strokeWidth={2.4} color="var(--muted-foreground)" />
 						<strong>Manual</strong>
 					</div>
-					<p class="modeCardDesc">
-						The Writer tanpa AI: siapkan media & unggah artikel tulisanmu sendiri.
-					</p>
+					<p class="modeCardDesc">{tr("The Writer tanpa AI: siapkan media & unggah artikel tulisanmu sendiri.")}</p>
+				</button>
+				<button
+					type="button"
+					onclick={() => (createMode = 'kilat')}
+					disabled={createBusy}
+					class="modeCard"
+					class:modeCardActive={createMode === 'kilat'}
+				>
+					<div class="modeCardTitle">
+						<Zap size={16} strokeWidth={2.4} color="var(--primary)" />
+						<strong>Kampanye Kilat</strong>
+					</div>
+					<p class="modeCardDesc">{tr("Cukup URL website + anggaran. AI menyusun ringkasan & memilih medianya, tanpa The Profiler.")}</p>
 				</button>
 			</div>
 
@@ -1280,7 +1295,9 @@
 	.dialogBox {
 		position: relative;
 		width: 100%;
-		max-width: 520px;
+		/* Tiga kartu mode (AI Pintar / Manual / Kampanye Kilat) butuh ruang
+		   supaya deskripsinya tidak terpotong jadi satu kata per baris. */
+		max-width: 768px;
 		border-radius: 16px;
 		border: 1px solid var(--border);
 		background: var(--card);
@@ -1336,7 +1353,7 @@
 	}
 	.modeGrid {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 1fr 1fr 1fr;
 		gap: 12px;
 		margin-top: 16px;
 	}

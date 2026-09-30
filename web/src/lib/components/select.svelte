@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Dropdown bergaya (pengganti <select> bawaan browser) — parity Radix
 	// Select/DropdownMenu di app lama: trigger 38px, radius 8px, border tipis,
 	// menu mengambang dengan item terpilih (tebal + biru + centang) dan pill
@@ -20,6 +22,8 @@
 		menuMaxHeight = 340,
 		variant = 'default',
 		disabled = false,
+		searchable = false,
+		searchPlaceholder = 'Cari…',
 		onchange,
 		footer
 	}: {
@@ -33,6 +37,9 @@
 		menuMaxHeight?: number;
 		variant?: 'default' | 'plain';
 		disabled?: boolean;
+		/** Tampilkan kolom pencarian di dalam menu (untuk daftar panjang). */
+		searchable?: boolean;
+		searchPlaceholder?: string;
 		onchange?: (value: string, option: SelectOption | null) => void;
 		footer?: Snippet;
 	} = $props();
@@ -40,13 +47,22 @@
 	let open = $state(false);
 	let trigger = $state<HTMLButtonElement | null>(null);
 	let menu = $state<HTMLDivElement | null>(null);
+	let searchInput = $state<HTMLInputElement | null>(null);
 	let pos = $state({ left: 0, top: 0, width: 0 });
 	let placement = $state<'down' | 'up'>('down');
 	let menuHeight = $state(0);
 	let activeIndex = $state(-1);
+	let query = $state('');
+	let measured = $state(false);
 
 	const selected = $derived(options.find((o) => o.value === value) ?? null);
 	const hasValue = $derived(selected != null && selected.value !== '');
+	// Daftar yang ditampilkan: seluruh opsi, atau hasil filter kolom pencarian.
+	const filtered = $derived(
+		searchable && query.trim() !== ''
+			? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
+			: options
+	);
 
 	function openMenu() {
 		if (!trigger) return;
@@ -57,8 +73,10 @@
 		// Perkirakan tinggi menu dulu (dibatasi menuMaxHeight) supaya tahu apakah
 		// muat ke bawah. Bila tidak, menu dibuka KE ATAS (drop-up) dan tingginya
 		// dipangkas agar tetap di dalam viewport — seperti perilaku Radix.
+		// Tinggi kolom pencarian ikut dihitung supaya perkiraannya tidak meleset.
 		const gap = 4;
-		const estimated = Math.min(options.length * 34 + 10, menuMaxHeight);
+		const searchHeight = searchable ? 44 : 0;
+		const estimated = Math.min(options.length * 34 + 10 + searchHeight, menuMaxHeight);
 		const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
 		const spaceAbove = rect.top - gap - 8;
 		const placeUp = spaceBelow < Math.min(estimated, 180) && spaceAbove > spaceBelow;
@@ -66,16 +84,38 @@
 		placement = placeUp ? 'up' : 'down';
 		menuHeight = Math.max(120, Math.min(estimated, available));
 		pos = { left, top: placeUp ? rect.top - gap - menuHeight : rect.bottom + gap, width };
+		query = '';
 		activeIndex = Math.max(
 			0,
 			options.findIndex((o) => o.value === value)
 		);
+		measured = false;
 		open = true;
 	}
 
 	function closeMenu() {
 		open = false;
 	}
+
+	// Koreksi posisi setelah menu ter-render: tinggi nyata bisa berbeda dari
+	// perkiraan (label panjang, kolom pencarian, footer), jadi flip up/down
+	// diputuskan ulang dari hasil ukur. Sekali per pembukaan agar tidak berulang.
+	$effect(() => {
+		if (!open || !menu || !trigger || measured) return;
+		const rect = trigger.getBoundingClientRect();
+		const gap = 4;
+		const natural = menu.scrollHeight + 10;
+		const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
+		const spaceAbove = rect.top - gap - 8;
+		const wanted = Math.min(natural, menuMaxHeight);
+		const placeUp = spaceBelow < Math.min(wanted, 180) && spaceAbove > spaceBelow;
+		const available = placeUp ? spaceAbove : spaceBelow;
+		const height = Math.max(120, Math.min(wanted, available));
+		placement = placeUp ? 'up' : 'down';
+		menuHeight = height;
+		pos = { ...pos, top: placeUp ? rect.top - gap - height : rect.bottom + gap };
+		measured = true;
+	});
 
 	function pick(option: SelectOption) {
 		if (option.disabled) return;
@@ -86,11 +126,12 @@
 	}
 
 	function moveActive(delta: number) {
-		if (options.length === 0) return;
+		const list = filtered;
+		if (list.length === 0) return;
 		let next = activeIndex;
-		for (let step = 0; step < options.length; step++) {
-			next = (next + delta + options.length) % options.length;
-			if (!options[next].disabled) break;
+		for (let step = 0; step < list.length; step++) {
+			next = (next + delta + list.length) % list.length;
+			if (!list[next].disabled) break;
 		}
 		activeIndex = next;
 	}
@@ -119,14 +160,38 @@
 		}
 		if (event.key === 'Enter' || event.key === ' ') {
 			event.preventDefault();
-			const option = options[activeIndex];
+			const option = filtered[activeIndex];
 			if (option) pick(option);
 		}
 	}
 
+	/** Kolom pencarian: mengetik memfilter, panah/Enter tetap menavigasi daftar. */
+	function onSearchKeydown(event: KeyboardEvent) {
+		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+			event.preventDefault();
+			moveActive(event.key === 'ArrowDown' ? 1 : -1);
+			return;
+		}
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			const option = filtered[activeIndex];
+			if (option) pick(option);
+			return;
+		}
+		onMenuKeydown(event);
+	}
+
+	function onSearchInput() {
+		// Hasil filter berubah: sorotan kembali ke item pertama yang terlihat.
+		activeIndex = filtered.findIndex((o) => !o.disabled);
+	}
+
 	$effect(() => {
 		if (!open) return;
-		menu?.focus();
+		// Dengan kolom pencarian, fokus langsung ke sana supaya user bisa
+		// mengetik tanpa klik; tanpa pencarian, fokus ke menunya (navigasi panah).
+		if (searchable) searchInput?.focus();
+		else menu?.focus();
 		// Tutup hanya bila halaman/induk yang di-scroll. Scroll DI DALAM menu
 		// harus diabaikan — kalau tidak, daftar panjang tak bisa digulir karena
 		// menu menutup dirinya sendiri (listener capture ikut menangkap event
@@ -171,7 +236,7 @@
 </button>
 
 {#if open}
-	<button type="button" class="zs-select-backdrop" aria-label="Tutup pilihan" onclick={closeMenu}></button>
+	<button type="button" class="zs-select-backdrop" aria-label={tr("Tutup pilihan")} onclick={closeMenu}></button>
 	<div
 		bind:this={menu}
 		class="zs-select-menu"
@@ -182,7 +247,26 @@
 		style="left: {pos.left}px; top: {pos.top}px; min-width: {pos.width}px; max-height: {menuMaxHeight}px; height: {menuHeight > 0 ? `${menuHeight}px` : 'auto'};"
 		onkeydown={onMenuKeydown}
 	>
-		{#each options as option, index (option.value)}
+		{#if searchable}
+			<div class="zs-select-search">
+				<input
+					bind:this={searchInput}
+					class="zs-select-search-input"
+					type="text"
+					autocomplete="off"
+					spellcheck="false"
+					placeholder={searchPlaceholder}
+					aria-label={searchPlaceholder}
+					bind:value={query}
+					oninput={onSearchInput}
+					onkeydown={onSearchKeydown}
+				/>
+			</div>
+		{/if}
+		{#if filtered.length === 0}
+			<p class="zs-select-empty">{tr("Tidak ada hasil")}</p>
+		{/if}
+		{#each filtered as option, index (option.value)}
 			<button
 				type="button"
 				role="option"
@@ -390,5 +474,40 @@
 		margin-top: 4px;
 		padding-top: 6px;
 		border-top: 1px solid #f1f5f9;
+	}
+
+	.zs-select-search {
+		position: sticky;
+		top: -5px;
+		z-index: 1;
+		margin: -5px -5px 4px;
+		padding: 5px 5px 6px;
+		background: #ffffff;
+		border-bottom: 1px solid #f1f5f9;
+	}
+	.zs-select-search-input {
+		width: 100%;
+		height: 32px;
+		padding: 0 10px;
+		border: 1px solid #e2e8f0;
+		border-radius: 7px;
+		background: #f8fafc;
+		color: #0f172a;
+		font: inherit;
+		font-size: 13px;
+		outline: none;
+	}
+	.zs-select-search-input::placeholder {
+		color: #94a3b8;
+	}
+	.zs-select-search-input:focus {
+		border-color: #2563eb;
+		background: #ffffff;
+		box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+	}
+	.zs-select-empty {
+		margin: 4px 6px 6px;
+		color: #64748b;
+		font-size: 12.5px;
 	}
 </style>

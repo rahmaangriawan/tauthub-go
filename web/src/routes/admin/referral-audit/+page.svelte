@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Monitoring non-VIP & audit referral — port app/admin/referral-audit/page.tsx:
 	// funnel referral mitra non-VIP (klik, pendaftaran, domain join, domain dapat
 	// orderan, GMV, komisi) + tab Domain Referral (approve/reject) + tab
@@ -37,8 +39,8 @@
 		last_order_at: string | null;
 	};
 
-	const ROLE_LABEL: Record<string, string> = { partner: 'Mitra', client: 'Klien', admin: 'Admin' };
-	const STATUS_LABEL: Record<string, string> = { pending: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak' };
+	const ROLE_LABEL: Record<string, string> = $derived({ partner: tr('Mitra'), client: tr('Klien'), admin: 'Admin' });
+	const STATUS_LABEL: Record<string, string> = $derived({ pending: tr('Menunggu'), approved: tr('Disetujui'), rejected: tr('Ditolak') });
 	const STATUS_TONE: Record<string, 'warning' | 'success' | 'danger'> = {
 		pending: 'warning', approved: 'success', rejected: 'danger'
 	};
@@ -162,7 +164,7 @@
 <section>
 	<PageHeader
 		title="Monitoring Non VIP"
-		description="Monitoring referral mitra non-VIP: siapa share kode, berapa klik & pendaftaran, domain yang join, domain yang dapat orderan, dan siapa pemilik tiap domain."
+		description={tr("Monitoring referral mitra non-VIP: siapa share kode, berapa klik & pendaftaran, domain yang join, domain yang dapat orderan, dan siapa pemilik tiap domain.")}
 	/>
 
 	<Feedback loading={!loaded} {error} loadingText="Memuat monitoring non VIP…" />
@@ -170,12 +172,12 @@
 	{#if loaded}
 		<div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 			<div class="app-card p-4"><p class="text-xs text-muted-foreground">Referrer Non VIP</p><p class="mt-1 text-2xl font-bold">{fmtNum(totalReferrers)}</p></div>
-			<div class="app-card p-4"><p class="text-xs text-muted-foreground">Total Klik</p><p class="mt-1 text-2xl font-bold">{fmtNum(totalClicks)}</p></div>
-			<div class="app-card p-4"><p class="text-xs text-muted-foreground">Total Pendaftaran</p><p class="mt-1 text-2xl font-bold">{fmtNum(totalSignups)}</p></div>
+			<div class="app-card p-4"><p class="text-xs text-muted-foreground">{tr("Total Klik")}</p><p class="mt-1 text-2xl font-bold">{fmtNum(totalClicks)}</p></div>
+			<div class="app-card p-4"><p class="text-xs text-muted-foreground">{tr("Total Pendaftaran")}</p><p class="mt-1 text-2xl font-bold">{fmtNum(totalSignups)}</p></div>
 			<div class="app-card p-4"><p class="text-xs text-muted-foreground">Domain Join</p><p class="mt-1 text-2xl font-bold">{fmtNum(totalDomainsJoined)}</p></div>
 			<div class="app-card p-4"><p class="text-xs text-muted-foreground">Domain Dapat Orderan</p><p class="mt-1 text-2xl font-bold" style="color: var(--success);">{fmtNum(totalDomainsWithOrders)}</p></div>
-			<div class="app-card p-4"><p class="text-xs text-muted-foreground">GMV Order Terbit</p><p class="mt-1 text-2xl font-bold" style="color: var(--success);">{fmtRp(totalGmv)}</p></div>
-			<div class="app-card p-4"><p class="text-xs text-muted-foreground">Total Komisi</p><p class="mt-1 text-2xl font-bold" style="color: var(--success);">{fmtRp(totalKomisi)}</p></div>
+			<div class="app-card p-4"><p class="text-xs text-muted-foreground">{tr("GMV Order Terbit")}</p><p class="mt-1 text-2xl font-bold" style="color: var(--success);">{fmtRp(totalGmv)}</p></div>
+			<div class="app-card p-4"><p class="text-xs text-muted-foreground">{tr("Total Komisi")}</p><p class="mt-1 text-2xl font-bold" style="color: var(--success);">{fmtRp(totalKomisi)}</p></div>
 		</div>
 
 		<div class="mt-4 flex flex-wrap gap-1 border-b">
@@ -196,7 +198,7 @@
 		{#if tab === 'referrers'}
 			<div class="app-card mt-3 overflow-x-auto">
 				{#if referrers.length === 0}
-					<p class="px-4 py-4 text-sm text-muted-foreground">Belum ada aktivitas referral dari mitra non-VIP.</p>
+					<p class="px-4 py-4 text-sm text-muted-foreground">{tr("Belum ada aktivitas referral dari mitra non-VIP.")}</p>
 				{:else}
 					<table class="w-full text-sm" style="min-width: 1080px;">
 						<thead>
@@ -205,8 +207,8 @@
 								<th class="px-4 py-2.5 font-medium">Kode</th>
 								<th class="px-4 py-2.5 font-medium">Klik</th>
 								<th class="px-4 py-2.5 font-medium">Pendaftaran</th>
-								<th class="px-4 py-2.5 font-medium">Mitra</th>
-								<th class="px-4 py-2.5 font-medium">Klien</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Mitra")}</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Klien")}</th>
 								<th class="px-4 py-2.5 font-medium">Domain Join</th>
 								<th class="px-4 py-2.5 font-medium">Domain Order</th>
 								<th class="px-4 py-2.5 font-medium">Komisi</th>
@@ -229,7 +231,7 @@
 										<p class="text-xs text-muted-foreground">domain masuk</p>
 									</td>
 									<td class="px-4 py-2.5">
-										<p class="font-medium" style={Number(r.domains_with_orders || 0) > 0 ? 'color: var(--success);' : undefined}>{fmtNum(r.domains_with_orders)} dapat orderan</p>
+										<p class="font-medium" style={Number(r.domains_with_orders || 0) > 0 ? 'color: var(--success);' : undefined}>{fmtNum(r.domains_with_orders)} {tr("dapat orderan")}</p>
 										<p class="text-xs text-muted-foreground">{fmtNum(r.orders_published_total)} order terbit</p>
 										<p class="text-xs text-muted-foreground">GMV {fmtRp(r.gmv_published_total)}</p>
 									</td>
@@ -242,7 +244,7 @@
 			</div>
 		{:else if tab === 'domains'}
 			<div class="mt-3 flex flex-wrap items-center gap-2">
-				{#each [['', 'Semua Domain'], ['with', 'Sudah Dapat Orderan'], ['without', 'Belum Ada Orderan']] as [key, label] (key || 'all')}
+				{#each [['', 'Semua Domain'], ['with', 'Sudah Dapat Orderan'], ['without', tr('Belum Ada Orderan')]] as [key, label] (key || 'all')}
 					<button
 						class="app-btn !min-h-8 !px-3 !text-xs"
 						class:app-btn-primary={orderFilter === key}
@@ -262,7 +264,7 @@
 					>{label}</button>
 				{/each}
 				<span class="text-xs text-muted-foreground">·</span>
-				{#each [['', 'Semua Status'], ['pending', 'Menunggu'], ['approved', 'Disetujui'], ['rejected', 'Ditolak']] as [key, label] (key || 'allstatus')}
+				{#each [['', tr('Semua Status')], ['pending', tr('Menunggu')], ['approved', tr('Disetujui')], ['rejected', tr('Ditolak')]] as [key, label] (key || 'allstatus')}
 					<button
 						class="app-btn !min-h-8 !px-3 !text-xs"
 						class:app-btn-primary={domainStatus === key}
@@ -277,17 +279,17 @@
 				{#if visibleDomains.length === 0}
 					<div class="flex flex-col items-center px-4 py-12 text-center">
 						<Globe size={26} class="text-muted-foreground" />
-						<p class="mt-2 text-sm text-muted-foreground">Belum ada domain referral yang cocok dengan filter.</p>
+						<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada domain referral yang cocok dengan filter.")}</p>
 					</div>
 				{:else}
 					<table class="w-full text-sm" style="min-width: 1320px;">
 						<thead>
 							<tr class="text-left text-xs text-muted-foreground">
 								<th class="px-4 py-2.5 font-medium">Domain</th>
-								<th class="px-4 py-2.5 font-medium">Referrer (Akun)</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Referrer (Akun)")}</th>
 								<th class="px-4 py-2.5 font-medium">Tier</th>
 								<th class="px-4 py-2.5 font-medium">Pemilik Domain</th>
-								<th class="px-4 py-2.5 font-medium">Media</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
 								<th class="px-4 py-2.5 font-medium">Order</th>
 								<th class="px-4 py-2.5 font-medium">Fee</th>
 								<th class="px-4 py-2.5 font-medium">Status</th>
@@ -325,11 +327,11 @@
 									<td class="px-4 py-2.5">
 										{#if rd.orders_published > 0}
 											<p class="text-sm font-medium" style="color: var(--success);">{fmtNum(rd.orders_published)} terbit</p>
-											<p class="text-xs text-muted-foreground">dari {fmtNum(rd.orders_total)} order</p>
+											<p class="text-xs text-muted-foreground">{tr("dari")} {fmtNum(rd.orders_total)} order</p>
 											<p class="text-xs text-muted-foreground">GMV {fmtRp(rd.gmv_published)}</p>
 											{#if rd.last_order_at}<p class="text-xs text-muted-foreground">terakhir {fmtDate(rd.last_order_at)}</p>{/if}
 										{:else}
-											<p class="text-sm text-muted-foreground">Belum ada</p>
+											<p class="text-sm text-muted-foreground">{tr("Belum ada")}</p>
 											{#if rd.orders_total > 0}<p class="text-xs text-muted-foreground">{fmtNum(rd.orders_total)} order belum terbit</p>{/if}
 										{/if}
 									</td>
@@ -338,7 +340,7 @@
 											<Badge label="Dibayar" tone="success" />
 											{#if rd.cpa_amount != null}<p class="mt-1 text-xs text-muted-foreground">{fmtRp(rd.cpa_amount)}</p>{/if}
 										{:else}
-											<Badge label="Belum" tone="neutral" />
+											<Badge label={tr("Belum")} tone="neutral" />
 										{/if}
 									</td>
 									<td class="px-4 py-2.5">
@@ -365,17 +367,17 @@
 		{:else}
 			<div class="app-card mt-3 overflow-x-auto">
 				{#if attributions.length === 0}
-					<p class="px-4 py-4 text-sm text-muted-foreground">Belum ada pendaftaran via referral.</p>
+					<p class="px-4 py-4 text-sm text-muted-foreground">{tr("Belum ada pendaftaran via referral.")}</p>
 				{:else}
 					<table class="w-full text-sm" style="min-width: 900px;">
 						<thead>
 							<tr class="text-left text-xs text-muted-foreground">
 								<th class="px-4 py-2.5 font-medium">Referrer</th>
 								<th class="px-4 py-2.5 font-medium">Referee</th>
-								<th class="px-4 py-2.5 font-medium">Peran</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Peran")}</th>
 								<th class="px-4 py-2.5 font-medium">IP</th>
 								<th class="px-4 py-2.5 font-medium">Catatan</th>
-								<th class="px-4 py-2.5 font-medium">Tanggal</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -424,13 +426,13 @@
 			{/if}
 			<input
 				class="app-input w-full"
-				placeholder="Contoh: Domain tidak aktif / umur domain belum memenuhi syarat"
+				placeholder={tr("Contoh: Domain tidak aktif / umur domain belum memenuhi syarat")}
 				value={rejectionReason}
 				oninput={(e) => { rejectionReason = (e.currentTarget as HTMLInputElement).value; rejectionError = ''; }}
 			/>
 		</div>
 		{#snippet footer()}
-			<button class="app-btn app-btn-soft" type="button" onclick={() => { rejecting = null; rejectionError = ''; }}>Batal</button>
+			<button class="app-btn app-btn-soft" type="button" onclick={() => { rejecting = null; rejectionError = ''; }}>{tr("Batal")}</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void reject()}>
 				{busy ? 'Menolak…' : 'Tolak Domain'}
 			</button>

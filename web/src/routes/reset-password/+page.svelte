@@ -1,10 +1,17 @@
 <script lang="ts">
-	// Port /reset-password — token dari query, password baru min 10.
+	import { tr } from '$lib/i18n/phrases';
+
+	// Port /reset-password — token dari query, password baru min 10 + konfirmasi
+	// (parity app lama). Shell + gaya sama dengan halaman auth lain (auth.css).
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import { Check, CircleAlert } from '@lucide/svelte';
+	import AuthShell from '$lib/components/auth/auth-shell.svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import '$lib/components/auth/auth.css';
 
 	let newPassword = $state('');
+	let confirm = $state('');
 	let busy = $state(false);
 	let error = $state('');
 	let success = $state(false);
@@ -14,6 +21,14 @@
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		if (busy) return;
+		if (newPassword !== confirm) {
+			error = tr('Password tidak cocok.');
+			return;
+		}
+		if (newPassword.length < 10) {
+			error = tr('Password minimal 10 karakter.');
+			return;
+		}
 		busy = true;
 		error = '';
 		try {
@@ -27,48 +42,78 @@
 				success = true;
 				setTimeout(() => void goto('/login'), 1500);
 			} else {
-				error =
-					typeof data.detail === 'string'
-						? data.detail
-						: 'Token reset tidak valid atau sudah kedaluwarsa.';
+				// Halaman publik: jangan tampilkan detail server apa adanya.
+				error = tr('Token reset tidak valid atau sudah kedaluwarsa.');
 			}
 		} catch {
-			error = 'Tidak dapat terhubung ke server. Coba lagi.';
+			error = tr('Tidak dapat terhubung ke server. Coba lagi.');
 		} finally {
 			busy = false;
 		}
 	}
 </script>
 
-<PageTitle title="Reset Password" />
+<PageTitle title={tr("Reset Password")} />
 
-<main class="flex min-h-screen items-center justify-center bg-background px-4">
-	<div class="app-card w-full max-w-sm p-6">
-		<h1 class="text-xl font-semibold tracking-tight">Reset password</h1>
-		{#if !token}
-			<p class="mt-4 text-sm text-destructive">Token reset tidak ditemukan. Minta tautan baru.</p>
-		{:else if success}
-			<p class="mt-4 text-sm text-emerald-600">Password berhasil diubah. Mengarahkan ke halaman login…</p>
-		{:else}
-			<form class="mt-4 flex flex-col gap-3" onsubmit={submit}>
-				<label class="flex flex-col gap-1 text-sm">
-					Password baru (min. 10 karakter)
-					<input
-						class="app-input"
-						type="password" bind:value={newPassword} minlength={10} required
-					/>
-				</label>
-				{#if error}
-					<p class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
-				{/if}
-				<button
-					type="submit"
-					disabled={busy}
-					class="app-btn app-btn-primary"
-				>
-					{busy ? 'Menyimpan…' : 'Simpan password baru'}
-				</button>
-			</form>
-		{/if}
+<AuthShell>
+	<h1 class="auth-title">{tr("Reset Password")}</h1>
+	<p class="auth-subtitle">{tr("Masukkan password baru untuk akun Tauthub Anda.")}</p>
+
+	<div class="auth-body">
+	{#if !token}
+		<p class="auth-alert" role="alert">
+			<CircleAlert size={15} />{tr("Token reset tidak ditemukan. Minta tautan baru.")}
+		</p>
+		<a class="auth-cta" href="/forgot-password">{tr("Minta tautan baru")}</a>
+	{:else if success}
+		<div class="auth-verify-ok" role="status">
+			<Check size={15} />
+			<div>
+				{tr("Password berhasil diubah.")}
+				<small>{tr("Mengarahkan ke halaman login…")}</small>
+			</div>
+		</div>
+	{:else}
+		<form class="auth-form" onsubmit={submit}>
+			{#if error}
+				<p class="auth-alert" role="alert"><CircleAlert size={15} />{error}</p>
+			{/if}
+			<label class="auth-field">
+				<span class="auth-label">{tr("Password baru")}</span>
+				<input
+					class="auth-input"
+					type="password"
+					bind:value={newPassword}
+					placeholder={tr("Minimal 10 karakter")}
+					autocomplete="new-password"
+					minlength={10}
+					required
+				/>
+			</label>
+			<label class="auth-field">
+				<span class="auth-label">{tr("Konfirmasi password")}</span>
+				<input
+					class="auth-input"
+					type="password"
+					bind:value={confirm}
+					placeholder={tr("Ulangi password baru")}
+					autocomplete="new-password"
+					minlength={10}
+					required
+				/>
+			</label>
+			<button type="submit" class="auth-cta" disabled={busy}>
+				{#if busy}<span class="auth-spinner" aria-hidden="true"></span>{/if}
+				{busy ? tr('Menyimpan…') : tr('Simpan password baru')}
+			</button>
+		</form>
+	{/if}
 	</div>
-</main>
+
+	<p class="auth-foot"><a class="auth-link" href="/login">{tr("Kembali ke login")}</a></p>
+</AuthShell>
+
+<style>
+	/* Jarak subtitle → konten, ritme sama dengan .auth-switch di halaman login. */
+	.auth-body { margin-top: 22px; }
+</style>

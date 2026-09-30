@@ -7,15 +7,50 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"syscall"
 	"time"
 )
 
-// SafeFetch client: dialer dengan Control yang memeriksa setiap IP hasil
+// safeResolver: resolver DNS yang mengutamakan public DNS (1.1.1.1, 8.8.8.8)
+// agar resolusi domain publik (media partner/WordPress/webhook) tidak terbajak
+// oleh DNS ISP lokal (mis. blockpage XL Axiata / Internet Positif), dengan fallback
+// ke DNS sistem bawaan bila koneksi UDP ke public DNS gagal.
+var safeResolver = &net.Resolver{
+	PreferGo: true,
+	Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+		d := net.Dialer{Timeout: 3 * time.Second}
+		if custom := strings.TrimSpace(os.Getenv("DNS_SERVER")); custom != "" {
+			if !strings.Contains(custom, ":") {
+				custom += ":53"
+			}
+			conn, err := d.DialContext(ctx, "udp", custom)
+			if err == nil {
+				return conn, nil
+			}
+		}
+		// Coba Cloudflare DNS 1.1.1.1:53
+		conn, err := d.DialContext(ctx, "udp", "1.1.1.1:53")
+		if err == nil {
+			return conn, nil
+		}
+		// Fallback Google DNS 8.8.8.8:53
+		conn, err = d.DialContext(ctx, "udp", "8.8.8.8:53")
+		if err == nil {
+			return conn, nil
+		}
+		// Fallback ke resolver sistem default
+		return d.DialContext(ctx, network, address)
+	},
+}
+
+// SafeClient: dialer dengan Control yang memeriksa setiap IP hasil
 // resolve (mencegah rebinding ke IP privat), redirect maks 5.
 func SafeClient(timeout time.Duration) *http.Client {
 	dialer := &net.Dialer{
-		Timeout: timeout,
+		Timeout:  timeout,
+		Resolver: safeResolver,
 		Control: func(_ string, address string, _ syscall.RawConn) error {
 			host, _, err := net.SplitHostPort(address)
 			if err != nil {
@@ -34,7 +69,15 @@ func SafeClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
-			DialContext: dialer.DialContext,
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				// Coba tcp4 terlebih dahulu agar koneksi ke CDN/host publik tidak terhambat
+				// rute IPv6 yang reset/timeout di ISP lokal (mis. rute IPv6 Cloudflare).
+				conn, err := dialer.DialContext(ctx, "tcp4", addr)
+				if err == nil {
+					return conn, nil
+				}
+				return dialer.DialContext(ctx, network, addr)
+			},
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {

@@ -3,6 +3,7 @@ package partner
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -26,7 +27,8 @@ var publicationTransitions = map[string][]string{
 	"partner_rejected": {"cancelled"},
 	"queued":           {"processing", "cancelled"},
 	"processing":       {"published", "failed", "retrying", "cancelled"},
-	"published":        {},
+	"published":        {"revision"},
+	"revision":         {"queued", "cancelled"},
 	"failed":           {"queued", "retrying", "cancelled"},
 	"retrying":         {"queued", "cancelled"},
 	"cancelled":        {},
@@ -35,6 +37,7 @@ var publicationTransitions = map[string][]string{
 var publicationStatuses = []string{
 	"pending", "waiting_partner", "partner_approved", "partner_rejected",
 	"queued", "processing", "published", "failed", "retrying", "cancelled",
+	"revision",
 }
 
 func validPublicationStatus(s string) bool {
@@ -170,7 +173,8 @@ func (d *Deps) partnerScopedPublication(ctx context.Context, partnerID, publicat
 		       m.integration_type AS media_integration_type,
 		       d.title AS document_title, d.slug AS document_slug,
 		       b.client_name AS client_name, b.name AS brand_name, b.public_id AS brand_public_id,
-		       pa.public_id AS partner_public_id
+		       pa.public_id AS partner_public_id,
+		       (SELECT pe.amount FROM partner_earnings pe WHERE pe.publication_id = p.id LIMIT 1) AS partner_amount
 		FROM publications p
 		JOIN media m ON m.id = p.media_id
 		JOIN content_documents d ON d.id = p.document_id
@@ -234,9 +238,9 @@ func partnerPublicationJSON(row rowMap) map[string]any {
 		"order_code":                    row.raw("order_code"),
 		"document_title":                row.raw("document_title"),
 		"document_slug":                 row.raw("document_slug"),
-		"featured_image_url":            row.raw("featured_image_url"),
+		"featured_image_url":            relSelfURL(row.strOr("featured_image_url", "")),
 		"partner_draft_edits":           editsOrNil(edits),
-		"thumbnail_url":                 ptrString(thumbnail),
+		"thumbnail_url":                 ptrString(relSelfURLN(thumbnail)),
 		"media_id":                      row.raw("media_id"),
 		"media_name":                    row.raw("media_name"),
 		"media_category":                row.raw("media_category"),
@@ -258,6 +262,8 @@ func partnerPublicationJSON(row rowMap) map[string]any {
 		"rss_published_at":              row.timePtr("rss_published_at"),
 		"notes":                         row.raw("notes"),
 		"rejection_reason":              row.raw("rejection_reason"),
+		"revision_reject_count":         row.intOr("revision_reject_count", 0),
+		"revision_reject_limit":         revisionRejectLimit,
 		"reviewed_by":                   row.raw("reviewed_by"),
 		"reviewed_at":                   row.timePtr("reviewed_at"),
 		"publish_progress":              row.numPtr("publish_progress"),
@@ -301,7 +307,12 @@ func ptrString(s *string) any {
 
 var publicationListStatuses = []string{
 	"waiting_partner", "partner_approved", "partner_rejected", "queued", "processing", "published", "failed",
+	"revision",
 }
+
+// revisionRejectLimit: mitra boleh menolak revisi klien maksimal 3 kali. Setelah
+// itu hanya tombol Terima yang tersisa dan admin ikut diberi tahu.
+const revisionRejectLimit = 3
 
 const publicationSelect = `SELECT p.*, m.name AS media_name, m.category AS media_category, m.partner_id AS media_partner_id,
               m.integration_type AS media_integration_type,
@@ -495,11 +506,24 @@ func (d *Deps) PublicationGet(w http.ResponseWriter, r *http.Request) {
 	message, _ := d.queryRow(r.Context(),
 		"SELECT consistency_score, status, error_message FROM pr_message_analyses WHERE publication_id = $1 LIMIT 1",
 		publicationID)
+	// Komentar revisi dari klien (review_comments belum pernah dibaca paket ini).
+	// Tanpa ini mitra tidak tahu apa yang harus diubah saat status `revision`.
+	revisionComments, _ := d.queryRows(r.Context(),
+		`SELECT id, body, attachment_url, attachment_name, created_at
+		 FROM review_comments
+		 WHERE document_id = $1 AND resolved = FALSE
+		 ORDER BY created_at DESC LIMIT 20`, publication.raw("document_id"))
 
 	payload := partnerPublicationJSON(publication)
 	payload["document"] = documentJSON(document)
 	payload["media_website_url"] = media.raw("website_url")
 	payload["media_integration_type"] = media.raw("integration_type")
+	// publications tidak punya kolom remote_url — URL hasil integrasi hidup di
+	// publication_jobs. Tanpa ini tautan "URL Terbit" kosong saat published_url
+	// belum diisi mitra.
+	if payload["remote_url"] == nil {
+		payload["remote_url"] = job.raw("remote_url")
+	}
 	attemptList := make([]map[string]any, 0, len(attempts))
 	for _, a := range attempts {
 		attemptList = append(attemptList, map[string]any{
@@ -516,6 +540,17 @@ func (d *Deps) PublicationGet(w http.ResponseWriter, r *http.Request) {
 	payload["verification"] = verificationJSON(verification)
 	payload["sentiment_analysis"] = sentimentJSON(sentiment)
 	payload["message_analysis"] = messageJSON(message)
+	commentList := make([]map[string]any, 0, len(revisionComments))
+	for _, c := range revisionComments {
+		commentList = append(commentList, map[string]any{
+			"id":              c.raw("id"),
+			"body":            c.strOr("body", ""),
+			"attachment_url":  c.raw("attachment_url"),
+			"attachment_name": c.raw("attachment_name"),
+			"created_at":      c.timePtr("created_at"),
+		})
+	}
+	payload["revision_comments"] = commentList
 	writeJSON(w, http.StatusOK, payload)
 }
 
@@ -759,6 +794,178 @@ func (d *Deps) PublicationURL(w http.ResponseWriter, r *http.Request) {
 	payload := partnerPublicationJSON(updated)
 	payload["verification_requeued"] = true
 	writeJSON(w, http.StatusOK, payload)
+}
+
+// ---------- POST revision accept / reject ----------
+
+// PublicationRevisionAccept: mitra menyetujui revisi klien. Publikasi
+// diantrekan ulang supaya konten (dan cover) versi baru benar-benar dikirim ke
+// CMS — worker berhenti setelah publish pertama, jadi tanpa antre ulang ini
+// artikel lama tetap tayang.
+func (d *Deps) PublicationRevisionAccept(w http.ResponseWriter, r *http.Request) {
+	user, partner, ok := d.auth(w, r)
+	if !ok {
+		return
+	}
+	if err := d.checkAuthRateReq(r, "partner-revision-accept:"+user.ID, 30); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	publicationID := chiParam(r, "publicationId")
+	publication, err := d.partnerScopedPublication(r.Context(), partner.ID, publicationID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	current := publication.strOr("status", "")
+	if current != "revision" {
+		httpx.Error(w, http.StatusConflict, "Publication status cannot transition from "+current+" to queued")
+		return
+	}
+	if err := d.transitionPublicationWith(r.Context(), publicationID, "queued", map[string]any{
+		"reviewed_by": user.ID, "reviewed_at": time.Now(), "revision_reject_count": 0,
+	}); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	// Komentar revisi dianggap selesai; kalau klien minta revisi lagi, entri baru
+	// yang muncul di daftar mitra.
+	if documentID := publication.strOr("document_id", ""); documentID != "" {
+		if err := d.exec(r.Context(),
+			"UPDATE review_comments SET resolved = TRUE WHERE document_id = $1 AND resolved = FALSE",
+			documentID); err != nil {
+			d.logger().Warn("gagal menandai komentar revisi selesai", "publication", publicationID, "err", err)
+		}
+	}
+	d.auditLog(r.Context(), user.ID, "publication.revision_accepted", "publication", publicationID)
+
+	// Worker memperlakukan pengiriman yang sudah 'completed' (atau sudah punya
+	// remote_post_id) sebagai selesai dan tidak menyentuh CMS lagi, jadi penanda
+	// pengiriman lama dibersihkan supaya versi revisi benar-benar dikirim.
+	// Cache 'resolved' ikut dibuang agar cover/kategori diunggah ulang; WordPress
+	// mencocokkan artikel lewat slug, jadi tidak menghasilkan artikel duplikat.
+	if err := d.exec(r.Context(),
+		`UPDATE publication_jobs
+		 SET status = 'queued', remote_post_id = NULL, remote_url = NULL, progress = 0,
+		     error_message = NULL, payload_snapshot = payload_snapshot - 'resolved'
+		 WHERE publication_id = $1`, publicationID); err != nil {
+		d.logger().Warn("gagal mereset pengiriman untuk revisi", "publication", publicationID, "err", err)
+	}
+
+	row, _ := d.queryRow(r.Context(), "SELECT brand_id, scheduled_at FROM publications WHERE id = $1 LIMIT 1", publicationID)
+	brandID := ""
+	var scheduledAt *time.Time
+	if row != nil {
+		brandID = row.strOr("brand_id", "")
+		if t, isTime := row.raw("scheduled_at").(time.Time); isTime {
+			scheduledAt = &t
+		}
+	}
+	d.enqueuePublicationExecution(r.Context(), publicationID, brandID, scheduledAt)
+	d.revisionEventNotification(r.Context(), publicationID, "publication.revision_accepted")
+
+	updated, err := d.partnerScopedPublication(r.Context(), partner.ID, publicationID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, partnerPublicationJSON(updated))
+}
+
+// PublicationRevisionReject: mitra menolak revisi dan menjelaskan alasannya.
+// Status tetap `revision` supaya klien bisa memperbaiki lalu mengirim ulang.
+func (d *Deps) PublicationRevisionReject(w http.ResponseWriter, r *http.Request) {
+	user, partner, ok := d.auth(w, r)
+	if !ok {
+		return
+	}
+	if err := d.checkAuthRateReq(r, "partner-revision-reject:"+user.ID, 30); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	publicationID := chiParam(r, "publicationId")
+	body := decodeJSON(r)
+	reason, _ := strField(body, "reason")
+	if runes := []rune(reason); len(runes) < 5 || len(runes) > 500 {
+		httpx.Error(w, http.StatusUnprocessableEntity, "String must contain at least 5 character(s)")
+		return
+	}
+	publication, err := d.partnerScopedPublication(r.Context(), partner.ID, publicationID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if publication.strOr("status", "") != "revision" {
+		httpx.Error(w, http.StatusConflict, "Publication status cannot transition to revision")
+		return
+	}
+	rejects := publication.intOr("revision_reject_count", 0)
+	if rejects >= revisionRejectLimit {
+		httpx.Error(w, http.StatusConflict, "Batas penolakan revisi sudah tercapai. Publikasi ini hanya bisa diterima.")
+		return
+	}
+	rejects++
+	if err := d.transitionPublicationWith(r.Context(), publicationID, "revision", map[string]any{
+		"reviewed_by": user.ID, "reviewed_at": time.Now(), "revision_reject_count": rejects,
+	}); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if err := d.exec(r.Context(),
+		`INSERT INTO review_comments (id, document_id, version, body, resolved, created_by)
+		 VALUES (gen_random_uuid(), $1, COALESCE((SELECT current_version FROM content_documents WHERE id = $1), 1), $2, FALSE, $3)`,
+		publication.strOr("document_id", ""), "Mitra menolak revisi: "+reason, user.ID); err != nil {
+		d.logger().Warn("gagal mencatat alasan penolakan revisi", "publication", publicationID, "err", err)
+	}
+	d.auditLog(r.Context(), user.ID, "publication.revision_rejected", "publication", publicationID)
+	d.revisionEventNotification(r.Context(), publicationID, "publication.revision_rejected", reason, rejects >= revisionRejectLimit)
+
+	updated, err := d.partnerScopedPublication(r.Context(), partner.ID, publicationID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, partnerPublicationJSON(updated))
+}
+
+// revisionEventNotification: kabari klien (dan admin saat penolakan mentok di
+// batas) tentang keputusan mitra atas revisi.
+func (d *Deps) revisionEventNotification(ctx context.Context, publicationID, event string, args ...any) {
+	ev := d.loadPublicationEventRow(ctx, publicationID)
+	if ev == nil {
+		return
+	}
+	brandLink := "/klien/" + derefOr(ev.BrandPublicID, ev.BrandID) + "/publications?pub=" + publicationID
+	switch event {
+	case "publication.revision_accepted":
+		title := "Revisi diterima mitra"
+		body := fmt.Sprintf("Mitra %s menerima revisi %q. Artikel dikirim ulang ke %s.", ev.MediaName, ev.DocumentTitle, ev.MediaName)
+		_ = d.notifyBrandMembers(ctx, ev.BrandID, event, title, body, &brandLink, &ev.ID)
+	case "publication.revision_rejected":
+		reason := derefOr(ev.RejectionReason, "")
+		limitReached := false
+		if len(args) > 0 {
+			if s, isStr := args[0].(string); isStr && s != "" {
+				reason = s
+			}
+		}
+		if len(args) > 1 {
+			if b, isBool := args[1].(bool); isBool {
+				limitReached = b
+			}
+		}
+		title := "Revisi ditolak mitra"
+		body := fmt.Sprintf("Mitra %s menolak revisi %q — %s", ev.MediaName, ev.DocumentTitle, reason)
+		if limitReached {
+			body += fmt.Sprintf(" Batas penolakan (%d kali) tercapai; revisi berikutnya hanya bisa diterima.", revisionRejectLimit)
+		}
+		_ = d.notifyBrandMembers(ctx, ev.BrandID, event, title, body, &brandLink, &ev.ID)
+		if limitReached {
+			adminLink := "/admin/publications?pub=" + publicationID
+			adminBody := fmt.Sprintf("Revisi %q di %s ditolak %d kali oleh mitra. Perlu tindakan admin.", ev.DocumentTitle, ev.MediaName, revisionRejectLimit)
+			d.notifyPlatformAdmins(ctx, event, "Revisi mentok di batas penolakan", adminBody, &adminLink)
+		}
+	}
 }
 
 // enqueuePublicationExecution: parity enqueuePublicationExecution (attempts 3).

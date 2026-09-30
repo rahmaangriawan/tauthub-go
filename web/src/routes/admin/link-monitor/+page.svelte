@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Pelacak 404 — menjaga garansi tayang 12 bulan: memeriksa apakah artikel yang
 	// sudah terbit di situs media mitra masih bisa dibuka.
 	// Port apps/web/src/app/admin/link-monitor/page.tsx.
@@ -85,15 +87,15 @@
 						'Situs media menolak akses atau sedang error. Belum tentu hilang, jadi tidak dihitung sebagai artikel hilang.'
 				};
 			case 'live':
-				return { label: 'Tayang', tone: 'success', title: 'Halaman artikel masih bisa dibuka di situs media.' };
+				return { label: 'Tayang', tone: 'success', title: tr('Halaman artikel masih bisa dibuka di situs media.') };
 			case 'no_url':
 				return {
 					label: 'Tanpa URL',
 					tone: 'neutral',
-					title: 'Publikasi ini belum punya URL, jadi halamannya belum bisa diperiksa.'
+					title: tr('Publikasi ini belum punya URL, jadi halamannya belum bisa diperiksa.')
 				};
 			default:
-				return { label: 'Belum Dicek', tone: 'neutral', title: 'Halaman artikel belum pernah diperiksa.' };
+				return { label: tr('Belum Dicek'), tone: 'neutral', title: tr('Halaman artikel belum pernah diperiksa.') };
 		}
 	}
 
@@ -113,9 +115,9 @@
 					title: 'Situs mitra hidup, tetapi penanda verifikasi domain tidak ditemukan lagi di halamannya.'
 				};
 			case 'live':
-				return { label: 'Hidup', tone: 'success', title: 'Situs mitra bisa dihubungi dan penanda verifikasi domain ditemukan.' };
+				return { label: 'Hidup', tone: 'success', title: tr('Situs mitra bisa dihubungi dan penanda verifikasi domain ditemukan.') };
 			default:
-				return { label: 'Belum Dicek', tone: 'neutral', title: 'Situs mitra ini belum pernah diperiksa.' };
+				return { label: tr('Belum Dicek'), tone: 'neutral', title: 'Situs mitra ini belum pernah diperiksa.' };
 		}
 	}
 
@@ -235,7 +237,7 @@
 			value: summary?.domains_down ?? 0,
 			color: (summary?.domains_down ?? 0) > 0 ? 'var(--destructive)' : 'var(--muted-foreground)'
 		},
-		{ label: 'Domain Belum Dicek', value: summary?.domains_unknown ?? 0, color: undefined }
+		{ label: tr('Domain Belum Dicek'), value: summary?.domains_unknown ?? 0, color: undefined }
 	]);
 
 	const visiblePubs = $derived(pubs.items.slice((pubsPage - 1) * PAGE_SIZE, pubsPage * PAGE_SIZE));
@@ -309,9 +311,9 @@
 			disabled={busyId !== null || item.state !== 'gone'}
 			title={item.state === 'gone'
 				? 'Buat publikasi pengganti ke media alternatif'
-				: 'Hanya artikel berstatus hilang (404) yang bisa diganti'}
+				: tr('Hanya artikel berstatus hilang (404) yang bisa diganti')}
 			onclick={() => void replaceArticle(item.id)}
-			>{busyId === item.id ? 'Memproses…' : 'Ganti Artikel'}</button
+			>{busyId === item.id ? 'Memproses…' : tr('Ganti Artikel')}</button
 		>
 	</div>
 {/snippet}
@@ -362,7 +364,7 @@
 <section>
 	<PageHeader
 		title="Pelacak 404"
-		description="Halaman ini menjaga garansi tayang 12 bulan: sistem memeriksa apakah artikel yang sudah terbit di situs media mitra masih bisa dibuka. Kalau ada halaman yang hilang, artikel itu ditandai di baris daftar supaya bisa segera diganti di media lain. Pengecekan ulang berjalan otomatis tiap 7 hari dan bisa diantrekan manual lewat tombol Cek Sekarang."
+		description={tr("Halaman ini menjaga garansi tayang 12 bulan: sistem memeriksa apakah artikel yang sudah terbit di situs media mitra masih bisa dibuka. Kalau ada halaman yang hilang, artikel itu ditandai di baris daftar supaya bisa segera diganti di media lain. Pengecekan ulang berjalan otomatis tiap 7 hari dan bisa diantrekan manual lewat tombol Cek Sekarang.")}
 	>
 		<Badge
 			tone={(summary?.gone ?? 0) > 0 ? 'danger' : 'success'}
@@ -397,25 +399,20 @@
 			class="app-btn !min-h-8 !rounded-b-none !px-3.5 !text-sm"
 			class:app-btn-primary={tab === 'domains'}
 			class:app-btn-soft={tab !== 'domains'}
-			onclick={() => (tab = 'domains')}>Domain Mitra ({domains.items.length})</button
+			onclick={() => (tab = 'domains')}>{tr("Domain Mitra (")}{domains.items.length})</button
 		>
 	</div>
 
 	<div class="pt-4">
 		{#if tab === 'articles'}
-			<div class="app-card mb-3 px-4 py-2.5 text-sm text-muted-foreground">
-				Sistem membuka halaman artikel di situs media mitra untuk memastikan halamannya masih bisa diakses. Kalau halaman
-				tidak ditemukan (Hilang 404), tekan tombol Ganti Artikel pada baris tersebut untuk membuat artikel pengganti di
-				media lain. Status Tak Terjangkau tidak dihitung sebagai artikel hilang, karena situsnya mungkin hanya sedang
-				memblokir akses atau mati sementara.
-			</div>
+			<div class="app-card mb-3 px-4 py-2.5 text-sm text-muted-foreground">{tr("Sistem membuka halaman artikel di situs media mitra untuk memastikan halamannya masih bisa diakses. Kalau halaman tidak ditemukan (Hilang 404), tekan tombol Ganti Artikel pada baris tersebut untuk membuat artikel pengganti di media lain. Status Tak Terjangkau tidak dihitung sebagai artikel hilang, karena situsnya mungkin hanya sedang memblokir akses atau mati sementara.")}</div>
 
 			<form class="mb-3 flex flex-wrap items-center gap-2" onsubmit={(e) => e.preventDefault()}>
 				<label class="app-input flex w-[280px] items-center gap-2 !py-1.5">
 					<Search size={14} class="text-muted-foreground" />
 					<input
 						class="w-full bg-transparent text-sm outline-none"
-						placeholder="Cari judul, media, mitra, atau URL…"
+						placeholder={tr("Cari judul, media, mitra, atau URL…")}
 						bind:value={search}
 					/>
 				</label>
@@ -431,9 +428,9 @@
 					}}
 					options={[
 						{ value: '', label: 'Bermasalah (Hilang + Tak Terjangkau)' },
-						{ value: 'gone', label: 'Hilang (404) — halaman sudah tidak ada' },
-						{ value: 'unreachable', label: 'Tak Terjangkau — situs menolak akses atau sedang error' },
-						{ value: 'live', label: 'Tayang — artikel masih bisa diakses' },
+						{ value: 'gone', label: tr('Hilang (404) — halaman sudah tidak ada') },
+						{ value: 'unreachable', label: tr('Tak Terjangkau — situs menolak akses atau sedang error') },
+						{ value: 'live', label: tr('Tayang — artikel masih bisa diakses') },
 						{ value: 'no_url', label: 'Tanpa URL' }
 					]}
 				/>
@@ -459,13 +456,13 @@
 			</form>
 
 			{#if loading}
-				<p class="text-sm text-muted-foreground">Memuat data…</p>
+				<p class="text-sm text-muted-foreground">{tr("Memuat data…")}</p>
 			{:else if pubs.items.length === 0}
 				<div class="app-card px-6 py-10 text-center">
 					<Unlink size={28} class="mx-auto" />
 					<p class="mt-2 text-sm text-muted-foreground">
 						{stateFilter || search.trim()
-							? 'Tidak ada artikel yang cocok dengan filter ini. Kosongkan filter atau jalankan Cek Sekarang untuk memperbarui data.'
+							? tr('Tidak ada artikel yang cocok dengan filter ini. Kosongkan filter atau jalankan Cek Sekarang untuk memperbarui data.')
 							: `Tidak ada artikel hilang atau tak terjangkau. ${summary?.watched ?? 0} artikel sedang dipantau — pengecekan ulang otomatis berjalan tiap 7 hari.`}
 					</p>
 				</div>
@@ -474,17 +471,17 @@
 				<DataTable
 					columns={[
 						{ key: 'article', label: 'Artikel', render: articleCell },
-						{ key: 'media', label: 'Media', render: articleMediaCell },
+						{ key: 'media', label: tr('Media'), render: articleMediaCell },
 						{ key: 'url', label: 'URL', render: urlCell },
 						{ key: 'status', label: 'Status', render: linkStatusCell },
-						{ key: 'failures', label: 'Gagal Berturut', render: failuresCell },
+						{ key: 'failures', label: tr('Gagal Berturut'), render: failuresCell },
 						{ key: 'checked', label: 'Terakhir Dicek', render: lastCheckedCell },
 						{ key: 'actions', label: '', align: 'right' as const, render: replaceCell }
 					]}
 					rows={visiblePubs}
 					rowKey={(item: PublicationItem) => item.id}
 					{loading}
-					empty="Tidak ada artikel yang cocok dengan filter ini."
+					empty={tr("Tidak ada artikel yang cocok dengan filter ini.")}
 					minWidth="1200px"
 				/>
 				</div>
@@ -496,12 +493,12 @@
 							<p class="font-medium">{item.document_title ?? 'Tanpa judul'}</p>
 							<p class="text-xs text-muted-foreground">{item.brand_name ?? '—'}</p>
 							<div class="mt-3 space-y-1.5 text-sm">
-								<p class="text-xs"><span class="text-muted-foreground">Media:</span> {item.media_name ?? '—'}{item.partner_name ? ` · ${item.partner_name}` : ''}</p>
+								<p class="text-xs"><span class="text-muted-foreground">{tr("Media:")}</span> {item.media_name ?? '—'}{item.partner_name ? ` · ${item.partner_name}` : ''}</p>
 								<p class="break-all text-xs"><span class="text-muted-foreground">URL:</span> {item.published_url ?? '—'}</p>
 								<p class="text-xs"><span class="text-muted-foreground">HTTP:</span> {item.http_status != null ? String(item.http_status) : '—'}</p>
 								<p><span title={m.title}><Badge tone={m.tone} label={m.label} /></span></p>
 								{#if item.error_message}<p class="text-xs"><span class="text-muted-foreground">Keterangan:</span> {item.error_message}</p>{/if}
-								<p class="text-xs"><span class="text-muted-foreground">Gagal berturut:</span> {item.consecutive_failures ?? 0}x</p>
+								<p class="text-xs"><span class="text-muted-foreground">{tr("Gagal berturut:")}</span> {item.consecutive_failures ?? 0}x</p>
 								<p class="text-xs"><span class="text-muted-foreground">Terakhir dicek:</span> {fmtDateTime(item.last_checked_at)}</p>
 								{#if item.first_detected_gone_at}<p class="text-xs"><span class="text-muted-foreground">Sejak hilang:</span> {fmtDateTime(item.first_detected_gone_at)}</p>{/if}
 							</div>
@@ -510,7 +507,7 @@
 								style="color: var(--destructive);"
 								disabled={busyId !== null || item.state !== 'gone'}
 								onclick={() => void replaceArticle(item.id)}
-								>{busyId === item.id ? 'Memproses…' : 'Ganti Artikel'}</button
+								>{busyId === item.id ? 'Memproses…' : tr('Ganti Artikel')}</button
 							>
 						</div>
 					{/each}
@@ -522,17 +519,11 @@
 					onChange={(next) => (pubsPage = next / PAGE_SIZE + 1)}
 				/>
 				{#if pubs.total > pubs.items.length}
-					<p class="mt-2 text-xs text-muted-foreground">
-						Menampilkan {pubs.items.length} dari total {pubs.total} artikel bermasalah. Persempit dengan filter untuk melihat
-						sisanya.
-					</p>
+					<p class="mt-2 text-xs text-muted-foreground"> {tr("Menampilkan")} {pubs.items.length} {tr("dari total")} {pubs.total} {tr("artikel bermasalah. Persempit dengan filter untuk melihat sisanya.")} </p>
 				{/if}
 			{/if}
 		{:else}
-			<div class="app-card mb-3 px-4 py-2.5 text-sm text-muted-foreground">
-				Bagian ini memeriksa apakah situs media mitra masih bisa dihubungi sama sekali. Domain yang mati penting karena
-				semua artikel yang terbit di sana jadi tidak bisa dibuka, jadi perlu segera ditangani.
-			</div>
+			<div class="app-card mb-3 px-4 py-2.5 text-sm text-muted-foreground">{tr("Bagian ini memeriksa apakah situs media mitra masih bisa dihubungi sama sekali. Domain yang mati penting karena semua artikel yang terbit di sana jadi tidak bisa dibuka, jadi perlu segera ditangani.")}</div>
 
 			<form class="mb-3 flex flex-wrap items-center gap-2" onsubmit={(e) => e.preventDefault()}>
 				<Select
@@ -546,9 +537,9 @@
 						void load();
 					}}
 					options={[
-						{ value: '', label: 'Perlu perhatian (Mati + Belum Dicek)' },
-						{ value: 'unreachable', label: 'Domain mati — situs tidak bisa dihubungi' },
-						{ value: 'unknown', label: 'Belum dicek' },
+						{ value: '', label: tr('Perlu perhatian (Mati + Belum Dicek)') },
+						{ value: 'unreachable', label: tr('Domain mati — situs tidak bisa dihubungi') },
+						{ value: 'unknown', label: tr('Belum dicek') },
 						{ value: 'token_missing', label: 'Token verifikasi hilang — situs hidup, tapi penanda verifikasi tidak ditemukan' },
 						{ value: 'live', label: 'Hidup' }
 					]}
@@ -566,31 +557,31 @@
 			</form>
 
 			{#if loading}
-				<p class="text-sm text-muted-foreground">Memuat data…</p>
+				<p class="text-sm text-muted-foreground">{tr("Memuat data…")}</p>
 			{:else if domains.items.length === 0}
 				<div class="app-card px-6 py-10 text-center">
 					<Unlink size={28} class="mx-auto" />
 					<p class="mt-2 text-sm text-muted-foreground">
 						{healthFilter
-							? 'Tidak ada domain mitra dengan status kesehatan yang dipilih. Kosongkan filter atau jalankan Cek Sekarang untuk memperbarui data.'
-							: 'Tidak ada domain mitra yang mati atau belum dicek. Pengecekan ulang otomatis berjalan tiap 7 hari untuk semua media mitra yang punya website.'}
+							? tr('Tidak ada domain mitra dengan status kesehatan yang dipilih. Kosongkan filter atau jalankan Cek Sekarang untuk memperbarui data.')
+							: tr('Tidak ada domain mitra yang mati atau belum dicek. Pengecekan ulang otomatis berjalan tiap 7 hari untuk semua media mitra yang punya website.')}
 					</p>
 				</div>
 			{:else}
 				<div class="hidden lg:block">
 				<DataTable
 					columns={[
-						{ key: 'media', label: 'Media', render: domainNameCell },
-						{ key: 'partner', label: 'Mitra', render: domainPartnerCell },
+						{ key: 'media', label: tr('Media'), render: domainNameCell },
+						{ key: 'partner', label: tr('Mitra'), render: domainPartnerCell },
 						{ key: 'website', label: 'Website', render: websiteCell },
 						{ key: 'status', label: 'Status', render: domainHealthCell },
 						{ key: 'checked', label: 'Terakhir Dicek', render: domainCheckedCell },
-						{ key: 'fail', label: 'Gagal', render: domainFailCell }
+						{ key: 'fail', label: tr('Gagal'), render: domainFailCell }
 					]}
 					rows={visibleDomains}
 					rowKey={(item: DomainItem) => item.media_id}
 					{loading}
-					empty="Tidak ada domain mitra dengan status kesehatan yang dipilih."
+					empty={tr("Tidak ada domain mitra dengan status kesehatan yang dipilih.")}
 					minWidth="1000px"
 				/>
 				</div>
@@ -602,11 +593,11 @@
 							<p class="font-medium">{item.name ?? 'Tanpa nama'}</p>
 							<p class="text-xs text-muted-foreground">{item.domain_verified === true || item.domain_verified === 1 ? 'Domain terverifikasi' : 'Domain belum terverifikasi'}</p>
 							<div class="mt-3 space-y-1.5 text-sm">
-								<p class="text-xs"><span class="text-muted-foreground">Mitra:</span> {item.partner_name ?? '—'}</p>
+								<p class="text-xs"><span class="text-muted-foreground">{tr("Mitra:")}</span> {item.partner_name ?? '—'}</p>
 								<p class="break-all text-xs"><span class="text-muted-foreground">Website:</span> {item.website_url ?? 'Website belum diisi'}</p>
 								<p><span title={m.title}><Badge tone={m.tone} label={m.label} /></span></p>
 								<p class="text-xs"><span class="text-muted-foreground">Terakhir dicek:</span> {fmtDateTime(item.domain_last_checked_at)}</p>
-								<p class="text-xs"><span class="text-muted-foreground">Gagal:</span> {item.domain_check_fail_count ?? 0}x</p>
+								<p class="text-xs"><span class="text-muted-foreground">{tr("Gagal:")}</span> {item.domain_check_fail_count ?? 0}x</p>
 							</div>
 						</div>
 					{/each}
@@ -618,17 +609,11 @@
 					onChange={(next) => (domainsPage = next / PAGE_SIZE + 1)}
 				/>
 				{#if domains.total > domains.items.length}
-					<p class="mt-2 text-xs text-muted-foreground">
-						Menampilkan {domains.items.length} dari total {domains.total} domain. Persempit dengan filter untuk melihat
-						sisanya.
-					</p>
+					<p class="mt-2 text-xs text-muted-foreground"> {tr("Menampilkan")} {domains.items.length} {tr("dari total")} {domains.total} {tr("domain. Persempit dengan filter untuk melihat sisanya.")} </p>
 				{/if}
 			{/if}
 		{/if}
 	</div>
 
-	<p class="mt-4 text-xs text-muted-foreground">
-		Artikel dipantau selama 12 bulan sejak terbit. Status Hilang (404) berarti halaman sudah tidak ada dan bisa diganti ke
-		media lain; Tak Terjangkau berarti situs menolak akses atau sedang error dan tidak dianggap hilang.
-	</p>
+	<p class="mt-4 text-xs text-muted-foreground">{tr("Artikel dipantau selama 12 bulan sejak terbit. Status Hilang (404) berarti halaman sudah tidak ada dan bisa diganti ke media lain; Tak Terjangkau berarti situs menolak akses atau sedang error dan tidak dianggap hilang.")}</p>
 </section>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Port app/payments/status/page.tsx — halaman polling status pembayaran publik
 	// setelah redirect dari gateway. Tidak butuh login; hanya status + info ringkas.
 	// Return URL gateway membawa transactionId internal (UUID) tetapi provider
@@ -16,15 +18,15 @@
 		reference: string | null;
 	};
 
-	const STATUS_LABEL: Record<string, { label: string; color: string; icon: string }> = {
+	const STATUS_LABEL: Record<string, { label: string; color: string; icon: string }> = $derived({
 		paid: { label: 'Pembayaran berhasil', color: '#16a34a', icon: '✓' },
-		pending: { label: 'Menunggu pembayaran', color: '#d97706', icon: '⏳' },
+		pending: { label: tr('Menunggu pembayaran'), color: '#d97706', icon: '⏳' },
 		processing: { label: 'Memproses pembayaran', color: '#d97706', icon: '⏳' },
 		failed: { label: 'Pembayaran gagal', color: '#dc2626', icon: '✕' },
 		expired: { label: 'Pembayaran kedaluwarsa', color: '#6b7280', icon: '!' },
 		cancelled: { label: 'Pembayaran dibatalkan', color: '#6b7280', icon: '!' },
 		refunded: { label: 'Pembayaran dikembalikan', color: '#6b7280', icon: '↩' }
-	};
+	});
 	const FINAL = ['paid', 'failed', 'expired', 'cancelled', 'refunded'];
 
 	const rawTxId = $derived(
@@ -38,7 +40,7 @@
 	let redirectIn = $state<number | null>(null);
 
 	const idr = (n: number) =>
-		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
+		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(n);
 
 	onMount(() => {
 		let pollTimer: number | null = null;
@@ -57,7 +59,7 @@
 					loading = false;
 					return;
 				}
-				if (!res.ok) throw new Error('Gagal memuat status.');
+				if (!res.ok) throw new Error(tr('Gagal memuat status.'));
 				const data = (await res.json()) as TxStatus;
 				tx = data;
 				loading = false;
@@ -66,7 +68,7 @@
 					pollTimer = null;
 				}
 			} catch {
-				error = 'Gagal memuat status pembayaran.';
+				error = tr('Gagal memuat status pembayaran.');
 				loading = false;
 			}
 		}
@@ -103,7 +105,7 @@
 </script>
 
 <svelte:head>
-	<title>Status Pembayaran — Tauthub</title>
+	<title>{tr("Status Pembayaran — Tauthub")}</title>
 </svelte:head>
 
 <main
@@ -147,23 +149,19 @@
 				<div class="mb-4 text-[26px] font-extrabold text-slate-900">{idr(tx.amount)}</div>
 
 				{#if tx.status === 'paid'}
-					<div class="mb-3 rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-3.5 py-3 text-left text-[13.5px] leading-relaxed text-[#15803d]">
-						Tauthub Credit berhasil masuk ke saldo akun Anda.
-					</div>
+					<div class="mb-3 rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-3.5 py-3 text-left text-[13.5px] leading-relaxed text-[#15803d]">{tr("Tauthub Credit berhasil masuk ke saldo akun Anda.")}</div>
 					{#if redirectIn !== null}
 						<p class="mb-5 text-[13px] text-slate-500">
 							Mengalihkan ke dashboard klien dalam <strong>{redirectIn}</strong> detik…
 						</p>
 					{/if}
 				{:else if !isFinal}
-					<p class="mb-5 text-[13px] text-slate-500">Halaman ini akan diperbarui otomatis saat pembayaran terverifikasi.</p>
+					<p class="mb-5 text-[13px] text-slate-500">{tr("Halaman ini akan diperbarui otomatis saat pembayaran terverifikasi.")}</p>
 				{:else}
 					<p class="mb-5 text-[13px] text-slate-500">Jika ini tidak sesuai, hubungi dukungan Tauthub.</p>
 				{/if}
 
-				<a class="inline-block rounded-[10px] bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white" href={dashboardUrl}>
-					Ke Dashboard Klien
-				</a>
+				<a class="inline-block rounded-[10px] bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white" href={dashboardUrl}>{tr("Ke Dashboard Klien")}</a>
 			</div>
 		{/if}
 	</div>

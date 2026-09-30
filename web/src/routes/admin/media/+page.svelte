@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Halaman admin Media terpadu: tab Direktori (master data), tab Arsip
 	// (media terarsip / disembunyikan dari mitra), tab Pending (menunggu review),
 	// tab Intelligence (health score), tab Pengaturan.
@@ -57,19 +59,19 @@
 		};
 	});
 
-	const tabs = [
-		{ value: 'directory', label: 'Direktori' },
-		{ value: 'archive', label: 'Arsip' },
+	const tabs = $derived([
+		{ value: 'directory', label: tr('Direktori') },
+		{ value: 'archive', label: tr('Arsip') },
 		{ value: 'pending', label: 'Pending' },
 		{ value: 'intelligence', label: 'Intelligence' },
-		{ value: 'settings', label: 'Pengaturan' }
-	];
+		{ value: 'settings', label: tr('Pengaturan') }
+	]);
 </script>
 
 <section class="w-full">
 	<PageHeader
-		title="Media"
-		description="Direktori = master data (harga, kredit, tier, integrasi, partner); Arsip = media diarsipkan / disembunyikan dari mitra; Intelligence = health score media."
+		title={tr("Media")}
+		description={tr("Direktori = master data (harga, kredit, tier, integrasi, partner); Arsip = media diarsipkan / disembunyikan dari mitra; Intelligence = health score media.")}
 	/>
 
 	<div class="mt-4 flex flex-wrap gap-1 border-b" role="tablist">

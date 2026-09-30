@@ -1,22 +1,29 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+	import { getI18n } from '$lib/i18n/i18n.svelte';
+
 	// Daftar & manajemen kampanye Taut Pintar klien.
 	// Port app/klien/[brandId]/taut-pintar/{page,client}.tsx.
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Archive, ArrowRight, Clock, FileText, LoaderCircle, RotateCcw, Search, Share2, Sparkles, Trash, X } from '@lucide/svelte';
+	import { Archive, ArrowRight, Clock, FileText, LoaderCircle, RotateCcw, Search, Share2, Sparkles, Trash, X, Zap } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
+	import { campaignUrlId } from '$lib/campaign-url';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
 	import { STAGE_LABEL, STAGE_TONE, STATUS_OPTIONS, statusAccent, fmtIdr } from '../taut-pintar/_shared';
 
 	const brandId = $derived(page.params.brandId as string);
+	const i18n = $derived(getI18n());
 	const brandUrl = $derived(getBrandUrlId() || brandId);
 
 	type Campaign = {
 		id: string;
+		public_id: string | null;
 		name: string;
 		taut_status: string | null;
+		entry_mode: 'ai' | 'manual' | 'kilat' | null;
 		media_type: string | null;
 		budget_strategy: string | null;
 		starts_at: string | null;
@@ -48,7 +55,7 @@
 	// Popup buat kampanye.
 	let createOpen = $state(false);
 	let createName = $state('');
-	let createMode = $state<'ai' | 'manual' | null>(null);
+	let createMode = $state<'ai' | 'manual' | 'kilat' | null>(null);
 
 	let filterTimer: number | null = null;
 
@@ -115,12 +122,12 @@
 	}
 
 	async function archiveCampaign(id: string) {
-		if (!window.confirm('Hapus kampanye ini? Kampanye dipindahkan ke Arsip dan masih bisa dikembalikan.')) return;
+		if (!window.confirm(tr('Hapus kampanye ini? Kampanye dipindahkan ke Arsip dan masih bisa dikembalikan.'))) return;
 		rowBusyId = id;
 		error = '';
 		try {
 			const res = await apiRequest(`/v1/brands/${brandId}/taut/campaigns/${id}`, { method: 'DELETE' });
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal menghapus kampanye.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menghapus kampanye.')));
 			await loadList();
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : String(reason);
@@ -130,12 +137,12 @@
 	}
 
 	async function archiveAction(id: string, action: 'restore' | 'purge') {
-		if (action === 'purge' && !window.confirm('Hapus permanen? Kampanye hilang selamanya dan tidak bisa dikembalikan.')) return;
+		if (action === 'purge' && !window.confirm(tr('Hapus permanen? Kampanye hilang selamanya dan tidak bisa dikembalikan.'))) return;
 		rowBusyId = id;
 		error = '';
 		try {
 			const res = await apiRequest(`/v1/brands/${brandId}/taut/campaigns/${id}?action=${action}`, { method: 'POST' });
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal memproses kampanye.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memproses kampanye.')));
 			await loadList();
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : String(reason);
@@ -154,7 +161,7 @@
 		try {
 			const res = await apiRequest(`/v1/brands/${brandId}/campaigns/${c.id}/report/share`, { method: 'POST' });
 			const j = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error(j.detail ?? 'Gagal membuat tautan share.');
+			if (!res.ok) throw new Error(j.detail ?? tr('Gagal membuat tautan share.'));
 			shareToken = j.token ?? '';
 		} catch (reason) {
 			shareError = reason instanceof Error ? reason.message : String(reason);
@@ -186,14 +193,14 @@
 		createMode = null;
 	}
 
-	async function createCampaign(mode: 'ai' | 'manual') {
+	async function createCampaign(mode: 'ai' | 'manual' | 'kilat') {
 		if (busy) {
-			error = 'Mohon tunggu, kampanye sedang dibuat…';
+			error = tr('Mohon tunggu, kampanye sedang dibuat…');
 			return;
 		}
 		const campaignName = createName.trim();
 		if (campaignName.length < 2) {
-			error = 'Nama kampanye minimal 2 karakter.';
+			error = tr('Nama kampanye minimal 2 karakter.');
 			return;
 		}
 		busy = true;
@@ -204,16 +211,23 @@
 				body: JSON.stringify({
 					name: campaignName,
 					starts_at: new Date().toISOString(),
+					// 'kilat' dicatat di kampanye supaya router tahu halaman ini milik
+					// jalur Kilat, bukan The Profiler (lihat migrasi 169).
 					entry_mode: mode
 				})
 			});
-			if (!res.ok) throw new Error(await readApiError(res, 'Gagal membuat kampanye.'));
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal membuat kampanye.')));
 			const data = await res.json();
-			// Mode menentukan step awal: AI → Profiler; Manual → Matchmaker tanpa AI.
-			if (mode === 'ai') {
-				await goto(`/klien/${brandUrl}/taut-pintar/${data.id}/profiler`);
+			// URL memakai public_id 6 karakter (migrasi 170); API menerima keduanya.
+			const target = campaignUrlId(data);
+			// Mode menentukan step awal: AI → Profiler; Kilat → halaman ringkas;
+			// Manual → Matchmaker tanpa AI.
+			if (mode === 'kilat') {
+				await goto(`/klien/${brandUrl}/taut-pintar/${target}/kilat`);
+			} else if (mode === 'ai') {
+				await goto(`/klien/${brandUrl}/taut-pintar/${target}/profiler`);
 			} else {
-				await goto(`/klien/${brandUrl}/taut-pintar/${data.id}/matchmaker?mode=manual`);
+				await goto(`/klien/${brandUrl}/taut-pintar/${target}/matchmaker?mode=manual`);
 			}
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : String(reason);
@@ -225,7 +239,7 @@
 		// Selalu lewat router root [id]/+page.svelte — biar bukti publikasi +
 		// status aktual yang memutuskan tujuan, bukan shortcut client yang bisa
 		// membuka /profiler basi untuk kampanye yang sudah selesai.
-		void goto(`/klien/${brandUrl}/taut-pintar/${c.id}`);
+		void goto(`/klien/${brandUrl}/taut-pintar/${campaignUrlId(c)}`);
 	}
 
 	const badgeStyle = (tone: string) =>
@@ -244,17 +258,17 @@
 <section>
 	<header class="flex flex-wrap items-center justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Manajemen Kampanye</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Kelola semua kampanye distribusi konten Anda di satu tempat.</p>
+			<h1 class="text-2xl font-semibold tracking-tight">{tr("Manajemen Kampanye")}</h1>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola semua kampanye distribusi konten Anda di satu tempat.")}</p>
 		</div>
 		<div class="flex flex-wrap items-center justify-end gap-2">
 			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={toggleArchiveView}>
 				{#if showArchive}<RotateCcw size={16} />{:else}<Archive size={16} />{/if}
-				{showArchive ? 'Kembali ke Daftar' : 'Arsip'}
+				{showArchive ? tr('Kembali ke Daftar') : tr('Arsip')}
 			</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={busy || showArchive} onclick={() => (createOpen = true)}>
 				{#if busy}<LoaderCircle size={16} class="animate-spin" />{/if}
-				{busy ? 'Membuat…' : 'Kampanye Baru'}
+				{busy ? 'Membuat…' : tr('Kampanye Baru')}
 			</button>
 		</div>
 	</header>
@@ -263,7 +277,7 @@
 		<Select
 			bind:value={statusFilter}
 			ariaLabel="Status kampanye"
-			placeholder="Semua Status"
+			placeholder={tr("Semua Status")}
 			minWidth={160}
 			onchange={() => (pageNum = 1)}
 			options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
@@ -272,8 +286,8 @@
 			<Search size={15} class="text-muted-foreground" />
 			<input
 				class="w-full bg-transparent text-sm outline-none"
-				placeholder="Cari nama kampanye…"
-				aria-label="Cari kampanye"
+				placeholder={tr("Cari nama kampanye…")}
+				aria-label={tr("Cari kampanye")}
 				value={search}
 				oninput={(e) => onSearch((e.currentTarget as HTMLInputElement).value)}
 			/>
@@ -286,19 +300,17 @@
 	{/if}
 
 	{#if showArchive}
-		<p class="mt-3 text-sm text-muted-foreground">
-			Kampanye yang dihapus disimpan di sini. Kampanye bisa dikembalikan, atau dihapus permanen.
-		</p>
+		<p class="mt-3 text-sm text-muted-foreground">{tr("Kampanye yang dihapus disimpan di sini. Kampanye bisa dikembalikan, atau dihapus permanen.")}</p>
 	{/if}
 
 	{#if filteredList.length === 0}
 		<div class="app-card mt-4 px-6 py-10 text-center">
 			<p class="text-sm text-muted-foreground">
 				{showArchive
-					? 'Arsip kosong.'
+					? tr('Arsip kosong.')
 					: query || statusFilter !== 'all'
-						? 'Tidak ada kampanye yang cocok.'
-						: 'Belum ada kampanye. Klik "Kampanye Baru" untuk memulai.'}
+						? tr('Tidak ada kampanye yang cocok.')
+						: 'Belum ada kampanye. Klik tr("Kampanye Baru") untuk memulai.'}
 			</p>
 		</div>
 	{:else}
@@ -309,21 +321,21 @@
 				<div class="app-card flex flex-col" style="padding: 18px 20px 14px; border-radius: 14px; border-left: 3px solid {accentColor(accent)};">
 					<div class="flex flex-wrap items-center justify-between gap-2">
 						<div class="flex flex-wrap items-center gap-2">
-							<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={badgeStyle('accent')}>DIBANTU AI</span>
+							<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={badgeStyle('accent')}>{c.entry_mode === 'kilat' ? 'KILAT' : 'DIBANTU AI'}</span>
 							<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={badgeStyle(c.stats.published_media > 0 ? 'success' : (STAGE_TONE[c.taut_status ?? 'draft'] ?? 'muted'))}>
 								{(STAGE_LABEL[c.taut_status ?? 'draft'] ?? c.taut_status ?? 'Draft').toUpperCase()}
 							</span>
 						</div>
 						<div class="flex items-center gap-2">
 							{#if c.created_at}
-								<span class="text-[11px] text-muted-foreground">Dibuat: {new Date(c.created_at).toLocaleDateString('id-ID')}</span>
+								<span class="text-[11px] text-muted-foreground">{tr('Dibuat:')} {new Date(c.created_at).toLocaleDateString(i18n.locale === 'en' ? 'en-GB' : 'id-ID')}</span>
 							{/if}
 							{#if !showArchive}
 								<div class="flex gap-1">
-									<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label="Berita acara & share" onclick={() => void openShare(c.id)}>
+									<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Berita acara & share")} onclick={() => void openShare(c.id)}>
 										<Share2 size={14} />
 									</button>
-									<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label="Hapus ke arsip" disabled={rowBusyId === c.id} onclick={() => void archiveCampaign(c.id)}>
+									<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Hapus ke arsip")} disabled={rowBusyId === c.id} onclick={() => void archiveCampaign(c.id)}>
 										<Archive size={14} />
 									</button>
 								</div>
@@ -335,23 +347,21 @@
 					<p class="mt-1 text-xs text-muted-foreground">
 						{c.media_type
 							? `Tipe media: ${c.media_type} · Strategi anggaran: ${c.budget_strategy ?? '-'} · Mulai ${c.starts_at ? new Date(c.starts_at).toLocaleDateString('id-ID') : '-'}`
-							: 'Kampanye distribusi konten PR otomatis.'}
+							: tr('Kampanye distribusi konten PR otomatis.')}
 					</p>
 
 					<div class="mt-3 flex flex-wrap items-end justify-between gap-3 border-t pt-3">
 						<div>
 							<p class="text-[10px] font-semibold tracking-wide text-muted-foreground">ANGGARAN TERSERAP</p>
-							<p class="text-sm font-semibold tabular-nums">{fmtIdr(c.stats.tc_used)} Kredit</p>
+							<p class="text-sm font-semibold tabular-nums">{fmtIdr(c.stats.tc_used)} {tr("Kredit")}</p>
 						</div>
 						<div>
 							<p class="text-[10px] font-semibold tracking-wide text-muted-foreground">PROGRES MEDIA</p>
 							<p class="text-sm font-semibold tabular-nums">
-								<span style="color: {c.stats.published_media > 0 ? 'var(--success)' : 'inherit'};">{c.stats.published_media} Terbit</span>
-								{' / '}{totalMedia} Total
-							</p>
+								<span style="color: {c.stats.published_media > 0 ? 'var(--success)' : 'inherit'};">{c.stats.published_media} {tr("Terbit")}</span>
+								{' / '}{totalMedia} {tr("Total")} </p>
 						</div>
-						<button class="ml-auto inline-flex items-center gap-1 text-sm font-medium" type="button" style="color: var(--primary);" onclick={() => handleContinue(c)}>
-							Buka Kampanye <ArrowRight size={14} />
+						<button class="ml-auto inline-flex items-center gap-1 text-sm font-medium" type="button" style="color: var(--primary);" onclick={() => handleContinue(c)}>{tr("Buka Kampanye")}<ArrowRight size={14} />
 						</button>
 					</div>
 
@@ -360,7 +370,7 @@
 							<button class="app-btn app-btn-primary flex-1" type="button" disabled={rowBusyId === c.id} onclick={() => void archiveAction(c.id, 'restore')}>
 								<Clock size={14} /> Pulihkan
 							</button>
-							<button class="app-btn app-btn-soft" type="button" aria-label="Hapus permanen" disabled={rowBusyId === c.id} onclick={() => void archiveAction(c.id, 'purge')}>
+							<button class="app-btn app-btn-soft" type="button" aria-label={tr("Hapus permanen")} disabled={rowBusyId === c.id} onclick={() => void archiveAction(c.id, 'purge')}>
 								<Trash size={14} />
 							</button>
 						</div>
@@ -371,13 +381,13 @@
 
 		{#if totalPages > 1 || loading}
 			<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
-				<p class="text-xs text-muted-foreground">{loading ? 'Memuat…' : `${total} kampanye`}</p>
+				<p class="text-xs text-muted-foreground">{loading ? tr('Memuat…') : `${total} kampanye`}</p>
 				<div class="flex items-center gap-2">
-					<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label="Halaman sebelumnya" disabled={pageNum <= 1 || loading} onclick={() => { pageNum = Math.max(1, pageNum - 1); void loadList(); }}>
+					<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label={tr("Halaman sebelumnya")} disabled={pageNum <= 1 || loading} onclick={() => { pageNum = Math.max(1, pageNum - 1); void loadList(); }}>
 						‹
 					</button>
-					<span class="text-xs text-muted-foreground">Halaman {pageNum} dari {totalPages}</span>
-					<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label="Halaman berikutnya" disabled={pageNum >= totalPages || loading} onclick={() => { pageNum = Math.min(totalPages, pageNum + 1); void loadList(); }}>
+					<span class="text-xs text-muted-foreground">{tr("Halaman")} {pageNum} {tr("dari")} {totalPages}</span>
+					<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label={tr("Halaman berikutnya")} disabled={pageNum >= totalPages || loading} onclick={() => { pageNum = Math.min(totalPages, pageNum + 1); void loadList(); }}>
 						›
 					</button>
 				</div>
@@ -387,19 +397,19 @@
 </section>
 
 {#if shareFor}
-	<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
-		<dialog open class="app-card my-6 w-full max-w-lg p-5" aria-label="Berita Acara Kampanye">
+	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
+		<dialog open class="app-card w-full max-w-lg p-5" aria-label={tr("Berita Acara Kampanye")}>
 			<div class="flex items-start justify-between gap-4">
 				<div>
-					<h2 class="font-bold">Berita Acara Kampanye</h2>
-					<p class="mt-0.5 text-sm text-muted-foreground">Detail kampanye &amp; tautan share publik untuk klien.</p>
+					<h2 class="font-bold">{tr("Berita Acara Kampanye")}</h2>
+					<p class="mt-0.5 text-sm text-muted-foreground">{tr("Detail kampanye & tautan share publik untuk klien.")}</p>
 				</div>
-				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label="Tutup" onclick={closeShare}><X size={18} /></button>
+				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Tutup")} onclick={closeShare}><X size={18} /></button>
 			</div>
 
 			<div class="mt-4 space-y-3 text-sm">
 				<div>
-					<p class="text-xs text-muted-foreground">Nama kampanye</p>
+					<p class="text-xs text-muted-foreground">{tr("Nama kampanye")}</p>
 					<p class="font-bold">{shareFor.name}</p>
 				</div>
 				<div>
@@ -409,8 +419,8 @@
 					</span>
 				</div>
 				<div>
-					<p class="text-xs text-muted-foreground">Jenis media</p>
-					<p>{shareFor.media_type ?? 'Belum dipilih'}</p>
+					<p class="text-xs text-muted-foreground">{tr("Jenis media")}</p>
+					<p>{shareFor.media_type ?? tr('Belum dipilih')}</p>
 				</div>
 				<div>
 					<p class="text-xs text-muted-foreground">Mulai</p>
@@ -424,7 +434,7 @@
 					<p class="text-lg font-bold">{shareFor.stats.articles ?? 0}</p>
 				</div>
 				<div class="min-w-[120px] flex-1">
-					<p class="text-xs text-muted-foreground">Media terbit</p>
+					<p class="text-xs text-muted-foreground">{tr("Media terbit")}</p>
 					<p class="text-lg font-bold">{shareFor.stats.published_media ?? 0}</p>
 				</div>
 				<div class="min-w-[120px] flex-1">
@@ -444,9 +454,7 @@
 					</div>
 				{:else}
 					<button class="app-btn app-btn-soft" type="button" disabled={shareLoading} onclick={() => void openShare(shareFor!.id)}>
-						{#if shareLoading}<LoaderCircle size={14} class="animate-spin" />{/if}
-						Buat tautan share publik
-					</button>
+						{#if shareLoading}<LoaderCircle size={14} class="animate-spin" />{/if} {tr("Buat tautan share publik")} </button>
 				{/if}
 			</div>
 		</dialog>
@@ -454,19 +462,19 @@
 {/if}
 
 {#if createOpen}
-	<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
-		<dialog open class="app-card my-6 w-full max-w-lg p-5" aria-label="Buat Kampanye">
+	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
+		<dialog open class="app-card w-full max-w-3xl p-5" aria-label={tr("Buat Kampanye")}>
 			<div class="flex items-start justify-between gap-3">
-				<h2 class="text-lg font-semibold">Buat Kampanye</h2>
-				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label="Tutup" disabled={busy} onclick={closeCreate}><X size={16} /></button>
+				<h2 class="text-lg font-semibold">{tr("Buat Kampanye")}</h2>
+				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Tutup")} disabled={busy} onclick={closeCreate}><X size={16} /></button>
 			</div>
-			<p class="mt-1 text-sm text-muted-foreground">Pilih cara kamu membuat kampanye distribusi konten.</p>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Pilih cara kamu membuat kampanye distribusi konten.")}</p>
 
 			<label class="mt-3 block">
-				<span class="text-sm font-medium">Nama Kampanye <span style="color: var(--destructive);">*</span></span>
+				<span class="text-sm font-medium">{tr("Nama Kampanye")}<span style="color: var(--destructive);">*</span></span>
 				<input
 					class="app-input mt-1 w-full"
-					placeholder="Contoh: Launching Produk Q3 2026"
+					placeholder={tr("Contoh: Launching Produk Q3 2026")}
 					value={createName}
 					oninput={(e) => { createName = (e.currentTarget as HTMLInputElement).value; if (error) error = ''; }}
 				/>
@@ -474,7 +482,7 @@
 
 			{#if error}<p class="mt-2 text-sm" style="color: var(--destructive);">{error}</p>{/if}
 
-			<div class="mt-4 grid grid-cols-2 gap-3">
+			<div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
 				<button
 					type="button"
 					class="rounded-xl border p-3 text-left transition-colors"
@@ -486,9 +494,7 @@
 						<Sparkles size={16} style="color: var(--primary);" />
 						<span class="font-bold">AI Pintar</span>
 					</span>
-					<span class="mt-1 block text-xs text-muted-foreground">
-						Profiler: AI menyusun strategi &amp; brief, lalu Matchmaker pilih media. Butuh 10 Kredit.
-					</span>
+					<span class="mt-1 block text-xs text-muted-foreground">{tr("Profiler: AI menyusun strategi & brief, lalu Matchmaker pilih media. Butuh 10 Kredit.")}</span>
 				</button>
 				<button
 					type="button"
@@ -502,8 +508,21 @@
 						<span class="font-bold">Manual</span>
 					</span>
 					<span class="mt-1 block text-xs text-muted-foreground">
-						The Writer tanpa AI: siapkan media &amp; unggah artikel tulisanmu sendiri.
+						The Writer tanpa AI: siapkan media & unggah artikel tulisanmu sendiri.
 					</span>
+				</button>
+				<button
+					type="button"
+					class="rounded-xl border p-3 text-left transition-colors"
+					style="border-color: {createMode === 'kilat' ? 'var(--primary)' : 'var(--border)'}; background-color: {createMode === 'kilat' ? 'var(--accent)' : 'transparent'};"
+					disabled={busy}
+					onclick={() => (createMode = 'kilat')}
+				>
+					<span class="flex items-center gap-2">
+						<Zap size={16} style="color: var(--primary);" />
+						<span class="font-bold">Kampanye Kilat</span>
+					</span>
+					<span class="mt-1 block text-xs text-muted-foreground">{tr("Cukup URL website + anggaran. AI menyusun ringkasan & memilih medianya, tanpa The Profiler.")}</span>
 				</button>
 			</div>
 
