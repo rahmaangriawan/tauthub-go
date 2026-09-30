@@ -1426,7 +1426,7 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 	// Tanpa ini lonceng admin hanya menampilkan masalah "saat ini" dari feed
 	// sintetis dan tidak punya riwayat sama sekali.
 	notifs, err := d.queryRows(ctx,
-		`SELECT id, type, title, body, created_at FROM notifications
+		`SELECT id, type, title, body, read_at, created_at FROM notifications
 		 WHERE user_id = $1 AND created_at > NOW() - INTERVAL '7 days'
 		 ORDER BY created_at DESC LIMIT 20`, user.ID)
 	if err != nil {
@@ -1445,13 +1445,22 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 		items = append(items, opNotifItem{
 			ID: "ntf-" + row.strOr("id", ""), Type: notifType,
 			Title: row.strOr("title", ""), Body: row.raw("body"),
-			Link: link, ReadAt: nil, CreatedAt: row.strOr("created_at", ""),
+			Link: link, ReadAt: row.anyOrNil("read_at"), CreatedAt: row.strOr("created_at", ""),
 		})
 	}
 	sortNotificationsDesc(items)
-	unread := len(items)
 	if len(items) > 50 {
 		items = items[:50]
+	}
+	// `unread` dihitung dari item yang dikembalikan: baris notifications yang
+	// read_at-nya terisi sudah dibaca (dulu semuanya dihitung belum dibaca,
+	// sehingga badge lonceng bisa muncul tanpa isi yang belum dibaca), sedangkan
+	// item sintetis selalu ReadAt nil karena memang butuh perhatian.
+	unread := 0
+	for _, item := range items {
+		if item.ReadAt == nil {
+			unread++
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"notifications": items, "unread": unread})
 }

@@ -29,13 +29,18 @@
 		showAnnouncementTab = false,
 		// true: server menyaring kategori (klien/mitra). false: feed tak mendukung
 		// parameter kategori (lonceng admin) — penyaringan dilakukan di klien.
-		serverCategory = true
+		serverCategory = true,
+		// Endpoint mark-read untuk feed agregat (readable=false): item ber-id
+		// `ntf-*` berasal dari tabel notifications milik user ini, jadi status
+		// bacanya bisa disimpan di server; item sintetis tetap lokal.
+		markReadApi = ''
 	}: {
 		apiBase: string;
 		fallbackBase: string;
 		readable?: boolean;
 		showAnnouncementTab?: boolean;
 		serverCategory?: boolean;
+		markReadApi?: string;
 	} = $props();
 
 	let items = $state<Notification[]>([]);
@@ -51,6 +56,9 @@
 	// Sisa unread di tab lain (dipakai empty state supaya tidak buntu).
 	const otherUnread = $derived(showAnnouncementTab ? Math.max(0, badgeUnread - unread) : 0);
 	let readIds = $state<Set<string>>(new Set());
+	// Semua id dari muatan terakhir (semua kategori) — "tandai semua dibaca"
+	// menyapu seluruh kategori, bukan hanya tab yang sedang dilihat.
+	let allIds = $state<string[]>([]);
 	let trigger = $state<HTMLButtonElement | null>(null);
 	let menu = $state<HTMLDivElement | null>(null);
 	let pos = $state({ left: 0, top: 0 });
@@ -94,6 +102,52 @@
 		}
 	}
 
+	// Status baca: klien/mitra dari server (read_at); lonceng admin dari feed
+	// agregat yang tidak menyimpan status per pengguna, jadi gabungan read_at
+	// item tersimpan + penanda lokal.
+	function isRead(n: Notification) {
+		return !!n.read_at || (!readable && readIds.has(n.id));
+	}
+
+	function countUnread(list: Notification[]) {
+		return list.filter((n) => !isRead(n)).length;
+	}
+
+	// Item belum dibaca didahulukan (sort stabil, urutan relatif tetap) supaya
+	// pratinjau 3 item tidak tertutup riwayat yang sudah dibaca. Hanya untuk
+	// lonceng dengan status baca lokal — klien/mitra tetap memakai urutan server.
+	function orderUnreadFirst(list: Notification[]) {
+		if (readable) return list;
+		return [...list].sort((a, b) => Number(isRead(a)) - Number(isRead(b)));
+	}
+
+	// Id baris notifications nyata di balik item feed agregat ("ntf-<uuid>");
+	// item sintetis (pekerjaan gagal, antrean) tidak punya baris tersimpan.
+	function storedId(id: string) {
+		return id.startsWith('ntf-') ? id.slice(4) : '';
+	}
+
+	// Simpan status baca ke server (best-effort): tampilan lokal tetap jalan
+	// walau permintaan gagal, dan halaman riwayat jadi ikut konsisten.
+	async function storeRead(id: string) {
+		const target = storedId(id);
+		if (!markReadApi || !target) return;
+		try {
+			await apiRequest(`${markReadApi}/${target}/read`, { method: 'POST' });
+		} catch {
+			// diabaikan — status baca lokal sudah tersimpan
+		}
+	}
+
+	async function storeReadAll() {
+		if (!markReadApi) return;
+		try {
+			await apiRequest(markReadApi, { method: 'POST' });
+		} catch {
+			// diabaikan — status baca lokal sudah tersimpan
+		}
+	}
+
 	async function load() {
 		try {
 			// Dengan tab kategori: badge di-poll dari hitungan global, daftar hanya
@@ -115,12 +169,15 @@
 			const data = (await res.json()) as { notifications: Notification[]; unread: number };
 			// Notifikasi kedaluwarsa (media mitra diarsipkan/dilepas) tidak relevan.
 			const expired = data.notifications.filter((n) => !n.expired_at);
-			const currentRead = readable ? new Set<string>() : loadReadState();
-			const visible = expired.filter((n) => !currentRead.has(n.id));
-			readIds = currentRead;
+			readIds = readable ? new Set<string>() : loadReadState();
+			// Riwayat tampil apa adanya (sudah dibaca maupun belum) — item yang
+			// sudah dibaca diredupkan, bukan dihapus dari daftar, supaya "tandai
+			// semua dibaca" tidak mengosongkan dropdown.
+			const visible = orderUnreadFirst(expired);
 			items = visible.slice(0, 3);
+			allIds = expired.map((n) => n.id);
 			hasMore = visible.length > 3;
-			unread = readable ? data.unread : visible.length;
+			unread = readable ? data.unread : countUnread(expired);
 			badgeUnread = unread;
 			error = '';
 		} catch (reason) {
@@ -153,19 +210,21 @@
 			if (!res.ok) throw new Error(await readApiError(res, 'Gagal memuat notifikasi.'));
 			const data = (await res.json()) as { notifications: Notification[]; unread: number };
 			const expired = data.notifications.filter((n) => !n.expired_at);
-			const currentRead = readable ? new Set<string>() : loadReadState();
-			const unreadAll = expired.filter((n) => !currentRead.has(n.id));
-			let visible = unreadAll;
+			readIds = readable ? new Set<string>() : loadReadState();
+			let visible = orderUnreadFirst(expired);
 			if (!serverCategory) {
-				visible = unreadAll.filter((n) => (category === 'announcement') === n.type.startsWith('announcement'));
-				// Badge dari SEMUA kategori, bukan tab aktif: angka di lonceng
-				// tidak boleh muncul tanpa isi di daftar.
-				badgeUnread = unreadAll.length;
+				// Feed admin tidak mendukung parameter kategori: saring di klien.
+				// Badge tetap dihitung dari SEMUA kategori, bukan tab aktif, supaya
+				// angka di lonceng tidak muncul tanpa isi di daftar.
+				visible = visible.filter(
+					(n) => (category === 'announcement') === n.type.startsWith('announcement')
+				);
+				badgeUnread = countUnread(expired);
 			}
-			readIds = currentRead;
 			items = visible.slice(0, 3);
+			allIds = expired.map((n) => n.id);
 			hasMore = visible.length > 3;
-			unread = readable ? data.unread : visible.length;
+			unread = readable ? data.unread : countUnread(visible);
 			error = '';
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : 'Gagal memuat notifikasi.';
@@ -207,10 +266,10 @@
 						n.id === id ? { ...n, read_at: new Date().toISOString() } : n
 					);
 				} else {
+					await storeRead(id);
 					const next = new Set(readIds);
 					next.add(id);
 					persist(next);
-					items = items.filter((n) => n.id !== id);
 				}
 				unread = Math.max(0, unread - 1);
 				badgeUnread = Math.max(0, badgeUnread - 1);
@@ -232,12 +291,14 @@
 			// Tandai-semua menyapu semua kategori; muat ulang agar konsisten.
 			if (showAnnouncementTab) void load();
 		} else {
+			// Tandai semua item yang termuat (seluruh kategori) lalu biarkan
+			// riwayat tetap tampil dalam keadaan sudah dibaca.
+			await storeReadAll();
 			const next = new Set(readIds);
-			for (const n of items) next.add(n.id);
+			for (const id of allIds) next.add(id);
 			persist(next);
-			items = [];
-			hasMore = false;
 			unread = 0;
+			badgeUnread = 0;
 		}
 	}
 
@@ -248,10 +309,11 @@
 		}
 		// Saat dibuka: daftar mengikuti tab aktif, dan badge di-refresh juga —
 		// tanpa ini, ping pengumuman baru tidak memunculkan angka merah sampai
-		// polling 60 dtk berjalan.
+		// polling 60 dtk berjalan. Pada feed agregat (readable=false) badge
+		// dihitung dari daftar, jadi tidak boleh ditimpa angka server.
 		if (showAnnouncementTab) {
 			void loadList();
-			void loadBadge();
+			if (readable) void loadBadge();
 		} else {
 			void load();
 		}
@@ -360,9 +422,9 @@
 						void markRead(notification.id, notification.link, notification.type);
 					}}
 				>
-					{#if !notification.read_at}<span class="notif-dot"></span>{/if}
+					{#if !isRead(notification)}<span class="notif-dot"></span>{/if}
 					<span class="notif-item-body">
-						<span class="notif-item-title" class:notif-item-title-unread={!notification.read_at}
+						<span class="notif-item-title" class:notif-item-title-unread={!isRead(notification)}
 							>{notification.title}</span
 						>
 						{#if notification.body}

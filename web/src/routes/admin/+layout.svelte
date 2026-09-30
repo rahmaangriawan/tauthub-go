@@ -322,7 +322,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 
 	{#snippet toolbar()}
 		<LangSelector />
-		<NotificationBell apiBase="/v1/platform/operations" fallbackBase="/admin" readable={false} showAnnouncementTab serverCategory={false} />
+		<NotificationBell apiBase="/v1/platform/operations" markReadApi="/v1/platform/notifications" fallbackBase="/admin" readable={false} showAnnouncementTab serverCategory={false} />
 	{/snippet}
 
 	{@render children()}
