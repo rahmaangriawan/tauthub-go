@@ -88,7 +88,9 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	const base = $derived(`/mitra/${partnerUrlId}`);
 	const isVip = $derived(Boolean(vip.data?.hasVip ?? vip.data?.isVip));
 	// VVIP = tier tertinggi; VIP Reguler tidak memakai menu VIP Dashboard.
-	const isVvip = $derived(isVvipTier(vip.data?.tier) && isVip);
+	// Sumber kebenaran sama dengan gerbang halaman VIP: tier brand_ambassador.
+	// is_vip saja tidak cukup karena VIP Reguler juga is_vip=true.
+	const isVvip = $derived(isVvipTier(vip.data?.tier));
 	// Pill tier di samping lonceng, hanya untuk mitra keanggotaan VIP.
 	const vipPill = $derived(isVip || isVipTier(vip.data?.tier) ? vipTierBadge(vip.data?.tier) : null);
 	const saldo = $derived(earnings.data?.summary?.settled ?? 0);
@@ -167,8 +169,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				<strong>Rp{saldo.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}</strong>
 			</a>
 {#if vipPill}
-				<a href="{base}/vip" class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold"
-					title={tr('Kelola keanggotaan VIP Anda')}
+				<a href={isVvip ? `${base}/vip` : `${base}/referral`} class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+					title={isVvip ? tr('Kelola keanggotaan VIP Anda') : tr('Lihat komisi referral Anda')}
 					style="background-color: {vipPill.bg}; color: {vipPill.fg}; border: 1px solid {vipPill.border};"
 				>
 					<span class="h-1.5 w-1.5 rounded-full" style="background-color: {vipPill.fg};" aria-hidden="true"></span>
