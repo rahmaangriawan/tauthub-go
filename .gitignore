@@ -43,3 +43,9 @@ api/.data/uploads/*
 
 # lockfile npm: proyek web memakai Bun (web/bun.lock)
 package-lock.json
+
+# fixture compat dihasilkan lokal oleh harness (memuat token, seal, dan hash
+# yang diturunkan dari APP_SECRET/CMS_ENCRYPTION_SECRET) — jangan pernah di-commit
+api/compat/fixtures.json
+api/compat/go-output.json
+api/compat/embed-fixtures.json
