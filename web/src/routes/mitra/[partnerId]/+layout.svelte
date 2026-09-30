@@ -1,5 +1,6 @@
 <script lang="ts">
 	import LangSelector from '$lib/components/lang-selector.svelte';
+	import { isVipTier, vipTierBadge } from '$lib/partner/vip-tier';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 
 	import { tr } from '$lib/i18n/phrases';
@@ -85,6 +86,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 
 	const base = $derived(`/mitra/${partnerUrlId}`);
 	const isVip = $derived(Boolean(vip.data?.hasVip ?? vip.data?.isVip));
+	// Pill tier di samping lonceng, hanya untuk mitra keanggotaan VIP.
+	const vipPill = $derived(isVip || isVipTier(vip.data?.tier) ? vipTierBadge(vip.data?.tier) : null);
 	const saldo = $derived(earnings.data?.summary?.settled ?? 0);
 
 	/**
@@ -160,6 +163,15 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				<Coins size={15} />
 				<strong>Rp{saldo.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}</strong>
 			</a>
+{#if vipPill}
+				<a href="{base}/vip" class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+					title={tr('Kelola keanggotaan VIP Anda')}
+					style="background-color: {vipPill.bg}; color: {vipPill.fg}; border: 1px solid {vipPill.border};"
+				>
+					<span class="h-1.5 w-1.5 rounded-full" style="background-color: {vipPill.fg};" aria-hidden="true"></span>
+					{vipPill.label}
+				</a>
+			{/if}
 			<NotificationBell apiBase="/v1/partner" fallbackBase={base} showAnnouncementTab />
 		{/snippet}
 
