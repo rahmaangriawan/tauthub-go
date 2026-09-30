@@ -19,6 +19,24 @@ data/
 .env.bak*
 *.env.bak*
 
-# artefak runtime lokal (unggahan mitra, berkas sementara) — bukan sumber
-.data/
-api/.data/
+# Unggahan runtime: hanya GAMBAR yang ikut ke repo (seed/backup untuk deploy
+# via GitHub Actions). Dokumen (pdf/txt/csv/…) tetap lokal karena bisa memuat
+# berkas sensitif mitra.
+.data/*
+!.data/uploads/
+.data/uploads/*
+!.data/uploads/*.webp
+!.data/uploads/*.png
+!.data/uploads/*.jpg
+!.data/uploads/*.jpeg
+!.data/uploads/*.gif
+!.data/uploads/*.svg
+api/.data/*
+!api/.data/uploads/
+api/.data/uploads/*
+!api/.data/uploads/*.webp
+!api/.data/uploads/*.png
+!api/.data/uploads/*.jpg
+!api/.data/uploads/*.jpeg
+!api/.data/uploads/*.gif
+!api/.data/uploads/*.svg
