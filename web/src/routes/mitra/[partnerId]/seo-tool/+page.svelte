@@ -302,7 +302,6 @@
 
 <section>
 	<header>
-		<p class="text-xs font-semibold tracking-wide text-muted-foreground">{tr("PARTNER PORTAL · SEO")}</p>
 		<h1 class="text-2xl font-semibold tracking-tight">{tr('Tool SEO')}</h1>
 		<p class="mt-1 text-sm text-muted-foreground">{tr("Analisis kualitas dan performa website media Anda.")}</p>
 	</header>

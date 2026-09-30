@@ -671,7 +671,7 @@
 			<table class="w-full text-sm">
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
-						<th class="px-4 py-2.5 font-medium">{tr('Artikel')}</th>
+						<th class="w-[38%] px-4 py-2.5 font-medium">{tr('Artikel')}</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Mode Publikasi")}</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
 						<th class="px-4 py-2.5 text-right font-medium">{tr("Penghasilan")}</th>
@@ -693,14 +693,14 @@
 												loading="lazy"
 											/>
 										{/if}
-									<div class="min-w-0">
-										<p class="truncate font-medium">{p.document_title ?? tr('Tanpa judul')}</p>
+									<div class="min-w-0 max-w-[330px]">
+										<p class="line-clamp-2 font-medium" title={p.document_title ?? tr('Tanpa judul')}>{p.document_title ?? tr('Tanpa judul')}</p>
 										{#if p.order_code}<p class="text-xs text-muted-foreground">{p.order_code}</p>{/if}
 									</div>
 								</div>
 							</td>
 							<td class="px-4 py-2.5">
-								<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: {pubMode(p.media_publication_mode).tone}22; color: {pubMode(p.media_publication_mode).tone};">
+								<span class="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: {pubMode(p.media_publication_mode).tone}22; color: {pubMode(p.media_publication_mode).tone};">
 									{pubMode(p.media_publication_mode).label}
 								</span>
 							</td>
@@ -717,7 +717,7 @@
 							</td>
 							<td class="px-4 py-2.5 text-right tabular-nums">{rp(p.partner_amount)}</td>
 							<td class="px-4 py-2.5">
-								<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--{statusTone[p.status] ?? 'accent'}-soft, var(--accent)); color: var(--{statusTone[p.status] ?? 'accent'});">
+								<span class="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--{statusTone[p.status] ?? 'accent'}-soft, var(--accent)); color: var(--{statusTone[p.status] ?? 'accent'});">
 									{pendingUrl(p) ? tr('Menunggu URL') : statusLabel[p.status] ?? p.status}
 								</span>
 								{#if !isManualRow(p) && LIVE.includes(p.status) && p.publish_progress != null}
