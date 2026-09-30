@@ -14,10 +14,12 @@ export function initLocaleFromStorage() {
 	if (typeof window === 'undefined') return;
 	const stored = localStorage.getItem(STORAGE_KEY);
 	if (stored === 'id' || stored === 'en') locale = stored;
+	applyHtmlLang();
 }
 
 export function setLocale(l: Locale) {
 	locale = l;
+	applyHtmlLang();
 	try {
 		localStorage.setItem(STORAGE_KEY, l);
 	} catch {
@@ -47,4 +49,14 @@ export function getI18n(): { locale: Locale; t: Dict; setLocale: (l: Locale) => 
 		},
 		setLocale
 	};
+}
+
+/**
+ * applyHtmlLang: samakan <html lang> dengan bahasa yang dipilih dari menu
+ * header. SSR tidak tahu pilihan pengguna (disimpan di localStorage), jadi
+ * nilai awal dari app.html disesuaikan di klien begitu locale diketahui.
+ */
+function applyHtmlLang() {
+	if (typeof document === 'undefined') return;
+	document.documentElement.lang = locale;
 }
