@@ -48,3 +48,8 @@ export function vipTierBadge(tier: string | null | undefined): { label: string }
 	const t = (tier ?? '').trim();
 	return { label: vipTierLabel(t), ...(TONES[t] ?? NEUTRAL) };
 }
+
+/** Tier tertinggi VVIP (nilai database: brand_ambassador)? */
+export function isVvipTier(tier: string | null | undefined): boolean {
+	return (tier ?? '').trim() === 'brand_ambassador';
+}

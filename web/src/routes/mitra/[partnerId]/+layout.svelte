@@ -1,6 +1,6 @@
 <script lang="ts">
 	import LangSelector from '$lib/components/lang-selector.svelte';
-	import { isVipTier, vipTierBadge } from '$lib/partner/vip-tier';
+	import { isVipTier, isVvipTier, vipTierBadge } from '$lib/partner/vip-tier';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 
 	import { tr } from '$lib/i18n/phrases';
@@ -49,8 +49,9 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			return res.json();
 		}
 	);
-	// Menu VIP Dashboard tetap tampil selama mitra terdaftar VIP (hasVip),
-	// walau masa kontrak sudah habis — parity usePartnerVip di app lama.
+	// Status VIP mitra. Menu VIP Dashboard hanya untuk VVIP (tier
+	// brand_ambassador) dan tetap tampil walau kontrak habis (hasVip) — parity
+	// usePartnerVip app lama. VIP Reguler masuk lewat pill tier di header.
 	const vip = swr<any>(
 		() => (getStoredSession() ? '/v1/partner/me/vip' : null),
 		async () => {
@@ -86,6 +87,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 
 	const base = $derived(`/mitra/${partnerUrlId}`);
 	const isVip = $derived(Boolean(vip.data?.hasVip ?? vip.data?.isVip));
+	// VVIP = tier tertinggi; VIP Reguler tidak memakai menu VIP Dashboard.
+	const isVvip = $derived(isVvipTier(vip.data?.tier) && isVip);
 	// Pill tier di samping lonceng, hanya untuk mitra keanggotaan VIP.
 	const vipPill = $derived(isVip || isVipTier(vip.data?.tier) ? vipTierBadge(vip.data?.tier) : null);
 	const saldo = $derived(earnings.data?.summary?.settled ?? 0);
@@ -101,7 +104,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			label: i18n.t.nav_partner.group_summary,
 			items: [
 				{ label: i18n.t.nav_partner.overview, href: base, icon: House, active: pathname === base },
-				...(isVip ? [{ label: i18n.t.nav_partner.vip_dashboard, href: `${base}/vip`, icon: ShieldCheck, active: isActive(`${base}/vip`) }] : [])
+				...(isVvip ? [{ label: i18n.t.nav_partner.vip_dashboard, href: `${base}/vip`, icon: ShieldCheck, active: isActive(`${base}/vip`) }] : [])
 			]
 		},
 		{
