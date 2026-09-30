@@ -239,7 +239,7 @@
 				{/if}
 			</div>
 			<p class="m-0 text-[13.5px] leading-normal text-muted-foreground">
-				{me?.media_count ?? 0} {tr("media terdaftar")}{#if me?.public_id} · ID mitra {me.public_id}{/if}{#if me?.category} · {me.category}{/if}
+				{me?.media_count ?? 0} {tr("media terdaftar")}{#if me?.public_id} · ID mitra {me.public_id}{/if}
 			</p>
 		</div>
 		<div class="flex gap-2">
