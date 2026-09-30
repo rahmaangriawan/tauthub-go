@@ -70,6 +70,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Tandai dibaca": "Mark as read",
   "Terima Revisi": "Accept Revision",
   "Terima untuk mengirim ulang artikel revisi ke media Anda, atau tolak dengan alasan bila masih belum sesuai.": "Accept to re-send the revised article to your media, or reject with a reason if it still does not fit.",
+  "Tidak ada di tab ini, tetapi ada notifikasi di tab lain.": "Nothing in this tab, but there are notifications in the other tab.",
   "Tidak ada menu yang cocok.": "No matching menu.",
   "Tolak Revisi": "Reject Revision",
   "Tolak revisi": "Reject revision",

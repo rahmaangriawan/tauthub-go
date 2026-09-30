@@ -48,6 +48,8 @@
 	let open = $state(false);
 	// Tab kategori (hanya saat showAnnouncementTab): "Umum" = selain pengumuman.
 	let category = $state<'general' | 'announcement'>('general');
+	// Sisa unread di tab lain (dipakai empty state supaya tidak buntu).
+	const otherUnread = $derived(showAnnouncementTab ? Math.max(0, badgeUnread - unread) : 0);
 	let readIds = $state<Set<string>>(new Set());
 	let trigger = $state<HTMLButtonElement | null>(null);
 	let menu = $state<HTMLDivElement | null>(null);
@@ -97,8 +99,15 @@
 			// Dengan tab kategori: badge di-poll dari hitungan global, daftar hanya
 			// di-refresh saat menu terbuka (mengikuti tab aktif).
 			if (showAnnouncementTab) {
-				await loadBadge();
-				if (open) await loadList();
+				// Badge harus berasal dari sumber angka yang sama dengan daftar.
+				// Feed admin (readable=false) tidak punya unread dari server dan
+				// status bacanya lokal, jadi daftarnya yang menghitung badge.
+				if (readable) {
+					await loadBadge();
+					if (open) await loadList();
+				} else {
+					await loadList();
+				}
 				return;
 			}
 			const res = await apiRequest(`${apiBase}/notifications?limit=20`, { cache: 'no-store' });
@@ -145,9 +154,13 @@
 			const data = (await res.json()) as { notifications: Notification[]; unread: number };
 			const expired = data.notifications.filter((n) => !n.expired_at);
 			const currentRead = readable ? new Set<string>() : loadReadState();
-			let visible = expired.filter((n) => !currentRead.has(n.id));
+			const unreadAll = expired.filter((n) => !currentRead.has(n.id));
+			let visible = unreadAll;
 			if (!serverCategory) {
-				visible = visible.filter((n) => (category === 'announcement') === n.type.startsWith('announcement'));
+				visible = unreadAll.filter((n) => (category === 'announcement') === n.type.startsWith('announcement'));
+				// Badge dari SEMUA kategori, bukan tab aktif: angka di lonceng
+				// tidak boleh muncul tanpa isi di daftar.
+				badgeUnread = unreadAll.length;
 			}
 			readIds = currentRead;
 			items = visible.slice(0, 3);
@@ -329,7 +342,14 @@
 		{/if}
 		<div class="notif-list">
 			{#if items.length === 0 && !error}
-				<p class="notif-empty">{tr("Belum ada notifikasi.")}</p>
+				<p class="notif-empty">
+					{otherUnread > 0 ? tr('Tidak ada di tab ini, tetapi ada notifikasi di tab lain.') : tr("Belum ada notifikasi.")}
+				</p>
+				{#if otherUnread > 0}
+					<button class="notif-readall" type="button" onclick={() => switchCategory(category === 'general' ? 'announcement' : 'general')}>
+						{tr('Lihat')} {otherUnread} {category === 'general' ? tr('Pengumuman') : tr('Umum')}
+					</button>
+				{/if}
 			{/if}
 			{#each items as notification (notification.id)}
 				<button
