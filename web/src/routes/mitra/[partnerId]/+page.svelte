@@ -224,9 +224,6 @@
 	<!-- 1. Header / sambutan (metrik dari mitra-overview.module.css) -->
 	<header class="flex w-full flex-wrap items-start justify-between gap-4 pt-1 pb-0.5">
 		<div class="flex flex-1 flex-col gap-1">
-			<div class="flex items-center gap-2">
-				<span class="text-[11px] font-bold uppercase tracking-[0.08em]" style="color: var(--primary);">PARTNER PORTAL</span>
-			</div>
 			<div class="flex flex-wrap items-center gap-3">
 				<h1 class="m-0 text-[24px] leading-[1.2] font-bold tracking-[-0.025em]">
 					{tr('Halo')}, {me?.name ?? tr('Mitra')}

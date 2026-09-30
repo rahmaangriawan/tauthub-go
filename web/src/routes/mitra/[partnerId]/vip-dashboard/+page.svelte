@@ -168,8 +168,7 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<p class="text-xs font-semibold tracking-wide text-muted-foreground">{tr('VIP MITRA')}</p>
-			<h1 class="mt-1 text-2xl font-semibold tracking-tight">VIP Dashboard</h1>
+			<h1 class="text-2xl font-semibold tracking-tight">VIP Dashboard</h1>
 			<p class="mt-1 text-sm text-muted-foreground">{tr("Ringkasan affiliate, dual-wallet, dan domain referral Anda.")}</p>
 		</div>
 		<div class="flex items-center gap-2">

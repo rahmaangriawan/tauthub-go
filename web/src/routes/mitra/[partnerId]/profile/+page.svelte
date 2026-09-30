@@ -478,8 +478,7 @@
 
 <section>
 	<header>
-		<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{tr("PENGATURAN · MITRA")}</p>
-		<h1 class="mt-1 text-2xl font-semibold tracking-tight">{tr("Profil & Rekening Mitra")}</h1>
+		<h1 class="text-2xl font-semibold tracking-tight">{tr("Profil & Rekening Mitra")}</h1>
 		<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola informasi identitas media partner, pengaturan rekening withdraw, keamanan, dan dokumen legalitas.")}</p>
 	</header>
 

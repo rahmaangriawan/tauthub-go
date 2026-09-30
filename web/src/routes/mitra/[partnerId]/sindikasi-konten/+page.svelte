@@ -58,8 +58,7 @@
 
 <section>
 	<header>
-		<p class="text-xs font-semibold tracking-wide text-muted-foreground">{tr('MEDIA & PUBLIKASI')}</p>
-		<h1 class="mt-1 text-2xl font-semibold tracking-tight">{tr('Sindikasi Konten')}</h1>
+		<h1 class="text-2xl font-semibold tracking-tight">{tr('Sindikasi Konten')}</h1>
 		<p class="mt-1 text-sm text-muted-foreground">{tr("Sindikasi Konten menyalurkan artikel mitra melalui RSS feed ke mitra lain atau publisher eksternal.")}</p>
 	</header>
 
