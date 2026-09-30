@@ -11,6 +11,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
+	pushdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/push"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobwire"
 )
@@ -39,6 +40,36 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Pengiriman Web Push berjalan di loop terpisah: antreannya bisa berisi
+	// ribuan baris saat pengumuman dikirim, sedangkan antrean `jobs` umum
+	// memproses satu job per interval. Konkurensi dibatasi PUSH_WORKERS.
+	pushDeps := pushdomain.New(database.Pool, cfg)
+	pushInterval := envDuration("PUSH_POLL_SECONDS", 2*time.Second)
+	slog.Info("[push] loop aktif", "enabled", pushDeps.Enabled(), "interval", pushInterval.String(), "workers", cfg.PushWorkers)
+	go func() {
+		workerID := jobs.WorkerID("push")
+		ticker := time.NewTicker(pushInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				for {
+					n, err := pushDeps.ProcessBatch(ctx, workerID, 100)
+					if err != nil {
+						slog.Error("[push] worker error", "err", err)
+						break
+					}
+					if n == 0 {
+						break
+					}
+				}
+			}
+		}
+	}()
+
 	runner.Loop(ctx, interval, jobs.WorkerID("worker"))
 	slog.Info("worker berhenti")
 }

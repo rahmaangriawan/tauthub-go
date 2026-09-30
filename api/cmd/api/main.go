@@ -28,6 +28,7 @@ import (
 	knowledgedomain "github.com/rahmaangriawan/tauthub-go/internal/domains/knowledge"
 	partnerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/partner"
 	platformdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/platform"
+	pushdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/push"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobwire"
@@ -158,6 +159,7 @@ func run() error {
 		clientRead := &clientreaddomain.Deps{Pool: database.Pool}
 		tautDeps := &clienttautdomain.Deps{Pool: database.Pool, Cfg: cfg}
 		brandFlowDeps := &brandflowdomain.Deps{Pool: database.Pool, Cfg: cfg}
+		pushDeps := pushdomain.New(database.Pool, cfg)
 
 		// Kanonikalisasi {campaignId}: URL boleh memakai public_id 6 karakter,
 		// handler tetap menerima UUID. Diterapkan per rute karena middleware
@@ -175,6 +177,12 @@ func run() error {
 			authed.Patch("/auth/me", authDeps.MeUpdate)
 
 			// Pengumuman (broadcast admin → seluruh pengguna klien/mitra).
+			// Notifikasi perangkat (Web Push) — kunci publik VAPID & langganan.
+			authed.Get("/push/config", pushDeps.Config)
+			authed.Post("/push/subscriptions", pushDeps.Subscribe)
+			authed.Delete("/push/subscriptions", pushDeps.Unsubscribe)
+			authed.Post("/push/test", pushDeps.Test)
+
 			authed.Get("/announcements", platformDeps.AnnouncementsList)
 			authed.Post("/announcements/{announcementId}/read", platformDeps.AnnouncementMarkRead)
 			authed.Post("/auth/2fa/setup", authDeps.TwoFactorSetup)

@@ -52,6 +52,13 @@ type Config struct {
 	AIMaxRetries        int
 
 	JobInline bool
+
+	// Web Push (VAPID). Kosong → fitur push nonaktif: endpoint mengembalikan
+	// enabled=false dan worker melewati antrean. Subject wajib mailto: / https:.
+	VAPIDPrivateKey string
+	VAPIDSubject    string
+	// PushWorkers: jumlah pengiriman paralel di worker push (default 16).
+	PushWorkers int
 }
 
 func Load() (*Config, error) {
@@ -115,6 +122,15 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	c.JobInline = strings.EqualFold(getEnv("JOB_INLINE", "true"), "true")
+
+	c.VAPIDPrivateKey = strings.TrimSpace(os.Getenv("VAPID_PRIVATE_KEY"))
+	c.VAPIDSubject = getEnv("VAPID_SUBJECT", "mailto:ops@tauthub.com")
+	if c.PushWorkers, err = getInt("PUSH_WORKERS", 16); err != nil {
+		return nil, err
+	}
+	if c.PushWorkers < 1 || c.PushWorkers > 128 {
+		return nil, fmt.Errorf("PUSH_WORKERS harus 1..128 (dapat %d)", c.PushWorkers)
+	}
 
 	if len(c.Secret) < 32 {
 		return nil, fmt.Errorf("APP_SECRET wajib >= 32 karakter (dapat %d)", len(c.Secret))

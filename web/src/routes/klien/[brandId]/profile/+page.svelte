@@ -10,6 +10,7 @@
 		updateStoredUser, AUTH_EXPIRED_EVENT, type AuthUser
 	} from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import DevicePushCard from '$lib/components/device-push-card.svelte';
 	import { renderSVG } from 'uqr';
 
 	// Tab halaman; label lewat $derived karena locale baru siap setelah layout init.
@@ -237,6 +238,7 @@
 			</div>
 			<button class="app-btn app-btn-primary mt-3" type="submit" disabled={busy}>{tr("Simpan preferensi")}</button>
 		</form>
+			<DevicePushCard />
 	{:else}
 		<!-- Keamanan -->
 		<div class="app-card mt-4 p-5">

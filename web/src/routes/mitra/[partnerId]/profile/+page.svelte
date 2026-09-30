@@ -17,6 +17,7 @@
 	} from '$lib/auth';
 	import type { AuthUser } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import DevicePushCard from '$lib/components/device-push-card.svelte';
 	import { renderSVG } from 'uqr';
 
 	// Daftar persis dari partner-profile.tsx app lama.
@@ -795,6 +796,7 @@
 						</button>
 					</div>
 				</form>
+				<DevicePushCard />
 			</div>
 		{/if}
 
