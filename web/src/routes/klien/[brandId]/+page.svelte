@@ -66,6 +66,13 @@
 	}
 
 	let userName = $state('');
+
+	// Emoji sapaan dipisah dari teksnya agar bisa dianimasikan (lihat .heroWave);
+	// teksnya sendiri tetap berasal dari kamus i18n.
+	const WAVE_EMOJI = '👋';
+	const welcomeText = $derived(
+		i18n.t.dashboard.welcome.replace('{name}', userName || 'User').replace(WAVE_EMOJI, '')
+	);
 	let wallet = $state<Wallet | null>(null);
 	let tcConfig = $state<{ rate_idr: number; topup_packages: Pkg[] } | null>(null);
 	let reports = $state<{ reach: number; clicks: number } | null>(null);
@@ -269,7 +276,7 @@
 		<section class="hero">
 			<div class="heroContent">
 					<h1 class="heroTitle">
-						{i18n.t.dashboard.welcome.replace('{name}', userName || 'User')}
+						{welcomeText}<span class="heroWave">{WAVE_EMOJI}</span>
 					</h1>
 					<p class="heroSubtitle">{i18n.t.dashboard.subtitle}</p>
 					<div class="heroBtns">
@@ -668,6 +675,25 @@
 			margin: 0 0 8px;
 			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 			word-break: break-word;
+		}
+		/* Lambaian tangan: hanya emoji yang bergerak, dengan jeda di antara
+		   lambaian supaya tidak terus bergoyang. */
+		.heroWave {
+			display: inline-block;
+			transform-origin: 72% 82%;
+			animation: heroWave 3.2s ease-in-out infinite;
+		}
+		@keyframes heroWave {
+			0%, 52% { transform: rotate(0deg); }
+			58% { transform: rotate(16deg); }
+			64% { transform: rotate(-7deg); }
+			70% { transform: rotate(13deg); }
+			76% { transform: rotate(-4deg); }
+			82% { transform: rotate(8deg); }
+			88%, 100% { transform: rotate(0deg); }
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.heroWave { animation: none; }
 		}
 		.heroSubtitle {
 			font-size: 14px;
