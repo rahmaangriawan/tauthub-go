@@ -804,12 +804,11 @@
 
 								<td class="modernTd">
 									<div class="releaseStack">
-										<span class={speed.cls}>
-											{#if speed.isSuper}<Zap size={12} />{:else}<Clock size={12} />{/if}
-											<span>{speed.label}</span>
-										</span>
-										<span class="releaseTimeSub">{speed.sub}</span>
-									</div>
+									<span class={speed.cls}>
+										{#if speed.isSuper}<Zap size={12} />{:else}<Clock size={12} />{/if}
+										<span>{speed.label}</span>
+									</span>
+								</div>
 								</td>
 
 								<td class="modernTd"><span class="priceBoldText">Rp {fmt(m.client_price ?? m.price ?? 0)}</span></td>
