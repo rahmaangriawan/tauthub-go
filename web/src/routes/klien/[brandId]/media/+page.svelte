@@ -19,7 +19,7 @@
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import MediaDetailModal from './_detail-modal.svelte';
 	import Select from '$lib/components/select.svelte';
-	import Tooltip from '$lib/components/tooltip.svelte';
+	import { Tooltip } from 'bits-ui';
 	import './media.css';
 	import PageTitle from '$lib/components/page-title.svelte';
 
@@ -455,6 +455,7 @@
 
 <PageTitle title={tr("Eksplorasi Media")} />
 
+<Tooltip.Provider delayDuration={0} skipDelayDuration={300}>
 <div class="katalogMedia">
 	{#if err}<div class="errorBanner">{err}</div>{/if}
 
@@ -669,37 +670,50 @@
 							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('da')}>DA{sortIndicator('da')}</th>
 							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_trust')}>
 								<span class="thWithInfo">AI TRUST
-									<Tooltip label="Keterangan AI Trust Score" maxWidth={260}>
-										{#snippet rich()}
-											<strong>AI Trust Score</strong> {tr("— Skor (0-100) kesiapan infrastruktur web (Schema, Speed) untuk dirayapi dan direkomendasikan oleh mesin LLM.")} {/snippet}
-										<button type="button" class="infoDot" aria-label="Keterangan AI Trust Score" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
-									</Tooltip>
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button {...props} type="button" class="infoDot" aria-label="Keterangan AI Trust Score" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+											<strong>AI Trust Score</strong> {tr("— Skor (0-100) kesiapan infrastruktur web (Schema, Speed) untuk dirayapi dan direkomendasikan oleh mesin LLM.")}
+										</Tooltip.Content>
+									</Tooltip.Root>
 								</span>{sortIndicator('ai_trust')}
 							</th>
 							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_cited')}>
 								<span class="thWithInfo">AI CITED
-									<Tooltip
-										label="Keterangan AI Citation"
-										content="Indikator otomatis via API apakah media ini terdeteksi aktif sebagai rujukan/referensi oleh mesin AI (misal: Perplexity atau AI Overviews)."
-										maxWidth={260}
-									>
-										<button type="button" class="infoDot" aria-label="Keterangan AI Citation" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
-									</Tooltip>
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button {...props} type="button" class="infoDot" aria-label="Keterangan AI Citation" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+											Indikator otomatis via API apakah media ini terdeteksi aktif sebagai rujukan/referensi oleh mesin AI (misal: Perplexity atau AI Overviews).
+										</Tooltip.Content>
+									</Tooltip.Root>
 								</span>{sortIndicator('ai_cited')}
 							</th>
 							<th class="modernTh modernThSortable" onclick={() => toggleSort('speed')}>
 								<span class="thWithInfo">WAKTU RILIS
-									<Tooltip label="Keterangan estimasi waktu rilis" maxWidth={260}>
-										{#snippet rich()}
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button {...props} type="button" class="infoDot" aria-label="Keterangan estimasi waktu rilis" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
 											<span class="tipStack">
 												<strong>Indikator Waktu Rilis</strong>
 												<span><span style="color:#4ade80;font-weight:700;">Super Cepat:</span> &lt; 3 Jam</span>
 												<span><span style="color:#60a5fa;font-weight:700;">Cepat:</span> &lt; 24 Jam</span>
 												<span><span style="color:#d1d5db;font-weight:700;">Standar:</span> 1 - 2 Hari</span>
 											</span>
-										{/snippet}
-										<button type="button" class="infoDot" aria-label="Keterangan estimasi waktu rilis" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
-									</Tooltip>
+										</Tooltip.Content>
+									</Tooltip.Root>
+
 								</span>{sortIndicator('speed')}
 							</th>
 							<th class="modernTh modernThSortable" onclick={() => toggleSort('price')}>HARGA{sortIndicator('price')}</th>
@@ -735,12 +749,21 @@
 										<div class="mediaTitleLine">
 											<span class="mediaHeading">{m.name}</span>
 											{#if m.domain_verified}
-												<span class="verifiedTick" title="Domain terverifikasi Tauthub" aria-label="Domain Terverifikasi">
+												<Tooltip.Root>
+											<Tooltip.Trigger>
+												{#snippet child({ props })}
+													<span {...props} class="verifiedTick" aria-label="Domain Terverifikasi">
 													<svg width="15" height="15" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-														<path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816z" fill="#1D9BF0"/>
-														<path d="M9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z" fill="#FFFFFF"/>
+													<path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816z" fill="#1D9BF0"/>
+													<path d="M9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z" fill="#FFFFFF"/>
 													</svg>
-												</span>
+													</span>
+												{/snippet}
+											</Tooltip.Trigger>
+											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+												Domain terverifikasi Tauthub
+											</Tooltip.Content>
+										</Tooltip.Root>
 											{/if}
 										</div>
 										<div class="mediaMetaLine">
@@ -778,14 +801,23 @@
 									<div class="categoryBadgeGroup">
 										<span class="categoryPill">{cats[0]}</span>
 										{#if cats.length > 1}
-											<button
-												type="button"
-												class="categoryPlusTag"
-												title={`Kategori: ${cats.join(', ')}`}
-												aria-label={`${cats.length} kategori: ${cats.join(', ')}`}
-												aria-expanded={catPopoverId === m.id}
-												onclick={(e) => openCategoryPopover(e, m.id, cats)}
-											>+{cats.length - 1}</button>
+											<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button
+													{...props}
+													type="button"
+													class="categoryPlusTag"
+													aria-label={`${cats.length} kategori: ${cats.join(', ')}`}
+													aria-expanded={catPopoverId === m.id}
+													onclick={(e) => openCategoryPopover(e, m.id, cats)}
+												>+{cats.length - 1}</button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+											Kategori: {cats.join(', ')}
+										</Tooltip.Content>
+									</Tooltip.Root>
 										{/if}
 									</div>
 								</td>
@@ -810,12 +842,19 @@
 
 								<td class="modernTd">
 									<div class="releaseStack">
-										<Tooltip content={releaseTip(speed.sub)} label={releaseTip(speed.sub)} maxWidth={240}>
-										<span class={speed.cls}>
+										<Tooltip.Root>
+									<Tooltip.Trigger>
+										{#snippet child({ props })}
+											<span {...props} class={speed.cls}>
 											{#if speed.isSuper}<Zap size={12} />{:else}<Clock size={12} />{/if}
 											<span>{speed.label}</span>
-										</span>
-										</Tooltip>
+											</span>
+										{/snippet}
+									</Tooltip.Trigger>
+									<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+										{releaseTip(speed.sub)}
+									</Tooltip.Content>
+								</Tooltip.Root>
 									</div>
 								</td>
 
@@ -1003,6 +1042,8 @@
 		</div>
 	</div>
 {/if}
+
+</Tooltip.Provider>
 
 <style>
 .maintBadge {

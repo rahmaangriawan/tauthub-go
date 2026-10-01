@@ -1345,3 +1345,18 @@ button.categoryPlusTag:focus-visible {
 
 .reqMark { color: #dc2626; font-weight: 700; }
 .bannerStrong { font-weight: 600; color: #0f172a; }
+
+/* Panel tooltip bits-ui (port Radix untuk Svelte) yang dipakai halaman katalog.
+   Posisinya fixed supaya tidak terpotong overflow-x milik .tableWrap. */
+.uiTip {
+  z-index: 1300;
+  max-width: 280px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.28);
+}
