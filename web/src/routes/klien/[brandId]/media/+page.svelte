@@ -676,7 +676,8 @@
 												<button {...props} type="button" class="infoDot" aria-label="Keterangan AI Trust Score" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
 											{/snippet}
 										</Tooltip.Trigger>
-										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+											<Tooltip.Arrow class="uiTipArrow" />
 											<strong>AI Trust Score</strong> {tr("— Skor (0-100) kesiapan infrastruktur web (Schema, Speed) untuk dirayapi dan direkomendasikan oleh mesin LLM.")}
 										</Tooltip.Content>
 									</Tooltip.Root>
@@ -690,7 +691,8 @@
 												<button {...props} type="button" class="infoDot" aria-label="Keterangan AI Citation" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
 											{/snippet}
 										</Tooltip.Trigger>
-										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+											<Tooltip.Arrow class="uiTipArrow" />
 											Indikator otomatis via API apakah media ini terdeteksi aktif sebagai rujukan/referensi oleh mesin AI (misal: Perplexity atau AI Overviews).
 										</Tooltip.Content>
 									</Tooltip.Root>
@@ -704,7 +706,8 @@
 												<button {...props} type="button" class="infoDot" aria-label="Keterangan estimasi waktu rilis" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
 											{/snippet}
 										</Tooltip.Trigger>
-										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+											<Tooltip.Arrow class="uiTipArrow" />
 											<span class="tipStack">
 												<strong>Indikator Waktu Rilis</strong>
 												<span><span style="color:#4ade80;font-weight:700;">Super Cepat:</span> &lt; 3 Jam</span>
@@ -760,7 +763,8 @@
 													</span>
 												{/snippet}
 											</Tooltip.Trigger>
-											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+												<Tooltip.Arrow class="uiTipArrow" />
 												Domain terverifikasi Tauthub
 											</Tooltip.Content>
 										</Tooltip.Root>
@@ -814,7 +818,8 @@
 												>+{cats.length - 1}</button>
 											{/snippet}
 										</Tooltip.Trigger>
-										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+											<Tooltip.Arrow class="uiTipArrow" />
 											Kategori: {cats.join(', ')}
 										</Tooltip.Content>
 									</Tooltip.Root>
@@ -851,7 +856,8 @@
 											</span>
 										{/snippet}
 									</Tooltip.Trigger>
-									<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+									<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+										<Tooltip.Arrow class="uiTipArrow" />
 										{releaseTip(speed.sub)}
 									</Tooltip.Content>
 								</Tooltip.Root>

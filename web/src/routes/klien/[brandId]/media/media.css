@@ -1348,6 +1348,9 @@ button.categoryPlusTag:focus-visible {
 
 /* Panel tooltip bits-ui (port Radix untuk Svelte) yang dipakai halaman katalog.
    Posisinya fixed supaya tidak terpotong overflow-x milik .tableWrap. */
+.uiTipArrow {
+  color: #0f172a;
+}
 .uiTip {
   z-index: 1300;
   max-width: 280px;
