@@ -193,7 +193,24 @@ $SUDO systemctl daemon-reload
 $SUDO systemctl enable tauthub-api tauthub-web tauthub-scheduler >/dev/null 2>&1 || true
 
 log "7/8 Nginx reverse proxy untuk $DOMAIN"
+# Sertifikat: Let's Encrypt bila sudah ada, kalau belum self-signed — port 443
+# wajib listen karena Cloudflare SSL mode Full menyambung origin via HTTPS
+# (tanpa itu Cloudflare menampilkan error 521).
+if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+  SSL_CERT="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+  SSL_KEY="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
+else
+  $SUDO mkdir -p /etc/nginx/ssl
+  if [ ! -f /etc/nginx/ssl/self.crt ]; then
+    $SUDO openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
+      -keyout /etc/nginx/ssl/self.key -out /etc/nginx/ssl/self.crt \
+      -subj "/CN=$DOMAIN" -addext "subjectAltName=DNS:$DOMAIN" >/dev/null 2>&1
+  fi
+  SSL_CERT="/etc/nginx/ssl/self.crt"
+  SSL_KEY="/etc/nginx/ssl/self.key"
+fi
 $SUDO sed -e "s|__DOMAIN__|$DOMAIN|g" \
+  -e "s|__SSL_CERT__|$SSL_CERT|g" -e "s|__SSL_KEY__|$SSL_KEY|g" \
   "$APP_DIR/deploy/nginx-staging.conf" > "/etc/nginx/sites-available/tauthub"
 $SUDO ln -sf /etc/nginx/sites-available/tauthub /etc/nginx/sites-enabled/tauthub
 $SUDO nginx -t
