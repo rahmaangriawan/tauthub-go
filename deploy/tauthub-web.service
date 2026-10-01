@@ -1,0 +1,27 @@
+[Unit]
+Description=Tauthub staging web (SvelteKit adapter-node)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tauthub
+Group=tauthub
+WorkingDirectory=__APP_DIR__/web
+EnvironmentFile=__APP_DIR__/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOST=127.0.0.1
+# Origin eksplisit + header proxy supaya CSRF/form-action dan cookie
+# secure memakai https://staging.tauthub.com, bukan http://127.0.0.1.
+Environment=ORIGIN=https://staging.tauthub.com
+Environment=PROTOCOL_HEADER=x-forwarded-proto
+Environment=HOST_HEADER=x-forwarded-host
+ExecStart=/usr/bin/node build
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

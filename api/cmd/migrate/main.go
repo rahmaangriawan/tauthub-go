@@ -8,7 +8,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
@@ -147,22 +146,21 @@ func applyPending(ctx context.Context, d *db.DB, files []string) error {
 			continue
 		}
 		started := time.Now()
-		err := d.WithTx(ctx, func(tx pgx.Tx) error {
-			sqlBytes, err := os.ReadFile("migrations/additive/" + f)
-			if err != nil {
-				return fmt.Errorf("baca file: %w", err)
-			}
-			if _, err := tx.Exec(ctx, string(sqlBytes)); err != nil {
-				if pgErr, ok := err.(*pgconn.PgError); ok && tolerantCodes[pgErr.Code] {
-					slog.Warn("duplikat object, dicatat applied (parity runner lama)", "version", f, "code", pgErr.Code)
-					return nil
-				}
-				return fmt.Errorf("eksekusi: %w", err)
-			}
-			return nil
-		})
+		sqlBytes, err := os.ReadFile("migrations/additive/" + f)
 		if err != nil {
-			return fmt.Errorf("migration %s: %w", f, err)
+			return fmt.Errorf("migration %s: baca file: %w", f, err)
+		}
+		// Satu file = satu transaksi implisit (multi-statement simple
+		// protocol): error apa pun me-rollback seluruh file. Error
+		// duplicate-object ditoleransi dan file tetap dicatat applied —
+		// parity runner JS lama; pakai WithTx di sini justru fatal karena
+		// tx sudah aborted sehingga COMMIT selalu gagal.
+		if _, err := d.Pool.Exec(ctx, string(sqlBytes)); err != nil {
+			if pgErr, ok := err.(*pgconn.PgError); ok && tolerantCodes[pgErr.Code] {
+				slog.Warn("duplikat object, dicatat applied (parity runner lama)", "version", f, "code", pgErr.Code)
+			} else {
+				return fmt.Errorf("migration %s: eksekusi: %w", f, err)
+			}
 		}
 		if err := markApplied(ctx, d, f); err != nil {
 			return err

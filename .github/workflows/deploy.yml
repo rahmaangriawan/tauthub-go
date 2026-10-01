@@ -1,0 +1,83 @@
+name: Deploy Staging (Go)
+
+# Deploy otomatis Tauthub Go staging ke VPS (root@103.42.245.116) setiap
+# push ke master. Binary Go dibangun di runner (linux/amd64), web SvelteKit
+# dibangun di VPS (bun). Kode dikirim via rsync di atas SSH (password).
+#
+# Di VPS urutannya (deploy/setup-vps.sh lalu deploy/deploy.sh):
+#   1. bootstrap idempoten: postgres, nginx, node 22, bun, user, .env (sekali),
+#      DB tauthub_go + baseline schema-full.sql (jika DB kosong), systemd, TLS
+#   2. migrate up (additive, toleran duplikat) -> build web -> restart service
+#
+# Secret (repo > Settings > Secrets and variables > Actions):
+#   SSH_HOST       103.42.245.116
+#   SSH_USER       root
+#   SSH_PASSWORD   password root VPS
+#   VPS_APP_DIR    (opsional) default /opt/tauthub/app
+#
+# Domain: staging.tauthub.com (A record -> 103.42.245.116).
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-staging-go
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+
+      - name: Build linux binaries (api, scheduler, migrate)
+        working-directory: api
+        run: |
+          for cmd in api scheduler migrate; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+              go build -trimpath -ldflags="-s -w" -o "bin/$cmd" "./cmd/$cmd"
+          done
+
+      - name: Install sshpass + rsync
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass rsync
+
+      - name: Sync + bootstrap + deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+        run: |
+          set -euo pipefail
+          : "${SSH_HOST:?Secret SSH_HOST belum di-set}"
+          : "${SSH_USER:?Secret SSH_USER belum di-set}"
+          : "${SSH_PASSWORD:?Secret SSH_PASSWORD belum di-set}"
+          APP_DIR="${VPS_APP_DIR:-/opt/tauthub/app}"
+          export SSHPASS="$SSH_PASSWORD"
+          mkdir -p ~/.ssh
+          # Keepalive: build web di VPS bisa diam beberapa menit, koneksi idle
+          # sering diputus NAT/firewall (broken pipe).
+          SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=12"
+
+          # Sinkronkan kode + binary. .env / .data / hasil build dipertahankan
+          # di VPS (exclude juga melindungi dari --delete).
+          rsync -rltDz --delete \
+            -e "sshpass -e ssh $SSH_OPTS" \
+            --exclude='.git/' --exclude='node_modules/' --exclude='.svelte-kit/' \
+            --exclude='.data/' --exclude='.env' --exclude='.env.*' \
+            --exclude='web/build/' --exclude='api/api' --exclude='.DS_Store' \
+            --exclude='tmp_*' --exclude='*.log' \
+            ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
+
+          # Bootstrap idempoten (paket, .env, DB, nginx, systemd, TLS).
+          sshpass -e ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='$APP_DIR' DOMAIN=staging.tauthub.com bash '$APP_DIR/deploy/setup-vps.sh'"
+
+          # Migrasi + build web + restart + health check.
+          sshpass -e ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='$APP_DIR' bash '$APP_DIR/deploy/deploy.sh'"
