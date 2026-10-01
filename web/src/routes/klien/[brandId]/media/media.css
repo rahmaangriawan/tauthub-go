@@ -1353,8 +1353,9 @@ button.categoryPlusTag:focus-visible {
 }
 .uiTip {
   z-index: 1300;
-  max-width: 280px;
-  padding: 7px 10px;
+  /* Batas lebar panel; teks boleh membungkus sampai batas ini. */
+  max-width: 320px;
+  padding: 8px 11px;
   border-radius: 8px;
   background: #0f172a;
   color: #f8fafc;
@@ -1362,4 +1363,11 @@ button.categoryPlusTag:focus-visible {
   font-weight: 400;
   line-height: 1.45;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.28);
+  /* Panel bisa berada di dalam <th>/<td> yang mewarisi nowrap + uppercase +
+     letter-spacing; semuanya dinetralkan supaya teks terbaca utuh. */
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
