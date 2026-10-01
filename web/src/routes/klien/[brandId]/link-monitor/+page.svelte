@@ -8,7 +8,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import {
-		ArrowDownUp, ExternalLink, CircleCheck, Image as ImageIcon,
+		ArrowDownUp, ArrowUp, ExternalLink, CircleCheck, Image as ImageIcon,
 		Link2Off, LoaderCircle, RotateCcw, Search, TriangleAlert, ClipboardList
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
@@ -40,7 +40,19 @@
 	let daysFilter = $state('');
 	let searchInput = $state('');
 	let query = $state('');
+	// Sortir satu kolom aktif: judul (perilaku lama) atau terakhir update.
+	let sortKey = $state<'title' | 'updated'>('title');
 	let sortAsc = $state(false);
+	// Tanggal: klik pertama selalu tampilkan yang terbaru dulu.
+	let dateDesc = $state(true);
+	function toggleTitleSort() {
+		if (sortKey !== 'title') { sortKey = 'title'; return; }
+		sortAsc = !sortAsc;
+	}
+	function toggleDateSort() {
+		if (sortKey !== 'updated') { sortKey = 'updated'; return; }
+		dateDesc = !dateDesc;
+	}
 	let loading = $state(true);
 	let error = $state('');
 	let requestingId = $state<string | null>(null);
@@ -150,9 +162,23 @@
 		return url;
 	}
 
-	// Sortir judul pada halaman aktif saja (parity sortedItems).
+	// Sortir pada halaman aktif saja (parity sortedItems). Judul memakai
+	// perilaku lama; kolom terakhir update membandingkan waktu, dengan entri
+	// "belum pernah dicek" selalu di bawah.
 	const sortedItems = $derived.by(() => {
 		const list = [...items];
+		if (sortKey === 'updated') {
+			const waktu = (v: string | null) => (v ? new Date(v).getTime() : null);
+			list.sort((a, b) => {
+				const at = waktu(a.last_checked_at);
+				const bt = waktu(b.last_checked_at);
+				if (at === null && bt === null) return 0;
+				if (at === null) return 1;
+				if (bt === null) return -1;
+				return dateDesc ? bt - at : at - bt;
+			});
+			return list;
+		}
 		list.sort((a, b) => {
 			const at = (a.document_title ?? '').toLowerCase();
 			const bt = (b.document_title ?? '').toLowerCase();
@@ -345,14 +371,19 @@
 						</colgroup>
 						<thead>
 							<tr style="background-color: var(--muted);">
-								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">
-									<button class="inline-flex items-center gap-1.5" type="button" onclick={() => (sortAsc = !sortAsc)}>
+								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);" aria-sort={sortKey === 'title' ? (sortAsc ? 'ascending' : 'descending') : 'none'}>
+									<button class="inline-flex items-center gap-1.5" type="button" onclick={toggleTitleSort} aria-label={tr('Urutkan berdasarkan judul')}>
 										<span>Artikel</span><ArrowDownUp size={13} strokeWidth={2.4} />
 									</button>
 								</th>
 								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">{tr("Media")}</th>
 								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Status</th>
-								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Terakhir Update</th>
+								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);" aria-sort={sortKey === 'updated' ? (dateDesc ? 'descending' : 'ascending') : 'none'}>
+									<button class="inline-flex items-center gap-1.5" type="button" onclick={toggleDateSort} aria-label={sortKey === 'updated' && !dateDesc ? tr('Urutkan dari yang terbaru') : tr('Urutkan dari yang terlama')}>
+										<span>Terakhir Update</span>
+										{#if sortKey === 'updated' && !dateDesc}<ArrowUp size={13} strokeWidth={2.4} />{:else}<ArrowDownUp size={13} strokeWidth={2.4} />{/if}
+									</button>
+								</th>
 								<th class="px-5 py-3.5 text-right text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Aksi</th>
 							</tr>
 						</thead>
