@@ -8,7 +8,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
-	import { sanitizeHtml } from '$lib/sanitize-html';
+	import RichTextEditor from '$lib/components/rich-text-editor.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
@@ -26,10 +26,6 @@
 
 	let doc = $state<any>(null);
 	let html = $state('');
-	// Pratinjau WAJIB disanitasi: isi HTML berasal dari dokumen yang bisa diedit
-	// siapa pun yang punya akses tulis, jadi script/handler/iframe jahat tidak
-	// boleh dieksekusi di browser pembaca.
-	const previewHtml = $derived(sanitizeHtml(html));
 	let loading = $state(true);
 	let busy = $state(false);
 	let msg = $state('');
@@ -128,20 +124,13 @@
 
 		<div class="mt-4 grid gap-4 lg:grid-cols-[2fr_1fr]">
 			<section class="app-card p-4">
-				<h2 class="text-sm font-semibold">Konten (HTML)</h2>
-				<textarea
-					class="mt-2 h-[520px] w-full resize-y rounded-md border border-input bg-background p-3 font-mono text-xs"
-					bind:value={html}
-				></textarea>
+				<div class="flex items-center justify-between">
+					<h2 class="text-sm font-semibold">Konten</h2>
+				</div>
+				<RichTextEditor bind:value={html} {brandId} disabled={busy} ariaLabel={tr('Isi artikel')} />
 			</section>
 
 			<div class="grid gap-4">
-				<section class="app-card p-4">
-					<h2 class="text-sm font-semibold">Preview</h2>
-					<div class="prose prose-sm mt-2 max-h-[240px] overflow-y-auto text-sm">
-						{@html previewHtml}
-					</div>
-				</section>
 
 				<section class="app-card p-4">
 					<h2 class="text-sm font-semibold">{tr("Riwayat versi (")}{(doc.versions ?? []).length})</h2>
