@@ -449,7 +449,7 @@
 
 <PageTitle title={tr("Eksplorasi Media")} />
 
-<div class="container">
+<div class="katalogMedia">
 	{#if err}<div class="errorBanner">{err}</div>{/if}
 
 	<!-- Header Eksplorasi Media -->

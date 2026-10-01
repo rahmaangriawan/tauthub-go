@@ -378,11 +378,15 @@ button.categoryPlusTag:focus-visible {
   flex-wrap: wrap;
   gap: 6px;
 }
-.container {
+/* Wadah halaman katalog. Namanya sengaja bukan "container": utility
+   "container" bawaan Tailwind memasang max-width per breakpoint sehingga
+   konten berhenti jauh dari tepi kanan di layar lebar. */
+.katalogMedia {
   display: flex;
   flex-direction: column;
   gap: 16px;
   width: 100%;
+  max-width: none;
 }
 .dewanPersBadge {
   display: inline-flex;
