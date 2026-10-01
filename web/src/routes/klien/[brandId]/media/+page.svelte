@@ -172,6 +172,12 @@
 		return { cls: 'releaseBadgeStandard', label: 'Standar', sub: '1 - 2 Hari', isSuper: false };
 	}
 
+	// Tooltip badge kecepatan: ambangnya sama dengan legenda di header kolom
+	// (Super Cepat < 3 jam, Cepat < 24 jam, Standar 1-2 hari).
+	function releaseTip(sub: string): string {
+		return tr('Estimasi terbit {waktu} setelah artikel dikirim.').replace('{waktu}', sub);
+	}
+
 	function getDa(m: Media): string | number {
 		if (m.seo_da != null && m.seo_da > 0) return m.seo_da;
 		const q = m.effective_quality ?? m.media_quality_score;
@@ -804,11 +810,13 @@
 
 								<td class="modernTd">
 									<div class="releaseStack">
-									<span class={speed.cls}>
-										{#if speed.isSuper}<Zap size={12} />{:else}<Clock size={12} />{/if}
-										<span>{speed.label}</span>
-									</span>
-								</div>
+										<Tooltip content={releaseTip(speed.sub)} label={releaseTip(speed.sub)} maxWidth={240}>
+										<span class={speed.cls}>
+											{#if speed.isSuper}<Zap size={12} />{:else}<Clock size={12} />{/if}
+											<span>{speed.label}</span>
+										</span>
+										</Tooltip>
+									</div>
 								</td>
 
 								<td class="modernTd"><span class="priceBoldText">Rp {fmt(m.client_price ?? m.price ?? 0)}</span></td>

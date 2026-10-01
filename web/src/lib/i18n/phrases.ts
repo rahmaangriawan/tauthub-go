@@ -31,6 +31,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Di iPhone/iPad, notifikasi baru aktif setelah app dipasang: tekan tombol Bagikan di Safari, pilih “Tambahkan ke Layar Utama”, lalu buka app dari ikon tersebut.": "On iPhone/iPad, notifications only work after installing the app: tap Share in Safari, choose “Add to Home Screen”, then open the app from that icon.",
   "Dibaca": "Read",
   "Empat pemeriksaan otomatis berjalan atas artikel: keamanan konten, kesehatan tautan, kemiripan teks, dan batas gaya bahasa.": "Four automatic checks run on the article: content safety, link health, text similarity, and writing-style limits.",
+  "Estimasi terbit {waktu} setelah artikel dikirim.": "Estimated to publish within {waktu} after the article is sent.",
   "Gagal memuat konfigurasi notifikasi.": "Failed to load notification configuration.",
   "Gagal memuat pengumuman.": "Failed to load announcements.",
   "Gagal memuat status notifikasi.": "Failed to load notification status.",
