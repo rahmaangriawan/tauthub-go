@@ -277,7 +277,6 @@
 		<Select
 			bind:value={statusFilter}
 			ariaLabel="Status kampanye"
-			placeholder={tr("Semua Status")}
 			minWidth={160}
 			onchange={() => (pageNum = 1)}
 			options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
