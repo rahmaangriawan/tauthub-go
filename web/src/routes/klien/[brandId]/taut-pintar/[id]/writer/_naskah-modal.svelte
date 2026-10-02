@@ -176,17 +176,18 @@
 	}
 
 	// ---------- validasi & simpan ----------
-	const alasan = $derived.by(() => {
+	// Alasan cover tampil di panel gambar; sisanya di footer.
+	const alasanCover = $derived(!cover ? tr('Gambar utama (thumbnail) wajib diunggah.') : '');
+	const alasanLain = $derived.by(() => {
 		const list: string[] = [];
 		if (!title.trim()) list.push(tr('Judul artikel wajib diisi.'));
 		if (editorStats.words === 0) list.push(tr('Isi artikel wajib ditulis atau diunggah.'));
-		if (!cover) list.push(tr('Gambar utama (thumbnail) wajib diunggah.'));
 		if (linkLimit > 0 && editorStats.links > linkLimit) {
 			list.push(`${tr('Tautan melebihi batas media.')} (${editorStats.links}/${linkLimit})`);
 		}
 		return list;
 	});
-	const canSave = $derived(alasan.length === 0 && !saving);
+	const canSave = $derived(!!cover && alasanLain.length === 0 && !saving);
 
 	function save() {
 		if (!canSave) return;
@@ -407,6 +408,15 @@
 					{#if coverError}
 						<p class="mt-2 text-xs" style="color: var(--destructive);">{coverError}</p>
 					{/if}
+					{#if !cover}
+						<p class="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs" style="color: var(--warning, #b45309);">
+							<CircleAlert size={13} class="flex-none" />
+							{alasanCover}
+							<button class="underline hover:no-underline" type="button" onclick={useFallbackCover}>
+								{tr('Pakai thumbnail default Tauthub')}
+							</button>
+						</p>
+					{/if}
 					<input
 						bind:this={coverInput}
 						type="file"
@@ -452,15 +462,10 @@
 		<div class="flex flex-wrap items-center gap-3 border-t px-5 py-3.5" style="border-color: var(--border);">
 			<button class="app-btn app-btn-soft" type="button" disabled={saving} onclick={close}>{tr('Batal')}</button>
 			<span class="flex-1"></span>
-			{#if alasan.length > 0}
+			{#if alasanLain.length > 0}
 				<p class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs" style="color: var(--warning, #b45309);">
 					<CircleAlert size={14} class="flex-none" />
-					<span class="truncate">{alasan.join(' ')}</span>
-					{#if !cover}
-						<button class="underline hover:no-underline" type="button" onclick={useFallbackCover}>
-							{tr('Pakai thumbnail default Tauthub')}
-						</button>
-					{/if}
+					<span class="truncate">{alasanLain.join(' ')}</span>
 				</p>
 			{:else if saveError}
 				<p class="text-xs" style="color: var(--destructive);">{saveError}</p>
