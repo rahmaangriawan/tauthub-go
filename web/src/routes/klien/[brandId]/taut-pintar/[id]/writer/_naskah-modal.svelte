@@ -62,6 +62,7 @@
 
 	let coverBusy = $state(false);
 	let coverError = $state('');
+	let coverNote = $state('');
 	let dragging = $state(false);
 	let coverInput = $state<HTMLInputElement | undefined>(undefined);
 	let docInput = $state<HTMLInputElement | undefined>(undefined);
@@ -102,12 +103,47 @@
 	});
 
 	// ---------- cover ----------
+	const KB = (b: number) => (b >= 1024 * 1024 ? (b / 1024 / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
+
+	// Kompres di browser sebelum diunggah: kanvas → WebP, sisi terpanjang
+	// dibatasi 1600 px. GIF dibiarkan (animasinya hilang bila dikonversi), dan
+	// bila hasil kompresi tidak lebih kecil, berkas asli yang dikirim.
+	async function kompresWebp(file: File): Promise<File> {
+		if (!file.type.startsWith('image/') || file.type === 'image/gif' || file.type === 'image/webp') return file;
+		try {
+			const bitmap = await createImageBitmap(file);
+			const maxSide = 1600;
+			const skala = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+			const w = Math.round(bitmap.width * skala);
+			const h = Math.round(bitmap.height * skala);
+			const canvas = document.createElement('canvas');
+			canvas.width = w;
+			canvas.height = h;
+			const ctx = canvas.getContext('2d');
+			if (!ctx) return file;
+			ctx.drawImage(bitmap, 0, 0, w, h);
+			bitmap.close?.();
+			const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.85));
+			if (!blob || blob.size >= file.size) return file;
+			return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.webp', { type: 'image/webp' });
+		} catch {
+			return file;
+		}
+	}
+
 	async function pickCover(file: File) {
 		if (!file || coverBusy || !file.type.startsWith('image/')) return;
 		coverBusy = true;
 		coverError = '';
+		coverNote = '';
 		try {
-			cover = await onUploadCover(file);
+			const siap = await kompresWebp(file);
+			const url = await onUploadCover(siap);
+			cover = url;
+			coverNote =
+				siap.size < file.size
+					? `${tr('Dikompres ke WebP:')} ${KB(file.size)} → ${KB(siap.size)}`
+					: `${tr('Diunggah sebagai')} ${siap.type === 'image/webp' ? 'WebP' : file.type.replace('image/', '').toUpperCase()} (${KB(siap.size)})`;
 		} catch {
 			coverError = tr('Gagal mengunggah gambar. Periksa koneksi lalu coba lagi.');
 		} finally {
@@ -124,6 +160,7 @@
 	function useFallbackCover() {
 		cover = ARTICLE_DEFAULT_COVER;
 		coverError = '';
+		coverNote = '';
 	}
 
 	// ---------- unggah dokumen ----------
@@ -376,7 +413,10 @@
 								class="absolute right-2 top-2 rounded-lg border bg-card p-1.5 hover:bg-secondary"
 								type="button"
 								aria-label={tr('Hapus gambar utama')}
-								onclick={() => (cover = null)}
+								onclick={() => {
+								cover = null;
+								coverNote = '';
+							}}
 							>
 								<Trash2 size={14} />
 							</button>
@@ -400,12 +440,14 @@
 							{:else}
 								<Upload size={22} style="color: var(--muted-foreground);" />
 							{/if}
-							<p class="mt-1 text-xs font-semibold">{tr('Unggah Gambar (JPG/PNG)')}</p>
-							<p class="text-[11px] text-muted-foreground">{tr('Media redaksi membutuhkan min. 1 gambar resolusi tinggi.')}</p>
+							<p class="mt-1 text-xs font-semibold">{tr('Klik, Tarik, atau Tempel Gambar')}</p>
+							<p class="text-[11px] text-muted-foreground">{tr('JPG/PNG · otomatis dikompres ke WebP')}</p>
 						</div>
 					{/if}
 					{#if coverError}
 						<p class="mt-2 text-xs" style="color: var(--destructive);">{coverError}</p>
+					{:else if coverNote}
+						<p class="mt-2 text-[11px] text-muted-foreground">{coverNote}</p>
 					{/if}
 					{#if !cover}
 						<div class="mt-2 text-center">
