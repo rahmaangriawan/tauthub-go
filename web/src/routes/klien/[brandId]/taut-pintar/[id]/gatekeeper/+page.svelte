@@ -6,7 +6,8 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Clock, LoaderCircle, ShieldAlert, ShieldCheck, TriangleAlert, Wallet, X } from '@lucide/svelte';
+	import { CircleAlert, Clock, LoaderCircle, ShieldAlert, ShieldCheck, TriangleAlert, Wallet, X } from '@lucide/svelte';
+	import { Tooltip } from 'bits-ui';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { sanitizeHtml } from '$lib/sanitize-html';
@@ -540,50 +541,92 @@
 			{/if}
 		</section>
 
-		<TautBottomBar>
-			<div class="flex flex-wrap gap-6">
+		<Tooltip.Provider delayDuration={0} skipDelayDuration={300}>
+			<TautBottomBar>
+				<!-- Kiri: Status & Kredit ringkas sejajar -->
+				<div class="flex flex-wrap items-center gap-4 sm:gap-6">
 					<div>
-						<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">STATUS KAMPANYE</p>
-						<p class="font-bold" style="color: {data?.canDistribute ? 'var(--success)' : 'var(--warning)'};">
-							{data?.canDistribute ? 'Siap Distribusi' : 'Terkunci (Butuh QC)'}
-						</p>
-						<p class="text-xs text-muted-foreground">
-							{data?.canDistribute
-								? 'Semua hard gate lulus (Illegal Content + Link Health).'
-								: tr('Illegal Content & Link Health harus Lulus untuk semua media.')}
-						</p>
+						<p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{tr('Status Kampanye')}</p>
+						<div class="flex items-center gap-1.5 font-bold" style="color: {data?.canDistribute ? 'var(--success)' : 'var(--warning)'};">
+							<span>{data?.canDistribute ? tr('Siap Distribusi') : tr('Terkunci (Butuh QC)')}</span>
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									{#snippet child({ props })}
+										<button
+											{...props}
+											type="button"
+											class="inline-flex cursor-pointer text-muted-foreground transition-colors hover:text-foreground"
+											aria-label={tr('Keterangan status')}
+										>
+											<CircleAlert size={14} />
+										</button>
+									{/snippet}
+								</Tooltip.Trigger>
+								<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+									<Tooltip.Arrow class="uiTipArrow" />
+									{data?.canDistribute
+										? tr('Semua hard gate lulus (Illegal Content + Link Health).')
+										: tr('Illegal Content & Link Health harus Lulus untuk semua media.')}
+								</Tooltip.Content>
+							</Tooltip.Root>
+						</div>
 					</div>
+
+					<div class="hidden h-7 w-px bg-border sm:block" aria-hidden="true"></div>
+
 					<div>
-						<p class="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-							KREDIT TOTAL DISTRIBUSI MEDIA <Wallet size={13} />
+						<p class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+							{tr('Kredit Total')} <Wallet size={11} />
 						</p>
-						<p class="text-xl font-bold">{fmtIdr(data?.totalCostTc ?? 0)} {tr("Kredit")}</p>
-						<p class="text-xs text-muted-foreground">Setara Rp {fmtIdr(data?.totalCostIdr ?? 0)}</p>
+						<div class="flex items-center gap-1.5 text-base font-bold">
+							<span>{fmtIdr(data?.totalCostTc ?? 0)} {tr("Kredit")}</span>
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									{#snippet child({ props })}
+										<button
+											{...props}
+											type="button"
+											class="inline-flex cursor-pointer text-muted-foreground transition-colors hover:text-foreground"
+											aria-label={tr('Keterangan nilai rupiah')}
+										>
+											<CircleAlert size={14} />
+										</button>
+									{/snippet}
+								</Tooltip.Trigger>
+								<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6}>
+									<Tooltip.Arrow class="uiTipArrow" />
+									{tr('Setara Rp')} {fmtIdr(data?.totalCostIdr ?? 0)}
+								</Tooltip.Content>
+							</Tooltip.Root>
+						</div>
 					</div>
 				</div>
-				<div class="flex flex-wrap items-center gap-3">
-					<div class="flex items-center gap-2" role="radiogroup" aria-label="Mode distribusi">
+
+				<!-- Kanan: Aksi distribusi (sejajar) -->
+				<div class="flex flex-wrap items-center gap-2 sm:gap-3">
+					<div class="flex items-center gap-1.5" role="radiogroup" aria-label={tr('Mode distribusi')}>
 						<button
-							class={publishMode === 'now' ? 'app-btn app-btn-primary' : 'app-btn app-btn-soft'}
+							class={publishMode === 'now' ? 'app-btn app-btn-primary !min-h-9 !px-3 !text-xs' : 'app-btn app-btn-soft !min-h-9 !px-3 !text-xs'}
 							type="button"
 							aria-pressed={publishMode === 'now'}
 							onclick={() => (publishModeChoice = 'now')}
-						>Terbitkan Langsung</button>
+						>{tr('Terbitkan Langsung')}</button>
 						<button
-							class={publishMode === 'scheduled' ? 'app-btn app-btn-primary' : 'app-btn app-btn-soft'}
+							class={publishMode === 'scheduled' ? 'app-btn app-btn-primary !min-h-9 !px-3 !text-xs' : 'app-btn app-btn-soft !min-h-9 !px-3 !text-xs'}
 							type="button"
 							aria-pressed={publishMode === 'scheduled'}
 							onclick={() => (publishModeChoice = 'scheduled')}
-						>Jadwalkan</button>
+						>{tr('Jadwalkan')}</button>
 					</div>
 					{#if blockingError}<p class="text-xs" style="color: var(--destructive);">{blockingError}</p>{/if}
-					<a class="app-btn app-btn-soft" href={backUrl}>{tr("Kembali (Revisi)")}</a>
-					<button class="app-btn app-btn-primary" type="button" disabled={!data?.canDistribute || distributing || Boolean(blockingError)} onclick={distribute}>
-						{#if distributing}<LoaderCircle size={16} class="animate-spin" />{:else}<ShieldCheck size={16} />{/if}
-						{distributing ? 'Memproses…' : 'Bayar & Distribusikan'}
+					<a class="app-btn app-btn-soft !min-h-9 !px-3 !text-xs" href={backUrl}>{tr("Kembali (Revisi)")}</a>
+					<button class="app-btn app-btn-primary !min-h-9 !px-4 !text-xs" type="button" disabled={!data?.canDistribute || distributing || Boolean(blockingError)} onclick={distribute}>
+						{#if distributing}<LoaderCircle size={15} class="animate-spin" />{:else}<ShieldCheck size={15} />{/if}
+						{distributing ? tr('Memproses…') : tr('Bayar & Distribusikan')}
 					</button>
 				</div>
-		</TautBottomBar>
+			</TautBottomBar>
+		</Tooltip.Provider>
 	{/if}
 </main>
 
