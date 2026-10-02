@@ -462,10 +462,10 @@
 		<div class="flex flex-wrap items-center gap-3 border-t px-5 py-3.5" style="border-color: var(--border);">
 			<button class="app-btn app-btn-soft" type="button" disabled={saving} onclick={close}>{tr('Batal')}</button>
 			<span class="flex-1"></span>
-			{#if alasanLain.length > 0}
-				<p class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs" style="color: var(--warning, #b45309);">
+			{#if alasanLain.length > 0 || !cover}
+				<p class="flex min-w-0 items-center gap-1.5 text-xs" style="color: var(--warning, #b45309);">
 					<CircleAlert size={14} class="flex-none" />
-					<span class="truncate">{alasanLain.join(' ')}</span>
+					<span class="truncate">{tr('Lengkapi data & thumbnail untuk menyimpan.')}</span>
 				</p>
 			{:else if saveError}
 				<p class="text-xs" style="color: var(--destructive);">{saveError}</p>
