@@ -1762,6 +1762,32 @@ func (d *Deps) bsPublishToWordpress(ctx context.Context, jobID string, connectio
 			payload["meta"] = meta
 		}
 	}
+	// Meta description juga dikirim ke kunci SEO plugin supaya tampil sebagai
+	// <meta name="description"> di artikel media, bukan hanya sebagai excerpt.
+	// Yoast dan RankMath mendaftarkan kuncinya untuk REST; plugin yang tidak
+	// memakai kunci itu akan mengabaikannya (tanpa error). Nilai dari custom
+	// fields media tetap menang bila sudah diisi.
+	if hasMeta && strings.TrimSpace(metaDesc) != "" {
+		meta, _ := payload["meta"].(map[string]any)
+		if meta == nil {
+			meta = map[string]any{}
+		}
+		if _, exists := meta["_yoast_wpseo_metadesc"]; !exists {
+			meta["_yoast_wpseo_metadesc"] = metaDesc
+		}
+		if _, exists := meta["rank_math_description"]; !exists {
+			meta["rank_math_description"] = metaDesc
+		}
+		if metaTitle, okTitle := document.raw("meta_title").(string); okTitle && strings.TrimSpace(metaTitle) != "" {
+			if _, exists := meta["_yoast_wpseo_title"]; !exists {
+				meta["_yoast_wpseo_title"] = metaTitle
+			}
+			if _, exists := meta["rank_math_title"]; !exists {
+				meta["rank_math_title"] = metaTitle
+			}
+		}
+		payload["meta"] = meta
+	}
 	basic := base64.StdEncoding.EncodeToString([]byte(connection.strOr("username", "") + ":" + secret))
 	headers := map[string]string{"Content-Type": "application/json", "Authorization": "Basic " + basic}
 
