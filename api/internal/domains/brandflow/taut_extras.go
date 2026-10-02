@@ -1,9 +1,13 @@
 package brandflow
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/xml"
+	"io"
 	"net/http"
 	"strings"
 
@@ -479,15 +483,112 @@ func (d *Deps) TautFilesUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // extractDocument: ekstraksi teks bahan referensi (port parseDocument).
-// TXT didukung native; PDF/DOCX butuh library ekstraksi yang belum tersedia.
+// TXT native; DOCX dibongkar dengan stdlib (arsip ZIP + XML Office Open XML);
+// PDF masih belum didukung (parser PDF butuh library pihak ketiga).
 func extractDocument(buffer []byte, mime string) (string, error) {
 	if mime == "text/plain" || mime == "text/csv" {
 		return truncateString(string(buffer), 100000), nil
 	}
+	if mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" {
+		return extractDocxText(buffer)
+	}
 	return "", &bfStatusError{
 		Status:  http.StatusUnprocessableEntity,
-		Message: "Parser dokumen " + mime + " belum tersedia di backend ini. Unggah TXT atau tempel isi artikel secara manual.",
+		Message: "Parser dokumen " + mime + " belum tersedia di backend ini. Unggah DOCX atau TXT, atau tempel isi artikel secara manual.",
 	}
+}
+
+// extractDocxText: ambil teks dari word/document.xml di dalam arsip DOCX.
+// DOCX = ZIP + XML Office Open XML: paragraf = <w:p>, teks = <w:t>, dengan
+// <w:br/> ganti baris dan <w:tab/> tab — semuanya cukup ditangani stdlib
+// (archive/zip + encoding/xml) tanpa dependensi pihak ketiga.
+func extractDocxText(buffer []byte) (string, error) {
+	zr, err := zip.NewReader(bytes.NewReader(buffer), int64(len(buffer)))
+	if err != nil {
+		return "", &bfStatusError{
+			Status:  http.StatusUnprocessableEntity,
+			Message: "DOCX tidak dapat dibuka — arsipnya rusak atau bukan berkas Office yang valid.",
+		}
+	}
+	var docFile *zip.File
+	for _, f := range zr.File {
+		if f.Name == "word/document.xml" {
+			docFile = f
+			break
+		}
+	}
+	if docFile == nil {
+		return "", &bfStatusError{
+			Status:  http.StatusUnprocessableEntity,
+			Message: "DOCX tidak berisi word/document.xml — kemungkinan bukan dokumen Word.",
+		}
+	}
+	rc, err := docFile.Open()
+	if err != nil {
+		return "", &bfStatusError{
+			Status:  http.StatusUnprocessableEntity,
+			Message: "Isi DOCX tidak dapat dibaca.",
+		}
+	}
+	defer rc.Close()
+	// Batas pengaman terhadap arsip jumbo: XML isi dibaca maksimal 32 MB.
+	xmlBytes, err := io.ReadAll(io.LimitReader(rc, 32*1024*1024))
+	if err != nil {
+		return "", &bfStatusError{
+			Status:  http.StatusUnprocessableEntity,
+			Message: "Isi DOCX tidak dapat dibaca.",
+		}
+	}
+
+	dec := xml.NewDecoder(bytes.NewReader(xmlBytes))
+	dec.Strict = false
+	var sb strings.Builder
+	inText := false
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", &bfStatusError{
+				Status:  http.StatusUnprocessableEntity,
+				Message: "Struktur XML di dalam DOCX tidak valid.",
+			}
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			switch t.Name.Local {
+			case "t":
+				inText = true
+			case "br":
+				sb.WriteString("\n")
+			case "tab":
+				sb.WriteString("\t")
+			}
+		case xml.CharData:
+			if inText {
+				sb.Write(t)
+			}
+		case xml.EndElement:
+			switch t.Name.Local {
+			case "t":
+				inText = false
+			case "p":
+				// Akhir paragraf → pemisah baris (tanpa baris kosong ganda).
+				if sb.Len() > 0 && !strings.HasSuffix(sb.String(), "\n") {
+					sb.WriteString("\n")
+				}
+			}
+		}
+	}
+	text := strings.TrimSpace(sb.String())
+	if text == "" {
+		return "", &bfStatusError{
+			Status:  http.StatusUnprocessableEntity,
+			Message: "Tidak ada teks yang bisa diekstrak dari DOCX ini.",
+		}
+	}
+	return truncateString(text, 100000), nil
 }
 
 // TautFileDelete: DELETE /v1/brands/{brandId}/taut/campaigns/{campaignId}/files/{fileId}
