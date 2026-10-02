@@ -15,7 +15,7 @@
 	type Connection = { id: string; name: string; base_url: string; status: string };
 
 	let connections = $state<Connection[]>([]);
-	let form = $state({ provider: 'wordpress' as 'wordpress' | 'emdash', name: '', base_url: '', username: '', application_password: '', access_token: '' });
+	let form = $state({ name: '', base_url: '', username: '', application_password: '' });
 	let busy = $state(false);
 	let publishStatus = $state<'draft' | 'publish'>('draft');
 	let message = $state('');
@@ -35,15 +35,11 @@
 		try {
 			const res = await apiRequest(`/v1/brands/${brandId}/cms-connections`, {
 				method: 'POST',
-				body: JSON.stringify(
-					form.provider === 'emdash'
-						? { provider: form.provider, name: form.name, base_url: form.base_url, access_token: form.access_token }
-						: { provider: form.provider, name: form.name, base_url: form.base_url, username: form.username, application_password: form.application_password }
-				)
+				body: JSON.stringify({ ...form, provider: 'wordpress' })
 			});
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan koneksi.')));
-			form = { provider: form.provider, name: '', base_url: '', username: '', application_password: '', access_token: '' };
-			message = tr('Koneksi tersimpan.');
+			form = { name: '', base_url: '', username: '', application_password: '' };
+			message = tr('Koneksi WordPress tersimpan.');
 			messageOk = true;
 			await load();
 		} catch (error) {
@@ -155,39 +151,26 @@
 	<div class="mt-4 grid gap-4 lg:grid-cols-3">
 		<div class="app-card p-5 lg:col-span-2">
 			{#if !connections.some((c) => c.status === 'active')}
-				<form class="mt-3 space-y-3" onsubmit={create}>
-					<label class="block">
-						<span class="text-xs font-medium text-muted-foreground">{tr('Jenis Integrasi')}</span>
-						<select class="app-input mt-1 w-full" bind:value={form.provider}>
-							<option value="wordpress">WordPress (REST API)</option>
-							<option value="emdash">EmDash CMS</option>
-						</select>
+				<form class="flex flex-col gap-3" onsubmit={create}>
+					<label class="flex flex-col gap-1 text-sm">
+						{tr('Nama koneksi')}
+						<input class="app-input" required bind:value={form.name} placeholder={tr('Website Giovani')} />
 					</label>
-					<label class="block">
-						<span class="text-xs font-medium text-muted-foreground">{tr('Nama Koneksi')}</span>
-						<input class="app-input mt-1 w-full" required placeholder={tr('Contoh: Situs Utama')} bind:value={form.name} />
+					<label class="flex flex-col gap-1 text-sm">
+						URL WordPress
+						<input class="app-input" required type="url" bind:value={form.base_url} placeholder="https://giovani.example" />
 					</label>
-					<label class="block">
-						<span class="text-xs font-medium text-muted-foreground">{tr('Base URL')}</span>
-						<input class="app-input mt-1 w-full" required placeholder="https://situs-anda.com" bind:value={form.base_url} />
+					<label class="flex flex-col gap-1 text-sm">
+						{tr('Username / email WordPress')}
+						<input class="app-input" required bind:value={form.username} />
 					</label>
-					{#if form.provider === 'wordpress'}
-						<label class="block">
-							<span class="text-xs font-medium text-muted-foreground">{tr('Username WordPress')}</span>
-							<input class="app-input mt-1 w-full" required bind:value={form.username} />
-						</label>
-						<label class="block">
-							<span class="text-xs font-medium text-muted-foreground">{tr('Application Password')}</span>
-							<input class="app-input mt-1 w-full" required type="password" bind:value={form.application_password} />
-						</label>
-					{:else}
-						<label class="block">
-							<span class="text-xs font-medium text-muted-foreground">Access Token EmDash</span>
-							<input class="app-input mt-1 w-full" required type="password" placeholder="ec_pat_…" bind:value={form.access_token} />
-							<span class="mt-1 block text-[11px] text-muted-foreground">{tr('Personal access token dari EmDash (menu Integrations → API).')}</span>
-						</label>
-					{/if}
-					<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? tr('Menyimpan…') : tr('Simpan Koneksi')}</button>
+					<label class="flex flex-col gap-1 text-sm">
+						Application Password
+						<input class="app-input" required type="password" bind:value={form.application_password} />
+					</label>
+					<button class="app-btn app-btn-primary self-start" disabled={busy} type="submit">
+						{busy ? tr('Menyimpan') : tr('Simpan Koneksi')}
+					</button>
 				</form>
 			{:else}
 				<p class="text-sm text-muted-foreground">
