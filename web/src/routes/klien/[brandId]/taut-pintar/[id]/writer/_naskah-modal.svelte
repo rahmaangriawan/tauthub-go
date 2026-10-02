@@ -10,6 +10,7 @@
 	import { ARTICLE_DEFAULT_COVER } from '$lib/media/cover';
 	import RichTextEditor from '$lib/components/rich-text-editor.svelte';
 	import Select from '$lib/components/select.svelte';
+	import { textToHtml } from '../../_shared';
 
 	let {
 		mediaName,
@@ -72,6 +73,7 @@
 	let genBusy = $state(false);
 	let genError = $state('');
 	let topic = $state('');
+	let teksTempel = $state('');
 
 	let panelEl = $state<HTMLElement | null>(null);
 
@@ -84,10 +86,18 @@
 			if (e.key === 'Escape') close();
 		};
 		const onPaste = (e: ClipboardEvent) => {
-			const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'));
-			if (file) {
+			const files = Array.from(e.clipboardData?.files ?? []);
+			const gambar = files.find((f) => f.type.startsWith('image/'));
+			if (gambar) {
 				e.preventDefault();
-				void pickCover(file);
+				void pickCover(gambar);
+				return;
+			}
+			const dokumen = files.find((f) => /\.[a-z0-9]+$/i.test(f.name) && /pdf|docx|txt/i.test(f.name.split('.').pop() ?? ''));
+			if (dokumen) {
+				e.preventDefault();
+				tab = 'unggah';
+				void uploadDoc(dokumen);
 			}
 		};
 		window.addEventListener('keydown', onKey);
@@ -193,6 +203,24 @@
 		} finally {
 			docBusy = false;
 		}
+	}
+
+	// Tempel teks artikel langsung: judul diambil dari baris pertama bila pendek,
+	// sisanya jadi isi — sama seperti pemisahan pada unggahan dokumen.
+	function pakaiTeksTempel() {
+		const teks = teksTempel.trim();
+		if (!teks) return;
+		const lines = teks.split('\n').map((l) => l.trim()).filter(Boolean);
+		let judul = title;
+		let isi = teks;
+		if (lines.length > 1 && lines[0].length <= 120) {
+			judul = lines[0];
+			isi = lines.slice(1).join('\n');
+		}
+		title = judul;
+		html = textToHtml(isi);
+		teksTempel = '';
+		tab = 'tulis';
 	}
 
 	// ---------- generate AI ----------
@@ -334,7 +362,7 @@
 								<div class="flex h-12 w-12 items-center justify-center rounded-full" style="background-color: var(--primary); color: var(--primary-foreground);">
 									<Upload size={20} />
 								</div>
-								<p class="mt-2 text-sm font-bold">{tr('Klik atau Tarik File ke sini')}</p>
+								<p class="mt-2 text-sm font-bold">{tr('Klik, Tarik, atau Tempel File ke sini')}</p>
 								<p class="text-xs text-muted-foreground">{tr('Mendukung DOCX, TXT, PDF (Maks 10MB)')}</p>
 							{/if}
 						</div>
@@ -343,6 +371,22 @@
 								<CircleAlert size={15} /> {docError}
 							</p>
 						{/if}
+
+						<div class="mt-6 w-full max-w-md text-left">
+							<div class="flex items-center gap-2">
+								<span class="h-px flex-1" style="background-color: var(--border);"></span>
+								<span class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{tr('atau tempel teks')}</span>
+								<span class="h-px flex-1" style="background-color: var(--border);"></span>
+							</div>
+							<textarea
+								class="app-input mt-3 min-h-[110px] w-full resize-y text-sm"
+								placeholder={tr('Tempel teks artikel di sini (Ctrl/Cmd+V). Baris pertama yang pendek akan jadi judul.')}
+								bind:value={teksTempel}
+							></textarea>
+							<button class="app-btn app-btn-soft mt-2 w-full" type="button" disabled={!teksTempel.trim()} onclick={pakaiTeksTempel}>
+								{tr('Gunakan Teks Ini')}
+							</button>
+						</div>
 					</div>
 				{:else}
 					<div class="flex h-full min-h-[320px] flex-col items-center py-4 text-center">
