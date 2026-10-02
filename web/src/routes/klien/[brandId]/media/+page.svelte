@@ -419,6 +419,14 @@
 		importText = '';
 	}
 
+	function proceedFromDetail(m: Media) {
+		selectedIds = new Set([...selectedIds, m.id]);
+		detail = null;
+		campaignName = m.name ? `Kampanye ${m.name}` : '';
+		campaignError = '';
+		campaignOpen = true;
+	}
+
 	async function createCampaign() {
 		const name = campaignName.trim();
 		if (name.length < 2) {
@@ -981,34 +989,41 @@
 	</div>
 {/if}
 
-<!-- Modal Nama Kampanye -->
-{#if campaignOpen}
-	<div class="modalOverlay" role="presentation" onclick={() => (campaignOpen = false)}>
-		<dialog open class="modalCard" aria-label={tr("Buat kampanye")} onclick={(e) => e.stopPropagation()}>
-			<div class="modalHeader">
-				<h2 class="modalTitle"><LayoutGrid size={17} />{tr("Simpan ke Kampanye")}</h2>
-				<button class="modalClose" type="button" aria-label={tr("Tutup")} onclick={() => (campaignOpen = false)}><X size={18} /></button>
-			</div>
-			<p class="modalHint">{tr("Anda memilih")}<strong>{selectedIds.size} media</strong>{tr(". Beri nama kampanye ini untuk masuk ke mode Dapur Produksi (The Writer).")}</p>
-			<label class="modalField">
-				<span>{tr("Nama Kampanye")}<b class="reqMark">*</b></span>
-				<input class="app-input" bind:value={campaignName} placeholder={tr("Contoh: Launching Produk Q3 2026")} />
-			</label>
-			{#if campaignError}<p class="modalError">{campaignError}</p>{/if}
-			<div class="modalFooter">
-				<button class="advFilterResetBtn" type="button" onclick={() => (campaignOpen = false)}>{tr("Batal")}</button>
-				<button class="advFilterApplyBtn" type="button" disabled={creating} onclick={() => void createCampaign()}>
-					{creating ? 'Membuat…' : tr('Buat Kampanye')}
-				</button>
-			</div>
-		</dialog>
-	</div>
-{/if}
+	<!-- Modal Nama Kampanye -->
+	{#if campaignOpen}
+		<div class="modalOverlay" role="presentation" onclick={() => (campaignOpen = false)}>
+			<dialog open class="modalCard" aria-label={tr("Buat kampanye")} onclick={(e) => e.stopPropagation()}>
+				<form onsubmit={(e) => { e.preventDefault(); void createCampaign(); }}>
+					<div class="modalHeader">
+						<h2 class="modalTitle"><LayoutGrid size={17} />{tr("Simpan ke Kampanye")}</h2>
+						<button class="modalClose" type="button" aria-label={tr("Tutup")} onclick={() => (campaignOpen = false)}><X size={18} /></button>
+					</div>
+					<p class="modalHint">{tr("Anda memilih")} <strong>{selectedIds.size} media</strong>{tr(". Beri nama kampanye ini untuk masuk ke mode Dapur Produksi (The Writer).")}</p>
+					<label class="modalField">
+						<span>{tr("Nama Kampanye")}<b class="reqMark">*</b></span>
+						<input class="app-input" bind:value={campaignName} placeholder={tr("Contoh: Launching Produk Q3 2026")} />
+					</label>
+					{#if campaignError}<p class="modalError">{campaignError}</p>{/if}
+					<div class="modalFooter">
+						<button class="advFilterResetBtn" type="button" onclick={() => (campaignOpen = false)}>{tr("Batal")}</button>
+						<button class="advFilterApplyBtn" type="submit" disabled={creating}>
+							{creating ? tr('Membuat…') : tr('Buat Kampanye')}
+						</button>
+					</div>
+				</form>
+			</dialog>
+		</div>
+	{/if}
 
-<!-- Modal Detail Media -->
-{#if detail}
-	<MediaDetailModal media={detail} onclose={() => (detail = null)} />
-{/if}
+	<!-- Modal Detail Media -->
+	{#if detail}
+		{@const d = detail}
+		<MediaDetailModal
+			media={d}
+			onclose={() => (detail = null)}
+			onProceed={() => proceedFromDetail(d)}
+		/>
+	{/if}
 
 <!-- Popover tr("Semua Kategori") — fixed agar tidak terpotong kartu tabel. -->
 {#if catPopoverId}

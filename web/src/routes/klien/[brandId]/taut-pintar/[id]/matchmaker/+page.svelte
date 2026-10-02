@@ -882,9 +882,22 @@
 	</TautBottomBar>
 </main>
 
-{#if detail}
-	<MediaDetailModal media={detail} onclose={() => (detail = null)} />
-{/if}
+	{#if detail}
+		{@const d = detail}
+		<MediaDetailModal
+			media={d}
+			onclose={() => (detail = null)}
+			onProceed={() => {
+				if (tab === 'custom') {
+					manualPicks = new Set([...manualPicks, d.id]);
+				} else {
+					selected = new Set([...selected, d.id]);
+				}
+				detail = null;
+				void finalize();
+			}}
+		/>
+	{/if}
 
 <!-- Popover kategori (+N) — fixed agar tidak terpotong kartu/wrapper tabel. -->
 {#if catPopoverId}
