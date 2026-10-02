@@ -85,20 +85,48 @@
 	// Jadwal per media: nilai tersimpan dari server digabung dengan perubahan user.
 	let scheduleEdits = $state<Record<string, string | null>>({});
 	let publishModeChoice = $state<'now' | 'scheduled' | null>(null);
-	// Modal jadwal yang sedang dibuka (media item target).
+	// Dropdown jadwal: menempel pada tombol yang diklik, diposisikan fixed
+	// supaya tidak mendorong baris tabel (tanpa pergeseran layout).
 	let scheduleTarget = $state<MediaItem | null>(null);
+	let schedulePos = $state({ left: 0, top: 0 });
+	const SCHEDULE_PANEL_WIDTH = 300;
+	const SCHEDULE_PANEL_HEIGHT = 268;
+
+	function openSchedule(item: MediaItem, trigger: HTMLElement) {
+		const rect = trigger.getBoundingClientRect();
+		const left = Math.min(
+			Math.max(8, rect.right - SCHEDULE_PANEL_WIDTH),
+			Math.max(8, window.innerWidth - SCHEDULE_PANEL_WIDTH - 8)
+		);
+		const spaceBelow = window.innerHeight - rect.bottom - 8;
+		const placeUp = spaceBelow < SCHEDULE_PANEL_HEIGHT && rect.top > spaceBelow;
+		const top = placeUp
+			? Math.max(8, rect.top - SCHEDULE_PANEL_HEIGHT - 6)
+			: rect.bottom + 6;
+		schedulePos = { left, top };
+		scheduleTarget = item;
+	}
 
 	$effect(() => {
 		if (!scheduleTarget) return;
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') scheduleTarget = null;
 		};
+		// Menutup saat halaman digulir/diubah ukurannya, seperti dropdown lain.
+		const onScroll = (event: Event) => {
+			const target = event.target as Node | null;
+			const panel = document.getElementById('schedule-dropdown');
+			if (target && panel && (target === panel || panel.contains(target))) return;
+			scheduleTarget = null;
+		};
+		const onResize = () => (scheduleTarget = null);
 		window.addEventListener('keydown', onKey);
-		const prev = document.body.style.overflow;
-		document.body.style.overflow = 'hidden';
+		window.addEventListener('scroll', onScroll, true);
+		window.addEventListener('resize', onResize);
 		return () => {
 			window.removeEventListener('keydown', onKey);
-		document.body.style.overflow = prev;
+			window.removeEventListener('scroll', onScroll, true);
+			window.removeEventListener('resize', onResize);
 		};
 	});
 
@@ -517,7 +545,7 @@
 										<button
 											class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs"
 											type="button"
-											onclick={() => (scheduleTarget = m)}
+											onclick={(e) => openSchedule(m, e.currentTarget as HTMLElement)}
 											aria-label={`Atur jadwal untuk ${m.name}`}
 										>
 											<Clock size={12} />
@@ -626,89 +654,58 @@
 
 {#if scheduleTarget}
 	{@const m = scheduleTarget}
-	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+	<!-- Latar transparan: klik di luar menutup dropdown. -->
+	<button class="fixed inset-0 z-30 cursor-default" type="button" aria-label={tr('Tutup jadwal')} onclick={() => (scheduleTarget = null)}></button>
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center p-4"
-		style="background-color: rgba(15, 23, 42, 0.45);"
+		id="schedule-dropdown"
+		class="fixed z-40 rounded-xl border p-3.5 shadow-xl"
+		style="left: {schedulePos.left}px; top: {schedulePos.top}px; width: {SCHEDULE_PANEL_WIDTH}px; border-color: var(--border); background-color: var(--card, #fff);"
 		role="dialog"
-		tabindex="-1"
-		aria-modal="true"
-		aria-labelledby="schedule-modal-title"
-		onclick={(e) => { if (e.target === e.currentTarget) scheduleTarget = null; }}
+		aria-label={tr('Atur Jadwal Distribusi')}
 	>
-		<div
-			class="flex w-full max-w-md flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
-			style="border-color: var(--border); background-color: var(--card, #fff);"
-		>
-			<!-- Header -->
-			<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
-				<div class="min-w-0">
-					<h3 id="schedule-modal-title" class="text-base font-semibold">{tr('Atur Jadwal Distribusi')}</h3>
-					<p class="mt-0.5 truncate text-xs text-muted-foreground">{tr('Media Target:')} <strong class="text-foreground">{m.name}</strong></p>
-				</div>
-				<button
-					class="rounded-lg p-1.5 hover:bg-secondary"
-					type="button"
-					aria-label={tr('Tutup')}
-					onclick={() => (scheduleTarget = null)}
-				>
-					<X size={18} />
-				</button>
+		<div class="flex items-start justify-between gap-2">
+			<div class="min-w-0">
+				<p class="text-xs font-bold">{tr('Atur Jadwal Distribusi')}</p>
+				<p class="mt-0.5 truncate text-[11px] text-muted-foreground">{m.name}</p>
 			</div>
-
-			<!-- Body -->
-			<div class="p-5">
-				<label class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground" for="schedule-datetime">
-					{tr('Pilih Tanggal & Waktu Terbit')}
-				</label>
-				<input
-					id="schedule-datetime"
-					type="datetime-local"
-					class="app-input mt-2 w-full text-sm"
-					aria-label={`Jadwal distribusi ${m.name}`}
-					value={scheduleByMedia[m.media_id] ? toLocalInput(scheduleByMedia[m.media_id] as string) : ''}
-					onchange={(e) => {
-						const v = (e.currentTarget as HTMLInputElement).value;
-						setSchedule(m.media_id, v ? new Date(v).toISOString() : null);
-					}}
-				/>
-
-				<p class="mt-3.5 text-xs font-semibold text-muted-foreground">{tr('Pintasan Cepat:')}</p>
-				<div class="mt-1.5 flex flex-wrap gap-1.5">
-					<button
-						class={!scheduleByMedia[m.media_id] ? 'app-btn app-btn-primary !min-h-8 !px-2.5 !text-xs' : 'app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs'}
-						type="button"
-						onclick={() => setSchedule(m.media_id, null)}
-					>
-						<Clock size={12} /> {tr('Sekarang')}
-					</button>
-					{#each [
-						['+1 Jam', 60],
-						['+24 Jam', 1440],
-						['+3 Hari', 4320]
-					] as [label, mins] (label)}
-						<button
-							class="app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs"
-							type="button"
-							onclick={() => setSchedule(m.media_id, new Date(Date.now() + (mins as number) * 60000).toISOString())}
-						>
-							{label}
-						</button>
-					{/each}
-				</div>
-
-				<div class="mt-4 rounded-lg p-3 text-xs leading-relaxed" style="background-color: var(--muted); color: var(--muted-foreground);">
-					<p>{tr('Jadwal ini dipakai pada mode "Jadwalkan". Jika memilih "Terbitkan Langsung", artikel akan diproses segera setelah pembayaran.')}</p>
-				</div>
-			</div>
-
-			<!-- Footer -->
-			<div class="flex items-center justify-end gap-2 border-t px-5 py-3.5" style="border-color: var(--border);">
-				<button class="app-btn app-btn-primary !min-h-9 !px-4 !text-xs" type="button" onclick={() => (scheduleTarget = null)}>
-					{tr('Selesai')}
-				</button>
-			</div>
+			<button class="rounded-md p-1 hover:bg-secondary" type="button" aria-label={tr('Tutup')} onclick={() => (scheduleTarget = null)}>
+				<X size={14} />
+			</button>
 		</div>
+
+		<label class="mt-3 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground" for="schedule-datetime">
+			{tr('Tanggal & Waktu')}
+		</label>
+		<input
+			id="schedule-datetime"
+			type="datetime-local"
+			class="app-input mt-1.5 w-full !text-xs"
+			aria-label={`Jadwal distribusi ${m.name}`}
+			value={scheduleByMedia[m.media_id] ? toLocalInput(scheduleByMedia[m.media_id] as string) : ''}
+			onchange={(e) => {
+				const v = (e.currentTarget as HTMLInputElement).value;
+				setSchedule(m.media_id, v ? new Date(v).toISOString() : null);
+			}}
+		/>
+
+		<div class="mt-2.5 flex flex-wrap gap-1.5">
+			<button
+				class={!scheduleByMedia[m.media_id] ? 'app-btn app-btn-primary !min-h-7 !px-2 !text-xs' : 'app-btn app-btn-soft !min-h-7 !px-2 !text-xs'}
+				type="button"
+				onclick={() => setSchedule(m.media_id, null)}
+			><Clock size={11} /> {tr('Sekarang')}</button>
+			{#each [['+1 Jam', 60], ['+24 Jam', 1440], ['+3 Hari', 4320]] as [label, mins] (label)}
+				<button
+					class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs"
+					type="button"
+					onclick={() => setSchedule(m.media_id, new Date(Date.now() + (mins as number) * 60000).toISOString())}
+				>{label}</button>
+			{/each}
+		</div>
+
+		<p class="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
+			{tr('Dipakai pada mode Jadwalkan. Kosong = terbit segera setelah pembayaran.')}
+		</p>
 	</div>
 {/if}
 
