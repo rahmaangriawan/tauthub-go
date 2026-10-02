@@ -402,36 +402,36 @@
 						</div>
 					</div>
 				{:else}
-					<div class="flex h-full min-h-[320px] flex-col items-center py-4 text-center">
-						<div class="flex h-12 w-12 items-center justify-center rounded-xl" style="background-color: var(--accent-soft, #f3e8ff); color: var(--accent);">
-							<Sparkles size={22} />
-						</div>
-						<h3 class="mt-3 text-xl font-bold">{tr('Delegasikan pada The Writer')}</h3>
-						<p class="mt-2 max-w-md text-sm text-muted-foreground">
-							{tr('Cukup berikan konteks singkat, AI kami akan merangkai artikel yang utuh, relevan, dan teroptimasi SEO.')}
-						</p>
-						<div class="mt-5 w-full rounded-lg p-3 text-left text-xs" style="background-color: var(--accent-soft, #eef2ff);">
-							<p class="flex items-center gap-1.5 font-semibold" style="color: var(--primary);">
-								<Info size={14} /> {tr('Penyesuaian Gaya Bahasa Otomatis')}
-							</p>
-							<p class="mt-1 leading-relaxed" style="color: var(--primary);">
-								{tr('AI Tauthub otomatis menyesuaikan gaya tulisan mengikuti kaidah media target — berita jurnalistik untuk media mainstream, format santai dengan heading untuk blog.')}
-							</p>
-						</div>
-						<div class="mt-5 w-full text-left">
-							<label class="text-sm font-semibold" for="naskah-topik">
-								{tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
-							</label>
-							<div class="relative mt-2">
-								<textarea
-									id="naskah-topik"
-									class="app-input min-h-[120px] w-full resize-y pr-10"
-									placeholder={tr('Contoh: Buatkan artikel pengumuman peluncuran software akuntansi baru dari PT Maju Bersama. Tekankan pada fitur rekonsiliasi otomatis dan targetkan pembaca UMKM…')}
-									bind:value={topic}
-									maxlength={2000}
-								></textarea>
-								<Sparkles size={16} class="absolute bottom-3 right-3" style="color: var(--accent);" />
+						<div class="flex h-full min-h-[320px] flex-col items-center py-4 text-center">
+							<div class="flex h-12 w-12 items-center justify-center rounded-xl" style="background-color: var(--primary); color: #ffffff;">
+								<Sparkles size={22} />
 							</div>
+							<h3 class="mt-3 text-xl font-bold">{tr('Delegasikan pada The Writer')}</h3>
+							<p class="mt-2 max-w-md text-sm text-muted-foreground">
+								{tr('Cukup berikan konteks singkat, AI kami akan merangkai artikel yang utuh, relevan, dan teroptimasi SEO.')}
+							</p>
+							<div class="mt-5 w-full rounded-lg p-3 text-left text-xs" style="background-color: var(--accent); color: var(--accent-foreground);">
+								<p class="flex items-center gap-1.5 font-semibold" style="color: var(--primary);">
+									<Info size={14} /> {tr('Penyesuaian Gaya Bahasa Otomatis')}
+								</p>
+								<p class="mt-1 leading-relaxed" style="color: var(--foreground);">
+									{tr('AI Tauthub otomatis menyesuaikan gaya tulisan mengikuti kaidah media target: berita jurnalistik untuk media mainstream, format santai dengan heading untuk blog.')}
+								</p>
+							</div>
+							<div class="mt-5 w-full text-left">
+								<label class="text-sm font-semibold" for="naskah-topik">
+									{tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
+								</label>
+								<div class="relative mt-2">
+									<textarea
+										id="naskah-topik"
+										class="app-input min-h-[120px] w-full resize-y pr-10"
+										placeholder={tr('Contoh: Buatkan artikel pengumuman peluncuran software akuntansi baru dari PT Maju Bersama. Tekankan pada fitur rekonsiliasi otomatis dan targetkan pembaca UMKM…')}
+										bind:value={topic}
+										maxlength={2000}
+									></textarea>
+									<Sparkles size={16} class="absolute bottom-3 right-3 text-muted-foreground" />
+								</div>
 							{#if genError}
 								<p class="mt-2 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">
 									<CircleAlert size={15} /> {genError}

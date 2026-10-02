@@ -13,7 +13,7 @@ export const PHRASE_EN: Record<string, string> = {
   "1 Kredit": "1 Credit",
   "404 berarti halaman tidak ditemukan di alamatnya. Penyebab umum: artikel dihapus atau ditarik dari situs media, atau alamat artikelnya berubah. Tautan seperti ini bisa diajukan penggantiannya.": "404 means the page was not found at its address. Common causes: the article was deleted or withdrawn from the media site, or the article's address changed. Links like this can be submitted for replacement.",
   "75% × Harga Pengajuan": "75% × Submitted price",
-  "AI Tauthub otomatis menyesuaikan gaya tulisan mengikuti kaidah media target — berita jurnalistik untuk media mainstream, format santai dengan heading untuk blog.": "Tauthub AI automatically adapts the writing style to the target media's standards — journalistic news for mainstream media, a relaxed format with headings for blogs.",
+  "AI Tauthub otomatis menyesuaikan gaya tulisan mengikuti kaidah media target: berita jurnalistik untuk media mainstream, format santai dengan heading untuk blog.": "Tauthub AI automatically adapts the writing style to the target media's standards: journalistic news for mainstream media, a relaxed format with headings for blogs.",
   "Aktifkan notifikasi di perangkat ini": "Enable notifications on this device",
   "Alur kerja Tauthub dan standar yang harus dilewati artikel Anda.": "How Tauthub works and the standards your article has to pass.",
   "Artikel yang tidak lolos hard gate tidak bisa didistribusikan. Perbaiki di editor lalu jalankan pemeriksaan ulang — tidak ada biaya tambahan sampai publikasinya sah.": "Articles that fail a hard gate cannot be distributed. Fix them in the editor and run the checks again — there is no extra charge until the publication is valid.",
