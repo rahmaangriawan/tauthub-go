@@ -5,10 +5,18 @@
 	// (mis. sisa deep link ke fitur yang sudah ditiadakan: paket, intake,
 	// pr-calculator, chat, history). Section yang ada route-nya tidak pernah
 	// masuk ke sini.
+	import { error } from '@sveltejs/kit';
 	import { page } from '$app/state';
 	import { Construction } from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 
+	// Section yang bukan fitur portal klien → 404, bukan kartu "segera hadir".
+	// 'integrations' milik portal mitra, jadi mustahil diakses klien.
+	// Membaca page.params langsung (bukan lewat $derived) supaya tidak ada
+	// peringatan snapshot; nilainya sama saat init.
+	if (new Set(['integrations', 'integrasi']).has(page.params.section as string)) {
+		error(404, tr('Halaman tidak ditemukan.'));
+	}
 	const section = $derived(page.params.section as string);
 	const title = $derived(section.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
 </script>
