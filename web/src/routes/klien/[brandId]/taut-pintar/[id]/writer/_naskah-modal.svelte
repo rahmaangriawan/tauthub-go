@@ -176,8 +176,7 @@
 	}
 
 	// ---------- validasi & simpan ----------
-	// Alasan cover tampil di panel gambar; sisanya di footer.
-	const alasanCover = $derived(!cover ? tr('Gambar utama (thumbnail) wajib diunggah.') : '');
+	// Sisa alasan (selain cover) tampil di footer sebagai satu pesan singkat.
 	const alasanLain = $derived.by(() => {
 		const list: string[] = [];
 		if (!title.trim()) list.push(tr('Judul artikel wajib diisi.'));
@@ -409,13 +408,11 @@
 						<p class="mt-2 text-xs" style="color: var(--destructive);">{coverError}</p>
 					{/if}
 					{#if !cover}
-						<p class="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs" style="color: var(--warning, #b45309);">
-							<CircleAlert size={13} class="flex-none" />
-							{alasanCover}
-							<button class="underline hover:no-underline" type="button" onclick={useFallbackCover}>
+						<div class="mt-2 text-center">
+							<button class="text-xs underline hover:no-underline" type="button" onclick={useFallbackCover}>
 								{tr('Pakai thumbnail default Tauthub')}
 							</button>
-						</p>
+						</div>
 					{/if}
 					<input
 						bind:this={coverInput}
