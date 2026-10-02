@@ -183,15 +183,26 @@
   border-radius: 6px;
   transition: all 0.12s ease;
 }
+.bookmarkActionBtn svg {
+  transition: fill 0.12s ease;
+}
 .bookmarkActionBtn:hover {
   color: #2563eb;
   background: #eff6ff;
 }
-.bookmarkActionBtnActive {
-  color: #2563eb !important;
+.bookmarkActionBtn:hover svg,
+.bookmarkActionBtn:hover svg path,
+.bookmarkActionBtnActive svg,
+.bookmarkActionBtnActive svg path {
+  fill: currentColor;
 }
 .bookmarkActionBtnActive {
   color: #2563eb !important;
+  background: #eff6ff;
+}
+.bookmarkActionBtnActive:hover {
+  color: #1d4ed8 !important;
+  background: #dbeafe;
 }
 .bookmarkCardItem {
   display: flex;
