@@ -253,6 +253,19 @@
 	});
 	const canSave = $derived(!!cover && alasanLain.length === 0 && !saving);
 
+	// Pesan footer mengikuti apa yang masih kurang, bukan kalimat tetap.
+	const pesanKurang = $derived.by(() => {
+		if (linkLimit > 0 && editorStats.links > linkLimit) {
+			return `${tr('Kurangi tautan agar sesuai batas media.')} (${editorStats.links}/${linkLimit})`;
+		}
+		const bagian: string[] = [];
+		if (!title.trim()) bagian.push(tr('judul'));
+		if (editorStats.words === 0) bagian.push(tr('artikel'));
+		if (!cover) bagian.push(tr('thumbnail'));
+		if (bagian.length === 0) return '';
+		return `${tr('Lengkapi')} ${bagian.join(' & ')} ${tr('untuk menyimpan.')}`;
+	});
+
 	function save() {
 		if (!canSave) return;
 		onSave(title.trim(), html, cover, category, meta.trim());
@@ -545,10 +558,10 @@
 		<div class="flex flex-wrap items-center gap-3 border-t px-5 py-3.5" style="border-color: var(--border);">
 			<button class="app-btn app-btn-soft" type="button" disabled={saving} onclick={close}>{tr('Batal')}</button>
 			<span class="flex-1"></span>
-			{#if alasanLain.length > 0 || !cover}
+			{#if pesanKurang}
 				<p class="flex min-w-0 items-center gap-1.5 text-xs" style="color: var(--warning, #b45309);">
 					<CircleAlert size={14} class="flex-none" />
-					<span class="truncate">{tr('Lengkapi data & thumbnail untuk menyimpan.')}</span>
+					<span class="truncate">{pesanKurang}</span>
 				</p>
 			{:else if saveError}
 				<p class="text-xs" style="color: var(--destructive);">{saveError}</p>
