@@ -426,22 +426,15 @@
 							{/if}
 						</div>
 
-						{#if imageError}
-							<p class="mt-3 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">
-								<CircleAlert size={15} /> {imageError}
-							</p>
-						{/if}
-					</div>
-
-					<!-- Footer -->
-					<div class="flex items-center justify-end gap-2 border-t px-5 py-3.5" style="border-color: var(--border);">
-						<button class="app-btn app-btn-soft !min-h-9 !px-4 !text-xs" type="button" disabled={imageBusy} onclick={() => (imageModalOpen = false)}>
-							{tr('Batal')}
-						</button>
+							{#if imageError}
+								<p class="mt-3 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">
+									<CircleAlert size={15} /> {imageError}
+								</p>
+							{/if}
+						</div>
 					</div>
 				</div>
-			</div>
-		{/if}
+			{/if}
 	</div>
 
 <style>
