@@ -82,7 +82,9 @@
 		const placeUp = spaceBelow < Math.min(estimated, 180) && spaceAbove > spaceBelow;
 		const available = placeUp ? spaceAbove : spaceBelow;
 		placement = placeUp ? 'up' : 'down';
-		menuHeight = Math.max(120, Math.min(estimated, available));
+		// Tinggi mengikuti isi; daftar pendek jangan dipaksa setinggi beberapa
+		// baris hanya karena lantai minimum.
+		menuHeight = Math.min(estimated, available);
 		pos = { left, top: placeUp ? rect.top - gap - menuHeight : rect.bottom + gap, width };
 		query = '';
 		activeIndex = Math.max(
@@ -110,7 +112,7 @@
 		const wanted = Math.min(natural, menuMaxHeight);
 		const placeUp = spaceBelow < Math.min(wanted, 180) && spaceAbove > spaceBelow;
 		const available = placeUp ? spaceAbove : spaceBelow;
-		const height = Math.max(120, Math.min(wanted, available));
+		const height = Math.min(wanted, available);
 		placement = placeUp ? 'up' : 'down';
 		menuHeight = height;
 		pos = { ...pos, top: placeUp ? rect.top - gap - height : rect.bottom + gap };
