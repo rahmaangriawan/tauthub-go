@@ -85,8 +85,22 @@
 	// Jadwal per media: nilai tersimpan dari server digabung dengan perubahan user.
 	let scheduleEdits = $state<Record<string, string | null>>({});
 	let publishModeChoice = $state<'now' | 'scheduled' | null>(null);
-	// Jadwal popover yang sedang dibuka (media_id).
-	let openSchedule = $state<string | null>(null);
+	// Modal jadwal yang sedang dibuka (media item target).
+	let scheduleTarget = $state<MediaItem | null>(null);
+
+	$effect(() => {
+		if (!scheduleTarget) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') scheduleTarget = null;
+		};
+		window.addEventListener('keydown', onKey);
+		const prev = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			window.removeEventListener('keydown', onKey);
+		document.body.style.overflow = prev;
+		};
+	});
 
 	let pollTimer: number | null = null;
 	const savedSchedule = $derived(
@@ -503,32 +517,12 @@
 										<button
 											class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs"
 											type="button"
-											onclick={() => (openSchedule = openSchedule === m.media_id ? null : m.media_id)}
+											onclick={() => (scheduleTarget = m)}
+											aria-label={`Atur jadwal untuk ${m.name}`}
 										>
-											<Clock size={12} />{toJakartaDisplay(scheduleByMedia[m.media_id] ?? null) ?? 'Sekarang'}
+											<Clock size={12} />
+											<span>{toJakartaDisplay(scheduleByMedia[m.media_id] ?? null) ?? tr('Sekarang')}</span>
 										</button>
-										{#if openSchedule === m.media_id}
-											<div class="mt-2 w-[280px] rounded-lg border p-3">
-												<p class="text-xs font-bold">{tr("Jadwal terbit di media mitra")}</p>
-												<input
-													type="datetime-local"
-													class="app-input mt-2 w-full"
-													aria-label={`Jadwal distribusi ${m.name}`}
-													value={scheduleByMedia[m.media_id] ? toLocalInput(scheduleByMedia[m.media_id] as string) : ''}
-													onchange={(e) => {
-														const v = (e.currentTarget as HTMLInputElement).value;
-														setSchedule(m.media_id, v ? new Date(v).toISOString() : null);
-													}}
-												/>
-												<div class="mt-2 flex flex-wrap gap-1">
-													<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => setSchedule(m.media_id, null)}>Sekarang</button>
-													{#each [['+1 jam', 60], ['+24 jam', 1440], ['+3 hari', 4320]] as [label, mins] (label)}
-														<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => setSchedule(m.media_id, new Date(Date.now() + (mins as number) * 60000).toISOString())}>{label}</button>
-													{/each}
-												</div>
-												<p class="mt-2 text-xs text-muted-foreground">{tr("Dipakai hanya pada mode Jadwalkan. Kosong = terbit segera setelah pembayaran.")}</p>
-											</div>
-										{/if}
 									</td>
 									<td class="px-3 py-2">
 										<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => void openMockup(m)}>Tinjau Artikel</button>
@@ -629,6 +623,96 @@
 		</Tooltip.Provider>
 	{/if}
 </main>
+
+{#if scheduleTarget}
+	{@const m = scheduleTarget}
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center p-4"
+		style="background-color: rgba(15, 23, 42, 0.45);"
+		role="dialog"
+		tabindex="-1"
+		aria-modal="true"
+		aria-labelledby="schedule-modal-title"
+		onclick={(e) => { if (e.target === e.currentTarget) scheduleTarget = null; }}
+	>
+		<div
+			class="flex w-full max-w-md flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
+			style="border-color: var(--border); background-color: var(--card, #fff);"
+		>
+			<!-- Header -->
+			<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
+				<div class="min-w-0">
+					<h3 id="schedule-modal-title" class="text-base font-semibold">{tr('Atur Jadwal Distribusi')}</h3>
+					<p class="mt-0.5 truncate text-xs text-muted-foreground">{tr('Media Target:')} <strong class="text-foreground">{m.name}</strong></p>
+				</div>
+				<button
+					class="rounded-lg p-1.5 hover:bg-secondary"
+					type="button"
+					aria-label={tr('Tutup')}
+					onclick={() => (scheduleTarget = null)}
+				>
+					<X size={18} />
+				</button>
+			</div>
+
+			<!-- Body -->
+			<div class="p-5">
+				<label class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground" for="schedule-datetime">
+					{tr('Pilih Tanggal & Waktu Terbit')}
+				</label>
+				<input
+					id="schedule-datetime"
+					type="datetime-local"
+					class="app-input mt-2 w-full text-sm"
+					aria-label={`Jadwal distribusi ${m.name}`}
+					value={scheduleByMedia[m.media_id] ? toLocalInput(scheduleByMedia[m.media_id] as string) : ''}
+					onchange={(e) => {
+						const v = (e.currentTarget as HTMLInputElement).value;
+						setSchedule(m.media_id, v ? new Date(v).toISOString() : null);
+					}}
+				/>
+
+				<p class="mt-3.5 text-xs font-semibold text-muted-foreground">{tr('Pintasan Cepat:')}</p>
+				<div class="mt-1.5 flex flex-wrap gap-1.5">
+					<button
+						class={!scheduleByMedia[m.media_id] ? 'app-btn app-btn-primary !min-h-8 !px-2.5 !text-xs' : 'app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs'}
+						type="button"
+						onclick={() => setSchedule(m.media_id, null)}
+					>
+						<Clock size={12} /> {tr('Sekarang')}
+					</button>
+					{#each [
+						['+1 Jam', 60],
+						['+24 Jam', 1440],
+						['+3 Hari', 4320]
+					] as [label, mins] (label)}
+						<button
+							class="app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs"
+							type="button"
+							onclick={() => setSchedule(m.media_id, new Date(Date.now() + (mins as number) * 60000).toISOString())}
+						>
+							{label}
+						</button>
+					{/each}
+				</div>
+
+				<div class="mt-4 rounded-lg p-3 text-xs leading-relaxed" style="background-color: var(--muted); color: var(--muted-foreground);">
+					<p>{tr('Jadwal ini dipakai pada mode "Jadwalkan". Jika memilih "Terbitkan Langsung", artikel akan diproses segera setelah pembayaran.')}</p>
+				</div>
+			</div>
+
+			<!-- Footer -->
+			<div class="flex items-center justify-end gap-2 border-t px-5 py-3.5" style="border-color: var(--border);">
+				<button class="app-btn app-btn-primary !min-h-9 !px-4 !text-xs" type="button" onclick={() => (scheduleTarget = null)}>
+					{tr('Selesai')}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+
 
 {#if preview}
 	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="dialog" aria-modal="true" aria-label={`Mockup artikel ${preview.mediaName}`}>
