@@ -1165,9 +1165,13 @@ func (d *Deps) peRunCMS(ctx context.Context, publication, media, document, versi
 	content, html := peRenderedHTML(version, publicOrigin)
 
 	var publishErr error
-	if integrationType == "webhook" {
+	switch integrationType {
+	case "webhook":
 		publishErr = d.bsPublishToWebhook(ctx, jobID, connection, document, snapshot, secret, content, html)
-	} else {
+	case "emdash":
+		publishErr = d.pePublishToEmdash(ctx, jobID, connection.strOr("base_url", ""), secret,
+			jobRecord.strOr("remote_post_id", ""), document, content)
+	default:
 		publishErr = d.bsPublishToWordpress(ctx, jobID, connection, jobRecord, document, snapshot, secret, html)
 	}
 	if publishErr != nil {

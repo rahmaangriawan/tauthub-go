@@ -129,9 +129,9 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 	provider := "wordpress"
 	if raw, ok := body["provider"]; ok {
 		s, isStr := raw.(string)
-		if !isStr || (s != "wordpress" && s != "webhook") {
+		if !isStr || (s != "wordpress" && s != "webhook" && s != "emdash") {
 			// null pun ditolak zod (default hanya berlaku untuk undefined).
-			d.cmsError(w, errUnprocessable("Invalid option: expected one of \"wordpress\"|\"webhook\""))
+			d.cmsError(w, errUnprocessable("Invalid option: expected one of \"wordpress\"|\"webhook\"|\"emdash\""))
 			return
 		}
 		provider = s

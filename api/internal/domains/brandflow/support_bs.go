@@ -443,6 +443,9 @@ func (d *Deps) bsTestCMSConnection(ctx context.Context, conn bsRow) (string, str
 	if conn.strOr("provider", "wordpress") == "webhook" {
 		return d.bsTestWebhook(ctx, conn)
 	}
+	if conn.strOr("provider", "wordpress") == "emdash" {
+		return d.bsTestEmdash(ctx, conn)
+	}
 	return d.bsTestWordPress(ctx, conn)
 }
 
