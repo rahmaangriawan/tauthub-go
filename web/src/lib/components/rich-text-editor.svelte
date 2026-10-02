@@ -13,13 +13,16 @@
 		brandId,
 		disabled = false,
 		minHeight = 420,
-		ariaLabel
+		ariaLabel,
+		stats = $bindable({ words: 0, links: 0, images: 0 })
 	}: {
 		value?: string;
 		brandId: string;
 		disabled?: boolean;
 		minHeight?: number;
 		ariaLabel?: string;
+		/** Statistik isi (kata, tautan aktif, gambar) — dihitung saat konten berubah. */
+		stats?: { words: number; links: number; images: number };
 	} = $props();
 
 	let bodyEl = $state<HTMLDivElement | null>(null);
@@ -54,7 +57,22 @@
 		if (!bodyEl) return;
 		lastExternal = bodyEl.innerHTML;
 		value = bodyEl.innerHTML;
+		publishStats();
 	}
+
+	// Statistik isi untuk footer pemanggil: kata, tautan aktif, gambar.
+	function publishStats() {
+		if (!bodyEl) return;
+		const text = (bodyEl.innerText ?? '').replace(/\s+/g, ' ').trim();
+		stats.words = text ? text.split(' ').length : 0;
+		stats.links = bodyEl.querySelectorAll('a[href]').length;
+		stats.images = bodyEl.querySelectorAll('img').length;
+	}
+
+	$effect(() => {
+		// Setelah konten terisi/diganti dari luar, statistik ikut diperbarui.
+		if (bodyEl) publishStats();
+	});
 
 	function exec(cmd: string, arg?: string) {
 		const body = bodyEl;

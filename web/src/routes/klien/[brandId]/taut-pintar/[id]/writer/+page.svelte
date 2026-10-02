@@ -11,7 +11,7 @@
 	import { apiRequest, getAccessToken, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
 	import TautBottomBar from '../../_bottom-bar.svelte';
-	import EditorModal from './_editor-modal.svelte';
+	import NaskahModal from './_naskah-modal.svelte';
 	import QcPanel from './_qc-panel.svelte';
 	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, buildTrackedUrl, stripScheme, withScheme, textToHtml, toLocalInput } from '../../_shared';
 	import { ARTICLE_DEFAULT_COVER } from '$lib/media/cover';
@@ -106,13 +106,13 @@
 	let editor = $state<{
 		mediaId: string;
 		mediaName: string;
+		tab: 'tulis' | 'unggah' | 'generate';
 		title: string;
 		html: string;
 		cover: string | null;
 		category: string | null;
 		metaDescription: string | null;
 		linkLimit: number;
-		allowEmbed: boolean;
 	} | null>(null);
 	let editorSaving = $state(false);
 	let editorError = $state('');
@@ -454,48 +454,67 @@
 			editor = {
 				mediaId: item.media_id,
 				mediaName: item.name,
+				tab: 'tulis',
 				title: d.title ?? '',
 				html: d.content_html ?? '',
 				cover: d.featured_image_url ?? null,
 				category: d.category ?? null,
 				metaDescription: d.meta_description ?? null,
-				linkLimit,
-				allowEmbed: item.allow_embed
+				linkLimit
 			};
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : tr('Gagal membuka artikel.');
 		}
 	}
 
-	async function uploadFor(item: PlacementItem, file: File) {
-		uploadBusyId = item.media_id;
+	function openNaskahUpload(item: PlacementItem) {
 		error = '';
-		try {
-			const form = new FormData();
-			form.append('file', file);
-			const upRes = await apiRequest(`${apiBase}/files`, { method: 'POST', body: form });
-			const upData = await upRes.json().catch(() => null);
-			const text = upData?.file && typeof upData.file.extracted_text === 'string' ? String(upData.file.extracted_text) : '';
-			if (!upRes.ok || !text.trim()) throw new Error(upData?.detail ?? 'File gagal dibaca. Gunakan PDF, DOCX, atau TXT.');
-			const base = file.name.replace(/\.[^.]+$/, '');
-			const upLimit = mediaAllowsLink(item) ? (item.max_links && item.max_links > 0 ? item.max_links : 2) : 0;
-			editorError = '';
-			editor = {
-				mediaId: item.media_id,
-				mediaName: item.name,
-				title: base.slice(0, 200),
-				html: textToHtml(text),
-				cover: null,
-				category: null,
-				metaDescription: null,
-				linkLimit: upLimit,
-				allowEmbed: item.allow_embed
-			};
-		} catch (reason) {
-			error = reason instanceof Error ? reason.message : tr('Gagal mengunggah file.');
-		} finally {
-			uploadBusyId = null;
+		const upLimit = mediaAllowsLink(item) ? (item.max_links && item.max_links > 0 ? item.max_links : 2) : 0;
+		editorError = '';
+		editor = {
+			mediaId: item.media_id,
+			mediaName: item.name,
+			tab: 'unggah',
+			title: '',
+			html: '',
+			cover: null,
+			category: null,
+			metaDescription: null,
+			linkLimit: upLimit
+		};
+	}
+
+	async function uploadDocNaskah(file: File): Promise<{ title: string; html: string }> {
+		const form = new FormData();
+		form.append('file', file);
+		const upRes = await apiRequest(`${apiBase}/files`, { method: 'POST', body: form });
+		const upData = await upRes.json().catch(() => null);
+		const text = upData?.file && typeof upData.file.extracted_text === 'string' ? String(upData.file.extracted_text) : '';
+		if (!upRes.ok || !text.trim()) throw new Error(upData?.detail ?? 'File gagal dibaca. Gunakan DOCX, PDF, atau TXT.');
+		// Pisahkan judul otomatis: baris pertama pendek (< 120 karakter) dianggap
+		// judul; selain itu pakai nama file.
+		const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+		let judul = file.name.replace(/\.[^.]+$/, '');
+		let isi = text;
+		if (lines.length > 1 && lines[0].length <= 120) {
+			judul = lines[0];
+			isi = lines.slice(1).join('\n');
 		}
+		return { title: judul.slice(0, 200), html: textToHtml(isi) };
+	}
+
+	// Generate dengan arahan topik dari modal Pengelola Naskah (1 kredit bila
+	// artikel belum ada; regenerasi 2 kredit sesuai aturan backend).
+	async function generateNaskah(mediaId: string, topic: string): Promise<{ title: string; html: string }> {
+		const res = await apiRequest(`${apiBase}/produce/${mediaId}`, {
+			method: 'POST',
+			body: JSON.stringify({ topic })
+		}, 240_000);
+		const data = await res.json().catch(() => null);
+		if (!res.ok) throw new Error(data?.detail ?? tr('Gagal membuat draf AI.'));
+		genState = { ...genState, [mediaId]: 'draft' };
+		qcToken += 1;
+		return { title: String(data?.title ?? ''), html: String(data?.content_html ?? '') };
 	}
 
 	async function saveEditor(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) {
@@ -1034,9 +1053,9 @@
 									</button>
 								{/if}
 								{#if !hasDoc(m)}
-									<label class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs cursor-pointer">
-										{#if uploadBusyId === m.media_id}<LoaderCircle size={14} class="animate-spin" />{:else}<Upload size={14} />{/if} {tr("Unggah Artikel")} <input type="file" accept=".pdf,.docx,.txt" class="hidden" onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; if (f) void uploadFor(m, f); }} />
-									</label>
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning} onclick={() => openNaskahUpload(m)}>
+										<Upload size={14} /> {tr('Unggah Artikel')}
+									</button>
 								{/if}
 								{#if hasDoc(m)}
 									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning} onclick={() => void openPreview(m)}><Eye size={14} /> {tr('Edit Artikel')}</button>
@@ -1110,8 +1129,10 @@
 {#if editor}
 	{@const ed = editor}
 	{#key ed.mediaId}
-		<EditorModal
+		<NaskahModal
+			{brandId}
 			mediaName={ed.mediaName}
+			initialTab={ed.tab}
 			initialTitle={ed.title}
 			initialHtml={ed.html}
 			initialCoverUrl={ed.cover}
@@ -1119,15 +1140,13 @@
 			initialMetaDescription={ed.metaDescription}
 			categoryOptions={placement.find((p) => p.media_id === ed.mediaId)?.categories ?? []}
 			linkLimit={ed.linkLimit}
-			allowEmbed={ed.allowEmbed}
 			saving={editorSaving}
 			saveError={editorError}
 			onClose={() => { if (!editorSaving) editor = null; }}
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveEditor(title, html, coverUrl, category, metaDescription)}
 			onUploadCover={uploadCover}
-			regenDisabled={!editorMedia || bulkRunning || !canRegen(editorMedia)}
-			regenTitle={editorMedia && hasDoc(editorMedia) && !canRegen(editorMedia) ? `${tr('Batas regenerasi tercapai')} (maks ${regenMax}x).` : undefined}
-			onRegenerate={!manualFlow && editorMedia ? () => { const em = editorMedia; editor = null; void generateOne(em); } : undefined}
+			onUploadDoc={uploadDocNaskah}
+			onGenerate={(topic) => generateNaskah(ed.mediaId, topic)}
 		/>
 	{/key}
 {/if}

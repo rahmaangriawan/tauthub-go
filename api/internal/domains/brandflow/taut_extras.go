@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
 	"io"
 	"net/http"
@@ -1238,7 +1239,21 @@ func (d *Deps) TautProduceOne(w http.ResponseWriter, r *http.Request) {
 	}
 	campaignID := chiParam(r, "campaignId")
 	mediaID := chiParam(r, "mediaId")
-	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID)
+	// Body opsional {topic}: arahan topik/konteks dari modal Pengelola Naskah.
+	// Tanpa body → perilaku lama (topik dari brief kampanye).
+	var topic string
+	if r.ContentLength != 0 {
+		var body struct {
+			Topic string `json:"topic"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err == nil {
+			topic = strings.TrimSpace(body.Topic)
+			if len(topic) > 2000 {
+				topic = topic[:2000]
+			}
+		}
+	}
+	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID, topic)
 	if err != nil {
 		var ic *insufficientCreditsError
 		if asInsufficient(err, &ic) {

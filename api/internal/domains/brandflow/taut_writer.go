@@ -61,7 +61,9 @@ func (d *Deps) selectedTautMedia(ctx context.Context, campaignID string) ([]sele
 
 // generateTautWriterArticle: generate artikel untuk SATU media terpilih.
 // Idempoten: media yang sudah punya dokumen = regenerasi (tambah versi).
-func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandID, userID, mediaID string) (writerItemResult, error) {
+// clientTopic opsional: arahan topik/konteks dari klien (modal Pengelola
+// Naskah). Kosong = perilaku lama (topik murni dari brief kampanye).
+func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandID, userID, mediaID string, clientTopic ...string) (writerItemResult, error) {
 	campaign, err := d.loadTautCampaignRow(ctx, campaignID, brandID)
 	if err != nil {
 		return writerItemResult{}, err
@@ -272,6 +274,13 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		"Tipe media: "+mediaType,
 		wordRule,
 	)
+	if len(clientTopic) > 0 {
+		if topik := strings.TrimSpace(clientTopic[0]); topik != "" {
+			promptLines = append(promptLines,
+				"Arahan topik dari klien (WAJIB mengikuti arahan ini selama tidak bertentangan dengan aturan di atas): "+topik,
+			)
+		}
+	}
 	promptLines = append(promptLines, structureRules...)
 	promptLines = append(promptLines,
 		languageBlock,
