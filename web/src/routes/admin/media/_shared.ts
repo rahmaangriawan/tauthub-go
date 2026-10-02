@@ -63,7 +63,7 @@ export function wordCountLabel(mode: unknown): string {
 }
 
 export const MEDIA_STATUSES = ['draft', 'active', 'inactive', 'archived', 'hidden', 'pending_review', 'rejected'];
-export const MEDIA_INTEGRATION_TYPES_UI = ['manual', 'wordpress', 'rss', 'webhook', 'tulisio_api'];
+export const MEDIA_INTEGRATION_TYPES_UI = ['manual', 'wordpress', 'rss', 'webhook', 'tulisio_api', 'emdash'];
 export const MEDIA_TIERS = ['tier1', 'tier2', 'tier3'];
 
 type PendingChange = { field: string; label: string; from: string | null; to: string | null };

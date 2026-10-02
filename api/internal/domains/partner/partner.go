@@ -502,7 +502,7 @@ func slugifyMediaName(name string) string {
 	return out
 }
 
-var mediaIntegrationTypes = []string{"manual", "wordpress", "rss", "webhook", "tulisio_api", "custom_web", "blogger"}
+var mediaIntegrationTypes = []string{"manual", "wordpress", "rss", "webhook", "tulisio_api", "custom_web", "blogger", "emdash"}
 
 func validIntegrationType(v string) bool {
 	for _, t := range mediaIntegrationTypes {

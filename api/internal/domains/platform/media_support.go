@@ -63,7 +63,7 @@ func mpArchiveBlockingStatuses() []string {
 }
 
 var mpMediaIntegrationTypes = []string{
-	"manual", "wordpress", "rss", "webhook", "tulisio_api", "custom_web", "blogger",
+	"manual", "wordpress", "rss", "webhook", "tulisio_api", "custom_web", "blogger", "emdash",
 }
 
 var mpMediaTiers = []string{"tier1", "tier2", "tier3"}

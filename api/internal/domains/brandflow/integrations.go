@@ -175,6 +175,23 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		applicationPassword = s
 	}
+	var accessToken string
+	if raw, ok := body["access_token"]; ok && raw != nil {
+		v, isStr := raw.(string)
+		if !isStr {
+			d.cmsError(w, errUnprocessable("Invalid input: expected string, received "+bsZodTypeName(raw)))
+			return
+		}
+		if len([]rune(v)) < 1 {
+			d.cmsError(w, errUnprocessable("Too small: expected string to have >=1 characters"))
+			return
+		}
+		if len([]rune(v)) > 500 {
+			d.cmsError(w, errUnprocessable("Too big: expected string to have <=500 characters"))
+			return
+		}
+		accessToken = v
+	}
 	secret := ""
 	if raw, ok := body["secret"]; ok && raw != nil {
 		s, isStr := raw.(string)
@@ -200,6 +217,14 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		websiteID = &s
+	}
+	if provider == "emdash" {
+		if accessToken == "" {
+			d.cmsError(w, errUnprocessable("access_token is required for EmDash connections"))
+			return
+		}
+		// Token EmDash disimpan pada kolom rahasia yang sama seperti provider lain.
+		secret = accessToken
 	}
 	// superRefine
 	if provider == "wordpress" {
