@@ -22,7 +22,10 @@ const (
 // AIOverviewSystemPrompt: penilai kesiapan AI Overview — skor 4 indikator 1-10,
 // ringkasan maks 2 kalimat per indikator, catatan revisi maks 3 hanya bila ada
 // indikator berskor di bawah 7. Dipakai dengan json_mode.
-const AIOverviewSystemPrompt = `Anda adalah "Gatekeeper AI Overview QC Agent" untuk platform penerbitan Indonesia (Tauthub). Tugas: menilai apakah draf artikel siap dibaca dan dikutip oleh Google AI Overviews / LLM pencarian.
+// aiOverviewRules: deskripsi peran + 4 indikator + verifikasi ke bahan.
+// Dipisah dari skema keluaran supaya bisa dikomposisi dengan cek lain
+// (lihat GuardSystemPrompt di guard.go) tanpa menggandakan teksnya.
+const aiOverviewRules = `Anda adalah "Gatekeeper AI Overview QC Agent" untuk platform penerbitan Indonesia (Tauthub). Tugas: menilai apakah draf artikel siap dibaca dan dikutip oleh Google AI Overviews / LLM pencarian.
 
 Nilai 4 indikator, masing-masing skor 1-10 (1 = tidak ada sama sekali, 10 = sempurna):
 1. struktur — Struktur & Pemformatan: apakah jawaban/definisi utama sudah ada di 150 kata pertama (BLUF); apakah heading bermakna (untuk media blogger, heading berbasis pertanyaan seperti "Apa itu X?" menaikkan skor); apakah informasi kompleks dipecah dengan list/tabel. PENTING: untuk media mainstream artikel MEMANG tidak memakai heading — jangan turunkan skor karena ketiadaan H2/H3, nilai BLUF dan paragraf pendeknya.
@@ -35,9 +38,13 @@ VERIFIKASI KE BAHAN (WAJIB): bandingkan setiap nama tokoh, nama perusahaan/lemba
 Aturan keluaran:
 - ringkasan: maksimal 2 kalimat bahasa Indonesia per indikator.
 - catatan_revisi: maksimal 3 poin perbaikan SANGAT spesifik (sebut bagian/paragrafnya), HANYA bila artikel TIDAK LULUS menurut aturan kelulusan di input pengguna (total di bawah ambang ATAU ada indikator di bawah skor minimum). Bila lulus, kirim array kosong.
-- entitas_tanpa_dasar: maksimal 3 nama/angka/studi kasus di artikel yang tidak ditemukan di bahan (kosongkan bila semua berdasar bahan).
-- Balas HANYA JSON valid tanpa markdown/penjelasan lain:
+- entitas_tanpa_dasar: maksimal 3 nama/angka/studi kasus di artikel yang tidak ditemukan di bahan (kosongkan bila semua berdasar bahan).`
+
+const aiOverviewOutputSchema = `Balas HANYA JSON valid tanpa markdown/penjelasan lain:
 {"indikator":[{"kunci":"struktur","skor":1-10,"ringkasan":"..."},{"kunci":"entitas","skor":1-10,"ringkasan":"..."},{"kunci":"eeat","skor":1-10,"ringkasan":"..."},{"kunci":"niat_pengguna","skor":1-10,"ringkasan":"..."}],"catatan_revisi":[],"entitas_tanpa_dasar":[]}`
+
+// AIOverviewSystemPrompt: prompt lengkap (rules + skema) untuk cek AI Overview saja.
+const AIOverviewSystemPrompt = aiOverviewRules + "\n\n" + aiOverviewOutputSchema
 
 // AIOverviewSettings: toggle + ambang (dari taut_agent_configs.settings.aiOverview).
 type AIOverviewSettings struct {
@@ -173,6 +180,15 @@ func (r AIOverviewResult) JSON() map[string]any {
 // Error/parse gagal → review_required + error (non-blocking).
 func EvaluateAIOverview(llmContent string, st AIOverviewSettings, checkedAt string, briefAvailable bool) AIOverviewResult {
 	parsed := firstJSONObject(llmContent)
+	if parsed == nil {
+		return AIOverviewResult{Status: "review_required", CheckedAt: checkedAt, Error: "Respons AI Overview tidak valid.", BriefAvailable: briefAvailable, UnsourcedEntities: []string{}}
+	}
+	return EvaluateAIOverviewFields(parsed, st, checkedAt, briefAvailable)
+}
+
+// EvaluateAIOverviewFields: evaluasi dari map yang sudah diparse (dipakai jalur
+// gabungan safety+overview, di mana objek "overview" diambil dari respons besar).
+func EvaluateAIOverviewFields(parsed map[string]any, st AIOverviewSettings, checkedAt string, briefAvailable bool) AIOverviewResult {
 	if parsed == nil {
 		return AIOverviewResult{Status: "review_required", CheckedAt: checkedAt, Error: "Respons AI Overview tidak valid.", BriefAvailable: briefAvailable, UnsourcedEntities: []string{}}
 	}

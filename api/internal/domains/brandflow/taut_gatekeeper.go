@@ -220,10 +220,11 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 	var links linkHealthResult
 	var aiOverview map[string]any
 	var checksWG sync.WaitGroup
-	checksWG.Add(3)
+	checksWG.Add(2)
 	go func() {
 		defer checksWG.Done()
-		safety = d.contentSafetyGuard(ctx, text, extractHTMLLinks(content), briefContext)
+		safety, aiOverview = d.contentSafetyAndOverview(ctx, title, mediaType, content, text,
+			briefContext, extractHTMLLinks(content), aiOverviewSet)
 	}()
 	go func() {
 		defer checksWG.Done()
@@ -231,10 +232,6 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 			strings.TrimSpace(campaign.strOr("primary_url", "")),
 			strings.TrimSpace(campaign.strOr("backup_url", "")),
 		})
-	}()
-	go func() {
-		defer checksWG.Done()
-		aiOverview = d.runAIOverviewCheck(ctx, title, mediaType, content, text, briefContext, aiOverviewSet)
 	}()
 	checksWG.Wait()
 	batchMS := time.Since(startedAt).Milliseconds()
@@ -475,6 +472,13 @@ func (d *Deps) contentSafetyGuard(ctx context.Context, text string, links []stri
 	if parsed == nil {
 		return contentSafetyFailsafe
 	}
+	return contentSafetyFromParsed(parsed)
+}
+
+// contentSafetyFromParsed: validasi field safety dari JSON yang sudah diparse
+// (dipakai jalur gabungan safety+AI Overview; whitelist kategori & clamp tetap
+// di sini supaya hasilnya identik dengan jalur terpisah).
+func contentSafetyFromParsed(parsed map[string]any) contentSafetyResult {
 	riskLevel := parseRiskLevel(parsed["riskLevel"])
 	categories := []string{}
 	if arr, ok := parsed["categories"].([]any); ok {
@@ -534,6 +538,31 @@ func clampConfidence(v any) float64 {
 		return 1
 	}
 	return f
+}
+
+// contentSafetyAndOverview: SATU panggilan LLM untuk klasifikasi keamanan
+// konten + penilaian AI Overview (keduanya membaca teks yang sama). Bila
+// respons gabungan gagal/tidak lengkap, fallback ke dua panggilan terpisah —
+// kualitas cek tidak pernah dikorbankan demi kecepatan.
+func (d *Deps) contentSafetyAndOverview(ctx context.Context, title, mediaType, content, text, brief string, links []string, st ai.AIOverviewSettings) (contentSafetyResult, map[string]any) {
+	checkedAt := nowISO()
+	briefAvailable := strings.TrimSpace(brief) != ""
+	if !st.Enabled {
+		return d.contentSafetyGuard(ctx, text, links, brief), ai.AIOverviewResult{
+			Status: "pending", CheckedAt: checkedAt, BriefAvailable: briefAvailable,
+			Info: "Pemeriksaan AI Overview dinonaktifkan admin.",
+		}.JSON()
+	}
+	prompt := ai.GuardUserPrompt(title, mediaType, content, text, brief, links, countWords(text), st)
+	result, err := d.callAgentLLM(ctx, "gatekeeper", prompt, true, ai.GuardSystemPrompt(contentSafetySystemPrompt), 0)
+	if err != nil {
+		slog.Warn("[brandflow] guard gabungan gagal, fallback dua panggilan", "err", truncateString(err.Error(), 200))
+	} else if overviewFields, safetyFields, ok := ai.ParseGuardResponse(result.Content); ok {
+		return contentSafetyFromParsed(safetyFields), ai.EvaluateAIOverviewFields(overviewFields, st, checkedAt, briefAvailable).JSON()
+	} else {
+		slog.Warn("[brandflow] guard gabungan tidak lengkap, fallback dua panggilan")
+	}
+	return d.contentSafetyGuard(ctx, text, links, brief), d.runAIOverviewCheck(ctx, title, mediaType, content, text, brief, st)
 }
 
 // ---------- link health (port lib/gatekeeper/link-health.ts) ----------

@@ -3,6 +3,7 @@ package clienttaut
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -103,19 +104,17 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		if mediaType == "" {
 			mediaType = campaign.strOr("media_type", "")
 		}
-		// Tiga cek independen (AI Overview, safety, link health) paralel.
+		// Dua pekerja paralel: (1) guard gabungan safety + AI Overview dalam satu
+		// panggilan LLM, (2) link health (probe + klasifikasi).
 		var aiOverview map[string]any
 		var safety contentSafetyResult
 		var links linkHealthResult
 		var checksWG sync.WaitGroup
-		checksWG.Add(3)
+		checksWG.Add(2)
 		go func() {
 			defer checksWG.Done()
-			aiOverview = d.runAIOverviewCheck(ctx, title, mediaType, content, text, briefContext)
-		}()
-		go func() {
-			defer checksWG.Done()
-			safety = d.contentSafetyGuard(ctx, text, extractLinks(content), briefContext)
+			safety, aiOverview = d.contentSafetyAndOverview(ctx, title, mediaType, content, text,
+				briefContext, extractLinks(content))
 		}()
 		go func() {
 			defer checksWG.Done()
@@ -306,6 +305,35 @@ func (d *Deps) runAIOverviewCheck(ctx context.Context, title, mediaType, content
 		}.JSON()
 	}
 	return ai.EvaluateAIOverview(result.Content, st, checkedAt, briefAvailable).JSON()
+}
+
+// contentSafetyAndOverview: SATU panggilan LLM untuk safety + AI Overview;
+// fallback ke dua panggilan terpisah bila respons gabungan tidak lengkap.
+func (d *Deps) contentSafetyAndOverview(ctx context.Context, title, mediaType, content, text, brief string, links []string) (contentSafetyResult, map[string]any) {
+	checkedAt := nowISO()
+	briefAvailable := strings.TrimSpace(brief) != ""
+	st := d.aiOverviewSettings(ctx)
+	if !st.Enabled {
+		return d.contentSafetyGuard(ctx, text, links, brief), ai.AIOverviewResult{
+			Status: "pending", CheckedAt: checkedAt, BriefAvailable: briefAvailable,
+			Info: "Pemeriksaan AI Overview dinonaktifkan admin.",
+		}.JSON()
+	}
+	// Catatan pra-sinyal (deterministik) tetap disertakan supaya perilakunya
+	// setara jalur terpisah.
+	prompt := ai.GuardUserPrompt(title, mediaType, content, text, brief, links, countWords(text), st)
+	if note := preSignalNote(normalizeForModeration(text)); note != "" {
+		prompt += "\n\nCatatan (verifikasi dengan konteks, bukan verdict): " + note
+	}
+	result, err := d.callAgentLLM(ctx, "gatekeeper", prompt, true, ai.GuardSystemPrompt(contentSafetySystemPrompt), 0)
+	if err != nil {
+		slog.Warn("[gatekeeper] guard gabungan gagal, fallback dua panggilan", "err", truncateString(err.Error(), 200))
+	} else if overviewFields, safetyFields, ok := ai.ParseGuardResponse(result.Content); ok {
+		return contentSafetyFromParsed(safetyFields), ai.EvaluateAIOverviewFields(overviewFields, st, checkedAt, briefAvailable).JSON()
+	} else {
+		slog.Warn("[gatekeeper] guard gabungan tidak lengkap, fallback dua panggilan")
+	}
+	return d.contentSafetyGuard(ctx, text, links, brief), d.runAIOverviewCheck(ctx, title, mediaType, content, text, brief)
 }
 
 // updateGatekeeperAuditChecks: perbarui checks baris audit yang baru dibuat

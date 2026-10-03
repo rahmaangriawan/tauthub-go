@@ -239,6 +239,13 @@ func (d *Deps) contentSafetyGuard(ctx context.Context, text string, links []stri
 	if parsed == nil {
 		return contentSafetyFailsafe
 	}
+	return contentSafetyFromParsed(parsed)
+}
+
+// contentSafetyFromParsed: validasi field safety dari JSON yang sudah diparse
+// (dipakai jalur gabungan safety+AI Overview; whitelist kategori & clamp tetap
+// di sini supaya hasilnya identik dengan jalur terpisah).
+func contentSafetyFromParsed(parsed map[string]any) contentSafetyResult {
 	riskLevel := parseRiskLevel(parsed["riskLevel"])
 	categories := []string{}
 	if set := toSet(contentSafetyCategories); set != nil {
