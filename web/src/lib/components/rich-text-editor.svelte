@@ -1,17 +1,22 @@
 <script lang="ts">
 	// Editor teks kaya untuk halaman editor dokumen — dipisahkan dari toolbar
 	// contentEditable _editor-modal.svelte (Taut Pintar Writer) supaya bisa
-	// dipakai di luar modal: perintah format, unggah gambar ke /brands/:id/assets,
+	// dipakai di luar modal: perintah format, pustaka gambar AI (bila scope
+	// brand+campaign+media tersedia) atau unggah gambar ke /brands/:id/assets,
 	// dialog tautan, dan sinkronisasi HTML dua arah.
 	import { CircleAlert, Image, Link, List, ListOrdered, LoaderCircle, Quote, RotateCcw, RotateCw, Upload, X } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 	import { apiRequest } from '$lib/auth';
 	import { sanitizeHtml } from '$lib/sanitize-html';
 	import { tr } from '$lib/i18n/phrases';
+	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
 
 	let {
 		value = $bindable(''),
 		brandId,
+		campaignId = '',
+		mediaId = '',
+		articleId = null,
 		disabled = false,
 		minHeight = 420,
 		ariaLabel,
@@ -19,6 +24,10 @@
 	}: {
 		value?: string;
 		brandId: string;
+		/** Scope pustaka gambar AI. Kosong = tombol gambar jatuh ke modal unggah. */
+		campaignId?: string;
+		mediaId?: string;
+		articleId?: string | null;
 		disabled?: boolean;
 		minHeight?: number;
 		ariaLabel?: string;
@@ -37,6 +46,7 @@
 		let linkDialog = $state({ open: false, url: '', isEdit: false });
 		let savedRange: Range | null = null;
 		let imageModalOpen = $state(false);
+		let mediaPickerOpen = $state(false);
 		let imageDragOver = $state(false);
 
 		$effect(() => {
@@ -66,6 +76,9 @@
 		if (value !== lastExternal && bodyEl && mode === 'rich') {
 			bodyEl.innerHTML = sanitizeHtml(value);
 			lastExternal = value;
+			// Konten bisa berubah dari luar (mis. sisip gambar per H2 / pulihkan
+			// versi) — statistik harus ikut segar, bukan hanya saat dipanggil sync().
+			publishStats();
 		}
 	});
 
@@ -123,9 +136,52 @@
 		if (!bodyEl || disabled || mode === 'html') return;
 		const sel = window.getSelection();
 		savedRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+		// Dengan scope artikel lengkap → pustaka gambar AI. Tanpa scope
+		// (mis. halaman editor dokumen mandiri) → modal unggah berkas.
+		if (brandId && campaignId && mediaId) {
+			mediaPickerOpen = true;
+			return;
+		}
 		imageError = '';
 		imageDragOver = false;
 		imageModalOpen = true;
+	}
+
+	/** Sisipkan gambar pada seleksi yang disimpan (atau di kursor saat ini). */
+	function insertImageUrl(url: string) {
+		if (!bodyEl || !url) return;
+		bodyEl.focus();
+		const sel = window.getSelection();
+		if (sel && savedRange) {
+			sel.removeAllRanges();
+			try {
+				sel.addRange(savedRange);
+			} catch {
+				/* range basi */
+			}
+		}
+		document.execCommand('insertImage', false, url);
+		sync();
+	}
+
+	// Tempel/tarik gambar langsung ke isi editor tetap didukung (unggah ke
+	// /assets) tanpa membuka modal.
+	function onBodyPaste(e: ClipboardEvent) {
+		if (disabled || mode !== 'rich') return;
+		const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'));
+		if (!file) return;
+		e.preventDefault();
+		void pickImage(file);
+	}
+
+	function onBodyDrop(e: DragEvent) {
+		if (disabled || mode !== 'rich') return;
+		const file = e.dataTransfer?.files?.[0];
+		if (!file || !file.type.startsWith('image/')) return;
+		e.preventDefault();
+		const sel = window.getSelection();
+		savedRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+		void pickImage(file);
 	}
 
 	async function kompresWebp(file: File): Promise<File> {
@@ -162,20 +218,7 @@
 			const res = await apiRequest(`/v1/brands/${brandId}/assets`, { method: 'POST', body: form });
 			if (!res.ok) throw new Error();
 			const data = (await res.json()) as { url?: string };
-			if (data.url && bodyEl) {
-				bodyEl.focus();
-				const sel = window.getSelection();
-				if (sel && savedRange) {
-					sel.removeAllRanges();
-					try {
-						sel.addRange(savedRange);
-					} catch {
-						/* range basi */
-					}
-				}
-				document.execCommand('insertImage', false, data.url);
-				sync();
-			}
+			if (data.url) insertImageUrl(data.url);
 			imageModalOpen = false;
 		} catch {
 			imageError = tr('Gagal mengunggah gambar. Periksa koneksi lalu coba lagi.');
@@ -284,8 +327,8 @@
 			<button
 				class="rte-tool"
 				type="button"
-				title={tr("Unggah gambar")}
-				aria-label={tr("Unggah gambar")}
+				title={tr("Sisipkan gambar")}
+				aria-label={tr("Sisipkan gambar")}
 				disabled={disabled || imageBusy || mode === 'html'}
 				onclick={openImageModal}
 			>
@@ -332,6 +375,9 @@
 			aria-label={ariaLabel ?? 'Isi artikel'}
 			oninput={sync}
 			onclick={handleBodyClick}
+			onpaste={onBodyPaste}
+			ondragover={(e) => { if (!disabled && mode === 'rich') e.preventDefault(); }}
+			ondrop={onBodyDrop}
 		></div>
 	{:else}
 		<textarea
@@ -435,6 +481,22 @@
 					</div>
 				</div>
 			{/if}
+
+		{#if campaignId && mediaId}
+			<MediaLibraryPicker
+				open={mediaPickerOpen}
+				{brandId}
+				{campaignId}
+				{mediaId}
+				{articleId}
+				mode="inline"
+				onSelect={(url) => {
+					insertImageUrl(url);
+					mediaPickerOpen = false;
+				}}
+				onClose={() => (mediaPickerOpen = false)}
+			/>
+		{/if}
 	</div>
 
 <style>
@@ -475,10 +537,19 @@
 		color: var(--primary-foreground);
 		border-color: var(--primary);
 	}
-	.rte-body {
-		margin-top: 8px;
-		background: var(--background);
-	}
+		.rte-body {
+			margin-top: 8px;
+			background: var(--background);
+		}
+		:global(.rte-body img) {
+			max-width: 100%;
+			height: auto;
+			aspect-ratio: 16 / 9;
+			object-fit: cover;
+			border-radius: 8px;
+			margin: 12px 0;
+			display: block;
+		}
 	.rte-link-backdrop {
 		position: fixed;
 		inset: 0;

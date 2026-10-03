@@ -47,8 +47,8 @@ export function statusAccent(tautStatus: string | null, published: number): 'acc
 
 /* ─── Tahapan agent ───────────────────────────────────────────────────── */
 
-export const AGENT_STEPS = ['The Profiler', 'The Matchmaker', 'The Writer', 'Gatekeeper'] as const;
-export const AGENT_STEP_ROUTES = ['profiler', 'matchmaker', 'writer', 'gatekeeper', 'ringkasan'] as const;
+export const AGENT_STEPS = ['The Profiler', 'The Matchmaker', 'The Writer'] as const;
+export const AGENT_STEP_ROUTES = ['profiler', 'matchmaker', 'writer', 'ringkasan'] as const;
 
 /** Alasan The Profiler di-bypass (kampanye jalur manual). */
 export const MANUAL_PROFILER_REASON =

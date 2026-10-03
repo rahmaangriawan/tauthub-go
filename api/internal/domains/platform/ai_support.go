@@ -264,38 +264,57 @@ func aiOrEmpty(v, fallback string) string {
 
 // aiConfigJSON: port configResponse di ai/configuration/route.ts.
 func aiConfigJSON(stored rowMap, rt *ai.AIRuntime) map[string]any {
+	imgCost := ai.ImageCreditCost()
 	if stored != nil {
 		dm := aiOrEmpty(stored.strOr("default_model", ""), rt.DefaultModel)
+		imgBase := aiOrEmpty(stored.strOr("image_base_url", ""), rt.ImageBaseURL)
+		imgModel := aiOrEmpty(stored.strOr("image_model", ""), rt.ImageModel)
+		imgHint := aiOrEmpty(stored.strOr("image_api_key_hint", ""), rt.ImageAPIKeyHint)
+		imgConfigured := rt.ImageAPIKey != "" || stored.strOr("image_sealed_api_key", "") != ""
 		return map[string]any{
-			"base_url":           stored.strOr("base_url", ""),
-			"api_key_configured": true,
-			"api_key_hint":       ptNullableStr(stored, "api_key_hint"),
-			"source":             "database",
-			"default_model":      dm,
-			"economy_model":      aiOrEmpty(stored.strOr("economy_model", ""), dm),
-			"premium_model":      aiOrEmpty(stored.strOr("premium_model", ""), dm),
+			"base_url":                 stored.strOr("base_url", ""),
+			"api_key_configured":       true,
+			"api_key_hint":             ptNullableStr(stored, "api_key_hint"),
+			"source":                   "database",
+			"default_model":            dm,
+			"economy_model":            aiOrEmpty(stored.strOr("economy_model", ""), dm),
+			"premium_model":            aiOrEmpty(stored.strOr("premium_model", ""), dm),
+			"image_base_url":           imgBase,
+			"image_model":              imgModel,
+			"image_api_key_configured": imgConfigured,
+			"image_api_key_hint":       nullIfEmpty(imgHint),
+			"image_credit_cost":        imgCost,
 		}
 	}
 	if rt.Source != "none" {
 		return map[string]any{
-			"base_url":           rt.BaseURL,
-			"api_key_configured": rt.APIKey != "",
-			"api_key_hint":       nullIfEmpty(rt.APIKeyHint),
-			"source":             rt.Source,
-			"default_model":      rt.DefaultModel,
-			"economy_model":      aiOrEmpty(rt.EconomyModel, rt.DefaultModel),
-			"premium_model":      aiOrEmpty(rt.PremiumModel, rt.DefaultModel),
+			"base_url":                 rt.BaseURL,
+			"api_key_configured":       rt.APIKey != "",
+			"api_key_hint":             nullIfEmpty(rt.APIKeyHint),
+			"source":                   rt.Source,
+			"default_model":            rt.DefaultModel,
+			"economy_model":            aiOrEmpty(rt.EconomyModel, rt.DefaultModel),
+			"premium_model":            aiOrEmpty(rt.PremiumModel, rt.DefaultModel),
+			"image_base_url":           rt.ImageBaseURL,
+			"image_model":              rt.ImageModel,
+			"image_api_key_configured": rt.ImageAPIKey != "",
+			"image_api_key_hint":       nullIfEmpty(rt.ImageAPIKeyHint),
+			"image_credit_cost":        imgCost,
 		}
 	}
 	dm := rt.DefaultModel
 	return map[string]any{
-		"base_url":           "",
-		"api_key_configured": false,
-		"api_key_hint":       nil,
-		"source":             "none",
-		"default_model":      dm,
-		"economy_model":      aiOrEmpty(rt.EconomyModel, dm),
-		"premium_model":      aiOrEmpty(rt.PremiumModel, dm),
+		"base_url":                 "",
+		"api_key_configured":       false,
+		"api_key_hint":             nil,
+		"source":                   "none",
+		"default_model":            dm,
+		"economy_model":            aiOrEmpty(rt.EconomyModel, dm),
+		"premium_model":            aiOrEmpty(rt.PremiumModel, dm),
+		"image_base_url":           rt.ImageBaseURL,
+		"image_model":              rt.ImageModel,
+		"image_api_key_configured": rt.ImageAPIKey != "",
+		"image_api_key_hint":       nullIfEmpty(rt.ImageAPIKeyHint),
 	}
 }
 
@@ -324,7 +343,7 @@ func aiNormalizeURL(raw string) *string {
 // aiStoredConfig: parity storedAiConfiguration (kolom terpilih).
 func (d *Deps) aiStoredConfig(ctx context.Context) rowMap {
 	row, err := d.queryRow(ctx,
-		"SELECT base_url, sealed_api_key, api_key_hint, default_model, economy_model, premium_model, updated_by, updated_at FROM platform_ai_configuration WHERE id = 'default' LIMIT 1")
+		"SELECT base_url, sealed_api_key, api_key_hint, default_model, economy_model, premium_model, image_base_url, image_sealed_api_key, image_api_key_hint, image_model, updated_by, updated_at FROM platform_ai_configuration WHERE id = 'default' LIMIT 1")
 	if err != nil {
 		return nil
 	}

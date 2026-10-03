@@ -19,6 +19,15 @@ import (
 // Config menyimpan API key TER-SEAL (t2:) dan tidak pernah mengembalikannya:
 // respons hanya berisi flag api_key_configured + hint.
 
+// AIImageTest: POST /v1/platform/ai/image-test — uji koneksi provider gambar
+// tanpa fallback placeholder agar error asli provider terlihat (debugging).
+func (d *Deps) AIImageTest(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := d.adminGuard(w, r, ""); !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, ai.TestImageConnection(r.Context(), d.Pool))
+}
+
 // AIConfigurationGet: GET /v1/platform/ai/configuration
 func (d *Deps) AIConfigurationGet(w http.ResponseWriter, r *http.Request) {
 	_, _, ok := d.adminGuard(w, r, "")
@@ -72,6 +81,27 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
+	// Konfigurasi Generate Gambar AI (opsional). image_api_key nullable; string
+	// kosong diizinkan (→ NULL), tetapi bila terisi wajib min 8 karakter.
+	imageBaseRaw, _, err := aiStringField(body, "image_base_url", 0, 500, true, true)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	imageModel, _, err := aiStringField(body, "image_model", 0, 200, true, true)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	imageAPIKey, hasImageKey, err := aiStringField(body, "image_api_key", 0, 1000, false, true)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	if hasImageKey && imageAPIKey != "" && len([]rune(imageAPIKey)) < 8 {
+		writeErr(w, d, errUnprocessable(ptZStringTooSmall(8)))
+		return
+	}
 
 	base := aiNormalizeURL(baseRaw)
 	if base == nil {
@@ -90,6 +120,37 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 	}
 	if hasPremium && premium != "" {
 		prem = premium
+	}
+	// Gambar: kosong/null → NULL ("ikuti konfigurasi AI chat"). image_api_key
+	// yang tidak dikirim → pertahankan nilai lama (khusus UPDATE); dikirim
+	// kosong → NULL; dikirim terisi → seal + hint.
+	var imageBaseVal, imageModelVal any
+	if imageBaseRaw != "" {
+		norm := aiNormalizeURL(imageBaseRaw)
+		if norm == nil {
+			writeErr(w, d, errBadRequest("Base URL must use HTTP or HTTPS and cannot contain credentials"))
+			return
+		}
+		imageBaseVal = *norm
+	}
+	if imageModel != "" {
+		imageModelVal = imageModel
+	}
+	var imageKeySealed, imageKeyHint any
+	setImageKey := false
+	if hasImageKey && imageAPIKey != "" {
+		sealed, sErr := d.sealT2(imageAPIKey)
+		if sErr != nil {
+			writeErr(w, d, sErr)
+			return
+		}
+		imageKeySealed = sealed
+		imageKeyHint = "••••" + aiTail(imageAPIKey, 4)
+		setImageKey = true
+	} else if _, present := body["image_api_key"]; present {
+		// Dikirim eksplisit null / string kosong → NULL. Tidak dikirim sama
+		// sekali → pertahankan nilai lama (khusus UPDATE).
+		setImageKey = true
 	}
 
 	existing, err := d.queryRow(ctx, "SELECT * FROM platform_ai_configuration WHERE id = 'default' LIMIT 1")
@@ -116,22 +177,29 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := d.exec(ctx,
-			"INSERT INTO platform_ai_configuration (id, base_url, sealed_api_key, api_key_hint, default_model, economy_model, premium_model, updated_by) VALUES ('default', $1, $2, $3, $4, $5, $6, $7)",
-			*base, sealed, hint, dm, econ, prem, user.ID); err != nil {
+			"INSERT INTO platform_ai_configuration (id, base_url, sealed_api_key, api_key_hint, default_model, economy_model, premium_model, image_base_url, image_sealed_api_key, image_api_key_hint, image_model, updated_by) VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+			*base, sealed, hint, dm, econ, prem, imageBaseVal, imageKeySealed, imageKeyHint, imageModelVal, user.ID); err != nil {
 			writeErr(w, d, err)
 			return
 		}
 	} else {
-		query := "UPDATE platform_ai_configuration SET base_url = $1, default_model = $2, economy_model = $3, premium_model = $4, updated_by = $5"
-		params := []any{*base, dm, econ, prem, user.ID}
+		query := "UPDATE platform_ai_configuration SET base_url = $1, default_model = $2, economy_model = $3, premium_model = $4, image_base_url = $5, image_model = $6, updated_by = $7"
+		params := []any{*base, dm, econ, prem, imageBaseVal, imageModelVal, user.ID}
+		next := 8
 		if hasAPIKey && apiKey != "" {
 			sealed, sErr := d.sealT2(apiKey)
 			if sErr != nil {
 				writeErr(w, d, sErr)
 				return
 			}
-			query += ", sealed_api_key = $6, api_key_hint = $7"
+			query += ", sealed_api_key = $" + strconv.Itoa(next) + ", api_key_hint = $" + strconv.Itoa(next+1)
 			params = append(params, sealed, hint)
+			next += 2
+		}
+		if setImageKey {
+			query += ", image_sealed_api_key = $" + strconv.Itoa(next) + ", image_api_key_hint = $" + strconv.Itoa(next+1)
+			params = append(params, imageKeySealed, imageKeyHint)
+			next += 2
 		}
 		query += " WHERE id = 'default'"
 		if err := d.exec(ctx, query, params...); err != nil {

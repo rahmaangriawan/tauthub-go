@@ -10,11 +10,14 @@
 	import { goto } from '$app/navigation';
 	import {
 		ArrowRight, Bookmark, Bot, Check, Clock, FileText, Info, LayoutGrid,
-		Plus, Search, SlidersHorizontal, Trash2, Upload, X, Zap, ExternalLink,
+		Plus, Search, SlidersHorizontal, Trash2, Upload, X, Zap,
 		ChevronLeft, ChevronRight
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { campaignUrlId } from '$lib/campaign-url';
+	import { mediaDomainLabel } from '$lib/media/domain-label';
+	import { mediaDistribution } from '$lib/media/distribution';
+	import { seededShuffle, randomShuffleSeed } from '$lib/media/shuffle';
 	import { apiRequest, ensureValidSession, readApiError, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import MediaDetailModal from './_detail-modal.svelte';
@@ -38,6 +41,7 @@
 		seo_da?: number | null; seo_pa?: number | null; seo_spam_score?: number | null;
 		seo_checked_at?: string | null; seo_ai_trust?: number | null; seo_ai_citation?: boolean | null;
 		sw_visits?: number | null; sw_snapshot_date?: string | null;
+		published_count?: number | null;
 		gsc_connected?: boolean; image_required?: boolean | null;
 		label_sponsor?: string | null; topik_terlarang?: string[];
 		max_links?: number | null; allow_hyperlink?: boolean | null;
@@ -69,7 +73,11 @@
 	// Media terarsip (soft delete oleh mitra) tetap tampil sebagai "maintenance"
 	// di katalog klien, tapi tidak bisa dipilih untuk distribusi.
 	const archivedIds = $derived(new Set(rows.filter((m) => m.status === 'archived').map((m) => m.id)));
-	let sortKey = $state<'traffic' | 'da' | 'ai_trust' | 'ai_cited' | 'speed' | 'price' | 'name'>('name');
+	// Default "Acak": urutan rotasi per muat ulang supaya semua media kebagian
+	// tampil di halaman awal, bukan selalu alfabetis dari atas.
+	let sortKey = $state<'traffic' | 'da' | 'ai_trust' | 'ai_cited' | 'speed' | 'price' | 'name' | 'acak'>('acak');
+	// Seed diacak sekali saat halaman dimuat; tombol "Acak" menggantinya.
+	let shuffleSeed = $state(randomShuffleSeed());
 	let sortDir = $state<'asc' | 'desc'>('asc');
 	let catPopoverId = $state<string | null>(null);
 	// Popover kategori diposisikan fixed (seperti portal Radix di app lama)
@@ -191,6 +199,10 @@
 	const fmt = (n: number) => n.toLocaleString('id-ID');
 	const cleanDomain = (m: Media) =>
 		m.website_url ? m.website_url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : m.id.slice(0, 8);
+	// Nama tampil = domain (bukan nama brand), huruf pertama dibesarkan.
+	const domainLabel = (m: Media) => mediaDomainLabel(m.website_url, m.name);
+	// Rekam jejak distribusi media (jumlah artikel yang sudah terbit lewat media ini).
+	const distribution = (m: Media) => mediaDistribution(m.health_breakdown, m.published_count);
 
 	// ── Muat data ──────────────────────────────────────────────────────
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -289,6 +301,8 @@
 	);
 
 	const sorted = $derived.by(() => {
+		// Mode rotasi: urutan acak-deterministik dari seed halaman ini.
+		if (sortKey === 'acak') return seededShuffle(filtered, shuffleSeed);
 		const list = [...filtered];
 		const dir = sortDir === 'asc' ? 1 : -1;
 		const num = (v: string | number) => (typeof v === 'number' ? v : -1);
@@ -302,11 +316,11 @@
 				case 'ai_cited': av = a.seo_ai_citation ? 1 : 0; bv = b.seo_ai_citation ? 1 : 0; break;
 				case 'speed': av = AUTO_TYPES.includes(a.integration_type) ? 2 : 1; bv = AUTO_TYPES.includes(b.integration_type) ? 2 : 1; break;
 				case 'price': av = a.client_price ?? a.price ?? 0; bv = b.client_price ?? b.price ?? 0; break;
-				default: av = a.name.toLowerCase(); bv = b.name.toLowerCase();
+				default: av = domainLabel(a).toLowerCase(); bv = domainLabel(b).toLowerCase();
 			}
 			if (av < bv) return -1 * dir;
 			if (av > bv) return 1 * dir;
-			return a.name.localeCompare(b.name, 'id');
+			return domainLabel(a).localeCompare(domainLabel(b), 'id');
 		});
 		return list;
 	});
@@ -362,8 +376,11 @@
 	}
 
 	function exportProposal() {
-		const headers = [tr('Nama Media'), 'Website', 'Kategori', 'Kecepatan', 'DA', 'AI Trust', 'AI Cited', tr('Harga IDR'), 'Kredit TC'];
+		const headers = ['Nama Media', 'Website', 'Kategori', 'Kecepatan', 'DA', 'AI Trust', 'AI Cited', tr('Harga IDR'), 'Kredit TC'];
 		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+		// Pemisah ";" dipakai karena Excel/Sheets ber-locale Indonesia (dan Eropa)
+		// memakai titik-koma sebagai list separator; CSV berkoma tampil menyatu
+		// jadi satu kolom di aplikasi sheet tersebut.
 		const lines = selectedMedia.map((m) => {
 			const speed = getReleaseSpeed(m.integration_type);
 			const price = m.client_price ?? m.price ?? 0;
@@ -371,9 +388,11 @@
 				esc(m.name), esc(m.website_url ?? ''), esc(m.category ?? 'Umum'),
 				esc(`${speed.label} (${speed.sub})`), esc(getDa(m)), esc(getAiTrust(m)),
 				esc(m.seo_ai_citation === true ? 'Ya' : 'Tidak'), esc(price), esc(m.credit_cost || Math.ceil(price / 1000))
-			].join(',');
+			].join(';');
 		});
-		const blob = new Blob([[headers.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
+		// BOM + CRLF supaya Excel membaca UTF-8 dan akhir baris dengan benar.
+		const csv = '\uFEFF' + [headers.map(esc).join(';'), ...lines].join('\r\n');
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
@@ -395,6 +414,31 @@
 		}
 	}
 
+	/**
+	 * Ambil sel pertama sebuah baris CSV/TSV. Hasil ekspor proposal memakai
+	 * pemisah ";" dan mengutip nilai, sedangkan daftar tempel bebas hanya berisi
+	 * satu domain per baris — keduanya terbaca di sini.
+	 */
+	function firstCsvCell(line: string): string {
+		const s = line.trim();
+		if (s.startsWith('"')) {
+			let out = '';
+			for (let i = 1; i < s.length; i++) {
+				if (s[i] === '"') {
+					if (s[i + 1] === '"') {
+						out += '"';
+						i++;
+						continue;
+					}
+					break;
+				}
+				out += s[i];
+			}
+			return out;
+		}
+		return s.split(/[;,\t]/)[0].trim();
+	}
+
 	function applyImport() {
 		importError = '';
 		const lines = importText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -404,9 +448,11 @@
 		}
 		const matched = new Set<string>();
 		for (const line of lines) {
-			const needle = line.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+			const cell = firstCsvCell(line);
+			if (!cell) continue;
+			const needle = cell.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
 			const hit = rows.find(
-				(m) => cleanDomain(m).toLowerCase() === needle || m.name.toLowerCase() === needle || m.id === line
+				(m) => cleanDomain(m).toLowerCase() === needle || m.name.toLowerCase() === needle || m.id === cell
 			);
 			if (hit) matched.add(hit.id);
 		}
@@ -742,6 +788,7 @@
 							{@const traffic = formatTraffic(m.sw_visits, m.traffic_estimate)}
 							{@const speed = getReleaseSpeed(m.integration_type)}
 							{@const cats = m.categories && m.categories.length ? m.categories : m.category ? [m.category] : ['Umum']}
+							{@const dist = distribution(m)}
 							<tr
 								class="modernTr"
 								style={archivedIds.has(m.id)
@@ -764,7 +811,12 @@
 								<td class="modernTd">
 									<div class="mediaRowCol">
 										<div class="mediaTitleLine">
-											<span class="mediaHeading">{m.name}</span>
+											<button
+												type="button"
+												class="mediaHeading mediaHeadingLink"
+												title={`Lihat detail ${domainLabel(m)}`}
+												onclick={(e) => { e.stopPropagation(); detail = m; }}
+											>{domainLabel(m)}</button>
 											{#if m.domain_verified}
 												<Tooltip.Root>
 											<Tooltip.Trigger>
@@ -786,28 +838,26 @@
 										</Tooltip.Root>
 											{/if}
 										</div>
-										<div class="mediaMetaLine">
-											{#if m.website_url}
-												<a
-													href={m.website_url}
-													target="_blank"
-													rel="noreferrer"
-													class="domainLink"
-													onclick={(e) => e.stopPropagation()}
-												>{cleanDomain(m)} <ExternalLink size={12} /></a>
-											{:else}
-												<span>{cleanDomain(m)}</span>
-											{/if}
-											{#if m.contoh_artikel_url}
-												<a
-													href={m.contoh_artikel_url}
-													target="_blank"
-													rel="noreferrer nofollow"
-													class="sampleDocLink"
-													onclick={(e) => e.stopPropagation()}
-												><FileText size={13} /><span>Sample</span></a>
-											{/if}
-										</div>
+										{#if m.contoh_artikel_url || dist.known}
+											<div class="mediaMetaLine">
+												{#if m.contoh_artikel_url}
+													<a
+														href={m.contoh_artikel_url}
+														target="_blank"
+														rel="noreferrer nofollow"
+														class="sampleDocLink"
+														onclick={(e) => e.stopPropagation()}
+													><FileText size={13} /><span>Sample</span></a>
+												{/if}
+												{#if dist.known}
+													<span
+														class="distBadge"
+														class:distBadgeMuted={dist.published === 0}
+														title={tr('Jumlah artikel yang sudah terbit lewat media ini di seluruh platform Tauthub.')}
+													><span>{dist.published > 0 ? `${dist.published} ${tr('artikel terdistribusi')}` : tr('Belum ada distribusi')}</span></span>
+												{/if}
+											</div>
+										{/if}
 										{#if m.dewan_pers_verified}
 											<div class="dewanPersBadge"><Check size={13} /><span>Dewan Pers</span></div>
 										{/if}
@@ -971,7 +1021,7 @@
 				<ul class="bookmarkList">
 					{#each rows.filter((m) => bookmarkedIds.has(m.id)) as m (m.id)}
 						<li class="bookmarkRow">
-							<span class="bookmarkName">{m.name}</span>
+							<span class="bookmarkName">{domainLabel(m)}</span>
 							<button
 								class="bookmarkRemove"
 								type="button"

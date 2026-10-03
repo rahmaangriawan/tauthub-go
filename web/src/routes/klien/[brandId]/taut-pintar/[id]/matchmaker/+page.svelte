@@ -18,6 +18,8 @@
 	import MediaDetailModal from '../../../media/_detail-modal.svelte';
 	import TautBottomBar from '../../_bottom-bar.svelte';
 	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, humanizeReason, fmtTrafficShort, formatTraffic } from '../../_shared';
+	import { mediaDomainLabel } from '$lib/media/domain-label';
+	import { mediaDistribution } from '$lib/media/distribution';
 	import PageTitle from '$lib/components/page-title.svelte';
 	// Kelas tabel bersama (port media-intelligence.module.css) — dipakai persis
 	// seperti app lama yang mengimpor modul CSS Katalog Media.
@@ -54,6 +56,7 @@
 		health_score: number | null;
 		health_breakdown?: Record<string, unknown> | null;
 		health_computed_at?: string | null;
+		published_count?: number | null;
 		dewan_pers_verified: boolean | null;
 		domain_verified?: boolean | null;
 		seo_da: number | null;
@@ -444,8 +447,10 @@
 		const quality = m.effective_quality ?? m.media_quality_score;
 		return quality ? Math.max(1, Math.round(quality * 0.9)) : '—';
 	}
-	const cleanDomain = (m: MediaRow) =>
-		m.website_url ? m.website_url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : m.id.slice(0, 8);
+	// Nama tampil = domain (bukan nama brand), huruf pertama dibesarkan.
+	const domainLabel = (m: MediaRow) => mediaDomainLabel(m.website_url, m.name);
+	// Rekam jejak distribusi media (jumlah artikel yang sudah terbit lewat media ini).
+	const distribution = (m: MediaRow) => mediaDistribution(m.health_breakdown, m.published_count);
 
 	function openCategoryPopover(event: MouseEvent, id: string, cats: string[]) {
 		event.stopPropagation();
@@ -553,7 +558,8 @@
 					{@const traffic = formatTraffic(m.sw_visits, m.traffic_estimate)}
 					{@const speed = getReleaseSpeed(m.integration_type)}
 					{@const cats = Array.isArray(m.categories) && m.categories.length > 0 ? m.categories : m.category ? [m.category] : ['Umum']}
-					{@const isSel = selectedIds.has(m.id)}
+						{@const isSel = selectedIds.has(m.id)}
+						{@const dist = distribution(m)}
 					<tr class="modernTr" style="background: {isSel ? '#f8faff' : 'transparent'}; cursor:pointer;" onclick={() => onToggle(m.id)}>
 						<td class="modernTd" style="width:36px;padding-right:0" onclick={(e) => e.stopPropagation()}>
 							<input type="checkbox" class="modernCheckbox" checked={isSel} onchange={() => onToggle(m.id)} aria-label={`${tr('Pilih media')} ${m.name}`} />
@@ -561,7 +567,18 @@
 						<td class="modernTd">
 							<div class="mediaRowCol">
 								<div class="mediaTitleLine">
-									<span class="mediaHeading">{m.name}</span>
+									{#if m.website_url}
+										<a
+											class="mediaHeading mediaHeadingLink"
+											href={m.website_url.startsWith('http') ? m.website_url : `https://${m.website_url}`}
+											target="_blank"
+											rel="noreferrer noopener"
+											title={`Buka ${domainLabel(m)}`}
+											onclick={(e) => e.stopPropagation()}
+										>{domainLabel(m)} <ExternalLink size={12} /></a>
+									{:else}
+										<span class="mediaHeading">{domainLabel(m)}</span>
+									{/if}
 									{#if m.domain_verified}
 										<span class="verifiedTick" title={tr('Domain terverifikasi Tauthub')} aria-label={tr('Domain Terverifikasi')}>
 											<svg width="15" height="15" viewBox="0 0 22 22" fill="none" aria-hidden="true">
@@ -574,16 +591,20 @@
 										<span class="badgeMatch" title={humanizeReason(entry.reason) || tr('Rekomendasi AI')}>★ {Math.round(entry.matchPercent)}% Match</span>
 									{/if}
 								</div>
-								<div class="mediaMetaLine">
-									{#if m.website_url}
-										<a class="domainLink" href={m.website_url.startsWith('http') ? m.website_url : `https://${m.website_url}`} target="_blank" rel="noreferrer noopener" onclick={(e) => e.stopPropagation()}>{cleanDomain(m)} <ExternalLink size={12} /></a>
-									{:else}
-										<span>{cleanDomain(m)}</span>
-									{/if}
-									{#if m.contoh_artikel_url}
-										<a class="sampleDocLink" href={m.contoh_artikel_url} target="_blank" rel="noreferrer nofollow" onclick={(e) => e.stopPropagation()}><FileText size={13} /><span>Sample</span></a>
-									{/if}
-								</div>
+								{#if m.contoh_artikel_url || dist.known}
+									<div class="mediaMetaLine">
+										{#if m.contoh_artikel_url}
+											<a class="sampleDocLink" href={m.contoh_artikel_url} target="_blank" rel="noreferrer nofollow" onclick={(e) => e.stopPropagation()}><FileText size={13} /><span>Sample</span></a>
+										{/if}
+										{#if dist.known}
+											<span
+												class="distBadge"
+												class:distBadgeMuted={dist.published === 0}
+												title={tr('Jumlah artikel yang sudah terbit lewat media ini di seluruh platform Tauthub.')}
+											><span>{dist.published > 0 ? `${dist.published} ${tr('artikel terdistribusi')}` : tr('Belum ada distribusi')}</span></span>
+										{/if}
+									</div>
+								{/if}
 								{#if m.dewan_pers_verified}
 									<div class="dewanPersBadge"><Check size={13} /><span>{tr('Dewan Pers')}</span></div>
 								{/if}

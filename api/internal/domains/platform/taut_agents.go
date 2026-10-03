@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -71,18 +72,23 @@ func (d *Deps) getTautAgentConfig(ctx context.Context, agent string) tautAgentCo
 	}
 	if row != nil {
 		apiKey := ""
+		var unsealErr error
 		if sealed, okStr := row.str("sealed_api_key"); okStr && sealed != "" {
 			if plain, uErr := d.unsealT2(sealed); uErr == nil {
 				apiKey = plain
+			} else {
+				unsealErr = uErr
 			}
 		}
 		enabled := row.boolOr("enabled", false)
-		complete := enabled && row.strOr("base_url", "") != "" && apiKey != "" && row.strOr("model", "") != ""
+		baseURL := strings.TrimRight(row.strOr("base_url", ""), "/")
+		model := row.strOr("model", "")
+		complete := enabled && baseURL != "" && apiKey != "" && model != ""
 		cfg = tautAgentConfig{
 			Agent:           agent,
-			BaseURL:         strings.TrimRight(row.strOr("base_url", ""), "/"),
+			BaseURL:         baseURL,
 			APIKey:          apiKey,
-			Model:           row.strOr("model", ""),
+			Model:           model,
 			Temperature:     ptRowTemperature(row),
 			MaxTokens:       ptRowIntPtr(row, "max_tokens"),
 			TimeoutMs:       ptRowIntDefault(row, "timeout_ms", 60000),
@@ -90,6 +96,22 @@ func (d *Deps) getTautAgentConfig(ctx context.Context, agent string) tautAgentCo
 			Enabled:         enabled,
 			RateLimitPerMin: ptMaxInt(ptRowIntDefault(row, "rate_limit_per_min", 3), 0),
 			Configured:      complete,
+		}
+		// Key per-agent ada tapi tak terbaca: tetap hormati model pilihan admin
+		// dengan meminjam key gateway global — hanya untuk base URL yang sama,
+		// karena key milik provider lain tidak akan valid di sini.
+		if unsealErr != nil && enabled && baseURL != "" && model != "" {
+			if rt, rtErr := ai.LoadAIRuntime(ctx, d.Pool); rtErr == nil && rt.APIKey != "" && strings.TrimRight(rt.BaseURL, "/") == baseURL {
+				cfg.APIKey = rt.APIKey
+				cfg.Configured = true
+				slog.Warn("[taut-agent] api key per-agent gagal di-unseal, memakai key gateway global dengan model config",
+					"agent", agent, "model", model, "unseal_err", unsealErr.Error())
+			}
+		}
+		if enabled && !cfg.Configured {
+			slog.Warn("[taut-agent] config agent tidak lengkap, memakai gateway global",
+				"agent", agent, "base_url", baseURL, "model", model,
+				"has_key", apiKey != "", "unseal_err", unsealErr)
 		}
 	}
 	if !cfg.Configured {
@@ -129,11 +151,9 @@ func ptRowIntDefault(row ptRow, key string, fallback int) int {
 }
 
 func (d *Deps) unsealT2(sealed string) (string, error) {
-	secret := d.Cfg.CmsEncryptionSecret
-	if secret == "" {
-		secret = d.Cfg.Secret
-	}
-	return crypto.Unseal(sealed, secret)
+	// Data lama ter-seal dengan APP_SECRET (provider.ts legacy), runtime baru
+	// memakai CMS_ENCRYPTION_SECRET — coba keduanya.
+	return crypto.UnsealCompat(sealed, d.Cfg.CmsEncryptionSecret, d.Cfg.Secret)
 }
 
 // sealT2: v2 (t2:) dengan cmsEncryptionSecret / fallback APP_SECRET.

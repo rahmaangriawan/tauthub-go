@@ -101,6 +101,8 @@
 	let copiedShare = $state(false);
 	let catPopoverOpen = $state(false);
 	let infoTipOpen = $state(false);
+	let exportingInfo = $state(false);
+	let infoExportFailed = $state(false);
 
 	// Content velocity dari crawlhub API
 	onMount(() => {
@@ -232,48 +234,116 @@
 		}
 	}
 
-	function exportInfo() {
-		const lines = [
-			`INFORMASI MEDIA: ${media.name.toUpperCase()}`,
-			`Website: ${media.website_url ?? '-'}`,
-			`Kategori: ${media.category ?? 'Umum'}`,
-			`Dewan Pers: ${media.dewan_pers_verified ? 'Terverifikasi' : tr('Belum Terverifikasi')}`,
-			'',
-			'JALUR PUBLIKASI',
-			autoPath
-				? 'Tauthub Secure Direct™ — artikel terbit otomatis ke website media tanpa antre persetujuan mitra.'
-				: 'Editorial Review (SLA Tracked) — naskah ditinjau dan diterbitkan langsung oleh tim redaksi mitra.',
-			'',
-			'INDIKATOR KINERJA MITRA (skala engine health Tauthub)',
-			`Health Score: ${score != null ? `${score} / 100` : 'belum diskor'} (${healthLabel})`,
-			`Fulfillment Rate: ${fulfillmentPoints} / ${METRIC_MAX.fulfillment} (${fulfillmentPct})`,
-			`SLA Responsiveness: ${slaText === '—' ? 'belum ada riwayat' : slaText} — ${slaPoints} / ${METRIC_MAX.sla}`,
-			`Link Permanence: ${permanencePoints} / ${METRIC_MAX.permanence} (${permanencePct})`,
-			`Server Uptime: ${uptimePoints} / ${METRIC_MAX.uptime} (${uptimePct})`,
-			hasHistory
-				? `Riwayat: ${published} terbit, ${rejected} ditolak, ${failed} gagal`
-				: 'Belum ada riwayat publikasi — seluruh komponen bernilai 0 sesuai perhitungan engine.',
-			'',
-			'PARAMETER AI & REDAKSI',
-			`Garansi Tayang (SLA): 12 Bulan (jaminan retensi standar platform Tauthub)`,
-			`Label Sponsor / Adv: ${media.label_sponsor === 'ada_sponsor' ? 'Ada Sponsor / Adv' : tr('Tidak Ada (Organik)')}`,
-			`Batas Tautan Keluar: ${linkPolicy}`,
-			`Panjang Artikel: ${wordCountLabel(media.word_count_mode)}`,
-			`Support Embed (Video/Maps): ${media.allow_embed ? 'Diizinkan' : tr('Tidak Diizinkan')}`,
-			`Mode Pengiriman: ${isDirectPublish ? tr('Langsung Terbit (otomatis, tanpa langkah terbit manual di media)') : tr('Draf (diterbitkan oleh media)')}`,
-			'',
-			'PEMBATASAN GATEKEEPER',
-			`Topik Dilarang: ${gatekeeperList.join(', ')}`,
-			'',
-			`BIAYA PUBLIKASI: ${idr(media.client_price ?? media.price)} (~ ${media.credit_cost} Kredit)`
-		];;
-		const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `Media_Info_${media.name.replace(/[^\w-]+/g, '_')}.txt`;
-		a.click();
-		URL.revokeObjectURL(url);
+	/** Unduh ringkasan info media sebagai laporan PDF bermerek Tauthub. */
+	async function exportInfo() {
+		if (exportingInfo) return;
+		exportingInfo = true;
+		infoExportFailed = false;
+		try {
+			// jspdf relatif berat, jadi baru diunduh saat tombol ini dipakai.
+			const { buildMediaInfoPdf, mediaInfoPdfFileName } = await import('$lib/media/media-info-pdf');
+			const doc = buildMediaInfoPdf({
+				name: media.name,
+				domainLabel: media.website_url
+					? media.website_url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')
+					: '—',
+				websiteUrl: media.website_url,
+				categories: cats,
+				mediaTypeLabel,
+				verified: media.domain_verified !== false,
+				dewanPers: Boolean(media.dewan_pers_verified),
+				trafficText,
+				daText,
+				aiTrustText,
+				autoPath,
+				healthScore: score,
+				healthLabel,
+				healthMax: 100,
+				metrics: [
+					{
+						label: tr('Fulfillment Rate'),
+						value: fulfillmentPct,
+						pct: (fulfillmentPoints / METRIC_MAX.fulfillment) * 100
+					},
+					{
+						label: tr('SLA Responsiveness'),
+						value: slaText === '—' ? tr('Belum ada riwayat') : slaText,
+						pct: (slaPoints / METRIC_MAX.sla) * 100
+					},
+					{
+						label: tr('Link Permanence'),
+						value: permanencePct,
+						pct: (permanencePoints / METRIC_MAX.permanence) * 100
+					},
+					{
+						label: tr('Server Uptime'),
+						value: uptimePct,
+						pct: (uptimePoints / METRIC_MAX.uptime) * 100
+					}
+				],
+				historyLine: hasHistory
+					? `${tr('Riwayat')}: ${published} ${tr('terbit')}, ${rejected} ${tr('ditolak')}, ${failed} ${tr('gagal')}.`
+					: tr('Belum ada riwayat publikasi (seluruh komponen bernilai 0 sesuai perhitungan engine).'),
+				parameters: [
+					{
+						label: tr('Garansi Tayang (SLA)'),
+						value: `12 ${tr('Bulan')} (${tr('jaminan retensi standar platform Tauthub')})`
+					},
+					{
+						label: tr('Label Sponsor / Adv'),
+						value: media.label_sponsor === 'ada_sponsor' ? tr('Ada Label Sponsor / Adv') : tr('Tidak Ada (Organik)')
+					},
+					{ label: tr('Batas Tautan Keluar'), value: linkPolicy },
+					{ label: tr('Panjang Artikel'), value: wordCountLabel(media.word_count_mode) },
+					{
+						label: tr('Support Embed (Video/Maps)'),
+						value: media.allow_embed ? tr('Diizinkan') : tr('Tidak Diizinkan')
+					},
+					{
+						label: tr('Mode Pengiriman'),
+						value: isDirectPublish
+							? tr('Langsung Terbit (otomatis, tanpa langkah terbit manual di media)')
+							: tr('Draf (diterbitkan oleh media)')
+					}
+				],
+				gatekeeper: gatekeeperList,
+				priceText: idr(media.client_price ?? media.price),
+				creditText: `~ ${media.credit_cost} ${tr('Kredit')}`,
+				generatedAt: jakartaStamp(new Date().toISOString()),
+				reference: `REF ${media.id.slice(0, 8).toUpperCase()}`,
+				labels: {
+					reportTitle: 'Media Information Report',
+					generatedAt: tr('Dibuat'),
+					traffic: tr('Estimasi Trafik'),
+					da: tr('Domain Authority'),
+					aiTrust: tr('AI Trust Score'),
+					publicationPath: tr('Jalur Publikasi'),
+					partnerKpi: tr('Indikator Kinerja Mitra'),
+					parameters: tr('Parameter AI & Redaksi'),
+					gatekeeper: tr('Pembatasan Gatekeeper'),
+					publicationCost: tr('Biaya Publikasi'),
+					directPathTitle: 'Tauthub Secure Direct™',
+					directPathDesc: tr(
+						'Artikel langsung terbit ke media target setelah submit pesanan tanpa perlu persetujuan manual, riwayat tayang otomatis akan terpantau di ringkasan kampanye.'
+					),
+					reviewPathTitle: 'Editorial Review (SLA Tracked)',
+					reviewPathDesc: tr(
+						'Naskah akan ditinjau secara manual oleh redaksi media, seluruh proses antrian penerbitan, revisi dan waktu respon dipantau pada halaman ringkasan kampanye.'
+					),
+					restrictedTopics: tr(
+						'Naskah yang mengandung topik berikut akan diblokir otomatis oleh AI Validator sebelum saldo kredit Anda terpotong:'
+					),
+					footerNote: `${tr('Dibuat otomatis oleh Tauthub')} · tauthub.com`,
+					page: tr('Halaman')
+				}
+			});
+			doc.save(mediaInfoPdfFileName(media.name));
+		} catch {
+			infoExportFailed = true;
+			setTimeout(() => (infoExportFailed = false), 2500);
+		} finally {
+			exportingInfo = false;
+		}
 	}
 
 	function onKeydown(e: KeyboardEvent) {
@@ -373,9 +443,15 @@
 						{/if}
 					</button>
 
-					<button class="detailExportPillBtn" type="button" onclick={exportInfo}>
+					<button
+						class="detailExportPillBtn"
+						type="button"
+						onclick={exportInfo}
+						disabled={exportingInfo}
+						title={tr('Unduh informasi media (PDF)')}
+					>
 						<Download size={16} />
-						<span>Ekspor Info</span>
+						<span>{exportingInfo ? tr('Menyiapkan…') : infoExportFailed ? tr('Gagal, coba lagi') : 'Ekspor Info'}</span>
 					</button>
 
 					<button class="detailCloseBtn" type="button" aria-label={tr("Tutup")} onclick={onclose}>
@@ -907,6 +983,14 @@
 	.detailExportPillBtn:hover {
 		background: #f8fafc;
 		border-color: #cbd5e1;
+	}
+	.detailExportPillBtn:disabled {
+		opacity: 0.7;
+		cursor: progress;
+	}
+	.detailExportPillBtn:disabled:hover {
+		background: #ffffff;
+		border-color: #e2e8f0;
 	}
 	.detailCloseBtn {
 		width: 34px;

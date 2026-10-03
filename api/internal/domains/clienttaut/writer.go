@@ -89,8 +89,9 @@ func (d *Deps) generateWriterArticle(ctx context.Context, campaignID, brandID, u
 	regenCount := item.intOr("regen_count", 0)
 	hasDocument := item.has("article_document_id")
 	if hasDocument {
+		// Limit mengikuti jatah akun (Admin Users); NULL = tanpa batas.
 		quota := d.userGenerateQuota(ctx, userID)
-		if regenCount >= quota-1 {
+		if quota > 0 && regenCount+1 > quota {
 			return writerItemResult{}, errStatus(500, "Batas jatah generate tercapai: artikel ini sudah di-generate "+
 				itoa(regenCount+1)+"x (kuota akun "+itoa(quota)+"x = generate pertama + regenerasi).")
 		}
@@ -542,26 +543,33 @@ func escapeHTMLText(v string) string {
 }
 
 // mapHTMLTextNodes: terapkan fn hanya pada text node (di luar tag; di dalam <a> dilewati).
+// Tokenizer manual di atas FindAllStringIndex: Regexp.Split di Go membuang
+// capture group-nya (berbeda dari String.split di JS), jadi Split di sini
+// dulu menghapus seluruh tag HTML dari artikel.
 func mapHTMLTextNodes(html string, fn func(string) string) string {
-	parts := reTagSplit.Split(html, -1)
 	var out strings.Builder
+	last := 0
 	inA := false
-	for _, part := range parts {
-		if strings.HasPrefix(part, "<") {
-			if reOpenA.MatchString(part) {
-				inA = true
-			} else if reCloseA.MatchString(part) {
-				inA = false
-			}
-			out.WriteString(part)
-			continue
+	for _, m := range reTagSplit.FindAllStringIndex(html, -1) {
+		text := html[last:m[0]]
+		if !inA {
+			text = fn(text)
 		}
-		if inA {
-			out.WriteString(part)
-		} else {
-			out.WriteString(fn(part))
+		out.WriteString(text)
+		tag := html[m[0]:m[1]]
+		if reOpenA.MatchString(tag) {
+			inA = true
+		} else if reCloseA.MatchString(tag) {
+			inA = false
 		}
+		out.WriteString(tag)
+		last = m[1]
 	}
+	tail := html[last:]
+	if !inA {
+		tail = fn(tail)
+	}
+	out.WriteString(tail)
 	return out.String()
 }
 
@@ -594,7 +602,7 @@ func weaveContextualLink(html, url, anchor string, rel *string) string {
 		if trimmed == "" {
 			continue
 		}
-		re, err := regexp.Compile(`(?i)(^|[^\w@./-])` + regexp.QuoteMeta(trimmed) + `([\s),.;:!?]|$)`)
+		re, err := regexp.Compile(`(?i)(^|[^\w@./-])(` + regexp.QuoteMeta(trimmed) + `)([\s),.;:!?]|$)`)
 		if err != nil {
 			continue
 		}
@@ -607,13 +615,13 @@ func weaveContextualLink(html, url, anchor string, rel *string) string {
 				return text
 			}
 			replaced = true
-			// Bungkus hanya frasa (pertahankan boundary char di luar <a>).
+			// Bungkus frasa (sub[2]); boundary kiri/kanan tetap di luar <a>.
 			return re.ReplaceAllStringFunc(text, func(m string) string {
 				sub := re.FindStringSubmatch(m)
 				if sub == nil {
 					return m
 				}
-				return sub[1] + wrap(sub[2])
+				return sub[1] + wrap(sub[2]) + sub[3]
 			})
 		})
 		if replaced {

@@ -122,6 +122,12 @@ type AIRuntime struct {
 	MaxRetries     int
 	Source         string // database | environment | none
 	APIKeyHint     string
+	// Konfigurasi khusus Generate Gambar AI (terpisah dari chat). Kosong =
+	// ikuti konfigurasi AI chat.
+	ImageBaseURL    string
+	ImageAPIKey     string
+	ImageModel      string
+	ImageAPIKeyHint string
 }
 
 type cfgCacheEntry struct {
@@ -160,9 +166,10 @@ func LoadAIRuntime(ctx context.Context, pool *pgxpool.Pool) (*AIRuntime, error) 
 	}
 
 	var baseURL, sealedKey, keyHint, defaultModel, economyModel, premiumModel *string
+	var imageBaseURL, imageSealedKey, imageKeyHint, imageModel *string
 	err := pool.QueryRow(ctx,
-		"SELECT base_url, sealed_api_key, api_key_hint, default_model, economy_model, premium_model FROM platform_ai_configuration WHERE id = 'default' LIMIT 1",
-	).Scan(&baseURL, &sealedKey, &keyHint, &defaultModel, &economyModel, &premiumModel)
+		"SELECT base_url, sealed_api_key, api_key_hint, default_model, economy_model, premium_model, image_base_url, image_sealed_api_key, image_api_key_hint, image_model FROM platform_ai_configuration WHERE id = 'default' LIMIT 1",
+	).Scan(&baseURL, &sealedKey, &keyHint, &defaultModel, &economyModel, &premiumModel, &imageBaseURL, &imageSealedKey, &imageKeyHint, &imageModel)
 
 	envDefault := envStr("AI_DEFAULT_MODEL")
 	if envDefault == "" {
@@ -218,6 +225,45 @@ func LoadAIRuntime(ctx context.Context, pool *pgxpool.Pool) (*AIRuntime, error) 
 		rt.PremiumModel = pm
 		rt.Source = source
 		rt.APIKeyHint = hint
+
+		// Konfigurasi gambar: kolom khusus dulu, lalu ikut konfigurasi chat,
+		// terakhir env AI_IMAGE_*. Model gambar tidak pernah ikut model chat
+		// (model chat bukan model gambar).
+		imageKey := ""
+		if imageSealedKey != nil && *imageSealedKey != "" {
+			for _, candidate := range SecretCandidates() {
+				if plain, unsealErr := UnsealWith(*imageSealedKey, candidate); unsealErr == nil && plain != "" {
+					imageKey = plain
+					break
+				}
+			}
+		}
+		imgKey := imageKey
+		if imgKey == "" {
+			imgKey = effectiveKey
+		}
+		if imgKey == "" {
+			imgKey = envStr("AI_IMAGE_API_KEY")
+		}
+		imgBase := derefStr(imageBaseURL)
+		if imgBase == "" {
+			imgBase = effectiveBase
+		}
+		if imgBase == "" {
+			imgBase = envStr("AI_IMAGE_BASE_URL")
+		}
+		imgModel := derefStr(imageModel)
+		if imgModel == "" {
+			imgModel = envStr("AI_IMAGE_MODEL")
+		}
+		imgHint := derefStr(imageKeyHint)
+		if imgHint == "" && imgKey != "" {
+			imgHint = "••••" + lastN(imgKey, 4)
+		}
+		rt.ImageBaseURL = imgBase
+		rt.ImageAPIKey = imgKey
+		rt.ImageModel = imgModel
+		rt.ImageAPIKeyHint = imgHint
 	} else {
 		hasEnv := envStr("AI_BASE_URL") != "" || envStr("AI_API_KEY") != ""
 		source := "none"
@@ -233,6 +279,20 @@ func LoadAIRuntime(ctx context.Context, pool *pgxpool.Pool) (*AIRuntime, error) 
 		rt.Source = source
 		if rt.APIKey != "" {
 			rt.APIKeyHint = "••••" + lastN(rt.APIKey, 4)
+		}
+
+		// Fallback env yang sama seperti cabang DB: ikut chat, lalu env AI_IMAGE_*.
+		rt.ImageBaseURL = rt.BaseURL
+		if rt.ImageBaseURL == "" {
+			rt.ImageBaseURL = envStr("AI_IMAGE_BASE_URL")
+		}
+		rt.ImageAPIKey = rt.APIKey
+		if rt.ImageAPIKey == "" {
+			rt.ImageAPIKey = envStr("AI_IMAGE_API_KEY")
+		}
+		rt.ImageModel = envStr("AI_IMAGE_MODEL")
+		if rt.ImageAPIKey != "" {
+			rt.ImageAPIKeyHint = "••••" + lastN(rt.ImageAPIKey, 4)
 		}
 	}
 

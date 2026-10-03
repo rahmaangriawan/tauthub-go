@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { CalendarClock, CircleCheck, Clock, Eye, FileText, Image, Link, Link2, ListChecks, LoaderCircle, Pencil, PencilLine, Send, ShieldCheck, Sparkles, TriangleAlert, Upload, Wallet, X } from '@lucide/svelte';
+	import { CalendarClock, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Link, Link2, ListChecks, LoaderCircle, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Trash2, TriangleAlert, Upload, Wallet, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, getAccessToken, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -64,6 +64,12 @@
 	let articleStats = $state<Record<string, ArticleStats>>({});
 	let articleTitles = $state<Record<string, string>>({});
 	let placement = $state<PlacementItem[]>([]);
+	// Jumlah analisis QC per media (badge di tombol "Analisis QC").
+	let qcCounts = $state<Record<string, number>>({});
+	// Konfirmasi hapus media dari kampanye (soft delete, data artikel tetap aman).
+	let removeTarget = $state<PlacementItem | null>(null);
+	let removeBusy = $state(false);
+	let removeError = $state('');
 	let links = $state<LinksForm>(EMPTY_LINKS);
 	let linksStatus = $state<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle');
 	let loading = $state(true);
@@ -82,6 +88,9 @@
 	// Panel analisis QC (slide-over kanan) untuk satu artikel.
 	let qcFor = $state<string | null>(null);
 	let qcToken = $state(0);
+	// Media yang hasil QC-nya menunggu dibuka: panel ditunda sampai modal naskah
+	// tertutup supaya dua overlay tidak menumpuk dan kunci scroll tidak bentrok.
+	let pendingQcFor = $state<string | null>(null);
 	let gatekeeperAgent = $state<{ configured: boolean; reason: string | null } | null>(null);
 	// Distribusi langsung dari The Writer ketika QC sudah lulus (Gatekeeper dilewati).
 	let distributable = $state<boolean | null>(null);
@@ -184,7 +193,14 @@
 			}
 			// null = belum diketahui / gagal dibaca → tombol kembali ke jalur aman
 			// (mampir ke halaman Gatekeeper).
-			distributable = auditsRes.ok ? (await auditsRes.json().catch(() => null))?.canDistribute === true : null;
+			const auditsData = auditsRes.ok ? await auditsRes.json().catch(() => null) : null;
+			distributable = auditsData?.canDistribute === true;
+			const counts: Record<string, number> = {};
+			for (const item of auditsData?.media ?? []) {
+				const id = String(item?.media_id ?? '');
+				if (id) counts[id] = Number(item?.audit?.count ?? 0);
+			}
+			qcCounts = counts;
 			const linksData = linksRes.ok ? await linksRes.json() : null;
 			const draftData = draftRes.ok ? await draftRes.json() : null;
 			const bl = draftData?.profilerBacklink ?? draftData?.draft?.backlink ?? draftData?.crawl_result?.backlink;
@@ -484,9 +500,14 @@
 		};
 	}
 
-	async function uploadDocNaskah(file: File): Promise<{ title: string; html: string }> {
+	async function uploadDocNaskah(
+		file: File,
+		onPhase?: (phase: 'extract' | 'clean') => void,
+		links: { anchor_text: string; url: string }[] = []
+	): Promise<{ title: string; html: string; warning?: string }> {
 		const form = new FormData();
 		form.append('file', file);
+		onPhase?.('extract');
 		const upRes = await apiRequest(`${apiBase}/files`, { method: 'POST', body: form });
 		const upData = await upRes.json().catch(() => null);
 		const text = upData?.file && typeof upData.file.extracted_text === 'string' ? String(upData.file.extracted_text) : '';
@@ -500,15 +521,43 @@
 			judul = lines[0];
 			isi = lines.slice(1).join('\n');
 		}
-		return { title: judul.slice(0, 200), html: textToHtml(isi) };
+		const rawHtml = textToHtml(isi);
+		// Rapikan dengan AI sebelum masuk editor. Kegagalan apa pun tidak
+		// menghalangi: teks asli tetap dipakai, alasannya dikembalikan sebagai
+		// peringatan agar modal menampilkannya.
+		onPhase?.('clean');
+		try {
+			const cleanRes = await apiRequest(
+				`${apiBase}/documents/cleanup`,
+				{ method: 'POST', body: JSON.stringify({ text: isi, title: judul, links }) },
+				180_000
+			);
+			if (!cleanRes.ok) {
+				throw new Error(await readApiError(cleanRes, tr('AI gagal merapikan dokumen.')));
+			}
+			const cleanData = await cleanRes.json().catch(() => null);
+			const cleaned = cleanData?.html ? String(cleanData.html) : '';
+			if (cleanData?.cleaned === false || !cleaned.trim()) {
+				const reason = String(cleanData?.reason ?? '').trim() || tr('AI mengembalikan hasil kosong.');
+				return { title: judul.slice(0, 200), html: rawHtml, warning: `${tr('AI gagal merapikan dokumen:')} ${reason} ${tr('Teks asli tetap dipakai.')}` };
+			}
+			return { title: judul.slice(0, 200), html: cleaned };
+		} catch (reason) {
+			const msg = reason instanceof Error ? reason.message : tr('AI gagal merapikan dokumen.');
+			return { title: judul.slice(0, 200), html: rawHtml, warning: `${tr('AI gagal merapikan dokumen:')} ${msg} ${tr('Teks asli tetap dipakai.')}` };
+		}
 	}
 
 	// Generate dengan arahan topik dari modal Pengelola Naskah (1 kredit bila
 	// artikel belum ada; regenerasi 2 kredit sesuai aturan backend).
-	async function generateNaskah(mediaId: string, topic: string): Promise<{ title: string; html: string }> {
+	async function generateNaskah(
+		mediaId: string,
+		topic: string,
+		links: { anchor_text: string; url: string }[] = []
+	): Promise<{ title: string; html: string }> {
 		const res = await apiRequest(`${apiBase}/produce/${mediaId}`, {
 			method: 'POST',
-			body: JSON.stringify({ topic })
+			body: JSON.stringify({ topic, links })
 		}, 240_000);
 		const data = await res.json().catch(() => null);
 		if (!res.ok) throw new Error(data?.detail ?? tr('Gagal membuat draf AI.'));
@@ -517,11 +566,12 @@
 		return { title: String(data?.title ?? ''), html: String(data?.content_html ?? '') };
 	}
 
-	async function saveEditor(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) {
+	// Simpan isi editor. Dipisah dari penutupan modal supaya alur "Cek Validasi
+	// Artikel" bisa menyimpan dulu lalu memindai tanpa menutup modal.
+	async function persistEditor(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string): Promise<boolean> {
 		const current = editor;
-		if (!current) return;
+		if (!current) return false;
 		const mediaId = current.mediaId;
-		editorSaving = true;
 		editorError = '';
 		try {
 			// Ada dokumen → PUT; belum ada (hasil upload) → POST upload.
@@ -535,19 +585,96 @@
 			} else {
 				const postRes = await apiRequest(`${apiBase}/articles/${mediaId}/upload`, {
 					method: 'POST',
-					body: JSON.stringify({ title, content_html: html })
+					body: JSON.stringify({ title, content_html: html, featured_image_url: coverUrl ?? undefined, category, meta_description: metaDescription })
 				});
 				if (!postRes.ok) throw new Error(await readApiError(postRes, tr('Gagal menyimpan artikel.')));
 				genState = { ...genState, [mediaId]: 'draft' };
 			}
-			editor = null;
 			qcToken += 1;
 			await load();
+			return true;
 		} catch (reason) {
 			editorError = reason instanceof Error ? reason.message : tr('Gagal menyimpan artikel.');
-		} finally {
-			editorSaving = false;
+			return false;
 		}
+	}
+
+	async function saveEditor(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) {
+		if (!editor) return;
+		editorSaving = true;
+		const saved = await persistEditor(title, html, coverUrl, category, metaDescription);
+		editorSaving = false;
+		if (saved) {
+			editor = null;
+			revealPendingQc();
+		}
+	}
+
+	type QcCheckOutcome = { ok: boolean; passed: boolean; message: string; error: string };
+
+	/** Pemindaian QC satu media lewat endpoint yang sama dengan panel QC. */
+	async function runQcCheck(mediaId: string): Promise<QcCheckOutcome> {
+		if (gatekeeperAgent && !gatekeeperAgent.configured) {
+			return { ok: false, passed: false, message: '', error: tr('AI Gatekeeper belum dikonfigurasi oleh admin. Audit tidak akan berjalan sampai admin mengaktifkannya.') };
+		}
+		try {
+			const scanRes = await apiRequest(`${apiBase}/gatekeeper/audit-all`, { method: 'POST', body: JSON.stringify({ mediaIds: [mediaId] }) }, 900_000);
+			if (!scanRes.ok) {
+				return { ok: false, passed: false, message: '', error: await readApiError(scanRes, tr('Gagal menjalankan pemindaian QC.')) };
+			}
+			const auditsRes = await apiRequest(`${apiBase}/gatekeeper/audits`);
+			const data = auditsRes.ok ? await auditsRes.json().catch(() => null) : null;
+			const entry = data?.media?.find((m: { media_id: string }) => m.media_id === mediaId);
+			const cs = entry?.audit?.checks?.contentSafety;
+			const lh = entry?.audit?.checks?.linkHealth;
+			const passed = cs?.status === 'passed' && lh?.status === 'passed';
+			const reasons: string[] = [];
+			if (!entry) {
+				reasons.push(tr('Hasil pemindaian belum tersedia.'));
+			} else {
+				if (cs && cs.status !== 'passed') {
+					if (cs.reasons?.length) reasons.push(...cs.reasons);
+					else if (cs.categories?.length) reasons.push(`${tr('Kategori berisiko:')} ${cs.categories.join(', ')}`);
+					else reasons.push(tr('Illegal Content Guard belum lulus.'));
+				}
+				if (lh && lh.status !== 'passed') {
+					const n = lh.links?.filter((l: { status?: string }) => l.status === 'unsafe' || l.status === 'suspicious').length ?? 0;
+					reasons.push(n > 0 ? `${n} ${tr('tautan bermasalah')}` : tr('Link Health Validator belum lulus.'));
+				}
+			}
+			await load();
+			return { ok: true, passed, message: reasons.join(' · '), error: '' };
+		} catch (reason) {
+			return { ok: false, passed: false, message: '', error: reason instanceof Error ? reason.message : tr('Gagal menjalankan pemindaian QC.') };
+		}
+	}
+
+	/** Cek Validasi dari modal: simpan dulu, pindai QC media ini, lalu buka panel. */
+	async function validateNaskah(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string): Promise<QcCheckOutcome> {
+		const current = editor;
+		if (!current) return { ok: false, passed: false, message: '', error: tr('Artikel tidak tersedia.') };
+		editorSaving = true;
+		const saved = await persistEditor(title, html, coverUrl, category, metaDescription);
+		editorSaving = false;
+		if (!saved) return { ok: false, passed: false, message: '', error: editorError || tr('Gagal menyimpan artikel.') };
+		const outcome = await runQcCheck(current.mediaId);
+		// Panel dibuka setelah modal tertutup (lihat revealPendingQc).
+		pendingQcFor = current.mediaId;
+		return outcome;
+	}
+
+	/** Buka panel QC begitu modal naskah tertutup. */
+	function revealPendingQc() {
+		if (!pendingQcFor) return;
+		qcFor = pendingQcFor;
+		pendingQcFor = null;
+		qcToken += 1;
+	}
+
+	/** Buka panel QC untuk media terpilih pertama (pengganti halaman Gatekeeper). */
+	function openQcPanel() {
+		const target = selected[0]?.media_id ?? placement[0]?.media_id ?? null;
+		if (target) qcFor = target;
 	}
 
 	async function uploadCover(file: File): Promise<string> {
@@ -588,9 +715,9 @@
 
 	async function publish() {
 		if (coverChecking || distributing) return;
-		// QC belum lulus → halaman Gatekeeper yang menangani audit + penjadwalan.
+		// QC belum lulus → buka panel QC agar alasan terlihat (halaman Gatekeeper dihapus).
 		if (!distributable) {
-			await goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/gatekeeper`);
+			openQcPanel();
 			return;
 		}
 		coverChecking = true;
@@ -846,8 +973,8 @@
 
 	{#if distributeFailed}
 		<div class="app-card mt-3 flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-			<span class="flex-1 text-muted-foreground">{tr('Penerbitan langsung gagal. Kamu masih bisa menyelesaikannya lewat halaman The Gatekeeper.')}</span>
-			<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/gatekeeper`)}><ShieldCheck size={14} /> {tr('Buka Gatekeeper')}</button>
+			<span class="flex-1 text-muted-foreground">{tr('Penerbitan gagal. Periksa panel Analisis QC lalu coba lagi.')}</span>
+			<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={openQcPanel}><ShieldCheck size={14} /> {tr('Buka Panel QC')}</button>
 		</div>
 	{/if}
 
@@ -1045,7 +1172,55 @@
 								{/if}
 							</p>
 							<div class="flex flex-wrap gap-2">
-								<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning} onclick={() => (checklistFor = m.media_id)}><ListChecks size={14} /> {tr('Cek Validasi')}</button>
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning} onclick={() => (checklistFor = m.media_id)}><ListChecks size={14} /> {tr('Cek Validasi')}</button>
+									{#if removeTarget && removeTarget.media_id === m.media_id}
+										<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.55);" role="presentation" onclick={(e) => { if (e.target === e.currentTarget && !removeBusy) removeTarget = null; }}>
+											<div class="flex w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl" style="border-color: var(--border); background-color: var(--card, #fff);" role="dialog" aria-modal="true" tabindex="-1" aria-label={tr('Hapus Media dari Kampanye')} onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape' && !removeBusy) removeTarget = null; }}>
+												<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
+													<div class="flex items-center gap-2.5 text-sm font-bold" style="color: var(--destructive);">
+														<Trash2 size={18} />
+														<span>{tr('Hapus Media dari Kampanye?')}</span>
+													</div>
+													<button class="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary" type="button" aria-label={tr('Tutup')} disabled={removeBusy} onclick={() => (removeTarget = null)}>
+														<X size={16} />
+													</button>
+												</div>
+												<div class="space-y-3 p-5">
+													<p class="text-sm font-semibold">{m.name}</p>
+													<p class="text-xs leading-relaxed text-muted-foreground">
+														{tr('Media ini akan dilepas dari kampanye (tidak dihapus permanen). Artikel dan datanya tetap tersimpan, jadi bisa dipakai lagi nanti.')}
+													</p>
+													<p class="rounded-lg p-2.5 text-xs leading-relaxed" style="background-color: var(--muted, #f8fafc); color: var(--foreground);">
+														{tr('Untuk mengaktifkan kembali media ini, buka The Matchmaker dan pilih ulang medianya.')}
+													</p>
+													{#if removeError}
+														<p class="flex items-center gap-1.5 text-xs" style="color: var(--destructive);"><CircleAlert size={14} /> {removeError}</p>
+													{/if}
+												</div>
+												<div class="flex items-center justify-end gap-2.5 border-t px-5 py-3.5" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
+													<button class="app-btn app-btn-soft text-xs" type="button" disabled={removeBusy} onclick={() => (removeTarget = null)}>{tr('Batal')}</button>
+													<button class="app-btn text-xs font-semibold" style="background-color: var(--destructive); color: #fff;" type="button" disabled={removeBusy} onclick={async () => {
+														if (!removeTarget) return;
+														removeBusy = true;
+														removeError = '';
+														try {
+															const remaining = placement.filter((p) => p.media_id !== removeTarget?.media_id).map((p) => p.media_id);
+															const res = await apiRequest(`${apiBase}/placement`, { method: 'PUT', body: JSON.stringify({ selected: remaining }) });
+															if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menghapus media dari kampanye.')));
+															removeTarget = null;
+															await load();
+														} catch (err) {
+															removeError = err instanceof Error ? err.message : tr('Gagal menghapus media dari kampanye.');
+														} finally {
+															removeBusy = false;
+														}
+													}}>
+														{#if removeBusy}<LoaderCircle size={14} class="animate-spin" /> <span>{tr('Melepas…')}</span>{:else}<Trash2 size={13} /> <span>{tr('Ya, Lepas Media')}</span>{/if}
+													</button>
+												</div>
+											</div>
+										</div>
+									{/if}
 								{#if !manualFlow && !hasDoc(m)}
 									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={generating || bulkRunning} onclick={() => void generateOne(m)}>
 										{#if generating}<LoaderCircle size={14} class="animate-spin" />{:else}<Sparkles size={14} />{/if}
@@ -1059,8 +1234,32 @@
 								{/if}
 								{#if hasDoc(m)}
 									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning} onclick={() => void openPreview(m)}><Eye size={14} /> {tr('Edit Artikel')}</button>
-									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning} onclick={() => (qcFor = m.media_id)}><ShieldCheck size={14} /> {tr('Analisis QC')}</button>
-								{/if}
+										{@const qcCount = qcCounts[m.media_id] ?? 0}
+										<button
+											class="app-btn !min-h-8 !px-3 !text-xs"
+											type="button"
+											disabled={bulkRunning}
+											style={qcCount > 0 ? 'background-color: var(--accent); color: var(--accent-foreground);' : ''}
+											onclick={() => (qcFor = m.media_id)}
+										>
+											<ShieldCheck size={14} /> {tr('Analisis QC')}
+											<span
+												class="rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+												style={qcCount > 0 ? 'background-color: var(--primary); color: #fff;' : 'background-color: var(--muted); color: var(--muted-foreground);'}
+											>{qcCount > 0 ? qcCount : tr('Belum ada')}</span>
+										</button>
+									{/if}
+									<button
+										class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:border-destructive hover:bg-destructive hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1"
+										style="border-color: var(--border);"
+										type="button"
+										disabled={bulkRunning || removeBusy}
+										aria-label={tr('Hapus media dari kampanye')}
+										title={tr('Hapus media dari kampanye')}
+										onclick={() => { removeError = ''; removeTarget = m; }}
+									>
+										<Trash2 size={14} />
+									</button>
 							</div>
 						</div>
 					{/each}
@@ -1089,6 +1288,8 @@
 					<!-- Lebarnya dibatasi supaya blok tombol tidak melebar sampai memaksa
 					     bar melipat dan tombolnya turun ke baris kedua. -->
 					<p class="max-w-[330px] text-right text-[11px] leading-snug text-muted-foreground">{tr('QC sudah lulus — tombol ini langsung menerbitkan kampanye dan membuka Ringkasan.')}</p>
+				{:else if distributable === false}
+					<p class="max-w-[330px] text-right text-[11px] leading-snug" style="color: var(--warning);">{tr('QC belum lulus. Jalankan Cek Validasi, hasilnya tampil di panel Analisis QC.')}</p>
 				{/if}
 				<div class="flex flex-wrap items-center gap-3">
 					<button class="app-btn app-btn-soft" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar`)}>{tr('Kembali')}</button>
@@ -1131,6 +1332,8 @@
 	{#key ed.mediaId}
 		<NaskahModal
 			{brandId}
+			{campaignId}
+			mediaId={ed.mediaId}
 			mediaName={ed.mediaName}
 			initialTab={ed.tab}
 			initialTitle={ed.title}
@@ -1142,11 +1345,13 @@
 			linkLimit={ed.linkLimit}
 			saving={editorSaving}
 			saveError={editorError}
-			onClose={() => { if (!editorSaving) editor = null; }}
+			onClose={() => { if (!editorSaving) { editor = null; revealPendingQc(); } }}
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveEditor(title, html, coverUrl, category, metaDescription)}
 			onUploadCover={uploadCover}
 			onUploadDoc={uploadDocNaskah}
-			onGenerate={(topic) => generateNaskah(ed.mediaId, topic)}
+			onGenerate={(topic, links) => generateNaskah(ed.mediaId, topic, links)}
+			gatekeeperConfigured={gatekeeperAgent ? gatekeeperAgent.configured : null}
+			onValidate={(title, html, coverUrl, category, metaDescription) => validateNaskah(title, html, coverUrl, category, metaDescription)}
 		/>
 	{/key}
 {/if}
@@ -1249,7 +1454,6 @@
 			onClose={() => (qcFor = null)}
 			onEdit={() => void openPreview(qc)}
 			onRegenerate={() => void generateOne(qc, false)}
-			onOpenGatekeeper={() => goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/gatekeeper`)}
 			onScanned={() => { qcToken += 1; void load(); }}
 		/>
 	{/key}

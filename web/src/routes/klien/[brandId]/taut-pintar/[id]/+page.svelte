@@ -9,7 +9,7 @@
 	//   - profil selesai (profiled, hasil terverifikasi) → The Matchmaker
 	//   - sudah ada publikasi / status terminal           → Ringkasan
 	//   - produksi                                        → The Writer
-	//   - review                                          → The Gatekeeper
+	//   - review (QC selesai, menunggu terbit)            → The Writer
 	//   - placement (media terkunci)                      → The Writer
 	//   - sisanya (draft/profiling/status wizard lama)    → The Profiler
 	import { onMount } from 'svelte';
@@ -66,13 +66,9 @@
 			return;
 		}
 
-		// Artikel sudah diproduksi → The Writer; QC/review → The Gatekeeper.
-		if (status === 'production') {
+		// Artikel sudah diproduksi atau QC selesai → The Writer (QC kini di sana).
+		if (status === 'production' || status === 'review') {
 			await goto(`${base}/writer`, { replaceState: true });
-			return;
-		}
-		if (status === 'review') {
-			await goto(`${base}/gatekeeper`, { replaceState: true });
 			return;
 		}
 		// Media sudah terkunci (order dari Katalog Media) → langsung The Writer.

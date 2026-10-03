@@ -269,6 +269,24 @@ func (d *Deps) TautArticleUpload(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "String must contain at most 200000 character(s)")
 		return
 	}
+	// Cover, kategori, dan meta desc ikut dikirim UI pada simpan pertama.
+	// Sebelumnya jalur ini hanya menyimpan title+content sehingga tiga nilai itu
+	// hilang sampai user menekan Simpan lagi (parity kolom dengan TautArticlePut).
+	featuredImage, _, err := optionalTrimmedString(body, "featured_image_url", 500)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	category, _, err := optionalTrimmedString(body, "category", 120)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	metaDescription, _, err := optionalTrimmedString(body, "meta_description", 500)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
 
 	item, err := d.queryRow(r.Context(),
 		"SELECT id, article_document_id FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND status = 'selected' LIMIT 1",
@@ -285,6 +303,26 @@ func (d *Deps) TautArticleUpload(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusConflict, "Media ini sudah punya artikel. Gunakan edit untuk mengubahnya.")
 		return
 	}
+	itemID := item.strOr("id", "")
+
+	// Kategori wajib berasal dari direktori kategori media mitra (sama seperti PUT).
+	if category != "" {
+		mediaRow, err := d.queryRow(r.Context(), `
+			SELECT COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv
+			FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id WHERE tcm.id = $1 LIMIT 1`, itemID)
+		if err != nil {
+			d.writeErr(w, err)
+			return
+		}
+		allowed := []string{}
+		if mediaRow != nil {
+			allowed = catutil.Split(mediaRow.strOr("categories_csv", ""))
+		}
+		if !containsString(allowed, category) {
+			httpx.Error(w, http.StatusUnprocessableEntity, "Kategori harus dipilih dari kategori media yang ditentukan mitra.")
+			return
+		}
+	}
 
 	trimmedTitle := strings.TrimSpace(title)
 	if trimmedTitle == "" {
@@ -299,7 +337,7 @@ func (d *Deps) TautArticleUpload(w http.ResponseWriter, r *http.Request) {
 	jobID := uuid.NewString()
 	if err := d.exec(r.Context(),
 		"INSERT INTO content_documents (id, brand_id, job_id, status, title, slug, meta_title, meta_description, current_version, created_by, approved_by, approved_at) VALUES ($1, $2, $3, 'approved', $4, $5, $6, $7, 1, $8, $9, NOW())",
-		docID, brandRow.ID, jobID, trimmedTitle, slug, truncateString(trimmedTitle, 255), "", user.ID, user.ID); err != nil {
+		docID, brandRow.ID, jobID, trimmedTitle, slug, truncateString(trimmedTitle, 255), metaDescription, user.ID, user.ID); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -310,7 +348,8 @@ func (d *Deps) TautArticleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := d.exec(r.Context(),
-		"UPDATE taut_campaign_media SET article_document_id = $1, article_status = 'draft' WHERE id = $2", docID, item.strOr("id", "")); err != nil {
+		"UPDATE taut_campaign_media SET article_document_id = $1, article_status = 'draft', featured_image_url = $2, category = $3 WHERE id = $4",
+		docID, featuredImage, category, itemID); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -762,6 +801,13 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 	}
 	rate := d.getTcConfig(r.Context()).RateIDR
 
+	// Jumlah analisis QC (semua revisi) per media — dipakai The Writer untuk
+	// menampilkan badge "sudah berapa kali dianalisis".
+	auditCounts := map[string]int{}
+	for i := range audits {
+		auditCounts[audits[i].MediaID]++
+	}
+
 	docIDs := []string{}
 	seenDoc := map[string]bool{}
 	for _, item := range items {
@@ -869,6 +915,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 			"client_approved_at": item.timePtr("pub_client_approved_at"),
 			"audit": map[string]any{
 				"status": auditStatus,
+				"count":  auditCounts[item.strOr("media_id", "")],
 				"checks": map[string]any{
 					"plagiarism":    plagiarism,
 					"contentSafety": contentSafety,
@@ -1239,21 +1286,30 @@ func (d *Deps) TautProduceOne(w http.ResponseWriter, r *http.Request) {
 	}
 	campaignID := chiParam(r, "campaignId")
 	mediaID := chiParam(r, "mediaId")
-	// Body opsional {topic}: arahan topik/konteks dari modal Pengelola Naskah.
-	// Tanpa body → perilaku lama (topik dari brief kampanye).
+	// Body opsional {topic, links[]}: arahan topik/konteks dan tautan tambahan
+	// dari modal Pengelola Naskah. Tanpa body → perilaku lama.
 	var topic string
+	var rawLinks []tautWriterLinkInput
 	if r.ContentLength != 0 {
 		var body struct {
-			Topic string `json:"topic"`
+			Topic string                `json:"topic"`
+			Links []tautWriterLinkInput `json:"links"`
 		}
-		if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err == nil {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 65536)).Decode(&body); err == nil {
 			topic = strings.TrimSpace(body.Topic)
 			if len(topic) > 2000 {
 				topic = topic[:2000]
 			}
+			rawLinks = body.Links
 		}
 	}
-	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID, topic)
+	links, err := normalizeTautWriterLinks(rawLinks)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID,
+		tautWriterOptions{Topic: topic, Links: links})
 	if err != nil {
 		var ic *insufficientCreditsError
 		if asInsufficient(err, &ic) {

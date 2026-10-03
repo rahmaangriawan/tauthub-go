@@ -3,6 +3,7 @@ package brandflow
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -17,8 +18,59 @@ import (
 
 type writerItemResult struct {
 	MediaID    string `json:"media_id"`
+	MediaType  string `json:"media_type"`
 	Status     string `json:"status"`
 	DocumentID any    `json:"document_id"`
+	Title      string `json:"title"`
+}
+
+// tautWriterLink: satu pasangan anchor + URL dari modal Pengelola Naskah.
+type tautWriterLink struct {
+	Anchor string
+	URL    string
+}
+
+// tautWriterLinkInput: bentuk mentah dari body JSON {anchor_text, url}.
+type tautWriterLinkInput struct {
+	AnchorText string `json:"anchor_text"`
+	URL        string `json:"url"`
+}
+
+// tautWriterOptions: arahan opsional dari klien saat generate satu artikel.
+type tautWriterOptions struct {
+	Topic string
+	Links []tautWriterLink
+}
+
+// normalizeTautWriterLinks: validasi + rapikan tautan dari klien. Maksimal 10
+// baris; baris kosong diabaikan; tiap baris wajib pasangan anchor + URL
+// http/https (menolak URL tanpa anchor, anchor tanpa URL, dan URL non-http).
+func normalizeTautWriterLinks(raw []tautWriterLinkInput) ([]tautWriterLink, error) {
+	if len(raw) > 10 {
+		return nil, errUnprocessable("Maksimal 10 tautan.")
+	}
+	out := make([]tautWriterLink, 0, len(raw))
+	for _, item := range raw {
+		anchor := strings.TrimSpace(item.AnchorText)
+		rawURL := strings.TrimSpace(item.URL)
+		if anchor == "" && rawURL == "" {
+			continue
+		}
+		if rawURL == "" {
+			return nil, errUnprocessable("URL wajib diisi bila anchor diisi.")
+		}
+		if !isHTTPURL(rawURL) || len(rawURL) > 2000 {
+			return nil, errUnprocessable("URL tautan tidak valid (wajib http/https).")
+		}
+		if anchor == "" {
+			return nil, errUnprocessable("Anchor teks wajib diisi bila URL diisi.")
+		}
+		if len([]rune(anchor)) > 120 {
+			return nil, errUnprocessable("Anchor teks maksimal 120 karakter.")
+		}
+		out = append(out, tautWriterLink{Anchor: anchor, URL: rawURL})
+	}
+	return out, nil
 }
 
 // runTautWriter: generate artikel untuk SEMUA media terpilih (status='selected').
@@ -61,9 +113,15 @@ func (d *Deps) selectedTautMedia(ctx context.Context, campaignID string) ([]sele
 
 // generateTautWriterArticle: generate artikel untuk SATU media terpilih.
 // Idempoten: media yang sudah punya dokumen = regenerasi (tambah versi).
-// clientTopic opsional: arahan topik/konteks dari klien (modal Pengelola
-// Naskah). Kosong = perilaku lama (topik murni dari brief kampanye).
-func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandID, userID, mediaID string, clientTopic ...string) (writerItemResult, error) {
+// opts opsional: arahan topik/konteks + daftar tautan tambahan dari klien
+// (modal Pengelola Naskah). Kosong = perilaku lama (topik murni dari brief).
+func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandID, userID, mediaID string, opts ...tautWriterOptions) (writerItemResult, error) {
+	clientTopic := ""
+	customLinks := []tautWriterLink{}
+	if len(opts) > 0 {
+		clientTopic = strings.TrimSpace(opts[0].Topic)
+		customLinks = opts[0].Links
+	}
 	campaign, err := d.loadTautCampaignRow(ctx, campaignID, brandID)
 	if err != nil {
 		return writerItemResult{}, err
@@ -97,10 +155,17 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	regenCount := item.intOr("regen_count", 0)
 	hasDocument := item.has("article_document_id")
 	if hasDocument {
+		// Limit mengikuti jatah akun di halaman Admin Users
+		// (users.writer_generate_quota) dan dihitung dari TOTAL generate akun,
+		// bukan per artikel. Satu artikel boleh diregenerasi berkali-kali
+		// selama jatah akun belum habis.
+		// Limit hanya berlaku bila admin mengisi jatah akun (writer_generate_quota).
+		// NULL = tanpa batas. Jika terisi, dipakai terhadap TOTAL generate akun.
 		quota := d.userGenerateQuota(ctx, userID)
-		if regenCount >= quota-1 {
-			return writerItemResult{}, errStatus(500, "Batas jatah generate tercapai: artikel ini sudah di-generate "+
-				itoa(regenCount+1)+"x (kuota akun "+itoa(quota)+"x = generate pertama + regenerasi).")
+		used := d.userGenerateUsed(ctx, brandID)
+		if quota > 0 && used >= quota {
+			return writerItemResult{}, errStatus(500, "Batas jatah generate akun tercapai: sudah "+
+				itoa(used)+"x generate dari kuota "+itoa(quota)+"x. Ubah jatahnya di halaman Admin Users bila perlu.")
 		}
 		if err := d.chargeCredit(ctx, brandID,
 			"taut-writer-regen:"+campaignID+":"+item.strOr("media_id", "")+":"+itoa(regenCount+1),
@@ -111,24 +176,36 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 
 	name := d.mediaNameFor(ctx, item.strOr("media_id", ""))
 	mediaType := item.strOr("media_type", "")
+	mediaTypeSource := "item"
 	if mediaType == "" {
-		mediaType = campaign.strOr("media_type", "mainstream")
+		mediaType = campaign.strOr("media_type", "")
+		mediaTypeSource = "campaign"
 	}
 	if mediaType == "" {
 		mediaType = "mainstream"
+		mediaTypeSource = "default"
 	}
+	slog.Info("[taut-writer] media type resolved", "campaign", campaignID, "media_id", mediaID, "media_type", mediaType, "source", mediaTypeSource)
 	wordRule := buildWordRule(item.strOr("word_count_mode", ""), mediaType)
 
 	structureRules := []string{
 		"Aturan gaya mainstream (WAJIB): tulis sebagai artikel berita dengan kaidah 5W+1H — paragraf pembuka (lead) menjawab siapa, apa, kapan, di mana, mengapa, dan bagaimana secara ringkas.",
-		"Aturan format mainstream (WAJIB): JANGAN gunakan heading/subjudul dan JANGAN memecah isi menjadi daftar poin — seluruh isi adalah paragraf mengalir gaya berita.",
+		"Aturan format mainstream (WAJIB): JANGAN gunakan heading/subjudul (<h2>/<h3>) dan JANGAN memecah isi menjadi daftar poin (<ul>/<ol>) — seluruh isi adalah paragraf mengalir gaya berita, tanpa markdown.",
+		"Aturan paragraf mainstream (WAJIB): pecah isi menjadi BANYAK paragraf <p> pendek (maksimal 3-5 kalimat per <p>) — DILARANG menulis satu gundukan teks panjang dalam satu <p>.",
 	}
 	if mediaType == "blogger" {
 		structureRules = []string{
-			"Aturan heading (WAJIB): tulis judul bagian sebagai tag HTML <h2> atau <h3> (mulai dari H2, jangan H1).",
-			"Aturan daftar (WAJIB): poin/langkah WAJIB ditulis sebagai daftar HTML <ul>/<ol>, bukan paragraf biasa.",
+			"Aturan heading (WAJIB): tulis judul bagian sebagai tag HTML <h2> atau <h3> (dimulai dari H2, jangan pernah H1); jangan tinggalkan judul bagian sebagai teks biasa.",
+			"Aturan daftar (WAJIB): poin, fitur, langkah, atau hal berurutan WAJIB ditulis sebagai daftar HTML <ul><li>…</li></ul> (tanpa urutan) atau <ol><li>…</li></ol> (berurutan) — jangan tulis daftar sebagai paragraf biasa atau kalimat berawal tanda '-' / '1.'.",
 		}
 	}
+	precedenceBlock := "PRIORITAS ATURAN (WAJIB): (1) Sudut/angle pilihan klien menentukan SUDUT PANDANG dan isi bahasan. (2) Gaya & format media menentukan BENTUK tulisan (panjang, struktur, gaya bahasa). Bila keduanya berbenturan, angle menang untuk sudut pandang, gaya media menang untuk format."
+	if mediaType == "blogger" {
+		precedenceBlock += " Terapkan juga: blogger -> artikel evergreen dengan heading/subjudul yang mengalir dan bahasa lebih santai."
+	} else {
+		precedenceBlock += " Terapkan juga: mainstream -> lead 5W+1H dan paragraf mengalir gaya berita tanpa heading."
+	}
+	tidyHTMLBlock := "ATURAN HTML RAPI (WAJIB): setiap paragraf dibungkus <p> yang utuh (tidak ada paragraf terpotong); JANGAN menulis heading nyasar atau heading kosong dan JANGAN memakai <hr> atau garis dekoratif; JANGAN meninggalkan tag kosong (mis. <p></p>, <h2></h2>); JANGAN menulis teks yang hanya berisi URL telanjang; heading hanya dipakai bila memang diizinkan tipe media (blogger) dan hierarkinya berurutan (H2 lalu H3, tidak melompat); buang atribut/style inline yang tidak perlu dan JANGAN menambah wrapper <div>. Kutipan narasumber ditulis sebagai <blockquote><p>...</p></blockquote>."
 
 	allowsLink := item.boolOr("allow_hyperlink", true)
 	if item.has("max_links") {
@@ -238,6 +315,19 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			"   - JANGAN menanam link lain selain yang disediakan di atas."
 	}
 
+	// Tautan tambahan dari klien (modal Pengelola Naskah): instruksi eksplisit
+	// agar AI menyisipkan link secara natural. Spesifikasinya juga dipakai
+	// saat pasca-proses agar URL telanjang tetap dibungkus jadi <a>.
+	customLinkBlock := ""
+	if allowsLink && len(customLinks) > 0 {
+		lines := make([]string, 0, len(customLinks))
+		for _, l := range customLinks {
+			lines = append(lines, "- ["+l.Anchor+"] -> "+l.URL)
+		}
+		customLinkBlock = "Sisipkan tautan ini secara natural pada bagian yang relevan (WAJIB, masing-masing tepat 1x, dibungkus <a href=\"URL\">anchor text</a> dan TIDAK boleh menulis URL telanjang):\n" +
+			strings.Join(lines, "\n")
+	}
+
 	// Angle pilihan klien adalah acuan tunggal: pakai instruksi dari brief Profiler
 	// bila ada, kalau tidak pakai prompt resmi angle yang dipilih klien di
 	// submission. Sebelumnya di sini ada blok "[ANGLE TERSEDIA — pilih satu]" yang
@@ -274,14 +364,15 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		"Tipe media: "+mediaType,
 		wordRule,
 	)
-	if len(clientTopic) > 0 {
-		if topik := strings.TrimSpace(clientTopic[0]); topik != "" {
-			promptLines = append(promptLines,
-				"Arahan topik dari klien (WAJIB mengikuti arahan ini selama tidak bertentangan dengan aturan di atas): "+topik,
-			)
-		}
+	if clientTopic != "" {
+		promptLines = append(promptLines,
+			"KONTEKS UTAMA DARI KLIEN (WAJIB DIPATUHI): "+clientTopic,
+			"Seluruh artikel (judul, lead, isi, penutup) WAJIB mengikuti konteks di atas. Jangan menambah fakta, angka, nama, atau klaim yang tidak ada di konteks tersebut, dan jangan mengganti topik.",
+		)
 	}
+	promptLines = append(promptLines, precedenceBlock)
 	promptLines = append(promptLines, structureRules...)
+	promptLines = append(promptLines, tidyHTMLBlock)
 	promptLines = append(promptLines,
 		languageBlock,
 		identity.String(),
@@ -290,12 +381,15 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		anglePromptBlock,
 		linkContext,
 		linkRule,
+		customLinkBlock,
 		spokespersonBlock,
 		smartVariationRule,
 		"Bahan: "+jsonStringify(orEmptyMapValue(materials)),
 		"Aturan hyperlink media (bila media tidak mengizinkan, gunakan ATURAN PENANAMAN LINK nol): "+jsonStringify(orEmptySliceValue(hyperlink)),
 		"Kutipan/fakta hanya dari bahan/brief di atas — jangan mengarang angka, nama, atau jabatan.",
 		"Aturan meta deskripsi (WAJIB): sertakan meta_description 120-160 karakter bahasa Indonesia aktif.",
+		"Variasi tulisan: gunakan sudut pembuka yang berbeda dari draf sebelumnya; jangan menyalin kalimat pembuka yang sama.",
+		"Nonce variasi (abaikan isinya, hanya penanda sesi agar tiap generate berbeda): "+itoa(int(time.Now().UnixNano())),
 		"", "Tulis artikel unik utk media ini. Output JSON valid {title, content_html, meta_description}.",
 	)
 	filtered := []string{}
@@ -327,7 +421,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		contentHTML = truncateString(result.Content, 200000)
 	}
 	if strings.TrimSpace(contentHTML) == "" {
-		return writerItemResult{MediaID: mediaID, Status: "generating", DocumentID: nil}, nil
+		return writerItemResult{MediaID: mediaID, MediaType: mediaType, Status: "generating", DocumentID: nil}, nil
 	}
 	if metaDescription == "" {
 		plainMeta := stripHTMLToText(contentHTML)
@@ -338,10 +432,22 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		}
 		metaDescription = truncateString(metaDescription, 500)
 	}
-	contentHTML = finalizeTautArticleHTML(contentHTML, mediaType, allowsLink, []tautBacklinkSpec{
+	linkSpecs := []tautBacklinkSpec{
 		{URL: plantPrimary, Anchor: primaryAnchor, Rel: primaryRel, Mandatory: plantPrimary != ""},
 		{URL: plantBackup, Anchor: backupAnchor, Rel: strPtrValue("nofollow sponsored"), Mandatory: false},
-	})
+	}
+	// Tautan klien ikut dinegosiasikan lewat pasca-proses (non-mandatory): bila
+	// AI menulis URL telanjang, URL itu dibungkus jadi <a> dengan anchor klien.
+	if allowsLink {
+		for _, l := range customLinks {
+			var rel *string
+			if sponsoredMedia {
+				rel = strPtrValue("sponsored")
+			}
+			linkSpecs = append(linkSpecs, tautBacklinkSpec{URL: l.URL, Anchor: l.Anchor, Rel: rel, Mandatory: false})
+		}
+	}
+	contentHTML = finalizeTautArticleHTML(contentHTML, mediaType, allowsLink, linkSpecs)
 
 	isRegen := hasDocument
 	docID := ""
@@ -366,8 +472,8 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			return writerItemResult{}, err
 		}
 		if err := d.exec(ctx,
-			"UPDATE content_documents SET current_version = $1, meta_description = $2, updated_at = NOW() WHERE id = $3",
-			next, metaDescription, docID); err != nil {
+			"UPDATE content_documents SET current_version = $1, meta_description = $2, title = $3, slug = $4, updated_at = NOW() WHERE id = $5",
+			next, metaDescription, title, slugOrValue(title, "taut-artikel"), docID); err != nil {
 			return writerItemResult{}, err
 		}
 	} else {
@@ -400,21 +506,32 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			return writerItemResult{}, err
 		}
 	}
-	return writerItemResult{MediaID: mediaID, Status: "draft", DocumentID: docID}, nil
+	return writerItemResult{MediaID: mediaID, MediaType: mediaType, Status: "draft", DocumentID: docID, Title: title}, nil
 }
 
-// userGenerateQuota: kuota generate per akun (users.writer_generate_quota,
-// NULL/kolom tak ada → default 3: 1x generate + 2x regenerasi).
+// userGenerateUsed: total generate akun (generate pertama + regenerasi) pada
+// semua kampanye brand ini. Dipakai bersama userGenerateQuota sebagai limit.
+func (d *Deps) userGenerateUsed(ctx context.Context, brandID string) int {
+	row, err := d.queryRow(ctx, `
+		SELECT (COALESCE(SUM(tcm.regen_count), 0) + COUNT(tcm.article_document_id))::int AS used
+		FROM taut_campaign_media tcm
+		JOIN campaigns c ON c.id = tcm.campaign_id
+		WHERE c.brand_id = $1 AND tcm.article_document_id IS NOT NULL`, brandID)
+	if err != nil || row == nil {
+		return 0
+	}
+	return row.intOr("used", 0)
+}
+
+// userGenerateQuota: kuota generate per akun (users.writer_generate_quota).
+// NULL / belum diatur = 0 artinya TANPA BATAS. Limit hanya berlaku bila admin
+// mengisinya di halaman Admin Users.
 func (d *Deps) userGenerateQuota(ctx context.Context, userID string) int {
 	row, err := d.queryRow(ctx, "SELECT writer_generate_quota FROM users WHERE id = $1 LIMIT 1", userID)
 	if err != nil || row == nil || !row.has("writer_generate_quota") {
-		return 3
+		return 0
 	}
-	quota := row.intOr("writer_generate_quota", 0)
-	if quota < 1 {
-		return 3
-	}
-	return quota
+	return row.intOr("writer_generate_quota", 0)
 }
 
 // ---------- schedule / timeline ----------

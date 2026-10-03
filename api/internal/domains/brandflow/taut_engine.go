@@ -83,18 +83,22 @@ func (d *Deps) getAgentConfig(ctx context.Context, agent string) agentConfig {
 		"SELECT agent, base_url, sealed_api_key, model, temperature, max_tokens, timeout_ms, system_prompt, enabled, rate_limit_per_min FROM taut_agent_configs WHERE agent = $1 LIMIT 1",
 		agent)
 	if err != nil {
+		slog.Warn("[taut-agent] query config agent gagal, memakai gateway global", "agent", agent, "err", err)
 		row = nil
 	}
 	if row != nil {
-		apiKey := ""
-		if sealed := row.strOr("sealed_api_key", ""); sealed != "" {
-			if plain, uErr := d.unsealT2(sealed); uErr == nil {
-				apiKey = plain
-			}
-		}
 		enabled := row.boolOr("enabled", false)
 		baseURL := strings.TrimRight(row.strOr("base_url", ""), "/")
 		model := row.strOr("model", "")
+		apiKey := ""
+		var unsealErr error
+		if sealed := row.strOr("sealed_api_key", ""); sealed != "" {
+			if plain, uErr := d.unsealT2(sealed); uErr == nil {
+				apiKey = plain
+			} else {
+				unsealErr = uErr
+			}
+		}
 		maxTokens := 0
 		var maxTokensPtr *int
 		if row.has("max_tokens") {
@@ -116,6 +120,22 @@ func (d *Deps) getAgentConfig(ctx context.Context, agent string) agentConfig {
 		}
 		if !row.has("temperature") {
 			cfg.Temperature = 0.7
+		}
+		// Key per-agent ada tapi tak terbaca: tetap hormati model pilihan admin
+		// dengan meminjam key gateway global — hanya untuk base URL yang sama,
+		// karena key milik provider lain tidak akan valid di sini.
+		if unsealErr != nil && enabled && baseURL != "" && model != "" {
+			if rt, rtErr := ai.LoadAIRuntime(ctx, d.Pool); rtErr == nil && rt.APIKey != "" && strings.TrimRight(rt.BaseURL, "/") == baseURL {
+				cfg.APIKey = rt.APIKey
+				cfg.Configured = true
+				slog.Warn("[taut-agent] api key per-agent gagal di-unseal, memakai key gateway global dengan model config",
+					"agent", agent, "model", model, "unseal_err", unsealErr.Error())
+			}
+		}
+		if enabled && !cfg.Configured {
+			slog.Warn("[taut-agent] config agent tidak lengkap, memakai gateway global",
+				"agent", agent, "base_url", baseURL, "model", model,
+				"has_key", apiKey != "", "unseal_err", unsealErr)
 		}
 	}
 
@@ -151,6 +171,12 @@ func (d *Deps) callAgentLLM(ctx context.Context, agent, userPrompt string, jsonM
 	system := cfg.SystemPrompt
 	if systemOverride != "" {
 		system = systemOverride
+	}
+	// Writer butuh sampling lebih kreatif agar regenerasi dengan konteks klien
+	// yang sama tidak menyalin draf sebelumnya. Hanya agen "writer" yang
+	// dinaikkan; profiler/gatekeeper dll tetap pakai temperature config-nya.
+	if agent == "writer" && cfg.Temperature < 0.85 {
+		cfg.Temperature = 0.85
 	}
 	payload := map[string]any{
 		"model":       cfg.Model,

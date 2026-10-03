@@ -207,7 +207,7 @@
 	const progressPercent = $derived(mediaList.length > 0 ? Math.round((publishedCount / mediaList.length) * 100) : 0);
 	const statusSub = $derived(
 		!done
-			? tr('Belum didistribusikan — submit lewat The Gatekeeper.')
+			? tr('Belum didistribusikan. Terbitkan dari halaman The Writer.')
 			: waitingCount > 0
 				? `${waitingCount} media menunggu persetujuan mitra`
 				: 'Semua media terbit'
@@ -224,7 +224,7 @@
 				return { slug: 'writer', label: 'Lanjut ke The Writer' };
 			case 'submitted':
 			case 'scheduled':
-				return { slug: 'gatekeeper', label: tr('Kembali ke The Gatekeeper') };
+				return { slug: 'writer', label: tr('Kembali ke The Writer') };
 			default:
 				return null;
 		}

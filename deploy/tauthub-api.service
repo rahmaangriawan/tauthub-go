@@ -9,6 +9,11 @@ User=tauthub
 Group=tauthub
 WorkingDirectory=__APP_DIR__/api
 EnvironmentFile=__APP_DIR__/.env
+# Path upload absolut — sebelumnya relatif working directory (.data/uploads
+# di bawah cwd service). Nilai sama dengan path efektif lama, jadi berkas
+# yang sudah ada tetap terbaca.
+Environment=UPLOAD_DIR=__APP_DIR__/api/.data/uploads
+Environment=LEGACY_UPLOAD_DIR=__APP_DIR__/web/public/uploads
 ExecStart=__APP_DIR__/api/bin/api
 Restart=always
 RestartSec=5

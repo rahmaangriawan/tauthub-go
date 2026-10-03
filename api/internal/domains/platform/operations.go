@@ -1851,6 +1851,7 @@ func (d *Deps) operationsUsersList(w http.ResponseWriter, r *http.Request) {
 	base := `
       SELECT u.id, u.email, u.display_name, u.role, u.is_active, u.approved_at,
         (SELECT COUNT(*) FROM brand_memberships bm WHERE bm.user_id = u.id) AS brand_count,
+        u.writer_generate_quota,
         u.created_at
       FROM users u`
 	conditions := []string{}
@@ -1883,6 +1884,7 @@ func (d *Deps) operationsUsersList(w http.ResponseWriter, r *http.Request) {
 			"display_name": row.anyOrNil("display_name"), "role": row.anyOrNil("role"),
 			"is_active": row.anyOrNil("is_active"), "is_approved": approvedAt != nil,
 			"approved_at": approvedAt, "brand_count": row.numOr("brand_count"),
+			"writer_generate_quota": row.anyOrNil("writer_generate_quota"),
 			"created_at": row.anyOrNil("created_at"),
 		})
 	}

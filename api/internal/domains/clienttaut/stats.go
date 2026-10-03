@@ -198,19 +198,15 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 	return out, nil
 }
 
-// userGenerateQuota: jatah generate per akun (users.writer_generate_quota),
-// default 3 (1x generate pertama + 2x regenerasi).
+// userGenerateQuota: jatah generate per akun (users.writer_generate_quota).
+// NULL / belum diatur = 0 artinya TANPA BATAS; limit hanya berlaku bila admin
+// mengisinya di halaman Admin Users.
 func (d *Deps) userGenerateQuota(ctx context.Context, userID string) int {
-	const fallback = 3
 	row, err := d.queryRow(ctx, "SELECT writer_generate_quota FROM users WHERE id = $1 LIMIT 1", userID)
 	if err != nil || row == nil {
-		return fallback
+		return 0
 	}
-	q := row.intOr("writer_generate_quota", 0)
-	if q >= 1 {
-		return q
-	}
-	return fallback
+	return row.intOr("writer_generate_quota", 0)
 }
 
 // estimateBudgetItem: hasil estimateBudget (parity interface BudgetEstimate).

@@ -147,7 +147,9 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		       sm.da, sm.pa, sm.spam_score, sm.checked_at, sm.ai_trust_score, sm.ai_citation,
 		       mcs.image_required AS standard_image_required,
 		       EXISTS (SELECT 1 FROM gsc_connections g WHERE g.partner_id = media.partner_id AND g.status = 'active') AS gsc_connected,
-		       sw.visits AS sw_visits, sw.created_at AS sw_snapshot_date
+		       sw.visits AS sw_visits, sw.created_at AS sw_snapshot_date,
+		       (SELECT COUNT(*)::int FROM publications p
+		          WHERE p.media_id = media.id AND p.status = 'published') AS published_count
 		FROM media
 		LEFT JOIN media_seo_metrics sm ON sm.media_id = media.id
 		LEFT JOIN media_content_standards mcs ON mcs.media_id = media.id AND mcs.status = 'active'
@@ -198,6 +200,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		var gscConnected bool
 		var swVisits *int64
 		var swSnapshotDate *time.Time
+		var publishedCount int
 		if rowsQ.Scan(&id, &name, &category, &description, &websiteURL, &contohArtikelURL, &price, &creditCost,
 			&integrationType, &trafficEstimate, &mediaTier, &qualityScore, &healthScore, &healthBreakdown,
 			&healthComputedAt, &autoPublish, &dewanPersVerified, &dewanPersNote, &dewanPersCertNo,
@@ -205,7 +208,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			&labelSponsor, &topikTerlarang, &maxLinks, &allowHyperlink,
 			&publicationMode, &wordCountMode, &allowEmbed, &pricingType, &priceStatus,
 			&categoriesCSV, &seoDA, &seoPA, &seoSpam, &seoCheckedAt, &seoAITrust, &seoAICitation,
-			&standardImageRequired, &gscConnected, &swVisits, &swSnapshotDate) != nil {
+			&standardImageRequired, &gscConnected, &swVisits, &swSnapshotDate, &publishedCount) != nil {
 			continue
 		}
 		// Pemisahan ganda: pemisah internal dari string_agg, plus koma untuk
@@ -258,6 +261,10 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			},
 			"effective_quality": effectiveQuality, "quality_source": strOrNil(qualitySource),
 			"sw_visits": swVisits, "sw_snapshot_date": tsOrNil(swSnapshotDate),
+			// Rekam jejak media: jumlah artikel yang sudah terbit lewat media ini.
+			// Dihitung langsung dari publications agar tidak bergantung pada
+			// kesegaran health_breakdown (health engine jalan berkala).
+			"published_count": publishedCount,
 			"gsc_connected":       gscConnected,
 			"image_required":      standardImageRequired,
 			"is_available":        status == "active",

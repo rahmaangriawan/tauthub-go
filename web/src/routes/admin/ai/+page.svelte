@@ -48,6 +48,10 @@
 		default_model: string;
 		economy_model: string;
 		premium_model: string;
+		image_base_url: string;
+		image_model: string;
+		image_api_key_configured: boolean;
+		image_api_key_hint?: string | null;
 	};
 	type ModelKnowledge = {
 		model_id?: string;
@@ -229,6 +233,10 @@
 	let formEconomy = $state('');
 	let formPremium = $state('');
 	let cfAccountId = $state('');
+	let formImageBaseUrl = $state('');
+	let formImageModel = $state('');
+	let formImageApiKey = $state('');
+	let formImageApiKeyTouched = $state(false);
 	let savedConfigs = $state<Record<ProviderTemplateKey, ProviderConfigState>>(defaultProviderState());
 
 	let result = $state<Generation | null>(null);
@@ -336,6 +344,10 @@
 			formDefault = data.default_model || '';
 			formEconomy = data.economy_model || '';
 			formPremium = data.premium_model || '';
+			formImageBaseUrl = data.image_base_url || '';
+			formImageModel = data.image_model || '';
+			formImageApiKey = '';
+			formImageApiKeyTouched = false;
 			if (data.base_url.includes('generativelanguage.googleapis.com')) template = 'google';
 			else if (data.base_url.includes('openrouter.ai')) template = 'openrouter';
 			else if (data.base_url.includes('cloudflare')) {
@@ -393,7 +405,10 @@
 					api_key: formApiKey.trim() || undefined,
 					default_model: formDefault.trim(),
 					economy_model: formEconomy.trim() || undefined,
-					premium_model: formPremium.trim() || undefined
+					premium_model: formPremium.trim() || undefined,
+					image_base_url: formImageBaseUrl.trim(),
+					image_model: formImageModel.trim(),
+					image_api_key: formImageApiKeyTouched ? formImageApiKey.trim() : undefined
 				})
 			});
 			if (!res.ok) {
@@ -401,6 +416,8 @@
 				return;
 			}
 			formApiKey = '';
+			formImageApiKey = '';
+			formImageApiKeyTouched = false;
 			notice = 'Konfigurasi AI provider berhasil disimpan.';
 			await load();
 		} finally {
@@ -796,6 +813,63 @@
 
 						<div class="mt-4 flex flex-wrap items-center justify-between gap-3">
 							<p class="text-xs text-muted-foreground">{tr("Economy dan Premium yang kosong otomatis memakai Default.")}</p>
+							<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan...' : tr('Simpan konfigurasi')}</button>
+						</div>
+					</form>
+				</div>
+
+				<div class="app-card p-4">
+					<div class="flex flex-wrap items-start justify-between gap-3">
+						<div>
+							<h2 class="text-base font-semibold">Generate Gambar AI</h2>
+							<p class="mt-1 text-sm text-muted-foreground">{tr("Konfigurasi khusus generate gambar AI (endpoint OpenAI-compatible")}<code class="rounded bg-secondary px-1">/images/generations</code>). Field yang dikosongkan berarti mengikuti konfigurasi AI chat. <strong>Model gambar wajib diisi</strong> agar gambar AI asli ter-generate — kalau kosong sistem memakai placeholder lokal.
+							</p>
+						</div>
+						<Badge tone={configuration?.image_model ? 'success' : 'neutral'} label={configuration?.image_model ? 'Image siap' : 'Placeholder'} />
+					</div>
+
+					<form class="mt-4" onsubmit={saveConfiguration}>
+						<div class="grid gap-4 md:grid-cols-3">
+							<label class="block">
+								<span class="text-sm font-medium">Base URL gambar</span>
+								<input
+									class="app-input mt-1 w-full"
+									type="url"
+									placeholder="https://api.openai.com/v1"
+									value={formImageBaseUrl}
+									oninput={(e) => (formImageBaseUrl = (e.currentTarget as HTMLInputElement).value)}
+								/>
+							</label>
+							<label class="block">
+								<span class="text-sm font-medium">API Key gambar</span>
+								<input
+									class="app-input mt-1 w-full"
+									type="password"
+									autocomplete="new-password"
+									placeholder={configuration?.image_api_key_configured
+										? `${configuration.image_api_key_hint ?? '••••'} · (kosongkan jika tidak diganti)`
+										: 'Biarkan kosong = pakai API key AI chat'}
+									value={formImageApiKey}
+									oninput={(e) => {
+										formImageApiKey = (e.currentTarget as HTMLInputElement).value;
+										formImageApiKeyTouched = true;
+									}}
+								/>
+							</label>
+							<label class="block">
+								<span class="text-sm font-medium">Model gambar</span>
+								<input
+									class="app-input mt-1 w-full"
+									maxlength={200}
+									placeholder="gpt-image-1"
+									value={formImageModel}
+									oninput={(e) => (formImageModel = (e.currentTarget as HTMLInputElement).value)}
+								/>
+							</label>
+						</div>
+
+						<div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+							<p class="text-xs text-muted-foreground">{tr("Base URL, API Key, dan Model gambar yang kosong mengikuti konfigurasi AI chat.")}</p>
 							<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan...' : tr('Simpan konfigurasi')}</button>
 						</div>
 					</form>

@@ -162,6 +162,25 @@ func Unseal(sealed, appSecret string) (string, error) {
 	return string(xorBytes(cipherBytes, keystream(key, len(cipherBytes)))), nil
 }
 
+// UnsealCompat: coba beberapa secret berurutan sampai satu berhasil. Data lama
+// bisa ter-seal dengan APP_SECRET (format provider.ts legacy) sementara runtime
+// baru menurunkan secret dari CMS_ENCRYPTION_SECRET — GCM/HMAC menolak secret
+// yang salah, jadi mencoba keduanya tidak punya false positive.
+func UnsealCompat(sealed string, secrets ...string) (string, error) {
+	var err error = ErrInvalidSealed
+	for _, secret := range secrets {
+		if secret == "" {
+			continue
+		}
+		if plain, uErr := Unseal(sealed, secret); uErr == nil {
+			return plain, nil
+		} else {
+			err = uErr
+		}
+	}
+	return "", err
+}
+
 // Seal: v2 AES-256-GCM (dipakai hanya untuk data lama yang menyimpan v2).
 func Seal(secret, appSecret string) (string, error) {
 	body, err := gcmSeal(hashKey(appSecret), secret)

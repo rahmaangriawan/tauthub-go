@@ -291,6 +291,7 @@ func run() error {
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/crawl", resolveCampaign(brandFlowDeps.TautCrawl))
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/files", resolveCampaign(brandFlowDeps.TautFilesList))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/files", resolveCampaign(brandFlowDeps.TautFilesUpload))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/documents/cleanup", resolveCampaign(brandFlowDeps.TautDocCleanup))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/produce", resolveCampaign(brandFlowDeps.TautProduce))
 			authed.Post("/brands/{brandId}/batches/{batchId}/cancel", brandFlowDeps.BatchCancel)
 			authed.Post("/brands/{brandId}/batches/{batchId}/pause", brandFlowDeps.BatchPause)
@@ -360,6 +361,11 @@ func run() error {
 			authed.Post("/brands/{brandId}/notifications/{notificationId}/read", clientRead.BrandNotificationRead)
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/writer-links", resolveCampaign(brandFlowDeps.TautWriterLinks))
 			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/writer-links", resolveCampaign(brandFlowDeps.TautWriterLinks))
+				// Pustaka gambar AI per artikel (isolasi brand+campaign+media).
+				authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/images", resolveCampaign(brandFlowDeps.ArticleImagesList))
+				authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/images/generate", resolveCampaign(brandFlowDeps.ArticleImageGenerate))
+				authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/images/upload", resolveCampaign(brandFlowDeps.ArticleImageUpload))
+				authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/images/{imageId}", resolveCampaign(brandFlowDeps.ArticleImageDelete))
 
 			// ---------- Taut Pintar klien (/v1/brands/{brandId}/taut/*) ----------
 			authed.Get("/brands/{brandId}/taut/campaigns", tautDeps.TautCampaignsList)
@@ -559,6 +565,7 @@ func run() error {
 			authed.Post("/platform/ai/probe", platformDeps.AIProbe)
 			authed.Get("/platform/ai/status", platformDeps.AIStatus)
 			authed.Post("/platform/ai/test-generation", platformDeps.AITestGeneration)
+			authed.Post("/platform/ai/image-test", platformDeps.AIImageTest)
 			authed.Get("/platform/ai/usage", platformDeps.AIUsage)
 
 			// Media (segmen literal sebelum {mediaId}).

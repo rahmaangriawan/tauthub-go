@@ -73,8 +73,9 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 								icon: Sparkle,
 								active: pathname.startsWith('/admin/taut-pintar') || pathname.startsWith('/admin/taut-agents') || pathname.startsWith('/admin/taut-prompts'),
 								children: [
-									{ label: tr('Monitoring'), href: '/admin/taut-pintar', active: pathname.startsWith('/admin/taut-pintar') },
-									{ label: 'Agent Config', href: '/admin/taut-agents', active: pathname.startsWith('/admin/taut-agents') },
+								{ label: tr('Monitoring'), href: '/admin/taut-pintar', active: pathname === '/admin/taut-pintar' },
+								{ label: 'AI Gambar', href: '/admin/taut-pintar/ai-image', active: pathname.startsWith('/admin/taut-pintar/ai-image') },
+								{ label: 'Agent Config', href: '/admin/taut-agents', active: pathname.startsWith('/admin/taut-agents') },
 									{ label: 'Prompt Studio', href: '/admin/taut-prompts', active: pathname.startsWith('/admin/taut-prompts') }
 								]
 							},

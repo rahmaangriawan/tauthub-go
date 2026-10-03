@@ -239,14 +239,14 @@ func (d *Deps) sealT2(plain string) (string, error) {
 }
 
 func (d *Deps) unsealT2(sealed string) (string, error) {
-	secret := ""
+	cms, app := "", ""
 	if d.Cfg != nil {
-		secret = d.Cfg.CmsEncryptionSecret
-		if secret == "" {
-			secret = d.Cfg.Secret
-		}
+		cms = d.Cfg.CmsEncryptionSecret
+		app = d.Cfg.Secret
 	}
-	return crypto.Unseal(sealed, secret)
+	// Data lama ter-seal dengan APP_SECRET (provider.ts legacy), runtime baru
+	// memakai CMS_ENCRYPTION_SECRET — coba keduanya.
+	return crypto.UnsealCompat(sealed, cms, app)
 }
 
 // ---------- audit & notifikasi ----------

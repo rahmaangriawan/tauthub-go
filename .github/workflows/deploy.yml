@@ -65,14 +65,24 @@ jobs:
           SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=12"
 
           # Sinkronkan kode + binary. .env / .data / hasil build dipertahankan
-          # di VPS (exclude juga melindungi dari --delete).
+          # di VPS (exclude juga melindungi dari --delete). public/uploads di
+          # dua sisi adalah lokasi unggahan lama — jangan sampai terhapus.
           rsync -rltDz --delete \
             -e "sshpass -e ssh $SSH_OPTS" \
             --exclude='.git/' --exclude='node_modules/' --exclude='.svelte-kit/' \
             --exclude='.data/' --exclude='.env' --exclude='.env.*' \
             --exclude='web/build/' --exclude='api/api' --exclude='.DS_Store' \
             --exclude='tmp_*' --exclude='*.log' \
+            --exclude='web/public/uploads/' --exclude='api/public/uploads/' \
             ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
+
+          # Seed gambar unggahan yang di-commit (api/.data/uploads, lihat
+          # .gitignore) ke VPS: --ignore-existing tanpa --delete supaya hanya
+          # menambah berkas yang hilang dan tidak pernah menimpa/menghapus
+          # gambar hasil generate runtime di VPS.
+          rsync -rltDz --ignore-existing \
+            -e "sshpass -e ssh $SSH_OPTS" \
+            api/.data/uploads/ "$SSH_USER@$SSH_HOST:$APP_DIR/api/.data/uploads/"
 
           # Bootstrap idempoten (paket, .env, DB, nginx, systemd, TLS).
           sshpass -e ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \

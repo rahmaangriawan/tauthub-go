@@ -43,7 +43,7 @@ export function getAgentSteps(): AgentStepState | null {
  * Langkah terjauh yang sudah dicapai sebuah kampanye selama sesi berjalan.
  *
  * Pil langkah hanya mengaktifkan `n <= langkah saat ini`, sehingga kembali ke
- * langkah sebelumnya (mis. dari Gatekeeper ke The Profiler) membuat pil langkah
+ * langkah sebelumnya (mis. dari The Writer ke The Profiler) membuat pil langkah
  * berikutnya mati dan pengguna tidak bisa maju lagi. Nilai terjauh ini dipakai
  * sebagai batas atas supaya langkah yang sudah pernah dicapai tetap bisa dibuka.
  *
@@ -82,11 +82,10 @@ const STEP_BY_STATUS: Record<string, number> = {
 	budget: 2,
 	placement: 3,
 	production: 3,
-	review: 4,
-	gatekeeper: 4,
-	submitted: 5,
-	scheduled: 5,
-	distributed: 5
+	review: 3,
+	submitted: 4,
+	scheduled: 4,
+	distributed: 4
 };
 
 let statusSteps = $state<Record<string, number>>({});

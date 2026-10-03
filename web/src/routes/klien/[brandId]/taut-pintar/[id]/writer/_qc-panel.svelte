@@ -6,7 +6,7 @@
 	// hanya pada Illegal Content Guard & Link Health Validator — dua pemeriksa
 	// itulah yang benar-benar menentukan canDistribute di server.
 	import { onDestroy } from 'svelte';
-	import { CircleCheck, Clock, Eye, LoaderCircle, RefreshCw, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, X, XCircle } from '@lucide/svelte';
+	import { CircleCheck, Clock, Eye, LoaderCircle, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, X, XCircle } from '@lucide/svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
 	import SlideOver from '$lib/components/slide-over.svelte';
 
@@ -58,7 +58,6 @@
 		onClose,
 		onEdit,
 		onRegenerate,
-		onOpenGatekeeper,
 		onScanned
 	}: {
 		apiBase: string;
@@ -75,7 +74,6 @@
 		onClose: () => void;
 		onEdit: () => void;
 		onRegenerate: () => void;
-		onOpenGatekeeper: () => void;
 		onScanned?: () => void;
 	} = $props();
 
@@ -436,7 +434,6 @@
 				{generating ? tr('Membuat…') : regenLabel}
 			</button>
 		{/if}
-		<button class="app-btn app-btn-soft !min-h-9 !px-3.5 !text-xs" type="button" onclick={onOpenGatekeeper}><RefreshCw size={14} /> {tr('Buka Gatekeeper')}</button>
 	{/snippet}
 </SlideOver>
 
