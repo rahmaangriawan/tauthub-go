@@ -329,9 +329,6 @@
 				<p class="mt-1 text-[12px] text-muted-foreground">
 					{scannedCount}/{totalMedia} {tr('artikel sudah punya hasil. Hasil per media muncul bertahap; panel ini memperbarui sendiri setiap 4 detik.')}
 				</p>
-				<p class="mt-1 text-[11.5px] text-muted-foreground">
-					{tr('Pemeriksaan memanggil model AI beberapa kali (keamanan konten, link, AI Overview, dan revisi akhir) — wajar 1-4 menit per artikel tergantung kecepatan model Gatekeeper.')}
-				</p>
 				<div class="qcProgressTrack"><div class="qcProgressFill" style="width: {totalMedia > 0 ? Math.round((scannedCount / totalMedia) * 100) : 0}%;"></div></div>
 			</div>
 		{/if}

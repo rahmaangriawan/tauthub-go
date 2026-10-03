@@ -232,16 +232,23 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		precedenceBlock += " Terapkan juga: mainstream -> lead 5W+1H dan paragraf mengalir gaya berita tanpa heading."
 	}
 	tidyHTMLBlock := "ATURAN HTML RAPI (WAJIB): setiap paragraf dibungkus <p> yang utuh (tidak ada paragraf terpotong); JANGAN menulis heading nyasar atau heading kosong dan JANGAN memakai <hr> atau garis dekoratif; JANGAN meninggalkan tag kosong (mis. <p></p>, <h2></h2>); JANGAN menulis teks yang hanya berisi URL telanjang; heading hanya dipakai bila memang diizinkan tipe media (blogger) dan hierarkinya berurutan (H2 lalu H3, tidak melompat); buang atribut/style inline yang tidak perlu dan JANGAN menambah wrapper <div>. Kutipan narasumber ditulis sebagai <blockquote><p>...</p></blockquote>."
-	// Selaras penilaian AI Overview (Gatekeeper QC): artikel yang lahir dari
-	// generator ini menyentuh empat indikator sejak awal — BLUF, entitas konkret,
-	// tanpa fluff; blogger mendapat subjudul berbasis pertanyaan.
+	// Rubrik AI Overview (Gatekeeper QC) ditulis eksplisit ke prompt: artikel
+	// dinilai 4 indikator skor 1-10 dan LULUS bila total >= 32 serta tiap
+	// indikator >= 7. Generator menulis untuk rubrik itu sejak awal, tanpa
+	// melanggar aturan format media (mainstream tetap tanpa heading/list).
 	aiOverviewRules := []string{
-		"Aturan AI Overview (WAJIB): jawab inti topik di 150 kata pertama (BLUF) — definisi/kesimpulan utama langsung di lead, tanpa basa-basi pembuka.",
-		"Aturan kepadatan informasi (WAJIB): sertakan entitas konkret dari bahan (nama orang/lembaga, lokasi, angka, persentase, istilah teknis); hindari kalimat pengisi dan klaim hiperbolik tanpa dasar.",
+		"Rubrik AI Overview (WAJIB DIPENUHI): artikel dinilai 4 indikator skor 1-10 dan dinyatakan LULUS bila total minimal 32 serta SETIAP indikator minimal 7. Tulis agar keempatnya kuat sejak awal.",
+		"Indikator 1 — Struktur (BLUF): definisi/jawaban inti langsung di 150 kata pertama, paragraf pendek, dan kesimpulan yang menegaskan jawaban utama.",
+		"Indikator 2 — Entitas & semantik: sertakan entitas konkret yang ada di bahan (nama orang/lembaga, lokasi, tanggal, angka, persentase, istilah teknis) dan bahas sub-topik terkait, bukan sekadar mengulang kata kunci.",
+		"Indikator 3 — E-E-A-T & orisinalitas: kaitkan klaim faktual dengan bahan/brief yang diberikan (mis. \"menurut data pada brief\"), JANGAN mengarang angka/nama/jabatan; hindari bahasa hiperbolik dan kalimat pengisi; beri nilai tambah berupa sudut pandang, sintesis, atau implikasi praktis — bukan rangkuman umum.",
+		"Indikator 4 — Niat pengguna: jawab proaktif 2-3 pertanyaan turunan yang lazim (biaya, cara, perbandingan, risiko) dan tutup dengan rekomendasi bersyarat yang spesifik (contoh: \"Pilih A bila …, pilih B bila …\"), bukan penutup basa-basi.",
 	}
 	if mediaType == "blogger" {
 		aiOverviewRules = append(aiOverviewRules,
-			"Aturan AI Overview (blogger): pakai subjudul <h2>/<h3> berbasis pertanyaan yang lazim dicari (mis. \"Apa itu X?\", \"Bagaimana cara Y?\") dan tutup dengan rekomendasi bersyarat yang spesifik.")
+			"Format tambahan (blogger): jawaban pertanyaan turunan memakai subjudul <h2>/<h3> berbasis pertanyaan yang lazim dicari (\"Apa itu X?\", \"Bagaimana cara Y?\") dan data komparatif/langkah ditulis sebagai list/tabel.")
+	} else {
+		aiOverviewRules = append(aiOverviewRules,
+			"Format tambahan (mainstream): TETAP tanpa heading dan tanpa list — jawab pertanyaan turunan dalam paragraf mengalir, lalu tutup dengan rekomendasi bersyarat.")
 	}
 
 	allowsLink := item.boolOr("allow_hyperlink", true)
