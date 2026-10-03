@@ -289,55 +289,55 @@
 			</div>
 		{/if}
 
-		<!-- ── Saldo ── -->
-		<div class="app-card mt-4 p-4">
-			<h2 class="text-sm font-semibold">{tr("Saldo")}</h2>
-			<div class="mt-3 grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-				{#if showCpa}
-					<div class="relative overflow-hidden rounded-lg border bg-card px-3.5 py-3">
-						<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--success);"></div>
-						<div class="flex min-h-4 items-center justify-between gap-2">
-							<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">CPA Balance</span>
-							{#if vip?.vipExpiresAt}
-								<span class="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide" style="background-color: var(--success-soft); color: var(--success);">Berakhir {dt(vip.vipExpiresAt)}</span>
-							{/if}
+			<!-- ── Saldo ── -->
+			<div class="mt-4">
+				<h2 class="text-sm font-semibold">{tr("Saldo")}</h2>
+				<div class="mt-2.5 grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+					{#if showCpa}
+						<div class="relative overflow-hidden rounded-lg border bg-card px-3.5 py-3 shadow-xs">
+							<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--success);"></div>
+							<div class="flex min-h-4 items-center justify-between gap-2">
+								<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">CPA Balance</span>
+								{#if vip?.vipExpiresAt}
+									<span class="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide" style="background-color: var(--success-soft); color: var(--success);">Berakhir {dt(vip.vipExpiresAt)}</span>
+								{/if}
+							</div>
+							<p class="mt-1 text-xl font-bold tabular-nums" style="color: var(--success);">{idr(wallet?.cpa ?? 0)}</p>
+							<p class="mt-1 text-xs text-muted-foreground">
+								{#if vip?.tier === 'vip_reguler'}
+									{idr(vip.cpaTier1Rate)}{tr("/domain untuk")} {vip.cpaTierThreshold.toLocaleString('id-ID')} domain pertama, lalu {idr(vip.cpaTier2Rate)}/domain
+								{:else}
+									{idr(vip?.cpaRate ?? 0)} per domain
+								{/if}
+							</p>
+							<svg viewBox="0 0 100 40" preserveAspectRatio="none" width="100%" height="26" aria-hidden="true" class="mt-1.5 block">
+								<path d={cpaPath.area} fill="var(--success)" fill-opacity="0.1" />
+								<path d={cpaPath.line} fill="none" stroke="var(--success)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+							</svg>
 						</div>
-						<p class="mt-1 text-xl font-bold tabular-nums" style="color: var(--success);">{idr(wallet?.cpa ?? 0)}</p>
-						<p class="mt-1 text-xs text-muted-foreground">
-							{#if vip?.tier === 'vip_reguler'}
-								{idr(vip.cpaTier1Rate)}{tr("/domain untuk")} {vip.cpaTierThreshold.toLocaleString('id-ID')} domain pertama, lalu {idr(vip.cpaTier2Rate)}/domain
-							{:else}
-								{idr(vip?.cpaRate ?? 0)} per domain
-							{/if}
-						</p>
+					{/if}
+					<div class="relative overflow-hidden rounded-lg border bg-card px-3.5 py-3 shadow-xs">
+						<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--primary);"></div>
+						<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Komisi Transaksi')}</span>
+						<p class="mt-1 text-xl font-bold tabular-nums" style="color: var(--primary);">{idr(wallet?.transaction_commission ?? 0)}</p>
+						{#if vip}<p class="mt-1 text-xs text-muted-foreground">{(vip.commissionRateBp / 100).toFixed(1)}{tr("% dari transaksi")}</p>{/if}
 						<svg viewBox="0 0 100 40" preserveAspectRatio="none" width="100%" height="26" aria-hidden="true" class="mt-1.5 block">
-							<path d={cpaPath.area} fill="var(--success)" fill-opacity="0.1" />
-							<path d={cpaPath.line} fill="none" stroke="var(--success)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+							<path d={komisiPath.area} fill="var(--primary)" fill-opacity="0.1" />
+							<path d={komisiPath.line} fill="none" stroke="var(--primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 						</svg>
 					</div>
-				{/if}
-				<div class="relative overflow-hidden rounded-lg border bg-card px-3.5 py-3">
-					<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--primary);"></div>
-					<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Komisi Transaksi')}</span>
-					<p class="mt-1 text-xl font-bold tabular-nums" style="color: var(--primary);">{idr(wallet?.transaction_commission ?? 0)}</p>
-					{#if vip}<p class="mt-1 text-xs text-muted-foreground">{(vip.commissionRateBp / 100).toFixed(1)}{tr("% dari transaksi")}</p>{/if}
-					<svg viewBox="0 0 100 40" preserveAspectRatio="none" width="100%" height="26" aria-hidden="true" class="mt-1.5 block">
-						<path d={komisiPath.area} fill="var(--primary)" fill-opacity="0.1" />
-						<path d={komisiPath.line} fill="none" stroke="var(--primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
-					</svg>
-				</div>
-				<div class="relative overflow-hidden rounded-lg border bg-card px-3.5 py-3">
-					<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--muted-foreground);"></div>
-					<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr("Total")}</span>
-					<p class="mt-1 text-xl font-bold tabular-nums">{idr(totalCpaPaid)}</p>
-					<p class="mt-1 text-xs text-muted-foreground">Akumulasi CPA · {approvedDomains.length} domain disetujui × {idr(vip?.cpaRate ?? 15000)}</p>
-					<svg viewBox="0 0 100 40" preserveAspectRatio="none" width="100%" height="26" aria-hidden="true" class="mt-1.5 block">
-						<path d={totalPath.area} fill="var(--muted-foreground)" fill-opacity="0.1" />
-						<path d={totalPath.line} fill="none" stroke="var(--muted-foreground)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
-					</svg>
+					<div class="relative overflow-hidden rounded-lg border bg-card px-3.5 py-3 shadow-xs">
+						<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--muted-foreground);"></div>
+						<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr("Total")}</span>
+						<p class="mt-1 text-xl font-bold tabular-nums">{idr(totalCpaPaid)}</p>
+						<p class="mt-1 text-xs text-muted-foreground">Akumulasi CPA · {approvedDomains.length} domain disetujui × {idr(vip?.cpaRate ?? 15000)}</p>
+						<svg viewBox="0 0 100 40" preserveAspectRatio="none" width="100%" height="26" aria-hidden="true" class="mt-1.5 block">
+							<path d={totalPath.area} fill="var(--muted-foreground)" fill-opacity="0.1" />
+							<path d={totalPath.line} fill="none" stroke="var(--muted-foreground)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+						</svg>
+					</div>
 				</div>
 			</div>
-		</div>
 
 			<!-- ── Performance + Statistik Affiliate ── -->
 			<div class="mt-4 grid gap-3 md:grid-cols-2">
