@@ -293,16 +293,30 @@ func (d *Deps) ArticleImageGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	started := time.Now()
 	result, err := ai.GenerateImage(r.Context(), d.Pool, ai.GenerateImageOptions{
 		Prompt: prompt, Role: role, Heading: heading,
 		BrandID: &brandRow.ID, UserID: &user.ID,
 	})
 	if err != nil {
+		ai.RecordImageEvent(r.Context(), d.Pool, ai.ImageEvent{
+			Kind: "generation", Status: "failed", ErrorDetail: err.Error(),
+			Prompt: prompt, Role: role,
+			BrandID: brandRow.ID, CampaignID: campaignID, MediaID: mediaID, ArticleID: articleID,
+			RequestedBy: user.ID, ElapsedMS: int(time.Since(started).Milliseconds()),
+		})
 		d.writeErr(w, err)
 		return
 	}
 	url, err := d.storeGeneratedImage(result)
 	if err != nil {
+		ai.RecordImageEvent(r.Context(), d.Pool, ai.ImageEvent{
+			Kind: "generation", Status: "failed",
+			Provider: result.Provider, Model: result.Model, BaseURL: result.BaseURL,
+			ErrorDetail: "gagal menyimpan gambar: " + err.Error(), Prompt: prompt, Role: role,
+			BrandID: brandRow.ID, CampaignID: campaignID, MediaID: mediaID, ArticleID: articleID,
+			RequestedBy: user.ID, ElapsedMS: int(time.Since(started).Milliseconds()),
+		})
 		d.writeErr(w, err)
 		return
 	}
@@ -336,6 +350,22 @@ func (d *Deps) ArticleImageGenerate(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
+
+	// Log monitoring: sukses atau fallback placeholder (beserta sebabnya) supaya
+	// admin bisa melihat "apa & kenapa" tanpa membuka log server.
+	logStatus, logDetail := "succeeded", ""
+	if result.Placeholder {
+		logStatus, logDetail = "fallback", result.FallbackReason
+	}
+	ai.RecordImageEvent(r.Context(), d.Pool, ai.ImageEvent{
+		Kind: "generation", Status: logStatus,
+		Provider: result.Provider, Model: result.Model, BaseURL: result.BaseURL,
+		ErrorDetail: logDetail, Prompt: prompt, Role: role,
+		BrandID: brandRow.ID, CampaignID: campaignID, MediaID: mediaID, ArticleID: articleID,
+		RequestedBy: user.ID, Width: result.Width, Height: result.Height,
+		CreditsCharged: charged, ElapsedMS: result.ElapsedMS,
+		ImageID: id, ImageURL: url,
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":                id,

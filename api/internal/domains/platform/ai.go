@@ -22,10 +22,129 @@ import (
 // AIImageTest: POST /v1/platform/ai/image-test — uji koneksi provider gambar
 // tanpa fallback placeholder agar error asli provider terlihat (debugging).
 func (d *Deps) AIImageTest(w http.ResponseWriter, r *http.Request) {
+	user, _, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	res := ai.TestImageConnection(r.Context(), d.Pool)
+	// Uji koneksi ikut dicatat supaya kegagalan provider tetap terlihat di tab
+	// Log & Monitoring, bukan hanya di layar sesaat.
+	status, detail := "failed", res.Message
+	if res.OK {
+		status, detail = "succeeded", ""
+	}
+	ai.RecordImageEvent(r.Context(), d.Pool, ai.ImageEvent{
+		Kind: "connection_test", Status: status,
+		BaseURL: res.BaseURL, Model: res.Model, ErrorDetail: detail,
+		Prompt: "connection test", RequestedBy: user.ID,
+		Width: res.Width, Height: res.Height, ElapsedMS: int(res.ElapsedMS),
+	})
+	writeJSON(w, http.StatusOK, res)
+}
+
+// AIImageLogs: GET /v1/platform/ai/image-logs — log generate gambar + ringkasan
+// error untuk halaman admin Taut Pintar > AI Gambar > Log & Monitoring.
+// Query: hours (default 168 = 7 hari), status (succeeded|fallback|failed), limit.
+func (d *Deps) AIImageLogs(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := d.adminGuard(w, r, ""); !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, ai.TestImageConnection(r.Context(), d.Pool))
+	ctx := r.Context()
+	q := r.URL.Query()
+	limit := aiClampLimit(q.Get("limit"), 100, 500)
+	hours := aiClampDays(q.Get("hours"), q.Has("hours"), 168)
+	since := time.Now().UTC().Add(-time.Duration(hours) * time.Hour)
+
+	status := strings.TrimSpace(q.Get("status"))
+	filter := "e.created_at >= $1"
+	params := []any{since}
+	if status == "succeeded" || status == "fallback" || status == "failed" {
+		filter += " AND e.status = $2"
+		params = append(params, status)
+	}
+
+	summary, err := d.queryRow(ctx,
+		`SELECT COUNT(*) AS total,
+		        COALESCE(SUM(CASE WHEN e.status = 'succeeded' THEN 1 ELSE 0 END), 0) AS succeeded,
+		        COALESCE(SUM(CASE WHEN e.status = 'fallback' THEN 1 ELSE 0 END), 0) AS fallback,
+		        COALESCE(SUM(CASE WHEN e.status = 'failed' THEN 1 ELSE 0 END), 0) AS failed
+		 FROM ai_image_events e WHERE e.event_kind = 'generation' AND `+filter, params...)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+
+	topErrors := []map[string]any{}
+	topRows, err := d.queryRows(ctx,
+		`SELECT COALESCE(NULLIF(TRIM(e.error_detail), ''), 'Tanpa keterangan') AS detail,
+		        COUNT(*) AS total, MAX(e.created_at) AS last_at
+		 FROM ai_image_events e
+		 WHERE e.status IN ('fallback','failed') AND `+filter+`
+		 GROUP BY 1 ORDER BY total DESC, last_at DESC LIMIT 5`, params...)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	for _, row := range topRows {
+		topErrors = append(topErrors, map[string]any{
+			"detail": row.strOr("detail", ""), "total": row.intOr("total", 0), "last_at": row.timePtr("last_at"),
+		})
+	}
+
+	rows, err := d.queryRows(ctx,
+		`SELECT e.id, e.event_kind, e.status, e.provider, e.model, e.base_url, e.error_detail,
+		        e.prompt, e.role, e.brand_id, e.campaign_id, e.media_id, e.article_id, e.requested_by,
+		        e.width, e.height, e.credits_charged, e.elapsed_ms, e.image_id, e.image_url, e.created_at,
+		        b.name AS brand_name, c.name AS campaign_name, m.name AS media_name
+		 FROM ai_image_events e
+		 LEFT JOIN brands b ON b.id = e.brand_id
+		 LEFT JOIN campaigns c ON c.id = e.campaign_id
+		 LEFT JOIN media m ON m.id = e.media_id
+		 WHERE `+filter+` ORDER BY e.created_at DESC LIMIT $`+strconv.Itoa(len(params)+1), append(params, limit)...)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	events := make([]map[string]any, 0, len(rows))
+	for _, e := range rows {
+		events = append(events, map[string]any{
+			"id": e.strOr("id", ""), "event_kind": e.strOr("event_kind", ""), "status": e.strOr("status", ""),
+			"provider": ptNullableStr(e, "provider"), "model": ptNullableStr(e, "model"),
+			"base_url": ptNullableStr(e, "base_url"), "error_detail": ptNullableStr(e, "error_detail"),
+			"prompt": ptNullableStr(e, "prompt"), "role": ptNullableStr(e, "role"),
+			"brand_id": ptNullableStr(e, "brand_id"), "campaign_id": ptNullableStr(e, "campaign_id"),
+			"media_id": ptNullableStr(e, "media_id"), "article_id": ptNullableStr(e, "article_id"),
+			"requested_by": ptNullableStr(e, "requested_by"),
+			"brand_name":   ptNullableStr(e, "brand_name"), "campaign_name": ptNullableStr(e, "campaign_name"),
+			"media_name": ptNullableStr(e, "media_name"),
+			"width":      e.intOr("width", 0), "height": e.intOr("height", 0),
+			"credits_charged": e.intOr("credits_charged", 0), "elapsed_ms": e.intOr("elapsed_ms", 0),
+			"image_id": ptNullableStr(e, "image_id"), "image_url": ptNullableStr(e, "image_url"),
+			"created_at": e.timePtr("created_at"),
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"summary": map[string]any{
+			"total": summary.intOr("total", 0), "succeeded": summary.intOr("succeeded", 0),
+			"fallback": summary.intOr("fallback", 0), "failed": summary.intOr("failed", 0),
+			"hours": hours,
+		},
+		"top_errors": topErrors,
+		"events":     events,
+	})
+}
+
+// aiClampLimit: batas jumlah baris log (default def, maksimum max).
+func aiClampLimit(raw string, def, max int) int {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n <= 0 {
+		return def
+	}
+	if n > max {
+		return max
+	}
+	return n
 }
 
 // AIConfigurationGet: GET /v1/platform/ai/configuration

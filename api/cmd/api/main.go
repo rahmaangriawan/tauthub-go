@@ -567,6 +567,7 @@ func run() error {
 			authed.Get("/platform/ai/status", platformDeps.AIStatus)
 			authed.Post("/platform/ai/test-generation", platformDeps.AITestGeneration)
 			authed.Post("/platform/ai/image-test", platformDeps.AIImageTest)
+			authed.Get("/platform/ai/image-logs", platformDeps.AIImageLogs)
 			authed.Get("/platform/ai/usage", platformDeps.AIUsage)
 
 			// Media (segmen literal sebelum {mediaId}).

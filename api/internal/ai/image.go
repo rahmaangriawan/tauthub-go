@@ -55,6 +55,13 @@ type ImageResult struct {
 	Width       int
 	Height      int
 	Placeholder bool
+	// FallbackReason: kenapa hasilnya placeholder (kosong bila sukses) — dipakai
+	// log monitoring admin supaya "apa & kenapa" terlihat tanpa buka log server.
+	FallbackReason string
+	// BaseURL: base URL provider yang dipakai saat itu (diagnostik config salah).
+	BaseURL string
+	// ElapsedMS: durasi panggilan provider.
+	ElapsedMS int
 }
 
 // imageSizeFor: ukuran default per role.
@@ -147,10 +154,13 @@ func GenerateImage(ctx context.Context, pool *pgxpool.Pool, opts GenerateImageOp
 	// Model gambar khusus (rt.ImageModel); TIDAK memakai DefaultModel chat
 	// (bukan model gambar).
 	model := rt.ImageModel
+	started := time.Now()
 
 	// Belum dikonfigurasi → placeholder (dev-friendly, gratis).
 	if !ImageGenerationConfigured(rt) {
-		return placeholderResult(opts, size, w, h)
+		return placeholderResult(opts, w, h,
+			"Provider gambar belum lengkap: isi Base URL, API key, dan Model gambar di halaman AI Gambar.",
+			rt.ImageBaseURL, started)
 	}
 
 	data, mime, err := callImageProvider(ctx, rt, model, opts.Prompt, size, "/images/generations", true)
@@ -178,17 +188,19 @@ func GenerateImage(ctx context.Context, pool *pgxpool.Pool, opts GenerateImageOp
 	}
 	if err != nil {
 		slog.Warn("[ai] generate gambar gagal, memakai placeholder", "err", err)
-		return placeholderResult(opts, size, w, h)
+		return placeholderResult(opts, w, h, "Panggilan provider gagal: "+err.Error(), rt.ImageBaseURL, started)
 	}
 	if len(data) == 0 {
 		slog.Warn("[ai] provider mengembalikan gambar kosong, memakai placeholder", "model", model)
-		return placeholderResult(opts, size, w, h)
+		return placeholderResult(opts, w, h,
+			"Provider mengembalikan gambar kosong (model mungkin bukan model gambar).", rt.ImageBaseURL, started)
 	}
 	// Semua gambar (cover & inline) dipaksa 16:9 dan maksimum 1920x1280.
 	if norm, nw, nh, nerr := NormalizeTo16x9(data); nerr == nil {
 		return &ImageResult{
 			Data: norm, MimeType: "image/png", Provider: rt.Provider, Model: model,
 			Width: nw, Height: nh, Placeholder: false,
+			BaseURL: rt.ImageBaseURL, ElapsedMS: int(time.Since(started).Milliseconds()),
 		}, nil
 	} else {
 		slog.Warn("[ai] normalisasi 16:9 gagal, pakai gambar asli", "err", nerr)
@@ -196,6 +208,7 @@ func GenerateImage(ctx context.Context, pool *pgxpool.Pool, opts GenerateImageOp
 	return &ImageResult{
 		Data: data, MimeType: mime, Provider: rt.Provider, Model: model,
 		Width: w, Height: h, Placeholder: false,
+		BaseURL: rt.ImageBaseURL, ElapsedMS: int(time.Since(started).Milliseconds()),
 	}, nil
 }
 
@@ -512,8 +525,9 @@ func detectImageMime(data []byte) string {
 	return "image/png"
 }
 
-// placeholderResult: gambar lokal deterministik (gradient + teks).
-func placeholderResult(opts GenerateImageOptions, size string, w, h int) (*ImageResult, error) {
+// placeholderResult: gambar lokal deterministik (gradient + teks) + alasan
+// kenapa fallback (dipakai log monitoring admin).
+func placeholderResult(opts GenerateImageOptions, w, h int, reason, baseURL string, started time.Time) (*ImageResult, error) {
 	label := strings.TrimSpace(opts.Heading)
 	if label == "" {
 		label = strings.TrimSpace(opts.Prompt)
@@ -525,6 +539,7 @@ func placeholderResult(opts GenerateImageOptions, size string, w, h int) (*Image
 	return &ImageResult{
 		Data: data, MimeType: "image/png", Provider: "placeholder",
 		Model: "local-placeholder", Width: w, Height: h, Placeholder: true,
+		FallbackReason: reason, BaseURL: baseURL, ElapsedMS: int(time.Since(started).Milliseconds()),
 	}, nil
 }
 
