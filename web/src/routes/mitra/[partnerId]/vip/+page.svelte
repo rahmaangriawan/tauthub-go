@@ -7,7 +7,7 @@
 	// sukses, dan riwayat earning dengan sparkline kumulatif.
 	import { onMount } from 'svelte';
 	import {
-		CircleCheck, CircleX, Clock, Coins, Crown, Globe, HandCoins,
+		Check, ChevronDown, CircleCheck, CircleX, Clock, Coins, Crown, Globe, HandCoins,
 		MousePointerClick, Users, Wallet
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -235,6 +235,20 @@
 	// Paginasi & limitasi Riwayat Earning
 	let earningPage = $state(1);
 	let earningLimit = $state(10);
+	let limitDropdownOpen = $state(false);
+	let limitDropdownEl = $state<HTMLDivElement | null>(null);
+
+	function onWindowClick(e: MouseEvent) {
+		if (limitDropdownOpen && limitDropdownEl && !limitDropdownEl.contains(e.target as Node)) {
+			limitDropdownOpen = false;
+		}
+	}
+
+	function onWindowKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && limitDropdownOpen) {
+			limitDropdownOpen = false;
+		}
+	}
 
 	const allEarnings = $derived(wallet?.history ?? []);
 	const totalEarnings = $derived(allEarnings.length);
@@ -253,7 +267,8 @@
 	});
 </script>
 
-<PageTitle title="VIP Dashboard" />
+	<PageTitle title="VIP Dashboard" />
+	<svelte:window onclick={onWindowClick} onkeydown={onWindowKeydown} />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
@@ -431,28 +446,58 @@
 		</div>
 
 			<!-- ── Riwayat Earning ── -->
-			<div class="app-card mt-3 overflow-hidden">
+			<div class="app-card mt-3">
 				<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
 					<div class="flex items-center gap-2">
 						<h2 class="text-sm font-semibold">{tr("Riwayat Earning")}</h2>
 						<span class="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground" style="background-color: var(--secondary);">{totalEarnings} transaksi</span>
 					</div>
 					{#if totalEarnings > 0}
-						<div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+						<div class="flex items-center gap-2 text-xs text-muted-foreground">
 							<span>{tr("Tampilkan:")}</span>
-							<select
-								class="app-input !h-7 !w-auto !py-0 !px-2 !text-xs"
-								value={earningLimit}
-								onchange={(e) => {
-									earningLimit = Number((e.currentTarget as HTMLSelectElement).value);
-									earningPage = 1;
-								}}
-							>
-								<option value={5}>5 per hal</option>
-								<option value={10}>10 per hal</option>
-								<option value={20}>20 per hal</option>
-								<option value={50}>50 per hal</option>
-							</select>
+							<div class="relative" bind:this={limitDropdownEl}>
+								<button
+									type="button"
+									class="flex h-7 items-center justify-between gap-2.5 rounded-md border bg-card pl-2.5 pr-2.5 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-secondary focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+									onclick={() => (limitDropdownOpen = !limitDropdownOpen)}
+									aria-expanded={limitDropdownOpen}
+									aria-haspopup="listbox"
+									aria-label="Pilih jumlah baris per halaman"
+								>
+									<span class="tabular-nums">{earningLimit} per hal</span>
+									<ChevronDown
+										size={13}
+										class="shrink-0 text-muted-foreground transition-transform duration-150 {limitDropdownOpen ? 'rotate-180 text-primary' : ''}"
+									/>
+								</button>
+
+								{#if limitDropdownOpen}
+									<div
+										class="absolute right-0 top-full z-50 mt-1 min-w-[125px] overflow-hidden rounded-lg border bg-card p-1 shadow-md animate-in fade-in-0 zoom-in-95 duration-100"
+										role="listbox"
+										aria-label="Pilihan jumlah baris per halaman"
+									>
+										{#each [5, 10, 20, 50] as opt (opt)}
+											<button
+												type="button"
+												role="option"
+												aria-selected={earningLimit === opt}
+												class="flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors {earningLimit === opt ? 'bg-accent font-semibold text-primary' : 'text-foreground hover:bg-secondary'}"
+												onclick={() => {
+													earningLimit = opt;
+													earningPage = 1;
+													limitDropdownOpen = false;
+												}}
+											>
+												<span class="tabular-nums">{opt} per hal</span>
+												{#if earningLimit === opt}
+													<Check size={13} class="shrink-0 text-primary" />
+												{/if}
+											</button>
+										{/each}
+									</div>
+								{/if}
+							</div>
 						</div>
 					{/if}
 				</div>
