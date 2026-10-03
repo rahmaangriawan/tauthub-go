@@ -78,7 +78,7 @@
 		const data = await res.json();
 		const raw = data.settings ?? {};
 		const base = {
-			plagiarism: { enabled: true, language: 'id', threshold_warning: 10, threshold_fail: 30, max_chars: 8000 },
+			aiOverview: { enabled: true, pass_total: 32, pass_min_indicator: 7, max_chars: 8000 },
 			contentSafety: {
 				enabled: true,
 				active_categories: ['sexual_content', 'child_safety', 'gambling', 'fraud_scam', 'violence', 'hate_speech'],
@@ -89,7 +89,7 @@
 			brandVoice: { enabled: true, ai_assist: true }
 		};
 		gk = {
-			plagiarism: { ...base.plagiarism, ...(raw.plagiarism ?? {}) },
+			aiOverview: { ...base.aiOverview, ...(raw.aiOverview ?? {}) },
 			contentSafety: { ...base.contentSafety, ...(raw.contentSafety ?? {}) },
 			linkHealth: { ...base.linkHealth, ...(raw.linkHealth ?? {}) },
 			brandVoice: { ...base.brandVoice, ...(raw.brandVoice ?? {}) }
@@ -184,26 +184,25 @@
 
 						<div class="mt-3 grid gap-3 sm:grid-cols-2">
 							<label class="flex items-center gap-2 text-sm">
-								<input type="checkbox" bind:checked={gk.plagiarism.enabled} />
-								Cek plagiarisme
+								<input type="checkbox" bind:checked={gk.aiOverview.enabled} />
+								Cek AI Overview (kesiapan artikel untuk Google AI Overviews)
 							</label>
 							<label class="block">
-								<span class="text-xs font-medium text-muted-foreground">Bahasa</span>
-								<input class="app-input mt-1 w-full" bind:value={gk.plagiarism.language} />
+								<span class="text-xs font-medium text-muted-foreground">Ambang total lulus (0-40)</span>
+								<input class="app-input mt-1 w-full" type="number" min="0" max="40" bind:value={gk.aiOverview.pass_total} />
 							</label>
 							<label class="block">
-								<span class="text-xs font-medium text-muted-foreground">Ambang peringatan (%)</span>
-								<input class="app-input mt-1 w-full" type="number" bind:value={gk.plagiarism.threshold_warning} />
+								<span class="text-xs font-medium text-muted-foreground">Skor minimum per indikator (0-10)</span>
+								<input class="app-input mt-1 w-full" type="number" min="0" max="10" bind:value={gk.aiOverview.pass_min_indicator} />
 							</label>
 							<label class="block">
-								<span class="text-xs font-medium text-muted-foreground">Ambang gagal (%)</span>
-								<input class="app-input mt-1 w-full" type="number" bind:value={gk.plagiarism.threshold_fail} />
-							</label>
-							<label class="block">
-								<span class="text-xs font-medium text-muted-foreground">Maks karakter</span>
-								<input class="app-input mt-1 w-full" type="number" bind:value={gk.plagiarism.max_chars} />
+								<span class="text-xs font-medium text-muted-foreground">Maks karakter isi</span>
+								<input class="app-input mt-1 w-full" type="number" bind:value={gk.aiOverview.max_chars} />
 							</label>
 						</div>
+						<p class="mt-2 text-[11px] text-muted-foreground">
+							Lulus bila total skor &ge; ambang total DAN tidak ada indikator di bawah skor minimum. Non-blocking: skor rendah hanya memunculkan catatan revisi, tidak menghalangi distribusi. Artikel buatan AI Tauthub dinilai ulang sekali setelah pass revisi.
+						</p>
 
 						<div class="mt-4">
 							<p class="text-xs font-medium text-muted-foreground">Kategori keamanan konten aktif</p>

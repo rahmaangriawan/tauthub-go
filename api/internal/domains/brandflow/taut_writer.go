@@ -232,6 +232,17 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		precedenceBlock += " Terapkan juga: mainstream -> lead 5W+1H dan paragraf mengalir gaya berita tanpa heading."
 	}
 	tidyHTMLBlock := "ATURAN HTML RAPI (WAJIB): setiap paragraf dibungkus <p> yang utuh (tidak ada paragraf terpotong); JANGAN menulis heading nyasar atau heading kosong dan JANGAN memakai <hr> atau garis dekoratif; JANGAN meninggalkan tag kosong (mis. <p></p>, <h2></h2>); JANGAN menulis teks yang hanya berisi URL telanjang; heading hanya dipakai bila memang diizinkan tipe media (blogger) dan hierarkinya berurutan (H2 lalu H3, tidak melompat); buang atribut/style inline yang tidak perlu dan JANGAN menambah wrapper <div>. Kutipan narasumber ditulis sebagai <blockquote><p>...</p></blockquote>."
+	// Selaras penilaian AI Overview (Gatekeeper QC): artikel yang lahir dari
+	// generator ini menyentuh empat indikator sejak awal — BLUF, entitas konkret,
+	// tanpa fluff; blogger mendapat subjudul berbasis pertanyaan.
+	aiOverviewRules := []string{
+		"Aturan AI Overview (WAJIB): jawab inti topik di 150 kata pertama (BLUF) — definisi/kesimpulan utama langsung di lead, tanpa basa-basi pembuka.",
+		"Aturan kepadatan informasi (WAJIB): sertakan entitas konkret dari bahan (nama orang/lembaga, lokasi, angka, persentase, istilah teknis); hindari kalimat pengisi dan klaim hiperbolik tanpa dasar.",
+	}
+	if mediaType == "blogger" {
+		aiOverviewRules = append(aiOverviewRules,
+			"Aturan AI Overview (blogger): pakai subjudul <h2>/<h3> berbasis pertanyaan yang lazim dicari (mis. \"Apa itu X?\", \"Bagaimana cara Y?\") dan tutup dengan rekomendasi bersyarat yang spesifik.")
+	}
 
 	allowsLink := item.boolOr("allow_hyperlink", true)
 	if item.has("max_links") {
@@ -398,6 +409,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 	promptLines = append(promptLines, precedenceBlock)
 	promptLines = append(promptLines, structureRules...)
+	promptLines = append(promptLines, aiOverviewRules...)
 	promptLines = append(promptLines, tidyHTMLBlock)
 	promptLines = append(promptLines,
 		languageBlock,

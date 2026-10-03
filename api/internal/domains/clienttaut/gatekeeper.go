@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"github.com/rahmaangriawan/tauthub-go/internal/moderation"
 )
 
@@ -33,7 +34,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 	}
 
 	items, err := d.queryRows(ctx,
-		`SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, m.bahasa_artikel, m.word_count_mode
+		`SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, m.media_type, m.bahasa_artikel, m.word_count_mode
 		 FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		 WHERE tcm.campaign_id = $1 AND tcm.status = 'selected' AND tcm.article_document_id IS NOT NULL
 		       AND tcm.article_status IN ('draft','revision')`, campaignID)
@@ -58,13 +59,15 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			currentVersion = doc.intOr("current_version", 1)
 		}
 		ver, err := d.queryRow(ctx,
-			"SELECT content FROM content_versions WHERE document_id = $1 AND version = $2 LIMIT 1", documentID, currentVersion)
+			"SELECT content, attribution FROM content_versions WHERE document_id = $1 AND version = $2 LIMIT 1", documentID, currentVersion)
 		if err != nil {
 			return nil, err
 		}
 		content := ""
+		attribution := ""
 		if ver != nil {
 			content = ver.strOr("content", "")
+			attribution = ver.strOr("attribution", "")
 		}
 
 		// Hard gate moderation (deterministik + AI classifier existing).
@@ -95,7 +98,11 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		}
 		voiceRange := resolveWordRange(item.strPtr("word_count_mode"))
 
-		plag, plagErr := d.checkPlagiarism(ctx, text, "id")
+		mediaType := item.strOr("media_type", "")
+		if mediaType == "" {
+			mediaType = campaign.strOr("media_type", "")
+		}
+		aiOverview := d.runAIOverviewCheck(ctx, title, mediaType, content, text)
 		safety := d.contentSafetyGuard(ctx, text, extractLinks(content), briefContext)
 		links := d.linkHealthValidator(ctx, content, []string{
 			strings.TrimSpace(campaign.strOr("primary_url", "")),
@@ -107,17 +114,6 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		}
 		voice := d.brandVoiceLimits(ctx, content, bahasaUtama, minWords, maxWords)
 
-		plagStatus := "review_required"
-		if plagErr == nil {
-			switch {
-			case plag.PercentPlagiarism <= 10:
-				plagStatus = "passed"
-			case plag.PercentPlagiarism <= 30:
-				plagStatus = "review_required"
-			default:
-				plagStatus = "failed"
-			}
-		}
 		safetyStatus := "review_required"
 		switch safety.RiskLevel {
 		case "high":
@@ -132,18 +128,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		voiceStatus := "passed" // voice informasional: tidak pernah gagal
 
 		checks := map[string]any{}
-		if plagErr == nil {
-			plagEntry := map[string]any{
-				"status": plagStatus, "percent": plag.PercentPlagiarism,
-				"sources": len(plag.Sources), "checkedAt": plag.CheckedAt,
-			}
-			if plag.Truncated {
-				plagEntry["truncated"] = true
-			}
-			checks["plagiarism"] = plagEntry
-		} else {
-			checks["plagiarism"] = map[string]any{"status": "review_required", "error": "Provider plagiarisme tidak tersedia"}
-		}
+		checks["aiOverview"] = aiOverview
 		checks["contentSafety"] = map[string]any{
 			"status": safetyStatus, "riskLevel": safety.RiskLevel,
 			"categories": safety.Categories, "confidence": safety.Confidence,
@@ -188,15 +173,22 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		if allowLink {
 			linkRule = "Media mengizinkan hyperlink. Tanam hyperlink_config secara natural bila sesuai: " + jsonString(orEmptySlice(hyperlink)) + "."
 		}
-		prompt := strings.Join([]string{
+		promptLines := []string{
 			"Kampanye: " + campaign.strOr("name", ""),
 			"Media tujuan: " + name,
 			linkRule,
 			"Periksa judi/SARA/ujaran kebencian.",
 			"Judul saat ini: " + title,
 			"Isi (HTML): " + truncateString(content, 4000),
-			"", "Output JSON valid {final_html, verdict: layak_tayang|revisi|gagal, catatan}.",
-		}, "\n")
+		}
+		// Catatan AI Overview disambungkan ke pass revisi (bila indikator lemah).
+		if notes := ai.AIOverviewRevisionNotes(aiOverview); len(notes) > 0 {
+			promptLines = append(promptLines,
+				"Catatan revisi AI Overview (WAJIB diperbaiki saat menulis ulang artikel):",
+				"- "+strings.Join(notes, "\n- "))
+		}
+		promptLines = append(promptLines, "", "Output JSON valid {final_html, verdict: layak_tayang|revisi|gagal, catatan}.")
+		prompt := strings.Join(promptLines, "\n")
 
 		result, err := d.runTautAgent(ctx, "gatekeeper", campaignID, prompt, &mediaID, true)
 		if err != nil {
@@ -220,6 +212,20 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		// Deterministik: media tidak izinkan → pastikan tak ada link tersisa.
 		if !allowLink {
 			finalHTML = stripHyperlinks(finalHTML, linkURL)
+		}
+
+		// Artikel buatan AI Tauthub: bila skor di bawah ambang dan pass revisi
+		// menulis ulang artikel, nilai ULANG sekali — skor tersimpan adalah
+		// kualitas akhir (hijau bila revisi memperbaiki indikator lemah).
+		if attribution == "ai_generated" && ai.AIOverviewRejected(aiOverview) && finalHTML != content {
+			rechecked := d.runAIOverviewCheck(ctx, title, mediaType, finalHTML, extractText(finalHTML))
+			if rechecked != nil {
+				aiOverview = rechecked
+				checks["aiOverview"] = rechecked
+				if err := d.updateGatekeeperAuditChecks(ctx, campaignID, mediaID, runRevision, checks); err != nil {
+					return nil, err
+				}
+			}
 		}
 
 		nextVersion := currentVersion + 1
@@ -247,6 +253,42 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		results = append(results, gatekeeperItemResult{MediaID: mediaID, Status: status, Verdict: verdict})
 	}
 	return results, nil
+}
+
+// aiOverviewSettings: toggle + ambang dari taut_agent_configs.settings.aiOverview.
+func (d *Deps) aiOverviewSettings(ctx context.Context) ai.AIOverviewSettings {
+	return ai.AIOverviewSettingsFromJSON(d.getAgentConfig(ctx, "gatekeeper").Settings["aiOverview"])
+}
+
+// runAIOverviewCheck: nilai kesiapan AI Overview (non-blocking). Bagian murni
+// (prompt + parsing + aturan gate) ada di internal/ai, sama dengan brandflow.
+func (d *Deps) runAIOverviewCheck(ctx context.Context, title, mediaType, contentHTML, text string) map[string]any {
+	checkedAt := nowISO()
+	st := d.aiOverviewSettings(ctx)
+	if !st.Enabled {
+		return ai.AIOverviewResult{
+			Status: "pending", CheckedAt: checkedAt,
+			Info: "Pemeriksaan AI Overview dinonaktifkan admin.",
+		}.JSON()
+	}
+	prompt := ai.AIOverviewUserPrompt(title, mediaType, contentHTML, countWords(text), st)
+	result, err := d.callAgentLLM(ctx, "gatekeeper", prompt, true, ai.AIOverviewSystemPrompt, 0)
+	if err != nil {
+		return ai.AIOverviewResult{
+			Status: "review_required", CheckedAt: checkedAt,
+			Error: "AI Overview tidak dapat menilai artikel: " + truncateString(err.Error(), 200),
+		}.JSON()
+	}
+	return ai.EvaluateAIOverview(result.Content, st, checkedAt).JSON()
+}
+
+// updateGatekeeperAuditChecks: perbarui checks baris audit yang baru dibuat
+// (dipakai setelah penilaian ulang AI Overview pasca-revisi).
+func (d *Deps) updateGatekeeperAuditChecks(ctx context.Context, campaignID, mediaID string, runRevision int, checks map[string]any) error {
+	return d.exec(ctx,
+		`UPDATE taut_gatekeeper_audits SET checks = $1::jsonb, updated_at = NOW()
+		 WHERE campaign_id = $2 AND media_id = $3 AND run_revision = $4`,
+		jsonString(checks), campaignID, mediaID, runRevision)
 }
 
 func strPtrOrNilPtr(s string) *string {

@@ -877,9 +877,9 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		if contentSafety == nil {
 			contentSafety = map[string]any{"status": "pending"}
 		}
-		plagiarism := checks["plagiarism"]
-		if plagiarism == nil {
-			plagiarism = map[string]any{"status": "pending"}
+		aiOverview := checks["aiOverview"]
+		if aiOverview == nil {
+			aiOverview = map[string]any{"status": "pending"}
 		}
 		linkHealth := checks["linkHealth"]
 		if linkHealth == nil {
@@ -918,7 +918,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 				"status": auditStatus,
 				"count":  auditCounts[item.strOr("media_id", "")],
 				"checks": map[string]any{
-					"plagiarism":    plagiarism,
+					"aiOverview":    aiOverview,
 					"contentSafety": contentSafety,
 					"linkHealth":    withUnsafeURLs(linkHealth, unsafeURLs),
 					"brandVoice":    brandVoice,

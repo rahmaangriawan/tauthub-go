@@ -38,6 +38,9 @@ type agentConfig struct {
 	Enabled         bool
 	RateLimitPerMin int
 	Configured      bool
+	// Settings: preferensi per-agent dari taut_agent_configs.settings (jsonb),
+	// mis. threshold AI Overview di gatekeeper.
+	Settings map[string]any
 }
 
 type agentLLMResult struct {
@@ -90,7 +93,7 @@ func (d *Deps) getAgentConfig(ctx context.Context, agent string) agentConfig {
 
 	cfg := agentConfig{Agent: agent, Temperature: 0.7, TimeoutMS: 60000, RateLimitPerMin: 3}
 	row, err := d.queryRow(ctx,
-		"SELECT agent, base_url, sealed_api_key, model, temperature, max_tokens, timeout_ms, system_prompt, enabled, rate_limit_per_min FROM taut_agent_configs WHERE agent = $1 LIMIT 1",
+		"SELECT agent, base_url, sealed_api_key, model, temperature, max_tokens, timeout_ms, system_prompt, enabled, rate_limit_per_min, settings FROM taut_agent_configs WHERE agent = $1 LIMIT 1",
 		agent)
 	if err != nil {
 		slog.Warn("[taut-agent] query config agent gagal, memakai gateway global", "agent", agent, "err", err)
@@ -115,6 +118,7 @@ func (d *Deps) getAgentConfig(ctx context.Context, agent string) agentConfig {
 			maxTokens = row.intOr("max_tokens", 0)
 			maxTokensPtr = &maxTokens
 		}
+		settingsMap, _ := row.jsonField("settings").(map[string]any)
 		cfg = agentConfig{
 			Agent:           agent,
 			BaseURL:         baseURL,
@@ -127,6 +131,7 @@ func (d *Deps) getAgentConfig(ctx context.Context, agent string) agentConfig {
 			Enabled:         enabled,
 			RateLimitPerMin: row.intOr("rate_limit_per_min", 3),
 			Configured:      enabled && baseURL != "" && apiKey != "" && model != "",
+			Settings:        settingsMap,
 		}
 		if !row.has("temperature") {
 			cfg.Temperature = 0.7

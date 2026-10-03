@@ -23,8 +23,15 @@
 		level?: string;
 		notes?: string[];
 		error?: string;
+		// AI Overview (kesiapan artikel untuk Google AI Overviews).
+		totalScore?: number;
+		maxScore?: number;
+		verdict?: 'lulus' | 'ditolak';
+		indicators?: Array<{ key: string; title: string; score: number; summary: string }>;
+		revisionNotes?: string[];
+		info?: string;
 	};
-	type Checks = { plagiarism: Check; contentSafety: Check; linkHealth: Check; brandVoice: Check };
+	type Checks = { aiOverview: Check; contentSafety: Check; linkHealth: Check; brandVoice: Check };
 	type MediaEntry = {
 		media_id: string;
 		name: string;
@@ -37,7 +44,7 @@
 	};
 
 	const CHECK_CARDS: Array<{ key: keyof Checks; title: string; gate: boolean }> = [
-		{ key: 'plagiarism', title: 'Plagiarism Checker', gate: false },
+		{ key: 'aiOverview', title: 'AI Overview Checker', gate: false },
 		{ key: 'contentSafety', title: 'Illegal Content Guard', gate: true },
 		{ key: 'linkHealth', title: 'Link Health Validator', gate: true },
 		{ key: 'brandVoice', title: 'Brand Voice Limits', gate: false }
@@ -164,12 +171,14 @@
 
 	function summaryOf(key: keyof Checks, check: Check): string {
 		switch (key) {
-			case 'plagiarism':
+			case 'aiOverview': {
+				if (check.info) return check.info;
 				if (check.error) return check.error;
-				if (check.status === 'passed') return `Kemiripan ${check.percent ?? '?'}%`;
-				if (check.status === 'failed') return `Kemiripan ${check.percent ?? '?'}% (di atas ambang)`;
-				if (check.status === 'review_required') return `Perlu review, kemiripan ${check.percent ?? '?'}%`;
+				const skor = `${check.totalScore ?? '?'}/${check.maxScore ?? 40}`;
+				if (check.status === 'passed') return `Layak AI Overview · skor ${skor}`;
+				if (check.status === 'review_required') return `Skor ${skor} — perlu revisi`;
 				return tr('Menunggu pemindaian…');
+			}
 			case 'contentSafety':
 				if (check.status === 'passed') return `Risiko ${check.riskLevel ?? 'rendah'}`;
 				if (check.status === 'failed') return `Diblokir: ${check.categories?.join(', ') ?? tr('konten ilegal')}`;
@@ -236,7 +245,12 @@
 				? Boolean(check.categories?.length || check.reasons?.length)
 				: key === 'brandVoice'
 					? Boolean(check.notes?.length)
-					: false;
+					: key === 'aiOverview'
+						? Boolean(check.indicators?.length || check.revisionNotes?.length || check.error)
+						: false;
+
+	/** Skor indikator AI Overview → tone badge (hijau bila >= 7). */
+	const indicatorTone = (score: number) => (score >= 7 ? 'success' : 'warning');
 </script>
 
 <SlideOver title={tr('Analisis QC Artikel')} subtitle={mediaName} closeLabel={tr('Tutup')} onClose={onClose}>
@@ -315,7 +329,7 @@
 					<div class="qcCheck" style="border-color: {status === 'passed' ? 'var(--success)' : status === 'failed' ? 'var(--destructive)' : 'var(--border)'};">
 						<div class="flex items-start gap-2">
 							<div class="qcCheckIcon">
-								{#if card.key === 'plagiarism'}<span class="text-xs font-bold">¶</span>
+								{#if card.key === 'aiOverview'}<Sparkles size={15} />
 								{:else if card.key === 'contentSafety'}<ShieldAlert size={15} />
 								{:else if card.key === 'linkHealth'}<span class="text-xs font-bold">⛓</span>
 								{:else}<span class="text-xs font-bold">~</span>{/if}
@@ -339,7 +353,35 @@
 							</button>
 							{#if detailOpen}
 								<div class="qcDetail">
-									{#if card.key === 'linkHealth'}
+										{#if card.key === 'aiOverview'}
+											<div class="space-y-2 text-[11.5px]">
+												<p>
+													{tr('Total skor')}: <strong>{check.totalScore ?? '—'}/{check.maxScore ?? 40}</strong>
+													{#if check.verdict}{' · '}{check.verdict === 'lulus' ? tr('lulus') : tr('perlu revisi')}{/if}
+												</p>
+												{#if check.indicators?.length}
+													<ul class="space-y-1.5">
+														{#each check.indicators as ind (ind.key)}
+															<li class="flex items-start gap-2">
+																<span class="mt-0.5 inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={badge(indicatorTone(ind.score))}>{ind.score}</span>
+																<div class="min-w-0 flex-1">
+																	<p class="font-semibold">{ind.title}</p>
+																	{#if ind.summary}<p class="text-muted-foreground">{ind.summary}</p>{/if}
+																</div>
+															</li>
+														{/each}
+													</ul>
+												{/if}
+												{#if check.revisionNotes?.length}
+													<div>
+														<p class="font-semibold">{tr('Catatan revisi')}</p>
+														<ul class="list-disc space-y-1 pl-4 text-muted-foreground">
+															{#each check.revisionNotes as note (note)}<li>{note}</li>{/each}
+														</ul>
+													</div>
+												{/if}
+											</div>
+										{:else if card.key === 'linkHealth'}
 										<ul class="space-y-1.5">
 											{#each check.links ?? [] as link (link.url)}
 												<li class="flex items-start gap-2">

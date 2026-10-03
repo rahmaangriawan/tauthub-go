@@ -266,7 +266,8 @@
 				{#if showArchive}<RotateCcw size={16} />{:else}<Archive size={16} />{/if}
 				{showArchive ? tr('Kembali ke Daftar') : tr('Arsip')}
 			</button>
-			<button class="app-btn app-btn-primary" type="button" disabled={busy || showArchive} onclick={() => (createOpen = true)}>
+			<!-- SEMENTARA: popup create ditimpa redirect ke katalog media; kembalikan ke (createOpen = true) saat fitur siap. -->
+			<button class="app-btn app-btn-primary" type="button" disabled={busy || showArchive} onclick={() => void goto(`/klien/${brandUrl}/media`)}>
 				{#if busy}<LoaderCircle size={16} class="animate-spin" />{/if}
 				{busy ? 'Membuat…' : tr('Kampanye Baru')}
 			</button>

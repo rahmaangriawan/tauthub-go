@@ -63,9 +63,9 @@
 			body: 'Menguji setiap tautan di dalam artikel. Tautan mati atau yang mengarah ke situs berisiko ditolak.'
 		},
 		{
-			title: 'Plagiarism Checker',
+			title: 'AI Overview Checker',
 			gate: false,
-			body: 'Menampilkan persentase kemiripan teks dengan sumber lain. Bersifat informasi, bukan penghalang distribusi.'
+			body: 'Menilai kesiapan artikel untuk Google AI Overviews: struktur (BLUF), kepadatan entitas, sinyal E-E-A-T, dan penyelarasan niat pengguna. Skor total dari 40; di bawah ambang berarti perlu revisi. Bersifat informasi, bukan penghalang distribusi.'
 		},
 		{
 			title: 'Brand Voice Limits',
