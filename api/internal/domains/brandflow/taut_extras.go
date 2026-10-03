@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -1321,6 +1322,83 @@ func (d *Deps) TautProduceOne(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeNoStore(w, http.StatusOK, result)
+}
+
+// TautProduceOneStream: POST .../produce/{mediaId}/stream — versi SSE dari
+// TautProduceOne. Event: delta (tambahan html parsial, escape sudah di-decode),
+// done (payload sama dengan produce biasa), error (message + status HTTP).
+// Semua cek akses/kredit tetap jalan; hasil akhir tetap lewat finalize yang
+// sama, jadi versi stream dan non-stream menghasilkan artikel identik.
+func (d *Deps) TautProduceOneStream(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	campaignID := chiParam(r, "campaignId")
+	mediaID := chiParam(r, "mediaId")
+	var topic string
+	var rawLinks []tautWriterLinkInput
+	if r.ContentLength != 0 {
+		var body struct {
+			Topic string                `json:"topic"`
+			Links []tautWriterLinkInput `json:"links"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 65536)).Decode(&body); err == nil {
+			topic = strings.TrimSpace(body.Topic)
+			if len(topic) > 2000 {
+				topic = topic[:2000]
+			}
+			rawLinks = body.Links
+		}
+	}
+	links, err := normalizeTautWriterLinks(rawLinks)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+
+	flusher, canFlush := w.(http.Flusher)
+	if canFlush {
+		h := w.Header()
+		h.Set("Content-Type", "text/event-stream")
+		h.Set("Cache-Control", "no-cache")
+		// Nonaktifkan buffering nginx per-respons supaya delta tidak tertahan.
+		h.Set("X-Accel-Buffering", "no")
+		w.WriteHeader(http.StatusOK)
+	}
+	sendEvent := func(event string, payload any) {
+		if !canFlush {
+			return
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, jsonStringify(payload))
+		flusher.Flush()
+	}
+
+	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID,
+		tautWriterOptions{Topic: topic, Links: links, StreamHTML: func(partial string) {
+			sendEvent("delta", map[string]any{"append": partial})
+		}})
+	if err != nil {
+		var ic *insufficientCreditsError
+		if asInsufficient(err, &ic) {
+			sendEvent("error", map[string]any{
+				"status":  http.StatusPaymentRequired,
+				"message": "Saldo kredit tidak cukup untuk generate (butuh " + itoa(ic.Needed) + ", tersedia " + itoa(ic.Available) + ").",
+			})
+			return
+		}
+		sendEvent("error", map[string]any{"status": http.StatusInternalServerError, "message": err.Error()})
+		return
+	}
+	// Tanpa flusher (pratinjau streaming tetap terkirim bila bisa): tulis hasil
+	// sebagai JSON biasa agar klien tetap mendapat artikel.
+	if !canFlush {
+		writeNoStore(w, http.StatusOK, result)
+		return
+	}
+	sendEvent("done", result)
 }
 
 // ---------- writer-links ----------

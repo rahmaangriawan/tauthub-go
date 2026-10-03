@@ -125,6 +125,8 @@
 	} | null>(null);
 	let editorSaving = $state(false);
 	let editorError = $state('');
+	// Pratinjau streaming: html parsial dari SSE saat AI menulis; null = idle.
+	let streamHtml = $state<string | null>(null);
 
 	let saveLinksTimer: number | null = null;
 	let saveLinksSeq = 0;
@@ -396,14 +398,89 @@
 					linksDirty = false;
 				}
 			}
-			// Menulis artikel memakai LLM (puluhan detik); timeout bawaan 12 dtk
-			// akan memutus request dan membatalkan pekerjaan di server.
-			const res = await apiRequest(`${apiBase}/produce/${item.media_id}`, { method: 'POST' }, 240_000);
-			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal generate artikel.')));
+			// Streaming (SSE): editor dibuka segera dan potongan artikel tampil
+			// bertahap saat LLM menulis. Hasil akhir tetap diambil dari server
+			// (sudah difinalisasi + backlink) lewat openPreview.
+			const linkLimit = mediaAllowsLink(item) ? (item.max_links && item.max_links > 0 ? item.max_links : 2) : 0;
+			editor = {
+				mediaId: item.media_id,
+				mediaName: item.name,
+				tab: 'tulis',
+				title: '',
+				html: '',
+				cover: null,
+				category: null,
+				metaDescription: null,
+				linkLimit
+			};
+			streamHtml = '';
+			const token = getAccessToken();
+			const controller = new AbortController();
+			const abortTimer = window.setTimeout(() => controller.abort(), 300_000);
+			const res = await fetch(`${apiBase}/produce/${item.media_id}/stream`, {
+				method: 'POST',
+				headers: {
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+					'Content-Type': 'application/json'
+				},
+				credentials: 'include',
+				signal: controller.signal
+			});
+			if (!res.ok || !res.body) {
+				throw new Error(await readApiError(res, tr('Gagal generate artikel.')));
+			}
+			const reader = res.body.getReader();
+			const dec = new TextDecoder();
+			let buf = '';
+			let finished = false;
+			let streamErr = '';
+			while (!finished) {
+				const { value, done: fin } = await reader.read();
+				if (fin) break;
+				buf += dec.decode(value, { stream: true });
+				let idx;
+				while ((idx = buf.indexOf('\n\n')) >= 0) {
+					const block = buf.slice(0, idx);
+					buf = buf.slice(idx + 2);
+					let ev = 'message';
+					let data = '';
+					for (const line of block.split('\n')) {
+						if (line.startsWith('event:')) ev = line.slice(6).trim();
+						else if (line.startsWith('data:')) data += line.slice(5).trim();
+					}
+					if (!data) continue;
+					let payload: { append?: string; message?: string } | null = null;
+					try {
+						payload = JSON.parse(data);
+					} catch {
+						continue;
+					}
+					if (ev === 'delta' && typeof payload?.append === 'string') {
+						streamHtml += payload.append;
+					} else if (ev === 'done') {
+						finished = true;
+					} else if (ev === 'error') {
+						streamErr = String(payload?.message ?? tr('Gagal generate artikel.'));
+						finished = true;
+					}
+				}
+			}
+			window.clearTimeout(abortTimer);
+			if (streamErr) throw new Error(streamErr);
+			if (!finished) throw new Error(tr('Koneksi streaming terputus.'));
 			genState = { ...genState, [item.media_id]: 'draft' };
 			qcToken += 1;
-			if (openAfter) await openPreview(item);
+			// Modal masih terbuka dan user belum menutupnya sendiri: ganti
+			// pratinjau streaming dengan artikel final dari server.
+			const wasOpen = editor?.mediaId === item.media_id && streamHtml !== null;
+			streamHtml = null;
+			if (openAfter && wasOpen) {
+				editor = null;
+				await openPreview(item);
+			}
 		} catch (reason) {
+			streamHtml = null;
+			editor = null;
 			genState = { ...genState, [item.media_id]: 'error' };
 			error = reason instanceof Error ? reason.message : tr('Gagal generate artikel.');
 		}
@@ -1360,6 +1437,7 @@
 			onGenerate={(topic, links) => generateNaskah(ed.mediaId, topic, links)}
 			gatekeeperConfigured={gatekeeperAgent ? gatekeeperAgent.configured : null}
 			onValidate={(title, html, coverUrl, category, metaDescription) => validateNaskah(title, html, coverUrl, category, metaDescription)}
+			streamingHtml={streamHtml}
 		/>
 	{/key}
 {/if}

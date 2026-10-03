@@ -1,6 +1,7 @@
 package brandflow
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -166,6 +167,14 @@ func (d *Deps) getAgentConfig(ctx context.Context, agent string) agentConfig {
 
 // callAgentLLM: port callAgentLLM — POST {baseUrl}/chat/completions.
 func (d *Deps) callAgentLLM(ctx context.Context, agent, userPrompt string, jsonMode bool, systemOverride string, timeoutMS int) (*agentLLMResult, error) {
+	return d.callAgentLLMCommon(ctx, agent, userPrompt, jsonMode, systemOverride, timeoutMS, nil)
+}
+
+// callAgentLLMCommon: inti callAgentLLM. onDelta != nil mengaktifkan
+// stream:true — tiap potongan teks dari gateway diteruskan segera (untuk
+// streaming ke editor). Gateway yang membalas JSON biasa meski diminta
+// streaming tetap dilayani: seluruh konten dikirim lewat onDelta sekali.
+func (d *Deps) callAgentLLMCommon(ctx context.Context, agent, userPrompt string, jsonMode bool, systemOverride string, timeoutMS int, onDelta func(string)) (*agentLLMResult, error) {
 	cfg := d.getAgentConfig(ctx, agent)
 	if !cfg.Configured {
 		return nil, &agentNotConfiguredError{agent: agent}
@@ -201,6 +210,9 @@ func (d *Deps) callAgentLLM(ctx context.Context, agent, userPrompt string, jsonM
 	if jsonMode {
 		payload["response_format"] = map[string]string{"type": "json_object"}
 	}
+	if onDelta != nil {
+		payload["stream"] = true
+	}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("LLM %s: %w", agent, err)
@@ -220,33 +232,94 @@ func (d *Deps) callAgentLLM(ctx context.Context, agent, userPrompt string, jsonM
 		return nil, fmt.Errorf("LLM %s: %w", agent, err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 
-	var parsed struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-		Usage struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-		} `json:"usage"`
+	if onDelta == nil || !strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		// Jalur non-streaming (juga fallback: gateway abaikan stream:true).
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		var parsed struct {
+			Choices []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			} `json:"choices"`
+			Usage struct {
+				PromptTokens     int `json:"prompt_tokens"`
+				CompletionTokens int `json:"completion_tokens"`
+			} `json:"usage"`
+		}
+		_ = json.Unmarshal(raw, &parsed)
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("LLM %s: HTTP %d", agent, resp.StatusCode)
+		}
+		content := ""
+		if len(parsed.Choices) > 0 {
+			content = parsed.Choices[0].Message.Content
+		}
+		if strings.TrimSpace(content) == "" {
+			return nil, fmt.Errorf("LLM %s: respons kosong.", agent)
+		}
+		if onDelta != nil {
+			onDelta(content)
+		}
+		return &agentLLMResult{
+			Content: content, Model: cfg.Model,
+			UsageIn: parsed.Usage.PromptTokens, UsageOut: parsed.Usage.CompletionTokens,
+			DurationMS: time.Since(startedAt).Milliseconds(),
+		}, nil
 	}
-	_ = json.Unmarshal(raw, &parsed)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("LLM %s: HTTP %d", agent, resp.StatusCode)
+
+	// Streaming SSE: baris "data: {json}" per potongan; [DONE] menutup stream.
+	var acc strings.Builder
+	usageIn, usageOut := 0, 0
+	sc := bufio.NewScanner(resp.Body)
+	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" {
+			continue
+		}
+		if data == "[DONE]" {
+			break
+		}
+		var chunk struct {
+			Choices []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+			} `json:"choices"`
+			Usage struct {
+				PromptTokens     int `json:"prompt_tokens"`
+				CompletionTokens int `json:"completion_tokens"`
+			} `json:"usage"`
+		}
+		if json.Unmarshal([]byte(data), &chunk) != nil {
+			continue
+		}
+		if chunk.Usage.PromptTokens > 0 {
+			usageIn = chunk.Usage.PromptTokens
+		}
+		if chunk.Usage.CompletionTokens > 0 {
+			usageOut = chunk.Usage.CompletionTokens
+		}
+		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
+			acc.WriteString(chunk.Choices[0].Delta.Content)
+			onDelta(chunk.Choices[0].Delta.Content)
+		}
 	}
-	content := ""
-	if len(parsed.Choices) > 0 {
-		content = parsed.Choices[0].Message.Content
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("LLM %s: stream terputus: %w", agent, err)
 	}
+	content := acc.String()
 	if strings.TrimSpace(content) == "" {
 		return nil, fmt.Errorf("LLM %s: respons kosong.", agent)
 	}
 	return &agentLLMResult{
 		Content: content, Model: cfg.Model,
-		UsageIn: parsed.Usage.PromptTokens, UsageOut: parsed.Usage.CompletionTokens,
+		UsageIn: usageIn, UsageOut: usageOut,
 		DurationMS: time.Since(startedAt).Milliseconds(),
 	}, nil
 }
@@ -311,6 +384,18 @@ func (d *Deps) waitForTautRateSlot(ctx context.Context, agent string) {
 // runTautAgent: port runTautAgent — dedup run done, retry max 2 + backoff,
 // catat taut_agent_runs + training sample.
 func (d *Deps) runTautAgent(ctx context.Context, agent, campaignID, userPrompt string, mediaID *string, jsonMode bool) (*agentLLMResult, error) {
+	return d.runTautAgentCommon(ctx, agent, campaignID, userPrompt, mediaID, jsonMode, nil)
+}
+
+// runTautAgentStream: seperti runTautAgent, tetapi tiap potongan teks dari LLM
+// diteruskan ke onDelta begitu tiba (untuk streaming ke editor). Cache hit
+// mengirim seluruh konten sekaligus. Kegagalan SETELAH sebagian delta terkirim
+// tidak di-retry — klien sudah menerima sebagian teks, retry menduplikasinya.
+func (d *Deps) runTautAgentStream(ctx context.Context, agent, campaignID, userPrompt string, mediaID *string, jsonMode bool, onDelta func(string)) (*agentLLMResult, error) {
+	return d.runTautAgentCommon(ctx, agent, campaignID, userPrompt, mediaID, jsonMode, onDelta)
+}
+
+func (d *Deps) runTautAgentCommon(ctx context.Context, agent, campaignID, userPrompt string, mediaID *string, jsonMode bool, onDelta func(string)) (*agentLLMResult, error) {
 	mediaKey := ""
 	if mediaID != nil {
 		mediaKey = *mediaID
@@ -322,6 +407,9 @@ func (d *Deps) runTautAgent(ctx context.Context, agent, campaignID, userPrompt s
 		agent, inputHash)
 	if err == nil && cached != nil {
 		if content := outputContent(cached.raw("output")); content != "" {
+			if onDelta != nil {
+				onDelta(content)
+			}
 			return &agentLLMResult{
 				Content: content, Model: cached.strOr("model", ""),
 				UsageIn: cached.intOr("token_input", 0), UsageOut: cached.intOr("token_output", 0),
@@ -332,6 +420,7 @@ func (d *Deps) runTautAgent(ctx context.Context, agent, campaignID, userPrompt s
 
 	const maxRetries = 2
 	attempt := 0
+	emitted := false
 	for {
 		attempt++
 		runID := uuid.NewString()
@@ -341,7 +430,16 @@ func (d *Deps) runTautAgent(ctx context.Context, agent, campaignID, userPrompt s
 			return nil, err
 		}
 		d.waitForTautRateSlot(ctx, agent)
-		result, llmErr := d.callAgentLLM(ctx, agent, userPrompt, jsonMode, "", 0)
+		var result *agentLLMResult
+		var llmErr error
+		if onDelta == nil {
+			result, llmErr = d.callAgentLLM(ctx, agent, userPrompt, jsonMode, "", 0)
+		} else {
+			result, llmErr = d.callAgentLLMCommon(ctx, agent, userPrompt, jsonMode, "", 0, func(delta string) {
+				emitted = true
+				onDelta(delta)
+			})
+		}
 		if llmErr == nil {
 			_ = d.exec(ctx,
 				"UPDATE taut_agent_runs SET status='done', model=$1, token_input=$2, token_output=$3, duration_ms=$4, output=$5::jsonb, finished_at=NOW() WHERE id=$6",
@@ -355,7 +453,7 @@ func (d *Deps) runTautAgent(ctx context.Context, agent, campaignID, userPrompt s
 		_ = d.exec(ctx, "UPDATE taut_agent_runs SET status='failed', error=$1, finished_at=NOW() WHERE id=$2",
 			truncateString(message, 1000), runID)
 		d.saveTautTrainingSample(ctx, campaignID, mediaID, agent, "failed", userPrompt, message, "", 0, 0)
-		if attempt > maxRetries {
+		if (onDelta != nil && emitted) || attempt > maxRetries {
 			return nil, llmErr
 		}
 		select {

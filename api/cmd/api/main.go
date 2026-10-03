@@ -281,6 +281,7 @@ func run() error {
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/audits", resolveCampaign(brandFlowDeps.TautGatekeeperAudits))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/distribute", resolveCampaign(brandFlowDeps.TautGatekeeperDistribute))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/produce/{mediaId}", resolveCampaign(brandFlowDeps.TautProduceOne))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/produce/{mediaId}/stream", resolveCampaign(brandFlowDeps.TautProduceOneStream))
 			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/analyze", resolveCampaign(brandFlowDeps.CampaignFlowAnalyze))
 			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/article-regen", resolveCampaign(brandFlowDeps.CampaignFlowArticleRegen))
 			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/checkout", resolveCampaign(brandFlowDeps.CampaignFlowCheckout))

@@ -35,7 +35,8 @@
 		onUploadDoc,
 		onGenerate,
 		gatekeeperConfigured = null,
-		onValidate
+		onValidate,
+		streamingHtml = null
 	}: {
 		mediaName: string;
 		brandId: string;
@@ -61,6 +62,8 @@
 		gatekeeperConfigured?: boolean | null;
 		/** Cek Validasi (QC) dari writer: simpan lalu pindai; hasil dibuka di panel QC. */
 		onValidate: (title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) => Promise<{ ok: boolean; passed: boolean; message: string; error: string }>;
+		/** Pratinjau streaming: html parsial yang tampil read-only saat AI menulis; null = tidak streaming. */
+		streamingHtml?: string | null;
 	} = $props();
 
 // Nilai awal disalin sekali per mount — writer memakai {#key mediaId}
@@ -762,7 +765,16 @@
 					<div class="mt-4">
 						<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{tr('Isi Artikel (Konten)')}</p>
 						<div class="mt-2">
-							<RichTextEditor bind:value={html} bind:stats={editorStats} brandId={brandId} campaignId={campaignId} mediaId={mediaId} ariaLabel={tr('Isi artikel')} minHeight={360} />
+							{#if streamingHtml !== null && streamingHtml !== undefined}
+								<div class="rounded-lg border p-4" style="border-color: var(--border);" aria-live="polite">
+									<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold" style="color: var(--primary);">
+										<LoaderCircle size={13} class="animate-spin" /> {tr('AI sedang menulis artikel…')}
+									</p>
+									<div class="max-w-none text-sm leading-relaxed [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-bold [&_h3]:mt-2 [&_h3]:font-semibold [&_p]:my-2 [&_li]:ml-5 [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:italic" style="min-height: 320px;">{@html streamingHtml}</div>
+								</div>
+							{:else}
+								<RichTextEditor bind:value={html} bind:stats={editorStats} brandId={brandId} campaignId={campaignId} mediaId={mediaId} ariaLabel={tr('Isi artikel')} minHeight={360} />
+							{/if}
 						</div>
 						{#if campaignId && mediaId}
 							<div class="mt-3 rounded-xl border p-3" style="border-color: var(--border); background-color: var(--muted);">

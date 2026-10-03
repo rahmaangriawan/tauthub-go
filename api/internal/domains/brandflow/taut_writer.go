@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -41,6 +42,10 @@ type tautWriterLinkInput struct {
 type tautWriterOptions struct {
 	Topic string
 	Links []tautWriterLink
+	// StreamHTML (opsional): dipanggil dengan TAMBAHAN html parsial setiap kali
+	// LLM menulis lebih banyak isi — untuk streaming SSE ke editor. Nilai masih
+	// mentah (belum lewat finalizeTautArticleHTML); finalize hanya di akhir.
+	StreamHTML func(partial string)
 }
 
 // normalizeTautWriterLinks: validasi + rapikan tautan dari klien. Maksimal 10
@@ -137,9 +142,11 @@ func (d *Deps) selectedTautMedia(ctx context.Context, campaignID string) ([]sele
 func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandID, userID, mediaID string, opts ...tautWriterOptions) (writerItemResult, error) {
 	clientTopic := ""
 	customLinks := []tautWriterLink{}
+	var streamFn func(string)
 	if len(opts) > 0 {
 		clientTopic = strings.TrimSpace(opts[0].Topic)
 		customLinks = opts[0].Links
+		streamFn = opts[0].StreamHTML
 	}
 	campaign, err := d.loadTautCampaignRow(ctx, campaignID, brandID)
 	if err != nil {
@@ -419,7 +426,23 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 	prompt := strings.Join(filtered, "\n")
 
-	result, err := d.runTautAgent(ctx, "writer", campaignID, prompt, &mediaID, true)
+	var result *agentLLMResult
+	if streamFn != nil {
+		// Streaming: kumpulkan delta JSON mentah, ekstrak content_html parsial,
+		// dan kirim TAMBAHANNYA saja ke klien (escape sudah di-decode).
+		var acc strings.Builder
+		sent := 0
+		result, err = d.runTautAgentStream(ctx, "writer", campaignID, prompt, &mediaID, true, func(delta string) {
+			acc.WriteString(delta)
+			visible, _ := partialContentHTML(acc.String())
+			if len(visible) > sent {
+				streamFn(visible[sent:])
+				sent = len(visible)
+			}
+		})
+	} else {
+		result, err = d.runTautAgent(ctx, "writer", campaignID, prompt, &mediaID, true)
+	}
 	if err != nil {
 		return writerItemResult{}, err
 	}
@@ -1112,4 +1135,77 @@ func spokespersonListValue(raw any) []spokespersonValue {
 		})
 	}
 	return out
+}
+
+// partialContentHTML: ekstrak nilai content_html dari akumulasi JSON mentah
+// yang mengalir dari LLM (json_mode). Escape JSON di-decode sampai posisi
+// terakhir yang valid, jadi teks parsial aman dirender di editor. closed=true
+// berarti nilai sudah lengkap (kutip penutup ditemukan).
+func partialContentHTML(acc string) (visible string, closed bool) {
+	const key = `"content_html"`
+	i := strings.Index(acc, key)
+	if i < 0 {
+		return "", false
+	}
+	j := i + len(key)
+	for j < len(acc) && (acc[j] == ' ' || acc[j] == ':') {
+		j++
+	}
+	if j >= len(acc) || acc[j] != '"' {
+		return "", false
+	}
+	j++
+	var out strings.Builder
+	for j < len(acc) {
+		c := acc[j]
+		if c == '"' {
+			return out.String(), true
+		}
+		if c != '\\' {
+			out.WriteByte(c)
+			j++
+			continue
+		}
+		// Escape: tunggu delta berikutnya bila terpotong di ujung.
+		if j+1 >= len(acc) {
+			break
+		}
+		esc := acc[j+1]
+		switch esc {
+		case '"', '\\', '/':
+			out.WriteByte(esc)
+			j += 2
+		case 'n':
+			out.WriteByte('\n')
+			j += 2
+		case 't':
+			out.WriteByte('\t')
+			j += 2
+		case 'r':
+			out.WriteByte('\r')
+			j += 2
+		case 'b':
+			out.WriteByte('\b')
+			j += 2
+		case 'f':
+			out.WriteByte('\f')
+			j += 2
+		case 'u':
+			if j+6 > len(acc) {
+				return out.String(), false
+			}
+			code, pErr := strconv.ParseUint(acc[j+2:j+6], 16, 32)
+			if pErr != nil {
+				out.WriteByte(esc)
+				j += 2
+				continue
+			}
+			out.WriteRune(rune(code))
+			j += 6
+		default:
+			out.WriteByte(esc)
+			j += 2
+		}
+	}
+	return out.String(), false
 }
