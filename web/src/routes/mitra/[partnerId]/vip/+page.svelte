@@ -147,19 +147,89 @@
 	const totalPath = $derived(buildSparkPath(totalSeries));
 
 	const performanceRows = $derived([
-		{ label: tr('Total Klik'), value: String(referral?.clicks?.total ?? domains?.clicks ?? 0), icon: MousePointerClick, color: 'var(--foreground)' },
-		{ label: tr('Total Referral'), value: String(referral?.totalReferrals ?? 0), icon: Users, color: 'var(--foreground)' },
-		{ label: 'Komisi Referral', value: idr(referral?.referral_earning ?? 0), icon: Wallet, color: 'var(--success)' },
-		{ label: 'Komisi Transaksi', value: idr(wallet?.transaction_commission ?? 0), icon: HandCoins, color: 'var(--foreground)' }
+		{
+			label: tr('Total Klik'),
+			value: String(referral?.clicks?.total ?? domains?.clicks ?? 0),
+			icon: MousePointerClick,
+			color: 'var(--foreground)',
+			iconBg: 'var(--secondary)',
+			iconColor: 'var(--muted-foreground)'
+		},
+		{
+			label: tr('Total Referral'),
+			value: String(referral?.totalReferrals ?? 0),
+			icon: Users,
+			color: 'var(--foreground)',
+			iconBg: 'var(--secondary)',
+			iconColor: 'var(--muted-foreground)'
+		},
+		{
+			label: 'Komisi Referral',
+			value: idr(referral?.referral_earning ?? 0),
+			icon: Wallet,
+			color: 'var(--success)',
+			iconBg: 'var(--success-soft)',
+			iconColor: 'var(--success)'
+		},
+		{
+			label: 'Komisi Transaksi',
+			value: idr(wallet?.transaction_commission ?? 0),
+			icon: HandCoins,
+			color: 'var(--foreground)',
+			iconBg: 'var(--secondary)',
+			iconColor: 'var(--muted-foreground)'
+		}
 	]);
 
 	const affiliateRows = $derived([
-		{ label: tr('Total Klik'), value: String(domains?.clicks ?? 0), icon: MousePointerClick, color: 'var(--foreground)' },
-		{ label: 'Domain Terdaftar', value: String(domains?.stats?.total ?? 0), icon: Globe, color: 'var(--primary)' },
-		{ label: 'Approved', value: String(domains?.stats?.approved ?? 0), icon: CircleCheck, color: 'var(--success)' },
-		{ label: 'Pending', value: String(domains?.stats?.pending ?? 0), icon: Clock, color: 'var(--warning)' },
-		{ label: tr('Ditolak'), value: String(domains?.stats?.rejected ?? 0), icon: CircleX, color: 'var(--destructive)' },
-		{ label: 'Estimasi CPA', value: idr((domains?.stats?.approved ?? 0) * (vip?.cpaRate ?? 15000)), icon: Coins, color: 'var(--primary)' }
+		{
+			label: tr('Total Klik'),
+			value: String(domains?.clicks ?? 0),
+			icon: MousePointerClick,
+			color: 'var(--foreground)',
+			iconBg: 'var(--secondary)',
+			iconColor: 'var(--muted-foreground)'
+		},
+		{
+			label: 'Domain Terdaftar',
+			value: String(domains?.stats?.total ?? 0),
+			icon: Globe,
+			color: 'var(--primary)',
+			iconBg: 'var(--accent)',
+			iconColor: 'var(--primary)'
+		},
+		{
+			label: 'Approved',
+			value: String(domains?.stats?.approved ?? 0),
+			icon: CircleCheck,
+			color: 'var(--success)',
+			iconBg: 'var(--success-soft)',
+			iconColor: 'var(--success)'
+		},
+		{
+			label: 'Pending',
+			value: String(domains?.stats?.pending ?? 0),
+			icon: Clock,
+			color: 'var(--warning)',
+			iconBg: 'var(--warning-soft)',
+			iconColor: 'var(--warning)'
+		},
+		{
+			label: tr('Ditolak'),
+			value: String(domains?.stats?.rejected ?? 0),
+			icon: CircleX,
+			color: 'var(--destructive)',
+			iconBg: 'var(--destructive-soft, #fdecee)',
+			iconColor: 'var(--destructive)'
+		},
+		{
+			label: 'Estimasi CPA',
+			value: idr((domains?.stats?.approved ?? 0) * (vip?.cpaRate ?? 15000)),
+			icon: Coins,
+			color: 'var(--primary)',
+			iconBg: 'var(--accent)',
+			iconColor: 'var(--primary)'
+		}
 	]);
 
 	// Paginasi & limitasi Riwayat Earning
@@ -269,34 +339,40 @@
 			</div>
 		</div>
 
-		<!-- ── Performance + Statistik Affiliate ── -->
-		<div class="mt-4 grid gap-3 md:grid-cols-2">
-			<div class="app-card overflow-hidden">
-				<div class="border-b px-4 py-3"><h2 class="text-sm font-semibold">Performance</h2></div>
-				<div>
-					{#each performanceRows as row (row.label)}
-						<div class="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
-							<span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md" style="background-color: var(--secondary);"><row.icon size={15} /></span>
-							<span class="flex-1 text-sm">{row.label}</span>
-							<span class="whitespace-nowrap text-sm font-semibold tabular-nums" style="color: {row.color};">{row.value}</span>
-						</div>
-					{/each}
+			<!-- ── Performance + Statistik Affiliate ── -->
+			<div class="mt-4 grid gap-3 md:grid-cols-2">
+				<div class="app-card overflow-hidden">
+					<div class="border-b px-4 py-3"><h2 class="text-sm font-semibold">Performance</h2></div>
+					<div>
+						{#each performanceRows as row (row.label)}
+							<div class="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
+								<span
+									class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+									style="background-color: {row.iconBg}; color: {row.iconColor};"
+								><row.icon size={15} /></span>
+								<span class="flex-1 text-sm">{row.label}</span>
+								<span class="whitespace-nowrap text-sm font-semibold tabular-nums" style="color: {row.color};">{row.value}</span>
+							</div>
+						{/each}
+					</div>
 				</div>
-			</div>
 
-			<div class="app-card overflow-hidden">
-				<div class="border-b px-4 py-3"><h2 class="text-sm font-semibold">{tr('Statistik Affiliate')}</h2></div>
-				<div>
-					{#each affiliateRows as row (row.label)}
-						<div class="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
-							<span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md" style="background-color: var(--secondary);"><row.icon size={15} /></span>
-							<span class="flex-1 text-sm">{row.label}</span>
-							<span class="whitespace-nowrap text-sm font-semibold tabular-nums" style="color: {row.color};">{row.value}</span>
-						</div>
-					{/each}
+				<div class="app-card overflow-hidden">
+					<div class="border-b px-4 py-3"><h2 class="text-sm font-semibold">{tr('Statistik Affiliate')}</h2></div>
+					<div>
+						{#each affiliateRows as row (row.label)}
+							<div class="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
+								<span
+									class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+									style="background-color: {row.iconBg}; color: {row.iconColor};"
+								><row.icon size={15} /></span>
+								<span class="flex-1 text-sm">{row.label}</span>
+								<span class="whitespace-nowrap text-sm font-semibold tabular-nums" style="color: {row.color};">{row.value}</span>
+							</div>
+						{/each}
+					</div>
 				</div>
 			</div>
-		</div>
 
 		<!-- ── Riwayat Penghasilan Affiliate (per domain sukses) ── -->
 		<div class="app-card mt-3 overflow-x-auto">
