@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/moderation"
@@ -431,15 +432,26 @@ func (d *Deps) linkHealthValidator(ctx context.Context, html string, excludeURLs
 		url        string
 		httpStatus *int
 	}
-	probes := make([]probe, 0, len(foreign))
-	for _, u := range foreign {
-		status, ok := d.probeURL(ctx, u)
-		if ok {
-			probes = append(probes, probe{url: u, httpStatus: &status})
-		} else {
-			probes = append(probes, probe{url: u, httpStatus: nil})
-		}
+	// Probe paralel (maks 6 sekaligus): serial 8 dtk/URL terlalu lambat.
+	probes := make([]probe, len(foreign))
+	var probeWG sync.WaitGroup
+	probeSem := make(chan struct{}, 6)
+	for i, u := range foreign {
+		probeWG.Add(1)
+		go func(i int, u string) {
+			defer probeWG.Done()
+			probeSem <- struct{}{}
+			defer func() { <-probeSem }()
+			status, ok := d.probeURL(ctx, u)
+			if ok {
+				s := status
+				probes[i] = probe{url: u, httpStatus: &s}
+			} else {
+				probes[i] = probe{url: u, httpStatus: nil}
+			}
+		}(i, u)
 	}
+	probeWG.Wait()
 
 	reachable := []string{}
 	for _, p := range probes {

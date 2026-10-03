@@ -207,22 +207,27 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		promptLines = append(promptLines, "", "Output JSON valid {final_html, verdict: layak_tayang|revisi|gagal, catatan}.")
 		prompt := strings.Join(promptLines, "\n")
 
-		result, err := d.runTautAgent(ctx, "gatekeeper", campaignID, prompt, &mediaID, true)
-		if err != nil {
-			return nil, err
-		}
+		// Percepatan: pass revisi akhir hanya bila ada yang perlu diperbaiki
+		// (safety/link tidak passed atau AI Overview menolak).
+		needsRepair := safetyStatus != "passed" || linkStatus != "passed" || ai.AIOverviewRejected(aiOverview)
 		finalHTML := content
 		verdict := "layak_tayang"
-		var parsed struct {
-			FinalHTML string `json:"final_html"`
-			Verdict   string `json:"verdict"`
-		}
-		if json.Unmarshal([]byte(result.Content), &parsed) == nil {
-			if parsed.FinalHTML != "" {
-				finalHTML = truncateString(parsed.FinalHTML, 200000)
+		if needsRepair {
+			result, err := d.runTautAgent(ctx, "gatekeeper", campaignID, prompt, &mediaID, true)
+			if err != nil {
+				return nil, err
 			}
-			if parsed.Verdict != "" {
-				verdict = parsed.Verdict
+			var parsed struct {
+				FinalHTML string `json:"final_html"`
+				Verdict   string `json:"verdict"`
+			}
+			if json.Unmarshal([]byte(result.Content), &parsed) == nil {
+				if parsed.FinalHTML != "" {
+					finalHTML = truncateString(parsed.FinalHTML, 200000)
+				}
+				if parsed.Verdict != "" {
+					verdict = parsed.Verdict
+				}
 			}
 		}
 
@@ -245,15 +250,18 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			}
 		}
 
-		nextVersion := currentVersion + 1
-		if err := d.exec(ctx,
-			"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, $3, $4, 'html', 'ai_edited', 'Taut Pintar Gatekeeper', $5)",
-			uuid.NewString(), documentID, nextVersion, finalHTML, userID); err != nil {
-			return nil, err
-		}
-		if err := d.exec(ctx,
-			"UPDATE content_documents SET current_version = $1, updated_at = NOW() WHERE id = $2", nextVersion, documentID); err != nil {
-			return nil, err
+		// Versi baru hanya bila isi berubah (revisi LLM atau strip link).
+		if finalHTML != content {
+			nextVersion := currentVersion + 1
+			if err := d.exec(ctx,
+				"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, $3, $4, 'html', 'ai_edited', 'Taut Pintar Gatekeeper', $5)",
+				uuid.NewString(), documentID, nextVersion, finalHTML, userID); err != nil {
+				return nil, err
+			}
+			if err := d.exec(ctx,
+				"UPDATE content_documents SET current_version = $1, updated_at = NOW() WHERE id = $2", nextVersion, documentID); err != nil {
+				return nil, err
+			}
 		}
 
 		// ck_taut_cm_article_status tidak mengenal 'gagal' → dipetakan ke 'blocked'.

@@ -94,6 +94,30 @@ Model memakai config agent **gatekeeper** yang sudah ada (admin bisa mengarahkan
 - **Panel QC menampilkan timer berjalan** + penjelasan bahwa pemindaian wajar 1-4 menit (4 panggilan LLM per artikel).
 - Terverifikasi end-to-end di lokal: audit lama (tanpa kunci) → rescan menghasilkan skor 23/40 (pra-revisi) lalu 31/40 (pasca-revisi, skor tertimpa oleh re-evaluasi).
 
+## Optimasi kecepatan (3 Okt, lanjutan)
+
+Timing nyata per tahap (log `[gatekeeper] audit selesai`):
+| Tahap | mimo-v2.5-pro | deepseek-v4-flash |
+|---|---|---|
+| Batch cek paralel (safety+link+AI Overview) | 82 dtk | 15,6 dtk |
+| Pass revisi (tulis ulang artikel) | 62 dtk | 38,8 dtk |
+| Re-evaluasi AI Overview pasca-revisi | 86 dtk | 16,5 dtk |
+| **Total** | **230 dtk** | **71 dtk** |
+
+Perubahan kode:
+- Pass revisi akhir hanya dijalankan bila AI Overview MENOLAK (sebelumnya juga
+  jalan saat safety/link `review_required`, padahal menulis ulang tidak
+  menyelesaikan link "perlu review" — keputusan manusia). Tanpa revisi, status
+  artikel diturunkan deterministik: failed -> blocked, review_required -> revision.
+- Versi artikel baru hanya ditulis bila isi benar-benar berubah (tidak ada
+  churn versi tiap scan).
+- Probe tautan dijalankan paralel (maks 6) — sebelumnya serial 8 dtk/URL.
+- Tiga cek independen sudah paralel; log timing per tahap ditambahkan supaya
+  penyebab lambat selalu bisa dibuktikan.
+
+Lever terbesar adalah kecepatan MODEL agent gatekeeper (satu field di
+Admin > Taut Agents) — disarankan model flash-class.
+
 ## Status pelaksanaan
 - [x] docs/plan-ai-overview-qc.md
 - [x] internal/ai/overview.go (prompt + parsing + aturan gate, dipakai bersama) + unit test

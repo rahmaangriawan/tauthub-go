@@ -162,6 +162,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 
 // gatekeeperAuditOne: satu putaran audit untuk satu media (dipanggil paralel).
 func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefContext, campaignID, brandID, userID string, item bsRow, aiOverviewSet ai.AIOverviewSettings) (gatekeeperItemResult, error) {
+	startedAt := time.Now()
 	itemID := item.strOr("id", "")
 	mediaID := item.strOr("media_id", "")
 	documentID := item.strOr("article_document_id", "")
@@ -236,6 +237,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 		aiOverview = d.runAIOverviewCheck(ctx, title, mediaType, content, text, briefContext, aiOverviewSet)
 	}()
 	checksWG.Wait()
+	batchMS := time.Since(startedAt).Milliseconds()
 	voice := brandVoiceLimits(text, voiceRange)
 
 	safetyStatus := "review_required"
@@ -280,6 +282,11 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 
 	name := d.mediaNameFor(ctx, mediaID)
 	allowLink := d.mediaAllowsHyperlink(ctx, mediaID)
+	// Percepatan: pass revisi akhir (LLM yang menulis ulang SELURUH artikel,
+	// 26-79 dtk) hanya dijalankan bila AI Overview menolak (catatan revisinya
+	// perlu diterapkan). Masalah safety/link bukan tugas penulisan ulang —
+	// statusnya sudah tercermin di overallVerdict + hard gate distribusi.
+	needsRepair := ai.AIOverviewRejected(aiOverview)
 	linkRule := "Media TIDAK mengizinkan hyperlink. JANGAN menanam link apa pun."
 	if allowLink {
 		linkRule = "Media mengizinkan hyperlink. Tanam link sesuai konfigurasi kampanye secara natural bila relevan."
@@ -302,22 +309,37 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 	promptLines = append(promptLines, "", "Output JSON valid {final_html, verdict: layak_tayang|revisi|gagal, catatan}.")
 	prompt := strings.Join(promptLines, "\n")
 
-	result, err := d.runTautAgent(ctx, "gatekeeper", campaignID, prompt, &mediaID, true)
-	if err != nil {
-		return gatekeeperItemResult{}, err
-	}
 	finalHTML := content
 	verdict := "layak_tayang"
-	var parsed struct {
-		FinalHTML string `json:"final_html"`
-		Verdict   string `json:"verdict"`
-	}
-	if jsonUnmarshal([]byte(result.Content), &parsed) == nil {
-		if parsed.FinalHTML != "" {
-			finalHTML = truncateString(parsed.FinalHTML, 200000)
+	revisiMS, reevalMS := int64(0), int64(0)
+	if !needsRepair {
+		// Tanpa LLM: status diturunkan dari hasil pengecekan (failed → blocked,
+		// review_required → revision) supaya artikel berisiko tetap tidak 'ready'.
+		switch {
+		case safetyStatus == "failed" || links.Verdict == "failed":
+			verdict = "gagal"
+		case safetyStatus == "review_required" || links.Verdict == "review_required":
+			verdict = "revisi"
 		}
-		if parsed.Verdict != "" {
-			verdict = parsed.Verdict
+	}
+	if needsRepair {
+		revisiStart := time.Now()
+		result, err := d.runTautAgent(ctx, "gatekeeper", campaignID, prompt, &mediaID, true)
+		if err != nil {
+			return gatekeeperItemResult{}, err
+		}
+		revisiMS = time.Since(revisiStart).Milliseconds()
+		var parsed struct {
+			FinalHTML string `json:"final_html"`
+			Verdict   string `json:"verdict"`
+		}
+		if jsonUnmarshal([]byte(result.Content), &parsed) == nil {
+			if parsed.FinalHTML != "" {
+				finalHTML = truncateString(parsed.FinalHTML, 200000)
+			}
+			if parsed.Verdict != "" {
+				verdict = parsed.Verdict
+			}
 		}
 	}
 	if !allowLink {
@@ -332,7 +354,9 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 	// revisi — skor yang tersimpan adalah kualitas akhir (hijau bila revisi
 	// memperbaiki indikator lemah). Satu putaran saja, tanpa loop.
 	if (attribution == "ai_generated" || attribution == "ai_edited") && ai.AIOverviewRejected(aiOverview) && finalHTML != content {
+		reevalStart := time.Now()
 		rechecked := d.runAIOverviewCheck(ctx, title, mediaType, finalHTML, stripHTMLToText(finalHTML), briefContext, aiOverviewSet)
+		reevalMS = time.Since(reevalStart).Milliseconds()
 		if rechecked != nil {
 			aiOverview = rechecked
 			checks["aiOverview"] = rechecked
@@ -342,15 +366,19 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 		}
 	}
 
-	nextVersion := currentVersion + 1
-	if err := d.exec(ctx,
-		"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, $3, $4, 'html', 'ai_edited', 'Taut Pintar Gatekeeper', $5)",
-		uuid.NewString(), documentID, nextVersion, finalHTML, userID); err != nil {
-		return gatekeeperItemResult{}, err
-	}
-	if err := d.exec(ctx,
-		"UPDATE content_documents SET current_version = $1, updated_at = NOW() WHERE id = $2", nextVersion, documentID); err != nil {
-		return gatekeeperItemResult{}, err
+	// Versi baru hanya ditulis bila isi benar-benar berubah (revisi LLM atau
+	// penghapusan link deterministik) — menghindari churn versi tiap scan.
+	if finalHTML != content {
+		nextVersion := currentVersion + 1
+		if err := d.exec(ctx,
+			"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, $3, $4, 'html', 'ai_edited', 'Taut Pintar Gatekeeper', $5)",
+			uuid.NewString(), documentID, nextVersion, finalHTML, userID); err != nil {
+			return gatekeeperItemResult{}, err
+		}
+		if err := d.exec(ctx,
+			"UPDATE content_documents SET current_version = $1, updated_at = NOW() WHERE id = $2", nextVersion, documentID); err != nil {
+			return gatekeeperItemResult{}, err
+		}
 	}
 	status := "blocked"
 	switch verdict {
@@ -362,6 +390,11 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 	if err := d.exec(ctx, "UPDATE taut_campaign_media SET article_status = $1 WHERE id = $2", status, itemID); err != nil {
 		return gatekeeperItemResult{}, err
 	}
+	// Log timing per tahap: satu-satunya cara menilai di mana waktu habis saat
+	// QC terasa lambat (model lambat vs pass revisi vs re-evaluasi).
+	slog.Info("[gatekeeper] audit selesai", "media", mediaID,
+		"batch_ms", batchMS, "revisi", needsRepair, "revisi_ms", revisiMS, "reeval_ms", reevalMS,
+		"total_ms", time.Since(startedAt).Milliseconds(), "status", status)
 	return gatekeeperItemResult{MediaID: mediaID, Status: status, Verdict: verdict}, nil
 }
 
@@ -554,16 +587,27 @@ func (d *Deps) linkHealthValidator(ctx context.Context, html string, excludeURLs
 		url        string
 		httpStatus *int
 	}
-	probes := make([]probe, 0, len(urls))
-	for _, u := range urls {
-		status, ok := d.probeURL(ctx, u)
-		if ok {
-			s := status
-			probes = append(probes, probe{url: u, httpStatus: &s})
-		} else {
-			probes = append(probes, probe{url: u, httpStatus: nil})
-		}
+	// Probe paralel (maks 6 sekaligus): serial 8 dtk/URL membuat artikel dengan
+	// 5 tautan menunggu ~40 dtk hanya untuk pengecekan link.
+	probes := make([]probe, len(urls))
+	var probeWG sync.WaitGroup
+	probeSem := make(chan struct{}, 6)
+	for i, u := range urls {
+		probeWG.Add(1)
+		go func(i int, u string) {
+			defer probeWG.Done()
+			probeSem <- struct{}{}
+			defer func() { <-probeSem }()
+			status, ok := d.probeURL(ctx, u)
+			if ok {
+				s := status
+				probes[i] = probe{url: u, httpStatus: &s}
+			} else {
+				probes[i] = probe{url: u, httpStatus: nil}
+			}
+		}(i, u)
 	}
+	probeWG.Wait()
 	reachable := []string{}
 	for _, p := range probes {
 		if p.httpStatus != nil {
