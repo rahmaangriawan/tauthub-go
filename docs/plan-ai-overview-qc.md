@@ -94,4 +94,4 @@ Model memakai config agent **gatekeeper** yang sudah ada (admin bisa mengarahkan
 - [x] clienttaut: ganti plagiarism (Smodin) dengan aiOverview + alur yang sama
 - [x] Writer: aturan selaras AI Overview (BLUF, entitas konkret, subjudul pertanyaan untuk blogger)
 - [x] Frontend: _qc-panel (kartu + ringkasan + detail 4 indikator + catatan revisi), help-modal, form admin gatekeeper
-- [ ] verifikasi di staging (menunggu deploy)
+- [x] verifikasi deploy staging (hash aset web berubah, healthz OK, route marker 401)
