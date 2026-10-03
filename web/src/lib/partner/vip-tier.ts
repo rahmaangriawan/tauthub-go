@@ -9,6 +9,12 @@ import { tr } from '$lib/i18n/phrases';
 
 type TierTone = { bg: string; fg: string; border: string };
 
+const VVIP_TONE: TierTone = {
+	bg: 'var(--vvip-soft, #f5f3ff)',
+	fg: 'var(--vvip, #6d28d9)',
+	border: 'var(--vvip-border, #ddd6fe)'
+};
+
 const TONES: Record<string, TierTone> = {
 	regular: { bg: 'var(--muted)', fg: 'var(--muted-foreground)', border: 'var(--border)' },
 	vip_reguler: {
@@ -16,17 +22,15 @@ const TONES: Record<string, TierTone> = {
 		fg: 'var(--warning)',
 		border: 'color-mix(in srgb, var(--warning) 35%, transparent)'
 	},
-	brand_ambassador: {
-		bg: 'var(--accent)',
-		fg: 'var(--accent-foreground)',
-		border: 'color-mix(in srgb, var(--accent-foreground) 35%, transparent)'
-	}
+	brand_ambassador: VVIP_TONE,
+	vvip: VVIP_TONE
 };
 
 const LABELS: Record<string, () => string> = {
 	regular: () => tr('Reguler'),
 	vip_reguler: () => tr('VIP Reguler'),
-	brand_ambassador: () => tr('Brand Ambassador')
+	brand_ambassador: () => tr('Brand Ambassador'),
+	vvip: () => tr('Brand Ambassador')
 };
 
 const NEUTRAL: TierTone = { bg: 'var(--muted)', fg: 'var(--muted-foreground)', border: 'var(--border)' };
@@ -51,5 +55,6 @@ export function vipTierBadge(tier: string | null | undefined): { label: string }
 
 /** Tier tertinggi VVIP (nilai database: brand_ambassador)? */
 export function isVvipTier(tier: string | null | undefined): boolean {
-	return (tier ?? '').trim() === 'brand_ambassador';
+	const t = (tier ?? '').trim();
+	return t === 'brand_ambassador' || t === 'vvip';
 }

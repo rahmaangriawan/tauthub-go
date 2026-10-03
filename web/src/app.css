@@ -36,6 +36,9 @@
   --success-soft: #eaf8f1;
   --warning: #a15c00;
   --warning-soft: #fff6df;
+  --vvip: #6d28d9;
+  --vvip-soft: #f5f3ff;
+  --vvip-border: #ddd6fe;
 
   --shadow-sm: 0 1px 2px rgba(23, 43, 77, 0.05);
   --shadow-md: 0 12px 32px rgba(23, 43, 77, 0.08);
@@ -68,6 +71,9 @@
   --accent-foreground: #bcd0ff;
   --destructive: #f97066;
   --destructive-foreground: #1f2430;
+  --vvip: #c4b5fd;
+  --vvip-soft: rgba(109, 40, 217, 0.22);
+  --vvip-border: rgba(167, 139, 250, 0.4);
   --border: rgba(255, 255, 255, 0.1);
   --input: rgba(255, 255, 255, 0.15);
   --ring: #2b67ec;

@@ -13,6 +13,7 @@
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDate, fmtRp, fmtNum } from '$lib/admin-format';
 	import { platformError } from '../_platform';
+	import { vipTierBadge } from '$lib/partner/vip-tier';
 
 	type VipPartner = {
 		partner_id: string; name: string | null; email: string | null; tier: string;
@@ -194,24 +195,25 @@
 							<th class="px-4 py-2.5"></th>
 						</tr>
 					</thead>
-					<tbody>
-						{#each items as p (p.partner_id)}
-							{@const isReguler = p.tier === 'vip_reguler'}
-							{@const quotaPct = isReguler && p.cpa_tier_threshold > 0 ? Math.min(100, Math.round((p.quota_used / p.cpa_tier_threshold) * 100)) : null}
-							<tr class="cursor-pointer border-t hover:bg-secondary" onclick={() => openDetail(p)}>
-								<td class="px-4 py-2.5">
-									<p class="font-medium">{p.name ?? '—'}</p>
-									<p class="text-xs text-muted-foreground">{p.email ?? '—'}</p>
-								</td>
-								<td class="px-4 py-2.5">
-									<span
-										class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
-										style="background-color: var(--accent); color: var(--accent-foreground);"
-									>
-										{#if !isReguler}<Crown size={11} />{/if} {tierLabel(p.tier)}
-									</span>
-								</td>
-								<td class="px-4 py-2.5">
+						<tbody>
+							{#each items as p (p.partner_id)}
+								{@const isReguler = p.tier === 'vip_reguler'}
+								{@const quotaPct = isReguler && p.cpa_tier_threshold > 0 ? Math.min(100, Math.round((p.quota_used / p.cpa_tier_threshold) * 100)) : null}
+								{@const b = vipTierBadge(p.tier)}
+								<tr class="cursor-pointer border-t hover:bg-secondary" onclick={() => openDetail(p)}>
+									<td class="px-4 py-2.5">
+										<p class="font-medium">{p.name ?? '—'}</p>
+										<p class="text-xs text-muted-foreground">{p.email ?? '—'}</p>
+									</td>
+									<td class="px-4 py-2.5">
+										<span
+											class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+											style="background-color: {b.bg}; color: {b.fg}; border: 1px solid {b.border};"
+										>
+											{#if !isReguler}<Crown size={11} />{/if} {tierLabel(p.tier)}
+										</span>
+									</td>
+									<td class="px-4 py-2.5">
 									{#if p.is_active}
 										<Badge label={tr("Aktif")} tone="success" />
 										<p class="mt-1 text-xs text-muted-foreground">

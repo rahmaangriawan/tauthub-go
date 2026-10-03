@@ -12,6 +12,7 @@
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import { vipTierBadge } from '$lib/partner/vip-tier';
 
 	type WalletHistory = {
 		id: string; kind: string; amount: number; client_price: number; status: string;
@@ -304,15 +305,19 @@
 			<h1 class="text-2xl font-semibold tracking-tight">VIP Dashboard</h1>
 			<p class="mt-1 text-sm text-muted-foreground">{tr("Ringkasan affiliate, dual-wallet, dan domain referral Anda.")}</p>
 		</div>
-		<div class="flex items-center gap-2">
-			{#if vip}
-				<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
-					<Crown size={12} /> {tierLabel}
-				</span>
-			{:else}
-				<span class="rounded-full px-2.5 py-1 text-xs font-medium text-muted-foreground" style="background-color: var(--secondary);">{tr("Memuat...")}</span>
-			{/if}
-		</div>
+			<div class="flex items-center gap-2">
+				{#if vip}
+					{@const b = vipTierBadge(vip.tier)}
+					<span
+						class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold shadow-xs"
+						style="background-color: {b.bg}; color: {b.fg}; border: 1px solid {b.border};"
+					>
+						<Crown size={12} class="shrink-0" /> {tierLabel}
+					</span>
+				{:else}
+					<span class="rounded-full px-2.5 py-1 text-xs font-medium text-muted-foreground" style="background-color: var(--secondary);">{tr("Memuat...")}</span>
+				{/if}
+			</div>
 	</header>
 
 	{#if error}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>{/if}

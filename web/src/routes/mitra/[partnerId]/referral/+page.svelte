@@ -11,6 +11,7 @@
 	import { Check, Copy, Crown, TriangleAlert } from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, readApiError, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import { vipTierBadge } from '$lib/partner/vip-tier';
 
 	type ReferralItem = {
 		id: string;
@@ -108,8 +109,9 @@
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			{#if isVip}
-				<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
-					<Crown size={12} /> VIP
+				{@const b = vipTierBadge(vip?.tier)}
+				<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold shadow-xs" style="background-color: {b.bg}; color: {b.fg}; border: 1px solid {b.border};">
+					<Crown size={12} /> {tierLabel}
 				</span>
 			{:else}
 				<span class="rounded-full px-2.5 py-1 text-xs font-medium text-muted-foreground" style="background-color: var(--secondary);">{tr('Regular')}</span>
@@ -123,12 +125,13 @@
 	{/if}
 
 	{#if isVip}
-		<div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3.5" style="border-color: var(--primary); background-color: var(--accent);">
+		{@const b = vipTierBadge(vip?.tier)}
+		<div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3.5" style="border-color: {b.border}; background-color: {b.bg};">
 			<div>
 				<div class="flex items-center gap-2">
-					<Crown size={16} style="color: var(--accent-foreground);" />
-					<span class="font-bold">{tr('VIP Mitra')}</span>
-					<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--primary); color: var(--primary-foreground);">{tierLabel}</span>
+					<Crown size={16} style="color: {b.fg};" />
+					<span class="font-bold" style="color: {b.fg};">{tr('VIP Mitra')}</span>
+					<span class="rounded-full px-2 py-0.5 text-[11px] font-semibold" style="background-color: {b.fg}; color: #ffffff;">{tierLabel}</span>
 				</div>
 				<p class="mt-1 text-sm text-muted-foreground">
 					{vip?.tier === 'vip_reguler'
