@@ -262,85 +262,93 @@
 	{:else}
 		<!-- 2. Tiga kartu ringkasan -->
 		<div class="grid grid-cols-1 gap-3.5 md:grid-cols-3">
-			<!-- Media Anda -->
-			<div class="app-card flex flex-col justify-between gap-2.5" style="padding: 16px 18px;">
-				<div class="flex items-center justify-between gap-2">
-					<span class="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">{tr("Media Anda")}</span>
-					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={iconBoxStyle('neutral')}>
-						<Newspaper size={17} />
-					</div>
-				</div>
-				<div>
-					<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums" style={valueStyle('neutral')}>{fmt(me?.media_count ?? 0)}</div>
-					<div class="text-[12px] leading-[1.35] text-muted-foreground" style={hintStyle('neutral')}>{tr("Media aktif terdaftar")}</div>
-				</div>
-				<Sparkline
-					values={mediaSeries}
-					stroke="var(--primary)"
-					title={tr('Media terdaftar kumulatif, 30 hari terakhir')}
-					class="mt-0.5"
-				/>
-			</div>
-
-			<!-- Menunggu (alert bila ada tindakan) -->
-			{#if (me?.pending_count ?? 0) > 0}
-				<div class="app-card flex flex-col justify-between gap-2.5" style="padding: 16px 18px; {cardStyle('pending')}">
+				<!-- Media Anda -->
+				<div class="app-card flex flex-col justify-between gap-3" style="padding: 16px 18px;">
 					<div class="flex items-center justify-between gap-2">
-						<span class="text-[11px] font-bold uppercase tracking-[0.05em]" style={labelStyle('pending')}>{tr("Menunggu")}</span>
-						<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={iconBoxStyle('pending')}>
-							<Clock size={17} />
-						</div>
-					</div>
-					<div>
-						<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums" style={valueStyle('pending')}>{fmt(me?.pending_count ?? 0)}</div>
-						<div class="text-[12px] leading-[1.35]" style={hintStyle('pending')}>{tr("Perlu tindakan segera")}</div>
-					</div>
-					<Sparkline
-						values={pubSeries}
-						stroke="var(--warning)"
-						title={tr('Permintaan artikel masuk per hari, 14 hari terakhir')}
-						class="mt-0.5"
-					/>
-				</div>
-			{:else}
-				<div class="app-card flex flex-col justify-between gap-2.5" style="padding: 16px 18px;">
-					<div class="flex items-center justify-between gap-2">
-						<span class="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">{tr("Menunggu")}</span>
+						<span class="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">{tr("Media Anda")}</span>
 						<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={iconBoxStyle('neutral')}>
-							<Clock size={17} />
+							<Newspaper size={17} />
 						</div>
 					</div>
-					<div>
-						<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums text-muted-foreground">0</div>
-						<div class="text-[12px] leading-[1.35] text-muted-foreground">{tr("Semua publikasi telah diproses")}</div>
+					<div class="flex items-end justify-between gap-3">
+						<div>
+							<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums" style={valueStyle('neutral')}>{fmt(me?.media_count ?? 0)}</div>
+							<div class="text-[12px] leading-[1.35] text-muted-foreground" style={hintStyle('neutral')}>{tr("Media aktif terdaftar")}</div>
+						</div>
+						<Sparkline
+							values={mediaSeries}
+							stroke="var(--primary)"
+							title={tr('Media terdaftar kumulatif, 30 hari terakhir')}
+							class="mb-0.5 shrink-0"
+						/>
 					</div>
-					<Sparkline
-						values={pubSeries}
-						stroke="var(--warning)"
-						title={tr('Permintaan artikel masuk per hari, 14 hari terakhir')}
-						class="mt-0.5"
-					/>
 				</div>
-			{/if}
 
-			<!-- Total Penghasilan (spotlight) -->
-				<div class="app-card flex flex-col justify-between gap-3.5" style="padding: 18px 20px; {cardStyle('earning')}">
+				<!-- Menunggu (alert bila ada tindakan) -->
+				{#if (me?.pending_count ?? 0) > 0}
+					<div class="app-card flex flex-col justify-between gap-3" style="padding: 16px 18px; {cardStyle('pending')}">
+						<div class="flex items-center justify-between gap-2">
+							<span class="text-[11px] font-bold uppercase tracking-[0.05em]" style={labelStyle('pending')}>{tr("Menunggu")}</span>
+							<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={iconBoxStyle('pending')}>
+								<Clock size={17} />
+							</div>
+						</div>
+						<div class="flex items-end justify-between gap-3">
+							<div>
+								<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums" style={valueStyle('pending')}>{fmt(me?.pending_count ?? 0)}</div>
+								<div class="text-[12px] leading-[1.35]" style={hintStyle('pending')}>{tr("Perlu tindakan segera")}</div>
+							</div>
+							<Sparkline
+								values={pubSeries}
+								stroke="var(--warning)"
+								title={tr('Permintaan artikel masuk per hari, 14 hari terakhir')}
+								class="mb-0.5 shrink-0"
+							/>
+						</div>
+					</div>
+				{:else}
+					<div class="app-card flex flex-col justify-between gap-3" style="padding: 16px 18px;">
+						<div class="flex items-center justify-between gap-2">
+							<span class="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">{tr("Menunggu")}</span>
+							<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={iconBoxStyle('neutral')}>
+								<Clock size={17} />
+							</div>
+						</div>
+						<div class="flex items-end justify-between gap-3">
+							<div>
+								<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums text-muted-foreground">0</div>
+								<div class="text-[12px] leading-[1.35] text-muted-foreground">{tr("Semua publikasi telah diproses")}</div>
+							</div>
+							<Sparkline
+								values={pubSeries}
+								stroke="var(--warning)"
+								title={tr('Permintaan artikel masuk per hari, 14 hari terakhir')}
+								class="mb-0.5 shrink-0"
+							/>
+						</div>
+					</div>
+				{/if}
+
+				<!-- Total Penghasilan (spotlight) -->
+				<div class="app-card flex flex-col justify-between gap-3" style="padding: 16px 18px; {cardStyle('earning')}">
 					<div class="flex items-center justify-between gap-2">
 						<span class="text-[11px] font-bold uppercase tracking-[0.05em]" style={labelStyle('earning')}>{tr("Total Penghasilan")}</span>
-					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={iconBoxStyle('earning')}>
-						<Wallet size={17} />
+						<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={iconBoxStyle('earning')}>
+							<Wallet size={17} />
+						</div>
 					</div>
-				</div>
-				<div>
-					<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums" style={valueStyle('earning')}>{rp(totalEarnings)}</div>
-						<div class="text-[12px] leading-[1.35]" style={hintStyle('earning')}>{tr("Penghasilan dari artikel terbit")}</div>
+					<div class="flex items-end justify-between gap-3">
+						<div>
+							<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums" style={valueStyle('earning')}>{rp(totalEarnings)}</div>
+							<div class="text-[12px] leading-[1.35]" style={hintStyle('earning')}>{tr("Penghasilan dari artikel terbit")}</div>
+						</div>
+						<Sparkline
+							values={earningSeries}
+							stroke="var(--success)"
+							title={tr('Penghasilan kumulatif (settled + pending), 30 hari terakhir')}
+							class="mb-0.5 shrink-0"
+						/>
 					</div>
-					<Sparkline
-						values={earningSeries}
-						stroke="var(--success)"
-						title={tr('Penghasilan kumulatif (settled + pending), 30 hari terakhir')}
-						class="mt-0.5"
-					/>
 				</div>
 		</div>
 
