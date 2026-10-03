@@ -108,10 +108,6 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 	if err != nil {
 		return nil, err
 	}
-	briefContext, err := d.loadTautBriefContext(ctx, campaignID)
-	if err != nil {
-		return nil, err
-	}
 
 	itemsQuery := `SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, m.media_type, m.bahasa_artikel, m.word_count_mode
 		 FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
@@ -148,7 +144,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results[i], errs[i] = d.gatekeeperAuditOne(ctx, campaign, briefContext, campaignID, brandID, userID, item, st)
+			results[i], errs[i] = d.gatekeeperAuditOne(ctx, campaign, campaignID, brandID, userID, item, st)
 		}(i, item)
 	}
 	wg.Wait()
@@ -161,11 +157,19 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 }
 
 // gatekeeperAuditOne: satu putaran audit untuk satu media (dipanggil paralel).
-func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefContext, campaignID, brandID, userID string, item bsRow, aiOverviewSet ai.AIOverviewSettings) (gatekeeperItemResult, error) {
+func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignID, brandID, userID string, item bsRow, aiOverviewSet ai.AIOverviewSettings) (gatekeeperItemResult, error) {
 	startedAt := time.Now()
 	itemID := item.strOr("id", "")
 	mediaID := item.strOr("media_id", "")
 	documentID := item.strOr("article_document_id", "")
+
+	// Bahan fakta kanonik yang SAMA dengan yang dipakai Writer (brief Profiler +
+	// materials klien + topik klien + narasumber). Tanpa ini, Checker menilai
+	// klaim bersumber sebagai "tanpa dasar" dan skor entitas/E-E-A-T jatuh.
+	refMaterial, _, err := d.tautReferenceMaterial(ctx, campaign, campaignID, mediaID)
+	if err != nil {
+		return gatekeeperItemResult{}, err
+	}
 
 	doc, err := d.queryRow(ctx, "SELECT title, current_version FROM content_documents WHERE id = $1 LIMIT 1", documentID)
 	if err != nil {
@@ -224,7 +228,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 	go func() {
 		defer checksWG.Done()
 		safety, aiOverview = d.contentSafetyAndOverview(ctx, title, mediaType, content, text,
-			briefContext, extractHTMLLinks(content), aiOverviewSet)
+			refMaterial, extractHTMLLinks(content), aiOverviewSet)
 	}()
 	go func() {
 		defer checksWG.Done()
@@ -355,7 +359,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 	// memperbaiki indikator lemah). Satu putaran saja, tanpa loop.
 	if (attribution == "ai_generated" || attribution == "ai_edited") && ai.AIOverviewRejected(aiOverview) && finalHTML != content {
 		reevalStart := time.Now()
-		rechecked := d.runAIOverviewCheck(ctx, title, mediaType, finalHTML, stripHTMLToText(finalHTML), briefContext, aiOverviewSet)
+		rechecked := d.runAIOverviewCheck(ctx, title, mediaType, finalHTML, stripHTMLToText(finalHTML), refMaterial, aiOverviewSet)
 		reevalMS = time.Since(reevalStart).Milliseconds()
 		if rechecked != nil {
 			aiOverview = rechecked

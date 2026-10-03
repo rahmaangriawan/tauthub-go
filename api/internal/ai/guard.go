@@ -18,7 +18,7 @@ func GuardSystemPrompt(safetyRules string) string {
 
 TUGAS GABUNGAN: kerjakan DUA penilaian dalam satu jawaban — (A) klasifikasi keamanan konten dan (B) penilaian kesiapan AI Overview di atas.
 Balas HANYA JSON valid, tanpa markdown/penjelasan lain:
-{"safety":{"allowed":true|false,"riskLevel":"low"|"medium"|"high","categories":["..."],"reasons":["... maks 3, bahasa Indonesia, aman dibaca pengguna"],"confidence":0.0},"overview":{"indikator":[{"kunci":"struktur","skor":1-10,"ringkasan":"..."},{"kunci":"entitas","skor":1-10,"ringkasan":"..."},{"kunci":"eeat","skor":1-10,"ringkasan":"..."},{"kunci":"niat_pengguna","skor":1-10,"ringkasan":"..."}],"catatan_revisi":[],"entitas_tanpa_dasar":[]}}
+{"safety":{"allowed":true|false,"riskLevel":"low"|"medium"|"high","categories":["..."],"reasons":["... maks 3, bahasa Indonesia, aman dibaca pengguna"],"confidence":0.0},"overview":{"indikator":[` + AIOverviewIndicatorSchemaFragment() + `],"catatan_revisi":[],"entitas_tanpa_dasar":[]}}
 Aturan: isi KEDUA bagian. safety.allowed=true HANYA untuk risiko rendah; medium = meragukan (allowed=false, review manual); high = blokir.`
 }
 
@@ -41,8 +41,8 @@ func GuardUserPrompt(title, mediaType, contentHTML, text, brief string, links []
 	briefText := strings.TrimSpace(brief)
 	if briefText == "" {
 		briefText = "(KOSONG — tidak ada brief/bahan rujukan untuk generate artikel ini)"
-	} else if len([]rune(briefText)) > 4000 {
-		briefText = string([]rune(briefText)[:4000])
+	} else if len([]rune(briefText)) > aiOverviewDefaultBriefChars {
+		briefText = string([]rune(briefText)[:aiOverviewDefaultBriefChars])
 	}
 	body := text
 	if len(body) > 6000 {
@@ -60,7 +60,7 @@ func GuardUserPrompt(title, mediaType, contentHTML, text, brief string, links []
 		"Judul: " + title,
 		"Tipe media: " + typeName,
 		"Jumlah kata: " + fmt.Sprintf("%d", wordCount),
-		fmt.Sprintf("Aturan kelulusan AI Overview: total minimal %d dari %d DAN setiap indikator minimal %d. Bila tidak memenuhi, sertakan catatan_revisi (maks 3) yang sangat spesifik.", st.PassTotal, AIOverviewMaxScore, st.PassMinIndicator),
+		fmt.Sprintf("Aturan kelulusan AI Overview: %s. Bila tidak memenuhi, sertakan catatan_revisi (maks 3) yang sangat spesifik.", AIOverviewPassRule(st)),
 		"BAHAN/BRIEF (rujukan fakta yang boleh dipakai artikel):\n" + briefText,
 		"Konten (teks polos):\n" + body,
 		"Links:\n" + linkBlock,

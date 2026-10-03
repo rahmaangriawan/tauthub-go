@@ -17,34 +17,132 @@ const (
 	aiOverviewDefaultTotal   = 32
 	aiOverviewDefaultMinItem = 7
 	aiOverviewDefaultMaxChar = 8000
+	// aiOverviewDefaultBriefChars: batas karakter BAHAN/BRIEF yang dikirim ke
+	// penilai. Bahan kini menggabungkan brief Profiler + materi klien + topik
+	// + kutipan narasumber (lihat tautReferenceMaterial di brandflow), jadi
+	// lebih besar dari batas HTML lama supaya tidak ada sumber yang hilang.
+	aiOverviewDefaultBriefChars = 12000
 )
 
-// AIOverviewSystemPrompt: penilai kesiapan AI Overview — skor 4 indikator 1-10,
-// ringkasan maks 2 kalimat per indikator, catatan revisi maks 3 hanya bila ada
-// indikator berskor di bawah 7. Dipakai dengan json_mode.
-// aiOverviewRules: deskripsi peran + 4 indikator + verifikasi ke bahan.
-// Dipisah dari skema keluaran supaya bisa dikomposisi dengan cek lain
-// (lihat GuardSystemPrompt di guard.go) tanpa menggandakan teksnya.
-const aiOverviewRules = `Anda adalah "Gatekeeper AI Overview QC Agent" untuk platform penerbitan Indonesia (Tauthub). Tugas: menilai apakah draf artikel siap dibaca dan dikutip oleh Google AI Overviews / LLM pencarian.
+// AIOverviewIndicatorDef: definisi satu indikator rubrik AI Overview. Ini
+// SATU sumber kebenaran yang dipakai penilai (Gatekeeper) dan penulis (The
+// Writer), supaya prompt penulisan dan prompt penilaian tidak bisa menyimpang:
+// menambah atau mengubah indikator cukup di sini.
+type AIOverviewIndicatorDef struct {
+	// Key: kunci kanonik internal (dipakai di checks JSON & tampilan UI).
+	Key string
+	// PromptKey: kunci yang diminta di JSON keluaran LLM (mis. niat_pengguna).
+	PromptKey string
+	// Title: judul tampilan indikator.
+	Title string
+	// GraderRule: definisi indikator untuk penilai.
+	GraderRule string
+	// WriterRule: arahan singkat agar penulis menulis untuk indikator ini.
+	WriterRule string
+}
 
-Nilai 4 indikator, masing-masing skor 1-10 (1 = tidak ada sama sekali, 10 = sempurna):
-1. struktur — Struktur & Pemformatan: apakah jawaban/definisi utama sudah ada di 150 kata pertama (BLUF); apakah heading bermakna (untuk media blogger, heading berbasis pertanyaan seperti "Apa itu X?" menaikkan skor); apakah informasi kompleks dipecah dengan list/tabel. PENTING: untuk media mainstream artikel MEMANG tidak memakai heading — jangan turunkan skor karena ketiadaan H2/H3, nilai BLUF dan paragraf pendeknya.
-2. entitas — Kepadatan Entitas & Semantik: banyak entitas konkret yang dikenali (nama tokoh/lembaga, lokasi, tanggal, angka, persentase, istilah teknis); rasio sinyal-terhadap-noise tinggi (sedikit kalimat pengisi/fluff); kedalaman sub-topik (LSI) memadai.
-3. eeat — Sinyal E-E-A-T & Orisinalitas: ada atribusi/kutipan/rujukan otoritatif atau data yang bisa diverifikasi; klaim objektif dan tidak hiperbolik; ada nilai tambah (information gain), bukan sekadar merangkum informasi umum.
-4. niat_pengguna — Penyelarasan Niat Pengguna: menjawab pertanyaan turunan yang lazim (People Also Ask); kesimpulan memberi rekomendasi spesifik/bersyarat, bukan penutup basa-basi.
+// AIOverviewIndicators: 4 indikator rubrik, urutan kanonik.
+var AIOverviewIndicators = []AIOverviewIndicatorDef{
+	{
+		Key: "struktur", PromptKey: "struktur", Title: "Struktur & Pemformatan",
+		GraderRule: "apakah jawaban/definisi utama sudah ada di 150 kata pertama (BLUF); apakah heading bermakna (untuk media blogger, heading berbasis pertanyaan seperti \"Apa itu X?\" menaikkan skor); apakah informasi kompleks dipecah dengan list/tabel. PENTING: untuk media mainstream artikel MEMANG tidak memakai heading — jangan turunkan skor karena ketiadaan H2/H3, nilai BLUF dan paragraf pendeknya.",
+		WriterRule: "definisi/jawaban inti langsung di 150 kata pertama (BLUF), paragraf pendek, dan kesimpulan yang menegaskan jawaban utama.",
+	},
+	{
+		Key: "entitas", PromptKey: "entitas", Title: "Kepadatan Entitas & Semantik",
+		GraderRule: "banyak entitas konkret yang dikenali (nama tokoh/lembaga, lokasi, tanggal, angka, persentase, istilah teknis); rasio sinyal-terhadap-noise tinggi (sedikit kalimat pengisi/fluff); kedalaman sub-topik (LSI) memadai.",
+		WriterRule: "sertakan entitas konkret yang ada di bahan (nama orang/lembaga, lokasi, tanggal, angka, persentase, istilah teknis) dan bahas sub-topik terkait, bukan sekadar mengulang kata kunci.",
+	},
+	{
+		Key: "eeat", PromptKey: "eeat", Title: "Sinyal E-E-A-T & Orisinalitas",
+		GraderRule: "ada atribusi/kutipan/rujukan otoritatif atau data yang bisa diverifikasi; klaim objektif dan tidak hiperbolik; ada nilai tambah (information gain), bukan sekadar merangkum informasi umum.",
+		WriterRule: "kaitkan klaim faktual dengan bahan/brief yang diberikan (mis. \"menurut data pada brief\"), JANGAN mengarang angka/nama/jabatan; hindari bahasa hiperbolik dan kalimat pengisi; beri nilai tambah berupa sudut pandang, sintesis, atau implikasi praktis — bukan rangkuman umum.",
+	},
+	{
+		Key: "niatPengguna", PromptKey: "niat_pengguna", Title: "Penyelarasan Niat Pengguna",
+		GraderRule: "menjawab pertanyaan turunan yang lazim (People Also Ask); kesimpulan memberi rekomendasi spesifik/bersyarat, bukan penutup basa-basi.",
+		WriterRule: "jawab proaktif 2-3 pertanyaan turunan yang lazim (biaya, cara, perbandingan, risiko) dan tutup dengan rekomendasi bersyarat yang spesifik (contoh: \"Pilih A bila …, pilih B bila …\"), bukan penutup basa-basi.",
+	},
+}
 
-VERIFIKASI KE BAHAN (WAJIB): bandingkan setiap nama tokoh, nama perusahaan/lembaga, studi kasus, kutipan, dan angka spesifik di artikel dengan BAHAN/BRIEF yang diberikan. Bila ada yang TIDAK ada di bahan, itu indikasi klaim tanpa dasar: turunkan skor indikator entitas dan E-E-A-T, lalu masukkan temuannya ke catatan_revisi dan ke "entitas_tanpa_dasar". Bila bahan kosong, tandai klaim spesifik apa pun sebagai tanpa dasar.
+// aiOverviewRoleText: deskripsi peran penilai.
+const aiOverviewRoleText = `Anda adalah "Gatekeeper AI Overview QC Agent" untuk platform penerbitan Indonesia (Tauthub). Tugas: menilai apakah draf artikel siap dibaca dan dikutip oleh Google AI Overviews / LLM pencarian.`
 
-Aturan keluaran:
+// aiOverviewVerificationText: aturan verifikasi klaim ke bahan rujukan.
+const aiOverviewVerificationText = `VERIFIKASI KE BAHAN (WAJIB): bandingkan setiap nama tokoh, nama perusahaan/lembaga, studi kasus, kutipan, dan angka spesifik di artikel dengan BAHAN/BRIEF yang diberikan. Bila ada yang TIDAK ada di bahan, itu indikasi klaim tanpa dasar: turunkan skor indikator entitas dan E-E-A-T, lalu masukkan temuannya ke catatan_revisi dan ke "entitas_tanpa_dasar". Bila bahan kosong, tandai klaim spesifik apa pun sebagai tanpa dasar.`
+
+// aiOverviewOutputRulesText: aturan keluaran penilai.
+const aiOverviewOutputRulesText = `Aturan keluaran:
 - ringkasan: maksimal 2 kalimat bahasa Indonesia per indikator.
 - catatan_revisi: maksimal 3 poin perbaikan SANGAT spesifik (sebut bagian/paragrafnya), HANYA bila artikel TIDAK LULUS menurut aturan kelulusan di input pengguna (total di bawah ambang ATAU ada indikator di bawah skor minimum). Bila lulus, kirim array kosong.
 - entitas_tanpa_dasar: maksimal 3 nama/angka/studi kasus di artikel yang tidak ditemukan di bahan (kosongkan bila semua berdasar bahan).`
 
-const aiOverviewOutputSchema = `Balas HANYA JSON valid tanpa markdown/penjelasan lain:
-{"indikator":[{"kunci":"struktur","skor":1-10,"ringkasan":"..."},{"kunci":"entitas","skor":1-10,"ringkasan":"..."},{"kunci":"eeat","skor":1-10,"ringkasan":"..."},{"kunci":"niat_pengguna","skor":1-10,"ringkasan":"..."}],"catatan_revisi":[],"entitas_tanpa_dasar":[]}`
+// buildAIOverviewRules: rangkai prompt penilai dari definisi indikator bersama.
+// aiOverviewRules: deskripsi peran + 4 indikator + verifikasi ke bahan.
+// Dipisah dari skema keluaran supaya bisa dikomposisi dengan cek lain
+// (lihat GuardSystemPrompt di guard.go) tanpa menggandakan teksnya.
+func buildAIOverviewRules() string {
+	var b strings.Builder
+	b.WriteString(aiOverviewRoleText)
+	b.WriteString("\n\nNilai 4 indikator, masing-masing skor 1-10 (1 = tidak ada sama sekali, 10 = sempurna):\n")
+	for i, ind := range AIOverviewIndicators {
+		b.WriteString(fmt.Sprintf("%d. %s — %s: %s\n", i+1, ind.PromptKey, ind.Title, ind.GraderRule))
+	}
+	b.WriteString("\n")
+	b.WriteString(aiOverviewVerificationText)
+	b.WriteString("\n\n")
+	b.WriteString(aiOverviewOutputRulesText)
+	return b.String()
+}
+
+var aiOverviewRules = buildAIOverviewRules()
+
+// AIOverviewIndicatorSchemaFragment: potongan skema JSON [{kunci,skor,ringkasan}]
+// dari definisi indikator. Dipakai skema tunggal (AI Overview saja) maupun
+// skema gabungan safety+overview di guard.go, supaya kunci tidak menyimpang.
+func AIOverviewIndicatorSchemaFragment() string {
+	parts := make([]string, 0, len(AIOverviewIndicators))
+	for _, ind := range AIOverviewIndicators {
+		parts = append(parts, fmt.Sprintf(`{"kunci":"%s","skor":1-10,"ringkasan":"..."}`, ind.PromptKey))
+	}
+	return strings.Join(parts, ",")
+}
+
+func buildAIOverviewOutputSchema() string {
+	return "Balas HANYA JSON valid tanpa markdown/penjelasan lain:\n" +
+		`{"indikator":[` + AIOverviewIndicatorSchemaFragment() + `],"catatan_revisi":[],"entitas_tanpa_dasar":[]}`
+}
+
+var aiOverviewOutputSchema = buildAIOverviewOutputSchema()
 
 // AIOverviewSystemPrompt: prompt lengkap (rules + skema) untuk cek AI Overview saja.
-const AIOverviewSystemPrompt = aiOverviewRules + "\n\n" + aiOverviewOutputSchema
+var AIOverviewSystemPrompt = aiOverviewRules + "\n\n" + aiOverviewOutputSchema
+
+// AIOverviewPassRule: kalimat aturan kelulusan (ambang dari settings). Dipakai
+// bersama oleh prompt penilai dan prompt penulis agar angkanya tidak menyimpang.
+func AIOverviewPassRule(st AIOverviewSettings) string {
+	return fmt.Sprintf("total minimal %d dari %d DAN setiap indikator minimal %d",
+		st.PassTotal, AIOverviewMaxScore, st.PassMinIndicator)
+}
+
+// AIOverviewWriterRubric: arahan rubrik untuk The Writer, dibangun dari definisi
+// indikator yang SAMA dengan penilai, ditambah catatan format per tipe media.
+// Ini menggantikan salinan manual rubrik di prompt penulis.
+func AIOverviewWriterRubric(st AIOverviewSettings, mediaType string) []string {
+	lines := []string{
+		fmt.Sprintf("Rubrik AI Overview (WAJIB DIPENUHI): artikel dinilai %d indikator skor 1-10 dan dinyatakan LULUS bila %s. Tulis agar keempatnya kuat sejak awal.",
+			len(AIOverviewIndicators), AIOverviewPassRule(st)),
+	}
+	for i, ind := range AIOverviewIndicators {
+		lines = append(lines, fmt.Sprintf("Indikator %d — %s: %s", i+1, ind.Title, ind.WriterRule))
+	}
+	if mediaType == "blogger" {
+		lines = append(lines, "Format tambahan (blogger): jawaban pertanyaan turunan memakai subjudul <h2>/<h3> berbasis pertanyaan yang lazim dicari (\"Apa itu X?\", \"Bagaimana cara Y?\") dan data komparatif/langkah ditulis sebagai list/tabel.")
+	} else {
+		lines = append(lines, "Format tambahan (mainstream): TETAP tanpa heading dan tanpa list — jawab pertanyaan turunan dalam paragraf mengalir, lalu tutup dengan rekomendasi bersyarat.")
+	}
+	return lines
+}
 
 // AIOverviewSettings: toggle + ambang (dari taut_agent_configs.settings.aiOverview).
 type AIOverviewSettings struct {
@@ -110,14 +208,14 @@ func AIOverviewUserPrompt(title, mediaType, contentHTML string, wordCount int, s
 	briefText := strings.TrimSpace(brief)
 	if briefText == "" {
 		briefText = "(KOSONG — tidak ada brief/bahan rujukan untuk generate artikel ini)"
-	} else if len([]rune(briefText)) > 4000 {
-		briefText = string([]rune(briefText)[:4000])
+	} else if len([]rune(briefText)) > aiOverviewDefaultBriefChars {
+		briefText = string([]rune(briefText)[:aiOverviewDefaultBriefChars])
 	}
 	return strings.Join([]string{
 		"Judul: " + title,
 		"Tipe media: " + typeName,
 		"Jumlah kata: " + fmt.Sprintf("%d", wordCount),
-		fmt.Sprintf("Aturan kelulusan: total minimal %d dari %d DAN setiap indikator minimal %d. Bila tidak memenuhi, sertakan catatan_revisi (maks 3) yang sangat spesifik.", st.PassTotal, AIOverviewMaxScore, st.PassMinIndicator),
+		fmt.Sprintf("Aturan kelulusan: %s. Bila tidak memenuhi, sertakan catatan_revisi (maks 3) yang sangat spesifik.", AIOverviewPassRule(st)),
 		"BAHAN/BRIEF (rujukan fakta yang boleh dipakai artikel):\n" + briefText,
 		"Isi (HTML): " + html,
 	}, "\n")
@@ -131,13 +229,15 @@ type AIOverviewIndicator struct {
 	Summary string `json:"summary"`
 }
 
-// aiOverviewCanonical: urutan + judul tampilan indikator.
-var aiOverviewCanonical = []struct{ Key, Title string }{
-	{"struktur", "Struktur & Pemformatan"},
-	{"entitas", "Kepadatan Entitas & Semantik"},
-	{"eeat", "Sinyal E-E-A-T & Orisinalitas"},
-	{"niatPengguna", "Penyelarasan Niat Pengguna"},
-}
+// aiOverviewCanonical: urutan + judul tampilan indikator (turunan dari
+// AIOverviewIndicators supaya tidak ada daftar kembar).
+var aiOverviewCanonical = func() []struct{ Key, Title string } {
+	out := make([]struct{ Key, Title string }, 0, len(AIOverviewIndicators))
+	for _, ind := range AIOverviewIndicators {
+		out = append(out, struct{ Key, Title string }{ind.Key, ind.Title})
+	}
+	return out
+}()
 
 // AIOverviewResult: hasil penilaian (dipetakan ke checks.aiOverview via JSON()).
 type AIOverviewResult struct {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
@@ -158,6 +159,17 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if err != nil {
 		return writerItemResult{}, err
 	}
+	// Regenerasi tanpa topik baru tetap memakai topik tersimpan, supaya prompt
+	// penulisan dan pengecekan (yang membaca kolom yang sama) memakai konteks
+	// yang sama.
+	writerTopic := clientTopic
+	if writerTopic == "" {
+		writerTopic = d.loadTautWriterTopic(ctx, campaignID, mediaID)
+	}
+	// Bahan fakta kanonik: dipakai di prompt penulisan DAN diverifikasi ulang
+	// oleh Gatekeeper AI Overview Checker lewat fungsi yang sama, sehingga klaim
+	// dari materials/topik/narasumber tidak lagi ditandai "tanpa dasar".
+	referenceMaterial, hasFacts := buildTautReferenceMaterial(briefContext, materials, writerTopic, spokespersonListValue(campaign.jsonField("spokepersons")))
 	backlinkEnabled, smartVariations := d.loadTautBacklinkSettings(ctx, campaignID)
 	smartVariationRule := ""
 	if smartVariations {
@@ -178,6 +190,14 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 
 	itemID := item.strOr("id", "")
+	// Topik/konteks klien dari modal Pengelola Naskah disimpan per media supaya
+	// Gatekeeper (request terpisah) bisa memverifikasi klaim ke konteks yang sama
+	// dengan yang dipakai Writer. Non-fatal bila kolom belum dimigrasi.
+	if clientTopic != "" {
+		if err := d.exec(ctx, "UPDATE taut_campaign_media SET writer_topic = $1 WHERE id = $2", clientTopic, itemID); err != nil {
+			slog.Warn("[taut-writer] gagal menyimpan writer_topic", "media_id", mediaID, "err", truncateString(err.Error(), 200))
+		}
+	}
 	regenCount := item.intOr("regen_count", 0)
 	hasDocument := item.has("article_document_id")
 	if hasDocument {
@@ -232,24 +252,10 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		precedenceBlock += " Terapkan juga: mainstream -> lead 5W+1H dan paragraf mengalir gaya berita tanpa heading."
 	}
 	tidyHTMLBlock := "ATURAN HTML RAPI (WAJIB): setiap paragraf dibungkus <p> yang utuh (tidak ada paragraf terpotong); JANGAN menulis heading nyasar atau heading kosong dan JANGAN memakai <hr> atau garis dekoratif; JANGAN meninggalkan tag kosong (mis. <p></p>, <h2></h2>); JANGAN menulis teks yang hanya berisi URL telanjang; heading hanya dipakai bila memang diizinkan tipe media (blogger) dan hierarkinya berurutan (H2 lalu H3, tidak melompat); buang atribut/style inline yang tidak perlu dan JANGAN menambah wrapper <div>. Kutipan narasumber ditulis sebagai <blockquote><p>...</p></blockquote>. Bila memakai tabel (hanya media yang mengizinkan daftar/tabel), tulis HTML standar <table><thead><tr><th>...</th></tr></thead><tbody><tr><td>...</td></tr></tbody></table> TANPA atribut style/border/width inline — tampilan diatur editor."
-	// Rubrik AI Overview (Gatekeeper QC) ditulis eksplisit ke prompt: artikel
-	// dinilai 4 indikator skor 1-10 dan LULUS bila total >= 32 serta tiap
-	// indikator >= 7. Generator menulis untuk rubrik itu sejak awal, tanpa
-	// melanggar aturan format media (mainstream tetap tanpa heading/list).
-	aiOverviewRules := []string{
-		"Rubrik AI Overview (WAJIB DIPENUHI): artikel dinilai 4 indikator skor 1-10 dan dinyatakan LULUS bila total minimal 32 serta SETIAP indikator minimal 7. Tulis agar keempatnya kuat sejak awal.",
-		"Indikator 1 — Struktur (BLUF): definisi/jawaban inti langsung di 150 kata pertama, paragraf pendek, dan kesimpulan yang menegaskan jawaban utama.",
-		"Indikator 2 — Entitas & semantik: sertakan entitas konkret yang ada di bahan (nama orang/lembaga, lokasi, tanggal, angka, persentase, istilah teknis) dan bahas sub-topik terkait, bukan sekadar mengulang kata kunci.",
-		"Indikator 3 — E-E-A-T & orisinalitas: kaitkan klaim faktual dengan bahan/brief yang diberikan (mis. \"menurut data pada brief\"), JANGAN mengarang angka/nama/jabatan; hindari bahasa hiperbolik dan kalimat pengisi; beri nilai tambah berupa sudut pandang, sintesis, atau implikasi praktis — bukan rangkuman umum.",
-		"Indikator 4 — Niat pengguna: jawab proaktif 2-3 pertanyaan turunan yang lazim (biaya, cara, perbandingan, risiko) dan tutup dengan rekomendasi bersyarat yang spesifik (contoh: \"Pilih A bila …, pilih B bila …\"), bukan penutup basa-basi.",
-	}
-	if mediaType == "blogger" {
-		aiOverviewRules = append(aiOverviewRules,
-			"Format tambahan (blogger): jawaban pertanyaan turunan memakai subjudul <h2>/<h3> berbasis pertanyaan yang lazim dicari (\"Apa itu X?\", \"Bagaimana cara Y?\") dan data komparatif/langkah ditulis sebagai list/tabel.")
-	} else {
-		aiOverviewRules = append(aiOverviewRules,
-			"Format tambahan (mainstream): TETAP tanpa heading dan tanpa list — jawab pertanyaan turunan dalam paragraf mengalir, lalu tutup dengan rekomendasi bersyarat.")
-	}
+	// Rubrik AI Overview (Gatekeeper QC) diambil dari SATU sumber yang sama
+	// dengan penilai (internal/ai): indikator, judul, dan ambang kelulusan tidak
+	// bisa lagi menyimpang antara prompt penulisan dan prompt pengecekan.
+	aiOverviewRules := ai.AIOverviewWriterRubric(d.aiOverviewSettings(ctx), mediaType)
 
 	allowsLink := item.boolOr("allow_hyperlink", true)
 	if item.has("max_links") {
@@ -408,9 +414,9 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		"Tipe media: "+mediaType,
 		wordRule,
 	)
-	if clientTopic != "" {
+	if writerTopic != "" {
 		promptLines = append(promptLines,
-			"KONTEKS UTAMA DARI KLIEN (WAJIB DIPATUHI): "+clientTopic,
+			"KONTEKS UTAMA DARI KLIEN (WAJIB DIPATUHI): "+writerTopic,
 			"Seluruh artikel (judul, lead, isi, penutup) WAJIB mengikuti konteks di atas. Jangan menambah fakta, angka, nama, atau klaim yang tidak ada di konteks tersebut, dan jangan mengganti topik.",
 		)
 	}
@@ -420,8 +426,9 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	promptLines = append(promptLines, tidyHTMLBlock)
 	// Guard anti-halusinasi: tanpa bahan rujukan, model cenderung mengarang nama
 	// tokoh/perusahaan/angka agar artikel terasa spesifik (dan justru dipuji
-	// "kepadatan entitas" oleh QC). Larang eksplisit saat bahan kosong.
-	if strings.TrimSpace(briefContext) == "" {
+	// "kepadatan entitas" oleh QC). Larang eksplisit saat bahan kosong. hasFacts
+	// dihitung dari SEMUA sumber yang dipakai Writer, bukan hanya brief Profiler.
+	if !hasFacts {
 		promptLines = append(promptLines,
 			"BAHAN KOSONG (PENTING): tidak ada brief/bahan rujukan untuk kampanye ini. JANGAN menyebut nama orang, nama perusahaan/lembaga, studi kasus, angka statistik, persentase, harga, tanggal, atau kutipan narasumber yang spesifik — tulis penjelasan generik tanpa mengarang fakta. Bila butuh contoh, pakai kalimat umum (mis. \"umumnya\", \"banyak pelaku industri\") TANPA angka atau nama.")
 	}
@@ -436,7 +443,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		customLinkBlock,
 		spokespersonBlock,
 		smartVariationRule,
-		"Bahan: "+jsonStringify(orEmptyMapValue(materials)),
+		"Bahan (rujukan fakta yang boleh dipakai; QC AI Overview memverifikasi klaim ke bahan yang sama):\n"+referenceMaterial,
 		"Aturan hyperlink media (bila media tidak mengizinkan, gunakan ATURAN PENANAMAN LINK nol): "+jsonStringify(orEmptySliceValue(hyperlink)),
 		"Kutipan/fakta hanya dari bahan/brief di atas — jangan mengarang angka, nama, atau jabatan.",
 		"Aturan meta deskripsi (WAJIB): sertakan meta_description 120-160 karakter bahasa Indonesia aktif.",
@@ -1069,13 +1076,6 @@ func asMapValue(v any) map[string]any {
 func asSliceValue(v any) []any {
 	s, _ := v.([]any)
 	return s
-}
-
-func orEmptyMapValue(m map[string]any) map[string]any {
-	if m == nil {
-		return map[string]any{}
-	}
-	return m
 }
 
 func orEmptySliceValue(s []any) []any {
