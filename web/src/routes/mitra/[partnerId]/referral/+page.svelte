@@ -11,7 +11,7 @@
 	import { Check, Copy, Crown, TriangleAlert } from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, readApiError, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
-	import { vipTierBadge } from '$lib/partner/vip-tier';
+	import { isVvipTier, vipTierBadge, vipTierLabel } from '$lib/partner/vip-tier';
 
 	type ReferralItem = {
 		id: string;
@@ -31,7 +31,7 @@
 		referrals: ReferralItem[];
 		clicks?: { total: number; unique: number };
 	};
-	type VipInfo = { isVip: boolean; hasVip: boolean; tier: string };
+	type VipInfo = { isVip: boolean; hasVip: boolean; tier: string; entitlements?: Record<string, boolean> };
 
 	let loading = $state(true);
 	let data = $state<ReferralData | null>(null);
@@ -85,9 +85,7 @@
 
 	const ratePct = $derived(((data?.rate_bps ?? 100) / 100).toFixed(1));
 	const isVip = $derived(Boolean(vip?.hasVip ?? vip?.isVip));
-	const tierLabel = $derived(
-		vip?.tier === 'brand_ambassador' ? 'VVIP' : vip?.tier === 'vip_reguler' ? 'VIP Reguler' : 'VIP'
-	);
+	const tierLabel = $derived(vipTierLabel(vip?.tier));
 	const totalReferrals = $derived(data?.totalReferrals ?? (data?.referrals?.length ?? 0));
 	const linkMitra = $derived(data?.link_mitra ?? data?.link ?? '');
 	const linkKlien = $derived(data?.link_klien ?? '');
@@ -139,11 +137,11 @@
 						: tr('Akses Client Workspace & AI premium aktif.')}
 				</p>
 			</div>
-			<!-- Hanya VVIP (brand_ambassador) yang boleh masuk Client Workspace.
-				VIP Reguler murni fee affiliate, jadi tombolnya tidak ditampilkan. -->
-			{#if vip?.tier === 'brand_ambassador'}
-				<a class="app-btn app-btn-primary shrink-0" href="/klien">{tr('Dashboard Klien')} →</a>
-			{/if}
+				<!-- Hanya VVIP (brand_ambassador) yang boleh masuk Client Workspace.
+					VIP Reguler murni fee affiliate, jadi tombolnya tidak ditampilkan. -->
+				{#if isVvipTier(vip?.tier) || vip?.entitlements?.client_workspace}
+					<a class="app-btn app-btn-primary shrink-0" href="/klien">{tr('Dashboard Klien')} →</a>
+				{/if}
 		</div>
 	{/if}
 

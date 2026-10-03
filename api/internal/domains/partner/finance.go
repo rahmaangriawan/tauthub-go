@@ -597,8 +597,8 @@ func (d *Deps) VipBrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	info := d.getPartnerVipInfo(r, partner.ID)
-	if !info.IsVip {
-		httpx.Error(w, http.StatusForbidden, "Hanya VIP dapat membuat brand.")
+	if !info.IsVip || (!info.Entitlements["client_workspace"] && info.Tier != "brand_ambassador" && info.Tier != "vvip") {
+		httpx.Error(w, http.StatusForbidden, "Hanya VIP Brand Ambassador yang memiliki akses workspace klien.")
 		return
 	}
 	existing, _ := d.queryRow(r.Context(),

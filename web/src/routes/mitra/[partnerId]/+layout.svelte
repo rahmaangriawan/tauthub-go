@@ -91,6 +91,11 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	// Sumber kebenaran sama dengan gerbang halaman VIP: tier brand_ambassador.
 	// is_vip saja tidak cukup karena VIP Reguler juga is_vip=true.
 	const isVvip = $derived(isVvipTier(vip.data?.tier));
+	// Client Workspace (Dashboard Klien) hanya untuk VVIP (brand_ambassador) atau bila entitlement diaktifkan khusus.
+	// VIP Reguler murni fee affiliate per-domain, jadi tidak diberi akses ke Dashboard Klien.
+	const canOpenClientWorkspace = $derived(
+		isVvip || Boolean(vip.data?.entitlements?.client_workspace)
+	);
 	// Pill tier di samping lonceng, hanya untuk mitra keanggotaan VIP.
 	const vipPill = $derived(isVip || isVipTier(vip.data?.tier) ? vipTierBadge(vip.data?.tier) : null);
 	const saldo = $derived(earnings.data?.summary?.settled ?? 0);
@@ -156,8 +161,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 					}}
 					roleLabel="Mitra"
 					profileHref={`${base}/profile`}
-					workspaceSwitchHref="/klien"
-					workspaceSwitchLabel="Dashboard Klien"
+					workspaceSwitchHref={canOpenClientWorkspace ? '/klien' : undefined}
+					workspaceSwitchLabel={canOpenClientWorkspace ? tr('Dashboard Klien') : undefined}
 				/>
 			{/if}
 		{/snippet}
