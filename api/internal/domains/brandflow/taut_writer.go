@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -74,18 +75,36 @@ func normalizeTautWriterLinks(raw []tautWriterLinkInput) ([]tautWriterLink, erro
 }
 
 // runTautWriter: generate artikel untuk SEMUA media terpilih (status='selected').
+// Paralel terbatas (4 pekerja): satu generate adalah panggilan LLM 20-35 detik,
+// serial membuat kampanye 4 media menunggu hampir 2 menit.
 func (d *Deps) runTautWriter(ctx context.Context, campaignID, brandID, userID string) ([]writerItemResult, error) {
 	items, err := d.selectedTautMedia(ctx, campaignID)
 	if err != nil {
 		return nil, err
 	}
-	results := make([]writerItemResult, 0, len(items))
-	for _, item := range items {
-		result, err := d.generateTautWriterArticle(ctx, campaignID, brandID, userID, item.MediaID)
-		if err != nil {
-			return nil, err
+	results := make([]writerItemResult, len(items))
+	errs := make([]error, len(items))
+	workers := len(items)
+	if workers > 4 {
+		workers = 4
+	}
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, workers)
+	for i, item := range items {
+		wg.Add(1)
+		go func(i int, item selectedTautMediaRow) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			result, gErr := d.generateTautWriterArticle(ctx, campaignID, brandID, userID, item.MediaID)
+			results[i], errs[i] = result, gErr
+		}(i, item)
+	}
+	wg.Wait()
+	for _, e := range errs {
+		if e != nil {
+			return nil, e
 		}
-		results = append(results, result)
 	}
 	return results, nil
 }

@@ -60,6 +60,15 @@ var (
 
 const agentConfigTTL = 60 * time.Second
 
+// InvalidateTautAgentConfigCache: dipanggil platform saat config agent disimpan
+// (TautAgentUpdate) agar perubahan base_url/model/key terlihat langsung tanpa
+// menunggu TTL 60 detik.
+func InvalidateTautAgentConfigCache(agent string) {
+	agentConfigMu.Lock()
+	delete(agentConfigCache, agent)
+	agentConfigMu.Unlock()
+}
+
 // agentNotConfiguredError: parity AgentNotConfiguredError (409).
 type agentNotConfiguredError struct{ agent string }
 

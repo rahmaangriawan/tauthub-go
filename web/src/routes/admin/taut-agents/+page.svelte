@@ -144,7 +144,7 @@
 <section>
 	<PageHeader
 		title="Taut Pintar — Agent"
-		description="Per-agent LLM (base_url, api key, model, system prompt). Hanya super admin."
+		description="Per-agent LLM (base_url, api key, model, system prompt). Hanya super admin. Kecepatan generate mengikuti model: model opus-class ±70 token/detik (artikel 20-35 detik), model flash-class (mis. via OpenRouter, base URL https://openrouter.ai/api/v1) bisa 5x lebih cepat. Perubahan langsung aktif tanpa restart."
 	/>
 
 	<Feedback {loading} {error} />

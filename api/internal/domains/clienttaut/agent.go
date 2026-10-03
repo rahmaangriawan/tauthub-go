@@ -59,6 +59,14 @@ var (
 
 const agentConfigTTL = 60 * time.Second
 
+// InvalidateTautAgentConfigCache: dipanggil platform saat config agent disimpan
+// agar perubahan base_url/model/key terlihat langsung tanpa menunggu TTL.
+func InvalidateTautAgentConfigCache(agent string) {
+	agentConfigMu.Lock()
+	delete(agentConfigCache, agent)
+	agentConfigMu.Unlock()
+}
+
 // ---------- agent config ----------
 
 // getAgentConfig: baca config per-agent (cache 60s) + unseal api key +

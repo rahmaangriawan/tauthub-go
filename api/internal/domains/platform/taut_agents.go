@@ -13,6 +13,8 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"github.com/rahmaangriawan/tauthub-go/internal/crypto"
+	brandflow "github.com/rahmaangriawan/tauthub-go/internal/domains/brandflow"
+	clienttaut "github.com/rahmaangriawan/tauthub-go/internal/domains/clienttaut"
 )
 
 // Taut agents: konfigurasi per-agent (taut_agent_configs) + pemanggilan LLM
@@ -592,6 +594,10 @@ func (d *Deps) TautAgentUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	d.audit(r.Context(), user.ID, auditAction, "taut_agent_config", agent)
 	d.invalidateTautAgentCache(agent)
+	// brandflow/clienttaut punya cache config sendiri (TTL 60s) — invalidasi
+	// eksplisit supaya model/base URL baru langsung terpakai tanpa menunggu.
+	brandflow.InvalidateTautAgentConfigCache(agent)
+	clienttaut.InvalidateTautAgentConfigCache(agent)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "agent": agent})
 }
 

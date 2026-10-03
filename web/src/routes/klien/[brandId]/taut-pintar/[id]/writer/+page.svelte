@@ -428,27 +428,35 @@
 		for (const m of targets) queued[m.media_id] = 'queued';
 		genState = queued;
 		let done = 0;
-		for (const m of targets) {
-			const isRegen = hasDoc(m);
-			genState = { ...genState, [m.media_id]: 'generating' };
-			try {
-				// Sama seperti generate satu artikel: ini panggilan LLM.
-				const res = await apiRequest(`${apiBase}/produce/${m.media_id}`, { method: 'POST' }, 240_000);
-				if (!res.ok) throw new Error(await readApiError(res, isRegen ? 'Gagal generate ulang artikel.': tr('Gagal generate artikel.')));
-				genState = { ...genState, [m.media_id]: 'draft' };
-			} catch (reason) {
-				const msg = reason instanceof Error ? reason.message : tr('Gagal generate artikel.');
-				genState = { ...genState, [m.media_id]: 'error' };
-				error = `${m.name}: ${msg}`;
-				if (/kredit|saldo|402/i.test(msg)) {
-					done += 1;
-					bulkProgress = { done, total: targets.length };
-					break;
+		let stop = false;
+		// Paralel terbatas: satu generate = panggilan LLM 20-35 dtk, serial
+		// membuat 4 media menunggu hampir 2 menit. Tiga sekaligus memangkas
+		// total waktu bulk tanpa membanjiri gateway.
+		const CONCURRENCY = 3;
+		let next = 0;
+		async function bulkWorker() {
+			while (!stop) {
+				const idx = next++;
+				if (idx >= targets.length) return;
+				const m = targets[idx];
+				const isRegen = hasDoc(m);
+				genState = { ...genState, [m.media_id]: 'generating' };
+				try {
+					// Sama seperti generate satu artikel: ini panggilan LLM.
+					const res = await apiRequest(`${apiBase}/produce/${m.media_id}`, { method: 'POST' }, 240_000);
+					if (!res.ok) throw new Error(await readApiError(res, isRegen ? 'Gagal generate ulang artikel.': tr('Gagal generate artikel.')));
+					genState = { ...genState, [m.media_id]: 'draft' };
+				} catch (reason) {
+					const msg = reason instanceof Error ? reason.message : tr('Gagal generate artikel.');
+					genState = { ...genState, [m.media_id]: 'error' };
+					error = `${m.name}: ${msg}`;
+					if (/kredit|saldo|402/i.test(msg)) stop = true;
 				}
+				done += 1;
+				bulkProgress = { done, total: targets.length };
 			}
-			done += 1;
-			bulkProgress = { done, total: targets.length };
 		}
+		await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, () => bulkWorker()));
 		bulkRunning = false;
 		bulkProgress = null;
 		// Sisa "queued" yang tak sempat diproses kembali ke status aslinya.
