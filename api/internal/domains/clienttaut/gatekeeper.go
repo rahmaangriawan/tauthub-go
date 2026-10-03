@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 
@@ -102,12 +103,28 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		if mediaType == "" {
 			mediaType = campaign.strOr("media_type", "")
 		}
-		aiOverview := d.runAIOverviewCheck(ctx, title, mediaType, content, text)
-		safety := d.contentSafetyGuard(ctx, text, extractLinks(content), briefContext)
-		links := d.linkHealthValidator(ctx, content, []string{
-			strings.TrimSpace(campaign.strOr("primary_url", "")),
-			strings.TrimSpace(campaign.strOr("backup_url", "")),
-		})
+		// Tiga cek independen (AI Overview, safety, link health) paralel.
+		var aiOverview map[string]any
+		var safety contentSafetyResult
+		var links linkHealthResult
+		var checksWG sync.WaitGroup
+		checksWG.Add(3)
+		go func() {
+			defer checksWG.Done()
+			aiOverview = d.runAIOverviewCheck(ctx, title, mediaType, content, text)
+		}()
+		go func() {
+			defer checksWG.Done()
+			safety = d.contentSafetyGuard(ctx, text, extractLinks(content), briefContext)
+		}()
+		go func() {
+			defer checksWG.Done()
+			links = d.linkHealthValidator(ctx, content, []string{
+				strings.TrimSpace(campaign.strOr("primary_url", "")),
+				strings.TrimSpace(campaign.strOr("backup_url", "")),
+			})
+		}()
+		checksWG.Wait()
 		minWords, maxWords := 0, 0
 		if voiceRange != nil {
 			minWords, maxWords = *voiceRange.min, *voiceRange.max
@@ -217,7 +234,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		// Artikel buatan AI Tauthub: bila skor di bawah ambang dan pass revisi
 		// menulis ulang artikel, nilai ULANG sekali — skor tersimpan adalah
 		// kualitas akhir (hijau bila revisi memperbaiki indikator lemah).
-		if attribution == "ai_generated" && ai.AIOverviewRejected(aiOverview) && finalHTML != content {
+		if (attribution == "ai_generated" || attribution == "ai_edited") && ai.AIOverviewRejected(aiOverview) && finalHTML != content {
 			rechecked := d.runAIOverviewCheck(ctx, title, mediaType, finalHTML, extractText(finalHTML))
 			if rechecked != nil {
 				aiOverview = rechecked

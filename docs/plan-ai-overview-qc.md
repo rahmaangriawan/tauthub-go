@@ -86,6 +86,14 @@ Model memakai config agent **gatekeeper** yang sudah ada (admin bisa mengarahkan
 - Status audit & struktur tabel; baris histori lama tetap utuh (kunci plagiarism di jsonb tidak dirender).
 - Endpoint & alur trigger (audit-all, audits, distribute).
 
+## Perbaikan pasca-rilis (3 Okt)
+
+- **"Scan QC Sekarang" tidak bergerak**: `audit-all` tanpa `mediaIds` menganggap semua media siap = `alreadyAudited` (idempoten), dan `runGatekeeper` hanya memindai artikel `draft/revision` — artikel `ready` tak pernah dipindai ulang sehingga kartu AI Overview tetap kosong. Perbaikan: (a) audit lama tanpa kunci `aiOverview` dianggap basi, (b) dukungan subset `mediaIds` di `runGatekeeper` yang menyertakan artikel `ready`, (c) tombol panel QC kini mengirim `mediaIds` artikel yang dibuka, (d) label tombol menjadi "Scan Ulang Artikel Ini".
+- **Cek per artikel sekarang paralel**: safety, link health, dan AI Overview berjalan bersamaan (sebelumnya berurutan).
+- **Aturan re-evaluasi diperluas**: `ai_generated` ATAU `ai_edited` (hasil Gatekeeper sendiri tetap dihitung produksi AI Tauthub); editan manual tidak.
+- **Panel QC menampilkan timer berjalan** + penjelasan bahwa pemindaian wajar 1-4 menit (4 panggilan LLM per artikel).
+- Terverifikasi end-to-end di lokal: audit lama (tanpa kunci) → rescan menghasilkan skor 23/40 (pra-revisi) lalu 31/40 (pasca-revisi, skor tertimpa oleh re-evaluasi).
+
 ## Status pelaksanaan
 - [x] docs/plan-ai-overview-qc.md
 - [x] internal/ai/overview.go (prompt + parsing + aturan gate, dipakai bersama) + unit test

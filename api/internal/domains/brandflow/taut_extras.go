@@ -1007,7 +1007,10 @@ func (d *Deps) TautGatekeeperAuditAll(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			}
-			if row.strOr("article_status", "") != "ready" || latest == nil || !hardGatesPassed(latest.Checks) {
+			// Audit lama tanpa kunci aiOverview = skema sebelum AI Overview
+			// Checker ada → anggap basi supaya artikel lama ikut dipindai sekali.
+			if row.strOr("article_status", "") != "ready" || latest == nil ||
+				!hardGatesPassed(latest.Checks) || latest.Checks["aiOverview"] == nil {
 				allReady = false
 				break
 			}
@@ -1018,7 +1021,7 @@ func (d *Deps) TautGatekeeperAuditAll(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := d.runGatekeeper(r.Context(), campaignID, brandRow.ID, user.ID)
+	results, err := d.runGatekeeper(r.Context(), campaignID, brandRow.ID, user.ID, requested)
 	if err != nil {
 		d.writeErr(w, err)
 		return

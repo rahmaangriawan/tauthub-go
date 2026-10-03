@@ -97,7 +97,10 @@ func (d *Deps) saveGatekeeperAudit(ctx context.Context, campaignID, mediaID stri
 // Paralel 4 pekerja: tiap media butuh 3-4 panggilan LLM (safety, klasifikasi
 // link, AI Overview, pass akhir) — serial membuat scan banyak media melewati
 // timeout klien. Tiap media independen (baris artikel & auditnya sendiri).
-func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID string) ([]gatekeeperItemResult, error) {
+// onlyMediaIDs (opsional): batasi + paksa pindai media tertentu meski
+// article_status-nya sudah 'ready' — dipakai tombol "Scan QC Sekarang"/"Cek
+// Validasi" per artikel supaya cek baru (mis. AI Overview) benar-benar jalan.
+func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID string, onlyMediaIDs []string) ([]gatekeeperItemResult, error) {
 	if !d.getAgentConfig(ctx, "gatekeeper").Configured {
 		return nil, &agentNotConfiguredError{agent: "gatekeeper"}
 	}
@@ -110,11 +113,19 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		return nil, err
 	}
 
-	items, err := d.queryRows(ctx,
-		`SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, m.media_type, m.bahasa_artikel, m.word_count_mode
+	itemsQuery := `SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, m.media_type, m.bahasa_artikel, m.word_count_mode
 		 FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
-		 WHERE tcm.campaign_id = $1 AND tcm.status = 'selected' AND tcm.article_document_id IS NOT NULL
-		       AND tcm.article_status IN ('draft','revision')`, campaignID)
+		 WHERE tcm.campaign_id = $1 AND tcm.status = 'selected' AND tcm.article_document_id IS NOT NULL`
+	queryArgs := []any{campaignID}
+	if len(onlyMediaIDs) > 0 {
+		// Permintaan eksplisit: sertakan artikel 'ready' (pindai ulang atas
+		// permintaan), tetap kecualikan 'blocked'.
+		itemsQuery += ` AND tcm.article_status IN ('draft','revision','ready') AND tcm.media_id = ANY($2)`
+		queryArgs = append(queryArgs, onlyMediaIDs)
+	} else {
+		itemsQuery += ` AND tcm.article_status IN ('draft','revision')`
+	}
+	items, err := d.queryRows(ctx, itemsQuery, queryArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -202,11 +213,29 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 	if mediaType == "" {
 		mediaType = campaign.strOr("media_type", "")
 	}
-	safety := d.contentSafetyGuard(ctx, text, extractHTMLLinks(content), briefContext)
-	links := d.linkHealthValidator(ctx, content, []string{
-		strings.TrimSpace(campaign.strOr("primary_url", "")),
-		strings.TrimSpace(campaign.strOr("backup_url", "")),
-	})
+	// Tiga cek independen (safety, link health, AI Overview) dijalankan paralel:
+	// masing-masing memanggil LLM sendiri, serial membuat satu artikel ~4 menit.
+	var safety contentSafetyResult
+	var links linkHealthResult
+	var aiOverview map[string]any
+	var checksWG sync.WaitGroup
+	checksWG.Add(3)
+	go func() {
+		defer checksWG.Done()
+		safety = d.contentSafetyGuard(ctx, text, extractHTMLLinks(content), briefContext)
+	}()
+	go func() {
+		defer checksWG.Done()
+		links = d.linkHealthValidator(ctx, content, []string{
+			strings.TrimSpace(campaign.strOr("primary_url", "")),
+			strings.TrimSpace(campaign.strOr("backup_url", "")),
+		})
+	}()
+	go func() {
+		defer checksWG.Done()
+		aiOverview = d.runAIOverviewCheck(ctx, title, mediaType, content, text, aiOverviewSet)
+	}()
+	checksWG.Wait()
 	voice := brandVoiceLimits(text, voiceRange)
 
 	safetyStatus := "review_required"
@@ -218,9 +247,6 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 	case "low":
 		safetyStatus = "passed"
 	}
-
-	// Kesiapan AI Overview (non-blocking): skor 4 indikator + catatan revisi.
-	aiOverview := d.runAIOverviewCheck(ctx, title, mediaType, content, text, aiOverviewSet)
 
 	checks := map[string]any{
 		"aiOverview": aiOverview,
@@ -305,7 +331,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 	// revisi di atas sudah menulis ulang artikel, nilai ULANG sekali pada hasil
 	// revisi — skor yang tersimpan adalah kualitas akhir (hijau bila revisi
 	// memperbaiki indikator lemah). Satu putaran saja, tanpa loop.
-	if attribution == "ai_generated" && ai.AIOverviewRejected(aiOverview) && finalHTML != content {
+	if (attribution == "ai_generated" || attribution == "ai_edited") && ai.AIOverviewRejected(aiOverview) && finalHTML != content {
 		rechecked := d.runAIOverviewCheck(ctx, title, mediaType, finalHTML, stripHTMLToText(finalHTML), aiOverviewSet)
 		if rechecked != nil {
 			aiOverview = rechecked

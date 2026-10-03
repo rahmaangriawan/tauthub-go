@@ -89,6 +89,8 @@
 	let error = $state('');
 	let notice = $state('');
 	let scanning = $state(false);
+	let scanSeconds = $state(0);
+	let scanTimer: number | null = null;
 	let openCheck = $state<string | null>(null);
 	let pollTimer: number | null = null;
 
@@ -134,21 +136,30 @@
 		window.clearInterval(pollTimer);
 		pollTimer = null;
 	}
-	onDestroy(stopPolling);
+	onDestroy(() => {
+		stopPolling();
+		if (scanTimer) window.clearInterval(scanTimer);
+	});
 
 	async function scan() {
 		if (scanning) return;
 		scanning = true;
+		scanSeconds = 0;
+		if (scanTimer) window.clearInterval(scanTimer);
+		scanTimer = window.setInterval(() => (scanSeconds += 1), 1000);
 		error = '';
 		notice = '';
 		startPolling();
 		try {
-			// audit-all sinkron: request menahan koneksi sampai seluruh media
-			// selesai dipindai, jauh di atas timeout bawaan apiRequest (12 detik).
-			// Kalau diputus, konteks request server ikut batal dan loop berhenti
-			// di tengah jalan — jadi timeout-nya harus panjang (parity timeout
-			// analisis Profiler).
-			const res = await apiRequest(`${apiBase}/gatekeeper/audit-all`, { method: 'POST', body: JSON.stringify({}) }, 900_000);
+			// Panel ini level-artikel: kirim mediaIds supaya server memindai
+			// ULANG artikel ini apa pun statusnya (termasuk yang sudah 'ready'),
+			// tanpa kena jalur idempoten audit-all. audit-all sinkron: request
+			// menahan koneksi sampai selesai, jadi timeout-nya harus panjang.
+			const res = await apiRequest(
+				`${apiBase}/gatekeeper/audit-all`,
+				{ method: 'POST', body: JSON.stringify({ mediaIds: [mediaId] }) },
+				900_000
+			);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menjalankan pemindaian QC.')));
 			const result = await res.json().catch(() => null);
 			if (result?.alreadyAudited) notice = tr('Semua artikel sudah punya hasil pemindaian — tidak ada yang dipindai ulang.');
@@ -162,6 +173,10 @@
 		} finally {
 			await loadAudits();
 			stopPolling();
+			if (scanTimer) {
+				window.clearInterval(scanTimer);
+				scanTimer = null;
+			}
 			scanning = false;
 			// Pemindaian mengubah article_status tiap media, jadi halaman induk
 			// harus memuat ulang kalau tidak badge barisnya jadi basi.
@@ -309,10 +324,13 @@
 		{#if scanning}
 			<div class="qcBlock" aria-live="polite">
 				<div class="flex items-center gap-2 text-sm font-semibold" style="color: var(--primary);">
-					<LoaderCircle size={16} class="animate-spin" />{tr('Memindai artikel…')}
+					<LoaderCircle size={16} class="animate-spin" />{tr('Memindai artikel…')} <span class="font-mono text-[12px]">{Math.floor(scanSeconds / 60)}:{String(scanSeconds % 60).padStart(2, '0')}</span>
 				</div>
 				<p class="mt-1 text-[12px] text-muted-foreground">
 					{scannedCount}/{totalMedia} {tr('artikel sudah punya hasil. Hasil per media muncul bertahap; panel ini memperbarui sendiri setiap 4 detik.')}
+				</p>
+				<p class="mt-1 text-[11.5px] text-muted-foreground">
+					{tr('Pemeriksaan memanggil model AI beberapa kali (keamanan konten, link, AI Overview, dan revisi akhir) — wajar 1-4 menit per artikel tergantung kecepatan model Gatekeeper.')}
 				</p>
 				<div class="qcProgressTrack"><div class="qcProgressFill" style="width: {totalMedia > 0 ? Math.round((scannedCount / totalMedia) * 100) : 0}%;"></div></div>
 			</div>
@@ -467,7 +485,7 @@
 	{#snippet footer()}
 		<button class="app-btn app-btn-primary !min-h-9 !px-3.5 !text-xs" type="button" disabled={scanning || gatekeeperConfigured === false} onclick={() => void scan()}>
 			{#if scanning}<LoaderCircle size={14} class="animate-spin" />{:else}<ShieldCheck size={14} />{/if}
-			{scanning ? tr('Memindai…') : tr('Scan QC Sekarang')}
+			{scanning ? tr('Memindai…') : tr('Scan Ulang Artikel Ini')}
 		</button>
 		<button class="app-btn app-btn-soft !min-h-9 !px-3.5 !text-xs" type="button" onclick={onEdit}><Eye size={14} /> {tr('Edit Artikel')}</button>
 		{#if !manualFlow && canRegen}
