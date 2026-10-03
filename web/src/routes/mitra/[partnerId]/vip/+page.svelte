@@ -124,15 +124,15 @@
 
 	const idr = (n: number) => 'Rp' + Number(n || 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' });
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '—');
-	const KIND_LABEL: Record<string, string> = $derived({ cpa: 'CPA', transaction_commission: 'Komisi Transaksi', referral: 'Referral', publication: tr('Publikasi') });
-	const STATUS_LABEL: Record<string, string> = $derived({ pending: tr('Menunggu'), approved: tr('Disetujui'), rejected: tr('Ditolak'), available: tr('Tersedia'), paid: 'Dibayar', reversed: 'Dibalik', settled: tr('Selesai'), voided: tr('Dibatalkan') });
+	const KIND_LABEL: Record<string, string> = $derived({ cpa: 'CPA', transaction_commission: tr('Komisi Transaksi'), referral: 'Referral', publication: tr('Publikasi') });
+	const STATUS_LABEL: Record<string, string> = $derived({ pending: tr('Menunggu'), approved: tr('Disetujui'), rejected: tr('Ditolak'), available: tr('Tersedia'), paid: tr('Dibayar'), reversed: tr('Dibalik'), settled: tr('Selesai'), voided: tr('Dibatalkan') });
 	const statusColor = (s: string) =>
 		s === 'approved' || s === 'paid' || s === 'settled' ? 'var(--success)'
 		: s === 'rejected' || s === 'reversed' ? 'var(--destructive)'
 		: s === 'available' ? 'var(--primary)'
 		: s === 'voided' ? 'var(--muted-foreground)'
 		: 'var(--warning)';
-	const tierLabel = $derived(vip?.tier === 'brand_ambassador' || vip?.tier === 'vvip' ? 'VVIP' : vip?.tier === 'vip_reguler' ? 'VIP Reguler' : 'VIP');
+	const tierLabel = $derived(vip?.tier === 'brand_ambassador' || vip?.tier === 'vvip' ? 'VVIP' : vip?.tier === 'vip_reguler' ? tr('VIP Reguler') : 'VIP');
 
 	const vipActive = $derived(Boolean(vip?.isVip) && !vip?.isExpired);
 	const showCpa = $derived(vipActive);
@@ -164,7 +164,7 @@
 			iconColor: 'var(--muted-foreground)'
 		},
 		{
-			label: 'Komisi Referral',
+			label: tr('Komisi Referral'),
 			value: idr(referral?.referral_earning ?? 0),
 			icon: Wallet,
 			color: 'var(--success)',
@@ -172,7 +172,7 @@
 			iconColor: 'var(--success)'
 		},
 		{
-			label: 'Komisi Transaksi',
+			label: tr('Komisi Transaksi'),
 			value: idr(wallet?.transaction_commission ?? 0),
 			icon: HandCoins,
 			color: 'var(--foreground)',
@@ -191,7 +191,7 @@
 			iconColor: 'var(--muted-foreground)'
 		},
 		{
-			label: 'Domain Terdaftar',
+			label: tr('Domain Terdaftar'),
 			value: String(domains?.stats?.total ?? 0),
 			icon: Globe,
 			color: 'var(--primary)',
@@ -199,7 +199,7 @@
 			iconColor: 'var(--primary)'
 		},
 		{
-			label: 'Approved',
+			label: tr('Approved'),
 			value: String(domains?.stats?.approved ?? 0),
 			icon: CircleCheck,
 			color: 'var(--success)',
@@ -207,7 +207,7 @@
 			iconColor: 'var(--success)'
 		},
 		{
-			label: 'Pending',
+			label: tr('Pending'),
 			value: String(domains?.stats?.pending ?? 0),
 			icon: Clock,
 			color: 'var(--warning)',
@@ -223,7 +223,7 @@
 			iconColor: 'var(--destructive)'
 		},
 		{
-			label: 'Estimasi CPA',
+			label: tr('Estimasi CPA'),
 			value: idr((domains?.stats?.approved ?? 0) * (vip?.cpaRate ?? 15000)),
 			icon: Coins,
 			color: 'var(--primary)',
@@ -320,17 +320,17 @@
 	{#if loading}
 		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat VIP Dashboard…")}</p>
 	{:else}
-		{#if vip && !vipActive}
-			<div class="app-card mt-3 flex items-start gap-2 px-4 py-3 text-sm" style="border-color: var(--warning); color: var(--warning);">
-				<Clock size={16} class="mt-0.5 shrink-0" />
-				<p>
-					{#if vip.isExpired || vip.vipExpiresAt}
-						Masa kontrak VIP telah berakhir{#if vip.vipContractMonths != null} ({vip.vipContractMonths} bulan, berakhir {vip.vipExpiresAt ? dt(vip.vipExpiresAt) : '—'}){/if}{tr(". CPA Balance nonaktif. Hubungi Admin untuk perpanjangan.")} {:else}
-						Status VIP tidak aktif saat ini.
-					{/if}
-				</p>
-			</div>
-		{/if}
+			{#if vip && !vipActive}
+				<div class="app-card mt-3 flex items-start gap-2 px-4 py-3 text-sm" style="border-color: var(--warning); color: var(--warning);">
+					<Clock size={16} class="mt-0.5 shrink-0" />
+					<p>
+						{#if vip.isExpired || vip.vipExpiresAt}
+							{tr("Masa kontrak VIP telah berakhir")}{#if vip.vipContractMonths != null} ({vip.vipContractMonths} {tr("bulan, berakhir")} {vip.vipExpiresAt ? dt(vip.vipExpiresAt) : '—'}){/if}{tr(". CPA Balance nonaktif. Hubungi Admin untuk perpanjangan.")} {:else}
+							{tr("Status VIP tidak aktif saat ini.")}
+						{/if}
+					</p>
+				</div>
+			{/if}
 
 			<!-- ── Saldo ── -->
 			<div class="mt-4">
@@ -340,17 +340,17 @@
 						<div class="relative overflow-hidden rounded-lg border bg-card px-3.5 py-3 shadow-xs">
 							<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--success);"></div>
 							<div class="flex min-h-4 items-center justify-between gap-2">
-								<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">CPA Balance</span>
+								<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr("CPA Balance")}</span>
 								{#if vip?.vipExpiresAt}
-									<span class="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide" style="background-color: var(--success-soft); color: var(--success);">Berakhir {dt(vip.vipExpiresAt)}</span>
+									<span class="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide" style="background-color: var(--success-soft); color: var(--success);">{tr("Berakhir")} {dt(vip.vipExpiresAt)}</span>
 								{/if}
 							</div>
 							<p class="mt-1 text-xl font-bold tabular-nums" style="color: var(--success);">{idr(wallet?.cpa ?? 0)}</p>
 							<p class="mt-1 text-xs text-muted-foreground">
 								{#if vip?.tier === 'vip_reguler'}
-									{idr(vip.cpaTier1Rate)}{tr("/domain untuk")} {vip.cpaTierThreshold.toLocaleString('id-ID')} domain pertama, lalu {idr(vip.cpaTier2Rate)}/domain
+									{idr(vip.cpaTier1Rate)}{tr("/domain untuk")} {vip.cpaTierThreshold.toLocaleString('id-ID')} {tr("domain pertama, lalu")} {idr(vip.cpaTier2Rate)}{tr("/domain")}
 								{:else}
-									{idr(vip?.cpaRate ?? 0)} per domain
+									{idr(vip?.cpaRate ?? 0)} {tr("per domain")}
 								{/if}
 							</p>
 							<svg viewBox="0 0 100 40" preserveAspectRatio="none" width="100%" height="26" aria-hidden="true" class="mt-1.5 block">
@@ -373,7 +373,7 @@
 						<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--muted-foreground);"></div>
 						<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr("Total")}</span>
 						<p class="mt-1 text-xl font-bold tabular-nums">{idr(totalCpaPaid)}</p>
-						<p class="mt-1 text-xs text-muted-foreground">Akumulasi CPA · {approvedDomains.length} domain disetujui × {idr(vip?.cpaRate ?? 15000)}</p>
+						<p class="mt-1 text-xs text-muted-foreground">{tr("Akumulasi CPA")} · {approvedDomains.length} {tr("domain disetujui")} × {idr(vip?.cpaRate ?? 15000)}</p>
 						<svg viewBox="0 0 100 40" preserveAspectRatio="none" width="100%" height="26" aria-hidden="true" class="mt-1.5 block">
 							<path d={totalPath.area} fill="var(--muted-foreground)" fill-opacity="0.1" />
 							<path d={totalPath.line} fill="none" stroke="var(--muted-foreground)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
@@ -385,7 +385,7 @@
 			<!-- ── Performance + Statistik Affiliate ── -->
 			<div class="mt-4 grid gap-3 md:grid-cols-2">
 				<div class="app-card overflow-hidden">
-					<div class="border-b px-4 py-3"><h2 class="text-sm font-semibold">Performance</h2></div>
+					<div class="border-b px-4 py-3"><h2 class="text-sm font-semibold">{tr("Performance")}</h2></div>
 					<div>
 						{#each performanceRows as row (row.label)}
 							<div class="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
@@ -417,154 +417,154 @@
 				</div>
 			</div>
 
-		<!-- ── Riwayat Penghasilan Affiliate (per domain sukses) ── -->
-		<div class="app-card mt-3 overflow-x-auto">
-			<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-				<h2 class="text-sm font-semibold">{tr("Riwayat Penghasilan Affiliate")}</h2>
-				<div class="flex items-center gap-2">
-					<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft); color: var(--success);">{approvedDomains.length} domain sukses</span>
-					<span class="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground" style="background-color: var(--secondary);">{domains?.items?.length ?? 0} domain</span>
-				</div>
-			</div>
-			{#if approvedDomains.length > 0}
-				<div class="border-b px-4 py-2.5 text-xs" style="color: var(--success);"> {tr("Total penghasilan CPA dari")} {approvedDomains.length} domain approved: <strong>{idr(totalCpaPaid)}</strong> (per domain sukses × {idr(vip?.cpaRate ?? 15000)}).
-				</div>
-			{/if}
-			{#if !domains || domains.items.length === 0}
-				<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada domain referral. Bagikan link referral Anda untuk memulai.")}</p>
-			{:else}
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="text-left text-xs text-muted-foreground">
-							<th class="px-4 py-2.5 font-medium">Domain</th>
-							<th class="px-4 py-2.5 font-medium">Owner</th>
-							<th class="px-4 py-2.5 font-medium">Status</th>
-							<th class="px-4 py-2.5 font-medium">CPA</th>
-							<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each domains.items as d (d.id)}
-							<tr class="border-t" style={d.status === 'approved' ? 'background-color: var(--success-soft);' : ''}>
-								<td class="px-4 py-2.5">
-									<div class="flex items-center gap-2">
-										<Globe size={14} />
-										<div>
-											<p class="font-medium">{d.domain_name}</p>
-											<p class="text-xs text-muted-foreground">{d.media_name ?? '—'}</p>
-										</div>
-									</div>
-								</td>
-								<td class="px-4 py-2.5 text-muted-foreground">{d.owner_email ?? '—'}</td>
-								<td class="px-4 py-2.5">
-									<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: {statusColor(d.status)};">{STATUS_LABEL[d.status] ?? d.status}</span>
-									{#if d.rejection_reason}<p class="mt-1 text-xs" style="color: var(--destructive);">{d.rejection_reason}</p>{/if}
-								</td>
-								<td class="px-4 py-2.5">
-									{#if d.cpa_paid}
-										<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft); color: var(--success);">{idr(d.cpa_amount ?? 0)}</span>
-									{:else}—{/if}
-								</td>
-								<td class="px-4 py-2.5 text-xs text-muted-foreground">{dt(d.created_at)}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			{/if}
-		</div>
-
-			<!-- ── Riwayat Earning ── -->
-			<div class="app-card mt-3">
+			<!-- ── Riwayat Penghasilan Affiliate (per domain sukses) ── -->
+			<div class="app-card mt-3 overflow-x-auto">
 				<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+					<h2 class="text-sm font-semibold">{tr("Riwayat Penghasilan Affiliate")}</h2>
 					<div class="flex items-center gap-2">
-						<h2 class="text-sm font-semibold">{tr("Riwayat Earning")}</h2>
-						<span class="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground" style="background-color: var(--secondary);">{totalEarnings} transaksi</span>
+						<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft); color: var(--success);">{approvedDomains.length} {tr("domain sukses")}</span>
+						<span class="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground" style="background-color: var(--secondary);">{domains?.items?.length ?? 0} {tr("domain")}</span>
 					</div>
-					{#if totalEarnings > 0}
-						<div class="flex items-center gap-2 text-xs text-muted-foreground">
-							<span>{tr("Tampilkan:")}</span>
-							<div class="relative" bind:this={limitDropdownEl}>
-								<button
-									bind:this={limitDropdownTrigger}
-									type="button"
-									class="flex h-7 items-center justify-between gap-2.5 rounded-md border bg-card pl-2.5 pr-2.5 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-secondary focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-									onclick={toggleLimitDropdown}
-									aria-expanded={limitDropdownOpen}
-									aria-haspopup="listbox"
-									aria-label="Pilih jumlah baris per halaman"
-								>
-									<span class="tabular-nums">{earningLimit} per hal</span>
-									<ChevronDown
-										size={13}
-										class="shrink-0 text-muted-foreground transition-transform duration-150 {limitDropdownOpen ? 'rotate-180 text-primary' : ''}"
-									/>
-								</button>
-
-								{#if limitDropdownOpen}
-									<div
-										class="absolute right-0 z-50 min-w-[125px] overflow-hidden rounded-lg border bg-card p-1 shadow-lg animate-in fade-in-0 zoom-in-95 duration-100 {limitDropdownPlacement === 'up' ? 'bottom-full mb-1 origin-bottom-right' : 'top-full mt-1 origin-top-right'}"
-										role="listbox"
-										aria-label="Pilihan jumlah baris per halaman"
-									>
-										{#each [5, 10, 20, 50] as opt (opt)}
-											<button
-												type="button"
-												role="option"
-												aria-selected={earningLimit === opt}
-												class="flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors {earningLimit === opt ? 'bg-accent font-semibold text-primary' : 'text-foreground hover:bg-secondary'}"
-												onclick={() => {
-													earningLimit = opt;
-													earningPage = 1;
-													limitDropdownOpen = false;
-												}}
-											>
-												<span class="tabular-nums">{opt} per hal</span>
-												{#if earningLimit === opt}
-													<Check size={13} class="shrink-0 text-primary" />
-												{/if}
-											</button>
-										{/each}
-									</div>
-								{/if}
-							</div>
-						</div>
-					{/if}
 				</div>
-				{#if !wallet || totalEarnings === 0}
-					<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada riwayat earning.")}</p>
-				{:else}
-					<div class="overflow-x-auto">
-						<table class="w-full text-sm">
-							<thead>
-								<tr class="text-left text-xs text-muted-foreground">
-									<th class="px-4 py-2.5 font-medium">{tr('Jenis')}</th>
-									<th class="px-4 py-2.5 font-medium">{tr("Jumlah")}</th>
-									<th class="px-4 py-2.5 font-medium">Status</th>
-									<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each pagedEarnings as h (h.id)}
-									<tr class="border-t">
-										<td class="px-4 py-2.5">
-											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: {h.kind === 'cpa' ? 'var(--success)' : h.kind === 'transaction_commission' ? 'var(--primary)' : h.kind === 'referral' ? 'var(--accent-foreground)' : 'var(--warning)'};">{KIND_LABEL[h.kind] ?? h.kind}</span>
-										</td>
-										<td class="px-4 py-2.5 font-medium tabular-nums">{idr(h.amount)}</td>
-										<td class="px-4 py-2.5">
-											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: {statusColor(h.status)};">{STATUS_LABEL[h.status] ?? h.status}</span>
-										</td>
-										<td class="px-4 py-2.5 text-xs text-muted-foreground">{dt(h.created_at)}</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
+				{#if approvedDomains.length > 0}
+					<div class="border-b px-4 py-2.5 text-xs" style="color: var(--success);"> {tr("Total penghasilan CPA dari")} {approvedDomains.length} {tr("domain disetujui")}: <strong>{idr(totalCpaPaid)}</strong> ({tr("per domain sukses")} × {idr(vip?.cpaRate ?? 15000)}).
 					</div>
+				{/if}
+				{#if !domains || domains.items.length === 0}
+					<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada domain referral. Bagikan link referral Anda untuk memulai.")}</p>
+				{:else}
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="text-left text-xs text-muted-foreground">
+								<th class="px-4 py-2.5 font-medium">{tr("Domain")}</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Owner")}</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Status")}</th>
+								<th class="px-4 py-2.5 font-medium">{tr("CPA")}</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each domains.items as d (d.id)}
+								<tr class="border-t" style={d.status === 'approved' ? 'background-color: var(--success-soft);' : ''}>
+									<td class="px-4 py-2.5">
+										<div class="flex items-center gap-2">
+											<Globe size={14} />
+											<div>
+												<p class="font-medium">{d.domain_name}</p>
+												<p class="text-xs text-muted-foreground">{d.media_name ?? '—'}</p>
+											</div>
+										</div>
+									</td>
+									<td class="px-4 py-2.5 text-muted-foreground">{d.owner_email ?? '—'}</td>
+									<td class="px-4 py-2.5">
+										<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: {statusColor(d.status)};">{STATUS_LABEL[d.status] ?? d.status}</span>
+										{#if d.rejection_reason}<p class="mt-1 text-xs" style="color: var(--destructive);">{d.rejection_reason}</p>{/if}
+									</td>
+									<td class="px-4 py-2.5">
+										{#if d.cpa_paid}
+											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft); color: var(--success);">{idr(d.cpa_amount ?? 0)}</span>
+										{:else}—{/if}
+									</td>
+									<td class="px-4 py-2.5 text-xs text-muted-foreground">{dt(d.created_at)}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				{/if}
+			</div>
 
-					{#if totalEarnings > 0}
-						<div class="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-2.5 text-xs text-muted-foreground">
-							<p>
-								{tr("Menampilkan")} <span class="font-semibold text-foreground">{earningStart}–{earningEnd}</span> {tr("dari")} <span class="font-semibold text-foreground">{totalEarnings}</span> transaksi
-							</p>
+				<!-- ── Riwayat Earning ── -->
+				<div class="app-card mt-3">
+					<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+						<div class="flex items-center gap-2">
+							<h2 class="text-sm font-semibold">{tr("Riwayat Earning")}</h2>
+							<span class="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground" style="background-color: var(--secondary);">{totalEarnings} {tr("transaksi")}</span>
+						</div>
+						{#if totalEarnings > 0}
+							<div class="flex items-center gap-2 text-xs text-muted-foreground">
+								<span>{tr("Tampilkan:")}</span>
+								<div class="relative" bind:this={limitDropdownEl}>
+									<button
+										bind:this={limitDropdownTrigger}
+										type="button"
+										class="flex h-7 items-center justify-between gap-2.5 rounded-md border bg-card pl-2.5 pr-2.5 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-secondary focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+										onclick={toggleLimitDropdown}
+										aria-expanded={limitDropdownOpen}
+										aria-haspopup="listbox"
+										aria-label={tr("Pilih jumlah baris per halaman")}
+									>
+										<span class="tabular-nums">{earningLimit} {tr("per hal")}</span>
+										<ChevronDown
+											size={13}
+											class="shrink-0 text-muted-foreground transition-transform duration-150 {limitDropdownOpen ? 'rotate-180 text-primary' : ''}"
+										/>
+									</button>
+
+									{#if limitDropdownOpen}
+										<div
+											class="absolute right-0 z-50 min-w-[125px] overflow-hidden rounded-lg border bg-card p-1 shadow-lg animate-in fade-in-0 zoom-in-95 duration-100 {limitDropdownPlacement === 'up' ? 'bottom-full mb-1 origin-bottom-right' : 'top-full mt-1 origin-top-right'}"
+											role="listbox"
+											aria-label={tr("Pilihan jumlah baris per halaman")}
+										>
+											{#each [5, 10, 20, 50] as opt (opt)}
+												<button
+													type="button"
+													role="option"
+													aria-selected={earningLimit === opt}
+													class="flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors {earningLimit === opt ? 'bg-accent font-semibold text-primary' : 'text-foreground hover:bg-secondary'}"
+													onclick={() => {
+														earningLimit = opt;
+														earningPage = 1;
+														limitDropdownOpen = false;
+													}}
+												>
+													<span class="tabular-nums">{opt} {tr("per hal")}</span>
+													{#if earningLimit === opt}
+														<Check size={13} class="shrink-0 text-primary" />
+													{/if}
+												</button>
+											{/each}
+										</div>
+									{/if}
+								</div>
+							</div>
+						{/if}
+					</div>
+					{#if !wallet || totalEarnings === 0}
+						<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada riwayat earning.")}</p>
+					{:else}
+						<div class="overflow-x-auto">
+							<table class="w-full text-sm">
+								<thead>
+									<tr class="text-left text-xs text-muted-foreground">
+										<th class="px-4 py-2.5 font-medium">{tr('Jenis')}</th>
+										<th class="px-4 py-2.5 font-medium">{tr("Jumlah")}</th>
+										<th class="px-4 py-2.5 font-medium">{tr("Status")}</th>
+										<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each pagedEarnings as h (h.id)}
+										<tr class="border-t">
+											<td class="px-4 py-2.5">
+												<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: {h.kind === 'cpa' ? 'var(--success)' : h.kind === 'transaction_commission' ? 'var(--primary)' : h.kind === 'referral' ? 'var(--accent-foreground)' : 'var(--warning)'};">{KIND_LABEL[h.kind] ?? h.kind}</span>
+											</td>
+											<td class="px-4 py-2.5 font-medium tabular-nums">{idr(h.amount)}</td>
+											<td class="px-4 py-2.5">
+												<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: {statusColor(h.status)};">{STATUS_LABEL[h.status] ?? h.status}</span>
+											</td>
+											<td class="px-4 py-2.5 text-xs text-muted-foreground">{dt(h.created_at)}</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+
+						{#if totalEarnings > 0}
+							<div class="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-2.5 text-xs text-muted-foreground">
+								<p>
+									{tr("Menampilkan")} <span class="font-semibold text-foreground">{earningStart}–{earningEnd}</span> {tr("dari")} <span class="font-semibold text-foreground">{totalEarnings}</span> {tr("transaksi")}
+								</p>
 							<div class="flex items-center gap-2">
 								<button
 									class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
