@@ -137,11 +137,11 @@
 						: tr('Akses Client Workspace & AI premium aktif.')}
 				</p>
 			</div>
-				<!-- Hanya VVIP (brand_ambassador) yang boleh masuk Client Workspace.
-					VIP Reguler murni fee affiliate, jadi tombolnya tidak ditampilkan. -->
-				{#if isVvipTier(vip?.tier) || vip?.entitlements?.client_workspace}
-					<a class="app-btn app-btn-primary shrink-0" href="/klien">{tr('Dashboard Klien')} →</a>
-				{/if}
+			<!-- Hanya VVIP (brand_ambassador) yang boleh masuk Client Workspace.
+				VIP Reguler murni fee affiliate, jadi tombolnya tidak ditampilkan. -->
+			{#if isVvipTier(vip?.tier)}
+				<a class="app-btn app-btn-primary shrink-0" href="/klien">{tr('Dashboard Klien')} →</a>
+			{/if}
 		</div>
 	{/if}
 
