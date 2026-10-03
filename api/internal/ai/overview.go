@@ -32,7 +32,7 @@ Nilai 4 indikator, masing-masing skor 1-10 (1 = tidak ada sama sekali, 10 = semp
 
 Aturan keluaran:
 - ringkasan: maksimal 2 kalimat bahasa Indonesia per indikator.
-- catatan_revisi: maksimal 3 poin perbaikan SANGAT spesifik (sebut bagian/paragrafnya), HANYA bila ada indikator berskor di bawah 7. Bila semua >= 7, kirim array kosong.
+- catatan_revisi: maksimal 3 poin perbaikan SANGAT spesifik (sebut bagian/paragrafnya), HANYA bila artikel TIDAK LULUS menurut aturan kelulusan di input pengguna (total di bawah ambang ATAU ada indikator di bawah skor minimum). Bila lulus, kirim array kosong.
 - Balas HANYA JSON valid tanpa markdown/penjelasan lain:
 {"indikator":[{"kunci":"struktur","skor":1-10,"ringkasan":"..."},{"kunci":"entitas","skor":1-10,"ringkasan":"..."},{"kunci":"eeat","skor":1-10,"ringkasan":"..."},{"kunci":"niat_pengguna","skor":1-10,"ringkasan":"..."}],"catatan_revisi":[]}`
 
@@ -101,6 +101,7 @@ func AIOverviewUserPrompt(title, mediaType, contentHTML string, wordCount int, s
 		"Judul: " + title,
 		"Tipe media: " + typeName,
 		"Jumlah kata: " + fmt.Sprintf("%d", wordCount),
+		fmt.Sprintf("Aturan kelulusan: total minimal %d dari %d DAN setiap indikator minimal %d. Bila tidak memenuhi, sertakan catatan_revisi (maks 3) yang sangat spesifik.", st.PassTotal, AIOverviewMaxScore, st.PassMinIndicator),
 		"Isi (HTML): " + html,
 	}, "\n")
 }

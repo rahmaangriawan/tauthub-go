@@ -117,10 +117,12 @@ func TestAIOverviewUserPromptTruncates(t *testing.T) {
 	st := DefaultAIOverviewSettings()
 	st.MaxChars = 1000
 	p := AIOverviewUserPrompt("Judul", "blogger", html, 42, st)
-	if len(p) > 1200 {
+	// Isi HTML dipotong ke MaxChars; sisa panjang adalah header tetap prompt.
+	if len(p) > st.MaxChars+700 {
 		t.Fatalf("prompt harus dipotong sekitar max_chars, panjang %d", len(p))
 	}
-	if !strings.Contains(p, "Judul: Judul") || !strings.Contains(p, "blogger") || !strings.Contains(p, "Jumlah kata: 42") {
+	if !strings.Contains(p, "Judul: Judul") || !strings.Contains(p, "blogger") || !strings.Contains(p, "Jumlah kata: 42") ||
+		!strings.Contains(p, "Aturan kelulusan: total minimal 32 dari 40 DAN setiap indikator minimal 7") {
 		t.Fatalf("prompt kehilangan bagian penting: %s", p[:120])
 	}
 }
