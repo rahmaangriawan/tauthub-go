@@ -63,38 +63,45 @@ jobs:
           # Keepalive: build web di VPS bisa diam beberapa menit, koneksi idle
           # sering diputus NAT/firewall (broken pipe). ConnectTimeout supaya
           # host mati gagal cepat, bukan menggantung 2 menit.
-          SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=12"
+          SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=12"
 
           # SSH/rsync kadang macet saat handshake (box 2GB sedang sibuk build) —
-          # "Timeout, server not responding". Semua langkah diulang sampai 3x;
+          # "Timeout, server not responding". Semua langkah diulang sampai 4x;
           # setup-vps.sh idempoten dan deploy.sh migrasinya additive, jadi aman.
           retry() {
-            for i in 1 2 3; do
+            for i in 1 2 3 4; do
               if "$@"; then return 0; fi
-              echo "percobaan $i gagal — mengulang dalam 20 detik..." >&2
-              sleep 20
+              echo "percobaan $i gagal — mengulang dalam 15 detik..." >&2
+              sleep 15
             done
-            echo "gagal setelah 3 percobaan" >&2
+            echo "gagal setelah 4 percobaan" >&2
             return 1
           }
 
           # Sinkronkan kode + binary. .env / .data / hasil build dipertahankan
           # di VPS (exclude juga melindungi dari --delete). public/uploads di
           # dua sisi adalah lokasi unggahan lama — jangan sampai terhapus.
-          retry rsync -rltDz --delete \
+          # apps/ + sisa struktur repo lama juga dilindungi: direktori tujuan
+          # dipakai bersama deploy lama, dan --delete sempat menghabiskan waktu
+          # mencoba menghapusnya ("cannot delete non-empty directory: apps/web")
+          # sampai koneksi SSH timeout. --timeout membatasi I/O macet.
+          retry rsync -rltDz --delete --timeout=120 \
             -e "sshpass -e ssh $SSH_OPTS" \
             --exclude='.git/' --exclude='node_modules/' --exclude='.svelte-kit/' \
             --exclude='.data/' --exclude='.env' --exclude='.env.*' \
             --exclude='web/build/' --exclude='api/api' --exclude='.DS_Store' \
             --exclude='tmp_*' --exclude='*.log' \
             --exclude='web/public/uploads/' --exclude='api/public/uploads/' \
+            --exclude='apps/' --exclude='packages/' --exclude='.next/' \
+            --exclude='context-graph-engine/' --exclude='REWRITE/' \
+            --exclude='turbo.json' --exclude='pnpm-lock.yaml' --exclude='pnpm-workspace.yaml' \
             ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
 
           # Seed gambar unggahan yang di-commit (api/.data/uploads, lihat
           # .gitignore) ke VPS: --ignore-existing tanpa --delete supaya hanya
           # menambah berkas yang hilang dan tidak pernah menimpa/menghapus
           # gambar hasil generate runtime di VPS.
-          retry rsync -rltDz --ignore-existing \
+          retry rsync -rltDz --ignore-existing --timeout=120 \
             -e "sshpass -e ssh $SSH_OPTS" \
             api/.data/uploads/ "$SSH_USER@$SSH_HOST:$APP_DIR/api/.data/uploads/"
 
