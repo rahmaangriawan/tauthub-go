@@ -236,7 +236,27 @@
 	let earningPage = $state(1);
 	let earningLimit = $state(10);
 	let limitDropdownOpen = $state(false);
+	let limitDropdownPlacement = $state<'down' | 'up'>('down');
 	let limitDropdownEl = $state<HTMLDivElement | null>(null);
+	let limitDropdownTrigger = $state<HTMLButtonElement | null>(null);
+
+	function updateDropdownPlacement() {
+		if (!limitDropdownTrigger) return;
+		const rect = limitDropdownTrigger.getBoundingClientRect();
+		const spaceBelow = window.innerHeight - rect.bottom;
+		const spaceAbove = rect.top;
+		// Tinggi menu ~125px + gap 8px; bila ruang di bawah sempit dan di atas lebih lega, buka ke atas
+		limitDropdownPlacement = spaceBelow < 135 && spaceAbove > spaceBelow ? 'up' : 'down';
+	}
+
+	function toggleLimitDropdown() {
+		if (!limitDropdownOpen) {
+			updateDropdownPlacement();
+			limitDropdownOpen = true;
+		} else {
+			limitDropdownOpen = false;
+		}
+	}
 
 	function onWindowClick(e: MouseEvent) {
 		if (limitDropdownOpen && limitDropdownEl && !limitDropdownEl.contains(e.target as Node)) {
@@ -248,6 +268,14 @@
 		if (e.key === 'Escape' && limitDropdownOpen) {
 			limitDropdownOpen = false;
 		}
+	}
+
+	function onWindowScroll() {
+		if (limitDropdownOpen) updateDropdownPlacement();
+	}
+
+	function onWindowResize() {
+		if (limitDropdownOpen) updateDropdownPlacement();
 	}
 
 	const allEarnings = $derived(wallet?.history ?? []);
@@ -268,7 +296,7 @@
 </script>
 
 	<PageTitle title="VIP Dashboard" />
-	<svelte:window onclick={onWindowClick} onkeydown={onWindowKeydown} />
+	<svelte:window onclick={onWindowClick} onkeydown={onWindowKeydown} onscroll={onWindowScroll} onresize={onWindowResize} />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
@@ -457,9 +485,10 @@
 							<span>{tr("Tampilkan:")}</span>
 							<div class="relative" bind:this={limitDropdownEl}>
 								<button
+									bind:this={limitDropdownTrigger}
 									type="button"
 									class="flex h-7 items-center justify-between gap-2.5 rounded-md border bg-card pl-2.5 pr-2.5 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-secondary focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-									onclick={() => (limitDropdownOpen = !limitDropdownOpen)}
+									onclick={toggleLimitDropdown}
 									aria-expanded={limitDropdownOpen}
 									aria-haspopup="listbox"
 									aria-label="Pilih jumlah baris per halaman"
@@ -473,7 +502,7 @@
 
 								{#if limitDropdownOpen}
 									<div
-										class="absolute right-0 top-full z-50 mt-1 min-w-[125px] overflow-hidden rounded-lg border bg-card p-1 shadow-md animate-in fade-in-0 zoom-in-95 duration-100"
+										class="absolute right-0 z-50 min-w-[125px] overflow-hidden rounded-lg border bg-card p-1 shadow-lg animate-in fade-in-0 zoom-in-95 duration-100 {limitDropdownPlacement === 'up' ? 'bottom-full mb-1 origin-bottom-right' : 'top-full mt-1 origin-top-right'}"
 										role="listbox"
 										aria-label="Pilihan jumlah baris per halaman"
 									>
