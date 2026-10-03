@@ -264,24 +264,31 @@ func (d *Deps) mpRecordDomainCheckFailure(ctx context.Context, mediaID string, b
 		health = "unreachable"
 	}
 	if revoked {
-		_ = d.exec(ctx, `
+		if err := d.exec(ctx, `
 			UPDATE media SET domain_verified = FALSE, domain_last_checked_at = NOW(), domain_check_fail_count = $1,
 			  domain_health = $2, domain_last_result = $3, domain_last_error = $4, domain_last_stage = $5,
 			  domain_last_trace = $6, domain_last_error_at = NOW(), updated_at = NOW()
 			WHERE id = $7`,
-			failCount, health, result, message, stage, mpJSONString(trace), mediaID)
+			failCount, health, result, message, stage, mpJSONString(trace), mediaID); err != nil {
+			// Jangan ditelan: kegagalan tulis di sini membuat last_checked_at tidak
+			// maju, sehingga sweep scheduler meng-enqueue ulang tiap siklus dan
+			// notifikasi admin ikut terulang.
+			d.logWarn("simpan diagnostik domain (revoked) gagal", mediaID, err)
+		}
 		if err := d.exec(ctx,
 			"INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id) VALUES (gen_random_uuid(), NULL, 'media.domain_revoked', 'media', $1)",
 			mediaID); err != nil {
 			d.logWarn("audit domain_revoked gagal", mediaID, err)
 		}
 	} else {
-		_ = d.exec(ctx, `
+		if err := d.exec(ctx, `
 			UPDATE media SET domain_last_checked_at = NOW(), domain_check_fail_count = $1,
 			  domain_health = $2, domain_last_result = $3, domain_last_error = $4, domain_last_stage = $5,
 			  domain_last_trace = $6, domain_last_error_at = NOW(), updated_at = NOW()
 			WHERE id = $7`,
-			failCount, health, result, message, stage, mpJSONString(trace), mediaID)
+			failCount, health, result, message, stage, mpJSONString(trace), mediaID); err != nil {
+			d.logWarn("simpan diagnostik domain gagal", mediaID, err)
+		}
 	}
 	payload := map[string]any{
 		"ok":         false,
@@ -303,12 +310,14 @@ func (d *Deps) mpRecordDomainCheckFailure(ctx context.Context, mediaID string, b
 // fail_count, domain_verified, dan domain_health tidak disentuh (WAF tidak
 // boleh mencabut verifikasi yang sudah ada).
 func (d *Deps) mpRecordDomainCheckNeutral(ctx context.Context, mediaID, result, message, stage string, trace []string) map[string]any {
-	_ = d.exec(ctx, `
+	if err := d.exec(ctx, `
 		UPDATE media SET domain_last_checked_at = NOW(), domain_last_result = $1,
 		  domain_last_error = $2, domain_last_stage = $3, domain_last_trace = $4,
 		  domain_last_error_at = NOW(), updated_at = NOW()
 		WHERE id = $5`,
-		result, message, stage, mpJSONString(trace), mediaID)
+		result, message, stage, mpJSONString(trace), mediaID); err != nil {
+		d.logWarn("simpan diagnostik domain (neutral) gagal", mediaID, err)
+	}
 	return map[string]any{
 		"ok":         false,
 		"status":     result,

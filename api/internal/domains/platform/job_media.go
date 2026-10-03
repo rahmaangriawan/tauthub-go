@@ -518,7 +518,7 @@ func (d *Deps) DomainVerifyJob(ctx context.Context, mediaID string) error {
 		failCount, _ := result["fail_count"].(int)
 		body := fmt.Sprintf("Situs %s tidak bisa diakses saat pengecekan otomatis (%dx gagal berturut-turut). Artikel yang tayang di media ini perlu ditinjau.", website, failCount)
 		link := "/admin/link-monitor"
-		d.notifyPlatformAdmins(ctx, "media.domain_down", "Domain mitra tidak terjangkau: "+label, body, &link)
+		d.notifyPlatformAdminsDomainDown(ctx, mediaID, "Domain mitra tidak terjangkau: "+label, body, &link)
 	}
 
 	// Mitra pemilik media diberi tahu setelah 3x gagal berturut-turut ATAU saat
@@ -532,6 +532,27 @@ func (d *Deps) DomainVerifyJob(ctx context.Context, mediaID string) error {
 		}
 	}
 	return nil
+}
+
+// notifyPlatformAdminsDomainDown: notifikasi admin "domain tidak terjangkau"
+// dengan dedupe per media (24 jam). Jaring pengaman: guard transisi di
+// DomainVerifyJob bergantung pada domain_health yang tersimpan — bila penulisan
+// diagnostik gagal, guard itu lolos tiap siklus scheduler dan notifikasi akan
+// terulang. Dedupe ini menahannya.
+func (d *Deps) notifyPlatformAdminsDomainDown(ctx context.Context, mediaID, title, body string, link *string) {
+	dedupeKey := "media.domain_down:" + mediaID
+	dup, err := d.queryRow(ctx,
+		"SELECT id FROM notifications WHERE dedupe_key = $1 AND created_at > NOW() - INTERVAL '24 hours' LIMIT 1", dedupeKey)
+	if err != nil || dup != nil {
+		return
+	}
+	if err := d.exec(ctx, `
+		INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key)
+		SELECT gen_random_uuid(), id, 'media.domain_down', $1, $2, $3, $4
+		FROM users WHERE role = 'admin' AND is_active = TRUE`,
+		title, body, link, dedupeKey); err != nil {
+		d.logWarn("notifikasi domain_down ke admin gagal", mediaID, err)
+	}
 }
 
 // notifyPartnerCrawlBlocked: notifikasi ke mitra pemilik media bila situsnya
