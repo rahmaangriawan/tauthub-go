@@ -200,11 +200,11 @@
 		{/if}
 
 		<!-- ── Saldo ── -->
-		<div class="mt-4 rounded-xl border p-4">
+		<div class="app-card mt-4 p-4">
 			<h2 class="text-sm font-semibold">{tr("Saldo")}</h2>
 			<div class="mt-3 grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
 				{#if showCpa}
-					<div class="relative overflow-hidden rounded-lg border px-3.5 py-3">
+					<div class="relative overflow-hidden rounded-lg border bg-card px-3.5 py-3">
 						<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--success);"></div>
 						<div class="flex min-h-4 items-center justify-between gap-2">
 							<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">CPA Balance</span>
@@ -226,7 +226,7 @@
 						</svg>
 					</div>
 				{/if}
-				<div class="relative overflow-hidden rounded-lg border px-3.5 py-3">
+				<div class="relative overflow-hidden rounded-lg border bg-card px-3.5 py-3">
 					<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--primary);"></div>
 					<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Komisi Transaksi')}</span>
 					<p class="mt-1 text-xl font-bold tabular-nums" style="color: var(--primary);">{idr(wallet?.transaction_commission ?? 0)}</p>
@@ -236,7 +236,7 @@
 						<path d={komisiPath.line} fill="none" stroke="var(--primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					</svg>
 				</div>
-				<div class="relative overflow-hidden rounded-lg border px-3.5 py-3">
+				<div class="relative overflow-hidden rounded-lg border bg-card px-3.5 py-3">
 					<div class="absolute inset-y-0 left-0 w-[3px]" style="background-color: var(--muted-foreground);"></div>
 					<span class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr("Total")}</span>
 					<p class="mt-1 text-xl font-bold tabular-nums">{idr(totalCpaPaid)}</p>
@@ -251,7 +251,7 @@
 
 		<!-- ── Performance + Statistik Affiliate ── -->
 		<div class="mt-4 grid gap-3 md:grid-cols-2">
-			<div class="overflow-hidden rounded-xl border">
+			<div class="app-card overflow-hidden">
 				<div class="border-b px-4 py-3"><h2 class="text-sm font-semibold">Performance</h2></div>
 				<div>
 					{#each performanceRows as row (row.label)}
@@ -264,7 +264,7 @@
 				</div>
 			</div>
 
-			<div class="overflow-hidden rounded-xl border">
+			<div class="app-card overflow-hidden">
 				<div class="border-b px-4 py-3"><h2 class="text-sm font-semibold">{tr('Statistik Affiliate')}</h2></div>
 				<div>
 					{#each affiliateRows as row (row.label)}
