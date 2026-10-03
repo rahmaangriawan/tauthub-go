@@ -111,7 +111,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		checksWG.Add(3)
 		go func() {
 			defer checksWG.Done()
-			aiOverview = d.runAIOverviewCheck(ctx, title, mediaType, content, text)
+			aiOverview = d.runAIOverviewCheck(ctx, title, mediaType, content, text, briefContext)
 		}()
 		go func() {
 			defer checksWG.Done()
@@ -235,7 +235,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		// menulis ulang artikel, nilai ULANG sekali — skor tersimpan adalah
 		// kualitas akhir (hijau bila revisi memperbaiki indikator lemah).
 		if (attribution == "ai_generated" || attribution == "ai_edited") && ai.AIOverviewRejected(aiOverview) && finalHTML != content {
-			rechecked := d.runAIOverviewCheck(ctx, title, mediaType, finalHTML, extractText(finalHTML))
+			rechecked := d.runAIOverviewCheck(ctx, title, mediaType, finalHTML, extractText(finalHTML), briefContext)
 			if rechecked != nil {
 				aiOverview = rechecked
 				checks["aiOverview"] = rechecked
@@ -279,24 +279,25 @@ func (d *Deps) aiOverviewSettings(ctx context.Context) ai.AIOverviewSettings {
 
 // runAIOverviewCheck: nilai kesiapan AI Overview (non-blocking). Bagian murni
 // (prompt + parsing + aturan gate) ada di internal/ai, sama dengan brandflow.
-func (d *Deps) runAIOverviewCheck(ctx context.Context, title, mediaType, contentHTML, text string) map[string]any {
+func (d *Deps) runAIOverviewCheck(ctx context.Context, title, mediaType, contentHTML, text, brief string) map[string]any {
 	checkedAt := nowISO()
+	briefAvailable := strings.TrimSpace(brief) != ""
 	st := d.aiOverviewSettings(ctx)
 	if !st.Enabled {
 		return ai.AIOverviewResult{
-			Status: "pending", CheckedAt: checkedAt,
+			Status: "pending", CheckedAt: checkedAt, BriefAvailable: briefAvailable,
 			Info: "Pemeriksaan AI Overview dinonaktifkan admin.",
 		}.JSON()
 	}
-	prompt := ai.AIOverviewUserPrompt(title, mediaType, contentHTML, countWords(text), st)
+	prompt := ai.AIOverviewUserPrompt(title, mediaType, contentHTML, countWords(text), st, brief)
 	result, err := d.callAgentLLM(ctx, "gatekeeper", prompt, true, ai.AIOverviewSystemPrompt, 0)
 	if err != nil {
 		return ai.AIOverviewResult{
-			Status: "review_required", CheckedAt: checkedAt,
+			Status: "review_required", CheckedAt: checkedAt, BriefAvailable: briefAvailable,
 			Error: "AI Overview tidak dapat menilai artikel: " + truncateString(err.Error(), 200),
 		}.JSON()
 	}
-	return ai.EvaluateAIOverview(result.Content, st, checkedAt).JSON()
+	return ai.EvaluateAIOverview(result.Content, st, checkedAt, briefAvailable).JSON()
 }
 
 // updateGatekeeperAuditChecks: perbarui checks baris audit yang baru dibuat

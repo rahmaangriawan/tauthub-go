@@ -29,6 +29,8 @@
 		verdict?: 'lulus' | 'ditolak';
 		indicators?: Array<{ key: string; title: string; score: number; summary: string }>;
 		revisionNotes?: string[];
+		unsourcedEntities?: string[];
+		briefAvailable?: boolean;
 		info?: string;
 	};
 	type Checks = { aiOverview: Check; contentSafety: Check; linkHealth: Check; brandVoice: Check };
@@ -190,8 +192,9 @@
 				if (check.info) return check.info;
 				if (check.error) return check.error;
 				const skor = `${check.totalScore ?? '?'}/${check.maxScore ?? 40}`;
-				if (check.status === 'passed') return `Layak AI Overview · skor ${skor}`;
-				if (check.status === 'review_required') return `Skor ${skor} — perlu revisi`;
+				const tanpaDasar = check.unsourcedEntities?.length ? ` · ${check.unsourcedEntities.length} klaim tanpa dasar` : '';
+				if (check.status === 'passed') return `Layak AI Overview · skor ${skor}${tanpaDasar}`;
+				if (check.status === 'review_required') return `Skor ${skor} — perlu revisi${tanpaDasar}`;
 				return tr('Menunggu pemindaian…');
 			}
 			case 'contentSafety':
@@ -261,7 +264,7 @@
 				: key === 'brandVoice'
 					? Boolean(check.notes?.length)
 					: key === 'aiOverview'
-						? Boolean(check.indicators?.length || check.revisionNotes?.length || check.error)
+						? Boolean(check.indicators?.length || check.revisionNotes?.length || check.unsourcedEntities?.length || check.error)
 						: false;
 
 	/** Skor indikator AI Overview → tone badge (hijau bila >= 7). */
@@ -386,6 +389,19 @@
 															</li>
 														{/each}
 													</ul>
+												{/if}
+												{#if check.unsourcedEntities?.length}
+													<div>
+														<p class="font-semibold" style="color: var(--warning);">{tr('Klaim tanpa dasar di bahan (indikasi karangan model)')}</p>
+														<ul class="list-disc space-y-1 pl-4" style="color: var(--warning);">
+															{#each check.unsourcedEntities as ent (ent)}<li>{ent}</li>{/each}
+														</ul>
+													</div>
+												{/if}
+												{#if check.briefAvailable === false}
+													<p class="text-muted-foreground">
+														{tr('Bahan/brief kosong saat pengecekan — klaim spesifik di artikel tidak bisa diverifikasi ke sumber.')}
+													</p>
 												{/if}
 												{#if check.revisionNotes?.length}
 													<div>

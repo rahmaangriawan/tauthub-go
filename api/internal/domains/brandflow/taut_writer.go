@@ -418,6 +418,13 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	promptLines = append(promptLines, structureRules...)
 	promptLines = append(promptLines, aiOverviewRules...)
 	promptLines = append(promptLines, tidyHTMLBlock)
+	// Guard anti-halusinasi: tanpa bahan rujukan, model cenderung mengarang nama
+	// tokoh/perusahaan/angka agar artikel terasa spesifik (dan justru dipuji
+	// "kepadatan entitas" oleh QC). Larang eksplisit saat bahan kosong.
+	if strings.TrimSpace(briefContext) == "" {
+		promptLines = append(promptLines,
+			"BAHAN KOSONG (PENTING): tidak ada brief/bahan rujukan untuk kampanye ini. JANGAN menyebut nama orang, nama perusahaan/lembaga, studi kasus, angka statistik, persentase, harga, tanggal, atau kutipan narasumber yang spesifik — tulis penjelasan generik tanpa mengarang fakta. Bila butuh contoh, pakai kalimat umum (mis. \"umumnya\", \"banyak pelaku industri\") TANPA angka atau nama.")
+	}
 	promptLines = append(promptLines,
 		languageBlock,
 		identity.String(),

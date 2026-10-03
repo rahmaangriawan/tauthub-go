@@ -30,11 +30,14 @@ Nilai 4 indikator, masing-masing skor 1-10 (1 = tidak ada sama sekali, 10 = semp
 3. eeat — Sinyal E-E-A-T & Orisinalitas: ada atribusi/kutipan/rujukan otoritatif atau data yang bisa diverifikasi; klaim objektif dan tidak hiperbolik; ada nilai tambah (information gain), bukan sekadar merangkum informasi umum.
 4. niat_pengguna — Penyelarasan Niat Pengguna: menjawab pertanyaan turunan yang lazim (People Also Ask); kesimpulan memberi rekomendasi spesifik/bersyarat, bukan penutup basa-basi.
 
+VERIFIKASI KE BAHAN (WAJIB): bandingkan setiap nama tokoh, nama perusahaan/lembaga, studi kasus, kutipan, dan angka spesifik di artikel dengan BAHAN/BRIEF yang diberikan. Bila ada yang TIDAK ada di bahan, itu indikasi klaim tanpa dasar: turunkan skor indikator entitas dan E-E-A-T, lalu masukkan temuannya ke catatan_revisi dan ke "entitas_tanpa_dasar". Bila bahan kosong, tandai klaim spesifik apa pun sebagai tanpa dasar.
+
 Aturan keluaran:
 - ringkasan: maksimal 2 kalimat bahasa Indonesia per indikator.
 - catatan_revisi: maksimal 3 poin perbaikan SANGAT spesifik (sebut bagian/paragrafnya), HANYA bila artikel TIDAK LULUS menurut aturan kelulusan di input pengguna (total di bawah ambang ATAU ada indikator di bawah skor minimum). Bila lulus, kirim array kosong.
+- entitas_tanpa_dasar: maksimal 3 nama/angka/studi kasus di artikel yang tidak ditemukan di bahan (kosongkan bila semua berdasar bahan).
 - Balas HANYA JSON valid tanpa markdown/penjelasan lain:
-{"indikator":[{"kunci":"struktur","skor":1-10,"ringkasan":"..."},{"kunci":"entitas","skor":1-10,"ringkasan":"..."},{"kunci":"eeat","skor":1-10,"ringkasan":"..."},{"kunci":"niat_pengguna","skor":1-10,"ringkasan":"..."}],"catatan_revisi":[]}`
+{"indikator":[{"kunci":"struktur","skor":1-10,"ringkasan":"..."},{"kunci":"entitas","skor":1-10,"ringkasan":"..."},{"kunci":"eeat","skor":1-10,"ringkasan":"..."},{"kunci":"niat_pengguna","skor":1-10,"ringkasan":"..."}],"catatan_revisi":[],"entitas_tanpa_dasar":[]}`
 
 // AIOverviewSettings: toggle + ambang (dari taut_agent_configs.settings.aiOverview).
 type AIOverviewSettings struct {
@@ -84,7 +87,7 @@ func AIOverviewSettingsFromJSON(raw any) AIOverviewSettings {
 
 // AIOverviewUserPrompt: prompt penilaian (judul + tipe media + jumlah kata + HTML).
 // Tipe media menentukan konteks: mainstream tanpa heading tidak dipenalti.
-func AIOverviewUserPrompt(title, mediaType, contentHTML string, wordCount int, st AIOverviewSettings) string {
+func AIOverviewUserPrompt(title, mediaType, contentHTML string, wordCount int, st AIOverviewSettings, brief string) string {
 	typeName := "mainstream (berita, tanpa heading)"
 	if mediaType == "blogger" {
 		typeName = "blogger (artikel evergreen, memakai heading)"
@@ -97,11 +100,18 @@ func AIOverviewUserPrompt(title, mediaType, contentHTML string, wordCount int, s
 	if len(html) > max {
 		html = html[:max]
 	}
+	briefText := strings.TrimSpace(brief)
+	if briefText == "" {
+		briefText = "(KOSONG — tidak ada brief/bahan rujukan untuk generate artikel ini)"
+	} else if len([]rune(briefText)) > 4000 {
+		briefText = string([]rune(briefText)[:4000])
+	}
 	return strings.Join([]string{
 		"Judul: " + title,
 		"Tipe media: " + typeName,
 		"Jumlah kata: " + fmt.Sprintf("%d", wordCount),
 		fmt.Sprintf("Aturan kelulusan: total minimal %d dari %d DAN setiap indikator minimal %d. Bila tidak memenuhi, sertakan catatan_revisi (maks 3) yang sangat spesifik.", st.PassTotal, AIOverviewMaxScore, st.PassMinIndicator),
+		"BAHAN/BRIEF (rujukan fakta yang boleh dipakai artikel):\n" + briefText,
 		"Isi (HTML): " + html,
 	}, "\n")
 }
@@ -129,9 +139,13 @@ type AIOverviewResult struct {
 	Total      int
 	Indicators []AIOverviewIndicator
 	Notes      []string
-	CheckedAt  string
-	Error      string
-	Info       string
+	// UnsourcedEntities: nama/angka/studi kasus di artikel yang tidak ada di bahan
+	// (indikasi klaim tanpa dasar). BriefAvailable=false berarti bahan kosong.
+	UnsourcedEntities []string
+	BriefAvailable    bool
+	CheckedAt         string
+	Error             string
+	Info              string
 }
 
 // JSON: bentuk yang disimpan di taut_gatekeeper_audits.checks.aiOverview.
@@ -140,6 +154,7 @@ func (r AIOverviewResult) JSON() map[string]any {
 		"status": r.Status, "maxScore": AIOverviewMaxScore,
 		"totalScore": r.Total, "indicators": r.Indicators,
 		"revisionNotes": r.Notes, "checkedAt": r.CheckedAt,
+		"unsourcedEntities": r.UnsourcedEntities, "briefAvailable": r.BriefAvailable,
 	}
 	if r.Verdict != "" {
 		out["verdict"] = r.Verdict
@@ -156,10 +171,10 @@ func (r AIOverviewResult) JSON() map[string]any {
 // EvaluateAIOverview: parse balasan JSON LLM + terapkan aturan gate di Go.
 // LULUS = total >= PassTotal DAN tidak ada indikator < PassMinIndicator.
 // Error/parse gagal → review_required + error (non-blocking).
-func EvaluateAIOverview(llmContent string, st AIOverviewSettings, checkedAt string) AIOverviewResult {
+func EvaluateAIOverview(llmContent string, st AIOverviewSettings, checkedAt string, briefAvailable bool) AIOverviewResult {
 	parsed := firstJSONObject(llmContent)
 	if parsed == nil {
-		return AIOverviewResult{Status: "review_required", CheckedAt: checkedAt, Error: "Respons AI Overview tidak valid."}
+		return AIOverviewResult{Status: "review_required", CheckedAt: checkedAt, Error: "Respons AI Overview tidak valid.", BriefAvailable: briefAvailable, UnsourcedEntities: []string{}}
 	}
 	scores := map[string]AIOverviewIndicator{}
 	if arr, isArr := parsed["indikator"].([]any); isArr {
@@ -176,7 +191,7 @@ func EvaluateAIOverview(llmContent string, st AIOverviewSettings, checkedAt stri
 		}
 	}
 	if len(scores) < len(aiOverviewCanonical) {
-		return AIOverviewResult{Status: "review_required", CheckedAt: checkedAt, Error: "AI Overview tidak mengembalikan 4 indikator lengkap."}
+		return AIOverviewResult{Status: "review_required", CheckedAt: checkedAt, Error: "AI Overview tidak mengembalikan 4 indikator lengkap.", BriefAvailable: briefAvailable, UnsourcedEntities: []string{}}
 	}
 
 	indicators := make([]AIOverviewIndicator, 0, len(aiOverviewCanonical))
@@ -194,6 +209,26 @@ func EvaluateAIOverview(llmContent string, st AIOverviewSettings, checkedAt stri
 	res := AIOverviewResult{
 		Total: total, Indicators: indicators, CheckedAt: checkedAt,
 		Status: "review_required", Verdict: "ditolak", Notes: []string{},
+		BriefAvailable: briefAvailable, UnsourcedEntities: []string{},
+	}
+	if arr, isArr := parsed["entitas_tanpa_dasar"].([]any); isArr {
+		for _, item := range arr {
+			s, isStr := item.(string)
+			if !isStr {
+				s = fmt.Sprint(item)
+			}
+			trimmed := strings.TrimSpace(s)
+			if trimmed == "" {
+				continue
+			}
+			if len([]rune(trimmed)) > 160 {
+				trimmed = string([]rune(trimmed)[:160])
+			}
+			res.UnsourcedEntities = append(res.UnsourcedEntities, trimmed)
+			if len(res.UnsourcedEntities) >= 3 {
+				break
+			}
+		}
 	}
 	if passed {
 		res.Status, res.Verdict = "passed", "lulus"
