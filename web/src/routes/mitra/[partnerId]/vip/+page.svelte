@@ -161,6 +161,26 @@
 		{ label: tr('Ditolak'), value: String(domains?.stats?.rejected ?? 0), icon: CircleX, color: 'var(--destructive)' },
 		{ label: 'Estimasi CPA', value: idr((domains?.stats?.approved ?? 0) * (vip?.cpaRate ?? 15000)), icon: Coins, color: 'var(--primary)' }
 	]);
+
+	// Paginasi & limitasi Riwayat Earning
+	let earningPage = $state(1);
+	let earningLimit = $state(10);
+
+	const allEarnings = $derived(wallet?.history ?? []);
+	const totalEarnings = $derived(allEarnings.length);
+	const earningTotalPages = $derived(Math.max(1, Math.ceil(totalEarnings / Math.max(1, earningLimit))));
+	const pagedEarnings = $derived.by(() => {
+		const start = (earningPage - 1) * earningLimit;
+		return allEarnings.slice(start, start + earningLimit);
+	});
+	const earningStart = $derived(totalEarnings === 0 ? 0 : (earningPage - 1) * earningLimit + 1);
+	const earningEnd = $derived(Math.min(earningPage * earningLimit, totalEarnings));
+
+	$effect(() => {
+		if (earningPage > earningTotalPages) {
+			earningPage = earningTotalPages;
+		}
+	});
 </script>
 
 <PageTitle title="VIP Dashboard" />
@@ -334,40 +354,91 @@
 			{/if}
 		</div>
 
-		<!-- ── Riwayat Earning ── -->
-		<div class="app-card mt-3 overflow-x-auto">
-			<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-				<h2 class="text-sm font-semibold">{tr("Riwayat Earning")}</h2>
-				<span class="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground" style="background-color: var(--secondary);">{wallet?.history?.length ?? 0} transaksi</span>
+			<!-- ── Riwayat Earning ── -->
+			<div class="app-card mt-3 overflow-hidden">
+				<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+					<div class="flex items-center gap-2">
+						<h2 class="text-sm font-semibold">{tr("Riwayat Earning")}</h2>
+						<span class="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground" style="background-color: var(--secondary);">{totalEarnings} transaksi</span>
+					</div>
+					{#if totalEarnings > 0}
+						<div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+							<span>{tr("Tampilkan:")}</span>
+							<select
+								class="app-input !h-7 !w-auto !py-0 !px-2 !text-xs"
+								value={earningLimit}
+								onchange={(e) => {
+									earningLimit = Number((e.currentTarget as HTMLSelectElement).value);
+									earningPage = 1;
+								}}
+							>
+								<option value={5}>5 per hal</option>
+								<option value={10}>10 per hal</option>
+								<option value={20}>20 per hal</option>
+								<option value={50}>50 per hal</option>
+							</select>
+						</div>
+					{/if}
+				</div>
+				{#if !wallet || totalEarnings === 0}
+					<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada riwayat earning.")}</p>
+				{:else}
+					<div class="overflow-x-auto">
+						<table class="w-full text-sm">
+							<thead>
+								<tr class="text-left text-xs text-muted-foreground">
+									<th class="px-4 py-2.5 font-medium">{tr('Jenis')}</th>
+									<th class="px-4 py-2.5 font-medium">{tr("Jumlah")}</th>
+									<th class="px-4 py-2.5 font-medium">Status</th>
+									<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each pagedEarnings as h (h.id)}
+									<tr class="border-t">
+										<td class="px-4 py-2.5">
+											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: {h.kind === 'cpa' ? 'var(--success)' : h.kind === 'transaction_commission' ? 'var(--primary)' : h.kind === 'referral' ? 'var(--accent-foreground)' : 'var(--warning)'};">{KIND_LABEL[h.kind] ?? h.kind}</span>
+										</td>
+										<td class="px-4 py-2.5 font-medium tabular-nums">{idr(h.amount)}</td>
+										<td class="px-4 py-2.5">
+											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: {statusColor(h.status)};">{STATUS_LABEL[h.status] ?? h.status}</span>
+										</td>
+										<td class="px-4 py-2.5 text-xs text-muted-foreground">{dt(h.created_at)}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+
+					{#if totalEarnings > 0}
+						<div class="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-2.5 text-xs text-muted-foreground">
+							<p>
+								{tr("Menampilkan")} <span class="font-semibold text-foreground">{earningStart}–{earningEnd}</span> {tr("dari")} <span class="font-semibold text-foreground">{totalEarnings}</span> transaksi
+							</p>
+							<div class="flex items-center gap-2">
+								<button
+									class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+									type="button"
+									disabled={earningPage <= 1}
+									onclick={() => (earningPage = Math.max(1, earningPage - 1))}
+								>
+									{tr("Sebelumnya")}
+								</button>
+								<span class="px-1 text-xs tabular-nums">
+									{tr("Halaman")} <strong class="text-foreground">{earningPage}</strong> / {earningTotalPages}
+								</span>
+								<button
+									class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+									type="button"
+									disabled={earningPage >= earningTotalPages}
+									onclick={() => (earningPage = Math.min(earningTotalPages, earningPage + 1))}
+								>
+									{tr("Berikutnya")}
+								</button>
+							</div>
+						</div>
+					{/if}
+				{/if}
 			</div>
-			{#if !wallet || wallet.history.length === 0}
-				<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada riwayat earning.")}</p>
-			{:else}
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="text-left text-xs text-muted-foreground">
-							<th class="px-4 py-2.5 font-medium">{tr('Jenis')}</th>
-							<th class="px-4 py-2.5 font-medium">{tr("Jumlah")}</th>
-							<th class="px-4 py-2.5 font-medium">Status</th>
-							<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each wallet.history as h (h.id)}
-							<tr class="border-t">
-								<td class="px-4 py-2.5">
-									<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: {h.kind === 'cpa' ? 'var(--success)' : h.kind === 'transaction_commission' ? 'var(--primary)' : h.kind === 'referral' ? 'var(--accent-foreground)' : 'var(--warning)'};">{KIND_LABEL[h.kind] ?? h.kind}</span>
-								</td>
-								<td class="px-4 py-2.5 font-medium tabular-nums">{idr(h.amount)}</td>
-								<td class="px-4 py-2.5">
-									<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: {statusColor(h.status)};">{STATUS_LABEL[h.status] ?? h.status}</span>
-								</td>
-								<td class="px-4 py-2.5 text-xs text-muted-foreground">{dt(h.created_at)}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			{/if}
-		</div>
 	{/if}
 </section>

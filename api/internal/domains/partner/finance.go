@@ -512,7 +512,7 @@ func (d *Deps) VipWallet(w http.ResponseWriter, r *http.Request) {
 		SELECT id, kind, amount, client_price, status, created_at, source_referred_domain_id
 		FROM partner_earnings
 		WHERE partner_id = $1 AND kind IN ('cpa','transaction_commission','referral','publication')
-		ORDER BY created_at DESC LIMIT 50`, partner.ID)
+		ORDER BY created_at DESC LIMIT 200`, partner.ID)
 	items := make([]map[string]any, 0, len(history))
 	for _, h := range history {
 		items = append(items, map[string]any{
