@@ -98,7 +98,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	/**
 	 * Menu aktif hanya bila path persis sama atau berada DI BAWAH href-nya.
 	 * Pencocokan per segmen, bukan substring: dengan `pathname.includes`,
-	 * `/vip-dashboard` ikut menyalakan menu `/vip`.
+	 * `/vip/extra` ikut menyalakan menu `/vip-extra` yang berbeda.
 	 */
 	const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 	const groups = $derived([

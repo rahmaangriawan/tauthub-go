@@ -221,6 +221,19 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, errUnprocessable(ptZStringTooSmall(8)))
 		return
 	}
+	// Harga kredit per gambar (tab "Atur Harga"). Opsional; null/tidak dikirim
+	// berarti pertahankan nilai lama.
+	var imageCreditCost int
+	setImageCreditCost := false
+	if raw, present := body["image_credit_cost"]; present && raw != nil {
+		f, isNum := raw.(float64)
+		if !isNum || f < 0 || f > 100000 || f != float64(int(f)) {
+			writeErr(w, d, errUnprocessable("Harga kredit gambar harus bilangan bulat 0 sampai 100000."))
+			return
+		}
+		imageCreditCost = int(f)
+		setImageCreditCost = true
+	}
 
 	base := aiNormalizeURL(baseRaw)
 	if base == nil {
@@ -295,9 +308,13 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, d, sErr)
 			return
 		}
+		imageCostVal := any(ai.DefaultImageCreditCost)
+		if setImageCreditCost {
+			imageCostVal = imageCreditCost
+		}
 		if err := d.exec(ctx,
-			"INSERT INTO platform_ai_configuration (id, base_url, sealed_api_key, api_key_hint, default_model, economy_model, premium_model, image_base_url, image_sealed_api_key, image_api_key_hint, image_model, updated_by) VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
-			*base, sealed, hint, dm, econ, prem, imageBaseVal, imageKeySealed, imageKeyHint, imageModelVal, user.ID); err != nil {
+			"INSERT INTO platform_ai_configuration (id, base_url, sealed_api_key, api_key_hint, default_model, economy_model, premium_model, image_base_url, image_sealed_api_key, image_api_key_hint, image_model, image_credit_cost, updated_by) VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+			*base, sealed, hint, dm, econ, prem, imageBaseVal, imageKeySealed, imageKeyHint, imageModelVal, imageCostVal, user.ID); err != nil {
 			writeErr(w, d, err)
 			return
 		}
@@ -319,6 +336,11 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 			query += ", image_sealed_api_key = $" + strconv.Itoa(next) + ", image_api_key_hint = $" + strconv.Itoa(next+1)
 			params = append(params, imageKeySealed, imageKeyHint)
 			next += 2
+		}
+		if setImageCreditCost {
+			query += ", image_credit_cost = $" + strconv.Itoa(next)
+			params = append(params, imageCreditCost)
+			next++
 		}
 		query += " WHERE id = 'default'"
 		if err := d.exec(ctx, query, params...); err != nil {

@@ -123,10 +123,18 @@ func fixedImageEndpoint(base string) bool {
 // DefaultImageCreditCost: tarif kredit default per gambar AI (2 TC ≈ Rp 2.000).
 const DefaultImageCreditCost = 2
 
-// ImageCreditCost: tarif per gambar, override via AI_IMAGE_CREDIT_COST.
-// Satu sumber dipakai handler generate (pemotongan) dan respons konfigurasi
-// admin (tampilan biaya) supaya angka di UI tidak menyimpang dari tagihan.
-func ImageCreditCost() int {
+// ImageCreditCost: tarif per gambar dari runtime (kolom
+// platform_ai_configuration.image_credit_cost, diatur admin lewat tab "Atur
+// Harga"). rt nil → fallback env/lokal supaya pemanggil lama tetap aman.
+func ImageCreditCost(rt *AIRuntime) int {
+	if rt != nil {
+		return rt.ImageCreditCost
+	}
+	return ImageCreditCostEnv()
+}
+
+// ImageCreditCostEnv: tarif dari env AI_IMAGE_CREDIT_COST, fallback default.
+func ImageCreditCostEnv() int {
 	if v := envStr("AI_IMAGE_CREDIT_COST"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			return n

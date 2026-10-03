@@ -264,7 +264,7 @@ func aiOrEmpty(v, fallback string) string {
 
 // aiConfigJSON: port configResponse di ai/configuration/route.ts.
 func aiConfigJSON(stored rowMap, rt *ai.AIRuntime) map[string]any {
-	imgCost := ai.ImageCreditCost()
+	imgCost := ai.ImageCreditCost(rt)
 	if stored != nil {
 		dm := aiOrEmpty(stored.strOr("default_model", ""), rt.DefaultModel)
 		imgBase := aiOrEmpty(stored.strOr("image_base_url", ""), rt.ImageBaseURL)

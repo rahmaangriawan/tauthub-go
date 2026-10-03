@@ -26,7 +26,11 @@ import (
 // mengembalikan tarif terkonfigurasi (tidak lagi 0 saat provider gambar belum
 // siap) supaya label biaya di UI konsisten dengan tagihan sebenarnya.
 func (d *Deps) effectiveImageCost(ctx context.Context) int {
-	return ai.ImageCreditCost()
+	rt, err := ai.LoadAIRuntime(ctx, d.Pool)
+	if err != nil || rt == nil {
+		return ai.ImageCreditCostEnv()
+	}
+	return ai.ImageCreditCost(rt)
 }
 
 // imageScopeKey: kunci isolasi stabil (tanpa perlu join berlapis).

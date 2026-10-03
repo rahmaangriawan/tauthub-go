@@ -128,6 +128,9 @@ type AIRuntime struct {
 	ImageAPIKey     string
 	ImageModel      string
 	ImageAPIKeyHint string
+	// ImageCreditCost: harga kredit per gambar (TC), diatur admin di halaman
+	// AI Gambar > Atur Harga. Sumber: kolom platform_ai_configuration.
+	ImageCreditCost int
 }
 
 type cfgCacheEntry struct {
@@ -160,16 +163,18 @@ func LoadAIRuntime(ctx context.Context, pool *pgxpool.Pool) (*AIRuntime, error) 
 	runtimeMu.Unlock()
 
 	rt := &AIRuntime{
-		EmbeddingModel: envStr("AI_EMBEDDING_MODEL"),
-		TimeoutSeconds: envIntOr("AI_REQUEST_TIMEOUT_SECONDS", 120),
-		MaxRetries:     envIntOr("AI_MAX_RETRIES", 2),
+		EmbeddingModel:  envStr("AI_EMBEDDING_MODEL"),
+		TimeoutSeconds:  envIntOr("AI_REQUEST_TIMEOUT_SECONDS", 120),
+		MaxRetries:      envIntOr("AI_MAX_RETRIES", 2),
+		ImageCreditCost: ImageCreditCostEnv(),
 	}
 
 	var baseURL, sealedKey, keyHint, defaultModel, economyModel, premiumModel *string
 	var imageBaseURL, imageSealedKey, imageKeyHint, imageModel *string
+	var imageCreditCost *int
 	err := pool.QueryRow(ctx,
-		"SELECT base_url, sealed_api_key, api_key_hint, default_model, economy_model, premium_model, image_base_url, image_sealed_api_key, image_api_key_hint, image_model FROM platform_ai_configuration WHERE id = 'default' LIMIT 1",
-	).Scan(&baseURL, &sealedKey, &keyHint, &defaultModel, &economyModel, &premiumModel, &imageBaseURL, &imageSealedKey, &imageKeyHint, &imageModel)
+		"SELECT base_url, sealed_api_key, api_key_hint, default_model, economy_model, premium_model, image_base_url, image_sealed_api_key, image_api_key_hint, image_model, image_credit_cost FROM platform_ai_configuration WHERE id = 'default' LIMIT 1",
+	).Scan(&baseURL, &sealedKey, &keyHint, &defaultModel, &economyModel, &premiumModel, &imageBaseURL, &imageSealedKey, &imageKeyHint, &imageModel, &imageCreditCost)
 
 	envDefault := envStr("AI_DEFAULT_MODEL")
 	if envDefault == "" {
@@ -264,6 +269,9 @@ func LoadAIRuntime(ctx context.Context, pool *pgxpool.Pool) (*AIRuntime, error) 
 		rt.ImageAPIKey = imgKey
 		rt.ImageModel = imgModel
 		rt.ImageAPIKeyHint = imgHint
+		if imageCreditCost != nil && *imageCreditCost >= 0 {
+			rt.ImageCreditCost = *imageCreditCost
+		}
 	} else {
 		hasEnv := envStr("AI_BASE_URL") != "" || envStr("AI_API_KEY") != ""
 		source := "none"

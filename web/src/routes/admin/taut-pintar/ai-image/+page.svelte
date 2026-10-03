@@ -52,7 +52,7 @@
 		events: LogEvent[];
 	};
 
-	let tab = $state<'config' | 'logs'>('config');
+	let tab = $state<'config' | 'logs' | 'price'>('config');
 
 	let loading = $state(true);
 	let busy = $state(false);
@@ -64,6 +64,8 @@
 	let formModel = $state('');
 	let formApiKey = $state('');
 	let apiKeyTouched = $state(false);
+	// Tab "Atur Harga": kredit per gambar (integer >= 0).
+	let formImageCost = $state('2');
 
 	// Nilai chat yang tersimpan — dikirim balik saat PUT supaya tidak tertimpa.
 	let chat = $state({ base_url: '', default_model: '', economy_model: '', premium_model: '' });
@@ -125,6 +127,7 @@
 			formModel = data.image_model ?? '';
 			formApiKey = '';
 			apiKeyTouched = false;
+			formImageCost = String(data.image_credit_cost ?? 2);
 		} catch {
 			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		}
@@ -150,7 +153,7 @@
 		}
 	}
 
-	function selectTab(next: 'config' | 'logs') {
+	function selectTab(next: 'config' | 'logs' | 'price') {
 		tab = next;
 		if (next === 'logs' && !logsLoaded) void loadLogs();
 	}
@@ -166,6 +169,11 @@
 			error = tr('Konfigurasikan AI chat dulu (Base URL + Model) di menu AI Gateway sebelum mengatur gambar.');
 			return;
 		}
+		const costNum = Number(formImageCost);
+		if (!Number.isInteger(costNum) || costNum < 0 || costNum > 100000) {
+			error = 'Harga kredit gambar harus bilangan bulat 0 sampai 100000.';
+			return;
+		}
 		busy = true;
 		notice = '';
 		error = '';
@@ -179,6 +187,7 @@
 					premium_model: chat.premium_model || undefined,
 					image_base_url: formBaseUrl.trim(),
 					image_model: formModel.trim(),
+					image_credit_cost: costNum,
 					image_api_key: apiKeyTouched ? formApiKey.trim() : undefined
 				})
 			});
@@ -297,6 +306,13 @@
 			class:app-btn-soft={tab !== 'logs'}
 			onclick={() => selectTab('logs')}>{tr('Log & Monitoring')}</button
 		>
+		<button
+			type="button"
+			class="app-btn !min-h-8 !rounded-b-none !px-3.5 !text-sm"
+			class:app-btn-primary={tab === 'price'}
+			class:app-btn-soft={tab !== 'price'}
+			onclick={() => selectTab('price')}>Atur Harga</button
+		>
 	</div>
 
 	<div class="pt-4">
@@ -410,7 +426,7 @@
 					</form>
 				</div>
 			{/if}
-		{:else}
+		{:else if tab === 'logs'}
 			<div class="mb-3 flex flex-wrap items-end gap-3">
 				<label class="block">
 					<span class="text-xs text-muted-foreground">Status</span>
@@ -509,6 +525,47 @@
 				empty={tr('Belum ada log generate gambar pada rentang ini.')}
 				minWidth="1100px"
 			/>
+		{:else}
+			{#if !loading}
+				<div class="app-card mt-4 max-w-xl p-4">
+					<div class="flex flex-wrap items-start justify-between gap-3">
+						<div>
+							<h2 class="text-base font-semibold">Atur Harga</h2>
+							<p class="mt-1 max-w-md text-sm text-muted-foreground">
+								Kredit yang dipotong dari saldo brand klien setiap kali generate satu gambar AI (cover maupun gambar per H2).
+							</p>
+						</div>
+						<Badge tone="accent" label="{formImageCost || '0'} Kredit / gambar" />
+					</div>
+
+					{#if error}<p class="mt-3 text-sm" style="color: var(--destructive);">{error}</p>{/if}
+					{#if notice}<p class="mt-3 text-sm" style="color: var(--success);">{notice}</p>{/if}
+
+					<form class="mt-4" onsubmit={save}>
+						<label class="block max-w-xs">
+							<span class="text-sm font-medium">Kredit per gambar</span>
+							<input
+								class="app-input mt-1 w-full"
+								type="number"
+								min="0"
+								max="100000"
+								step="1"
+								value={formImageCost}
+								oninput={(e) => (formImageCost = (e.currentTarget as HTMLInputElement).value)}
+							/>
+						</label>
+						<p class="mt-2 max-w-md text-xs text-muted-foreground">
+							Isi 0 untuk gratis. Berlaku untuk semua brand: dipakai saat menagih generate maupun saat menampilkan estimasi biaya ke klien. Perubahan langsung aktif setelah disimpan.
+						</p>
+						<div class="mt-4 flex items-center gap-2">
+							<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Simpan harga')}</button>
+							{#if config}<span class="text-xs text-muted-foreground">Harga tersimpan saat ini: {config.image_credit_cost} kredit</span>{/if}
+						</div>
+					</form>
+				</div>
+			{:else}
+				<Feedback {loading} {error} loadingText="Memuat konfigurasi AI gambar…" />
+			{/if}
 		{/if}
 	</div>
 </section>
