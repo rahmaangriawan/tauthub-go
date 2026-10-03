@@ -496,7 +496,7 @@ func (d *Deps) CrawlTargetSyncJob(ctx context.Context, mediaID string) error {
 // saat health bertransisi ke unreachable (parity verifyDomainOwnership).
 func (d *Deps) DomainVerifyJob(ctx context.Context, mediaID string) error {
 	before, err := d.queryRow(ctx, `
-		SELECT id, name, website_url, domain_verify_token, domain_verified, domain_check_fail_count, domain_health
+		SELECT id, name, website_url, domain_verify_token, domain_verified, domain_check_fail_count, domain_health, partner_id
 		FROM media WHERE id = $1 LIMIT 1`, mediaID)
 	if err != nil {
 		return err
@@ -520,7 +520,54 @@ func (d *Deps) DomainVerifyJob(ctx context.Context, mediaID string) error {
 		link := "/admin/link-monitor"
 		d.notifyPlatformAdmins(ctx, "media.domain_down", "Domain mitra tidak terjangkau: "+label, body, &link)
 	}
+
+	// Mitra pemilik media diberi tahu setelah 3x gagal berturut-turut ATAU saat
+	// diblokir WAF (403) — supaya mengizinkan akses crawler Tauthub atau
+	// memasang verifikasi meta tag / TXT. Idempoten per media (30 hari).
+	if status, _ := result["status"].(string); status == "unreachable" || status == "blocked_by_waf" {
+		failCount, _ := result["fail_count"].(int)
+		if failCount >= 3 || status == "blocked_by_waf" {
+			d.notifyPartnerCrawlBlocked(ctx, before.strOr("partner_id", ""), mediaID,
+				before.strOr("name", ""), before.strOr("website_url", ""), status, failCount)
+		}
+	}
 	return nil
+}
+
+// notifyPartnerCrawlBlocked: notifikasi ke mitra pemilik media bila situsnya
+// tidak bisa di-crawl — gagal >= 3x berturut-turut ATAU diblokir WAF — beserta
+// dua jalan keluar: izinkan akses crawler di WAF, atau verifikasi domain lewat
+// meta tag / TXT record. Idempoten: maksimal satu per media per 30 hari.
+func (d *Deps) notifyPartnerCrawlBlocked(ctx context.Context, partnerID, mediaID, mediaName, website, status string, failCount int) {
+	if strings.TrimSpace(partnerID) == "" {
+		return
+	}
+	detail := fmt.Sprintf("Pengecekan otomatis sudah gagal %dx berturut-turut", failCount)
+	if status == "blocked_by_waf" {
+		detail = "Situs Anda hidup, tetapi WAF/firewall menolak crawler Tauthub (HTTP 403)"
+	}
+	title := "Situs " + mediaName + " tidak bisa diakses crawler Tauthub"
+	body := detail + " pada " + website + ". Agar artikel dan pemeriksaan berjalan normal, mohon: " +
+		"(1) izinkan akses crawler Tauthub di pengaturan WAF/Cloudflare Anda, atau " +
+		"(2) buka halaman Media lalu verifikasi kepemilikan domain lewat meta tag atau TXT record _tauthub-verify, kemudian klik Verifikasi Sekarang."
+	link := "/mitra"
+	dedupeKey := "media.crawl_blocked:" + mediaID
+	// Paritas notifyPartnerReminder: cek duplikat eksplisit, bukan ON CONFLICT.
+	dup, dErr := d.queryRow(ctx, `
+		SELECT n.id FROM notifications n
+		JOIN partners p ON p.user_id = n.user_id
+		WHERE p.id = $1 AND n.dedupe_key = $2 AND n.created_at > NOW() - INTERVAL '30 days'
+		LIMIT 1`, partnerID, dedupeKey)
+	if dErr != nil || dup != nil {
+		return
+	}
+	if err := d.exec(ctx, `
+		INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key)
+		SELECT gen_random_uuid(), user_id, 'media.crawl_blocked', $1, $2, $3, $4
+		FROM partners WHERE id = $5 AND user_id IS NOT NULL`,
+		title, body, link, dedupeKey, partnerID); err != nil {
+		d.logWarn("notifikasi crawl_blocked ke mitra gagal", mediaID, err)
+	}
 }
 
 // mjVerifyDomainOwnership: alur verifikasi yang sama dengan
