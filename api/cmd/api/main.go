@@ -838,6 +838,7 @@ func run() error {
 			authed.Get("/platform/gatekeeper/stats", platformDeps.GatekeeperStats)
 			authed.Get("/platform/domain-diagnostics", platformDeps.DomainDiagnosticsList)
 			authed.Post("/platform/domain-diagnostics/recheck", platformDeps.DomainDiagnosticsRecheck)
+			authed.Post("/platform/domain-diagnostics/recheck-all", platformDeps.DomainDiagnosticsRecheckAll)
 			authed.Get("/platform/link-monitor", platformDeps.LinkMonitorGlobal)
 			authed.Post("/platform/link-monitor/check", platformDeps.LinkMonitorCheck)
 			authed.Post("/platform/link-monitor/replace", platformDeps.LinkMonitorReplace)

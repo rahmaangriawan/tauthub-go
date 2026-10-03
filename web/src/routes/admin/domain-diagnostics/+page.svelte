@@ -34,6 +34,7 @@
 
 	type Summary = {
 		unreachable: number;
+		blocked_by_waf: number;
 		token_not_found: number;
 		token_mismatch: number;
 		verified: number;
@@ -46,6 +47,7 @@
 		{ label: string; tone: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' }
 	> = {
 		verified: { label: 'Terverifikasi', tone: 'success' },
+		blocked_by_waf: { label: 'Diblokir WAF mitra', tone: 'warning' },
 		token_not_found: { label: 'Kode tidak ditemukan', tone: 'warning' },
 		token_mismatch: { label: 'Kode lama terpasang', tone: 'warning' },
 		unreachable: { label: 'Situs tak terjangkau', tone: 'danger' }
@@ -68,6 +70,14 @@
 		http: {
 			label: 'Server menolak',
 			hint: 'Tersambung, tapi server mitra membalas error. Sering 403 dari Cloudflare/WAF yang memblokir akses dari IP server.'
+		},
+		waf: {
+			label: 'Diblokir WAF mitra',
+			hint: 'Situs hidup, tapi WAF/Cloudflare mitra menolak akses dari IP server (403). Tidak dihitung gagal — verifikasi bisa lewat DNS TXT.'
+		},
+		txt: {
+			label: 'Kode via DNS TXT',
+			hint: 'Token ditemukan di TXT record _tauthub-verify.<domain>, bukan di meta tag halaman.'
 		},
 		bot_challenge: {
 			label: tr('Halaman challenge bot'),
@@ -144,6 +154,29 @@
 			await load();
 		} finally {
 			busyId = null;
+		}
+	}
+
+	/** Recheck massal: semua media ber-website masuk antrean domain_verify. */
+	let recheckingAll = $state(false);
+
+	async function recheckAll() {
+		if (recheckingAll) return;
+		if (!window.confirm('Cek ulang SEMUA media ber-website sekarang? Pemeriksaan berjalan lewat antrean latar belakang dan hasilnya muncul bertahap saat halaman disegarkan.')) return;
+		recheckingAll = true;
+		error = '';
+		notice = '';
+		try {
+			const res = await apiRequest('/v1/platform/domain-diagnostics/recheck-all', { method: 'POST' });
+			if (!res.ok) {
+				error = await readApiError(res, 'Permintaan gagal.');
+				return;
+			}
+			const data = (await res.json()) as { enqueued?: number };
+			notice = `${data.enqueued ?? 0} media masuk antrean pemeriksaan. Segarkan halaman sesekali untuk melihat hasil terbaru.`;
+			await load();
+		} finally {
+			recheckingAll = false;
 		}
 	}
 
@@ -227,11 +260,14 @@
 		<button class="app-btn app-btn-soft" onclick={load} disabled={loading}>
 			<RefreshCw size={15} /> Segarkan
 		</button>
+		<button class="app-btn app-btn-primary" onclick={() => void recheckAll()} disabled={recheckingAll}>
+			<Globe size={15} /> {recheckingAll ? 'Memasukkan antrean…' : 'Recheck Semua'}
+		</button>
 	</PageHeader>
 
 	{#if summary}
 		<div class="mt-4 flex flex-wrap gap-3">
-			{#each [['unreachable', 'Situs tak terjangkau'], ['token_mismatch', 'Kode lama terpasang'], ['token_not_found', 'Kode tidak ditemukan'], ['never_checked', tr('Belum pernah dicek')]] as [key, label] (key)}
+			{#each [['blocked_by_waf', 'Diblokir WAF mitra'], ['unreachable', 'Situs tak terjangkau'], ['token_mismatch', 'Kode lama terpasang'], ['token_not_found', 'Kode tidak ditemukan'], ['never_checked', tr('Belum pernah dicek')]] as [key, label] (key)}
 				<div class="app-card min-w-[190px] p-3">
 					<p class="text-xs text-muted-foreground">{label}</p>
 					<p class="text-2xl font-bold">{summary[key as keyof Summary]}</p>
@@ -254,6 +290,7 @@
 				}}
 				options={[
 					{ value: 'all', label: 'Perlu perhatian' },
+					{ value: 'blocked_by_waf', label: 'Diblokir WAF mitra' },
 					{ value: 'unreachable', label: 'Situs tak terjangkau' },
 					{ value: 'token_mismatch', label: 'Kode lama terpasang' },
 					{ value: 'token_not_found', label: 'Kode tidak ditemukan' },

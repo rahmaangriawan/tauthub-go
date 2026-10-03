@@ -7,17 +7,15 @@ package platform
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
 // mpDomainResults: sebab kegagalan verifikasi domain yang bisa difilter admin.
-var mpDomainResults = []string{"verified", "token_not_found", "token_mismatch", "unreachable"}
+var mpDomainResults = []string{"verified", "blocked_by_waf", "token_not_found", "token_mismatch", "unreachable"}
 
 // ---------- GET /v1/platform/domain-diagnostics ----------
 
@@ -37,6 +35,7 @@ func (d *Deps) DomainDiagnosticsList(w http.ResponseWriter, r *http.Request) {
 	if view == "summary" {
 		row, err := d.queryRow(r.Context(), `
 			SELECT COUNT(*) FILTER (WHERE domain_last_result = 'unreachable')::int AS unreachable,
+			       COUNT(*) FILTER (WHERE domain_last_result = 'blocked_by_waf')::int AS blocked_by_waf,
 			       COUNT(*) FILTER (WHERE domain_last_result = 'token_not_found')::int AS token_not_found,
 			       COUNT(*) FILTER (WHERE domain_last_result = 'token_mismatch')::int AS token_mismatch,
 			       COUNT(*) FILTER (WHERE domain_last_result = 'verified')::int AS verified,
@@ -51,12 +50,13 @@ func (d *Deps) DomainDiagnosticsList(w http.ResponseWriter, r *http.Request) {
 		if row != nil {
 			pr := ptRow(ptNormalizeMap(row))
 			out["unreachable"] = pr.intOr("unreachable", 0)
+			out["blocked_by_waf"] = pr.intOr("blocked_by_waf", 0)
 			out["token_not_found"] = pr.intOr("token_not_found", 0)
 			out["token_mismatch"] = pr.intOr("token_mismatch", 0)
 			out["verified"] = pr.intOr("verified", 0)
 			out["never_checked"] = pr.intOr("never_checked", 0)
 		} else {
-			for _, key := range []string{"unreachable", "token_not_found", "token_mismatch", "verified", "never_checked"} {
+			for _, key := range []string{"unreachable", "blocked_by_waf", "token_not_found", "token_mismatch", "verified", "never_checked"} {
 				out[key] = 0
 			}
 		}
@@ -188,8 +188,9 @@ func (d *Deps) mpCheckRecheckRate(r *http.Request, userID string) error {
 	return nil
 }
 
-// mpVerifyDomainOwnership: port verifyDomainOwnership admin — ambil halaman
-// media dan cari token, lalu catat seluruh tahap di kolom domain_*.
+// mpVerifyDomainOwnership: port verifyDomainOwnership admin — periksa halaman
+// media + token verifikasi lewat security.VerifyDomainOwnership (klasifikasi
+// WAF + fallback DNS TXT terpusat), lalu catat seluruh tahap di kolom domain_*.
 func (d *Deps) mpVerifyDomainOwnership(r *http.Request, mediaID string) map[string]any {
 	ctx := r.Context()
 	row, err := d.queryRow(ctx, `
@@ -207,37 +208,15 @@ func (d *Deps) mpVerifyDomainOwnership(r *http.Request, mediaID string) map[stri
 	token := media.strOr("domain_verify_token", "")
 	target := strings.Replace(mpEnsureScheme(website), "http://", "https://", 1)
 
-	trace := []string{"GET " + target}
-	resp, reqErr := security.Get(ctx, target, map[string]string{
-		"user-agent":      mpBrowserUA,
-		"accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-		"accept-language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
-	}, 30*time.Second)
-	if reqErr != nil {
-		stage := "fetch"
-		code := mpErrorCode(reqErr)
-		if code == "ENOTFOUND" || code == "EAI_AGAIN" {
-			stage = "dns"
-		}
-		return d.mpRecordDomainCheckFailure(ctx, mediaID, media,
-			"unreachable", ptTruncate(reqErr.Error(), 300), stage, append(trace, "error: "+code+": "+ptTruncate(reqErr.Error(), 200)))
-	}
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 500_000))
-	resp.Body.Close()
-	status := resp.StatusCode
-	trace = append(trace, "HTTP "+ptItoa(status))
-	if status < 200 || status >= 300 {
-		return d.mpRecordDomainCheckFailure(ctx, mediaID, media,
-			"unreachable", "HTTP "+ptItoa(status)+" "+strings.TrimSpace(resp.Status), "http", trace)
-	}
-	lowerBody := strings.ToLower(string(body))
-	if token != "" && strings.Contains(lowerBody, strings.ToLower(token)) {
+	out := security.VerifyDomainOwnership(ctx, target, token)
+	switch out.Result {
+	case "verified":
 		if err := d.exec(ctx, `
 			UPDATE media SET domain_verified = TRUE, domain_verified_at = NOW(), domain_last_checked_at = NOW(),
 			  domain_check_fail_count = 0, domain_health = 'live', domain_last_result = 'verified',
-			  domain_last_error = NULL, domain_last_stage = 'ok', domain_last_trace = $1, domain_last_error_at = NULL, updated_at = NOW()
-			WHERE id = $2`, mpJSONString(trace), mediaID); err != nil {
-			return map[string]any{"ok": false, "status": "error", "stage": "update", "trace": trace}
+			  domain_last_error = NULL, domain_last_stage = $1, domain_last_trace = $2, domain_last_error_at = NULL, updated_at = NOW()
+			WHERE id = $3`, out.Stage, mpJSONString(out.Trace), mediaID); err != nil {
+			return map[string]any{"ok": false, "status": "error", "stage": "update", "trace": out.Trace}
 		}
 		if err := d.exec(ctx,
 			"INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id) VALUES (gen_random_uuid(), NULL, 'media.domain_verified', 'media', $1)",
@@ -249,22 +228,22 @@ func (d *Deps) mpVerifyDomainOwnership(r *http.Request, mediaID string) map[stri
 			"UPDATE referred_domains SET status = 'approved', rejection_reason = NULL, updated_at = NOW() WHERE media_id = $1 AND status = 'pending'", mediaID)
 		return map[string]any{
 			"ok": true, "status": "verified", "checked_at": d.isoNow(),
-			"fail_count": 0, "stage": "ok", "trace": trace,
+			"fail_count": 0, "stage": out.Stage, "trace": out.Trace,
 		}
+	case "blocked_by_waf":
+		return d.mpRecordDomainCheckNeutral(ctx, mediaID, out.Result, out.Message, out.Stage, out.Trace)
+	case "unreachable":
+		return d.mpRecordDomainCheckFailure(ctx, mediaID, media,
+			"unreachable", ptTruncate(out.Message, 300), out.Stage, out.Trace)
+	case "token_missing":
+		result := d.mpRecordDomainCheckFailure(ctx, mediaID, media,
+			"token_missing", out.Message, out.Stage, out.Trace)
+		result["found_token"] = ptTruncate(out.FoundToken, 80)
+		return result
+	default:
+		return d.mpRecordDomainCheckFailure(ctx, mediaID, media,
+			out.Result, out.Message, out.Stage, out.Trace)
 	}
-	if token != "" {
-		if idx := strings.Index(lowerBody, "domain-verify"); idx >= 0 {
-			payload := string(body)
-			start := idx
-			end := ptMinInt(idx+80, len(payload))
-			result := d.mpRecordDomainCheckFailure(ctx, mediaID, media,
-				"token_missing", "token_mismatch", "token", append(trace, "token ditemukan tapi tidak cocok"))
-			result["found_token"] = ptTruncate(payload[start:end], 80)
-			return result
-		}
-	}
-	return d.mpRecordDomainCheckFailure(ctx, mediaID, media,
-		"token_not_found", "Token verifikasi tidak ditemukan di halaman.", "token", trace)
 }
 
 func ptMinInt(a, b int) int {
@@ -317,6 +296,63 @@ func (d *Deps) mpRecordDomainCheckFailure(ctx context.Context, mediaID string, b
 		payload["revoked"] = true
 	}
 	return payload
+}
+
+// mpRecordDomainCheckNeutral: catat hasil pemeriksaan TANPA penalti — dipakai
+// untuk blocked_by_waf: situs hidup, WAF mitra hanya menolak IP datacenter.
+// fail_count, domain_verified, dan domain_health tidak disentuh (WAF tidak
+// boleh mencabut verifikasi yang sudah ada).
+func (d *Deps) mpRecordDomainCheckNeutral(ctx context.Context, mediaID, result, message, stage string, trace []string) map[string]any {
+	_ = d.exec(ctx, `
+		UPDATE media SET domain_last_checked_at = NOW(), domain_last_result = $1,
+		  domain_last_error = $2, domain_last_stage = $3, domain_last_trace = $4,
+		  domain_last_error_at = NOW(), updated_at = NOW()
+		WHERE id = $5`,
+		result, message, stage, mpJSONString(trace), mediaID)
+	return map[string]any{
+		"ok":         false,
+		"status":     result,
+		"checked_at": d.isoNow(),
+		"stage":      stage,
+		"trace":      trace,
+		"reason":     message,
+		"neutral":    true,
+	}
+}
+
+// DomainDiagnosticsRecheckAll: POST /v1/platform/domain-diagnostics/recheck-all
+// — masukkan SEMUA media ber-website ke antrean domain_verify (bukan hanya yang
+// tersapu jadwal 7 hari). Untuk membersihkan catatan error era lama sekaligus:
+// job memakai checker terbaru (klasifikasi WAF + DNS TXT). Aman diulang.
+func (d *Deps) DomainDiagnosticsRecheckAll(w http.ResponseWriter, r *http.Request) {
+	user, _, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	if err := auth.CheckWriteRate(r.Context(), d.Pool, "domain-recheck-all:"+user.ID, 2); err != nil {
+		writeErr(w, d, ptErrTooMany("Recheck semua baru saja dijalankan. Tunggu satu menit lalu coba lagi."))
+		return
+	}
+	rows, err := d.queryRows(r.Context(),
+		"SELECT id FROM media WHERE website_url IS NOT NULL AND TRIM(website_url) <> ''")
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	enqueued := 0
+	for _, row := range rows {
+		mediaID := row.strOr("id", "")
+		if mediaID == "" {
+			continue
+		}
+		// Paritas enqueueJobAt (brandflow): INSERT jobs status pending.
+		if _, jErr := d.Pool.Exec(r.Context(),
+			"INSERT INTO jobs (id, kind, payload, status, attempts, max_attempts, run_at) VALUES (gen_random_uuid(), 'domain_verify', $1::jsonb, 'pending', 0, 2, NOW())",
+			`{"mediaId":"`+mediaID+`"}`); jErr == nil {
+			enqueued++
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"enqueued": enqueued})
 }
 
 // mpErrorCode: kode errno jaringan dari error (parity cause.code di Node).

@@ -62,9 +62,10 @@ func isUnsafeHost(host string) bool {
 	return false
 }
 
-// verifyDomainOwnership: port verifyDomainOwnership — ambil halaman media dan
-// cari token verifikasi. Semua tahap dicatat di kolom domain_* supaya mitra
-// bisa melihat penyebab kegagalan (parity alat diagnosa app lama).
+// verifyDomainOwnership: port verifyDomainOwnership — periksa halaman media
+// + token verifikasi lewat security.VerifyDomainOwnership (klasifikasi WAF +
+// fallback DNS TXT terpusat). Semua tahap dicatat di kolom domain_* supaya
+// mitra bisa melihat penyebab kegagalan (parity alat diagnosa app lama).
 func (d *Deps) verifyDomainOwnership(r *http.Request, mediaID string) map[string]any {
 	ctx := r.Context()
 	row, err := d.queryRow(ctx, `
@@ -81,37 +82,15 @@ func (d *Deps) verifyDomainOwnership(r *http.Request, mediaID string) map[string
 	token := row.strOr("domain_verify_token", "")
 	target := strings.Replace(ensureScheme(website), "http://", "https://", 1)
 
-	trace := []string{"GET " + target}
-	headers := map[string]string{
-		"user-agent":      browserUA,
-		"accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-		"accept-language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
-	}
-	resp, err := security.Get(ctx, target, headers, 30*time.Second)
-	if err != nil {
-		code := errorCodeOf(err)
-		stage := "fetch"
-		if code == "ENOTFOUND" || code == "EAI_AGAIN" {
-			stage = "dns"
-		}
-		return d.recordDomainCheckFailure(ctx, mediaID, row,
-			"unreachable", truncateRunes(err.Error(), 300), stage, append(trace, "error: "+errorCodeOr(err)))
-	}
-	body, _ := readBodyLimited(resp, 500_000)
-	status := resp.StatusCode
-	trace = append(trace, "HTTP "+itoa(status))
-	if status < 200 || status >= 300 {
-		return d.recordDomainCheckFailure(ctx, mediaID, row,
-			"unreachable", "HTTP "+itoa(status)+" "+strings.TrimSpace(resp.Status), "http", trace)
-	}
-	lowerBody := strings.ToLower(body)
-	if token != "" && strings.Contains(lowerBody, strings.ToLower(token)) {
+	out := security.VerifyDomainOwnership(ctx, target, token)
+	switch out.Result {
+	case "verified":
 		if err := d.exec(ctx, `
 			UPDATE media SET domain_verified = TRUE, domain_verified_at = NOW(), domain_last_checked_at = NOW(),
 			  domain_check_fail_count = 0, domain_health = 'live', domain_last_result = 'verified',
-			  domain_last_error = NULL, domain_last_stage = 'ok', domain_last_trace = $1, domain_last_error_at = NULL, updated_at = NOW()
-			WHERE id = $2`, marshalJSONArr(trace), mediaID); err != nil {
-			return map[string]any{"ok": false, "status": "error", "stage": "update", "trace": trace}
+			  domain_last_error = NULL, domain_last_stage = $1, domain_last_trace = $2, domain_last_error_at = NULL, updated_at = NOW()
+			WHERE id = $3`, out.Stage, marshalJSONArr(out.Trace), mediaID); err != nil {
+			return map[string]any{"ok": false, "status": "error", "stage": "update", "trace": out.Trace}
 		}
 		if err := d.exec(ctx,
 			"INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id) VALUES (gen_random_uuid(), NULL, 'media.domain_verified', 'media', $1)",
@@ -121,23 +100,43 @@ func (d *Deps) verifyDomainOwnership(r *http.Request, mediaID string) map[string
 		d.approveReferredDomains(ctx, mediaID)
 		return map[string]any{
 			"ok": true, "status": "verified", "checked_at": isoMilli(time.Now()),
-			"fail_count": 0, "stage": "ok", "trace": trace,
+			"fail_count": 0, "stage": out.Stage, "trace": out.Trace,
 		}
+	case "blocked_by_waf":
+		return d.recordDomainCheckNeutral(ctx, mediaID, out.Result, out.Message, out.Stage, out.Trace)
+	case "unreachable":
+		return d.recordDomainCheckFailure(ctx, mediaID, row,
+			"unreachable", truncateRunes(out.Message, 300), out.Stage, out.Trace)
+	case "token_missing":
+		result := d.recordDomainCheckFailure(ctx, mediaID, row,
+			"token_missing", out.Message, out.Stage, out.Trace)
+		result["found_token"] = truncateRunes(out.FoundToken, 80)
+		return result
+	default:
+		return d.recordDomainCheckFailure(ctx, mediaID, row,
+			out.Result, out.Message, out.Stage, out.Trace)
 	}
-	if token != "" {
-		foundIndex := -1
-		if idx := strings.Index(lowerBody, "domain-verify"); idx >= 0 {
-			foundIndex = idx
-		}
-		if foundIndex >= 0 {
-			result := d.recordDomainCheckFailure(ctx, mediaID, row,
-				"token_missing", "token_mismatch", "token", append(trace, "token ditemukan tapi tidak cocok"))
-			result["found_token"] = truncateRunes(body[foundIndex:minInt(foundIndex+80, len(body))], 80)
-			return result
-		}
+}
+
+// recordDomainCheckNeutral: catat hasil pemeriksaan TANPA penalti — untuk
+// blocked_by_waf: situs hidup, WAF mitra hanya menolak IP datacenter kami.
+// fail_count, domain_verified, dan domain_health tidak disentuh.
+func (d *Deps) recordDomainCheckNeutral(ctx context.Context, mediaID, result, message, stage string, trace []string) map[string]any {
+	_ = d.exec(ctx, `
+		UPDATE media SET domain_last_checked_at = NOW(), domain_last_result = $1,
+		  domain_last_error = $2, domain_last_stage = $3, domain_last_trace = $4,
+		  domain_last_error_at = NOW(), updated_at = NOW()
+		WHERE id = $5`,
+		result, message, stage, marshalJSONArr(trace), mediaID)
+	return map[string]any{
+		"ok":      false,
+		"status":  result,
+		"checked_at": isoMilli(time.Now()),
+		"stage":   stage,
+		"trace":   trace,
+		"reason":  message,
+		"neutral": true,
 	}
-	return d.recordDomainCheckFailure(ctx, mediaID, row,
-		"token_not_found", "Token verifikasi tidak ditemukan di halaman.", "token", trace)
 }
 
 func minInt(a, b int) int {

@@ -1384,6 +1384,12 @@
 					<Copy size={13} /> {domCopied === 'token' ? tr('Tersalin') : tr('Salin token')}
 				</button>
 			</div>
+			<div class="mt-3 rounded-lg border p-3 text-xs" style="border-color: var(--border);">
+				<p class="font-medium">{tr('Alternatif: verifikasi lewat DNS TXT')}</p>
+				<p class="mt-1 text-muted-foreground">{tr('Kalau sulit mengubah kode situs (atau situs diblokir WAF), tambahkan TXT record berikut di DNS domain utama tanpa www:')}</p>
+				<pre class="mt-2 overflow-x-auto rounded-md p-2 text-[11px]" style="background: var(--secondary);"><code>{`_tauthub-verify   TXT   "${domToken}"`}</code></pre>
+				<p class="mt-1 text-muted-foreground">{tr('Perubahan DNS bisa perlu waktu sampai 24 jam sebelum terbaca sistem.')}</p>
+			</div>
 			{#if domTarget.domain_verified}
 				<p class="mt-3 text-sm" style="color: var(--success);">{tr('Domain sudah terverifikasi.')}</p>
 			{:else}

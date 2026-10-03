@@ -523,8 +523,9 @@ func (d *Deps) DomainVerifyJob(ctx context.Context, mediaID string) error {
 	return nil
 }
 
-// mjVerifyDomainOwnership: alur fetch + verifikasi token yang sama dengan
-// mpVerifyDomainOwnership, tetapi berbasis context (dipakai job, tanpa request).
+// mjVerifyDomainOwnership: alur verifikasi yang sama dengan
+// mpVerifyDomainOwnership — klasifikasi + fallback DNS TXT terpusat di
+// security.VerifyDomainOwnership (dipakai job, tanpa request).
 func (d *Deps) mjVerifyDomainOwnership(ctx context.Context, mediaID string, before ptRow) map[string]any {
 	website := strings.TrimSpace(before.strOr("website_url", ""))
 	if website == "" {
@@ -536,38 +537,15 @@ func (d *Deps) mjVerifyDomainOwnership(ctx context.Context, mediaID string, befo
 	// mitra mengalihkan HTTP ke HTTPS sendiri.
 	target := strings.Replace(mpEnsureScheme(website), "http://", "https://", 1)
 
-	trace := []string{"GET " + target}
-	resp, reqErr := security.Get(ctx, target, map[string]string{
-		"user-agent":      mpBrowserUA,
-		"accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-		"accept-language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
-	}, 30*time.Second)
-	if reqErr != nil {
-		stage := "fetch"
-		code := mpErrorCode(reqErr)
-		if code == "ENOTFOUND" || code == "EAI_AGAIN" {
-			stage = "dns"
-		}
-		return d.mpRecordDomainCheckFailure(ctx, mediaID, before,
-			"unreachable", ptTruncate(reqErr.Error(), 300), stage, append(trace, "error: "+code+": "+ptTruncate(reqErr.Error(), 200)))
-	}
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 500_000))
-	resp.Body.Close()
-	status := resp.StatusCode
-	trace = append(trace, "HTTP "+ptItoa(status))
-	if status < 200 || status >= 300 {
-		return d.mpRecordDomainCheckFailure(ctx, mediaID, before,
-			"unreachable", "HTTP "+ptItoa(status)+" "+strings.TrimSpace(resp.Status), "http", trace)
-	}
-	lowerBody := strings.ToLower(string(body))
-	// Token hex case-sensitive: tanpa toLowerCase — format-agnostic via includes.
-	if token != "" && strings.Contains(lowerBody, strings.ToLower(token)) {
+	out := security.VerifyDomainOwnership(ctx, target, token)
+	switch out.Result {
+	case "verified":
 		if err := d.exec(ctx, `
 			UPDATE media SET domain_verified = TRUE, domain_verified_at = NOW(), domain_last_checked_at = NOW(),
 			  domain_check_fail_count = 0, domain_health = 'live', domain_last_result = 'verified',
-			  domain_last_error = NULL, domain_last_stage = 'ok', domain_last_trace = $1, domain_last_error_at = NULL, updated_at = NOW()
-			WHERE id = $2`, mpJSONString(trace), mediaID); err != nil {
-			return map[string]any{"ok": false, "status": "error", "stage": "update", "trace": trace}
+			  domain_last_error = NULL, domain_last_stage = $1, domain_last_trace = $2, domain_last_error_at = NULL, updated_at = NOW()
+			WHERE id = $3`, out.Stage, mpJSONString(out.Trace), mediaID); err != nil {
+			return map[string]any{"ok": false, "status": "error", "stage": "update", "trace": out.Trace}
 		}
 		if err := d.exec(ctx,
 			"INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id) VALUES (gen_random_uuid(), NULL, 'media.domain_verified', 'media', $1)",
@@ -584,22 +562,22 @@ func (d *Deps) mjVerifyDomainOwnership(ctx context.Context, mediaID string, befo
 		}
 		return map[string]any{
 			"ok": true, "status": "verified", "checked_at": d.isoNow(),
-			"fail_count": 0, "stage": "ok", "trace": trace,
+			"fail_count": 0, "stage": out.Stage, "trace": out.Trace,
 		}
+	case "blocked_by_waf":
+		return d.mpRecordDomainCheckNeutral(ctx, mediaID, out.Result, out.Message, out.Stage, out.Trace)
+	case "unreachable":
+		return d.mpRecordDomainCheckFailure(ctx, mediaID, before,
+			"unreachable", ptTruncate(out.Message, 300), out.Stage, out.Trace)
+	case "token_missing":
+		result := d.mpRecordDomainCheckFailure(ctx, mediaID, before,
+			"token_missing", out.Message, out.Stage, out.Trace)
+		result["found_token"] = ptTruncate(out.FoundToken, 80)
+		return result
+	default:
+		return d.mpRecordDomainCheckFailure(ctx, mediaID, before,
+			out.Result, out.Message, out.Stage, out.Trace)
 	}
-	if token != "" {
-		if idx := strings.Index(lowerBody, "domain-verify"); idx >= 0 {
-			payload := string(body)
-			start := idx
-			end := ptMinInt(idx+80, len(payload))
-			result := d.mpRecordDomainCheckFailure(ctx, mediaID, before,
-				"token_missing", "token_mismatch", "token", append(trace, "token ditemukan tapi tidak cocok"))
-			result["found_token"] = ptTruncate(payload[start:end], 80)
-			return result
-		}
-	}
-	return d.mpRecordDomainCheckFailure(ctx, mediaID, before,
-		"token_not_found", "Token verifikasi tidak ditemukan di halaman.", "token", trace)
 }
 
 // ---------- registrasi ----------
