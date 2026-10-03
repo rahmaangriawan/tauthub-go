@@ -339,6 +339,9 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, briefCont
 			}
 		}
 	}
+	// H1 dilarang di isi artikel (judul ada di field judul) — hasil tulisan
+	// ulang model yang memakai H1 ikut diturunkan; tanpa H1 tidak berubah.
+	finalHTML = demoteH1ToH2(finalHTML)
 	if !allowLink {
 		if url := campaign.strOr("primary_url", ""); url != "" {
 			finalHTML = stripLinksTo(finalHTML, url)

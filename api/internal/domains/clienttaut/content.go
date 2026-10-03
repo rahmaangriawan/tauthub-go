@@ -170,6 +170,21 @@ func demoteHeadings(html string) string {
 	return reH1234Close.ReplaceAllString(out, "</p>")
 }
 
+// demoteH1ToH2: H1 dilarang di isi artikel (judul hidup di field judul
+// terpisah); H1 yang lolos dari model/manual diturunkan deterministik jadi H2.
+var (
+	reH1OpenTag  = regexp.MustCompile(`(?i)<h1\b[^>]*>`)
+	reH1CloseTag = regexp.MustCompile(`(?i)</h1\s*>`)
+)
+
+func demoteH1ToH2(html string) string {
+	if html == "" || !strings.Contains(strings.ToLower(html), "<h1") {
+		return html
+	}
+	out := reH1OpenTag.ReplaceAllString(html, "<h2>")
+	return reH1CloseTag.ReplaceAllString(out, "</h2>")
+}
+
 // normalizeHeadings: port normalizeHeadings — blok <p>/<div> yang jelas judul
 // dinaikkan jadi <h2>, sisa markdown ##/###/#### jadi heading. Idempoten.
 func normalizeHeadings(html string) string {
@@ -363,6 +378,12 @@ func transformSegments(segments []headingSegment) string {
 				level := len(sub[2])
 				return "<h" + itoa(level) + ">" + sub[3] + "</h" + itoa(level) + ">"
 			}))
+			continue
+		}
+		// H1 dilarang di isi artikel (judul hidup di field judul) → diturunkan.
+		// Lewati s.raw (blok utuh), bukan s.inner — inner bisa kosong.
+		if s.tag == "h1" {
+			out.WriteString(demoteH1ToH2(s.raw))
 			continue
 		}
 		if s.tag == "p" || s.tag == "div" {

@@ -230,6 +230,10 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			}
 		}
 
+		// H1 dilarang di isi artikel (judul ada di field judul) — hasil tulisan
+		// ulang model yang memakai H1 ikut diturunkan; tanpa H1 tidak berubah.
+		finalHTML = demoteH1ToH2(finalHTML)
+
 		// Deterministik: media tidak izinkan → pastikan tak ada link tersisa.
 		if !allowLink {
 			finalHTML = stripHyperlinks(finalHTML, linkURL)

@@ -122,6 +122,21 @@ func demoteHeadingBlocks(html string) string {
 	return reH1234Close.ReplaceAllString(out, "</p>")
 }
 
+// demoteH1ToH2: H1 dilarang di isi artikel (judul hidup di field judul
+// terpisah); H1 yang lolos dari model/manual diturunkan deterministik jadi H2.
+var (
+	reH1OpenTag  = regexp.MustCompile(`(?i)<h1\b[^>]*>`)
+	reH1CloseTag = regexp.MustCompile(`(?i)</h1\s*>`)
+)
+
+func demoteH1ToH2(html string) string {
+	if html == "" || !strings.Contains(strings.ToLower(html), "<h1") {
+		return html
+	}
+	out := reH1OpenTag.ReplaceAllString(html, "<h2>")
+	return reH1CloseTag.ReplaceAllString(out, "</h2>")
+}
+
 // normalizeHeadingBlocks: naikkan blok judul sederhana jadi <h2> untuk blogger
 // (port normalizeHeadings, versi ringkas deterministik: paragraf pendek tanpa
 // titik akhir yang diapit baris kosong → heading).

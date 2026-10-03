@@ -1645,9 +1645,10 @@ func numOrNil(row bsRow, key string) any {
 // sanitizeArticleHTMLForStore: filter iframe lama + netralisasi konstruk
 // berbahaya sebelum HTML manual disimpan (lihat security.SanitizeArticleHTML).
 // Artikel normal tidak berubah; hanya konstruk berbahaya yang dibuang.
+// H1 di dalam isi diturunkan jadi H2 (judul artikel ada di field judul).
 func sanitizeArticleHTMLForStore(html string) string {
 	safe, _ := security.SanitizeArticleHTML(html)
-	return safe
+	return demoteH1ToH2(safe)
 }
 
 func stripDisallowedIframesHTML(html string) string {

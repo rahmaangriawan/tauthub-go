@@ -97,9 +97,9 @@ func buildDocCleanupPrompt(title, text string) string {
 		"1. Perbaiki pemenggalan baris yang rusak: gabungkan kalimat yang terpotong dan satukan paragraf yang terbelah.",
 		"2. Hapus duplikasi, header/footer yang berulang, dan nomor halaman.",
 		"3. Pertahankan makna, fakta, angka, nama, dan kutipan asli. JANGAN menambah fakta, opini, atau informasi baru.",
-		"4. Pertahankan struktur judul/subjudul yang ada (H1 untuk judul, H2/H3 untuk subjudul).",
+		"4. Subjudul yang ada di naskah ditulis sebagai <h2> atau <h3>. JANGAN membuat <h1> dan JANGAN mengulang judul dokumen di dalam isi — judul sudah disimpan di field judul terpisah.",
 		"5. Pertahankan bahasa asli naskah.",
-		"6. Keluarkan HANYA HTML bersih: <p>, <h1>, <h2>, <h3>, <ul>, <ol>, <li>, <blockquote>. Tanpa <html>, <head>, <body>, markdown, atau penjelasan tambahan.",
+		"6. Keluarkan HANYA HTML bersih: <p>, <h2>, <h3>, <ul>, <ol>, <li>, <blockquote>. Tanpa <html>, <head>, <body>, <h1>, markdown, atau penjelasan tambahan.",
 		"",
 	}
 	if title != "" {
@@ -130,6 +130,7 @@ func normalizeCleanupHTML(content string) (string, bool) {
 		// Model mengabaikan instruksi HTML → bungkus teks polos jadi paragraf.
 		out = plainTextToHTML(out)
 	}
+	out = demoteH1ToH2(out)
 	if cleanupVisibleLen(out) < 20 {
 		return "", false
 	}
