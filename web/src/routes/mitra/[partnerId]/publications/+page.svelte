@@ -1095,7 +1095,7 @@
 						</div>
 					{/if}
 					<div class="p-4">
-						<article class="max-w-full break-words text-sm leading-relaxed [&_a]:underline [&_a]:text-[var(--primary)] [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:font-semibold [&_img]:mx-auto [&_img]:my-3 [&_img]:max-h-[360px] [&_img]:w-auto [&_img]:rounded-lg [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:my-2">
+						<article class="article-html max-w-full break-words text-sm leading-relaxed [&_a]:underline [&_a]:text-[var(--primary)] [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:font-semibold [&_img]:mx-auto [&_img]:my-3 [&_img]:max-h-[360px] [&_img]:w-auto [&_img]:rounded-lg [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:my-2">
 							<!-- eslint-disable-next-line svelte/no-at-html-tags -- konten draf milik mitra sendiri dan sudah melalui editor -->
 							{@html sanitizeHtml(draft?.content_html ?? draft?.html ?? '')}
 						</article>

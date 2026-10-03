@@ -603,3 +603,87 @@ dialog.app-card {
   text-align: left;
   overflow-wrap: anywhere;
 }
+
+/* ── Gaya isi artikel (editor Taut Pintar & pratinjau) ─────────────────────
+   Server tidak mengirim CSS, dan Tailwind preflight menghapus gaya bawaan
+   heading/list/tabel — akibatnya tabel dari AI tampil tanpa border di editor.
+   Kelas ini dipakai .rte-body (contentEditable editor) dan .article-html
+   (pratinjau streaming di modal naskah). */
+.rte-body,
+.article-html {
+  line-height: 1.7;
+}
+.rte-body :is(h2, h3, h4),
+.article-html :is(h2, h3, h4) {
+  margin: 1.1em 0 0.5em;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.rte-body h2,
+.article-html h2 {
+  font-size: 1.25rem;
+}
+.rte-body h3,
+.article-html h3 {
+  font-size: 1.1rem;
+}
+.rte-body p,
+.article-html p {
+  margin: 0.6em 0;
+}
+.rte-body :is(ul, ol),
+.article-html :is(ul, ol) {
+  margin: 0.6em 0;
+  padding-left: 1.4em;
+}
+.rte-body ul,
+.article-html ul {
+  list-style: disc;
+}
+.rte-body ol,
+.article-html ol {
+  list-style: decimal;
+}
+.rte-body li,
+.article-html li {
+  margin: 0.25em 0;
+}
+.rte-body blockquote,
+.article-html blockquote {
+  margin: 0.8em 0;
+  border-left: 3px solid var(--border);
+  padding: 0.2em 0 0.2em 0.9em;
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+.rte-body table,
+.article-html table {
+  width: 100%;
+  margin: 0.9em 0;
+  border-collapse: collapse;
+  font-size: 0.875em;
+}
+.rte-body :is(th, td),
+.article-html :is(th, td) {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.rte-body thead th,
+.article-html thead th {
+  background: var(--muted);
+  font-weight: 600;
+}
+.rte-body tbody tr:nth-child(even),
+.article-html tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
+}
+.rte-body caption,
+.article-html caption {
+  caption-side: top;
+  padding-bottom: 4px;
+  font-size: 0.8em;
+  text-align: left;
+  color: var(--muted-foreground);
+}

@@ -770,7 +770,7 @@
 									<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold" style="color: var(--primary);">
 										<LoaderCircle size={13} class="animate-spin" /> {tr('AI sedang menulis artikel…')}
 									</p>
-									<div class="max-w-none text-sm leading-relaxed [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-bold [&_h3]:mt-2 [&_h3]:font-semibold [&_p]:my-2 [&_li]:ml-5 [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:italic" style="min-height: 320px;">{@html streamingHtml}</div>
+									<div class="article-html max-w-none text-sm" style="min-height: 320px;">{@html streamingHtml}</div>
 								</div>
 							{:else}
 								<RichTextEditor bind:value={html} bind:stats={editorStats} brandId={brandId} campaignId={campaignId} mediaId={mediaId} ariaLabel={tr('Isi artikel')} minHeight={360} />
