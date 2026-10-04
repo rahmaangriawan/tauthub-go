@@ -27,6 +27,23 @@ func peWriteUpload(t *testing.T, d *Deps, name string, data []byte) {
 	}
 }
 
+func TestPeInlineImageNameUnikDanStabil(t *testing.T) {
+	a := peInlineImageName("Judul Artikel Panjang", "/uploads/aaa.webp")
+	b := peInlineImageName("Judul Artikel Panjang", "/uploads/bbb.webp")
+	if a == b {
+		t.Fatalf("nama harus unik per gambar: %s", a)
+	}
+	if a != peInlineImageName("Judul Artikel Panjang", "/uploads/aaa.webp") {
+		t.Fatalf("nama harus stabil antar retry: %s", a)
+	}
+	if !strings.HasPrefix(a, "judul-artikel-panjang-") {
+		t.Fatalf("nama harus memuat judul artikel: %s", a)
+	}
+	if got := peInlineImageName("", "/uploads/aaa.webp"); !strings.HasPrefix(got, "gambar-artikel-") {
+		t.Fatalf("tanpa judul harus pakai awalan tetap: %s", got)
+	}
+}
+
 func TestPeIsUploadImageRef(t *testing.T) {
 	cases := []struct {
 		value string

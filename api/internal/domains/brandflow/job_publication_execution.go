@@ -1655,6 +1655,31 @@ func (d *Deps) peUploadArticleImages(ctx context.Context, connection, document b
 	return rewritten
 }
 
+// peInlineImageName: nama berkas gambar badan artikel — judul artikel plus
+// potongan hash URL asal, supaya tiap gambar unik di media library mitra (nama
+// UUID asli tidak informatif, sedangkan judul saja membuat semua berkas sama).
+func peInlineImageName(title, src string) string {
+	suffix := fmt.Sprintf("%08x", fnv32(src))
+	slug := peSlugifyTerm(title)
+	if len(slug) > 60 {
+		slug = slug[:60]
+	}
+	if slug == "" {
+		return "gambar-artikel-" + suffix
+	}
+	return slug + "-" + suffix
+}
+
+// fnv32: hash FNV-1a 32-bit untuk penamaan berkas yang stabil antar retry.
+func fnv32(value string) uint32 {
+	hash := uint32(2166136261)
+	for i := 0; i < len(value); i++ {
+		hash ^= uint32(value[i])
+		hash *= 16777619
+	}
+	return hash
+}
+
 // peRewriteImgTag: ganti src satu tag <img> bila menunjuk berkas /uploads kita.
 func (d *Deps) peRewriteImgTag(ctx context.Context, baseURL string, headers map[string]string, tag string, cache map[string]any, friendlyName string, uploadedSoFar int) (string, bool, string) {
 	value, vStart, vEnd, _ := peAttrValue(tag, "src")
@@ -1675,7 +1700,7 @@ func (d *Deps) peRewriteImgTag(ctx context.Context, baseURL string, headers map[
 		slog.Warn("[brandflow] gambar artikel tidak bisa dibaca", "url", value, "err", err)
 		return tag, false, value + " (" + err.Error() + ")"
 	}
-	id, sourceURL, err := d.peUploadMedia(ctx, baseURL, headers, file, friendlyName)
+	id, sourceURL, err := d.peUploadMedia(ctx, baseURL, headers, file, peInlineImageName(friendlyName, value))
 	if err != nil {
 		slog.Warn("[brandflow] upload gambar artikel gagal", "url", value, "err", err)
 		return tag, false, value + " (" + err.Error() + ")"
