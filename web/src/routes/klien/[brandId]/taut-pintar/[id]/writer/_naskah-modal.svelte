@@ -159,7 +159,6 @@
 		let h2Busy = $state(false);
 		let h2ConfirmOpen = $state(false);
 		let h2ConfirmData = $state<{
-			mode: 'h2' | 'paragraph';
 			items: { label: string; prompt: string }[];
 			cost: number;
 			balance: number | null;
@@ -299,7 +298,7 @@
 		return url;
 	}
 
-		// Ambil blok teks berisi isi artikel (dipakai mode fallback tanpa H2).
+		// Ambil blok teks berisi isi artikel (dasar hitungan paragraf).
 		// Editor bisa menghasilkan <p> maupun <div> tergantung browser, jadi
 		// keduanya diterima — pembungkus yang isinya blok lain dibuang.
 		const BLOK_TAG = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'BLOCKQUOTE', 'TABLE', 'SECTION', 'ARTICLE', 'FIGURE']);
@@ -312,55 +311,83 @@
 			});
 		}
 
-		// Siapkan gambar otomatis: satu per subjudul H2 bila ada. Kalau artikel
-		// TIDAK punya H2, fallback ke satu gambar tiap 3 paragraf dengan prompt
-		// dari konteks teksnya. Biaya dikonfirmasi lewat modal dialog sebelum mulai.
+		// Penempatan gambar otomatis. Satu gambar di setiap subjudul H2 selalu
+		// dipakai (anchor struktural); di antara anchor itu ditambah gambar isian
+		// supaya tidak ada rentang lebih dari PARAGRAF_PER_GAMBAR paragraf tanpa
+		// gambar. Ini menutup kasus artikel ber-H2 sedikit — mis. hanya satu —
+		// yang dulu cuma dapat satu gambar, tanpa mengubah artikel tanpa H2.
+		const PARAGRAF_PER_GAMBAR = 3;
+		const MAX_GAMBAR_ISIAN = 6;
+
+		function buildImagePrompt(judul: string, heading: string, konteks: string): string {
+			const parts: string[] = [];
+			if (judul) parts.push(judul);
+			if (heading) parts.push(`Subjudul: ${heading}`);
+			const cuplikan = konteks.trim().slice(0, 500);
+			if (cuplikan) parts.push(`Ilustrasi untuk bagian artikel berikut: ${cuplikan}`);
+			return parts.join('. ');
+		}
+
+		function ringkasTeks(teks: string): string {
+			return teks.length > 70 ? `${teks.slice(0, 70)}…` : teks;
+		}
+
+		// Susun rencana penempatan sesuai urutan dokumen: { node, label, prompt }.
+		// Dipakai dua kali — saat menghitung biaya dan saat menyisipkan — supaya
+		// anchor yang dipakai identik.
+		function planAutoImages(doc: Document, articleTitle: string): { node: Element; label: string; prompt: string }[] {
+			const judul = articleTitle.trim();
+			const paras = new Set<Element>(collectParagraphs(doc));
+			const urut = (Array.from(doc.body.querySelectorAll('h2, p, div')) as HTMLElement[]).filter((el) =>
+				el.tagName === 'H2' ? (el.textContent ?? '').trim().length > 0 : paras.has(el)
+			);
+
+			const plan: { node: Element; label: string; prompt: string }[] = [];
+			let isian = 0;
+			let sejakGambar = 0;
+			urut.forEach((el, idx) => {
+				if (el.tagName === 'H2') {
+					const heading = (el.textContent ?? '').trim();
+					const berikut = urut.slice(idx + 1).find((n) => n.tagName !== 'H2');
+					const konteks = berikut ? (berikut.textContent ?? '').replace(/\s+/g, ' ').trim() : '';
+					plan.push({ node: el, label: heading, prompt: buildImagePrompt(judul, heading, konteks) });
+					sejakGambar = 0;
+					return;
+				}
+				sejakGambar++;
+				if (sejakGambar < PARAGRAF_PER_GAMBAR || isian >= MAX_GAMBAR_ISIAN) return;
+				const teks = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+				plan.push({ node: el, label: ringkasTeks(teks), prompt: buildImagePrompt(judul, '', teks) });
+				sejakGambar = 0;
+				isian++;
+			});
+			return plan;
+		}
+
 		async function promptGeneratePerH2() {
 			if (h2Busy) return;
 			h2Error = '';
 			h2Note = '';
 			const parsed = new DOMParser().parseFromString(html || '', 'text/html');
-			const headings = Array.from(parsed.querySelectorAll('h2'))
-				.map((el) => (el.textContent ?? '').trim())
-				.filter((t) => t.length > 0);
-
-			let mode: 'h2' | 'paragraph' = 'h2';
-			let items: { label: string; prompt: string }[] = [];
-
-			if (headings.length > 0) {
-				items = headings.map((h) => ({ label: h, prompt: h }));
-			} else {
-				const paras = collectParagraphs(parsed);
-				if (paras.length === 0) {
-					h2Error = tr('Artikel belum punya subjudul H2 atau paragraf yang bisa diberi gambar.');
-					return;
-				}
-				mode = 'paragraph';
-				const judul = title.trim();
-				// Kelompok 3 paragraf; prompt memakai ringkasan teks grup supaya
-				// gambarnya sesuai konteks artikel.
-				for (let i = 0; i < paras.length; i += 3) {
-					const teks = paras
-						.slice(i, i + 3)
-						.map((p) => (p.textContent ?? '').trim())
-						.join(' ')
-						.replace(/\s+/g, ' ');
-					items.push({
-						label: teks.length > 70 ? `${teks.slice(0, 70)}…` : teks,
-						prompt: `${judul ? `${judul}. ` : ''}Ilustrasi untuk bagian artikel berikut: ${teks.slice(0, 500)}`
-					});
-				}
+			const plan = planAutoImages(parsed, title);
+			if (plan.length === 0) {
+				h2Error = tr('Artikel belum punya subjudul H2 atau paragraf yang bisa diberi gambar.');
+				return;
 			}
-
 			const { cost, balance } = await fetchImageCost();
-			const total = cost * items.length;
-			h2ConfirmData = { mode, items, cost, balance, total };
+			const total = cost * plan.length;
+			h2ConfirmData = {
+				items: plan.map((p) => ({ label: p.label, prompt: p.prompt })),
+				cost,
+				balance,
+				total
+			};
 			h2ConfirmOpen = true;
 		}
 
 		async function executeGeneratePerH2() {
 			if (h2Busy || !h2ConfirmData) return;
-			const { mode, items } = h2ConfirmData;
+			const items = h2ConfirmData.items;
 			h2ConfirmOpen = false;
 			h2Busy = true;
 			try {
@@ -369,17 +396,7 @@
 					urls.push(await generateImageFor(item.label, item.prompt));
 				}
 				const doc = new DOMParser().parseFromString(html || '', 'text/html');
-				let anchors: Element[] = [];
-				if (mode === 'h2') {
-					anchors = Array.from(doc.querySelectorAll('h2')).filter((el) => (el.textContent ?? '').trim().length > 0);
-				} else {
-					// Sisipkan setelah paragraf ke-3, ke-6, ... (paragraf terakhir tiap grup).
-					const paras = collectParagraphs(doc);
-					for (let i = 0; i < paras.length; i += 3) {
-						const grup = paras.slice(i, i + 3);
-						anchors.push(grup[grup.length - 1]);
-					}
-				}
+				const anchors = planAutoImages(doc, title).map((p) => p.node);
 				anchors.forEach((node, i) => {
 					if (!urls[i]) return;
 					const img = doc.createElement('img');
@@ -788,7 +805,7 @@
 										</button>
 								</div>
 									<p class="mt-1 text-[11px] text-muted-foreground">
-										{tr('Satu gambar AI per subjudul H2. Kalau artikel tanpa H2, sistem otomatis memakai satu gambar per 3 paragraf dengan prompt sesuai konteks artikel. Biaya dikonfirmasi dulu sebelum proses.')}
+										{tr('Satu gambar AI di setiap subjudul H2, ditambah gambar isian tiap 3 paragraf pada bagian yang panjang. Biaya dikonfirmasi dulu sebelum proses.')}
 									</p>
 								{#if h2Error}
 									<p class="mt-2 flex items-center gap-1.5 text-xs" style="color: var(--destructive);"><CircleAlert size={14} /> {h2Error}</p>
@@ -1084,7 +1101,7 @@
 						style="border-color: var(--border); background-color: var(--card, #fff);"
 						role="dialog"
 						aria-modal="true"
-						aria-label={h2ConfirmData.mode === 'h2' ? tr('Generate Gambar per Subjudul (H2)') : tr('Generate Gambar per 3 Paragraf')}
+						aria-label={tr('Gambar Otomatis Artikel')}
 						tabindex="-1"
 						onclick={(e) => e.stopPropagation()}
 						onkeydown={(e) => e.stopPropagation()}
@@ -1097,12 +1114,10 @@
 							</div>
 							<div>
 								<h4 class="text-sm font-bold leading-tight text-foreground">
-									{h2ConfirmData.mode === 'h2' ? tr('Generate Gambar per Subjudul (H2)') : tr('Generate Gambar per 3 Paragraf')}
+									{tr('Gambar Otomatis Artikel')}
 								</h4>
 								<p class="mt-0.5 text-xs text-muted-foreground">
-									{h2ConfirmData.mode === 'h2'
-										? tr('Sistem akan membuat gambar AI untuk setiap subjudul H2 di artikel.')
-										: tr('Artikel tanpa H2 — satu gambar AI dibuat tiap 3 paragraf, mengikuti konteks teksnya.')}
+									{tr('Sistem menyisipkan satu gambar di setiap subjudul H2, lalu menambah gambar isian pada bagian panjang supaya seluruh artikel tetap bergambar.')}
 								</p>
 							</div>
 						</div>
@@ -1119,12 +1134,12 @@
 
 					<!-- Body -->
 					<div class="space-y-4 p-5">
-						<!-- List of H2 headings -->
-						<div>
-							<div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-								<span>{h2ConfirmData.mode === 'h2' ? tr('Daftar Subjudul (H2)') : tr('Daftar Bagian (tiap 3 paragraf)')}</span>
-								<span>{h2ConfirmData.items.length} {h2ConfirmData.mode === 'h2' ? tr('subjudul') : tr('bagian')}</span>
-							</div>
+						<!-- Rencana penempatan gambar -->
+							<div>
+								<div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+									<span>{tr('Rencana Penempatan Gambar')}</span>
+									<span>{h2ConfirmData.items.length} {tr('gambar')}</span>
+								</div>
 							<div class="max-h-36 overflow-y-auto rounded-xl border p-2.5 space-y-1.5" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
 								{#each h2ConfirmData.items as item, idx (idx)}
 									<div class="flex items-center gap-2 text-xs">
