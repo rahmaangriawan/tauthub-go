@@ -3340,6 +3340,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Peringatan pengiriman": "Delivery warning",
   "Peringatan": "Warning",
   "Perbaiki gambar": "Repair images",
+  "Token dengan scope media:write dan content:write (ec_pat_…). Dipakai untuk mengunggah gambar artikel ke media library EmDash.":
+    "A token with media:write and content:write scope (ec_pat_…). Used to upload article images into the EmDash media library.",
   "Mengantrekan…": "Queuing…",
   "Tidak ada peringatan pengiriman.": "No delivery warnings.",
   "Unggah ulang gambar artikel ke media mitra dan pasang gambar utama pada post yang sudah terbit (post mitra diperbarui, bukan dibuat baru).":

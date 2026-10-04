@@ -55,6 +55,7 @@
 		wordpress: { label: 'WordPress REST API', desc: 'Push langsung via WP REST API CMS', tone: 'accent', isAuto: true },
 		rss: { label: 'RSS Feed Importer', desc: 'Sindikasi otomatis via RSS Feed', tone: 'warning', isAuto: true },
 		webhook: { label: 'Web Custom (Webhook)', desc: 'Webhook payload ke endpoint custom', tone: 'success', isAuto: true },
+		emdash: { label: 'EmDash CMS', desc: 'Push langsung ke EmDash REST (gambar diunggah ke media library)', tone: 'accent', isAuto: true },
 		manual: { label: 'Manual', desc: 'Publikasi manual tanpa integrasi API', tone: 'neutral', isAuto: false }
 	};
 
@@ -64,6 +65,7 @@
 		{ value: 'wordpress', label: 'WordPress REST API' },
 		{ value: 'rss', label: 'RSS Feed' },
 		{ value: 'webhook', label: 'Web Custom (Webhook)' },
+		{ value: 'emdash', label: 'EmDash CMS' },
 		{ value: 'manual', label: 'Manual' }
 	]);
 
@@ -99,6 +101,7 @@
 		base_url: '',
 		username: '',
 		application_password: '',
+		access_token: '',
 		secret: ''
 	});
 
@@ -247,6 +250,7 @@
 				username: connForm.provider === 'wordpress' ? connForm.username.trim() || null : null
 			};
 			if (connForm.provider === 'wordpress') body.application_password = connForm.application_password;
+			else if (connForm.provider === 'emdash') body.access_token = connForm.access_token;
 			else body.secret = connForm.secret;
 			const res = await apiRequest(connBase, { method: 'POST', body: JSON.stringify(body) });
 			if (!res.ok) {
@@ -254,7 +258,7 @@
 				return;
 			}
 			createOpen = false;
-			connForm = { provider: 'wordpress', name: '', base_url: '', username: '', application_password: '', secret: '' };
+			connForm = { provider: 'wordpress', name: '', base_url: '', username: '', application_password: '', access_token: '', secret: '' };
 			await loadConnections();
 		} finally {
 			connBusy = false;
@@ -649,6 +653,7 @@
 					onchange={(v) => (connForm.provider = v)}
 					options={[
 						{ value: 'wordpress', label: 'WordPress REST API' },
+						{ value: 'emdash', label: 'EmDash CMS' },
 						{ value: 'webhook', label: 'Web Custom (API + HMAC)' }
 					]}
 				/>
@@ -658,12 +663,22 @@
 				<input class="app-input mt-1 w-full" required placeholder={tr("Website Utama Mitra")} bind:value={connForm.name} />
 			</label>
 			<label class="block">
-				<span class="text-sm font-medium">{connForm.provider === 'wordpress' ? 'URL WordPress' : 'Endpoint URL'}</span>
+				<span class="text-sm font-medium"
+					>{connForm.provider === 'wordpress'
+						? 'URL WordPress'
+						: connForm.provider === 'emdash'
+							? 'URL Situs EmDash'
+							: 'Endpoint URL'}</span
+				>
 				<input
 					class="app-input mt-1 w-full"
 					required
 					type="url"
-					placeholder={connForm.provider === 'wordpress' ? 'https://situs.example' : 'https://situs.example/api/tauthub/content'}
+					placeholder={connForm.provider === 'wordpress'
+						? 'https://situs.example'
+						: connForm.provider === 'emdash'
+							? 'https://blog.mitra.example'
+							: 'https://situs.example/api/tauthub/content'}
 					bind:value={connForm.base_url}
 				/>
 			</label>
@@ -675,6 +690,14 @@
 				<label class="block">
 					<span class="text-sm font-medium">{tr("Application Password")}</span>
 					<input class="app-input mt-1 w-full" required type="password" bind:value={connForm.application_password} />
+				</label>
+			{:else if connForm.provider === 'emdash'}
+				<label class="block">
+					<span class="text-sm font-medium">Personal Access Token EmDash</span>
+					<input class="app-input mt-1 w-full" required type="password" minlength={16} bind:value={connForm.access_token} />
+					<span class="mt-1 block text-xs text-muted-foreground"
+						>{tr('Token dengan scope media:write dan content:write (ec_pat_…). Dipakai untuk mengunggah gambar artikel ke media library EmDash.')}</span
+					>
 				</label>
 			{:else}
 				<label class="block">

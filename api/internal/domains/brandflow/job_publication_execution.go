@@ -1143,10 +1143,10 @@ func (d *Deps) peRunCMS(ctx context.Context, publication, media, document, versi
 	if featured := strings.TrimSpace(publication.strOr("featured_image_url", "")); featured != "" {
 		defaults["featured_image_url"] = featured
 	}
-	if integrationType == "wordpress" && bsStringifyAny(defaults["featured_image_url"]) == "" {
-		// Publikasi tanpa cover membuat WordPress terbit dengan featured_media 0
-		// tanpa error apa pun. Ambil cover dari kampanye/gambar AI, lalu pakai
-		// aset fallback; cover fallback bersifat lunak (gagal unggah ≠ gagal terbit).
+	if (integrationType == "wordpress" || integrationType == "emdash") && bsStringifyAny(defaults["featured_image_url"]) == "" {
+		// Publikasi tanpa cover membuat artikel terbit tanpa gambar utama tanpa
+		// error apa pun. Ambil cover dari kampanye/gambar AI, lalu pakai aset
+		// fallback; cover fallback bersifat lunak (gagal unggah ≠ gagal terbit).
 		if cover := d.peResolveCoverURL(ctx, publication, media); cover != "" {
 			defaults["featured_image_url"] = cover
 			_ = d.exec(ctx,
@@ -1188,7 +1188,9 @@ func (d *Deps) peRunCMS(ctx context.Context, publication, media, document, versi
 		publishErr = d.bsPublishToWebhook(ctx, jobID, connection, document, snapshot, secret, content, html)
 	case "emdash":
 		publishErr = d.pePublishToEmdash(ctx, jobID, connection.strOr("base_url", ""), secret,
-			jobRecord.strOr("remote_post_id", ""), document, content)
+			jobRecord.strOr("remote_post_id", ""), document, html,
+			publication.strOr("publish_status", "draft"),
+			bsStringifyAny(defaults["featured_image_url"]), snapshot)
 	default:
 		publishErr = d.bsPublishToWordpress(ctx, jobID, connection, jobRecord, document, snapshot, secret, html)
 	}
@@ -1583,15 +1585,30 @@ func (d *Deps) peUploadFeaturedImage(ctx context.Context, baseURL string, header
 // cache (dari payload_snapshot.resolved.inline_media) dipakai agar retry tidak
 // mengunggah ulang. Balikan HTML baru, cache terbaru, dan daftar kegagalan.
 func (d *Deps) peUploadInlineImages(ctx context.Context, baseURL string, headers map[string]string, html string, cache map[string]any, friendlyName string) (string, map[string]any, []string) {
-	if html == "" || !strings.Contains(html, "<img") {
-		return html, cache, nil
-	}
 	updated := cache
 	if updated == nil {
 		updated = map[string]any{}
 	}
-	failures := []string{}
 	uploaded := 0
+	rewrite := func(tag string) (string, bool, string) {
+		rewritten, didUpload, failure := d.peRewriteImgTag(ctx, baseURL, headers, tag, updated, friendlyName, uploaded)
+		if didUpload {
+			uploaded++
+		}
+		return rewritten, didUpload, failure
+	}
+	rewritten, failures := peRewriteImages(html, rewrite)
+	return rewritten, updated, failures
+}
+
+// peRewriteImages: jalankan rewriteTag untuk setiap tag <img> di HTML; tag yang
+// tidak dikenali dibiarkan apa adanya. Balikan HTML baru + daftar kegagalan.
+// Penelusuran tag dipakai bersama jalur WordPress dan EmDash.
+func peRewriteImages(html string, rewriteTag func(tag string) (string, bool, string)) (string, []string) {
+	if html == "" || !strings.Contains(html, "<img") {
+		return html, nil
+	}
+	failures := []string{}
 	var b strings.Builder
 	i := 0
 	for i < len(html) {
@@ -1602,22 +1619,19 @@ func (d *Deps) peUploadInlineImages(ctx context.Context, baseURL string, headers
 		}
 		start := i + idx
 		b.WriteString(html[i:start])
-		end := peImgTagEnd(html, start)
+		end := peTagEnd(html, start)
 		if end < 0 {
 			b.WriteString(html[start:])
 			break
 		}
-		rewritten, didUpload, failure := d.peRewriteImgTag(ctx, baseURL, headers, html[start:end], updated, friendlyName, uploaded)
-		if didUpload {
-			uploaded++
-		}
+		rewritten, _, failure := rewriteTag(html[start:end])
 		if failure != "" {
 			failures = append(failures, failure)
 		}
 		b.WriteString(rewritten)
 		i = end
 	}
-	return b.String(), updated, failures
+	return b.String(), failures
 }
 
 // peUploadArticleImages: unggah gambar badan artikel ke media library mitra lalu
@@ -1625,6 +1639,9 @@ func (d *Deps) peUploadInlineImages(ctx context.Context, baseURL string, headers
 func (d *Deps) peUploadArticleImages(ctx context.Context, connection, document bsRow, snapshot map[string]any, jobID, secret, html string) string {
 	if !strings.Contains(html, "<img") {
 		return html
+	}
+	if snapshot == nil {
+		snapshot = map[string]any{}
 	}
 	headers := peWPAuthHeaders(connection.strOr("username", ""), secret)
 	rewritten, cache, failures := d.peUploadInlineImages(ctx, connection.strOr("base_url", ""), headers,
@@ -1731,9 +1748,9 @@ func peIndexFold(haystack, needle string) int {
 	return strings.Index(strings.ToLower(haystack), strings.ToLower(needle))
 }
 
-// peImgTagEnd: indeks tepat setelah '>' penutup tag <img>, memperhitungkan
-// nilai atribut yang dikutip. -1 bila tag tidak pernah ditutup.
-func peImgTagEnd(html string, start int) int {
+// peTagEnd: indeks tepat setelah '>' penutup tag, memperhitungkan nilai
+// atribut yang dikutip. -1 bila tag tidak pernah ditutup.
+func peTagEnd(html string, start int) int {
 	quote := byte(0)
 	for i := start; i < len(html); i++ {
 		ch := html[i]
@@ -1814,7 +1831,7 @@ func peAddImageClass(tag string, id int) string {
 		}
 		return tag[:cStart] + tag[cStart:cEnd] + " " + class + tag[cEnd:]
 	}
-	end := peImgTagEnd(tag, 0)
+	end := peTagEnd(tag, 0)
 	if end <= 0 {
 		return tag
 	}
