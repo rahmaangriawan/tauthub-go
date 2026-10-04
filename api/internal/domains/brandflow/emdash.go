@@ -154,6 +154,45 @@ func emdashContentPayload(document bsRow, blocks []map[string]any, featured map[
 	return data
 }
 
+// emdashFieldCandidates: urutan field opsional yang dicoba dilepas bila EmDash
+// menolak suatu field karena tidak ada di skema koleksi mitra — dari yang paling
+// tidak penting (gambar utama) sampai excerpt.
+func emdashFieldCandidates(data map[string]any) []map[string]bool {
+	candidates := []map[string]bool{{}}
+	hasFeatured := data["featured_image"] != nil
+	_, hasExcerpt := data["excerpt"]
+	if hasFeatured {
+		candidates = append(candidates, map[string]bool{"featured_image": true})
+	}
+	if hasExcerpt {
+		candidates = append(candidates, map[string]bool{"excerpt": true})
+		if hasFeatured {
+			candidates = append(candidates, map[string]bool{"excerpt": true, "featured_image": true})
+		}
+	}
+	return candidates
+}
+
+// emdashDropFields: salinan data tanpa field yang dilepas.
+func emdashDropFields(data map[string]any, drops map[string]bool) map[string]any {
+	out := make(map[string]any, len(data))
+	for k, v := range data {
+		if drops[k] {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+func emdashFieldNames(drops map[string]bool) []string {
+	names := make([]string, 0, len(drops))
+	for name := range drops {
+		names = append(names, name)
+	}
+	return names
+}
+
 // emdashWriteEnvelope: bentuk body tulis sesuai tata letak situs mitra.
 func emdashWriteEnvelope(data map[string]any, slug, rev string, dialect emdashDialect) map[string]any {
 	payload := map[string]any{}
@@ -306,25 +345,38 @@ func (d *Deps) pePublishToEmdash(ctx context.Context, jobID, baseURL, secret, re
 		slog.Warn("[brandflow] gagal menyimpan cache gambar EmDash", "job", jobID, "err", err)
 	}
 
-	data := emdashContentPayload(document, htmlToPortableText(rewritten, peEmdashImageRefs(cache)), featured)
+	blocks := htmlToPortableText(rewritten, peEmdashImageRefs(cache))
+	data := emdashContentPayload(document, blocks, featured)
 	slug := emdashSlug(document)
 
 	if err := d.exec(ctx, "UPDATE publication_jobs SET status = 'running', attempts = attempts + 1, progress = 70 WHERE id = $1", jobID); err != nil {
 		return err
 	}
-	remoteID, err := emdashUpsertContent(ctx, baseURL, secret, collection, slug, data,
-		strings.TrimSpace(remotePostID), jobID, dialect)
-	if err != nil && featured != nil && emdashUnknownField(err) {
-		// Skema koleksi mitra tidak punya featured_image: kirim ulang tanpa gambar
-		// utama supaya artikel tetap terbit, dan catat sebagai peringatan.
-		slog.Warn("[brandflow] featured_image ditolak EmDash, kirim ulang tanpa gambar utama", "err", err)
-		failures = append(failures, "featured_image ditolak skema koleksi mitra")
-		data = emdashContentPayload(document, htmlToPortableText(rewritten, peEmdashImageRefs(cache)), nil)
-		remoteID, err = emdashUpsertContent(ctx, baseURL, secret, collection, slug, data,
-			strings.TrimSpace(remotePostID), jobID, dialect)
+	// EmDash menolak field yang tidak ada di skema koleksi mitra. Lepas field
+	// opsional satu per satu supaya artikel tetap terbit, lalu catat peringatan.
+	var remoteID string
+	var err error
+	var dropped []string
+	candidates := emdashFieldCandidates(data)
+	for i, drops := range candidates {
+		remoteID, err = emdashUpsertContent(ctx, baseURL, secret, collection, slug,
+			emdashDropFields(data, drops), strings.TrimSpace(remotePostID), jobID, dialect)
+		if err == nil {
+			if len(drops) > 0 {
+				dropped = emdashFieldNames(drops)
+			}
+			break
+		}
+		if !emdashUnknownField(err) || i == len(candidates)-1 {
+			break
+		}
+		slog.Warn("[brandflow] EmDash menolak field opsional, kirim ulang", "fields", emdashFieldNames(drops), "err", err)
 	}
 	if err != nil {
 		return err
+	}
+	if len(dropped) > 0 {
+		failures = append(failures, "field dilepas karena tidak ada di skema koleksi mitra: "+strings.Join(dropped, ", "))
 	}
 	if remoteID == "" {
 		return errors.New("EmDash tidak mengembalikan id item.")

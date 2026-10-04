@@ -183,6 +183,38 @@ func TestHtmlToPortableTextTidakMenyisakanTag(t *testing.T) {
 	}
 }
 
+func TestEmdashFieldCandidatesDanDrop(t *testing.T) {
+	full := map[string]any{
+		"title":          "Judul",
+		"content":        []map[string]any{},
+		"featured_image": map[string]any{"provider": "local", "id": "m-1"},
+		"excerpt":        "Ringkasan",
+	}
+	candidates := emdashFieldCandidates(full)
+	if len(candidates) != 4 {
+		t.Fatalf("kandidat = %d, mau 4: %v", len(candidates), candidates)
+	}
+	if len(candidates[0]) != 0 {
+		t.Fatalf("percobaan pertama harus tanpa pelepasan: %v", candidates[0])
+	}
+	last := emdashDropFields(full, candidates[3])
+	if _, ok := last["featured_image"]; ok {
+		t.Fatalf("featured_image harus dilepas: %v", last)
+	}
+	if _, ok := last["excerpt"]; ok {
+		t.Fatalf("excerpt harus dilepas: %v", last)
+	}
+	if bsStringifyAny(last["title"]) != "Judul" {
+		t.Fatalf("field wajib ikut terhapus: %v", last)
+	}
+	if _, ok := full["excerpt"]; !ok {
+		t.Fatal("data sumber tidak boleh ikut berubah")
+	}
+	if got := emdashFieldCandidates(map[string]any{"title": "T"}); len(got) != 1 {
+		t.Fatalf("tanpa field opsional harus 1 kandidat: %v", got)
+	}
+}
+
 func TestEmdashUploadContentImagesGantiSrcDanCache(t *testing.T) {
 	d := emdashTestDeps(t)
 	peWriteUpload(t, d, "a.webp", []byte("aaa"))
