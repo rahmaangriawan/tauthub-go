@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -1142,6 +1143,20 @@ func (d *Deps) peRunCMS(ctx context.Context, publication, media, document, versi
 	if featured := strings.TrimSpace(publication.strOr("featured_image_url", "")); featured != "" {
 		defaults["featured_image_url"] = featured
 	}
+	if integrationType == "wordpress" && bsStringifyAny(defaults["featured_image_url"]) == "" {
+		// Publikasi tanpa cover membuat WordPress terbit dengan featured_media 0
+		// tanpa error apa pun. Ambil cover dari kampanye/gambar AI, lalu pakai
+		// aset fallback; cover fallback bersifat lunak (gagal unggah ≠ gagal terbit).
+		if cover := d.peResolveCoverURL(ctx, publication, media); cover != "" {
+			defaults["featured_image_url"] = cover
+			_ = d.exec(ctx,
+				"UPDATE publications SET featured_image_url = $1, updated_at = NOW() WHERE id = $2 AND (featured_image_url IS NULL OR featured_image_url = '')",
+				cover, publication.strOr("id", ""))
+		} else {
+			defaults["featured_image_url"] = peFallbackCoverURL
+			snapshot["cover_soft"] = true
+		}
+	}
 
 	if err := d.exec(ctx, "UPDATE publication_jobs SET progress = 30 WHERE id = $1", jobID); err != nil {
 		return err
@@ -1163,6 +1178,9 @@ func (d *Deps) peRunCMS(ctx context.Context, publication, media, document, versi
 	}
 
 	content, html := peRenderedHTML(version, publicOrigin)
+	if integrationType == "wordpress" {
+		html = d.peUploadArticleImages(ctx, connection, document, snapshot, jobID, secret, html)
+	}
 
 	var publishErr error
 	switch integrationType {
@@ -1224,6 +1242,12 @@ func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media
 		mediaID := d.peUploadFeaturedImage(ctx, baseURL, headers, imageURL, document.strOr("title", ""))
 		if mediaID > 0 {
 			resolved["featured_media"] = mediaID
+		} else if coverSoft, _ := snapshot["cover_soft"].(bool); coverSoft {
+			// Cover fallback (artikel memang belum punya gambar): kegagalan
+			// mengunggah tidak boleh menahan terbitnya artikel.
+			d.peRecordWarning(ctx, jobID, []string{
+				"Gambar cover fallback tidak bisa diunggah ke media mitra (" + imageURL + "), artikel terbit tanpa gambar utama.",
+			})
 		} else {
 			reason := "Gambar cover artikel tidak bisa diunggah ke WordPress (" + imageURL + "). " +
 				"Publikasi dihentikan sebelum terbit — periksa file/URL cover lalu coba lagi."
@@ -1364,62 +1388,128 @@ func peLegacyUploadDir() string {
 	return filepath.Join("public", "uploads")
 }
 
-// peUploadFeaturedImage: parity uploadFeaturedImage — balikan 0 (skip) pada
-// kegagalan supaya masalah thumbnail tidak menggagalkan publikasi. Namun
-// pemanggil memperlakukan 0 sebagai kegagalan bila artikel punya cover.
-func (d *Deps) peUploadFeaturedImage(ctx context.Context, baseURL string, headers map[string]string, imageURL, friendlyName string) int {
-	var data []byte
-	var contentType, filename string
+// peMaxImageBytes: batas unduh berkas gambar dari HTTP. peHTTPRequestBytes
+// memotong di 1 MiB, terlalu kecil untuk foto 1920x1080.
+const peMaxImageBytes = 12 << 20
 
-	if strings.HasPrefix(imageURL, "/uploads/") {
-		raw, mime, name, ok := d.peReadLocalUpload(imageURL)
+// peMaxInlineUploads: batas jumlah gambar badan artikel yang diunggah per
+// publikasi supaya satu artikel tidak menahan job terlalu lama.
+const peMaxInlineUploads = 20
+
+// peFallbackCoverURL: aset statis publik aplikasi, dipakai saat artikel tidak
+// punya cover sama sekali.
+const peFallbackCoverURL = "/images/article-fallback.png"
+
+// peImageFile: berkas gambar siap dikirim ke media library CMS mitra.
+type peImageFile struct {
+	Data        []byte
+	ContentType string
+	Filename    string
+}
+
+// peFetchUploadBytes: ambil isi berkas gambar yang dipakai artikel.
+// Urutan resolusi: /uploads/* dibaca dari disk (API & scheduler berbagi
+// UPLOAD_DIR), URL absolut ber-path /uploads/* juga dicoba dari disk dulu,
+// path relatif lain lewat origin publik, terakhir unduh via HTTP.
+func (d *Deps) peFetchUploadBytes(ctx context.Context, imageURL string) (peImageFile, error) {
+	raw := strings.TrimSpace(imageURL)
+	if raw == "" {
+		return peImageFile{}, errors.New("URL gambar kosong")
+	}
+	if strings.HasPrefix(raw, "/uploads/") {
+		data, mime, name, ok := d.peReadLocalUpload(raw)
 		if !ok {
-			return 0
+			return peImageFile{}, fmt.Errorf("berkas %s tidak ditemukan di server", raw)
 		}
-		data, contentType, filename = raw, mime, name
-	} else {
-		// Path relatif (mis. aset statis aplikasi "/images/...") tidak punya skema
-		// maupun host, jadi dulu selalu dilewati di sini dan artikel terbit tanpa
-		// featured image. Resolusikan dulu ke origin publik server supaya berkasnya
-		// bisa diunduh seperti URL biasa.
-		if strings.HasPrefix(imageURL, "/") {
-			imageURL = strings.TrimRight(d.pePublicOrigin(), "/") + imageURL
-		}
-		parsed, err := url.Parse(imageURL)
-		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
-			return 0
-		}
-		if strings.HasPrefix(parsed.Path, "/uploads/") {
-			if raw, mime, name, ok := d.peReadLocalUpload(parsed.Path); ok {
-				data, contentType, filename = raw, mime, name
-			}
-		}
-		if data == nil {
-			host := strings.ToLower(parsed.Hostname())
-			if host == "localhost" || host == "127.0.0.1" || host == "::1" {
-				return 0
-			}
-			status, body, err := peHTTPRequestBytes(ctx, http.MethodGet, parsed.String(), nil, "", 30*time.Second)
-			if err != nil || status < 200 || status >= 300 {
-				return 0
-			}
-			data = body
-			contentType = "image/jpeg"
-			parts := strings.Split(parsed.Path, "/")
-			filename = parts[len(parts)-1]
-			if decoded, decErr := url.PathUnescape(filename); decErr == nil {
-				filename = decoded
-			}
-			if filename == "" {
-				filename = "featured-image"
-			}
+		return peImageFile{Data: data, ContentType: mime, Filename: name}, nil
+	}
+	target := raw
+	if strings.HasPrefix(target, "/") {
+		target = strings.TrimRight(d.pePublicOrigin(), "/") + target
+	}
+	parsed, err := url.Parse(target)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
+		return peImageFile{}, fmt.Errorf("URL gambar tidak valid: %s", raw)
+	}
+	name := filepath.Base(parsed.Path)
+	if decoded, decErr := url.PathUnescape(name); decErr == nil {
+		name = decoded
+	}
+	if name == "" || name == "." || name == "/" {
+		name = "image"
+	}
+	if strings.HasPrefix(parsed.Path, "/uploads/") {
+		if data, mime, localName, ok := d.peReadLocalUpload(parsed.Path); ok {
+			return peImageFile{Data: data, ContentType: mime, Filename: localName}, nil
 		}
 	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return peImageFile{}, fmt.Errorf("gambar %s hanya tersedia di host lokal", raw)
+	}
+	status, body, err := peFetchRemoteBytes(ctx, parsed.String(), peMaxImageBytes)
+	if err != nil {
+		return peImageFile{}, fmt.Errorf("unduh gambar %s gagal: %w", raw, err)
+	}
+	if status < 200 || status >= 300 {
+		return peImageFile{}, fmt.Errorf("unduh gambar %s ditolak (HTTP %d)", raw, status)
+	}
+	if len(body) == 0 {
+		return peImageFile{}, fmt.Errorf("gambar %s kosong", raw)
+	}
+	return peImageFile{Data: body, ContentType: peImageContentType(name), Filename: name}, nil
+}
 
-	ext := strings.ToLower(filepath.Ext(filename))
+// peFetchRemoteBytes: unduh berkas biner dengan batas ukuran khusus gambar.
+func peFetchRemoteBytes(ctx context.Context, target string, maxBytes int64) (int, []byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	resp, err := security.SafeClient(30 * time.Second).Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	if readErr != nil {
+		return resp.StatusCode, nil, readErr
+	}
+	if int64(len(data)) > maxBytes {
+		return resp.StatusCode, nil, fmt.Errorf("berkas melebihi batas %d byte", maxBytes)
+	}
+	return resp.StatusCode, data, nil
+}
+
+// peImageContentType: MIME dari ekstensi berkas. Jangan hardcode image/jpeg —
+// gambar artikel kita WebP, dan WordPress menolak mime yang tidak cocok.
+func peImageContentType(name string) string {
+	if mime, ok := peImageMIME[strings.ToLower(filepath.Ext(name))]; ok {
+		return mime
+	}
+	return "image/jpeg"
+}
+
+func peSafeFilename(name string) string {
+	safe := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' {
+			return r
+		}
+		return '_'
+	}, name)
+	if safe == "" {
+		return "image.jpg"
+	}
+	return safe
+}
+
+// peWordPressUploadMedia: POST berkas ke wp/v2/media; balikan id + source_url.
+func (d *Deps) peWordPressUploadMedia(ctx context.Context, baseURL string, headers map[string]string, file peImageFile, friendlyName string) (int, string, error) {
+	ext := strings.ToLower(filepath.Ext(file.Filename))
 	if ext == "" {
 		ext = ".jpg"
 	}
+	filename := file.Filename
 	if trimmed := strings.TrimSpace(friendlyName); trimmed != "" {
 		slug := peSlugifyTerm(trimmed)
 		if slug == "" {
@@ -1430,33 +1520,336 @@ func (d *Deps) peUploadFeaturedImage(ctx context.Context, baseURL string, header
 		}
 		filename = slug + ext
 	}
-	safeName := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' {
-			return r
-		}
-		return '_'
-	}, filename)
-
+	safeName := peSafeFilename(filename)
+	contentType := strings.TrimSpace(file.ContentType)
+	if contentType == "" {
+		contentType = peImageContentType(safeName)
+	}
 	uploadHeaders := map[string]string{
 		"Authorization":       headers["Authorization"],
 		"Content-Disposition": `attachment; filename="` + safeName + `"`,
 		"Content-Type":        contentType,
 	}
-	status, text, err := bsHTTPDoBytes(ctx, http.MethodPost, bsWPURL(baseURL, "wp/v2/media"), uploadHeaders, data, 30*time.Second)
-	if err != nil || status < 200 || status >= 300 {
-		slog.Warn("[brandflow] upload featured image gagal", "status", status)
-		return 0
+	status, text, err := bsHTTPDoBytes(ctx, http.MethodPost, bsWPURL(baseURL, "wp/v2/media"), uploadHeaders, file.Data, 30*time.Second)
+	if err != nil {
+		return 0, "", err
+	}
+	if status < 200 || status >= 300 {
+		return 0, "", fmt.Errorf("WordPress media menolak unggahan (HTTP %d): %s", status, truncateString(text, 200))
 	}
 	var created map[string]any
 	if json.Unmarshal([]byte(text), &created) != nil {
-		return 0
+		return 0, "", errors.New("respons media WordPress tidak valid")
 	}
 	id := int(peNumFromAny(created["id"]))
 	if id <= 0 {
-		slog.Warn("[brandflow] upload media WordPress tanpa id")
+		return 0, "", errors.New("respons media WordPress tanpa id")
+	}
+	return id, bsStringifyAny(created["source_url"]), nil
+}
+
+// peUploadMediaHook: titik injeksi untuk tes — menggantikan unggahan nyata ke
+// media library CMS mitra. Nil berlaku = pakai peWordPressUploadMedia.
+var peUploadMediaHook func(ctx context.Context, d *Deps, baseURL string, headers map[string]string, file peImageFile, friendlyName string) (int, string, error)
+
+// peUploadMedia: unggah satu berkas gambar ke media library CMS mitra.
+func (d *Deps) peUploadMedia(ctx context.Context, baseURL string, headers map[string]string, file peImageFile, friendlyName string) (int, string, error) {
+	if peUploadMediaHook != nil {
+		return peUploadMediaHook(ctx, d, baseURL, headers, file, friendlyName)
+	}
+	return d.peWordPressUploadMedia(ctx, baseURL, headers, file, friendlyName)
+}
+
+// peUploadFeaturedImage: parity uploadFeaturedImage — balikan 0 (skip) pada
+// kegagalan supaya masalah thumbnail tidak menggagalkan publikasi. Namun
+// pemanggil memperlakukan 0 sebagai kegagalan bila artikel punya cover.
+func (d *Deps) peUploadFeaturedImage(ctx context.Context, baseURL string, headers map[string]string, imageURL, friendlyName string) int {
+	file, err := d.peFetchUploadBytes(ctx, imageURL)
+	if err != nil {
+		slog.Warn("[brandflow] cover tidak bisa dibaca untuk diunggah", "url", imageURL, "err", err)
+		return 0
+	}
+	id, _, err := d.peUploadMedia(ctx, baseURL, headers, file, friendlyName)
+	if err != nil {
+		slog.Warn("[brandflow] upload featured image gagal", "url", imageURL, "err", err)
 		return 0
 	}
 	return id
+}
+
+// peUploadInlineImages: unggah tiap gambar /uploads di badan artikel ke media
+// library CMS mitra lalu ganti src-nya. Tanpa ini gambar tetap hotlink ke
+// /uploads kita yang butuh cookie sesi, jadi pengunjung mitra selalu dapat 401.
+// cache (dari payload_snapshot.resolved.inline_media) dipakai agar retry tidak
+// mengunggah ulang. Balikan HTML baru, cache terbaru, dan daftar kegagalan.
+func (d *Deps) peUploadInlineImages(ctx context.Context, baseURL string, headers map[string]string, html string, cache map[string]any, friendlyName string) (string, map[string]any, []string) {
+	if html == "" || !strings.Contains(html, "<img") {
+		return html, cache, nil
+	}
+	updated := cache
+	if updated == nil {
+		updated = map[string]any{}
+	}
+	failures := []string{}
+	uploaded := 0
+	var b strings.Builder
+	i := 0
+	for i < len(html) {
+		idx := peIndexFold(html[i:], "<img")
+		if idx < 0 {
+			b.WriteString(html[i:])
+			break
+		}
+		start := i + idx
+		b.WriteString(html[i:start])
+		end := peImgTagEnd(html, start)
+		if end < 0 {
+			b.WriteString(html[start:])
+			break
+		}
+		rewritten, didUpload, failure := d.peRewriteImgTag(ctx, baseURL, headers, html[start:end], updated, friendlyName, uploaded)
+		if didUpload {
+			uploaded++
+		}
+		if failure != "" {
+			failures = append(failures, failure)
+		}
+		b.WriteString(rewritten)
+		i = end
+	}
+	return b.String(), updated, failures
+}
+
+// peUploadArticleImages: unggah gambar badan artikel ke media library mitra lalu
+// simpan cache + peringatan di payload_snapshot agar retry tidak mengunggah ulang.
+func (d *Deps) peUploadArticleImages(ctx context.Context, connection, document bsRow, snapshot map[string]any, jobID, secret, html string) string {
+	if !strings.Contains(html, "<img") {
+		return html
+	}
+	headers := peWPAuthHeaders(connection.strOr("username", ""), secret)
+	rewritten, cache, failures := d.peUploadInlineImages(ctx, connection.strOr("base_url", ""), headers,
+		html, peInlineMediaCache(snapshot), document.strOr("title", ""))
+	if len(cache) == 0 && len(failures) == 0 {
+		return rewritten
+	}
+	resolved, _ := snapshot["resolved"].(map[string]any)
+	if resolved == nil {
+		resolved = map[string]any{}
+	}
+	if len(cache) > 0 {
+		resolved["inline_media"] = cache
+	}
+	if len(failures) > 0 {
+		resolved["inline_upload_failed"] = failures
+	}
+	snapshot["resolved"] = resolved
+	if err := d.exec(ctx, "UPDATE publication_jobs SET payload_snapshot = $1::jsonb WHERE id = $2",
+		marshalJSON(snapshot), jobID); err != nil {
+		slog.Warn("[brandflow] gagal menyimpan cache gambar publikasi", "job", jobID, "err", err)
+	}
+	if len(failures) > 0 {
+		d.peRecordWarning(ctx, jobID, []string{
+			fmt.Sprintf("%d gambar artikel tidak bisa diunggah ke media mitra: %s", len(failures), strings.Join(failures, ", ")),
+		})
+	}
+	return rewritten
+}
+
+// peRewriteImgTag: ganti src satu tag <img> bila menunjuk berkas /uploads kita.
+func (d *Deps) peRewriteImgTag(ctx context.Context, baseURL string, headers map[string]string, tag string, cache map[string]any, friendlyName string, uploadedSoFar int) (string, bool, string) {
+	value, vStart, vEnd, _ := peAttrValue(tag, "src")
+	if value == "" || !peIsUploadImageRef(value) {
+		return tag, false, ""
+	}
+	if entry, ok := cache[value].(map[string]any); ok {
+		if url := bsStringifyAny(entry["url"]); url != "" {
+			rewritten := peReplaceAttrValue(tag, vStart, vEnd, url)
+			return peAddImageClass(rewritten, int(peNumFromAny(entry["id"]))), false, ""
+		}
+	}
+	if uploadedSoFar >= peMaxInlineUploads {
+		return tag, false, ""
+	}
+	file, err := d.peFetchUploadBytes(ctx, value)
+	if err != nil {
+		slog.Warn("[brandflow] gambar artikel tidak bisa dibaca", "url", value, "err", err)
+		return tag, false, value + " (" + err.Error() + ")"
+	}
+	id, sourceURL, err := d.peUploadMedia(ctx, baseURL, headers, file, friendlyName)
+	if err != nil {
+		slog.Warn("[brandflow] upload gambar artikel gagal", "url", value, "err", err)
+		return tag, false, value + " (" + err.Error() + ")"
+	}
+	if sourceURL == "" {
+		sourceURL = value
+	}
+	cache[value] = map[string]any{"id": id, "url": sourceURL}
+	rewritten := peAddImageClass(peReplaceAttrValue(tag, vStart, vEnd, sourceURL), id)
+	return rewritten, true, ""
+}
+
+// peIsUploadImageRef: apakah src menunjuk berkas gambar milik /uploads kita.
+func peIsUploadImageRef(value string) bool {
+	path := value
+	if parsed, err := url.Parse(value); err == nil && parsed.Host != "" {
+		path = parsed.Path
+	}
+	if !strings.HasPrefix(path, "/uploads/") {
+		return false
+	}
+	_, ok := peImageMIME[strings.ToLower(filepath.Ext(path))]
+	return ok
+}
+
+// peIndexFold: strings.Index dengan pencocokan tanpa peduli huruf besar/kecil.
+func peIndexFold(haystack, needle string) int {
+	return strings.Index(strings.ToLower(haystack), strings.ToLower(needle))
+}
+
+// peImgTagEnd: indeks tepat setelah '>' penutup tag <img>, memperhitungkan
+// nilai atribut yang dikutip. -1 bila tag tidak pernah ditutup.
+func peImgTagEnd(html string, start int) int {
+	quote := byte(0)
+	for i := start; i < len(html); i++ {
+		ch := html[i]
+		if quote != 0 {
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == '"' || ch == '\'' {
+			quote = ch
+			continue
+		}
+		if ch == '>' {
+			return i + 1
+		}
+	}
+	return -1
+}
+
+// peAttrValue: nilai atribut di dalam satu tag; balikan nilai + rentang indeks
+// nilai di dalam tag + karakter kutipnya. Kosong bila atribut tidak ada.
+func peAttrValue(tag, name string) (string, int, int, byte) {
+	lower := strings.ToLower(tag)
+	needle := strings.ToLower(name) + "="
+	search := 0
+	for {
+		idx := strings.Index(lower[search:], needle)
+		if idx < 0 {
+			return "", 0, 0, 0
+		}
+		pos := search + idx
+		// Hindari kecocokan di tengah nama atribut lain (mis. data-src=).
+		if pos > 0 {
+			prev := tag[pos-1]
+			if !(prev == ' ' || prev == '\t' || prev == '\n' || prev == '\r' || prev == '"') {
+				search = pos + len(needle)
+				continue
+			}
+		}
+		valueStart := pos + len(needle)
+		if valueStart >= len(tag) {
+			return "", 0, 0, 0
+		}
+		if tag[valueStart] == '"' || tag[valueStart] == '\'' {
+			quote := tag[valueStart]
+			valueStart++
+			rel := strings.IndexByte(tag[valueStart:], quote)
+			if rel < 0 {
+				return "", 0, 0, 0
+			}
+			return tag[valueStart : valueStart+rel], valueStart, valueStart + rel, quote
+		}
+		end := valueStart
+		for end < len(tag) && tag[end] != ' ' && tag[end] != '>' && tag[end] != '\t' {
+			end++
+		}
+		return tag[valueStart:end], valueStart, end, 0
+	}
+}
+
+// peReplaceAttrValue: ganti nilai atribut pada rentang yang dikembalikan
+// peAttrValue.
+func peReplaceAttrValue(tag string, start, end int, value string) string {
+	return tag[:start] + value + tag[end:]
+}
+
+// peAddImageClass: tambahkan kelas wp-image-<id> supaya WordPress mengenali
+// lampiran gambar; kelas lama tidak diubah.
+func peAddImageClass(tag string, id int) string {
+	if id <= 0 {
+		return tag
+	}
+	class := "wp-image-" + itoa(id)
+	if _, cStart, cEnd, quote := peAttrValue(tag, "class"); cStart != 0 && quote != 0 {
+		if strings.Contains(tag[cStart:cEnd], class) {
+			return tag
+		}
+		return tag[:cStart] + tag[cStart:cEnd] + " " + class + tag[cEnd:]
+	}
+	end := peImgTagEnd(tag, 0)
+	if end <= 0 {
+		return tag
+	}
+	insertAt := end - 1
+	if insertAt > 0 && tag[insertAt-1] == '/' {
+		insertAt--
+	}
+	return tag[:insertAt] + ` class="` + class + `"` + tag[insertAt:]
+}
+
+// peInlineMediaCache: cache hasil unggah gambar inline dari payload_snapshot.
+func peInlineMediaCache(snapshot map[string]any) map[string]any {
+	resolved, _ := snapshot["resolved"].(map[string]any)
+	if resolved == nil {
+		return nil
+	}
+	if raw, ok := resolved["inline_media"].(map[string]any); ok {
+		return raw
+	}
+	return nil
+}
+
+// peResolveCoverURL: cari gambar utama artikel saat publications.featured_image_url
+// kosong — kolom taut_campaign_media lalu gambar AI cover terbaru di
+// article_images. Balikan "" bila artikel memang belum punya gambar.
+func (d *Deps) peResolveCoverURL(ctx context.Context, publication, media bsRow) string {
+	campaignID := publication.strOr("campaign_id", "")
+	mediaID := publication.strOr("media_id", "")
+	if campaignID == "" || mediaID == "" {
+		return ""
+	}
+	row, err := d.queryRow(ctx,
+		"SELECT featured_image_url FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND featured_image_url IS NOT NULL AND featured_image_url <> '' LIMIT 1",
+		campaignID, mediaID)
+	if err == nil && row != nil {
+		if v := strings.TrimSpace(row.strOr("featured_image_url", "")); v != "" {
+			return v
+		}
+	}
+	img, err := d.queryRow(ctx,
+		"SELECT url FROM article_images WHERE campaign_id = $1 AND media_id = $2 AND role = 'cover' ORDER BY created_at DESC LIMIT 1",
+		campaignID, mediaID)
+	if err == nil && img != nil {
+		if v := strings.TrimSpace(img.strOr("url", "")); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// peRecordWarning: catat peringatan non-fatal (mis. gambar gagal diunggah) pada
+// job supaya tidak hilang diam-diam.
+func (d *Deps) peRecordWarning(ctx context.Context, jobID string, lines []string) {
+	if jobID == "" || len(lines) == 0 {
+		return
+	}
+	message := truncateString(strings.Join(lines, " | "), 500)
+	if err := d.exec(ctx, "UPDATE publication_jobs SET warning_message = $1 WHERE id = $2", message, jobID); err != nil {
+		slog.Warn("[brandflow] gagal mencatat warning publikasi", "job", jobID, "err", err)
+	}
 }
 
 // ---------- job record & kesuksesan ----------

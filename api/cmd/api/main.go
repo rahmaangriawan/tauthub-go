@@ -638,6 +638,7 @@ func run() error {
 			authed.Get("/platform/operations/publications", platformDeps.OperationsPublications)
 			authed.Get("/platform/operations/publications/{publicationId}", platformDeps.OperationsPublicationDetail)
 			authed.Post("/platform/operations/publications/{publicationId}/retry", platformDeps.OperationsPublicationRetry)
+			authed.Post("/platform/operations/publications/{publicationId}/repair-images", platformDeps.OperationsPublicationRepairImages)
 			authed.Get("/platform/operations/running-batches", platformDeps.OperationsRunningBatches)
 			authed.Get("/platform/operations/users", platformDeps.OperationsUsers)
 			authed.Post("/platform/operations/users", platformDeps.OperationsUsers)

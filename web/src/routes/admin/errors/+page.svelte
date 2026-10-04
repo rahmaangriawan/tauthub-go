@@ -55,6 +55,18 @@
 		failed_media: string | null;
 		updated_at: string;
 	};
+	// Peringatan non-fatal: pengiriman sukses tapi ada yang tidak sempurna,
+	// mis. gambar artikel gagal diunggah ke media mitra.
+	type WarningRow = {
+		id: string;
+		publication_id: string | null;
+		status: string;
+		brand_name: string | null;
+		media_name: string | null;
+		document_title: string | null;
+		warning_message: string | null;
+		updated_at: string;
+	};
 
 	const ADAPTER_CODE_LABELS: Record<string, string> = $derived({
 		adapter_unreachable: 'Adapter tidak terjangkau',
@@ -80,7 +92,8 @@
 	let rss = $state<RssError[]>([]);
 	let queue = $state<QueueError[]>([]);
 	let variantBatches = $state<VariantBatchError[]>([]);
-	let offsets = $state({ variant: 0, publication: 0, job: 0, rss: 0, queue: 0 });
+	let warnings = $state<WarningRow[]>([]);
+	let offsets = $state({ variant: 0, publication: 0, job: 0, rss: 0, queue: 0, warning: 0 });
 
 	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -103,7 +116,7 @@
 		search = value;
 		clearTimeout(debounceTimer);
 		debounceTimer = setTimeout(() => {
-			offsets = { variant: 0, publication: 0, job: 0, rss: 0, queue: 0 };
+			offsets = { variant: 0, publication: 0, job: 0, rss: 0, queue: 0, warning: 0 };
 			void load(value.trim());
 		}, 300);
 	}
@@ -124,6 +137,7 @@
 			rss = body.rss ?? [];
 			queue = body.queue ?? [];
 			variantBatches = body.variant_batches ?? [];
+			warnings = body.warnings ?? [];
 		} catch {
 			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		} finally {
@@ -134,7 +148,7 @@
 	function clearSearch() {
 		search = '';
 		clearTimeout(debounceTimer);
-		offsets = { variant: 0, publication: 0, job: 0, rss: 0, queue: 0 };
+		offsets = { variant: 0, publication: 0, job: 0, rss: 0, queue: 0, warning: 0 };
 		void load('');
 	}
 
@@ -179,13 +193,14 @@
 			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke laporan error.")}</p>
 		</div>
 	{:else}
-		<div class="mt-4 grid gap-3 sm:grid-cols-5">
+		<div class="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
 			{#each [
 				{ label: tr('Publikasi gagal'), value: publications.length },
 				{ label: 'Job distribusi gagal', value: jobs.length },
 				{ label: 'Batch variant gagal', value: variantBatches.length },
 				{ label: 'RSS gagal verifikasi', value: rss.length },
-				{ label: 'Queue gagal', value: queue.length }
+				{ label: 'Queue gagal', value: queue.length },
+				{ label: tr('Peringatan pengiriman'), value: warnings.length }
 			] as card (card.label)}
 				<div class="app-card p-3">
 					<p class="text-2xl font-bold" style="color: var(--destructive);">{card.value}</p>
@@ -320,6 +335,49 @@
 				<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Tidak ada job distribusi gagal.")}</p>
 			{/if}
 			<Pagination total={jobs.length} limit={PAGE_SIZE} offset={offsets.job} onChange={(v) => setOffset('job', v)} />
+		</div>
+
+		<!-- Peringatan pengiriman (non-fatal) -->
+		<div class="app-card mt-4 p-4">
+			<h2 class="text-sm font-semibold">{tr('Peringatan pengiriman')}</h2>
+			<p class="mt-1 text-xs text-muted-foreground">
+				{tr('Artikel tetap terbit, tetapi ada bagian yang tidak sempurna — misalnya gambar gagal diunggah ke media mitra. Buka detail publikasi untuk memperbaiki gambarnya.')}
+			</p>
+			<div class="mt-2 overflow-x-auto">
+				<table class="w-full text-sm" style="min-width: 900px;">
+					<thead>
+						<tr class="text-xs text-muted-foreground">
+							<th class="px-3 py-2 text-left font-medium">Artikel</th>
+							<th class="px-3 py-2 text-left font-medium">{tr("Media")}</th>
+							<th class="px-3 py-2 text-left font-medium">{tr("Peringatan")}</th>
+							<th class="px-3 py-2 text-left font-medium">Waktu</th>
+							<th class="px-3 py-2 text-left font-medium"></th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each slice(warnings, 'warning') as row (row.id)}
+							<tr class="border-t">
+								<td class="px-3 py-2 font-medium">{row.document_title ?? row.id.slice(0, 8)}</td>
+								<td class="px-3 py-2">{row.media_name ?? '—'}</td>
+								<td class="px-3 py-2 text-xs" style="color: var(--warning);">{row.warning_message ?? '—'}</td>
+								<td class="px-3 py-2 text-xs text-muted-foreground">{fmtDateTime(row.updated_at)}</td>
+								<td class="px-3 py-2">
+									{#if row.publication_id}
+										<a
+											class="text-xs underline"
+											style="color: var(--primary);"
+											href="/admin/publications/{row.publication_id}">{tr('Perbaiki gambar')}</a>
+									{/if}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+			{#if !loading && warnings.length === 0}
+				<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr('Tidak ada peringatan pengiriman.')}</p>
+			{/if}
+			<Pagination total={warnings.length} limit={PAGE_SIZE} offset={offsets.warning} onChange={(v) => setOffset('warning', v)} />
 		</div>
 
 		<!-- RSS gagal verifikasi -->

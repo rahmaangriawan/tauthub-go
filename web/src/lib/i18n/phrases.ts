@@ -3337,6 +3337,15 @@ export const PHRASE_EN: Record<string, string> = {
   "Performance": "Performance",
   "Approved": "Approved",
   "Pending": "Pending",
+  "Peringatan pengiriman": "Delivery warning",
+  "Peringatan": "Warning",
+  "Perbaiki gambar": "Repair images",
+  "Mengantrekan…": "Queuing…",
+  "Tidak ada peringatan pengiriman.": "No delivery warnings.",
+  "Unggah ulang gambar artikel ke media mitra dan pasang gambar utama pada post yang sudah terbit (post mitra diperbarui, bukan dibuat baru).":
+    "Re-upload the article images to the partner media library and set the featured image on the already-published post (the partner post is updated, not duplicated).",
+  "Artikel tetap terbit, tetapi ada bagian yang tidak sempurna — misalnya gambar gagal diunggah ke media mitra. Buka detail publikasi untuk memperbaiki gambarnya.":
+    "The article was still published, but something was incomplete — for example images failed to upload to the partner media library. Open the publication detail to repair its images.",
 };
 
 /**

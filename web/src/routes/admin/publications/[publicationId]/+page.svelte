@@ -6,7 +6,7 @@
 	// Port apps/web/src/app/admin/publications/[publicationId]/page.tsx.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { ArrowLeft, ExternalLink, RefreshCw } from '@lucide/svelte';
+	import { ArrowLeft, ExternalLink, ImagePlus, RefreshCw } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
@@ -29,6 +29,7 @@
 		remote_url: string | null;
 		error_code: string | null;
 		error_message: string | null;
+		warning_message: string | null;
 		attempts: number;
 		started_at: string | null;
 		completed_at: string | null;
@@ -167,6 +168,9 @@
 	let retrying = $state(false);
 	let retryError = $state('');
 	let retryDone = $state('');
+	let repairing = $state(false);
+	let repairError = $state('');
+	let repairDone = $state('');
 
 	onMount(() => {
 		void (async () => {
@@ -213,6 +217,27 @@
 			void load();
 		} finally {
 			retrying = false;
+		}
+	}
+
+	async function repairImages() {
+		repairing = true;
+		repairError = '';
+		repairDone = '';
+		try {
+			const res = await apiRequest(
+				`/v1/platform/operations/publications/${publicationId}/repair-images`,
+				{ method: 'POST' }
+			);
+			if (!res.ok) {
+				repairError = await readApiError(res, 'Permintaan gagal.');
+				return;
+			}
+			repairDone =
+				'Perbaikan diantrekan. Gambar artikel akan diunggah ulang ke media mitra dan dipasang ke post yang sama (tidak membuat post baru).';
+			void load();
+		} finally {
+			repairing = false;
 		}
 	}
 
@@ -271,6 +296,29 @@
 			{/if}
 			{#if retryDone}
 				<p class="mt-3 text-sm" style="color: var(--success);">{retryDone}</p>
+			{/if}
+
+			{#if data?.job?.warning_message}
+				<div class="app-card mt-4 px-4 py-3 text-sm" style="color: var(--warning);">
+					<strong>{tr('Peringatan pengiriman')}</strong> — {data.job.warning_message}
+				</div>
+			{/if}
+
+			{#if pub.status === 'published' && data?.job?.remote_post_id}
+				<div class="mt-4 flex flex-wrap items-center gap-2">
+					<button class="app-btn app-btn-soft" onclick={repairImages} disabled={repairing}>
+						<ImagePlus size={15} />{repairing ? tr('Mengantrekan…') : tr('Perbaiki gambar')}
+					</button>
+					<span class="text-xs text-muted-foreground">
+						{tr('Unggah ulang gambar artikel ke media mitra dan pasang gambar utama pada post yang sudah terbit (post mitra diperbarui, bukan dibuat baru).')}
+					</span>
+				</div>
+			{/if}
+			{#if repairError}
+				<p class="mt-3 text-sm" style="color: var(--destructive);">{repairError}</p>
+			{/if}
+			{#if repairDone}
+				<p class="mt-3 text-sm" style="color: var(--success);">{repairDone}</p>
 			{/if}
 
 			<div class="app-card mt-4 p-4">

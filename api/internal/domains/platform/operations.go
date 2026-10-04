@@ -1126,6 +1126,23 @@ func (d *Deps) OperationsErrors(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
+	// Peringatan non-fatal (mis. gambar gagal diunggah ke media mitra) — artikel
+	// tetap terbit, tapi admin harus bisa melihatnya di sini.
+	warnFilter, warnParams := opLikeClause(like, "(b.name ILIKE %s OR m.name ILIKE %s OR d.title ILIKE %s OR j.warning_message ILIKE %s)", 4)
+	warnings, err := d.queryRows(ctx, `
+		SELECT j.id, j.publication_id, j.status, j.warning_message, j.updated_at,
+		       b.name AS brand_name, m.name AS media_name, d.title AS document_title
+		FROM publication_jobs j
+		LEFT JOIN publications p ON p.id = j.publication_id
+		LEFT JOIN brands b ON b.id = j.brand_id
+		LEFT JOIN media m ON m.id = p.media_id
+		LEFT JOIN content_documents d ON d.id = j.document_id
+		WHERE j.warning_message IS NOT NULL AND j.warning_message <> '' `+warnFilter+`
+		ORDER BY j.updated_at DESC LIMIT 100`, warnParams...)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
 	rss, err := d.queryRows(ctx, `
 		SELECT f.id, f.name, f.install_status, f.install_error, f.updated_at,
 		       p.name AS partner_name, m.name AS media_name
@@ -1195,6 +1212,16 @@ func (d *Deps) OperationsErrors(w http.ResponseWriter, r *http.Request) {
 			"http_status": httpStatus, "attempts": row.intOr("attempts", 0), "updated_at": row.anyOrNil("updated_at"),
 		})
 	}
+	warningsOut := make([]rowMap, 0, len(warnings))
+	for _, raw := range warnings {
+		row := ptRow(ptNormalizeMap(raw))
+		warningsOut = append(warningsOut, map[string]any{
+			"id": row.anyOrNil("id"), "publication_id": ptNullableStr(row, "publication_id"),
+			"status": row.anyOrNil("status"), "brand_name": ptNullableStr(row, "brand_name"),
+			"media_name": ptNullableStr(row, "media_name"), "document_title": ptNullableStr(row, "document_title"),
+			"warning_message": ptNullableStr(row, "warning_message"), "updated_at": row.anyOrNil("updated_at"),
+		})
+	}
 	rssOut := make([]rowMap, 0, len(rss))
 	for _, raw := range rss {
 		row := ptRow(ptNormalizeMap(raw))
@@ -1228,9 +1255,10 @@ func (d *Deps) OperationsErrors(w http.ResponseWriter, r *http.Request) {
 		"summary": map[string]any{
 			"publications": len(publications), "jobs": len(jobs), "rss": len(rss),
 			"queue": len(queue), "variant_batches": len(variantBatches),
+			"warnings": len(warnings),
 		},
 		"publications": pubsOut, "jobs": jobsOut, "rss": rssOut,
-		"queue": queueOut, "variant_batches": batchesOut,
+		"queue": queueOut, "variant_batches": batchesOut, "warnings": warningsOut,
 	})
 }
 
@@ -1630,7 +1658,7 @@ func (d *Deps) OperationsPublicationDetail(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	jobs, err := d.queryRows(ctx,
-		`SELECT id, status, publish_status, payload_snapshot, remote_post_id, remote_url, error_code, error_message, attempts, started_at, completed_at
+		`SELECT id, status, publish_status, payload_snapshot, remote_post_id, remote_url, error_code, error_message, warning_message, attempts, started_at, completed_at
 		 FROM publication_jobs WHERE publication_id = $1 ORDER BY created_at DESC LIMIT 1`, publicationID)
 	if err != nil {
 		writeErr(w, d, err)
@@ -1727,6 +1755,7 @@ func (d *Deps) OperationsPublicationDetail(w http.ResponseWriter, r *http.Reques
 			"remote_url":     ptNullableStr(jr, "remote_url"),
 			"error_code":     ptNullableStr(jr, "error_code"),
 			"error_message":  ptNullableStr(jr, "error_message"),
+			"warning_message": ptNullableStr(jr, "warning_message"),
 			"attempts":       jr.intOr("attempts", 0),
 			"started_at":     jr.anyOrNil("started_at"), "completed_at": jr.anyOrNil("completed_at"),
 			"payload_snapshot": payloadSnapshot,
@@ -1798,6 +1827,73 @@ func (d *Deps) OperationsPublicationRetry(w http.ResponseWriter, r *http.Request
 	if err := d.exec(ctx,
 		"UPDATE publication_jobs SET error_code = NULL, error_message = NULL, status = 'queued' WHERE publication_id = $1 AND status <> 'completed'",
 		publicationID); err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	jobID, err := d.opEnqueueJob(ctx, "publication_execution",
+		map[string]any{"publicationId": publicationID, "brandId": row.strOr("brand_id", "")}, 3)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": "queued", "job_id": jobID})
+}
+
+// OperationsPublicationRepairImages: POST /v1/platform/operations/publications/{publicationId}/repair-images
+// Jalankan ulang pengiriman untuk publikasi yang SUDAH terbit supaya gambar
+// artikel diunggah ke media library mitra dan gambar utama dipasang. Post mitra
+// diperbarui, bukan dibuat ulang: remote_post_id dipertahankan sehingga
+// WordPress menerima update pada post yang sama.
+func (d *Deps) OperationsPublicationRepairImages(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := d.adminGuard(w, r, ""); !ok {
+		return
+	}
+	ctx := r.Context()
+	publicationID := chiParam(r, "publicationId")
+	publication, err := d.queryRow(ctx,
+		"SELECT id, status, brand_id FROM publications WHERE id = $1 LIMIT 1", publicationID)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	if publication == nil {
+		writeErr(w, d, errNotFound("Publication not found"))
+		return
+	}
+	row := ptRow(ptNormalizeMap(publication))
+	current := row.strOr("status", "")
+	if current != "published" {
+		writeErr(w, d, errConflict(fmt.Sprintf("Hanya publikasi terbit yang bisa diperbaiki (status saat ini: %s)", current)))
+		return
+	}
+	job, err := d.queryRow(ctx,
+		"SELECT id, remote_post_id FROM publication_jobs WHERE publication_id = $1 ORDER BY created_at DESC LIMIT 1",
+		publicationID)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	if job == nil || job.strOr("remote_post_id", "") == "" {
+		writeErr(w, d, errConflict("Publikasi belum punya post mitra (remote_post_id), tidak ada yang bisa diperbaiki."))
+		return
+	}
+	// published → revision → queued: satu-satunya jalur transisi yang diizinkan
+	// menuju eksekusi ulang.
+	if err := d.opTransitionPublication(ctx, publicationID, "revision"); err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	if err := d.opTransitionPublication(ctx, publicationID, "queued"); err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	// payload_snapshot dikosongkan agar kategori, gambar utama, dan gambar badan
+	// artikel di-resolve serta diunggah ulang. remote_post_id sengaja disimpan.
+	if err := d.exec(ctx, `
+		UPDATE publication_jobs
+		SET status = 'queued', progress = 0, error_code = NULL, error_message = NULL,
+		    warning_message = NULL, payload_snapshot = NULL
+		WHERE id = $1`, job.strOr("id", "")); err != nil {
 		writeErr(w, d, err)
 		return
 	}
