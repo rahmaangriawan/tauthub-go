@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/email"
 )
@@ -113,7 +114,7 @@ func (d *Deps) SettingsEmailPut(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, stInvalidEmailErr())
 		return
 	}
-	if hasFromEmail && len([]rune(fromEmail)) > 200 {
+	if hasFromEmail && utf8.RuneCountInString(fromEmail) > 200 {
 		writeErr(w, d, errUnprocessable(ptZStringTooBig(200)))
 		return
 	}

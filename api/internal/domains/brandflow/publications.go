@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
@@ -34,7 +35,7 @@ func (d *Deps) PublicationsList(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 	search := strings.TrimSpace(q.Get("q"))
-	if len([]rune(search)) > 120 {
+	if utf8.RuneCountInString(search) > 120 {
 		search = string([]rune(search)[:120])
 	}
 
@@ -164,7 +165,20 @@ func (d *Deps) PublicationsCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Phase 5 campaign context: quota + credits hanya untuk publikasi kampanye.
+	// Biaya media sama untuk jalur kampanye dan jalur dompet, jadi dihitung
+	// sekali per request — dulu jalur dompet mengulang query yang identik.
 	cost := 0
+	var (
+		mediaCostVal  int
+		mediaCostDone bool
+	)
+	mediaCost := func() int {
+		if !mediaCostDone {
+			mediaCostVal = d.creditCostForMedia(r.Context(), mediaID)
+			mediaCostDone = true
+		}
+		return mediaCostVal
+	}
 	var campaignIDPtr *string
 	if campaignID != "" {
 		campaign, err := d.scopedCampaign(r.Context(), brandRow.ID, campaignID)
@@ -176,7 +190,7 @@ func (d *Deps) PublicationsCreate(w http.ResponseWriter, r *http.Request) {
 			d.writeErr(w, err)
 			return
 		}
-		cost = d.creditCostForMedia(r.Context(), mediaID)
+		cost = mediaCost()
 		if cost > 0 {
 			balance := d.brandCreditBalance(r.Context(), brandRow.ID)
 			if balance.PackageCount > 0 && balance.Remaining < cost {
@@ -190,7 +204,7 @@ func (d *Deps) PublicationsCreate(w http.ResponseWriter, r *http.Request) {
 	// Tulisio Credit: brand dengan dompet membayar TC untuk setiap publikasi.
 	wallet := d.getWallet(r.Context(), brandRow.ID)
 	if wallet != nil {
-		cost = d.creditCostForMedia(r.Context(), mediaID)
+		cost = mediaCost()
 		if packageID != "" {
 			pkg, err := d.queryRow(r.Context(),
 				`SELECT mp.discount_percent
@@ -673,11 +687,11 @@ func (d *Deps) PublicationRequestRevision(w http.ResponseWriter, r *http.Request
 	publicationID := chiParam(r, "publicationId")
 	body := decodeJSON(r)
 	comment, ok := strField(body, "comment")
-	if !ok || len([]rune(comment)) < 5 {
+	if !ok || utf8.RuneCountInString(comment) < 5 {
 		d.writeErr(w, errUnprocessable("String must contain at least 5 character(s)"))
 		return
 	}
-	if len([]rune(comment)) > 1000 {
+	if utf8.RuneCountInString(comment) > 1000 {
 		d.writeErr(w, errUnprocessable("String must contain at most 1000 character(s)"))
 		return
 	}
@@ -922,7 +936,7 @@ func (d *Deps) PublicationVariantsCreate(w http.ResponseWriter, r *http.Request)
 	if s, ok := sourceMaterial.(string); ok {
 		sourceMaterialStr = s
 	}
-	if mode == "generate" && len([]rune(strings.TrimSpace(sourceMaterialStr))) < 40 {
+	if mode == "generate" && utf8.RuneCountInString(strings.TrimSpace(sourceMaterialStr)) < 40 {
 		d.writeErr(w, errConflict("Bahan terlalu singkat — isi minimal 40 karakter agar artikel bisa dibuatkan dengan baik."))
 		return
 	}
@@ -964,8 +978,9 @@ func (d *Deps) PublicationVariantsCreate(w http.ResponseWriter, r *http.Request)
 			d.writeErr(w, err)
 			return
 		}
+		costs := d.creditCostsForMedia(r.Context(), mediaIDs)
 		for _, id := range mediaIDs {
-			totalCost += d.creditCostForMedia(r.Context(), id)
+			totalCost += costs[id]
 		}
 		if totalCost > 0 {
 			balance := d.brandCreditBalance(r.Context(), brandRow.ID)

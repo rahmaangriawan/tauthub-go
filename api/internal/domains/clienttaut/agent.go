@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -845,6 +846,18 @@ var angleLabels = map[string]string{
 	"community_event":           "Liputan Event Komunitas",
 }
 
+// angleLabelRes: regex batas-kata tiap slug, dikompilasi sekali saat init.
+// humanizeReason tetap mengiterasi angleLabels (bukan peta ini) supaya urutan
+// penggantian — acak, dan memengaruhi hasil saat dua slug bertetangga hanya
+// dipisah satu karakter non-word — persis seperti sebelumnya.
+var angleLabelRes = func() map[string]*regexp.Regexp {
+	m := make(map[string]*regexp.Regexp, len(angleLabels))
+	for slug := range angleLabels {
+		m[slug] = wordBoundaryRe(slug)
+	}
+	return m
+}()
+
 // humanizeReason: ganti slug angle teknis dengan label manusiawi.
 func humanizeReason(text string) string {
 	if text == "" {
@@ -852,8 +865,7 @@ func humanizeReason(text string) string {
 	}
 	out := text
 	for slug, label := range angleLabels {
-		re := wordBoundaryRe(slug)
-		out = re.ReplaceAllString(out, label)
+		out = angleLabelRes[slug].ReplaceAllString(out, label)
 	}
 	return strings.TrimSpace(out)
 }

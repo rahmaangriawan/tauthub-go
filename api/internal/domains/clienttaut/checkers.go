@@ -351,7 +351,7 @@ func normalizeForModeration(raw string) string {
 	lower = mapLeet(lower)
 	for i := 0; i < 6; i++ {
 		next := reSeparatorBetweenAlnum.ReplaceAllStringFunc(lower, func(m string) string {
-			return string(m[0]) + string(m[len(m)-1])
+			return m[:1] + m[len(m)-1:]
 		})
 		if next == lower {
 			break
@@ -405,14 +405,15 @@ var linkReasons = map[string]string{
 // linkHealthValidator: probe reachability + klasifikasi AI semua link reachable.
 func (d *Deps) linkHealthValidator(ctx context.Context, html string, excludeURLs []string) linkHealthResult {
 	checkedAt := nowISO()
-	excluded := map[string]bool{}
+	excluded := make(map[string]bool, len(excludeURLs))
 	for _, u := range excludeURLs {
 		if trimmed := strings.TrimSpace(u); trimmed != "" {
 			excluded[trimmed] = true
 		}
 	}
-	urls := []string{}
-	for _, u := range extractLinks(html) {
+	extracted := extractLinks(html)
+	urls := make([]string, 0, len(extracted))
+	for _, u := range extracted {
 		if !excluded[u] {
 			urls = append(urls, u)
 		}
@@ -422,7 +423,7 @@ func (d *Deps) linkHealthValidator(ctx context.Context, html string, excludeURLs
 	}
 
 	ownShort := []linkHealthItem{}
-	foreign := []string{}
+	foreign := make([]string, 0, len(urls))
 	for _, u := range urls {
 		code := extractTrackingCode(u)
 		if code != "" && d.isTrackingCode(ctx, code) {

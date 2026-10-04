@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -217,7 +218,7 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	if hasImageKey && imageAPIKey != "" && len([]rune(imageAPIKey)) < 8 {
+	if hasImageKey && imageAPIKey != "" && utf8.RuneCountInString(imageAPIKey) < 8 {
 		writeErr(w, d, errUnprocessable(ptZStringTooSmall(8)))
 		return
 	}

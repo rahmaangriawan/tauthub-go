@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // Validasi parity zod v4 (pesan error default English + pesan kustom Indonesia
@@ -197,13 +198,13 @@ func fieldMap(body map[string]any, key string) (map[string]any, bool, error) {
 // validateTrimmedString: parity z.string().trim().min(n).max(m) dengan pesan kustom.
 func validateTrimmedString(raw string, min, max int, customMin, customMax string) (string, error) {
 	s := strings.TrimSpace(raw)
-	if len([]rune(s)) < min {
+	if utf8.RuneCountInString(s) < min {
 		if customMin != "" {
 			return "", errUnprocessable(customMin)
 		}
 		return "", zodTooSmallString(min)
 	}
-	if len([]rune(s)) > max {
+	if utf8.RuneCountInString(s) > max {
 		if customMax != "" {
 			return "", errUnprocessable(customMax)
 		}
@@ -243,10 +244,10 @@ func validateStringArray(arr []any, maxItems, minLen, maxLen int) ([]string, err
 			return nil, zodInvalidType("string", receivedType(item))
 		}
 		trimmed := strings.TrimSpace(s)
-		if minLen > 0 && len([]rune(trimmed)) < minLen {
+		if minLen > 0 && utf8.RuneCountInString(trimmed) < minLen {
 			return nil, zodTooSmallString(minLen)
 		}
-		if maxLen > 0 && len([]rune(trimmed)) > maxLen {
+		if maxLen > 0 && utf8.RuneCountInString(trimmed) > maxLen {
 			return nil, zodTooBigString(maxLen)
 		}
 		out = append(out, trimmed)

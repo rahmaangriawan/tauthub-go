@@ -3,6 +3,7 @@ package clienttaut
 import (
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // parseProfilerDraft: parity profilerDraftSchema di schema.ts (lenient
@@ -16,7 +17,7 @@ func parseProfilerDraft(body map[string]any) (profilerAnalysisForm, error) {
 	if raw, ok, err := fieldStr(body, "name"); err != nil {
 		return out, err
 	} else if ok {
-		if len([]rune(raw)) > 200 {
+		if utf8.RuneCountInString(raw) > 200 {
 			return out, zodTooBigString(200)
 		}
 		out.Name = strings.TrimSpace(raw)
@@ -38,7 +39,7 @@ func parseProfilerDraft(body map[string]any) (profilerAnalysisForm, error) {
 				case "website":
 					limit = 300
 				}
-				if len([]rune(raw)) > limit {
+				if utf8.RuneCountInString(raw) > limit {
 					return out, zodTooBigString(limit)
 				}
 				trimmed := strings.TrimSpace(raw)
@@ -82,7 +83,7 @@ func parseProfilerDraft(body map[string]any) (profilerAnalysisForm, error) {
 				if !isStr {
 					return out, zodInvalidType("string", receivedType(item))
 				}
-				if len([]rune(s)) < 1 {
+				if utf8.RuneCountInString(s) < 1 {
 					return out, zodTooSmallString(1)
 				}
 				out.Audience.Selected = append(out.Audience.Selected, strings.TrimSpace(s))
@@ -91,7 +92,7 @@ func parseProfilerDraft(body map[string]any) (profilerAnalysisForm, error) {
 		if raw, ok, err := fieldStr(m, "custom"); err != nil {
 			return out, err
 		} else if ok {
-			if len([]rune(raw)) > 200 {
+			if utf8.RuneCountInString(raw) > 200 {
 				return out, zodTooBigString(200)
 			}
 			out.Audience.Custom = strings.TrimSpace(raw)
@@ -142,10 +143,10 @@ func parseProfilerDraft(body map[string]any) (profilerAnalysisForm, error) {
 				if !isStr {
 					return out, zodInvalidType("string", receivedType(item))
 				}
-				if len([]rune(s)) < 1 {
+				if utf8.RuneCountInString(s) < 1 {
 					return out, zodTooSmallString(1)
 				}
-				if len([]rune(s)) > 2000 {
+				if utf8.RuneCountInString(s) > 2000 {
 					return out, zodTooBigString(2000)
 				}
 				out.Guardrails.Rules = append(out.Guardrails.Rules, strings.TrimSpace(s))
@@ -165,7 +166,7 @@ func parseProfilerDraft(body map[string]any) (profilerAnalysisForm, error) {
 		if raw, ok, err := fieldStr(m, "target_url"); err != nil {
 			return out, err
 		} else if ok {
-			if len([]rune(raw)) > 500 {
+			if utf8.RuneCountInString(raw) > 500 {
 				return out, zodTooBigString(500)
 			}
 			out.Backlink.TargetURL = strings.TrimSpace(raw)
@@ -173,7 +174,7 @@ func parseProfilerDraft(body map[string]any) (profilerAnalysisForm, error) {
 		if raw, ok, err := fieldStr(m, "anchor_text"); err != nil {
 			return out, err
 		} else if ok {
-			if len([]rune(raw)) > 120 {
+			if utf8.RuneCountInString(raw) > 120 {
 				return out, zodTooBigString(120)
 			}
 			out.Backlink.AnchorText = strings.TrimSpace(raw)
@@ -211,7 +212,7 @@ func parseProfilerDraft(body map[string]any) (profilerAnalysisForm, error) {
 			if rawAngle, ok, err := fieldStr(obj, "angle_slug"); err != nil {
 				return out, err
 			} else if ok {
-				if len([]rune(rawAngle)) > 120 {
+				if utf8.RuneCountInString(rawAngle) > 120 {
 					return out, zodTooBigString(120)
 				}
 				sel.AngleSlug = strings.TrimSpace(rawAngle)
@@ -244,7 +245,7 @@ func parseProfilerDraft(body map[string]any) (profilerAnalysisForm, error) {
 				if !isStr {
 					return out, zodInvalidType("string", receivedType(item))
 				}
-				if len([]rune(strings.TrimSpace(s))) < 1 {
+				if utf8.RuneCountInString(strings.TrimSpace(s)) < 1 {
 					return out, zodTooSmallString(1)
 				}
 				out.MaterialsFileIDs = append(out.MaterialsFileIDs, strings.TrimSpace(s))
@@ -256,7 +257,7 @@ func parseProfilerDraft(body map[string]any) (profilerAnalysisForm, error) {
 			out.MaterialsDynamic = map[string]any{}
 			for k, v := range dyn {
 				if s, isStr := v.(string); isStr {
-					if len([]rune(s)) > 2000 {
+					if utf8.RuneCountInString(s) > 2000 {
 						return out, zodTooBigString(2000)
 					}
 					out.MaterialsDynamic[k] = strings.TrimSpace(s)
@@ -267,7 +268,7 @@ func parseProfilerDraft(body map[string]any) (profilerAnalysisForm, error) {
 						if !isStr {
 							return out, zodInvalidType("string", receivedType(nv))
 						}
-						if len([]rune(s)) > 2000 {
+						if utf8.RuneCountInString(s) > 2000 {
 							return out, zodTooBigString(2000)
 						}
 						nested[nk] = strings.TrimSpace(s)
@@ -322,7 +323,7 @@ func parseSpokespersonLenient(m map[string]any) (spokesperson, error) {
 		if key == "quote" {
 			limit = 500
 		}
-		if len([]rune(raw)) > limit {
+		if utf8.RuneCountInString(raw) > limit {
 			return out, zodTooBigString(limit)
 		}
 		trimmed := strings.TrimSpace(raw)

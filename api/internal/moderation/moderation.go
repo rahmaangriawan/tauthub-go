@@ -19,6 +19,12 @@ import (
 
 const Version = "v1"
 
+// Pagar kode fence di sekitar JSON keluaran model — dikompilasi sekali.
+var (
+	reModFenceHead = regexp.MustCompile("(?i)^```(?:json)?\\s*")
+	reModFenceTail = regexp.MustCompile("```\\s*$")
+)
+
 const (
 	SafeMax   = 29
 	ReviewMax = 69
@@ -557,8 +563,8 @@ func aiModerate(ctx context.Context, pool *pgxpool.Pool, in Input, fragments []s
 	}
 
 	cleaned := strings.TrimSpace(result.Content)
-	cleaned = regexp.MustCompile(`(?i)^` + "```" + `(?:json)?\s*`).ReplaceAllString(cleaned, "")
-	cleaned = regexp.MustCompile("```\\s*$").ReplaceAllString(cleaned, "")
+	cleaned = reModFenceHead.ReplaceAllString(cleaned, "")
+	cleaned = reModFenceTail.ReplaceAllString(cleaned, "")
 	cleaned = strings.TrimSpace(cleaned)
 	var parsed struct {
 		RiskScore      any      `json:"risk_score"`

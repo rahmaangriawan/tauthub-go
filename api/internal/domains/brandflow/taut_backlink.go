@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // taut_backlink.go: port lib/taut/agents.ts bagian post-processing artikel
@@ -158,7 +159,7 @@ func normalizeHeadingBlocks(html string) string {
 		if inner == "" || strings.Contains(inner, ".") {
 			continue
 		}
-		if len([]rune(inner)) > 90 || len(strings.Fields(inner)) > 12 {
+		if utf8.RuneCountInString(inner) > 90 || len(strings.Fields(inner)) > 12 {
 			continue
 		}
 		out = strings.Replace(out, m[0], "<h2>"+strings.TrimSpace(m[1])+"</h2>", 1)
@@ -250,7 +251,7 @@ func weaveContextualLink(html, url, anchor string, rel *string) string {
 	candidates := []string{anchor}
 	words := []string{}
 	for _, w := range strings.Fields(anchor) {
-		if len([]rune(w)) > 4 && isAlphaPhrase(w) {
+		if utf8.RuneCountInString(w) > 4 && isAlphaPhrase(w) {
 			words = append(words, w)
 		}
 	}

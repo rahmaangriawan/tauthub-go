@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -467,7 +468,7 @@ func (d *Deps) pePublishViaTulisioAPI(ctx context.Context, jobID string, publica
 	if err != nil {
 		return err
 	}
-	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	signature := peSignHMAC(target.Secret, timestamp, string(raw))
 	headers := map[string]string{
 		"Content-Type":              "application/json",
@@ -1330,34 +1331,88 @@ func peFindTermID(ctx context.Context, baseURL string, headers map[string]string
 
 // peResolveTermIDs: resolve nama term → ID (search, opsional create). Error
 // per-term tidak menggagalkan publikasi (dicatat & dilewati).
+//
+// Nama yang berulang dalam satu panggilan di-resolve sekali: request
+// pencariannya identik byte-per-byte (`?search=<nama>`), jadi mengulanginya
+// per kemunculan tidak bisa menghasilkan id lain — kemunculan berikutnya
+// cukup menyalin hasil kemunculan pertama. Penggabungan semua nama ke satu
+// GET per taxonomy (match nama lokal tanpa ?search=) sengaja tidak dilakukan:
+// pemilihan hasil bergantung urutan balikan server (slug exact dulu, lalu
+// name exact, ambil pertama), dan urutan kandidat `?search=` tidak dijamin
+// sama dengan urutan daftar penuh — apalagi pada mitra yang hanya meniru
+// wp/v2. Batas rate mitra juga belum terdokumentasi di mana pun.
 func peResolveTermIDs(ctx context.Context, baseURL string, headers map[string]string, names []string, taxonomy string, create bool) []int {
-	ids := []int{}
-	for _, name := range names {
-		if id, found := peFindTermID(ctx, baseURL, headers, taxonomy, name); found {
-			ids = append(ids, id)
-			continue
-		}
-		if !create {
-			slog.Warn("[brandflow] term WordPress belum ditemukan — dilewati", "taxonomy", taxonomy, "name", name)
-			continue
-		}
-		raw, err := json.Marshal(map[string]any{"name": name})
-		if err != nil {
-			continue
-		}
-		status, text, err := peFetchWPJSON(ctx, baseURL, headers, "wp/v2/"+taxonomy, http.MethodPost, string(raw))
-		if err != nil || status < 200 || status >= 300 {
-			slog.Warn("[brandflow] create term WordPress gagal", "taxonomy", taxonomy, "name", name)
-			continue
-		}
-		var created map[string]any
-		if json.Unmarshal([]byte(text), &created) == nil {
-			if id := int(peNumFromAny(created["id"])); id > 0 {
-				ids = append(ids, id)
-			}
+	return pePlanTermResolution(names, func(name string) int {
+		return peResolveOneTerm(ctx, baseURL, headers, taxonomy, name, create)
+	})
+}
+
+// peResolveOneTerm: resolve satu nama — search, lalu POST create bila
+// diizinkan. 0 berarti tidak ditemukan/gagal dibuat (dilewati tanpa error).
+func peResolveOneTerm(ctx context.Context, baseURL string, headers map[string]string, taxonomy, name string, create bool) int {
+	if id, found := peFindTermID(ctx, baseURL, headers, taxonomy, name); found {
+		return id
+	}
+	if !create {
+		slog.Warn("[brandflow] term WordPress belum ditemukan — dilewati", "taxonomy", taxonomy, "name", name)
+		return 0
+	}
+	raw, err := json.Marshal(map[string]any{"name": name})
+	if err != nil {
+		return 0
+	}
+	status, text, err := peFetchWPJSON(ctx, baseURL, headers, "wp/v2/"+taxonomy, http.MethodPost, string(raw))
+	if err != nil || status < 200 || status >= 300 {
+		slog.Warn("[brandflow] create term WordPress gagal", "taxonomy", taxonomy, "name", name)
+		return 0
+	}
+	var created map[string]any
+	if json.Unmarshal([]byte(text), &created) == nil {
+		if id := int(peNumFromAny(created["id"])); id > 0 {
+			return id
 		}
 	}
-	return ids
+	return 0
+}
+
+// peTermDedupeSlots: untuk tiap posisi nama, indeks kemunculan PERTAMA nama
+// yang sama persis. Pencarian mitra memakai nama mentah, jadi varian huruf
+// besar/kecil atau spasi tetap query berbeda dan tidak boleh digabung.
+func peTermDedupeSlots(names []string) []int {
+	slots := make([]int, len(names))
+	seen := make(map[string]int, len(names))
+	for i, name := range names {
+		if first, dup := seen[name]; dup {
+			slots[i] = first
+			continue
+		}
+		slots[i] = i
+		seen[name] = i
+	}
+	return slots
+}
+
+// pePlanTermResolution: resolve tiap nama unik sekali lewat resolve, lalu
+// salin hasilnya (id maupun 0 = dilewati) ke kemunculan ulangnya. Urutan
+// keluaran mengikuti urutan kemunculan nama, sama seperti resolusi per-term
+// penuh.
+func pePlanTermResolution(names []string, resolve func(name string) int) []int {
+	slots := peTermDedupeSlots(names)
+	perName := make([]int, len(names))
+	for i, name := range names {
+		if slots[i] != i {
+			perName[i] = perName[slots[i]]
+			continue
+		}
+		perName[i] = resolve(name)
+	}
+	out := make([]int, 0, len(names))
+	for _, id := range perName {
+		if id > 0 {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 var peImageMIME = map[string]string{
@@ -1676,7 +1731,12 @@ func (d *Deps) peUploadArticleImages(ctx context.Context, connection, document b
 // potongan hash URL asal, supaya tiap gambar unik di media library mitra (nama
 // UUID asli tidak informatif, sedangkan judul saja membuat semua berkas sama).
 func peInlineImageName(title, src string) string {
-	suffix := fmt.Sprintf("%08x", fnv32(src))
+	// padanan "%08x": heksadesimal huruf kecil, lebar minimal 8 dengan nol di
+	// depan (fnv32 = uint32, jadi tidak pernah lebih dari 8 digit).
+	suffix := strconv.FormatUint(uint64(fnv32(src)), 16)
+	if len(suffix) < 8 {
+		suffix = "00000000"[:8-len(suffix)] + suffix
+	}
 	slug := peSlugifyTerm(title)
 	if len(slug) > 60 {
 		slug = slug[:60]
@@ -1743,9 +1803,75 @@ func peIsUploadImageRef(value string) bool {
 	return ok
 }
 
-// peIndexFold: strings.Index dengan pencocokan tanpa peduli huruf besar/kecil.
+// peIndexFold: strings.Index case-insensitive ASCII tanpa menyalin haystack.
+// Versi lama memanggil strings.ToLower(haystack) — salinan seluruh sisa dokumen
+// per panggilan, dan peRewriteImages memanggilnya per tag <img> di dokumen
+// ratusan KB.
+//
+// Beda perilaku dengan versi ToLower hanya untuk rune non-ASCII yang bentuk
+// lowercase-nya satu karakter ASCII (mis. U+0130/U+212A): untuk needle "<img"
+// tidak ada rune seperti itu. Pada kasus ekstrem itu versi lama sendiri sudah
+// mengembalikan indeks yang melenceng dari string asli, karena ToLower bisa
+// mengubah panjang byte.
 func peIndexFold(haystack, needle string) int {
-	return strings.Index(strings.ToLower(haystack), strings.ToLower(needle))
+	if needle == "" {
+		return 0
+	}
+	first := needle[0]
+	low, up := first, first
+	if first >= 'A' && first <= 'Z' {
+		low += 'a' - 'A'
+	} else if first >= 'a' && first <= 'z' {
+		up -= 'a' - 'A'
+	}
+	rest := needle[1:]
+	for pos := 0; pos+len(needle) <= len(haystack); {
+		if asciiEqByte(haystack[pos], first) && asciiEqFold(haystack[pos+1:pos+len(needle)], rest) {
+			return pos
+		}
+		// Kandidat berikutnya: kemunculan terdekat varian huruf pertama
+		// (IndexByte dipercepat SIMD, jauh lebih murah daripada membandingkan
+		// tiap posisi).
+		next := -1
+		if j := strings.IndexByte(haystack[pos+1:], low); j >= 0 {
+			next = pos + 1 + j
+		}
+		if up != low {
+			if j := strings.IndexByte(haystack[pos+1:], up); j >= 0 && (next < 0 || pos+1+j < next) {
+				next = pos + 1 + j
+			}
+		}
+		if next < 0 || next+len(needle) > len(haystack) {
+			return -1
+		}
+		pos = next
+	}
+	return -1
+}
+
+func asciiEqByte(a, b byte) bool {
+	if a == b {
+		return true
+	}
+	if a >= 'A' && a <= 'Z' {
+		a += 'a' - 'A'
+	}
+	if b >= 'A' && b <= 'Z' {
+		b += 'a' - 'A'
+	}
+	return a == b
+}
+
+func asciiEqFold(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !asciiEqByte(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // peTagEnd: indeks tepat setelah '>' penutup tag, memperhitungkan nilai

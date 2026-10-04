@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -295,7 +296,7 @@ func (d *Deps) BugReportUpdate(w http.ResponseWriter, r *http.Request) {
 				writeErr(w, d, errUnprocessable("Invalid input: expected string, received "+mopsJSONType(v)))
 				return
 			}
-			if len([]rune(s)) > 5000 {
+			if utf8.RuneCountInString(s) > 5000 {
 				writeErr(w, d, errUnprocessable("Too big: expected string to have <=5000 characters"))
 				return
 			}

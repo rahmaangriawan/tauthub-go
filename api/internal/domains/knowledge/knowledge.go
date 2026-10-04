@@ -193,20 +193,32 @@ func InsertSource(ctx context.Context, pool *pgxpool.Pool, opts InsertSourceOpti
 
 // ---------- retrieval (parity retrieveChunks: 0.65 semantic + 0.35 lexical) ----------
 
+// reLexicalTerm: pemisah token untuk lexicalHits — dikompilasi sekali, bukan
+// per baris chunk.
+var reLexicalTerm = regexp.MustCompile(`[\w-]+`)
+
+// lexicalTerms: himpunan token unik (huruf kecil) dari sebuah teks.
+func lexicalTerms(s string) map[string]bool {
+	terms := map[string]bool{}
+	for _, t := range reLexicalTerm.FindAllString(strings.ToLower(s), -1) {
+		terms[t] = true
+	}
+	return terms
+}
+
 // lexicalHits: varian _knowledge.ts — hits/queryTerms (BEDA dari Jaccard embed.ts).
 func lexicalHits(query, content string) float64 {
-	termRe := regexp.MustCompile(`[\w-]+`)
-	queryTerms := map[string]bool{}
-	for _, t := range termRe.FindAllString(strings.ToLower(query), -1) {
-		queryTerms[t] = true
-	}
+	return lexicalHitsFromTerms(lexicalTerms(query), content)
+}
+
+// lexicalHitsFromTerms: lexicalHits dengan term query yang sudah dihitung.
+// RetrieveChunks menghitung term query sekali lalu memakai ini per baris chunk
+// supaya tidak mengulang ekstraksi term untuk query yang sama.
+func lexicalHitsFromTerms(queryTerms map[string]bool, content string) float64 {
 	if len(queryTerms) == 0 {
 		return 0
 	}
-	contentTerms := map[string]bool{}
-	for _, t := range termRe.FindAllString(strings.ToLower(content), -1) {
-		contentTerms[t] = true
-	}
+	contentTerms := lexicalTerms(content)
 	hits := 0
 	for term := range queryTerms {
 		if contentTerms[term] {
@@ -240,6 +252,7 @@ func RetrieveChunks(ctx context.Context, pool *pgxpool.Pool, brandID, query stri
 	defer rowsQ.Close()
 
 	queryVector := ai.LocalEmbedding(query)
+	queryTerms := lexicalTerms(query)
 	scored := []ScoredChunk{}
 	for rowsQ.Next() {
 		var chunkID, sourceID, sourceTitle, content string
@@ -256,7 +269,7 @@ func RetrieveChunks(ctx context.Context, pool *pgxpool.Pool, brandID, query stri
 		if len(embedding) == len(queryVector) {
 			semantic = ai.CosineSimilarity(queryVector, embedding)
 		}
-		score := semantic*0.65 + lexicalHits(query, content)*0.35
+		score := semantic*0.65 + lexicalHitsFromTerms(queryTerms, content)*0.35
 		scored = append(scored, ScoredChunk{
 			ChunkID: chunkID, SourceID: sourceID, SourceTitle: sourceTitle,
 			Content: content, Score: mathRound6(score), ChunkIndex: chunkIndex,

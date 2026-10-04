@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -29,11 +30,11 @@ func (d *Deps) BugReportSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	body := decodeJSON(r)
 	message, _ := strField(body, "message")
-	if len([]rune(message)) < 10 {
+	if utf8.RuneCountInString(message) < 10 {
 		writeErr(w, d, errUnprocessable("Pesan minimal 10 karakter"))
 		return
 	}
-	if len([]rune(message)) > 5000 {
+	if utf8.RuneCountInString(message) > 5000 {
 		writeErr(w, d, errUnprocessable("String must contain at most 5000 character(s)"))
 		return
 	}

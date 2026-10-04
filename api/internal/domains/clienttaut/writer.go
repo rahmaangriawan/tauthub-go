@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -364,7 +365,7 @@ func (d *Deps) generateWriterArticle(ctx context.Context, campaignID, brandID, u
 		plainMeta := stripHiddenBlocks(contentHTML)
 		plainMeta = reHTMLTag.ReplaceAllString(plainMeta, " ")
 		plainMeta = strings.TrimSpace(reWhitespace.ReplaceAllString(plainMeta, " "))
-		if len([]rune(plainMeta)) > 160 {
+		if utf8.RuneCountInString(plainMeta) > 160 {
 			metaDescription = strings.TrimRight(string([]rune(plainMeta)[:160]), " ") + "…"
 		} else {
 			metaDescription = plainMeta
@@ -585,7 +586,7 @@ func weaveContextualLink(html, url, anchor string, rel *string) string {
 	candidates := []string{anchor}
 	words := []string{}
 	for _, w := range strings.Fields(anchor) {
-		if len([]rune(w)) > 4 && isAlphaPhrase(w) {
+		if utf8.RuneCountInString(w) > 4 && isAlphaPhrase(w) {
 			words = append(words, w)
 		}
 	}

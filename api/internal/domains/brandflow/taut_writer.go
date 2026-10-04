@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -72,7 +73,7 @@ func normalizeTautWriterLinks(raw []tautWriterLinkInput) ([]tautWriterLink, erro
 		if anchor == "" {
 			return nil, errUnprocessable("Anchor teks wajib diisi bila URL diisi.")
 		}
-		if len([]rune(anchor)) > 120 {
+		if utf8.RuneCountInString(anchor) > 120 {
 			return nil, errUnprocessable("Anchor teks maksimal 120 karakter.")
 		}
 		out = append(out, tautWriterLink{Anchor: anchor, URL: rawURL})
@@ -462,15 +463,12 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	var result *agentLLMResult
 	if streamFn != nil {
 		// Streaming: kumpulkan delta JSON mentah, ekstrak content_html parsial,
-		// dan kirim TAMBAHANNYA saja ke klien (escape sudah di-decode).
-		var acc strings.Builder
-		sent := 0
+		// dan kirim TAMBAHANNYA saja ke klien (escape sudah di-decode). Decoder
+		// inkremental — dulu tiap delta memindai ulang seluruh akumulasi.
+		stream := newPEStreamHTML()
 		result, err = d.runTautAgentStream(ctx, "writer", campaignID, prompt, &mediaID, true, func(delta string) {
-			acc.WriteString(delta)
-			visible, _ := partialContentHTML(acc.String())
-			if len(visible) > sent {
-				streamFn(visible[sent:])
-				sent = len(visible)
+			if tail, _ := stream.Write(delta); tail != "" {
+				streamFn(tail)
 			}
 		})
 	} else {
@@ -500,7 +498,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 	if metaDescription == "" {
 		plainMeta := stripHTMLToText(contentHTML)
-		if len([]rune(plainMeta)) > 160 {
+		if utf8.RuneCountInString(plainMeta) > 160 {
 			metaDescription = strings.TrimRight(string([]rune(plainMeta)[:160]), " ") + "…"
 		} else {
 			metaDescription = plainMeta
@@ -1234,4 +1232,120 @@ func partialContentHTML(acc string) (visible string, closed bool) {
 		}
 	}
 	return out.String(), false
+}
+
+// peStreamHTML: dekoder inkremental untuk partialContentHTML. Keluaran tiap
+// Write() adalah TAMBAHAN yang akan dihasilkan partialContentHTML pada prefix
+// akumulasi tersebut — decode kiri-ke-kanan deterministik dan hanya bertambah,
+// jadi kursor boleh dibawa antar delta tanpa memindai ulang seluruh akumulasi.
+type peStreamHTML struct {
+	raw     strings.Builder
+	scanned int // batas pencarian key; key bisa terbelah di tengah delta
+	stage   int // 0 = cari key, 1 = tunggu quote pembuka, 2 = decode isi
+	j       int // posisi baca berikutnya di raw
+	out     strings.Builder
+	outLen  int
+	closed  bool
+}
+
+func newPEStreamHTML() *peStreamHTML { return &peStreamHTML{} }
+
+// Write menambah delta dan mengembalikan tambahan teks yang ter-decode.
+func (s *peStreamHTML) Write(delta string) (tail string, closed bool) {
+	if s.closed {
+		return "", true
+	}
+	s.raw.WriteString(delta)
+	acc := s.raw.String()
+
+	const key = `"content_html"`
+	if s.stage == 0 {
+		from := s.scanned - len(key) + 1
+		if from < 0 {
+			from = 0
+		}
+		i := strings.Index(acc[from:], key)
+		if i < 0 {
+			s.scanned = len(acc)
+			return "", false
+		}
+		s.j = from + i + len(key)
+		s.stage = 1
+	}
+	if s.stage == 1 {
+		for s.j < len(acc) && (acc[s.j] == ' ' || acc[s.j] == ':') {
+			s.j++
+		}
+		if s.j >= len(acc) {
+			return "", false
+		}
+		if acc[s.j] != '"' {
+			return "", false
+		}
+		s.j++
+		s.stage = 2
+	}
+	for s.j < len(acc) {
+		c := acc[s.j]
+		if c == '"' {
+			s.closed = true
+			break
+		}
+		if c != '\\' {
+			s.out.WriteByte(c)
+			s.j++
+			continue
+		}
+		// Escape: tunggu delta berikutnya bila terpotong di ujung.
+		if s.j+1 >= len(acc) {
+			break
+		}
+		esc := acc[s.j+1]
+		switch esc {
+		case '"', '\\', '/':
+			s.out.WriteByte(esc)
+			s.j += 2
+		case 'n':
+			s.out.WriteByte('\n')
+			s.j += 2
+		case 't':
+			s.out.WriteByte('\t')
+			s.j += 2
+		case 'r':
+			s.out.WriteByte('\r')
+			s.j += 2
+		case 'b':
+			s.out.WriteByte('\b')
+			s.j += 2
+		case 'f':
+			s.out.WriteByte('\f')
+			s.j += 2
+		case 'u':
+			if s.j+6 > len(acc) {
+				return s.tail(), false
+			}
+			code, pErr := strconv.ParseUint(acc[s.j+2:s.j+6], 16, 32)
+			if pErr != nil {
+				s.out.WriteByte(esc)
+				s.j += 2
+				continue
+			}
+			s.out.WriteRune(rune(code))
+			s.j += 6
+		default:
+			s.out.WriteByte(esc)
+			s.j += 2
+		}
+	}
+	return s.tail(), s.closed
+}
+
+func (s *peStreamHTML) tail() string {
+	out := s.out.String()
+	if len(out) <= s.outLen {
+		return ""
+	}
+	tail := out[s.outLen:]
+	s.outLen = len(out)
+	return tail
 }

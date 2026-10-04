@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -674,7 +675,7 @@ func (d *Deps) TautProfileVerify(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	} else if ok {
-		if len([]rune(raw)) > 2000 {
+		if utf8.RuneCountInString(raw) > 2000 {
 			d.writeErr(w, zodTooBigString(2000))
 			return
 		}
@@ -886,7 +887,7 @@ func parseProfileStrict(body map[string]any) (profileForm, error) {
 	if raw, ok, err := fieldStr(ci, "custom"); err != nil {
 		return out, err
 	} else if ok {
-		if len([]rune(raw)) > 120 {
+		if utf8.RuneCountInString(raw) > 120 {
 			return out, zodTooBigString(120)
 		}
 		out.CategoryInput.Custom = strings.TrimSpace(raw)
@@ -940,7 +941,7 @@ func parseProfileStrict(body map[string]any) (profileForm, error) {
 				return out, zodInvalidType("string", "undefined")
 			}
 			linkURL := strings.TrimSpace(rawURL)
-			if len([]rune(linkURL)) > 500 {
+			if utf8.RuneCountInString(linkURL) > 500 {
 				return out, zodTooBigString(500)
 			}
 			if !isZodURL(linkURL) {
@@ -989,7 +990,7 @@ func parseProfileDraft(body map[string]any) (profileForm, error) {
 				case "website":
 					limit = 300
 				}
-				if len([]rune(raw)) > limit {
+				if utf8.RuneCountInString(raw) > limit {
 					return out, zodTooBigString(limit)
 				}
 				trimmed := strings.TrimSpace(raw)
@@ -1023,7 +1024,7 @@ func parseProfileDraft(body map[string]any) (profileForm, error) {
 		if raw, ok, err := fieldStr(m, "custom"); err != nil {
 			return out, err
 		} else if ok {
-			if len([]rune(raw)) > 120 {
+			if utf8.RuneCountInString(raw) > 120 {
 				return out, zodTooBigString(120)
 			}
 			out.CategoryInput.Custom = strings.TrimSpace(raw)
@@ -1037,7 +1038,7 @@ func parseProfileDraft(body map[string]any) (profileForm, error) {
 				if raw, ok, err := fieldStr(m, key); err != nil {
 					return out, err
 				} else if ok {
-					if len([]rune(raw)) > 8000 {
+					if utf8.RuneCountInString(raw) > 8000 {
 						return out, zodTooBigString(8000)
 					}
 					out.Materials.Brief = strings.TrimSpace(raw)
@@ -1081,7 +1082,7 @@ func parseProfileDraft(body map[string]any) (profileForm, error) {
 			if raw, ok, err := fieldStr(obj, "anchor"); err != nil {
 				return out, err
 			} else if ok {
-				if len([]rune(raw)) > 120 {
+				if utf8.RuneCountInString(raw) > 120 {
 					return out, zodTooBigString(120)
 				}
 				entry.Anchor = strings.TrimSpace(raw)
@@ -1089,7 +1090,7 @@ func parseProfileDraft(body map[string]any) (profileForm, error) {
 			if raw, ok, err := fieldStr(obj, "url"); err != nil {
 				return out, err
 			} else if ok {
-				if len([]rune(raw)) > 500 {
+				if utf8.RuneCountInString(raw) > 500 {
 					return out, zodTooBigString(500)
 				}
 				entry.URL = strings.TrimSpace(raw)
@@ -1097,7 +1098,7 @@ func parseProfileDraft(body map[string]any) (profileForm, error) {
 			if raw, ok, err := fieldStr(obj, "notes"); err != nil {
 				return out, err
 			} else if ok {
-				if len([]rune(raw)) > 300 {
+				if utf8.RuneCountInString(raw) > 300 {
 					return out, zodTooBigString(300)
 				}
 				entry.Notes = strings.TrimSpace(raw)
@@ -1134,7 +1135,7 @@ func parseProfileDraft(body map[string]any) (profileForm, error) {
 					if key == "quote" {
 						limit = 500
 					}
-					if len([]rune(raw)) > limit {
+					if utf8.RuneCountInString(raw) > limit {
 						return out, zodTooBigString(limit)
 					}
 					trimmed := strings.TrimSpace(raw)
@@ -1162,7 +1163,7 @@ func optionalTrimmed(m map[string]any, key string, limit int) (string, error) {
 	if !ok {
 		return "", nil
 	}
-	if len([]rune(raw)) > limit {
+	if utf8.RuneCountInString(raw) > limit {
 		return "", zodTooBigString(limit)
 	}
 	return strings.TrimSpace(raw), nil

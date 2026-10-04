@@ -152,7 +152,61 @@ func (d *Deps) runMatchmaker(ctx context.Context, campaignID, brandID string) (m
 		existingIDs[e.strOr("media_id", "")] = true
 	}
 
+	out, plan := planMatchmakerWrites(campaignID, pool, ranked, existingIDs)
+	// Tulis semua baris dengan DUA statement (sebelumnya satu UPDATE/INSERT per
+	// media): baris yang sudah ada lewat satu UPDATE berbasis jsonb_to_recordset,
+	// baris baru lewat satu multi-row INSERT. Cabang existing vs baru tetap
+	// memakai snapshot existingIDs yang sama seperti jalur lama.
+	if len(plan.updateRows) > 0 {
+		if err := d.exec(ctx,
+			`UPDATE taut_campaign_media tcm
+			 SET match_reason = v.match_reason, status = v.status, ai_score = v.ai_score, match_rank = v.match_rank
+			 FROM jsonb_to_recordset($1::jsonb) AS v(media_id text, match_reason text, status text, ai_score int, match_rank int)
+			 WHERE tcm.campaign_id = $2 AND tcm.media_id::text = v.media_id`,
+			jsonString(plan.updateRows), campaignID); err != nil {
+			return nil, err
+		}
+	}
+	if len(plan.insertArgs) > 0 {
+		if err := d.exec(ctx, plan.insertSQL, plan.insertArgs...); err != nil {
+			return nil, err
+		}
+	}
+
+	selectedCount := 0
+	for _, m := range out {
+		if m.Status == "selected" {
+			selectedCount++
+		}
+	}
+	return map[string]any{"selected": selectedCount, "media": out}, nil
+}
+
+func rankedItemAlasan(item *rankedItem) string {
+	if item == nil {
+		return ""
+	}
+	return item.Alasan
+}
+
+// matchmakerWritePlan: hasil pemisahan baris pool untuk penulisan batch.
+type matchmakerWritePlan struct {
+	// updateRows: baris media yang sudah ada → payload UPDATE (jsonb).
+	updateRows []map[string]any
+	// insertSQL/insertArgs: multi-row INSERT untuk media baru; argumen per
+	// baris urut (id baru, campaign_id, media_id, status, reason, score, rank).
+	insertSQL  string
+	insertArgs []any
+}
+
+// planMatchmakerWrites: hitung keluaran matchmaker + rencana penulisannya
+// (murni, tanpa DB). Cabang UPDATE vs INSERT memakai snapshot existingIDs,
+// sama seperti jalur satu-query-per-media; nilai kolom tidak berubah.
+func planMatchmakerWrites(campaignID string, pool []candidateLine, ranked []rankedItem, existingIDs map[string]bool) ([]matchmakerOutputItem, matchmakerWritePlan) {
 	out := make([]matchmakerOutputItem, 0, len(pool))
+	plan := matchmakerWritePlan{}
+	insertValues := []string{}
+	insertParam := 1
 	for _, item := range pool {
 		idx := -1
 		for i, r := range ranked {
@@ -179,37 +233,23 @@ func (d *Deps) runMatchmaker(ctx context.Context, campaignID, brandID string) (m
 		}
 
 		if existingIDs[item.MediaID] {
-			if err := d.exec(ctx,
-				"UPDATE taut_campaign_media SET match_reason = $1, status = $2, ai_score = $3, match_rank = $4 WHERE campaign_id = $5 AND media_id = $6",
-				reason, status, aiScore, rank, campaignID, item.MediaID); err != nil {
-				return nil, err
-			}
+			plan.updateRows = append(plan.updateRows, map[string]any{
+				"media_id": item.MediaID, "match_reason": reason, "status": status,
+				"ai_score": aiScore, "match_rank": rank,
+			})
 		} else {
-			if err := d.exec(ctx,
-				"INSERT INTO taut_campaign_media (id, campaign_id, media_id, source, status, match_reason, ai_score, match_rank) VALUES ($1, $2, $3, 'ai', $4, $5, $6, $7)",
-				newUUID(), campaignID, item.MediaID, status, reason, aiScore, rank); err != nil {
-				return nil, err
-			}
+			insertValues = append(insertValues, "("+placeholders(insertParam, 7)+")")
+			plan.insertArgs = append(plan.insertArgs, newUUID(), campaignID, item.MediaID, status, reason, aiScore, rank)
+			insertParam += 7
 		}
 		out = append(out, matchmakerOutputItem{
 			MediaID: item.MediaID, Name: item.Name, Score: aiScore, Status: status, Reason: reason,
 		})
 	}
-
-	selectedCount := 0
-	for _, m := range out {
-		if m.Status == "selected" {
-			selectedCount++
-		}
+	if len(insertValues) > 0 {
+		plan.insertSQL = "INSERT INTO taut_campaign_media (id, campaign_id, media_id, source, status, match_reason, ai_score, match_rank) VALUES " + strings.Join(insertValues, ", ")
 	}
-	return map[string]any{"selected": selectedCount, "media": out}, nil
-}
-
-func rankedItemAlasan(item *rankedItem) string {
-	if item == nil {
-		return ""
-	}
-	return item.Alasan
+	return out, plan
 }
 
 func optionalString(row rowMap, key string) *string {

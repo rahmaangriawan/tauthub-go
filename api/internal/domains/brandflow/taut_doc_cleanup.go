@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -43,7 +44,7 @@ func (d *Deps) TautDocCleanup(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "Teks dokumen kosong.")
 		return
 	}
-	if len([]rune(text)) > docCleanupMaxChars*2 {
+	if utf8.RuneCountInString(text) > docCleanupMaxChars*2 {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Teks dokumen terlalu panjang untuk dirapikan.")
 		return
 	}

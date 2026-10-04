@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -148,8 +149,8 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 			d.cmsError(w, errUnprocessable("Invalid input: expected string, received "+bsZodTypeName(raw)))
 			return
 		}
-		if len([]rune(s)) < 1 || len([]rune(s)) > 160 {
-			if len([]rune(s)) > 160 {
+		if utf8.RuneCountInString(s) < 1 || utf8.RuneCountInString(s) > 160 {
+			if utf8.RuneCountInString(s) > 160 {
 				d.cmsError(w, errUnprocessable("Too big: expected string to have <=160 characters"))
 				return
 			}
@@ -169,7 +170,7 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 			d.cmsError(w, errUnprocessable("Too small: expected string to have >=1 characters"))
 			return
 		}
-		if len([]rune(s)) > 500 {
+		if utf8.RuneCountInString(s) > 500 {
 			d.cmsError(w, errUnprocessable("Too big: expected string to have <=500 characters"))
 			return
 		}
@@ -182,11 +183,11 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 			d.cmsError(w, errUnprocessable("Invalid input: expected string, received "+bsZodTypeName(raw)))
 			return
 		}
-		if len([]rune(v)) < 1 {
+		if utf8.RuneCountInString(v) < 1 {
 			d.cmsError(w, errUnprocessable("Too small: expected string to have >=1 characters"))
 			return
 		}
-		if len([]rune(v)) > 500 {
+		if utf8.RuneCountInString(v) > 500 {
 			d.cmsError(w, errUnprocessable("Too big: expected string to have <=500 characters"))
 			return
 		}
@@ -199,11 +200,11 @@ func (d *Deps) CmsConnectionCreate(w http.ResponseWriter, r *http.Request) {
 			d.cmsError(w, errUnprocessable("Invalid input: expected string, received "+bsZodTypeName(raw)))
 			return
 		}
-		if len([]rune(s)) < 16 {
+		if utf8.RuneCountInString(s) < 16 {
 			d.cmsError(w, errUnprocessable("Too small: expected string to have >=16 characters"))
 			return
 		}
-		if len([]rune(s)) > 500 {
+		if utf8.RuneCountInString(s) > 500 {
 			d.cmsError(w, errUnprocessable("Too big: expected string to have <=500 characters"))
 			return
 		}
@@ -824,10 +825,10 @@ func bsZodStringMode(body map[string]any, key string, min, max int, optional, nu
 	if trim {
 		value = strings.TrimSpace(s)
 	}
-	if min > 0 && len([]rune(value)) < min {
+	if min > 0 && utf8.RuneCountInString(value) < min {
 		return "", errUnprocessable("Too small: expected string to have >=" + itoa(min) + " characters")
 	}
-	if max > 0 && len([]rune(value)) > max {
+	if max > 0 && utf8.RuneCountInString(value) > max {
 		return "", errUnprocessable("Too big: expected string to have <=" + itoa(max) + " characters")
 	}
 	return value, nil
@@ -854,7 +855,7 @@ func bsZodURL(body map[string]any, key string, max int, nullable bool) (string, 
 	if !bsIsURL(trimmed) {
 		return "", errUnprocessable("Invalid URL")
 	}
-	if len([]rune(trimmed)) > max {
+	if utf8.RuneCountInString(trimmed) > max {
 		return "", errUnprocessable("Too big: expected string to have <=" + itoa(max) + " characters")
 	}
 	return trimmed, nil

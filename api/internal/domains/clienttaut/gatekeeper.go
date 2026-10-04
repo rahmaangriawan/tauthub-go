@@ -45,31 +45,49 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 	}
 
 	results := []gatekeeperItemResult{}
+	// Muat dokumen + versi aktif seluruh item dalam SATU query (sebelumnya dua
+	// query per item). Nilai per item sama: dokumen yang tidak ada tetap
+	// berarti title=""/versi 1, versi yang tidak ada tetap isi=""/atribusi="".
+	docIDs, docUseCount := gatekeeperDocUsage(items)
+	docInfo, err := d.loadGatekeeperDocVersions(ctx, docIDs)
+	if err != nil {
+		return nil, err
+	}
 	for _, item := range items {
 		itemID := item.strOr("id", "")
 		mediaID := item.strOr("media_id", "")
 		documentID := item.strOr("article_document_id", "")
 
-		doc, err := d.queryRow(ctx, "SELECT title, current_version FROM content_documents WHERE id = $1 LIMIT 1", documentID)
-		if err != nil {
-			return nil, err
-		}
 		title := ""
 		currentVersion := 1
-		if doc != nil {
-			title = doc.strOr("title", "")
-			currentVersion = doc.intOr("current_version", 1)
-		}
-		ver, err := d.queryRow(ctx,
-			"SELECT content, attribution FROM content_versions WHERE document_id = $1 AND version = $2 LIMIT 1", documentID, currentVersion)
-		if err != nil {
-			return nil, err
-		}
 		content := ""
 		attribution := ""
-		if ver != nil {
-			content = ver.strOr("content", "")
-			attribution = ver.strOr("attribution", "")
+		if info, ok := docInfo[documentID]; ok && docUseCount[documentID] == 1 {
+			title = info.title
+			currentVersion = info.currentVersion
+			content = info.content
+			attribution = info.attribution
+		} else {
+			// Dokumen dipakai lebih dari satu item (atau tidak ada di hasil
+			// query): versinya bisa berubah di tengah loop karena item lain
+			// bisa menaikkan current_version, jadi baca ulang langsung.
+			doc, err := d.queryRow(ctx, "SELECT title, current_version FROM content_documents WHERE id = $1 LIMIT 1", documentID)
+			if err != nil {
+				return nil, err
+			}
+			if doc != nil {
+				title = doc.strOr("title", "")
+				currentVersion = doc.intOr("current_version", 1)
+			}
+			ver, err := d.queryRow(ctx,
+				"SELECT content, attribution FROM content_versions WHERE document_id = $1 AND version = $2 LIMIT 1", documentID, currentVersion)
+			if err != nil {
+				return nil, err
+			}
+			if ver != nil {
+				content = ver.strOr("content", "")
+				attribution = ver.strOr("attribution", "")
+			}
 		}
 
 		// Hard gate moderation (deterministik + AI classifier existing).
@@ -286,6 +304,66 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 // aiOverviewSettings: toggle + ambang dari taut_agent_configs.settings.aiOverview.
 func (d *Deps) aiOverviewSettings(ctx context.Context) ai.AIOverviewSettings {
 	return ai.AIOverviewSettingsFromJSON(d.getAgentConfig(ctx, "gatekeeper").Settings["aiOverview"])
+}
+
+// gatekeeperDocData: judul + versi aktif + isi satu dokumen artikel.
+type gatekeeperDocData struct {
+	title          string
+	currentVersion int
+	content        string
+	attribution    string
+}
+
+// gatekeeperDocUsage: daftar document_id per item (urutan asli) + berapa kali
+// tiap dokumen dipakai. Dokumen yang dipakai lebih dari satu item tidak boleh
+// dibaca lewat snapshot awal (versinya bisa naik di tengah loop).
+func gatekeeperDocUsage(items []rowMap) ([]string, map[string]int) {
+	docIDs := make([]string, 0, len(items))
+	docUseCount := map[string]int{}
+	for _, item := range items {
+		docID := item.strOr("article_document_id", "")
+		docIDs = append(docIDs, docID)
+		docUseCount[docID]++
+	}
+	return docIDs, docUseCount
+}
+
+// mapGatekeeperDocRows: baris query gabungan → data per document_id.
+// Padanan baca per dokumen: dokumen yang tidak ada = title ""/versi 1
+// (COALESCE current_version NULL → 1), versi yang tidak ada = isi/attribution "".
+func mapGatekeeperDocRows(rows []rowMap) map[string]gatekeeperDocData {
+	out := map[string]gatekeeperDocData{}
+	for _, r := range rows {
+		out[r.strOr("document_id", "")] = gatekeeperDocData{
+			title:          r.strOr("title", ""),
+			currentVersion: r.intOr("current_version", 1),
+			content:        r.strOr("content", ""),
+			attribution:    r.strOr("attribution", ""),
+		}
+	}
+	return out
+}
+
+// loadGatekeeperDocVersions: judul, versi aktif, isi, dan atribusi untuk
+// BANYAK dokumen sekaligus (satu query, sebelumnya dua query per dokumen).
+// Setiap id input menghasilkan tepat satu baris (unnest + LEFT JOIN).
+func (d *Deps) loadGatekeeperDocVersions(ctx context.Context, docIDs []string) (map[string]gatekeeperDocData, error) {
+	if len(docIDs) == 0 {
+		return map[string]gatekeeperDocData{}, nil
+	}
+	rows, err := d.queryRows(ctx, `
+		SELECT u.id AS document_id, doc.title, doc.current_version, cv.content, cv.attribution
+		FROM unnest($1::text[]) AS u(id)
+		LEFT JOIN content_documents doc ON doc.id::text = u.id
+		LEFT JOIN LATERAL (
+			SELECT content, attribution FROM content_versions
+			WHERE document_id::text = u.id AND version = COALESCE(doc.current_version, 1)
+			LIMIT 1
+		) cv ON TRUE`, docIDs)
+	if err != nil {
+		return nil, err
+	}
+	return mapGatekeeperDocRows(rows), nil
 }
 
 // runAIOverviewCheck: nilai kesiapan AI Overview (non-blocking). Bagian murni

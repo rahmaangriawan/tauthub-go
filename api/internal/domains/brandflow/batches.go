@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -47,25 +48,25 @@ func parseBatchBrief(raw any) (batchBriefRow, error) {
 	}
 	row := batchBriefRow{Raw: m, TargetWords: 1000, Language: "id-ID", ContentType: "article"}
 	topic, ok := m["topic"].(string)
-	if !ok || len([]rune(strings.TrimSpace(topic))) < 3 {
+	if !ok || utf8.RuneCountInString(strings.TrimSpace(topic)) < 3 {
 		return row, errUnprocessable("String must contain at least 3 character(s)")
 	}
-	if len([]rune(topic)) > 300 {
+	if utf8.RuneCountInString(topic) > 300 {
 		return row, errUnprocessable("String must contain at most 300 character(s)")
 	}
 	row.Topic = strings.TrimSpace(topic)
 	goal, ok := m["goal"].(string)
-	if !ok || len([]rune(strings.TrimSpace(goal))) < 3 {
+	if !ok || utf8.RuneCountInString(strings.TrimSpace(goal)) < 3 {
 		return row, errUnprocessable("String must contain at least 3 character(s)")
 	}
-	if len([]rune(goal)) > 2000 {
+	if utf8.RuneCountInString(goal) > 2000 {
 		return row, errUnprocessable("String must contain at most 2000 character(s)")
 	}
 	row.Goal = strings.TrimSpace(goal)
 
 	if kw, present := m["primary_keyword"]; present && kw != nil {
 		s, isStr := kw.(string)
-		if !isStr || len([]rune(s)) > 200 {
+		if !isStr || utf8.RuneCountInString(s) > 200 {
 			return row, errUnprocessable("String must contain at most 200 character(s)")
 		}
 		row.PrimaryKeyword = s
@@ -86,7 +87,7 @@ func parseBatchBrief(raw any) (batchBriefRow, error) {
 			if key == "search_intent" {
 				limit = 80
 			}
-			if len([]rune(s)) > limit {
+			if utf8.RuneCountInString(s) > limit {
 				return row, errUnprocessable("String must contain at most " + itoa(limit) + " character(s)")
 			}
 			switch key {
@@ -121,13 +122,13 @@ func parseBatchBrief(raw any) (batchBriefRow, error) {
 		row.TargetWords = int(f)
 	}
 	if s, ok := m["language"].(string); ok && s != "" {
-		if len([]rune(s)) > 20 {
+		if utf8.RuneCountInString(s) > 20 {
 			return row, errUnprocessable("String must contain at most 20 character(s)")
 		}
 		row.Language = s
 	}
 	if s, ok := m["content_type"].(string); ok && s != "" {
-		if len([]rune(s)) > 50 {
+		if utf8.RuneCountInString(s) > 50 {
 			return row, errUnprocessable("String must contain at most 50 character(s)")
 		}
 		row.ContentType = s
@@ -177,7 +178,7 @@ func (d *Deps) batchJSON(ctx context.Context, batch bsRow, includeItems bool) (m
 	if err != nil {
 		return nil, err
 	}
-	countMap := map[string]any{}
+	countMap := make(map[string]any, len(counts))
 	for _, c := range counts {
 		countMap[c.strOr("status", "")] = c.intOr("count", 0)
 	}
@@ -290,11 +291,11 @@ func (d *Deps) BatchesCreate(w http.ResponseWriter, r *http.Request) {
 	body := decodeJSON(r)
 
 	name, ok := body["name"].(string)
-	if !ok || len([]rune(strings.TrimSpace(name))) < 2 {
+	if !ok || utf8.RuneCountInString(strings.TrimSpace(name)) < 2 {
 		d.writeErr(w, errUnprocessable("String must contain at least 2 character(s)"))
 		return
 	}
-	if len([]rune(name)) > 200 {
+	if utf8.RuneCountInString(name) > 200 {
 		d.writeErr(w, errUnprocessable("String must contain at most 200 character(s)"))
 		return
 	}
@@ -405,13 +406,13 @@ func (d *Deps) BatchesCreate(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
-	for i, brief := range parsed {
-		if err := d.exec(r.Context(),
-			"INSERT INTO content_batch_items (id, brand_id, batch_id, row_number, fingerprint, brief_payload, status) VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'pending')",
-			uuid.NewString(), brandRow.ID, batchID, i+1, fingerprints[i], marshalJSON(brief.Raw)); err != nil {
-			d.writeErr(w, err)
-			return
-		}
+	// Semua baris item dimasukkan dengan SATU multi-row INSERT (sebelumnya
+	// satu INSERT per baris). ID tetap dibuat urut per baris, sehingga nilai
+	// kolom, urutan baris, dan row_number identik dengan loop lama.
+	insertSQL, itemArgs := buildBatchItemInsert(parsed, brandRow.ID, batchID, fingerprints)
+	if err := d.exec(r.Context(), insertSQL, itemArgs...); err != nil {
+		d.writeErr(w, err)
+		return
 	}
 	d.audit(r.Context(), brandRow.ID, user.ID, "content.batch.created", "content_batch", batchID)
 	created, err := d.queryRow(r.Context(), "SELECT * FROM content_batches WHERE id = $1", batchID)
@@ -442,6 +443,23 @@ func estimateTokens(rows []batchBriefRow) int {
 		total += v
 	}
 	return total
+}
+
+// buildBatchItemInsert: susun multi-row INSERT content_batch_items untuk semua
+// baris batch. Urutan argumen per baris sama dengan loop INSERT lama:
+// (id baru, brand_id, batch_id, row_number=i+1, fingerprint, brief_payload::jsonb,
+// status literal 'pending') — id tetap dibuat satu kali per baris, berurutan.
+func buildBatchItemInsert(parsed []batchBriefRow, brandID, batchID string, fingerprints []string) (string, []any) {
+	itemValues := make([]string, 0, len(parsed))
+	itemArgs := make([]any, 0, len(parsed)*6)
+	param := 1
+	for i, brief := range parsed {
+		itemValues = append(itemValues,
+			"($"+itoa(param)+", $"+itoa(param+1)+", $"+itoa(param+2)+", $"+itoa(param+3)+", $"+itoa(param+4)+", $"+itoa(param+5)+"::jsonb, 'pending')")
+		itemArgs = append(itemArgs, uuid.NewString(), brandID, batchID, i+1, fingerprints[i], marshalJSON(brief.Raw))
+		param += 6
+	}
+	return "INSERT INTO content_batch_items (id, brand_id, batch_id, row_number, fingerprint, brief_payload, status) VALUES " + strings.Join(itemValues, ", "), itemArgs
 }
 
 // ---------- GET /v1/brands/{brandId}/batches/{batchId} ----------

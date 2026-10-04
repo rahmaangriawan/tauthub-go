@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 )
@@ -87,10 +88,10 @@ func aiStringField(body map[string]any, key string, minLen, maxLen int, trim, nu
 	if trim {
 		s = strings.TrimSpace(s)
 	}
-	if minLen > 0 && len([]rune(s)) < minLen {
+	if minLen > 0 && utf8.RuneCountInString(s) < minLen {
 		return "", true, errUnprocessable(ptZStringTooSmall(minLen))
 	}
-	if maxLen > 0 && len([]rune(s)) > maxLen {
+	if maxLen > 0 && utf8.RuneCountInString(s) > maxLen {
 		return "", true, errUnprocessable(ptZStringTooBig(maxLen))
 	}
 	return s, true, nil
@@ -126,10 +127,10 @@ func aiRequiredStringField(body map[string]any, key string, minLen, maxLen int) 
 		return "", aiZodInvalidType("string", aiZodReceivedType(v))
 	}
 	s = strings.TrimSpace(s)
-	if minLen > 0 && len([]rune(s)) < minLen {
+	if minLen > 0 && utf8.RuneCountInString(s) < minLen {
 		return "", errUnprocessable(ptZStringTooSmall(minLen))
 	}
-	if maxLen > 0 && len([]rune(s)) > maxLen {
+	if maxLen > 0 && utf8.RuneCountInString(s) > maxLen {
 		return "", errUnprocessable(ptZStringTooBig(maxLen))
 	}
 	return s, nil

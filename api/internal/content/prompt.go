@@ -275,7 +275,7 @@ func ParseFrontMatter(content, fallbackTitle string) FrontMatter {
 	if match != nil {
 		body = content[len(match[0]):]
 	}
-	body = regexp.MustCompile(`(?m)^#\s+.+\n?`).ReplaceAllString(body, "")
+	body = reBodyMDHeading.ReplaceAllString(body, "")
 	title := values["title"]
 	if title == "" {
 		title = fallbackTitle
@@ -287,11 +287,18 @@ func ParseFrontMatter(content, fallbackTitle string) FrontMatter {
 	return FrontMatter{Title: title, MetaTitle: metaTitle, MetaDescription: values["meta_description"], Body: body}
 }
 
+// Regex pengolahan body dokumen — dikompilasi sekali, bukan per artikel.
+var (
+	reBodyMDHeading = regexp.MustCompile(`(?m)^#\s+.+\n?`)
+	reHTMLTagStrip  = regexp.MustCompile(`<[^>]*>`)
+	reMDSymbols     = regexp.MustCompile("[#*_`~>\\[\\]]")
+)
+
 // BodyWordCount: hitung kata body (strip front matter + markdown + HTML).
 func BodyWordCount(content string) int {
 	body := frontMatterRe.ReplaceAllString(content, "")
-	body = regexp.MustCompile(`<[^>]*>`).ReplaceAllString(body, " ")
-	body = regexp.MustCompile("[#*_`~>\\[\\]]").ReplaceAllString(body, " ")
+	body = reHTMLTagStrip.ReplaceAllString(body, " ")
+	body = reMDSymbols.ReplaceAllString(body, " ")
 	fields := strings.Fields(strings.TrimSpace(body))
 	return len(fields)
 }

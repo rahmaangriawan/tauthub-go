@@ -177,13 +177,14 @@ func (d *Deps) DocumentGet(w http.ResponseWriter, r *http.Request) {
 
 var h1Re = regexp.MustCompile(`(?is)<h1[^>]*>([\s\S]*?)</h1>`)
 var tagRe = regexp.MustCompile(`<[^>]+>`)
+var wsRe = regexp.MustCompile(`\s+`)
 
 func articleTitle(html string) *string {
 	m := h1Re.FindStringSubmatch(html)
 	if m == nil {
 		return nil
 	}
-	text := strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(tagRe.ReplaceAllString(m[1], " "), " "))
+	text := strings.TrimSpace(wsRe.ReplaceAllString(tagRe.ReplaceAllString(m[1], " "), " "))
 	if text == "" {
 		return nil
 	}

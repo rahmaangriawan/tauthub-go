@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -39,6 +40,20 @@ func chatAction(label, href, variant string) map[string]any {
 	return map[string]any{"label": label, "href": href, "variant": variant}
 }
 
+// Regex pesan chat — dikompilasi sekali, bukan per pesan.
+var (
+	reChatSmallTalk      = regexp.MustCompile(`^(hai|halo|hi|hey|pagi|siang|sore|malam|terima kasih|makasih|thanks|oke|ok)\b`)
+	reChatMemory         = regexp.MustCompile(`(tadi|barusan|sebelumnya|ingat|ingatkan|percakapan|preferensi|kesukaan|yang saya bilang|jawabanmu)`)
+	reTopicPrefix        = regexp.MustCompile(`(?i)^(?:tentang|mengenai|soal|dengan judul|berjudul)\s+`)
+	reAngleInformational = regexp.MustCompile(`informational|edukasi|panduan|guide|tutorial`)
+	reAngleCommercial    = regexp.MustCompile(`commercial|rekomendasi|review|bandingkan`)
+	reAngleTransactional = regexp.MustCompile(`transactional|beli|daftar|cta|promo`)
+	reAngleNavigational  = regexp.MustCompile(`navigational|cari|produk|brand`)
+	reBriefWordCount     = regexp.MustCompile(`(\d{3,5})\s*(kata|word)`)
+	reBriefAudience      = regexp.MustCompile(`(?i)(?:audience|target|pembaca|untuk)\s*[:\-]?\s*([^,.\n]{3,80})`)
+	reBriefGoal          = regexp.MustCompile(`(?i)(?:goal|tujuan|untuk)\s*[:\-]?\s*([^,.\n]{3,120})`)
+)
+
 // classifyIntent: parity (create_article bila topik terdeteksi, small_talk,
 // needs_memory, needs_knowledge).
 func classifyIntent(message, topic string) string {
@@ -46,10 +61,10 @@ func classifyIntent(message, topic string) string {
 		return "create_article"
 	}
 	lower := strings.ToLower(strings.TrimSpace(message))
-	if regexp.MustCompile(`^(hai|halo|hi|hey|pagi|siang|sore|malam|terima kasih|makasih|thanks|oke|ok)\b`).MatchString(lower) {
+	if reChatSmallTalk.MatchString(lower) {
 		return "small_talk"
 	}
-	if regexp.MustCompile(`(tadi|barusan|sebelumnya|ingat|ingatkan|percakapan|preferensi|kesukaan|yang saya bilang|jawabanmu)`).MatchString(lower) {
+	if reChatMemory.MatchString(lower) {
 		return "needs_memory"
 	}
 	return "needs_knowledge"
@@ -62,7 +77,7 @@ func extractTopic(message string) string {
 		if strings.HasPrefix(lower, prefix) {
 			topic := strings.TrimSpace(message[len(prefix):])
 			topic = strings.Trim(topic, " \t,:.")
-			topic = regexp.MustCompile(`(?i)^(?:tentang|mengenai|soal|dengan judul|berjudul)\s+`).ReplaceAllString(topic, "")
+			topic = reTopicPrefix.ReplaceAllString(topic, "")
 			return topic
 		}
 	}
@@ -176,32 +191,32 @@ func parseUserDetails(message string) pendingBrief {
 	lower := strings.ToLower(message)
 	var angle *string
 	switch {
-	case regexp.MustCompile(`informational|edukasi|panduan|guide|tutorial`).MatchString(lower):
+	case reAngleInformational.MatchString(lower):
 		a := "informational"
 		angle = &a
-	case regexp.MustCompile(`commercial|rekomendasi|review|bandingkan`).MatchString(lower):
+	case reAngleCommercial.MatchString(lower):
 		a := "commercial"
 		angle = &a
-	case regexp.MustCompile(`transactional|beli|daftar|cta|promo`).MatchString(lower):
+	case reAngleTransactional.MatchString(lower):
 		a := "transactional"
 		angle = &a
-	case regexp.MustCompile(`navigational|cari|produk|brand`).MatchString(lower):
+	case reAngleNavigational.MatchString(lower):
 		a := "navigational"
 		angle = &a
 	}
 	var words *int
-	if m := regexp.MustCompile(`(\d{3,5})\s*(kata|word)`).FindStringSubmatch(message); m != nil {
+	if m := reBriefWordCount.FindStringSubmatch(message); m != nil {
 		if n, err := strconv.Atoi(m[1]); err == nil {
 			words = &n
 		}
 	}
 	var audience *string
-	if m := regexp.MustCompile(`(?i)(?:audience|target|pembaca|untuk)\s*[:\-]?\s*([^,.\n]{3,80})`).FindStringSubmatch(message); m != nil {
+	if m := reBriefAudience.FindStringSubmatch(message); m != nil {
 		a := strings.TrimSpace(m[1])
 		audience = &a
 	}
 	var goal *string
-	if m := regexp.MustCompile(`(?i)(?:goal|tujuan|untuk)\s*[:\-]?\s*([^,.\n]{3,120})`).FindStringSubmatch(message); m != nil {
+	if m := reBriefGoal.FindStringSubmatch(message); m != nil {
 		g := strings.TrimSpace(m[1])
 		goal = &g
 	}
@@ -257,12 +272,12 @@ func chatReadinessScore(r chatReadiness) int {
 }
 
 type lastArticleInfo struct {
-	ID         string
-	Title      *string
-	Status     string
+	ID          string
+	Title       *string
+	Status      string
 	CurrentStep string
-	Progress   int
-	DocumentID *string
+	Progress    int
+	DocumentID  *string
 }
 
 func (d *Deps) lastArticle(ctx context.Context, brandID string) *lastArticleInfo {
@@ -465,11 +480,11 @@ func (d *Deps) Chat(w http.ResponseWriter, r *http.Request) {
 
 	// Topik terlalu pendek.
 	if topic != "" {
-		if len([]rune(strings.TrimSpace(topic))) < 3 {
+		if utf8.RuneCountInString(strings.TrimSpace(topic)) < 3 {
 			d.storeChatLearning(r.Context(), brandID, conversationID, user.ID, body.Message, "Topik terlalu pendek.", "general")
 			writeJSON(w, http.StatusOK, map[string]any{
-				"reply":    "Topik terlalu pendek. Coba tulis lebih jelas, misalnya *\"buat artikel tentang cara merawat rambut\"*.",
-				"actions":  []map[string]any{chatAction("Buka halaman Generate", "/klien/"+chiParam(r, "brandId")+"/generate", "soft")},
+				"reply":           "Topik terlalu pendek. Coba tulis lebih jelas, misalnya *\"buat artikel tentang cara merawat rambut\"*.",
+				"actions":         []map[string]any{chatAction("Buka halaman Generate", "/klien/"+chiParam(r, "brandId")+"/generate", "soft")},
 				"conversation_id": conversationID,
 			})
 			return
@@ -487,8 +502,8 @@ func (d *Deps) Chat(w http.ResponseWriter, r *http.Request) {
 			last := d.lastArticle(r.Context(), brandID)
 			if last == nil {
 				writeJSON(w, http.StatusOK, map[string]any{
-					"reply":   "Belum ada artikel yang dibuat untuk brand ini. Mau kubuatkan sekarang? Coba tulis *\"buat artikel tentang …\"*.",
-					"actions": []map[string]any{chatAction("Buat artikel", "/klien/"+chiParam(r, "brandId")+"/generate", "solid")},
+					"reply":           "Belum ada artikel yang dibuat untuk brand ini. Mau kubuatkan sekarang? Coba tulis *\"buat artikel tentang …\"*.",
+					"actions":         []map[string]any{chatAction("Buat artikel", "/klien/"+chiParam(r, "brandId")+"/generate", "solid")},
 					"conversation_id": conversationID,
 				})
 				return
@@ -504,7 +519,7 @@ func (d *Deps) Chat(w http.ResponseWriter, r *http.Request) {
 			}
 			d.storeChatLearning(r.Context(), brandID, conversationID, user.ID, body.Message, "Status artikel terakhir: "+last.Status, "last_article")
 			writeJSON(w, http.StatusOK, map[string]any{
-				"reply": "Artikel terakhir: **" + title + "**\nStatus: *" + last.Status + "* · langkah: " + last.CurrentStep + " · progress " + strconv.Itoa(last.Progress) + "%.",
+				"reply":   "Artikel terakhir: **" + title + "**\nStatus: *" + last.Status + "* · langkah: " + last.CurrentStep + " · progress " + strconv.Itoa(last.Progress) + "%.",
 				"actions": actions,
 				"article": map[string]any{
 					"id": last.ID, "title": title, "status": last.Status,
@@ -551,9 +566,9 @@ func (d *Deps) Chat(w http.ResponseWriter, r *http.Request) {
 			answer := derefStr2(b["answer"])
 			d.storeChatLearning(r.Context(), brandID, conversationID, user.ID, body.Message, answer, intent)
 			writeJSON(w, http.StatusOK, map[string]any{
-				"reply":     answer,
-				"cached":    true,
-				"actions":   []map[string]any{chatAction("Buka Brand", "/klien/"+chiParam(r, "brandId"), "soft")},
+				"reply":           answer,
+				"cached":          true,
+				"actions":         []map[string]any{chatAction("Buka Brand", "/klien/"+chiParam(r, "brandId"), "soft")},
 				"conversation_id": conversationID,
 			})
 			return
@@ -578,9 +593,9 @@ func (d *Deps) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 	d.storeChatLearning(r.Context(), brandID, conversationID, user.ID, body.Message, result.Content, intent)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"reply":     result.Content,
-		"cached":    false,
-		"actions":   []map[string]any{chatAction("Buka Brand", "/klien/"+chiParam(r, "brandId"), "soft")},
+		"reply":           result.Content,
+		"cached":          false,
+		"actions":         []map[string]any{chatAction("Buka Brand", "/klien/"+chiParam(r, "brandId"), "soft")},
 		"conversation_id": conversationID,
 	})
 }

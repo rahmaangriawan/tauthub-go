@@ -26,13 +26,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	xdraw "golang.org/x/image/draw"
-	_ "golang.org/x/image/webp"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
+	_ "golang.org/x/image/webp"
 )
 
 // GenerateImageOptions: input generate satu gambar.
@@ -445,15 +446,15 @@ func callOpenRouterImages(ctx context.Context, rt *AIRuntime, model, prompt stri
 
 // ImageTestResult: hasil uji koneksi provider gambar (tombol "Tes Koneksi" admin).
 type ImageTestResult struct {
-	Configured  bool   `json:"configured"`
-	OK          bool   `json:"ok"`
-	BaseURL     string `json:"base_url"`
-	Model       string `json:"model"`
-	Width       int    `json:"width"`
-	Height      int    `json:"height"`
-	Bytes       int    `json:"bytes"`
-	ElapsedMS   int64  `json:"elapsed_ms"`
-	Message     string `json:"message"`
+	Configured bool   `json:"configured"`
+	OK         bool   `json:"ok"`
+	BaseURL    string `json:"base_url"`
+	Model      string `json:"model"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	Bytes      int    `json:"bytes"`
+	ElapsedMS  int64  `json:"elapsed_ms"`
+	Message    string `json:"message"`
 }
 
 // TestImageConnection: panggil provider gambar SEKALI tanpa fallback placeholder,
@@ -575,7 +576,7 @@ func drawPlaceholder(w, h int, label string) ([]byte, error) {
 	lineH := face.Metrics().Height.Ceil()
 	textW := 1
 	for _, ln := range lines {
-		if wpx := len([]rune(ln)) * advance; wpx > textW {
+		if wpx := utf8.RuneCountInString(ln) * advance; wpx > textW {
 			textW = wpx
 		}
 	}
@@ -633,7 +634,7 @@ func wrapText(text string, maxChars int) []string {
 			cur = word
 			continue
 		}
-		if len([]rune(cur))+1+len([]rune(word)) <= maxChars {
+		if utf8.RuneCountInString(cur)+1+utf8.RuneCountInString(word) <= maxChars {
 			cur += " " + word
 		} else {
 			lines = append(lines, cur)

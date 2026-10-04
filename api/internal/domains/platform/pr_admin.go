@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -497,7 +498,7 @@ func (d *Deps) PRMediaRulesPut(w http.ResponseWriter, r *http.Request) {
 	categoryRelevance := map[string]any{}
 	for key, v := range categoryRaw {
 		trimmed := strings.TrimSpace(key)
-		if trimmed == "" || len([]rune(trimmed)) > 60 {
+		if trimmed == "" || utf8.RuneCountInString(trimmed) > 60 {
 			writeErr(w, d, invalidRules)
 			return
 		}

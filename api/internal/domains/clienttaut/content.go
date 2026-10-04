@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Port lib/media/word-count.ts, lib/content/html-text.ts,
@@ -343,7 +344,7 @@ func innerText(html string) string {
 }
 
 func isHeadingCandidate(text string) bool {
-	if len([]rune(text)) < 4 || len([]rune(text)) > 90 {
+	if utf8.RuneCountInString(text) < 4 || utf8.RuneCountInString(text) > 90 {
 		return false
 	}
 	if strings.HasSuffix(text, ".") || strings.HasSuffix(text, "!") || strings.HasSuffix(text, "?") || strings.HasSuffix(text, ":") {

@@ -7,7 +7,9 @@ package ai
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // AIOverviewMaxScore: total maksimum 4 indikator × skor 10.
@@ -208,13 +210,13 @@ func AIOverviewUserPrompt(title, mediaType, contentHTML string, wordCount int, s
 	briefText := strings.TrimSpace(brief)
 	if briefText == "" {
 		briefText = "(KOSONG — tidak ada brief/bahan rujukan untuk generate artikel ini)"
-	} else if len([]rune(briefText)) > aiOverviewDefaultBriefChars {
+	} else if utf8.RuneCountInString(briefText) > aiOverviewDefaultBriefChars {
 		briefText = string([]rune(briefText)[:aiOverviewDefaultBriefChars])
 	}
 	return strings.Join([]string{
 		"Judul: " + title,
 		"Tipe media: " + typeName,
-		"Jumlah kata: " + fmt.Sprintf("%d", wordCount),
+		"Jumlah kata: " + strconv.Itoa(wordCount),
 		fmt.Sprintf("Aturan kelulusan: %s. Bila tidak memenuhi, sertakan catatan_revisi (maks 3) yang sangat spesifik.", AIOverviewPassRule(st)),
 		"BAHAN/BRIEF (rujukan fakta yang boleh dipakai artikel):\n" + briefText,
 		"Isi (HTML): " + html,
@@ -337,7 +339,7 @@ func EvaluateAIOverviewFields(parsed map[string]any, st AIOverviewSettings, chec
 			if trimmed == "" {
 				continue
 			}
-			if len([]rune(trimmed)) > 160 {
+			if utf8.RuneCountInString(trimmed) > 160 {
 				trimmed = string([]rune(trimmed)[:160])
 			}
 			res.UnsourcedEntities = append(res.UnsourcedEntities, trimmed)
@@ -360,7 +362,7 @@ func EvaluateAIOverviewFields(parsed map[string]any, st AIOverviewSettings, chec
 			if trimmed == "" {
 				continue
 			}
-			if len([]rune(trimmed)) > 300 {
+			if utf8.RuneCountInString(trimmed) > 300 {
 				trimmed = string([]rune(trimmed)[:300])
 			}
 			res.Notes = append(res.Notes, trimmed)
@@ -423,12 +425,13 @@ func aiOverviewKeyOf(obj map[string]any) string {
 		if !isStr {
 			continue
 		}
-		norm := ""
+		var nb strings.Builder
 		for _, r := range strings.ToLower(strings.TrimSpace(raw)) {
 			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-				norm += string(r)
+				nb.WriteRune(r)
 			}
 		}
+		norm := nb.String()
 		switch norm {
 		case "struktur", "structure", "format":
 			return "struktur"
@@ -470,7 +473,7 @@ func aiOverviewSummaryOf(obj map[string]any) string {
 			if trimmed == "" {
 				continue
 			}
-			if len([]rune(trimmed)) > 300 {
+			if utf8.RuneCountInString(trimmed) > 300 {
 				trimmed = string([]rune(trimmed)[:300])
 			}
 			return trimmed

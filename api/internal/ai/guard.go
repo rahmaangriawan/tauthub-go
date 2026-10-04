@@ -7,7 +7,9 @@ package ai
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // GuardSystemPrompt: aturan keamanan konten (dari domain, supaya daftar
@@ -41,7 +43,7 @@ func GuardUserPrompt(title, mediaType, contentHTML, text, brief string, links []
 	briefText := strings.TrimSpace(brief)
 	if briefText == "" {
 		briefText = "(KOSONG — tidak ada brief/bahan rujukan untuk generate artikel ini)"
-	} else if len([]rune(briefText)) > aiOverviewDefaultBriefChars {
+	} else if utf8.RuneCountInString(briefText) > aiOverviewDefaultBriefChars {
 		briefText = string([]rune(briefText)[:aiOverviewDefaultBriefChars])
 	}
 	body := text
@@ -59,7 +61,7 @@ func GuardUserPrompt(title, mediaType, contentHTML, text, brief string, links []
 	return strings.Join([]string{
 		"Judul: " + title,
 		"Tipe media: " + typeName,
-		"Jumlah kata: " + fmt.Sprintf("%d", wordCount),
+		"Jumlah kata: " + strconv.Itoa(wordCount),
 		fmt.Sprintf("Aturan kelulusan AI Overview: %s. Bila tidak memenuhi, sertakan catatan_revisi (maks 3) yang sangat spesifik.", AIOverviewPassRule(st)),
 		"BAHAN/BRIEF (rujukan fakta yang boleh dipakai artikel):\n" + briefText,
 		"Konten (teks polos):\n" + body,

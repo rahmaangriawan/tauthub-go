@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -39,7 +40,7 @@ func (d *Deps) rssLogAccess(ctx context.Context, feedID string, r *http.Request,
 		ipPtr = &ip
 	}
 	ua := r.Header.Get("User-Agent")
-	if len([]rune(ua)) > 300 {
+	if utf8.RuneCountInString(ua) > 300 {
 		ua = string([]rune(ua)[:300])
 	}
 	_ = d.exec(ctx,
@@ -208,11 +209,11 @@ func (d *Deps) RSSFeedImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	guid := strings.TrimSpace(body.GUID)
-	if guid == "" || len([]rune(guid)) > 300 || (body.Status != "imported" && body.Status != "published") {
+	if guid == "" || utf8.RuneCountInString(guid) > 300 || (body.Status != "imported" && body.Status != "published") {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"detail": "Invalid payload"})
 		return
 	}
-	if body.URL != "" && len([]rune(body.URL)) > 500 {
+	if body.URL != "" && utf8.RuneCountInString(body.URL) > 500 {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"detail": "Invalid payload"})
 		return
 	}

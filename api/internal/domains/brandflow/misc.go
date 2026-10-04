@@ -3,6 +3,7 @@ package brandflow
 import (
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -38,7 +39,7 @@ func (d *Deps) TautAnalyzeTopic(w http.ResponseWriter, r *http.Request) {
 	}
 	topic := strings.TrimSpace(chiParam(r, "topic"))
 	topic = truncateString(topic, 300)
-	if len([]rune(topic)) < 6 {
+	if utf8.RuneCountInString(topic) < 6 {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Topic too short")
 		return
 	}

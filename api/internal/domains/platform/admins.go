@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/adminshared"
 )
@@ -158,7 +159,7 @@ func admValidateCreate(body map[string]any) (string, string, map[string]any, str
 	if !admEmailValid(email) {
 		return "", "", nil, "Invalid email address"
 	}
-	if len([]rune(email)) > 320 {
+	if utf8.RuneCountInString(email) > 320 {
 		return "", "", nil, "Too big: expected string to have <=320 characters"
 	}
 

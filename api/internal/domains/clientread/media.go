@@ -12,10 +12,11 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
-// regexpReplaceCI: ganti pola di awal string (case-insensitive).
-func regexpReplaceCI(s, pattern, repl string) string {
-	return regexp.MustCompile("(?i)"+pattern).ReplaceAllString(s, repl)
-}
+// Pola pembersihan kueri pencarian media — dikompilasi sekali, bukan per request.
+var (
+	reSearchScheme = regexp.MustCompile(`(?i)^https?://`)
+	reSearchWWW    = regexp.MustCompile(`(?i)^www\.`)
+)
 
 // Port v1/brands/[brandId]/media/route.ts — katalog media aktif untuk klien.
 // Read-only: hanya media status 'active', dengan harga klien (markup) & filter.
@@ -101,8 +102,8 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		clause += " AND (EXISTS (SELECT 1 FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = media.id AND c.normalized = " + p1 + ") OR LOWER(TRIM(media.category)) = " + p2 + ")"
 	}
 	if search != "" {
-		bare := regexpReplaceCI(search, `^https?://`, "")
-		bare = regexpReplaceCI(bare, `^www\.`, "")
+		bare := reSearchScheme.ReplaceAllString(search, "")
+		bare = reSearchWWW.ReplaceAllString(bare, "")
 		bare = strings.TrimRight(bare, "/")
 		like := "%" + search + "%"
 		likeBare := "%" + bare + "%"

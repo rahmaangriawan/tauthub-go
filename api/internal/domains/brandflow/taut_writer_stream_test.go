@@ -1,6 +1,9 @@
 package brandflow
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestPartialContentHTMLPlain(t *testing.T) {
 	// Key belum muncul (model masih menulis title).
@@ -60,5 +63,52 @@ func TestPartialContentHTMLKeyOrder(t *testing.T) {
 	v, closed := partialContentHTML(acc)
 	if v != "<p>X" || closed {
 		t.Errorf("urutan key: dapat %q closed=%v", v, closed)
+	}
+}
+
+// TestPartialContentHTMLStreamParity: peStreamHTML harus menghasilkan akumulasi
+// yang identik dengan partialContentHTML pada SETIAP prefix, apa pun ukuran
+// delta-nya — termasuk escape yang terbelah di tengah delta.
+func TestPartialContentHTMLStreamParity(t *testing.T) {
+	cases := []string{
+		`{"title": "Epoxy`,
+		`{"title": "Epoxy", "content_html": "<p>Halo`,
+		`{"title": "Epoxy", "content_html": "<p>Halo dunia</p>", "meta_description": "x"}`,
+		`{"content_html": "<p>escape \n \t \\ \" selesai \u00e9 invalid \uZ</p>"}`,
+		`{"a":1,"content_html":"<p>potong \u0`,
+		`{"content_html" :   "<p>spasi dan titik dua</p>"}`,
+		`tidak ada key sama sekali`,
+		`{"content_html" :  <p>tanpa quote`,
+		`{"content_html"`,
+		`{"content_html":`,
+		`{"content_html":"`,
+		``,
+	}
+	for _, acc := range cases {
+		for _, chunk := range []int{1, 2, 3, 5, 17, 4096} {
+			var got strings.Builder
+			stream := newPEStreamHTML()
+			start := 0
+			for start <= len(acc) {
+				stop := start + chunk
+				if stop > len(acc) {
+					stop = len(acc)
+				}
+				tail, closed := stream.Write(acc[start:stop])
+				prefix := acc[:stop]
+				ref, refClosed := partialContentHTML(prefix)
+				got.WriteString(tail)
+				if got.String() != ref {
+					t.Fatalf("acc=%q chunk=%d stop=%d: stream=%q mau %q", acc, chunk, stop, got.String(), ref)
+				}
+				if closed != refClosed {
+					t.Fatalf("acc=%q chunk=%d stop=%d: closed=%v mau %v", acc, chunk, stop, closed, refClosed)
+				}
+				if stop == start {
+					break
+				}
+				start = stop
+			}
+		}
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -266,7 +267,7 @@ func (d *Deps) TautArticleUpload(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Isi artikel tidak boleh kosong.")
 		return
 	}
-	if len([]rune(contentHTML)) > 200000 {
+	if utf8.RuneCountInString(contentHTML) > 200000 {
 		httpx.Error(w, http.StatusUnprocessableEntity, "String must contain at most 200000 character(s)")
 		return
 	}
@@ -708,7 +709,7 @@ func (d *Deps) TautCrawl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	text := truncateString(stripHTMLToText(string(raw)), maxChars)
-	if len([]rune(text)) < 80 {
+	if utf8.RuneCountInString(text) < 80 {
 		httpx.Error(w, http.StatusUnprocessableEntity,
 			"Website belum dapat dibaca otomatis (konten kosong). Anda tetap dapat melanjutkan dengan mengisi informasi secara manual.")
 		return
@@ -1458,7 +1459,7 @@ func (d *Deps) TautWriterLinks(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Anchor teks induk wajib diisi.")
 		return
 	}
-	if len([]rune(primaryAnchor)) > 120 {
+	if utf8.RuneCountInString(primaryAnchor) > 120 {
 		httpx.Error(w, http.StatusUnprocessableEntity, "String must contain at most 120 character(s)")
 		return
 	}
@@ -1468,7 +1469,7 @@ func (d *Deps) TautWriterLinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	backupAnchor, _ := strField(body, "backup_anchor")
-	if len([]rune(backupAnchor)) > 120 {
+	if utf8.RuneCountInString(backupAnchor) > 120 {
 		httpx.Error(w, http.StatusUnprocessableEntity, "String must contain at most 120 character(s)")
 		return
 	}
@@ -1531,7 +1532,7 @@ func optionalTrimmedString(body map[string]any, key string, max int) (string, bo
 	if !ok {
 		return "", false, errUnprocessable("Expected string, received number")
 	}
-	if len([]rune(s)) > max {
+	if utf8.RuneCountInString(s) > max {
 		return "", false, errUnprocessable("String must contain at most " + itoa(max) + " character(s)")
 	}
 	return strings.TrimSpace(s), true, nil

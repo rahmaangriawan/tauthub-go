@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -148,7 +149,7 @@ func (d *Deps) CreditsTopupCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		trimmed := strings.TrimSpace(s)
-		if len([]rune(trimmed)) > 2000 {
+		if utf8.RuneCountInString(trimmed) > 2000 {
 			httpx.Error(w, http.StatusUnprocessableEntity, "Too big: expected string to have <=2000 characters")
 			return
 		}
@@ -162,11 +163,11 @@ func (d *Deps) CreditsTopupCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		trimmed := strings.TrimSpace(s)
-		if len([]rune(trimmed)) < 8 {
+		if utf8.RuneCountInString(trimmed) < 8 {
 			httpx.Error(w, http.StatusUnprocessableEntity, "Too small: expected string to have >=8 characters")
 			return
 		}
-		if len([]rune(trimmed)) > 100 {
+		if utf8.RuneCountInString(trimmed) > 100 {
 			httpx.Error(w, http.StatusUnprocessableEntity, "Too big: expected string to have <=100 characters")
 			return
 		}
@@ -243,7 +244,7 @@ func bsParseInvoice(body map[string]any) (bsInvoiceData, bool) {
 			return out, false
 		}
 		trimmed := strings.TrimSpace(s)
-		if len([]rune(trimmed)) < f.min || len([]rune(trimmed)) > f.max {
+		if utf8.RuneCountInString(trimmed) < f.min || utf8.RuneCountInString(trimmed) > f.max {
 			return out, false
 		}
 		*f.dst = trimmed
@@ -301,7 +302,7 @@ func (d *Deps) CreditReportsCreate(w http.ResponseWriter, r *http.Request) {
 	var paymentReference any
 	if raw, ok := body["payment_reference"]; ok && raw != nil {
 		s, isStr := raw.(string)
-		if !isStr || len([]rune(strings.TrimSpace(s))) > 200 {
+		if !isStr || utf8.RuneCountInString(strings.TrimSpace(s)) > 200 {
 			httpx.Error(w, http.StatusUnprocessableEntity, "Data laporan tidak valid.")
 			return
 		}
@@ -318,7 +319,7 @@ func (d *Deps) CreditReportsCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	description = strings.TrimSpace(description)
-	if len([]rune(description)) < 10 || len([]rune(description)) > 2000 {
+	if utf8.RuneCountInString(description) < 10 || utf8.RuneCountInString(description) > 2000 {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Data laporan tidak valid.")
 		return
 	}

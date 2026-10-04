@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -87,7 +88,7 @@ func (d *Deps) TautCampaignsList(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	archivedOnly := q.Get("archived") == "1"
 	search := strings.TrimSpace(q.Get("q"))
-	if len([]rune(search)) > 100 {
+	if utf8.RuneCountInString(search) > 100 {
 		search = string([]rune(search)[:100])
 	}
 	page := 1
@@ -623,7 +624,7 @@ func validateMaterials(m map[string]any) (map[string]any, error) {
 			if !ok {
 				return nil, zodInvalidType("string", receivedType(item))
 			}
-			if len([]rune(s)) > 200 {
+			if utf8.RuneCountInString(s) > 200 {
 				return nil, zodTooBigString(200)
 			}
 			items = append(items, strings.TrimSpace(s))
@@ -645,7 +646,7 @@ func validateMaterials(m map[string]any) (map[string]any, error) {
 				return nil, zodInvalidType("string", receivedType(item))
 			}
 			trimmed := strings.TrimSpace(s)
-			if len([]rune(trimmed)) > 500 {
+			if utf8.RuneCountInString(trimmed) > 500 {
 				return nil, zodTooBigString(500)
 			}
 			if !isZodURL(trimmed) {
@@ -669,7 +670,7 @@ func validateMaterials(m map[string]any) (map[string]any, error) {
 			if !ok {
 				return nil, zodInvalidType("string", receivedType(item))
 			}
-			if len([]rune(s)) > 500 {
+			if utf8.RuneCountInString(s) > 500 {
 				return nil, zodTooBigString(500)
 			}
 			items = append(items, strings.TrimSpace(s))

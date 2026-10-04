@@ -66,17 +66,26 @@ func bsGroupID(n int64) string {
 		n = -n
 	}
 	digits := strconv.FormatInt(n, 10)
+	// parts terkumpul dari kanan ke kiri (dulu disisipkan di depan tiap
+	// iterasi — O(n²)); hasil join-nya sama persis, hanya urutan build yang
+	// dibalik saat menulis.
 	var parts []string
 	for len(digits) > 3 {
-		parts = append([]string{digits[len(digits)-3:]}, parts...)
+		parts = append(parts, digits[len(digits)-3:])
 		digits = digits[:len(digits)-3]
 	}
-	parts = append([]string{digits}, parts...)
-	out := strings.Join(parts, ".")
+	parts = append(parts, digits)
+	var b strings.Builder
 	if neg {
-		return "-" + out
+		b.WriteByte('-')
 	}
-	return out
+	for i := len(parts) - 1; i >= 0; i-- {
+		if i < len(parts)-1 {
+			b.WriteByte('.')
+		}
+		b.WriteString(parts[i])
+	}
+	return b.String()
 }
 
 // bsRound1: pembulatan 1 desimal half-up (parity Intl maximumFractionDigits:1).

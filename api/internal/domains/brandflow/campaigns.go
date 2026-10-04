@@ -3,6 +3,7 @@ package brandflow
 import (
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -194,11 +195,11 @@ func (d *Deps) CampaignUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		trimmed := strings.TrimSpace(s)
-		if len([]rune(trimmed)) < 2 {
+		if utf8.RuneCountInString(trimmed) < 2 {
 			d.writeErr(w, errUnprocessable("String must contain at least 2 character(s)"))
 			return
 		}
-		if len([]rune(trimmed)) > 160 {
+		if utf8.RuneCountInString(trimmed) > 160 {
 			d.writeErr(w, errUnprocessable("String must contain at most 160 character(s)"))
 			return
 		}
@@ -209,7 +210,7 @@ func (d *Deps) CampaignUpdate(w http.ResponseWriter, r *http.Request) {
 		if raw == nil {
 			descArg = nil
 		} else if s, isStr := raw.(string); isStr {
-			if len([]rune(s)) > 2000 {
+			if utf8.RuneCountInString(s) > 2000 {
 				d.writeErr(w, errUnprocessable("String must contain at most 2000 character(s)"))
 				return
 			}
@@ -365,10 +366,10 @@ func requiredTrimmedString(body map[string]any, key string, min, max int, _ []st
 		return "", false, errUnprocessable("Expected string, received number")
 	}
 	trimmed := strings.TrimSpace(s)
-	if len([]rune(trimmed)) < min {
+	if utf8.RuneCountInString(trimmed) < min {
 		return "", false, errUnprocessable("String must contain at least " + itoa(min) + " character(s)")
 	}
-	if len([]rune(trimmed)) > max {
+	if utf8.RuneCountInString(trimmed) > max {
 		return "", false, errUnprocessable("String must contain at most " + itoa(max) + " character(s)")
 	}
 	return trimmed, true, nil
@@ -383,7 +384,7 @@ func optionalString(body map[string]any, key string, max int) (any, error) {
 	if !isStr {
 		return nil, errUnprocessable("Expected string, received number")
 	}
-	if len([]rune(s)) > max {
+	if utf8.RuneCountInString(s) > max {
 		return nil, errUnprocessable("String must contain at most " + itoa(max) + " character(s)")
 	}
 	return s, nil

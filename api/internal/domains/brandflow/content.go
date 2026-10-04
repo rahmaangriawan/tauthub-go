@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -253,7 +254,7 @@ func (d *Deps) ContentIntakeAIFill(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, http.StatusUnprocessableEntity, "Masukkan topik/judul naskah terlebih dahulu.")
 			return
 		}
-		if len([]rune(s)) > 50 {
+		if utf8.RuneCountInString(s) > 50 {
 			httpx.Error(w, http.StatusUnprocessableEntity, "Masukkan topik/judul naskah terlebih dahulu.")
 			return
 		}
@@ -604,7 +605,7 @@ func (d *Deps) ContentIntakeAutoKeyMessages(w http.ResponseWriter, r *http.Reque
 	articleText := ""
 	if raw, ok := body["article_text"]; ok && raw != nil {
 		s, isStr := raw.(string)
-		if !isStr || len([]rune(s)) > 40000 {
+		if !isStr || utf8.RuneCountInString(s) > 40000 {
 			httpx.Error(w, http.StatusUnprocessableEntity, "Masukkan topik/judul naskah terlebih dahulu.")
 			return
 		}
@@ -613,7 +614,7 @@ func (d *Deps) ContentIntakeAutoKeyMessages(w http.ResponseWriter, r *http.Reque
 	mediaID := ""
 	if raw, ok := body["media_id"]; ok && raw != nil {
 		s, isStr := raw.(string)
-		if !isStr || len([]rune(s)) > 36 {
+		if !isStr || utf8.RuneCountInString(s) > 36 {
 			httpx.Error(w, http.StatusUnprocessableEntity, "Masukkan topik/judul naskah terlebih dahulu.")
 			return
 		}
@@ -1471,7 +1472,7 @@ func bsParsePublishSchema(body map[string]any) (cmsPublishInput, error) {
 			if !isStr {
 				return out, errUnprocessable("Invalid input: expected string, received " + bsZodTypeName(raw))
 			}
-			if len([]rune(es)) > 500 {
+			if utf8.RuneCountInString(es) > 500 {
 				return out, errUnprocessable("Too big: expected string to have <=500 characters")
 			}
 			out.Excerpt = es
@@ -1915,7 +1916,7 @@ func bsOptionalStringArray(body map[string]any, key string, maxLen, maxItems int
 		if !isStr {
 			return nil, false
 		}
-		if len([]rune(s)) > maxLen {
+		if utf8.RuneCountInString(s) > maxLen {
 			return nil, false
 		}
 		out = append(out, strings.TrimSpace(s))
@@ -1934,7 +1935,7 @@ func bsNullableString(body map[string]any, key string, max int) (any, error) {
 	if !isStr {
 		return nil, errUnprocessable("Invalid input: expected string, received " + bsZodTypeName(raw))
 	}
-	if len([]rune(s)) > max {
+	if utf8.RuneCountInString(s) > max {
 		return nil, errUnprocessable("Too big: expected string to have <=" + itoa(max) + " characters")
 	}
 	return s, nil

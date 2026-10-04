@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -472,7 +473,7 @@ func (d *Deps) JobUpdateOutline(w http.ResponseWriter, r *http.Request) {
 	}
 	invalid := len(body.Outline) == 0 || len(body.Outline) > 40
 	for _, item := range body.Outline {
-		if (item.Level != 2 && item.Level != 3) || trimS(item.Title) == "" || len([]rune(item.Title)) > 300 {
+		if (item.Level != 2 && item.Level != 3) || trimS(item.Title) == "" || utf8.RuneCountInString(item.Title) > 300 {
 			invalid = true
 			break
 		}
