@@ -1,0 +1,144 @@
+name: Deploy Production (app.tauthub.com)
+
+# Deploy Tauthub Go PRODUCTION (app.tauthub.com, VPS 43.156.237.97) — manual
+# dari tab Actions > Run workflow. Tidak otomatis dari push: production harus
+# sadar. Staging tetap otomatis via deploy.yml tiap push ke master.
+#
+# Host production memakai CloudPanel: site app.tauthub.com terdaftar lewat
+# clpctl (site user `tauthub`, htdocs /home/tauthub/htdocs/app.tauthub.com).
+# Vhost nginx + sertifikat dikelola CloudPanel — workflow ini TIDAK menyentuh
+# nginx (MANAGE_NGINX=0) dan hanya deploy aplikasi + DB migrasi.
+#
+# Aplikasi: api :8080, web :3001, scheduler — systemd tauthub-{api,web,scheduler}.
+#
+# Secret (repo > Settings > Secrets and variables > Actions):
+#   SSH_PROD_HOST   43.156.237.97
+#   SSH_PROD_USER   ubuntu
+#   SSH_PROD_KEY    private key deploy (ed25519, public key ada di
+#                   authorized_keys ubuntu@VPS)
+#   PROD_APP_DIR    (opsional) default /home/tauthub/htdocs/app.tauthub.com
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production-go
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+
+      - name: Build linux binaries (api, scheduler, migrate)
+        working-directory: api
+        run: |
+          for cmd in api scheduler migrate; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+              go build -trimpath -ldflags="-s -w" -o "bin/$cmd" "./cmd/$cmd"
+          done
+
+      - name: Prepare SSH key
+        env:
+          SSH_PROD_KEY: ${{ secrets.SSH_PROD_KEY }}
+        run: |
+          set -euo pipefail
+          : "${SSH_PROD_KEY:?Secret SSH_PROD_KEY belum di-set}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PROD_KEY" > ~/.ssh/prod_deploy_key
+          chmod 600 ~/.ssh/prod_deploy_key
+
+      - name: Sync + bootstrap + deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_PROD_HOST }}
+          SSH_USER: ${{ secrets.SSH_PROD_USER }}
+          APP_DIR: ${{ secrets.PROD_APP_DIR }}
+        run: |
+          set -euo pipefail
+          : "${SSH_HOST:?Secret SSH_PROD_HOST belum di-set}"
+          : "${SSH_USER:?Secret SSH_PROD_USER belum di-set}"
+          APP_DIR="${APP_DIR:-/home/tauthub/htdocs/app.tauthub.com}"
+          SYNC_DIR="/home/$SSH_USER/tauthub-sync"
+          SSH_OPTS="-i ~/.ssh/prod_deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=12"
+
+          retry() {
+            for i in 1 2 3 4; do
+              if "$@"; then return 0; fi
+              echo "percobaan $i gagal — mengulang dalam 15 detik..." >&2
+              sleep 15
+            done
+            echo "gagal setelah 4 percobaan" >&2
+            return 1
+          }
+
+          # 1. Sinkronkan repo + binary ke folder sync milik user SSH (bukan
+          #    langsung ke htdocs site user — home CloudPanel tidak writable
+          #    oleh user ubuntu; yang menyalin ke APP_DIR adalah root via sudo).
+          retry rsync -rltDz --delete --timeout=120 \
+            -e "ssh $SSH_OPTS" \
+            --exclude='.git/' --exclude='node_modules/' --exclude='.svelte-kit/' \
+            --exclude='.data/' --exclude='.env' --exclude='.env.*' \
+            --exclude='web/build/' --exclude='api/api' --exclude='.DS_Store' \
+            --exclude='tmp_*' --exclude='*.log' \
+            --exclude='web/public/uploads/' --exclude='api/public/uploads/' \
+            --exclude='apps/' --exclude='packages/' --exclude='.next/' \
+            --exclude='context-graph-engine/' --exclude='REWRITE/' \
+            --exclude='turbo.json' --exclude='pnpm-lock.yaml' --exclude='pnpm-workspace.yaml' \
+            ./ "$SSH_USER@$SSH_HOST:$SYNC_DIR/"
+
+          # 2. Root menyalin snapshot ke htdocs site. .env dan api/.data
+          #    (upload runtime) TIDAK PERNAH ditimpa/dihapus.
+          retry ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "sudo rsync -rltDz --delete --timeout=120 \
+              --exclude='.env' --exclude='.env.*' \
+              --exclude='api/.data/' --exclude='web/build/' \
+              --exclude='.DS_Store' --exclude='tmp_*' --exclude='*.log' \
+              '$SYNC_DIR/' '$APP_DIR/'"
+
+          # 3. Seed gambar unggahan yang di-commit (api/.data/uploads) — hanya
+          #    menambah berkas yang hilang, tidak pernah menimpa upload runtime.
+          #    Dikirim langsung dari workspace (step 1 meng-exclude .data/),
+          #    dilandaskan dulu ke SYNC_DIR karena home site user tidak
+          #    writable oleh user SSH.
+          retry rsync -rltDz --ignore-existing --timeout=120 \
+            -e "ssh $SSH_OPTS" \
+            api/.data/uploads/ "$SSH_USER@$SSH_HOST:$SYNC_DIR/api/.data/uploads/"
+          retry ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "sudo rsync -rltDz --ignore-existing --timeout=120 \
+              '$SYNC_DIR/api/.data/uploads/' '$APP_DIR/api/.data/uploads/'"
+
+          # 4. Bootstrap idempoten: user, .env (sekali), PostgreSQL role+db,
+          #    baseline schema, unit systemd (web :3001, ORIGIN production).
+          #    MANAGE_NGINX=0 — vhost + TLS dikelola CloudPanel.
+          retry ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "sudo env APP_DIR='$APP_DIR' DOMAIN=app.tauthub.com \
+              ORIGIN=https://app.tauthub.com WEB_PORT=3001 \
+              MANAGE_NGINX=0 MANAGE_SWAP=0 SKIP_APT=1 \
+              bash '$APP_DIR/deploy/setup-vps.sh'"
+
+          # 5. Migrasi additive + build web (bun) + restart service + health.
+          retry ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "sudo env APP_DIR='$APP_DIR' bash '$APP_DIR/deploy/deploy.sh'"
+
+          # 6. Verifikasi dari runner (lewat Cloudflare) + origin langsung.
+          echo "Verifikasi https://app.tauthub.com ..."
+          for i in 1 2 3 4 5; do
+            health="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://app.tauthub.com/healthz || true)"
+            web="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://app.tauthub.com/ || true)"
+            if [ "$health" = "200" ] && [ "$web" != "000" ] && [ "$web" -lt 500 ]; then
+              echo "Sehat: app.tauthub.com /healthz=200, web HTTP $web."
+              exit 0
+            fi
+            echo "  belum sehat (healthz=$health web=$web) — tunggu 10 detik..."
+            sleep 10
+          done
+          echo "::warning::Public URL belum sehat — cek Cloudflare SSL mode (Full) dan DNS app.tauthub.com."
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "curl -s -o /dev/null -w 'origin healthz=%{http_code}\n' --max-time 10 http://127.0.0.1:8080/healthz || true; \
+             curl -s -o /dev/null -w 'origin web=%{http_code}\n' --max-time 10 http://127.0.0.1:3001/ || true; \
+             journalctl -u tauthub-api -u tauthub-web -u tauthub-scheduler -n 30 --no-pager | tail -40"
+          exit 1

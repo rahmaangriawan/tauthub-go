@@ -1,26 +1,42 @@
 #!/usr/bin/env bash
-# Bootstrap VPS staging Tauthub Go — dijalankan di VPS (root) oleh GitHub
-# Actions workflow (.github/workflows/deploy.yml) SEBELUM deploy, atau manual
-# sekali via SSH. IDEMPOTEN: aman dijalankan berulang tiap deploy.
+# Bootstrap VPS Tauthub Go — dijalankan di VPS (root/sudo) oleh GitHub
+# Actions workflow SEBELUM deploy, atau manual sekali via SSH. IDEMPOTEN:
+# aman dijalankan berulang tiap deploy.
 #
 #   1. Paket sistem: postgresql, nginx, certbot, unzip + Node 22 (runtime web)
 #   2. Swap 2GB (build Vite butuh memori di atas RAM 2GB)
 #   3. Bun (build web) di /usr/local/bin/bun
-#   4. User sistem 'tauthub' pemilik $APP_DIR
+#   4. User sistem $APP_USER pemilik $APP_DIR
 #   5. .env di $APP_DIR/.env — dibuat SEKALI dengan secret acak, tidak pernah
 #      disentuh lagi (rsync workflow meng-exclude .env)
 #   6. Database PostgreSQL: role + db, lalu baseline schema-full.sql (159
 #      tabel) hanya saat DB masih kosong
-#   7. Unit systemd: tauthub-api (:8080), tauthub-web (:3000), tauthub-scheduler
-#   8. Nginx: staging.tauthub.com → web :3000, /v1 /uploads /t /feed /healthz
+#   7. Unit systemd: tauthub-api, tauthub-web, tauthub-scheduler
+#   8. Nginx: $DOMAIN → web :$WEB_PORT, /v1 /uploads /t /feed /healthz
 #      → api :8080 + sertifikat Let's Encrypt (jika DNS sudah mengarah ke sini)
 #
-# Env: APP_DIR (default /opt/tauthub/app), DOMAIN (default staging.tauthub.com)
+# Env (semua opsional, default = staging):
+#   APP_DIR       default /opt/tauthub/app
+#   DOMAIN        default staging.tauthub.com
+#   APP_USER      default tauthub
+#   WEB_PORT      default 3000   (port tauthub-web SvelteKit)
+#   ORIGIN        default https://$DOMAIN (ORIGIN SvelteKit: CSRF/cookie)
+#   MANAGE_SWAP   default 1      (0 = jangan buat /swapfile — host sudah punya)
+#   MANAGE_NGINX  default 1      (0 = nginx/TLS dikelola CloudPanel — JANGAN
+#                                sentuh vhost & certbot, site sudah didaftarkan
+#                                lewat clpctl di production)
+#   SKIP_APT      default 0      (1 = lewati apt install — paket sudah lengkap,
+#                                hindari menyentuh nginx milik CloudPanel)
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/tauthub/app}"
 DOMAIN="${DOMAIN:-staging.tauthub.com}"
-APP_USER="tauthub"
+APP_USER="${APP_USER:-tauthub}"
+WEB_PORT="${WEB_PORT:-3000}"
+ORIGIN="${ORIGIN:-https://$DOMAIN}"
+MANAGE_SWAP="${MANAGE_SWAP:-1}"
+MANAGE_NGINX="${MANAGE_NGINX:-1}"
+SKIP_APT="${SKIP_APT:-0}"
 
 log() { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 
@@ -41,13 +57,17 @@ pg_createdb() {
 }
 
 log "1/8 Paket sistem (postgresql, nginx, certbot, unzip)"
-export DEBIAN_FRONTEND=noninteractive
-$SUDO apt-get update -qq
-$SUDO apt-get install -y -qq postgresql nginx rsync certbot python3-certbot-nginx unzip ca-certificates curl >/dev/null
+if [ "$SKIP_APT" != "1" ]; then
+  export DEBIAN_FRONTEND=noninteractive
+  $SUDO apt-get update -qq
+  $SUDO apt-get install -y -qq postgresql nginx rsync certbot python3-certbot-nginx unzip ca-certificates curl >/dev/null
+else
+  echo "  SKIP_APT=1 — paket diasumsikan sudah terpasang (host CloudPanel)."
+fi
 
 # Swap 2GB: build Vite/rollup bisa melebihi RAM 2GB VPS — tanpa swap proses
 # build dibunuh OOM killer. Idempoten: lewati jika /swapfile sudah ada.
-if [ ! -f /swapfile ]; then
+if [ "$MANAGE_SWAP" = "1" ] && [ ! -f /swapfile ]; then
   $SUDO fallocate -l 2G /swapfile
   $SUDO chmod 600 /swapfile
   $SUDO mkswap /swapfile >/dev/null
@@ -74,7 +94,7 @@ log "4/8 File .env"
 ENV_FILE="$APP_DIR/.env"
 if [ ! -f "$ENV_FILE" ]; then
   $SUDO tee "$ENV_FILE" >/dev/null <<EOF
-# Tauthub staging (backend Go) — dibuat otomatis oleh deploy/setup-vps.sh.
+# Tauthub (backend Go) — dibuat otomatis oleh deploy/setup-vps.sh.
 # Isi nilai CHANGE_ME (AI provider, Google OAuth) lalu deploy ulang.
 APP_ENV=production
 APP_NAME=Tauthub
@@ -154,7 +174,12 @@ fi
 # riwayat migrasi di atas dump — state antaranya tidak cocok (drift).
 if [ "$(pg_psql -d "$DB_NAME" -tAc "SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='users'")" != "1" ]; then
   log "  DB kosong — terapkan api/migrations/schema-full.sql"
-  pg_psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$APP_DIR/api/migrations/schema-full.sql" >/dev/null
+  # Salin dulu ke /tmp: di host CloudPanel home site user 750, postgres tidak
+  # bisa membaca file langsung dari $APP_DIR.
+  SCHEMA_TMP="/tmp/tauthub-schema-full.$$.sql"
+  $SUDO install -m 644 "$APP_DIR/api/migrations/schema-full.sql" "$SCHEMA_TMP"
+  pg_psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$SCHEMA_TMP" >/dev/null
+  $SUDO rm -f "$SCHEMA_TMP"
   # Buku besar migrasi (runner Go tidak membuat tabel ini).
   pg_psql -d "$DB_NAME" -c "CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());" >/dev/null
   # Dump diterapkan sebagai superuser postgres — pindahkan kepemilikan semua
@@ -187,11 +212,17 @@ fi
 log "6/8 Unit systemd (tauthub-api, tauthub-web, tauthub-scheduler)"
 for unit in tauthub-api tauthub-web tauthub-scheduler; do
   sed -e "s|__APP_DIR__|$APP_DIR|g" \
+    -e "s|__WEB_PORT__|$WEB_PORT|g" \
+    -e "s|__ORIGIN__|$ORIGIN|g" \
     "$APP_DIR/deploy/$unit.service" > "/etc/systemd/system/$unit.service"
 done
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable tauthub-api tauthub-web tauthub-scheduler >/dev/null 2>&1 || true
 
+# Nginx + TLS hanya dikelola di sini untuk host polos (staging). Di host
+# CloudPanel (MANAGE_NGINX=0) vhost & sertifikat dibuat/dikelola lewat
+# clpctl — menimpa conf di sini bisa merusak site lain di host yang sama.
+if [ "$MANAGE_NGINX" = "1" ]; then
 log "7/8 Nginx reverse proxy untuk $DOMAIN"
 # Sertifikat: Let's Encrypt bila sudah ada, kalau belum self-signed — port 443
 # wajib listen karena Cloudflare SSL mode Full menyambung origin via HTTPS
@@ -226,5 +257,6 @@ else
   echo "  DNS $DOMAIN belum mengarah ke VPS ini — lewati. Setelah DNS diarahkan"
   echo "  (atau record di-grey-cloud), jalankan: certbot --nginx -d $DOMAIN"
 fi
+fi # MANAGE_NGINX
 
 log "Setup VPS selesai."

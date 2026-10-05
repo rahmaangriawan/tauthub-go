@@ -13,7 +13,7 @@
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/tauthub/app}"
-APP_USER="tauthub"
+APP_USER="${APP_USER:-tauthub}"
 
 log() { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 
@@ -21,6 +21,13 @@ if [ ! -f "$APP_DIR/.env" ]; then
   echo "$APP_DIR/.env belum ada — jalankan setup-vps.sh dulu." >&2
   exit 1
 fi
+# Port health check ikut .env (API_PORT ditulis setup-vps.sh); WEB_PORT tidak
+# ada di .env — baca dari unit tauthub-web (di-sed per environment oleh
+# setup-vps.sh), fallback ke unit default :3000.
+set -a; . "$APP_DIR/.env"; set +a
+API_PORT="${API_PORT:-8080}"
+WEB_PORT="${WEB_PORT:-$(systemctl cat tauthub-web 2>/dev/null | sed -n 's/^Environment=PORT=//p' | tail -1)}"
+WEB_PORT="${WEB_PORT:-3000}"
 SUDO=""
 if [ "$(id -u)" != "0" ]; then SUDO="sudo"; fi
 
@@ -46,10 +53,10 @@ as_user "cd '$APP_DIR/web' && bun install --frozen-lockfile && bun run build"
 log "4/4 restart service"
 $SUDO systemctl restart tauthub-api tauthub-web tauthub-scheduler
 
-# Health check: api /healthz (ping DB) + respons web di :3000.
+# Health check: api /healthz (ping DB) + respons web di :$WEB_PORT.
 for i in $(seq 1 30); do
-  api_code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/healthz || true)"
-  web_code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/ || true)"
+  api_code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/healthz" || true)"
+  web_code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$WEB_PORT/" || true)"
   if [ "$api_code" = "200" ] && [ "$web_code" != "000" ] && [ "$web_code" -lt 500 ]; then
     log "Sehat: api /healthz=200, web HTTP $web_code. Deploy selesai."
     exit 0
