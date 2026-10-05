@@ -1222,8 +1222,18 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 .domainLink { display: inline-flex; align-items: center; gap: 3px; color: #2563eb; text-decoration: none; font-weight: 500; }
 .domainLink:hover { text-decoration: underline; }
 .verifiedTick { display: inline-flex; align-items: center; flex-shrink: 0; }
-/* Indikator rekam jejak: jumlah artikel yang sudah terbit lewat media ini.
-   Tanpa ikon, tinggi baris disamakan dengan tautan "Sample" supaya sejajar. */
+/* Indikator rekam jejak (daftar media): titik kecil di antara tautan "Sample"
+   dan sisa baris — jumlah artikel muncul sebagai tooltip saat hover, jadi
+   tidak ada teks permanen yang memakan ruang. Biru = sudah ada distribusi,
+   abu = belum. */
+.distDot {
+  display: inline-block; flex-shrink: 0;
+  width: 7px; height: 7px; border-radius: 999px;
+  background: #2b67ec;
+}
+.distDotMuted { background: #cbd5e1; }
+
+/* Badge versi teks — masih dipakai halaman matchmaker. */
 .distBadge {
   display: inline-flex; align-items: center;
   padding: 1px 7px; border-radius: 999px;

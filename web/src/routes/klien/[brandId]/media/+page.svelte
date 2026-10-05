@@ -850,11 +850,24 @@
 													><FileText size={13} /><span>Sample</span></a>
 												{/if}
 												{#if dist.known}
-													<span
-														class="distBadge"
-														class:distBadgeMuted={dist.published === 0}
-														title={tr('Jumlah artikel yang sudah terbit lewat media ini di seluruh platform Tauthub.')}
-													><span>{dist.published > 0 ? `${dist.published} ${tr('artikel terdistribusi')}` : tr('Belum ada distribusi')}</span></span>
+												<Tooltip.Root>
+												<Tooltip.Trigger>
+												{#snippet child({ props })}
+												<span
+												{...props}
+												class="distDot"
+												class:distDotMuted={dist.published === 0}
+												aria-label={dist.published > 0 ? `${dist.published} ${tr('artikel terdistribusi')}` : tr('Belum ada distribusi')}
+												></span>
+												{/snippet}
+												</Tooltip.Trigger>
+												<Tooltip.Portal>
+												<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+												<Tooltip.Arrow class="uiTipArrow" />
+												<strong>{dist.published > 0 ? `${dist.published} ${tr('artikel terdistribusi')}` : tr('Belum ada distribusi')}</strong> {tr('— jumlah artikel yang sudah terbit lewat media ini di seluruh platform Tauthub.')}
+												</Tooltip.Content>
+												</Tooltip.Portal>
+												</Tooltip.Root>
 												{/if}
 											</div>
 										{/if}
