@@ -17,6 +17,7 @@
 	} from '$lib/navigation/open-notification-link';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import MultilineText from '$lib/components/multiline-text.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 
@@ -276,7 +277,7 @@
 				</div>
 
 				{#if active.body}
-					<p class="mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-muted-foreground">{active.body}</p>
+					<MultilineText class="mt-3 break-words text-sm leading-relaxed text-muted-foreground" text={active.body} />
 				{/if}
 
 				<div class="mt-4 flex justify-end gap-2">

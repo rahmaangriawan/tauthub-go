@@ -7,6 +7,7 @@
 	import { Megaphone, X } from '@lucide/svelte';
 	import { apiRequest } from '$lib/auth';
 	import { tr } from '$lib/i18n/phrases';
+	import MultilineText from '$lib/components/multiline-text.svelte';
 
 	type Item = {
 		id: string;
@@ -100,7 +101,7 @@
 			</div>
 			<h2 class="mt-2 text-lg font-semibold leading-snug">{item.title}</h2>
 			<p class="mt-1 text-xs text-muted-foreground">{fmtDate(item.created_at)}</p>
-			<p class="mt-3 text-sm whitespace-pre-line">{item.body}</p>
+			<MultilineText class="mt-3 text-sm" text={item.body} />
 			<div class="mt-4 flex justify-end">
 				<button class="app-btn app-btn-primary" type="button" disabled={closing} onclick={() => void close()}>{tr('Mengerti')}</button>
 			</div>

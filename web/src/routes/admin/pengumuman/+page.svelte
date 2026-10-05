@@ -9,6 +9,7 @@
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import Select from '$lib/components/select.svelte';
+	import MultilineText from '$lib/components/multiline-text.svelte';
 
 	type Announcement = {
 		id: string;
@@ -194,7 +195,7 @@
 								</button>
 							</div>
 						</div>
-						<p class="mt-1.5 text-sm whitespace-pre-line">{item.body}</p>
+						<MultilineText class="mt-1.5 text-sm" text={item.body} />
 					</li>
 				{/each}
 			</ul>
