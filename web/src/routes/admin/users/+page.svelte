@@ -52,7 +52,7 @@
 	let isSuperAdmin = $state(false);
 
 	let searchText = $state('');
-	let roleFilter = $state('');
+	let roleFilter = $state('client');
 
 	// Dialog status (approve/suspend/reactivate)
 	let statusTarget = $state<User | null>(null);
@@ -109,7 +109,7 @@
 			currentUserId = getStoredSession()?.user.id ?? '';
 			// Deep-link ?role=client|partner (menu sidebar per role).
 			const roleParam = page.url.searchParams.get('role');
-			if (roleParam === 'client' || roleParam === 'partner') roleFilter = roleParam;
+			if (roleParam === 'client') roleFilter = roleParam;
 			await load();
 			loading = false;
 			const me = await apiRequest('/v1/platform/admins/me');
@@ -142,7 +142,7 @@
 	let roleParamSeen = page.url.searchParams.get('role') ?? '';
 	$effect(() => {
 		const roleParam = page.url.searchParams.get('role');
-		if ((roleParam === 'client' || roleParam === 'partner') && roleParam !== roleParamSeen) {
+		if ((roleParam === 'client') && roleParam !== roleParamSeen) {
 			roleParamSeen = roleParam;
 			if (roleParam !== roleFilter) {
 				roleFilter = roleParam;
@@ -158,11 +158,6 @@
 		void load(searchText.trim());
 	}
 
-	function changeRoleFilter(value: string) {
-		roleFilter = value;
-		pageNum = 1;
-		void load(searchText.trim(), value);
-	}
 
 	async function updateStatus() {
 		if (!statusTarget) return;
@@ -423,7 +418,7 @@
 </script>
 
 <section>
-	<PageHeader title={tr("Klien & Mitra")} description="Setujui pendaftaran baru dan kelola status akun serta batas pemakaian harian.">
+	<PageHeader title={tr("Daftar Klien")} description={tr("Setujui pendaftaran klien baru dan kelola status akun serta batas pemakaian harian.")}>
 		<button class="app-btn app-btn-soft" type="button" onclick={openCreate}>{tr("Tambah Pengguna")}</button>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{rows.length} users</span>
 	</PageHeader>
@@ -449,18 +444,6 @@
 				</label>
 				<button class="app-btn app-btn-soft" type="submit" disabled={loading}>{tr("Cari")}</button>
 			</form>
-			<Select
-				ariaLabel="Filter role pengguna"
-				minWidth={170}
-				align="end"
-				value={roleFilter}
-				onchange={(v) => changeRoleFilter(v)}
-				options={[
-					{ value: '', label: tr('Semua role') },
-					{ value: 'client', label: tr('Klien') },
-					{ value: 'partner', label: tr('Mitra') }
-				]}
-			/>
 		</div>
 
 		<div class="app-card mt-4 overflow-x-auto">

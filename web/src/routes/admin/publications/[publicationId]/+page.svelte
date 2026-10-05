@@ -336,7 +336,7 @@
 						{#if pub.brand_public_id}<p class="text-xs text-muted-foreground">{pub.brand_public_id}</p>{/if}
 					</div>
 					<div>
-						<p class="text-xs text-muted-foreground">Partner</p>
+						<p class="text-xs text-muted-foreground">{tr('Mitra')}</p>
 						<p class="text-sm font-medium">{pub.partner_name ?? '—'}</p>
 						{#if pub.partner_public_id}<p class="text-xs text-muted-foreground">{pub.partner_public_id}</p>{/if}
 					</div>

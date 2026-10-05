@@ -312,7 +312,7 @@
 			<table class="w-full text-sm" style="min-width: 940px;">
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
-						<th class="px-4 py-2.5 font-medium">Partner</th>
+						<th class="px-4 py-2.5 font-medium">{tr('Mitra')}</th>
 						<th class="px-4 py-2.5 font-medium">Periode</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Total")}</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
@@ -391,9 +391,9 @@
 	<Modal title={tr("Buat settlement")} label={tr("Buat settlement")} maxWidth="lg" onClose={() => (createOpen = false)}>
 		<form class="flex flex-col gap-3" onsubmit={create}>
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Partner</span>
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr('Mitra')}</span>
 				<Select
-					ariaLabel="Partner"
+					ariaLabel={tr('Mitra')}
 					minWidth={260}
 					value={form.partner_id}
 					onchange={(v) => (form.partner_id = v)}

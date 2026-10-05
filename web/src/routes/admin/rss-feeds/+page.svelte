@@ -258,9 +258,9 @@
 	<Modal title={tr("Buat RSS feed")} maxWidth="md" onClose={() => (createOpen = false)}>
 		<form class="space-y-3" onsubmit={create}>
 			<label class="block">
-				<span class="text-xs font-bold text-muted-foreground">Partner</span>
+				<span class="text-xs font-bold text-muted-foreground">{tr('Mitra')}</span>
 				<Select
-					ariaLabel="Partner"
+					ariaLabel={tr('Mitra')}
 					minWidth={260}
 					value={form.partner_id}
 					onchange={(v) => {

@@ -18,6 +18,7 @@
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDate, fmtNum } from '$lib/admin-format';
+	import Tooltip from '$lib/components/tooltip.svelte';
 	import { platformError } from '../_platform';
 
 	type Partner = {
@@ -505,11 +506,10 @@
 						<th class="px-4 py-2.5 font-medium">WA</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Email Alternatif")}</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Harga Media")}</th>
-						<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
+						<th class="px-4 py-2.5 font-medium min-w-[220px]">{tr("Media")}</th>
 						<th class="px-4 py-2.5 font-medium">Dewan Pers</th>
 						<th class="px-4 py-2.5 font-medium">VIP</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
-						<th class="px-4 py-2.5 font-medium">Bergabung</th>
 						<th class="px-4 py-2.5 font-medium">Aksi</th>
 					</tr>
 				</thead>
@@ -527,6 +527,11 @@
 							</td>
 							<td class="whitespace-nowrap px-4 py-3">
 								<a style="color: var(--primary);" href={`mailto:${row.email}`}>{row.email}</a>
+								<div class="mt-0.5">
+									<Tooltip content={tr('Tanggal mitra bergabung ke platform Tauthub.')}>
+										<span class="text-xs text-muted-foreground">{tr('Bergabung')} {fmtDate(row.created_at)}</span>
+									</Tooltip>
+								</div>
 							</td>
 							<td class="px-4 py-3">
 								{#if row.wa_number}
@@ -590,7 +595,6 @@
 								{/if}
 							</td>
 							<td class="px-4 py-3"><Badge label={row.status} tone={row.status === 'active' ? 'success' : 'neutral'} /></td>
-							<td class="px-4 py-3 text-xs text-muted-foreground">{fmtDate(row.created_at)}</td>
 							<td class="px-4 py-3">
 								<button
 									class="rounded-lg p-1.5 hover:bg-secondary"
