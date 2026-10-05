@@ -270,17 +270,21 @@ type GoogleExchange struct {
 }
 
 // ExchangeGoogleCode: code → access token (+ klaim id_token tanpa verifikasi,
-// parity: token langsung dari Google via TLS).
-func (g *Google) ExchangeGoogleCode(ctx context.Context, code string) *GoogleExchange {
+// parity: token langsung dari Google via TLS). redirectURI harus sama persis
+// dengan yang dipakai saat membangun URL consent (Google menolak bila beda).
+func (g *Google) ExchangeGoogleCode(ctx context.Context, code, redirectURI string) *GoogleExchange {
 	cfg := g.LoadConfig(ctx)
 	if cfg.ClientID == "" || cfg.ClientSecret == "" || cfg.RedirectURI == "" {
 		return nil
+	}
+	if redirectURI == "" {
+		redirectURI = cfg.RedirectURI
 	}
 	form := url.Values{}
 	form.Set("code", code)
 	form.Set("client_id", cfg.ClientID)
 	form.Set("client_secret", cfg.ClientSecret)
-	form.Set("redirect_uri", cfg.RedirectURI)
+	form.Set("redirect_uri", redirectURI)
 	form.Set("grant_type", "authorization_code")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, GoogleTokenURL, strings.NewReader(form.Encode()))
 	if err != nil {

@@ -64,10 +64,21 @@ func (d *Deps) GoogleURL(w http.ResponseWriter, r *http.Request) {
 	state := d.Google.CreateOAuthState(w, mode, role, returnTo, appOrigin(r))
 
 	authorize := auth.GoogleAuthURL + "?client_id=" + urlEscape(cfg.ClientID) +
-		"&redirect_uri=" + urlEscape(cfg.RedirectURI) +
+		"&redirect_uri=" + urlEscape(googleRedirectURI(r, cfg)) +
 		"&response_type=code&scope=" + urlEscape("openid email profile") +
 		"&state=" + urlEscape(state) + "&prompt=select_account"
 	http.Redirect(w, r, authorize, http.StatusFound)
+}
+
+// googleRedirectURI: Google menuntut redirect_uri absolut yang terdaftar di
+// Console — config yang tersimpan sebagai path relatif (mis. "/v1/auth/
+// google/callback") dibangun dari origin request; URI absolut dipakai apa
+// adanya. Nilai yang sama wajib dipakai lagi saat tukar code di callback.
+func googleRedirectURI(r *http.Request, cfg auth.GoogleOAuthConfig) string {
+	if strings.HasPrefix(cfg.RedirectURI, "http://") || strings.HasPrefix(cfg.RedirectURI, "https://") {
+		return cfg.RedirectURI
+	}
+	return appOrigin(r) + cfg.RedirectURI
 }
 
 func googleFailRedirect(w http.ResponseWriter, r *http.Request, code string) {
@@ -103,7 +114,7 @@ func (d *Deps) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exchanged := d.Google.ExchangeGoogleCode(r.Context(), code)
+	exchanged := d.Google.ExchangeGoogleCode(r.Context(), code, googleRedirectURI(r, d.Google.LoadConfig(r.Context())))
 	if exchanged == nil {
 		googleFailRedirect(w, r, "oauth_error")
 		return
