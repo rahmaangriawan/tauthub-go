@@ -103,7 +103,10 @@ jobs:
           #    menambah berkas yang hilang, tidak pernah menimpa upload runtime.
           #    Dikirim langsung dari workspace (step 1 meng-exclude .data/),
           #    dilandaskan dulu ke SYNC_DIR karena home site user tidak
-          #    writable oleh user SSH.
+          #    writable oleh user SSH. .data tidak ada di SYNC_DIR (karena
+          #    excluded di step 1) — buat dulu, rsync tidak membuat parent.
+          retry ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "mkdir -p '$SYNC_DIR/api/.data/uploads'"
           retry rsync -rltDz --ignore-existing --timeout=120 \
             -e "ssh $SSH_OPTS" \
             api/.data/uploads/ "$SSH_USER@$SSH_HOST:$SYNC_DIR/api/.data/uploads/"
