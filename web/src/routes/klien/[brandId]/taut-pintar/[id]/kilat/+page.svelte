@@ -12,13 +12,16 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import TautBottomBar from '../../_bottom-bar.svelte';
-	import { fmtIdr, rpCurrency } from '../../_shared';
+	import { fmtIdr, rpCurrency, isCampaignDone } from '../../_shared';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
 	const apiBase = $derived(`/v1/brands/${brandId}/taut/campaigns/${campaignId}`);
+	// Status kampanye dari GET /profile/draft. Final = view only.
+	let campaignStatus = $state<string | null>(null);
+	const viewOnly = $derived(isCampaignDone(campaignStatus));
 
 	type CrawlExtraction = {
 		business_name?: string;
@@ -107,6 +110,7 @@
 			]);
 			if (draftRes.ok) {
 				const d = await draftRes.json();
+				campaignStatus = d.campaign?.taut_status ?? null;
 				campaignName = d.campaign?.name ?? '';
 				wallet = d.wallet?.available ?? 0;
 				rateIdr = d.wallet?.rate_idr ?? 0;
@@ -211,6 +215,10 @@
 	const ready = $derived(media.length > 0);
 
 	async function racik() {
+		if (viewOnly) {
+			await goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`);
+			return;
+		}
 		if (busy !== 'idle') return;
 		attempted = true;
 		error = '';
@@ -451,8 +459,14 @@
 					{/if}
 				</label>
 			</div>
+			{#if viewOnly}
+				<div class="mb-1 flex flex-wrap items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px]" style="border-color: var(--border); background: var(--muted);">
+					<span>{tr('Kampanye ini sudah selesai — mode lihat saja.')}</span>
+					<a class="font-semibold underline" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`}>{tr('Buka Ringkasan')}</a>
+				</div>
+			{/if}
 			<div class="mt-3 flex flex-wrap items-center gap-3">
-				<button class="app-btn app-btn-primary" type="button" disabled={busy !== 'idle'} onclick={() => void racik()}>
+				<button class="app-btn app-btn-primary" type="button" disabled={busy !== 'idle' || viewOnly} onclick={() => void racik()}>
 					{#if busy !== 'idle'}<LoaderCircle size={16} class="animate-spin" />{:else}<Sparkles size={16} />{/if}
 					{busy === 'crawl' ? tr('Membaca website…') : busy === 'place' ? tr('AI memilih media…') : ready ? tr('Racik Ulang Kampanye Kilat') : tr('Racik Kampanye Kilat')}
 				</button>

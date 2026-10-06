@@ -13,7 +13,7 @@
 	import TautBottomBar from '../../_bottom-bar.svelte';
 	import NaskahModal from './_naskah-modal.svelte';
 	import QcPanel from './_qc-panel.svelte';
-	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, buildTrackedUrl, stripScheme, withScheme, textToHtml, toLocalInput } from '../../_shared';
+	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, buildTrackedUrl, stripScheme, withScheme, textToHtml, toLocalInput, isCampaignDone } from '../../_shared';
 	import { ARTICLE_DEFAULT_COVER } from '$lib/media/cover';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import SlideOver from '$lib/components/slide-over.svelte';
@@ -22,6 +22,10 @@
 	const campaignId = $derived(page.params.id as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
 	const apiBase = $derived(`/v1/brands/${brandId}/taut/campaigns/${campaignId}`);
+	// Status kampanye dari GET /profile/draft. Final = view only.
+	let campaignStatus = $state<string | null>(null);
+	const viewOnly = $derived(isCampaignDone(campaignStatus));
+	const VIEW_ONLY_MSG = 'Kampanye sudah selesai — mode lihat saja. Hubungi admin kalau perlu revisi.';
 
 	type PlacementItem = {
 		media_id: string;
@@ -238,6 +242,7 @@
 			}
 			if (draftData) {
 				campaignName = draftData.campaign?.name ?? tr('Kampanye');
+				campaignStatus = draftData.campaign?.taut_status ?? null;
 				wallet = draftData.wallet?.available ?? 0;
 				rateIdr = draftData.wallet?.rate_idr ?? 0;
 				if (draftData.entry_mode === 'ai' || draftData.entry_mode === 'manual') entryMode = draftData.entry_mode;
@@ -327,6 +332,7 @@
 		};
 	}
 	async function persistLinks() {
+		if (viewOnly) return; // kampanye final: tautan tidak boleh diubah
 		try {
 			const res = await apiRequest(`${apiBase}/writer-links`, { method: 'PUT', body: JSON.stringify(linksPayload()) });
 			if (!res.ok) return null;
@@ -387,6 +393,7 @@
 	}
 
 	async function generateOne(item: PlacementItem, openAfter = true) {
+		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		genState = { ...genState, [item.media_id]: 'generating' };
 		error = '';
 		try {
@@ -487,6 +494,7 @@
 	}
 
 	async function generateAll() {
+		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		if (bulkRunning) return;
 		const targets = selected.filter((m) => !hasDoc(m) || canRegen(m));
 		if (targets.length === 0) return;
@@ -654,6 +662,7 @@
 	// Simpan isi editor. Dipisah dari penutupan modal supaya alur "Cek Validasi
 	// Artikel" bisa menyimpan dulu lalu memindai tanpa menutup modal.
 	async function persistEditor(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string): Promise<boolean> {
+		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return false; }
 		const current = editor;
 		if (!current) return false;
 		const mediaId = current.mediaId;
@@ -685,6 +694,7 @@
 	}
 
 	async function saveEditor(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) {
+		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		if (!editor) return;
 		editorSaving = true;
 		const saved = await persistEditor(title, html, coverUrl, category, metaDescription);
@@ -763,6 +773,7 @@
 	}
 
 	async function uploadCover(file: File): Promise<string> {
+		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return ''; }
 		const form = new FormData();
 		form.append('file', file);
 		form.append('for', 'cover');
@@ -799,6 +810,7 @@
 	});
 
 	async function publish() {
+		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		if (coverChecking || distributing) return;
 		// QC belum lulus → buka panel QC agar alasan terlihat (halaman Gatekeeper dihapus).
 		if (!distributable) {
@@ -899,6 +911,7 @@
 
 	/** Kirim terbit dari panel, lalu buka Ringkasan. Cover wajib sudah beres. */
 	async function confirmPublish() {
+		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		if (distributing) return;
 		if (missingCovers.length > 0) {
 			publishError = tr('Selesaikan cover dulu: tambahkan lewat Edit Artikel, atau pakai thumbnail default Tauthub.');
@@ -913,6 +926,7 @@
 	}
 
 	async function distributeNow(schedule: { media_id: string; scheduled_at: string }[] = []) {
+		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		distributing = true;
 		try {
 			// schedule kosong = terbit serentak sekarang; berisi jadwal = terbit terjadwal.
@@ -983,6 +997,12 @@
 <PageTitle title="Taut Pintar — The Writer" />
 
 <main>
+	{#if viewOnly}
+		<div class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px]" style="border-color: var(--border); background: var(--muted);">
+			<span>{tr('Kampanye ini sudah selesai — mode lihat saja. Isinya tidak bisa diubah lagi.')}</span>
+			<a class="font-semibold underline" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`}>{tr('Buka Ringkasan')}</a>
+		</div>
+	{/if}
 	<div class="flex flex-wrap items-center justify-between gap-3">
 		<div class="flex items-center gap-3">
 			<div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background-color: var(--primary);">
@@ -1188,7 +1208,7 @@
 					</div>
 				</div>
 				{#if !manualFlow}
-					<button class="app-btn app-btn-primary" type="button" disabled={bulkRunning || pendingCount === 0} title={generateTooltip} onclick={generateAll}>
+					<button class="app-btn app-btn-primary" type="button" disabled={bulkRunning || pendingCount === 0 || viewOnly} title={generateTooltip} onclick={generateAll}>
 						{#if bulkRunning}<LoaderCircle size={16} class="animate-spin" />{:else}<Sparkles size={16} />{/if}
 						{bulkRunning
 							? `${tr('Membuat')} ${bulkProgress ? `${bulkProgress.done}/${bulkProgress.total}` : ''}…`
@@ -1257,7 +1277,7 @@
 								{/if}
 							</p>
 							<div class="flex flex-wrap gap-2">
-									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning} onclick={() => (checklistFor = m.media_id)}><ListChecks size={14} /> {tr('Cek Validasi')}</button>
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning || viewOnly} onclick={() => (checklistFor = m.media_id)}><ListChecks size={14} /> {tr('Cek Validasi')}</button>
 									{#if removeTarget && removeTarget.media_id === m.media_id}
 										<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.55);" role="presentation" onclick={(e) => { if (e.target === e.currentTarget && !removeBusy) removeTarget = null; }}>
 											<div class="flex w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl" style="border-color: var(--border); background-color: var(--card, #fff);" role="dialog" aria-modal="true" tabindex="-1" aria-label={tr('Hapus Media dari Kampanye')} onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape' && !removeBusy) removeTarget = null; }}>
@@ -1307,13 +1327,13 @@
 										</div>
 									{/if}
 								{#if !manualFlow && !hasDoc(m)}
-									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={generating || bulkRunning} onclick={() => void generateOne(m)}>
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={generating || bulkRunning || viewOnly} onclick={() => void generateOne(m)}>
 										{#if generating}<LoaderCircle size={14} class="animate-spin" />{:else}<Sparkles size={14} />{/if}
 										{generating ? tr('Membuat…') : queued ? tr('Mengantre…') : tr('Generate Konten')}
 									</button>
 								{/if}
 								{#if !hasDoc(m)}
-									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning} onclick={() => openNaskahUpload(m)}>
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning || viewOnly} onclick={() => openNaskahUpload(m)}>
 										<Upload size={14} /> {tr('Unggah Artikel')}
 									</button>
 								{/if}
@@ -1338,7 +1358,7 @@
 										class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:border-destructive hover:bg-destructive hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1"
 										style="border-color: var(--border);"
 										type="button"
-										disabled={bulkRunning || removeBusy}
+										disabled={bulkRunning || removeBusy || viewOnly}
 										aria-label={tr('Hapus media dari kampanye')}
 										title={tr('Hapus media dari kampanye')}
 										onclick={() => { removeError = ''; removeTarget = m; }}
@@ -1378,7 +1398,7 @@
 				{/if}
 				<div class="flex flex-wrap items-center gap-3">
 					<button class="app-btn app-btn-soft" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar`)}>{tr('Kembali')}</button>
-					<button class="app-btn" type="button" style="background-color: var(--success); color: #fff;" disabled={coverChecking || distributing} onclick={publish}>
+					<button class="app-btn" type="button" style="background-color: var(--success); color: #fff;" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
 						{#if coverChecking || distributing}<LoaderCircle size={16} class="animate-spin" />{:else}<Send size={16} />{/if}
 						{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}
 					</button>

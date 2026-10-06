@@ -21,6 +21,9 @@
 	const formUrl = $derived(`/klien/${brandUrl}/taut-pintar/${campaignId}/profiler`);
 
 	let brief = $state<any>(null);
+	// Status kampanye (dari GET /profile/draft) — final = view only.
+	let campaignStatus = $state<string | null>(null);
+	const viewOnly = $derived(['submitted', 'scheduled', 'distributed'].includes(campaignStatus ?? ''));
 	let loading = $state(true);
 	let error = $state('');
 	let busy = $state(false);
@@ -46,6 +49,7 @@
 				await goto(formUrl, { replaceState: true });
 				return;
 			}
+			campaignStatus = data.campaign?.taut_status ?? null;
 			brief = data.result.executive_brief;
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : tr('Gagal memuat hasil analisis.');
@@ -58,7 +62,12 @@
 		error = '';
 		try {
 			const res = await apiRequest(`${apiBase}/advance`, { method: 'POST', body: JSON.stringify({ target: 'profiled' }) });
-			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengunci hasil Profiler.')));
+			// 422 = penanda "profiled" tidak bisa/tidak perlu diset (kampanye lama
+			// atau hasil belum berstatus completed). Brief sudah tampil di layar —
+			// lanjutkan ke Matchmaker, jangan buntu di error.
+			if (!res.ok && res.status !== 422) {
+				throw new Error(await readApiError(res, tr('Gagal mengunci hasil Profiler.')));
+			}
 			await goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/matchmaker`);
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : tr('Gagal lanjut.');
@@ -68,6 +77,10 @@
 
 	async function backToForm() {
 		if (busy) return;
+		if (viewOnly) {
+			error = tr('Kampanye sudah selesai — hasil analisis tidak bisa diubah lagi.');
+			return;
+		}
 		busy = true;
 		error = '';
 		try {
@@ -94,6 +107,12 @@
 <PageTitle title="Taut Pintar — Executive PR Brief" />
 
 <main>
+	{#if viewOnly}
+		<div class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px]" style="border-color: var(--border); background: var(--muted);">
+			<span>{tr('Kampanye ini sudah selesai — mode lihat saja. Brief tidak bisa diubah lagi.')}</span>
+			<a class="font-semibold underline" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`}>{tr('Buka Ringkasan Distribusi')}</a>
+		</div>
+	{/if}
 	<AgentSteps current={1} />
 	{#if loading}
 		<div class="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">

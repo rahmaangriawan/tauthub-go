@@ -54,6 +54,13 @@ export const AGENT_STEP_ROUTES = ['profiler', 'matchmaker', 'writer', 'ringkasan
 export const MANUAL_PROFILER_REASON =
 	'The Profiler dilewati: kampanye ini dibuat lewat jalur Manual, jadi tidak ada brief AI yang disusun. Media dipilih sendiri dan artikelnya kamu siapkan.';
 
+/** Status kampanye yang sudah final: hanya boleh dilihat, tidak boleh diedit lagi. */
+export const DONE_STATUSES = new Set(['submitted', 'scheduled', 'distributed']);
+
+export function isCampaignDone(status?: string | null): boolean {
+	return DONE_STATUSES.has(status ?? '');
+}
+
 /* ─── Berita acara ────────────────────────────────────────────────────── */
 
 export const MEDIA_LABEL: Record<string, string> = {

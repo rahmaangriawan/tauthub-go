@@ -17,7 +17,7 @@
 	import Tooltip from '$lib/components/tooltip.svelte';
 	import MediaDetailModal from '../../../media/_detail-modal.svelte';
 	import TautBottomBar from '../../_bottom-bar.svelte';
-	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, humanizeReason, fmtTrafficShort, formatTraffic } from '../../_shared';
+	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, humanizeReason, fmtTrafficShort, formatTraffic, isCampaignDone } from '../../_shared';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { mediaDistribution } from '$lib/media/distribution';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -29,6 +29,10 @@
 	const campaignId = $derived(page.params.id as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
 	const apiBase = $derived(`/v1/brands/${brandId}/taut/campaigns/${campaignId}`);
+	// Status kampanye dari GET /profile/draft. Final (terkirim/terjadwal/
+	// terdistribusi) → halaman ini hanya boleh dilihat, bukan diubah.
+	let campaignStatus = $state<string | null>(null);
+	const viewOnly = $derived(isCampaignDone(campaignStatus));
 
 	type PlacementRow = { media_id: string; name: string; score: number | null; status: string; reason: string | null };
 	type MediaRow = {
@@ -179,6 +183,7 @@
 					walletAvailable: data.wallet?.available ?? 0,
 					rateIdr: data.wallet?.rate_idr ?? 0
 				};
+				campaignStatus = data.campaign?.taut_status ?? null;
 				if (data.entry_mode === 'ai' || data.entry_mode === 'manual') entryMode = data.entry_mode;
 				return data.entry_mode ?? null;
 			}
@@ -249,6 +254,7 @@
 	});
 
 	function toggleMedia(id: string) {
+		if (viewOnly) return; // kampanye final: mode lihat saja
 		const next = new Set(selected);
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
@@ -256,6 +262,7 @@
 	}
 
 	function toggleManual(id: string) {
+		if (viewOnly) return; // kampanye final: mode lihat saja
 		const next = new Set(manualPicks);
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
@@ -397,6 +404,10 @@
 	});
 
 	async function finalize() {
+		if (viewOnly) {
+			await goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`);
+			return;
+		}
 		const picks = tab === 'custom' ? manualPicks : selected;
 		if (picks.size === 0) return;
 		saving = true;
@@ -420,7 +431,15 @@
 			});
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan seleksi media.')));
 			const advRes = await apiRequest(`${apiBase}/advance`, { method: 'POST', body: JSON.stringify({ target: 'placement' }) });
-			if (!advRes.ok) throw new Error(await readApiError(advRes, tr('Gagal mengunci placement.')));
+			if (!advRes.ok) {
+				// 422 = kampanye sudah melewati tahap ini (mis. sudah terdistribusi).
+				// Itu bukan kesalahan user — antar ke Ringkasan (mode lihat).
+				if (advRes.status === 422) {
+					await goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`);
+					return;
+				}
+				throw new Error(await readApiError(advRes, tr('Gagal mengunci placement.')));
+			}
 			await goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/writer${manualFlow ? '?mode=manual' : ''}`);
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : tr('Gagal melanjutkan.');
@@ -562,7 +581,7 @@
 						{@const dist = distribution(m)}
 					<tr class="modernTr" style="background: {isSel ? '#f8faff' : 'transparent'}; cursor:pointer;" onclick={() => onToggle(m.id)}>
 						<td class="modernTd" style="width:36px;padding-right:0" onclick={(e) => e.stopPropagation()}>
-							<input type="checkbox" class="modernCheckbox" checked={isSel} onchange={() => onToggle(m.id)} aria-label={`${tr('Pilih media')} ${m.name}`} />
+							<input type="checkbox" class="modernCheckbox" checked={isSel} disabled={viewOnly} onchange={() => onToggle(m.id)} aria-label={`${tr('Pilih media')} ${m.name}`} />
 						</td>
 						<td class="modernTd">
 							<div class="mediaRowCol">
@@ -667,6 +686,12 @@
 <PageTitle title={tr('Taut Pintar — The Matchmaker')} />
 
 <main>
+	{#if viewOnly}
+		<div class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px]" style="border-color: var(--border); background: var(--muted);">
+			<span>{tr('Kampanye ini sudah selesai — mode lihat saja. Isinya tidak bisa diubah lagi.')}</span>
+			<a class="font-semibold underline" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`}>{tr('Buka Ringkasan')}</a>
+		</div>
+	{/if}
 	<div class="flex flex-wrap items-center justify-between gap-3">
 		<div class="flex items-center gap-3">
 			<div class="flex h-11 w-11 items-center justify-center rounded-xl" style="background-color: var(--primary);">
@@ -773,7 +798,7 @@
 				<p>{running ? tr('AI Matchmaker sedang mencocokkan media dengan hasil The Profiler…') : tr('Memuat rekomendasi…')}</p>
 			</div>
 		{:else if recommendedCards.length === 0}
-			<div class="app-card mt-3 px-4 py-10 text-center text-sm text-muted-foreground">{tr('Belum ada rekomendasi.')}<button class="ml-1 font-medium" style="color: var(--primary);" type="button" onclick={() => void loadPlacement(true)}>{tr('Jalankan ulang Matchmaker')}</button>
+			<div class="app-card mt-3 px-4 py-10 text-center text-sm text-muted-foreground">{tr('Belum ada rekomendasi.')}{#if !viewOnly}<button class="ml-1 font-medium" style="color: var(--primary);" type="button" onclick={() => void loadPlacement(true)}>{tr('Jalankan ulang Matchmaker')}</button>{/if}
 			</div>
 		{:else}
 			<div class="aiSectionGroup mt-3">
@@ -895,10 +920,14 @@
 		</div>
 		<div class="bottomActions">
 			<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/profiler`}>{tr('Kembali')}</a>
-			<button class="app-btn app-btn-primary" type="button" disabled={saving || summary.count === 0} onclick={finalize}>
-				{#if saving}<div class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>{/if}
-				{saving ? tr('Menyimpan…') : tr('Kunci & Lanjutkan Penulisan →')}
-			</button>
+			{#if viewOnly}
+				<a class="app-btn app-btn-primary" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`}>{tr('Lihat Ringkasan →')}</a>
+			{:else}
+				<button class="app-btn app-btn-primary" type="button" disabled={saving || summary.count === 0} onclick={finalize}>
+					{#if saving}<div class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>{/if}
+					{saving ? tr('Menyimpan…') : tr('Kunci & Lanjutkan Penulisan →')}
+				</button>
+			{/if}
 		</div>
 	</TautBottomBar>
 </main>
