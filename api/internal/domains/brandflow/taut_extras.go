@@ -66,13 +66,24 @@ func (d *Deps) TautAgentStatus(w http.ResponseWriter, r *http.Request) {
 // TautArticleGet: GET /v1/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}
 func (d *Deps) TautArticleGet(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
-	_, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
 	campaignID := chiParam(r, "campaignId")
 	mediaID := chiParam(r, "mediaId")
+	// Kampanye wajib milik brand pada URL — cegah akses lintas-brand.
+	camp, err := d.queryRow(r.Context(),
+		"SELECT 1 FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandRow.ID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if camp == nil {
+		httpx.Error(w, http.StatusNotFound, "Kampanye tidak ditemukan.")
+		return
+	}
 	item, err := d.queryRow(r.Context(),
 		"SELECT id, article_document_id, featured_image_url, category FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 LIMIT 1",
 		campaignID, mediaID)
@@ -121,13 +132,23 @@ func (d *Deps) TautArticleGet(w http.ResponseWriter, r *http.Request) {
 // TautArticlePut: PUT /v1/brands/{brandId}/taut/campaigns/{campaignId}/articles/{mediaId}
 func (d *Deps) TautArticlePut(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
-	_, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
 	campaignID := chiParam(r, "campaignId")
 	mediaID := chiParam(r, "mediaId")
+	camp, err := d.queryRow(r.Context(),
+		"SELECT 1 FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandRow.ID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if camp == nil {
+		httpx.Error(w, http.StatusNotFound, "Kampanye tidak ditemukan.")
+		return
+	}
 	item, err := d.queryRow(r.Context(),
 		"SELECT id, article_document_id FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 LIMIT 1",
 		campaignID, mediaID)
@@ -259,6 +280,16 @@ func (d *Deps) TautArticleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	campaignID := chiParam(r, "campaignId")
 	mediaID := chiParam(r, "mediaId")
+	camp, err := d.queryRow(r.Context(),
+		"SELECT 1 FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandRow.ID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if camp == nil {
+		httpx.Error(w, http.StatusNotFound, "Kampanye tidak ditemukan.")
+		return
+	}
 	body := decodeJSON(r)
 
 	title, _ := strField(body, "title")
@@ -363,9 +394,20 @@ func (d *Deps) TautArticleUpload(w http.ResponseWriter, r *http.Request) {
 // TautFilesList: GET /v1/brands/{brandId}/taut/campaigns/{campaignId}/files
 func (d *Deps) TautFilesList(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
-	_, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
 	if err != nil {
 		d.writeErr(w, err)
+		return
+	}
+	campaignID := chiParam(r, "campaignId")
+	camp, err := d.queryRow(r.Context(),
+		"SELECT 1 FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandRow.ID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if camp == nil {
+		httpx.Error(w, http.StatusNotFound, "Kampanye tidak ditemukan.")
 		return
 	}
 	files, err := d.queryRows(r.Context(), `
@@ -373,7 +415,7 @@ func (d *Deps) TautFilesList(w http.ResponseWriter, r *http.Request) {
 		       parse_status, parse_error, created_at
 		FROM taut_campaign_files
 		WHERE campaign_id = $1 AND deleted_at IS NULL
-		ORDER BY created_at DESC`, chiParam(r, "campaignId"))
+		ORDER BY created_at DESC`, campaignID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -636,13 +678,23 @@ func extractDocxText(buffer []byte) (string, error) {
 // TautFileDelete: DELETE /v1/brands/{brandId}/taut/campaigns/{campaignId}/files/{fileId}
 func (d *Deps) TautFileDelete(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
-	_, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
 	fileID := chiParam(r, "fileId")
 	campaignID := chiParam(r, "campaignId")
+	camp, err := d.queryRow(r.Context(),
+		"SELECT 1 FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandRow.ID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if camp == nil {
+		httpx.Error(w, http.StatusNotFound, "Kampanye tidak ditemukan.")
+		return
+	}
 	row, err := d.queryRow(r.Context(),
 		"SELECT id FROM taut_campaign_files WHERE id = $1 AND campaign_id = $2 AND deleted_at IS NULL LIMIT 1", fileID, campaignID)
 	if err != nil {

@@ -159,6 +159,11 @@ func (d *Deps) PublicPaymentGatewayActive(w http.ResponseWriter, r *http.Request
 // PublicPaymentStatus: GET /v1/payments/status/{transactionId} — PUBLIK.
 func (d *Deps) PublicPaymentStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	// Publik tanpa auth — dibatasi longgar supaya polling halaman pembayaran
+	// sah tidak terganggu, tapi pengurasan/recon massal tertahan.
+	if !d.pubRateLimit(w, r, "payments-status", 120) {
+		return
+	}
 	transactionID := chiParam(r, "transactionId")
 
 	loadTx := func(id string) (rowMap, error) {

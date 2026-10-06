@@ -1,3 +1,7 @@
-# allow crawling everything by default
+# Konten publik boleh dirayapi; area privat (portal klien/mitra/admin dan
+# halaman berita acara ber-token) tidak untuk mesin pencari.
 User-agent: *
-Disallow:
+Disallow: /admin
+Disallow: /klien
+Disallow: /mitra
+Disallow: /berita-acara/

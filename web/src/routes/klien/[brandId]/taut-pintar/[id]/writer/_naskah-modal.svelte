@@ -11,6 +11,7 @@
 	import { ARTICLE_DEFAULT_COVER } from '$lib/media/cover';
 	import RichTextEditor from '$lib/components/rich-text-editor.svelte';
 	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
+	import { sanitizeHtml } from '$lib/sanitize-html';
 	import Select from '$lib/components/select.svelte';
 	import { textToHtml } from '../../_shared';
 
@@ -787,7 +788,7 @@
 									<p class="mb-2 flex items-center gap-1.5 text-xs font-semibold" style="color: var(--primary);">
 										<LoaderCircle size={13} class="animate-spin" /> {tr('AI sedang menulis artikel…')}
 									</p>
-									<div class="article-html max-w-none text-sm" style="min-height: 320px;">{@html streamingHtml}</div>
+									<div class="article-html max-w-none text-sm" style="min-height: 320px;">{@html sanitizeHtml(streamingHtml ?? '')}</div>
 								</div>
 							{:else}
 								<RichTextEditor bind:value={html} bind:stats={editorStats} brandId={brandId} campaignId={campaignId} mediaId={mediaId} ariaLabel={tr('Isi artikel')} minHeight={360} />

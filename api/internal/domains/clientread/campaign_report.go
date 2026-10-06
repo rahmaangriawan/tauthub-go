@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -15,6 +16,18 @@ import (
 // Endpoint publik ini sengaja tidak memerlukan login: tautannya dibagikan ke
 // pihak ketiga. Token yang dicabut (revoked_at) → 404.
 func (d *Deps) CampaignReportGet(w http.ResponseWriter, r *http.Request) {
+	// Publik tanpa auth — dibatasi longgar per IP supaya tautan sah tetap
+	// nyaman dipakai, tapi brute force token tertahan.
+	ip := auth.RequestIp(r.Header)
+	if ip == "" {
+		ip = "unknown"
+	}
+	if err := auth.CheckAuthRate(r.Context(), d.Pool, "campaign-report:"+ip, 120); err != nil {
+		w.Header().Set("Retry-After", "60")
+		httpx.Error(w, http.StatusTooManyRequests, "Terlalu banyak permintaan. Coba lagi sebentar lagi.")
+		return
+	}
+
 	token := chiParam(r, "token")
 	if token == "" {
 		httpx.Error(w, http.StatusNotFound, "Berita acara tidak ditemukan atau tautannya sudah dicabut.")

@@ -9,7 +9,11 @@
 	import { page } from '$app/state';
 	import { apiRequest } from '$lib/auth';
 
-	const SANDBOX_SECRET = 'tauthub-sandbox-secret';
+	// Secret sandbox hanya ada pada build non-produksi: Vite meng-inline
+	// import.meta.env.PROD sehingga konstanta ini dibuang dari bundle
+	// produksi. Backend juga menolak provider sandbox saat APP_ENV=production,
+	// jadi halaman ini memang hanya berfungsi di lokal.
+	const SANDBOX_SECRET = import.meta.env.PROD ? '' : 'tauthub-sandbox-secret';
 	const txId = $derived(page.params.tx as string);
 
 	let loading = $state(true);
@@ -36,6 +40,10 @@
 	});
 
 	async function simulate() {
+		if (import.meta.env.PROD) {
+			result = { ok: false, message: 'Simulasi pembayaran hanya tersedia di lingkungan non-produksi.' };
+			return;
+		}
 		busy = true;
 		result = null;
 		try {

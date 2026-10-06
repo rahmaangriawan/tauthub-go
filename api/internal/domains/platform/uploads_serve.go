@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -51,7 +52,30 @@ func (d *Deps) UploadsServe(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Login diperlukan untuk mengakses dokumen ini.")
 		return
 	}
-	if _, err := auth.VerifyRefreshToken(d.Cfg.Secret, d.Cfg.AppName, cookie.Value); err != nil {
+	claims, err := auth.VerifyRefreshToken(d.Cfg.Secret, d.Cfg.AppName, cookie.Value)
+	if err != nil {
+		httpx.Error(w, http.StatusUnauthorized, "Login diperlukan untuk mengakses dokumen ini.")
+		return
+	}
+	// Sesi wajib masih hidup & user masih aktif — refresh token yang sudah
+	// di-revoke (logout, reset password, suspend) tidak lagi boleh mengunduh.
+	if claims.SID != "" {
+		var revoked bool
+		var expiresAt time.Time
+		err := d.Pool.QueryRow(r.Context(),
+			"SELECT revoked, expires_at FROM user_sessions WHERE refresh_jti = $1 LIMIT 1",
+			claims.SID,
+		).Scan(&revoked, &expiresAt)
+		if err != nil || revoked || !expiresAt.After(time.Now()) {
+			httpx.Error(w, http.StatusUnauthorized, "Login diperlukan untuk mengakses dokumen ini.")
+			return
+		}
+	}
+	var active bool
+	if err := d.Pool.QueryRow(r.Context(),
+		"SELECT is_active FROM users WHERE id = $1 AND is_active = TRUE AND approved_at IS NOT NULL LIMIT 1",
+		claims.Sub,
+	).Scan(&active); err != nil {
 		httpx.Error(w, http.StatusUnauthorized, "Login diperlukan untuk mengakses dokumen ini.")
 		return
 	}

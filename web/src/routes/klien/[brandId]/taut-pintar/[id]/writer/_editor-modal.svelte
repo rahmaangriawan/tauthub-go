@@ -8,6 +8,7 @@
 	import type { Component, Snippet } from 'svelte';
 	import Select from '$lib/components/select.svelte';
 	import { TAUTHUB_FALLBACK_COVER } from '$lib/media/cover';
+	import { sanitizeHtml } from '$lib/sanitize-html';
 
 	// Fallback cover "pakai logo Tauthub": konstantanya di $lib/media/cover agar
 	// sama dengan yang dipakai konfirmasi "lanjut tanpa cover" di The Writer.
@@ -162,11 +163,13 @@
 	});
 
 	// Isi body sekali saat mount: ekstrak H1 ke field judul, sisanya jadi body.
+	// Sanitasi di sini defense-in-depth — konten tersimpan sudah disanitasi
+	// server-side, dan sanitizer sama dipakai rich-text-editor.
 	$effect(() => {
 		const body = bodyEl;
 		if (!body) return;
 		const { h1, body: rest } = extractH1(initialHtml);
-		body.innerHTML = rest || initialHtml;
+		body.innerHTML = sanitizeHtml(rest || initialHtml);
 		const t = window.setTimeout(() => {
 			if (h1) title = h1;
 			sync();
