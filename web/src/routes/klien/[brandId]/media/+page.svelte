@@ -153,8 +153,21 @@
 	let campaignName = $state('');
 	let campaignError = $state('');
 	let creating = $state(false);
+	// Cek pesanan ganda: media yang sudah dipesan di kampanye aktif lain.
+	let dupHits = $state<Array<{ mediaName: string; campaignName: string }>>([]);
+	let checkingDup = $state(false);
+	// Saldo kredit (bar seleksi & modal) — null = belum/gagal terbaca.
+	let walletAvailableTc = $state<number | null>(null);
+	let walletRateIdr = $state(1000);
+	// Jumlah media yang dipulihkan dari sesi terakhir (badge, bukan error).
+	let restoredSelectionCount = $state(0);
+	// Pilihan bisa memuat media di luar 250 baris yang sedang dimuat (filter lain)
+	// — snapshot harga disimpan supaya total di bar tidak bohong.
+	let selectedSnapshot = $state<Record<string, { name: string; price: number; credits: number }>>({});
+	let selectionHydrated = $state(false);
 
 	const BOOKMARK_KEY = 'tauthub_client_bookmarked_media';
+	const SELECTED_KEY = 'tauthub_client_selected_media';
 
 	// ── Helper parity media-section.tsx ────────────────────────────────
 	/** Estimasi trafik. CATATAN: tren ↑/↓ di app lama DIREKAYASA dari
@@ -233,6 +246,107 @@
 		}
 	}
 
+	/** Pulihkan pilihan sesi terakhir (badge + snapshot harga untuk total). */
+	function restoreSelection() {
+		try {
+			const raw = localStorage.getItem(SELECTED_KEY);
+			if (!raw) return;
+			const items = JSON.parse(raw) as Array<{ id?: string; name?: string; price?: number; credits?: number }>;
+			const valid = items.filter((x) => typeof x?.id === 'string' && x.id);
+			if (!valid.length) return;
+			selectedIds = new Set(valid.map((x) => x.id as string));
+			selectedSnapshot = Object.fromEntries(
+				valid.map((x) => [
+					x.id as string,
+					{ name: x.name ?? '', price: Number(x.price ?? 0) || 0, credits: Number(x.credits ?? 0) || 0 }
+				])
+			);
+			restoredSelectionCount = valid.length;
+		} catch {
+			/* pilihan korup — abaikan */
+		}
+	}
+
+	function clearSelection() {
+		selectedIds = new Set();
+		selectedSnapshot = {};
+		restoredSelectionCount = 0;
+		try { localStorage.removeItem(SELECTED_KEY); } catch { /* abaikan */ }
+	}
+
+	/** Saldo kredit untuk bar seleksi & ringkasan modal. Gagal baca bukan penghalang. */
+	async function loadWallet() {
+		try {
+			const res = await apiRequest(`${apiBase}/credits?limit=1`);
+			if (!res.ok) return;
+			const d = (await res.json()) as { wallet?: { available_tc?: number; rate_idr?: number }; tc_config?: { rate_idr?: number } };
+			const tc = Number(d?.wallet?.available_tc);
+			if (Number.isFinite(tc)) walletAvailableTc = tc;
+			const rate = Number(d?.tc_config?.rate_idr ?? d?.wallet?.rate_idr);
+			if (Number.isFinite(rate) && rate > 0) walletRateIdr = rate;
+		} catch {
+			/* saldo tetap tak diketahui — jangan blokir katalog */
+		}
+	}
+
+	// Simpan pilihan ke localStorage (pola BOOKMARK_KEY) supaya orang sibuk bisa
+	// lanjut besok tanpa memilih ulang.
+	$effect(() => {
+		if (!selectionHydrated) return;
+		const ids = [...selectedIds];
+		try {
+			if (ids.length === 0) {
+				localStorage.removeItem(SELECTED_KEY);
+				return;
+			}
+			const items = ids.map((id) => ({ id, ...(selectedSnapshot[id] ?? { name: '', price: 0, credits: 0 }) }));
+			localStorage.setItem(SELECTED_KEY, JSON.stringify(items));
+		} catch {
+			/* penyimpanan penuh/diblokir — abaikan */
+		}
+	});
+
+	/** Buka modal konfirmasi: reset state, tarik saldo, lalu cek pesanan ganda. */
+	async function openCampaignModal(presetName = '') {
+		campaignName = presetName;
+		campaignError = '';
+		dupHits = [];
+		campaignOpen = true;
+		if (walletAvailableTc === null) void loadWallet();
+		checkingDup = true;
+		dupHits = await findReservations();
+		checkingDup = false;
+	}
+
+	/** Media terpilih yang sudah dipesan di kampanye aktif lain (peringatan, bukan blokir). */
+	async function findReservations(): Promise<Array<{ mediaName: string; campaignName: string }>> {
+		if (selectedIds.size === 0) return [];
+		const ACTIVE = new Set(['profiled', 'profiling', 'placement', 'production', 'review', 'scheduled']);
+		try {
+			const res = await apiRequest(`${apiBase}/taut/campaigns?page=1`);
+			if (!res.ok) return [];
+			const data = (await res.json()) as { campaigns?: Array<{ id: string; name: string; taut_status?: string | null }> };
+			const candidates = (data.campaigns ?? []).filter((c) => ACTIVE.has(c.taut_status ?? '')).slice(0, 10);
+			const hits: Array<{ mediaName: string; campaignName: string }> = [];
+			await Promise.all(
+				candidates.map(async (c) => {
+					const r = await apiRequest(`${apiBase}/taut/campaigns/${c.id}/placement`);
+					if (!r.ok) return;
+					const d = (await r.json().catch(() => null)) as { media?: Array<{ media_id?: string }> } | null;
+					for (const item of d?.media ?? []) {
+						const id = item.media_id;
+						if (!id || !selectedIds.has(id)) continue;
+						const m = rows.find((x) => x.id === id);
+						hits.push({ mediaName: m ? domainLabel(m) : 'Media', campaignName: c.name });
+					}
+				})
+			);
+			return hits.slice(0, 6);
+		} catch {
+			return []; // cek gagal bukan penghalang order
+		}
+	}
+
 	onMount(() => {
 		void (async () => {
 			const fresh = await ensureValidSession();
@@ -244,7 +358,10 @@
 				const raw = localStorage.getItem(BOOKMARK_KEY);
 				if (raw) bookmarkedIds = new Set(JSON.parse(raw) as string[]);
 			} catch { /* bookmark korup — abaikan */ }
+			restoreSelection();
+			selectionHydrated = true;
 			await load();
+			void loadWallet();
 		})();
 		const onExpired = () => void goto('/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -267,7 +384,21 @@
 		e.stopPropagation();
 		if (archivedIds.has(id)) return; // media maintenance tidak bisa dipilih
 		const next = new Set(selectedIds);
-		if (next.has(id)) next.delete(id); else next.add(id);
+		if (next.has(id)) {
+			next.delete(id);
+			const rest = { ...selectedSnapshot };
+			delete rest[id];
+			selectedSnapshot = rest;
+		} else {
+			next.add(id);
+			const m = rows.find((x) => x.id === id);
+			if (m) {
+				selectedSnapshot = {
+					...selectedSnapshot,
+					[id]: { name: domainLabel(m), price: m.client_price ?? m.price ?? 0, credits: m.credit_cost ?? 0 }
+				};
+			}
+		}
 		selectedIds = next;
 	}
 
@@ -346,8 +477,33 @@
 		rows.length ? Math.min(...rows.map((m) => m.client_price ?? m.price ?? 0).filter((p) => p > 0)) : 0
 	);
 	const selectedMedia = $derived(rows.filter((m) => selectedIds.has(m.id)));
-	const totalSelectedPrice = $derived(selectedMedia.reduce((s, m) => s + (m.client_price ?? m.price ?? 0), 0));
-	const totalSelectedCredits = $derived(selectedMedia.reduce((s, m) => s + (m.credit_cost ?? 0), 0));
+	// Media terpilih yang tidak ada di baris termuat (filter/sort lain) — harganya
+	// dari snapshot tersimpan supaya total tidak bohong.
+	const offViewSelected = $derived([...selectedIds].filter((id) => !selectedMedia.some((m) => m.id === id)));
+	const totalSelectedPrice = $derived(
+		selectedMedia.reduce((s, m) => s + (m.client_price ?? m.price ?? 0), 0) +
+			offViewSelected.reduce((s, id) => s + (selectedSnapshot[id]?.price ?? 0), 0)
+	);
+	const totalSelectedCredits = $derived(
+		selectedMedia.reduce((s, m) => s + (m.credit_cost ?? 0), 0) +
+			offViewSelected.reduce((s, id) => s + (selectedSnapshot[id]?.credits ?? 0), 0)
+	);
+	// Waktu rilis terlama di antara media terpilih — ekspektasi jujur di modal.
+	const slowestRelease = $derived.by(() => {
+		const pick = selectedMedia.map((m) => getReleaseSpeed(m.integration_type));
+		if (pick.some((s) => s.label === 'Standar')) return getReleaseSpeed('manual');
+		if (pick.some((s) => s.label === 'Cepat')) return getReleaseSpeed('rss');
+		return pick[0] ?? null;
+	});
+	// Persentase media terbit < 24 jam, dihitung dari data nyata (bukan klaim).
+	const fastShare = $derived.by(() => {
+		if (!rows.length) return null;
+		const fast = rows.filter((m) => {
+			const s = getReleaseSpeed(m.integration_type);
+			return s.isSuper || s.label === 'Cepat';
+		}).length;
+		return Math.round((fast / rows.length) * 100);
+	});
 
 	function toggleSort(key: typeof sortKey) {
 		if (sortKey === key) {
@@ -372,7 +528,18 @@
 		// Pilih semua melewati media maintenance (terarsip).
 		const ids = visible.filter((m) => !archivedIds.has(m.id)).map((m) => m.id);
 		const allSelected = ids.length > 0 && ids.every((id) => selectedIds.has(id));
-		selectedIds = allSelected ? new Set() : new Set(ids);
+		if (allSelected) {
+			selectedIds = new Set();
+			selectedSnapshot = {};
+			return;
+		}
+		selectedIds = new Set(ids);
+		const snap: Record<string, { name: string; price: number; credits: number }> = {};
+		for (const m of visible) {
+			if (archivedIds.has(m.id)) continue;
+			snap[m.id] = { name: domainLabel(m), price: m.client_price ?? m.price ?? 0, credits: m.credit_cost ?? 0 };
+		}
+		selectedSnapshot = snap;
 	}
 
 	function exportProposal() {
@@ -466,17 +633,21 @@
 	}
 
 	function proceedFromDetail(m: Media) {
+		const snap = selectedSnapshot[m.id] ?? {
+			name: domainLabel(m),
+			price: m.client_price ?? m.price ?? 0,
+			credits: m.credit_cost ?? 0
+		};
 		selectedIds = new Set([...selectedIds, m.id]);
+		selectedSnapshot = { ...selectedSnapshot, [m.id]: snap };
 		detail = null;
-		campaignName = m.name ? `Kampanye ${m.name}` : '';
-		campaignError = '';
-		campaignOpen = true;
+		void openCampaignModal(`Kampanye ${domainLabel(m)}`);
 	}
 
 	async function createCampaign() {
 		const name = campaignName.trim();
-		if (name.length < 2) {
-			campaignError = tr('Nama kampanye minimal 2 karakter.');
+		if (name.length === 1) {
+			campaignError = tr('Nama kampanye minimal 2 karakter — atau kosongkan untuk nama otomatis.');
 			return;
 		}
 		campaignError = '';
@@ -485,7 +656,8 @@
 			const res = await apiRequest(`${apiBase}/taut/campaigns`, {
 				method: 'POST',
 				body: JSON.stringify({
-					name,
+					// Kosong → nama otomatis "Kampanye Baru #N" (ditomori server).
+					name: name || 'Kampanye Baru',
 					starts_at: new Date().toISOString(),
 					entry_mode: 'manual',
 					media_ids: [...selectedIds]
@@ -495,6 +667,7 @@
 				const data = (await res.json()) as { id: string; public_id?: string | null };
 				campaignOpen = false;
 				campaignName = '';
+				clearSelection();
 				await goto(`/klien/${brandUrl}/taut-pintar/${campaignUrlId(data)}/writer`);
 			} else {
 				campaignError = await readApiError(res, tr('Gagal membuat kampanye. Coba lagi.'));
@@ -513,6 +686,13 @@
 <div class="katalogMedia">
 	{#if err}<div class="errorBanner">{err}</div>{/if}
 
+	{#if page.url.searchParams.get('from') === 'new-campaign'}
+		<div class="catalogContextBanner">
+			<Zap size={14} />
+			<span>{tr('Pilih media untuk kampanyemu — setelah ini kamu diarahkan ke produksi artikel: judul, cover, pemeriksaan mutu, lalu terbit ke media.')}</span>
+		</div>
+	{/if}
+
 	<!-- Header Eksplorasi Media -->
 	<div class="explorationHeader">
 		<div class="explorationTitleCol">
@@ -526,8 +706,8 @@
 			</div>
 			<div class="explorationStatDivider"></div>
 			<div class="explorationStatItem">
-				<span class="explorationStatLabel">RATA-RATA TERBIT</span>
-				<span class="explorationStatValueDark">&lt; 24 Jam</span>
+				<span class="explorationStatLabel">MEDIA TERBIT &lt; 24 JAM</span>
+				<span class="explorationStatValueDark">{fastShare === null ? '—' : `${fastShare}% dari katalog`}</span>
 			</div>
 			<div class="explorationStatDivider"></div>
 			<div class="explorationStatItem">
@@ -685,6 +865,13 @@
 		</div>
 	{/if}
 
+	{#if restoredSelectionCount > 0 && selectedIds.size > 0}
+		<div class="restoredSelectionBar">
+			<span><strong>{restoredSelectionCount}</strong> {tr('media dipulihkan dari sesi terakhir — kamu bisa lanjut memilih atau langsung buat kampanye.')}</span>
+			<button class="bookmarkBannerClear" type="button" onclick={clearSelection}>{tr('Bersihkan pilihan')}</button>
+		</div>
+	{/if}
+
 	<!-- Tabel -->
 	<div class="modernCard">
 		{#if busy && rows.length === 0}
@@ -720,8 +907,40 @@
 							</th>
 							<th class="modernTh modernThSortable" onclick={() => toggleSort('name')}>NAMA MEDIA{sortIndicator('name')}</th>
 							<th class="modernTh">KATEGORI</th>
-							<th class="modernTh modernThSortable" onclick={() => toggleSort('traffic')}>TRAFIK (EST){sortIndicator('traffic')}</th>
-							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('da')}>DA{sortIndicator('da')}</th>
+							<th class="modernTh modernThSortable" onclick={() => toggleSort('traffic')}>
+								<span class="thWithInfo">TRAFIK (EST)
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button {...props} type="button" class="infoDot" aria-label="Keterangan trafik" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Portal>
+											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+											<Tooltip.Arrow class="uiTipArrow" />
+											Perkiraan kunjungan bulanan situs media. Dari Similarweb bila tersedia; kalau tidak, dari estimasi internal media.
+										</Tooltip.Content>
+										</Tooltip.Portal>
+									</Tooltip.Root>
+								</span>{sortIndicator('traffic')}
+							</th>
+							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('da')}>
+								<span class="thWithInfo">DA
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button {...props} type="button" class="infoDot" aria-label="Keterangan DA" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Portal>
+											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+											<Tooltip.Arrow class="uiTipArrow" />
+											<strong>DA (Domain Authority)</strong> — skor 0–100 seberapa kuat dan berwibawa sebuah domain di mata mesin pencari. Makin tinggi, makin besar peluang artikel ikut terangkat di Google.
+										</Tooltip.Content>
+										</Tooltip.Portal>
+									</Tooltip.Root>
+								</span>{sortIndicator('da')}
+							</th>
 							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_trust')}>
 								<span class="thWithInfo">AI TRUST
 									<Tooltip.Root>
@@ -1064,16 +1283,64 @@
 						<h2 class="modalTitle"><LayoutGrid size={17} />{tr("Simpan ke Kampanye")}</h2>
 						<button class="modalClose" type="button" aria-label={tr("Tutup")} onclick={() => (campaignOpen = false)}><X size={18} /></button>
 					</div>
-					<p class="modalHint">{tr("Anda memilih")} <strong>{selectedIds.size} media</strong>{tr(". Beri nama kampanye ini untuk masuk ke mode Dapur Produksi (The Writer).")}</p>
+					<div class="campaignSummary">
+						<div class="campaignSummaryRow">
+							<span>{tr("Media terpilih")}</span><strong>{selectedIds.size}</strong>
+						</div>
+						<div class="campaignSummaryRow">
+							<span>{tr("Total biaya publikasi")}</span>
+							<strong>Rp {fmt(totalSelectedPrice)} <span class="campaignSummaryMuted">~ {fmt(totalSelectedCredits)} {tr("Kredit")}</span></strong>
+						</div>
+						{#if walletAvailableTc !== null}
+							<div class="campaignSummaryRow">
+								<span>{tr("Saldo kamu")}</span>
+								<strong>Rp {fmt(walletAvailableTc * walletRateIdr)} <span class="campaignSummaryMuted">~ {fmt(walletAvailableTc)} {tr("Kredit")}</span></strong>
+							</div>
+							{#if totalSelectedCredits > walletAvailableTc}
+								<p class="campaignWalletWarn">
+									{tr("Saldo kurang")} ~{fmt(totalSelectedCredits - walletAvailableTc)} {tr("Kredit")} {tr("untuk pesanan ini.")} <a href={`/klien/${brandUrl}/credits`}>{tr("Top Up dulu")}</a>
+								</p>
+							{/if}
+						{/if}
+					</div>
+
+					<div class="campaignNextSteps">
+						<p class="campaignNextTitle">{tr("Setelah ini")}</p>
+						<ol>
+							<li>{tr("Siapkan artikel untuk tiap media — bisa dibuat AI, atau kamu unggah sendiri.")}</li>
+							<li>{tr("Pemeriksaan mutu otomatis: keamanan konten, tautan, dan kesiapan dibaca mesin AI.")}</li>
+							<li>{tr("Terbit ke media")}{#if slowestRelease} {tr("— waktu rilis terlama di pilihanmu:")} <strong>{slowestRelease.label} ({slowestRelease.sub})</strong>{/if}.</li>
+						</ol>
+					</div>
+
+					{#if checkingDup}
+						<p class="modalHint">{tr("Memeriksa pesanan ganda…")}</p>
+					{:else if dupHits.length > 0}
+						<div class="dupWarn">
+							<strong>{tr("Sebagian media sudah dipesan di kampanye aktif lain:")}</strong>
+							<ul>
+								{#each dupHits as h (h.mediaName + h.campaignName)}
+									<li>{h.mediaName} — {h.campaignName}</li>
+								{/each}
+							</ul>
+							<span>{tr("Lanjutkan hanya jika kamu memang ingin memesan media yang sama dua kali.")}</span>
+						</div>
+					{/if}
+
 					<label class="modalField">
-						<span>{tr("Nama Kampanye")}<b class="reqMark">*</b></span>
-						<input class="app-input" bind:value={campaignName} placeholder={tr("Contoh: Launching Produk Q3 2026")} />
+						<span>{tr("Nama Kampanye")} <span class="campaignSummaryMuted">({tr("opsional")})</span></span>
+						<input
+							class="app-input"
+							bind:value={campaignName}
+							maxlength={120}
+							placeholder={tr("Kosongkan untuk nama otomatis (Kampanye Baru #N)")}
+						/>
 					</label>
 					{#if campaignError}<p class="modalError">{campaignError}</p>{/if}
 					<div class="modalFooter">
 						<button class="advFilterResetBtn" type="button" onclick={() => (campaignOpen = false)}>{tr("Batal")}</button>
-						<button class="advFilterApplyBtn" type="submit" disabled={creating}>
-							{creating ? tr('Membuat…') : tr('Buat Kampanye')}
+						<button class="advFilterApplyBtn" type="submit" disabled={creating || checkingDup}>
+							{creating ? tr('Membuat…') : dupHits.length > 0 ? tr('Pesan Lagi & Buat Kampanye') : tr('Buat Kampanye')}
 						</button>
 					</div>
 				</form>
@@ -1119,7 +1386,7 @@
 		<div class="selectedBarLeft">
 			<div class="selectedStatItem">
 				<span class="selectedStatLabel">MEDIA TERPILIH</span>
-				<span class="selectedStatDomainVal">{selectedIds.size} Domain</span>
+				<span class="selectedStatDomainVal">{selectedIds.size} Media</span>
 			</div>
 			<div class="selectedBarDivider"></div>
 			<div class="selectedStatItem">
@@ -1129,13 +1396,30 @@
 					<span class="selectedStatCreditVal">~ {fmt(totalSelectedCredits)} {tr("Kredit")}</span>
 				</div>
 			</div>
+			<div class="selectedBarDivider"></div>
+			<div class="selectedStatItem">
+				<span class="selectedStatLabel">SALDO KREDIT</span>
+				{#if walletAvailableTc === null}
+					<span class="selectedStatPriceVal" style="opacity:.6;">—</span>
+				{:else}
+					<div class="selectedStatPriceGroup">
+						<span class="selectedStatPriceVal">Rp {fmt(walletAvailableTc * walletRateIdr)}</span>
+						<span class="selectedStatCreditVal">~ {fmt(walletAvailableTc)} {tr("Kredit")}</span>
+					</div>
+					{#if totalSelectedCredits > walletAvailableTc}
+						<span class="walletShortfall">{tr("Kurang")} ~{fmt(totalSelectedCredits - walletAvailableTc)} {tr("Kredit")} · <a href={`/klien/${brandUrl}/credits`}>{tr("Top Up")}</a></span>
+					{:else}
+						<span class="walletEnough">{tr("Cukup untuk pesanan ini")}</span>
+					{/if}
+				{/if}
+			</div>
 		</div>
 		<div class="selectedBarRight">
 			<button class="selectedCancelBtn" type="button" onclick={() => (selectedIds = new Set())}>{tr("Batal")}</button>
 			<button class="selectedExportBtn" type="button" onclick={exportProposal} title={tr("Unduh proposal ringkasan media terpilih (format CSV)")}>
 				<FileText size={15} /><span>Ekspor Proposal</span>
 			</button>
-			<button class="selectedCreateBtn" type="button" disabled={creating} onclick={() => { campaignName = ''; campaignError = ''; campaignOpen = true; }}>
+			<button class="selectedCreateBtn" type="button" disabled={creating} onclick={() => void openCampaignModal()}>
 				<Plus size={14} /><span>{tr("Buat Kampanye")}</span>
 			</button>
 		</div>
@@ -1157,4 +1441,89 @@
 	background: #f1f3f6;
 	border: 1px dashed #9aa4b2;
 }
+	/* Banner konteks saat masuk dari tombol "Kampanye Baru". */
+	.catalogContextBanner {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 12px;
+		padding: 10px 14px;
+		border-radius: 12px;
+		border: 1px solid var(--border);
+		background: var(--accent, #eef4ff);
+		font-size: 13px;
+		color: var(--foreground);
+	}
+	/* Strip "N media dipulihkan dari sesi terakhir". */
+	.restoredSelectionBar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		margin: 12px 0;
+		padding: 8px 14px;
+		border-radius: 10px;
+		border: 1px dashed var(--border);
+		background: var(--muted, #f6f7f9);
+		font-size: 13px;
+	}
+	.walletShortfall {
+		display: block;
+		margin-top: 2px;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--warning, #b45309);
+	}
+	.walletShortfall a { text-decoration: underline; }
+	.walletEnough {
+		display: block;
+		margin-top: 2px;
+		font-size: 11px;
+		color: var(--success, #15803d);
+	}
+	/* Ringkasan konfirmasi di modal kampanye. */
+	.campaignSummary {
+		margin: 4px 0 12px;
+		padding: 12px 14px;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		display: grid;
+		gap: 6px;
+	}
+	.campaignSummaryRow {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 12px;
+		font-size: 13px;
+	}
+	.campaignSummaryMuted { font-weight: 500; color: var(--muted-foreground); }
+	.campaignWalletWarn { margin: 2px 0 0; font-size: 12px; color: var(--warning, #b45309); }
+	.campaignWalletWarn a { text-decoration: underline; font-weight: 600; }
+	.campaignNextSteps {
+		margin: 0 0 12px;
+		padding: 12px 14px;
+		border-radius: 12px;
+		background: var(--muted, #f6f7f9);
+	}
+	.campaignNextTitle {
+		margin: 0 0 6px;
+		font-size: 12px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--muted-foreground);
+	}
+	.campaignNextSteps ol { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
+	.dupWarn {
+		margin: 0 0 12px;
+		padding: 10px 12px;
+		border-radius: 10px;
+		border: 1px solid var(--warning, #f59e0b);
+		background: #fffbeb;
+		font-size: 12.5px;
+		display: grid;
+		gap: 4px;
+	}
+	.dupWarn ul { margin: 0; padding-left: 18px; }
 </style>

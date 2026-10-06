@@ -266,8 +266,9 @@
 				{#if showArchive}<RotateCcw size={16} />{:else}<Archive size={16} />{/if}
 				{showArchive ? tr('Kembali ke Daftar') : tr('Arsip')}
 			</button>
-			<!-- SEMENTARA: popup create ditimpa redirect ke katalog media; kembalikan ke (createOpen = true) saat fitur siap. -->
-			<button class="app-btn app-btn-primary" type="button" disabled={busy || showArchive} onclick={() => void goto(`/klien/${brandUrl}/media`)}>
+			<!-- SEMENTARA: popup create ditimpa redirect ke katalog media; kembalikan ke (createOpen = true) saat fitur siap.
+			     Parameter ?from=new-campaign dipakai katalog untuk menampilkan banner konteks. -->
+			<button class="app-btn app-btn-primary" type="button" disabled={busy || showArchive} onclick={() => void goto(`/klien/${brandUrl}/media?from=new-campaign`)}>
 				{#if busy}<LoaderCircle size={16} class="animate-spin" />{/if}
 				{busy ? 'Membuat…' : tr('Kampanye Baru')}
 			</button>
