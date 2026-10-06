@@ -280,7 +280,13 @@ func (d *Deps) generateWriterArticle(ctx context.Context, campaignID, brandID, u
 	if resultRow, err := d.getLatestCompletedResult(ctx, campaignID); err == nil && resultRow != nil && resultRow.RawExecutiveBriefMap != nil {
 		channelInstruction = channelInstructionFromBrief(resultRow.RawExecutiveBriefMap, mediaType)
 	}
-	anglePromptBlock := d.loadAnglePromptBlock(ctx, campaignID, mediaType)
+	angleContext := "Kampanye: " + campaign.strOr("name", "")
+	if briefContext != "" {
+		angleContext += "\n" + briefContext
+	} else if tk := campaign.strOr("trigger_keywords", ""); tk != "" {
+		angleContext += "\nTrigger: " + tk
+	}
+	anglePromptBlock := d.resolveAnglePromptBlock(ctx, campaignID, mediaType, angleContext)
 
 	var identity strings.Builder
 	identity.WriteString("[IDENTITAS MEDIA]\n   Nama: " + name + "\n   Tipe: " + mediaType)

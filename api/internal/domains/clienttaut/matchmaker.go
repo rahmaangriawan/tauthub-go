@@ -324,6 +324,15 @@ func (d *Deps) loadBriefContext(ctx context.Context, campaignID string) (string,
 // loadAnglePromptBlock: prompt angle aktif dari admin (Taut Prompt Studio)
 // untuk SATU tipe media. String kosong bila tidak dikonfigurasi.
 func (d *Deps) loadAnglePromptBlock(ctx context.Context, campaignID, mediaType string) string {
+	slug := d.draftChannelAngleSlug(ctx, campaignID, mediaType)
+	if slug == "" {
+		return ""
+	}
+	return d.loadAnglePromptBlockBySlug(ctx, campaignID, mediaType, slug)
+}
+
+// draftChannelAngleSlug: slug angle yang tercatat pada channel draft kampanye.
+func (d *Deps) draftChannelAngleSlug(ctx context.Context, campaignID, mediaType string) string {
 	draft, err := d.getCurrentDraftSubmission(ctx, campaignID)
 	if err != nil || draft == nil {
 		return ""
@@ -332,7 +341,6 @@ func (d *Deps) loadAnglePromptBlock(ctx context.Context, campaignID, mediaType s
 	if !ok {
 		return ""
 	}
-	slug := ""
 	for _, c := range channels {
 		entry, ok := c.(map[string]any)
 		if !ok {
@@ -340,14 +348,16 @@ func (d *Deps) loadAnglePromptBlock(ctx context.Context, campaignID, mediaType s
 		}
 		if ch, _ := entry["channel"].(string); ch == mediaType {
 			if s, ok := entry["angle_slug"].(string); ok {
-				slug = strings.TrimSpace(s)
+				return strings.TrimSpace(s)
 			}
-			break
+			return ""
 		}
 	}
-	if slug == "" {
-		return ""
-	}
+	return ""
+}
+
+// loadAnglePromptBlockBySlug: blok prompt untuk slug angle tertentu.
+func (d *Deps) loadAnglePromptBlockBySlug(ctx context.Context, campaignID, mediaType, slug string) string {
 	angle, err := d.getAngleBySlug(ctx, slug)
 	if err != nil || angle == nil || !angle.Active {
 		return ""
@@ -358,6 +368,62 @@ func (d *Deps) loadAnglePromptBlock(ctx context.Context, campaignID, mediaType s
 		return ""
 	}
 	return "[PROMPT ANGLE (dari Admin) — " + mediaType + "/" + slug + "]\n" + truncateString(prompt, 1500)
+}
+
+// resolveAnglePromptBlock: AI memilih angle paling tepat dari channel sesuai
+// jenis media (angle di Taut Prompt Studio dikelompokkan per channel:
+// mainstream, blogger, dst.), lalu prompt angle aktifnya menjadi knowledge
+// artikel. Fallback: slug statis dari draft kampanye (perilaku lama).
+func (d *Deps) resolveAnglePromptBlock(ctx context.Context, campaignID, mediaType, contextSummary string) string {
+	if angles, err := d.listAnglesByChannel(ctx, mediaType); err == nil {
+		switch {
+		case len(angles) == 1:
+			if block := d.loadAnglePromptBlockBySlug(ctx, campaignID, mediaType, angles[0].Slug); block != "" {
+				return block
+			}
+		case len(angles) > 1:
+			if slug := d.pickAngleForArticle(ctx, mediaType, contextSummary, angles); slug != "" {
+				if block := d.loadAnglePromptBlockBySlug(ctx, campaignID, mediaType, slug); block != "" {
+					return block
+				}
+			}
+		}
+	}
+	return d.loadAnglePromptBlock(ctx, campaignID, mediaType)
+}
+
+// pickAngleForArticle: LLM memilih SATU angle dari daftar angle aktif pada
+// channel jenis media. "" bila gagal — pemanggil fallback ke draft. Panggilan
+// hanya terjadi bila channel punya >= 2 angle aktif.
+func (d *Deps) pickAngleForArticle(ctx context.Context, mediaType, contextSummary string, angles []angleRow) string {
+	var list strings.Builder
+	for _, a := range angles {
+		list.WriteString("- " + a.Slug + " — " + a.Name)
+		if a.Description != "" {
+			list.WriteString(": " + a.Description)
+		}
+		list.WriteString("\n")
+	}
+	prompt := "Konteks artikel:\n" + truncateString(contextSummary, 900) +
+		"\n\nDaftar angle yang tersedia untuk media bertipe \"" + mediaType + "\":" +
+		"\n" + list.String() +
+		"\nPilih SATU angle yang paling tepat untuk artikel ini pada media bertipe tersebut." +
+		"\nJawab HANYA JSON: {\"angle_slug\": \"<slug dari daftar>\"}"
+	result, err := d.callAgentLLM(ctx, "matchmaker", prompt, true,
+		"Kamu pemilih sudut pandang (angle) artikel. Jawab HANYA JSON tanpa penjelasan apa pun.", 0)
+	if err != nil || result == nil {
+		return ""
+	}
+	obj := extractJSONObject(result.Content)
+	slug, _ := obj["angle_slug"].(string)
+	slug = strings.TrimSpace(slug)
+	for _, a := range angles {
+		if a.Slug == slug {
+			slog.Info("[writer] angle dipilih AI", "media_type", mediaType, "angle_slug", slug, "angle", a.Name)
+			return slug
+		}
+	}
+	return ""
 }
 
 // channelInstructionFromBrief: instruksi angle channel dari executive_brief.
