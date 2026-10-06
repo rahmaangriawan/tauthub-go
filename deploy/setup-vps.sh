@@ -120,7 +120,7 @@ WRITE_RATE_LIMIT_PER_MINUTE=120
 # JOB_INLINE=false: job domain content tidak jalan inline — antrean hanya
 # terkuras oleh tauthub-scheduler.service (wajib hidup, lihat .env.example).
 JOB_INLINE=false
-SCHEDULER_INTERVAL_SECONDS=60
+SCHEDULER_INTERVAL_SECONDS=10
 SCHEDULER_MAX_JOBS=20
 WORKER_POLL_SECONDS=5
 JOB_RUNNER_KEY=$(openssl rand -hex 24)
