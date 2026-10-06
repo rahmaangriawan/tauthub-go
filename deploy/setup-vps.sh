@@ -227,9 +227,10 @@ log "6/8 Unit systemd (${UNIT_PREFIX}-api, ${UNIT_PREFIX}-web, ${UNIT_PREFIX}-sc
 # UNIT_PREFIX supaya bisa berdampingan dengan production tauthub-* di host yang sama.
 for svc in api web scheduler; do
   target="/etc/systemd/system/${UNIT_PREFIX}-${svc}.service"
-  # Jangan menimpa unit milik deployment lain: kalau unit sudah ada tapi
-  # ExecStart-nya menunjuk APP_DIR lain, hentikan (kecuali FORCE=1).
-  if [ -f "$target" ] && [ "${FORCE:-0}" != "1" ] && ! grep -q "ExecStart=$APP_DIR/" "$target"; then
+  # Unit dianggap milik deployment ini kalau menyebut APP_DIR di mana pun: unit
+  # web memakai ExecStart=/usr/bin/node build (APP_DIR hanya muncul di
+  # WorkingDirectory/EnvironmentFile), jadi tidak boleh dicek lewat ExecStart saja.
+  if [ -f "$target" ] && [ "${FORCE:-0}" != "1" ] && ! grep -qF "$APP_DIR" "$target"; then
     echo "REFUSED: $target sudah ada dan bukan milik $APP_DIR." >&2
     echo "  Set FORCE=1 kalau memang mau menimpanya." >&2
     exit 1
