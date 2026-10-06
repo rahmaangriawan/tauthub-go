@@ -14,6 +14,10 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/tauthub/app}"
 APP_USER="${APP_USER:-tauthub}"
+# Prefix unit systemd. Host polos: tauthub. Di host CloudPanel yang sudah
+# menjalankan production tauthub-*, staging memakai tauthub-staging supaya unit
+# production tidak pernah tertimpa atau ter-restart oleh deploy ini.
+UNIT_PREFIX="${UNIT_PREFIX:-tauthub}"
 
 log() { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 
@@ -22,11 +26,11 @@ if [ ! -f "$APP_DIR/.env" ]; then
   exit 1
 fi
 # Port health check ikut .env (API_PORT ditulis setup-vps.sh); WEB_PORT tidak
-# ada di .env — baca dari unit tauthub-web (di-sed per environment oleh
+# ada di .env — baca dari unit ${UNIT_PREFIX}-web (di-sed per environment oleh
 # setup-vps.sh), fallback ke unit default :3000.
 set -a; . "$APP_DIR/.env"; set +a
 API_PORT="${API_PORT:-8080}"
-WEB_PORT="${WEB_PORT:-$(systemctl cat tauthub-web 2>/dev/null | sed -n 's/^Environment=PORT=//p' | tail -1)}"
+WEB_PORT="${WEB_PORT:-$(systemctl cat "${UNIT_PREFIX}-web" 2>/dev/null | sed -n 's/^Environment=PORT=//p' | tail -1)}"
 WEB_PORT="${WEB_PORT:-3000}"
 SUDO=""
 if [ "$(id -u)" != "0" ]; then SUDO="sudo"; fi
@@ -51,7 +55,7 @@ log "3/4 build web (SvelteKit adapter-node)"
 as_user "cd '$APP_DIR/web' && bun install --frozen-lockfile && bun run build"
 
 log "4/4 restart service"
-$SUDO systemctl restart tauthub-api tauthub-web tauthub-scheduler
+$SUDO systemctl restart "${UNIT_PREFIX}-api" "${UNIT_PREFIX}-web" "${UNIT_PREFIX}-scheduler"
 
 # Health check: api /healthz (ping DB) + respons web di :$WEB_PORT.
 for i in $(seq 1 30); do
@@ -64,5 +68,5 @@ for i in $(seq 1 30); do
   sleep 2
 done
 echo "Service belum sehat setelah 60 detik — cek:" >&2
-echo "  journalctl -u tauthub-api -u tauthub-web -u tauthub-scheduler -n 50" >&2
+echo "  journalctl -u ${UNIT_PREFIX}-api -u ${UNIT_PREFIX}-web -u ${UNIT_PREFIX}-scheduler -n 50" >&2
 exit 1

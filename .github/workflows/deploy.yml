@@ -10,12 +10,22 @@ name: Deploy Staging (Go)
 #   2. migrate up (additive, toleran duplikat) -> build web -> restart service
 #
 # Secret (repo > Settings > Secrets and variables > Actions):
-#   SSH_HOST       103.42.245.116
-#   SSH_USER       root
-#   SSH_PASSWORD   password root VPS
+#   SSH_HOST       host staging (VPS lama: 103.42.245.116 / host v2: 43.156.237.97)
+#   SSH_USER       root (VPS lama) / ubuntu (host v2 CloudPanel)
+#   SSH_PASSWORD   password user SSH
 #   VPS_APP_DIR    (opsional) default /opt/tauthub/app
 #
-# Domain: staging.tauthub.com (A record -> 103.42.245.116).
+# Variabel repo (Settings > Variables) — isi begini kalau staging pindah ke host
+# v2 (CloudPanel) yang sudah menjalankan production tauthub-*:
+#   STAGING_APP_USER     tauthub-staging
+#   STAGING_UNIT_PREFIX  tauthub-staging  (unit production tauthub-* tidak disentuh)
+#   STAGING_WEB_PORT     3000             (production memakai 3001)
+#   STAGING_SKIP_APT     1                (jangan sentuh paket/nginx CloudPanel)
+#   STAGING_MANAGE_NGINX 0                (vhost & TLS staging dikelola CloudPanel)
+#   STAGING_MANAGE_SWAP  0                (host v2 sudah punya swap)
+# Tanpa variabel di atas, perilaku lama (host polos, unit tauthub-*) tetap jalan.
+#
+# Domain: staging.tauthub.com (A record -> host staging).
 on:
   push:
     branches: [master]
@@ -52,6 +62,12 @@ jobs:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
           VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+          STAGING_APP_USER: ${{ vars.STAGING_APP_USER || 'tauthub' }}
+          STAGING_UNIT_PREFIX: ${{ vars.STAGING_UNIT_PREFIX || 'tauthub' }}
+          STAGING_WEB_PORT: ${{ vars.STAGING_WEB_PORT || '3000' }}
+          STAGING_SKIP_APT: ${{ vars.STAGING_SKIP_APT || '0' }}
+          STAGING_MANAGE_NGINX: ${{ vars.STAGING_MANAGE_NGINX || '1' }}
+          STAGING_MANAGE_SWAP: ${{ vars.STAGING_MANAGE_SWAP || '1' }}
         run: |
           set -euo pipefail
           : "${SSH_HOST:?Secret SSH_HOST belum di-set}"
@@ -107,8 +123,8 @@ jobs:
 
           # Bootstrap idempoten (paket, .env, DB, nginx, systemd, TLS).
           retry sshpass -e ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
-            "APP_DIR='$APP_DIR' DOMAIN=staging.tauthub.com bash '$APP_DIR/deploy/setup-vps.sh'"
+            "APP_DIR='$APP_DIR' DOMAIN=staging.tauthub.com APP_USER='$STAGING_APP_USER' UNIT_PREFIX='$STAGING_UNIT_PREFIX' WEB_PORT='$STAGING_WEB_PORT' SKIP_APT='$STAGING_SKIP_APT' MANAGE_NGINX='$STAGING_MANAGE_NGINX' MANAGE_SWAP='$STAGING_MANAGE_SWAP' bash '$APP_DIR/deploy/setup-vps.sh'"
 
           # Migrasi + build web + restart + health check.
           retry sshpass -e ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
-            "APP_DIR='$APP_DIR' bash '$APP_DIR/deploy/deploy.sh'"
+            "APP_DIR='$APP_DIR' APP_USER='$STAGING_APP_USER' UNIT_PREFIX='$STAGING_UNIT_PREFIX' WEB_PORT='$STAGING_WEB_PORT' bash '$APP_DIR/deploy/deploy.sh'"
