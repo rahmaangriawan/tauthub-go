@@ -25,6 +25,9 @@
 #   MANAGE_NGINX  default 1      (0 = nginx/TLS dikelola CloudPanel — JANGAN
 #                                sentuh vhost & certbot, site sudah didaftarkan
 #                                lewat clpctl di production)
+#   UNIT_PREFIX   default tauthub (prefix nama unit systemd. Di host CloudPanel
+#                                yang sudah punya production tauthub-*, staging
+#                                memakai tauthub-staging)
 #   SKIP_APT      default 0      (1 = lewati apt install — paket sudah lengkap,
 #                                hindari menyentuh nginx milik CloudPanel)
 set -euo pipefail
@@ -32,6 +35,7 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/opt/tauthub/app}"
 DOMAIN="${DOMAIN:-staging.tauthub.com}"
 APP_USER="${APP_USER:-tauthub}"
+UNIT_PREFIX="${UNIT_PREFIX:-tauthub}"
 WEB_PORT="${WEB_PORT:-3000}"
 ORIGIN="${ORIGIN:-https://$DOMAIN}"
 MANAGE_SWAP="${MANAGE_SWAP:-1}"
@@ -161,6 +165,15 @@ $SUDO systemctl enable --now postgresql
 if ! pg_psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1; then
   pg_psql -c "CREATE ROLE $DB_USER LOGIN PASSWORD '$DB_PASSWORD';"
 else
+  # Jangan me-reset password role milik deployment LAIN: kalau role ini memiliki
+  # database selain $DB_NAME, artinya dia dipakai aplikasi lain di host yang sama
+  # (mis. production). Hentikan kecuali FORCE=1.
+  owns_other="$(pg_psql -tAc "SELECT 1 FROM pg_database WHERE datdba = (SELECT oid FROM pg_roles WHERE rolname='$DB_USER') AND datname <> '$DB_NAME' LIMIT 1")"
+  if [ "$owns_other" = "1" ] && [ "${FORCE:-0}" != "1" ]; then
+    echo "REFUSED: role $DB_USER memiliki database lain di host ini (bukan $DB_NAME)." >&2
+    echo "  Kelihatannya milik deployment lain — pakai FORCE=1 hanya kalau yakin." >&2
+    exit 1
+  fi
   pg_psql -c "ALTER ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASSWORD';"
 fi
 if ! pg_psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
@@ -209,15 +222,25 @@ EOSQL
   run_as_app "cd '$APP_DIR/api' && set -a && . '$APP_DIR/.env' && set +a && xargs -r -a '$APP_DIR/deploy/prebaseline.txt' ./bin/migrate mark" >/dev/null
 fi
 
-log "6/8 Unit systemd (tauthub-api, tauthub-web, tauthub-scheduler)"
-for unit in tauthub-api tauthub-web tauthub-scheduler; do
+log "6/8 Unit systemd (${UNIT_PREFIX}-api, ${UNIT_PREFIX}-web, ${UNIT_PREFIX}-scheduler)"
+# Template di repo tetap bernama tauthub-<svc>.service; nama unit di host mengikuti
+# UNIT_PREFIX supaya bisa berdampingan dengan production tauthub-* di host yang sama.
+for svc in api web scheduler; do
+  target="/etc/systemd/system/${UNIT_PREFIX}-${svc}.service"
+  # Jangan menimpa unit milik deployment lain: kalau unit sudah ada tapi
+  # ExecStart-nya menunjuk APP_DIR lain, hentikan (kecuali FORCE=1).
+  if [ -f "$target" ] && [ "${FORCE:-0}" != "1" ] && ! grep -q "ExecStart=$APP_DIR/" "$target"; then
+    echo "REFUSED: $target sudah ada dan bukan milik $APP_DIR." >&2
+    echo "  Set FORCE=1 kalau memang mau menimpanya." >&2
+    exit 1
+  fi
   sed -e "s|__APP_DIR__|$APP_DIR|g" \
     -e "s|__WEB_PORT__|$WEB_PORT|g" \
     -e "s|__ORIGIN__|$ORIGIN|g" \
-    "$APP_DIR/deploy/$unit.service" > "/etc/systemd/system/$unit.service"
+    "$APP_DIR/deploy/tauthub-$svc.service" > "$target"
 done
 $SUDO systemctl daemon-reload
-$SUDO systemctl enable tauthub-api tauthub-web tauthub-scheduler >/dev/null 2>&1 || true
+$SUDO systemctl enable "${UNIT_PREFIX}-api" "${UNIT_PREFIX}-web" "${UNIT_PREFIX}-scheduler" >/dev/null 2>&1 || true
 
 # Nginx + TLS hanya dikelola di sini untuk host polos (staging). Di host
 # CloudPanel (MANAGE_NGINX=0) vhost & sertifikat dibuat/dikelola lewat
