@@ -294,14 +294,12 @@
 							<Globe size={18} strokeWidth={2.4} />
 							<span>{i18n.t.dashboard.open_media_catalog}</span>
 						</button>
+						<!-- CTA ini mengarah ke daftar Kampanye (sebelumnya membuka modal
+						     create di halaman ini; modalnya masih ada di bawah). -->
 						<button
 							class="heroCTAGhost"
 							type="button"
-							onclick={() => {
-								createErr = '';
-								createName = '';
-								createOpen = true;
-							}}
+							onclick={() => goto(`${fallbackBase}/campaigns`)}
 						>
 							<Sparkles size={18} strokeWidth={2.4} />
 							<span>{i18n.t.dashboard.create_campaign}</span>
