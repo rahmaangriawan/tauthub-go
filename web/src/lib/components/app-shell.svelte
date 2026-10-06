@@ -151,10 +151,18 @@
 		{#if searchable}
 			<div class="app-sidebar-search">
 				<Search size={14} aria-hidden="true" />
+				<!-- Chrome menganggap input pertama di halaman sebagai kolom login
+				     dan mengisinya dengan email tersimpan; readonly dilepas saat
+				     focus sehingga input terbaca bukan kolom kredensial. -->
 				<input
 					bind:this={searchEl}
 					bind:value={navQuery}
 					type="search"
+					name="menu-filter"
+					autocomplete="off"
+					spellcheck="false"
+					readonly
+					onfocus={(e) => e.currentTarget.removeAttribute('readonly')}
 					placeholder={tr('Cari halaman…')}
 					aria-label={tr('Cari halaman admin')}
 				/>
