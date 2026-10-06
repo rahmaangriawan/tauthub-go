@@ -855,10 +855,13 @@
 												{#snippet child({ props })}
 												<span
 												{...props}
-												class="distDot"
-												class:distDotMuted={dist.published === 0}
+												class="distCount"
+												class:distCountMuted={dist.published === 0}
 												aria-label={dist.published > 0 ? `${dist.published} ${tr('artikel terdistribusi')}` : tr('Belum ada distribusi')}
-												></span>
+												>
+												<span class="distDot" class:distDotMuted={dist.published === 0}></span>
+												<span>{dist.published > 0 ? `${dist.published} ${tr('artikel')}` : tr('Belum ada distribusi')}</span>
+												</span>
 												{/snippet}
 												</Tooltip.Trigger>
 												<Tooltip.Portal>
