@@ -19,6 +19,24 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.4.0 — 2026-10-07
+
+### Fitur
+- Katalog media: kolom DA (Domain Authority) dan AI Trust kini menampilkan nilai hasil pemeriksaan yang sebenarnya, dan kolom AI Cited menandai media yang situsnya disebut sebagai salah satu sumber jawaban AI Google.
+- Katalog media: tautan Top Up pada bar bawah langsung membuka jendela isi saldo di halaman itu, tanpa berpindah halaman, dan saldo di bar ikut diperbarui begitu jendelanya ditutup.
+- Admin: pemeriksaan nilai media bisa dijalankan untuk semua media sekaligus di latar belakang ("Cek DA semua", "Cek AI & SEO Semua"), media yang sudah punya skor otomatis dilewati, dan tersedia tombol "Batalkan antrean" bila ingin dihentikan di tengah jalan.
+- Admin: media yang baru diajukan mitra langsung diperiksa saat itu juga, jadi nilai DA dan AI Trust-nya sudah tersedia saat admin meninjau pengajuan.
+
+### Perbaikan
+- Skor AI Trust tidak lagi memakai angka cadangan: nilainya hanya diisi bila kecepatan situs benar-benar terukur, dan dibiarkan kosong bila pengukuran tidak memungkinkan. Sebelumnya puluhan media menampilkan angka yang seolah hasil pemeriksaan padahal bukan.
+- Kolom DA dan AI Trust di halaman admin tidak lagi tampil kosong padahal datanya tersimpan.
+- Status AI Cited tidak lagi langsung dianggap "tidak dikutip" ketika data jawaban AI tidak tersedia; statusnya ditulis belum bisa dinilai supaya tidak menyesatkan.
+- Situs mitra yang menolak akses dari server kami, misalnya karena aturan firewall atau sertifikat TLS bermasalah, tidak lagi dilaporkan sebagai situs tidak terjangkau, dan artikel yang tayang di sana tidak ikut ditandai perlu ditinjau.
+- Pemeriksaan otomatis tidak lagi menumpuk: pekerjaan yang tertinggal karena server dimulai ulang dibersihkan sendiri, dan percobaan yang gagal tidak lagi diulang tanpa batas.
+- Tombol pemeriksaan per media tidak lagi berakhir dengan pesan "Server terlalu lama merespons".
+- Admin: bila penyedia data DA menolak permintaan (misalnya kuota paket habis), halaman media menampilkan alasannya, dan pemeriksaan yang bergantung pada penyedia itu otomatis dijeda agar tidak terbuang.
+- Header kolom tabel media di katalog tetap terlihat saat daftar media digulir.
+
 ## v0.3.0 — 2026-10-07
 
 ### Fitur
