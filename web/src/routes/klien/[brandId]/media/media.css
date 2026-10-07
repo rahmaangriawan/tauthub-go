@@ -163,11 +163,11 @@
   gap: 4px;
   font-size: 10.5px;
   font-weight: 600;
-  /* Biru: centang "sumber AI" memakai warna primary supaya terbaca sebagai
-     tanda terverifikasi, bukan aksen ungu. */
-  color: #1d4ed8;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  /* Biru platform (--primary), bukan tiruan pucatnya: centang putih di atas
+     biru tegas supaya langsung terbaca sebagai tanda terverifikasi. */
+  color: var(--primary-foreground, #fff);
+  background: var(--primary);
+  border: 1px solid var(--primary);
   /* Hanya berisi ikon centang: rapatkan tanpa ruang untuk teks. */
   padding: 3px 5px;
   border-radius: 999px;
