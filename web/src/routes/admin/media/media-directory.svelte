@@ -75,6 +75,7 @@
 		da_error_at: string | null;
 	} | null>(null);
 	let daStatusTimer: ReturnType<typeof setTimeout> | null = null;
+	let daCancelBusy = $state(false);
 	let reviewTarget = $state<Media | null>(null);
 	let rejectReason = $state('');
 	let reviewBusy = $state(false);
@@ -508,6 +509,29 @@
 		}
 	}
 
+	/** Hentikan antrean pemeriksaan yang sedang menunggu. */
+	async function cancelQueue() {
+		if (!confirm('Hentikan antrean pemeriksaan yang sedang berjalan? Hasil yang sudah selesai tetap tersimpan.'))
+			return;
+		error = '';
+		daCancelBusy = true;
+		try {
+			const r = await platformRequest<{ cancelled: number }>('/media/seo-refresh-cancel', {
+				method: 'POST'
+			});
+			daSummary =
+				r.cancelled > 0
+					? `${r.cancelled} pemeriksaan dibatalkan. Yang sedang berjalan menyelesaikan panggilannya dulu.`
+					: 'Tidak ada antrean yang perlu dibatalkan.';
+			await load();
+			await loadDaStatus();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			daCancelBusy = false;
+		}
+	}
+
 	/**
 	 * Antrekan pemeriksaan DA + AI Trust — satu klik untuk seluruh media yang
 	 * relevan, bukan 25 per klik. Pemeriksaan berjalan di latar lewat job
@@ -923,6 +947,15 @@
 				<span class="rounded-full px-2.5 py-1" style="background-color: var(--warning-soft); color: var(--warning);" title={daStatus.last_error ?? ''}>
 					{daStatus.failed_last_hour} {tr('pemeriksaan gagal (sejam terakhir) — arahkan kursor untuk pesan')}
 				</span>
+			{/if}
+			{#if daStatus.pending_jobs > 0}
+				<button
+					class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs"
+					type="button"
+					disabled={daCancelBusy}
+					onclick={() => void cancelQueue()}
+					>{daCancelBusy ? tr('Menghentikan…') : tr('Batalkan antrean')}</button
+				>
 			{/if}
 			<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => { void load(); void loadDaStatus(); }}>{tr('Muat ulang')}</button>
 		</div>

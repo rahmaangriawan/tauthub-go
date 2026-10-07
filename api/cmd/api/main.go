@@ -613,6 +613,7 @@ func run() error {
 			// detik (kecepatan situs + penyedia DA + SERPens) sehingga selalu
 			// melewati batas 12 detik di klien bila dijalankan sinkron.
 			authed.Post("/platform/media/{mediaId}/seo-refresh", platformDeps.MediaSEORefreshOne)
+			authed.Post("/platform/media/seo-refresh-cancel", platformDeps.MediaSEORefreshCancel)
 			authed.Get("/platform/media/{mediaId}/similarweb", platformDeps.MediaSimilarWeb)
 			authed.Post("/platform/media/{mediaId}/similarweb", platformDeps.MediaSimilarWeb)
 

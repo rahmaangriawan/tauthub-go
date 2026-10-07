@@ -536,6 +536,19 @@ func (d *Deps) mpRecordDAError(ctx context.Context, msg *string) {
 	}
 }
 
+// mpDAProviderPaused: true bila penyedia DA/PA terakhir kali menolak (kuota habis
+// atau langganan salah) dalam 24 jam terakhir. Panggilan penyedia dilewati selama
+// jeda ini supaya pemeriksaan AI Trust tetap berjalan tanpa menghajar penyedia
+// yang sudah menolak; menyimpan ulang key di Konfigurasi membersihkan catatannya
+// sehingga percobaan berikutnya langsung jalan.
+func (d *Deps) mpDAProviderPaused(ctx context.Context) bool {
+	row, err := d.queryRow(ctx, `
+		SELECT 1 AS paused FROM platform_seo_config
+		WHERE id = 'default' AND last_da_error IS NOT NULL
+		  AND last_da_error_at > NOW() - INTERVAL '24 hours'`)
+	return err == nil && row != nil
+}
+
 // mpFetchSeoMetrics: POST provider DA/PA (timeout 15s). Balasannya
 // {domain_authority, page_authority, spam_score, external_urls_to_url, …}.
 func (d *Deps) mpFetchSeoMetrics(ctx context.Context, domain, apiKey string) (map[string]any, *mpSeoError) {
@@ -920,7 +933,11 @@ func (d *Deps) mpCheckAndStoreSeoMetrics(ctx context.Context, mediaID string, we
 
 	metrics := map[string]any{"da": nil, "pa": nil, "spam_score": nil}
 	var providerErr *mpSeoError
-	if apiKey, keyErr := d.mpPlatformSeoKey(ctx, "sealed_api_key"); keyErr != nil {
+	if d.mpDAProviderPaused(ctx) {
+		// Penyedia DA/PA sedang menolak (mis. kuota habis). Lewati panggilannya:
+		// AI Trust tetap dihitung, dan catatan kegagalan lama tidak ditimpa supaya
+		// pesannya tetap terbaca admin.
+	} else if apiKey, keyErr := d.mpPlatformSeoKey(ctx, "sealed_api_key"); keyErr != nil {
 		providerErr = keyErr
 	} else if fetched, fetchErr := d.mpFetchSeoMetrics(ctx, domain, apiKey); fetchErr != nil {
 		providerErr = fetchErr

@@ -619,6 +619,30 @@ func (d *Deps) MediaSEORefreshAll(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// MediaSEORefreshCancel: POST /v1/platform/media/seo-refresh-cancel — hentikan
+// antrean pemeriksaan yang sedang berjalan/menunggu. Dipakai tombol "Batalkan
+// antrean": pekerjaan yang sudah terlanjur mulai tetap menyelesaikan panggilan
+// yang sedang berjalan, tapi sisanya berhenti dan tidak diklaim ulang.
+func (d *Deps) MediaSEORefreshCancel(w http.ResponseWriter, r *http.Request) {
+	user, _, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	tag, err := d.Pool.Exec(r.Context(), `
+		UPDATE jobs
+		SET status = 'failed', attempts = max_attempts,
+		    last_error = 'Dibatalkan admin: antrean pemeriksaan dihentikan.',
+		    locked_at = NULL, locked_by = NULL, updated_at = NOW()
+		WHERE kind = 'media_seo_refresh' AND status IN ('pending','running')`)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	cancelled := int(tag.RowsAffected())
+	d.audit(r.Context(), user.ID, "media.seo_refresh_cancelled", "media", "")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "cancelled": cancelled})
+}
+
 // MediaSEORefreshOne: POST /v1/platform/media/{mediaId}/seo-refresh — antrekan
 // pemeriksaan DA/AI untuk SATU media (tombol "Cek DA & AI" per baris).
 //

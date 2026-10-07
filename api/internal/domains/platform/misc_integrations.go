@@ -1770,6 +1770,10 @@ func (d *Deps) SEOConfigPut(w http.ResponseWriter, r *http.Request) {
 		   api_key_hint = COALESCE(EXCLUDED.api_key_hint, platform_seo_config.api_key_hint),
 		   sealed_similarweb_api_key = COALESCE(EXCLUDED.sealed_similarweb_api_key, platform_seo_config.sealed_similarweb_api_key),
 		   sealed_serpens_api_key = COALESCE(EXCLUDED.sealed_serpens_api_key, platform_seo_config.sealed_serpens_api_key),
+		   -- Key baru berarti penyedia mungkin sudah beres: buang catatan kegagalan
+		   -- supaya pemeriksaan berikutnya mencoba lagi, bukan menunggu jeda 24 jam.
+		   last_da_error = CASE WHEN EXCLUDED.sealed_api_key IS NOT NULL THEN NULL ELSE platform_seo_config.last_da_error END,
+		   last_da_error_at = CASE WHEN EXCLUDED.sealed_api_key IS NOT NULL THEN NULL ELSE platform_seo_config.last_da_error_at END,
 		   updated_by = EXCLUDED.updated_by,
 		   updated_at = NOW()`,
 		sealed, hint, sealedSimilarweb, sealedSerpens, user.ID); err != nil {
