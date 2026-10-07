@@ -7,6 +7,7 @@
 	import { onMount } from 'svelte';
 	import { LoaderCircle, Megaphone } from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import { sanitizeHtml } from '$lib/sanitize-html';
 	import PageTitle from '$lib/components/page-title.svelte';
 
@@ -35,6 +36,13 @@
 		lainnya: 'Lainnya'
 	};
 
+	const i18n = $derived(getI18n());
+	// Isi entri diterjemahkan otomatis oleh API saat antarmuka Inggris;
+	// daftar dimuat ulang begitu bahasanya berganti.
+	const lang = $derived(i18n.locale === 'en' ? 'en' : 'id');
+	let loadedLang = $state('');
+	let ready = $state(false);
+
 	let items = $state<Entry[]>([]);
 	let unread = $state(0);
 	let loading = $state(true);
@@ -45,6 +53,7 @@
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
 			await load();
+			ready = true;
 			loading = false;
 		})();
 		const onExpired = () => (window.location.href = '/login');
@@ -52,10 +61,19 @@
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 	});
 
+	// Bahasa antarmuka berganti → muat ulang daftar dengan terjemahan bahasa itu.
+	$effect(() => {
+		if (!ready || loadedLang === lang) return;
+		void load();
+	});
+
 	async function load() {
 		error = '';
+		loadedLang = lang;
 		try {
-			const res = await apiRequest('/v1/changelog');
+			// Terjemahan otomatis bisa memakan puluhan detik pada permintaan pertama
+			// (sesudahnya hasilnya di-cache di server) — timeout dinaikkan.
+			const res = await apiRequest(`/v1/changelog?lang=${lang}`, {}, 120_000);
 			if (!res.ok) throw new Error(tr('Gagal memuat catatan rilis.'));
 			const data = (await res.json()) as { items?: Entry[]; unread?: number };
 			items = data.items ?? [];
@@ -121,7 +139,7 @@
 					<div class="flex flex-wrap items-center gap-2">
 						<span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style="background-color: var(--muted);">{entry.version}</span>
 						<span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold" style={CATEGORY_STYLE[entry.category] ?? CATEGORY_STYLE.lainnya}>
-							{CATEGORY_LABEL[entry.category] ?? entry.category}
+							{tr(CATEGORY_LABEL[entry.category] ?? entry.category)}
 						</span>
 						<span class="text-xs text-muted-foreground">{fmtDate(entry.released_on)}</span>
 						{#if !entry.read_at}

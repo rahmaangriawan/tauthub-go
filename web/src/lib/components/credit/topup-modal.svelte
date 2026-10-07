@@ -29,13 +29,19 @@
 
 	// Fallback sama dengan app lama bila admin belum mengisi paket di tc_config.
 	const DEFAULT_PACKAGES = [
-		{ tc: 1000, idr: 1000000 },
-		{ tc: 5000, idr: 5000000 },
-		{ tc: 10000, idr: 10000000 }
+		{ tc: 10, idr: 10000 },
+		{ tc: 100, idr: 100000 },
+		{ tc: 1000, idr: 1000000 }
 	];
 	const effectivePackages = $derived(packages.length > 0 ? packages : DEFAULT_PACKAGES);
 
 	const fmtIDR = (n: number) => `Rp ${n.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
+
+	// Minimum top up Rp 10.000 — dihitung dari rate aktif (1 Kredit = rateIdr) supaya
+	// tetap benar kalau admin mengubah rate.
+	const MIN_TOPUP_IDR = 10_000;
+	const minTc = $derived(Math.max(1, Math.ceil(MIN_TOPUP_IDR / (rateIdr || 1000))));
+	const minLabel = $derived(fmtIDR(minTc * (rateIdr || 1000)));
 
 	let customTcInput = $state('');
 	let customError = $state('');
@@ -96,18 +102,9 @@
 		onSelectPackage(tc, null);
 	}
 
-	function handleCustomSubmit(event: SubmitEvent) {
-		event.preventDefault();
-		if (parsedCustomTc < 100) {
-			customError = 'Minimal 100 Kredit.';
-			return;
-		}
-		validateAndSubmit(parsedCustomTc);
-	}
-
 	function handleCta() {
-		if (effectiveTc < 100) {
-			customError = 'Minimal 100 Kredit.';
+		if (effectiveTc < minTc) {
+			customError = `Minimal ${minLabel} (${minTc} Kredit).`;
 			return;
 		}
 		validateAndSubmit(effectiveTc);
@@ -212,7 +209,7 @@
 							aria-hidden="true"
 						/>
 						<span class="tu-preset-tc">{tr("Nominal Lain")}</span>
-						<span class="tu-preset-price">{tr("Min. 100 Kredit")}</span>
+						<span class="tu-preset-price">Min. {minTc} {tr("Kredit")}</span>
 					</button>
 				</div>
 			</div>
@@ -220,7 +217,7 @@
 			{#if showCustomInput}
 				<div class="tu-custom">
 					<label class="tu-label" for="tu-custom-input">{tr("Atau masukkan nominal lainnya")}</label>
-					<form onsubmit={handleCustomSubmit}>
+					<div>
 						<div class="tu-custom-row">
 							<div class="tu-custom-wrap">
 								<input
@@ -229,30 +226,26 @@
 									type="text"
 									inputmode="numeric"
 									class="tu-input"
-									placeholder={tr("Minimum 100 Kredit")}
+									placeholder={`Minimal ${minTc} ${tr('Kredit')}`}
 									value={customTcInput}
 									oninput={handleCustomTcChange}
 									disabled={busy}
 								/>
 								<span class="tu-custom-suffix">{tr("Kredit")}</span>
 							</div>
-							<button
-								type="submit"
-								class="tu-btn-primary tu-custom-submit"
-								disabled={busy || parsedCustomTc < 100}
-							>
-								{busy ? 'Memproses…' : 'Lanjutkan'}
-							</button>
 						</div>
 						<div class="tu-custom-meta">
 							{#if parsedCustomTc > 0}
 								<span>Estimasi: <strong class="tu-custom-calc">{fmtIDR(estimatedCustomPrice)}</strong></span>
 							{:else}
-								<span>1 Kredit = Rp{rateIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}</span>
+								<span>1 Kredit = Rp{rateIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })} · Minimal {minLabel}</span>
+							{/if}
+							{#if parsedCustomTc > 0 && parsedCustomTc < minTc}
+								<span class="tu-invalid">Minimal {minLabel} ({minTc} {tr("Kredit")}).</span>
 							{/if}
 							{#if customError}<span class="tu-invalid">{customError}</span>{/if}
 						</div>
-					</form>
+					</div>
 				</div>
 			{/if}
 
@@ -324,7 +317,7 @@
 			<button
 				type="button"
 				class="tu-cta"
-				disabled={busy || effectiveTc < 100}
+				disabled={busy || effectiveTc < minTc}
 				onclick={handleCta}
 			>
 				{busy ? 'Memproses…' : 'Lanjutkan ke Pembayaran →'}
@@ -471,7 +464,6 @@
 		color: var(--muted-foreground);
 		pointer-events: none;
 	}
-	.tu-custom-submit { flex-shrink: 0; white-space: nowrap; }
 	.tu-custom-meta {
 		display: flex;
 		align-items: center;
@@ -661,6 +653,5 @@
 	}
 	@media (max-width: 380px) {
 		.tu-custom-row { flex-direction: column; align-items: stretch; }
-		.tu-custom-submit { width: 100%; }
 	}
 </style>

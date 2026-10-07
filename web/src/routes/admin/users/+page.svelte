@@ -364,7 +364,14 @@
 			return;
 		}
 		const result = await res.json();
-		rows = rows.map((item) => (item.id === result.id ? { ...item, role: result.role } : item));
+		// Daftar ini difilter per peran: kalau peran barunya tidak lagi cocok,
+		// baris dibuang sekarang (langsung hilang) — bukan sekadar ganti label.
+		if (roleFilter && result.role !== roleFilter) {
+			rows = rows.filter((item) => item.id !== result.id);
+			void load(searchText, roleFilter);
+		} else {
+			rows = rows.map((item) => (item.id === result.id ? { ...item, role: result.role } : item));
+		}
 		const kept = result.retained_brands.length > 0 ? ` Brand yang dipertahankan: ${result.retained_brands.join(', ')}.` : '';
 		roleNotice =
 			`${roleTarget.display_name} sekarang berperan sebagai ${result.role === 'partner' ? tr('Mitra') : tr('Klien')}.` +

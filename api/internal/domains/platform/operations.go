@@ -2180,6 +2180,24 @@ func (d *Deps) OperationsUserRole(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(ctx, "UPDATE users SET role = $1 WHERE id = $2", role, userID); err != nil {
 			return err
 		}
+		// Sinkronkan baris mitra dengan peran baru supaya daftar admin ikut pindah:
+		// turun jadi klien → baris mitra dinonaktifkan (media, publikasi, dan
+		// riwayat penghasilan tetap utuh), naik jadi mitra → baris yang sudah ada
+		// diaktifkan kembali supaya tidak terbentuk mitra duplikat.
+		if role == "client" {
+			if _, err := tx.Exec(ctx,
+				"UPDATE partners SET status = 'inactive', updated_at = NOW() WHERE user_id = $1 AND status <> 'inactive'",
+				userID); err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.Exec(ctx,
+				`UPDATE partners SET status = 'active', updated_at = NOW()
+				   WHERE id = (SELECT id FROM partners WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1)
+				     AND status <> 'active'`, userID); err != nil {
+				return err
+			}
+		}
 		if err := auth.HealRoleProvisioning(ctx, tx, role, userID, displayName); err != nil {
 			return err
 		}

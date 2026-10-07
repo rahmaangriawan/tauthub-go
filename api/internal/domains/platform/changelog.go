@@ -59,7 +59,8 @@ func (d *Deps) ChangelogList(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := d.queryRows(r.Context(), `
 		SELECT e.id, e.version, e.released_on::text AS released_on, e.category, e.title,
-		       e.summary, e.body, e.source_key, e.published, e.created_at, cr.read_at
+		       e.summary, e.body, e.title_en, e.summary_en, e.body_en,
+		       e.source_key, e.published, e.created_at, cr.read_at
 		FROM changelog_entries e
 		LEFT JOIN changelog_reads cr ON cr.entry_id = e.id AND cr.user_id = $1
 		WHERE e.published = TRUE
@@ -86,6 +87,11 @@ func (d *Deps) ChangelogList(w http.ResponseWriter, r *http.Request) {
 	unread := 0
 	if unreadRow != nil {
 		unread = unreadRow.intOr("total", 0)
+	}
+	// Antarmuka Inggris: terjemahkan entri yang belum punya versi EN (hasilnya
+	// disimpan di kolom *_en supaya permintaan berikutnya tidak memanggil model).
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("lang")), "en") {
+		d.chgLocalizeItems(r.Context(), user.ID, rows, items)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "unread": unread})
 }
