@@ -34,7 +34,6 @@ Catatan:
 - Situs mitra yang menolak akses dari server kami, misalnya karena aturan firewall atau sertifikat TLS bermasalah, tidak lagi dilaporkan sebagai situs tidak terjangkau, dan artikel yang tayang di sana tidak ikut ditandai perlu ditinjau.
 - Pemeriksaan otomatis tidak lagi menumpuk: pekerjaan yang tertinggal karena server dimulai ulang dibersihkan sendiri, dan percobaan yang gagal tidak lagi diulang tanpa batas.
 - Tombol pemeriksaan per media tidak lagi berakhir dengan pesan "Server terlalu lama merespons".
-- Admin: bila penyedia data DA menolak permintaan (misalnya kuota paket habis), halaman media menampilkan alasannya, dan pemeriksaan yang bergantung pada penyedia itu otomatis dijeda agar tidak terbuang.
 - Header kolom tabel media di katalog tetap terlihat saat daftar media digulir.
 
 ## v0.3.0 — 2026-10-07
@@ -47,7 +46,6 @@ Catatan:
 - Katalog media: pencarian pilihan media dari CSV hasil "Ekspor Proposal" tetap bisa dilanjutkan (nama kampanye opsional, dibuat otomatis bila dikosongkan).
 - Taut Pintar: kampanye yang sudah selesai (terkirim/terjadwal/terdistribusi) kini mode lihat saja — Matchmaker, Writer, Kilat, dan Ringkasan Profiler tetap bisa dibaca, tapi tidak bisa diubah.
 - The Writer: tombol "Generate Konten" membuka Pengelola Naskah di tab "Generate dengan AI", jadi topik, cover, dan kategori diisi dulu sebelum artikel ditulis.
-- Admin: peran akun bisa diubah Klien ⇄ Mitra dari halaman Pengguna dan halaman Mitra.
 - Halaman "Apa yang Baru" ini sendiri: catatan rilis bisa dibaca dari dashboard klien & mitra.
 
 ### Perbaikan
