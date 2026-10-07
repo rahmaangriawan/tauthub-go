@@ -52,9 +52,12 @@
 	let showCustomInput = $state(false);
 	let customInputEl = $state<HTMLInputElement | null>(null);
 
+	// Kolom nominal diisi dalam RUPIAH; nilai kredit diturunkan dari kurs aktif
+	// supaya seluruh tampilan klien tetap berbahasa rupiah.
 	const parsedCustomTc = $derived.by(() => {
 		const raw = customTcInput.replace(/\D/g, '');
-		return raw ? parseInt(raw, 10) : 0;
+		if (!raw) return 0;
+		return Math.max(1, Math.ceil(parseInt(raw, 10) / (rateIdr || 1000)));
 	});
 	const effectiveTc = $derived(parsedCustomTc > 0 ? parsedCustomTc : (selectedPreset ?? 0));
 	const subtotal = $derived(effectiveTc * rateIdr);
@@ -71,7 +74,8 @@
 			return;
 		}
 		const num = parseInt(rawDigits, 10);
-		customTcInput = (num > 10_000_000 ? 10_000_000 : num).toLocaleString('id-ID');
+		const cap = 10_000_000 * (rateIdr || 1000);
+		customTcInput = (num > cap ? cap : num).toLocaleString('id-ID');
 		customError = '';
 		if (num > 0) selectedPreset = null;
 	}
@@ -104,7 +108,7 @@
 
 	function handleCta() {
 		if (effectiveTc < minTc) {
-			customError = `Minimal ${minLabel} (${minTc} Kredit).`;
+			customError = `Minimal ${minLabel}.`;
 			return;
 		}
 		validateAndSubmit(effectiveTc);
@@ -121,7 +125,7 @@
 	<dialog
 		open
 		class="tu-dialog"
-		aria-label={tr("Top Up Saldo (Kredit)")}
+		aria-label={tr("Top Up Saldo")}
 		onclick={(e) => e.stopPropagation()}
 	>
 		<div class="tu-header">
@@ -132,8 +136,7 @@
 					</svg>
 				</span>
 				<div>
-					<h3 class="tu-title">{tr("Top Up Saldo (Kredit)")}</h3>
-					<p class="tu-subtitle">1 Kredit = Rp {rateIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}</p>
+					<h3 class="tu-title">{tr("Top Up Saldo")}</h3>
 				</div>
 			</div>
 			{#if onClose}
@@ -151,7 +154,7 @@
 			<div class="tu-payment">
 				<div>
 					<p class="tu-payment-title">
-						Pesanan dibuat — {payment.tc.toLocaleString('id-ID')} Kredit · {fmtIDR(payment.amount_idr)}
+						Pesanan dibuat — {fmtIDR(payment.amount_idr)}
 					</p>
 					<p class="tu-payment-meta">{tr("Menunggu pembayaran diverifikasi payment gateway. Kredit masuk otomatis ke saldo setelah pembayaran lunas.")}</p>
 				</div>
@@ -166,7 +169,7 @@
 			</div>
 		{:else}
 			<div class="tu-section">
-				<span class="tu-label">{tr("Pilih Nominal Kredit")}</span>
+				<span class="tu-label">{tr("Pilih Nominal")}</span>
 				<div class="tu-presets">
 					{#each effectivePackages as pkg (pkg.tc)}
 						{@const selected = selectedPreset === pkg.tc && !isCustomSelected}
@@ -187,7 +190,6 @@
 								class="tu-coin"
 								aria-hidden="true"
 							/>
-							<span class="tu-preset-tc">{pkg.tc.toLocaleString('id-ID')} {tr("Kredit")}</span>
 							<span class="tu-preset-price">{fmtIDR(pkg.idr)}</span>
 						</button>
 					{/each}
@@ -209,7 +211,7 @@
 							aria-hidden="true"
 						/>
 						<span class="tu-preset-tc">{tr("Nominal Lain")}</span>
-						<span class="tu-preset-price">Min. {minTc} {tr("Kredit")}</span>
+						<span class="tu-preset-price">Min. {fmtIDR(minTc * (rateIdr || 1000))}</span>
 					</button>
 				</div>
 			</div>
@@ -226,22 +228,22 @@
 									type="text"
 									inputmode="numeric"
 									class="tu-input"
-									placeholder={`Minimal ${minTc} ${tr('Kredit')}`}
+									placeholder={`Minimal ${minLabel}`}
 									value={customTcInput}
 									oninput={handleCustomTcChange}
 									disabled={busy}
 								/>
-								<span class="tu-custom-suffix">{tr("Kredit")}</span>
+								<span class="tu-custom-suffix">Rp</span>
 							</div>
 						</div>
 						<div class="tu-custom-meta">
 							{#if parsedCustomTc > 0}
 								<span>Estimasi: <strong class="tu-custom-calc">{fmtIDR(estimatedCustomPrice)}</strong></span>
 							{:else}
-								<span>1 Kredit = Rp{rateIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })} · Minimal {minLabel}</span>
+								<span>Minimal {minLabel}</span>
 							{/if}
 							{#if parsedCustomTc > 0 && parsedCustomTc < minTc}
-								<span class="tu-invalid">Minimal {minLabel} ({minTc} {tr("Kredit")}).</span>
+								<span class="tu-invalid">Minimal {minLabel}.</span>
 							{/if}
 							{#if customError}<span class="tu-invalid">{customError}</span>{/if}
 						</div>
@@ -301,7 +303,7 @@
 					<div class="tu-row"><span>PPN 11%</span><span>{fmtIDR(ppn)}</span></div>
 					<div class="tu-divider"></div>
 					<div class="tu-row tu-row-total"><span>{tr("Total Pembayaran")}</span><span>{fmtIDR(total)}</span></div>
-					<p class="tu-hint">1 Kredit = Rp{rateIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })} · {tr("belum termasuk biaya gateway")}</p>
+					<p class="tu-hint">{tr("Belum termasuk biaya gateway")}</p>
 				</div>
 				<img src="/images/billing-summary.webp" alt="" class="tu-billing-image" aria-hidden="true" />
 			</div>
@@ -310,7 +312,7 @@
 				<span class="tu-info-icon"><Info size={16} /></span>
 				<div>
 					<p class="tu-info-title">Punya Bukti Potong PPh 23?</p>
-					<p class="tu-info-desc">{tr("Klien korporasi dapat mengklaim bukti potong PPh 23 menjadi tambahan saldo Kredit melalui halaman Invoice setelah pembayaran berhasil.")}</p>
+					<p class="tu-info-desc">{tr("Klien korporasi dapat mengklaim bukti potong PPh 23 menjadi tambahan saldo melalui halaman Invoice setelah pembayaran berhasil.")}</p>
 				</div>
 			</div>
 
@@ -380,7 +382,6 @@
 		color: var(--primary);
 	}
 	.tu-title { margin: 0; font-size: 18px; font-weight: 750; letter-spacing: -0.02em; }
-	.tu-subtitle { margin: 2px 0 0; font-size: 12.5px; color: var(--muted-foreground); }
 	.tu-close {
 		display: inline-flex;
 		align-items: center;

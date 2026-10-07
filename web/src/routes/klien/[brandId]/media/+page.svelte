@@ -558,7 +558,7 @@
 	}
 
 	function exportProposal() {
-		const headers = ['Nama Media', 'Website', 'Kategori', 'Kecepatan', 'DA', 'AI Trust', 'AI Cited', tr('Harga IDR'), 'Kredit TC'];
+		const headers = ['Nama Media', 'Website', 'Kategori', 'Kecepatan', 'DA', 'AI Trust', 'AI Cited', tr('Harga IDR')];
 		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 		// Pemisah ";" dipakai karena Excel/Sheets ber-locale Indonesia (dan Eropa)
 		// memakai titik-koma sebagai list separator; CSV berkoma tampil menyatu
@@ -573,7 +573,7 @@
 				// menampilkan AI Overview) — jangan ditulis "Tidak" untuk yang
 				// belum pernah bisa dinilai.
 				esc(m.seo_ai_citation === true ? 'Ya' : m.seo_ai_citation === false ? 'Tidak' : 'Belum bisa ditentukan'),
-				esc(price), esc(m.credit_cost || Math.ceil(price / 1000))
+				esc(price)
 			].join(';');
 		});
 		// BOM + CRLF supaya Excel membaca UTF-8 dan akhir baris dengan benar.
@@ -1284,16 +1284,16 @@
 						</div>
 						<div class="campaignSummaryRow">
 							<span>{tr("Total biaya publikasi")}</span>
-							<strong>Rp {fmt(totalSelectedPrice)} <span class="campaignSummaryMuted">~ {fmt(totalSelectedCredits)} {tr("Kredit")}</span></strong>
+							<strong>Rp {fmt(totalSelectedPrice)}</strong>
 						</div>
 						{#if walletAvailableTc !== null}
 							<div class="campaignSummaryRow">
 								<span>{tr("Saldo kamu")}</span>
-								<strong>Rp {fmt(walletAvailableTc * walletRateIdr)} <span class="campaignSummaryMuted">~ {fmt(walletAvailableTc)} {tr("Kredit")}</span></strong>
+								<strong>Rp {fmt(walletAvailableTc * walletRateIdr)}</strong>
 							</div>
 							{#if totalSelectedCredits > walletAvailableTc}
 								<p class="campaignWalletWarn">
-									{tr("Saldo kurang")} ~{fmt(totalSelectedCredits - walletAvailableTc)} {tr("Kredit")} {tr("untuk pesanan ini.")} <a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up dulu")}</a>
+									{tr("Saldo kurang")} Rp {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)} {tr("untuk pesanan ini.")} <a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up dulu")}</a>
 								</p>
 							{/if}
 						{/if}
@@ -1388,8 +1388,7 @@
 				<span class="selectedStatLabel">TOTAL BIAYA PUBLIKASI</span>
 				<div class="selectedStatPriceGroup">
 					<span class="selectedStatPriceVal">Rp {fmt(totalSelectedPrice)}</span>
-					<span class="selectedStatCreditVal">~ {fmt(totalSelectedCredits)} {tr("Kredit")}</span>
-				</div>
+									</div>
 			</div>
 			<div class="selectedBarDivider"></div>
 			<div class="selectedStatItem">
@@ -1399,10 +1398,9 @@
 				{:else}
 					<div class="selectedStatPriceGroup">
 						<span class="selectedStatPriceVal">Rp {fmt(walletAvailableTc * walletRateIdr)}</span>
-						<span class="selectedStatCreditVal">~ {fmt(walletAvailableTc)} {tr("Kredit")}</span>
-					</div>
+											</div>
 					{#if totalSelectedCredits > walletAvailableTc}
-						<span class="walletShortfall">{tr("Kurang")} ~{fmt(totalSelectedCredits - walletAvailableTc)} {tr("Kredit")} · <a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up")}</a></span>
+						<span class="walletShortfall">{tr("Kurang")} Rp {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)} · <a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up")}</a></span>
 					{:else}
 						<span class="walletEnough">{tr("Cukup untuk pesanan ini")}</span>
 					{/if}

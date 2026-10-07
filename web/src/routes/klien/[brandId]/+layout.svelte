@@ -89,6 +89,12 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	});
 
 	const saldo = $derived(overview.data?.wallet?.available_tc ?? 0);
+	// Tampilan klien berbahasa rupiah: saldo kredit dikonversi memakai kurs aktif
+	// dari data saldo (fallback ke kurs modal top up, lalu Rp 1.000).
+	const saldoRate = $derived(
+		Number(overview.data?.wallet?.rate_idr ?? overview.data?.tc_config?.rate_idr) || 1000
+	);
+	const fmtIDRPill = (tc: number) => `Rp ${(tc * saldoRate).toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;
 
 	// Top Up cepat dari utility bar (parity CreditPill app lama). Paket & kurs
 	// diambil dari GET /credits agar selalu ikut konfigurasi platform; modal
@@ -248,10 +254,10 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			class="app-credit-pill app-credit-trigger"
 			type="button"
 			onclick={() => void openTopUp()}
-			aria-label={`Saldo Tauthub Kredit: ${saldo.toLocaleString('id-ID')} Kredit. Buka top up.`}
+			aria-label={`Saldo Tauthub: ${fmtIDRPill(saldo)}. Buka top up.`}
 		>
 			<Coins size={15} />
-			<strong>{saldo.toLocaleString('id-ID')} {tr("Kredit")}</strong>
+			<strong>{fmtIDRPill(saldo)}</strong>
 		</button>
 		<NotificationBell apiBase={`/v1/brands/${brandId}`} fallbackBase={base} showAnnouncementTab />
 	{/snippet}

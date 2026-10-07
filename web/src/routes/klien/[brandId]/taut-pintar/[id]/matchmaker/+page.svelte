@@ -699,7 +699,7 @@
 			</div>
 		</div>
 		<div class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold" style="background-color: var(--success-soft); color: var(--success);">
-			<span>{fmtIdr(info?.walletAvailable ?? 0)} {tr('Kredit')}</span>
+			<span>{rpCurrency((info?.walletAvailable ?? 0) * (info?.rateIdr ?? 0))}</span>
 		</div>
 	</div>
 
@@ -748,7 +748,7 @@
 					{info?.budgetMode === 'optimal'
 						? tr('Optimal (Strategis)')
 						: info?.budgetMode === 'efficient' && (info?.budgetAmount ?? 0) > 0
-							? `${tr('Efisien')} (${tr('Max')} ${fmtIdr(info.budgetAmount)} ${tr('Kredit')})`
+							? `${tr('Efisien')} (${tr('Max')} ${rpCurrency(info.budgetAmount * (info?.rateIdr ?? 0))})`
 							: tr('Efisien')}
 				</strong>
 			</span>
@@ -871,7 +871,7 @@
 						<input class="app-input w-full" type="number" min="0" max="100" placeholder="15" bind:value={spamMax} />
 					</label>
 					<label class="advFilterField">
-						<span>{tr('Harga (Kredit, Maksimal)')}</span>
+						<span>{tr('Harga (Maksimal)')}</span>
 						<input class="app-input w-full" type="number" min="0" placeholder={tr('Tanpa batas')} bind:value={priceMax} />
 					</label>
 					<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => { daMin = ''; spamMax = ''; priceMax = ''; }}>{tr('Reset Filter')}</button>
@@ -911,7 +911,6 @@
 			<div class="bottomStat">
 				<span class="bottomStatLabel">{tr('Total Biaya Kampanye')}</span>
 				<span class="bottomStatValue" style="font-size:20px;">{(info?.rateIdr ?? 0) > 0 ? rpCurrency(summary.cost * (info?.rateIdr ?? 0)) : '—'}</span>
-				<span class="bottomStatSub">{tr('Jumlah Kredit:')} {fmtIdr(summary.cost)}</span>
 			</div>
 		</div>
 		<div class="bottomActions">
