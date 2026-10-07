@@ -104,10 +104,13 @@
 		seoError = '';
 		seoResult = null;
 		try {
-			const res = await apiRequest('/v1/partner/seo/check', {
-				method: 'POST',
-				body: JSON.stringify({ domain: domain.trim() })
-			});
+			// Pemeriksaan DA/PA ke penyedia bisa lambat; batas bawaan 12 detik
+			// terlalu ketat untuk satu panggilan penyedia (bukan cache).
+			const res = await apiRequest(
+				'/v1/partner/seo/check',
+				{ method: 'POST', body: JSON.stringify({ domain: domain.trim() }) },
+				45_000
+			);
 			const data = await res.json();
 			if (!res.ok) {
 				seoError = await readApiError(res, tr('Pemeriksaan domain gagal. Coba lagi atau hubungi admin Tauthub.'));

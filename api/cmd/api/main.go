@@ -367,11 +367,11 @@ func run() error {
 			authed.Post("/brands/{brandId}/notifications/{notificationId}/read", clientRead.BrandNotificationRead)
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/writer-links", resolveCampaign(brandFlowDeps.TautWriterLinks))
 			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/writer-links", resolveCampaign(brandFlowDeps.TautWriterLinks))
-				// Pustaka gambar AI per artikel (isolasi brand+campaign+media).
-				authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/images", resolveCampaign(brandFlowDeps.ArticleImagesList))
-				authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/images/generate", resolveCampaign(brandFlowDeps.ArticleImageGenerate))
-				authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/images/upload", resolveCampaign(brandFlowDeps.ArticleImageUpload))
-				authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/images/{imageId}", resolveCampaign(brandFlowDeps.ArticleImageDelete))
+			// Pustaka gambar AI per artikel (isolasi brand+campaign+media).
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/images", resolveCampaign(brandFlowDeps.ArticleImagesList))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/images/generate", resolveCampaign(brandFlowDeps.ArticleImageGenerate))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/images/upload", resolveCampaign(brandFlowDeps.ArticleImageUpload))
+			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/images/{imageId}", resolveCampaign(brandFlowDeps.ArticleImageDelete))
 
 			// ---------- Taut Pintar klien (/v1/brands/{brandId}/taut/*) ----------
 			authed.Get("/brands/{brandId}/taut/campaigns", tautDeps.TautCampaignsList)
@@ -609,6 +609,10 @@ func run() error {
 			authed.Post("/platform/media/{mediaId}/review", platformDeps.MediaReview)
 			authed.Get("/platform/media/{mediaId}/seo", platformDeps.MediaSEO)
 			authed.Post("/platform/media/{mediaId}/seo", platformDeps.MediaSEO)
+			// Antrekan, bukan jalankan langsung: satu pemeriksaan butuh ~25-30
+			// detik (kecepatan situs + penyedia DA + SERPens) sehingga selalu
+			// melewati batas 12 detik di klien bila dijalankan sinkron.
+			authed.Post("/platform/media/{mediaId}/seo-refresh", platformDeps.MediaSEORefreshOne)
 			authed.Get("/platform/media/{mediaId}/similarweb", platformDeps.MediaSimilarWeb)
 			authed.Post("/platform/media/{mediaId}/similarweb", platformDeps.MediaSimilarWeb)
 

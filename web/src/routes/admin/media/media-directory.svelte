@@ -454,29 +454,24 @@
 		}
 	}
 
+	/**
+	 * Pemeriksaan satu media TIDAK dijalankan langsung. Satu kali periksa butuh
+	 * ~25-30 detik (kecepatan situs + penyedia DA + SERPens) sedangkan klien
+	 * memutus koneksi di 12 detik, jadi dulu tombol ini selalu berakhir
+	 * "Server terlalu lama merespons". Sekarang pekerjaannya diantrekan dan
+	 * tabel menyusul lewat indikator antrean.
+	 */
 	async function checkAiSignals(media: Media) {
 		error = '';
 		aiBusyId = media.id;
 		try {
-			const r = await platformRequest<{
-				da: number | null;
-				ai_trust_score: number | null;
-				ai_citation: boolean | null;
-				checked_at: string;
-			}>(`/media/${media.id}/seo`, { method: 'POST' });
-			rows = rows.map((row) =>
-				row.id === media.id
-					? {
-							...row,
-							// Nilai null dari respons (penyedia gagal sebagian) tidak
-							// boleh menghapus angka yang sudah tampil di tabel.
-							seo_da: r.da ?? row.seo_da,
-							seo_ai_trust: r.ai_trust_score ?? row.seo_ai_trust,
-							seo_ai_citation: r.ai_citation ?? row.seo_ai_citation,
-							seo_checked_at: r.checked_at
-						}
-					: row
-			);
+			const r = await platformRequest<{ queued: boolean }>(`/media/${media.id}/seo-refresh`, {
+				method: 'POST'
+			});
+			daSummary = r.queued
+				? `Pemeriksaan "${media.name}" masuk antrean — hasilnya muncul di tabel begitu selesai.`
+				: `"${media.name}" sudah ada di antrean pemeriksaan.`;
+			await loadDaStatus();
 		} catch (reason) {
 			error = errMessage(reason);
 		} finally {
@@ -770,7 +765,7 @@
 			onclick={(e) => {
 				e.stopPropagation();
 				void checkAiSignals(row);
-			}}>{aiBusyId === row.id ? 'Mengecek…' : tr('Cek DA & AI')}</button
+			}}>{aiBusyId === row.id ? 'Mengantrekan…' : tr('Cek DA & AI')}</button
 		>
 		{#if row.status === 'active'}
 			<button

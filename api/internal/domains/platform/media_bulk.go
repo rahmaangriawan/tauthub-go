@@ -614,6 +614,51 @@ func (d *Deps) MediaSEORefreshAll(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// MediaSEORefreshOne: POST /v1/platform/media/{mediaId}/seo-refresh — antrekan
+// pemeriksaan DA/AI untuk SATU media (tombol "Cek DA & AI" per baris).
+//
+// Endpoint sinkron `POST /media/{mediaId}/seo` tetap ada untuk pemanggil yang
+// memang menunggu hasilnya, tapi UI tidak boleh memakainya: satu pemeriksaan
+// butuh 24-30 detik (pengukuran nyata) sementara klien memutus di 12 detik.
+// Di sini pekerjaan dilempar ke job `media_seo_refresh`, jadi responsnya
+// seketika dan tabel menyusul lewat indikator antrean.
+func (d *Deps) MediaSEORefreshOne(w http.ResponseWriter, r *http.Request) {
+	user, _, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	mediaID := chiParam(r, "mediaId")
+	media, err := d.queryRow(r.Context(), `
+		SELECT m.id, COALESCE(m.website_url, '') AS website_url,
+		       EXISTS (SELECT 1 FROM jobs j
+		               WHERE j.kind = 'media_seo_refresh' AND j.status IN ('pending','running')
+		                 AND j.payload->>'mediaId' = m.id) AS queued
+		FROM media m WHERE m.id = $1 AND m.status <> 'hidden' LIMIT 1`, mediaID)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	if media == nil {
+		writeErr(w, d, errNotFound("Media tidak ditemukan"))
+		return
+	}
+	row := ptRow(ptNormalizeMap(media))
+	if strings.TrimSpace(row.strOr("website_url", "")) == "" {
+		writeErr(w, d, errUnprocessable("Media belum memiliki website/domain yang bisa diperiksa."))
+		return
+	}
+	if row.boolOr("queued", false) {
+		writeJSON(w, http.StatusOK, map[string]any{"queued": false, "reason": "already_queued"})
+		return
+	}
+	if _, jErr := d.mpEnqueueJob(r.Context(), "media_seo_refresh", map[string]any{"mediaId": mediaID}, 2); jErr != nil {
+		writeErr(w, d, jErr)
+		return
+	}
+	d.audit(r.Context(), user.ID, "media.seo_refresh_one", "media", mediaID)
+	writeJSON(w, http.StatusAccepted, map[string]any{"queued": true})
+}
+
 // ---------- GET /v1/platform/media/seo-refresh-status ----------
 
 // MediaSEORefreshStatus: indikator antrean cek DA — berapa media yang masih
