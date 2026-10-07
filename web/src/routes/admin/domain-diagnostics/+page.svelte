@@ -48,7 +48,7 @@
 		{ label: string; tone: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' }
 	> = {
 		verified: { label: 'Terverifikasi', tone: 'success' },
-		blocked_by_waf: { label: 'Diblokir WAF mitra', tone: 'warning' },
+		blocked_by_waf: { label: 'Diblokir dari server (WAF/jaringan)', tone: 'warning' },
 		token_not_found: { label: 'Kode tidak ditemukan', tone: 'warning' },
 		token_mismatch: { label: 'Kode lama terpasang', tone: 'warning' },
 		unreachable: { label: 'Situs tak terjangkau', tone: 'danger' },
@@ -74,7 +74,7 @@
 			hint: 'Tersambung, tapi server mitra membalas error. Sering 403 dari Cloudflare/WAF yang memblokir akses dari IP server.'
 		},
 		waf: {
-			label: 'Diblokir WAF mitra',
+			label: 'Diblokir dari server (WAF/jaringan)',
 			hint: 'Situs hidup, tapi WAF/Cloudflare mitra menolak akses dari IP server (403). Tidak dihitung gagal — verifikasi bisa lewat DNS TXT.'
 		},
 		txt: {
@@ -270,7 +270,7 @@
 
 	{#if summary}
 		<div class="mt-4 flex flex-wrap gap-3">
-			{#each [['blocked_by_waf', 'Diblokir WAF mitra'], ['tls_error', 'Sertifikat TLS bermasalah'], ['unreachable', 'Situs tak terjangkau'], ['token_mismatch', 'Kode lama terpasang'], ['token_not_found', 'Kode tidak ditemukan'], ['never_checked', tr('Belum pernah dicek')]] as [key, label] (key)}
+			{#each [['blocked_by_waf', 'Diblokir server (WAF/jaringan)'], ['tls_error', 'Sertifikat TLS bermasalah'], ['unreachable', 'Situs tak terjangkau'], ['token_mismatch', 'Kode lama terpasang'], ['token_not_found', 'Kode tidak ditemukan'], ['never_checked', tr('Belum pernah dicek')]] as [key, label] (key)}
 				<div class="app-card min-w-[190px] p-3">
 					<p class="text-xs text-muted-foreground">{label}</p>
 					<p class="text-2xl font-bold">{summary[key as keyof Summary]}</p>
@@ -293,7 +293,7 @@
 				}}
 				options={[
 					{ value: 'all', label: 'Perlu perhatian' },
-					{ value: 'blocked_by_waf', label: 'Diblokir WAF mitra' },
+					{ value: 'blocked_by_waf', label: 'Diblokir server (WAF/jaringan)' },
 					{ value: 'unreachable', label: 'Situs tak terjangkau' },
 					{ value: 'tls_error', label: 'Sertifikat TLS bermasalah' },
 					{ value: 'token_mismatch', label: 'Kode lama terpasang' },

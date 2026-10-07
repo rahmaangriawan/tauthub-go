@@ -39,3 +39,34 @@ func TestTxtVerifiedEmptyToken(t *testing.T) {
 		t.Error("token kosong tidak boleh memicu TXT lookup")
 	}
 }
+
+// Pemisahan "tidak bisa menyambung" dari "situs mati". Koneksi yang
+// menggantung/di-drop dari IP server tidak boleh disebut situs mati (dulu
+// memicu peringatan "artikel perlu ditinjau" untuk situs yang normal), sedangkan
+// domain yang tidak resolve tetap unreachable.
+func TestIsNoConnectError(t *testing.T) {
+	timeout := []string{
+		"Get \"https://jasarelease.co.id/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+		"dial tcp 103.16.198.177:443: i/o timeout",
+		"dial tcp 1.2.3.4:443: connection timed out",
+		"net/http: TLS handshake timeout",
+	}
+	for _, msg := range timeout {
+		if !isNoConnectError(errors.New(msg)) {
+			t.Errorf("harus dianggap tidak bisa menyambung: %q", msg)
+		}
+	}
+	mati := []string{
+		"dial tcp: lookup yzab.id on 127.0.0.5:53: no such host",
+		"dial tcp 127.0.0.1:80: connect: connection refused",
+		"x509: certificate signed by unknown authority",
+	}
+	for _, msg := range mati {
+		if isNoConnectError(errors.New(msg)) {
+			t.Errorf("tidak boleh dianggap blokir jaringan: %q", msg)
+		}
+	}
+	if isNoConnectError(nil) {
+		t.Error("error nil tidak boleh dianggap blokir jaringan")
+	}
+}

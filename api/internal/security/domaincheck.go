@@ -9,9 +9,11 @@ package security
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -69,6 +71,20 @@ func VerifyDomainOwnership(ctx context.Context, target, token string) DomainChec
 			return DomainCheckOutcome{
 				Result: "tls_error", Stage: "tls",
 				Message: "Sertifikat TLS bermasalah: " + firstLine(err.Error()),
+				Trace:   trace,
+			}
+		}
+		// DNS normal tapi koneksi tidak pernah menyambung (menggantung lalu
+		// timeout, atau di-reset). Pola khas host yang memblokir IP datacenter:
+		// situsnya hidup di browser pengunjung, hanya akses dari server kami yang
+		// ditolak. Dulu semuanya dicap "tidak terjangkau" sehingga admin menerima
+		// peringatan "artikel perlu ditinjau" untuk situs yang sebenarnya normal
+		// (mis. jasarelease.co.id dan conference.co.id, satu IP yang sama: TCP :443
+		// tidak pernah tersambung dari server, tapi 200 dari jaringan lain).
+		if isNoConnectError(err) || code == "ECONNRESET" || code == "EHOSTUNREACH" || code == "ENETUNREACH" {
+			return DomainCheckOutcome{
+				Result: "blocked_by_waf", Stage: "fetch",
+				Message: "DNS normal, tapi koneksi dari IP server tidak tersambung (kemungkinan diblokir firewall mitra) — situs tetap dianggap hidup.",
 				Trace:   trace,
 			}
 		}
@@ -214,4 +230,32 @@ func DomainErrCode(err error) string {
 		}
 	}
 	return ""
+}
+
+// isNoConnectError: error yang berarti "kami tidak pernah berhasil menyambung"
+// (menggantung sampai timeout / handshake TLS kelamaan). Dipakai untuk
+// memisahkan blokir jaringan dari situs yang benar-benar mati — pemeriksaan ini
+// dijalankan dari IP datacenter, dan banyak host mitra men-drop koneksi dari
+// rentang IP tersebut.
+func isNoConnectError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || os.IsTimeout(err) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	for _, needle := range []string{
+		"context deadline exceeded",
+		"client.timeout exceeded",
+		"timeout awaiting response headers",
+		"i/o timeout",
+		"tls handshake timeout",
+		"connection timed out",
+	} {
+		if strings.Contains(msg, needle) {
+			return true
+		}
+	}
+	return false
 }
