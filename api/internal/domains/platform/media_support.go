@@ -274,6 +274,8 @@ func (d *Deps) mpMediaJSON(row ptRow, markupPercent float64) map[string]any {
 		"integration_type":       row.anyOrNil("integration_type"),
 		"partner_id":             row.anyOrNil("partner_id"),
 		"partner_name":           row.anyOrNil("partner_name"),
+		"partner_wa_set":         mpPartnerWASet(row),
+		"partner_wa_required":    row.intOr("partner_media_count", 0) > partnerWAThreshold && !mpPartnerWASet(row),
 		"auto_publish":           row.boolOr("auto_publish", false),
 		"referred_by_partner_id": row.anyOrNil("referred_by_partner_id"),
 		"referrer_name":          row.anyOrNil("referrer_name"),

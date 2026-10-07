@@ -398,6 +398,12 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 		topikJSON = marshalJSONArr(topik)
 	}
 
+	// Mitra dengan lebih dari 2 media wajib mengisi nomor WhatsApp + izin dihubungi.
+	if d.waRequirementMissing(r.Context(), partner.UserID, partner.ID, 1) {
+		writeWARequired(w)
+		return
+	}
+
 	if err := d.exec(r.Context(), `
 		INSERT INTO media (id, name, slug, category, media_type, description, traffic_estimate, max_links, allow_hyperlink, website_url, price, pricing_type, price_status, credit_cost, status, integration_type, partner_id, notes, publication_mode, bahasa_artikel, label_sponsor, word_count_mode, allow_embed, topik_terlarang, contoh_artikel_url, dewan_pers_verified, dewan_pers_note, dewan_pers_cert_no, created_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'menunggu_review', $13, 'pending_review', $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)`,

@@ -89,6 +89,8 @@ export type Media = {
 	integration_type: string;
 	partner_id: string | null;
 	partner_name?: string | null;
+	partner_wa_set?: boolean;
+	partner_wa_required?: boolean;
 	referred_by_partner_id?: string | null;
 	referrer_name?: string | null;
 	publish_defaults: unknown;

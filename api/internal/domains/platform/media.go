@@ -21,6 +21,8 @@ import (
 const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.description, m.website_url, m.contoh_artikel_url, m.adapter_url, m.price, m.credit_cost, m.status, m.integration_type, m.partner_id, p.name AS partner_name, u.referred_by_partner_id, referrer.name AS referrer_name, m.publish_defaults, m.notes, m.traffic_estimate, m.media_tier, m.media_quality_score, m.media_quality_notes, m.health_score, m.health_breakdown, m.health_computed_at, m.auto_publish, m.word_count_mode, m.pending_changes, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.rejection_reason, m.reviewed_by, m.reviewed_at, m.created_by, m.created_at, m.updated_at, m.pricing_type, m.price_status, m.negotiated_price,
        COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv,
        sm.da AS seo_da, sm.ai_trust_score AS seo_ai_trust, sm.ai_citation AS seo_ai_citation, sm.checked_at AS seo_checked_at,
+       COALESCE(np.wa_number, '') AS partner_wa_number, COALESCE(np.wa_consent, FALSE) AS partner_wa_consent,
+       (SELECT COUNT(*) FROM media mm WHERE mm.partner_id = m.partner_id AND mm.status <> 'hidden') AS partner_media_count,
        CASE
          WHEN m.integration_type = 'manual' THEN FALSE
          WHEN m.integration_type = 'custom_web' THEN COALESCE(m.custom_web_status, '') = 'connected'
@@ -40,7 +42,13 @@ FROM media m
 LEFT JOIN partners p ON p.id = m.partner_id
 LEFT JOIN users u ON u.id = p.user_id
 LEFT JOIN partners referrer ON referrer.id = u.referred_by_partner_id
-LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id`
+LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id
+LEFT JOIN notification_preferences np ON np.user_id = p.user_id`
+
+// mpPartnerWASet: mitra sudah punya nomor WA DAN menyetujui dihubungi.
+func mpPartnerWASet(row rowMap) bool {
+	return strings.TrimSpace(row.strOr("partner_wa_number", "")) != "" && row.boolOr("partner_wa_consent", false)
+}
 
 // mpScopedMedia: parity scopedMedia → NotFound "Media not found".
 func (d *Deps) mpScopedMedia(ctx context.Context, mediaID string) (ptRow, error) {

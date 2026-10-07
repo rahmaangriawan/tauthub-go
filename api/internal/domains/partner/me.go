@@ -23,7 +23,9 @@ const partnerMeSelect = `SELECT p.*,
             WHERE m.partner_id = p.id AND pb.status = 'published' AND pb.publish_status = 'publish') AS auto_published,
          (SELECT COUNT(*) FROM publications pb
             JOIN media m ON m.id = pb.media_id
-            WHERE m.partner_id = p.id AND pb.status = 'failed') AS failed_count
+            WHERE m.partner_id = p.id AND pb.status = 'failed') AS failed_count,
+         COALESCE((SELECT nn.wa_number FROM notification_preferences nn WHERE nn.user_id = p.user_id LIMIT 1), '') AS wa_number,
+         COALESCE((SELECT nn.wa_consent FROM notification_preferences nn WHERE nn.user_id = p.user_id LIMIT 1), FALSE) AS wa_consent
        FROM partners p`
 
 func partnerMeJSON(row rowMap) map[string]any {
@@ -32,6 +34,10 @@ func partnerMeJSON(row rowMap) map[string]any {
 	}
 	mediaCount := row.intOr("media_count", 0)
 	pendingCount := row.intOr("pending_count", 0)
+	waNumber := strings.TrimSpace(row.strOr("wa_number", ""))
+	waConsent := row.boolOr("wa_consent", false)
+	// Mitra wajib melengkapi nomor WA begitu medianya lebih dari 2.
+	waRequired := mediaCount > waMediaThreshold && (waNumber == "" || !waConsent)
 	return map[string]any{
 		"id":                            row.raw("id"),
 		"public_id":                     row.raw("public_id"),
@@ -44,6 +50,9 @@ func partnerMeJSON(row rowMap) map[string]any {
 		"bank_account_name":             row.raw("bank_account_name"),
 		"media_count":                   mediaCount,
 		"pending_count":                 pendingCount,
+		"wa_number_set":                 waNumber != "",
+		"wa_consent":                    waConsent,
+		"wa_required":                   waRequired,
 		"integration_terms_accepted_at": row.timePtr("integration_terms_accepted_at"),
 		"publication_stats": map[string]any{
 			"draft_delivered": row.intOr("draft_delivered", 0),

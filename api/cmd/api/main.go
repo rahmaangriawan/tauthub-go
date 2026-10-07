@@ -671,6 +671,7 @@ func run() error {
 			authed.Post("/platform/partners", platformDeps.PartnerCreate)
 			authed.Get("/platform/partners/{partnerId}", platformDeps.PartnerGet)
 			authed.Put("/platform/partners/{partnerId}", platformDeps.PartnerUpdate)
+			authed.Post("/platform/partners/{partnerId}/wa-reminder", platformDeps.AdminPartnerWAReminder)
 			authed.Delete("/platform/partners/{partnerId}", platformDeps.PartnerDelete)
 			authed.Get("/platform/partners/{partnerId}/connections", platformDeps.PartnerConnections)
 			authed.Post("/platform/partners/{partnerId}/connections", platformDeps.PartnerConnections)

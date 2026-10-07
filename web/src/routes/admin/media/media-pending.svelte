@@ -31,6 +31,8 @@
 	let search = $state('');
 	let page = $state(1);
 	let reviewTarget = $state<Media | null>(null);
+	// Media milik mitra tanpa nomor WA: ACC butuh konfirmasi eksplisit.
+	let waConfirm = $state<Media | null>(null);
 	let rejectReason = $state('');
 	let reviewBusy = $state(false);
 
@@ -189,6 +191,9 @@
 		{#if owner.email && owner.email !== owner.name}
 			<p class="break-all text-xs text-muted-foreground">{owner.email}</p>
 		{/if}
+		{#if row.partner_wa_required}
+			<span class="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold" style="background-color: var(--warning-soft); color: var(--warning);">{tr('WA mitra belum diisi')}</span>
+		{/if}
 		<div class="mt-1">
 			{#if row.referred_by_partner_id}
 				<Badge
@@ -220,7 +225,7 @@
 			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
 			style="color: var(--success);"
 			disabled={reviewBusy}
-			onclick={() => void approveMedia(row)}>Setujui</button
+			onclick={() => (row.partner_wa_required ? (waConfirm = row) : void approveMedia(row))}>Setujui</button
 		>
 		<button
 			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
@@ -317,7 +322,24 @@
 				style="background-color: var(--destructive);"
 				disabled={reviewBusy}
 				onclick={rejectMedia}>{reviewBusy ? 'Menyimpan…' : 'Tolak Media'}</button
-			>
-		</div>
-	</Modal>
-{/if}
+					>
+				</div>
+			</Modal>
+		{/if}
+
+	{#if waConfirm}
+		<Modal title={tr('Mitra belum mengisi nomor WhatsApp')} maxWidth="md" onClose={() => (waConfirm = null)}>
+			<p class="text-sm">
+				<strong>{waConfirm.name}</strong> {tr('milik mitra yang punya lebih dari 2 media tetapi belum mengisi nomor WhatsApp. Kalau ada pesanan, mitranya sulit dikonfirmasi.')}
+			</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr('Kamu tetap bisa menyetujui — pertimbangkan kirim pengingat dulu dari halaman Mitra.')}</p>
+			{#snippet footer()}
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (waConfirm = null)}>{tr('Batal')}</button>
+				<button
+					class="app-btn app-btn-primary"
+					type="button"
+					onclick={() => { const target = waConfirm; waConfirm = null; if (target) void approveMedia(target); }}
+				>{tr('Tetap setujui')}</button>
+			{/snippet}
+		</Modal>
+	{/if}

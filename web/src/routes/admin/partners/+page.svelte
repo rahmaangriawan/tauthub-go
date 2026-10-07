@@ -8,7 +8,7 @@
 	import { onMount } from 'svelte';
 	import {
 		ArrowUpRight, Check, Copy, Ellipsis, FileText, Image as ImageIcon,
-		Newspaper, Search, ShieldCheck, Trash, TriangleAlert, UsersRound
+		MessageCircle, Newspaper, Search, ShieldCheck, Trash, TriangleAlert, UsersRound
 	} from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
@@ -78,6 +78,7 @@
 	let pageNum = $state(1);
 	let exporting = $state(false);
 	let busyId = $state<string | null>(null);
+	let waNotice = $state('');
 
 	// Tambah partner
 	let createOpen = $state(false);
@@ -264,6 +265,20 @@
 		await load();
 	}
 
+	/** Kirim pengingat isi nomor WA (lonceng + email, maksimal 1x per 30 hari). */
+	async function sendWaReminder(partner: Partner) {
+		error = '';
+		waNotice = '';
+		try {
+			const res = await apiRequest(`/v1/platform/partners/${partner.id}/wa-reminder`, { method: 'POST' });
+			const data = (await res.json().catch(() => ({}))) as { detail?: string; sent?: boolean };
+			if (!res.ok) throw new Error(await platformError(res));
+			waNotice = data.detail ?? (data.sent ? tr('Pengingat dikirim.') : tr('Tidak ada yang dikirim.'));
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : tr('Gagal mengirim pengingat.');
+		}
+	}
+
 	async function setStatus(partner: Partner, status: string) {
 		error = '';
 		const res = await apiRequest(`/v1/platform/partners/${partner.id}`, {
@@ -288,6 +303,9 @@
 
 	async function submitRoleChange() {
 		if (!roleTarget || roleBusy) return;
+		// Disimpan sebelum await: TS tidak lagi menganggap roleTarget non-null
+		// setelah beberapa await di dalam blok try.
+		const targetId = roleTarget.id;
 		roleBusy = true;
 		roleError = '';
 		roleNotice = '';
@@ -302,6 +320,14 @@
 			}
 			const data = (await res.json().catch(() => ({}))) as { detail?: string };
 			roleNotice = data.detail ?? (roleNext === 'partner' ? tr('Peran diubah menjadi Mitra.') : tr('Peran diubah menjadi Klien.'));
+			// Mitra yang turun jadi klien tidak lagi bagian daftar mitra aktif:
+			// buang barisnya sekarang, lalu fokuskan tampilan ke mitra aktif dan
+			// sinkronkan ulang dengan server.
+			if (roleNext === 'client') {
+				rows = rows.filter((item) => item.id !== targetId);
+				filterStatus = 'active';
+				pageNum = 1;
+			}
 			await load();
 		} catch (reason) {
 			roleError = reason instanceof Error ? reason.message : tr('Gagal mengubah peran.');
@@ -553,7 +579,7 @@
 			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke pengelolaan partner.")}</p>
 		</div>
 	{:else}
-		<Feedback {loading} {error} loadingText="Memuat partner…" />
+		<Feedback {loading} {error} notice={waNotice} loadingText="Memuat partner…" />
 
 		<div class="app-card mt-4 overflow-x-auto">
 			<table class="w-full text-sm" style="min-width: 1280px;">
@@ -596,10 +622,13 @@
 									<div class="flex flex-col gap-1">
 										<a style="color: var(--primary);" href={`https://wa.me/${row.wa_number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer">{row.wa_number}</a>
 										{#if !row.wa_consent}<Badge label="tanpa izin WA" tone="neutral" />{/if}
-									</div>
-								{:else}
-									<span class="text-xs text-muted-foreground">—</span>
-								{/if}
+										</div>
+							{:else}
+										<span class="text-xs text-muted-foreground">—</span>
+										{#if (row.media_count ?? 0) > 2}
+											<Badge label={tr('WA belum diisi')} tone="warning" />
+										{/if}
+							{/if}
 							</td>
 							<td class="px-4 py-3">
 								{#if row.email_alt1 || row.email_alt2}
@@ -673,6 +702,11 @@
 											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openDocs(row); }}>
 												<ShieldCheck size={14} /> Dokumen
 											</button>
+											{#if (row.media_count ?? 0) > 2 && (!row.wa_number || !row.wa_consent)}
+												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void sendWaReminder(row); }}>
+													<MessageCircle size={14} /> {tr('Kirim pengingat isi WA')}
+												</button>
+											{/if}
 											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; openRoleDialog(row); }}>
 												<UsersRound size={14} /> {tr('Ubah peran (Klien/Mitra)')}
 											</button>

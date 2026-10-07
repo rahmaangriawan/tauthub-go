@@ -23,6 +23,7 @@
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import WaRequiredBanner from '$lib/components/wa-required-banner.svelte';
 		import Sparkline from '$lib/components/sparkline.svelte';
 
 	const partnerId = $derived(page.params.partnerId as string);
@@ -226,6 +227,10 @@
 </script>
 
 <PageTitle title={tr("Ringkasan Mitra")} />
+
+<div class="mb-1">
+	<WaRequiredBanner show={me?.wa_required === true} mediaCount={me?.media_count ?? 0} profileHref={`${base}/profile`} />
+</div>
 
 <section class="flex w-full flex-col gap-5">
 	<!-- 1. Header / sambutan (metrik dari mitra-overview.module.css) -->

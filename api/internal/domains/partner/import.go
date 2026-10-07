@@ -816,6 +816,12 @@ func (d *Deps) MediaImport(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Tidak ada baris valid untuk diimport.")
 		return
 	}
+	// Mitra dengan lebih dari 2 media wajib mengisi nomor WhatsApp + izin dihubungi
+	// (dihitung dari media lama + baris yang akan diimpor).
+	if d.waRequirementMissing(r.Context(), partner.UserID, partner.ID, validCount) {
+		writeWARequired(w)
+		return
+	}
 
 	tcCfg := d.getTcConfig(r)
 	markup := d.getMarkupPercent(r.Context())
