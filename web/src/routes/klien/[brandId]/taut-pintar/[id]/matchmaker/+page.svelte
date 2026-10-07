@@ -704,7 +704,7 @@
 	</div>
 
 	<div class="mt-3">
-		<AgentSteps current={2} lockedSteps={manualFlow ? [1] : undefined} lockedReason={MANUAL_PROFILER_REASON} />
+		<AgentSteps current={1} />
 	</div>
 
 	{#if error}

@@ -243,7 +243,7 @@
 <PageTitle title="Taut Pintar — Ringkasan Distribusi" />
 
 <main>
-	<AgentSteps current={4} tone={bannerState === 'published' ? 'published' : bannerState === 'waiting' ? 'waiting' : undefined} extra="ringkasan" lockedSteps={manualFlow ? [1] : undefined} lockedReason={MANUAL_PROFILER_REASON} />
+	<AgentSteps current={3} tone={bannerState === 'published' ? 'published' : bannerState === 'waiting' ? 'waiting' : undefined} extra="ringkasan" />
 
 	{#if loading}
 		<div class="app-card mt-4 flex items-center justify-between gap-3 p-4">

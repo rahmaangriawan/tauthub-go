@@ -1042,7 +1042,7 @@
 	</div>
 
 	<div class="mt-3">
-		<AgentSteps current={3} lockedSteps={manualFlow ? [1] : undefined} lockedReason={MANUAL_PROFILER_REASON} />
+		<AgentSteps current={2} />
 	</div>
 
 	{#if spokepersons.length > 0}
