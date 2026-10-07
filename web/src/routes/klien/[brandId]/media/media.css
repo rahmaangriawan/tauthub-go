@@ -171,6 +171,8 @@
   padding: 1.5px 7px;
   border-radius: 999px;
   width: fit-content;
+  /* Label pendek seperti "Sumber AI" jangan terbelah dua baris di kolom sempit. */
+  white-space: nowrap;
   cursor: help;
 }
 .bookmarkActionBtn {
