@@ -109,9 +109,16 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		likeBare := "%" + bare + "%"
 		p1 := addArg(like)
 		p2 := addArg(like)
-		clause += " AND (name ILIKE " + p1 + " OR category ILIKE " + p2
+		// website_url selalu ikut dicocokkan dengan bentuk tanpa skema/www, karena
+		// pencarian domain ("siar.co.id") adalah cara paling wajar mencari media.
+		// Sebelumnya klausa ini hanya ditambahkan bila bentuk bare BERBEDA dari teks
+		// aslinya, sehingga pencarian domain polos tidak pernah menyentuh website_url
+		// dan selalu berakhir "media tidak ditemukan".
+		clause += " AND (name ILIKE " + p1 + " OR category ILIKE " + p2 +
+			" OR website_url ILIKE " + addArg(likeBare)
 		if likeBare != like {
-			clause += " OR website_url ILIKE " + addArg(likeBare)
+			// URL lengkap ("https://situs.com/") juga dicocokkan apa adanya.
+			clause += " OR website_url ILIKE " + addArg(like)
 		}
 		clause += ")"
 	}
@@ -265,7 +272,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			// Rekam jejak media: jumlah artikel yang sudah terbit lewat media ini.
 			// Dihitung langsung dari publications agar tidak bergantung pada
 			// kesegaran health_breakdown (health engine jalan berkala).
-			"published_count": publishedCount,
+			"published_count":     publishedCount,
 			"gsc_connected":       gscConnected,
 			"image_required":      standardImageRequired,
 			"is_available":        status == "active",
