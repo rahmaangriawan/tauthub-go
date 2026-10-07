@@ -13,6 +13,7 @@ const id = {
     loading: "Memuat…",
   },
   nav: {
+    changelog: "Apa yang Baru",
     brand: "Beranda",
     media_catalog: "Katalog Media",
     campaigns: "Kampanye",
@@ -224,6 +225,7 @@ const id = {
     no_daily: "Tidak ada data harian.",
   },
   nav_partner: {
+    changelog: "Apa yang Baru",
     group_summary: "RINGKASAN",
     overview: "Ringkasan",
     vip_dashboard: "VIP Dashboard",
@@ -314,6 +316,7 @@ const en = {
     loading: "Loading…",
   },
   nav: {
+    changelog: "What's New",
     brand: "Home",
     media_catalog: "Media Catalog",
     campaigns: "Campaigns",
@@ -525,6 +528,7 @@ const en = {
     no_daily: "No daily data.",
   },
   nav_partner: {
+    changelog: "What's New",
     group_summary: "SUMMARY",
     overview: "Overview",
     vip_dashboard: "VIP Dashboard",

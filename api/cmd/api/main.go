@@ -185,6 +185,11 @@ func run() error {
 
 			authed.Get("/announcements", platformDeps.AnnouncementsList)
 			authed.Post("/announcements/{announcementId}/read", platformDeps.AnnouncementMarkRead)
+
+			// Changelog ("Apa yang Baru") — entri rilis hasil impor admin dari
+			// web/static/changelog.md (dashboard klien & mitra).
+			authed.Get("/changelog", platformDeps.ChangelogList)
+			authed.Post("/changelog/{entryId}/read", platformDeps.ChangelogMarkRead)
 			authed.Post("/auth/2fa/setup", authDeps.TwoFactorSetup)
 			authed.Post("/auth/2fa/enable", authDeps.TwoFactorEnable)
 			authed.Post("/auth/2fa/disable", authDeps.TwoFactorDisable)
@@ -555,6 +560,13 @@ func run() error {
 			authed.Get("/platform/announcements", platformDeps.AdminAnnouncementsList)
 			authed.Post("/platform/announcements", platformDeps.AdminAnnouncementCreate)
 			authed.Delete("/platform/announcements/{announcementId}", platformDeps.AdminAnnouncementDelete)
+
+			// Changelog (sisi admin): impor entri dari web/static/changelog.md,
+			// ubah status terbit, hapus entri.
+			authed.Get("/platform/changelog", platformDeps.AdminChangelogList)
+			authed.Post("/platform/changelog/import", platformDeps.AdminChangelogImport)
+			authed.Patch("/platform/changelog/{entryId}", platformDeps.AdminChangelogUpdate)
+			authed.Delete("/platform/changelog/{entryId}", platformDeps.AdminChangelogDelete)
 
 			// AI.
 			authed.Get("/platform/ai/configuration", platformDeps.AIConfigurationGet)

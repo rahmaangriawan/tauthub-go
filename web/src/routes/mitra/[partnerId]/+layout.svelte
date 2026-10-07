@@ -143,7 +143,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			items: [
 				{ label: i18n.t.nav_partner.integrations, href: `${base}/integrations`, icon: PlugZap, active: isActive(`${base}/integrations`) },
 				{ label: i18n.t.nav_partner.profile, href: `${base}/profile`, icon: Settings, active: isActive(`${base}/profile`) },
-				{ label: i18n.t.nav_partner.notifications, href: `${base}/notifications`, icon: Bell, active: isActive(`${base}/notifications`) }
+				{ label: i18n.t.nav_partner.notifications, href: `${base}/notifications`, icon: Bell, active: isActive(`${base}/notifications`) },
+				{ label: i18n.t.nav_partner.changelog, href: `${base}/changelog`, icon: ScrollText, active: isActive(`${base}/changelog`) }
 			]
 		}
 	]);

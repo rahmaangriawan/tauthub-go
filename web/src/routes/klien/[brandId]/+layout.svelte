@@ -11,7 +11,7 @@
 	import { page } from '$app/state';
 	import {
 		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, Newspaper, Receipt,
-		ShieldCheck, TriangleAlert, UserCircle
+		ScrollText, ShieldCheck, TriangleAlert, UserCircle
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { swr } from '$lib/swr-cache.svelte';
@@ -197,7 +197,10 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		},
 		{
 			label: i18n.t.nav.group_settings,
-			items: [{ label: i18n.t.nav.profile, href: `${base}/profile`, icon: UserCircle, active: isActive(`${base}/profile`) }]
+			items: [
+				{ label: i18n.t.nav.profile, href: `${base}/profile`, icon: UserCircle, active: isActive(`${base}/profile`) },
+				{ label: i18n.t.nav.changelog, href: `${base}/changelog`, icon: ScrollText, active: isActive(`${base}/changelog`) }
+			]
 		}
 	]);
 </script>
