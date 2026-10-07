@@ -168,11 +168,15 @@
   color: var(--primary-foreground, #fff);
   background: var(--primary);
   border: 1px solid var(--primary);
-  /* Hanya berisi ikon centang: rapatkan tanpa ruang untuk teks. */
-  padding: 3px 5px;
-  border-radius: 999px;
-  width: fit-content;
-  white-space: nowrap;
+  /* Hanya berisi ikon centang. Kotaknya dibuat persegi lalu dibulatkan penuh:
+     dengan padding asimetris (5px kiri-kanan, 3px atas-bawah) bentuknya jadi
+     stadion, bukan lingkaran. */
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
   cursor: help;
 }
 .bookmarkActionBtn {
