@@ -7,7 +7,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
-		Bot, Check, ChevronDown, Clock, Coins, ExternalLink, FileText, Hand, Info,
+		Check, ChevronDown, Clock, Coins, ExternalLink, FileText, Hand, Info,
 		Search, SlidersHorizontal, Sparkles, Target, X, Zap
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
@@ -655,7 +655,7 @@
 						<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getAiTrust(m)}</span></td>
 						<td class="modernTd" style="text-align:center">
 							{#if m.seo_ai_citation === true}
-								<span class="aiCitationBadge"><Bot size={11} /> {tr('Sumber AI')}</span>
+								<span class="aiCitationBadge"><Check size={11} /> {tr('Sumber AI')}</span>
 							{:else}
 								<span class="mutedDash">—</span>
 							{/if}

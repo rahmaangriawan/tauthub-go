@@ -9,7 +9,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import {
-		ArrowRight, Bookmark, Bot, Check, Clock, FileText, Info, LayoutGrid,
+		ArrowRight, Bookmark, Check, Clock, FileText, Info, LayoutGrid,
 		Plus, Search, SlidersHorizontal, Trash2, Upload, X, Zap,
 		ChevronLeft, ChevronRight
 	} from '@lucide/svelte';
@@ -1137,7 +1137,7 @@
 
 								<td class="modernTd" style="text-align:center">
 									{#if m.seo_ai_citation === true}
-										<span class="aiCitationBadge"><Bot size={11} />Sumber AI</span>
+										<span class="aiCitationBadge"><Check size={11} />Sumber AI</span>
 									{:else}
 										<span class="mutedDash">—</span>
 									{/if}
