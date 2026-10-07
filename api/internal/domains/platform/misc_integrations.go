@@ -1683,7 +1683,7 @@ func (d *Deps) SEOConfigGet(w http.ResponseWriter, r *http.Request) {
 func igSEOJSON(row ptRow) map[string]any {
 	if row == nil {
 		return map[string]any{
-			"provider": "rapidapi", "host": "domain-metrics-check.p.rapidapi.com",
+			"provider": "rapidapi", "host": mpSeoProviderHost,
 			"api_key_configured": false, "api_key_hint": nil,
 			"similarweb_api_key_configured": false, "serpens_api_key_configured": false,
 			"updated_at": nil,
@@ -1691,7 +1691,7 @@ func igSEOJSON(row ptRow) map[string]any {
 	}
 	return map[string]any{
 		"provider":                      "rapidapi",
-		"host":                          "domain-metrics-check.p.rapidapi.com",
+		"host":                          mpSeoProviderHost,
 		"api_key_configured":            row.has("sealed_api_key"),
 		"api_key_hint":                  ptNullableStr(row, "api_key_hint"),
 		"similarweb_api_key_configured": row.has("sealed_similarweb_api_key"),
@@ -1813,14 +1813,15 @@ func (d *Deps) SEODiagnose(w http.ResponseWriter, r *http.Request) {
 	}
 	reqCtx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	req, rErr := http.NewRequestWithContext(reqCtx, http.MethodGet,
-		"https://domain-metrics-check.p.rapidapi.com/domain-metrics/"+url.PathEscape(domain)+"/", nil)
+	payload, _ := json.Marshal(map[string]string{"q": domain})
+	req, rErr := http.NewRequestWithContext(reqCtx, http.MethodPost, mpSeoProviderURL, strings.NewReader(string(payload)))
 	if rErr != nil {
 		writeErr(w, d, rErr)
 		return
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("x-rapidapi-host", "domain-metrics-check.p.rapidapi.com")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-rapidapi-host", mpSeoProviderHost)
 	req.Header.Set("x-rapidapi-key", apiKey)
 	resp, doErr := security.SafeClient(15 * time.Second).Do(req)
 	if doErr != nil {

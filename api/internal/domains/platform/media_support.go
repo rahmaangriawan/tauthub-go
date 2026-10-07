@@ -507,11 +507,23 @@ func mpClamp100(v float64) *float64 {
 }
 
 // mpFetchSeoMetrics: GET provider domain-metrics (timeout 15s).
+// Provider DA/PA (RapidAPI). Akun admin berlangganan "domain-da-pa-checker",
+// bukan "domain-metrics-check" yang dipakai versi lama: host lama menjawab
+// 403 "You are not subscribed to this API." walaupun kuncinya benar (host itu
+// memang masih ada — host yang tidak ada menjawab 404 "API doesn't exists").
+const (
+	mpSeoProviderHost = "domain-da-pa-checker.p.rapidapi.com"
+	mpSeoProviderURL  = "https://" + mpSeoProviderHost + "/v1/getDaPa"
+)
+
+// mpFetchSeoMetrics: POST provider DA/PA (timeout 15s). Balasannya
+// {domain_authority, page_authority, spam_score, external_urls_to_url, …}.
 func (d *Deps) mpFetchSeoMetrics(ctx context.Context, domain, apiKey string) (map[string]any, *mpSeoError) {
-	target := "https://domain-metrics-check.p.rapidapi.com/domain-metrics/" + url.PathEscape(domain) + "/"
-	status, body := mpSafeGet(ctx, target, map[string]string{
+	payload, _ := json.Marshal(map[string]string{"q": domain})
+	status, body := mpSafePostJSON(ctx, mpSeoProviderURL, string(payload), map[string]string{
 		"accept":          "application/json",
-		"x-rapidapi-host": "domain-metrics-check.p.rapidapi.com",
+		"content-type":    "application/json",
+		"x-rapidapi-host": mpSeoProviderHost,
 		"x-rapidapi-key":  apiKey,
 	}, 15*time.Second)
 	if status == 0 {
@@ -520,7 +532,7 @@ func (d *Deps) mpFetchSeoMetrics(ctx context.Context, domain, apiKey string) (ma
 	if status < 200 || status >= 300 {
 		switch status {
 		case 401, 403:
-			return nil, mpSeoErr(http.StatusServiceUnavailable, "Autentikasi provider SEO gagal. Perbarui RapidAPI key.")
+			return nil, mpSeoErr(http.StatusServiceUnavailable, "Autentikasi provider SEO gagal. Pastikan akun langganan API DA/PA yang dipakai (domain-da-pa-checker), lalu perbarui key-nya.")
 		case 429:
 			return nil, mpSeoErr(http.StatusServiceUnavailable, "Provider SEO sedang rate-limited. Coba lagi nanti.")
 		case 404:
@@ -536,9 +548,19 @@ func (d *Deps) mpFetchSeoMetrics(ctx context.Context, domain, apiKey string) (ma
 	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
 		return nil, mpSeoErr(http.StatusBadGateway, "Respons provider SEO tidak dapat dibaca (malformed).")
 	}
-	da := mpFindMetric(parsed, "mozda", 0)
-	pa := mpFindMetric(parsed, "mozpa", 0)
-	spam := mpFindMetric(parsed, "mozspam", 0)
+	da := mpFindMetric(parsed, "domain_authority", 0)
+	pa := mpFindMetric(parsed, "page_authority", 0)
+	spam := mpFindMetric(parsed, "spam_score", 0)
+	// Bentuk lama (mozda/mozpa/mozspam) tetap didukung bila providernya berganti lagi.
+	if da == nil {
+		da = mpFindMetric(parsed, "mozda", 0)
+	}
+	if pa == nil {
+		pa = mpFindMetric(parsed, "mozpa", 0)
+	}
+	if spam == nil {
+		spam = mpFindMetric(parsed, "mozspam", 0)
+	}
 	if da == nil || pa == nil {
 		return nil, mpSeoErr(http.StatusServiceUnavailable, "Provider SEO tidak mengembalikan DA/PA.")
 	}

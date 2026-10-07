@@ -507,13 +507,18 @@ func mpShortError(err error, max int) string {
 // ---------- POST /v1/platform/media/seo-refresh-all ----------
 
 // mpSeoNeedsCheck: predikat "media belum punya skor" — belum ada baris metrik,
-// atau DA / AI Trust masih kosong. Media yang skornya sudah ada TIDAK diperiksa
-// ulang otomatis (pemeriksaan berkala dihapus atas permintaan pemilik produk);
-// yang masih kosong dicoba lagi paling cepat sekali per hari supaya kuota
-// penyedia tetap aman. Semua kueri memakai alias `sm` untuk media_seo_metrics.
+// atau DA / AI Trust masih kosong. Media yang skornya sudah ada tidak diperiksa
+// ulang. Semua kueri memakai alias `sm` untuk media_seo_metrics.
+//
+// Tanpa penahan waktu: tombol ini dijalankan karena admin memang minta, dan
+// penahan "sekali per hari" pernah membuat tombolnya menjawab "semua media sudah
+// punya skor" tepat setelah kunci penyedia diperbaiki (semua media baru dicek
+// beberapa menit sebelumnya sehingga terlewat). Pembatas spam-nya sekarang:
+// dedupe job pending/running + rate limit 2 permintaan/menit. Penahan harian
+// tetap dipakai jalur otomatis (sweep scheduler + pemicu saat media dibuat).
 const mpSeoNeedsCheck = `
 			  (sm.media_id IS NULL OR sm.checked_at IS NULL
-			   OR ((sm.da IS NULL OR sm.ai_trust_score IS NULL) AND sm.checked_at < NOW() - INTERVAL '1 day'))`
+			   OR sm.da IS NULL OR sm.ai_trust_score IS NULL)`
 
 // mpStaleSeoWhere: predikat media yang metrik SEO/AI-nya perlu diperiksa.
 const mpStaleSeoWhere = `
@@ -524,14 +529,11 @@ const mpStaleSeoWhere = `
 // mpDaMissingWhere: predikat tombol "Cek DA semua" — media aktif yang DOMAIN
 // AUTHORITY-nya belum ada. Pemeriksaan DA dan AI Trust dijalankan oleh job yang
 // sama (satu panggilan penyedia + satu pengukuran kecepatan), jadi tombol ini
-// memilih media berdasarkan DA; media yang sudah punya DA dilewati. Percobaan
-// ulang dibatasi sekali per hari supaya penyedia tidak dihajar saat DA memang
-// belum bisa diambil (mis. kunci belum berlangganan).
+// memilih media berdasarkan DA; media yang sudah punya DA dilewati.
 const mpDaMissingWhere = `
 			m.status = 'active'
 			  AND m.website_url IS NOT NULL AND m.website_url <> ''
-			  AND sm.da IS NULL
-			  AND (sm.checked_at IS NULL OR sm.checked_at < NOW() - INTERVAL '1 day')`
+			  AND sm.da IS NULL`
 
 // MediaSEORefreshAll: antrekan pemeriksaan DA/SEO untuk media yang metriknya
 // belum ada. Dijalankan di latar lewat job `media_seo_refresh` (kind yang sama

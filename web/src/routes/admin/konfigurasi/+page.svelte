@@ -785,7 +785,7 @@
 					</div>
 					<p class="text-sm text-muted-foreground">{tr("API server-side untuk fitur")}<strong>Cek DA/PA</strong>{tr("di dashboard Mitra (Domain & Page Authority media). Tanpa key ini, mitra yang klik Cek DA/PA akan melihat pesan \"RapidAPI SEO belum dikonfigurasi oleh Admin\". Key tidak pernah ditampilkan atau dikirim ke browser.")}</p>
 					<div class="rounded-lg border px-3 py-2 text-xs text-muted-foreground">
-						Host: <code class="rounded bg-secondary px-1">{seoConfig?.host ?? 'domain-metrics-check.p.rapidapi.com'}</code>
+						Host: <code class="rounded bg-secondary px-1">{seoConfig?.host ?? 'domain-da-pa-checker.p.rapidapi.com'}</code>
 						{seoConfig?.api_key_hint ? ` · Key ${seoConfig.api_key_hint}` : ''}
 					</div>
 					<form class="space-y-3" onsubmit={saveSeo}>
