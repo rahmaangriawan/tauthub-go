@@ -269,9 +269,26 @@ func (d *Deps) AdminChangelogImport(w http.ResponseWriter, r *http.Request) {
 			if runes := []rune(notifTitle); len(runes) > 180 {
 				notifTitle = string(runes[:180])
 			}
+			// Tautan per peran: tanpa ini lonceng memakai cadangan bawaan
+			// ({base}/publications) sehingga entri "Apa yang Baru" membuka halaman
+			// publikasi, bukan halaman changelog-nya.
 			n, err := d.execRows(r.Context(), `
-				INSERT INTO notifications (id, user_id, type, title, body)
-				SELECT gen_random_uuid()::text, x.id, 'changelog.new', $1, left($2, 500)
+				INSERT INTO notifications (id, user_id, type, title, body, link)
+				SELECT gen_random_uuid()::text, x.id, 'changelog.new', $1, left($2, 500),
+				       CASE x.role
+				         WHEN 'client' THEN (
+				           SELECT '/klien/' || b.public_id || '/changelog'
+				           FROM brand_memberships bm
+				           JOIN brands b ON b.id = bm.brand_id
+				           WHERE bm.user_id = x.id
+				           ORDER BY bm.created_at, bm.id
+				           LIMIT 1
+				         )
+				         WHEN 'partner' THEN (
+				           SELECT '/mitra/' || p.public_id || '/changelog'
+				           FROM partners p WHERE p.user_id = x.id ORDER BY p.id LIMIT 1
+				         )
+				       END
 				FROM users x
 				WHERE x.is_active = TRUE AND x.role IN ('client', 'partner')`,
 				notifTitle, summary)

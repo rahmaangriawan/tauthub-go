@@ -314,9 +314,13 @@
 		const target = type.startsWith('announcement')
 			? link || `${fallbackBase}/notifications`
 			: link;
+		// Cadangan harus sesuai jenis notifikasi: entri "Apa yang Baru" tanpa
+		// tautan dulu jatuh ke /publications sehingga membuka halaman yang salah.
+		const fallbackLink =
+			type === 'changelog.new' ? `${fallbackBase}/changelog` : `${fallbackBase}/publications`;
 		await openNotificationLink({
 			link: target,
-			fallbackLink: `${fallbackBase}/publications`,
+			fallbackLink,
 			push: (href) => goto(href),
 			markRead: async () => {
 				if (readable) {
