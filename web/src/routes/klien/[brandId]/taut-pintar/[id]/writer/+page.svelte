@@ -1216,16 +1216,6 @@
 						</p>
 					</div>
 				</div>
-				{#if !manualFlow}
-					<button class="app-btn app-btn-primary" type="button" disabled={bulkRunning || pendingCount === 0 || viewOnly} title={generateTooltip} onclick={generateAll}>
-						{#if bulkRunning}<LoaderCircle size={16} class="animate-spin" />{:else}<Sparkles size={16} />{/if}
-						{bulkRunning
-							? `${tr('Membuat')} ${bulkProgress ? `${bulkProgress.done}/${bulkProgress.total}` : ''}…`
-							: cost.writing > 0
-								? `${tr('Generate Semua Artikel')} · ${toRp(cost.writing)}`
-								: tr('Generate Semua Artikel')}
-					</button>
-				{/if}
 			</div>
 
 			{#if selected.length === 0}
