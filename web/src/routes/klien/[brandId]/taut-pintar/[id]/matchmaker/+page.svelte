@@ -655,7 +655,7 @@
 						<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getAiTrust(m)}</span></td>
 						<td class="modernTd" style="text-align:center">
 							{#if m.seo_ai_citation === true}
-								<span class="aiCitationBadge"><Check size={11} /> {tr('Sumber AI')}</span>
+								<span class="aiCitationBadge" title={tr('Sumber AI')} aria-label={tr('Sumber AI')}><Check size={11} /></span>
 							{:else}
 								<span class="mutedDash">—</span>
 							{/if}

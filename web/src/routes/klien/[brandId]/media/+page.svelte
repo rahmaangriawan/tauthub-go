@@ -1137,7 +1137,7 @@
 
 								<td class="modernTd" style="text-align:center">
 									{#if m.seo_ai_citation === true}
-										<span class="aiCitationBadge"><Check size={11} />Sumber AI</span>
+										<span class="aiCitationBadge" title="Sumber AI" aria-label="Sumber AI"><Check size={11} /></span>
 									{:else}
 										<span class="mutedDash">—</span>
 									{/if}

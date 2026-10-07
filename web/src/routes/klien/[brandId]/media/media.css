@@ -168,10 +168,10 @@
   color: #1d4ed8;
   background: #eff6ff;
   border: 1px solid #bfdbfe;
-  padding: 1.5px 7px;
+  /* Hanya berisi ikon centang: rapatkan tanpa ruang untuk teks. */
+  padding: 3px 5px;
   border-radius: 999px;
   width: fit-content;
-  /* Label pendek seperti "Sumber AI" jangan terbelah dua baris di kolom sempit. */
   white-space: nowrap;
   cursor: help;
 }
