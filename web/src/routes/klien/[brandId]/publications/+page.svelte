@@ -159,10 +159,9 @@
 	const RESETTABLE = new Set(['processing', 'failed', 'retrying', 'queued', 'cancelled']);
 	const IN_FLIGHT = ['queued', 'processing', 'retrying'];
 
-	/** tcLabel — konversi rupiah → TC dengan rate aktif (parity). */
-	function tcLabel(rupiah: number, rate: number): string {
-		const tc = Math.max(0, Math.round(Number(rupiah) / Math.max(1, rate)));
-		return `${tc.toLocaleString('id-ID')} TC`;
+	/** Tampilan berbahasa rupiah: nilai rupiah ditampilkan apa adanya. */
+	function tcLabel(rupiah: number, _rate: number): string {
+		return `Rp ${Math.max(0, Math.round(Number(rupiah) || 0)).toLocaleString('id-ID')}`;
 	}
 
 	const fmtDate = (v: string | null) =>

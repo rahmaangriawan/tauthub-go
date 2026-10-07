@@ -150,7 +150,7 @@
 					<p class="text-lg font-bold">{stats?.published_media ?? 0}</p>
 				</div>
 				<div class="rounded-lg border p-3 text-center">
-					<p class="text-xs text-muted-foreground">TC terpakai</p>
+					<p class="text-xs text-muted-foreground">Terpakai</p>
 					<p class="text-lg font-bold">{stats?.tc_used ?? 0} TC</p>
 				</div>
 			</div>

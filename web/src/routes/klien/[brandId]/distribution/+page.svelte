@@ -82,9 +82,8 @@
 	const fmtNum = (n: unknown) => Number(n ?? 0).toLocaleString('id-ID');
 	const fmtDate = (v: unknown) =>
 		v ? new Date(v as string).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '—';
-	// tcLabel: nilai rupiah → "N TC" memakai rate_idr aktif (parity app lama).
-	const tcLabel = (amountIdr: number, rate: number) =>
-		`${fmtNum(Math.round(Number(amountIdr || 0) / Math.max(1, rate)))} TC`;
+	// Tampilan berbahasa rupiah: nilai rupiah ditampilkan apa adanya.
+	const tcLabel = (amountIdr: number, _rate: number) => `Rp ${fmtNum(Number(amountIdr || 0))}`;
 </script>
 
 <PageTitle title="Overview Distribusi" />
@@ -113,13 +112,13 @@
 				</div>
 				{#if wallet}
 					<div>
-						<p class="text-xs text-muted-foreground">{tr("Saldo TC tersedia")}</p>
-						<p class="text-xl font-bold tabular-nums">{fmtNum(wallet.available_tc)} TC</p>
+						<p class="text-xs text-muted-foreground">{tr("Saldo tersedia")}</p>
+						<p class="text-xl font-bold tabular-nums">Rp {fmtNum(wallet.available_tc * wallet.rate_idr)}</p>
 						<p class="text-[11px] text-muted-foreground">{tr("bisa dipakai untuk publikasi")}</p>
 					</div>
-					<div title={tr("TC yang ditahan untuk publikasi yang belum final. Terbit → jadi terpakai; ditolak/batal → kembali ke saldo tersedia.")}>
-						<p class="text-xs text-muted-foreground">Reserved TC ⓘ</p>
-						<p class="text-xl font-bold tabular-nums">{fmtNum(wallet.reserved_tc)} TC</p>
+					<div title={tr("Saldo yang ditahan untuk publikasi yang belum final. Terbit → jadi terpakai; ditolak/batal → kembali ke saldo tersedia.")}>
+						<p class="text-xs text-muted-foreground">Tertahan ⓘ</p>
+						<p class="text-xl font-bold tabular-nums">Rp {fmtNum(wallet.reserved_tc * wallet.rate_idr)}</p>
 						<p class="text-[11px] text-muted-foreground">ditahan publikasi belum final</p>
 					</div>
 				{/if}
@@ -170,7 +169,7 @@
 								<div class="min-w-0">
 									<p class="truncate text-sm font-medium">{row.name}</p>
 									<p class="text-[11px] text-muted-foreground">
-										{Number(row.publication_count ?? 0)} publikasi · {fmtNum(row.tc_used)} TC terpakai
+										{Number(row.publication_count ?? 0)} publikasi · Rp {fmtNum(Number(row.tc_used ?? 0) * (wallet?.rate_idr ?? 1000))} terpakai
 									</p>
 								</div>
 								<span class="shrink-0 rounded-full px-2 py-0.5 text-[11px]" style="background: var(--accent); color: var(--accent-foreground);">

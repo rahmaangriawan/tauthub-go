@@ -439,7 +439,7 @@
 					<p class="text-lg font-bold">{shareFor.stats.published_media ?? 0}</p>
 				</div>
 				<div class="min-w-[120px] flex-1">
-					<p class="text-xs text-muted-foreground">TC terpakai</p>
+					<p class="text-xs text-muted-foreground">Terpakai</p>
 					<p class="text-lg font-bold">{shareFor.stats.tc_used ?? 0}</p>
 				</div>
 			</div>

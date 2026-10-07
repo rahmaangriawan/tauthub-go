@@ -140,7 +140,7 @@
 		reportMsg = '';
 		const claimed = Number(reportTc);
 		if (!Number.isFinite(claimed) || claimed <= 0) {
-			reportErr = tr('Jumlah TC harus lebih dari 0.');
+			reportErr = tr('Jumlah rupiah harus lebih dari 0.');
 			return;
 		}
 		if (reportDesc.trim().length < 10) {
@@ -182,14 +182,14 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{tr("Kredit Saldo")}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Saldo Tulisio Credit (TC) untuk eksekusi publikasi.")}</p>
+			<h1 class="text-2xl font-semibold tracking-tight">{tr("Saldo")}</h1>
+			<p class="mt-1 text-sm text-muted-foreground">{tr("Saldo rupiah untuk eksekusi publikasi.")}</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			<button class="app-btn app-btn-soft" type="button" onclick={openReport}>
 				<Flag size={15} />{tr("Laporkan Topup Gagal")}</button>
 			<button class="app-btn app-btn-primary" type="button" onclick={openTopUp}>
-				<Plus size={15} />{tr("Top Up Kredit")}</button>
+				<Plus size={15} />{tr("Top Up Saldo")}</button>
 		</div>
 	</header>
 
@@ -201,7 +201,7 @@
 				<div>
 					<p class="text-sm font-medium">{tr("Ada pembayaran top up yang belum selesai")}</p>
 					<p class="text-xs text-muted-foreground">
-						{data.pending_payment.tc ?? 0} TC · Rp {fmt(data.pending_payment.amount_idr)} · status {data.pending_payment.status}
+						Rp {fmt(data.pending_payment.amount_idr)} · status {data.pending_payment.status}
 					</p>
 				</div>
 				{#if data.pending_payment.payment_url}
@@ -215,28 +215,25 @@
 				<Wallet size={18} style="color: var(--primary);" />
 				<div>
 					<p class="text-xs text-muted-foreground">{tr("Saldo tersedia")}</p>
-					<p class="text-2xl font-bold tabular-nums">{fmt(data.wallet.available_tc)} <span class="text-sm font-medium text-muted-foreground">TC</span></p>
+					<p class="text-2xl font-bold tabular-nums">Rp {fmt(data.wallet.available_tc * rateIdr)}</p>
 				</div>
 			</div>
 			<div class="app-card flex items-center gap-3 p-4">
 				<Lock size={18} style="color: var(--warning);" />
 				<div>
 					<p class="text-xs text-muted-foreground">Tertahan</p>
-					<p class="text-2xl font-bold tabular-nums">{fmt(data.wallet.reserved_tc)} <span class="text-sm font-medium text-muted-foreground">TC</span></p>
+					<p class="text-2xl font-bold tabular-nums">Rp {fmt(data.wallet.reserved_tc * rateIdr)}</p>
 				</div>
 			</div>
 			<div class="app-card flex items-center gap-3 p-4">
 				<Coins size={18} style="color: var(--success);" />
 				<div>
 					<p class="text-xs text-muted-foreground">{tr("Total terpakai")}</p>
-					<p class="text-2xl font-bold tabular-nums">{fmt(data.wallet.captured_tc)} <span class="text-sm font-medium text-muted-foreground">TC</span></p>
+					<p class="text-2xl font-bold tabular-nums">Rp {fmt(data.wallet.captured_tc * rateIdr)}</p>
 				</div>
 			</div>
 		</div>
 
-		<p class="mt-2 text-xs text-muted-foreground">
-			Kurs: 1 TC = Rp {fmt(rateIdr)} · nilai saldo ≈ Rp {fmt(data.wallet.available_idr)}
-		</p>
 
 		<div class="app-card mt-4 overflow-x-auto">
 			<div class="flex items-center justify-between border-b px-4 py-3">
@@ -271,7 +268,7 @@
 			<div class="flex items-start justify-between gap-3">
 				<div>
 					<h2 class="text-lg font-semibold">{tr("Laporkan Topup Gagal")}</h2>
-					<p class="mt-1 text-xs text-muted-foreground">{tr("Pembayaran sukses tapi saldo TC belum masuk? Laporan akan diverifikasi admin Tauthub, lalu saldo ditambahkan manual setelah disetujui.")}</p>
+					<p class="mt-1 text-xs text-muted-foreground">{tr("Pembayaran sukses tapi saldo belum masuk? Laporan akan diverifikasi admin Tauthub, lalu saldo ditambahkan manual setelah disetujui.")}</p>
 				</div>
 				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Tutup")} onclick={() => (reportOpen = false)}>
 					<X size={18} />
@@ -286,7 +283,7 @@
 					<p class="rounded-lg px-3 py-2 text-sm" style="background-color: color-mix(in srgb, var(--destructive) 10%, var(--card)); color: var(--destructive);">{reportErr}</p>
 				{/if}
 
-				<label class="flex flex-col gap-1 text-sm">{tr("Jumlah TC yang dibayar")}<input class="app-input" type="number" min="1" placeholder={tr("cth: 1000")} bind:value={reportTc} />
+				<label class="flex flex-col gap-1 text-sm">{tr("Jumlah yang dibayar")}<input class="app-input" type="number" min="1" placeholder={tr("cth: 1000")} bind:value={reportTc} />
 				</label>
 				<label class="flex flex-col gap-1 text-sm">
 					Referensi pembayaran (opsional)
@@ -294,7 +291,7 @@
 				</label>
 				<label class="flex flex-col gap-1 text-sm">
 					Deskripsi masalah
-					<textarea class="app-input" rows="3" placeholder={tr("cth: Sudah bayar via QRIS tapi saldo TC tidak bertambah setelah 30 menit")} bind:value={reportDesc}></textarea>
+					<textarea class="app-input" rows="3" placeholder={tr("cth: Sudah bayar via QRIS tapi saldo tidak bertambah setelah 30 menit")} bind:value={reportDesc}></textarea>
 				</label>
 
 				<div class="flex justify-end gap-2 border-t pt-3">
