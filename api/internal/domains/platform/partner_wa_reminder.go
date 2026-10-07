@@ -1,7 +1,7 @@
 package platform
 
 // Pengingat WhatsApp untuk mitra: dipakai aksi "Kirim pengingat isi WA" di
-// /admin/partners. Mitra dengan lebih dari 2 media yang belum mengisi nomor WA
+// /admin/partners. Mitra dengan lebih dari 1 media yang belum mengisi nomor WA
 // (notification_preferences.wa_number + wa_consent) dikirimi notifikasi lonceng
 // + email. Idempoten: maksimal sekali per 30 hari per mitra.
 
@@ -13,7 +13,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/email"
 )
 
-const partnerWAThreshold = 2
+const partnerWAThreshold = 1
 
 // AdminPartnerWAReminder: POST /v1/platform/partners/{partnerId}/wa-reminder
 func (d *Deps) AdminPartnerWAReminder(w http.ResponseWriter, r *http.Request) {

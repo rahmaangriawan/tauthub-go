@@ -481,9 +481,11 @@ type backlinkStrategy struct {
 	SmartVariations bool
 }
 
+// Tag json wajib huruf kecil: tanpa ini draft kembali sebagai {"Mode","Amount"}
+// dan frontend membacanya sebagai amount=0 (anggaran hilang saat halaman dimuat ulang).
 type budgetStrategy struct {
-	Mode   string
-	Amount int
+	Mode   string `json:"mode"`
+	Amount int    `json:"amount"`
 }
 
 // resolveProfilerPrompt: susun SYSTEM PROMPT + USER PROMPT berlabel + manifest

@@ -5,9 +5,10 @@
 	// media, filter status, pratinjau/edit draf, setujui, tolak, kirim URL,
 	// dan rewrite AI (berbayar dari saldo mitra).
 	import { onMount } from 'svelte';
-	import { Check, Clock, Eye, ExternalLink, Link2, MoreVertical, Paperclip, Pencil, Search, Sparkles, Trash2, XCircle } from '@lucide/svelte';
+	import { Check, Clock, Eye, ExternalLink, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, Sparkles, Trash2, XCircle } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import RichTextEditor from '$lib/components/rich-text-editor.svelte';
 	import { sanitizeHtml } from '$lib/sanitize-html';
 
 	type Pub = {
@@ -94,6 +95,9 @@
 	let draftPub = $state<Pub | null>(null);
 	let draft = $state<any>(null);
 	let draftLoading = $state(false);
+	let coverInput = $state<HTMLInputElement | undefined>(undefined);
+	let coverBusy = $state(false);
+	let coverError = $state('');
 
 	// Sesi harus divalidasi lebih dulu (refresh token), baru daftar dimuat.
 	let ready = $state(false);
@@ -218,6 +222,8 @@
 		draft = null;
 		draftLoading = true;
 		error = '';
+		coverError = '';
+		coverBusy = false;
 		draft = await loadDraft(p);
 		draftLoading = false;
 	}
@@ -422,6 +428,35 @@
 			notice = `Rewrite selesai (biaya Rp ${(data.amount_charged_idr ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}). Tinjau lalu simpan draf.`;
 		} finally {
 			busy = false;
+		}
+	}
+
+	// Unggah gambar draf mitra: satu jalur untuk gambar inline di editor dan
+	// untuk mengganti gambar utama, memakai endpoint draf yang sudah ada.
+	async function uploadDraftImage(file: File): Promise<string> {
+		if (!draftPub) throw new Error(tr('Artikel belum dipilih.'));
+		const form = new FormData();
+		form.append('file', file);
+		const res = await apiRequest(`/v1/partner/publications/${draftPub.id}/draft/image`, { method: 'POST', body: form });
+		if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengunggah gambar.')));
+		const data = (await res.json()) as { url?: string };
+		if (!data.url) throw new Error(tr('Gambar tidak diterima server.'));
+		return data.url;
+	}
+
+	async function pickCover(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file || !draft) return;
+		coverBusy = true;
+		coverError = '';
+		try {
+			draft.featured_image_url = await uploadDraftImage(file);
+		} catch (err) {
+			coverError = err instanceof Error ? err.message : tr('Gagal mengunggah gambar.');
+		} finally {
+			coverBusy = false;
 		}
 	}
 
@@ -1164,7 +1199,7 @@
 <!-- Editor draf — modal terpisah (parity tombol "Edit" app lama). -->
 {#if draftPub}
 	<div class="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={closeDraftEditor}>
-		<dialog open class="app-card my-8 w-full max-w-[720px] p-5" aria-label={tr('Edit draf')} onclick={(e) => e.stopPropagation()}>
+		<dialog open class="app-card my-8 flex max-h-[85vh] w-full max-w-[860px] flex-col overflow-hidden p-5" aria-label={tr('Edit draf')} onclick={(e) => e.stopPropagation()}>
 			<div class="flex items-start justify-between gap-3">
 				<div class="min-w-0">
 					<h2 class="text-lg font-semibold">{tr('Isi Artikel')}</h2>
@@ -1184,24 +1219,68 @@
 			{:else if draft?.error}
 				<p class="mt-3 text-sm" style="color: var(--destructive);">{draft.error}</p>
 			{:else if draft}
-				<form class="mt-3 space-y-2" onsubmit={saveDraft}>
-					<label class="block">
-						<span class="text-xs font-medium text-muted-foreground">{tr('Judul')}</span>
-						<input class="app-input mt-1 w-full" maxlength="200" bind:value={draft.title} />
-					</label>
-					<label class="block">
-						<span class="text-xs font-medium text-muted-foreground">{tr('Meta Deskripsi')}</span>
-						<input class="app-input mt-1 w-full" maxlength="500" bind:value={draft.meta_description} />
-					</label>
-					<label class="block">
-						<span class="text-xs font-medium text-muted-foreground">{tr('Gambar Utama (URL)')}</span>
-						<input class="app-input mt-1 w-full" bind:value={draft.featured_image_url} />
-					</label>
-					<label class="block">
-						<span class="text-xs font-medium text-muted-foreground">{tr('Isi Artikel (HTML)')}</span>
-						<textarea class="app-input mt-1 w-full font-mono text-xs" rows="12" bind:value={draft.content_html}></textarea>
-					</label>
-					<div class="flex flex-wrap items-center justify-between gap-2">
+				<form class="mt-4 flex min-h-0 flex-1 flex-col gap-4" onsubmit={saveDraft}>
+					<div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+						<div class="grid gap-4 sm:grid-cols-2">
+							<label class="block">
+								<span class="text-xs font-medium text-muted-foreground">{tr('Judul')}</span>
+								<input class="app-input mt-1 w-full" maxlength="200" bind:value={draft.title} />
+							</label>
+							<label class="block">
+								<span class="text-xs font-medium text-muted-foreground">{tr('Meta Deskripsi')}</span>
+								<input class="app-input mt-1 w-full" maxlength="500" bind:value={draft.meta_description} />
+							</label>
+						</div>
+
+						<div>
+							<span class="text-xs font-medium text-muted-foreground">{tr('Gambar Utama')}</span>
+							<div class="mt-1 flex flex-wrap items-start gap-3 rounded-xl border p-3" style="border-color: var(--border);">
+								{#if draft.featured_image_url}
+									<img
+										src={draft.featured_image_url}
+										alt={tr('Gambar cover artikel')}
+										class="w-40 shrink-0 rounded-lg object-cover"
+										style="aspect-ratio: 16 / 9;"
+									/>
+								{:else}
+									<div class="flex w-40 shrink-0 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground" style="aspect-ratio: 16 / 9; border-color: var(--border);">
+										{tr('Belum ada gambar')}
+									</div>
+								{/if}
+								<div class="flex min-w-0 flex-1 flex-col gap-2">
+									<input class="app-input w-full" placeholder="/uploads/…" bind:value={draft.featured_image_url} />
+									<div class="flex flex-wrap gap-2">
+										<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={coverBusy} onclick={() => coverInput?.click()}>
+											{#if coverBusy}<LoaderCircle size={13} class="animate-spin" />{:else}<Paperclip size={13} />{/if}
+											{tr('Ganti gambar')}
+										</button>
+										{#if draft.featured_image_url}
+											<a class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" href={draft.featured_image_url} target="_blank" rel="noopener">{tr('Buka di tab baru')}</a>
+											<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => (draft.featured_image_url = '')}>{tr('Hapus gambar')}</button>
+										{/if}
+									</div>
+									<p class="text-xs text-muted-foreground">{tr('Gambar disimpan di Tauthub; saat artikel terbit ke media, tautannya dikirim lengkap dengan domain.')}</p>
+								</div>
+							</div>
+							<input bind:this={coverInput} type="file" accept="image/*" class="hidden" onchange={pickCover} />
+							{#if coverError}<p class="mt-1 text-xs" style="color: var(--destructive);">{coverError}</p>{/if}
+						</div>
+
+						<div>
+							<span class="text-xs font-medium text-muted-foreground">{tr('Isi Artikel')}</span>
+							<div class="mt-1">
+								<RichTextEditor
+									bind:value={draft.content_html}
+									ariaLabel={tr('Isi artikel')}
+									minHeight={320}
+									uploadImage={uploadDraftImage}
+									disabled={busy}
+								/>
+							</div>
+						</div>
+					</div>
+
+					<div class="flex flex-wrap items-center justify-between gap-2 border-t pt-3" style="border-color: var(--border);">
 						<p class="text-xs text-muted-foreground">
 							{draft.source === 'wp_draft' ? tr('Sumber: draf WordPress') : tr('Sumber: dokumen klien')}
 							{#if draft.edited_at} · {tr('diedit')} {dt(draft.edited_at)}{/if}

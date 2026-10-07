@@ -133,7 +133,7 @@
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
 				if (data?.code === 'insufficient_credits') {
-					error = 'Kredit Saldo tidak mencukupi untuk menjalankan kampanye ini. Silakan Top Up Kredit Saldo terlebih dahulu.';
+					error = 'Saldo tidak mencukupi untuk menjalankan kampanye ini. Silakan Top Up Saldo terlebih dahulu.';
 				} else {
 					error = data?.detail ?? 'Analisis AI mengalami kendala sementara. Draft Anda tetap tersimpan.';
 				}

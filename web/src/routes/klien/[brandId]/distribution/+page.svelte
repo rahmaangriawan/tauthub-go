@@ -125,7 +125,7 @@
 			</div>
 			{#if wallet}
 				<div class="mt-4">
-					<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/credits`}><Coins size={15} />{tr("Kelola Kredit Saldo")}</a>
+					<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/credits`}><Coins size={15} />{tr("Kelola Saldo")}</a>
 				</div>
 			{/if}
 		</div>

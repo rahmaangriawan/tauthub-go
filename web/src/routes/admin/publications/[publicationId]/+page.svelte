@@ -171,6 +171,9 @@
 	let repairing = $state(false);
 	let repairError = $state('');
 	let repairDone = $state('');
+	let syncing = $state(false);
+	let syncError = $state('');
+	let syncDone = $state('');
 
 	onMount(() => {
 		void (async () => {
@@ -245,7 +248,38 @@
 		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(
 			Number(n ?? 0)
 		);
+	// Sinkron ulang untuk WordPress: mengirim ulang gambar utama + kategori ke
+	// post yang sudah ada (kategori = taxonomy, gambar utama = featured_media).
+	async function resyncWordpress() {
+		if (
+			!confirm(
+				'Sinkronkan ulang gambar utama & kategori ke WordPress?\n\n' +
+					'Post di WordPress akan DIPERBARUI (judul dan isi ikut dikirim ulang), bukan dibuat baru. ' +
+					'Pakai ini kalau artikel terbit tanpa gambar utama atau tanpa kategori.'
+			)
+		)
+			return;
+		syncing = true;
+		syncError = '';
+		syncDone = '';
+		try {
+			const res = await apiRequest(
+				`/v1/platform/operations/publications/${publicationId}/resync-wordpress`,
+				{ method: 'POST' }
+			);
+			if (!res.ok) {
+				syncError = await readApiError(res, 'Permintaan gagal.');
+				return;
+			}
+			syncDone =
+				'Sinkronisasi diantrekan. Gambar utama dan kategori akan dikirim ulang ke post WordPress yang sama (post tidak digandakan). Muat ulang halaman ini beberapa saat lagi untuk melihat hasilnya.';
+			void load();
+		} finally {
+			syncing = false;
+		}
+	}
 	const pub = $derived(data?.publication);
+	const isWordpress = $derived(pub?.media_integration_type === 'wordpress');
 </script>
 
 <section>
@@ -304,7 +338,16 @@
 				</div>
 			{/if}
 
-			{#if pub.status === 'published' && data?.job?.remote_post_id}
+			{#if pub.status === 'published' && isWordpress}
+				<div class="mt-4 flex flex-wrap items-center gap-2">
+					<button class="app-btn app-btn-soft" onclick={resyncWordpress} disabled={syncing}>
+						<ImagePlus size={15} />{syncing ? tr('Mengantrekan…') : tr('Sinkron ulang gambar & kategori')}
+					</button>
+					<span class="text-xs text-muted-foreground">
+						{tr('Kirim ulang gambar utama dan kategori ke post WordPress yang sudah terbit. Pakai ini kalau artikel tampil tanpa gambar utama atau masuk kategori “Uncategorized”. Post mitra diperbarui, bukan dibuat baru.')}
+					</span>
+				</div>
+			{:else if pub.status === 'published' && data?.job?.remote_post_id}
 				<div class="mt-4 flex flex-wrap items-center gap-2">
 					<button class="app-btn app-btn-soft" onclick={repairImages} disabled={repairing}>
 						<ImagePlus size={15} />{repairing ? tr('Mengantrekan…') : tr('Perbaiki gambar')}
@@ -319,6 +362,12 @@
 			{/if}
 			{#if repairDone}
 				<p class="mt-3 text-sm" style="color: var(--success);">{repairDone}</p>
+			{/if}
+			{#if syncError}
+				<p class="mt-3 text-sm" style="color: var(--destructive);">{syncError}</p>
+			{/if}
+			{#if syncDone}
+				<p class="mt-3 text-sm" style="color: var(--success);">{syncDone}</p>
 			{/if}
 
 			<div class="app-card mt-4 p-4">

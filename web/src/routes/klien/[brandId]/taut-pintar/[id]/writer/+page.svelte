@@ -13,7 +13,8 @@
 	import TautBottomBar from '../../_bottom-bar.svelte';
 	import NaskahModal from './_naskah-modal.svelte';
 	import QcPanel from './_qc-panel.svelte';
-	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, buildTrackedUrl, stripScheme, withScheme, textToHtml, toLocalInput, isCampaignDone } from '../../_shared';
+	import { MANUAL_PROFILER_REASON, buildTrackedUrl, stripScheme, withScheme, textToHtml, toLocalInput, isCampaignDone } from '../../_shared';
+	import { tcToRp } from '$lib/credits/rupiah';
 	import { ARTICLE_DEFAULT_COVER } from '$lib/media/cover';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import SlideOver from '$lib/components/slide-over.svelte';
@@ -813,7 +814,8 @@
 		return { count: selected.length, writing, media, total: writing + media };
 	});
 	const pendingCount = $derived(selected.filter((m) => !hasDoc(m) || canRegen(m)).length);
-	const toRp = (credits: number) => (rateIdr > 0 ? rpCurrency(credits * rateIdr) : `${credits} ${tr('Kredit')}`);
+	// Biaya ditampilkan dalam rupiah memakai kurs aktif (fallback Rp 1.000).
+	const toRp = (credits: number) => tcToRp(credits, rateIdr);
 
 	// Tooltip rincian biaya tombol "Generate Semua Artikel" (parity Tooltip app lama).
 	const generateTooltip = $derived.by(() => {
@@ -1037,7 +1039,7 @@
 			{#if campaignName}
 				<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold" style="background-color: var(--muted);" title={campaignName}><FileText size={13} />{campaignName}</span>
 			{/if}
-			<span class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-bold" style="background-color: var(--success-soft); color: var(--success);">{fmtIdr(wallet)} {tr("Kredit")}</span>
+			<span class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-bold" style="background-color: var(--success-soft); color: var(--success);" title={tr('Saldo Anda')}>{toRp(wallet)}</span>
 		</div>
 	</div>
 
@@ -1076,10 +1078,10 @@
 
 	{#if topup}
 		<div class="app-card mt-3 px-4 py-3 text-sm" style="background-color: var(--warning-soft); color: var(--warning);" role="alert">
-			<p class="font-bold">{tr('Saldo Kredit Tidak Cukup')}</p>
-			<p class="mt-1">Distribusi butuh <strong>{fmtIdr(topup.needed)} {tr("Kredit")}</strong>, saldo tersedia <strong>{fmtIdr(topup.available)} {tr("Kredit")}</strong>. Silakan top up terlebih dahulu.</p>
+			<p class="font-bold">{tr('Saldo Tidak Cukup')}</p>
+			<p class="mt-1">Distribusi butuh <strong>{toRp(topup.needed)}</strong>, saldo tersedia <strong>{toRp(topup.available)}</strong>. Silakan top up terlebih dahulu.</p>
 			<div class="mt-2 flex flex-wrap gap-2">
-				<a class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" href={`/klien/${brandUrl}/credits`}>{tr('Top Up Kredit')}</a>
+				<a class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" href={`/klien/${brandUrl}/credits`}>{tr('Top Up Saldo')}</a>
 				<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => (topup = null)}>{tr('Tutup')}</button>
 			</div>
 		</div>
@@ -1550,7 +1552,7 @@
 			mediaName={qc.name}
 			articleStatus={articleStatusOf(qc)}
 			words={qcStats?.words ?? null}
-			regenLabel={tr('Generate Ulang (2 Kredit)')}
+			regenLabel={`${tr('Generate Ulang')} (${toRp(2)})`}
 			canRegen={canRegen(qc) && !bulkRunning}
 			{manualFlow}
 			generating={articleStatusOf(qc) === 'generating'}

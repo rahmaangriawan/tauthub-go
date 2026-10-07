@@ -5,11 +5,12 @@
 	//
 	// Dipakai dua tempat: pemilih cover (mode 'cover') dan tombol gambar di
 	// toolbar editor (mode 'inline'). Ada juga area "Generate baru" yang
-	// menampilkan biaya kredit per gambar + saldo brand, lalu memanggil endpoint
-	// generate dan menyegarkan grid.
+	// menampilkan biaya per gambar + saldo brand dalam rupiah, lalu memanggil
+	// endpoint generate dan menyegarkan grid.
 		import { Check, CircleAlert, Image as ImageIcon, LoaderCircle, Sparkles, Trash2, Upload, X } from '@lucide/svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
 	import { tr } from '$lib/i18n/phrases';
+	import { tcToRp } from '$lib/credits/rupiah';
 
 	type LibraryImage = {
 		id: string;
@@ -53,6 +54,11 @@
 	let listError = $state('');
 		let cost = $state(0);
 		let balance = $state<number | null>(null);
+		let rateIdr = $state(0);
+		// Biaya & saldo tampil dalam rupiah memakai kurs aktif dari server.
+		const costRp = $derived(cost > 0 ? tcToRp(cost, rateIdr) : tr('Gratis'));
+		const balanceRp = $derived(balance == null ? '—' : tcToRp(balance, rateIdr));
+		const remainingRp = $derived(balance == null ? '—' : tcToRp(Math.max(0, balance - cost), rateIdr));
 		let prompt = $state('');
 		let generating = $state(false);
 		let confirmOpen = $state(false);
@@ -120,6 +126,7 @@
 			images = Array.isArray(data?.images) ? (data.images as LibraryImage[]) : [];
 			cost = Number(data?.cost_credits ?? 0);
 			balance = Number.isFinite(Number(data?.balance_remaining)) ? Number(data.balance_remaining) : null;
+			if (Number(data?.rate_idr) > 0) rateIdr = Number(data.rate_idr);
 		} catch (reason) {
 			listError = reason instanceof Error ? reason.message : tr('Gagal memuat pustaka gambar.');
 		} finally {
@@ -155,6 +162,7 @@
 					const data = await res.json().catch(() => null);
 					if (!res.ok) throw new Error(await readApiError(res, tr('Gagal membuat gambar AI.')));
 					if (typeof data?.balance_remaining === 'number') balance = data.balance_remaining;
+					if (Number(data?.rate_idr) > 0) rateIdr = Number(data.rate_idr);
 					await load();
 				} catch (reason) {
 					genError = reason instanceof Error ? reason.message : tr('Gagal membuat gambar AI.');
@@ -386,8 +394,8 @@
 						<Sparkles size={13} /> {tr('Generate Baru')}
 					</p>
 					<p class="text-[11px] text-muted-foreground">
-						{tr('Biaya')} <strong class="text-foreground">{cost}</strong> {tr('Kredit')} {tr('per gambar')} ·
-						{tr('Saldo')} <strong class="text-foreground">{balance ?? '-'}</strong> {tr('Kredit')}
+						{tr('Biaya')} <strong class="text-foreground">{costRp}</strong> {tr('per gambar')} ·
+						{tr('Saldo')} <strong class="text-foreground">{balanceRp}</strong>
 					</p>
 				</div>
 				<div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -400,7 +408,7 @@
 					></textarea>
 						<button class="app-btn app-btn-primary shrink-0" type="button" disabled={generating || !prompt.trim()} onclick={requestGenerate}>
 							{#if generating}<LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
-							{generating ? tr('Membuat…') : `${tr('Generate')} · ${cost} ${tr('Kredit')}`}
+							{generating ? tr('Membuat…') : `${tr('Generate')} · ${costRp}`}
 						</button>
 					</div>
 					{#if genError}
@@ -447,7 +455,7 @@
 									{mode === 'cover' ? tr('Buat Gambar Cover dengan AI') : tr('Buat Gambar Artikel dengan AI')}
 								</h4>
 								<p class="mt-0.5 text-xs text-muted-foreground">
-									{tr('Konfirmasi pembuatan gambar menggunakan kuota kredit')}
+									{tr('Konfirmasi pembuatan gambar menggunakan saldo Anda')}
 								</p>
 							</div>
 						</div>
@@ -478,15 +486,12 @@
 						<div class="rounded-xl border p-3.5 space-y-2.5" style="border-color: var(--border);">
 							<div class="flex items-center justify-between text-xs">
 								<span class="text-muted-foreground">{tr('Biaya Pembuatan')}</span>
-								<div class="text-right">
-									<strong class="font-bold text-foreground">{cost} {tr('Kredit')}</strong>
-									<span class="ml-1 text-[11px] text-muted-foreground">(≈ Rp {(cost * 1000).toLocaleString('id-ID')})</span>
-								</div>
+								<strong class="font-bold text-foreground">{costRp}</strong>
 							</div>
 
 							<div class="flex items-center justify-between text-xs">
 								<span class="text-muted-foreground">{tr('Saldo Saat Ini')}</span>
-								<span class="font-medium text-foreground">{balance != null ? `${balance.toLocaleString('id-ID')} ${tr('Kredit')}` : '—'}</span>
+								<span class="font-medium text-foreground">{balanceRp}</span>
 							</div>
 
 							<div class="h-px w-full" style="background-color: var(--border);"></div>
@@ -494,7 +499,7 @@
 							<div class="flex items-center justify-between text-xs">
 								<span class="font-semibold text-foreground">{tr('Estimasi Sisa Saldo')}</span>
 								<strong class="font-bold" style="color: var(--primary);">
-									{balance != null ? `${Math.max(0, balance - cost).toLocaleString('id-ID')} ${tr('Kredit')}` : '—'}
+									{remainingRp}
 								</strong>
 							</div>
 						</div>
@@ -502,7 +507,7 @@
 						{#if balance != null && balance < cost}
 							<div class="flex items-center gap-2 rounded-xl p-3 text-xs" style="background-color: var(--destructive-soft, #fef2f2); color: var(--destructive, #dc2626);">
 								<CircleAlert size={15} class="shrink-0" />
-								<span>{tr('Saldo kredit tidak mencukupi untuk membuat gambar. Silakan top up terlebih dahulu.')}</span>
+								<span>{tr('Saldo tidak mencukupi untuk membuat gambar. Silakan top up terlebih dahulu.')}</span>
 							</div>
 						{/if}
 					</div>
@@ -528,7 +533,7 @@
 									<span>{tr('Memproses…')}</span>
 								{:else}
 									<Sparkles size={14} />
-									<span>{tr('Ya, Buat Gambar')} ({cost} {tr('Kredit')})</span>
+									<span>{tr('Ya, Buat Gambar')} ({costRp})</span>
 								{/if}
 							</button>
 						</div>

@@ -12,7 +12,8 @@
 	import { campaignUrlId } from '$lib/campaign-url';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
-	import { STAGE_LABEL, STAGE_TONE, STATUS_OPTIONS, statusAccent, fmtIdr } from '../taut-pintar/_shared';
+	import { STAGE_LABEL, STAGE_TONE, STATUS_OPTIONS, statusAccent } from '../taut-pintar/_shared';
+	import { tcToRp } from '$lib/credits/rupiah';
 
 	const brandId = $derived(page.params.brandId as string);
 	const i18n = $derived(getI18n());
@@ -36,6 +37,7 @@
 
 	let list = $state<Campaign[]>([]);
 	let total = $state(0);
+	let rateIdr = $state(1000);
 	let pageNum = $state(1);
 	let loading = $state(true);
 	let busy = $state(false);
@@ -92,6 +94,7 @@
 			const data = await res.json();
 			list = data.campaigns ?? [];
 			total = data.total ?? 0;
+			rateIdr = Number(data.rate_idr) || 1000;
 		} finally {
 			loading = false;
 		}
@@ -354,7 +357,7 @@
 					<div class="mt-3 flex flex-wrap items-end justify-between gap-3 border-t pt-3">
 						<div>
 							<p class="text-[10px] font-semibold tracking-wide text-muted-foreground">ANGGARAN TERSERAP</p>
-							<p class="text-sm font-semibold tabular-nums">{fmtIdr(c.stats.tc_used)} {tr("Kredit")}</p>
+							<p class="text-sm font-semibold tabular-nums">{tcToRp(c.stats.tc_used, rateIdr)}</p>
 						</div>
 						<div>
 							<p class="text-[10px] font-semibold tracking-wide text-muted-foreground">PROGRES MEDIA</p>
@@ -440,7 +443,7 @@
 				</div>
 				<div class="min-w-[120px] flex-1">
 					<p class="text-xs text-muted-foreground">Terpakai</p>
-					<p class="text-lg font-bold">{shareFor.stats.tc_used ?? 0}</p>
+					<p class="text-lg font-bold">{tcToRp(shareFor.stats.tc_used ?? 0, rateIdr)}</p>
 				</div>
 			</div>
 
@@ -495,7 +498,7 @@
 						<Sparkles size={16} style="color: var(--primary);" />
 						<span class="font-bold">AI Pintar</span>
 					</span>
-					<span class="mt-1 block text-xs text-muted-foreground">{tr("Profiler: AI menyusun strategi & brief, lalu Matchmaker pilih media. Butuh 10 Kredit.")}</span>
+					<span class="mt-1 block text-xs text-muted-foreground">{tr("Profiler: AI menyusun strategi & brief, lalu Matchmaker pilih media. Butuh")} {tcToRp(10, rateIdr)}.</span>
 				</button>
 				<button
 					type="button"

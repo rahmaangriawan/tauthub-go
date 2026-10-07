@@ -47,7 +47,8 @@ func (d *Deps) LinkMonitorGlobal(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN publication_link_checks c ON c.publication_id = p.id
 			WHERE p.status = 'published'
 			  AND p.published_url IS NOT NULL
-			  AND p.published_at > NOW() - INTERVAL '12 months'`)
+			  AND p.published_at > NOW() - INTERVAL '12 months'
+			  AND p.publish_status <> 'draft'`)
 		if err != nil {
 			writeErr(w, d, err)
 			return
@@ -144,6 +145,9 @@ func (d *Deps) LinkMonitorGlobal(w http.ResponseWriter, r *http.Request) {
 		"p.status = 'published'",
 		"p.published_url IS NOT NULL",
 		"p.published_at > NOW() - INTERVAL '12 months'",
+		// Publikasi berstatus DRAF di website mitra belum tampil publik → tidak
+		// dipantau 404 (sama dengan aturan di scheduler & PublicationLinkCheckJob).
+		"p.publish_status <> 'draft'",
 	}
 	values := []any{}
 	next := func(v any) string {
@@ -256,6 +260,7 @@ func (d *Deps) LinkMonitorCheck(w http.ResponseWriter, r *http.Request) {
 			WHERE p.status = 'published'
 			  AND p.published_url IS NOT NULL
 			  AND p.published_at > NOW() - INTERVAL '12 months'
+			  AND p.publish_status <> 'draft'
 			  AND (c.last_checked_at IS NULL OR c.last_checked_at < NOW() - INTERVAL '7 days')
 			  AND NOT EXISTS (
 			    SELECT 1 FROM jobs j

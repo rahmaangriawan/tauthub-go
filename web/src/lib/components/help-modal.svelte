@@ -26,8 +26,8 @@
 
 	const HOW_STEPS = [
 		{
-			title: 'Isi saldo kredit',
-			body: 'Kredit dipakai saat artikel didistribusikan. 1 kredit setara Rp 1.000, dan saldo bisa ditambah dari menu Keuangan.'
+			title: 'Isi saldo',
+			body: 'Saldo dipakai saat artikel didistribusikan. Semua biaya ditampilkan dalam rupiah, dan saldo bisa ditambah dari menu Keuangan.'
 		},
 		{
 			title: 'Siapkan artikel',
@@ -39,7 +39,7 @@
 		},
 		{
 			title: 'Pilih media lalu distribusi',
-			body: 'Pilih media sendiri dari katalog, atau ikuti rekomendasi AI Matchmaker. Kredit diamankan lebih dulu dan baru diteruskan setelah publikasi sah.'
+			body: 'Pilih media sendiri dari katalog, atau ikuti rekomendasi AI Matchmaker. Saldo diamankan lebih dulu dan baru diteruskan setelah publikasi sah.'
 		},
 		{
 			title: 'Mitra menerbitkan artikel',
@@ -156,7 +156,7 @@
 					{/each}
 				</ol>
 				<p class="help-note">
-					{tr('Kredit hanya terpakai setelah publikasi sah. Kalau artikel gagal di tengah jalan, kredit dikembalikan ke saldo Anda.')}
+					{tr('Saldo hanya terpakai setelah publikasi sah. Kalau artikel gagal di tengah jalan, saldo dikembalikan ke akun Anda.')}
 				</p>
 			{:else}
 				<ul class="help-checks">

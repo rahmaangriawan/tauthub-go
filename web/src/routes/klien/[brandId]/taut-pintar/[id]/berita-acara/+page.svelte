@@ -15,6 +15,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { MEDIA_LABEL, BUDGET_LABEL, STAGE_LABEL, fmtDateWib } from '../../_shared';
+	import { tcToRp } from '$lib/credits/rupiah';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
@@ -41,6 +42,7 @@
 	let budgetStrategy = $state<string | null>(null);
 	let tautStatus = $state<string | null>(null);
 	let stats = $state<{ articles: number; published_media: number; tc_used: number } | null>(null);
+	let rateIdr = $state(1000);
 	let placements = $state<PlacementRow[]>([]);
 
 	onMount(() => {
@@ -73,6 +75,7 @@
 		budgetStrategy = c.budget_strategy ?? null;
 		tautStatus = c.taut_status ?? null;
 		stats = c.stats ?? null;
+		rateIdr = Number(c.rate_idr) || 1000;
 
 		if (brandRes.ok) {
 			const b = await brandRes.json();
@@ -151,7 +154,7 @@
 				</div>
 				<div class="rounded-lg border p-3 text-center">
 					<p class="text-xs text-muted-foreground">Terpakai</p>
-					<p class="text-lg font-bold">{stats?.tc_used ?? 0} TC</p>
+					<p class="text-lg font-bold">{tcToRp(stats?.tc_used ?? 0, rateIdr)}</p>
 				</div>
 			</div>
 

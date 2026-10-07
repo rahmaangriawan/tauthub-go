@@ -330,7 +330,7 @@
 	{#if waConfirm}
 		<Modal title={tr('Mitra belum mengisi nomor WhatsApp')} maxWidth="md" onClose={() => (waConfirm = null)}>
 			<p class="text-sm">
-				<strong>{waConfirm.name}</strong> {tr('milik mitra yang punya lebih dari 2 media tetapi belum mengisi nomor WhatsApp. Kalau ada pesanan, mitranya sulit dikonfirmasi.')}
+				<strong>{waConfirm.name}</strong> {tr('milik mitra yang punya lebih dari satu media tetapi belum mengisi nomor WhatsApp. Kalau ada pesanan, mitranya sulit dikonfirmasi.')}
 			</p>
 			<p class="mt-2 text-sm text-muted-foreground">{tr('Kamu tetap bisa menyetujui — pertimbangkan kirim pengingat dulu dari halaman Mitra.')}</p>
 			{#snippet footer()}

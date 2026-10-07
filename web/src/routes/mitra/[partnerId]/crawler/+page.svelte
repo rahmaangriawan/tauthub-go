@@ -5,10 +5,10 @@
 	// per media (terbitkan/rotasi/nonaktifkan/cabut), uji koneksi ke website,
 	// salinan Cloudflare Worker, dan diagnostik terakhir.
 	import { onMount } from 'svelte';
-	import { Copy, RefreshCw, Server, ShieldCheck, Trash2, Zap } from '@lucide/svelte';
+	import { Clock, Copy, RefreshCw, Server, ShieldCheck, Trash2, Zap } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
-	import { CRAWLER_CONSENT_TEXT, CRAWLER_CONSENT_VERSION } from '$lib/crawler-consent';
+	import { CRAWLER_CONSENT_TEXT, CRAWLER_CONSENT_VERSION, CRAWLER_CRAWL_WINDOW } from '$lib/crawler-consent';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	let loading = $state(true);
@@ -185,6 +185,15 @@
 					<Server size={16} />
 					<h2 class="text-sm font-semibold">{tr('Kredensial Crawler')}</h2>
 				</div>
+				<!-- Keterangan jadwal tampil sebelum mitra menyetujui, supaya jam kerja
+				     crawler jelas lebih dulu (bukan sesudah kredensial terbit). -->
+				<div class="mt-3 flex items-start gap-2 rounded-lg border p-3 text-xs" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
+					<Clock size={14} class="mt-0.5 shrink-0" />
+					<span>
+						<strong>{tr('Jam crawl Tauthub')}: {CRAWLER_CRAWL_WINDOW}</strong> {tr('setiap hari.')}
+						{tr('Crawler hanya memeriksa website di jendela jam itu — saat trafik paling sepi — sehingga performa website Anda tidak terganggu. Di luar jam tersebut crawler tidak berjalan.')}
+					</span>
+				</div>
 				{#if credential}
 					<dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
 						<div><dt class="text-xs text-muted-foreground">Site ID</dt><dd class="font-mono text-xs">{credential.crawler_id}</dd></div>
@@ -207,7 +216,7 @@
 					<div class="mt-3">
 						<label class="mt-3 flex items-start gap-2 text-sm">
 							<input class="mt-1" type="checkbox" bind:checked={consent} />
-							<span>{tr("Saya menyetujui dokumen akses crawler: Tauthub hanya mengakses halaman publik website, tidak pernah panel admin/akun, dan dapat dinonaktifkan kapan saja.")}</span>
+							<span>{tr("Saya menyetujui dokumen akses crawler: Tauthub hanya mengakses halaman publik website pada jam crawl")} {CRAWLER_CRAWL_WINDOW}{tr(", tidak pernah panel admin/akun, dan dapat dinonaktifkan kapan saja.")}</span>
 						</label>
 						<button class="app-btn app-btn-primary mt-2" disabled={busy || !consent} onclick={() => action('issue')}>
 							<ShieldCheck size={15} />{tr("Buat Kredensial")}</button>

@@ -371,6 +371,7 @@ func opPublicationListItem(row ptRow) map[string]any {
 		"brand_public_id":        ptNullableStr(row, "brand_public_id"),
 		"media_name":             ptNullableStr(row, "media_name"),
 		"media_integration_type": ptNullableStr(row, "media_integration_type"),
+		"remote_post_id":         ptNullableStr(row, "remote_post_id"),
 		"document_title":         ptNullableStr(row, "document_title"),
 		"campaign_name":          ptNullableStr(row, "campaign_name"),
 		"partner_name":           ptNullableStr(row, "partner_name"),

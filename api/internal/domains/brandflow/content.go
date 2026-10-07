@@ -1682,12 +1682,9 @@ func (d *Deps) bsPublishToWebhook(ctx context.Context, jobID string, connection,
 		remoteID, nil, jobID)
 }
 
-// bsPublishToWordpress: parity publishToWordpress (reconciliation slug + POST).
-func (d *Deps) bsPublishToWordpress(ctx context.Context, jobID string, connection, job, document bsRow, snapshot map[string]any, secret, html string) error {
-	slug := document.strOr("slug", "")
-	if slug == "" {
-		slug = bsSlugify(document.strOr("title", ""))
-	}
+// bsWordPressPayload: body JSON untuk wp/v2/posts. Dipisah dari pengiriman HTTP
+// agar bisa diuji tanpa jaringan.
+func bsWordPressPayload(snapshot map[string]any, document bsRow, slug, html string) map[string]any {
 	status := "draft"
 	if snapshot["publish_status"] == "publish" {
 		status = "publish"
@@ -1705,47 +1702,31 @@ func (d *Deps) bsPublishToWordpress(ctx context.Context, jobID string, connectio
 		}
 	}
 	resolved, _ := snapshot["resolved"].(map[string]any)
-	numbers := func(value any) []int {
-		arr, ok := value.([]any)
-		if !ok {
-			return []int{}
-		}
-		out := []int{}
-		for _, item := range arr {
-			if n, isNum := item.(float64); isNum && n == float64(int64(n)) && n > 0 {
-				out = append(out, int(n))
-			}
-		}
-		return out
-	}
 	resolvedNumbers := func(key string) []int {
 		if resolved == nil {
 			return []int{}
 		}
-		return numbers(resolved[key])
+		return bsIntIDs(resolved[key])
 	}
-	categories := bsDedupeInts(append(resolvedNumbers("categories"), numbers(snapshot["categories"])...))
-	tags := bsDedupeInts(append(resolvedNumbers("tags"), numbers(snapshot["tags"])...))
+	categories := bsDedupeInts(append(resolvedNumbers("categories"), bsIntIDs(snapshot["categories"])...))
+	tags := bsDedupeInts(append(resolvedNumbers("tags"), bsIntIDs(snapshot["tags"])...))
 	if len(categories) > 0 {
 		payload["categories"] = categories
 	}
 	if len(tags) > 0 {
 		payload["tags"] = tags
 	}
-	authorID := 0
-	if n, ok := snapshot["author_id"].(float64); ok {
-		authorID = int(n)
-	}
+	authorID := int(peNumFromAny(snapshot["author_id"]))
 	if resolved != nil {
-		if n, ok := resolved["author_id"].(float64); ok && authorID == 0 {
-			authorID = int(n)
+		if n := int(peNumFromAny(resolved["author_id"])); authorID == 0 && n > 0 {
+			authorID = n
 		}
 	}
 	if authorID > 0 {
 		payload["author"] = authorID
 	}
 	if resolved != nil {
-		if n, ok := resolved["featured_media"].(float64); ok && n == float64(int64(n)) && n > 0 {
+		if n := peNumFromAny(resolved["featured_media"]); n == float64(int64(n)) && n > 0 {
 			payload["featured_media"] = int(n)
 		}
 	}
@@ -1789,6 +1770,16 @@ func (d *Deps) bsPublishToWordpress(ctx context.Context, jobID string, connectio
 		}
 		payload["meta"] = meta
 	}
+	return payload
+}
+
+// bsPublishToWordpress: parity publishToWordpress (reconciliation slug + POST).
+func (d *Deps) bsPublishToWordpress(ctx context.Context, jobID string, connection, job, document bsRow, snapshot map[string]any, secret, html string) error {
+	slug := document.strOr("slug", "")
+	if slug == "" {
+		slug = bsSlugify(document.strOr("title", ""))
+	}
+	payload := bsWordPressPayload(snapshot, document, slug, html)
 	basic := base64.StdEncoding.EncodeToString([]byte(connection.strOr("username", "") + ":" + secret))
 	headers := map[string]string{"Content-Type": "application/json", "Authorization": "Basic " + basic}
 
@@ -1859,6 +1850,24 @@ func (d *Deps) bsPublishToWordpress(ctx context.Context, jobID string, connectio
 		}
 	}
 	return nil
+}
+
+// bsIntIDs: daftar ID dari snapshot job. Nilainya masih bertipe Go asli (int,
+// []any berisi int) selama job berjalan dan baru menjadi float64 setelah
+// dibaca ulang dari jsonb. Dulu hanya float64 yang diterima, sehingga
+// percobaan PERTAMA kehilangan kategori/tag walau snapshot di DB tampak benar.
+func bsIntIDs(value any) []int {
+	arr, ok := value.([]any)
+	if !ok {
+		return []int{}
+	}
+	out := []int{}
+	for _, item := range arr {
+		if n := peNumFromAny(item); n == float64(int64(n)) && n > 0 {
+			out = append(out, int(n))
+		}
+	}
+	return out
 }
 
 func bsDedupeInts(items []int) []int {

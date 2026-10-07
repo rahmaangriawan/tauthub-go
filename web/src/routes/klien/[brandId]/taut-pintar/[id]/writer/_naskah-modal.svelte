@@ -13,6 +13,7 @@
 	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
 	import { sanitizeHtml } from '$lib/sanitize-html';
 	import Select from '$lib/components/select.svelte';
+	import { tcToRp } from '$lib/credits/rupiah';
 	import { textToHtml } from '../../_shared';
 
 	let {
@@ -164,10 +165,21 @@
 			cost: number;
 			balance: number | null;
 			total: number;
+			rateIdr: number;
 		} | null>(null);
 		let h2Error = $state('');
 		let h2Note = $state('');
 		let imageCost = $state(0);
+		let imageRateIdr = $state(0);
+
+		// Biaya & saldo gambar selalu tampil dalam rupiah (kurs aktif dari server).
+		const rpOf = (tc: number, rate: number) => (tc > 0 ? tcToRp(tc, rate) : tr('Gratis'));
+		const h2CostRp = $derived(h2ConfirmData ? rpOf(h2ConfirmData.cost, h2ConfirmData.rateIdr) : '—');
+		const h2TotalRp = $derived(h2ConfirmData ? rpOf(h2ConfirmData.total, h2ConfirmData.rateIdr) : '—');
+		const h2BalanceRp = $derived(h2ConfirmData?.balance == null ? '—' : tcToRp(h2ConfirmData.balance, h2ConfirmData.rateIdr));
+		const h2RemainingRp = $derived(
+			h2ConfirmData?.balance == null ? '—' : tcToRp(Math.max(0, h2ConfirmData.balance - h2ConfirmData.total), h2ConfirmData.rateIdr)
+		);
 
 		function close() {
 			if (!saving) onClose();
@@ -268,13 +280,14 @@
 
 	// ---------- gambar AI (pustaka + per H2) ----------
 
-	// Ambil biaya per gambar + saldo dari pustaka (untuk konfirmasi biaya).
+	// Ambil biaya per gambar + saldo + kurs dari pustaka (untuk konfirmasi biaya).
 	async function fetchImageCost(): Promise<{ cost: number; balance: number | null }> {
 		try {
 			const res = await apiRequest(`${apiBase}/images?media_id=${encodeURIComponent(mediaId)}`);
 			if (!res.ok) return { cost: imageCost, balance: null };
 			const d = await res.json().catch(() => null);
 			imageCost = Number(d?.cost_credits ?? imageCost);
+			if (Number(d?.rate_idr) > 0) imageRateIdr = Number(d.rate_idr);
 			return {
 				cost: imageCost,
 				balance: Number.isFinite(Number(d?.balance_remaining)) ? Number(d.balance_remaining) : null
@@ -296,6 +309,7 @@
 		const url = String(d?.url ?? '');
 		if (!url) throw new Error(tr('Server tidak mengembalikan URL gambar.'));
 		imageCost = Number(d?.cost_credits ?? imageCost);
+		if (Number(d?.rate_idr) > 0) imageRateIdr = Number(d.rate_idr);
 		return url;
 	}
 
@@ -381,7 +395,8 @@
 				items: plan.map((p) => ({ label: p.label, prompt: p.prompt })),
 				cost,
 				balance,
-				total
+				total,
+				rateIdr: imageRateIdr
 			};
 			h2ConfirmOpen = true;
 		}
@@ -1157,20 +1172,17 @@
 						<div class="rounded-xl border p-3.5 space-y-2.5" style="border-color: var(--border);">
 							<div class="flex items-center justify-between text-xs">
 								<span class="text-muted-foreground">{tr('Biaya per Gambar')}</span>
-								<span class="font-medium text-foreground">{h2ConfirmData.cost} {tr('Kredit')}</span>
+								<span class="font-medium text-foreground">{h2CostRp}</span>
 							</div>
 
 							<div class="flex items-center justify-between text-xs">
-								<span class="text-muted-foreground">{tr('Total Biaya')} ({h2ConfirmData.items.length} × {h2ConfirmData.cost})</span>
-								<div class="text-right">
-									<strong class="font-bold text-foreground">{h2ConfirmData.total} {tr('Kredit')}</strong>
-									<span class="ml-1 text-[11px] text-muted-foreground">(≈ Rp {(h2ConfirmData.total * 1000).toLocaleString('id-ID')})</span>
-								</div>
+								<span class="text-muted-foreground">{tr('Total Biaya')} ({h2ConfirmData.items.length} × {h2CostRp})</span>
+								<strong class="font-bold text-foreground">{h2TotalRp}</strong>
 							</div>
 
 							<div class="flex items-center justify-between text-xs">
 								<span class="text-muted-foreground">{tr('Saldo Saat Ini')}</span>
-								<span class="font-medium text-foreground">{h2ConfirmData.balance != null ? `${h2ConfirmData.balance.toLocaleString('id-ID')} ${tr('Kredit')}` : '—'}</span>
+								<span class="font-medium text-foreground">{h2BalanceRp}</span>
 							</div>
 
 							<div class="h-px w-full" style="background-color: var(--border);"></div>
@@ -1178,7 +1190,7 @@
 							<div class="flex items-center justify-between text-xs">
 								<span class="font-semibold text-foreground">{tr('Estimasi Sisa Saldo')}</span>
 								<strong class="font-bold" style="color: var(--primary);">
-									{h2ConfirmData.balance != null ? `${Math.max(0, h2ConfirmData.balance - h2ConfirmData.total).toLocaleString('id-ID')} ${tr('Kredit')}` : '—'}
+									{h2RemainingRp}
 								</strong>
 							</div>
 						</div>
@@ -1186,7 +1198,7 @@
 						{#if h2ConfirmData.balance != null && h2ConfirmData.balance < h2ConfirmData.total}
 							<div class="flex items-center gap-2 rounded-xl p-3 text-xs" style="background-color: var(--destructive-soft, #fef2f2); color: var(--destructive, #dc2626);">
 								<CircleAlert size={15} class="shrink-0" />
-								<span>{tr('Saldo kredit tidak mencukupi untuk membuat gambar. Silakan top up terlebih dahulu.')}</span>
+								<span>{tr('Saldo tidak mencukupi untuk membuat gambar. Silakan top up terlebih dahulu.')}</span>
 							</div>
 						{/if}
 					</div>
@@ -1212,7 +1224,7 @@
 								<span>{tr('Memproses…')}</span>
 							{:else}
 								<Sparkles size={14} />
-								<span>{tr('Ya, Generate Semua')} ({h2ConfirmData.total} {tr('Kredit')})</span>
+								<span>{tr('Ya, Generate Semua')} ({h2TotalRp})</span>
 							{/if}
 						</button>
 					</div>

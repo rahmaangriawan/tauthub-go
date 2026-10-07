@@ -18,6 +18,8 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 
+	contentengine "github.com/rahmaangriawan/tauthub-go/internal/content"
+
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
@@ -1698,10 +1700,11 @@ func numOrNil(row bsRow, key string) any {
 // sanitizeArticleHTMLForStore: filter iframe lama + netralisasi konstruk
 // berbahaya sebelum HTML manual disimpan (lihat security.SanitizeArticleHTML).
 // Artikel normal tidak berubah; hanya konstruk berbahaya yang dibuang.
-// H1 di dalam isi diturunkan jadi H2 (judul artikel ada di field judul).
+// H1 di dalam isi diturunkan jadi H2 (judul artikel ada di field judul), lalu
+// markup dirapikan dari sisa editor (<div> per baris, blok kosong).
 func sanitizeArticleHTMLForStore(html string) string {
 	safe, _ := security.SanitizeArticleHTML(html)
-	return demoteH1ToH2(safe)
+	return contentengine.NormalizeArticleHTML(demoteH1ToH2(safe))
 }
 
 func stripDisallowedIframesHTML(html string) string {

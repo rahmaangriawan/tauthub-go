@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -1530,7 +1531,8 @@ const opPublicationSelectColumns = `p.id, p.order_code, p.status, p.client_price
               (SELECT pa2.error_code FROM publication_attempts pa2 WHERE pa2.publication_id = p.id ORDER BY pa2.attempt_number DESC LIMIT 1) AS error_code,
               (SELECT pa2.error_message FROM publication_attempts pa2 WHERE pa2.publication_id = p.id ORDER BY pa2.attempt_number DESC LIMIT 1) AS error_message,
               (SELECT v.angle_label FROM publication_variants v WHERE v.publication_id = p.id LIMIT 1) AS variant_angle,
-              (SELECT b.mode FROM publication_variants v JOIN publication_variant_batches b ON b.id = v.batch_id WHERE v.publication_id = p.id LIMIT 1) AS variant_mode`
+              (SELECT b.mode FROM publication_variants v JOIN publication_variant_batches b ON b.id = v.batch_id WHERE v.publication_id = p.id LIMIT 1) AS variant_mode,
+              (SELECT pj.remote_post_id FROM publication_jobs pj WHERE pj.publication_id = p.id ORDER BY pj.created_at DESC LIMIT 1) AS remote_post_id`
 
 const opPublicationFromClause = `FROM publications p
        JOIN brands b ON b.id = p.brand_id
@@ -1750,14 +1752,14 @@ func (d *Deps) OperationsPublicationDetail(w http.ResponseWriter, r *http.Reques
 		jr := ptRow(ptNormalizeMap(jobRow))
 		jobOut = map[string]any{
 			"id": jr.anyOrNil("id"), "status": jr.anyOrNil("status"),
-			"publish_status": jr.anyOrNil("publish_status"),
-			"remote_post_id": ptNullableStr(jr, "remote_post_id"),
-			"remote_url":     ptNullableStr(jr, "remote_url"),
-			"error_code":     ptNullableStr(jr, "error_code"),
-			"error_message":  ptNullableStr(jr, "error_message"),
+			"publish_status":  jr.anyOrNil("publish_status"),
+			"remote_post_id":  ptNullableStr(jr, "remote_post_id"),
+			"remote_url":      ptNullableStr(jr, "remote_url"),
+			"error_code":      ptNullableStr(jr, "error_code"),
+			"error_message":   ptNullableStr(jr, "error_message"),
 			"warning_message": ptNullableStr(jr, "warning_message"),
-			"attempts":       jr.intOr("attempts", 0),
-			"started_at":     jr.anyOrNil("started_at"), "completed_at": jr.anyOrNil("completed_at"),
+			"attempts":        jr.intOr("attempts", 0),
+			"started_at":      jr.anyOrNil("started_at"), "completed_at": jr.anyOrNil("completed_at"),
 			"payload_snapshot": payloadSnapshot,
 		}
 	}
@@ -1839,71 +1841,144 @@ func (d *Deps) OperationsPublicationRetry(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": "queued", "job_id": jobID})
 }
 
-// OperationsPublicationRepairImages: POST /v1/platform/operations/publications/{publicationId}/repair-images
-// Jalankan ulang pengiriman untuk publikasi yang SUDAH terbit supaya gambar
-// artikel diunggah ke media library mitra dan gambar utama dipasang. Post mitra
-// diperbarui, bukan dibuat ulang: remote_post_id dipertahankan sehingga
-// WordPress menerima update pada post yang sama.
-func (d *Deps) OperationsPublicationRepairImages(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := d.adminGuard(w, r, ""); !ok {
-		return
-	}
-	ctx := r.Context()
-	publicationID := chiParam(r, "publicationId")
-	publication, err := d.queryRow(ctx,
-		"SELECT id, status, brand_id FROM publications WHERE id = $1 LIMIT 1", publicationID)
+// opPublicationRelink: inti aksi "perbaiki / sinkron ulang". Menandai ulang
+// publikasi terbit supaya job eksekusi jalan lagi dan kategori, gambar utama,
+// serta gambar badan artikel di-resolve dari awal. Post mitra DIPERBARUI, bukan
+// dibuat ulang: remote_post_id dipertahankan (worker memakai ID itu untuk
+// mengirim ulang ke wp/v2/posts/{id}).
+//
+// label dipakai di pesan kesalahan agar tiap tombol menjelaskan dirinya
+// sendiri; wordpressOnly=true untuk tombol sinkron kategori + gambar, yang
+// hanya masuk akal pada integrasi WordPress.
+func (d *Deps) opPublicationRelink(ctx context.Context, publicationID, label string, wordpressOnly bool) (map[string]any, error) {
+	row, err := d.queryRow(ctx,
+		`SELECT p.id, p.status, p.brand_id, p.published_url, m.integration_type
+		 FROM publications p
+		 JOIN media m ON m.id = p.media_id
+		 WHERE p.id = $1 LIMIT 1`, publicationID)
 	if err != nil {
-		writeErr(w, d, err)
-		return
+		return nil, err
 	}
-	if publication == nil {
-		writeErr(w, d, errNotFound("Publication not found"))
-		return
+	if row == nil {
+		return nil, errNotFound("Publication not found")
 	}
-	row := ptRow(ptNormalizeMap(publication))
-	current := row.strOr("status", "")
+	pub := ptRow(ptNormalizeMap(row))
+	current := pub.strOr("status", "")
 	if current != "published" {
-		writeErr(w, d, errConflict(fmt.Sprintf("Hanya publikasi terbit yang bisa diperbaiki (status saat ini: %s)", current)))
-		return
+		return nil, errConflict(fmt.Sprintf("Hanya publikasi terbit yang bisa %s (status saat ini: %s)", label, current))
 	}
-	job, err := d.queryRow(ctx,
+	integration := pub.strOr("integration_type", "")
+	if wordpressOnly && integration != "wordpress" {
+		return nil, errConflict(fmt.Sprintf("Sinkron ulang gambar & kategori hanya untuk media WordPress (integrasi media ini: %s).", integration))
+	}
+	jobRow, err := d.queryRow(ctx,
 		"SELECT id, remote_post_id FROM publication_jobs WHERE publication_id = $1 ORDER BY created_at DESC LIMIT 1",
 		publicationID)
 	if err != nil {
-		writeErr(w, d, err)
-		return
+		return nil, err
 	}
-	if job == nil || job.strOr("remote_post_id", "") == "" {
-		writeErr(w, d, errConflict("Publikasi belum punya post mitra (remote_post_id), tidak ada yang bisa diperbaiki."))
-		return
+	if jobRow == nil {
+		return nil, errConflict(fmt.Sprintf("Publikasi belum punya job pengiriman, tidak ada yang bisa %s.", label))
+	}
+	job := ptRow(ptNormalizeMap(jobRow))
+	remotePostID := strings.TrimSpace(job.strOr("remote_post_id", ""))
+	// Post lama kadang hanya menyimpan tautannya (…/?p=152), bukan ID post-nya.
+	derivedID := ""
+	if remotePostID == "" {
+		derivedID = opPostIDFromWPURL(pub.strOr("published_url", ""))
+		if derivedID == "" {
+			return nil, errConflict(fmt.Sprintf("Publikasi belum punya post mitra (remote_post_id) dan tautan terbitnya tidak memuat ID post, tidak ada yang bisa %s.", label))
+		}
 	}
 	// published → revision → queued: satu-satunya jalur transisi yang diizinkan
 	// menuju eksekusi ulang.
 	if err := d.opTransitionPublication(ctx, publicationID, "revision"); err != nil {
-		writeErr(w, d, err)
-		return
+		return nil, err
 	}
 	if err := d.opTransitionPublication(ctx, publicationID, "queued"); err != nil {
-		writeErr(w, d, err)
-		return
+		return nil, err
 	}
-	// payload_snapshot dikosongkan agar kategori, gambar utama, dan gambar badan
-	// artikel di-resolve serta diunggah ulang. remote_post_id sengaja disimpan.
+	// payload_snapshot direset ke bentuk "job baru" (publish_status dipertahankan)
+	// supaya kategori, gambar utama, dan gambar badan artikel di-resolve serta
+	// diunggah ulang. Tidak boleh dikosongkan seluruhnya: kolomnya NOT NULL, dan
+	// tanpa publish_status post live akan turun jadi draft. remote_post_id
+	// sengaja disimpan; bila kosong, ID dari tautan dipakai supaya post yang sama
+	// yang diperbarui.
 	if err := d.exec(ctx, `
 		UPDATE publication_jobs
 		SET status = 'queued', progress = 0, error_code = NULL, error_message = NULL,
-		    warning_message = NULL, payload_snapshot = NULL
-		WHERE id = $1`, job.strOr("id", "")); err != nil {
-		writeErr(w, d, err)
-		return
+		    warning_message = NULL,
+		    payload_snapshot = jsonb_build_object(
+		        'publish_status', COALESCE(NULLIF(publish_status, ''), 'draft'),
+		        'excerpt', NULL,
+		        'categories', '[]'::jsonb,
+		        'tags', '[]'::jsonb),
+		    remote_post_id = COALESCE(NULLIF($2, ''), remote_post_id)
+		WHERE id = $1`, job.strOr("id", ""), derivedID); err != nil {
+		return nil, err
 	}
 	jobID, err := d.opEnqueueJob(ctx, "publication_execution",
-		map[string]any{"publicationId": publicationID, "brandId": row.strOr("brand_id", "")}, 3)
+		map[string]any{"publicationId": publicationID, "brandId": pub.strOr("brand_id", "")}, 3)
+	if err != nil {
+		return nil, err
+	}
+	remotePost := remotePostID
+	if remotePost == "" {
+		remotePost = derivedID
+	}
+	return map[string]any{
+		"ok": true, "status": "queued", "job_id": jobID,
+		"integration_type": integration, "remote_post_id": remotePost,
+	}, nil
+}
+
+// opPostIDFromWPURL: ID post dari tautan gaya "…?p=152". Permalink cantik
+// ("/judul-artikel/") tidak memuat ID sehingga hasilnya kosong.
+func opPostIDFromWPURL(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	id := strings.TrimSpace(parsed.Query().Get("p"))
+	if id == "" {
+		return ""
+	}
+	for _, ch := range id {
+		if ch < '0' || ch > '9' {
+			return ""
+		}
+	}
+	return id
+}
+
+// OperationsPublicationRepairImages: POST /v1/platform/operations/publications/{publicationId}/repair-images
+// Jalankan ulang pengiriman untuk publikasi yang SUDAH terbit supaya gambar
+// artikel diunggah ke media library mitra dan gambar utama dipasang.
+func (d *Deps) OperationsPublicationRepairImages(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := d.adminGuard(w, r, ""); !ok {
+		return
+	}
+	res, err := d.opPublicationRelink(r.Context(), chiParam(r, "publicationId"), "diperbaiki", false)
 	if err != nil {
 		writeErr(w, d, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": "queued", "job_id": jobID})
+	writeJSON(w, http.StatusOK, res)
+}
+
+// OperationsPublicationResyncWordpress: POST /v1/platform/operations/publications/{publicationId}/resync-wordpress
+// Sama dengan repair-images tetapi khusus WordPress: dipakai tombol "Sinkron
+// ulang gambar & kategori" ketika post mitra terbit tanpa keduanya.
+func (d *Deps) OperationsPublicationResyncWordpress(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := d.adminGuard(w, r, ""); !ok {
+		return
+	}
+	res, err := d.opPublicationRelink(r.Context(), chiParam(r, "publicationId"), "disinkronkan", true)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // ---------- running batches ----------
@@ -1981,7 +2056,7 @@ func (d *Deps) operationsUsersList(w http.ResponseWriter, r *http.Request) {
 			"is_active": row.anyOrNil("is_active"), "is_approved": approvedAt != nil,
 			"approved_at": approvedAt, "brand_count": row.numOr("brand_count"),
 			"writer_generate_quota": row.anyOrNil("writer_generate_quota"),
-			"created_at": row.anyOrNil("created_at"),
+			"created_at":            row.anyOrNil("created_at"),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

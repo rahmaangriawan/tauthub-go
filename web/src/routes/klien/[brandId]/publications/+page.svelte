@@ -155,6 +155,23 @@
 		return c ?? { ...STATUS_FALLBACK, label: status };
 	}
 
+	// Publikasi yang sudah diterima media tetapi diterbitkan sebagai DRAF di
+	// website mitra belum bisa dibuka publik. Statusnya ditulis "Disetujui"
+	// (bukan "Published") dan alasannya muncul saat dihover.
+	const isDraftVisibility = (row: { status: string; publish_status?: string | null }) =>
+		row.status === 'published' && row.publish_status === 'draft';
+	const draftVisibilityTip = $derived(
+		tr(
+			'Artikel sudah diterima & diterbitkan media, tetapi masih berstatus draf di website mitra — belum bisa dibuka publik. Tautan tayang muncul otomatis setelah mitra mempublikasikannya.'
+		)
+	);
+	const draftVisibilityCfg = $derived({
+		label: tr('Disetujui'),
+		dot: 'var(--warning)',
+		text: 'var(--warning)',
+		bg: 'var(--warning-soft)'
+	});
+
 	const CANCELLABLE = new Set(['pending', 'queued', 'waiting_partner', 'partner_rejected', 'processing', 'retrying']);
 	const RESETTABLE = new Set(['processing', 'failed', 'retrying', 'queued', 'cancelled']);
 	const IN_FLIGHT = ['queued', 'processing', 'retrying'];
@@ -319,6 +336,18 @@
 
 <PageTitle title={tr("Publikasi")} />
 
+<!-- Badge status publikasi. Dipakai daftar & modal detail; saat artikel masih
+     draf di website mitra, badge dibungkus tooltip penjelas. -->
+{#snippet statusBadge(row: Pub, cfg: { label: string; dot: string; text: string; bg: string })}
+	<span
+		class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold capitalize"
+		style="color: {cfg.text}; background-color: {cfg.bg};"
+	>
+		<span class="h-1.5 w-1.5 rounded-full {IN_FLIGHT.includes(row.status) ? 'animate-pulse' : ''}" style="background-color: {cfg.dot};"></span>
+		{cfg.label}
+	</span>
+{/snippet}
+
 <section>
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
@@ -427,6 +456,8 @@
 			<div class="app-card mt-4 flex flex-col">
 				{#each sorted as row (row.id)}
 					{@const cfg = statusCfg(row.status)}
+					{@const draftVis = isDraftVisibility(row)}
+					{@const badge = draftVis ? draftVisibilityCfg : cfg}
 					{@const cats = categoriesOf(row)}
 					{@const thumb = row.featured_image_url?.startsWith('https://app.tauthub.com/uploads/')
 						? row.featured_image_url.replace('https://app.tauthub.com', '')
@@ -513,13 +544,13 @@
 
 						<!-- Sisi kanan -->
 						<div class="flex shrink-0 flex-col items-end gap-2 md:w-[230px]">
-							<span
-								class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold capitalize"
-								style="color: {cfg.text}; background-color: {cfg.bg};"
-							>
-								<span class="h-1.5 w-1.5 rounded-full {IN_FLIGHT.includes(row.status) ? 'animate-pulse' : ''}" style="background-color: {cfg.dot};"></span>
-								{cfg.label}
-							</span>
+							{#if draftVis}
+								<Tooltip content={draftVisibilityTip} maxWidth={320}>
+									{@render statusBadge(row, badge)}
+								</Tooltip>
+							{:else}
+								{@render statusBadge(row, badge)}
+							{/if}
 
 							{#if IN_FLIGHT.includes(row.status)}
 								<div class="w-full">
@@ -579,7 +610,7 @@
 		     dibuat dari alur distribusi), jadi arahkan ke sana. -->
 		<div class="app-card mt-4 flex flex-col items-center gap-3 px-6 py-12 text-center">
 			<p class="font-medium">{tr("Jadwal berulang dikelola dari alur kampanye")}</p>
-			<p class="max-w-lg text-sm text-muted-foreground">{tr("Buat dan pantau jadwal distribusi berulang lewat The Gatekeeper pada kampanye Taut Pintar, supaya media, jadwal, dan kreditnya tercatat dalam satu alur.")}</p>
+			<p class="max-w-lg text-sm text-muted-foreground">{tr("Buat dan pantau jadwal distribusi berulang lewat The Gatekeeper pada kampanye Taut Pintar, supaya media, jadwal, dan biayanya tercatat dalam satu alur.")}</p>
 			<a class="app-btn app-btn-primary" href={`/klien/${brandUrl}/campaigns`}>{tr("Buka Kampanye")}</a>
 		</div>
 	{/if}
@@ -602,10 +633,13 @@
 				<div>
 					<dt class="flex items-center gap-1.5 text-xs text-muted-foreground"><CircleCheck size={13} /> Status</dt>
 					<dd class="mt-1.5">
-						<span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold capitalize" style="color: {statusCfg(detail.status).text}; background-color: {statusCfg(detail.status).bg};">
-							<span class="h-1.5 w-1.5 rounded-full" style="background-color: {statusCfg(detail.status).dot};"></span>
-							{statusCfg(detail.status).label}
-						</span>
+						{#if isDraftVisibility(detail)}
+							<Tooltip content={draftVisibilityTip} maxWidth={320}>
+								{@render statusBadge(detail, draftVisibilityCfg)}
+							</Tooltip>
+						{:else}
+							{@render statusBadge(detail, statusCfg(detail.status))}
+						{/if}
 					</dd>
 				</div>
 				<div>
@@ -665,7 +699,7 @@
 		<button type="button" aria-label={tr("Tutup")} tabindex="-1" style="position:absolute; inset:0; border:none; background:transparent; cursor:default;" onclick={() => { if (!cancelBusy) cancelTarget = null; }}></button>
 		<dialog open class="app-card relative z-10 w-full max-w-md p-5" aria-label="Batalkan publikasi" onkeydown={(e) => { if (e.key === 'Escape' && !cancelBusy) cancelTarget = null; }}>
 			<h2 class="text-base font-bold">Batalkan publikasi</h2>
-			<p class="mt-2 text-sm text-muted-foreground">{tr("Publikasi ke")}<strong style="color: var(--foreground);">{cancelTarget.media_name ?? tr('Media Mitra')}</strong>{tr("akan dibatalkan. Kredit (bila ada) otomatis dikembalikan.")}</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr("Publikasi ke")}<strong style="color: var(--foreground);">{cancelTarget.media_name ?? tr('Media Mitra')}</strong>{tr("akan dibatalkan. Saldo (bila ada) otomatis dikembalikan.")}</p>
 			<label class="mt-3 flex flex-col gap-1 text-sm">
 				Alasan (opsional)
 				<textarea class="app-input" rows="3" bind:value={cancelReason} maxlength={500}></textarea>

@@ -21,9 +21,11 @@ import (
 
 const (
 	crawlerSignatureVersion = "v1"
-	crawlerConsentVersion   = "1"
-	crawlerSecretBytes      = 32
-	crawlerNonceBytes       = 16
+	// Naikkan bila isi dokumen persetujuan berubah (web: CRAWLER_CONSENT_VERSION)
+	// supaya consent_doc_version pada kredensial baru mencatat versi yang benar.
+	crawlerConsentVersion = "2"
+	crawlerSecretBytes    = 32
+	crawlerNonceBytes     = 16
 )
 
 // buildCanonical: v1|crawlerId|METHOD|host|path?query|ts|nonce.

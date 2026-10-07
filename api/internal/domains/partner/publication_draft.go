@@ -83,13 +83,24 @@ func (d *Deps) wpDraftPreview(r *http.Request, publicationID string, publication
 	featured := firstNonNilString(edits["featured_image_url"], publication.raw("featured_image_url"))
 	return map[string]any{
 		"title":              title,
-		"content_html":       relSelfHTMLAny(contentHTML),
+		"content_html":       relSelfHTMLAny(normalizeDraftHTML(contentHTML)),
 		"meta_description":   metaDescription,
 		"featured_image_url": relSelfURLAny(featured),
 		"wp_status":          firstNonNilString(post["status"], "draft"),
 		"edited_at":          edits["edited_at"],
 		"source":             "wp_draft",
 	}, true
+}
+
+// normalizeDraftHTML: rapikan markup draf sebelum ditampilkan ke mitra, supaya
+// sisa editor klien (<div> per baris, <div><br></div>) tidak muncul sebagai tag
+// sampah di form edit. Nilai non-string dilewatkan apa adanya.
+func normalizeDraftHTML(value any) any {
+	s, ok := value.(string)
+	if !ok || s == "" {
+		return value
+	}
+	return content.NormalizeArticleHTML(s)
 }
 
 func firstNonNilString(vals ...any) any {
@@ -160,7 +171,7 @@ func (d *Deps) clientDocumentPreview(r *http.Request, publicationID string, publ
 	edits := d.partnerEdits(r.Context(), publicationID)
 	return map[string]any{
 		"title":              firstNonNilString(edits["title"], doc.raw("title"), ""),
-		"content_html":       relSelfHTMLAny(firstNonNilString(edits["content_html"], html)),
+		"content_html":       relSelfHTMLAny(normalizeDraftHTML(firstNonNilString(edits["content_html"], html))),
 		"meta_description":   firstNonNilString(edits["meta_description"], doc.raw("meta_description")),
 		"featured_image_url": relSelfURLAny(firstNonNilString(edits["featured_image_url"], publication.raw("featured_image_url"))),
 		"wp_status":          "terbit",
@@ -233,6 +244,11 @@ func (d *Deps) publicationDraftPut(w http.ResponseWriter, r *http.Request) {
 	if hasMeta && len(metaDescription) > 500 {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid meta_description")
 		return
+	}
+	// Simpan versi yang sudah dirapikan agar editor mitra tidak menambah tag
+	// sampah baru dan draf WordPress menerima markup yang bersih.
+	if hasContent {
+		contentHTML = content.NormalizeArticleHTML(contentHTML)
 	}
 
 	// Sinkronisasi draf WordPress (best-effort; snapshot lokal tetap disimpan).
@@ -439,7 +455,7 @@ func (d *Deps) PublicationRewrite(w http.ResponseWriter, r *http.Request) {
 	d.auditLog(r.Context(), user.ID, "publication.partner_rewrite_ai", "publication", publicationID)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"title":              truncateRunes(parsed["title"], 200),
-		"content_html":       truncateRunes(parsed["content_html"], 200_000),
+		"content_html":       content.NormalizeArticleHTML(truncateRunes(parsed["content_html"], 200_000)),
 		"amount_charged_idr": rewriteCostIDR,
 	})
 }

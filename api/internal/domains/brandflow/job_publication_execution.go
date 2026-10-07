@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	contentengine "github.com/rahmaangriawan/tauthub-go/internal/content"
 	"github.com/rahmaangriawan/tauthub-go/internal/crypto"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
@@ -309,15 +310,16 @@ func peCloneRow(row bsRow) bsRow {
 	return out
 }
 
-// peRenderedHTML: markdown → HTML lalu buang H1 pertama dan absolutisasi
-// src="/uploads/..." ke origin publik.
+// peRenderedHTML: markdown → HTML, rapikan sisa markup editor, buang H1 pertama,
+// lalu absolutisasi src="/uploads/..." ke origin publik.
 func peRenderedHTML(version bsRow, publicOrigin string) (content, html string) {
 	content = version.strOr("content", "")
 	rendered := content
 	if strings.ToLower(version.strOr("content_format", "")) == "markdown" {
 		rendered = bsPublishMarkdown(content)
 	}
-	return content, peAbsolutizeUploadURLs(bsStripH1(rendered), publicOrigin)
+	rendered = contentengine.NormalizeArticleHTML(bsStripH1(rendered))
+	return content, peAbsolutizeUploadURLs(rendered, publicOrigin)
 }
 
 // ---------- gerbang moderasi ----------

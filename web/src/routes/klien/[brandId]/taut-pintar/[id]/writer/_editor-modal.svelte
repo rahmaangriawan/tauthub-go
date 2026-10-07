@@ -29,7 +29,7 @@
 		onSave,
 		onUploadCover,
 		regenDisabled,
-		regenLabel = tr('Generate Ulang (2 Kredit)'),
+		regenLabel = tr('Generate Ulang'),
 		regenTitle,
 		onRegenerate,
 		// Kebijakan yang bisa dilonggarkan konteks lain (mis. modal revisi di

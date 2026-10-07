@@ -159,6 +159,8 @@ func (d *Deps) TautCampaignsList(w http.ResponseWriter, r *http.Request) {
 		"total":     total,
 		"page":      page,
 		"per_page":  perPage,
+		// Kurs aktif supaya daftar kampanye menampilkan anggaran serapan dalam rupiah.
+		"rate_idr": d.getTcConfig(r.Context()).RateIDR,
 	})
 }
 
@@ -430,6 +432,8 @@ func (d *Deps) TautCampaignGet(w http.ResponseWriter, r *http.Request) {
 		"taut_status":      c.raw("taut_status"),
 		"entry_mode":       c.raw("taut_entry_mode"),
 		"stats":            stats,
+		// Kurs aktif supaya biaya kampanye ditampilkan dalam rupiah.
+		"rate_idr": d.getTcConfig(r.Context()).RateIDR,
 	})
 }
 

@@ -6,7 +6,7 @@
 	// (pratinjau → konfirmasi, parity alur bulk import app lama).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { BadgeCheck, Check, Copy, ExternalLink, Info, Link, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Trash2, TriangleAlert, Upload, X } from '@lucide/svelte';
+	import { BadgeCheck, Check, Copy, ExternalLink, Info, Link, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Trash2, TriangleAlert, Upload, X } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -42,6 +42,9 @@
 	let autoBusy = $state<string | null>(null);
 	let categories = $state<string[]>([]);
 	let autoPublishEnabled = $state(false);
+	// Impor massal baru terbuka setelah media pertama disetujui admin dan
+	// domainnya terverifikasi. Nilainya datang dari server (sumber kebenaran).
+	let bulkUnlocked = $state(false);
 	let loading = $state(true);
 	let busy = $state(false);
 	let error = $state('');
@@ -177,6 +180,7 @@
 		total = data.total ?? items.length;
 		categories = data.categories ?? [];
 		autoPublishEnabled = Boolean(data.auto_publish_enabled);
+		bulkUnlocked = Boolean(data.bulk_unlocked);
 	}
 
 	/** Toggle "Mode Otomatis" per media (parity app lama: PUT {auto_publish}). */
@@ -682,13 +686,41 @@
 			<p class="mt-1 text-sm text-muted-foreground">{items.length} {tr("media terdaftar pada akun mitra Anda.")}</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<label class="app-btn app-btn-soft cursor-pointer">
-				<Upload size={15} /> Impor XLSX
-				<input id="bulk-file" class="hidden" type="file" accept=".xlsx" onchange={uploadImport} />
-			</label>
+			{#if bulkUnlocked}
+				<label class="app-btn app-btn-soft cursor-pointer">
+					<Upload size={15} /> Impor XLSX
+					<input id="bulk-file" class="hidden" type="file" accept=".xlsx" onchange={uploadImport} />
+				</label>
+			{:else}
+				<button
+					class="app-btn app-btn-soft"
+					type="button"
+					disabled
+					title={tr('Impor massal terbuka setelah media pertama Anda disetujui admin dan domainnya terverifikasi.')}
+				>
+					<Lock size={15} /> Impor XLSX
+				</button>
+			{/if}
 			<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={15} />{tr("Tambah Media")}</button>
 		</div>
 	</header>
+
+	{#if !bulkUnlocked}
+		<div class="app-card mt-3 flex items-start gap-3 px-4 py-3 text-sm">
+			<ShieldCheck size={18} class="mt-0.5 shrink-0" style="color: var(--primary);" />
+			<div>
+				<p class="font-semibold">{tr('Impor massal belum terbuka')}</p>
+				<ol class="mt-1 list-decimal space-y-0.5 pl-5 text-muted-foreground">
+					<li>{tr('Ajukan satu media lewat “Tambah Media”, lalu tunggu persetujuan admin.')}</li>
+					<li>{tr('Buka menu ⋮ pada media itu, pilih “Verifikasi Domain”, lalu pasang kode verifikasi di situs Anda.')}</li>
+					<li>{tr('Setelah domain pertama terverifikasi, Impor XLSX aktif dengan sendirinya.')}</li>
+				</ol>
+				<p class="mt-1 text-xs text-muted-foreground">
+					{tr('Langkah ini memastikan hanya pemilik situs yang bisa mengunggah media, sehingga tidak ada domain orang lain yang diajukan tanpa izin.')}
+				</p>
+			</div>
+		</div>
+	{/if}
 
 	{#if notice}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--success);">{notice}</div>{/if}
 	{#if error}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>{/if}

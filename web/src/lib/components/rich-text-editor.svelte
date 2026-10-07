@@ -13,17 +13,18 @@
 
 	let {
 		value = $bindable(''),
-		brandId,
+		brandId = '',
 		campaignId = '',
 		mediaId = '',
 		articleId = null,
 		disabled = false,
 		minHeight = 420,
 		ariaLabel,
+		uploadImage,
 		stats = $bindable({ words: 0, links: 0, images: 0 })
 	}: {
 		value?: string;
-		brandId: string;
+		brandId?: string;
 		/** Scope pustaka gambar AI. Kosong = tombol gambar jatuh ke modal unggah. */
 		campaignId?: string;
 		mediaId?: string;
@@ -31,6 +32,11 @@
 		disabled?: boolean;
 		minHeight?: number;
 		ariaLabel?: string;
+		/**
+		 * Pengunggah gambar khusus. Bila diisi, editor memakai fungsi ini dan
+		 * tidak menyentuh aset brand (dipakai halaman mitra lewat unggahan draf).
+		 */
+		uploadImage?: (file: File) => Promise<string>;
 		/** Statistik isi (kata, tautan aktif, gambar) — dihitung saat konten berubah. */
 		stats?: { words: number; links: number; images: number };
 	} = $props();
@@ -213,12 +219,18 @@
 		imageError = '';
 		try {
 			const readyFile = await kompresWebp(file);
-			const form = new FormData();
-			form.append('file', readyFile);
-			const res = await apiRequest(`/v1/brands/${brandId}/assets`, { method: 'POST', body: form });
-			if (!res.ok) throw new Error();
-			const data = (await res.json()) as { url?: string };
-			if (data.url) insertImageUrl(data.url);
+			if (uploadImage) {
+				const url = await uploadImage(readyFile);
+				if (!url) throw new Error();
+				insertImageUrl(url);
+			} else {
+				const form = new FormData();
+				form.append('file', readyFile);
+				const res = await apiRequest(`/v1/brands/${brandId}/assets`, { method: 'POST', body: form });
+				if (!res.ok) throw new Error();
+				const data = (await res.json()) as { url?: string };
+				if (data.url) insertImageUrl(data.url);
+			}
 			imageModalOpen = false;
 		} catch {
 			imageError = tr('Gagal mengunggah gambar. Periksa koneksi lalu coba lagi.');
@@ -482,7 +494,7 @@
 				</div>
 			{/if}
 
-		{#if campaignId && mediaId}
+		{#if campaignId && mediaId && !uploadImage}
 			<MediaLibraryPicker
 				open={mediaPickerOpen}
 				{brandId}

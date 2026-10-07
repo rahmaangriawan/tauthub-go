@@ -4,7 +4,7 @@
 	// Publikasi admin — semua publikasi seluruh brand (staff visibility).
 	// Port apps/web/src/app/admin/publications/page.tsx.
 	import { onMount } from 'svelte';
-	import { Download, Megaphone, Search } from '@lucide/svelte';
+	import { Download, ImagePlus, Megaphone, Search } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import DataTable from '$lib/components/admin/data-table.svelte';
@@ -25,6 +25,9 @@
 		created_at: string;
 		error_code: string | null;
 		variant: { angle_label: string; mode: string | null } | null;
+		media_integration_type: string | null;
+		published_url: string | null;
+		remote_post_id: string | null;
 	};
 
 	const STATUS_TONE: Record<string, 'neutral' | 'accent' | 'success' | 'warning' | 'danger'> = {
@@ -63,6 +66,9 @@
 	let exporting = $state(false);
 	let page = $state(1);
 	let total = $state(0);
+	let syncBusyId = $state('');
+	let syncNotice = $state('');
+	let syncError = $state('');
 
 	onMount(() => {
 		void (async () => {
@@ -138,6 +144,40 @@
 		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(
 			Number(n ?? 0)
 		);
+
+	// Tombol sinkron hanya masuk akal untuk post WordPress yang sudah terbit dan
+	// masih bisa ditelusuri post-nya (ID tersimpan, atau tautannya berbentuk ?p=).
+	const canResync = (row: Row) =>
+		row.status === 'published' &&
+		row.media_integration_type === 'wordpress' &&
+		(!!row.remote_post_id || /\?p=\d+/.test(row.published_url ?? ''));
+
+	async function resyncRow(row: Row) {
+		if (
+			!confirm(
+				`Sinkronkan ulang gambar utama & kategori untuk “${row.document_title ?? row.id.slice(0, 8)}”?\n\n` +
+					'Post di WordPress akan DIPERBARUI (judul dan isi ikut dikirim ulang), bukan dibuat baru.'
+			)
+		)
+			return;
+		syncBusyId = row.id;
+		syncNotice = '';
+		syncError = '';
+		try {
+			const res = await apiRequest(
+				`/v1/platform/operations/publications/${row.id}/resync-wordpress`,
+				{ method: 'POST' }
+			);
+			if (!res.ok) {
+				syncError = await readApiError(res, 'Permintaan gagal.');
+				return;
+			}
+			syncNotice = `Sinkronisasi diantrekan untuk “${row.document_title ?? row.id.slice(0, 8)}”. Gambar utama dan kategori akan dikirim ulang ke post WordPress yang sama.`;
+			void load();
+		} finally {
+			syncBusyId = '';
+		}
+	}
 	const showAccess = $derived(rows.length === 0 && error.includes('Akses platform'));
 </script>
 
@@ -192,6 +232,20 @@
 	<span class="text-xs text-muted-foreground">{fmtDateTime(row.created_at)}</span>
 {/snippet}
 
+{#snippet actionCell(row: Row)}
+	{#if canResync(row)}
+		<button
+			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+			disabled={syncBusyId === row.id}
+			onclick={() => resyncRow(row)}
+		>
+			<ImagePlus size={14} />{syncBusyId === row.id ? 'Mengantrekan…' : tr('Sinkron ulang')}
+		</button>
+	{:else}
+		<span class="text-xs text-muted-foreground">—</span>
+	{/if}
+{/snippet}
+
 <section>
 	<PageHeader
 		title={tr("Publikasi")}
@@ -201,6 +255,13 @@
 	</PageHeader>
 
 	<Feedback {loading} {error} />
+
+	{#if syncNotice}
+		<p class="mt-3 text-sm" style="color: var(--success);">{syncNotice}</p>
+	{/if}
+	{#if syncError}
+		<p class="mt-3 text-sm" style="color: var(--destructive);">{syncError}</p>
+	{/if}
 
 	<div class="mt-4 flex flex-wrap items-center gap-2">
 		<label class="app-input flex min-w-[240px] max-w-[360px] flex-1 items-center gap-2 !py-1.5">
@@ -244,7 +305,8 @@
 				{ key: 'media', label: tr('Media'), render: mediaCell },
 				{ key: 'price', label: tr('Harga'), render: priceCell },
 				{ key: 'status', label: 'Status', render: pubStatusCell },
-				{ key: 'created', label: 'Waktu', render: createdAtCell }
+				{ key: 'created', label: 'Waktu', render: createdAtCell },
+				{ key: 'action', label: tr('Aksi'), render: actionCell }
 			]}
 			rows={rows}
 			rowKey={(row: Row) => row.id}

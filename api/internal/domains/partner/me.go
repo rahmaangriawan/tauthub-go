@@ -36,7 +36,7 @@ func partnerMeJSON(row rowMap) map[string]any {
 	pendingCount := row.intOr("pending_count", 0)
 	waNumber := strings.TrimSpace(row.strOr("wa_number", ""))
 	waConsent := row.boolOr("wa_consent", false)
-	// Mitra wajib melengkapi nomor WA begitu medianya lebih dari 2.
+	// Mitra wajib melengkapi nomor WA begitu medianya lebih dari satu.
 	waRequired := mediaCount > waMediaThreshold && (waNumber == "" || !waConsent)
 	return map[string]any{
 		"id":                            row.raw("id"),

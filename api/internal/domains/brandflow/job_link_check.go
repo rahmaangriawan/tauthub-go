@@ -59,9 +59,13 @@ type linkCheckResult struct {
 
 // PublicationLinkCheckJob: cek satu publikasi tayang lalu simpan hasilnya
 // (parity checkPublicationLink). Mengembalikan nil bila publikasi tidak ada.
+//
+// Publikasi yang diterbitkan sebagai DRAF di website mitra (publish_status =
+// 'draft') TIDAK dicatat: URL-nya belum tampil untuk publik, jadi pengecekan
+// hanya akan melaporkan artikel "hilang" palsu di Pelacak 404.
 func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string) error {
 	pub, err := d.queryRow(ctx, `
-		SELECT p.id, p.brand_id, p.media_id, p.published_url,
+		SELECT p.id, p.brand_id, p.media_id, p.published_url, p.publish_status,
 		       m.name AS media_name, m.partner_id,
 		       d.title AS document_title
 		FROM publications p
@@ -70,6 +74,9 @@ func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string
 		WHERE p.id = $1 LIMIT 1`, publicationID)
 	if err != nil || pub == nil {
 		return err
+	}
+	if pub.strOr("publish_status", "draft") == "draft" {
+		return nil
 	}
 
 	previous, err := d.queryRow(ctx,

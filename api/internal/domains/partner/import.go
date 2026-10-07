@@ -816,8 +816,15 @@ func (d *Deps) MediaImport(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Tidak ada baris valid untuk diimport.")
 		return
 	}
-	// Mitra dengan lebih dari 2 media wajib mengisi nomor WhatsApp + izin dihubungi
-	// (dihitung dari media lama + baris yang akan diimpor).
+	// Impor massal terkunci sampai mitra membuktikan kepemilikan satu domain
+	// (media pertama disetujui admin + domain terverifikasi). Diperiksa di sini,
+	// bukan hanya di UI, supaya panggilan API langsung pun ikut tertahan.
+	if !d.bulkMediaUnlocked(r.Context(), partner.ID) {
+		writeBulkLocked(w)
+		return
+	}
+	// Menambah media kedua dan seterusnya wajib mengisi nomor WhatsApp + izin
+	// dihubungi (dihitung dari media lama + baris yang akan diimpor).
 	if d.waRequirementMissing(r.Context(), partner.UserID, partner.ID, validCount) {
 		writeWARequired(w)
 		return

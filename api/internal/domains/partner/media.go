@@ -250,6 +250,7 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 		"media":                mediaItems,
 		"categories":           categories,
 		"auto_publish_enabled": partner.AutoPublishEnabled,
+		"bulk_unlocked":        d.bulkMediaUnlocked(r.Context(), partner.ID),
 		"total":                countRow.intOr("count", 0),
 		"limit":                limit,
 		"offset":               offset,
@@ -398,7 +399,7 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 		topikJSON = marshalJSONArr(topik)
 	}
 
-	// Mitra dengan lebih dari 2 media wajib mengisi nomor WhatsApp + izin dihubungi.
+	// Menambah media kedua dan seterusnya wajib mengisi nomor WhatsApp + izin dihubungi.
 	if d.waRequirementMissing(r.Context(), partner.UserID, partner.ID, 1) {
 		writeWARequired(w)
 		return

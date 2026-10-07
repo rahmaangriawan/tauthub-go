@@ -15,7 +15,7 @@
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
 	import EditorModal from '../writer/_editor-modal.svelte';
-	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, toJakartaDisplay } from '../../_shared';
+	import { MANUAL_PROFILER_REASON, rpCurrency, toJakartaDisplay } from '../../_shared';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
@@ -292,10 +292,9 @@
 			<div class="app-card p-4">
 				<div class="flex items-center gap-3">
 					<span class="flex h-9 w-9 items-center justify-center rounded-lg" style="background-color: var(--accent); color: var(--accent-foreground);"><Database size={20} /></span>
-					<p class="text-sm text-muted-foreground">{tr("Kredit Distribusi Media")}</p>
+					<p class="text-sm text-muted-foreground">{tr("Biaya Distribusi Media")}</p>
 				</div>
-				<p class="mt-2 text-lg font-bold">{fmtIdr(data.totalCostTc)} {tr("Kredit")}</p>
-				<p class="text-xs text-muted-foreground">Setara {rpCurrency(data.totalCostIdr)}</p>
+				<p class="mt-2 text-lg font-bold">{rpCurrency(data.totalCostIdr)}</p>
 			</div>
 			<div class="app-card p-4">
 				<div class="flex items-center gap-3">

@@ -56,7 +56,9 @@ export type MediaInfoPdfData = {
 	parameters: MediaInfoParam[];
 	gatekeeper: string[];
 	priceText: string;
-	creditText: string;
+	// Catatan tambahan di sisi kanan pita harga (mis. satuan kredit). Kosong =
+	// tidak dicetak, karena tampilan klien kini memakai rupiah.
+	creditText?: string;
 	generatedAt: string;
 	reference: string;
 	labels: MediaInfoPdfLabels;
@@ -345,7 +347,7 @@ export function buildMediaInfoPdf(data: MediaInfoPdfData): jsPDF {
 	print(labels.publicationCost.toUpperCase(), MARGIN + 7, bandY + 7, { size: 6.5, style: 'bold', color: C.headerMuted, space: 0.5 });
 	print(data.priceText, MARGIN + 7, bandY + 15, { size: 15, style: 'bold', color: C.white });
 	print(data.reference, PAGE_W - MARGIN - 7, bandY + 7, { size: 6.5, color: C.headerMuted, align: 'right' });
-	print(data.creditText, PAGE_W - MARGIN - 7, bandY + 15, { size: 10, style: 'bold', color: C.white, align: 'right' });
+	if (data.creditText) print(data.creditText, PAGE_W - MARGIN - 7, bandY + 15, { size: 10, style: 'bold', color: C.white, align: 'right' });
 
 	// ── 6. Document Footer ──
 	const footerY = 282;

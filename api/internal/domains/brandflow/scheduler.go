@@ -790,7 +790,8 @@ func (d *Deps) schEnqueueCrawlTargetSyncs(ctx context.Context, limit int) {
 // ---------- 8c. pelacak 404 (enqueuePublicationLinkChecks) ----------
 
 // schEnqueuePublicationLinkChecks: artikel published dalam garansi 12 bulan yang
-// belum pernah dicek atau > 7 hari lalu, dedupe job pending/running.
+// belum pernah dicek atau > 7 hari lalu, dedupe job pending/running. Publikasi
+// berstatus DRAF di website mitra dilewati — URL-nya belum tampil publik.
 func (d *Deps) schEnqueuePublicationLinkChecks(ctx context.Context, limit int) {
 	stale, err := d.queryRows(ctx, `
 		SELECT p.id FROM publications p
@@ -798,6 +799,7 @@ func (d *Deps) schEnqueuePublicationLinkChecks(ctx context.Context, limit int) {
 		WHERE p.status = 'published'
 		  AND p.published_url IS NOT NULL
 		  AND p.published_at > NOW() - INTERVAL '12 months'
+		  AND p.publish_status <> 'draft'
 		  AND (c.last_checked_at IS NULL OR c.last_checked_at < NOW() - INTERVAL '7 days')
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j

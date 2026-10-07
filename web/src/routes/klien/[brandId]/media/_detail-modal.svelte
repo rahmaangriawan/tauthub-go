@@ -308,7 +308,6 @@
 				],
 				gatekeeper: gatekeeperList,
 				priceText: idr(media.client_price ?? media.price),
-				creditText: `~ ${media.credit_cost} ${tr('Kredit')}`,
 				generatedAt: jakartaStamp(new Date().toISOString()),
 				reference: `REF ${media.id.slice(0, 8).toUpperCase()}`,
 				labels: {
@@ -331,7 +330,7 @@
 						'Naskah akan ditinjau secara manual oleh redaksi media, seluruh proses antrian penerbitan, revisi dan waktu respon dipantau pada halaman ringkasan kampanye.'
 					),
 					restrictedTopics: tr(
-						'Naskah yang mengandung topik berikut akan diblokir otomatis oleh AI Validator sebelum saldo kredit Anda terpotong:'
+						'Naskah yang mengandung topik berikut akan diblokir otomatis oleh AI Validator sebelum saldo Anda terpotong:'
 					),
 					footerNote: `${tr('Dibuat otomatis oleh Tauthub')} · tauthub.com`,
 					page: tr('Halaman')
@@ -685,7 +684,7 @@
 								<span class="gatekeeperTitle">Pembatasan Gatekeeper</span>
 							</div>
 
-							<p class="gatekeeperDesc">{tr("Naskah yang mengandung topik berikut akan diblokir otomatis oleh AI Validator sebelum saldo kredit Anda terpotong:")}</p>
+							<p class="gatekeeperDesc">{tr("Naskah yang mengandung topik berikut akan diblokir otomatis oleh AI Validator sebelum saldo Anda terpotong:")}</p>
 
 							<div class="gatekeeperChips">
 								{#each gatekeeperList as tag (tag)}
@@ -712,8 +711,6 @@
 							<span class="detailFooterPriceBig">
 								{idr(media.client_price ?? media.price)}
 							</span>
-							<span class="detailFooterCredits">
-								~ {media.credit_cost.toLocaleString('id-ID')} {tr("Kredit")} </span>
 						</div>
 					</div>
 				</div>
@@ -1526,11 +1523,6 @@
 		font-weight: 900;
 		letter-spacing: -0.02em;
 		color: #0f172a;
-	}
-	.detailFooterCredits {
-		font-size: 14px;
-		font-weight: 700;
-		color: #2563eb;
 	}
 
 	.detailCtaBtnBlue {

@@ -16,6 +16,7 @@
 	import AgentSteps from '../../_agent-steps.svelte';
 	import TautBottomBar from '../../_bottom-bar.svelte';
 	import ProfilerSections from './_sections.svelte';
+	import { tcToRp } from '$lib/credits/rupiah';
 	import { emptyDraft, draftFromResponse, validateProfilerDraft } from '../../_shared';
 	import type { ProfilerDraft } from '../../_shared';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -57,6 +58,7 @@
 	let options = $state<ChannelOption[]>([]);
 	let dynamicQuestions = $state<Record<string, DynamicQuestion[]>>({});
 	let walletAvailable = $state(0);
+	let rateIdr = $state(1000);
 	let loading = $state(true);
 	let error = $state('');
 	let crawlError = $state('');
@@ -105,6 +107,7 @@
 			dynamicQuestions = draftData.draft?.crawl_result?.dynamic_questions ?? {};
 			options = optionsData.channels ?? [];
 			walletAvailable = draftData.wallet?.available ?? 0;
+			rateIdr = Number(draftData.wallet?.rate_idr) || 1000;
 			saveStatus = 'idle';
 			hydrated = true;
 			loading = false;
@@ -281,8 +284,12 @@
 		const v = validateProfilerDraft(draft);
 		if (v) return v;
 		const budget = draft.budget;
+		// Batas bawah server untuk Mode Efisien adalah 5.000 kredit — dicegah di sini
+		// supaya klien tidak menabrak 422 setelah menunggu.
+		if (budget?.mode === 'efficient' && budget.amount > 0 && budget.amount < 5000)
+			return `${tr('Anggaran minimum belum terpenuhi. Isi minimal')} ${tcToRp(5000, rateIdr)}.`;
 		if (budget?.mode === 'efficient' && budget.amount > walletAvailable)
-			return tr('Kredit Saldo tidak mencukupi. Top Up dulu sebelum menjalankan analisis.');
+			return tr('Saldo tidak mencukupi. Top Up dulu sebelum menjalankan analisis.');
 		return null;
 	});
 
@@ -320,8 +327,8 @@
 			</div>
 		</div>
 		<div class="flex flex-col items-end gap-1">
-			<div class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium">
-				{walletAvailable.toLocaleString('id-ID')} {tr("Kredit")} </div>
+			<div class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium" title={tr('Saldo Anda')}>
+				{tcToRp(walletAvailable, rateIdr)} </div>
 			<div class="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
 				<span class="h-2 w-2 rounded-full" style="background-color: var(--success);"></span>{saveLabel}
 			</div>
@@ -345,7 +352,8 @@
 				{apiBase}
 				{creditsHref}
 				{options}
-				{walletAvailable}
+					{walletAvailable}
+					{rateIdr}
 				{crawling}
 				{dynamicQuestions}
 				onPatch={patch}

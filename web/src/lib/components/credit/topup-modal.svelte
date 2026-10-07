@@ -156,7 +156,7 @@
 					<p class="tu-payment-title">
 						Pesanan dibuat — {fmtIDR(payment.amount_idr)}
 					</p>
-					<p class="tu-payment-meta">{tr("Menunggu pembayaran diverifikasi payment gateway. Kredit masuk otomatis ke saldo setelah pembayaran lunas.")}</p>
+					<p class="tu-payment-meta">{tr("Menunggu pembayaran diverifikasi payment gateway. Saldo masuk otomatis setelah pembayaran lunas.")}</p>
 				</div>
 				<div class="tu-payment-actions">
 					{#if payment.payment_url}
@@ -328,7 +328,7 @@
 			<div class="tu-disclaimer">
 				<span class="tu-disclaimer-icon"><TriangleAlert size={15} /></span>
 				<p>
-					{tr("Kredit hasil Top Up")} <strong>{tr("tidak dapat di-refund / dikembalikan menjadi uang")}</strong>{tr("— hanya untuk layanan Tauthub.")}</p>
+					{tr("Saldo hasil Top Up")} <strong>{tr("tidak dapat di-refund / dikembalikan menjadi uang")}</strong>{tr("— hanya untuk layanan Tauthub.")}</p>
 			</div>
 		{/if}
 	</dialog>

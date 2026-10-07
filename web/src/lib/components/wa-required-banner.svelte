@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
 
-	// Banner wajib nomor WhatsApp: muncul saat mitra sudah punya > 2 media
-	// tetapi nomor WA + izin dihubungi belum lengkap (aturan server:
-	// notification_preferences.wa_number + wa_consent).
+	// Banner wajib nomor WhatsApp: muncul saat mitra sudah punya lebih dari satu
+	// media tetapi nomor WA + izin dihubungi belum lengkap (aturan server:
+	// notification_preferences.wa_number + wa_consent; ambang di waMediaThreshold).
 	import { TriangleAlert } from '@lucide/svelte';
 
 	let {
@@ -26,7 +26,7 @@
 				<p class="mt-1 text-sm text-muted-foreground">
 					{tr('Media Anda sudah')}
 					<strong>{mediaCount}</strong>
-					{tr('(lebih dari 2), jadi kami perlu nomor WhatsApp aktif dan izin dihubungi untuk mengonfirmasi pesanan lebih cepat. Menambah media baru diblokir sampai bagian ini lengkap.')}
+					{tr('. Media berikutnya baru bisa ditambahkan setelah nomor WhatsApp aktif dan izin dihubungi diisi, supaya pesanan dari klien bisa kami konfirmasi lebih cepat.')}
 				</p>
 				{#if profileHref}
 					<a class="app-btn app-btn-primary mt-3 !min-h-8 !px-3 !text-xs" href={profileHref}>

@@ -439,6 +439,13 @@ export function draftFromResponse(d: Partial<ProfilerDraft> | null | undefined, 
 			: spokesperson.name
 				? [{ name: spokesperson.name ?? '', role: spokesperson.role ?? '', quote: spokesperson.quote ?? '' }]
 				: [];
+	// Draft lama tersimpan dengan kunci kapital ({"Mode","Amount"}) karena struct Go
+	// belum bertag json; baca keduanya supaya anggaran tidak hilang saat dimuat.
+	const budgetRaw = (d.budget ?? {}) as Record<string, unknown>;
+	const budget: ProfilerDraft['budget'] = {
+		mode: (budgetRaw.mode ?? budgetRaw.Mode ?? base.budget.mode) as ProfilerDraft['budget']['mode'],
+		amount: Number(budgetRaw.amount ?? budgetRaw.Amount ?? base.budget.amount) || 0
+	};
 	return {
 		name: name || base.name,
 		business_profile: { ...base.business_profile, ...(d.business_profile ?? {}) },
@@ -449,7 +456,7 @@ export function draftFromResponse(d: Partial<ProfilerDraft> | null | undefined, 
 		backlink: { ...base.backlink, ...(d.backlink ?? {}) },
 		channels: d.channels ?? [],
 		materials: { ...base.materials, ...(d.materials ?? {}) },
-		budget: { ...base.budget, ...(d.budget ?? {}) },
+		budget,
 		objective: d.objective ?? null
 	};
 }
@@ -484,6 +491,6 @@ export function validateProfilerDraft(d: ProfilerDraft): string | null {
 	if (d.materials?.mode === 'upload' && !d.materials.file_ids?.length)
 		return 'Upload minimal satu dokumen bahan referensi.';
 	if (d.budget?.mode === 'efficient' && (!d.budget.amount || d.budget.amount < 1))
-		return 'Nominal Kredit Saldo wajib diisi pada Mode Efisien.';
+		return 'Nominal anggaran wajib diisi pada Mode Efisien.';
 	return null;
 }

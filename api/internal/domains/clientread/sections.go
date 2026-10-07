@@ -146,7 +146,8 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 			FROM publications p
 			LEFT JOIN publication_link_checks c ON c.publication_id = p.id
 			WHERE p.brand_id = $1 AND p.status = 'published' AND p.published_url IS NOT NULL
-			  AND p.published_at > NOW() - INTERVAL '12 months'`, brandID).
+			  AND p.published_at > NOW() - INTERVAL '12 months'
+			  AND p.publish_status <> 'draft'`, brandID).
 			Scan(&watched, &live, &gone, &unreachable, &noURL)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"watched": watched, "live": live, "gone": gone,
@@ -156,8 +157,12 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// view=publications (default): daftar artikel dengan status link.
+	// Publikasi yang diterbitkan sebagai DRAF di website mitra tidak pernah masuk
+	// pelacak 404: URL-nya belum bisa diakses publik, jadi pengecekan hanya akan
+	// melaporkan "hilang" palsu.
 	clause := "WHERE p.brand_id = $1 AND p.status = 'published' AND p.published_url IS NOT NULL" +
-		" AND p.published_at > NOW() - INTERVAL '12 months'"
+		" AND p.published_at > NOW() - INTERVAL '12 months'" +
+		" AND p.publish_status <> 'draft'"
 	args := []any{brandID}
 	addArg := func(v any) string {
 		args = append(args, v)

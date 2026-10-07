@@ -242,6 +242,8 @@ func (d *Deps) ArticleImagesList(w http.ResponseWriter, r *http.Request) {
 		"cost_credits":      d.effectiveImageCost(r.Context()),
 		"balance_remaining": remaining,
 		"has_packages":      hasPackages,
+		// Kurs aktif supaya klien melihat biaya & saldo dalam rupiah.
+		"rate_idr": d.getTcConfig(r.Context()).RateIDR,
 	})
 }
 
@@ -380,6 +382,7 @@ func (d *Deps) ArticleImageGenerate(w http.ResponseWriter, r *http.Request) {
 		"height":            result.Height,
 		"cost_credits":      charged,
 		"balance_remaining": balanceAfter,
+		"rate_idr":          d.getTcConfig(r.Context()).RateIDR,
 		"placeholder":       result.Placeholder,
 		"mime":              result.MimeType,
 	})

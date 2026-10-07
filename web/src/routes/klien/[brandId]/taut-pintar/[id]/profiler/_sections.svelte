@@ -6,7 +6,8 @@
 	import { Calculator, ChartLine, ChevronDown, Coins, Info, Link2, Search, Sparkles, Trash, Upload, Users } from '@lucide/svelte';
 	import { apiRequest, getStoredSession } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
-	import { fmtBytes, fmtIdr } from '../../_shared';
+	import { fmtBytes } from '../../_shared';
+	import { rp, tcToRp } from '$lib/credits/rupiah';
 	import type { ProfilerDraft, DynamicAngleField } from '../../_shared';
 	import {
 		ANGLE_DYNAMIC_FIELDS,
@@ -39,6 +40,7 @@
 		creditsHref,
 		options,
 		walletAvailable,
+		rateIdr = 1000,
 		crawling,
 		dynamicQuestions = {},
 		onPatch,
@@ -49,6 +51,7 @@
 		creditsHref: string;
 		options: ChannelOption[];
 		walletAvailable: number;
+		rateIdr?: number;
 		crawling: boolean;
 		dynamicQuestions?: Record<string, DynamicQuestion[]>;
 		onPatch: (patch: Partial<ProfilerDraft>) => void;
@@ -220,6 +223,27 @@
 	const efficientInsufficient = $derived(
 		draft.budget?.mode === 'efficient' && draft.budget?.amount > 0 && draft.budget.amount > walletAvailable
 	);
+
+	// Nominal anggaran DIKETIK dalam rupiah, disimpan tetap dalam kredit (kontrak
+	// API tidak berubah). Teks input dipertahankan apa adanya saat mengetik supaya
+	// kursor tidak melompat; sinkron ulang hanya kalau nilainya berubah dari luar.
+	let budgetRpInput = $state('');
+	let budgetLastTc = -1;
+	$effect(() => {
+		const tc = draft.budget?.amount ?? 0;
+		if (tc === budgetLastTc) return;
+		budgetLastTc = tc;
+		budgetRpInput = tc > 0 ? (tc * rateIdr).toLocaleString('id-ID') : '';
+	});
+	function onBudgetInput(event: Event) {
+		const digits = (event.currentTarget as HTMLInputElement).value.replace(/\D/g, '').slice(0, 12);
+		budgetRpInput = digits ? Number(digits).toLocaleString('id-ID') : '';
+		const tc = Math.min(100000, Math.round((Number(digits) || 0) / rateIdr));
+		budgetLastTc = tc;
+		patchBudget({ amount: tc });
+	}
+	const budgetMinRp = $derived(5000 * rateIdr);
+	const budgetMaxRp = $derived(100000 * rateIdr);
 
 	// Angka dynamic answers pembantu tipe.
 	function dynamicAnswersFor(angleSlug: string): Record<string, string> {
@@ -611,7 +635,7 @@
 			<span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold" style="background-color: var(--accent); color: var(--accent-foreground);">04</span>
 			<div>
 				<h2 class="font-semibold">Kendali Anggaran</h2>
-				<p class="text-sm text-muted-foreground">{tr("Pilih mode anggaran dan nominal Kredit Saldo kampanye.")}</p>
+				<p class="text-sm text-muted-foreground">{tr("Pilih mode anggaran dan nominal anggaran kampanye dalam rupiah.")}</p>
 			</div>
 		</header>
 		<div class="mt-4 grid gap-3 md:grid-cols-2">
@@ -630,18 +654,18 @@
 							</button>
 							{#if mode.value === 'efficient'}
 								<p class="mt-2 inline-flex items-center gap-1 text-xs" style="color: var(--success);">
-									<Coins size={13} /> Saldo: {fmtIdr(walletAvailable)} {tr("Kredit")} </p>
+									<Coins size={13} /> Saldo: {tcToRp(walletAvailable, rateIdr)} </p>
 							{/if}
 							{#if mode.value === 'efficient' && sel}
 								<label class="mt-2 block">
-									<span class="text-xs text-muted-foreground">{tr("Nominal (5.000 – 100.000 Kredit)")}</span>
-									<input class="app-input mt-1 w-full" type="number" min="5000" max="100000" placeholder={tr("5.000 – 100.000 Kredit")} value={draft.budget?.amount || ''} oninput={(e) => patchBudget({ amount: Math.min(100000, Number((e.currentTarget as HTMLInputElement).value) || 0) })} />
+									<span class="text-xs text-muted-foreground">{tr("Nominal Anggaran (Rupiah)")} — {rp(budgetMinRp)} – {rp(budgetMaxRp)}</span>
+									<input class="app-input mt-1 w-full" inputmode="numeric" autocomplete="off" maxlength="12" placeholder={budgetMinRp.toLocaleString('id-ID')} value={budgetRpInput} oninput={onBudgetInput} />
 								</label>
 							{/if}
 							{#if mode.value === 'efficient' && insufficient}
 								<div class="mt-2 rounded-lg border p-2">
-									<p class="text-xs" style="color: var(--destructive);">{tr("Kredit Saldo tidak mencukupi untuk menjalankan kampanye ini.")}</p>
-									<a class="app-btn app-btn-soft mt-2 !min-h-7 !px-2 !text-xs" href={creditsHref}>{tr("Top Up Kredit Saldo")}</a>
+									<p class="text-xs" style="color: var(--destructive);">{tr("Saldo tidak mencukupi untuk menjalankan kampanye ini.")}</p>
+									<a class="app-btn app-btn-soft mt-2 !min-h-7 !px-2 !text-xs" href={creditsHref}>{tr("Top Up Saldo")}</a>
 								</div>
 							{/if}
 							{#if mode.value === 'optimal' && sel}

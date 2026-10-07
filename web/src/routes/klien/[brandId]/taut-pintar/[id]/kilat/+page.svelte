@@ -12,7 +12,8 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import TautBottomBar from '../../_bottom-bar.svelte';
-	import { fmtIdr, rpCurrency, isCampaignDone } from '../../_shared';
+	import { rpCurrency, isCampaignDone } from '../../_shared';
+	import { tcToRp } from '$lib/credits/rupiah';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
@@ -113,7 +114,7 @@
 				campaignStatus = d.campaign?.taut_status ?? null;
 				campaignName = d.campaign?.name ?? '';
 				wallet = d.wallet?.available ?? 0;
-				rateIdr = d.wallet?.rate_idr ?? 0;
+				rateIdr = Number(d.wallet?.rate_idr) || 1000;
 			}
 			if (placeRes.ok) {
 				const d = await placeRes.json();
@@ -133,7 +134,7 @@
 		}
 	}
 
-	/** Rp → Kredit untuk tampilan; rate dari GET /profile/draft (tidak ada endpoint baru). */
+	/** Anggaran Rupiah → kredit internal (dipakai pemilihan media AI, bukan tampilan). */
 	const toTc = (rp: number) => (rateIdr > 0 ? Math.ceil(rp / rateIdr) : 0);
 	const budgetValue = $derived(Number(budgetRp.replace(/[^\d]/g, '')) || 0);
 	const estimatedTc = $derived(toTc(budgetValue));
@@ -393,7 +394,7 @@
 			{#if campaignName}
 				<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold" style="background-color: var(--muted);" title={campaignName}>{campaignName}</span>
 			{/if}
-			<span class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-bold" style="background-color: var(--success-soft); color: var(--success);"><Wallet size={13} />{fmtIdr(wallet)} {tr('Kredit')}</span>
+			<span class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-bold" style="background-color: var(--success-soft); color: var(--success);" title={tr('Saldo Anda')}><Wallet size={13} />{tcToRp(wallet, rateIdr)}</span>
 		</div>
 	</div>
 
@@ -454,8 +455,8 @@
 					/>
 					{#if showBudgetError}
 						<span id="kilat-budget-error" class="mt-1 block text-[11px]" style="color: var(--destructive);">{budgetError}</span>
-					{:else if budgetValue > 0 && rateIdr > 0}
-						<span class="mt-1 block text-[11px] text-muted-foreground">≈ {fmtIdr(estimatedTc)} {tr('Kredit')} ({tr('1 Kredit')} = {rpCurrency(rateIdr)})</span>
+					{:else if budgetValue > 0}
+						<span class="mt-1 block text-[11px] text-muted-foreground">{tr('Anggaran ini dipakai AI untuk memilih media yang muat.')}</span>
 					{/if}
 				</label>
 			</div>
@@ -475,7 +476,7 @@
 				</button>
 			</div>
 			<p class="mt-2 text-[11px] text-muted-foreground">
-				{tr('Tautan backlink dan anchor text diatur di The Writer setelah media dipilih. The Profiler lengkap (10 Kredit) tetap tersedia lewat tombol di atas.')}
+				{tr('Tautan backlink dan anchor text diatur di The Writer setelah media dipilih. The Profiler lengkap')} ({tcToRp(10, rateIdr)}) {tr('tetap tersedia lewat tombol di atas.')}
 			</p>
 		</section>
 
@@ -546,8 +547,7 @@
 										{#if m.reason}<span class="block truncate text-[11px] text-muted-foreground">{m.reason}</span>{/if}
 									</span>
 									<span class="shrink-0 text-right">
-										<span class="block text-[12px] font-semibold">{m.credit_cost ?? 0} {tr('Kredit')}</span>
-										{#if rateIdr > 0}<span class="block text-[10.5px] text-muted-foreground">{rpCurrency((m.credit_cost ?? 0) * rateIdr)}</span>{/if}
+										<span class="block text-[12px] font-semibold">{tcToRp(m.credit_cost ?? 0, rateIdr)}</span>
 									</span>
 								</label>
 							{/each}
@@ -567,7 +567,7 @@
 				<span class="mt-3.5 self-start text-lg font-semibold" style="color: var(--border);">+</span>
 				<div class="flex flex-col gap-1">
 					<p class="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Estimasi Biaya Media')}</p>
-					<p class="text-[17px] font-bold leading-tight">{rateIdr > 0 ? rpCurrency(totalTc * rateIdr) : `${fmtIdr(totalTc)} ${tr('Kredit')}`}</p>
+					<p class="text-[17px] font-bold leading-tight">{tcToRp(totalTc, rateIdr)}</p>
 				</div>
 				{#if budgetValue > 0}
 					<div class="flex flex-col gap-1">

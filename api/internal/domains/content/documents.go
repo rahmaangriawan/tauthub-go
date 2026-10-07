@@ -241,6 +241,10 @@ func (d *Deps) DocumentUpdate(w http.ResponseWriter, r *http.Request) {
 			VALUES (gen_random_uuid(), $1, $2, 'content.html_sanitized', 'content_document', $3)`,
 			brandRow.ID, user.ID, documentID)
 	}
+	// Editor klien menulis satu <div> per baris dan <div><br></div> untuk baris
+	// kosong. Rapikan jadi paragraf <p> supaya yang tersimpan (dan yang terbit
+	// ke media mitra) tidak berisi tag sampah.
+	content = contentengine.NormalizeArticleHTML(content)
 
 	var currentVersion int
 	var status, title string
