@@ -205,12 +205,6 @@
 					</div>
 				{:else}
 					<div class="mt-3">
-						<details class="rounded-lg border p-3" style="border-color: var(--border);">
-							<summary class="cursor-pointer text-xs font-medium">
-								{tr('Baca dokumen persetujuan (versi')} {CRAWLER_CONSENT_VERSION})
-							</summary>
-							<pre class="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground" style="font-family: inherit;">{CRAWLER_CONSENT_TEXT}</pre>
-						</details>
 						<label class="mt-3 flex items-start gap-2 text-sm">
 							<input class="mt-1" type="checkbox" bind:checked={consent} />
 							<span>{tr("Saya menyetujui dokumen akses crawler: Tauthub hanya mengakses halaman publik website, tidak pernah panel admin/akun, dan dapat dinonaktifkan kapan saja.")}</span>
@@ -219,6 +213,15 @@
 							<ShieldCheck size={15} />{tr("Buat Kredensial")}</button>
 					</div>
 				{/if}
+
+				<!-- Dokumen persetujuan selalu tampil: dulu isinya disembunyikan di dalam
+				     <details> dan hanya dirender saat media belum punya kredensial, jadi
+				     begitu ditutup atau kredensial sudah terbit, tutorialnya tidak bisa
+				     dibaca lagi. Sekarang ikut terlihat tanpa perlu dibuka. -->
+				<div class="mt-3 rounded-lg border p-3" style="border-color: var(--border);">
+					<p class="text-xs font-medium">{tr('Dokumen persetujuan (versi')} {CRAWLER_CONSENT_VERSION})</p>
+					<pre class="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground" style="font-family: inherit;">{CRAWLER_CONSENT_TEXT}</pre>
+				</div>
 
 				{#if diagnostics.length > 0}
 					<h3 class="mt-4 text-sm font-semibold">{tr('Diagnosis Terakhir')}</h3>
