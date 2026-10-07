@@ -11,7 +11,7 @@ func TestBuildTautReferenceMaterial(t *testing.T) {
 		"key_messages": []any{"harga transparan"},
 	}
 	spokes := []spokespersonValue{{Name: "Budi Santoso", Role: "Direktur", Quote: "Kualitas nomor satu."}}
-	text, has := buildTautReferenceMaterial("Ringkasan brief Profiler.", materials, "Topik dari klien: renovasi gudang.", spokes)
+	text, has := buildTautReferenceMaterial("Ringkasan brief Profiler.", materials, "Topik dari klien: renovasi gudang.", spokes, "")
 	if !has {
 		t.Fatal("bahan lengkap harus hasFacts=true")
 	}
@@ -32,7 +32,7 @@ func TestBuildTautReferenceMaterial(t *testing.T) {
 	// Semua sumber kosong -> tidak ada fakta (Writer wajib generik, Checker
 	// memperlakukan bahan kosong).
 	empty := map[string]any{"brief": "  ", "key_messages": []any{}, "references": []any{}}
-	if _, has := buildTautReferenceMaterial("", empty, "   ", nil); has {
+	if _, has := buildTautReferenceMaterial("", empty, "   ", nil, ""); has {
 		t.Fatal("bahan kosong harus hasFacts=false")
 	}
 }

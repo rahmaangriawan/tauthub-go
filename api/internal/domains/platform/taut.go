@@ -474,7 +474,7 @@ func (d *Deps) TautBasePromptVersionActivate(w http.ResponseWriter, r *http.Requ
 
 // ---------- ai usage ----------
 
-var tautAgentNames = []string{"profiler", "matchmaker", "writer", "gatekeeper"}
+var tautAgentNames = []string{"profiler", "matchmaker", "writer", "writer_mainstream", "writer_blogger", "gatekeeper"}
 var tautRunStatuses = []string{"done", "failed", "running", "pending", "skipped"}
 
 // TautAIUsage: GET /v1/platform/taut/ai-usage

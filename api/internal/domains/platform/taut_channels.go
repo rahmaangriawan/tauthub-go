@@ -155,7 +155,7 @@ func (d *Deps) TautChannelAngles(w http.ResponseWriter, r *http.Request) {
 	}
 	channelID := chiParam(r, "channelId")
 	rows, err := d.queryRows(r.Context(),
-		`SELECT a.id, a.channel_id, a.name, a.slug, a.description, a.active, a.sort_order,
+		`SELECT a.id, a.channel_id, a.name, a.slug, a.description, a.source_notes, a.active, a.sort_order,
 		        v.id AS active_version_id, v.version AS active_version
 		 FROM taut_content_angles a
 		 LEFT JOIN taut_content_angle_prompt_versions v
@@ -193,6 +193,7 @@ func (d *Deps) TautAngleCreate(w http.ResponseWriter, r *http.Request) {
 	name, _ := strField(body, "name")
 	slug, _ := strField(body, "slug")
 	description, _ := strField(body, "description")
+	sourceNotes, _ := strField(body, "source_notes")
 	active, hasActive := boolField(body, "active")
 	sortOrder, hasSort := intField(body, "sort_order")
 	if name == "" || len(name) > 160 {
@@ -207,6 +208,10 @@ func (d *Deps) TautAngleCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, errUnprocessable("Payload tidak valid."))
 		return
 	}
+	if len(sourceNotes) > 4000 {
+		writeErr(w, d, errUnprocessable("Payload tidak valid."))
+		return
+	}
 	if !hasActive {
 		active = true
 	}
@@ -215,8 +220,8 @@ func (d *Deps) TautAngleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	angleID := uuid.NewString()
 	if err := d.exec(r.Context(),
-		"INSERT INTO taut_content_angles (id, channel_id, name, slug, description, active, sort_order, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-		angleID, channelID, name, slug, description, active, sortOrder, user.ID); err != nil {
+		"INSERT INTO taut_content_angles (id, channel_id, name, slug, description, source_notes, active, sort_order, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+		angleID, channelID, name, slug, description, sourceNotes, active, sortOrder, user.ID); err != nil {
 		writeErr(w, d, err)
 		return
 	}

@@ -25,13 +25,41 @@ func (d *Deps) tautReferenceMaterial(ctx context.Context, campaign bsRow, campai
 	materials := asMapValue(campaign.jsonField("editorial_standard_snapshot"))
 	topic := d.loadTautWriterTopic(ctx, campaignID, mediaID)
 	spokes := spokespersonListValue(campaign.jsonField("spokepersons"))
-	text, hasFacts := buildTautReferenceMaterial(brief, materials, topic, spokes)
+	// Angle berita ikut jadi bahan rujukan supaya Writer DAN Gatekeeper melihat
+	// sumber informasi yang sama (klaim bersumber tidak dinilai "tanpa dasar").
+	angleBlock, angleHasSources := tautAngleBriefBlock(
+		d.loadTautAngleContext(ctx, campaignID, d.tautReferenceMediaType(ctx, campaign, campaignID, mediaID)))
+	text, hasFacts := buildTautReferenceMaterial(brief, materials, topic, spokes, angleBlock)
+	if angleHasSources {
+		hasFacts = true
+	}
 	return text, hasFacts, nil
 }
 
+// tautReferenceMediaType: tipe media satu media di kampanye — resolusi yang
+// sama dengan mesin writer (baris media → kampanye → mainstream).
+func (d *Deps) tautReferenceMediaType(ctx context.Context, campaign bsRow, campaignID, mediaID string) string {
+	row, err := d.queryRow(ctx, `
+		SELECT m.media_type FROM taut_campaign_media tcm
+		JOIN media m ON m.id = tcm.media_id
+		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 LIMIT 1`, campaignID, mediaID)
+	if err == nil && row != nil {
+		if mt := strings.TrimSpace(row.strOr("media_type", "")); mt != "" {
+			return mt
+		}
+	}
+	if mt := strings.TrimSpace(campaign.strOr("media_type", "")); mt != "" {
+		return mt
+	}
+	return "mainstream"
+}
+
 // buildTautReferenceMaterial: bagian murni (tanpa DB) supaya bisa diuji.
-func buildTautReferenceMaterial(brief string, materials map[string]any, topic string, spokes []spokespersonValue) (string, bool) {
+func buildTautReferenceMaterial(brief string, materials map[string]any, topic string, spokes []spokespersonValue, angleBlock string) (string, bool) {
 	sections := []string{}
+	if s := strings.TrimSpace(angleBlock); s != "" {
+		sections = append(sections, "[ANGLE BERITA (sumber informasi)]\n"+s)
+	}
 	if s := strings.TrimSpace(brief); s != "" {
 		sections = append(sections, "[BRIEF PROFILER]\n"+s)
 	}

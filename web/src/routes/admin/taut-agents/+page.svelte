@@ -32,7 +32,9 @@
 	const AGENT_META: Record<string, { label: string; role: string; hint: string }> = {
 		profiler: { label: 'Profiler', role: 'Strategis', hint: 'Menerjemahkan profil bisnis + anggaran menjadi strategy_brief.' },
 		matchmaker: { label: 'Matchmaker', role: 'Placement', hint: 'AI ranking media berdasarkan brief Profiler — wajib dikonfigurasi, tanpa fallback formula.' },
-		writer: { label: 'Writer', role: 'Kreatif', hint: 'Satu artikel unik per media sesuai trigger.' },
+		writer_mainstream: { label: 'Writer · Media Mainstream', role: 'Kreatif (subagent)', hint: 'Subagent The Writer untuk media mainstream (gaya berita 5W+1H, tanpa heading). Konfigurasi disalin dari agent Writer oleh migrasi 195.' },
+		writer_blogger: { label: 'Writer · Blogger', role: 'Kreatif (subagent)', hint: 'Subagent The Writer untuk media blogger (subjudul H2/H3 + daftar). Konfigurasi disalin dari agent Writer oleh migrasi 195.' },
+		writer: { label: 'Writer (cadangan)', role: 'Kreatif', hint: 'Dipakai hanya bila subagent per tipe media belum dikonfigurasi admin.' },
 		gatekeeper: { label: 'Gatekeeper', role: 'Editor & Compliance', hint: 'Tanam hyperlink natural + editorial + pre-check; hard gate tetap moderateContent.' }
 	};
 

@@ -1217,7 +1217,16 @@ func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media
 	hasResolved := snapshot["resolved"] != nil
 	needsFeatured := bsStringifyAny(defaults["featured_image_url"]) != "" && peNumFromAny(resolved["featured_media"]) <= 0
 	hasMediaCategory := strings.TrimSpace(media.strOr("category", "")) != ""
-	shouldResolve := (!hasResolved && len(defaults) > 0) || needsFeatured || (!hasResolved && hasMediaCategory)
+	// Snapshot lama bisa sudah ada TAPI belum memuat categories/featured_media
+	// (mis. percobaan pertama saat cover belum siap). Tanpa syarat tambahan ini,
+	// penyelesaian istilah dan gambar utama dilewati selamanya sehingga artikel
+	// terbit "Uncategorized" dan tanpa gambar utama.
+	resolvedCategoryCount := 0
+	if arr, isArr := resolved["categories"].([]any); isArr {
+		resolvedCategoryCount = len(arr)
+	}
+	needsCategories := (hasMediaCategory || len(peNameList(defaults["categories"])) > 0) && resolvedCategoryCount == 0
+	shouldResolve := (!hasResolved && len(defaults) > 0) || needsFeatured || needsCategories || (!hasResolved && hasMediaCategory)
 	if !shouldResolve {
 		if author, ok := defaults["author_id"]; ok {
 			snapshot["author_id"] = peNumFromAny(author)
@@ -1233,8 +1242,15 @@ func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media
 		categoryNames = append(categoryNames, strings.TrimSpace(media.strOr("category", "")))
 	}
 	tagNames := peNameList(defaults["tags"])
-	if !hasResolved && len(categoryNames) > 0 {
-		resolved["categories"] = peIntListAny(peResolveTermIDs(ctx, baseURL, headers, categoryNames, "categories", create))
+	if len(categoryNames) > 0 && (!hasResolved || needsCategories) {
+		ids := peIntListAny(peResolveTermIDs(ctx, baseURL, headers, categoryNames, "categories", create))
+		if len(ids) > 0 {
+			resolved["categories"] = ids
+		} else if skipCategories := false; !skipCategories {
+			d.peRecordWarning(ctx, jobID, []string{
+				"Kategori media (" + strings.Join(categoryNames, ", ") + ") tidak berhasil dipetakan di WordPress, artikel bisa terbit tanpa kategori.",
+			})
+		}
 	}
 	if !hasResolved && len(tagNames) > 0 {
 		resolved["tags"] = peIntListAny(peResolveTermIDs(ctx, baseURL, headers, tagNames, "tags", create))
@@ -1258,6 +1274,11 @@ func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media
 			return pePublishErr("featured_image_upload_failed", reason)
 		}
 		_ = d.exec(ctx, "UPDATE publication_jobs SET progress = 60 WHERE id = $1", jobID)
+	}
+	if bsStringifyAny(defaults["featured_image_url"]) != "" && peNumFromAny(resolved["featured_media"]) <= 0 {
+		d.peRecordWarning(ctx, jobID, []string{
+			"Gambar utama tidak terpasang di WordPress (featured_media kosong), artikel terbit tanpa thumbnail.",
+		})
 	}
 	snapshot["resolved"] = resolved
 	if err := d.exec(ctx, "UPDATE publication_jobs SET payload_snapshot = $1::jsonb WHERE id = $2", marshalJSON(snapshot), jobID); err != nil {

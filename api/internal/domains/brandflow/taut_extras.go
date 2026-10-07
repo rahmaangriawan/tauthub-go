@@ -35,7 +35,7 @@ func (d *Deps) TautAgentStatus(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
-	agents := []string{"profiler", "matchmaker", "writer", "gatekeeper"}
+	agents := []string{"profiler", "matchmaker", "writer", "writer_mainstream", "writer_blogger", "gatekeeper"}
 	statuses := make([]map[string]any, 0, len(agents))
 	for _, agent := range agents {
 		cfg := d.getAgentConfig(r.Context(), agent)

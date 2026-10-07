@@ -15,7 +15,7 @@
 	import { sanitizeHtml } from '$lib/sanitize-html';
 
 	type Channel = { id: string; name: string; slug: string; description: string | null; active: boolean; angle_count?: number };
-	type Angle = { id: string; channel_id: string; name: string; active: boolean; active_version?: number | null; description?: string | null };
+	type Angle = { id: string; channel_id: string; name: string; active: boolean; active_version?: number | null; description?: string | null; source_notes?: string | null };
 	type VersionMeta = { id: string; version: number; status: string; change_note: string | null; created_at: string };
 	type VersionDetail = VersionMeta & { prompt: string | null };
 
@@ -38,8 +38,8 @@
 	// edit bisa tertulis ke angle lain (atau tidak tersimpan sama sekali).
 	let editAngleId = $state<string | null>(null);
 	let channelForm = $state({ name: '', slug: '', description: '' });
-	let angleForm = $state({ name: '', slug: '', description: '' });
-	let editAngleForm = $state({ name: '', description: '', active: true });
+	let angleForm = $state({ name: '', slug: '', description: '', source_notes: '' });
+	let editAngleForm = $state({ name: '', description: '', active: true, source_notes: '' });
 
 	let newPromptText = $state('');
 	let newPromptNote = $state('');
@@ -145,7 +145,7 @@
 				return;
 			}
 			showAngle = false;
-			angleForm = { name: '', slug: '', description: '' };
+			angleForm = { name: '', slug: '', description: '', source_notes: '' };
 			await loadAngles(selectedChannel.id);
 		} finally {
 			busy = false;
@@ -154,7 +154,7 @@
 
 	function openEditAngle(angle: Angle) {
 		editAngleId = angle.id;
-		editAngleForm = { name: angle.name, description: angle.description ?? '', active: angle.active };
+		editAngleForm = { name: angle.name, description: angle.description ?? '', active: angle.active, source_notes: angle.source_notes ?? '' };
 		showEditAngle = true;
 	}
 
@@ -521,6 +521,9 @@
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Deskripsi</span>
 				<textarea class="app-input mt-1 w-full" placeholder={tr("Pengumuman peluncuran produk…")} bind:value={angleForm.description}></textarea>
+				<span class="mt-3 block text-xs font-medium text-muted-foreground">{tr("Sumber Informasi")}</span>
+				<p class="text-[11px] text-muted-foreground">{tr("Poin-poin/konteks/fakta untuk angle ini — AI The Writer memakainya sebagai bahan rujukan. Isi hanya informasi yang bisa dipertanggungjawabkan; kosongkan bila belum ada.")}</p>
+				<textarea class="app-input mt-1 w-full" rows="4" placeholder={tr("Contoh: fakta/angka yang boleh dipakai, konteks industri, rujukan resmi…")} bind:value={angleForm.source_notes}></textarea>
 			</label>
 			<div class="flex justify-end gap-2">
 				<button class="app-btn app-btn-soft" type="button" onclick={() => (showAngle = false)}>{tr("Batal")}</button>
@@ -540,6 +543,9 @@
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Deskripsi</span>
 				<textarea class="app-input mt-1 w-full" bind:value={editAngleForm.description}></textarea>
+				<span class="mt-3 block text-xs font-medium text-muted-foreground">{tr("Sumber Informasi")}</span>
+				<p class="text-[11px] text-muted-foreground">{tr("Poin-poin/konteks/fakta untuk angle ini — AI The Writer memakainya sebagai bahan rujukan. Isi hanya informasi yang bisa dipertanggungjawabkan; kosongkan bila belum ada.")}</p>
+				<textarea class="app-input mt-1 w-full" rows="4" placeholder={tr("Contoh: fakta/angka yang boleh dipakai, konteks industri, rujukan resmi…")} bind:value={editAngleForm.source_notes}></textarea>
 			</label>
 			<label class="flex items-center gap-2 text-sm">
 				<input type="checkbox" bind:checked={editAngleForm.active} />

@@ -23,7 +23,7 @@ func (d *Deps) TautAngleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row, err := d.queryRow(r.Context(),
-		"SELECT id, channel_id, name, slug, description, active, sort_order, created_by, created_at FROM taut_content_angles WHERE id = $1 LIMIT 1",
+		"SELECT id, channel_id, name, slug, description, source_notes, active, sort_order, created_by, created_at FROM taut_content_angles WHERE id = $1 LIMIT 1",
 		chiParam(r, "angleId"))
 	if err != nil {
 		writeErr(w, d, err)
@@ -50,6 +50,7 @@ func (d *Deps) TautAngleUpdate(w http.ResponseWriter, r *http.Request) {
 	body := decodeJSON(r)
 	name, hasName := strField(body, "name")
 	description, hasDescription := strField(body, "description")
+	sourceNotes, hasSourceNotes := strField(body, "source_notes")
 	active, hasActive := boolField(body, "active")
 	sortOrder, hasSort := intField(body, "sort_order")
 	if hasName && (name == "" || len(name) > 160) {
@@ -57,6 +58,10 @@ func (d *Deps) TautAngleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if hasDescription && len(description) > 2000 {
+		writeErr(w, d, errUnprocessable("Payload tidak valid."))
+		return
+	}
+	if hasSourceNotes && len(sourceNotes) > 4000 {
 		writeErr(w, d, errUnprocessable("Payload tidak valid."))
 		return
 	}
@@ -71,9 +76,11 @@ func (d *Deps) TautAngleUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := d.exec(r.Context(),
 		`UPDATE taut_content_angles SET name = COALESCE($1, name), description = COALESCE($2, description),
-		        active = COALESCE($3, active), sort_order = COALESCE($4, sort_order), updated_by = $5, updated_at = NOW()
-		 WHERE id = $6`,
+		        source_notes = COALESCE($3, source_notes),
+		        active = COALESCE($4, active), sort_order = COALESCE($5, sort_order), updated_by = $6, updated_at = NOW()
+		 WHERE id = $7`,
 		ptNullableArgStr(name, hasName), ptNullableArgStr(description, hasDescription),
+		ptNullableArgStr(sourceNotes, hasSourceNotes),
 		ptNullableArgBool(active, hasActive), ptNullableArgInt(sortOrder, hasSort), user.ID, angleID); err != nil {
 		writeErr(w, d, err)
 		return

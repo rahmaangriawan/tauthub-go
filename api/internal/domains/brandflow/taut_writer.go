@@ -170,7 +170,9 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	// Bahan fakta kanonik: dipakai di prompt penulisan DAN diverifikasi ulang
 	// oleh Gatekeeper AI Overview Checker lewat fungsi yang sama, sehingga klaim
 	// dari materials/topik/narasumber tidak lagi ditandai "tanpa dasar".
-	referenceMaterial, hasFacts := buildTautReferenceMaterial(briefContext, materials, writerTopic, spokespersonListValue(campaign.jsonField("spokepersons")))
+	// Blok angle berita (butuh mediaType) ditambahkan setelah tipe media
+	// diresolusi di bawah; di sini masih kosong.
+	referenceMaterial, hasFacts := buildTautReferenceMaterial(briefContext, materials, writerTopic, spokespersonListValue(campaign.jsonField("spokepersons")), "")
 	backlinkEnabled, smartVariations := d.loadTautBacklinkSettings(ctx, campaignID)
 	smartVariationRule := ""
 	if smartVariations {
@@ -389,6 +391,16 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if channelInstruction == "" {
 		anglePromptBlock = d.loadTautChosenAnglePrompt(ctx, campaignID, mediaType)
 	}
+	// Angle berita sebagai SUMBER INFORMASI (bukan sekadar instruksi gaya):
+	// nama + deskripsi + kolom "Sumber Informasi" dari halaman angle, ikut ke
+	// bahan rujukan yang diverifikasi Gatekeeper AI Overview.
+	angleBriefBlock, angleHasSources := tautAngleBriefBlock(d.loadTautAngleContext(ctx, campaignID, mediaType))
+	if angleBriefBlock != "" {
+		referenceMaterial = strings.TrimSpace(referenceMaterial + "\n\n[ANGLE BERITA]\n" + angleBriefBlock)
+	}
+	if angleHasSources {
+		hasFacts = true
+	}
 
 	var identity strings.Builder
 	identity.WriteString("[IDENTITAS MEDIA]\n   Nama: " + name + "\n   Tipe: " + mediaType)
@@ -439,6 +451,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		topikBlock,
 		channelInstruction,
 		anglePromptBlock,
+		angleBriefBlock,
 		linkContext,
 		linkRule,
 		customLinkBlock,
@@ -460,19 +473,27 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 	prompt := strings.Join(filtered, "\n")
 
+	// Subagent The Writer per tipe media (migrasi 195). Kalau agent spesifiknya
+	// belum dikonfigurasi admin, kembali ke agent "writer" generik supaya gaya
+	// artikel produksi tidak berubah tanpa sengaja.
+	writerAgent := writerAgentName(mediaType)
+	if !d.getAgentConfig(ctx, writerAgent).Configured {
+		writerAgent = "writer"
+	}
+
 	var result *agentLLMResult
 	if streamFn != nil {
 		// Streaming: kumpulkan delta JSON mentah, ekstrak content_html parsial,
 		// dan kirim TAMBAHANNYA saja ke klien (escape sudah di-decode). Decoder
 		// inkremental — dulu tiap delta memindai ulang seluruh akumulasi.
 		stream := newPEStreamHTML()
-		result, err = d.runTautAgentStream(ctx, "writer", campaignID, prompt, &mediaID, true, func(delta string) {
+		result, err = d.runTautAgentStream(ctx, writerAgent, campaignID, prompt, &mediaID, true, func(delta string) {
 			if tail, _ := stream.Write(delta); tail != "" {
 				streamFn(tail)
 			}
 		})
 	} else {
-		result, err = d.runTautAgent(ctx, "writer", campaignID, prompt, &mediaID, true)
+		result, err = d.runTautAgent(ctx, writerAgent, campaignID, prompt, &mediaID, true)
 	}
 	if err != nil {
 		return writerItemResult{}, err
@@ -1019,7 +1040,9 @@ func normalizeSpokespersons(v any) []map[string]any {
 //
 // Dipakai hanya sebagai cadangan saat brief Profiler belum ada, misalnya
 // kampanye jalur Kilat yang tidak menjalankan analisis Profiler.
-func (d *Deps) loadTautChosenAnglePrompt(ctx context.Context, campaignID, mediaType string) string {
+// tautChosenAngleSlug: slug angle yang dipilih klien untuk tipe media ini
+// (submission Profiler terbaru). Kosong bila belum ada pilihan.
+func (d *Deps) tautChosenAngleSlug(ctx context.Context, campaignID, mediaType string) string {
 	sub, err := d.queryRow(ctx, `
 		SELECT channels
 		FROM taut_profiler_submissions
@@ -1028,17 +1051,20 @@ func (d *Deps) loadTautChosenAnglePrompt(ctx context.Context, campaignID, mediaT
 	if err != nil || sub == nil {
 		return ""
 	}
-	angleSlug := ""
 	for _, entry := range asSliceValue(sub.jsonField("channels")) {
 		ch := asMapValue(entry)
 		if ch == nil || mapGetString(ch, "channel", "") != mediaType {
 			continue
 		}
 		if slug := mapGetString(ch, "angle_slug", ""); slug != "" {
-			angleSlug = slug
-			break
+			return slug
 		}
 	}
+	return ""
+}
+
+func (d *Deps) loadTautChosenAnglePrompt(ctx context.Context, campaignID, mediaType string) string {
+	angleSlug := d.tautChosenAngleSlug(ctx, campaignID, mediaType)
 	if angleSlug == "" {
 		return ""
 	}

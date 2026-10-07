@@ -321,7 +321,8 @@ func (d *Deps) TautAgentsList(w http.ResponseWriter, r *http.Request) {
 	rows, err := d.queryRows(r.Context(),
 		`SELECT agent, base_url, sealed_api_key, model, temperature, max_tokens, timeout_ms, system_prompt, enabled, rate_limit_per_min, updated_at
 		 FROM taut_agent_configs ORDER BY
-		   CASE agent WHEN 'profiler' THEN 1 WHEN 'matchmaker' THEN 2 WHEN 'writer' THEN 3 WHEN 'gatekeeper' THEN 4 ELSE 5 END`)
+		   CASE agent WHEN 'profiler' THEN 1 WHEN 'matchmaker' THEN 2 WHEN 'writer' THEN 3
+		     WHEN 'writer_mainstream' THEN 4 WHEN 'writer_blogger' THEN 5 WHEN 'gatekeeper' THEN 6 ELSE 7 END`)
 	if err != nil {
 		writeErr(w, d, err)
 		return

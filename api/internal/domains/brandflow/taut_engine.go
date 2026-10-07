@@ -196,9 +196,10 @@ func (d *Deps) callAgentLLMCommon(ctx context.Context, agent, userPrompt string,
 		system = systemOverride
 	}
 	// Writer butuh sampling lebih kreatif agar regenerasi dengan konteks klien
-	// yang sama tidak menyalin draf sebelumnya. Hanya agen "writer" yang
-	// dinaikkan; profiler/gatekeeper dll tetap pakai temperature config-nya.
-	if agent == "writer" && cfg.Temperature < 0.85 {
+	// yang sama tidak menyalin draf sebelumnya. Berlaku untuk agent writer dan
+	// subagentnya (writer_mainstream/writer_blogger); profiler/gatekeeper dll
+	// tetap pakai temperature config-nya.
+	if strings.HasPrefix(agent, "writer") && cfg.Temperature < 0.85 {
 		cfg.Temperature = 0.85
 	}
 	payload := map[string]any{
