@@ -521,12 +521,24 @@ const mpStaleSeoWhere = `
 			  AND m.website_url IS NOT NULL AND m.website_url <> ''
 			  AND (` + mpSeoNeedsCheck + `)`
 
+// mpDaMissingWhere: predikat tombol "Cek DA semua" — media aktif yang DOMAIN
+// AUTHORITY-nya belum ada. Pemeriksaan DA dan AI Trust dijalankan oleh job yang
+// sama (satu panggilan penyedia + satu pengukuran kecepatan), jadi tombol ini
+// memilih media berdasarkan DA; media yang sudah punya DA dilewati. Percobaan
+// ulang dibatasi sekali per hari supaya penyedia tidak dihajar saat DA memang
+// belum bisa diambil (mis. kunci belum berlangganan).
+const mpDaMissingWhere = `
+			m.status = 'active'
+			  AND m.website_url IS NOT NULL AND m.website_url <> ''
+			  AND sm.da IS NULL
+			  AND (sm.checked_at IS NULL OR sm.checked_at < NOW() - INTERVAL '1 day')`
+
 // MediaSEORefreshAll: antrekan pemeriksaan DA/SEO untuk media yang metriknya
 // belum ada. Dijalankan di latar lewat job `media_seo_refresh` (kind yang sama
 // dipakai scheduler), jadi aman untuk ratusan media dan tidak menahan request.
-// Media yang masih punya job pending/running dilewati. `force: true` mengabaikan
-// predikat "belum punya skor" — dipakai untuk menghitung ulang seluruh media
-// (mis. setelah kunci penyedia diperbarui).
+// Media yang masih punya job pending/running dilewati.
+//   - da_only: true → hanya media yang DA-nya belum ada (tombol "Cek DA semua")
+//   - force: true   → semua media aktif, termasuk yang sudah berskor
 func (d *Deps) MediaSEORefreshAll(w http.ResponseWriter, r *http.Request) {
 	user, _, ok := d.adminGuard(w, r, "")
 	if !ok {
@@ -536,12 +548,17 @@ func (d *Deps) MediaSEORefreshAll(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, ptErrTooMany("Antrean cek DA baru saja dijalankan. Tunggu satu menit lalu coba lagi."))
 		return
 	}
-	force, _ := boolField(decodeJSON(r), "force")
+	body := decodeJSON(r)
+	force, _ := boolField(body, "force")
+	daOnly, _ := boolField(body, "da_only")
 	needsCheck := mpStaleSeoWhere
-	if force {
+	switch {
+	case force:
 		needsCheck = `
 			m.status = 'active'
 			  AND m.website_url IS NOT NULL AND m.website_url <> ''`
+	case daOnly:
+		needsCheck = mpDaMissingWhere
 	}
 	rows, err := d.queryRows(r.Context(), `
 		SELECT m.id

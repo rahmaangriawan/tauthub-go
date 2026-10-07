@@ -510,34 +510,39 @@
 	}
 
 	/**
-	 * Antrekan pemeriksaan DA + AI Trust untuk SELURUH media aktif yang belum
-	 * punya skor lengkap — satu klik, bukan 25 per klik. Pemeriksaan berjalan di
-	 * latar lewat job `media_seo_refresh`, jadi halaman tidak ikut menunggu.
-	 * force = true memeriksa ulang semua media termasuk yang sudah berskor.
+	 * Antrekan pemeriksaan DA + AI Trust — satu klik untuk seluruh media yang
+	 * relevan, bukan 25 per klik. Pemeriksaan berjalan di latar lewat job
+	 * `media_seo_refresh`, jadi halaman tidak ikut menunggu.
+	 *   - daOnly = true  → hanya media yang DA-nya belum ada (tombol "Cek DA semua")
+	 *   - force  = true  → semua media aktif, termasuk yang sudah berskor
+	 * Satu pemeriksaan mengisi DA dan AI Trust sekaligus, jadi ketiga tombol
+	 * memakai job yang sama; yang berbeda hanya media mana yang dipilih.
 	 */
-	async function enqueueSeoRefresh(force = false) {
-		if (
-			!confirm(
-				force
-					? 'Hitung ulang DA dan AI Trust untuk SEMUA media aktif, termasuk yang sudah punya skor?'
-					: 'Cek DA dan AI Trust untuk semua media yang belum punya skor? Media yang sudah dicek akan dilewati.'
-			)
-		)
-			return;
+	async function enqueueSeoRefresh(force = false, daOnly = false) {
+		const pertanyaan = force
+			? 'Hitung ulang DA dan AI Trust untuk SEMUA media aktif, termasuk yang sudah punya skor?'
+			: daOnly
+				? 'Cek DA untuk semua media yang nilai DA-nya belum ada? Media yang sudah punya DA dilewati.'
+				: 'Cek DA dan AI Trust untuk semua media yang belum punya skor? Media yang sudah dicek dilewati.';
+		if (!confirm(pertanyaan)) return;
 		error = '';
 		daBulkBusy = true;
 		daSummary = 'Mengantrekan pemeriksaan…';
 		try {
 			const r = await platformRequest<{ enqueued: number; total_stale: number; skipped: number }>(
 				'/media/seo-refresh-all',
-				{ method: 'POST', body: JSON.stringify({ force }) }
+				{ method: 'POST', body: JSON.stringify({ force, da_only: daOnly }) }
 			);
-			daSummary =
-				r.enqueued === 0
-					? force
-						? 'Tidak ada media aktif yang bisa diperiksa (perlu website_url terisi).'
-						: 'Semua media sudah punya skor — tidak ada yang perlu dicek. Pakai "Hitung ulang semua" kalau ingin memeriksa ulang.'
-					: `${r.enqueued} media masuk antrean${force ? ' (hitung ulang)' : ''} dari ${r.total_stale} kandidat. Hasil muncul bertahap di tabel.`;
+			if (r.enqueued === 0) {
+				daSummary = force
+					? 'Tidak ada media aktif yang bisa diperiksa (butuh website_url terisi).'
+					: daOnly
+						? 'Semua media yang punya website sudah punya nilai DA — tidak ada yang perlu dicek.'
+						: 'Semua media sudah punya skor — tidak ada yang perlu dicek. Pakai "Hitung ulang semua" kalau ingin memeriksa ulang.';
+			} else {
+				const apa = force ? 'dihitung ulang' : daOnly ? 'tanpa DA' : 'belum berskor';
+				daSummary = `${r.enqueued} media ${apa} masuk antrean (dari ${r.total_stale} kandidat). Hasil muncul bertahap di tabel.`;
+			}
 			await loadDaStatus();
 		} catch (reason) {
 			error = errMessage(reason);
@@ -765,7 +770,7 @@
 			onclick={(e) => {
 				e.stopPropagation();
 				void checkAiSignals(row);
-			}}>{aiBusyId === row.id ? 'Mengecek…' : 'Cek AI'}</button
+			}}>{aiBusyId === row.id ? 'Mengecek…' : tr('Cek DA & AI')}</button
 		>
 		{#if row.status === 'active'}
 			<button
@@ -869,6 +874,14 @@
 			onclick={() => void enqueueSeoRefresh()}
 		>
 			<RefreshCw size={15} /> {daBulkBusy ? 'Mengantrekan…' : tr('Cek AI & SEO Semua')}
+		</button>
+		<button
+			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+			disabled={daBulkBusy}
+			title={tr('Cek DA untuk semua media yang nilai DA-nya belum ada (DA dan AI Trust diambil pada pemeriksaan yang sama)')}
+			onclick={() => void enqueueSeoRefresh(false, true)}
+		>
+			<RefreshCw size={15} /> {tr('Cek DA semua')}
 		</button>
 		<button
 			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
