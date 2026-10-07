@@ -177,7 +177,7 @@
 	const fmt = (n: number) => n.toLocaleString('id-ID');
 </script>
 
-<PageTitle title={tr("Kredit Saldo")} />
+<PageTitle title={tr("Saldo")} />
 
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
@@ -243,7 +243,7 @@
 			<!-- Fitur belum dirilis — daftar mutasi digantikan panel Coming Soon
 			     (parity distribution.tsx Riwayat Transaksi di project lama). -->
 			<div class="p-4">
-				<ComingSoon message="Riwayat mutasi saldo kredit sedang kami siapkan dan akan segera tersedia di Tauthub." />
+				<ComingSoon message="Riwayat mutasi saldo sedang kami siapkan dan akan segera tersedia di Tauthub." />
 			</div>
 		</div>
 	{/if}

@@ -52,8 +52,8 @@
 		retrying: 'amber'
 	};
 
-	function tcLabel(rupiah: number, rate: number): string {
-		return Math.max(0, Math.round(Number(rupiah) / Math.max(1, rate))).toLocaleString('id-ID');
+	function tcLabel(rupiah: number, _rate: number): string {
+		return `Rp ${Math.max(0, Math.round(Number(rupiah) || 0)).toLocaleString('id-ID')}`;
 	}
 
 	function startOfMonth(d = new Date()) {
@@ -458,7 +458,7 @@
 							<span>{i18n.t.dashboard.queue_col_campaign}</span>
 							<span>{i18n.t.dashboard.queue_col_media}</span>
 							<span>{i18n.t.dashboard.queue_col_status}</span>
-							<span>{tr("Kredit")}</span>
+							<span>{tr("Biaya")}</span>
 						</div>
 							{#each pubs as r (r.id)}
 								<div class="queueRow">
@@ -473,7 +473,7 @@
 									</div>
 									<div class="queueCell queueCellPrice font-medium">
 										<Coins size={13} class="queueCoinIcon" />
-										<span>{tcLabel(r.client_price ?? 0, tcConfig?.rate_idr ?? wallet?.rate_idr ?? 1000)} {tr("Kredit")}</span>
+										<span>{tcLabel(r.client_price ?? 0, tcConfig?.rate_idr ?? wallet?.rate_idr ?? 1000)}</span>
 									</div>
 								</div>
 							{/each}
@@ -589,7 +589,7 @@
 						<Sparkles size={16} strokeWidth={2.4} color="var(--primary)" />
 						<strong>AI Pintar</strong>
 					</div>
-					<p class="modeCardDesc">{tr("Profiler: AI menyusun strategi & brief, lalu Matchmaker pilih media. Butuh 10 Kredit.")}</p>
+					<p class="modeCardDesc">{tr("Profiler: AI menyusun strategi & brief, lalu Matchmaker pilih media. Butuh Rp 10.000.")}</p>
 				</button>
 				<button
 					type="button"
