@@ -63,11 +63,6 @@
 			body: 'Menguji setiap tautan di dalam artikel. Tautan mati atau yang mengarah ke situs berisiko ditolak.'
 		},
 		{
-			title: 'AI Overview Checker',
-			gate: false,
-			body: 'Menilai kesiapan artikel untuk Google AI Overviews: struktur (BLUF), kepadatan entitas, sinyal E-E-A-T, dan penyelarasan niat pengguna. Skor total dari 40; di bawah ambang berarti perlu revisi. Bersifat informasi, bukan penghalang distribusi.'
-		},
-		{
 			title: 'Brand Voice Limits',
 			gate: false,
 			body: 'Membandingkan jumlah kata dengan batas media, menghitung istilah promosi, dan menandai frasa terlarang.'

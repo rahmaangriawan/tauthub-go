@@ -46,7 +46,6 @@
 	};
 
 	const CHECK_CARDS: Array<{ key: keyof Checks; title: string; gate: boolean }> = [
-		{ key: 'aiOverview', title: 'AI Overview Checker', gate: false },
 		{ key: 'contentSafety', title: 'Illegal Content Guard', gate: true },
 		{ key: 'linkHealth', title: 'Link Health Validator', gate: true },
 		{ key: 'brandVoice', title: 'Brand Voice Limits', gate: false }
