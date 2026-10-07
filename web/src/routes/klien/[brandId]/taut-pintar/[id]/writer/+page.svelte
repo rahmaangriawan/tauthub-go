@@ -1060,17 +1060,6 @@
 		</div>
 	{/if}
 
-	{#if entryMode === 'manual'}
-		<div class="mt-3 flex flex-wrap items-center gap-3.5 rounded-xl border p-4" style="background-color: var(--accent);">
-			<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--primary);"><Sparkles size={18} style="color: #fff;" /></div>
-			<div class="flex-1">
-				<p class="font-bold">{tr("Mau AI yang mengerjakan sisanya?")}</p>
-				<p class="text-sm text-muted-foreground">{tr("Kampanye ini berjalan tanpa AI — kamu memilih media dan menyiapkan artikelnya sendiri. Kalau ingin AI menyusun brief, memilih media, lalu menulis artikelnya, mulai dari The Profiler. Kampanye ini tetap dipakai, jadi tidak perlu membuat kampanye baru.")}</p>
-			</div>
-			<button class="app-btn app-btn-primary shrink-0" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/profiler`)}>{tr("Mulai dari The Profiler")}</button>
-		</div>
-	{/if}
-
 	{#if agentStatus && !agentStatus.configured}
 		<div class="app-card mt-3 flex items-start gap-2 px-4 py-2.5 text-sm" style="background-color: color-mix(in srgb, var(--destructive) 7%, var(--card)); color: var(--destructive);" role="alert">
 			<TriangleAlert size={16} class="mt-0.5 shrink-0" />
