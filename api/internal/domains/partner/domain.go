@@ -102,7 +102,7 @@ func (d *Deps) verifyDomainOwnership(r *http.Request, mediaID string) map[string
 			"ok": true, "status": "verified", "checked_at": isoMilli(time.Now()),
 			"fail_count": 0, "stage": out.Stage, "trace": out.Trace,
 		}
-	case "blocked_by_waf":
+	case "blocked_by_waf", "tls_error":
 		return d.recordDomainCheckNeutral(ctx, mediaID, out.Result, out.Message, out.Stage, out.Trace)
 	case "unreachable":
 		return d.recordDomainCheckFailure(ctx, mediaID, row,
@@ -122,20 +122,23 @@ func (d *Deps) verifyDomainOwnership(r *http.Request, mediaID string) map[string
 // blocked_by_waf: situs hidup, WAF mitra hanya menolak IP datacenter kami.
 // fail_count, domain_verified, dan domain_health tidak disentuh.
 func (d *Deps) recordDomainCheckNeutral(ctx context.Context, mediaID, result, message, stage string, trace []string) map[string]any {
+	// Situs jelas merespons (403/WAF atau sertifikat bermasalah) → health "live",
+	// sekaligus membersihkan status 'unreachable' lama yang sudah tidak berlaku.
 	_ = d.exec(ctx, `
 		UPDATE media SET domain_last_checked_at = NOW(), domain_last_result = $1,
 		  domain_last_error = $2, domain_last_stage = $3, domain_last_trace = $4,
+		  domain_health = 'live',
 		  domain_last_error_at = NOW(), updated_at = NOW()
 		WHERE id = $5`,
 		result, message, stage, marshalJSONArr(trace), mediaID)
 	return map[string]any{
-		"ok":      false,
-		"status":  result,
+		"ok":         false,
+		"status":     result,
 		"checked_at": isoMilli(time.Now()),
-		"stage":   stage,
-		"trace":   trace,
-		"reason":  message,
-		"neutral": true,
+		"stage":      stage,
+		"trace":      trace,
+		"reason":     message,
+		"neutral":    true,
 	}
 }
 

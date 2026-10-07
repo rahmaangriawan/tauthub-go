@@ -56,6 +56,22 @@ func VerifyDomainOwnership(ctx context.Context, target, token string) DomainChec
 		if txtVerified(ctx, target, token, &trace) {
 			return DomainCheckOutcome{Result: "verified", Stage: "txt", Message: "Token ditemukan di TXT record", Trace: trace}
 		}
+		// Sertifikat TLS bermasalah (self-signed/kedaluwarsa/nama tidak cocok):
+		// situsnya hidup di browser, jadi jangan disebut "tidak terjangkau".
+		if tlsCertProblem(err) {
+			if status, ok := insecureReachable(ctx, target, &trace); ok {
+				return DomainCheckOutcome{
+					Result: "tls_error", Stage: "tls",
+					Message: fmt.Sprintf("Situs merespons (HTTP %d), tapi sertifikat TLS-nya bermasalah: %s", status, firstLine(err.Error())),
+					Trace:   trace,
+				}
+			}
+			return DomainCheckOutcome{
+				Result: "tls_error", Stage: "tls",
+				Message: "Sertifikat TLS bermasalah: " + firstLine(err.Error()),
+				Trace:   trace,
+			}
+		}
 		return DomainCheckOutcome{Result: "unreachable", Stage: stage, Message: err.Error(), Trace: trace}
 	}
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 500_000))
@@ -64,14 +80,17 @@ func VerifyDomainOwnership(ctx context.Context, target, token string) DomainChec
 	trace = append(trace, "HTTP "+fmt.Sprintf("%d", status))
 
 	if status < 200 || status >= 300 {
-		if status == 403 {
-			trace = append(trace, "Diblokir WAF mitra (403) — situs hidup, akses dari IP server ditolak")
+		// 401/403/406/429/451 = permintaan kita DITOLAK, bukan situs mati
+		// (mis. WAF mitra menolak IP datacenter). Status ini tidak boleh
+		// dihitung sebagai "tidak terjangkau".
+		if status == 401 || status == 403 || status == 406 || status == 429 || status == 451 {
+			trace = append(trace, fmt.Sprintf("Akses ditolak mitra (HTTP %d) — situs hidup, permintaan dari IP server ditolak", status))
 			if txtVerified(ctx, target, token, &trace) {
 				return DomainCheckOutcome{Result: "verified", Stage: "txt", Message: "Token ditemukan di TXT record", Trace: trace}
 			}
 			return DomainCheckOutcome{
 				Result: "blocked_by_waf", Stage: "waf",
-				Message: fmt.Sprintf("HTTP 403 %s — diblokir WAF mitra", strings.TrimSpace(resp.Status)),
+				Message: fmt.Sprintf("HTTP %d %s — situs hidup, akses dari IP server ditolak", status, strings.TrimSpace(resp.Status)),
 				Trace:   trace,
 			}
 		}
@@ -142,6 +161,48 @@ func txtVerified(ctx context.Context, target, token string, trace *[]string) boo
 		*trace = append(*trace, fmt.Sprintf("TXT %s → %d record, token tidak cocok", name, len(txts)))
 	}
 	return false
+}
+
+// tlsCertProblem: error berasal dari verifikasi sertifikat TLS (Go menuliskan
+// "x509: ..." / "tls: failed to verify certificate"). DomainErrors gaya Node
+// (mis. CERT_HAS_EXPIRED) tidak muncul di Go, jadi dicek dari pesannya.
+func tlsCertProblem(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, needle := range []string{
+		"x509:", "tls: failed to verify", "certificate signed by unknown authority",
+		"certificate has expired", "certificate is not valid for", "certificate is expired",
+	} {
+		if strings.Contains(msg, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+// firstLine: pesan error TLS panjang (sertifikat + nama host) dipotong ke
+// baris pertama supaya rapi disimpan di domain_last_error.
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
+}
+
+// insecureReachable: coba sekali lagi tanpa validasi sertifikat hanya untuk
+// memastikan situs merespons (status HTTP dicatat di jejak).
+func insecureReachable(ctx context.Context, target string, trace *[]string) (int, bool) {
+	resp, err := SafeClientInsecure(15 * time.Second).Get(target)
+	if err != nil {
+		*trace = append(*trace, "retry tanpa validasi sertifikat gagal: "+firstLine(err.Error()))
+		return 0, false
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	*trace = append(*trace, fmt.Sprintf("retry tanpa validasi sertifikat → HTTP %d (situs hidup)", resp.StatusCode))
+	return resp.StatusCode, true
 }
 
 // DomainErrCode: kode errno jaringan dari error (parity cause.code di Node).

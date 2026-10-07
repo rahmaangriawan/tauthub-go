@@ -3,7 +3,7 @@
 
 	// Tab Direktori /admin/media — master data media (harga, kredit, tier, integrasi, partner).
 	// Port MediaDirectorySection di apps/web/src/app/admin/media/_sections.tsx.
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { ExternalLink, Plus, RefreshCw, Search, Sparkle } from '@lucide/svelte';
 	import DataTable from '$lib/components/admin/data-table.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
@@ -63,6 +63,11 @@
 	let aiBusyId = $state<string | null>(null);
 	let aiBulkBusy = $state(false);
 	let aiSummary = $state('');
+	let daBulkBusy = $state(false);
+	let daSummary = $state('');
+	// Indikator antrean cek DA (job media_seo_refresh).
+	let daStatus = $state<{ pending_jobs: number; stale: number; failed_last_hour: number; last_error: string | null } | null>(null);
+	let daStatusTimer: ReturnType<typeof setTimeout> | null = null;
 	let reviewTarget = $state<Media | null>(null);
 	let rejectReason = $state('');
 	let reviewBusy = $state(false);
@@ -100,6 +105,13 @@
 
 	let ready = $state(false);
 	onMount(() => mountWithSession(async () => (ready = true)));
+	$effect(() => {
+		if (!ready) return;
+		void loadDaStatus();
+	});
+	onDestroy(() => {
+		if (daStatusTimer) clearTimeout(daStatusTimer);
+	});
 
 	$effect(() => {
 		if (!ready) return;
@@ -451,9 +463,11 @@
 				row.id === media.id
 					? {
 							...row,
-							seo_da: r.da,
-							seo_ai_trust: r.ai_trust_score,
-							seo_ai_citation: r.ai_citation,
+							// Nilai null dari respons (penyedia gagal sebagian) tidak
+							// boleh menghapus angka yang sudah tampil di tabel.
+							seo_da: r.da ?? row.seo_da,
+							seo_ai_trust: r.ai_trust_score ?? row.seo_ai_trust,
+							seo_ai_citation: r.ai_citation ?? row.seo_ai_citation,
 							seo_checked_at: r.checked_at
 						}
 					: row
@@ -462,6 +476,49 @@
 			error = errMessage(reason);
 		} finally {
 			aiBusyId = null;
+		}
+	}
+
+	/** Status antrean cek DA — dipakai indikator dan auto-refresh tabel. */
+	async function loadDaStatus() {
+		try {
+			daStatus = await platformRequest<{
+				pending_jobs: number;
+				stale: number;
+				failed_last_hour: number;
+				last_error: string | null;
+			}>('/media/seo-refresh-status');
+			if ((daStatus?.pending_jobs ?? 0) > 0) {
+				// Selama antrean berjalan, tabel + indikator disegarkan sendiri tiap 30 dtk.
+				if (daStatusTimer) clearTimeout(daStatusTimer);
+				daStatusTimer = setTimeout(() => {
+					void load();
+					void loadDaStatus();
+				}, 30_000);
+			}
+		} catch {
+			/* indikator opsional — jangan ganggu daftar media */
+		}
+	}
+
+	/** Antrekan pemeriksaan DA/SEO untuk semua media yang metriknya belum segar. */
+	async function refreshAllDa() {
+		if (!confirm('Cek DA untuk semua media yang metriknya belum segar? Proses berjalan di latar (antrean), hasilnya muncul bertahap di tabel.')) return;
+		error = '';
+		daBulkBusy = true;
+		daSummary = 'Mengantrekan pemeriksaan DA…';
+		try {
+			const r = await platformRequest<{ enqueued: number; total_stale: number; skipped: number }>(
+				'/media/seo-refresh-all',
+				{ method: 'POST' }
+			);
+			daSummary = `${r.enqueued} media masuk antrean (dari ${r.total_stale} yang perlu dicek). Tabel menyegarkan sendiri selama antrean berjalan.`;
+			await loadDaStatus();
+		} catch (reason) {
+			error = errMessage(reason);
+			daSummary = '';
+		} finally {
+			daBulkBusy = false;
 		}
 	}
 
@@ -613,6 +670,16 @@
 	{/if}
 {/snippet}
 
+{#snippet daCell(row: Media)}
+	<span title={row.seo_checked_at ? `Terakhir dicek ${fmtDateTime(row.seo_checked_at)} · sumber: RapidAPI domain-metrics` : tr('Belum pernah dicek')}>
+		{#if row.seo_da != null}
+			<Badge tone={scoreTone(row.seo_da)} value={`${row.seo_da}`} />
+		{:else}
+			<Badge tone="neutral" value="—" />
+		{/if}
+	</span>
+{/snippet}
+
 {#snippet aiTrustCell(row: Media)}
 	<span title={row.seo_checked_at ? `Terakhir dicek ${fmtDateTime(row.seo_checked_at)}` : undefined}>
 		{#if row.seo_ai_trust != null}
@@ -622,7 +689,7 @@
 		{/if}
 	</span>
 	{#if row.seo_da != null}
-		<p class="mt-1 text-xs text-muted-foreground" title="Domain Authority (Ahrefs)">DA {row.seo_da}</p>
+		<p class="mt-1 text-xs text-muted-foreground" title={tr('Domain Authority (RapidAPI domain-metrics)')}>DA {row.seo_da}</p>
 	{/if}
 {/snippet}
 
@@ -781,12 +848,29 @@
 		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={aiBulkBusy} onclick={bulkAiSignals}>
 			<Sparkle size={15} /> {aiBulkBusy ? 'Memeriksa…' : 'Cek AI & SEO Semua'}
 		</button>
+		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={daBulkBusy} onclick={() => void refreshAllDa()}>
+			<RefreshCw size={15} /> {daBulkBusy ? 'Mengantrekan…' : tr('Cek DA semua')}
+		</button>
 		<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" onclick={openCreate}>
 			<Plus size={15} />{tr("Tambah media")}</button>
 	</div>
 
 	{#if swSummary}<p class="mt-2 text-xs text-muted-foreground">{swSummary}</p>{/if}
 	{#if aiSummary}<p class="mt-2 text-xs text-muted-foreground">{aiSummary}</p>{/if}
+	{#if daSummary}<p class="mt-2 text-xs text-muted-foreground">{daSummary}</p>{/if}
+	{#if daStatus && (daStatus.pending_jobs > 0 || daStatus.stale > 0 || daStatus.failed_last_hour > 0)}
+		<div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+			<span class="rounded-full px-2.5 py-1" style="background-color: var(--muted);">
+				{tr('Antrean cek DA')}: <strong>{daStatus.stale}</strong> {tr('media menunggu')} · <strong>{daStatus.pending_jobs}</strong> {tr('job berjalan')}
+			</span>
+			{#if daStatus.failed_last_hour > 0}
+				<span class="rounded-full px-2.5 py-1" style="background-color: var(--warning-soft); color: var(--warning);" title={daStatus.last_error ?? ''}>
+					{daStatus.failed_last_hour} {tr('job gagal (sejam terakhir) — arahkan kursor untuk pesan')}
+				</span>
+			{/if}
+			<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => { void load(); void loadDaStatus(); }}>{tr('Muat ulang')}</button>
+		</div>
+	{/if}
 	{#if error && !isAccessError(error)}
 		<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>
 	{/if}
@@ -805,6 +889,7 @@
 			{ key: 'traffic', label: 'Trafik', align: 'right' as const, render: trafficCell },
 			{ key: 'health', label: 'Health', render: healthCell },
 			{ key: 'ai_trust', label: 'AI Trust', render: aiTrustCell },
+			{ key: 'da', label: 'DA', align: 'center' as const, render: daCell },
 			{ key: 'ai_cited', label: 'AI Cited', render: aiCitedCell },
 			{ key: 'integration', label: 'Integrasi', render: integrationCell },
 			{ key: 'actions', label: 'Aksi', align: 'center' as const, render: actionsCell }

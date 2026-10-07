@@ -786,7 +786,9 @@ func (d *Deps) mpCheckAndStoreSeoMetrics(ctx context.Context, mediaID string, we
 		return mpSeoResult{}, err
 	}
 
-	if cached != nil && mpSeoIsFresh(cached.anyOrNil("checked_at")) {
+	// Baris "segar" tanpa nilai DA tetap harus diambil ulang: kegagalan penyedia
+	// menyimpan checked_at walau DA-nya kosong (lihat `metrics` awal di bawah).
+	if cached != nil && mpSeoIsFresh(cached.anyOrNil("checked_at")) && cached.has("da") {
 		serpensKey := d.mpOptionalSeoKey(ctx, "sealed_serpens_api_key")
 		needsAI := !cached.has("ai_trust_score") || (serpensKey != "" && !cached.has("ai_citation"))
 		if !needsAI {

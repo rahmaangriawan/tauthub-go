@@ -483,9 +483,6 @@
 		(speedFilter ? 1 : 0) + (priceFilter ? 1 : 0) + (minDaFilter ? 1 : 0) +
 		(verifiedOnly ? 1 : 0) + (dewanPersOnly ? 1 : 0) + (category ? 1 : 0)
 	);
-	const minPrice = $derived(
-		rows.length ? Math.min(...rows.map((m) => m.client_price ?? m.price ?? 0).filter((p) => p > 0)) : 0
-	);
 	const selectedMedia = $derived(rows.filter((m) => selectedIds.has(m.id)));
 	// Media terpilih yang tidak ada di baris termuat (filter/sort lain) — harganya
 	// dari snapshot tersimpan supaya total tidak bohong.
@@ -504,15 +501,6 @@
 		if (pick.some((s) => s.label === 'Standar')) return getReleaseSpeed('manual');
 		if (pick.some((s) => s.label === 'Cepat')) return getReleaseSpeed('rss');
 		return pick[0] ?? null;
-	});
-	// Persentase media terbit < 24 jam, dihitung dari data nyata (bukan klaim).
-	const fastShare = $derived.by(() => {
-		if (!rows.length) return null;
-		const fast = rows.filter((m) => {
-			const s = getReleaseSpeed(m.integration_type);
-			return s.isSuper || s.label === 'Cepat';
-		}).length;
-		return Math.round((fast / rows.length) * 100);
 	});
 
 	function toggleSort(key: typeof sortKey) {
@@ -702,30 +690,6 @@
 			<span>{tr('Pilih media untuk kampanyemu — setelah ini kamu diarahkan ke produksi artikel: judul, cover, pemeriksaan mutu, lalu terbit ke media.')}</span>
 		</div>
 	{/if}
-
-	<!-- Header Eksplorasi Media -->
-	<div class="explorationHeader">
-		<div class="explorationTitleCol">
-			<h1 class="explorationTitle">{tr("Eksplorasi Media")}</h1>
-			<p class="explorationSubtitle">{tr("Temukan publisher terbaik untuk kampanye PR Anda.")}</p>
-		</div>
-		<div class="explorationStatsCard">
-			<div class="explorationStatItem">
-				<span class="explorationStatLabel">TOTAL MEDIA TERSEDIA</span>
-				<span class="explorationStatValueBlue">{fmt(rows.length)}</span>
-			</div>
-			<div class="explorationStatDivider"></div>
-			<div class="explorationStatItem">
-				<span class="explorationStatLabel">MEDIA TERBIT &lt; 24 JAM</span>
-				<span class="explorationStatValueDark">{fastShare === null ? '—' : `${fastShare}% dari katalog`}</span>
-			</div>
-			<div class="explorationStatDivider"></div>
-			<div class="explorationStatItem">
-				<span class="explorationStatLabel">HARGA MULAI DARI</span>
-				<span class="explorationStatValueDark">Rp {fmt(minPrice)}</span>
-			</div>
-		</div>
-	</div>
 
 	<!-- Top Search & Filter Bar -->
 	<div class="modernTopBar">

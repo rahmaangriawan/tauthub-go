@@ -7,6 +7,7 @@ package platform
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -15,7 +16,29 @@ import (
 )
 
 // mpDomainResults: sebab kegagalan verifikasi domain yang bisa difilter admin.
-var mpDomainResults = []string{"verified", "blocked_by_waf", "token_not_found", "token_mismatch", "unreachable"}
+var mpDomainResults = []string{"verified", "blocked_by_waf", "tls_error", "token_not_found", "token_mismatch", "unreachable"}
+
+// mpTraceText: kolom domain_last_trace menyimpan JSON array langkah ([]string,
+// ditulis marshalJSONArr). UI menampilkannya sebagai teks satu langkah per baris —
+// dulu nilainya diteruskan mentah sebagai array sehingga `.split` di UI meledak.
+func mpTraceText(row rowMap) any {
+	switch v := row.jsonField("domain_last_trace").(type) {
+	case nil:
+		return nil
+	case string:
+		return v
+	case []any:
+		parts := make([]string, 0, len(v))
+		for _, item := range v {
+			parts = append(parts, strings.TrimSpace(fmt.Sprint(item)))
+		}
+		return strings.Join(parts, "\n")
+	case []string:
+		return strings.Join(v, "\n")
+	default:
+		return fmt.Sprint(v)
+	}
+}
 
 // ---------- GET /v1/platform/domain-diagnostics ----------
 
@@ -134,7 +157,7 @@ func (d *Deps) DomainDiagnosticsList(w http.ResponseWriter, r *http.Request) {
 			"domain_last_error":       row.anyOrNil("domain_last_error"),
 			"domain_last_error_at":    row.anyOrNil("domain_last_error_at"),
 			"domain_last_stage":       row.anyOrNil("domain_last_stage"),
-			"domain_last_trace":       row.jsonField("domain_last_trace"),
+			"domain_last_trace":       mpTraceText(row),
 		})
 	}
 	total := 0
@@ -230,7 +253,7 @@ func (d *Deps) mpVerifyDomainOwnership(r *http.Request, mediaID string) map[stri
 			"ok": true, "status": "verified", "checked_at": d.isoNow(),
 			"fail_count": 0, "stage": out.Stage, "trace": out.Trace,
 		}
-	case "blocked_by_waf":
+	case "blocked_by_waf", "tls_error":
 		return d.mpRecordDomainCheckNeutral(ctx, mediaID, out.Result, out.Message, out.Stage, out.Trace)
 	case "unreachable":
 		return d.mpRecordDomainCheckFailure(ctx, mediaID, media,
@@ -311,9 +334,11 @@ func (d *Deps) mpRecordDomainCheckFailure(ctx context.Context, mediaID string, b
 // boleh mencabut verifikasi yang sudah ada).
 func (d *Deps) mpRecordDomainCheckNeutral(ctx context.Context, mediaID, result, message, stage string, trace []string) map[string]any {
 	if err := d.exec(ctx, `
+		-- Situs jelas merespons (403/WAF atau sertifikat bermasalah) → health "live",
+		-- sekaligus membersihkan status 'unreachable' lama yang sudah tidak berlaku.
 		UPDATE media SET domain_last_checked_at = NOW(), domain_last_result = $1,
 		  domain_last_error = $2, domain_last_stage = $3, domain_last_trace = $4,
-		  domain_last_error_at = NOW(), updated_at = NOW()
+		  domain_health = 'live', domain_last_error_at = NOW(), updated_at = NOW()
 		WHERE id = $5`,
 		result, message, stage, mpJSONString(trace), mediaID); err != nil {
 		d.logWarn("simpan diagnostik domain (neutral) gagal", mediaID, err)

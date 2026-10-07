@@ -632,7 +632,7 @@ func (d *Deps) mjVerifyDomainOwnership(ctx context.Context, mediaID string, befo
 			"ok": true, "status": "verified", "checked_at": d.isoNow(),
 			"fail_count": 0, "stage": out.Stage, "trace": out.Trace,
 		}
-	case "blocked_by_waf":
+	case "blocked_by_waf", "tls_error":
 		return d.mpRecordDomainCheckNeutral(ctx, mediaID, out.Result, out.Message, out.Stage, out.Trace)
 	case "unreachable":
 		return d.mpRecordDomainCheckFailure(ctx, mediaID, before,

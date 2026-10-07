@@ -595,6 +595,10 @@ func run() error {
 			authed.Post("/platform/media/recompute-health", platformDeps.MediaRecomputeHealthBulk)
 			authed.Post("/platform/media/restore-archived", platformDeps.MediaRestoreArchived)
 			authed.Post("/platform/media/seo-bulk", platformDeps.MediaSEOBulk)
+			// Cek DA semua: antrekan media_seo_refresh untuk seluruh media yang
+			// metriknya belum segar, plus indikator antreannya.
+			authed.Post("/platform/media/seo-refresh-all", platformDeps.MediaSEORefreshAll)
+			authed.Get("/platform/media/seo-refresh-status", platformDeps.MediaSEORefreshStatus)
 			authed.Post("/platform/media/similarweb-bulk", platformDeps.MediaSimilarWebBulk)
 			authed.Post("/platform/media/sync-credit-cost", platformDeps.MediaSyncCreditCost)
 			authed.Get("/platform/media/{mediaId}", platformDeps.MediaGet)

@@ -11,6 +11,8 @@ import (
 	"context"
 	"net/http"
 	"strings"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 )
 
 // ---------- GET /v1/platform/media/archive-impact ----------
@@ -452,7 +454,15 @@ func (d *Deps) MediaSEOBulk(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN media_seo_metrics sm ON sm.media_id = media.id
 		WHERE media.status = 'active'
 		  AND media.website_url IS NOT NULL AND media.website_url <> ''
-		  AND (sm.media_id IS NULL OR sm.checked_at IS NULL OR sm.checked_at < NOW() - INTERVAL '5 months')
+		  AND (
+		  sm.media_id IS NULL
+		  OR sm.checked_at IS NULL
+		  OR sm.checked_at < NOW() - INTERVAL '5 months'
+		  -- Kegagalan ambil DA tetap menulis checked_at, jadi "DA kosong"
+		  -- juga dianggap perlu dicek ulang — paling cepat sekali per hari
+		  -- supaya kuota penyedia aman.
+		  OR (sm.da IS NULL AND sm.checked_at < NOW() - INTERVAL '1 day')
+		  )
 		ORDER BY sm.checked_at ASC NULLS FIRST
 		LIMIT $1`, limit)
 	if err != nil {
@@ -500,6 +510,132 @@ func mpShortError(err error, max int) string {
 		msg = msg[:max]
 	}
 	return msg
+}
+
+// ---------- POST /v1/platform/media/seo-refresh-all ----------
+
+// mpStaleSeoWhere: predikat media yang metrik SEO/AI-nya perlu dicek ulang —
+// belum punya baris metrik, atau terakhir dicek lebih dari 5 bulan.
+const mpStaleSeoWhere = `
+		m.status = 'active'
+		  AND m.website_url IS NOT NULL AND m.website_url <> ''
+		  AND (sm.media_id IS NULL OR sm.checked_at IS NULL OR sm.checked_at < NOW() - INTERVAL '5 months'
+		       OR (sm.da IS NULL AND sm.checked_at < NOW() - INTERVAL '1 day'))`
+
+// MediaSEORefreshAll: antrekan pemeriksaan DA/SEO untuk SEMUA media yang
+// metriknya belum segar. Dijalankan di latar lewat job `media_seo_refresh`
+// (kind yang sama dipakai scheduler), jadi aman untuk ratusan media dan tidak
+// menahan request. Media yang masih punya job pending/running dilewati.
+func (d *Deps) MediaSEORefreshAll(w http.ResponseWriter, r *http.Request) {
+	user, _, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	if err := auth.CheckWriteRate(r.Context(), d.Pool, "media-seo-refresh-all:"+user.ID, 2); err != nil {
+		writeErr(w, d, ptErrTooMany("Antrean cek DA baru saja dijalankan. Tunggu satu menit lalu coba lagi."))
+		return
+	}
+	rows, err := d.queryRows(r.Context(), `
+		SELECT m.id
+		FROM media m
+		LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id
+		WHERE`+mpStaleSeoWhere+`
+		  AND NOT EXISTS (
+		    SELECT 1 FROM jobs j
+		    WHERE j.kind = 'media_seo_refresh' AND j.status IN ('pending','running')
+		      AND j.payload->>'mediaId' = m.id
+		  )
+		ORDER BY sm.checked_at ASC NULLS FIRST
+		LIMIT 500`)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	enqueued := 0
+	skipped := 0
+	for _, row := range rows {
+		mediaID := row.strOr("id", "")
+		if mediaID == "" {
+			skipped++
+			continue
+		}
+		if _, jErr := d.mpEnqueueJob(r.Context(), "media_seo_refresh", map[string]any{"mediaId": mediaID}, 2); jErr != nil {
+			d.logWarn("enqueue media_seo_refresh gagal", mediaID, jErr)
+			skipped++
+			continue
+		}
+		enqueued++
+	}
+	// Total kandidat (tanpa dedupe) supaya UI bisa menyebut sisa antrean.
+	totalRow, err := d.queryRow(r.Context(), `
+		SELECT COUNT(*) AS total FROM media m
+		LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id
+		WHERE`+mpStaleSeoWhere)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	total := 0
+	if totalRow != nil {
+		total = totalRow.intOr("total", 0)
+	}
+	d.audit(r.Context(), user.ID, "media.seo_refresh_all", "media", "")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":          true,
+		"enqueued":    enqueued,
+		"skipped":     skipped,
+		"candidates":  len(rows),
+		"total_stale": total,
+	})
+}
+
+// ---------- GET /v1/platform/media/seo-refresh-status ----------
+
+// MediaSEORefreshStatus: indikator antrean cek DA — berapa media yang masih
+// perlu dicek, berapa job berjalan, dan (bila ada) pesan kegagalan terakhir
+// supaya masalah kunci provider/rate limit langsung kelihatan.
+func (d *Deps) MediaSEORefreshStatus(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := d.adminGuard(w, r, ""); !ok {
+		return
+	}
+	jobsRow, err := d.queryRow(r.Context(), `
+		SELECT COUNT(*) FILTER (WHERE status IN ('pending','running')) AS pending,
+		       COUNT(*) FILTER (WHERE status = 'failed' AND updated_at > NOW() - INTERVAL '1 hour') AS failed
+		FROM jobs WHERE kind = 'media_seo_refresh'`)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	staleRow, err := d.queryRow(r.Context(), `
+		SELECT COUNT(*) AS total FROM media m
+		LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id
+		WHERE`+mpStaleSeoWhere)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	lastErrRow, _ := d.queryRow(r.Context(), `
+		SELECT last_error FROM jobs
+		WHERE kind = 'media_seo_refresh' AND status = 'failed' AND last_error IS NOT NULL
+		ORDER BY updated_at DESC LIMIT 1`)
+	pending, failed, stale := 0, 0, 0
+	if jobsRow != nil {
+		pending = jobsRow.intOr("pending", 0)
+		failed = jobsRow.intOr("failed", 0)
+	}
+	if staleRow != nil {
+		stale = staleRow.intOr("total", 0)
+	}
+	lastError := ""
+	if lastErrRow != nil {
+		lastError = lastErrRow.strOr("last_error", "")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"pending_jobs":     pending,
+		"failed_last_hour": failed,
+		"stale":            stale,
+		"last_error":       lastError,
+	})
 }
 
 // ---------- POST /v1/platform/media/similarweb-bulk ----------

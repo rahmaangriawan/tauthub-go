@@ -891,7 +891,8 @@ func (d *Deps) schEnqueueMediaAiRefreshes(ctx context.Context, limit int) {
 		LEFT JOIN media_seo_metrics sm ON sm.media_id = media.id
 		WHERE media.status = 'active'
 		  AND media.website_url IS NOT NULL AND media.website_url <> ''
-		  AND (sm.media_id IS NULL OR sm.checked_at IS NULL OR sm.checked_at < NOW() - INTERVAL '5 months')
+		  AND (sm.media_id IS NULL OR sm.checked_at IS NULL OR sm.checked_at < NOW() - INTERVAL '5 months'
+		       OR (sm.da IS NULL AND sm.checked_at < NOW() - INTERVAL '1 day'))
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'media_seo_refresh' AND j.status IN ('pending','running')

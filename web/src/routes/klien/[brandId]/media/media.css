@@ -427,88 +427,6 @@ button.categoryPlusTag:focus-visible {
   color: var(--destructive);
   font-size: 13px;
 }
-.explorationHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
-  padding: 22px 26px;
-  background: var(--card);
-  border: 1px solid var(--gray-a5, #e2e8f0);
-  border-radius: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-  margin-bottom: 2px;
-}
-.explorationStatDivider {
-  width: 1px;
-  height: 38px;
-  background: #f1f5f9;
-  flex-shrink: 0;
-}
-.explorationStatItem {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 20px;
-  min-width: 120px;
-}
-.explorationStatLabel {
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #94a3b8;
-  white-space: nowrap;
-}
-.explorationStatValueBlue {
-  font-size: 17px;
-  font-weight: 750;
-  color: #2563eb;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-.explorationStatValueDark {
-  font-size: 16px;
-  font-weight: 750;
-  color: #0f172a;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-.explorationStatsCard {
-  display: inline-flex;
-  align-items: center;
-  background: var(--card);
-  border: 1px solid var(--gray-a5, #e2e8f0);
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-  overflow: hidden;
-}
-.explorationSubtitle {
-  font-size: 14px;
-  color: #64748b;
-  margin: 0;
-  line-height: 1.45;
-}
-.explorationTitleCol {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.explorationTitle {
-  font-size: 24px;
-  font-weight: 750;
-  letter-spacing: -0.025em;
-  color: #0f172a;
-  margin: 0;
-  line-height: 1.2;
-}
-.explorationTitleCol {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
 .filterCountBadge {
   display: inline-flex;
   align-items: center;
@@ -631,7 +549,9 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   background: var(--card);
   border: 1px solid var(--gray-a5, #e2e8f0);
   border-radius: 12px;
-  overflow: hidden;
+  /* Bukan scroll container: kalau di-clip, header tabel yang sticky tidak bisa
+     menempel ke halaman (hanya menempel ke kartu yang ikut tergulir). */
+  overflow: visible;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 .modernCheckbox {
@@ -748,6 +668,21 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   border-bottom: 1px solid #e2e8f0;
   white-space: nowrap;
   user-select: none;
+  /* Header kolom menempel tepat di bawah header aplikasi (app-utility-bar,
+     tingginya 64px) saat daftar media digulir. Latar wajib solid supaya baris
+     tak tembus; garis bawah dipindah ke inset shadow karena border-collapse:
+     collapse sering tidak menggambar border pada sel sticky. */
+  position: sticky;
+  top: 64px;
+  z-index: 3;
+  box-shadow: inset 0 -1px 0 #e2e8f0;
+}
+
+/* Header aplikasi menyusut jadi 60px di layar kecil (lihat .app-content di app.css). */
+@media (max-width: 640px) {
+  .modernTh {
+    top: 60px;
+  }
 }
 .modernThSortable {
   cursor: pointer;
@@ -1082,7 +1017,10 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   border-bottom: none;
 }
 .tableWrap {
-  overflow-x: auto;
+  /* TIDAK memakai overflow sendiri: halaman yang menggulir (seperti biasa),
+     sehingga toolbar pencarian ikut tergulir hilang, sementara header kolom
+     tetap menempel di bawah header aplikasi. */
+  overflow: visible;
   width: 100%;
 }
 .trafficMainVal {

@@ -83,9 +83,18 @@ func (m rowMap) num(key string) (float64, bool) {
 	switch t := v.(type) {
 	case float64:
 		return t, true
+	case float32:
+		return float64(t), true
 	case int64:
 		return float64(t), true
 	case int32:
+		return float64(t), true
+	// Kolom smallint (da, pa, spam_score, ai_trust_score, credit_cost, …)
+	// dikembalikan pgx sebagai int16 — tanpa cabang ini semua pembacaan
+	// lewat rowMap menghasilkan nil/0 di JSON.
+	case int16:
+		return float64(t), true
+	case int8:
 		return float64(t), true
 	case int:
 		return float64(t), true

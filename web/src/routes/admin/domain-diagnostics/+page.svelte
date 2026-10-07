@@ -29,11 +29,12 @@
 		domain_last_error: string | null;
 		domain_last_error_at: string | null;
 		domain_last_stage: string | null;
-		domain_last_trace: string | null;
+		domain_last_trace: string | string[] | null;
 	};
 
 	type Summary = {
 		unreachable: number;
+		tls_error?: number;
 		blocked_by_waf: number;
 		token_not_found: number;
 		token_mismatch: number;
@@ -50,7 +51,8 @@
 		blocked_by_waf: { label: 'Diblokir WAF mitra', tone: 'warning' },
 		token_not_found: { label: 'Kode tidak ditemukan', tone: 'warning' },
 		token_mismatch: { label: 'Kode lama terpasang', tone: 'warning' },
-		unreachable: { label: 'Situs tak terjangkau', tone: 'danger' }
+		unreachable: { label: 'Situs tak terjangkau', tone: 'danger' },
+		tls_error: { label: 'Sertifikat TLS bermasalah', tone: 'warning' }
 	};
 
 	/**
@@ -225,13 +227,14 @@
 			<p class="mt-1 text-xs text-muted-foreground">{stage.hint}</p>
 		{/if}
 		{#if row.domain_last_trace}
+			{@const traceText = Array.isArray(row.domain_last_trace) ? row.domain_last_trace.join('\n') : String(row.domain_last_trace)}
 			<details class="mt-1.5 max-w-[420px]">
 				<summary class="cursor-pointer text-[11px] text-muted-foreground"
-					>Jejak langkah ({row.domain_last_trace.split('\n').length})</summary
+					>Jejak langkah ({traceText.split('\n').length})</summary
 				>
 				<pre
 					class="mt-1.5 whitespace-pre-wrap break-words rounded-md p-2 text-[11px] leading-relaxed"
-					style="background-color: var(--secondary);">{row.domain_last_trace}</pre>
+					style="background-color: var(--secondary);">{traceText}</pre>
 			</details>
 		{/if}
 	</div>
@@ -267,7 +270,7 @@
 
 	{#if summary}
 		<div class="mt-4 flex flex-wrap gap-3">
-			{#each [['blocked_by_waf', 'Diblokir WAF mitra'], ['unreachable', 'Situs tak terjangkau'], ['token_mismatch', 'Kode lama terpasang'], ['token_not_found', 'Kode tidak ditemukan'], ['never_checked', tr('Belum pernah dicek')]] as [key, label] (key)}
+			{#each [['blocked_by_waf', 'Diblokir WAF mitra'], ['tls_error', 'Sertifikat TLS bermasalah'], ['unreachable', 'Situs tak terjangkau'], ['token_mismatch', 'Kode lama terpasang'], ['token_not_found', 'Kode tidak ditemukan'], ['never_checked', tr('Belum pernah dicek')]] as [key, label] (key)}
 				<div class="app-card min-w-[190px] p-3">
 					<p class="text-xs text-muted-foreground">{label}</p>
 					<p class="text-2xl font-bold">{summary[key as keyof Summary]}</p>
@@ -292,6 +295,7 @@
 					{ value: 'all', label: 'Perlu perhatian' },
 					{ value: 'blocked_by_waf', label: 'Diblokir WAF mitra' },
 					{ value: 'unreachable', label: 'Situs tak terjangkau' },
+					{ value: 'tls_error', label: 'Sertifikat TLS bermasalah' },
 					{ value: 'token_mismatch', label: 'Kode lama terpasang' },
 					{ value: 'token_not_found', label: 'Kode tidak ditemukan' },
 					{ value: 'verified', label: 'Terverifikasi' }

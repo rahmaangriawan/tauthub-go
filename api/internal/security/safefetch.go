@@ -4,6 +4,7 @@ package security
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -106,6 +107,20 @@ func isBlockedIP(ip net.IP) bool {
 }
 
 // Get: GET dengan timeout + header (dipakai crawler/domain verification).
+// SafeClientInsecure: klien yang sama (anti-SSRF tetap aktif) tetapi TIDAK
+// memvalidasi sertifikat TLS. Dipakai hanya untuk memastikan situs benar-benar
+// merespons saat sertifikatnya bermasalah — bukan untuk verifikasi token,
+// supaya jalur verifikasi tetap butuh kanal tepercaya (atau TXT).
+func SafeClientInsecure(timeout time.Duration) *http.Client {
+	c := SafeClient(timeout)
+	if tr, ok := c.Transport.(*http.Transport); ok {
+		clone := tr.Clone()
+		clone.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // probe keterjangkauan saja
+		c.Transport = clone
+	}
+	return c
+}
+
 func Get(ctx context.Context, url string, headers map[string]string, timeout time.Duration) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
