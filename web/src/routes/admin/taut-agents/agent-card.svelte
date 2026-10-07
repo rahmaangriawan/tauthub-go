@@ -25,12 +25,16 @@
 		config,
 		meta,
 		onSave,
-		onTest
+		onTest,
+		bare = false
 	}: {
 		config: AgentConfig;
 		meta: { label: string; role: string; hint: string };
 		onSave: (agent: string, form: Record<string, unknown>) => Promise<void>;
 		onTest: (agent: string) => Promise<{ ok: boolean; message: string; latencyMs?: number }>;
+		// bare: jangan bungkus dengan kartu sendiri — dipakai saat komponen ini
+		// ditaruh di dalam kartu wrapper (mis. tab The Writer).
+		bare?: boolean;
 	} = $props();
 
 	// Form dikendalikan state lokal. Nilai awal disalin dari prop config lewat
@@ -108,7 +112,7 @@
 	}
 </script>
 
-<div class="app-card p-4">
+<div class={bare ? "" : "app-card p-4"}>
 	<div class="flex flex-wrap items-center gap-2">
 		<Bot size={20} />
 		<h3 class="text-sm font-semibold">{meta.label}</h3>

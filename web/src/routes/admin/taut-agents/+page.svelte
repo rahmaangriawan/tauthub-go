@@ -32,9 +32,8 @@
 	const AGENT_META: Record<string, { label: string; role: string; hint: string }> = {
 		profiler: { label: 'Profiler', role: 'Strategis', hint: 'Menerjemahkan profil bisnis + anggaran menjadi strategy_brief.' },
 		matchmaker: { label: 'Matchmaker', role: 'Placement', hint: 'AI ranking media berdasarkan brief Profiler — wajib dikonfigurasi, tanpa fallback formula.' },
-		writer_mainstream: { label: 'Writer · Media Mainstream', role: 'Kreatif (subagent)', hint: 'Subagent The Writer untuk media mainstream (gaya berita 5W+1H, tanpa heading). Konfigurasi disalin dari agent Writer oleh migrasi 195.' },
-		writer_blogger: { label: 'Writer · Blogger', role: 'Kreatif (subagent)', hint: 'Subagent The Writer untuk media blogger (subjudul H2/H3 + daftar). Konfigurasi disalin dari agent Writer oleh migrasi 195.' },
-		writer: { label: 'Writer (cadangan)', role: 'Kreatif', hint: 'Dipakai hanya bila subagent per tipe media belum dikonfigurasi admin.' },
+		writer_mainstream: { label: 'Media Mainstream', role: 'Subagent The Writer', hint: 'Artikel gaya berita 5W+1H tanpa heading — untuk media mainstream.' },
+		writer_blogger: { label: 'Blogger', role: 'Subagent The Writer', hint: 'Artikel dengan subjudul H2/H3 + daftar — untuk media blogger/niche.' },
 		gatekeeper: { label: 'Gatekeeper', role: 'Editor & Compliance', hint: 'Tanam hyperlink natural + editorial + pre-check; hard gate tetap moderateContent.' }
 	};
 
@@ -51,6 +50,16 @@
 
 	let logs = $state<any[]>([]);
 	let logsLoading = $state(false);
+
+	// Wrapper The Writer: satu kartu dengan tab per subagent (Blogger/Media
+	// Mainstream). Agent `writer` generik tetap ada di DB sebagai cadangan mesin
+	// writer, tapi tidak ditampilkan karena sudah diwakili dua subagent ini.
+	let writerTab = $state<'writer_blogger' | 'writer_mainstream'>('writer_blogger');
+	const writerCard = $derived(agents.find((a) => a.agent === writerTab) ?? null);
+	const WRITER_TABS: Array<{ agent: 'writer_blogger' | 'writer_mainstream'; label: string }> = [
+		{ agent: 'writer_blogger', label: 'Blogger' },
+		{ agent: 'writer_mainstream', label: 'Media Mainstream' }
+	];
 
 	let gk = $state<any>(null);
 	let gkNotice = $state('');
@@ -169,9 +178,50 @@
 	{#if !loading}
 		{#if tab === 'agents'}
 			<div class="mt-4 flex flex-col gap-3">
+				<!-- Wrapper The Writer: dua subagent (Blogger & Media Mainstream) dalam
+				     satu kartu bertab, supaya tidak menumpuk tiga kartu writer. -->
+				<section class="app-card p-4">
+					<div class="flex flex-wrap items-start justify-between gap-3">
+						<div>
+							<p class="text-sm font-semibold">The Writer</p>
+							<p class="mt-0.5 text-xs text-muted-foreground">
+								{tr("Dua subagent — model & system prompt bisa berbeda per tipe media. Pilih tab untuk mengaturnya.")}
+							</p>
+						</div>
+						<div class="flex gap-1 rounded-lg p-1" style="background-color: var(--muted);" role="tablist" aria-label={tr("Subagent The Writer")}>
+							{#each WRITER_TABS as t (t.agent)}
+								<button
+									class="app-btn !min-h-8 !px-3 !text-xs"
+									class:app-btn-primary={writerTab === t.agent}
+									class:app-btn-soft={writerTab !== t.agent}
+									type="button"
+									role="tab"
+									aria-selected={writerTab === t.agent}
+									onclick={() => (writerTab = t.agent)}
+								>{t.label}</button>
+							{/each}
+						</div>
+					</div>
+					{#if writerCard}
+						<div class="mt-3">
+							<AgentCard
+								bare
+								config={writerCard}
+								meta={AGENT_META[writerTab] ?? { label: 'The Writer', role: 'Kreatif', hint: '' }}
+								onSave={saveAgent}
+								onTest={testAgent}
+							/>
+						</div>
+					{:else}
+						<p class="mt-3 text-xs text-muted-foreground">{tr("Konfigurasi subagent belum termuat.")}</p>
+					{/if}
+				</section>
+
 				{#each agents as cfg (cfg.agent)}
-					{@const meta = AGENT_META[cfg.agent] ?? { label: cfg.agent, role: cfg.agent, hint: '' }}
-					<AgentCard config={cfg} {meta} onSave={saveAgent} onTest={testAgent} />
+					{#if !cfg.agent.startsWith('writer')}
+						{@const meta = AGENT_META[cfg.agent] ?? { label: cfg.agent, role: cfg.agent, hint: '' }}
+						<AgentCard config={cfg} {meta} onSave={saveAgent} onTest={testAgent} />
+					{/if}
 				{/each}
 			</div>
 		{:else if tab === 'gatekeeper'}
