@@ -336,7 +336,9 @@
 	.tu-overlay {
 		position: fixed;
 		inset: 0;
-		z-index: 60;
+		/* Di atas seluruh lapisan halaman klien (tertinggi .uiTip 1300); bar
+		   pilihan media memakai 95 dan dulu menembus di atas overlay ini. */
+		z-index: 2000;
 		display: flex;
 		align-items: flex-start;
 		justify-content: center;

@@ -543,7 +543,7 @@
 					</th>
 					<th class="modernTh" style="text-align:center">
 						<span class="thWithInfo">AI CITED
-							<Tooltip label={tr('Keterangan AI Citation')} content={tr('Menandai apakah situs media ini disebut sebagai sumber oleh AI Google. Tanda — berarti Google belum menampilkan jawaban AI untuk situs ini, jadi belum bisa dinilai.')} maxWidth={260}>
+							<Tooltip label={tr('Keterangan AI Citation')} content={tr('Menandai apakah situs media ini disebut sebagai salah satu sumber pada jawaban AI Google. Tanda — berarti pemeriksaan terakhir tidak menerima data jawaban AI untuk situs ini, jadi belum bisa dinilai.')} maxWidth={260}>
 								<button type="button" class="infoDot" aria-label={tr('Keterangan AI Citation')} onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
 							</Tooltip>
 						</span>

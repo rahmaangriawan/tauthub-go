@@ -5,7 +5,7 @@
 	// Struktur: error banner → header eksplorasi (+stats card) → top bar
 	// (search, kategori, filter lanjutan, impor, bookmark) → banner filter →
 	// tabel 10 kolom + sort + multi-select → paginasi → modal → selection bar.
-	import { onMount } from 'svelte';
+	import { getContext, onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import {
@@ -288,6 +288,20 @@
 	}
 
 	/** Saldo kredit untuk bar seleksi & ringkasan modal. Gagal baca bukan penghalang. */
+	// Modal top up dimiliki layout klien. Halaman ini hanya meminta membukanya
+	// lewat konteks, supaya alur pembayaran (submitTopUp/topupKey) tidak disalin
+	// ke sini; callback-nya menyegarkan saldo yang tampil di bar bawah.
+	const brandTopUp = getContext<{ open: (onClosed?: () => void) => void } | undefined>('brandTopUp');
+
+	// Klik biasa membuka modal di tempat; klik dengan tombol pengubah tetap
+	// membuka /credits seperti sebelumnya sehingga tautannya tidak pernah jadi
+	// kontrol mati.
+	function openTopUpFromBar(e: MouseEvent) {
+		if (!brandTopUp || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+		e.preventDefault();
+		brandTopUp.open(() => void loadWallet());
+	}
+
 	async function loadWallet() {
 		try {
 			const res = await apiRequest(`${apiBase}/credits?limit=1`);
@@ -950,7 +964,7 @@
 										<Tooltip.Portal>
 											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
 											<Tooltip.Arrow class="uiTipArrow" />
-											Menandai apakah situs media ini disebut sebagai sumber oleh AI Google (jawaban otomatis yang muncul di hasil pencarian). Tanda — berarti Google belum menampilkan jawaban AI untuk situs ini, jadi belum bisa dinilai.
+											Menandai apakah situs media ini disebut sebagai salah satu sumber pada jawaban AI Google. Tanda — berarti pemeriksaan terakhir tidak menerima data jawaban AI untuk situs ini, jadi belum bisa dinilai.
 										</Tooltip.Content>
 										</Tooltip.Portal>
 									</Tooltip.Root>
@@ -1279,7 +1293,7 @@
 							</div>
 							{#if totalSelectedCredits > walletAvailableTc}
 								<p class="campaignWalletWarn">
-									{tr("Saldo kurang")} ~{fmt(totalSelectedCredits - walletAvailableTc)} {tr("Kredit")} {tr("untuk pesanan ini.")} <a href={`/klien/${brandUrl}/credits`}>{tr("Top Up dulu")}</a>
+									{tr("Saldo kurang")} ~{fmt(totalSelectedCredits - walletAvailableTc)} {tr("Kredit")} {tr("untuk pesanan ini.")} <a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up dulu")}</a>
 								</p>
 							{/if}
 						{/if}
@@ -1388,7 +1402,7 @@
 						<span class="selectedStatCreditVal">~ {fmt(walletAvailableTc)} {tr("Kredit")}</span>
 					</div>
 					{#if totalSelectedCredits > walletAvailableTc}
-						<span class="walletShortfall">{tr("Kurang")} ~{fmt(totalSelectedCredits - walletAvailableTc)} {tr("Kredit")} · <a href={`/klien/${brandUrl}/credits`}>{tr("Top Up")}</a></span>
+						<span class="walletShortfall">{tr("Kurang")} ~{fmt(totalSelectedCredits - walletAvailableTc)} {tr("Kredit")} · <a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up")}</a></span>
 					{:else}
 						<span class="walletEnough">{tr("Cukup untuk pesanan ini")}</span>
 					{/if}

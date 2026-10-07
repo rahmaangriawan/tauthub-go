@@ -593,11 +593,14 @@ func (d *Deps) MediaSEORefreshAll(w http.ResponseWriter, r *http.Request) {
 		}
 		enqueued++
 	}
-	// Total kandidat (tanpa dedupe) supaya UI bisa menyebut sisa antrean.
+	// Total kandidat (tanpa dedupe) supaya UI bisa menyebut sisa antrean. Memakai
+	// predikat yang sama dengan pemilihannya: dulu selalu memakai "belum berskor
+	// lengkap", sehingga tombol "Cek DA semua" melaporkan "66 dari 71 kandidat"
+	// padahal kandidat DA memang 66.
 	totalRow, err := d.queryRow(r.Context(), `
 		SELECT COUNT(*) AS total FROM media m
 		LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id
-		WHERE`+mpStaleSeoWhere)
+		WHERE`+needsCheck)
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -692,6 +695,10 @@ func (d *Deps) MediaSEORefreshStatus(w http.ResponseWriter, r *http.Request) {
 		SELECT last_error FROM jobs
 		WHERE kind = 'media_seo_refresh' AND status = 'failed' AND last_error IS NOT NULL
 		ORDER BY updated_at DESC LIMIT 1`)
+	// Kegagalan penyedia DA/PA tingkat platform (langganan/kuota): tanpa ini
+	// kolom DA tampak "kosong tanpa sebab" karena job tetap selesai berkat AI Trust.
+	daErrRow, _ := d.queryRow(r.Context(), `
+		SELECT last_da_error, last_da_error_at FROM platform_seo_config WHERE id = 'default' LIMIT 1`)
 	pending, queued, running, failed, stale := 0, 0, 0, 0, 0
 	if jobsRow != nil {
 		pending = jobsRow.intOr("pending", 0)
@@ -706,6 +713,12 @@ func (d *Deps) MediaSEORefreshStatus(w http.ResponseWriter, r *http.Request) {
 	if lastErrRow != nil {
 		lastError = lastErrRow.strOr("last_error", "")
 	}
+	daError := ""
+	var daErrorAt any
+	if daErrRow != nil {
+		daError = daErrRow.strOr("last_da_error", "")
+		daErrorAt = daErrRow.anyOrNil("last_da_error_at")
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pending_jobs":     pending,
 		"queued_jobs":      queued,
@@ -713,6 +726,8 @@ func (d *Deps) MediaSEORefreshStatus(w http.ResponseWriter, r *http.Request) {
 		"failed_last_hour": failed,
 		"stale":            stale,
 		"last_error":       lastError,
+		"da_error":         daError,
+		"da_error_at":      daErrorAt,
 	})
 }
 

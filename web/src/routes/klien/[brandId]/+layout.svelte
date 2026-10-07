@@ -7,7 +7,7 @@
 	// sidebar 264px (inner 16/10/12), nav item min-height 40px TANPA margin
 	// antar-item, label grup 8/10/5, topbar 64px padding 0 28px,
 	// konten 32/28/64.
-	import { onMount } from 'svelte';
+	import { onMount, setContext } from 'svelte';
 	import { page } from '$app/state';
 	import {
 		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, Newspaper, Receipt,
@@ -103,6 +103,26 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	// di-reset setelah intent selesai/batal (parity credit-pill.tsx).
 	let topupKey = '';
 
+	// Jembatan untuk halaman anak (katalog media): membuka modal top up yang sama
+	// tanpa menyalin alur pembayarannya. onClosed dipanggil saat modal tertutup
+	// atau setelah pembayaran berhasil, supaya halaman pemanggil bisa menyegarkan
+	// saldo yang ditampilkannya.
+	let topupClosedHook: (() => void) | null = null;
+
+	setContext('brandTopUp', {
+		open(onClosed?: () => void) {
+			topupClosedHook = onClosed ?? null;
+			void openTopUp();
+		}
+	});
+
+	function closeTopUp() {
+		topupOpen = false;
+		const hook = topupClosedHook;
+		topupClosedHook = null;
+		if (hook) hook();
+	}
+
 	async function openTopUp() {
 		topupPayment = null;
 		topupError = '';
@@ -129,7 +149,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			if (result.status === 'paid') {
 				topupKey = crypto.randomUUID();
 				topupPayment = null;
-				topupOpen = false;
+				closeTopUp();
 				showToast(tr('Top up ini sudah terbayar. Saldo telah diperbarui.'));
 				void overview.refetch();
 				return;
@@ -247,7 +267,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			payment={topupPayment}
 			onSelectPackage={startTopUp}
 			onResetPayment={resetTopUpPayment}
-			onClose={() => (topupOpen = false)}
+			onClose={closeTopUp}
 		/>
 	{/if}
 	<AnnouncementPopup />

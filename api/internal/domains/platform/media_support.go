@@ -516,6 +516,26 @@ const (
 	mpSeoProviderURL  = "https://" + mpSeoProviderHost + "/v1/getDaPa"
 )
 
+// mpRecordDAError: catat kegagalan penyedia DA/PA tingkat platform (langganan
+// salah, kuota habis) supaya halaman admin bisa menjelaskan kenapa kolom DA
+// kosong. Panggilan dengan msg nil membersihkan catatan setelah penyedia normal
+// lagi. Best-effort: kegagalan menulis catatan tidak mengubah hasil pemeriksaan.
+func (d *Deps) mpRecordDAError(ctx context.Context, msg *string) {
+	var err error
+	if msg == nil {
+		_, err = d.Pool.Exec(ctx, `
+			UPDATE platform_seo_config SET last_da_error = NULL, last_da_error_at = NULL
+			WHERE id = 'default' AND last_da_error IS NOT NULL`)
+	} else {
+		_, err = d.Pool.Exec(ctx, `
+			UPDATE platform_seo_config SET last_da_error = $1, last_da_error_at = NOW()
+			WHERE id = 'default'`, *msg)
+	}
+	if err != nil {
+		d.logWarn("catat status penyedia DA gagal", "", err)
+	}
+}
+
 // mpFetchSeoMetrics: POST provider DA/PA (timeout 15s). Balasannya
 // {domain_authority, page_authority, spam_score, external_urls_to_url, …}.
 func (d *Deps) mpFetchSeoMetrics(ctx context.Context, domain, apiKey string) (map[string]any, *mpSeoError) {
@@ -532,9 +552,17 @@ func (d *Deps) mpFetchSeoMetrics(ctx context.Context, domain, apiKey string) (ma
 	if status < 200 || status >= 300 {
 		switch status {
 		case 401, 403:
-			return nil, mpSeoErr(http.StatusServiceUnavailable, "Autentikasi provider SEO gagal. Pastikan akun langganan API DA/PA yang dipakai (domain-da-pa-checker), lalu perbarui key-nya.")
+			msg := "Autentikasi provider DA/PA ditolak. Pastikan akun yang dipakai berlangganan API domain-da-pa-checker, lalu simpan ulang key-nya di Konfigurasi."
+			d.mpRecordDAError(ctx, &msg)
+			return nil, mpSeoErr(http.StatusServiceUnavailable, msg)
 		case 429:
-			return nil, mpSeoErr(http.StatusServiceUnavailable, "Provider SEO sedang rate-limited. Coba lagi nanti.")
+			// Bedakan kuota habis (butuh tindakan admin) dari rate limit sesaat.
+			msg := "Provider DA/PA sedang rate-limited. Coba lagi nanti."
+			if strings.Contains(strings.ToLower(body), "quota") {
+				msg = "Kuota permintaan penyedia DA/PA habis untuk periode ini, jadi kolom DA tidak bisa diisi. Naikkan paket API-nya atau tunggu kuota reset."
+			}
+			d.mpRecordDAError(ctx, &msg)
+			return nil, mpSeoErr(http.StatusServiceUnavailable, msg)
 		case 404:
 			return nil, mpSeoErr(http.StatusServiceUnavailable, "Domain media tidak ditemukan provider.")
 		default:
@@ -564,6 +592,9 @@ func (d *Deps) mpFetchSeoMetrics(ctx context.Context, domain, apiKey string) (ma
 	if da == nil || pa == nil {
 		return nil, mpSeoErr(http.StatusServiceUnavailable, "Provider SEO tidak mengembalikan DA/PA.")
 	}
+	// Penyedia normal lagi: bersihkan catatan kegagalan supaya peringatan di
+	// halaman admin hilang sendiri.
+	d.mpRecordDAError(ctx, nil)
 	return map[string]any{"domain": domain, "da": *da, "pa": *pa, "spam_score": spam}, nil
 }
 
@@ -591,11 +622,15 @@ func (d *Deps) mpFetchSpamScore(ctx context.Context, domain, apiKey string) *flo
 // (68 dengan schema, 43 tanpa) yang tampak seperti hasil pemeriksaan.
 func (d *Deps) mpComputeAiTrustScore(ctx context.Context, websiteURL string) *float64 {
 	target := mpEnsureScheme(websiteURL)
+	// Sinyal schema dibaca dari halaman situs itu sendiri. Kalau halaman tidak
+	// bisa dibaca dari IP server (banyak host mitra memblokir IP datacenter),
+	// skor TETAP dihitung dari kecepatan saja: nilainya jadi batas bawah, bukan
+	// dikosongkan. Sebelumnya kegagalan baca halaman membatalkan seluruh skor
+	// sehingga 14 media tampak "belum berskor" padahal PageSpeed punya angkanya
+	// (mis. jasarelease.co.id: skor kecepatan 79, tertahan hanya karena fetch kami
+	// ditolak hostnya).
 	hasSchema := false
 	status, body := mpSafeGet(ctx, target, map[string]string{"accept": "text/html,application/xhtml+xml"}, 10*time.Second)
-	if status == 0 {
-		return nil
-	}
 	if status >= 200 && status < 300 {
 		lower := strings.ToLower(body)
 		hasSchema = strings.Contains(lower, "application/ld+json") ||
@@ -632,7 +667,10 @@ func (d *Deps) mpPageSpeedPerformance(ctx context.Context, target string) *float
 		return nil
 	}
 	req.Header.Set("accept", "application/json")
-	resp, err := security.SafeClient(45 * time.Second).Do(req)
+	// Situs berat bisa butuh lebih dari satu menit sampai PageSpeed membalas
+	// (radarcianjur.com tercatat 1m22s). Job ini berjalan di latar, jadi menunggu
+	// lebih lama lebih berguna daripada kehilangan skornya.
+	resp, err := security.SafeClient(90 * time.Second).Do(req)
 	if err != nil {
 		return nil
 	}

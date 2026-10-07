@@ -71,6 +71,8 @@
 		stale: number;
 		failed_last_hour: number;
 		last_error: string | null;
+		da_error: string | null;
+		da_error_at: string | null;
 	} | null>(null);
 	let daStatusTimer: ReturnType<typeof setTimeout> | null = null;
 	let reviewTarget = $state<Media | null>(null);
@@ -489,6 +491,8 @@
 				stale: number;
 				failed_last_hour: number;
 				last_error: string | null;
+				da_error: string | null;
+				da_error_at: string | null;
 			}>('/media/seo-refresh-status');
 			if ((daStatus?.pending_jobs ?? 0) > 0) {
 				// Selama masih ada job menunggu/diproses, tabel + indikator
@@ -710,11 +714,11 @@
 			<Badge tone="accent" label="🤖 Sumber AI" />
 		</span>
 	{:else if row.seo_ai_citation === false}
-		<span title={tr('Sudah diperiksa: Google punya jawaban AI, tapi situs ini bukan salah satu sumbernya')}>
+		<span title={tr('Sudah diperiksa: ada jawaban AI, tapi situs ini bukan salah satu sumbernya')}>
 			<Badge tone="neutral" value="Tidak" />
 		</span>
 	{:else}
-		<span title={tr('Belum bisa dinilai — Google belum menampilkan jawaban AI untuk situs ini')}>
+		<span title={tr('Belum bisa dinilai — pemeriksaan terakhir tidak menerima data jawaban AI untuk situs ini')}>
 			<Badge tone="neutral" value="—" />
 		</span>
 	{/if}
@@ -904,6 +908,15 @@
 					title={tr('Media ini belum punya skor lengkap. Pemeriksaan berjalan otomatis paling cepat sekali per hari, atau klik "Cek AI & SEO Semua".')}
 				>
 					<strong>{daStatus.stale}</strong> {tr('media belum punya skor lengkap')}
+				</span>
+			{/if}
+			{#if daStatus.da_error}
+				<span
+					class="rounded-full px-2.5 py-1"
+					style="background-color: var(--warning-soft); color: var(--warning);"
+					title={daStatus.da_error_at ? `Sejak ${fmtDateTime(daStatus.da_error_at)}` : undefined}
+				>
+					{tr('Penyedia DA menolak permintaan')}: {daStatus.da_error}
 				</span>
 			{/if}
 			{#if daStatus.failed_last_hour > 0}
