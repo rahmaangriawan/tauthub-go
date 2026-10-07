@@ -64,7 +64,10 @@
 			const res = await apiRequest('/v1/partner/crawler', { method: 'POST', body: JSON.stringify(payload) });
 			const data = await res.json();
 			if (!res.ok) {
-				error = tr('Aksi crawler gagal. Coba lagi atau hubungi admin Tauthub.');
+				// Tampilkan sebab dari API (mis. kunci server belum diatur) supaya
+				// kegagalan bisa dibaca sendiri, bukan hanya pesan generik.
+				const detail = typeof data?.detail === 'string' ? data.detail.trim() : '';
+				error = detail || tr('Aksi crawler gagal. Coba lagi atau hubungi admin Tauthub.');
 				return;
 			}
 			if (kind === 'issue' || kind === 'rotate') {
