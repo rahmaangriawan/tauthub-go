@@ -165,6 +165,33 @@ func (d *Deps) enqueueJobBestEffort(ctx context.Context, kind string, payload ma
 	}
 }
 
+// enqueueSeoRefreshForMedia: pengajuan media langsung dicek DA/AI Trust-nya,
+// tidak menunggu sweep scheduler. Dilewati bila website_url kosong (job-nya
+// pasti gagal), skornya sudah ada, atau sudah ada job pending/running. Media
+// yang sudah berskor tidak diperiksa ulang otomatis; yang masih kosong dicoba
+// lagi paling cepat sekali per hari.
+func (d *Deps) enqueueSeoRefreshForMedia(ctx context.Context, mediaID string) {
+	if strings.TrimSpace(mediaID) == "" {
+		return
+	}
+	var websiteURL string
+	var skip bool
+	err := d.Pool.QueryRow(ctx, `
+		SELECT COALESCE(m.website_url, ''),
+		       (EXISTS (SELECT 1 FROM jobs j
+		                WHERE j.kind = 'media_seo_refresh' AND j.status IN ('pending','running')
+		                  AND j.payload->>'mediaId' = m.id)
+		        OR EXISTS (SELECT 1 FROM media_seo_metrics s
+		                   WHERE s.media_id = m.id
+		                     AND ((s.da IS NOT NULL AND s.ai_trust_score IS NOT NULL)
+		                          OR s.checked_at > NOW() - INTERVAL '1 day')))
+		FROM media m WHERE m.id = $1`, mediaID).Scan(&websiteURL, &skip)
+	if err != nil || strings.TrimSpace(websiteURL) == "" || skip {
+		return
+	}
+	d.enqueueJobBestEffort(ctx, "media_seo_refresh", map[string]any{"mediaId": mediaID}, 2)
+}
+
 // partnerScopedPublication: port partnerScopedPublication (tenant scoping mitra).
 func (d *Deps) partnerScopedPublication(ctx context.Context, partnerID, publicationID string) (rowMap, error) {
 	row, err := d.queryRow(ctx, `

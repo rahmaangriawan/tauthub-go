@@ -454,15 +454,7 @@ func (d *Deps) MediaSEOBulk(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN media_seo_metrics sm ON sm.media_id = media.id
 		WHERE media.status = 'active'
 		  AND media.website_url IS NOT NULL AND media.website_url <> ''
-		  AND (
-		  sm.media_id IS NULL
-		  OR sm.checked_at IS NULL
-		  OR sm.checked_at < NOW() - INTERVAL '5 months'
-		  -- Kegagalan ambil DA tetap menulis checked_at, jadi "DA kosong"
-		  -- juga dianggap perlu dicek ulang — paling cepat sekali per hari
-		  -- supaya kuota penyedia aman.
-		  OR (sm.da IS NULL AND sm.checked_at < NOW() - INTERVAL '1 day')
-		  )
+		  AND (`+mpSeoNeedsCheck+`)
 		ORDER BY sm.checked_at ASC NULLS FIRST
 		LIMIT $1`, limit)
 	if err != nil {
@@ -514,18 +506,27 @@ func mpShortError(err error, max int) string {
 
 // ---------- POST /v1/platform/media/seo-refresh-all ----------
 
-// mpStaleSeoWhere: predikat media yang metrik SEO/AI-nya perlu dicek ulang —
-// belum punya baris metrik, atau terakhir dicek lebih dari 5 bulan.
-const mpStaleSeoWhere = `
-		m.status = 'active'
-		  AND m.website_url IS NOT NULL AND m.website_url <> ''
-		  AND (sm.media_id IS NULL OR sm.checked_at IS NULL OR sm.checked_at < NOW() - INTERVAL '5 months'
-		       OR (sm.da IS NULL AND sm.checked_at < NOW() - INTERVAL '1 day'))`
+// mpSeoNeedsCheck: predikat "media belum punya skor" — belum ada baris metrik,
+// atau DA / AI Trust masih kosong. Media yang skornya sudah ada TIDAK diperiksa
+// ulang otomatis (pemeriksaan berkala dihapus atas permintaan pemilik produk);
+// yang masih kosong dicoba lagi paling cepat sekali per hari supaya kuota
+// penyedia tetap aman. Semua kueri memakai alias `sm` untuk media_seo_metrics.
+const mpSeoNeedsCheck = `
+			  (sm.media_id IS NULL OR sm.checked_at IS NULL
+			   OR ((sm.da IS NULL OR sm.ai_trust_score IS NULL) AND sm.checked_at < NOW() - INTERVAL '1 day'))`
 
-// MediaSEORefreshAll: antrekan pemeriksaan DA/SEO untuk SEMUA media yang
-// metriknya belum segar. Dijalankan di latar lewat job `media_seo_refresh`
-// (kind yang sama dipakai scheduler), jadi aman untuk ratusan media dan tidak
-// menahan request. Media yang masih punya job pending/running dilewati.
+// mpStaleSeoWhere: predikat media yang metrik SEO/AI-nya perlu diperiksa.
+const mpStaleSeoWhere = `
+			m.status = 'active'
+			  AND m.website_url IS NOT NULL AND m.website_url <> ''
+			  AND (` + mpSeoNeedsCheck + `)`
+
+// MediaSEORefreshAll: antrekan pemeriksaan DA/SEO untuk media yang metriknya
+// belum ada. Dijalankan di latar lewat job `media_seo_refresh` (kind yang sama
+// dipakai scheduler), jadi aman untuk ratusan media dan tidak menahan request.
+// Media yang masih punya job pending/running dilewati. `force: true` mengabaikan
+// predikat "belum punya skor" — dipakai untuk menghitung ulang seluruh media
+// (mis. setelah kunci penyedia diperbarui).
 func (d *Deps) MediaSEORefreshAll(w http.ResponseWriter, r *http.Request) {
 	user, _, ok := d.adminGuard(w, r, "")
 	if !ok {
@@ -535,11 +536,18 @@ func (d *Deps) MediaSEORefreshAll(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, ptErrTooMany("Antrean cek DA baru saja dijalankan. Tunggu satu menit lalu coba lagi."))
 		return
 	}
+	force, _ := boolField(decodeJSON(r), "force")
+	needsCheck := mpStaleSeoWhere
+	if force {
+		needsCheck = `
+			m.status = 'active'
+			  AND m.website_url IS NOT NULL AND m.website_url <> ''`
+	}
 	rows, err := d.queryRows(r.Context(), `
 		SELECT m.id
 		FROM media m
 		LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id
-		WHERE`+mpStaleSeoWhere+`
+		WHERE`+needsCheck+`
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'media_seo_refresh' AND j.status IN ('pending','running')
@@ -599,7 +607,9 @@ func (d *Deps) MediaSEORefreshStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jobsRow, err := d.queryRow(r.Context(), `
-		SELECT COUNT(*) FILTER (WHERE status IN ('pending','running')) AS pending,
+		SELECT COUNT(*) FILTER (WHERE status = 'pending') AS queued,
+		       COUNT(*) FILTER (WHERE status = 'running') AS running,
+		       COUNT(*) FILTER (WHERE status IN ('pending','running')) AS pending,
 		       COUNT(*) FILTER (WHERE status = 'failed' AND updated_at > NOW() - INTERVAL '1 hour') AS failed
 		FROM jobs WHERE kind = 'media_seo_refresh'`)
 	if err != nil {
@@ -618,9 +628,11 @@ func (d *Deps) MediaSEORefreshStatus(w http.ResponseWriter, r *http.Request) {
 		SELECT last_error FROM jobs
 		WHERE kind = 'media_seo_refresh' AND status = 'failed' AND last_error IS NOT NULL
 		ORDER BY updated_at DESC LIMIT 1`)
-	pending, failed, stale := 0, 0, 0
+	pending, queued, running, failed, stale := 0, 0, 0, 0, 0
 	if jobsRow != nil {
 		pending = jobsRow.intOr("pending", 0)
+		queued = jobsRow.intOr("queued", 0)
+		running = jobsRow.intOr("running", 0)
 		failed = jobsRow.intOr("failed", 0)
 	}
 	if staleRow != nil {
@@ -632,6 +644,8 @@ func (d *Deps) MediaSEORefreshStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pending_jobs":     pending,
+		"queued_jobs":      queued,
+		"running_jobs":     running,
 		"failed_last_hour": failed,
 		"stale":            stale,
 		"last_error":       lastError,

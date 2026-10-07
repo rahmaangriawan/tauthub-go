@@ -4,7 +4,7 @@
 	// Tab Direktori /admin/media — master data media (harga, kredit, tier, integrasi, partner).
 	// Port MediaDirectorySection di apps/web/src/app/admin/media/_sections.tsx.
 	import { onDestroy, onMount } from 'svelte';
-	import { ExternalLink, Plus, RefreshCw, Search, Sparkle } from '@lucide/svelte';
+	import { ExternalLink, Plus, RefreshCw, Search } from '@lucide/svelte';
 	import DataTable from '$lib/components/admin/data-table.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
@@ -61,12 +61,17 @@
 	let swSummary = $state('');
 	let swVisits = $state<Record<string, number | null>>({});
 	let aiBusyId = $state<string | null>(null);
-	let aiBulkBusy = $state(false);
-	let aiSummary = $state('');
 	let daBulkBusy = $state(false);
 	let daSummary = $state('');
-	// Indikator antrean cek DA (job media_seo_refresh).
-	let daStatus = $state<{ pending_jobs: number; stale: number; failed_last_hour: number; last_error: string | null } | null>(null);
+	// Indikator antrean pemeriksaan DA/AI (job media_seo_refresh).
+	let daStatus = $state<{
+		pending_jobs: number;
+		queued_jobs: number;
+		running_jobs: number;
+		stale: number;
+		failed_last_hour: number;
+		last_error: string | null;
+	} | null>(null);
 	let daStatusTimer: ReturnType<typeof setTimeout> | null = null;
 	let reviewTarget = $state<Media | null>(null);
 	let rejectReason = $state('');
@@ -484,60 +489,61 @@
 		try {
 			daStatus = await platformRequest<{
 				pending_jobs: number;
+				queued_jobs: number;
+				running_jobs: number;
 				stale: number;
 				failed_last_hour: number;
 				last_error: string | null;
 			}>('/media/seo-refresh-status');
 			if ((daStatus?.pending_jobs ?? 0) > 0) {
-				// Selama antrean berjalan, tabel + indikator disegarkan sendiri tiap 30 dtk.
+				// Selama masih ada job menunggu/diproses, tabel + indikator
+				// disegarkan sendiri tiap 15 dtk sampai antrean benar-benar kosong.
 				if (daStatusTimer) clearTimeout(daStatusTimer);
 				daStatusTimer = setTimeout(() => {
 					void load();
 					void loadDaStatus();
-				}, 30_000);
+				}, 15_000);
 			}
 		} catch {
 			/* indikator opsional — jangan ganggu daftar media */
 		}
 	}
 
-	/** Antrekan pemeriksaan DA/SEO untuk semua media yang metriknya belum segar. */
-	async function refreshAllDa() {
-		if (!confirm('Cek DA untuk semua media yang metriknya belum segar? Proses berjalan di latar (antrean), hasilnya muncul bertahap di tabel.')) return;
+	/**
+	 * Antrekan pemeriksaan DA + AI Trust untuk SELURUH media aktif yang belum
+	 * punya skor lengkap — satu klik, bukan 25 per klik. Pemeriksaan berjalan di
+	 * latar lewat job `media_seo_refresh`, jadi halaman tidak ikut menunggu.
+	 * force = true memeriksa ulang semua media termasuk yang sudah berskor.
+	 */
+	async function enqueueSeoRefresh(force = false) {
+		if (
+			!confirm(
+				force
+					? 'Hitung ulang DA dan AI Trust untuk SEMUA media aktif, termasuk yang sudah punya skor?'
+					: 'Cek DA dan AI Trust untuk semua media yang belum punya skor? Media yang sudah dicek akan dilewati.'
+			)
+		)
+			return;
 		error = '';
 		daBulkBusy = true;
-		daSummary = 'Mengantrekan pemeriksaan DA…';
+		daSummary = 'Mengantrekan pemeriksaan…';
 		try {
 			const r = await platformRequest<{ enqueued: number; total_stale: number; skipped: number }>(
 				'/media/seo-refresh-all',
-				{ method: 'POST' }
+				{ method: 'POST', body: JSON.stringify({ force }) }
 			);
-			daSummary = `${r.enqueued} media masuk antrean (dari ${r.total_stale} yang perlu dicek). Tabel menyegarkan sendiri selama antrean berjalan.`;
+			daSummary =
+				r.enqueued === 0
+					? force
+						? 'Tidak ada media aktif yang bisa diperiksa (perlu website_url terisi).'
+						: 'Semua media sudah punya skor — tidak ada yang perlu dicek. Pakai "Hitung ulang semua" kalau ingin memeriksa ulang.'
+					: `${r.enqueued} media masuk antrean${force ? ' (hitung ulang)' : ''} dari ${r.total_stale} kandidat. Hasil muncul bertahap di tabel.`;
 			await loadDaStatus();
 		} catch (reason) {
 			error = errMessage(reason);
 			daSummary = '';
 		} finally {
 			daBulkBusy = false;
-		}
-	}
-
-	async function bulkAiSignals() {
-		error = '';
-		aiBulkBusy = true;
-		aiSummary = 'Memeriksa sinyal SEO & AI media (maks 25 per klik)…';
-		try {
-			const r = await platformRequest<{ candidates: number; checked: number; ok: number; failed: number }>(
-				'/media/seo-bulk',
-				{ method: 'POST', body: JSON.stringify({ limit: 25 }) }
-			);
-			aiSummary = `Selesai: ${r.ok} berhasil, ${r.failed} gagal, dari ${r.checked} media diperiksa (${r.candidates} kandidat basi >5 bulan). Sisa media menyusul klik berikutnya atau otomatis via scheduler.`;
-			await load();
-		} catch (reason) {
-			error = errMessage(reason);
-			aiSummary = '';
-		} finally {
-			aiBulkBusy = false;
 		}
 	}
 
@@ -681,7 +687,12 @@
 {/snippet}
 
 {#snippet aiTrustCell(row: Media)}
-	<span title={row.seo_checked_at ? `Terakhir dicek ${fmtDateTime(row.seo_checked_at)}` : undefined}>
+	<span
+		title={row.seo_ai_trust != null
+			? tr('Nilai 0-100 dari pengukuran: kecepatan halaman situs + kelengkapan data situsnya') +
+				(row.seo_checked_at ? ` · terakhir dicek ${fmtDateTime(row.seo_checked_at)}` : '')
+			: tr('Belum bisa dinilai — kecepatan situs ini belum berhasil diukur')}
+	>
 		{#if row.seo_ai_trust != null}
 			<Badge tone={scoreTone(row.seo_ai_trust)} value={`${row.seo_ai_trust}/100`} />
 		{:else}
@@ -689,17 +700,23 @@
 		{/if}
 	</span>
 	{#if row.seo_da != null}
-		<p class="mt-1 text-xs text-muted-foreground" title={tr('Domain Authority (RapidAPI domain-metrics)')}>DA {row.seo_da}</p>
+		<p class="mt-1 text-xs text-muted-foreground" title={tr('Domain Authority: nilai otoritas domain (0-100)')}>DA {row.seo_da}</p>
 	{/if}
 {/snippet}
 
 {#snippet aiCitedCell(row: Media)}
 	{#if row.seo_ai_citation === true}
-		<span title="Terdeteksi sebagai rujukan AI Overview via SERPens">
+		<span title={tr('Situs ini disebut sebagai salah satu sumber jawaban AI Google')}>
 			<Badge tone="accent" label="🤖 Sumber AI" />
 		</span>
+	{:else if row.seo_ai_citation === false}
+		<span title={tr('Sudah diperiksa: Google punya jawaban AI, tapi situs ini bukan salah satu sumbernya')}>
+			<Badge tone="neutral" value="Tidak" />
+		</span>
 	{:else}
-		<Badge tone="neutral" value="—" />
+		<span title={tr('Belum bisa dinilai — Google belum menampilkan jawaban AI untuk situs ini')}>
+			<Badge tone="neutral" value="—" />
+		</span>
 	{/if}
 {/snippet}
 
@@ -744,7 +761,7 @@
 		>
 		<button
 			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
-			disabled={aiBusyId === row.id || aiBulkBusy}
+			disabled={aiBusyId === row.id}
 			onclick={(e) => {
 				e.stopPropagation();
 				void checkAiSignals(row);
@@ -845,27 +862,45 @@
 		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={swBulkBusy} onclick={bulkSimilarWeb}>
 			<RefreshCw size={15} /> {swBulkBusy ? 'Memeriksa…' : 'Cek Trafik Semua (SimilarWeb)'}
 		</button>
-		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={aiBulkBusy} onclick={bulkAiSignals}>
-			<Sparkle size={15} /> {aiBulkBusy ? 'Memeriksa…' : 'Cek AI & SEO Semua'}
+		<button
+			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+			disabled={daBulkBusy}
+			title={tr('Cek DA dan AI Trust untuk seluruh media yang belum punya skor; yang sudah dicek dilewati')}
+			onclick={() => void enqueueSeoRefresh()}
+		>
+			<RefreshCw size={15} /> {daBulkBusy ? 'Mengantrekan…' : tr('Cek AI & SEO Semua')}
 		</button>
-		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={daBulkBusy} onclick={() => void refreshAllDa()}>
-			<RefreshCw size={15} /> {daBulkBusy ? 'Mengantrekan…' : tr('Cek DA semua')}
-		</button>
+		<button
+			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+			disabled={daBulkBusy}
+			title={tr('Hitung ulang DA dan AI Trust untuk seluruh media aktif, termasuk yang sudah punya skor')}
+			onclick={() => void enqueueSeoRefresh(true)}>{tr('Hitung ulang semua')}</button
+		>
 		<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" onclick={openCreate}>
 			<Plus size={15} />{tr("Tambah media")}</button>
 	</div>
 
 	{#if swSummary}<p class="mt-2 text-xs text-muted-foreground">{swSummary}</p>{/if}
-	{#if aiSummary}<p class="mt-2 text-xs text-muted-foreground">{aiSummary}</p>{/if}
 	{#if daSummary}<p class="mt-2 text-xs text-muted-foreground">{daSummary}</p>{/if}
 	{#if daStatus && (daStatus.pending_jobs > 0 || daStatus.stale > 0 || daStatus.failed_last_hour > 0)}
 		<div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
-			<span class="rounded-full px-2.5 py-1" style="background-color: var(--muted);">
-				{tr('Antrean cek DA')}: <strong>{daStatus.stale}</strong> {tr('media menunggu')} · <strong>{daStatus.pending_jobs}</strong> {tr('job berjalan')}
-			</span>
+			{#if daStatus.pending_jobs > 0}
+				<span class="rounded-full px-2.5 py-1" style="background-color: var(--muted);">
+					{tr('Antrean')}: <strong>{daStatus.queued_jobs}</strong> {tr('menunggu')} · <strong>{daStatus.running_jobs}</strong> {tr('sedang diperiksa')}
+				</span>
+			{/if}
+			{#if daStatus.stale > 0}
+				<span
+					class="rounded-full px-2.5 py-1"
+					style="background-color: var(--muted);"
+					title={tr('Media ini belum punya skor lengkap. Pemeriksaan berjalan otomatis paling cepat sekali per hari, atau klik "Cek AI & SEO Semua".')}
+				>
+					<strong>{daStatus.stale}</strong> {tr('media belum punya skor lengkap')}
+				</span>
+			{/if}
 			{#if daStatus.failed_last_hour > 0}
 				<span class="rounded-full px-2.5 py-1" style="background-color: var(--warning-soft); color: var(--warning);" title={daStatus.last_error ?? ''}>
-					{daStatus.failed_last_hour} {tr('job gagal (sejam terakhir) — arahkan kursor untuk pesan')}
+					{daStatus.failed_last_hour} {tr('pemeriksaan gagal (sejam terakhir) — arahkan kursor untuk pesan')}
 				</span>
 			{/if}
 			<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => { void load(); void loadDaStatus(); }}>{tr('Muat ulang')}</button>

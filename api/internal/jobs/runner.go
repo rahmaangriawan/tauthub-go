@@ -92,11 +92,17 @@ func backoff(attempt int) time.Duration {
 // ClaimNextJob: ambil satu job pending ATAU failed yang waktunya tiba, kunci
 // barisnya (SKIP LOCKED), tandai running, attempts+1. Parity claimNextJob —
 // termasuk ikut memungut baris `failed` yang run_at-nya sudah lewat.
+//
+// `attempts < max_attempts` ditambahkan supaya percobaan benar-benar berhenti:
+// tanpa syarat itu job yang sudah kehabisan percobaan diklaim ulang tanpa
+// batas (attempts pernah tercatat 156 dari batas 2) dan menghajar penyedia
+// eksternal terus-menerus.
 func (r *Runner) ClaimNextJob(ctx context.Context, workerID string) (*JobRow, error) {
 	row := r.Pool.QueryRow(ctx, `
 		WITH picked AS (
 		  SELECT id FROM jobs
 		  WHERE status IN ('pending','failed') AND run_at <= NOW()
+		    AND attempts < max_attempts
 		  ORDER BY run_at
 		  LIMIT 1
 		  FOR UPDATE SKIP LOCKED
@@ -148,6 +154,33 @@ func (r *Runner) MarkFailed(ctx context.Context, job JobRow, message, workerID s
 		`UPDATE jobs SET status=$1, locked_at=NULL, locked_by=NULL, last_error=$2, run_at=$3, updated_at=NOW()
 		 WHERE id=$4 AND ($5 = '' OR locked_by=$5)`, status, msg, runAt, job.ID, workerID)
 	return err
+}
+
+// ReapStuck: selamatkan job yang tertinggal berstatus `running` karena proses
+// pemiliknya berhenti (restart/deploy) atau menggantung. Tanpa ini barisnya
+// menempel selamanya — tidak pernah diklaim lagi karena claim hanya memungut
+// pending/failed — dan indikator antrean di UI tidak pernah bersih (di produksi
+// ada dua baris tersangkut sejak September dengan attempts 156 dari batas 2).
+// Job yang sudah kehabisan percobaan ditutup sebagai `failed`, sisanya
+// dikembalikan ke antrean.
+func (r *Runner) ReapStuck(ctx context.Context, staleAfter time.Duration) (int, error) {
+	if staleAfter <= 0 {
+		staleAfter = 10 * time.Minute
+	}
+	tag, err := r.Pool.Exec(ctx, `
+		UPDATE jobs
+		SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,
+		    last_error = CASE WHEN attempts >= max_attempts
+		                      THEN COALESCE(last_error, 'Pemroses berhenti saat job berjalan (dibersihkan otomatis).')
+		                      ELSE last_error END,
+		    locked_at = NULL, locked_by = NULL, run_at = NOW(), updated_at = NOW()
+		WHERE status = 'running'
+		  AND (locked_at IS NULL OR locked_at < NOW() - $1::interval)`,
+		fmt.Sprintf("%d seconds", int(staleAfter.Seconds())))
+	if err != nil {
+		return 0, err
+	}
+	return int(tag.RowsAffected()), nil
 }
 
 // ProcessOnce: claim satu job lalu proses. Mengembalikan (nil, nil) bila

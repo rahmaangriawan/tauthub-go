@@ -90,8 +90,14 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	// 4. Notifikasi telat menyetujui (jadwal terbit sudah lewat).
 	res.LateApprovalNotified = d.schSweepPartnerDeadlines(ctx, schMinInt(maxJobs, 20), true)
 
-	// 5. Drain antrean job.
+	// 5. Bersihkan job yang tertinggal `running` (proses pemiliknya berhenti saat
+	//    deploy/restart), lalu drain antrean.
 	if runner != nil {
+		if n, err := runner.ReapStuck(ctx, 10*time.Minute); err != nil {
+			slog.Error("[scheduler] bersihkan job macet gagal", "err", err)
+		} else if n > 0 {
+			slog.Info("[scheduler] job macet dikembalikan ke antrean", "jumlah", n)
+		}
 		if n, err := runner.Drain(ctx, maxJobs, jobs.WorkerID("scheduler")); err != nil {
 			slog.Error("[scheduler] drain gagal", "err", err)
 		} else {
@@ -883,16 +889,19 @@ func (d *Deps) schSweepMediaAiSummaries(ctx context.Context, limit int) {
 
 // ---------- 8e. sinyal SEO & AI (enqueueMediaAiRefreshes) ----------
 
-// schEnqueueMediaAiRefreshes: media aktif yang belum punya metrik atau > 5 bulan
-// → enqueue media_seo_refresh (dedupe job pending/running).
+// schEnqueueMediaAiRefreshes: media aktif yang belum punya skor — belum ada
+// baris metrik, atau DA / AI Trust masih kosong. Media yang sudah berskor tidak
+// diperiksa ulang otomatis (pemeriksaan berkala 5 bulan dihapus atas permintaan
+// pemilik produk); yang masih kosong dicoba lagi paling cepat sekali per hari.
+// Predikat ini harus tetap sama dengan platform.mpSeoNeedsCheck.
 func (d *Deps) schEnqueueMediaAiRefreshes(ctx context.Context, limit int) {
 	stale, err := d.queryRows(ctx, `
 		SELECT media.id FROM media
 		LEFT JOIN media_seo_metrics sm ON sm.media_id = media.id
 		WHERE media.status = 'active'
 		  AND media.website_url IS NOT NULL AND media.website_url <> ''
-		  AND (sm.media_id IS NULL OR sm.checked_at IS NULL OR sm.checked_at < NOW() - INTERVAL '5 months'
-		       OR (sm.da IS NULL AND sm.checked_at < NOW() - INTERVAL '1 day'))
+		  AND (sm.media_id IS NULL OR sm.checked_at IS NULL
+		       OR ((sm.da IS NULL OR sm.ai_trust_score IS NULL) AND sm.checked_at < NOW() - INTERVAL '1 day'))
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'media_seo_refresh' AND j.status IN ('pending','running')

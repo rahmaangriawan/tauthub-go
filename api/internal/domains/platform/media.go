@@ -329,6 +329,8 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeAuditBestEffort(d, r.Context(), user.ID, "platform.media.created", "media", id)
+	// Media baru langsung dicek DA/AI Trust-nya, tidak menunggu sweep scheduler.
+	d.mpEnqueueSeoRefreshForMedia(r.Context(), id)
 	created, err := d.queryRow(r.Context(), "SELECT * FROM media WHERE id = $1 LIMIT 1", id)
 	if err != nil || created == nil {
 		writeErr(w, d, mpMediaError(err))
@@ -747,6 +749,9 @@ func (d *Deps) MediaReview(w http.ResponseWriter, r *http.Request) {
 	action := "media.rejected"
 	if decision == "approve" {
 		action = "media.approved"
+		// Pengajuan mitra yang belum punya metrik (mis. website_url diisi belakangan
+		// atau pemeriksaan sebelumnya gagal) dicek saat disetujui.
+		d.mpEnqueueSeoRefreshForMedia(r.Context(), mediaID)
 	}
 	writeAuditBestEffort(d, r.Context(), user.ID, action, "media", mediaID)
 

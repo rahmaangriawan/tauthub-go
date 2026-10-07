@@ -563,26 +563,27 @@ func (d *Deps) mpFetchSpamScore(ctx context.Context, domain, apiKey string) *flo
 	return mpFindMetric(parsed, "spam", 0)
 }
 
-// mpComputeAiTrustScore: 0.65×performance + 25×schema + 10×reachable.
+// mpComputeAiTrustScore: 0.65×performance + 25×schema + 10. Nil bila skor
+// performance tidak benar-benar terukur — sebelumnya nilai default 50 dipakai
+// saat pengukuran gagal, sehingga puluhan media menampilkan angka jatuhan
+// (68 dengan schema, 43 tanpa) yang tampak seperti hasil pemeriksaan.
 func (d *Deps) mpComputeAiTrustScore(ctx context.Context, websiteURL string) *float64 {
 	target := mpEnsureScheme(websiteURL)
-	reachable := false
 	hasSchema := false
 	status, body := mpSafeGet(ctx, target, map[string]string{"accept": "text/html,application/xhtml+xml"}, 10*time.Second)
 	if status == 0 {
 		return nil
 	}
-	reachable = status >= 200 && status < 300
-	if reachable {
+	if status >= 200 && status < 300 {
 		lower := strings.ToLower(body)
 		hasSchema = strings.Contains(lower, "application/ld+json") ||
 			strings.Contains(lower, "schema.org") || strings.Contains(lower, "itemscope")
 	}
-	performance := 50.0
-	if psi := d.mpPageSpeedPerformance(ctx, target); psi != nil {
-		performance = *psi
+	performance := d.mpPageSpeedPerformance(ctx, target)
+	if performance == nil {
+		return nil
 	}
-	score := 0.65*performance + 10.0
+	score := 0.65*(*performance) + 10.0
 	if hasSchema {
 		score += 25
 	}
@@ -590,7 +591,13 @@ func (d *Deps) mpComputeAiTrustScore(ctx context.Context, websiteURL string) *fl
 	return &score
 }
 
-// mpPageSpeedPerformance: skor performance PageSpeed (nil bila key tidak ada).
+// mpPageSpeedPerformance: skor performance PageSpeed (nil bila key tidak ada,
+// Lighthouse tidak mengembalikan skor, atau permintaan gagal).
+//
+// Respons Lighthouse bisa jauh di atas 1 MB karena berisi tangkapan layar.
+// Pembacaan dibatasi 16 MB dan langsung di-decode ke struct kecil: pemotongan
+// 512 KB (batas mpSafeGet) membuat JSON tidak valid, sehingga skor yang
+// sebenarnya ada ikut hilang dan berujung pada angka default.
 func (d *Deps) mpPageSpeedPerformance(ctx context.Context, target string) *float64 {
 	apiKey := d.mpPageSpeedKey(ctx)
 	if apiKey == "" {
@@ -598,22 +605,36 @@ func (d *Deps) mpPageSpeedPerformance(ctx context.Context, target string) *float
 	}
 	u := "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=" + url.QueryEscape(target) +
 		"&strategy=mobile&category=performance&key=" + url.QueryEscape(apiKey)
-	status, body := mpSafeGet(ctx, u, map[string]string{"accept": "application/json"}, 30*time.Second)
-	if status < 200 || status >= 300 {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
 		return nil
 	}
-	var parsed map[string]any
-	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
+	req.Header.Set("accept", "application/json")
+	resp, err := security.SafeClient(45 * time.Second).Do(req)
+	if err != nil {
 		return nil
 	}
-	light, _ := parsed["lighthouseResult"].(map[string]any)
-	categories, _ := light["categories"].(map[string]any)
-	perf, _ := categories["performance"].(map[string]any)
-	score, ok := perf["score"].(float64)
-	if !ok {
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil
 	}
-	v := math.Round(score * 100)
+	var parsed struct {
+		LighthouseResult struct {
+			Categories struct {
+				Performance struct {
+					Score *float64 `json:"score"`
+				} `json:"performance"`
+			} `json:"categories"`
+		} `json:"lighthouseResult"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(&parsed); err != nil {
+		return nil
+	}
+	score := parsed.LighthouseResult.Categories.Performance.Score
+	if score == nil {
+		return nil
+	}
+	v := math.Round(*score * 100)
 	return &v
 }
 
@@ -634,6 +655,9 @@ func (d *Deps) mpPageSpeedKey(ctx context.Context) string {
 type mpCitationResult struct {
 	Cited     *bool
 	CheckedAt string
+	// Unavailable: panggilan ke SERPens gagal (bukan "Google tidak menampilkan
+	// AI Overview"). Hasil sebelumnya tidak boleh dihapus dalam kasus ini.
+	Unavailable bool
 }
 
 func (d *Deps) mpCheckAiCitation(ctx context.Context, websiteURL string) *mpCitationResult {
@@ -653,16 +677,18 @@ func (d *Deps) mpCheckAiCitation(ctx context.Context, websiteURL string) *mpCita
 		"x-rapidapi-key":  key,
 	}, 20*time.Second)
 	if status < 200 || status >= 300 {
-		return &mpCitationResult{Cited: nil, CheckedAt: checkedAt}
+		return &mpCitationResult{CheckedAt: checkedAt, Unavailable: true}
 	}
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(body), &payload); err != nil {
-		return &mpCitationResult{Cited: nil, CheckedAt: checkedAt}
+		return &mpCitationResult{CheckedAt: checkedAt, Unavailable: true}
 	}
 	overview, ok := payload["aiOverview"].(map[string]any)
 	if !ok {
-		cited := false
-		return &mpCitationResult{Cited: &cited, CheckedAt: checkedAt}
+		// Google tidak menampilkan AI Overview untuk kueri ini, jadi "dikutip
+		// atau tidak" belum bisa ditentukan. Dulu di sini langsung ditulis
+		// false — itu klaim yang tidak pernah kita periksa.
+		return &mpCitationResult{CheckedAt: checkedAt}
 	}
 	hosts := map[string]bool{}
 	mpCollectCitedHosts(overview, 0, hosts)
@@ -674,6 +700,25 @@ func (d *Deps) mpCheckAiCitation(ctx context.Context, websiteURL string) *mpCita
 		}
 	}
 	return &mpCitationResult{Cited: &cited, CheckedAt: checkedAt}
+}
+
+// mpCitationArgs: nilai yang ditulis untuk ai_citation / ai_citation_checked_at.
+// Provider tidak tersedia atau tidak dikonfigurasi → pertahankan nilai lama.
+// Tidak ada AI Overview → nil (belum bisa ditentukan), bukan false.
+func mpCitationArgs(citation *mpCitationResult, prev rowMap) (any, any) {
+	var prevCited, prevChecked any
+	if prev != nil {
+		prevCited = prev.anyOrNil("ai_citation")
+		prevChecked = prev.anyOrNil("ai_citation_checked_at")
+	}
+	if citation == nil || citation.Unavailable {
+		return prevCited, prevChecked
+	}
+	var cited any
+	if citation.Cited != nil {
+		cited = *citation.Cited
+	}
+	return cited, citation.CheckedAt
 }
 
 // mpCollectCitedHosts: kumpulkan hostname dari subtree aiOverview.
@@ -790,7 +835,10 @@ func (d *Deps) mpCheckAndStoreSeoMetrics(ctx context.Context, mediaID string, we
 	// menyimpan checked_at walau DA-nya kosong (lihat `metrics` awal di bawah).
 	if cached != nil && mpSeoIsFresh(cached.anyOrNil("checked_at")) && cached.has("da") {
 		serpensKey := d.mpOptionalSeoKey(ctx, "sealed_serpens_api_key")
-		needsAI := !cached.has("ai_trust_score") || (serpensKey != "" && !cached.has("ai_citation"))
+		// ai_citation_checked_at, bukan ai_citation: "Google tidak menampilkan AI
+		// Overview" adalah hasil pemeriksaan yang sah, jadi SERPens tidak perlu
+		// ditanyai berulang hanya karena nilainya kosong.
+		needsAI := !cached.has("ai_trust_score") || (serpensKey != "" && !cached.has("ai_citation_checked_at"))
 		if !needsAI {
 			return mpSeoResultFromRow(mediaID, ptRow(ptNormalizeMap(cached)), domain, true), nil
 		}
@@ -799,7 +847,8 @@ func (d *Deps) mpCheckAndStoreSeoMetrics(ctx context.Context, mediaID string, we
 		if serpensKey != "" {
 			citation = d.mpCheckAiCitation(ctx, "https://"+domain)
 		}
-		if err := d.mpUpdateAiSignals(ctx, mediaID, aiTrust, citation); err != nil {
+		cited, citationChecked := mpCitationArgs(citation, cached)
+		if err := d.mpUpdateAiSignals(ctx, mediaID, aiTrust, cited, citationChecked); err != nil {
 			return mpSeoResult{}, err
 		}
 		stored, _ := d.queryRow(ctx, "SELECT "+mpSeoMetricColumns+" FROM media_seo_metrics WHERE media_id = $1 LIMIT 1", mediaID)
@@ -831,21 +880,15 @@ func (d *Deps) mpCheckAndStoreSeoMetrics(ctx context.Context, mediaID string, we
 	if d.mpOptionalSeoKey(ctx, "sealed_serpens_api_key") != "" {
 		citation = d.mpCheckAiCitation(ctx, "https://"+domain)
 	}
-	var citationCited any
-	var citationChecked any
-	if citation != nil {
-		if citation.Cited != nil {
-			citationCited = *citation.Cited
-		}
-		citationChecked = citation.CheckedAt
-	}
+	cited, citationChecked := mpCitationArgs(citation, cached)
+	citationOK := citation != nil && !citation.Unavailable
 
 	if providerErr != nil && metrics["da"] == nil && metrics["pa"] == nil && metrics["spam_score"] == nil &&
-		aiTrust == nil && citationCited == nil {
+		aiTrust == nil && !citationOK {
 		return mpSeoResult{}, providerErr
 	}
 
-	if err := d.mpUpsertSeoMetrics(ctx, mediaID, metrics, aiTrust, citationCited, citationChecked); err != nil {
+	if err := d.mpUpsertSeoMetrics(ctx, mediaID, metrics, aiTrust, cited, citationChecked); err != nil {
 		return mpSeoResult{}, err
 	}
 	d.audit(ctx, actorID, "media.seo_metrics_checked", "media", mediaID)
@@ -857,19 +900,15 @@ func (d *Deps) mpCheckAndStoreSeoMetrics(ctx context.Context, mediaID string, we
 	return mpSeoResultFromRow(mediaID, ptRow(ptNormalizeMap(stored)), domain, false), nil
 }
 
-func (d *Deps) mpUpdateAiSignals(ctx context.Context, mediaID string, aiTrust *float64, citation *mpCitationResult) error {
-	var cited, checked any
-	if citation != nil {
-		if citation.Cited != nil {
-			cited = *citation.Cited
-		}
-		checked = citation.CheckedAt
-	}
+// mpUpdateAiSignals: tulis sinyal AI pada baris yang sudah ada. Nilai ditulis
+// apa adanya (termasuk NULL) supaya angka hasil pemeriksaan lama tidak
+// tertinggal saat pengukuran berikutnya tidak menghasilkan apa-apa.
+func (d *Deps) mpUpdateAiSignals(ctx context.Context, mediaID string, aiTrust *float64, cited, checked any) error {
 	return d.exec(ctx, `
 		UPDATE media_seo_metrics
-		SET ai_trust_score = COALESCE($1, ai_trust_score),
-		    ai_citation = COALESCE($2, ai_citation),
-		    ai_citation_checked_at = COALESCE($3, ai_citation_checked_at),
+		SET ai_trust_score = $1,
+		    ai_citation = $2,
+		    ai_citation_checked_at = $3,
 		    updated_at = NOW()
 		WHERE media_id = $4`, mpFloatArg(aiTrust), cited, checked, mediaID)
 }
@@ -882,9 +921,13 @@ func (d *Deps) mpUpsertSeoMetrics(ctx context.Context, mediaID string, metrics m
 		  da = COALESCE(EXCLUDED.da, media_seo_metrics.da),
 		  pa = COALESCE(EXCLUDED.pa, media_seo_metrics.pa),
 		  spam_score = COALESCE(EXCLUDED.spam_score, media_seo_metrics.spam_score),
-		  ai_trust_score = COALESCE(EXCLUDED.ai_trust_score, media_seo_metrics.ai_trust_score),
-		  ai_citation = COALESCE(EXCLUDED.ai_citation, media_seo_metrics.ai_citation),
-		  ai_citation_checked_at = COALESCE(EXCLUDED.ai_citation_checked_at, media_seo_metrics.ai_citation_checked_at),
+		  -- Sinyal AI ditulis apa adanya: DA/PA boleh dipertahankan saat penyedia
+		  -- gagal, tapi skor AI Trust dan status kutipan harus mencerminkan
+		  -- pemeriksaan terakhir — kalau tidak, angka lama yang keliru ikut
+		  -- tersimpan selamanya di balik COALESCE.
+		  ai_trust_score = EXCLUDED.ai_trust_score,
+		  ai_citation = EXCLUDED.ai_citation,
+		  ai_citation_checked_at = EXCLUDED.ai_citation_checked_at,
 		  checked_at = EXCLUDED.checked_at,
 		  source = EXCLUDED.source,
 		  updated_at = NOW()`,
@@ -2124,6 +2167,34 @@ func (d *Deps) mpEnqueueJobBestEffort(ctx context.Context, kind string, payload 
 	if _, err := d.mpEnqueueJob(ctx, kind, payload, maxAttempts); err != nil {
 		d.logWarn("enqueue job gagal", kind, err)
 	}
+}
+
+// mpEnqueueSeoRefreshForMedia: minta pemeriksaan metrik SEO/AI untuk satu media
+// begitu media dibuat atau disetujui, tanpa menunggu sweep scheduler (≤1 menit).
+// Dilewati bila media belum punya website_url (job-nya pasti gagal), bila
+// skornya sudah ada, atau bila sudah ada job pending/running. Media yang sudah
+// berskor tidak diperiksa ulang otomatis — perintah pemilik produk; untuk media
+// yang masih kosong, percobaan ulang dibatasi sekali per hari.
+func (d *Deps) mpEnqueueSeoRefreshForMedia(ctx context.Context, mediaID string) {
+	if strings.TrimSpace(mediaID) == "" {
+		return
+	}
+	var websiteURL string
+	var skip bool
+	err := d.Pool.QueryRow(ctx, `
+		SELECT COALESCE(m.website_url, ''),
+		       (EXISTS (SELECT 1 FROM jobs j
+		                WHERE j.kind = 'media_seo_refresh' AND j.status IN ('pending','running')
+		                  AND j.payload->>'mediaId' = m.id)
+		        OR EXISTS (SELECT 1 FROM media_seo_metrics s
+		                   WHERE s.media_id = m.id
+		                     AND ((s.da IS NOT NULL AND s.ai_trust_score IS NOT NULL)
+		                          OR s.checked_at > NOW() - INTERVAL '1 day')))
+		FROM media m WHERE m.id = $1`, mediaID).Scan(&websiteURL, &skip)
+	if err != nil || strings.TrimSpace(websiteURL) == "" || skip {
+		return
+	}
+	d.mpEnqueueJobBestEffort(ctx, "media_seo_refresh", map[string]any{"mediaId": mediaID}, 2)
 }
 
 // mpWriteRate: parity checkWriteRate — 429 pesan standar.

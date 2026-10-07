@@ -201,14 +201,17 @@
 	}
 
 	function getDa(m: Media): string | number {
-		if (m.seo_da != null && m.seo_da > 0) return m.seo_da;
-		const q = m.effective_quality ?? m.media_quality_score;
-		return q ? Math.max(1, Math.round(q * 0.45)) : '—';
+		// Hanya hasil pemeriksaan nyata (RapidAPI domain-metrics); sebelumnya DA
+		// diturunkan dari skor kualitas media bila belum diperiksa.
+		if (m.seo_da != null) return m.seo_da;
+		return '—';
 	}
 	function getAiTrust(m: Media): string | number {
-		if (m.seo_ai_trust != null && m.seo_ai_trust > 0) return m.seo_ai_trust;
-		const q = m.effective_quality ?? m.media_quality_score;
-		return q ? Math.max(1, Math.round(q * 0.9)) : '—';
+		// Hanya tampilkan hasil pemeriksaan yang sebenarnya. Sebelumnya nilai di
+		// sini diturunkan dari skor kualitas media (q × 0.9) saat belum diperiksa,
+		// sehingga angka yang tampil bukan hasil pemeriksaan apa pun.
+		if (m.seo_ai_trust != null) return m.seo_ai_trust;
+		return '—';
 	}
 	const fmt = (n: number) => n.toLocaleString('id-ID');
 	const cleanDomain = (m: Media) =>
@@ -552,7 +555,11 @@
 			return [
 				esc(m.name), esc(m.website_url ?? ''), esc(m.category ?? 'Umum'),
 				esc(`${speed.label} (${speed.sub})`), esc(getDa(m)), esc(getAiTrust(m)),
-				esc(m.seo_ai_citation === true ? 'Ya' : 'Tidak'), esc(price), esc(m.credit_cost || Math.ceil(price / 1000))
+				// Tiga keadaan: Ya / Tidak / belum bisa ditentukan (Google tidak
+				// menampilkan AI Overview) — jangan ditulis "Tidak" untuk yang
+				// belum pernah bisa dinilai.
+				esc(m.seo_ai_citation === true ? 'Ya' : m.seo_ai_citation === false ? 'Tidak' : 'Belum bisa ditentukan'),
+				esc(price), esc(m.credit_cost || Math.ceil(price / 1000))
 			].join(';');
 		});
 		// BOM + CRLF supaya Excel membaca UTF-8 dan akhir baris dengan benar.
@@ -926,7 +933,7 @@
 										<Tooltip.Portal>
 											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
 											<Tooltip.Arrow class="uiTipArrow" />
-											<strong>AI Trust Score</strong> {tr("— Skor (0-100) kesiapan infrastruktur web (Schema, Speed) untuk dirayapi dan direkomendasikan oleh mesin LLM.")}
+											<strong>AI Trust Score</strong> {tr("— Nilai 0-100: seberapa siap situs media ini dibaca dan dipercaya oleh mesin AI, dilihat dari kecepatan halaman dan kelengkapan data situsnya. Tanda — berarti kecepatannya belum bisa diukur.")}
 										</Tooltip.Content>
 										</Tooltip.Portal>
 									</Tooltip.Root>
@@ -943,7 +950,7 @@
 										<Tooltip.Portal>
 											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
 											<Tooltip.Arrow class="uiTipArrow" />
-											Indikator otomatis via API apakah media ini terdeteksi aktif sebagai rujukan/referensi oleh mesin AI (misal: Perplexity atau AI Overviews).
+											Menandai apakah situs media ini disebut sebagai sumber oleh AI Google (jawaban otomatis yang muncul di hasil pencarian). Tanda — berarti Google belum menampilkan jawaban AI untuk situs ini, jadi belum bisa dinilai.
 										</Tooltip.Content>
 										</Tooltip.Portal>
 									</Tooltip.Root>

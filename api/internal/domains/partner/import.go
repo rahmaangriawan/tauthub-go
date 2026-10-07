@@ -864,6 +864,7 @@ func (d *Deps) MediaImport(w http.ResponseWriter, r *http.Request) {
 			 VALUES (gen_random_uuid(), $1, $2, NULL, $3, NULL, $4, NULL, 'menunggu_review', 'Bulk import XLSX')`,
 			id, user.ID, row.Parsed.Price, row.Parsed.PricingType)
 		d.auditLog(r.Context(), user.ID, "media.submitted", "media", id)
+		d.enqueueSeoRefreshForMedia(r.Context(), id)
 		if cert, isString := row.Parsed.CertificateNo.(string); isString && cert != "" {
 			if _, certErr := d.submitDewanPersVerification(r.Context(), id, partner.ID, cert, user.ID); certErr != nil {
 				rowErrors = append(rowErrors, map[string]any{"rowNumber": row.RowNumber,

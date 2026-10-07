@@ -423,6 +423,9 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 		"INSERT INTO media_price_history (id, media_id, actor_id, from_price, to_price, from_pricing_type, to_pricing_type, from_price_status, to_price_status, note) VALUES (gen_random_uuid(), $1, $2, NULL, $3, NULL, $4, NULL, $5, $6)",
 		id, user.ID, price, pricingType, "menunggu_review", "Pengajuan awal")
 	d.auditLog(r.Context(), user.ID, "media.submitted", "media", id)
+	// Pengajuan baru diperiksa metrik SEO/AI-nya lebih awal supaya admin sudah
+	// punya DA/AI Trust saat menilai.
+	d.enqueueSeoRefreshForMedia(r.Context(), id)
 	link := "/admin/media?status=pending_review#tab-pending"
 	d.notifyPlatformAdmins(r.Context(), "media.submitted", "Media baru menunggu review",
 		`Mitra mengajukan media "`+name+`" untuk direview.`, &link)

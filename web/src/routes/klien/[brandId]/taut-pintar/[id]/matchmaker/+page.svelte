@@ -454,17 +454,13 @@
 		if (integrationType === 'rss') return { cls: 'releaseBadgeFast', label: 'Cepat', sub: '< 24 Jam', isSuper: false };
 		return { cls: 'releaseBadgeStandard', label: 'Standar', sub: '1 - 2 Hari', isSuper: false };
 	}
+	// DA & AI Trust hanya menampilkan hasil pemeriksaan nyata; jangan menurunkan
+	// angka dari skor kualitas media karena itu bukan hasil pemeriksaan apa pun.
 	function getDa(m: MediaRow): string | number {
-		return m.seo_da != null && m.seo_da > 0
-			? m.seo_da
-			: m.media_quality_score
-				? Math.max(1, Math.round(m.media_quality_score * 0.45))
-				: '—';
+		return m.seo_da != null ? m.seo_da : '—';
 	}
 	function getAiTrust(m: MediaRow): string | number {
-		if (m.seo_ai_trust != null && m.seo_ai_trust > 0) return m.seo_ai_trust;
-		const quality = m.effective_quality ?? m.media_quality_score;
-		return quality ? Math.max(1, Math.round(quality * 0.9)) : '—';
+		return m.seo_ai_trust != null ? m.seo_ai_trust : '—';
 	}
 	// Nama tampil = domain (bukan nama brand), huruf pertama dibesarkan.
 	const domainLabel = (m: MediaRow) => mediaDomainLabel(m.website_url, m.name);
@@ -539,7 +535,7 @@
 						<span class="thWithInfo">AI TRUST
 							<Tooltip label={tr('Keterangan AI Trust Score')} maxWidth={260}>
 								{#snippet rich()}
-									<strong>AI Trust Score</strong> {tr('— Skor (0-100) kesiapan infrastruktur web (Schema, Speed) untuk dirayapi dan direkomendasikan oleh mesin LLM.')}
+									<strong>AI Trust Score</strong> {tr('— Nilai 0-100: seberapa siap situs media ini dibaca dan dipercaya oleh mesin AI, dilihat dari kecepatan halaman dan kelengkapan data situsnya. Tanda — berarti kecepatannya belum bisa diukur.')}
 								{/snippet}
 								<button type="button" class="infoDot" aria-label={tr('Keterangan AI Trust Score')} onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
 							</Tooltip>
@@ -547,7 +543,7 @@
 					</th>
 					<th class="modernTh" style="text-align:center">
 						<span class="thWithInfo">AI CITED
-							<Tooltip label={tr('Keterangan AI Citation')} content={tr('Indikator otomatis via API apakah media ini terdeteksi aktif sebagai rujukan/referensi oleh mesin AI.')} maxWidth={260}>
+							<Tooltip label={tr('Keterangan AI Citation')} content={tr('Menandai apakah situs media ini disebut sebagai sumber oleh AI Google. Tanda — berarti Google belum menampilkan jawaban AI untuk situs ini, jadi belum bisa dinilai.')} maxWidth={260}>
 								<button type="button" class="infoDot" aria-label={tr('Keterangan AI Citation')} onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
 							</Tooltip>
 						</span>
