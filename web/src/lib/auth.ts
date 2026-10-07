@@ -36,6 +36,7 @@ const API_BASE = '';
 // Cache SWR menyimpan data tenant; tanpa invalidasi, logout → login ulang
 // di tab sama bisa menampilkan data akun sebelumnya (parity auth.ts lama).
 import { invalidateSwrCache } from '$lib/swr-cache.svelte';
+import { swrClear } from '$lib/swr';
 
 let refreshing: Promise<AuthSession | null> | null = null;
 
@@ -211,14 +212,31 @@ export async function apiRequest(
 	}
 
 	const controller = new AbortController();
-	const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-	const doFetch = () =>
-		fetch(`${API_BASE}${path}`, {
-			...init,
-			headers,
-			credentials: 'include',
-			signal: init.signal ?? controller.signal
-		});
+	let timedOut = false;
+	const timeout = window.setTimeout(() => {
+		timedOut = true;
+		controller.abort();
+	}, timeoutMs);
+	const doFetch = async () => {
+		try {
+			return await fetch(`${API_BASE}${path}`, {
+				...init,
+				headers,
+				credentials: 'include',
+				signal: init.signal ?? controller.signal
+			});
+		} catch (reason) {
+			// Abort karena timeout kita sendiri bukan pembatalan dari pemanggil: beri
+			// nama + pesan yang jelas supaya UI bisa menyebut sebabnya (sebelumnya
+			// DOMException mentah 'AbortError: signal is aborted without reason').
+			if (timedOut && reason instanceof DOMException && reason.name === 'AbortError') {
+				const err = new Error(`Server terlalu lama merespons (lewat ${Math.round(timeoutMs / 1000)} detik). Coba lagi.`);
+				err.name = 'TimeoutError';
+				throw err;
+			}
+			throw reason;
+		}
+	};
 
 	try {
 		let response = await doFetch();
@@ -240,6 +258,8 @@ export async function apiRequest(
 				window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
 			}
 		}
+		// Mutasi sukses membatalkan cache daftar client (SWR) supaya tidak basi.
+		if (method !== 'GET' && response.ok) swrClear();
 		if (shouldToast)
 			showToast(
 				response.ok ? mutationMessage(method) : 'Gagal menyimpan perubahan.',

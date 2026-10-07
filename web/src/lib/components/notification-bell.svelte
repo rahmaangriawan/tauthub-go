@@ -148,7 +148,8 @@
 		}
 	}
 
-	async function load() {
+	// Mengembalikan status sukses supaya pemanggil polling bisa mengatur backoff.
+	async function load(): Promise<boolean> {
 		try {
 			// Dengan tab kategori: badge di-poll dari hitungan global, daftar hanya
 			// di-refresh saat menu terbuka (mengikuti tab aktif).
@@ -162,7 +163,7 @@
 				} else {
 					await loadList();
 				}
-				return;
+				return true;
 			}
 			const res = await apiRequest(`${apiBase}/notifications?limit=20`, { cache: 'no-store' });
 			if (!res.ok) throw new Error(await readApiError(res, 'Gagal memuat notifikasi.'));
@@ -180,8 +181,10 @@
 			unread = readable ? data.unread : countUnread(expired);
 			badgeUnread = unread;
 			error = '';
+			return true;
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : 'Gagal memuat notifikasi.';
+			return false;
 		}
 	}
 
@@ -237,10 +240,66 @@
 		void loadList();
 	}
 
+	// ── Polling lonceng ─────────────────────────────────────────────────────
+	// Sebelumnya setInterval lugas: request bisa tumpang-tindih, tetap jalan di
+	// tab background (koneksi basi → net::ERR_TIMED_OUT), dan gagal berulang
+	// tanpa jeda sehingga error membanjiri UI. Sekarang: satu request sekaligus,
+	// dijeda saat tab tak terlihat, backoff eksponensial saat gagal, dan senyap
+	// selama menu tertutup (error hanya relevan saat user melihat daftarnya).
+	const POLL_BASE_MS = 60_000;
+	const POLL_MAX_MS = 10 * 60_000;
+	let pollTimer: number | null = null;
+	let pollInFlight = false;
+	let pollFailures = 0;
+
+	function pollDelay() {
+		return Math.min(POLL_MAX_MS, POLL_BASE_MS * 2 ** Math.min(pollFailures, 4));
+	}
+
+	function schedulePoll() {
+		if (pollTimer) window.clearTimeout(pollTimer);
+		pollTimer = window.setTimeout(() => void pollTick(), pollDelay());
+	}
+
+	async function pollTick() {
+		// Tab background: koneksi sering sudah basi dan request menggantung sampai
+		// browser menyerah. Lewati, tapi tetap jadwalkan — saat tab kembali
+		// terlihat, visibilitychange memicu poll segera.
+		if (typeof document !== 'undefined' && document.hidden) {
+			schedulePoll();
+			return;
+		}
+		// Masih ada request jalan: biarkan rantai itu yang menjadwalkan ulang.
+		if (pollInFlight) return;
+		pollInFlight = true;
+		try {
+			const ok = await load();
+			pollFailures = ok ? 0 : pollFailures + 1;
+			if (!ok && !open) error = '';
+		} catch {
+			// Jaring pengaman: polling latar tidak boleh melempar keluar (unhandled).
+			pollFailures += 1;
+		} finally {
+			pollInFlight = false;
+			schedulePoll();
+		}
+	}
+
 	$effect(() => {
-		void load();
-		const timer = window.setInterval(() => void load(), 60_000);
-		return () => window.clearInterval(timer);
+		void pollTick();
+		const onWake = () => {
+			if (!document.hidden) {
+				pollFailures = 0;
+				void pollTick();
+			}
+		};
+		document.addEventListener('visibilitychange', onWake);
+		window.addEventListener('online', onWake);
+		return () => {
+			if (pollTimer) window.clearTimeout(pollTimer);
+			document.removeEventListener('visibilitychange', onWake);
+			window.removeEventListener('online', onWake);
+		};
 	});
 
 	function persist(ids: Set<string>) {

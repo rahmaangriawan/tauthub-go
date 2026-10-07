@@ -25,6 +25,7 @@
 	import { Tooltip } from 'bits-ui';
 	import './media.css';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import { swrPeek, swrPut } from '$lib/swr';
 
 	type Media = {
 		id: string; name: string; category: string | null; categories?: string[];
@@ -230,15 +231,24 @@
 	});
 
 	async function load() {
-		busy = true;
 		err = '';
+		const qs = new URLSearchParams({ limit: '250' });
+		if (debouncedSearch) qs.set('q', debouncedSearch);
+		const listUrl = `${apiBase}/media?${qs}`;
+		// Data lama (<=10 menit) tampil seketika, refresh di latar.
+		const cached = swrPeek<{ media?: Media[]; items?: Media[] }>(listUrl);
+		if (cached) {
+			rows = cached.media ?? cached.items ?? [];
+			busy = false;
+		} else {
+			busy = true;
+		}
 		try {
-			const qs = new URLSearchParams({ limit: '250' });
-			if (debouncedSearch) qs.set('q', debouncedSearch);
-			const res = await apiRequest(`${apiBase}/media?${qs}`);
+			const res = await apiRequest(listUrl);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat media.')));
 			const data = (await res.json()) as { media?: Media[]; items?: Media[] };
 			rows = data.media ?? data.items ?? [];
+			swrPut(listUrl, data);
 		} catch (reason) {
 			err = reason instanceof Error ? reason.message : tr('Gagal memuat media.');
 		} finally {

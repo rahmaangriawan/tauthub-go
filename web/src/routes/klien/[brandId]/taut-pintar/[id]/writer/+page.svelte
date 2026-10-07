@@ -593,6 +593,26 @@
 		};
 	}
 
+	/** Tombol "Generate Konten": buka Pengelola Naskah langsung di tab
+	 *  "Generate dengan AI", jadi user mengisi topik/cover/kategori dulu sebelum
+	 *  The Writer menulis — bukan generate tanpa konteks lalu mengedit belakangan. */
+	function openNaskahGenerate(item: PlacementItem) {
+		error = '';
+		const genLimit = mediaAllowsLink(item) ? (item.max_links && item.max_links > 0 ? item.max_links : 2) : 0;
+		editorError = '';
+		editor = {
+			mediaId: item.media_id,
+			mediaName: item.name,
+			tab: 'generate',
+			title: '',
+			html: '',
+			cover: null,
+			category: null,
+			metaDescription: null,
+			linkLimit: genLimit
+		};
+	}
+
 	async function uploadDocNaskah(
 		file: File,
 		onPhase?: (phase: 'extract' | 'clean') => void,
@@ -1326,12 +1346,12 @@
 											</div>
 										</div>
 									{/if}
-								{#if !manualFlow && !hasDoc(m)}
-									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={generating || bulkRunning || viewOnly} onclick={() => void generateOne(m)}>
-										{#if generating}<LoaderCircle size={14} class="animate-spin" />{:else}<Sparkles size={14} />{/if}
-										{generating ? tr('Membuat…') : queued ? tr('Mengantre…') : tr('Generate Konten')}
-									</button>
-								{/if}
+									{#if !manualFlow && !hasDoc(m)}
+										<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={generating || bulkRunning || viewOnly} onclick={() => openNaskahGenerate(m)}>
+											{#if generating}<LoaderCircle size={14} class="animate-spin" />{:else}<Sparkles size={14} />{/if}
+											{generating ? tr('Membuat…') : queued ? tr('Mengantre…') : tr('Generate Konten')}
+										</button>
+									{/if}
 								{#if !hasDoc(m)}
 									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning || viewOnly} onclick={() => openNaskahUpload(m)}>
 										<Upload size={14} /> {tr('Unggah Artikel')}

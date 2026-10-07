@@ -7,6 +7,9 @@ export default defineConfig({
 	plugins: [
 		tailwindcss(),
 		sveltekit({
+			// Client diberi tahu bila ada build baru (aset lama bisa 404 setelah deploy).
+			// Reaksinya ada di src/routes/+layout.svelte (updated + vite:preloadError).
+			version: { pollInterval: 60_000 },
 			compilerOptions: {
 				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
 				runes: ({ filename }) =>

@@ -20,6 +20,7 @@
 	import { fmtDate, fmtNum } from '$lib/admin-format';
 	import Tooltip from '$lib/components/tooltip.svelte';
 	import { platformError } from '../_platform';
+	import { swrPeek, swrPut } from '$lib/swr';
 
 	type Partner = {
 		id: string; user_id: string; email: string; name: string | null; status: string;
@@ -86,6 +87,14 @@
 	// Aksi baris
 	let openMenu = $state<string | null>(null);
 	let menuPos = $state({ top: 0, right: 0 });
+	// Ubah peran (Klien ⇄ Mitra) — endpoint sama dengan /admin/users:
+	// PUT /v1/platform/operations/users/{userId}/role.
+	let roleTarget = $state<Partner | null>(null);
+	let roleNext = $state<'partner' | 'client'>('client');
+	let roleKeepBrands = $state(false);
+	let roleBusy = $state(false);
+	let roleError = $state('');
+	let roleNotice = $state('');
 	// Dokumen
 	let docsPartner = $state<Partner | null>(null);
 	let docs = $state<PartnerDocument[]>([]);
@@ -123,6 +132,12 @@
 		void (async () => {
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
+			// Kolom Mitra di /admin/media menautkan ke sini dengan ?q=<email|nama>.
+			const q = new URLSearchParams(window.location.search).get('q')?.trim() ?? '';
+			if (q) {
+				search = q;
+				debouncedSearch = q;
+			}
 			await load();
 		})();
 		const onExpired = () => (window.location.href = '/login');
@@ -146,7 +161,6 @@
 	}
 
 	async function load() {
-		loading = true;
 		error = '';
 		const params = new URLSearchParams({
 			limit: String(PARTNER_PAGE_SIZE),
@@ -157,11 +171,22 @@
 		if (filterContact) params.set('contact', filterContact);
 		if (filterHasMedia) params.set('has_media', filterHasMedia);
 		if (filterAutoPublish) params.set('auto_publish', filterAutoPublish);
-		const res = await apiRequest(`/v1/platform/partners?${params.toString()}`);
+		const listUrl = `/v1/platform/partners?${params.toString()}`;
+		// Data lama (<=10 menit) tampil seketika, refresh di latar.
+		const cached = swrPeek<{ partners?: typeof rows; total?: number }>(listUrl);
+		if (cached) {
+			rows = cached.partners ?? [];
+			total = cached.total ?? 0;
+			loading = false;
+		} else {
+			loading = true;
+		}
+		const res = await apiRequest(listUrl);
 		if (res.ok) {
 			const data = await res.json();
 			rows = data.partners ?? [];
 			total = data.total ?? 0;
+			swrPut(listUrl, data);
 		} else {
 			error = await platformError(res);
 		}
@@ -250,6 +275,39 @@
 			return;
 		}
 		await load();
+	}
+
+	/** Buka dialog ubah peran. Halaman ini daftar mitra, jadi arah default: mitra → klien. */
+	function openRoleDialog(row: Partner) {
+		roleTarget = row;
+		roleNext = 'client';
+		roleKeepBrands = false;
+		roleError = '';
+		roleNotice = '';
+	}
+
+	async function submitRoleChange() {
+		if (!roleTarget || roleBusy) return;
+		roleBusy = true;
+		roleError = '';
+		roleNotice = '';
+		try {
+			const res = await apiRequest(`/v1/platform/operations/users/${roleTarget.user_id}/role`, {
+				method: 'PUT',
+				body: JSON.stringify({ role: roleNext, keep_brands: roleKeepBrands })
+			});
+			if (!res.ok) {
+				roleError = await platformError(res);
+				return;
+			}
+			const data = (await res.json().catch(() => ({}))) as { detail?: string };
+			roleNotice = data.detail ?? (roleNext === 'partner' ? tr('Peran diubah menjadi Mitra.') : tr('Peran diubah menjadi Klien.'));
+			await load();
+		} catch (reason) {
+			roleError = reason instanceof Error ? reason.message : tr('Gagal mengubah peran.');
+		} finally {
+			roleBusy = false;
+		}
 	}
 
 	async function setVip(partner: Partner, isVip: boolean, tier?: 'brand_ambassador' | 'vip_reguler') {
@@ -614,6 +672,9 @@
 									>
 											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openDocs(row); }}>
 												<ShieldCheck size={14} /> Dokumen
+											</button>
+											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; openRoleDialog(row); }}>
+												<UsersRound size={14} /> {tr('Ubah peran (Klien/Mitra)')}
 											</button>
 											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openVipSettings(row); }}>
 												{row.is_vip ? tr('Pengaturan VIP') : 'Jadikan VIP'}
@@ -1078,6 +1139,47 @@
 			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => (deleting = null)}>{tr("Batal")}</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void confirmDelete()}>
 				{busy ? 'Menghapus…' : 'Ya, hapus partner'}
+			</button>
+		{/snippet}
+	</Modal>
+{/if}
+
+{#if roleTarget}
+	<Modal title={`Ubah peran — ${roleTarget.name ?? roleTarget.email}`} label={tr("Ubah peran")} maxWidth="md" onClose={() => (roleTarget = null)}>
+		<p class="text-sm text-muted-foreground">
+			{tr('Peran menentukan dasbor yang dipakai akun ini:')}
+			<strong>{tr('Mitra')}</strong> {tr('mengelola media dan menerima publikasi;')}
+			<strong>{tr('Klien')}</strong> {tr('mengelola brand dan kontennya.')}
+		</p>
+		<div class="mt-3 grid gap-1.5">
+			<span class="text-xs font-medium text-muted-foreground">{tr('Peran baru')}</span>
+			<Select
+				value={roleNext}
+				ariaLabel={tr('Peran baru')}
+				minWidth={260}
+				onchange={(v) => (roleNext = v === 'partner' ? 'partner' : 'client')}
+				options={[
+					{ value: 'client', label: tr('Klien — kelola brand & konten') },
+					{ value: 'partner', label: tr('Mitra — media partner') }
+				]}
+			/>
+		</div>
+		{#if roleNext === 'partner'}
+			<label class="mt-3 flex items-start gap-2 text-sm">
+				<input type="checkbox" class="mt-0.5" bind:checked={roleKeepBrands} />
+				<span>{tr('Pertahankan brand miliknya — kalau tidak dicentang, brand dilepas saat jadi Mitra.')}</span>
+			</label>
+		{/if}
+		{#if roleError}
+			<div class="mt-3 flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{roleError}</div>
+		{/if}
+		{#if roleNotice}
+			<div class="mt-3 flex items-start gap-2 text-sm" style="color: var(--success);"><Check size={16} class="mt-0.5 shrink-0" />{roleNotice}</div>
+		{/if}
+		{#snippet footer()}
+			<button class="app-btn app-btn-soft" type="button" disabled={roleBusy} onclick={() => (roleTarget = null)}>{tr("Tutup")}</button>
+			<button class="app-btn app-btn-primary" type="button" disabled={roleBusy} onclick={() => void submitRoleChange()}>
+				{roleBusy ? tr('Menyimpan…') : tr('Simpan peran')}
 			</button>
 		{/snippet}
 	</Modal>

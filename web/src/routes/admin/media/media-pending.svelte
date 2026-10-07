@@ -119,8 +119,21 @@
 		}
 	}
 
-	const partnerLabel = (id: string | null) =>
-		id ? (partners.find((p) => p.id === id)?.name ?? partners.find((p) => p.id === id)?.email ?? '—') : '—';
+	/** Info pemilik media untuk verifikasi sebelum Setujui/Tolak: nama diambil dari
+	 *  baris API (partner_name) dan email dari daftar mitra. */
+	const partnerInfo = (row: Media): { id: string | null; name: string; email: string | null } => {
+		const id = row.partner_id ?? null;
+		const fromList = id ? partners.find((p) => p.id === id) : undefined;
+		return {
+			id,
+			name: row.partner_name?.trim() || fromList?.name?.trim() || fromList?.email || '—',
+			email: fromList?.email ?? null
+		};
+	};
+
+	/** Tautan ke halaman Mitra — halaman itu membaca ?q= dan memfilter daftarnya. */
+	const partnerHref = (info: { name: string; email: string | null }) =>
+		`/admin/partners?q=${encodeURIComponent(info.email || info.name)}`;
 
 	// Daftar perubahan mitra yang menunggu keputusan admin (migrasi 159).
 	const pendingChanges = (row: Media) => (Array.isArray(row.pending_changes) ? row.pending_changes : []);
@@ -161,8 +174,21 @@
 {/snippet}
 
 {#snippet partnerCell(row: Media)}
+	{@const owner = partnerInfo(row)}
 	<div>
-		<p class="text-sm">{partnerLabel(row.partner_id)}</p>
+		{#if owner.id}
+			<a
+				class="text-sm font-medium underline decoration-dotted"
+				style="color: var(--primary);"
+				href={partnerHref(owner)}
+				title={tr('Buka halaman Mitra untuk memeriksa pengaju ini')}
+			>{owner.name}</a>
+		{:else}
+			<p class="text-sm">{owner.name}</p>
+		{/if}
+		{#if owner.email && owner.email !== owner.name}
+			<p class="break-all text-xs text-muted-foreground">{owner.email}</p>
+		{/if}
 		<div class="mt-1">
 			{#if row.referred_by_partner_id}
 				<Badge
@@ -270,7 +296,11 @@
 
 {#if reviewTarget}
 	<Modal title={`Review media — ${reviewTarget.name}`} maxWidth="md" onClose={() => (reviewTarget = null)}>
-		<p class="text-sm text-muted-foreground">{tr("Tolak media ini. Alasan akan dikirim ke mitra. (Negosiasi harga dinonaktifkan — harga ditentukan mitra.)")}</p>
+		<p class="text-sm">
+			{tr('Mitra pengaju:')}
+			<strong>{partnerInfo(reviewTarget).name}</strong>{#if partnerInfo(reviewTarget).email} · <span class="text-muted-foreground">{partnerInfo(reviewTarget).email}</span>{/if}
+		</p>
+		<p class="mt-1 text-sm text-muted-foreground">{tr("Tolak media ini. Alasan akan dikirim ke mitra. (Negosiasi harga dinonaktifkan — harga ditentukan mitra.)")}</p>
 		<label class="mt-3 block">
 			<span class="text-xs font-medium text-muted-foreground">Alasan / Catatan</span>
 			<textarea

@@ -4,10 +4,54 @@
 	import '@fontsource/geist/latin-400.css';
 	import '@fontsource/geist-mono/latin-400.css';
 	import '../app.css';
+	import { onMount } from 'svelte';
+	import { beforeNavigate } from '$app/navigation';
+	import { updated } from '$app/state';
 	import ToastHost from '$lib/components/toast-host.svelte';
 	import { initLocaleFromStorage } from '$lib/i18n/i18n.svelte';
 
 	let { children } = $props();
+
+	// Deploy baru: aset lama bisa sudah tidak ada. Muat ulang penuh saat user
+	// berpindah halaman berikutnya — pekerjaan yang sedang berjalan tidak dipotong.
+	beforeNavigate(({ willUnload, to }) => {
+		if (updated.current && !willUnload && to?.url) {
+			window.location.href = to.url.href;
+		}
+	});
+
+	onMount(() => {
+		// Request yang dibatalkan (timeout 12 dtk / pembatalan sengaja) bukan bug,
+		// tapi browser mencatatnya sebagai "Uncaught (in promise) AbortError".
+		// Telan hanya kelas error itu; error lain tetap dilaporkan apa adanya.
+		const onRejection = (event: PromiseRejectionEvent) => {
+			const name = (event.reason as { name?: string } | null | undefined)?.name;
+			if (name === 'AbortError' || name === 'TimeoutError') {
+				event.preventDefault();
+				console.debug('[tauthub] request dibatalkan/di-timeout:', name);
+			}
+		};
+		window.addEventListener('unhandledrejection', onRejection);
+		// Chunk route lama (hash berubah setelah deploy) gagal di-import: Vite
+		// menembakkan vite:preloadError. Muat ulang sekali supaya ambil bundle baru.
+		const RELOAD_KEY = 'tauthub:preload-reload-at';
+		const onPreloadError = (event: Event) => {
+			event.preventDefault();
+			try {
+				const last = Number(sessionStorage.getItem(RELOAD_KEY) ?? 0);
+				if (Date.now() - last < 15_000) return; // cegah loop reload
+				sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+			} catch {
+				/* sessionStorage diblokir — tetap reload */
+			}
+			window.location.reload();
+		};
+		window.addEventListener('vite:preloadError', onPreloadError);
+		return () => {
+			window.removeEventListener('unhandledrejection', onRejection);
+			window.removeEventListener('vite:preloadError', onPreloadError);
+		};
+	});
 
 	$effect(() => {
 		// Parity ThemeProvider: selalu light + bersihkan preferensi dark lama.

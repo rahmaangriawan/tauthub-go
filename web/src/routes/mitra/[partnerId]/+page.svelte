@@ -32,6 +32,9 @@
 	let error = $state('');
 	let pubError = $state(false);
 	let me = $state<any>(null);
+	// /v1/partner/me juga mengirim { user } — email dipakai di baris ringkas
+	// pengganti "ID mitra <kode>" yang tidak berguna bagi mitra.
+	let meUser = $state<{ email?: string } | null>(null);
 	let earnings = $state<any>(null);
 	let media = $state<any[]>([]);
 	let publications = $state<any[]>([]);
@@ -47,7 +50,11 @@
 				apiRequest('/v1/partner/media?limit=500'),
 				apiRequest('/v1/partner/publications?limit=200')
 			]);
-			if (meRes.ok) me = (await meRes.json()).partner;
+			if (meRes.ok) {
+				const meData = await meRes.json();
+				me = meData.partner;
+				meUser = meData.user ?? null;
+			}
 			if (earnRes.ok) earnings = await earnRes.json();
 			if (mediaRes.ok) media = (await mediaRes.json()).media ?? [];
 			if (pubRes.ok) publications = (await pubRes.json()).publications ?? [];
@@ -239,7 +246,7 @@
 				{/if}
 			</div>
 			<p class="m-0 text-[13.5px] leading-normal text-muted-foreground">
-				{me?.media_count ?? 0} {tr("media terdaftar")}{#if me?.public_id} · ID mitra {me.public_id}{/if}
+				{me?.media_count ?? 0} {tr("media terdaftar")}{#if meUser?.email} · {meUser.email}{/if}
 			</p>
 		</div>
 		<div class="flex gap-2">

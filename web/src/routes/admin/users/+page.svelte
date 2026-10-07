@@ -20,6 +20,7 @@
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDate, fmtNum } from '$lib/admin-format';
 	import { platformError } from '../_platform';
+	import { swrPeek, swrPut } from '$lib/swr';
 
 	type Quota = { user_id: string; daily_token_limit: number };
 	type GenQuota = { user_id: string; writer_generate_quota: number | null; effective: number };
@@ -124,15 +125,28 @@
 	});
 
 	async function load(search = '', role = roleFilter) {
-		loading = true;
 		error = '';
 		const params = new URLSearchParams();
 		if (search) params.set('search', search);
 		if (role) params.set('role', role);
 		const query = params.toString();
-		const res = await apiRequest(`/v1/platform/operations/users${query ? `?${query}` : ''}`);
-		if (res.ok) rows = await res.json();
-		else error = await platformError(res);
+		const listUrl = `/v1/platform/operations/users${query ? `?${query}` : ''}`;
+		// Data lama (<=10 menit) tampil seketika, refresh di latar.
+		const cached = swrPeek<User[]>(listUrl);
+		if (cached) {
+			rows = cached;
+			loading = false;
+		} else {
+			loading = true;
+		}
+		const res = await apiRequest(listUrl);
+		if (res.ok) {
+			const data = (await res.json()) as User[];
+			rows = data;
+			swrPut(listUrl, data);
+		} else {
+			error = await platformError(res);
+		}
 		loading = false;
 	}
 
