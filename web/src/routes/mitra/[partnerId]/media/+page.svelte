@@ -6,8 +6,9 @@
 	// (pratinjau → konfirmasi, parity alur bulk import app lama).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { BadgeCheck, Check, Copy, ExternalLink, Info, Link, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Trash2, TriangleAlert, Upload, X } from '@lucide/svelte';
+	import { BadgeCheck, Check, CircleAlert, Copy, ExternalLink, Info, Link, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Trash2, TriangleAlert, Upload, X } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
+	import { Tooltip } from 'bits-ui';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -230,11 +231,37 @@
 		: s === 'conflict' ? { label: tr('Konflik'), tone: 'var(--warning)' }
 		: { label: tr('Tidak'), tone: 'var(--muted-foreground)' };
 	const seoLabel = (m: Media) => (m.seo_da == null ? null : `DA ${m.seo_da} · PA ${m.seo_pa ?? '—'} · Spam ${m.seo_spam_score ?? '—'}`);
-	const platLabel = (m: Media) =>
-		m.integration_type === 'custom_web' ? `Custom Web${m.custom_web_status ? ` (${m.custom_web_status})` : ''}`
-		: m.integration_type === 'blogger' ? `Blogger${m.blogger_status ? ` (${m.blogger_status})` : ''}`
-		: m.integration_type === 'tulisio_api' ? 'Tulisio API'
-		: tr('Manual');
+
+	// Nama platform memakai istilah yang sama dengan halaman Integrasi
+	// (WordPress, Web Custom, Blogger). Tipe lain tetap punya sebutannya sendiri
+	// supaya tidak semua jenis jatuh ke kata "Manual".
+	const platLabel = (m: Media) => {
+		switch (m.integration_type) {
+			case 'wordpress':
+				return 'WordPress';
+			case 'custom_web':
+				return 'Web Custom';
+			case 'blogger':
+				return 'Blogger';
+			case 'tulisio_api':
+				return 'Tulisio API';
+			case 'rss':
+				return tr('Feed RSS');
+			case 'webhook':
+				return 'Webhook';
+			case 'emdash':
+				return 'EmDash';
+			default:
+				return tr('Manual');
+		}
+	};
+
+	/** Tooltip header kolom Mode Publikasi: siapa yang menuntaskan penerbitan. */
+	const modeColumnHint = () =>
+		tr('Siapa yang menerbitkan artikel. Mode Integrasi = di-push otomatis ke situs mitra lewat integrasi; Mode Manual = mitra menempel artikelnya sendiri lalu mengirim URL artikelnya.');
+
+	/** Tooltip header kolom Platform: platform yang dipakai media. */
+	const platformColumnHint = () => tr('Platform yang digunakan media, WordPress, Blogger, Emdash, API');
 
 	// ── Menu aksi titik-tiga (parity app lama) ────────────────────────────
 	let openMenu = $state<string | null>(null);
@@ -843,12 +870,64 @@
 						<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
 						<th class="px-4 py-2.5 font-medium">{tr('Domain')}</th>
 						<th class="px-4 py-2.5 font-medium">{tr('Kategori')}</th>
-						<th class="px-4 py-2.5 font-medium">{tr("Mode Publikasi")}</th>
+						<th class="px-4 py-2.5 font-medium">
+							<span class="inline-flex items-center gap-1">
+								{tr("Mode Publikasi")}
+								<Tooltip.Provider delayDuration={0}>
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button
+													{...props}
+													type="button"
+													class="inline-flex cursor-help items-center text-muted-foreground"
+													aria-label={modeColumnHint()}
+												>
+													<CircleAlert size={12} />
+												</button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Portal>
+											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+												<Tooltip.Arrow class="uiTipArrow" />
+												{modeColumnHint()}
+											</Tooltip.Content>
+										</Tooltip.Portal>
+									</Tooltip.Root>
+								</Tooltip.Provider>
+							</span>
+						</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Dewan Pers")}</th>
 						<th class="px-4 py-2.5 text-right font-medium">{tr('Harga')}</th>
 						<th class="px-4 py-2.5 font-medium">{tr('Kualitas')}</th>
 						<th class="px-4 py-2.5 font-medium">SEO</th>
-						<th class="px-4 py-2.5 font-medium">Platform</th>
+						<th class="px-4 py-2.5 font-medium">
+							<span class="inline-flex items-center gap-1">
+								Platform
+								<Tooltip.Provider delayDuration={0}>
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button
+													{...props}
+													type="button"
+													class="inline-flex cursor-help items-center text-muted-foreground"
+													aria-label={platformColumnHint()}
+												>
+													<CircleAlert size={12} />
+												</button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Portal>
+											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+												<Tooltip.Arrow class="uiTipArrow" />
+												{platformColumnHint()}
+											</Tooltip.Content>
+										</Tooltip.Portal>
+									</Tooltip.Root>
+								</Tooltip.Provider>
+							</span>
+						</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
 						<th class="px-4 py-2.5 text-right font-medium">{tr('Aksi')}</th>
 					</tr>
@@ -896,13 +975,13 @@
 								{/if}
 							</td>
 							<td class="px-4 py-2.5 text-muted-foreground">{m.categories.join(', ') || '—'}</td>
-							<td class="px-4 py-2.5">
-								<div class="flex flex-col items-start gap-1">
-									{#if (m.publication_mode ?? 'draft') === 'publish'}
-										<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft, #e8f7ee); color: var(--success);">{tr('Mode Integrasi')}</span>
-									{:else}
-										<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">{tr('Mode Manual')}</span>
-									{/if}
+								<td class="px-4 py-2.5">
+									<div class="flex flex-col items-start gap-1">
+										{#if (m.publication_mode ?? 'draft') === 'publish'}
+											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft, #e8f7ee); color: var(--success);">{tr('Mode Integrasi')}</span>
+										{:else}
+											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">{tr('Mode Manual')}</span>
+										{/if}
 									{#if autoPublishEnabled}
 										<label class="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
 											<input
@@ -942,6 +1021,9 @@
 								<span class="text-xs">{platLabel(m)}</span>
 								{#if m.has_connection}
 									<span class="mt-0.5 block text-[11px]" style="color: var(--success);">{tr('Koneksi siap')}</span>
+								{/if}
+								{#if (m.integration_type === 'blogger' && m.blogger_status !== 'connected') || (m.integration_type === 'custom_web' && m.custom_web_status !== 'connected')}
+									<span class="mt-0.5 block text-[11px]" style="color: var(--destructive);">{tr('Belum terhubung')}</span>
 								{/if}
 							</td>
 							<td class="px-4 py-2.5">
