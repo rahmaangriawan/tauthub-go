@@ -46,7 +46,7 @@
 		gsc_connected?: boolean; image_required?: boolean | null;
 		label_sponsor?: string | null; topik_terlarang?: string[];
 		max_links?: number | null; allow_hyperlink?: boolean | null;
-		publication_mode?: string | null; word_count_mode?: string | null;
+		publication_mode?: string | null; auto_publish?: boolean | null; word_count_mode?: string | null;
 		allow_embed?: boolean; pricing_type_raw?: string | null;
 		status?: string | null;
 	};
@@ -66,10 +66,11 @@
 	let priceFilter = $state<'' | 'low' | 'mid' | 'high'>('');
 	// Minimum DA memakai slider (0 = tanpa batas), menggantikan chip DA ≥ 10/20/30.
 	let minDa = $state(0);
-	// Terbit otomatis: media yang terbitnya langsung diproses integrasi, tanpa
-	// langkah terbit manual di sisi media. Ini pemakaian field publication_mode
-	// yang sama dengan label "Mode Pengiriman" di modal detail (publish lawan draft).
-	let directPublishOnly = $state(false);
+	// Terbit otomatis: jalur bypass tanpa persetujuan mitra. Ini flag "Mode
+	// Otomatis" per media (media.auto_publish) — artikel dari klien langsung
+	// diproses dan terbit ke situs media tanpa menunggu acc mitra. Berbeda dari
+	// publication_mode, yang hanya menentukan siapa yang menempel artikelnya.
+	let autoPublishOnly = $state(false);
 	// AI Citation: media yang terdeteksi dikutip atau dirujuk mesin AI.
 	let aiCitationOnly = $state(false);
 	let verifiedOnly = $state(false);
@@ -461,7 +462,7 @@
 				const da = getDa(m);
 				if (typeof da !== 'number' || da < minDa) return false;
 			}
-			if (directPublishOnly && m.publication_mode !== 'publish') return false;
+			if (autoPublishOnly && m.auto_publish !== true) return false;
 			if (aiCitationOnly && m.seo_ai_citation !== true) return false;
 			return true;
 		})
@@ -507,7 +508,7 @@
 
 	const activeFilterCount = $derived(
 		(speedFilter ? 1 : 0) + (priceFilter ? 1 : 0) + (minDa > 0 ? 1 : 0) +
-		(directPublishOnly ? 1 : 0) + (aiCitationOnly ? 1 : 0) +
+		(autoPublishOnly ? 1 : 0) + (aiCitationOnly ? 1 : 0) +
 		(verifiedOnly ? 1 : 0) + (dewanPersOnly ? 1 : 0) + (category ? 1 : 0)
 	);
 	const selectedMedia = $derived(rows.filter((m) => selectedIds.has(m.id)));
@@ -544,7 +545,7 @@
 		speedFilter = '';
 		priceFilter = '';
 		minDa = 0;
-		directPublishOnly = false;
+		autoPublishOnly = false;
 		aiCitationOnly = false;
 		verifiedOnly = false;
 		dewanPersOnly = false;
@@ -825,8 +826,8 @@
 				<div class="advFilterSection">
 					<span class="advFilterSectionLabel">{tr("Terbit Otomatis")}</span>
 					<div class="advFilterToggleRow">
-						<label class="advFilterToggle" title={tr("Langsung Terbit (otomatis, tanpa langkah terbit manual di media)")}>
-							<input type="checkbox" bind:checked={directPublishOnly} onchange={() => (page_ = 1)} />
+						<label class="advFilterToggle" title={tr("Artikel dari klien langsung diterbitkan ke media tanpa persetujuan manual Mitra.")}>
+							<input type="checkbox" bind:checked={autoPublishOnly} onchange={() => (page_ = 1)} />
 							<span>{tr("Langsung terbit")}</span>
 						</label>
 					</div>
