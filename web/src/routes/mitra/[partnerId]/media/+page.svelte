@@ -940,12 +940,9 @@
 					{#each filtered as m (m.id)}
 						<tr class="border-t align-top">
 							<td class="px-4 py-2.5">
-								<div class="flex flex-wrap items-center gap-1.5">
-									<span class="font-medium">{m.name}</span>
-									{#if seoLabel(m)}
-										<span class="rounded px-1.5 py-0.5 text-[10px] font-medium" style="background: var(--muted); color: var(--muted-foreground);" title={`SEO diperbarui ${dt(m.seo_checked_at)}`}>{seoLabel(m)}</span>
-									{/if}
-								</div>
+									<div class="flex flex-wrap items-center gap-1.5">
+										<span class="font-medium">{m.name}</span>
+									</div>
 								{#if m.website_url}
 									<a class="inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={m.website_url} target="_blank" rel="noreferrer">
 										{m.website_url.replace(/^https?:\/\//, '').slice(0, 40)} <ExternalLink size={11} />

@@ -766,7 +766,7 @@
 								{/if}
 								{#if p.status === 'published'}
 									{#if p.published_url}
-										<span class="mt-1 block text-[11px] font-medium" style="color: var(--success);">URL ✓</span>
+										<span class="mt-1 block text-[11px] font-medium" style="color: var(--success);">{tr('Lihat URL')}</span>
 									{:else}
 										<span class="mt-1 block text-[11px] font-medium" style="color: var(--warning);">{tr('URL belum terisi')}</span>
 									{/if}

@@ -1967,6 +1967,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Lihat Detail": "View Details",
   "Lihat Langsung": "View live",
   "Lihat Publikasi": "View Publication",
+  "Lihat URL": "View URL",
   "Lihat Semua": "View All",
   "Lihat artikel": "View article",
   "Lihat bahan lengkap": "View full materials",
