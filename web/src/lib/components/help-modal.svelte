@@ -47,7 +47,7 @@
 		},
 		{
 			title: 'Verifikasi, pantau, dan laporan',
-			body: 'URL terbit diverifikasi dan Link Monitor terus memantau tautannya. Laporan jangkauan, klik smart link, dan skor PR tersedia di dasbor.'
+			body: 'URL terbit diverifikasi dan Link Guardian terus memantau tautannya. Laporan jangkauan, klik smart link, dan skor PR tersedia di dasbor.'
 		}
 	];
 

@@ -226,7 +226,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Tulis pengumuman yang tampil di kotak pengumuman seluruh pengguna klien dan mitra.": "Write announcements that appear in the announcement inbox of all client and partner users.",
   "Tulis sendiri di editor, atau minta Agen AI menyusunnya dari brief kampanye Anda. Artikel bisa diperiksa berulang kali sebelum dikirim.": "Write it yourself in the editor, or let the AI Agent draft it from your campaign brief. You can re-check the article as many times as you need before sending it.",
   "Tutup panduan": "Close guide",
-  "URL terbit diverifikasi dan Link Monitor terus memantau tautannya. Laporan jangkauan, klik smart link, dan skor PR tersedia di dasbor.": "Published URLs are verified and Link Monitor keeps watching the links. Reach estimates, smart link clicks, and PR scores are available on the dashboard.",
+  "URL terbit diverifikasi dan Link Guardian terus memantau tautannya. Laporan jangkauan, klik smart link, dan skor PR tersedia di dasbor.": "Published URLs are verified and Link Guardian keeps watching the links. Reach estimates, smart link clicks, and PR scores are available on the dashboard.",
   "Ukuran file melebihi 10 MB.": "File size exceeds 10 MB.",
   "Umum": "General",
   "Unggah Dokumen": "Upload Document",

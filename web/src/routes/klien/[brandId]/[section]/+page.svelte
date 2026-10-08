@@ -12,9 +12,12 @@
 
 	// Section yang bukan fitur portal klien → 404, bukan kartu "segera hadir".
 	// 'integrations' milik portal mitra, jadi mustahil diakses klien.
+	// 'link-monitor' slug lama halaman Link Guardian yang sudah pindah ke
+	// '/link-guardian'; kalau dibiarkan, ia justru menampilkan kartu "segera
+	// hadir" untuk fitur yang sudah ada.
 	// Membaca page.params langsung (bukan lewat $derived) supaya tidak ada
 	// peringatan snapshot; nilainya sama saat init.
-	if (new Set(['integrations', 'integrasi']).has(page.params.section as string)) {
+	if (new Set(['integrations', 'integrasi', 'link-monitor']).has(page.params.section as string)) {
 		error(404, tr('Halaman tidak ditemukan.'));
 	}
 	const section = $derived(page.params.section as string);
