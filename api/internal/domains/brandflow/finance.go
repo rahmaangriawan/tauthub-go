@@ -408,6 +408,28 @@ func (d *Deps) LinkMonitorRequestReplacement(w http.ResponseWriter, r *http.Requ
 		d.writeErr(w, err)
 		return
 	}
+	// Catat klaim agar bisa dilacak admin: satu publikasi = satu klaim, jadi
+	// pengajuan ulang tidak menumpuk baris dan pengembalian saldo tidak mungkin
+	// terjadi dua kali untuk artikel yang sama.
+	if err := d.exec(r.Context(), `
+		INSERT INTO link_guardian_claims
+		  (id, publication_id, brand_id, status, detection_state, anchor_expected, created_by)
+		SELECT $4, $1, $2, 'submitted',
+		       CASE WHEN lc.in_article_state = 'removed' THEN 'link_removed'
+		            WHEN lc.state = 'gone' THEN 'gone' END,
+		       lc.in_article_anchor, $3
+		  FROM (SELECT 1) AS x
+		  LEFT JOIN publication_link_checks lc ON lc.publication_id = $1
+		ON CONFLICT (publication_id) DO UPDATE SET
+		  status = CASE WHEN link_guardian_claims.status = 'rejected' THEN 'submitted'
+		                ELSE link_guardian_claims.status END,
+		  detection_state = EXCLUDED.detection_state,
+		  anchor_expected = COALESCE(EXCLUDED.anchor_expected, link_guardian_claims.anchor_expected),
+		  updated_at = NOW()`,
+		publicationID, brandRow.ID, user.ID, uuid.NewString()); err != nil {
+		d.writeErr(w, err)
+		return
+	}
 	d.audit(r.Context(), brandRow.ID, user.ID, "publication.link_lost.replacement_requested", "publication", publicationID)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "publication_id": publicationID})
 }

@@ -869,6 +869,10 @@ func run() error {
 			authed.Get("/platform/link-monitor", platformDeps.LinkMonitorGlobal)
 			authed.Post("/platform/link-monitor/check", platformDeps.LinkMonitorCheck)
 			authed.Post("/platform/link-monitor/replace", platformDeps.LinkMonitorReplace)
+			authed.Get("/platform/link-guardian/claims", platformDeps.LinkGuardianClaimsList)
+			authed.Post("/platform/link-guardian/claims/{claimId}/step", platformDeps.LinkGuardianClaimStep)
+			authed.Post("/platform/link-guardian/claims/{claimId}/refund", platformDeps.LinkGuardianClaimRefund)
+			authed.Post("/platform/link-guardian/claims/{claimId}/reject", platformDeps.LinkGuardianClaimReject)
 		})
 
 		// TODO fase 2+: peta lengkap di REWRITE/04_API_ENDPOINTS.md.

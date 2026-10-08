@@ -9,7 +9,7 @@
 	import { page } from '$app/state';
 	import {
 		Activity, ArrowDownUp, ArrowUp, CircleAlert, CircleCheck, ExternalLink, Filter as FilterIcon,
-		Image as ImageIcon, Info, LoaderCircle, RefreshCw, RotateCcw, Search
+		Image as ImageIcon, Info, LoaderCircle, RefreshCw, RotateCcw, Search, TriangleAlert
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
@@ -27,6 +27,12 @@
 		state: string | null; http_status?: number | null; consecutive_failures?: number | null;
 		error_message?: string | null; last_checked_at: string | null;
 		featured_image_url?: string | null; draft_featured_image_url?: string | null;
+		// Link Guardian: hasil pemeriksaan tautan di dalam artikel + kelayakan klaim.
+		in_article_state?: string | null; in_article_anchor?: string | null; in_article_found?: number | null;
+		in_article_checked_at?: string | null; in_article_error?: string | null;
+		domain_verified?: boolean | null; in_warranty?: boolean | null;
+		claim_id?: string | null; claim_status?: string | null;
+		refund_idr?: number | null; refund_tc?: number | null;
 	};
 	type Summary = {
 		watched: number; live: number; gone: number; unreachable: number; no_url: number;
@@ -65,7 +71,7 @@
 	}
 	let loading = $state(true);
 	let error = $state('');
-	let requestingId = $state<string | null>(null);
+	let claimingId = $state<string | null>(null);
 	let crawling = $state(false);
 	let notice = $state('');
 	let imgError = $state<Record<string, boolean>>({});
@@ -135,13 +141,6 @@
 		const m = STATE_META[state];
 		if (m) return m;
 		return { ...FALLBACK_META, label: state, hint: '' };
-	}
-
-	/** mediaSubtitle — parity helper yang sama. */
-	function mediaSubtitle(mediaType?: string | null, category?: string | null): string {
-		if (mediaType === 'blogger') return 'Blog Personal';
-		if (mediaType === 'mainstream') return 'Media Online';
-		return category || 'Media Online';
 	}
 
 	/** formatRelativeTime — parity helper yang sama. */
@@ -228,23 +227,6 @@
 		void load();
 	}
 
-	async function requestReplacement(item: Item) {
-		requestingId = item.id;
-		error = '';
-		try {
-			const res = await apiRequest(`${apiBase}/link-monitor/request-replacement`, {
-				method: 'POST',
-				body: JSON.stringify({ publicationId: item.id })
-			});
-			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengirim permintaan penggantian.')));
-			notice = tr('Permintaan penggantian terkirim. Tim Tauthub akan menindaklanjuti.');
-		} catch (reason) {
-			error = reason instanceof Error ? reason.message : tr('Gagal mengirim permintaan penggantian.');
-		} finally {
-			requestingId = null;
-		}
-	}
-
 	/** Label sinkronisasi bergaya "Hari ini, 08:30 WIB" (zona Asia/Jakarta). */
 	function syncLabel(iso: string | null | undefined): string {
 		if (!iso) return tr('Belum pernah');
@@ -288,6 +270,66 @@
 	// Angka kartu selalu dari summary server (bukan konstanta). `tone` = aksen
 	// warna border/label/ikon, `strong` = keterangan ikut berwarna tone,
 	// `info` = keterangan tambahan di ikon info.
+	/** Status deteksi gabungan: kondisi URL artikel + tautan DI DALAM artikel. */
+	function detectionMeta(item: Item): { label: string; text: string; bg: string; dot: string } {
+		if (item.state === 'gone') {
+			return { label: 'HILANG (404)', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
+		}
+		if (item.in_article_state === 'removed') {
+			return { label: 'TAUTAN DIHAPUS', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
+		}
+		if (item.state === 'unreachable') {
+			return { label: 'TAK TERJANGKAU', text: 'var(--warning)', bg: 'var(--warning-soft)', dot: 'var(--warning)' };
+		}
+		if (item.state === 'live') {
+			return { label: '200 OK (AMAN)', text: 'var(--success)', bg: 'var(--success-soft)', dot: 'var(--success)' };
+		}
+		return { label: tr('Belum ada URL'), text: 'var(--muted-foreground)', bg: 'var(--muted)', dot: 'var(--muted-foreground)' };
+	}
+
+	/**
+	 * Aksi garansi per baris. Urutannya sengaja: klaim yang sudah diproses
+	 * menang atas kelayakan, lalu garansi habis, lalu media tak terverifikasi,
+	 * baru tombol klaim muncul saat artikelnya benar-benar rusak.
+	 */
+	function claimState(item: Item): 'refunded' | 'processing' | 'expired' | 'not_covered' | 'none' | 'claimable' {
+		if (item.claim_status === 'refunded') return 'refunded';
+		if (item.claim_status) return 'processing';
+		if (item.in_warranty === false) return 'expired';
+		if (item.domain_verified === false) return 'not_covered';
+		const broken = item.state === 'gone' || item.in_article_state === 'removed';
+		return broken ? 'claimable' : 'none';
+	}
+
+	const claimStatusLabel: Record<string, string> = $derived({
+		submitted: tr('Klaim diajukan'), checking: tr('Sedang diperiksa'),
+		contacted: tr('Menghubungi pemilik domain'), refunded: tr('Dana dikembalikan'),
+		rejected: tr('Klaim ditolak')
+	});
+
+	/** Ajukan klaim garansi: satu endpoint dengan pengajuan penggantian. */
+	async function submitClaim(item: Item) {
+		claimingId = item.id;
+		error = '';
+		notice = '';
+		try {
+			const res = await apiRequest(`${apiBase}/link-monitor/request-replacement`, {
+				method: 'POST',
+				body: JSON.stringify({ publicationId: item.id })
+			});
+			if (!res.ok) {
+				error = await readApiError(res, tr('Gagal mengajukan klaim.'));
+				return;
+			}
+			notice = tr('Klaim diajukan. Tim Tauthub akan memeriksa kondisi tautan dan menindaklanjuti.');
+			await load();
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : tr('Gagal mengajukan klaim.');
+		} finally {
+			claimingId = null;
+		}
+	}
+
 	const statCards = $derived([
 		{ label: tr('Total Dipantau'), value: summary?.watched ?? 0, hint: tr('Dalam masa garansi aktif'), icon: Activity, tone: 'var(--muted-foreground)', strong: false, info: null as string | null },
 		{ label: tr('Tayang & Aman'), value: summary?.live ?? 0, hint: tr('Halaman & Tautan aktif (200 OK)'), icon: CircleCheck, tone: 'var(--success)', strong: false, info: null },
@@ -466,30 +508,33 @@
 				     dengan ellipsis, sehingga tabel tidak pernah melebihi kartu. -->
 					<table class="linkmon-table w-full text-sm">
 						<colgroup>
-							<col style="width:36%" /><col style="width:14%" /><col style="width:14%" />
-							<col style="width:19%" /><col style="width:17%" />
+							<col style="width:31%" /><col style="width:15%" /><col style="width:13%" />
+							<col style="width:14%" /><col style="width:13%" /><col style="width:14%" />
 						</colgroup>
 						<thead>
 							<tr>
 								<th class="lg-th lg-th-left" aria-sort={sortKey === 'title' ? (sortAsc ? 'ascending' : 'descending') : 'none'}>
 									<button class="lg-th-btn" type="button" onclick={toggleTitleSort} aria-label={tr('Urutkan berdasarkan judul')}>
-										<span>Artikel</span><ArrowDownUp size={12} strokeWidth={2.4} />
+										<span>{tr('Informasi Artikel & Tautan')}</span><ArrowDownUp size={12} strokeWidth={2.4} />
 									</button>
 								</th>
-								<th class="lg-th lg-th-left">{tr("Media")}</th>
-								<th class="lg-th lg-th-left">Status</th>
+								<th class="lg-th lg-th-left">{tr('Publisher')}</th>
+								<th class="lg-th lg-th-left">{tr('Status Verifikasi')}</th>
+								<th class="lg-th lg-th-left">{tr('Status Deteksi')}</th>
 								<th class="lg-th lg-th-left" aria-sort={sortKey === 'updated' ? (dateDesc ? 'descending' : 'ascending') : 'none'}>
 									<button class="lg-th-btn" type="button" onclick={toggleDateSort} aria-label={sortKey === 'updated' && !dateDesc ? tr('Urutkan dari yang terbaru') : tr('Urutkan dari yang terlama')}>
-										<span>Terakhir Update</span>
+										<span>{tr('Waktu Cek')}</span>
 										{#if sortKey === 'updated' && !dateDesc}<ArrowUp size={12} strokeWidth={2.4} />{:else}<ArrowDownUp size={12} strokeWidth={2.4} />{/if}
 									</button>
 								</th>
-								<th class="lg-th lg-th-right">Aksi</th>
+								<th class="lg-th lg-th-right">{tr('Aksi Garansi')}</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each sortedItems as item (item.id)}
 								{@const meta = metaFor(item.state)}
+								{@const det = detectionMeta(item)}
+								{@const cs = claimState(item)}
 								{@const thumb = thumbUrl(item.featured_image_url ?? item.draft_featured_image_url)}
 								<tr class="linkmon-row lg-row">
 									<td class="linkmon-cell linkmon-cell-article lg-cell">
@@ -514,18 +559,28 @@
 													</a>
 												{/if}
 												<p class="lg-doctitle">{item.document_title ?? 'Tanpa judul'}</p>
+												{#if item.in_article_anchor}
+													<p class="lg-anchor">{tr('Anchor:')} <strong>{item.in_article_anchor}</strong></p>
+												{/if}
 											</div>
 										</div>
 									</td>
-									<td class="linkmon-cell lg-cell" data-label={tr("Media")}>
+									<td class="linkmon-cell lg-cell" data-label={tr('Publisher')}>
 										<p class="lg-media">{item.media_name ?? '—'}</p>
-										<p class="lg-media-sub">{mediaSubtitle(item.media_type, item.media_category)}</p>
+										<p class="lg-media-sub">{tr('Tgl Tayang:')} {item.published_at ? fmtDateTime(item.published_at) : '—'}</p>
 									</td>
-									<td class="linkmon-cell lg-cell" data-label="Status">
+									<td class="linkmon-cell lg-cell" data-label={tr('Status Verifikasi')}>
+										{#if item.domain_verified}
+											<span class="lg-verified"><CircleCheck size={11} strokeWidth={2.6} /> VERIFIED</span>
+										{:else}
+											<span class="lg-unverified"><CircleAlert size={11} strokeWidth={2.6} /> UNVERIFIED</span>
+										{/if}
+									</td>
+									<td class="linkmon-cell lg-cell" data-label={tr('Status Deteksi')}>
 										{#snippet statusBadge()}
-											<span class="lg-badge" style="color: {meta.text}; background-color: {meta.bg};">
-												<span class="lg-badge-dot" style="background-color: {meta.dot};"></span>
-												<span>{meta.label}</span>
+											<span class="lg-badge" style="color: {det.text}; background-color: {det.bg};">
+												<span class="lg-badge-dot" style="background-color: {det.dot};"></span>
+												<span>{det.label}</span>
 											</span>
 										{/snippet}
 										{#if meta.hint}
@@ -535,22 +590,28 @@
 										{:else}
 											{@render statusBadge()}
 										{/if}
+										{#if item.in_article_state === 'unknown' && item.in_article_error}
+											<p class="lg-time-rel" title={item.in_article_error}>{tr('Isi artikel belum bisa diperiksa')}</p>
+										{/if}
 									</td>
-									<td class="linkmon-cell lg-cell" data-label="Terakhir diperiksa">
-										<p class="lg-time">{item.last_checked_at ? fmtDateTime(item.last_checked_at) : tr('Belum pernah')}</p>
-										<p class="lg-time-rel">{formatRelativeTime(item.last_checked_at)}</p>
+									<td class="linkmon-cell lg-cell" data-label={tr('Waktu Cek')}>
+										<p class="lg-time">{formatRelativeTime(item.last_checked_at)}</p>
+										<p class="lg-time-rel">{item.last_checked_at ? fmtDateTime(item.last_checked_at) : tr('Belum pernah')}</p>
 									</td>
-									<td class="linkmon-cell lg-cell lg-cell-action" data-label="Aksi">
-										{#if item.state === 'gone'}
-											<button
-												class="app-btn app-btn-primary lg-action"
-												type="button"
-												disabled={requestingId !== null}
-												onclick={() => void requestReplacement(item)}
-											>
-												{#if requestingId === item.id}<LoaderCircle size={13} class="animate-spin" />{:else}<RotateCcw size={13} />{/if}
-												{requestingId === item.id ? 'Mengirim…' : 'Ajukan penggantian'}
+									<td class="linkmon-cell lg-cell lg-cell-action" data-label={tr('Aksi Garansi')}>
+										{#if cs === 'claimable'}
+											<button class="lg-claim" type="button" disabled={claimingId !== null} onclick={() => void submitClaim(item)}>
+												{#if claimingId === item.id}<LoaderCircle size={12} class="animate-spin" />{:else}<TriangleAlert size={12} />{/if}
+												{claimingId === item.id ? tr('Mengirim…') : tr('Ajukan Klaim')}
 											</button>
+										{:else if cs === 'refunded'}
+											<span class="lg-claim-done"><CircleCheck size={12} /> {claimStatusLabel[item.claim_status ?? ''] ?? tr('Dana dikembalikan')}</span>
+										{:else if cs === 'processing'}
+											<span class="lg-claim-progress">{claimStatusLabel[item.claim_status ?? ''] ?? tr('Diproses')}</span>
+										{:else if cs === 'expired'}
+											<span class="lg-claim-muted">{tr('Garansi Habis')}</span>
+										{:else if cs === 'not_covered'}
+											<span class="lg-claim-muted">{tr('Tidak Digaransi')}</span>
 										{:else}
 											<span class="lg-noaction">—</span>
 										{/if}
@@ -719,8 +780,39 @@
 	.lg-time { font-size: 12.5px; }
 	.lg-time-rel { margin-top: 1px; font-size: 11.5px; color: var(--muted-foreground); }
 
-	.lg-action { min-height: 28px; padding: 0 10px; font-size: 12px; white-space: normal; line-height: 1.25; max-width: 100%; }
 	.lg-noaction { font-size: 12.5px; color: var(--muted-foreground); }
+
+	/* Kolom tambahan ala dashboard garansi: anchor, status verifikasi, aksi klaim. */
+	.lg-anchor { margin-top: 2px; font-size: 11.5px; color: var(--muted-foreground); }
+	.lg-anchor strong { color: var(--foreground); font-weight: 600; }
+
+	.lg-verified,
+	.lg-unverified {
+		display: inline-flex; align-items: center; gap: 4px;
+		padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 700;
+		letter-spacing: 0.04em; border: 1px solid transparent;
+	}
+	.lg-verified { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 35%, transparent); }
+	.lg-unverified { color: var(--muted-foreground); border-color: var(--border); }
+
+	.lg-claim {
+		display: inline-flex; align-items: center; gap: 5px;
+		min-height: 28px; padding: 0 10px; border-radius: var(--radius-button, 9px);
+		font-size: 12px; font-weight: 600; white-space: nowrap;
+		color: var(--destructive); border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
+		background-color: color-mix(in srgb, var(--destructive) 8%, transparent);
+		transition: background-color 120ms ease;
+	}
+	.lg-claim:hover:not(:disabled) { background-color: color-mix(in srgb, var(--destructive) 15%, transparent); }
+	.lg-claim:disabled { opacity: .6; }
+
+	.lg-claim-done { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--success); }
+	.lg-claim-progress { font-size: 11.5px; font-weight: 500; color: var(--warning); }
+	.lg-claim-muted {
+		display: inline-block; padding: 3px 8px; border-radius: 6px;
+		font-size: 10.5px; font-weight: 600; color: var(--muted-foreground);
+		background-color: var(--muted);
+	}
 
 	.lg-pagination {
 		display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;

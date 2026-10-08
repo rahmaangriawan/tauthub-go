@@ -224,9 +224,15 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 		SELECT p.id, p.document_id, p.media_id, p.published_url, p.published_at, d.title, m.name,
 		       COALESCE(c.state, 'no_url') AS state,
 		       c.last_checked_at, c.http_status, c.consecutive_failures, c.error_message,
-		       c.final_url, c.first_detected_gone_at
+		       c.final_url, c.first_detected_gone_at,
+		       c.in_article_state, c.in_article_anchor, c.in_article_found,
+		       c.in_article_checked_at, c.in_article_error,
+		       COALESCE(m.domain_verified, FALSE) AS domain_verified,
+		       (p.published_at > NOW() - INTERVAL '12 months') AS in_warranty,
+		       g.id AS claim_id, g.status AS claim_status, g.refund_idr, g.refund_tc
 		FROM publications p
 		LEFT JOIN publication_link_checks c ON c.publication_id = p.id
+		LEFT JOIN link_guardian_claims g ON g.publication_id = p.id
 		JOIN content_documents d ON d.id = p.document_id
 		JOIN media m ON m.id = p.media_id `+clause+`
 		ORDER BY p.published_at DESC LIMIT `+limitArg+` OFFSET `+offsetArg, args...)
@@ -243,9 +249,18 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 		var lastCheckedAt, firstGoneAt *time.Time
 		var httpStatus, consecutiveFailures *int
 		var lastError, finalURL *string
+		var inArticleState, inArticleAnchor, inArticleError *string
+		var inArticleFound *int
+		var inArticleCheckedAt *time.Time
+		var domainVerified, inWarranty bool
+		var claimID, claimStatus *string
+		var refundIDR, refundTC *int
 		if rowsQ.Scan(&id, &documentID, &mediaID, &publishedURL, &publishedAt, &title, &mediaName,
 			&state, &lastCheckedAt, &httpStatus, &consecutiveFailures, &lastError,
-			&finalURL, &firstGoneAt) == nil {
+			&finalURL, &firstGoneAt,
+			&inArticleState, &inArticleAnchor, &inArticleFound, &inArticleCheckedAt, &inArticleError,
+			&domainVerified, &inWarranty,
+			&claimID, &claimStatus, &refundIDR, &refundTC) == nil {
 			items = append(items, map[string]any{
 				"id": id, "document_id": documentID, "media_id": mediaID,
 				"published_url": publishedURL, "published_at": tsOrNil(publishedAt),
@@ -253,6 +268,19 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 				"last_checked_at": tsOrNil(lastCheckedAt), "http_status": httpStatus,
 				"consecutive_failures": consecutiveFailures, "error_message": lastError,
 				"final_url": finalURL, "first_detected_gone_at": tsOrNil(firstGoneAt),
+				// Pemeriksaan tautan di dalam artikel (Link Guardian).
+				"in_article_state":      inArticleState,
+				"in_article_anchor":     inArticleAnchor,
+				"in_article_found":      inArticleFound,
+				"in_article_checked_at": tsOrNil(inArticleCheckedAt),
+				"in_article_error":      inArticleError,
+				"domain_verified":       domainVerified,
+				"in_warranty":           inWarranty,
+				// Klaim garansi (bila sudah pernah diajukan brand ini).
+				"claim_id":     claimID,
+				"claim_status": claimStatus,
+				"refund_idr":   refundIDR,
+				"refund_tc":    refundTC,
 			})
 		}
 	}

@@ -3,6 +3,7 @@ package brandflow
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -65,7 +66,7 @@ type linkCheckResult struct {
 // hanya akan melaporkan artikel "hilang" palsu di Pelacak 404.
 func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string) error {
 	pub, err := d.queryRow(ctx, `
-		SELECT p.id, p.brand_id, p.media_id, p.published_url, p.publish_status,
+		SELECT p.id, p.brand_id, p.media_id, p.document_id, p.published_url, p.publish_status,
 		       m.name AS media_name, m.partner_id,
 		       d.title AS document_title
 		FROM publications p
@@ -110,6 +111,7 @@ func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string
 	var httpStatus *int
 	var finalURL string
 	var errorMessage string
+	liveHTML := ""
 	if resp, fErr := security.Get(ctx, url, nil, linkFetchTimeout); fErr != nil {
 		// Timeout / DNS gagal / diblokir SSRF guard — bukan bukti artikel hilang.
 		msg := fErr.Error()
@@ -126,8 +128,13 @@ func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string
 		if finalURL == "" {
 			finalURL = url
 		}
-		// Hanya status yang dibutuhkan; body ditutup rapi agar tidak menarik
-		// seluruh halaman mitra (bisa ratusan KB per artikel).
+		// Isi halaman dibaca (terbatas) HANYA untuk mencari tautan di dalam
+		// artikel; halaman 404/410 tidak perlu diunduh isinya.
+		if code >= 200 && code < 300 {
+			if body, rErr := io.ReadAll(io.LimitReader(resp.Body, inArticleMaxHTML)); rErr == nil {
+				liveHTML = string(body)
+			}
+		}
 		_ = resp.Body.Close()
 	}
 
@@ -148,9 +155,25 @@ func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string
 		firstDetectedGoneAt = &now
 	}
 
+	// Tautan di dalam artikel hanya bisa dinilai kalau halamannya terbaca.
+	// Pengambilan langsung sering diblokir WAF media (state 'unreachable'),
+	// jadi Crawlhub dicoba lebih dulu saat isi halaman kosong.
+	inArticle := inArticleResult{}
+	if state == LinkLive {
+		if strings.TrimSpace(liveHTML) == "" {
+			if chHTML, chErr := d.crawlhubPageHTML(ctx, url); chErr == nil {
+				liveHTML = chHTML
+			}
+		}
+		inArticle = d.checkInArticleLinks(ctx, pub.strOr("document_id", ""), liveHTML)
+	}
+
 	if err := d.saveLinkCheck(ctx, publicationID, linkCheckStateInput{
 		URL: url, FinalURL: finalURL, HTTPStatus: httpStatus, State: state,
 		Failures: failures, FirstDetected: firstDetectedGoneAt, ErrorMessage: errorMessage,
+		InArticleState: inArticle.State, InArticleAnchor: inArticle.Anchor,
+		InArticleFound: inArticle.Found, InArticleChecked: inArticle.CheckedAt,
+		InArticleErrorMsg: inArticle.ErrMsg,
 	}); err != nil {
 		return err
 	}
@@ -171,6 +194,12 @@ type linkCheckStateInput struct {
 	Failures      int
 	FirstDetected *time.Time
 	ErrorMessage  string
+	// Hasil pemeriksaan tautan di dalam artikel (lihat link_in_article.go).
+	InArticleState    string
+	InArticleAnchor   string
+	InArticleFound    int
+	InArticleChecked  *time.Time
+	InArticleErrorMsg string
 }
 
 // saveLinkCheck: upsert hasil pengecekan (parity saveCheck).
@@ -178,8 +207,10 @@ func (d *Deps) saveLinkCheck(ctx context.Context, publicationID string, in linkC
 	return d.exec(ctx, `
 		INSERT INTO publication_link_checks
 		  (publication_id, url, final_url, http_status, state, consecutive_failures,
-		   first_detected_gone_at, last_checked_at, error_message, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, NOW(), NOW())
+		   first_detected_gone_at, last_checked_at, error_message,
+		   in_article_state, in_article_anchor, in_article_found, in_article_checked_at, in_article_error,
+		   created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, $10, $11, $12, $13, NOW(), NOW())
 		ON CONFLICT (publication_id) DO UPDATE SET
 		  url = EXCLUDED.url,
 		  final_url = EXCLUDED.final_url,
@@ -189,9 +220,16 @@ func (d *Deps) saveLinkCheck(ctx context.Context, publicationID string, in linkC
 		  first_detected_gone_at = EXCLUDED.first_detected_gone_at,
 		  last_checked_at = NOW(),
 		  error_message = EXCLUDED.error_message,
+		  in_article_state = EXCLUDED.in_article_state,
+		  in_article_anchor = EXCLUDED.in_article_anchor,
+		  in_article_found = EXCLUDED.in_article_found,
+		  in_article_checked_at = EXCLUDED.in_article_checked_at,
+		  in_article_error = EXCLUDED.in_article_error,
 		  updated_at = NOW()`,
 		publicationID, nullIfEmpty(in.URL), nullIfEmpty(in.FinalURL), in.HTTPStatus, string(in.State),
-		in.Failures, in.FirstDetected, nullIfEmpty(in.ErrorMessage))
+		in.Failures, in.FirstDetected, nullIfEmpty(in.ErrorMessage),
+		nullIfEmpty(in.InArticleState), nullIfEmpty(in.InArticleAnchor), in.InArticleFound,
+		in.InArticleChecked, nullIfEmpty(in.InArticleErrorMsg))
 }
 
 // alertLinkLost: beri tahu admin, brand member, dan mitra bahwa artikel tidak
