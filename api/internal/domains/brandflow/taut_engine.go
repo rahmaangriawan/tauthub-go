@@ -401,6 +401,14 @@ func (d *Deps) runTautAgentStream(ctx context.Context, agent, campaignID, userPr
 	return d.runTautAgentCommon(ctx, agent, campaignID, userPrompt, mediaID, jsonMode, onDelta)
 }
 
+// finishRunCtx: konteks pendek yang TIDAK ikut batal ketika request berakhir.
+// Status akhir run ditulis dengan konteks ini. Sebelumnya UPDATE memakai ctx
+// utama yang sudah mati saat klien menutup koneksi, sehingga UPDATE-nya gagal
+// diam-diam (error ditelan) dan baris run tertinggal 'running' selamanya.
+func finishRunCtx(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+}
+
 func (d *Deps) runTautAgentCommon(ctx context.Context, agent, campaignID, userPrompt string, mediaID *string, jsonMode bool, onDelta func(string)) (*agentLLMResult, error) {
 	mediaKey := ""
 	if mediaID != nil {
@@ -447,18 +455,22 @@ func (d *Deps) runTautAgentCommon(ctx context.Context, agent, campaignID, userPr
 			})
 		}
 		if llmErr == nil {
-			_ = d.exec(ctx,
+			wctx, cancel := finishRunCtx(ctx)
+			_ = d.exec(wctx,
 				"UPDATE taut_agent_runs SET status='done', model=$1, token_input=$2, token_output=$3, duration_ms=$4, output=$5::jsonb, finished_at=NOW() WHERE id=$6",
 				result.Model, result.UsageIn, result.UsageOut, result.DurationMS,
 				jsonStringify(map[string]any{"content": result.Content}), runID)
-			d.saveTautTrainingSample(ctx, campaignID, mediaID, agent, "done", userPrompt, result.Content, result.Model, result.UsageIn, result.UsageOut)
+			d.saveTautTrainingSample(wctx, campaignID, mediaID, agent, "done", userPrompt, result.Content, result.Model, result.UsageIn, result.UsageOut)
+			cancel()
 			result.RunID = runID
 			return result, nil
 		}
 		message := llmErr.Error()
-		_ = d.exec(ctx, "UPDATE taut_agent_runs SET status='failed', error=$1, finished_at=NOW() WHERE id=$2",
+		wctx, cancel := finishRunCtx(ctx)
+		_ = d.exec(wctx, "UPDATE taut_agent_runs SET status='failed', error=$1, finished_at=NOW() WHERE id=$2",
 			truncateString(message, 1000), runID)
-		d.saveTautTrainingSample(ctx, campaignID, mediaID, agent, "failed", userPrompt, message, "", 0, 0)
+		d.saveTautTrainingSample(wctx, campaignID, mediaID, agent, "failed", userPrompt, message, "", 0, 0)
+		cancel()
 		if (onDelta != nil && emitted) || attempt > maxRetries {
 			return nil, llmErr
 		}

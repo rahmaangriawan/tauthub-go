@@ -105,6 +105,15 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 		}
 	}
 
+	// 5b. Baris run Taut tertinggal `running` karena proses pemiliknya berhenti di
+	//     tengah generasi (deploy/restart) ditandai gagal, supaya riwayat run dan
+	//     statistik admin tidak selamanya menghitungnya sebagai "aktif".
+	if n, err := d.reapStuckTautRuns(ctx, 20*time.Minute); err != nil {
+		slog.Error("[scheduler] bersihkan run Taut macet gagal", "err", err)
+	} else if n > 0 {
+		slog.Info("[scheduler] run Taut macet ditandai gagal", "jumlah", n)
+	}
+
 	// 6. Safety net antrean email & WA. App lama memanggil processEmailQueue(10) /
 	//    processWaQueue(10) langsung dari scheduler. Port Go-nya hidup sebagai
 	//    processor job kind `send_email` / `send_wa` di paket platform
@@ -130,6 +139,28 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	res.UploadsPurged = d.schPurgeStaleUploads(ctx)
 
 	return res
+}
+
+// reapStuckTautRuns: tandai baris run Taut yang tertinggal `running` sebagai
+// gagal. Terjadi kalau proses pemiliknya berhenti di tengah generasi (deploy
+// atau restart), sehingga barisnya tidak pernah punya status akhir dan membuat
+// riwayat run serta statistik admin berbohong. Ambang 20 menit dipilih agar run
+// yang masih sah tidak tersentuh: timeout LLM 5 menit dikali tiga percobaan
+// plus tunggu slot rate limit masih di bawah itu.
+func (d *Deps) reapStuckTautRuns(ctx context.Context, staleAfter time.Duration) (int, error) {
+	if staleAfter <= 0 {
+		staleAfter = 20 * time.Minute
+	}
+	affected, err := d.execRows(ctx, `
+		UPDATE taut_agent_runs
+		SET status = 'failed',
+		    error = COALESCE(error, 'Proses berhenti saat generasi berjalan (dibersihkan otomatis).'),
+		    finished_at = NOW()
+		WHERE status = 'running'
+		  AND finished_at IS NULL
+		  AND created_at < NOW() - $1::interval`,
+		strconv.Itoa(int(staleAfter.Seconds()))+" seconds")
+	return int(affected), err
 }
 
 // RunSchedulerLoop: polling periodik sampai ctx dibatalkan (cmd/scheduler).
