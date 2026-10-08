@@ -415,115 +415,115 @@ func (d *Deps) ArticleImageDelete(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
-		// Hapus berkas fisik best-effort (kegagalan tidak menggagalkan respons).
-		if name := strings.TrimPrefix(row.strOr("url", ""), "/uploads/"); name != "" && !strings.Contains(name, "/") {
-			_ = os.Remove(d.uploadDir() + string(os.PathSeparator) + name)
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	// Hapus berkas fisik best-effort (kegagalan tidak menggagalkan respons).
+	if name := strings.TrimPrefix(row.strOr("url", ""), "/uploads/"); name != "" && !strings.Contains(name, "/") {
+		_ = os.Remove(d.uploadDir() + string(os.PathSeparator) + name)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// ArticleImageUpload: POST /v1/brands/{brandId}/taut/campaigns/{campaignId}/images/upload
+// Unggah gambar manual (drag-and-drop, paste, browse) langsung ke pustaka artikel.
+// Gambar otomatis dinormalisasi ke rasio 16:9 murni (crop tengah) & batas 1920x1280.
+func (d *Deps) ArticleImageUpload(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	campaignID := chiParam(r, "campaignId")
+	file, filename, size, contentType, err := formFile(r, "file")
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, "File gambar tidak ditemukan.")
+		return
+	}
+	defer file.Close()
+
+	mediaID := strings.TrimSpace(r.FormValue("media_id"))
+	if mediaID == "" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "media_id wajib diisi.")
+		return
+	}
+	if err := d.verifyTautImageScope(r.Context(), brandRow.ID, campaignID, mediaID); err != nil {
+		d.writeErr(w, err)
+		return
 	}
 
-	// ArticleImageUpload: POST /v1/brands/{brandId}/taut/campaigns/{campaignId}/images/upload
-	// Unggah gambar manual (drag-and-drop, paste, browse) langsung ke pustaka artikel.
-	// Gambar otomatis dinormalisasi ke rasio 16:9 murni (crop tengah) & batas 1920x1280.
-	func (d *Deps) ArticleImageUpload(w http.ResponseWriter, r *http.Request) {
-		user := httpx.AuthUserFromCtx(r)
-		brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
-		if err != nil {
-			d.writeErr(w, err)
-			return
-		}
-		campaignID := chiParam(r, "campaignId")
-		file, filename, size, contentType, err := formFile(r, "file")
-		if err != nil {
-			httpx.Error(w, http.StatusBadRequest, "File gambar tidak ditemukan.")
-			return
-		}
-		defer file.Close()
+	mime := strings.ToLower(contentType)
+	if !strings.HasPrefix(mime, "image/") && mime != "application/octet-stream" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "File harus berupa gambar (JPG, PNG, WebP).")
+		return
+	}
+	if size > 15*1024*1024 {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Maksimal ukuran gambar 15 MB.")
+		return
+	}
 
-		mediaID := strings.TrimSpace(r.FormValue("media_id"))
-		if mediaID == "" {
-			httpx.Error(w, http.StatusUnprocessableEntity, "media_id wajib diisi.")
-			return
-		}
-		if err := d.verifyTautImageScope(r.Context(), brandRow.ID, campaignID, mediaID); err != nil {
-			d.writeErr(w, err)
-			return
-		}
+	buffer, err := readAllLimited(file, 15*1024*1024)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
 
-		mime := strings.ToLower(contentType)
-		if !strings.HasPrefix(mime, "image/") && mime != "application/octet-stream" {
-			httpx.Error(w, http.StatusUnprocessableEntity, "File harus berupa gambar (JPG, PNG, WebP).")
-			return
-		}
-		if size > 15*1024*1024 {
-			httpx.Error(w, http.StatusUnprocessableEntity, "Maksimal ukuran gambar 15 MB.")
-			return
-		}
+	normData, wPx, hPx, normErr := ai.NormalizeTo16x9(buffer)
+	var finalBytes []byte
+	var finalMime string
+	var finalWidth, finalHeight int
+	if normErr == nil {
+		finalBytes = normData
+		finalMime = "image/png"
+		finalWidth, finalHeight = wPx, hPx
+	} else {
+		finalBytes = buffer
+		finalMime = mime
+		finalWidth, finalHeight = 0, 0
+	}
 
-		buffer, err := readAllLimited(file, 15*1024*1024)
-		if err != nil {
-			d.writeErr(w, err)
-			return
-		}
+	storedURL, storeErr := d.storeGeneratedImage(&ai.ImageResult{
+		Data:     finalBytes,
+		MimeType: finalMime,
+		Width:    finalWidth,
+		Height:   finalHeight,
+	})
+	if storeErr != nil {
+		d.writeErr(w, storeErr)
+		return
+	}
 
-		normData, wPx, hPx, normErr := ai.NormalizeTo16x9(buffer)
-		var finalBytes []byte
-		var finalMime string
-		var finalWidth, finalHeight int
-		if normErr == nil {
-			finalBytes = normData
-			finalMime = "image/png"
-			finalWidth, finalHeight = wPx, hPx
-		} else {
-			finalBytes = buffer
-			finalMime = mime
-			finalWidth, finalHeight = 0, 0
-		}
+	articleID := strings.TrimSpace(r.FormValue("article_id"))
+	role := strings.ToLower(strings.TrimSpace(r.FormValue("role")))
+	if role != "cover" {
+		role = "inline"
+	}
+	prompt := strings.TrimSpace(filename)
+	if prompt == "" {
+		prompt = "Unggahan manual"
+	}
 
-		storedURL, storeErr := d.storeGeneratedImage(&ai.ImageResult{
-			Data:     finalBytes,
-			MimeType: finalMime,
-			Width:    finalWidth,
-			Height:   finalHeight,
-		})
-		if storeErr != nil {
-			d.writeErr(w, storeErr)
-			return
-		}
-
-		articleID := strings.TrimSpace(r.FormValue("article_id"))
-		role := strings.ToLower(strings.TrimSpace(r.FormValue("role")))
-		if role != "cover" {
-			role = "inline"
-		}
-		prompt := strings.TrimSpace(filename)
-		if prompt == "" {
-			prompt = "Unggahan manual"
-		}
-
-		id := uuid.NewString()
-		scopeKey := imageScopeKey(brandRow.ID, campaignID, mediaID, articleID)
-		if err := d.exec(r.Context(),
-			`INSERT INTO article_images (id, brand_id, campaign_id, media_id, article_id, scope_key, url, provider, model, prompt, heading, role, width, height, cost_credits, created_by)
+	id := uuid.NewString()
+	scopeKey := imageScopeKey(brandRow.ID, campaignID, mediaID, articleID)
+	if err := d.exec(r.Context(),
+		`INSERT INTO article_images (id, brand_id, campaign_id, media_id, article_id, scope_key, url, provider, model, prompt, heading, role, width, height, cost_credits, created_by)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
-			id, brandRow.ID, campaignID, mediaID, nullIfEmpty(articleID), scopeKey, storedURL,
-			"upload", "manual_upload", prompt, nil, role,
-			finalWidth, finalHeight, 0, user.ID); err != nil {
-			d.writeErr(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, map[string]any{
-			"id":           id,
-			"url":          storedURL,
-			"provider":     "upload",
-			"model":        "manual_upload",
-			"prompt":       prompt,
-			"heading":      nil,
-			"role":         role,
-			"width":        finalWidth,
-			"height":       finalHeight,
-			"cost_credits": 0,
-			"created_at":   time.Now().UTC().Format(time.RFC3339),
-		})
+		id, brandRow.ID, campaignID, mediaID, nullIfEmpty(articleID), scopeKey, storedURL,
+		"upload", "manual_upload", prompt, nil, role,
+		finalWidth, finalHeight, 0, user.ID); err != nil {
+		d.writeErr(w, err)
+		return
 	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":           id,
+		"url":          storedURL,
+		"provider":     "upload",
+		"model":        "manual_upload",
+		"prompt":       prompt,
+		"heading":      nil,
+		"role":         role,
+		"width":        finalWidth,
+		"height":       finalHeight,
+		"cost_credits": 0,
+		"created_at":   time.Now().UTC().Format(time.RFC3339),
+	})
+}
