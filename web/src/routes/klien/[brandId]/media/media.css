@@ -1144,6 +1144,14 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 }
 .advFilterToggle { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: #334155; cursor: pointer; }
 .advFilterToggle input { width: 15px; height: 15px; accent-color: #2563eb; cursor: pointer; }
+/* Slider Minimum DA: baris rapat dengan nilai di kanan agar lebar trek stabil. */
+.advFilterSliderRow { display: flex; align-items: center; gap: 10px; }
+.advFilterRange { flex: 1; min-width: 0; height: 16px; accent-color: #2563eb; cursor: pointer; }
+.advFilterRange:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; border-radius: 4px; }
+.advFilterRangeValue {
+  flex: none; min-width: 64px; text-align: right; font-size: 12px; font-weight: 600;
+  color: #334155; font-variant-numeric: tabular-nums;
+}
 
 .activeFilterBanner {
   display: flex; align-items: center; justify-content: space-between; padding: 8px 14px;

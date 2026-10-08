@@ -64,7 +64,14 @@
 	let category = $state('');
 	let speedFilter = $state<'' | 'super' | 'fast' | 'standard'>('');
 	let priceFilter = $state<'' | 'low' | 'mid' | 'high'>('');
-	let minDaFilter = $state<'' | '10' | '20' | '30'>('');
+	// Minimum DA memakai slider (0 = tanpa batas), menggantikan chip DA ≥ 10/20/30.
+	let minDa = $state(0);
+	// Terbit otomatis: media yang terbitnya langsung diproses integrasi, tanpa
+	// langkah terbit manual di sisi media. Ini pemakaian field publication_mode
+	// yang sama dengan label "Mode Pengiriman" di modal detail (publish lawan draft).
+	let directPublishOnly = $state(false);
+	// AI Citation: media yang terdeteksi dikutip atau dirujuk mesin AI.
+	let aiCitationOnly = $state(false);
 	let verifiedOnly = $state(false);
 	let dewanPersOnly = $state(false);
 	let bookmarkOnly = $state(false);
@@ -450,10 +457,12 @@
 				if (priceFilter === 'mid' && !(price > 500_000 && price <= 2_000_000)) return false;
 				if (priceFilter === 'high' && !(price > 2_000_000)) return false;
 			}
-			if (minDaFilter) {
+			if (minDa > 0) {
 				const da = getDa(m);
-				if (typeof da !== 'number' || da < Number(minDaFilter)) return false;
+				if (typeof da !== 'number' || da < minDa) return false;
 			}
+			if (directPublishOnly && m.publication_mode !== 'publish') return false;
+			if (aiCitationOnly && m.seo_ai_citation !== true) return false;
 			return true;
 		})
 	);
@@ -497,7 +506,8 @@
 	});
 
 	const activeFilterCount = $derived(
-		(speedFilter ? 1 : 0) + (priceFilter ? 1 : 0) + (minDaFilter ? 1 : 0) +
+		(speedFilter ? 1 : 0) + (priceFilter ? 1 : 0) + (minDa > 0 ? 1 : 0) +
+		(directPublishOnly ? 1 : 0) + (aiCitationOnly ? 1 : 0) +
 		(verifiedOnly ? 1 : 0) + (dewanPersOnly ? 1 : 0) + (category ? 1 : 0)
 	);
 	const selectedMedia = $derived(rows.filter((m) => selectedIds.has(m.id)));
@@ -533,7 +543,9 @@
 	function resetFilters() {
 		speedFilter = '';
 		priceFilter = '';
-		minDaFilter = '';
+		minDa = 0;
+		directPublishOnly = false;
+		aiCitationOnly = false;
 		verifiedOnly = false;
 		dewanPersOnly = false;
 		category = '';
@@ -811,6 +823,26 @@
 				</div>
 
 				<div class="advFilterSection">
+					<span class="advFilterSectionLabel">{tr("Terbit Otomatis")}</span>
+					<div class="advFilterToggleRow">
+						<label class="advFilterToggle" title={tr("Langsung Terbit (otomatis, tanpa langkah terbit manual di media)")}>
+							<input type="checkbox" bind:checked={directPublishOnly} onchange={() => (page_ = 1)} />
+							<span>{tr("Langsung terbit")}</span>
+						</label>
+					</div>
+				</div>
+
+				<div class="advFilterSection">
+					<span class="advFilterSectionLabel">{tr("AI Citation")}</span>
+					<div class="advFilterToggleRow">
+						<label class="advFilterToggle" title={tr("Indikator otomatis via API apakah media ini terdeteksi aktif sebagai rujukan/referensi oleh mesin AI.")}>
+							<input type="checkbox" bind:checked={aiCitationOnly} onchange={() => (page_ = 1)} />
+							<span>{tr("Dikutip mesin AI")}</span>
+						</label>
+					</div>
+				</div>
+
+				<div class="advFilterSection">
 					<span class="advFilterSectionLabel">{tr("Rentang Harga")}</span>
 					<div class="advFilterChipsGroup">
 						{#each [{ v: 'low', l: '≤ Rp 500rb' }, { v: 'mid', l: 'Rp 500rb – 2jt' }, { v: 'high', l: '> Rp 2jt' }] as opt (opt.v)}
@@ -825,14 +857,18 @@
 
 				<div class="advFilterSection">
 					<span class="advFilterSectionLabel">Minimum DA</span>
-					<div class="advFilterChipsGroup">
-						{#each ['10', '20', '30'] as min (min)}
-							<button
-								class="advFilterChip {minDaFilter === min ? 'advFilterChipActive' : ''}"
-								type="button"
-								onclick={() => { minDaFilter = minDaFilter === min ? '' : (min as typeof minDaFilter); page_ = 1; }}
-							>DA ≥ {min}</button>
-						{/each}
+					<div class="advFilterSliderRow">
+						<input
+							class="advFilterRange"
+							type="range"
+							min="0"
+							max="100"
+							step="1"
+							bind:value={minDa}
+							oninput={() => (page_ = 1)}
+							aria-label={tr("Minimum DA")}
+						/>
+						<span class="advFilterRangeValue">{minDa > 0 ? `DA ≥ ${minDa}` : tr('Semua DA')}</span>
 					</div>
 				</div>
 
