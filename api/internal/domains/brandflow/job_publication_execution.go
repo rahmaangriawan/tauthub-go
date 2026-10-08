@@ -311,15 +311,16 @@ func peCloneRow(row bsRow) bsRow {
 }
 
 // peRenderedHTML: markdown → HTML, rapikan sisa markup editor, buang H1 pertama,
-// lalu absolutisasi src="/uploads/..." ke origin publik.
-func peRenderedHTML(version bsRow, publicOrigin string) (content, html string) {
+// lalu absolutisasi src="/uploads/..." ke origin publik. URL gambar juga diberi
+// tanda tangan supaya bisa dibaca pengunjung situs media tanpa sesi login.
+func (d *Deps) peRenderedHTML(version bsRow, publicOrigin string) (content, html string) {
 	content = version.strOr("content", "")
 	rendered := content
 	if strings.ToLower(version.strOr("content_format", "")) == "markdown" {
 		rendered = bsPublishMarkdown(content)
 	}
 	rendered = contentengine.NormalizeArticleHTML(bsStripH1(rendered))
-	return content, peAbsolutizeUploadURLs(rendered, publicOrigin)
+	return content, peAbsolutizeUploadURLs(rendered, publicOrigin, d.peAppSecret())
 }
 
 // ---------- gerbang moderasi ----------
@@ -430,7 +431,7 @@ func (d *Deps) peRunTulisioAPI(ctx context.Context, publication, media, document
 		return d.peMarkPublished(ctx, publication, startedAt)
 	}
 
-	content, html := peRenderedHTML(version, publicOrigin)
+	content, html := d.peRenderedHTML(version, publicOrigin)
 	err = d.pePublishViaTulisioAPI(ctx, jobID, publication, media, document, content, html, target)
 	if err != nil {
 		return d.peFailDelivery(ctx, publication, jobID, err, startedAt, terminal)
@@ -607,7 +608,7 @@ func (d *Deps) peRunCustomWeb(ctx context.Context, publication, media, document,
 		return d.peMarkPublished(ctx, publication, startedAt)
 	}
 
-	_, html := peRenderedHTML(version, publicOrigin)
+	_, html := d.peRenderedHTML(version, publicOrigin)
 	excerpt := truncateString(document.strOr("meta_description", ""), 500)
 	slug := document.strOr("slug", "")
 	categoryName := strings.TrimSpace(media.strOr("category", ""))
@@ -874,7 +875,7 @@ func (d *Deps) peRunBlogger(ctx context.Context, publication, media, document, v
 		return d.peMarkPublished(ctx, publication, startedAt)
 	}
 
-	_, html := peRenderedHTML(version, publicOrigin)
+	_, html := d.peRenderedHTML(version, publicOrigin)
 	isDraftMode := publication.strOr("publish_status", "draft") == "draft"
 	var labels []string
 	if category := strings.TrimSpace(media.strOr("category", "")); category != "" {
@@ -1180,7 +1181,7 @@ func (d *Deps) peRunCMS(ctx context.Context, publication, media, document, versi
 		}
 	}
 
-	content, html := peRenderedHTML(version, publicOrigin)
+	content, html := d.peRenderedHTML(version, publicOrigin)
 	if integrationType == "wordpress" {
 		html = d.peUploadArticleImages(ctx, connection, document, snapshot, jobID, secret, html)
 	}
@@ -2415,8 +2416,9 @@ func (d *Deps) pePartnerVipInfo(ctx context.Context, partnerID string) peVipInfo
 // ---------- util ----------
 
 // peAbsolutizeUploadURLs: parity absolutizeUploadUrls — rewrite semua
-// src="/uploads/..." menjadi URL absolut origin publik.
-func peAbsolutizeUploadURLs(html, origin string) string {
+// src="/uploads/..." menjadi URL absolut origin publik plus tanda tangan
+// publiknya, karena gambar artikel dibaca pengunjung situs media.
+func peAbsolutizeUploadURLs(html, origin, appSecret string) string {
 	if html == "" || origin == "" {
 		return html
 	}
@@ -2453,8 +2455,7 @@ func peAbsolutizeUploadURLs(html, origin string) string {
 		if strings.HasPrefix(value, "/uploads/") && !strings.ContainsAny(value, " \t\r\n>") {
 			b.WriteString("src=")
 			b.WriteByte(quote)
-			b.WriteString(base)
-			b.WriteString(value)
+			b.WriteString(security.WithUploadSignature(base+value, appSecret))
 			b.WriteByte(quote)
 		} else {
 			b.WriteString(html[pos : valueEnd+1])
@@ -2465,19 +2466,18 @@ func peAbsolutizeUploadURLs(html, origin string) string {
 }
 
 // peAbsolutizeValue: parity absolutizeUrl untuk satu nilai (string → string,
-// kosong → "").
+// kosong → ""). Berkas unggahan ikut ditandatangani supaya bisa dibuka publik
+// di situs media.
 func (d *Deps) peAbsolutizeValue(value, origin string) string {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return ""
 	}
-	if !strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, "//") {
-		return trimmed
+	absolute := trimmed
+	if strings.HasPrefix(trimmed, "/") && !strings.HasPrefix(trimmed, "//") && origin != "" {
+		absolute = strings.TrimRight(origin, "/") + trimmed
 	}
-	if origin == "" {
-		return trimmed
-	}
-	return strings.TrimRight(origin, "/") + trimmed
+	return security.WithUploadSignature(absolute, d.peAppSecret())
 }
 
 // peParseDefaults: parity parseDefaults (jsonb string/object → map).
