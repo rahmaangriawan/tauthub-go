@@ -2194,6 +2194,13 @@ func (d *Deps) peMarkPublished(ctx context.Context, publication bsRow, startedAt
 	}
 	if media != nil {
 		d.peRecordFinance(ctx, publication, media)
+		// Skor kesehatan ("Kualitas") media ikut disegarkan begitu ada publikasi
+		// yang benar-benar terbit, supaya angkanya tidak menunggu jendela refresh
+		// 14 hari milik scheduler. Best-effort: kegagalan tidak membatalkan
+		// publikasi yang sudah sukses.
+		if err := d.schRefreshMediaHealth(ctx, media.strOr("id", "")); err != nil {
+			slog.Warn("[brandflow] gagal menyegarkan skor kesehatan media", "media", media.strOr("id", ""), "err", err)
+		}
 	}
 	return nil
 }

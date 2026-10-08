@@ -263,6 +263,10 @@
 	/** Tooltip header kolom Platform: platform yang dipakai media. */
 	const platformColumnHint = () => tr('Platform yang digunakan media, WordPress, Blogger, Emdash, API');
 
+	/** Tooltip centang Mode Otomatis: apa akibatnya dan kapan dipakai. */
+	const autoPublishHint = () =>
+		tr('Kalau dicentang, artikel dari klien langsung diproses dan terbit ke situs media tanpa menunggu persetujuan mitra. Kalau tidak dicentang, mitra harus menyetujui dulu setiap artikel.');
+
 	// ── Menu aksi titik-tiga (parity app lama) ────────────────────────────
 	let openMenu = $state<string | null>(null);
 	function closeMenu() {
@@ -898,9 +902,9 @@
 							</span>
 						</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Dewan Pers")}</th>
-						<th class="px-4 py-2.5 text-right font-medium">{tr('Harga')}</th>
+						<th class="px-4 py-2.5 font-medium">{tr('Harga')}</th>
 						<th class="px-4 py-2.5 font-medium">{tr('Kualitas')}</th>
-						<th class="px-4 py-2.5 font-medium">SEO</th>
+						<th class="px-4 py-2.5 font-medium">DA</th>
 						<th class="px-4 py-2.5 font-medium">
 							<span class="inline-flex items-center gap-1">
 								Platform
@@ -983,26 +987,72 @@
 											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">{tr('Mode Manual')}</span>
 										{/if}
 									{#if autoPublishEnabled}
-										<label class="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
-											<input
-												type="checkbox"
-												checked={m.auto_publish}
-												disabled={autoBusy === m.id}
-												onchange={(e) => void toggleAutoPublish(m, (e.currentTarget as HTMLInputElement).checked)}
-												aria-label={`${tr('Mode otomatis untuk')} ${m.name}`}
-											/>
-											{tr('Mode Otomatis')}
-										</label>
+										<div class="flex items-center gap-1">
+											<label class="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+												<input
+													type="checkbox"
+													checked={m.auto_publish}
+													disabled={autoBusy === m.id}
+													onchange={(e) => void toggleAutoPublish(m, (e.currentTarget as HTMLInputElement).checked)}
+													aria-label={`${tr('Mode otomatis untuk')} ${m.name}`}
+												/>
+												{tr('Mode Otomatis')}
+											</label>
+											<Tooltip.Provider delayDuration={0}>
+												<Tooltip.Root>
+													<Tooltip.Trigger>
+														{#snippet child({ props })}
+															<button
+																{...props}
+																type="button"
+																class="inline-flex cursor-help items-center text-muted-foreground"
+																aria-label={autoPublishHint()}
+															>
+																<CircleAlert size={12} />
+															</button>
+														{/snippet}
+													</Tooltip.Trigger>
+													<Tooltip.Portal>
+														<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+															<Tooltip.Arrow class="uiTipArrow" />
+															{autoPublishHint()}
+														</Tooltip.Content>
+													</Tooltip.Portal>
+												</Tooltip.Root>
+											</Tooltip.Provider>
+										</div>
 									{/if}
 								</div>
 							</td>
 							<td class="px-4 py-2.5">
-								<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid {dpBadge(m.dewan_pers_status).tone}; color: {dpBadge(m.dewan_pers_status).tone};">{dpBadge(m.dewan_pers_status).label}</span>
+								{#if m.dewan_pers_status === 'verified'}
+									<span
+										class="inline-flex h-5 w-5 items-center justify-center rounded-full"
+										style="background: var(--primary); color: var(--primary-foreground, #fff);"
+										role="img"
+										title={tr('Terverifikasi')}
+										aria-label={tr('Terverifikasi')}
+									>
+										<Check size={13} />
+									</span>
+								{:else if m.dewan_pers_status === 'pending' || m.dewan_pers_status === 'rejected' || m.dewan_pers_status === 'conflict'}
+									<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid {dpBadge(m.dewan_pers_status).tone}; color: {dpBadge(m.dewan_pers_status).tone};">{dpBadge(m.dewan_pers_status).label}</span>
+								{:else}
+									<span
+										class="inline-flex h-5 w-5 items-center justify-center rounded-full"
+										style="background: #ff4c4c; color: var(--destructive-foreground, #fff);"
+										role="img"
+										title={tr('Tanpa Dewan Pers')}
+										aria-label={tr('Tanpa Dewan Pers')}
+									>
+										<X size={13} />
+									</span>
+								{/if}
 								{#if m.dewan_pers_status === 'rejected' && m.dewan_pers_rejection_reason}
 									<span class="mt-1 block max-w-[180px] text-[11px]" style="color: var(--destructive);">{m.dewan_pers_rejection_reason}</span>
 								{/if}
 							</td>
-							<td class="px-4 py-2.5 text-right tabular-nums">{rp(m.price)}</td>
+							<td class="px-4 py-2.5 tabular-nums">{rp(m.price)}</td>
 							<td class="px-4 py-2.5">
 								{#if m.health_score != null}
 									<span class="text-xs font-medium tabular-nums" title={JSON.stringify(m.health_breakdown ?? {})}>{m.health_score}</span>
