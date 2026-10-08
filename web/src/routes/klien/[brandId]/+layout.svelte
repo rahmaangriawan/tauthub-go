@@ -204,7 +204,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				{ label: i18n.t.nav.media_catalog, href: `${base}/media`, icon: Newspaper, active: isActive(`${base}/media`) },
 				{ label: i18n.t.nav.campaigns, href: `${base}/campaigns`, icon: Megaphone, active: isActive(`${base}/campaigns`) },
 				{ label: i18n.t.nav.publications, href: `${base}/publications`, icon: ShieldCheck, active: isActive(`${base}/publications`) },
-				{ label: i18n.t.nav.link_monitor, href: `${base}/link-monitor`, icon: TriangleAlert, active: isActive(`${base}/link-monitor`) }
+				{ label: i18n.t.nav.link_monitor, href: `${base}/link-guardian`, icon: TriangleAlert, active: isActive(`${base}/link-guardian`) }
 			]
 		},
 		{
