@@ -5,10 +5,12 @@
 	// media, filter status, pratinjau/edit draf, setujui, tolak, kirim URL,
 	// dan rewrite AI (berbayar dari saldo mitra).
 	import { onMount } from 'svelte';
-	import { Check, Clock, Eye, ExternalLink, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, Sparkles, Trash2, XCircle } from '@lucide/svelte';
+	import { Check, CircleAlert, Clock, Eye, ExternalLink, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, Sparkles, Trash2, XCircle } from '@lucide/svelte';
+	import { Tooltip } from 'bits-ui';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import RichTextEditor from '$lib/components/rich-text-editor.svelte';
+	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { sanitizeHtml } from '$lib/sanitize-html';
 
 	type Pub = {
@@ -460,6 +462,10 @@
 		}
 	}
 
+	/** Tooltip header kolom Mode Publikasi: siapa yang menerbitkan artikel. */
+	const modeColumnHint = () =>
+		tr('Siapa yang menerbitkan artikel. Mode Integrasi = di-push otomatis ke situs mitra lewat integrasi; Mode Manual = mitra menempel artikelnya sendiri lalu mengirim URL artikelnya.');
+
 	const statusLabel: Record<string, string> = $derived({
 		waiting_partner: tr('Menunggu persetujuan'), partner_approved: tr('Disetujui'), partner_rejected: tr('Ditolak'),
 		queued: tr('Antrean'), processing: tr('Diproses'), published: tr('Terbit'), failed: tr('Gagal'),
@@ -707,7 +713,33 @@
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="w-[38%] px-4 py-2.5 font-medium">{tr('Artikel')}</th>
-						<th class="px-4 py-2.5 font-medium">{tr("Mode Publikasi")}</th>
+						<th class="px-4 py-2.5 font-medium">
+							<span class="inline-flex items-center gap-1">
+								{tr("Mode Publikasi")}
+								<Tooltip.Provider delayDuration={0}>
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<button
+													{...props}
+													type="button"
+													class="inline-flex cursor-help items-center text-muted-foreground"
+													aria-label={modeColumnHint()}
+												>
+													<CircleAlert size={12} />
+												</button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Portal>
+											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+												<Tooltip.Arrow class="uiTipArrow" />
+												{modeColumnHint()}
+											</Tooltip.Content>
+										</Tooltip.Portal>
+									</Tooltip.Root>
+								</Tooltip.Provider>
+							</span>
+						</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
 						<th class="px-4 py-2.5 text-right font-medium">{tr("Penghasilan")}</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
@@ -738,16 +770,22 @@
 								<span class="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: {pubMode(p.media_publication_mode).tone}22; color: {pubMode(p.media_publication_mode).tone};">
 									{pubMode(p.media_publication_mode).label}
 								</span>
-							</td>
-							<td class="px-4 py-2.5">
-								<p>{p.media_name ?? '—'}</p>
-								{#if p.media_website_url}
-									<a class="text-xs" style="color: var(--primary);" href={p.media_website_url} target="_blank" rel="noreferrer" onclick={(e) => e.stopPropagation()}>
-										{mediaHost(p.media_website_url)}
-									</a>
-								{/if}
 								{#if p.media_integration_type}
-									<p class="text-[11px] text-muted-foreground">{integrationLabel[p.media_integration_type] ?? p.media_integration_type}</p>
+									<p class="mt-1 pl-2 text-[11px] text-muted-foreground">{integrationLabel[p.media_integration_type] ?? p.media_integration_type}</p>
+								{/if}
+							</td>
+								<td class="px-4 py-2.5">
+									<p class="font-medium">{mediaDomainLabel(p.media_website_url, p.media_name ?? '')}</p>
+									{#if effectiveUrl(p)}
+									<a
+										class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+										href={effectiveUrl(p) ?? undefined}
+										target="_blank"
+										rel="noreferrer"
+										onclick={(e) => e.stopPropagation()}
+									>
+										{tr('Lihat Artikel')}
+									</a>
 								{/if}
 							</td>
 							<td class="px-4 py-2.5 text-right tabular-nums">{rp(p.partner_amount)}</td>
@@ -764,12 +802,8 @@
 								{#if rssBadge(p.rss_import_status)}
 									<span class="mt-1 block rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid var(--primary); color: var(--primary);">{rssBadge(p.rss_import_status)}</span>
 								{/if}
-								{#if p.status === 'published'}
-									{#if p.published_url}
-										<span class="mt-1 block text-[11px] font-medium" style="color: var(--success);">{tr('Lihat URL')}</span>
-									{:else}
-										<span class="mt-1 block text-[11px] font-medium" style="color: var(--warning);">{tr('URL belum terisi')}</span>
-									{/if}
+								{#if p.status === 'published' && !p.published_url}
+									<span class="mt-1 block text-[11px] font-medium" style="color: var(--warning);">{tr('URL belum terisi')}</span>
 								{/if}
 							</td>
 							<td class="px-4 py-2.5 text-right">

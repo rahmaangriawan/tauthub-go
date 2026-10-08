@@ -12,6 +12,7 @@
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import { mediaDomainLabel } from '$lib/media/domain-label';
 
 	const partnerId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || partnerId}`);
@@ -45,7 +46,19 @@
 	let autoPublishEnabled = $state(false);
 	// Impor massal baru terbuka setelah media pertama disetujui admin dan
 	// domainnya terverifikasi. Nilainya datang dari server (sumber kebenaran).
-	let bulkUnlocked = $state(false);
+	// Tri-state: `null` = belum diketahui, yaitu sebelum load pertama berhasil.
+	// Tanpa ini, default `false` membuat banner "belum terbuka" sempat tampil
+	// selama beberapa detik saat halaman masih memuat daftar media.
+	let bulkUnlocked = $state<boolean | null>(null);
+	// true hanya setelah request daftar media berhasil. Dipakai untuk menahan
+	// teks jumlah media agar tidak sempat menampilkan "0 media" saat memuat.
+	let mediaLoaded = $state(false);
+
+	// Satu-satunya sumber kebenaran untuk UI "impor terkunci". Hanya bernilai
+	// true kalau request daftar media SUDAH selesai DAN server menyatakan belum
+	// ada domain terverifikasi. Status "belum diketahui" (null) atau error tidak
+	// pernah dihitung sebagai terkunci, jadi banner tidak bisa muncul lebih awal.
+	const bulkLocked = $derived(mediaLoaded && bulkUnlocked === false);
 	let loading = $state(true);
 	let busy = $state(false);
 	let error = $state('');
@@ -137,6 +150,12 @@
 	// yang sama. Simpan objek File-nya: input file dikosongkan setelah pratinjau,
 	// tanpa ini tombol konfirmasi selalu gagal ("pilih ulang file").
 	let importFile = $state<File | null>(null);
+	// Dialog Bulk Import: dibuka sebelum memilih berkas, memuat template
+	// spreadsheet dari admin (/v1/partner/media/template-url) sebagai pedoman kolom.
+	let showImportDialog = $state(false);
+	let templateUrl = $state<string | null>(null);
+	let templateUrlBusy = $state(false);
+	let importDragOver = $state(false);
 
 	onMount(() => {
 		void (async () => {
@@ -172,6 +191,8 @@
 		if (dewanFilter) params.set('dewan_pers', dewanFilter);
 		const res = await apiRequest(`/v1/partner/media?${params}`);
 		if (!res.ok) {
+			// Gagal memuat: status verifikasi tetap "belum diketahui" (bukan
+			// "belum terverifikasi"), supaya banner tidak muncul karena error.
 			error = await readApiError(res, tr('Gagal memuat daftar media.'));
 			return;
 		}
@@ -181,7 +202,9 @@
 		total = data.total ?? items.length;
 		categories = data.categories ?? [];
 		autoPublishEnabled = Boolean(data.auto_publish_enabled);
+		// Baru di sini status verifikasi domain dianggap diketahui.
 		bulkUnlocked = Boolean(data.bulk_unlocked);
+		mediaLoaded = true;
 	}
 
 	/** Toggle "Mode Otomatis" per media (parity app lama: PUT {auto_publish}). */
@@ -222,6 +245,7 @@
 	}
 
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '—');
+	const mediaHost = (u: string | null) => (u ?? '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
 
 	/** Badge status Dewan Pers (parity kolom app lama). */
 	const dpBadge = (s: string | null) =>
@@ -647,10 +671,37 @@
 		await load();
 	}
 
+	/** Buka dialog Bulk Import; template spreadsheet dimuat sekali per pembukaan. */
+	async function openImportDialog() {
+		showImportDialog = true;
+		importError = '';
+		if (templateUrl !== null) return;
+		templateUrlBusy = true;
+		try {
+			const res = await apiRequest('/v1/partner/media/template-url');
+			if (res.ok) {
+				const data = (await res.json()) as { url?: string | null };
+				templateUrl = data.url ?? '';
+			}
+		} catch {
+			templateUrl = '';
+		} finally {
+			templateUrlBusy = false;
+		}
+	}
+
 	async function uploadImport(e: Event) {
-		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0] ?? null;
+		// Kosongkan input supaya berkas yang sama bisa dipilih ulang setelah gagal.
+		input.value = '';
+		await startImport(file);
+	}
+
+	/** Titik masuk bersama untuk pilih-berkas dan tarik & lepas. */
+	async function startImport(file: File | null) {
 		if (!file) return;
+		showImportDialog = false;
 		importError = '';
 		importResult = null;
 		importFile = file;
@@ -661,11 +712,15 @@
 		if (!res.ok) {
 			importError = await readApiError(res, "Permintaan gagal.");
 			importFile = null;
-			input.value = '';
 			return;
 		}
 		importResult = await res.json();
-		input.value = '';
+	}
+
+	function dropImport(e: DragEvent) {
+		e.preventDefault();
+		importDragOver = false;
+		void startImport(e.dataTransfer?.files?.[0] ?? null);
 	}
 
 	async function confirmImport() {
@@ -714,15 +769,16 @@
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">{tr("Daftar Media")}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{items.length} {tr("media terdaftar pada akun mitra Anda.")}</p>
+			{#if mediaLoaded}
+				<p class="mt-1 text-sm text-muted-foreground">{items.length} {tr("media terdaftar pada akun mitra Anda.")}</p>
+			{/if}
 		</div>
 		<div class="flex flex-wrap gap-2">
-			{#if bulkUnlocked}
-				<label class="app-btn app-btn-soft cursor-pointer">
+			{#if bulkUnlocked === true}
+				<button class="app-btn app-btn-soft" type="button" onclick={() => void openImportDialog()}>
 					<Upload size={15} /> Impor XLSX
-					<input id="bulk-file" class="hidden" type="file" accept=".xlsx" onchange={uploadImport} />
-				</label>
-			{:else}
+				</button>
+			{:else if bulkLocked}
 				<button
 					class="app-btn app-btn-soft"
 					type="button"
@@ -731,12 +787,18 @@
 				>
 					<Lock size={15} /> Impor XLSX
 				</button>
+			{:else}
+				<!-- Status verifikasi belum diketahui (load pertama belum selesai):
+					placeholder tanpa ikon kunci supaya tidak terlihat seperti "terkunci". -->
+				<button class="app-btn app-btn-soft" type="button" disabled aria-busy="true">
+					<Upload size={15} /> Impor XLSX
+				</button>
 			{/if}
 			<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={15} />{tr("Tambah Media")}</button>
 		</div>
 	</header>
 
-	{#if !bulkUnlocked}
+	{#if bulkLocked}
 		<div class="app-card mt-3 flex items-start gap-3 px-4 py-3 text-sm">
 			<ShieldCheck size={18} class="mt-0.5 shrink-0" style="color: var(--primary);" />
 			<div>
@@ -754,6 +816,61 @@
 
 	{#if importError}
 		<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{importError}</div>
+	{/if}
+
+	{#if showImportDialog}
+		<div
+			class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4"
+			style="background-color: rgba(0,0,0,.45);"
+			role="presentation"
+			onclick={() => (showImportDialog = false)}
+			onkeydown={(e) => { if (e.key === 'Escape') showImportDialog = false; }}
+		>
+			<dialog open class="app-card my-8 w-full max-w-lg p-5" aria-label={tr('Impor Media Massal')} onclick={(e) => e.stopPropagation()}>
+				<div class="flex items-start justify-between gap-3">
+					<div>
+						<h2 class="text-lg font-semibold">{tr('Impor Media Massal')}</h2>
+						<p class="mt-0.5 text-xs text-muted-foreground">{tr('Tambahkan beberapa media sekaligus dari satu berkas XLSX.')}</p>
+					</div>
+					<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr('Tutup')} onclick={() => (showImportDialog = false)}><X size={18} /></button>
+				</div>
+
+				<ol class="mt-4 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+					<li>{tr('Unduh template spreadsheet di bawah, lalu isi satu baris untuk tiap media.')}</li>
+					<li>{tr('Simpan sebagai XLSX (Google Spreadsheet: File → Download → Microsoft Excel).')}</li>
+					<li>{tr('Unggah berkasnya di sini; Tauthub menampilkan pratinjau sebelum data disimpan.')}</li>
+				</ol>
+
+				<div class="mt-4 rounded-[10px] border p-3" style="border-color: var(--border); background: var(--muted);">
+					{#if templateUrlBusy}
+						<p class="text-sm text-muted-foreground">{tr('Memuat template…')}</p>
+					{:else if templateUrl}
+						<a class="app-btn app-btn-soft" href={templateUrl} target="_blank" rel="noreferrer">
+							<ExternalLink size={14} /> {tr('Buka Template Spreadsheet')}
+						</a>
+					{:else}
+						<p class="text-sm text-muted-foreground">{tr('Template spreadsheet belum diatur admin. Minta admin mengisi Template URL di Pengaturan Media.')}</p>
+					{/if}
+				</div>
+
+				{#if importError}
+					<p class="mt-3 text-sm" style="color: var(--destructive);">{importError}</p>
+				{/if}
+
+				<label
+					class="mt-4 flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed px-6 py-8 text-center focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--primary)]"
+					style="border-color: {importDragOver ? 'var(--primary)' : 'var(--border)'}; background: {importDragOver ? 'var(--accent)' : 'transparent'};"
+					ondragover={(e) => { e.preventDefault(); importDragOver = true; }}
+					ondragleave={() => (importDragOver = false)}
+					ondrop={dropImport}
+				>
+					<Upload size={22} class="text-muted-foreground" />
+					<span class="text-sm font-medium">{tr('Tarik & lepas berkas XLSX di sini')}</span>
+					<span class="text-xs text-muted-foreground">{tr('atau klik untuk memilih berkas')}</span>
+					<input class="sr-only" type="file" accept=".xlsx" onchange={uploadImport} />
+				</label>
+			</dialog>
+		</div>
 	{/if}
 
 	{#if importResult}
@@ -940,14 +1057,15 @@
 					{#each filtered as m (m.id)}
 						<tr class="border-t align-top">
 							<td class="px-4 py-2.5">
-									<div class="flex flex-wrap items-center gap-1.5">
+								<div class="flex flex-wrap items-center gap-1.5">
+										{#if m.website_url}
+											<a class="font-medium hover:underline" href={m.website_url} target="_blank" rel="noreferrer">
+												{mediaDomainLabel(m.website_url, m.name)}
+											</a>
+										{:else}
 										<span class="font-medium">{m.name}</span>
-									</div>
-								{#if m.website_url}
-									<a class="inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={m.website_url} target="_blank" rel="noreferrer">
-										{m.website_url.replace(/^https?:\/\//, '').slice(0, 40)} <ExternalLink size={11} />
-									</a>
-								{/if}
+									{/if}
+								</div>
 								{#if m.contoh_artikel_url}
 									<a class="mt-0.5 inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={m.contoh_artikel_url} target="_blank" rel="noreferrer">{tr('Contoh artikel')} <ExternalLink size={10} /></a>
 								{:else}
@@ -1034,17 +1152,17 @@
 									</span>
 								{:else if m.dewan_pers_status === 'pending' || m.dewan_pers_status === 'rejected' || m.dewan_pers_status === 'conflict'}
 									<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid {dpBadge(m.dewan_pers_status).tone}; color: {dpBadge(m.dewan_pers_status).tone};">{dpBadge(m.dewan_pers_status).label}</span>
-								{:else}
-									<span
-										class="inline-flex h-5 w-5 items-center justify-center rounded-full"
-										style="background: #ff4c4c; color: var(--destructive-foreground, #fff);"
-										role="img"
-										title={tr('Tanpa Dewan Pers')}
-										aria-label={tr('Tanpa Dewan Pers')}
-									>
-										<X size={13} />
-									</span>
-								{/if}
+									{:else}
+										<span
+											class="inline-flex h-5 w-5 items-center justify-center rounded-full"
+											style="background: color-mix(in srgb, var(--destructive) 14%, transparent); color: var(--destructive);"
+											role="img"
+											title={tr('Tanpa Dewan Pers')}
+											aria-label={tr('Tanpa Dewan Pers')}
+										>
+											<X size={13} />
+										</span>
+									{/if}
 								{#if m.dewan_pers_status === 'rejected' && m.dewan_pers_rejection_reason}
 									<span class="mt-1 block max-w-[180px] text-[11px]" style="color: var(--destructive);">{m.dewan_pers_rejection_reason}</span>
 								{/if}
