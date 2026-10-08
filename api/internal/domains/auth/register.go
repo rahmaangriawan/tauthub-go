@@ -143,6 +143,46 @@ func (d *Deps) Register(w http.ResponseWriter, r *http.Request) {
 		Source:       "public",
 	})
 
+	// Email sudah dipakai akun lain. Diperiksa paling awal, sebelum keputusan
+	// guard, karena email yang sudah terdaftar tidak akan pernah bisa dipakai
+	// lagi: guard memberi skor 100 untuknya (RecentRegistration) dan domain
+	// non-Gmail memicu jalur "hubungi admin", sehingga keduanya menutupi alasan
+	// sebenarnya. Bila perannya BERBEDA (mis. email mitra didaftarkan lagi
+	// sebagai klien), tolak eksplisit supaya login dan izin tidak bertabrakan;
+	// peran yang sama tetap dibalas netral 201 (anti-enumerasi, parity lama).
+	var existingID, existingRole string
+	err := d.Pool.QueryRow(r.Context(), "SELECT id, role FROM users WHERE email = $1 LIMIT 1", email).Scan(&existingID, &existingRole)
+	if err == nil {
+		emailHash := auth.HashSignal(email, d.Cfg.CmsEncryptionSecret)
+		domain := ""
+		if at := strings.LastIndex(email, "@"); at != -1 {
+			domain = strings.ToLower(email[at+1:])
+		}
+		roleConflict := existingRole != role
+		reasons := append(guard.ReasonCodes, "DUPLICATE")
+		if roleConflict {
+			reasons = append(reasons, "ROLE_CONFLICT")
+		}
+		auth.RecordRegistration(r.Context(), d.Pool, auth.RegistrationHistoryEntry{
+			Source: "public", EmailHash: emailHash, IPHash: ipHash, DeviceHash: deviceHash,
+			Domain: &domain, RiskScore: guard.RiskScore, RiskLevel: guard.RiskLevel, ReasonCodes: reasons,
+		})
+		d.setRegDeviceCookie(w, deviceID)
+		if roleConflict {
+			detail, _ := json.Marshal(map[string]any{"requested_role": role, "existing_role": existingRole})
+			_, _ = d.Pool.Exec(r.Context(),
+				"INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id, ip_address, user_agent, detail) VALUES ($1, NULL, 'registration_role_conflict', 'registration', $2, $3, $4, $5::jsonb)",
+				uuid.NewString(), existingID, nullIfEmpty(ip), nullIfEmpty(r.Header.Get("user-agent")), string(detail))
+			httpx.Error(w, http.StatusConflict,
+				"Email ini sudah terdaftar sebagai "+roleLabelID(existingRole)+". Masuk memakai akun itu, atau daftar dengan email lain.")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		return
+	}
+
 	if guard.Decision == auth.GuardAdminRequired {
 		msg := guard.CustomMessage
 		if msg == "" {
@@ -169,27 +209,6 @@ func (d *Deps) Register(w http.ResponseWriter, r *http.Request) {
 		_, _ = d.Pool.Exec(r.Context(),
 			"INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id, detail) VALUES ($1, NULL, 'registration_review', 'registration', $2, $3::jsonb)",
 			uuid.NewString(), deviceID, string(detailJSON))
-	}
-
-	// Anti-enumerasi: email sudah ada → balas sukses netral 201.
-	var existingID string
-	err := d.Pool.QueryRow(r.Context(), "SELECT id FROM users WHERE email = $1 LIMIT 1", email).Scan(&existingID)
-	if err == nil {
-		emailHash := auth.HashSignal(email, d.Cfg.CmsEncryptionSecret)
-		domain := ""
-		if at := strings.LastIndex(email, "@"); at != -1 {
-			domain = strings.ToLower(email[at+1:])
-		}
-		reasons := append(guard.ReasonCodes, "DUPLICATE")
-		auth.RecordRegistration(r.Context(), d.Pool, auth.RegistrationHistoryEntry{
-			Source: "public", EmailHash: emailHash, IPHash: ipHash, DeviceHash: deviceHash,
-			Domain: &domain, RiskScore: guard.RiskScore, RiskLevel: guard.RiskLevel, ReasonCodes: reasons,
-		})
-		d.setRegDeviceCookie(w, deviceID)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
-		return
 	}
 
 	userID := uuid.NewString()
@@ -274,6 +293,18 @@ func nullIfEmpty(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// roleLabelID: sebutan peran untuk pesan yang dibaca pengguna.
+func roleLabelID(role string) string {
+	switch role {
+	case "partner":
+		return "mitra"
+	case "client":
+		return "klien"
+	default:
+		return "akun Tauthub"
+	}
 }
 
 func nullIfEmptyPtr(s string) *string { return nullIfEmpty(s) }

@@ -47,6 +47,18 @@ func (d *Deps) issueSession(w http.ResponseWriter, r *http.Request, userID strin
 		httpx.Error(w, http.StatusInternalServerError, httpx.Scrub500(d.Cfg.AppEnv, err.Error()))
 		return
 	}
+	// Satu akun, satu sesi aktif: login dari browser atau device lain langsung
+	// mematikan sesi lama. Middleware memeriksa user_sessions.revoked di setiap
+	// request, jadi sesi lama ditolak pada permintaan berikutnya; saat refresh
+	// tokennya gagal, klien mengarahkan pengguna kembali ke halaman masuk.
+	if _, err := d.Pool.Exec(ctx,
+		"UPDATE user_sessions SET revoked = TRUE WHERE user_id = $1 AND revoked = FALSE",
+		userID,
+	); err != nil {
+		httpx.Error(w, http.StatusInternalServerError, httpx.Scrub500(d.Cfg.AppEnv, err.Error()))
+		return
+	}
+	d.Auth.InvalidateAuthCache(userID)
 	sessionID := uuid.NewString()
 	if _, err := d.Pool.Exec(ctx,
 		"INSERT INTO user_sessions (id, user_id, refresh_jti, expires_at, revoked, created_at) VALUES ($1, $2, $3, $4, FALSE, NOW())",
@@ -87,11 +99,11 @@ func tokenPairResponse(w http.ResponseWriter, cfg *config.Config, pair *auth.Tok
 	})
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
-			"access_token":       pair.AccessToken,
-			"refresh_token":      pair.RefreshToken,
-			"expires_in":         pair.AccessExpiresIn,
-			"refresh_expires_in": pair.RefreshExpiresIn,
-			"session_expires_at": isoMilli(pair.SessionExpiresAt),
-			"user":               userJSON,
-		})
+		"access_token":       pair.AccessToken,
+		"refresh_token":      pair.RefreshToken,
+		"expires_in":         pair.AccessExpiresIn,
+		"refresh_expires_in": pair.RefreshExpiresIn,
+		"session_expires_at": isoMilli(pair.SessionExpiresAt),
+		"user":               userJSON,
+	})
 }

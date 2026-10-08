@@ -734,12 +734,16 @@ type peBloggerCredential struct {
 	ExpiresAt    int64
 	GoogleEmail  string
 	Scope        string
+	// DriveFolderID: folder Drive mitra untuk gambar artikel, dibuat sekali lalu
+	// dipakai ulang supaya berkas tidak menumpuk di root Drive mitra.
+	DriveFolderID string
 }
 
 func (d *Deps) peSealBloggerCredential(cred peBloggerCredential, mediaID string) (string, error) {
 	plain, err := json.Marshal(map[string]any{
 		"access_token": cred.AccessToken, "refresh_token": cred.RefreshToken,
 		"expires_at": cred.ExpiresAt, "google_email": cred.GoogleEmail, "scope": cred.Scope,
+		"drive_folder_id": cred.DriveFolderID,
 	})
 	if err != nil {
 		return "", err
@@ -759,22 +763,33 @@ func (d *Deps) peUnsealBloggerCredential(sealed, mediaID string, encKeyVer int) 
 		return nil, err
 	}
 	var parsed struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresAt    any    `json:"expires_at"`
-		GoogleEmail  string `json:"google_email"`
-		Scope        string `json:"scope"`
+		AccessToken   string `json:"access_token"`
+		RefreshToken  string `json:"refresh_token"`
+		ExpiresAt     any    `json:"expires_at"`
+		GoogleEmail   string `json:"google_email"`
+		Scope         string `json:"scope"`
+		DriveFolderID string `json:"drive_folder_id"`
 	}
 	if err := json.Unmarshal([]byte(plain), &parsed); err != nil || parsed.AccessToken == "" {
 		return nil, fmt.Errorf("kredensial Blogger tidak valid")
 	}
 	return &peBloggerCredential{
-		AccessToken:  parsed.AccessToken,
-		RefreshToken: parsed.RefreshToken,
-		ExpiresAt:    int64(peNumFromAny(parsed.ExpiresAt)),
-		GoogleEmail:  parsed.GoogleEmail,
-		Scope:        parsed.Scope,
+		AccessToken:   parsed.AccessToken,
+		RefreshToken:  parsed.RefreshToken,
+		ExpiresAt:     int64(peNumFromAny(parsed.ExpiresAt)),
+		GoogleEmail:   parsed.GoogleEmail,
+		Scope:         parsed.Scope,
+		DriveFolderID: parsed.DriveFolderID,
 	}, nil
+}
+
+// peBloggerScopeFromRefresh: Google hanya mengembalikan `scope` saat ada
+// perubahan; nilai lama dipertahankan bila respons tidak memuatnya.
+func peBloggerScopeFromRefresh(previous, fromResponse string) string {
+	if strings.TrimSpace(fromResponse) != "" {
+		return fromResponse
+	}
+	return previous
 }
 
 // peResolveBloggerTarget: parity resolveBloggerTarget (refresh bila expired).
@@ -791,12 +806,13 @@ func (d *Deps) peResolveBloggerTarget(ctx context.Context, media bsRow, clientID
 		if cred.RefreshToken == "" {
 			return nil, nil
 		}
-		accessToken, expiresIn, refreshErr := peRefreshBloggerToken(ctx, cred.RefreshToken, clientID, clientSecret)
+		accessToken, expiresIn, scope, refreshErr := peRefreshBloggerToken(ctx, cred.RefreshToken, clientID, clientSecret)
 		if refreshErr != nil {
 			return nil, refreshErr
 		}
 		cred.AccessToken = accessToken
 		cred.ExpiresAt = time.Now().UnixMilli() + int64(expiresIn)*1000
+		cred.Scope = peBloggerScopeFromRefresh(cred.Scope, scope)
 		if resealed, sealErr := d.peSealBloggerCredential(*cred, media.strOr("id", "")); sealErr == nil {
 			_ = d.exec(ctx, "UPDATE media SET blogger_credentials_sealed = $1, enc_key_ver = 1, updated_at = NOW() WHERE id = $2",
 				resealed, media.strOr("id", ""))
@@ -805,7 +821,7 @@ func (d *Deps) peResolveBloggerTarget(ctx context.Context, media bsRow, clientID
 	return cred, nil
 }
 
-func peRefreshBloggerToken(ctx context.Context, refreshToken, clientID, clientSecret string) (string, int, error) {
+func peRefreshBloggerToken(ctx context.Context, refreshToken, clientID, clientSecret string) (string, int, string, error) {
 	form := url.Values{}
 	form.Set("refresh_token", refreshToken)
 	form.Set("client_id", clientID)
@@ -814,11 +830,12 @@ func peRefreshBloggerToken(ctx context.Context, refreshToken, clientID, clientSe
 	status, body, err := peHTTPRequest(ctx, http.MethodPost, "https://oauth2.googleapis.com/token",
 		map[string]string{"content-type": "application/x-www-form-urlencoded"}, form.Encode(), 20*time.Second)
 	if err != nil {
-		return "", 0, err
+		return "", 0, "", err
 	}
 	var parsed struct {
 		AccessToken string `json:"access_token"`
 		ExpiresIn   any    `json:"expires_in"`
+		Scope       string `json:"scope"`
 		ErrorDesc   string `json:"error_description"`
 		ErrorField  string `json:"error"`
 	}
@@ -831,13 +848,13 @@ func peRefreshBloggerToken(ctx context.Context, refreshToken, clientID, clientSe
 		if msg == "" {
 			msg = "Refresh gagal (" + itoa(status) + ")"
 		}
-		return "", 0, fmt.Errorf("%s", msg)
+		return "", 0, "", fmt.Errorf("%s", msg)
 	}
 	expiresIn := int(peNumFromAny(parsed.ExpiresIn))
 	if expiresIn <= 0 {
 		expiresIn = 3600
 	}
-	return parsed.AccessToken, expiresIn, nil
+	return parsed.AccessToken, expiresIn, parsed.Scope, nil
 }
 
 func (d *Deps) peRunBlogger(ctx context.Context, publication, media, document, version bsRow, publicOrigin string, startedAt time.Time, terminal bool) error {
@@ -881,6 +898,7 @@ func (d *Deps) peRunBlogger(ctx context.Context, publication, media, document, v
 	if category := strings.TrimSpace(media.strOr("category", "")); category != "" {
 		labels = []string{category}
 	}
+	postTitle := document.strOr("title", "")
 
 	if err := d.exec(ctx,
 		"UPDATE publication_jobs SET status = 'processing', started_at = COALESCE(started_at, NOW()) WHERE id = $1", jobID); err != nil {
@@ -889,18 +907,82 @@ func (d *Deps) peRunBlogger(ctx context.Context, publication, media, document, v
 	if err := d.exec(ctx, "UPDATE publication_jobs SET progress = 30 WHERE id = $1", jobID); err != nil {
 		return err
 	}
+
+	// Gambar artikel: API Blogger tidak punya endpoint unggah media, jadi tiap
+	// gambar /uploads dititipkan ke Google Drive mitra lalu src-nya diganti URL
+	// gambar Google. Kredensial lama yang belum punya scope Drive tetap terbit
+	// seperti sebelumnya (tautan publik Tauthub) plus peringatan agar mitra
+	// menyambung ulang.
+	snapshot, _ := jobRecord.jsonField("payload_snapshot").(map[string]any)
+	if snapshot == nil {
+		snapshot = map[string]any{}
+	}
+	mediaCache := peBloggerMediaCache(snapshot)
+	if mediaCache == nil {
+		mediaCache = map[string]any{}
+	}
+	featured := d.peAbsolutizeValue(publication.strOr("featured_image_url", ""), publicOrigin)
+	hasInlineImage := strings.Contains(html, "<img")
+	driveReady := peBloggerHasDriveScope(credential.Scope)
+	// Catatan dikumpulkan lalu ditulis sekali: peRecordWarning menimpa kolom
+	// warning_message, jadi beberapa panggilan terpisah akan saling menghapus.
+	notes := []string{}
+	if !driveReady {
+		notes = append(notes, "Blogger belum punya izin Google Drive, gambar artikel masih memakai tautan Tauthub. Hubungkan ulang Blogger agar gambar disimpan ke Drive mitra.")
+	}
+	folderID := ""
+	if driveReady && (featured != "" || hasInlineImage) {
+		id, folderErr := d.peBloggerDriveFolder(ctx, credential.AccessToken, credential, media)
+		if folderErr != nil {
+			notes = append(notes, "Folder Google Drive mitra tidak bisa disiapkan ("+folderErr.Error()+"), gambar memakai tautan Tauthub.")
+			driveReady = false
+		} else {
+			folderID = id
+			if credential.DriveFolderID != id {
+				credential.DriveFolderID = id
+				if resealed, sealErr := d.peSealBloggerCredential(*credential, media.strOr("id", "")); sealErr == nil {
+					_ = d.exec(ctx, "UPDATE media SET blogger_credentials_sealed = $1, enc_key_ver = 1, updated_at = NOW() WHERE id = $2",
+						resealed, media.strOr("id", ""))
+				}
+			}
+		}
+	}
+	var imageFailures []string
 	bodyHTML := html
-	if featured := d.peAbsolutizeValue(publication.strOr("featured_image_url", ""), publicOrigin); featured != "" &&
-		(strings.HasPrefix(featured, "http://") || strings.HasPrefix(featured, "https://")) {
-		alt := strings.ReplaceAll(document.strOr("title", ""), `"`, "&quot;")
+	if driveReady {
+		if hasInlineImage {
+			bodyHTML, imageFailures = d.peMirrorBloggerImages(ctx, credential.AccessToken, folderID, html, postTitle, mediaCache)
+		}
+		if featured != "" && peBloggerMirrorableURL(publicOrigin, featured) {
+			mirrored, verified, mirrorErr := d.peMirrorBloggerImage(ctx, credential.AccessToken, folderID, featured, postTitle, mediaCache)
+			if mirrorErr != nil {
+				reason := "Gambar utama tidak bisa dititipkan ke Google Drive mitra (" + featured + "): " + mirrorErr.Error()
+				d.peSaveBloggerMediaCache(ctx, jobID, snapshot, mediaCache, imageFailures)
+				return d.peFailDelivery(ctx, publication, jobID, pePublishErr("blogger_image_upload_failed", reason), startedAt, terminal)
+			}
+			featured = mirrored
+			if !verified {
+				notes = append(notes, "Gambar utama sudah tersimpan di Google Drive mitra, tetapi URL gambarnya belum bisa diverifikasi dari server. Periksa tampilan artikel setelah terbit.")
+			}
+		}
+	}
+	if featured != "" && (strings.HasPrefix(featured, "http://") || strings.HasPrefix(featured, "https://")) {
+		alt := strings.ReplaceAll(postTitle, `"`, "&quot;")
 		src := strings.ReplaceAll(featured, `"`, "&quot;")
 		bodyHTML = `<img alt="` + alt + `" src="` + src + `" />` + "\n\n" + bodyHTML
+	}
+	d.peSaveBloggerMediaCache(ctx, jobID, snapshot, mediaCache, imageFailures)
+	if len(imageFailures) > 0 {
+		notes = append(notes, fmt.Sprintf("%d gambar di badan artikel tidak bisa dititipkan ke Drive: %s", len(imageFailures), strings.Join(imageFailures, ", ")))
+	}
+	if len(notes) > 0 {
+		d.peRecordWarning(ctx, jobID, notes)
 	}
 	if err := d.exec(ctx, "UPDATE publication_jobs SET progress = 60 WHERE id = $1", jobID); err != nil {
 		return err
 	}
 	result, pubErr := pePublishBloggerPost(ctx, credential.AccessToken, media.strOr("blogger_blog_id", ""),
-		document.strOr("title", ""), bodyHTML, labels, isDraftMode)
+		postTitle, bodyHTML, labels, isDraftMode)
 	if pubErr != nil {
 		return d.peFailDelivery(ctx, publication, jobID, pubErr, startedAt, terminal)
 	}

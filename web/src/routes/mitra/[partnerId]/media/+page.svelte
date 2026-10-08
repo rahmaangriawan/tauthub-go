@@ -711,13 +711,9 @@
 			<div>
 				<p class="font-semibold">{tr('Impor massal belum terbuka')}</p>
 				<ol class="mt-1 list-decimal space-y-0.5 pl-5 text-muted-foreground">
-					<li>{tr('Ajukan satu media lewat “Tambah Media”, lalu tunggu persetujuan admin.')}</li>
-					<li>{tr('Buka menu ⋮ pada media itu, pilih “Verifikasi Domain”, lalu pasang kode verifikasi di situs Anda.')}</li>
+					<li>{tr('Klik “Verifikasi” pada baris media, lalu pasang kode verifikasi di situs Anda.')}</li>
 					<li>{tr('Setelah domain pertama terverifikasi, Impor XLSX aktif dengan sendirinya.')}</li>
 				</ol>
-				<p class="mt-1 text-xs text-muted-foreground">
-					{tr('Langkah ini memastikan hanya pemilik situs yang bisa mengunggah media, sehingga tidak ada domain orang lain yang diajukan tanpa izin.')}
-				</p>
 			</div>
 		</div>
 	{/if}
@@ -845,6 +841,7 @@
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
+						<th class="px-4 py-2.5 font-medium">{tr('Domain')}</th>
 						<th class="px-4 py-2.5 font-medium">{tr('Kategori')}</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Mode Publikasi")}</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Dewan Pers")}</th>
@@ -865,9 +862,6 @@
 									{#if seoLabel(m)}
 										<span class="rounded px-1.5 py-0.5 text-[10px] font-medium" style="background: var(--muted); color: var(--muted-foreground);" title={`SEO diperbarui ${dt(m.seo_checked_at)}`}>{seoLabel(m)}</span>
 									{/if}
-									{#if m.domain_verified}
-										<span class="rounded px-1.5 py-0.5 text-[10px] font-medium" style="background: var(--accent); color: var(--accent-foreground);" title={tr('Kepemilikan domain terverifikasi')}>Domain</span>
-									{/if}
 								</div>
 								{#if m.website_url}
 									<a class="inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={m.website_url} target="_blank" rel="noreferrer">
@@ -879,6 +873,25 @@
 								{:else}
 									<button type="button" class="mt-0.5 inline-flex items-center gap-1 text-[11px]" style="color: var(--primary);" onclick={() => openContoh(m)}>
 										<Plus size={11} /> {tr('Tambah contoh artikel')}
+									</button>
+								{/if}
+							</td>
+							<td class="px-4 py-2.5">
+								{#if m.domain_verified}
+									<span
+										class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+										style="background: var(--accent); color: var(--accent-foreground);"
+										title={tr('Kepemilikan domain terverifikasi')}
+									>
+										<ShieldCheck size={12} /> {tr('Terverifikasi')}
+									</span>
+								{:else}
+									<button
+										type="button"
+										class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+										onclick={() => void openDomainVerify(m)}
+									>
+										<ShieldCheck size={12} /> {tr('Verifikasi')}
 									</button>
 								{/if}
 							</td>
@@ -977,9 +990,6 @@
 														<RotateCcw size={14} /> {tr('Ajukan Kembali')}
 													</button>
 												{/if}
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); void openDomainVerify(m); }}>
-													<ShieldCheck size={14} /> {tr('Verifikasi Domain')}
-												</button>
 												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); openDewanPers(m); }}>
 													<BadgeCheck size={14} /> {tr('Dewan Pers')}
 												</button>

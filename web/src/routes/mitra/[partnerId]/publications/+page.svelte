@@ -814,7 +814,7 @@
 											{/if}
 											{#if p.published_url}
 												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => { e.stopPropagation(); closeRowMenu(); window.open(p.published_url ?? '', '_blank', 'noopener'); }}>
-													<ExternalLink size={14} /> {tr('Lihat di WordPress')}
+													<ExternalLink size={14} /> {tr('Lihat Langsung')}
 												</button>
 											{/if}
 											{#if p.status === 'partner_approved'}

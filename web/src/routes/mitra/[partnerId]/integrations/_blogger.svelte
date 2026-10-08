@@ -9,7 +9,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Globe, Newspaper, Unplug, X } from '@lucide/svelte';
+	import { Globe, Newspaper, RefreshCw, Unplug, X } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	let rows = $state<any[]>([]);
@@ -253,6 +253,9 @@
 								disabled={busyId === item.id || !item.blogger_blog_id}
 								onclick={() => testConnection(item)}
 							>{busyId === item.id ? 'Menguji…' : 'Test Connection'}</button>
+							<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={busyId === item.id} onclick={() => connect(item)}>
+								<RefreshCw size={12} /> {tr('Hubungkan Ulang')}
+							</button>
 							<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" style="color: var(--destructive);" disabled={busyId === item.id} onclick={() => disconnect(item)}>
 								<Unplug size={12} /> Putuskan
 							</button>
@@ -261,6 +264,11 @@
 
 					{#if item.blogger_last_test_message && item.blogger_status === 'failed'}
 						<p class="mt-2 text-xs" style="color: var(--destructive);">{item.blogger_last_test_message}</p>
+					{/if}
+					{#if item.blogger_connected}
+						<p class="mt-2 text-xs text-muted-foreground">
+							{tr('Gambar artikel disimpan ke Google Drive mitra, jadi gambarnya tidak bergantung pada server Tauthub. Klik Hubungkan Ulang bila artikel terbit dengan gambar dari tautan Tauthub.')}
+						</p>
 					{/if}
 					{#if !item.blogger_blog_id && item.blogger_connected}
 						<p class="mt-2 text-xs text-muted-foreground">

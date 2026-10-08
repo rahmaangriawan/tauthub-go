@@ -18,11 +18,14 @@ import (
 )
 
 // blogger.go: port lib/publish/blogger.ts + app/api/blogger/callback/route.ts —
-// OAuth2 Google (scope blogger, PKCE S256), kredensial ter-seal per media
-// (enc_key_ver=1 → v3 t3:), refresh token, dan publikasi post.
+// OAuth2 Google (PKCE S256), kredensial ter-seal per media (enc_key_ver=1 →
+// v3 t3:), refresh token, dan publikasi post.
 
 const (
-	bloggerScope     = "https://www.googleapis.com/auth/blogger"
+	// bloggerScope: akses Blogger + drive.file. API Blogger tidak punya endpoint
+	// unggah media, jadi gambar artikel dititipkan ke Google Drive mitra dan URL
+	// gambar Google itulah yang dipakai di dalam post.
+	bloggerScope     = "https://www.googleapis.com/auth/blogger https://www.googleapis.com/auth/drive.file"
 	bloggerAuthURL   = "https://accounts.google.com/o/oauth2/v2/auth"
 	bloggerTokenURL  = "https://oauth2.googleapis.com/token"
 	bloggerAPIBase   = "https://www.googleapis.com/blogger/v3"
@@ -37,6 +40,9 @@ type bloggerCredential struct {
 	ExpiresAt    int64   `json:"expires_at"`
 	GoogleEmail  *string `json:"google_email,omitempty"`
 	Scope        *string `json:"scope,omitempty"`
+	// DriveFolderID: folder Drive mitra untuk gambar artikel (diisi jalur
+	// publikasi). Ikut disegel supaya tidak hilang saat kredensial di-refresh.
+	DriveFolderID *string `json:"drive_folder_id,omitempty"`
 }
 
 type bloggerBlog struct {
