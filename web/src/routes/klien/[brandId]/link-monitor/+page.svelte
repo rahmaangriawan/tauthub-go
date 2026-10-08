@@ -8,8 +8,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import {
-		ArrowDownUp, ArrowUp, ExternalLink, CircleCheck, Image as ImageIcon,
-		Link2Off, LoaderCircle, RotateCcw, Search, TriangleAlert, ClipboardList
+		Activity, ArrowDownUp, ArrowUp, CircleAlert, CircleCheck, ExternalLink, Filter as FilterIcon,
+		Image as ImageIcon, Info, LoaderCircle, RefreshCw, RotateCcw, Search
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
@@ -28,16 +28,26 @@
 		error_message?: string | null; last_checked_at: string | null;
 		featured_image_url?: string | null; draft_featured_image_url?: string | null;
 	};
-	type Summary = { watched: number; live: number; gone: number; unreachable: number; no_url: number };
+	type Summary = {
+		watched: number; live: number; gone: number; unreachable: number; no_url: number;
+		// Ditambahkan server: waktu pengecekan terakhir + jatah pengecekan manual.
+		last_checked_at?: string | null; next_manual_check_at?: string | null;
+		manual_check_available?: boolean;
+	};
 
 	let summary = $state<Summary | null>(null);
 	let items = $state<Item[]>([]);
 	let total = $state(0);
 	let offset = $state(0);
 	let pageSize = $state(10);
-	let stateFilter = $state('problematic');
+	let stateFilter = $state('all');
 	let mediaFilter = $state('');
 	let daysFilter = $state('');
+	// Panel "Filter" (media + tanggal): dibuka tombol Filter, ditutup klik di luar
+	// atau Escape.
+	let filterOpen = $state(false);
+	const closeFilterPanel = () => (filterOpen = false);
+	const advancedFilterCount = $derived((mediaFilter ? 1 : 0) + (daysFilter ? 1 : 0));
 	let searchInput = $state('');
 	let query = $state('');
 	// Sortir satu kolom aktif: judul (perilaku lama) atau terakhir update.
@@ -56,6 +66,7 @@
 	let loading = $state(true);
 	let error = $state('');
 	let requestingId = $state<string | null>(null);
+	let crawling = $state(false);
 	let notice = $state('');
 	let imgError = $state<Record<string, boolean>>({});
 
@@ -204,10 +215,11 @@
 	function resetFilters() {
 		searchInput = '';
 		query = '';
-		stateFilter = 'problematic';
+		stateFilter = 'all';
 		mediaFilter = '';
 		daysFilter = '';
 		offset = 0;
+		filterOpen = false;
 		void load();
 	}
 	function commitSearch() {
@@ -233,113 +245,201 @@
 		}
 	}
 
+	/** Label sinkronisasi bergaya "Hari ini, 08:30 WIB" (zona Asia/Jakarta). */
+	function syncLabel(iso: string | null | undefined): string {
+		if (!iso) return tr('Belum pernah');
+		const at = new Date(iso);
+		const dayFmt = new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', year: 'numeric' });
+		const timeFmt = new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', hour12: false });
+		const day = dayFmt.format(at);
+		const label = day === dayFmt.format(new Date()) ? tr('Hari ini') : day;
+		return `${label}, ${timeFmt.format(at).replace('.', ':')} WIB`;
+	}
+
+	/** Antrekan pengecekan tautan untuk brand ini (jeda 1x sehari ditegakkan server). */
+	async function crawlNow() {
+		crawling = true;
+		error = '';
+		notice = '';
+		try {
+			const res = await apiRequest(`${apiBase}/link-monitor/check`, { method: 'POST' });
+			if (res.status === 429) {
+				const data = await res.json().catch(() => null);
+				notice = data?.error ? `${data.error} ${tr('Coba lagi nanti.')}` : tr('Pengecekan manual dibatasi 1x sehari.');
+				return;
+			}
+			if (!res.ok) {
+				error = await readApiError(res, tr('Gagal mengantrekan pengecekan.'));
+				return;
+			}
+			const data = await res.json();
+			const queued = data?.queued_publications ?? 0;
+			notice = queued > 0
+				? `${tr('Antrean pengecekan dibuat:')} ${queued} ${tr('artikel.')}${data?.capped ? ' ' + tr('Dibatasi 200 artikel per sekali jalan, sisanya menyusul pada siklus berikutnya.') : ''} ${tr('Hasil muncul setelah worker selesai.')}`
+				: tr('Semua artikel baru saja diperiksa, belum ada yang perlu dicek ulang.');
+			await load();
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : tr('Gagal mengantrekan pengecekan.');
+		} finally {
+			crawling = false;
+		}
+	}
+
+	// Angka kartu selalu dari summary server (bukan konstanta). `tone` = aksen
+	// warna border/label/ikon, `strong` = keterangan ikut berwarna tone,
+	// `info` = keterangan tambahan di ikon info.
 	const statCards = $derived([
-		{ label: 'Artikel Dipantau', value: summary?.watched ?? 0, hint: 'Artikel tayang dalam masa garansi 12 bulan', icon: ClipboardList },
-		{ label: 'Tayang', value: summary?.live ?? 0, hint: tr('Terverifikasi masih bisa diakses'), icon: CircleCheck },
-		{ label: 'Hilang (404)', value: summary?.gone ?? 0, hint: 'URL-nya mengembalikan 404 atau 410', icon: Link2Off },
-		{ label: 'Tak Terjangkau', value: summary?.unreachable ?? 0, hint: tr('Situs menolak akses atau sedang bermasalah'), icon: TriangleAlert }
+		{ label: tr('Total Dipantau'), value: summary?.watched ?? 0, hint: tr('Dalam masa garansi aktif'), icon: Activity, tone: 'var(--muted-foreground)', strong: false, info: null as string | null },
+		{ label: tr('Tayang & Aman'), value: summary?.live ?? 0, hint: tr('Halaman & Tautan aktif (200 OK)'), icon: CircleCheck, tone: 'var(--success)', strong: false, info: null },
+		{ label: tr('Tak Terjangkau'), value: summary?.unreachable ?? 0, hint: tr('Sistem keamanan media memblokir bot'), icon: CircleAlert, tone: 'var(--warning)', strong: false, info: tr('Situs menolak akses atau sedang bermasalah — belum tentu hilang') },
+		{ label: tr('Bermasalah'), value: summary?.gone ?? 0, hint: tr('404 atau Tautan dihapus (SLA Klaim)'), icon: CircleAlert, tone: 'var(--destructive)', strong: true, info: null }
 	]);
 </script>
 
-<PageTitle title="Pelacak 404" />
+<PageTitle title="Link Guardian" />
+
+<svelte:window
+	onclick={(e) => { if (!(e.target as HTMLElement)?.closest?.('.lg-filter-wrap')) closeFilterPanel(); }}
+	onkeydown={(e) => { if (e.key === 'Escape') closeFilterPanel(); }}
+/>
 
 <section>
-	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">Pelacak 404</h1>
-		<p class="mt-1 text-sm text-muted-foreground">{tr("Kami memeriksa berkala artikel Anda yang sudah tayang selama masa garansi 12 bulan.")}</p>
+	<header class="lg-header">
+		<div class="min-w-0">
+			<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--primary);">LINK GUARDIAN</p>
+			<h1 class="mt-1 text-2xl font-semibold tracking-tight">{tr("Link Guardian")}</h1>
+			<p class="lg-sub mt-1 text-sm text-muted-foreground">
+				{tr('Sistem memantau tautan Anda secara berkala.')}
+				<strong>{tr('Garansi tayang 12 bulan')}</strong>
+				{tr('berlaku sejak tanggal tayang, dan eksklusif untuk')}
+				<strong style="color: var(--primary);">{tr('Media Terverifikasi')}</strong>.
+			</p>
+		</div>
+		<div class="lg-sync">
+			<p class="lg-sync-time">
+				{tr('Terakhir sinkronisasi:')} <span class="lg-sync-value">{syncLabel(summary?.last_checked_at)}</span>
+			</p>
+			<button
+				class="app-btn app-btn-soft lg-crawl"
+				type="button"
+				disabled={crawling || summary?.manual_check_available === false}
+				title={summary?.manual_check_available === false
+					? `${tr('Pengecekan manual dibatasi 1x sehari. Bisa dicoba lagi')} ${syncLabel(summary?.next_manual_check_at)}.`
+					: tr('Antrekan pengecekan tautan sekarang')}
+				onclick={() => void crawlNow()}
+			>
+				<RefreshCw size={14} class={crawling ? 'animate-spin' : ''} />
+				{crawling ? tr('Mengantrekan…') : tr('Crawl Sekarang')}
+			</button>
+			<span class="lg-manual-note"><Info size={12} /> {tr('Pengecekan manual maksimal 1x sehari')}</span>
+		</div>
 	</header>
 
 	{#if loading && !summary}
 		<p class="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
-			<LoaderCircle size={16} class="animate-spin" />{tr("Memuat Pelacak 404")}</p>
+			<LoaderCircle size={16} class="animate-spin" />{tr("Memuat Link Guardian")}</p>
 	{:else if error && !summary}
-		<div class="app-card mt-6 px-6 py-10 text-center">
+		<div class="app-card mt-5 px-6 py-10 text-center">
 			<p class="text-sm font-medium">{tr("Halaman tidak dapat dimuat")}</p>
 			<p class="mt-1 text-sm text-muted-foreground">{error}</p>
 			<button class="app-btn app-btn-soft mt-3" type="button" onclick={() => void load()}>Coba lagi</button>
 		</div>
 	{:else}
 		<!-- 4 kartu statistik -->
-		<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+		<div class="lg-cards">
 			{#each statCards as c (c.label)}
-				<div class="app-card flex items-center justify-between gap-3 p-4">
-					<div>
-						<p class="text-[13px]" style="color: var(--muted-foreground);">{c.label}</p>
-						<p class="text-[34px] font-bold leading-tight tabular-nums">{c.value}</p>
-						<p class="text-xs" style="color: var(--muted-foreground);">{c.hint}</p>
-					</div>
-					<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--accent); color: var(--primary);">
-						<c.icon size={18} strokeWidth={2.4} />
-					</span>
+				<div class="app-card lg-card" style="--tone: {c.tone};">
+					<p class="lg-card-label">
+						<c.icon size={14} strokeWidth={2.4} />
+						<span>{c.label}</span>
+						{#if c.info}
+							<Tooltip content={c.info} label={c.info} maxWidth={280}>
+								<span class="lg-card-info"><Info size={12} /></span>
+							</Tooltip>
+						{/if}
+					</p>
+					<p class="lg-card-value">{c.value}</p>
+					<p class="lg-card-hint" style={c.strong ? 'color: var(--tone); font-weight: 500;' : ''}>{c.hint}</p>
 				</div>
 			{/each}
 		</div>
 
-		<!-- Kartu filter -->
-		<div class="app-card mt-4 p-3">
-			<div class="flex flex-wrap items-end gap-3">
-				<label class="flex min-w-[220px] flex-1 flex-col gap-1">
-					<span class="text-[11px] font-semibold tracking-wide" style="color: var(--muted-foreground);">CARI</span>
-					<span class="app-input flex items-center gap-2 !py-1.5">
-						<Search size={15} class="text-muted-foreground" />
-						<input
-							class="w-full bg-transparent text-sm outline-none"
-							placeholder={tr("Cari artikel, media, atau URL…")}
-							bind:value={searchInput}
-							onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitSearch(); } }}
-						/>
-					</span>
-				</label>
-				<label class="flex flex-col gap-1">
-					<span class="text-[11px] font-semibold tracking-wide" style="color: var(--muted-foreground);">STATUS</span>
-					<Select
-						bind:value={stateFilter}
-						ariaLabel="Filter status"
-						minWidth={170}
-						onchange={applyFilters}
-						options={[
-							{ value: 'problematic', label: '• Yang bermasalah' },
-							{ value: 'all', label: tr('Semua Status') },
-							{ value: 'gone', label: '404' },
-							{ value: 'unreachable', label: 'Tak terjangkau' },
-							{ value: 'live', label: 'Tayang' },
-							{ value: 'no_url', label: tr('Belum ada URL') }
-						]}
-					/>
-				</label>
-				<label class="flex flex-col gap-1">
-					<span class="text-[11px] font-semibold tracking-wide" style="color: var(--muted-foreground);">MEDIA</span>
-					<Select
-						bind:value={mediaFilter}
-						ariaLabel="Filter media"
-						placeholder={tr("Semua Media")}
-						minWidth={150}
-						onchange={applyFilters}
-						options={[
-							{ value: '', label: tr('Semua Media') },
-							...mediaOptions.map((m) => ({ value: m, label: m }))
-						]}
-					/>
-				</label>
-				<label class="flex flex-col gap-1">
-					<span class="text-[11px] font-semibold tracking-wide" style="color: var(--muted-foreground);">TANGGAL</span>
-					<Select
-						bind:value={daysFilter}
-						ariaLabel="Filter tanggal"
-						placeholder={tr("Semua Tanggal")}
-						minWidth={150}
-						onchange={applyFilters}
-						options={[
-							{ value: '', label: tr('Semua Tanggal') },
-							{ value: '7', label: '7 Hari Terakhir' },
-							{ value: '30', label: '30 Hari Terakhir' },
-							{ value: '90', label: '3 Bulan Terakhir' }
-						]}
-					/>
-				</label>
-				<button class="app-btn app-btn-soft" type="button" title="Reset semua filter ke kondisi awal" onclick={resetFilters}>
-					<RotateCcw size={14} /> Reset Filter
+		<!-- Toolbar: pencarian lebar, dropdown status, lalu tombol Filter -->
+		<div class="app-card lg-toolbar">
+			<label class="lg-search">
+				<Search size={15} class="text-muted-foreground" />
+				<input
+					class="w-full bg-transparent text-sm outline-none"
+					placeholder={tr("Cari artikel, media, atau URL…")}
+					aria-label={tr("Cari artikel, media, atau URL…")}
+					bind:value={searchInput}
+					onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitSearch(); } }}
+				/>
+			</label>
+			<span class="lg-divider" aria-hidden="true"></span>
+			<Select
+				bind:value={stateFilter}
+				ariaLabel="Filter status"
+				minWidth={205}
+				onchange={applyFilters}
+				options={[
+					{ value: 'all', label: tr('Semua Status') },
+					{ value: 'gone', label: tr('Bermasalah saja (SLA Klaim)') },
+					{ value: 'unreachable', label: tr('Tak Terjangkau') },
+					{ value: 'live', label: tr('Tayang & Aman') },
+					{ value: 'no_url', label: tr('Belum ada URL') }
+				]}
+			/>
+			<span class="lg-divider" aria-hidden="true"></span>
+			<div class="lg-filter-wrap">
+				<button
+					class="lg-filter-btn"
+					type="button"
+					aria-expanded={filterOpen}
+					aria-controls="lg-filter-panel"
+					onclick={(e) => { e.stopPropagation(); filterOpen = !filterOpen; }}
+				>
+					<FilterIcon size={14} /> {tr('Filter')}
+					{#if advancedFilterCount > 0}<span class="lg-filter-count">{advancedFilterCount}</span>{/if}
 				</button>
+				{#if filterOpen}
+					<div class="lg-filter-pop" id="lg-filter-panel">
+						<div class="lg-pop-field">
+							<span class="lg-pop-label">{tr('Media')}</span>
+							<Select
+								bind:value={mediaFilter}
+								ariaLabel="Filter media"
+								placeholder={tr("Semua Media")}
+								minWidth={190}
+								onchange={applyFilters}
+								options={[
+									{ value: '', label: tr('Semua Media') },
+									...mediaOptions.map((m) => ({ value: m, label: m }))
+								]}
+							/>
+						</div>
+						<div class="lg-pop-field">
+							<span class="lg-pop-label">{tr('Tanggal')}</span>
+							<Select
+								bind:value={daysFilter}
+								ariaLabel="Filter tanggal"
+								placeholder={tr("Semua Tanggal")}
+								minWidth={190}
+								onchange={applyFilters}
+								options={[
+									{ value: '', label: tr('Semua Tanggal') },
+									{ value: '7', label: '7 Hari Terakhir' },
+									{ value: '30', label: '30 Hari Terakhir' },
+									{ value: '90', label: '3 Bulan Terakhir' }
+								]}
+							/>
+						</div>
+						<div class="lg-pop-actions">
+							<button class="lg-pop-reset" type="button" onclick={resetFilters}><RotateCcw size={13} /> {tr('Reset filter')}</button>
+							<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" onclick={closeFilterPanel}>{tr('Terapkan')}</button>
+						</div>
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -366,68 +466,65 @@
 				     dengan ellipsis, sehingga tabel tidak pernah melebihi kartu. -->
 					<table class="linkmon-table w-full text-sm">
 						<colgroup>
-							<col style="width:34%" /><col style="width:13%" /><col style="width:13%" />
-							<col style="width:19%" /><col style="width:21%" />
+							<col style="width:36%" /><col style="width:14%" /><col style="width:14%" />
+							<col style="width:19%" /><col style="width:17%" />
 						</colgroup>
 						<thead>
-							<tr style="background-color: var(--muted);">
-								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);" aria-sort={sortKey === 'title' ? (sortAsc ? 'ascending' : 'descending') : 'none'}>
-									<button class="inline-flex items-center gap-1.5" type="button" onclick={toggleTitleSort} aria-label={tr('Urutkan berdasarkan judul')}>
-										<span>Artikel</span><ArrowDownUp size={13} strokeWidth={2.4} />
+							<tr>
+								<th class="lg-th lg-th-left" aria-sort={sortKey === 'title' ? (sortAsc ? 'ascending' : 'descending') : 'none'}>
+									<button class="lg-th-btn" type="button" onclick={toggleTitleSort} aria-label={tr('Urutkan berdasarkan judul')}>
+										<span>Artikel</span><ArrowDownUp size={12} strokeWidth={2.4} />
 									</button>
 								</th>
-								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">{tr("Media")}</th>
-								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Status</th>
-								<th class="px-5 py-3.5 text-left text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);" aria-sort={sortKey === 'updated' ? (dateDesc ? 'descending' : 'ascending') : 'none'}>
-									<button class="inline-flex items-center gap-1.5" type="button" onclick={toggleDateSort} aria-label={sortKey === 'updated' && !dateDesc ? tr('Urutkan dari yang terbaru') : tr('Urutkan dari yang terlama')}>
+								<th class="lg-th lg-th-left">{tr("Media")}</th>
+								<th class="lg-th lg-th-left">Status</th>
+								<th class="lg-th lg-th-left" aria-sort={sortKey === 'updated' ? (dateDesc ? 'descending' : 'ascending') : 'none'}>
+									<button class="lg-th-btn" type="button" onclick={toggleDateSort} aria-label={sortKey === 'updated' && !dateDesc ? tr('Urutkan dari yang terbaru') : tr('Urutkan dari yang terlama')}>
 										<span>Terakhir Update</span>
-										{#if sortKey === 'updated' && !dateDesc}<ArrowUp size={13} strokeWidth={2.4} />{:else}<ArrowDownUp size={13} strokeWidth={2.4} />{/if}
+										{#if sortKey === 'updated' && !dateDesc}<ArrowUp size={12} strokeWidth={2.4} />{:else}<ArrowDownUp size={12} strokeWidth={2.4} />{/if}
 									</button>
 								</th>
-								<th class="px-5 py-3.5 text-right text-[11.5px] font-semibold uppercase tracking-wide" style="color: var(--muted-foreground);">Aksi</th>
+								<th class="lg-th lg-th-right">Aksi</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each sortedItems as item (item.id)}
 								{@const meta = metaFor(item.state)}
 								{@const thumb = thumbUrl(item.featured_image_url ?? item.draft_featured_image_url)}
-								<tr class="linkmon-row border-b last:border-0" style="vertical-align: top;">
-									<td class="linkmon-cell linkmon-cell-article px-5 py-4">
-										<div class="flex items-center gap-3">
+								<tr class="linkmon-row lg-row">
+									<td class="linkmon-cell linkmon-cell-article lg-cell">
+										<div class="lg-article">
 											{#if thumb && !imgError[item.id]}
 												<img
 													src={thumb}
 													alt={item.document_title ?? 'Cover artikel'}
-													class="h-12 w-[72px] shrink-0 rounded-md object-cover"
+													class="lg-thumb"
 													loading="lazy"
 													onerror={() => (imgError = { ...imgError, [item.id]: true })}
 												/>
 											{:else}
-												<span class="flex h-12 w-[72px] shrink-0 items-center justify-center rounded-md" style="background-color: var(--muted); color: var(--muted-foreground);" title={item.document_title ?? undefined}>
-													<ImageIcon size={20} />
+												<span class="lg-thumb lg-thumb-empty" title={item.document_title ?? undefined}>
+													<ImageIcon size={15} />
 												</span>
 											{/if}
 											<div class="min-w-0">
-												<p class="linkmon-title font-medium">{item.document_title ?? 'Tanpa judul'}</p>
 												{#if item.published_url}
-													<a class="linkmon-url inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={item.published_url} target="_blank" rel="noreferrer" title={item.published_url}>
-														<span class="truncate">{item.published_url}</span><ExternalLink size={12} />
+													<a class="lg-url" href={item.published_url} target="_blank" rel="noreferrer" title={item.published_url}>
+														<span class="truncate">{item.published_url}</span><ExternalLink size={11} />
 													</a>
 												{/if}
+												<p class="lg-doctitle">{item.document_title ?? 'Tanpa judul'}</p>
 											</div>
 										</div>
 									</td>
-									<td class="linkmon-cell px-5 py-4" data-label={tr("Media")}>
-										<p class="font-medium">{item.media_name ?? '—'}</p>
-										<p class="text-xs text-muted-foreground">{mediaSubtitle(item.media_type, item.media_category)}</p>
+									<td class="linkmon-cell lg-cell" data-label={tr("Media")}>
+										<p class="lg-media">{item.media_name ?? '—'}</p>
+										<p class="lg-media-sub">{mediaSubtitle(item.media_type, item.media_category)}</p>
 									</td>
-									<td class="linkmon-cell px-5 py-4" data-label="Status">
+									<td class="linkmon-cell lg-cell" data-label="Status">
 										{#snippet statusBadge()}
-											<span
-												class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold"
-												style="color: {meta.text}; background-color: {meta.bg}; border: 1px solid color-mix(in srgb, {meta.dot} 20%, transparent);"
-											>
-												<span class="h-1.5 w-1.5 rounded-full" style="background-color: {meta.dot};"></span>
+											<span class="lg-badge" style="color: {meta.text}; background-color: {meta.bg};">
+												<span class="lg-badge-dot" style="background-color: {meta.dot};"></span>
 												<span>{meta.label}</span>
 											</span>
 										{/snippet}
@@ -439,23 +536,23 @@
 											{@render statusBadge()}
 										{/if}
 									</td>
-									<td class="linkmon-cell px-5 py-4" data-label="Terakhir diperiksa">
-										<p>{item.last_checked_at ? fmtDateTime(item.last_checked_at) : tr('Belum pernah')}</p>
-										<p class="text-xs text-muted-foreground">{formatRelativeTime(item.last_checked_at)}</p>
+									<td class="linkmon-cell lg-cell" data-label="Terakhir diperiksa">
+										<p class="lg-time">{item.last_checked_at ? fmtDateTime(item.last_checked_at) : tr('Belum pernah')}</p>
+										<p class="lg-time-rel">{formatRelativeTime(item.last_checked_at)}</p>
 									</td>
-									<td class="linkmon-cell px-5 py-4 text-right" data-label="Aksi">
+									<td class="linkmon-cell lg-cell lg-cell-action" data-label="Aksi">
 										{#if item.state === 'gone'}
 											<button
-												class="app-btn app-btn-soft linkmon-action !min-h-8 !text-xs"
+												class="app-btn app-btn-primary lg-action"
 												type="button"
 												disabled={requestingId !== null}
 												onclick={() => void requestReplacement(item)}
 											>
-												{#if requestingId === item.id}<LoaderCircle size={14} class="animate-spin" />{:else}<RotateCcw size={14} />{/if}
+												{#if requestingId === item.id}<LoaderCircle size={13} class="animate-spin" />{:else}<RotateCcw size={13} />{/if}
 												{requestingId === item.id ? 'Mengirim…' : 'Ajukan penggantian'}
 											</button>
 										{:else}
-											<span class="text-[13px]" style="color: var(--muted-foreground);">—</span>
+											<span class="lg-noaction">—</span>
 										{/if}
 									</td>
 								</tr>
@@ -464,8 +561,8 @@
 					</table>
 
 				<!-- Footer paginasi -->
-				<div class="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3">
-					<span class="text-sm text-muted-foreground">{tr("Menampilkan")} {startItem}–{endItem} {tr("dari")} {total} artikel</span>
+				<div class="lg-pagination">
+					<span class="text-[12.5px] text-muted-foreground">{tr("Menampilkan")} {startItem}–{endItem} {tr("dari")} {total} artikel</span>
 					<div class="flex flex-wrap items-center gap-2">
 						<Select
 							value={String(pageSize)}
@@ -479,11 +576,11 @@
 								{ value: '50', label: '50 per halaman' }
 							]}
 						/>
-						<button class="app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs" type="button" disabled={currentPage <= 1 || loading} onclick={() => { offset = Math.max(0, (currentPage - 2) * pageSize); void load(); }}>
+						<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={currentPage <= 1 || loading} onclick={() => { offset = Math.max(0, (currentPage - 2) * pageSize); void load(); }}>
 							‹ Sebelumnya
 						</button>
-						<span class="text-sm text-muted-foreground">{currentPage} / {totalPages}</span>
-						<button class="app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs" type="button" disabled={currentPage >= totalPages || loading} onclick={() => { offset = currentPage * pageSize; void load(); }}>
+						<span class="text-[12.5px] tabular-nums text-muted-foreground">{currentPage} / {totalPages}</span>
+						<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={currentPage >= totalPages || loading} onclick={() => { offset = currentPage * pageSize; void load(); }}>
 							Berikutnya ›
 						</button>
 					</div>
@@ -494,27 +591,147 @@
 </section>
 
 <style>
-	/* Tabel Pelacak 404: layout fixed supaya kolom tidak melebar mengikuti
-	   panjang URL. Semua isi panjang dipotong dengan ellipsis, sehingga tidak
-	   pernah muncul scroll horizontal (parity proporsi kolom app lama). */
+	/* ── Header ─────────────────────────────────────────────────────────── */
+	.lg-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+	.lg-sub { max-width: 62ch; }
+	.lg-sub strong { color: var(--foreground); }
+
+	/* Sisi kanan header: waktu sinkron terakhir + aksi manual. */
+	.lg-sync { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+	.lg-sync-time { font-size: 11.5px; color: var(--muted-foreground); }
+	.lg-sync-value { font-weight: 600; color: var(--foreground); }
+	.lg-crawl { white-space: nowrap; }
+	.lg-manual-note {
+		display: inline-flex; align-items: center; gap: 5px;
+		padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 500;
+		color: var(--warning); background-color: var(--warning-soft);
+	}
+
+	/* ── Kartu ringkasan: ikon sebaris label, angka besar, border berwarna ── */
+	.lg-cards { margin-top: 16px; display: grid; gap: 10px; grid-template-columns: 1fr; }
+	@media (min-width: 640px) { .lg-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+	@media (min-width: 1280px) { .lg-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+	.lg-card {
+		display: flex; flex-direction: column; padding: 14px 16px;
+		border: 1px solid color-mix(in srgb, var(--tone) 38%, var(--border));
+	}
+	.lg-card-label {
+		display: inline-flex; align-items: center; gap: 6px;
+		font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+		color: var(--tone);
+	}
+	.lg-card-info { display: inline-flex; color: var(--muted-foreground); }
+	.lg-card-value { margin-top: 6px; font-size: 30px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+	.lg-card-hint { margin-top: 5px; font-size: 11.5px; line-height: 1.35; color: var(--muted-foreground); }
+
+	/* ── Toolbar: pencarian lebar, status, tombol Filter ───────────────── */
+	.lg-toolbar { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; }
+	.lg-search { display: flex; align-items: center; gap: 8px; flex: 1 1 320px; min-width: 220px; padding: 5px 2px; }
+	.lg-divider { width: 1px; height: 24px; flex: none; background-color: var(--border); }
+	/* Select di dalam toolbar tampil tanpa kotak sendiri: kartu toolbar yang jadi wadahnya. */
+	.lg-toolbar :global(.zs-select-trigger) { border: 0; background: transparent; padding-left: 6px; padding-right: 6px; }
+
+	.lg-filter-wrap { position: relative; margin-left: auto; }
+	.lg-filter-btn {
+		display: inline-flex; align-items: center; gap: 6px;
+		padding: 6px 10px; border-radius: var(--radius-control, 10px);
+		font-size: 13px; font-weight: 500; color: var(--foreground);
+		transition: background-color 120ms ease;
+	}
+	.lg-filter-btn:hover { background-color: var(--secondary); }
+	.lg-filter-count {
+		display: inline-flex; align-items: center; justify-content: center;
+		min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+		background-color: var(--primary); color: var(--primary-foreground);
+		font-size: 10.5px; font-weight: 700;
+	}
+	.lg-filter-pop {
+		position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
+		width: 252px; display: flex; flex-direction: column; gap: 12px; padding: 14px;
+		border-radius: var(--radius, 12px); border: 1px solid var(--border);
+		background-color: var(--card); box-shadow: var(--shadow-md);
+	}
+	.lg-pop-field { display: flex; flex-direction: column; gap: 4px; }
+	.lg-pop-label {
+		font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+		text-transform: uppercase; color: var(--muted-foreground);
+	}
+	.lg-pop-actions {
+		display: flex; align-items: center; justify-content: space-between; gap: 8px;
+		border-top: 1px solid var(--border); padding-top: 10px;
+	}
+	.lg-pop-reset { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 500; color: var(--muted-foreground); }
+	.lg-pop-reset:hover { color: var(--foreground); }
+
+	/* ── Tabel ─────────────────────────────────────────────────────────── */
+	/* table-layout fixed + lebar kolom persen: isi dipotong dengan ellipsis,
+	   sehingga tabel tidak pernah melebihi kartunya. */
 	.linkmon-table { table-layout: fixed; }
 
-	.linkmon-title {
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-		word-break: break-word;
+	.lg-th {
+		padding: 9px 16px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+		text-transform: uppercase; color: var(--muted-foreground);
+		border-bottom: 1px solid var(--border); background-color: transparent;
+	}
+	.lg-th-left { text-align: left; }
+	.lg-th-right { text-align: right; }
+	.lg-th-btn {
+		display: inline-flex; align-items: center; gap: 5px;
+		font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit;
+	}
+	.lg-th-btn:hover { color: var(--foreground); }
+
+	.lg-row { border-bottom: 1px solid var(--border); transition: background-color 120ms ease; }
+	.lg-row:last-child { border-bottom: 0; }
+	.lg-row:hover { background-color: color-mix(in srgb, var(--secondary) 55%, transparent); }
+	.lg-cell { padding: 11px 16px; vertical-align: top; }
+	.lg-cell-action { text-align: right; }
+
+	.lg-article { display: flex; align-items: center; gap: 10px; min-width: 0; }
+	.lg-thumb { width: 56px; height: 38px; flex: none; border-radius: 6px; object-fit: cover; }
+	.lg-thumb-empty {
+		display: flex; align-items: center; justify-content: center;
+		background-color: var(--muted); color: var(--muted-foreground);
+	}
+	.lg-url {
+		display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+		font-size: 12.5px; font-weight: 500; color: var(--primary);
+	}
+	.lg-url span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+	.lg-url:hover span { text-decoration: underline; }
+	.lg-doctitle {
+		margin-top: 2px; font-size: 11.5px; line-height: 1.35; color: var(--muted-foreground);
+		display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
+		-webkit-box-orient: vertical; overflow: hidden; word-break: break-word;
 	}
 
-	.linkmon-url {
-		max-width: 100%;
-		overflow: hidden;
-	}
-	.linkmon-url span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+	.lg-media { font-size: 13.5px; font-weight: 500; }
+	.lg-media-sub { margin-top: 1px; font-size: 11.5px; color: var(--muted-foreground); }
 
-	.linkmon-action { max-width: 100%; white-space: normal; line-height: 1.25; }
+	.lg-badge {
+		display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+		padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+		white-space: nowrap;
+	}
+	.lg-badge-dot { width: 6px; height: 6px; flex: none; border-radius: 999px; }
+
+	.lg-time { font-size: 12.5px; }
+	.lg-time-rel { margin-top: 1px; font-size: 11.5px; color: var(--muted-foreground); }
+
+	.lg-action { min-height: 28px; padding: 0 10px; font-size: 12px; white-space: normal; line-height: 1.25; max-width: 100%; }
+	.lg-noaction { font-size: 12.5px; color: var(--muted-foreground); }
+
+	.lg-pagination {
+		display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+		gap: 10px; border-top: 1px solid var(--border); padding: 10px 14px;
+	}
+
+	/* Toolbar menumpuk di layar sempit supaya kontrol tidak terpotong. */
+	@media (max-width: 900px) {
+		.lg-search { flex: 1 1 100%; }
+		.lg-toolbar .lg-divider { display: none; }
+	}
 
 	/* Di bawah 700px tabel 5 kolom tidak bisa muat walau kolom sudah
 	   dipersempit (header terpanjang saja butuh ~130px). Baris berubah jadi
@@ -528,19 +745,20 @@
 		.linkmon-table colgroup,
 		.linkmon-table thead { display: none; }
 
-		.linkmon-row { padding: 14px 16px; }
-		.linkmon-row:last-child { border-bottom: 0; }
+		.lg-row { padding: 12px 14px; }
+		.lg-row:last-child { border-bottom: 0; }
+		.lg-row:hover { background-color: transparent; }
 
-		.linkmon-cell { padding: 0; text-align: left !important; }
-		.linkmon-cell + .linkmon-cell { margin-top: 10px; }
-		.linkmon-cell-article { margin-bottom: 4px; }
+		.lg-cell { padding: 0; text-align: left !important; }
+		.lg-cell + .lg-cell { margin-top: 9px; }
+		.linkmon-cell-article { margin-bottom: 3px; }
 
 		.linkmon-cell[data-label]::before {
 			content: attr(data-label);
 			display: block;
 			margin-bottom: 3px;
 			color: var(--muted-foreground);
-			font-size: 10.5px;
+			font-size: 10px;
 			font-weight: 700;
 			letter-spacing: 0.06em;
 			text-transform: uppercase;

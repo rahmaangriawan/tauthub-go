@@ -137,21 +137,42 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 
 	if view == "summary" {
 		var watched, live, gone, unreachable, noURL int
+		var lastChecked *time.Time
 		_ = d.Pool.QueryRow(r.Context(), `
 			SELECT COUNT(*)::int,
 			       COUNT(*) FILTER (WHERE c.state = 'live')::int,
 			       COUNT(*) FILTER (WHERE c.state = 'gone')::int,
 			       COUNT(*) FILTER (WHERE c.state = 'unreachable')::int,
-			       COUNT(*) FILTER (WHERE c.state = 'no_url')::int
+			       COUNT(*) FILTER (WHERE c.state = 'no_url')::int,
+			       MAX(c.last_checked_at)
 			FROM publications p
 			LEFT JOIN publication_link_checks c ON c.publication_id = p.id
 			WHERE p.brand_id = $1 AND p.status = 'published' AND p.published_url IS NOT NULL
 			  AND p.published_at > NOW() - INTERVAL '12 months'
 			  AND p.publish_status <> 'draft'`, brandID).
-			Scan(&watched, &live, &gone, &unreachable, &noURL)
+			Scan(&watched, &live, &gone, &unreachable, &noURL, &lastChecked)
+
+		// Jeda pengecekan manual (1x sehari) dibaca dari audit_logs — sumber yang
+		// sama dengan penegakan di server, supaya tombol di UI tidak menipu.
+		var lastManual *time.Time
+		_ = d.Pool.QueryRow(r.Context(), `
+			SELECT MAX(created_at) FROM audit_logs
+			 WHERE brand_id = $1 AND action = 'link_monitor.manual_check'`, brandID).Scan(&lastManual)
+		var nextManual any
+		manualAvailable := true
+		if lastManual != nil {
+			if next := lastManual.Add(24 * time.Hour); next.After(time.Now()) {
+				nextManual = tsOrNil(&next)
+				manualAvailable = false
+			}
+		}
+
 		writeJSON(w, http.StatusOK, map[string]any{
 			"watched": watched, "live": live, "gone": gone,
 			"unreachable": unreachable, "no_url": noURL,
+			"last_checked_at":        tsOrNil(lastChecked),
+			"next_manual_check_at":   nextManual,
+			"manual_check_available": manualAvailable,
 		})
 		return
 	}

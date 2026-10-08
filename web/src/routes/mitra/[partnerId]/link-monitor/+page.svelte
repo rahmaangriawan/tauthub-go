@@ -103,11 +103,11 @@
 	const mediaNames = $derived([...new Set(domains.map((d) => d.name).filter(Boolean))] as string[]);
 </script>
 
-<PageTitle title={tr('Pelacak 404')} />
+<PageTitle title={tr('Link Guardian')} />
 
 <section>
 	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">{tr('Pelacak 404')}</h1>
+		<h1 class="text-2xl font-semibold tracking-tight">{tr('Link Guardian')}</h1>
 		<p class="mt-1 text-sm text-muted-foreground">{tr("Pantau tautan artikel yang hilang dan kesehatan domain media Anda.")}</p>
 	</header>
 

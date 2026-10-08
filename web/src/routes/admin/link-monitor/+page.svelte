@@ -363,7 +363,7 @@
 
 <section>
 	<PageHeader
-		title="Pelacak 404"
+		title="Link Guardian"
 		description={tr("Halaman ini menjaga garansi tayang 12 bulan: sistem memeriksa apakah artikel yang sudah terbit di situs media mitra masih bisa dibuka. Kalau ada halaman yang hilang, artikel itu ditandai di baris daftar supaya bisa segera diganti di media lain. Pengecekan ulang berjalan otomatis tiap 7 hari dan bisa diantrekan manual lewat tombol Cek Sekarang.")}
 	>
 		<Badge
