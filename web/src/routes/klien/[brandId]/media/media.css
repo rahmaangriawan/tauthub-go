@@ -424,6 +424,24 @@ button.categoryPlusTag:focus-visible {
     transform: translateY(0) scale(1);
   }
 }
+/* Varian "buka ke atas": popover diposisikan dari titik atas elemen lalu digeser
+   penuh ke atas. Animasi masuknya IKUT memuat translateY(-100%) supaya tidak
+   tampil di bawah dulu lalu melompat naik. */
+.categoryPopoverUp {
+  transform: translateY(-100%);
+  transform-origin: bottom left;
+  animation-name: categoryPopoverInUp;
+}
+@keyframes categoryPopoverInUp {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-100% - 4px)) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-100%) scale(1);
+  }
+}
 .categoryPopoverTitle {
   font-size: 11px;
   font-weight: 700;
@@ -722,12 +740,12 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
      collapse sering tidak menggambar border pada sel sticky. */
   position: sticky;
   top: 64px;
-  z-index: 3;
+  z-index: 10;
   box-shadow: inset 0 -1px 0 #e2e8f0;
 }
 
 /* Header aplikasi menyusut jadi 60px di layar kecil (lihat .app-content di app.css). */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .modernTh {
     top: 60px;
   }
@@ -1633,10 +1651,18 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   .modernTable th:nth-child(8), .modernTable td:nth-child(8) {
     display: none;
   }
-  /* Fallback gulir mendatar bila kolom tetap terasa sempit. */
-  .tableWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Header kolom wajib tetap sticky di mobile: container tidak boleh overflow-x: auto agar sticky tidak batal. */
+  .tableWrap { overflow: visible; width: 100%; }
+  .modernCard { overflow: visible; }
+  .modernTh {
+    position: sticky;
+    top: 60px;
+    z-index: 10;
+    padding: 11px 10px;
+    background: #f8fafc;
+    box-shadow: inset 0 -1px 0 #e2e8f0;
+  }
   .modernTd { padding: 12px 10px; }
-  .modernTh { padding: 11px 10px; }
   .modernTopBar { gap: 8px; padding: 10px; }
   .modernSearchWrap { min-width: 100%; }
   .actionBtnGroup { gap: 6px; }
@@ -1654,4 +1680,27 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   .selectedBottomBar { padding: 10px 12px; }
   .selectedBarRight { width: 100%; }
   .selectedExportBtn, .selectedCreateBtn { flex: 1; justify-content: center; }
+}
+
+/* ── Alat katalog: tombol corong di samping search + panel kanan ─────────── */
+.modernToolsWrap { display: flex; align-items: center; gap: 8px; flex: none; }
+.modernToolsBtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px; width: 38px; height: 38px; flex: none;
+  border: 1px solid var(--gray-a6, #e2e8f0); border-radius: 10px;
+  background: var(--card); color: #334155; cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.modernToolsBtn:hover { background: #f8fafc; border-color: #cbd5e1; color: #0f172a; }
+.modernToolsBtnActive { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+.toolsPanel { display: flex; flex-direction: column; gap: 12px; }
+.toolsPanelLabel {
+  display: block; margin-bottom: 6px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: #94a3b8;
+}
+.toolsPanel .modernActionBtn { width: 100%; justify-content: flex-start; }
+@media (max-width: 768px) {
+  .modernSearchWrap { flex: 1 1 auto; }
+  .modernToolsWrap { flex: none; }
 }

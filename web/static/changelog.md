@@ -19,6 +19,27 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.5.0 — 2026-10-09
+
+### Fitur
+- Profiler: halaman baru untuk menyimpan "buku panduan brand" Anda — nama dan bidang usaha, gaya bahasa, kata yang dilarang, pedoman konten, instruksi khusus, sampai dokumen, gambar, dan tautan referensi. Isi sekali, lalu tiap artikel AI bisa memakai acuan itu. Satu akun boleh punya banyak Profiler, dan bisa diganti nama, disalin, atau dihapus.
+- Pilih jenis artikel saat membuat naskah dengan AI: Editorial, Advertorial, atau Opini. Masing-masing punya gaya penulisan sendiri. Tersedia untuk media mainstream; untuk media blog gayanya sudah menyesuaikan otomatis.
+- Minta gambar lewat kolom topik, AI membuat gambarnya dan memasukkannya ke dalam artikel. Perkiraan jumlah gambar dan biayanya ditampilkan lebih dulu sebelum diproses, jadi saldo tidak terpakai tanpa Anda sadari. Gambar utama tetap Anda atur sendiri.
+- Unggah dokumen Word atau PDF kini ikut membawa gambarnya, bukan hanya teksnya. Gambar dari dokumen otomatis disimpan sehingga ikut terbit di media tujuan.
+- Profiler bisa dipilih saat menyimpan kampanye dari katalog media, dan pilihannya tersimpan rapi bersama kampanye tersebut.
+
+### Perbaikan
+- Di jendela pengelola naskah kini terlihat jenis media tujuannya: Media Mainstream atau Media Blogger.
+- Katalog media lebih nyaman dibuka dari HP: kolom yang kurang penting disembunyikan otomatis, jadi yang tampil tinggal nama media, harga, dan tombolnya.
+- Nama kategori media kini berwarna berbeda-beda supaya lebih cepat dikenali.
+- Ada animasi halus sebagai tanda pilihan tercatat: saat mencentang media, saat menandai media simpanan, dan saat menambah media ke kampanye. Semua animasi otomatis mati bila perangkat Anda diatur mengurangi gerakan.
+- Di pengaturan Agent, tab Blogger dan Media Mainstream kini terpisah rapi — masing-masing punya kolom prompt sendiri sehingga tidak saling tertukar.
+- Toolbar katalog media diringkas jadi satu tombol corong di samping kolom pencarian. Diklik, muncul panel dari kanan berisi kategori, filter lanjutan, impor daftar, dan media simpanan — jadi toolbar tidak lagi berjejal.
+- Header kolom tabel tetap menempel di atas saat daftar digulir, termasuk dari HP.
+- Daftar kategori menyesuaikan posisi otomatis: tampil ke atas bila barisnya ada di dekat dasar layar, jadi tidak terpotong.
+- Saat semua pilihan media dibatalkan, penanda tahapan hilang dengan animasi halus (bukan hilang mendadak).
+- Ikon saldo kredit dibuat hijau supaya lebih mudah dikenali.
+
 ## v0.4.0 — 2026-10-07
 
 ### Fitur

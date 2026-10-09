@@ -59,6 +59,7 @@
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import MediaDetailModal from './_detail-modal.svelte';
 	import Select from '$lib/components/select.svelte';
+	import SlideOver from '$lib/components/slide-over.svelte';
 	import { Tooltip } from 'bits-ui';
 	import { getCategoryTone } from '$lib/media/category-tone';
 	import './media.css';
@@ -139,7 +140,7 @@
 	let catPopoverId = $state<string | null>(null);
 	// Popover kategori diposisikan fixed (seperti portal Radix di app lama)
 	// supaya tidak terpotong overflow:hidden milik .modernCard / .tableWrap.
-	let catPopoverPos = $state<{ left: number; top: number }>({ left: 0, top: 0 });
+	let catPopoverPos = $state<{ left: number; top: number; atas: boolean }>({ left: 0, top: 0, atas: false });
 	let catPopoverCats = $state<string[]>([]);
 
 	function openCategoryPopover(event: MouseEvent, id: string, cats: string[]) {
@@ -151,7 +152,13 @@
 		const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
 		const width = 280;
 		const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8));
-		catPopoverPos = { left, top: rect.bottom + 4 };
+		// Kondisional: kalau ruang di bawah tidak cukup (mis. baris di dekat dasar
+		// layar), popover tampil KE ATAS; selain itu ke bawah seperti biasa.
+		const perkiraanTinggi = 200;
+		const ruangBawah = window.innerHeight - rect.bottom - 8;
+		const ruangAtas = rect.top - 8;
+		const bukaKeAtas = ruangBawah < perkiraanTinggi && ruangAtas > ruangBawah;
+		catPopoverPos = { left, top: bukaKeAtas ? rect.top - 4 : rect.bottom + 4, atas: bukaKeAtas };
 		catPopoverCats = cats;
 		catPopoverId = id;
 	}
@@ -214,6 +221,8 @@
 	let profilerOptions = $state<Array<{ value: string; label: string }>>([]);
 	let profilerId = $state('');
 	let profilerLoading = $state(false);
+	// Panel alat katalog (kategori, filter, impor, bookmark) dari kanan.
+	let toolsOpen = $state(false);
 	// Cek pesanan ganda: media yang sudah dipesan di kampanye aktif lain.
 	let dupHits = $state<Array<{ mediaName: string; campaignName: string }>>([]);
 	let checkingDup = $state(false);
@@ -953,9 +962,28 @@
 			<Search size={18} class="modernSearchIcon" />
 			<input class="modernSearchInput" placeholder={tr("Cari nama media, domain, atau niche...")} bind:value={search} />
 		</div>
-		<div class="modernActionsGroup">
-			<!-- Kategori -->
+		<div class="modernToolsWrap">
+			<button
+				class="modernToolsBtn {activeFilterCount > 0 || bookmarkOnly || category ? 'modernToolsBtnActive' : ''}"
+				type="button"
+				aria-expanded={toolsOpen}
+				aria-label={tr('Buka alat katalog')}
+				title={tr('Alat katalog: kategori, filter, impor, bookmark')}
+				onclick={() => (toolsOpen = true)}
+			>
+				<SlidersHorizontal size={16} />
+				{#if activeFilterCount + (bookmarkOnly ? 1 : 0) + (category ? 1 : 0) > 0}
+					<span class="modernActionBadge">{activeFilterCount + (bookmarkOnly ? 1 : 0) + (category ? 1 : 0)}</span>
+				{/if}
+			</button>
+		</div>
+	</div>
+
+	<!-- Alat katalog: panel dari kanan (kategori, filter lanjutan, impor, bookmark). -->
+	<SlideOver open={toolsOpen} title={tr('Alat Katalog')} subtitle={tr('Kelola kategori, filter, impor daftar, dan media simpanan.')} closeLabel={tr('Tutup')} onClose={() => (toolsOpen = false)}>
+		<div class="toolsPanel">
 			<div class="modernSelectWrap">
+				<span class="toolsPanelLabel">{tr('Kategori')}</span>
 				<Select
 					bind:value={category}
 					ariaLabel="Kategori"
@@ -970,7 +998,6 @@
 				/>
 			</div>
 
-			<!-- Filter lanjutan (popover mengambang) -->
 			<button
 				bind:this={advBtn}
 				class="modernActionBtn {activeFilterCount > 0 ? 'modernActionBtnActive' : ''}"
@@ -979,16 +1006,14 @@
 				onclick={openAdvFilter}
 			>
 				<SlidersHorizontal size={15} />
-				<span>Filter</span>
+				<span>{tr('Filter Lanjutan')}</span>
 				{#if activeFilterCount > 0}<span class="modernActionBadge">{activeFilterCount}</span>{/if}
 			</button>
 
-			<!-- Impor daftar -->
-			<button class="modernActionBtn" type="button" onclick={() => (importOpen = true)}>
-				<Upload size={15} /><span>Impor List</span>
+			<button class="modernActionBtn" type="button" onclick={() => { toolsOpen = false; importOpen = true; }}>
+				<Upload size={15} /><span>{tr('Impor List')}</span>
 			</button>
 
-			<!-- Bookmark -->
 			<button
 				class="modernActionBtn {bookmarkOnly ? 'modernActionBtnActive' : ''}"
 				type="button"
@@ -997,11 +1022,11 @@
 				onclick={() => (bookmarkOnly = !bookmarkOnly)}
 			>
 				<Bookmark size={15} />
-				<span>Bookmark</span>
+				<span>{tr('Hanya Bookmark')}</span>
 				{#if bookmarkedIds.size > 0}<span class="modernActionBadge">{bookmarkedIds.size}</span>{/if}
 			</button>
 		</div>
-	</div>
+	</SlideOver>
 
 	<!-- Panel filter lanjutan — mengambang di bawah tombol Filter, tidak menggeser tabel -->
 	{#if advOpen}
@@ -1671,11 +1696,12 @@
 		aria-label={tr("Tutup daftar kategori")}
 		onclick={() => (catPopoverId = null)}
 	></button>
-	<div
-		class="categoryPopover"
-		role="tooltip"
-		style="left: {catPopoverPos.left}px; top: {catPopoverPos.top}px;"
-	>
+		<div
+			class="categoryPopover"
+			class:categoryPopoverUp={catPopoverPos.atas}
+			role="tooltip"
+			style="left: {catPopoverPos.left}px; top: {catPopoverPos.top}px;"
+		>
 		<div class="categoryPopoverTitle">{tr("Semua Kategori")}</div>
 			<div class="categoryPopoverList">
 				{#each catPopoverCats as c (c)}<span class="categoryPill categoryPill--{getCategoryTone(c)}">{c}</span>{/each}
