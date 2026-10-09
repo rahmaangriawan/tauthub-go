@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
+	profilerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/profiler"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -240,6 +241,33 @@ func (d *Deps) TautCampaignCreate(w http.ResponseWriter, r *http.Request) {
 
 	id := uuid.NewString()
 
+	// Profiler opsional: divalidasi kepemilikannya, lalu DISNAPSHOT saat kampanye
+	// dibuat supaya artikel tetap konsisten walau Profiler diubah belakangan.
+	profilerID := ""
+	var profilerSnapshot any
+	if raw, ok, err := fieldStr(body, "profiler_id"); err != nil {
+		d.writeErr(w, err)
+		return
+	} else if ok && strings.TrimSpace(raw) != "" {
+		profilerID = strings.TrimSpace(raw)
+		owned, oErr := d.queryRow(r.Context(),
+			"SELECT id FROM profiler_profiles WHERE id = $1 AND brand_id = $2 AND deleted_at IS NULL", profilerID, brandID)
+		if oErr != nil {
+			d.writeErr(w, oErr)
+			return
+		}
+		if owned == nil {
+			httpx.Error(w, http.StatusUnprocessableEntity, "Profiler tidak ditemukan untuk brand ini.")
+			return
+		}
+		contextText := profilerdomain.BuildContextText(r.Context(), d.Pool, profilerID)
+		profilerSnapshot = jsonString(map[string]any{"profile_id": profilerID, "context": contextText, "captured_at": isoMilli(time.Now())})
+	}
+	var profilerArg any
+	if profilerID != "" {
+		profilerArg = profilerID
+	}
+
 	// Nama default "Kampanye Baru #N" dinomori dari MAX(#N)+1 (bukan COUNT).
 	resolvedName := name
 	if reDefaultCampaignName.MatchString(name) {
@@ -260,10 +288,12 @@ func (d *Deps) TautCampaignCreate(w http.ResponseWriter, r *http.Request) {
 	// insert dari app lama pun ikut dapat; di sini dibaca balik untuk respons.
 	created, err := d.queryRow(r.Context(),
 		`INSERT INTO campaigns (id, brand_id, name, created_by, status,
-		   business_profile, hyperlink_config, starts_at, taut_status, taut_entry_mode, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, 'active', $5::jsonb, $6::jsonb, $7, $8, $9, NOW(), NOW())
+		   business_profile, hyperlink_config, starts_at, taut_status, taut_entry_mode,
+		   profiler_id, profiler_snapshot, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, 'active', $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11::jsonb, NOW(), NOW())
 		 RETURNING public_id`,
-		id, brandID, resolvedName, user.ID, "{}", "[]", startsAt, status, entryMode)
+		id, brandID, resolvedName, user.ID, "{}", "[]", startsAt, status, entryMode,
+		profilerArg, profilerSnapshot)
 	if err != nil {
 		d.writeErr(w, err)
 		return

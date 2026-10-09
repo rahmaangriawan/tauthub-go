@@ -317,35 +317,75 @@
   align-items: center;
   gap: 5px;
 }
+/* Badge Kategori: B2B SaaS Corporate Bold */
 .categoryPill {
-  display: inline-block;
-  padding: 4px 10px;
-  background: #f1f5f9;
-  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
   white-space: nowrap;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  color: #1e293b;
+  transition: opacity 0.12s ease;
 }
+
+/* Palette kategori: 24 warna (Corporate Bold). Tint latar tipis + border tegas
+   + teks berkontras tinggi (≥4.5:1). */
+.categoryPill--charcoal { background: #f1f5f9; border-color: #cbd5e1; color: #1e293b; }
+.categoryPill--slate { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
+.categoryPill--stone { background: #fafaf9; border-color: #e7e5e4; color: #57534e; }
+.categoryPill--navy { background: #f0f4f9; border-color: #cbd5e1; color: #0f2744; }
+.categoryPill--cobalt { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.categoryPill--blue { background: #eef6ff; border-color: #cfe4fe; color: #1e40af; }
+.categoryPill--sky { background: #f0f9ff; border-color: #bae6fd; color: #0369a1; }
+.categoryPill--cyan { background: #ecfeff; border-color: #a5f3fc; color: #0e7490; }
+.categoryPill--teal { background: #f0fdfa; border-color: #99f6e4; color: #0f766e; }
+.categoryPill--emerald { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+.categoryPill--green { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+.categoryPill--lime { background: #f7fee7; border-color: #d9f99d; color: #4d7c0f; }
+.categoryPill--gold { background: #fefce8; border-color: #fef08a; color: #a16207; }
+.categoryPill--amber { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.categoryPill--orange { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
+.categoryPill--coral { background: #fff4f2; border-color: #ffd5cc; color: #b93815; }
+.categoryPill--red { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+.categoryPill--burgundy { background: #fff1f2; border-color: #fecdd3; color: #9f1239; }
+.categoryPill--pink { background: #fdf2f8; border-color: #fbcfe8; color: #be185d; }
+.categoryPill--rose { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
+.categoryPill--fuchsia { background: #fdf4ff; border-color: #f5d0fe; color: #a21caf; }
+.categoryPill--purple { background: #faf5ff; border-color: #e9d5ff; color: #7e22ce; }
+.categoryPill--violet { background: #f5f3ff; border-color: #ddd6fe; color: #6d28d9; }
+.categoryPill--indigo { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+
+/* Badge +N untuk kategori tambahan: badge netral charcoal dengan kontras jelas */
 .categoryPlusTag {
-  display: inline-block;
-  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 7px;
   background: #e2e8f0;
-  color: #475569;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
+  line-height: 1.2;
 }
 /* Badge +N yang bisa diklik (tombol) — membuka popover semua kategori. */
 button.categoryPlusTag {
-  border: none;
-  font: inherit;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  border: 1px solid #cbd5e1;
+  font: inherit;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 button.categoryPlusTag:hover {
-  background: #cbd5e1;
-  color: #0f172a;
+  background: #334155;
+  border-color: #1e293b;
+  color: #ffffff;
 }
 button.categoryPlusTag:focus-visible {
   outline: 2px solid #2563eb;
@@ -990,6 +1030,100 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   color: #94a3b8;
   white-space: nowrap;
 }
+/* Indikator tahap alur kampanye di header (muncul saat media dipilih). */
+.selectedStepsTrack {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: stepsTrackEnter 340ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+@keyframes stepsTrackEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .selectedStepsTrack {
+    animation: none;
+  }
+}
+.selectedStepChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 400;
+  padding: 5px 14px 5px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--card, #fff);
+  color: var(--muted-foreground, #94a3b8);
+  white-space: nowrap;
+}
+/* Bulatan nomor/centang di dalam pil, sama seperti pil tahap di The Writer. */
+.selectedStepNum {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--muted, #eef2f8);
+  color: var(--muted-foreground, #94a3b8);
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+/* Langkah yang sudah dilewati: bulatan hijau bercentang. */
+.selectedStepChipDone .selectedStepNum {
+  background: var(--success, #16a34a);
+  color: #ffffff;
+}
+.selectedStepChipDone {
+  border-color: var(--border, #e2e8f0);
+  color: var(--muted-foreground, #94a3b8);
+}
+/* Langkah aktif saat ini: bingkai biru, bulatan nomor biru (primary), teks tebal. */
+.selectedStepChipActive {
+  border-color: var(--primary);
+  color: var(--foreground);
+  font-weight: 700;
+}
+.selectedStepChipActive .selectedStepNum {
+  background: var(--primary);
+  color: var(--primary-foreground, #ffffff);
+}
+/* Field modal: dropdown Profiler pas dengan teks isinya (fit-content). */
+.modalField .zs-select-trigger {
+  width: fit-content;
+  max-width: 100%;
+}
+.modalField .zs-select-label {
+  max-width: 260px;
+}
+/* Ajakan melengkapi Profiler: teks saja, tanpa kotak, supaya tetap minimalis. */
+.profilerInviteBtn {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.profilerInviteBtn:hover {
+  color: var(--primary-hover, var(--primary));
+}
 .selectedStatPriceGroup {
   display: flex;
   align-items: baseline;
@@ -1223,23 +1357,28 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 
 .modalOverlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.45); }
 .modalCard {
-  background: var(--card); border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px;
-  width: 100%; max-width: 520px; max-height: 86vh; overflow-y: auto; color: #0f172a;
+  background: var(--card); border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px 26px;
+  width: 100%; max-width: 530px; max-height: 88vh; overflow-y: auto; color: #0f172a;
 }
-.modalHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-.modalTitle { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; margin: 0; }
-.modalClose { background: transparent; border: none; color: #64748b; cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
-.modalClose:hover { background: #f1f5f9; }
-.modalHint { font-size: 13px; color: #64748b; margin: 4px 0 12px; line-height: 1.5; }
+.campaignModalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.modalHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.modalTitle { display: inline-flex; align-items: center; gap: 8px; font-size: 16.5px; font-weight: 700; margin: 0; }
+.modalClose { background: transparent; border: none; color: #64748b; cursor: pointer; padding: 6px; border-radius: 8px; display: inline-flex; }
+.modalClose:hover { background: #f1f5f9; color: #0f172a; }
+.modalHint { font-size: 13px; color: #64748b; margin: 0; line-height: 1.5; }
 .modalTextarea {
   width: 100%; border: 1px solid #e2e8f0; border-radius: 9px; padding: 11px 13px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
   background: #f8fafc; color: #0f172a; outline: none; resize: vertical;
 }
 .modalTextarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
-.modalField { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; color: #334155; }
-.modalError { font-size: 12.5px; color: #dc2626; margin: 8px 0 0; }
-.modalFooter { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.modalField { display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; font-weight: 550; color: #1e293b; }
+.modalError { font-size: 12.5px; color: #dc2626; margin: -10px 0 0; }
+.modalFooter { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 8px; }
 .bookmarkList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
 .bookmarkRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid #f1f5f9; border-radius: 8px; }
 .bookmarkName { font-size: 13px; font-weight: 500; color: #0f172a; }
@@ -1248,6 +1387,91 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 
 /* Bar seleksi menempel di kanan sidebar (lebar sidebar klien 264px). */
 @media (min-width: 1024px) { .selectedBottomBar { left: 264px; } }
+
+/* ── Fly-to-campaign: chip animasi + highlight baris + pulse tombol ────── */
+.flyLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  pointer-events: none;
+  overflow: hidden;
+}
+.flyChip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #1d4ed8;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(29, 78, 216, 0.35);
+  will-change: transform, opacity;
+}
+.flyChip svg {
+  flex: none;
+}
+/* Varian chip bookmark (ikon saja, hijau-biru aksen utama). */
+.flyChipBookmark {
+  padding: 6px;
+  background: #2563eb;
+}
+/* Pop singkat pada ikon bookmark sumber: membesar lalu kembali + jadi filled. */
+.bookmarkActionBtn.bookmarkPop svg {
+  animation: bookmarkPop 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  fill: #2563eb;
+  stroke: #2563eb;
+}
+@keyframes bookmarkPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+/* Pulse tombol Bookmark di toolbar saat chip tiba. */
+.modernActionBtn.bookmarkPulse {
+  animation: bookmarkPulse 480ms ease-out;
+}
+@keyframes bookmarkPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+  45% { transform: scale(1.06); }
+  70% { box-shadow: 0 0 0 9px rgba(37, 99, 235, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bookmarkActionBtn.bookmarkPop svg,
+  .modernActionBtn.bookmarkPulse {
+    animation: none;
+  }
+}
+/* Baris yang baru dipilih: highlight biru halus ~360 ms. */
+.modernTr.rowJustSelected > td {
+  animation: rowSelectFlash 360ms ease-out;
+}
+@keyframes rowSelectFlash {
+  0% { background-color: rgba(37, 99, 235, 0.16); }
+  100% { background-color: transparent; }
+}
+/* Pulse pada tombol Kampanye saat chip tiba. */
+.selectedCreateBtn.barPulse,
+.selectedBottomBar.barPulse .selectedCreateBtn {
+  animation: createBtnPulse 560ms ease-out;
+}
+@keyframes createBtnPulse {
+  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); }
+  70% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modernTr.rowJustSelected > td,
+  .selectedBottomBar.barPulse .selectedCreateBtn {
+    animation: none;
+  }
+}
 
 /* ── Modal detail media (port media-detail-modal.tsx) ─────────────────── */
 .detailCard {
@@ -1388,4 +1612,46 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   letter-spacing: normal;
   text-align: left;
   overflow-wrap: anywhere;
+}
+
+/* ── Responsif: tabel katalog & bar seleksi di layar kecil ─────────────────
+   Kolom tabel (1 checkbox, 2 Nama Media, 3 Kategori, 4 Trafik, 5 DA,
+   6 AI Trust, 7 AI Cited, 8 Waktu Rilis, 9 Harga, 10 Aksi). Kolom sekunder
+   disembunyikan bertahap agar baris tetap terbaca tanpa scroll horizontal. */
+@media (max-width: 1024px) {
+  .modernTable th:nth-child(5), .modernTable td:nth-child(5),
+  .modernTable th:nth-child(6), .modernTable td:nth-child(6),
+  .modernTable th:nth-child(7), .modernTable td:nth-child(7) {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Sisakan: checkbox, Nama Media, Harga, Aksi. */
+  .modernTable th:nth-child(3), .modernTable td:nth-child(3),
+  .modernTable th:nth-child(4), .modernTable td:nth-child(4),
+  .modernTable th:nth-child(8), .modernTable td:nth-child(8) {
+    display: none;
+  }
+  /* Fallback gulir mendatar bila kolom tetap terasa sempit. */
+  .tableWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .modernTd { padding: 12px 10px; }
+  .modernTh { padding: 11px 10px; }
+  .modernTopBar { gap: 8px; padding: 10px; }
+  .modernSearchWrap { min-width: 100%; }
+  .actionBtnGroup { gap: 6px; }
+
+  /* Bar seleksi: sidebar disembunyikan (<768px) → menempel penuh & membungkus. */
+  .selectedBottomBar { left: 0; padding: 12px 14px; flex-wrap: wrap; gap: 10px 16px; }
+  .selectedBarLeft { flex-wrap: wrap; gap: 8px 16px; }
+  .selectedBarRight { flex-wrap: wrap; }
+  .selectedBarDivider { display: none; }
+}
+
+@media (max-width: 480px) {
+  .modernTd { padding: 11px 8px; }
+  .modernTh { padding: 10px 8px; }
+  .selectedBottomBar { padding: 10px 12px; }
+  .selectedBarRight { width: 100%; }
+  .selectedExportBtn, .selectedCreateBtn { flex: 1; justify-content: center; }
 }

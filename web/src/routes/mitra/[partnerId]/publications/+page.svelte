@@ -766,28 +766,28 @@
 									</div>
 								</div>
 							</td>
-							<td class="px-4 py-2.5">
-								<span class="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: {pubMode(p.media_publication_mode).tone}22; color: {pubMode(p.media_publication_mode).tone};">
-									{pubMode(p.media_publication_mode).label}
-								</span>
-								{#if p.media_integration_type}
-									<p class="mt-1 pl-2 text-[11px] text-muted-foreground">{integrationLabel[p.media_integration_type] ?? p.media_integration_type}</p>
-								{/if}
-							</td>
 								<td class="px-4 py-2.5">
-									<p class="font-medium">{mediaDomainLabel(p.media_website_url, p.media_name ?? '')}</p>
-									{#if effectiveUrl(p)}
-									<a
-										class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-										href={effectiveUrl(p) ?? undefined}
-										target="_blank"
-										rel="noreferrer"
-										onclick={(e) => e.stopPropagation()}
-									>
-										{tr('Lihat Artikel')}
-									</a>
-								{/if}
-							</td>
+									<span class="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: {pubMode(p.media_publication_mode).tone}22; color: {pubMode(p.media_publication_mode).tone};">
+										{pubMode(p.media_publication_mode).label}
+									</span>
+								</td>
+									<td class="px-4 py-2.5">
+										<p class="font-medium">{mediaDomainLabel(p.media_website_url, p.media_name ?? '')}</p>
+										{#if effectiveUrl(p)}
+										<a
+											class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+											href={effectiveUrl(p) ?? undefined}
+											target="_blank"
+											rel="noreferrer"
+											onclick={(e) => e.stopPropagation()}
+										>
+											{tr('Lihat Artikel')}
+										</a>
+									{/if}
+									{#if p.media_integration_type}
+										<p class="mt-0.5 text-[11px] text-muted-foreground">{integrationLabel[p.media_integration_type] ?? p.media_integration_type}</p>
+									{/if}
+								</td>
 							<td class="px-4 py-2.5 text-right tabular-nums">{rp(p.partner_amount)}</td>
 							<td class="px-4 py-2.5">
 								<span class="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--{statusTone[p.status] ?? 'accent'}-soft, var(--accent)); color: var(--{statusTone[p.status] ?? 'accent'});">

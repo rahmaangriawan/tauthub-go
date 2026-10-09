@@ -49,7 +49,21 @@
 		// Saat kembali dari mode HTML, elemen contenteditable dibuat ulang oleh
 		// {#if} — isinya harus diisi ulang dari value.
 		let pendingRender = $state(false);
-		let linkDialog = $state({ open: false, url: '', isEdit: false });
+		let linkDialog = $state<{ open: boolean; url: string; text: string; isEdit: boolean; rel: string; error: string }>({
+			open: false,
+			url: '',
+			text: '',
+			isEdit: false,
+			rel: 'dofollow',
+			error: ''
+		});
+		// Keterangan yang tampil mengikuti radio rel yang dipilih, ditulis dengan
+		// bahasa awam: apa efeknya + kapan sebaiknya dipakai.
+		const REL_HINTS: Record<string, string> = {
+			dofollow: tr('Tautan biasa. Google ikut membaca dan menilai tautan ini, jadi bisa membantu SEO. Pakai untuk tautan yang wajar ada di dalam artikel.'),
+			nofollow: tr('Google tidak menghitung tautan ini. Pakai kalau tautannya bukan untuk mendongkrak SEO, atau kamu tidak ingin dianggap merekomendasikan halaman tujuan.'),
+			sponsored: tr('Untuk tautan berbayar: iklan atau kerja sama. Google mewajibkan penanda ini. Pakai kalau tautannya disponsori.')
+		};
 		let savedRange: Range | null = null;
 		let imageModalOpen = $state(false);
 		let mediaPickerOpen = $state(false);
@@ -259,16 +273,61 @@
 		const sel = window.getSelection();
 		savedRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
 		const anchor = closestAnchor();
-		linkDialog = { open: true, url: anchor?.getAttribute('href') ?? '', isEdit: Boolean(anchor) };
+		// Auto-deteksi: teks yang sedang diseleksi dipakai sebagai teks tautan.
+		const selectedText = savedRange && !savedRange.collapsed ? savedRange.toString().trim() : '';
+		// rel tautan yang sedang diedit: sponsored menang, lalu nofollow, sisanya
+		// dofollow (tanpa rel).
+		const relAttr = (anchor?.getAttribute('rel') ?? '').toLowerCase();
+		const rel: 'dofollow' | 'nofollow' | 'sponsored' = relAttr.includes('sponsored')
+			? 'sponsored'
+			: relAttr.includes('nofollow')
+				? 'nofollow'
+				: 'dofollow';
+		linkDialog = {
+			open: true,
+			url: anchor?.getAttribute('href') ?? '',
+			text: anchor ? (anchor.textContent ?? '').trim() : selectedText,
+			isEdit: Boolean(anchor),
+			rel,
+			error: ''
+		};
+	}
+
+	function closeLinkDialog() {
+		linkDialog = { ...linkDialog, open: false, error: '' };
+	}
+
+	function applyRel(a: HTMLAnchorElement, rel: string) {
+		if (rel === 'dofollow') a.removeAttribute('rel');
+		else a.setAttribute('rel', rel);
+	}
+
+	function insertLinkNode(a: HTMLAnchorElement, range: Range | null) {
+		if (range) {
+			if (!range.collapsed) range.deleteContents();
+			range.insertNode(a);
+		} else {
+			bodyEl?.appendChild(a);
+		}
+		// Letakkan caret tepat setelah tautan yang baru disisipkan.
+		const sel = window.getSelection();
+		if (sel) {
+			const after = document.createRange();
+			after.setStartAfter(a);
+			after.collapse(true);
+			sel.removeAllRanges();
+			sel.addRange(after);
+		}
 	}
 
 	function applyLink() {
 		const body = bodyEl;
 		if (!body) {
-			linkDialog = { ...linkDialog, open: false };
+			closeLinkDialog();
 			return;
 		}
 		const url = linkDialog.url.trim();
+		const text = linkDialog.text.trim();
 		body.focus();
 		const sel = window.getSelection();
 		if (sel && savedRange) {
@@ -279,22 +338,51 @@
 				/* range basi */
 			}
 		}
-		const anchor = closestAnchor();
+		const existing = closestAnchor();
+		const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+
+		// URL kosong = lepas tautan dari teks terpilih.
 		if (!url) {
-			if (anchor) {
-				const range = document.createRange();
-				range.selectNodeContents(anchor);
+			if (existing) {
+				const r = document.createRange();
+				r.selectNodeContents(existing);
 				sel?.removeAllRanges();
-				sel?.addRange(range);
+				sel?.addRange(r);
 				document.execCommand('unlink', false);
 			}
-		} else if (anchor && sel?.isCollapsed) {
-			anchor.setAttribute('href', url);
-		} else {
-			document.execCommand('createLink', false, url);
+			sync();
+			closeLinkDialog();
+			return;
 		}
+
+		const hasSelection = Boolean(range && !range.collapsed);
+		// Butuh teks tautan: dari field, atau dari teks yang diseleksi di artikel.
+		if (!text && !hasSelection && !existing) {
+			linkDialog = { ...linkDialog, error: tr('Blok teks di artikel dulu, atau isi Teks Tautan.') };
+			return;
+		}
+
+		let target: HTMLAnchorElement | null = null;
+		if (existing) {
+			// Seleksi berada di dalam tautan yang sudah ada → perbarui tautan itu
+			// (jangan membuat tautan bersarang). Teks hanya diganti bila seleksi
+			// mencakup seluruh teks tautan.
+			const fullText = (existing.textContent ?? '').trim();
+			const coversWhole = !range || range.collapsed || range.toString().trim() === fullText;
+			existing.setAttribute('href', url);
+			if (text && text !== fullText && coversWhole) existing.textContent = text;
+			target = existing;
+		} else {
+			// Buat tautan baru — membungkus seleksi atau menyisipkan di caret.
+			const a = document.createElement('a');
+			a.setAttribute('href', url);
+			a.textContent = text || (range ? range.toString() : '');
+			insertLinkNode(a, range);
+			target = a;
+		}
+		if (target) applyRel(target, linkDialog.rel);
 		sync();
-		linkDialog = { open: false, url: '', isEdit: false };
+		closeLinkDialog();
 	}
 
 	function handleBodyClick(e: MouseEvent) {
@@ -404,19 +492,68 @@
 	{#if imageError}<p class="mt-1 text-sm" style="color: var(--destructive);">{imageError}</p>{/if}
 
 		{#if linkDialog.open}
-			<div class="rte-link-backdrop" role="presentation" onclick={() => (linkDialog = { ...linkDialog, open: false })}></div>
-			<div class="rte-link-pop" role="dialog" aria-label="Tautan">
-				<input
-					class="app-input w-72 text-sm"
-					placeholder="https://contoh.com/artikel"
-					bind:value={linkDialog.url}
-					onkeydown={(e) => {
-						if (e.key === 'Enter') { e.preventDefault(); applyLink(); }
-						if (e.key === 'Escape') linkDialog = { ...linkDialog, open: false };
-					}}
-				/>
-				<button class="app-btn app-btn-primary" type="button" onclick={applyLink}>Simpan</button>
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (linkDialog = { ...linkDialog, open: false })}>Batal</button>
+			<div class="rte-link-backdrop" role="presentation" onclick={closeLinkDialog}></div>
+			<div class="rte-link-modal" role="dialog" aria-modal="true" aria-label={tr('Sisipkan Tautan')}>
+				<div class="rte-link-modal-head">
+					<strong class="text-sm">{linkDialog.isEdit ? tr('Edit Tautan') : tr('Sisipkan Tautan')}</strong>
+					<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" aria-label={tr('Tutup')} onclick={closeLinkDialog}>
+						<X size={14} />
+					</button>
+				</div>
+
+				<label class="mt-3 block">
+					<span class="text-xs font-medium text-muted-foreground">{tr('Teks Tautan (anchor)')}</span>
+					<input
+						class="app-input mt-1 w-full text-sm"
+						placeholder={tr('Teks yang tampil sebagai tautan')}
+						bind:value={linkDialog.text}
+						onkeydown={(e) => { if (e.key === 'Escape') closeLinkDialog(); }}
+					/>
+					<span class="text-[11px] text-muted-foreground">
+						{tr('Otomatis terisi dari teks yang kamu blok di artikel. Bisa diubah.')}
+					</span>
+				</label>
+
+				<label class="mt-3 block">
+					<span class="text-xs font-medium text-muted-foreground">URL</span>
+					<input
+						class="app-input mt-1 w-full text-sm"
+						placeholder="https://contoh.com/artikel"
+						bind:value={linkDialog.url}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') { e.preventDefault(); applyLink(); }
+							if (e.key === 'Escape') closeLinkDialog();
+						}}
+					/>
+				</label>
+
+				<fieldset class="mt-3">
+					<legend class="text-xs font-medium text-muted-foreground">{tr('Jenis Tautan (rel)')}</legend>
+					<div class="mt-1.5 flex flex-wrap gap-3">
+						{#each [['dofollow', tr('Dofollow')], ['nofollow', 'Nofollow'], ['sponsored', 'Sponsored']] as [value, label] (value)}
+							<label class="flex items-center gap-1.5 text-sm">
+								<input
+									type="radio"
+									name="rte-link-rel"
+									value={value}
+									checked={linkDialog.rel === value}
+									onchange={() => (linkDialog.rel = value)}
+								/>
+								{label}
+							</label>
+						{/each}
+					</div>
+					<p class="mt-1 text-[11px] text-muted-foreground">{REL_HINTS[linkDialog.rel] ?? ''}</p>
+				</fieldset>
+
+				{#if linkDialog.error}
+					<p class="mt-2 text-sm" style="color: var(--destructive);">{linkDialog.error}</p>
+				{/if}
+
+				<div class="mt-4 flex justify-end gap-2">
+					<button class="app-btn app-btn-soft" type="button" onclick={closeLinkDialog}>{tr('Batal')}</button>
+					<button class="app-btn app-btn-primary" type="button" onclick={applyLink}>{tr('Simpan')}</button>
+				</div>
 			</div>
 		{/if}
 
@@ -566,19 +703,27 @@
 		position: fixed;
 		inset: 0;
 		z-index: 1090;
+		background: rgba(15, 23, 42, 0.45);
 	}
-	.rte-link-pop {
-		position: absolute;
+	.rte-link-modal {
+		position: fixed;
 		z-index: 1100;
-		right: 0;
-		top: 42px;
-		display: flex;
-		gap: 8px;
-		align-items: center;
-		padding: 10px;
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		width: min(92vw, 420px);
+		max-height: 90vh;
+		overflow-y: auto;
+		padding: 16px;
 		border: 1px solid var(--border);
-		border-radius: 10px;
+		border-radius: 12px;
 		background: var(--card, #fff);
-		box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+		box-shadow: 0 18px 44px rgba(15, 23, 42, 0.22);
+	}
+	.rte-link-modal-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
 	}
 </style>

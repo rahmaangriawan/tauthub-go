@@ -65,7 +65,14 @@
 	function select(n: number, locked: boolean) {
 		if (!clickable(n, locked)) return;
 		const slug = AGENT_STEP_ROUTES[n - 1];
-		if (slug) void goto(`${base}/${slug}`);
+		if (!slug) return;
+		// The Matchmaker kini mengarah ke Katalog Media: klien memilih media di
+		// sana (katalog), bukan di halaman matchmaker.
+		if (slug === 'matchmaker') {
+			void goto(`/klien/${getBrandUrlId() || brandId}/media`);
+			return;
+		}
+		void goto(`${base}/${slug}`);
 	}
 
 	const toolbarSlot = getToolbarSlot();
@@ -94,7 +101,13 @@
 		{@const locked = Boolean(lockedSteps?.includes(n))}
 		{@const canClick = clickable(n, locked)}
 		{@const cls = pillClass(n, locked, canClick)}
-		{@const tip = locked ? (lockedReason ?? `${label} tidak dipakai pada kampanye ini.`) : canClick ? `Buka ${label} (langkah tersimpan)` : undefined}
+		{@const tip = n === cur
+			? tr('Anda berada di sini')
+			: locked
+				? (lockedReason ?? `${label} tidak dipakai pada kampanye ini.`)
+				: canClick
+					? `Buka ${label} (langkah tersimpan)`
+					: undefined}
 		{#if canClick}
 			<li>
 				<button

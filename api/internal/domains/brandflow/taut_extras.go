@@ -23,6 +23,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
+	"github.com/rahmaangriawan/tauthub-go/internal/doctext"
 )
 
 // taut_extras.go: port endpoint Taut Pintar klien yang belum di-wire —
@@ -495,6 +496,17 @@ func (d *Deps) TautFilesUpload(w http.ResponseWriter, r *http.Request) {
 	sum := sha256.Sum256(buffer)
 	checksum := hex.EncodeToString(sum[:])
 
+	// DOCX dengan gambar: bangun juga versi HTML yang mempertahankan gambarnya.
+	// Gambar disimpan ke uploads Tauthub, jadi dokumen pindah ke editor "sama
+	// persis" (teks + gambar) dan gambarnya ikut terbawa saat distribusi. Untuk
+	// dokumen tanpa gambar (atau format lain) hasilnya kosong → alur lama tetap.
+	docxHTML := ""
+	if mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" {
+		if richHTML, n, rErr := d.extractDocxRich(buffer); rErr == nil && n > 0 {
+			docxHTML = richHTML
+		}
+	}
+
 	existing, err := d.queryRow(r.Context(),
 		"SELECT id, original_filename, mime_type, size_bytes, parse_status, created_at FROM taut_campaign_files WHERE campaign_id = $1 AND checksum = $2 AND deleted_at IS NULL LIMIT 1",
 		campaignID, checksum)
@@ -557,26 +569,35 @@ func (d *Deps) TautFilesUpload(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
+	fileOut := map[string]any{
+		"id": fileRow.raw("id"), "original_filename": fileRow.raw("original_filename"),
+		"mime_type": fileRow.raw("mime_type"), "size_bytes": fileRow.intOr("size_bytes", 0),
+		"parse_status": fileRow.raw("parse_status"), "extracted_text": fileRow.raw("extracted_text"),
+		"created_at": fileRow.timePtr("created_at"),
+	}
+	// extracted_html = teks + gambar yang sudah dihosting Tauthub (khusus DOCX
+	// bergambar). Klien memakainya apa adanya supaya dokumen sama persis.
+	if docxHTML != "" {
+		fileOut["extracted_html"] = docxHTML
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"file": map[string]any{
-			"id": fileRow.raw("id"), "original_filename": fileRow.raw("original_filename"),
-			"mime_type": fileRow.raw("mime_type"), "size_bytes": fileRow.intOr("size_bytes", 0),
-			"parse_status": fileRow.raw("parse_status"), "extracted_text": fileRow.raw("extracted_text"),
-			"created_at": fileRow.timePtr("created_at"),
-		},
+		"file":         fileOut,
 		"deduplicated": false,
 	})
 }
 
 // extractDocument: ekstraksi teks bahan referensi (port parseDocument).
 // TXT native; DOCX dibongkar dengan stdlib (arsip ZIP + XML Office Open XML);
-// PDF masih belum didukung (parser PDF butuh library pihak ketiga).
+// PDF lewat library pihak ketiga (internal/doctext).
 func extractDocument(buffer []byte, mime string) (string, error) {
 	if mime == "text/plain" || mime == "text/csv" {
 		return truncateString(string(buffer), 100000), nil
 	}
 	if mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" {
 		return extractDocxText(buffer)
+	}
+	if mime == "application/pdf" {
+		return doctext.FromPDF(buffer)
 	}
 	return "", &bfStatusError{
 		Status:  http.StatusUnprocessableEntity,
@@ -1345,19 +1366,26 @@ func (d *Deps) TautProduceOne(w http.ResponseWriter, r *http.Request) {
 	}
 	campaignID := chiParam(r, "campaignId")
 	mediaID := chiParam(r, "mediaId")
-	// Body opsional {topic, links[]}: arahan topik/konteks dan tautan tambahan
-	// dari modal Pengelola Naskah. Tanpa body → perilaku lama.
+	// Body opsional {topic, links[], article_type}: arahan topik/konteks, tautan
+	// tambahan, dan jenis artikel (editorial/advertorial/opini) dari modal
+	// Pengelola Naskah. Tanpa body → perilaku lama.
 	var topic string
+	var articleType string
 	var rawLinks []tautWriterLinkInput
 	if r.ContentLength != 0 {
 		var body struct {
-			Topic string                `json:"topic"`
-			Links []tautWriterLinkInput `json:"links"`
+			Topic       string                `json:"topic"`
+			Links       []tautWriterLinkInput `json:"links"`
+			ArticleType string                `json:"article_type"`
 		}
 		if err := json.NewDecoder(io.LimitReader(r.Body, 65536)).Decode(&body); err == nil {
 			topic = strings.TrimSpace(body.Topic)
 			if len(topic) > 2000 {
 				topic = topic[:2000]
+			}
+			articleType = strings.TrimSpace(body.ArticleType)
+			if len(articleType) > 50 {
+				articleType = articleType[:50]
 			}
 			rawLinks = body.Links
 		}
@@ -1368,7 +1396,7 @@ func (d *Deps) TautProduceOne(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID,
-		tautWriterOptions{Topic: topic, Links: links})
+		tautWriterOptions{Topic: topic, Links: links, ArticleType: articleType})
 	if err != nil {
 		var ic *insufficientCreditsError
 		if asInsufficient(err, &ic) {

@@ -390,7 +390,7 @@ func (d *Deps) waitForTautRateSlot(ctx context.Context, agent string) {
 // runTautAgent: port runTautAgent — dedup run done, retry max 2 + backoff,
 // catat taut_agent_runs + training sample.
 func (d *Deps) runTautAgent(ctx context.Context, agent, campaignID, userPrompt string, mediaID *string, jsonMode bool) (*agentLLMResult, error) {
-	return d.runTautAgentCommon(ctx, agent, campaignID, userPrompt, mediaID, jsonMode, nil)
+	return d.runTautAgentCommon(ctx, agent, campaignID, userPrompt, mediaID, jsonMode, nil, "")
 }
 
 // runTautAgentStream: seperti runTautAgent, tetapi tiap potongan teks dari LLM
@@ -398,7 +398,14 @@ func (d *Deps) runTautAgent(ctx context.Context, agent, campaignID, userPrompt s
 // mengirim seluruh konten sekaligus. Kegagalan SETELAH sebagian delta terkirim
 // tidak di-retry — klien sudah menerima sebagian teks, retry menduplikasinya.
 func (d *Deps) runTautAgentStream(ctx context.Context, agent, campaignID, userPrompt string, mediaID *string, jsonMode bool, onDelta func(string)) (*agentLLMResult, error) {
-	return d.runTautAgentCommon(ctx, agent, campaignID, userPrompt, mediaID, jsonMode, onDelta)
+	return d.runTautAgentCommon(ctx, agent, campaignID, userPrompt, mediaID, jsonMode, onDelta, "")
+}
+
+// runTautAgentSystem: jalur Writer yang memakai prompt system pengganti, dipakai
+// untuk varian prompt per jenis artikel (opini, advertorial, dan sejenisnya).
+// Override kosong berarti tetap memakai prompt agent dari database.
+func (d *Deps) runTautAgentSystem(ctx context.Context, agent, campaignID, userPrompt string, mediaID *string, jsonMode bool, systemOverride string, onDelta func(string)) (*agentLLMResult, error) {
+	return d.runTautAgentCommon(ctx, agent, campaignID, userPrompt, mediaID, jsonMode, onDelta, systemOverride)
 }
 
 // finishRunCtx: konteks pendek yang TIDAK ikut batal ketika request berakhir.
@@ -409,7 +416,7 @@ func finishRunCtx(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 }
 
-func (d *Deps) runTautAgentCommon(ctx context.Context, agent, campaignID, userPrompt string, mediaID *string, jsonMode bool, onDelta func(string)) (*agentLLMResult, error) {
+func (d *Deps) runTautAgentCommon(ctx context.Context, agent, campaignID, userPrompt string, mediaID *string, jsonMode bool, onDelta func(string), systemOverride string) (*agentLLMResult, error) {
 	mediaKey := ""
 	if mediaID != nil {
 		mediaKey = *mediaID
@@ -447,9 +454,9 @@ func (d *Deps) runTautAgentCommon(ctx context.Context, agent, campaignID, userPr
 		var result *agentLLMResult
 		var llmErr error
 		if onDelta == nil {
-			result, llmErr = d.callAgentLLM(ctx, agent, userPrompt, jsonMode, "", 0)
+			result, llmErr = d.callAgentLLM(ctx, agent, userPrompt, jsonMode, systemOverride, 0)
 		} else {
-			result, llmErr = d.callAgentLLMCommon(ctx, agent, userPrompt, jsonMode, "", 0, func(delta string) {
+			result, llmErr = d.callAgentLLMCommon(ctx, agent, userPrompt, jsonMode, systemOverride, 0, func(delta string) {
 				emitted = true
 				onDelta(delta)
 			})

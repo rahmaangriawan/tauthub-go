@@ -265,6 +265,9 @@
 			<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola semua kampanye distribusi konten Anda di satu tempat.")}</p>
 		</div>
 		<div class="flex flex-wrap items-center justify-end gap-2">
+			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => void goto(`/klien/${brandUrl}/profiler`)}>
+				<Sparkles size={16} /> {tr('Profiler')}
+			</button>
 			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={toggleArchiveView}>
 				{#if showArchive}<RotateCcw size={16} />{:else}<Archive size={16} />{/if}
 				{showArchive ? tr('Kembali ke Daftar') : tr('Arsip')}

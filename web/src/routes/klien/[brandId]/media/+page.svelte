@@ -7,10 +7,47 @@
 	// tabel 10 kolom + sort + multi-select → paginasi → modal → selection bar.
 	import { getContext, onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { getToolbarSlot } from '$lib/components/toolbar-slot.svelte';
+
+	// Tahap alur kampanye dipindahkan ke utility bar (header) seperti halaman
+	// The Writer, dan hanya tampil kalau sudah ada media yang benar-benar dipilih.
+	const toolbarSlot = getToolbarSlot();
+	function portalToToolbar(node: HTMLElement) {
+		const stop = $effect.root(() => {
+			$effect(() => {
+				const target = toolbarSlot?.el ?? null;
+				if (!target) return;
+				if (node.parentElement !== target) target.appendChild(node);
+			});
+		});
+		return {
+			destroy() {
+				stop();
+				if (!motionOK) {
+					node.remove();
+					return;
+				}
+				// Keluar dengan animasi halus sebelum dilepas (mis. saat seluruh
+				// pilihan dibatalkan → indikator tahap menghilang dengan mulus).
+				const anim = node.animate(
+					[
+						{ opacity: 1, transform: 'translateY(0) scale(1)' },
+						{ opacity: 0, transform: 'translateY(-6px) scale(0.96)' }
+					],
+					{ duration: 220, easing: 'cubic-bezier(0.4, 0, 0.6, 1)' }
+				);
+				const done = () => node.remove();
+				anim.onfinish = done;
+				anim.oncancel = done;
+			}
+		};
+	}
 	import { goto } from '$app/navigation';
+	import { fly } from 'svelte/transition';
+	import { cubicOut, cubicIn } from 'svelte/easing';
 	import {
-		ArrowRight, Bookmark, Check, Clock, FileText, Info, LayoutGrid,
-		Plus, Search, SlidersHorizontal, Trash2, Upload, X, Zap,
+		ArrowRight, Bookmark, Check, Clock, Database, FileText, Info, LayoutGrid,
+		Plus, Search, SlidersHorizontal, Trash2, Upload, Wallet, X, Zap,
 		ChevronLeft, ChevronRight
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
@@ -23,6 +60,7 @@
 	import MediaDetailModal from './_detail-modal.svelte';
 	import Select from '$lib/components/select.svelte';
 	import { Tooltip } from 'bits-ui';
+	import { getCategoryTone } from '$lib/media/category-tone';
 	import './media.css';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import { swrPeek, swrPut } from '$lib/swr';
@@ -78,6 +116,16 @@
 	let bookmarkOnly = $state(false);
 	let selectedIds = $state<Set<string>>(new Set());
 	let bookmarkedIds = $state<Set<string>>(new Set());
+	// ── Animasi "fly to campaign" saat media dipilih ──────────────────────
+	// Hormati prefers-reduced-motion: kalau pengguna mematikannya, state tetap
+	// diperbarui tetapi tanpa gerakan terbang.
+	const motionOK = typeof window !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	let flyLayer = $state<HTMLElement | null>(null);
+	let flashRowId = $state<string | null>(null);
+	let barPulse = $state(false);
+	let createBtnEl = $state<HTMLButtonElement | null>(null);
+	let bookmarkToolbarBtn = $state<HTMLButtonElement | null>(null);
+	let bookmarkPulse = $state(false);
 	let detail = $state<Media | null>(null);
 	// Media terarsip (soft delete oleh mitra) tetap tampil sebagai "maintenance"
 	// di katalog klien, tapi tidak bisa dipilih untuk distribusi.
@@ -162,6 +210,10 @@
 	let campaignName = $state('');
 	let campaignError = $state('');
 	let creating = $state(false);
+	// Profiler (workspace knowledge klien) opsional untuk kampanye baru.
+	let profilerOptions = $state<Array<{ value: string; label: string }>>([]);
+	let profilerId = $state('');
+	let profilerLoading = $state(false);
 	// Cek pesanan ganda: media yang sudah dipesan di kampanye aktif lain.
 	let dupHits = $state<Array<{ mediaName: string; campaignName: string }>>([]);
 	let checkingDup = $state(false);
@@ -346,11 +398,27 @@
 		campaignName = presetName;
 		campaignError = '';
 		dupHits = [];
+		profilerId = '';
 		campaignOpen = true;
 		if (walletAvailableTc === null) void loadWallet();
+		if (profilerOptions.length === 0) void loadProfilerOptions();
 		checkingDup = true;
 		dupHits = await findReservations();
 		checkingDup = false;
+	}
+
+	/** Daftar Profiler milik klien yang login (untuk dipilih saat simpan kampanye). */
+	async function loadProfilerOptions() {
+		profilerLoading = true;
+		try {
+			const res = await apiRequest(`/v1/brands/${brandId}/profiler/profiles`);
+			if (!res.ok) return;
+			const data = await res.json().catch(() => null);
+			const items = Array.isArray(data?.profiles) ? data.profiles : [];
+			profilerOptions = items.map((p: { id: string; name: string }) => ({ value: p.id, label: p.name }));
+		} finally {
+			profilerLoading = false;
+		}
 	}
 
 	/** Media terpilih yang sudah dipesan di kampanye aktif lain (peringatan, bukan blokir). */
@@ -411,9 +479,30 @@
 	function toggleBookmark(id: string, e: Event) {
 		e.stopPropagation();
 		const next = new Set(bookmarkedIds);
-		if (next.has(id)) next.delete(id); else next.add(id);
+		if (next.has(id)) {
+			// Dihapus: cukup transisi warna/scale, tanpa animasi terbang.
+			next.delete(id);
+			bookmarkedIds = next;
+			persistBookmarks();
+			return;
+		}
+		next.add(id);
 		bookmarkedIds = next;
 		persistBookmarks();
+		// Ditambahkan: pop pada ikon sumber + chip terbang ke tombol Bookmark.
+		const btn = e.currentTarget as HTMLElement | null;
+		popBookmark(btn);
+		flyToBookmark(btn, 'Bookmark');
+	}
+
+	/** Pop singkat + isi (filled) pada ikon sumber saat bookmark ditambahkan. */
+	function popBookmark(btn: HTMLElement | null) {
+		if (!motionOK || !btn) return;
+		btn.classList.remove('bookmarkPop');
+		// Paksa reflow agar animasi bisa dipicu ulang pada klik beruntun.
+		void btn.offsetWidth;
+		btn.classList.add('bookmarkPop');
+		window.setTimeout(() => btn.classList.remove('bookmarkPop'), 420);
 	}
 	function toggleSelectRow(id: string, e: Event) {
 		e.stopPropagation();
@@ -433,8 +522,140 @@
 					[id]: { name: domainLabel(m), price: m.client_price ?? m.price ?? 0, credits: m.credit_cost ?? 0 }
 				};
 			}
+			// Feedback visual: highlight baris + chip terbang ke tombol Kampanye.
+			flashRow(id);
+			flyToCampaign(e.currentTarget as HTMLElement | null, m ? domainLabel(m) : 'Media');
 		}
 		selectedIds = next;
+	}
+
+	/**
+	 * Animasi chip yang terbang dari elemen asal (checkbox/baris) ke tombol
+	 * "Buat Kampanye" di floating action bar. Memakai Web Animations API dengan
+	 * lintasan melengkung (3 keyframe), aman dipanggil berulang, dan elemen
+	 * sementaranya selalu dibersihkan setelah selesai.
+	 */
+	function flyToCampaign(anchor: HTMLElement | null, label: string) {
+		if (!motionOK || !anchor || !flyLayer) return;
+		const start = anchor.getBoundingClientRect();
+		const target = createBtnEl?.getBoundingClientRect();
+		// Bar muncul setelah state berubah; ukur ulang pada frame berikutnya bila
+		// tombol tujuan belum ada (mis. pemilihan media pertama).
+		const run = (end: DOMRect | undefined) => {
+			if (!end || end.width === 0) return;
+			const chip = document.createElement('div');
+			chip.className = 'flyChip';
+			chip.setAttribute('aria-hidden', 'true');
+			chip.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg><span></span>`;
+			const labelEl = chip.querySelector('span');
+			if (labelEl) labelEl.textContent = label.length > 18 ? label.slice(0, 17) + '…' : label;
+			flyLayer!.appendChild(chip);
+
+			const sx = start.left + start.width / 2 - 12;
+			const sy = start.top + start.height / 2 - 12;
+			const ex = end.left + end.width / 2 - 12;
+			const ey = end.top + end.height / 2 - 12;
+			const mx = (sx + ex) / 2;
+			// Puncak lengkungan: naik di atas kedua ujung agar lintasan terlihat busur.
+			const my = Math.min(sy, ey) - 110;
+
+			const anim = chip.animate(
+				[
+					{ transform: `translate(${sx}px, ${sy}px) scale(1)`, opacity: 1 },
+					{ transform: `translate(${mx}px, ${my}px) scale(0.94)`, opacity: 0.98, offset: 0.45 },
+					{ transform: `translate(${ex}px, ${ey}px) scale(0.28)`, opacity: 0 }
+				],
+				{ duration: 880, easing: 'cubic-bezier(0.33, 0.05, 0.28, 1)' }
+			);
+			const cleanup = () => chip.remove();
+			anim.onfinish = () => {
+				cleanup();
+				pulseCreateButton();
+			};
+			anim.oncancel = cleanup;
+		};
+
+		if (createBtnEl) {
+			run(target);
+		} else {
+			requestAnimationFrame(() => run(createBtnEl?.getBoundingClientRect()));
+		}
+	}
+
+	function pulseCreateButton() {
+		if (!motionOK) return;
+		barPulse = false;
+		requestAnimationFrame(() => {
+			barPulse = true;
+			window.setTimeout(() => (barPulse = false), 560);
+		});
+	}
+
+	/** Pulse singkat pada tombol Bookmark di toolbar saat chip tiba. */
+	function pulseBookmarkButton() {
+		if (!motionOK) return;
+		bookmarkPulse = false;
+		requestAnimationFrame(() => {
+			bookmarkPulse = true;
+			window.setTimeout(() => (bookmarkPulse = false), 520);
+		});
+	}
+
+	/**
+	 * Animasi chip ikon bookmark terbang dari baris media menuju tombol Bookmark
+	 * di toolbar kanan atas. Lintasan melengkung ke atas, elemen sementara
+	 * dibersihkan setelah selesai, dan aman untuk klik beruntun.
+	 */
+	function flyToBookmark(anchor: HTMLElement | null, label: string) {
+		if (!motionOK || !anchor || !flyLayer) return;
+		const start = anchor.getBoundingClientRect();
+		const run = (end: DOMRect | undefined) => {
+			if (!end || end.width === 0) return;
+			const chip = document.createElement('div');
+			chip.className = 'flyChip flyChipBookmark';
+			chip.setAttribute('aria-hidden', 'true');
+			chip.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/></svg>';
+			chip.title = label;
+			flyLayer!.appendChild(chip);
+
+			const sx = start.left + start.width / 2 - 11;
+			const sy = start.top + start.height / 2 - 11;
+			const ex = end.left + end.width / 2 - 11;
+			const ey = end.top + end.height / 2 - 11;
+			const mx = (sx + ex) / 2;
+			const my = Math.min(sy, ey) - 70;
+
+			const anim = chip.animate(
+				[
+					{ transform: `translate(${sx}px, ${sy}px) scale(0.9)`, opacity: 1 },
+					{ transform: `translate(${sx}px, ${sy - 10}px) scale(1.18)`, opacity: 1, offset: 0.18 },
+					{ transform: `translate(${mx}px, ${my}px) scale(1.02)`, opacity: 0.98, offset: 0.55 },
+					{ transform: `translate(${ex}px, ${ey}px) scale(0.32)`, opacity: 0 }
+				],
+				{ duration: 600, easing: 'cubic-bezier(0.34, 0.06, 0.26, 1)' }
+			);
+			const cleanup = () => chip.remove();
+			anim.onfinish = () => {
+				cleanup();
+				pulseBookmarkButton();
+			};
+			anim.oncancel = cleanup;
+		};
+		if (bookmarkToolbarBtn) {
+			run(bookmarkToolbarBtn.getBoundingClientRect());
+		} else {
+			// Tombol tujuan tidak ada → state tetap berubah, tanpa animasi terbang.
+			requestAnimationFrame(() => run(bookmarkToolbarBtn?.getBoundingClientRect()));
+		}
+	}
+
+	/** Highlight biru halus pada baris yang baru dipilih (≈300 ms). */
+	function flashRow(id: string) {
+		if (!motionOK) return;
+		flashRowId = id;
+		window.setTimeout(() => {
+			if (flashRowId === id) flashRowId = null;
+		}, 380);
 	}
 
 	// ── Filter & sort (parity useMemo legacy) ──────────────────────────
@@ -692,7 +913,8 @@
 					name: name || 'Kampanye Baru',
 					starts_at: new Date().toISOString(),
 					entry_mode: 'manual',
-					media_ids: [...selectedIds]
+					media_ids: [...selectedIds],
+					profiler_id: profilerId || undefined
 				})
 			});
 			if (res.ok) {
@@ -770,6 +992,8 @@
 			<button
 				class="modernActionBtn {bookmarkOnly ? 'modernActionBtnActive' : ''}"
 				type="button"
+				class:bookmarkPulse
+				bind:this={bookmarkToolbarBtn}
 				onclick={() => (bookmarkOnly = !bookmarkOnly)}
 			>
 				<Bookmark size={15} />
@@ -824,7 +1048,7 @@
 				</div>
 
 				<div class="advFilterSection">
-					<span class="advFilterSectionLabel">{tr("Terbit Otomatis")}</span>
+					<span class="advFilterSectionLabel">{tr("Secure Direct")}</span>
 					<div class="advFilterToggleRow">
 						<label class="advFilterToggle" title={tr("Artikel dari klien langsung diterbitkan ke media tanpa persetujuan manual Mitra.")}>
 							<input type="checkbox" bind:checked={autoPublishOnly} onchange={() => (page_ = 1)} />
@@ -1042,6 +1266,7 @@
 							{@const dist = distribution(m)}
 							<tr
 								class="modernTr"
+								class:rowJustSelected={flashRowId === m.id}
 								style={archivedIds.has(m.id)
 									? 'opacity:.55;filter:grayscale(.85);'
 									: selectedIds.has(m.id) ? 'background:#f8faff' : ''}
@@ -1134,10 +1359,10 @@
 									</div>
 								</td>
 
-								<td class="modernTd">
-									<div class="categoryBadgeGroup">
-										<span class="categoryPill">{cats[0]}</span>
-										{#if cats.length > 1}
+									<td class="modernTd">
+										<div class="categoryBadgeGroup">
+											<span class="categoryPill categoryPill--{getCategoryTone(cats[0])}">{cats[0]}</span>
+											{#if cats.length > 1}
 											<Tooltip.Root>
 										<Tooltip.Trigger>
 											{#snippet child({ props })}
@@ -1309,43 +1534,44 @@
 	<!-- Modal Nama Kampanye -->
 	{#if campaignOpen}
 		<div class="modalOverlay" role="presentation" onclick={() => (campaignOpen = false)}>
-			<dialog open class="modalCard" aria-label={tr("Buat kampanye")} onclick={(e) => e.stopPropagation()}>
-				<form onsubmit={(e) => { e.preventDefault(); void createCampaign(); }}>
-					<div class="modalHeader">
+				<dialog open class="modalCard" aria-label={tr("Buat kampanye")} onclick={(e) => e.stopPropagation()}>
+					<form class="campaignModalForm" onsubmit={(e) => { e.preventDefault(); void createCampaign(); }}>
+						<div class="modalHeader">
 						<h2 class="modalTitle"><LayoutGrid size={17} />{tr("Simpan ke Kampanye")}</h2>
 						<button class="modalClose" type="button" aria-label={tr("Tutup")} onclick={() => (campaignOpen = false)}><X size={18} /></button>
 					</div>
-					<div class="campaignSummary">
-						<div class="campaignSummaryRow">
-							<span>{tr("Media terpilih")}</span><strong>{selectedIds.size}</strong>
-						</div>
-						<div class="campaignSummaryRow">
-							<span>{tr("Total biaya publikasi")}</span>
-							<strong>Rp {fmt(totalSelectedPrice)}</strong>
-						</div>
-						{#if walletAvailableTc !== null}
+						<div class="campaignSummary">
 							<div class="campaignSummaryRow">
-								<span>{tr("Saldo kamu")}</span>
-								<strong>Rp {fmt(walletAvailableTc * walletRateIdr)}</strong>
+								<div class="campaignSummaryLabel">
+									<div class="campaignSummaryIcon"><FileText size={18} /></div>
+									<span>{tr("Media terpilih")}</span>
+								</div>
+								<strong>{selectedIds.size}</strong>
 							</div>
-							{#if totalSelectedCredits > walletAvailableTc}
-								<p class="campaignWalletWarn">
-									{tr("Saldo kurang")} Rp {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)} {tr("untuk pesanan ini.")} <a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up dulu")}</a>
-								</p>
+							<div class="campaignSummaryRow">
+								<div class="campaignSummaryLabel">
+									<div class="campaignSummaryIcon"><Database size={18} /></div>
+									<span>{tr("Total biaya publikasi")}</span>
+								</div>
+								<strong>Rp {fmt(totalSelectedPrice)}</strong>
+							</div>
+							{#if walletAvailableTc !== null}
+								<div class="campaignSummaryRow">
+									<div class="campaignSummaryLabel">
+										<div class="campaignSummaryIcon"><Wallet size={18} /></div>
+										<span>{tr("Saldo kamu")}</span>
+									</div>
+									<strong>Rp {fmt(walletAvailableTc * walletRateIdr)}</strong>
+								</div>
+								{#if totalSelectedCredits > walletAvailableTc}
+									<p class="campaignWalletWarn">
+										{tr("Saldo kurang")} Rp {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)} {tr("untuk pesanan ini.")} <a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up dulu")}</a>
+									</p>
+								{/if}
 							{/if}
-						{/if}
-					</div>
+						</div>
 
-					<div class="campaignNextSteps">
-						<p class="campaignNextTitle">{tr("Setelah ini")}</p>
-						<ol>
-							<li>{tr("Siapkan artikel untuk tiap media — bisa dibuat AI, atau kamu unggah sendiri.")}</li>
-							<li>{tr("Pemeriksaan mutu otomatis: keamanan konten, tautan, dan kesiapan dibaca mesin AI.")}</li>
-							<li>{tr("Terbit ke media")}{#if slowestRelease} {tr("— waktu rilis terlama di pilihanmu:")} <strong>{slowestRelease.label} ({slowestRelease.sub})</strong>{/if}.</li>
-						</ol>
-					</div>
-
-					{#if checkingDup}
+						{#if checkingDup}
 						<p class="modalHint">{tr("Memeriksa pesanan ganda…")}</p>
 					{:else if dupHits.length > 0}
 						<div class="dupWarn">
@@ -1369,6 +1595,53 @@
 						/>
 					</label>
 					{#if campaignError}<p class="modalError">{campaignError}</p>{/if}
+						<label class="modalField">
+							<span class="inline-flex items-center gap-1">
+								{tr("Profiler")} <span class="campaignSummaryMuted">({tr("opsional")})</span>
+								<Tooltip.Root>
+									<Tooltip.Trigger>
+										{#snippet child({ props })}
+											<button
+												{...props}
+												type="button"
+												class="infoDot cursor-help"
+												style="border: none; background: transparent; padding: 0; margin-left: 2px;"
+												aria-label={tr("Penjelasan Profiler")}
+												onclick={(e) => {
+													e.preventDefault();
+													e.stopPropagation();
+												}}
+											>
+												<Info size={13} />
+											</button>
+										{/snippet}
+									</Tooltip.Trigger>
+									<Tooltip.Portal>
+										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={6} style="max-width: 300px;">
+											<Tooltip.Arrow class="uiTipArrow" />
+											{tr(
+												"Dengan Profiler, artikel ditulis mengikuti karakter brand-mu: gaya bahasa, nada, dan sudut pandang yang sudah kamu tentukan. Tanpa Profiler, The Writer memakai pengaturan bawaan Tauthub."
+											)}
+										</Tooltip.Content>
+									</Tooltip.Portal>
+								</Tooltip.Root>
+							</span>
+							<Select
+								ariaLabel={tr("Profiler")}
+								placeholder={profilerLoading ? tr('Memuat…') : tr('Tanpa Profiler')}
+								bind:value={profilerId}
+								options={[{ value: '', label: tr('Tanpa Profiler') }, ...profilerOptions]}
+								searchable={profilerOptions.length > 10}
+								searchPlaceholder={tr("Cari Profiler…")}
+								minWidth={0}
+							/>
+						<span class="campaignSummaryMuted">{tr("Acuan brand & gaya penulisan untuk The Writer.")}</span>
+						{#if !profilerLoading && profilerOptions.length === 0}
+							<button class="profilerInviteBtn" type="button" onclick={() => goto(`/klien/${page.params.brandId}/profiler`)}>
+								{tr('Lengkapi Profiler')}
+							</button>
+						{/if}
+					</label>
 					<div class="modalFooter">
 						<button class="advFilterResetBtn" type="button" onclick={() => (campaignOpen = false)}>{tr("Batal")}</button>
 						<button class="advFilterApplyBtn" type="submit" disabled={creating || checkingDup}>
@@ -1404,18 +1677,36 @@
 		style="left: {catPopoverPos.left}px; top: {catPopoverPos.top}px;"
 	>
 		<div class="categoryPopoverTitle">{tr("Semua Kategori")}</div>
-		<div class="categoryPopoverList">
-			{#each catPopoverCats as c (c)}<span class="categoryPill">{c}</span>{/each}
-		</div>
+			<div class="categoryPopoverList">
+				{#each catPopoverCats as c (c)}<span class="categoryPill categoryPill--{getCategoryTone(c)}">{c}</span>{/each}
+			</div>
 	</div>
 {/if}
 
 {#if selectedIds.size > 0}<div style="height:74px"></div>{/if}
 
 <!-- Selection bar -->
-{#if selectedIds.size > 0}
-	<div class="selectedBottomBar">
-		<div class="selectedBarLeft">
+	{#if selectedIds.size > 0}
+		<div
+			class="selectedBottomBar"
+			class:barPulse
+			in:fly={motionOK ? { y: 48, duration: 340, easing: cubicOut } : { duration: 0 }}
+			out:fly={motionOK ? { y: 48, duration: 280, easing: cubicIn } : { duration: 0 }}
+		>
+			<div class="selectedBarLeft">
+				<div class="selectedStatItem" use:portalToToolbar>
+						<span class="selectedStepsTrack" aria-label={tr("Tahap alur kampanye")}>
+								<span class="selectedStepChip selectedStepChipActive" title={tr("Anda berada di sini")}>
+									<span class="selectedStepNum" aria-hidden="true">1</span>
+									{tr("Katalog Media")}
+								</span>
+							<span class="selectedStepChip">
+								<span class="selectedStepNum" aria-hidden="true">2</span>
+								{tr("Penyedia Konten")}
+							</span>
+						</span>
+				</div>
+			<div class="selectedBarDivider"></div>
 			<div class="selectedStatItem">
 				<span class="selectedStatLabel">MEDIA TERPILIH</span>
 				<span class="selectedStatDomainVal">{selectedIds.size} Media</span>
@@ -1449,7 +1740,7 @@
 			<button class="selectedExportBtn" type="button" onclick={exportProposal} title={tr("Unduh proposal ringkasan media terpilih (format CSV)")}>
 				<FileText size={15} /><span>Ekspor Proposal</span>
 			</button>
-			<button class="selectedCreateBtn" type="button" disabled={creating} onclick={() => void openCampaignModal()}>
+			<button bind:this={createBtnEl} class="selectedCreateBtn" type="button" disabled={creating} onclick={() => void openCampaignModal()}>
 				<Plus size={14} /><span>{tr("Buat Kampanye")}</span>
 			</button>
 		</div>
@@ -1457,6 +1748,9 @@
 {/if}
 
 </Tooltip.Provider>
+
+<!-- Lapisan animasi fly-to-campaign: fixed agar chip tidak terpotong overflow tabel. -->
+<div class="flyLayer" bind:this={flyLayer} aria-hidden="true"></div>
 
 <style>
 .maintBadge {
@@ -1511,41 +1805,55 @@
 		font-size: 11px;
 		color: var(--success, #15803d);
 	}
-	/* Ringkasan konfirmasi di modal kampanye. */
-	.campaignSummary {
-		margin: 4px 0 12px;
-		padding: 12px 14px;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		display: grid;
-		gap: 6px;
-	}
-	.campaignSummaryRow {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 12px;
-		font-size: 13px;
-	}
-	.campaignSummaryMuted { font-weight: 500; color: var(--muted-foreground); }
-	.campaignWalletWarn { margin: 2px 0 0; font-size: 12px; color: var(--warning, #b45309); }
-	.campaignWalletWarn a { text-decoration: underline; font-weight: 600; }
-	.campaignNextSteps {
-		margin: 0 0 12px;
-		padding: 12px 14px;
-		border-radius: 12px;
-		background: var(--muted, #f6f7f9);
-	}
-	.campaignNextTitle {
-		margin: 0 0 6px;
-		font-size: 12px;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--muted-foreground);
-	}
-	.campaignNextSteps ol { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
-	.dupWarn {
+		/* Ringkasan konfirmasi di modal kampanye (kartu beraksen biru dengan ikon svg). */
+		.campaignSummary {
+			margin: 0;
+			padding: 4px 18px;
+			border: 1px solid #e1effe;
+			border-radius: 16px;
+			background: #f4f8fe;
+			display: flex;
+			flex-direction: column;
+		}
+		.campaignSummaryRow {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			padding: 12px 0;
+		}
+		.campaignSummaryRow + .campaignSummaryRow {
+			border-top: 1px solid #e5effd;
+		}
+		.campaignSummaryLabel {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			color: #334155;
+			font-size: 13.5px;
+			font-weight: 500;
+		}
+		.campaignSummaryIcon {
+			width: 36px;
+			height: 36px;
+			border-radius: 10px;
+			background: #e0edfe;
+			color: #2563eb;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+		}
+		.campaignSummaryRow strong {
+			font-size: 14.5px;
+			font-weight: 700;
+			color: #0f172a;
+			white-space: nowrap;
+		}
+		.campaignSummaryMuted { font-weight: 500; color: var(--muted-foreground); }
+		.campaignWalletWarn { margin: 2px 0 0; font-size: 12px; color: var(--warning, #b45309); }
+		.campaignWalletWarn a { text-decoration: underline; font-weight: 600; }
+		.dupWarn {
 		margin: 0 0 12px;
 		padding: 10px 12px;
 		border-radius: 10px;

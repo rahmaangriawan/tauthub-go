@@ -20,6 +20,7 @@
 	import { MANUAL_PROFILER_REASON, fmtIdr, rpCurrency, humanizeReason, fmtTrafficShort, formatTraffic, isCampaignDone } from '../../_shared';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { mediaDistribution } from '$lib/media/distribution';
+	import { getCategoryTone } from '$lib/media/category-tone';
 	import PageTitle from '$lib/components/page-title.svelte';
 	// Kelas tabel bersama (port media-intelligence.module.css) — dipakai persis
 	// seperti app lama yang mengimpor modul CSS Katalog Media.
@@ -625,10 +626,10 @@
 								{/if}
 							</div>
 						</td>
-						<td class="modernTd" onclick={(e) => e.stopPropagation()}>
-							<div class="categoryBadgeGroup">
-								<span class="categoryPill">{cats[0]}</span>
-								{#if cats.length > 1}
+							<td class="modernTd" onclick={(e) => e.stopPropagation()}>
+								<div class="categoryBadgeGroup">
+									<span class="categoryPill categoryPill--{getCategoryTone(cats[0])}">{cats[0]}</span>
+									{#if cats.length > 1}
 									<button
 										type="button"
 										class="categoryPlusTag"
@@ -949,9 +950,9 @@
 	<button type="button" class="categoryPopoverBackdrop" aria-label={tr('Tutup daftar kategori')} onclick={() => (catPopoverId = null)}></button>
 	<div class="categoryPopover" role="tooltip" style="left: {catPopoverPos.left}px; top: {catPopoverPos.top}px;">
 		<div class="categoryPopoverTitle">{tr('Semua Kategori')}</div>
-		<div class="categoryPopoverList">
-			{#each catPopoverCats as c (c)}<span class="categoryPill">{c}</span>{/each}
-		</div>
+			<div class="categoryPopoverList">
+				{#each catPopoverCats as c (c)}<span class="categoryPill categoryPill--{getCategoryTone(c)}">{c}</span>{/each}
+			</div>
 	</div>
 {/if}
 

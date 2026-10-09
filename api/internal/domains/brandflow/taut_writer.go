@@ -26,6 +26,9 @@ type writerItemResult struct {
 	Status     string `json:"status"`
 	DocumentID any    `json:"document_id"`
 	Title      string `json:"title"`
+	// Gambar isi yang dibuat otomatis dari instruksi klien + biayanya (transparansi).
+	ImagesGenerated   int `json:"images_generated"`
+	ImagesCostCredits int `json:"images_cost_credits"`
 }
 
 // tautWriterLink: satu pasangan anchor + URL dari modal Pengelola Naskah.
@@ -44,6 +47,10 @@ type tautWriterLinkInput struct {
 type tautWriterOptions struct {
 	Topic string
 	Links []tautWriterLink
+	// ArticleType (opsional): kode jenis artikel (taut_article_types.code) dari
+	// toggle di modal Pengelola Naskah. Bila prompt aktifnya ada, dipakai sebagai
+	// system prompt pengganti The Writer. Kosong = prompt agent apa adanya.
+	ArticleType string
 	// StreamHTML (opsional): dipanggil dengan TAMBAHAN html parsial setiap kali
 	// LLM menulis lebih banyak isi — untuk streaming SSE ke editor. Nilai masih
 	// mentah (belum lewat finalizeTautArticleHTML); finalize hanya di akhir.
@@ -143,10 +150,12 @@ func (d *Deps) selectedTautMedia(ctx context.Context, campaignID string) ([]sele
 // (modal Pengelola Naskah). Kosong = perilaku lama (topik murni dari brief).
 func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandID, userID, mediaID string, opts ...tautWriterOptions) (writerItemResult, error) {
 	clientTopic := ""
+	articleType := ""
 	customLinks := []tautWriterLink{}
 	var streamFn func(string)
 	if len(opts) > 0 {
 		clientTopic = strings.TrimSpace(opts[0].Topic)
+		articleType = strings.TrimSpace(opts[0].ArticleType)
 		customLinks = opts[0].Links
 		streamFn = opts[0].StreamHTML
 	}
@@ -173,6 +182,12 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	// Blok angle berita (butuh mediaType) ditambahkan setelah tipe media
 	// diresolusi di bawah; di sini masih kosong.
 	referenceMaterial, hasFacts := buildTautReferenceMaterial(briefContext, materials, writerTopic, spokespersonListValue(campaign.jsonField("spokepersons")), "")
+	// Profiler klien (kalau kampanye memakainya): tambahkan sebagai bahan rujukan
+	// terstruktur (identitas brand, gaya, pedoman, dokumen/URL siap, knowledge blok).
+	if profilerText := d.loadCampaignProfilerContext(ctx, campaignID, writerTopic); profilerText != "" {
+		referenceMaterial = referenceMaterial + "\n\n" + profilerText
+		hasFacts = true
+	}
 	backlinkEnabled, smartVariations := d.loadTautBacklinkSettings(ctx, campaignID)
 	smartVariationRule := ""
 	if smartVariations {
@@ -201,6 +216,16 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			slog.Warn("[taut-writer] gagal menyimpan writer_topic", "media_id", mediaID, "err", truncateString(err.Error(), 200))
 		}
 	}
+	// Pilihan jenis artikel dari modal Pengelola Naskah disimpan per media supaya
+	// regenerate & Gatekeeper memakai genre yang sama. Non-fatal bila kolom belum
+	// dimigrasi (migrasi 200).
+	if articleType != "" {
+		if err := d.exec(ctx, "UPDATE taut_campaign_media SET content_type = $1 WHERE id = $2", articleType, itemID); err != nil {
+			slog.Warn("[taut-writer] gagal menyimpan content_type", "media_id", mediaID, "err", truncateString(err.Error(), 200))
+		}
+	}
+	// Prompt system pengganti per jenis artikel (kosong = prompt agent standar).
+	articleTypePrompt, _ := d.loadTautArticleTypePrompt(ctx, articleType)
 	regenCount := item.intOr("regen_count", 0)
 	hasDocument := item.has("article_document_id")
 	if hasDocument {
@@ -265,6 +290,12 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		allowsLink = int(item.numOr("max_links")) > 0
 	}
 	sponsoredMedia := item.strOr("label_sponsor", "tidak_ada") == "ada_sponsor"
+	// Advertorial = sponsored content: paksa rel="sponsored" pada setiap tautan
+	// yang ditanam (backlink kampanye maupun tautan yang diminta klien), sejalan
+	// dengan master prompt advertorial. Tautan tetap hanya ditanam bila ada.
+	if articleType == "advertorial" {
+		sponsoredMedia = true
+	}
 	var primaryRel *string
 	if sponsoredMedia {
 		rel := "sponsored"
@@ -435,8 +466,12 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 	promptLines = append(promptLines, precedenceBlock)
 	promptLines = append(promptLines, structureRules...)
+	// Gambar isi (kondisional): klien boleh minta gambar lewat topik/konteks.
+	// Writer hanya menaruh PENANDA; gambar aslinya dibuat sistem sepulang generate
+	// (lihat resolveTautInlineImages). Cover tidak lewat jalur ini.
+	imageMarkerBlock := "ATURAN GAMBAR ISI (KONDISIONAL): Bila instruksi pengguna meminta gambar, foto, atau ilustrasi DI DALAM artikel, sisipkan penanda persis berformat [[IMAGE: deskripsi singkat gambar]] pada posisi yang tepat di content_html (di antara paragraf, setelah bagian yang relevan). Sistem akan mengganti penanda itu dengan gambar asli. JANGAN membuat penanda untuk gambar utama/cover — cover diatur terpisah oleh klien. Bila pengguna TIDAK meminta gambar, JANGAN menulis penanda apa pun."
 	promptLines = append(promptLines, aiOverviewRules...)
-	promptLines = append(promptLines, tidyHTMLBlock)
+	promptLines = append(promptLines, tidyHTMLBlock, imageMarkerBlock)
 	// Guard anti-halusinasi: tanpa bahan rujukan, model cenderung mengarang nama
 	// tokoh/perusahaan/angka agar artikel terasa spesifik (dan justru dipuji
 	// "kepadatan entitas" oleh QC). Larang eksplisit saat bahan kosong. hasFacts
@@ -463,7 +498,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		"Aturan meta deskripsi (WAJIB): sertakan meta_description 120-160 karakter bahasa Indonesia aktif.",
 		"Variasi tulisan: gunakan sudut pembuka yang berbeda dari draf sebelumnya; jangan menyalin kalimat pembuka yang sama.",
 		"Nonce variasi (abaikan isinya, hanya penanda sesi agar tiap generate berbeda): "+itoa(int(time.Now().UnixNano())),
-		"", "Tulis artikel unik utk media ini. Output JSON valid {title, content_html, meta_description}.",
+		"", "Tulis artikel unik utk media ini. Output JSON valid {title, content_html, meta_description}. Penanda [[IMAGE: ...]] (bila klien minta gambar) ditulis di dalam content_html — JANGAN sebagai field terpisah.",
 	)
 	filtered := []string{}
 	for _, line := range promptLines {
@@ -487,13 +522,22 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		// dan kirim TAMBAHANNYA saja ke klien (escape sudah di-decode). Decoder
 		// inkremental — dulu tiap delta memindai ulang seluruh akumulasi.
 		stream := newPEStreamHTML()
-		result, err = d.runTautAgentStream(ctx, writerAgent, campaignID, prompt, &mediaID, true, func(delta string) {
+		onDelta := func(delta string) {
 			if tail, _ := stream.Write(delta); tail != "" {
 				streamFn(tail)
 			}
-		})
+		}
+		if articleTypePrompt != "" {
+			result, err = d.runTautAgentSystem(ctx, writerAgent, campaignID, prompt, &mediaID, true, articleTypePrompt, onDelta)
+		} else {
+			result, err = d.runTautAgentStream(ctx, writerAgent, campaignID, prompt, &mediaID, true, onDelta)
+		}
 	} else {
-		result, err = d.runTautAgent(ctx, writerAgent, campaignID, prompt, &mediaID, true)
+		if articleTypePrompt != "" {
+			result, err = d.runTautAgentSystem(ctx, writerAgent, campaignID, prompt, &mediaID, true, articleTypePrompt, nil)
+		} else {
+			result, err = d.runTautAgent(ctx, writerAgent, campaignID, prompt, &mediaID, true)
+		}
 	}
 	if err != nil {
 		return writerItemResult{}, err
@@ -542,6 +586,24 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		}
 	}
 	contentHTML = finalizeTautArticleHTML(contentHTML, mediaType, allowsLink, linkSpecs)
+
+	// Gambar isi otomatis: kalau klien meminta gambar/foto/ilustrasi di dalam
+	// artikel, Writer menaruh penanda [[IMAGE: ...]] dan di sini penanda itu
+	// diganti gambar AI yang benar-benar dibuat. Gambar utama (cover) TIDAK
+	// disentuh — cover tetap manual/upload dari modal. Bila klien tidak meminta
+	// gambar, penanda (kalau ada) dibuang tanpa membuat gambar.
+	imagesGenerated, imagesCost := 0, 0
+	if strings.Contains(strings.ToLower(contentHTML), "[[image") {
+		if userRequestedInlineImages(writerTopic) {
+			var imgWarnings []string
+			contentHTML, imagesGenerated, imagesCost, imgWarnings = d.resolveTautInlineImages(ctx, brandID, campaignID, mediaID, userID, contentHTML, title)
+			for _, w := range imgWarnings {
+				slog.Warn("[taut-writer] gambar inline", "campaign", campaignID, "media_id", mediaID, "info", w)
+			}
+		} else {
+			contentHTML = tautImageMarkerRe.ReplaceAllString(contentHTML, "")
+		}
+	}
 
 	isRegen := hasDocument
 	docID := ""
@@ -600,7 +662,8 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			return writerItemResult{}, err
 		}
 	}
-	return writerItemResult{MediaID: mediaID, MediaType: mediaType, Status: "draft", DocumentID: docID, Title: title}, nil
+	return writerItemResult{MediaID: mediaID, MediaType: mediaType, Status: "draft", DocumentID: docID, Title: title,
+		ImagesGenerated: imagesGenerated, ImagesCostCredits: imagesCost}, nil
 }
 
 // userGenerateUsed: total generate akun (generate pertama + regenerasi) pada

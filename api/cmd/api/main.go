@@ -28,6 +28,7 @@ import (
 	knowledgedomain "github.com/rahmaangriawan/tauthub-go/internal/domains/knowledge"
 	partnerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/partner"
 	platformdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/platform"
+	profilerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/profiler"
 	pushdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/push"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
@@ -155,6 +156,7 @@ func run() error {
 		// Brands (fase 2) — butuh Bearer.
 		brands := &brandsdomain.Deps{Pool: database.Pool}
 		knowledge := &knowledgedomain.Deps{Pool: database.Pool}
+		profilerDeps := &profilerdomain.Deps{Pool: database.Pool}
 		contentDeps := &contentdomain.Deps{Pool: database.Pool, JobInline: cfg.JobInline, WriteRateLimitPerMinute: cfg.WriteRateLimitPerMinute}
 		clientRead := &clientreaddomain.Deps{Pool: database.Pool}
 		tautDeps := &clienttautdomain.Deps{Pool: database.Pool, Cfg: cfg}
@@ -229,6 +231,25 @@ func run() error {
 			authed.Get("/brands/{brandId}/knowledge/sitemap", knowledge.SitemapStatus)
 			authed.Get("/brands/{brandId}/chat-learning", knowledge.ChatLearningList)
 			authed.Delete("/brands/{brandId}/chat-learning", knowledge.ChatLearningDelete)
+
+			// Profiler (Structured Knowledge Workspace) tingkat klien.
+			authed.Get("/brands/{brandId}/profiler/profiles", profilerDeps.ProfilesList)
+			authed.Post("/brands/{brandId}/profiler/profiles", profilerDeps.ProfileCreate)
+			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}", profilerDeps.ProfileGet)
+			authed.Put("/brands/{brandId}/profiler/profiles/{profileId}", profilerDeps.ProfileUpdate)
+			authed.Delete("/brands/{brandId}/profiler/profiles/{profileId}", profilerDeps.ProfileDelete)
+			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/duplicate", profilerDeps.ProfileDuplicate)
+			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/blocks", profilerDeps.BlockCreate)
+			authed.Put("/brands/{brandId}/profiler/blocks/{blockId}", profilerDeps.BlockUpdate)
+			authed.Delete("/brands/{brandId}/profiler/blocks/{blockId}", profilerDeps.BlockDelete)
+			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/documents", profilerDeps.DocumentUpload)
+			authed.Delete("/brands/{brandId}/profiler/documents/{documentId}", profilerDeps.DocumentDelete)
+			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/images", profilerDeps.ImageUpload)
+			authed.Put("/brands/{brandId}/profiler/images/{imageId}", profilerDeps.ImageUpdate)
+			authed.Delete("/brands/{brandId}/profiler/images/{imageId}", profilerDeps.ImageDelete)
+			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/urls", profilerDeps.URLAdd)
+			authed.Post("/brands/{brandId}/profiler/urls/{urlId}/sync", profilerDeps.URLSync)
+			authed.Delete("/brands/{brandId}/profiler/urls/{urlId}", profilerDeps.URLDelete)
 
 			// Content pipeline (fase 4).
 			authed.Get("/brands/{brandId}/content-jobs", contentDeps.JobsList)
@@ -347,6 +368,7 @@ func run() error {
 			authed.Get("/brands/{brandId}/publications/{publicationId}", brandFlowDeps.PublicationGet)
 			authed.Get("/brands/{brandId}/publications/{publicationId}/replacement", brandFlowDeps.PublicationReplacementGet)
 			authed.Get("/brands/{brandId}/taut/agent-status", brandFlowDeps.TautAgentStatus)
+			authed.Get("/brands/{brandId}/taut/article-types", brandFlowDeps.TautArticleTypesList)
 			authed.Post("/brands/{brandId}/assets", brandFlowDeps.AssetsUpload)
 			authed.Get("/brands/{brandId}/batches", brandFlowDeps.BatchesList)
 			authed.Post("/brands/{brandId}/batches", brandFlowDeps.BatchesCreate)
@@ -745,6 +767,18 @@ func run() error {
 			authed.Patch("/platform/taut/angles/{angleId}/versions/{versionId}", platformDeps.TautAngleVersionUpdate)
 			authed.Delete("/platform/taut/angles/{angleId}/versions/{versionId}", platformDeps.TautAngleVersionDelete)
 			authed.Post("/platform/taut/angles/{angleId}/versions/{versionId}/activate", platformDeps.TautAngleVersionActivate)
+			authed.Get("/platform/taut/article-types", platformDeps.TautArticleTypesList)
+			authed.Post("/platform/taut/article-types", platformDeps.TautArticleTypeCreate)
+			authed.Get("/platform/taut/article-types/{typeId}", platformDeps.TautArticleTypeGet)
+			authed.Patch("/platform/taut/article-types/{typeId}", platformDeps.TautArticleTypeUpdate)
+			authed.Delete("/platform/taut/article-types/{typeId}", platformDeps.TautArticleTypeDelete)
+			authed.Post("/platform/taut/article-types/{typeId}/test", platformDeps.TautArticleTypeTest)
+			authed.Get("/platform/taut/article-types/{typeId}/versions", platformDeps.TautArticleTypeVersions)
+			authed.Post("/platform/taut/article-types/{typeId}/versions", platformDeps.TautArticleTypeVersionCreate)
+			authed.Get("/platform/taut/article-types/{typeId}/versions/{versionId}", platformDeps.TautArticleTypeVersionGet)
+			authed.Patch("/platform/taut/article-types/{typeId}/versions/{versionId}", platformDeps.TautArticleTypeVersionUpdate)
+			authed.Delete("/platform/taut/article-types/{typeId}/versions/{versionId}", platformDeps.TautArticleTypeVersionDelete)
+			authed.Post("/platform/taut/article-types/{typeId}/versions/{versionId}/activate", platformDeps.TautArticleTypeVersionActivate)
 			authed.Get("/platform/taut/base-prompt", platformDeps.TautBasePromptGet)
 			authed.Post("/platform/taut/base-prompt", platformDeps.TautBasePromptCreate)
 			authed.Get("/platform/taut/base-prompt/{versionId}", platformDeps.TautBasePromptVersionGet)

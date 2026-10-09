@@ -26,7 +26,8 @@
 		meta,
 		onSave,
 		onTest,
-		bare = false
+		bare = false,
+		hideSystemPrompt = false
 	}: {
 		config: AgentConfig;
 		meta: { label: string; role: string; hint: string };
@@ -35,6 +36,10 @@
 		// bare: jangan bungkus dengan kartu sendiri — dipakai saat komponen ini
 		// ditaruh di dalam kartu wrapper (mis. tab The Writer).
 		bare?: boolean;
+		// hideSystemPrompt: sembunyikan field System Prompt. Dipakai untuk subagent
+		// The Writer, karena prompt-nya diatur per jenis artikel (editorial/
+		// advertorial/opini) lewat tab di kartu wrapper.
+		hideSystemPrompt?: boolean;
 	} = $props();
 
 	// Form dikendalikan state lokal. Nilai awal disalin dari prop config lewat
@@ -166,10 +171,12 @@
 			</label>
 		</div>
 
-		<label class="block">
-			<span class="text-xs font-medium text-muted-foreground">System Prompt (knowledge)</span>
-			<textarea class="app-input mt-1 w-full font-mono text-xs" rows="10" placeholder={tr("Instruksi agent...")} bind:value={systemPrompt}></textarea>
-		</label>
+		{#if !hideSystemPrompt}
+			<label class="block">
+				<span class="text-xs font-medium text-muted-foreground">System Prompt (knowledge)</span>
+				<textarea class="app-input mt-1 w-full font-mono text-xs" rows="10" placeholder={tr("Instruksi agent...")} bind:value={systemPrompt}></textarea>
+			</label>
+		{/if}
 
 		<label class="flex items-center gap-2 text-sm">
 			<input type="checkbox" bind:checked={enabled} />

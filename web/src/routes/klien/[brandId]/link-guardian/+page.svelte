@@ -675,7 +675,7 @@
 
 	.lg-card {
 		display: flex; flex-direction: column; padding: 14px 16px;
-		border: 1px solid color-mix(in srgb, var(--tone) 38%, var(--border));
+		border: 1px solid var(--border);
 	}
 	.lg-card-label {
 		display: inline-flex; align-items: center; gap: 6px;

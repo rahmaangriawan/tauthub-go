@@ -67,23 +67,20 @@
 	function openMenu() {
 		if (!trigger) return;
 		const rect = trigger.getBoundingClientRect();
-		const width = Math.max(minWidth, rect.width);
+		const width = minWidth > 0 ? Math.max(minWidth, rect.width) : rect.width;
 		const maxLeft = Math.max(8, window.innerWidth - width - 8);
 		const left = align === 'end' ? Math.max(8, rect.right - width) : Math.min(rect.left, maxLeft);
 		// Perkirakan tinggi menu dulu (dibatasi menuMaxHeight) supaya tahu apakah
-		// muat ke bawah. Bila tidak, menu dibuka KE ATAS (drop-up) dan tingginya
-		// dipangkas agar tetap di dalam viewport — seperti perilaku Radix.
-		// Tinggi kolom pencarian ikut dihitung supaya perkiraannya tidak meleset.
+		// muat ke bawah. Bila tidak muat dan ruang di atas lebih lapang, menu
+		// dibuka KE ATAS (drop-up) agar bagian bawah tidak terpotong layar.
 		const gap = 4;
 		const searchHeight = searchable ? 44 : 0;
-		const estimated = Math.min(options.length * 34 + 10 + searchHeight, menuMaxHeight);
+		const estimated = Math.min(options.length * 34 + 12 + searchHeight, menuMaxHeight);
 		const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
 		const spaceAbove = rect.top - gap - 8;
-		const placeUp = spaceBelow < Math.min(estimated, 180) && spaceAbove > spaceBelow;
-		const available = placeUp ? spaceAbove : spaceBelow;
+		const placeUp = spaceBelow < estimated && spaceAbove > spaceBelow;
+		const available = Math.max(120, placeUp ? spaceAbove : spaceBelow);
 		placement = placeUp ? 'up' : 'down';
-		// Tinggi mengikuti isi; daftar pendek jangan dipaksa setinggi beberapa
-		// baris hanya karena lantai minimum.
 		menuHeight = Math.min(estimated, available);
 		pos = { left, top: placeUp ? rect.top - gap - menuHeight : rect.bottom + gap, width };
 		query = '';
@@ -110,12 +107,17 @@
 		const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
 		const spaceAbove = rect.top - gap - 8;
 		const wanted = Math.min(natural, menuMaxHeight);
-		const placeUp = spaceBelow < Math.min(wanted, 180) && spaceAbove > spaceBelow;
-		const available = placeUp ? spaceAbove : spaceBelow;
+		const placeUp = spaceBelow < wanted && spaceAbove > spaceBelow;
+		const available = Math.max(120, placeUp ? spaceAbove : spaceBelow);
 		const height = Math.min(wanted, available);
 		placement = placeUp ? 'up' : 'down';
 		menuHeight = height;
-		pos = { ...pos, top: placeUp ? rect.top - gap - height : rect.bottom + gap };
+
+		const menuW = menu.offsetWidth;
+		const maxLeft = Math.max(8, window.innerWidth - menuW - 8);
+		const left = align === 'end' ? Math.max(8, rect.right - menuW) : Math.min(rect.left, maxLeft);
+
+		pos = { left, top: placeUp ? rect.top - gap - height : rect.bottom + gap, width: pos.width };
 		measured = true;
 	});
 
@@ -246,7 +248,7 @@
 		role="listbox"
 		aria-label={ariaLabel}
 		tabindex="-1"
-		style="left: {pos.left}px; top: {pos.top}px; min-width: {pos.width}px; max-height: {menuMaxHeight}px; height: {menuHeight > 0 ? `${menuHeight}px` : 'auto'};"
+		style="left: {pos.left}px; top: {pos.top}px; min-width: {pos.width}px; width: {minWidth === 0 ? 'max-content' : 'auto'}; max-width: min(92vw, 360px); max-height: {menuHeight > 0 ? `${menuHeight}px` : `${menuMaxHeight}px`}; {placement === 'up' && menuHeight > 0 ? `height: ${menuHeight}px;` : ''}"
 		onkeydown={onMenuKeydown}
 	>
 		{#if searchable}

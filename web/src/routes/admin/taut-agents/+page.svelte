@@ -61,6 +61,75 @@
 		{ agent: 'writer_mainstream', label: 'Media Mainstream' }
 	];
 
+	// Prompt per jenis artikel (editorial/advertorial/opini) untuk The Writer.
+	// Base URL / API key / model tetap milik agent (dipakai bersama); yang berbeda
+	// hanya system prompt-nya. Dikelola di sini karena menyatu dengan kartu agent.
+	type ArticleType = {
+		id: string;
+		code: string;
+		name: string;
+		active: boolean;
+		active_version?: number | null;
+		active_version_id?: string | null;
+	};
+	let articleTypes = $state<ArticleType[]>([]);
+	let atTab = $state(''); // code jenis artikel terpilih
+	let atPrompt = $state('');
+	let atVersionId = $state<string | null>(null);
+	let atBusy = $state(false);
+	let atMsg = $state('');
+	let atMsgOk = $state(false);
+	const atTypeName = $derived(articleTypes.find((t) => t.code === atTab)?.name ?? '');
+
+	async function loadArticleTypes() {
+		const res = await apiRequest('/v1/platform/taut/article-types');
+		if (!res.ok) return;
+		articleTypes = (await res.json()).items ?? [];
+		const first = articleTypes.find((t) => t.code === 'editorial') ?? articleTypes[0] ?? null;
+		if (first) await selectArticleTypeTab(first.code);
+	}
+
+	async function selectArticleTypeTab(code: string) {
+		atTab = code;
+		atMsg = '';
+		const type = articleTypes.find((t) => t.code === code);
+		if (!type) return;
+		const res = await apiRequest(`/v1/platform/taut/article-types/${type.id}/versions`);
+		if (!res.ok) return;
+		const versions = (await res.json()).items ?? [];
+		const active = versions.find((v: { status: string }) => v.status === 'active') ?? versions[0] ?? null;
+		if (!active) {
+			atVersionId = null;
+			atPrompt = '';
+			return;
+		}
+		atVersionId = active.id;
+		const detail = await apiRequest(`/v1/platform/taut/article-types/${type.id}/versions/${active.id}`);
+		atPrompt = detail.ok ? ((await detail.json()).version?.prompt ?? '') : '';
+	}
+
+	async function saveArticleTypePrompt() {
+		const type = articleTypes.find((t) => t.code === atTab);
+		if (!type || !atVersionId) return;
+		atBusy = true;
+		atMsg = '';
+		try {
+			const res = await apiRequest(`/v1/platform/taut/article-types/${type.id}/versions/${atVersionId}`, {
+				method: 'PATCH',
+				body: JSON.stringify({ prompt: atPrompt })
+			});
+			if (!res.ok) {
+				atMsg = await readApiError(res, tr('Gagal menyimpan prompt.'));
+				atMsgOk = false;
+				return;
+			}
+			atMsg = tr('Prompt tersimpan.');
+			atMsgOk = true;
+		} finally {
+			atBusy = false;
+		}
+	}
+
 	let gk = $state<any>(null);
 	let gkNotice = $state('');
 	let gkError = $state('');
@@ -69,7 +138,7 @@
 		void (async () => {
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
-			await Promise.all([loadAgents(), loadGatekeeper(), loadLogs()]);
+			await Promise.all([loadAgents(), loadGatekeeper(), loadLogs(), loadArticleTypes()]);
 			loading = false;
 		})();
 		const onExpired = () => (window.location.href = '/login');
@@ -185,7 +254,7 @@
 						<div>
 							<p class="text-sm font-semibold">The Writer</p>
 							<p class="mt-0.5 text-xs text-muted-foreground">
-								{tr("Dua subagent — model & system prompt bisa berbeda per tipe media. Pilih tab untuk mengaturnya.")}
+								{tr("Dua subagent — koneksi (base URL, API key, model) bisa berbeda per tipe media. Media Blogger memakai System Prompt-nya sendiri; Media Mainstream memakai prompt per jenis artikel (editorial/advertorial/opini) di bawah.")}
 							</p>
 						</div>
 						<div class="flex gap-1 rounded-lg p-1" style="background-color: var(--muted);" role="tablist" aria-label={tr("Subagent The Writer")}>
@@ -206,11 +275,63 @@
 						<div class="mt-3">
 							<AgentCard
 								bare
+								hideSystemPrompt={writerTab === 'writer_mainstream'}
 								config={writerCard}
 								meta={AGENT_META[writerTab] ?? { label: 'The Writer', role: 'Kreatif', hint: '' }}
 								onSave={saveAgent}
 								onTest={testAgent}
 							/>
+
+							{#if writerTab === 'writer_mainstream'}
+								<!-- Prompt per jenis artikel: base_url/api_key/model di atas
+								     dipakai bersama; yang berbeda hanya system prompt.
+								     Hanya untuk The Writer media MAINSTREAM — media blogger
+								     terisolasi dengan system prompt-nya sendiri di kartu atas. -->
+								<div class="mt-4 border-t pt-4" style="border-color: var(--border);">
+								<p class="text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr("Prompt per Jenis Artikel")}</p>
+								<p class="mt-1 text-[11px] text-muted-foreground">
+									{tr("Base URL, API key, dan model di atas dipakai bersama untuk semua jenis artikel. Yang berbeda hanya system prompt (knowledge)-nya — dipilih klien lewat toggle di modal Pengelola Naskah. Berlaku untuk The Writer di semua tipe media; kosongkan untuk memakai prompt dasar.")}
+								</p>
+								{#if articleTypes.length > 0}
+									<div class="mt-2 flex flex-wrap gap-1.5" role="tablist" aria-label={tr("Jenis artikel")}>
+										{#each articleTypes as t (t.id)}
+											<button
+												type="button"
+												role="tab"
+												aria-selected={atTab === t.code}
+												class="app-btn !min-h-8 !px-3 !text-xs"
+												class:app-btn-primary={atTab === t.code}
+												class:app-btn-soft={atTab !== t.code}
+												onclick={() => selectArticleTypeTab(t.code)}
+											>{t.name}</button>
+										{/each}
+									</div>
+									{#if atVersionId}
+										<label class="mt-3 block">
+											<span class="text-xs font-medium text-muted-foreground">{tr("System Prompt (knowledge)")} · {atTypeName}</span>
+											<textarea
+												class="app-input mt-1 w-full font-mono text-xs"
+												rows="10"
+												placeholder={tr("Tulis persona & pedoman gaya jenis artikel ini…")}
+												bind:value={atPrompt}
+											></textarea>
+										</label>
+										<div class="mt-2 flex items-center gap-2">
+											<button type="button" class="app-btn app-btn-primary" disabled={atBusy} onclick={saveArticleTypePrompt}>
+												{atBusy ? tr('Menyimpan…') : tr('Simpan Prompt')}
+											</button>
+											{#if atMsg}
+												<span class="text-sm" style="color: {atMsgOk ? 'var(--success)' : 'var(--destructive)'};">{atMsg}</span>
+											{/if}
+										</div>
+									{:else}
+										<p class="mt-3 text-xs text-muted-foreground">{tr("Jenis artikel ini belum punya versi prompt aktif.")}</p>
+									{/if}
+								{:else}
+									<p class="mt-2 text-xs text-muted-foreground">{tr("Belum ada jenis artikel.")}</p>
+								{/if}
+							</div>
+							{/if}
 						</div>
 					{:else}
 						<p class="mt-3 text-xs text-muted-foreground">{tr("Konfigurasi subagent belum termuat.")}</p>

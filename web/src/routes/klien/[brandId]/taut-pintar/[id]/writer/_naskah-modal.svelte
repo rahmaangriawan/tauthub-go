@@ -28,6 +28,9 @@
 		initialCategory = null,
 		initialMetaDescription = null,
 		categoryOptions = [],
+		articleTypeOptions = [],
+		showArticleType = true,
+		mediaType = '',
 		linkLimit,
 		saving = false,
 		saveError = null,
@@ -52,6 +55,12 @@
 		initialCategory?: string | null;
 		initialMetaDescription?: string | null;
 		categoryOptions?: string[];
+		/** Jenis artikel (editorial/advertorial/opini) untuk tab Generate dengan AI. */
+		articleTypeOptions?: Array<{ code: string; name: string }>;
+		/** Tampilkan pilihan Jenis Artikel? Hanya untuk media mainstream. */
+		showArticleType?: boolean;
+		/** Jenis media target (mainstream | blogger) — untuk keterangan dinamis di header. */
+		mediaType?: string;
 		linkLimit: number;
 		saving?: boolean;
 		saveError?: string | null;
@@ -59,7 +68,7 @@
 		onSave: (title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) => void;
 		onUploadCover: (file: File) => Promise<string>;
 		onUploadDoc: (file: File, onPhase?: (phase: 'extract' | 'clean') => void, links?: WriterLink[]) => Promise<{ title: string; html: string; warning?: string }>;
-		onGenerate: (topic: string, links: WriterLink[]) => Promise<{ title: string; html: string }>;
+		onGenerate: (topic: string, links: WriterLink[], articleType: string) => Promise<{ title: string; html: string; imagesGenerated?: number; imagesCostCredits?: number }>;
 		/** null = belum tahu; false = AI Gatekeeper belum dikonfigurasi admin. */
 		gatekeeperConfigured?: boolean | null;
 		/** Cek Validasi (QC) dari writer: simpan lalu pindai; hasil dibuka di panel QC. */
@@ -93,6 +102,46 @@
 	let genBusy = $state(false);
 	let genError = $state('');
 	let topic = $state('');
+	// Jenis artikel untuk tab Generate. Default "editorial" bila tersedia, agar
+	// perilaku lama (gaya standar The Writer) tetap jadi pilihan pertama. Untuk
+	// media non-mainstream (blogger) pilihannya disembunyikan dan dipaksa kosong
+	// supaya The Writer memakai prompt agent-nya sendiri (writer_blogger).
+	let articleType = $state(
+		untrack(() =>
+			showArticleType
+				? (articleTypeOptions.find((o) => o.code === 'editorial')?.code ?? articleTypeOptions[0]?.code ?? '')
+				: ''
+		)
+	);
+	// Transparansi biaya gambar isi: kalau topik/konteks meminta gambar, tampilkan
+	// perkiraan biayanya. Harga per gambar diambil dari endpoint pustaka gambar.
+	let imgCost = $state(0);
+	let imgRateIdr = $state(0);
+	let imgPricingLoaded = $state(false);
+	let genNotice = $state('');
+	const IMG_WORD_RE = /\b(gambar|images?|foto|ilustrasi|infografis)\b/i;
+	const IMG_COUNT_RE = /(\d+)\s*(gambar|foto|images?|ilustrasi|infografis)/i;
+	const imgRequestCount = $derived.by(() => {
+		if (!IMG_WORD_RE.test(topic)) return 0;
+		const m = IMG_COUNT_RE.exec(topic);
+		const n = m ? Number.parseInt(m[1], 10) : 1;
+		if (!Number.isFinite(n) || n < 1) return 1;
+		return Math.min(n, 5);
+	});
+	const imgEstimateRupiah = $derived(imgRequestCount * imgCost * imgRateIdr);
+	$effect(() => {
+		if (imgPricingLoaded || !campaignId || !mediaId) return;
+		imgPricingLoaded = true;
+		void (async () => {
+			const res = await apiRequest(`/v1/brands/${brandId}/taut/campaigns/${campaignId}/images?media_id=${mediaId}`);
+			if (!res.ok) return;
+			const d = await res.json().catch(() => null);
+			if (d) {
+				imgCost = Number(d.cost_credits ?? 0) || 0;
+				imgRateIdr = Number(d.rate_idr ?? 0) || 0;
+			}
+		})();
+	});
 	let teksTempel = $state('');
 
 	// ---------- tautan tambahan (anchor + URL) ----------
@@ -515,9 +564,14 @@
 		if (genBusy || !topic.trim() || !linksValid) return;
 		genBusy = true;
 		genError = '';
+		genNotice = '';
 		try {
-			const hasil = await onGenerate(topic.trim(), payloadLinks);
+			const hasil = await onGenerate(topic.trim(), payloadLinks, articleType);
 			title = hasil.title || title;
+			if (hasil.imagesGenerated && hasil.imagesGenerated > 0) {
+				const kredit = hasil.imagesCostCredits ?? 0;
+				genNotice = tr('Gambar isi dibuat otomatis') + `: ${hasil.imagesGenerated}` + (kredit > 0 ? ` (${kredit} ${tr('kredit')})` : '') + '.';
+			}
 			// Respons generate tidak memuat HTML, jadi ambil draf tersimpan agar
 			// editor langsung terisi dan tab berpindah ke Tulis / Edit.
 			if (hasil.html && hasil.html.trim()) {
@@ -637,7 +691,15 @@
 		<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
 			<div class="min-w-0">
 				<h2 class="text-base font-semibold">{tr('Pengelola Naskah')}</h2>
-				<p class="mt-0.5 truncate text-xs text-muted-foreground">{tr('Media Target:')} <strong class="text-foreground">{mediaName}</strong></p>
+				<p class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+					<span class="truncate">{tr('Media Target:')} <strong class="text-foreground">{mediaName}</strong></span>
+					{#if mediaType}
+						<span
+							class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+							style="background: {mediaType === 'blogger' ? 'var(--warning-soft)' : 'var(--accent)'}; color: {mediaType === 'blogger' ? 'var(--warning)' : 'var(--primary)'};"
+						>{mediaType === 'blogger' ? tr('Media Blogger') : tr('Media Mainstream')}</span>
+					{/if}
+				</p>
 			</div>
 			<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr('Tutup')} onclick={close}>
 				<X size={18} />
@@ -891,7 +953,9 @@
 							<button class="app-btn app-btn-soft mt-2 w-full" type="button" disabled={!teksTempel.trim()} onclick={pakaiTeksTempel}>
 								{tr('Gunakan Teks Ini')}
 							</button>
-						{@render linkEditor()}
+							<p class="mt-2 text-xs leading-relaxed text-muted-foreground">
+								{tr('Artikel akan 100% memakai dokumen yang kamu unggah — tanpa ditulis ulang oleh AI. Sistem tetap memeriksa tautan dan memvalidasi bahwa dokumen ini aman untuk diterbitkan.')}
+							</p>
 						</div>
 					</div>
 				{:else}
@@ -912,6 +976,25 @@
 								</p>
 							</div>
 							<div class="mt-5 w-full text-left">
+								{#if showArticleType && articleTypeOptions.length > 0}
+									<div class="mb-4">
+										<span class="text-sm font-semibold">{tr('Jenis Artikel')}</span>
+										<div class="mt-2 flex flex-wrap gap-2">
+											{#each articleTypeOptions as opt (opt.code)}
+												<button
+													type="button"
+													class="app-btn !min-h-9 !px-3.5 !text-xs"
+													class:app-btn-primary={articleType === opt.code}
+													class:app-btn-soft={articleType !== opt.code}
+													onclick={() => (articleType = opt.code)}
+												>{opt.name}</button>
+											{/each}
+										</div>
+										<p class="mt-1 text-[11px] text-muted-foreground">
+											{tr('Menentukan gaya penulisan artikel yang dibuat AI.')}
+										</p>
+									</div>
+								{/if}
 								<label class="text-sm font-semibold" for="naskah-topik">
 									{tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
 								</label>
@@ -925,6 +1008,26 @@
 									></textarea>
 									<Sparkles size={16} class="absolute bottom-3 right-3 text-muted-foreground" />
 								</div>
+								{#if imgRequestCount > 0 && !genNotice}
+									<div class="mt-2 rounded-lg px-3 py-2 text-xs" style="background-color: var(--accent); color: var(--accent-foreground);">
+										<p class="font-semibold" style="color: var(--primary);">
+											{tr('Terdeteksi permintaan gambar')} (~{imgRequestCount} {tr('gambar isi')})
+										</p>
+										<p class="mt-0.5">
+											{#if imgCost > 0}
+												{tr('Perkiraan biaya')}: {imgRequestCount} × {imgCost} {tr('kredit')}{imgRateIdr > 0
+													? ` ≈ Rp ${imgEstimateRupiah.toLocaleString('id-ID')}`
+													: ''}.
+											{:else}
+												{tr('Biaya gambar mengikuti tarif yang berlaku saat generate.')}
+											{/if}
+											{tr('Gambar utama (cover) tetap kamu atur manual atau unggah sendiri.')}
+										</p>
+									</div>
+								{/if}
+								{#if genNotice}
+									<p class="mt-2 text-xs" style="color: var(--success);">{genNotice}</p>
+								{/if}
 								{@render linkEditor()}
 							{#if genError}
 								<p class="mt-2 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">

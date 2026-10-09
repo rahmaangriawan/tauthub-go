@@ -16,6 +16,7 @@
 	import { MANUAL_PROFILER_REASON, buildTrackedUrl, stripScheme, withScheme, textToHtml, toLocalInput, isCampaignDone } from '../../_shared';
 	import { tcToRp } from '$lib/credits/rupiah';
 	import { ARTICLE_DEFAULT_COVER } from '$lib/media/cover';
+	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import SlideOver from '$lib/components/slide-over.svelte';
 
@@ -42,6 +43,8 @@
 		regen_count: number | null;
 		categories: string[];
 		label_sponsor?: string;
+		media_type?: string | null;
+		website_url?: string | null;
 	};
 	type LinksForm = {
 		tracking_mode: 'direct' | 'tauthub';
@@ -69,6 +72,9 @@
 	let articleStats = $state<Record<string, ArticleStats>>({});
 	let articleTitles = $state<Record<string, string>>({});
 	let placement = $state<PlacementItem[]>([]);
+	// Pilihan jenis artikel untuk tab "Generate dengan AI" di modal Pengelola Naskah
+	// (editorial/advertorial/opini). Dikelola admin di Taut Prompt Studio.
+	let articleTypeOptions = $state<Array<{ code: string; name: string; description?: string | null }>>([]);
 	// Jumlah analisis QC per media (badge di tombol "Analisis QC").
 	let qcCounts = $state<Record<string, number>>({});
 	// Konfirmasi hapus media dari kampanye (soft delete, data artikel tetap aman).
@@ -186,12 +192,18 @@
 
 	async function load() {
 		try {
-			const [placeRes, linksRes, draftRes, auditsRes] = await Promise.all([
+			const [placeRes, linksRes, draftRes, auditsRes, typesRes] = await Promise.all([
 				apiRequest(`${apiBase}/placement`),
 				apiRequest(`${apiBase}/writer-links`),
 				apiRequest(`${apiBase}/profile/draft`),
-				apiRequest(`${apiBase}/gatekeeper/audits`)
+				apiRequest(`${apiBase}/gatekeeper/audits`),
+				apiRequest(`/v1/brands/${brandId}/taut/article-types`)
 			]);
+			// Jenis artikel (editorial/advertorial/opini) untuk toggle di modal naskah.
+			if (typesRes.ok) {
+				const td = await typesRes.json().catch(() => null);
+				articleTypeOptions = Array.isArray(td?.items) ? td.items : [];
+			}
 			if (placeRes.ok) {
 				const d = await placeRes.json();
 				placement = d.media ?? [];
@@ -635,6 +647,13 @@
 			judul = lines[0];
 			isi = lines.slice(1).join('\n');
 		}
+		// DOCX bergambar: server sudah memindahkan gambarnya ke Tauthub dan
+		// mengembalikan HTML teks + gambar. Pakai apa adanya (tanpa AI merapikan)
+		// supaya dokumen pindah sama persis dan gambarnya tidak hilang.
+		const richHtml = upData?.file && typeof upData.file.extracted_html === 'string' ? String(upData.file.extracted_html) : '';
+		if (richHtml.trim()) {
+			return { title: judul.slice(0, 200), html: richHtml };
+		}
 		const rawHtml = textToHtml(isi);
 		// Rapikan dengan AI sebelum masuk editor. Kegagalan apa pun tidak
 		// menghalangi: teks asli tetap dipakai, alasannya dikembalikan sebagai
@@ -667,17 +686,23 @@
 	async function generateNaskah(
 		mediaId: string,
 		topic: string,
-		links: { anchor_text: string; url: string }[] = []
-	): Promise<{ title: string; html: string }> {
+		links: { anchor_text: string; url: string }[] = [],
+		articleType = ''
+	): Promise<{ title: string; html: string; imagesGenerated?: number; imagesCostCredits?: number }> {
 		const res = await apiRequest(`${apiBase}/produce/${mediaId}`, {
 			method: 'POST',
-			body: JSON.stringify({ topic, links })
+			body: JSON.stringify({ topic, links, article_type: articleType })
 		}, 240_000);
 		const data = await res.json().catch(() => null);
 		if (!res.ok) throw new Error(data?.detail ?? tr('Gagal membuat draf AI.'));
 		genState = { ...genState, [mediaId]: 'draft' };
 		qcToken += 1;
-		return { title: String(data?.title ?? ''), html: String(data?.content_html ?? '') };
+		return {
+			title: String(data?.title ?? ''),
+			html: String(data?.content_html ?? ''),
+			imagesGenerated: Number(data?.images_generated ?? 0) || 0,
+			imagesCostCredits: Number(data?.images_cost_credits ?? 0) || 0
+		};
 	}
 
 	// Simpan isi editor. Dipisah dari penutupan modal supaya alur "Cek Validasi
@@ -1016,7 +1041,7 @@
 						: 'background-color: var(--muted); color: var(--muted-foreground);';
 </script>
 
-<PageTitle title="Taut Pintar — The Writer" />
+<PageTitle title="Taut Pintar — Penyedia Konten" />
 
 <main>
 	{#if viewOnly}
@@ -1031,7 +1056,7 @@
 				<Pencil size={22} style="color: #fff;" />
 			</div>
 			<div>
-				<p class="font-bold leading-tight">Agent 3: The Writer</p>
+				<p class="font-bold leading-tight">Agent 3: Penyedia Konten</p>
 				<p class="text-sm leading-tight text-muted-foreground">{manualFlow ? tr('Dapur Produksi') : tr('Dapur Produksi AI')} ({cost.count} {tr('media terpilih')})</p>
 			</div>
 		</div>
@@ -1236,7 +1261,7 @@
 									<FileText size={18} class="text-muted-foreground" />
 								</div>
 								<div class="min-w-0">
-									<p class="font-bold leading-tight">{m.name}</p>
+									<p class="font-bold leading-tight">{mediaDomainLabel(m.website_url, m.name)}</p>
 									<div class="mt-1 flex flex-wrap items-center gap-2">
 										<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={badge(statusTone(statusKind))}>
 											{#if statusKind === 'generating'}<LoaderCircle size={11} class="animate-spin" />
@@ -1448,6 +1473,9 @@
 			initialCategory={ed.category}
 			initialMetaDescription={ed.metaDescription}
 			categoryOptions={placement.find((p) => p.media_id === ed.mediaId)?.categories ?? []}
+			articleTypeOptions={articleTypeOptions}
+			showArticleType={(placement.find((p) => p.media_id === ed.mediaId)?.media_type || 'mainstream') !== 'blogger'}
+			mediaType={placement.find((p) => p.media_id === ed.mediaId)?.media_type || 'mainstream'}
 			linkLimit={ed.linkLimit}
 			saving={editorSaving}
 			saveError={editorError}
@@ -1455,7 +1483,7 @@
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveEditor(title, html, coverUrl, category, metaDescription)}
 			onUploadCover={uploadCover}
 			onUploadDoc={uploadDocNaskah}
-			onGenerate={(topic, links) => generateNaskah(ed.mediaId, topic, links)}
+			onGenerate={(topic, links, articleType) => generateNaskah(ed.mediaId, topic, links, articleType)}
 			gatekeeperConfigured={gatekeeperAgent ? gatekeeperAgent.configured : null}
 			onValidate={(title, html, coverUrl, category, metaDescription) => validateNaskah(title, html, coverUrl, category, metaDescription)}
 			streamingHtml={streamHtml}

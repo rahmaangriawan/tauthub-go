@@ -18,6 +18,7 @@
 	} from '@lucide/svelte';
 	import { apiRequest } from '$lib/auth';
 	import { wordCountLabel, normalizeWordCountMode } from '$lib/media/word-count';
+	import { getCategoryTone } from '$lib/media/category-tone';
 	import { MEDIA_LABEL } from '../taut-pintar/_shared';
 
 	export type MediaDetailItem = {
@@ -411,11 +412,11 @@
 										{#if catPopoverOpen}
 											<div class="categoryPopover">
 												<div class="categoryPopoverTitle">{tr("Semua Kategori")}</div>
-												<div class="categoryPopoverList">
-													{#each cats as c (c)}
-														<span class="categoryPill">{c}</span>
-													{/each}
-												</div>
+													<div class="categoryPopoverList">
+														{#each cats as c (c)}
+															<span class="categoryPill categoryPill--{getCategoryTone(c)}">{c}</span>
+														{/each}
+													</div>
 											</div>
 										{/if}
 									</span>
@@ -944,14 +945,42 @@
 		flex-wrap: wrap;
 		gap: 6px;
 	}
-	.categoryPill {
-		display: inline-block;
-		padding: 2px 8px;
-		border-radius: 6px;
-		background: #f1f5f9;
-		font-size: 11.5px;
-		color: #334155;
-	}
+		.categoryPill {
+			display: inline-flex;
+			align-items: center;
+			padding: 3px 8px;
+			border-radius: 6px;
+			font-size: 11.5px;
+			font-weight: 600;
+			line-height: 1.25;
+			border: 1px solid #cbd5e1;
+			background: #f1f5f9;
+			color: #1e293b;
+		}
+		.categoryPill--charcoal { background: #f1f5f9; border-color: #cbd5e1; color: #1e293b; }
+		.categoryPill--slate { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
+		.categoryPill--stone { background: #fafaf9; border-color: #e7e5e4; color: #57534e; }
+		.categoryPill--navy { background: #f0f4f9; border-color: #cbd5e1; color: #0f2744; }
+		.categoryPill--cobalt { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+		.categoryPill--blue { background: #eef6ff; border-color: #cfe4fe; color: #1e40af; }
+		.categoryPill--sky { background: #f0f9ff; border-color: #bae6fd; color: #0369a1; }
+		.categoryPill--cyan { background: #ecfeff; border-color: #a5f3fc; color: #0e7490; }
+		.categoryPill--teal { background: #f0fdfa; border-color: #99f6e4; color: #0f766e; }
+		.categoryPill--emerald { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+		.categoryPill--green { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+		.categoryPill--lime { background: #f7fee7; border-color: #d9f99d; color: #4d7c0f; }
+		.categoryPill--gold { background: #fefce8; border-color: #fef08a; color: #a16207; }
+		.categoryPill--amber { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+		.categoryPill--orange { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
+		.categoryPill--coral { background: #fff4f2; border-color: #ffd5cc; color: #b93815; }
+		.categoryPill--red { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+		.categoryPill--burgundy { background: #fff1f2; border-color: #fecdd3; color: #9f1239; }
+		.categoryPill--pink { background: #fdf2f8; border-color: #fbcfe8; color: #be185d; }
+		.categoryPill--rose { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
+		.categoryPill--fuchsia { background: #fdf4ff; border-color: #f5d0fe; color: #a21caf; }
+		.categoryPill--purple { background: #faf5ff; border-color: #e9d5ff; color: #7e22ce; }
+		.categoryPill--violet { background: #f5f3ff; border-color: #ddd6fe; color: #6d28d9; }
+		.categoryPill--indigo { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
 
 	.detailHeaderActions {
 		display: flex;
