@@ -136,12 +136,140 @@
 	let pubsPage = $state(1);
 	let domainsPage = $state(1);
 
+	// ── Klaim garansi (Link Guardian SLA) ──────────────────────────────────
+	// Baris klaim dibuat dari sisi klien; di sini admin memprosesnya: cek
+	// kondisi domain, hubungi pemilik domain, lalu kembalikan saldo bila tidak
+	// bisa diselesaikan. Kelayakan sudah dihitung server, jadi UI hanya
+	// menampilkan alasannya saat tombol pengembalian tidak boleh ditekan.
+	type ClaimRow = {
+		id: string; brand_name: string | null; media_name: string | null; published_url: string | null;
+		published_at: string | null; status: string; detection_state: string | null;
+		anchor_expected: string | null; domain_check_note: string | null; owner_contact_note: string | null;
+		refund_idr: number | null; refund_tc: number | null;
+		eligible: boolean; ineligible_reason: string | null;
+		link_state: string | null; in_article_state: string | null;
+	};
+	let claims = $state<ClaimRow[]>([]);
+	let openClaim = $state<string | null>(null);
+	let highlightClaim = $state<string | null>(null);
+	let claimBusy = $state<string | null>(null);
+	let noteDomain = $state('');
+	let noteOwner = $state('');
+	let rejectReason = $state('');
+
+	const openClaimCount = $derived(claims.filter((c) => c.status !== 'refunded' && c.status !== 'rejected').length);
+
+	const CLAIM_STATUS_LABEL: Record<string, string> = $derived({
+		submitted: tr('Menunggu diperiksa'), checking: tr('Sedang diperiksa'),
+		contacted: tr('Menghubungi pemilik domain'), refunded: tr('Dana dikembalikan'),
+		rejected: tr('Ditolak')
+	});
+	const claimTone = (s: string): 'success' | 'warning' | 'danger' | 'neutral' =>
+		s === 'refunded' ? 'success' : s === 'rejected' ? 'neutral' : 'warning';
+	const fmtDay = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '—');
+	const fmtRp = (n: number | null) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;
+	const detectionLabel = (c: ClaimRow) =>
+		c.detection_state === 'link_removed' ? tr('Tautan dihapus')
+		: c.detection_state === 'gone' ? tr('Hilang (404)')
+		: c.link_state ?? '—';
+
+	function toggleClaim(c: ClaimRow) {
+		if (openClaim === c.id) {
+			openClaim = null;
+			return;
+		}
+		openClaim = c.id;
+		noteDomain = c.domain_check_note ?? '';
+		noteOwner = c.owner_contact_note ?? '';
+		rejectReason = '';
+	}
+
+	async function saveClaimStep(c: ClaimRow) {
+		claimBusy = c.id;
+		error = '';
+		notice = '';
+		try {
+			const res = await apiRequest(`/v1/platform/link-guardian/claims/${c.id}/step`, {
+				method: 'POST',
+				body: JSON.stringify({
+					status: noteOwner.trim() ? 'contacted' : 'checking',
+					domain_check_note: noteDomain,
+					owner_contact_note: noteOwner
+				})
+			});
+			if (!res.ok) {
+				error = await readApiError(res, 'Permintaan gagal.');
+				return;
+			}
+			notice = 'Progres klaim tersimpan.';
+			await load();
+		} finally {
+			claimBusy = null;
+		}
+	}
+
+	async function refundClaim(c: ClaimRow) {
+		if (!confirm(`Kembalikan saldo untuk klaim ${c.brand_name ?? ''} - ${c.media_name ?? ''}? Tindakan ini mengurangi pemasukan Tauthub dan tidak bisa dibatalkan.`)) return;
+		claimBusy = c.id;
+		error = '';
+		notice = '';
+		try {
+			const res = await apiRequest(`/v1/platform/link-guardian/claims/${c.id}/refund`, {
+				method: 'POST',
+				body: JSON.stringify({ resolution_note: noteDomain })
+			});
+			const data = await res.json().catch(() => null);
+			if (!res.ok) {
+				error = data?.detail ?? (await readApiError(res, 'Permintaan gagal.'));
+				return;
+			}
+			notice = `Saldo dikembalikan ${fmtRp(data?.refund_idr ?? 0)} ke akun klien.`;
+			await load();
+		} finally {
+			claimBusy = null;
+		}
+	}
+
+	async function rejectClaim(c: ClaimRow) {
+		if (rejectReason.trim().length < 5) {
+			error = 'Alasan penolakan minimal 5 karakter.';
+			return;
+		}
+		claimBusy = c.id;
+		error = '';
+		notice = '';
+		try {
+			const res = await apiRequest(`/v1/platform/link-guardian/claims/${c.id}/reject`, {
+				method: 'POST',
+				body: JSON.stringify({ reason: rejectReason })
+			});
+			if (!res.ok) {
+				error = await readApiError(res, 'Permintaan gagal.');
+				return;
+			}
+			notice = 'Klaim ditolak dan alasannya tercatat.';
+			rejectReason = '';
+			await load();
+		} finally {
+			claimBusy = null;
+		}
+	}
+
 	onMount(() => {
 		void (async () => {
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
 			await load();
 			loading = false;
+			// Notifikasi klaim menautkan ?claim=<id>: buka tab Klaim dan sorot
+			// barisnya supaya admin mendarat tepat di klaim yang dimaksud.
+			const wanted = new URL(window.location.href).searchParams.get('claim');
+			if (wanted) {
+				tab = 'claims';
+				highlightClaim = wanted;
+				const target = claims.find((c) => c.id === wanted);
+				if (target) toggleClaim(target);
+			}
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -157,10 +285,11 @@
 		const domQuery = new URLSearchParams({ view: 'domains', limit: '500' });
 		if (healthFilter) domQuery.set('health', healthFilter);
 		try {
-			const [sumRes, pubsRes, domsRes] = await Promise.all([
+			const [sumRes, pubsRes, domsRes, claimsRes] = await Promise.all([
 				apiRequest('/v1/platform/link-monitor?view=summary'),
 				apiRequest(`/v1/platform/link-monitor?${pubQuery}`),
-				apiRequest(`/v1/platform/link-monitor?${domQuery}`)
+				apiRequest(`/v1/platform/link-monitor?${domQuery}`),
+				apiRequest('/v1/platform/link-guardian/claims')
 			]);
 			if (!sumRes.ok) {
 				error = await readApiError(sumRes, 'Permintaan gagal.');
@@ -169,6 +298,10 @@
 			summary = await sumRes.json();
 			pubs = pubsRes.ok ? await pubsRes.json() : { items: [], total: 0, limit: 500, offset: 0 };
 			domains = domsRes.ok ? await domsRes.json() : { items: [], total: 0, limit: 500, offset: 0 };
+			if (claimsRes.ok) {
+				const data = (await claimsRes.json()) as { claims?: ClaimRow[] };
+				claims = data.claims ?? [];
+			}
 		} catch {
 			error = 'Permintaan gagal.';
 		} finally {
@@ -401,9 +534,88 @@
 			class:app-btn-soft={tab !== 'domains'}
 			onclick={() => (tab = 'domains')}>{tr("Domain Mitra (")}{domains.items.length})</button
 		>
+		<button
+			type="button"
+			class="app-btn !min-h-8 !rounded-b-none !px-3.5 !text-sm"
+			class:app-btn-primary={tab === 'claims'}
+			class:app-btn-soft={tab !== 'claims'}
+			onclick={() => (tab = 'claims')}>{tr("Klaim Garansi")}{openClaimCount > 0 ? ` (${openClaimCount})` : ''}</button
+		>
 	</div>
 
 	<div class="pt-4">
+		{#if tab === 'claims'}
+			<div class="app-card mb-3 px-4 py-2.5 text-sm text-muted-foreground">{tr("Klaim garansi dari klien. Periksa kondisi domain, hubungi pemilik domain, lalu kembalikan saldo bila masalahnya tidak bisa diselesaikan. Kelayakan (garansi 12 bulan, media terverifikasi, dan kerusakan 404 atau tautan dicabut) sudah diperiksa server.")}</div>
+
+			{#if claims.length === 0}
+				<div class="app-card px-6 py-10 text-center text-sm text-muted-foreground">{tr("Belum ada klaim masuk.")}</div>
+			{:else}
+				<div class="flex flex-col gap-2">
+					{#each claims as c (c.id)}
+						<div
+							class="app-card p-3"
+							style={highlightClaim === c.id ? 'border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);' : ''}
+						>
+							<div class="flex flex-wrap items-start justify-between gap-2">
+								<div class="min-w-0">
+									<p class="text-sm font-semibold">{c.brand_name ?? tr('Brand')} · {c.media_name ?? tr('Media')}</p>
+									{#if c.published_url}
+										<a class="break-all text-xs" style="color: var(--primary);" href={c.published_url} target="_blank" rel="noreferrer">{c.published_url}</a>
+									{/if}
+									<p class="mt-0.5 text-xs text-muted-foreground">
+										{tr('Tayang')} {fmtDay(c.published_at)} · {tr('Deteksi:')} {detectionLabel(c)}
+										{#if c.anchor_expected} · {tr('Anchor:')} {c.anchor_expected}{/if}
+										{#if c.refund_tc} · {tr('Dikembalikan')} {fmtRp(c.refund_idr)}{/if}
+									</p>
+								</div>
+								<div class="flex flex-none items-center gap-2">
+									<Badge tone={claimTone(c.status)} label={CLAIM_STATUS_LABEL[c.status] ?? c.status} />
+									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => toggleClaim(c)}>
+										{openClaim === c.id ? tr('Tutup') : tr('Proses')}
+									</button>
+								</div>
+							</div>
+
+							{#if !c.eligible && c.status !== 'refunded' && c.status !== 'rejected'}
+								<p class="mt-2 text-xs" style="color: var(--warning);">{tr('Tidak bisa diklaim:')} {c.ineligible_reason}</p>
+							{/if}
+
+							{#if openClaim === c.id}
+								<div class="mt-3 grid gap-2 sm:grid-cols-2">
+									<label class="flex flex-col gap-1 text-xs">
+										<span class="font-medium text-muted-foreground">{tr('Hasil cek kondisi domain')}</span>
+										<textarea class="app-input w-full" rows="2" bind:value={noteDomain}></textarea>
+									</label>
+									<label class="flex flex-col gap-1 text-xs">
+										<span class="font-medium text-muted-foreground">{tr('Catatan menghubungi pemilik domain')}</span>
+										<textarea class="app-input w-full" rows="2" bind:value={noteOwner}></textarea>
+									</label>
+								</div>
+								{#if c.status !== 'refunded' && c.status !== 'rejected'}
+									<label class="mt-2 flex flex-col gap-1 text-xs">
+										<span class="font-medium text-muted-foreground">{tr('Alasan penolakan (wajib bila klaim ditolak)')}</span>
+										<input class="app-input w-full" bind:value={rejectReason} />
+									</label>
+									<div class="mt-3 flex flex-wrap justify-end gap-2">
+										<button class="app-btn app-btn-soft" type="button" disabled={claimBusy === c.id} onclick={() => void saveClaimStep(c)}>{tr('Simpan langkah')}</button>
+										<button class="app-btn app-btn-soft" style="color: var(--destructive);" type="button" disabled={claimBusy === c.id} onclick={() => void rejectClaim(c)}>{tr('Tolak klaim')}</button>
+										<button
+											class="app-btn app-btn-primary"
+											type="button"
+											disabled={claimBusy === c.id || !c.eligible}
+											title={c.eligible ? tr('Kembalikan saldo senilai pembelian artikel ini') : (c.ineligible_reason ?? '')}
+											onclick={() => void refundClaim(c)}
+										>
+											{claimBusy === c.id ? tr('Memproses…') : tr('Kembalikan Saldo')}
+										</button>
+									</div>
+								{/if}
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+		{/if}
 		{#if tab === 'articles'}
 			<div class="app-card mb-3 px-4 py-2.5 text-sm text-muted-foreground">{tr("Sistem membuka halaman artikel di situs media mitra untuk memastikan halamannya masih bisa diakses. Kalau halaman tidak ditemukan (Hilang 404), tekan tombol Ganti Artikel pada baris tersebut untuk membuat artikel pengganti di media lain. Status Tak Terjangkau tidak dihitung sebagai artikel hilang, karena situsnya mungkin hanya sedang memblokir akses atau mati sementara.")}</div>
 

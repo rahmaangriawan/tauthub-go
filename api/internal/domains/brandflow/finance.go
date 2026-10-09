@@ -390,28 +390,9 @@ func (d *Deps) LinkMonitorRequestReplacement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	dedupeKey := "link_replacement_request:" + publicationID
-	title := "Klien mengajukan penggantian artikel"
-	articleTitle := found.strOr("title", "Artikel")
-	mediaName := found.strOr("media_name", "media")
-	bodyText := "\"" + articleTitle + "\" di " + mediaName + " diminta diganti oleh " + user.Email + "."
-	if err := d.exec(r.Context(), `
-		INSERT INTO notifications (id, user_id, type, title, body, link, publication_id, dedupe_key)
-		SELECT gen_random_uuid(), u.id, $1, $2, $3, $4, $5, $6
-		  FROM users u
-		 WHERE u.role = 'admin' AND u.is_active = TRUE
-		   AND NOT EXISTS (
-		     SELECT 1 FROM notifications n WHERE n.user_id = u.id AND n.dedupe_key = $6
-		   )`,
-		"publication.link_replacement_requested", title, bodyText, "/admin/link-monitor",
-		publicationID, dedupeKey); err != nil {
-		d.writeErr(w, err)
-		return
-	}
-	// Catat klaim agar bisa dilacak admin: satu publikasi = satu klaim, jadi
-	// pengajuan ulang tidak menumpuk baris dan pengembalian saldo tidak mungkin
-	// terjadi dua kali untuk artikel yang sama.
-	if err := d.exec(r.Context(), `
+	// Klaim dicatat lebih dulu supaya notifikasi admin bisa menunjuk LANGSUNG ke
+	// klaim itu (?claim=<id>), bukan hanya ke halaman daftarnya.
+	claimRow, err := d.queryRow(r.Context(), `
 		INSERT INTO link_guardian_claims
 		  (id, publication_id, brand_id, status, detection_state, anchor_expected, created_by)
 		SELECT $4, $1, $2, 'submitted',
@@ -425,8 +406,29 @@ func (d *Deps) LinkMonitorRequestReplacement(w http.ResponseWriter, r *http.Requ
 		                ELSE link_guardian_claims.status END,
 		  detection_state = EXCLUDED.detection_state,
 		  anchor_expected = COALESCE(EXCLUDED.anchor_expected, link_guardian_claims.anchor_expected),
-		  updated_at = NOW()`,
-		publicationID, brandRow.ID, user.ID, uuid.NewString()); err != nil {
+		  updated_at = NOW()
+		RETURNING id`, publicationID, brandRow.ID, user.ID, uuid.NewString())
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	claimLink := "/admin/link-monitor?claim=" + claimRow.strOr("id", "")
+
+	dedupeKey := "link_replacement_request:" + publicationID
+	title := "Klien mengajukan penggantian artikel"
+	articleTitle := found.strOr("title", "Artikel")
+	mediaName := found.strOr("media_name", "media")
+	bodyText := "\"" + articleTitle + "\" di " + mediaName + " diminta diganti oleh " + user.Email + "."
+	if err := d.exec(r.Context(), `
+		INSERT INTO notifications (id, user_id, type, title, body, link, publication_id, dedupe_key)
+		SELECT gen_random_uuid(), u.id, $1, $2, $3, $4, $5, $6
+		  FROM users u
+		 WHERE u.role = 'admin' AND u.is_active = TRUE
+		   AND NOT EXISTS (
+		     SELECT 1 FROM notifications n WHERE n.user_id = u.id AND n.dedupe_key = $6
+		   )`,
+		"publication.link_replacement_requested", title, bodyText, claimLink,
+		publicationID, dedupeKey); err != nil {
 		d.writeErr(w, err)
 		return
 	}
