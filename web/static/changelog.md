@@ -39,6 +39,9 @@ Catatan:
 - Daftar kategori menyesuaikan posisi otomatis: tampil ke atas bila barisnya ada di dekat dasar layar, jadi tidak terpotong.
 - Saat semua pilihan media dibatalkan, penanda tahapan hilang dengan animasi halus (bukan hilang mendadak).
 - Ikon saldo kredit dibuat hijau supaya lebih mudah dikenali.
+- Toolbar katalog jadi lebih rapi: kategori kini berupa pilihan tombol (yang tampil 5 dulu, sisanya lewat "Lihat semua"), filter lanjutan langsung terlihat tanpa perlu diklik, dan tombol Impor List serta Bookmark berdampingan.
+- Tampilan katalog di HP jauh lebih ringkas: tiap media hanya menampilkan nama, harga kecil di bawahnya, dan tombol Detail. Informasi lain (kategori, trafik, DA, AI Trust, AI Cited, waktu rilis, dan tombol simpan) muncul di panel kanan saat tombol Detail diklik.
+- Badge Dewan Pers dan tanda verifikasi kini berdekatan dengan nama media, dan kolom pencarian tetap sebaris dengan tombol alat katalog.
 
 ## v0.4.0 — 2026-10-07
 

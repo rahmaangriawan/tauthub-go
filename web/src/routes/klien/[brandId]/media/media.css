@@ -708,8 +708,8 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 }
 .modernSearchWrap {
   position: relative;
-  flex: 1;
-  min-width: 260px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .modernTable {
   width: 100%;
@@ -769,7 +769,7 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   padding: 10px 14px;
   background: var(--card);
   border: 1px solid var(--gray-a5, #e2e8f0);
@@ -1656,15 +1656,16 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   .modernCard { overflow: visible; }
   .modernTh {
     position: sticky;
-    top: 60px;
-    z-index: 10;
+    /* Offset mengikuti tinggi topbar yang sebenarnya (di-set JS; fallback 60px). */
+    top: var(--media-sticky-top, 60px);
+    z-index: 20;
     padding: 11px 10px;
     background: #f8fafc;
     box-shadow: inset 0 -1px 0 #e2e8f0;
   }
   .modernTd { padding: 12px 10px; }
   .modernTopBar { gap: 8px; padding: 10px; }
-  .modernSearchWrap { min-width: 100%; }
+  .modernSearchWrap { min-width: 0; flex: 1 1 auto; }
   .actionBtnGroup { gap: 6px; }
 
   /* Bar seleksi: sidebar disembunyikan (<768px) → menempel penuh & membungkus. */
@@ -1683,7 +1684,7 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 }
 
 /* ── Alat katalog: tombol corong di samping search + panel kanan ─────────── */
-.modernToolsWrap { display: flex; align-items: center; gap: 8px; flex: none; }
+.modernToolsWrap { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
 .modernToolsBtn {
   display: inline-flex; align-items: center; justify-content: center;
   gap: 6px; width: 38px; height: 38px; flex: none;
@@ -1693,14 +1694,97 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 }
 .modernToolsBtn:hover { background: #f8fafc; border-color: #cbd5e1; color: #0f172a; }
 .modernToolsBtnActive { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
-.toolsPanel { display: flex; flex-direction: column; gap: 12px; }
+/* Panel alat: lega, tombol tersusun 2 kolom. */
+.toolsPanel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+  padding-top: 4px;
+}
+.toolsPanel .modernSelectWrap { grid-column: 1 / -1; }
 .toolsPanelLabel {
-  display: block; margin-bottom: 6px;
+  display: block; margin-bottom: 8px;
   font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .05em; color: #94a3b8;
 }
-.toolsPanel .modernActionBtn { width: 100%; justify-content: flex-start; }
+.toolsPanel .modernActionBtn {
+  width: 100%; min-height: 44px; justify-content: center;
+  padding: 0 12px; gap: 8px;
+}
+/* Impor List + Bookmark berdampingan dalam satu baris (2 kolom). */
+@media (max-width: 380px) {
+  .toolsPanel { grid-template-columns: 1fr; gap: 12px; }
+}
 @media (max-width: 768px) {
   .modernSearchWrap { flex: 1 1 auto; }
   .modernToolsWrap { flex: none; }
+}
+
+/* Panel info media (mobile): baris label–nilai rapi. */
+.quickInfoPanel { display: flex; flex-direction: column; gap: 2px; }
+.quickInfoRow {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 0; border-bottom: 1px solid #f1f5f9; font-size: 13.5px;
+}
+.quickInfoRow:last-child { border-bottom: none; }
+.quickInfoRow > span:first-child { color: #64748b; }
+.quickInfoRow strong { color: #0f172a; font-variant-numeric: tabular-nums; }
+.quickInfoCats { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+
+/* Label tombol detail: versi panjang di layar lebar, versi pendek di HP. */
+.vdShort { display: none; }
+@media (max-width: 768px) {
+  .vdFull { display: none; }
+  .vdShort { display: inline; }
+  /* Bookmark di kolom Aksi disembunyikan di HP — sudah ada di panel Detail. */
+  .modernTable .actionBtnGroup .bookmarkActionBtn { display: none; }
+}
+
+/* Harga: kolomnya disembunyikan di HP, nilainya dipindah ke bawah nama media. */
+.priceMobile { display: none; }
+@media (max-width: 768px) {
+  .modernTable th:nth-child(9), .modernTable td:nth-child(9) { display: none; }
+  /* Di HP: grid 2 kolom — nama domain di kiri, badge Dewan Pers di kanan
+     (sebaris dengan centang verifikasi), lalu harga dan meta selebar penuh. */
+  .mediaRowCol {
+    display: grid;
+    /* Nama domain dan badge Dewan Pers berdempetan di kiri (bukan ditarik ke
+       ujung kanan kolom), kolom sisa menyerap kelegaan. */
+    grid-template-columns: minmax(0, max-content) max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 4px 6px;
+  }
+  .mediaRowCol .mediaTitleLine { grid-column: 1; order: 1; min-width: 0; }
+  .mediaRowCol .dewanPersBadge { grid-column: 2; order: 2; justify-self: start; }
+  .priceMobile {
+    display: block; grid-column: 1 / -1; order: 3; margin-top: 0;
+    font-size: 12px; font-weight: 500; color: #64748b;
+  }
+  .mediaRowCol .mediaMetaLine { grid-column: 1 / -1; order: 4; }
+}
+
+/* ── Panel alat (mobile): kategori radio, expand, filter lanjutan inline ── */
+.catRadioLabel { grid-column: 1 / -1; margin-bottom: -8px; }
+.catRadioGroup { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.catRadio {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 34px; padding: 0 12px;
+  border: 1px solid #e2e8f0; border-radius: 999px;
+  background: var(--card); color: #334155;
+  font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.catRadio:hover { border-color: #cbd5e1; background: #f8fafc; }
+.catRadioActive { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+.catRadioCount { font-size: 11px; font-weight: 700; color: #94a3b8; }
+.catRadioActive .catRadioCount { color: #2563eb; }
+.catExpandBtn {
+  align-self: center; padding: 0; border: 0; background: none;
+  color: var(--primary); font-size: 12px; font-weight: 600;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.advFilterInline {
+  grid-column: 1 / -1; margin-top: 4px;
+  padding: 14px 0 0; border-top: 1px solid #f1f5f9;
+  display: flex; flex-direction: column; gap: 16px;
 }

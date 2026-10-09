@@ -223,6 +223,10 @@
 	let profilerLoading = $state(false);
 	// Panel alat katalog (kategori, filter, impor, bookmark) dari kanan.
 	let toolsOpen = $state(false);
+	// Kategori: radio (maks 5 tampil, sisanya lewat tombol expand).
+	let catExpand = $state(false);
+	// Panel info cepat (mobile): detail kolom yang disembunyikan di tabel.
+	let quickInfo = $state<any | null>(null);
 	// Cek pesanan ganda: media yang sudah dipesan di kampanye aktif lain.
 	let dupHits = $state<Array<{ mediaName: string; campaignName: string }>>([]);
 	let checkingDup = $state(false);
@@ -478,6 +482,27 @@
 		const onExpired = () => void goto('/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+	});
+
+	// Header kolom tabel sticky tepat di bawah topbar aplikasi. Tinggi topbar
+	// berubah (mis. pill tahapan membungkus di layar sempit), jadi offset-nya
+	// diukur dari elemen asli, bukan angka tetap.
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const sync = () => {
+			const bar = document.querySelector('.app-utility-bar');
+			const h = bar ? Math.round(bar.getBoundingClientRect().height) : 0;
+			document.documentElement.style.setProperty('--media-sticky-top', (h > 0 ? h : 60) + 'px');
+		};
+		sync();
+		window.addEventListener('resize', sync);
+		const ro = new ResizeObserver(sync);
+		const bar = document.querySelector('.app-utility-bar');
+		if (bar) ro.observe(bar);
+		return () => {
+			window.removeEventListener('resize', sync);
+			ro.disconnect();
+		};
 	});
 
 	function persistBookmarks() {
@@ -982,33 +1007,35 @@
 	<!-- Alat katalog: panel dari kanan (kategori, filter lanjutan, impor, bookmark). -->
 	<SlideOver open={toolsOpen} title={tr('Alat Katalog')} subtitle={tr('Kelola kategori, filter, impor daftar, dan media simpanan.')} closeLabel={tr('Tutup')} onClose={() => (toolsOpen = false)}>
 		<div class="toolsPanel">
-			<div class="modernSelectWrap">
-				<span class="toolsPanelLabel">{tr('Kategori')}</span>
-				<Select
-					bind:value={category}
-					ariaLabel="Kategori"
-					Icon={LayoutGrid}
-					placeholder={tr("Semua Kategori")}
-					minWidth={210}
-					onchange={() => (page_ = 1)}
-					options={[
-						{ value: '', label: tr('Semua Kategori'), count: rows.length },
-						...categories.map(([name, count]) => ({ value: name, label: name, count }))
-					]}
-				/>
+			<span class="toolsPanelLabel catRadioLabel">{tr('Kategori')}</span>
+			<div class="catRadioGroup" role="radiogroup" aria-label={tr('Kategori')}>
+				<button
+					type="button"
+					role="radio"
+					aria-checked={category === ''}
+					class="catRadio"
+					class:catRadioActive={category === ''}
+					onclick={() => { category = ''; page_ = 1; }}
+				>{tr('Semua')} <span class="catRadioCount">{rows.length}</span></button>
+				{#each (catExpand ? categories : categories.slice(0, 5)) as [name, count] (name)}
+					<button
+						type="button"
+						role="radio"
+						aria-checked={category === name}
+						class="catRadio"
+						class:catRadioActive={category === name}
+						onclick={() => { category = name; page_ = 1; }}
+					>{name} <span class="catRadioCount">{count}</span></button>
+				{/each}
+				{#if categories.length > 5}
+					<button type="button" class="catExpandBtn" onclick={() => (catExpand = !catExpand)}>
+						{catExpand ? tr('Lebih sedikit') : `${tr('Lihat semua')} (${categories.length})`}
+					</button>
+				{/if}
 			</div>
 
-			<button
-				bind:this={advBtn}
-				class="modernActionBtn {activeFilterCount > 0 ? 'modernActionBtnActive' : ''}"
-				type="button"
-				aria-expanded={advOpen}
-				onclick={openAdvFilter}
-			>
-				<SlidersHorizontal size={15} />
-				<span>{tr('Filter Lanjutan')}</span>
-				{#if activeFilterCount > 0}<span class="modernActionBadge">{activeFilterCount}</span>{/if}
-			</button>
+
+			<div class="advFilterInline">{@render advFields()}</div>
 
 			<button class="modernActionBtn" type="button" onclick={() => { toolsOpen = false; importOpen = true; }}>
 				<Upload size={15} /><span>{tr('Impor List')}</span>
@@ -1022,29 +1049,51 @@
 				onclick={() => (bookmarkOnly = !bookmarkOnly)}
 			>
 				<Bookmark size={15} />
-				<span>{tr('Hanya Bookmark')}</span>
+				<span>{tr('Bookmark')}</span>
 				{#if bookmarkedIds.size > 0}<span class="modernActionBadge">{bookmarkedIds.size}</span>{/if}
 			</button>
 		</div>
 	</SlideOver>
 
-	<!-- Panel filter lanjutan — mengambang di bawah tombol Filter, tidak menggeser tabel -->
-	{#if advOpen}
-		<button
-			type="button"
-			class="advFilterBackdrop"
-			aria-label={tr("Tutup filter")}
-			onclick={() => (advOpen = false)}
-		></button>
-		<div class="advFilterPanel" style="left: {advPos.left}px; top: {advPos.top}px;">
-			<div class="advFilterCard">
-				<div class="advFilterHeader">
-					<div class="advFilterTitle"><SlidersHorizontal size={16} /> Filter Lanjutan</div>
-					<button class="advFilterResetBtn" type="button" onclick={() => (advOpen = false)} aria-label={tr("Tutup filter")}>
-						<X size={16} />
-					</button>
+	<!-- Info media (mobile): kolom yang disembunyikan di tabel, dibuka dari tombol Aksi. -->
+	<SlideOver
+		open={quickInfo !== null}
+		title={quickInfo ? domainLabel(quickInfo) : tr('Info Media')}
+		subtitle={tr('Rincian yang tidak ditampilkan di tabel versi HP.')}
+		closeLabel={tr('Tutup')}
+		onClose={() => (quickInfo = null)}
+	>
+		{#if quickInfo}
+			{@const qi = quickInfo}
+			{@const qtraffic = formatTraffic(qi.sw_visits, qi.traffic_estimate)}
+			{@const qcats = qi.categories && qi.categories.length ? qi.categories : qi.category ? [qi.category] : ['Umum']}
+			{@const qspeed = getReleaseSpeed(qi.integration_type)}
+			<div class="quickInfoPanel">
+				<div class="quickInfoRow">
+					<span>{tr('Kategori')}</span>
+					<span class="quickInfoCats">
+						{#each qcats as c (c)}<span class="categoryPill categoryPill--{getCategoryTone(c)}">{c}</span>{/each}
+					</span>
 				</div>
+				<div class="quickInfoRow"><span>{tr('Trafik (est)')}</span><strong>{qtraffic.text}</strong></div>
+				<div class="quickInfoRow"><span>DA</span><strong>{qi.da ?? '—'}</strong></div>
+				<div class="quickInfoRow"><span>{tr('AI Trust')}</span><strong>{qi.ai_trust_score ?? '—'}</strong></div>
+				<div class="quickInfoRow"><span>{tr('AI Cited')}</span><strong>{qi.ai_cited === true ? tr('Dikutip') : qi.ai_cited === false ? tr('Belum dikutip') : '—'}</strong></div>
+				<div class="quickInfoRow"><span>{tr('Waktu Rilis')}</span><strong>{qspeed?.label ?? '—'}</strong></div>
+				<div class="quickInfoRow">
+					<span>{tr('Bookmark')}</span>
+					<button
+						class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+						type="button"
+						class:app-btn-primary={bookmarkedIds.has(qi.id)}
+						onclick={(e) => toggleBookmark(qi.id, e)}
+					><Bookmark size={13} /> {bookmarkedIds.has(qi.id) ? tr('Tersimpan') : tr('Simpan')}</button>
+				</div>
+			</div>
+		{/if}
+	</SlideOver>
 
+{#snippet advFields()}
 				<div class="advFilterSection">
 					<span class="advFilterSectionLabel">Kecepatan Rilis</span>
 					<div class="advFilterChipsGroup">
@@ -1087,7 +1136,7 @@
 					<div class="advFilterToggleRow">
 						<label class="advFilterToggle" title={tr("Indikator otomatis via API apakah media ini terdeteksi aktif sebagai rujukan/referensi oleh mesin AI.")}>
 							<input type="checkbox" bind:checked={aiCitationOnly} onchange={() => (page_ = 1)} />
-							<span>{tr("Dikutip mesin AI")}</span>
+							<span>{tr("Dikutip AI Overview")}</span>
 						</label>
 					</div>
 				</div>
@@ -1122,6 +1171,26 @@
 					</div>
 				</div>
 
+{/snippet}
+
+	<!-- Panel filter lanjutan — mengambang di bawah tombol Filter, tidak menggeser tabel -->
+	{#if advOpen}
+		<button
+			type="button"
+			class="advFilterBackdrop"
+			aria-label={tr("Tutup filter")}
+			onclick={() => (advOpen = false)}
+		></button>
+		<div class="advFilterPanel" style="left: {advPos.left}px; top: {advPos.top}px;">
+			<div class="advFilterCard">
+				<div class="advFilterHeader">
+					<div class="advFilterTitle"><SlidersHorizontal size={16} /> Filter Lanjutan</div>
+					<button class="advFilterResetBtn" type="button" onclick={() => (advOpen = false)} aria-label={tr("Tutup filter")}>
+						<X size={16} />
+					</button>
+				</div>
+
+				{@render advFields()}
 				<div class="advFilterFooter">
 					<button class="advFilterResetBtn" type="button" onclick={resetFilters}>Reset semua</button>
 					<button class="advFilterApplyBtn" type="button" onclick={() => (advOpen = false)}>Terapkan</button>
@@ -1311,6 +1380,8 @@
 
 								<td class="modernTd">
 									<div class="mediaRowCol">
+									<!-- Harga versi HP: kolom Harganya disembunyikan di layar kecil. -->
+									<span class="priceMobile">Rp {fmt(m.client_price ?? m.price ?? 0)}</span>
 										<div class="mediaTitleLine">
 											<button
 												type="button"
@@ -1465,8 +1536,13 @@
 										<button
 											type="button"
 											class="viewDetailBtn"
-											onclick={(e) => { e.stopPropagation(); detail = m; }}
-										><span>{tr("Lihat Detail")}</span><ArrowRight size={13} /></button>
+											onclick={(e) => {
+												e.stopPropagation();
+												// Mobile: panel kanan berisi info kolom yang disembunyikan.
+												if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) quickInfo = m;
+												else detail = m;
+											}}
+										><span class="vdFull">{tr("Lihat Detail")}</span><span class="vdShort">{tr("Detail")}</span><ArrowRight size={13} /></button>
 									</div>
 								</td>
 							</tr>
