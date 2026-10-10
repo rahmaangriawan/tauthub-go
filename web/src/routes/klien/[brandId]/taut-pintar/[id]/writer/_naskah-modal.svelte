@@ -858,7 +858,10 @@
 						</p>
 					{/if}
 					<div class="mt-4">
-						<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{tr('Isi Artikel (Konten)')}</p>
+						<div class="flex items-center justify-between gap-4">
+							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{tr('Isi Artikel (Konten)')}</p>
+							<p class="shrink-0 text-xs text-muted-foreground">{editorStats.words} {tr('kata')}</p>
+						</div>
 						<div class="mt-2">
 							{#if streamingHtml !== null && streamingHtml !== undefined}
 								<div class="rounded-lg border p-4" style="border-color: var(--border);" aria-live="polite">

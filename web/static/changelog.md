@@ -19,6 +19,11 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.5.1 — 2026-10-10
+
+### Perbaikan
+- Di jendela pengelola naskah kini ada penghitung jumlah kata di sisi kanan label "Isi Artikel (Konten)". Panjang naskah bisa langsung dipantau tanpa menghitung manual, dan angkanya ikut berubah saat naskah diedit.
+
 ## v0.5.0 — 2026-10-09
 
 ### Fitur
