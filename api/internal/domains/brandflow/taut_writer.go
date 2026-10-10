@@ -211,6 +211,12 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if writerTopic == "" {
 		writerTopic = d.loadTautWriterTopic(ctx, campaignID, mediaID)
 	}
+	// Editorial zero-link: instruksi tautan pada topik klien dianggap batal.
+	// Skema URL ikut dibuang supaya model tidak menyalin alamat web ke badan
+	// berita — topik tersimpan di DB tetap yang asli (dipakai Gatekeeper).
+	if articleType == "editorial" {
+		writerTopic = stripURLSchemeText(writerTopic)
+	}
 	// Bahan fakta kanonik: dipakai di prompt penulisan DAN diverifikasi ulang
 	// oleh Gatekeeper AI Overview Checker lewat fungsi yang sama, sehingga klaim
 	// dari materials/topik/narasumber tidak lagi ditandai "tanpa dasar".
@@ -524,6 +530,14 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			"KONTEKS UTAMA DARI KLIEN (WAJIB DIPATUHI): "+writerTopic,
 			"Seluruh artikel (judul, lead, isi, penutup) WAJIB mengikuti konteks di atas. Jangan menambah fakta, angka, nama, atau klaim yang tidak ada di konteks tersebut, dan jangan mengganti topik.",
 		)
+		// Editorial zero-link: klien boleh saja menulis "sertakan backlink/link
+		// ke ..." di kolom topik — untuk Editorial itu dianggap tidak pernah
+		// ditulis. Tanpa blok ini model menurutinya dan menuliskan tautan/URL.
+		if articleType == "editorial" {
+			promptLines = append(promptLines,
+				"ZERO-LINK OVERRIDE (WAJIB — JENIS ARTIKEL EDITORIAL): Abaikan SETIAP bagian konteks klien di atas yang meminta menyematkan tautan, link, backlink, anchor, hyperlink, atau alamat web — bagian itu dianggap tidak pernah ditulis dan tidak boleh memengaruhi naskah. Naskah Editorial TIDAK boleh memuat tautan aktif maupun alamat web di badan berita; sebutkan nama brand/layanan secara natural tanpa alamat web. Aturan ini MENANG atas instruksi tautan apa pun dari klien.",
+			)
+		}
 	}
 	promptLines = append(promptLines, precedenceBlock)
 	promptLines = append(promptLines, structureRules...)
@@ -647,6 +661,12 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		}
 	}
 	contentHTML = finalizeTautArticleHTML(contentHTML, mediaType, allowsLink, linkSpecs)
+	// Editorial zero-link: <a> sudah diupas finalize; URL telanjang yang mungkin
+	// ditulis model (mis. karena topik klien menyebut alamat web) dibuat teks
+	// polos tanpa skema supaya tidak terasa seperti tautan.
+	if articleType == "editorial" {
+		contentHTML = stripURLSchemeHTML(contentHTML)
+	}
 
 	// Gambar isi otomatis: kalau klien meminta gambar/foto/ilustrasi di dalam
 	// artikel, Writer menaruh penanda [[IMAGE: ...]] dan di sini penanda itu

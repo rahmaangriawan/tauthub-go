@@ -113,6 +113,11 @@
 				: ''
 		)
 	);
+	// Pemberitahuan zero-link untuk Editorial. {jenis} dipisah agar kata
+	// "Advertorial" bisa menjadi tombol yang langsung memindah jenis artikel.
+	const editorialNoticeParts = $derived(
+		tr('Jenis artikel Editorial tidak menyematkan tautan apa pun sesuai standar redaksi berita. Apabila Anda ingin menggunakan tautan & anchor, silakan pilih jenis artikel {jenis}.').split('{jenis}')
+	);
 	// Transparansi biaya gambar isi: kalau topik/konteks meminta gambar, tampilkan
 	// perkiraan biayanya. Harga per gambar diambil dari endpoint pustaka gambar.
 	let imgCost = $state(0);
@@ -837,9 +842,13 @@
 	{/snippet}
 
 			<!-- Body: dua kolom, scroll internal -->
-		<div class="grid flex-1 gap-5 overflow-y-auto p-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+		<!-- Padding ATAS sengaja 0: toolbar rich-text editor di kolom kiri sticky
+		     top-0, jadi harus menempel persis di bawah tab tanpa celah padding
+		     (dulu isi artikel terlihat lewat celah 20px itu). Jaraknya dipindah
+		     ke padding kolom. -->
+		<div class="grid flex-1 gap-5 overflow-y-auto px-5 pb-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
 			<!-- Kolom kerja utama -->
-			<div class="min-w-0">
+			<div class="min-w-0 pt-5">
 				{#if tab === 'tulis'}
 					<label class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground" for="naskah-judul">
 						{tr('Judul Artikel')}
@@ -1051,7 +1060,16 @@
 									<div class="mt-4 w-full rounded-xl border p-3 text-left" style="border-color: var(--border); background-color: var(--accent);">
 										<p class="flex items-start gap-1.5 text-[11px] leading-relaxed" style="color: var(--primary);">
 											<Info size={13} class="mt-0.5 shrink-0" />
-											<span>{tr('Jenis artikel Editorial tidak menyematkan tautan apa pun (standar redaksi berita). Kalau ingin memakai tautan & anchor, pilih jenis artikel Advertorial.')}</span>
+											<span>
+												{editorialNoticeParts[0]}
+												<button
+													type="button"
+													class="font-semibold underline underline-offset-2 transition-opacity hover:opacity-75"
+													style="color: var(--primary);"
+													title={tr('Gunakan jenis artikel ini')}
+													onclick={() => (articleType = 'advertorial')}
+												>Advertorial</button>{editorialNoticeParts[1] ?? ''}
+											</span>
 										</p>
 									</div>
 								{:else}
@@ -1080,7 +1098,7 @@
 			</div>
 
 			<!-- Panel pengaturan artikel (kanan) -->
-			<aside class="min-w-0 space-y-5 border-t pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0" style="border-color: var(--border);">
+			<aside class="min-w-0 space-y-5 border-t pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-5" style="border-color: var(--border);">
 				<div>
 					<div class="flex items-center justify-between gap-2">
 						<p class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">

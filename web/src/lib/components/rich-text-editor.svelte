@@ -400,7 +400,7 @@
 </script>
 
 <div class="rte">
-	<div class="flex flex-wrap items-center gap-1 rounded-lg border p-1" role="toolbar" aria-label="Format teks">
+	<div class="rte-toolbar flex flex-wrap items-center gap-1 rounded-lg border p-1" role="toolbar" aria-label="Format teks">
 		{#each tools as t (t.cmd + (t.arg ?? ''))}
 			{@const ToolIcon = t.icon}
 			<button
@@ -652,6 +652,15 @@
 	.rte {
 		position: relative;
 	}
+	/* Toolbar menempel di atas saat SELURUH modal digulir (bukan scroll internal
+	   editor) — container penggulirnya adalah grid overflow-y-auto di modal
+	   Pengelola Naskah. Latar harus pekat supaya isi tidak tembus di baliknya. */
+	.rte-toolbar {
+		position: sticky;
+		top: 0;
+		z-index: 30;
+		background: var(--card, #fff);
+	}
 	.rte-tool {
 		display: inline-flex;
 		align-items: center;
@@ -684,6 +693,14 @@
 	.rte-tool-active {
 		background: var(--primary);
 		color: var(--primary-foreground);
+		border-color: var(--primary);
+	}
+	/* Toggle HTML saat AKTIF lalu di-hover: ikon tetap terlihat — biru di atas
+	   latar terang. Dulu warna ikonnya tetap putih (primary-foreground) sementara
+	   latar hover berubah terang, sehingga ikonnya hilang. */
+	.rte-tool-toggle.rte-tool-active:hover:not(:disabled) {
+		background: var(--secondary);
+		color: var(--primary);
 		border-color: var(--primary);
 	}
 		.rte-body {

@@ -17,6 +17,24 @@ type tautBacklinkSpec struct {
 	Mandatory bool
 }
 
+// reURLWithScheme: URL ber-skema di dalam teks.
+var reURLWithScheme = regexp.MustCompile(`(?i)https?://[^\s<>"']+`)
+
+// stripURLSchemeText: lepas skema http(s):// dari URL pada teks biasa —
+// alamat tetap terbaca sebagai teks polos, tanpa rasa tautan.
+func stripURLSchemeText(text string) string {
+	return reURLWithScheme.ReplaceAllStringFunc(text, func(m string) string {
+		return strings.TrimPrefix(strings.TrimPrefix(m, "http://"), "https://")
+	})
+}
+
+// stripURLSchemeHTML: sama seperti stripURLSchemeText, tetapi hanya menyentuh
+// teks di dalam node teks HTML — atribut (href dsb.) tidak disentuh.
+func stripURLSchemeHTML(html string) string {
+	return mapHTMLTextNodes(html, stripURLSchemeText)
+}
+
+
 // finalizeTautArticleHTML: pasca-proses struktur + kebijakan link.
 func finalizeTautArticleHTML(html, mediaType string, allowsLink bool, links []tautBacklinkSpec) string {
 	out := html
