@@ -25,6 +25,7 @@ Catatan:
 - Balik dari Penyedia Konten ke Katalog Media kini membawa pilihanmu: media yang sudah kamu pilih tetap tercentang, jadi kamu cukup menambah media baru lalu klik "Tambahkan ke Kampanye" untuk kembali ke Penyedia Konten. Sebelumnya pilihan itu hilang dan kamu harus memilih ulang, dan sistem malah membuat kampanye baru.
 
 ### Perbaikan
+- Artikel bergaya Editorial tidak lagi ditutup blok "Kontak Media" berisi teks cadangan seperti [Placeholder: ...]. Naskah kini berhenti di isi berita, tanpa paragraf "Tentang Perusahaan" atau baris surel/telepon yang belum pasti di bagian akhir.
 - Di jendela pengelola naskah kini ada penghitung jumlah kata di sisi kanan label "Isi Artikel (Konten)". Panjang naskah bisa langsung dipantau tanpa menghitung manual, dan angkanya ikut berubah saat naskah diedit.
 
 ## v0.5.0 — 2026-10-09

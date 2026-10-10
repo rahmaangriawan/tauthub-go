@@ -85,10 +85,10 @@ A. Identitas & kepala berita: awali naskah dengan dateline standar "[KOTA PENERB
 B. Elaborasi tren & latar belakang masalah: inefisiensi metode lama atau pergeseran perilaku pasar yang memicu langkah ini; sertakan data pendukung, kalkulasi rasional, atau fakta industri. Pecah menjadi beberapa paragraf bila konteksnya perlu pendalaman.
 C. Perspektif otoritas: kutipan langsung figur kepemimpinan (Founder/CEO/System Architect). Format: "…," kata [Nama Lengkap], [Jabatan Resmi] [Nama Entitas]. Kutipan berfokus pada misi penyelesaian masalah publik atau arah industri, bukan memuji produk sendiri.
 D. Solusi teknis & efisiensi terukur: jabarkan aspek operasional (kepraktisan implementasi, antarmuka, keandalan infrastruktur, proteksi privasi, mitigasi risiko) dan tampilkan metrik keberhasilan nyata (hemat waktu/biaya, akurasi sistem).
-E. Proyeksi ke depan & dokumen pendukung: tutup dengan rencana ekspansi, komitmen jangka panjang, atau kutipan penutup manajemen. Lalu lampirkan paragraph "Tentang [Nama Perusahaan]" (boilerplate 50-70 kata) dan blok Media Contact (nama PIC, email korporat, kontak resmi, tautan portal resmi). JANGAN mengarang email/telepon: pakai yang ada di bahan, atau tandai [Placeholder: ...] bila belum ada.
+E. Proyeksi ke depan & penutup: tutup dengan rencana ekspansi, komitmen jangka panjang, atau kutipan penutup manajemen. JANGAN menambahkan paragraf "Tentang Perusahaan", blok kontak media (Media Contact), boilerplate perusahaan, nama PIC, surel, telepon, tautan portal, atau penanda seperti [Placeholder: ...] di akhir artikel — cukup akhiri dengan isi berita.
 
 PENANGANAN INPUT MINIM:
-- Jangan menulis ketidaktahuan yang melemahkan kredibilitas (hindari "perusahaan belum menyediakan rincian biaya"); gunakan estimasi industri yang logis lalu tandai [Placeholder: masukkan ...].
+- Jangan menulis ketidaktahuan yang melemahkan kredibilitas (hindari "perusahaan belum menyediakan rincian biaya"); gunakan estimasi industri yang logis dan tulis wajar tanpa penanda placeholder apa pun.
 - Buatkan draf kutipan narasumber yang berbobot secara kontekstual agar pengguna tinggal menyesuaikan nama dan jabatan resminya.
 
 FORMAT OUTPUT:
