@@ -23,9 +23,10 @@ Catatan:
 
 ### Fitur
 - Balik dari Penyedia Konten ke Katalog Media kini membawa pilihanmu: media yang sudah kamu pilih tetap tercentang, jadi kamu cukup menambah media baru lalu klik "Tambahkan ke Kampanye" untuk kembali ke Penyedia Konten. Sebelumnya pilihan itu hilang dan kamu harus memilih ulang, dan sistem malah membuat kampanye baru.
+- Artikel bergaya Editorial kini ditulis sebagai berita peristiwa: dibingkai sebagai peluncuran resmi, pembaruan sistem, atau perluasan ekosistem (bukan lagi teks profil "X adalah…"), lengkap dengan narasumber bernama dan jabatan C-level serta data efisiensi yang wajar — seolah siap terbit di media.
 
 ### Perbaikan
-- Artikel bergaya Editorial tidak lagi ditutup blok "Kontak Media" berisi teks cadangan seperti [Placeholder: ...]. Naskah kini berhenti di isi berita, tanpa paragraf "Tentang Perusahaan" atau baris surel/telepon yang belum pasti di bagian akhir.
+- Artikel bergaya Editorial tidak lagi memuat teks cadangan seperti [Placeholder: ...] di badan berita. Bila bahan menyediakan data resmi perusahaan, artikel boleh ditutup boilerplate singkat dan kontak media resmi yang bersih; kalau tidak ada, bagian itu dilewati tanpa penanda.
 - Di jendela pengelola naskah kini ada penghitung jumlah kata di sisi kanan label "Isi Artikel (Konten)". Panjang naskah bisa langsung dipantau tanpa menghitung manual, dan angkanya ikut berubah saat naskah diedit.
 
 ## v0.5.0 — 2026-10-09
