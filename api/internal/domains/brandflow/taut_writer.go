@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -144,6 +145,40 @@ func (d *Deps) selectedTautMedia(ctx context.Context, campaignID string) ([]sele
 	return out, nil
 }
 
+// tautWordCountRe: frasa "N kata"/"N words" di topik/instruksi klien.
+var tautWordCountRe = regexp.MustCompile(`(?i)(\d{2,5})\s*(?:kata|words?|word)\b`)
+
+// tautWordCapCueRe: kata pembatas ATAS. "maksimal 2500 kata" bukan target
+// panjang, jadi angkanya tidak dipakai memaksa artikel jadi 2500 kata.
+var tautWordCapCueRe = regexp.MustCompile(`(?i)\b(maksimal|maks|max|maksimum|paling banyak|tidak lebih dari|kurang dari)\b`)
+
+// requestedWordCount: jumlah kata yang diminta klien (mis. "minimal 2500 kata").
+// Mengembalikan angka target terbesar; angka yang didahului kata pembatas atas
+// diabaikan.
+func requestedWordCount(topic string) (int, bool) {
+	best := 0
+	for _, loc := range tautWordCountRe.FindAllStringSubmatchIndex(topic, -1) {
+		n, err := strconv.Atoi(topic[loc[2]:loc[3]])
+		if err != nil || n < 150 || n > 20000 {
+			continue
+		}
+		start := loc[0] - 20
+		if start < 0 {
+			start = 0
+		}
+		if tautWordCapCueRe.MatchString(topic[start:loc[0]]) {
+			continue
+		}
+		if n > best {
+			best = n
+		}
+	}
+	if best == 0 {
+		return 0, false
+	}
+	return best, true
+}
+
 // generateTautWriterArticle: generate artikel untuk SATU media terpilih.
 // Idempoten: media yang sudah punya dokumen = regenerasi (tambah versi).
 // opts opsional: arahan topik/konteks + daftar tautan tambahan dari klien
@@ -262,6 +297,22 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	slog.Info("[taut-writer] media type resolved", "campaign", campaignID, "media_id", mediaID, "media_type", mediaType, "source", mediaTypeSource)
 	wordRule := buildWordRule(item.strOr("word_count_mode", ""), mediaType)
 
+	// Jumlah kata EKSPLISIT dari klien (mis. "minimal 2500 kata" di kolom topik)
+	// MENANG atas aturan panjang bawaan media. Tanpa ini, model mengikuti batas
+	// media (mis. "minimal 300 kata") lalu berhenti jauh di bawah permintaan —
+	// kasus nyata: minta 2500 kata, hasil hanya ~1873.
+	clientWords, hasClientWords := requestedWordCount(writerTopic)
+	if hasClientWords {
+		minWords := clientWords
+		maxWords := clientWords + clientWords/8
+		if maxWords < clientWords+100 {
+			maxWords = clientWords + 100
+		}
+		wordRule = "Aturan panjang artikel (WAJIB — PERMINTAAN EKSPLISIT KLIEN, PRIORITAS UTAMA): tulis artikel sepanjang " +
+			itoa(clientWords) + " kata (target " + itoa(minWords) + "–" + itoa(maxWords) + " kata). Aturan ini MENANG atas aturan panjang media mana pun. Perkirakan jumlah kata saat menulis; panjang akhir TIDAK BOLEH kurang dari " +
+			itoa(minWords) + " kata. Tambah paragraf sampai target tercapai dan JANGAN menutup artikel sebelum " + itoa(minWords) + " kata."
+	}
+
 	structureRules := []string{
 		"Aturan gaya mainstream (WAJIB): tulis sebagai artikel berita dengan kaidah 5W+1H — paragraf pembuka (lead) menjawab siapa, apa, kapan, di mana, mengapa, dan bagaimana secara ringkas.",
 		"Aturan format mainstream (WAJIB): JANGAN gunakan heading/subjudul (<h2>/<h3>) dan JANGAN memecah isi menjadi daftar poin (<ul>/<ol>) — seluruh isi adalah paragraf mengalir gaya berita, tanpa markdown.",
@@ -278,6 +329,9 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		precedenceBlock += " Terapkan juga: blogger -> artikel evergreen dengan heading/subjudul yang mengalir dan bahasa lebih santai."
 	} else {
 		precedenceBlock += " Terapkan juga: mainstream -> lead 5W+1H dan paragraf mengalir gaya berita tanpa heading."
+	}
+	if hasClientWords {
+		precedenceBlock += " PENGECUALIAN: jumlah kata eksplisit dari klien (lihat aturan panjang di atas) MENANG atas panjang bawaan media."
 	}
 	tidyHTMLBlock := "ATURAN HTML RAPI (WAJIB): setiap paragraf dibungkus <p> yang utuh (tidak ada paragraf terpotong); JANGAN menulis heading nyasar atau heading kosong dan JANGAN memakai <hr> atau garis dekoratif; JANGAN meninggalkan tag kosong (mis. <p></p>, <h2></h2>); JANGAN menulis teks yang hanya berisi URL telanjang; heading hanya dipakai bila memang diizinkan tipe media (blogger) dan hierarkinya berurutan (H2 lalu H3, tidak melompat); buang atribut/style inline yang tidak perlu dan JANGAN menambah wrapper <div>. Kutipan narasumber ditulis sebagai <blockquote><p>...</p></blockquote>. Bila memakai tabel (hanya media yang mengizinkan daftar/tabel), tulis HTML standar <table><thead><tr><th>...</th></tr></thead><tbody><tr><td>...</td></tr></tbody></table> TANPA atribut style/border/width inline — tampilan diatur editor."
 	// Rubrik AI Overview (Gatekeeper QC) diambil dari SATU sumber yang sama
