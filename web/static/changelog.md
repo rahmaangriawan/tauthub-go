@@ -26,6 +26,8 @@ Catatan:
 - Artikel bergaya Editorial kini ditulis sebagai berita peristiwa: dibingkai sebagai peluncuran resmi, pembaruan sistem, atau perluasan ekosistem (bukan lagi teks profil "X adalah…"), lengkap dengan narasumber bernama dan jabatan C-level serta data efisiensi yang wajar — seolah siap terbit di media.
 - Artikel Editorial kini selalu punya penutup yang konklusif — memadukan refleksi nilai dan ajakan halus — tidak berhenti menggantung di tengah pembahasan, dan tidak memakai frasa klise seperti "Kesimpulannya" atau "Akhir kata". Kalau harga/paket belum disebutkan, artikel menjelaskannya secara wajar tanpa teks cadangan.
 - Artikel bergaya Opini kini menutup dengan identitas penulis yang disusun AI secara wajar saat kamu belum mengisi nama penulis — nama personal dan kepakaran Indonesia yang kredibel dan selaras topik, tanpa penanda [Nama Penulis] atau teks cadangan.
+- Artikel bergaya Editorial kini benar-benar bebas tautan (standar redaksi berita): kolom Tautan & Anchor disembunyikan dan diganti pemberitahuan — kalau ingin memakai tautan, pilih jenis artikel Advertorial. Backlink kampanye juga tidak ditanam di naskah Editorial.
+- Naskah Editorial kini mengikuti standar kurasi redaksi nasional tier-1: lead langsung ke peristiwa dengan dateline, kutipan narasumber yang bervariasi dan berbobot, tanpa gaya panduan beli, lalu ditutup blok "Tentang Perusahaan" dan "Narahubung Media" — semuanya tanpa teks cadangan.
 
 ### Perbaikan
 - Jumlah kata yang kamu tulis eksplisit di kolom topik (mis. "minimal 2500 kata") kini benar-benar dipatuhi AI. Sebelumnya AI mengikuti batas panjang bawaan media dan sering berhenti jauh di bawah permintaan — misalnya diminta 2500 kata tapi hasilnya hanya sekitar 1.800 kata.

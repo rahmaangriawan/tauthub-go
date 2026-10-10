@@ -3538,6 +3538,7 @@ export const PHRASE_EN: Record<string, string> = {
 	"Kamu sedang menambah media ke kampanye yang sudah dibuat. Media yang sudah dipilih tetap tercentang — pilih tambahanmu, lalu klik \"Tambahkan ke Kampanye\" untuk kembali ke Penyedia Konten.": "You are adding media to an existing campaign. Already-selected media stays checked — pick your additions, then click \"Add to Campaign\" to return to the Content Provider.",
 	"Muat lebih banyak": "Load more",
 	"Menampilkan {n} dari {total} entri": "Showing {n} of {total} entries",
+	"Jenis artikel Editorial tidak menyematkan tautan apa pun (standar redaksi berita). Kalau ingin memakai tautan & anchor, pilih jenis artikel Advertorial.": "Editorial articles do not embed any links (newsroom standard). If you want to use links & anchors, choose the Advertorial article type.",
 };
 
 /**

@@ -580,7 +580,9 @@
 		genError = '';
 		genNotice = '';
 		try {
-			const hasil = await onGenerate(topic.trim(), payloadLinks, articleType);
+			// Editorial: standar redaksi berita = tanpa tautan apa pun, jadi
+			// tautan yang sempat diisi di jenis lain tidak ikut terkirim.
+			const hasil = await onGenerate(topic.trim(), articleType === 'editorial' ? [] : payloadLinks, articleType);
 			title = hasil.title || title;
 			if (hasil.imagesGenerated && hasil.imagesGenerated > 0) {
 				const kredit = hasil.imagesCostCredits ?? 0;
@@ -1045,7 +1047,16 @@
 								{#if genNotice}
 									<p class="mt-2 text-xs" style="color: var(--success);">{genNotice}</p>
 								{/if}
-								{@render linkEditor()}
+								{#if articleType === 'editorial'}
+									<div class="mt-4 w-full rounded-xl border p-3 text-left" style="border-color: var(--border); background-color: var(--accent);">
+										<p class="flex items-start gap-1.5 text-[11px] leading-relaxed" style="color: var(--primary);">
+											<Info size={13} class="mt-0.5 shrink-0" />
+											<span>{tr('Jenis artikel Editorial tidak menyematkan tautan apa pun (standar redaksi berita). Kalau ingin memakai tautan & anchor, pilih jenis artikel Advertorial.')}</span>
+										</p>
+									</div>
+								{:else}
+									{@render linkEditor()}
+								{/if}
 							{#if genError}
 								<p class="mt-2 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">
 									<CircleAlert size={15} /> {genError}

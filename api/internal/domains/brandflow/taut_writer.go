@@ -343,6 +343,12 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if item.has("max_links") {
 		allowsLink = int(item.numOr("max_links")) > 0
 	}
+	// Editorial = standar redaksi berita: ZERO-LINK. Pilihan jenis artikel ini
+	// menang atas aturan hyperlink media maupun backlink kampanye — finalize
+	// nanti akan mengupas <a> apa pun yang lolos (stripAllLinks).
+	if articleType == "editorial" {
+		allowsLink = false
+	}
 	sponsoredMedia := item.strOr("label_sponsor", "tidak_ada") == "ada_sponsor"
 	// Advertorial = sponsored content: paksa rel="sponsored" pada setiap tautan
 	// yang ditanam (backlink kampanye maupun tautan yang diminta klien), sejalan
@@ -416,7 +422,8 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		backlinkFlag = "AKTIF dari The Profiler — WAJIB di semua artikel"
 	}
 	linkContext := ""
-	if primaryURL != "" {
+	// Editorial tidak membawa konteks backlink sama sekali (zero-link).
+	if primaryURL != "" && articleType != "editorial" {
 		var b strings.Builder
 		b.WriteString("Konteks tautan kampanye (backlink " + backlinkFlag + "):\n")
 		b.WriteString("   Mode pelacakan: " + trackingMode)
