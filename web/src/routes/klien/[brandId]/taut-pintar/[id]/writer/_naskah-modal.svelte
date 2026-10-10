@@ -121,8 +121,22 @@
 	let genNotice = $state('');
 	const IMG_WORD_RE = /\b(gambar|images?|foto|ilustrasi|infografis)\b/i;
 	const IMG_COUNT_RE = /(\d+)\s*(gambar|foto|images?|ilustrasi|infografis)/i;
+	// Sanggahan: "tanpa gambar", "jangan pakai gambar", "tidak perlu ilustrasi".
+	// Negasi dinilai per klausa (dipisah tanda baca) supaya klien yang menolak
+	// gambar tidak dikenai estimasi biaya gambar — tapi permintaan campuran
+	// ("tanpa gambar utama, tambahkan 2 gambar isi") tetap terdeteksi.
+	const IMG_NEG_RE = /\b(tanpa|jangan|tidak|tdk|tak|gak|nggak|hindari|no|without)\b/i;
+	const IMG_CLAUSE_SPLIT_RE = /[.,;!?()\[\]{}"\r\n]+/;
+	function topicRequestsImages(text: string): boolean {
+		for (const clause of text.split(IMG_CLAUSE_SPLIT_RE)) {
+			if (!IMG_WORD_RE.test(clause)) continue;
+			if (IMG_NEG_RE.test(clause)) continue;
+			return true;
+		}
+		return false;
+	}
 	const imgRequestCount = $derived.by(() => {
-		if (!IMG_WORD_RE.test(topic)) return 0;
+		if (!topicRequestsImages(topic)) return 0;
 		const m = IMG_COUNT_RE.exec(topic);
 		const n = m ? Number.parseInt(m[1], 10) : 1;
 		if (!Number.isFinite(n) || n < 1) return 1;

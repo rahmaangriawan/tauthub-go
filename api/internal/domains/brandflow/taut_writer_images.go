@@ -29,9 +29,30 @@ var tautImageInstructionRe = regexp.MustCompile(`(?i)\b(gambar|image|images|foto
 // tautMaxInlineImages: batas aman jumlah gambar isi per artikel (biaya + waktu).
 const tautMaxInlineImages = 5
 
-// userRequestedInlineImages: apakah topik/instruksi klien menyebut gambar.
+// tautImageNegationRe: kata sanggahan. Klien yang menulis "tanpa gambar",
+// "jangan pakai gambar", atau "tidak perlu ilustrasi" TIDAK dianggap meminta
+// gambar — dulu selalu terdeteksi sehingga muncul estimasi biaya + tagihan
+// gambar padahal klien justru menolaknya.
+var tautImageNegationRe = regexp.MustCompile(`(?i)\b(tanpa|jangan|tidak|tdk|tak|gak|nggak|hindari|no|without)\b`)
+
+// tautClauseSplitRe: pecah teks per klausa (tanda baca/ganti baris) supaya
+// negasi dinilai lokal, tidak menular ke seluruh teks. "tanpa gambar utama,
+// tapi tambahkan 2 gambar isi" tetap terdeteksi benar.
+var tautClauseSplitRe = regexp.MustCompile(`[.,;!?()\[\]{}"\r\n]+`)
+
+// userRequestedInlineImages: true bila minimal satu klausa menyebut gambar
+// TANPA kata sanggahan di klausa yang sama.
 func userRequestedInlineImages(topic string) bool {
-	return tautImageInstructionRe.MatchString(topic)
+	for _, clause := range tautClauseSplitRe.Split(topic, -1) {
+		if !tautImageInstructionRe.MatchString(clause) {
+			continue
+		}
+		if tautImageNegationRe.MatchString(clause) {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // resolveTautInlineImages: ganti setiap penanda [[IMAGE: ...]] dengan gambar AI

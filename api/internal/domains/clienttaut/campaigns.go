@@ -280,8 +280,12 @@ func (d *Deps) TautCampaignCreate(w http.ResponseWriter, r *http.Request) {
 		resolvedName = "Kampanye Baru #" + itoa(row.intOr("n", 0)+1)
 	}
 
+	// Media yang dikirim eksplisit (mis. dari Katalog Media) selalu dipasang,
+	// apa pun mode-nya. Dulu hanya mode 'manual' yang memasang media, sehingga
+	// kampanye AI dari katalog kehilangan media terpilihnya. Status 'placement'
+	// menandai media sudah terkunci → router mengarahkan langsung ke The Writer.
 	status := "draft"
-	if entryMode == "manual" && len(mediaIDs) > 0 {
+	if len(mediaIDs) > 0 {
 		status = "placement"
 	}
 	// public_id diisi DEFAULT DB (public._random_short_id, migrasi 170) supaya
@@ -301,7 +305,7 @@ func (d *Deps) TautCampaignCreate(w http.ResponseWriter, r *http.Request) {
 	publicID := created.strOr("public_id", "")
 
 	added := map[string]any{"added": []string{}, "skipped": []string{}}
-	if entryMode == "manual" && len(mediaIDs) > 0 {
+	if len(mediaIDs) > 0 {
 		result, err := d.addManualMedia(r.Context(), id, brandID, mediaIDs)
 		if err != nil {
 			d.writeErr(w, err)

@@ -27,6 +27,8 @@ Catatan:
 - Artikel Editorial kini selalu punya penutup yang konklusif — memadukan refleksi nilai dan ajakan halus — tidak berhenti menggantung di tengah pembahasan, dan tidak memakai frasa klise seperti "Kesimpulannya" atau "Akhir kata". Kalau harga/paket belum disebutkan, artikel menjelaskannya secara wajar tanpa teks cadangan.
 
 ### Perbaikan
+- Kampanye yang dibuat dari Katalog Media tidak lagi dipaksa mode manual — tombol "Generate Konten" (artikel dengan AI) kini muncul seperti seharusnya. Sebelumnya media hasil pilihannya hanya bisa diunggah, tidak bisa dibuat AI.
+- Kolom topik yang menulis "tanpa gambar", "jangan pakai gambar", atau "tidak perlu ilustrasi" tidak lagi salah dianggap permintaan gambar, jadi tidak muncul estimasi biaya gambar dan tidak ada tagihan gambar yang tidak diminta.
 - Artikel bergaya Editorial tidak lagi memuat teks cadangan seperti [Placeholder: ...] di badan berita. Bila bahan menyediakan data resmi perusahaan, artikel boleh ditutup boilerplate singkat dan kontak media resmi yang bersih; kalau tidak ada, bagian itu dilewati tanpa penanda.
 - Di jendela pengelola naskah kini ada penghitung jumlah kata di sisi kanan label "Isi Artikel (Konten)". Panjang naskah bisa langsung dipantau tanpa menghitung manual, dan angkanya ikut berubah saat naskah diedit.
 

@@ -1025,10 +1025,13 @@
 			const res = await apiRequest(`${apiBase}/taut/campaigns`, {
 				method: 'POST',
 				body: JSON.stringify({
-					// Kosong → nama otomatis "Kampanye Baru #N" (ditomori server).
+					// Mode 'ai': kampanye dari katalog tetap bisa generate artikel
+					// dengan AI (dulu dipaksa 'manual' sehingga tombol Generate
+					// tak pernah muncul). Media terpilih tetap dipasang server.
+					// Nama kosong → otomatis "Kampanye Baru #N" (ditomori server).
 					name: name || 'Kampanye Baru',
 					starts_at: new Date().toISOString(),
-					entry_mode: 'manual',
+					entry_mode: 'ai',
 					media_ids: [...selectedIds],
 					profiler_id: profilerId || undefined
 				})
