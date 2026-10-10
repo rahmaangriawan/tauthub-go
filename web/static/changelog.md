@@ -24,6 +24,7 @@ Catatan:
 ### Fitur
 - Balik dari Penyedia Konten ke Katalog Media kini membawa pilihanmu: media yang sudah kamu pilih tetap tercentang, jadi kamu cukup menambah media baru lalu klik "Tambahkan ke Kampanye" untuk kembali ke Penyedia Konten. Sebelumnya pilihan itu hilang dan kamu harus memilih ulang, dan sistem malah membuat kampanye baru.
 - Artikel bergaya Editorial kini ditulis sebagai berita peristiwa: dibingkai sebagai peluncuran resmi, pembaruan sistem, atau perluasan ekosistem (bukan lagi teks profil "X adalah…"), lengkap dengan narasumber bernama dan jabatan C-level serta data efisiensi yang wajar — seolah siap terbit di media.
+- Artikel Editorial kini selalu punya penutup yang konklusif — memadukan refleksi nilai dan ajakan halus — tidak berhenti menggantung di tengah pembahasan, dan tidak memakai frasa klise seperti "Kesimpulannya" atau "Akhir kata". Kalau harga/paket belum disebutkan, artikel menjelaskannya secara wajar tanpa teks cadangan.
 
 ### Perbaikan
 - Artikel bergaya Editorial tidak lagi memuat teks cadangan seperti [Placeholder: ...] di badan berita. Bila bahan menyediakan data resmi perusahaan, artikel boleh ditutup boilerplate singkat dan kontak media resmi yang bersih; kalau tidak ada, bagian itu dilewati tanpa penanda.
