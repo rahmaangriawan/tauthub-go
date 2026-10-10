@@ -5,7 +5,7 @@
 	// berasal dari GET /v1/changelog (hasil impor admin dari
 	// web/static/changelog.md) dan ditandai sudah dibaca saat halaman dibuka.
 	import { onMount } from 'svelte';
-	import { LoaderCircle, Megaphone } from '@lucide/svelte';
+	import { ChevronDown, LoaderCircle, Megaphone } from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import { sanitizeHtml } from '$lib/sanitize-html';
@@ -48,6 +48,15 @@
 	let loading = $state(true);
 	let error = $state('');
 
+	// Paginasi + lazyload: halaman tidak menumpuk semua entri sekaligus. Yang
+	// dirender hanya PAGE_SIZE (minimal 3) pertama; "Muat lebih banyak"
+	// menambah PAGE_SIZE lagi. Entri disembunyikan juga belum ditandai dibaca,
+	// jadi badge "BELUM DIBACA" baru hilang saat entri benar-benar tampil.
+	const PAGE_SIZE = 3;
+	let visibleCount = $state(PAGE_SIZE);
+	const visibleItems = $derived(items.slice(0, visibleCount));
+	const hasMore = $derived(items.length > visibleCount);
+
 	onMount(() => {
 		void (async () => {
 			const fresh = await ensureValidSession();
@@ -78,7 +87,9 @@
 			const data = (await res.json()) as { items?: Entry[]; unread?: number };
 			items = data.items ?? [];
 			unread = data.unread ?? 0;
-			await markRead(items.filter((e) => !e.read_at));
+			// Kembalikan ke halaman pertama tiap kali daftar dimuat (mis. ganti bahasa).
+			visibleCount = PAGE_SIZE;
+			await markRead(items.slice(0, PAGE_SIZE).filter((e) => !e.read_at));
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : tr('Gagal memuat catatan rilis.');
 		}
@@ -88,14 +99,30 @@
 	async function markRead(targets: Entry[]) {
 		if (targets.length === 0) return;
 		const now = new Date().toISOString();
+		const ids = new Set(targets.map((e) => e.id));
 		await Promise.all(
 			targets.map((e) =>
 				apiRequest(`/v1/changelog/${e.id}/read`, { method: 'POST' }).catch(() => undefined)
 			)
 		);
-		items = items.map((e) => (e.read_at ? e : { ...e, read_at: now }));
-		unread = 0;
+		items = items.map((e) => (e.read_at || !ids.has(e.id) ? e : { ...e, read_at: now }));
+		// Yang masih tersembunyi tetap dihitung belum dibaca.
+		unread = items.filter((e) => !e.read_at).length;
 	}
+
+	/** Lazyload: tampilkan PAGE_SIZE entri berikutnya saat diminta. */
+	function revealMore() {
+		const next = Math.min(items.length, visibleCount + PAGE_SIZE);
+		const newlyShown = items.slice(visibleCount, next);
+		visibleCount = next;
+		void markRead(newlyShown.filter((e) => !e.read_at));
+	}
+
+	const showingLabel = $derived(
+		tr('Menampilkan {n} dari {total} entri')
+			.replace('{n}', String(visibleItems.length))
+			.replace('{total}', String(items.length))
+	);
 
 	function fmtDate(value: string): string {
 		const parsed = new Date(`${value}T00:00:00`);
@@ -134,7 +161,7 @@
 		</div>
 	{:else}
 		<ol class="mt-4 grid gap-3">
-			{#each items as entry (entry.id)}
+			{#each visibleItems as entry (entry.id)}
 				<li class="app-card p-5" style={entry.read_at ? '' : 'border-left: 3px solid var(--primary);'}>
 					<div class="flex flex-wrap items-center gap-2">
 						<span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style="background-color: var(--muted);">{entry.version}</span>
@@ -153,5 +180,15 @@
 				</li>
 			{/each}
 		</ol>
+		{#if hasMore}
+			<div class="mt-5 flex flex-col items-center gap-2">
+				<p class="text-xs text-muted-foreground">{showingLabel}</p>
+				<button class="app-btn app-btn-soft text-sm" type="button" onclick={revealMore}>
+					<ChevronDown size={15} /> {tr('Muat lebih banyak')}
+				</button>
+			</div>
+		{:else if items.length > PAGE_SIZE}
+			<p class="mt-4 text-center text-xs text-muted-foreground">{showingLabel}</p>
+		{/if}
 	{/if}
 </section>
