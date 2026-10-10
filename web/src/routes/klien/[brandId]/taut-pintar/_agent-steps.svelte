@@ -67,9 +67,11 @@
 		const slug = AGENT_STEP_ROUTES[n - 1];
 		if (!slug) return;
 		// The Matchmaker kini mengarah ke Katalog Media: klien memilih media di
-		// sana (katalog), bukan di halaman matchmaker.
+		// sana (katalog), bukan di halaman matchmaker. Konteks kampanye dibawa
+		// lewat ?campaign supaya media yang sudah dipilih tetap tercentang dan
+		// klien bisa menambah media lalu kembali ke Penyedia Konten.
 		if (slug === 'matchmaker') {
-			void goto(`/klien/${getBrandUrlId() || brandId}/media`);
+			void goto(`/klien/${getBrandUrlId() || brandId}/media?campaign=${campaignId}`);
 			return;
 		}
 		void goto(`${base}/${slug}`);

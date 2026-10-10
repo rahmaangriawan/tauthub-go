@@ -239,6 +239,14 @@
 	// — snapshot harga disimpan supaya total di bar tidak bohong.
 	let selectedSnapshot = $state<Record<string, { name: string; price: number; credits: number }>>({});
 	let selectionHydrated = $state(false);
+	// Mode "tambah ke kampanye": katalog dibuka dari Penyedia Konten lewat
+	// ?campaign=<urlId kampanye>. Berisi urlId tujuan, atau null untuk alur biasa.
+	let addToCampaignId = $state<string | null>(null);
+	// Media yang sudah ada di kampanye saat katalog dibuka — dipakai untuk tahu
+	// mana yang benar-benar tambahan saat menyimpan, dan untuk tombol "Batal".
+	let originalCampaignIds = $state<Set<string>>(new Set());
+	let adding = $state(false);
+	let addError = $state('');
 
 	const BOOKMARK_KEY = 'tauthub_client_bookmarked_media';
 	const SELECTED_KEY = 'tauthub_client_selected_media';
@@ -360,6 +368,70 @@
 		try { localStorage.removeItem(SELECTED_KEY); } catch { /* abaikan */ }
 	}
 
+	/** Mode "tambah ke kampanye": pra-pilih media yang sudah ada di kampanye
+	 *  tujuan supaya klien melihat pilihannya dan tinggal menambah. */
+	async function preselectCampaign() {
+		if (!addToCampaignId) return;
+		try {
+			const res = await apiRequest(`${apiBase}/taut/campaigns/${addToCampaignId}/placement`);
+			if (!res.ok) return;
+			const data = (await res.json()) as {
+				media?: Array<{ media_id?: string; name?: string; website_url?: string | null; credit_cost?: number | null; status?: string }>;
+			};
+			const items = (data.media ?? []).filter(
+				(m) => (!m.status || m.status === 'selected') && typeof m.media_id === 'string'
+			);
+			if (!items.length) return;
+			const ids = items.map((m) => m.media_id as string);
+			selectedIds = new Set(ids);
+			originalCampaignIds = new Set(ids);
+			selectedSnapshot = Object.fromEntries(
+				items.map((m) => {
+					const id = m.media_id as string;
+					const row = rows.find((x) => x.id === id);
+					return [id, {
+						name: mediaDomainLabel(m.website_url ?? null, m.name ?? ''),
+						price: row ? row.client_price ?? row.price ?? 0 : 0,
+						credits: Number(m.credit_cost ?? 0) || 0
+					}];
+				})
+			);
+		} catch {
+			/* gagal memuat pilihan kampanye — katalog tetap bisa dipakai */
+		}
+	}
+
+	/** Simpan media tambahan ke kampanye yang SUDAH ada lalu kembali ke Penyedia
+	 *  Konten. Hanya media baru yang dikirim (PUT placement {add}), jadi media
+	 *  lama tidak tersentuh dan tidak ada kampanye baru yang dibuat. */
+	async function addToCampaign() {
+		if (!addToCampaignId) return;
+		const target = `/klien/${brandUrl}/taut-pintar/${addToCampaignId}/writer`;
+		const toAdd = [...selectedIds].filter((id) => !originalCampaignIds.has(id));
+		if (toAdd.length === 0) {
+			await goto(target);
+			return;
+		}
+		adding = true;
+		addError = '';
+		try {
+			const res = await apiRequest(`${apiBase}/taut/campaigns/${addToCampaignId}/placement`, {
+				method: 'PUT',
+				body: JSON.stringify({ add: toAdd })
+			});
+			if (!res.ok) {
+				addError = await readApiError(res, tr('Gagal menambah media ke kampanye.'));
+				return;
+			}
+			clearSelection();
+			await goto(target);
+		} catch {
+			addError = tr('Gagal menambah media ke kampanye.');
+		} finally {
+			adding = false;
+		}
+	}
+
 	/** Saldo kredit untuk bar seleksi & ringkasan modal. Gagal baca bukan penghalang. */
 	// Modal top up dimiliki layout klien. Halaman ini hanya meminta membukanya
 	// lewat konteks, supaya alur pembayaran (submitTopUp/topupKey) tidak disalin
@@ -392,7 +464,10 @@
 	// Simpan pilihan ke localStorage (pola BOOKMARK_KEY) supaya orang sibuk bisa
 	// lanjut besok tanpa memilih ulang.
 	$effect(() => {
-		if (!selectionHydrated) return;
+		// Mode tambah ke kampanye tidak menulis draft ke localStorage: pilihan di
+		// situ berasal dari kampanye, bukan draft baru, jadi jangan bocor ke
+		// kampanye berikutnya.
+		if (!selectionHydrated || addToCampaignId) return;
 		const ids = [...selectedIds];
 		try {
 			if (ids.length === 0) {
@@ -474,9 +549,13 @@
 				const raw = localStorage.getItem(BOOKMARK_KEY);
 				if (raw) bookmarkedIds = new Set(JSON.parse(raw) as string[]);
 			} catch { /* bookmark korup — abaikan */ }
-			restoreSelection();
-			selectionHydrated = true;
+			// Muat media dulu supaya snapshot harga untuk pra-pilih kampanye bisa
+			// dibaca dari daftar (bar seleksi tidak menampilkan total yang salah).
+			addToCampaignId = page.url.searchParams.get('campaign');
 			await load();
+			if (addToCampaignId) await preselectCampaign();
+			else restoreSelection();
+			selectionHydrated = true;
 			void loadWallet();
 		})();
 		const onExpired = () => void goto('/login');
@@ -928,6 +1007,9 @@
 		selectedIds = new Set([...selectedIds, m.id]);
 		selectedSnapshot = { ...selectedSnapshot, [m.id]: snap };
 		detail = null;
+		// Mode tambah: cukup pilih medianya; penyimpanan lewat tombol
+		// "Tambahkan ke Kampanye" di bar bawah, bukan modal kampanye baru.
+		if (addToCampaignId) return;
 		void openCampaignModal(`Kampanye ${domainLabel(m)}`);
 	}
 
@@ -973,6 +1055,14 @@
 <Tooltip.Provider delayDuration={0} skipDelayDuration={300}>
 <div class="katalogMedia">
 	{#if err}<div class="errorBanner">{err}</div>{/if}
+
+	{#if addToCampaignId}
+		<div class="catalogContextBanner">
+			<Plus size={14} />
+			<span>{tr('Kamu sedang menambah media ke kampanye yang sudah dibuat. Media yang sudah dipilih tetap tercentang — pilih tambahanmu, lalu klik "Tambahkan ke Kampanye" untuk kembali ke Penyedia Konten.')}</span>
+		</div>
+		{#if addError}<div class="errorBanner">{addError}</div>{/if}
+	{/if}
 
 	{#if page.url.searchParams.get('from') === 'new-campaign'}
 		<div class="catalogContextBanner">
@@ -1838,12 +1928,12 @@
 			</div>
 		</div>
 		<div class="selectedBarRight">
-			<button class="selectedCancelBtn" type="button" onclick={() => (selectedIds = new Set())}>{tr("Batal")}</button>
+			<button class="selectedCancelBtn" type="button" onclick={() => (addToCampaignId ? goto(`/klien/${brandUrl}/taut-pintar/${addToCampaignId}/writer`) : (selectedIds = new Set()))}>{tr("Batal")}</button>
 			<button class="selectedExportBtn" type="button" onclick={exportProposal} title={tr("Unduh proposal ringkasan media terpilih (format CSV)")}>
 				<FileText size={15} /><span>Ekspor Proposal</span>
 			</button>
-			<button bind:this={createBtnEl} class="selectedCreateBtn" type="button" disabled={creating} onclick={() => void openCampaignModal()}>
-				<Plus size={14} /><span>{tr("Buat Kampanye")}</span>
+			<button bind:this={createBtnEl} class="selectedCreateBtn" type="button" disabled={creating || adding} onclick={() => (addToCampaignId ? void addToCampaign() : void openCampaignModal())}>
+				<Plus size={14} /><span>{addToCampaignId ? (adding ? tr('Menambahkan…') : tr('Tambahkan ke Kampanye')) : tr("Buat Kampanye")}</span>
 			</button>
 		</div>
 	</div>

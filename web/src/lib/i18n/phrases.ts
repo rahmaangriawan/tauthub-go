@@ -3531,6 +3531,10 @@ export const PHRASE_EN: Record<string, string> = {
 	"Saldo kurang": "Insufficient balance",
 	"untuk pesanan ini.": "for this order.",
 	"Top Up dulu": "Top up first",
+	"Tambahkan ke Kampanye": "Add to Campaign",
+	"Menambahkan…": "Adding…",
+	"Gagal menambah media ke kampanye.": "Failed to add media to the campaign.",
+	"Kamu sedang menambah media ke kampanye yang sudah dibuat. Media yang sudah dipilih tetap tercentang — pilih tambahanmu, lalu klik \"Tambahkan ke Kampanye\" untuk kembali ke Penyedia Konten.": "You are adding media to an existing campaign. Already-selected media stays checked — pick your additions, then click \"Add to Campaign\" to return to the Content Provider.",
 };
 
 /**
