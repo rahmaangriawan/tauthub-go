@@ -1236,7 +1236,7 @@
 						<p class="font-bold">{manualFlow ? tr('Dapur Produksi') : tr('Dapur Produksi AI')} ({cost.count} {tr('Media Terpilih')})</p>
 						<p class="text-xs text-muted-foreground">
 							{#if manualFlow}
-								{tr('Mode manual — unggah artikel tulisanmu sendiri untuk tiap media.')}
+								{tr('Unggah artikel tulisanmu sendiri, atau buat dengan AI lewat tombol di tiap media.')}
 							{:else}
 								{tr('Biaya penulisan konten organik oleh The Writer adalah')} <strong>{toRp(1)}</strong> {tr('/ Artikel.')}
 							{/if}
@@ -1352,7 +1352,10 @@
 											</div>
 										</div>
 									{/if}
-									{#if !manualFlow && !hasDoc(m)}
+									<!-- Generate AI ditampilkan juga di mode manual: generate lewat
+									     Pengelola Naskah memang sudah bisa, jadi tombolnya tidak
+									     disembunyikan (kampanye lama/katalog sering ber-mode manual). -->
+									{#if !hasDoc(m)}
 										<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={generating || bulkRunning || viewOnly} onclick={() => openNaskahGenerate(m)}>
 											{#if generating}<LoaderCircle size={14} class="animate-spin" />{:else}<Sparkles size={14} />{/if}
 											{generating ? tr('Membuat…') : queued ? tr('Mengantre…') : tr('Generate Konten')}
@@ -1582,7 +1585,6 @@
 			words={qcStats?.words ?? null}
 			regenLabel={`${tr('Generate Ulang')} (${toRp(2)})`}
 			canRegen={canRegen(qc) && !bulkRunning}
-			{manualFlow}
 			generating={articleStatusOf(qc) === 'generating'}
 			gatekeeperConfigured={gatekeeperAgent ? gatekeeperAgent.configured : null}
 			reloadToken={qcToken}

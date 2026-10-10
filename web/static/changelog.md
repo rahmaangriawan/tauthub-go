@@ -30,6 +30,7 @@ Catatan:
 ### Perbaikan
 - Jumlah kata yang kamu tulis eksplisit di kolom topik (mis. "minimal 2500 kata") kini benar-benar dipatuhi AI. Sebelumnya AI mengikuti batas panjang bawaan media dan sering berhenti jauh di bawah permintaan — misalnya diminta 2500 kata tapi hasilnya hanya sekitar 1.800 kata.
 - Kampanye yang dibuat dari Katalog Media tidak lagi dipaksa mode manual — tombol "Generate Konten" (artikel dengan AI) kini muncul seperti seharusnya. Sebelumnya media hasil pilihannya hanya bisa diunggah, tidak bisa dibuat AI.
+- Tombol "Generate Konten" kini juga tampil di kampanye mode manual, termasuk kampanye lama yang sudah telanjur ber-mode manual — sebelumnya di mode itu hanya ada "Unggah Artikel", padahal artikel dengan AI tetap bisa dibuat dari dalam jendela pengelola naskah.
 - Kolom topik yang menulis "tanpa gambar", "jangan pakai gambar", atau "tidak perlu ilustrasi" tidak lagi salah dianggap permintaan gambar, jadi tidak muncul estimasi biaya gambar dan tidak ada tagihan gambar yang tidak diminta.
 - Artikel bergaya Editorial tidak lagi memuat teks cadangan seperti [Placeholder: ...] di badan berita. Bila bahan menyediakan data resmi perusahaan, artikel boleh ditutup boilerplate singkat dan kontak media resmi yang bersih; kalau tidak ada, bagian itu dilewati tanpa penanda.
 - Di jendela pengelola naskah kini ada penghitung jumlah kata di sisi kanan label "Isi Artikel (Konten)". Panjang naskah bisa langsung dipantau tanpa menghitung manual, dan angkanya ikut berubah saat naskah diedit.

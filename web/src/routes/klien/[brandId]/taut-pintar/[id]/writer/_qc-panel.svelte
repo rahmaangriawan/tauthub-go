@@ -59,7 +59,6 @@
 		words,
 		regenLabel,
 		canRegen,
-		manualFlow,
 		generating,
 		gatekeeperConfigured,
 		reloadToken,
@@ -75,7 +74,6 @@
 		words: number | null;
 		regenLabel: string;
 		canRegen: boolean;
-		manualFlow: boolean;
 		generating: boolean;
 		gatekeeperConfigured: boolean | null;
 		reloadToken: number;
@@ -500,7 +498,7 @@
 			{scanning ? tr('Memindai…') : tr('Scan Ulang Artikel Ini')}
 		</button>
 		<button class="app-btn app-btn-soft !min-h-9 !px-3.5 !text-xs" type="button" onclick={onEdit}><Eye size={14} /> {tr('Edit Artikel')}</button>
-		{#if !manualFlow && canRegen}
+		{#if canRegen}
 			<button class="app-btn app-btn-soft !min-h-9 !px-3.5 !text-xs" type="button" disabled={generating} onclick={onRegenerate}>
 				{#if generating}<LoaderCircle size={14} class="animate-spin" />{:else}<Sparkles size={14} />{/if}
 				{generating ? tr('Membuat…') : regenLabel}
