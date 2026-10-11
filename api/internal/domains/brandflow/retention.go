@@ -55,7 +55,9 @@ func DefaultRetentionConfig() RetentionConfig {
 		EmailDeliveryDays:   90,
 		TrackingEventDays:   180,
 		AuditLogDays:        365,
-		ContentVersionKeep:  10,
+		// Editor tidak menyimpan riwayat versi (regenerasi/edit menimpa), jadi
+		// cukup satu versi terbaru per dokumen — menyamakan dengan perilaku app.
+		ContentVersionKeep: 1,
 		BatchSize:           500,
 		ArchiveDir:          defaultArchiveDir(),
 	}

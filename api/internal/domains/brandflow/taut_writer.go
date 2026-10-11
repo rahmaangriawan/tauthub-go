@@ -179,6 +179,15 @@ func requestedWordCount(topic string) (int, bool) {
 	return best, true
 }
 
+// pruneContentVersions: sisakan HANYA versi terbaru sebuah dokumen. Editor
+// Taut Pintar tidak punya fitur pemulihan versi, jadi versi lama yang tertimpa
+// (regenerasi AI maupun edit manual) tidak perlu menumpuk di database — semua
+// pembaca konten selalu mengambil content_documents.current_version.
+func (d *Deps) pruneContentVersions(ctx context.Context, documentID string, keepVersion int) error {
+	return d.exec(ctx,
+		"DELETE FROM content_versions WHERE document_id = $1 AND version <> $2", documentID, keepVersion)
+}
+
 // generateTautWriterArticle: generate artikel untuk SATU media terpilih.
 // Idempoten: media yang sudah punya dokumen = regenerasi (tambah versi).
 // opts opsional: arahan topik/konteks + daftar tautan tambahan dari klien
@@ -711,6 +720,11 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		if err := d.exec(ctx,
 			"UPDATE content_documents SET current_version = $1, meta_description = $2, title = $3, slug = $4, updated_at = NOW() WHERE id = $5",
 			next, metaDescription, title, slugOrValue(title, "taut-artikel"), docID); err != nil {
+			return writerItemResult{}, err
+		}
+		// Regenerasi menimpa artikel: versi lama dihapus — editor tidak punya
+		// fitur pemulihan versi, jadi artikel lama tak perlu menumpuk di DB.
+		if err := d.pruneContentVersions(ctx, docID, next); err != nil {
 			return writerItemResult{}, err
 		}
 	} else {

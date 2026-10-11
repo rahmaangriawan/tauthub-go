@@ -251,6 +251,12 @@ func (d *Deps) TautArticlePut(w http.ResponseWriter, r *http.Request) {
 			d.writeErr(w, err)
 			return
 		}
+		// Simpan manual juga menimpa artikel: versi lama dihapus (tak ada fitur
+		// pemulihan versi), supaya naskah lama tidak menumpuk di database.
+		if err := d.pruneContentVersions(r.Context(), documentID, next); err != nil {
+			d.writeErr(w, err)
+			return
+		}
 	}
 	if hasFeatured || hasCategory {
 		sets := []string{}
