@@ -138,6 +138,7 @@ export const AUDIT_LABEL: Record<string, string> = {
 	'media.hidden': 'Disembunyikan dari mitra',
 	'media.deleted': 'Dihapus permanen',
 	'media.updated': 'Diperbarui',
+	'media.da_updated': 'DA diperbarui manual',
 	'media.created': 'Dibuat'
 };
 

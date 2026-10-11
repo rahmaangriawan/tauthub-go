@@ -475,6 +475,20 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	partnerID, hasPartner := strField(body, "partner_id")
 	autoPublish, hasAutoPublish := boolField(body, "auto_publish")
+	// DA manual: admin boleh mengisi Domain Authority sendiri saat deteksi
+	// otomatis tidak menemukannya. Hanya divalidasi sebagai bilangan bulat 0-100.
+	// Dikirim null = hapus nilai; tipe lain yang tak terbaca = tolak.
+	daRaw, seoDAPresent := body["seo_da"]
+	seoDAClear := seoDAPresent && daRaw == nil
+	seoDA, hasSeoDA := intField(body, "seo_da")
+	if seoDAPresent && !seoDAClear && !hasSeoDA {
+		writeErr(w, d, errUnprocessable("Invalid seo_da"))
+		return
+	}
+	if hasSeoDA && (seoDA < 0 || seoDA > 100) {
+		writeErr(w, d, errUnprocessable("Invalid seo_da"))
+		return
+	}
 
 	markup := d.mpGetMarkupPercent(r.Context())
 	var creditCost any
@@ -511,7 +525,7 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		  media_quality_score = COALESCE($17, media_quality_score),
 		  media_quality_notes = COALESCE($18, media_quality_notes),
 		  pricing_type = COALESCE($19, pricing_type),
-		  price_status = CASE WHEN $20 IS NOT NULL THEN 'final' ELSE price_status END,
+			  price_status = CASE WHEN $20::text IS NOT NULL THEN 'final' ELSE price_status END,
 		  updated_at = NOW()
 		WHERE id = $21`,
 		ptNullableArgStr(name, hasName), ptNullableArgStr(slug, hasSlug), ptNullableArgStr(category, hasCategory),
@@ -524,6 +538,20 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		ptNullableArgStr(pricingType, hasPricingType), ptNullableArgStr(pricingType, hasPricingType), mediaID); err != nil {
 		writeErr(w, d, mpMediaError(err))
 		return
+	}
+
+	// Simpan DA manual sebelum membaca ulang media, supaya nilainya ikut terlihat.
+	if seoDAPresent {
+		if seoDAClear {
+			if err := d.mpClearManualDA(r.Context(), mediaID); err != nil {
+				writeErr(w, d, mpMediaError(err))
+				return
+			}
+		} else if err := d.mpSetManualDA(r.Context(), mediaID, seoDA); err != nil {
+			writeErr(w, d, mpMediaError(err))
+			return
+		}
+		writeAuditBestEffort(d, r.Context(), user.ID, "media.da_updated", "media", mediaID)
 	}
 
 	// Konfirmasi harga nego↔nett oleh Admin: harga final + catatan ke mitra.

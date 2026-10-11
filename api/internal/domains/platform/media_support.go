@@ -1011,6 +1011,38 @@ func (d *Deps) mpUpsertSeoMetrics(ctx context.Context, mediaID string, metrics m
 		mediaID, metrics["da"], metrics["pa"], metrics["spam_score"], mpFloatArg(aiTrust), cited, checked, "rapidapi-domain-metrics")
 }
 
+// mpSetManualDA: admin mengisi Domain Authority sendiri (deteksi otomatis tidak
+// menemukannya). Nilai disimpan apa adanya dengan sumber 'manual' dan checked_at
+// diperbarui, sehingga jendela "segar" (mpSeoIsFresh) menahan pemeriksaan
+// otomatis menimpa angka manual ini. Kolom pa, spam_score, dan sinyal AI tidak
+// disentuh.
+func (d *Deps) mpSetManualDA(ctx context.Context, mediaID string, da int) error {
+	return d.exec(ctx, `
+		INSERT INTO media_seo_metrics (media_id, da, checked_at, source, created_at, updated_at)
+		VALUES ($1, $2, NOW(), 'manual', NOW(), NOW())
+		ON CONFLICT (media_id) DO UPDATE
+		SET da = EXCLUDED.da,
+		    source = EXCLUDED.source,
+		    checked_at = NOW(),
+		    updated_at = NOW()`, mediaID, da)
+}
+
+// mpClearManualDA: kosongkan DA. Baris yang isinya hanya DA dihapus karena tabel
+// menuntut minimal satu sinyal terisi; baris yang masih punya sinyal lain cukup
+// dikosongkan nilai DA-nya.
+func (d *Deps) mpClearManualDA(ctx context.Context, mediaID string) error {
+	if err := d.exec(ctx, `
+		DELETE FROM media_seo_metrics
+		WHERE media_id = $1
+		  AND pa IS NULL AND spam_score IS NULL
+		  AND ai_trust_score IS NULL AND ai_citation IS NULL`, mediaID); err != nil {
+		return err
+	}
+	return d.exec(ctx, `
+		UPDATE media_seo_metrics SET da = NULL, updated_at = NOW()
+		WHERE media_id = $1`, mediaID)
+}
+
 func mpFloatArg(p *float64) any {
 	if p == nil {
 		return nil

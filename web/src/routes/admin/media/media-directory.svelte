@@ -96,6 +96,7 @@
 		media_tier: 'tier3',
 		media_quality_score: '',
 		media_quality_notes: '',
+		seo_da: '',
 		pricing_type: 'nett' as 'nett' | 'nego'
 	});
 
@@ -182,6 +183,7 @@
 			media_tier: 'tier3',
 			media_quality_score: '',
 			media_quality_notes: '',
+			seo_da: '',
 			pricing_type: 'nett'
 		};
 		createOpen = true;
@@ -202,6 +204,7 @@
 			media_tier: row.media_tier,
 			media_quality_score: row.media_quality_score != null ? String(row.media_quality_score) : '',
 			media_quality_notes: row.media_quality_notes ?? '',
+			seo_da: row.seo_da != null ? String(row.seo_da) : '',
 			pricing_type: row.pricing_type ?? 'nett'
 		};
 		detailAudit = null;
@@ -246,9 +249,12 @@
 				publish_defaults: publishDefaults,
 				traffic_estimate: Number(form.traffic_estimate) || 0,
 				media_tier: form.media_tier,
-				media_quality_score: form.media_quality_score === '' ? null : Number(form.media_quality_score),
-				media_quality_notes: form.media_quality_notes.trim() || null,
-				pricing_type: form.pricing_type,
+					media_quality_score: form.media_quality_score === '' ? null : Number(form.media_quality_score),
+					media_quality_notes: form.media_quality_notes.trim() || null,
+					// DA manual hanya dikirim saat mengedit (media harus sudah ada).
+					// Kosong = hapus nilai DA (dikirim null).
+					seo_da: !editing ? undefined : form.seo_da.trim() === '' ? null : Number(form.seo_da),
+					pricing_type: form.pricing_type,
 				price_change_note:
 					form.pricing_type !== (editing?.pricing_type ?? 'nett') ? priceNote.trim() || null : undefined
 			};
@@ -1271,6 +1277,24 @@
 					/>
 				</label>
 			</div>
+
+			<label class="block">
+				<span class="text-xs font-medium text-muted-foreground">{tr("Domain Authority (DA)")}</span>
+				<input
+					class="app-input mt-1 w-full"
+					type="text"
+					inputmode="numeric"
+					placeholder={tr("kosong = tidak diset")}
+					value={form.seo_da}
+					oninput={(e) => {
+						const digits = e.currentTarget.value.replace(/\D/g, '').slice(0, 3);
+						form.seo_da = digits === '' ? '' : String(Math.min(100, Number(digits)));
+					}}
+				/>
+				<span class="mt-1 block text-xs text-muted-foreground"
+					>{tr("Isi manual bila deteksi otomatis belum menemukan DA (angka 0-100). Kosongkan untuk menghapus.")}</span
+				>
+			</label>
 
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Catatan kualitas (opsional)</span>
