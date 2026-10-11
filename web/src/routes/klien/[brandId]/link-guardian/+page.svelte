@@ -87,6 +87,27 @@
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 	});
 
+	// Toolbar pencarian sticky tepat di bawah topbar aplikasi (mobile). Tinggi
+	// topbar bisa berubah, jadi offset diukur dari elemen aslinya, bukan angka
+	// tetap — pola yang sama dengan sticky header tabel di halaman Media.
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const sync = () => {
+			const bar = document.querySelector('.app-utility-bar');
+			const h = bar ? Math.round(bar.getBoundingClientRect().height) : 0;
+			document.documentElement.style.setProperty('--lg-sticky-top', (h > 0 ? h : 60) + 'px');
+		};
+		sync();
+		window.addEventListener('resize', sync);
+		const ro = new ResizeObserver(sync);
+		const bar = document.querySelector('.app-utility-bar');
+		if (bar) ro.observe(bar);
+		return () => {
+			window.removeEventListener('resize', sync);
+			ro.disconnect();
+		};
+	});
+
 	// Muat ulang saat filter/halaman berubah (parity: summary & daftar satu paket).
 	$effect(() => {
 		void offset;
@@ -503,13 +524,13 @@
 				<p class="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">{tr("Semua artikel yang tayang dalam masa garansi 12 bulan terpantau masih bisa diakses. Halaman ini akan menampilkan artikel begitu ada yang hilang atau tidak terjangkau.")}</p>
 			</div>
 		{:else}
-			<div class="app-card mt-4">
-				<!-- table-layout fixed + lebar kolom persen: isi kolom dipotong
-				     dengan ellipsis, sehingga tabel tidak pernah melebihi kartu. -->
+			<div class="app-card mt-4 lg-list-card">
+				<!-- Kolom mengikuti kebutuhan konten (lebar minimum per kolom di <style>);
+				     tabel digulir lokal di dalam kartu bila lebih lebar dari area. -->
 					<table class="linkmon-table w-full text-sm">
 						<colgroup>
-							<col style="width:31%" /><col style="width:15%" /><col style="width:13%" />
-							<col style="width:14%" /><col style="width:13%" /><col style="width:14%" />
+							<col class="lg-col-1" /><col class="lg-col-2" /><col class="lg-col-3" />
+							<col class="lg-col-4" /><col class="lg-col-5" /><col class="lg-col-6" />
 						</colgroup>
 						<thead>
 							<tr>
@@ -726,9 +747,43 @@
 	.lg-pop-reset:hover { color: var(--foreground); }
 
 	/* ── Tabel ─────────────────────────────────────────────────────────── */
-	/* table-layout fixed + lebar kolom persen: isi dipotong dengan ellipsis,
-	   sehingga tabel tidak pernah melebihi kartunya. */
-	.linkmon-table { table-layout: fixed; }
+	/* Ukuran kolom mengikuti kebutuhan konten (table-layout auto) dengan lebar
+	   minimum per kolom, bukan persentase. Persentase membuat kolom status dan
+	   waktu menyusut ke ±75px sehingga header dan badge terpecah per karakter.
+	   Bila total lebih lebar dari kartu, gulir terjadi di dalam kartu saja. */
+	.lg-list-card {
+		max-width: 100%;
+		min-width: 0;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+	}
+	/* Override khusus halaman ini: aturan global `main table { min-width: 0 }`
+	   (≤1279px) tidak boleh menurunkan lebar tabel di bawah kebutuhan kolom. */
+	.lg-list-card .linkmon-table {
+		table-layout: auto;
+		width: 100%;
+		min-width: max-content;
+		border-collapse: collapse;
+	}
+	.lg-list-card .linkmon-table .lg-col-1 { min-width: 280px; max-width: 360px; }
+	.lg-list-card .linkmon-table td.linkmon-cell-article { max-width: 360px; }
+	.lg-list-card .linkmon-table td.linkmon-cell-article .lg-url { max-width: 100%; }
+	.lg-list-card .linkmon-table td.linkmon-cell-article .lg-doctitle { overflow-wrap: anywhere; }
+	.lg-list-card .linkmon-table .lg-col-2 { min-width: 140px; }
+	.lg-list-card .linkmon-table .lg-col-3 { min-width: 110px; }
+	.lg-list-card .linkmon-table .lg-col-4 { min-width: 130px; }
+	.lg-list-card .linkmon-table .lg-col-5 { min-width: 130px; }
+	.lg-list-card .linkmon-table .lg-col-6 { min-width: 110px; }
+	.lg-list-card .linkmon-table thead th { white-space: nowrap; }
+	.lg-list-card .linkmon-table .lg-cell { white-space: normal; }
+	.lg-list-card .lg-badge,
+	.lg-list-card .lg-verified,
+	.lg-list-card .lg-unverified,
+	.lg-list-card .lg-claim,
+	.lg-list-card .lg-claim-done,
+	.lg-list-card .lg-claim-progress,
+	.lg-list-card .lg-claim-muted { white-space: nowrap; }
+
 
 	.lg-th {
 		padding: 9px 16px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
@@ -885,8 +940,9 @@
 		.lg-card-hint { margin-top: 4px; }
 
 		/* Toolbar: pencarian + filter status + tombol filter dalam SATU baris.
-		   Tombol filter hanya ikon (teksnya disembunyikan) supaya muat. */
-		.lg-toolbar { margin-top: 10px; padding: 10px 12px; gap: 8px; flex-wrap: nowrap; align-items: center; }
+		   Tombol filter hanya ikon (teksnya disembunyikan) supaya muat. Saat
+		   daftar digulir, toolbar menempel di bawah header aplikasi. */
+		.lg-toolbar { margin-top: 10px; padding: 10px 12px; gap: 8px; flex-wrap: nowrap; align-items: center; position: sticky; top: var(--lg-sticky-top, 60px); z-index: 20; }
 		.lg-search { flex: 1 1 auto; min-width: 0; }
 		.lg-filter-wrap { margin-left: 0; flex: 0 0 auto; }
 		.lg-toolbar :global(.lg-status) { flex: 0 0 auto; }
