@@ -463,20 +463,33 @@
 						? row.featured_image_url.replace('https://app.tauthub.com', '')
 						: row.featured_image_url}
 					<div class="flex flex-col gap-4 border-b p-4 last:border-0 md:flex-row">
-						<!-- Cover: mobile 16/9 selebar kartu, desktop thumbnail 140x88. -->
-						{#if thumb && !imgError[row.id]}
-							<img
-								src={thumb}
-								alt={row.document_title ?? 'Cover artikel'}
-								class="aspect-video w-full shrink-0 rounded-lg object-cover md:aspect-auto md:h-[88px] md:w-[140px]"
-								loading="lazy"
-								onerror={() => (imgError = { ...imgError, [row.id]: true })}
-							/>
-						{:else}
-							<span class="flex aspect-video w-full shrink-0 items-center justify-center rounded-lg md:aspect-auto md:h-[88px] md:w-[140px]" style="background-color: var(--muted); color: var(--muted-foreground);" title={row.document_title ?? undefined}>
-								<ImageIcon size={28} />
-							</span>
-						{/if}
+						<!-- Cover: mobile 16/9 selebar kartu dengan label status menempel
+						     di pojok kanan atas gambar; desktop thumbnail 140x88. -->
+						<div class="relative w-full shrink-0 md:h-[88px] md:w-[140px]">
+							{#if thumb && !imgError[row.id]}
+								<img
+									src={thumb}
+									alt={row.document_title ?? 'Cover artikel'}
+									class="aspect-video w-full rounded-lg object-cover md:aspect-auto md:h-full md:w-full"
+									loading="lazy"
+									onerror={() => (imgError = { ...imgError, [row.id]: true })}
+								/>
+							{:else}
+								<span class="flex aspect-video w-full items-center justify-center rounded-lg md:aspect-auto md:h-full md:w-full" style="background-color: var(--muted); color: var(--muted-foreground);" title={row.document_title ?? undefined}>
+									<ImageIcon size={28} />
+								</span>
+							{/if}
+							<!-- Label status: overlay di pojok kanan atas gambar (mobile). -->
+							<div class="absolute right-2 top-2 md:hidden">
+								{#if draftVis}
+									<Tooltip content={draftVisibilityTip} maxWidth={320}>
+										{@render statusBadge(row, badge)}
+									</Tooltip>
+								{:else}
+									{@render statusBadge(row, badge)}
+								{/if}
+							</div>
+						</div>
 
 						<!-- Utama -->
 						<div class="min-w-0 flex-1">
@@ -492,7 +505,7 @@
 								<span>{tr("Media:")}<span style="color: var(--foreground);">{row.media_name ?? tr('Media Mitra')}</span></span>
 								<span>{tcLabel(row.client_price, rateIdr)}</span>
 								{#if row.published_url}
-									<a class="inline-flex items-center gap-1" style="color: var(--primary);" href={row.published_url} target="_blank" rel="noreferrer">{tr("Lihat terbit")}<ExternalLink size={13} />
+									<a class="inline-flex items-center gap-1" style="color: var(--primary);" href={row.published_url} target="_blank" rel="noreferrer">{tr("Lihat Artikel")}<ExternalLink size={13} />
 									</a>
 								{/if}
 							</div>
@@ -544,13 +557,16 @@
 
 						<!-- Sisi kanan -->
 						<div class="flex shrink-0 flex-col items-end gap-2 md:w-[230px]">
-							{#if draftVis}
-								<Tooltip content={draftVisibilityTip} maxWidth={320}>
+							<!-- Label status desktop (mobile: pojok kanan atas kartu). -->
+							<div class="hidden md:block">
+								{#if draftVis}
+									<Tooltip content={draftVisibilityTip} maxWidth={320}>
+										{@render statusBadge(row, badge)}
+									</Tooltip>
+								{:else}
 									{@render statusBadge(row, badge)}
-								</Tooltip>
-							{:else}
-								{@render statusBadge(row, badge)}
-							{/if}
+								{/if}
+							</div>
 
 							{#if IN_FLIGHT.includes(row.status)}
 								<div class="w-full">
@@ -561,29 +577,30 @@
 								</div>
 							{/if}
 
-							<div class="flex flex-wrap items-center justify-end gap-1.5">
+							<div class="flex w-full flex-wrap items-center justify-end gap-1.5 md:w-auto">
 								{#if CANCELLABLE.has(row.status)}
-									<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" style="color: var(--destructive);" type="button" onclick={() => { cancelTarget = row; cancelReason = ''; }}>
+									<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none" style="color: var(--destructive);" type="button" onclick={() => { cancelTarget = row; cancelReason = ''; }}>
 										Batalkan
 									</button>
 								{/if}
 								{#if row.status === 'failed'}
-									<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => void retryPublication(row.id)}>
+									<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none" type="button" onclick={() => void retryPublication(row.id)}>
 										<RotateCcw size={13} /> Retry
 									</button>
 								{/if}
 								{#if RESETTABLE.has(row.status)}
+									<!-- Mobile: baris sendiri, lebar penuh, di atas Detail/Tracking. -->
 									<button
-										class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs"
+										class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs w-full md:w-auto md:flex-none"
 										type="button"
 										title={tr("Kembalikan ke tahap persetujuan mitra (tombol setuju muncul lagi)")}
 										onclick={() => (confirmReset = row)}
 									>{tr("Kembalikan ke Persetujuan")}</button>
 								{/if}
-								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => void openDetail(row)}>
+								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none" type="button" onclick={() => void openDetail(row)}>
 									{detailBusy ? tr('Memuat…') : tr('Detail')}
 								</button>
-								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => void openTracking(row)}>
+								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none" type="button" onclick={() => void openTracking(row)}>
 									<ChartLine size={14} /> Tracking
 								</button>
 							</div>
