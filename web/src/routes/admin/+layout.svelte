@@ -1,5 +1,6 @@
 <script lang="ts">
 	import LangSelector from '$lib/components/lang-selector.svelte';
+	import MobileUtilityMenu from '$lib/components/mobile-utility-menu.svelte';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 
 	import { tr } from '$lib/i18n/phrases';
@@ -323,7 +324,10 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	{/snippet}
 
 	{#snippet toolbar()}
-		<LangSelector />
+		<div class="hidden items-center gap-2 md:flex">
+			<LangSelector />
+		</div>
+		<MobileUtilityMenu />
 		<NotificationBell apiBase="/v1/platform/operations" markReadApi="/v1/platform/notifications" fallbackBase="/admin" readable={false} showAnnouncementTab serverCategory={false} />
 	{/snippet}
 

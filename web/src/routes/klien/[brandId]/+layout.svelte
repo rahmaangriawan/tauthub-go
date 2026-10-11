@@ -21,6 +21,7 @@
 import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	import AccountDropdown from '$lib/components/account-dropdown.svelte';
 	import NotificationBell from '$lib/components/notification-bell.svelte';
+	import MobileUtilityMenu from '$lib/components/mobile-utility-menu.svelte';
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 	import { setToolbarSlot } from '$lib/components/toolbar-slot.svelte';
 	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
@@ -255,16 +256,20 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	{/snippet}
 
 	{#snippet toolbar()}
-		<LangSelector />
-		<button
-			class="app-credit-pill app-credit-trigger"
-			type="button"
-			onclick={() => void openTopUp()}
-			aria-label={`Saldo Tauthub: ${fmtIDRPill(saldo)}. Buka top up.`}
-		>
-			<Coins size={15} />
-			<strong>{fmtIDRPill(saldo)}</strong>
-		</button>
+		<!-- Desktop: bahasa + saldo sebaris. Mobile: keduanya masuk menu ikon. -->
+		<div class="hidden items-center gap-2 md:flex">
+			<LangSelector />
+			<button
+				class="app-credit-pill app-credit-trigger"
+				type="button"
+				onclick={() => void openTopUp()}
+				aria-label={`Saldo Tauthub: ${fmtIDRPill(saldo)}. Buka top up.`}
+			>
+				<Coins size={15} />
+				<strong>{fmtIDRPill(saldo)}</strong>
+			</button>
+		</div>
+		<MobileUtilityMenu saldoLabel={fmtIDRPill(saldo)} onTopUp={() => void openTopUp()} />
 		<NotificationBell apiBase={`/v1/brands/${brandId}`} fallbackBase={base} showAnnouncementTab />
 	{/snippet}
 

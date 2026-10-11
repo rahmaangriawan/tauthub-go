@@ -23,6 +23,7 @@
 import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	import AccountDropdown from '$lib/components/account-dropdown.svelte';
 	import NotificationBell from '$lib/components/notification-bell.svelte';
+	import MobileUtilityMenu from '$lib/components/mobile-utility-menu.svelte';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
@@ -99,6 +100,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	// Pill tier di samping lonceng, hanya untuk mitra keanggotaan VIP.
 	const vipPill = $derived(isVip || isVipTier(vip.data?.tier) ? vipTierBadge(vip.data?.tier) : null);
 	const saldo = $derived(earnings.data?.summary?.settled ?? 0);
+	// Label saldo dipakai dua tempat: pil di header (desktop) dan menu ikon (mobile).
+	const saldoLabel = $derived('Rp' + saldo.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }));
 
 	/**
 	 * Menu aktif hanya bila path persis sama atau berada DI BAWAH href-nya.
@@ -169,11 +172,15 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		{/snippet}
 
 		{#snippet toolbar()}
-			<LangSelector />
-			<a href={`${base}/earnings`} class="app-credit-pill app-earnings-pill">
-				<Coins size={15} />
-				<strong>Rp{saldo.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}</strong>
-			</a>
+			<!-- Desktop: bahasa + saldo sebaris. Mobile: keduanya masuk menu ikon. -->
+			<div class="hidden items-center gap-2 md:flex">
+				<LangSelector />
+				<a href={`${base}/earnings`} class="app-credit-pill app-earnings-pill">
+					<Coins size={15} />
+					<strong>{saldoLabel}</strong>
+				</a>
+			</div>
+			<MobileUtilityMenu saldoLabel={saldoLabel} saldoHref={`${base}/earnings`} />
 {#if vipPill}
 				<a href={isVvip ? `${base}/vip` : `${base}/referral`} class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold"
 					title={isVvip ? tr('Kelola keanggotaan VIP Anda') : tr('Lihat komisi referral Anda')}

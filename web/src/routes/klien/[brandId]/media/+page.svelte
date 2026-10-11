@@ -182,6 +182,21 @@
 	const pageSize = 24;
 	let advOpen = $state(false);
 	let advBtn = $state<HTMLButtonElement | null>(null);
+
+	// Lebar layar: panel alat dari kanan HANYA untuk mobile. Di desktop alat
+	// katalog tampil langsung di toolbar (kategori, Filter, Impor List,
+	// Bookmark) seperti semula — corong + panel kanan baru dipakai di layar
+	// sempit. Dipilih lewat matchMedia (bukan CSS dua-render) supaya markup
+	// alatnya hanya ada sekali, jadi binding tombol bookmark tidak dobel.
+	let isNarrow = $state(typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches);
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const mq = window.matchMedia('(max-width: 1023px)');
+		const sync = () => (isNarrow = mq.matches);
+		sync();
+		mq.addEventListener('change', sync);
+		return () => mq.removeEventListener('change', sync);
+	});
 	// Panel filter lanjutan mengambang (parity Radix Popover.Content align="end"
 	// sideOffset={8}) — bukan panel inline yang mendorong tabel ke bawah.
 	let advPos = $state<{ left: number; top: number }>({ left: 0, top: 0 });
@@ -228,8 +243,6 @@
 	// Panel info cepat (mobile): detail kolom yang disembunyikan di tabel.
 	let quickInfo = $state<any | null>(null);
 	// Cek pesanan ganda: media yang sudah dipesan di kampanye aktif lain.
-	let dupHits = $state<Array<{ mediaName: string; campaignName: string }>>([]);
-	let checkingDup = $state(false);
 	// Saldo kredit (bar seleksi & modal) — null = belum/gagal terbaca.
 	let walletAvailableTc = $state<number | null>(null);
 	let walletRateIdr = $state(1000);
@@ -485,14 +498,10 @@
 	async function openCampaignModal(presetName = '') {
 		campaignName = presetName;
 		campaignError = '';
-		dupHits = [];
 		profilerId = '';
 		campaignOpen = true;
 		if (walletAvailableTc === null) void loadWallet();
 		if (profilerOptions.length === 0) void loadProfilerOptions();
-		checkingDup = true;
-		dupHits = await findReservations();
-		checkingDup = false;
 	}
 
 	/** Daftar Profiler milik klien yang login (untuk dipilih saat simpan kampanye). */
@@ -1080,53 +1089,83 @@
 			<Search size={18} class="modernSearchIcon" />
 			<input class="modernSearchInput" placeholder={tr("Cari nama media, domain, atau niche...")} bind:value={search} />
 		</div>
-		<div class="modernToolsWrap">
-			<button
-				class="modernToolsBtn {activeFilterCount > 0 || bookmarkOnly || category ? 'modernToolsBtnActive' : ''}"
-				type="button"
-				aria-expanded={toolsOpen}
-				aria-label={tr('Buka alat katalog')}
-				title={tr('Alat katalog: kategori, filter, impor, bookmark')}
-				onclick={() => (toolsOpen = true)}
-			>
-				<SlidersHorizontal size={16} />
-				{#if activeFilterCount + (bookmarkOnly ? 1 : 0) + (category ? 1 : 0) > 0}
-					<span class="modernActionBadge">{activeFilterCount + (bookmarkOnly ? 1 : 0) + (category ? 1 : 0)}</span>
-				{/if}
-			</button>
-		</div>
+		{#if isNarrow}
+			<div class="modernToolsWrap">
+				<button
+					class="modernToolsBtn {activeFilterCount > 0 || bookmarkOnly || category ? 'modernToolsBtnActive' : ''}"
+					type="button"
+					aria-expanded={toolsOpen}
+					aria-label={tr('Buka alat katalog')}
+					title={tr('Alat katalog: kategori, filter, impor, bookmark')}
+					onclick={() => (toolsOpen = true)}
+				>
+					<!-- Ikon corong (funnel) untuk membuka panel alat katalog. -->
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+						<path fill="none" stroke="currentColor" stroke-width="2" d="m3 6l7 7v8h4v-8l7-7V3H3z" />
+					</svg>
+					{#if activeFilterCount + (bookmarkOnly ? 1 : 0) + (category ? 1 : 0) > 0}
+						<span class="modernActionBadge">{activeFilterCount + (bookmarkOnly ? 1 : 0) + (category ? 1 : 0)}</span>
+					{/if}
+				</button>
+			</div>
+		{:else}
+			<!-- Desktop: alat katalog di samping KANAN search box (kategori,
+			     Filter, Impor List, Bookmark) — corong + panel kanan hanya mobile. -->
+			<div class="modernActionsGroup catalogToolsInline">
+				<!-- Kategori desktop: satu tombol, diklik membuka dropdown-nya. -->
+				<div class="modernSelectWrap toolsInlineCats">
+					<Select
+						bind:value={category}
+						ariaLabel={tr('Kategori')}
+						Icon={LayoutGrid}
+						placeholder={tr('Semua Kategori')}
+						minWidth={210}
+						searchable={categories.length > 10}
+						searchPlaceholder={tr('Cari kategori…')}
+						onchange={() => (page_ = 1)}
+						options={[
+							{ value: '', label: tr('Semua Kategori'), count: rows.length },
+							...categories.map(([name, count]) => ({ value: name, label: name, count }))
+						]}
+					/>
+				</div>
+				<div class="toolsInlineActions">
+					<button
+						bind:this={advBtn}
+						class="modernActionBtn {activeFilterCount > 0 ? 'modernActionBtnActive' : ''}"
+						type="button"
+						aria-expanded={advOpen}
+						onclick={openAdvFilter}
+					>
+						<SlidersHorizontal size={15} />
+						<span>{tr('Filter')}</span>
+						{#if activeFilterCount > 0}<span class="modernActionBadge">{activeFilterCount}</span>{/if}
+					</button>
+					<button class="modernActionBtn" type="button" onclick={() => (importOpen = true)}>
+						<Upload size={15} /><span>{tr('Impor List')}</span>
+					</button>
+					<button
+						class="modernActionBtn {bookmarkOnly ? 'modernActionBtnActive' : ''}"
+						type="button"
+						class:bookmarkPulse
+						bind:this={bookmarkToolbarBtn}
+						onclick={() => (bookmarkOnly = !bookmarkOnly)}
+					>
+						<Bookmark size={15} />
+						<span>{tr('Bookmark')}</span>
+						{#if bookmarkedIds.size > 0}<span class="modernActionBadge">{bookmarkedIds.size}</span>{/if}
+					</button>
+				</div>
+			</div>
+		{/if}
 	</div>
 
-	<!-- Alat katalog: panel dari kanan (kategori, filter lanjutan, impor, bookmark). -->
+	<!-- Alat katalog versi MOBILE: corong di toolbar membuka panel dari kanan. -->
+	{#if isNarrow}
 	<SlideOver open={toolsOpen} title={tr('Alat Katalog')} subtitle={tr('Kelola kategori, filter, impor daftar, dan media simpanan.')} closeLabel={tr('Tutup')} onClose={() => (toolsOpen = false)}>
 		<div class="toolsPanel">
 			<span class="toolsPanelLabel catRadioLabel">{tr('Kategori')}</span>
-			<div class="catRadioGroup" role="radiogroup" aria-label={tr('Kategori')}>
-				<button
-					type="button"
-					role="radio"
-					aria-checked={category === ''}
-					class="catRadio"
-					class:catRadioActive={category === ''}
-					onclick={() => { category = ''; page_ = 1; }}
-				>{tr('Semua')} <span class="catRadioCount">{rows.length}</span></button>
-				{#each (catExpand ? categories : categories.slice(0, 5)) as [name, count] (name)}
-					<button
-						type="button"
-						role="radio"
-						aria-checked={category === name}
-						class="catRadio"
-						class:catRadioActive={category === name}
-						onclick={() => { category = name; page_ = 1; }}
-					>{name} <span class="catRadioCount">{count}</span></button>
-				{/each}
-				{#if categories.length > 5}
-					<button type="button" class="catExpandBtn" onclick={() => (catExpand = !catExpand)}>
-						{catExpand ? tr('Lebih sedikit') : `${tr('Lihat semua')} (${categories.length})`}
-					</button>
-				{/if}
-			</div>
-
+			{@render catRadios()}
 
 			<div class="advFilterInline">{@render advFields()}</div>
 
@@ -1146,7 +1185,8 @@
 				{#if bookmarkedIds.size > 0}<span class="modernActionBadge">{bookmarkedIds.size}</span>{/if}
 			</button>
 		</div>
-	</SlideOver>
+		</SlideOver>
+	{/if}
 
 	<!-- Info media (mobile): kolom yang disembunyikan di tabel, dibuka dari tombol Aksi. -->
 	<SlideOver
@@ -1185,6 +1225,34 @@
 			</div>
 		{/if}
 	</SlideOver>
+
+{#snippet catRadios()}
+	<div class="catRadioGroup" role="radiogroup" aria-label={tr('Kategori')}>
+		<button
+			type="button"
+			role="radio"
+			aria-checked={category === ''}
+			class="catRadio"
+			class:catRadioActive={category === ''}
+			onclick={() => { category = ''; page_ = 1; }}
+		>{tr('Semua')} <span class="catRadioCount">{rows.length}</span></button>
+		{#each (catExpand ? categories : categories.slice(0, 5)) as [name, count] (name)}
+			<button
+				type="button"
+				role="radio"
+				aria-checked={category === name}
+				class="catRadio"
+				class:catRadioActive={category === name}
+				onclick={() => { category = name; page_ = 1; }}
+			>{name} <span class="catRadioCount">{count}</span></button>
+		{/each}
+		{#if categories.length > 5}
+			<button type="button" class="catExpandBtn" onclick={() => (catExpand = !catExpand)}>
+				{catExpand ? tr('Lebih sedikit') : `${tr('Lihat semua')} (${categories.length})`}
+			</button>
+		{/if}
+	</div>
+{/snippet}
 
 {#snippet advFields()}
 				<div class="advFilterSection">
@@ -1657,12 +1725,12 @@
 						Berikutnya <ChevronRight size={15} />
 					</button>
 				</div>
+				</div>
+				{/if}
 			</div>
-		{/if}
-	</div>
-</div>
+		</div>
 
-<!-- Modal Impor List -->
+	<!-- Modal Impor List -->
 {#if importOpen}
 	<div class="modalOverlay" role="presentation" onclick={() => (importOpen = false)}>
 		<dialog open class="modalCard" aria-label={tr("Impor daftar media")} onclick={(e) => e.stopPropagation()}>
@@ -1728,8 +1796,10 @@
 	<!-- Modal Nama Kampanye -->
 	{#if campaignOpen}
 		<div class="modalOverlay" role="presentation" onclick={() => (campaignOpen = false)}>
-				<dialog open class="modalCard" aria-label={tr("Buat kampanye")} onclick={(e) => e.stopPropagation()}>
+				<dialog open class="modalCard campaignCard" aria-label={tr("Buat kampanye")} onclick={(e) => e.stopPropagation()}>
+					<span class="campaignHandle" aria-hidden="true"></span>
 					<form class="campaignModalForm" onsubmit={(e) => { e.preventDefault(); void createCampaign(); }}>
+						<div class="campaignBody">
 						<div class="modalHeader">
 						<h2 class="modalTitle"><LayoutGrid size={17} />{tr("Simpan ke Kampanye")}</h2>
 						<button class="modalClose" type="button" aria-label={tr("Tutup")} onclick={() => (campaignOpen = false)}><X size={18} /></button>
@@ -1753,32 +1823,33 @@
 								<div class="campaignSummaryRow">
 									<div class="campaignSummaryLabel">
 										<div class="campaignSummaryIcon"><Wallet size={18} /></div>
-										<span>{tr("Saldo kamu")}</span>
+										<span>{tr("Saldo kredit")}</span>
 									</div>
 									<strong>Rp {fmt(walletAvailableTc * walletRateIdr)}</strong>
 								</div>
-								{#if totalSelectedCredits > walletAvailableTc}
-									<p class="campaignWalletWarn">
-										{tr("Saldo kurang")} Rp {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)} {tr("untuk pesanan ini.")} <a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up dulu")}</a>
-									</p>
-								{/if}
 							{/if}
 						</div>
+						{#if walletAvailableTc !== null}
+							{#if totalSelectedCredits > walletAvailableTc}
+								<div class="campaignBalanceBadge campaignBalanceBadgeLow">
+									<Info size={16} />
+									<span>
+										{tr("Saldo kurang")} Rp {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)} {tr("untuk pesanan ini.")}
+										<a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up dulu")}</a>
+									</span>
+								</div>
+							{:else}
+								<div class="campaignBalanceBadge campaignBalanceBadgeOk">
+									<Check size={16} />
+									<span>
+										<strong>{tr("Cukup untuk pesanan ini")}</strong>
+										<em>{tr("Saldo kamu mencukupi untuk membuat kampanye")}</em>
+									</span>
+								</div>
+							{/if}
+							{/if}
 
-						{#if checkingDup}
-						<p class="modalHint">{tr("Memeriksa pesanan ganda…")}</p>
-					{:else if dupHits.length > 0}
-						<div class="dupWarn">
-							<strong>{tr("Sebagian media sudah dipesan di kampanye aktif lain:")}</strong>
-							<ul>
-								{#each dupHits as h (h.mediaName + h.campaignName)}
-									<li>{h.mediaName} — {h.campaignName}</li>
-								{/each}
-							</ul>
-							<span>{tr("Lanjutkan hanya jika kamu memang ingin memesan media yang sama dua kali.")}</span>
-						</div>
-					{/if}
-
+						
 					<label class="modalField">
 						<span>{tr("Nama Kampanye")} <span class="campaignSummaryMuted">({tr("opsional")})</span></span>
 						<input
@@ -1836,10 +1907,11 @@
 							</button>
 						{/if}
 					</label>
-					<div class="modalFooter">
+					</div>
+					<div class="modalFooter campaignFooter">
 						<button class="advFilterResetBtn" type="button" onclick={() => (campaignOpen = false)}>{tr("Batal")}</button>
-						<button class="advFilterApplyBtn" type="submit" disabled={creating || checkingDup}>
-							{creating ? tr('Membuat…') : dupHits.length > 0 ? tr('Pesan Lagi & Buat Kampanye') : tr('Buat Kampanye')}
+						<button class="advFilterApplyBtn" type="submit" disabled={creating}>
+							{creating ? tr('Membuat…') : tr('Buat Kampanye')}
 						</button>
 					</div>
 				</form>
@@ -1888,18 +1960,48 @@
 			in:fly={motionOK ? { y: 48, duration: 340, easing: cubicOut } : { duration: 0 }}
 			out:fly={motionOK ? { y: 48, duration: 280, easing: cubicIn } : { duration: 0 }}
 		>
-			<div class="selectedBarLeft">
-				<div class="selectedStatItem" use:portalToToolbar>
-						<span class="selectedStepsTrack" aria-label={tr("Tahap alur kampanye")}>
-								<span class="selectedStepChip selectedStepChipActive" title={tr("Anda berada di sini")}>
-									<span class="selectedStepNum" aria-hidden="true">1</span>
-									{tr("Katalog Media")}
+				<div class="selectedBarMobile">
+					<div class="selectedBarMobileRow">
+						<div class="selectedBarMobileIcons" aria-hidden="true">
+							{#each [...selectedIds].slice(0, 3) as id (id)}
+								<span class="selectedBarAvatar">{(selectedSnapshot[id]?.name ?? id).trim().charAt(0).toUpperCase() || '•'}</span>
+							{/each}
+							{#if selectedIds.size > 3}
+								<span class="selectedBarAvatar selectedBarAvatarMore">+{selectedIds.size - 3}</span>
+							{/if}
+						</div>
+						<div class="selectedBarMobileText">
+							<strong>{selectedIds.size} {tr('Media dipilih')}</strong>
+							<span>{tr('Total')} Rp {fmt(totalSelectedPrice)}</span>
+						</div>
+						<!-- Buka modal ringkasan kampanye (fungsi sama dengan tombol utama). -->
+						<button
+							class="selectedBarToggle"
+							type="button"
+							aria-haspopup="dialog"
+							aria-label={tr('Ringkasan kampanye')}
+							onclick={() => void openCampaignModal()}
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+								<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+							</svg>
+						</button>
+					</div>
+
+					<!-- Detail (expand/collapse): saldo + daftar media terpilih. -->
+									</div>
+				<div class="selectedBarStats">
+					<div class="selectedStatItem" use:portalToToolbar>
+							<span class="selectedStepsTrack" aria-label={tr("Tahap alur kampanye")}>
+									<span class="selectedStepChip selectedStepChipActive" title={tr("Anda berada di sini")}>
+										<span class="selectedStepNum" aria-hidden="true">1</span>
+										<span class="selectedStepChipLabel">{tr("Katalog Media")}</span>
+									</span>
+								<span class="selectedStepChip">
+									<span class="selectedStepNum" aria-hidden="true">2</span>
+									<span class="selectedStepChipLabel">{tr("Penyedia Konten")}</span>
 								</span>
-							<span class="selectedStepChip">
-								<span class="selectedStepNum" aria-hidden="true">2</span>
-								{tr("Penyedia Konten")}
 							</span>
-						</span>
 				</div>
 			<div class="selectedBarDivider"></div>
 			<div class="selectedStatItem">
@@ -2046,17 +2148,4 @@
 			white-space: nowrap;
 		}
 		.campaignSummaryMuted { font-weight: 500; color: var(--muted-foreground); }
-		.campaignWalletWarn { margin: 2px 0 0; font-size: 12px; color: var(--warning, #b45309); }
-		.campaignWalletWarn a { text-decoration: underline; font-weight: 600; }
-		.dupWarn {
-		margin: 0 0 12px;
-		padding: 10px 12px;
-		border-radius: 10px;
-		border: 1px solid var(--warning, #f59e0b);
-		background: #fffbeb;
-		font-size: 12.5px;
-		display: grid;
-		gap: 4px;
-	}
-	.dupWarn ul { margin: 0; padding-left: 18px; }
 </style>

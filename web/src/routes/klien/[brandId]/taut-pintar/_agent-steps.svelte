@@ -233,7 +233,7 @@
 		background: var(--muted);
 		color: var(--muted-foreground);
 	}
-	@media (max-width: 640px) {
+	@media (max-width: 767px) {
 		.taut-step-label {
 			display: none;
 		}

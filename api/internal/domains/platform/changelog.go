@@ -182,7 +182,7 @@ func (d *Deps) AdminChangelogImport(w http.ResponseWriter, r *http.Request) {
 	items := make([]map[string]any, 0, len(arr))
 	firstID := ""
 
-	for _, rawItem := range arr {
+	for idx, rawItem := range arr {
 		item, itemOK := rawItem.(map[string]any)
 		if !itemOK {
 			writeErr(w, d, errUnprocessable("Setiap entri harus berupa objek."))
@@ -272,8 +272,13 @@ func (d *Deps) AdminChangelogImport(w http.ResponseWriter, r *http.Request) {
 			// Tautan per peran: tanpa ini lonceng memakai cadangan bawaan
 			// ({base}/publications) sehingga entri "Apa yang Baru" membuka halaman
 			// publikasi, bukan halaman changelog-nya.
+			// created_at dibuat EKSPLISIT menurut urutan entri: entri pertama di
+			// payload = versi terbaru (changelog.md terbaru-di-atas), jadi diberi
+			// timestamp paling baru. Tanpa ini semua notifikasi satu batch berbagi
+			// waktu yang (hampir) sama dan urutan lonceng jadi acak — versi lama
+			// bisa muncul di atas versi baru.
 			n, err := d.execRows(r.Context(), `
-				INSERT INTO notifications (id, user_id, type, title, body, link)
+				INSERT INTO notifications (id, user_id, type, title, body, link, created_at)
 				SELECT gen_random_uuid()::text, x.id, 'changelog.new', $1, left($2, 500),
 				       CASE x.role
 				         WHEN 'client' THEN (
@@ -288,10 +293,11 @@ func (d *Deps) AdminChangelogImport(w http.ResponseWriter, r *http.Request) {
 				           SELECT '/mitra/' || p.public_id || '/changelog'
 				           FROM partners p WHERE p.user_id = x.id ORDER BY p.id LIMIT 1
 				         )
-				       END
+				       END,
+				       NOW() - ($3 * INTERVAL '1 second')
 				FROM users x
 				WHERE x.is_active = TRUE AND x.role IN ('client', 'partner')`,
-				notifTitle, summary)
+				notifTitle, summary, idx)
 			if err != nil {
 				// Kegagalan ping tidak membatalkan entri yang sudah masuk.
 				slog.Warn("[platform] fan-out notifikasi changelog gagal", "err", err)

@@ -8,7 +8,9 @@
 	 * supaya konten tidak lagi terjepit / memicu scroll horizontal.
 	 */
 	import type { Component, Snippet } from 'svelte';
-	import { List, Search, X } from '@lucide/svelte';
+	import { fly, fade } from 'svelte/transition';
+	import { cubicIn, cubicOut } from 'svelte/easing';
+	import { Search } from '@lucide/svelte';
 	import { page } from '$app/state';
 
 	export type ShellNavItem = {
@@ -47,6 +49,8 @@
 	} = $props();
 
 	let drawerOpen = $state(false);
+	// Animasi drawer (buka & tutup) dimatikan bila pengguna memilih reduce motion.
+	const motionOK = typeof window !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	let panel = $state<HTMLDivElement | null>(null);
 	let navQuery = $state('');
 	let searchEl = $state<HTMLInputElement | null>(null);
@@ -216,7 +220,13 @@
 					aria-expanded={drawerOpen}
 					onclick={() => (drawerOpen = true)}
 				>
-					<List size={20} />
+					<!-- Ikon "buka sidebar": panel dengan chevron menunjuk kanan. -->
+					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+						<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+							<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2" />
+							<path d="M7.25 10L5.5 12l1.75 2m2.25 7V3" />
+						</g>
+					</svg>
 				</button>
 				{@render toolbarLeft?.()}
 			</div>
@@ -235,6 +245,7 @@
 			type="button"
 			aria-label={tr("Tutup navigasi")}
 			onclick={() => (drawerOpen = false)}
+			transition:fade={{ duration: motionOK ? 180 : 0 }}
 		></button>
 		<div
 			class="app-drawer-panel"
@@ -243,6 +254,8 @@
 			aria-label={navLabel}
 			tabindex="-1"
 			bind:this={panel}
+			in:fly={{ x: -300, duration: motionOK ? 280 : 0, easing: cubicOut }}
+			out:fly={{ x: -300, duration: motionOK ? 200 : 0, easing: cubicIn }}
 		>
 			<button
 				class="app-drawer-close"
@@ -250,7 +263,13 @@
 				aria-label={tr("Tutup navigasi")}
 				onclick={() => (drawerOpen = false)}
 			>
-				<X size={20} />
+				<!-- Ikon "tutup sidebar": panel dengan chevron menunjuk kiri. -->
+				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+					<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+						<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2m-9.5 0V3" />
+						<path d="m5.5 10l1.75 2l-1.75 2" />
+					</g>
+				</svg>
 			</button>
 			{@render sidebar()}
 		</div>

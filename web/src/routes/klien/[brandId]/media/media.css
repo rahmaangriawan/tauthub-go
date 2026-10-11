@@ -1076,8 +1076,7 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   align-items: center;
   gap: 8px;
   font-size: 12.5px;
-  font-weight: 400;
-  padding: 5px 14px 5px 5px;
+  font-weight: 400;  padding: 5px 14px 5px 5px;
   border-radius: 999px;
   border: 1px solid var(--border, #e2e8f0);
   background: var(--card, #fff);
@@ -1116,6 +1115,12 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 .selectedStepChipActive .selectedStepNum {
   background: var(--primary);
   color: var(--primary-foreground, #ffffff);
+}
+/* Mobile: label tahap ("Katalog Media", "Penyedia Konten") disembunyikan —
+   tinggal bulatan nomornya, supaya header tidak berjejal. */
+@media (max-width: 767px) {
+  .selectedStepChipLabel { display: none; }
+  .selectedStepChip { gap: 0; padding-right: 5px; }
 }
 /* Field modal: dropdown Profiler pas dengan teks isinya (fit-content). */
 .modalField .zs-select-trigger {
@@ -1683,7 +1688,23 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   .selectedExportBtn, .selectedCreateBtn { flex: 1; justify-content: center; }
 }
 
-/* ── Alat katalog: tombol corong di samping search + panel kanan ─────────── */
+/* ── Alat katalog versi DESKTOP: tampil langsung di toolbar, bukan panel kanan.
+   Corong + panel kanan hanya dipakai di layar sempit (dipilih lewat matchMedia
+   di +page.svelte, jadi tidak ada CSS dua-render di sini). ─────────────────── */
+.catalogToolsInline {
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-left: auto;
+}
+.catalogToolsInline .toolsInlineCats { flex: none; }
+/* Kategori duduk tepat di samping Filter — dulu aksinya didorong ke kanan
+   (margin-left:auto) sehingga jaraknya berjauhan. */
+.catalogToolsInline .toolsInlineActions {
+  display: flex; align-items: center; gap: 8px; flex: none;
+}
+
+/* ── Alat katalog: tombol corong di samping search + panel kanan (MOBILE) ── */
 .modernToolsWrap { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
 .modernToolsBtn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -1788,3 +1809,157 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   padding: 14px 0 0; border-top: 1px solid #f1f5f9;
   display: flex; flex-direction: column; gap: 16px;
 }
+
+/* ── Bar aksi bawah (mobile): ringkas, ringkasan + tombol utama penuh ────── */
+.selectedBarMobile { display: none; align-items: center; gap: 10px; min-width: 0; }
+.selectedBarMobileIcons { display: inline-flex; align-items: center; flex: 0 0 auto; }
+.selectedBarAvatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; margin-right: -12px;
+  border-radius: 50%; border: 2px solid var(--card, #fff);
+  background: var(--accent, #eef4ff); color: var(--primary);
+  font-size: 14px; font-weight: 800;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+.selectedBarAvatarMore { background: #0f172a; color: #fff; margin-right: 0; }
+.selectedBarMobileText { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.selectedBarMobileText strong { font-size: 13px; }
+.selectedBarMobileText span { font-size: 12px; color: var(--muted-foreground); }
+
+@media (max-width: 767px) {
+  .selectedBottomBar {
+    flex-direction: column; align-items: stretch; gap: 10px;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  /* Stat desktop diganti ringkasan mobile (node tahap sudah dipindah ke header). */
+  .selectedBarStats { display: none; }
+  .selectedBarMobile { display: flex; }
+  .selectedBarRight { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; }
+  /* Mobile: cukup tombol utama — Batal & Ekspor Proposal disembunyikan
+     (fungsinya tetap tersedia di desktop). */
+  .selectedCancelBtn, .selectedExportBtn { display: none; }
+  .selectedCreateBtn { grid-column: 1 / -1; justify-content: center; min-height: 46px; }
+}
+
+/* ── Ringkasan Kampanye (mobile): bottom sheet 90dvh + footer menempel ───── */
+.campaignHandle { display: none; }
+
+@media (max-width: 767px) {
+  .campaignCard {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; margin: 0;
+    width: 100%; max-width: none; max-height: 90dvh;
+    border-radius: 16px 16px 0 0; overflow: hidden;
+    display: flex; flex-direction: column;
+    animation: campaignSheetUp 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .campaignHandle {
+    display: block; flex: 0 0 auto;
+    width: 40px; height: 4px; margin: 8px auto 2px;
+    border-radius: 999px; background: var(--border, #e2e8f0);
+  }
+  .campaignModalForm { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+  /* Konten utama menggulir sendiri; footer tombol tetap di bawah panel. */
+  .campaignBody { overflow-y: auto; flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+  .campaignFooter {
+    position: sticky; bottom: 0; z-index: 2;
+    background: var(--card, #fff);
+    border-top: 1px solid var(--border, #e2e8f0);
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+}
+@keyframes campaignSheetUp {
+  from { transform: translateY(18px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .campaignCard { animation: none; }
+}
+
+/* Badge kecukupan saldo di kartu ringkasan kampanye. */
+.campaignBalanceBadge {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-top: 10px; padding: 10px 12px;
+  border-radius: 10px; font-size: 12.5px; line-height: 1.45;
+}
+.campaignBalanceBadge :global(svg) { flex: 0 0 auto; margin-top: 1px; }
+.campaignBalanceBadgeOk {
+  border: 1px solid color-mix(in srgb, var(--success, #16a34a) 35%, transparent);
+  background: var(--success-soft, #ecfdf3);
+  color: var(--success, #166534);
+}
+.campaignBalanceBadgeOk strong { display: block; font-weight: 700; }
+.campaignBalanceBadgeOk em { font-style: normal; color: color-mix(in srgb, var(--success, #16a34a) 78%, #0f172a); }
+.campaignBalanceBadgeLow {
+  border: 1px solid var(--warning, #f59e0b);
+  background: var(--warning-soft, #fffbeb);
+  color: var(--warning, #b45309);
+}
+.campaignBalanceBadgeLow a { font-weight: 700; color: inherit; text-decoration: underline; }
+
+/* ── Bar aksi mobile: kartu membulat, ringkasan + expand, tombol navy ────── */
+.selectedBarMobile { width: 100%; }
+/* Desktop: stat item kembali sebaris horizontal (dulu ada di .selectedBarLeft).
+   Ditulis sebagai min-width supaya TIDAK menimpa aturan sembunyikan di mobile. */
+@media (min-width: 768px) {
+  .selectedBarStats { display: flex; align-items: center; gap: 0; }
+}
+
+.selectedBarMobileRow { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; }
+.selectedBarToggle {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border: 1px solid var(--border, #e2e8f0); border-radius: 9px;
+  background: transparent; color: var(--muted-foreground);
+  cursor: pointer; transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
+  margin-left: auto;
+}
+.selectedBarToggle:hover { background: var(--secondary, #f1f5f9); }
+
+
+
+@media (max-width: 767px) {
+  /* Panel mengambang: kartu membulat, border tipis + shadow lembut. */
+  .selectedBottomBar {
+    left: 10px; right: 10px; bottom: 10px; border-radius: 16px;
+    border: 1px solid var(--border, #e2e8f0);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.14);
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  .selectedCreateBtn {
+    min-height: 50px; border-radius: 12px;
+    background: #0f172a; color: #fff; font-weight: 650; gap: 8px;
+  }
+  .selectedCreateBtn:hover:not(:disabled) { background: #16233c; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .selectedBarToggle { transition: none; }
+}
+
+/* ── Ringkasan Kampanye (mobile): jarak antarbagian yang konsisten ───────── */
+@media (max-width: 767px) {
+  /* Badan sheet: satu kolom dengan jarak seragam, padding horizontal lega. */
+  .campaignBody {
+    display: flex; flex-direction: column; gap: 14px;
+    padding: 6px 8px 8px;
+  }
+  .campaignBody .modalHeader { padding: 0; margin: 0; }
+  .campaignBody .modalField { margin: 0; }
+  .campaignBody .modalField > span:first-child { margin-bottom: 6px; display: block; }
+  .campaignSummary { display: flex; flex-direction: column; gap: 0; padding: 4px 0; }
+  .campaignBalanceBadge { margin-top: 0; }
+  .dupWarn { margin: 0; }
+  /* Footer aksi: tombol utama menempel di dasar sheet. */
+  .campaignFooter {
+    display: flex; gap: 10px;
+    padding: 12px 8px calc(4px + env(safe-area-inset-bottom, 0px));
+  }
+  .campaignFooter .advFilterApplyBtn { flex: 1 1 auto; min-height: 46px; }
+  .campaignFooter .advFilterResetBtn { flex: 0 0 auto; min-width: 96px; min-height: 46px; }
+}
+
+/* Tombol aksi di banner (mis. "Bersihkan pilihan") jangan sampai teksnya
+   terpotong/wrap dua baris — utamakan tetap satu baris. */
+.bookmarkBannerClear { white-space: nowrap; flex: 0 0 auto; }
+.restoredSelectionBar { flex-wrap: nowrap; align-items: center; gap: 10px; }
+.restoredSelectionBar > span:first-child { min-width: 0; }
