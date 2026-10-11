@@ -306,7 +306,7 @@
 		</div>
 
 		<div class="app-card mt-4 p-4">
-			<div class="max-h-[70vh] overflow-auto">
+			<div class="max-h-[70vh] overflow-auto overflow-x-auto">
 				<table class="w-full text-sm" style="min-width: 1180px;">
 					<thead>
 						<tr class="text-xs text-muted-foreground">
