@@ -1804,6 +1804,22 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   color: var(--primary); font-size: 12px; font-weight: 600;
   text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
 }
+
+/* Layar sangat sempit (≤379px): rapatkan padding sel dan tombol Aksi supaya
+   empat kolom yang tersisa (checkbox, Nama Media, Harga, Aksi) tidak memaksa
+   tabel melebar keluar viewport. Kolom nama media tidak lagi dikunci 180px
+   (min-width di .mediaRowCol) dan domain/meta boleh membungkus. */
+@media (max-width: 379px) {
+  .modernTh, .modernTd { padding: 10px 6px; }
+  .actionBtnGroup { gap: 4px; }
+  .viewDetailBtn { padding: 6px 8px; gap: 3px; }
+  .mediaRowCol { min-width: 0; grid-template-columns: minmax(0, 1fr) max-content; }
+  .mediaHeading { white-space: normal; overflow-wrap: anywhere; }
+  .mediaMetaLine { overflow-wrap: anywhere; }
+  /* Bar paginasi: biarkan membungkus (info + tombol) alih-alih melebar keluar. */
+  .modernPaginationBar { flex-wrap: wrap; gap: 8px; }
+  .paginationBtns { flex-wrap: wrap; }
+}
 .advFilterInline {
   grid-column: 1 / -1; margin-top: 4px;
   padding: 14px 0 0; border-top: 1px solid #f1f5f9;
