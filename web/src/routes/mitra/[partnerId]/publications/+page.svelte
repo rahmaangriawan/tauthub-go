@@ -5,7 +5,7 @@
 	// media, filter status, pratinjau/edit draf, setujui, tolak, kirim URL,
 	// dan rewrite AI (berbayar dari saldo mitra).
 	import { onMount } from 'svelte';
-	import { Check, CircleAlert, Clock, Eye, ExternalLink, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, Sparkles, Trash2, XCircle } from '@lucide/svelte';
+	import { Check, CircleAlert, Clock, Eye, ExternalLink, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, SlidersHorizontal, Sparkles, Trash2, XCircle } from '@lucide/svelte';
 	import { Tooltip } from 'bits-ui';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -654,6 +654,7 @@
 		}
 		await approve(p, 'draft');
 	}
+	let statusMenuOpen = $state(false);
 </script>
 
 <PageTitle title={tr("Publikasi")} />
@@ -670,7 +671,7 @@
 	{#if error}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>{/if}
 
 	<form class="app-card mt-4 flex flex-wrap items-center gap-2 p-3" onsubmit={(e) => e.preventDefault()}>
-		<div class="flex flex-wrap items-center gap-1" role="tablist" aria-label={tr("Filter status publikasi")}>
+		<div class="hidden flex-wrap items-center gap-1 md:flex" role="tablist" aria-label={tr("Filter status publikasi")}>
 			{#each statusTabs as t (t.key)}
 				<button
 					type="button"
@@ -685,6 +686,38 @@
 						pageNo = 1;
 					}}>{t.label}</button>
 			{/each}
+		</div>
+		<!-- Mobile: filter status berupa tombol ikon + dropdown. -->
+		<div class="relative md:hidden">
+			<button
+				type="button"
+				class="app-btn app-btn-soft !min-h-9 !px-3"
+				aria-haspopup="menu"
+				aria-expanded={statusMenuOpen}
+				aria-label={tr('Filter status publikasi')}
+				title={tr('Filter status publikasi')}
+				onclick={() => (statusMenuOpen = !statusMenuOpen)}
+			>
+				<SlidersHorizontal size={15} />
+			</button>
+			{#if statusMenuOpen}
+				<button class="fixed inset-0 z-[5] cursor-default" type="button" aria-label={tr('Tutup')} onclick={() => (statusMenuOpen = false)}></button>
+				<div class="absolute left-0 top-[calc(100%+6px)] z-10 w-56 overflow-hidden rounded-xl border bg-card p-1 shadow-lg" style="border-color: var(--border);" role="menu">
+					{#each statusTabs as t (t.key)}
+						<button
+							type="button"
+							role="menuitemradio"
+							aria-checked={activeTab === t.key}
+							class="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm"
+							style={activeTab === t.key ? 'color: var(--primary); font-weight: 700;' : 'color: var(--foreground);'}
+							onclick={() => { activeTab = t.key; pageNo = 1; statusMenuOpen = false; }}
+						>
+							{t.label}
+							{#if activeTab === t.key}<Check size={14} />{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
 		<label class="app-input flex min-w-[200px] flex-1 items-center gap-2 !py-1.5">
 			<Search size={15} class="text-muted-foreground" />
@@ -708,7 +741,8 @@
 			</p>
 		</div>
 	{:else}
-		<div class="app-card mt-4 overflow-x-auto">
+		<!-- Desktop: tabel asli, tidak diubah (≥768px). -->
+		<div class="app-card mt-4 hidden overflow-x-auto md:block">
 			<table class="w-full text-sm">
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
@@ -790,91 +824,92 @@
 								</td>
 							<td class="px-4 py-2.5 text-right tabular-nums">{rp(p.partner_amount)}</td>
 							<td class="px-4 py-2.5">
-								<span class="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--{statusTone[p.status] ?? 'accent'}-soft, var(--accent)); color: var(--{statusTone[p.status] ?? 'accent'});">
-									{pendingUrl(p) ? tr('Menunggu URL') : statusLabel[p.status] ?? p.status}
-								</span>
-								{#if !isManualRow(p) && LIVE.includes(p.status) && p.publish_progress != null}
-									<span class="mt-1 block text-[11px] text-muted-foreground">{p.publish_progress}%</span>
-								{/if}
-								{#if p.rejection_reason}
-									<span class="mt-1 block max-w-[220px] text-[11px]" style="color: var(--destructive);">{p.rejection_reason}</span>
-								{/if}
-								{#if rssBadge(p.rss_import_status)}
-									<span class="mt-1 block rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid var(--primary); color: var(--primary);">{rssBadge(p.rss_import_status)}</span>
-								{/if}
-								{#if p.status === 'published' && !p.published_url}
-									<span class="mt-1 block text-[11px] font-medium" style="color: var(--warning);">{tr('URL belum terisi')}</span>
-								{/if}
+								{@render statusBadge(p, false)}
+								{@render statusExtras(p)}
 							</td>
 							<td class="px-4 py-2.5 text-right">
-								<div class="relative inline-block">
-									<button
-										type="button"
-										class="rounded-lg p-1.5 hover:bg-secondary"
-										aria-haspopup="menu"
-										aria-expanded={rowMenu === p.id}
-										aria-label={`${tr('Aksi untuk')} ${p.document_title ?? tr('publikasi')}`}
-										onclick={(e) => {
-											e.stopPropagation();
-											if (rowMenu === p.id) { rowMenu = null; } else { positionRowMenu(e.currentTarget as HTMLElement); rowMenu = p.id; }
-										}}
-									>
-										<MoreVertical size={16} />
-									</button>
-									{#if rowMenu === p.id}
-										<div class="fixed z-40 w-56 rounded-xl border py-1 shadow-lg" style="border-color: var(--border); background: var(--card, #fff); {menuPositionStyle}" role="menu" aria-label={tr('Aksi publikasi')}>
-											<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'detail')}>
-												<Eye size={14} /> {tr('Detail')}
-											</button>
-											{#if p.status === 'published' || p.status === 'waiting_partner' || p.status === 'revision'}
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'preview')}>
-													<Eye size={14} /> {tr('Pratinjau draf')}
-												</button>
-											{/if}
-											{#if p.status === 'revision'}
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'accept-revision')}>
-													<Check size={14} /> {tr('Terima Revisi')}
-												</button>
-												{#if (p.revision_reject_count ?? 0) < (p.revision_reject_limit ?? 3)}
-													<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" style="color: var(--destructive);" onclick={(e) => menuAction(e, p, 'reject')}>
-														<XCircle size={14} /> {tr('Tolak Revisi')}
-													</button>
-												{/if}
-											{/if}
-											{#if p.status === 'waiting_partner'}
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'edit')}>
-													<Pencil size={14} /> {tr('Edit draf')}
-												</button>
-											{/if}
-											{#if p.published_url}
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => { e.stopPropagation(); closeRowMenu(); window.open(p.published_url ?? '', '_blank', 'noopener'); }}>
-													<ExternalLink size={14} /> {tr('Lihat Langsung')}
-												</button>
-											{/if}
-											{#if p.status === 'partner_approved'}
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'url')}>
-													<Link2 size={14} /> {tr('Kirim URL')}
-												</button>
-											{/if}
-											{#if p.status === 'waiting_partner'}
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'publish')}>
-													<Check size={14} /> {tr('Setujui & Terbitkan')}
-												</button>
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'draft')}>
-													<Check size={14} /> {tr('Setujui sebagai Draf')}
-												</button>
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" style="color: var(--destructive);" onclick={(e) => menuAction(e, p, 'reject')}>
-													<XCircle size={14} /> {tr('Tolak')}
-												</button>
-											{/if}
-										</div>
-									{/if}
-								</div>
+								{@render rowActions(p)}
 							</td>
 						</tr>
 					{/each}
 				</tbody>
 			</table>
+		</div>
+
+		<!-- Mobile: setiap publikasi menjadi kartu vertikal (<768px). Data sama
+			dengan tabel (snippet bersama); min-w-0 di flex child & grid supaya
+			judul, domain, dan nominal tidak terpecah per karakter. -->
+		<div class="mt-4 flex flex-col gap-2.5 md:hidden">
+			{#each filtered as p (p.id)}
+				<div
+					class="app-card cursor-pointer p-3"
+					role="button"
+					tabindex="0"
+					onclick={() => void openDetail(p)}
+					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void openDetail(p); } }}
+				>
+					<div class="flex items-start gap-3">
+						{#if p.thumbnail_url ?? p.featured_image_url}
+							<img
+								src={p.thumbnail_url ?? p.featured_image_url}
+								alt=""
+								class="h-11 w-11 flex-none rounded-lg border object-cover"
+								style="border-color: var(--border); background-color: var(--muted);"
+								loading="lazy"
+							/>
+						{/if}
+						<div class="min-w-0 flex-1">
+							<h3 class="line-clamp-2 text-[15px] font-semibold leading-snug" title={p.document_title ?? tr('Tanpa judul')}>{p.document_title ?? tr('Tanpa judul')}</h3>
+							{#if p.order_code}<p class="mt-0.5 text-[11px] text-muted-foreground">{p.order_code}</p>{/if}
+						</div>
+						{@render rowActions(p)}
+					</div>
+
+					<div class="mt-3 border-t pt-3" style="border-color: var(--border);">
+						<dl class="grid grid-cols-2 gap-x-3 gap-y-3">
+							<div class="min-w-0">
+								<dt class="text-[11px] text-muted-foreground">{tr('Mode Publikasi')}</dt>
+								<dd class="mt-1">
+									<span class="text-[13px] font-medium" style="color: {pubMode(p.media_publication_mode).tone};">{pubMode(p.media_publication_mode).label}</span>
+									{#if p.media_integration_type}
+										<span class="mt-0.5 block text-[11px] text-muted-foreground">{integrationLabel[p.media_integration_type] ?? p.media_integration_type}</span>
+									{/if}
+								</dd>
+							</div>
+							<div class="min-w-0">
+								<dt class="text-[11px] text-muted-foreground">{tr('Media')}</dt>
+								<dd class="mt-1 flex min-w-0 items-center text-[13px] font-medium">
+									{#if effectiveUrl(p)}
+										<a
+											class="flex min-w-0 items-center gap-1 underline-offset-2 hover:underline"
+											href={effectiveUrl(p) ?? undefined}
+											target="_blank"
+											rel="noreferrer"
+											onclick={(e) => e.stopPropagation()}
+										>
+											<span class="truncate">{mediaDomainLabel(p.media_website_url, p.media_name ?? '')}</span>
+											<ExternalLink size={13} class="flex-none" style="color: var(--primary);" />
+										</a>
+									{:else}
+										<span class="truncate">{mediaDomainLabel(p.media_website_url, p.media_name ?? '')}</span>
+									{/if}
+								</dd>
+							</div>
+							<div class="min-w-0">
+								<dt class="text-[11px] text-muted-foreground">{tr('Penghasilan')}</dt>
+								<dd class="mt-1 text-[13px] font-semibold tabular-nums">{rp(p.partner_amount)}</dd>
+							</div>
+							<div class="min-w-0">
+								<dt class="text-[11px] text-muted-foreground">Status</dt>
+								<dd class="mt-1">
+									{@render statusBadge(p, true)}
+									{@render statusExtras(p)}
+								</dd>
+							</div>
+						</dl>
+					</div>
+				</div>
+			{/each}
 		</div>
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 			<span class="text-xs text-muted-foreground">
@@ -892,6 +927,94 @@
 	<span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium" style="background-color: {TONE[tone]?.bg ?? TONE.gray.bg}; color: {TONE[tone]?.fg ?? TONE.gray.fg};">
 		{label}
 	</span>
+{/snippet}
+
+{#snippet statusBadge(p: any, withDot: boolean)}
+	<span class="inline-flex max-md:whitespace-normal items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--{statusTone[p.status] ?? 'accent'}-soft, var(--accent)); color: {(statusTone[p.status] ?? 'accent') === 'accent' ? 'var(--accent-foreground)' : `var(--${statusTone[p.status]})`};">
+		{#if withDot}<span class="h-1.5 w-1.5 flex-none rounded-full" style="background-color: currentColor;"></span>{/if}
+		{pendingUrl(p) ? tr('Menunggu URL') : statusLabel[p.status] ?? p.status}
+	</span>
+{/snippet}
+
+{#snippet statusExtras(p: any)}
+	{#if !isManualRow(p) && LIVE.includes(p.status) && p.publish_progress != null}
+		<span class="mt-1 block text-[11px] text-muted-foreground">{p.publish_progress}%</span>
+	{/if}
+	{#if p.rejection_reason}
+		<span class="mt-1 block max-w-[220px] text-[11px]" style="color: var(--destructive);">{p.rejection_reason}</span>
+	{/if}
+	{#if rssBadge(p.rss_import_status)}
+		<span class="mt-1 block rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid var(--primary); color: var(--primary);">{rssBadge(p.rss_import_status)}</span>
+	{/if}
+	{#if p.status === 'published' && !p.published_url}
+		<span class="mt-1 block text-[11px] font-medium" style="color: var(--warning);">{tr('URL belum terisi')}</span>
+	{/if}
+{/snippet}
+
+{#snippet rowActions(p: any)}
+	<div class="relative inline-block">
+		<button
+			type="button"
+			class="pub-menu-trigger inline-flex items-center justify-center rounded-lg p-1.5 hover:bg-secondary"
+			aria-haspopup="menu"
+			aria-expanded={rowMenu === p.id}
+			aria-label={`${tr('Aksi untuk')} ${p.document_title ?? tr('publikasi')}`}
+			onclick={(e) => {
+				e.stopPropagation();
+				if (rowMenu === p.id) { rowMenu = null; } else { positionRowMenu(e.currentTarget as HTMLElement); rowMenu = p.id; }
+			}}
+		>
+			<MoreVertical size={16} />
+		</button>
+		{#if rowMenu === p.id}
+			<div class="pub-row-menu fixed z-40 w-56 rounded-xl border py-1 shadow-lg" style="border-color: var(--border); background: var(--card, #fff); {menuPositionStyle}" role="menu" aria-label={tr('Aksi publikasi')}>
+				<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'detail')}>
+					<Eye size={14} /> {tr('Detail')}
+				</button>
+				{#if p.status === 'published' || p.status === 'waiting_partner' || p.status === 'revision'}
+					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'preview')}>
+						<Eye size={14} /> {tr('Pratinjau draf')}
+					</button>
+				{/if}
+				{#if p.status === 'revision'}
+					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'accept-revision')}>
+						<Check size={14} /> {tr('Terima Revisi')}
+					</button>
+					{#if (p.revision_reject_count ?? 0) < (p.revision_reject_limit ?? 3)}
+						<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" style="color: var(--destructive);" onclick={(e) => menuAction(e, p, 'reject')}>
+							<XCircle size={14} /> {tr('Tolak Revisi')}
+						</button>
+					{/if}
+				{/if}
+				{#if p.status === 'waiting_partner'}
+					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'edit')}>
+						<Pencil size={14} /> {tr('Edit draf')}
+					</button>
+				{/if}
+				{#if p.published_url}
+					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => { e.stopPropagation(); closeRowMenu(); window.open(p.published_url ?? '', '_blank', 'noopener'); }}>
+						<ExternalLink size={14} /> {tr('Lihat Langsung')}
+					</button>
+				{/if}
+				{#if p.status === 'partner_approved'}
+					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'url')}>
+						<Link2 size={14} /> {tr('Kirim URL')}
+					</button>
+				{/if}
+				{#if p.status === 'waiting_partner'}
+					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'publish')}>
+						<Check size={14} /> {tr('Setujui & Terbitkan')}
+					</button>
+					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'draft')}>
+						<Check size={14} /> {tr('Setujui sebagai Draf')}
+					</button>
+					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" style="color: var(--destructive);" onclick={(e) => menuAction(e, p, 'reject')}>
+						<XCircle size={14} /> {tr('Tolak')}
+					</button>
+				{/if}
+			</div>
+		{/if}
+	</div>
 {/snippet}
 
 {#if selected}
@@ -1323,9 +1446,24 @@
 							<button class="app-btn app-btn-soft" type="button" onclick={closeDraftEditor}>{tr('Tutup')}</button>
 							<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{tr('Simpan Draf')}</button>
 						</div>
-					</div>
-				</form>
-			{/if}
-		</dialog>
+				</div>
+			</form>
+		{/if}
+	</dialog>
 	</div>
 {/if}
+
+<style>
+	/* Menu aksi baris dipakai bersama tabel (desktop) dan kartu (mobile). Di
+		layar sentuh (<768px) pemicu dan item menunya minimal 44px; desktop tidak
+		berubah. */
+	@media (max-width: 767px) {
+		.pub-menu-trigger {
+			min-width: 44px;
+			min-height: 44px;
+		}
+		.pub-row-menu button[role='menuitem'] {
+			min-height: 44px;
+		}
+	}
+</style>

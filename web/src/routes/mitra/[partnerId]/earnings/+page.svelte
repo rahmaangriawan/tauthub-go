@@ -239,7 +239,7 @@
 					</div>
 				</div>
 
-				<button class="app-btn app-btn-primary ml-auto min-h-11 shrink-0 px-5" disabled={!hasPayoutAccount} onclick={() => (showWithdraw = true)}>
+				<button class="app-btn app-btn-primary md:ml-auto min-h-11 shrink-0 px-5" disabled={!hasPayoutAccount} onclick={() => (showWithdraw = true)}>
 					<Banknote size={16} />{tr("Tarik Saldo")}
 				</button>
 			</div>
@@ -271,7 +271,7 @@
 				<div class="flex flex-wrap items-center gap-2">
 					<label class="relative block">
 						<Search size={14} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-						<input class="app-input w-64 pl-9" placeholder={tr("Cari artikel, media, atau domain...")} bind:value={search} />
+						<input class="app-input w-64 max-md:w-full pl-9" placeholder={tr("Cari artikel, media, atau domain...")} bind:value={search} />
 					</label>
 					<Select
 						bind:value={dateFilter}
@@ -297,49 +297,79 @@
 					<p class="mt-1 text-xs text-muted-foreground">{tr('Penghasilan tercatat otomatis setelah artikel Anda terbit di media.')}</p>
 				</div>
 			{:else}
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="text-left text-xs text-muted-foreground">
-							<th class="px-5 py-2.5 font-medium">{tr("Artikel")}</th>
-							<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
-							<th class="px-4 py-2.5 text-right font-medium">{tr("Nilai Diterima")}</th>
-							<th class="px-4 py-2.5 text-right font-medium">{tr("Harga ke Klien")}</th>
-							<th class="px-4 py-2.5 font-medium">{tr("Status")}</th>
-							<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each filteredRows as e (e.id)}
-							<tr class="border-t">
-								<td class="px-5 py-2.5">
-									<div class="flex items-center gap-2.5">
-										<span class="flex h-8 w-8 flex-none items-center justify-center rounded-md" style="background: var(--accent);">
-											<FileText size={14} style="color: var(--primary);" />
-										</span>
-										<span class="max-w-[320px] truncate" title={e.document_title ?? ''}>{e.document_title ?? '-'}</span>
-									</div>
-								</td>
-								<td class="px-4 py-2.5">
-									<div class="flex items-center gap-2">
-										<span class="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[11px] font-semibold" style="background: var(--muted); color: var(--muted-foreground);">
-											{(e.media_name ?? '?').charAt(0).toUpperCase()}
-										</span>
-										<span class="text-muted-foreground" title={e.media_name ?? ''}>{e.media_name ?? '-'}</span>
-									</div>
-								</td>
-								<td class="px-4 py-2.5 text-right font-semibold tabular-nums">{rp(e.amount)}</td>
-								<td class="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{rp(e.client_price)}</td>
-								<td class="px-4 py-2.5">
-									<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium" style="background-color: var(--success-soft); color: var(--success);">
-										<span class="h-1.5 w-1.5 rounded-full" style="background: var(--success);"></span>
-										{statusLabel[e.status] ?? e.status}
-									</span>
-								</td>
-								<td class="whitespace-nowrap px-4 py-2.5 text-xs text-muted-foreground">{dt(e.created_at)}</td>
+				<!-- Desktop: tabel asli, tidak diubah (≥768px). -->
+				<div class="hidden md:block">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="text-left text-xs text-muted-foreground">
+								<th class="px-5 py-2.5 font-medium">{tr("Artikel")}</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
+								<th class="px-4 py-2.5 text-right font-medium">{tr("Nilai Diterima")}</th>
+								<th class="px-4 py-2.5 text-right font-medium">{tr("Harga ke Klien")}</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Status")}</th>
+								<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody>
+							{#each filteredRows as e (e.id)}
+								<tr class="border-t">
+									<td class="px-5 py-2.5">
+										<div class="flex items-center gap-2.5">
+											{@render earnDocIcon()}
+											<span class="max-w-[320px] truncate" title={e.document_title ?? ''}>{e.document_title ?? '-'}</span>
+										</div>
+									</td>
+									<td class="px-4 py-2.5">
+										{@render earnMediaCell(e)}
+									</td>
+									<td class="px-4 py-2.5 text-right font-semibold tabular-nums">{rp(e.amount)}</td>
+									<td class="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{rp(e.client_price)}</td>
+									<td class="px-4 py-2.5">
+										{@render earnStatusBadge(e)}
+									</td>
+									<td class="whitespace-nowrap px-4 py-2.5 text-xs text-muted-foreground">{dt(e.created_at)}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+
+				<!-- Mobile: setiap earning menjadi kartu vertikal (<768px). Data sama
+					dengan tabel (snippet bersama); nominal memakai tabular-nums dan
+					min-w-0 supaya tidak terpecah per digit. -->
+				<div class="flex flex-col gap-2.5 p-3 md:hidden">
+					{#each filteredRows as e (e.id)}
+						<article class="app-card p-3.5">
+							<!-- Header: ikon dokumen + judul artikel -->
+							<div class="flex items-start gap-3">
+								{@render earnDocIcon()}
+								<div class="min-w-0 flex-1">
+									<h3 class="line-clamp-3 text-[15px] font-semibold leading-snug" title={e.document_title ?? ''}>{e.document_title ?? '-'}</h3>
+								</div>
+							</div>
+							<!-- Media -->
+							<div class="mt-2.5 min-w-0">
+								{@render earnMediaCell(e)}
+							</div>
+							<!-- Ringkasan nominal -->
+							<dl class="mt-3 grid grid-cols-2 gap-3 border-t pt-3" style="border-color: var(--border);">
+								<div class="min-w-0">
+									<dt class="text-[11px] text-muted-foreground">{tr("Nilai Diterima")}</dt>
+									<dd class="mt-0.5 text-[15px] font-semibold tabular-nums">{rp(e.amount)}</dd>
+								</div>
+								<div class="min-w-0">
+									<dt class="text-[11px] text-muted-foreground">{tr("Harga ke Klien")}</dt>
+									<dd class="mt-0.5 text-[13px] font-medium tabular-nums text-muted-foreground">{rp(e.client_price)}</dd>
+								</div>
+							</dl>
+							<!-- Status & tanggal -->
+							<div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+								{@render earnStatusBadge(e)}
+								<span class="text-xs text-muted-foreground">{dt(e.created_at)}</span>
+							</div>
+						</article>
+					{/each}
+				</div>
 			{/if}
 			<div class="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3">
 				<p class="text-xs text-muted-foreground">
@@ -365,6 +395,28 @@
 		</div>
 	{/if}
 </section>
+
+{#snippet earnDocIcon()}
+	<span class="flex h-8 w-8 flex-none items-center justify-center rounded-md" style="background: var(--accent);">
+		<FileText size={14} style="color: var(--primary);" />
+	</span>
+{/snippet}
+
+{#snippet earnMediaCell(e: any)}
+	<div class="flex min-w-0 items-center gap-2">
+		<span class="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[11px] font-semibold" style="background: var(--muted); color: var(--muted-foreground);">
+			{(e.media_name ?? '?').charAt(0).toUpperCase()}
+		</span>
+		<span class="min-w-0 text-muted-foreground" title={e.media_name ?? ''}>{e.media_name ?? '-'}</span>
+	</div>
+{/snippet}
+
+{#snippet earnStatusBadge(e: any)}
+	<span class="inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium" style={statusBadge(e.status)}>
+		<span class="h-1.5 w-1.5 rounded-full" style="background: currentColor;"></span>
+		{statusLabel[e.status] ?? e.status}
+	</span>
+{/snippet}
 
 {#if showWithdraw}
 	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={(event) => event.currentTarget === event.target && (showWithdraw = false)} onkeydown={(e) => { if (e.key === 'Escape') showWithdraw = false; }}>

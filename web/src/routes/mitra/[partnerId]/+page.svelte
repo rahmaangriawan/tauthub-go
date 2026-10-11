@@ -413,11 +413,11 @@
 						{@const PubIcon = pubIcon(p.status)}
 						<div class="flex flex-col items-start justify-between gap-2 border-b px-5 py-[13px] transition-colors last:border-b-0 hover:bg-accent sm:flex-row sm:items-center sm:gap-4">
 							<div class="flex min-w-0 items-center gap-3">
-								<div class="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[8px]" style={pubIconBoxStyle(p.status)}>
+								<div class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px]" style={pubIconBoxStyle(p.status)}>
 									<PubIcon size={18} />
 								</div>
 								<div class="flex min-w-0 flex-col gap-0.5">
-									<div class="truncate text-[13.5px] leading-[1.35] font-semibold" title={p.document_title ?? tr('Artikel')}>
+									<div class="line-clamp-2 break-words text-[13.5px] leading-[1.35] font-semibold" title={p.document_title ?? tr('Artikel')}>
 										<span>{p.document_title ?? tr('Artikel')}</span>
 										{#if p.media_name}
 											<span class="font-medium" style="color: var(--primary);"> · {p.media_name}</span>
@@ -430,11 +430,11 @@
 									</div>
 								</div>
 							</div>
-							<div class="flex w-full items-center justify-between gap-3.5 border-t border-dashed pt-1.5 sm:w-auto sm:justify-end sm:border-t-0 sm:pt-0">
+							<div class="flex w-full min-w-0 items-center justify-between gap-3 border-t pt-2 sm:w-auto sm:justify-end sm:border-t-0 sm:pt-0">
 								<span class="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-[3px] text-[12px] font-semibold capitalize" style={badgeStyle(p.status)}>
 									{badgeLabel(p.status)}
 								</span>
-								<span class="min-w-[90px] text-right text-[13.5px] font-bold tabular-nums">{rp(p.partner_amount ?? 0)}</span>
+								<span class="shrink-0 text-right text-[13.5px] font-bold tabular-nums">{rp(p.partner_amount ?? 0)}</span>
 							</div>
 						</div>
 					{/each}

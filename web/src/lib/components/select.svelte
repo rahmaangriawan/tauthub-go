@@ -248,7 +248,7 @@
 		role="listbox"
 		aria-label={ariaLabel}
 		tabindex="-1"
-		style="left: {pos.left}px; top: {pos.top}px; min-width: {pos.width}px; width: {minWidth === 0 ? 'max-content' : 'auto'}; max-width: min(92vw, 360px); max-height: {menuHeight > 0 ? `${menuHeight}px` : `${menuMaxHeight}px`}; {placement === 'up' && menuHeight > 0 ? `height: ${menuHeight}px;` : ''}"
+		style="left: {pos.left}px; top: {pos.top}px; min-width: {pos.width}px; width: {minWidth === 0 ? 'max-content' : 'auto'}; max-width: min(92vw, 360px, calc(100vw - {pos.left}px - 8px)); max-height: {menuHeight > 0 ? `${menuHeight}px` : `${menuMaxHeight}px`}; {placement === 'up' && menuHeight > 0 ? `height: ${menuHeight}px;` : ''}"
 		onkeydown={onMenuKeydown}
 	>
 		{#if searchable}

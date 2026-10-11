@@ -631,7 +631,9 @@
 				<div>
 					<h3 class="text-base font-semibold">{tr("Riwayat Audit")}</h3>
 					<p class="mt-1 text-sm text-muted-foreground">{tr("Pantau hasil analisis performa website sebelumnya.")}</p>
-					<div class="app-card mt-3 overflow-x-auto">
+
+					<!-- Desktop: tabel asli, tidak diubah (≥768px). -->
+					<div class="app-card mt-3 hidden overflow-x-auto md:block">
 						<table class="w-full text-sm">
 							<thead>
 								<tr class="text-left text-xs text-muted-foreground">
@@ -649,22 +651,77 @@
 									<tr class="border-t">
 										<td class="max-w-[220px] break-all px-4 py-2.5">{h.domain}</td>
 										<td class="px-4 py-2.5">
-											<span class="rounded-full px-2 py-0.5 text-[11px]" style="background-color: var(--secondary); color: var(--muted-foreground);">{h.strategy === 'desktop' ? tr('Desktop') : tr('Mobile')}</span>
+											{@render auditStrategyBadge(h)}
 										</td>
 										<td class="whitespace-nowrap px-4 py-2.5 text-xs text-muted-foreground">{formatWibShort(h.created_at)}</td>
 										<td class="px-4 py-2.5 text-right tabular-nums" style="color: {speedScoreColor(h.performance_score)};">{h.performance_score ?? '—'}</td>
 										<td class="px-4 py-2.5 text-right tabular-nums">{h.lcp_ms != null ? `${(h.lcp_ms / 1000).toFixed(1)}s` : '—'}</td>
 										<td class="px-4 py-2.5 text-right tabular-nums">{h.cls ?? '—'}</td>
 										<td class="px-4 py-2.5 text-right">
-											<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" disabled={speedBusy} onclick={() => void viewHistoryItem(h)}>{tr("Lihat")}</button>
+											{@render auditLihatButton(h)}
 										</td>
 									</tr>
 								{/each}
 							</tbody>
 						</table>
 					</div>
+
+					<!-- Mobile: setiap riwayat audit menjadi kartu vertikal (<768px).
+						Metrik memakai grid 3 kolom repeat(3, minmax(0,1fr)); angka
+						Performance paling menonjol dengan warna skor yang sama. -->
+					<div class="mt-3 flex flex-col gap-2.5 md:hidden">
+						{#each speedHistory as h (h.id)}
+							<article class="app-card p-3.5">
+								<!-- A. Header: website + badge strategi -->
+								<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+									<h3 class="min-w-0 break-words text-[15px] font-semibold leading-snug">{h.domain}</h3>
+									{@render auditStrategyBadge(h)}
+								</div>
+								<!-- B. Tanggal audit -->
+								<p class="mt-1 text-xs text-muted-foreground">{formatWibShort(h.created_at)}</p>
+								<!-- C. Metrik performa -->
+								<div class="mt-3 grid grid-cols-3 gap-3 border-t pt-3" style="border-color: var(--border);">
+									<div class="min-w-0">
+										<p class="text-[11px] text-muted-foreground">{tr('Performance')}</p>
+										<p class="mt-0.5 text-xl font-bold tabular-nums" style="color: {speedScoreColor(h.performance_score)};">{h.performance_score ?? '—'}</p>
+									</div>
+									<div class="min-w-0">
+										<p class="text-[11px] text-muted-foreground">LCP</p>
+										<p class="mt-0.5 text-[13px] font-semibold tabular-nums">{h.lcp_ms != null ? `${(h.lcp_ms / 1000).toFixed(1)}s` : '—'}</p>
+									</div>
+									<div class="min-w-0">
+										<p class="text-[11px] text-muted-foreground">CLS</p>
+										<p class="mt-0.5 text-[13px] font-semibold tabular-nums">{h.cls ?? '—'}</p>
+									</div>
+								</div>
+								<!-- D. Aksi -->
+								<div class="mt-3">
+									{@render auditLihatButton(h)}
+								</div>
+							</article>
+						{/each}
+					</div>
 				</div>
 			{/if}
 		</div>
 	{/if}
 </section>
+
+{#snippet auditStrategyBadge(h: any)}
+	<span class="rounded-full px-2 py-0.5 text-[11px]" style="background-color: var(--secondary); color: var(--muted-foreground);">{h.strategy === 'desktop' ? tr('Desktop') : tr('Mobile')}</span>
+{/snippet}
+
+{#snippet auditLihatButton(h: any)}
+	<button class="audit-lihat app-btn app-btn-soft !px-2.5 !text-xs" disabled={speedBusy} onclick={() => void viewHistoryItem(h)}>{tr("Lihat")}</button>
+{/snippet}
+
+<style>
+	/* Tombol Lihat dipakai bersama tabel (desktop) dan kartu (mobile). Di layar
+		sentuh (<768px) target ketuknya diperbesar; desktop tidak berubah. */
+	@media (max-width: 767px) {
+		.audit-lihat {
+			min-width: 96px;
+			min-height: 44px;
+		}
+	}
+</style>

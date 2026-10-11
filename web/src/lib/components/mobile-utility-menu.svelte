@@ -52,8 +52,8 @@
 		aria-expanded={open}
 		onclick={() => (open = !open)}
 	>
-		<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-			<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.6" d="M12.01 7.3H12m.01 4.7H12m.01 4.7H12" />
+		<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+			<path fill="currentColor" d="M8 4.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5zm1 3A1.5 1.5 0 0 1 7.5 9h-3A1.5 1.5 0 0 1 3 7.5v-3A1.5 1.5 0 0 1 4.5 3h3A1.5 1.5 0 0 1 9 4.5zm7-3a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5zm1 3A1.5 1.5 0 0 1 15.5 9h-3A1.5 1.5 0 0 1 11 7.5v-3A1.5 1.5 0 0 1 12.5 3h3A1.5 1.5 0 0 1 17 4.5zm-9 5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5zm1 3A1.5 1.5 0 0 1 7.5 17h-3A1.5 1.5 0 0 1 3 15.5v-3A1.5 1.5 0 0 1 4.5 11h3A1.5 1.5 0 0 1 9 12.5zm7-3a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5zm1 3a1.5 1.5 0 0 1-1.5 1.5h-3a1.5 1.5 0 0 1-1.5-1.5v-3a1.5 1.5 0 0 1 1.5-1.5h3a1.5 1.5 0 0 1 1.5 1.5z" />
 		</svg>
 	</button>
 
@@ -113,13 +113,13 @@
 		justify-content: center;
 		width: 36px;
 		height: 32px;
-		border: 1px solid var(--border);
-		border-radius: 999px;
-		background-color: var(--accent, #eef4ff);
+		padding: 0;
+		border: 0;
+		background: transparent;
 		color: var(--foreground);
 		cursor: pointer;
 	}
-	.app-utility-more:hover { border-color: var(--primary); }
+	.app-utility-more:hover { color: var(--primary); }
 	@media (max-width: 767px) {
 		.app-utility-more-wrap { display: block; }
 	}

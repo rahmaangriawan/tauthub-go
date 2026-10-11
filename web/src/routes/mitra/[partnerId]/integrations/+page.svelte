@@ -117,12 +117,13 @@
 	{#if terms.loading}
 		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat…")}</p>
 	{:else}
-		<div class="mt-4 flex flex-wrap gap-2">
+		<!-- Mobile: tab digeser horizontal bila tidak muat; desktop tetap wrap. -->
+		<div class="mt-4 flex max-md:flex-nowrap max-md:overflow-x-auto md:flex-wrap gap-2">
 			{#each [['terms', 'Syarat & Ketentuan'], ['wordpress', 'WordPress'], ['web-custom', 'Web Custom'], ['blogger', 'Blogger']] as item (item[0])}
 				{@const value = item[0] as TabKey}
 				{@const disabled = !accepted && value !== 'terms'}
 				<button
-					class="app-btn !min-h-8 !px-3 !text-xs"
+					class="integration-tab app-btn !px-3 !text-xs max-md:shrink-0"
 					class:app-btn-primary={tab === value}
 					class:app-btn-soft={tab !== value}
 					{disabled}
@@ -181,3 +182,16 @@
 		</dialog>
 	</div>
 {/if}
+
+<style>
+	/* Tab integrasi dipakai di desktop dan mobile; di layar sentuh (<768px)
+		target ketuknya diperbesar. Desktop tetap 32px seperti sebelumnya. */
+	.integration-tab {
+		min-height: 32px;
+	}
+	@media (max-width: 767px) {
+		.integration-tab {
+			min-height: 44px;
+		}
+	}
+</style>

@@ -140,6 +140,10 @@
 		}
 		await load();
 	}
+
+	/** Warna hasil test koneksi terakhir (dipakai tabel & kartu mobile). */
+	const testTone = (row: any) =>
+		row.last_test_status === 'ok' ? 'var(--success)' : row.last_test_status === 'error' ? 'var(--destructive)' : 'var(--muted-foreground)';
 </script>
 
 <div class="app-card mt-4 overflow-x-auto">
@@ -148,7 +152,7 @@
 			<Plug size={16} />
 			<h2 class="text-sm font-semibold">Koneksi ({rows.length})</h2>
 		</div>
-		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" onclick={() => (createOpen = true)}><Plus size={13} />{tr("Tambah koneksi")}</button>
+		<button class="conn-add app-btn app-btn-soft !px-3 !text-xs" onclick={() => (createOpen = true)}><Plus size={13} />{tr("Tambah koneksi")}</button>
 	</div>
 
 	<p class="px-4 pt-3 text-xs text-muted-foreground">{tr("Koneksi WordPress / Web Custom milik partner. Publikasi ke media Anda yang ber-integrasi WordPress dikirim lewat koneksi ini, bukan koneksi brand klien.")}</p>
@@ -160,52 +164,84 @@
 	{:else if rows.length === 0}
 		<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada koneksi. Tambahkan koneksi WordPress untuk media ber-integrasi WordPress.")}</p>
 	{:else}
-		<table class="w-full text-sm">
-			<thead>
-				<tr class="text-left text-xs text-muted-foreground">
-					<th class="px-4 py-2.5 font-medium">{tr('Koneksi')}</th>
-					<th class="px-4 py-2.5 font-medium">Provider</th>
-					<th class="px-4 py-2.5 font-medium">Endpoint</th>
-					<th class="px-4 py-2.5 font-medium">Status</th>
-					<th class="px-4 py-2.5 font-medium">{tr('Test terakhir')}</th>
-					<th class="px-4 py-2.5 text-right font-medium">{tr('Aksi')}</th>
-				</tr>
-			</thead>
-			<tbody>
+			<!-- Desktop: tabel asli, tidak diubah (≥768px). -->
+			<div class="hidden md:block">
+				<table class="w-full text-sm">
+					<thead>
+						<tr class="text-left text-xs text-muted-foreground">
+							<th class="px-4 py-2.5 font-medium">{tr('Koneksi')}</th>
+							<th class="px-4 py-2.5 font-medium">Provider</th>
+							<th class="px-4 py-2.5 font-medium">Endpoint</th>
+							<th class="px-4 py-2.5 font-medium">Status</th>
+							<th class="px-4 py-2.5 font-medium">{tr('Test terakhir')}</th>
+							<th class="px-4 py-2.5 text-right font-medium">{tr('Aksi')}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each visibleRows as row (row.id)}
+							<tr class="border-t">
+								<td class="px-4 py-2.5">
+									<p class="font-medium">{row.name}</p>
+									<p class="text-xs text-muted-foreground">{row.username ?? String(row.id).slice(0, 8)}</p>
+								</td>
+								<td class="px-4 py-2.5">
+									{@render connProviderBadge(row)}
+								</td>
+								<td class="max-w-[220px] break-words px-4 py-2.5 font-mono text-[11px] text-muted-foreground">{row.base_url}</td>
+								<td class="px-4 py-2.5">
+									{@render connStatusBadge(row)}
+								</td>
+								<td class="px-4 py-2.5 text-xs" style="color: {testTone(row)};">
+									{row.last_test_message ?? tr('Belum diuji')}
+								</td>
+								<td class="px-4 py-2.5">
+									<div class="flex justify-end gap-2">
+										{@render connActionButtons(row)}
+									</div>
+								</td>
+							</tr>
+						{/each}
+						</tbody>
+					</table>
+			</div>
+
+			<!-- Mobile: setiap koneksi menjadi kartu vertikal (<768px). Pesan error
+				membungkus normal (break-words) tanpa melebarkan kartu; aksi Test dan
+				Cabut berbagi satu baris selebar kartu. -->
+			<div class="flex flex-col gap-2.5 px-4 pb-4 pt-3 md:hidden">
 				{#each visibleRows as row (row.id)}
-					<tr class="border-t">
-						<td class="px-4 py-2.5">
-							<p class="font-medium">{row.name}</p>
-							<p class="text-xs text-muted-foreground">{row.username ?? String(row.id).slice(0, 8)}</p>
-						</td>
-						<td class="px-4 py-2.5">
-							<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--secondary); color: var(--muted-foreground);">{row.provider}</span>
-						</td>
-						<td class="max-w-[220px] break-words px-4 py-2.5 font-mono text-[11px] text-muted-foreground">{row.base_url}</td>
-						<td class="px-4 py-2.5">
-							<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: {row.status === 'active' ? 'var(--success-soft)' : 'var(--secondary)'}; color: {row.status === 'active' ? 'var(--success)' : 'var(--muted-foreground)'};">{row.status}</span>
-						</td>
-						<td class="px-4 py-2.5 text-xs" style="color: {row.last_test_status === 'ok' ? 'var(--success)' : row.last_test_status === 'error' ? 'var(--destructive)' : 'var(--muted-foreground)'};">
-							{row.last_test_message ?? tr('Belum diuji')}
-						</td>
-						<td class="px-4 py-2.5">
-							<div class="flex justify-end gap-2">
-								{#if row.status === 'active'}
-									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" disabled={testingId !== null} onclick={() => test(row)}>
-										{testingId === row.id ? 'Menguji…' : 'Test'}
-									</button>
-									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" style="color: var(--destructive);" onclick={() => revoke(row)}>{tr('Cabut')}</button>
-								{:else}
-									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" style="color: var(--destructive);" onclick={() => removeConnection(row)}>
-										<Trash2 size={12} />{tr("Hapus")}</button>
-								{/if}
+					<article class="app-card p-3.5">
+						<!-- A. Header: nama koneksi + identitas -->
+						<div class="min-w-0">
+							<h3 class="break-words text-[15px] font-semibold leading-snug">{row.name}</h3>
+							<p class="mt-0.5 text-xs text-muted-foreground">{row.username ?? String(row.id).slice(0, 8)}</p>
+						</div>
+						<!-- Badge provider + status -->
+						<div class="mt-2 flex flex-wrap items-center gap-1.5">
+							{@render connProviderBadge(row)}
+							{@render connStatusBadge(row)}
+						</div>
+						<!-- B. Endpoint & hasil test terakhir -->
+						<dl class="mt-3 flex flex-col gap-2.5 border-t pt-3" style="border-color: var(--border);">
+							<div class="min-w-0">
+								<dt class="text-[11px] text-muted-foreground">Endpoint</dt>
+								<dd class="mt-0.5 min-w-0 break-words font-mono text-[11px] text-muted-foreground">{row.base_url}</dd>
 							</div>
-						</td>
-					</tr>
+							{#if row.last_test_message}
+								<div class="min-w-0">
+									<dt class="text-[11px] text-muted-foreground">{tr('Test terakhir')}</dt>
+									<dd class="mt-0.5 min-w-0 break-words text-xs leading-relaxed" style="color: {testTone(row)};">{row.last_test_message}</dd>
+								</div>
+							{/if}
+						</dl>
+						<!-- D. Aksi -->
+						<div class="mt-3 grid grid-cols-2 gap-2">
+							{@render connActionButtons(row)}
+						</div>
+					</article>
 				{/each}
-				</tbody>
-			</table>
-	{/if}
+			</div>
+		{/if}
 
 	{#if rows.length > PAGE_SIZE}
 		<div class="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
@@ -300,3 +336,38 @@
 		</dialog>
 	</div>
 {/if}
+
+{#snippet connProviderBadge(row: any)}
+	<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--secondary); color: var(--muted-foreground);">{row.provider}</span>
+{/snippet}
+
+{#snippet connStatusBadge(row: any)}
+	<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: {row.status === 'active' ? 'var(--success-soft)' : 'var(--secondary)'}; color: {row.status === 'active' ? 'var(--success)' : 'var(--muted-foreground)'};">{row.status}</span>
+{/snippet}
+
+{#snippet connActionButtons(row: any)}
+	{#if row.status === 'active'}
+		<button class="conn-btn app-btn app-btn-soft !px-2.5 !text-xs" disabled={testingId !== null} onclick={() => test(row)}>
+			{testingId === row.id ? 'Menguji…' : 'Test'}
+		</button>
+		<button class="conn-btn app-btn app-btn-soft !px-2.5 !text-xs" style="color: var(--destructive);" onclick={() => revoke(row)}>{tr('Cabut')}</button>
+	{:else}
+		<button class="conn-btn app-btn app-btn-soft !px-2.5 !text-xs" style="color: var(--destructive);" onclick={() => removeConnection(row)}>
+			<Trash2 size={12} />{tr("Hapus")}</button>
+	{/if}
+{/snippet}
+
+<style>
+	/* Kontrol koneksi dipakai bersama tabel (desktop) dan kartu (mobile). Di
+		layar sentuh (<768px) target ketuknya diperbesar; desktop tidak berubah. */
+	.conn-add,
+	.conn-btn {
+		min-height: 32px;
+	}
+	@media (max-width: 767px) {
+		.conn-add,
+		.conn-btn {
+			min-height: 44px;
+		}
+	}
+</style>

@@ -984,7 +984,8 @@
 			</p>
 		</div>
 	{:else}
-		<div class="app-card mt-4 overflow-x-auto">
+		<!-- Desktop: tabel asli, tidak diubah (≥768px). -->
+		<div class="app-card mt-4 hidden overflow-x-auto md:block">
 			<table class="w-full text-sm">
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
@@ -1066,106 +1067,20 @@
 										<span class="font-medium">{m.name}</span>
 									{/if}
 								</div>
-								{#if m.contoh_artikel_url}
-									<a class="mt-0.5 inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={m.contoh_artikel_url} target="_blank" rel="noreferrer">{tr('Contoh artikel')} <ExternalLink size={10} /></a>
-								{:else}
-									<button type="button" class="mt-0.5 inline-flex items-center gap-1 text-[11px]" style="color: var(--primary);" onclick={() => openContoh(m)}>
-										<Plus size={11} /> {tr('Tambah contoh artikel')}
-									</button>
-								{/if}
+								{@render contohLink(m)}
 							</td>
 							<td class="px-4 py-2.5">
-								{#if m.domain_verified}
-									<span
-										class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
-										style="background: var(--accent); color: var(--accent-foreground);"
-										title={tr('Kepemilikan domain terverifikasi')}
-									>
-										<ShieldCheck size={12} /> {tr('Terverifikasi')}
-									</span>
-								{:else}
-									<button
-										type="button"
-										class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
-										onclick={() => void openDomainVerify(m)}
-									>
-										<ShieldCheck size={12} /> {tr('Verifikasi')}
-									</button>
-								{/if}
+								{@render domainVerify(m)}
 							</td>
 							<td class="px-4 py-2.5 text-muted-foreground">{m.categories.join(', ') || '—'}</td>
 								<td class="px-4 py-2.5">
 									<div class="flex flex-col items-start gap-1">
-										{#if (m.publication_mode ?? 'draft') === 'publish'}
-											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft, #e8f7ee); color: var(--success);">{tr('Mode Integrasi')}</span>
-										{:else}
-											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">{tr('Mode Manual')}</span>
-										{/if}
-									{#if autoPublishEnabled}
-										<div class="flex items-center gap-1">
-											<label class="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
-												<input
-													type="checkbox"
-													checked={m.auto_publish}
-													disabled={autoBusy === m.id}
-													onchange={(e) => void toggleAutoPublish(m, (e.currentTarget as HTMLInputElement).checked)}
-													aria-label={`${tr('Mode otomatis untuk')} ${m.name}`}
-												/>
-												{tr('Mode Otomatis')}
-											</label>
-											<Tooltip.Provider delayDuration={0}>
-												<Tooltip.Root>
-													<Tooltip.Trigger>
-														{#snippet child({ props })}
-															<button
-																{...props}
-																type="button"
-																class="inline-flex cursor-help items-center text-muted-foreground"
-																aria-label={autoPublishHint()}
-															>
-																<CircleAlert size={12} />
-															</button>
-														{/snippet}
-													</Tooltip.Trigger>
-													<Tooltip.Portal>
-														<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
-															<Tooltip.Arrow class="uiTipArrow" />
-															{autoPublishHint()}
-														</Tooltip.Content>
-													</Tooltip.Portal>
-												</Tooltip.Root>
-											</Tooltip.Provider>
-										</div>
-									{/if}
-								</div>
-							</td>
+										{@render modeBadge(m)}
+										{@render autoPublish(m, true)}
+									</div>
+								</td>
 							<td class="px-4 py-2.5">
-								{#if m.dewan_pers_status === 'verified'}
-									<span
-										class="inline-flex h-5 w-5 items-center justify-center rounded-full"
-										style="background: var(--primary); color: var(--primary-foreground, #fff);"
-										role="img"
-										title={tr('Terverifikasi')}
-										aria-label={tr('Terverifikasi')}
-									>
-										<Check size={13} />
-									</span>
-								{:else if m.dewan_pers_status === 'pending' || m.dewan_pers_status === 'rejected' || m.dewan_pers_status === 'conflict'}
-									<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid {dpBadge(m.dewan_pers_status).tone}; color: {dpBadge(m.dewan_pers_status).tone};">{dpBadge(m.dewan_pers_status).label}</span>
-									{:else}
-										<span
-											class="inline-flex h-5 w-5 items-center justify-center rounded-full"
-											style="background: color-mix(in srgb, var(--destructive) 14%, transparent); color: var(--destructive);"
-											role="img"
-											title={tr('Tanpa Dewan Pers')}
-											aria-label={tr('Tanpa Dewan Pers')}
-										>
-											<X size={13} />
-										</span>
-									{/if}
-								{#if m.dewan_pers_status === 'rejected' && m.dewan_pers_rejection_reason}
-									<span class="mt-1 block max-w-[180px] text-[11px]" style="color: var(--destructive);">{m.dewan_pers_rejection_reason}</span>
-								{/if}
+								{@render dewanPers(m)}
 							</td>
 							<td class="px-4 py-2.5 tabular-nums">{rp(m.price)}</td>
 							<td class="px-4 py-2.5">
@@ -1184,82 +1099,105 @@
 							</td>
 							<td class="px-4 py-2.5">
 								<span class="text-xs">{platLabel(m)}</span>
-								{#if m.has_connection}
-									<span class="mt-0.5 block text-[11px]" style="color: var(--success);">{tr('Koneksi siap')}</span>
-								{/if}
-								{#if (m.integration_type === 'blogger' && m.blogger_status !== 'connected') || (m.integration_type === 'custom_web' && m.custom_web_status !== 'connected')}
-									<span class="mt-0.5 block text-[11px]" style="color: var(--destructive);">{tr('Belum terhubung')}</span>
-								{/if}
+								{@render connectionStatus(m)}
 							</td>
 							<td class="px-4 py-2.5">
-								<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
-									{statusLabel[m.status] ?? m.status}
-								</span>
-								{#if m.pending_publications > 0}
-									<span class="ml-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">
-										{m.pending_publications} {tr('menunggu')}
-									</span>
-								{/if}
-								{#if m.status === 'rejected' && m.rejection_reason}
-									<span class="mt-1 block max-w-[200px] text-[11px]" style="color: var(--destructive);">{tr('Alasan')}: {m.rejection_reason}</span>
-								{/if}
+								{@render statusBadges(m)}
+								{@render statusRejection(m)}
 							</td>
 							<td class="px-4 py-2.5 text-right">
-								{#if m.status === 'archived'}
-									<div class="flex items-center justify-end gap-2">
-										<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--muted); color: var(--muted-foreground);">{tr('Terarsip')}</span>
-										<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" onclick={() => restore(m)}><RotateCcw size={13} /> {tr('Pulihkan')}</button>
-									</div>
-								{:else}
-									<div class="relative inline-block text-right">
-										<button
-											type="button"
-											class="rounded-lg p-1.5 hover:bg-secondary"
-											aria-label={`${tr('Aksi untuk')} ${m.name}`}
-											aria-haspopup="menu"
-											aria-expanded={openMenu === m.id}
-											onclick={(e) => {
-												e.stopPropagation();
-												if (openMenu === m.id) { openMenu = null; } else { positionMenu(e.currentTarget as HTMLElement); openMenu = m.id; }
-											}}
-										>
-											<MoreVertical size={16} />
-										</button>
-										{#if openMenu === m.id}
-											<div
-												class="fixed z-40 w-52 rounded-xl border py-1 shadow-lg"
-												style="border-color: var(--border); background: var(--card, #fff); {menuPositionStyle}"
-												role="menu"
-												aria-label={`${tr('Menu aksi')} ${m.name}`}
-											>
-												{#if m.status === 'rejected'}
-													<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); void resubmit(m); }}>
-														<RotateCcw size={14} /> {tr('Ajukan Kembali')}
-													</button>
-												{/if}
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); openDewanPers(m); }}>
-													<BadgeCheck size={14} /> {tr('Dewan Pers')}
-												</button>
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); openEdit(m); }}>
-													<Pencil size={14} /> Edit
-												</button>
-												{#if m.integration_type === 'tulisio_api'}
-													<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); void testConnection(m); }}>
-														<Plug size={14} /> {tr('Test Koneksi')}
-													</button>
-												{/if}
-												<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" style="color: var(--destructive);" onclick={() => { closeMenu(); void archive(m); }}>
-													<Trash2 size={14} /> {tr('Hapus')}
-												</button>
-											</div>
-										{/if}
-									</div>
-								{/if}
+								{@render rowActions(m)}
 							</td>
 						</tr>
 					{/each}
 				</tbody>
 			</table>
+		</div>
+
+		<!-- Mobile: setiap media menjadi kartu vertikal (<768px). Data sama dengan
+			tabel (variabel & snippet bersama), hanya representasinya yang berbeda.
+			Grid memakai repeat(2, minmax(0,1fr)) + min-w-0 supaya kolom menyusut
+			aman tanpa teks terpecah per karakter. -->
+		<div class="mt-4 flex flex-col gap-2.5 md:hidden">
+			{#each filtered as m (m.id)}
+				<article class="app-card p-3.5">
+					<!-- A. Header: domain + status, kategori, contoh artikel, menu aksi -->
+					<div class="flex items-start justify-between gap-2">
+						<div class="min-w-0">
+							<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+								{#if m.website_url}
+									<a class="break-words text-[15px] font-semibold leading-snug hover:underline" href={m.website_url} target="_blank" rel="noreferrer">{mediaDomainLabel(m.website_url, m.name)}</a>
+								{:else}
+									<span class="break-words text-[15px] font-semibold leading-snug">{m.name}</span>
+								{/if}
+								{@render statusBadges(m)}
+							</div>
+							{#if m.categories.length}
+								<div class="mt-1.5 flex flex-wrap gap-1">
+									{#each m.categories as c (c)}
+										<span class="rounded px-1.5 py-0.5 text-[10px] font-medium" style="background: var(--muted); color: var(--muted-foreground);">{c}</span>
+									{/each}
+								</div>
+							{/if}
+							{@render statusRejection(m)}
+							<div class="mt-1.5 flex min-w-0">
+								{@render contohLink(m)}
+							</div>
+						</div>
+						{@render rowActions(m)}
+					</div>
+
+					<!-- B. Informasi utama -->
+					<dl class="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-3">
+						<div class="min-w-0">
+							<dt class="text-[11px] text-muted-foreground">{tr('Harga')}</dt>
+							<dd class="mt-0.5 text-[13px] font-semibold tabular-nums">{rp(m.price)}</dd>
+						</div>
+						<div class="min-w-0">
+							<dt class="text-[11px] text-muted-foreground">{tr('Kualitas')}</dt>
+							<dd class="mt-0.5 text-[13px] font-semibold tabular-nums">
+								{#if m.health_score != null}
+									<span title={JSON.stringify(m.health_breakdown ?? {})}>{m.health_score}</span>
+								{:else}
+									<span class="text-[11px] font-normal text-muted-foreground">{tr('Belum dihitung')}</span>
+								{/if}
+							</dd>
+						</div>
+						<div class="min-w-0">
+							<dt class="text-[11px] text-muted-foreground">DA</dt>
+							<dd class="mt-0.5 text-[13px] font-semibold tabular-nums">{#if m.seo_da != null}{m.seo_da}{:else}<span class="font-normal text-muted-foreground">—</span>{/if}</dd>
+						</div>
+						<div class="min-w-0">
+							<dt class="text-[11px] text-muted-foreground">Platform</dt>
+							<dd class="mt-0.5 text-[13px] font-semibold">{platLabel(m)}</dd>
+							<div class="font-normal">{@render connectionStatus(m)}</div>
+						</div>
+					</dl>
+
+					<!-- C. Informasi pengelolaan media -->
+					<div class="mt-3.5 border-t pt-3.5" style="border-color: var(--border);">
+						<dl class="grid grid-cols-2 gap-x-3 gap-y-3">
+							<div class="min-w-0">
+								<dt class="text-[11px] text-muted-foreground">{tr('Domain')}</dt>
+								<dd class="mt-1">{@render domainVerify(m)}</dd>
+							</div>
+							<div class="min-w-0">
+								<dt class="text-[11px] text-muted-foreground">{tr('Mode Publikasi')}</dt>
+								<dd class="mt-1">{@render modeBadge(m)}</dd>
+							</div>
+							<div class="min-w-0">
+								<dt class="text-[11px] text-muted-foreground">{tr('Dewan Pers')}</dt>
+								<dd class="mt-1">{@render dewanPers(m)}</dd>
+							</div>
+							{#if autoPublishEnabled}
+								<div class="min-w-0 self-center">
+									{@render autoPublish(m, true)}
+								</div>
+							{/if}
+						</dl>
+					</div>
+				</article>
+			{/each}
 		</div>
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 			<span class="text-xs text-muted-foreground">{tr('Menampilkan')} {items.length} {tr('dari')} {total} {tr('media')}</span>
@@ -1270,6 +1208,192 @@
 		</div>
 	{/if}
 </section>
+
+{#snippet contohLink(m: Media)}
+	{#if m.contoh_artikel_url}
+		<a class="mt-0.5 inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={m.contoh_artikel_url} target="_blank" rel="noreferrer">{tr('Contoh artikel')} <ExternalLink size={10} /></a>
+	{:else}
+		<button type="button" class="media-contoh mt-0.5 inline-flex items-center gap-1 text-[11px]" style="color: var(--primary);" onclick={() => openContoh(m)}>
+			<Plus size={11} /> {tr('Tambah contoh artikel')}
+		</button>
+	{/if}
+{/snippet}
+
+{#snippet domainVerify(m: Media)}
+	{#if m.domain_verified}
+		<span
+			class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+			style="background: var(--accent); color: var(--accent-foreground);"
+			title={tr('Kepemilikan domain terverifikasi')}
+		>
+			<ShieldCheck size={12} /> {tr('Terverifikasi')}
+		</span>
+	{:else}
+		<button
+			type="button"
+			class="media-verify app-btn app-btn-soft !px-2.5 !text-xs"
+			onclick={() => void openDomainVerify(m)}
+		>
+			<ShieldCheck size={12} /> {tr('Verifikasi')}
+		</button>
+	{/if}
+{/snippet}
+
+{#snippet modeBadge(m: Media)}
+	{#if (m.publication_mode ?? 'draft') === 'publish'}
+		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft, #e8f7ee); color: var(--success);">{tr('Mode Integrasi')}</span>
+	{:else}
+		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">{tr('Mode Manual')}</span>
+	{/if}
+{/snippet}
+
+{#snippet autoPublish(m: Media, showLabel: boolean)}
+	{#if autoPublishEnabled}
+		<div class="flex items-center gap-1">
+			<label class="media-auto-label inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+				<input
+					type="checkbox"
+					class="media-auto-check"
+					checked={m.auto_publish}
+					disabled={autoBusy === m.id}
+					onchange={(e) => void toggleAutoPublish(m, (e.currentTarget as HTMLInputElement).checked)}
+					aria-label={`${tr('Mode otomatis untuk')} ${m.name}`}
+				/>
+				{#if showLabel}{tr('Mode Otomatis')}{/if}
+			</label>
+			<Tooltip.Provider delayDuration={0}>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							<button
+								{...props}
+								type="button"
+								class="inline-flex cursor-help items-center text-muted-foreground"
+								aria-label={autoPublishHint()}
+							>
+								<CircleAlert size={12} />
+							</button>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Portal>
+						<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+							<Tooltip.Arrow class="uiTipArrow" />
+							{autoPublishHint()}
+						</Tooltip.Content>
+					</Tooltip.Portal>
+				</Tooltip.Root>
+			</Tooltip.Provider>
+		</div>
+	{/if}
+{/snippet}
+
+{#snippet dewanPers(m: Media)}
+	{#if m.dewan_pers_status === 'verified'}
+		<span
+			class="inline-flex h-5 w-5 items-center justify-center rounded-full"
+			style="background: var(--primary); color: var(--primary-foreground, #fff);"
+			role="img"
+			title={tr('Terverifikasi')}
+			aria-label={tr('Terverifikasi')}
+		>
+			<Check size={13} />
+		</span>
+	{:else if m.dewan_pers_status === 'pending' || m.dewan_pers_status === 'rejected' || m.dewan_pers_status === 'conflict'}
+		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid {dpBadge(m.dewan_pers_status).tone}; color: {dpBadge(m.dewan_pers_status).tone};">{dpBadge(m.dewan_pers_status).label}</span>
+		{:else}
+			<span
+				class="inline-flex h-5 w-5 items-center justify-center rounded-full"
+				style="background: color-mix(in srgb, var(--destructive) 14%, transparent); color: var(--destructive);"
+				role="img"
+				title={tr('Tanpa Dewan Pers')}
+				aria-label={tr('Tanpa Dewan Pers')}
+			>
+				<X size={13} />
+			</span>
+		{/if}
+	{#if m.dewan_pers_status === 'rejected' && m.dewan_pers_rejection_reason}
+		<span class="mt-1 block max-w-[180px] text-[11px]" style="color: var(--destructive);">{m.dewan_pers_rejection_reason}</span>
+	{/if}
+{/snippet}
+
+{#snippet connectionStatus(m: Media)}
+	{#if m.has_connection}
+		<span class="mt-0.5 block text-[11px]" style="color: var(--success);">{tr('Koneksi siap')}</span>
+	{/if}
+	{#if (m.integration_type === 'blogger' && m.blogger_status !== 'connected') || (m.integration_type === 'custom_web' && m.custom_web_status !== 'connected')}
+		<span class="mt-0.5 block text-[11px]" style="color: var(--destructive);">{tr('Belum terhubung')}</span>
+	{/if}
+{/snippet}
+
+{#snippet statusBadges(m: Media)}
+	<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
+		{statusLabel[m.status] ?? m.status}
+	</span>
+	{#if m.pending_publications > 0}
+		<span class="ml-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">
+			{m.pending_publications} {tr('menunggu')}
+		</span>
+	{/if}
+{/snippet}
+
+{#snippet statusRejection(m: Media)}
+	{#if m.status === 'rejected' && m.rejection_reason}
+		<span class="mt-1 block max-w-[200px] text-[11px]" style="color: var(--destructive);">{tr('Alasan')}: {m.rejection_reason}</span>
+	{/if}
+{/snippet}
+
+{#snippet rowActions(m: Media)}
+	{#if m.status === 'archived'}
+		<div class="flex items-center justify-end gap-2">
+			<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--muted); color: var(--muted-foreground);">{tr('Terarsip')}</span>
+			<button class="media-restore app-btn app-btn-soft !px-2.5 !text-xs" onclick={() => restore(m)}><RotateCcw size={13} /> {tr('Pulihkan')}</button>
+		</div>
+	{:else}
+		<div class="relative inline-block text-right">
+			<button
+				type="button"
+				class="media-menu-trigger inline-flex items-center justify-center rounded-lg p-1.5 hover:bg-secondary"
+				aria-label={`${tr('Aksi untuk')} ${m.name}`}
+				aria-haspopup="menu"
+				aria-expanded={openMenu === m.id}
+				onclick={(e) => {
+					e.stopPropagation();
+					if (openMenu === m.id) { openMenu = null; } else { positionMenu(e.currentTarget as HTMLElement); openMenu = m.id; }
+				}}
+			>
+				<MoreVertical size={16} />
+			</button>
+			{#if openMenu === m.id}
+				<div
+					class="media-row-menu fixed z-40 w-52 rounded-xl border py-1 shadow-lg"
+					style="border-color: var(--border); background: var(--card, #fff); {menuPositionStyle}"
+					role="menu"
+					aria-label={`${tr('Menu aksi')} ${m.name}`}
+				>
+					{#if m.status === 'rejected'}
+						<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); void resubmit(m); }}>
+							<RotateCcw size={14} /> {tr('Ajukan Kembali')}
+						</button>
+					{/if}
+					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); openDewanPers(m); }}>
+						<BadgeCheck size={14} /> {tr('Dewan Pers')}
+					</button>
+					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); openEdit(m); }}>
+						<Pencil size={14} /> Edit
+					</button>
+					{#if m.integration_type === 'tulisio_api'}
+						<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); void testConnection(m); }}>
+							<Plug size={14} /> {tr('Test Koneksi')}
+						</button>
+					{/if}
+					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" style="color: var(--destructive);" onclick={() => { closeMenu(); void archive(m); }}>
+						<Trash2 size={14} /> {tr('Hapus')}
+					</button>
+				</div>
+			{/if}
+		</div>
+	{/if}
+{/snippet}
 
 {#if showForm}
 	<div
@@ -1762,9 +1886,40 @@
 				</label>
 				<div class="flex justify-end gap-2">
 					<button class="app-btn app-btn-soft" type="button" onclick={() => (contohTarget = null)}>{tr('Batal')}</button>
-					<button class="app-btn app-btn-primary" type="submit" disabled={contohBusy}>{contohBusy ? tr('Menyimpan…') : tr('Simpan')}</button>
-				</div>
-			</form>
-		</dialog>
-	</div>
+				<button class="app-btn app-btn-primary" type="submit" disabled={contohBusy}>{contohBusy ? tr('Menyimpan…') : tr('Simpan')}</button>
+			</div>
+		</form>
+	</dialog>
+</div>
 {/if}
+
+<style>
+	/* Kontrol baris dipakai bersama tabel (desktop) dan kartu (mobile). Di layar
+		sentuh (<768px) target ketuknya dijamin minimal 44px; desktop tidak berubah. */
+	@media (max-width: 767px) {
+		.media-menu-trigger {
+			min-width: 44px;
+			min-height: 44px;
+		}
+		.media-row-menu button[role='menuitem'] {
+			min-height: 44px;
+		}
+		.media-verify {
+			min-height: 44px;
+		}
+		.media-contoh {
+			min-height: 44px;
+		}
+		.media-auto-label {
+			width: 100%;
+			min-height: 44px;
+		}
+		.media-restore {
+			min-height: 44px;
+		}
+		.media-auto-check {
+			width: 18px;
+			height: 18px;
+		}
+	}
+</style>
