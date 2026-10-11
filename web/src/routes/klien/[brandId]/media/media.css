@@ -1671,7 +1671,9 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   .modernTd { padding: 12px 10px; }
   .modernTopBar { gap: 8px; padding: 10px; }
   .modernSearchWrap { min-width: 0; flex: 1 1 auto; }
-  .actionBtnGroup { gap: 6px; }
+  /* Jarak tombol aksi tidak dirapatkan di HP: 6px membuat tombol Detail
+     berdempetan dengan ikon bookmark di sebelahnya. */
+  .actionBtnGroup { gap: 8px; }
 
   /* Bar seleksi: sidebar disembunyikan (<768px) → menempel penuh & membungkus. */
   .selectedBottomBar { left: 0; padding: 12px 14px; flex-wrap: wrap; gap: 10px 16px; }
@@ -1811,7 +1813,9 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
    (min-width di .mediaRowCol) dan domain/meta boleh membungkus. */
 @media (max-width: 379px) {
   .modernTh, .modernTd { padding: 10px 6px; }
-  .actionBtnGroup { gap: 4px; }
+  /* Jarak antar tombol aksi tetap lega (8px) — yang dirapatkan hanya padding
+     sel dan padding dalam tombol, bukan jarak antar kontrol. */
+  .actionBtnGroup { gap: 8px; }
   .viewDetailBtn { padding: 6px 8px; gap: 3px; }
   .mediaRowCol { min-width: 0; grid-template-columns: minmax(0, 1fr) max-content; }
   .mediaHeading { white-space: normal; overflow-wrap: anywhere; }
