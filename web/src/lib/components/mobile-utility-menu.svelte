@@ -133,16 +133,18 @@
 		background: transparent;
 		cursor: default;
 	}
-	/* Dropdown menempel di bawah tombol, rata kanan — bukan sheet dari bawah. */
+	/* Dropdown jadi panel tetap di bawah header aplikasi, dijepit 12px dari tiap
+	   sisi viewport. Anchor absolute terhadap tombol bisa keluar layar di ponsel
+	   sempit (tombol dekat tepi kiri/kanan), dan itu tidak boleh terjadi. */
 	.app-utility-menu {
-		position: absolute;
-		top: calc(100% + 8px);
-		right: 0;
+		position: fixed;
+		top: 68px;
+		right: 12px;
+		left: 12px;
 		z-index: 1150;
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		min-width: 210px;
 		padding: 10px;
 		border: 1px solid var(--border);
 		border-radius: 12px;
