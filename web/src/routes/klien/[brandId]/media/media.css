@@ -1637,16 +1637,60 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   overflow-wrap: anywhere;
 }
 
-/* ── Responsif: tabel katalog & bar seleksi di layar kecil ─────────────────
-   Kolom tabel (1 checkbox, 2 Nama Media, 3 Kategori, 4 Trafik, 5 DA,
-   6 AI Trust, 7 AI Cited, 8 Waktu Rilis, 9 Harga, 10 Aksi). Kolom sekunder
-   disembunyikan bertahap agar baris tetap terbaca tanpa scroll horizontal. */
+/* Aturan lama (≤1024) tetap berlaku untuk tabel lain yang memakai kelas
+   sama di luar halaman ini (mis. matchmaker) — jadi perilakunya tidak berubah. */
 @media (max-width: 1024px) {
   .modernTable th:nth-child(5), .modernTable td:nth-child(5),
   .modernTable th:nth-child(6), .modernTable td:nth-child(6),
   .modernTable th:nth-child(7), .modernTable td:nth-child(7) {
     display: none;
   }
+}
+
+/* Katalog media: sembunyikan DA/AI Trust/AI Cited sampai 1279px. Di
+   1025-1279 lebar konten (±470-750px setelah sidebar) tidak cukup untuk 10
+   kolom — sebelumnya semua kolom tampil dan tabel meluber hingga seluruh
+   halaman ikut menggulir. Tujuh kolom sisanya memakai seluruh lebar konten
+   secara proporsional (auto layout + sel membungkus dari aturan global
+   `main table` di app.css), tanpa scroll horizontal. */
+@media (max-width: 1279px) {
+  .katalogMedia .modernTable th:nth-child(5), .katalogMedia .modernTable td:nth-child(5),
+  .katalogMedia .modernTable th:nth-child(6), .katalogMedia .modernTable td:nth-child(6),
+  .katalogMedia .modernTable th:nth-child(7), .katalogMedia .modernTable td:nth-child(7) {
+    display: none;
+  }
+}
+
+/* Tablet (769-1279px): tujuh kolom tersisa butuh ±950px (header kolom
+   nowrap) sementara konten hanya ±470-750px — jadi gulir horizontal terjadi
+   DI DALAM kartu tabel, bukan melar seluruh halaman. Sticky header kolom
+   dikorbankan hanya di rentang ini; mobile (≤768) tetap overflow: visible
+   agar header kolom menempel, dan desktop (≥1280) tidak tersentuh. */
+@media (min-width: 769px) and (max-width: 1279px) {
+  .katalogMedia .tableWrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Header kolom sticky menempel ke bawah bar aplikasi, bukan ke tepi kartu.
+     Saat halaman belum digulir itu membuat kepala tabel tampil 65px di bawah
+     tepi atas kartu. Di rentang ini header tidak perlu sticky: kartu tabel
+     sudah menggulir sendiri. */
+  .katalogMedia .modernTable thead th {
+    position: static;
+  }
+}
+
+/* Desktop 1280–1439: sepuluh kolom dipadatkan agar muat di kartu ±945px tanpa
+   gulir horizontal dan tanpa menghilangkan kolom. Padding sel 14px → 8px dan
+   jarak tombol aksi 8px → 6px. Overflow tabel tetap visible supaya sticky
+   header kolom tidak terputus. */
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .katalogMedia .modernTable th,
+  .katalogMedia .modernTable td {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .katalogMedia .actionBtnGroup { gap: 6px; }
 }
 
 @media (max-width: 768px) {
