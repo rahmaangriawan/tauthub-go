@@ -740,37 +740,3 @@ dialog.app-card {
   text-align: left;
   color: var(--muted-foreground);
 }
-
-/* ── Fondasi responsif global ───────────────────────────────────────────────
-   Sumber overflow paling umum di aplikasi ini adalah anak flex/grid yang tidak
-   boleh menyusut (min-width default `auto`), sehingga parent ikut melebar dari
-   viewport. Perbaikan di sini berlaku untuk SEMUA halaman karena memakai
-   kerangka bersama (.app-shell / .app-content). */
-.app-shell,
-.app-content { max-width: 100%; min-width: 0; }
-.app-content > * { min-width: 0; max-width: 100%; }
-/* Anak flex yang memuat teks panjang (judul, nama media, dsb.). */
-.app-content :where(.min-w-0-important) { min-width: 0; }
-
-@media (max-width: 1023px) {
-  /* Tabel lebar (mis. halaman admin ber-`min-width: 1180px`) harus menggulir di
-     dalam container-nya sendiri, bukan menyeret seluruh halaman. */
-  .app-content .app-card,
-  .app-content .tableWrap,
-  .app-content .overflow-x-auto { max-width: 100%; }
-  .app-content .tableWrap,
-  .app-content .overflow-x-auto {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  /* Kontrol toolbar/form tidak boleh melampaui lebar induknya. */
-  .app-content :where(input, select, textarea, .app-btn) { max-width: 100%; }
-}
-
-/* Mobile: lebar minimum tetap (mis. Tailwind `min-w-[200px]` pada baris form,
-   input, atau label) sering memaksa baris lebih lebar dari layar. Di HP biarkan
-   elemen itu menyusut mengikuti ruang yang ada. */
-@media (max-width: 767px) {
-  .app-content :where([class*="min-w-["], [style*="min-width"]) { min-width: 0; }
-  .app-content :where([class*="max-w-["], [style*="max-width"]) { max-width: 100%; }
-}
