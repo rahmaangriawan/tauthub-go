@@ -3540,6 +3540,7 @@ export const PHRASE_EN: Record<string, string> = {
 	"Menampilkan {n} dari {total} entri": "Showing {n} of {total} entries",
 	"Jenis artikel Editorial tidak menyematkan tautan apa pun sesuai standar redaksi berita. Apabila Anda ingin menggunakan tautan & anchor, silakan pilih jenis artikel {jenis}.": "Editorial articles do not embed any links, in line with newsroom standards. If you would like to use links & anchors, please choose the {jenis} article type.",
 	"Gunakan jenis artikel ini": "Use this article type",
+	"Cek Manual Maks. 1x Sehari": "Manual check max. 1x per day",
 };
 
 /**

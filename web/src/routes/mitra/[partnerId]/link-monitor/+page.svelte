@@ -99,6 +99,13 @@
 		unknown: tr('Belum diperiksa')
 	});
 	const healthy = (s: string | null) => s === 'live' || s === 'ok';
+	/** Nada pill kesehatan domain untuk kartu mobile (warna semantik design system). */
+	const healthTone = (s: string | null) =>
+		s === 'live'
+			? { bg: 'var(--success-soft)', fg: 'var(--success)' }
+			: s === 'unreachable' || s === 'token_missing'
+				? { bg: 'var(--warning-soft, #fdf3e3)', fg: 'var(--warning, #a15c00)' }
+				: { bg: 'var(--muted)', fg: 'var(--muted-foreground)' };
 	const healthLabel: Record<string, string> = $derived({ live: tr('Aktif'), unreachable: 'Tidak terjangkau', unknown: tr('Belum diperiksa'), token_missing: 'Token hilang' });
 	const mediaNames = $derived([...new Set(domains.map((d) => d.name).filter(Boolean))] as string[]);
 </script>
@@ -194,13 +201,14 @@
 				</div>
 			{/if}
 
-			<div class="app-card mt-3 overflow-x-auto">
-				{#if publications.length === 0}
-					<div class="px-4 py-10 text-center">
-						<TriangleAlert size={26} class="mx-auto text-muted-foreground" />
-						<p class="mt-3 text-sm text-muted-foreground">{tr("Tidak ada tautan bermasalah. Semua artikel sehat.")}</p>
-					</div>
-				{:else}
+			{#if publications.length === 0}
+				<div class="app-card mt-3 px-4 py-10 text-center">
+					<TriangleAlert size={26} class="mx-auto text-muted-foreground" />
+					<p class="mt-3 text-sm text-muted-foreground">{tr("Tidak ada tautan bermasalah. Semua artikel sehat.")}</p>
+				</div>
+			{:else}
+				<!-- Desktop: tabel asli, tidak diubah (≥768px). -->
+				<div class="app-card mt-3 hidden overflow-x-auto md:block">
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="text-left text-xs text-muted-foreground">
@@ -216,46 +224,64 @@
 								<tr class="border-t">
 									<td class="px-4 py-2.5">
 										<div class="flex items-center gap-2.5">
-											{#if p.featured_image_url || p.draft_featured_image_url}
-												<img
-													src={p.featured_image_url ?? p.draft_featured_image_url}
-													alt=""
-													class="h-10 w-10 flex-none rounded-lg border object-cover"
-													style="border-color: var(--border); background-color: var(--muted);"
-													loading="lazy"
-												/>
-											{/if}
+											{@render pubThumb(p)}
 											<span class="max-w-[220px] truncate">{p.document_title ?? '—'}</span>
 										</div>
 									</td>
 									<td class="px-4 py-2.5 text-muted-foreground">
-										<p>{p.media_name ?? '—'}</p>
-										<p class="text-xs">{p.media_type ?? ''}{p.media_category ? ` · ${p.media_category}` : ''}</p>
+										{@render pubMediaCell(p)}
 									</td>
 									<td class="max-w-[220px] px-4 py-2.5">
-										{#if p.published_url}
-											<a class="inline-flex items-center gap-1 truncate text-xs" style="color: var(--primary);" href={p.published_url} target="_blank" rel="noreferrer">
-												{p.published_url.replace(/^https?:\/\//, '').slice(0, 42)} <ExternalLink size={11} />
-											</a>
-										{:else}<span class="text-xs text-muted-foreground">{tr('URL belum ada')}</span>{/if}
+										{@render pubUrlCell(p)}
 									</td>
 									<td class="px-4 py-2.5">
-										<span
-											class="rounded-full px-2 py-0.5 text-[11px] font-medium"
-											style="background-color: {healthy(p.state) ? 'var(--accent)' : 'var(--destructive-soft, #fdecee)'}; color: {healthy(p.state) ? 'var(--accent-foreground)' : 'var(--destructive)'};"
-											title={p.http_status ? `HTTP ${p.http_status} · ${p.consecutive_failures ?? 0} ${tr('gagal berturut-turut')}` : `${p.consecutive_failures ?? 0} ${tr('gagal berturut-turut')}`}
-										>{stateLabel[p.state ?? 'unknown'] ?? p.state}</span>
+										{@render pubStatusBadge(p)}
 									</td>
 									<td class="px-4 py-2.5 text-xs text-muted-foreground">
-										{dt(p.last_checked_at)}
-										{#if p.last_checked_at}<span class="block">{timeAgo(p.last_checked_at)}</span>{/if}
+										{@render pubCheckedCell(p)}
 									</td>
 								</tr>
 							{/each}
 						</tbody>
 					</table>
-				{/if}
-			</div>
+				</div>
+
+				<!-- Mobile: setiap tautan bermasalah menjadi kartu vertikal (<768px).
+					Data sama dengan tabel (snippet bersama); URL dan judul memakai
+					min-w-0 + line-clamp/truncate supaya tidak memaksa kartu melebar. -->
+				<div class="mt-3 flex flex-col gap-2.5 md:hidden">
+					{#each publications as p (p.id)}
+						<article class="app-card p-3.5">
+							<!-- A. Header artikel: thumbnail + judul, status di bawahnya -->
+							<div class="flex items-start gap-3">
+								{@render pubThumb(p)}
+								<div class="min-w-0 flex-1">
+									<h3 class="line-clamp-3 text-[15px] font-semibold leading-snug" title={p.document_title ?? '—'}>{p.document_title ?? '—'}</h3>
+									<div class="mt-2 flex flex-wrap">
+										{@render pubStatusBadge(p)}
+									</div>
+								</div>
+							</div>
+
+							<!-- B/C. Media, URL, waktu pemeriksaan -->
+							<dl class="mt-3 flex flex-col gap-2.5 border-t pt-3" style="border-color: var(--border);">
+								<div class="min-w-0">
+									<dt class="text-[11px] text-muted-foreground">{tr('Media')}</dt>
+									<dd class="mt-0.5 text-[13px] text-muted-foreground">{@render pubMediaCell(p)}</dd>
+								</div>
+								<div class="min-w-0">
+									<dt class="text-[11px] text-muted-foreground">URL</dt>
+									<dd class="mt-0.5 min-w-0 text-[13px]">{@render pubUrlCell(p)}</dd>
+								</div>
+								<div class="min-w-0">
+									<dt class="text-[11px] text-muted-foreground">{tr('Diperiksa')}</dt>
+									<dd class="mt-0.5 text-[13px] text-muted-foreground">{@render pubCheckedCell(p)}</dd>
+								</div>
+							</dl>
+						</article>
+					{/each}
+				</div>
+			{/if}
 			<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 				<span class="text-xs text-muted-foreground">
 					{tr('Menampilkan')} {publications.length} {tr('dari')} {total} {tr('tautan')}
@@ -282,10 +308,11 @@
 				/>
 			</div>
 
-			<div class="app-card mt-3 overflow-x-auto">
-				{#if domains.length === 0}
-					<p class="px-4 py-10 text-center text-sm text-muted-foreground">{tr("Tidak ada domain yang perlu perhatian.")}</p>
-				{:else}
+			{#if domains.length === 0}
+				<div class="app-card mt-3 px-4 py-10 text-center text-sm text-muted-foreground">{tr("Tidak ada domain yang perlu perhatian.")}</div>
+			{:else}
+				<!-- Desktop: tabel asli, tidak diubah (≥768px). -->
+				<div class="app-card mt-3 hidden overflow-x-auto md:block">
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="text-left text-xs text-muted-foreground">
@@ -316,8 +343,64 @@
 							{/each}
 						</tbody>
 					</table>
-				{/if}
-			</div>
+				</div>
+
+				<!-- Mobile: kartu domain (<768px) dengan data yang sama. -->
+				<div class="mt-3 flex flex-col gap-2.5 md:hidden">
+					{#each domains as d (d.media_id)}
+						<article class="app-card p-3.5">
+							<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+								<h3 class="text-[15px] font-semibold leading-snug">{d.name}</h3>
+								<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: {healthTone(d.domain_health).bg}; color: {healthTone(d.domain_health).fg};">{healthLabel[d.domain_health ?? 'unknown'] ?? d.domain_health}</span>
+							</div>
+							<p class="mt-1 min-w-0 truncate text-xs text-muted-foreground">{d.website_url ?? '—'}</p>
+							<div class="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2.5 text-[11px] text-muted-foreground" style="border-color: var(--border);">
+								<span>{tr('Verifikasi')}: {#if d.domain_verified}<span style="color: var(--success);">{tr('Terverifikasi')}</span>{:else}<span style="color: var(--warning, #a15c00);">{tr("Belum")}</span>{/if}</span>
+								<span>{tr("Gagal")}: <span class="tabular-nums">{d.domain_check_fail_count ?? 0}</span></span>
+								<span>{tr('Diperiksa')}: {dt(d.domain_last_checked_at)}</span>
+							</div>
+						</article>
+					{/each}
+				</div>
+			{/if}
 		{/if}
 	{/if}
 </section>
+
+{#snippet pubThumb(p: any)}
+	{#if p.featured_image_url || p.draft_featured_image_url}
+		<img
+			src={p.featured_image_url ?? p.draft_featured_image_url}
+			alt=""
+			class="h-10 w-10 flex-none rounded-lg border object-cover"
+			style="border-color: var(--border); background-color: var(--muted);"
+			loading="lazy"
+		/>
+	{/if}
+{/snippet}
+
+{#snippet pubMediaCell(p: any)}
+	<p>{p.media_name ?? '—'}</p>
+	<p class="text-xs">{p.media_type ?? ''}{p.media_category ? ` · ${p.media_category}` : ''}</p>
+{/snippet}
+
+{#snippet pubUrlCell(p: any)}
+	{#if p.published_url}
+		<a class="inline-flex max-w-full items-center gap-1 truncate text-xs" style="color: var(--primary);" href={p.published_url} target="_blank" rel="noreferrer">
+			{p.published_url.replace(/^https?:\/\//, '').slice(0, 42)} <ExternalLink size={11} />
+		</a>
+	{:else}<span class="text-xs text-muted-foreground">{tr('URL belum ada')}</span>{/if}
+{/snippet}
+
+{#snippet pubStatusBadge(p: any)}
+	<span
+		class="w-fit rounded-full px-2 py-0.5 text-[11px] font-medium"
+		style="background-color: {healthy(p.state) ? 'var(--accent)' : 'var(--destructive-soft, #fdecee)'}; color: {healthy(p.state) ? 'var(--accent-foreground)' : 'var(--destructive)'};"
+		title={p.http_status ? `HTTP ${p.http_status} · ${p.consecutive_failures ?? 0} ${tr('gagal berturut-turut')}` : `${p.consecutive_failures ?? 0} ${tr('gagal berturut-turut')}`}
+	>{stateLabel[p.state ?? 'unknown'] ?? p.state}</span>
+{/snippet}
+
+{#snippet pubCheckedCell(p: any)}
+	{dt(p.last_checked_at)}
+	{#if p.last_checked_at}<span class="block">{timeAgo(p.last_checked_at)}</span>{/if}
+{/snippet}

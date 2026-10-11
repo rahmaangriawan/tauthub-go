@@ -373,7 +373,7 @@
 				<RefreshCw size={14} class={crawling ? 'animate-spin' : ''} />
 				{crawling ? tr('Mengantrekan…') : tr('Crawl Sekarang')}
 			</button>
-			<span class="lg-manual-note"><Info size={12} /> {tr('Pengecekan manual maksimal 1x sehari')}</span>
+			<span class="lg-manual-note"><Info size={12} /> {tr('Cek Manual Maks. 1x Sehari')}</span>
 		</div>
 	</header>
 
@@ -855,5 +855,113 @@
 			letter-spacing: 0.06em;
 			text-transform: uppercase;
 		}
+	}
+
+	/* ── Mobile: jarak dirapikan supaya tidak berdesakan/bertumpuk ─────────── */
+	@media (max-width: 700px) {
+		/* Header: subjudul penuh, blok sinkronisasi turun ke baris sendiri. */
+		.lg-header { gap: 10px; }
+		/* Baris: waktu sinkronisasi penuh satu baris, lalu tombol Crawl + catatan
+		   manual berdampingan dalam satu baris. */
+		.lg-sync {
+			flex-direction: row; flex-wrap: wrap; align-items: center;
+			width: 100%; gap: 8px 10px;
+		}
+		.lg-sync-time { flex: 1 1 100%; }
+		/* Tombol Crawl + catatan manual wajib SATU baris: catatannya yang
+		   menyusut & membungkus teks, bukan pindah ke baris baru. */
+		.lg-crawl { flex: 0 0 auto; }
+		.lg-manual-note {
+			flex: 1 1 0; min-width: 0;
+			white-space: normal; line-height: 1.25;
+		}
+		.lg-sync-time { font-size: 11px; }
+		.lg-manual-note { font-size: 10.5px; line-height: 1.3; }
+
+		/* Kartu ringkasan: satu kolom, jarak seragam. */
+		.lg-cards { margin-top: 12px; gap: 8px; }
+		.lg-card { padding: 12px 14px; }
+		.lg-card-value { font-size: 26px; margin-top: 4px; }
+		.lg-card-hint { margin-top: 4px; }
+
+		/* Toolbar: pencarian + filter status + tombol filter dalam SATU baris.
+		   Tombol filter hanya ikon (teksnya disembunyikan) supaya muat. */
+		.lg-toolbar { margin-top: 10px; padding: 10px 12px; gap: 8px; flex-wrap: nowrap; align-items: center; }
+		.lg-search { flex: 1 1 auto; min-width: 0; }
+		.lg-filter-wrap { margin-left: 0; flex: 0 0 auto; }
+		.lg-toolbar :global(.lg-status) { flex: 0 0 auto; }
+		.lg-filter-btn { font-size: 0; gap: 0; padding: 0 10px; min-width: 38px; justify-content: center; }
+		.lg-filter-btn :global(svg) { flex: 0 0 auto; }
+		.lg-filter-count { font-size: 10px; margin-left: 4px; }
+
+		/* Baris artikel: padding proporsional + blok yang jelas antar bagian. */
+		.lg-row { padding: 14px 12px; }
+		.lg-article { flex-wrap: wrap; gap: 10px; }
+		.lg-cell + .lg-cell { margin-top: 10px; }
+		.linkmon-cell[data-label]::before { margin-bottom: 2px; }
+	}
+	@media (max-width: 420px) {
+		.lg-card { padding: 11px 12px; }
+		.lg-row { padding: 12px 10px; }
+		.lg-card-value { font-size: 24px; }
+	}
+
+	/* ── Kartu artikel (mobile): grid 2 kolom, grup rapi, tanpa overflow ─────
+	   Baris tabel berubah jadi kartu: sel 1 (artikel) & 2 (publisher) selebar
+	   kartu, sisanya 2 kolom — status/waktu/aksi berdampingan seperti mock. */
+	@media (max-width: 700px) {
+		.lg-row {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 10px 12px;
+			width: 100%; max-width: 100%;
+			margin: 0 0 12px;
+			padding: 14px;
+			border: 1px solid var(--border, #e2e8f0);
+			border-radius: 14px;
+			background: var(--card, #fff);
+		}
+		.lg-row:last-child { margin-bottom: 0; }
+		/* Sel artikel + publisher: selebar kartu. */
+		.lg-row > .lg-cell:nth-child(1),
+		.lg-row > .lg-cell:nth-child(2) { grid-column: 1 / -1; }
+		.lg-cell { padding: 0 !important; margin-top: 0 !important; min-width: 0; }
+		/* Divider tipis antar kelompok informasi. */
+		.lg-row > .lg-cell:nth-child(2),
+		.lg-row > .lg-cell:nth-child(3) {
+			padding-top: 10px !important;
+			border-top: 1px solid var(--border, #f1f5f9);
+		}
+		.lg-row > .lg-cell:nth-child(5) {
+			padding-top: 10px !important;
+			border-top: 1px solid var(--border, #f1f5f9);
+		}
+		/* Label kecil di atas nilai (sudah ada lewat ::before data-label). */
+		.linkmon-cell[data-label]::before { margin-bottom: 4px; }
+		/* Judul artikel maksimal 3 baris, URL tetap satu baris terpotong. */
+		.lg-doctitle {
+			display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical;
+			overflow: hidden;
+		}
+		.lg-url { max-width: 100%; }
+		.lg-badge, .lg-unverified, .lg-verified { max-width: 100%; }
+	}
+
+	/* Mobile: pembungkus tabel (kartu putih) dibuat transparan supaya kartu
+	   artikel tampil langsung di atas latar halaman — tidak ada pita putih. */
+	@media (max-width: 700px) {
+		.app-card:has(.linkmon-table) {
+			background: transparent;
+			border-color: transparent;
+			box-shadow: none;
+			padding: 0;
+		}
+	}
+
+	/* Mobile: thumbnail artikel diperbesar supaya jelas terlihat. */
+	@media (max-width: 700px) {
+		.lg-thumb { width: 76px; height: 56px; border-radius: 8px; }
+		.lg-thumb :global(svg) { width: 20px; height: 20px; }
+		.lg-article { gap: 12px; align-items: flex-start; }
 	}
 </style>
