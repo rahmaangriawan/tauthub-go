@@ -86,6 +86,44 @@ func (d *Deps) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// VerifyPassword: cek password saat ini terhadap hash di database TANPA efek
+// samping — dipakai form ganti password supaya bisa memberi umpan balik
+// sebelum submit. Wajib Bearer; di-rate-limit seperti change-password.
+func (d *Deps) VerifyPassword(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	if user == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
+		return
+	}
+
+	if err := auth.CheckAuthRate(r.Context(), d.Pool, "verify-pass:ip:"+orUnknown(authRequestIp(r)), d.Cfg.AuthRateLimitPerMinute); err != nil {
+		writeRateErr(w, err)
+		return
+	}
+
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid payload")
+		return
+	}
+	if len(body.CurrentPassword) < 1 || len(body.CurrentPassword) > 128 {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid payload")
+		return
+	}
+
+	var passwordHash string
+	err := d.Pool.QueryRow(r.Context(),
+		"SELECT password_hash FROM users WHERE id = $1 LIMIT 1", user.ID).Scan(&passwordHash)
+	if err != nil {
+		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": auth.VerifyPassword(body.CurrentPassword, passwordHash)})
+}
+
 // ForgotPassword: anti-enumerasi total — SELALU {ok:true}, bahkan saat 429.
 func (d *Deps) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	ok := func() {

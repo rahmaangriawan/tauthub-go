@@ -196,6 +196,7 @@ func run() error {
 			authed.Post("/auth/2fa/enable", authDeps.TwoFactorEnable)
 			authed.Post("/auth/2fa/disable", authDeps.TwoFactorDisable)
 			authed.Post("/auth/change-password", authDeps.ChangePassword)
+			authed.Post("/auth/verify-password", authDeps.VerifyPassword)
 			authed.Get("/me/notification-preferences", authDeps.NotificationPreferencesGet)
 			authed.Put("/me/notification-preferences", authDeps.NotificationPreferencesPut)
 
