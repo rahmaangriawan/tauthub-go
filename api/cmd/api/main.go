@@ -793,6 +793,7 @@ func run() error {
 			authed.Post("/platform/taut/channels/{channelId}/angles", platformDeps.TautAngleCreate)
 			authed.Get("/platform/taut/runs", platformDeps.TautRunsList)
 			authed.Post("/platform/taut/runs/cleanup", platformDeps.TautRunsCleanup)
+			authed.Post("/platform/maintenance/retention", platformDeps.MaintenanceRetention)
 			authed.Post("/platform/taut/runs/retry/{runId}", platformDeps.TautRunRetry)
 			authed.Get("/platform/taut/runs/{campaignId}", resolveCampaign(platformDeps.TautRunsByCampaign))
 

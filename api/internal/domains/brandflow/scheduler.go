@@ -39,6 +39,8 @@ type SchedulerResult struct {
 	MediaHealthRefreshed        int `json:"media_health_refreshed"`
 	UploadsPurged               int `json:"uploads_purged"`
 	JobsProcessed               int `json:"jobs_processed"`
+	RetentionDeleted            int64 `json:"retention_deleted"`
+	RetentionArchived           int64 `json:"retention_archived"`
 }
 
 // toMap: bentuk respons JSON (parity nama field snake_case app lama).
@@ -52,6 +54,8 @@ func (r SchedulerResult) toMap() map[string]any {
 		"media_health_refreshed":        r.MediaHealthRefreshed,
 		"uploads_purged":                r.UploadsPurged,
 		"jobs_processed":                r.JobsProcessed,
+		"retention_deleted":             r.RetentionDeleted,
+		"retention_archived":            r.RetentionArchived,
 	}
 }
 
@@ -138,6 +142,10 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	// 9. Purge upload basi (>30 hari & tak direferensikan DB).
 	res.UploadsPurged = d.schPurgeStaleUploads(ctx)
 
+	// 10. Retensi data: pangkas log/cache/event yang melebihi ambang supaya
+	//     database tidak membengkak. Maksimal sekali sehari (klaim harian).
+	res.RetentionDeleted, res.RetentionArchived = d.schRetention(ctx)
+
 	return res
 }
 
@@ -161,6 +169,43 @@ func (d *Deps) reapStuckTautRuns(ctx context.Context, staleAfter time.Duration) 
 		  AND created_at < NOW() - $1::interval`,
 		strconv.Itoa(int(staleAfter.Seconds()))+" seconds")
 	return int(affected), err
+}
+
+// ---------- 10. retensi data (brandflow/retention.go) ----------
+
+// schRetention: pangkas log/cache/event melebihi ambang retensi — MAKSIMAL
+// SEKALI SEHARI. Klaim hari ini lewat tabel retention_runs (INSERT ON CONFLICT
+// DO NOTHING): proses pertama yang berhasil klaim yang menjalankan, proses lain
+// (API dan scheduler bisa hidup berdampingan) melewati hari itu. Baris klaim
+// juga menjadi jejak audit kapan retensi terakhir dijalankan + statistiknya.
+func (d *Deps) schRetention(ctx context.Context) (deleted, archived int64) {
+	tag, err := d.Pool.Exec(ctx,
+		`INSERT INTO retention_runs (day, stats) VALUES (current_date, '{}'::jsonb) ON CONFLICT (day) DO NOTHING`)
+	if err != nil {
+		slog.Error("[scheduler] klaim hari retensi gagal", "err", err)
+		return 0, 0
+	}
+	if tag.RowsAffected() == 0 {
+		return 0, 0 // sudah dijalankan hari ini oleh proses lain
+	}
+	rep, err := RunRetention(ctx, d.Pool, DefaultRetentionConfig())
+	if err != nil {
+		// Lepaskan klaim supaya siklus berikutnya mencoba lagi — jangan sampai
+		// satu hari penuh tanpa retensi hanya karena satu query gagal.
+		if _, delErr := d.Pool.Exec(ctx, `DELETE FROM retention_runs WHERE day = current_date`); delErr != nil {
+			slog.Error("[scheduler] lepas klaim retensi gagal", "err", delErr)
+		}
+		slog.Error("[scheduler] retensi data gagal", "err", err)
+		return 0, 0
+	}
+	if _, err := d.Pool.Exec(ctx,
+		`UPDATE retention_runs SET stats = $1::jsonb WHERE day = current_date`,
+		jsonStringify(rep)); err != nil {
+		slog.Warn("[scheduler] simpan statistik retensi gagal", "err", err)
+	}
+	slog.Info("[scheduler] retensi data selesai",
+		"dihapus", rep.Deleted, "diarsipkan", rep.Archived, "ms", rep.DurationMS)
+	return rep.Deleted, rep.Archived
 }
 
 // RunSchedulerLoop: polling periodik sampai ctx dibatalkan (cmd/scheduler).
