@@ -643,6 +643,10 @@
   .auth-marketing { display: none; }
   .auth-form-pane { padding: 28px 22px 40px; align-items: flex-start; }
   .auth-form-inner { max-width: 100%; }
+  /* Safari iOS memperbesar (zoom) halaman begitu input difokuskan bila ukuran
+     hurufnya di bawah 16px. Di layar kecil kontrol form dinaikkan ke 16px
+     supaya tidak ada zoom otomatis saat mengisi login/register. */
+  .auth-input { font-size: 16px; }
   .auth-mobile-brand {
     display: inline-flex;
     align-items: center;
