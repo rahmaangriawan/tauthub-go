@@ -2399,7 +2399,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Pendaftar Mitra": "Partner Applicants",
   "Pengajuan Dewan Pers gagal.": "Press Council submission failed.",
   "Pengajuan verifikasi Dewan Pers terkirim dan menunggu review admin.": "Press Council verification submitted and awaiting admin review.",
-  "Pengaktifan hanya dapat dilakukan admin Tauthub; mitra dapat mematikannya.": "Activation can only be done by the Tauthub admin; partners can turn it off.",
+  "Pengaktifan hanya dapat dilakukan admin Tauthub. Fitur ini masih dalam pengembangan": "Activation is handled by the Tauthub admin. This feature is still in development",
   "Pengambilan data gagal, sistem akan mencoba ulang otomatis.": "Data retrieval failed; the system will retry automatically.",
   "Pengaturan": "Settings",
   "Pengaturan Bulk Import Media": "Media Bulk Import Settings",
@@ -3541,6 +3541,11 @@ export const PHRASE_EN: Record<string, string> = {
 	"Jenis artikel Editorial tidak menyematkan tautan apa pun sesuai standar redaksi berita. Apabila Anda ingin menggunakan tautan & anchor, silakan pilih jenis artikel {jenis}.": "Editorial articles do not embed any links, in line with newsroom standards. If you would like to use links & anchors, please choose the {jenis} article type.",
 	"Gunakan jenis artikel ini": "Use this article type",
 	"Cek Manual Maks. 1x Sehari": "Manual check max. 1x per day",
+	"Minimal 10 karakter dengan kombinasi huruf besar, huruf kecil, angka, dan karakter khusus.": "Use at least 10 characters with a mix of uppercase, lowercase, numbers, and special characters.",
+	"Memeriksa password saat ini…": "Checking your current password…",
+	"Password saat ini tidak cocok dengan yang terdaftar.": "The current password doesn't match our records.",
+	"Password saat ini cocok.": "Current password is correct.",
+	"Ulangi kata sandi belum sama dengan kata sandi baru.": "The password confirmation doesn't match the new password.",
 };
 
 /**

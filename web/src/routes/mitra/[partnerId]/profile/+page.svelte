@@ -84,6 +84,14 @@
 
 	// Notifikasi
 	let prefs = $state({ email_alt1: '', email_alt2: '', wa_number: '', wa_consent: false });
+	// Simpan preferensi notifikasi hanya aktif bila email tambahan 1 & 2, nomor
+	// WA, dan persetujuan WA sudah lengkap.
+	const notifSiap = $derived(
+		prefs.email_alt1.trim() !== '' &&
+			prefs.email_alt2.trim() !== '' &&
+			prefs.wa_number.trim() !== '' &&
+			prefs.wa_consent
+	);
 	let notificationBusy = $state(false);
 	let notificationNotice = $state('');
 	let notificationError = $state('');
@@ -99,6 +107,47 @@
 	let passwordBusy = $state(false);
 	let passwordNotice = $state('');
 	let passwordError = $state('');
+	// Validasi langsung form kata sandi (paritas dengan profil klien): cek kata
+	// sandi saat ini ke database via /v1/auth/verify-password (debounce 700ms),
+	// aturan kekuatan sandi baru, dan kecocokan kolom ulangi.
+	let pwCheck = $state<'unknown' | 'checking' | 'ok' | 'mismatch'>('unknown');
+	let pwCheckTimer: ReturnType<typeof setTimeout> | null = null;
+	const sandiBaruValid = $derived(
+		newPassword.length >= 10 &&
+			/[A-Z]/.test(newPassword) &&
+			/[a-z]/.test(newPassword) &&
+			/[0-9]/.test(newPassword) &&
+			/[^A-Za-z0-9]/.test(newPassword)
+	);
+
+	function onCurrentPasswordInput() {
+		passwordError = '';
+		pwCheck = 'unknown';
+		if (pwCheckTimer) clearTimeout(pwCheckTimer);
+		if (!currentPassword) return;
+		pwCheckTimer = setTimeout(() => void verifyCurrentPassword(), 700);
+	}
+
+	async function verifyCurrentPassword() {
+		const v = currentPassword;
+		if (!v) return;
+		pwCheck = 'checking';
+		try {
+			const res = await apiRequest('/v1/auth/verify-password', {
+				method: 'POST',
+				body: JSON.stringify({ current_password: v })
+			});
+			if (currentPassword !== v) return;
+			if (!res.ok) {
+				pwCheck = 'unknown'; // 429 dll: netral, server memvalidasi ulang saat submit
+				return;
+			}
+			const d = await res.json();
+			pwCheck = d.ok ? 'ok' : 'mismatch';
+		} catch {
+			if (currentPassword === v) pwCheck = 'unknown';
+		}
+	}
 
 	let twoFa = $state<TwoFaState>({
 		enabled: false, busy: false, error: '', notice: '', secret: null, otpauthUrl: null, step: 'idle', code: '', recoveryCodes: null
@@ -369,6 +418,7 @@
 			currentPassword = '';
 			newPassword = '';
 			confirmPassword = '';
+			pwCheck = 'unknown';
 			showPasswordForm = false;
 		} finally {
 			passwordBusy = false;
@@ -489,9 +539,9 @@
 		<div class="app-card mt-4 px-4 py-2.5 text-sm" style="border-color: var(--destructive); color: var(--destructive);">{loadError}</div>
 	{:else}
 		<!-- Hero identitas mitra -->
-		<div class="app-card mt-4 flex flex-wrap items-center justify-between gap-3 p-5">
+		<div class="app-card cfg-hero mt-4 flex flex-wrap items-center justify-between gap-3 p-5">
 			<div class="flex min-w-0 items-center gap-3.5">
-				<span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-sm font-bold" style="background-color: var(--success-soft); color: var(--success); border-color: var(--success);">{initials}</span>
+				<span class="cfg-avatar flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-sm font-bold" style="background-color: var(--success-soft); color: var(--success); border-color: var(--success);">{initials}</span>
 				<div class="min-w-0">
 					<h2 class="truncate text-lg font-semibold">{partner?.name || 'Mitra Media Tauthub'}</h2>
 					<span class="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]" style="background-color: var(--accent); color: var(--accent-foreground);">
@@ -506,7 +556,7 @@
 		</div>
 
 		<!-- Navigasi tab: underline, satu sistem untuk keempat tab -->
-		<div class="mt-4 flex gap-1 overflow-x-auto border-b" role="tablist" aria-label={tr("Bagian konfigurasi")}>
+		<div class="cfg-tabs mt-4 flex gap-1 overflow-x-auto border-b" role="tablist" aria-label={tr("Bagian konfigurasi")}>
 			{#each tabItems as item (item.id)}
 				<button
 					type="button"
@@ -526,7 +576,7 @@
 			{#if profileNotice}<div class="app-card mt-4 px-4 py-2.5 text-sm" style="border-color: var(--success); background-color: var(--success-soft); color: var(--success);">{profileNotice}</div>{/if}
 			{#if profileError}<div class="app-card mt-4 px-4 py-2.5 text-sm" style="border-color: var(--destructive); color: var(--destructive);">{profileError}</div>{/if}
 
-			<div class="app-card mt-4 p-5">
+			<div class="app-card cfg-info mt-4 p-5">
 					<div class="flex items-start gap-2.5">
 						<Building2 size={16} class="mt-0.5 shrink-0 text-muted-foreground" />
 						<div class="min-w-0">
@@ -534,10 +584,10 @@
 							<p class="mt-1 text-xs leading-snug text-muted-foreground">{tr("Data kontak dan identitas resmi penerbit media partner di jaringan Tauthub")}</p>
 						</div>
 					</div>
-					<div class="mt-4 border-t" style="border-color: var(--border);"></div>
+					<div class="cfg-divider mt-4 border-t" style="border-color: var(--border);"></div>
 
 					{#if !editing}
-						<div class="mt-4 grid gap-x-8 gap-y-5 sm:grid-cols-2">
+						<div class="cfg-grid mt-4 grid gap-x-8 gap-y-5 sm:grid-cols-2">
 							<dl class="space-y-5">
 								<div>
 									<dt class="flex items-center gap-1.5 text-xs text-muted-foreground"><Newspaper size={13} class="shrink-0" />{tr("Nama Entitas Media")}</dt>
@@ -599,7 +649,7 @@
 				</div>
 			{/if}
 
-			<div class="app-card mt-3 p-4">
+			<div class="app-card cfg-rss mt-3 p-4">
 				<div class="flex items-center justify-between gap-3">
 					<div class="flex items-center gap-2">
 						<Rss size={15} class="text-muted-foreground" />
@@ -612,9 +662,9 @@
 					{/if}
 				</div>
 				{#if rssEnabled == null}
-					<p class="mt-2 text-xs text-muted-foreground">{tr("Pengaktifan hanya dapat dilakukan admin Tauthub; mitra dapat mematikannya.")} {tr("Status saat ini tidak tersedia dari server.")}</p>
+					<p class="mt-2 text-xs text-muted-foreground">{tr("Pengaktifan hanya dapat dilakukan admin Tauthub. Fitur ini masih dalam pengembangan")}</p>
 				{:else}
-					<p class="mt-2 text-xs text-muted-foreground">{tr("Pengaktifan hanya dapat dilakukan admin Tauthub; mitra dapat mematikannya.")}</p>
+					<p class="mt-2 text-xs text-muted-foreground">{tr("Pengaktifan hanya dapat dilakukan admin Tauthub. Fitur ini masih dalam pengembangan")}</p>
 					{#if rssEnabled}
 						<button class="app-btn app-btn-soft mt-3" style="color: var(--destructive);" onclick={disableRSS}>{tr("Matikan RSS")}</button>
 					{/if}
@@ -797,7 +847,9 @@
 						<span class="text-xs leading-relaxed text-muted-foreground">{tr("Klik setuju maka anda menyetujui bahwa nomor WA anda akan menjadi penerima notifikasi dari dashboard tauthub")}</span>
 					</label>
 					<div class="flex justify-end border-t pt-4">
-						<button class="app-btn app-btn-primary min-h-11" type="submit" disabled={notificationBusy || (prefs.wa_number.trim() !== '' && !prefs.wa_consent)}>
+						<!-- Tombol aktif hanya bila kedua email tambahan dan nomor WA terisi
+						     serta persetujuan WA sudah dicentang. -->
+						<button class="app-btn app-btn-primary min-h-11" type="submit" disabled={notificationBusy || !notifSiap}>
 							{notificationBusy ? tr('Menyimpan…') : tr('Simpan Pengaturan Notifikasi')}
 						</button>
 					</div>
@@ -830,7 +882,7 @@
 							<label class="block">
 								<span class="text-xs font-medium text-muted-foreground">{tr("Kata Sandi Saat Ini *")}</span>
 								<span class="relative mt-1 block">
-									<input class="app-input w-full pr-9" type={showCurrent ? 'text' : 'password'} required bind:value={currentPassword} placeholder={tr("Masukkan kata sandi lama")} disabled={passwordBusy} />
+									<input class="app-input w-full pr-9" type={showCurrent ? 'text' : 'password'} required bind:value={currentPassword} placeholder={tr("Masukkan kata sandi lama")} disabled={passwordBusy} oninput={onCurrentPasswordInput} />
 									<button type="button" class="absolute inset-y-0 right-1 flex items-center rounded px-1 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={tr("Tampilkan kata sandi")} onclick={() => (showCurrent = !showCurrent)}>
 										{#if showCurrent}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
 									</button>
@@ -855,9 +907,24 @@
 								</span>
 							</label>
 						</div>
+						<!-- Umpan balik langsung: muncul hanya saat isian belum memenuhi
+						     aturan; tanpa teks statis. -->
+						{#if pwCheck === 'checking'}
+							<p class="text-xs text-muted-foreground">{tr("Memeriksa password saat ini…")}</p>
+						{:else if pwCheck === 'mismatch'}
+							<p class="animate-in fade-in slide-in-from-top-1 text-xs duration-200" style="color: var(--destructive);" role="alert">{tr("Password saat ini tidak cocok dengan yang terdaftar.")}</p>
+						{:else if pwCheck === 'ok'}
+							<p class="animate-in fade-in slide-in-from-top-1 text-xs duration-200" style="color: var(--success);">{tr("Password saat ini cocok.")}</p>
+						{/if}
+						{#if newPassword && !sandiBaruValid}
+							<p class="animate-in fade-in slide-in-from-top-1 text-xs duration-200" style="color: var(--destructive);" role="status">{tr("Minimal 10 karakter dengan kombinasi huruf besar, huruf kecil, angka, dan karakter khusus.")}</p>
+						{/if}
+						{#if confirmPassword && newPassword && confirmPassword !== newPassword}
+							<p class="animate-in fade-in slide-in-from-top-1 text-xs duration-200" style="color: var(--destructive);" role="status">{tr("Ulangi kata sandi belum sama dengan kata sandi baru.")}</p>
+						{/if}
 						<div class="flex justify-end gap-2 border-t pt-4">
 							<button type="button" class="app-btn app-btn-soft" onclick={() => (showPasswordForm = false)} disabled={passwordBusy}>{tr("Batal")}</button>
-							<button type="submit" class="app-btn app-btn-primary min-h-11" disabled={passwordBusy}>
+							<button type="submit" class="app-btn app-btn-primary min-h-11" disabled={passwordBusy || !sandiBaruValid || confirmPassword !== newPassword}>
 								<ShieldCheck size={15} /> {passwordBusy ? tr('Menyimpan…') : tr('Perbarui Kata Sandi')}
 							</button>
 						</div>
@@ -955,3 +1022,125 @@
 		{/if}
 	{/if}
 </section>
+
+<style>
+	/* Mobile: rapatkan tinggi halaman Konfigurasi supaya isi tab Profil muat
+	   tanpa menggulir di viewport ponsel (~780-900px). Desktop tidak berubah.
+	   Override Tailwind di sini menang karena CSS scoped tak berlayer. */
+	@media (max-width: 767px) {
+		header h1 {
+			font-size: 20px;
+			line-height: 1.25;
+		}
+		header p {
+			margin-top: 3px;
+			font-size: 12px;
+		}
+		.cfg-hero {
+			margin-top: 12px;
+			padding: 12px 16px;
+			gap: 10px;
+		}
+		.cfg-avatar {
+			width: 40px;
+			height: 40px;
+		}
+		.cfg-hero h2 {
+			font-size: 16px;
+		}
+		.cfg-tabs {
+			margin-top: 10px;
+			/* Bilah gulir tetap tampil sebagai penanda strip ini bisa digeser. */
+		}
+		.cfg-tabs button {
+			padding-top: 7px;
+			padding-bottom: 7px;
+		}
+		.cfg-info {
+			margin-top: 12px;
+			padding: 16px 18px;
+		}
+		.cfg-divider {
+			margin-top: 14px;
+		}
+		/* Dua kolom seperti desktop: enam baris data searah lebih tinggi daripada
+		   viewport ponsel, dua kolom memotongnya hingga separuh. */
+		.cfg-grid {
+			margin-top: 14px;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			row-gap: 16px;
+			column-gap: 16px;
+		}
+		.cfg-info dl > div + div {
+			margin-top: 16px;
+		}
+		.cfg-info dt {
+			font-size: 11px;
+		}
+		.cfg-info dd {
+			margin-top: 6px;
+			font-size: 13px;
+			line-height: 1.4;
+		}
+		.cfg-rss {
+			padding: 14px 18px;
+		}
+	}
+
+	/* Tingkat kedua untuk ponsel kecil (≤379px): supaya isi tab Profil tetap
+	   muat tanpa menggulir di viewport sempit dan pendek (360x780). */
+	@media (max-width: 379px) {
+		header h1 {
+			font-size: 18px;
+		}
+		header p {
+			margin-top: 2px;
+			font-size: 11px;
+		}
+		.cfg-hero {
+			margin-top: 10px;
+			padding: 10px 14px;
+		}
+		.cfg-avatar {
+			width: 36px;
+			height: 36px;
+		}
+		.cfg-tabs {
+			margin-top: 8px;
+		}
+		.cfg-tabs button {
+			padding-top: 6px;
+			padding-bottom: 6px;
+		}
+		.cfg-info {
+			margin-top: 12px;
+			padding: 14px 16px;
+		}
+		.cfg-divider {
+			margin-top: 12px;
+		}
+		.cfg-grid {
+			margin-top: 12px;
+			row-gap: 12px;
+			column-gap: 12px;
+		}
+		.cfg-info dl > div + div {
+			margin-top: 12px;
+		}
+		.cfg-info dt {
+			font-size: 10.5px;
+		}
+		.cfg-info dd {
+			margin-top: 4px;
+			font-size: 12.5px;
+			line-height: 1.35;
+		}
+		.cfg-rss {
+			margin-top: 12px;
+			padding: 12px 16px;
+		}
+		.cfg-rss p {
+			font-size: 11px;
+		}
+	}
+</style>

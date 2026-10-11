@@ -4,7 +4,7 @@
 	// Profil & Akun — tab Akun / Preferensi notifikasi / Keamanan. Semua endpoint
 	// sudah ada (fase 1 & 2), jadi tidak ada data placeholder.
 	import { onMount } from 'svelte';
-	import { KeyRound, ShieldCheck, UserCircle, Bell } from '@lucide/svelte';
+	import { KeyRound, ShieldCheck, UserCircle, Bell, Eye, EyeOff } from '@lucide/svelte';
 	import {
 		apiRequest, readApiError, ensureValidSession, getStoredSession,
 		updateStoredUser, AUTH_EXPIRED_EVENT, type AuthUser
@@ -24,6 +24,55 @@
 	let user = $state<AuthUser | null>(null);
 	let notif = $state({ wa_number: '', wa_consent: false });
 	let password = $state({ current: '', next: '' });
+	// Pesan gagal ganti password ditampilkan merah di bawah form (bukan banner
+	// atas), mis. password saat ini tidak cocok. Dikosongkan saat user mengetik.
+	let pwError = $state('');
+	// Validasi "password saat ini" terhadap database lewat /v1/auth/verify-password
+	// (debounce 700ms setelah berhenti mengetik) — hash tidak bisa dicek di browser.
+	let pwCheck = $state<'unknown' | 'checking' | 'ok' | 'mismatch'>('unknown');
+	let pwCheckTimer: ReturnType<typeof setTimeout> | null = null;
+	// Tampil/sembunyi isi kolom password (icon mata).
+	let showCurrent = $state(false);
+	let showNew = $state(false);
+	// Password baru wajib min. 10 karakter dengan kombinasi huruf besar, huruf
+	// kecil, angka, dan karakter khusus; tombol simpan nonaktif sampai lengkap.
+	const passwordBaruValid = $derived(
+		password.next.length >= 10 &&
+			/[A-Z]/.test(password.next) &&
+			/[a-z]/.test(password.next) &&
+			/[0-9]/.test(password.next) &&
+			/[^A-Za-z0-9]/.test(password.next)
+	);
+
+	function onCurrentPasswordInput() {
+		pwError = '';
+		pwCheck = 'unknown';
+		if (pwCheckTimer) clearTimeout(pwCheckTimer);
+		if (!password.current) return;
+		pwCheckTimer = setTimeout(() => void verifyCurrentPassword(), 700);
+	}
+
+	async function verifyCurrentPassword() {
+		const v = password.current;
+		if (!v) return;
+		pwCheck = 'checking';
+		try {
+			const res = await apiRequest('/v1/auth/verify-password', {
+				method: 'POST',
+				body: JSON.stringify({ current_password: v })
+			});
+			// Kalau user sudah mengetik lagi, buang hasil lama.
+			if (password.current !== v) return;
+			if (!res.ok) {
+				pwCheck = 'unknown'; // 429 dll: biarkan netral, server akan memvalidasi saat submit
+				return;
+			}
+			const d = await res.json();
+			pwCheck = d.ok ? 'ok' : 'mismatch';
+		} catch {
+			if (password.current === v) pwCheck = 'unknown';
+		}
+	}
 	let twoFactorSecret = $state('');
 	let twoFactorUrl = $state('');
 	let twoFactorCode = $state('');
@@ -111,6 +160,7 @@
 
 	async function changePassword(e: SubmitEvent) {
 		e.preventDefault();
+		pwError = '';
 		await withBusy(async () => {
 			const res = await apiRequest('/v1/auth/change-password', {
 				method: 'POST',
@@ -119,8 +169,9 @@
 			if (res.status === 204) {
 				msg = 'Password diubah. Sesi lain dicabut.';
 				password = { current: '', next: '' };
+				pwCheck = 'unknown';
 			} else {
-				error = await readApiError(res, tr('Gagal mengubah password.'));
+				pwError = await readApiError(res, tr('Gagal mengubah password.'));
 			}
 		});
 	}
@@ -204,7 +255,9 @@
 									aria-label={tr('Nama tampilan baru')}
 									onkeydown={(e) => { if (e.key === 'Escape') editingName = false; }}
 								/>
-								<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="submit" disabled={busy}>{tr("Simpan")}</button>
+								<!-- Simpan nonaktif bila nama belum diubah dari nilai semula
+								     atau masih di bawah panjang minimum. -->
+								<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="submit" disabled={busy || nameValue.trim() === (user?.display_name ?? '') || nameValue.trim().length < 2}>{tr("Simpan")}</button>
 								<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={busy} onclick={() => (editingName = false)}>{tr("Batal")}</button>
 							</form>
 						{:else}
@@ -236,7 +289,8 @@
 					Setuju dihubungi via WhatsApp
 				</label>
 			</div>
-			<button class="app-btn app-btn-primary mt-3" type="submit" disabled={busy}>{tr("Simpan preferensi")}</button>
+			<!-- Simpan hanya bisa saat kotak persetujuan WhatsApp dicentang. -->
+			<button class="app-btn app-btn-primary mt-3" type="submit" disabled={busy || !notif.wa_consent}>{tr("Simpan preferensi")}</button>
 		</form>
 			<DevicePushCard />
 	{:else}
@@ -250,10 +304,35 @@
 			<form class="mt-4" onsubmit={changePassword}>
 				<p class="text-sm font-medium">Ganti password</p>
 				<div class="mt-2 grid gap-2 sm:grid-cols-2">
-					<input class="app-input" type="password" placeholder={tr("Password saat ini")} bind:value={password.current} required />
-					<input class="app-input" type="password" placeholder={tr("Password baru (min. 10)")} bind:value={password.next} minlength={10} required />
+					<div class="relative">
+						<input class="app-input pr-10" type={showCurrent ? 'text' : 'password'} placeholder={tr("Password saat ini")} bind:value={password.current} required oninput={onCurrentPasswordInput} />
+						<button class="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary" type="button" aria-label={showCurrent ? tr('Sembunyikan password') : tr('Tampilkan password')} aria-pressed={showCurrent} onclick={() => (showCurrent = !showCurrent)}>
+							{#if showCurrent}<EyeOff size={15} />{:else}<Eye size={15} />{/if}
+						</button>
+					</div>
+					<div class="relative">
+						<input class="app-input pr-10" type={showNew ? 'text' : 'password'} placeholder={tr("Password baru (min. 10)")} bind:value={password.next} minlength={10} required oninput={() => (pwError = '')} />
+						<button class="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary" type="button" aria-label={showNew ? tr('Sembunyikan password') : tr('Tampilkan password')} aria-pressed={showNew} onclick={() => (showNew = !showNew)}>
+							{#if showNew}<EyeOff size={15} />{:else}<Eye size={15} />{/if}
+						</button>
+					</div>
 				</div>
-				<button class="app-btn app-btn-primary mt-2" type="submit" disabled={busy}>{tr("Simpan password")}</button>
+				{#if pwCheck === 'checking'}
+					<p class="mt-1 text-xs text-muted-foreground">{tr("Memeriksa password saat ini…")}</p>
+				{:else if pwCheck === 'mismatch'}
+					<p class="mt-1 animate-in fade-in slide-in-from-top-1 text-xs duration-200" style="color: var(--destructive);" role="alert">{tr("Password saat ini tidak cocok dengan yang terdaftar.")}</p>
+				{:else if pwCheck === 'ok'}
+					<p class="mt-1 animate-in fade-in slide-in-from-top-1 text-xs duration-200" style="color: var(--success);">{tr("Password saat ini cocok.")}</p>
+				{/if}
+				{#if pwError}
+					<p class="mt-1 text-xs" style="color: var(--destructive);" role="alert">{pwError}</p>
+				{/if}
+				<!-- Validasi langsung saat mengetik: muncul (merah, beranimasi) hanya
+				     bila isian belum memenuhi aturan; tidak ada teks statis. -->
+				{#if password.next && !passwordBaruValid}
+					<p class="mt-1 animate-in fade-in slide-in-from-top-1 text-xs duration-200" style="color: var(--destructive);" role="status">{tr("Minimal 10 karakter dengan kombinasi huruf besar, huruf kecil, angka, dan karakter khusus.")}</p>
+				{/if}
+				<button class="app-btn app-btn-primary mt-2" type="submit" disabled={busy || !passwordBaruValid}>{tr("Simpan password")}</button>
 			</form>
 
 			<div class="mt-5 border-t pt-4">
