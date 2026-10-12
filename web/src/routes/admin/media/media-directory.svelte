@@ -549,10 +549,10 @@
 	 */
 	async function enqueueSeoRefresh(force = false, daOnly = false) {
 		const pertanyaan = force
-			? 'Hitung ulang DA dan AI Trust untuk SEMUA media aktif, termasuk yang sudah punya skor?'
+			? tr('Hitung ulang DA dan AI Trust untuk SEMUA media aktif, termasuk yang sudah punya skor?')
 			: daOnly
-				? 'Cek DA untuk semua media yang nilai DA-nya belum ada? Media yang sudah punya DA dilewati.'
-				: 'Cek DA dan AI Trust untuk semua media yang belum punya skor? Media yang sudah dicek dilewati.';
+				? tr('Cek DA untuk semua media yang nilai DA-nya belum ada? Media yang sudah punya DA dilewati.')
+				: tr('Cek DA dan AI Trust untuk semua media yang belum punya skor? Media yang sudah dicek dilewati.');
 		if (!confirm(pertanyaan)) return;
 		error = '';
 		daBulkBusy = true;
@@ -567,7 +567,7 @@
 					? 'Tidak ada media aktif yang bisa diperiksa (butuh website_url terisi).'
 					: daOnly
 						? 'Semua media yang punya website sudah punya nilai DA — tidak ada yang perlu dicek.'
-						: 'Semua media sudah punya skor — tidak ada yang perlu dicek. Pakai "Hitung ulang semua" kalau ingin memeriksa ulang.';
+						: tr('Semua media sudah punya skor — tidak ada yang perlu dicek. Pakai "Hitung ulang semua" kalau ingin memeriksa ulang.');
 			} else {
 				const apa = force ? 'dihitung ulang' : daOnly ? 'tanpa DA' : 'belum berskor';
 				daSummary = `${r.enqueued} media ${apa} masuk antrean (dari ${r.total_stale} kandidat). Hasil muncul bertahap di tabel.`;

@@ -1416,10 +1416,10 @@
 									aria-label={tr("Pilih semua media di halaman ini")}
 								/>
 							</th>
-							<th class="modernTh modernThSortable" onclick={() => toggleSort('name')}>NAMA MEDIA{sortIndicator('name')}</th>
-							<th class="modernTh">KATEGORI</th>
+							<th class="modernTh modernThSortable" onclick={() => toggleSort('name')}>{tr('Nama Media')}{sortIndicator('name')}</th>
+							<th class="modernTh">{tr('Kategori')}</th>
 							<th class="modernTh modernThSortable" onclick={() => toggleSort('traffic')}>
-								<span class="thWithInfo">TRAFIK (EST)
+								<span class="thWithInfo">{tr('Trafik (Est)')}
 									<Tooltip.Root>
 										<Tooltip.Trigger>
 											{#snippet child({ props })}
@@ -1453,7 +1453,7 @@
 								</span>{sortIndicator('da')}
 							</th>
 							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_trust')}>
-								<span class="thWithInfo">AI TRUST
+								<span class="thWithInfo">{tr('AI Trust')}
 									<Tooltip.Root>
 										<Tooltip.Trigger>
 											{#snippet child({ props })}
@@ -1470,7 +1470,7 @@
 								</span>{sortIndicator('ai_trust')}
 							</th>
 							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_cited')}>
-								<span class="thWithInfo">AI CITED
+								<span class="thWithInfo">{tr('AI Cited')}
 									<Tooltip.Root>
 										<Tooltip.Trigger>
 											{#snippet child({ props })}
@@ -1487,7 +1487,7 @@
 								</span>{sortIndicator('ai_cited')}
 							</th>
 							<th class="modernTh modernThSortable" onclick={() => toggleSort('speed')}>
-								<span class="thWithInfo">WAKTU RILIS
+								<span class="thWithInfo">{tr('Waktu Rilis')}
 									<Tooltip.Root>
 										<Tooltip.Trigger>
 											{#snippet child({ props })}
@@ -1509,8 +1509,8 @@
 
 								</span>{sortIndicator('speed')}
 							</th>
-							<th class="modernTh modernThSortable" onclick={() => toggleSort('price')}>HARGA{sortIndicator('price')}</th>
-							<th class="modernTh" style="text-align:right">AKSI</th>
+							<th class="modernTh modernThSortable" onclick={() => toggleSort('price')}>{tr('Harga')}{sortIndicator('price')}</th>
+							<th class="modernTh" style="text-align:right">{tr('Aksi')}</th>
 						</tr>
 					</thead>
 					<tbody>
