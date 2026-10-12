@@ -152,8 +152,8 @@
 	// STATE_META — salinan persis link-monitor-section.tsx.
 	const STATE_META: Record<string, { label: string; text: string; bg: string; dot: string; hint: string }> = $derived({
 		gone: { label: '404', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)', hint: tr('404 berarti halaman tidak ditemukan di alamatnya. Penyebab umum: artikel dihapus atau ditarik dari situs media, atau alamat artikelnya berubah. Tautan seperti ini bisa diajukan penggantiannya.') },
-		unreachable: { label: 'Tak terjangkau', text: 'var(--warning)', bg: 'var(--warning-soft)', dot: 'var(--warning)', hint: tr('Situs menolak akses atau sedang bermasalah — belum tentu hilang') },
-		live: { label: 'Tayang', text: 'var(--success)', bg: 'var(--success-soft)', dot: 'var(--success)', hint: tr('Artikel masih bisa diakses') },
+		unreachable: { label: tr('Tak terjangkau'), text: 'var(--warning)', bg: 'var(--warning-soft)', dot: 'var(--warning)', hint: tr('Situs menolak akses atau sedang bermasalah — belum tentu hilang') },
+		live: { label: tr('Tayang'), text: 'var(--success)', bg: 'var(--success-soft)', dot: 'var(--success)', hint: tr('Artikel masih bisa diakses') },
 		no_url: { label: tr('Belum ada URL'), text: 'var(--muted-foreground)', bg: 'var(--muted)', dot: 'var(--muted-foreground)', hint: tr('Belum ada URL terbit yang bisa dicek') }
 	});
 	const FALLBACK_META = $derived({ label: tr('Belum dicek'), text: 'var(--muted-foreground)', bg: 'var(--muted)', dot: 'var(--muted-foreground)', hint: tr('Pemeriksaan belum pernah berjalan untuk artikel ini') });
@@ -294,16 +294,16 @@
 	/** Status deteksi gabungan: kondisi URL artikel + tautan DI DALAM artikel. */
 	function detectionMeta(item: Item): { label: string; text: string; bg: string; dot: string } {
 		if (item.state === 'gone') {
-			return { label: 'HILANG (404)', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
+			return { label: tr('HILANG (404)'), text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
 		}
 		if (item.in_article_state === 'removed') {
-			return { label: 'TAUTAN DIHAPUS', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
+			return { label: tr('TAUTAN DIHAPUS'), text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
 		}
 		if (item.state === 'unreachable') {
-			return { label: 'TAK TERJANGKAU', text: 'var(--warning)', bg: 'var(--warning-soft)', dot: 'var(--warning)' };
+			return { label: tr('TAK TERJANGKAU'), text: 'var(--warning)', bg: 'var(--warning-soft)', dot: 'var(--warning)' };
 		}
 		if (item.state === 'live') {
-			return { label: '200 OK (AMAN)', text: 'var(--success)', bg: 'var(--success-soft)', dot: 'var(--success)' };
+			return { label: tr('200 OK (AMAN)'), text: 'var(--success)', bg: 'var(--success-soft)', dot: 'var(--success)' };
 		}
 		return { label: tr('Belum ada URL'), text: 'var(--muted-foreground)', bg: 'var(--muted)', dot: 'var(--muted-foreground)' };
 	}
@@ -491,9 +491,9 @@
 								onchange={applyFilters}
 								options={[
 									{ value: '', label: tr('Semua Tanggal') },
-									{ value: '7', label: '7 Hari Terakhir' },
-									{ value: '30', label: '30 Hari Terakhir' },
-									{ value: '90', label: '3 Bulan Terakhir' }
+									{ value: '7', label: tr('7 Hari Terakhir') },
+									{ value: '30', label: tr('30 Hari Terakhir') },
+									{ value: '90', label: tr('3 Bulan Terakhir') }
 								]}
 							/>
 						</div>
@@ -563,7 +563,7 @@
 											{#if thumb && !imgError[item.id]}
 												<img
 													src={thumb}
-													alt={item.document_title ?? 'Cover artikel'}
+													alt={item.document_title ?? tr('Cover artikel')}
 													class="lg-thumb"
 													loading="lazy"
 													onerror={() => (imgError = { ...imgError, [item.id]: true })}
@@ -579,7 +579,7 @@
 														<span class="truncate">{item.published_url}</span><ExternalLink size={11} />
 													</a>
 												{/if}
-												<p class="lg-doctitle">{item.document_title ?? 'Tanpa judul'}</p>
+												<p class="lg-doctitle">{item.document_title ?? tr('Tanpa judul')}</p>
 												{#if item.in_article_anchor}
 													<p class="lg-anchor">{tr('Anchor:')} <strong>{item.in_article_anchor}</strong></p>
 												{/if}
@@ -653,9 +653,9 @@
 							align="end"
 							onchange={(v) => { pageSize = Number(v); offset = 0; void load(); }}
 							options={[
-								{ value: '10', label: '10 per halaman' },
-								{ value: '20', label: '20 per halaman' },
-								{ value: '50', label: '50 per halaman' }
+								{ value: '10', label: tr('10 per halaman') },
+								{ value: '20', label: tr('20 per halaman') },
+								{ value: '50', label: tr('50 per halaman') }
 							]}
 						/>
 						<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={currentPage <= 1 || loading} onclick={() => { offset = Math.max(0, (currentPage - 2) * pageSize); void load(); }}>

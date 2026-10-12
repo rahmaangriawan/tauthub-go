@@ -91,7 +91,7 @@
 		return `${diffDays} ${tr('hari lalu')}`;
 	};
 	const stateLabel: Record<string, string> = $derived({
-		gone: 'Hilang (404)',
+		gone: tr('Hilang (404)'),
 		unreachable: tr('Tidak terjangkau'),
 		live: tr('Tayang'),
 		no_url: tr('URL belum ada'),
@@ -106,7 +106,7 @@
 			: s === 'unreachable' || s === 'token_missing'
 				? { bg: 'var(--warning-soft, #fdf3e3)', fg: 'var(--warning, #a15c00)' }
 				: { bg: 'var(--muted)', fg: 'var(--muted-foreground)' };
-	const healthLabel: Record<string, string> = $derived({ live: tr('Aktif'), unreachable: 'Tidak terjangkau', unknown: tr('Belum diperiksa'), token_missing: 'Token hilang' });
+	const healthLabel: Record<string, string> = $derived({ live: tr('Aktif'), unreachable: tr('Tidak terjangkau'), unknown: tr('Belum diperiksa'), token_missing: tr('Token hilang') });
 	const mediaNames = $derived([...new Set(domains.map((d) => d.name).filter(Boolean))] as string[]);
 </script>
 
