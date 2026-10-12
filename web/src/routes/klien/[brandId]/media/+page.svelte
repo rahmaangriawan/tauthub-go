@@ -199,6 +199,9 @@
 	let campaignError = $state('');
 	let creating = $state(false);
 	// Profiler (workspace knowledge klien) opsional untuk kampanye baru.
+	// Sementara disembunyikan atas permintaan: ubah ke true untuk memunculkan
+	// kembali pilihan Profiler di modal "Buat Kampanye".
+	const SHOW_PROFILER_FIELD = false;
 	let profilerOptions = $state<Array<{ value: string; label: string }>>([]);
 	let profilerId = $state('');
 	let profilerLoading = $state(false);
@@ -467,7 +470,7 @@
 		profilerId = '';
 		campaignOpen = true;
 		if (walletAvailableTc === null) void loadWallet();
-		if (profilerOptions.length === 0) void loadProfilerOptions();
+		if (SHOW_PROFILER_FIELD && profilerOptions.length === 0) void loadProfilerOptions();
 	}
 
 	/** Daftar Profiler milik klien yang login (untuk dipilih saat simpan kampanye). */
@@ -1826,6 +1829,7 @@
 						/>
 					</label>
 					{#if campaignError}<p class="modalError">{campaignError}</p>{/if}
+					{#if SHOW_PROFILER_FIELD}
 						<label class="modalField">
 							<span class="inline-flex items-center gap-1">
 								{tr("Profiler")} <span class="campaignSummaryMuted">({tr("opsional")})</span>
@@ -1867,12 +1871,13 @@
 								minWidth={0}
 							/>
 						<span class="campaignSummaryMuted">{tr("Acuan brand & gaya penulisan untuk The Writer.")}</span>
-						{#if !profilerLoading && profilerOptions.length === 0}
-							<button class="profilerInviteBtn" type="button" onclick={() => goto(`/klien/${page.params.brandId}/profiler`)}>
-								{tr('Lengkapi Profiler')}
-							</button>
-						{/if}
-					</label>
+							{#if !profilerLoading && profilerOptions.length === 0}
+								<button class="profilerInviteBtn" type="button" onclick={() => goto(`/klien/${page.params.brandId}/profiler`)}>
+									{tr('Lengkapi Profiler')}
+								</button>
+							{/if}
+						</label>
+					{/if}
 					</div>
 					<div class="modalFooter campaignFooter">
 						<button class="advFilterResetBtn" type="button" onclick={() => (campaignOpen = false)}>{tr("Batal")}</button>
