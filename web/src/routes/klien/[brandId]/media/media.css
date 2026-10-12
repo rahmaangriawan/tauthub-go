@@ -1116,6 +1116,36 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   background: var(--primary);
   color: var(--primary-foreground, #ffffff);
 }
+button.selectedStepChip,
+.selectedStepChipClickable {
+  cursor: pointer;
+  outline: none;
+  font: inherit;
+  font-size: 12.5px;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+button.selectedStepChip:hover:not(:disabled),
+.selectedStepChipClickable:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--accent, #eef4ff);
+}
+button.selectedStepChip:hover:not(:disabled) .selectedStepNum,
+.selectedStepChipClickable:hover:not(:disabled) .selectedStepNum {
+  background: var(--primary);
+  color: var(--primary-foreground, #ffffff);
+}
+button.selectedStepChip:focus-visible,
+.selectedStepChipClickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+button.selectedStepChip:disabled,
+.selectedStepChipClickable:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 /* Mobile: label tahap ("Katalog Media", "Penyedia Konten") disembunyikan —
    tinggal bulatan nomornya, supaya header tidak berjejal. */
 @media (max-width: 767px) {

@@ -17,12 +17,18 @@
 
 	let {
 		current,
+		campaignId: campaignIdProp,
+		maxReached: maxReachedProp,
+		onSelect,
 		tone,
 		extra,
 		lockedSteps,
 		lockedReason
 	}: {
 		current: 1 | 2 | 3 | 4;
+		campaignId?: string;
+		maxReached?: number;
+		onSelect?: (step: number, proceed: () => void) => void;
 		tone?: 'waiting' | 'published';
 		extra?: 'ringkasan';
 		lockedSteps?: number[];
@@ -30,7 +36,7 @@
 	} = $props();
 
 	const brandId = $derived(page.params.brandId as string);
-	const campaignId = $derived(page.params.id as string);
+	const campaignId = $derived(campaignIdProp ?? (page.params.id as string));
 	const base = $derived(`/klien/${getBrandUrlId() || brandId}/taut-pintar/${campaignId}`);
 
 	// Langkah saat ini dihitung TANPA membaca panjang daftar pil, supaya tidak
@@ -41,10 +47,11 @@
 	// statusnya. Status dipakai supaya pil Ringkasan tetap tersedia dari halaman
 	// lain setelah kampanye selesai — termasuk setelah halaman dimuat ulang.
 	$effect(() => {
+		if (!campaignId) return;
 		noteReachedStep(campaignId, cur);
 		void ensureCampaignStep(brandId, campaignId);
 	});
-	const maxReached = $derived(Math.max(cur, furthestStep(campaignId), statusStep(campaignId)));
+	const maxReached = $derived(maxReachedProp ?? Math.max(cur, furthestStep(campaignId), statusStep(campaignId)));
 	const steps = $derived(maxReached > AGENT_STEPS.length ? [...AGENT_STEPS, 'Ringkasan'] : [...AGENT_STEPS]);
 
 	function pillClass(n: number, locked: boolean, clickable: boolean): string {
@@ -64,17 +71,24 @@
 
 	function select(n: number, locked: boolean) {
 		if (!clickable(n, locked)) return;
-		const slug = AGENT_STEP_ROUTES[n - 1];
-		if (!slug) return;
-		// The Matchmaker kini mengarah ke Katalog Media: klien memilih media di
-		// sana (katalog), bukan di halaman matchmaker. Konteks kampanye dibawa
-		// lewat ?campaign supaya media yang sudah dipilih tetap tercentang dan
-		// klien bisa menambah media lalu kembali ke Penyedia Konten.
-		if (slug === 'matchmaker') {
-			void goto(`/klien/${getBrandUrlId() || brandId}/media?campaign=${campaignId}`);
-			return;
+		const proceed = () => {
+			const slug = AGENT_STEP_ROUTES[n - 1];
+			if (!slug) return;
+			// The Matchmaker kini mengarah ke Katalog Media: klien memilih media di
+			// sana (katalog), bukan di halaman matchmaker. Konteks kampanye dibawa
+			// lewat ?campaign supaya media yang sudah dipilih tetap tercentang dan
+			// klien bisa menambah media lalu kembali ke Penyedia Konten.
+			if (slug === 'matchmaker') {
+				void goto(`/klien/${getBrandUrlId() || brandId}/media?campaign=${campaignId}`);
+				return;
+			}
+			void goto(`${base}/${slug}`);
+		};
+		if (onSelect) {
+			onSelect(n, proceed);
+		} else {
+			proceed();
 		}
-		void goto(`${base}/${slug}`);
 	}
 
 	const toolbarSlot = getToolbarSlot();

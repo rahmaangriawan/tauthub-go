@@ -13,6 +13,7 @@
 	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
 	import { sanitizeHtml } from '$lib/sanitize-html';
 	import Select from '$lib/components/select.svelte';
+	import Tooltip from '$lib/components/tooltip.svelte';
 	import { tcToRp } from '$lib/credits/rupiah';
 	import { textToHtml } from '../../_shared';
 
@@ -730,23 +731,28 @@
 					{ key: 'generate', label: tr('Generate dengan AI') },
 					{ key: 'tulis', label: tr('Tulis / Edit') }
 				] as t (t.key)}
-					<button
-						class="relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors"
-						style="border-color: {tab === t.key ? 'var(--primary)' : 'transparent'}; color: {tab === t.key ? 'var(--primary)' : 'var(--muted-foreground)'};"
-						type="button"
-						role="tab"
-						aria-selected={tab === t.key}
-						onclick={() => (tab = t.key as Tab)}
-					>
-						{#if t.key === 'generate'}
-							<span
-								class="pointer-events-none absolute -top-1.5 right-0 text-[9px] font-bold uppercase tracking-wide leading-none"
-								style="color: var(--primary);">{tr('Beta')}</span
-							>
-						{/if}
-						{#if t.key === 'tulis'}<FileText size={14} />{:else if t.key === 'unggah'}<Upload size={14} />{:else}<Sparkles size={14} />{/if}
-						{t.label}
-					</button>
+						<button
+							class="relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors"
+							style="border-color: {tab === t.key ? 'var(--primary)' : 'transparent'}; color: {tab === t.key ? 'var(--primary)' : 'var(--muted-foreground)'};"
+							type="button"
+							role="tab"
+							aria-selected={tab === t.key}
+							title={t.key === 'generate' ? tr('Fitur ini masih dalam tahap beta. Hasil draf artikel AI masih perlu dikaji dan diperiksa ulang sebelum diterbitkan.') : undefined}
+							onclick={() => (tab = t.key as Tab)}
+						>
+							{#if t.key === 'generate'}
+								<div class="pointer-events-auto absolute -top-1.5 right-0">
+									<Tooltip content={tr('Fitur ini masih dalam tahap beta. Hasil draf artikel AI masih perlu dikaji dan diperiksa ulang sebelum diterbitkan.')} maxWidth={280}>
+										<span
+											class="cursor-help text-[9px] font-bold uppercase tracking-wide leading-none transition-opacity hover:opacity-80"
+											style="color: var(--primary);">{tr('Beta')}</span
+										>
+									</Tooltip>
+								</div>
+							{/if}
+							{#if t.key === 'tulis'}<FileText size={14} />{:else if t.key === 'unggah'}<Upload size={14} />{:else}<Sparkles size={14} />{/if}
+							{t.label}
+						</button>
 				{/each}
 			</div>
 		</div>
@@ -988,15 +994,22 @@
 						</div>
 					</div>
 				{:else}
-						<div class="flex h-full min-h-[320px] flex-col items-center py-4 text-center">
-							<div class="flex h-12 w-12 items-center justify-center rounded-xl" style="background-color: var(--primary); color: #ffffff;">
-								<Sparkles size={22} />
-							</div>
-							<span
-								class="mt-3 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-								style="background-color: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary);">{tr('Beta')}</span
-							>
-							<h3 class="mt-2 text-xl font-bold">{tr('Delegasikan pada The Writer')}</h3>
+							<div class="flex h-full min-h-[320px] flex-col items-center py-4 text-center">
+								<div class="flex h-12 w-12 items-center justify-center rounded-xl" style="background-color: var(--primary); color: #ffffff;">
+									<Sparkles size={22} />
+								</div>
+								<div class="mt-3">
+									<Tooltip content={tr('Fitur ini masih dalam tahap beta. Hasil draf artikel AI masih perlu dikaji dan diperiksa ulang sebelum diterbitkan.')} maxWidth={280}>
+										<span
+											class="inline-flex cursor-help items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-opacity hover:opacity-85"
+											style="background-color: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary);"
+										>
+											<span>{tr('Beta')}</span>
+											<CircleAlert size={12} class="shrink-0" />
+										</span>
+									</Tooltip>
+								</div>
+								<h3 class="mt-2 text-xl font-bold">{tr('Delegasikan pada The Writer')}</h3>
 							<p class="mt-2 max-w-md text-sm text-muted-foreground">
 								{tr('Cukup berikan konteks singkat, AI kami akan merangkai artikel yang utuh, relevan, dan teroptimasi SEO.')}
 							</p>

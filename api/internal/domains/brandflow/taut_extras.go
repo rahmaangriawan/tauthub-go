@@ -849,8 +849,8 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	campaignID := chiParam(r, "campaignId")
-	campaign, err := d.queryRow(r.Context(),
-		"SELECT id, taut_status, taut_entry_mode FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandRow.ID)
+		campaign, err := d.queryRow(r.Context(),
+			"SELECT id, name, taut_status, taut_entry_mode FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandRow.ID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -1019,11 +1019,11 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 	if tokensRow != nil {
 		tokensUsed = tokensRow.intOr("total", 0)
 	}
-	writeNoStore(w, http.StatusOK, map[string]any{
-		"campaign": map[string]any{
-			"id": campaignID, "taut_status": campaign.raw("taut_status"),
-			"entry_mode": campaign.raw("taut_entry_mode"),
-		},
+		writeNoStore(w, http.StatusOK, map[string]any{
+			"campaign": map[string]any{
+				"id": campaignID, "name": campaign.strOr("name", ""), "taut_status": campaign.raw("taut_status"),
+				"entry_mode": campaign.raw("taut_entry_mode"),
+			},
 		"media":         mediaOut,
 		"canDistribute": canDistribute,
 		"totalCostIdr":  totalCostIDR,

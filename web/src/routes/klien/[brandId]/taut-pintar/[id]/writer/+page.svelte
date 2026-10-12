@@ -1046,11 +1046,11 @@
 				? tr('Dalam Antrean…')
 				: s === 'draft'
 					? tr('Draft Tersedia')
-					: s === 'ready'
-						? tr('Siap Terbit')
-						: s === 'blocked'
-							? tr('Diblokir')
-							: tr('MENUNGGU AI');
+						: s === 'ready'
+							? tr('Siap Terbit')
+							: s === 'blocked'
+								? tr('Diblokir')
+								: tr('MENUNGGU ARTIKEL');
 	const badge = (tone: string) =>
 		tone === 'success'
 			? 'background-color: var(--success-soft); color: var(--success);'
@@ -1423,39 +1423,43 @@
 			{/if}
 		</section>
 
-		<TautBottomBar>
-			<div class="flex flex-wrap items-start gap-5">
-				<div class="flex flex-col gap-1">
-					<p class="flex h-4 items-center text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('BIAYA MEDIA')} ({cost.count} {tr('Media')})</p>
-					<p class="text-[17px] font-bold leading-tight">{toRp(cost.media)}</p>
+			<TautBottomBar fullWidth>
+				<div class="selectedBarStats">
+					<div class="selectedStatItem">
+						<span class="selectedStatLabel">{tr('BIAYA MEDIA')} ({cost.count} {tr('Media')})</span>
+						<span class="selectedStatPriceVal">{toRp(cost.media)}</span>
+					</div>
+					<div class="selectedBarDivider"></div>
+					<div class="selectedStatItem">
+						<span class="selectedStatLabel">{tr('BIAYA PENULISAN AI')}</span>
+						<span class="selectedStatPriceVal">{toRp(cost.writing)}</span>
+					</div>
+					<div class="selectedBarDivider"></div>
+					<div class="selectedStatItem">
+						<span class="selectedStatLabel flex items-center gap-1">
+							{tr('TOTAL TAGIHAN AKHIR')}
+							<Wallet size={12} class="opacity-70" />
+						</span>
+						<span class="selectedStatPriceVal selectedStatTotalVal">{toRp(cost.total)}</span>
+					</div>
 				</div>
-				<span class="mt-3.5 self-start text-lg font-semibold" style="color: var(--border);">+</span>
-				<div class="flex flex-col gap-1">
-					<p class="flex h-4 items-center text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('BIAYA PENULISAN AI')}</p>
-					<p class="text-[17px] font-bold leading-tight">{toRp(cost.writing)}</p>
+				<div class="selectedBarRight">
+					{#if distributable}
+						<!-- Lebarnya dibatasi supaya blok tombol tidak melebar sampai memaksa
+						     bar melipat dan tombolnya turun ke baris kedua. -->
+						<p class="writerQcNotice text-muted-foreground">{tr('QC sudah lulus — tombol ini langsung menerbitkan kampanye dan membuka Ringkasan.')}</p>
+					{:else if distributable === false}
+						<p class="writerQcNotice" style="color: var(--warning, #b45309);">{tr('QC belum lulus. Jalankan Cek Validasi sekarang')}</p>
+					{/if}
+					<div class="writerActionBtns">
+						<button class="selectedCancelBtn" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar`)}>{tr('Kembali')}</button>
+						<button class="selectedCreateBtn" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
+							{#if coverChecking || distributing}<LoaderCircle size={15} class="animate-spin" />{:else}<Send size={15} />{/if}
+							<span>{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
+						</button>
+					</div>
 				</div>
-				<div class="flex flex-col gap-1">
-					<p class="flex h-4 items-center gap-1 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('TOTAL TAGIHAN AKHIR')} <Wallet size={13} /></p>
-					<p class="text-[19px] font-extrabold leading-tight">{toRp(cost.total)}</p>
-				</div>
-			</div>
-			<div class="flex flex-col items-end gap-1.5">
-				{#if distributable}
-					<!-- Lebarnya dibatasi supaya blok tombol tidak melebar sampai memaksa
-					     bar melipat dan tombolnya turun ke baris kedua. -->
-					<p class="max-w-[330px] text-right text-[11px] leading-snug text-muted-foreground">{tr('QC sudah lulus — tombol ini langsung menerbitkan kampanye dan membuka Ringkasan.')}</p>
-				{:else if distributable === false}
-					<p class="max-w-[330px] text-right text-[11px] leading-snug" style="color: var(--warning);">{tr('QC belum lulus. Jalankan Cek Validasi, hasilnya tampil di panel Analisis QC.')}</p>
-				{/if}
-				<div class="flex flex-wrap items-center gap-3">
-					<button class="app-btn app-btn-soft" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar`)}>{tr('Kembali')}</button>
-					<button class="app-btn" type="button" style="background-color: var(--success); color: #fff;" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
-						{#if coverChecking || distributing}<LoaderCircle size={16} class="animate-spin" />{:else}<Send size={16} />{/if}
-						{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}
-					</button>
-				</div>
-			</div>
-		</TautBottomBar>
+			</TautBottomBar>
 	{/if}
 </main>
 
@@ -1619,7 +1623,151 @@
 			onClose={() => (qcFor = null)}
 			onEdit={() => void openPreview(qc)}
 			onRegenerate={() => void generateOne(qc, false)}
-			onScanned={() => { qcToken += 1; void load(); }}
-		/>
-	{/key}
-{/if}
+				onScanned={() => { qcToken += 1; void load(); }}
+			/>
+		{/key}
+	{/if}
+
+	<style>
+		/* Bar biaya bawah (referensi style dari katalog media):
+		   Stat item rapi dengan pembatas vertikal tipis, tombol hitam untuk aksi utama,
+		   dan membentang penuh (full-width) mengikuti area konten. */
+		.selectedBarStats {
+			display: flex;
+			align-items: center;
+			gap: 0;
+		}
+		.selectedStatItem {
+			display: flex;
+			flex-direction: column;
+			gap: 3px;
+		}
+		.selectedStatLabel {
+			font-size: 10.5px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: #94a3b8;
+			white-space: nowrap;
+		}
+		.selectedStatPriceVal {
+			font-size: 17.5px;
+			font-weight: 750;
+			color: #0f172a;
+			letter-spacing: -0.01em;
+			line-height: 1.2;
+			font-variant-numeric: tabular-nums;
+		}
+		.selectedStatTotalVal {
+			font-size: 19px;
+			font-weight: 800;
+		}
+		.selectedBarDivider {
+			width: 1px;
+			height: 34px;
+			background: #e2e8f0;
+			margin: 0 24px;
+			flex-shrink: 0;
+		}
+		.selectedBarRight {
+			display: flex;
+			flex-direction: column;
+			align-items: flex-end;
+			gap: 6px;
+		}
+		.writerQcNotice {
+			max-width: 380px;
+			text-align: right;
+			font-size: 11px;
+			line-height: 1.35;
+		}
+		.writerActionBtns {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.selectedCancelBtn {
+			background: #ffffff;
+			border: 1px solid #e2e8f0;
+			color: #334155;
+			font-size: 13px;
+			font-weight: 500;
+			padding: 8px 18px;
+			min-height: 40px;
+			border-radius: 8px;
+			cursor: pointer;
+			outline: none;
+			transition: all 0.12s ease;
+			white-space: nowrap;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.selectedCancelBtn:hover {
+			background: #f8fafc;
+			border-color: #cbd5e1;
+			color: #0f172a;
+		}
+		.selectedCreateBtn {
+			background: #0f172a;
+			color: #ffffff;
+			font-size: 13px;
+			font-weight: 600;
+			padding: 9px 20px;
+			min-height: 40px;
+			border-radius: 8px;
+			border: none;
+			cursor: pointer;
+			outline: none;
+			transition: all 0.15s ease;
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			white-space: nowrap;
+		}
+		.selectedCreateBtn:hover:not(:disabled) {
+			background: #1e293b;
+			transform: translateY(-1px);
+		}
+		.selectedCreateBtn:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+			transform: none;
+		}
+
+		@media (max-width: 1023px) {
+			.selectedBarDivider {
+				margin: 0 16px;
+			}
+		}
+		@media (max-width: 767px) {
+			.selectedBarStats {
+				width: 100%;
+				flex-wrap: wrap;
+				gap: 12px 20px;
+			}
+			.selectedBarDivider {
+				display: none;
+			}
+			.selectedBarRight {
+				width: 100%;
+				align-items: stretch;
+			}
+			.writerQcNotice {
+				text-align: left;
+				max-width: none;
+			}
+			.writerActionBtns {
+				width: 100%;
+			}
+			.selectedCancelBtn {
+				flex: 1;
+				min-height: 44px;
+			}
+			.selectedCreateBtn {
+				flex: 2;
+				justify-content: center;
+				min-height: 44px;
+			}
+		}
+	</style>

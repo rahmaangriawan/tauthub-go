@@ -7,44 +7,10 @@
 	// tabel 10 kolom + sort + multi-select → paginasi → modal → selection bar.
 	import { getContext, onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { getToolbarSlot } from '$lib/components/toolbar-slot.svelte';
-
-	// Tahap alur kampanye dipindahkan ke utility bar (header) seperti halaman
-	// The Writer, dan hanya tampil kalau sudah ada media yang benar-benar dipilih.
-	const toolbarSlot = getToolbarSlot();
-	function portalToToolbar(node: HTMLElement) {
-		const stop = $effect.root(() => {
-			$effect(() => {
-				const target = toolbarSlot?.el ?? null;
-				if (!target) return;
-				if (node.parentElement !== target) target.appendChild(node);
-			});
-		});
-		return {
-			destroy() {
-				stop();
-				if (!motionOK) {
-					node.remove();
-					return;
-				}
-				// Keluar dengan animasi halus sebelum dilepas (mis. saat seluruh
-				// pilihan dibatalkan → indikator tahap menghilang dengan mulus).
-				const anim = node.animate(
-					[
-						{ opacity: 1, transform: 'translateY(0) scale(1)' },
-						{ opacity: 0, transform: 'translateY(-6px) scale(0.96)' }
-					],
-					{ duration: 220, easing: 'cubic-bezier(0.4, 0, 0.6, 1)' }
-				);
-				const done = () => node.remove();
-				anim.onfinish = done;
-				anim.oncancel = done;
-			}
-		};
-	}
 	import { goto } from '$app/navigation';
 	import { fly } from 'svelte/transition';
 	import { cubicOut, cubicIn } from 'svelte/easing';
+	import AgentSteps from '../taut-pintar/_agent-steps.svelte';
 	import {
 		ArrowRight, Bookmark, Check, Clock, Database, FileText, Info, LayoutGrid,
 		Plus, Search, SlidersHorizontal, Trash2, Upload, Wallet, X, Zap,
@@ -254,7 +220,7 @@
 	let selectionHydrated = $state(false);
 	// Mode "tambah ke kampanye": katalog dibuka dari Penyedia Konten lewat
 	// ?campaign=<urlId kampanye>. Berisi urlId tujuan, atau null untuk alur biasa.
-	let addToCampaignId = $state<string | null>(null);
+	let addToCampaignId = $state<string | null>(page.url.searchParams.get('campaign'));
 	// Media yang sudah ada di kampanye saat katalog dibuka — dipakai untuk tahu
 	// mana yang benar-benar tambahan saat menyimpan, dan untuk tombol "Batal".
 	let originalCampaignIds = $state<Set<string>>(new Set());
@@ -1952,7 +1918,32 @@
 
 {#if selectedIds.size > 0}<div style="height:74px"></div>{/if}
 
-<!-- Selection bar -->
+	<!-- Tahap alur kampanye di header (portal ke utility bar):
+	     Menggunakan komponen AgentSteps yang sama persis dengan The Writer
+	     agar posisi, ukuran, jumlah langkah, dan styling pil 100% konsisten tanpa layout shift. -->
+	{#if addToCampaignId}
+		<AgentSteps
+			current={1}
+			campaignId={addToCampaignId}
+			onSelect={(n, proceed) => {
+				if (n === 2) {
+					void addToCampaign();
+				} else {
+					proceed();
+				}
+			}}
+		/>
+	{:else if selectedIds.size > 0}
+		<AgentSteps
+			current={1}
+			maxReached={2}
+			onSelect={(n) => {
+				if (n === 2) void openCampaignModal();
+			}}
+		/>
+	{/if}
+
+	<!-- Selection bar -->
 	{#if selectedIds.size > 0}
 		<div
 			class="selectedBottomBar"
@@ -1989,32 +1980,19 @@
 					</div>
 
 					<!-- Detail (expand/collapse): saldo + daftar media terpilih. -->
-									</div>
-				<div class="selectedBarStats">
-					<div class="selectedStatItem" use:portalToToolbar>
-							<span class="selectedStepsTrack" aria-label={tr("Tahap alur kampanye")}>
-									<span class="selectedStepChip selectedStepChipActive" title={tr("Anda berada di sini")}>
-										<span class="selectedStepNum" aria-hidden="true">1</span>
-										<span class="selectedStepChipLabel">{tr("Katalog Media")}</span>
-									</span>
-								<span class="selectedStepChip">
-									<span class="selectedStepNum" aria-hidden="true">2</span>
-									<span class="selectedStepChipLabel">{tr("Penyedia Konten")}</span>
-								</span>
-							</span>
 				</div>
-			<div class="selectedBarDivider"></div>
-			<div class="selectedStatItem">
-				<span class="selectedStatLabel">MEDIA TERPILIH</span>
-				<span class="selectedStatDomainVal">{selectedIds.size} Media</span>
-			</div>
-			<div class="selectedBarDivider"></div>
-			<div class="selectedStatItem">
-				<span class="selectedStatLabel">TOTAL BIAYA PUBLIKASI</span>
-				<div class="selectedStatPriceGroup">
-					<span class="selectedStatPriceVal">Rp {fmt(totalSelectedPrice)}</span>
-									</div>
-			</div>
+				<div class="selectedBarStats">
+					<div class="selectedStatItem">
+						<span class="selectedStatLabel">MEDIA TERPILIH</span>
+						<span class="selectedStatDomainVal">{selectedIds.size} Media</span>
+					</div>
+					<div class="selectedBarDivider"></div>
+					<div class="selectedStatItem">
+						<span class="selectedStatLabel">TOTAL BIAYA PUBLIKASI</span>
+						<div class="selectedStatPriceGroup">
+							<span class="selectedStatPriceVal">Rp {fmt(totalSelectedPrice)}</span>
+						</div>
+					</div>
 			<div class="selectedBarDivider"></div>
 			<div class="selectedStatItem">
 				<span class="selectedStatLabel">SALDO KREDIT</span>

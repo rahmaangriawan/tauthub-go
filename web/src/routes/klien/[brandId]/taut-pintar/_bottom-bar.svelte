@@ -7,7 +7,7 @@
 	// tinggi bar berbeda-beda per langkah dan bisa membungkus di layar sempit.
 	import type { Snippet } from 'svelte';
 
-	let { children }: { children: Snippet } = $props();
+	let { children, fullWidth = false }: { children: Snippet; fullWidth?: boolean } = $props();
 
 	let barEl = $state<HTMLElement | null>(null);
 	let barHeight = $state(84);
@@ -25,7 +25,7 @@
 
 <div class="taut-bottom-spacer" style="height: {barHeight}px" aria-hidden="true"></div>
 <div class="taut-bottom-bar" bind:this={barEl}>
-	<div class="taut-bottom-inner">{@render children()}</div>
+	<div class="taut-bottom-inner" class:taut-bottom-inner-full={fullWidth}>{@render children()}</div>
 </div>
 
 <style>
@@ -35,9 +35,9 @@
 		right: 0;
 		bottom: 0;
 		z-index: 30;
-		background: var(--card);
-		border-top: 1px solid var(--border);
-		box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.05);
+		background: #ffffff;
+		border-top: 1px solid #e2e8f0;
+		box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.08);
 	}
 	.taut-bottom-inner {
 		display: flex;
@@ -49,6 +49,12 @@
 		margin: 0 auto;
 		padding: 12px 32px;
 	}
+	.taut-bottom-inner.taut-bottom-inner-full {
+		max-width: none;
+		margin: 0;
+		width: 100%;
+		padding: 14px 32px;
+	}
 	/* Sidebar disembunyikan di bawah 768px (app.css) — bar ikut melebar penuh. */
 	@media (max-width: 767px) {
 		.taut-bottom-bar {
@@ -56,6 +62,9 @@
 		}
 		.taut-bottom-inner {
 			padding: 10px 16px;
+		}
+		.taut-bottom-inner.taut-bottom-inner-full {
+			padding: 12px 16px;
 		}
 	}
 </style>
