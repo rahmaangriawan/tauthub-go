@@ -265,7 +265,7 @@
 		<div class="app-card mt-4 overflow-hidden">
 			<div class="flex flex-wrap items-end justify-between gap-3 border-b px-5 py-4">
 				<div>
-					<h2 class="text-lg font-bold tracking-tight">{tr("Earnings Details")}</h2>
+					<h2 class="text-lg font-bold tracking-tight">{tr("Riwayat Penghasilan")}</h2>
 					<p class="mt-0.5 text-xs text-muted-foreground">{tr("Daftar artikel yang sudah menghasilkan dan bisa ditarik.")}</p>
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
@@ -297,15 +297,15 @@
 					<p class="mt-1 text-xs text-muted-foreground">{tr('Penghasilan tercatat otomatis setelah artikel Anda terbit di media.')}</p>
 				</div>
 			{:else}
-				<!-- Desktop: tabel asli, tidak diubah (≥768px). -->
-				<div class="hidden md:block">
+				<!-- Desktop/tablet: tabel asli. Wrapper-nya yang menggulir lokal
+				     bila kolom butuh lebih banyak ruang (lihat blok <style>). -->
+				<div class="earn-table-wrap hidden md:block">
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="text-left text-xs text-muted-foreground">
 								<th class="px-5 py-2.5 font-medium">{tr("Artikel")}</th>
 								<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
 								<th class="px-4 py-2.5 text-right font-medium">{tr("Nilai Diterima")}</th>
-								<th class="px-4 py-2.5 text-right font-medium">{tr("Harga ke Klien")}</th>
 								<th class="px-4 py-2.5 font-medium">{tr("Status")}</th>
 								<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
 							</tr>
@@ -322,8 +322,7 @@
 									<td class="px-4 py-2.5">
 										{@render earnMediaCell(e)}
 									</td>
-									<td class="px-4 py-2.5 text-right font-semibold tabular-nums">{rp(e.amount)}</td>
-									<td class="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{rp(e.client_price)}</td>
+									<td class="px-4 py-2.5 text-right font-semibold tabular-nums" style="color: var(--success);">+{rp(e.amount)}</td>
 									<td class="px-4 py-2.5">
 										{@render earnStatusBadge(e)}
 									</td>
@@ -352,14 +351,10 @@
 								{@render earnMediaCell(e)}
 							</div>
 							<!-- Ringkasan nominal -->
-							<dl class="mt-3 grid grid-cols-2 gap-3 border-t pt-3" style="border-color: var(--border);">
+							<dl class="mt-3 border-t pt-3" style="border-color: var(--border);">
 								<div class="min-w-0">
 									<dt class="text-[11px] text-muted-foreground">{tr("Nilai Diterima")}</dt>
-									<dd class="mt-0.5 text-[15px] font-semibold tabular-nums">{rp(e.amount)}</dd>
-								</div>
-								<div class="min-w-0">
-									<dt class="text-[11px] text-muted-foreground">{tr("Harga ke Klien")}</dt>
-									<dd class="mt-0.5 text-[13px] font-medium tabular-nums text-muted-foreground">{rp(e.client_price)}</dd>
+									<dd class="mt-0.5 text-[15px] font-semibold tabular-nums" style="color: var(--success);">+{rp(e.amount)}</dd>
 								</div>
 							</dl>
 							<!-- Status & tanggal -->
@@ -491,3 +486,25 @@
 		</dialog>
 	</div>
 {/if}
+
+<style>
+	/* Tabel Earnings Details: di bawah 1400px area konten menyempit karena
+	   sidebar, sehingga enam kolom tidak muat nyaman (di 768px tinggi header
+	   kolom sampai 100px) dan di 1280px tabel terpotong overflow-hidden kartu.
+	   Solusinya: lebar minimum kolom + gulir lokal pada wrapper tabel.
+	   `!important` diperlukan karena aturan global `main table` di app.css
+	   memaksa min-width:0 pada semua tabel di bawah 1280px. */
+	@media (min-width: 768px) and (max-width: 1399px) {
+		.earn-table-wrap {
+			min-width: 0;
+			max-width: 100%;
+			overflow-x: auto;
+			-webkit-overflow-scrolling: touch;
+		}
+		.earn-table-wrap > table {
+			/* Lima kolom: cukup agar judul kolom satu baris dan kolom angka tidak
+			   berdesakan; di area lebih sempit tabel digulir lokal di dalam kartu. */
+			min-width: 860px !important;
+		}
+	}
+</style>
