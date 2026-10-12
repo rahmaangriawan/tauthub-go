@@ -207,8 +207,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 					label: i18n.t.nav.campaigns,
 					href: `${base}/campaigns`,
 					icon: Megaphone,
-					active: isActive(`${base}/campaigns`) || isActive(`${base}/profiler`),
-					children: [{ label: i18n.t.nav.profiler, href: `${base}/profiler`, active: isActive(`${base}/profiler`) }]
+					active: isActive(`${base}/campaigns`) || isActive(`${base}/profiler`)
 				},
 				{ label: i18n.t.nav.publications, href: `${base}/publications`, icon: ShieldCheck, active: isActive(`${base}/publications`) },
 				{ label: i18n.t.nav.link_monitor, href: `${base}/link-guardian`, icon: TriangleAlert, active: isActive(`${base}/link-guardian`) }

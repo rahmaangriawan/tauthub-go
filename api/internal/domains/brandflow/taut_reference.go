@@ -14,21 +14,44 @@ import (
 // (nama, angka, kutipan dari materials/topik) ditandai "tanpa dasar" dan
 // menurunkan skor entitas + E-E-A-T. Keduanya kini memakai fungsi ini.
 
+// TautWriterReferenceMaterial shares the Writer's saved-angle context with the
+// legacy /finish Gatekeeper route without duplicating angle resolution.
+func (d *Deps) TautWriterReferenceMaterial(ctx context.Context, campaignID, brandID, mediaID string) (string, error) {
+	campaign, err := d.loadTautCampaignRow(ctx, campaignID, brandID)
+	if err != nil {
+		return "", err
+	}
+	text, _, err := d.tautReferenceMaterial(ctx, campaign, campaignID, mediaID)
+	return text, err
+}
+
 // tautReferenceMaterial: rangkai bahan fakta untuk satu media. hasFacts=false
 // berarti benar-benar tidak ada rujukan: Writer harus menulis generik (tanpa
 // nama/angka karangan) dan Checker memperlakukan bahan sebagai kosong.
 func (d *Deps) tautReferenceMaterial(ctx context.Context, campaign bsRow, campaignID, mediaID string) (string, bool, error) {
-	brief, err := d.loadTautBriefContext(ctx, campaignID)
+	item, err := d.queryRow(ctx, `
+		SELECT tcm.angle_slug, m.media_type FROM taut_campaign_media tcm
+		JOIN media m ON m.id = tcm.media_id
+		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 LIMIT 1`, campaignID, mediaID)
+	if err != nil {
+		return "", false, err
+	}
+	if item == nil {
+		return "", false, errNotFound("Media tidak ditemukan di kampanye ini.")
+	}
+	mediaType := resolveTautMediaType(item.strOr("media_type", ""), campaign.strOr("media_type", ""))
+	angle, angleOverride, err := d.resolveTautWriterAngle(ctx, campaignID, mediaType, item.strOr("angle_slug", ""), nil)
+	if err != nil {
+		return "", false, err
+	}
+	brief, err := d.loadTautBriefContext(ctx, campaignID, angleOverride)
 	if err != nil {
 		return "", false, err
 	}
 	materials := asMapValue(campaign.jsonField("editorial_standard_snapshot"))
 	topic := d.loadTautWriterTopic(ctx, campaignID, mediaID)
 	spokes := spokespersonListValue(campaign.jsonField("spokepersons"))
-	// Angle berita ikut jadi bahan rujukan supaya Writer DAN Gatekeeper melihat
-	// sumber informasi yang sama (klaim bersumber tidak dinilai "tanpa dasar").
-	angleBlock, angleHasSources := tautAngleBriefBlock(
-		d.loadTautAngleContext(ctx, campaignID, d.tautReferenceMediaType(ctx, campaign, campaignID, mediaID)))
+	angleBlock, angleHasSources := tautAngleBriefBlock(angle)
 	text, hasFacts := buildTautReferenceMaterial(brief, materials, topic, spokes, angleBlock)
 	if angleHasSources {
 		hasFacts = true
@@ -36,19 +59,11 @@ func (d *Deps) tautReferenceMaterial(ctx context.Context, campaign bsRow, campai
 	return text, hasFacts, nil
 }
 
-// tautReferenceMediaType: tipe media satu media di kampanye — resolusi yang
-// sama dengan mesin writer (baris media → kampanye → mainstream).
-func (d *Deps) tautReferenceMediaType(ctx context.Context, campaign bsRow, campaignID, mediaID string) string {
-	row, err := d.queryRow(ctx, `
-		SELECT m.media_type FROM taut_campaign_media tcm
-		JOIN media m ON m.id = tcm.media_id
-		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 LIMIT 1`, campaignID, mediaID)
-	if err == nil && row != nil {
-		if mt := strings.TrimSpace(row.strOr("media_type", "")); mt != "" {
-			return mt
-		}
+func resolveTautMediaType(mediaType, campaignType string) string {
+	if mt := strings.TrimSpace(mediaType); mt != "" {
+		return mt
 	}
-	if mt := strings.TrimSpace(campaign.strOr("media_type", "")); mt != "" {
+	if mt := strings.TrimSpace(campaignType); mt != "" {
 		return mt
 	}
 	return "mainstream"

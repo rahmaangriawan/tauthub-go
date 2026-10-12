@@ -767,7 +767,7 @@ func (d *Deps) TautProfilerOptions(w http.ResponseWriter, r *http.Request) {
 		angleItems := make([]map[string]any, 0, len(angles))
 		for _, a := range angles {
 			angleItems = append(angleItems, map[string]any{
-				"id": a.ID, "name": a.Name, "slug": a.Slug, "description": a.Description,
+				"id": a.ID, "name": a.Name, "slug": a.Slug, "description": a.Description, "has_prompt": a.HasPrompt,
 			})
 		}
 		items = append(items, map[string]any{

@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
@@ -52,6 +53,7 @@ type tautWriterOptions struct {
 	// toggle di modal Pengelola Naskah. Bila prompt aktifnya ada, dipakai sebagai
 	// system prompt pengganti The Writer. Kosong = prompt agent apa adanya.
 	ArticleType string
+	AngleSlug   *string
 	// StreamHTML (opsional): dipanggil dengan TAMBAHAN html parsial setiap kali
 	// LLM menulis lebih banyak isi — untuk streaming SSE ke editor. Nilai masih
 	// mentah (belum lewat finalizeTautArticleHTML); finalize hanya di akhir.
@@ -195,11 +197,13 @@ func (d *Deps) pruneContentVersions(ctx context.Context, documentID string, keep
 func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandID, userID, mediaID string, opts ...tautWriterOptions) (writerItemResult, error) {
 	clientTopic := ""
 	articleType := ""
+	var requestedAngle *string
 	customLinks := []tautWriterLink{}
 	var streamFn func(string)
 	if len(opts) > 0 {
 		clientTopic = strings.TrimSpace(opts[0].Topic)
 		articleType = strings.TrimSpace(opts[0].ArticleType)
+		requestedAngle = opts[0].AngleSlug
 		customLinks = opts[0].Links
 		streamFn = opts[0].StreamHTML
 	}
@@ -207,9 +211,30 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if err != nil {
 		return writerItemResult{}, err
 	}
+	item, err := d.queryRow(ctx, `
+		SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.regen_count, tcm.angle_slug,
+		       m.media_type, m.category, m.website_url, m.allow_hyperlink, m.max_links,
+		       m.label_sponsor, m.word_count_mode, m.topik_terlarang, m.bahasa_artikel
+		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
+		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 AND tcm.status = 'selected' LIMIT 1`,
+		campaignID, mediaID)
+	if err != nil {
+		return writerItemResult{}, err
+	}
+	if item == nil {
+		return writerItemResult{}, errStatus(500, "Media tidak terpilih di kampanye ini.")
+	}
+	mediaType := resolveTautMediaType(item.strOr("media_type", ""), campaign.strOr("media_type", ""))
+	angle, angleOverride, err := d.resolveTautWriterAngle(ctx, campaignID, mediaType, item.strOr("angle_slug", ""), requestedAngle)
+	if err != nil {
+		return writerItemResult{}, err
+	}
+	if angleOverride && articleType != "" {
+		return writerItemResult{}, errUnprocessable("Kirim angle_slug atau article_type, bukan keduanya.")
+	}
 	materials := asMapValue(campaign.jsonField("editorial_standard_snapshot"))
 	hyperlink := asSliceValue(campaign.jsonField("hyperlink_config"))
-	briefContext, err := d.loadTautBriefContext(ctx, campaignID)
+	briefContext, err := d.loadTautBriefContext(ctx, campaignID, angleOverride)
 	if err != nil {
 		return writerItemResult{}, err
 	}
@@ -244,24 +269,11 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		smartVariationRule = tautSmartVariationRule
 	}
 
-	item, err := d.queryRow(ctx, `
-		SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.regen_count, m.media_type, m.category, m.website_url,
-		       m.allow_hyperlink, m.max_links, m.label_sponsor, m.word_count_mode, m.topik_terlarang, m.bahasa_artikel
-		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
-		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 AND tcm.status = 'selected' LIMIT 1`,
-		campaignID, mediaID)
-	if err != nil {
-		return writerItemResult{}, err
-	}
-	if item == nil {
-		return writerItemResult{}, errStatus(500, "Media tidak terpilih di kampanye ini.")
-	}
-
 	itemID := item.strOr("id", "")
 	// Topik/konteks klien dari modal Pengelola Naskah disimpan per media supaya
 	// Gatekeeper (request terpisah) bisa memverifikasi klaim ke konteks yang sama
 	// dengan yang dipakai Writer. Non-fatal bila kolom belum dimigrasi.
-	if clientTopic != "" {
+	if clientTopic != "" && !angleOverride {
 		if err := d.exec(ctx, "UPDATE taut_campaign_media SET writer_topic = $1 WHERE id = $2", clientTopic, itemID); err != nil {
 			slog.Warn("[taut-writer] gagal menyimpan writer_topic", "media_id", mediaID, "err", truncateString(err.Error(), 200))
 		}
@@ -269,7 +281,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	// Pilihan jenis artikel dari modal Pengelola Naskah disimpan per media supaya
 	// regenerate & Gatekeeper memakai genre yang sama. Non-fatal bila kolom belum
 	// dimigrasi (migrasi 200).
-	if articleType != "" {
+	if articleType != "" && !angleOverride {
 		if err := d.exec(ctx, "UPDATE taut_campaign_media SET content_type = $1 WHERE id = $2", articleType, itemID); err != nil {
 			slog.Warn("[taut-writer] gagal menyimpan content_type", "media_id", mediaID, "err", truncateString(err.Error(), 200))
 		}
@@ -299,17 +311,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 
 	name := d.mediaNameFor(ctx, item.strOr("media_id", ""))
-	mediaType := item.strOr("media_type", "")
-	mediaTypeSource := "item"
-	if mediaType == "" {
-		mediaType = campaign.strOr("media_type", "")
-		mediaTypeSource = "campaign"
-	}
-	if mediaType == "" {
-		mediaType = "mainstream"
-		mediaTypeSource = "default"
-	}
-	slog.Info("[taut-writer] media type resolved", "campaign", campaignID, "media_id", mediaID, "media_type", mediaType, "source", mediaTypeSource)
+	slog.Info("[taut-writer] media type resolved", "campaign", campaignID, "media_id", mediaID, "media_type", mediaType)
 	wordRule := buildWordRule(item.strOr("word_count_mode", ""), mediaType)
 
 	// Jumlah kata EKSPLISIT dari klien (mis. "minimal 2500 kata" di kolom topik)
@@ -488,20 +490,18 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			strings.Join(lines, "\n")
 	}
 
-	// Angle pilihan klien adalah acuan tunggal: pakai instruksi dari brief Profiler
-	// bila ada, kalau tidak pakai prompt resmi angle yang dipilih klien di
-	// submission. Sebelumnya di sini ada blok "[ANGLE TERSEDIA — pilih satu]" yang
-	// hanya memuat 3 angle pertama menurut sort_order, sehingga AI bisa menulis
-	// dengan angle yang berbeda dari pilihan klien.
-	channelInstruction := d.loadTautChannelInstruction(ctx, campaignID, mediaType)
+	channelInstruction := ""
 	anglePromptBlock := ""
-	if channelInstruction == "" {
-		anglePromptBlock = d.loadTautChosenAnglePrompt(ctx, campaignID, mediaType)
+	if angleOverride {
+		// Keep the complete admin instructions; the brief block is only a summary.
+		anglePromptBlock = "[ANGLE PILIHAN KLIEN - " + mediaType + "/" + angle.Slug + "]\n" + angle.Prompt
+	} else {
+		channelInstruction = d.loadTautChannelInstruction(ctx, campaignID, mediaType)
+		if channelInstruction == "" {
+			anglePromptBlock = d.loadTautChosenAnglePrompt(ctx, campaignID, mediaType)
+		}
 	}
-	// Angle berita sebagai SUMBER INFORMASI (bukan sekadar instruksi gaya):
-	// nama + deskripsi + kolom "Sumber Informasi" dari halaman angle, ikut ke
-	// bahan rujukan yang diverifikasi Gatekeeper AI Overview.
-	angleBriefBlock, angleHasSources := tautAngleBriefBlock(d.loadTautAngleContext(ctx, campaignID, mediaType))
+	angleBriefBlock, angleHasSources := tautAngleBriefBlock(angle)
 	if angleBriefBlock != "" {
 		referenceMaterial = strings.TrimSpace(referenceMaterial + "\n\n[ANGLE BERITA]\n" + angleBriefBlock)
 	}
@@ -703,53 +703,64 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		docID = uuid.NewString()
 	}
 	jobID := uuid.NewString()
-	if isRegen {
-		doc, err := d.queryRow(ctx, "SELECT current_version FROM content_documents WHERE id = $1 LIMIT 1", docID)
-		if err != nil {
-			return writerItemResult{}, err
+	err = d.withTx(ctx, func(tx pgx.Tx) error {
+		if isRegen {
+			var currentVersion int
+			if err := tx.QueryRow(ctx, "SELECT current_version FROM content_documents WHERE id = $1 FOR UPDATE", docID).Scan(&currentVersion); err != nil {
+				return err
+			}
+			next := currentVersion + 1
+			if _, err := tx.Exec(ctx,
+				"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, $3, $4, 'html', 'ai_generated', 'Taut Pintar Writer - regenerasi', $5)",
+				uuid.NewString(), docID, next, contentHTML, userID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx,
+				"UPDATE content_documents SET current_version = $1, meta_description = $2, title = $3, slug = $4, updated_at = NOW() WHERE id = $5",
+				next, metaDescription, title, slugOrValue(title, "taut-artikel"), docID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, "DELETE FROM content_versions WHERE document_id = $1 AND version <> $2", docID, next); err != nil {
+				return err
+			}
+		} else {
+			slug := slugOrValue(title, "taut-artikel")
+			if _, err := tx.Exec(ctx,
+				"INSERT INTO content_documents (id, brand_id, job_id, status, title, slug, meta_title, meta_description, current_version, created_by, approved_by, approved_at) VALUES ($1, $2, $3, 'approved', $4, $5, $6, $7, 1, $8, $9, NOW())",
+				docID, brandID, jobID, title, slug, truncateString(title, 255), metaDescription, userID, userID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx,
+				"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, 1, $3, 'html', 'ai_generated', 'Taut Pintar Writer', $4)",
+				uuid.NewString(), docID, contentHTML, userID); err != nil {
+				return err
+			}
 		}
-		next := 1
-		if doc != nil {
-			next = doc.intOr("current_version", 1) + 1
+		if isRegen {
+			if _, err := tx.Exec(ctx,
+				"UPDATE taut_campaign_media SET article_status = 'draft', regen_count = regen_count + 1 WHERE id = $1", itemID); err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.Exec(ctx,
+				"UPDATE taut_campaign_media SET article_document_id = $1, article_status = 'draft' WHERE id = $2", docID, itemID); err != nil {
+				return err
+			}
 		}
-		if err := d.exec(ctx,
-			"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, $3, $4, 'html', 'ai_generated', 'Taut Pintar Writer — regenerasi', $5)",
-			uuid.NewString(), docID, next, contentHTML, userID); err != nil {
-			return writerItemResult{}, err
+		if angleOverride {
+			// The article and its QC context must change together. Empty article_type
+			// clears legacy editorial/advertorial policy without reusing it for angles.
+			if _, err := tx.Exec(ctx, `UPDATE taut_campaign_media
+				SET angle_slug = $1, content_type = NULLIF($2, ''),
+				    writer_topic = COALESCE(NULLIF($3, ''), writer_topic) WHERE id = $4`,
+				angle.Slug, articleType, clientTopic, itemID); err != nil {
+				return err
+			}
 		}
-		if err := d.exec(ctx,
-			"UPDATE content_documents SET current_version = $1, meta_description = $2, title = $3, slug = $4, updated_at = NOW() WHERE id = $5",
-			next, metaDescription, title, slugOrValue(title, "taut-artikel"), docID); err != nil {
-			return writerItemResult{}, err
-		}
-		// Regenerasi menimpa artikel: versi lama dihapus — editor tidak punya
-		// fitur pemulihan versi, jadi artikel lama tak perlu menumpuk di DB.
-		if err := d.pruneContentVersions(ctx, docID, next); err != nil {
-			return writerItemResult{}, err
-		}
-	} else {
-		slug := slugOrValue(title, "taut-artikel")
-		if err := d.exec(ctx,
-			"INSERT INTO content_documents (id, brand_id, job_id, status, title, slug, meta_title, meta_description, current_version, created_by, approved_by, approved_at) VALUES ($1, $2, $3, 'approved', $4, $5, $6, $7, 1, $8, $9, NOW())",
-			docID, brandID, jobID, title, slug, truncateString(title, 255), metaDescription, userID, userID); err != nil {
-			return writerItemResult{}, err
-		}
-		if err := d.exec(ctx,
-			"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, 1, $3, 'html', 'ai_generated', 'Taut Pintar Writer', $4)",
-			uuid.NewString(), docID, contentHTML, userID); err != nil {
-			return writerItemResult{}, err
-		}
-	}
-	if isRegen {
-		if err := d.exec(ctx,
-			"UPDATE taut_campaign_media SET article_status = 'draft', regen_count = regen_count + 1 WHERE id = $1", itemID); err != nil {
-			return writerItemResult{}, err
-		}
-	} else {
-		if err := d.exec(ctx,
-			"UPDATE taut_campaign_media SET article_document_id = $1, article_status = 'draft' WHERE id = $2", docID, itemID); err != nil {
-			return writerItemResult{}, err
-		}
+		return nil
+	})
+	if err != nil {
+		return writerItemResult{}, err
 	}
 	if !isRegen {
 		if err := d.chargeCredit(ctx, brandID, "taut-writer:"+campaignID+":"+mediaID, 1,

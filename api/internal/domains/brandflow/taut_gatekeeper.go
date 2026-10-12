@@ -109,7 +109,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		return nil, err
 	}
 
-	itemsQuery := `SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, m.media_type, m.bahasa_artikel, m.word_count_mode
+	itemsQuery := `SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode
 		 FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		 WHERE tcm.campaign_id = $1 AND tcm.status = 'selected' AND tcm.article_document_id IS NOT NULL`
 	queryArgs := []any{campaignID}
@@ -299,6 +299,9 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 		"Periksa judi/SARA/ujaran kebencian.",
 		"Judul saat ini: " + title,
 		"Isi (HTML): " + truncateString(content, 4000),
+	}
+	if strings.TrimSpace(item.strOr("angle_slug", "")) != "" {
+		promptLines = append(promptLines, "Pertahankan sudut konten dan bahan Writer berikut:\n"+refMaterial)
 	}
 	// Catatan AI Overview disambungkan ke pass revisi: bila indikator lemah,
 	// penulisan ulang wajib memperbaikinya.

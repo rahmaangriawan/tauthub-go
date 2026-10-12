@@ -209,6 +209,7 @@ type angleRow struct {
 	Description string
 	Active      bool
 	SortOrder   int
+	HasPrompt   bool
 }
 
 func (d *Deps) listActiveChannels(ctx context.Context) ([]channelRow, error) {
@@ -229,10 +230,13 @@ func (d *Deps) listActiveChannels(ctx context.Context) ([]channelRow, error) {
 
 func (d *Deps) listAnglesByChannel(ctx context.Context, channelSlug string) ([]angleRow, error) {
 	list, err := d.queryRows(ctx,
-		`SELECT a.id, a.channel_id, a.name, a.slug, a.description, a.active, a.sort_order
+		`SELECT a.id, a.channel_id, a.name, a.slug, a.description, a.active, a.sort_order,
+		        COALESCE((SELECT v.prompt ~ '[^[:space:]]' FROM taut_content_angle_prompt_versions v
+		                  WHERE v.content_angle_id = a.id AND v.status = 'active'
+		                  ORDER BY v.version DESC LIMIT 1), FALSE) AS has_prompt
 		 FROM taut_content_angles a
 		 JOIN taut_media_channels c ON c.id = a.channel_id
-		 WHERE a.active = TRUE AND c.slug = $1
+		 WHERE a.active = TRUE AND c.active = TRUE AND c.slug = $1
 		 ORDER BY a.sort_order, a.name`, channelSlug)
 	if err != nil {
 		return nil, err
@@ -242,7 +246,7 @@ func (d *Deps) listAnglesByChannel(ctx context.Context, channelSlug string) ([]a
 		out = append(out, angleRow{
 			ID: r.strOr("id", ""), ChannelID: r.strOr("channel_id", ""), Name: r.strOr("name", ""),
 			Slug: r.strOr("slug", ""), Description: r.strOr("description", ""),
-			Active: r.boolOr("active", true), SortOrder: r.intOr("sort_order", 0),
+			Active: r.boolOr("active", true), SortOrder: r.intOr("sort_order", 0), HasPrompt: r.boolOr("has_prompt", false),
 		})
 	}
 	return out, nil

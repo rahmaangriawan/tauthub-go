@@ -1362,6 +1362,42 @@ func (d *Deps) TautProduce(w http.ResponseWriter, r *http.Request) {
 	writeNoStore(w, http.StatusOK, map[string]any{"items": results})
 }
 
+func decodeTautWriterOptions(r *http.Request) (tautWriterOptions, error) {
+	var opts tautWriterOptions
+	if r.ContentLength == 0 {
+		return opts, nil
+	}
+	var body struct {
+		Topic       string                `json:"topic"`
+		Links       []tautWriterLinkInput `json:"links"`
+		ArticleType string                `json:"article_type"`
+		AngleSlug   json.RawMessage       `json:"angle_slug"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 65536))
+	if err := decoder.Decode(&body); err != nil {
+		if err == io.EOF {
+			return opts, nil
+		}
+		return opts, errBadRequest("Body JSON tidak valid.")
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return opts, errBadRequest("Body JSON tidak valid.")
+	}
+	opts.Topic = truncateString(strings.TrimSpace(body.Topic), 2000)
+	opts.ArticleType = truncateString(strings.TrimSpace(body.ArticleType), 50)
+	if len(body.AngleSlug) > 0 {
+		var slug string
+		if err := json.Unmarshal(body.AngleSlug, &slug); err != nil || strings.TrimSpace(slug) == "" {
+			return opts, errUnprocessable("angle_slug wajib berupa string yang tidak kosong.")
+		}
+		slug = strings.TrimSpace(slug)
+		opts.AngleSlug = &slug
+	}
+	links, err := normalizeTautWriterLinks(body.Links)
+	opts.Links = links
+	return opts, err
+}
+
 // TautProduceOne: POST /v1/brands/{brandId}/taut/campaigns/{campaignId}/produce/{mediaId}
 func (d *Deps) TautProduceOne(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
@@ -1372,37 +1408,12 @@ func (d *Deps) TautProduceOne(w http.ResponseWriter, r *http.Request) {
 	}
 	campaignID := chiParam(r, "campaignId")
 	mediaID := chiParam(r, "mediaId")
-	// Body opsional {topic, links[], article_type}: arahan topik/konteks, tautan
-	// tambahan, dan jenis artikel (editorial/advertorial/opini) dari modal
-	// Pengelola Naskah. Tanpa body → perilaku lama.
-	var topic string
-	var articleType string
-	var rawLinks []tautWriterLinkInput
-	if r.ContentLength != 0 {
-		var body struct {
-			Topic       string                `json:"topic"`
-			Links       []tautWriterLinkInput `json:"links"`
-			ArticleType string                `json:"article_type"`
-		}
-		if err := json.NewDecoder(io.LimitReader(r.Body, 65536)).Decode(&body); err == nil {
-			topic = strings.TrimSpace(body.Topic)
-			if len(topic) > 2000 {
-				topic = topic[:2000]
-			}
-			articleType = strings.TrimSpace(body.ArticleType)
-			if len(articleType) > 50 {
-				articleType = articleType[:50]
-			}
-			rawLinks = body.Links
-		}
-	}
-	links, err := normalizeTautWriterLinks(rawLinks)
+	opts, err := decodeTautWriterOptions(r)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID,
-		tautWriterOptions{Topic: topic, Links: links, ArticleType: articleType})
+	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID, opts)
 	if err != nil {
 		var ic *insufficientCreditsError
 		if asInsufficient(err, &ic) {
@@ -1430,58 +1441,50 @@ func (d *Deps) TautProduceOneStream(w http.ResponseWriter, r *http.Request) {
 	}
 	campaignID := chiParam(r, "campaignId")
 	mediaID := chiParam(r, "mediaId")
-	var topic string
-	var rawLinks []tautWriterLinkInput
-	if r.ContentLength != 0 {
-		var body struct {
-			Topic string                `json:"topic"`
-			Links []tautWriterLinkInput `json:"links"`
-		}
-		if err := json.NewDecoder(io.LimitReader(r.Body, 65536)).Decode(&body); err == nil {
-			topic = strings.TrimSpace(body.Topic)
-			if len(topic) > 2000 {
-				topic = topic[:2000]
-			}
-			rawLinks = body.Links
-		}
-	}
-	links, err := normalizeTautWriterLinks(rawLinks)
+	opts, err := decodeTautWriterOptions(r)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
 
 	flusher, canFlush := w.(http.Flusher)
-	if canFlush {
-		h := w.Header()
-		h.Set("Content-Type", "text/event-stream")
-		h.Set("Cache-Control", "no-cache")
-		// Nonaktifkan buffering nginx per-respons supaya delta tidak tertahan.
-		h.Set("X-Accel-Buffering", "no")
-		w.WriteHeader(http.StatusOK)
-	}
+	started := false
 	sendEvent := func(event string, payload any) {
 		if !canFlush {
 			return
+		}
+		if !started {
+			h := w.Header()
+			h.Set("Content-Type", "text/event-stream")
+			h.Set("Cache-Control", "no-cache")
+			h.Set("X-Accel-Buffering", "no")
+			w.WriteHeader(http.StatusOK)
+			started = true
 		}
 		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, jsonStringify(payload))
 		flusher.Flush()
 	}
 
-	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID,
-		tautWriterOptions{Topic: topic, Links: links, StreamHTML: func(partial string) {
-			sendEvent("delta", map[string]any{"append": partial})
-		}})
+	opts.StreamHTML = func(partial string) {
+		sendEvent("delta", map[string]any{"append": partial})
+	}
+	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID, opts)
 	if err != nil {
 		var ic *insufficientCreditsError
 		if asInsufficient(err, &ic) {
-			sendEvent("error", map[string]any{
-				"status":  http.StatusPaymentRequired,
-				"message": "Saldo kredit tidak cukup untuk generate (butuh " + itoa(ic.Needed) + ", tersedia " + itoa(ic.Available) + ").",
-			})
+			message := "Saldo kredit tidak cukup untuk generate (butuh " + itoa(ic.Needed) + ", tersedia " + itoa(ic.Available) + ")."
+			if !started {
+				httpx.Error(w, http.StatusPaymentRequired, message)
+			} else {
+				sendEvent("error", map[string]any{"status": http.StatusPaymentRequired, "message": message})
+			}
 			return
 		}
-		sendEvent("error", map[string]any{"status": http.StatusInternalServerError, "message": err.Error()})
+		if !started {
+			d.writeErr(w, err)
+		} else {
+			sendEvent("error", map[string]any{"status": http.StatusInternalServerError, "message": err.Error()})
+		}
 		return
 	}
 	// Tanpa flusher (pratinjau streaming tetap terkirim bila bisa): tulis hasil

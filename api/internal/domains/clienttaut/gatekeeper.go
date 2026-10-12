@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
+	"github.com/rahmaangriawan/tauthub-go/internal/domains/brandflow"
 	"github.com/rahmaangriawan/tauthub-go/internal/moderation"
 )
 
@@ -36,7 +37,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 	}
 
 	items, err := d.queryRows(ctx,
-		`SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, m.media_type, m.bahasa_artikel, m.word_count_mode
+		`SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode
 		 FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		 WHERE tcm.campaign_id = $1 AND tcm.status = 'selected' AND tcm.article_document_id IS NOT NULL
 		       AND tcm.article_status IN ('draft','revision')`, campaignID)
@@ -57,6 +58,14 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		itemID := item.strOr("id", "")
 		mediaID := item.strOr("media_id", "")
 		documentID := item.strOr("article_document_id", "")
+		itemBriefContext := briefContext
+		if strings.TrimSpace(item.strOr("angle_slug", "")) != "" {
+			writer := brandflow.Deps{Pool: d.Pool, Cfg: d.Cfg}
+			itemBriefContext, err = writer.TautWriterReferenceMaterial(ctx, campaignID, brandID, mediaID)
+			if err != nil {
+				return nil, err
+			}
+		}
 
 		title := ""
 		currentVersion := 1
@@ -132,7 +141,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		go func() {
 			defer checksWG.Done()
 			safety, aiOverview = d.contentSafetyAndOverview(ctx, title, mediaType, content, text,
-				briefContext, extractLinks(content))
+				itemBriefContext, extractLinks(content))
 		}()
 		go func() {
 			defer checksWG.Done()
@@ -215,6 +224,9 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			"Judul saat ini: " + title,
 			"Isi (HTML): " + truncateString(content, 4000),
 		}
+		if strings.TrimSpace(item.strOr("angle_slug", "")) != "" {
+			promptLines = append(promptLines, "Pertahankan sudut konten dan bahan Writer berikut:\n"+itemBriefContext)
+		}
 		// Catatan AI Overview disambungkan ke pass revisi (bila indikator lemah).
 		if notes := ai.AIOverviewRevisionNotes(aiOverview); len(notes) > 0 {
 			promptLines = append(promptLines,
@@ -261,7 +273,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		// menulis ulang artikel, nilai ULANG sekali — skor tersimpan adalah
 		// kualitas akhir (hijau bila revisi memperbaiki indikator lemah).
 		if (attribution == "ai_generated" || attribution == "ai_edited") && ai.AIOverviewRejected(aiOverview) && finalHTML != content {
-			rechecked := d.runAIOverviewCheck(ctx, title, mediaType, finalHTML, extractText(finalHTML), briefContext)
+			rechecked := d.runAIOverviewCheck(ctx, title, mediaType, finalHTML, extractText(finalHTML), itemBriefContext)
 			if rechecked != nil {
 				aiOverview = rechecked
 				checks["aiOverview"] = rechecked

@@ -11,7 +11,7 @@ import (
 
 // loadTautBriefContext: konteks brief Profiler terbaru (best-effort, "" bila
 // kampanye belum punya hasil Profiler valid) — port loadBriefContext.
-func (d *Deps) loadTautBriefContext(ctx context.Context, campaignID string) (string, error) {
+func (d *Deps) loadTautBriefContext(ctx context.Context, campaignID string, omitAngles ...bool) (string, error) {
 	row, err := d.queryRow(ctx, `
 		SELECT r.executive_brief, r.writing_instructions
 		FROM taut_profiler_results r
@@ -37,6 +37,12 @@ func (d *Deps) loadTautBriefContext(ctx context.Context, campaignID string) (str
 		}
 	}
 
+	if len(omitAngles) > 0 && omitAngles[0] {
+		// These generated instructions describe the old Profiler choices, not the
+		// per-media Writer override. Keep the business facts and guardrails only.
+		delete(brief, "channels")
+		return buildMatchmakerContextBrief(brief, usp), nil
+	}
 	base := buildMatchmakerContextBrief(brief, usp)
 	raw := row.jsonField("writing_instructions")
 	if raw == nil {

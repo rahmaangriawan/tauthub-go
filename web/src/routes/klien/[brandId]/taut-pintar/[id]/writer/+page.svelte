@@ -44,6 +44,7 @@
 		categories: string[];
 		label_sponsor?: string;
 		media_type?: string | null;
+		angle_slug?: string | null;
 		website_url?: string | null;
 	};
 	type LinksForm = {
@@ -72,9 +73,11 @@
 	let articleStats = $state<Record<string, ArticleStats>>({});
 	let articleTitles = $state<Record<string, string>>({});
 	let placement = $state<PlacementItem[]>([]);
-	// Pilihan jenis artikel untuk tab "Generate dengan AI" di modal Pengelola Naskah
-	// (editorial/advertorial/opini). Dikelola admin di Taut Prompt Studio.
-	let articleTypeOptions = $state<Array<{ code: string; name: string; description?: string | null }>>([]);
+	type WriterAngle = { slug: string; name: string; description?: string | null; has_prompt: boolean };
+	type WriterChannel = { slug: string; name: string; angles: WriterAngle[] };
+	let angleChannels = $state<WriterChannel[]>([]);
+	let anglesLoading = $state(true);
+	let anglesError = $state('');
 	// Jumlah analisis QC per media (badge di tombol "Analisis QC").
 	let qcCounts = $state<Record<string, number>>({});
 	// Konfirmasi hapus media dari kampanye (soft delete, data artikel tetap aman).
@@ -190,20 +193,35 @@
 		}
 	}
 
+	async function loadAngles() {
+		anglesLoading = true;
+		anglesError = '';
+		try {
+			const res = await apiRequest(`${apiBase}/profiler/options`);
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat pilihan angle.')));
+			const data = await res.json();
+			if (!Array.isArray(data?.channels)) throw new Error(tr('Gagal memuat pilihan angle.'));
+			if (data.channels.some((channel: WriterChannel) => !Array.isArray(channel.angles) || channel.angles.some((angle) => typeof angle.has_prompt !== 'boolean'))) {
+				throw new Error(tr('Pilihan angle belum tersedia di server. Muat ulang setelah API diperbarui.'));
+			}
+			angleChannels = data.channels;
+		} catch (reason) {
+			angleChannels = [];
+			anglesError = reason instanceof Error ? reason.message : tr('Gagal memuat pilihan angle.');
+		} finally {
+			anglesLoading = false;
+		}
+	}
+
 	async function load() {
 		try {
-			const [placeRes, linksRes, draftRes, auditsRes, typesRes] = await Promise.all([
+			const [placeRes, linksRes, draftRes, auditsRes] = await Promise.all([
 				apiRequest(`${apiBase}/placement`),
 				apiRequest(`${apiBase}/writer-links`),
 				apiRequest(`${apiBase}/profile/draft`),
 				apiRequest(`${apiBase}/gatekeeper/audits`),
-				apiRequest(`/v1/brands/${brandId}/taut/article-types`)
+				loadAngles()
 			]);
-			// Jenis artikel (editorial/advertorial/opini) untuk toggle di modal naskah.
-			if (typesRes.ok) {
-				const td = await typesRes.json().catch(() => null);
-				articleTypeOptions = Array.isArray(td?.items) ? td.items : [];
-			}
 			if (placeRes.ok) {
 				const d = await placeRes.json();
 				placement = d.media ?? [];
@@ -687,14 +705,18 @@
 		mediaId: string,
 		topic: string,
 		links: { anchor_text: string; url: string }[] = [],
-		articleType = ''
+		angleSlug = ''
 	): Promise<{ title: string; html: string; imagesGenerated?: number; imagesCostCredits?: number }> {
+		const mediaType = placement.find((p) => p.media_id === mediaId)?.media_type;
+		const angle = angleChannels.find((ch) => ch.slug === mediaType)?.angles.find((a) => a.slug === angleSlug && a.has_prompt);
+		if (anglesLoading || anglesError || !angle) throw new Error(tr('Pilih angle artikel yang tersedia untuk media ini.'));
 		const res = await apiRequest(`${apiBase}/produce/${mediaId}`, {
 			method: 'POST',
-			body: JSON.stringify({ topic, links, article_type: articleType })
+			body: JSON.stringify({ topic, links, angle_slug: angleSlug })
 		}, 240_000);
 		const data = await res.json().catch(() => null);
 		if (!res.ok) throw new Error(data?.detail ?? tr('Gagal membuat draf AI.'));
+		placement = placement.map((p) => p.media_id === mediaId ? { ...p, angle_slug: angleSlug } : p);
 		genState = { ...genState, [mediaId]: 'draft' };
 		qcToken += 1;
 		return {
@@ -1463,6 +1485,8 @@
 
 {#if editor}
 	{@const ed = editor}
+	{@const targetMedia = placement.find((p) => p.media_id === ed.mediaId)}
+	{@const angleChannel = angleChannels.find((ch) => ch.slug === targetMedia?.media_type)}
 	{#key ed.mediaId}
 		<NaskahModal
 			{brandId}
@@ -1475,10 +1499,14 @@
 			initialCoverUrl={ed.cover}
 			initialCategory={ed.category}
 			initialMetaDescription={ed.metaDescription}
-			categoryOptions={placement.find((p) => p.media_id === ed.mediaId)?.categories ?? []}
-			articleTypeOptions={articleTypeOptions}
-			showArticleType={(placement.find((p) => p.media_id === ed.mediaId)?.media_type || 'mainstream') !== 'blogger'}
-			mediaType={placement.find((p) => p.media_id === ed.mediaId)?.media_type || 'mainstream'}
+			categoryOptions={targetMedia?.categories ?? []}
+			angleOptions={angleChannel?.angles.filter((a) => a.has_prompt === true) ?? []}
+			angleChannelName={angleChannel?.name ?? ''}
+			initialAngleSlug={targetMedia?.angle_slug ?? ''}
+			{anglesLoading}
+			{anglesError}
+			onRetryAngles={() => void loadAngles()}
+			mediaType={targetMedia?.media_type ?? ''}
 			linkLimit={ed.linkLimit}
 			saving={editorSaving}
 			saveError={editorError}
@@ -1486,7 +1514,7 @@
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveEditor(title, html, coverUrl, category, metaDescription)}
 			onUploadCover={uploadCover}
 			onUploadDoc={uploadDocNaskah}
-			onGenerate={(topic, links, articleType) => generateNaskah(ed.mediaId, topic, links, articleType)}
+			onGenerate={(topic, links, angleSlug) => generateNaskah(ed.mediaId, topic, links, angleSlug)}
 			gatekeeperConfigured={gatekeeperAgent ? gatekeeperAgent.configured : null}
 			onValidate={(title, html, coverUrl, category, metaDescription) => validateNaskah(title, html, coverUrl, category, metaDescription)}
 			streamingHtml={streamHtml}

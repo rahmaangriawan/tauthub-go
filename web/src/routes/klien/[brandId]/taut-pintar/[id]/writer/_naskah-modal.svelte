@@ -28,8 +28,12 @@
 		initialCategory = null,
 		initialMetaDescription = null,
 		categoryOptions = [],
-		articleTypeOptions = [],
-		showArticleType = true,
+		angleOptions = [],
+		angleChannelName = '',
+		initialAngleSlug = '',
+		anglesLoading = false,
+		anglesError = '',
+		onRetryAngles,
 		mediaType = '',
 		linkLimit,
 		saving = false,
@@ -55,10 +59,12 @@
 		initialCategory?: string | null;
 		initialMetaDescription?: string | null;
 		categoryOptions?: string[];
-		/** Jenis artikel (editorial/advertorial/opini) untuk tab Generate dengan AI. */
-		articleTypeOptions?: Array<{ code: string; name: string }>;
-		/** Tampilkan pilihan Jenis Artikel? Hanya untuk media mainstream. */
-		showArticleType?: boolean;
+		angleOptions?: Array<{ slug: string; name: string; description?: string | null }>;
+		angleChannelName?: string;
+		initialAngleSlug?: string;
+		anglesLoading?: boolean;
+		anglesError?: string;
+		onRetryAngles: () => void;
 		/** Jenis media target (mainstream | blogger) — untuk keterangan dinamis di header. */
 		mediaType?: string;
 		linkLimit: number;
@@ -68,7 +74,7 @@
 		onSave: (title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) => void;
 		onUploadCover: (file: File) => Promise<string>;
 		onUploadDoc: (file: File, onPhase?: (phase: 'extract' | 'clean') => void, links?: WriterLink[]) => Promise<{ title: string; html: string; warning?: string }>;
-		onGenerate: (topic: string, links: WriterLink[], articleType: string) => Promise<{ title: string; html: string; imagesGenerated?: number; imagesCostCredits?: number }>;
+		onGenerate: (topic: string, links: WriterLink[], angleSlug: string) => Promise<{ title: string; html: string; imagesGenerated?: number; imagesCostCredits?: number }>;
 		/** null = belum tahu; false = AI Gatekeeper belum dikonfigurasi admin. */
 		gatekeeperConfigured?: boolean | null;
 		/** Cek Validasi (QC) dari writer: simpan lalu pindai; hasil dibuka di panel QC. */
@@ -102,22 +108,13 @@
 	let genBusy = $state(false);
 	let genError = $state('');
 	let topic = $state('');
-	// Jenis artikel untuk tab Generate. Default "editorial" bila tersedia, agar
-	// perilaku lama (gaya standar The Writer) tetap jadi pilihan pertama. Untuk
-	// media non-mainstream (blogger) pilihannya disembunyikan dan dipaksa kosong
-	// supaya The Writer memakai prompt agent-nya sendiri (writer_blogger).
-	let articleType = $state(
-		untrack(() =>
-			showArticleType
-				? (articleTypeOptions.find((o) => o.code === 'editorial')?.code ?? articleTypeOptions[0]?.code ?? '')
-				: ''
-		)
-	);
-	// Pemberitahuan zero-link untuk Editorial. {jenis} dipisah agar kata
-	// "Advertorial" bisa menjadi tombol yang langsung memindah jenis artikel.
-	const editorialNoticeParts = $derived(
-		tr('Jenis artikel Editorial tidak menyematkan tautan apa pun sesuai standar redaksi berita. Apabila Anda ingin menggunakan tautan & anchor, silakan pilih jenis artikel {jenis}.').split('{jenis}')
-	);
+	let angleSlug = $state(untrack(() => initialAngleSlug));
+	const selectedAngle = $derived(angleOptions.find((a) => a.slug === angleSlug));
+	const angleSelectOptions = $derived(angleOptions.map((a) => ({ value: a.slug, label: tr(a.name) })));
+	const angleReady = $derived(!anglesLoading && !anglesError && !!selectedAngle);
+	$effect(() => {
+		if (!anglesLoading && !anglesError && angleSlug && !selectedAngle) angleSlug = '';
+	});
 	// Transparansi biaya gambar isi: kalau topik/konteks meminta gambar, tampilkan
 	// perkiraan biayanya. Harga per gambar diambil dari endpoint pustaka gambar.
 	let imgCost = $state(0);
@@ -580,14 +577,12 @@
 	}
 
 	async function generate() {
-		if (genBusy || !topic.trim() || !linksValid) return;
+		if (genBusy || !topic.trim() || (linkLimit > 0 && !linksValid) || !angleReady) return;
 		genBusy = true;
 		genError = '';
 		genNotice = '';
 		try {
-			// Editorial: standar redaksi berita = tanpa tautan apa pun, jadi
-			// tautan yang sempat diisi di jenis lain tidak ikut terkirim.
-			const hasil = await onGenerate(topic.trim(), articleType === 'editorial' ? [] : payloadLinks, articleType);
+			const hasil = await onGenerate(topic.trim(), linkLimit > 0 ? payloadLinks : [], angleSlug);
 			title = hasil.title || title;
 			if (hasil.imagesGenerated && hasil.imagesGenerated > 0) {
 				const kredit = hasil.imagesCostCredits ?? 0;
@@ -606,7 +601,7 @@
 			}
 			tab = 'tulis';
 		} catch (reason) {
-			genError = reason instanceof Error ? reason.message : tr('Gagal membuat draf AI.');
+			genError = reason instanceof Error ? tr(reason.message) : tr('Gagal membuat draf AI.');
 		} finally {
 			genBusy = false;
 		}
@@ -736,13 +731,19 @@
 					{ key: 'tulis', label: tr('Tulis / Edit') }
 				] as t (t.key)}
 					<button
-						class="-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors"
+						class="relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors"
 						style="border-color: {tab === t.key ? 'var(--primary)' : 'transparent'}; color: {tab === t.key ? 'var(--primary)' : 'var(--muted-foreground)'};"
 						type="button"
 						role="tab"
 						aria-selected={tab === t.key}
 						onclick={() => (tab = t.key as Tab)}
 					>
+						{#if t.key === 'generate'}
+							<span
+								class="pointer-events-none absolute -top-1.5 right-0 text-[9px] font-bold uppercase tracking-wide leading-none"
+								style="color: var(--primary);">{tr('Beta')}</span
+							>
+						{/if}
 						{#if t.key === 'tulis'}<FileText size={14} />{:else if t.key === 'unggah'}<Upload size={14} />{:else}<Sparkles size={14} />{/if}
 						{t.label}
 					</button>
@@ -991,7 +992,11 @@
 							<div class="flex h-12 w-12 items-center justify-center rounded-xl" style="background-color: var(--primary); color: #ffffff;">
 								<Sparkles size={22} />
 							</div>
-							<h3 class="mt-3 text-xl font-bold">{tr('Delegasikan pada The Writer')}</h3>
+							<span
+								class="mt-3 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+								style="background-color: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary);">{tr('Beta')}</span
+							>
+							<h3 class="mt-2 text-xl font-bold">{tr('Delegasikan pada The Writer')}</h3>
 							<p class="mt-2 max-w-md text-sm text-muted-foreground">
 								{tr('Cukup berikan konteks singkat, AI kami akan merangkai artikel yang utuh, relevan, dan teroptimasi SEO.')}
 							</p>
@@ -1004,25 +1009,35 @@
 								</p>
 							</div>
 							<div class="mt-5 w-full text-left">
-								{#if showArticleType && articleTypeOptions.length > 0}
-									<div class="mb-4">
-										<span class="text-sm font-semibold">{tr('Jenis Artikel')}</span>
-										<div class="mt-2 flex flex-wrap gap-2">
-											{#each articleTypeOptions as opt (opt.code)}
-												<button
-													type="button"
-													class="app-btn !min-h-9 !px-3.5 !text-xs"
-													class:app-btn-primary={articleType === opt.code}
-													class:app-btn-soft={articleType !== opt.code}
-													onclick={() => (articleType = opt.code)}
-												>{opt.name}</button>
-											{/each}
-										</div>
-										<p class="mt-1 text-[11px] text-muted-foreground">
-											{tr('Menentukan gaya penulisan artikel yang dibuat AI.')}
-										</p>
+								<div class="mb-4 min-w-0">
+									<span class="text-sm font-semibold">{tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
+									{#if angleChannelName}
+										<p class="mt-1 break-words text-xs text-muted-foreground">{tr(angleChannelName)}</p>
+									{/if}
+									<div class="angle-field mt-2">
+										<Select
+											ariaLabel={tr('Angle Artikel')}
+											bind:value={angleSlug}
+											options={angleSelectOptions}
+											placeholder={tr('Pilih angle artikel')}
+											searchable
+											searchPlaceholder={tr('Cari angle…')}
+											disabled={anglesLoading || !!anglesError || angleOptions.length === 0 || genBusy}
+										/>
 									</div>
-								{/if}
+									<div id="naskah-angle-help" class="mt-2 break-words text-xs" aria-live="polite">
+										{#if anglesLoading}
+											<p class="text-muted-foreground">{tr('Memuat pilihan angle…')}</p>
+										{:else if anglesError}
+											<p role="alert" style="color: var(--destructive);">{tr(anglesError)}</p>
+											<button type="button" class="app-btn app-btn-soft mt-2 min-h-11" onclick={onRetryAngles}>{tr('Coba lagi')}</button>
+										{:else if angleOptions.length === 0}
+											<p class="text-muted-foreground">{tr('Belum ada angle dengan prompt aktif untuk media ini. Hubungi admin Tauthub.')}</p>
+										{:else}
+											<p class="text-muted-foreground">{selectedAngle?.description ? tr(selectedAngle.description) : tr('Pilih sudut pembahasan dari channel media target. Pilihan ini menentukan prompt AI yang digunakan.')}</p>
+										{/if}
+									</div>
+								</div>
 								<label class="text-sm font-semibold" for="naskah-topik">
 									{tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
 								</label>
@@ -1056,24 +1071,10 @@
 								{#if genNotice}
 									<p class="mt-2 text-xs" style="color: var(--success);">{genNotice}</p>
 								{/if}
-								{#if articleType === 'editorial'}
-									<div class="mt-4 w-full rounded-xl border p-3 text-left" style="border-color: var(--border); background-color: var(--accent);">
-										<p class="flex items-start gap-1.5 text-[11px] leading-relaxed" style="color: var(--primary);">
-											<Info size={13} class="mt-0.5 shrink-0" />
-											<span>
-												{editorialNoticeParts[0]}
-												<button
-													type="button"
-													class="font-semibold underline underline-offset-2 transition-opacity hover:opacity-75"
-													style="color: var(--primary);"
-													title={tr('Gunakan jenis artikel ini')}
-													onclick={() => (articleType = 'advertorial')}
-												>Advertorial</button>{editorialNoticeParts[1] ?? ''}
-											</span>
-										</p>
-									</div>
-								{:else}
+								{#if linkLimit > 0}
 									{@render linkEditor()}
+								{:else}
+									<p class="mt-4 text-xs text-muted-foreground">{tr('Media ini tidak mengizinkan tautan dalam artikel.')}</p>
 								{/if}
 							{#if genError}
 								<p class="mt-2 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">
@@ -1083,7 +1084,7 @@
 							<button
 								class="app-btn app-btn-primary mt-3 w-full"
 								type="button"
-								disabled={genBusy || !topic.trim() || !linksValid}
+								disabled={genBusy || !topic.trim() || (linkLimit > 0 && !linksValid) || !angleReady}
 								onclick={generate}
 							>
 								{#if genBusy}<LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
@@ -1381,3 +1382,21 @@
 			</div>
 		{/if}
 	</div>
+
+<style>
+	/* Dropdown "Angle Artikel" memakai komponen Select bawaan app. Di dalam
+	   modal ini trigger-nya dilebarkan mengikuti lebar field supaya sejajar
+	   dengan textarea Topik & Konteks; warna, hover, dan menu mengambang
+	   tetap dari komponen. */
+	.angle-field :global(.zs-select-trigger) {
+		width: 100%;
+		max-width: 100%;
+		height: 44px;
+		font-size: 14px;
+	}
+	.angle-field :global(.zs-select-label) {
+		flex: 1;
+		max-width: none;
+		text-align: left;
+	}
+</style>
