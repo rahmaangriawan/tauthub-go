@@ -73,6 +73,15 @@ func decodeJSON(r *http.Request) map[string]any {
 	return body
 }
 
+func boolField(body map[string]any, key string) (bool, bool) {
+	v, ok := body[key]
+	if !ok || v == nil {
+		return false, false
+	}
+	b, isBool := v.(bool)
+	return b, isBool
+}
+
 func strField(body map[string]any, key string) (string, bool) {
 	v, ok := body[key]
 	if !ok || v == nil {
@@ -127,14 +136,15 @@ func (d *Deps) ProfilesList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := d.Pool.Query(r.Context(), `
-		SELECT p.id, p.name, p.description, p.identity, p.style, p.seo, p.instructions, p.updated_at,
+		SELECT p.id, p.name, p.description, p.short_code, p.identity, p.style, p.seo, p.instructions,
+		       p.pinned_at, p.updated_at,
 		       (SELECT COUNT(*) FROM profiler_documents x WHERE x.profile_id = p.id AND x.deleted_at IS NULL) AS docs,
 		       (SELECT COUNT(*) FROM profiler_images x WHERE x.profile_id = p.id AND x.deleted_at IS NULL) AS imgs,
 		       (SELECT COUNT(*) FROM profiler_urls x WHERE x.profile_id = p.id AND x.deleted_at IS NULL) AS urls,
 		       (SELECT COUNT(*) FROM profiler_blocks x WHERE x.profile_id = p.id) AS blocks
 		FROM profiler_profiles p
 		WHERE p.brand_id = $1 AND p.deleted_at IS NULL
-		ORDER BY p.updated_at DESC`, brandID)
+		ORDER BY p.pinned_at DESC NULLS LAST, p.updated_at DESC`, brandID)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -145,16 +155,20 @@ func (d *Deps) ProfilesList(w http.ResponseWriter, r *http.Request) {
 		var (
 			id, name                      string
 			description, instructions     *string
+			shortCode                     *string
 			identity, style, seo          []byte
-			updatedAt                     any
+			pinnedAt, updatedAt           any
 			docs, imgs, urls, blocksCount int
 		)
-		if err := rows.Scan(&id, &name, &description, &identity, &style, &seo, &instructions, &updatedAt, &docs, &imgs, &urls, &blocksCount); err != nil {
+		if err := rows.Scan(&id, &name, &description, &shortCode, &identity, &style, &seo, &instructions,
+			&pinnedAt, &updatedAt, &docs, &imgs, &urls, &blocksCount); err != nil {
 			writeErr(w, err)
 			return
 		}
 		items = append(items, map[string]any{
 			"id": id, "name": name, "description": description,
+			"short_code":      shortCode,
+			"pinned":          pinnedAt != nil,
 			"readiness":       readiness(identity, style, seo, instructions, docs, imgs, urls, blocksCount),
 			"documents_count": docs, "images_count": imgs, "urls_count": urls, "blocks_count": blocksCount,
 			"updated_at": updatedAt,
@@ -183,6 +197,9 @@ func readiness(identity, style, seo []byte, instructions *string, docs, imgs, ur
 	}
 }
 
+// shortCodeFromUUID: 5 karakter lowercase dari UUID — kunci URL ringkas.
+func shortCodeFromUUID() string { return strings.ToLower(uuid.NewString())[:5] }
+
 // ProfileCreate: POST /v1/brands/{brandId}/profiler/profiles  {name, description?}
 func (d *Deps) ProfileCreate(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
@@ -202,14 +219,22 @@ func (d *Deps) ProfileCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Nama Profiler wajib diisi (maks 160 karakter).")
 		return
 	}
-	id := uuid.NewString()
-	if _, err := d.Pool.Exec(r.Context(), `
-		INSERT INTO profiler_profiles (id, brand_id, name, description, created_by)
-		VALUES ($1, $2, $3, NULLIF($4, ''), $5)`, id, brandID, name, description, user.ID); err != nil {
-		writeErr(w, err)
+	// Kode pendek untuk URL ringkas (/profiler/{kode}). Bentrok dijaga dengan
+	// mencoba ulang bila unique index-nya mengeluh.
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		code := shortCodeFromUUID()
+		id := uuid.NewString()
+		if _, err := d.Pool.Exec(r.Context(), `
+			INSERT INTO profiler_profiles (id, brand_id, name, description, short_code, created_by)
+			VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6)`, id, brandID, name, description, code, user.ID); err != nil {
+			lastErr = err
+			continue
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id, "short_code": code})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "name": name})
+	writeErr(w, lastErr)
 }
 
 // ProfileGet: GET /v1/brands/{brandId}/profiler/profiles/{profileId}
@@ -226,21 +251,23 @@ func (d *Deps) ProfileGet(w http.ResponseWriter, r *http.Request) {
 	}
 	profileID := chiParam(r, "profileId")
 	row := d.Pool.QueryRow(r.Context(), `
-		SELECT id, name, description, identity, style, seo, instructions, created_at, updated_at
+		SELECT id, name, description, identity, style, seo, entity_core, instructions, created_at, updated_at
 		FROM profiler_profiles WHERE id = $1 AND brand_id = $2 AND deleted_at IS NULL`, profileID, brandID)
 	var (
 		id, name                  string
 		description, instructions *string
 		identity, style, seo      []byte
+		entityCore                []byte
 		createdAt, updatedAt      any
 	)
-	if err := row.Scan(&id, &name, &description, &identity, &style, &seo, &instructions, &createdAt, &updatedAt); err != nil {
+	if err := row.Scan(&id, &name, &description, &identity, &style, &seo, &entityCore, &instructions, &createdAt, &updatedAt); err != nil {
 		httpx.Error(w, http.StatusNotFound, "Profiler tidak ditemukan.")
 		return
 	}
 	out := map[string]any{
 		"id": id, "name": name, "description": description,
 		"identity": asMap(identity), "style": asMap(style), "seo": asMap(seo),
+		"entity_core":  asMap(entityCore),
 		"instructions": instructions, "created_at": createdAt, "updated_at": updatedAt,
 		"blocks":    d.listBlocks(r.Context(), profileID),
 		"documents": d.listDocuments(r.Context(), profileID),
@@ -302,7 +329,14 @@ func (d *Deps) ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		add("instructions", nullIfEmpty(v))
 	}
-	for _, k := range []string{"identity", "style", "seo"} {
+	if pinned, hasPinned := boolField(body, "pinned"); hasPinned {
+		if pinned {
+			add("pinned_at", time.Now())
+		} else {
+			add("pinned_at", nil)
+		}
+	}
+	for _, k := range []string{"identity", "style", "seo", "entity_core"} {
 		if raw := jsonField(body, k); raw != nil {
 			// Kirim sebagai string supaya pgx mengirim teks JSON (bukan bytea).
 			add(k, string(raw))
@@ -381,11 +415,22 @@ func (d *Deps) ProfileDuplicate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newID := uuid.NewString()
-	if _, err := d.Pool.Exec(ctx, `
-		INSERT INTO profiler_profiles (id, brand_id, name, description, identity, style, seo, instructions, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		newID, brandID, truncate(name+" (salinan)", 160), description, string(identity), string(style), string(seo), instructions, user.ID); err != nil {
-		writeErr(w, err)
+	var insertErr error
+	var shortCode string
+	for attempt := 0; attempt < 3; attempt++ {
+		shortCode = shortCodeFromUUID()
+		_, insertErr = d.Pool.Exec(ctx, `
+			INSERT INTO profiler_profiles
+			  (id, brand_id, name, description, identity, style, seo, instructions, short_code, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+			newID, brandID, truncate(name+" (salinan)", 160), description,
+			string(identity), string(style), string(seo), instructions, shortCode, user.ID)
+		if insertErr == nil {
+			break
+		}
+	}
+	if insertErr != nil {
+		writeErr(w, insertErr)
 		return
 	}
 	// Salin blok knowledge kustom.
@@ -396,7 +441,7 @@ func (d *Deps) ProfileDuplicate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": newID})
+	writeJSON(w, http.StatusOK, map[string]any{"id": newID, "short_code": shortCode})
 }
 
 // ---------- blocks ----------

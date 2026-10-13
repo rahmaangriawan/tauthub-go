@@ -12,7 +12,7 @@
 	import { page } from '$app/state';
 	import {
 		Bell, Binoculars, BookOpenText, Bug, ChartBar, ChevronDown, ClipboardList, Coins,
-		Gauge, Gift, House, Megaphone, Newspaper, Percent, Receipt, ScrollText,
+		Gauge, Gift, House, Megaphone, MessageSquare, Newspaper, Percent, Receipt, ScrollText,
 		Settings, ShieldCheck, Sparkle, TriangleAlert, Users, Wallet, Zap
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -86,6 +86,14 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 								icon: Zap,
 								active: pathname.startsWith('/admin/ai') && !pathname.startsWith('/admin/ai-usage'),
 								children: [{ label: 'AI Token Usage', href: '/admin/ai-usage', active: pathname.startsWith('/admin/ai-usage') }]
+							},
+							{
+								// Taut Brief berdiri sendiri, bukan anak Taut Pintar: config,
+								// prompt, skema field, dan log-nya tabel taut_brief_* sendiri.
+								label: tr('Taut Brief'),
+								href: '/admin/taut-brief',
+								icon: MessageSquare,
+								active: pathname.startsWith('/admin/taut-brief')
 							}
 						]
 					: [])

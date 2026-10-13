@@ -1,4 +1,4 @@
-.PHONY: dev-api dev-web build-api build-web sqlc sqlc-schema test migrate-status api-web-check
+.PHONY: dev-api dev-web dev-worker dev-scheduler build-api build-web sqlc sqlc-schema test migrate-status api-web-check
 
 # Prasyarat: PATH berisi Go, bun, sqlc (lihat README).
 GO ?= $(HOME)/sdk/go1.27.1/bin/go
@@ -11,6 +11,14 @@ dev-api:
 
 dev-web:
 	cd web && bun run dev
+
+# Dua proses latar yang WAJIB hidup agar alur terbit berjalan: worker menyedot
+# antrean `jobs`, scheduler menyapu jadwal/pengingat + drain cadangan.
+dev-worker:
+	cd api && $(GO) run ./cmd/worker
+
+dev-scheduler:
+	cd api && $(GO) run ./cmd/scheduler
 
 build-api:
 	cd api && $(GO) build -o bin/api ./cmd/api && $(GO) build -o bin/worker ./cmd/worker && $(GO) build -o bin/scheduler ./cmd/scheduler

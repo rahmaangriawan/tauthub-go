@@ -21,6 +21,7 @@ import (
 	authdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/auth"
 	brandflowdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brandflow"
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
+	briefdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brief"
 	campaignsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/campaigns"
 	clientreaddomain "github.com/rahmaangriawan/tauthub-go/internal/domains/clientread"
 	clienttautdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/clienttaut"
@@ -157,6 +158,7 @@ func run() error {
 		brands := &brandsdomain.Deps{Pool: database.Pool}
 		knowledge := &knowledgedomain.Deps{Pool: database.Pool}
 		profilerDeps := &profilerdomain.Deps{Pool: database.Pool}
+		briefDeps := &briefdomain.Deps{Pool: database.Pool, Cfg: cfg, Admin: &adminshared.Deps{Pool: database.Pool, Cfg: cfg}}
 		contentDeps := &contentdomain.Deps{Pool: database.Pool, JobInline: cfg.JobInline, WriteRateLimitPerMinute: cfg.WriteRateLimitPerMinute}
 		clientRead := &clientreaddomain.Deps{Pool: database.Pool}
 		tautDeps := &clienttautdomain.Deps{Pool: database.Pool, Cfg: cfg}
@@ -251,6 +253,13 @@ func run() error {
 			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/urls", profilerDeps.URLAdd)
 			authed.Post("/brands/{brandId}/profiler/urls/{urlId}/sync", profilerDeps.URLSync)
 			authed.Delete("/brands/{brandId}/profiler/urls/{urlId}", profilerDeps.URLDelete)
+
+			// Taut Brief — chatbot penyusun Profiler brand (terisolasi dari agent Taut Pintar).
+			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}/brief/chat", briefDeps.BriefChatGet)
+			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/brief/chat", briefDeps.BriefChatPost)
+			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/brief/chat/stream", briefDeps.BriefChatStream)
+			authed.Delete("/brands/{brandId}/profiler/profiles/{profileId}/brief/chat", briefDeps.BriefChatReset)
+			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/brief/fields", briefDeps.BriefFieldsPost)
 
 			// Content pipeline (fase 4).
 			authed.Get("/brands/{brandId}/content-jobs", contentDeps.JobsList)
@@ -753,6 +762,25 @@ func run() error {
 
 			// Taut.
 			authed.Get("/platform/taut-agent-logs", platformDeps.TautAgentLogs)
+
+			// Taut Brief — console admin asisten Profiler brand.
+			authed.Get("/platform/taut-brief/config", briefDeps.TautBriefConfigGet)
+			authed.Put("/platform/taut-brief/config", briefDeps.TautBriefConfigUpdate)
+			authed.Post("/platform/taut-brief/config/test", briefDeps.TautBriefConfigTest)
+			authed.Get("/platform/taut-brief/prompts", briefDeps.TautBriefPromptsList)
+			authed.Post("/platform/taut-brief/prompts", briefDeps.TautBriefPromptCreate)
+			authed.Get("/platform/taut-brief/prompts/{versionId}", briefDeps.TautBriefPromptGet)
+			authed.Patch("/platform/taut-brief/prompts/{versionId}", briefDeps.TautBriefPromptUpdate)
+			authed.Delete("/platform/taut-brief/prompts/{versionId}", briefDeps.TautBriefPromptDelete)
+			authed.Post("/platform/taut-brief/prompts/{versionId}/activate", briefDeps.TautBriefPromptActivate)
+			authed.Get("/platform/taut-brief/fields", briefDeps.TautBriefFieldsList)
+			authed.Post("/platform/taut-brief/fields", briefDeps.TautBriefFieldCreate)
+			authed.Get("/platform/taut-brief/fields/{versionId}", briefDeps.TautBriefFieldGet)
+			authed.Patch("/platform/taut-brief/fields/{versionId}", briefDeps.TautBriefFieldUpdate)
+			authed.Delete("/platform/taut-brief/fields/{versionId}", briefDeps.TautBriefFieldDelete)
+			authed.Post("/platform/taut-brief/fields/{versionId}/activate", briefDeps.TautBriefFieldActivate)
+			authed.Post("/platform/taut-brief/test", briefDeps.TautBriefTest)
+			authed.Get("/platform/taut-brief/logs", briefDeps.TautBriefLogs)
 			authed.Get("/platform/taut-agents", platformDeps.TautAgentsList)
 			authed.Get("/platform/taut-agents/{agent}", platformDeps.TautAgentGet)
 			authed.Put("/platform/taut-agents/{agent}", platformDeps.TautAgentUpdate)

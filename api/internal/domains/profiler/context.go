@@ -31,17 +31,25 @@ func BuildContextTextForTopic(ctx context.Context, pool *pgxpool.Pool, profileID
 	var (
 		name                 string
 		identity, style, seo []byte
+		entityCore           []byte
 		instructions         *string
 	)
 	if err := pool.QueryRow(ctx,
-		"SELECT name, identity, style, seo, instructions FROM profiler_profiles WHERE id = $1 AND deleted_at IS NULL",
-		profileID).Scan(&name, &identity, &style, &seo, &instructions); err != nil {
+		"SELECT name, identity, style, seo, entity_core, instructions FROM profiler_profiles WHERE id = $1 AND deleted_at IS NULL",
+		profileID).Scan(&name, &identity, &style, &seo, &entityCore, &instructions); err != nil {
 		return ""
 	}
 
 	var b strings.Builder
 	b.WriteString("[PROFILER KLIEN — acuan brand & gaya penulisan]\n")
 	fmt.Fprintf(&b, "Nama Profiler: %s\n", name)
+
+	// Entity Core ditulis paling atas: inilah fakta kanonik yang harus sama di
+	// semua artikel, supaya sinyal entitas brand tidak pecah di mata mesin AI.
+	writeKV(&b, "ENTITY CORE — fakta kanonik, jangan diparafrase atau diubah angkanya", entityCore,
+		[]string{"canonical_name", "canonical_description", "entity_category", "official_facts",
+			"allowed_claims", "forbidden_claims", "forbidden_words", "target_questions",
+			"boilerplate", "canonical_links", "target_keywords_urls"})
 
 	writeKV(&b, "Identitas Bisnis", identity,
 		[]string{"brand_name", "industry", "business_description", "products", "audience",
