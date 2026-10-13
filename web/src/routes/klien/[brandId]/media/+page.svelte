@@ -1872,9 +1872,12 @@
 							/>
 						<span class="campaignSummaryMuted">{tr("Acuan brand & gaya penulisan untuk The Writer.")}</span>
 							{#if !profilerLoading && profilerOptions.length === 0}
+								<!-- SEMENTARA: pintasan ke Brief (chatbot Profiler) disembunyikan
+								     sebelum deploy. Kembalikan saat fiturnya dirilis.
 								<button class="profilerInviteBtn" type="button" onclick={() => goto(`/klien/${page.params.brandId}/profiler`)}>
 									{tr('Lengkapi Profiler')}
 								</button>
+								-->
 							{/if}
 						</label>
 					{/if}
