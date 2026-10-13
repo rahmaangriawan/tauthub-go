@@ -1366,6 +1366,15 @@
 								<span>{tr('Saldo tidak mencukupi untuk membuat gambar. Silakan top up terlebih dahulu.')}</span>
 							</div>
 						{/if}
+						<div
+							class="flex items-start gap-2 rounded-lg px-3 py-2 text-xs leading-relaxed"
+							style="background-color: var(--accent); color: var(--accent-foreground);"
+						>
+							<Info size={14} class="mt-px flex-none" />
+							<p>
+								{tr('Anda sebaiknya pakai gambar asli, bukan hasil generate AI. Mitra media lebih sering menyetujui artikel yang gambarnya asli, misalnya foto produk atau materi brand Anda sendiri.')}
+							</p>
+						</div>
 					</div>
 
 					<!-- Footer Actions -->
