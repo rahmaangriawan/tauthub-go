@@ -5,7 +5,7 @@
 	// media, filter status, pratinjau/edit draf, setujui, tolak, kirim URL,
 	// dan rewrite AI (berbayar dari saldo mitra).
 	import { onMount } from 'svelte';
-	import { Check, CircleAlert, Clock, Eye, ExternalLink, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, SlidersHorizontal, Sparkles, Trash2, XCircle } from '@lucide/svelte';
+	import { Check, CircleAlert, Eye, ExternalLink, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, Send, SlidersHorizontal, Sparkles, Trash2 } from '@lucide/svelte';
 	import { Tooltip } from 'bits-ui';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -90,6 +90,10 @@
 	// dan editor draf dari dialog Detail (dialog Detail murni baca + setujui).
 	let rejectTarget = $state<Pub | null>(null);
 	let rejectReason = $state('');
+	// Konfirmasi ganda untuk ikon "Setuju & Terbitkan" di kolom Aksi: satu klik
+	// belum menerbitkan apa pun, keputusan diambil di modal ini.
+	let publishConfirm = $state<Pub | null>(null);
+	let publishBusy = $state(false);
 	let quickUrlTarget = $state<Pub | null>(null);
 	let quickUrlValue = $state('');
 	let quickUrlBusy = $state(false);
@@ -241,7 +245,7 @@
 	 * Tanpa ini server memakai default mode media, sehingga mitra tidak bisa
 	 * memilih draf saat mode medianya "publish".
 	 */
-	async function approve(pub: Pub, publishStatus: 'draft' | 'publish') {
+	async function approve(pub: Pub, publishStatus: 'draft' | 'publish'): Promise<boolean> {
 		busy = true;
 		error = '';
 		try {
@@ -251,7 +255,7 @@
 			});
 			if (!res.ok) {
 				error = await readApiError(res, "Permintaan gagal.");
-				return;
+				return false;
 			}
 			notice = publishStatus === 'draft' ? tr('Artikel disetujui sebagai draf.') : tr('Artikel disetujui dan diterbitkan.');
 			if (detail && detail.id === pub.id) await openDetail(pub);
@@ -259,8 +263,21 @@
 			// Mode manual + "Setujui & Terbitkan": langsung sodorkan input URL
 			// artikel yang mitra terbitkan sendiri — satu alur, parity app lama.
 			if (publishStatus === 'publish' && isManualRow(pub)) openQuickUrl(pub);
+			return true;
 		} finally {
 			busy = false;
+		}
+	}
+
+	/** Konfirmasi kedua dari ikon pesawat; modal tetap terbuka bila server menolak. */
+	async function confirmPublishNow() {
+		const target = publishConfirm;
+		if (!target || publishBusy) return;
+		publishBusy = true;
+		try {
+			if (await approve(target, 'publish')) publishConfirm = null;
+		} finally {
+			publishBusy = false;
 		}
 	}
 
@@ -489,6 +506,12 @@
 	});
 	const isManualRow = (p: Pub) => (p.media_publication_mode ?? 'draft') !== 'publish';
 	const pendingUrl = (p: Pub) => p.status === 'partner_approved' && isManualRow(p) && !p.published_url;
+	// Tolak kini berdiri sendiri di kolom Aksi (tong sampah), bukan lagi item
+	// menu titik-tiga. Batas penolakan revisi tetap dihormati seperti menu lama.
+	const canReject = (p: Pub) =>
+		p.status === 'waiting_partner' ||
+		(p.status === 'revision' && (p.revision_reject_count ?? 0) < (p.revision_reject_limit ?? 3));
+	const rejectLabel = (p: Pub) => (p.status === 'revision' ? tr('Tolak revisi') : tr('Tolak publikasi'));
 	const rssBadge = (s: string | null) => (!s || s === 'not_imported') ? null : s === 'published' ? tr('Terbit di situs mitra') : tr('Diimport mitra');
 	const LIVE = ['queued', 'processing', 'retrying'];
 
@@ -659,7 +682,7 @@
 
 <PageTitle title={tr("Publikasi")} />
 
-<svelte:window onclick={closeRowMenu} onkeydown={(e) => { if (e.key === 'Escape') closeRowMenu(); }} />
+<svelte:window onclick={closeRowMenu} onkeydown={(e) => { if (e.key === 'Escape') { closeRowMenu(); publishConfirm = null; } }} />
 
 <section>
 	<header>
@@ -777,7 +800,7 @@
 						<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
 						<th class="px-4 py-2.5 text-right font-medium">{tr("Penghasilan")}</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
-						<th class="px-4 py-2.5 text-right font-medium">{tr('Aksi')}</th>
+						<th class="w-[136px] whitespace-nowrap px-4 py-2.5 text-right font-medium">{tr('Aksi')}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -952,7 +975,68 @@
 {/snippet}
 
 {#snippet rowActions(p: any)}
-	<div class="relative inline-block">
+	<div class="relative inline-flex items-center gap-1">
+		{#if p.status === 'waiting_partner'}
+			<Tooltip.Provider delayDuration={150}>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							<button
+								{...props}
+								type="button"
+								class="pub-act pub-act-publish"
+								aria-label={tr('Setuju & Terbitkan')}
+								onclick={(e) => {
+									e.stopPropagation();
+									closeRowMenu();
+									error = '';
+									publishConfirm = p;
+								}}
+							>
+								<Send size={16} />
+							</button>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Portal>
+						<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+							<Tooltip.Arrow class="uiTipArrow" />
+							{tr('Setuju & Terbitkan')}
+						</Tooltip.Content>
+					</Tooltip.Portal>
+				</Tooltip.Root>
+			</Tooltip.Provider>
+		{/if}
+		{#if canReject(p)}
+			<Tooltip.Provider delayDuration={150}>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							<button
+								{...props}
+								type="button"
+								class="pub-act pub-act-reject"
+								aria-label={rejectLabel(p)}
+								onclick={(e) => {
+									e.stopPropagation();
+									closeRowMenu();
+									error = '';
+									rejectTarget = p;
+									rejectReason = '';
+								}}
+							>
+								<Trash2 size={16} />
+							</button>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Portal>
+						<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+							<Tooltip.Arrow class="uiTipArrow" />
+							{rejectLabel(p)}
+						</Tooltip.Content>
+					</Tooltip.Portal>
+				</Tooltip.Root>
+			</Tooltip.Provider>
+		{/if}
 		<button
 			type="button"
 			class="pub-menu-trigger inline-flex items-center justify-center rounded-lg p-1.5 hover:bg-secondary"
@@ -980,11 +1064,6 @@
 					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'accept-revision')}>
 						<Check size={14} /> {tr('Terima Revisi')}
 					</button>
-					{#if (p.revision_reject_count ?? 0) < (p.revision_reject_limit ?? 3)}
-						<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" style="color: var(--destructive);" onclick={(e) => menuAction(e, p, 'reject')}>
-							<XCircle size={14} /> {tr('Tolak Revisi')}
-						</button>
-					{/if}
 				{/if}
 				{#if p.status === 'waiting_partner'}
 					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'edit')}>
@@ -1004,12 +1083,6 @@
 				{#if p.status === 'waiting_partner'}
 					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'publish')}>
 						<Check size={14} /> {tr('Setujui & Terbitkan')}
-					</button>
-					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'draft')}>
-						<Check size={14} /> {tr('Setujui sebagai Draf')}
-					</button>
-					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" style="color: var(--destructive);" onclick={(e) => menuAction(e, p, 'reject')}>
-						<XCircle size={14} /> {tr('Tolak')}
 					</button>
 				{/if}
 			</div>
@@ -1243,7 +1316,6 @@
 							{#if isManualRow(pub)}
 								<button class="app-btn app-btn-primary" disabled={busy} onclick={() => void approve(pub, 'publish')}><Check size={15} />{tr('Setujui')}</button>
 							{:else}
-								<button class="app-btn app-btn-soft" style="color: var(--warning);" disabled={busy} onclick={() => void approve(pub, 'draft')}><Clock size={15} />{tr('Setujui sebagai Draf')}</button>
 								<button class="app-btn app-btn-primary" disabled={busy} onclick={() => void approve(pub, 'publish')}><Check size={15} />{tr('Setujui & Terbitkan')}</button>
 							{/if}
 						</div>
@@ -1297,6 +1369,31 @@
 
 			<div class="mt-3 flex justify-end gap-2">
 				<button class="app-btn app-btn-soft" type="button" onclick={() => (showPreview = false)}>{tr('Tutup')}</button>
+			</div>
+		</dialog>
+	</div>
+{/if}
+
+<!-- Konfirmasi ganda "Setuju & Terbitkan" — dipicu ikon pesawat di kolom Aksi. -->
+{#if publishConfirm}
+	<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={() => (publishConfirm = null)}>
+		<dialog open class="app-card w-full max-w-[480px] p-5" aria-label={tr('Setuju & Terbitkan')} onclick={(e) => e.stopPropagation()}>
+			<h2 class="text-lg font-semibold">{tr('Setuju & Terbitkan')}</h2>
+			<p class="mt-1 text-sm text-muted-foreground">
+				{tr('Apakah Anda yakin ingin menyetujui dan menerbitkan')} <strong>{publishConfirm.document_title ?? tr('artikel ini')}</strong>
+				{tr('ke')} {publishConfirm.media_name ?? tr('media')}?
+				{#if isManualRow(publishConfirm)}
+					{tr('Setelah disetujui, Anda diminta menempel URL artikel yang sudah tayang di website Anda.')}
+				{:else}
+					{tr('Artikel langsung dikirim ke website mitra lewat integrasi.')}
+				{/if}
+			</p>
+			{#if error}<p class="mt-3 text-sm" style="color: var(--destructive);">{error}</p>{/if}
+			<div class="mt-4 flex justify-end gap-2">
+				<button class="app-btn app-btn-soft" type="button" disabled={publishBusy} onclick={() => (publishConfirm = null)}>{tr('Batal')}</button>
+				<button class="app-btn app-btn-primary" type="button" disabled={publishBusy} onclick={() => void confirmPublishNow()}>
+					{publishBusy ? tr('Menerbitkan…') : tr('Ya, Setuju & Terbitkan')}
+				</button>
 			</div>
 		</dialog>
 	</div>
@@ -1454,11 +1551,56 @@
 {/if}
 
 <style>
+	/* Aksi baris yang berdiri sendiri di kolom Aksi: lencana tonal, bukan ikon
+		tertelanjang. Warnanya membawa makna (terbitkan = aksen utama, tolak =
+		destruktif); animasinya hanya bereaksi saat disorot — satu gerakan singkat
+		tanpa apa pun yang berdenyut sendiri. */
+	.pub-act {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 30px;
+		height: 30px;
+		border-radius: 9px;
+		transition: background-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
+	}
+	.pub-act-publish {
+		background: color-mix(in srgb, var(--primary) 12%, transparent);
+		color: var(--primary);
+	}
+	.pub-act-publish:hover {
+		background: color-mix(in srgb, var(--primary) 20%, transparent);
+		transform: translateY(-1px) scale(1.05);
+		box-shadow: 0 4px 10px color-mix(in srgb, var(--primary) 24%, transparent);
+	}
+	.pub-act-reject {
+		background: color-mix(in srgb, var(--destructive) 10%, transparent);
+		color: var(--destructive);
+	}
+	.pub-act-reject:hover {
+		background: color-mix(in srgb, var(--destructive) 18%, transparent);
+		transform: translateY(-1px) scale(1.05);
+		box-shadow: 0 4px 10px color-mix(in srgb, var(--destructive) 22%, transparent);
+	}
+	.pub-act:active {
+		transform: translateY(0) scale(0.96);
+		box-shadow: none;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.pub-act,
+		.pub-act:hover,
+		.pub-act:active {
+			transition: none;
+			transform: none;
+		}
+	}
+
 	/* Menu aksi baris dipakai bersama tabel (desktop) dan kartu (mobile). Di
-		layar sentuh (<768px) pemicu dan item menunya minimal 44px; desktop tidak
-		berubah. */
+		layar sentuh (<768px) pemicu, tombol aksi, dan item menunya minimal 44px;
+		desktop tidak berubah. */
 	@media (max-width: 767px) {
-		.pub-menu-trigger {
+		.pub-menu-trigger,
+		.pub-act {
 			min-width: 44px;
 			min-height: 44px;
 		}

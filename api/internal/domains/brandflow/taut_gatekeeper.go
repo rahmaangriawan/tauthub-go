@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -109,7 +111,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		return nil, err
 	}
 
-	itemsQuery := `SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode
+	itemsQuery := `SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode, m.website_url
 		 FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		 WHERE tcm.campaign_id = $1 AND tcm.status = 'selected' AND tcm.article_document_id IS NOT NULL`
 	queryArgs := []any{campaignID}
@@ -232,10 +234,12 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 	}()
 	go func() {
 		defer checksWG.Done()
-		links = d.linkHealthValidator(ctx, content, []string{
-			strings.TrimSpace(campaign.strOr("primary_url", "")),
-			strings.TrimSpace(campaign.strOr("backup_url", "")),
-		})
+		links = d.linkHealthValidator(ctx, content,
+			[]string{
+				strings.TrimSpace(campaign.strOr("primary_url", "")),
+				strings.TrimSpace(campaign.strOr("backup_url", "")),
+			},
+			d.ownLinkDomains(ctx, campaign, item.strOr("website_url", "")))
 	}()
 	checksWG.Wait()
 	batchMS := time.Since(startedAt).Milliseconds()
@@ -387,11 +391,16 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 			return gatekeeperItemResult{}, err
 		}
 	}
-	status := "blocked"
-	switch verdict {
-	case "layak_tayang":
-		status = "ready"
-	case "revisi":
+	// Status artikel diturunkan dari GERBANG KERAS yang sama dengan syarat
+	// distribusi (contentSafety + linkHealth) — BUKAN dari verdict yang dilaporkan
+	// model saat pass revisi. Model kerap menjawab "revisi" walaupun pemeriksaan
+	// ulang sudah lulus, dan status pun tersangkut 'revision': kampanye mustahil
+	// diterbitkan padahal panel QC bilang "Siap Distribusi".
+	status := "ready"
+	switch {
+	case safetyStatus == "failed" || links.Verdict == "failed":
+		status = "blocked"
+	case safetyStatus == "review_required" || links.Verdict == "review_required":
 		status = "revision"
 	}
 	if err := d.exec(ctx, "UPDATE taut_campaign_media SET article_status = $1 WHERE id = $2", status, itemID); err != nil {
@@ -604,7 +613,7 @@ var linkReasons = map[string]string{
 // linkHealthValidator: probe reachability + klasifikasi AI semua link reachable.
 // Provider AI link-classifier memakai agent gatekeeper; bila tidak dikonfigurasi
 // hasilnya review_required (fail-safe), bukan 500.
-func (d *Deps) linkHealthValidator(ctx context.Context, html string, excludeURLs []string) linkHealthResult {
+func (d *Deps) linkHealthValidator(ctx context.Context, html string, excludeURLs []string, ownDomains map[string]bool) linkHealthResult {
 	checkedAt := nowISO()
 	excluded := map[string]bool{}
 	for _, u := range excludeURLs {
@@ -612,11 +621,24 @@ func (d *Deps) linkHealthValidator(ctx context.Context, html string, excludeURLs
 			excluded[trimmed] = true
 		}
 	}
+	// Tautan ke domain sendiri (target backlink kampanye, situs media, link
+	// kanonik brand) TIDAK diprobe dan TIDAK ditanya ke AI: dari teks URL saja
+	// model selalu menjawab "unknown", yang dulu membuat QC selalu "perlu
+	// review" hanya karena artikel memuat tautan normal milik klien sendiri.
+	ownLinks := []linkHealthItem{}
 	urls := []string{}
 	for _, u := range extractHTMLLinks(html) {
-		if !excluded[u] {
-			urls = append(urls, u)
+		if excluded[u] {
+			continue
 		}
+		if hostOwned(u, ownDomains) {
+			ownLinks = append(ownLinks, linkHealthItem{
+				URL: u, Status: "ok", Category: "safe",
+				Reason: "Tautan milik brand/kampanye sendiri", CheckedAt: checkedAt,
+			})
+			continue
+		}
+		urls = append(urls, u)
 	}
 	if len(urls) == 0 {
 		return linkHealthResult{Links: []linkHealthItem{}, Verdict: "passed", BlockedReasons: []string{}}
@@ -655,14 +677,16 @@ func (d *Deps) linkHealthValidator(ctx context.Context, html string, excludeURLs
 	}
 	categories, classificationFailed := d.classifyLinks(ctx, reachable)
 
-	links := []linkHealthItem{}
+	links := append([]linkHealthItem{}, ownLinks...)
 	for _, p := range probes {
 		if p.httpStatus == nil {
 			links = append(links, linkHealthItem{URL: p.url, Status: "unreachable", HTTPStatus: nil, Reason: "Tidak dapat dijangkau", CheckedAt: checkedAt})
 			continue
 		}
 		if classificationFailed {
-			links = append(links, linkHealthItem{URL: p.url, Status: "suspicious", HTTPStatus: p.httpStatus, Reason: "Klasifikasi AI gagal", CheckedAt: checkedAt})
+			// Alat klasifikasi tidak tersedia ≠ temuan. Dicatat, tidak menggagalkan.
+			links = append(links, linkHealthItem{URL: p.url, Status: "ok", HTTPStatus: p.httpStatus,
+				Reason: "Klasifikasi otomatis tidak tersedia — dicatat, tidak menghalangi", CheckedAt: checkedAt})
 			continue
 		}
 		category := categories[p.url]
@@ -674,7 +698,11 @@ func (d *Deps) linkHealthValidator(ctx context.Context, html string, excludeURLs
 			continue
 		}
 		if category == "unknown" {
-			links = append(links, linkHealthItem{URL: p.url, Status: "suspicious", HTTPStatus: p.httpStatus, Category: category, Reason: linkReasons["unknown"], CheckedAt: checkedAt})
+			// Hanya judi/pornografi/malware yang menggagalkan. Ragu terhadap URL
+			// normal dicatat sebagai keterangan supaya QC tidak selalu merah.
+			links = append(links, linkHealthItem{URL: p.url, Status: "ok", HTTPStatus: p.httpStatus,
+				Category: category,
+				Reason:   "Tidak dapat dipastikan dari URL saja — dicatat, tidak menghalangi", CheckedAt: checkedAt})
 			continue
 		}
 		links = append(links, linkHealthItem{URL: p.url, Status: "ok", HTTPStatus: p.httpStatus, Category: "safe", CheckedAt: checkedAt})
@@ -704,6 +732,86 @@ func (d *Deps) linkHealthValidator(ctx context.Context, html string, excludeURLs
 		verdict = "review_required"
 	}
 	return linkHealthResult{Links: links, Verdict: verdict, BlockedReasons: blockedReasons}
+}
+
+var reAnyURL = regexp.MustCompile(`https?://[^\s,;|()\[\]]+`)
+
+// hostOwned: true bila host tautan adalah domain sendiri, termasuk subdomainnya.
+func hostOwned(rawURL string, own map[string]bool) bool {
+	if len(own) == 0 {
+		return false
+	}
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Hostname() == "" {
+		return false
+	}
+	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	if own[host] {
+		return true
+	}
+	for d := range own {
+		if strings.HasSuffix(host, "."+d) {
+			return true
+		}
+	}
+	return false
+}
+
+// ownLinkDomains: domain yang jelas milik sendiri — target backlink kampanye,
+// situs media tujuannya, link kanonik + website dari Profiler brand yang dipakai
+// kampanye, dan Tauthub sendiri. Pencocokan berbasis DOMAIN, bukan string URL
+// persis, supaya `https://situs.com`, `https://www.situs.com`, dan
+// `https://situs.com/halaman` sama-sama dikenali sebagai milik sendiri.
+func (d *Deps) ownLinkDomains(ctx context.Context, campaign bsRow, mediaWebsite string) map[string]bool {
+	own := map[string]bool{"tauthub.com": true}
+	add := func(raw string) {
+		u, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || u.Hostname() == "" {
+			return
+		}
+		own[strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")] = true
+	}
+	add(campaign.strOr("primary_url", ""))
+	add(campaign.strOr("backup_url", ""))
+	add(mediaWebsite)
+	for _, link := range d.profilerOwnLinks(ctx, campaign) {
+		add(link)
+	}
+	return own
+}
+
+// profilerOwnLinks: link kanonik serta website dari Profiler yang dipakai
+// kampanye — tautan milik klien sendiri yang tidak perlu dinilai AI.
+func (d *Deps) profilerOwnLinks(ctx context.Context, campaign bsRow) []string {
+	profileID := strings.TrimSpace(campaign.strOr("profiler_id", ""))
+	if profileID == "" {
+		return nil
+	}
+	row, err := d.queryRow(ctx,
+		"SELECT entity_core, identity FROM profiler_profiles WHERE id = $1 AND deleted_at IS NULL", profileID)
+	if err != nil || row == nil {
+		return nil
+	}
+	out := []string{}
+	pick := func(raw any, keys ...string) {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			return
+		}
+		for _, k := range keys {
+			v, isStr := m[k].(string)
+			if !isStr || strings.TrimSpace(v) == "" {
+				continue
+			}
+			if found := reAnyURL.FindAllString(v, -1); len(found) > 0 {
+				out = append(out, found...)
+			}
+			out = append(out, strings.TrimSpace(v))
+		}
+	}
+	pick(row.jsonField("entity_core"), "canonical_links")
+	pick(row.jsonField("identity"), "website")
+	return out
 }
 
 // probeURL: safeFetch HEAD/GET → status code; false bila gagal.
