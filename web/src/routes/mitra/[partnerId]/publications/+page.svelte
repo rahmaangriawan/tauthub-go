@@ -5,7 +5,7 @@
 	// media, filter status, pratinjau/edit draf, setujui, tolak, kirim URL,
 	// dan rewrite AI (berbayar dari saldo mitra).
 	import { onMount } from 'svelte';
-	import { Check, CircleAlert, Eye, ExternalLink, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, Send, SlidersHorizontal, Sparkles, Trash2 } from '@lucide/svelte';
+	import { Check, CircleAlert, Eye, ExternalLink, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, Send, SlidersHorizontal, Sparkles, Trash2, X } from '@lucide/svelte';
 	import { Tooltip } from 'bits-ui';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -1024,7 +1024,7 @@
 									rejectReason = '';
 								}}
 							>
-								<Trash2 size={16} />
+								<X size={16} />
 							</button>
 						{/snippet}
 					</Tooltip.Trigger>
@@ -1078,11 +1078,6 @@
 				{#if p.status === 'partner_approved'}
 					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'url')}>
 						<Link2 size={14} /> {tr('Kirim URL')}
-					</button>
-				{/if}
-				{#if p.status === 'waiting_partner'}
-					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'publish')}>
-						<Check size={14} /> {tr('Setujui & Terbitkan')}
 					</button>
 				{/if}
 			</div>
