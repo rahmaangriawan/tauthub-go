@@ -291,6 +291,10 @@
 	const autoPublishHint = () =>
 		tr('Kalau dicentang, artikel dari klien langsung diproses dan terbit ke situs media tanpa menunggu persetujuan mitra. Kalau tidak dicentang, mitra harus menyetujui dulu setiap artikel.');
 
+	/** Tooltip lencana "N menunggu": artikel klien yang butuh konfirmasi mitra. */
+	const pendingHint = () =>
+		tr('Ada artikel dari klien yang menunggu konfirmasi Anda. Buka menu Publikasi untuk menyetujui atau menolaknya.');
+
 	// ── Menu aksi titik-tiga (parity app lama) ────────────────────────────
 	let openMenu = $state<string | null>(null);
 	function closeMenu() {
@@ -1330,9 +1334,28 @@
 		{statusLabel[m.status] ?? m.status}
 	</span>
 	{#if m.pending_publications > 0}
-		<span class="ml-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">
-			{m.pending_publications} {tr('menunggu')}
-		</span>
+		<Tooltip.Provider delayDuration={150}>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					{#snippet child({ props })}
+						<button
+							{...props}
+							type="button"
+							class="ml-1 cursor-help rounded-full px-2 py-0.5 text-[11px] font-medium"
+							style="border: 0; background-color: var(--warning-soft, #fdf3e3); color: var(--warning);"
+						>
+							{m.pending_publications} {tr('menunggu')}
+						</button>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Portal>
+					<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+						<Tooltip.Arrow class="uiTipArrow" />
+						{pendingHint()}
+					</Tooltip.Content>
+				</Tooltip.Portal>
+			</Tooltip.Root>
+		</Tooltip.Provider>
 	{/if}
 {/snippet}
 
