@@ -3,6 +3,7 @@ package clienttaut
 import (
 	"context"
 	"crypto/rand"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -43,6 +44,26 @@ func (d *Deps) getShortLinkBase(ctx context.Context) string {
 		return ""
 	}
 	return strings.TrimSpace(row.strOr("value", ""))
+}
+
+// writerCreditCostKey / defaultWriterCreditCost: tarif penulisan The Writer
+// (berlaku rata untuk artikel baru maupun tulis ulang). Nilai yang sama dibaca
+// brandflow untuk menagih, jadi tampilan mustahil berbeda dari tagihan.
+const (
+	writerCreditCostKey     = "writer_credit_cost"
+	defaultWriterCreditCost = 2
+)
+
+// writerCreditCost: tarif kredit per artikel dari platform_settings.
+func (d *Deps) writerCreditCost(ctx context.Context) int {
+	row, err := d.queryRow(ctx, "SELECT value FROM platform_settings WHERE key = $1 LIMIT 1", writerCreditCostKey)
+	if err != nil || row == nil {
+		return defaultWriterCreditCost
+	}
+	if n, convErr := strconv.Atoi(strings.TrimSpace(row.strOr("value", ""))); convErr == nil && n > 0 {
+		return n
+	}
+	return defaultWriterCreditCost
 }
 
 // upsertWriterShortLink: upsert idempoten per (campaign, kind). URL berubah →

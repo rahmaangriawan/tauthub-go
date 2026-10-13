@@ -305,7 +305,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		}
 		if err := d.chargeCredit(ctx, brandID,
 			"taut-writer-regen:"+campaignID+":"+item.strOr("media_id", "")+":"+itoa(regenCount+1),
-			2, "Taut Pintar — regenerasi artikel AI", userID); err != nil {
+			d.writerCreditCost(ctx), "Taut Pintar — regenerasi artikel AI", userID); err != nil {
 			return writerItemResult{}, err
 		}
 	}
@@ -763,8 +763,8 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		return writerItemResult{}, err
 	}
 	if !isRegen {
-		if err := d.chargeCredit(ctx, brandID, "taut-writer:"+campaignID+":"+mediaID, 1,
-			"Taut Pintar — penulisan AI artikel "+name, userID); err != nil {
+		if err := d.chargeCredit(ctx, brandID, "taut-writer:"+campaignID+":"+mediaID,
+			d.writerCreditCost(ctx), "Taut Pintar — penulisan AI artikel "+name, userID); err != nil {
 			return writerItemResult{}, err
 		}
 	}
@@ -926,6 +926,27 @@ func randomTautCode5() string {
 		b[i] = tautCodeAlphabet[randInt(len(tautCodeAlphabet))]
 	}
 	return string(b)
+}
+
+// writerCreditCostKey: kunci platform_settings untuk tarif penulisan artikel.
+const writerCreditCostKey = "writer_credit_cost"
+
+// defaultWriterCreditCost: tarif bawaan sebelum admin mengubahnya (dalam kredit).
+const defaultWriterCreditCost = 2
+
+// writerCreditCost: tarif kredit per artikel yang dihasilkan The Writer —
+// BERLAKU RATA untuk artikel baru maupun tulis ulang. Dibaca dari satu tempat
+// (platform_settings) supaya penagihan dan tampilan memakai angka yang sama;
+// sebelumnya angka ini tertulis terpisah di backend dan frontend.
+func (d *Deps) writerCreditCost(ctx context.Context) int {
+	row, err := d.queryRow(ctx,
+		"SELECT value FROM platform_settings WHERE key = $1 LIMIT 1", writerCreditCostKey)
+	if err == nil && row != nil {
+		if n, convErr := strconv.Atoi(strings.TrimSpace(row.strOr("value", ""))); convErr == nil && n > 0 {
+			return n
+		}
+	}
+	return defaultWriterCreditCost
 }
 
 // getShortLinkDomain: domain short link dari platform_settings; "" = domain utama.

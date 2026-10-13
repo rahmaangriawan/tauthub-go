@@ -159,7 +159,7 @@ func (d *Deps) AIConfigurationGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, aiConfigJSON(d.aiStoredConfig(r.Context()), rt))
+	writeJSON(w, http.StatusOK, aiConfigJSON(d.aiStoredConfig(r.Context()), rt, d.writerCreditCostSetting(r.Context())))
 }
 
 // AIConfigurationPut: PUT /v1/platform/ai/configuration
@@ -234,6 +234,20 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 		}
 		imageCreditCost = int(f)
 		setImageCreditCost = true
+	}
+	// Tarif penulisan The Writer (berlaku rata: artikel baru maupun tulis ulang).
+	// Disimpan di platform_settings, dibaca brandflow (menagih) dan clienttaut
+	// (menampilkan) — satu angka, mustahil berbeda antara tampilan dan tagihan.
+	var writerCreditCost int
+	setWriterCreditCost := false
+	if raw, present := body["writer_credit_cost"]; present && raw != nil {
+		f, isNum := raw.(float64)
+		if !isNum || f < 0 || f > 100000 || f != float64(int(f)) {
+			writeErr(w, d, errUnprocessable("Harga kredit penulisan harus bilangan bulat 0 sampai 100000."))
+			return
+		}
+		writerCreditCost = int(f)
+		setWriterCreditCost = true
 	}
 
 	base := aiNormalizeURL(baseRaw)
@@ -349,11 +363,20 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if setWriterCreditCost {
+		if err := d.exec(ctx,
+			`INSERT INTO platform_settings (key, value, updated_at) VALUES ('writer_credit_cost', $1, NOW())
+			 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+			strconv.Itoa(writerCreditCost)); err != nil {
+			writeErr(w, d, err)
+			return
+		}
+	}
 	d.audit(ctx, user.ID, "platform.ai.configuration_updated", "platform_ai_configuration", "default")
 	ai.InvalidateRuntimeCache()
 
 	rt, _ := ai.LoadAIRuntime(ctx, d.Pool)
-	writeJSON(w, http.StatusOK, aiConfigJSON(d.aiStoredConfig(ctx), rt))
+	writeJSON(w, http.StatusOK, aiConfigJSON(d.aiStoredConfig(ctx), rt, d.writerCreditCostSetting(ctx)))
 }
 
 // aiTail: n karakter terakhir (parity slice(-4)).

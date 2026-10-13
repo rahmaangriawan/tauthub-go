@@ -40,6 +40,11 @@
 		allow_hyperlink: boolean | null;
 		max_links: number | null;
 		allow_embed: boolean;
+		price?: number | null;
+		/** Kredit penempatan hasil konversi harga media — SAMA dengan yang ditagih. */
+		cost_tc?: number | null;
+		/** Jumlah gambar di artikel tersimpan (untuk panel Biaya Gambar). */
+		images_count?: number | null;
 		regen_count: number | null;
 		categories: string[];
 		label_sponsor?: string;
@@ -91,6 +96,10 @@
 	let backlinkEnabled = $state(false);
 	let entryMode = $state<'ai' | 'manual' | null>(null);
 	let regenMax = $state(2);
+	// Tarif penulisan dari server (platform_settings) — satu angka untuk semua aksi.
+	let writerCostCredits = $state(2);
+	// Tarif per gambar dari konfigurasi AI — dipakai bar dan panel Biaya Gambar.
+	let imageCreditCost = $state(2);
 	let trackingOn = $state(false);
 	let genState = $state<Record<string, string>>({});
 	let bulkRunning = $state(false);
@@ -104,7 +113,6 @@
 	let qcToken = $state(0);
 	// Media yang hasil QC-nya menunggu dibuka: panel ditunda sampai modal naskah
 	// tertutup supaya dua overlay tidak menumpuk dan kunci scroll tidak bentrok.
-	let pendingQcFor = $state<string | null>(null);
 	let gatekeeperAgent = $state<{ configured: boolean; reason: string | null } | null>(null);
 	// Distribusi langsung dari The Writer ketika QC sudah lulus (Gatekeeper dilewati).
 	let distributable = $state<boolean | null>(null);
@@ -114,6 +122,9 @@
 	// Panel geser penerbitan: jadwal diatur PER MEDIA (boleh campur: satu terbit
 	// langsung, satu terjadwal), dan cover tiap artikel dipastikan dulu.
 	let publishOpen = $state(false);
+	// Popover rincian biaya di bar bawah: terbuka saat hover, tetap terbuka saat diklik.
+	let costPopoverOpen = $state(false);
+	let costPinned = $state(false);
 	// media_id -> nilai datetime-local; tidak ada entri = terbit langsung.
 	let scheduleByMedia = $state<Record<string, string>>({});
 	// Preset cepat yang sedang berlaku per media, untuk sorotan tombol. Kosong
@@ -227,6 +238,10 @@
 				placement = d.media ?? [];
 				const rm = Number(d.regen_max ?? 2);
 				if (Number.isFinite(rm) && rm >= 0) regenMax = rm;
+				const wc = Number(d.writer_cost_credits ?? 2);
+				if (Number.isFinite(wc) && wc > 0) writerCostCredits = wc;
+				const ic = Number(d.image_credit_cost ?? 0);
+				if (Number.isFinite(ic) && ic >= 0) imageCreditCost = ic;
 			}
 			// null = belum diketahui / gagal dibaca → tombol kembali ke jalur aman
 			// (mampir ke halaman Gatekeeper).
@@ -727,8 +742,9 @@
 		};
 	}
 
-	// Simpan isi editor. Dipisah dari penutupan modal supaya alur "Cek Validasi
-	// Artikel" bisa menyimpan dulu lalu memindai tanpa menutup modal.
+	// Simpan isi editor: PUT bila dokumen sudah ada, POST upload bila belum.
+	// Pemeriksaan QC tidak lagi dijalankan dari sini — pemindaian tetap tersedia
+	// lewat tombol "Analisis QC" per media di daftar.
 	async function persistEditor(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string): Promise<boolean> {
 		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return false; }
 		const current = editor;
@@ -769,69 +785,7 @@
 		editorSaving = false;
 		if (saved) {
 			editor = null;
-			revealPendingQc();
 		}
-	}
-
-	type QcCheckOutcome = { ok: boolean; passed: boolean; message: string; error: string };
-
-	/** Pemindaian QC satu media lewat endpoint yang sama dengan panel QC. */
-	async function runQcCheck(mediaId: string): Promise<QcCheckOutcome> {
-		if (gatekeeperAgent && !gatekeeperAgent.configured) {
-			return { ok: false, passed: false, message: '', error: tr('AI Gatekeeper belum dikonfigurasi oleh admin. Audit tidak akan berjalan sampai admin mengaktifkannya.') };
-		}
-		try {
-			const scanRes = await apiRequest(`${apiBase}/gatekeeper/audit-all`, { method: 'POST', body: JSON.stringify({ mediaIds: [mediaId] }) }, 900_000);
-			if (!scanRes.ok) {
-				return { ok: false, passed: false, message: '', error: await readApiError(scanRes, tr('Gagal menjalankan pemindaian QC.')) };
-			}
-			const auditsRes = await apiRequest(`${apiBase}/gatekeeper/audits`);
-			const data = auditsRes.ok ? await auditsRes.json().catch(() => null) : null;
-			const entry = data?.media?.find((m: { media_id: string }) => m.media_id === mediaId);
-			const cs = entry?.audit?.checks?.contentSafety;
-			const lh = entry?.audit?.checks?.linkHealth;
-			const passed = cs?.status === 'passed' && lh?.status === 'passed';
-			const reasons: string[] = [];
-			if (!entry) {
-				reasons.push(tr('Hasil pemindaian belum tersedia.'));
-			} else {
-				if (cs && cs.status !== 'passed') {
-					if (cs.reasons?.length) reasons.push(...cs.reasons);
-					else if (cs.categories?.length) reasons.push(`${tr('Kategori berisiko:')} ${cs.categories.join(', ')}`);
-					else reasons.push(tr('Illegal Content Guard belum lulus.'));
-				}
-				if (lh && lh.status !== 'passed') {
-					const n = lh.links?.filter((l: { status?: string }) => l.status === 'unsafe' || l.status === 'suspicious').length ?? 0;
-					reasons.push(n > 0 ? `${n} ${tr('tautan bermasalah')}` : tr('Link Health Validator belum lulus.'));
-				}
-			}
-			await load();
-			return { ok: true, passed, message: reasons.join(' · '), error: '' };
-		} catch (reason) {
-			return { ok: false, passed: false, message: '', error: reason instanceof Error ? reason.message : tr('Gagal menjalankan pemindaian QC.') };
-		}
-	}
-
-	/** Cek Validasi dari modal: simpan dulu, pindai QC media ini, lalu buka panel. */
-	async function validateNaskah(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string): Promise<QcCheckOutcome> {
-		const current = editor;
-		if (!current) return { ok: false, passed: false, message: '', error: tr('Artikel tidak tersedia.') };
-		editorSaving = true;
-		const saved = await persistEditor(title, html, coverUrl, category, metaDescription);
-		editorSaving = false;
-		if (!saved) return { ok: false, passed: false, message: '', error: editorError || tr('Gagal menyimpan artikel.') };
-		const outcome = await runQcCheck(current.mediaId);
-		// Panel dibuka setelah modal tertutup (lihat revealPendingQc).
-		pendingQcFor = current.mediaId;
-		return outcome;
-	}
-
-	/** Buka panel QC begitu modal naskah tertutup. */
-	function revealPendingQc() {
-		if (!pendingQcFor) return;
-		qcFor = pendingQcFor;
-		pendingQcFor = null;
-		qcToken += 1;
 	}
 
 	/** Buka panel QC untuk media terpilih pertama (pengganti halaman Gatekeeper). */
@@ -856,20 +810,39 @@
 	const canRegen = (m: PlacementItem) => hasDoc(m) && regenCountOf(m) < regenMax;
 
 	const cost = $derived.by(() => {
-		const writing = selected.reduce((s, m) => s + (!hasDoc(m) ? 1 : canRegen(m) ? 2 : 0), 0);
-		const media = selected.reduce((s, m) => s + (m.credit_cost ?? 0), 0);
-		return { count: selected.length, writing, media, total: writing + media };
+		// Tarif RATA: artikel baru dan tulis ulang dihargai sama, dan angkanya
+		// datang dari server — tidak lagi ditulis terpisah di sini.
+		const pending = selected.filter((m) => !hasDoc(m) || canRegen(m)).length;
+		const writing = pending * writerCostCredits;
+		// Biaya media memakai harga penempatan (dikonversi server), bukan
+		// credit_cost yang bukan sumber penagihan — dulu itu sebab bar menulis
+		// Rp 22.000 padahal yang ditagih Rp 20.000.
+		const media = selected.reduce((s, m) => s + (m.cost_tc ?? 0), 0);
+		const imageCount = selected.reduce((s, m) => s + (m.images_count ?? 0), 0);
+		const images = imageCount * imageCreditCost;
+		return { count: selected.length, writing, media, images, imageCount, total: writing + media + images };
 	});
 	const pendingCount = $derived(selected.filter((m) => !hasDoc(m) || canRegen(m)).length);
+	// Komposisi biaya penulisan: artikel baru 1 kredit, regenerasi 2 kredit —
+	// dipakai bersama oleh tooltip tombol dan rincian di bar bawah.
+	const newArticleCount = $derived(selected.filter((m) => !hasDoc(m)).length);
+	const regenArticleCount = $derived(selected.filter((m) => hasDoc(m) && canRegen(m)).length);
 	// Biaya ditampilkan dalam rupiah memakai kurs aktif (fallback Rp 1.000).
 	const toRp = (credits: number) => tcToRp(credits, rateIdr);
+
+	// Rincian biaya penulisan dalam bahasa manusia, tampil di bar bawah supaya
+	// angka tidak muncul tanpa penjelasan.
+	const costDetail = $derived.by(() => {
+		const total = newArticleCount + regenArticleCount;
+		if (total === 0) return tr('Semua media sudah punya artikel — tidak ada biaya penulisan tertunda.');
+		return `${total} ${tr('artikel')} × ${toRp(writerCostCredits)} = ${toRp(cost.writing)}`;
+	});
+
 
 	// Tooltip rincian biaya tombol "Generate Semua Artikel" (parity Tooltip app lama).
 	const generateTooltip = $derived.by(() => {
 		if (cost.writing <= 0) return tr('Semua media sudah memiliki artikel — generate tidak diperlukan.');
-		const baru = selected.filter((m) => !hasDoc(m)).length;
-		const regen = selected.filter((m) => hasDoc(m) && canRegen(m)).length;
-		return `${tr('Rincian:')} ${baru} ${tr('artikel baru')} × ${toRp(1)}${regen ? ` + ${regen} ${tr('regenerasi')} × ${toRp(2)}` : ''} = ${tr('total')} ${toRp(cost.writing)}`;
+		return `${tr('Rincian:')} ${costDetail}`;
 	});
 
 	const editorMedia = $derived.by(() => {
@@ -1260,7 +1233,7 @@
 							{#if manualFlow}
 								{tr('Unggah artikel tulisanmu sendiri, atau buat dengan AI lewat tombol di tiap media.')}
 							{:else}
-								{tr('Biaya penulisan konten organik oleh The Writer adalah')} <strong>{toRp(1)}</strong> {tr('/ Artikel.')}
+								{tr('Biaya penulisan konten organik oleh The Writer:')} <strong>{toRp(writerCostCredits)}</strong> {tr('/ artikel — baru maupun tulis ulang.')}
 							{/if}
 						</p>
 					</div>
@@ -1424,24 +1397,74 @@
 		</section>
 
 			<TautBottomBar fullWidth>
-				<div class="selectedBarStats">
-					<div class="selectedStatItem">
-						<span class="selectedStatLabel">{tr('BIAYA MEDIA')} ({cost.count} {tr('Media')})</span>
-						<span class="selectedStatPriceVal">{toRp(cost.media)}</span>
-					</div>
-					<div class="selectedBarDivider"></div>
-					<div class="selectedStatItem">
-						<span class="selectedStatLabel">{tr('BIAYA PENULISAN AI')}</span>
-						<span class="selectedStatPriceVal">{toRp(cost.writing)}</span>
-					</div>
-					<div class="selectedBarDivider"></div>
-					<div class="selectedStatItem">
-						<span class="selectedStatLabel flex items-center gap-1">
-							{tr('TOTAL TAGIHAN AKHIR')}
-							<Wallet size={12} class="opacity-70" />
-						</span>
-						<span class="selectedStatPriceVal selectedStatTotalVal">{toRp(cost.total)}</span>
-					</div>
+				<div class="selectedBarLeftCol">
+					<!-- Bar hanya menampilkan TOTAL. Rinciannya muncul sebagai popover
+					     ke atas saat di-hover atau diklik. -->
+					<span class="relative inline-flex">
+						<button
+							class="selectedStatItem selectedStatItemTotal"
+							type="button"
+							aria-expanded={costPopoverOpen}
+							onmouseenter={() => (costPopoverOpen = true)}
+							onmouseleave={() => { if (!costPinned) costPopoverOpen = false; }}
+							onfocus={() => (costPopoverOpen = true)}
+							onblur={() => { if (!costPinned) costPopoverOpen = false; }}
+							onclick={() => { costPinned = !costPinned; costPopoverOpen = costPinned; }}
+						>
+							<span class="selectedStatLabel flex items-center gap-1">
+								{tr('TOTAL TAGIHAN AKHIR')}
+								<Wallet size={12} class="opacity-70" />
+							</span>
+							<span class="selectedStatPriceVal selectedStatTotalVal">{toRp(cost.total)}</span>
+						</button>
+
+						{#if costPopoverOpen}
+							{#if costPinned}
+								<button
+									class="fixed inset-0 z-30 cursor-default"
+									type="button"
+									aria-label={tr('Tutup rincian biaya')}
+									onclick={() => { costPinned = false; costPopoverOpen = false; }}
+								></button>
+							{/if}
+							<div class="costPopover" role="dialog" tabindex="-1" aria-label={tr('Rincian biaya')}
+								onkeydown={(e) => { if (e.key === 'Escape') { costPinned = false; costPopoverOpen = false; } }}
+							>
+								<p class="costPopoverTitle">{tr('Rincian biaya')}</p>
+
+								<div class="costPopoverRow">
+									<span>
+										{tr('Biaya media')} <span class="text-muted-foreground">({cost.count} {tr('media')})</span>
+									</span>
+									<span class="font-medium">{toRp(cost.media)}</span>
+								</div>
+
+								<div class="costPopoverRow">
+									<span>
+										{tr('Biaya penulisan AI')} <span class="text-muted-foreground">({newArticleCount + regenArticleCount} {tr('artikel')})</span>
+										<span class="costPopoverRowNote">{newArticleCount + regenArticleCount} × {toRp(writerCostCredits)}</span>
+									</span>
+									<span class="font-medium">{toRp(cost.writing)}</span>
+								</div>
+
+								<div class="costPopoverRow">
+									<span>
+										{tr('Biaya gambar')} <span class="text-muted-foreground">({cost.imageCount} {tr('gambar')})</span>
+										<span class="costPopoverRowNote">{cost.imageCount} × {toRp(imageCreditCost)}</span>
+									</span>
+									<span class="font-medium">{toRp(cost.images)}</span>
+								</div>
+
+								<div class="costPopoverDivider"></div>
+
+								<div class="costPopoverTotal">
+									<span>{tr('TOTAL TAGIHAN AKHIR')}</span>
+									<span>{toRp(cost.total)}</span>
+								</div>
+
+							</div>
+						{/if}
+					</span>
 				</div>
 				<div class="selectedBarRight">
 					{#if distributable}
@@ -1514,13 +1537,11 @@
 			linkLimit={ed.linkLimit}
 			saving={editorSaving}
 			saveError={editorError}
-			onClose={() => { if (!editorSaving) { editor = null; revealPendingQc(); } }}
+			onClose={() => { if (!editorSaving) editor = null; }}
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveEditor(title, html, coverUrl, category, metaDescription)}
 			onUploadCover={uploadCover}
 			onUploadDoc={uploadDocNaskah}
 			onGenerate={(topic, links, angleSlug) => generateNaskah(ed.mediaId, topic, links, angleSlug)}
-			gatekeeperConfigured={gatekeeperAgent ? gatekeeperAgent.configured : null}
-			onValidate={(title, html, coverUrl, category, metaDescription) => validateNaskah(title, html, coverUrl, category, metaDescription)}
 			streamingHtml={streamHtml}
 		/>
 	{/key}
@@ -1604,6 +1625,7 @@
 			</div>
 		{/snippet}
 	</SlideOver>
+
 {/if}
 
 {#if qcItem}
@@ -1615,7 +1637,7 @@
 			mediaName={qc.name}
 			articleStatus={articleStatusOf(qc)}
 			words={qcStats?.words ?? null}
-			regenLabel={`${tr('Generate Ulang')} (${toRp(2)})`}
+			regenLabel={`${tr('Generate Ulang')} (${toRp(writerCostCredits)})`}
 			canRegen={canRegen(qc) && !bulkRunning}
 			generating={articleStatusOf(qc) === 'generating'}
 			gatekeeperConfigured={gatekeeperAgent ? gatekeeperAgent.configured : null}
@@ -1623,7 +1645,19 @@
 			onClose={() => (qcFor = null)}
 			onEdit={() => void openPreview(qc)}
 			onRegenerate={() => void generateOne(qc, false)}
-				onScanned={() => { qcToken += 1; void load(); }}
+				onScanned={() => {
+					qcToken += 1;
+					// Setelah pemindaian selesai: bila seluruh gerbang keras kini lulus,
+					// panel QC ditutup dan panel penerbitan langsung terbuka — tidak
+					// perlu menutup manual lalu menekan tombol di bar bawah.
+					void (async () => {
+						await load();
+						if (!viewOnly && !editor && distributable) {
+							qcFor = null;
+							void publish();
+						}
+					})();
+				}}
 			/>
 		{/key}
 	{/if}
@@ -1632,11 +1666,14 @@
 		/* Bar biaya bawah (referensi style dari katalog media):
 		   Stat item rapi dengan pembatas vertikal tipis, tombol hitam untuk aksi utama,
 		   dan membentang penuh (full-width) mengikuti area konten. */
-		.selectedBarStats {
+
+		.selectedBarLeftCol {
 			display: flex;
-			align-items: center;
-			gap: 0;
+			flex-direction: column;
+			gap: 3px;
+			min-width: 0;
 		}
+
 		.selectedStatItem {
 			display: flex;
 			flex-direction: column;
@@ -1658,16 +1695,68 @@
 			line-height: 1.2;
 			font-variant-numeric: tabular-nums;
 		}
+		/* Total adalah angka yang harus terbaca pertama: diberi blok hijau. */
+		.costPopover {
+			position: absolute;
+			bottom: calc(100% + 10px);
+			left: 0;
+			z-index: 40;
+			width: 300px;
+			padding: 12px 14px;
+			border-radius: 14px;
+			border: 1px solid var(--border);
+			background: var(--card);
+			box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+		}
+		.costPopoverTitle {
+			font-size: 10.5px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: var(--muted-foreground);
+		}
+		.costPopoverRow {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 10px;
+			margin-top: 9px;
+			font-size: 12.5px;
+		}
+		.costPopoverRowNote {
+			display: block;
+			font-size: 10.5px;
+			color: var(--muted-foreground);
+		}
+		.costPopoverDivider {
+			height: 1px;
+			margin-top: 11px;
+			background: var(--border);
+		}
+		.costPopoverTotal {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 10px;
+			margin-top: 10px;
+			font-size: 13.5px;
+			font-weight: 700;
+			color: var(--success);
+		}
+
+		.selectedStatItemTotal {
+			padding: 10px 16px;
+			border-radius: 11px;
+			background: var(--success-soft, #e8f5ee);
+			/* Tombol mewarisi text-align: center bawaan browser — dipaksa rata
+			   kiri supaya label dan angkanya sejajar. */
+			text-align: left;
+		}
+		.selectedStatItemTotal .selectedStatLabel { color: var(--success); }
 		.selectedStatTotalVal {
 			font-size: 19px;
 			font-weight: 800;
-		}
-		.selectedBarDivider {
-			width: 1px;
-			height: 34px;
-			background: #e2e8f0;
-			margin: 0 24px;
-			flex-shrink: 0;
+			color: var(--success);
 		}
 		.selectedBarRight {
 			display: flex;
@@ -1735,20 +1824,15 @@
 			transform: none;
 		}
 
-		@media (max-width: 1023px) {
-			.selectedBarDivider {
-				margin: 0 16px;
-			}
+		/* Kolom kiri bar: total tagihan + popover rinciannya. */
+		.selectedBarLeftCol {
+			display: flex;
+			flex-direction: column;
+			gap: 3px;
+			min-width: 0;
 		}
+
 		@media (max-width: 767px) {
-			.selectedBarStats {
-				width: 100%;
-				flex-wrap: wrap;
-				gap: 12px 20px;
-			}
-			.selectedBarDivider {
-				display: none;
-			}
 			.selectedBarRight {
 				width: 100%;
 				align-items: stretch;

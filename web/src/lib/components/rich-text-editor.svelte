@@ -4,7 +4,7 @@
 	// dipakai di luar modal: perintah format, pustaka gambar AI (bila scope
 	// brand+campaign+media tersedia) atau unggah gambar ke /brands/:id/assets,
 	// dialog tautan, dan sinkronisasi HTML dua arah.
-	import { CircleAlert, Image, Link, List, ListOrdered, LoaderCircle, Quote, RotateCcw, RotateCw, Upload, X } from '@lucide/svelte';
+	import { CircleAlert, Image, Link, List, ListOrdered, LoaderCircle, Quote, RotateCcw, RotateCw, Trash2, Upload, X } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 	import { apiRequest } from '$lib/auth';
 	import { sanitizeHtml } from '$lib/sanitize-html';
@@ -45,6 +45,46 @@
 	let imageInput = $state<HTMLInputElement | undefined>(undefined);
 	let imageBusy = $state(false);
 	let imageError = $state('');
+
+	// Gambar yang sedang dipilih di dalam artikel. Tanpa ini, menghapus gambar
+	// hanya bisa lewat caret + Backspace — tidak kasat mata dan sering gagal.
+	let rootEl = $state<HTMLElement | null>(null);
+	let selectedImg = $state<HTMLImageElement | null>(null);
+	let imgBarPos = $state<{ top: number; left: number }>({ top: 0, left: 0 });
+
+	function clearImageSelection() {
+		selectedImg?.classList.remove('rte-img-selected');
+		selectedImg = null;
+	}
+
+	function selectImage(img: HTMLImageElement) {
+		clearImageSelection();
+		selectedImg = img;
+		img.classList.add('rte-img-selected');
+		placeImageBar();
+	}
+
+	function placeImageBar() {
+		if (!selectedImg || !rootEl) return;
+		const r = selectedImg.getBoundingClientRect();
+		const root = rootEl.getBoundingClientRect();
+		imgBarPos = {
+			top: Math.max(4, r.top - root.top - 36),
+			left: Math.max(4, r.left - root.left)
+		};
+	}
+
+	function deleteSelectedImage() {
+		const img = selectedImg;
+		if (!img || !bodyEl?.contains(img)) {
+			clearImageSelection();
+			return;
+		}
+		img.remove();
+		clearImageSelection();
+		sync();
+		commitHistory();
+	}
 	let mode = $state<'rich' | 'html'>('rich');
 		// Saat kembali dari mode HTML, elemen contenteditable dibuat ulang oleh
 		// {#if} — isinya harus diisi ulang dari value.
@@ -94,8 +134,10 @@
 	let lastExternal = '';
 	$effect(() => {
 		if (value !== lastExternal && bodyEl && mode === 'rich') {
+			clearImageSelection();
 			bodyEl.innerHTML = sanitizeHtml(value);
 			lastExternal = value;
+			resetHistory();
 			// Konten bisa berubah dari luar (mis. sisip gambar per H2 / pulihkan
 			// versi) — statistik harus ikut segar, bukan hanya saat dipanggil sync().
 			publishStats();
@@ -107,6 +149,7 @@
 			bodyEl.innerHTML = sanitizeHtml(value);
 			lastExternal = value;
 			pendingRender = false;
+			resetHistory();
 		}
 	});
 
@@ -115,6 +158,7 @@
 		lastExternal = bodyEl.innerHTML;
 		value = bodyEl.innerHTML;
 		publishStats();
+		scheduleHistoryCommit();
 	}
 
 	// Statistik isi untuk footer pemanggil: kata, tautan aktif, gambar.
@@ -137,6 +181,88 @@
 		body.focus();
 		document.execCommand(cmd, false, arg);
 		sync();
+		// Tindakan dari toolbar selalu jadi satu langkah riwayat.
+		commitHistory();
+	}
+
+	// ---------- riwayat suntingan (undo/redo) ----------
+	// Tumpukan snapshot HTML, bukan execCommand: perintah bawaan browser rusak
+	// begitu isi editor ditulis ulang dari luar (sisip gambar per H2, pulihkan
+	// versi, hapus gambar dari bar aksi).
+	let history: string[] = [];
+	let historyIndex = $state(-1);
+	let applyingHistory = false;
+	let snapshotTimer: number | null = null;
+	const HISTORY_LIMIT = 80;
+
+	const canUndo = $derived(historyIndex > 0);
+	const canRedo = $derived(historyIndex >= 0 && historyIndex < history.length - 1);
+
+	function resetHistory() {
+		if (!bodyEl) return;
+		history = [bodyEl.innerHTML];
+		historyIndex = 0;
+	}
+
+	// "commitHistory": catat keadaan sekarang sebagai langkah baru.
+	function commitHistory() {
+		if (!bodyEl || applyingHistory) return;
+		const html = bodyEl.innerHTML;
+		if (historyIndex >= 0 && history[historyIndex] === html) return;
+		history = history.slice(0, historyIndex + 1);
+		history.push(html);
+		if (history.length > HISTORY_LIMIT) history = history.slice(history.length - HISTORY_LIMIT);
+		historyIndex = history.length - 1;
+	}
+
+	// Ketikan: gabungkan jeda mengetik jadi satu langkah (debounce).
+	function scheduleHistoryCommit() {
+		if (snapshotTimer) window.clearTimeout(snapshotTimer);
+		snapshotTimer = window.setTimeout(() => {
+			snapshotTimer = null;
+			commitHistory();
+		}, 500);
+	}
+
+	function applyHistory(index: number) {
+		if (!bodyEl || index < 0 || index >= history.length) return;
+		applyingHistory = true;
+		historyIndex = index;
+		clearImageSelection();
+		bodyEl.innerHTML = history[index];
+		lastExternal = bodyEl.innerHTML;
+		value = bodyEl.innerHTML;
+		publishStats();
+		applyingHistory = false;
+	}
+
+	function undoEdit() {
+		if (canUndo) applyHistory(historyIndex - 1);
+	}
+
+	function redoEdit() {
+		if (canRedo) applyHistory(historyIndex + 1);
+	}
+
+	// Pintasan: Ctrl/Cmd+Z urungkan, Ctrl/Cmd+Shift+Z atau Ctrl+Y ulangi, dan
+	// Delete/Backspace menghapus gambar yang sedang dipilih.
+	function onBodyKeydown(e: KeyboardEvent) {
+		const mod = e.metaKey || e.ctrlKey;
+		if (mod && e.key.toLowerCase() === 'z') {
+			e.preventDefault();
+			if (e.shiftKey) redoEdit();
+			else undoEdit();
+			return;
+		}
+		if (mod && e.key.toLowerCase() === 'y') {
+			e.preventDefault();
+			redoEdit();
+			return;
+		}
+		if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImg) {
+			e.preventDefault();
+			deleteSelectedImage();
+		}
 	}
 
 	const tools: Array<{ cmd: string; label?: string; icon?: Component; arg?: string; name: string }> = [
@@ -182,6 +308,7 @@
 		}
 		document.execCommand('insertImage', false, url);
 		sync();
+		commitHistory();
 	}
 
 	// Tempel/tarik gambar langsung ke isi editor tetap didukung (unggah ke
@@ -388,8 +515,18 @@
 	function handleBodyClick(e: MouseEvent) {
 		const body = bodyEl;
 		const el = e.target instanceof Element ? e.target : null;
-		const anchor = el?.closest('a');
-		if (!body || !anchor || !body.contains(anchor)) return;
+		if (!body || !el) return;
+
+		const img = el.closest('img');
+		if (img && body.contains(img)) {
+			e.preventDefault();
+			selectImage(img as HTMLImageElement);
+			return;
+		}
+		clearImageSelection();
+
+		const anchor = el.closest('a');
+		if (!anchor || !body.contains(anchor)) return;
 		e.preventDefault();
 		const range = document.createRange();
 		range.selectNodeContents(anchor);
@@ -399,7 +536,7 @@
 	}
 </script>
 
-<div class="rte">
+<div class="rte" bind:this={rootEl}>
 	<div class="rte-toolbar flex flex-wrap items-center gap-1 rounded-lg border p-1" role="toolbar" aria-label="Format teks">
 		{#each tools as t (t.cmd + (t.arg ?? ''))}
 			{@const ToolIcon = t.icon}
@@ -408,8 +545,15 @@
 				type="button"
 				title={t.name}
 				aria-label={t.name}
-				disabled={disabled || mode === 'html'}
-				onclick={() => exec(t.cmd, t.arg)}
+				disabled={disabled ||
+					mode === 'html' ||
+					(t.cmd === 'undo' && !canUndo) ||
+					(t.cmd === 'redo' && !canRedo)}
+				onclick={() => {
+					if (t.cmd === 'undo') return undoEdit();
+					if (t.cmd === 'redo') return redoEdit();
+					exec(t.cmd, t.arg);
+				}}
 			>
 				{#if ToolIcon}<ToolIcon size={15} />{:else}{t.label}{/if}
 			</button>
@@ -475,10 +619,21 @@
 			aria-label={ariaLabel ?? 'Isi artikel'}
 			oninput={sync}
 			onclick={handleBodyClick}
+			onkeydown={onBodyKeydown}
+			onscroll={placeImageBar}
 			onpaste={onBodyPaste}
 			ondragover={(e) => { if (!disabled && mode === 'rich') e.preventDefault(); }}
 			ondrop={onBodyDrop}
 		></div>
+
+		{#if selectedImg}
+			<!-- Bar aksi gambar: muncul saat gambar diklik di dalam artikel. -->
+			<div class="rte-imgbar" style="top: {imgBarPos.top}px; left: {imgBarPos.left}px;">
+				<button class="rte-imgbar-btn" type="button" onclick={deleteSelectedImage}>
+					<Trash2 size={13} />{tr('Hapus gambar')}
+				</button>
+			</div>
+		{/if}
 	{:else}
 		<textarea
 			class="rte-body w-full resize-y rounded-lg border p-3 font-mono text-xs"
@@ -655,6 +810,35 @@
 	/* Toolbar menempel di atas saat SELURUH modal digulir (bukan scroll internal
 	   editor) — container penggulirnya adalah grid overflow-y-auto di modal
 	   Pengelola Naskah. Latar harus pekat supaya isi tidak tembus di baliknya. */
+	.rte :global(.rte-img-selected) {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+		border-radius: 6px;
+	}
+
+	.rte-imgbar {
+		position: absolute;
+		z-index: 20;
+		display: flex;
+		gap: 4px;
+		padding: 3px;
+		border-radius: 9px;
+		border: 1px solid var(--border);
+		background: var(--card);
+		box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
+	}
+	.rte-imgbar-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		padding: 4px 8px;
+		border-radius: 6px;
+		font-size: 12px;
+		color: var(--destructive);
+	}
+	.rte-imgbar-btn:hover { background: var(--secondary); }
+	.rte-imgbar-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
 	.rte-toolbar {
 		position: sticky;
 		top: 0;

@@ -4,7 +4,7 @@
 	// artikel (cover, kategori, meta deskripsi) dan footer validasi.
 	// Reuse: rich-text-editor (toolbar + contentEditable), endpoint /files dan
 	// /produce/{mediaId} lewat callback dari writer, serta saveEditor di writer.
-	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, Info, ShieldCheck, Link2, Plus } from '@lucide/svelte';
+	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, Info, Link2, Lightbulb, Plus } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { tr } from '$lib/i18n/phrases';
 	import { apiRequest, readApiError } from '$lib/auth';
@@ -44,8 +44,6 @@
 		onUploadCover,
 		onUploadDoc,
 		onGenerate,
-		gatekeeperConfigured = null,
-		onValidate,
 		streamingHtml = null
 	}: {
 		mediaName: string;
@@ -77,10 +75,7 @@
 		onUploadDoc: (file: File, onPhase?: (phase: 'extract' | 'clean') => void, links?: WriterLink[]) => Promise<{ title: string; html: string; warning?: string }>;
 		onGenerate: (topic: string, links: WriterLink[], angleSlug: string) => Promise<{ title: string; html: string; imagesGenerated?: number; imagesCostCredits?: number }>;
 		/** null = belum tahu; false = AI Gatekeeper belum dikonfigurasi admin. */
-		gatekeeperConfigured?: boolean | null;
-		/** Cek Validasi (QC) dari writer: simpan lalu pindai; hasil dibuka di panel QC. */
-		onValidate: (title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) => Promise<{ ok: boolean; passed: boolean; message: string; error: string }>;
-		/** Pratinjau streaming: html parsial yang tampil read-only saat AI menulis; null = tidak streaming. */
+			/** Pratinjau streaming: html parsial yang tampil read-only saat AI menulis; null = tidak streaming. */
 		streamingHtml?: string | null;
 	} = $props();
 
@@ -109,6 +104,18 @@
 	let genBusy = $state(false);
 	let genError = $state('');
 	let topic = $state('');
+	// Contoh prompt siap pakai: dibuka dari tombol di sebelah kanan label topik.
+	let topicHelpOpen = $state(false);
+	const TOPIC_EXAMPLES: { label: string; text: string }[] = [
+		{
+			label: 'Peluncuran produk (media mainstream)',
+			text: 'Buatkan artikel pengumuman peluncuran aplikasi kasir digital dari PT Maju Jaya. Tekankan fitur rekonsiliasi otomatis dan laporan harian, sasar pemilik UMKM. Sisipkan 2 gambar isi.'
+		},
+		{
+			label: 'Panduan (blogger)',
+			text: 'Tulis panduan langkah demi langkah memilih laptop untuk desain grafis. Bahas RAM, kartu grafis, dan kualitas layar; sasar mahasiswa desain. Pakai daftar poin dan sertakan 3 gambar.'
+		}
+	];
 	let angleSlug = $state(untrack(() => initialAngleSlug));
 	const selectedAngle = $derived(angleOptions.find((a) => a.slug === angleSlug));
 	const angleSelectOptions = $derived(angleOptions.map((a) => ({ value: a.slug, label: tr(a.name) })));
@@ -214,10 +221,6 @@
 
 	// Hasil Cek Validasi (QC) untuk konten yang sedang diedit. Perubahan isi
 	// membatalkan hasil lama supaya artikel tidak tersimpan tanpa QC ulang.
-	let checking = $state(false);
-	let checked = $state(false);
-	let checkError = $state('');
-	let checkOutcome = $state<{ passed: boolean; message: string } | null>(null);
 
 	let panelEl = $state<HTMLElement | null>(null);
 
@@ -241,10 +244,17 @@
 		// Biaya & saldo gambar selalu tampil dalam rupiah (kurs aktif dari server).
 		const rpOf = (tc: number, rate: number) => (tc > 0 ? tcToRp(tc, rate) : tr('Gratis'));
 		const h2CostRp = $derived(h2ConfirmData ? rpOf(h2ConfirmData.cost, h2ConfirmData.rateIdr) : '—');
-		const h2TotalRp = $derived(h2ConfirmData ? rpOf(h2ConfirmData.total, h2ConfirmData.rateIdr) : '—');
 		const h2BalanceRp = $derived(h2ConfirmData?.balance == null ? '—' : tcToRp(h2ConfirmData.balance, h2ConfirmData.rateIdr));
+
+			// Jumlah gambar bisa diatur pengguna. Bawaannya 1 — rencana tetap
+			// menghitung penempatan sampai N gambar, tapi pengguna yang menaikkan.
+			let h2Count = $state(1);
+			const h2Planned = $derived(h2ConfirmData?.items.length ?? 0);
+			const h2Chosen = $derived(Math.max(1, Math.min(h2Count || 1, Math.max(1, h2Planned))));
+		const h2TotalCredits = $derived((h2ConfirmData?.cost ?? 0) * h2Chosen);
+		const h2TotalRp = $derived(h2ConfirmData ? rpOf(h2TotalCredits, h2ConfirmData.rateIdr) : '—');
 		const h2RemainingRp = $derived(
-			h2ConfirmData?.balance == null ? '—' : tcToRp(Math.max(0, h2ConfirmData.balance - h2ConfirmData.total), h2ConfirmData.rateIdr)
+			h2ConfirmData?.balance == null ? '—' : tcToRp(Math.max(0, h2ConfirmData.balance - h2TotalCredits), h2ConfirmData.rateIdr)
 		);
 
 		function close() {
@@ -457,6 +467,7 @@
 			}
 			const { cost, balance } = await fetchImageCost();
 			const total = cost * plan.length;
+			h2Count = 1;
 			h2ConfirmData = {
 				items: plan.map((p) => ({ label: p.label, prompt: p.prompt })),
 				cost,
@@ -469,7 +480,8 @@
 
 		async function executeGeneratePerH2() {
 			if (h2Busy || !h2ConfirmData) return;
-			const items = h2ConfirmData.items;
+			const chosen = Math.max(1, Math.min(h2Count || 1, h2ConfirmData.items.length));
+			const items = h2ConfirmData.items.slice(0, chosen);
 			h2ConfirmOpen = false;
 			h2Busy = true;
 			try {
@@ -620,20 +632,7 @@
 		}
 		return list;
 	});
-	const canSave = $derived(!!cover && alasanLain.length === 0 && !saving && !checking);
-	// Cek Validasi butuh konten siap karena QC dijalankan pada salinan tersimpan.
-	const canCheck = $derived(!!cover && alasanLain.length === 0 && !saving && !checking && gatekeeperConfigured !== false);
-
-	// Perubahan isi membatalkan hasil Cek Validasi sebelumnya.
-	$effect(() => {
-		title;
-		html;
-		cover;
-		category;
-		meta;
-		checked = false;
-		checkOutcome = null;
-	});
+	const canSave = $derived(!!cover && alasanLain.length === 0 && !saving);
 
 	// Pesan footer mengikuti apa yang masih kurang, bukan kalimat tetap.
 	const pesanKurang = $derived.by(() => {
@@ -649,45 +648,9 @@
 		return `${tr('Lengkapi')} ${bagian.join(' & ')} ${tr('untuk menyimpan.')}`;
 	});
 
-	/** Jalankan Cek Validasi lewat writer. true = hasil didapat (lulus/gagal). */
-	async function runCheck(): Promise<boolean> {
-		checking = true;
-		checkError = '';
-		checkOutcome = null;
-		try {
-			const outcome = await onValidate(title.trim(), html, cover, category, meta.trim());
-			if (!outcome.ok) {
-				checkError = outcome.error || tr('Gagal menjalankan pemindaian QC.');
-				return false;
-			}
-			checked = true;
-			checkOutcome = { passed: outcome.passed, message: outcome.message };
-			return true;
-		} finally {
-			checking = false;
-		}
-	}
-
-	/** Tombol "Cek Validasi Artikel": memindai artikel tanpa menyimpan. */
-	function checkNow() {
-		if (checking || saving || !canCheck) return;
-		void runCheck();
-	}
-
-	/** Simpan: bila belum dicek, QC wajib jalan dulu sebelum menyimpan. */
+	/** Simpan artikel apa adanya. Pemeriksaan QC tidak lagi dipicu dari sini. */
 	async function save() {
-		if (!canSave || saving || checking) return;
-		// QC tidak tersedia (belum dikonfigurasi) → jangan tahan simpan.
-		if (gatekeeperConfigured === false) {
-			onSave(title.trim(), html, cover, category, meta.trim());
-			return;
-		}
-		if (!checked) {
-			// Request QC gagal → tampilkan error dan jangan simpan. Kalau QC jalan
-			// tapi belum lulus, simpan tetap lanjut; publikasi yang diblokir.
-			const obtained = await runCheck();
-			if (!obtained) return;
-		}
+		if (!canSave || saving) return;
 		onSave(title.trim(), html, cover, category, meta.trim());
 	}
 
@@ -867,28 +830,6 @@
 						bind:value={title}
 						maxlength={300}
 					/>
-					<div class="mt-3 flex flex-wrap items-center gap-2 rounded-xl border p-3" style="border-color: var(--border); background-color: var(--muted);">
-						<div class="min-w-0 flex-1">
-							<p class="flex items-center gap-1.5 text-xs font-semibold text-foreground"><ShieldCheck size={13} /> {tr('Cek Validasi Artikel')}</p>
-							{#if gatekeeperConfigured === false}
-								<p class="mt-0.5 text-[11px]" style="color: var(--warning);">{tr('AI Gatekeeper belum dikonfigurasi oleh admin. Pemindaian tidak akan berjalan sampai admin mengaktifkannya.')}</p>
-							{:else}
-								<p class="mt-0.5 text-[11px] text-muted-foreground">{tr('Jalankan pemeriksaan QC sebelum menyimpan. Hasil lengkap tampil di panel Analisis QC.')}</p>
-							{/if}
-						</div>
-						<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={!canCheck} onclick={checkNow}>
-							{#if checking}<LoaderCircle size={14} class="animate-spin" />{:else}<ShieldCheck size={14} />{/if}
-							{checking ? tr('Memeriksa…') : tr('Cek Validasi Artikel')}
-						</button>
-					</div>
-					{#if checkError}
-						<p class="mt-2 flex items-start gap-1.5 text-xs" style="color: var(--destructive);" role="alert"><CircleAlert size={14} class="mt-0.5 shrink-0" /> <span>{checkError}</span></p>
-					{:else if checkOutcome}
-						<p class="mt-2 flex items-start gap-1.5 text-xs" style="color: {checkOutcome.passed ? 'var(--success)' : 'var(--destructive)'};" role="status">
-							{#if checkOutcome.passed}<CircleCheck size={14} class="mt-0.5 shrink-0" />{:else}<CircleAlert size={14} class="mt-0.5 shrink-0" />{/if}
-							<span>{checkOutcome.passed ? tr('Artikel lolos QC.') : `${tr('QC belum lulus:')} ${checkOutcome.message}`}</span>
-						</p>
-					{/if}
 					<div class="mt-4">
 						<div class="flex items-center justify-between gap-4">
 							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{tr('Isi Artikel (Konten)')}</p>
@@ -1051,9 +992,60 @@
 										{/if}
 									</div>
 								</div>
-								<label class="text-sm font-semibold" for="naskah-topik">
-									{tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
-								</label>
+								<div class="flex items-center gap-2">
+									<label class="text-sm font-semibold" for="naskah-topik">
+										{tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
+									</label>
+									<span class="relative ml-auto">
+										<button
+											class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
+											type="button"
+											aria-expanded={topicHelpOpen}
+											onclick={() => (topicHelpOpen = !topicHelpOpen)}
+										>
+											<Lightbulb size={13} /> {tr('Contoh')}
+										</button>
+									</span>
+								</div>
+								{#if topicHelpOpen}
+									<button
+										class="fixed inset-0 z-20 cursor-default"
+										type="button"
+										aria-label={tr('Tutup contoh')}
+										onclick={() => (topicHelpOpen = false)}
+									></button>
+									<div
+										class="relative z-30 mt-2 rounded-xl border p-3"
+										style="border-color: var(--border); background-color: var(--card); box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);"
+										role="dialog"
+										tabindex="-1"
+										aria-label={tr('Contoh topik & konteks')}
+										onkeydown={(e) => {
+											if (e.key === 'Escape') topicHelpOpen = false;
+										}}
+									>
+										<p class="flex items-center gap-1.5 text-xs font-semibold"><Lightbulb size={13} /> {tr('Contoh topik & konteks')}</p>
+										<p class="mt-1 text-[11px] text-muted-foreground">
+											{tr('Klik salah satu untuk memakainya sebagai isi kolom topik — silakan ubah sesuai brand-mu.')}
+										</p>
+										<div class="mt-2 space-y-1.5">
+											{#each TOPIC_EXAMPLES as ex (ex.label)}
+												<button
+													class="w-full rounded-lg border p-2 text-left text-[11px] transition-colors hover:border-[var(--primary)]"
+													type="button"
+													style="border-color: var(--border);"
+													onclick={() => { topic = ex.text; topicHelpOpen = false; }}
+												>
+													<span class="block font-semibold">{tr(ex.label)}</span>
+													<span class="mt-0.5 block text-muted-foreground">{ex.text}</span>
+												</button>
+											{/each}
+										</div>
+										<p class="mt-2 text-[11px] text-muted-foreground">
+											{tr('Tips: kamu bisa sekalian meminta jumlah gambar isi di dalam topik, misalnya "sertakan 4 gambar". Biayanya mengikuti tarif per gambar.')}
+										</p>
+									</div>
+								{/if}
 								<div class="relative mt-2">
 									<textarea
 										id="naskah-topik"
@@ -1317,7 +1309,17 @@
 							<div>
 								<div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
 									<span>{tr('Rencana Penempatan Gambar')}</span>
-									<span>{h2ConfirmData.items.length} {tr('gambar')}</span>
+									<span class="flex items-center gap-1.5">
+										<label class="text-muted-foreground" for="h2-image-count">{tr('Jumlah gambar')}</label>
+										<input
+											id="h2-image-count"
+											class="app-input !min-h-7 !w-16 !py-0.5 text-center text-xs"
+											type="number"
+											min="1"
+											max={h2ConfirmData.items.length}
+											bind:value={h2Count}
+										/>
+									</span>
 								</div>
 							<div class="max-h-36 overflow-y-auto rounded-xl border p-2.5 space-y-1.5" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
 								{#each h2ConfirmData.items as item, idx (idx)}
@@ -1339,7 +1341,7 @@
 							</div>
 
 							<div class="flex items-center justify-between text-xs">
-								<span class="text-muted-foreground">{tr('Total Biaya')} ({h2ConfirmData.items.length} × {h2CostRp})</span>
+								<span class="text-muted-foreground">{tr('Total Biaya')} ({h2Chosen} × {h2CostRp})</span>
 								<strong class="font-bold text-foreground">{h2TotalRp}</strong>
 							</div>
 
@@ -1358,7 +1360,7 @@
 							</div>
 						</div>
 
-						{#if h2ConfirmData.balance != null && h2ConfirmData.balance < h2ConfirmData.total}
+						{#if h2ConfirmData.balance != null && h2ConfirmData.balance < h2TotalCredits}
 							<div class="flex items-center gap-2 rounded-xl p-3 text-xs" style="background-color: var(--destructive-soft, #fef2f2); color: var(--destructive, #dc2626);">
 								<CircleAlert size={15} class="shrink-0" />
 								<span>{tr('Saldo tidak mencukupi untuk membuat gambar. Silakan top up terlebih dahulu.')}</span>
@@ -1379,7 +1381,7 @@
 						<button
 							class="app-btn app-btn-primary text-xs"
 							type="button"
-							disabled={h2Busy || (h2ConfirmData.balance != null && h2ConfirmData.balance < h2ConfirmData.total)}
+							disabled={h2Busy || (h2ConfirmData.balance != null && h2ConfirmData.balance < h2TotalCredits)}
 							onclick={executeGeneratePerH2}
 						>
 							{#if h2Busy}
@@ -1387,7 +1389,7 @@
 								<span>{tr('Memproses…')}</span>
 							{:else}
 								<Sparkles size={14} />
-								<span>{tr('Ya, Generate Semua')} ({h2TotalRp})</span>
+								<span>{tr('Ya, Generate')} {h2Chosen} {tr('gambar')} · {h2TotalRp}</span>
 							{/if}
 						</button>
 					</div>

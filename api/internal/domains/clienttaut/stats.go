@@ -139,9 +139,18 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 	if _, err := d.loadCampaignForAgents(ctx, campaignID, brandID); err != nil {
 		return nil, err
 	}
+	rateIDR := d.getTcConfig(ctx).RateIDR
+	if rateIDR < 1 {
+		rateIDR = 1
+	}
 	items, err := d.queryRows(ctx,
 		`SELECT tcm.media_id, m.name, m.media_type, m.website_url, tcm.status, tcm.article_status, tcm.match_reason, tcm.ai_score, tcm.match_rank,
 		        m.credit_cost, m.allow_hyperlink, m.max_links, m.allow_embed, m.label_sponsor, tcm.regen_count, tcm.angle_slug,
+		        COALESCE(tcm.price, m.price, 0) AS price,
+		        COALESCE((SELECT (length(cv.content) - length(replace(cv.content, '<img', ''))) / 4
+		                  FROM content_documents cd
+		                  JOIN content_versions cv ON cv.document_id = cd.id AND cv.version = cd.current_version
+		                  WHERE cd.id = tcm.article_document_id), 0) AS images_count,
 		        COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv
 		 FROM taut_campaign_media tcm
 		 JOIN media m ON m.id = tcm.media_id
@@ -196,6 +205,13 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 			"angle_slug":      i.raw("angle_slug"),
 			"categories":      categories,
 			"label_sponsor":   i.strOr("label_sponsor", "tidak_ada"),
+			// price + cost_tc: sumber biaya media yang SAMA dengan penagihan
+			// (COALESCE(price penempatan, harga media) → kredit dibulatkan).
+			// credit_cost lama tetap dikirim untuk kompatibilitas, tapi bukan
+			// angka yang ditagihkan.
+			"price":        i.numOr("price"),
+			"cost_tc":      (int(i.numOr("price")) + rateIDR/2) / rateIDR,
+			"images_count": int(i.numOr("images_count")),
 		})
 	}
 	return out, nil

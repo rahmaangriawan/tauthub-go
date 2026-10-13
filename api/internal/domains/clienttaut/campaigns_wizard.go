@@ -2,6 +2,7 @@ package clienttaut
 
 import (
 	"context"
+	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"net/http"
 	"strings"
 
@@ -291,7 +292,20 @@ func (d *Deps) TautPlacementGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	quota := d.userGenerateQuota(r.Context(), user.ID)
-	writeNoStore(w, http.StatusOK, map[string]any{"media": media, "regen_max": quota - 1})
+	// writer_cost_credits: tarif penulisan dari platform_settings, supaya bar
+	// biaya di frontend tidak memakai angka mati yang bisa berbeda dari tagihan.
+	// image_credit_cost: tarif per gambar dari konfigurasi AI, dipakai bar biaya
+	// dan panel Biaya Gambar supaya sama dengan yang ditagihkan.
+	imageCost := 0
+	if rt, rtErr := ai.LoadAIRuntime(r.Context(), d.Pool); rtErr == nil {
+		imageCost = ai.ImageCreditCost(rt)
+	}
+	writeNoStore(w, http.StatusOK, map[string]any{
+		"media":               media,
+		"regen_max":           quota - 1,
+		"writer_cost_credits": d.writerCreditCost(r.Context()),
+		"image_credit_cost":   imageCost,
+	})
 }
 
 // TautPlacementPost: POST /v1/brands/{brandId}/taut/campaigns/{campaignId}/placement

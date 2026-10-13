@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -264,7 +265,7 @@ func aiOrEmpty(v, fallback string) string {
 // ---------- config AI ----------
 
 // aiConfigJSON: port configResponse di ai/configuration/route.ts.
-func aiConfigJSON(stored rowMap, rt *ai.AIRuntime) map[string]any {
+func aiConfigJSON(stored rowMap, rt *ai.AIRuntime, writerCost int) map[string]any {
 	imgCost := ai.ImageCreditCost(rt)
 	if stored != nil {
 		dm := aiOrEmpty(stored.strOr("default_model", ""), rt.DefaultModel)
@@ -285,6 +286,7 @@ func aiConfigJSON(stored rowMap, rt *ai.AIRuntime) map[string]any {
 			"image_api_key_configured": imgConfigured,
 			"image_api_key_hint":       nullIfEmpty(imgHint),
 			"image_credit_cost":        imgCost,
+			"writer_credit_cost":       writerCost,
 		}
 	}
 	if rt.Source != "none" {
@@ -301,6 +303,7 @@ func aiConfigJSON(stored rowMap, rt *ai.AIRuntime) map[string]any {
 			"image_api_key_configured": rt.ImageAPIKey != "",
 			"image_api_key_hint":       nullIfEmpty(rt.ImageAPIKeyHint),
 			"image_credit_cost":        imgCost,
+			"writer_credit_cost":       writerCost,
 		}
 	}
 	dm := rt.DefaultModel
@@ -567,4 +570,17 @@ func aiModelJSON(item map[string]any) map[string]any {
 		"chunk_count":     chunkCount,
 		"knowledge":       knowledgeOut,
 	}
+}
+
+// writerCreditCostSetting: tarif penulisan The Writer dari platform_settings.
+// Dipakai endpoint setelan AI supaya halaman admin bisa menampilkan dan
+// mengubahnya tanpa deploy.
+func (d *Deps) writerCreditCostSetting(ctx context.Context) int {
+	row, err := d.queryRow(ctx, "SELECT value FROM platform_settings WHERE key = 'writer_credit_cost' LIMIT 1")
+	if err == nil && row != nil {
+		if n, convErr := strconv.Atoi(strings.TrimSpace(row.strOr("value", ""))); convErr == nil && n > 0 {
+			return n
+		}
+	}
+	return 2
 }
