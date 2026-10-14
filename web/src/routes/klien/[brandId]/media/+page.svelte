@@ -13,7 +13,7 @@
 	import AgentSteps from '../taut-pintar/_agent-steps.svelte';
 	import {
 		ArrowRight, Bookmark, Check, Clock, Database, FileText, Info, LayoutGrid,
-		Plus, Search, SlidersHorizontal, Trash2, Upload, Wallet, X, Zap,
+		Plus, RotateCcw, Search, SlidersHorizontal, Trash2, Upload, Wallet, X, Zap,
 		ChevronLeft, ChevronRight
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
@@ -217,6 +217,8 @@
 	let walletRateIdr = $state(1000);
 	// Jumlah media yang dipulihkan dari sesi terakhir (badge, bukan error).
 	let restoredSelectionCount = $state(0);
+	// Popover daftar media terpilih (dibuka dari kartu "MEDIA TERPILIH" di bar bawah).
+	let selectedListOpen = $state(false);
 	// Pilihan bisa memuat media di luar 250 baris yang sedang dimuat (filter lain)
 	// — snapshot harga disimpan supaya total di bar tidak bohong.
 	let selectedSnapshot = $state<Record<string, { name: string; price: number; credits: number }>>({});
@@ -595,6 +597,17 @@
 		btn.classList.add('bookmarkPop');
 		window.setTimeout(() => btn.classList.remove('bookmarkPop'), 420);
 	}
+	/** Buang satu media dari pilihan (dipakai popover daftar media terpilih). */
+	function removeSelected(id: string) {
+		const next = new Set(selectedIds);
+		next.delete(id);
+		const rest = { ...selectedSnapshot };
+		delete rest[id];
+		selectedIds = next;
+		selectedSnapshot = rest;
+		if (next.size === 0) selectedListOpen = false;
+	}
+
 	function toggleSelectRow(id: string, e: Event) {
 		e.stopPropagation();
 		if (archivedIds.has(id)) return; // media maintenance tidak bisa dipilih
@@ -834,6 +847,19 @@
 	const totalSelectedCredits = $derived(
 		selectedMedia.reduce((s, m) => s + (m.credit_cost ?? 0), 0) +
 			offViewSelected.reduce((s, id) => s + (selectedSnapshot[id]?.credits ?? 0), 0)
+	);
+
+	// Daftar media terpilih untuk popover: nama + harga. Baris yang sedang tampil
+	// dipakai langsung; yang di luar tampilan memakai snapshot tersimpan.
+	const selectedItems = $derived(
+		[...selectedIds].map((id) => {
+			const row = selectedMedia.find((m) => m.id === id);
+			return {
+				id,
+				name: row ? domainLabel(row) : (selectedSnapshot[id]?.name ?? id),
+				price: row ? (row.client_price ?? row.price ?? 0) : (selectedSnapshot[id]?.price ?? 0)
+			};
+		})
 	);
 	// Waktu rilis terlama di antara media terpilih — ekspektasi jujur di modal.
 	const slowestRelease = $derived.by(() => {
@@ -1990,9 +2016,61 @@
 					<!-- Detail (expand/collapse): saldo + daftar media terpilih. -->
 				</div>
 				<div class="selectedBarStats">
-					<div class="selectedStatItem">
-						<span class="selectedStatLabel">MEDIA TERPILIH</span>
-						<span class="selectedStatDomainVal">{selectedIds.size} Media</span>
+					<div class="selectedStatItem selectedStatClickable">
+						<button
+							class="selectedStatBtn"
+							class:active={selectedListOpen}
+							type="button"
+							aria-expanded={selectedListOpen}
+							aria-label={tr('Lihat media terpilih')}
+							onclick={() => (selectedListOpen = !selectedListOpen)}
+						>
+							<span class="selectedStatLabel">MEDIA TERPILIH</span>
+							<span class="selectedStatDomainVal">{selectedIds.size} Media</span>
+						</button>
+
+						{#if selectedListOpen}
+							<button class="selectedListBackdrop" type="button" aria-label={tr('Tutup')} onclick={() => (selectedListOpen = false)}></button>
+							<div class="selectedListPop" role="dialog" aria-label={tr('Media terpilih')}>
+								<div class="selectedListHead">
+									<span class="selectedListTitle">{tr('Media terpilih')} ({selectedIds.size})</span>
+									<span class="selectedListActions">
+									<button
+										class="selectedListReset"
+										type="button"
+										aria-label={tr('Reset pilihan')}
+										title={tr('Reset pilihan')}
+										onclick={() => { clearSelection(); selectedListOpen = false; }}
+									>
+										<RotateCcw size={13} />
+									</button>
+									<button class="selectedListClose" type="button" aria-label={tr('Tutup')} onclick={() => (selectedListOpen = false)}>
+										<X size={14} />
+									</button>
+									</span>
+								</div>
+								<div class="selectedListItems">
+									{#each selectedItems as it (it.id)}
+										<div class="selectedListRow">
+											<span class="selectedListRowName" title={it.name}>{it.name}</span>
+											<span class="selectedListRowPrice">Rp {fmt(it.price)}</span>
+											<button
+												class="selectedListRemove"
+												type="button"
+												aria-label={`${tr('Hapus')} ${it.name}`}
+												onclick={() => removeSelected(it.id)}
+											>
+												<X size={12} />
+											</button>
+										</div>
+									{/each}
+								</div>
+								<div class="selectedListFoot">
+									<span>{tr('Total')}</span>
+									<strong>Rp {fmt(totalSelectedPrice)}</strong>
+								</div>
+							</div>
+						{/if}
 					</div>
 					<div class="selectedBarDivider"></div>
 					<div class="selectedStatItem">
