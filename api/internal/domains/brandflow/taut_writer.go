@@ -497,9 +497,11 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		anglePromptBlock = "[ANGLE PILIHAN KLIEN - " + mediaType + "/" + angle.Slug + "]\n" + angle.Prompt
 	} else {
 		channelInstruction = d.loadTautChannelInstruction(ctx, campaignID, mediaType)
-		if channelInstruction == "" {
-			anglePromptBlock = d.loadTautChosenAnglePrompt(ctx, campaignID, mediaType)
-		}
+		// Prompt angle penuh SELALU ikut — bukan hanya saat brief kosong.
+		// Aturan editorial verbatim di dalamnya (blokir gaya "disarankan...",
+		// kewajiban kutipan bernama, dst.) harus terbaca The Writer di setiap
+		// generate; ringkasan brief saja tidak cukup menjaga aturan itu utuh.
+		anglePromptBlock = d.loadTautChosenAnglePrompt(ctx, campaignID, mediaType)
 	}
 	angleBriefBlock, angleHasSources := tautAngleBriefBlock(angle)
 	if angleBriefBlock != "" {
