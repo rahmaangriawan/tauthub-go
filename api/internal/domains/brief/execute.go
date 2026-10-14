@@ -15,6 +15,9 @@ type executeInput struct {
 	UserName  string
 	// OnReply != nil → coba jalur streaming.
 	OnReply func(string)
+	// OnStatus != nil → kabari klien soal progres singkat sebelum balasan
+	// mengalir (mis. "Membaca tautan …") selagi AI menyiapkan giliran.
+	OnStatus func(string)
 }
 
 // turnResult: yang dikembalikan ke frontend setelah satu giliran.
@@ -67,6 +70,11 @@ func (d *Deps) executeTurn(inCtx context.Context, in executeInput) (result *turn
 	if err := d.insertMessage(ctx, in.ProfileID, in.BrandID, "user", in.Message, in.UserID, nil); err != nil {
 		return nil, err
 	}
+
+	// Tautan di pesan user dibaca lebih dulu, jadi isinya sudah masuk daftar
+	// sumber saat konteks giliran ini dirakit. Kegagalan tidak membatalkan
+	// giliran — AI tetap menjawab (tanpa bahan halaman itu).
+	d.absorbMessageLinks(ctx, in.ProfileID, in.UserID, in.Message, in.OnStatus)
 
 	t, err := d.loadTurn(ctx, in.ProfileID, in.BrandID, in.UserName)
 	if err != nil {

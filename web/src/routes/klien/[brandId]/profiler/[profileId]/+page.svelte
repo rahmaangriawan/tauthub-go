@@ -117,6 +117,9 @@
 	let streaming = $state(false);
 	let streamingText = $state('');
 	let streamError = $state('');
+	// Status singkat dari backend selagi AI menyiapkan giliran (mis.
+	// "Membaca tautan example.com…") — tampil di indikator berpikir.
+	let streamStatus = $state('');
 	let phase = $state('intake');
 	let progress = $state({ filled: 0, total: 0 });
 	let fields = $state<FieldMeta[]>([]);
@@ -530,6 +533,7 @@
 		messages = [...messages, { role: 'user', content: message, created_at: new Date().toISOString() }];
 		streaming = true;
 		streamingText = '';
+		streamStatus = '';
 		controller = new AbortController();
 
 		const token = getAccessToken();
@@ -571,6 +575,10 @@
 					if (ev === 'delta' && typeof data.append === 'string') {
 						partial += data.append;
 						streamingText = partial;
+						streamStatus = '';
+					} else if (ev === 'status') {
+						// Progres backend sebelum balasan mengalir (mis. "Membaca tautan …").
+						streamStatus = String(data.message ?? '');
 					} else if (ev === 'done') {
 						finished = true;
 						messages = [...messages, { role: 'assistant', content: String(data.reply ?? partial), created_at: new Date().toISOString() }];
@@ -597,6 +605,7 @@
 			generationCount++;
 			streaming = false;
 			streamingText = '';
+			streamStatus = '';
 			controller = null;
 			// askedField dari giliran ini dikelola applyDone — jangan direset di sini.
 		}
@@ -1397,7 +1406,7 @@
 								<span class="brief-avatar brief-avatar-ai" aria-hidden="true"><img src="/tauthub-icon.png" alt="" /></span>
 								<div class="brief-thinking">
 									<span class="thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
-									<span>{tr('Sedang berpikir…')}</span>
+									<span>{streamStatus || tr('Sedang berpikir…')}</span>
 								</div>
 							</div>
 						{/if}

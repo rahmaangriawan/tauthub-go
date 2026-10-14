@@ -211,7 +211,8 @@ func (d *Deps) BriefChatStream(w http.ResponseWriter, r *http.Request) {
 	run, err := d.executeTurn(r.Context(), executeInput{
 		BrandID: brandID, ProfileID: profileID, UserID: userID,
 		Message: message, UserName: userDisplayName(r),
-		OnReply: func(delta string) { sendEvent("delta", map[string]any{"append": delta}) },
+		OnReply:  func(delta string) { sendEvent("delta", map[string]any{"append": delta}) },
+		OnStatus: func(status string) { sendEvent("status", map[string]any{"message": status}) },
 	})
 	if err != nil {
 		slog.Error("brief stream: giliran gagal", "profile_id", profileID, "err", err.Error())
