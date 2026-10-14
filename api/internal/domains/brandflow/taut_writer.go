@@ -1272,7 +1272,7 @@ func (d *Deps) loadTautChosenAnglePrompt(ctx context.Context, campaignID, mediaT
 	if prompt == "" {
 		return ""
 	}
-	return "[ANGLE PILIHAN KLIEN — " + mediaType + "/" + angleSlug + "]\n" + truncateString(prompt, 1500)
+	return "[ANGLE PILIHAN KLIEN — " + mediaType + "/" + angleSlug + "]\n" + truncateString(prompt, 12000)
 }
 
 // securityGet: safeFetch GET dengan header (port safeFetch).
