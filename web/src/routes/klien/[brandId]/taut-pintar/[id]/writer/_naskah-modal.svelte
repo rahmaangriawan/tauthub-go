@@ -90,6 +90,9 @@
 	let html = $state(untrack(() => initialHtml));
 	let cover = $state<string | null>(untrack(() => initialCoverUrl));
 	let category = $state<string>(untrack(() => initialCategory) ?? '');
+	// Rubrik yang dipilih otomatis setelah draf AI jadi (bukan pilihan user) —
+	// dipakai untuk menampilkan keterangan kecil di bawah dropdown rubrik.
+	let autoCategory = $state('');
 	let meta = $state(untrack(() => initialMetaDescription) ?? '');
 	let editorStats = $state({ words: 0, links: 0, images: 0 });
 
@@ -294,8 +297,20 @@
 			h2ConfirmData?.balance == null ? '—' : tcToRp(Math.max(0, h2ConfirmData.balance - h2TotalCredits), h2ConfirmData.rateIdr)
 		);
 
+		// Saat draf sedang disusun (generate AI / olah dokumen), modal tidak
+		// boleh ditutup: prosesnya tetap berjalan di server dan artikel +
+		// kreditnya tetap tercatat, jadi menutup di tengah proses hanya membuat
+		// user mengira pekerjaannya batal. Klik tutup malah memunculkan
+		// peringatan untuk menunggu.
+		const composeBusy = $derived(genBusy || docBusy);
+		let closeNotice = $state('');
 		function close() {
-			if (!saving) onClose();
+			if (saving) return;
+			if (composeBusy) {
+				closeNotice = tr('Draf sedang disusun — tunggu sampai prosesnya selesai sebelum menutup.');
+				return;
+			}
+			onClose();
 		}
 
 		$effect(() => {
@@ -588,6 +603,7 @@
 			docError = reason instanceof Error ? reason.message : tr('Gagal mengunggah dokumen.');
 		} finally {
 			docBusy = false;
+			closeNotice = '';
 		}
 	}
 
@@ -650,10 +666,18 @@
 				}
 			}
 			tab = 'tulis';
+			// Rubrik wajib ada sebelum simpan; setelah draf AI jadi, pilih
+			// otomatis dari rubrik yang tersedia agar tidak menahan proses.
+			// User tetap bisa menggantinya di panel pengaturan.
+			if (!category.trim() && categoryOptions.length > 0) {
+				category = categoryOptions[0];
+				autoCategory = category;
+			}
 		} catch (reason) {
 			genError = reason instanceof Error ? tr(reason.message) : tr('Gagal membuat draf AI.');
 		} finally {
 			genBusy = false;
+			closeNotice = '';
 		}
 	}
 
@@ -718,7 +742,13 @@
 					{/if}
 				</p>
 			</div>
-			<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr('Tutup')} onclick={close}>
+			<button
+				class={`rounded-lg p-1.5 ${composeBusy ? 'cursor-not-allowed opacity-40' : 'hover:bg-secondary'}`}
+				type="button"
+				aria-label={tr('Tutup')}
+				aria-disabled={composeBusy || saving}
+				onclick={close}
+			>
 				<X size={18} />
 			</button>
 		</div>
@@ -1239,8 +1269,14 @@
 							ariaLabel={tr('Kategori / Rubrik')}
 							placeholder={tr('Pilih Rubrik…')}
 							options={kategoriOptions}
+							onchange={() => (autoCategory = '')}
 						/>
 					</div>
+					{#if autoCategory}
+						<p class="mt-1 text-[11px] font-medium" style="color: var(--primary);">
+							{tr('Dipilih otomatis saat draf AI jadi — ubah bila perlu.')}
+						</p>
+					{/if}
 					<p class="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
 						{tr('*Pilihan kategori diambil sesuai ketersediaan direktori media target.')}
 					</p>
@@ -1263,9 +1299,20 @@
 
 		<!-- Footer tetap -->
 		<div class="flex flex-wrap items-center gap-3 border-t px-5 py-3.5" style="border-color: var(--border);">
-			<button class="app-btn app-btn-soft" type="button" disabled={saving} onclick={close}>{tr('Batal')}</button>
+			<button
+				class={`app-btn app-btn-soft${composeBusy ? ' cursor-not-allowed opacity-50' : ''}`}
+				type="button"
+				disabled={saving}
+				aria-disabled={composeBusy || saving}
+				onclick={close}
+			>{tr('Batal')}</button>
 			<span class="flex-1"></span>
-			{#if pesanKurang}
+			{#if closeNotice}
+				<p class="flex min-w-0 items-center gap-1.5 text-xs" style="color: var(--warning, #b45309);">
+					<LoaderCircle size={14} class="flex-none animate-spin" />
+					<span class="truncate">{closeNotice}</span>
+				</p>
+			{:else if pesanKurang}
 				<p class="flex min-w-0 items-center gap-1.5 text-xs" style="color: var(--warning, #b45309);">
 					<CircleAlert size={14} class="flex-none" />
 					<span class="truncate">{pesanKurang}</span>

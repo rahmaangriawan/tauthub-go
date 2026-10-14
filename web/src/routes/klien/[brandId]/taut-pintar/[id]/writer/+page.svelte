@@ -714,8 +714,9 @@
 		}
 	}
 
-	// Generate dengan arahan topik dari modal Pengelola Naskah (1 kredit bila
-	// artikel belum ada; regenerasi 2 kredit sesuai aturan backend).
+	// Generate dengan arahan topik dari modal Pengelola Naskah. Penulisan
+	// ditagih 1× tarif per generate: artikel baru maupun setiap regenerasi
+	// (tarif & penagihan ada di backend).
 	async function generateNaskah(
 		mediaId: string,
 		topic: string,
@@ -734,6 +735,10 @@
 		placement = placement.map((p) => p.media_id === mediaId ? { ...p, angle_slug: angleSlug } : p);
 		genState = { ...genState, [mediaId]: 'draft' };
 		qcToken += 1;
+		// Setiap generate menambah tagihan (regenerasi ditagih lagi) — segarkan
+		// data kampanye supaya regen_count, gambar, dan Total Tagihan Akhir di
+		// bar bawah ikut naik tanpa reload halaman.
+		await load();
 		return {
 			title: String(data?.title ?? ''),
 			html: String(data?.content_html ?? ''),
@@ -810,38 +815,38 @@
 	const canRegen = (m: PlacementItem) => hasDoc(m) && regenCountOf(m) < regenMax;
 
 	const cost = $derived.by(() => {
-		// Tarif RATA: artikel baru dan tulis ulang dihargai sama, dan angkanya
-		// datang dari server — tidak lagi ditulis terpisah di sini.
-		const pending = selected.filter((m) => !hasDoc(m) || canRegen(m)).length;
-		const writing = pending * writerCostCredits;
+		// Penulisan ditagih PER generate dengan tarif rata dari server: artikel
+		// baru 1× tarif dan tiap regenerasi menambah 1× lagi (ledger backend:
+		// taut-writer / taut-writer-regen). Jadi biaya penulisan = jumlah
+		// penulisan NYATA; media yang belum punya artikel diproyeksikan 1×.
+		const writingUnits = selected.reduce((s, m) => s + (hasDoc(m) ? 1 + regenCountOf(m) : 1), 0);
+		const regens = selected.reduce((s, m) => s + (hasDoc(m) ? regenCountOf(m) : 0), 0);
+		const writing = writingUnits * writerCostCredits;
 		// Biaya media memakai harga penempatan (dikonversi server), bukan
 		// credit_cost yang bukan sumber penagihan — dulu itu sebab bar menulis
 		// Rp 22.000 padahal yang ditagih Rp 20.000.
 		const media = selected.reduce((s, m) => s + (m.cost_tc ?? 0), 0);
 		const imageCount = selected.reduce((s, m) => s + (m.images_count ?? 0), 0);
 		const images = imageCount * imageCreditCost;
-		return { count: selected.length, writing, media, images, imageCount, total: writing + media + images };
+		return { count: selected.length, writing, writingUnits, regens, media, images, imageCount, total: writing + media + images };
 	});
 	const pendingCount = $derived(selected.filter((m) => !hasDoc(m) || canRegen(m)).length);
-	// Komposisi biaya penulisan: artikel baru 1 kredit, regenerasi 2 kredit —
-	// dipakai bersama oleh tooltip tombol dan rincian di bar bawah.
-	const newArticleCount = $derived(selected.filter((m) => !hasDoc(m)).length);
-	const regenArticleCount = $derived(selected.filter((m) => hasDoc(m) && canRegen(m)).length);
 	// Biaya ditampilkan dalam rupiah memakai kurs aktif (fallback Rp 1.000).
 	const toRp = (credits: number) => tcToRp(credits, rateIdr);
 
 	// Rincian biaya penulisan dalam bahasa manusia, tampil di bar bawah supaya
-	// angka tidak muncul tanpa penjelasan.
+	// angka tidak muncul tanpa penjelasan. Angka tooltip = biaya tombol
+	// "Generate Semua Artikel", yaitu satu penulisan untuk tiap media yang
+	// belum punya artikel atau masih boleh diregenerasi.
 	const costDetail = $derived.by(() => {
-		const total = newArticleCount + regenArticleCount;
-		if (total === 0) return tr('Semua media sudah punya artikel — tidak ada biaya penulisan tertunda.');
-		return `${total} ${tr('artikel')} × ${toRp(writerCostCredits)} = ${toRp(cost.writing)}`;
+		if (pendingCount === 0) return tr('Semua media sudah punya artikel — tidak ada biaya penulisan tertunda.');
+		return `${pendingCount} ${tr('artikel')} × ${toRp(writerCostCredits)} = ${toRp(pendingCount * writerCostCredits)}`;
 	});
 
 
 	// Tooltip rincian biaya tombol "Generate Semua Artikel" (parity Tooltip app lama).
 	const generateTooltip = $derived.by(() => {
-		if (cost.writing <= 0) return tr('Semua media sudah memiliki artikel — generate tidak diperlukan.');
+		if (pendingCount === 0) return tr('Semua media sudah memiliki artikel — generate tidak diperlukan.');
 		return `${tr('Rincian:')} ${costDetail}`;
 	});
 
@@ -1441,8 +1446,9 @@
 
 								<div class="costPopoverRow">
 									<span>
-										{tr('Biaya penulisan AI')} <span class="text-muted-foreground">({newArticleCount + regenArticleCount} {tr('artikel')})</span>
-										<span class="costPopoverRowNote">{newArticleCount + regenArticleCount} × {toRp(writerCostCredits)}</span>
+										{tr('Biaya penulisan AI')}
+										<span class="text-muted-foreground">({cost.writingUnits - cost.regens} {tr('artikel')}{cost.regens > 0 ? ` + ${cost.regens} ${tr('tulis ulang')}` : ''})</span>
+										<span class="costPopoverRowNote">{cost.writingUnits} × {toRp(writerCostCredits)}</span>
 									</span>
 									<span class="font-medium">{toRp(cost.writing)}</span>
 								</div>
