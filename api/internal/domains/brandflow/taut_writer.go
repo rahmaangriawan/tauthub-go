@@ -580,7 +580,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		smartVariationRule,
 		"Bahan (rujukan fakta yang boleh dipakai; QC AI Overview memverifikasi klaim ke bahan yang sama):\n"+referenceMaterial,
 		"Aturan hyperlink media (bila media tidak mengizinkan, gunakan ATURAN PENANAMAN LINK nol): "+jsonStringify(orEmptySliceValue(hyperlink)),
-		"Kutipan/fakta hanya dari bahan/brief di atas — jangan mengarang angka, nama, atau jabatan.",
+		"Kutipan/fakta hanya dari bahan/brief di atas — jangan mengarang angka, tanggal, atau harga. Soal narasumber: pakai [SPOKESPERSON] bila tersedia; bila brief tidak memuatnya dan [PROMPT ANGLE (dari Admin)] di atas mewajibkan kutipan bernama, penuhi mandat angle itu dengan satu figur strategis yang wajar.",
 		"Aturan meta deskripsi (WAJIB): sertakan meta_description 120-160 karakter bahasa Indonesia aktif.",
 		"Variasi tulisan: gunakan sudut pembuka yang berbeda dari draf sebelumnya; jangan menyalin kalimat pembuka yang sama.",
 		"Nonce variasi (abaikan isinya, hanya penanda sesi agar tiap generate berbeda): "+itoa(int(time.Now().UnixNano())),
@@ -1274,7 +1274,7 @@ func (d *Deps) loadTautChosenAnglePrompt(ctx context.Context, campaignID, mediaT
 	if prompt == "" {
 		return ""
 	}
-	return "[ANGLE PILIHAN KLIEN — " + mediaType + "/" + angleSlug + "]\n" + truncateString(prompt, 12000)
+	return "[ANGLE PILIHAN KLIEN — " + mediaType + "/" + angleSlug + "]\n" + truncateString(prompt, 16000)
 }
 
 // securityGet: safeFetch GET dengan header (port safeFetch).

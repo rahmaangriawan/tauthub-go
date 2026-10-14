@@ -330,7 +330,7 @@ func (d *Deps) generateWriterArticle(ctx context.Context, campaignID, brandID, u
 		smartVariationRule,
 		"Bahan: "+jsonString(orEmptyMap(materials)),
 		"Aturan hyperlink media (bila media tidak mengizinkan, gunakan ATURAN PENANAMAN LINK nol): "+jsonString(orEmptySlice(hyperlink)),
-		"Kutipan/fakta hanya dari bahan/brief di atas — jangan mengarang angka, nama, atau jabatan.",
+		"Kutipan/fakta hanya dari bahan/brief di atas — jangan mengarang angka, tanggal, atau harga. Soal narasumber: pakai [SPOKESPERSON] bila tersedia; bila brief tidak memuatnya dan [PROMPT ANGLE (dari Admin)] di atas mewajibkan kutipan bernama, penuhi mandat angle itu dengan satu figur strategis yang wajar.",
 		"Aturan meta deskripsi (WAJIB): sertakan meta_description 120-160 karakter — ringkasan menarik isi artikel untuk hasil pencarian, bahasa Indonesia aktif, tanpa tanda kutip ganda.",
 		"", "Tulis artikel unik utk media ini. Output JSON valid {title, content_html, meta_description}.",
 	)

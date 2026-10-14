@@ -367,7 +367,7 @@ func (d *Deps) loadAnglePromptBlockBySlug(ctx context.Context, campaignID, media
 	if !ok || prompt == "" {
 		return ""
 	}
-	return "[PROMPT ANGLE (dari Admin) — " + mediaType + "/" + slug + "]\n" + truncateString(prompt, 12000)
+	return "[PROMPT ANGLE (dari Admin) — " + mediaType + "/" + slug + "]\n" + truncateString(prompt, 16000)
 }
 
 // resolveAnglePromptBlock: AI memilih angle paling tepat dari channel sesuai
