@@ -1320,12 +1320,18 @@
 			<div bind:this={threadEl} class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
 				{#if !loading && messages.length === 0}
 					<div class="m-auto w-full max-w-2xl px-4">
-						<!-- Sapaan pembuka: judul besar + deskripsi, bukan gelembung chat. -->
+						<!-- Sapaan pembuka: maskot + judul besar + deskripsi, bukan gelembung chat. -->
+						<img
+							src="/brief-empty-mascot.webp"
+							alt=""
+							class="mx-auto mb-5 w-full max-w-[320px] select-none"
+							draggable="false"
+						/>
 						<h1 class="text-center text-2xl font-semibold tracking-tight">{tr('Bangun brief brand-mu lewat obrolan')}</h1>
-					<p class="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
-						{tr('Ceritakan brand-mu, sisanya aku tanyakan satu per satu.')}
-					</p>
-				</div>
+						<p class="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
+							{tr('Ceritakan brand-mu, sisanya aku tanyakan satu per satu.')}
+						</p>
+					</div>
 				{:else}
 					<div class="mx-auto max-w-2xl space-y-2.5">
 						{#each messages as m, i (m.id ?? `msg-${i}`)}
