@@ -1535,6 +1535,7 @@
 			onRetryAngles={() => void loadAngles()}
 			mediaType={targetMedia?.media_type ?? ''}
 			linkLimit={ed.linkLimit}
+			sponsored={targetMedia?.label_sponsor === 'ada_sponsor'}
 			saving={editorSaving}
 			saveError={editorError}
 			onClose={() => { if (!editorSaving) editor = null; }}

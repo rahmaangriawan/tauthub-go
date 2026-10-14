@@ -37,6 +37,7 @@
 		onRetryAngles,
 		mediaType = '',
 		linkLimit,
+		sponsored = false,
 		saving = false,
 		saveError = null,
 		onClose,
@@ -66,6 +67,8 @@
 		onRetryAngles: () => void;
 		/** Jenis media target (mainstream | blogger) — untuk keterangan dinamis di header. */
 		mediaType?: string;
+		/** Media mitra berstatus sponsor: tautan ditulis rel="sponsored", bukan dofollow. */
+		sponsored?: boolean;
 		linkLimit: number;
 		saving?: boolean;
 		saveError?: string | null;
@@ -153,6 +156,40 @@
 		return Math.min(n, 5);
 	});
 	const imgEstimateRupiah = $derived(imgRequestCount * imgCost * imgRateIdr);
+	// Permintaan rel di teks topik vs cakupan media mitra: media sponsor menulis
+	// rel="sponsored", media biasa menulis dofollow (tanpa rel). Pipeline
+	// mengabaikan permintaan di luar cakupan itu, jadi klien diberi tahu di
+	// bawah kolom topik alih-alih diam-diam tidak dipenuhi.
+	const REL_TERMS: { term: 'sponsored' | 'nofollow' | 'dofollow'; re: RegExp }[] = [
+		{ term: 'sponsored', re: /\bsponsored\b/i },
+		{ term: 'nofollow', re: /\bno[-\s]?follow\b/i },
+		{ term: 'dofollow', re: /\bdo[-\s]?follow\b/i }
+	];
+	const REL_NEG_RE = /\b(tanpa|jangan|tidak|tdk|tak|gak|nggak|hindari|bukan)\b/i;
+	const relNotices = $derived.by(() => {
+		if (linkLimit <= 0) return [];
+		const out: string[] = [];
+		const seen = new Set<string>();
+		for (const clause of topic.split(IMG_CLAUSE_SPLIT_RE)) {
+			if (REL_NEG_RE.test(clause)) continue;
+			for (const { term, re } of REL_TERMS) {
+				if (seen.has(term) || !re.test(clause)) continue;
+				seen.add(term);
+				if (term === 'sponsored' && !sponsored) {
+					out.push(tr('rel="sponsored" tidak diperbolehkan di media ini — tautan ditulis dofollow (tanpa rel).'));
+				} else if (term === 'dofollow' && sponsored) {
+					out.push(tr('rel dofollow tidak diperbolehkan di media ini — tautan ditulis rel="sponsored".'));
+				} else if (term === 'nofollow') {
+					out.push(
+						sponsored
+							? tr('rel="nofollow" tidak diperbolehkan di media ini — tautan ditulis rel="sponsored".')
+							: tr('rel="nofollow" tidak diperbolehkan di media ini — tautan ditulis dofollow (tanpa rel).')
+					);
+				}
+			}
+		}
+		return out;
+	});
 	$effect(() => {
 		if (imgPricingLoaded || !campaignId || !mediaId) return;
 		imgPricingLoaded = true;
@@ -1075,6 +1112,16 @@
 								{/if}
 								{#if genNotice}
 									<p class="mt-2 text-xs" style="color: var(--success);">{genNotice}</p>
+								{/if}
+								{#if relNotices.length > 0}
+									<div class="mt-2 rounded-lg px-3 py-2 text-xs" style="background-color: var(--warning-soft); color: var(--warning);" aria-live="polite">
+										<p class="font-semibold">{tr('Permintaan rel di luar cakupan media mitra')}</p>
+										<ul class="mt-0.5 list-disc space-y-0.5 pl-4">
+											{#each relNotices as notice (notice)}
+												<li>{notice}</li>
+											{/each}
+										</ul>
+									</div>
 								{/if}
 								{#if linkLimit > 0}
 									{@render linkEditor()}
