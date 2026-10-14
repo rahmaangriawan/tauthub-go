@@ -17,7 +17,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
-		ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, ClipboardList, Code2, Copy, FileText, Link2, LoaderCircle, MessageSquare,
+		ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Code2, Copy, FileText, Link2, LoaderCircle,
 		MoreHorizontal, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, ShieldAlert, Sparkle, Square, SquarePen, Trash2, Upload, UserCircle, X
 	} from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -1322,41 +1322,10 @@
 					<div class="m-auto w-full max-w-2xl px-4">
 						<!-- Sapaan pembuka: judul besar + deskripsi, bukan gelembung chat. -->
 						<h1 class="text-center text-2xl font-semibold tracking-tight">{tr('Bangun brief brand-mu lewat obrolan')}</h1>
-						<p class="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
-							{tr('Ceritakan brand-mu, sisanya aku tanyakan satu per satu.')}
-						</p>
-						<!-- Empat jalan masuk, dua kolom dua baris. -->
-						<div class="mt-7 grid grid-cols-2 gap-3">
-							<button class="brief-cta" type="button" onclick={() => { urlOpen = true; sidebarOpen = false; }}>
-								<span class="brief-cta-icon"><Link2 size={16} /></span>
-								<span class="min-w-0">
-									<span class="brief-cta-title">{tr('Tempel URL website')}</span>
-									<span class="brief-cta-sub">{tr('Aku baca dan tangkap sendiri')}</span>
-								</span>
-							</button>
-							<button class="brief-cta" type="button" onclick={() => document.getElementById('brief-doc-input')?.click()}>
-								<span class="brief-cta-icon"><Upload size={16} /></span>
-								<span class="min-w-0">
-									<span class="brief-cta-title">{tr('Unggah dokumen')}</span>
-									<span class="brief-cta-sub">{tr('Company profile / PDF / DOCX')}</span>
-								</span>
-							</button>
-							<button class="brief-cta" type="button" onclick={() => { pasteOpen = true; sidebarOpen = false; }}>
-								<span class="brief-cta-icon"><ClipboardList size={16} /></span>
-								<span class="min-w-0">
-									<span class="brief-cta-title">{tr('Tempel teks siap pakai')}</span>
-									<span class="brief-cta-sub">{tr('Ringkasan atau keterangan bisnis')}</span>
-								</span>
-							</button>
-							<button class="brief-cta" type="button" onclick={() => document.getElementById('brief-composer')?.focus()}>
-								<span class="brief-cta-icon"><MessageSquare size={16} /></span>
-								<span class="min-w-0">
-									<span class="brief-cta-title">{tr('Ceritakan dari awal')}</span>
-									<span class="brief-cta-sub">{tr('Ngobrol bebas, aku arahkan')}</span>
-								</span>
-							</button>
-						</div>
-					</div>
+					<p class="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
+						{tr('Ceritakan brand-mu, sisanya aku tanyakan satu per satu.')}
+					</p>
+				</div>
 				{:else}
 					<div class="mx-auto max-w-2xl space-y-2.5">
 						{#each messages as m, i (m.id ?? `msg-${i}`)}
@@ -2042,34 +2011,6 @@
 	.brief-menu-danger { color: var(--destructive); }
 
 
-	.brief-cta {
-		display: flex;
-		align-items: flex-start;
-		gap: 12px;
-		padding: 14px 16px;
-		border-radius: 14px;
-		border: 1px solid var(--border);
-		background: var(--card);
-		text-align: left;
-		transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-	}
-	.brief-cta:hover {
-		border-color: var(--primary);
-		background: var(--accent);
-	}
-	.brief-cta-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 36px;
-		height: 36px;
-		border-radius: 10px;
-		flex-shrink: 0;
-		background: var(--secondary);
-		color: var(--primary);
-	}
-	.brief-cta-title { display: block; font-size: 14px; font-weight: 600; }
-	.brief-cta-sub { display: block; margin-top: 2px; font-size: 12px; color: var(--muted-foreground); }
 
 	.brief-modal-overlay {
 		position: fixed;
@@ -2539,7 +2480,6 @@
 	.brief-pop-row.active { background: var(--secondary); color: var(--foreground); font-weight: 600; }
 	@media (prefers-reduced-motion: reduce) {
 		.thinking-dots span { animation: none; opacity: 0.6; }
-		.brief-cta, .brief-cta:hover { transform: none; box-shadow: none; }
 	}
 
 </style>
