@@ -1324,7 +1324,7 @@
 						<img
 							src="/brief-empty-mascot.webp"
 							alt=""
-							class="mx-auto mb-5 w-full max-w-[320px] select-none"
+							class="mx-auto mb-6 w-full max-w-[440px] select-none"
 							draggable="false"
 						/>
 						<h1 class="text-center text-2xl font-semibold tracking-tight">{tr('Bangun brief brand-mu lewat obrolan')}</h1>
