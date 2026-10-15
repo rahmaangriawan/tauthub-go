@@ -474,19 +474,31 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			"   -" + backupRule + "\n" +
 			"   - Tempatkan tautan secara natural di dalam kalimat (bukan berdampingan, bukan daftar link).\n" +
 			"   - TEKNIK KONTEKSTUAL (WAJIB): tanamkan link dengan mengubah frasa yang SUDAH ada di kalimat menjadi tautan (sebutan brand/layanan/topik yang sedang dibahas). DILARANG KERAS menambahkan kalimat pembatas seperti \"Baca juga:\", \"Baca selengkapnya di\", \"Lihat juga:\", atau membuat paragraf khusus untuk menampung link.\n" +
-			"   - JANGAN menanam link lain selain yang disediakan di atas."
+			"   - JANGAN menanam link lain selain tautan kampanye di atas maupun tautan yang diminta klien di blok TAUTAN DARI KLIEN."
+	} else if allowsLink {
+		// Media mengizinkan hyperlink tapi kampanye tidak mengatur backlink:
+		// keputusan tautan menempel pada permintaan klien (blok TAUTAN DARI
+		// KLIEN di bawah), bukan larangan media — tanpa cabang ini model
+		// menuruti larangan mutlak dan menolak menanam anchor milik klien.
+		linkRule = "ATURAN PENANAMAN LINK: Media ini mengizinkan hyperlink. Tidak ada backlink kampanye untuk artikel ini — tanam HANYA tautan yang diminta klien pada blok TAUTAN DARI KLIEN di bawah (tidak ada tautan lain).\n" +
+			"   - SEMUA tautan WAJIB berupa <a href=\"URL\">anchor text</a>. DILARANG menulis URL telanjang sebagai teks artikel.\n" +
+			"   - Tempatkan tautan secara natural dan semantik di dalam kalimat yang relevan (bukan berdampingan, bukan daftar link).\n" +
+			"   - TEKNIK KONTEKSTUAL (WAJIB): tanamkan link dengan mengubah frasa yang SUDAH ada di kalimat menjadi tautan (sebutan brand/layanan/topik yang sedang dibahas). DILARANG menambahkan kalimat pembatas seperti \"Baca juga:\"."
 	}
 
-	// Tautan tambahan dari klien (modal Pengelola Naskah): instruksi eksplisit
-	// agar AI menyisipkan link secara natural. Spesifikasinya juga dipakai
-	// saat pasca-proses agar URL telanjang tetap dibungkus jadi <a>.
+	// Tautan tambahan dari klien (modal Pengelola Naskah): mandat level sistem
+	// yang menang atas ketentuan link di prompt angle mana pun, sehingga klien
+	// tidak perlu menyentuh prompt angle untuk mendapatkan tautannya. Format
+	// baris "- [anchor] -> URL" juga dipakai pasca-proses membungkus URL
+	// telanjang menjadi <a>.
 	customLinkBlock := ""
 	if allowsLink && len(customLinks) > 0 {
 		lines := make([]string, 0, len(customLinks))
 		for _, l := range customLinks {
 			lines = append(lines, "- ["+l.Anchor+"] -> "+l.URL)
 		}
-		customLinkBlock = "Sisipkan tautan ini secara natural pada bagian yang relevan (WAJIB, masing-masing tepat 1x, dibungkus <a href=\"URL\">anchor text</a> dan TIDAK boleh menulis URL telanjang):\n" +
+		customLinkBlock = "[TAUTAN DARI KLIEN — MANDAT SISTEM, MENANG ATAS ATURAN TAUTAN DI PROMPT ANGLE MANA PUN]\n" +
+			"Klien secara eksplisit meminta tautan berikut disertakan dalam artikel. Sisipkan masing-masing TEPAT 1x secara natural dan semantik pada bagian yang relevan, dibungkus <a href=\"URL\">anchor text</a>, dan DILARANG menulis URL telanjang:\n" +
 			strings.Join(lines, "\n")
 	}
 
