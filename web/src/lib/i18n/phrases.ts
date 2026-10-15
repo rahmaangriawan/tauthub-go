@@ -3871,7 +3871,6 @@ export const PHRASE_EN: Record<string, string> = {
 	"Terbitkan Sekarang": "Publish Now",
 	"Terdeteksi permintaan gambar": "Image request detected",
 	"tulis ulang": "rewrite",
-	"sudah ditagih": "already charged",
 	"belum memakai AI": "no AI used yet",
 	"Biaya gambar AI": "AI image cost",
 	"Dipilih otomatis saat draf AI jadi — ubah bila perlu.": "Auto-selected when the AI draft is ready — change it if needed.",
