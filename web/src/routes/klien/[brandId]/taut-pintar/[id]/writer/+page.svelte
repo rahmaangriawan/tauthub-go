@@ -2053,13 +2053,15 @@
 			overflow: hidden;
 			white-space: nowrap;
 			padding-left: 0;
-			transition: max-width 0.2s ease, opacity 0.15s ease, padding-left 0.2s ease;
+			padding-right: 0;
+			transition: max-width 0.2s ease, opacity 0.15s ease, padding-left 0.2s ease, padding-right 0.2s ease;
 		}
 		.expAction:hover .expLabel,
 		.expAction:focus-visible .expLabel {
 			max-width: 150px;
 			opacity: 1;
 			padding-left: 6px;
+			padding-right: 10px;
 		}
 		@media (prefers-reduced-motion: reduce) {
 			.expLabel { transition: none; }
