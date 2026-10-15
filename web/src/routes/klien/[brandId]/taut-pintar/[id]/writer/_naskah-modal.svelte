@@ -629,14 +629,18 @@
 	// Respons /produce/{mediaId} hanya berisi {media_id, status, document_id},
 	// tanpa isi artikel. Muat dokumen tersimpan lewat endpoint artikel yang sama
 	// dengan pemuat naskah writer (GET /articles/{mediaId}). null = belum ada.
-	async function fetchSavedArticle(): Promise<{ title: string; html: string } | null> {
+	async function fetchSavedArticle(): Promise<{ title: string; html: string; metaDescription: string } | null> {
 		if (!campaignId || !mediaId) return null;
 		try {
 			const res = await apiRequest(`${apiBase}/articles/${mediaId}`);
 			if (!res.ok) return null;
 			const d = await res.json().catch(() => null);
 			if (!d) return null;
-			return { title: String(d.title ?? ''), html: String(d.content_html ?? '') };
+			return {
+				title: String(d.title ?? ''),
+				html: String(d.content_html ?? ''),
+				metaDescription: String(d.meta_description ?? '')
+			};
 		} catch {
 			return null;
 		}
@@ -656,15 +660,18 @@
 			}
 			// Respons generate tidak memuat HTML, jadi ambil draf tersimpan agar
 			// editor langsung terisi dan tab berpindah ke Tulis / Edit.
+			const draf = await fetchSavedArticle();
 			if (hasil.html && hasil.html.trim()) {
 				html = hasil.html;
-			} else {
-				const draf = await fetchSavedArticle();
-				if (draf?.html) {
-					html = draf.html;
-					if (draf.title) title = draf.title;
-				}
+			} else if (draf?.html) {
+				html = draf.html;
+				if (draf.title) title = draf.title;
 			}
+			// Tiap generate menulis versi + meta deskripsi BARU di server. Kolom
+			// meta harus ikut disegarkan; kalau tidak, ringkasan artikel lama
+			// tertinggal di sini dan simpan berikutnya malah menimpakannya ke
+			// artikel baru (ikut terbawa sampai terbit).
+			if (draf?.metaDescription) meta = draf.metaDescription;
 			tab = 'tulis';
 			// Rubrik wajib ada sebelum simpan; setelah draf AI jadi, pilih
 			// otomatis dari rubrik yang tersedia agar tidak menahan proses.
