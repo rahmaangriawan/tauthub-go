@@ -273,6 +273,27 @@ func (d *Deps) TautBudgetEstimate(w http.ResponseWriter, r *http.Request) {
 
 // ---------- placement (tahap 6) ----------
 
+// tautCampaignCharges: kredit yang SUDAH ditagih kampanye ini — penulisan AI
+// (artikel baru + setiap regenerasi) dan gambar AI — dibaca dari ledger. Dipakai
+// bar biaya writer supaya uang yang tampil adalah yang benar-benar keluar:
+// klien yang menulis atau mengunggah artikelnya sendiri tidak melihat biaya
+// penulisan AI sama sekali.
+func (d *Deps) tautCampaignCharges(ctx context.Context, campaignID string) (writerTC, writerN, writerRegenN, imageTC, imageN int) {
+	row, err := d.queryRow(ctx, `
+		SELECT
+		  COALESCE(-SUM(amount_tc) FILTER (WHERE ref_id LIKE 'taut-writer:%' OR ref_id LIKE 'taut-writer-regen:%'), 0) AS writer_tc,
+		  COUNT(*) FILTER (WHERE ref_id LIKE 'taut-writer:%') AS writer_n,
+		  COUNT(*) FILTER (WHERE ref_id LIKE 'taut-writer-regen:%') AS writer_regen_n,
+		  COALESCE(-SUM(amount_tc) FILTER (WHERE ref_id LIKE 'ai-image:%'), 0) AS image_tc,
+		  COUNT(*) FILTER (WHERE ref_id LIKE 'ai-image:%') AS image_n
+		FROM credit_ledger_entries
+		WHERE split_part(ref_id, ':', 2) = $1`, campaignID)
+	if err != nil {
+		return 0, 0, 0, 0, 0
+	}
+	return row.intOr("writer_tc", 0), row.intOr("writer_n", 0), row.intOr("writer_regen_n", 0), row.intOr("image_tc", 0), row.intOr("image_n", 0)
+}
+
 // TautPlacementGet: GET /v1/brands/{brandId}/taut/campaigns/{campaignId}/placement
 func (d *Deps) TautPlacementGet(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
@@ -300,11 +321,19 @@ func (d *Deps) TautPlacementGet(w http.ResponseWriter, r *http.Request) {
 	if rt, rtErr := ai.LoadAIRuntime(r.Context(), d.Pool); rtErr == nil {
 		imageCost = ai.ImageCreditCost(rt)
 	}
+	writerTC, writerN, writerRegenN, imageTC, imageN := d.tautCampaignCharges(r.Context(), campaignID)
 	writeNoStore(w, http.StatusOK, map[string]any{
 		"media":               media,
 		"regen_max":           quota - 1,
 		"writer_cost_credits": d.writerCreditCost(r.Context()),
 		"image_credit_cost":   imageCost,
+		// Nyata yang sudah ditagih kampanye ini (ledger): biaya penulisan &
+		// gambar AI. Kamus tarif (di atas) tetap dipakai untuk proyeksi aksi.
+		"writer_charged_tc":   writerTC,
+		"writer_charge_count": writerN,
+		"writer_regen_count":  writerRegenN,
+		"image_charged_tc":    imageTC,
+		"image_charge_count":  imageN,
 	})
 }
 

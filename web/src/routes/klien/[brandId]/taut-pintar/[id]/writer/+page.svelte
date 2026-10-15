@@ -96,10 +96,17 @@
 	let backlinkEnabled = $state(false);
 	let entryMode = $state<'ai' | 'manual' | null>(null);
 	let regenMax = $state(2);
-	// Tarif penulisan dari server (platform_settings) — satu angka untuk semua aksi.
+	// Tarif penulisan dari server (platform_settings) — dipakai proyeksi biaya
+	// aksi generate (tooltip tombol bulk). Biaya yang sudah jadi membaca ledger.
 	let writerCostCredits = $state(2);
-	// Tarif per gambar dari konfigurasi AI — dipakai bar dan panel Biaya Gambar.
-	let imageCreditCost = $state(2);
+	// Kredit yang SUDAH ditagih kampanye ini (agregat ledger server): penulisan
+	// AI (artikel baru + regenerasi) dan gambar AI. Dipakai bar biaya supaya
+	// klien yang menulis/unggah artikelnya sendiri tidak melihat biaya AI.
+	let writerChargedTc = $state(0);
+	let writerChargeCount = $state(0);
+	let writerRegenCount = $state(0);
+	let imageChargedTc = $state(0);
+	let imageChargeCount = $state(0);
 	let trackingOn = $state(false);
 	let genState = $state<Record<string, string>>({});
 	let bulkRunning = $state(false);
@@ -240,8 +247,16 @@
 				if (Number.isFinite(rm) && rm >= 0) regenMax = rm;
 				const wc = Number(d.writer_cost_credits ?? 2);
 				if (Number.isFinite(wc) && wc > 0) writerCostCredits = wc;
-				const ic = Number(d.image_credit_cost ?? 0);
-				if (Number.isFinite(ic) && ic >= 0) imageCreditCost = ic;
+				const wt = Number(d.writer_charged_tc ?? 0);
+				if (Number.isFinite(wt) && wt >= 0) writerChargedTc = wt;
+				const wcCount = Number(d.writer_charge_count ?? 0);
+				if (Number.isFinite(wcCount) && wcCount >= 0) writerChargeCount = wcCount;
+				const wr = Number(d.writer_regen_count ?? 0);
+				if (Number.isFinite(wr) && wr >= 0) writerRegenCount = wr;
+				const it = Number(d.image_charged_tc ?? 0);
+				if (Number.isFinite(it) && it >= 0) imageChargedTc = it;
+				const icCount = Number(d.image_charge_count ?? 0);
+				if (Number.isFinite(icCount) && icCount >= 0) imageChargeCount = icCount;
 			}
 			// null = belum diketahui / gagal dibaca → tombol kembali ke jalur aman
 			// (mampir ke halaman Gatekeeper).
@@ -815,20 +830,23 @@
 	const canRegen = (m: PlacementItem) => hasDoc(m) && regenCountOf(m) < regenMax;
 
 	const cost = $derived.by(() => {
-		// Penulisan ditagih PER generate dengan tarif rata dari server: artikel
-		// baru 1× tarif dan tiap regenerasi menambah 1× lagi (ledger backend:
-		// taut-writer / taut-writer-regen). Jadi biaya penulisan = jumlah
-		// penulisan NYATA; media yang belum punya artikel diproyeksikan 1×.
-		const writingUnits = selected.reduce((s, m) => s + (hasDoc(m) ? 1 + regenCountOf(m) : 1), 0);
-		const regens = selected.reduce((s, m) => s + (hasDoc(m) ? regenCountOf(m) : 0), 0);
-		const writing = writingUnits * writerCostCredits;
+		// Biaya AI memakai yang SUDAH ditagih kampanye ini (agregat ledger di
+		// server), bukan proyeksi per media — klien yang menulis atau mengunggah
+		// artikelnya sendiri tidak melihat biaya penulisan/gambar AI sama
+		// sekali; regenerasi ikut karena ditagih per generate.
 		// Biaya media memakai harga penempatan (dikonversi server), bukan
 		// credit_cost yang bukan sumber penagihan — dulu itu sebab bar menulis
-		// Rp 22.000 padahal yang ditagih Rp 20.000.
+		// Rp 22.000 padahal yang ditagih Rp 20.000. Ini biaya saat terbit.
 		const media = selected.reduce((s, m) => s + (m.cost_tc ?? 0), 0);
-		const imageCount = selected.reduce((s, m) => s + (m.images_count ?? 0), 0);
-		const images = imageCount * imageCreditCost;
-		return { count: selected.length, writing, writingUnits, regens, media, images, imageCount, total: writing + media + images };
+		return {
+			count: selected.length,
+			writing: writerChargedTc,
+			writingUnits: writerChargeCount,
+			media,
+			images: imageChargedTc,
+			imageCount: imageChargeCount,
+			total: writerChargedTc + media + imageChargedTc
+		};
 	});
 	const pendingCount = $derived(selected.filter((m) => !hasDoc(m) || canRegen(m)).length);
 	// Biaya ditampilkan dalam rupiah memakai kurs aktif (fallback Rp 1.000).
@@ -1455,16 +1473,20 @@
 								<div class="costPopoverRow">
 									<span>
 										{tr('Biaya penulisan AI')}
-										<span class="text-muted-foreground">({cost.writingUnits - cost.regens} {tr('artikel')}{cost.regens > 0 ? ` + ${cost.regens} ${tr('tulis ulang')}` : ''})</span>
-										<span class="costPopoverRowNote">{cost.writingUnits} × {toRp(writerCostCredits)}</span>
+										{#if cost.writingUnits > 0}
+											<span class="text-muted-foreground">({cost.writingUnits} {tr('artikel')}{writerRegenCount > 0 ? ` + ${writerRegenCount} ${tr('tulis ulang')}` : ''})</span>
+											<span class="costPopoverRowNote">{tr('sudah ditagih')}</span>
+										{:else}
+											<span class="text-muted-foreground">({tr('belum memakai AI')})</span>
+										{/if}
 									</span>
 									<span class="font-medium">{toRp(cost.writing)}</span>
 								</div>
 
 								<div class="costPopoverRow">
 									<span>
-										{tr('Biaya gambar')} <span class="text-muted-foreground">({cost.imageCount} {tr('gambar')})</span>
-										<span class="costPopoverRowNote">{cost.imageCount} × {toRp(imageCreditCost)}</span>
+										{tr('Biaya gambar AI')} <span class="text-muted-foreground">({cost.imageCount} {tr('gambar')})</span>
+										{#if cost.imageCount > 0}<span class="costPopoverRowNote">{tr('sudah ditagih')}</span>{/if}
 									</span>
 									<span class="font-medium">{toRp(cost.images)}</span>
 								</div>
