@@ -1131,18 +1131,7 @@
 			</div>
 		{/if}
 
-		<!-- Header Halaman -->
-		<div class="flex flex-wrap items-center justify-between gap-4 pt-1">
-			<div class="flex items-center gap-3">
-				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] bg-blue-600 text-white shadow-sm shadow-blue-500/20">
-					<Pencil size={20} strokeWidth={2.4} />
-				</div>
-				<div>
-					<h1 class="text-lg font-bold leading-tight text-slate-900">{tr('Isi Dapur Produksi')}</h1>
-					<p class="mt-0.5 text-xs font-medium text-slate-500">{cost.count} {tr('media terpilih')}</p>
-				</div>
-			</div>
-		</div>
+		<!-- Header Halaman dihapus: informasi judul sudah diwakili banner produksi. -->
 
 		<div class="mt-3">
 			<AgentSteps current={2} />
