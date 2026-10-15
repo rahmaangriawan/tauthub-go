@@ -327,6 +327,7 @@ export const PHRASE_EN: Record<string, string> = {
   "DA Score (Minimal)": "DA Score (Minimum)",
   "Dalam Antrean…": "In Queue…",
   "Dapur Produksi": "Production Kitchen",
+  "Isi Dapur Produksi": "Stock the Production Kitchen",
   "Dapur produksi AI": "AI production kitchen",
   "Dapur Produksi AI": "AI Production Kitchen",
   "Dari brief sampai artikel": "From brief to article",

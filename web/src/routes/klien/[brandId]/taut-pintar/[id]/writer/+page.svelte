@@ -1079,8 +1079,8 @@
 				<Pencil size={22} style="color: #fff;" />
 			</div>
 			<div>
-				<p class="font-bold leading-tight">Agent 3: Penyedia Konten</p>
-				<p class="text-sm leading-tight text-muted-foreground">{manualFlow ? tr('Dapur Produksi') : tr('Dapur Produksi AI')} ({cost.count} {tr('media terpilih')})</p>
+				<p class="font-bold leading-tight">{tr('Isi Dapur Produksi')}</p>
+				<p class="text-sm leading-tight text-muted-foreground">{cost.count} {tr('media terpilih')}</p>
 			</div>
 		</div>
 		<div class="flex flex-wrap items-center justify-end gap-3">
