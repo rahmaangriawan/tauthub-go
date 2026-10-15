@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { CalendarClock, Check, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Info, Link, Link2, ListChecks, LoaderCircle, MoreVertical, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Trash2, TriangleAlert, Upload, Wallet, X } from '@lucide/svelte';
+	import { CalendarClock, Check, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Info, Link, Link2, ListChecks, LoaderCircle, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Trash2, TriangleAlert, Upload, Wallet, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, getAccessToken, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -116,7 +116,6 @@
 	let checklistFor = $state<string | null>(null);
 	let coverChecking = $state(false);
 	let agentStatus = $state<{ configured: boolean; reason: string | null } | null>(null);
-	let menuOpenId = $state<string | null>(null);
 	let avatarFailed = $state<Record<string, boolean>>({});
 
 	function cleanDomain(url: string | null | undefined, name: string): string {
@@ -1520,47 +1519,8 @@
 
 								<!-- Kolom 4: Area Aksi (2x2) -->
 								<div class="w-full lg:w-[260px] shrink-0 flex flex-col gap-2">
-									<!-- Baris 1: Titik tiga & Cek Validasi -->
+									<!-- Baris 1: Cek Validasi & Hapus -->
 									<div class="flex items-center gap-2">
-										<div class="relative">
-											<button
-												type="button"
-												class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 hover:border-slate-300 transition-colors"
-												disabled={bulkRunning || removeBusy || viewOnly}
-												title={tr('Aksi tambahan')}
-												aria-label={tr('Aksi tambahan')}
-												aria-expanded={menuOpenId === m.media_id}
-												onclick={() => { menuOpenId = menuOpenId === m.media_id ? null : m.media_id; }}
-											>
-												<MoreVertical size={14} />
-											</button>
-
-											{#if menuOpenId === m.media_id}
-												<button
-													class="fixed inset-0 z-30 cursor-default"
-													type="button"
-													aria-label={tr('Tutup menu')}
-													onclick={() => (menuOpenId = null)}
-												></button>
-												<div
-													class="absolute left-0 top-full mt-1.5 z-40 w-48 rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
-												>
-													<button
-														class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors"
-														type="button"
-														onclick={() => {
-															menuOpenId = null;
-															removeError = '';
-															removeTarget = m;
-														}}
-													>
-														<Trash2 size={13} />
-														<span>{tr('Hapus dari kampanye')}</span>
-													</button>
-												</div>
-											{/if}
-										</div>
-
 										<button
 											type="button"
 											class={`flex-1 h-8 px-3 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-all ${
@@ -1573,6 +1533,17 @@
 										>
 											<ShieldCheck size={14} strokeWidth={2.2} />
 											<span>{tr('Cek Validasi')}</span>
+										</button>
+
+										<button
+											type="button"
+											class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-white hover:bg-destructive hover:border-destructive transition-colors"
+											disabled={bulkRunning || removeBusy || viewOnly}
+											aria-label={tr('Hapus media dari kampanye')}
+											title={tr('Hapus media dari kampanye')}
+											onclick={() => { removeError = ''; removeTarget = m; }}
+										>
+											<Trash2 size={14} />
 										</button>
 									</div>
 
