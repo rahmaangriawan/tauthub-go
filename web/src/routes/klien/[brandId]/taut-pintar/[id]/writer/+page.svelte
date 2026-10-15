@@ -1395,9 +1395,23 @@
 														removeBusy = true;
 														removeError = '';
 														try {
-															const remaining = placement.filter((p) => p.media_id !== removeTarget?.media_id).map((p) => p.media_id);
+															// Payload PUT adalah status akhir pilihan kampanye:
+															// server menandai SEMUA baris removed lalu menyetel ulang
+															// id yang dikirim ke 'selected'. placement yang diterima
+															// GET memuat juga baris riwayat berstatus 'removed' —
+															// ikut dikirim di sini berarti membangkitkan media lama
+															// yang sudah dilepas ("dihapus, muncul lagi"), maka
+															// hanya baris 'selected' minus yang dilepas yang kirim.
+															const removedId = removeTarget.media_id;
+															const remaining = placement
+																.filter((p) => p.status === 'selected' && p.media_id !== removedId)
+																.map((p) => p.media_id);
 															const res = await apiRequest(`${apiBase}/placement`, { method: 'PUT', body: JSON.stringify({ selected: remaining }) });
 															if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menghapus media dari kampanye.')));
+															// Kartu langsung hilang di layar; angka biaya dan data
+															// lainnya menyusul dari server supaya tidak terasa
+															// macet menunggu refresh penuh.
+															placement = placement.map((p) => (p.media_id === removedId ? { ...p, status: 'removed' } : p));
 															removeTarget = null;
 															await load();
 														} catch (err) {
