@@ -1360,8 +1360,10 @@
 								<!-- Kolom 1: Identitas Media -->
 								<div class="flex min-w-0 items-center gap-3.5 lg:w-[280px] shrink-0">
 									<div
-										class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] overflow-hidden shadow-2xs border border-slate-200/60 font-bold text-base"
-										style="background-color: {av.bg}; color: {av.text};"
+										class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] overflow-hidden border border-slate-200/60 font-bold text-base"
+										style={domain && !avatarFailed[m.media_id]
+											? 'background-color: transparent;'
+											: `background-color: ${av.bg}; color: ${av.text};`}
 									>
 										{#if domain && !avatarFailed[m.media_id]}
 											<img
