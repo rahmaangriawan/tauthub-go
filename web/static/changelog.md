@@ -19,6 +19,22 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.5.2 — 2026-10-15
+
+### Fitur
+- Menulis permintaan rel di luar cakupan media (misalnya meminta rel="sponsored" di media biasa) kini dijawab jujur di tempat: muncul pemberitahuan di bawah kolom topik bahwa rel itu tidak diperbolehkan dan tautan akan ditulis dofollow. Sebelumnya permintaan seperti itu diam-diam diabaikan oleh AI saat menulis.
+- Rubrik kini terisi otomatis dari daftar rubrik media begitu draf AI selesai dibuat, lengkap keterangan kecil bahwa itu pilihan otomatis; tinggal diganti bila dirasa kurang pas. Dulu kolom rubrik wajib diisi manual dan sering jadi penunda terakhir sebelum menyimpan.
+- Saat AI sedang menyusun draf, tombol tutup dan Batal tidak lagi menutup jendela pengelola naskah; diklik paksa pun yang muncul hanya peringatan untuk menunggu proses selesai. Dulu menutup di tengah proses membuat kesan penulisan gagal, padahal artikel tetap tersimpan dan biayanya tetap tercatat.
+- Angka TOTAL TAGIHAN AKHIR kini berubah begitu ada aksi yang mengubah biaya (buat draf AI, tulis ulang, buat gambar, lepas media) tanpa perlu memuat ulang halaman. Perubahan nominalnya tampil sebagai chip kecil mengapung: + hijau berarti biaya naik, - merah berarti turun.
+- Halaman Penyedia Konten kini dibuka dengan judul "Isi Dapur Produksi", dan setiap kartu media menandai jenisnya: Mainstream atau Blogger, jadi cakupan media terbaca sekali lirik.
+- Di Taut Brief, kirimkan saja tautan di ruang obrolan: AI membacanya sejak masa berpikir dan memakai isinya sebagai konteks jawaban. Dulu tautan hanya diperlakukan teks biasa.
+
+### Perbaikan
+- Biaya AI di bar tagihan kini hanya menghitung artikel dan gambar yang benar-benar dibuat AI, dengan tarif berlaku (tiap generate 1x tarif). Sebelumnya media yang belum mengerjakan apa pun tetap menampilkan "Biaya penulisan AI", dan gambar milik artikel unggahan sendiri ikut dihitung, padahal tidak ada AI yang dipakai.
+- Setiap generate ulang kini terhitung di rincian biaya betul sesuai penagihannya (muncul sebagai "tulis ulang"). Dulu tulis ulang yang berulang-ulang tidak terlihat sama sekali di bar, padahal kredennya terpakai.
+- Membuat ulang artikel kini ikut memperbarui Cuplikan Singkat (meta deskripsi) mengikuti artikel baru. Dulu ringkasan artikel lama tetap tertinggal di kolomnya, dan begitu disimpan malah menimpa meta deskripsi artikel yang baru.
+- Menghapus media dari kampanye kini bersih: media yang pernah dilepas sebelumnya tidak lagi muncul kembali setelah penghapusan berikutnya, dan kartunya hilang seketika begitu dikonfirmasi, tanpa menunggu data dimuat ulang.
+
 ## v0.5.1 — 2026-10-10
 
 ### Fitur
