@@ -1142,18 +1142,6 @@
 					<p class="mt-0.5 text-xs font-medium text-slate-500">{cost.count} {tr('media terpilih')}</p>
 				</div>
 			</div>
-			<div class="flex flex-wrap items-center justify-end gap-2.5">
-				{#if campaignName}
-					<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-[5px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={campaignName}>
-						<FileText size={13} class="shrink-0 text-slate-400" />
-						<span class="truncate">{campaignName}</span>
-					</span>
-				{/if}
-				<span class="inline-flex items-center gap-1.5 rounded-[5px] border border-emerald-200/80 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-700 shadow-2xs" title={tr('Saldo Anda')}>
-					<Wallet size={13} class="shrink-0 text-emerald-600" />
-					<span>{toRp(wallet)}</span>
-				</span>
-			</div>
 		</div>
 
 		<div class="mt-3">
@@ -1330,22 +1318,34 @@
 						<path d="M154 84l1.5 3 3 1.5-3 1.5-1.5 3-1.5-3-3-1.5 3-1.5 1.5-3z" fill="#93c5fd"/>
 					</svg>
 				</div>
-				<div class="relative z-10 flex items-center gap-3.5">
-					<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] border border-blue-200/70 bg-white text-blue-600 shadow-2xs">
-						<FileText size={20} class="stroke-[2.2]" />
+				<div class="relative z-10 flex flex-wrap items-center justify-between gap-3.5">
+					<div class="flex items-center gap-3.5">
+						<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] border border-blue-200/70 bg-white text-blue-600 shadow-2xs">
+							<FileText size={20} class="stroke-[2.2]" />
+						</div>
+						<div>
+							<h3 class="text-base font-bold text-slate-900 leading-tight">
+								{manualFlow ? tr('Dapur Produksi') : tr('Dapur Produksi AI')} ({cost.count} {tr('Media Terpilih')})
+							</h3>
+							<p class="mt-1 text-xs text-slate-500">
+								{#if manualFlow}
+									{tr('Unggah artikel tulisanmu sendiri, atau buat dengan AI lewat tombol di tiap media.')}
+								{:else}
+									{tr('Biaya penulisan konten organik oleh The Writer:')} <strong class="text-slate-700">{toRp(writerCostCredits)}</strong> {tr('/ artikel — baru maupun tulis ulang.')}
+								{/if}
+							</p>
+						</div>
 					</div>
-					<div>
-						<h3 class="text-base font-bold text-slate-900 leading-tight">
-							{manualFlow ? tr('Dapur Produksi') : tr('Dapur Produksi AI')} ({cost.count} {tr('Media Terpilih')})
-						</h3>
-						<p class="mt-1 text-xs text-slate-500">
-							{#if manualFlow}
-								{tr('Unggah artikel tulisanmu sendiri, atau buat dengan AI lewat tombol di tiap media.')}
-							{:else}
-								{tr('Biaya penulisan konten organik oleh The Writer:')} <strong class="text-slate-700">{toRp(writerCostCredits)}</strong> {tr('/ artikel — baru maupun tulis ulang.')}
-							{/if}
-						</p>
-					</div>
+					{#if campaignName}
+						<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-[5px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={campaignName}>
+							<FileText size={13} class="shrink-0 text-slate-400" />
+							<span class="truncate">{campaignName}</span>
+						</span>
+					{/if}
+					<span class="inline-flex items-center gap-1.5 rounded-[5px] border border-emerald-200/80 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-700 shadow-2xs" title={tr('Saldo Anda')}>
+						<Wallet size={13} class="shrink-0 text-emerald-600" />
+						<span>{toRp(wallet)}</span>
+					</span>
 				</div>
 			</div>
 
