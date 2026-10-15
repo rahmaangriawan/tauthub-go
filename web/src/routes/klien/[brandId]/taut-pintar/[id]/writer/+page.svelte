@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { CalendarClock, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Link, Link2, ListChecks, LoaderCircle, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Trash2, TriangleAlert, Upload, Wallet, X } from '@lucide/svelte';
+	import { CalendarClock, Check, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Info, Link, Link2, ListChecks, LoaderCircle, MoreVertical, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Trash2, TriangleAlert, Upload, Wallet, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, getAccessToken, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -116,6 +116,35 @@
 	let checklistFor = $state<string | null>(null);
 	let coverChecking = $state(false);
 	let agentStatus = $state<{ configured: boolean; reason: string | null } | null>(null);
+	let menuOpenId = $state<string | null>(null);
+	let avatarFailed = $state<Record<string, boolean>>({});
+
+	function cleanDomain(url: string | null | undefined, name: string): string {
+		const raw = (url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim() || name.trim();
+		return raw.toLowerCase();
+	}
+
+	const AVATAR_PALETTES = [
+		{ bg: '#b91c1c', text: '#ffffff' },
+		{ bg: '#334155', text: '#ffffff' },
+		{ bg: '#0284c7', text: '#ffffff' },
+		{ bg: '#d97706', text: '#ffffff' },
+		{ bg: '#059669', text: '#ffffff' },
+		{ bg: '#7c3aed', text: '#ffffff' },
+		{ bg: '#0f172a', text: '#ffffff' },
+		{ bg: '#ea580c', text: '#ffffff' },
+		{ bg: '#dc2626', text: '#ffffff' },
+		{ bg: '#0891b2', text: '#ffffff' }
+	];
+
+	function avatarStyle(name: string | null | undefined) {
+		const s = (name ?? '').trim().toLowerCase();
+		let h = 0;
+		for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) % AVATAR_PALETTES.length;
+		return AVATAR_PALETTES[h];
+	}
+
+	const initialOf = (name: string | null | undefined) => (name ?? '').trim().charAt(0).toUpperCase() || '?';
 	// Panel analisis QC (slide-over kanan) untuk satu artikel.
 	let qcFor = $state<string | null>(null);
 	let qcToken = $state(0);
@@ -1078,9 +1107,9 @@
 					? tr('Draft Tersedia')
 						: s === 'ready'
 							? tr('Siap Terbit')
-							: s === 'blocked'
-								? tr('Diblokir')
-								: tr('MENUNGGU ARTIKEL');
+								: s === 'blocked'
+									? tr('Diblokir')
+									: tr('Menunggu Artikel');
 	const badge = (tone: string) =>
 		tone === 'success'
 			? 'background-color: var(--success-soft); color: var(--success);'
@@ -1093,36 +1122,44 @@
 						: 'background-color: var(--muted); color: var(--muted-foreground);';
 </script>
 
-<PageTitle title="Taut Pintar — Penyedia Konten" />
+	<PageTitle title="Taut Pintar — Penyedia Konten" />
 
-<main>
-	{#if viewOnly}
-		<div class="mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px]" style="border-color: var(--border); background: var(--muted);">
-			<span>{tr('Kampanye ini sudah selesai — mode lihat saja. Isinya tidak bisa diubah lagi.')}</span>
-			<a class="font-semibold underline" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`}>{tr('Buka Ringkasan')}</a>
-		</div>
-	{/if}
-	<div class="flex flex-wrap items-center justify-between gap-3">
-		<div class="flex items-center gap-3">
-			<div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background-color: var(--primary);">
-				<Pencil size={22} style="color: #fff;" />
+	<main class="mx-auto max-w-7xl pb-32">
+		{#if viewOnly}
+			<div class="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-700">
+				<span>{tr('Kampanye ini sudah selesai — mode lihat saja. Isinya tidak bisa diubah lagi.')}</span>
+				<a class="font-semibold text-blue-600 underline" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`}>{tr('Buka Ringkasan')}</a>
 			</div>
-			<div>
-				<p class="font-bold leading-tight">{tr('Isi Dapur Produksi')}</p>
-				<p class="text-sm leading-tight text-muted-foreground">{cost.count} {tr('media terpilih')}</p>
-			</div>
-		</div>
-		<div class="flex flex-wrap items-center justify-end gap-3">
-			{#if campaignName}
-				<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold" style="background-color: var(--muted);" title={campaignName}><FileText size={13} />{campaignName}</span>
-			{/if}
-			<span class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-bold" style="background-color: var(--success-soft); color: var(--success);" title={tr('Saldo Anda')}>{toRp(wallet)}</span>
-		</div>
-	</div>
+		{/if}
 
-	<div class="mt-3">
-		<AgentSteps current={2} />
-	</div>
+		<!-- Header Halaman -->
+		<div class="flex flex-wrap items-center justify-between gap-4 pt-1">
+			<div class="flex items-center gap-3">
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-500/20">
+					<Pencil size={20} strokeWidth={2.4} />
+				</div>
+				<div>
+					<h1 class="text-lg font-bold leading-tight text-slate-900">{tr('Isi Dapur Produksi')}</h1>
+					<p class="mt-0.5 text-xs font-medium text-slate-500">{cost.count} {tr('media terpilih')}</p>
+				</div>
+			</div>
+			<div class="flex flex-wrap items-center justify-end gap-2.5">
+				{#if campaignName}
+					<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={campaignName}>
+						<FileText size={13} class="shrink-0 text-slate-400" />
+						<span class="truncate">{campaignName}</span>
+					</span>
+				{/if}
+				<span class="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-700 shadow-2xs" title={tr('Saldo Anda')}>
+					<Wallet size={13} class="shrink-0 text-emerald-600" />
+					<span>{toRp(wallet)}</span>
+				</span>
+			</div>
+		</div>
+
+		<div class="mt-3">
+			<AgentSteps current={2} />
+		</div>
 
 	{#if spokepersons.length > 0}
 		<div class="mt-3 rounded-[10px] border p-3" style="background-color: var(--muted);">
@@ -1280,303 +1317,496 @@
 			</section>
 		{/if}
 
-		<section class="app-card mt-3 p-4" aria-label={tr('Dapur produksi AI')}>
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<div class="flex items-center gap-2">
-					<span class="flex h-7 w-7 items-center justify-center rounded-lg" style="background-color: var(--accent); color: var(--accent-foreground);"><FileText size={16} /></span>
+			<!-- Banner Informasi Dapur Produksi -->
+			<div class="relative mt-4 overflow-hidden rounded-2xl border border-blue-100/80 bg-gradient-to-r from-blue-50/70 via-slate-50/40 to-blue-50/40 p-5 shadow-2xs">
+				<div class="pointer-events-none absolute -right-2 -top-2 h-28 w-44 opacity-60">
+					<svg viewBox="0 0 160 120" fill="none" class="h-full w-full">
+						<path d="M110 20h30a6 6 0 0 1 6 6v70a6 6 0 0 1-6 6h-30a6 6 0 0 1-6-6V26a6 6 0 0 1 6-6z" fill="#93c5fd" fill-opacity="0.25" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="3 3"/>
+						<path d="M120 12h32a6 6 0 0 1 6 6v70a6 6 0 0 1-6 6h-32a6 6 0 0 1-6-6V18a6 6 0 0 1 6-6z" fill="#ffffff" fill-opacity="0.8" stroke="#3b82f6" stroke-width="1.5"/>
+						<line x1="128" y1="28" x2="150" y2="28" stroke="#93c5fd" stroke-width="2" stroke-linecap="round"/>
+						<line x1="128" y1="38" x2="146" y2="38" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/>
+						<line x1="128" y1="48" x2="142" y2="48" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/>
+						<path d="M102 36l2 4 4 2-4 2-2 4-2-4-4-2 4-2 2-4z" fill="#3b82f6"/>
+						<path d="M96 68l1.5 3 3 1.5-3 1.5-1.5 3-1.5-3-3-1.5 3-1.5 1.5-3z" fill="#60a5fa"/>
+						<path d="M154 84l1.5 3 3 1.5-3 1.5-1.5 3-1.5-3-3-1.5 3-1.5 1.5-3z" fill="#93c5fd"/>
+					</svg>
+				</div>
+				<div class="relative z-10 flex items-center gap-3.5">
+					<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-200/70 bg-white text-blue-600 shadow-2xs">
+						<FileText size={20} class="stroke-[2.2]" />
+					</div>
 					<div>
-						<p class="font-bold">{manualFlow ? tr('Dapur Produksi') : tr('Dapur Produksi AI')} ({cost.count} {tr('Media Terpilih')})</p>
-						<p class="text-xs text-muted-foreground">
+						<h3 class="text-base font-bold text-slate-900 leading-tight">
+							{manualFlow ? tr('Dapur Produksi') : tr('Dapur Produksi AI')} ({cost.count} {tr('Media Terpilih')})
+						</h3>
+						<p class="mt-1 text-xs text-slate-500">
 							{#if manualFlow}
 								{tr('Unggah artikel tulisanmu sendiri, atau buat dengan AI lewat tombol di tiap media.')}
 							{:else}
-								{tr('Biaya penulisan konten organik oleh The Writer:')} <strong>{toRp(writerCostCredits)}</strong> {tr('/ artikel — baru maupun tulis ulang.')}
+								{tr('Biaya penulisan konten organik oleh The Writer:')} <strong class="text-slate-700">{toRp(writerCostCredits)}</strong> {tr('/ artikel — baru maupun tulis ulang.')}
 							{/if}
 						</p>
 					</div>
 				</div>
 			</div>
 
+			<!-- Daftar Media Terpilih -->
 			{#if selected.length === 0}
-				<div class="mt-3 rounded-lg border px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada media terpilih. Kembali ke Matchmaker untuk memilih media.")}</div>
+				<div class="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-2xs">
+					{tr("Belum ada media terpilih. Kembali ke Matchmaker untuk memilih media.")}
+				</div>
 			{:else}
-				<div class="mt-3 space-y-2">
+				<div class="mt-4 space-y-3">
 					{#each selected as m (m.media_id)}
 						{@const st = articleStatusOf(m)}
 						{@const statusKind = st === 'error' ? 'none' : st}
 						{@const generating = st === 'generating'}
 						{@const queued = st === 'queued'}
 						{@const links2 = linkStats[m.media_id] ?? null}
-						<div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border px-5 py-4">
-							<div class="flex min-w-0 items-center gap-3">
-								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style="background-color: var(--muted);">
-									<FileText size={18} class="text-muted-foreground" />
-								</div>
-								<div class="min-w-0">
-									<div class="flex min-w-0 flex-wrap items-center gap-1.5">
-										<p class="font-bold leading-tight">{mediaDomainLabel(m.website_url, m.name)}</p>
-										{#if m.media_type}
-											<span
-												class="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-												style="background: {m.media_type === 'blogger' ? 'var(--warning-soft)' : 'var(--accent)'}; color: {m.media_type === 'blogger' ? 'var(--warning)' : 'var(--primary)'};"
-											>{m.media_type === 'blogger' ? tr('Blogger') : tr('Mainstream')}</span>
-										{/if}
-									</div>
-									<div class="mt-1 flex flex-wrap items-center gap-2">
-										<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={badge(statusTone(statusKind))}>
-											{#if statusKind === 'generating'}<LoaderCircle size={11} class="animate-spin" />
-											{:else if statusKind === 'queued'}<Clock size={11} />
-											{:else if statusKind === 'draft'}<FileText size={11} />
-											{:else if statusKind === 'ready'}<CircleCheck size={11} />
-											{:else if statusKind === 'blocked'}<X size={11} />
-											{:else}<Clock size={11} />{/if}
-											{statusText(statusKind)}
-										</span>
-										{#if !mediaAllowsLink(m)}
-											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style={badge('warning')}>{tr("Tidak Tersedia Backlink")}</span>
-										{:else if links2}
-											<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={badge('warning')}>
-												<PencilLine size={11} /> {links2.dofollow} Dofollow - {linkStatsTail(links2)}
-											</span>
+						{@const domain = cleanDomain(m.website_url, m.name)}
+						{@const av = avatarStyle(m.name)}
+						<div class="rounded-2xl border border-slate-200/80 bg-white p-4.5 sm:p-5 shadow-2xs transition-all duration-200 hover:border-slate-300 hover:shadow-xs">
+							<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+								<!-- Kolom 1: Identitas Media -->
+								<div class="flex min-w-0 items-center gap-3.5 lg:w-[280px] shrink-0">
+									<div
+										class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl overflow-hidden shadow-2xs border border-slate-200/60 font-bold text-base"
+										style="background-color: {av.bg}; color: {av.text};"
+									>
+										{#if domain && !avatarFailed[m.media_id]}
+											<img
+												src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`}
+												alt={m.name}
+												class="h-full w-full object-cover"
+												onerror={() => { avatarFailed = { ...avatarFailed, [m.media_id]: true }; }}
+											/>
 										{:else}
-											<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={badge('warning')}>
-												<PencilLine size={11} /> {m.label_sponsor === 'ada_sponsor' ? 'Sponsored' : 'Dofollow'} · Maks. {m.max_links != null && m.max_links > 0 ? m.max_links : 1} Link
-											</span>
+											<span>{initialOf(m.name)}</span>
 										{/if}
 									</div>
+
+									<div class="min-w-0 flex-1">
+										<div class="flex items-center gap-2">
+											<p class="font-bold text-[14.5px] leading-tight text-slate-900 truncate" title={m.name}>
+												{mediaDomainLabel(m.website_url, m.name)}
+											</p>
+											{#if m.media_type}
+												<span
+													class="shrink-0 rounded-full border px-2 py-0.5 text-[9.5px] font-bold tracking-wider uppercase {m.media_type === 'blogger' ? 'border-amber-200/80 bg-amber-50 text-amber-700' : 'border-blue-200/80 bg-blue-50 text-blue-600'}"
+												>
+													{m.media_type === 'blogger' ? tr('Blogger') : tr('Mainstream')}
+												</span>
+											{/if}
+										</div>
+
+										<div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+											{#if statusKind === 'ready'}
+												<span class="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
+													<CircleCheck size={11} strokeWidth={2.2} />
+													<span>{tr('Siap Terbit')}</span>
+												</span>
+											{:else if statusKind === 'draft'}
+												<span class="inline-flex items-center gap-1 rounded-full border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
+													<FileText size={11} />
+													<span>{tr('Draft Tersedia')}</span>
+												</span>
+											{:else if statusKind === 'generating'}
+												<span class="inline-flex items-center gap-1 rounded-full border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-600">
+													<LoaderCircle size={11} class="animate-spin" />
+													<span>{tr('Generasi AI…')}</span>
+												</span>
+											{:else if statusKind === 'queued'}
+												<span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100/80 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
+													<Clock size={11} />
+													<span>{tr('Dalam Antrean…')}</span>
+												</span>
+											{:else if statusKind === 'blocked'}
+												<span class="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[11px] font-medium text-rose-700">
+													<X size={11} />
+													<span>{tr('Diblokir')}</span>
+												</span>
+											{:else}
+												<span class="inline-flex items-center gap-1 rounded-full border border-slate-200/70 bg-slate-100/80 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
+													<Clock size={11} />
+													<span>{tr('Menunggu Artikel')}</span>
+												</span>
+											{/if}
+
+											{#if !mediaAllowsLink(m)}
+												<span class="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-500">
+													{tr('Tidak Tersedia Backlink')}
+												</span>
+											{:else if links2}
+												{#if links2.sponsored > 0}
+													<span class="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+														<PencilLine size={10.5} />
+														<span>{links2.sponsored} Sponsored</span>
+													</span>
+												{/if}
+												{#if links2.dofollow > 0}
+													<span class="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+														<PencilLine size={10.5} />
+														<span>{links2.dofollow} Dofollow</span>
+													</span>
+												{/if}
+												<span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+													<span class="h-1.5 w-1.5 rounded-full border border-slate-400"></span>
+													<span>{links2.nofollow} Nofollow</span>
+												</span>
+											{:else}
+												<span class="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-800">
+													<PencilLine size={10.5} />
+													<span>{m.label_sponsor === 'ada_sponsor' ? 'Sponsored' : 'Dofollow'} (Maks. {m.max_links != null && m.max_links > 0 ? m.max_links : 1})</span>
+												</span>
+											{/if}
+										</div>
+									</div>
 								</div>
-							</div>
-							{#if articleTitles[m.media_id]}
-								<div class="min-w-0 flex-1 basis-[220px]">
-									<p class="text-[11px] text-muted-foreground">{tr('Judul Artikel')}</p>
-									<p class="line-clamp-2 text-[13px] font-semibold leading-snug" title={articleTitles[m.media_id]}>{articleTitles[m.media_id]}</p>
-								</div>
-							{/if}
-							<p class="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-								<Image size={12} class="shrink-0" />
-								{#if hasDoc(m) && articleStats[m.media_id]}
-									<span style="color: {articleStats[m.media_id].cover ? 'var(--success)' : 'var(--destructive)'}; font-weight: 600;">{tr('Cover')} {articleStats[m.media_id].cover ? tr('ada') : tr('tidak ada')}</span>
-									<span>·</span><span>{articleStats[m.media_id].images} {tr('gambar di artikel')}</span>
-									<span>·</span><span>{articleStats[m.media_id].words.toLocaleString('id-ID')} {tr('kata')}</span>
-								{:else}
-									<span>{tr('Gambar artikel: tidak ada')}</span>
-								{/if}
-							</p>
-							<div class="flex flex-wrap gap-2">
-									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning || viewOnly} onclick={() => (checklistFor = m.media_id)}><ListChecks size={14} /> {tr('Cek Validasi')}</button>
-									{#if removeTarget && removeTarget.media_id === m.media_id}
-										<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.55);" role="presentation" onclick={(e) => { if (e.target === e.currentTarget && !removeBusy) removeTarget = null; }}>
-											<div class="flex w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl" style="border-color: var(--border); background-color: var(--card, #fff);" role="dialog" aria-modal="true" tabindex="-1" aria-label={tr('Hapus Media dari Kampanye')} onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape' && !removeBusy) removeTarget = null; }}>
-												<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
-													<div class="flex items-center gap-2.5 text-sm font-bold" style="color: var(--destructive);">
-														<Trash2 size={18} />
-														<span>{tr('Hapus Media dari Kampanye?')}</span>
-													</div>
-													<button class="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary" type="button" aria-label={tr('Tutup')} disabled={removeBusy} onclick={() => (removeTarget = null)}>
-														<X size={16} />
-													</button>
-												</div>
-												<div class="space-y-3 p-5">
-													<p class="text-sm font-semibold">{m.name}</p>
-													<p class="text-xs leading-relaxed text-muted-foreground">
-														{tr('Media ini akan dilepas dari kampanye (tidak dihapus permanen). Artikel dan datanya tetap tersimpan, jadi bisa dipakai lagi nanti.')}
-													</p>
-													<p class="rounded-lg p-2.5 text-xs leading-relaxed" style="background-color: var(--muted, #f8fafc); color: var(--foreground);">
-														{tr('Untuk mengaktifkan kembali media ini, buka The Matchmaker dan pilih ulang medianya.')}
-													</p>
-													{#if removeError}
-														<p class="flex items-center gap-1.5 text-xs" style="color: var(--destructive);"><CircleAlert size={14} /> {removeError}</p>
-													{/if}
-												</div>
-												<div class="flex items-center justify-end gap-2.5 border-t px-5 py-3.5" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
-													<button class="app-btn app-btn-soft text-xs" type="button" disabled={removeBusy} onclick={() => (removeTarget = null)}>{tr('Batal')}</button>
-													<button class="app-btn text-xs font-semibold" style="background-color: var(--destructive); color: #fff;" type="button" disabled={removeBusy} onclick={async () => {
-														if (!removeTarget) return;
-														removeBusy = true;
-														removeError = '';
-														try {
-															// Payload PUT adalah status akhir pilihan kampanye:
-															// server menandai SEMUA baris removed lalu menyetel ulang
-															// id yang dikirim ke 'selected'. placement yang diterima
-															// GET memuat juga baris riwayat berstatus 'removed' —
-															// ikut dikirim di sini berarti membangkitkan media lama
-															// yang sudah dilepas ("dihapus, muncul lagi"), maka
-															// hanya baris 'selected' minus yang dilepas yang kirim.
-															const removedId = removeTarget.media_id;
-															const remaining = placement
-																.filter((p) => p.status === 'selected' && p.media_id !== removedId)
-																.map((p) => p.media_id);
-															const res = await apiRequest(`${apiBase}/placement`, { method: 'PUT', body: JSON.stringify({ selected: remaining }) });
-															if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menghapus media dari kampanye.')));
-															// Kartu langsung hilang di layar; angka biaya dan data
-															// lainnya menyusul dari server supaya tidak terasa
-															// macet menunggu refresh penuh.
-															placement = placement.map((p) => (p.media_id === removedId ? { ...p, status: 'removed' } : p));
-															removeTarget = null;
-															await load();
-														} catch (err) {
-															removeError = err instanceof Error ? err.message : tr('Gagal menghapus media dari kampanye.');
-														} finally {
-															removeBusy = false;
-														}
-													}}>
-														{#if removeBusy}<LoaderCircle size={14} class="animate-spin" /> <span>{tr('Melepas…')}</span>{:else}<Trash2 size={13} /> <span>{tr('Ya, Lepas Media')}</span>{/if}
-													</button>
-												</div>
-											</div>
+
+								<!-- Kolom 2: Informasi Artikel -->
+								<div class="min-w-0 flex-1 lg:max-w-[340px]">
+									{#if articleTitles[m.media_id]}
+										<div>
+											<p class="text-[11px] font-medium text-slate-400 mb-0.5">{tr('Judul Artikel')}</p>
+											<p class="line-clamp-2 text-[13.5px] font-semibold text-slate-900 leading-snug" title={articleTitles[m.media_id]}>
+												{articleTitles[m.media_id]}
+											</p>
+										</div>
+									{:else}
+										<div>
+											<p class="text-sm font-semibold text-slate-400 leading-none">-</p>
+											<p class="mt-1.5 inline-flex items-center gap-1.5 text-xs text-slate-400 font-normal">
+												<Image size={13} class="shrink-0 text-slate-300" />
+												<span>{tr('Gambar artikel: tidak ada')}</span>
+											</p>
 										</div>
 									{/if}
-									<!-- Generate AI ditampilkan juga di mode manual: generate lewat
-									     Pengelola Naskah memang sudah bisa, jadi tombolnya tidak
-									     disembunyikan (kampanye lama/katalog sering ber-mode manual). -->
-									{#if !hasDoc(m)}
-										<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={generating || bulkRunning || viewOnly} onclick={() => openNaskahGenerate(m)}>
-											{#if generating}<LoaderCircle size={14} class="animate-spin" />{:else}<Sparkles size={14} />{/if}
-											{generating ? tr('Membuat…') : queued ? tr('Mengantre…') : tr('Generate Konten')}
-										</button>
-									{/if}
-								{#if !hasDoc(m)}
-									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning || viewOnly} onclick={() => openNaskahUpload(m)}>
-										<Upload size={14} /> {tr('Unggah Artikel')}
-									</button>
-								{/if}
-								{#if hasDoc(m)}
-									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={bulkRunning} onclick={() => void openPreview(m)}><Eye size={14} /> {tr('Edit Artikel')}</button>
-										{@const qcCount = qcCounts[m.media_id] ?? 0}
+								</div>
+
+								<!-- Kolom 3: Cover & Metadata -->
+								<div class="flex items-center gap-3 shrink-0">
+									<div class="h-12 w-16 sm:h-13 sm:w-18 shrink-0 overflow-hidden rounded-xl border border-slate-200/80 bg-slate-100/70 flex items-center justify-center">
+										{#if hasDoc(m) && articleStats[m.media_id]?.cover}
+											<img src={articleStats[m.media_id].cover} alt="Cover" class="h-full w-full object-cover" />
+										{:else}
+											<Image size={20} class="text-slate-400 stroke-[1.5]" />
+										{/if}
+									</div>
+									<div class="flex flex-col gap-0.5">
+										{#if hasDoc(m) && articleStats[m.media_id]}
+											{#if articleStats[m.media_id].cover}
+												<span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+													<Check size={12} strokeWidth={2.4} />
+													<span>{tr('Cover ada')}</span>
+												</span>
+											{:else}
+												<span class="inline-flex items-center gap-1 text-xs font-semibold text-rose-600">
+													<CircleAlert size={12} strokeWidth={2.2} />
+													<span>{tr('Cover tidak ada')}</span>
+												</span>
+											{/if}
+											<span class="text-xs text-slate-500 font-normal">
+												{articleStats[m.media_id].words.toLocaleString('id-ID')} {tr('kata')}
+											</span>
+										{:else}
+											<span class="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
+												<FileText size={12} class="text-slate-400" />
+												<span>{tr('Cover belum ada')}</span>
+											</span>
+											<span class="text-xs text-slate-400 font-normal">0 {tr('kata')}</span>
+										{/if}
+									</div>
+								</div>
+
+								<!-- Kolom 4: Area Aksi (2x2) -->
+								<div class="w-full lg:w-[260px] shrink-0 flex flex-col gap-2">
+									<!-- Baris 1: Titik tiga & Cek Validasi -->
+									<div class="flex items-center gap-2">
+										<div class="relative">
+											<button
+												type="button"
+												class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+												disabled={bulkRunning || removeBusy || viewOnly}
+												title={tr('Aksi tambahan')}
+												aria-label={tr('Aksi tambahan')}
+												aria-expanded={menuOpenId === m.media_id}
+												onclick={() => { menuOpenId = menuOpenId === m.media_id ? null : m.media_id; }}
+											>
+												<MoreVertical size={14} />
+											</button>
+
+											{#if menuOpenId === m.media_id}
+												<button
+													class="fixed inset-0 z-30 cursor-default"
+													type="button"
+													aria-label={tr('Tutup menu')}
+													onclick={() => (menuOpenId = null)}
+												></button>
+												<div
+													class="absolute left-0 top-full mt-1.5 z-40 w-48 rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+												>
+													<button
+														class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors"
+														type="button"
+														onclick={() => {
+															menuOpenId = null;
+															removeError = '';
+															removeTarget = m;
+														}}
+													>
+														<Trash2 size={13} />
+														<span>{tr('Hapus dari kampanye')}</span>
+													</button>
+												</div>
+											{/if}
+										</div>
+
 										<button
-											class="app-btn !min-h-8 !px-3 !text-xs"
 											type="button"
-											disabled={bulkRunning}
-											style={qcCount > 0 ? 'background-color: var(--accent); color: var(--accent-foreground);' : ''}
-											onclick={() => (qcFor = m.media_id)}
+											class={`flex-1 h-8 px-3 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-all ${
+												hasDoc(m)
+													? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
+													: 'bg-blue-50/90 hover:bg-blue-100 text-blue-600 border border-blue-200/80'
+											}`}
+											disabled={bulkRunning || viewOnly}
+											onclick={() => (checklistFor = m.media_id)}
 										>
-											<ShieldCheck size={14} /> {tr('Analisis QC')}
-											<span
-												class="rounded-full px-1.5 py-0.5 text-[10px] font-bold"
-												style={qcCount > 0 ? 'background-color: var(--primary); color: #fff;' : 'background-color: var(--muted); color: var(--muted-foreground);'}
-											>{qcCount > 0 ? qcCount : tr('Belum ada')}</span>
+											<ShieldCheck size={14} strokeWidth={2.2} />
+											<span>{tr('Cek Validasi')}</span>
 										</button>
-									{/if}
-									<button
-										class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:border-destructive hover:bg-destructive hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1"
-										style="border-color: var(--border);"
-										type="button"
-										disabled={bulkRunning || removeBusy || viewOnly}
-										aria-label={tr('Hapus media dari kampanye')}
-										title={tr('Hapus media dari kampanye')}
-										onclick={() => { removeError = ''; removeTarget = m; }}
-									>
-										<Trash2 size={14} />
-									</button>
+									</div>
+
+									<!-- Baris 2: Edit/QC atau Generate/Unggah -->
+									<div class="flex items-center gap-2">
+										{#if hasDoc(m)}
+											<button
+												type="button"
+												class="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												disabled={bulkRunning}
+												onclick={() => void openPreview(m)}
+											>
+												<Pencil size={12} strokeWidth={2} />
+												<span>{tr('Edit Artikel')}</span>
+											</button>
+
+											{@const qcCount = qcCounts[m.media_id] ?? 0}
+											<button
+												type="button"
+												class="flex-1 h-8 px-2 rounded-lg border border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												disabled={bulkRunning}
+												onclick={() => (qcFor = m.media_id)}
+											>
+												<ShieldCheck size={13} strokeWidth={2} />
+												<span>{tr('Analisis QC')}</span>
+												<span
+													class="rounded-full px-1.5 py-0.2 text-[10px] font-bold leading-none"
+													style={qcCount > 0 ? 'background-color: #2563eb; color: #fff;' : 'background-color: #e2e8f0; color: #64748b;'}
+												>
+													{qcCount > 0 ? qcCount : tr('Belum ada')}
+												</span>
+											</button>
+										{:else}
+											<button
+												type="button"
+												class="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												disabled={generating || bulkRunning || viewOnly}
+												onclick={() => openNaskahGenerate(m)}
+											>
+												{#if generating}
+													<LoaderCircle size={12} class="animate-spin text-blue-600" />
+													<span class="truncate">{tr('Membuat…')}</span>
+												{:else if queued}
+													<Clock size={12} class="text-slate-400" />
+													<span class="truncate">{tr('Mengantre…')}</span>
+												{:else}
+													<Sparkles size={12} class="text-slate-500" />
+													<span class="truncate">{tr('Generate Konten')}</span>
+												{/if}
+											</button>
+
+											<button
+												type="button"
+												class="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												disabled={bulkRunning || viewOnly}
+												onclick={() => openNaskahUpload(m)}
+											>
+												<Upload size={12} strokeWidth={2} class="text-slate-500" />
+												<span class="truncate">{tr('Unggah Artikel')}</span>
+											</button>
+										{/if}
+									</div>
+								</div>
 							</div>
 						</div>
 					{/each}
 				</div>
 			{/if}
-		</section>
 
-			<TautBottomBar fullWidth>
-				<div class="selectedBarLeftCol">
-					<!-- Bar hanya menampilkan TOTAL. Rinciannya muncul sebagai popover
-					     ke atas saat di-hover atau diklik. -->
-					<span class="relative inline-flex">
-						<button
-							class="selectedStatItem selectedStatItemTotal"
-							type="button"
-							aria-expanded={costPopoverOpen}
-							onmouseenter={() => (costPopoverOpen = true)}
-							onmouseleave={() => { if (!costPinned) costPopoverOpen = false; }}
-							onfocus={() => (costPopoverOpen = true)}
-							onblur={() => { if (!costPinned) costPopoverOpen = false; }}
-							onclick={() => { costPinned = !costPinned; costPopoverOpen = costPinned; }}
-						>
-							<span class="selectedStatLabel flex items-center gap-1">
-								{tr('TOTAL TAGIHAN AKHIR')}
-								<Wallet size={12} class="opacity-70" />
-							</span>
-							<span class="selectedStatPriceVal selectedStatTotalVal">{toRp(cost.total)}</span>
-						</button>
-
-						{#if billDelta}
-							{#key billDelta.id}
-								<span class="billDeltaWrap" aria-hidden="true">
-									<span class="billDelta" class:down={billDelta.delta < 0}>
-										{billDelta.delta > 0 ? '+' : '-'}{toRp(Math.abs(billDelta.delta))}
-									</span>
-								</span>
-							{/key}
-						{/if}
-
-						{#if costPopoverOpen}
-							{#if costPinned}
-								<button
-									class="fixed inset-0 z-30 cursor-default"
-									type="button"
-									aria-label={tr('Tutup rincian biaya')}
-									onclick={() => { costPinned = false; costPopoverOpen = false; }}
-								></button>
-							{/if}
-							<div class="costPopover" role="dialog" tabindex="-1" aria-label={tr('Rincian biaya')}
-								onkeydown={(e) => { if (e.key === 'Escape') { costPinned = false; costPopoverOpen = false; } }}
-							>
-								<p class="costPopoverTitle">{tr('Rincian biaya')}</p>
-
-								<div class="costPopoverRow">
-									<span>
-										{tr('Biaya media')} <span class="text-muted-foreground">({cost.count} {tr('media')})</span>
-									</span>
-									<span class="font-medium">{toRp(cost.media)}</span>
-								</div>
-
-								<div class="costPopoverRow">
-									<span>
-										{tr('Biaya penulisan AI')}
-										{#if cost.writingUnits > 0}
-											<span class="text-muted-foreground">({cost.writingUnits} {tr('artikel')}{writerRegenCount > 0 ? ` + ${writerRegenCount} ${tr('tulis ulang')}` : ''})</span>
-											<span class="costPopoverRowNote">{cost.writingUnits} × {toRp(writerCostCredits)}</span>
-										{:else}
-											<span class="text-muted-foreground">({tr('belum memakai AI')})</span>
-										{/if}
-									</span>
-									<span class="font-medium">{toRp(cost.writing)}</span>
-								</div>
-
-								<div class="costPopoverRow">
-									<span>
-										{tr('Biaya gambar AI')} <span class="text-muted-foreground">({cost.imageCount} {tr('gambar')})</span>
-										{#if cost.imageCount > 0}<span class="costPopoverRowNote">{cost.imageCount} × {toRp(imageCreditCost)}</span>{/if}
-									</span>
-									<span class="font-medium">{toRp(cost.images)}</span>
-								</div>
-
-								<div class="costPopoverDivider"></div>
-
-								<div class="costPopoverTotal">
-									<span>{tr('TOTAL TAGIHAN AKHIR')}</span>
-									<span>{toRp(cost.total)}</span>
-								</div>
-
+			{#if removeTarget}
+				<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.55);" role="presentation" onclick={(e) => { if (e.target === e.currentTarget && !removeBusy) removeTarget = null; }}>
+					<div class="flex w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl" style="border-color: var(--border); background-color: var(--card, #fff);" role="dialog" aria-modal="true" tabindex="-1" aria-label={tr('Hapus Media dari Kampanye')} onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape' && !removeBusy) removeTarget = null; }}>
+						<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
+							<div class="flex items-center gap-2.5 text-sm font-bold" style="color: var(--destructive);">
+								<Trash2 size={18} />
+								<span>{tr('Hapus Media dari Kampanye?')}</span>
 							</div>
-						{/if}
-					</span>
-				</div>
-				<div class="selectedBarRight">
-					{#if distributable}
-						<!-- Lebarnya dibatasi supaya blok tombol tidak melebar sampai memaksa
-						     bar melipat dan tombolnya turun ke baris kedua. -->
-						<p class="writerQcNotice text-muted-foreground">{tr('QC sudah lulus — tombol ini langsung menerbitkan kampanye dan membuka Ringkasan.')}</p>
-					{:else if distributable === false}
-						<p class="writerQcNotice" style="color: var(--warning, #b45309);">{tr('QC belum lulus. Jalankan Cek Validasi sekarang')}</p>
-					{/if}
-					<div class="writerActionBtns">
-						<button class="selectedCancelBtn" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar`)}>{tr('Kembali')}</button>
-						<button class="selectedCreateBtn" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
-							{#if coverChecking || distributing}<LoaderCircle size={15} class="animate-spin" />{:else}<Send size={15} />{/if}
-							<span>{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
-						</button>
+							<button class="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary" type="button" aria-label={tr('Tutup')} disabled={removeBusy} onclick={() => (removeTarget = null)}>
+								<X size={16} />
+							</button>
+						</div>
+						<div class="space-y-3 p-5">
+							<p class="text-sm font-semibold">{removeTarget.name}</p>
+							<p class="text-xs leading-relaxed text-muted-foreground">
+								{tr('Media ini akan dilepas dari kampanye (tidak dihapus permanen). Artikel dan datanya tetap tersimpan, jadi bisa dipakai lagi nanti.')}
+							</p>
+							<p class="rounded-lg p-2.5 text-xs leading-relaxed" style="background-color: var(--muted, #f8fafc); color: var(--foreground);">
+								{tr('Untuk mengaktifkan kembali media ini, buka The Matchmaker dan pilih ulang medianya.')}
+							</p>
+							{#if removeError}
+								<p class="flex items-center gap-1.5 text-xs" style="color: var(--destructive);"><CircleAlert size={14} /> {removeError}</p>
+							{/if}
+						</div>
+						<div class="flex items-center justify-end gap-2.5 border-t px-5 py-3.5" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
+							<button class="app-btn app-btn-soft text-xs" type="button" disabled={removeBusy} onclick={() => (removeTarget = null)}>{tr('Batal')}</button>
+							<button class="app-btn text-xs font-semibold" style="background-color: var(--destructive); color: #fff;" type="button" disabled={removeBusy} onclick={async () => {
+								if (!removeTarget) return;
+								removeBusy = true;
+								removeError = '';
+								try {
+									const removedId = removeTarget.media_id;
+									const remaining = placement
+										.filter((p) => p.status === 'selected' && p.media_id !== removedId)
+										.map((p) => p.media_id);
+									const res = await apiRequest(`${apiBase}/placement`, { method: 'PUT', body: JSON.stringify({ selected: remaining }) });
+									if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menghapus media dari kampanye.')));
+									placement = placement.map((p) => (p.media_id === removedId ? { ...p, status: 'removed' } : p));
+									removeTarget = null;
+									await load();
+								} catch (err) {
+									removeError = err instanceof Error ? err.message : tr('Gagal menghapus media dari kampanye.');
+								} finally {
+									removeBusy = false;
+								}
+							}}>
+								{#if removeBusy}<LoaderCircle size={14} class="animate-spin" /> <span>{tr('Melepas…')}</span>{:else}<Trash2 size={13} /> <span>{tr('Ya, Lepas Media')}</span>{/if}
+							</button>
+						</div>
 					</div>
 				</div>
-			</TautBottomBar>
+			{/if}
+
+				<TautBottomBar fullWidth>
+					<div class="flex w-full flex-wrap items-center justify-between gap-4 py-1">
+						<!-- Kolom Kiri: Total Tagihan Akhir -->
+						<div class="relative inline-flex items-center">
+							<button
+								class="flex items-center gap-3 rounded-2xl border border-emerald-200/90 bg-emerald-50/70 hover:bg-emerald-50/90 px-4 py-2 text-left transition-colors cursor-pointer"
+								type="button"
+								aria-expanded={costPopoverOpen}
+								onmouseenter={() => (costPopoverOpen = true)}
+								onmouseleave={() => { if (!costPinned) costPopoverOpen = false; }}
+								onfocus={() => (costPopoverOpen = true)}
+								onblur={() => { if (!costPinned) costPopoverOpen = false; }}
+								onclick={() => { costPinned = !costPinned; costPopoverOpen = costPinned; }}
+							>
+								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100/90 text-emerald-700">
+									<Wallet size={18} strokeWidth={2.2} />
+								</div>
+								<div>
+									<span class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+										{tr('TOTAL TAGIHAN AKHIR')}
+										<Info size={11} class="opacity-70" />
+									</span>
+									<span class="selectedStatPriceVal selectedStatTotalVal text-lg sm:text-xl font-extrabold text-emerald-700 leading-tight">
+										{toRp(cost.total)}
+									</span>
+								</div>
+							</button>
+
+							{#if billDelta}
+								{#key billDelta.id}
+									<span class="billDeltaWrap" aria-hidden="true">
+										<span class="billDelta" class:down={billDelta.delta < 0}>
+											{billDelta.delta > 0 ? '+' : '-'}{toRp(Math.abs(billDelta.delta))}
+										</span>
+									</span>
+								{/key}
+							{/if}
+
+							{#if costPopoverOpen}
+								{#if costPinned}
+									<button
+										class="fixed inset-0 z-30 cursor-default"
+										type="button"
+										aria-label={tr('Tutup rincian biaya')}
+										onclick={() => { costPinned = false; costPopoverOpen = false; }}
+									></button>
+								{/if}
+								<div class="costPopover" role="dialog" tabindex="-1" aria-label={tr('Rincian biaya')}
+									onkeydown={(e) => { if (e.key === 'Escape') { costPinned = false; costPopoverOpen = false; } }}
+								>
+									<p class="costPopoverTitle">{tr('Rincian biaya')}</p>
+
+									<div class="costPopoverRow">
+										<span>
+											{tr('Biaya media')} <span class="text-muted-foreground">({cost.count} {tr('media')})</span>
+										</span>
+										<span class="font-medium">{toRp(cost.media)}</span>
+									</div>
+
+									<div class="costPopoverRow">
+										<span>
+											{tr('Biaya penulisan AI')}
+											{#if cost.writingUnits > 0}
+												<span class="text-muted-foreground">({cost.writingUnits} {tr('artikel')}{writerRegenCount > 0 ? ` + ${writerRegenCount} ${tr('tulis ulang')}` : ''})</span>
+												<span class="costPopoverRowNote">{cost.writingUnits} × {toRp(writerCostCredits)}</span>
+											{:else}
+												<span class="text-muted-foreground">({tr('belum memakai AI')})</span>
+											{/if}
+										</span>
+										<span class="font-medium">{toRp(cost.writing)}</span>
+									</div>
+
+									<div class="costPopoverRow">
+										<span>
+											{tr('Biaya gambar AI')} <span class="text-muted-foreground">({cost.imageCount} {tr('gambar')})</span>
+											{#if cost.imageCount > 0}<span class="costPopoverRowNote">{cost.imageCount} × {toRp(imageCreditCost)}</span>{/if}
+										</span>
+										<span class="font-medium">{toRp(cost.images)}</span>
+									</div>
+
+									<div class="costPopoverDivider"></div>
+
+									<div class="costPopoverTotal">
+										<span>{tr('TOTAL TAGIHAN AKHIR')}</span>
+										<span>{toRp(cost.total)}</span>
+									</div>
+
+								</div>
+							{/if}
+						</div>
+
+						<!-- Kolom Tengah: Pesan Status QC -->
+						<div class="hidden md:flex items-center gap-2 max-w-sm text-xs leading-snug">
+							{#if distributable}
+								<CircleCheck size={16} class="text-emerald-600 shrink-0" />
+								<span class="text-slate-600 font-medium">{tr('QC sudah lulus — tombol ini langsung menerbitkan kampanye dan membuka Ringkasan.')}</span>
+							{:else if distributable === false}
+								<TriangleAlert size={16} class="text-amber-600 shrink-0" />
+								<span class="text-amber-800 font-medium">{tr('QC belum lulus. Jalankan Cek Validasi sekarang untuk melihat hasil detail setiap artikel.')}</span>
+							{/if}
+						</div>
+
+						<!-- Kolom Kanan: Tombol Aksi -->
+						<div class="flex items-center gap-2.5">
+							<button class="h-10 px-5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar`)}>{tr('Kembali')}</button>
+							<button class="h-10 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold inline-flex items-center gap-2 shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
+								{#if coverChecking || distributing}<LoaderCircle size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
+								<span>{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
+							</button>
+						</div>
+					</div>
+				</TautBottomBar>
 	{/if}
 </main>
 
@@ -1840,18 +2070,9 @@
 			color: var(--success);
 		}
 
-		.selectedStatItemTotal {
-			padding: 10px 16px;
-			border-radius: 11px;
-			background: var(--success-soft, #e8f5ee);
-			/* Tombol mewarisi text-align: center bawaan browser — dipaksa rata
-			   kiri supaya label dan angkanya sejajar. */
-			text-align: left;
-		}
-		.selectedStatItemTotal .selectedStatLabel { color: var(--success); }
-		/* Chip delta tagihan: memunculkan selisih (+ hijau / - merah) yang naik
-		   dari bawah angka total lalu memudar. Tujuan animasinya: memancing mata
-		   ke angka yang baru saja berubah setelah suatu aksi (R-19). */
+			/* Chip delta tagihan: memunculkan selisih (+ hijau / - merah) yang naik
+			   dari bawah angka total lalu memudar. Tujuan animasinya: memancing mata
+			   ke angka yang baru saja berubah setelah suatu aksi (R-19). */
 		.billDeltaWrap {
 			position: absolute;
 			left: 50%;
