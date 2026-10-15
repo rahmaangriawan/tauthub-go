@@ -1482,15 +1482,17 @@
 									{/if}
 								</div>
 
-								<!-- Kolom 3: Cover & Metadata -->
-								<div class="flex items-center gap-3 shrink-0">
-									<div class="h-12 w-16 sm:h-13 sm:w-18 shrink-0 overflow-hidden rounded-[10px] border border-slate-200/80 bg-slate-100/70 flex items-center justify-center">
-										{#if hasDoc(m) && articleStats[m.media_id]?.cover}
-											<img src={articleStats[m.media_id].cover} alt="Cover" class="h-full w-full object-cover" />
-										{:else}
-											<Image size={20} class="text-slate-400 stroke-[1.5]" />
-										{/if}
-									</div>
+									<!-- Kolom 3: Cover & Metadata -->
+									<div class="flex items-center gap-3 shrink-0">
+										<!-- Thumbnail cover: di mobile & tablet diperbesar supaya gambarnya
+										     terbaca jelas; ukuran desktop tetap seperti desain awal. -->
+										<div class="h-16 w-24 sm:h-20 sm:w-30 lg:h-13 lg:w-18 shrink-0 overflow-hidden rounded-[10px] border border-slate-200/80 bg-slate-100/70 flex items-center justify-center">
+											{#if hasDoc(m) && articleStats[m.media_id]?.cover}
+												<img src={articleStats[m.media_id].cover} alt="Cover" class="h-full w-full object-cover" />
+											{:else}
+												<Image size={20} class="text-slate-400 stroke-[1.5] h-6 w-6 sm:h-7 sm:w-7 lg:h-5 lg:w-5" />
+											{/if}
+										</div>
 									<div class="flex flex-col gap-0.5">
 										{#if hasDoc(m) && articleStats[m.media_id]}
 											{#if articleStats[m.media_id].cover}
