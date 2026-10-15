@@ -19,6 +19,13 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.5.4 — 2026-10-15
+
+### Perbaikan
+- Nilai DA dan AI Trust kini tampil apa adanya di halaman Ringkasan, sama dengan yang terlihat di katalog media. Sebelumnya ada kesalahan pembacaan tipe data di server yang membuat media ber-DA nol atau AI Trust kosong padahal datanya tersimpan, termasuk di panel detail media. Sekalian memperbaiki kolom serupa lain, seperti PA dan Spam Score, di seluruh halaman.
+- Kolom "DA / SS" di tabel Ringkasan disederhanakan jadi "DA": indikator SS tidak dipakai lagi.
+- Tautan pada artikel kini dilabeli dengan status rel yang berlaku: 1 link dofollow bila tanpa atribut rel, bukan lagi kalimat "tanpa rel" yang membingungkan karena dofollow memang berarti tanpa rel.
+
 ## v0.5.3 — 2026-10-15
 
 ### Fitur
