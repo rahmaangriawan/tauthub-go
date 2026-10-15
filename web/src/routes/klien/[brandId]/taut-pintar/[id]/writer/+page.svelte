@@ -1513,7 +1513,7 @@
 								<!-- Kolom 4: Area Aksi (2x2) -->
 								<!-- Aksi: satu baris ikon; saat hover tombol mengembang memunculkan
 								     teksnya (efek tooltip sekaligus label). -->
-									<div class="w-full lg:w-auto shrink-0 flex items-center justify-start lg:justify-end gap-1.5 overflow-visible">
+									<div class="w-full lg:w-auto shrink-0 flex flex-wrap items-center justify-start lg:justify-end gap-2 overflow-visible">
 										<button
 											type="button"
 											class={`expAction h-8 min-w-8 rounded-[5px] inline-flex items-center justify-center text-xs font-semibold transition-colors ${
@@ -2042,9 +2042,14 @@
 		   dari bawah angka total lalu memudar. Tujuan animasinya: memancing mata
 		   ke angka yang baru saja berubah setelah suatu aksi (R-19). */
 
-		/* Tombol aksi card: normal hanya ikon (min-w-8). Saat hover/fokus,
-		   label mengembang dari lebar 0 — sekaligus berfungsi sebagai tooltip. */
+		/* Tombol aksi card: normal hanya ikon (min-w-8, area klik 32x32). Saat
+		   hover/fokus, label mengembang dari lebar 0 dengan padding 8px kiri /
+		   14px kanan — berfungsi sekaligus sebagai label dan tooltip. */
+		.expAction {
+			box-sizing: border-box;
+		}
 		.expLabel {
+			box-sizing: border-box;
 			display: inline-flex;
 			align-items: center;
 			gap: 4px;
@@ -2060,8 +2065,8 @@
 		.expAction:focus-visible .expLabel {
 			max-width: 250px;
 			opacity: 1;
-			padding-left: 6px;
-			padding-right: 10px;
+			padding-left: 8px;
+			padding-right: 14px;
 		}
 		@media (prefers-reduced-motion: reduce) {
 			.expLabel { transition: none; }
