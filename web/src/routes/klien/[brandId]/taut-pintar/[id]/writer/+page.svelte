@@ -537,6 +537,9 @@
 			if (!finished) throw new Error(tr('Koneksi streaming terputus.'));
 			genState = { ...genState, [item.media_id]: 'draft' };
 			qcToken += 1;
+			// Penulisan/gambar AI di atas mengubah tagihan — segarkan data biaya
+			// supaya bar Total Tagihan Akhir berubah begitu generate selesai.
+			void load();
 			// Modal masih terbuka dan user belum menutupnya sendiri: ganti
 			// pratinjau streaming dengan artikel final dari server.
 			const wasOpen = editor?.mediaId === item.media_id && streamHtml !== null;
@@ -1577,6 +1580,7 @@
 			saving={editorSaving}
 			saveError={editorError}
 			onClose={() => { if (!editorSaving) editor = null; }}
+			onRefresh={() => void load()}
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveEditor(title, html, coverUrl, category, metaDescription)}
 			onUploadCover={uploadCover}
 			onUploadDoc={uploadDocNaskah}

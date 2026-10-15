@@ -41,6 +41,8 @@
 		saving = false,
 		saveError = null,
 		onClose,
+		/** Kaba writer bahwa ada aksi yang mengubah tagihan (mis. gambar AI) — bar biaya disegarkan. */
+		onRefresh,
 		onSave,
 		onUploadCover,
 		onUploadDoc,
@@ -73,6 +75,8 @@
 		saving?: boolean;
 		saveError?: string | null;
 		onClose: () => void;
+		/** Diberi tahu writer bahwa ada aksi yang mengubah tagihan (mis. gambar AI) — bar biaya disegarkan. */
+		onRefresh?: () => void;
 		onSave: (title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) => void;
 		onUploadCover: (file: File) => Promise<string>;
 		onUploadDoc: (file: File, onPhase?: (phase: 'extract' | 'clean') => void, links?: WriterLink[]) => Promise<{ title: string; html: string; warning?: string }>;
@@ -554,6 +558,9 @@
 				html = doc.body.innerHTML;
 				editorStats = { ...editorStats, images: (html.match(/<img\b/gi) ?? []).length };
 				h2Note = `${items.length} ${tr('gambar ditambahkan ke artikel.')}`;
+				// Setiap gambar AI ditagih saat dibuat — beri tahu writer agar bar
+				// Total Tagihan Akhir ikut diperbarui.
+				void onRefresh?.();
 			} catch (reason) {
 				h2Error = reason instanceof Error ? reason.message : tr('Gagal membuat gambar AI.');
 			} finally {
