@@ -1304,8 +1304,8 @@
 			</section>
 		{/if}
 
-			<!-- Banner Informasi Dapur Produksi -->
-			<div class="relative mt-4 overflow-hidden rounded-[5px] border border-blue-100/80 bg-gradient-to-r from-blue-50/70 via-slate-50/40 to-blue-50/40 p-5 shadow-2xs">
+				<!-- Banner Informasi Dapur Produksi -->
+				<div class="relative mt-4 overflow-hidden rounded-[5px] border border-blue-100/80 bg-gradient-to-r from-blue-50/70 via-slate-50/40 to-blue-50/40 py-5 pl-5 pr-3.5 shadow-2xs">
 				<div class="pointer-events-none absolute -right-2 -top-2 h-28 w-44 opacity-60">
 					<svg viewBox="0 0 160 120" fill="none" class="h-full w-full">
 						<path d="M110 20h30a6 6 0 0 1 6 6v70a6 6 0 0 1-6 6h-30a6 6 0 0 1-6-6V26a6 6 0 0 1 6-6z" fill="#93c5fd" fill-opacity="0.25" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="3 3"/>
@@ -1318,7 +1318,7 @@
 						<path d="M154 84l1.5 3 3 1.5-3 1.5-1.5 3-1.5-3-3-1.5 3-1.5 1.5-3z" fill="#93c5fd"/>
 					</svg>
 				</div>
-				<div class="relative z-10 flex flex-wrap items-center justify-between gap-3.5">
+				<div class="relative z-10 flex flex-wrap items-center justify-between gap-2.5">
 					<div class="flex items-center gap-3.5">
 						<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] border border-blue-200/70 bg-white text-blue-600 shadow-2xs">
 							<FileText size={20} class="stroke-[2.2]" />
@@ -1336,16 +1336,18 @@
 							</p>
 						</div>
 					</div>
-					{#if campaignName}
-						<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-[5px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={campaignName}>
-							<FileText size={13} class="shrink-0 text-slate-400" />
-							<span class="truncate">{campaignName}</span>
+					<div class="flex shrink-0 items-center gap-2">
+						{#if campaignName}
+							<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-[5px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={campaignName}>
+								<FileText size={13} class="shrink-0 text-slate-400" />
+								<span class="truncate">{campaignName}</span>
+							</span>
+						{/if}
+						<span class="inline-flex items-center gap-1.5 rounded-[5px] border border-emerald-200/80 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-700 shadow-2xs" title={tr('Saldo Anda')}>
+							<Wallet size={13} class="shrink-0 text-emerald-600" />
+							<span>{toRp(wallet)}</span>
 						</span>
-					{/if}
-					<span class="inline-flex items-center gap-1.5 rounded-[5px] border border-emerald-200/80 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-700 shadow-2xs" title={tr('Saldo Anda')}>
-						<Wallet size={13} class="shrink-0 text-emerald-600" />
-						<span>{toRp(wallet)}</span>
-					</span>
+					</div>
 				</div>
 			</div>
 
