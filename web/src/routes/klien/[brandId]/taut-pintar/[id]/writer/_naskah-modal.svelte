@@ -4,7 +4,7 @@
 	// artikel (cover, kategori, meta deskripsi) dan footer validasi.
 	// Reuse: rich-text-editor (toolbar + contentEditable), endpoint /files dan
 	// /produce/{mediaId} lewat callback dari writer, serta saveEditor di writer.
-	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, Info, Link2, Lightbulb, Plus } from '@lucide/svelte';
+	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, Info, Link2, Lightbulb, Plus } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { tr } from '$lib/i18n/phrases';
 	import { apiRequest, readApiError } from '$lib/auth';
@@ -113,6 +113,22 @@
 	let docWarning = $state('');
 	let genBusy = $state(false);
 	let genError = $state('');
+	// Panel progres generate. Tahap mengikuti kondisi nyata request yang sudah
+	// ada — respons /produce tidak membawa progres internal AI, jadi timeline
+	// disusun dari siklus request (kirim → menunggu respons → memproses hasil):
+	// tanpa persentase fiktif, tanpa interval palsu.
+	let genStage = $state(0); // 0 idle; 1 mengirim; 2 menunggu respons; 3 memproses
+	let genOutcome = $state<'idle' | 'success' | 'error'>('idle');
+	const GEN_STAGES = [
+		{ key: 'send', label: 'Mengirim permintaan', desc: 'Permintaan generate dikirim ke AI Writer.' },
+		{ key: 'wait', label: 'Menunggu respons AI', desc: 'AI sedang menulis artikel sesuai topik dan angle yang kamu pilih.' },
+		{ key: 'process', label: 'Memproses hasil', desc: 'Draf tersimpan diambil dan disiapkan di tab Tulis / Edit.' }
+	] as const;
+	const genStagePct = $derived.by(() => {
+		if (genOutcome === 'success') return 100;
+		if (genOutcome === 'error') return 0;
+		return Math.round(((genStage - 1) / GEN_STAGES.length) * 100);
+	});
 	let topic = $state('');
 	// Contoh prompt siap pakai: dibuka dari tombol di sebelah kanan label topik.
 	let topicHelpOpen = $state(false);
@@ -691,8 +707,12 @@
 		genBusy = true;
 		genError = '';
 		genNotice = '';
+		genOutcome = 'idle';
+		genStage = 1; // permintaan dikirim
 		try {
+			genStage = 2; // menunggu respons AI
 			const hasil = await onGenerate(topic.trim(), linkLimit > 0 ? payloadLinks : [], angleSlug);
+			genStage = 3; // memproses hasil (muat draf tersimpan + isi editor)
 			title = hasil.title || title;
 			if (hasil.imagesGenerated && hasil.imagesGenerated > 0) {
 				const kredit = hasil.imagesCostCredits ?? 0;
@@ -720,8 +740,10 @@
 				category = categoryOptions[0];
 				autoCategory = category;
 			}
+			genOutcome = 'success';
 		} catch (reason) {
 			genError = reason instanceof Error ? tr(reason.message) : tr('Gagal membuat draf AI.');
+			genOutcome = 'error';
 		} finally {
 			genBusy = false;
 			closeNotice = '';
@@ -1260,9 +1282,97 @@
 								disabled={genBusy || !topic.trim() || (linkLimit > 0 && !linksValid) || !angleReady}
 								onclick={generate}
 							>
-								{#if genBusy}<LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
-								{genBusy ? tr('Menyusun draf…') : tr('Buat Draf dengan AI')}
+								{#if genBusy}<Sparkles size={15} class="genSparkle" /><LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
+								{genBusy ? tr('Sedang membuat draf artikel...') : tr('Buat Draf dengan AI')}
 							</button>
+
+							{#if genBusy || genOutcome !== 'idle'}
+								<div class="genPanel mt-3" role="status" aria-live="polite">
+									<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+										<div class="min-w-0 flex-1">
+											<div class="flex items-start gap-2">
+												{#if genOutcome === 'error'}
+													<CircleAlert size={17} class="mt-0.5 shrink-0" style="color: var(--destructive);" />
+												{:else if genOutcome === 'success'}
+													<CircleCheck size={17} class="mt-0.5 shrink-0" style="color: var(--success);" />
+												{:else}
+													<LoaderCircle size={17} class="mt-0.5 shrink-0 animate-spin" style="color: var(--primary);" />
+												{/if}
+												<div class="min-w-0">
+													<p class="text-sm font-bold">
+														{genOutcome === 'error'
+															? tr('Gagal membuat draf artikel')
+															: genOutcome === 'success'
+																? tr('Draf artikel berhasil dibuat')
+																: tr('AI sedang menyusun draf artikel...')}
+													</p>
+													<p class="mt-0.5 text-xs text-muted-foreground">
+														{genOutcome === 'error'
+															? genError
+															: genOutcome === 'success'
+																? tr('Draf siap ditinjau di tab Tulis / Edit.')
+																: tr('Proses ini berjalan di server AI. Kamu bisa menunggu di halaman ini — draf akan muncul otomatis setelah selesai.')}
+													</p>
+												</div>
+											</div>
+
+											<!-- Bar progres: lebar mengikuti tahap nyata yang sedang berjalan,
+											     tanpa angka persentase karena backend tidak mengirimkannya. -->
+											<div class="genTrack mt-3" aria-hidden="true">
+												<div class="genFill" class:fillError={genOutcome === 'error'} style="width: {genStagePct}%"></div>
+											</div>
+
+											<ul class="mt-4 space-y-0">
+												{#each GEN_STAGES as s, i}
+													{@const done = genOutcome === 'success' || i < genStage - 1}
+													{@const active = genOutcome === 'idle' && i === genStage - 1}
+													{@const failed = genOutcome === 'error' && i === genStage - 1}
+													<li class="flex gap-2.5">
+														<div class="flex flex-col items-center">
+															{#if done}
+																<span class="genDot genDotDone"><CircleCheck size={13} /></span>
+															{:else if failed}
+																<span class="genDot genDotError"><CircleAlert size={13} /></span>
+															{:else if active}
+																<span class="genDot genDotActive"></span>
+															{:else}
+																<span class="genDot genDotPending"></span>
+															{/if}
+															{#if i < GEN_STAGES.length - 1}
+																<span class="genLine" class:genLineDone={done}></span>
+															{/if}
+														</div>
+														<div class="pb-3">
+															<p class="text-xs font-semibold" class:text-muted-foreground={!done && !active && !failed}>
+																{tr(s.label)}
+															</p>
+															<p class="mt-0.5 text-[11px] leading-snug text-muted-foreground">{tr(s.desc)}</p>
+														</div>
+													</li>
+												{/each}
+											</ul>
+
+											{#if genOutcome === 'error' && !genBusy}
+												<button class="app-btn app-btn-soft mt-1 !min-h-8 !px-3 !text-xs" type="button" onclick={generate}>
+													{tr('Coba lagi')}
+												</button>
+											{/if}
+										</div>
+
+										<!-- Info: di desktop jadi kolom kanan, di layar sempit turun ke bawah timeline. -->
+										<aside class="genInfo shrink-0">
+											<p class="flex items-center gap-1.5 text-xs font-bold">
+												<FileText size={13} class="shrink-0" style="color: var(--primary);" />
+												{tr('Draf akan muncul di tab Tulis / Edit')}
+											</p>
+											<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+												{tr('Setelah proses selesai, draf artikel akan tersedia untuk kamu tinjau sebelum disimpan.')}
+											</p>
+										</aside>
+									</div>
+								</div>
+							{/if}
+
 							<p class="mt-2 text-xs text-muted-foreground">
 								{tr('Draf akan tampil di tab Tulis / Edit untuk kamu tinjau sebelum disimpan.')}
 							</p>
@@ -1607,5 +1717,102 @@
 		flex: 1;
 		max-width: none;
 		text-align: left;
+	}
+
+	/* Panel progres generate AI: kartu putih-biru muda dengan radius 14px, muncul
+	   fade + slide-up singkat; timeline-nya mengikuti status request yang nyata. */
+	.genPanel {
+		border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+		border-radius: 14px;
+		background: color-mix(in srgb, var(--primary) 4%, var(--card, #fff));
+		padding: 18px;
+		box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+		animation: gen-panel-in 0.3s ease-out;
+	}
+	.genTrack {
+		height: 6px;
+		width: 100%;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--primary) 12%, var(--muted));
+		overflow: hidden;
+	}
+	.genFill {
+		height: 100%;
+		border-radius: 999px;
+		background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 60%, #67e8f9));
+		transition: width 300ms ease;
+	}
+	.genFill.fillError { background: var(--destructive); }
+	.genDot {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border-radius: 999px;
+		flex-shrink: 0;
+	}
+	.genDotDone {
+		color: var(--success);
+		background: color-mix(in srgb, var(--success) 14%, transparent);
+		animation: gen-dot-pop 0.25s ease-out;
+	}
+	.genDotError {
+		color: var(--destructive);
+		background: color-mix(in srgb, var(--destructive) 14%, transparent);
+	}
+	.genDotActive {
+		position: relative;
+		background: color-mix(in srgb, var(--primary) 22%, transparent);
+		animation: gen-dot-pulse 1.8s ease-in-out infinite;
+	}
+	.genDotActive::after {
+		content: '';
+		width: 8px;
+		height: 8px;
+		border-radius: 999px;
+		background: var(--primary);
+	}
+	.genDotPending { background: color-mix(in srgb, var(--muted-foreground) 18%, transparent); }
+	.genLine {
+		width: 2px;
+		flex: 1;
+		min-height: 18px;
+		margin: 2px 0;
+		background: color-mix(in srgb, var(--muted-foreground) 18%, transparent);
+		transition: background-color 300ms ease;
+	}
+	.genLine.genLineDone { background: color-mix(in srgb, var(--success) 55%, transparent); }
+	.genInfo {
+		width: 100%;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--card, #fff) 85%, transparent);
+		padding: 12px;
+	}
+	.genSparkle { animation: gen-sparkle 2.4s ease-in-out infinite; }
+	@keyframes gen-panel-in {
+		from { opacity: 0; transform: translateY(8px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+	@keyframes gen-dot-pop {
+		from { transform: scale(0.7); }
+		to { transform: scale(1); }
+	}
+	@keyframes gen-dot-pulse {
+		0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 32%, transparent); }
+		50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 0%, transparent); }
+	}
+	@keyframes gen-sparkle {
+		0%, 100% { opacity: 1; transform: scale(1); }
+		50% { opacity: 0.78; transform: scale(0.94); }
+	}
+	@media (min-width: 640px) {
+		.genPanel { padding: 22px; }
+		.genInfo { width: 15rem; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.genPanel, .genSparkle, .genDotDone, .genDotActive { animation: none; }
+		.genFill, .genLine { transition: none; }
 	}
 </style>
