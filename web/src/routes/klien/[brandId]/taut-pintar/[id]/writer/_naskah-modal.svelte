@@ -116,6 +116,9 @@
 	let topic = $state('');
 	// Contoh prompt siap pakai: dibuka dari tombol di sebelah kanan label topik.
 	let topicHelpOpen = $state(false);
+	// Tips menulis topik: dorong klien menulis prompt detail supaya artikelnya
+	// kaya data, dan jelaskan bahwa AI tidak mengarang fakta di luar bahan.
+	let topicTipsOpen = $state(false);
 	const TOPIC_EXAMPLES: { label: string; text: string }[] = [
 		{
 			label: 'Peluncuran produk (media mainstream)',
@@ -1077,15 +1080,27 @@
 									<label class="text-sm font-semibold" for="naskah-topik">
 										{tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
 									</label>
-									<span class="relative ml-auto">
-										<button
-											class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
-											type="button"
-											aria-expanded={topicHelpOpen}
-											onclick={() => (topicHelpOpen = !topicHelpOpen)}
-										>
-											<Lightbulb size={13} /> {tr('Contoh')}
-										</button>
+									<span class="ml-auto flex items-center gap-1.5">
+										<span class="relative">
+											<button
+												class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
+												type="button"
+												aria-expanded={topicTipsOpen}
+												onclick={() => (topicTipsOpen = !topicTipsOpen)}
+											>
+												<Info size={13} /> {tr('Tips')}
+											</button>
+										</span>
+										<span class="relative">
+											<button
+												class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
+												type="button"
+												aria-expanded={topicHelpOpen}
+												onclick={() => (topicHelpOpen = !topicHelpOpen)}
+											>
+												<Lightbulb size={13} /> {tr('Contoh')}
+											</button>
+										</span>
 									</span>
 								</div>
 								{#if topicHelpOpen}
@@ -1125,6 +1140,35 @@
 										<p class="mt-2 text-[11px] text-muted-foreground">
 											{tr('Tips: kamu bisa sekalian meminta jumlah gambar isi di dalam topik, misalnya "sertakan 4 gambar". Biayanya mengikuti tarif per gambar.')}
 										</p>
+									</div>
+								{/if}
+								{#if topicTipsOpen}
+									<button
+										class="fixed inset-0 z-20 cursor-default"
+										type="button"
+										aria-label={tr('Tutup tips')}
+										onclick={() => (topicTipsOpen = false)}
+									></button>
+									<div
+										class="relative z-30 mt-2 rounded-xl border p-3"
+										style="border-color: var(--border); background-color: var(--card); box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);"
+										role="dialog"
+										tabindex="-1"
+										aria-label={tr('Tips menulis topik')}
+										onkeydown={(e) => {
+											if (e.key === 'Escape') topicTipsOpen = false;
+										}}
+									>
+										<p class="flex items-center gap-1.5 text-xs font-semibold"><Info size={13} /> {tr('Tips menulis topik')}</p>
+										<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+											{tr('Semakin detail topik yang kamu tulis, semakin kaya data artikelnya. AI hanya memakai fakta dari brief dan bahan yang tersedia, dan tidak mengarang angka, tanggal, atau harga. Data penting seperti itu tulis langsung di topik.')}
+										</p>
+										<ul class="mt-2 list-disc space-y-1 pl-4 text-[11px] text-muted-foreground">
+											<li>{tr('Sebutkan produk atau fitur yang mau ditekankan beserta keunggulannya')}</li>
+											<li>{tr('Sertakan data faktual dari sumber resmi: tanggal, angka, harga, dan nama narasumber yang boleh dikutip')}</li>
+											<li>{tr('Tentukan sasaran pembaca dan panjang artikel, misalnya "minimal 1200 kata"')}</li>
+											<li>{tr('Minta jumlah gambar langsung di topik, misalnya "sertakan 3 gambar"')}</li>
+										</ul>
 									</div>
 								{/if}
 								<div class="relative mt-2">
