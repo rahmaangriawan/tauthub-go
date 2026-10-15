@@ -1556,20 +1556,20 @@
 											{@const qcCount = qcCounts[m.media_id] ?? 0}
 											<button
 												type="button"
-												class="expAction h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 text-xs font-semibold transition-colors"
+												class="expAction relative h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 text-xs font-semibold transition-colors"
 												title={qcCount > 0 ? `${tr('Analisis QC')} (${qcCount})` : tr('Analisis QC')}
 												disabled={bulkRunning}
 												onclick={() => (qcFor = m.media_id)}
 											>
 												<ListChecks size={13} strokeWidth={2} class="shrink-0" />
-												<span class="expLabel">
-													{tr('Analisis QC')}
-													<span
-														class="rounded-[5px] px-1 py-0.5 text-[10px] font-bold leading-none"
-														style={qcCount > 0 ? 'background-color: #2563eb; color: #fff;' : 'background-color: #e2e8f0; color: #64748b;'}
-													>
-														{qcCount > 0 ? qcCount : tr('Belum ada')}
-													</span>
+												<span class="expLabel">{tr('Analisis QC')}</span>
+												<!-- Angka QC nempel di pojok kanan atas pill, tetap tampil
+												     meski tombol sedang menciut jadi ikon saja. -->
+												<span
+													class="pointer-events-none absolute -right-1.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-[5px] px-1 text-[10px] font-bold leading-none ring-2 ring-white"
+													style={qcCount > 0 ? 'background-color: #2563eb; color: #fff;' : 'background-color: #e2e8f0; color: #64748b;'}
+												>
+													{qcCount > 0 ? qcCount : '0'}
 												</span>
 											</button>
 										{:else}
