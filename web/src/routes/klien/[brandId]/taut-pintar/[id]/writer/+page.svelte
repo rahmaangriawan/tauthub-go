@@ -1529,18 +1529,6 @@
 											<span class="expLabel">{tr('Cek Validasi')}</span>
 										</button>
 
-										<button
-											type="button"
-											class="expAction h-8 min-w-8 shrink-0 inline-flex items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-500 hover:text-white hover:bg-destructive hover:border-destructive transition-colors"
-											disabled={bulkRunning || removeBusy || viewOnly}
-											aria-label={tr('Hapus media dari kampanye')}
-											title={tr('Hapus media dari kampanye')}
-											onclick={() => { removeError = ''; removeTarget = m; }}
-										>
-											<Trash2 size={14} class="shrink-0" />
-											<span class="expLabel">{tr('Hapus media dari kampanye')}</span>
-										</button>
-
 										{#if hasDoc(m)}
 											<button
 												type="button"
@@ -1603,6 +1591,19 @@
 												<span class="expLabel">{tr('Unggah Artikel')}</span>
 											</button>
 										{/if}
+
+										<!-- Hapus: paling kanan, merah lembut (bukan destructive penuh). -->
+										<button
+											type="button"
+											class="expAction h-8 min-w-8 shrink-0 inline-flex items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition-colors"
+											disabled={bulkRunning || removeBusy || viewOnly}
+											aria-label={tr('Hapus media dari kampanye')}
+											title={tr('Hapus media dari kampanye')}
+											onclick={() => { removeError = ''; removeTarget = m; }}
+										>
+											<Trash2 size={14} class="shrink-0" />
+											<span class="expLabel">{tr('Hapus media dari kampanye')}</span>
+										</button>
 									</div>
 							</div>
 						</div>
