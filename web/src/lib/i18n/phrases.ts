@@ -3632,6 +3632,7 @@ export const PHRASE_EN: Record<string, string> = {
 	"data": "entries",
 	"Alternatif: verifikasi lewat DNS TXT": "Alternative: verify via DNS TXT",
 	"Blogger": "Blogger",
+	"Mainstream": "Mainstream",
 	"Impor massal belum terbuka": "Bulk import is not open yet",
 	"Impor massal terbuka setelah media pertama Anda disetujui admin dan domainnya terverifikasi.": "Bulk import opens once your first media is approved by an admin and its domain is verified.",
 	"Kalau sulit mengubah kode situs (atau situs diblokir WAF), tambahkan TXT record berikut di DNS domain utama tanpa www:": "If editing the site code is difficult (or the site is blocked by a WAF), add the following TXT record to the main domain's DNS without www:",

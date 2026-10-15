@@ -1261,7 +1261,15 @@
 									<FileText size={18} class="text-muted-foreground" />
 								</div>
 								<div class="min-w-0">
-									<p class="font-bold leading-tight">{mediaDomainLabel(m.website_url, m.name)}</p>
+									<div class="flex min-w-0 flex-wrap items-center gap-1.5">
+										<p class="font-bold leading-tight">{mediaDomainLabel(m.website_url, m.name)}</p>
+										{#if m.media_type}
+											<span
+												class="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+												style="background: {m.media_type === 'blogger' ? 'var(--warning-soft)' : 'var(--accent)'}; color: {m.media_type === 'blogger' ? 'var(--warning)' : 'var(--primary)'};"
+											>{m.media_type === 'blogger' ? tr('Blogger') : tr('Mainstream')}</span>
+										{/if}
+									</div>
 									<div class="mt-1 flex flex-wrap items-center gap-2">
 										<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={badge(statusTone(statusKind))}>
 											{#if statusKind === 'generating'}<LoaderCircle size={11} class="animate-spin" />
