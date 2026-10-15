@@ -1125,7 +1125,7 @@
 
 	<main class="w-full pb-32">
 		{#if viewOnly}
-			<div class="mb-4 flex flex-wrap items-center gap-2 rounded-[10px] border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-700">
+			<div class="mb-4 flex flex-wrap items-center gap-2 rounded-[5px] border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-700">
 				<span>{tr('Kampanye ini sudah selesai — mode lihat saja. Isinya tidak bisa diubah lagi.')}</span>
 				<a class="font-semibold text-blue-600 underline" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`}>{tr('Buka Ringkasan')}</a>
 			</div>
@@ -1134,7 +1134,7 @@
 		<!-- Header Halaman -->
 		<div class="flex flex-wrap items-center justify-between gap-4 pt-1">
 			<div class="flex items-center gap-3">
-				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-blue-600 text-white shadow-sm shadow-blue-500/20">
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] bg-blue-600 text-white shadow-sm shadow-blue-500/20">
 					<Pencil size={20} strokeWidth={2.4} />
 				</div>
 				<div>
@@ -1144,12 +1144,12 @@
 			</div>
 			<div class="flex flex-wrap items-center justify-end gap-2.5">
 				{#if campaignName}
-					<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-[10px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={campaignName}>
+					<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-[5px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={campaignName}>
 						<FileText size={13} class="shrink-0 text-slate-400" />
 						<span class="truncate">{campaignName}</span>
 					</span>
 				{/if}
-				<span class="inline-flex items-center gap-1.5 rounded-[10px] border border-emerald-200/80 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-700 shadow-2xs" title={tr('Saldo Anda')}>
+				<span class="inline-flex items-center gap-1.5 rounded-[5px] border border-emerald-200/80 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-700 shadow-2xs" title={tr('Saldo Anda')}>
 					<Wallet size={13} class="shrink-0 text-emerald-600" />
 					<span>{toRp(wallet)}</span>
 				</span>
@@ -1161,7 +1161,7 @@
 		</div>
 
 	{#if spokepersons.length > 0}
-		<div class="mt-3 rounded-[10px] border p-3" style="background-color: var(--muted);">
+		<div class="mt-3 rounded-[5px] border p-3" style="background-color: var(--muted);">
 			<p class="text-xs font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr("Kutipan Narasumber (dari The Profiler)")}</p>
 			<div class="mt-1 space-y-2">
 				{#each spokepersons as s, i (s.name + '-' + i)}
@@ -1214,7 +1214,7 @@
 			<section class="app-card mt-3 p-4" aria-label={tr("Mode pelacakan dan anchor text")}>
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<div class="flex items-center gap-2">
-						<span class="flex h-7 w-7 items-center justify-center rounded-lg" style="background-color: var(--accent); color: var(--accent-foreground);"><Link size={18} /></span>
+						<span class="flex h-7 w-7 items-center justify-center rounded-[5px]" style="background-color: var(--accent); color: var(--accent-foreground);"><Link size={18} /></span>
 						<p class="font-bold">{tr("Mode Pelacakan & Anchor Text")}</p>
 					</div>
 					<p class="text-xs" style="color: {linksStatus === 'error' ? 'var(--destructive)' : linksStatus === 'saving' ? 'var(--primary)' : linksStatus === 'dirty' ? 'var(--warning)' : 'var(--muted-foreground)'};">{linksStatusLabel()}</p>
@@ -1236,7 +1236,7 @@
 				<div class="mt-3 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label={tr('Mode pelacakan')}>
 					<button
 						type="button"
-						class="rounded-[10px] border p-3 text-left"
+						class="rounded-[5px] border p-3 text-left"
 						style="border-color: {links.tracking_mode === 'direct' ? 'var(--primary)' : 'var(--border)'}; background-color: {links.tracking_mode === 'direct' ? 'var(--accent)' : 'transparent'};"
 						role="radio" aria-checked={links.tracking_mode === 'direct'}
 						onclick={() => { trackingOn = false; patchLinks({ tracking_mode: 'direct' }); }}
@@ -1250,7 +1250,7 @@
 					{#if trackingOn}
 						<button
 							type="button"
-							class="rounded-[10px] border p-3 text-left"
+							class="rounded-[5px] border p-3 text-left"
 							style="border-color: {links.tracking_mode === 'tauthub' ? 'var(--primary)' : 'var(--border)'}; background-color: {links.tracking_mode === 'tauthub' ? 'var(--accent)' : 'transparent'};"
 							role="radio" aria-checked={links.tracking_mode === 'tauthub'}
 							onclick={() => patchLinks({ tracking_mode: 'tauthub' })}
@@ -1265,7 +1265,7 @@
 				</div>
 
 				<div class="mt-4 space-y-4">
-					<div class="rounded-[10px] border p-3" style="border-color: var(--primary);">
+					<div class="rounded-[5px] border p-3" style="border-color: var(--primary);">
 						<p class="flex items-center gap-2 text-sm font-bold" style="color: var(--primary);"><Link2 size={16} /> {tr('Tautan Utama (Prioritas 1)')}</p>
 						<div class="mt-3 grid gap-3 sm:grid-cols-2">
 							<label class="block">
@@ -1287,10 +1287,10 @@
 						{/if}
 					</div>
 
-					<div class="rounded-[10px] border p-3">
+					<div class="rounded-[5px] border p-3">
 						<div class="flex items-center justify-between">
 							<p class="flex items-center gap-2 text-sm font-bold text-muted-foreground"><Link2 size={16} /> {tr('Tautan Cadangan (Prioritas 2)')}</p>
-							<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={badge('muted')}>{tr("Opsional")}</span>
+							<span class="rounded-[5px] px-2 py-0.5 text-[10px] font-semibold" style={badge('muted')}>{tr("Opsional")}</span>
 						</div>
 						<p class="mt-1 text-xs text-muted-foreground">{tr("Hanya akan digunakan secara dinamis oleh AI pada media mitra yang mengizinkan penanaman")} <strong>{tr('Maksimal 2 Link')}</strong>.</p>
 						<div class="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1317,7 +1317,7 @@
 		{/if}
 
 			<!-- Banner Informasi Dapur Produksi -->
-			<div class="relative mt-4 overflow-hidden rounded-[10px] border border-blue-100/80 bg-gradient-to-r from-blue-50/70 via-slate-50/40 to-blue-50/40 p-5 shadow-2xs">
+			<div class="relative mt-4 overflow-hidden rounded-[5px] border border-blue-100/80 bg-gradient-to-r from-blue-50/70 via-slate-50/40 to-blue-50/40 p-5 shadow-2xs">
 				<div class="pointer-events-none absolute -right-2 -top-2 h-28 w-44 opacity-60">
 					<svg viewBox="0 0 160 120" fill="none" class="h-full w-full">
 						<path d="M110 20h30a6 6 0 0 1 6 6v70a6 6 0 0 1-6 6h-30a6 6 0 0 1-6-6V26a6 6 0 0 1 6-6z" fill="#93c5fd" fill-opacity="0.25" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="3 3"/>
@@ -1331,7 +1331,7 @@
 					</svg>
 				</div>
 				<div class="relative z-10 flex items-center gap-3.5">
-					<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border border-blue-200/70 bg-white text-blue-600 shadow-2xs">
+					<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] border border-blue-200/70 bg-white text-blue-600 shadow-2xs">
 						<FileText size={20} class="stroke-[2.2]" />
 					</div>
 					<div>
@@ -1351,7 +1351,7 @@
 
 			<!-- Daftar Media Terpilih -->
 			{#if selected.length === 0}
-				<div class="mt-4 rounded-[10px] border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-2xs">
+				<div class="mt-4 rounded-[5px] border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-2xs">
 					{tr("Belum ada media terpilih. Kembali ke Matchmaker untuk memilih media.")}
 				</div>
 			{:else}
@@ -1364,12 +1364,12 @@
 						{@const links2 = linkStats[m.media_id] ?? null}
 						{@const domain = cleanDomain(m.website_url, m.name)}
 						{@const av = avatarStyle(m.name)}
-						<div class="rounded-[10px] border border-slate-200/80 bg-white p-4.5 sm:p-5 shadow-2xs transition-all duration-200 hover:border-slate-300 hover:shadow-xs">
+						<div class="rounded-[5px] border border-slate-200/80 bg-white p-4.5 sm:p-5 shadow-2xs transition-all duration-200 hover:border-slate-300 hover:shadow-xs">
 							<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 								<!-- Kolom 1: Identitas Media -->
 								<div class="flex min-w-0 items-center gap-3.5 lg:w-[280px] shrink-0">
 									<div
-										class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] overflow-hidden shadow-2xs border border-slate-200/60 font-bold text-base"
+										class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] overflow-hidden shadow-2xs border border-slate-200/60 font-bold text-base"
 										style="background-color: {av.bg}; color: {av.text};"
 									>
 										{#if domain && !avatarFailed[m.media_id]}
@@ -1391,7 +1391,7 @@
 											</p>
 											{#if m.media_type}
 												<span
-													class="shrink-0 rounded-full border px-2 py-0.5 text-[9.5px] font-bold tracking-wider uppercase {m.media_type === 'blogger' ? 'border-amber-200/80 bg-amber-50 text-amber-700' : 'border-blue-200/80 bg-blue-50 text-blue-600'}"
+													class="shrink-0 rounded-[5px] border px-2 py-0.5 text-[9.5px] font-bold tracking-wider uppercase {m.media_type === 'blogger' ? 'border-amber-200/80 bg-amber-50 text-amber-700' : 'border-blue-200/80 bg-blue-50 text-blue-600'}"
 												>
 													{m.media_type === 'blogger' ? tr('Blogger') : tr('Mainstream')}
 												</span>
@@ -1400,60 +1400,60 @@
 
 										<div class="mt-1.5 flex flex-wrap items-center gap-1.5">
 											{#if statusKind === 'ready'}
-												<span class="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
 													<CircleCheck size={11} strokeWidth={2.2} />
 													<span>{tr('Siap Terbit')}</span>
 												</span>
 											{:else if statusKind === 'draft'}
-												<span class="inline-flex items-center gap-1 rounded-full border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
 													<FileText size={11} />
 													<span>{tr('Draft Tersedia')}</span>
 												</span>
 											{:else if statusKind === 'generating'}
-												<span class="inline-flex items-center gap-1 rounded-full border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-600">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-600">
 													<LoaderCircle size={11} class="animate-spin" />
 													<span>{tr('Generasi AI…')}</span>
 												</span>
 											{:else if statusKind === 'queued'}
-												<span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100/80 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/80 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
 													<Clock size={11} />
 													<span>{tr('Dalam Antrean…')}</span>
 												</span>
 											{:else if statusKind === 'blocked'}
-												<span class="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[11px] font-medium text-rose-700">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[11px] font-medium text-rose-700">
 													<X size={11} />
 													<span>{tr('Diblokir')}</span>
 												</span>
 											{:else}
-												<span class="inline-flex items-center gap-1 rounded-full border border-slate-200/70 bg-slate-100/80 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200/70 bg-slate-100/80 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
 													<Clock size={11} />
 													<span>{tr('Menunggu Artikel')}</span>
 												</span>
 											{/if}
 
 											{#if !mediaAllowsLink(m)}
-												<span class="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-500">
+												<span class="rounded-[5px] border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-500">
 													{tr('Tidak Tersedia Backlink')}
 												</span>
 											{:else if links2}
 												{#if links2.sponsored > 0}
-													<span class="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+													<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
 														<PencilLine size={10.5} />
 														<span>{links2.sponsored} Sponsored</span>
 													</span>
 												{/if}
 												{#if links2.dofollow > 0}
-													<span class="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+													<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
 														<PencilLine size={10.5} />
 														<span>{links2.dofollow} Dofollow</span>
 													</span>
 												{/if}
-												<span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
 													<span class="h-1.5 w-1.5 rounded-full border border-slate-400"></span>
 													<span>{links2.nofollow} Nofollow</span>
 												</span>
 											{:else}
-												<span class="inline-flex items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-800">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-800">
 													<PencilLine size={10.5} />
 													<span>{m.label_sponsor === 'ada_sponsor' ? 'Sponsored' : 'Dofollow'} (Maks. {m.max_links != null && m.max_links > 0 ? m.max_links : 1})</span>
 												</span>
@@ -1486,7 +1486,7 @@
 									<div class="flex items-center gap-3 shrink-0">
 										<!-- Thumbnail cover: di mobile & tablet diperbesar supaya gambarnya
 										     terbaca jelas; ukuran desktop tetap seperti desain awal. -->
-										<div class="h-24 w-36 sm:h-30 sm:w-44 lg:h-13 lg:w-18 shrink-0 overflow-hidden rounded-[10px] border border-slate-200/80 bg-slate-100/70 flex items-center justify-center">
+										<div class="h-24 w-36 sm:h-30 sm:w-44 lg:h-13 lg:w-18 shrink-0 overflow-hidden rounded-[5px] border border-slate-200/80 bg-slate-100/70 flex items-center justify-center">
 											{#if hasDoc(m) && articleStats[m.media_id]?.cover}
 												<img src={articleStats[m.media_id].cover} alt="Cover" class="h-full w-full object-cover" />
 											{:else}
@@ -1525,7 +1525,7 @@
 									<div class="flex items-center gap-2">
 										<button
 											type="button"
-											class={`flex-1 h-8 px-3 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-all ${
+											class={`flex-1 h-8 px-3 rounded-[5px] text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-all ${
 												hasDoc(m)
 													? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
 													: 'bg-blue-50/90 hover:bg-blue-100 text-blue-600 border border-blue-200/80'
@@ -1539,7 +1539,7 @@
 
 										<button
 											type="button"
-											class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-white hover:bg-destructive hover:border-destructive transition-colors"
+											class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-500 hover:text-white hover:bg-destructive hover:border-destructive transition-colors"
 											disabled={bulkRunning || removeBusy || viewOnly}
 											aria-label={tr('Hapus media dari kampanye')}
 											title={tr('Hapus media dari kampanye')}
@@ -1554,7 +1554,7 @@
 										{#if hasDoc(m)}
 											<button
 												type="button"
-												class="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												class="flex-1 h-8 px-2.5 rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
 												disabled={bulkRunning}
 												onclick={() => void openPreview(m)}
 											>
@@ -1565,14 +1565,14 @@
 											{@const qcCount = qcCounts[m.media_id] ?? 0}
 											<button
 												type="button"
-												class="flex-1 h-8 px-2 rounded-lg border border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												class="flex-1 h-8 px-2 rounded-[5px] border border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
 												disabled={bulkRunning}
 												onclick={() => (qcFor = m.media_id)}
 											>
 												<ShieldCheck size={13} strokeWidth={2} />
 												<span>{tr('Analisis QC')}</span>
 												<span
-													class="rounded-full px-1.5 py-0.2 text-[10px] font-bold leading-none"
+													class="rounded-[5px] px-1.5 py-0.2 text-[10px] font-bold leading-none"
 													style={qcCount > 0 ? 'background-color: #2563eb; color: #fff;' : 'background-color: #e2e8f0; color: #64748b;'}
 												>
 													{qcCount > 0 ? qcCount : tr('Belum ada')}
@@ -1581,7 +1581,7 @@
 										{:else}
 											<button
 												type="button"
-												class="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												class="flex-1 h-8 px-2 rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
 												disabled={generating || bulkRunning || viewOnly}
 												onclick={() => openNaskahGenerate(m)}
 											>
@@ -1599,7 +1599,7 @@
 
 											<button
 												type="button"
-												class="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												class="flex-1 h-8 px-2 rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
 												disabled={bulkRunning || viewOnly}
 												onclick={() => openNaskahUpload(m)}
 											>
@@ -1617,13 +1617,13 @@
 
 			{#if removeTarget}
 				<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.55);" role="presentation" onclick={(e) => { if (e.target === e.currentTarget && !removeBusy) removeTarget = null; }}>
-					<div class="flex w-full max-w-md flex-col overflow-hidden rounded-[10px] border shadow-2xl" style="border-color: var(--border); background-color: var(--card, #fff);" role="dialog" aria-modal="true" tabindex="-1" aria-label={tr('Hapus Media dari Kampanye')} onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape' && !removeBusy) removeTarget = null; }}>
+					<div class="flex w-full max-w-md flex-col overflow-hidden rounded-[5px] border shadow-2xl" style="border-color: var(--border); background-color: var(--card, #fff);" role="dialog" aria-modal="true" tabindex="-1" aria-label={tr('Hapus Media dari Kampanye')} onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape' && !removeBusy) removeTarget = null; }}>
 						<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
 							<div class="flex items-center gap-2.5 text-sm font-bold" style="color: var(--destructive);">
 								<Trash2 size={18} />
 								<span>{tr('Hapus Media dari Kampanye?')}</span>
 							</div>
-							<button class="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary" type="button" aria-label={tr('Tutup')} disabled={removeBusy} onclick={() => (removeTarget = null)}>
+							<button class="rounded-[5px] p-1.5 text-muted-foreground hover:bg-secondary" type="button" aria-label={tr('Tutup')} disabled={removeBusy} onclick={() => (removeTarget = null)}>
 								<X size={16} />
 							</button>
 						</div>
@@ -1632,7 +1632,7 @@
 							<p class="text-xs leading-relaxed text-muted-foreground">
 								{tr('Media ini akan dilepas dari kampanye (tidak dihapus permanen). Artikel dan datanya tetap tersimpan, jadi bisa dipakai lagi nanti.')}
 							</p>
-							<p class="rounded-lg p-2.5 text-xs leading-relaxed" style="background-color: var(--muted, #f8fafc); color: var(--foreground);">
+							<p class="rounded-[5px] p-2.5 text-xs leading-relaxed" style="background-color: var(--muted, #f8fafc); color: var(--foreground);">
 								{tr('Untuk mengaktifkan kembali media ini, buka The Matchmaker dan pilih ulang medianya.')}
 							</p>
 							{#if removeError}
@@ -1673,7 +1673,7 @@
 						<!-- Kolom Kiri: Total Tagihan Akhir -->
 						<div class="relative inline-flex items-center">
 							<button
-								class="flex items-center gap-3 rounded-[10px] border border-emerald-200/90 bg-emerald-50/70 hover:bg-emerald-50/90 px-4 py-2 text-left transition-colors cursor-pointer"
+								class="flex items-center gap-3 rounded-[5px] border border-emerald-200/90 bg-emerald-50/70 hover:bg-emerald-50/90 px-4 py-2 text-left transition-colors cursor-pointer"
 								type="button"
 								aria-expanded={costPopoverOpen}
 								onmouseenter={() => (costPopoverOpen = true)}
@@ -1682,7 +1682,7 @@
 								onblur={() => { if (!costPinned) costPopoverOpen = false; }}
 								onclick={() => { costPinned = !costPinned; costPopoverOpen = costPinned; }}
 							>
-								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-emerald-100/90 text-emerald-700">
+								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[5px] bg-emerald-100/90 text-emerald-700">
 									<Wallet size={18} strokeWidth={2.2} />
 								</div>
 								<div>
@@ -1772,8 +1772,8 @@
 
 						<!-- Kolom Kanan: Tombol Aksi -->
 						<div class="flex items-center gap-2.5">
-							<button class="h-10 px-5 rounded-[10px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar`)}>{tr('Kembali')}</button>
-							<button class="h-10 px-5 rounded-[10px] bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold inline-flex items-center gap-2 shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
+							<button class="h-10 px-5 rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar`)}>{tr('Kembali')}</button>
+							<button class="h-10 px-5 rounded-[5px] bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold inline-flex items-center gap-2 shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
 								{#if coverChecking || distributing}<LoaderCircle size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
 								<span>{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
 							</button>
@@ -1855,7 +1855,7 @@
 		onClose={() => (publishOpen = false)}
 	>
 		<div class="space-y-3">
-			<div class="rounded-[10px] border p-3">
+			<div class="rounded-[5px] border p-3">
 				<p class="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Waktu Terbit per Media')}</p>
 				<p class="mt-1 text-[11px] text-muted-foreground">{tr('Atur satu per satu: biarkan "Sekarang" untuk terbit langsung, atau pilih tanggal untuk menjadwalkan media itu saja.')}</p>
 				<!-- Daftar ini punya area gulir sendiri: dengan puluhan media, bloknya tidak
@@ -1863,7 +1863,7 @@
 				<div class="mt-2 max-h-[42vh] space-y-2 overflow-y-auto pr-1">
 					{#each selected as m (m.media_id)}
 						{@const at = scheduleByMedia[m.media_id] ?? ''}
-						<div class="rounded-lg border p-2">
+						<div class="rounded-[5px] border p-2">
 							<div class="flex items-center justify-between gap-2">
 								<span class="min-w-0 flex-1 truncate text-[13px] font-semibold">{m.name}</span>
 								<span class="shrink-0 text-[11px] font-medium" style="color: {at ? 'var(--primary)' : 'var(--success)'};">{at ? tr('Terjadwal') : tr('Langsung')}</span>
@@ -1892,7 +1892,7 @@
 			<!-- Pemeriksaan cover + ringkasan biaya ditaruh di kaki panel: bagian ini
 			     tidak ikut tergulir, jadi selalu terlihat tepat di atas tombol. -->
 			<div class="w-full space-y-2">
-				<div class="rounded-[10px] border p-3">
+				<div class="rounded-[5px] border p-3">
 					<p class="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Pemeriksaan Cover')}</p>
 					{#if missingCovers.length === 0}
 						<p class="mt-1.5 flex items-center gap-1.5 text-sm" style="color: var(--success);"><CircleCheck size={14} /> {tr('Semua artikel sudah punya cover.')}</p>
@@ -1906,7 +1906,7 @@
 					{/if}
 				</div>
 
-				<div class="rounded-[10px] border p-3 text-sm">
+				<div class="rounded-[5px] border p-3 text-sm">
 					<div class="flex items-center justify-between gap-2"><span class="text-muted-foreground">{tr('Media terpilih')}</span><span class="font-semibold">{cost.count} {tr('Media')}</span></div>
 					<div class="mt-1 flex items-center justify-between gap-2"><span class="text-muted-foreground">{tr('Waktu terbit')}</span><span class="font-medium">{cost.count - scheduledCount} {tr('langsung')} · {scheduledCount} {tr('terjadwal')}</span></div>
 					<div class="mt-1 flex items-center justify-between gap-2"><span class="text-muted-foreground">{tr('Total tagihan')}</span><span class="font-bold">{toRp(cost.total)}</span></div>
@@ -2002,7 +2002,7 @@
 			z-index: 40;
 			width: 300px;
 			padding: 12px 14px;
-			border-radius: 10px;
+			border-radius: 5px;
 			border: 1px solid var(--border);
 			background: var(--card);
 			box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
@@ -2057,7 +2057,7 @@
 		.billDelta {
 			display: inline-flex;
 			padding: 3px 9px;
-			border-radius: 999px;
+			border-radius: 5px;
 			font-size: 12.5px;
 			font-weight: 800;
 			white-space: nowrap;
@@ -2117,7 +2117,7 @@
 			font-weight: 500;
 			padding: 8px 18px;
 			min-height: 40px;
-			border-radius: 8px;
+			border-radius: 5px;
 			cursor: pointer;
 			outline: none;
 			transition: all 0.12s ease;
@@ -2138,7 +2138,7 @@
 			font-weight: 600;
 			padding: 9px 20px;
 			min-height: 40px;
-			border-radius: 8px;
+			border-radius: 5px;
 			border: none;
 			cursor: pointer;
 			outline: none;
