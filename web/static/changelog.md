@@ -19,6 +19,13 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.5.3 — 2026-10-15
+
+### Fitur
+- Di kolom Topik & Konteks kini ada tombol Tips di samping tombol Contoh, yang membuka panel cara menulis topik yang baik: tulis detail produk dan datanya, sebutkan angka, harga, tanggal, dan narasumber dari sumber resmi, serta tentukan target pembaca, panjang artikel, dan jumlah gambar. Intinya: artikel yang kaya data lahir dari topik yang kaya data, dan AI tidak mengarang fakta di luar bahan.
+- Tombol Tips ini tampil untuk semua angle di media mainstream, dan juga di media blogger yang memilih angle Review Produk, Cerita Pengalaman/Studi Kasus, Unboxing, atau Liputan Acara/Event Komunitas. Media blogger dengan angle lain tetap tanpa tombolnya.
+- Panel tips muncul sebagai popover melayang di bawah tombolnya tanpa mendorong isi jendela, dan otomatis membuka ke atas ketika tombolnya berada terlalu dekat dasar layar supaya tidak terpotong.
+
 ## v0.5.2 — 2026-10-15
 
 ### Fitur
