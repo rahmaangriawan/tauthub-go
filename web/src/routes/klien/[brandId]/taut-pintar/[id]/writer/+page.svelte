@@ -2058,7 +2058,7 @@
 		}
 		.expAction:hover .expLabel,
 		.expAction:focus-visible .expLabel {
-			max-width: 150px;
+			max-width: 250px;
 			opacity: 1;
 			padding-left: 6px;
 			padding-right: 10px;
