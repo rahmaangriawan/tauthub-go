@@ -1125,7 +1125,7 @@
 
 	<main class="w-full pb-32">
 		{#if viewOnly}
-			<div class="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-700">
+			<div class="mb-4 flex flex-wrap items-center gap-2 rounded-[10px] border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-700">
 				<span>{tr('Kampanye ini sudah selesai — mode lihat saja. Isinya tidak bisa diubah lagi.')}</span>
 				<a class="font-semibold text-blue-600 underline" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`}>{tr('Buka Ringkasan')}</a>
 			</div>
@@ -1134,7 +1134,7 @@
 		<!-- Header Halaman -->
 		<div class="flex flex-wrap items-center justify-between gap-4 pt-1">
 			<div class="flex items-center gap-3">
-				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-500/20">
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-blue-600 text-white shadow-sm shadow-blue-500/20">
 					<Pencil size={20} strokeWidth={2.4} />
 				</div>
 				<div>
@@ -1144,12 +1144,12 @@
 			</div>
 			<div class="flex flex-wrap items-center justify-end gap-2.5">
 				{#if campaignName}
-					<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={campaignName}>
+					<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-[10px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={campaignName}>
 						<FileText size={13} class="shrink-0 text-slate-400" />
 						<span class="truncate">{campaignName}</span>
 					</span>
 				{/if}
-				<span class="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-700 shadow-2xs" title={tr('Saldo Anda')}>
+				<span class="inline-flex items-center gap-1.5 rounded-[10px] border border-emerald-200/80 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-700 shadow-2xs" title={tr('Saldo Anda')}>
 					<Wallet size={13} class="shrink-0 text-emerald-600" />
 					<span>{toRp(wallet)}</span>
 				</span>
@@ -1236,7 +1236,7 @@
 				<div class="mt-3 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label={tr('Mode pelacakan')}>
 					<button
 						type="button"
-						class="rounded-xl border p-3 text-left"
+						class="rounded-[10px] border p-3 text-left"
 						style="border-color: {links.tracking_mode === 'direct' ? 'var(--primary)' : 'var(--border)'}; background-color: {links.tracking_mode === 'direct' ? 'var(--accent)' : 'transparent'};"
 						role="radio" aria-checked={links.tracking_mode === 'direct'}
 						onclick={() => { trackingOn = false; patchLinks({ tracking_mode: 'direct' }); }}
@@ -1250,7 +1250,7 @@
 					{#if trackingOn}
 						<button
 							type="button"
-							class="rounded-xl border p-3 text-left"
+							class="rounded-[10px] border p-3 text-left"
 							style="border-color: {links.tracking_mode === 'tauthub' ? 'var(--primary)' : 'var(--border)'}; background-color: {links.tracking_mode === 'tauthub' ? 'var(--accent)' : 'transparent'};"
 							role="radio" aria-checked={links.tracking_mode === 'tauthub'}
 							onclick={() => patchLinks({ tracking_mode: 'tauthub' })}
@@ -1265,7 +1265,7 @@
 				</div>
 
 				<div class="mt-4 space-y-4">
-					<div class="rounded-xl border p-3" style="border-color: var(--primary);">
+					<div class="rounded-[10px] border p-3" style="border-color: var(--primary);">
 						<p class="flex items-center gap-2 text-sm font-bold" style="color: var(--primary);"><Link2 size={16} /> {tr('Tautan Utama (Prioritas 1)')}</p>
 						<div class="mt-3 grid gap-3 sm:grid-cols-2">
 							<label class="block">
@@ -1287,7 +1287,7 @@
 						{/if}
 					</div>
 
-					<div class="rounded-xl border p-3">
+					<div class="rounded-[10px] border p-3">
 						<div class="flex items-center justify-between">
 							<p class="flex items-center gap-2 text-sm font-bold text-muted-foreground"><Link2 size={16} /> {tr('Tautan Cadangan (Prioritas 2)')}</p>
 							<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={badge('muted')}>{tr("Opsional")}</span>
@@ -1317,7 +1317,7 @@
 		{/if}
 
 			<!-- Banner Informasi Dapur Produksi -->
-			<div class="relative mt-4 overflow-hidden rounded-2xl border border-blue-100/80 bg-gradient-to-r from-blue-50/70 via-slate-50/40 to-blue-50/40 p-5 shadow-2xs">
+			<div class="relative mt-4 overflow-hidden rounded-[10px] border border-blue-100/80 bg-gradient-to-r from-blue-50/70 via-slate-50/40 to-blue-50/40 p-5 shadow-2xs">
 				<div class="pointer-events-none absolute -right-2 -top-2 h-28 w-44 opacity-60">
 					<svg viewBox="0 0 160 120" fill="none" class="h-full w-full">
 						<path d="M110 20h30a6 6 0 0 1 6 6v70a6 6 0 0 1-6 6h-30a6 6 0 0 1-6-6V26a6 6 0 0 1 6-6z" fill="#93c5fd" fill-opacity="0.25" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="3 3"/>
@@ -1331,7 +1331,7 @@
 					</svg>
 				</div>
 				<div class="relative z-10 flex items-center gap-3.5">
-					<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-200/70 bg-white text-blue-600 shadow-2xs">
+					<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border border-blue-200/70 bg-white text-blue-600 shadow-2xs">
 						<FileText size={20} class="stroke-[2.2]" />
 					</div>
 					<div>
@@ -1351,7 +1351,7 @@
 
 			<!-- Daftar Media Terpilih -->
 			{#if selected.length === 0}
-				<div class="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-2xs">
+				<div class="mt-4 rounded-[10px] border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-2xs">
 					{tr("Belum ada media terpilih. Kembali ke Matchmaker untuk memilih media.")}
 				</div>
 			{:else}
@@ -1364,12 +1364,12 @@
 						{@const links2 = linkStats[m.media_id] ?? null}
 						{@const domain = cleanDomain(m.website_url, m.name)}
 						{@const av = avatarStyle(m.name)}
-						<div class="rounded-2xl border border-slate-200/80 bg-white p-4.5 sm:p-5 shadow-2xs transition-all duration-200 hover:border-slate-300 hover:shadow-xs">
+						<div class="rounded-[10px] border border-slate-200/80 bg-white p-4.5 sm:p-5 shadow-2xs transition-all duration-200 hover:border-slate-300 hover:shadow-xs">
 							<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 								<!-- Kolom 1: Identitas Media -->
 								<div class="flex min-w-0 items-center gap-3.5 lg:w-[280px] shrink-0">
 									<div
-										class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl overflow-hidden shadow-2xs border border-slate-200/60 font-bold text-base"
+										class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] overflow-hidden shadow-2xs border border-slate-200/60 font-bold text-base"
 										style="background-color: {av.bg}; color: {av.text};"
 									>
 										{#if domain && !avatarFailed[m.media_id]}
@@ -1484,7 +1484,7 @@
 
 								<!-- Kolom 3: Cover & Metadata -->
 								<div class="flex items-center gap-3 shrink-0">
-									<div class="h-12 w-16 sm:h-13 sm:w-18 shrink-0 overflow-hidden rounded-xl border border-slate-200/80 bg-slate-100/70 flex items-center justify-center">
+									<div class="h-12 w-16 sm:h-13 sm:w-18 shrink-0 overflow-hidden rounded-[10px] border border-slate-200/80 bg-slate-100/70 flex items-center justify-center">
 										{#if hasDoc(m) && articleStats[m.media_id]?.cover}
 											<img src={articleStats[m.media_id].cover} alt="Cover" class="h-full w-full object-cover" />
 										{:else}
@@ -1615,7 +1615,7 @@
 
 			{#if removeTarget}
 				<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.55);" role="presentation" onclick={(e) => { if (e.target === e.currentTarget && !removeBusy) removeTarget = null; }}>
-					<div class="flex w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl" style="border-color: var(--border); background-color: var(--card, #fff);" role="dialog" aria-modal="true" tabindex="-1" aria-label={tr('Hapus Media dari Kampanye')} onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape' && !removeBusy) removeTarget = null; }}>
+					<div class="flex w-full max-w-md flex-col overflow-hidden rounded-[10px] border shadow-2xl" style="border-color: var(--border); background-color: var(--card, #fff);" role="dialog" aria-modal="true" tabindex="-1" aria-label={tr('Hapus Media dari Kampanye')} onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape' && !removeBusy) removeTarget = null; }}>
 						<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
 							<div class="flex items-center gap-2.5 text-sm font-bold" style="color: var(--destructive);">
 								<Trash2 size={18} />
@@ -1671,7 +1671,7 @@
 						<!-- Kolom Kiri: Total Tagihan Akhir -->
 						<div class="relative inline-flex items-center">
 							<button
-								class="flex items-center gap-3 rounded-2xl border border-emerald-200/90 bg-emerald-50/70 hover:bg-emerald-50/90 px-4 py-2 text-left transition-colors cursor-pointer"
+								class="flex items-center gap-3 rounded-[10px] border border-emerald-200/90 bg-emerald-50/70 hover:bg-emerald-50/90 px-4 py-2 text-left transition-colors cursor-pointer"
 								type="button"
 								aria-expanded={costPopoverOpen}
 								onmouseenter={() => (costPopoverOpen = true)}
@@ -1680,7 +1680,7 @@
 								onblur={() => { if (!costPinned) costPopoverOpen = false; }}
 								onclick={() => { costPinned = !costPinned; costPopoverOpen = costPinned; }}
 							>
-								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100/90 text-emerald-700">
+								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-emerald-100/90 text-emerald-700">
 									<Wallet size={18} strokeWidth={2.2} />
 								</div>
 								<div>
@@ -1770,8 +1770,8 @@
 
 						<!-- Kolom Kanan: Tombol Aksi -->
 						<div class="flex items-center gap-2.5">
-							<button class="h-10 px-5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar`)}>{tr('Kembali')}</button>
-							<button class="h-10 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold inline-flex items-center gap-2 shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
+							<button class="h-10 px-5 rounded-[10px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors" type="button" onclick={() => goto(`/klien/${brandUrl}/taut-pintar`)}>{tr('Kembali')}</button>
+							<button class="h-10 px-5 rounded-[10px] bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold inline-flex items-center gap-2 shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
 								{#if coverChecking || distributing}<LoaderCircle size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
 								<span>{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
 							</button>
@@ -1853,7 +1853,7 @@
 		onClose={() => (publishOpen = false)}
 	>
 		<div class="space-y-3">
-			<div class="rounded-xl border p-3">
+			<div class="rounded-[10px] border p-3">
 				<p class="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Waktu Terbit per Media')}</p>
 				<p class="mt-1 text-[11px] text-muted-foreground">{tr('Atur satu per satu: biarkan "Sekarang" untuk terbit langsung, atau pilih tanggal untuk menjadwalkan media itu saja.')}</p>
 				<!-- Daftar ini punya area gulir sendiri: dengan puluhan media, bloknya tidak
@@ -1890,7 +1890,7 @@
 			<!-- Pemeriksaan cover + ringkasan biaya ditaruh di kaki panel: bagian ini
 			     tidak ikut tergulir, jadi selalu terlihat tepat di atas tombol. -->
 			<div class="w-full space-y-2">
-				<div class="rounded-xl border p-3">
+				<div class="rounded-[10px] border p-3">
 					<p class="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Pemeriksaan Cover')}</p>
 					{#if missingCovers.length === 0}
 						<p class="mt-1.5 flex items-center gap-1.5 text-sm" style="color: var(--success);"><CircleCheck size={14} /> {tr('Semua artikel sudah punya cover.')}</p>
@@ -1904,7 +1904,7 @@
 					{/if}
 				</div>
 
-				<div class="rounded-xl border p-3 text-sm">
+				<div class="rounded-[10px] border p-3 text-sm">
 					<div class="flex items-center justify-between gap-2"><span class="text-muted-foreground">{tr('Media terpilih')}</span><span class="font-semibold">{cost.count} {tr('Media')}</span></div>
 					<div class="mt-1 flex items-center justify-between gap-2"><span class="text-muted-foreground">{tr('Waktu terbit')}</span><span class="font-medium">{cost.count - scheduledCount} {tr('langsung')} · {scheduledCount} {tr('terjadwal')}</span></div>
 					<div class="mt-1 flex items-center justify-between gap-2"><span class="text-muted-foreground">{tr('Total tagihan')}</span><span class="font-bold">{toRp(cost.total)}</span></div>
@@ -2000,7 +2000,7 @@
 			z-index: 40;
 			width: 300px;
 			padding: 12px 14px;
-			border-radius: 14px;
+			border-radius: 10px;
 			border: 1px solid var(--border);
 			background: var(--card);
 			box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
