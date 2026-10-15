@@ -119,6 +119,29 @@
 	// Tips menulis topik: dorong klien menulis prompt detail supaya artikelnya
 	// kaya data, dan jelaskan bahwa AI tidak mengarang fakta di luar bahan.
 	let topicTipsOpen = $state(false);
+	// Popover kondisional: kalau tombol tepat di dekat dasar viewport, panelnya
+	// membuka ke atas supaya tidak terpotong dasar layar. Tinggi panel dipakai
+	// sebagai perkiraan saat mengukur ruang — panelnya sendiri tetap diposisikan
+	// CSS (top/bottom), jadi tidak perlu hitung piksel saat render.
+	let tipsBtnEl = $state<HTMLButtonElement | undefined>(undefined);
+	let tipsUp = $state(false);
+	const TIPS_PANEL_ESTIMATE = 250;
+	function toggleTips() {
+		if (topicTipsOpen) {
+			topicTipsOpen = false;
+			return;
+		}
+		const r = tipsBtnEl?.getBoundingClientRect();
+		// Buka ke atas hanya kalau ruang di bawah tombol kurang dari perkiraan
+		// tinggi panel DAN sisi atasnya lebih lega; bila keduanya pas-pasan,
+		// arah bawah dianggap lebih aman (termasuk tergulir di dalam modal).
+		if (r) {
+			const below = window.innerHeight - r.bottom;
+			const above = r.top;
+			tipsUp = below < TIPS_PANEL_ESTIMATE && above > below;
+		}
+		topicTipsOpen = true;
+	}
 	const TOPIC_EXAMPLES: { label: string; text: string }[] = [
 		{
 			label: 'Peluncuran produk (media mainstream)',
@@ -1087,10 +1110,11 @@
 										{#if tipsAvailable}
 											<span class="relative">
 											<button
-												class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
+												bind:this={tipsBtnEl}
+												class={`app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]`}
 												type="button"
 												aria-expanded={topicTipsOpen}
-												onclick={() => (topicTipsOpen = !topicTipsOpen)}
+												onclick={toggleTips}
 											>
 												<Info size={13} /> {tr('Tips')}
 											</button>
@@ -1102,7 +1126,7 @@
 													onclick={() => (topicTipsOpen = false)}
 												></button>
 												<div
-													class="absolute right-0 top-[calc(100%+8px)] z-30 w-[min(420px,calc(100vw-48px))] rounded-xl border p-3"
+													class={`absolute right-0 z-30 w-[min(420px,calc(100vw-48px))] rounded-xl border p-3 ${tipsUp ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'}`}
 													style="border-color: var(--border); background-color: var(--card); box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);"
 													role="dialog"
 													tabindex="-1"
