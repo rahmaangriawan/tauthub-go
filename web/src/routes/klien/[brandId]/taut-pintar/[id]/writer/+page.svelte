@@ -873,6 +873,35 @@
 		return `${tr('Rincian:')} ${costDetail}`;
 	});
 
+	// Umpan balik perubahan tagihan: begitu total berubah, chip delta mengapung
+	// di atas angkanya lalu naik dan memudar. Hijau = naik, merah = turun.
+	// Selama data awal masih dimuat, total pindah 0 → nilai penuh tanpa aksi
+	// apa pun dan TIDAK boleh dianimasikan: karena itu baseline diambil dari
+	// snapshot pertama setelah data siap (hydrated), baru selisih dihitung.
+	// prevTotalShown sengaja non-reaktif: hanya buku besar pembanding, bukan
+	// tampilan, agar tidak memicu ulang efeknya sendiri.
+	let billDelta = $state<{ id: number; delta: number } | null>(null);
+	let billDeltaSeq = 0;
+	let deltaBaselineSeen = false;
+	let prevTotalShown: number | null = null;
+	$effect(() => {
+		const now = cost.total;
+		if (!hydrated || !Number.isFinite(now)) return;
+		const prev = prevTotalShown;
+		if (!deltaBaselineSeen) {
+			deltaBaselineSeen = true;
+			prevTotalShown = now;
+			return;
+		}
+		if (prev === null || prev === now) {
+			prevTotalShown = now;
+			return;
+		}
+		prevTotalShown = now;
+		billDeltaSeq += 1;
+		billDelta = { id: billDeltaSeq, delta: now - prev };
+	});
+
 	const editorMedia = $derived.by(() => {
 		const current = editor;
 		if (!current) return null;
@@ -1454,6 +1483,16 @@
 							<span class="selectedStatPriceVal selectedStatTotalVal">{toRp(cost.total)}</span>
 						</button>
 
+						{#if billDelta}
+							{#key billDelta.id}
+								<span class="billDeltaWrap" aria-hidden="true">
+									<span class="billDelta" class:down={billDelta.delta < 0}>
+										{billDelta.delta > 0 ? '+' : '-'}{toRp(Math.abs(billDelta.delta))}
+									</span>
+								</span>
+							{/key}
+						{/if}
+
 						{#if costPopoverOpen}
 							{#if costPinned}
 								<button
@@ -1796,6 +1835,50 @@
 			text-align: left;
 		}
 		.selectedStatItemTotal .selectedStatLabel { color: var(--success); }
+		/* Chip delta tagihan: memunculkan selisih (+ hijau / - merah) yang naik
+		   dari bawah angka total lalu memudar. Tujuan animasinya: memancing mata
+		   ke angka yang baru saja berubah setelah suatu aksi (R-19). */
+		.billDeltaWrap {
+			position: absolute;
+			left: 50%;
+			bottom: calc(100% + 10px);
+			transform: translateX(-50%);
+			pointer-events: none;
+			z-index: 5;
+		}
+		.billDelta {
+			display: inline-flex;
+			padding: 3px 9px;
+			border-radius: 999px;
+			font-size: 12.5px;
+			font-weight: 800;
+			white-space: nowrap;
+			color: var(--success);
+			background-color: var(--success-soft, #e8f5ee);
+			box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+			animation: bill-delta-rise 1.6s ease-out forwards;
+		}
+		.billDelta.down {
+			color: var(--destructive);
+			background-color: var(--destructive-soft, #fdecee);
+		}
+		@keyframes bill-delta-rise {
+			0% { opacity: 0; transform: translateY(12px); }
+			18% { opacity: 1; transform: translateY(0); }
+			65% { opacity: 1; transform: translateY(-7px); }
+			100% { opacity: 0; transform: translateY(-16px); }
+		}
+		@media (prefers-reduced-motion: reduce) {
+			/* Tanpa gerakan: chip tetap tampil-teruntai khas animasi langsung
+			   naik-turun, cukup memudar pelan di tempat. */
+			.billDelta { animation-name: bill-delta-fade; }
+			@keyframes bill-delta-fade {
+				0% { opacity: 0; }
+				20% { opacity: 1; }
+				70% { opacity: 1; }
+				100% { opacity: 0; }
+			}
+		}
 		.selectedStatTotalVal {
 			font-size: 19px;
 			font-weight: 800;
