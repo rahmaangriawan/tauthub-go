@@ -153,9 +153,13 @@
 		}
 	];
 	let angleSlug = $state(untrack(() => initialAngleSlug));
-	// Tombol Tips hanya untuk media mainstream (semua angle) — media blogger
-	// punya gaya tulis santai bawaan sehingga tips ini tidak relevan di sana.
-	const tipsAvailable = $derived(mediaType === 'mainstream');
+	// Tombol Tips: selalu ada untuk media mainstream (semua angle), dan muncul
+	// juga untuk angle review/pengalaman di media mana pun ia tersedia —
+	// termasuk media blogger yang memilih salah satu angle itu. Pembanding
+	// memakai slug (bukan nama tampilan) supaya perubahan nama dari admin
+	// tidak mematikan tombolnya. Sumber slug: taut_content_angles.
+	const TIPS_ANGLE_SLUGS = new Set(['product_review', 'success_case', 'unboxing', 'community_event']);
+	const tipsAvailable = $derived(mediaType === 'mainstream' || TIPS_ANGLE_SLUGS.has(angleSlug));
 	const selectedAngle = $derived(angleOptions.find((a) => a.slug === angleSlug));
 	const angleSelectOptions = $derived(angleOptions.map((a) => ({ value: a.slug, label: tr(a.name) })));
 	const angleReady = $derived(!anglesLoading && !anglesError && !!selectedAngle);
