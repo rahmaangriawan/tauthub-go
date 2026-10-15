@@ -130,6 +130,9 @@
 		}
 	];
 	let angleSlug = $state(untrack(() => initialAngleSlug));
+	// Tombol Tips hanya untuk media mainstream (semua angle) — media blogger
+	// punya gaya tulis santai bawaan sehingga tips ini tidak relevan di sana.
+	const tipsAvailable = $derived(mediaType === 'mainstream');
 	const selectedAngle = $derived(angleOptions.find((a) => a.slug === angleSlug));
 	const angleSelectOptions = $derived(angleOptions.map((a) => ({ value: a.slug, label: tr(a.name) })));
 	const angleReady = $derived(!anglesLoading && !anglesError && !!selectedAngle);
@@ -1081,7 +1084,8 @@
 										{tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
 									</label>
 									<span class="ml-auto flex items-center gap-1.5">
-										<span class="relative">
+										{#if tipsAvailable}
+											<span class="relative">
 											<button
 												class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
 												type="button"
@@ -1118,9 +1122,10 @@
 														<li>{tr('Minta jumlah gambar langsung di topik, misalnya "sertakan 3 gambar"')}</li>
 													</ul>
 												</div>
+												{/if}
+											</span>
 											{/if}
-										</span>
-										<span class="relative">
+											<span class="relative">
 											<button
 												class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
 												type="button"
