@@ -2043,10 +2043,19 @@
 		   ke angka yang baru saja berubah setelah suatu aksi (R-19). */
 
 		/* Tombol aksi card: normal hanya ikon (min-w-8, area klik 32x32). Saat
-		   hover/fokus, label mengembang dari lebar 0 dengan padding 8px kiri /
-		   14px kanan — berfungsi sekaligus sebagai label dan tooltip. */
+		   hover/fokus, tombol mengembang: padding 12px kiri + 14px kanan supaya
+		   ikon tidak menempel tepi pill, label menyusul dengan jarak 8px. */
 		.expAction {
 			box-sizing: border-box;
+			padding-left: 0;
+			padding-right: 0;
+			transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+				padding-left 0.2s ease, padding-right 0.2s ease;
+		}
+		.expAction:hover,
+		.expAction:focus-visible {
+			padding-left: 12px;
+			padding-right: 14px;
 		}
 		.expLabel {
 			box-sizing: border-box;
@@ -2058,15 +2067,13 @@
 			overflow: hidden;
 			white-space: nowrap;
 			padding-left: 0;
-			padding-right: 0;
-			transition: max-width 0.2s ease, opacity 0.15s ease, padding-left 0.2s ease, padding-right 0.2s ease;
+			transition: max-width 0.2s ease, opacity 0.15s ease, padding-left 0.2s ease;
 		}
 		.expAction:hover .expLabel,
 		.expAction:focus-visible .expLabel {
 			max-width: 250px;
 			opacity: 1;
 			padding-left: 8px;
-			padding-right: 14px;
 		}
 		@media (prefers-reduced-motion: reduce) {
 			.expLabel { transition: none; }
