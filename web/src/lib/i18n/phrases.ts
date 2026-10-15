@@ -3870,7 +3870,6 @@ export const PHRASE_EN: Record<string, string> = {
 	"Terbitkan & Jadwalkan": "Publish & Schedule",
 	"Terbitkan Kampanye": "Publish Campaign",
 	"Terbitkan Sekarang": "Publish Now",
-	"QC belum lulus. Jalankan Cek Validasi sekarang untuk melihat hasil detail setiap artikel.": "QC has not passed. Run validation check now to see detailed results for each article.",
 	"Hapus dari kampanye": "Remove from campaign",
 	"Aksi tambahan": "More actions",
 	"Tutup menu": "Close menu",
