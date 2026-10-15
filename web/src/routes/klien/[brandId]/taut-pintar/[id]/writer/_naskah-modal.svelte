@@ -1339,7 +1339,10 @@
 																<span class="genDot genDotPending"></span>
 															{/if}
 															{#if i < GEN_STAGES.length - 1}
-																<span class="genLine" class:genLineDone={done}></span>
+																<!-- Garis terisi hijau saat tahap selesai; saat tahap
+																     sedang berjalan, aliran gradasi biru mengalir turun
+																     menandai proses yang benar-benar aktif. -->
+																<span class="genLine" class:genLineDone={done} class:genLineActive={active}></span>
 															{/if}
 														</div>
 														<div class="pb-3">
@@ -1358,17 +1361,6 @@
 												</button>
 											{/if}
 										</div>
-
-										<!-- Info: di desktop jadi kolom kanan, di layar sempit turun ke bawah timeline. -->
-										<aside class="genInfo shrink-0">
-											<p class="flex items-center gap-1.5 text-xs font-bold">
-												<FileText size={13} class="shrink-0" style="color: var(--primary);" />
-												{tr('Draf akan muncul di tab Tulis / Edit')}
-											</p>
-											<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-												{tr('Setelah proses selesai, draf artikel akan tersedia untuk kamu tinjau sebelum disimpan.')}
-											</p>
-										</aside>
 									</div>
 								</div>
 							{/if}
@@ -1783,12 +1775,12 @@
 		transition: background-color 300ms ease;
 	}
 	.genLine.genLineDone { background: color-mix(in srgb, var(--success) 55%, transparent); }
-	.genInfo {
-		width: 100%;
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		background: color-mix(in srgb, var(--card, #fff) 85%, transparent);
-		padding: 12px;
+	/* Tahap berjalan: garis timeline mengalir turun (bukan pajangan statis). */
+	.genLine.genLineActive {
+		background: linear-gradient(180deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 20%, transparent) 70%, transparent 100%);
+		background-size: 100% 26px;
+		background-repeat: no-repeat;
+		animation: gen-line-flow 1.6s linear infinite;
 	}
 	.genSparkle { animation: gen-sparkle 2.4s ease-in-out infinite; }
 	@keyframes gen-panel-in {
@@ -1803,16 +1795,19 @@
 		0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 32%, transparent); }
 		50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 0%, transparent); }
 	}
+	@keyframes gen-line-flow {
+		0% { background-position: 0 -26px; }
+		100% { background-position: 0 0; }
+	}
 	@keyframes gen-sparkle {
 		0%, 100% { opacity: 1; transform: scale(1); }
 		50% { opacity: 0.78; transform: scale(0.94); }
 	}
 	@media (min-width: 640px) {
 		.genPanel { padding: 22px; }
-		.genInfo { width: 15rem; }
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.genPanel, .genSparkle, .genDotDone, .genDotActive { animation: none; }
+		.genPanel, .genSparkle, .genDotDone, .genDotActive, .genLine.genLineActive { animation: none; }
 		.genFill, .genLine { transition: none; }
 	}
 </style>
