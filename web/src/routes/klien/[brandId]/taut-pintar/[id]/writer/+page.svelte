@@ -1520,95 +1520,99 @@
 								</div>
 
 								<!-- Kolom 4: Area Aksi (2x2) -->
-								<div class="w-full lg:w-[260px] shrink-0 flex flex-col gap-2">
-									<!-- Baris 1: Cek Validasi & Hapus -->
-									<div class="flex items-center gap-2">
+								<!-- Aksi: satu baris ikon; saat hover tombol mengembang memunculkan
+								     teksnya (efek tooltip sekaligus label). -->
+									<div class="w-full lg:w-auto shrink-0 flex items-center justify-start lg:justify-end gap-1.5 overflow-visible">
 										<button
 											type="button"
-											class={`flex-1 h-8 px-3 rounded-[5px] text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-all ${
+											class={`expAction h-8 min-w-8 rounded-[5px] inline-flex items-center justify-center text-xs font-semibold transition-colors ${
 												hasDoc(m)
 													? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
 													: 'bg-blue-50/90 hover:bg-blue-100 text-blue-600 border border-blue-200/80'
 											}`}
+											title={tr('Cek Validasi')}
 											disabled={bulkRunning || viewOnly}
 											onclick={() => (checklistFor = m.media_id)}
 										>
-											<ShieldCheck size={14} strokeWidth={2.2} />
-											<span>{tr('Cek Validasi')}</span>
+											<ShieldCheck size={14} strokeWidth={2.2} class="shrink-0" />
+											<span class="expLabel">{tr('Cek Validasi')}</span>
 										</button>
 
 										<button
 											type="button"
-											class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-500 hover:text-white hover:bg-destructive hover:border-destructive transition-colors"
+											class="expAction h-8 min-w-8 shrink-0 inline-flex items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-500 hover:text-white hover:bg-destructive hover:border-destructive transition-colors"
 											disabled={bulkRunning || removeBusy || viewOnly}
 											aria-label={tr('Hapus media dari kampanye')}
 											title={tr('Hapus media dari kampanye')}
 											onclick={() => { removeError = ''; removeTarget = m; }}
 										>
-											<Trash2 size={14} />
+											<Trash2 size={14} class="shrink-0" />
+											<span class="expLabel">{tr('Hapus media dari kampanye')}</span>
 										</button>
-									</div>
 
-									<!-- Baris 2: Edit/QC atau Generate/Unggah -->
-									<div class="flex items-center gap-2">
 										{#if hasDoc(m)}
 											<button
 												type="button"
-												class="flex-1 h-8 px-2.5 rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												class="expAction h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors"
+												title={tr('Edit Artikel')}
 												disabled={bulkRunning}
 												onclick={() => void openPreview(m)}
 											>
-												<Pencil size={12} strokeWidth={2} />
-												<span>{tr('Edit Artikel')}</span>
+												<Pencil size={12} strokeWidth={2} class="shrink-0" />
+												<span class="expLabel">{tr('Edit Artikel')}</span>
 											</button>
 
 											{@const qcCount = qcCounts[m.media_id] ?? 0}
 											<button
 												type="button"
-												class="flex-1 h-8 px-2 rounded-[5px] border border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												class="expAction h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 text-xs font-semibold transition-colors"
+												title={qcCount > 0 ? `${tr('Analisis QC')} (${qcCount})` : tr('Analisis QC')}
 												disabled={bulkRunning}
 												onclick={() => (qcFor = m.media_id)}
 											>
-												<ShieldCheck size={13} strokeWidth={2} />
-												<span>{tr('Analisis QC')}</span>
-												<span
-													class="rounded-[5px] px-1.5 py-0.2 text-[10px] font-bold leading-none"
-													style={qcCount > 0 ? 'background-color: #2563eb; color: #fff;' : 'background-color: #e2e8f0; color: #64748b;'}
-												>
-													{qcCount > 0 ? qcCount : tr('Belum ada')}
+												<ListChecks size={13} strokeWidth={2} class="shrink-0" />
+												<span class="expLabel">
+													{tr('Analisis QC')}
+													<span
+														class="rounded-[5px] px-1 py-0.5 text-[10px] font-bold leading-none"
+														style={qcCount > 0 ? 'background-color: #2563eb; color: #fff;' : 'background-color: #e2e8f0; color: #64748b;'}
+													>
+														{qcCount > 0 ? qcCount : tr('Belum ada')}
+													</span>
 												</span>
 											</button>
 										{:else}
 											<button
 												type="button"
-												class="flex-1 h-8 px-2 rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												class="expAction h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors"
+												title={generating ? tr('Membuat…') : tr('Generate Konten')}
 												disabled={generating || bulkRunning || viewOnly}
 												onclick={() => openNaskahGenerate(m)}
 											>
 												{#if generating}
-													<LoaderCircle size={12} class="animate-spin text-blue-600" />
-													<span class="truncate">{tr('Membuat…')}</span>
+													<LoaderCircle size={12} class="animate-spin text-blue-600 shrink-0" />
+													<span class="expLabel">{tr('Membuat…')}</span>
 												{:else if queued}
-													<Clock size={12} class="text-slate-400" />
-													<span class="truncate">{tr('Mengantre…')}</span>
+													<Clock size={12} class="text-slate-400 shrink-0" />
+													<span class="expLabel">{tr('Mengantre…')}</span>
 												{:else}
-													<Sparkles size={12} class="text-slate-500" />
-													<span class="truncate">{tr('Generate Konten')}</span>
+													<Sparkles size={12} class="text-slate-500 shrink-0" />
+													<span class="expLabel">{tr('Generate Konten')}</span>
 												{/if}
 											</button>
 
 											<button
 												type="button"
-												class="flex-1 h-8 px-2 rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+												class="expAction h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors"
+												title={tr('Unggah Artikel')}
 												disabled={bulkRunning || viewOnly}
 												onclick={() => openNaskahUpload(m)}
 											>
-												<Upload size={12} strokeWidth={2} class="text-slate-500" />
-												<span class="truncate">{tr('Unggah Artikel')}</span>
+												<Upload size={12} strokeWidth={2} class="text-slate-500 shrink-0" />
+												<span class="expLabel">{tr('Unggah Artikel')}</span>
 											</button>
 										{/if}
 									</div>
-								</div>
 							</div>
 						</div>
 					{/each}
@@ -2043,9 +2047,33 @@
 			color: var(--success);
 		}
 
-			/* Chip delta tagihan: memunculkan selisih (+ hijau / - merah) yang naik
-			   dari bawah angka total lalu memudar. Tujuan animasinya: memancing mata
-			   ke angka yang baru saja berubah setelah suatu aksi (R-19). */
+		/* Chip delta tagihan: memunculkan selisih (+ hijau / - merah) yang naik
+		   dari bawah angka total lalu memudar. Tujuan animasinya: memancing mata
+		   ke angka yang baru saja berubah setelah suatu aksi (R-19). */
+
+		/* Tombol aksi card: normal hanya ikon (min-w-8). Saat hover/fokus,
+		   label mengembang dari lebar 0 — sekaligus berfungsi sebagai tooltip. */
+		.expLabel {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			max-width: 0;
+			opacity: 0;
+			overflow: hidden;
+			white-space: nowrap;
+			padding-left: 0;
+			transition: max-width 0.2s ease, opacity 0.15s ease, padding-left 0.2s ease;
+		}
+		.expAction:hover .expLabel,
+		.expAction:focus-visible .expLabel {
+			max-width: 150px;
+			opacity: 1;
+			padding-left: 6px;
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.expLabel { transition: none; }
+		}
+
 		.billDeltaWrap {
 			position: absolute;
 			left: 50%;
