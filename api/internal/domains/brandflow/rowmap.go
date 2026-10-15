@@ -65,6 +65,11 @@ func (m bsRow) num(key string) (float64, bool) {
 		return float64(t), true
 	case int32:
 		return float64(t), true
+	// int16: kolom smallint (da, pa, spam_score, ai_trust_score) — tanpa cabang
+	// ini semua kolom smallint terbaca 0/null di seluruh API (DA ringkasan nol,
+	// AI Trust kosong) padahal isinya ada.
+	case int16:
+		return float64(t), true
 	case int:
 		return float64(t), true
 	case pgtype.Numeric:

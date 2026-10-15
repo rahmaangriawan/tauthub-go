@@ -76,6 +76,10 @@ func (m rowMap) num(key string) (float64, bool) {
 		return float64(t), true
 	case int32:
 		return float64(t), true
+	// int16: kolom smallint (da, pa, spam_score, ai_trust_score) — tanpa cabang
+	// ini nilainya terbaca 0/null (DA media 0 di daftar) padahal terisi di DB.
+	case int16:
+		return float64(t), true
 	case int:
 		return float64(t), true
 	case pgtype.Numeric:

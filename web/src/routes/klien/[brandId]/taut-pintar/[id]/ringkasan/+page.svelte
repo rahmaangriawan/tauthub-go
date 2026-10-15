@@ -420,7 +420,7 @@
 							<tr class="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
 								<th class="px-3 py-2 font-semibold">{tr("Media")}</th>
 								<th class="px-3 py-2 font-semibold">Tipe</th>
-								<th class="px-3 py-2 font-semibold">DA / SS</th>
+								<th class="px-3 py-2 font-semibold">DA</th>
 								<th class="px-3 py-2 font-semibold">Link Artikel</th>
 								<th class="px-3 py-2 font-semibold">{tr("Jadwal Terbit")}</th>
 								<th class="px-3 py-2 font-semibold">Judul Artikel</th>
@@ -440,10 +440,10 @@
 									<td class="px-3 py-2">
 										{#if m.media_type}<span class="rounded-full px-2 py-0.5 text-[11px]" style="background-color: var(--accent); color: var(--accent-foreground);">{m.media_type}</span>{:else}—{/if}
 									</td>
-									<td class="px-3 py-2">{m.da != null ? m.da : '—'}{m.ss != null ? ` / ${m.ss}%` : ''}</td>
+									<td class="px-3 py-2">{m.da != null ? m.da : '—'}</td>
 									<td class="px-3 py-2">
 										{#if m.article.links.count > 0}
-											<span class="text-xs">{m.article.links.count} link{m.article.links.rels.length > 0 ? ` · ${m.article.links.rels.join(', ')}` : ' · tanpa rel'}</span>
+											<span class="text-xs">{m.article.links.count} link{m.article.links.rels.length > 0 ? ` · ${m.article.links.rels.join(', ')}` : ' dofollow'}</span>
 										{:else}
 											<span class="text-xs text-muted-foreground">{tr("Tidak ada link")}</span>
 										{/if}
