@@ -1124,7 +1124,7 @@
 
 	<PageTitle title="Taut Pintar — Penyedia Konten" />
 
-	<main class="mx-auto max-w-7xl pb-32">
+	<main class="w-full pb-32">
 		{#if viewOnly}
 			<div class="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-100/70 px-4 py-2.5 text-xs text-slate-700">
 				<span>{tr('Kampanye ini sudah selesai — mode lihat saja. Isinya tidak bisa diubah lagi.')}</span>
@@ -1463,8 +1463,8 @@
 									</div>
 								</div>
 
-								<!-- Kolom 2: Informasi Artikel -->
-								<div class="min-w-0 flex-1 lg:max-w-[340px]">
+								<!-- Kolom 2: Informasi Artikel (mengisi sisa lebar, tanpa batas atas) -->
+								<div class="min-w-0 flex-1">
 									{#if articleTitles[m.media_id]}
 										<div>
 											<p class="text-[11px] font-medium text-slate-400 mb-0.5">{tr('Judul Artikel')}</p>
