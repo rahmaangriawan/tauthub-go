@@ -1,7 +1,11 @@
 package clientread
 
 import (
+	"fmt"
+	"math"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -9,7 +13,39 @@ import (
 
 // Port v1/brands/[brandId]/credits/route.ts + invoices/route.ts (read-only).
 
+// ledgerCampaignExpr: SQL yang menormalkan PEMILIK KAMPANYE tiap entri ledger.
+// - reserve/capture/release memakai id publikasi sebagai ref_id → dipetakan
+//   lewat join `publications p`.
+// - charge AI/Taut Pintar memakai prefiks ref_id: "taut-writer:{campaign}:…",
+//   "taut-writer-regen:{campaign}:…", "ai-image:{campaign}:…", dan
+//   "profiler-{campaign}-{hash}" (campaign = UUID 36 karakter setelah prefiks).
+// - entri lain (topup, koreksi admin, legacy tanpa ref_id) → NULL = tanpa
+//   kampanye; ditampilkan sebagai grup terpisah di UI.
+const ledgerCampaignExpr = `(CASE
+		WHEN e.ref_id LIKE 'taut-writer:%' THEN split_part(e.ref_id, ':', 2)
+		WHEN e.ref_id LIKE 'taut-writer-regen:%' THEN split_part(e.ref_id, ':', 2)
+		WHEN e.ref_id LIKE 'ai-image:%' THEN split_part(e.ref_id, ':', 2)
+		WHEN e.ref_id LIKE 'profiler-%' THEN substring(e.ref_id from 10 for 36)
+		WHEN p.id IS NOT NULL THEN p.campaign_id::text
+		ELSE NULL
+	END)`
+
+// ledgerSpentExpr: biaya yang BENAR-BENAR terpakai per entri — konsisten
+// dengan warna baris di UI (merah): capture (tagihan publikasi, tandanya bisa
+// +/− tergantung alur) dan adjustment negatif (tulis artikel/gambar AI/regen).
+// reserve (dana ditahan) dan release (pengembalian) TIDAK dihitung terpakai.
+const ledgerSpentExpr = `(CASE
+		WHEN e.ref_type = 'capture' THEN ABS(e.amount_tc)
+		WHEN e.ref_type = 'adjustment' AND e.amount_tc < 0 THEN -e.amount_tc
+		ELSE 0
+	END)`
+
 // Credits: GET /v1/brands/{brandId}/credits — wallet + ledger + transaksi.
+// Param opsional:
+//   - group_by=campaign → kembalikan `ledger_groups` (agregat per kampanye,
+//     lengkap lintas halaman) alih-alih daftar entri mentah.
+//   - campaign_id=<uuid|none> → filter daftar entri ke satu kampanye (untuk
+//     tampilan rincian saat grup diklik).
 func (d *Deps) Credits(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
 	if user == nil {
@@ -25,6 +61,8 @@ func (d *Deps) Credits(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit := clampInt(q.Get("limit"), 50, 1, 500)
 	offset := clampInt(q.Get("offset"), 0, 0, 1<<30)
+	campaignFilter := strings.TrimSpace(q.Get("campaign_id"))
+	groupByCampaign := strings.TrimSpace(q.Get("group_by")) == "campaign"
 
 	// Wallet (credit_wallets + tc_config.rate_idr) — parity walletSummary.
 	available, reserved, captured := 0, 0, 0
@@ -40,9 +78,24 @@ func (d *Deps) Credits(w http.ResponseWriter, r *http.Request) {
 	_ = d.Pool.QueryRow(r.Context(), "SELECT topup_packages FROM tc_config LIMIT 1").Scan(&topupPackages)
 
 	// Ledger (credit_ledger_entries + join dokumen/media/publikasi).
+	// Filter campaign_id: "none" = entri tanpa kampanye (topup/koreksi admin).
+	campaignWhere := ""
+	countCampaignWhere := ""
+	countArgs := []any{brandID}
+	ledgerArgs := []any{brandID, limit, offset}
+	if campaignFilter == "none" {
+		campaignWhere = " AND " + ledgerCampaignExpr + " IS NULL"
+		countCampaignWhere = campaignWhere
+	} else if campaignFilter != "" {
+		campaignWhere = fmt.Sprintf(" AND %s = $4", ledgerCampaignExpr)
+		countCampaignWhere = fmt.Sprintf(" AND %s = $2", ledgerCampaignExpr)
+		countArgs = append(countArgs, campaignFilter)
+		ledgerArgs = append(ledgerArgs, campaignFilter)
+	}
 	var ledgerTotal int
 	_ = d.Pool.QueryRow(r.Context(),
-		"SELECT COUNT(*) FROM credit_ledger_entries WHERE brand_id = $1", brandID).Scan(&ledgerTotal)
+		"SELECT COUNT(*) FROM credit_ledger_entries e LEFT JOIN publications p ON p.id = e.ref_id WHERE e.brand_id = $1"+countCampaignWhere,
+		countArgs...).Scan(&ledgerTotal)
 	ledger := []map[string]any{}
 	lRows, lErr := d.Pool.Query(r.Context(), `
 		SELECT e.id, e.ref_type, e.ref_id, e.amount_tc, e.balance_after_tc, e.rate_idr, e.amount_idr, e.reason,
@@ -51,8 +104,8 @@ func (d *Deps) Credits(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN publications p ON p.id = e.ref_id
 		LEFT JOIN content_documents d ON d.id = p.document_id
 		LEFT JOIN media m ON m.id = p.media_id
-		WHERE e.brand_id = $1
-		ORDER BY e.created_at DESC LIMIT $2 OFFSET $3`, brandID, limit, offset)
+		WHERE e.brand_id = $1`+campaignWhere+`
+		ORDER BY e.created_at DESC LIMIT $2 OFFSET $3`, ledgerArgs...)
 	if lErr == nil {
 		defer lRows.Close()
 		for lRows.Next() {
@@ -71,6 +124,57 @@ func (d *Deps) Credits(w http.ResponseWriter, r *http.Request) {
 					"reason": reason, "document_title": documentTitle, "media_name": mediaName,
 					"publication_status": pubStatus, "created_at": isoMilli(createdAt),
 				})
+			}
+		}
+	}
+
+	// Agregat per kampanye (group_by=campaign): dasar tampilan "rincian
+	// penggunaan saldo per kampanye". Angka terpakai memakai ledgerSpentExpr —
+	// semantik yang sama dengan warna merah di tabel entri.
+	ledgerGroups := []map[string]any{}
+	ledgerGroupsTotal := 0
+	if groupByCampaign {
+		_ = d.Pool.QueryRow(r.Context(),
+			"SELECT COUNT(*) FROM (SELECT 1 FROM credit_ledger_entries e LEFT JOIN publications p ON p.id = e.ref_id WHERE e.brand_id = $1 GROUP BY "+ledgerCampaignExpr+") t",
+			brandID).Scan(&ledgerGroupsTotal)
+		gRows, gErr := d.Pool.Query(r.Context(), `
+			SELECT COALESCE(sub.campaign_id, '') AS campaign_id,
+			       COALESCE(c.name, '') AS campaign_name,
+			       COUNT(*) AS entries,
+			       COALESCE(SUM(sub.spent_tc), 0) AS spent_tc,
+			       COALESCE(SUM(sub.net_tc), 0) AS net_tc,
+			       COALESCE(SUM(sub.held_tc), 0) AS held_tc,
+			       MAX(sub.created_at) AS last_at
+			FROM (
+				SELECT `+ledgerCampaignExpr+` AS campaign_id,
+				       `+ledgerSpentExpr+` AS spent_tc,
+				       e.amount_tc AS net_tc,
+				       CASE WHEN e.ref_type = 'reserve' THEN -e.amount_tc
+				            WHEN e.ref_type = 'release' THEN -e.amount_tc
+				            WHEN e.ref_type = 'capture' AND e.amount_tc > 0 THEN -e.amount_tc
+				            ELSE 0 END AS held_tc,
+				       e.created_at
+				FROM credit_ledger_entries e
+				LEFT JOIN publications p ON p.id = e.ref_id
+				WHERE e.brand_id = $1
+			) sub
+			LEFT JOIN campaigns c ON c.id::text = sub.campaign_id
+			GROUP BY sub.campaign_id, c.name
+			ORDER BY MAX(sub.created_at) DESC
+			LIMIT $2 OFFSET $3`, brandID, limit, offset)
+		if gErr == nil {
+			defer gRows.Close()
+			for gRows.Next() {
+				var campaignID, campaignName string
+				var entries, spentTC, netTC, heldTC int
+				var lastAt time.Time
+				if gRows.Scan(&campaignID, &campaignName, &entries, &spentTC, &netTC, &heldTC, &lastAt) == nil {
+					ledgerGroups = append(ledgerGroups, map[string]any{
+						"campaign_id": campaignID, "campaign_name": campaignName,
+						"entries": entries, "spent_tc": spentTC, "net_tc": netTC,
+						"held_tc": heldTC, "last_at": isoMilli(lastAt),
+					})
+				}
 			}
 		}
 	}
@@ -126,26 +230,53 @@ func (d *Deps) Credits(w http.ResponseWriter, r *http.Request) {
 		SELECT COUNT(DISTINCT package_id) FROM credit_transactions
 		WHERE brand_id = $1 AND package_id IS NOT NULL`, brandID).Scan(&packageCount)
 
-	// Pending topup payment (payment_transactions).
-	var pending any
-	var pID, pURL, pStatus *string
-	var pAmount int
-	var pTC *int
-	var pCreatedAt *time.Time
-	pErr := d.Pool.QueryRow(r.Context(), `
-		SELECT id, payment_url, amount, purpose_ref_id, status, created_at FROM payment_transactions
+	// Pending topup payments (payment_transactions). `amount` bertipe NUMERIC —
+	// dulu di-scan ke *int sehingga SELALU gagal dan banner pending tak pernah
+	// muncul; sekarang dibaca float64 → rupiah dibulatkan, `purpose_ref_id`
+	// (character) berisi jumlah TC. Semua baris pending dikembalikan (bisa lebih
+	// dari satu bila klien membuka beberapa tagihan lalu ditinggalkan) supaya UI
+	// bisa menghitung totalnya.
+	//
+	// MASA BERLAKU SESI TOPUP = 24 JAM: tagihan yang lewat masa berlaku tidak
+	// lagi dihitung/ditampilkan (notif hilang). Baris lama kadang tidak punya
+	// `expired_at` (dibuat sebelum kolom itu diisi), jadi jatuh tempo dihitung
+	// dari created_at + 24 jam — sama dengan yang ditulis saat pembuatan baru.
+	pendingPayments := []map[string]any{}
+	pRows, pErr := d.Pool.Query(r.Context(), `
+		SELECT id, COALESCE(payment_url, ''), amount, COALESCE(purpose_ref_id, ''), status, created_at
+		FROM payment_transactions
 		WHERE brand_id = $1 AND purpose = 'topup' AND status IN ('pending','processing')
-		ORDER BY created_at DESC LIMIT 1`, brandID).
-		Scan(&pID, &pURL, &pAmount, &pTC, &pStatus, &pCreatedAt)
-	if pErr == nil && pID != nil {
-		pending = map[string]any{
-			"id": *pID, "payment_url": pURL, "amount_idr": pAmount,
-			"tc": pTC, "status": deref(pStatus), "created_at": tsOrNil(pCreatedAt),
+		  AND COALESCE(expired_at, created_at + interval '24 hours') > NOW()
+		ORDER BY created_at DESC`, brandID)
+	if pErr == nil {
+		defer pRows.Close()
+		for pRows.Next() {
+			var id, url, ref, status string
+			var amountF float64
+			var createdAt time.Time
+			if pRows.Scan(&id, &url, &amountF, &ref, &status, &createdAt) != nil {
+				continue
+			}
+			tc, tcErr := strconv.Atoi(strings.TrimSpace(ref))
+			var tcVal any
+			if tcErr == nil && tc > 0 {
+				tcVal = tc
+			}
+			pendingPayments = append(pendingPayments, map[string]any{
+				"id": id, "payment_url": url, "amount_idr": int(math.Round(amountF)),
+				"tc": tcVal, "status": status, "created_at": isoMilli(createdAt),
+			})
 		}
+	}
+	// `pending_payment` (tunggal) = tagihan terbaru — dipakai alur lama/modal.
+	var pending any
+	if len(pendingPayments) > 0 {
+		pending = pendingPayments[0]
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"pending_payment": pending,
+		"pending_payment":  pending,
+		"pending_payments": pendingPayments,
 		"balance": map[string]any{
 			"total": totalCredits, "used": usedCredits,
 			"remaining": totalCredits - usedCredits, "package_count": packageCount,
@@ -159,6 +290,7 @@ func (d *Deps) Credits(w http.ResponseWriter, r *http.Request) {
 			"rate_idr": rateIDR, "topup_packages": jsonRaw(topupPackages, []any{}),
 		},
 		"ledger": ledger, "ledger_total": ledgerTotal,
+		"ledger_groups": ledgerGroups, "ledger_groups_total": ledgerGroupsTotal,
 		"transactions": transactions, "total": txTotal,
 		"limit": limit, "offset": offset,
 	})

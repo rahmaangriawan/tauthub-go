@@ -1654,9 +1654,10 @@ func (d *Deps) bsAttemptGatewayPayment(ctx context.Context, input bsPaymentInput
 			refArg = input.PurposeRefID
 		}
 		_, insertErr := d.Pool.Exec(ctx,
-			`INSERT INTO payment_transactions (id, user_id, brand_id, gateway_provider, gateway_config_id, gateway_environment, external_transaction_id, amount, currency, status, purpose, purpose_ref_id, invoice_data, idempotency_key, reference)
+			`INSERT INTO payment_transactions (id, user_id, brand_id, gateway_provider, gateway_config_id, gateway_environment, external_transaction_id, amount, currency, status, purpose, purpose_ref_id, invoice_data, idempotency_key, reference, expired_at)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11, $12::jsonb, $13,
-			         'PAY-' || to_char(NOW(), 'YYYYMM') || '-' || lpad(nextval('payment_transaction_ref_seq')::text, 5, '0'))`,
+			         'PAY-' || to_char(NOW(), 'YYYYMM') || '-' || lpad(nextval('payment_transaction_ref_seq')::text, 5, '0'),
+			         NOW() + interval '24 hours')`,
 			transactionID, input.UserID, nullIfEmpty(input.BrandID), provider,
 			gateway.strOr("id", ""), gateway.strOr("environment", ""), transactionID,
 			input.Amount, currency, purpose, refArg, invoiceArg, keyArg)

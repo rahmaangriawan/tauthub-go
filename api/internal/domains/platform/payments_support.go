@@ -437,9 +437,10 @@ func (d *Deps) payAttemptGatewayPayment(ctx context.Context, input payCreateInpu
 			purpose = "generic"
 		}
 		_, err := d.Pool.Exec(ctx,
-			`INSERT INTO payment_transactions (id, user_id, brand_id, gateway_provider, gateway_config_id, gateway_environment, external_transaction_id, amount, currency, status, purpose, purpose_ref_id, invoice_data, idempotency_key, reference)
+			`INSERT INTO payment_transactions (id, user_id, brand_id, gateway_provider, gateway_config_id, gateway_environment, external_transaction_id, amount, currency, status, purpose, purpose_ref_id, invoice_data, idempotency_key, reference, expired_at)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11, $12::jsonb, $13,
-			         'PAY-' || to_char(NOW(), 'YYYYMM') || '-' || lpad(nextval('payment_transaction_ref_seq')::text, 5, '0'))`,
+			         'PAY-' || to_char(NOW(), 'YYYYMM') || '-' || lpad(nextval('payment_transaction_ref_seq')::text, 5, '0'),
+			         NOW() + interval '24 hours')`,
 			transactionID, input.UserID, input.BrandID, provider,
 			gateway.strOr("id", ""), gateway.strOr("environment", ""), transactionID,
 			input.Amount, currency, purpose, input.PurposeRefID, invoiceArg, input.IdempotencyKey)
@@ -648,7 +649,8 @@ func (d *Deps) payPostTopUpOnTx(ctx context.Context, tx pgx.Tx, brandID, userID,
 		tc, brandID).Scan(&available, &reserved, &captured); err != nil {
 		return payTopUpOutcome{}, err
 	}
-	reason := "Top Up Tulisio Credit — pembayaran " + payShortID(paymentTxID, 8)
+	// Nama produk untuk klien cukup "Saldo" — jangan pakai nama internal lama.
+	reason := "Top Up Saldo (" + payShortID(paymentTxID, 8) + ") berhasil"
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO credit_ledger_entries (id, brand_id, ref_type, ref_id, amount_tc, balance_after_tc, rate_idr, amount_idr, reason, idempotency_key, created_by)
 		 VALUES ($1, $2, 'topup', $3, $4, $5, $6, $7, $8, $9, $10)`,
