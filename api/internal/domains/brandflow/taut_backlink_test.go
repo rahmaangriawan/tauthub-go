@@ -69,3 +69,54 @@ func TestFinalizeTautArticleHTMLStructurePerMediaType(t *testing.T) {
 		}
 	})
 }
+
+// Regresi: model menanam URL yang sama lebih dari sekali (anchor diulang atau
+// "di-divariasikan") → pasca-proses wajib menyisakan TEPAT SATU link per URL.
+func TestEnforceTautBacklinkPolicyKeepsSingleLinkPerURL(t *testing.T) {
+	in := "<p>Solusi epoxy lantai dari <a href=\"https://klien.test/layanan\">jasa epoxy lantai</a> populer.</p>" +
+		"<p>Bagi pemula, <a href=\"https://klien.test/layanan\">layanan epoxy profesional</a> jadi pilihan utama.</p>"
+	links := []tautBacklinkSpec{{URL: "https://klien.test/layanan", Anchor: "jasa epoxy lantai", Mandatory: true}}
+	got := enforceTautBacklinkPolicy(in, links)
+	if n := strings.Count(got, "https://klien.test/layanan"); n != 1 {
+		t.Fatalf("URL yang sama muncul %dx, harus 1: %s", n, got)
+	}
+	if !strings.Contains(got, ">jasa epoxy lantai</a>") {
+		t.Fatalf("link yang tersisa tidak memakai anchor spesifikasi: %s", got)
+	}
+}
+
+// Regresi: link utama sudah ditanam model dengan href yang ter-escape (&amp;)
+// atau diberi trailing slash — enforcement tidak boleh salah anggap link
+// hilang lalu menyisipkan link kedua.
+func TestEnforceTautBacklinkPolicyDetectsEscapedHrefAndTrailingSlash(t *testing.T) {
+	links := []tautBacklinkSpec{{URL: "https://klien.test/layanan?id=7&ref=x", Anchor: "jasa epoxy lantai", Mandatory: true}}
+	for _, href := range []string{
+		"https://klien.test/layanan?id=7&amp;ref=x",
+		"https://klien.test/layanan?id=7&ref=x/",
+	} {
+		in := "<p>Konsultasikan kebutuhan Anda pada dasbor tim Bumi Cafe.</p><p>Lihat <a href=\"" + href + "\">jasa epoxy lantai</a> untuk detail.</p>"
+		got := enforceTautBacklinkPolicy(in, links)
+		if n := strings.Count(got, "<a "); n != 1 {
+			t.Fatalf("href %s: link jadi %d, harus tetap 1: %s", href, n, got)
+		}
+	}
+}
+
+// Regresi kasus nyata: model menanam URL yang sama dua kali dengan dua anchor
+// yang hanya beda kapitalisasi ("Bukalapak" vs "bukalapak"). Sisakan SATU, dan
+// yang tersisa harus persis seperti anchor yang diketik klien.
+func TestEnforceTautBacklinkPolicyKeepExactCaseAnchor(t *testing.T) {
+	in := "<p>PT <a href=\"https://bukalapak.com\">Bukalapak</a>.com Tbk resmi menyetujui pengangkatan direksi baru.</p>" +
+		"<p>Stabilitas tata kelola ini memantapkan PT <a href=\"https://bukalapak.com\">bukalapak</a> Tbk mengejar profitabilitas.</p>"
+	links := []tautBacklinkSpec{{URL: "https://bukalapak.com", Anchor: "bukalapak", Mandatory: true}}
+	got := enforceTautBacklinkPolicy(in, links)
+	if n := strings.Count(got, "https://bukalapak.com"); n != 1 {
+		t.Fatalf("URL sama masih muncul %dx, harus 1: %s", n, got)
+	}
+	if !strings.Contains(got, ">bukalapak</a>") {
+		t.Fatalf("anchor tersisa bukan persis seperti input klien: %s", got)
+	}
+	if strings.Contains(got, ">Bukalapak</a>") {
+		t.Fatalf("anchor variasi kapital masih tersisa: %s", got)
+	}
+}

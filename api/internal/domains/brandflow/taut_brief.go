@@ -110,7 +110,7 @@ func (d *Deps) loadTautBacklinkSettings(ctx context.Context, campaignID string) 
 	return enabled, smart
 }
 
-const tautSmartVariationRule = "   - SMART VARIATIONS (WAJIB — aktif dari The Profiler): jangan tanam anchor yang sama persis dua kali — variasikan dengan frasa LSI/natural yang bermakna sama (lokasi, kategori, konteks kalimat). Semua tautan tetap wajib ber-anchor; tautan utama tetap URL prioritas di semua artikel."
+const tautSmartVariationRule = "   - SMART VARIATIONS (WAJIB — aktif dari The Profiler): variasi anchor berlaku ANTAR ARTIKEL — artikel lain boleh memakai frasa LSI/natural yang bermakna sama dengan anchor yang diberikan. Tapi DALAM artikel INI setiap tautan yang diberikan ditanam TEPAT 1x dengan anchor persis seperti yang diberikan — DILARANG menanam URL yang sama dua kali atau menambah versi anchor kedua untuk URL yang sama di artikel ini."
 
 // executiveBriefShapeValid: padanan longgar executiveBriefSchema.safeParse —
 // hanya field yang dipakai blok konteks yang diperiksa.

@@ -229,7 +229,7 @@ func (d *Deps) generateWriterArticle(ctx context.Context, campaignID, brandID, u
 				backlinkEnabled = true
 			}
 			if sv, ok := bl["smart_variations"].(bool); ok && sv {
-				smartVariationRule = "   - SMART VARIATIONS (WAJIB — aktif dari The Profiler): jangan tanam anchor yang sama persis dua kali — variasikan dengan frasa LSI/natural yang bermakna sama (lokasi, kategori, konteks kalimat). Semua tautan tetap wajib ber-anchor; tautan utama tetap URL prioritas di semua artikel."
+				smartVariationRule = "   - SMART VARIATIONS (WAJIB — aktif dari The Profiler): variasi anchor berlaku ANTAR ARTIKEL — artikel lain boleh memakai frasa LSI/natural yang bermakna sama dengan anchor yang diberikan. Tapi DALAM artikel INI setiap tautan yang diberikan ditanam TEPAT 1x dengan anchor persis seperti yang diberikan — DILARANG menanam URL yang sama dua kali atau menambah versi anchor kedua untuk URL yang sama di artikel ini."
 			}
 		}
 	}
@@ -658,6 +658,63 @@ func isAlphaPhrase(w string) bool {
 	return true
 }
 
+// hrefLinkReFor: pasangan <a> lengkap untuk satu URL. href ditoleransi &amp;
+// (model sering meng-escape & di atribut) dan trailing slash — tanpa ini link
+// yang sudah ditanam dianggap hilang lalu disisipkan lagi jadi link ganda.
+func hrefLinkReFor(url string) *regexp.Regexp {
+	meta := regexp.QuoteMeta(url)
+	meta = strings.ReplaceAll(meta, "&", "&(?:amp;)?")
+	return regexp.MustCompile(`(?i)<a\b[^>]*href=["']` + meta + `/?["'][^>]*>([\s\S]*?)</a>`)
+}
+
+// dedupeLinksByURL: satu URL wajib muncul maksimal sekali per artikel
+// (aturan TEPAT 1x). Bila model menanam URL yang sama beberapa kali — dengan
+// anchor diulang atau variasi — sisakan satu (yang memakai anchor spesifikasi
+// bila ada, kalau tidak kemunculan pertama) dan kembalikan sisanya jadi teks.
+func dedupeLinksByURL(html, url, anchor string) string {
+	all := hrefLinkReFor(url).FindAllStringSubmatchIndex(html, -1)
+	if len(all) < 2 {
+		return html
+	}
+	// Prioritas keep: inner yang persis sama dengan anchor spesifikasi
+	// (contoh model menulis "Bukalapak" vs "bukalapak"), baru yang mirip.
+	keep := -1
+	want := escapeHTMLText(anchor)
+	for i, m := range all {
+		if strings.TrimSpace(html[m[2]:m[3]]) == want {
+			keep = i
+			break
+		}
+	}
+	if keep == -1 {
+		wantLower := strings.ToLower(want)
+		for i, m := range all {
+			if strings.EqualFold(strings.TrimSpace(html[m[2]:m[3]]), wantLower) {
+				keep = i
+				break
+			}
+		}
+	}
+	if keep == -1 {
+		keep = 0
+	}
+	var b strings.Builder
+	last := 0
+	for i, m := range all {
+		if i == keep {
+			b.WriteString(html[last:m[0]])
+			b.WriteString(html[m[0]:m[1]])
+			last = m[1]
+			continue
+		}
+		b.WriteString(html[last:m[0]])
+		b.WriteString(html[m[2]:m[3]])
+		last = m[1]
+	}
+	b.WriteString(html[last:])
+	return b.String()
+}
+
 // enforceBacklinkPolicy: penegak kebijakan link (deterministik).
 func enforceBacklinkPolicy(html string, links []backlinkSpec) string {
 	out := html
@@ -684,13 +741,15 @@ func enforceBacklinkPolicy(html string, links []backlinkSpec) string {
 				return sub[1] + `<a href="` + spec.URL + `"` + attr + `>` + escapeHTMLText(spec.Anchor) + `</a>` + sub[2]
 			})
 		})
+		// TEPAT 1x: URL yang sama ditanam lebih dari satu → sisakan satu.
+		out = dedupeLinksByURL(out, spec.URL, spec.Anchor)
 	}
 
 	// c) Tautan utama wajib ada.
 	if len(links) > 0 {
 		primary := links[0]
 		if primary.Mandatory && primary.URL != "" && primary.Anchor != "" {
-			hasPrimary := regexp.MustCompile(`(?i)<a\b[^>]*href=["']` + regexp.QuoteMeta(primary.URL) + `["']`).MatchString(out)
+			hasPrimary := hrefLinkReFor(primary.URL).MatchString(out)
 			if !hasPrimary {
 				woven := weaveContextualLink(out, primary.URL, primary.Anchor, primary.Rel)
 				if woven != "" {
