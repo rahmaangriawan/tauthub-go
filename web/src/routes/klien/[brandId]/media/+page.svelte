@@ -13,7 +13,7 @@
 	import { cubicOut, cubicIn } from 'svelte/easing';
 	import AgentSteps from '../taut-pintar/_agent-steps.svelte';
 	import {
-		ArrowRight, Bookmark, Check, Clock, Database, FileText, Info, LayoutGrid,
+		ArrowRight, Bookmark, Check, CircleAlert, Clock, Database, FileText, Info, LayoutGrid,
 		Plus, RotateCcw, Search, SlidersHorizontal, Trash2, Upload, Wallet, X, Zap,
 		ChevronLeft, ChevronRight
 	} from '@lucide/svelte';
@@ -2111,29 +2111,27 @@
 						{/if}
 					</div>
 					<div class="selectedBarDivider"></div>
+					<!-- Ringkasan finansial: total publikasi + status kecukupan saldo
+					     dalam satu blok vertikal (blok saldo terpisah dihapus). -->
 					<div class="selectedStatItem">
-						<span class="selectedStatLabel">TOTAL BIAYA PUBLIKASI</span>
-						<div class="selectedStatPriceGroup">
-							<span class="selectedStatPriceVal">Rp {fmt(totalSelectedPrice)}</span>
-						</div>
+						<span class="selectedStatLabel">{tr('Total publikasi')}</span>
+						<span class="selectedStatPriceVal">Rp {fmt(totalSelectedPrice)}</span>
+						{#if walletAvailableTc !== null}
+							{#if totalSelectedCredits > walletAvailableTc}
+								<span class="walletStatus walletShort">
+									<CircleAlert size={13} class="shrink-0" />
+									<span>{tr('Saldo kurang')} Rp {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)}</span>
+									<a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr('Top Up')}</a>
+								</span>
+							{:else}
+								<span class="walletStatus walletEnough">
+									<Check size={13} class="shrink-0" />
+									<span>{tr('Saldo mencukupi')}</span>
+								</span>
+							{/if}
+						{/if}
 					</div>
-			<div class="selectedBarDivider"></div>
-			<div class="selectedStatItem">
-				<span class="selectedStatLabel">SALDO KREDIT</span>
-				{#if walletAvailableTc === null}
-					<span class="selectedStatPriceVal" style="opacity:.6;">—</span>
-				{:else}
-					<div class="selectedStatPriceGroup">
-						<span class="selectedStatPriceVal">Rp {fmt(walletAvailableTc * walletRateIdr)}</span>
-											</div>
-					{#if totalSelectedCredits > walletAvailableTc}
-						<span class="walletShortfall">{tr("Kurang")} Rp {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)} · <a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up")}</a></span>
-					{:else}
-						<span class="walletEnough">{tr("Cukup untuk pesanan ini")}</span>
-					{/if}
-				{/if}
 			</div>
-		</div>
 		<div class="selectedBarRight">
 			<button class="selectedCancelBtn" type="button" onclick={() => (addToCampaignId ? goto(`/klien/${brandUrl}/taut-pintar/${addToCampaignId}/writer`) : (selectedIds = new Set()))}>{tr("Batal")}</button>
 			<button class="selectedExportBtn" type="button" onclick={exportProposal} title={tr("Unduh proposal ringkasan media terpilih (format CSV)")}>
@@ -2190,20 +2188,26 @@
 		background: var(--muted, #f6f7f9);
 		font-size: 13px;
 	}
-	.walletShortfall {
-		display: block;
-		margin-top: 2px;
-		font-size: 11px;
+	/* Status kecukupan saldo: satu baris rapat di bawah nominal total, boleh
+	   membungkus di layar sempit tanpa mendorong horizontal overflow. */
+	.walletStatus {
+		display: inline-flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 5px;
+		margin-top: 3px;
+		font-size: 11.5px;
 		font-weight: 600;
-		color: var(--warning, #b45309);
+		line-height: 1.35;
 	}
-	.walletShortfall a { text-decoration: underline; }
-	.walletEnough {
-		display: block;
-		margin-top: 2px;
-		font-size: 11px;
-		color: var(--success, #15803d);
+	.walletShort { color: var(--warning, #b45309); }
+	.walletEnough { color: var(--success, #15803d); }
+	.walletStatus a {
+		color: #2563eb;
+		font-weight: 700;
+		text-decoration: none;
 	}
+	.walletStatus a:hover { text-decoration: underline; }
 		/* Ringkasan konfirmasi di modal kampanye (kartu beraksen biru dengan ikon svg). */
 		.campaignSummary {
 			margin: 0;

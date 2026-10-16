@@ -3723,6 +3723,8 @@ export const PHRASE_EN: Record<string, string> = {
 	"Changelog": "Changelog",
 	"Contoh: fakta/angka yang boleh dipakai, konteks industri, rujukan resmi…": "Example: facts/figures that may be used, industry context, official references…",
 	"Cukup untuk pesanan ini": "Enough for this order",
+	"Total publikasi": "Total publication",
+	"Saldo mencukupi": "Balance is sufficient",
 	"Deteksi:": "Detection:",
 	"Dibuat otomatis oleh Tauthub": "Generated automatically by Tauthub",
 	"Dikembalikan": "Refunded",
