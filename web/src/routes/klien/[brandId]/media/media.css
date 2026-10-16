@@ -930,6 +930,12 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   color: #1e293b;
   font-variant-numeric: tabular-nums;
 }
+/* Badge AI Trust: warna latar/teks/border diisi inline oleh aiTrustToneStyle()
+   (makin tinggi skor makin kuat hijaunya); kelas ini hanya menegaskan bobot. */
+.aiTrustPill {
+  font-weight: 800;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
 .selectedBarDivider {
   width: 1px;
   height: 34px;

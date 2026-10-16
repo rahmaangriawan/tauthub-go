@@ -18,6 +18,7 @@
 		ChevronLeft, ChevronRight
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
+	import { aiTrustToneStyle } from '$lib/media/ai-trust-tone';
 	import { campaignUrlId } from '$lib/campaign-url';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { mediaDistribution } from '$lib/media/distribution';
@@ -1656,7 +1657,7 @@
 								</td>
 
 								<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getDa(m)}</span></td>
-								<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getAiTrust(m)}</span></td>
+								<td class="modernTd" style="text-align:center"><span class="scoreBoxPill aiTrustPill" style={aiTrustToneStyle(getAiTrust(m))}>{getAiTrust(m)}</span></td>
 
 								<td class="modernTd" style="text-align:center">
 									{#if m.seo_ai_citation === true}
