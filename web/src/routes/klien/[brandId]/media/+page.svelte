@@ -9,6 +9,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { fly } from 'svelte/transition';
+	import { flip } from 'svelte/animate';
 	import { cubicOut, cubicIn } from 'svelte/easing';
 	import AgentSteps from '../taut-pintar/_agent-steps.svelte';
 	import {
@@ -221,7 +222,7 @@
 	let selectedListOpen = $state(false);
 	// Pilihan bisa memuat media di luar 250 baris yang sedang dimuat (filter lain)
 	// — snapshot harga disimpan supaya total di bar tidak bohong.
-	let selectedSnapshot = $state<Record<string, { name: string; price: number; credits: number }>>({});
+	let selectedSnapshot = $state<Record<string, { name: string; price: number; credits: number; domain?: string }>>({});
 	let selectionHydrated = $state(false);
 	// Mode "tambah ke kampanye": katalog dibuka dari Penyedia Konten lewat
 	// ?campaign=<urlId kampanye>. Berisi urlId tujuan, atau null untuk alur biasa.
@@ -283,6 +284,12 @@
 		m.website_url ? m.website_url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : m.id.slice(0, 8);
 	// Nama tampil = domain (bukan nama brand), huruf pertama dibesarkan.
 	const domainLabel = (m: Media) => mediaDomainLabel(m.website_url, m.name);
+	// Domain untuk favicon stack di bar bawah (dipakai juga oleh entri yang
+	// tidak sedang tampil, yang hanya menyimpan nama/website_url di snapshot).
+	const domainOf = (website: string | null | undefined, fallback: string) =>
+		(website ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim() || fallback;
+	// Favicon yang gagal dimuat jatuh ke inisial huruf (per id media).
+	let faviconFailed = $state<Record<string, boolean>>({});
 	// Rekam jejak distribusi media (jumlah artikel yang sudah terbit lewat media ini).
 	const distribution = (m: Media) => mediaDistribution(m.health_breakdown, m.published_count);
 
@@ -336,7 +343,7 @@
 			selectedSnapshot = Object.fromEntries(
 				valid.map((x) => [
 					x.id as string,
-					{ name: x.name ?? '', price: Number(x.price ?? 0) || 0, credits: Number(x.credits ?? 0) || 0 }
+					{ name: x.name ?? '', price: Number(x.price ?? 0) || 0, credits: Number(x.credits ?? 0) || 0, domain: domainOf(x.name ?? '', x.name ?? '') }
 				])
 			);
 			restoredSelectionCount = valid.length;
@@ -375,6 +382,7 @@
 					const row = rows.find((x) => x.id === id);
 					return [id, {
 						name: mediaDomainLabel(m.website_url ?? null, m.name ?? ''),
+						domain: domainOf(m.website_url, m.name ?? ''),
 						price: row ? row.client_price ?? row.price ?? 0 : 0,
 						credits: Number(m.credit_cost ?? 0) || 0
 					}];
@@ -857,6 +865,7 @@
 			return {
 				id,
 				name: row ? domainLabel(row) : (selectedSnapshot[id]?.name ?? id),
+				domain: row ? domainOf(row.website_url, domainLabel(row)) : (selectedSnapshot[id]?.domain ?? domainOf(selectedSnapshot[id]?.name, selectedSnapshot[id]?.name ?? id)),
 				price: row ? (row.client_price ?? row.price ?? 0) : (selectedSnapshot[id]?.price ?? 0)
 			};
 		})
@@ -2026,7 +2035,34 @@
 							onclick={() => (selectedListOpen = !selectedListOpen)}
 						>
 							<span class="selectedStatLabel">MEDIA TERPILIH</span>
-							<span class="selectedStatDomainVal">{selectedIds.size} Media</span>
+							<span class="selectedStatFaviconRow">
+								<span class="selectedStatFavicons" aria-hidden="true">
+									{#each selectedItems.slice(0, 3) as it, i (it.id)}
+										<span
+											class="selectedStatFavicon"
+											style="z-index: {3 - i};"
+											animate:flip={{ duration: 220 }}
+										>
+											{#if it.domain && !faviconFailed[it.id]}
+												<img
+													src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(it.domain)}&sz=64`}
+													alt=""
+													loading="lazy"
+													onerror={() => (faviconFailed = { ...faviconFailed, [it.id]: true })}
+												/>
+											{:else}
+												<span class="selectedStatFaviconFallback">{it.name.trim().charAt(0).toUpperCase() || '?'}</span>
+											{/if}
+										</span>
+									{/each}
+									{#if selectedIds.size > 3}
+										<span class="selectedStatFavicon selectedStatFaviconMore" style="z-index: 0;">
+											+{selectedIds.size - 3}
+										</span>
+									{/if}
+								</span>
+								<span class="selectedStatDomainVal">{selectedIds.size} Media</span>
+							</span>
 						</button>
 
 						{#if selectedListOpen}

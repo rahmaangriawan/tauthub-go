@@ -1058,6 +1058,66 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 }
 .selectedStatBtn:hover { background: #f1f5f9; }
 .selectedStatBtn.active { background: #e8eefc; }
+
+/* Favicon stack media terpilih: logo bertumpuk (overlap 16px) dengan cincin
+   putih, bukan berjajar berjarak. Maksimal 3 logo asli + lingkaran "+N". */
+.selectedStatFaviconRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.selectedStatFavicons {
+  display: inline-flex;
+  align-items: center;
+  padding-left: 4px;
+}
+.selectedStatFavicon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  margin-left: -16px;
+  border-radius: 999px;
+  border: 3px solid #ffffff;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  color: #475569;
+  animation: faviconStackIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.selectedStatFavicon:first-child { margin-left: 0; }
+.selectedStatFavicon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.selectedStatFaviconFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #eef2f7;
+}
+.selectedStatFaviconMore {
+  background: #e8eefc;
+  color: #2563eb;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+@keyframes faviconStackIn {
+  from { opacity: 0; transform: scale(0.82); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .selectedStatFavicon { animation: none; }
+}
 .selectedListBackdrop { position: fixed; inset: 0; z-index: 96; cursor: default; }
 .selectedListPop {
   position: absolute;
