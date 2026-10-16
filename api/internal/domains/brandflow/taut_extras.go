@@ -860,7 +860,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items, err := d.queryRows(r.Context(), `
-		SELECT tcm.media_id, m.name, m.media_type,
+		SELECT tcm.media_id, m.name, m.media_type, m.website_url,
 		       COALESCE(tcm.price, m.price, 0) AS price,
 		       m.max_links, sm.da, sm.spam_score, m.traffic_estimate,
 		       p.scheduled_at, tcm.article_document_id, d.title AS article_title, d.updated_at AS article_updated_at,
@@ -981,6 +981,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 
 		mediaOut = append(mediaOut, map[string]any{
 			"media_id": item.raw("media_id"), "name": item.raw("name"), "media_type": item.raw("media_type"),
+			"website_url":        item.raw("website_url"),
 			"featured_image_url": coverURL,
 			"price_idr":          price,
 			"da":                 numOrNil(item, "da"),
