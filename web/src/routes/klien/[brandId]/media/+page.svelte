@@ -2005,6 +2005,7 @@
 											src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(it.domain)}&sz=128`}
 											alt=""
 											loading="lazy"
+														decoding="async"
 											onerror={() => (faviconFailed = { ...faviconFailed, [it.id]: true })}
 										/>
 									{:else}
@@ -2059,6 +2060,7 @@
 													src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(it.domain)}&sz=128`}
 													alt=""
 													loading="lazy"
+														decoding="async"
 													onerror={() => (faviconFailed = { ...faviconFailed, [it.id]: true })}
 												/>
 											{:else}

@@ -370,6 +370,8 @@
 							<img
 								src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(faviconDomain)}&sz=128`}
 								alt={media.name}
+								loading="lazy"
+								decoding="async"
 								onerror={() => (faviconFailed = true)}
 							/>
 						{:else}

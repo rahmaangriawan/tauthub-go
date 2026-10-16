@@ -69,6 +69,10 @@
 	<link rel="apple-touch-icon" href="/tauthub-icon.png" />
 	<link rel="shortcut icon" href="/favicon.ico" />
 	<link rel="manifest" href="/manifest.webmanifest" />
+	<!-- Favicon media (Google s2) dipasang setelah hydration; tarik TLS sejak
+	     awal supaya bitmap avatar pertama tidak menunggu handshake. -->
+	<link rel="preconnect" href="https://www.google.com" />
+	<link rel="dns-prefetch" href="https://www.google.com" />
 	<meta name="theme-color" content="#212121" />
 	<title>Tauthub</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1" />

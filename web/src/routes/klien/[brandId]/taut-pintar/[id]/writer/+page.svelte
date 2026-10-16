@@ -1367,8 +1367,10 @@
 									>
 										{#if domain && !avatarFailed[m.media_id]}
 											<img
-												src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`}
+												src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`}
 												alt={m.name}
+												loading="lazy"
+												decoding="async"
 												class="h-full w-full object-cover"
 												onerror={() => { avatarFailed = { ...avatarFailed, [m.media_id]: true }; }}
 											/>
