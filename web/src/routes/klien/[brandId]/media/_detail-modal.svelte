@@ -373,7 +373,7 @@
 								onerror={() => (faviconFailed = true)}
 							/>
 						{:else}
-							{initialLetter}
+							<span class="detailHeaderAvatarFallback">{initialLetter}</span>
 						{/if}
 					</div>
 
@@ -833,8 +833,8 @@
 		width: 48px;
 		height: 48px;
 		border-radius: 50%;
-		background: #ffffff;
-		border: 1px solid #e2e8f0;
+		background: transparent;
+		border: none;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -842,7 +842,6 @@
 		font-weight: 800;
 		color: #2563eb;
 		flex-shrink: 0;
-		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 		overflow: hidden;
 	}
 	.detailHeaderAvatar img {
@@ -850,6 +849,17 @@
 		height: 100%;
 		object-fit: cover;
 		display: block;
+	}
+	/* Fallback inisial tetap butuh latar + cincin agar hurufnya terbaca. */
+	.detailHeaderAvatarFallback {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+		border-radius: 50%;
+		background: #ffffff;
+		border: 1px solid #e2e8f0;
 	}
 	.detailHeaderInfo {
 		display: flex;
