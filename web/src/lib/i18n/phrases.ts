@@ -556,7 +556,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Preview URL cadangan:": "Backup URL preview:",
   "Preview URL final:": "Final URL preview:",
   "PT Contoh Sejahtera": "Example Corp",
-  "QC sudah lulus — tombol ini langsung menerbitkan kampanye dan membuka Ringkasan.": "QC has passed — this button publishes the campaign right away and opens the Summary.",
+  "QC sudah lulus": "QC has passed",
   "Racik Kampanye Kilat": "Assemble the Fast Campaign",
   "Racik Ulang Kampanye Kilat": "Re-assemble the Fast Campaign",
   "perangkat menerima notifikasi uji.": "devices received the test notification.",

@@ -1761,7 +1761,7 @@
 						<div class="hidden md:flex ml-auto items-center gap-2 max-w-sm text-xs leading-snug">
 							{#if distributable}
 								<CircleCheck size={16} class="text-emerald-600 shrink-0" />
-								<span class="text-slate-600 font-medium">{tr('QC sudah lulus — tombol ini langsung menerbitkan kampanye dan membuka Ringkasan.')}</span>
+								<span class="text-slate-600 font-medium">{tr('QC sudah lulus')}</span>
 							{:else if distributable === false}
 								<TriangleAlert size={16} class="text-amber-600 shrink-0" />
 								<span class="text-amber-800 font-medium">{tr('QC belum lulus. Jalankan Cek Validasi sekarang')}</span>
