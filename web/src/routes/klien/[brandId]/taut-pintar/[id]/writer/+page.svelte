@@ -1386,7 +1386,7 @@
 											</p>
 											{#if m.media_type}
 												<span
-													class="shrink-0 rounded-[5px] border px-2 py-0.5 text-[9.5px] font-bold tracking-wider uppercase {m.media_type === 'blogger' ? 'border-amber-200/80 bg-amber-50 text-amber-700' : 'border-blue-200/80 bg-blue-50 text-blue-600'}"
+													class="shrink-0 rounded-[5px] border px-2 py-0.5 text-[7.5px] font-bold tracking-wider uppercase {m.media_type === 'blogger' ? 'border-amber-200/80 bg-amber-50 text-amber-700' : 'border-blue-200/80 bg-blue-50 text-blue-600'}"
 												>
 													{m.media_type === 'blogger' ? tr('Blogger') : tr('Mainstream')}
 												</span>
@@ -1395,60 +1395,60 @@
 
 										<div class="mt-1.5 flex flex-wrap items-center gap-1.5">
 											{#if statusKind === 'ready'}
-												<span class="inline-flex items-center gap-1 rounded-[5px] border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-[9px] font-medium text-emerald-700">
 													<CircleCheck size={11} strokeWidth={2.2} />
 													<span>{tr('Siap Terbit')}</span>
 												</span>
 											{:else if statusKind === 'draft'}
-												<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-[9px] font-medium text-blue-700">
 													<FileText size={11} />
 													<span>{tr('Draft Tersedia')}</span>
 												</span>
 											{:else if statusKind === 'generating'}
-												<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-600">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-[9px] font-medium text-blue-600">
 													<LoaderCircle size={11} class="animate-spin" />
 													<span>{tr('Generasi AI…')}</span>
 												</span>
 											{:else if statusKind === 'queued'}
-												<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/80 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/80 px-2.5 py-0.5 text-[9px] font-medium text-slate-600">
 													<Clock size={11} />
 													<span>{tr('Dalam Antrean…')}</span>
 												</span>
 											{:else if statusKind === 'blocked'}
-												<span class="inline-flex items-center gap-1 rounded-[5px] border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[11px] font-medium text-rose-700">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[9px] font-medium text-rose-700">
 													<X size={11} />
 													<span>{tr('Diblokir')}</span>
 												</span>
 											{:else}
-												<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200/70 bg-slate-100/80 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200/70 bg-slate-100/80 px-2.5 py-0.5 text-[9px] font-medium text-slate-600">
 													<Clock size={11} />
 													<span>{tr('Menunggu Artikel')}</span>
 												</span>
 											{/if}
 
 											{#if !mediaAllowsLink(m)}
-												<span class="rounded-[5px] border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-500">
+												<span class="rounded-[5px] border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[9px] font-medium text-slate-500">
 													{tr('Tidak Tersedia Backlink')}
 												</span>
 											{:else if links2}
 												{#if links2.sponsored > 0}
-													<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+													<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[9px] font-medium text-amber-800">
 														<PencilLine size={10.5} />
 														<span>{links2.sponsored} Sponsored</span>
 													</span>
 												{/if}
 												{#if links2.dofollow > 0}
-													<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+													<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[9px] font-medium text-amber-800">
 														<PencilLine size={10.5} />
 														<span>{links2.dofollow} Dofollow</span>
 													</span>
 												{/if}
-												<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/70 px-2 py-0.5 text-[9px] font-medium text-slate-600">
 													<span class="h-1.5 w-1.5 rounded-full border border-slate-400"></span>
 													<span>{links2.nofollow} Nofollow</span>
 												</span>
 											{:else}
-												<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-800">
+												<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2.5 py-0.5 text-[9px] font-medium text-amber-800">
 													<PencilLine size={10.5} />
 													<span>{m.label_sponsor === 'ada_sponsor' ? 'Sponsored' : 'Dofollow'} (Maks. {m.max_links != null && m.max_links > 0 ? m.max_links : 1})</span>
 												</span>
