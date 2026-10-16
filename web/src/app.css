@@ -425,7 +425,9 @@ dialog.app-card {
      atas `display: inline-flex` bawaan .app-btn. */
   .app-btn.app-shell-trigger { display: none; flex: 0 0 auto; }
 
-  .app-drawer { position: fixed; z-index: 60; inset: 0; }
+  /* Drawer mobile harus menutupi SEMUA elemen halaman (sticky bottom bar,
+     popover, fly layer) — bukan hanya konten di belakangnya. */
+  .app-drawer { position: fixed; z-index: 2000; inset: 0; }
   .app-drawer-backdrop {
     position: absolute;
     inset: 0;
