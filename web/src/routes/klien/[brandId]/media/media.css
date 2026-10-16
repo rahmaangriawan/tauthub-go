@@ -1059,33 +1059,33 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 .selectedStatBtn:hover { background: #f1f5f9; }
 .selectedStatBtn.active { background: #e8eefc; }
 
-/* Favicon stack media terpilih: logo bertumpuk (overlap 16px) dengan cincin
-   putih, bukan berjajar berjarak. Maksimal 3 logo asli + lingkaran "+N". */
+/* Favicon stack media terpilih: logo besar bertumpuk (overlap ~20px) dengan
+   cincin putih, teks jumlah media di kanannya. Maks 4 logo asli + "+N". */
 .selectedStatFaviconRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
 }
 .selectedStatFavicons {
   display: inline-flex;
   align-items: center;
-  padding-left: 4px;
+  padding-left: 5px;
 }
 .selectedStatFavicon {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  margin-left: -16px;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  margin-left: -20px;
   border-radius: 999px;
   border: 3px solid #ffffff;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
   overflow: hidden;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 700;
   color: #475569;
   animation: faviconStackIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1106,14 +1106,36 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   background: #eef2f7;
 }
 .selectedStatFaviconMore {
-  background: #e8eefc;
+  background: #eef4ff;
   color: #2563eb;
-  font-size: 13px;
+  font-size: 19px;
   letter-spacing: -0.01em;
+}
+.selectedStatTextCol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.selectedStatTextCol .selectedStatDomainVal {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+.selectedStatSub {
+  font-size: 12.5px;
+  color: #94a3b8;
+  white-space: nowrap;
 }
 @keyframes faviconStackIn {
   from { opacity: 0; transform: scale(0.82); }
   to { opacity: 1; transform: scale(1); }
+}
+@media (max-width: 900px) {
+  .selectedStatFavicon { width: 44px; height: 44px; flex-basis: 44px; margin-left: -16px; font-size: 16px; }
+  .selectedStatFaviconMore { font-size: 15px; }
+  .selectedStatFavicons { padding-left: 4px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .selectedStatFavicon { animation: none; }

@@ -2034,18 +2034,17 @@
 							aria-label={tr('Lihat media terpilih')}
 							onclick={() => (selectedListOpen = !selectedListOpen)}
 						>
-							<span class="selectedStatLabel">MEDIA TERPILIH</span>
 							<span class="selectedStatFaviconRow">
 								<span class="selectedStatFavicons" aria-hidden="true">
-									{#each selectedItems.slice(0, 3) as it, i (it.id)}
+									{#each selectedItems.slice(0, 4) as it, i (it.id)}
 										<span
 											class="selectedStatFavicon"
-											style="z-index: {3 - i};"
+											style="z-index: {4 - i};"
 											animate:flip={{ duration: 220 }}
 										>
 											{#if it.domain && !faviconFailed[it.id]}
 												<img
-													src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(it.domain)}&sz=64`}
+													src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(it.domain)}&sz=128`}
 													alt=""
 													loading="lazy"
 													onerror={() => (faviconFailed = { ...faviconFailed, [it.id]: true })}
@@ -2055,13 +2054,16 @@
 											{/if}
 										</span>
 									{/each}
-									{#if selectedIds.size > 3}
+									{#if selectedIds.size > 4}
 										<span class="selectedStatFavicon selectedStatFaviconMore" style="z-index: 0;">
-											+{selectedIds.size - 3}
+											+{selectedIds.size - 4}
 										</span>
 									{/if}
 								</span>
-								<span class="selectedStatDomainVal">{selectedIds.size} Media</span>
+								<span class="selectedStatTextCol">
+									<span class="selectedStatDomainVal">{selectedIds.size} Media Terpilih</span>
+									<span class="selectedStatSub">Siap untuk kampanye</span>
+								</span>
 							</span>
 						</button>
 
