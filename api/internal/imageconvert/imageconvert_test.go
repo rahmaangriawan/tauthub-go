@@ -6,7 +6,11 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"math"
+	"math/rand"
 	"testing"
+
+	"github.com/HugoSmits86/nativewebp"
 )
 
 func samplePNG(t *testing.T, w, h int) []byte {
@@ -143,4 +147,72 @@ func TestIsConvertibleImage(t *testing.T) {
 			t.Errorf("%s tidak boleh convertible", m)
 		}
 	}
+}
+
+// Kompresi lossy: kasus nyata gambar AI — file WebP LOSSLESS (nativewebp)
+// berukuran besar harus menyusut jauh setelah dikompres lossy dan tetap bisa
+// didekode ulang.
+func TestCompressToWebPLossyShrinks(t *testing.T) {
+	// Pola mirip foto: gelombang halus + noise halus. Noise membuat encoder
+	// lossless WAJIB menyimpan hampir semua piksel (file besar, seperti
+	// gambar AI yang tersimpan sekarang), sedangkan lossy meratakannya.
+	img := image.NewRGBA(image.Rect(0, 0, 1600, 900))
+	rng := rand.New(rand.NewSource(42))
+	for y := 0; y < 900; y++ {
+		for x := 0; x < 1600; x++ {
+			fx, fy := float64(x), float64(y)
+			n := func() int { return rng.Intn(25) - 12 }
+			img.Set(x, y, color.RGBA{
+				uint8(clamp8(128 + 70*math.Sin(fx/37)*math.Cos(fy/53) + float64(n()))),
+				uint8(clamp8(128 + 70*math.Sin(fx/91+fy/71) + float64(n()))),
+				uint8(clamp8(128 + 70*math.Cos((fx+fy)/61) + float64(n()))),
+				255,
+			})
+		}
+	}
+	var losslessBuf bytes.Buffer
+	if err := nativewebp.Encode(&losslessBuf, img, nil); err != nil {
+		t.Fatalf("encode lossless: %v", err)
+	}
+	baseline := losslessBuf.Bytes()
+	if len(baseline) < 200_000 {
+		t.Fatalf("fixture terlalu kecil untuk uji kompresi: %d byte", len(baseline))
+	}
+
+	out, ok := CompressToWebP(baseline, "image/webp", LossyQuality)
+	if !ok {
+		t.Fatalf("kompresi lossy gagal (baseline %d byte)", len(baseline))
+	}
+	if !IsAlreadyWebP(out) {
+		t.Fatalf("keluaran bukan WebP, %d byte", len(out))
+	}
+	if len(out) >= len(baseline) {
+		t.Fatalf("keluaran tidak lebih kecil: %d >= %d", len(out), len(baseline))
+	}
+	if len(out) > TargetMaxBytes {
+		t.Fatalf("keluaran %d byte melebihi batas %d byte", len(out), TargetMaxBytes)
+	}
+	if _, _, err := image.Decode(bytes.NewReader(out)); err != nil {
+		t.Fatalf("keluaran tidak bisa didekode: %v", err)
+	}
+
+	// Sumber yang sudah WebP dan sudah di bawah batas tidak boleh disentuh.
+	small := out
+	kept, ok2 := CompressToWebP(small, "image/webp", LossyQuality)
+	if ok2 {
+		t.Fatalf("sumber di bawah batas seharusnya dipakai apa adanya, tapi dikembalikan %d byte", len(kept))
+	}
+	if !bytes.Equal(kept, small) {
+		t.Fatal("byte sumber berubah padahal seharusnya dipakai apa adanya")
+	}
+}
+
+func clamp8(v float64) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 255 {
+		return 255
+	}
+	return int(v)
 }

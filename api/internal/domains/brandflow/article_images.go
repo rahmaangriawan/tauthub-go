@@ -147,8 +147,9 @@ func (d *Deps) chargePackageCredits(ctx context.Context, brandID string, amount 
 	return remainingAfter, nil
 }
 
-// storeGeneratedImage: konversi ke WebP (bila memungkinkan) lalu tulis ke
-// UPLOAD_DIR; kembalikan URL publik /uploads/<file>.
+// storeGeneratedImage: kompres ke WebP lossy (bila memungkinkan) lalu tulis
+// ke UPLOAD_DIR; kembalikan URL publik /uploads/<file>. Gambar AI 1600px bisa
+// 1-1,5 MB bila hanya di-encode lossless — lossy memangkasnya sekitar 10x.
 func (d *Deps) storeGeneratedImage(result *ai.ImageResult) (string, error) {
 	payload := result.Data
 	mime := result.MimeType
@@ -156,7 +157,10 @@ func (d *Deps) storeGeneratedImage(result *ai.ImageResult) (string, error) {
 		mime = "image/png"
 	}
 	ext := imageExtForMime(mime)
-	if ext != "webp" {
+	if converted, ok := imageconvert.CompressToWebP(result.Data, mime, imageconvert.LossyQuality); ok {
+		payload = converted
+		ext = "webp"
+	} else if ext != "webp" {
 		if converted, ok := imageconvert.ConvertToWebP(result.Data, mime); ok {
 			payload = converted
 			ext = "webp"

@@ -1,16 +1,14 @@
 // Package imageconvert: konversi gambar unggahan ke WebP.
 //
 // Parity `compressCoverImage` / `compressImageIfNeeded` di app lama
-// (lib/uploads.ts, memakai sharp). Di Go dipakai encoder WebP pure-Go
-// (nativewebp, VP8L lossless) + resizer dari golang.org/x/image — tanpa cgo
-// supaya binary tetap portabel di VPS.
+// (lib/uploads.ts, memakai sharp). Di Go ada dua encoder:
+//   - nativewebp (VP8L, lossless, pure-Go) untuk konversi cepat tanpa
+//     penurunan kualitas;
+//   - gen2brain/webp (libwebp asli via WASM/purego, LOSSY) untuk kompresi
+//     nyata — dipakai CompressToWebP karena foto/ilustrasi AI 1600px bisa
+//     1-1,5 MB bila di-encode lossless.
 //
-// CATATAN DEVIASI (dicatat di docs/REWRITE/00 §6): nativewebp hanya lossless
-// (VP8L), sedangkan sharp memakai lossy. Hasil WebP di sini bisa LEBIH BESAR
-// dari aslinya untuk foto. Karena itu Resize dulu ke lebar maksimum, dan
-// pemanggil boleh memakai hasil lossless hanya bila ukurannya tidak membengkak
-// (lihat ConvertToWebP: kalau hasil lebih besar dari sumber, sumber dipakai
-// apa adanya bila sudah WebP, atau tetap dipakai bila konversi diminta eksplisit).
+// Keduanya tanpa cgo supaya binary tetap portabel di VPS (CGO_ENABLED=0).
 package imageconvert
 
 import (
@@ -23,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/HugoSmits86/nativewebp"
+	"github.com/gen2brain/webp"
 	xdraw "golang.org/x/image/draw"
 
 	// Dekoder tambahan: WebP (baca) dan BMP.
@@ -32,6 +31,14 @@ import (
 
 // MaxWidth: lebar maksimum keluaran (parity IMAGE_MAX_DIMENSION app lama).
 const MaxWidth = 1600
+
+// LossyQuality: kualitas default encode WebP lossy untuk gambar AI.
+const LossyQuality = 82
+
+// TargetMaxBytes: batas keras ukuran gambar yang DISIMPAN oleh sistem (150 KB).
+// Gambar AI dikompres bertahap — turunkan kualitas dulu, lalu turunkan dimensi —
+// sampai hasilnya di bawah batas ini.
+const TargetMaxBytes = 150 << 10
 
 // IsConvertibleImage: MIME yang bisa dikonversi ke WebP.
 func IsConvertibleImage(mime string) bool {
@@ -75,6 +82,85 @@ func ConvertToWebP(data []byte, mime string) ([]byte, bool) {
 		return data, false
 	}
 	return out, true
+}
+
+// CompressToWebP: dekode gambar apa pun yang didukung, perkecil bila lebih
+// lebar dari MaxWidth, lalu encode WebP LOSSY (libwebp) sampai ukurannya di
+// bawah TargetMaxBytes (150 KB): kualitas diturunkan dulu (82 → 70 → 58 → 46),
+// baru dimensi (×0,8 sampai minimum 800 px).
+//
+// Ini yang dipakai untuk gambar hasil AI: encoder lossless bisa meninggalkan
+// file 1-1,5 MB, lossy + batas 150 KB memangkasnya lebih dari 10x.
+//
+// Mengembalikan (data, true) bila ada hasil yang LEBIH KECIL dari sumber;
+// bila sumber sudah di bawah batas dan/atau tidak ada varian yang menang,
+// sumber dipakai apa adanya (false) supaya tidak ada penyimpanan yang membengkak.
+func CompressToWebP(data []byte, mime string, quality int) ([]byte, bool) {
+	if !IsConvertibleImage(mime) {
+		return data, false
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return data, false
+	}
+	if img.Bounds().Dx() > MaxWidth {
+		img = Resize(img, MaxWidth)
+	}
+	if quality <= 0 || quality > 100 {
+		quality = LossyQuality
+	}
+	// Sudah WebP dan sudah di bawah batas: tidak perlu disentuh.
+	if IsAlreadyWebP(data) && len(data) <= TargetMaxBytes {
+		return data, false
+	}
+
+	var best []byte
+	width := img.Bounds().Dx()
+search:
+	for {
+		current := img
+		if width < img.Bounds().Dx() {
+			current = Resize(img, width)
+		}
+		for q := quality; q >= 40; q -= 12 {
+			out := encodeLossy(current, q)
+			if out == nil {
+				break
+			}
+			if best == nil || len(out) < len(best) {
+				best = out
+			}
+			if len(out) <= TargetMaxBytes {
+				best = out
+				break search
+			}
+		}
+		// Kualitas terendah masih kelebihan → turunkan dimensi, ulangi.
+		if width <= 800 {
+			break
+		}
+		width = int(float64(width) * 0.8)
+		if width < 800 {
+			width = 800
+		}
+	}
+
+	if best == nil || len(best) >= len(data) {
+		return data, false
+	}
+	return best, true
+}
+
+// encodeLossy: satu percobaan encode WebP lossy; nil bila gagal.
+func encodeLossy(img image.Image, quality int) []byte {
+	var buf bytes.Buffer
+	if err := webp.Encode(&buf, img, webp.Options{Lossless: false, Quality: quality, Method: 4}); err != nil {
+		return nil
+	}
+	if buf.Len() == 0 {
+		return nil
+	}
+	return buf.Bytes()
 }
 
 // Resize: penyusutan proporsional memakai interpolasi CatmullRom (kualitas
