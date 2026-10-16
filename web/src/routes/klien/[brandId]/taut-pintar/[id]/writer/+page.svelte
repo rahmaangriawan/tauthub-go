@@ -1773,8 +1773,8 @@
 							<!-- Kembali mengarah ke langkah sebelumnya: Katalog Media
 							     (klien memilih/menambah media), dengan konteks kampanye
 							     dibawa agar centang pilihan tetap terjaga. -->
-								<button class="h-10 px-5 rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors" type="button" onclick={() => goto(`/klien/${brandUrl}/media?campaign=${campaignId}`)}>{tr('Kembali')}</button>
-							<button class="h-10 px-5 rounded-[5px] bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold inline-flex items-center gap-2 shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
+								<button class="h-10 px-4.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-[13px] font-medium transition-all whitespace-nowrap" type="button" onclick={() => goto(`/klien/${brandUrl}/media?campaign=${campaignId}`)}>{tr('Kembali')}</button>
+								<button class="h-10 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 hover:-translate-y-px text-white text-[13px] font-semibold inline-flex items-center gap-1.5 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
 								{#if coverChecking || distributing}<LoaderCircle size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
 								<span>{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
 							</button>
