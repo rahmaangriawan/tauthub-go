@@ -15,7 +15,7 @@
 	import QcPanel from './_qc-panel.svelte';
 	import { MANUAL_PROFILER_REASON, buildTrackedUrl, stripScheme, withScheme, textToHtml, toLocalInput, isCampaignDone } from '../../_shared';
 	import { tcToRp } from '$lib/credits/rupiah';
-	import { ARTICLE_DEFAULT_COVER } from '$lib/media/cover';
+	import { ARTICLE_DEFAULT_COVER, sameOriginAssetUrl } from '$lib/media/cover';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import SlideOver from '$lib/components/slide-over.svelte';
@@ -1483,7 +1483,7 @@
 										     terbaca jelas; ukuran desktop tetap seperti desain awal. -->
 										<div class="h-24 w-36 sm:h-30 sm:w-44 lg:h-13 lg:w-18 shrink-0 overflow-hidden rounded-[5px] border border-slate-200/80 bg-slate-100/70 flex items-center justify-center">
 											{#if hasDoc(m) && articleStats[m.media_id]?.cover}
-												<img src={articleStats[m.media_id].cover} alt="Cover" class="h-full w-full object-cover" />
+												<img src={sameOriginAssetUrl(articleStats[m.media_id].cover) ?? ''} alt="Cover" class="h-full w-full object-cover" />
 											{:else}
 												<Image size={20} class="text-slate-400 stroke-[1.5] h-8 w-8 sm:h-9 sm:w-9 lg:h-5 lg:w-5" />
 											{/if}

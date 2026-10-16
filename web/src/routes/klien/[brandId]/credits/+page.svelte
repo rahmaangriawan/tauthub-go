@@ -5,30 +5,62 @@
 	// credits app lama). Termasuk aksi Top Up dan laporan topup gagal.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { Coins, Lock, Wallet, Plus, TriangleAlert, X, Flag } from '@lucide/svelte';
+	import { ChevronLeft, ChevronRight, Clock, Coins, Lock, Wallet, Plus, TriangleAlert, X, Flag } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, readApiError, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
+	import { tcToRp } from '$lib/credits/rupiah';
 	import PageTitle from '$lib/components/page-title.svelte';
-	import ComingSoon from '$lib/components/coming-soon.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	// URL navigasi memakai public_id (parity app lama; UUID tetap valid di route).
 	const brandUrl = $derived(getBrandUrlId() || brandId);
+	type LedgerEntry = {
+		id: string;
+		ref_type: string;
+		ref_id: string | null;
+		amount_tc: number;
+		balance_after_tc: number;
+		rate_idr: number | null;
+		amount_idr: number | null;
+		reason: string | null;
+		document_title: string | null;
+		media_name: string | null;
+		publication_status: string | null;
+		created_at: string;
+	};
+	type LedgerGroup = {
+		campaign_id: string;
+		campaign_name: string;
+		entries: number;
+		spent_tc: number;
+		net_tc: number;
+		held_tc: number;
+		last_at: string;
+	};
 	type Credits = {
 		pending_payment: { id: string; payment_url: string | null; amount_idr: number; tc: number | null; status: string } | null;
+		pending_payments: Array<{ id: string; payment_url: string | null; amount_idr: number; tc: number | null; status: string; created_at: string }>;
 		balance: { total: number; used: number; remaining: number; package_count: number };
 		wallet: { available_tc: number; reserved_tc: number; captured_tc: number; total_tc: number; rate_idr: number; available_idr: number };
 		tc_config: { rate_idr: number; topup_packages: Array<{ tc?: number; idr?: number; price_idr?: number; label?: string }> };
-		ledger: Array<{ id: string; ref_type: string; amount_tc: number; balance_after_tc: number; reason: string | null; document_title: string | null; media_name: string | null; created_at: string }>;
+		ledger: LedgerEntry[];
 		ledger_total: number;
+		ledger_groups: LedgerGroup[];
+		ledger_groups_total: number;
 		transactions: Array<{ id: string; amount: number; reason: string; balance_after: number; package_name: string | null; document_title: string | null; created_at: string }>;
 		total: number;
 	};
 
 	let data = $state<Credits | null>(null);
 	let loading = $state(true);
+	// Riwayat dipaginasi dari server PER GRUP KAMPANYE (limit/offset grup).
+	const LEDGER_PAGE_SIZE = 50;
+	let ledgerOffset = $state(0);
+	// Rincian entri per grup dimuat saat grup diklik (accordion satu terbuka).
+	let openGroup = $state<string | null>(null);
+	let groupDetail = $state<Record<string, { loading: boolean; entries: LedgerEntry[]; total: number }>>({});
 
 	// Normalisasi paket: backend mengirim {tc, idr}; sebagian konfigurasi lama
 	// memakai price_idr. Keduanya diterima agar modal selalu punya nominal.
@@ -38,6 +70,12 @@
 			.filter((p) => p.tc > 0 && p.idr > 0)
 	);
 	const rateIdr = $derived(data?.tc_config.rate_idr ?? data?.wallet.rate_idr ?? 1000);
+	// Semua tagihan top up yang masih menunggu pembayaran: ditampilkan & dihitung
+	// sebagai "menunggu pembayaran", TIDAK ditambahkan ke saldo tersedia (uang
+	// baru masuk setelah pembayaran selesai).
+	const pendingTopups = $derived(data?.pending_payments ?? (data?.pending_payment ? [data.pending_payment] : []));
+	const pendingTotalIdr = $derived(pendingTopups.reduce((sum, p) => sum + (Number(p.amount_idr) || 0), 0));
+	const latestPending = $derived(pendingTopups[0] ?? null);
 
 	let topupOpen = $state(false);
 	let topupBusy = $state(false);
@@ -55,9 +93,37 @@
 	let reportMsg = $state('');
 
 	async function load() {
-		const res = await apiRequest(`/v1/brands/${brandId}/credits?limit=50`);
+		const res = await apiRequest(
+			`/v1/brands/${brandId}/credits?group_by=campaign&limit=${LEDGER_PAGE_SIZE}&offset=${ledgerOffset}`
+		);
 		if (res.ok) data = await res.json();
 		loading = false;
+	}
+
+	// Buka/tutup rincian grup; entri grup dimuat sekali lalu di-cache sampai
+	// halaman di-refresh (topup sukses) — data ledger tidak berubah sendiri.
+	async function toggleGroup(g: LedgerGroup) {
+		const key = g.campaign_id || 'none';
+		if (openGroup === key) {
+			openGroup = null;
+			return;
+		}
+		openGroup = key;
+		if (groupDetail[key]) return;
+		groupDetail = { ...groupDetail, [key]: { loading: true, entries: [], total: 0 } };
+		try {
+			const res = await apiRequest(
+				`/v1/brands/${brandId}/credits?campaign_id=${encodeURIComponent(key)}&limit=500`
+			);
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat rincian saldo.')));
+			const d = await res.json();
+			groupDetail = {
+				...groupDetail,
+				[key]: { loading: false, entries: (d?.ledger ?? []) as LedgerEntry[], total: Number(d?.ledger_total ?? 0) }
+			};
+		} catch {
+			groupDetail = { ...groupDetail, [key]: { loading: false, entries: [], total: 0 } };
+		}
 	}
 
 	onMount(() => {
@@ -70,13 +136,16 @@
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
 		// Tab checkout gateway menulis kunci ini setelah pembayaran selesai.
 		const onStorage = (event: StorageEvent) => {
-			if (event.key === 'tauthub:topup-success' || event.key === 'tauthub:topup-cancelled') {
-				topupPayment = null;
-				topupError = '';
-				topupOpen = false;
-				topupKey = crypto.randomUUID();
-				void load();
-			}
+				if (event.key === 'tauthub:topup-success' || event.key === 'tauthub:topup-cancelled') {
+					topupPayment = null;
+					topupError = '';
+					topupOpen = false;
+					topupKey = crypto.randomUUID();
+					// Saldo berubah → cache rincian grup dibuang, muat ulang.
+					openGroup = null;
+					groupDetail = {};
+					void load();
+				}
 		};
 		window.addEventListener('storage', onStorage);
 		return () => {
@@ -172,9 +241,82 @@
 		}
 	}
 
-	// Catatan: refLabel/fmtDate untuk tabel ledger dihapus karena daftar mutasi
-	// kini digantikan panel Coming Soon. Kembalikan saat fitur ledger dikerjakan.
 	const fmt = (n: number) => n.toLocaleString('id-ID');
+
+	// Tanggal mutasi ditampilkan WIB (format sama dengan halaman Taut Pintar).
+	const jakartaDisplay = (iso: string | null) =>
+		iso
+			? new Date(iso).toLocaleString('id-ID', {
+					timeZone: 'Asia/Jakarta',
+					day: 'numeric',
+					month: 'short',
+					year: 'numeric',
+					hour: '2-digit',
+					minute: '2-digit'
+				})
+			: '—';
+
+	// Label human-readable saat `reason` kosong/berisi string mesin.
+	const REF_TYPE_LABEL: Record<string, string> = {
+		topup: 'Top Up Saldo',
+		reserve: 'Dana ditahan untuk publikasi',
+		release: 'Dana ditahan dikembalikan',
+		capture: 'Kredit publikasi ditagihkan (artikel terbit)',
+		adjustment: 'Penyesuaian saldo',
+		refund: 'Pengembalian klaim Link Guardian'
+	};
+
+	function ledgerLabel(e: LedgerEntry): string {
+		const reason = (e.reason ?? '').trim();
+		// Baris lama di DB memakai nama produk internal ("Top Up Tulisio
+		// Credit — pembayaran X") — dinormalkan ke penamaan baru saat tampil.
+		const legacyTopup = /^Top Up Tulisio Credit — pembayaran (.+)$/i.exec(reason);
+		if (legacyTopup) return `Top Up Saldo (${legacyTopup[1]}) berhasil`;
+		// Reason mesin (huruf kecil bertitik, mis. "ai.image.generate") diganti
+		// label manusiawi; reason berbahasa Indonesia dari server dipakai apa adanya.
+		if (reason === 'ai.image.generate') return tr('Gambar AI untuk artikel');
+		if (reason && !/^[a-z0-9]+([._-][a-z0-9]+)+$/.test(reason)) return reason;
+		return tr(REF_TYPE_LABEL[e.ref_type] ?? 'Mutasi saldo');
+	}
+
+	type LedgerRow = { tone: 'in' | 'out' | 'hold'; sign: string; amount: string; label: string; sub: string | null };
+
+	// ================== ATURAN ARAH MUTASI — BACA SEBELUM MENGUBAH ==================
+	// Warna & tanda mengikuti ARTI uangnya, bukan tanda mentah amount_tc:
+	// - `reserve` (−): dana dialokasikan/ditahan → netral (abu), BUKAN merah.
+	//   Uangnya belum terpakai; bila publikasi batal akan kembali lewat `release` (+).
+	// - `capture` (+) dari dana tertahan: penagihan saat artikel TERBIT → MERAH −.
+	//   Tanda mentahnya positif, tapi ini uang KELUAR — kalau ditampilkan hijau +
+	//   artinya persis kebalik. Jangan "perbaiki" ini jadi ikut tanda mentah.
+	// - `capture` (−) debit langsung (Taut Pintar lama), `adjustment` (−),
+	//   `refund` (−) → merah −.
+	// - `topup` (+), `adjustment` (+) → hijau + ; `release` (+) → hijau + (dana kembali).
+	// ==================================================================================
+	function ledgerRow(e: LedgerEntry, fallbackRate: number): LedgerRow {
+		const rate = e.rate_idr && e.rate_idr > 0 ? e.rate_idr : fallbackRate;
+		const amount = tcToRp(Math.abs(e.amount_tc), rate);
+		const sub = [e.document_title, e.media_name].filter(Boolean).join(' · ') || null;
+		const label = ledgerLabel(e);
+		if (e.ref_type === 'reserve') return { tone: 'hold', sign: '', amount, label, sub };
+		const outgoing = e.ref_type === 'capture' || e.ref_type === 'refund' || e.amount_tc < 0;
+		return outgoing
+			? { tone: 'out', sign: '−', amount, label, sub }
+			: { tone: 'in', sign: '+', amount, label, sub };
+	}
+
+	// Rentang grup yang sedang tampil untuk teks "Menampilkan X–Y dari N".
+	const ledgerFrom = $derived(data && data.ledger_groups_total > 0 ? ledgerOffset + 1 : 0);
+	const ledgerTo = $derived(Math.min(ledgerOffset + LEDGER_PAGE_SIZE, data?.ledger_groups_total ?? 0));
+	const ledgerHasPrev = $derived(ledgerOffset > 0);
+	const ledgerHasNext = $derived(ledgerOffset + LEDGER_PAGE_SIZE < (data?.ledger_groups_total ?? 0));
+
+	function ledgerPage(delta: number) {
+		ledgerOffset = Math.max(0, ledgerOffset + delta);
+		// Rincian grup ikut direset: komposisi grup bisa bergeser antahalaman.
+		openGroup = null;
+		groupDetail = {};
+		void load();
+	}
 </script>
 
 <PageTitle title={tr("Saldo")} />
@@ -196,16 +338,20 @@
 	{#if loading}
 		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat saldo…")}</p>
 	{:else if data}
-		{#if data.pending_payment}
+		{#if pendingTopups.length > 0}
 			<div class="app-card mt-4 flex flex-wrap items-center justify-between gap-3 border-l-4 p-4" style="border-left-color: var(--warning);">
 				<div>
-					<p class="text-sm font-medium">{tr("Ada pembayaran top up yang belum selesai")}</p>
+					<p class="text-sm font-medium">
+						{pendingTopups.length === 1
+							? tr("Ada pembayaran top up yang belum selesai")
+							: `${pendingTopups.length} ${tr("tagihan top up menunggu pembayaran")}`}
+					</p>
 					<p class="text-xs text-muted-foreground">
-						Rp {fmt(data.pending_payment.amount_idr)} · status {data.pending_payment.status}
+						{tr("Total tagihan menunggu pembayaran")} Rp {fmt(pendingTotalIdr)} · {tr("belum masuk saldo sampai pembayaran selesai")}
 					</p>
 				</div>
-				{#if data.pending_payment.payment_url}
-					<a class="app-btn app-btn-primary" href={data.pending_payment.payment_url}>Lanjutkan pembayaran</a>
+				{#if latestPending?.payment_url}
+					<a class="app-btn app-btn-primary" href={latestPending.payment_url}>{tr("Lanjutkan pembayaran")}</a>
 				{/if}
 			</div>
 		{/if}
@@ -216,12 +362,17 @@
 				<div>
 					<p class="text-xs text-muted-foreground">{tr("Saldo tersedia")}</p>
 					<p class="text-2xl font-bold tabular-nums">Rp {fmt(data.wallet.available_tc * rateIdr)}</p>
+					{#if pendingTotalIdr > 0}
+						<p class="mt-0.5 text-[11px] font-medium" style="color: var(--warning);">
+							+ Rp {fmt(pendingTotalIdr)} {tr("menunggu pembayaran")}
+						</p>
+					{/if}
 				</div>
 			</div>
 			<div class="app-card flex items-center gap-3 p-4">
 				<Lock size={18} style="color: var(--warning);" />
 				<div>
-					<p class="text-xs text-muted-foreground">Tertahan</p>
+					<p class="text-xs text-muted-foreground">{tr("Tertahan")}</p>
 					<p class="text-2xl font-bold tabular-nums">Rp {fmt(data.wallet.reserved_tc * rateIdr)}</p>
 				</div>
 			</div>
@@ -235,16 +386,157 @@
 		</div>
 
 
-		<div class="app-card mt-4 overflow-x-auto">
-			<div class="flex items-center justify-between border-b px-4 py-3">
-				<h2 class="text-sm font-semibold">{tr("Riwayat ledger")}</h2>
-				<span class="text-xs text-muted-foreground">{fmt(data.ledger_total)} entri</span>
+		<div class="app-card mt-4">
+			<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+				<div>
+					<h2 class="text-sm font-semibold">{tr("Riwayat penggunaan saldo")}</h2>
+					<p class="mt-0.5 text-[11px] text-muted-foreground">{tr("Dikelompokkan per kampanye — klik untuk melihat rinciannya.")}</p>
+				</div>
+				<span class="text-xs text-muted-foreground">{fmt(data.ledger_groups_total)} {tr("kampanye")}</span>
 			</div>
-			<!-- Fitur belum dirilis — daftar mutasi digantikan panel Coming Soon
-			     (parity distribution.tsx Riwayat Transaksi di project lama). -->
-			<div class="p-4">
-				<ComingSoon message="Riwayat mutasi saldo sedang kami siapkan dan akan segera tersedia di Tauthub." />
-			</div>
+
+			{#if pendingTopups.length > 0}
+				<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style="background-color: var(--warning-soft);">
+					<span class="flex min-w-0 items-center gap-2">
+						<Clock size={14} class="shrink-0" style="color: var(--warning);" />
+						<span class="min-w-0">
+							<span class="block text-sm font-medium" style="color: var(--warning);">
+								{tr("menunggu pembayaran")} · {pendingTopups.length} {tr("tagihan")}
+							</span>
+							<span class="mt-0.5 block text-xs text-muted-foreground">
+								{tr("belum masuk saldo sampai pembayaran selesai")}
+							</span>
+						</span>
+					</span>
+					<span class="shrink-0 text-sm font-semibold tabular-nums" style="color: var(--warning);">+Rp {fmt(pendingTotalIdr)}</span>
+				</div>
+			{/if}
+
+			{#if data.ledger_groups.length === 0}
+				<p class="px-4 py-6 text-sm text-muted-foreground">
+					{tr("Belum ada mutasi saldo. Top up atau publikasi artikel untuk melihat riwayat.")}
+				</p>
+			{:else}
+				<ul>
+					{#each data.ledger_groups as g (g.campaign_id || 'none')}
+						{@const key = g.campaign_id || 'none'}
+						{@const detail = groupDetail[key]}
+						{@const open = openGroup === key}
+						<li class="border-b last:border-b-0">
+							<button
+								class="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-secondary/50"
+								type="button"
+								aria-expanded={open}
+								onclick={() => toggleGroup(g)}
+							>
+								<span class="flex min-w-0 items-center gap-2">
+									<ChevronRight size={14} class="shrink-0 text-muted-foreground transition-transform {open ? 'rotate-90' : ''}" />
+									<span class="min-w-0">
+										<span class="block truncate text-sm font-medium">
+											{g.campaign_name || tr("Lainnya — top up & penyesuaian saldo")}
+										</span>
+										<span class="mt-0.5 block text-xs text-muted-foreground">
+											{g.entries} {tr("transaksi")} · {jakartaDisplay(g.last_at)}
+										</span>
+									</span>
+								</span>
+								<span class="shrink-0 text-right">
+									{#if g.campaign_id}
+										<span class="block text-sm font-semibold tabular-nums" style="color: {g.spent_tc > 0 ? 'var(--destructive)' : 'var(--muted-foreground)'};">
+											{g.spent_tc > 0 ? `−${tcToRp(g.spent_tc, rateIdr)}` : tcToRp(0, rateIdr)}
+										</span>
+										{#if g.held_tc > 0}
+											<span class="mt-0.5 block text-[11px] text-muted-foreground">{tcToRp(g.held_tc, rateIdr)} {tr("ditahan")}</span>
+										{/if}
+									{:else}
+										<span
+											class="block text-sm font-semibold tabular-nums"
+											style="color: {g.net_tc > 0 ? 'var(--success)' : g.net_tc < 0 ? 'var(--destructive)' : 'var(--muted-foreground)'};"
+										>
+											{g.net_tc > 0 ? '+' : g.net_tc < 0 ? '−' : ''}{tcToRp(Math.abs(g.net_tc), rateIdr)}
+										</span>
+									{/if}
+								</span>
+							</button>
+
+							{#if open}
+								<div class="border-t bg-secondary/20 px-4 py-3">
+									{#if !detail || detail.loading}
+										<p class="text-xs text-muted-foreground">{tr("Memuat rincian…")}</p>
+									{:else if detail.entries.length === 0}
+										<p class="text-xs text-muted-foreground">{tr("Tidak ada rincian untuk grup ini.")}</p>
+									{:else}
+										<div class="overflow-x-auto">
+											<table class="w-full text-sm">
+												<thead>
+													<tr class="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+														<th class="py-1.5 pr-4 font-semibold">{tr("Tanggal")}</th>
+														<th class="py-1.5 pr-4 font-semibold">{tr("Keterangan")}</th>
+														<th class="py-1.5 text-right font-semibold">{tr("Nominal")}</th>
+													</tr>
+												</thead>
+												<tbody>
+													{#each detail.entries as e (e.id)}
+														{@const row = ledgerRow(e, rateIdr)}
+														<tr class="border-t border-border/60">
+															<td class="whitespace-nowrap py-2 pr-4 text-xs text-muted-foreground">{jakartaDisplay(e.created_at)}</td>
+															<td class="py-2 pr-4">
+																<p class="font-medium">{row.label}</p>
+																{#if row.sub}
+																	<p class="mt-0.5 max-w-[420px] truncate text-xs text-muted-foreground">{row.sub}</p>
+																{/if}
+															</td>
+															<td
+																class="whitespace-nowrap py-2 text-right font-semibold tabular-nums"
+																style="color: {row.tone === 'in'
+																	? 'var(--success)'
+																	: row.tone === 'out'
+																		? 'var(--destructive)'
+																		: 'var(--muted-foreground)'};"
+															>
+																{row.sign}{row.amount}
+															</td>
+														</tr>
+													{/each}
+												</tbody>
+											</table>
+										</div>
+										{#if detail.total > detail.entries.length}
+											<p class="mt-2 text-[11px] text-muted-foreground">
+												{tr("Menampilkan")} {detail.entries.length} {tr("entri terbaru dari")} {fmt(detail.total)}.
+											</p>
+										{/if}
+									{/if}
+								</div>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+
+				<div class="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5">
+					<span class="text-xs text-muted-foreground">
+						{tr("Menampilkan")} {ledgerFrom}–{ledgerTo} {tr("dari")} {fmt(data.ledger_groups_total)} {tr("kampanye")}
+					</span>
+					<div class="flex gap-2">
+						<button
+							class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+							type="button"
+							disabled={!ledgerHasPrev || loading}
+							onclick={() => ledgerPage(-LEDGER_PAGE_SIZE)}
+						>
+							<ChevronLeft size={13} />{tr("Sebelumnya")}
+						</button>
+						<button
+							class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+							type="button"
+							disabled={!ledgerHasNext || loading}
+							onclick={() => ledgerPage(LEDGER_PAGE_SIZE)}
+						>
+							{tr("Berikutnya")}<ChevronRight size={13} />
+						</button>
+					</div>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </section>

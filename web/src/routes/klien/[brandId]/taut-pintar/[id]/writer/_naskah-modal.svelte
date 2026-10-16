@@ -8,7 +8,7 @@
 	import { untrack } from 'svelte';
 	import { tr } from '$lib/i18n/phrases';
 	import { apiRequest, readApiError } from '$lib/auth';
-	import { ARTICLE_DEFAULT_COVER } from '$lib/media/cover';
+	import { ARTICLE_DEFAULT_COVER, sameOriginAssetUrl } from '$lib/media/cover';
 	import RichTextEditor from '$lib/components/rich-text-editor.svelte';
 	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
 	import { sanitizeHtml } from '$lib/sanitize-html';
@@ -399,7 +399,8 @@
 	});
 
 	// ---------- cover ----------
-	const KB = (b: number) => (b >= 1024 * 1024 ? (b / 1024 / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
+	// Satuan paling ringkas + koma desimal ala Indonesia: 3,4MB, bukan 3422KB.
+	const KB = (b: number) => (b >= 1024 * 1024 ? (b / 1024 / 1024).toFixed(1).replace('.', ',') + 'MB' : Math.max(1, Math.round(b / 1024)) + 'KB');
 
 	// Kompres di browser sebelum diunggah: kanvas → WebP, sisi terpanjang
 	// dibatasi 1600 px. GIF dibiarkan (animasinya hilang bila dikonversi), dan
@@ -1384,7 +1385,7 @@
 					</div>
 						{#if cover}
 							<div class="relative mt-3">
-								<img src={cover} alt={tr('Gambar utama artikel')} class="aspect-video w-full rounded-lg border object-cover" style="border-color: var(--border);" />
+								<img src={sameOriginAssetUrl(cover) ?? ''} alt={tr('Gambar utama artikel')} class="aspect-video w-full rounded-lg border object-cover" style="border-color: var(--border);" />
 								<button
 								class="absolute right-2 top-2 rounded-lg border bg-card p-1.5 hover:bg-secondary"
 								type="button"

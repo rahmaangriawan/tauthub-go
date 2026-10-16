@@ -10,7 +10,7 @@
 	// endpoint identik, hanya kontrol editnya lebih ringkas.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { CircleCheck, ClipboardList, Clock, Database, Ellipsis, ExternalLink, Eye, Loader, LoaderCircle, Megaphone, Paperclip, RefreshCw, RotateCcw } from '@lucide/svelte';
+	import { Check, CircleCheck, ClipboardList, Clock, Database, Ellipsis, ExternalLink, Eye, Link as LinkIcon, Loader, LoaderCircle, Paperclip, RefreshCw, RotateCcw } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -27,6 +27,7 @@
 	type MediaItem = {
 		media_id: string;
 		name: string;
+		website_url: string | null;
 		media_type: string | null;
 		featured_image_url: string | null;
 		price_idr: number;
@@ -97,7 +98,7 @@
 			activeMenuId = null;
 		}
 
-		let revisionTarget = $state<{ publication_id: string | null; document_id: string | null; name: string; featured_image_url: string | null } | null>(null);
+		let revisionTarget = $state<{ publication_id: string | null; document_id: string | null; media_id: string; name: string; featured_image_url: string | null } | null>(null);
 		let revTitle = $state('');
 		let revHtml = $state('');
 		let revCover = $state<string | null>(null);
@@ -150,6 +151,7 @@
 		revisionTarget = {
 			publication_id: m.publication_id,
 			document_id: m.document_id,
+			media_id: m.media_id,
 			name: m.name,
 			featured_image_url: m.featured_image_url
 		};
@@ -313,6 +315,11 @@
 		return h;
 	};
 	const AVA = ['var(--accent)', 'var(--success-soft)', 'var(--warning-soft)', 'var(--muted)', 'var(--accent)', 'var(--success-soft)'];
+
+	// Favicon media di tabel: domain dari website_url, fallback ke inisial nama.
+	const cleanDomain = (url: string | null | undefined, name: string): string =>
+		((url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim() || name.trim()).toLowerCase();
+	let faviconFailed = $state<Record<string, boolean>>({});
 </script>
 
 <PageTitle title="Taut Pintar — Ringkasan Distribusi" />
@@ -333,9 +340,10 @@
 		</div>
 	{:else}
 		<div
-			class="app-card mt-4 p-4"
+			class="app-card mt-4 flex items-center justify-between gap-3 p-4"
 			style="background-color: {bannerState === 'published' ? 'var(--success-soft)' : 'var(--accent)'}; color: {bannerState === 'published' ? 'var(--success)' : 'var(--accent-foreground)'};"
 		>
+			<div class="min-w-0">
 				<div class="flex items-center gap-2">
 					{#if bannerState === 'published'}
 						<CircleCheck size={18} class="shrink-0" />
@@ -365,146 +373,235 @@
 						{tr('Terbitkan kampanye dari halaman The Writer untuk mendistribusikan artikel ke media terpilih dan melihat laporan distribusi.')}
 					{/if}
 				</p>
-		</div>
-
-		{#if resume}
-			<div class="mt-3 flex justify-end">
-				<a class="app-btn app-btn-primary" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/${resume.slug}`}>
+			</div>
+			{#if resume}
+				<a class="app-btn app-btn-primary shrink-0" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/${resume.slug}`}>
 					<RotateCcw size={14} /> {resume.label}
 				</a>
-			</div>
-		{/if}
+			{/if}
+		</div>
 
 		<div class="mt-3 grid gap-3 md:grid-cols-2">
-			<div class="app-card p-4">
-				<div class="flex items-center gap-3">
-					<span class="flex h-9 w-9 items-center justify-center rounded-lg" style="background-color: var(--accent); color: var(--accent-foreground);"><Database size={20} /></span>
-					<p class="text-sm text-muted-foreground">{tr("Biaya Distribusi Media")}</p>
+			<div
+				class="app-card relative overflow-hidden p-4 sm:p-5"
+				style="background: linear-gradient(115deg, #ffffff 0%, #f5f9ff 45%, #e4eefe 100%);"
+			>
+				<img
+					src="/images/wallet-distribusi.webp"
+					alt=""
+					aria-hidden="true"
+					class="pointer-events-none absolute right-0 bottom-0 h-[78%] w-auto translate-x-[10%] translate-y-[18%] object-contain opacity-25 select-none"
+					draggable="false"
+				/>
+				<div class="relative z-10">
+					<div class="flex items-center gap-3">
+						<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600"><Database size={20} /></span>
+						<div class="min-w-0">
+							<p class="text-sm font-semibold text-slate-700">{tr("Biaya Distribusi Media")}</p>
+							<p class="text-xs text-muted-foreground mt-0.5">{tr("Total biaya untuk distribusi ke seluruh media terpilih.")}</p>
+						</div>
+					</div>
+					<p class="mt-4 text-3xl font-extrabold tracking-tight text-slate-900">{rpCurrency(data.totalCostIdr)}</p>
 				</div>
-				<p class="mt-2 text-lg font-bold">{rpCurrency(data.totalCostIdr)}</p>
 			</div>
-			<div class="app-card p-4">
-				<div class="flex items-center gap-3">
-					<span class="flex h-9 w-9 items-center justify-center rounded-lg" style="background-color: var(--warning-soft); color: var(--warning);"><ClipboardList size={20} /></span>
-					<p class="text-sm text-muted-foreground">{tr("Status Kampanye")}</p>
+			<div
+				class="app-card relative overflow-hidden p-4 sm:p-5"
+				style="background: {allPublished
+					? 'linear-gradient(115deg, #ffffff 0%, #f6fdf9 45%, #e6f9ee 100%)'
+					: 'linear-gradient(115deg, #ffffff 0%, #fefaef 45%, #fcf1d6 100%)'};"
+			>
+				<div class="relative z-10">
+					<div class="flex items-start justify-between gap-3">
+						<div class="flex items-center gap-3">
+							{#if allPublished}
+								<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style="background-color: #d9f4e4; color: #16a34a;"><Check size={20} strokeWidth={2.8} /></span>
+							{:else}
+								<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style="background-color: var(--warning-soft); color: var(--warning);"><ClipboardList size={20} /></span>
+							{/if}
+							<div class="min-w-0">
+								<p class="text-sm font-semibold text-slate-700">{tr("Status Kampanye")}</p>
+								<p class="text-xs text-muted-foreground mt-0.5">{tr("Progres penerbitan artikel ke media terpilih.")}</p>
+							</div>
+						</div>
+					</div>
+					<p class="mt-4 text-3xl font-extrabold tracking-tight text-slate-900">{publishedCount} / {mediaList.length} {tr("Terbit")}</p>
+					<div class="mt-3 flex items-center gap-3">
+						<div
+							class="h-2 flex-1 overflow-hidden rounded-full"
+							style="background-color: {allPublished ? '#d9f4e4' : 'var(--muted)'};"
+							role="progressbar"
+							aria-valuenow={progressPercent}
+							aria-valuemin="0"
+							aria-valuemax="100"
+						>
+							<div class="h-full rounded-full transition-all" style="width: {progressPercent}%; background-color: {allPublished ? '#22c55e' : 'var(--primary)'};"></div>
+						</div>
+						<span class="text-xs font-bold" style="color: {allPublished ? '#16a34a' : 'var(--muted-foreground)'};">{progressPercent}%</span>
+					</div>
+					<p class="mt-2 flex items-center gap-1.5 text-xs font-medium" style="color: {allPublished ? '#16a34a' : 'var(--muted-foreground)'};">
+						{#if allPublished}<CircleCheck size={13} />{/if}
+						{statusSub}
+					</p>
 				</div>
-				<p class="mt-2 text-lg font-bold">{publishedCount} / {mediaList.length} {tr("Terbit")}</p>
-				<div class="mt-2 h-2 w-full overflow-hidden rounded-full" style="background-color: var(--muted);" role="progressbar" aria-valuenow={progressPercent} aria-valuemin="0" aria-valuemax="100">
-					<div class="h-full" style="width: {progressPercent}%; background-color: var(--primary);"></div>
-				</div>
-				<p class="mt-1 text-xs text-muted-foreground">{statusSub}</p>
 			</div>
 		</div>
 
 		{#if error}<p class="mt-2 text-sm" style="color: var(--destructive);">{error}</p>{/if}
 
-		<section class="app-card mt-3 p-4">
-			<div class="flex flex-wrap items-center justify-between gap-2">
-				<div class="flex items-center gap-2">
-					<span class="flex h-8 w-8 items-center justify-center rounded-lg" style="background-color: var(--accent); color: var(--accent-foreground);"><Megaphone size={18} /></span>
+		<section class="app-card mt-3 p-4 sm:p-5">
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div class="flex items-center gap-3">
+					<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-2xs">
+						<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 16 16" aria-hidden="true">
+							<g fill="currentColor">
+								<path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855a.75.75 0 0 0-.124 1.329l4.995 3.178l1.531 2.406a.5.5 0 0 0 .844-.536L6.637 10.07l7.494-7.494l-1.895 4.738a.5.5 0 1 0 .928.372zm-2.54 1.183L5.93 9.363L1.591 6.602z" />
+								<path d="M16 12.5a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0m-1.993-1.679a.5.5 0 0 0-.686.172l-1.17 1.95l-.547-.547a.5.5 0 0 0-.708.708l.774.773a.75.75 0 0 0 1.174-.144l1.335-2.226a.5.5 0 0 0-.172-.686" />
+							</g>
+						</svg>
+					</span>
 					<div>
-						<p class="font-bold">{tr("Media Terpilih (")}{mediaList.length})</p>
-						<p class="text-xs text-muted-foreground">{tr("Daftar media untuk distribusi konten kampanye ini.")}</p>
+						<p class="font-bold text-base text-slate-900">{tr("Media Terpilih (")}{mediaList.length})</p>
+						<p class="text-xs text-slate-500 mt-0.5">{tr("Daftar media untuk distribusi konten kampanye ini.")}</p>
 					</div>
 				</div>
-				<div class="flex gap-2">
-					<a class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" href={`/klien/${brandUrl}/taut-pintar`}>{tr("Kembali ke Daftar Kampanye")}</a>
-					<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={loadData}><RefreshCw size={14} /> Segarkan</button>
+				<div class="flex items-center gap-2">
+					<button
+						class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors"
+						type="button"
+						onclick={loadData}
+					>
+						<RefreshCw size={13} class="text-blue-600" />
+						Segarkan
+					</button>
 				</div>
 			</div>
 
 			{#if mediaList.length > 0}
-				<div class="mt-3 overflow-x-auto">
+				<div class="mt-4 overflow-x-auto rounded-lg border border-slate-100">
 					<table class="w-full text-sm">
 						<thead>
-							<tr class="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-								<th class="px-3 py-2 font-semibold">{tr("Media")}</th>
-								<th class="px-3 py-2 font-semibold">Tipe</th>
-								<th class="px-3 py-2 font-semibold">DA</th>
-								<th class="px-3 py-2 font-semibold">Link Artikel</th>
-								<th class="px-3 py-2 font-semibold">{tr("Jadwal Terbit")}</th>
-								<th class="px-3 py-2 font-semibold">Judul Artikel</th>
-								<th class="px-3 py-2 font-semibold">{tr("Status Terbit")}</th>
-								<th class="px-3 py-2 font-semibold">Aksi</th>
+							<tr class="bg-slate-50/80 border-b border-slate-100 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+								<th class="px-4 py-3">{tr("Media")}</th>
+								<th class="px-4 py-3">Tipe</th>
+								<th class="px-4 py-3">DA</th>
+								<th class="px-4 py-3">Link Artikel</th>
+								<th class="px-4 py-3">{tr("Jadwal Terbit")}</th>
+								<th class="px-4 py-3">Judul Artikel</th>
+								<th class="px-4 py-3">{tr("Status Terbit")}</th>
+								<th class="px-4 py-3 text-right">Aksi</th>
 							</tr>
 						</thead>
-						<tbody>
+						<tbody class="divide-y divide-slate-100 bg-white">
 							{#each mediaList as m (m.media_id)}
-								<tr class="border-t">
-									<td class="px-3 py-2">
-										<div class="flex items-center gap-2">
-											<span class="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold" style="background-color: {AVA[avatarTone(m.name)]};">{initialOf(m.name)}</span>
-											<span class="font-medium">{m.name || '—'}</span>
+								{@const domain = cleanDomain(m.website_url, m.name)}
+								<tr class="hover:bg-slate-50/50 transition-colors">
+									<td class="px-4 py-3">
+										<div class="flex items-center gap-3">
+											<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold border border-slate-200/60" style="background-color: {AVA[avatarTone(m.name)]};">
+												{#if domain && !faviconFailed[m.media_id]}
+													<img
+														src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`}
+														alt=""
+														class="h-full w-full object-cover"
+														loading="lazy"
+														decoding="async"
+														onerror={() => (faviconFailed = { ...faviconFailed, [m.media_id]: true })}
+													/>
+												{:else}
+													{initialOf(m.name)}
+												{/if}
+											</span>
+											<div class="min-w-0">
+												<span class="block font-bold text-slate-900 text-[13.5px] leading-tight truncate">{m.name || '—'}</span>
+												{#if domain}
+													<span class="block text-[11px] text-slate-400 font-normal mt-0.5 truncate">{domain}</span>
+												{/if}
+											</div>
 										</div>
 									</td>
-									<td class="px-3 py-2">
-										{#if m.media_type}<span class="rounded-full px-2 py-0.5 text-[11px]" style="background-color: var(--accent); color: var(--accent-foreground);">{m.media_type}</span>{:else}—{/if}
+									<td class="px-4 py-3 whitespace-nowrap">
+										{#if m.media_type}
+											<span class="rounded-full border border-blue-200/80 bg-blue-50 px-3 py-0.5 text-[11px] font-semibold text-blue-600">
+												{m.media_type}
+											</span>
+										{:else}
+											—
+										{/if}
 									</td>
-									<td class="px-3 py-2">{m.da != null ? m.da : '—'}</td>
-									<td class="px-3 py-2">
+									<td class="px-4 py-3 font-semibold text-slate-800">{m.da != null ? m.da : '—'}</td>
+									<td class="px-4 py-3 whitespace-nowrap">
 										{#if m.article.links.count > 0}
-											<span class="text-xs">{m.article.links.count} link{m.article.links.rels.length > 0 ? ` · ${m.article.links.rels.join(', ')}` : ' dofollow'}</span>
+											<span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+												<LinkIcon size={12} class="text-slate-400 shrink-0" />
+												{m.article.links.count} link{m.article.links.rels.length > 0 ? ` · ${m.article.links.rels.join(', ')}` : ' dofollow'}
+											</span>
 										{:else}
 											<span class="text-xs text-muted-foreground">{tr("Tidak ada link")}</span>
 										{/if}
 									</td>
-									<td class="px-3 py-2">
-										<span class="inline-flex items-center gap-1 text-xs" style="color: {m.publish.status === 'published' ? 'var(--success)' : 'var(--muted-foreground)'};">
-											<Clock size={12} />{toJakartaDisplay(m.scheduled_at) ?? 'Segera'}
+									<td class="px-4 py-3 whitespace-nowrap">
+										<span class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+											<Clock size={12} class="text-emerald-500 shrink-0" />
+											{toJakartaDisplay(m.scheduled_at) ?? 'Segera'}
 										</span>
 									</td>
-									<td class="max-w-[260px] px-3 py-2">
+									<td class="max-w-[280px] px-4 py-3">
 										{#if m.article.title}
-											<span class="block truncate text-xs">{m.article.title}</span>
+											<span class="block truncate text-xs text-slate-700" title={m.article.title}>{m.article.title}</span>
 										{:else}
 											<span class="text-xs text-muted-foreground">{tr("Belum ada artikel")}</span>
 										{/if}
 									</td>
-									<td class="px-3 py-2">
+									<td class="px-4 py-3 whitespace-nowrap">
 										{#if m.publish.status === 'published'}
 											<span class="inline-flex items-center gap-1.5">
-												<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft); color: var(--success);">
-													<CircleCheck size={11} />{tr("Terbit")}</span>
+												<span class="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600">
+													<CircleCheck size={11} class="text-emerald-500" />
+													{tr("Terbit")}
+												</span>
 												{#if m.publish.url}
 													<a
 														href={m.publish.url}
 														target="_blank"
 														rel="noreferrer"
-														class="inline-flex items-center gap-1 rounded-lg border px-1.5 py-0.5 text-[11px] font-medium hover:underline"
-														style="border-color: var(--accent-foreground); color: var(--accent-foreground); background-color: var(--accent);"
+														class="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50/60 px-2 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-100/70 transition-colors"
 														title={tr('Buka artikel di situs mitra')}
 													>
-														<ExternalLink size={11} />{tr("Lihat")}
+														<ExternalLink size={11} />
+														{tr("Lihat")}
 													</a>
 												{/if}
 											</span>
 										{:else if m.publish.status === 'failed'}
-											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--destructive); color: #fff;">{tr("Gagal")}</span>
+											<span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-rose-50 border border-rose-200 text-rose-600">{tr("Gagal")}</span>
 										{:else if m.publish.status === 'processing' || m.publish.status === 'queued' || m.publish.status === 'retrying'}
-											<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">Diproses</span>
+											<span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-blue-50 border border-blue-200 text-blue-600">Diproses</span>
 										{:else if m.publish.status === 'revision'}
-											<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);"><RotateCcw size={11} />{tr("Revisi - Menunggu Mitra")}</span>
+											<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-blue-50 border border-blue-200 text-blue-600">
+												<RotateCcw size={11} />{tr("Revisi - Menunggu Mitra")}
+											</span>
 										{:else if m.publish.status === 'waiting_partner' || m.publish.status === 'partner_approved' || m.publish.status === 'pending'}
-											<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft); color: var(--warning);"><Clock size={11} />{tr("Menunggu Mitra")}</span>
+											<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-amber-50 border border-amber-200 text-amber-700">
+												<Clock size={11} />{tr("Menunggu Mitra")}
+											</span>
 										{:else}
 											<span class="text-xs text-muted-foreground">—</span>
 										{/if}
 									</td>
-										<td class="px-3 py-2">
-											<div class="relative flex items-center">
-												<button
-													type="button"
-													class="inline-flex h-7 w-7 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-													style="border-color: var(--border); background: var(--card, #fff);"
-													aria-haspopup="menu"
-													aria-expanded={activeMenuId === m.media_id}
-													aria-label={`${tr('Aksi untuk')} ${m.name}`}
-													onclick={(e) => {
-														e.stopPropagation();
-														toggleRowMenu(m.media_id, e.currentTarget as HTMLElement);
-													}}
+									<td class="px-4 py-3 text-right">
+										<div class="relative inline-flex items-center">
+											<button
+												type="button"
+												class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-2xs hover:bg-slate-50 hover:text-slate-800 transition-colors"
+												aria-haspopup="menu"
+												aria-expanded={activeMenuId === m.media_id}
+												aria-label={`${tr('Aksi untuk')} ${m.name}`}
+												onclick={(e) => {
+													e.stopPropagation();
+													toggleRowMenu(m.media_id, e.currentTarget as HTMLElement);
+												}}
 												>
-													<Ellipsis size={15} />
+													<Ellipsis size={14} />
 												</button>
 											</div>
 										</td>
@@ -514,7 +611,7 @@
 						</table>
 					</div>
 
-						{#if activeMenuMedia}
+					{#if activeMenuMedia}
 							{@const m = activeMenuMedia}
 							{@const isRevisionRequested = m?.publish?.status === 'revision'}
 							<button
@@ -597,6 +694,7 @@
 				saveLabel={editorMode === 'request_revision' ? tr("Kirim Revisi") : tr("Simpan Revisi")}
 				showSaveButton={editorMode !== 'view'}
 				readOnly={editorMode === 'view'}
+				coverAi={revisionTarget ? { brandId, campaignId, mediaId: revisionTarget.media_id, articleId: null } : null}
 				onClose={() => (revisionTarget = null)}
 				onUploadCover={uploadRevisionCover}
 				onSave={(title, html, cover) => {

@@ -4,10 +4,11 @@
 	// Modal editor rich untuk Writer — dipakai untuk Preview hasil generate
 	// maupun edit hasil Unggah Artikel. Port writer/editor-modal.tsx.
 	// contentEditable + execCommand (tanpa dependensi baru).
-	import { Image, Info, Link, List, ListOrdered, LoaderCircle, Quote, RotateCcw, RotateCw, TriangleAlert, Upload, Video, X } from '@lucide/svelte';
+	import { Image, Info, Link, List, ListOrdered, LoaderCircle, Quote, RotateCcw, RotateCw, Sparkles, TriangleAlert, Upload, Video, X } from '@lucide/svelte';
 	import type { Component, Snippet } from 'svelte';
 	import Select from '$lib/components/select.svelte';
-	import { TAUTHUB_FALLBACK_COVER } from '$lib/media/cover';
+	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
+	import { sameOriginAssetUrl, TAUTHUB_FALLBACK_COVER } from '$lib/media/cover';
 	import { sanitizeHtml } from '$lib/sanitize-html';
 
 	// Fallback cover "pakai logo Tauthub": konstantanya di $lib/media/cover agar
@@ -40,6 +41,9 @@
 		saveLabel = tr('Simpan'),
 		showSaveButton = true,
 		readOnly = false,
+		// Konteks untuk opsi "Generate Gambar AI" pada tombol Ganti Cover.
+		// Null = perilaku lama: tombol langsung membuka pemilih berkas.
+		coverAi = null,
 		extraFields
 	}: {
 		mediaName: string;
@@ -66,6 +70,7 @@
 		saveLabel?: string;
 		showSaveButton?: boolean;
 		readOnly?: boolean;
+		coverAi?: { brandId: string; campaignId: string; mediaId: string; articleId?: string | null } | null;
 		extraFields?: Snippet;
 	} = $props();
 
@@ -100,6 +105,36 @@
 	let coverConfirmOpen = $state(false);
 	let warnOpen = $state(false);
 	let coverInfoOpen = $state(false);
+	// Menu dua opsi pada tombol Ganti Cover (unggah sendiri / generate AI) dan
+	// status buka modal pustaka gambar AI. Menu dirender sebagai popup mengambang
+	// yang di-anchor ke tombolnya (posisi dihitung dari rect tombol).
+	let coverMenuOpen = $state(false);
+	let coverMenuPos = $state<{ left: number; top: number; width: number } | null>(null);
+	let coverAiOpen = $state(false);
+	function onCoverPickClick(event: MouseEvent) {
+		if (coverBusy || readOnly) return;
+		if (coverAi) {
+			if (coverMenuOpen) {
+				coverMenuOpen = false;
+				return;
+			}
+			const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+			const width = Math.min(340, window.innerWidth - 24);
+			const left = Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12);
+			coverMenuPos = { left, top: Math.min(rect.bottom + 6, window.innerHeight - 132), width };
+			coverMenuOpen = true;
+			return;
+		}
+		coverInput?.click();
+	}
+	function pickOwnCover() {
+		coverMenuOpen = false;
+		coverInput?.click();
+	}
+	function openCoverAi() {
+		coverMenuOpen = false;
+		coverAiOpen = true;
+	}
 	// Ukuran gambar (byte) — cover + gambar di dalam artikel, untuk footer editor.
 	let coverBytes = $state(0);
 	let articleBytes = $state(0);
@@ -109,7 +144,12 @@
 
 	const linkOverLimit = $derived(linkCount > linkLimit);
 	const totalImageKb = $derived(coverBytes + articleBytes);
-	const fmtKb = (b: number) => (b > 0 ? `${Math.round(b / 1024)}KB` : '0KB');
+	// Satuan paling ringkas + koma desimal ala Indonesia: 3,4MB, bukan 3422KB.
+	const fmtKb = (b: number) => {
+		if (b <= 0) return '0KB';
+		if (b >= 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1).replace('.', ',')}MB`;
+		return `${Math.max(1, Math.round(b / 1024))}KB`;
+	};
 
 	async function measureBytes(src: string): Promise<number> {
 		try {
@@ -134,10 +174,11 @@
 		void measureArticleImages();
 	});
 
-	// Ukur cover saat berubah.
+	// Ukur cover saat berubah. URL di-relatifkan dulu: cover tersimpan bisa
+	// absolut ke origin publik (produksi) sementara file ada di server lokal.
 	$effect(() => {
 		let alive = true;
-		const url = coverUrl;
+		const url = sameOriginAssetUrl(coverUrl);
 		if (!url) {
 			coverBytes = 0;
 			return;
@@ -436,7 +477,43 @@
 	});
 </script>
 
-<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(15, 23, 42, 0.45);" role="dialog" aria-modal="true" aria-label={`${tr('Editor artikel')} ${mediaName}`}>
+<!-- Menu dua opsi untuk Ganti Cover sebagai POPUP mengambang, anchor tepat di
+     bawah tombol yang diklik (posisi dihitung dari rect tombol di JS). Di
+     belakangnya ada backdrop transparan untuk menutup saat klik di luar. -->
+{#snippet coverMenu()}
+	{#if coverAi && coverMenuPos}
+		<div class="fixed inset-0 z-[90]" role="presentation" onclick={() => (coverMenuOpen = false)}></div>
+		<div
+			class="fixed z-[91] overflow-hidden rounded-xl border shadow-xl"
+			style="left: {coverMenuPos.left}px; top: {coverMenuPos.top}px; width: {coverMenuPos.width}px; border-color: var(--border); background-color: var(--card, #fff);"
+			role="menu"
+		>
+			<button type="button" class="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-secondary" role="menuitem" onclick={pickOwnCover}>
+				<Upload size={15} class="mt-0.5 shrink-0 text-muted-foreground" />
+				<span class="min-w-0">
+					<span class="block text-xs font-semibold">{tr('Unggah gambar sendiri')}</span>
+					<span class="block text-[11px] text-muted-foreground">{tr('Gratis · JPG/PNG, otomatis dikompres ke WebP')}</span>
+				</span>
+			</button>
+			<button type="button" class="flex w-full items-start gap-2.5 border-t px-3 py-2.5 text-left transition-colors hover:bg-secondary" style="border-color: var(--border);" role="menuitem" onclick={openCoverAi}>
+				<Sparkles size={15} class="mt-0.5 shrink-0" style="color: var(--primary);" />
+				<span class="min-w-0">
+					<span class="block text-xs font-semibold">{tr('Generate Gambar AI')}</span>
+					<span class="block text-[11px] text-muted-foreground">{tr('Berbayar — biaya & saldo ditampilkan sebelum diproses; saldo terpotong otomatis bila saldo cukup')}</span>
+				</span>
+			</button>
+		</div>
+	{/if}
+{/snippet}
+
+<div
+	class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4"
+	style="background-color: rgba(15, 23, 42, 0.45);"
+	role="dialog"
+	aria-modal="true"
+	aria-label={`${tr('Editor artikel')} ${mediaName}`}
+	onscroll={() => (coverMenuOpen = false)}
+>
 	<div class="app-card my-auto w-full max-w-3xl p-5">
 		<div class="flex items-start justify-between gap-3">
 			<div>
@@ -470,11 +547,14 @@
 					{/if}
 					{#if coverUrl}
 						<div class="relative">
-							<img src={coverUrl} alt={tr('Cover artikel')} class="max-h-56 w-full rounded-lg object-cover" />
+							<img src={sameOriginAssetUrl(coverUrl) ?? ''} alt={tr('Cover artikel')} class="aspect-video w-full rounded-lg object-cover" />
 							{#if !readOnly}
-								<button class="app-btn absolute right-2.5 bottom-2.5 !min-h-7 !px-3 !text-xs" type="button" style="background-color: rgba(15, 23, 42, 0.72); color: #fff;" disabled={coverBusy} onclick={() => coverInput?.click()}>
+								<button class="app-btn absolute right-2.5 bottom-2.5 !min-h-7 !px-3 !text-xs" type="button" style="background-color: rgba(15, 23, 42, 0.72); color: #fff;" disabled={coverBusy} onclick={onCoverPickClick}>
 									{coverBusy ? tr('Mengunggah…') : tr('Ganti Cover')}
 								</button>
+								{#if coverMenuOpen}
+									{@render coverMenu()}
+								{/if}
 							{/if}
 						</div>
 					{:else if readOnly}
@@ -482,11 +562,16 @@
 							{tr('Cover artikel belum diunggah')}
 						</div>
 					{:else}
-						<button class="flex min-h-[132px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-5 text-center" type="button" disabled={coverBusy} onclick={() => coverInput?.click()}>
-							<Upload size={20} class="text-muted-foreground" />
-							<span class="text-sm font-medium">{coverBusy ? tr('Mengunggah cover…') : tr('Cover artikel belum diunggah')}</span>
-							<span class="text-xs text-muted-foreground">{tr("Klik untuk mengunggah, atau tempel gambar (Ctrl+V) · Maksimal 200KB · Lebih dari itu otomatis dikompres & diubah ke WebP oleh sistem TautHub")}</span>
-						</button>
+						<div class="relative">
+							<button class="flex min-h-[132px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-5 text-center" type="button" disabled={coverBusy} onclick={onCoverPickClick}>
+								<Upload size={20} class="text-muted-foreground" />
+								<span class="text-sm font-medium">{coverBusy ? tr('Mengunggah cover…') : tr('Cover artikel belum diunggah')}</span>
+								<span class="text-xs text-muted-foreground">{tr("Klik untuk mengunggah, atau tempel gambar (Ctrl+V) · Maksimal 200KB · Lebih dari itu otomatis dikompres & diubah ke WebP oleh sistem TautHub")}</span>
+							</button>
+							{#if coverMenuOpen}
+								{@render coverMenu()}
+							{/if}
+						</div>
 					{/if}
 				</div>
 
@@ -703,4 +788,24 @@
 			</div>
 		</div>
 	</div>
+{/if}
+
+<!-- Pustaka + generate gambar AI untuk cover (mode 'cover'): menampilkan biaya
+     per gambar & saldo dalam rupiah, memblokir generate saat saldo kurang. -->
+{#if coverAi && coverAiOpen}
+	<MediaLibraryPicker
+		open={coverAiOpen}
+		brandId={coverAi.brandId}
+		campaignId={coverAi.campaignId}
+		mediaId={coverAi.mediaId}
+		articleId={coverAi.articleId ?? null}
+		mode="cover"
+		defaultHeading={title}
+		onSelect={(url) => {
+			coverUrl = url;
+			coverAiOpen = false;
+			coverMenuOpen = false;
+		}}
+		onClose={() => (coverAiOpen = false)}
+	/>
 {/if}

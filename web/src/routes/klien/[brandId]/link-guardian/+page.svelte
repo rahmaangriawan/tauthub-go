@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
+	import { sameOriginAssetUrl } from '$lib/media/cover';
 
 	// Pelacak 404 klien — port LinkMonitorSection (link-monitor-section.tsx).
 	// Struktur: header → 4 kartu statistik → kartu filter (cari + STATUS/MEDIA/
@@ -186,12 +187,8 @@
 	const fmtDateTime = (v: string | null) =>
 		v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : tr('Belum pernah');
 
-	/** Normalisasi URL thumbnail: origin upload lama → path relatif (parity). */
-	function thumbUrl(url: string | null | undefined): string | null {
-		if (!url) return null;
-		if (url.startsWith('https://app.tauthub.com/uploads/')) return url.replace('https://app.tauthub.com', '');
-		return url;
-	}
+	/** Normalisasi URL thumbnail: origin upload absolut → path relatif. */
+	const thumbUrl = sameOriginAssetUrl;
 
 	// Sortir pada halaman aktif saja (parity sortedItems). Judul memakai
 	// perilaku lama; kolom terakhir update membandingkan waktu, dengan entri

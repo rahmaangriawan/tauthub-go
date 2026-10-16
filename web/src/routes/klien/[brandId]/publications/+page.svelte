@@ -8,6 +8,7 @@
 	// (detail, batalkan, tracking) → toast "macet".
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { sameOriginAssetUrl } from '$lib/media/cover';
 	import { goto } from '$app/navigation';
 	import {
 		Calendar, ChartLine, CircleAlert, CircleCheck, Coins, ExternalLink, FileText, Image as ImageIcon, LoaderCircle, PencilLine, RotateCcw, Search, X
@@ -459,9 +460,7 @@
 					{@const draftVis = isDraftVisibility(row)}
 					{@const badge = draftVis ? draftVisibilityCfg : cfg}
 					{@const cats = categoriesOf(row)}
-					{@const thumb = row.featured_image_url?.startsWith('https://app.tauthub.com/uploads/')
-						? row.featured_image_url.replace('https://app.tauthub.com', '')
-						: row.featured_image_url}
+					{@const thumb = sameOriginAssetUrl(row.featured_image_url)}
 					<div class="flex flex-col gap-4 border-b p-4 last:border-0 md:flex-row">
 						<!-- Cover: mobile 16/9 selebar kartu dengan label status menempel
 						     di pojok kanan atas gambar; desktop thumbnail 140x88. -->
