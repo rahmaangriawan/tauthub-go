@@ -2141,6 +2141,10 @@ button.selectedStepChip:disabled,
   background: var(--accent, #eef4ff); color: var(--primary);
   font-size: 14px; font-weight: 800;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+.selectedBarAvatar img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
 }
 .selectedBarAvatarMore { background: #0f172a; color: #fff; margin-right: 0; }
 .selectedBarMobileText { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }

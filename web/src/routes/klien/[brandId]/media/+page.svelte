@@ -1997,8 +1997,19 @@
 				<div class="selectedBarMobile">
 					<div class="selectedBarMobileRow">
 						<div class="selectedBarMobileIcons" aria-hidden="true">
-							{#each [...selectedIds].slice(0, 3) as id (id)}
-								<span class="selectedBarAvatar">{(selectedSnapshot[id]?.name ?? id).trim().charAt(0).toUpperCase() || '•'}</span>
+							{#each selectedItems.slice(0, 3) as it (it.id)}
+								<span class="selectedBarAvatar">
+									{#if it.domain && !faviconFailed[it.id]}
+										<img
+											src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(it.domain)}&sz=128`}
+											alt=""
+											loading="lazy"
+											onerror={() => (faviconFailed = { ...faviconFailed, [it.id]: true })}
+										/>
+									{:else}
+										{(it.name ?? it.id).trim().charAt(0).toUpperCase() || '•'}
+									{/if}
+								</span>
 							{/each}
 							{#if selectedIds.size > 3}
 								<span class="selectedBarAvatar selectedBarAvatarMore">+{selectedIds.size - 3}</span>
