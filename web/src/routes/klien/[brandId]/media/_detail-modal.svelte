@@ -186,6 +186,12 @@
 	const sponsorText = $derived(isOrganic ? tr('✓ Tidak Ada (Organik)') : 'Ada Label Sponsor / Adv');
 	const isDirectPublish = $derived(media.publication_mode === 'publish');
 	const initialLetter = $derived((media.name || 'M').trim().charAt(0).toUpperCase());
+	// Favicon langsung dari website media (layanan favicon publik Google);
+	// gagal muat → jatuh ke inisial huruf.
+	const faviconDomain = $derived(
+		(media.website_url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim()
+	);
+	let faviconFailed = $state(false);
 
 	const cats = $derived(
 		Array.isArray(media.categories) && media.categories.length > 0
@@ -360,7 +366,15 @@
 			<div class="detailHeader">
 				<div class="detailHeaderLeft">
 					<div class="detailHeaderAvatar">
-						{initialLetter}
+						{#if faviconDomain && !faviconFailed}
+							<img
+								src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(faviconDomain)}&sz=128`}
+								alt={media.name}
+								onerror={() => (faviconFailed = true)}
+							/>
+						{:else}
+							{initialLetter}
+						{/if}
 					</div>
 
 					<div class="detailHeaderInfo">
@@ -829,6 +843,13 @@
 		color: #2563eb;
 		flex-shrink: 0;
 		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+		overflow: hidden;
+	}
+	.detailHeaderAvatar img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
 	}
 	.detailHeaderInfo {
 		display: flex;
