@@ -19,6 +19,25 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.5.5 — 2026-10-16
+
+### Fitur
+- **Riwayat Saldo kini per kampanye**: setiap kampanye tampil dengan total terpakai dan jumlah transaksinya, klik untuk membuka rinciannya — mana yang biaya tulis artikel, mana yang penagihan publikasi. Top up dan penyesuaian saldo dikumpulkan di grup "Lainnya". Warna konsisten: merah dengan tanda − untuk saldo berkurang, hijau dengan tanda + untuk saldo bertambah, dan abu untuk dana yang ditahan (belum terpakai).
+- **Ganti Cover punya dua pilihan**: unggah gambar sendiri (gratis), atau **Generate Gambar AI** — berbayar, dan sebelum diproses selalu ditampilkan biaya per gambar plus saldo kamu, dengan konfirmasi sekali klik. Kalau saldo kurang, tombolnya mati dan ada anjuran top up.
+- **Tagihan top up yang belum dibayar kini terlihat dan dihitung**: banner menampilkan jumlah tagihan yang menunggu beserta totalnya dan tombol "Lanjutkan pembayaran", dan tagihan itu ikut tampil di riwayat. Nilai tagihan belum dihitung ke Saldo tersedia sampai pembayarannya benar-benar selesai.
+- **Masa berlaku sesi top up 24 jam**: tagihan yang tidak dibayar dalam 24 jam otomatis hilang dari notifikasi dan riwayat — tidak menumpuk lagi.
+- **Halaman Ringkasan distribusi dirapikan**: tabel media kini memakai logo asli situs media plus domainnya, tipe, DA, jumlah tautan, jadwal terbit, dan status tuntas-bayar sekali lirik; dua kartu ringkas (Biaya Distribusi Media dan Status Kampanye) — kartu status berubah kuning saat proses dan hijau begitu semua artikel terbit; tombol "Kembali ke The Writer" pindah rapi ke dalam banner.
+
+### Perbaikan
+- **Permintaan jumlah kata di kolom topik/konteks kini benar-benar dipatuhi**. Tulis "800 kata" dan hasilnya akan di sekitar 720–880 kata; tulis "minimal 2.500 kata" dan artikel tidak akan berhenti di bawah itu. Kalau draf pertama meleset dari rentang, AI otomatis menulis ulang sekali dengan koreksi panjang. Sebelumnya minta 800 kata bisa keluar 1.000 kata, dan minta 2.500 kata bisa berhenti di 1.873.
+- **Tautan utama artikel tidak lagi bisa tertanam dua kali**: sistem menyisakan satu tautan dengan anchor persis seperti yang kamu isi, walau model sempat menulisnya berulang. Link yang sudah ada juga lebih jarang salah dianggap hilang (aturan href dirapikan), termasuk saat URL punya tanda `&` atau garis miring di akhir.
+- **Gambar cover di editor artikel kembali termuat dengan benar** (berlaku juga untuk thumbnail cover di Status Publikasi dan Link Guardian), dan cover di editor kini rasio **16:9** persis seperti tampilannya saat terbit.
+- **Ukuran gambar ditulis lebih ramah**: "3,4MB", bukan lagi "3422KB".
+- **Favicon media di dashboard** kini logo asli tiap situs, dimuat lebih ringan (satu ukuran untuk semua tempat plus koneksi awal ke sumber gambar, jadi muncul lebih cepat).
+
+### Performa
+- **Gambar hasil AI otomatis dikompres saat disimpan**: dikonversi ke WebP dengan batas maksimal 150 KB per gambar. Sebelumnya satu gambar bisa 1–1,5 MB sehingga satu artikel beratnya bisa mencapai 3,4 MB; sekarang artikel bisa lebih dari sepuluh kali lipat lebih ringan, dan gambar tetap tajam di ukuran tampilnya.
+
 ## v0.5.4 — 2026-10-15
 
 ### Perbaikan
