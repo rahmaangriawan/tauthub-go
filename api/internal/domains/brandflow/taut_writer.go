@@ -150,35 +150,163 @@ func (d *Deps) selectedTautMedia(ctx context.Context, campaignID string) ([]sele
 // tautWordCountRe: frasa "N kata"/"N words" di topik/instruksi klien.
 var tautWordCountRe = regexp.MustCompile(`(?i)(\d{2,5})\s*(?:kata|words?|word)\b`)
 
+// tautWordRangeRe: rentang eksplisit "800-900 kata", "800–1000 kata",
+// "800 sampai 900 kata".
+var tautWordRangeRe = regexp.MustCompile(`(?i)(\d{2,5})\s*(?:-|–|—|sampai|s/d|hingga)\s*(\d{2,5})\s*(?:kata|words?|word)\b`)
+
 // tautWordCapCueRe: kata pembatas ATAS. "maksimal 2500 kata" bukan target
 // panjang, jadi angkanya tidak dipakai memaksa artikel jadi 2500 kata.
 var tautWordCapCueRe = regexp.MustCompile(`(?i)\b(maksimal|maks|max|maksimum|paling banyak|tidak lebih dari|kurang dari)\b`)
 
-// requestedWordCount: jumlah kata yang diminta klien (mis. "minimal 2500 kata").
-// Mengembalikan angka target terbesar; angka yang didahului kata pembatas atas
-// diabaikan.
-func requestedWordCount(topic string) (int, bool) {
-	best := 0
+// tautWordMinCueRe: kata pembatas BAWAH. "minimal 2500 kata" berarti jendela
+// terbuka ke atas (boleh lebih panjang), bukan target sempit di 2500.
+var tautWordMinCueRe = regexp.MustCompile(`(?i)\b(minimal|minimum|min|paling sedikit|setidaknya)\b`)
+
+// wordTarget: jendela panjang artikel yang diminta klien. Exact > 0 bila
+// permintaannya satu angka ("800 kata") sehingga jendelanya ±10% di sekitarnya;
+// untuk "minimal N kata" jendela terbuka ke atas; untuk rentang eksplisit
+// dipakai apa adanya.
+type wordTarget struct {
+	Min   int
+	Max   int
+	Exact int
+}
+
+func (t wordTarget) accepts(words int) bool {
+	return words >= t.Min && words <= t.Max
+}
+
+// describe: teks rentang untuk prompt/koreksi, mis. "tepat 800 kata (720–880 kata)".
+func (t wordTarget) describe() string {
+	if t.Exact > 0 {
+		return itoa(t.Exact) + " kata (jendela " + itoa(t.Min) + "–" + itoa(t.Max) + " kata)"
+	}
+	return itoa(t.Min) + "–" + itoa(t.Max) + " kata"
+}
+
+// requestedWordTarget: jendela jumlah kata yang diminta klien dari kolom
+// konteks/topik (mis. "minimal 2500 kata", "800 kata", "800-900 kata").
+// Angka yang didahului kata pembatas atas ("maksimal N kata") diabaikan.
+// Bila ada beberapa angka, permintaan terbesar yang dipakai.
+func requestedWordTarget(topic string) (wordTarget, bool) {
+	clamp := func(n int) (int, bool) {
+		if n < 150 || n > 20000 {
+			return 0, false
+		}
+		return n, true
+	}
+	if m := tautWordRangeRe.FindStringSubmatch(topic); m != nil {
+		a, errA := strconv.Atoi(m[1])
+		b, errB := strconv.Atoi(m[2])
+		if errA == nil && errB == nil {
+			if a > b {
+				a, b = b, a
+			}
+			if lo, okLo := clamp(a); okLo {
+				if hi, okHi := clamp(b); okHi {
+					return wordTarget{Min: lo, Max: hi}, true
+				}
+			}
+		}
+	}
+	best := wordTarget{}
+	bestN := 0
 	for _, loc := range tautWordCountRe.FindAllStringSubmatchIndex(topic, -1) {
 		n, err := strconv.Atoi(topic[loc[2]:loc[3]])
 		if err != nil || n < 150 || n > 20000 {
 			continue
 		}
-		start := loc[0] - 20
+		start := loc[0] - 24
 		if start < 0 {
 			start = 0
 		}
-		if tautWordCapCueRe.MatchString(topic[start:loc[0]]) {
+		cue := topic[start:loc[0]]
+		if tautWordCapCueRe.MatchString(cue) {
 			continue
 		}
-		if n > best {
-			best = n
+		if n <= bestN {
+			continue
 		}
+		bestN = n
+		if tautWordMinCueRe.MatchString(cue) {
+			// Batas bawah eksplisit: jendela terbuka ke atas (+25%, minimal +150).
+			headroom := n / 4
+			if headroom < 150 {
+				headroom = 150
+			}
+			best = wordTarget{Min: n, Max: n + headroom}
+			continue
+		}
+		// Angka tunggal ("800 kata", "sekitar 800 kata"): target di 800 dengan
+		// toleransi ±10% — simetris, supaya tidak bias ke atas.
+		tol := n / 10
+		if tol < 30 {
+			tol = 30
+		}
+		best = wordTarget{Min: n - tol, Max: n + tol, Exact: n}
 	}
-	if best == 0 {
-		return 0, false
+	if bestN == 0 {
+		return wordTarget{}, false
 	}
 	return best, true
+}
+
+// clientWordRule: aturan prompt untuk target kata eksplisit dari klien.
+func clientWordRule(t wordTarget) string {
+	if t.Exact > 0 {
+		return "Aturan panjang artikel (WAJIB — PERMINTAAN EKSPLISIT KLIEN, PRIORITAS UTAMA): tulis artikel tepat " +
+			itoa(t.Exact) + " kata; panjang akhir yang diterima " + itoa(t.Min) + "–" + itoa(t.Max) +
+			" kata (±10%). Perkirakan jumlah kata saat menulis, jangan menutup artikel di bawah " + itoa(t.Min) +
+			" kata, dan jangan melewati " + itoa(t.Max) + " kata. Aturan ini MENANG atas aturan panjang media mana pun."
+	}
+	return "Aturan panjang artikel (WAJIB — PERMINTAAN EKSPLISIT KLIEN, PRIORITAS UTAMA): tulis artikel sepanjang " +
+		itoa(t.Min) + "–" + itoa(t.Max) + " kata. Jangan kurang dari " + itoa(t.Min) + " kata dan jangan lebih dari " +
+		itoa(t.Max) + " kata. Aturan ini MENANG atas aturan panjang media mana pun."
+}
+
+// correctionPrompt: instruksi tulis ulang saat draf pertama meleset dari jendela.
+func (t wordTarget) correction(actual int) string {
+	return "KOREKSI PANJANG (WAJIB): draf sebelumnya " + itoa(actual) + " kata, sedangkan permintaan klien " +
+		t.describe() + ". Tulis ULANG seluruh artikel dari awal dengan panjang dalam jendela itu, sambil mempertahankan " +
+		"topik, fakta, sudut pandang, dan seluruh aturan link/format yang sama."
+}
+
+// enforceClientWordTarget: penegakan panjang artikel untuk permintaan eksplisit
+// klien. Prompt saja tidak cukup — model kerap meleset (kasus nyata: klien minta
+// 800 kata, hasil 1000). Bila draf di luar jendela, artikel ditulis ulang SEKALI
+// dengan koreksi panjang eksplisit; bila tulis ulang gagal/masih meleset, draf
+// pertama yang dipakai (generate tidak pernah digagalkan oleh langkah ini).
+func (d *Deps) enforceClientWordTarget(ctx context.Context, campaignID, mediaID, prompt string, target wordTarget, html, title, metaDescription string) (string, string, string) {
+	actual := countWords(html)
+	if target.accepts(actual) {
+		return html, title, metaDescription
+	}
+	slog.Info("[taut-writer] jumlah kata di luar jendela — tulis ulang",
+		"campaign", campaignID, "media_id", mediaID, "actual", actual, "min", target.Min, "max", target.Max)
+	retry, err := d.runTautAgent(ctx, "writer", campaignID, prompt+"\n"+target.correction(actual), &mediaID, true)
+	if err != nil || retry == nil {
+		slog.Warn("[taut-writer] tulis ulang koreksi panjang gagal", "media_id", mediaID, "err", err)
+		return html, title, metaDescription
+	}
+	var parsed struct {
+		Title           string `json:"title"`
+		ContentHTML     string `json:"content_html"`
+		MetaDescription string `json:"meta_description"`
+	}
+	if json.Unmarshal([]byte(retry.Content), &parsed) != nil || strings.TrimSpace(parsed.ContentHTML) == "" {
+		slog.Warn("[taut-writer] hasil tulis ulang tidak bisa diparsing", "media_id", mediaID)
+		return html, title, metaDescription
+	}
+	newHTML := truncateString(parsed.ContentHTML, 200000)
+	if t := truncateString(parsed.Title, 300); t != "" {
+		title = t
+	}
+	if m := truncateString(strings.TrimSpace(parsed.MetaDescription), 500); m != "" {
+		metaDescription = m
+	}
+	slog.Info("[taut-writer] hasil tulis ulang koreksi panjang",
+		"media_id", mediaID, "before", actual, "after", countWords(newHTML))
+	return newHTML, title, metaDescription
 }
 
 // pruneContentVersions: sisakan HANYA versi terbaru sebuah dokumen. Editor
@@ -314,20 +442,13 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	slog.Info("[taut-writer] media type resolved", "campaign", campaignID, "media_id", mediaID, "media_type", mediaType)
 	wordRule := buildWordRule(item.strOr("word_count_mode", ""), mediaType)
 
-	// Jumlah kata EKSPLISIT dari klien (mis. "minimal 2500 kata" di kolom topik)
-	// MENANG atas aturan panjang bawaan media. Tanpa ini, model mengikuti batas
-	// media (mis. "minimal 300 kata") lalu berhenti jauh di bawah permintaan —
-	// kasus nyata: minta 2500 kata, hasil hanya ~1873.
-	clientWords, hasClientWords := requestedWordCount(writerTopic)
+	// Jumlah kata EKSPLISIT dari klien (mis. "minimal 2500 kata" / "800 kata" di
+	// kolom topik) MENANG atas aturan panjang bawaan media. Tanpa ini, model
+	// mengikuti batas media (mis. "minimal 300 kata") lalu berhenti jauh dari
+	// permintaan — kasus nyata: minta 2500 kata, hasil hanya ~1873.
+	wordTarget, hasClientWords := requestedWordTarget(writerTopic)
 	if hasClientWords {
-		minWords := clientWords
-		maxWords := clientWords + clientWords/8
-		if maxWords < clientWords+100 {
-			maxWords = clientWords + 100
-		}
-		wordRule = "Aturan panjang artikel (WAJIB — PERMINTAAN EKSPLISIT KLIEN, PRIORITAS UTAMA): tulis artikel sepanjang " +
-			itoa(clientWords) + " kata (target " + itoa(minWords) + "–" + itoa(maxWords) + " kata). Aturan ini MENANG atas aturan panjang media mana pun. Perkirakan jumlah kata saat menulis; panjang akhir TIDAK BOLEH kurang dari " +
-			itoa(minWords) + " kata. Tambah paragraf sampai target tercapai dan JANGAN menutup artikel sebelum " + itoa(minWords) + " kata."
+		wordRule = clientWordRule(wordTarget)
 	}
 
 	structureRules := []string{
@@ -658,6 +779,11 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 	if strings.TrimSpace(contentHTML) == "" {
 		return writerItemResult{MediaID: mediaID, MediaType: mediaType, Status: "generating", DocumentID: nil}, nil
+	}
+	// Kepastian panjang untuk permintaan klien: prompt saja tidak cukup, draf di
+	// luar jendela ditulis ulang SEKALI di sini (sebelum pasca-proses link dsb).
+	if hasClientWords {
+		contentHTML, title, metaDescription = d.enforceClientWordTarget(ctx, campaignID, mediaID, prompt, wordTarget, contentHTML, title, metaDescription)
 	}
 	if metaDescription == "" {
 		plainMeta := stripHTMLToText(contentHTML)
