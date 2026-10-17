@@ -878,6 +878,7 @@ func run() error {
 			authed.Get("/platform/seo/config", platformDeps.SEOConfigGet)
 			authed.Put("/platform/seo/config", platformDeps.SEOConfigPut)
 			authed.Get("/platform/seo/diagnose", platformDeps.SEODiagnose)
+			authed.Get("/platform/seo/similarweb-diagnose", platformDeps.SEOSimilarWebDiagnose)
 
 			// Credits / invoices / packages / orders / revenue / settlements / referrals / VIP.
 			authed.Get("/platform/credits", platformDeps.CreditsConfigGet)

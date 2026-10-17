@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1846,6 +1847,81 @@ func (d *Deps) SEODiagnose(w http.ResponseWriter, r *http.Request) {
 		"domain":          domain,
 		"payload_raw":     ptTruncate(string(raw), 2000),
 	})
+}
+
+// swDiagnoseHint: interpretasi jawaban gateway RapidAPI untuk SimilarWeb.
+// 403 "not subscribed" dan key yang tidak dikenal sama-sama menghasilkan pesan
+// yang identik, jadi arahannya mencakup keduanya.
+func swDiagnoseHint(status int, body string) string {
+	switch {
+	case status == 0:
+		return "Provider tidak dapat dihubungi dari server sekarang (jaringan/timeout)."
+	case status >= 200 && status < 300:
+		return "Key valid dan berlangganan aktif — pemeriksaan SimilarWeb siap dipakai di panel media."
+	case status == 401:
+		return "RapidAPI menolak key ini (Invalid API key). Pastikan di-tempel persis dari Dashboard RapidAPI — tanpa spasi/kutip — lalu simpan ulang."
+	case status == 403 && strings.Contains(body, "not subscribed"):
+		return "Key tersimpan tapi RapidAPI bilang \"You are not subscribed to this API.\" — artinya akun yang punya key ini belum berlangganan listing SimilarWeb (similarweb-api-pro). Buka listing-nya di RapidAPI, klik Subscribe (paket apa pun yang tersedia), lalu tes lagi. Key tidak perlu diganti kalau memang benar."
+	case status == 403:
+		return "Provider menolak akses (403). Periksa pesan raw di bawah."
+	case status == 404:
+		return "Berlangganan aktif; domain uji (app.tauthub.com) saja yang tidak terdata di SimilarWeb — media lain tetap bisa diperiksa. Anggap tes lolos."
+	case status == 429:
+		return "Kuota/rate limit provider kosong untuk saat ini — tunggu lalu tes lagi."
+	case status == 402:
+		return "Kuota langganan RapidAPI habis; perlu aktivasi/top-up di dasbor RapidAPI."
+	default:
+		return "Provider menjawab status " + strconv.Itoa(status) + ". Periksa pesan raw di bawah."
+	}
+}
+
+// SEOSimilarWebDiagnose: GET /v1/platform/seo/similarweb-diagnose — ping satu
+// kali ke provider SimilarWeb dengan key tersegel supaya admin melihat sebab
+// penolakan beneran (berlangganan/kunci salah/kuota) tanpa menyentuh media.
+// Tidak menyimpan snapshot apa pun.
+func (d *Deps) SEOSimilarWebDiagnose(w http.ResponseWriter, r *http.Request) {
+	_, _, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	config, err := d.queryRow(r.Context(),
+		"SELECT sealed_similarweb_api_key FROM platform_seo_config WHERE id = 'default' LIMIT 1")
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	apiKey := ""
+	if config != nil {
+		apiKey = ptRow(ptNormalizeMap(config)).strOr("sealed_similarweb_api_key", "")
+	}
+	if apiKey == "" {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok": false, "detail": "SimilarWeb key belum tersimpan — isi di kartu SimilarWeb dulu.",
+		})
+		return
+	}
+	apiKey, uErr := d.unsealT2(apiKey)
+	if uErr != nil || apiKey == "" {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok": false, "detail": "Key SimilarWeb tidak dapat dibuka (APP_SECRET kemungkinan berubah). Simpan ulang di kartu SimilarWeb.",
+		})
+		return
+	}
+	status, body := mpSafeGet(r.Context(),
+		"https://similarweb-api-pro.p.rapidapi.com/site-overview?url=app.tauthub.com",
+		map[string]string{
+			"accept":          "application/json",
+			"x-rapidapi-host": "similarweb-api-pro.p.rapidapi.com",
+			"x-rapidapi-key":  apiKey,
+		}, 15*time.Second)
+	detail := swDiagnoseHint(status, body)
+	v := map[string]any{
+		"ok":              status >= 200 && status < 300,
+		"provider_status": status,
+		"ket":             detail,
+		"payload_raw":     nullIfEmpty(ptTruncate(body, 800)),
+	}
+	writeJSON(w, http.StatusOK, v)
 }
 
 // ---------- rss feeds ----------

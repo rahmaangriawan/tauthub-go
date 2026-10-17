@@ -34,7 +34,7 @@ Catatan:
 - **Gambar cover di editor artikel kembali termuat dengan benar** (berlaku juga untuk thumbnail cover di Status Publikasi dan Link Guardian), dan cover di editor kini rasio **16:9** persis seperti tampilannya saat terbit.
 - **Ukuran gambar ditulis lebih ramah**: "3,4MB", bukan lagi "3422KB".
 - **Favicon media di dashboard** kini logo asli tiap situs, dimuat lebih ringan (satu ukuran untuk semua tempat plus koneksi awal ke sumber gambar, jadi muncul lebih cepat).
-- Admin: pesan kegagalan pemeriksaan SimilarWeb kini jelas penyebabnya. Kalau RapidAPI menolak karena kuncinya belum berlangganan API SimilarWeb, yang muncul arahan langganan di RapidAPI — bukan lagi "perbarui RapidAPI key" yang samar padahal kuncinya sudah tersimpan.
+- Admin: pemeriksaan SimilarWeb kini transparan sebabnya. Kalau RapidAPI menolak karena kuncinya belum berlangganan API SimilarWeb, pesannya langsung mengarah ke langganan di RapidAPI — bukan lagi "perbarui RapidAPI key" yang samar padahal kunci sudah tersimpan. Bonus: ada tombol "Tes koneksi provider" di Konfigurasi yang ping provider sekali dan menampilkan jawabannya apa adanya (kunci salah / belum berlangganan / kuota habis / sukses).
 
 ### Performa
 - **Gambar hasil AI otomatis dikompres saat disimpan**: dikonversi ke WebP dengan batas maksimal 150 KB per gambar. Sebelumnya satu gambar bisa 1–1,5 MB sehingga satu artikel beratnya bisa mencapai 3,4 MB; sekarang artikel bisa lebih dari sepuluh kali lipat lebih ringan, dan gambar tetap tajam di ukuran tampilnya.

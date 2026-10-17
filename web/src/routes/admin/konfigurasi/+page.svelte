@@ -178,6 +178,9 @@
 	let similarwebKey = $state('');
 	let similarwebMsg = $state({ text: '', ok: false });
 	let similarwebBusy = $state(false);
+	type SwDiag = { ok: boolean; provider_status: number | null; ket?: string | null; detail?: string | null; payload_raw?: string | null };
+	let swTestBusy = $state(false);
+	let swTest = $state<SwDiag | null>(null);
 	let serpensKey = $state('');
 	let serpensMsg = $state({ text: '', ok: false });
 	let serpensBusy = $state(false);
@@ -221,6 +224,15 @@
 			await loadSeo();
 		}
 		similarwebBusy = false;
+	}
+
+	async function testSimilarWeb() {
+		swTestBusy = true;
+		swTest = null;
+		const res = await request<SwDiag>('/seo/similarweb-diagnose', {}, 'Gagal menguji SimilarWeb.');
+		if (!res.ok) swTest = { ok: false, provider_status: null, ket: res.error };
+		else swTest = res.data;
+		swTestBusy = false;
 	}
 
 	async function saveSerpens(e: SubmitEvent) {
@@ -840,7 +852,25 @@
 									{similarwebMsg.text}
 								</div>
 							{/if}
-							<button class="app-btn app-btn-primary" type="submit" disabled={similarwebBusy}>{similarwebBusy ? 'Menyimpan…' : tr('Simpan SimilarWeb Key')}</button>
+							<div class="flex flex-wrap gap-2">
+								<button class="app-btn app-btn-primary" type="submit" disabled={similarwebBusy}>{similarwebBusy ? 'Menyimpan…' : tr('Simpan SimilarWeb Key')}</button>
+								<button class="app-btn app-btn-soft" type="button" onclick={testSimilarWeb} disabled={swTestBusy}>{swTestBusy ? 'Menguji…' : 'Tes koneksi provider'}</button>
+							</div>
+							{#if swTest}
+								<div class="space-y-1 rounded-lg border px-3 py-2 text-xs">
+									<div class="flex items-center gap-2 font-medium" style="color: {swTest.ok ? 'var(--success)' : 'var(--destructive)'};">
+										{#if swTest.ok}<CheckCircle2 size={14} />{:else}<TriangleAlert size={14} />{/if}
+										{#if swTest.provider_status === null}
+											{swTest.ket ?? swTest.detail ?? ''}
+										{:else}
+											Provider {swTest.provider_status} — {swTest.ket ?? swTest.detail ?? ''}
+										{/if}
+									</div>
+									{#if swTest.payload_raw}
+										<p class="text-muted-foreground">Jawaban provider: <code class="rounded bg-secondary px-1 break-all">{swTest.payload_raw}</code></p>
+									{/if}
+								</div>
+							{/if}
 						</form>
 					</div>
 
