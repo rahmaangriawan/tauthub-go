@@ -59,6 +59,15 @@
 	let swBusyId = $state<string | null>(null);
 	let swBulkBusy = $state(false);
 	let swSummary = $state('');
+	let swStatus = $state<{
+		pending_jobs: number;
+		queued_jobs: number;
+		running_jobs: number;
+		failed_last_hour: number;
+		stale: number;
+		last_error: string | null;
+	} | null>(null);
+	let swStatusTimer: ReturnType<typeof setTimeout> | undefined;
 	let swVisits = $state<Record<string, number | null>>({});
 	let aiBusyId = $state<string | null>(null);
 	let daBulkBusy = $state(false);
@@ -438,23 +447,28 @@
 		}
 	}
 
+	/**
+	 * Pemeriksaan trafik TIDAK dijalankan langsung — dulu satu klik memanggil
+	 * penyedia untuk hingga 25 media berurutan (tiap media bisa 15 detik) dan
+	 * selalu berakhir timeout proxy. Sekarang semua media kandidat masuk
+	 * antrean (job media_similarweb_refresh) dan scheduler/worker yang
+	 * melakukan panggilannya satu per satu; tabel menyusul lewat indikator.
+	 */
 	async function bulkSimilarWeb() {
 		error = '';
 		swBulkBusy = true;
-		swSummary = 'Memeriksa trafik media (maks 25 per klik)…';
+		swSummary = 'Memasukkan antrian…';
 		try {
 			const r = await platformRequest<{
+				enqueued: number;
+				skipped: number;
 				candidates: number;
-				checked: number;
-				ok: number;
-				failed: number;
-				results: Array<{ media_id: string; ok: boolean; visits: number | null; detail: string }>;
+				total_stale: number;
 			}>('/media/similarweb-bulk', { method: 'POST', body: JSON.stringify({ limit: 25 }) });
-			const next = { ...swVisits };
-			for (const res of r.results ?? []) if (res.ok) next[res.media_id] = res.visits;
-			swVisits = next;
-			swSummary = `Selesai: ${r.ok} berhasil, ${r.failed} gagal, dari ${r.checked} media diperiksa (${r.candidates} kandidat basi/stale). Sisa media menyusul klik berikutnya.`;
-			await load();
+			const sisa = r.total_stale - r.enqueued;
+			swSummary = `Antrean dibuat: ${r.enqueued} media dijadwalkan (sisa kandidat ${Math.max(0, sisa)}${r.skipped ? `, ${r.skipped} gagal antre` : ''}). Scheduler yang memprosesnya otomatis — nilai trafik muncul di tabel begitu tiap media selesai.`;
+			await loadSwStatus();
+			void load();
 		} catch (reason) {
 			error = errMessage(reason);
 			swSummary = '';
@@ -462,6 +476,36 @@
 			swBulkBusy = false;
 		}
 	}
+
+	/** Status antrean cek trafik — indikator + auto-refresh tabel 15 dtk. */
+	async function loadSwStatus() {
+		try {
+			swStatus = await platformRequest<{
+				pending_jobs: number;
+				queued_jobs: number;
+				running_jobs: number;
+				failed_last_hour: number;
+				stale: number;
+				last_error: string | null;
+			}>('/media/similarweb-status');
+			if ((swStatus?.pending_jobs ?? 0) > 0) {
+				if (swStatusTimer) clearTimeout(swStatusTimer);
+				swStatusTimer = setTimeout(() => {
+					void load();
+					void loadSwStatus();
+				}, 15_000);
+			}
+		} catch {
+			/* indikator opsional — jangan ganggu daftar media */
+		}
+	}
+
+	$effect(() => {
+		if (swStatus === null) void loadSwStatus();
+		return () => {
+			if (swStatusTimer) clearTimeout(swStatusTimer);
+		};
+	});
 
 	/**
 	 * Pemeriksaan satu media TIDAK dijalankan langsung. Satu kali periksa butuh
@@ -893,8 +937,8 @@
 		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={syncing} onclick={syncCredits}>
 			<RefreshCw size={15} /> Sinkronkan kredit semua
 		</button>
-		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={swBulkBusy} onclick={bulkSimilarWeb}>
-			<RefreshCw size={15} /> {swBulkBusy ? 'Memeriksa…' : 'Cek Trafik Semua (SimilarWeb)'}
+		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={swBulkBusy} onclick={bulkSimilarWeb} title="Antrekan pemeriksaan trafik semua media yang belum punya data — scheduler yang memprosesnya">
+			<RefreshCw size={15} /> {swBulkBusy ? 'Mengantrekan…' : swStatus && swStatus.pending_jobs > 0 ? `Antrean Trafik (${swStatus.pending_jobs})` : 'Antrekan Cek Trafik Semua'}
 		</button>
 		<button
 			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
@@ -922,6 +966,13 @@
 			<Plus size={15} />{tr("Tambah media")}</button>
 	</div>
 
+	{#if swStatus && (swStatus.pending_jobs > 0 || swStatus.failed_last_hour > 0)}
+		<p class="mt-2 text-xs text-muted-foreground">
+			Antrean trafik: {swStatus.pending_jobs} menunggu{swStatus.running_jobs ? `, ${swStatus.running_jobs} berjalan` : ''}
+			{swStatus.failed_last_hour ? `, ${swStatus.failed_last_hour} gagal dalam sejam` : ''}.
+			{swStatus.last_error ? `Sebab gagal terakhir: ${swStatus.last_error}` : ''}
+		</p>
+	{/if}
 	{#if swSummary}<p class="mt-2 text-xs text-muted-foreground">{swSummary}</p>{/if}
 	{#if daSummary}<p class="mt-2 text-xs text-muted-foreground">{daSummary}</p>{/if}
 	{#if daStatus && (daStatus.pending_jobs > 0 || daStatus.stale > 0 || daStatus.failed_last_hour > 0)}

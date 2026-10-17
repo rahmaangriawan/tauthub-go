@@ -633,6 +633,7 @@ func run() error {
 			authed.Post("/platform/media/seo-refresh-all", platformDeps.MediaSEORefreshAll)
 			authed.Get("/platform/media/seo-refresh-status", platformDeps.MediaSEORefreshStatus)
 			authed.Post("/platform/media/similarweb-bulk", platformDeps.MediaSimilarWebBulk)
+			authed.Get("/platform/media/similarweb-status", platformDeps.MediaSimilarWebStatus)
 			authed.Post("/platform/media/sync-credit-cost", platformDeps.MediaSyncCreditCost)
 			authed.Get("/platform/media/{mediaId}", platformDeps.MediaGet)
 			authed.Put("/platform/media/{mediaId}", platformDeps.MediaUpdate)

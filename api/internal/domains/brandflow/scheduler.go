@@ -138,6 +138,9 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	d.schEnqueueCrawlTargetSyncs(ctx, 20)
 	d.schEnqueuePublicationLinkChecks(ctx, 20)
 	d.schEnqueueMediaAiRefreshes(ctx, 20)
+	// Media aktif tanpa data trafik SimilarWeb otomatis masuk antrean; media
+	// berdata dijeda 6 bulan (lihat schEnqueueSimilarWebChecks).
+	d.schEnqueueSimilarWebChecks(ctx, 5)
 
 	// 9. Purge upload basi (>30 hari & tak direferensikan DB).
 	res.UploadsPurged = d.schPurgeStaleUploads(ctx)
@@ -995,6 +998,54 @@ func (d *Deps) schEnqueueMediaAiRefreshes(ctx context.Context, limit int) {
 		mediaID := row.strOr("id", "")
 		if _, err := d.enqueueJobAt(ctx, "media_seo_refresh", map[string]any{"mediaId": mediaID}, nil, 2); err != nil {
 			slog.Warn("[scheduler] enqueue refresh SEO/AI gagal", "id", mediaID, "err", err)
+		}
+	}
+}
+
+// ---------- 8c. similarweb check (antrean otomatis) ----------
+
+// schEnqueueSimilarWebChecks: aturan pemilik produk — media aktif yang BELUM
+// pernah punya data trafik SimilarWeb otomatis masuk antrian pemeriksaan tiap
+// siklus scheduler (limit kecil per tick supaya panggilan provider tidak
+// jebol), sementara media yang datanya sudah ada dibiarkan tersimpan sampai
+// usia snapshotnya melewati 6 bulan baru minta ulang. Job-nya kind
+// `media_similarweb_refresh` — processor yang sama dengan tombol admin.
+func (d *Deps) schEnqueueSimilarWebChecks(ctx context.Context, limit int) {
+	if limit < 1 {
+		limit = 1
+	}
+	stale, err := d.queryRows(ctx, `
+		SELECT media.id FROM media
+		WHERE media.status = 'active'
+		  AND media.website_url IS NOT NULL AND media.website_url <> ''
+		  AND NOT EXISTS (
+		    SELECT 1 FROM media_similarweb_snapshots s
+		    WHERE s.media_id = media.id
+		      AND s.created_at >= NOW() - INTERVAL '6 months'
+		      AND (s.insights->>'visits') IS NOT NULL
+		      AND (s.insights->>'visits')::numeric > 0
+		  )
+		  AND NOT EXISTS (
+		    SELECT 1 FROM jobs j
+		    WHERE j.kind = 'media_similarweb_refresh' AND j.status IN ('pending','running')
+		      AND j.payload->>'mediaId' = media.id
+		  )
+		  AND NOT EXISTS (
+		    SELECT 1 FROM jobs j
+		    WHERE j.kind = 'media_similarweb_refresh' AND j.status = 'failed'
+		      AND j.payload->>'mediaId' = media.id
+		      AND j.updated_at > NOW() - INTERVAL '24 hours'
+		  )
+		ORDER BY media.updated_at ASC
+		LIMIT $1`, limit)
+	if err != nil {
+		slog.Error("[scheduler] sweep similarweb gagal", "err", err)
+		return
+	}
+	for _, row := range stale {
+		mediaID := row.strOr("id", "")
+		if _, err := d.enqueueJobAt(ctx, "media_similarweb_refresh", map[string]any{"mediaId": mediaID}, nil, 2); err != nil {
+			slog.Warn("[scheduler] enqueue similarweb gagal", "id", mediaID, "err", err)
 		}
 	}
 }

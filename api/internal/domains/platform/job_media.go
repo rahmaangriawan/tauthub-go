@@ -49,6 +49,30 @@ func (d *Deps) MediaSeoRefreshJob(ctx context.Context, mediaID string) error {
 	return err
 }
 
+// ---------- kind: media_similarweb_refresh ----------
+
+// MediaSimilarWebJob: job antrean pemeriksaan trafik SimilarWeb satu media
+// (dipicu sweep scheduler atau tombol "Cek Trafik Semua"). force=false karena
+// gerak cooldown sudah dinilai di mpCheckSimilarWebInsights: media yang
+// snapshottnya masih segar hanya membaca snapshot, sementara media yang sudah
+// basi memanggil provider sekali. Media tanpa website_url atau yang sudah
+// non-aktif selesai tanpa error — tidak ada yang perlu di-retry.
+func (d *Deps) MediaSimilarWebJob(ctx context.Context, mediaID string) error {
+	row, err := d.queryRow(ctx, "SELECT website_url, status FROM media WHERE id = $1 LIMIT 1", mediaID)
+	if err != nil {
+		return err
+	}
+	if row == nil {
+		return nil
+	}
+	nrow := ptRow(ptNormalizeMap(row))
+	if strings.TrimSpace(nrow.strOr("website_url", "")) == "" || nrow.strOr("status", "") != "active" {
+		return nil
+	}
+	_, sErr := d.mpCheckSimilarWebInsights(ctx, mediaID, nrow.anyOrNil("website_url"), "scheduler", false)
+	return sErr
+}
+
 // ---------- kind: media_ai_summary ----------
 
 // MediaAISummaryJob: port processMediaAiSummary — idempoten (lewati media yang
@@ -672,6 +696,13 @@ func (d *Deps) RegisterMediaJobs() {
 			return fmt.Errorf("payload mediaId kosong")
 		}
 		return d.CrawlTargetSyncJob(ctx, id)
+	})
+	jobs.Register("media_similarweb_refresh", func(ctx context.Context, job jobs.JobRow) error {
+		id, _ := job.Payload["mediaId"].(string)
+		if id == "" {
+			return fmt.Errorf("payload mediaId kosong")
+		}
+		return d.MediaSimilarWebJob(ctx, id)
 	})
 	jobs.Register("domain_verify", func(ctx context.Context, job jobs.JobRow) error {
 		id, _ := job.Payload["mediaId"].(string)

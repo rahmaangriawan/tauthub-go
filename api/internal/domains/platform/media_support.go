@@ -1401,7 +1401,7 @@ func (d *Deps) mpSimilarWebSnapshotJSON(row ptRow, mediaID string) map[string]an
 	return out
 }
 
-// mpCheckSimilarWebInsights: ambil insights; cooldown 2 bulan, force = fetch ulang.
+// mpCheckSimilarWebInsights: ambil insights; cooldown 6 bulan, force = fetch ulang.
 func (d *Deps) mpCheckSimilarWebInsights(ctx context.Context, mediaID string, websiteURL any, actorID string, force bool) (map[string]any, *mpSimilarWebError) {
 	domain, _ := mpDomainFromWebsite(websiteURL).(string)
 	if domain == "" {
@@ -1419,7 +1419,9 @@ func (d *Deps) mpCheckSimilarWebInsights(ctx context.Context, mediaID string, we
 		normalized := ptRow(ptNormalizeMap(latest))
 		if t, ok := normalized.anyOrNil("created_at").(string); ok {
 			if parsed, pErr := time.Parse(time.RFC3339, t); pErr == nil {
-				fresh = parsed.After(time.Now().AddDate(0, -2, 0))
+				// Aturan pemilik produk: media yang datanya sudah ada dibiarkan
+				// 6 bulan sebelum reqrawl (dulu 2 bulan).
+				fresh = parsed.After(time.Now().AddDate(0, -6, 0))
 			}
 		}
 		if insights, ok := normalized.jsonField("insights").(map[string]any); ok {

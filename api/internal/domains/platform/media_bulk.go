@@ -757,73 +757,145 @@ func (d *Deps) MediaSEORefreshStatus(w http.ResponseWriter, r *http.Request) {
 
 // ---------- POST /v1/platform/media/similarweb-bulk ----------
 
+// mpSimilarWebStaleWhere: media aktif yang trafiknya perlu diperiksa —
+// belum pernah dicek ATAU snapshot terakhirnya basi (>cool down 6 bulan)
+// ATAU snapshotnya tidak punya nilai visits. Media "sudah punya data" tak
+// diusik sampai melewati jeda 6 bulan (aturan pemilik produk).
+const mpSimilarWebStaleWhere = `
+			media.status = 'active'
+			  AND media.website_url IS NOT NULL AND media.website_url <> ''
+			  AND NOT EXISTS (
+			    SELECT 1 FROM media_similarweb_snapshots s
+			    WHERE s.media_id = media.id
+			      AND s.created_at >= NOW() - INTERVAL '6 months'
+			      AND (s.insights->>'visits') IS NOT NULL
+			      AND (s.insights->>'visits')::numeric > 0
+			  )`
+
+// MediaSimilarWebBulk: POST /v1/platform/media/similarweb-bulk — tulis ulang
+// jadi ANTREAN, bukan pemeriksaan inline. Dulu fungsi ini memanggil provider
+// hingga `limit` media berurutan di satu request (tiap media bisa 15 detik),
+// sehingga tombol "Cek Trafik Semua" selalu berakhir timeout proxy padahal
+// backend masih memproses. Sekarang reply cepat: semua media kandidat masuk
+// tabel jobs (kind media_similarweb_refresh) dan scheduler/worker yang
+// melakukan panggilan provider satu per satu.
 func (d *Deps) MediaSimilarWebBulk(w http.ResponseWriter, r *http.Request) {
 	user, _, ok := d.adminGuard(w, r, "")
 	if !ok {
 		return
 	}
-	body := decodeJSON(r)
-	limit := 25
-	if v, has := intField(body, "limit"); has {
-		if v < 1 || v > 50 {
-			writeErr(w, d, errUnprocessable("Number must be less than or equal to 50"))
-			return
-		}
-		limit = v
+	if err := auth.CheckWriteRate(r.Context(), d.Pool, "media-similarweb-bulk:"+user.ID, 2); err != nil {
+		writeErr(w, d, ptErrTooMany("Antrean cek trafik baru saja dijalankan. Tunggu satu menit lalu coba lagi."))
+		return
 	}
 
 	stale, err := d.queryRows(r.Context(), `
-		SELECT media.id, media.name, media.website_url
+		SELECT media.id, media.name
 		FROM media
-		WHERE media.status = 'active'
-		  AND media.website_url IS NOT NULL AND media.website_url <> ''
+		WHERE`+mpSimilarWebStaleWhere+`
 		  AND NOT EXISTS (
-		    SELECT 1 FROM media_similarweb_snapshots s
-		    WHERE s.media_id = media.id
-		      AND s.created_at >= NOW() - INTERVAL '2 months'
-		      AND (s.insights->>'visits') IS NOT NULL
-		      AND (s.insights->>'visits')::numeric > 0
+		    SELECT 1 FROM jobs j
+		    WHERE j.kind = 'media_similarweb_refresh' AND j.status IN ('pending','running')
+		      AND j.payload->>'mediaId' = media.id
+		  )
+		  AND NOT EXISTS (
+		    SELECT 1 FROM jobs j
+		    WHERE j.kind = 'media_similarweb_refresh' AND j.status = 'failed'
+		      AND j.payload->>'mediaId' = media.id
+		      AND j.updated_at > NOW() - INTERVAL '24 hours'
 		  )
 		ORDER BY media.updated_at ASC
-		LIMIT $1`, limit)
+		LIMIT 200`)
 	if err != nil {
 		writeErr(w, d, err)
 		return
 	}
 
-	results := []map[string]any{}
-	okCount := 0
+	enqueued, skipped := 0, 0
 	for _, raw := range stale {
 		row := ptRow(ptNormalizeMap(raw))
 		mediaID := row.strOr("id", "")
-		name := row.strOr("name", mediaID)
-		insight, swErr := d.mpCheckSimilarWebInsights(r.Context(), mediaID, row.anyOrNil("website_url"), user.ID, false)
-		if swErr == nil {
-			detail := "fresh"
-			if cached, isBool := insight["cached"].(bool); isBool && cached {
-				detail = "cached"
-			}
-			results = append(results, map[string]any{
-				"media_id": mediaID, "name": name, "ok": true, "visits": insight["visits"], "detail": detail,
-			})
-			okCount++
+		if mediaID == "" {
+			skipped++
 			continue
 		}
-		results = append(results, map[string]any{
-			"media_id": mediaID, "name": name, "ok": false, "visits": nil, "detail": mpShortError(swErr, 160),
-		})
-		if mpStopStatuses[swErr.Status] {
-			break
+		if _, jErr := d.mpEnqueueJob(r.Context(), "media_similarweb_refresh", map[string]any{"mediaId": mediaID}, 2); jErr != nil {
+			d.logWarn("enqueue media_similarweb_refresh gagal", mediaID, jErr)
+			skipped++
+			continue
 		}
+		enqueued++
 	}
 
+	totalRow, err := d.queryRow(r.Context(), "SELECT COUNT(*) AS total FROM media WHERE"+mpSimilarWebStaleWhere)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	totalStale := 0
+	if totalRow != nil {
+		totalStale = totalRow.intOr("total", 0)
+	}
+	d.audit(r.Context(), user.ID, "media.similarweb_refresh_all", "media", "")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"requested":  limit,
-		"candidates": len(stale),
-		"checked":    len(results),
-		"ok":         okCount,
-		"failed":     len(results) - okCount,
-		"results":    results,
+		"ok":          true,
+		"enqueued":    enqueued,
+		"skipped":     skipped,
+		"candidates":  len(stale),
+		"total_stale": totalStale,
+	})
+}
+
+// ---------- GET /v1/platform/media/similarweb-status ----------
+
+// MediaSimilarWebStatus: indikator antrean cek trafik — dipakai tombol admin
+// untuk melihat sisa pekerjaan dan (bila ada) sebab kegagalannya, seperti
+// indikator antrean cek DA. "stale" dihitung tanpa dedupe antrean supaya
+// angkanya stabil terhadap jumlah pending.
+func (d *Deps) MediaSimilarWebStatus(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := d.adminGuard(w, r, ""); !ok {
+		return
+	}
+	jobsRow, err := d.queryRow(r.Context(), `
+		SELECT COUNT(*) FILTER (WHERE status = 'pending') AS queued,
+		       COUNT(*) FILTER (WHERE status = 'running') AS running,
+		       COUNT(*) FILTER (WHERE status IN ('pending','running')) AS pending,
+		       COUNT(*) FILTER (WHERE status = 'failed' AND updated_at > NOW() - INTERVAL '1 hour') AS failed
+		FROM jobs WHERE kind = 'media_similarweb_refresh'`)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	staleRow, err := d.queryRow(r.Context(), "SELECT COUNT(*) AS total FROM media WHERE"+mpSimilarWebStaleWhere)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	lastErrRow, _ := d.queryRow(r.Context(), `
+		SELECT last_error FROM jobs
+		WHERE kind = 'media_similarweb_refresh' AND status = 'failed' AND last_error IS NOT NULL
+		ORDER BY updated_at DESC LIMIT 1`)
+	queued, running, pending, failed, stale := 0, 0, 0, 0, 0
+	if jobsRow != nil {
+		queued = jobsRow.intOr("queued", 0)
+		running = jobsRow.intOr("running", 0)
+		pending = jobsRow.intOr("pending", 0)
+		failed = jobsRow.intOr("failed", 0)
+	}
+	if staleRow != nil {
+		stale = staleRow.intOr("total", 0)
+	}
+	lastError := ""
+	if lastErrRow != nil {
+		lastError = lastErrRow.strOr("last_error", "")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"pending_jobs":     pending,
+		"queued_jobs":      queued,
+		"running_jobs":     running,
+		"failed_last_hour": failed,
+		"stale":            stale,
+		"last_error":       lastError,
 	})
 }
 
