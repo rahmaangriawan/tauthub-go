@@ -35,6 +35,7 @@ Catatan:
 - **Ukuran gambar ditulis lebih ramah**: "3,4MB", bukan lagi "3422KB".
 - **Favicon media di dashboard** kini logo asli tiap situs, dimuat lebih ringan (satu ukuran untuk semua tempat plus koneksi awal ke sumber gambar, jadi muncul lebih cepat).
 - Admin: pemeriksaan SimilarWeb butuh DUA kredensial dari provider (publisher DataBee di RapidAPI) — key RapidAPI dan DataBee Token. Keduanya kini diatur di kartu SimilarWeb panel Konfigurasi dan dikirim benar (X-RapidAPI-Key + Authorization Bearer), dengan validasi yang menyebut mana yang belum diisi. Tombol "Tes koneksi provider" menampilkan jawaban provider apa adanya, jadi ketahuan tepat: kunci salah, token kurang, langganan belum aktif, atau kuota habis.
+- **Katalog media klien kembali lengkap**: ada cacat teknis yang membuat media yang sudah punya data trafik SimilarWeb terlempar diam-diam dari katalog dan dari Estimasi Media — makin banyak data trafiknya, makin kecil daftar yang terlihat. Sekarang semua media aktif tampil apa adanya (97 media aktif di admin = 97 di katalog klien).
 
 ### Performa
 - **Gambar hasil AI otomatis dikompres saat disimpan**: dikonversi ke WebP dengan batas maksimal 150 KB per gambar. Sebelumnya satu gambar bisa 1–1,5 MB sehingga satu artikel beratnya bisa mencapai 3,4 MB; sekarang artikel bisa lebih dari sepuluh kali lipat lebih ringan, dan gambar tetap tajam di ukuran tampilnya.

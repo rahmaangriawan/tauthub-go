@@ -2,6 +2,7 @@ package clientread
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -155,13 +156,15 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		       sm.da, sm.pa, sm.spam_score, sm.checked_at, sm.ai_trust_score, sm.ai_citation,
 		       mcs.image_required AS standard_image_required,
 		       EXISTS (SELECT 1 FROM gsc_connections g WHERE g.partner_id = media.partner_id AND g.status = 'active') AS gsc_connected,
-		       sw.visits AS sw_visits, sw.created_at AS sw_snapshot_date,
-		       (SELECT COUNT(*)::int FROM publications p
-		          WHERE p.media_id = media.id AND p.status = 'published') AS published_count
-		FROM media
-		LEFT JOIN media_seo_metrics sm ON sm.media_id = media.id
-		LEFT JOIN media_content_standards mcs ON mcs.media_id = media.id AND mcs.status = 'active'
-		LEFT JOIN LATERAL (SELECT s.insights->>'visits' AS visits, s.created_at FROM media_similarweb_snapshots s WHERE s.media_id = media.id ORDER BY s.created_at DESC LIMIT 1) sw ON TRUE
+	       sw.visits AS sw_visits, sw.created_at AS sw_snapshot_date,
+	       (SELECT COUNT(*)::int FROM publications p
+	          WHERE p.media_id = media.id AND p.status = 'published') AS published_count
+	FROM media
+	LEFT JOIN media_seo_metrics sm ON sm.media_id = media.id
+	LEFT JOIN media_content_standards mcs ON mcs.media_id = media.id AND mcs.status = 'active'
+	LEFT JOIN LATERAL (SELECT CASE WHEN s.insights->>'visits' ~ '^-?[0-9]+([.][0-9]+)?$'
+	                          THEN ((s.insights->>'visits')::numeric)::bigint END AS visits, s.created_at
+	                  FROM media_similarweb_snapshots s WHERE s.media_id = media.id ORDER BY s.created_at DESC LIMIT 1) sw ON TRUE
 		`+clause+`
 		ORDER BY media.media_tier NULLS LAST, media.name
 		LIMIT `+limitArg+` OFFSET `+offsetArg, args...)
@@ -209,14 +212,19 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		var swVisits *int64
 		var swSnapshotDate *time.Time
 		var publishedCount int
-		if rowsQ.Scan(&id, &name, &category, &description, &websiteURL, &contohArtikelURL, &price, &creditCost,
+		scanErr := rowsQ.Scan(&id, &name, &category, &description, &websiteURL, &contohArtikelURL, &price, &creditCost,
 			&integrationType, &trafficEstimate, &mediaTier, &qualityScore, &healthScore, &healthBreakdown,
 			&healthComputedAt, &autoPublish, &dewanPersVerified, &dewanPersNote, &dewanPersCertNo,
 			&domainVerified, &status, &createdAt, &mediaType, &bahasaArtikel,
 			&labelSponsor, &topikTerlarang, &maxLinks, &allowHyperlink,
 			&publicationMode, &wordCountMode, &allowEmbed, &pricingType, &priceStatus,
 			&categoriesCSV, &seoDA, &seoPA, &seoSpam, &seoCheckedAt, &seoAITrust, &seoAICitation,
-			&standardImageRequired, &gscConnected, &swVisits, &swSnapshotDate, &publishedCount) != nil {
+			&standardImageRequired, &gscConnected, &swVisits, &swSnapshotDate, &publishedCount)
+		if scanErr != nil {
+			// catat supaya penyebab drop tidak pernah kembali diam —
+			// dulu kegagalan scan ini gulir senyap dan katalog klien menyusut
+			// tanpa jejak di log apa pun (kasus sw_visits: teks → *int64).
+			slog.Error("[clientread] scan baris katalog media gagal — baris dilewati", "err", scanErr)
 			continue
 		}
 		// Pemisahan ganda: pemisah internal dari string_agg, plus koma untuk
@@ -279,6 +287,13 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			"availability_reason": availabilityReason(status),
 		}
 		items = append(items, item)
+	}
+	// rows.Err() menutup iterasi seluruhnya bila dekode satu baris gagal —
+	// bila tidak dicatat, jumlah item bisa jauh lebih kecil dari `total`
+	// tanpa jejak (kasus asal: teks visits menjatuhkan iterasi di baris 7).
+	if itErr := rowsQ.Err(); itErr != nil {
+		slog.Error("[clientread] iterasi katalog media berhenti lebih awal",
+			"total_hitung", total, "item_terscan", len(items), "err", itErr)
 	}
 
 	// "media" adalah nama kunci kontrak app lama (UI & flow wizard membacanya);
