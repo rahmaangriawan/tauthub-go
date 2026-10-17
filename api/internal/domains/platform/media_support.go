@@ -1269,29 +1269,78 @@ func mpSWBool(v any) any {
 	return nil
 }
 
-func (d *Deps) mpSimilarWebKey(ctx context.Context) (string, *mpSimilarWebError) {
-	row, err := d.queryRow(ctx, "SELECT sealed_similarweb_api_key FROM platform_seo_config WHERE id = 'default' LIMIT 1")
+const (
+	mpSimilarWebHost = "similarweb-api-pro.p.rapidapi.com"
+	mpSimilarWebURL  = "https://" + mpSimilarWebHost + "/site-overview?url="
+	// country-metadata hanya untuk diagnose kredensial (ringan, tanpa domain
+	// khusus di listing), bukan untuk snapshot media.
+	mpSimilarWebDiagnoseURL = "https://" + mpSimilarWebHost + "/country-metadata?url=app.tauthub.com"
+)
+
+// mpSimilarWebCredentials: buka pasangan kredensial provider Similarweb API
+// Pro (DataBee di RapidAPI). Dua-duanya wajib: key RapidAPI dikirim sebagai
+// X-RapidAPI-Key dan token DataBee sebagai Authorization: Bearer. Pesan
+// validasi menyebut KREDENSIAL YANG MANA yang belum tersimpan supaya admin
+// tidak menebak.
+func (d *Deps) mpSimilarWebCredentials(ctx context.Context) (string, string, *mpSimilarWebError) {
+	row, err := d.queryRow(ctx, "SELECT sealed_similarweb_api_key, sealed_databee_token FROM platform_seo_config WHERE id = 'default' LIMIT 1")
 	if err != nil || row == nil {
-		return "", mpSWErr(http.StatusConflict, "SimilarWeb API belum dikonfigurasi oleh Admin.")
+		return "", "", mpSWErr(http.StatusConflict, "SimilarWeb API belum dikonfigurasi oleh Admin. Isi key RapidAPI dan DataBee Token di panel Konfigurasi.")
 	}
-	sealed := row.strOr("sealed_similarweb_api_key", "")
-	if sealed == "" {
-		return "", mpSWErr(http.StatusConflict, "SimilarWeb API belum dikonfigurasi oleh Admin.")
+	rapidSealed := row.strOr("sealed_similarweb_api_key", "")
+	databeeSealed := row.strOr("sealed_databee_token", "")
+	rapidPlain := ""
+	if rapidSealed != "" {
+		plain, uErr := d.unsealT2(rapidSealed)
+		if uErr != nil || plain == "" {
+			return "", "", mpSWErr(http.StatusConflict, "Key RapidAPI SEO tidak dapat dibuka (APP_SECRET kemungkinan berubah). Simpan ulang di panel Konfigurasi.")
+		}
+		rapidPlain = plain
 	}
-	plain, uErr := d.unsealT2(sealed)
-	if uErr != nil || plain == "" {
-		return "", mpSWErr(http.StatusConflict, "SimilarWeb API key tidak dapat dibaca. Simpan ulang di panel Konfigurasi.")
+	databeePlain := ""
+	if databeeSealed != "" {
+		plain, uErr := d.unsealT2(databeeSealed)
+		if uErr != nil || plain == "" {
+			return rapidPlain, "", mpSWErr(http.StatusConflict, "DataBee Token tidak dapat dibuka (APP_SECRET kemungkinan berubah). Simpan ulang di panel Konfigurasi.")
+		}
+		databeePlain = plain
 	}
-	return plain, nil
+	var missing []string
+	if rapidPlain == "" {
+		missing = append(missing, "key RapidAPI")
+	}
+	if databeePlain == "" {
+		missing = append(missing, "DataBee Token")
+	}
+	if len(missing) > 0 {
+		need := missing[0]
+		if len(missing) == 2 {
+			need = "key RapidAPI DAN DataBee Token"
+		}
+		return rapidPlain, databeePlain, mpSWErr(http.StatusConflict,
+			"Provider Similarweb API Pro mewajibkan "+need+". Provider menolak tanpa itu — lengkapi di kartu SimilarWeb, panel Konfigurasi.")
+	}
+	return rapidPlain, databeePlain, nil
 }
 
-func (d *Deps) mpSimilarWebFetch(ctx context.Context, domain, apiKey string) (map[string]any, *mpSimilarWebError) {
-	target := "https://similarweb-api-pro.p.rapidapi.com/site-overview?url=" + url.QueryEscape(domain)
-	status, body := mpSafeGet(ctx, target, map[string]string{
+// mpSimilarWebHeaders: header wajib provider Similarweb API Pro (DataBee di
+// RapidAPI). DataBee token dikirim sebagai Authorization: Bearer — hanya lewat
+// header, tidak pernah masuk log/pesan pesan.
+func mpSimilarWebHeaders(apiKey, databeeToken string) map[string]string {
+	headers := map[string]string{
 		"accept":          "application/json",
-		"x-rapidapi-host": "similarweb-api-pro.p.rapidapi.com",
+		"x-rapidapi-host": mpSimilarWebHost,
 		"x-rapidapi-key":  apiKey,
-	}, 15*time.Second)
+	}
+	if databeeToken != "" {
+		headers["authorization"] = "Bearer " + databeeToken
+	}
+	return headers
+}
+
+func (d *Deps) mpSimilarWebFetch(ctx context.Context, domain, apiKey, databeeToken string) (map[string]any, *mpSimilarWebError) {
+	target := mpSimilarWebURL + url.QueryEscape(domain)
+	status, body := mpSafeGet(ctx, target, mpSimilarWebHeaders(apiKey, databeeToken), 15*time.Second)
 	if status == 0 {
 		return nil, mpSWErr(http.StatusServiceUnavailable, "Provider SimilarWeb tidak dapat dihubungi sekarang.")
 	}
@@ -1301,12 +1350,15 @@ func (d *Deps) mpSimilarWebFetch(ctx context.Context, domain, apiKey string) (ma
 			// RapidAPI membuat 403 "not subscribed" untuk dua hal berbeda: key
 			// yang tidak dikenal maupun key valid yang aplikasinya belum
 			// Subscribe API SimilarWeb (kasus yang sama pernah terjadi di
-			// provider DA/PA di atas). 401 artinya key benar-benar invalid.
+			// provider DA/PA di atas). 401 artinya kredensial ditolak mentah —
+			// bisa key RapidAPI invalid, bisa juga DataBee Token kurang/salah
+			// (listing DataBee mewajibkan Authorization Bearer).
 			if status == 403 && strings.Contains(body, "not subscribed") {
 				return nil, mpSWErr(http.StatusServiceUnavailable,
-					"RapidAPI menolak: \"You are not subscribed to this API.\" Buka listing SimilarWeb (similarweb-api-pro) di RapidAPI lalu Subscribe, lalu coba lagi — key tersimpan tidak perlu diganti. Bila sudah berlangganan, periksa ulang key yang ditempel.")
+					"RapidAPI menolak: \"You are not subscribed to this API.\" Buka listing SimilarWeb (similarweb-api-pro) di RapidAPI lalu Subscribe, lalu coba lagi — key tersimpan tidak perlu diganti. Bila sudah berlangganan, jalankan \"Tes koneksi provider\" di Konfigurasi untuk melihat status kredensialnya persis.")
 			}
-			return nil, mpSWErr(http.StatusServiceUnavailable, "Autentikasi provider SimilarWeb gagal. Perbarui RapidAPI key.")
+			return nil, mpSWErr(http.StatusServiceUnavailable,
+				"Autentikasi provider SimilarWeb ditolak (401/403). Cek dua kredensial di Konfigurasi: key RapidAPI dan DataBee Token — lalu jalankan \"Tes koneksi provider\" untuk melihat jawaban mentah provider.")
 		case 429:
 			return nil, mpSWErr(http.StatusServiceUnavailable, "Provider SimilarWeb sedang rate-limited. Coba lagi nanti.")
 		case 404:
@@ -1380,11 +1432,11 @@ func (d *Deps) mpCheckSimilarWebInsights(ctx context.Context, mediaID string, we
 		return d.mpSimilarWebSnapshotJSON(ptRow(ptNormalizeMap(latest)), mediaID), nil
 	}
 
-	apiKey, keyErr := d.mpSimilarWebKey(ctx)
+	apiKey, databeeToken, keyErr := d.mpSimilarWebCredentials(ctx)
 	if keyErr != nil {
 		return nil, keyErr
 	}
-	insights, fetchErr := d.mpSimilarWebFetch(ctx, domain, apiKey)
+	insights, fetchErr := d.mpSimilarWebFetch(ctx, domain, apiKey, databeeToken)
 	if fetchErr != nil {
 		return nil, fetchErr
 	}

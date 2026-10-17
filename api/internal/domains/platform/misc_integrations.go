@@ -1654,7 +1654,7 @@ func (d *Deps) SEOConfigGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row, err := d.queryRow(r.Context(),
-		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_serpens_api_key, updated_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
+		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_databee_token, sealed_serpens_api_key, updated_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -1686,8 +1686,8 @@ func igSEOJSON(row ptRow) map[string]any {
 		return map[string]any{
 			"provider": "rapidapi", "host": mpSeoProviderHost,
 			"api_key_configured": false, "api_key_hint": nil,
-			"similarweb_api_key_configured": false, "serpens_api_key_configured": false,
-			"updated_at": nil,
+			"similarweb_api_key_configured": false, "databee_token_configured": false,
+			"serpens_api_key_configured": false, "updated_at": nil,
 		}
 	}
 	return map[string]any{
@@ -1696,6 +1696,7 @@ func igSEOJSON(row ptRow) map[string]any {
 		"api_key_configured":            row.has("sealed_api_key"),
 		"api_key_hint":                  ptNullableStr(row, "api_key_hint"),
 		"similarweb_api_key_configured": row.has("sealed_similarweb_api_key"),
+		"databee_token_configured":      row.has("sealed_databee_token"),
 		"serpens_api_key_configured":    row.has("sealed_serpens_api_key"),
 		"updated_at":                    row.anyOrNil("updated_at"),
 	}
@@ -1710,18 +1711,19 @@ func (d *Deps) SEOConfigPut(w http.ResponseWriter, r *http.Request) {
 	body := decodeJSON(r)
 	apiKey, hasAPIKey := strField(body, "api_key")
 	similarweb, hasSimilarweb := strField(body, "similarweb_api_key")
+	databee, hasDatabee := strField(body, "databee_token")
 	serpens, hasSerpens := strField(body, "serpens_api_key")
 	for _, pair := range []struct {
 		v   string
 		has bool
-	}{{apiKey, hasAPIKey}, {similarweb, hasSimilarweb}, {serpens, hasSerpens}} {
+	}{{apiKey, hasAPIKey}, {similarweb, hasSimilarweb}, {databee, hasDatabee}, {serpens, hasSerpens}} {
 		if pair.has && pair.v != "" && (len(pair.v) < 8 || len(pair.v) > 1000) {
 			writeErr(w, d, errUnprocessable("Payload tidak valid"))
 			return
 		}
 	}
 	existing, err := d.queryRow(r.Context(),
-		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_serpens_api_key, updated_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
+		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_databee_token, sealed_serpens_api_key, updated_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -1746,7 +1748,15 @@ func (d *Deps) SEOConfigPut(w http.ResponseWriter, r *http.Request) {
 	} else if existingRow != nil {
 		hint = existingRow.strOr("api_key_hint", "")
 	}
-	var sealedSimilarweb, sealedSerpens any
+	var sealedSimilarweb, sealedDatabee, sealedSerpens any
+	if hasDatabee && databee != "" {
+		s, sErr := d.sealT2(databee)
+		if sErr != nil {
+			writeErr(w, d, sErr)
+			return
+		}
+		sealedDatabee = s
+	}
 	if hasSimilarweb && similarweb != "" {
 		s, sErr := d.sealT2(similarweb)
 		if sErr != nil {
@@ -1764,12 +1774,13 @@ func (d *Deps) SEOConfigPut(w http.ResponseWriter, r *http.Request) {
 		sealedSerpens = s
 	}
 	if err := d.exec(r.Context(),
-		`INSERT INTO platform_seo_config (id, sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_serpens_api_key, updated_by, updated_at)
-		 VALUES ('default', $1, $2, $3, $4, $5, NOW())
+		`INSERT INTO platform_seo_config (id, sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_databee_token, sealed_serpens_api_key, updated_by, updated_at)
+		 VALUES ('default', $1, $2, $3, $4, $5, $6, NOW())
 		 ON CONFLICT (id) DO UPDATE SET
 		   sealed_api_key = COALESCE(EXCLUDED.sealed_api_key, platform_seo_config.sealed_api_key),
 		   api_key_hint = COALESCE(EXCLUDED.api_key_hint, platform_seo_config.api_key_hint),
 		   sealed_similarweb_api_key = COALESCE(EXCLUDED.sealed_similarweb_api_key, platform_seo_config.sealed_similarweb_api_key),
+		   sealed_databee_token = COALESCE(EXCLUDED.sealed_databee_token, platform_seo_config.sealed_databee_token),
 		   sealed_serpens_api_key = COALESCE(EXCLUDED.sealed_serpens_api_key, platform_seo_config.sealed_serpens_api_key),
 		   -- Key baru berarti penyedia mungkin sudah beres: buang catatan kegagalan
 		   -- supaya pemeriksaan berikutnya mencoba lagi, bukan menunggu jeda 24 jam.
@@ -1777,13 +1788,13 @@ func (d *Deps) SEOConfigPut(w http.ResponseWriter, r *http.Request) {
 		   last_da_error_at = CASE WHEN EXCLUDED.sealed_api_key IS NOT NULL THEN NULL ELSE platform_seo_config.last_da_error_at END,
 		   updated_by = EXCLUDED.updated_by,
 		   updated_at = NOW()`,
-		sealed, hint, sealedSimilarweb, sealedSerpens, user.ID); err != nil {
+		sealed, hint, sealedSimilarweb, sealedDatabee, sealedSerpens, user.ID); err != nil {
 		writeErr(w, d, err)
 		return
 	}
 	d.audit(r.Context(), user.ID, "platform.seo.configuration_updated", "platform_seo_config", "default")
 	updated, err := d.queryRow(r.Context(),
-		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_serpens_api_key, updated_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
+		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_databee_token, sealed_serpens_api_key, updated_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -1859,13 +1870,13 @@ func swDiagnoseHint(status int, body string) string {
 	case status >= 200 && status < 300:
 		return "Key valid dan berlangganan aktif — pemeriksaan SimilarWeb siap dipakai di panel media."
 	case status == 401:
-		return "RapidAPI menolak key ini (Invalid API key). Pastikan di-tempel persis dari Dashboard RapidAPI — tanpa spasi/kutip — lalu simpan ulang."
+		return "Ditolak 401: cek dua-duanya di kartu SimilarWeb — key RapidAPI (di-tempel persis dari Dashboard RapidAPI, tanpa spasi/kutip) dan DataBee Token dari hal listing DataBee. Jawaban mentah provider ada di bawah."
 	case status == 403 && strings.Contains(body, "not subscribed"):
-		return "Key tersimpan tapi RapidAPI bilang \"You are not subscribed to this API.\" — artinya akun yang punya key ini belum berlangganan listing SimilarWeb (similarweb-api-pro). Buka listing-nya di RapidAPI, klik Subscribe (paket apa pun yang tersedia), lalu tes lagi. Key tidak perlu diganti kalau memang benar."
+		return "Key tersimpan tapi RapidAPI bilang \"You are not subscribed to this API.\" — akun yang punya key ini belum berlangganan listing SimilarWeb (similarweb-api-pro). Buka listing-nya di RapidAPI, klik Subscribe (paket apa pun yang tersedia), lalu tes lagi. Key tidak perlu diganti kalau memang benar."
 	case status == 403:
-		return "Provider menolak akses (403). Periksa pesan raw di bawah."
+		return "Ditolak 403: biasanya DataBee Token kurang/salah atau langganan belum aktif. Lengkapi DataBee Token di kartu SimilarWeb (dikirim sebagai Authorization: Bearer), lalu tes lagi. Jawaban mentah provider ada di bawah."
 	case status == 404:
-		return "Berlangganan aktif; domain uji (app.tauthub.com) saja yang tidak terdata di SimilarWeb — media lain tetap bisa diperiksa. Anggap tes lolos."
+		return "Kredensial lolos — provider hanya menyebut domain uji (app.tauthub.com) tidak terdata di SimilarWeb. Media lain tetap bisa diperiksa. Anggap tes lolos."
 	case status == 429:
 		return "Kuota/rate limit provider kosong untuk saat ini — tunggu lalu tes lagi."
 	case status == 402:
@@ -1884,36 +1895,19 @@ func (d *Deps) SEOSimilarWebDiagnose(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	config, err := d.queryRow(r.Context(),
-		"SELECT sealed_similarweb_api_key FROM platform_seo_config WHERE id = 'default' LIMIT 1")
-	if err != nil {
-		writeErr(w, d, err)
-		return
-	}
-	apiKey := ""
-	if config != nil {
-		apiKey = ptRow(ptNormalizeMap(config)).strOr("sealed_similarweb_api_key", "")
-	}
-	if apiKey == "" {
+	// Validasi dua kredensial dulu; bila ada yang kurang, jangan panggil
+	// provider — jelaskan mana yang belum tersimpan. Pesan validasi tidak
+	// pernah memuat nilai kredensial.
+	apiKey, databee, credsErr := d.mpSimilarWebCredentials(r.Context())
+	if credsErr != nil {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"ok": false, "detail": "SimilarWeb key belum tersimpan — isi di kartu SimilarWeb dulu.",
+			"ok": false, "provider_status": nil, "detail": credsErr.Message,
 		})
 		return
 	}
-	apiKey, uErr := d.unsealT2(apiKey)
-	if uErr != nil || apiKey == "" {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"ok": false, "detail": "Key SimilarWeb tidak dapat dibuka (APP_SECRET kemungkinan berubah). Simpan ulang di kartu SimilarWeb.",
-		})
-		return
-	}
-	status, body := mpSafeGet(r.Context(),
-		"https://similarweb-api-pro.p.rapidapi.com/site-overview?url=app.tauthub.com",
-		map[string]string{
-			"accept":          "application/json",
-			"x-rapidapi-host": "similarweb-api-pro.p.rapidapi.com",
-			"x-rapidapi-key":  apiKey,
-		}, 15*time.Second)
+	// Endpoint country-metadata dipilih untuk diagnose karena ringan; jika
+	// kredensial valid, jawaban mentah provider langsung tampil di admin.
+	status, body := mpSafeGet(r.Context(), mpSimilarWebDiagnoseURL, mpSimilarWebHeaders(apiKey, databee), 15*time.Second)
 	detail := swDiagnoseHint(status, body)
 	v := map[string]any{
 		"ok":              status >= 200 && status < 300,

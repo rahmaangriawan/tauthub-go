@@ -2574,6 +2574,7 @@ CREATE TABLE IF NOT EXISTS public.platform_seo_config (
   sealed_api_key  text,
   api_key_hint    character varying(16),
   sealed_similarweb_api_key text,
+  sealed_databee_token text,
   sealed_serpens_api_key text,
   updated_by      character(36),
   updated_at      timestamp(6) with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP(6),

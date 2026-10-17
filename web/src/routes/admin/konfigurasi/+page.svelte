@@ -19,6 +19,7 @@
 		api_key_hint?: string | null;
 		host?: string | null;
 		similarweb_api_key_configured?: boolean;
+		databee_token_configured?: boolean;
 		serpens_api_key_configured?: boolean;
 	};
 	type SmtpConfig = {
@@ -176,6 +177,7 @@
 	let seoMsg = $state({ text: '', ok: false });
 	let seoBusy = $state(false);
 	let similarwebKey = $state('');
+	let databeeKey = $state('');
 	let similarwebMsg = $state({ text: '', ok: false });
 	let similarwebBusy = $state(false);
 	type SwDiag = { ok: boolean; provider_status: number | null; ket?: string | null; detail?: string | null; payload_raw?: string | null };
@@ -215,11 +217,12 @@
 		similarwebMsg = { text: '', ok: false };
 		const res = await request<SeoConfig>('/seo/config', {
 			method: 'PUT',
-			body: JSON.stringify({ similarweb_api_key: similarwebKey.trim() || null })
+			body: JSON.stringify({ similarweb_api_key: similarwebKey.trim() || null, databee_token: databeeKey.trim() || null })
 		});
 		if (!res.ok) similarwebMsg = { text: res.error, ok: false };
 		else {
 			similarwebKey = '';
+			databeeKey = '';
 			similarwebMsg = { text: 'SimilarWeb API key berhasil disimpan.', ok: true };
 			await loadSeo();
 		}
@@ -831,9 +834,10 @@
 						<div class="flex flex-wrap items-center gap-2">
 							<Globe size={18} />
 							<h2 class="text-base font-semibold">SimilarWeb Insights (RapidAPI)</h2>
-							<Badge tone={seoConfig?.similarweb_api_key_configured ? 'success' : 'warning'} label={seoConfig?.similarweb_api_key_configured ? 'Terhubung' : tr('Belum Dikonfigurasi')} />
+							<Badge tone={seoConfig?.similarweb_api_key_configured ? 'success' : 'warning'} label={seoConfig?.similarweb_api_key_configured ? 'Key terhubung' : tr('Belum Dikonfigurasi')} />
+							<Badge tone={seoConfig?.databee_token_configured ? 'success' : 'warning'} label={seoConfig?.databee_token_configured ? 'DataBee terhubung' : 'DataBee belum diisi'} />
 						</div>
-						<p class="text-sm text-muted-foreground">{tr("API untuk")}<strong>SimilarWeb Insights</strong>{tr("(visits, engagement, rank, top keywords) di dashboard Mitra. Key tidak pernah ditampilkan atau dikirim ke browser.")}</p>
+						<p class="text-sm text-muted-foreground">{tr("API untuk")}<strong>SimilarWeb Insights</strong>{tr("(visits, engagement, rank, top keywords) di dashboard Mitra. Provider Similarweb API Pro (DataBee) butuh DUA kredensial sekaligus: key RapidAPI DAN DataBee Token yang keduanya tersedia di halaman listingnya di RapidAPI. Kalau salah satu belum diisi, provider menolak dengan pesan autentikasi. Keduanya tidak pernah ditampilkan atau dikirim ke browser.")}</p>
 						<form class="space-y-3" onsubmit={saveSimilarWeb}>
 							<label class="block">
 								<span class="text-sm font-medium">SimilarWeb RapidAPI Key</span>
@@ -846,6 +850,18 @@
 									bind:value={similarwebKey}
 								/>
 							</label>
+							<label class="block">
+								<span class="text-sm font-medium">DataBee Token (Authorization Bearer)</span>
+								<input
+									class="app-input mt-1 w-full"
+									type="password"
+									required={seoConfig?.similarweb_api_key_configured && !seoConfig?.databee_token_configured}
+									minlength={seoConfig?.databee_token_configured ? 0 : 4}
+									placeholder={seoConfig?.databee_token_configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan DataBee token dari listing Similarweb API Pro'}
+									bind:value={databeeKey}
+								/>
+							</label>
+							<p class="text-xs text-muted-foreground">Ambil di halaman listing Similarweb API Pro di RapidAPI (publisher DataBee) — pengaturan Authorization/payload token akan membentuk header Authorization: Bearer. Wajib bersama key RapidAPI, tidak dipakai sendiri.</p>
 							{#if similarwebMsg.text}
 								<div class="flex items-center gap-2 text-sm" style="color: {similarwebMsg.ok ? 'var(--success)' : 'var(--destructive)'};">
 									{#if similarwebMsg.ok}<CheckCircle2 size={15} />{:else}<TriangleAlert size={15} />{/if}

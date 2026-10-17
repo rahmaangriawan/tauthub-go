@@ -2067,6 +2067,7 @@ CREATE TABLE public.platform_seo_config (
     updated_by character(36),
     updated_at timestamp(6) with time zone DEFAULT CURRENT_TIMESTAMP(6) NOT NULL,
     sealed_similarweb_api_key text,
+    sealed_databee_token text,
     sealed_smodin_api_key text,
     sealed_serpens_api_key text,
     CONSTRAINT ck_platform_seo_config_id CHECK ((id = 'default'::text))
