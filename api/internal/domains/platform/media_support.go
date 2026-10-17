@@ -1298,6 +1298,14 @@ func (d *Deps) mpSimilarWebFetch(ctx context.Context, domain, apiKey string) (ma
 	if status < 200 || status >= 300 {
 		switch status {
 		case 401, 403:
+			// RapidAPI membuat 403 "not subscribed" untuk dua hal berbeda: key
+			// yang tidak dikenal maupun key valid yang aplikasinya belum
+			// Subscribe API SimilarWeb (kasus yang sama pernah terjadi di
+			// provider DA/PA di atas). 401 artinya key benar-benar invalid.
+			if status == 403 && strings.Contains(body, "not subscribed") {
+				return nil, mpSWErr(http.StatusServiceUnavailable,
+					"RapidAPI menolak: \"You are not subscribed to this API.\" Buka listing SimilarWeb (similarweb-api-pro) di RapidAPI lalu Subscribe, lalu coba lagi — key tersimpan tidak perlu diganti. Bila sudah berlangganan, periksa ulang key yang ditempel.")
+			}
 			return nil, mpSWErr(http.StatusServiceUnavailable, "Autentikasi provider SimilarWeb gagal. Perbarui RapidAPI key.")
 		case 429:
 			return nil, mpSWErr(http.StatusServiceUnavailable, "Provider SimilarWeb sedang rate-limited. Coba lagi nanti.")
