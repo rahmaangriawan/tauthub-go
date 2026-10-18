@@ -1026,7 +1026,7 @@
 			{ key: 'select', label: '', width: '36px', render: selectCell },
 			{ key: 'name', label: tr('Media'), render: mediaCell },
 			{ key: 'category', label: 'Kategori', render: categoryCell },
-			{ key: 'publication_mode', label: tr('Mode Publikasi'), render: publicationModeCell },
+			{ key: 'publication_mode', label: tr('Mode Integrasi'), render: publicationModeCell },
 			{ key: 'word_count_mode', label: tr('Jumlah Kata'), render: wordCountCell },
 			{ key: 'dewan_pers', label: 'Dewan Pers', render: dewanPersCell },
 			{ key: 'tier', label: 'Tier', render: tierCell },
@@ -1146,7 +1146,7 @@
 
 			<div class="app-card mb-3 p-3">
 				<div class="mb-1 flex items-center gap-2">
-					<p class="text-sm font-medium">{tr("Mode Publikasi")}</p>
+					<p class="text-sm font-medium">{tr("Mode Integrasi")}</p>
 					{#if (editing.publication_mode ?? 'draft') === 'publish'}
 						<Badge tone="success" label={tr("Terbit")} />
 					{:else}

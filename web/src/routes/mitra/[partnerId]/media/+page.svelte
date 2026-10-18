@@ -280,7 +280,7 @@
 		}
 	};
 
-	/** Tooltip header kolom Mode Publikasi: siapa yang menuntaskan penerbitan. */
+	/** Tooltip header kolom Mode Integrasi: siapa yang menuntaskan penerbitan. */
 	const modeColumnHint = () =>
 		tr('Siapa yang menerbitkan artikel. Mode Integrasi = di-push otomatis ke situs mitra lewat integrasi; Mode Manual = mitra menempel artikelnya sendiri lalu mengirim URL artikelnya.');
 
@@ -998,7 +998,7 @@
 						<th class="px-4 py-2.5 font-medium">{tr('Kategori')}</th>
 						<th class="px-4 py-2.5 font-medium">
 							<span class="inline-flex items-center gap-1">
-								{tr("Mode Publikasi")}
+								{tr("Mode Integrasi")}
 								<Tooltip.Provider delayDuration={0}>
 									<Tooltip.Root>
 										<Tooltip.Trigger>
@@ -1186,7 +1186,7 @@
 								<dd class="mt-1">{@render domainVerify(m)}</dd>
 							</div>
 							<div class="min-w-0">
-								<dt class="text-[11px] text-muted-foreground">{tr('Mode Publikasi')}</dt>
+								<dt class="text-[11px] text-muted-foreground">{tr('Mode Integrasi')}</dt>
 								<dd class="mt-1">{@render modeBadge(m)}</dd>
 							</div>
 							<div class="min-w-0">

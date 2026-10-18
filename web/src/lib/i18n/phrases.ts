@@ -2249,7 +2249,6 @@ export const PHRASE_EN: Record<string, string> = {
   "Mode Integrasi": "Integration Mode",
   "Mode Manual": "Manual Mode",
   "Mode Otomatis": "Automatic Mode",
-  "Mode Publikasi": "Publication Mode",
   "Mode manual — unggah artikel tulisanmu sendiri untuk tiap media.": "Manual mode — upload your own written article for each outlet.",
   "Unggah artikel tulisanmu sendiri, atau buat dengan AI lewat tombol di tiap media.": "Upload your own written article, or create one with AI using the button on each outlet.",
   "Mode media": "Media mode",
