@@ -520,7 +520,7 @@ func (d *Deps) resolveProfilerPrompt(ctx context.Context, in resolveProfilerProm
 		}
 		versionID, prompt, version, ok := d.getActiveAnglePrompt(ctx, angle.ID)
 		if !ok {
-			return nil, errUnprocessable("Angle \"" + angle.Name + "\" belum memiliki versi prompt aktif. Hubungi super admin untuk publish di Taut Prompt Studio.")
+			return nil, errUnprocessable("Angle \"" + angle.Name + "\" belum memiliki versi prompt aktif. Hubungi super admin untuk publish di Prompt Angle.")
 		}
 		blocks = append(blocks, resolvedAngleBlock{
 			ChannelSlug: channel.Slug, ChannelID: channel.ID,

@@ -269,7 +269,7 @@
 </script>
 
 <section>
-	<PageHeader title="Taut Prompt Studio" description={tr("Satu angle = satu prompt aktif yang bisa diedit selamanya. Hapus versi lama yang tidak dipakai untuk hemat resource.")}>
+	<PageHeader title="Prompt Angle" description={tr("Satu angle = satu prompt aktif yang bisa diedit selamanya. Hapus versi lama yang tidak dipakai untuk hemat resource.")}>
 		<span class="rounded-full px-2.5 py-0.5 text-xs font-medium" style="background: var(--accent); color: var(--primary);">{channels.length} channel</span>
 		<button class="app-btn app-btn-primary" onclick={() => (showChannel = true)}><Plus size={15} />{tr("Buat Channel")}</button>
 	</PageHeader>
