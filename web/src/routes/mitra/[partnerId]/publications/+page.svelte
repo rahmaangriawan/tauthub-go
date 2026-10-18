@@ -1623,35 +1623,47 @@
 
 						<div>
 							<span class="text-xs font-medium text-muted-foreground">{tr('Gambar Utama')}</span>
-							<div class="mt-1 flex flex-wrap items-start gap-3 rounded-xl border p-3" style="border-color: var(--border);">
-								{#if draft.featured_image_url}
+					<!-- Cover 16/9 besar selebar kartu; klik gambar/kartu = unggah. Topol
+     aksi taruh di bawah cover kanan; kolom input URL dihilangkan (pemilik produk). -->\n					<div class="mt-1 rounded-xl border p-2" style="border-color: var(--border);">
+						<div class="relative overflow-hidden rounded-lg" style="aspect-ratio: 16 / 9; background: var(--secondary);">
+							{#if draft.featured_image_url}
+								<button
+									type="button"
+									class="flex h-full w-full cursor-zoom-in overflow-hidden rounded-lg"
+									title={tr('Ganti gambar')}
+									onclick={() => coverInput?.click()}
+								>
 									<img
 										src={draft.featured_image_url}
 										alt={tr('Gambar cover artikel')}
-										class="w-40 shrink-0 rounded-lg object-cover"
-										style="aspect-ratio: 16 / 9;"
+										class="h-full w-full object-cover"
 									/>
-								{:else}
-									<div class="flex w-40 shrink-0 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground" style="aspect-ratio: 16 / 9; border-color: var(--border);">
-										{tr('Belum ada gambar')}
-									</div>
+								</button>
+							{:else}
+								<button
+									type="button"
+									class="flex h-full w-full items-center justify-center gap-2 text-xs text-muted-foreground"
+									onclick={() => coverInput?.click()}
+								>
+									<Paperclip size={13} /> {tr('Belum ada gambar — klik untuk unggah')}
+								</button>
+							{/if}
+						</div>
+						<div class="mt-2 flex flex-wrap items-center justify-between gap-2 px-1">
+							<p class="text-xs text-muted-foreground">{tr('Gambar disimpan di Tauthub; saat artikel terbit ke media, tautannya dikirim lengkap dengan domain.')}</p>
+							<div class="flex flex-wrap gap-2">
+								<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" disabled={coverBusy} onclick={() => coverInput?.click()}>
+									{#if coverBusy}<LoaderCircle size={13} class="animate-spin" />{:else}<Paperclip size={13} />{/if}
+									{tr('Ganti gambar')}
+								</button>
+								{#if draft.featured_image_url}
+									<a class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" href={draft.featured_image_url} target="_blank" rel="noopener">{tr('Buka di tab baru')}</a>
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => { draft.featured_image_url = ''; void measureDraftImages(); }}>{tr('Hapus gambar')}</button>
 								{/if}
-								<div class="flex min-w-0 flex-1 flex-col gap-2">
-									<input class="app-input w-full" placeholder="/uploads/…" bind:value={draft.featured_image_url} />
-									<div class="flex flex-wrap gap-2">
-										<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={coverBusy} onclick={() => coverInput?.click()}>
-											{#if coverBusy}<LoaderCircle size={13} class="animate-spin" />{:else}<Paperclip size={13} />{/if}
-											{tr('Ganti gambar')}
-										</button>
-										{#if draft.featured_image_url}
-											<a class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" href={draft.featured_image_url} target="_blank" rel="noopener">{tr('Buka di tab baru')}</a>
-											<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => { draft.featured_image_url = ''; void measureDraftImages(); }}>{tr('Hapus gambar')}</button>
-										{/if}
-									</div>
-									<p class="text-xs text-muted-foreground">{tr('Gambar disimpan di Tauthub; saat artikel terbit ke media, tautannya dikirim lengkap dengan domain.')}</p>
-								</div>
 							</div>
-							<input bind:this={coverInput} type="file" accept="image/*" class="hidden" onchange={pickCover} />
+						</div>
+					</div>\n
+							<input bind:this={coverInput} type="file" accept="image/*" class="hidden" onchange={pickCover} />							<input bind:this={coverInput} type="file" accept="image/*" class="hidden" onchange={pickCover} />
 							{#if coverError}<p class="mt-1 text-xs" style="color: var(--destructive);">{coverError}</p>{/if}
 						</div>
 
