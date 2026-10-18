@@ -282,7 +282,7 @@
 
 	/** Tooltip header kolom Mode Integrasi: siapa yang menuntaskan penerbitan. */
 	const modeColumnHint = () =>
-		tr('Siapa yang menerbitkan artikel. Mode Integrasi = di-push otomatis ke situs mitra lewat integrasi; Mode Manual = mitra menempel artikelnya sendiri lalu mengirim URL artikelnya.');
+		tr('Siapa yang menerbitkan artikel. API = di-push otomatis ke situs mitra lewat WordPress/Blogger/Custom/API key; Manual = mitra menempel artikelnya sendiri lalu mengirim URL artikelnya.');
 
 	/** Tooltip header kolom Platform: platform yang dipakai media. */
 	const platformColumnHint = () => tr('Platform yang digunakan media, WordPress, Blogger, Emdash, API');
@@ -1244,10 +1244,12 @@
 {/snippet}
 
 {#snippet modeBadge(m: Media)}
+	<!-- Badge menunjukkan JENIS integrasinya: 'publish' = jalur API situs mitra
+	(WordPress/Blogger/Custom/sites API key), sisanya mitra menempel sendiri. -->
 	{#if (m.publication_mode ?? 'draft') === 'publish'}
-		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft, #e8f7ee); color: var(--success);">{tr('Mode Integrasi')}</span>
+		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft, #e8f7ee); color: var(--success);">{tr('API')}</span>
 	{:else}
-		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">{tr('Mode Manual')}</span>
+		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">{tr('Manual')}</span>
 	{/if}
 {/snippet}
 
@@ -1634,8 +1636,8 @@
 							<span class="mb-1 block text-xs font-bold text-muted-foreground">{tr('Mode')}</span>
 							<div class="flex flex-col gap-2">
 								{#each [
-									{ v: 'draft', label: 'Mode Manual', helper: 'Mitra copy-paste artikel ke web-nya sendiri dan input URL publikasi di artikel klien. Status jadi Terbit otomatis saat URL dikirim.' },
-									{ v: 'publish', label: 'Mode Integrasi', helper: 'Artikel di-push otomatis ke WordPress/Blogger/Custom Web. Status jadi Terbit otomatis setelah klik ACC.' }
+									{ v: 'draft', label: tr('Manual'), helper: 'Mitra copy-paste artikel ke web-nya sendiri dan input URL publikasi di artikel klien. Status jadi Terbit otomatis saat URL dikirim.' },
+									{ v: 'publish', label: tr('API'), helper: 'Artikel di-push otomatis ke WordPress/Blogger/Custom Web. Status jadi Terbit otomatis setelah klik ACC.' }
 								] as opt (opt.v)}
 									<button
 										type="button"

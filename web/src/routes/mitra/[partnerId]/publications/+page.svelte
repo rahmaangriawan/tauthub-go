@@ -481,7 +481,7 @@
 
 	/** Tooltip header kolom Mode Integrasi: siapa yang menerbitkan artikel. */
 	const modeColumnHint = () =>
-		tr('Siapa yang menerbitkan artikel. Mode Integrasi = di-push otomatis ke situs mitra lewat integrasi; Mode Manual = mitra menempel artikelnya sendiri lalu mengirim URL artikelnya.');
+		tr('Siapa yang menerbitkan artikel. API = di-push otomatis ke situs mitra lewat WordPress/Blogger/Custom/API key; Manual = mitra menempel artikelnya sendiri lalu mengirim URL artikelnya.');
 
 	const statusLabel: Record<string, string> = $derived({
 		waiting_partner: tr('Menunggu persetujuan'), partner_approved: tr('Disetujui'), partner_rejected: tr('Ditolak'),
@@ -497,9 +497,12 @@
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 
 	// ── Parity kolom tabel app lama ──────────────────────────────────────
+	// Badge menunjukkan JENIS integrasinya: 'publish' berarti artikel dipindah
+	// lewat jalur API situs mitra (WordPress/Blogger/Custom/Web API key), sisanya
+	// mitra menempel sendiri (Manual).
 	const pubMode = (m: string | null) => (m ?? 'draft') === 'publish'
-		? { label: tr('Mode Integrasi'), tone: 'var(--success)' }
-		: { label: tr('Mode Manual'), tone: 'var(--warning)' };
+		? { label: tr('API'), tone: 'var(--success)' }
+		: { label: tr('Manual'), tone: 'var(--warning)' };
 	const mediaHost = (u: string | null) => (u ?? '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
 	const integrationLabel: Record<string, string> = $derived({
 		wordpress: 'WordPress', blogger: 'Blogger', custom_web: 'Custom Web', tulisio_api: 'Tulisio API', manual: tr('Manual')
