@@ -233,11 +233,74 @@
 		coverBusy = false;
 		draft = await loadDraft(p);
 		draftLoading = false;
+		if (draft) void measureDraftImages();
+	}
+
+	// ── Ukuran gambar di draf: jumlah + total berat (mis. "3 gambar · 412 KB")
+	// muncul di sebelah teks Sumber berkat HEAD fetch ke tiap URL gambar;
+	// gambar luar yang tidak membongkar Content-Length dihitung "tak terukur". ──
+	let draftImgCount = $state(0);
+	let draftImgBytes = $state<number | null>(null);
+	let draftImgUnknown = $state(false);
+	let draftImgFallbackCount = $state(0);
+	let draftImgToken = 0;
+
+	const fmtBytesID = (b: number) =>
+		b >= 1048576 ? `${(b / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.round(b / 1024).toLocaleString('id-ID')} KB`;
+
+	function collectDraftImageURLs(coverURL: string | null | undefined, html: string | null | undefined): string[] {
+		const urls = new Set<string>();
+		if (coverURL) urls.add(coverURL);
+		const re = /<img[^>]*\ssrc=["']([^"']+)["']/gi;
+		for (const m of (html ?? '').matchAll(re)) urls.add(m[1]);
+		return [...urls];
+	}
+
+	async function measureDraftImages() {
+		const token = ++draftImgToken;
+		const urls = draft ? collectDraftImageURLs(draft.featured_image_url, draft.content_html) : [];
+		draftImgCount = urls.length;
+		draftImgBytes = null;
+		draftImgUnknown = false;
+		draftImgFallbackCount = 0;
+		if (!urls.length) return;
+		let total = 0;
+		let unknown = false;
+		await Promise.all(urls.map(async (u) => {
+			try {
+				const res = await fetch(u, { method: 'HEAD' });
+				const len = res.headers.get('content-length');
+				if (res.ok && len && Number(len) > 0) {
+					total += Number(len);
+					return;
+				}
+				// Header length sering hilang di proxy dev — ukur langsung lewat blob
+				// untuk gambar satu asal (origin sama); gambar luar tetap tak terukur.
+				const abs = new URL(u, window.location.href);
+				if (abs.origin !== window.location.origin) {
+					unknown = true;
+					return;
+				}
+				const blob = await fetch(abs.href).then((r2) => (r2.ok ? r2.blob() : null));
+				if (blob && blob.size > 0) total += blob.size;
+				else unknown = true;
+			} catch {
+				unknown = true;
+			}
+		}));
+		if (token !== draftImgToken) return;
+		draftImgUnknown = unknown;
+		draftImgBytes = unknown ? null : total;
+		draftImgFallbackCount = unknown ? urls.length : 0;
 	}
 
 	function closeDraftEditor() {
 		draftPub = null;
 		draft = null;
+		draftImgCount = 0;
+		draftImgBytes = null;
+		draftImgUnknown = false;
+		draftImgFallbackCount = 0;
 	}
 
 	/**
@@ -423,6 +486,7 @@
 				return;
 			}
 			notice = 'Perubahan draf tersimpan.';
+			void measureDraftImages();
 			await load();
 		} finally {
 			busy = false;
@@ -473,6 +537,7 @@
 		coverError = '';
 		try {
 			draft.featured_image_url = await uploadDraftImage(file);
+			void measureDraftImages();
 		} catch (err) {
 			coverError = err instanceof Error ? err.message : tr('Gagal mengunggah gambar.');
 		} finally {
@@ -1580,7 +1645,7 @@
 										</button>
 										{#if draft.featured_image_url}
 											<a class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" href={draft.featured_image_url} target="_blank" rel="noopener">{tr('Buka di tab baru')}</a>
-											<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => (draft.featured_image_url = '')}>{tr('Hapus gambar')}</button>
+											<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => { draft.featured_image_url = ''; void measureDraftImages(); }}>{tr('Hapus gambar')}</button>
 										{/if}
 									</div>
 									<p class="text-xs text-muted-foreground">{tr('Gambar disimpan di Tauthub; saat artikel terbit ke media, tautannya dikirim lengkap dengan domain.')}</p>
@@ -1608,6 +1673,11 @@
 						<p class="text-xs text-muted-foreground">
 							{draft.source === 'wp_draft' ? tr('Sumber: draf WordPress') : tr('Sumber: dokumen klien')}
 							{#if draft.edited_at} · {tr('diedit')} {dt(draft.edited_at)}{/if}
+							{#if draftImgCount > 0}
+								<!-- Total UKURAN gambar artikel yang diminta pemilik produk; kalau
+								     ada gambar luar yang tak terukur, tampil perkiraan jumlah saja. -->
+								· {#if !draftImgUnknown && draftImgBytes != null}{fmtBytesID(draftImgBytes)}{:else}±{draftImgCount} {tr('gambar')}{/if}
+							{/if}
 						</p>
 						<div class="flex gap-2">
 							<button class="app-btn app-btn-soft" type="button" onclick={closeDraftEditor}>{tr('Tutup')}</button>
