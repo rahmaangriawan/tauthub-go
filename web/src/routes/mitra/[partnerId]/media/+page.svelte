@@ -6,7 +6,7 @@
 	// (pratinjau → konfirmasi, parity alur bulk import app lama).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { BadgeCheck, Check, CircleAlert, Copy, ExternalLink, Info, Link, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Trash2, TriangleAlert, Upload, X } from '@lucide/svelte';
+	import { BadgeCheck, Check, CircleAlert, Copy, ExternalLink, FileText, Info, Link, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Trash2, TriangleAlert, Upload, X } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { Tooltip } from 'bits-ui';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
@@ -31,6 +31,9 @@
 		allow_embed: boolean; ai_summary: string | null; ai_summary_generated_at: string | null;
 		// Kolom tabel app lama (dipakai untuk badge & aksi).
 		auto_publish: boolean; dewan_pers_status: string | null; dewan_pers_rejection_reason: string | null;
+		// Kiriman Dewan Pers yang sudah tersimpan — dipakai untuk prefilled dialog verifikasi.
+		dewan_pers_cert_no: string | null; dewan_pers_doc_key: string | null;
+		dewan_pers_submitted_at: string | null; dewan_pers_reviewed_at: string | null;
 		health_score: number | null; health_breakdown: Record<string, unknown> | null;
 		seo_da: number | null; seo_pa: number | null; seo_spam_score: number | null; seo_checked_at: string | null;
 		has_connection: boolean; custom_web_status: string | null; blogger_status: string | null;
@@ -207,7 +210,7 @@
 		mediaLoaded = true;
 	}
 
-	/** Toggle "Mode Otomatis" per media (parity app lama: PUT {auto_publish}). */
+	/** Toggle "Langsung terbit" per media (parity app lama: PUT {auto_publish}). */
 	async function toggleAutoPublish(m: Media, checked: boolean) {
 		autoBusy = m.id;
 		error = '';
@@ -287,7 +290,7 @@
 	/** Tooltip header kolom Platform: platform yang dipakai media. */
 	const platformColumnHint = () => tr('Platform yang digunakan media, WordPress, Blogger, Emdash, API');
 
-	/** Tooltip centang Mode Otomatis: apa akibatnya dan kapan dipakai. */
+	/** Tooltip centang Langsung terbit: apa akibatnya dan kapan dipakai. */
 	const autoPublishHint = () =>
 		tr('Kalau dicentang, artikel dari klien langsung diproses dan terbit ke situs media tanpa menunggu persetujuan mitra. Kalau tidak dicentang, mitra harus menyetujui dulu setiap artikel.');
 
@@ -381,19 +384,16 @@
 			return;
 		}
 		verifTab = 'dewan';
-		dpCert = '';
-		dpDoc = null;
-		dpBusy = false;
+		resetDewanForm(m);
 	}
 
 	async function switchVerifTab(t: 'domain' | 'dewan') {
 		verifTab = t;
 		if (t === 'domain' && domTarget && !domToken) await loadDomToken(domTarget);
-		if (t === 'dewan') {
-			// Form dewan selalu mulai bersih supaya pengajuan tidak membawa sisa data dialog sebelumnya.
-			dpCert = '';
-			dpDoc = null;
-			dpBusy = false;
+		if (t === 'dewan' && domTarget) {
+			// Form dewan mulai dari kiriman yang sudah tersimpan supaya mitra tetap
+			// melihat nomor sertifikat & status pengajuan yang pernah diajukannya.
+			resetDewanForm(domTarget);
 		}
 	}
 
@@ -482,13 +482,53 @@
 	let dpCert = $state('');
 	let dpDoc = $state<File | null>(null);
 	let dpBusy = $state(false);
+	// Box unggah dokumen: status tarik & lepas + pratinjau gambar + validasi
+	// klien (paritas server handler dewan-pers-document: PDF/JPG/PNG, maks 10 MB).
+	let dpDocDragOver = $state(false);
+	let dpDocError = $state('');
+	let dpDocUrl = $state<string | null>(null);
+
+	function clearDpDocUrl() {
+		if (dpDocUrl) URL.revokeObjectURL(dpDocUrl);
+		dpDocUrl = null;
+	}
+
+	const DP_DOC_OK = /\.(pdf|jpe?g|png)$/i;
+	const DP_DOC_MAX = 10 * 1024 * 1024;
+
+	/** Validasi klien supaya pengguna tidak menunggu penolakan dari server. */
+	function pickDpDoc(file: File | null) {
+		dpDocError = '';
+		if (!file) return;
+		if (!DP_DOC_OK.test(file.name)) dpDocError = tr('Format dokumen harus PDF, JPG, atau PNG.');
+		else if (file.size > DP_DOC_MAX) dpDocError = tr('Ukuran file maksimal 10 MB.');
+		else {
+			clearDpDocUrl();
+			dpDoc = file;
+			dpDocUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+		}
+	}
+
+	const fmtBytes = (n: number) =>
+		n >= 1024 * 1024
+			? `${(n / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`
+			: `${Math.max(1, Math.round(n / 1024))} KB`;
+
+	/** Form dewan mulai dari kiriman yang sudah tersimpan: mitra tetap melihat
+	 * nomor sertifikat yang pernah diajukan. Pilihan berkas baru dikosongkan. */
+	function resetDewanForm(m: Media) {
+		dpCert = m.dewan_pers_cert_no ?? '';
+		dpDoc = null;
+		dpDocDragOver = false;
+		dpDocError = '';
+		clearDpDocUrl();
+		dpBusy = false;
+	}
 
 	function openDewanPers(m: Media) {
 		domTarget = m;
 		verifTab = 'dewan';
-		dpCert = '';
-		dpDoc = null;
-		dpBusy = false;
+		resetDewanForm(m);
 	}
 
 	async function submitDewanPers(e: SubmitEvent) {
@@ -1304,9 +1344,9 @@
 					checked={m.auto_publish}
 					disabled={autoBusy === m.id}
 					onchange={(e) => void toggleAutoPublish(m, (e.currentTarget as HTMLInputElement).checked)}
-					aria-label={`${tr('Mode otomatis untuk')} ${m.name}`}
+					aria-label={`${tr('Langsung terbit untuk')} ${m.name}`}
 				/>
-				{#if showLabel}{tr('Mode Otomatis')}{/if}
+				{#if showLabel}{tr('Langsung terbit')}{/if}
 			</label>
 			<Tooltip.Provider delayDuration={0}>
 				<Tooltip.Root>
@@ -2024,24 +2064,88 @@
 				</div>
 			{/if}
 			{:else}
-			<p class="mt-2 text-sm text-muted-foreground">
-				{tr('Ajukan verifikasi untuk')} <strong>{domTarget.name}</strong>.
-				{tr('Masukkan nomor sertifikat Dewan Pers dan unggah dokumen pendukung bila ada.')}
-			</p>
+				<p class="mt-2 text-sm text-muted-foreground">
+					{tr('Ajukan verifikasi untuk')} <strong>{domTarget.name}</strong>.
+					{tr('Masukkan nomor sertifikat Dewan Pers dan unggah dokumen pendukung bila ada.')}
+				</p>
+				{#if domTarget.dewan_pers_cert_no || domTarget.dewan_pers_doc_key || domTarget.dewan_pers_status}
+					<div class="mt-2 flex flex-wrap items-center gap-2 rounded-lg border p-2.5 text-xs" style="border-color: var(--border); background: var(--muted);">
+						{#if domTarget.dewan_pers_status}
+							<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid {dpBadge(domTarget.dewan_pers_status).tone}; color: {dpBadge(domTarget.dewan_pers_status).tone};">
+								{dpBadge(domTarget.dewan_pers_status).label}
+							</span>
+						{/if}
+						{#if domTarget.dewan_pers_submitted_at}
+							<span class="text-muted-foreground">{tr('Diajukan')} {dt(domTarget.dewan_pers_submitted_at)}</span>
+						{/if}
+						{#if domTarget.dewan_pers_doc_key}
+							<a class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" href={`/uploads/${domTarget.dewan_pers_doc_key}`} target="_blank" rel="noreferrer">
+								<ExternalLink size={12} /> {tr('Lihat dokumen')}
+							</a>
+						{/if}
+					</div>
+					<p class="text-xs text-muted-foreground">{tr('Unggah berkas baru di bawah untuk mengganti dokumen lama.')}</p>
+				{/if}
 			<form class="mt-4 flex flex-col gap-3" onsubmit={submitDewanPers}>
 				<label class="flex flex-col gap-1 text-sm">
 					<span class="text-xs font-medium text-muted-foreground">{tr('Nomor sertifikat *')}</span>
 					<input class="app-input" required minlength="3" maxlength="120" bind:value={dpCert} />
 				</label>
-				<label class="flex flex-col gap-1 text-sm">
+				<div class="flex flex-col gap-1">
 					<span class="text-xs font-medium text-muted-foreground">{tr('Dokumen sertifikat (PDF/JPG, opsional)')}</span>
-					<input
-						class="app-input"
-						type="file"
-						accept=".pdf,.jpg,.jpeg,.png"
-						onchange={(e) => (dpDoc = (e.currentTarget as HTMLInputElement).files?.[0] ?? null)}
-					/>
-				</label>
+					<label
+						class="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed px-4 py-6 text-center focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--primary)]"
+						style="border-color: {dpDocDragOver ? 'var(--primary)' : 'var(--border)'}; background: {dpDocDragOver ? 'var(--accent)' : 'var(--muted)'};"
+						ondragover={(e) => { e.preventDefault(); dpDocDragOver = true; }}
+						ondragleave={() => (dpDocDragOver = false)}
+						ondrop={(e) => {
+							e.preventDefault();
+							dpDocDragOver = false;
+							pickDpDoc(e.dataTransfer?.files?.[0] ?? null);
+						}}
+					>
+						{#if dpDoc}
+							<div class="flex w-full flex-wrap items-center gap-3 text-left">
+								{#if dpDocUrl}
+									<img src={dpDocUrl} alt={dpDoc.name} class="h-14 w-14 shrink-0 rounded-lg border object-cover" style="border-color: var(--border);" />
+								{:else}
+									<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style="background: color-mix(in srgb, var(--primary) 12%, var(--card)); color: var(--primary);">
+										<FileText size={18} />
+									</span>
+								{/if}
+								<div class="min-w-0 flex-1">
+									<span class="block truncate text-sm font-medium">{dpDoc.name}</span>
+									<span class="text-xs text-muted-foreground">{fmtBytes(dpDoc.size)}</span>
+								</div>
+								<button
+									type="button"
+									class="app-btn app-btn-soft shrink-0 !min-h-7 !px-2.5 !text-xs"
+									onclick={(e) => {
+										e.stopPropagation();
+										clearDpDocUrl();
+										dpDoc = null;
+									}}
+								><X size={13} /> {tr('Hapus')}</button>
+							</div>
+						{:else}
+							<Upload size={20} class="text-muted-foreground" />
+							<span class="text-sm font-medium">{tr('Tarik & lepas dokumen sertifikat di sini')}</span>
+							<span class="text-xs text-muted-foreground">{tr('atau klik untuk memilih berkas · PDF, JPG, PNG (maksimal 10 MB)')}</span>
+						{/if}
+						<input
+							class="sr-only"
+							type="file"
+							accept=".pdf,.jpg,.jpeg,.png"
+							onchange={(e) => {
+								const input = e.currentTarget as HTMLInputElement;
+								pickDpDoc(input.files?.[0] ?? null);
+								// Kosongkan input agar berkas yang sama bisa dipilih ulang.
+								input.value = '';
+							}}
+						/>
+					</label>
+					{#if dpDocError}<span class="text-xs" style="color: var(--destructive);">{dpDocError}</span>{/if}
+				</div>
 				{#if error}<p class="text-sm" style="color: var(--destructive);">{error}</p>{/if}
 				<div class="flex justify-end gap-2">
 					<button class="app-btn app-btn-soft" type="button" onclick={() => (domTarget = null)}>{tr('Batal')}</button>
