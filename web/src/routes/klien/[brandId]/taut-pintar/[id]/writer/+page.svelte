@@ -89,7 +89,6 @@
 	// pemindaian berjalan; setelah selesai angka badge menjadi HIJAU (tanda
 	// QC selesai) — aturan pemilik produk.
 	let qcRunning = $state<Record<string, boolean>>({});
-	let qcDoneSave = $state<Record<string, boolean>>({});
 	// Konfirmasi hapus media dari kampanye (soft delete, data artikel tetap aman).
 	let removeTarget = $state<PlacementItem | null>(null);
 	let removeBusy = $state(false);
@@ -838,15 +837,12 @@
 	async function runQcAfterSave(mediaId: string) {
 		if (qcRunning[mediaId]) return;
 		qcRunning = { ...qcRunning, [mediaId]: true };
-		qcDoneSave = { ...qcDoneSave, [mediaId]: false };
 		try {
 			const res = await apiRequest(`${apiBase}/gatekeeper/audit-all`, {
 				method: 'POST',
 				body: JSON.stringify({ mediaIds: [mediaId] })
 			}, 900_000);
-			if (res.ok) {
-				qcDoneSave = { ...qcDoneSave, [mediaId]: true };
-			}
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menjalankan pemindaian QC.')));
 		} catch {
 			// Senyap: QC manual tetap tersedia lewat tombol/panel bila otomatis gagal.
 		} finally {
@@ -1579,7 +1575,10 @@
 
 											{@const qcCount = qcCounts[m.media_id] ?? 0}
 											{@const qcBusy = qcRunning[m.media_id] === true}
-											{@const qcSelesai = qcDoneSave[m.media_id] === true}
+											<!-- HIJAU = hasil QC terakhir lulus (artikel Siap Terbit):
+											     dibaca dari status artikel, bukan memori sesi, supaya
+											     tetap hijau setelah refresh halaman. -->
+											{@const qcSelesai = !qcBusy && m.article_status === 'ready' && qcCount > 0}
 											<button
 												type="button"
 												class="expAction relative h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border transition-colors {qcSelesai
