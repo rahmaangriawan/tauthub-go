@@ -6,7 +6,7 @@
 	// hanya pada Illegal Content Guard & Link Health Validator — dua pemeriksa
 	// itulah yang benar-benar menentukan canDistribute di server.
 	import { onDestroy } from 'svelte';
-	import { CheckCircle2, CircleCheck, Clock, Eye, LoaderCircle, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, X, XCircle } from '@lucide/svelte';
+	import { CheckCircle2, CircleCheck, Clock, Eye, Send, LoaderCircle, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, X, XCircle } from '@lucide/svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
 	import SlideOver from '$lib/components/slide-over.svelte';
 
@@ -65,7 +65,8 @@
 		onClose,
 		onEdit,
 		onRegenerate,
-		onScanned
+		onScanned,
+		onPublish
 	}: {
 		apiBase: string;
 		mediaId: string;
@@ -81,6 +82,7 @@
 		onEdit: () => void;
 		onRegenerate: () => void;
 		onScanned?: () => void;
+		onPublish?: () => void;
 	} = $props();
 
 	let data = $state<AuditsData | null>(null);
@@ -496,8 +498,8 @@
 		<!-- Artikel yang sudah lulus QC (Siap Terbit) tak perlu aksi: cukup tombol
 		     Ok untuk menutup panel — aturan pemilik produk. -->
 		{#if articleStatus === 'ready'}
-			<button class="app-btn app-btn-primary !min-h-9 !px-3.5 !text-xs mx-auto" type="button" onclick={onClose}>
-				<CheckCircle2 size={14} /> {tr('Ok')}
+			<button class="app-btn app-btn-primary !min-h-9 !px-3.5 !text-xs mx-auto" type="button" onclick={onPublish ?? onClose}>
+				<Send size={14} /> {tr('Lanjut Terbit')}
 			</button>
 		{:else}
 			<button class="app-btn app-btn-primary !min-h-9 !px-3.5 !text-xs" type="button" disabled={scanning || gatekeeperConfigured === false} onclick={() => void scan()}>

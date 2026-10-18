@@ -1989,6 +1989,7 @@
 			gatekeeperConfigured={gatekeeperAgent ? gatekeeperAgent.configured : null}
 			reloadToken={qcToken}
 			onClose={() => (qcFor = null)}
+			onPublish={() => { qcFor = null; publish(); }}
 			onEdit={() => void openPreview(qc)}
 			onRegenerate={() => void generateOne(qc, false)}
 				onScanned={() => {
