@@ -337,6 +337,12 @@
 	let domResult = $state<{ status: string; found_token?: string | null } | null>(null);
 	let domCopied = $state<string | null>(null);
 
+	// ── Harga kolom tabel media = pendapatan bersih (potongan platform 5%),
+	//    sama seperti halaman Publikasi; klik membuka rincian. ────────────
+	let openPriceID = $state<string | null>(null);
+	const netPrice = (v: number) => Math.max(Math.round((Number(v) || 0) * 0.95), 0);
+	const priceCut = (v: number) => Math.max((Number(v) || 0) - netPrice(v), 0);
+
 	/** Ringkasan status verifikasi satu media — tooltip wrapper sel tabel. */
 	function verifHint(m: Media) {
 		const dewan = m.dewan_pers_status === 'verified'
@@ -1123,7 +1129,9 @@
 										{@render autoPublish(m, true)}
 									</div>
 								</td>
-							<td class="px-4 py-2.5 tabular-nums">{rp(m.price)}</td>
+							<td class="px-4 py-2.5 tabular-nums">
+								{@render priceCell(m)}
+							</td>
 							<td class="px-4 py-2.5">
 								{#if m.health_score != null}
 									<span class="text-xs font-medium tabular-nums" title={JSON.stringify(m.health_breakdown ?? {})}>{m.health_score}</span>
@@ -1192,7 +1200,7 @@
 					<dl class="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-3">
 						<div class="min-w-0">
 							<dt class="text-[11px] text-muted-foreground">{tr('Harga')}</dt>
-							<dd class="mt-0.5 text-[13px] font-semibold tabular-nums">{rp(m.price)}</dd>
+							<dd class="mt-0.5 text-[13px] font-semibold tabular-nums">{@render priceCell(m)}</dd>
 						</div>
 						<div class="min-w-0">
 							<dt class="text-[11px] text-muted-foreground">{tr('Kualitas')}</dt>
@@ -1326,6 +1334,57 @@
 	{/if}
 {/snippet}
 
+<!-- Harga media: nominal bersih; klik membuka rincian harga diajukan ·
+     potongan platform 5% · pendapatan. Pola sama dengan halaman Publikasi. -->
+{#snippet priceCell(m: Media)}
+	{@const net = netPrice(m.price)}
+	{@const cut = priceCut(m.price)}
+	<div class="relative flex justify-start">
+		<button
+			class="inline-flex items-center gap-1 text-left tabular-nums underline-offset-2 hover:underline"
+			aria-haspopup="dialog"
+			aria-expanded={openPriceID === m.id}
+			title={tr('Lihat rincian penghasilan')}
+			onclick={(e) => { e.stopPropagation(); openPriceID = openPriceID === m.id ? null : m.id; }}
+		>
+			{rp(net)}
+			<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+		</button>
+		{#if openPriceID === m.id}
+			<div
+				class="fixed inset-0 z-40"
+				role="presentation"
+				onclick={(e) => { e.stopPropagation(); openPriceID = null; }}
+			></div>
+			<div
+				class="app-card absolute left-0 top-full z-50 mt-1 w-64 p-3 text-left shadow-lg"
+				style="border: 1px solid var(--border);"
+				role="dialog"
+				tabindex="-1"
+				aria-label={tr('Rincian penghasilan')}
+				onclick={(e) => e.stopPropagation()}
+				onkeydown={(e) => { if (e.key === 'Escape') openPriceID = null; }}
+			>
+				<p class="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Rincian penghasilan')}</p>
+				<dl class="space-y-1.5 text-[13px] tabular-nums">
+					<div class="flex items-center justify-between gap-3">
+						<dt class="text-muted-foreground">{tr('Harga diajukan')}</dt>
+						<dd>{rp(m.price)}</dd>
+					</div>
+					<div class="flex items-center justify-between gap-3" style="color: var(--destructive, #d92d20);">
+						<dt>{tr('Potongan platform')} (5%)</dt>
+						<dd>−{rp(cut)}</dd>
+					</div>
+					<div class="flex items-center justify-between gap-3 border-t pt-1.5 font-semibold" style="border-color: var(--border); color: var(--success);">
+						<dt>{tr('Pendapatan Anda')}</dt>
+						<dd>{rp(net)}</dd>
+					</div>
+				</dl>
+			</div>
+		{/if}
+	</div>
+{/snippet}
+
 {#snippet verifCell(m: Media)}
 	<!-- IKON SAJA (pemilik produk): interaksi lewat wrapper — klik membuka
 	     dialog 2 tab di bagian yang belum selesai; hover = ringkasan status. -->
@@ -1341,13 +1400,14 @@
 						title={verifHint(m)}
 						onclick={() => void openVerification(m)}
 					>
-						<!-- Domain: hijau = terverifikasi; garis putus = perlu verifikasi. -->
+						<!-- Domain: badge shield-check biru (pembeda dari cek Dewan Pers);
+							garis putus kuning = perlu verifikasi. -->
 						{#if m.domain_verified}
 							<span
 								class="inline-flex h-5 w-5 items-center justify-center rounded-full"
-								style="background: var(--success); color: #fff;"
+								style="background: var(--accent); color: var(--accent-foreground);"
 							>
-								<Check size={12} />
+								<ShieldCheck size={12} />
 							</span>
 						{:else}
 							<span
