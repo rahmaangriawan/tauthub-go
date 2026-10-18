@@ -6,7 +6,7 @@
 	// hanya pada Illegal Content Guard & Link Health Validator — dua pemeriksa
 	// itulah yang benar-benar menentukan canDistribute di server.
 	import { onDestroy } from 'svelte';
-	import { CircleCheck, Clock, Eye, LoaderCircle, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, X, XCircle } from '@lucide/svelte';
+	import { CheckCircle2, CircleCheck, Clock, Eye, LoaderCircle, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, X, XCircle } from '@lucide/svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
 	import SlideOver from '$lib/components/slide-over.svelte';
 
@@ -493,16 +493,24 @@
 	{/if}
 
 	{#snippet footer()}
-		<button class="app-btn app-btn-primary !min-h-9 !px-3.5 !text-xs" type="button" disabled={scanning || gatekeeperConfigured === false} onclick={() => void scan()}>
-			{#if scanning}<LoaderCircle size={14} class="animate-spin" />{:else}<ShieldCheck size={14} />{/if}
-			{scanning ? tr('Memindai…') : tr('Scan Ulang Artikel Ini')}
-		</button>
-		<button class="app-btn app-btn-soft !min-h-9 !px-3.5 !text-xs" type="button" onclick={onEdit}><Eye size={14} /> {tr('Edit Artikel')}</button>
-		{#if canRegen}
-			<button class="app-btn app-btn-soft !min-h-9 !px-3.5 !text-xs" type="button" disabled={generating} onclick={onRegenerate}>
-				{#if generating}<LoaderCircle size={14} class="animate-spin" />{:else}<Sparkles size={14} />{/if}
-				{generating ? tr('Membuat…') : regenLabel}
+		<!-- Artikel yang sudah lulus QC (Siap Terbit) tak perlu aksi: cukup tombol
+		     Ok untuk menutup panel — aturan pemilik produk. -->
+		{#if articleStatus === 'ready'}
+			<button class="app-btn app-btn-primary !min-h-9 !px-3.5 !text-xs mx-auto" type="button" onclick={onClose}>
+				<CheckCircle2 size={14} /> {tr('Ok')}
 			</button>
+		{:else}
+			<button class="app-btn app-btn-primary !min-h-9 !px-3.5 !text-xs" type="button" disabled={scanning || gatekeeperConfigured === false} onclick={() => void scan()}>
+				{#if scanning}<LoaderCircle size={14} class="animate-spin" />{:else}<ShieldCheck size={14} />{/if}
+				{scanning ? tr('Memindai…') : tr('Scan Ulang Artikel Ini')}
+			</button>
+			<button class="app-btn app-btn-soft !min-h-9 !px-3.5 !text-xs" type="button" onclick={onEdit}><Eye size={14} /> {tr('Edit Artikel')}</button>
+			{#if canRegen}
+				<button class="app-btn app-btn-soft !min-h-9 !px-3.5 !text-xs" type="button" disabled={generating} onclick={onRegenerate}>
+					{#if generating}<LoaderCircle size={14} class="animate-spin" />{:else}<Sparkles size={14} />{/if}
+					{generating ? tr('Membuat…') : regenLabel}
+				</button>
+			{/if}
 		{/if}
 	{/snippet}
 </SlideOver>
