@@ -201,7 +201,8 @@ func (d *Deps) partnerScopedPublication(ctx context.Context, partnerID, publicat
 		       d.title AS document_title, d.slug AS document_slug,
 		       b.client_name AS client_name, b.name AS brand_name, b.public_id AS brand_public_id,
 		       pa.public_id AS partner_public_id,
-		       (SELECT pe.amount FROM partner_earnings pe WHERE pe.publication_id = p.id LIMIT 1) AS partner_amount
+		       (SELECT pe.amount FROM partner_earnings pe WHERE pe.publication_id = p.id LIMIT 1) AS partner_amount,
+		       (SELECT pe.gross_amount FROM partner_earnings pe WHERE pe.publication_id = p.id LIMIT 1) AS partner_amount_gross
 		FROM publications p
 		JOIN media m ON m.id = p.media_id
 		JOIN content_documents d ON d.id = p.document_id
@@ -256,6 +257,13 @@ func partnerPublicationJSON(row rowMap) map[string]any {
 	if v, ok := row.num("partner_amount"); ok {
 		partnerAmount = v
 	}
+	// gross = angka sebelum potongan platform 5%; amount = yang diterima mitra.
+	// Baris lama tanpa gross_amount jatuh kembali ke amount (potongan 0) supaya
+	// rincian tetap masuk akal tanpa mengubah saldo historis.
+	grossAmount := partnerAmount
+	if v, ok := row.num("partner_amount_gross"); ok {
+		grossAmount = v
+	}
 
 	return map[string]any{
 		"id":                            row.strOr("id", ""),
@@ -279,6 +287,8 @@ func partnerPublicationJSON(row rowMap) map[string]any {
 		"partner_price":                 partnerPrice,
 		"markup_percent":                markupPercent,
 		"partner_amount":                partnerAmount,
+		"partner_amount_gross":          grossAmount,
+		"partner_cut_percent":           pePlatformCutPercentFor(partnerAmount, grossAmount),
 		"publish_status":                row.raw("publish_status"),
 		"scheduled_at":                  row.timePtr("scheduled_at"),
 		"published_at":                  row.timePtr("published_at"),
@@ -353,7 +363,8 @@ const publicationSelect = `SELECT p.*, m.name AS media_name, m.category AS media
               ma.consistency_score AS pr_message_score, ma.status AS pr_message_status,
               (SELECT pj.progress FROM publication_jobs pj WHERE pj.publication_id = p.id ORDER BY pj.created_at DESC LIMIT 1) AS publish_progress,
               (SELECT pj.remote_url FROM publication_jobs pj WHERE pj.publication_id = p.id ORDER BY pj.created_at DESC LIMIT 1) AS remote_url,
-              (SELECT pe.amount FROM partner_earnings pe WHERE pe.publication_id = p.id LIMIT 1) AS partner_amount
+              (SELECT pe.amount FROM partner_earnings pe WHERE pe.publication_id = p.id LIMIT 1) AS partner_amount,
+              (SELECT pe.gross_amount FROM partner_earnings pe WHERE pe.publication_id = p.id LIMIT 1) AS partner_amount_gross
        FROM publications p
        JOIN media m ON m.id = p.media_id
        JOIN content_documents d ON d.id = p.document_id

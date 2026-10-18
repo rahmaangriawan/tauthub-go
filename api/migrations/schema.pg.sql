@@ -910,6 +910,7 @@ CREATE TABLE public.partner_earnings (
     media_id character(36) NOT NULL,
     rule_id character(36),
     amount numeric(14,2) NOT NULL,
+    gross_amount numeric(14,2),
     client_price numeric(14,2) NOT NULL,
     status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
     settlement_id character(36),

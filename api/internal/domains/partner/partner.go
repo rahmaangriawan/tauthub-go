@@ -432,6 +432,30 @@ func (d *Deps) partnerServiceChargesTotal(ctx context.Context, partnerID string)
 	return total
 }
 
+// Potongan platform atas penghasilan mitra per publikasi (aturan pemilik
+// produk: 5% dari angka yang diajukan). Dibagi di sini, bukan per-tampilan,
+// supaya popover rincian dan angka saldo selalu berasal dari hitungan sama.
+const pePlatformCutPercent = 5.0
+
+// earningGross: gross_amount dari baris ledger; baris lama tanpa gross jatuh
+// kembali ke amount (tidak ada potongan yang bisa ditampilkan).
+func earningGross(row rowMap) float64 {
+	if v, ok := row.num("gross_amount"); ok {
+		return v
+	}
+	return row.numOr("amount")
+}
+
+// pePlatformCutPercentFor: persentase potongan yang benar-benar berlaku pada
+// satu earning. Kalau gross kosong/lebih kecil dari amount (baris historis
+// sebelum kolom gross_amount ada) hasilnya 0 — jangan mengarang potongan.
+func pePlatformCutPercentFor(amount, gross float64) float64 {
+	if gross <= 0 || amount >= gross {
+		return 0
+	}
+	return round2(((gross - amount) / gross) * 100)
+}
+
 // splitRevenue: port lib/finance/revenue-share.ts splitRevenue (default 25% mitra).
 func splitRevenue(clientPrice, partnerPrice, partnerPercent float64) float64 {
 	price := clientPrice

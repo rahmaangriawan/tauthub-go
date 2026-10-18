@@ -18,6 +18,7 @@
 		document_title: string | null; document_id: string; media_name: string | null;
 		media_category: string | null; media_integration_type: string | null;
 		media_publication_mode: string | null; client_price: number; partner_amount: number;
+		partner_amount_gross?: number; partner_cut_percent?: number;
 		publish_status: string | null; scheduled_at: string | null; published_at: string | null;
 		published_url: string | null; remote_url: string | null; rejection_reason: string | null; notes: string | null;
 		verification_status: string | null; verification_compliance_score: number | null;
@@ -496,6 +497,20 @@
 	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 
+	// ── Rincian penghasilan (popover) ────────────────────────────────────
+	// amount = yang diterima mitra (sudah dipotong platform), gross = angka
+	// sebelum potongan. Baris historis tanpa gross → potongan tampil "—" dan
+	// pendapatan = amount, jangan mengarang angka potongan.
+	const incomeGross = (p: Pub) => Math.max(Number(p.partner_amount_gross ?? p.partner_amount) || 0, 0);
+	const incomeCut = (p: Pub) => Math.max(incomeGross(p) - (Number(p.partner_amount) || 0), 0);
+	const cutPercentLabel = (p: Pub) => {
+		const g = incomeGross(p);
+		if (!g || incomeCut(p) <= 0) return null;
+		return Number(p.partner_cut_percent ?? 5);
+	};
+	// Popover rincian; satu terbuka sekaligus per baris (bukan global).
+	let openIncomeID = $state<string | null>(null);
+
 	// ── Parity kolom tabel app lama ──────────────────────────────────────
 	// Badge menunjukkan JENIS integrasinya: 'publish' berarti artikel dipindah
 	// lewat jalur API situs mitra (WordPress/Blogger/Custom/Web API key), sisanya
@@ -685,7 +700,60 @@
 
 <PageTitle title={tr("Publikasi")} />
 
-<svelte:window onclick={closeRowMenu} onkeydown={(e) => { if (e.key === 'Escape') { closeRowMenu(); publishConfirm = null; } }} />
+<svelte:window onclick={closeRowMenu} onkeydown={(e) => { if (e.key === 'Escape') { closeRowMenu(); publishConfirm = null; openIncomeID = null; } }} />
+
+<!-- ── Penghasilan: nominal = pendapatan bersih; klik membuka rincian
+     (harga diajukan · potongan platform · pendapatan diterima). ───────── -->
+{#snippet incomeCell(p: Pub)}
+	{@const gross = incomeGross(p)}
+	{@const cut = incomeCut(p)}
+	{@const pct = cutPercentLabel(p)}
+	<div class="relative flex justify-end">
+		<button
+			class="inline-flex items-center gap-1 text-right tabular-nums underline-offset-2 hover:underline"
+			aria-haspopup="dialog"
+			aria-expanded={openIncomeID === p.id}
+			title={tr('Lihat rincian penghasilan')}
+			onclick={(e) => { e.stopPropagation(); openIncomeID = openIncomeID === p.id ? null : p.id; }}
+		>
+			{rp(p.partner_amount)}
+			<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+		</button>
+		{#if openIncomeID === p.id}
+			<!-- Penutup transparan: klik di luar menutup popover tanpa membuka detail. -->
+			<div
+				class="fixed inset-0 z-40"
+				role="presentation"
+				onclick={(e) => { e.stopPropagation(); openIncomeID = null; }}
+			></div>
+			<div
+				class="app-card absolute right-0 top-full z-50 mt-1 w-64 p-3 text-left shadow-lg"
+				style="border: 1px solid var(--border);"
+				role="dialog"
+				tabindex="-1"
+				aria-label={tr('Rincian penghasilan')}
+				onclick={(e) => e.stopPropagation()}
+				onkeydown={(e) => { if (e.key === 'Escape') openIncomeID = null; }}
+			>
+				<p class="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Rincian penghasilan')}</p>
+				<dl class="space-y-1.5 text-[13px] tabular-nums">
+					<div class="flex items-center justify-between gap-3">
+						<dt class="text-muted-foreground">{tr('Harga diajukan')}</dt>
+						<dd>{rp(gross)}</dd>
+					</div>
+					<div class="flex items-center justify-between gap-3" style="color: var(--destructive, #d92d20);">
+						<dt>{tr('Potongan platform')}{pct !== null ? ` (${pct}%)` : ''}</dt>
+						<dd>{pct !== null ? `−${rp(cut)}` : '—'}</dd>
+					</div>
+					<div class="flex items-center justify-between gap-3 border-t pt-1.5 font-semibold" style="border-color: var(--border); color: var(--success);">
+						<dt>{tr('Pendapatan Anda')}</dt>
+						<dd>{rp(p.partner_amount)}</dd>
+					</div>
+				</dl>
+			</div>
+		{/if}
+	</div>
+{/snippet}
 
 <section>
 	<header>
@@ -848,7 +916,9 @@
 										<p class="mt-0.5 text-[11px] text-muted-foreground">{integrationLabel[p.media_integration_type] ?? p.media_integration_type}</p>
 									{/if}
 								</td>
-							<td class="px-4 py-2.5 text-right tabular-nums">{rp(p.partner_amount)}</td>
+							<td class="px-4 py-2.5 text-right tabular-nums">
+								{@render incomeCell(p)}
+							</td>
 							<td class="px-4 py-2.5">
 								{@render statusBadge(p, false)}
 								{@render statusExtras(p)}
@@ -922,8 +992,10 @@
 								</dd>
 							</div>
 							<div class="min-w-0">
+								<!-- Popover absolut di dalam <dd> tertutup oleh dialog detail,
+								     jadi di sini cukup nominal bersih + potongan sekilas. -->
 								<dt class="text-[11px] text-muted-foreground">{tr('Penghasilan')}</dt>
-								<dd class="mt-1 text-[13px] font-semibold tabular-nums">{rp(p.partner_amount)}</dd>
+								<dd class="mt-1 text-[13px] font-semibold tabular-nums">{@render incomeCell(p)}</dd>
 							</div>
 							<div class="min-w-0">
 								<dt class="text-[11px] text-muted-foreground">Status</dt>
@@ -1166,7 +1238,7 @@
 							<div class="flex items-center justify-between gap-3">
 								<div>
 									<p class="text-sm font-bold">{tr('Pendapatan Anda')}</p>
-									<p class="text-xs text-muted-foreground">{tr('75% × Harga Pengajuan')}</p>
+									<p class="text-xs text-muted-foreground">{tr('Harga pengajuan')} {rp(incomeGross(detail))} · {tr('potongan platform')} {cutPercentLabel(detail) ?? 0}% ({rp(incomeCut(detail))})</p>
 								</div>
 								<p class="text-xl font-semibold tabular-nums" style="color: var(--success);">{rp(detail.partner_amount)}</p>
 							</div>

@@ -2273,9 +2273,9 @@ func (d *Deps) finCreditCPAForDomain(ctx context.Context, referredDomainID strin
 		return
 	}
 	_ = d.exec(ctx,
-		`INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, client_price, status, kind, source_referred_domain_id)
-		 VALUES ($1, $2, $3, $4, NULL, $5, $5, 'settled', 'cpa', $6) ON CONFLICT (publication_id) DO NOTHING`,
-		uuid.NewString(), referrerPartnerID, "cpa:"+referredDomainID, mediaID, cpaAmount, referredDomainID)
+		`INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_referred_domain_id)
+		 VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'settled', 'cpa', $7) ON CONFLICT (publication_id) DO NOTHING`,
+		uuid.NewString(), referrerPartnerID, "cpa:"+referredDomainID, mediaID, cpaAmount, cpaAmount, referredDomainID)
 	partner, err := d.queryRow(ctx, "SELECT user_id, public_id, name FROM partners WHERE id = $1 LIMIT 1", referrerPartnerID)
 	if err == nil && partner != nil {
 		userID := partner.strOr("user_id", "")

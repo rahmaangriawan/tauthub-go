@@ -2259,23 +2259,24 @@ func (d *Deps) peRecordFinance(ctx context.Context, publication, media bsRow) {
 	}
 	if basePrice <= 0 {
 		if err := d.exec(ctx,
-			"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, client_price, status) VALUES ($1, $2, $3, $4, NULL, $5, $5, 'settled')",
-			newUUID(), partnerID, publication.strOr("id", ""), media.strOr("id", ""), clientPrice); err != nil {
+			"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status) VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'settled')",
+			newUUID(), partnerID, publication.strOr("id", ""), media.strOr("id", ""), peNetAfterPlatformCut(clientPrice), clientPrice); err != nil {
 			slog.Warn("[brandflow] partner earning gagal", "err", err)
 		}
 		return
 	}
 
-	partnerAmount := basePrice
+	grossShare := basePrice
 	var ruleID *string
 	if split, splitErr := d.peResolveRevenueShare(ctx, media.strOr("id", ""), partnerID, clientPrice, basePrice); splitErr == nil {
-		partnerAmount = split.PartnerAmount
+		grossShare = split.PartnerAmount
 		ruleID = split.RuleID
 	}
+	partnerAmount := peNetAfterPlatformCut(grossShare)
 	earningID := newUUID()
 	if err := d.exec(ctx,
-		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, client_price, status, kind, source_earning_id) VALUES ($1, $2, $3, $4, $5, $6, $7, 'settled', 'publication', NULL)",
-		earningID, partnerID, publication.strOr("id", ""), media.strOr("id", ""), ruleID, partnerAmount, clientPrice); err != nil {
+		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_earning_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'settled', 'publication', NULL)",
+		earningID, partnerID, publication.strOr("id", ""), media.strOr("id", ""), ruleID, partnerAmount, grossShare, clientPrice); err != nil {
 		slog.Warn("[brandflow] partner earning gagal", "err", err)
 		return
 	}
@@ -2286,6 +2287,18 @@ func (d *Deps) peRecordFinance(ctx context.Context, publication, media bsRow) {
 type peRevenueSplit struct {
 	RuleID        *string
 	PartnerAmount float64
+}
+
+// Potongan platform atas penghasilan yang diajukan mitra (aturan pemilik
+// produk 5%). amount di ledger menyimpan pendapatan bersih, gross_amount
+// menyimpan angka sebelum potongan supaya popover rincian bisa tampil jujur.
+const pePlatformCutRate = 0.05
+
+func peNetAfterPlatformCut(gross float64) float64 {
+	if gross < 0 {
+		gross = 0
+	}
+	return round2(gross * (1 - pePlatformCutRate))
 }
 
 // peResolveRevenueShare: parity resolveRevenueShare (bagi hasil berbasis markup).
@@ -2416,7 +2429,7 @@ func (d *Deps) peCreateReferralCommission(ctx context.Context, earningID, refere
 	// Legacy menulis earning dengan publication_id = earningId (FK publications
 	// dapat menolak) — best-effort, sama seperti app lama.
 	if err := d.exec(ctx,
-		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, client_price, status, settlement_id, kind, source_earning_id) VALUES ($1, $2, $3, $4, NULL, $5, $6, 'pending', NULL, 'referral', $7)",
+		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, settlement_id, kind, source_earning_id) VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'pending', NULL, 'referral', $7)",
 		newUUID(), referrerPartnerID, earningID, mediaID, commissionAmount, clientPrice, earningID); err != nil {
 		slog.Warn("[brandflow] referral earning gagal", "err", err)
 	}
@@ -2463,7 +2476,7 @@ func (d *Deps) peCreditVipTransactionCommission(ctx context.Context, publication
 		return
 	}
 	_ = d.exec(ctx,
-		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, client_price, status, kind, source_earning_id) VALUES ($1, $2, $3, $4, NULL, $5, $6, 'settled', 'transaction_commission', $7) ON CONFLICT (publication_id) DO NOTHING",
+		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_earning_id) VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'settled', 'transaction_commission', $7) ON CONFLICT (publication_id) DO NOTHING",
 		newUUID(), referrerPartnerID, publicationID, publication.strOr("media_id", ""), amount, clientPrice, publicationID)
 }
 
