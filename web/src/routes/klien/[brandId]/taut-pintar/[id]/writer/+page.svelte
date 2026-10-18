@@ -1596,17 +1596,17 @@
 											</button>
 										{/if}
 
-										<!-- Hapus: paling kanan, merah lembut (bukan destructive penuh). -->
+										<!-- Hapus: ikon saja (tidak ikut auto expand), nama tetap lewat
+										     aria-label + tooltip; hover cukup mengubah warna tombol. -->
 										<button
 											type="button"
-											class="expAction h-8 min-w-8 shrink-0 inline-flex items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition-colors"
+											class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition-colors"
 											disabled={bulkRunning || removeBusy || viewOnly}
 											aria-label={tr('Hapus media dari kampanye')}
 											title={tr('Hapus media dari kampanye')}
 											onclick={() => { removeError = ''; removeTarget = m; }}
 										>
 											<Trash2 size={14} class="shrink-0" />
-											<span class="expLabel">{tr('Hapus media dari kampanye')}</span>
 										</button>
 									</div>
 							</div>
