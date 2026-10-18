@@ -1610,21 +1610,29 @@
 			{:else if draft}
 				<form class="mt-4 flex min-h-0 flex-1 flex-col gap-4" onsubmit={saveDraft}>
 					<div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-						<div class="grid gap-4 sm:grid-cols-2">
+						<!-- Tata urut satu kolom: Judul dulu, lalu Meta Deskripsi. -->
+						<div class="space-y-4">
 							<label class="block">
 								<span class="text-xs font-medium text-muted-foreground">{tr('Judul')}</span>
 								<input class="app-input mt-1 w-full" maxlength="200" bind:value={draft.title} />
 							</label>
 							<label class="block">
 								<span class="text-xs font-medium text-muted-foreground">{tr('Meta Deskripsi')}</span>
-								<input class="app-input mt-1 w-full" maxlength="500" bind:value={draft.meta_description} />
+								<!-- Textarea: teks panjang membungkus, bukan menggulir ke samping. -->
+								<textarea
+									class="app-input mt-1 w-full resize-y leading-snug"
+									rows="3"
+									maxlength="500"
+									bind:value={draft.meta_description}
+								></textarea>
 							</label>
 						</div>
 
 						<div>
 							<span class="text-xs font-medium text-muted-foreground">{tr('Gambar Utama')}</span>
-					<!-- Cover 16/9 besar selebar kartu; klik gambar/kartu = unggah. Topol
-     aksi taruh di bawah cover kanan; kolom input URL dihilangkan (pemilik produk). -->\n					<div class="mt-1 rounded-xl border p-2" style="border-color: var(--border);">
+					<!-- Cover 16/9 besar selebar kartu; klik gambar/kartu = unggah.
+					     Tombol aksi di bawah cover kanan; kolom input URL dihapus. -->
+					<div class="mt-1 rounded-xl border p-2" style="border-color: var(--border);">
 						<div class="relative overflow-hidden rounded-lg" style="aspect-ratio: 16 / 9; background: var(--secondary);">
 							{#if draft.featured_image_url}
 								<button
