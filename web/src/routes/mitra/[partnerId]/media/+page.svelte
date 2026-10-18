@@ -329,18 +329,28 @@
 		menuBottom !== null ? `right: ${menuRight}px; bottom: ${menuBottom}px;` : `right: ${menuRight}px; top: ${menuTop}px;`
 	);
 
-	// ── Verifikasi kepemilikan domain (meta tag tauthub-verification) ─────
+	// ── Verifikasi kepemilikan (domain + Dewan Pers dalam SATU dialog 2 tab) ─
 	let domTarget = $state<Media | null>(null);
+	let verifTab = $state<'domain' | 'dewan'>('domain');
 	let domToken = $state('');
 	let domBusy = $state(false);
 	let domResult = $state<{ status: string; found_token?: string | null } | null>(null);
 	let domCopied = $state<string | null>(null);
 
-	async function openDomainVerify(m: Media) {
-		domTarget = m;
+	/** Ringkasan status verifikasi satu media — tooltip wrapper sel tabel. */
+	function verifHint(m: Media) {
+		const dewan = m.dewan_pers_status === 'verified'
+			? tr('Dewan Pers: terverifikasi')
+			: m.dewan_pers_status === 'pending' || m.dewan_pers_status === 'conflict' || m.dewan_pers_status === 'rejected'
+				? `${tr('Dewan Pers')}: ${dpBadge(m.dewan_pers_status).label}`
+				: tr('Dewan Pers: belum diajukan');
+		return `${m.domain_verified ? tr('Domain: terverifikasi') : tr('Domain: belum terverifikasi')} · ${dewan}`;
+	}
+
+	async function loadDomToken(m: Media) {
 		domToken = '';
-		domResult = null;
 		domBusy = false;
+		domResult = null;
 		const res = await apiRequest(`/v1/partner/media/${m.id}/domain-verification`);
 		if (!res.ok) {
 			error = await readApiError(res, tr('Gagal memuat token verifikasi domain.'));
@@ -348,6 +358,37 @@
 			return;
 		}
 		domToken = (await res.json()).token ?? '';
+	}
+
+	async function openDomainVerify(m: Media) {
+		domTarget = m;
+		verifTab = 'domain';
+		await loadDomToken(m);
+	}
+
+	/** Klik wrapper sel: buka tab verifikasi yang masih kurang dahulu. */
+	async function openVerification(m: Media) {
+		domTarget = m;
+		if (!m.domain_verified) {
+			verifTab = 'domain';
+			await loadDomToken(m);
+			return;
+		}
+		verifTab = 'dewan';
+		dpCert = '';
+		dpDoc = null;
+		dpBusy = false;
+	}
+
+	async function switchVerifTab(t: 'domain' | 'dewan') {
+		verifTab = t;
+		if (t === 'domain' && domTarget && !domToken) await loadDomToken(domTarget);
+		if (t === 'dewan') {
+			// Form dewan selalu mulai bersih supaya pengajuan tidak membawa sisa data dialog sebelumnya.
+			dpCert = '';
+			dpDoc = null;
+			dpBusy = false;
+		}
 	}
 
 	async function verifyDomainNow() {
@@ -431,14 +472,14 @@
 		}
 	}
 
-	// ── Pengajuan verifikasi Dewan Pers ───────────────────────────────────
-	let dpTarget = $state<Media | null>(null);
+	// ── Pengajuan verifikasi Dewan Pers (tab kedua dialog verifikasi) ─────
 	let dpCert = $state('');
 	let dpDoc = $state<File | null>(null);
 	let dpBusy = $state(false);
 
 	function openDewanPers(m: Media) {
-		dpTarget = m;
+		domTarget = m;
+		verifTab = 'dewan';
 		dpCert = '';
 		dpDoc = null;
 		dpBusy = false;
@@ -446,11 +487,11 @@
 
 	async function submitDewanPers(e: SubmitEvent) {
 		e.preventDefault();
-		if (!dpTarget) return;
+		if (!domTarget) return;
 		dpBusy = true;
 		error = '';
 		try {
-			const res = await apiRequest(`/v1/partner/media/${dpTarget.id}/dewan-pers-verification`, {
+			const res = await apiRequest(`/v1/partner/media/${domTarget.id}/dewan-pers-verification`, {
 				method: 'POST',
 				body: JSON.stringify({ certificate_no: dpCert.trim() })
 			});
@@ -461,7 +502,7 @@
 			if (dpDoc) {
 				const form = new FormData();
 				form.append('file', dpDoc);
-				const up = await apiRequest(`/v1/partner/media/${dpTarget.id}/dewan-pers-document`, { method: 'POST', body: form });
+				const up = await apiRequest(`/v1/partner/media/${domTarget.id}/dewan-pers-document`, { method: 'POST', body: form });
 				if (!up.ok) {
 					error = await readApiError(up, tr('Sertifikat tersimpan, tetapi unggah dokumen gagal.'));
 					await load();
@@ -469,7 +510,7 @@
 				}
 			}
 			notice = tr('Pengajuan verifikasi Dewan Pers terkirim dan menunggu review admin.');
-			dpTarget = null;
+			domTarget = null;
 			await load();
 		} finally {
 			dpBusy = false;
@@ -994,7 +1035,7 @@
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
-						<th class="px-4 py-2.5 font-medium">{tr('Domain')}</th>
+						<th class="px-4 py-2.5 font-medium">{tr('Verifikasi Kepemilikan')}</th>
 						<th class="px-4 py-2.5 font-medium">{tr('Kategori')}</th>
 						<th class="px-4 py-2.5 font-medium">
 							<span class="inline-flex items-center gap-1">
@@ -1023,7 +1064,6 @@
 								</Tooltip.Provider>
 							</span>
 						</th>
-						<th class="px-4 py-2.5 font-medium">{tr("Dewan Pers")}</th>
 						<th class="px-4 py-2.5 font-medium">{tr('Harga')}</th>
 						<th class="px-4 py-2.5 font-medium">{tr('Kualitas')}</th>
 						<th class="px-4 py-2.5 font-medium">DA</th>
@@ -1074,7 +1114,7 @@
 								{@render contohLink(m)}
 							</td>
 							<td class="px-4 py-2.5">
-								{@render domainVerify(m)}
+								{@render verifCell(m)}
 							</td>
 							<td class="px-4 py-2.5 text-muted-foreground">{m.categories.join(', ') || '—'}</td>
 								<td class="px-4 py-2.5">
@@ -1083,9 +1123,6 @@
 										{@render autoPublish(m, true)}
 									</div>
 								</td>
-							<td class="px-4 py-2.5">
-								{@render dewanPers(m)}
-							</td>
 							<td class="px-4 py-2.5 tabular-nums">{rp(m.price)}</td>
 							<td class="px-4 py-2.5">
 								{#if m.health_score != null}
@@ -1182,16 +1219,12 @@
 					<div class="mt-3.5 border-t pt-3.5" style="border-color: var(--border);">
 						<dl class="grid grid-cols-2 gap-x-3 gap-y-3">
 							<div class="min-w-0">
-								<dt class="text-[11px] text-muted-foreground">{tr('Domain')}</dt>
-								<dd class="mt-1">{@render domainVerify(m)}</dd>
+								<dt class="text-[11px] text-muted-foreground">{tr('Verifikasi Kepemilikan')}</dt>
+								<dd class="mt-1">{@render verifCell(m)}</dd>
 							</div>
 							<div class="min-w-0">
 								<dt class="text-[11px] text-muted-foreground">{tr('Mode Integrasi')}</dt>
 								<dd class="mt-1">{@render modeBadge(m)}</dd>
-							</div>
-							<div class="min-w-0">
-								<dt class="text-[11px] text-muted-foreground">{tr('Dewan Pers')}</dt>
-								<dd class="mt-1">{@render dewanPers(m)}</dd>
 							</div>
 							{#if autoPublishEnabled}
 								<div class="min-w-0 self-center">
@@ -1291,6 +1324,73 @@
 			</Tooltip.Provider>
 		</div>
 	{/if}
+{/snippet}
+
+{#snippet verifCell(m: Media)}
+	<!-- IKON SAJA (pemilik produk): interaksi lewat wrapper — klik membuka
+	     dialog 2 tab di bagian yang belum selesai; hover = ringkasan status. -->
+	<Tooltip.Provider delayDuration={0}>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				{#snippet child({ props })}
+					<button
+						{...props}
+						type="button"
+						class="inline-flex items-center gap-1.5 rounded-lg py-0.5"
+						aria-label={verifHint(m)}
+						title={verifHint(m)}
+						onclick={() => void openVerification(m)}
+					>
+						<!-- Domain: hijau = terverifikasi; garis putus = perlu verifikasi. -->
+						{#if m.domain_verified}
+							<span
+								class="inline-flex h-5 w-5 items-center justify-center rounded-full"
+								style="background: var(--success); color: #fff;"
+							>
+								<Check size={12} />
+							</span>
+						{:else}
+							<span
+								class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed"
+								style="border-color: var(--warning); color: var(--warning);"
+							>
+								<ShieldCheck size={11} />
+							</span>
+						{/if}
+						<!-- Dewan Pers: hijau = terverifikasi; kuning = diajukan/ditolak; merah = belum. -->
+						{#if m.dewan_pers_status === 'verified'}
+							<span
+								class="inline-flex h-5 w-5 items-center justify-center rounded-full"
+								style="background: var(--primary); color: var(--primary-foreground, #fff);"
+							>
+								<Check size={12} />
+							</span>
+						{:else if m.dewan_pers_status === 'pending' || m.dewan_pers_status === 'rejected' || m.dewan_pers_status === 'conflict'}
+							<span
+								class="inline-flex h-5 w-5 items-center justify-center rounded-full border"
+								style="border-color: {dpBadge(m.dewan_pers_status).tone}; color: {dpBadge(m.dewan_pers_status).tone};"
+							>
+								<CircleAlert size={11} />
+							</span>
+						{:else}
+							<span
+								class="inline-flex h-5 w-5 items-center justify-center rounded-full"
+								style="background: color-mix(in srgb, var(--destructive) 14%, transparent); color: var(--destructive);"
+							>
+								<X size={12} />
+							</span>
+						{/if}
+					</button>
+				{/snippet}
+			</Tooltip.Trigger>
+			<Tooltip.Portal>
+				<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+					<Tooltip.Arrow class="uiTipArrow" />
+					{verifHint(m)}
+				</Tooltip.Content>
+			</Tooltip.Portal>
+		</Tooltip.Root>
+	</Tooltip.Provider>
 {/snippet}
 
 {#snippet dewanPers(m: Media)}
@@ -1804,11 +1904,24 @@
 
 {#if domTarget}
 	<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={() => (domTarget = null)} onkeydown={(e) => { if (e.key === 'Escape') domTarget = null; }}>
-		<dialog open class="app-card my-8 w-full max-w-xl p-5" aria-label={tr('Verifikasi Kepemilikan Domain')} onclick={(e) => e.stopPropagation()}>
+		<dialog open class="app-card my-8 w-full max-w-xl p-5" aria-label={tr('Verifikasi Kepemilikan')} onclick={(e) => e.stopPropagation()}>
 			<div class="flex items-start justify-between gap-3">
-				<h2 class="text-lg font-semibold">{tr('Verifikasi Kepemilikan Domain')}</h2>
+				<div>
+					<h2 class="text-lg font-semibold">{tr('Verifikasi Kepemilikan')}</h2>
+					<p class="mt-0.5 text-xs text-muted-foreground">{domTarget.name}</p>
+				</div>
 				<button class="rounded-lg p-1.5 hover:bg-secondary" aria-label={tr('Tutup')} onclick={() => (domTarget = null)}><X size={18} /></button>
 			</div>
+			<!-- Dua tab: verifikasi domain (dulu dialog sendiri) + verifikasi Dewan Pers. -->
+			<div class="mt-3 flex gap-1 rounded-[10px] p-1" style="background: var(--secondary);" role="tablist" aria-label={tr('Jenis verifikasi')}>
+				<button type="button" role="tab" aria-selected={verifTab === 'domain'} class="flex-1 rounded-lg px-3 py-1.5 text-sm font-medium" style:background={verifTab === 'domain' ? 'var(--card)' : 'transparent'} onclick={() => void switchVerifTab('domain')}>
+					{tr('Verifikasi Domain')}
+				</button>
+				<button type="button" role="tab" aria-selected={verifTab === 'dewan'} class="flex-1 rounded-lg px-3 py-1.5 text-sm font-medium" style:background={verifTab === 'dewan' ? 'var(--card)' : 'transparent'} onclick={() => (verifTab = 'dewan')}>
+					{tr('Dewan Pers')}
+				</button>
+			</div>
+			{#if verifTab === 'domain'}
 			<p class="mt-2 text-sm text-muted-foreground">
 				{tr('Tempel meta tag berikut di bagian head halaman utama')}
 				<strong>{domTarget.website_url ?? domTarget.name}</strong>, {tr('lalu klik Verifikasi Sekarang.')}
@@ -1831,7 +1944,7 @@
 			{#if domTarget.domain_verified}
 				<p class="mt-3 text-sm" style="color: var(--success);">{tr('Domain sudah terverifikasi.')}</p>
 			{:else}
-				<div class="mt-4 flex flex-wrap items-center gap-3">
+				<div class="mt-4 flex flex-wrap items-center justify-end gap-3">
 					<button class="app-btn app-btn-primary" type="button" disabled={domBusy || !domToken} onclick={() => void verifyDomainNow()}>
 						{domBusy ? tr('Memeriksa…') : tr('Verifikasi Sekarang')}
 					</button>
@@ -1850,19 +1963,9 @@
 					{/if}
 				</div>
 			{/if}
-		</dialog>
-	</div>
-{/if}
-
-{#if dpTarget}
-	<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={() => (dpTarget = null)} onkeydown={(e) => { if (e.key === 'Escape') dpTarget = null; }}>
-		<dialog open class="app-card my-8 w-full max-w-lg p-5" aria-label={tr('Verifikasi Dewan Pers')} onclick={(e) => e.stopPropagation()}>
-			<div class="flex items-start justify-between gap-3">
-				<h2 class="text-lg font-semibold">{tr('Verifikasi Dewan Pers')}</h2>
-				<button class="rounded-lg p-1.5 hover:bg-secondary" aria-label={tr('Tutup')} onclick={() => (dpTarget = null)}><X size={18} /></button>
-			</div>
+			{:else}
 			<p class="mt-2 text-sm text-muted-foreground">
-				{tr('Ajukan verifikasi untuk')} <strong>{dpTarget.name}</strong>.
+				{tr('Ajukan verifikasi untuk')} <strong>{domTarget.name}</strong>.
 				{tr('Masukkan nomor sertifikat Dewan Pers dan unggah dokumen pendukung bila ada.')}
 			</p>
 			<form class="mt-4 flex flex-col gap-3" onsubmit={submitDewanPers}>
@@ -1881,12 +1984,13 @@
 				</label>
 				{#if error}<p class="text-sm" style="color: var(--destructive);">{error}</p>{/if}
 				<div class="flex justify-end gap-2">
-					<button class="app-btn app-btn-soft" type="button" onclick={() => (dpTarget = null)}>{tr('Batal')}</button>
+					<button class="app-btn app-btn-soft" type="button" onclick={() => (domTarget = null)}>{tr('Batal')}</button>
 					<button class="app-btn app-btn-primary" type="submit" disabled={dpBusy || dpCert.trim().length < 3}>
 						{dpBusy ? tr('Mengirim…') : tr('Ajukan Verifikasi')}
 					</button>
 				</div>
 			</form>
+			{/if}
 		</dialog>
 	</div>
 {/if}
