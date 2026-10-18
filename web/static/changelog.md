@@ -41,6 +41,9 @@ Catatan:
 ### Performa
 - **Gambar hasil AI otomatis dikompres saat disimpan**: dikonversi ke WebP dengan batas maksimal 150 KB per gambar. Sebelumnya satu gambar bisa 1–1,5 MB sehingga satu artikel beratnya bisa mencapai 3,4 MB; sekarang artikel bisa lebih dari sepuluh kali lipat lebih ringan, dan gambar tetap tajam di ukuran tampilnya.
 
+### Admin
+- Menu "Prompt Studio" diganti nama menjadi **Prompt Angle** dan alamatnya menjadi `/admin/prompt-angle` — isi fungsinya sama, sekadar penamaan; tautan lama otomatis dianggap hilang, jadi kalau ada yang menyimpan bookmark lama cukup buka menu baru.
+
 ## v0.5.4 — 2026-10-15
 
 ### Perbaikan
