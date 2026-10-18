@@ -2500,6 +2500,7 @@ CREATE TABLE public.publications (
     order_code character varying(40),
     CONSTRAINT ck_publication_publish_status CHECK (((publish_status)::text = ANY (ARRAY[('draft'::character varying)::text, ('publish'::character varying)::text]))),
     CONSTRAINT ck_publication_status CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('waiting_partner'::character varying)::text, ('partner_approved'::character varying)::text, ('partner_rejected'::character varying)::text, ('queued'::character varying)::text, ('processing'::character varying)::text, ('published'::character varying)::text, ('failed'::character varying)::text, ('retrying'::character varying)::text, ('cancelled'::character varying)::text])))
+    rewrite_ai_count integer DEFAULT 0,
 );
 
 

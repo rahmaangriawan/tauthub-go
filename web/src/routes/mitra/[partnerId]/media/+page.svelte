@@ -2064,10 +2064,6 @@
 				</div>
 			{/if}
 			{:else}
-				<p class="mt-2 text-sm text-muted-foreground">
-					{tr('Ajukan verifikasi untuk')} <strong>{domTarget.name}</strong>.
-					{tr('Masukkan nomor sertifikat Dewan Pers dan unggah dokumen pendukung bila ada.')}
-				</p>
 				{#if domTarget.dewan_pers_cert_no || domTarget.dewan_pers_doc_key || domTarget.dewan_pers_status}
 					<div class="mt-2 flex flex-wrap items-center gap-2 rounded-lg border p-2.5 text-xs" style="border-color: var(--border); background: var(--muted);">
 						{#if domTarget.dewan_pers_status}

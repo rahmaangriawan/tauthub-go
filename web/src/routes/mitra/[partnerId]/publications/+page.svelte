@@ -19,6 +19,7 @@
 		media_category: string | null; media_integration_type: string | null;
 		media_publication_mode: string | null; client_price: number; partner_amount: number;
 		partner_amount_gross?: number; partner_cut_percent?: number;
+		rewrite_ai_count?: number; rewrite_remain?: number;
 		publish_status: string | null; scheduled_at: string | null; published_at: string | null;
 		published_url: string | null; remote_url: string | null; rejection_reason: string | null; notes: string | null;
 		verification_status: string | null; verification_compliance_score: number | null;
@@ -223,8 +224,12 @@
 		urlSavedNotice = '';
 	}
 
+	// Jatah Rewrite AI per artikel (gratis, maksimal 2 kali — aturan pemilik produk).
+	let rewriteLeft = $state(2);
+
 	/** Editor draf — modal terpisah (parity tombol "Edit" app lama). */
 	async function openDraftEditor(p: Pub) {
+		rewriteLeft = Math.max(0, p.rewrite_remain ?? 2 - (p.rewrite_ai_count ?? 0));
 		draftPub = p;
 		draft = null;
 		draftLoading = true;
@@ -504,12 +509,13 @@
 			});
 			const data = await res.json();
 			if (!res.ok) {
-				error = tr('Rewrite gagal. Coba lagi nanti.');
+				error = await readApiError(res, tr('Rewrite gagal. Coba lagi nanti.'));
 				return;
 			}
 			draft.title = data.title;
 			draft.content_html = data.content_html;
-			notice = `Rewrite selesai (biaya Rp ${(data.amount_charged_idr ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}). Tinjau lalu simpan draf.`;
+			rewriteLeft = Math.max(0, Number(data.rewrite_remain ?? rewriteLeft - 1) || 0);
+			notice = tr('Rewrite selesai (gratis). AI menulis ulang dengan sudut pandang angle yang dipilih klien — tinjau lalu simpan draf.');
 		} finally {
 			busy = false;
 		}
@@ -1595,8 +1601,14 @@
 					<p class="mt-1 text-sm text-muted-foreground">{draftPub.document_title ?? tr('Artikel')}</p>
 				</div>
 				{#if draft && !draft.error}
-					<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={busy} onclick={rewrite}>
-						<Sparkles size={13} /> Rewrite AI (Rp 1.000)
+					<button
+						class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+						disabled={busy || rewriteLeft <= 0}
+						title={rewriteLeft <= 0 ? tr('Batas Rewrite AI tercapai — maksimal 2 kali per artikel.') : tr('Gratis, maksimal 2 kali per artikel. AI The Writer menulis ulang isi artikel mengikuti sudut pandang angle yang dipilih klien di kampanyenya.')}
+						onclick={rewrite}
+					>
+						{#if busy}<LoaderCircle size={13} class="animate-spin" />{:else}<Sparkles size={13} />{/if}
+						{tr('Rewrite AI')} — {tr('gratis')} · {tr('sisa')} {rewriteLeft}/{2}
 					</button>
 				{/if}
 			</div>
@@ -1670,8 +1682,15 @@
 								{/if}
 							</div>
 						</div>
-					</div>\n
-							<input bind:this={coverInput} type="file" accept="image/*" class="hidden" onchange={pickCover} />							<input bind:this={coverInput} type="file" accept="image/*" class="hidden" onchange={pickCover} />
+					</div>
+							<input bind:this={coverInput} type="file" accept="image/*" class="hidden" onchange={pickCover} />
+						{#if draftPub?.media_category}
+							<!-- Kategori ini berasal dari pilihan klien saat order media ini. -->
+							<div class="mt-1 flex items-center gap-1.5">
+								<span class="text-[11px] text-muted-foreground">{tr('Kategori')} ({tr('pilihan klien')}):</span>
+								<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background: var(--accent); color: var(--accent-foreground);">{draftPub.media_category}</span>
+							</div>
+						{/if}
 							{#if coverError}<p class="mt-1 text-xs" style="color: var(--destructive);">{coverError}</p>{/if}
 						</div>
 
@@ -1696,7 +1715,10 @@
 							{#if draftImgCount > 0}
 								<!-- Total UKURAN gambar artikel yang diminta pemilik produk; kalau
 								     ada gambar luar yang tak terukur, tampil perkiraan jumlah saja. -->
-								· {#if !draftImgUnknown && draftImgBytes != null}{fmtBytesID(draftImgBytes)}{:else}±{draftImgCount} {tr('gambar')}{/if}
+								<span class="inline-flex items-center gap-1">
+									<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="inline-block text-muted-foreground"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+									{#if !draftImgUnknown && draftImgBytes != null}{fmtBytesID(draftImgBytes)}{:else}±{draftImgCount} {tr('gambar')}{/if}
+								</span>
 							{/if}
 						</p>
 						<div class="flex gap-2">

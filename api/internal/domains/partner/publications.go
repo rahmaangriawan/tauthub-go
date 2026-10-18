@@ -298,6 +298,8 @@ func partnerPublicationJSON(row rowMap) map[string]any {
 		"rss_imported_at":               row.timePtr("rss_imported_at"),
 		"rss_published_at":              row.timePtr("rss_published_at"),
 		"notes":                         row.raw("notes"),
+		"rewrite_ai_count":              row.intOr("rewrite_ai_count", 0),
+		"rewrite_remain":                maxIntP(0, rewriteMaxPerPublicationPublic - row.intOr("rewrite_ai_count", 0)),
 		"rejection_reason":              row.raw("rejection_reason"),
 		"revision_reject_count":         row.intOr("revision_reject_count", 0),
 		"revision_reject_limit":         revisionRejectLimit,
@@ -1034,3 +1036,14 @@ func (d *Deps) enqueueJobAt(ctx context.Context, kind string, payload map[string
 }
 
 var _ = pgx.ErrNoRows
+
+// Batas pemakaian Rewrite AI gratis per publikasi (aturan pemilik produk);
+// issuance dihitung di handler rewrite, angka ini untuk tampilan frontend.
+const rewriteMaxPerPublicationPublic = 2
+
+func maxIntP(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}

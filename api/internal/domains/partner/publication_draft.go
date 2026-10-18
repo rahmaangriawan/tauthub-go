@@ -1,6 +1,7 @@
 package partner
 
 import (
+	"fmt"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -388,7 +389,9 @@ func (d *Deps) PublicationDraftImage(w http.ResponseWriter, r *http.Request) {
 
 // ---------- POST /v1/partner/publications/{publicationId}/rewrite ----------
 
-const rewriteCostIDR = 1000
+// rewriteMaxPerPublication: batas pemakaian Rewrite AI per artikel — aturan
+// pemilik produk: gratis dulu, maksimal 2 kali generate per publikasi.
+const rewriteMaxPerPublication = 2
 
 func (d *Deps) PublicationRewrite(w http.ResponseWriter, r *http.Request) {
 	user, partner, ok := d.auth(w, r)
@@ -422,59 +425,182 @@ func (d *Deps) PublicationRewrite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	available := d.partnerAvailableIDR(r.Context(), partner.ID)
-	if available < rewriteCostIDR {
-		writeJSON(w, http.StatusPaymentRequired, map[string]any{
-			"detail": "Saldo tidak cukup untuk Rewrite (" + formatIDR(available) + " tersedia, butuh " + formatIDR(rewriteCostIDR) +
-				"). Saldo Mitra bertambah dari penghasilan ketika klien membeli media.",
-			"available_idr": available,
-			"required_idr":  rewriteCostIDR,
-		})
+	// Klaim jatah Rewrite secara atomik: hanya 2 pemakaian per publikasi.
+	// Kalau generate gagal, jatah dikembalikan di bawah supaya mitra bisa mencoba lagi.
+	claimed, err := d.execRows(r.Context(),
+		"UPDATE publications SET rewrite_ai_count = rewrite_ai_count + 1 WHERE id = $1 AND COALESCE(rewrite_ai_count, 0) < $2",
+		publicationID, rewriteMaxPerPublication)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if claimed == 0 {
+		d.writeErr(w, errConflict(fmt.Sprintf("Batas Rewrite AI tercapai — maksimal %d kali per artikel.", rewriteMaxPerPublication)))
 		return
 	}
 
-	prompt := buildRewritePrompt(title, contentHTML)
+	// Mesin tulis The Writer: blok ANGLE pilihan klien + bahan writer dari
+	// kampanye (topik tersimpan) dibaca dari basis data kampanye publikasi ini,
+	// sehingga rewrite menyesuaikan sudut pandang sesuai angle yang dipilih klien.
+	angleBlock := d.rewriteAngleBlock(r.Context(), publication)
+	topicBlock := d.rewriteTopicBlock(r.Context(), publication)
+	prompt := buildRewritePrompt(title, contentHTML, angleBlock, topicBlock)
 	result, err := d.generateChat(r, prompt, "partner_article_rewrite", publication.strPtr("brand_id"), user.ID)
 	if err != nil {
 		d.logger().Warn("rewrite AI gagal", "err", err)
+		d.releaseRewriteClaim(r.Context(), publicationID)
 		httpx.Error(w, http.StatusBadGateway, "AI tidak mengembalikan hasil yang valid. Silakan coba lagi.")
 		return
 	}
 	parsed, ok := parseRewriteOutput(result.Content)
 	if !ok {
+		d.releaseRewriteClaim(r.Context(), publicationID)
 		httpx.Error(w, http.StatusBadGateway, "AI tidak mengembalikan hasil yang valid. Silakan coba lagi.")
-		return
-	}
-	if err := d.exec(r.Context(), `
-		INSERT INTO partner_service_charges (id, partner_id, service, amount_idr, reference_id, reference_type, notes)
-		VALUES (gen_random_uuid(), $1, 'article_rewrite_ai', $2, $3, 'publication', $4)`,
-		partner.ID, rewriteCostIDR, publicationID, "Rewrite artikel oleh mitra"); err != nil {
-		d.writeErr(w, err)
 		return
 	}
 	d.auditLog(r.Context(), user.ID, "publication.partner_rewrite_ai", "publication", publicationID)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"title":              truncateRunes(parsed["title"], 200),
 		"content_html":       content.NormalizeArticleHTML(truncateRunes(parsed["content_html"], 200_000)),
-		"amount_charged_idr": rewriteCostIDR,
+		"amount_charged_idr": 0,
+		"rewrite_remain":     maxInt(0, rewriteMaxPerPublication-int(claimed)),
 	})
 }
 
-// buildRewritePrompt: parity prompt rewrite mitra (instruksi bahasa Indonesia).
-func buildRewritePrompt(title, contentHTML string) string {
-	return strings.Join([]string{
-		"Kamu editor artikel profesional berbahasa Indonesia.",
-		"Tulis ulang artikel berikut agar lebih segar, mengalir, dan bebas plagiarisme,",
-		"tanpa mengubah fakta, sudut pandang, atau pesan utama.",
+// publicationChosenAngle: baca kolom `channels` (jsonb) dari taut_profiler_submissions
+// lalu cari angle_slug untuk channel bertipe mediaType. Bentuk kolom bisa []any
+// hasil decode pgx atau string JSON legacy — keduanya diterima.
+func publicationChosenAngle(raw any, mediaType string) string {
+	if raw == nil {
+		return ""
+	}
+	entries := []any{}
+	switch t := raw.(type) {
+	case []any:
+		entries = t
+	case string:
+		var parsed []any
+		if json.Unmarshal([]byte(t), &parsed) != nil {
+			return ""
+		}
+		entries = parsed
+	default:
+		return ""
+	}
+	for _, entry := range entries {
+		ch, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		channel, _ := ch["channel"].(string)
+		if channel != mediaType {
+			continue
+		}
+		if slug, _ := ch["angle_slug"].(string); slug != "" {
+			return slug
+		}
+	}
+	return ""
+}
+
+// rewriteAngleBlock: ambil blok ANGLE pilihan klien untuk kampanye publikasi ini
+// (paritas loadTautChosenAnglePrompt di brandflow) — dipakai sebagai sudut
+// pandang The Writer saat rewrite. Kosong bila kampanye tanpa pilihan angle.
+func (d *Deps) rewriteAngleBlock(ctx context.Context, publication rowMap) string {
+	mediaRow, err := d.queryRow(ctx, "SELECT media_type FROM media WHERE id = $1 LIMIT 1", publication.strOr("media_id", ""))
+	if err != nil || mediaRow == nil {
+		return ""
+	}
+	mediaType := mediaRow.strOr("media_type", "")
+	sub, err := d.queryRow(ctx, `
+		SELECT channels FROM taut_profiler_submissions
+		WHERE campaign_id = $1 ORDER BY revision DESC LIMIT 1`, publication.strOr("campaign_id", ""))
+	if err != nil || sub == nil {
+		return ""
+	}
+	angleSlug := publicationChosenAngle(sub.raw("channels"), mediaType)
+	if angleSlug == "" {
+		return ""
+	}
+	row, err := d.queryRow(ctx, `
+		SELECT v.prompt
+		FROM taut_content_angle_prompt_versions v
+		JOIN taut_content_angles a ON a.id = v.content_angle_id
+		JOIN taut_media_channels c ON c.id = a.channel_id
+		WHERE a.slug = $1 AND c.slug = $2 AND v.status = 'active'
+		ORDER BY v.version DESC LIMIT 1`, angleSlug, mediaType)
+	if err != nil || row == nil {
+		return ""
+	}
+	prompt := strings.TrimSpace(row.strOr("prompt", ""))
+	if prompt == "" {
+		return ""
+	}
+	return "[ANGLE PILIHAN KLIEN — " + mediaType + "/" + angleSlug + "]\n" + truncateRunes(prompt, 16000)
+}
+
+// rewriteTopicBlock: topik/bahan writer yang tersimpan per media kampanye —
+// konteks fakta yang dipakai The Writer saat menyusun artikel pertama kali.
+func (d *Deps) rewriteTopicBlock(ctx context.Context, publication rowMap) string {
+	if publication.strOr("campaign_id", "") == "" || publication.strOr("media_id", "") == "" {
+		return ""
+	}
+	row, err := d.queryRow(ctx, `
+		SELECT writer_topic FROM taut_campaign_media
+		WHERE campaign_id = $1 AND media_id = $2 LIMIT 1`,
+		publication.strOr("campaign_id", ""), publication.strOr("media_id", ""))
+	if err != nil || row == nil {
+		return ""
+	}
+	topic := strings.TrimSpace(row.strOr("writer_topic", ""))
+	if topic == "" {
+		return ""
+	}
+	return "[KONTEKS TOPIK KLIEN DI THE WRITER]\n" + truncateRunes(topic, 6000)
+}
+
+// releaseRewriteClaim: kembalikan jatah yang sempat diklaim but generate gagal.
+func (d *Deps) releaseRewriteClaim(ctx context.Context, publicationID string) {
+	if _, err := d.execRows(ctx,
+		"UPDATE publications SET rewrite_ai_count = GREATEST(COALESCE(rewrite_ai_count, 0) - 1, 0) WHERE id = $1",
+		publicationID); err != nil {
+		d.logger().Warn("rewrite jatah gagal dikembalikan", "publication", publicationID, "err", err)
+	}
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// buildRewritePrompt: prompt rewrite mitra memakai panel The Writer —
+// angle pilihan klien menuntun sudut pandang, bahan writer menjaga fakta.
+func buildRewritePrompt(title, contentHTML, angleBlock, topicBlock string) string {
+	parts := []string{
+		"Kamu The Writer — penulis AI Tauthub yang profesional berbahasa Indonesia.",
+		"Tulis ulang artikel berikut agar lebih segar, mengalir, dan bebas plagiarisme.",
+		"FAKTA TETAP DIJAGA: nama, angka, kutipan, tautan, dan urutan kejadian pada isi asli tidak boleh berubah.",
 		"",
 		"Judul saat ini: " + title,
 		"",
 		"Isi artikel (HTML):",
 		contentHTML,
 		"",
+	}
+	if angleBlock != "" {
+		parts = append(parts, angleBlock, "", "SUDUT PANDANG: tulisan hasil rewrite WAJIB mengikuti ANGLE PILIHAN KLIEN di atas — pembasa, struktur paragraf, dan penekanan bahasan diarahkan ke sudut itu, seolah artikel ini yang pertama kali ditulis The Writer dengan angle yang dipilih klien.")
+	}
+	if topicBlock != "" {
+		parts = append(parts, "", topicBlock, "Gunakan konteks topik di atas sebagai bahan fakta tambahan bila relevan.")
+	}
+	parts = append(parts,
+		"",
 		"Kembalikan JSON valid dengan bentuk: {\"title\": \"...\", \"content_html\": \"...\"}.",
 		"Jangan menambahkan penjelasan di luar JSON.",
-	}, "\n")
+	)
+	return strings.Join(parts, "\n")
 }
 
 // parseRewriteOutput: port parseRewriteOutput — strip fence lalu ambil JSON.
