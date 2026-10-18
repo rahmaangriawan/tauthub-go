@@ -692,6 +692,7 @@ CREATE TABLE public.publications (
     CONSTRAINT ck_publication_status CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'waiting_partner'::character varying, 'partner_approved'::character varying, 'partner_rejected'::character varying, 'queued'::character varying, 'processing'::character varying, 'published'::character varying, 'failed'::character varying, 'retrying'::character varying, 'cancelled'::character varying])::text[]))),
     CONSTRAINT ck_publication_publish_status CHECK (((publish_status)::text = ANY ((ARRAY['draft'::character varying, 'publish'::character varying])::text[])))
     rewrite_ai_count integer NOT NULL DEFAULT 0,
+    category_override text,
 );
 
 CREATE TABLE public.auto_replace_configs (

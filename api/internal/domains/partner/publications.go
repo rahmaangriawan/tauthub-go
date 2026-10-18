@@ -195,7 +195,7 @@ func (d *Deps) enqueueSeoRefreshForMedia(ctx context.Context, mediaID string) {
 // partnerScopedPublication: port partnerScopedPublication (tenant scoping mitra).
 func (d *Deps) partnerScopedPublication(ctx context.Context, partnerID, publicationID string) (rowMap, error) {
 	row, err := d.queryRow(ctx, `
-		SELECT p.*, m.name AS media_name, m.category AS media_category, m.partner_id AS media_partner_id,
+		SELECT p.*, m.name AS media_name, m.category AS media_category, COALESCE(p.category_override, '') AS category_override, m.partner_id AS media_partner_id,
 		       m.website_url AS media_website_url, m.publication_mode AS media_publication_mode,
 		       m.integration_type AS media_integration_type,
 		       d.title AS document_title, d.slug AS document_slug,
@@ -278,10 +278,11 @@ func partnerPublicationJSON(row rowMap) map[string]any {
 		"thumbnail_url":                 ptrString(relSelfURLN(thumbnail)),
 		"media_id":                      row.raw("media_id"),
 		"media_name":                    row.raw("media_name"),
-		"media_category":                row.raw("media_category"),
 		"media_integration_type":        row.raw("media_integration_type"),
 		"media_website_url":             row.raw("media_website_url"),
 		"media_publication_mode":        row.raw("media_publication_mode"),
+		"media_category":                draftCategory(row),
+		"category_override":             row.strOr("category_override", ""),
 		"status":                        row.raw("status"),
 		"client_price":                  clientPrice,
 		"partner_price":                 partnerPrice,
@@ -353,7 +354,7 @@ var publicationListStatuses = []string{
 // itu hanya tombol Terima yang tersisa dan admin ikut diberi tahu.
 const revisionRejectLimit = 3
 
-const publicationSelect = `SELECT p.*, m.name AS media_name, m.category AS media_category, m.partner_id AS media_partner_id,
+const publicationSelect = `SELECT p.*, m.name AS media_name, m.category AS media_category, COALESCE(p.category_override, '') AS category_override, m.partner_id AS media_partner_id,
               m.integration_type AS media_integration_type,
               m.website_url AS media_website_url,
               m.publication_mode AS media_publication_mode,

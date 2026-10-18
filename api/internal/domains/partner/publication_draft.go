@@ -88,9 +88,19 @@ func (d *Deps) wpDraftPreview(r *http.Request, publicationID string, publication
 		"meta_description":   metaDescription,
 		"featured_image_url": relSelfURLAny(featured),
 		"wp_status":          firstNonNilString(post["status"], "draft"),
+		"category":           draftCategory(publication),
 		"edited_at":          edits["edited_at"],
 		"source":             "wp_draft",
 	}, true
+}
+
+// draftCategory: kategori yang dipakai klien untuk publikasi — override mitra
+// menang atas kategori media (pilihan klien saat order).
+func draftCategory(publication rowMap) string {
+	if ov := strings.TrimSpace(publication.strOr("category_override", "")); ov != "" {
+		return ov
+	}
+	return strings.TrimSpace(publication.strOr("media_category", ""))
 }
 
 // normalizeDraftHTML: rapikan markup draf sebelum ditampilkan ke mitra, supaya
@@ -176,6 +186,7 @@ func (d *Deps) clientDocumentPreview(r *http.Request, publicationID string, publ
 		"meta_description":   firstNonNilString(edits["meta_description"], doc.raw("meta_description")),
 		"featured_image_url": relSelfURLAny(firstNonNilString(edits["featured_image_url"], publication.raw("featured_image_url"))),
 		"wp_status":          "terbit",
+		"category":           draftCategory(publication),
 		"edited_at":          edits["edited_at"],
 		"source":             "client_document",
 	}, nil
@@ -223,13 +234,14 @@ func (d *Deps) publicationDraftPut(w http.ResponseWriter, r *http.Request) {
 	title, hasTitle := strField(body, "title")
 	contentHTML, hasContent := strField(body, "content_html")
 	metaDescription, hasMeta := strField(body, "meta_description")
+	category, hasCategory := strField(body, "category")
 	var featuredImage any
 	hasFeatured := false
 	if v, present := body["featured_image_url"]; present {
 		hasFeatured = true
 		featuredImage = v
 	}
-	if !hasTitle && !hasContent && !hasMeta && !hasFeatured {
+	if !hasTitle && !hasContent && !hasMeta && !hasFeatured && !hasCategory {
 		httpx.Error(w, http.StatusUnprocessableEntity,
 			"Tidak ada perubahan: kirim title, content_html, meta_description, dan/atau featured_image_url.")
 		return
@@ -281,6 +293,16 @@ func (d *Deps) publicationDraftPut(w http.ResponseWriter, r *http.Request) {
 		marshalJSON(edits), publicationID); err != nil {
 		d.writeErr(w, err)
 		return
+	}
+	// Kategori bisa diubah mitra di editor (dropdown) — disimpan sebagai override
+	// atas kategori media pilihan klien; kosong = kembali ke pilihan klien.
+	if hasCategory {
+		if err := d.exec(r.Context(),
+			"UPDATE publications SET category_override = NULLIF($1, ''), updated_at = NOW() WHERE id = $2",
+			strings.TrimSpace(category), publicationID); err != nil {
+			d.writeErr(w, err)
+			return
+		}
 	}
 	d.auditLog(r.Context(), user.ID, "publication.partner_draft_edited", "publication", publicationID)
 	updated, err := d.partnerScopedPublication(r.Context(), partner.ID, publicationID)

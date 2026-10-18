@@ -7,6 +7,7 @@
 	import { onMount } from 'svelte';
 	import { Check, CircleAlert, Eye, ExternalLink, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, Send, SlidersHorizontal, Sparkles, Trash2, X } from '@lucide/svelte';
 	import { Tooltip } from 'bits-ui';
+	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import RichTextEditor from '$lib/components/rich-text-editor.svelte';
@@ -226,6 +227,34 @@
 
 	// Jatah Rewrite AI per artikel (gratis, maksimal 2 kali — aturan pemilik produk).
 	let rewriteLeft = $state(2);
+	// Opsi Kategori: dari kategori milik mitra + kategori yang dipilih klien.
+	let catOptions = $state<string[]>([]);
+	let catOptionsLoading = $state(false);
+	let catOptionsLoaded = $state(false);
+
+	async function loadCategoryOptions(current: string) {
+		if (catOptionsLoaded && current) {
+			ensureCatOption(current);
+			return;
+		}
+		catOptionsLoading = true;
+		try {
+			const res = await apiRequest('/v1/partner/media/categories');
+			if (res.ok) {
+				const data = await res.json();
+				catOptions = (data.categories ?? []).filter((c: unknown) => typeof c === 'string' && c.trim() !== '');
+				catOptionsLoaded = true;
+			}
+		} finally {
+			catOptionsLoading = false;
+		}
+		ensureCatOption(current);
+	}
+
+	function ensureCatOption(current: string) {
+		const v = (current ?? '').trim();
+		if (v && !catOptions.includes(v)) catOptions = [v, ...catOptions];
+	}
 
 	/** Editor draf — modal terpisah (parity tombol "Edit" app lama). */
 	async function openDraftEditor(p: Pub) {
@@ -238,7 +267,11 @@
 		coverBusy = false;
 		draft = await loadDraft(p);
 		draftLoading = false;
-		if (draft) void measureDraftImages();
+		if (draft) {
+			if (!draft.category) draft.category = (p.media_category ?? '').trim();
+			void loadCategoryOptions((draft.category ?? '').trim());
+			void measureDraftImages();
+		}
 	}
 
 	// ── Ukuran gambar di draf: jumlah + total berat (mis. "3 gambar · 412 KB")
@@ -480,7 +513,8 @@
 				title: draft.title,
 				content_html: draft.content_html,
 				meta_description: draft.meta_description ?? '',
-				featured_image_url: draft.featured_image_url || null
+				featured_image_url: draft.featured_image_url || null,
+				category: (draft.category ?? '').trim()
 			};
 			const res = await apiRequest(`/v1/partner/publications/${draftPub.id}/draft`, {
 				method: 'PUT',
@@ -1684,13 +1718,23 @@
 						</div>
 					</div>
 							<input bind:this={coverInput} type="file" accept="image/*" class="hidden" onchange={pickCover} />
-						{#if draftPub?.media_category}
-							<!-- Kategori ini berasal dari pilihan klien saat order media ini. -->
-							<div class="mt-1 flex items-center gap-1.5">
-								<span class="text-[11px] text-muted-foreground">{tr('Kategori')} ({tr('pilihan klien')}):</span>
-								<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background: var(--accent); color: var(--accent-foreground);">{draftPub.media_category}</span>
-							</div>
-						{/if}
+						<span class="flex flex-wrap items-center gap-2">
+							<!-- Dropdown berstyle (bukan bawaan browser): awal mengikuti
+							     pilihan klien saat order, mitra boleh pilih lain. -->
+							<span class="text-[11px] text-muted-foreground">{tr('Kategori')} :</span>
+							{#if draft}
+								<Select
+									ariaLabel={tr('Kategori')}
+									variant="plain"
+									minWidth={170}
+									options={(catOptions.includes(draft.category) || !(draft.category ?? '').trim()
+										? catOptions
+										: [(draft.category ?? ''), ...catOptions]).map((c) => ({ value: c, label: c }))}
+									bind:value={draft.category}
+									onchange={() => ensureCatOption(draft.category ?? '')}
+								/>
+							{/if}
+						</span>
 							{#if coverError}<p class="mt-1 text-xs" style="color: var(--destructive);">{coverError}</p>{/if}
 						</div>
 
