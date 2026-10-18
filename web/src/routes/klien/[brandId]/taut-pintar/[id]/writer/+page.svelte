@@ -85,6 +85,11 @@
 	let anglesError = $state('');
 	// Jumlah analisis QC per media (badge di tombol "Analisis QC").
 	let qcCounts = $state<Record<string, number>>({});
+	// QC otomatis setelah "Simpan Artikel": ikon tombol berputar selama
+	// pemindaian berjalan; setelah selesai angka badge menjadi HIJAU (tanda
+	// QC selesai) — aturan pemilik produk.
+	let qcRunning = $state<Record<string, boolean>>({});
+	let qcDoneSave = $state<Record<string, boolean>>({});
 	// Konfirmasi hapus media dari kampanye (soft delete, data artikel tetap aman).
 	let removeTarget = $state<PlacementItem | null>(null);
 	let removeBusy = $state(false);
@@ -827,14 +832,41 @@
 		}
 	}
 
+	// QC otomatis pasca simpan: pemindaian gatekeeper untuk artikel yang baru
+	// disimpan, level-artikel (sama dengan tombol pemindaian ulang di panel QC).
+	// Setiap selesai, qcToken dinaikkan supaya panel & badge muat data baru.
+	async function runQcAfterSave(mediaId: string) {
+		if (qcRunning[mediaId]) return;
+		qcRunning = { ...qcRunning, [mediaId]: true };
+		qcDoneSave = { ...qcDoneSave, [mediaId]: false };
+		try {
+			const res = await apiRequest(`${apiBase}/gatekeeper/audit-all`, {
+				method: 'POST',
+				body: JSON.stringify({ mediaIds: [mediaId] })
+			}, 900_000);
+			if (res.ok) {
+				qcDoneSave = { ...qcDoneSave, [mediaId]: true };
+			}
+		} catch {
+			// Senyap: QC manual tetap tersedia lewat tombol/panel bila otomatis gagal.
+		} finally {
+			qcToken += 1;
+			await load();
+			qcRunning = { ...qcRunning, [mediaId]: false };
+		}
+	}
+
 	async function saveEditor(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) {
 		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		if (!editor) return;
+		const mediaId = editor.mediaId;
 		editorSaving = true;
 		const saved = await persistEditor(title, html, coverUrl, category, metaDescription);
 		editorSaving = false;
 		if (saved) {
 			editor = null;
+			// Dapur Produksi: QC langsung diproses setelah artikel disimpan.
+			void runQcAfterSave(mediaId);
 		}
 	}
 
@@ -1546,20 +1578,32 @@
 											</button>
 
 											{@const qcCount = qcCounts[m.media_id] ?? 0}
+											{@const qcBusy = qcRunning[m.media_id] === true}
+											{@const qcSelesai = qcDoneSave[m.media_id] === true}
 											<button
 												type="button"
-												class="expAction relative h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 text-xs font-semibold transition-colors"
-												title={qcCount > 0 ? `${tr('Analisis QC')} (${qcCount})` : tr('Analisis QC')}
-												disabled={bulkRunning}
+												class="expAction relative h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border transition-colors {qcSelesai
+													? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+													: 'border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700'}"
+												title={qcBusy
+													? tr('QC sedang memeriksa artikel…')
+													: qcCount > 0 ? `${tr('Analisis QC')} (${qcCount})` : tr('Analisis QC')}
+												disabled={bulkRunning || qcBusy}
 												onclick={() => (qcFor = m.media_id)}
 											>
-												<ListChecks size={13} strokeWidth={2} class="shrink-0" />
+												{#if qcBusy}
+													<LoaderCircle size={13} strokeWidth={2} class="shrink-0 animate-spin" />
+												{:else}
+													<ListChecks size={13} strokeWidth={2} class="shrink-0" />
+												{/if}
 												<span class="expLabel">{tr('Analisis QC')}</span>
 												<!-- Angka QC nempel di pojok kanan atas pill, tetap tampil
-												     meski tombol sedang menciut jadi ikon saja. -->
+												     meski tombol sedang menciut jadi ikon saja; hijau = QC selesai. -->
 												<span
 													class="pointer-events-none absolute -right-1.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-[5px] px-1 text-[10px] font-bold leading-none ring-2 ring-white"
-													style={qcCount > 0 ? 'background-color: #2563eb; color: #fff;' : 'background-color: #e2e8f0; color: #64748b;'}
+													style={qcSelesai
+														? 'background-color: var(--success, #16794b); color: #fff;'
+														: qcCount > 0 ? 'background-color: #2563eb; color: #fff;' : 'background-color: #e2e8f0; color: #64748b;'}
 												>
 													{qcCount > 0 ? qcCount : '0'}
 												</span>
