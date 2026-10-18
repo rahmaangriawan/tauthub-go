@@ -378,7 +378,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Gagal menyimpan ringkasan strategi.": "Failed to save the strategy summary.",
   "Gagal menyimpan URL.": "Failed to save the URL.",
   "Gagal meracik kampanye kilat.": "Failed to assemble the fast campaign.",
-  "gambar": "images",
+  "gambar": "image(s)",
   "Gambar artikel: tidak ada": "Article images: none",
   "Gambar cover artikel": "Article cover image",
   "gambar di artikel": "images in the article",
