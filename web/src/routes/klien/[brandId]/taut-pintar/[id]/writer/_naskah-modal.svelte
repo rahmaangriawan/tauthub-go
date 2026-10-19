@@ -871,7 +871,7 @@
 		<div class="mt-4 w-full rounded-xl border p-3 text-left" style="border-color: var(--border); background-color: var(--muted);">
 			<div class="flex items-center justify-between gap-2">
 				<p class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-					<Link2 size={13} /> {tr('Tautan & Anchor (Opsional)')}
+					3. <Link2 size={13} /> {tr('Tautan & Anchor (Opsional)')}
 				</p>
 				<span
 					class="rounded-full px-2 py-0.5 text-[10px] font-bold"
@@ -1155,7 +1155,7 @@
 						</div>
 						<div class="mt-5 w-full text-left">
 								<div class="mb-4 min-w-0">
-									<span class="text-sm font-semibold">{tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
+									<span class="text-sm font-semibold">2. {tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
 									{#if angleChannelName}
 										<p class="mt-1 break-words text-xs text-muted-foreground">{tr(angleChannelName)}</p>
 									{/if}
@@ -1193,7 +1193,7 @@
 								</div>
 							<div class="flex items-center gap-2">
 									<label class="text-sm font-semibold" for="naskah-topik">
-										{tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
+										4. {tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
 									</label>
 									<span class="ml-auto flex items-center gap-1.5">
 										{#if tipsAvailable}
