@@ -45,7 +45,11 @@
 		canDistribute: boolean;
 	};
 
+	// Empat pemeriksa — heading panel bilang 4, jadi kartunya harus 4 juga
+	// (AI Overview sempat hilang dari daftar inilah yang membuat badge count
+	// terkesan tak cocok dengan panel).
 	const CHECK_CARDS: Array<{ key: keyof Checks; title: string; gate: boolean }> = [
+		{ key: 'aiOverview', title: 'AI Overview Checker', gate: false },
 		{ key: 'contentSafety', title: 'Illegal Content Guard', gate: true },
 		{ key: 'linkHealth', title: 'Link Health Validator', gate: true },
 		{ key: 'brandVoice', title: 'Brand Voice Limits', gate: false }
