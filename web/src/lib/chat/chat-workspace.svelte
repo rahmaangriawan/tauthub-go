@@ -11,6 +11,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { refreshChatUnreadNow } from '$lib/chat/chat-unread.svelte';
 
 	type Thread = {
 		id: string;
@@ -207,6 +208,7 @@
 			scrollToBottom();
 			composerEl?.focus();
 			if (threads.some((t) => t.id === id)) void loadThreads(true);
+			void refreshChatUnreadNow();
 		} catch (reason) {
 			bootError = reason instanceof Error ? reason.message : tr('Gagal membuka obrolan.');
 		} finally {
@@ -279,6 +281,7 @@
 			await Promise.resolve();
 			scrollToBottom();
 			void loadThreads(true);
+			void refreshChatUnreadNow();
 		} catch (reason) {
 			sendError = reason instanceof Error ? reason.message : tr('Pesan gagal dikirim.');
 		} finally {

@@ -19,8 +19,10 @@
 		icon: Component<{ size?: number; strokeWidth?: number }>;
 		active: boolean;
 		// Sub-halaman bertingkat (parity navSublinks app lama): tampil menjorok
-		// di bawah induknya, selalu terbuka.
-		children?: Array<{ label: string; href: string; active: boolean }>;
+			// di bawah induknya, selalu terbuka.
+			children?: Array<{ label: string; href: string; active: boolean }>;
+			/** Badge angka (merah) di kanan label — mis. jumlah pesan belum dibaca. */
+			badge?: number | null;
 	};
 	export type ShellNavGroup = { label: string; items: ShellNavItem[] };
 
@@ -186,6 +188,9 @@
 					>
 						<item.icon size={18} strokeWidth={item.active ? 2.4 : 2} />
 						<span>{item.label}</span>
+						{#if (item.badge ?? 0) > 0}
+							<span class="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white" style="background: var(--destructive, #e11d48);">{item.badge}</span>
+						{/if}
 					</a>
 					{#if item.children?.length}
 						<span class="app-sidebar-sublinks">

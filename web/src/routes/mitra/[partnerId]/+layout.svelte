@@ -17,6 +17,7 @@
 			UserCircle, Wallet
 		} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, AUTH_EXPIRED_EVENT } from '$lib/auth';
+ import { chatUnread, startChatUnreadPolling, stopChatUnreadPolling } from '$lib/chat/chat-unread.svelte';
 	import { swr } from '$lib/swr-cache.svelte';
 	import { setPartnerUrlId } from '$lib/partner-url.svelte';
 	import AppShell from '$lib/components/app-shell.svelte';
@@ -87,9 +88,15 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				role: fresh.user.role
 			};
 		})();
+		// Badge menu "Pesan" portal mitra.
+		const partnerIdNow = page.params.partnerId as string;
+		startChatUnreadPolling('/v1/partner');
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
-		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		return () => {
+			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+			stopChatUnreadPolling();
+		};
 	});
 
 	// Link internal memakai public_id (6 karakter) seperti app lama; UUID tetap
@@ -132,7 +139,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			label: i18n.t.nav_partner.group_media,
 			items: [
 				{ label: tr('Publikasi'), href: `${base}/publications`, icon: Newspaper, active: isActive(`${base}/publications`) },
-				{ label: i18n.t.nav_partner.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`) },
+				{ label: i18n.t.nav_partner.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`), badge: chatUnread.count },
 				{ label: tr('Daftar Media'), href: `${base}/media`, icon: ScrollText, active: isActive(`${base}/media`) },
 				{ label: i18n.t.nav_partner.link_monitor, href: `${base}/link-monitor`, icon: TriangleAlert, active: isActive(`${base}/link-monitor`) },
 				{ label: i18n.t.nav_partner.crawler, href: `${base}/crawler`, icon: Server, active: isActive(`${base}/crawler`) }
