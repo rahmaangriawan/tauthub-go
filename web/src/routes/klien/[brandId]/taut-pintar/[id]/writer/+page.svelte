@@ -1385,9 +1385,10 @@
 							</p>
 						</div>
 					</div>
-					<div class="flex shrink-0 items-center gap-2">
-						<!-- Generate Semua di header: klik membuka popup yang sama
-						     dengan bar seleksi (masih placeholder "Dalam Pengerjaan"). -->
+					<div class="flex shrink-0 items-center gap-2 lg:mr-10">
+						<!-- Generate Semua di header: klik membuka popup yang sama dengan
+						     bar seleksi (masih placeholder "Dalam Pengerjaan");
+						     grup digeser ke kiri ~40px agar tidak tembus ke tepi. -->
 						<button
 							class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs disabled:opacity-50 disabled:cursor-not-allowed"
 							type="button"
