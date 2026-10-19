@@ -1357,7 +1357,7 @@
 						</div>
 						{:else}
 					<!-- PANE "YANG PROPER": isian berbeda dari Sederhana — grounding ke Copilot & fakta. -->
-							<div class="w-full text-left">
+							<div class="mt-6 w-full text-left">
 								<div class="min-w-0">
 									<span class="text-sm font-semibold">2. {tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
 									{#if angleChannelName}
@@ -1391,7 +1391,7 @@
 								</div>
 
 								<!-- Memori Brand (Copilot) + Fakta Terkunci -->
-								<div class="mt-5">
+								<div class="mt-6">
 									<div class="flex flex-wrap items-center justify-between gap-2">
 										<span class="text-sm font-semibold">{tr('Memori Brand (Tauthub Copilot)')}</span>
 										<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold" style="background-color: var(--success-soft, #e8f7ee); color: var(--success);">
@@ -1399,7 +1399,7 @@
 											{tr('Anti-Capek Ketik')}
 										</span>
 									</div>
-									<div class="mt-2 rounded-xl border p-3" style="border-color: var(--border);">
+									<div class="mt-3 rounded-xl border p-4" style="border-color: var(--border);">
 										<p class="flex items-center gap-2 text-xs font-semibold">
 											<span class="inline-flex items-center gap-1.5">
 												<span class="h-2 w-2 rounded-full" style="background-color: var(--success);"></span>
@@ -1411,7 +1411,7 @@
 											<span class="text-xs text-muted-foreground"> {tr('SaaS PR & GEO Marketplace')} • {tr('Fitur: AI Trust Score, SLA Tracked, Link Guardian.')}</span>
 										</p>
 
-										<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+										<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
 											<span class="text-xs font-semibold">{tr('Fakta / Data Produk yang Wajib Masuk')} <span style="color: var(--destructive);">*</span></span>
 											<span class="flex items-center gap-1.5">
 												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika Copilot menyusul')}>
@@ -1427,19 +1427,19 @@
 											placeholder={tr('Malas merangkai kalimat? Copy-paste saja teks mentahan dari chat WA, brosur, atau spesifikasi produk di sini. AI hanya akan menggunakan fakta dari kotak ini & Copilot…')}
 											bind:value={faktaTerkunci}
 										></textarea>
-										<p class="mt-1.5 text-[11px] leading-relaxed" style="color: var(--warning);">
+										<p class="mt-2 text-[11px] leading-relaxed" style="color: var(--warning);">
 											{tr('AI dilarang mengarang fitur, harga, atau klaim di luar data yang tertulis di atas.')}
 										</p>
 									</div>
 								</div>
 
-								<!-- Pengunci standar redaksi -->
-								<div class="mt-5">
-									<div class="flex flex-wrap items-center gap-2">
-										<span class="text-sm font-semibold">{tr('Pengunci Standar Redaksi')}</span>
-										<span class="text-[11px] text-muted-foreground">{tr('Opsional • Cegah Kutipan Fiktif')}</span>
-									</div>
-									<div class="mt-2 grid gap-3 sm:grid-cols-2">
+									<!-- Pengunci standar redaksi -->
+									<div class="mt-6">
+										<div class="flex flex-wrap items-center gap-2">
+											<span class="text-sm font-semibold">{tr('Pengunci Standar Redaksi')}</span>
+											<span class="text-[11px] text-muted-foreground">{tr('Opsional • Cegah Kutipan Fiktif')}</span>
+										</div>
+										<div class="mt-3 grid gap-4 sm:grid-cols-2">
 										<label class="block">
 											<span class="text-xs font-semibold text-muted-foreground">{tr('Kota Rilis (Dateline)')}</span>
 											<input class="app-input mt-1 w-full text-sm uppercase" placeholder="JAKARTA" bind:value={kotaRilis} />
@@ -1461,46 +1461,46 @@
 									</div>
 
 									<!-- 3. Tautan & Anchor (Backlink) -->
-								<div class="mt-5">
-									{#if linkLimit > 0}
-										{@render linkEditor(' (Backlink)', tr('Disisipkan natural di paragraf yang relevan'))}
-									{:else}
-										<p class="text-xs text-muted-foreground">{tr('Media ini tidak mengizinkan tautan dalam artikel.')}</p>
-									{/if}
-								</div>
-
-								<!-- 4. Instruksi tambahan -->
-								<div class="mt-5">
-									<div class="flex flex-wrap items-baseline justify-between gap-2">
-										<span class="text-sm font-semibold">4. {tr('Instruksi Tambahan / Fokus Cerita')}</span>
-										<span class="text-[11px] text-muted-foreground">{tr('Opsional jika Copilot/Fakta sudah terisi')}</span>
+									<div class="mt-6">
+										{#if linkLimit > 0}
+											{@render linkEditor(' (Backlink)', tr('Disisipkan natural di paragraf yang relevan'))}
+										{:else}
+											<p class="text-xs text-muted-foreground">{tr('Media ini tidak mengizinkan tautan dalam artikel.')}</p>
+										{/if}
 									</div>
-									<div class="mt-2 flex items-center gap-2">
-										<span class="flex items-center gap-1.5">
-											<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika bias-up menyusul')}>
-												<LoaderCircle size={12} /> {tr('Malas Mikir? Racik dari Anchor')}
-											</button>
-											<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika contoh menyusul')}>
-												<Lightbulb size={12} /> {tr('Contoh')}
-											</button>
-										</span>
+
+									<!-- 4. Instruksi tambahan -->
+									<div class="mt-6">
+										<div class="flex flex-wrap items-baseline justify-between gap-2">
+											<span class="text-sm font-semibold">4. {tr('Instruksi Tambahan / Fokus Cerita')}</span>
+											<span class="text-[11px] text-muted-foreground">{tr('Opsional jika Copilot/Fakta sudah terisi')}</span>
+										</div>
+										<div class="mt-3 flex items-center gap-2">
+											<span class="flex items-center gap-1.5">
+												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika bias-up menyusul')}>
+													<LoaderCircle size={12} /> {tr('Malas Mikir? Racik dari Anchor')}
+												</button>
+												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika contoh menyusul')}>
+													<Lightbulb size={12} /> {tr('Contoh')}
+												</button>
+											</span>
+										</div>
+										<textarea
+											class="app-input mt-2 min-h-[120px] w-full resize-y text-sm"
+											placeholder={tr('Bahas tentang tren dan keunggulan penggunaan epoxy lantai pada bangunan modern (mulai dari ketahanan beban, estetika seamless, hingga kemudahan perawatan), lalu sisipkan tautan jasa epoxy lantai secara natural.')}
+											bind:value={fokusSisa}
+										></textarea>
 									</div>
-									<textarea
-										class="app-input mt-2 min-h-[120px] w-full resize-y text-sm"
-										placeholder={tr('Bahas tentang tren dan keunggulan penggunaan epoxy lantai pada bangunan modern (mulai dari ketahanan beban, estetika seamless, hingga kemudahan perawatan), lalu sisipkan tautan jasa epoxy lantai secara natural.')}
-										bind:value={fokusSisa}
-									></textarea>
-								</div>
 
-								<div class="mt-4 rounded-lg px-3 py-2 text-xs" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">
-									<p class="font-semibold">{tr('Mode Proper (Strict Grounding)')}</p>
-									<p class="mt-0.5 leading-relaxed">{tr('Seluruh klaim produk, fitur & kutipan dikunci 100% hanya dari Memori Copilot & Fakta Input.')}</p>
-								</div>
+									<div class="mt-6 rounded-lg px-3 py-2.5 text-xs" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">
+										<p class="font-semibold">{tr('Mode Proper (Strict Grounding)')}</p>
+										<p class="mt-1 leading-relaxed">{tr('Seluruh klaim produk, fitur & kutipan dikunci 100% hanya dari Memori Copilot & Fakta Input.')}</p>
+									</div>
 
-								<button class="app-btn app-btn-primary mt-4 w-full" type="button" disabled title={tr('Logika generate Proper menyusul')}>
-									<Sparkles size={15} /> {tr('Buat Draf dengan AI')} ({tr('Gaya')} {mediaType === 'blogger' ? tr('Media Blogger') : tr('Media Mainstream')})
-								</button>
-							</div>
+									<button class="app-btn app-btn-primary mt-3 w-full" type="button" disabled title={tr('Logika generate Proper menyusul')}>
+										<Sparkles size={15} /> {tr('Buat Draf dengan AI')} ({tr('Gaya')} {mediaType === 'blogger' ? tr('Media Blogger') : tr('Media Mainstream')})
+									</button>
+								</div>
 						{/if}
 					</div>
 				{/if}
