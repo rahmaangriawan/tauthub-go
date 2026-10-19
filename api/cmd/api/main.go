@@ -511,6 +511,8 @@ func run() error {
 			authed.Post("/partner/media/{mediaId}/blogger/test-connection", partnerDeps.MediaBloggerTest)
 
 			authed.Get("/partner/publications", partnerDeps.PublicationsList)
+			authed.Get("/partner/publications/unread-count", partnerDeps.PublicationsUnread)
+			authed.Post("/partner/publications/mark-seen", partnerDeps.PublicationsMarkSeen)
 			authed.Get("/partner/publications/{publicationId}", partnerDeps.PublicationGet)
 			authed.Post("/partner/publications/{publicationId}/approve", partnerDeps.PublicationApprove)
 			authed.Post("/partner/publications/{publicationId}/reject", partnerDeps.PublicationReject)

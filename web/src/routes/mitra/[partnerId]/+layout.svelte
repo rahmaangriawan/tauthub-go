@@ -18,6 +18,7 @@
 		} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, AUTH_EXPIRED_EVENT } from '$lib/auth';
  import { chatUnread, startChatUnreadPolling, stopChatUnreadPolling } from '$lib/chat/chat-unread.svelte';
+	import { pubsUnread, startPubsUnreadPolling, stopPubsUnreadPolling } from '$lib/partner/pubs-unread.svelte';
 	import { swr } from '$lib/swr-cache.svelte';
 	import { setPartnerUrlId } from '$lib/partner-url.svelte';
 	import AppShell from '$lib/components/app-shell.svelte';
@@ -91,11 +92,13 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		// Badge menu "Pesan" portal mitra.
 		const partnerIdNow = page.params.partnerId as string;
 		startChatUnreadPolling('/v1/partner');
+		startPubsUnreadPolling();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
 		return () => {
 			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 			stopChatUnreadPolling();
+			stopPubsUnreadPolling();
 		};
 	});
 
@@ -138,7 +141,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		{
 			label: i18n.t.nav_partner.group_media,
 			items: [
-				{ label: tr('Publikasi'), href: `${base}/publications`, icon: Newspaper, active: isActive(`${base}/publications`) },
+				{ label: tr('Publikasi'), href: `${base}/publications`, icon: Newspaper, active: isActive(`${base}/publications`), badge: pubsUnread.count },
 				{ label: tr('Daftar Media'), href: `${base}/media`, icon: ScrollText, active: isActive(`${base}/media`) },
 				{ label: i18n.t.nav_partner.link_monitor, href: `${base}/link-monitor`, icon: TriangleAlert, active: isActive(`${base}/link-monitor`) },
 				{ label: i18n.t.nav_partner.crawler, href: `${base}/crawler`, icon: Server, active: isActive(`${base}/crawler`) }

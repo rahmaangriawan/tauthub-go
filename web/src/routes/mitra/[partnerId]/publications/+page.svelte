@@ -13,6 +13,7 @@
 	import RichTextEditor from '$lib/components/rich-text-editor.svelte';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { sanitizeHtml } from '$lib/sanitize-html';
+	import { markPubSeen, refreshPubsUnreadNow } from '$lib/partner/pubs-unread.svelte';
 
 	type Pub = {
 		id: string; order_code: string | null; status: string; client_name: string | null;
@@ -116,6 +117,10 @@
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
 			ready = true;
+			// Publikasi baru menyalakan badge merah di menu; membuka halaman ini
+			// dihitung sudah dibaca (angka hilang), publikasi lain menyalakannya lagi.
+			void markPubSeen();
+			void refreshPubsUnreadNow();
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
