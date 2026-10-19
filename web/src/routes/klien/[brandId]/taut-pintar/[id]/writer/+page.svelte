@@ -1392,10 +1392,7 @@
 								<span class="truncate">{campaignName}</span>
 							</span>
 						{/if}
-						<span class="inline-flex items-center gap-1.5 rounded-[5px] border border-emerald-200/80 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-700 shadow-2xs" title={tr('Saldo Anda')}>
-							<Wallet size={13} class="shrink-0 text-emerald-600" />
-							<span>{toRp(wallet)}</span>
-						</span>
+	
 					</div>
 				</div>
 			</div>
