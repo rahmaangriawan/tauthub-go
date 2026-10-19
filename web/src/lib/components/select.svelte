@@ -62,12 +62,12 @@
 	let trigger = $state<HTMLButtonElement | null>(null);
 	let menu = $state<HTMLDivElement | null>(null);
 	let searchInput = $state<HTMLInputElement | null>(null);
-	let pos = $state({ left: 0, top: 0, width: 0 });
+	let pos = $state({ left: 0, width: 0 });
+	let menuTop = $state(0);
 	let placement = $state<'down' | 'up'>('down');
 	let menuHeight = $state(0);
 	let activeIndex = $state(-1);
 	let query = $state('');
-	let measured = $state(false);
 	// Mode "populer": default hanya menampilkan N opsi teratas; tombol di
 	// bawah menu membuka seluruh daftar. Pencarian selalu mencari ke SEMUA opsi.
 	let showAll = $state(false);
@@ -81,34 +81,40 @@
 	);
 	const popularMode = $derived(popularCount > 0 && !searching);
 	const visible = $derived(popularMode && !showAll ? matches.slice(0, popularCount) : matches);
+	// Kartu butuh ruang jauh lebih tinggi daripada baris biasa, jadi batasnya
+	// mengikuti tinggi layar. Ruang di atas/bawah trigger tetap jadi pembatas
+	// akhir, sehingga menu tidak pernah melewati tepi layar.
+	let heightLimit = $state(340);
 
 	function openMenu() {
 		if (!trigger) return;
+		heightLimit = card ? window.innerHeight - 16 : menuMaxHeight;
 		const rect = trigger.getBoundingClientRect();
 		const width = minWidth > 0 ? Math.max(minWidth, rect.width) : rect.width;
 		const maxLeft = Math.max(8, window.innerWidth - width - 8);
 		const left = align === 'end' ? Math.max(8, rect.right - width) : Math.min(rect.left, maxLeft);
-		// Perkirakan tinggi menu dulu (dibatasi menuMaxHeight) supaya tahu apakah
+		// Perkirakan tinggi menu dulu (dibatasi heightLimit) supaya tahu apakah
 		// muat ke bawah. Bila tidak muat dan ruang di atas lebih lapang, menu
 		// dibuka KE ATAS (drop-up) agar bagian bawah tidak terpotong layar.
 		const gap = 4;
 		const searchHeight = searchable ? 44 : 0;
 		const listLen = popularCount > 0 ? Math.min(popularCount, options.length) : options.length;
-		const estimated = Math.min(listLen * 34 + 12 + searchHeight + (popularCount > 0 ? 40 : 0), menuMaxHeight);
+		const rowHeight = card ? 90 : 34;
+		const estimated = Math.min(listLen * rowHeight + 12 + searchHeight + (popularCount > 0 ? 40 : 0), heightLimit);
 		const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
 		const spaceAbove = rect.top - gap - 8;
 		const placeUp = spaceBelow < estimated && spaceAbove > spaceBelow;
 		const available = Math.max(120, placeUp ? spaceAbove : spaceBelow);
 		placement = placeUp ? 'up' : 'down';
 		menuHeight = Math.min(estimated, available);
-		pos = { left, top: placeUp ? rect.top - gap - menuHeight : rect.bottom + gap, width };
+		pos = { left, width };
+		menuTop = placeUp ? rect.top - gap - menuHeight : rect.bottom + gap;
 		query = '';
 		showAll = false;
 		activeIndex = Math.max(
 			0,
 			visible.findIndex((o) => o.value === value)
 		);
-		measured = false;
 		open = true;
 	}
 
@@ -116,29 +122,41 @@
 		open = false;
 	}
 
-	// Koreksi posisi setelah menu ter-render: tinggi nyata bisa berbeda dari
-	// perkiraan (label panjang, kolom pencarian, footer), jadi flip up/down
-	// diputuskan ulang dari hasil ukur. Sekali per pembukaan agar tidak berulang.
+	// Tinggi alami isi menu, dihitung dari anak-anaknya. `scrollHeight` tidak
+	// bisa dipakai: saat isi lebih pendek dari menu ia ikut tinggi menu, jadi
+	// menu tidak pernah menyusut. `getBoundingClientRect` juga tidak akurat
+	// untuk footer sticky, karena posisinya bergeser dari alur normal.
+	function contentHeight(el: HTMLElement) {
+		const pad = parseFloat(getComputedStyle(el).paddingTop) + parseFloat(getComputedStyle(el).paddingBottom);
+		let total = pad;
+		for (const child of el.children) {
+			const s = getComputedStyle(child);
+			total += (child as HTMLElement).offsetHeight + parseFloat(s.marginTop) + parseFloat(s.marginBottom);
+		}
+		return total;
+	}
+
+	// Tinggi dan arah buka dihitung ulang setiap isi menu berubah (buka/tutup
+	// daftar penuh, pencarian). Dengan begitu "Lihat semua" memanjang mengikuti
+	// jumlah kartu — atau membuka ke atas bila ruang di bawah tidak cukup —
+	// bukan mempertahankan tinggi daftar populer yang pendek.
 	$effect(() => {
-		if (!open || !menu || !trigger || measured) return;
+		if (!open || !menu || !trigger) return;
+		// Dependensi reaktif: isi menu berubah.
+		void showAll;
+		void query;
+		void visible.length;
 		const rect = trigger.getBoundingClientRect();
 		const gap = 4;
-		const natural = menu.scrollHeight + 10;
+		const wanted = Math.min(contentHeight(menu), heightLimit);
 		const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
 		const spaceAbove = rect.top - gap - 8;
-		const wanted = Math.min(natural, menuMaxHeight);
 		const placeUp = spaceBelow < wanted && spaceAbove > spaceBelow;
 		const available = Math.max(120, placeUp ? spaceAbove : spaceBelow);
 		const height = Math.min(wanted, available);
 		placement = placeUp ? 'up' : 'down';
 		menuHeight = height;
-
-		const menuW = menu.offsetWidth;
-		const maxLeft = Math.max(8, window.innerWidth - menuW - 8);
-		const left = align === 'end' ? Math.max(8, rect.right - menuW) : Math.min(rect.left, maxLeft);
-
-		pos = { left, top: placeUp ? rect.top - gap - height : rect.bottom + gap, width: pos.width };
-		measured = true;
+		menuTop = placeUp ? rect.top - gap - height : rect.bottom + gap;
 	});
 
 	function pick(option: SelectOption) {
@@ -268,7 +286,7 @@
 		role="listbox"
 		aria-label={ariaLabel}
 		tabindex="-1"
-		style="left: {pos.left}px; top: {pos.top}px; min-width: {pos.width}px; width: {minWidth === 0 ? 'max-content' : 'auto'}; max-width: min(92vw, {card ? '1200px' : '360px'}, calc(100vw - {pos.left}px - 8px)); max-height: {menuHeight > 0 ? `${menuHeight}px` : `${menuMaxHeight}px`}; {placement === 'up' && menuHeight > 0 ? `height: ${menuHeight}px;` : ''}"
+		style="left: {pos.left}px; top: {menuTop}px; min-width: {pos.width}px; width: {minWidth === 0 ? 'max-content' : 'auto'}; max-width: min(92vw, {card ? '1200px' : '360px'}, calc(100vw - {pos.left}px - 8px)); max-height: {menuHeight > 0 ? `${menuHeight}px` : `${heightLimit}px`}; {placement === 'up' && menuHeight > 0 ? `height: ${menuHeight}px;` : ''}"
 		onkeydown={onMenuKeydown}
 	>
 		{#if searchable}
@@ -456,6 +474,12 @@
 	}
 	/* Drop-up: dibuka ke atas saat ruang di bawah tidak cukup. Animasi dan
 	   titik asal transform dibalik supaya arah geraknya konsisten. */
+	/* Menu adalah flex-column yang bisa digulir. Tanpa flex-shrink:0, anak-anak
+	   menu ikut mengempis saat isinya melebihi tinggi menu — kartu terlihat
+	   terpotong walau seharusnya cukup digulir. */
+	.zs-select-menu > * {
+		flex: 0 0 auto;
+	}
 	.zs-select-menu-up {
 		transform-origin: bottom center;
 		animation-name: zsSelectInUp;
