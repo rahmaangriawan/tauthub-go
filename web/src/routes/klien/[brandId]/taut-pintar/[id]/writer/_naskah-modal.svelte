@@ -122,7 +122,7 @@
 	const GEN_STAGES = [
 		{ key: 'send', label: 'Mengirim permintaan', desc: 'Permintaan generate dikirim ke AI Writer.' },
 		{ key: 'wait', label: 'Menunggu respons AI', desc: 'AI sedang menulis artikel sesuai topik dan angle yang kamu pilih.' },
-		{ key: 'process', label: 'Memproses hasil', desc: 'Draf tersimpan diambil dan disiapkan di tab Tulis / Edit.' }
+		{ key: 'process', label: 'Memproses hasil', desc: 'Draf tersimpan diambil dan disiapkan di tab Editor Post.' }
 	] as const;
 	const genStagePct = $derived.by(() => {
 		if (genOutcome === 'success') return 100;
@@ -720,7 +720,7 @@
 				genNotice = tr('Gambar isi dibuat otomatis') + `: ${hasil.imagesGenerated}` + (kredit > 0 ? ` (${kredit} ${tr('kredit')})` : '') + '.';
 			}
 			// Respons generate tidak memuat HTML, jadi ambil draf tersimpan agar
-			// editor langsung terisi dan tab berpindah ke Tulis / Edit.
+			// editor langsung terisi dan tab berpindah ke Editor Post.
 			const draf = await fetchSavedArticle();
 			if (hasil.html && hasil.html.trim()) {
 				html = hasil.html;
@@ -829,7 +829,7 @@
 				{#each [
 					{ key: 'unggah', label: tr('Unggah Dokumen') },
 					{ key: 'generate', label: tr('Generate dengan AI') },
-					{ key: 'tulis', label: tr('Tulis / Edit') }
+					{ key: 'tulis', label: tr('Editor Post') }
 				] as t (t.key)}
 						<button
 							class="relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors"
@@ -1311,7 +1311,7 @@
 														{genOutcome === 'error'
 															? genError
 															: genOutcome === 'success'
-																? tr('Draf siap ditinjau di tab Tulis / Edit.')
+																? tr('Draf siap ditinjau di tab Editor Post.')
 																: tr('Proses ini berjalan di server AI. Kamu bisa menunggu di halaman ini — draf akan muncul otomatis setelah selesai.')}
 													</p>
 												</div>
@@ -1367,7 +1367,7 @@
 							{/if}
 
 							<p class="mt-2 text-xs text-muted-foreground">
-								{tr('Draf akan tampil di tab Tulis / Edit untuk kamu tinjau sebelum disimpan.')}
+								{tr('Draf akan tampil di tab Editor Post untuk kamu tinjau sebelum disimpan.')}
 							</p>
 						</div>
 					</div>
