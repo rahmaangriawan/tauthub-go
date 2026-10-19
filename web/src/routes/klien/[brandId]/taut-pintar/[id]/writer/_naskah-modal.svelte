@@ -102,6 +102,7 @@
 	let faktaTerkunci = $state('');
 	let kotaRilis = $state('');
 	let narasumber = $state('');
+	let kutipanNarasumber = $state('');
 	let fokusSisa = $state('');
 	let title = $state(untrack(() => initialTitle));
 	let html = $state(untrack(() => initialHtml));
@@ -1446,6 +1447,15 @@
 										<label class="block">
 											<span class="text-xs font-semibold text-muted-foreground">{tr('Nama & Jabatan Narasumber Kutipan')}</span>
 											<input class="app-input mt-1 w-full text-sm" placeholder="Budi Santoso, CEO Tuathub Indonesia" bind:value={narasumber} />
+										</label>
+										<label class="block sm:col-span-2">
+											<span class="text-xs font-semibold text-muted-foreground">{tr('Isi Kutipan (Apa Adanya)')}</span>
+											<textarea
+												rows="3"
+												class="app-input mt-1 w-full resize-y text-sm"
+												placeholder={tr('Pernyataan yang diketik AI pakai persis seperti tulisanmu — tanpa menambah kutipan fiktif.')}
+												bind:value={kutipanNarasumber}
+											></textarea>
 										</label>
 										</div>
 									</div>

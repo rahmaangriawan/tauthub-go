@@ -4185,6 +4185,8 @@ export const PHRASE_EN: Record<string, string> = {
 	"Opsional • Cegah Kutipan Fiktif": "Optional • Prevents fictional quotes",
 	"Kota Rilis (Dateline)": "Release City (dateline)",
 	"Nama & Jabatan Narasumber Kutipan": "Spokesperson Name & Title",
+	"Isi Kutipan (Apa Adanya)": "Spokesperson Quote (as written)",
+	"Pernyataan yang diketik AI pakai persis seperti tulisanmu — tanpa menambah kutipan fiktif.": "The AI will use this statement exactly as you wrote it — no invented quotes added.",
 	"Pagar Pembatas AI (Aktif Otomatis)": "AI Guardrails (Active by default)",
 	"Klik chip untuk ubah": "Click a chip to toggle",
 	"Jangan Karang Angka / Harga": "No invented numbers / prices",
