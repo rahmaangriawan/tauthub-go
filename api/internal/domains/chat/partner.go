@@ -7,7 +7,8 @@ import (
 )
 
 // PartnerThreadsList: GET /v1/partner/chat/threads
-// Semua forum milik media partner ini (klien yang mengajak bicara).
+// Forum milik media partner ini, hanya yang sudah dipakai klien (ada pesan
+// pertama) — forum yang masih kosong tak ada gunanya muncul di sisi mitra.
 func (d *Deps) PartnerThreadsList(w http.ResponseWriter, r *http.Request) {
 	user := authUser(r)
 	if user == nil {
@@ -20,7 +21,7 @@ func (d *Deps) PartnerThreadsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := d.queryRows(r.Context(),
-		threadListSelect+" WHERE t.partner_id = $2 ORDER BY COALESCE(t.last_message_at, t.created_at) DESC LIMIT 200",
+		threadListSelect+" WHERE t.partner_id = $2 AND t.started_at IS NOT NULL ORDER BY COALESCE(t.last_message_at, t.created_at) DESC LIMIT 200",
 		"partner", partner.ID)
 	if err != nil {
 		writeErr(w, err)
