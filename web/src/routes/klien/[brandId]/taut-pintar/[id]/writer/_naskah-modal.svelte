@@ -1636,19 +1636,17 @@
 
 									<!-- 4. Instruksi tambahan -->
 									<div class="mt-6">
-										<div class="flex flex-wrap items-baseline justify-between gap-2">
+										<div class="flex flex-wrap items-center justify-between gap-2">
 											<span class="text-sm font-semibold">4. {tr('Instruksi Tambahan / Fokus Cerita')}</span>
-											<span class="text-[11px] text-muted-foreground">{tr('Opsional jika Copilot/Fakta sudah terisi')}</span>
-										</div>
-										<div class="mt-3 flex items-center gap-2">
-											<span class="flex items-center gap-1.5">
+											<span class="flex flex-wrap items-center gap-2">
+												<span class="text-[11px] text-muted-foreground">{tr('Opsional jika Copilot/Fakta sudah terisi')}</span>
 												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika contoh menyusul')}>
 													<Lightbulb size={12} /> {tr('Contoh')}
 												</button>
 											</span>
 										</div>
 										<textarea
-											class="app-input mt-2 min-h-[120px] w-full resize-y text-sm"
+											class="app-input mt-3 min-h-[120px] w-full resize-y text-sm"
 											placeholder={tr('Bahas tentang tren dan keunggulan penggunaan epoxy lantai pada bangunan modern (mulai dari ketahanan beban, estetika seamless, hingga kemudahan perawatan), lalu sisipkan tautan jasa epoxy lantai secara natural.')}
 											bind:value={fokusSisa}
 										></textarea>
