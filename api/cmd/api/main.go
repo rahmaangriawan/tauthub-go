@@ -706,6 +706,7 @@ func run() error {
 			authed.Post("/platform/operations/dead-letters/{id}/retry", platformDeps.OperationsDeadLetterRetry)
 			authed.Get("/platform/operations/errors", platformDeps.OperationsErrors)
 			authed.Put("/platform/operations/generation-switch", platformDeps.OperationsGenerationSwitch)
+			authed.Get("/platform/operations/queue-alerts", platformDeps.OperationsQueueAlerts)
 			authed.Get("/platform/operations/notifications", platformDeps.OperationsNotifications)
 			authed.Get("/platform/operations/publications", platformDeps.OperationsPublications)
 			authed.Get("/platform/operations/publications/{publicationId}", platformDeps.OperationsPublicationDetail)

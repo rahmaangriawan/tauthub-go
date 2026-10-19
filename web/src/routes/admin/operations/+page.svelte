@@ -22,6 +22,12 @@
 		total_items: number;
 		updated_at: string;
 	};
+	type QueueAlert = {
+		kind: string;
+		failures: number;
+		last_at: string;
+		last_error: string;
+	};
 	type Dead = {
 		id: string;
 		batch_name: string;
@@ -41,8 +47,9 @@
 	let summary = $state<Summary | null>(null);
 	let batches = $state<Batch[]>([]);
 	let dead = $state<Dead[]>([]);
+	let queue = $state<QueueAlert[]>([]);
 	let busyId = $state('');
-	let tab = $state<'alerts' | 'batches' | 'dead'>('alerts');
+	let tab = $state<'alerts' | 'batches' | 'dead' | 'queue'>('alerts');
 	let batchOffset = $state(0);
 	let deadOffset = $state(0);
 
@@ -79,10 +86,11 @@
 
 	async function load() {
 		error = '';
-		const [summaryRes, batchRes, deadRes] = await Promise.all([
+		const [summaryRes, batchRes, deadRes, queueRes] = await Promise.all([
 			get<Summary>('/operations/summary'),
 			get<Batch[]>('/operations/running-batches'),
-			get<Dead[]>('/operations/dead-letters')
+			get<Dead[]>('/operations/dead-letters'),
+			get<{ items: QueueAlert[] }>('/operations/queue-alerts')
 		]);
 		if (!summaryRes.ok) {
 			error = summaryRes.error;
@@ -91,6 +99,7 @@
 		summary = summaryRes.data;
 		batches = batchRes.ok ? batchRes.data : [];
 		dead = deadRes.ok ? deadRes.data : [];
+		queue = queueRes.ok ? queueRes.data.items : [];
 	}
 
 	async function retry(item: Dead) {
@@ -143,6 +152,11 @@
 				type="button"
 				onclick={() => (tab = 'dead')}
 			>Dead letters ({dead.length})</button>
+			<button
+				class="app-btn {tab === 'queue' ? 'app-btn-primary' : 'app-btn-soft'} !min-h-8 !px-3 !text-xs"
+				type="button"
+				onclick={() => (tab = 'queue')}
+			>Queue gagal ({queue.reduce((n, q) => n + q.failures, 0)})</button>
 		</div>
 
 		{#if tab === 'alerts'}
@@ -238,6 +252,34 @@
 				{/if}
 			</div>
 			<Pagination total={dead.length} limit={PAGE_SIZE} offset={deadOffset} onChange={(v) => (deadOffset = v)} />
+		{/if}
+
+		{#if tab === 'queue'}
+			<div class="app-card mt-3 overflow-x-auto">
+				<table class="w-full text-sm" style="min-width: 760px;">
+					<thead>
+						<tr class="text-xs text-muted-foreground">
+							<th class="px-4 py-2.5 text-left font-medium">{tr('Jenis Job')}</th>
+							<th class="px-4 py-2.5 text-left font-medium">{tr('Kegagalan (24 jam)')}</th>
+							<th class="px-4 py-2.5 text-left font-medium">{tr('Terakhir')}</th>
+							<th class="px-4 py-2.5 text-left font-medium">{tr('Error terakhir')}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each queue as item (item.kind)}
+							<tr class="border-t">
+								<td class="px-4 py-2.5 font-medium">{item.kind}</td>
+								<td class="px-4 py-2.5 tabular-nums">{item.failures}</td>
+								<td class="px-4 py-2.5 whitespace-nowrap">{fmtDateTime(item.last_at)}</td>
+								<td class="max-w-[520px] px-4 py-2.5"><span class="block truncate" title={item.last_error}>{item.last_error || '—'}</span></td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+				{#if queue.length === 0}
+					<p class="px-4 py-10 text-center text-sm text-muted-foreground">{tr('Tidak ada kegagalan queue dalam 24 jam terakhir.')}</p>
+				{/if}
+			</div>
 		{/if}
 	{/if}
 </section>

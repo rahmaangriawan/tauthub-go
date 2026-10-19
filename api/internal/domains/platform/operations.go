@@ -117,6 +117,16 @@ func (d *Deps) OperationsSummary(w http.ResponseWriter, r *http.Request) {
 	if deadLetterItems > 0 {
 		alerts = append(alerts, fmt.Sprintf("%d item berada di dead letter", deadLetterItems))
 	}
+	// Satu peringatan agregat untuk kegagalan queue 24 jam — detailnya di tab
+	// "Queue gagal"; jangan satu alert per kegagalan.
+	if qRow, qErr := d.queryRow(ctx,
+		"SELECT COUNT(*) AS failures, COUNT(DISTINCT kind) AS kinds FROM jobs WHERE status = 'failed' AND updated_at > $1", day); qErr == nil && qRow != nil {
+		failures := int(qRow.numOr("failures"))
+		kinds := int(qRow.numOr("kinds"))
+		if failures > 0 {
+			alerts = append(alerts, fmt.Sprintf("%d kegagalan queue dalam 24 jam (%d jenis job) — lihat tab Queue gagal", failures, kinds))
+		}
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"generation_disabled": disabled, "provider": provider, "provider_configured": configured,
@@ -1365,14 +1375,6 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	queue, err := d.queryRows(ctx,
-		`SELECT id, kind, last_error, updated_at FROM jobs
-		 WHERE status = 'failed' AND updated_at > `+opNotificationWindow+`
-		 ORDER BY updated_at DESC LIMIT 20`)
-	if err != nil {
-		writeErr(w, d, err)
-		return
-	}
 	pendingMedia, err := d.queryRow(ctx,
 		"SELECT COUNT(*) AS count, MAX(updated_at) AS updated_at FROM media WHERE status = 'pending_review'")
 	if err != nil {
@@ -1440,17 +1442,9 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 			Body: body, Link: "/admin/rss-feeds", ReadAt: nil, CreatedAt: row.strOr("updated_at", ""),
 		})
 	}
-	for _, raw := range queue {
-		row := ptRow(ptNormalizeMap(raw))
-		body := row.strOr("kind", "job")
-		if errMsg, okString := row.str("last_error"); okString {
-			body += ": " + opTruncate(errMsg, 160)
-		}
-		items = append(items, opNotifItem{
-			ID: "queue-" + row.strOr("id", ""), Type: "queue.failed", Title: "Queue job gagal",
-			Body: body, Link: "/admin/operations", ReadAt: nil, CreatedAt: row.strOr("updated_at", ""),
-		})
-	}
+	// Queue sengaja TIDAK dimasukkan ke lonceng: kegagalan job berulang
+	// dianggap bising. Pantauannya ada di halaman Operations (tab "Queue
+	// gagal", dikelompokkan per kind) dan satu ringkasan di daftar alerts.
 	// Riwayat notifikasi admin dari tabel notifications (semua tipe, 7 hari).
 	// Tanpa ini lonceng admin hanya menampilkan masalah "saat ini" dari feed
 	// sintetis dan tidak punya riwayat sama sekali.
@@ -1492,6 +1486,35 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"notifications": items, "unread": unread})
+}
+
+// OperationsQueueAlerts: GET /v1/platform/operations/queue-alerts
+// Log kegagalan job queue 24 jam terakhir, dikelompokkan per kind — halaman
+// Operations menampilkan seluruhnya; lonceng hanya 1 peringatan per kind.
+func (d *Deps) OperationsQueueAlerts(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := d.adminGuard(w, r, ""); !ok {
+		return
+	}
+	rows, err := d.queryRows(r.Context(),
+		`SELECT DISTINCT ON (kind) kind, updated_at AS last_at, last_error,
+		        count(*) OVER (PARTITION BY kind) AS failures
+		 FROM jobs WHERE status = 'failed' AND updated_at > `+opNotificationWindow+`
+		 ORDER BY kind, updated_at DESC`)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(rows))
+	for _, raw := range rows {
+		row := ptRow(ptNormalizeMap(raw))
+		items = append(items, map[string]any{
+			"kind":       row.strOr("kind", ""),
+			"failures":   int(row.numOr("failures")),
+			"last_at":    row.strOr("last_at", ""),
+			"last_error": row.strOr("last_error", ""),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 // sortNotificationsDesc: urutkan feed menurun berdasarkan created_at (ISO).
