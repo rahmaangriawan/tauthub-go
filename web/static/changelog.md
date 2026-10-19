@@ -19,6 +19,24 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.5.6 — 2026-10-20
+
+### Fitur
+- **Obrolan langsung dengan mitra per artikel**: tombol "Hubungi" di Ringkasan Distribusi membuka ruang obrolan khusus untuk artikel itu — satu halaman tiga kolom berisi daftar percakapan, ruang pesan, dan info media/artikel. Sesi berlaku 3×24 jam sejak pesan pertama; setelah berakhir riwayat tetap bisa dibaca. Sebelum masuk, ada konfirmasi ketentuan ruang obrolan dengan ceklis persetujuan.
+- **Menu "Pesan" di portal klien dan mitra**, lengkap dengan pencarian percakapan, tab Semua/Aktif/Selesai, penanda pesan belum dibaca, dan badge merah berisi jumlah pesan baru di sidebar.
+- **Badge "Publikasi" untuk mitra**: begitu ada publikasi baru untuk medianya, menu Publikasi menampilkan angka merah; membuka halaman Publikasi menandai semuanya sudah dibaca dan angkanya hilang.
+- **Kartu "Pesan" di dashboard mitra** menampilkan jumlah chat klien yang belum dibaca dan langsung menuju ruang obrolan.
+
+### Perbaikan
+- **Penghasilan mitra**: potongan platform kini **25%** — mitra menerima 75% dari harga pengajuan, sesuai aturan yang juga tertulis di halaman Media. Sebelumnya perhitungan memakai 5%. Berlaku untuk earning baru.
+- **Kartu media di Dapur Produksi** hanya melaporkan jenis tautan yang benar-benar ada: artikel dengan 1 link dofollow tidak lagi menampilkan "0 Nofollow"; artikel tanpa link tetap ditandai "0 Tautan".
+- **Popup Cek Validasi** dirapikan menjadi kartu indikator dua kolom dengan chip status berwarna.
+
+### Tampilan
+- Tabel Media Terpilih di Ringkasan Distribusi dirapikan: header bersih, baris lebih lega, logo media, serta tombol Lihat dan Hubungi berbingkai.
+- **Pengelola Naskah**: lebih lebar, header menampilkan domain media (huruf depan kapital) dengan favicon, dan hanya tab yang relevan yang muncul sesuai pintu masuk — dari Generate Konten tampil AI + Editor, dari Unggah Artikel tampil Unggah + Editor.
+- Tombol aksi kartu media kini berupa ikon dengan tooltip di atas saat hover, bukan melebar.
+
 ## v0.5.5 — 2026-10-16
 
 ### Fitur
