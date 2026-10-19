@@ -1438,15 +1438,17 @@
 				{/snippet}
 						{#if gayaArtikel === 'simpel'}
 						<div class="mt-6 w-full text-left">
-							<div class="mb-6 min-w-0">
-									<div class="flex items-start gap-3">
-										{@render numBadge('2')}
-										<span class="text-sm font-semibold">{tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
-									</div>
-									{#if angleChannelName}
-										<p class="mt-1 break-words pl-[52px] text-xs text-muted-foreground">{tr(angleChannelName)}</p>
-									{/if}
-									<div class="angle-field mt-2">
+								<div class="mb-6 min-w-0">
+										<div class="flex items-start gap-3">
+											{@render numBadge('2')}
+											<div class="min-w-0">
+												<p class="text-sm font-semibold">{tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></p>
+												{#if angleChannelName}
+													<p class="mt-0.5 break-words text-xs text-muted-foreground">{tr(angleChannelName)}</p>
+												{/if}
+											</div>
+										</div>
+										<div class="angle-field mt-2">
 										<Select
 											ariaLabel={tr('Angle Artikel')}
 											bind:value={angleSlug}
@@ -1567,15 +1569,17 @@
 						{:else}
 					<!-- PANE "YANG PROPER": isian berbeda dari Sederhana — grounding ke Copilot & fakta. -->
 							<div class="mt-6 w-full text-left">
-								<div class="min-w-0">
-									<div class="flex items-start gap-3">
-										{@render numBadge('2')}
-										<span class="text-sm font-semibold">{tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
-									</div>
-									{#if angleChannelName}
-										<p class="mt-1 break-words pl-[52px] text-xs text-muted-foreground">{tr(angleChannelName)}</p>
-									{/if}
-									<div class="angle-field mt-2">
+									<div class="min-w-0">
+										<div class="flex items-start gap-3">
+											{@render numBadge('2')}
+											<div class="min-w-0">
+												<p class="text-sm font-semibold">{tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></p>
+												{#if angleChannelName}
+													<p class="mt-0.5 break-words text-xs text-muted-foreground">{tr(angleChannelName)}</p>
+												{/if}
+											</div>
+										</div>
+										<div class="angle-field mt-2">
 										<Select
 											ariaLabel={tr('Angle Artikel')}
 											bind:value={angleSlug}
