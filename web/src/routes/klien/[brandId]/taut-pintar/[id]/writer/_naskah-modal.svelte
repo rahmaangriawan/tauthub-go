@@ -868,7 +868,7 @@
 		{/if}
 
 	{#snippet linkEditor()}
-		<div class="mt-4 w-full rounded-xl border p-3 text-left" style="border-color: var(--border); background-color: var(--muted);">
+		<div class="mt-4 w-full rounded-xl border p-3 text-left" style="border-color: var(--border); background-color: var(--card, #fff);">
 			<div class="flex items-center justify-between gap-2">
 				<p class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
 					3. <Link2 size={13} /> {tr('Tautan & Anchor (Opsional)')}
@@ -884,7 +884,7 @@
 				{tr('AI menyisipkan tautan ini secara natural pada bagian yang relevan. Isi anchor dan URL secara berpasangan.')}
 			</p>
 			{#if linkRows.length === 0}
-				<p class="mt-3 rounded-lg border border-dashed px-3 py-4 text-center text-xs text-muted-foreground" style="border-color: var(--border);">
+				<p class="mt-3 rounded-lg border border-dashed px-3 py-4 text-left text-xs text-muted-foreground" style="border-color: var(--border);">
 					{tr('Belum ada tautan')}
 				</p>
 			{:else}
