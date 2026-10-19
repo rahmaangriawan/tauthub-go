@@ -708,7 +708,12 @@
 	// milih brief mana yang jadi sumbernya, lalu tombol Tarik mengisi kotak
 	// fakta dari nilai tersimpan brief tersebut — tanpa teks tetap di UI.
 	const profilerBase = $derived(`/v1/brands/${brandId}/profiler`);
+	// Alamat halaman Profiler untuk tombol di peringatan — dibuka tab baru
+	// supaya isi popup nggak hilang saat user menyiapkan brief-nya. Memakai
+	// brandId route (bukan cache brand global) agar selalu ke brand kampanye ini.
+	const profilerHref = $derived(`/klien/${brandId}/profiler`);
 	let copilotBriefs = $state<{ id: string; name: string }[]>([]);
+	let copilotBriefsLoaded = $state(false);
 	let copilotBriefId = $state('');
 	let copilotBriefName = $state('');
 	let copilotEntries = $state<{ key: string; label: string; value: string }[]>([]);
@@ -779,7 +784,7 @@
 	}
 
 	async function loadCopilotBriefs(): Promise<boolean> {
-		if (copilotBriefs.length > 0 || copilotBusy) return copilotBriefs.length > 0;
+		if (copilotBriefsLoaded || copilotBusy) return copilotBriefs.length > 0;
 		copilotBusy = true;
 		try {
 			const res = await apiRequest(`${profilerBase}/profiles`);
@@ -794,6 +799,7 @@
 			copilotError = reason instanceof Error ? reason.message : tr('Gagal memuat data Brief Copilot.');
 			return false;
 		} finally {
+			copilotBriefsLoaded = true;
 			copilotBusy = false;
 		}
 	}
@@ -828,7 +834,7 @@
 		copilotError = '';
 		if (!(await loadCopilotBriefs())) return;
 		if (copilotBriefs.length === 0) {
-			copilotError = tr('Belum ada Brief Copilot untuk brand ini — buat dulu di halaman Taut Brief.');
+			// Peringatan "belum ada brief" sudah tampil di strip seksi ini.
 			return;
 		}
 		if (!copilotBriefId || copilotLoadedBriefId !== copilotBriefId) {
@@ -1536,9 +1542,29 @@
 											{tr('Anti-Capek Ketik')}
 										</span>
 									</div>
-										<div class="mt-3 w-full max-w-[24rem]">
-											{#if copilotBriefs.length === 0 && !copilotBusy}
-												<p class="text-xs text-muted-foreground">{tr('Belum ada Brief Copilot untuk brand ini — buat dulu di halaman Taut Brief.')}</p>
+										<div class="mt-3 w-full">
+											{#if copilotBriefsLoaded && copilotBriefs.length === 0}
+												<!-- Peringatan: brand belum punya Brief Copilot (Profiler).
+												     Tombol membuka halaman Profiler di tab baru — isi
+												     popup tetap aman. -->
+												<div class="flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-xs" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">
+													<div class="flex min-w-0 items-start gap-2">
+														<CircleAlert size={14} class="mt-0.5 shrink-0" />
+														<div class="min-w-0">
+															<p class="font-semibold">{tr('Belum ada Brief Copilot untuk brand ini')}</p>
+															<p class="mt-0.5 leading-relaxed">{tr('Buat dulu Taut Brief-nya — setelah ada, fakta bisa ditarik otomatis ke sini.')}</p>
+														</div>
+													</div>
+													<a
+														href={profilerHref}
+														target="_blank"
+														rel="noopener noreferrer"
+														class="app-btn app-btn-soft !min-h-7 shrink-0 border px-2.5 text-[11px] font-semibold"
+														style="border-color: var(--warning);"
+													>
+														{tr('Buka Taut Brief')}
+													</a>
+												</div>
 											{:else}
 												<Select
 													ariaLabel={tr('Brief Copilot')}
