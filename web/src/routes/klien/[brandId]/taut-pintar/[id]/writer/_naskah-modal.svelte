@@ -1068,7 +1068,7 @@
 								<button class="app-btn app-btn-soft mt-2 w-full" type="button" disabled={!teksTempel.trim()} onclick={pakaiTeksTempel}>
 									{tr('Gunakan Teks Ini')}
 								</button>
-								<p class="mt-2 text-center text-xs leading-relaxed text-muted-foreground">
+								<p class="mt-2 text-left text-xs leading-relaxed text-muted-foreground">
 									{tr('Artikel akan 100% memakai dokumen yang kamu unggah — tanpa ditulis ulang oleh AI. Sistem tetap memeriksa tautan dan memvalidasi bahwa dokumen ini aman untuk diterbitkan.')}
 								</p>
 							</div>
