@@ -4,7 +4,7 @@
 	// artikel (cover, kategori, meta deskripsi) dan footer validasi.
 	// Reuse: rich-text-editor (toolbar + contentEditable), endpoint /files dan
 	// /produce/{mediaId} lewat callback dari writer, serta saveEditor di writer.
-	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, Info, Link2, Lightbulb, Plus , Zap, Crosshair, Plug , ShieldCheck, ShieldAlert } from '@lucide/svelte';
+	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, Info, Link2, Lightbulb, Plus , Zap, Crosshair, Plug  } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { tr } from '$lib/i18n/phrases';
 	import { apiRequest, readApiError } from '$lib/auth';
@@ -98,18 +98,11 @@
 	let racikBusy = $state(false);
 	let racikError = $state('');
 	// Isian Proper (UI dulu — logika generate menyusul): fakta terkunci,
-	// dateline & narasumber, dan chip pagarnya.
+	// dateline & narasumber.
 	let faktaTerkunci = $state('');
 	let kotaRilis = $state('');
 	let narasumber = $state('');
 	let fokusSisa = $state('');
-	let pagarAktif = $state<Record<string, boolean>>({ angka: true, fitur: true, kompetitor: true, nomor1: true });
-	const pagarChips = $derived([
-		{ key: 'angka', label: tr('Jangan Karang Angka / Harga'), on: pagarAktif.angka === true },
-		{ key: 'fitur', label: tr('Jangan Tambah Fitur Fiktif'), on: pagarAktif.fitur === true },
-		{ key: 'kompetitor', label: tr('Tanpa Sebut Kompetitor'), on: pagarAktif.kompetitor === true },
-		{ key: 'nomor1', label: tr('Hindari Klaim "Nomor 1 / Terbaik"'), on: pagarAktif.nomor1 === true }
-	]);
 	let title = $state(untrack(() => initialTitle));
 	let html = $state(untrack(() => initialHtml));
 	let cover = $state<string | null>(untrack(() => initialCoverUrl));
@@ -1454,29 +1447,10 @@
 											<span class="text-xs font-semibold text-muted-foreground">{tr('Nama & Jabatan Narasumber Kutipan')}</span>
 											<input class="app-input mt-1 w-full text-sm" placeholder="Budi Santoso, CEO Tuathub Indonesia" bind:value={narasumber} />
 										</label>
-									</div>
-
-									<div class="mt-3">
-										<p class="text-xs font-semibold">{tr('Pagar Pembatas AI (Aktif Otomatis)')}</p>
-										<p class="mt-0.5 text-[11px] text-muted-foreground">{tr('Klik chip untuk ubah')}</p>
-										<div class="mt-2 flex flex-wrap gap-2">
-											{#each pagarChips as chip (chip.key)}
-												<button
-													type="button"
-													class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors {chip.on
-														? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-														: 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}"
-													onclick={() => (pagarAktif = { ...pagarAktif, [chip.key]: !chip.on })}
-												>
-													{#if chip.on}<ShieldCheck size={12} />{:else}<ShieldAlert size={12} />{/if}
-													{chip.label}
-												</button>
-											{/each}
 										</div>
 									</div>
-								</div>
 
-								<!-- 3. Tautan & Anchor (Backlink) -->
+									<!-- 3. Tautan & Anchor (Backlink) -->
 								<div class="mt-5">
 									{#if linkLimit > 0}
 										{@render linkEditor(' (Backlink)', tr('Disisipkan natural di paragraf yang relevan'))}
