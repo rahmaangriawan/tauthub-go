@@ -10,11 +10,10 @@
 	// endpoint identik, hanya kontrol editnya lebih ringkas.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { Check, CircleCheck, ClipboardList, Clock, Database, Ellipsis, ExternalLink, Eye, Link as LinkIcon, Loader, LoaderCircle, Paperclip, RefreshCw, RotateCcw } from '@lucide/svelte';
+	import { Check, CircleCheck, ClipboardList, Clock, Database, Ellipsis, ExternalLink, Link as LinkIcon, Loader, LoaderCircle, RefreshCw, RotateCcw } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
-	import EditorModal from '../writer/_editor-modal.svelte';
 	import { MANUAL_PROFILER_REASON, rpCurrency, toJakartaDisplay } from '../../_shared';
 	import PageTitle from '$lib/components/page-title.svelte';
 
@@ -57,57 +56,6 @@
 	let error = $state('');
 	let manualFlow = $state(false);
 	let loading = $state(true);
-	let actionNotice = $state('');
-
-		// Dialog revisi & editor naskah.
-		type EditorMode = 'view' | 'edit_revision' | 'request_revision';
-		let editorMode = $state<EditorMode>('view');
-
-		// Menu aksi titik tiga per baris media
-		let activeMenuId = $state<string | null>(null);
-		const activeMenuMedia = $derived(data?.media.find((m) => m.media_id === activeMenuId) ?? null);
-		let menuRight = $state(0);
-		let menuTop = $state(0);
-		let menuBottom = $state<number | null>(null);
-		const menuPositionStyle = $derived(
-			menuBottom != null
-				? `right: ${menuRight}px; bottom: ${menuBottom}px;`
-				: `right: ${menuRight}px; top: ${menuTop}px;`
-		);
-
-		function toggleRowMenu(id: string, trigger: HTMLElement) {
-			if (activeMenuId === id) {
-				activeMenuId = null;
-				return;
-			}
-			const rect = trigger.getBoundingClientRect();
-			menuRight = Math.max(8, window.innerWidth - rect.right);
-			const spaceBelow = window.innerHeight - rect.bottom;
-			const spaceAbove = rect.top;
-			if (spaceBelow < 110 && spaceAbove > spaceBelow) {
-				menuBottom = Math.max(8, window.innerHeight - rect.top + 4);
-				menuTop = 0;
-			} else {
-				menuBottom = null;
-				menuTop = rect.bottom + 4;
-			}
-			activeMenuId = id;
-		}
-
-		function closeRowMenu() {
-			activeMenuId = null;
-		}
-
-		let revisionTarget = $state<{ publication_id: string | null; document_id: string | null; media_id: string; name: string; featured_image_url: string | null } | null>(null);
-		let revTitle = $state('');
-		let revHtml = $state('');
-		let revCover = $state<string | null>(null);
-		let revComment = $state('');
-		let revAttachment = $state<{ url: string; name: string } | null>(null);
-		let revLoading = $state(false);
-		let revUploading = $state(false);
-		let revSaving = $state(false);
-		let revError = $state('');
 
 	onMount(() => {
 		void (async () => {
@@ -141,135 +89,6 @@
 			error = tr('Gagal memuat ringkasan distribusi.');
 		} finally {
 			loading = false;
-		}
-	}
-
-	/* ─── Dialog revisi & pratinjau editor ─── */
-
-	async function openArticleModal(m: MediaItem, mode: EditorMode) {
-		editorMode = mode;
-		revisionTarget = {
-			publication_id: m.publication_id,
-			document_id: m.document_id,
-			media_id: m.media_id,
-			name: m.name,
-			featured_image_url: m.featured_image_url
-		};
-		revComment = '';
-		revAttachment = null;
-		revError = '';
-		revHtml = '';
-		revTitle = m.article.title;
-		revCover = m.featured_image_url;
-		if (!m.document_id) return;
-		revLoading = true;
-		try {
-			const res = await apiRequest(`/v1/brands/${brandId}/documents/${m.document_id}/html`);
-			if (!res.ok) throw new Error(tr('Gagal memuat isi artikel.'));
-			const d = await res.json();
-			revHtml = d.content ?? '';
-			if (!revTitle && typeof d.title === 'string') revTitle = d.title;
-		} catch (reason) {
-			revError = reason instanceof Error ? reason.message : tr('Gagal memuat isi artikel.');
-		} finally {
-			revLoading = false;
-		}
-	}
-
-	async function saveDocumentOnly() {
-		const target = revisionTarget;
-		if (!target?.document_id || revSaving) return;
-		revSaving = true;
-		revError = '';
-		try {
-			const saveRes = await apiRequest(`/v1/brands/${brandId}/documents/${target.document_id}`, {
-				method: 'PUT',
-				body: JSON.stringify({
-					title: revTitle,
-					content: revHtml,
-					featured_image_url: revCover ?? undefined
-				})
-			});
-			if (!saveRes.ok) throw new Error(await readApiError(saveRes, tr('Gagal menyimpan perubahan artikel.')));
-			revisionTarget = null;
-			actionNotice = tr('Perubahan artikel berhasil disimpan.');
-			await loadData();
-		} catch (reason) {
-			revError = reason instanceof Error ? reason.message : tr('Gagal menyimpan perubahan artikel.');
-		} finally {
-			revSaving = false;
-		}
-	}
-
-	async function uploadScreenshot(file: File) {
-		revUploading = true;
-		revError = '';
-		try {
-			const form = new FormData();
-			form.append('file', file);
-			const res = await apiRequest(`/v1/brands/${brandId}/assets`, { method: 'POST', body: form });
-			const d = await res.json().catch(() => null);
-			if (!res.ok || !d?.url) throw new Error(d?.detail ?? tr('Gagal mengunggah screenshot.'));
-			revAttachment = { url: d.url, name: file.name };
-		} catch (reason) {
-			revError = reason instanceof Error ? reason.message : tr('Gagal mengunggah screenshot.');
-		} finally {
-			revUploading = false;
-		}
-	}
-
-	// Unggah cover baru dari editor revisi; editor memakai nilai kembaliannya.
-	async function uploadRevisionCover(file: File): Promise<string> {
-		const form = new FormData();
-		form.append('file', file);
-		const res = await apiRequest(`/v1/brands/${brandId}/assets`, { method: 'POST', body: form });
-		const d = await res.json().catch(() => null);
-		if (!res.ok || !d?.url) throw new Error(d?.detail ?? tr('Gagal mengunggah cover.'));
-		return d.url as string;
-	}
-
-	async function submitRevision() {
-		const target = revisionTarget;
-		if (!target?.publication_id || revSaving) return;
-		const trimmed = revComment.trim();
-		if (trimmed.length < 5) {
-			revError = tr('Tuliskan komentar minimal 5 karakter supaya blogger tahu apa yang perlu diubah.');
-			return;
-		}
-		revSaving = true;
-		revError = '';
-		try {
-			// 1) Simpan hasil edit sebagai versi artikel baru (endpoint dokumen).
-			if (target.document_id) {
-				const saveRes = await apiRequest(`/v1/brands/${brandId}/documents/${target.document_id}`, {
-					method: 'PUT',
-					body: JSON.stringify({
-						content: revHtml,
-						title: revTitle,
-						content_format: 'html',
-						change_note: `Revisi klien: ${trimmed}`.slice(0, 255)
-					})
-				});
-				if (!saveRes.ok) throw new Error(await readApiError(saveRes, tr('Gagal menyimpan revisi artikel.')));
-			}
-			// 2) Catat komentar + lampiran, lalu teruskan ke blogger.
-			const res = await apiRequest(`/v1/brands/${brandId}/publications/${target.publication_id}/request-revision`, {
-				method: 'POST',
-				body: JSON.stringify({
-					comment: trimmed,
-					attachmentUrl: revAttachment?.url ?? null,
-					attachmentName: revAttachment?.name ?? null,
-					featuredImageUrl: revCover ?? null
-				})
-			});
-			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengirim revisi.')));
-			actionNotice = 'Revisi terkirim ke pemilik domain.';
-			revisionTarget = null;
-			await loadData();
-		} catch (reason) {
-			revError = reason instanceof Error ? reason.message : tr('Gagal mengirim revisi.');
-		} finally {
-			revSaving = false;
 		}
 	}
 
@@ -488,7 +307,6 @@
 								<th class="px-4 py-3">{tr("Jadwal Terbit")}</th>
 								<th class="px-4 py-3">Judul Artikel</th>
 								<th class="px-4 py-3">{tr("Status Terbit")}</th>
-								<th class="px-4 py-3 text-right">Aksi</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-slate-100 bg-white">
@@ -588,79 +406,12 @@
 											<span class="text-xs text-muted-foreground">—</span>
 										{/if}
 									</td>
-									<td class="px-4 py-3 text-right">
-										<div class="relative inline-flex items-center">
-											<button
-												type="button"
-												class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-2xs hover:bg-slate-50 hover:text-slate-800 transition-colors"
-												aria-haspopup="menu"
-												aria-expanded={activeMenuId === m.media_id}
-												aria-label={`${tr('Aksi untuk')} ${m.name}`}
-												onclick={(e) => {
-													e.stopPropagation();
-													toggleRowMenu(m.media_id, e.currentTarget as HTMLElement);
-												}}
-												>
-													<Ellipsis size={14} />
-												</button>
-											</div>
-										</td>
-									</tr>
+																		</tr>
 								{/each}
 							</tbody>
 						</table>
 					</div>
 
-					{#if activeMenuMedia}
-							{@const m = activeMenuMedia}
-							{@const isRevisionRequested = m?.publish?.status === 'revision'}
-							<button
-								type="button"
-								class="fixed inset-0 z-40 bg-transparent cursor-default"
-								aria-label={tr("Tutup menu")}
-								onclick={closeRowMenu}
-							></button>
-							<div
-								class="fixed z-50 w-44 rounded-xl border py-1 shadow-lg"
-								style="border-color: var(--border); background: var(--card, #fff); {menuPositionStyle}"
-								role="menu"
-								aria-label={tr('Menu aksi')}
-							>
-								<button
-									type="button"
-									role="menuitem"
-									class="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
-									disabled={!m.document_id}
-									title={!m.document_id ? tr('Artikel belum tersedia') : undefined}
-									onclick={() => {
-										const targetMedia = m;
-										closeRowMenu();
-										void openArticleModal(targetMedia, isRevisionRequested ? 'edit_revision' : 'view');
-									}}
-								>
-									<Eye size={13} class="shrink-0 text-muted-foreground" />
-									<span>{isRevisionRequested ? tr('Edit Artikel') : tr('Lihat / Edit')}</span>
-								</button>
-
-								<button
-									type="button"
-									role="menuitem"
-									class="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
-									disabled={!m.publication_id || !m.document_id}
-									title={!m.document_id ? tr('Artikel belum tersedia') : !m.publication_id ? tr('Publikasi belum diajukan') : undefined}
-									onclick={() => {
-										const targetMedia = m;
-										closeRowMenu();
-										void openArticleModal(targetMedia, 'request_revision');
-									}}
-								>
-									<RotateCcw size={13} class="shrink-0 text-muted-foreground" />
-									<span>{tr('Ajukan Revisi')}</span>
-								</button>
-							</div>
-						{/if}
-
-				{#if actionNotice}<p class="mt-3 text-sm" style="color: var(--success);">{actionNotice}</p>{/if}
 			{:else}
 				<p class="mt-3 text-sm text-muted-foreground">{tr("Belum ada media terpilih.")}</p>
 			{/if}
@@ -668,70 +419,6 @@
 	{/if}
 </main>
 
-{#if revisionTarget}
-	{#if revLoading}
-		<div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.45);" role="dialog" aria-modal="true" aria-label={tr('Revisi Artikel')}>
-			<div class="app-card flex items-center gap-2 p-5 text-sm text-muted-foreground">
-				<LoaderCircle size={18} class="animate-spin" />{tr("Memuat artikel…")}
-			</div>
-		</div>
-	{:else}
-		<EditorModal
-			mediaName={revisionTarget.name ?? 'media'}
-			initialTitle={revTitle}
-			initialHtml={revHtml}
-			initialCoverUrl={revCover}
-			linkLimit={9999}
-			requireCover={false}
-			enforceLinkLimit={false}
-				saving={revSaving}
-				saveError={revError || null}
-				subtitle={editorMode === 'request_revision'
-					? tr("Edit artikelnya langsung, jelaskan yang perlu diubah, lalu kirim ke pemilik domain. Revisi boleh berkali-kali.")
-					: editorMode === 'edit_revision'
-						? tr("Perbaiki artikel sesuai pengajuan revisi dari mitra lalu simpan.")
-						: tr("Pratinjau naskah artikel (mode baca).")}
-				saveLabel={editorMode === 'request_revision' ? tr("Kirim Revisi") : tr("Simpan Revisi")}
-				showSaveButton={editorMode !== 'view'}
-				readOnly={editorMode === 'view'}
-				coverAi={revisionTarget ? { brandId, campaignId, mediaId: revisionTarget.media_id, articleId: null } : null}
-				onClose={() => (revisionTarget = null)}
-				onUploadCover={uploadRevisionCover}
-				onSave={(title, html, cover) => {
-					revTitle = title;
-					revHtml = html;
-					revCover = cover;
-					if (editorMode === 'request_revision') {
-						void submitRevision();
-					} else if (editorMode === 'edit_revision') {
-						void saveDocumentOnly();
-					}
-				}}
-			>
-				{#snippet extraFields()}
-					{#if editorMode === 'request_revision'}
-						<label class="block">
-							<span class="text-xs font-medium text-muted-foreground">{tr("Komentar untuk pemilik domain")}</span>
-							<textarea class="app-input mt-1 w-full" rows="3" placeholder={tr("mis. Paragraf kedua tolong ganti nama produk menjadi versi terbaru.")} bind:value={revComment}></textarea>
-						</label>
-						<div>
-							<span class="text-xs font-medium text-muted-foreground">{tr("Screenshot (opsional)")}</span>
-							<div class="mt-1 flex flex-wrap items-center gap-3">
-								<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={revUploading} onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; if (f) void uploadScreenshot(f); }} />
-								{#if revUploading}<LoaderCircle size={14} class="animate-spin" />{/if}
-								{#if revAttachment}
-									<span class="flex items-center gap-2 text-xs text-muted-foreground">
-										<Paperclip size={14} />{revAttachment.name}
-										<button class="underline" type="button" onclick={() => (revAttachment = null)}>{tr("Hapus")}</button>
-									</span>
-								{/if}
-							</div>
-						</div>
-					{/if}
-				{/snippet}
-			</EditorModal>
-	{/if}
-{/if}
 
 <style>
 	.bannerLoader {
