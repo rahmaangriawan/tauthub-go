@@ -1399,7 +1399,7 @@
 							<Sparkles size={13} /> {tr('Generate Semua')}
 						</button>
 						{#if campaignName}
-							<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-[5px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={campaignName}>
+							<span class="inline-flex max-w-[260px] cursor-help items-center gap-1.5 truncate rounded-[5px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={`${tr('Ini adalah nama kampanye Anda')}: ${campaignName}`}>
 								<FileText size={13} class="shrink-0 text-slate-400" />
 								<span class="truncate">{campaignName}</span>
 							</span>
