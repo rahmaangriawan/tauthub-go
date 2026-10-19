@@ -325,9 +325,9 @@
 	});
 </script>
 
-<div class="grid gap-3 lg:grid-cols-[290px_minmax(0,1fr)] xl:grid-cols-[290px_minmax(0,1fr)_310px]">
+<div class="grid h-auto min-h-0 gap-3 lg:h-full lg:grid-cols-[290px_minmax(0,1fr)] xl:grid-cols-[290px_minmax(0,1fr)_310px]">
 	<!-- Kolom 1: daftar forum -->
-	<section class="app-card flex max-h-[74dvh] min-h-[420px] flex-col overflow-hidden p-0 lg:max-h-[calc(100dvh-150px)]">
+	<section class="app-card flex min-h-0 flex-col overflow-hidden p-0 max-lg:h-[40dvh] max-lg:min-h-[280px]">
 		<div class="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
 			<MessagesSquare size={15} style="color: var(--primary);" />
 			<p class="text-[13px] font-bold">{tr('Percakapan')}</p>
@@ -336,7 +336,7 @@
 		{#if bootError}
 			<p class="px-4 py-3 text-xs" style="color: var(--destructive);">{bootError}</p>
 		{/if}
-		<div class="flex-1 overflow-y-auto">
+		<div class="min-h-0 flex-1 overflow-y-auto">
 			{#if loadingList}
 				<p class="px-4 py-6 text-center text-xs text-muted-foreground">{tr('Memuat…')}</p>
 			{:else if threads.length === 0}
@@ -393,7 +393,7 @@
 	</section>
 
 	<!-- Kolom 2: ruang pesan -->
-	<section class="app-card flex max-h-[74dvh] min-h-[420px] flex-col overflow-hidden p-0 lg:max-h-[calc(100dvh-150px)]">
+	<section class="app-card flex min-h-0 flex-col overflow-hidden p-0 max-lg:h-[68dvh] max-lg:min-h-[420px]">
 		{#if active}
 			<div class="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
 				<div class="min-w-0 flex-1">
@@ -412,7 +412,7 @@
 				</span>
 			</div>
 
-			<div bind:this={messagesEl} class="flex-1 space-y-1 overflow-y-auto bg-slate-50/60 px-4 py-4">
+			<div bind:this={messagesEl} class="min-h-0 flex-1 space-y-1 overflow-y-auto bg-slate-50/60 px-4 py-4">
 				<div class="mx-auto mb-3 max-w-md rounded-xl bg-white/80 px-3 py-2 text-center text-[11px] leading-relaxed text-slate-500 ring-1 ring-slate-100">
 					{tr('Sesi obrolan berlaku 3×24 jam sejak pesan pertama dari klien. Setelah berakhir, riwayat tetap dapat dibaca.')}
 				</div>
@@ -491,7 +491,7 @@
 	</section>
 
 	<!-- Kolom 3: info forum (desktop lebar) -->
-	<aside class="hidden flex-col gap-3 xl:flex">
+	<aside class="flex min-h-0 flex-col gap-3 lg:col-span-2 xl:col-span-1 xl:overflow-y-auto">
 		{#if active}
 			{@const tone = avatarTone(active.media_name)}
 			<div class="app-card p-4">
