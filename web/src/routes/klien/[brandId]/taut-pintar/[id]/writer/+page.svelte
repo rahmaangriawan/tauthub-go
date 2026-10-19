@@ -78,7 +78,7 @@
 	let articleStats = $state<Record<string, ArticleStats>>({});
 	let articleTitles = $state<Record<string, string>>({});
 	let placement = $state<PlacementItem[]>([]);
-	type WriterAngle = { slug: string; name: string; description?: string | null; has_prompt: boolean };
+	type WriterAngle = { slug: string; name: string; description?: string | null; has_prompt: boolean; pick_count?: number };
 	type WriterChannel = { slug: string; name: string; angles: WriterAngle[] };
 	let angleChannels = $state<WriterChannel[]>([]);
 	let anglesLoading = $state(true);

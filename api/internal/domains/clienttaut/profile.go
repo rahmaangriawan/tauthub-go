@@ -768,6 +768,9 @@ func (d *Deps) TautProfilerOptions(w http.ResponseWriter, r *http.Request) {
 		for _, a := range angles {
 			angleItems = append(angleItems, map[string]any{
 				"id": a.ID, "name": a.Name, "slug": a.Slug, "description": a.Description, "has_prompt": a.HasPrompt,
+				// Berapa kali angle ini dipilih klien (semua brand) — dipakai
+				// UI untuk urutan "paling populer".
+				"pick_count": a.PickCount,
 			})
 		}
 		items = append(items, map[string]any{
@@ -775,6 +778,68 @@ func (d *Deps) TautProfilerOptions(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"channels": items})
+}
+
+// ---------- angle picks (popularitas) ----------
+
+// TautAnglePick: POST /v1/brands/{brandId}/taut/campaigns/{campaignId}/angles/{slug}/pick
+// Mencatat bahwa satu penempatan media memilih angle ini. Dipanggil saat klien
+// memilih angle di modal writer; unik per (campaign, media, angle) sehingga
+// klik berulang tidak menggelembungkan angka populer.
+func (d *Deps) TautAnglePick(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	if user == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
+		return
+	}
+	brandID, err := d.brandID(r, user.ID, "viewer")
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	campaignID := chiParam(r, "campaignId")
+	if _, err := d.queryRow(r.Context(),
+		"SELECT id FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandID); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	slug := strings.TrimSpace(chiParam(r, "slug"))
+	if slug == "" {
+		d.writeErr(w, errUnprocessable("Angle tidak valid."))
+		return
+	}
+	angle, err := d.getAngleBySlug(r.Context(), slug)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if angle == nil {
+		d.writeErr(w, errNotFound("Angle tidak ditemukan."))
+		return
+	}
+	mediaID := ""
+	if body, err := requireJSONObject(r); err == nil {
+		if s, ok := body["media_id"].(string); ok {
+			mediaID = strings.TrimSpace(s)
+		}
+	}
+	if mediaID != "" {
+		if _, err := d.queryRow(r.Context(),
+			"SELECT id FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 LIMIT 1",
+			campaignID, mediaID); err != nil {
+			d.writeErr(w, err)
+			return
+		}
+	}
+	if err := d.exec(r.Context(),
+		`INSERT INTO taut_angle_picks (id, angle_id, angle_slug, brand_id, campaign_id, media_id, user_id)
+		 VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7)
+		 ON CONFLICT DO NOTHING`,
+		uuid.NewString(), angle.ID, angle.Slug, brandID, campaignID, mediaID, user.ID); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // ---------- parsing skema profiler ----------

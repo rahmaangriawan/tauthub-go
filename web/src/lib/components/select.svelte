@@ -9,7 +9,7 @@
 	import type { Component, Snippet } from 'svelte';
 	import { Check, ChevronDown } from '@lucide/svelte';
 
-	export type SelectOption = { value: string; label: string; count?: number; disabled?: boolean };
+	export type SelectOption = { value: string; label: string; description?: string; count?: number; disabled?: boolean };
 
 	let {
 		value = $bindable(''),
@@ -25,7 +25,14 @@
 		searchable = false,
 		searchPlaceholder = 'Cari…',
 		onchange,
-		footer
+		footer,
+		popularCount = 0,
+		popularLabel = 'Paling populer',
+		showAllLabel = 'Lihat semua',
+		showLessLabel = 'Tampilkan lebih sedikit',
+		card = false,
+		cardIcon = null,
+		allOptionsLabel = ''
 	}: {
 		value?: string;
 		options: SelectOption[];
@@ -42,6 +49,15 @@
 		searchPlaceholder?: string;
 		onchange?: (value: string, option: SelectOption | null) => void;
 		footer?: Snippet;
+		/** >0: tampilkan hanya N opsi teratas (urut populer) plus tombol "Lihat semua". */
+		popularCount?: number;
+		popularLabel?: string;
+		showAllLabel?: string;
+		showLessLabel?: string;
+		/** true: opsi mode populer dirender sebagai kartu (ikon + judul + deskripsi). */
+		card?: boolean;
+		cardIcon?: Component<{ size?: number; color?: string }> | null;
+		allOptionsLabel?: string;
 	} = $props();
 
 	let open = $state(false);
@@ -54,15 +70,22 @@
 	let activeIndex = $state(-1);
 	let query = $state('');
 	let measured = $state(false);
+	// Mode "populer": default hanya menampilkan N opsi teratas; tombol di
+	// bawah menu membuka seluruh daftar. Pencarian selalu mencari ke SEMUA opsi.
+	let showAll = $state(false);
 
 	const selected = $derived(options.find((o) => o.value === value) ?? null);
 	const hasValue = $derived(selected != null && selected.value !== '');
+	const searching = $derived(searchable && query.trim() !== '');
 	// Daftar yang ditampilkan: seluruh opsi, atau hasil filter kolom pencarian.
-	const filtered = $derived(
-		searchable && query.trim() !== ''
-			? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
-			: options
+	const matches = $derived(
+		searching ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase())) : options
 	);
+	const popularMode = $derived(popularCount > 0 && !searching);
+	const visible = $derived(popularMode && !showAll ? matches.slice(0, popularCount) : matches);
+	// Alias kapital: komponen dinamis Svelte hanya dikenali lewat identifier
+	// berawalan huruf besar di markup.
+	const CardIcon = $derived(cardIcon ?? null);
 
 	function openMenu() {
 		if (!trigger) return;
@@ -75,7 +98,8 @@
 		// dibuka KE ATAS (drop-up) agar bagian bawah tidak terpotong layar.
 		const gap = 4;
 		const searchHeight = searchable ? 44 : 0;
-		const estimated = Math.min(options.length * 34 + 12 + searchHeight, menuMaxHeight);
+		const listLen = popularCount > 0 ? Math.min(popularCount, options.length) : options.length;
+		const estimated = Math.min(listLen * 34 + 12 + searchHeight + (popularCount > 0 ? 40 : 0), menuMaxHeight);
 		const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
 		const spaceAbove = rect.top - gap - 8;
 		const placeUp = spaceBelow < estimated && spaceAbove > spaceBelow;
@@ -84,9 +108,10 @@
 		menuHeight = Math.min(estimated, available);
 		pos = { left, top: placeUp ? rect.top - gap - menuHeight : rect.bottom + gap, width };
 		query = '';
+		showAll = false;
 		activeIndex = Math.max(
 			0,
-			options.findIndex((o) => o.value === value)
+			visible.findIndex((o) => o.value === value)
 		);
 		measured = false;
 		open = true;
@@ -130,7 +155,7 @@
 	}
 
 	function moveActive(delta: number) {
-		const list = filtered;
+		const list = visible;
 		if (list.length === 0) return;
 		let next = activeIndex;
 		for (let step = 0; step < list.length; step++) {
@@ -164,7 +189,7 @@
 		}
 		if (event.key === 'Enter' || event.key === ' ') {
 			event.preventDefault();
-			const option = filtered[activeIndex];
+			const option = visible[activeIndex];
 			if (option) pick(option);
 		}
 	}
@@ -178,7 +203,7 @@
 		}
 		if (event.key === 'Enter') {
 			event.preventDefault();
-			const option = filtered[activeIndex];
+			const option = visible[activeIndex];
 			if (option) pick(option);
 			return;
 		}
@@ -187,7 +212,7 @@
 
 	function onSearchInput() {
 		// Hasil filter berubah: sorotan kembali ke item pertama yang terlihat.
-		activeIndex = filtered.findIndex((o) => !o.disabled);
+		activeIndex = visible.findIndex((o) => !o.disabled);
 	}
 
 	$effect(() => {
@@ -248,7 +273,7 @@
 		role="listbox"
 		aria-label={ariaLabel}
 		tabindex="-1"
-		style="left: {pos.left}px; top: {pos.top}px; min-width: {pos.width}px; width: {minWidth === 0 ? 'max-content' : 'auto'}; max-width: min(92vw, 360px, calc(100vw - {pos.left}px - 8px)); max-height: {menuHeight > 0 ? `${menuHeight}px` : `${menuMaxHeight}px`}; {placement === 'up' && menuHeight > 0 ? `height: ${menuHeight}px;` : ''}"
+		style="left: {pos.left}px; top: {pos.top}px; min-width: {pos.width}px; width: {minWidth === 0 ? 'max-content' : 'auto'}; max-width: min(92vw, {card ? '1200px' : '360px'}, calc(100vw - {pos.left}px - 8px)); max-height: {menuHeight > 0 ? `${menuHeight}px` : `${menuMaxHeight}px`}; {placement === 'up' && menuHeight > 0 ? `height: ${menuHeight}px;` : ''}"
 		onkeydown={onMenuKeydown}
 	>
 		{#if searchable}
@@ -267,34 +292,83 @@
 				/>
 			</div>
 		{/if}
-		{#if filtered.length === 0}
+		{#if visible.length === 0}
 			<p class="zs-select-empty">{tr("Tidak ada hasil")}</p>
 		{/if}
-		{#each filtered as option, index (option.value)}
-			<button
-				type="button"
-				role="option"
-				aria-selected={option.value === value}
-				class="zs-select-item"
-				class:zs-select-item-selected={option.value === value}
-				class:zs-select-item-active={index === activeIndex}
-				disabled={option.disabled}
-				onclick={() => pick(option)}
-				onmousemove={() => (activeIndex = index)}
-			>
-				<span class="zs-select-item-label">{option.label}</span>
-				<span class="zs-select-item-right">
-					{#if option.count != null}
-						<span class="zs-select-count" class:zs-select-count-selected={option.value === value}>
-							{option.count}
+		{#if popularMode && !showAll && visible.length > 0}
+			<p class="zs-select-section">{popularLabel}</p>
+		{:else if popularMode && showAll && card && !searching && visible.length > popularCount}
+			<p class="zs-select-section">{allOptionsLabel || tr("Semua angle")}</p>
+		{/if}
+		{#if popularMode && card}
+			<div class="zs-select-cards">
+				{#each visible as option, index (option.value)}
+					<button
+						type="button"
+						role="option"
+						aria-selected={option.value === value}
+						class="zs-card"
+						class:zs-card-selected={option.value === value}
+						class:zs-card-active={index === activeIndex}
+						disabled={option.disabled}
+						onclick={() => pick(option)}
+						onmousemove={() => (activeIndex = index)}
+					>
+						<span class="zs-card-icon">
+						{#if CardIcon}
+							<CardIcon size={15} color={option.value === value ? '#2563eb' : '#475569'}></CardIcon>
+						{/if}
 						</span>
+						<span class="zs-card-title">{option.label}</span>
+					{#if option.description}
+						<span class="zs-card-desc">{option.description}</span>
 					{/if}
-					{#if option.value === value}
-						<Check size={14} />
-					{/if}
-				</span>
-			</button>
-		{/each}
+						{#if option.value === value}
+							<span class="zs-card-check"><Check size={11} /></span>
+						{:else if option.count != null}
+							<span class="zs-card-count">{option.count}×</span>
+						{/if}
+					</button>
+				{/each}
+			</div>
+		{:else}
+			{#each visible as option, index (option.value)}
+				<button
+					type="button"
+					role="option"
+					aria-selected={option.value === value}
+					class="zs-select-item"
+					class:zs-select-item-selected={option.value === value}
+					class:zs-select-item-active={index === activeIndex}
+					disabled={option.disabled}
+					onclick={() => pick(option)}
+					onmousemove={() => (activeIndex = index)}
+				>
+					<span class="zs-select-item-label">{option.label}</span>
+					<span class="zs-select-item-right">
+						{#if option.count != null}
+							<span class="zs-select-count" class:zs-select-count-selected={option.value === value}>
+								{option.count}
+							</span>
+						{/if}
+						{#if option.value === value}
+							<Check size={14} />
+						{/if}
+					</span>
+				</button>
+			{/each}
+		{/if}
+		{#if popularCount > 0 && !searching}
+			{#if !showAll}
+				<button type="button" class="zs-select-more" onclick={() => (showAll = true)}>
+					{showAllLabel} ({matches.length}) →
+				</button>
+			{:else if card}
+				<button type="button" class="zs-select-more" onclick={() => (showAll = false)}>
+					← {showLessLabel}
+				</button>
+			{/if}
+		{/if}
 		{#if footer}
 			<div class="zs-select-footer">{@render footer()}</div>
 		{/if}
@@ -513,5 +587,127 @@
 		margin: 4px 6px 6px;
 		color: #64748b;
 		font-size: 12.5px;
+	}
+	/* Label kecil di atas daftar mode populer. */
+	.zs-select-section {
+		margin: 2px 6px 3px;
+		color: #94a3b8;
+		font-size: 10.5px;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+	/* Tombol "Lihat semua" di kaki daftar populer. */
+	.zs-select-more {
+		margin-top: 4px;
+		padding: 7px 10px;
+		border: none;
+		border-top: 1px solid #f1f5f9;
+		border-radius: 7px;
+		background: transparent;
+		color: #2563eb;
+		font: inherit;
+		font-size: 12.5px;
+		font-weight: 600;
+		text-align: left;
+		cursor: pointer;
+	}
+	.zs-select-more:hover {
+		background: #eff6ff;
+	}
+	/* Mode kartu (angle populer): grid kartu ikon + judul + deskripsi. */
+	.zs-select-cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: 8px;
+		padding: 5px 1px;
+	}
+	.zs-card {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 1px;
+		padding: 11px 10px 10px;
+		border: 1px solid #e2e8f0;
+		border-radius: 10px;
+		background: #ffffff;
+		color: #0f172a;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		transition:
+			border-color 0.15s ease,
+			background-color 0.15s ease;
+	}
+	.zs-card:hover {
+		background: #f8fafc;
+	}
+	.zs-card.zs-card-active {
+		background: #f1f5f9;
+	}
+	.zs-card.zs-card-selected {
+		background: #eff6ff;
+		border-color: #93c5fd;
+	}
+	.zs-card:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.zs-card-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 26px;
+		height: 26px;
+		margin-bottom: 6px;
+		border: 1px solid #e2e8f0;
+		border-radius: 8px;
+		background: #f8fafc;
+		flex-shrink: 0;
+	}
+	.zs-card.zs-card-selected .zs-card-icon {
+		border-color: #bfdbfe;
+		background: #dbeafe;
+	}
+	.zs-card-title {
+		font-size: 12.5px;
+		font-weight: 700;
+		line-height: 1.3;
+		color: inherit;
+	}
+	.zs-card.zs-card-selected .zs-card-title {
+		color: #1d4ed8;
+	}
+	.zs-card-desc {
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		font-size: 11px;
+		line-height: 1.45;
+		color: #64748b;
+	}
+	.zs-card-check {
+		position: absolute;
+		top: 7px;
+		right: 7px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		border-radius: 999px;
+		background: #2563eb;
+		color: #ffffff;
+	}
+	.zs-card-count {
+		position: absolute;
+		top: 7px;
+		right: 7px;
+		font-size: 10px;
+		font-weight: 700;
+		color: #94a3b8;
 	}
 </style>

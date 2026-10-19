@@ -61,7 +61,7 @@
 		initialCategory?: string | null;
 		initialMetaDescription?: string | null;
 		categoryOptions?: string[];
-		angleOptions?: Array<{ slug: string; name: string; description?: string | null }>;
+		angleOptions?: Array<{ slug: string; name: string; description?: string | null; pick_count?: number }>;
 		angleChannelName?: string;
 		initialAngleSlug?: string;
 		anglesLoading?: boolean;
@@ -149,8 +149,27 @@
 	// (Tips/Contoh manual digantikan tombol "Racik Instruksi dari Anchor" — AI.)
 	let angleSlug = $state(untrack(() => initialAngleSlug));
 	const selectedAngle = $derived(angleOptions.find((a) => a.slug === angleSlug));
-	const angleSelectOptions = $derived(angleOptions.map((a) => ({ value: a.slug, label: tr(a.name) })));
+	// Urut populer: jumlah pemilihan angle oleh seluruh klien (pick_count dari
+	// server). Select menampilkan N teratas + tombol "Lihat semua" + pencarian.
+	const angleSelectOptions = $derived(
+		[...angleOptions]
+			.sort((a, b) => (b.pick_count ?? 0) - (a.pick_count ?? 0) || tr(a.name).localeCompare(tr(b.name)))
+			.map((a) => ({ value: a.slug, label: tr(a.name), description: tr(a.description ?? ''), count: a.pick_count ?? 0 }))
+	);
 	const angleReady = $derived(!anglesLoading && !anglesError && !!selectedAngle);
+	// Catat pilihan angle untuk statistik populer. Kegagalan diabaikan: ini
+	// telemetri, bukan syarat generate.
+	async function recordAnglePick(slug: string) {
+		if (!slug || !brandId || !campaignId) return;
+		try {
+			await apiRequest(
+				`/v1/brands/${brandId}/taut/campaigns/${campaignId}/angles/${encodeURIComponent(slug)}/pick`,
+				{ method: 'POST', body: JSON.stringify({ media_id: mediaId }) }
+			);
+		} catch {
+			/* opsional */
+		}
+	}
 	$effect(() => {
 		if (!anglesLoading && !anglesError && angleSlug && !selectedAngle) angleSlug = '';
 	});
@@ -1457,6 +1476,14 @@
 											placeholder={tr('Pilih angle artikel')}
 											searchable
 											searchPlaceholder={tr('Cari angle…')}
+											popularCount={5}
+											card
+											cardIcon={Crosshair}
+											allOptionsLabel={tr('Semua angle')}
+											popularLabel={tr('Angle paling populer')}
+											showAllLabel={tr('Lihat semua angle')}
+											showLessLabel={tr('Tampilkan lebih sedikit')}
+											onchange={(v) => void recordAnglePick(v)}
 											disabled={anglesLoading || !!anglesError || angleOptions.length === 0 || genBusy}
 										/>
 									</div>
@@ -1588,6 +1615,14 @@
 											placeholder={tr('Pilih angle artikel')}
 											searchable
 											searchPlaceholder={tr('Cari angle…')}
+											popularCount={5}
+											card
+											cardIcon={Crosshair}
+											allOptionsLabel={tr('Semua angle')}
+											popularLabel={tr('Angle paling populer')}
+											showAllLabel={tr('Lihat semua angle')}
+											showLessLabel={tr('Tampilkan lebih sedikit')}
+											onchange={(v) => void recordAnglePick(v)}
 											disabled={anglesLoading || !!anglesError || angleOptions.length === 0 || genBusy}
 										/>
 									</div>

@@ -210,6 +210,8 @@ type angleRow struct {
 	Active      bool
 	SortOrder   int
 	HasPrompt   bool
+	// PickCount: berapa kali angle ini dipilih di seluruh brand/kampanye.
+	PickCount int
 }
 
 func (d *Deps) listActiveChannels(ctx context.Context) ([]channelRow, error) {
@@ -233,9 +235,12 @@ func (d *Deps) listAnglesByChannel(ctx context.Context, channelSlug string) ([]a
 		`SELECT a.id, a.channel_id, a.name, a.slug, a.description, a.active, a.sort_order,
 		        COALESCE((SELECT v.prompt ~ '[^[:space:]]' FROM taut_content_angle_prompt_versions v
 		                  WHERE v.content_angle_id = a.id AND v.status = 'active'
-		                  ORDER BY v.version DESC LIMIT 1), FALSE) AS has_prompt
+		                  ORDER BY v.version DESC LIMIT 1), FALSE) AS has_prompt,
+		        COALESCE(p.pick_count, 0) AS pick_count
 		 FROM taut_content_angles a
 		 JOIN taut_media_channels c ON c.id = a.channel_id
+		 LEFT JOIN (SELECT angle_id, COUNT(*) AS pick_count FROM taut_angle_picks GROUP BY angle_id) p
+		        ON p.angle_id = a.id
 		 WHERE a.active = TRUE AND c.active = TRUE AND c.slug = $1
 		 ORDER BY a.sort_order, a.name`, channelSlug)
 	if err != nil {
@@ -247,6 +252,7 @@ func (d *Deps) listAnglesByChannel(ctx context.Context, channelSlug string) ([]a
 			ID: r.strOr("id", ""), ChannelID: r.strOr("channel_id", ""), Name: r.strOr("name", ""),
 			Slug: r.strOr("slug", ""), Description: r.strOr("description", ""),
 			Active: r.boolOr("active", true), SortOrder: r.intOr("sort_order", 0), HasPrompt: r.boolOr("has_prompt", false),
+			PickCount: r.intOr("pick_count", 0),
 		})
 	}
 	return out, nil

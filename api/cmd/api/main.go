@@ -433,6 +433,7 @@ func run() error {
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profile/results/{resultId}", resolveCampaign(tautDeps.TautProfileResultGet))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/profile/verify", resolveCampaign(tautDeps.TautProfileVerify))
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profiler/options", resolveCampaign(tautDeps.TautProfilerOptions))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/angles/{slug}/pick", resolveCampaign(tautDeps.TautAnglePick))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/submit-final", resolveCampaign(tautDeps.TautSubmitFinal))
 
 		})
