@@ -1385,7 +1385,7 @@
 							</p>
 						</div>
 					</div>
-					<div class="flex shrink-0 items-center gap-2 lg:mr-10">
+					<div class="flex shrink-0 items-center gap-2 lg:mr-15">
 						<!-- Generate Semua di header: klik membuka popup yang sama dengan
 						     bar seleksi (masih placeholder "Dalam Pengerjaan");
 						     grup digeser ke kiri ~40px agar tidak tembus ke tepi. -->
