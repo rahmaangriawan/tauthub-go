@@ -1439,7 +1439,7 @@
 						{#if gayaArtikel === 'simpel'}
 						<div class="mt-6 w-full text-left">
 							<div class="mb-6 min-w-0">
-									<div class="flex items-center gap-3">
+									<div class="flex items-start gap-3">
 										{@render numBadge('2')}
 										<span class="text-sm font-semibold">{tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
 									</div>
@@ -1568,7 +1568,7 @@
 					<!-- PANE "YANG PROPER": isian berbeda dari Sederhana — grounding ke Copilot & fakta. -->
 							<div class="mt-6 w-full text-left">
 								<div class="min-w-0">
-									<div class="flex items-center gap-3">
+									<div class="flex items-start gap-3">
 										{@render numBadge('2')}
 										<span class="text-sm font-semibold">{tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
 									</div>
