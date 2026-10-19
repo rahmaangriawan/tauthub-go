@@ -1008,13 +1008,18 @@
 						{/if}
 					</div>
 				{:else if tab === 'unggah'}
-					<div class="flex h-full min-h-[320px] flex-col items-center justify-center py-6 text-center">
-						<h3 class="text-xl font-bold">{tr('Punya Draf Sendiri?')}</h3>
-						<p class="mt-2 max-w-sm text-sm text-muted-foreground">
-							{tr('Unggah file Word/TXT. AI Tauthub akan secara cerdas memisahkan Judul, Paragraf, dan Kategori secara otomatis.')}
-						</p>
+					<!-- Dua jalur berdampingan: file upload (kiri) & tempel teks (kanan). -->
+					<div class="flex h-full min-h-[320px] flex-col justify-center py-6">
+						<div class="text-center">
+							<h3 class="text-xl font-bold">{tr('Punya Draf Sendiri?')}</h3>
+							<p class="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
+								{tr('Unggah file Word/TXT. AI Tauthub akan secara cerdas memisahkan Judul, Paragraf, dan Kategori secara otomatis.')}
+							</p>
+						</div>
+						<div class="mt-6 grid flex-1 items-start gap-5 lg:grid-cols-2">
+							<div class="flex flex-col">
 						<div
-							class="mt-6 flex w-full max-w-md cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 transition-colors"
+							class="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 transition-colors"
 							class:border-primary={dragging}
 							style="border-color: {dragging ? 'var(--primary)' : 'var(--border)'}; background-color: var(--muted);"
 							role="button"
@@ -1047,29 +1052,31 @@
 								<p class="text-xs text-muted-foreground">{tr('Mendukung DOCX, TXT, PDF (Maks 10MB)')}</p>
 							{/if}
 						</div>
-						{#if docError}
-							<p class="mt-3 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">
-								<CircleAlert size={15} /> {docError}
-							</p>
-						{/if}
-
-						<div class="mt-6 w-full max-w-md text-left">
-							<div class="flex items-center gap-2">
-								<span class="h-px flex-1" style="background-color: var(--border);"></span>
-								<span class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{tr('atau tempel teks')}</span>
-								<span class="h-px flex-1" style="background-color: var(--border);"></span>
+							{#if docError}
+								<p class="mt-3 flex items-center justify-center gap-1.5 text-sm" style="color: var(--destructive);">
+									<CircleAlert size={15} /> {docError}
+								</p>
+							{/if}
 							</div>
-							<textarea
-								class="app-input mt-3 min-h-[110px] w-full resize-y text-sm"
-								placeholder={tr('Tempel teks artikel di sini (Ctrl/Cmd+V). Baris pertama yang pendek akan jadi judul.')}
-								bind:value={teksTempel}
-							></textarea>
-							<button class="app-btn app-btn-soft mt-2 w-full" type="button" disabled={!teksTempel.trim()} onclick={pakaiTeksTempel}>
-								{tr('Gunakan Teks Ini')}
-							</button>
-							<p class="mt-2 text-xs leading-relaxed text-muted-foreground">
-								{tr('Artikel akan 100% memakai dokumen yang kamu unggah — tanpa ditulis ulang oleh AI. Sistem tetap memeriksa tautan dan memvalidasi bahwa dokumen ini aman untuk diterbitkan.')}
-							</p>
+
+							<div class="flex h-full flex-col text-left">
+								<div class="flex items-center gap-2">
+									<span class="h-px flex-1" style="background-color: var(--border);"></span>
+									<span class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{tr('atau tempel teks')}</span>
+									<span class="h-px flex-1" style="background-color: var(--border);"></span>
+								</div>
+								<textarea
+									class="app-input mt-3 min-h-[220px] w-full flex-1 resize-y text-sm"
+									placeholder={tr('Tempel teks artikel di sini (Ctrl/Cmd+V). Baris pertama yang pendek akan jadi judul.')}
+									bind:value={teksTempel}
+								></textarea>
+								<button class="app-btn app-btn-soft mt-2 w-full" type="button" disabled={!teksTempel.trim()} onclick={pakaiTeksTempel}>
+									{tr('Gunakan Teks Ini')}
+								</button>
+								<p class="mt-2 text-xs leading-relaxed text-muted-foreground">
+									{tr('Artikel akan 100% memakai dokumen yang kamu unggah — tanpa ditulis ulang oleh AI. Sistem tetap memeriksa tautan dan memvalidasi bahwa dokumen ini aman untuk diterbitkan.')}
+								</p>
+							</div>
 						</div>
 					</div>
 				{:else}
