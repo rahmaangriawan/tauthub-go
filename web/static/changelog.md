@@ -26,6 +26,7 @@ Catatan:
 - **Menu "Pesan" di portal klien dan mitra**, lengkap dengan pencarian percakapan, tab Semua/Aktif/Selesai, penanda pesan belum dibaca, dan badge merah berisi jumlah pesan baru di sidebar.
 - **Badge "Publikasi" untuk mitra**: begitu ada publikasi baru untuk medianya, menu Publikasi menampilkan angka merah; membuka halaman Publikasi menandai semuanya sudah dibaca dan angkanya hilang.
 - **Kartu "Pesan" di dashboard mitra** menampilkan jumlah chat klien yang belum dibaca dan langsung menuju ruang obrolan.
+- **Admin punya menu "Log Obrolan"** untuk meninjau riwayat percakapan klien ↔ mitra (hanya baca, disertai jejak audit). Admin tidak lagi menerima notifikasi chat; notifikasi hanya dikirim ke peserta percakapan.
 
 ### Perbaikan
 - **Penghasilan mitra**: potongan platform kini **25%** — mitra menerima 75% dari harga pengajuan, sesuai aturan yang juga tertulis di halaman Media. Sebelumnya perhitungan memakai 5%. Berlaku untuk earning baru.

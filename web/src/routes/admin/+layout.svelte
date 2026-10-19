@@ -12,7 +12,7 @@
 	import { page } from '$app/state';
 	import {
 		Bell, Binoculars, BookOpenText, Bug, ChartBar, ChevronDown, ClipboardList, Coins,
-		Gauge, Gift, House, Megaphone, MessageSquare, Newspaper, Percent, Receipt, ScrollText,
+		Gauge, Gift, House, Megaphone, MessageCircle, MessageSquare, Newspaper, Percent, Receipt, ScrollText,
 		Settings, ShieldCheck, Sparkle, TriangleAlert, Users, Wallet, Zap
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -238,6 +238,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				// Pengumuman terbuka untuk semua platform admin (guard backend sama).
 				{ label: tr('Kotak Pengumuman'), href: '/admin/pengumuman', icon: Megaphone, active: pathname.startsWith('/admin/pengumuman') },
 				{ label: tr('Notifikasi'), href: '/admin/notifications', icon: Bell, active: pathname.startsWith('/admin/notifications') },
+				{ label: tr('Log Obrolan'), href: '/admin/obrolan', icon: MessageCircle, active: pathname.startsWith('/admin/obrolan') },
 				{ label: tr('Changelog'), href: '/admin/changelog', icon: ScrollText, active: pathname.startsWith('/admin/changelog') }
 			]
 		},

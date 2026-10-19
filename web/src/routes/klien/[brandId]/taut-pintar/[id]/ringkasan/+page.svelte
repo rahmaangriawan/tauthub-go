@@ -523,6 +523,7 @@
 						<li>{tr('Dengan melanjutkan, kamu membuka sesi obrolan dengan mitra untuk artikel ini. Sesi berlaku 3×24 jam sejak pesan pertama dan riwayatnya dapat dibaca kedua pihak.')}</li>
 						<li>{tr('Gunakan untuk mengajukan revisi, penambahan atau perbaikan backlink, dan pertanyaan lain seputar artikel.')}</li>
 						<li>{tr('Setelah sesi berakhir, riwayat tetap dapat dibaca tetapi pesan baru tidak bisa dikirim.')}</li>
+						<li>{tr('Pesan pada ruang ini dapat ditinjau tim admin Tauthub untuk keperluan operasional dan penyelesaian masalah.')}</li>
 					</ol>
 				</div>
 

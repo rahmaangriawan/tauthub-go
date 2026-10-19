@@ -611,6 +611,8 @@ func run() error {
 
 			// Changelog (sisi admin): impor entri dari web/static/changelog.md,
 			// ubah status terbit, hapus entri.
+			authed.Get("/platform/chat/threads", platformDeps.AdminChatThreads)
+			authed.Get("/platform/chat/threads/{threadId}", platformDeps.AdminChatThreadDetail)
 			authed.Get("/platform/changelog", platformDeps.AdminChangelogList)
 			authed.Post("/platform/changelog/import", platformDeps.AdminChangelogImport)
 			authed.Patch("/platform/changelog/{entryId}", platformDeps.AdminChangelogUpdate)

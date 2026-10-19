@@ -106,9 +106,14 @@ func (d *Deps) notifyBrandMembers(ctx context.Context, brandID, title, body, lin
 	if len([]rune(preview)) > 140 {
 		preview = string([]rune(preview)[:140]) + "…"
 	}
+	// Admin platform tidak perlu menerima notifikasi obrolan — mereka hanya
+	// membaca lewat menu Log Obrolan. Hanya anggota brand ber-role non-admin
+	// yang dikirimi (bisa jadi admin juga owner brand; itu yang dikecualikan).
 	if err := d.exec(ctx,
 		`INSERT INTO notifications (id, user_id, type, title, body, link)
-		 SELECT gen_random_uuid(), user_id, 'chat.message', $1, $2, $3 FROM brand_memberships WHERE brand_id = $4`,
+		 SELECT gen_random_uuid(), bm.user_id, 'chat.message', $1, $2, $3
+		 FROM brand_memberships bm JOIN users u ON u.id = bm.user_id
+		 WHERE bm.brand_id = $4 AND u.role <> 'admin'`,
 		title, preview, link, brandID); err != nil {
 		slog.Warn("[chat] notifikasi brand gagal", "err", err)
 	}
