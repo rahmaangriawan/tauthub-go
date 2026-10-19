@@ -882,9 +882,7 @@
 						: 'background-color: var(--muted); color: var(--muted-foreground);'}
 				>{linkRows.length}/{maxLinkRows}</span>
 			</div>
-			<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-				{tr('AI menyisipkan tautan ini secara natural pada bagian yang relevan. Isi anchor dan URL secara berpasangan.')}
-			</p>
+
 			{#if linkRows.length === 0}
 				<p class="mt-3 rounded-lg border border-dashed px-3 py-4 text-left text-xs text-muted-foreground" style="border-color: var(--border);">
 					{tr('Belum ada tautan')}
@@ -1182,7 +1180,9 @@
 										{:else if angleOptions.length === 0}
 											<p class="text-muted-foreground">{tr('Belum ada angle dengan prompt aktif untuk media ini. Hubungi admin Tauthub.')}</p>
 										{:else}
-											<p class="text-muted-foreground">{selectedAngle?.description ? tr(selectedAngle.description) : tr('Pilih sudut pembahasan dari channel media target. Pilihan ini menentukan prompt AI yang digunakan.')}</p>
+											{#if selectedAngle?.description}
+												<p class="text-muted-foreground">{tr(selectedAngle.description)}</p>
+											{/if}
 										{/if}
 									</div>
 								</div>
