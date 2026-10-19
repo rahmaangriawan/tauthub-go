@@ -22,7 +22,7 @@
 	<div class="mb-4 shrink-0">
 		<h1 class="text-xl font-bold text-slate-900">{tr('Pesan')}</h1>
 		<p class="mt-1 text-[13px] text-muted-foreground">
-			{tr('Obrolan langsung dengan mitra per artikel. Sesi berlaku 3×24 jam sejak pesan pertama; setelah itu riwayat tetap dapat dibaca.')}
+			{tr('Obrolan langsung dengan mitra per artikel.')}
 		</p>
 	</div>
 
