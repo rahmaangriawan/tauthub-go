@@ -83,6 +83,12 @@
 	};
 	const initialOf = (name: string) => (name || '?').trim().charAt(0).toUpperCase() || '?';
 
+	// Favicon media dari website_url (pola sama dengan tabel Ringkasan);
+	// gagal muat → jatuh kembali ke inisial nama.
+	const cleanDomain = (url: string | null | undefined, name: string): string =>
+		((url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim() || name.trim()).toLowerCase();
+	let faviconFailed = $state<Record<string, boolean>>({});
+
 	const otherName = (t: Thread) => (side === 'client' ? t.partner_name || t.media_name : t.brand_name || tr('Klien'));
 	const otherLabel = $derived(side === 'client' ? tr('Mitra') : tr('Klien'));
 
@@ -350,8 +356,19 @@
 						class="flex w-full items-start gap-2.5 border-b border-slate-50 px-3.5 py-3 text-left transition-colors hover:bg-slate-50 {active?.id === t.id ? 'bg-blue-50/60' : ''}"
 						onclick={() => void openThread(t.id)}
 					>
-						<span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold" style="background:{AVA_BG[tone]};color:{AVA_FG[tone]};">
-							{initialOf(t.media_name)}
+						<span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold" style="background:{AVA_BG[tone]};color:{AVA_FG[tone]};">
+							{#if cleanDomain(t.website_url, t.media_name) && !faviconFailed[t.id]}
+								<img
+									src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleanDomain(t.website_url, t.media_name))}&sz=128`}
+									alt=""
+									class="h-full w-full object-cover"
+									loading="lazy"
+									decoding="async"
+									onerror={() => (faviconFailed = { ...faviconFailed, [t.id]: true })}
+								/>
+							{:else}
+								{initialOf(t.media_name)}
+							{/if}
 						</span>
 						<span class="min-w-0 flex-1">
 							<span class="flex items-baseline gap-2">
@@ -480,8 +497,19 @@
 			<div class="app-card p-4">
 				<p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{tr('Info media')}</p>
 				<div class="mt-2.5 flex items-center gap-2.5">
-					<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[14px] font-bold" style="background:{AVA_BG[tone]};color:{AVA_FG[tone]};">
-						{initialOf(active.media_name)}
+					<span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-[14px] font-bold" style="background:{AVA_BG[tone]};color:{AVA_FG[tone]};">
+						{#if cleanDomain(active.website_url, active.media_name) && !faviconFailed[active.id]}
+							<img
+								src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleanDomain(active.website_url, active.media_name))}&sz=128`}
+								alt=""
+								class="h-full w-full object-cover"
+								loading="lazy"
+								decoding="async"
+								onerror={() => (faviconFailed = { ...faviconFailed, [active?.id ?? '']: true })}
+							/>
+						{:else}
+							{initialOf(active.media_name)}
+						{/if}
 					</span>
 					<div class="min-w-0">
 						<p class="truncate text-[13px] font-bold text-slate-900">{active.media_name}</p>
