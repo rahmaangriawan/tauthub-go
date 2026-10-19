@@ -345,3 +345,23 @@ export async function resolveHomeRoute(role?: string): Promise<string> {
 	}
 	return '/klien';
 }
+
+/**
+ * Role sesi yang terverifikasi: pakai role tersimpan kalau ada (sesi baru),
+ * kalau tidak tanya /v1/auth/me (sesi lama). Gagal nerjemahkan → 'client'
+ * supaya perilakunya sama dengan legacy (jangan mengunci user lama).
+ */
+export async function resolveSessionRole(): Promise<string> {
+	const fresh = await ensureValidSession();
+	if (fresh?.user.role) return fresh.user.role;
+	try {
+		const me = await apiRequest('/v1/auth/me');
+		if (me.ok) {
+			const data = (await me.json()) as { role?: string };
+			return data.role ?? 'client';
+		}
+	} catch {
+		// Backend tak terjangkau → pakai legacy (client).
+	}
+	return 'client';
+}

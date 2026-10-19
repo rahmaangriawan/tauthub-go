@@ -13,7 +13,7 @@
 		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, Newspaper, Receipt,
 		ScrollText, ShieldCheck, TriangleAlert, UserCircle
 	} from '@lucide/svelte';
-	import { apiRequest, ensureValidSession, getStoredSession, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { swr } from '$lib/swr-cache.svelte';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import { setBrandUrlId } from '$lib/brand-url.svelte';
@@ -61,6 +61,22 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			if (!fresh) {
 				window.location.href = '/login';
 				return;
+			}
+			// Gerbang tenancy shell: data API sudah menolak non-member per brand,
+			// tapi shell-nya tidak boleh bisa dibuka oleh role yang salah.
+			// Admin langsung ditolak; mitra hanya boleh lanjut bila benar-benar
+			// member brand ini (Client Workspace VVIP via brand VIP-nya).
+			const role = fresh.user.role ?? (await resolveSessionRole());
+			if (role === 'admin') {
+				window.location.href = '/admin';
+				return;
+			}
+			if (role === 'partner') {
+				const access = await apiRequest(`/v1/brands/${brandId}/overview`);
+				if (!access.ok) {
+					window.location.href = '/mitra';
+					return;
+				}
 			}
 			user = {
 				id: fresh.user.id,

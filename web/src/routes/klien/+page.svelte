@@ -7,7 +7,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { Building } from '@lucide/svelte';
-	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { apiRequest, ensureValidSession, resolveSessionRole, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	type Brand = { id: string; public_id?: string | null };
@@ -39,6 +39,12 @@
 				await goto('/login');
 				return;
 			}
+			// Gerbang area: admin punya shell sendiri; shell klien bukan tempatnya.
+			const role = fresh.user.role ?? (await resolveSessionRole());
+			if (role === 'admin') {
+				await goto('/admin', { replaceState: true });
+				return;
+			}
 			try {
 				const res = await apiRequest('/v1/brands');
 				if (!res.ok) {
@@ -51,6 +57,13 @@
 					const pid = await provisionVipBrand(false);
 					if (pid) {
 						if (!cancelled) await goto(`/klien/${pid}`, { replaceState: true });
+						return;
+					}
+					// Mitra tanpa workspace (bukan VVIP) tidak boleh manteng area
+					// klien: balik ke shell mitra. VVIP sudah tercukupi provisi di
+					// atas; klien tanpa brand tetap melihat tawaran brand VIP.
+					if (role === 'partner') {
+						await goto('/mitra', { replaceState: true });
 						return;
 					}
 					if (!cancelled) view = 'empty';

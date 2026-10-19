@@ -16,7 +16,7 @@
 			Receipt, ScrollText, Server, Settings, ShieldCheck, TriangleAlert,
 			UserCircle, Wallet
 		} from '@lucide/svelte';
-	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { swr } from '$lib/swr-cache.svelte';
 	import { setPartnerUrlId } from '$lib/partner-url.svelte';
 	import AppShell from '$lib/components/app-shell.svelte';
@@ -67,6 +67,17 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			const fresh = await ensureValidSession();
 			if (!fresh) {
 				window.location.href = '/login';
+				return;
+			}
+			// Gerbang arah sebaliknya: shell mitra bukan tempat klien/admin.
+			// Data API memang sudah terkunci, tapi shell sendiri tak boleh terbuka.
+			const role = fresh.user.role ?? (await resolveSessionRole());
+			if (role === 'client') {
+				window.location.href = '/klien';
+				return;
+			}
+			if (role === 'admin') {
+				window.location.href = '/admin';
 				return;
 			}
 			user = {

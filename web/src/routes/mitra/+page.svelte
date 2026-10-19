@@ -5,7 +5,7 @@
 	// /mitra/{public_id} (parity app lama: public_id 6 karakter di URL).
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { apiRequest, ensureValidSession, resolveSessionRole, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	let error = $state('');
@@ -16,6 +16,16 @@
 			const fresh = await ensureValidSession();
 			if (!fresh) {
 				await goto('/login?returnTo=%2Fmitra');
+				return;
+			}
+			// Gerbang arah sebaliknya: portal mitra bukan tempat klien/admin.
+			const role = fresh.user.role ?? (await resolveSessionRole());
+			if (role === 'client') {
+				await goto('/klien', { replaceState: true });
+				return;
+			}
+			if (role === 'admin') {
+				await goto('/admin', { replaceState: true });
 				return;
 			}
 			const res = await apiRequest('/v1/partner/me');
