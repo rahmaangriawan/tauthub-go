@@ -208,6 +208,25 @@
 	const manualMode = $derived(page.url.searchParams.get('mode') === 'manual');
 	const manualFlow = $derived(entryMode ? entryMode === 'manual' : manualMode);
 	const selected = $derived(placement.filter((p) => p.status === 'selected'));
+	// ── Seleksi Dapur Produksi (aturan pemilik produk): centang per media,
+	//    bar aksi muncul di bawah header; "Generate Semua" masih placeholder
+	//    popup "Dalam Pengerjaan" — mesin bulk menyusul.
+	let pickedIds = $state<Record<string, boolean>>({});
+	let bulkPopupOpen = $state(false);
+	const pickedList = $derived(
+		Object.keys(pickedIds).filter((id) => pickedIds[id] && selected.some((m) => m.media_id === id))
+	);
+	const allPicked = $derived(selected.length > 0 && pickedList.length === selected.length);
+	function togglePicked(id: string) {
+		pickedIds = { ...pickedIds, [id]: !pickedIds[id] };
+	}
+	function pickAll() {
+		if (allPicked) {
+			pickedIds = {};
+			return;
+		}
+		pickedIds = Object.fromEntries(selected.map((m) => [m.media_id, true]));
+	}
 
 	onMount(() => {
 		void (async () => {
@@ -1368,6 +1387,21 @@
 				</div>
 			</div>
 
+			{#if pickedList.length > 0}
+				<!-- Bar aksi seleksi: muncul tepat di bawah header Dapur Produksi. -->
+				<div class="sticky top-0 z-10 mt-3 flex flex-wrap items-center gap-2 rounded-[5px] border border-blue-200/80 bg-blue-50/90 px-3.5 py-2 shadow-2xs backdrop-blur-sm">
+					<span class="text-xs font-bold text-blue-700">{pickedList.length} {tr('media dipilih')}</span>
+					<div class="flex flex-1 flex-wrap items-center justify-end gap-2">
+						<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={pickAll}>
+							{allPicked ? tr('Batal Pilih Semua') : tr('Pilih Semua')}
+						</button>
+						<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" title={tr('Generate artikel untuk semua media terpilih')} onclick={() => (bulkPopupOpen = true)}>
+							<Sparkles size={13} /> {tr('Generate Semua')} ({pickedList.length})
+						</button>
+					</div>
+				</div>
+			{/if}
+
 			<!-- Daftar Media Terpilih -->
 			{#if selected.length === 0}
 				<div class="mt-4 rounded-[5px] border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-2xs">
@@ -1383,10 +1417,22 @@
 						{@const links2 = linkStats[m.media_id] ?? null}
 						{@const domain = cleanDomain(m.website_url, m.name)}
 						{@const av = avatarStyle(m.name)}
-						<div class="rounded-[5px] border border-slate-200/80 bg-white p-4.5 sm:p-5 shadow-2xs transition-all duration-200 hover:border-slate-300 hover:shadow-xs">
+						<div
+							class="rounded-[5px] border bg-white p-4.5 sm:p-5 shadow-2xs transition-all duration-200 {pickedIds[m.media_id]
+								? 'border-blue-400 bg-blue-50/20 hover:border-blue-400'
+								: 'border-slate-200/80 hover:border-slate-300 hover:shadow-xs'}"
+						>
 							<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 								<!-- Kolom 1: Identitas Media -->
 								<div class="flex min-w-0 items-center gap-3.5 lg:w-[280px] shrink-0">
+									<input
+										type="checkbox"
+										class="h-4 w-4 shrink-0 cursor-pointer rounded-[4px] accent-blue-600"
+										checked={!!pickedIds[m.media_id]}
+										title={tr('Pilih media ini')}
+										aria-label={`${tr('Pilih media ini')}: ${m.name}`}
+										onclick={(e) => { e.stopPropagation(); togglePicked(m.media_id); }}
+									/>
 									<div
 										class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] overflow-hidden border border-slate-200/60 font-bold text-base"
 										style={domain && !avatarFailed[m.media_id]
@@ -2006,6 +2052,18 @@
 				}}
 			/>
 		{/key}
+	{/if}
+
+	<!-- Popup placeholder untuk "Generate Semua" (bulk): mesinnya menyusul. -->
+	{#if bulkPopupOpen}
+		<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={() => (bulkPopupOpen = false)} onkeydown={(e) => { if (e.key === 'Escape') bulkPopupOpen = false; }}>
+			<dialog open class="app-card w-full max-w-sm p-6 text-center" aria-label={tr('Generate Semua')} onclick={(e) => e.stopPropagation()}>
+				<LoaderCircle size={26} class="mx-auto animate-spin" style="color: var(--accent);" />
+				<h3 class="mt-3 text-base font-bold">{tr('Generate Semua')}</h3>
+				<p class="mt-1.5 text-sm text-muted-foreground">{tr('Dalam Pengerjaan')}</p>
+				<button class="app-btn app-btn-soft mt-4 !min-h-9 !px-4" type="button" onclick={() => (bulkPopupOpen = false)}>{tr('Tutup')}</button>
+			</dialog>
+		</div>
 	{/if}
 
 	<style>
