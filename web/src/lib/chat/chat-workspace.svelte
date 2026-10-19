@@ -59,6 +59,9 @@
 
 	let threads = $state<Thread[]>([]);
 	let threadQuery = $state('');
+	// Filter status: Aktif = sesi belum berakhir (menunggu / berjalan),
+	// Selesai = sesi 3×24 jam sudah lewat (riwayat tetap bisa dibaca).
+	let threadFilter = $state<'all' | 'active' | 'done'>('all');
 	let active = $state<Thread | null>(null);
 	let messages = $state<Message[]>([]);
 	let draft = $state('');
@@ -123,12 +126,21 @@
 		return `${tr('Sisa')} ${h > 0 ? `${h}j ` : ''}${m}m`;
 	};
 
-	// Filter kotak pencarian: cocokkan nama media, lawan bicara, atau cuplikan
-	// pesan terakhir — pencarian lokal saja (daftar sudah dimuat penuh).
+	const activeCount = $derived(threads.filter((t) => t.status !== 'expired').length);
+	const doneCount = $derived(threads.length - activeCount);
+
+	// Filter tab status + kotak pencarian (nama media, lawan bicara, atau
+	// cuplikan pesan terakhir) — semuanya lokal, daftar sudah dimuat penuh.
 	const filteredThreads = $derived.by(() => {
+		const byStatus =
+			threadFilter === 'active'
+				? threads.filter((t) => t.status !== 'expired')
+				: threadFilter === 'done'
+					? threads.filter((t) => t.status === 'expired')
+					: threads;
 		const q = threadQuery.trim().toLowerCase();
-		if (!q) return threads;
-		return threads.filter((t) =>
+		if (!q) return byStatus;
+		return byStatus.filter((t) =>
 			`${t.media_name} ${side === 'client' ? t.partner_name : t.brand_name} ${t.last_message?.body ?? ''}`.toLowerCase().includes(q)
 		);
 	});
@@ -356,6 +368,20 @@
 					spellcheck="false"
 					bind:value={threadQuery}
 				/>
+			</div>
+			<div class="mt-2 flex items-center gap-1.5" role="tablist" aria-label={tr('Filter percakapan')}>
+				{#each [{ id: 'all', label: tr('Semua'), count: threads.length }, { id: 'active', label: tr('Aktif'), count: activeCount }, { id: 'done', label: tr('Selesai'), count: doneCount }] as tab (tab.id)}
+					<button
+						type="button"
+						role="tab"
+						aria-selected={threadFilter === tab.id}
+						class="inline-flex flex-1 items-center justify-center gap-1 rounded-[5px] px-2 py-1.5 text-[11px] font-semibold transition-colors {threadFilter === tab.id ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' : 'text-slate-500 hover:bg-slate-50'}"
+						onclick={() => (threadFilter = tab.id as 'all' | 'active' | 'done')}
+					>
+						{tab.label}
+						<span class="rounded-full px-1.5 text-[10px] font-bold {threadFilter === tab.id ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}">{tab.count}</span>
+					</button>
+				{/each}
 			</div>
 		</div>
 		{#if bootError}
