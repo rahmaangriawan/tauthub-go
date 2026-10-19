@@ -12,7 +12,7 @@
 	import AgentSteps from '../../_agent-steps.svelte';
 	import TautBottomBar from '../../_bottom-bar.svelte';
 	import NaskahModal from './_naskah-modal.svelte';
-	import QcPanel from './_qc-panel.svelte';
+	import QcPanel, { QC_CHECK_COUNT } from './_qc-panel.svelte';
 	import { MANUAL_PROFILER_REASON, buildTrackedUrl, stripScheme, withScheme, textToHtml, toLocalInput, isCampaignDone } from '../../_shared';
 	import { tcToRp } from '$lib/credits/rupiah';
 	import { ARTICLE_DEFAULT_COVER, sameOriginAssetUrl } from '$lib/media/cover';
@@ -1640,6 +1640,10 @@
 
 											{@const qcCount = qcCounts[m.media_id] ?? 0}
 											{@const qcBusy = qcRunning[m.media_id] === true}
+											<!-- Badge menampilkan JUMLAH PEMERIKSA panel (satu ceklis),
+											     bukan jumlah riwayat pemindaian — angkanya selalu
+											     sinkron dengan daftar kartu pada panel Analisis QC. -->
+											{@const qcBadge = qcCount > 0 ? QC_CHECK_COUNT : 0}
 											<!-- HIJAU = hasil QC terakhir lulus (artikel Siap Terbit):
 											     dibaca dari status artikel, bukan memori sesi, supaya
 											     tetap hijau setelah refresh halaman. -->
@@ -1651,7 +1655,7 @@
 													: 'border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700'}"
 												title={qcBusy
 													? tr('QC sedang memeriksa artikel…')
-													: qcCount > 0 ? `${tr('Analisis QC')} (${qcCount})` : tr('Analisis QC')}
+													: qcCount > 0 ? `${tr('Analisis QC')} (${QC_CHECK_COUNT})` : tr('Analisis QC')}
 												disabled={bulkRunning || qcBusy}
 												onclick={() => (qcFor = m.media_id)}
 											>
@@ -1669,7 +1673,7 @@
 														? 'background-color: var(--success, #16794b); color: #fff;'
 														: qcCount > 0 ? 'background-color: #2563eb; color: #fff;' : 'background-color: #e2e8f0; color: #64748b;'}
 												>
-													{qcCount > 0 ? qcCount : '0'}
+													{qcBadge}
 												</span>
 											</button>
 										{:else}

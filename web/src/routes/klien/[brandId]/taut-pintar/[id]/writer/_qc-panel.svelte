@@ -1,3 +1,15 @@
+<script module lang="ts">
+	// Daftar ceklis panel dibagikan lewat modul juga: badge tombol "Analisis
+	// QC" di daftar media memakai angka yang sama (jumlah pemeriksa), bukan
+	// jumlah riwayat pemindaian.
+	const CHECK_CARDS: Array<{ key: keyof Checks; title: string; gate: boolean }> = [
+		{ key: 'contentSafety', title: 'Illegal Content Guard', gate: true },
+		{ key: 'linkHealth', title: 'Link Health Validator', gate: true },
+		{ key: 'brandVoice', title: 'Brand Voice Limits', gate: false }
+	];
+	export const QC_CHECK_COUNT = CHECK_CARDS.length;
+</script>
+
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
 
@@ -47,12 +59,6 @@
 
 	// AI Overview Checker dihapus dari panel (aturan pemilik produk) — pemindaian
 	// backendo tetap menyimpan datanya, hanya layar tiga pemeriksa ini.
-	const CHECK_CARDS: Array<{ key: keyof Checks; title: string; gate: boolean }> = [
-		{ key: 'contentSafety', title: 'Illegal Content Guard', gate: true },
-		{ key: 'linkHealth', title: 'Link Health Validator', gate: true },
-		{ key: 'brandVoice', title: 'Brand Voice Limits', gate: false }
-	];
-
 	let {
 		apiBase,
 		mediaId,
