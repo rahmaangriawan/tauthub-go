@@ -1042,15 +1042,15 @@
 
 	{#snippet linkEditor(sub = ' (Opsional)', note = '')}
 		<div class="w-full text-left">
-				<div class="flex items-start justify-between gap-2">
-					<div class="flex items-start gap-3">
+				<div class="flex items-center justify-between gap-2">
+					<div class="flex items-center gap-3">
 						{@render numBadge('3')}
 						<p class="text-sm font-semibold leading-5">
 							{tr('Tautan & Anchor')}{sub}
 						</p>
 					</div>
 					<span
-						class="mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold"
+						class="rounded-full px-2 py-0.5 text-[10px] font-bold"
 					style={linkRows.length >= maxLinkRows
 						? 'background-color: var(--primary); color: #fff;'
 						: 'background-color: var(--muted); color: var(--muted-foreground);'}
