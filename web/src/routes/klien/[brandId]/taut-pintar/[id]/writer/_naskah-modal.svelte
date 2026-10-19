@@ -1042,24 +1042,25 @@
 
 	{#snippet linkEditor(sub = ' (Opsional)', note = '')}
 		<div class="w-full text-left">
-				<div class="flex items-center justify-between gap-2">
-					<div class="flex items-center gap-3">
-						{@render numBadge('3')}
-						<p class="text-sm font-semibold leading-5">
-							{tr('Tautan & Anchor')}{sub}
-						</p>
+				<div class="flex items-start gap-3">
+					{@render numBadge('3')}
+					<div class="min-w-0 flex-1">
+						<div class="flex items-start justify-between gap-2">
+							<p class="min-w-0 text-sm font-semibold leading-5">
+								{tr('Tautan & Anchor')}{sub}
+							</p>
+							<span
+								class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
+								style={linkRows.length >= maxLinkRows
+									? 'background-color: var(--primary); color: #fff;'
+									: 'background-color: var(--muted); color: var(--muted-foreground);'}
+							>{linkRows.length}/{maxLinkRows}</span>
+						</div>
+						{#if note}
+							<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">{note}</p>
+						{/if}
 					</div>
-					<span
-						class="rounded-full px-2 py-0.5 text-[10px] font-bold"
-					style={linkRows.length >= maxLinkRows
-						? 'background-color: var(--primary); color: #fff;'
-						: 'background-color: var(--muted); color: var(--muted-foreground);'}
-				>{linkRows.length}/{maxLinkRows}</span>
-			</div>
-
-			{#if note}
-				<p class="mt-1 pl-[52px] text-[11px] leading-relaxed text-muted-foreground">{note}</p>
-			{/if}
+				</div>
 
 			{#if linkRows.length === 0}
 				<p class="mt-3 rounded-lg border border-dashed px-3 py-4 text-left text-xs text-muted-foreground" style="border-color: var(--border);">
