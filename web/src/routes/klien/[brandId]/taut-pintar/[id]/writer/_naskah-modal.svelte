@@ -1265,11 +1265,11 @@
 									type="button"
 									class="relative overflow-hidden rounded-xl border-2 p-4 text-left transition-colors {gayaArtikel === 'simpel'
 										? 'border-amber-400 bg-amber-50/50'
-										: 'border-slate-200 bg-white hover:border-slate-300'}"
+										: 'border-slate-200 bg-slate-50 hover:border-slate-300'}"
 									onclick={() => (gayaArtikel = 'simpel')}
 								>
-									<img src="/img/writer/gaya-sederhana.webp" alt={tr('Ilustrasi artikel sederhana')} loading="lazy" class="pointer-events-none absolute inset-y-0 right-0 w-[44%] select-none object-cover object-right" />
-									<div class="relative flex items-start gap-3">
+									<img src="/img/writer/gaya-sederhana.webp" alt={tr('Ilustrasi artikel sederhana')} loading="lazy" class="pointer-events-none absolute inset-y-0 right-0 w-[44%] select-none object-cover object-right transition-all {gayaArtikel === 'simpel' ? '' : 'opacity-55 grayscale'}" />
+									<div class="relative flex items-start gap-3 {gayaArtikel === 'simpel' ? '' : 'opacity-70'}">
 										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning, #b45309);">
 											<Zap size={18} />
 										</div>
@@ -1286,7 +1286,7 @@
 									<p class="relative mt-2 max-w-[58%] text-xs leading-relaxed text-muted-foreground">
 										{tr('Cukup instruksi sederhana, cocok untuk artikel brief ringan')}
 									</p>
-									<span class="relative mt-3 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10.5px] font-semibold text-blue-700">
+									<span class="relative mt-3 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10.5px] font-semibold text-blue-700 {gayaArtikel === 'simpel' ? '' : 'opacity-70'}">
 										<Zap size={12} class="shrink-0" /> {tr('Tanpa Perlu data perusahaan / Copilot')}
 									</span>
 								</button>
@@ -1294,11 +1294,11 @@
 									type="button"
 									class="relative overflow-hidden rounded-xl border-2 p-4 text-left transition-colors {gayaArtikel === 'proper'
 										? 'border-blue-500 bg-blue-50/40'
-										: 'border-slate-200 bg-white hover:border-slate-300'}"
+										: 'border-slate-200 bg-slate-50 hover:border-slate-300'}"
 									onclick={() => (gayaArtikel = 'proper')}
 								>
-									<img src="/img/writer/gaya-proper.webp" alt={tr('Ilustrasi artikel yang proper')} loading="lazy" class="pointer-events-none absolute inset-y-0 right-0 w-[44%] select-none object-cover object-right" />
-									<div class="relative flex items-start gap-3">
+									<img src="/img/writer/gaya-proper.webp" alt={tr('Ilustrasi artikel yang proper')} loading="lazy" class="pointer-events-none absolute inset-y-0 right-0 w-[44%] select-none object-cover object-right transition-all {gayaArtikel === 'proper' ? '' : 'opacity-55 grayscale'}" />
+									<div class="relative flex items-start gap-3 {gayaArtikel === 'proper' ? '' : 'opacity-70'}">
 										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
 											<Crosshair size={17} />
 										</div>
@@ -1315,7 +1315,7 @@
 									<p class="relative mt-2 max-w-[58%] text-xs leading-relaxed text-muted-foreground">
 										{tr('Rilis resmi brand, peluncuran produk, atau artikel yang butuh fakta presisi.')}
 									</p>
-									<span class="relative mt-3 inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1 text-[10.5px] font-semibold text-blue-700" style="border-color: color-mix(in srgb, var(--primary) 25%, transparent);">
+									<span class="relative mt-3 inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1 text-[10.5px] font-semibold text-blue-700 {gayaArtikel === 'proper' ? '' : 'opacity-70'}" style="border-color: color-mix(in srgb, var(--primary) 25%, transparent);">
 										<Plug size={12} class="shrink-0" /> {tr('Terhubung Copilot & Paste Mentahan')}
 									</span>
 								</button>
