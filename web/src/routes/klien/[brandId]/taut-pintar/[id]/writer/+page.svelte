@@ -190,6 +190,11 @@
 	} | null>(null);
 	let editorSaving = $state(false);
 	let editorError = $state('');
+	// Snapshot artikel dari BACKEND saat "Edit Artikel" dibuka — dipakai untuk
+	// cek "ada perubahan?" saat Simpan: kalau sama, QC otomatis TIDAK dipicu
+	// (hemat token) karena hasil pemindaian tetap valid. Upload/generate mulai
+	// dari kosong → baseline null → QC selalu jalan.
+	let editorBaseline = $state<{ title: string; html: string } | null>(null);
 	// Pratinjau streaming: html parsial dari SSE saat AI menulis; null = idle.
 	let streamHtml = $state<string | null>(null);
 
@@ -685,6 +690,7 @@
 				metaDescription: d.meta_description ?? null,
 				linkLimit
 			};
+			editorBaseline = { title: editor.title, html: editor.html };
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : tr('Gagal membuka artikel.');
 		}
@@ -705,6 +711,7 @@
 			metaDescription: null,
 			linkLimit: upLimit
 		};
+		editorBaseline = null;
 	}
 
 	/** Tombol "Generate Konten": buka Pengelola Naskah langsung di tab
@@ -725,6 +732,7 @@
 			metaDescription: null,
 			linkLimit: genLimit
 		};
+		editorBaseline = null;
 	}
 
 	async function uploadDocNaskah(
@@ -880,8 +888,13 @@
 		editorSaving = false;
 		if (saved) {
 			editor = null;
-			// Dapur Produksi: QC langsung diproses setelah artikel disimpan.
-			void runQcAfterSave(mediaId);
+			// QC otomatis hanya saat ada PERUBAHAN vs backend: judul/isi sama
+			// persis (mis. klien hanya ganti cover/meta tanpa menulis ulang)
+			// → pemindaian dipindai hasil lama cukup, jangan bakar token AI.
+			const kontenBerubah = !editorBaseline
+				|| editorBaseline.title !== (title ?? '')
+				|| editorBaseline.html !== (html ?? '');
+			if (kontenBerubah) void runQcAfterSave(mediaId);
 		}
 	}
 
