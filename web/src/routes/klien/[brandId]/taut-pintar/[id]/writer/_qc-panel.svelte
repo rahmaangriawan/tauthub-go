@@ -459,32 +459,6 @@
 			</div>
 		</section>
 
-		<section class="qcBlock" aria-label={tr('Kesiapan distribusi kampanye')}>
-			<div class="flex items-center justify-between gap-2">
-				<p class="qcBlockTitle">{tr('Kesiapan Distribusi Kampanye')}</p>
-				<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={badge(data?.canDistribute ? 'success' : 'warning')}>
-					{#if data?.canDistribute}<CircleCheck size={11} />{:else}<Clock size={11} />{/if}
-					{data?.canDistribute ? tr('Siap Distribusi') : tr('Terkunci (Butuh QC)')}
-				</span>
-			</div>
-			{#if data?.canDistribute}
-				<p class="mt-1.5 text-[11.5px] text-muted-foreground">{tr('Semua hard gate lulus untuk seluruh media terpilih.')}</p>
-			{:else if blocking.length > 0}
-				<p class="mt-1.5 text-[11.5px] text-muted-foreground">{tr('Media berikut belum lulus hard gate:')}</p>
-				<ul class="mt-1.5 space-y-1">
-					{#each blocking as m (m.media_id)}
-						<li class="flex items-center gap-2 text-[11.5px]">
-							<XCircle size={12} class="shrink-0" style="color: var(--warning);" />
-							<span class="min-w-0 flex-1 truncate">{m.name}</span>
-							<span class="shrink-0 text-muted-foreground">{m.audit.status === 'pending' ? tr('Belum dipindai') : statusLabel(m.audit.status)}</span>
-						</li>
-					{/each}
-				</ul>
-			{:else}
-				<p class="mt-1.5 text-[11.5px] text-muted-foreground">{tr('Belum ada media terpilih pada kampanye ini.')}</p>
-			{/if}
-		</section>
-
 		{#if articleStatus === 'ready'}
 			<p class="mt-3 text-[11px] text-muted-foreground">
 				{tr('Artikel ini berstatus Siap Terbit, jadi pemindaian ulang akan melewatinya — hasil di atas berasal dari pemindaian terakhir. Perubahan manual pada artikel tidak otomatis memicu pemindaian baru; pakai Generate Ulang agar versi terbaru ikut dipindai.')}
