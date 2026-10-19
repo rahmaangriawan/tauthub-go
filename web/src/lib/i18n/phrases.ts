@@ -4237,6 +4237,8 @@ export const PHRASE_EN: Record<string, string> = {
 	"Gagal meracik instruksi. Coba lagi.": "Failed to brew the instruction. Try again.",
   // ---- Obrolan klien ↔ mitra (halaman Pesan) ----
   "Cari percakapan…": "Search conversations…",
+  "Pesan klien belum dibaca": "Unread client messages",
+  "Semua pesan klien sudah dibaca": "All client messages are read",
   "Filter percakapan": "Filter conversations",
   "Tidak ada percakapan yang cocok.": "No conversations match.",
   "Pesan": "Messages",

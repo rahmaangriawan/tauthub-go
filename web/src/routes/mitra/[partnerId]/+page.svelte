@@ -14,6 +14,7 @@
 		CircleCheck,
 		Clock,
 		Megaphone,
+		MessageCircle,
 		Newspaper,
 		RotateCcw,
 		TriangleAlert,
@@ -23,6 +24,7 @@
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import { chatUnread, refreshChatUnreadNow } from '$lib/chat/chat-unread.svelte';
 	import WaRequiredBanner from '$lib/components/wa-required-banner.svelte';
 		import Sparkline from '$lib/components/sparkline.svelte';
 
@@ -44,6 +46,7 @@
 		void (async () => {
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
+			void refreshChatUnreadNow();
 			const [meRes, earnRes, mediaRes, pubRes] = await Promise.all([
 				apiRequest('/v1/partner/me'),
 				// Limit diperbesar khusus untuk deret sparkline; tabel tetap 5 baris (slice).
@@ -272,8 +275,8 @@
 	{#if loading}
 		<p class="text-sm text-muted-foreground">{tr("Memuat ringkasan…")}</p>
 	{:else}
-		<!-- 2. Tiga kartu ringkasan -->
-		<div class="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+		<!-- 2. Kartu ringkasan (4): media, menunggu, pesan, penghasilan -->
+		<div class="grid grid-cols-1 gap-3.5 md:grid-cols-2 lg:grid-cols-4">
 				<!-- Media Anda -->
 				<div class="app-card flex flex-col justify-between gap-3" style="padding: 16px 18px;">
 					<div class="flex items-center justify-between gap-2">
@@ -362,6 +365,28 @@
 						/>
 					</div>
 				</div>
+
+				<!-- Pesan: jumlah chat klien yang belum dibaca (badge di sidebar menu) -->
+				<a
+					class="app-card flex flex-col justify-between gap-3"
+					href={`${base}/chat`}
+					style="padding: 16px 18px; {chatUnread.count > 0 ? cardStyle('pending') : ''}"
+				>
+					<div class="flex items-center justify-between gap-2">
+						<span class="text-[11px] font-bold uppercase tracking-[0.05em]" style={chatUnread.count > 0 ? labelStyle('pending') : 'color: var(--muted-foreground);'}>{tr('Pesan')}</span>
+						<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={chatUnread.count > 0 ? iconBoxStyle('pending') : iconBoxStyle('neutral')}>
+							<MessageCircle size={17} />
+						</div>
+					</div>
+					<div class="flex items-end justify-between gap-3">
+						<div>
+							<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums {chatUnread.count > 0 ? '' : 'text-muted-foreground'}" style={chatUnread.count > 0 ? valueStyle('pending') : ''}>{fmt(chatUnread.count)}</div>
+							<div class="text-[12px] leading-[1.35]" style={chatUnread.count > 0 ? hintStyle('pending') : 'color: var(--muted-foreground);'}>
+								{chatUnread.count > 0 ? tr('Pesan klien belum dibaca') : tr('Semua pesan klien sudah dibaca')}
+							</div>
+						</div>
+					</div>
+				</a>
 		</div>
 
 		<!-- 3. Statistik publikasi -->
