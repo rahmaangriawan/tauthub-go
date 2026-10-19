@@ -1173,7 +1173,7 @@
 				Icon: FileText,
 				label: tr('Status artikel'),
 				sub: tr('Status terkini artikel di sistem.'),
-				value: statusText(st),
+				value: st === 'draft' ? tr('Tersedia') : statusText(st),
 				tone: st === 'ready' ? 'pos' : st === 'blocked' ? 'warn' : 'num'
 			},
 			{
