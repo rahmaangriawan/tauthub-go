@@ -321,7 +321,9 @@ func (d *Deps) createNotification(ctx context.Context, userID, notifType, title,
 func (d *Deps) notifyBrandMembers(ctx context.Context, brandID, notifType, title, body string, link *string, publicationID *string) {
 	if err := d.exec(ctx,
 		`INSERT INTO notifications (id, user_id, type, title, body, link, publication_id)
-		 SELECT gen_random_uuid(), user_id, $1, $2, $3, $4, $5 FROM brand_memberships WHERE brand_id = $6`,
+		 SELECT gen_random_uuid(), bm.user_id, $1, $2, $3, $4, $5
+		 FROM brand_memberships bm JOIN users u ON u.id = bm.user_id
+		 WHERE bm.brand_id = $6 AND u.role <> 'admin'`,
 		notifType, title, body, link, publicationID, brandID); err != nil {
 		slog.Warn("[clienttaut] notifikasi brand gagal", "type", notifType, "err", err)
 	}
