@@ -4,7 +4,7 @@
 	// artikel (cover, kategori, meta deskripsi) dan footer validasi.
 	// Reuse: rich-text-editor (toolbar + contentEditable), endpoint /files dan
 	// /produce/{mediaId} lewat callback dari writer, serta saveEditor di writer.
-	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, Info, Link2, Lightbulb, Plus , Zap, Crosshair, Plug  } from '@lucide/svelte';
+	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, CircleDot, Info, Link2, Lightbulb, Plus , Zap, Crosshair, Plug  } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { tr } from '$lib/i18n/phrases';
 	import { apiRequest, readApiError } from '$lib/auth';
@@ -96,8 +96,7 @@
 	let properPaste = $state('');
 	// Racik instruksi topik dari anchor (AI): ganti Tips/Contoh manual.
 	let racikBusy = $state(false);
-	let racikError = $state('');
-	// Isian Proper (UI dulu — logika generate menyusul): fakta terkunci,
+	let racikError = $state('');	// Isian Proper (UI dulu — logika generate menyusul): fakta terkunci,
 	// dateline & narasumber.
 	let faktaTerkunci = $state('');
 	let kotaRilis = $state('');
@@ -1246,52 +1245,77 @@
 							</div>
 						</div>
 
-						<!-- 1. Pilihan gaya artikel (UI dulu — logika menyusul). -->
+						<!-- 1. Pilihan gaya artikel: dua kartu besar dengan ilustrasi
+						     aset 3D + chip keunggulan. -->
 						<div class="mt-6">
-							<div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-								<p class="text-sm font-bold">1. {tr('Kamu mau buat artikel seperti apa?')} <span style="color: var(--destructive);">*</span></p>
-								<p class="text-[11px] text-muted-foreground">{tr('Pilih sesuai tujuan publikasi')}</p>
+							<div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+								<div class="flex items-start gap-3">
+									<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-bold" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">1</span>
+									<div>
+										<p class="text-sm font-bold">{tr('Kamu mau buat artikel seperti apa?')} <span style="color: var(--destructive);">*</span></p>
+										<p class="mt-0.5 text-[11px] text-muted-foreground">{tr('Pilih sesuai tujuan publikasi dan kebutuhan konten kamu.')}</p>
+									</div>
+								</div>
+								<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold" style="background-color: color-mix(in srgb, var(--primary) 8%, transparent); color: var(--primary);">
+									<CircleDot size={12} /> {tr('Pilih sesuai tujuan publikasi')}
+								</span>
 							</div>
 							<div class="grid gap-4 lg:grid-cols-2">
 								<button
 									type="button"
-									class="rounded-xl border-2 p-4 text-left transition-colors {gayaArtikel === 'simpel' ? 'border-blue-500 bg-blue-50/40' : 'border-slate-200 bg-white hover:border-slate-300'}"
+									class="relative overflow-hidden rounded-xl border-2 p-4 text-left transition-colors {gayaArtikel === 'simpel'
+										? 'border-amber-400 bg-amber-50/50'
+										: 'border-slate-200 bg-white hover:border-slate-300'}"
 									onclick={() => (gayaArtikel = 'simpel')}
 								>
-									<div class="flex items-start gap-3">
+									<img src="/img/writer/gaya-sederhana.webp" alt={tr('Ilustrasi artikel sederhana')} loading="lazy" class="pointer-events-none absolute inset-y-0 right-0 w-[44%] select-none object-cover object-right" />
+									<div class="relative flex items-start gap-3">
 										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning, #b45309);">
 											<Zap size={18} />
 										</div>
-										<p class="flex-1 text-sm font-bold">{tr('Sederhana Aja')}</p>
-										<span class="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-2 {gayaArtikel === 'simpel' ? 'border-blue-600' : 'border-slate-300'}">
-											{#if gayaArtikel === 'simpel'}<span class="h-2 w-2 rounded-full bg-blue-600"></span>{/if}
-										</span>
+										<div>
+											<p class="text-sm font-bold">{tr('Sederhana Aja')}</p>
+											<span class="mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning, #b45309);">
+												{tr('Cepat & Praktis')}
+											</span>
+										</div>
 									</div>
-									<p class="mt-2 text-xs leading-relaxed text-muted-foreground">
+									<span class="absolute right-3 top-3 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-2 {gayaArtikel === 'simpel' ? 'border-amber-500' : 'border-slate-300'} bg-white">
+										{#if gayaArtikel === 'simpel'}<span class="h-2 w-2 rounded-full bg-amber-500"></span>{/if}
+									</span>
+									<p class="relative mt-2 max-w-[58%] text-xs leading-relaxed text-muted-foreground">
 										{tr('Cukup 1 kolom instruksi. Cocok untuk artikel dengan brief ringan — langsung mengalir, muncul natural.')}
 									</p>
-									<span class="mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
-										<CircleCheck size={12} class="shrink-0" /> {tr('Tanpa Perlu data perusahaan / Copilot')}
+									<span class="relative mt-3 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10.5px] font-semibold text-blue-700">
+										<Zap size={12} class="shrink-0" /> {tr('Tanpa Perlu data perusahaan / Copilot')}
 									</span>
 								</button>
 								<button
 									type="button"
-									class="rounded-xl border-2 p-4 text-left transition-colors {gayaArtikel === 'proper' ? 'border-blue-500 bg-blue-50/40' : 'border-slate-200 bg-white hover:border-slate-300'}"
+									class="relative overflow-hidden rounded-xl border-2 p-4 text-left transition-colors {gayaArtikel === 'proper'
+										? 'border-blue-500 bg-blue-50/40'
+										: 'border-slate-200 bg-white hover:border-slate-300'}"
 									onclick={() => (gayaArtikel = 'proper')}
 								>
-									<div class="flex items-start gap-3">
+									<img src="/img/writer/gaya-proper.webp" alt={tr('Ilustrasi artikel yang proper')} loading="lazy" class="pointer-events-none absolute inset-y-0 right-0 w-[44%] select-none object-cover object-right" />
+									<div class="relative flex items-start gap-3">
 										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
 											<Crosshair size={17} />
 										</div>
-										<p class="flex-1 text-sm font-bold">{tr('Yang Proper')}</p>
-										<span class="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-2 {gayaArtikel === 'proper' ? 'border-blue-600' : 'border-slate-300'}">
-											{#if gayaArtikel === 'proper'}<span class="h-2 w-2 rounded-full bg-blue-600"></span>{/if}
-										</span>
+										<div>
+											<p class="text-sm font-bold">{tr('Yang Proper')}</p>
+											<span class="mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
+												{tr('Lebih Lengkap & Presisi')}
+											</span>
+										</div>
 									</div>
-									<p class="mt-2 text-xs leading-relaxed text-muted-foreground">
+									<span class="absolute right-3 top-3 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-2 {gayaArtikel === 'proper' ? 'border-blue-600' : 'border-slate-300'} bg-white">
+										{#if gayaArtikel === 'proper'}<span class="h-2 w-2 rounded-full bg-blue-600"></span>{/if}
+									</span>
+									<p class="relative mt-2 max-w-[58%] text-xs leading-relaxed text-muted-foreground">
 										{tr('Rilis resmi brand, peluncuran produk, atau artikel yang butuh fakta presisi.')}
 									</p>
-									<span class="mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
+									<span class="relative mt-3 inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1 text-[10.5px] font-semibold text-blue-700" style="border-color: color-mix(in srgb, var(--primary) 25%, transparent);">
 										<Plug size={12} class="shrink-0" /> {tr('Terhubung Copilot & Paste Mentahan')}
 									</span>
 								</button>
