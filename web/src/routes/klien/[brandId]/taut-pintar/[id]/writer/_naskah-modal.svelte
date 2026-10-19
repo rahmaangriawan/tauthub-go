@@ -1652,12 +1652,7 @@
 										></textarea>
 									</div>
 
-									<div class="mt-6 rounded-lg px-3 py-2.5 text-xs" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">
-										<p class="font-semibold">{tr('Mode Proper (Strict Grounding)')}</p>
-										<p class="mt-1 leading-relaxed">{tr('Seluruh klaim produk, fitur & kutipan dikunci 100% hanya dari Memori Copilot & Fakta Input.')}</p>
-									</div>
-
-									<button class="app-btn app-btn-primary mt-3 w-full" type="button" disabled title={tr('Logika generate Proper menyusul')}>
+									<button class="app-btn app-btn-primary mt-6 w-full" type="button" disabled title={tr('Logika generate Proper menyusul')}>
 										<Sparkles size={15} /> {tr('Buat Draf dengan AI')} ({tr('Gaya')} {mediaType === 'blogger' ? tr('Media Blogger') : tr('Media Mainstream')})
 									</button>
 								</div>
