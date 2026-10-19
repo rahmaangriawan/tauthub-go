@@ -889,7 +889,7 @@
 	}
 		.rte-body {
 			margin-top: 8px;
-			background: var(--background);
+			background: var(--card, #fff);
 		}
 		:global(.rte-body img) {
 			max-width: 100%;
