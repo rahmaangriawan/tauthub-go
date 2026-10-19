@@ -402,11 +402,6 @@
 						{otherLabel}: {otherName(active)}{#if active.article_title} · {active.article_title}{/if}
 					</p>
 				</div>
-				{#if active.pub_url}
-					<a class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50/60 px-2.5 py-1 text-[11px] font-semibold text-blue-600 hover:bg-blue-100/70" href={active.pub_url} target="_blank" rel="noreferrer">
-						<ExternalLink size={11} />{tr('Buka artikel')}
-					</a>
-				{/if}
 				<span class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold {statusChip.cls}">
 					{statusChip.label}
 				</span>
