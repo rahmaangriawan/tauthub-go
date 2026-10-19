@@ -1684,8 +1684,8 @@
 								</div>
 
 								<!-- Kolom 4: Area Aksi (2x2) -->
-								<!-- Aksi: satu baris ikon; saat hover tombol mengembang memunculkan
-								     teksnya (efek tooltip sekaligus label). -->
+								<!-- Aksi: satu baris ikon; tooltip muncul di atas tombol
+								     saat hover dengan animasi halus. -->
 									<div class="w-full lg:w-auto shrink-0 flex flex-wrap items-center justify-start lg:justify-end gap-2 overflow-visible">
 										<button
 											type="button"
@@ -1694,24 +1694,24 @@
 													? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
 													: 'bg-blue-50/90 hover:bg-blue-100 text-blue-600 border border-blue-200/80'
 											}`}
-											title={tr('Cek Validasi')}
+											aria-label={tr('Cek Validasi')}
 											disabled={bulkRunning || viewOnly}
 											onclick={() => (checklistFor = m.media_id)}
 										>
 											<ShieldCheck size={14} strokeWidth={2.2} class="shrink-0" />
-											<span class="expLabel">{tr('Cek Validasi')}</span>
+											<span class="expTip">{tr('Cek Validasi')}</span>
 										</button>
 
 										{#if hasDoc(m)}
 											<button
 												type="button"
 												class="expAction h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors"
-												title={tr('Edit Artikel')}
+												aria-label={tr('Edit Artikel')}
 												disabled={bulkRunning}
 												onclick={() => void openPreview(m)}
 											>
 												<Pencil size={12} strokeWidth={2} class="shrink-0" />
-												<span class="expLabel">{tr('Edit Artikel')}</span>
+												<span class="expTip">{tr('Edit Artikel')}</span>
 											</button>
 
 											{@const qcCount = qcCounts[m.media_id] ?? 0}
@@ -1729,7 +1729,7 @@
 												class="expAction relative h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border transition-colors {qcSelesai
 													? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
 													: 'border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700'}"
-												title={qcBusy
+												aria-label={qcBusy
 													? tr('QC sedang memeriksa artikel…')
 													: qcCount > 0 ? `${tr('Analisis QC')} (${QC_CHECK_COUNT})` : tr('Analisis QC')}
 												disabled={bulkRunning || qcBusy}
@@ -1740,7 +1740,7 @@
 												{:else}
 													<ListChecks size={13} strokeWidth={2} class="shrink-0" />
 												{/if}
-												<span class="expLabel">{tr('Analisis QC')}</span>
+												<span class="expTip">{qcBusy ? tr('QC sedang memeriksa artikel…') : qcCount > 0 ? `${tr('Analisis QC')} (${QC_CHECK_COUNT})` : tr('Analisis QC')}</span>
 												<!-- Angka QC nempel di pojok kanan atas pill, tetap tampil
 												     meski tombol sedang menciut jadi ikon saja; hijau = QC selesai. -->
 												<span
@@ -1756,31 +1756,31 @@
 											<button
 												type="button"
 												class="expAction h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors"
-												title={generating ? tr('Membuat…') : tr('Generate Konten')}
+												aria-label={generating ? tr('Membuat…') : queued ? tr('Mengantre…') : tr('Generate Konten')}
 												disabled={generating || bulkRunning || viewOnly}
 												onclick={() => openNaskahGenerate(m)}
 											>
 												{#if generating}
 													<LoaderCircle size={12} class="animate-spin text-blue-600 shrink-0" />
-													<span class="expLabel">{tr('Membuat…')}</span>
+													<span class="expTip">{tr('Membuat…')}</span>
 												{:else if queued}
 													<Clock size={12} class="text-slate-400 shrink-0" />
-													<span class="expLabel">{tr('Mengantre…')}</span>
+													<span class="expTip">{tr('Mengantre…')}</span>
 												{:else}
 													<Sparkles size={12} class="text-slate-500 shrink-0" />
-													<span class="expLabel">{tr('Generate Konten')}</span>
+													<span class="expTip">{tr('Generate Konten')}</span>
 												{/if}
 											</button>
 
 											<button
 												type="button"
 												class="expAction h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors"
-												title={tr('Unggah Artikel')}
+												aria-label={tr('Unggah Artikel')}
 												disabled={bulkRunning || viewOnly}
 												onclick={() => openNaskahUpload(m)}
 											>
 												<Upload size={12} strokeWidth={2} class="text-slate-500 shrink-0" />
-												<span class="expLabel">{tr('Unggah Artikel')}</span>
+												<span class="expTip">{tr('Unggah Artikel')}</span>
 											</button>
 										{/if}
 
@@ -1788,13 +1788,13 @@
 										     aria-label + tooltip; hover cukup mengubah warna tombol. -->
 										<button
 											type="button"
-											class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition-colors"
+											class="expAction inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition-colors"
 											disabled={bulkRunning || removeBusy || viewOnly}
 											aria-label={tr('Hapus media dari kampanye')}
-											title={tr('Hapus media dari kampanye')}
 											onclick={() => { removeError = ''; removeTarget = m; }}
 										>
 											<Trash2 size={14} class="shrink-0" />
+											<span class="expTip">{tr('Hapus media dari kampanye')}</span>
 										</button>
 									</div>
 							</div>
@@ -2278,41 +2278,46 @@
 		   dari bawah angka total lalu memudar. Tujuan animasinya: memancing mata
 		   ke angka yang baru saja berubah setelah suatu aksi (R-19). */
 
-		/* Tombol aksi card: normal hanya ikon (min-w-8, area klik 32x32). Saat
-		   hover/fokus, tombol mengembang: padding 12px kiri + 14px kanan supaya
-		   ikon tidak menempel tepi pill, label menyusul dengan jarak 8px. */
+		/* Tombol aksi card: selalu ikon (32px), tidak mengembang. Saat hover/
+		   fokus, tooltip muncul di atas tombol dengan animasi halus. */
 		.expAction {
 			box-sizing: border-box;
-			padding-left: 0;
-			padding-right: 0;
-			transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease,
-				padding-left 0.2s ease, padding-right 0.2s ease;
+			position: relative;
 		}
-		.expAction:hover,
-		.expAction:focus-visible {
-			padding-left: 12px;
-			padding-right: 14px;
-		}
-		.expLabel {
-			box-sizing: border-box;
-			display: inline-flex;
-			align-items: center;
-			gap: 4px;
-			max-width: 0;
-			opacity: 0;
-			overflow: hidden;
+		.expTip {
+			position: absolute;
+			bottom: calc(100% + 8px);
+			left: 50%;
+			transform: translate(-50%, 4px) scale(0.96);
+			padding: 5px 9px;
+			border-radius: 5px;
+			background: #0f172a;
+			color: #ffffff;
+			font-size: 11px;
+			font-weight: 600;
+			line-height: 1.4;
 			white-space: nowrap;
-			padding-left: 0;
-			transition: max-width 0.2s ease, opacity 0.15s ease, padding-left 0.2s ease;
+			opacity: 0;
+			pointer-events: none;
+			z-index: 20;
+			transition: opacity 0.18s ease, transform 0.18s ease;
 		}
-		.expAction:hover .expLabel,
-		.expAction:focus-visible .expLabel {
-			max-width: 250px;
+		.expTip::after {
+			content: '';
+			position: absolute;
+			top: 100%;
+			left: 50%;
+			transform: translateX(-50%);
+			border: 4px solid transparent;
+			border-top-color: #0f172a;
+		}
+		.expAction:hover .expTip,
+		.expAction:focus-visible .expTip {
 			opacity: 1;
-			padding-left: 8px;
+			transform: translate(-50%, 0) scale(1);
 		}
 		@media (prefers-reduced-motion: reduce) {
-			.expLabel { transition: none; }
+			.expTip { transition: none; }
 		}
 
 		.billDeltaWrap {
