@@ -92,6 +92,8 @@
 	let tab = $state<Tab>(untrack(() => initialTab));
 	// Pilihan gaya (1. kamu mau buat artikel seperti apa?) — UI dulu, logika menyusul.
 	let gayaArtikel = $state<'simpel' | 'proper'>('simpel');
+	// Isian mode Proper (copilot & paste) — UI dulu, logika menyusul.
+	let properPaste = $state('');
 	let title = $state(untrack(() => initialTitle));
 	let html = $state(untrack(() => initialHtml));
 	let cover = $state<string | null>(untrack(() => initialCoverUrl));
@@ -1153,7 +1155,8 @@
 								</button>
 							</div>
 						</div>
-						<div class="mt-5 w-full text-left">
+												{#if gayaArtikel === 'simpel'}
+<div class="mt-5 w-full text-left">
 								<div class="mb-4 min-w-0">
 									<span class="text-sm font-semibold">2. {tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
 									{#if angleChannelName}
@@ -1429,6 +1432,42 @@
 								{tr('Draf akan tampil di tab Editor Post untuk kamu tinjau sebelum disimpan.')}
 							</p>
 						</div>
+						{:else}
+							<!-- PANE "YANG PROPER": isian berdiri sendiri, beda dari Sederhana. -->
+							<div class="mt-5 w-full text-left">
+								<div class="mb-4 min-w-0">
+									<span class="text-sm font-semibold">2. {tr('Unggah Dokumen Brief')} <span style="color: var(--destructive);">*</span></span>
+									<p class="mt-1 text-xs text-muted-foreground">{tr('Rilis resmi, brosur, atau dokumen fakta brand menjadi sumber utama artikel.')}</p>
+									<div
+										class="mt-2 flex h-full min-h-[190px] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
+										style="border-color: var(--border); background-color: var(--muted);"
+										role="button"
+										tabindex="0"
+										aria-label={tr('Unggah dokumen brief')}
+									>
+										<div class="flex h-12 w-12 items-center justify-center rounded-full" style="background-color: var(--primary); color: var(--primary-foreground);">
+											<Upload size={20} />
+										</div>
+										<p class="mt-2 text-sm font-bold">{tr('Tarik & lepas dokumen brief di sini')}</p>
+										<p class="text-xs text-muted-foreground">{tr('DOCX, PDF, TXT (Maks 10MB) — logika unggah menyusul')}</p>
+									</div>
+								</div>
+
+								<div class="mb-4 min-w-0">
+									<span class="text-sm font-semibold">3. {tr('Tempel Teks Mentahan')} <span style="color: var(--destructive);">*</span></span>
+									<p class="mt-1 text-xs text-muted-foreground">{tr('Alternatif unggahan: tempel isi rilis/bromos/materi press mentah — Copilot mengurutkan jadi artikel.')}</p>
+									<textarea
+										class="app-input mt-2 min-h-[160px] w-full resize-y text-sm"
+										placeholder={tr('Tempel teks mentahan brief di sini (Ctrl/Cmd+V)…')}
+										bind:value={properPaste}
+									></textarea>
+								</div>
+
+								<button class="app-btn app-btn-primary mt-3 w-full" type="button" disabled title={tr('Logika generate Proper menyusul')}>
+									<Sparkles size={15} /> {tr('Buat Draf dengan AI')} ({tr('Copilot & Paste Mentahan')})
+								</button>
+							</div>
+						{/if}
 					</div>
 				{/if}
 			</div>

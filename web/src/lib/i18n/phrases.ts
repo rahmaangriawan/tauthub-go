@@ -4159,6 +4159,16 @@ export const PHRASE_EN: Record<string, string> = {
 	"Terhubung Copilot & Paste Mentahan": "Copilot-connected & raw paste",
 	"Ini adalah nama kampanye Anda": "This is your campaign name",
 	"Gaya": "Style",
+	"Unggah Dokumen Brief": "Upload Brief Document",
+	"Rilis resmi, brosur, atau dokumen fakta brand menjadi sumber utama artikel.": "Official releases, brochures, or factual brand documents become the article's primary source.",
+	"Unggah dokumen brief": "Upload brief document",
+	"Tarik & lepas dokumen brief di sini": "Drag & drop your brief document here",
+	"DOCX, PDF, TXT (Maks 10MB) — logika unggah menyusul": "DOCX, PDF, TXT (max 10MB) — upload logic coming soon",
+	"Tempel Teks Mentahan": "Paste Raw Text",
+	"Alternatif unggahan: tempel isi rilis/bromos/materi press mentah — Copilot mengurutkan jadi artikel.": "Alternative: paste raw release/brochure/press materials — Copilot arranges them into an article.",
+	"Tempel teks mentahan brief di sini (Ctrl/Cmd+V)…": "Paste the raw brief text here (Ctrl/Cmd+V)…",
+	"Logika generate Proper menyusul": "Proper generation logic coming soon",
+	"Copilot & Paste Mentahan": "Copilot & raw paste",
 };
 
 /**
