@@ -31,7 +31,7 @@ Catatan:
 - **Admin punya menu "Log Obrolan"** untuk meninjau riwayat percakapan klien ↔ mitra (hanya baca, disertai jejak audit). Admin tidak lagi menerima notifikasi chat; notifikasi hanya dikirim ke peserta percakapan.
 
 ### Perbaikan
-- **Penghasilan mitra**: potongan platform kini **25%** — mitra menerima 75% dari harga pengajuan, sesuai aturan yang juga tertulis di halaman Media. Sebelumnya perhitungan memakai 5%. Berlaku untuk earning baru.
+- **Penghasilan mitra**: potongan platform kini **25%** — mitra menerima 75% dari harga pengajuan, sesuai aturan yang juga tertulis di halaman Media. Sebelumnya perhitungan memakai 5%. Seluruh publikasi lama ikut dikoreksi, bukan hanya earning baru.
 - **Kartu media di Dapur Produksi** hanya melaporkan jenis tautan yang benar-benar ada: artikel dengan 1 link dofollow tidak lagi menampilkan "0 Nofollow"; artikel tanpa link tetap ditandai "0 Tautan".
 - **Popup Cek Validasi** dirapikan menjadi kartu indikator dua kolom dengan chip status berwarna.
 - **Peringatan queue gagal tidak lagi membanjiri lonceng admin**: kegagalan job kini tampil sebagai satu ringkasan di halaman Operations beserta tab **Queue gagal** yang mengelompokkan kegagalan per jenis job (jumlah + error terakhir 24 jam).
