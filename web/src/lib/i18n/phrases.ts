@@ -4158,6 +4158,7 @@ export const PHRASE_EN: Record<string, string> = {
 	"Rilis resmi brand, peluncuran produk, atau artikel yang butuh fakta presisi.": "Official brand releases, product launches, or articles needing precise facts.",
 	"Terhubung Copilot & Paste Mentahan": "Copilot-connected & raw paste",
 	"Ini adalah nama kampanye Anda": "This is your campaign name",
+	"Gaya": "Style",
 };
 
 /**

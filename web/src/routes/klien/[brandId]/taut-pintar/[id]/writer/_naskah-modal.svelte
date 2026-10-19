@@ -1183,7 +1183,15 @@
 										{/if}
 									</div>
 								</div>
-								<div class="flex items-center gap-2">
+									<!-- Tautan & anchor: tampil setelah Angle, sebelum Topik. -->
+								<div class="mt-5">
+									{#if linkLimit > 0}
+										{@render linkEditor()}
+									{:else}
+										<p class="text-xs text-muted-foreground">{tr('Media ini tidak mengizinkan tautan dalam artikel.')}</p>
+									{/if}
+								</div>
+							<div class="flex items-center gap-2">
 									<label class="text-sm font-semibold" for="naskah-topik">
 										{tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
 									</label>
@@ -1321,11 +1329,6 @@
 										</ul>
 									</div>
 								{/if}
-								{#if linkLimit > 0}
-									{@render linkEditor()}
-								{:else}
-									<p class="mt-4 text-xs text-muted-foreground">{tr('Media ini tidak mengizinkan tautan dalam artikel.')}</p>
-								{/if}
 							{#if genError}
 								<p class="mt-2 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">
 									<CircleAlert size={15} /> {genError}
@@ -1338,7 +1341,9 @@
 								onclick={generate}
 							>
 								{#if genBusy}<Sparkles size={15} class="genSparkle" /><LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
-								{genBusy ? tr('Sedang membuat draf artikel...') : tr('Buat Draf dengan AI')}
+								{genBusy
+									? tr('Sedang membuat draf artikel...')
+									: `${tr('Buat Draf dengan AI')} (${tr('Gaya')} ${mediaType === 'blogger' ? tr('Media Blogger') : tr('Media Mainstream')})`}
 							</button>
 
 							{#if genBusy || genOutcome !== 'idle'}
