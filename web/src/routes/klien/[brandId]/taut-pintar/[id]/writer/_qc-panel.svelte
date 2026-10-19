@@ -498,8 +498,10 @@
 		<!-- Artikel yang sudah lulus QC (Siap Terbit) tak perlu aksi: cukup tombol
 		     Ok untuk menutup panel — aturan pemilik produk. -->
 		{#if articleStatus === 'ready'}
-			<button class="app-btn app-btn-primary !min-h-9 !px-3.5 !text-xs mx-auto" type="button" onclick={onPublish ?? onClose}>
-				<Send size={14} /> {tr('Lanjut Terbit')}
+			<!-- Kembalikan ke OKE sederhana di sebelah KIRI — alur terbit sudah
+			     ditangani tombol bar bawah "Lanjut Tinjau & Terbit". -->
+			<button class="app-btn app-btn-primary !min-h-9 !px-3.5 !text-xs !mr-auto" type="button" onclick={onClose}>
+				<CheckCircle2 size={14} /> {tr('OKE')}
 			</button>
 		{:else}
 			<button class="app-btn app-btn-primary !min-h-9 !px-3.5 !text-xs" type="button" disabled={scanning || gatekeeperConfigured === false} onclick={() => void scan()}>

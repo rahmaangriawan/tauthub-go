@@ -3901,6 +3901,7 @@ export const PHRASE_EN: Record<string, string> = {
 	"Selesaikan cover dulu: tambahkan lewat Edit Artikel, atau pakai thumbnail default Tauthub.": "Finish the cover first: add one via Edit Article, or use Tauthub's default thumbnail.",
 	"Sembunyikan": "Hide",
 	"Semua artikel sudah punya cover.": "All articles have a cover.",
+	"OKE": "OKE",
 	"Pilih media ini": "Select this media",
 	"Batal Pilih Semua": "Clear selection",
 	"Pilih Semua": "Select all",
