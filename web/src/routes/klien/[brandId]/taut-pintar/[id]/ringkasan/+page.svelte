@@ -11,7 +11,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, Link as LinkIcon, Loader, LoaderCircle, MessageCircle, RefreshCw, RotateCcw, X } from '@lucide/svelte';
+	import { ArrowRight, Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, Info, Link as LinkIcon, Loader, LoaderCircle, MessageCircle, RefreshCw, RotateCcw, Star, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -62,9 +62,15 @@
 	// dan wajib dicentang sebelum tombol lanjut aktif.
 	let contactTarget = $state<MediaItem | null>(null);
 	let contactAck = $state(false);
+	// Rating kecepatan terbit: hanya state tampilan (belum ada endpoint
+	// penyimpanan) — interaksi bintang tetap hidup seperti desain.
+	let contactRating = $state(0);
+	let contactHover = $state(0);
 
 	function openContact(m: MediaItem) {
 		contactAck = false;
+		contactRating = 0;
+		contactHover = 0;
 		contactTarget = m;
 	}
 
@@ -457,37 +463,70 @@
 		onclick={(e) => { if (e.target === e.currentTarget) contactTarget = null; }}
 	>
 		<div
-			class="app-card w-full max-w-lg"
+			class="app-card flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden"
 			role="dialog"
 			aria-modal="true"
-			aria-label={tr('Ajukan Revisi lewat Obrolan')}
+			aria-label={tr('Konfirmasi Sesi Obrolan')}
 			tabindex="-1"
 			onkeydown={(e) => { if (e.key === 'Escape') contactTarget = null; }}
 			onclick={(e) => e.stopPropagation()}
 		>
-			<div class="flex items-start gap-3 border-b border-slate-100 px-5 pb-4 pt-5">
-				<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
+			<!-- Kepala -->
+			<div class="flex items-start gap-3 px-5 pb-3 pt-5">
+				<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
 					<MessageCircle size={21} />
 				</span>
 				<div class="min-w-0 flex-1">
-					<p class="text-lg leading-tight font-bold text-slate-900">{tr('Ajukan Revisi lewat Obrolan')}</p>
-					<p class="mt-1 text-[13px] text-muted-foreground">{contactTarget.name}</p>
+					<p class="text-lg leading-tight font-bold text-slate-900">{tr('Konfirmasi Sesi Obrolan')}</p>
+					<p class="mt-1 truncate text-[13px] text-muted-foreground">{contactTarget.name}</p>
 				</div>
-				<button class="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" type="button" aria-label={tr('Tutup')} onclick={() => (contactTarget = null)}>
+				<button class="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" type="button" aria-label={tr('Tutup')} onclick={() => (contactTarget = null)}>
 					<X size={18} />
 				</button>
 			</div>
 
-			<div class="px-5 py-4">
-				<p class="text-[13px] leading-relaxed text-slate-700">
-					{tr('Dengan melanjutkan, kamu membuka sesi obrolan dengan mitra untuk artikel ini. Sesi berlaku 3×24 jam sejak pesan pertama dan riwayatnya dapat dibaca kedua pihak.')}
-				</p>
-				<ul class="mt-3 space-y-1.5 text-[12.5px] leading-relaxed text-slate-600">
-					<li>• {tr('Gunakan untuk mengajukan revisi, penambahan atau perbaikan backlink, dan pertanyaan lain seputar artikel.')}</li>
-					<li>• {tr('Setelah sesi berakhir, riwayat tetap dapat dibaca tetapi pesan baru tidak bisa dikirim.')}</li>
-				</ul>
+			<div class="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+				<!-- Rating kecepatan terbit -->
+				<div class="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-center">
+					<p class="text-[13.5px] font-bold text-slate-900">{tr('Beri Rating Kecepatan Terbit')}</p>
+					<p class="mt-1 text-[12px] leading-relaxed text-slate-500">{tr('Seberapa cepat mitra memproses dan menayangkan artikel Anda?')}</p>
+					<div class="mt-3 flex items-center justify-center gap-2" role="radiogroup" aria-label={tr('Beri Rating Kecepatan Terbit')}>
+						{#each [1, 2, 3, 4, 5] as n (n)}
+							<button
+								type="button"
+								role="radio"
+								aria-checked={contactRating === n}
+								aria-label={`${n} / 5`}
+								class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors {n <= (contactHover || contactRating) ? 'text-amber-400' : 'text-slate-300 hover:text-amber-300'}"
+								onmouseenter={() => (contactHover = n)}
+								onmouseleave={() => (contactHover = 0)}
+								onclick={() => (contactRating = n)}
+							>
+								<Star size={22} fill={n <= (contactHover || contactRating) ? 'currentColor' : 'none'} strokeWidth={1.8} />
+							</button>
+						{/each}
+					</div>
+					<div class="mt-1.5 flex items-center justify-between px-1">
+						<span class="text-[10.5px] text-slate-400">{tr('Sangat Lambat')}</span>
+						<span class="text-[10.5px] text-slate-400">{tr('Sangat Cepat')}</span>
+					</div>
+				</div>
 
-				<label class="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3 transition-colors hover:border-slate-300">
+				<!-- Ketentuan ruang obrolan -->
+				<div class="mt-3.5 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3.5">
+					<p class="flex items-center gap-2 text-[12.5px] font-bold text-blue-900">
+						<Info size={14} class="shrink-0 text-blue-600" />
+						{tr('Ketentuan Ruang Obrolan')}
+					</p>
+					<ol class="mt-2.5 list-decimal space-y-1.5 pl-4 text-[12px] leading-relaxed text-slate-600">
+						<li>{tr('Dengan melanjutkan, kamu membuka sesi obrolan dengan mitra untuk artikel ini. Sesi berlaku 3×24 jam sejak pesan pertama dan riwayatnya dapat dibaca kedua pihak.')}</li>
+						<li>{tr('Gunakan untuk mengajukan revisi, penambahan atau perbaikan backlink, dan pertanyaan lain seputar artikel.')}</li>
+						<li>{tr('Setelah sesi berakhir, riwayat tetap dapat dibaca tetapi pesan baru tidak bisa dikirim.')}</li>
+					</ol>
+				</div>
+
+				<!-- Persetujuan wajib -->
+				<label class="mt-3.5 flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3 transition-colors hover:border-slate-300">
 					<input type="checkbox" bind:checked={contactAck} class="mt-0.5 h-4 w-4 shrink-0" style="accent-color: var(--primary);" />
 					<span class="text-[12.5px] leading-relaxed text-slate-700">
 						{tr('Saya mengerti dan ingin melanjutkan menghubungi mitra untuk artikel ini.')}
@@ -495,10 +534,12 @@
 				</label>
 			</div>
 
-			<div class="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (contactTarget = null)}>{tr('Batal')}</button>
-				<button class="app-btn app-btn-primary" type="button" disabled={!contactAck} onclick={confirmContact}>
-					{tr('Lanjut ke Obrolan')}
+			<!-- Kaki -->
+			<div class="flex flex-col-reverse gap-2 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-end">
+				<button class="app-btn app-btn-soft w-full justify-center sm:w-auto" type="button" onclick={() => (contactTarget = null)}>{tr('Batal')}</button>
+				<button class="app-btn app-btn-primary inline-flex w-full items-center justify-center gap-1.5 sm:w-auto" type="button" disabled={!contactAck} onclick={confirmContact}>
+					{tr('Lanjut ke Ruang Obrolan')}
+					<ArrowRight size={14} />
 				</button>
 			</div>
 		</div>
