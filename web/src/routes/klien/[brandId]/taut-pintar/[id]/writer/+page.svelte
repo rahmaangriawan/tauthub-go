@@ -1386,6 +1386,16 @@
 						</div>
 					</div>
 					<div class="flex shrink-0 items-center gap-2">
+						<!-- Generate Semua di header: klik membuka popup yang sama
+						     dengan bar seleksi (masih placeholder "Dalam Pengerjaan"). -->
+						<button
+							class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs"
+							type="button"
+							title={tr('Generate artikel untuk semua media terpilih')}
+							onclick={() => (bulkPopupOpen = true)}
+						>
+							<Sparkles size={13} /> {tr('Generate Semua')}
+						</button>
 						{#if campaignName}
 							<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-[5px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={campaignName}>
 								<FileText size={13} class="shrink-0 text-slate-400" />
