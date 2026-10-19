@@ -19,6 +19,7 @@
 
 	let {
 		mediaName,
+		mediaDomain = '',
 		brandId,
 		campaignId = '',
 		mediaId = '',
@@ -50,6 +51,8 @@
 		streamingHtml = null
 	}: {
 		mediaName: string;
+		/** Domain media (dari website_url) untuk favicon kecil di header. */
+		mediaDomain?: string;
 		brandId: string;
 		/** Scope pustaka gambar AI: brand + campaign + media. */
 		campaignId?: string;
@@ -89,6 +92,21 @@
 // Nilai awal disalin sekali per mount — writer memakai {#key mediaId}
 // sehingga setiap buka modal adalah instance baru.
 	type Tab = 'tulis' | 'unggah' | 'generate';
+
+	// Tab yang tersedia mengikuti pintu masuk modal:
+	//   - dibuka dari "Generate Konten"  → hanya Generate dengan AI + Editor Post;
+	//   - dibuka dari "Unggah Artikel"   → hanya Unggah Dokumen + Editor Post;
+	//   - pintu masuk lain (Edit Artikel) → ketiganya tetap tampil.
+	const availableTabs = $derived.by<Array<{ key: Tab; label: string }>>(() => {
+		const all: Array<{ key: Tab; label: string }> = [
+			{ key: 'unggah', label: tr('Unggah Dokumen') },
+			{ key: 'generate', label: tr('Generate dengan AI') },
+			{ key: 'tulis', label: tr('Editor Post') }
+		];
+		if (initialTab === 'generate') return all.filter((t) => t.key === 'generate' || t.key === 'tulis');
+		if (initialTab === 'unggah') return all.filter((t) => t.key === 'unggah' || t.key === 'tulis');
+		return all;
+	});
 	/** Isian mode "Yang Proper" dikirim ke backend generate (grounding ke fakta). */
 	type ProperGenPayload = { fakta: string; dateline: string; narasumber: string; kutipan: string; fokus: string; brief_id: string };
 	let tab = $state<Tab>(untrack(() => initialTab));
@@ -993,6 +1011,16 @@
 			<div class="min-w-0">
 				<h2 class="text-base font-semibold">{tr('Pengelola Naskah')}</h2>
 				<p class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+					{#if mediaDomain}
+						<img
+							src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(mediaDomain)}&sz=64`}
+							alt=""
+							class="mr-1 inline-block h-4 w-4 shrink-0 rounded-[3px] align-text-bottom"
+							loading="lazy"
+							decoding="async"
+							onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+						/>
+					{/if}
 					<span class="truncate">{tr('Media Target:')} <strong class="text-foreground">{mediaName}</strong></span>
 					{#if mediaType}
 						<span
@@ -1016,11 +1044,7 @@
 		<!-- Tab -->
 		<div class="border-b px-5 pt-3" style="border-color: var(--border);">
 			<div class="flex flex-wrap gap-1" role="tablist" aria-label={tr('Cara menyusun naskah')}>
-				{#each [
-					{ key: 'unggah', label: tr('Unggah Dokumen') },
-					{ key: 'generate', label: tr('Generate dengan AI') },
-					{ key: 'tulis', label: tr('Editor Post') }
-				] as t (t.key)}
+				{#each availableTabs as t (t.key)}
 						<button
 							class="relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors"
 							style="border-color: {tab === t.key ? 'var(--primary)' : 'transparent'}; color: {tab === t.key ? 'var(--primary)' : 'var(--muted-foreground)'};"

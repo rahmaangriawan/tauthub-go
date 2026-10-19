@@ -698,6 +698,10 @@
 		}
 	}
 
+	/** Domain dari website_url media (untuk favicon kecil di header modal). */
+	const mediaDomainOf = (m: PlacementItem | null | undefined): string =>
+		((m?.website_url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim() || (m?.name ?? '').trim()).toLowerCase();
+
 	function openNaskahUpload(item: PlacementItem) {
 		error = '';
 		const upLimit = mediaAllowsLink(item) ? (item.max_links && item.max_links > 0 ? item.max_links : 2) : 0;
@@ -2034,6 +2038,7 @@
 			{campaignId}
 			mediaId={ed.mediaId}
 			mediaName={ed.mediaName}
+			mediaDomain={mediaDomainOf(targetMedia)}
 			initialTab={ed.tab}
 			initialTitle={ed.title}
 			initialHtml={ed.html}
