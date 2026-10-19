@@ -9,7 +9,7 @@
 	// itu "Belum dimulai"; setelah lewat "expired" → komposer mati, riwayat
 	// tetap bisa dibaca dua pihak.
 	import { onMount, onDestroy } from 'svelte';
-	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3 } from '@lucide/svelte';
+	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	type Thread = {
@@ -58,6 +58,7 @@
 	} = $props();
 
 	let threads = $state<Thread[]>([]);
+	let threadQuery = $state('');
 	let active = $state<Thread | null>(null);
 	let messages = $state<Message[]>([]);
 	let draft = $state('');
@@ -121,6 +122,16 @@
 		if (h <= 0 && m <= 0) return tr('Kurang dari 1 menit');
 		return `${tr('Sisa')} ${h > 0 ? `${h}j ` : ''}${m}m`;
 	};
+
+	// Filter kotak pencarian: cocokkan nama media, lawan bicara, atau cuplikan
+	// pesan terakhir — pencarian lokal saja (daftar sudah dimuat penuh).
+	const filteredThreads = $derived.by(() => {
+		const q = threadQuery.trim().toLowerCase();
+		if (!q) return threads;
+		return threads.filter((t) =>
+			`${t.media_name} ${side === 'client' ? t.partner_name : t.brand_name} ${t.last_message?.body ?? ''}`.toLowerCase().includes(q)
+		);
+	});
 
 	const previewOf = (t: Thread) => {
 		if (!t.last_message) return tr('Belum ada pesan');
@@ -331,7 +342,21 @@
 		<div class="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
 			<MessagesSquare size={15} style="color: var(--primary);" />
 			<p class="text-[13px] font-bold">{tr('Percakapan')}</p>
-			<span class="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-500">{threads.length}</span>
+			<span class="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-500">{filteredThreads.length}</span>
+		</div>
+		<div class="border-b border-slate-100 px-3 pb-2.5 pt-2.5">
+			<div class="relative">
+				<Search size={13} class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+				<input
+					type="text"
+					class="app-input py-1.5 pl-7 text-[12px]"
+					placeholder={tr('Cari percakapan…')}
+					aria-label={tr('Cari percakapan…')}
+					autocomplete="off"
+					spellcheck="false"
+					bind:value={threadQuery}
+				/>
+			</div>
 		</div>
 		{#if bootError}
 			<p class="px-4 py-3 text-xs" style="color: var(--destructive);">{bootError}</p>
@@ -348,8 +373,10 @@
 							: tr('Obrolan muncul di sini begitu ada klien yang menghubungi medianya.')}
 					</p>
 				</div>
+			{:else if filteredThreads.length === 0}
+				<p class="px-4 py-6 text-center text-xs text-muted-foreground">{tr('Tidak ada percakapan yang cocok.')}</p>
 			{:else}
-				{#each threads as t (t.id)}
+				{#each filteredThreads as t (t.id)}
 					{@const tone = avatarTone(t.media_name)}
 					<button
 						type="button"
