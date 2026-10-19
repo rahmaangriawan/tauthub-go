@@ -100,21 +100,22 @@ func (d *Deps) notifyUser(ctx context.Context, userID, title, body, link string)
 	}
 }
 
-// notifyBrandMembers: fan-out ke semua anggota brand (satu INSERT..SELECT).
-func (d *Deps) notifyBrandMembers(ctx context.Context, brandID, title, body, link string) {
+// notifyBrandMembers: fan-out ke anggota brand (satu INSERT..SELECT).
+// Admin platform tidak perlu menerima notifikasi obrolan (pantauannya di menu
+// Log Obrolan). Pengirim pesan juga dikecualikan: akun mitra bisa terdaftar
+// sebagai anggota brand (mis. VVIP), jangan sampai menerima notifikasi
+// balasannya sendiri.
+func (d *Deps) notifyBrandMembers(ctx context.Context, brandID, senderUserID, title, body, link string) {
 	preview := body
 	if len([]rune(preview)) > 140 {
 		preview = string([]rune(preview)[:140]) + "…"
 	}
-	// Admin platform tidak perlu menerima notifikasi obrolan — mereka hanya
-	// membaca lewat menu Log Obrolan. Hanya anggota brand ber-role non-admin
-	// yang dikirimi (bisa jadi admin juga owner brand; itu yang dikecualikan).
 	if err := d.exec(ctx,
 		`INSERT INTO notifications (id, user_id, type, title, body, link)
 		 SELECT gen_random_uuid(), bm.user_id, 'chat.message', $1, $2, $3
 		 FROM brand_memberships bm JOIN users u ON u.id = bm.user_id
-		 WHERE bm.brand_id = $4 AND u.role <> 'admin'`,
-		title, preview, link, brandID); err != nil {
+		 WHERE bm.brand_id = $4 AND u.role <> 'admin' AND bm.user_id <> $5`,
+		title, preview, link, brandID, senderUserID); err != nil {
 		slog.Warn("[chat] notifikasi brand gagal", "err", err)
 	}
 }

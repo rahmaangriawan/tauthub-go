@@ -234,7 +234,7 @@ func (d *Deps) sendMessage(ctx context.Context, threadID, role, userID, authorNa
 				"/mitra/"+partnerPublicID+"/chat?t="+threadID)
 		}
 	} else {
-		d.notifyBrandMembers(ctx, brandID, "Balasan dari mitra", masked,
+		d.notifyBrandMembers(ctx, brandID, userID, "Balasan dari mitra", masked,
 			"/klien/"+brandRef+"/chat?t="+threadID)
 	}
 
