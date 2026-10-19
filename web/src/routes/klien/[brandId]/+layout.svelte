@@ -231,7 +231,6 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 					active: isActive(`${base}/campaigns`) || isActive(`${base}/profiler`)
 				},
 				{ label: i18n.t.nav.publications, href: `${base}/publications`, icon: ShieldCheck, active: isActive(`${base}/publications`) },
-				{ label: i18n.t.nav.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`), badge: chatUnread.count },
 				{ label: i18n.t.nav.link_monitor, href: `${base}/link-guardian`, icon: TriangleAlert, active: isActive(`${base}/link-guardian`) }
 			]
 		},
@@ -253,6 +252,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			label: i18n.t.nav.group_settings,
 			items: [
 				{ label: i18n.t.nav.profile, href: `${base}/profile`, icon: UserCircle, active: isActive(`${base}/profile`) },
+				{ label: i18n.t.nav.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`), badge: chatUnread.count },
 				{ label: i18n.t.nav.changelog, href: `${base}/changelog`, icon: ScrollText, active: isActive(`${base}/changelog`) }
 			]
 		}
