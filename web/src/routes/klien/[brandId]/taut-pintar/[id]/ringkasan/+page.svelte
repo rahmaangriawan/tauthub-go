@@ -9,8 +9,9 @@
 	// textarea HTML sederhana memakai endpoint dokumen yang sama — perilaku
 	// endpoint identik, hanya kontrol editnya lebih ringkas.
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Check, CircleCheck, ClipboardList, Clock, Database, Ellipsis, ExternalLink, Link as LinkIcon, Loader, LoaderCircle, RefreshCw, RotateCcw } from '@lucide/svelte';
+	import { Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, Link as LinkIcon, Loader, LoaderCircle, MessageCircle, RefreshCw, RotateCcw } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -307,6 +308,7 @@
 								<th class="px-4 py-3">{tr("Jadwal Terbit")}</th>
 								<th class="px-4 py-3">Judul Artikel</th>
 								<th class="px-4 py-3">{tr("Status Terbit")}</th>
+								<th class="px-4 py-3 text-right">{tr("Aksi")}</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-slate-100 bg-white">
@@ -405,6 +407,19 @@
 										{:else}
 											<span class="text-xs text-muted-foreground">—</span>
 										{/if}
+									</td>
+									<td class="px-4 py-3 text-right">
+										<!-- Hubungi mitra tentang artikel ini; publikasi belum ada
+										     (belum diajukan) belum punya forum. -->
+										<button
+											type="button"
+											class="app-btn app-btn-soft inline-flex items-center gap-1.5 !min-h-7 !px-2.5 !text-[11.5px]"
+											disabled={!m.publication_id}
+											title={!m.publication_id ? tr('Publikasi belum diajukan') : tr('Hubungi mitra tentang artikel ini')}
+											onclick={() => goto(`/klien/${brandUrl}/chat?pub=${m.publication_id}`)}
+										>
+											<MessageCircle size={12} />{tr('Hubungi')}
+										</button>
 									</td>
 																		</tr>
 								{/each}

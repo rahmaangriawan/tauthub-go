@@ -23,6 +23,7 @@ import (
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
 	briefdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brief"
 	campaignsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/campaigns"
+	chatdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/chat"
 	clientreaddomain "github.com/rahmaangriawan/tauthub-go/internal/domains/clientread"
 	clienttautdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/clienttaut"
 	contentdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/content"
@@ -163,6 +164,7 @@ func run() error {
 		clientRead := &clientreaddomain.Deps{Pool: database.Pool}
 		tautDeps := &clienttautdomain.Deps{Pool: database.Pool, Cfg: cfg}
 		brandFlowDeps := &brandflowdomain.Deps{Pool: database.Pool, Cfg: cfg}
+		chatDeps := &chatdomain.Deps{Pool: database.Pool, Cfg: cfg}
 		pushDeps := pushdomain.New(database.Pool, cfg)
 
 		// Kanonikalisasi {campaignId}: URL boleh memakai public_id 6 karakter,
@@ -408,6 +410,12 @@ func run() error {
 			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/images/{imageId}", resolveCampaign(brandFlowDeps.ArticleImageDelete))
 
 			// ---------- Taut Pintar klien (/v1/brands/{brandId}/taut/*) ----------
+			// ---------- Obrolan klien ↔ mitra (forum per publikasi, 3×24 jam) ----------
+			authed.Get("/brands/{brandId}/chat/threads", chatDeps.ClientThreadsList)
+			authed.Post("/brands/{brandId}/chat/threads", chatDeps.ClientThreadCreate)
+			authed.Get("/brands/{brandId}/chat/threads/{threadId}", chatDeps.ClientThreadGet)
+			authed.Post("/brands/{brandId}/chat/threads/{threadId}/messages", chatDeps.ClientMessageSend)
+
 			authed.Get("/brands/{brandId}/taut/campaigns", tautDeps.TautCampaignsList)
 			authed.Post("/brands/{brandId}/taut/campaigns", tautDeps.TautCampaignCreate)
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}", resolveCampaign(tautDeps.TautCampaignGet))
@@ -464,6 +472,9 @@ func run() error {
 			authed.Get("/payments/gateway/active", platformDeps.PublicPaymentGatewayActive)
 
 			// ---------- Portal mitra (/mitra) — port app/v1/partner/* ----------
+			authed.Get("/partner/chat/threads", chatDeps.PartnerThreadsList)
+			authed.Get("/partner/chat/threads/{threadId}", chatDeps.PartnerThreadGet)
+			authed.Post("/partner/chat/threads/{threadId}/messages", chatDeps.PartnerMessageSend)
 			authed.Get("/partner/me", partnerDeps.Me)
 			authed.Patch("/partner/me", partnerDeps.MeUpdate)
 			authed.Get("/partner/me/vip", partnerDeps.MeVip)

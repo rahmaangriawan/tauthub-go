@@ -12,7 +12,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 		import {
-			Bell, ChevronDown, Coins, Gauge, Gift, House, Link2, Newspaper, PlugZap,
+			Bell, ChevronDown, Coins, Gauge, Gift, House, Link2, MessageCircle, Newspaper, PlugZap,
 			Receipt, ScrollText, Server, Settings, ShieldCheck, TriangleAlert,
 			UserCircle, Wallet
 		} from '@lucide/svelte';
@@ -132,6 +132,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			label: i18n.t.nav_partner.group_media,
 			items: [
 				{ label: tr('Publikasi'), href: `${base}/publications`, icon: Newspaper, active: isActive(`${base}/publications`) },
+				{ label: i18n.t.nav_partner.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`) },
 				{ label: tr('Daftar Media'), href: `${base}/media`, icon: ScrollText, active: isActive(`${base}/media`) },
 				{ label: i18n.t.nav_partner.link_monitor, href: `${base}/link-monitor`, icon: TriangleAlert, active: isActive(`${base}/link-monitor`) },
 				{ label: i18n.t.nav_partner.crawler, href: `${base}/crawler`, icon: Server, active: isActive(`${base}/crawler`) }

@@ -10,7 +10,7 @@
 	import { onMount, setContext } from 'svelte';
 	import { page } from '$app/state';
 	import {
-		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, Newspaper, Receipt,
+		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, MessageCircle, Newspaper, Receipt,
 		ScrollText, ShieldCheck, TriangleAlert, UserCircle
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -226,6 +226,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 					active: isActive(`${base}/campaigns`) || isActive(`${base}/profiler`)
 				},
 				{ label: i18n.t.nav.publications, href: `${base}/publications`, icon: ShieldCheck, active: isActive(`${base}/publications`) },
+				{ label: i18n.t.nav.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`) },
 				{ label: i18n.t.nav.link_monitor, href: `${base}/link-guardian`, icon: TriangleAlert, active: isActive(`${base}/link-guardian`) }
 			]
 		},

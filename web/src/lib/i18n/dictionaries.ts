@@ -15,6 +15,7 @@ const id = {
   nav: {
     changelog: "Apa yang Baru",
     brand: "Beranda",
+    chat: "Pesan",
     media_catalog: "Katalog Media",
     campaigns: "Kampanye",
     profiler: "Profiler",
@@ -227,6 +228,7 @@ const id = {
   },
   nav_partner: {
     changelog: "Apa yang Baru",
+    chat: "Pesan",
     group_summary: "RINGKASAN",
     overview: "Ringkasan",
     vip_dashboard: "VIP Dashboard",
@@ -319,6 +321,7 @@ const en = {
   nav: {
     changelog: "What's New",
     brand: "Home",
+    chat: "Messages",
     media_catalog: "Media Catalog",
     campaigns: "Campaigns",
     profiler: "Profiler",
@@ -531,6 +534,7 @@ const en = {
   },
   nav_partner: {
     changelog: "What's New",
+    chat: "Messages",
     group_summary: "SUMMARY",
     overview: "Overview",
     vip_dashboard: "VIP Dashboard",
