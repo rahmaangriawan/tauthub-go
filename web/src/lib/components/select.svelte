@@ -357,15 +357,17 @@
 			{/each}
 		{/if}
 		{#if popularCount > 0 && !searching}
-			{#if !showAll}
-				<button type="button" class="zs-select-more" onclick={() => (showAll = true)}>
-					{showAllLabel} ({matches.length}) →
-				</button>
-			{:else if card}
-				<button type="button" class="zs-select-more" onclick={() => (showAll = false)}>
-					← {showLessLabel}
-				</button>
-			{/if}
+			<div class="zs-select-more-wrap">
+				{#if !showAll}
+					<button type="button" class="zs-select-more" onclick={() => (showAll = true)}>
+						{showAllLabel} ({matches.length}) →
+					</button>
+				{:else if card}
+					<button type="button" class="zs-select-more" onclick={() => (showAll = false)}>
+						← {showLessLabel}
+					</button>
+				{/if}
+			</div>
 		{/if}
 		{#if footer}
 			<div class="zs-select-footer">{@render footer()}</div>
@@ -595,12 +597,23 @@
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
 	}
-	/* Tombol "Lihat semua" di kaki daftar populer. */
+	/* Tombol "Lihat semua" menempel di kaki menu: tetap terlihat walau daftar
+	   kartu memanjang dan isi menu digulir. */
+	.zs-select-more-wrap {
+		position: sticky;
+		bottom: -5px;
+		z-index: 1;
+		margin: 6px -5px -5px;
+		padding: 0 5px 5px;
+		background: #ffffff;
+		border-top: 1px solid #f1f5f9;
+	}
 	.zs-select-more {
-		margin-top: 4px;
+		display: block;
+		width: 100%;
+		margin: 0;
 		padding: 7px 10px;
 		border: none;
-		border-top: 1px solid #f1f5f9;
 		border-radius: 7px;
 		background: transparent;
 		color: #2563eb;
