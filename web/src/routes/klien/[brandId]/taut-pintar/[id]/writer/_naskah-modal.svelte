@@ -704,6 +704,138 @@
 		}
 	}
 
+	// Memori Brand: fakta diserap dari Brief Copilot (Profiler) brand. Dropdown
+	// milih brief mana yang jadi sumbernya, lalu tombol Tarik mengisi kotak
+	// fakta dari nilai tersimpan brief tersebut — tanpa teks tetap di UI.
+	const profilerBase = $derived(`/v1/brands/${brandId}/profiler`);
+	let copilotBriefs = $state<{ id: string; name: string }[]>([]);
+	let copilotBriefId = $state('');
+	let copilotBriefName = $state('');
+	let copilotEntries = $state<{ key: string; label: string; value: string }[]>([]);
+	let copilotLoadedBriefId = $state('');
+	let copilotBusy = $state(false);
+	let copilotError = $state('');
+	const copilotBriefOptions = $derived(copilotBriefs.map((b) => ({ value: b.id, label: b.name })));
+	const copilotBrandName = $derived.by(() => copilotEntries.find((e) => e.key === 'canonical_name')?.value || copilotBriefName);
+	const copilotSummary = $derived.by(() => {
+		if (copilotEntries.length === 0) return '';
+		const val = (k: string) => copilotEntries.find((e) => e.key === k)?.value ?? '';
+		return [
+			val('entity_category') || val('canonical_links') ? val('entity_category') : '',
+			val('canonical_name'),
+			`${copilotEntries.length} ${tr('fakta tersimpan')}`
+		].filter(Boolean).join(' • ');
+	});
+
+	$effect(() => {
+		if (gayaArtikel === 'proper' && copilotBriefs.length === 0 && !copilotBusy) {
+			void loadCopilotBriefs();
+		}
+	});
+
+	// Label panjang skema field diringkas: buang keterangan dalam tanda
+	// kurung/plus/slash supaya pas dipakai sebagai awalan baris fakta.
+	function copilotShortLabel(raw: string): string {
+		const cut = raw.search(/\(|\[|\+|\//);
+		const head = (cut > 0 ? raw.slice(0, cut) : raw).trim();
+		return head || raw;
+	}
+
+	function copilotFallbackLabel(key: string): string {
+		const known: Record<string, string> = {
+			canonical_name: tr('Nama brand'),
+			canonical_description: tr('Deskripsi brand'),
+			entity_category: tr('Kategori entitas'),
+			canonical_links: tr('Tautan resmi'),
+			official_facts: tr('Fakta resmi'),
+			allowed_claims: tr('Klaim yang boleh'),
+			forbidden_claims: tr('Klaim yang dilarang')
+		};
+		return known[key] ?? key.replace(/_/g, ' ');
+	}
+
+	function copilotCollectEntries(values: Record<string, unknown>, fields: any[]): { key: string; label: string; value: string }[] {
+		const meta = new Map<string, { label: string; order: number }>();
+		fields.forEach((f, i) => {
+			if (f?.key) meta.set(String(f.key), { label: String(f.label ?? f.key), order: Number(f.sort_order ?? i) });
+		});
+		const rows: { key: string; label: string; value: string; order: number }[] = [];
+		for (const [key, raw] of Object.entries(values)) {
+			let text = '';
+			if (typeof raw === 'string') text = raw;
+			else if (Array.isArray(raw)) text = raw.map((v) => (v == null ? '' : String(v))).filter(Boolean).join('; ');
+			else if (raw != null) text = String(raw);
+			if (!text.trim()) continue;
+			const m = meta.get(key);
+			rows.push({ key, label: m ? copilotShortLabel(m.label) : copilotFallbackLabel(key), value: text, order: m?.order ?? 900 + rows.length });
+		}
+		rows.sort((a, b) => a.order - b.order);
+		return rows.map(({ key, label, value }) => ({ key, label, value }));
+	}
+
+	async function loadCopilotBriefs(): Promise<boolean> {
+		if (copilotBriefs.length > 0 || copilotBusy) return copilotBriefs.length > 0;
+		copilotBusy = true;
+		try {
+			const res = await apiRequest(`${profilerBase}/profiles`);
+			if (!res.ok) {
+				copilotError = await readApiError(res, tr('Gagal memuat data Brief Copilot.'));
+				return false;
+			}
+			const data = await res.json().catch(() => null);
+			copilotBriefs = (data?.profiles ?? []).map((p: any) => ({ id: String(p.id), name: String(p.name ?? tr('Brief')) }));
+			return copilotBriefs.length > 0;
+		} catch (reason) {
+			copilotError = reason instanceof Error ? reason.message : tr('Gagal memuat data Brief Copilot.');
+			return false;
+		} finally {
+			copilotBusy = false;
+		}
+	}
+
+	async function pickCopilotBrief(id: string) {
+		copilotBriefId = id;
+		copilotBriefName = copilotBriefs.find((b) => b.id === id)?.name ?? copilotBriefName;
+		copilotEntries = [];
+		copilotLoadedBriefId = '';
+		copilotError = '';
+		if (!id) return;
+		copilotBusy = true;
+		try {
+			const res = await apiRequest(`${profilerBase}/profiles/${encodeURIComponent(id)}/brief/chat`);
+			if (!res.ok) {
+				copilotError = await readApiError(res, tr('Gagal memuat data Brief Copilot.'));
+				return;
+			}
+			const data = await res.json().catch(() => null);
+			copilotBriefName = String(data?.profile?.name ?? copilotBriefName);
+			copilotEntries = copilotCollectEntries(data?.values ?? {}, Array.isArray(data?.fields) ? data.fields : []);
+			copilotLoadedBriefId = id;
+		} catch (reason) {
+			copilotError = reason instanceof Error ? reason.message : tr('Gagal memuat data Brief Copilot.');
+		} finally {
+			copilotBusy = false;
+		}
+	}
+
+	async function tarikFaktaCopilot() {
+		if (copilotBusy) return;
+		copilotError = '';
+		if (!(await loadCopilotBriefs())) return;
+		if (copilotBriefs.length === 0) {
+			copilotError = tr('Belum ada Brief Copilot untuk brand ini — buat dulu di halaman Taut Brief.');
+			return;
+		}
+		if (!copilotBriefId || copilotLoadedBriefId !== copilotBriefId) {
+			await pickCopilotBrief(copilotBriefId || copilotBriefs[0].id);
+		}
+		if (copilotEntries.length === 0) {
+			copilotError = tr('Brief ini belum menyimpan fakta — lengkapi dulu percakapannya di halaman Taut Brief.');
+			return;
+		}
+		faktaTerkunci = copilotEntries.map((e) => `${e.label}: ${e.value}`).join('\n\n');
+	}
+
 	async function generate() {
 		if (genBusy || !topic.trim() || (linkLimit > 0 && !linksValid) || !angleReady) return;
 		genBusy = true;
@@ -1399,29 +1531,57 @@
 											{tr('Anti-Capek Ketik')}
 										</span>
 									</div>
-									<div class="mt-3 rounded-xl border p-4" style="border-color: var(--border);">
-										<p class="flex items-center gap-2 text-xs font-semibold">
-											<span class="inline-flex items-center gap-1.5">
-												<span class="h-2 w-2 rounded-full" style="background-color: var(--success);"></span>
-												<span>{tr('Brand:')} <strong>Tuathub</strong> ({tr('Profil & Produk Terkunci')})</span>
-											</span>
-										</p>
-										<p class="mt-1 leading-relaxed">
-											<span class="text-xs font-semibold">{tr('Data Copilot Aktif')}:</span>
-											<span class="text-xs text-muted-foreground"> {tr('SaaS PR & GEO Marketplace')} • {tr('Fitur: AI Trust Score, SLA Tracked, Link Guardian.')}</span>
-										</p>
-
-										<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
-											<span class="text-xs font-semibold">{tr('Fakta / Data Produk yang Wajib Masuk')} <span style="color: var(--destructive);">*</span></span>
-											<span class="flex items-center gap-1.5">
-												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika Copilot menyusul')}>
-													<Sparkles size={12} /> {tr('Tarik dari Copilot')}
-												</button>
-												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika contoh menyusul')}>
-													<Lightbulb size={12} /> {tr('Contoh Paste Chat WA')}
-												</button>
-											</span>
+										<div class="mt-3 w-full max-w-[24rem]">
+											{#if copilotBriefs.length === 0 && !copilotBusy}
+												<p class="text-xs text-muted-foreground">{tr('Belum ada Brief Copilot untuk brand ini — buat dulu di halaman Taut Brief.')}</p>
+											{:else}
+												<Select
+													ariaLabel={tr('Brief Copilot')}
+													bind:value={copilotBriefId}
+													options={copilotBriefOptions}
+													placeholder={tr('Pilih Brief Copilot…')}
+													disabled={copilotBusy || genBusy}
+													onchange={(v) => void pickCopilotBrief(v)}
+												/>
+											{/if}
 										</div>
+										<div class="mt-3 rounded-xl border p-4" style="border-color: var(--border);">
+											{#if copilotBriefId}
+												<p class="flex items-center gap-2 text-xs font-semibold">
+													<span class="inline-flex items-center gap-1.5">
+														<span class="h-2 w-2 rounded-full" style="background-color: var(--success);"></span>
+														<span>{tr('Brand:')} <strong>{copilotBusy ? '…' : copilotBrandName || copilotBriefName}</strong> ({tr('Profil & Produk Terkunci')})</span>
+													</span>
+												</p>
+												<p class="mt-1 leading-relaxed">
+													<span class="text-xs font-semibold">{tr('Data Copilot Aktif')}:</span>
+													{#if copilotBusy}
+														<span class="text-xs text-muted-foreground"> {tr('Memuat fakta dari Brief ini…')}</span>
+													{:else if copilotSummary}
+														<span class="text-xs text-muted-foreground"> {copilotSummary}</span>
+													{:else}
+														<span class="text-xs text-muted-foreground"> {tr('Brief ini belum menyimpan fakta.')}</span>
+													{/if}
+												</p>
+											{:else}
+												<p class="text-xs text-muted-foreground">{tr('Pilih Brief Copilot dulu — nama brand, fakta & klaim diambil dari sana, bukan teks tetap.')}</p>
+											{/if}
+											{#if copilotError}
+												<p class="mt-1 text-xs" style="color: var(--destructive);">{copilotError}</p>
+											{/if}
+
+											<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
+												<span class="text-xs font-semibold">{tr('Fakta / Data Produk yang Wajib Masuk')} <span style="color: var(--destructive);">*</span></span>
+												<span class="flex items-center gap-1.5">
+													<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" disabled={copilotBusy || genBusy} title={tr('Serap fakta dari Brief Copilot yang dipilih')} onclick={() => void tarikFaktaCopilot()}>
+														{#if copilotBusy}<LoaderCircle size={12} class="animate-spin" />{:else}<Sparkles size={12} />{/if}
+														{copilotBusy ? tr('Menyerap…') : tr('Tarik dari Copilot')}
+													</button>
+													<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika contoh menyusul')}>
+														<Lightbulb size={12} /> {tr('Contoh Paste Chat WA')}
+													</button>
+												</span>
+											</div>
 										<textarea
 											class="app-input mt-2 min-h-[130px] w-full resize-y text-sm"
 											placeholder={tr('Malas merangkai kalimat? Copy-paste saja teks mentahan dari chat WA, brosur, atau spesifikasi produk di sini. AI hanya akan menggunakan fakta dari kotak ini & Copilot…')}
