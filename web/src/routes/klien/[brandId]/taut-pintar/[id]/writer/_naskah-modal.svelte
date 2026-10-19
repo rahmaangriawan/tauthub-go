@@ -4,7 +4,7 @@
 	// artikel (cover, kategori, meta deskripsi) dan footer validasi.
 	// Reuse: rich-text-editor (toolbar + contentEditable), endpoint /files dan
 	// /produce/{mediaId} lewat callback dari writer, serta saveEditor di writer.
-	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, Info, Link2, Lightbulb, Plus , Zap, Crosshair, Plug } from '@lucide/svelte';
+	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, Info, Link2, Lightbulb, Plus , Zap, Crosshair, Plug , ShieldCheck, ShieldAlert } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { tr } from '$lib/i18n/phrases';
 	import { apiRequest, readApiError } from '$lib/auth';
@@ -94,6 +94,19 @@
 	let gayaArtikel = $state<'simpel' | 'proper'>('simpel');
 	// Isian mode Proper (copilot & paste) — UI dulu, logika menyusul.
 	let properPaste = $state('');
+	// Isian Proper (UI dulu — logika generate menyusul): fakta terkunci,
+	// dateline & narasumber, dan chip pagarnya.
+	let faktaTerkunci = $state('');
+	let kotaRilis = $state('');
+	let narasumber = $state('');
+	let fokusSisa = $state('');
+	let pagarAktif = $state<Record<string, boolean>>({ angka: true, fitur: true, kompetitor: true, nomor1: true });
+	const pagarChips = $derived([
+		{ key: 'angka', label: tr('Jangan Karang Angka / Harga'), on: pagarAktif.angka === true },
+		{ key: 'fitur', label: tr('Jangan Tambah Fitur Fiktif'), on: pagarAktif.fitur === true },
+		{ key: 'kompetitor', label: tr('Tanpa Sebut Kompetitor'), on: pagarAktif.kompetitor === true },
+		{ key: 'nomor1', label: tr('Hindari Klaim "Nomor 1 / Terbaik"'), on: pagarAktif.nomor1 === true }
+	]);
 	let title = $state(untrack(() => initialTitle));
 	let html = $state(untrack(() => initialHtml));
 	let cover = $state<string | null>(untrack(() => initialCoverUrl));
@@ -869,11 +882,11 @@
 			</div>
 		{/if}
 
-	{#snippet linkEditor()}
+	{#snippet linkEditor(sub = ' (Opsional)', note = '')}
 		<div class="w-full text-left">
 			<div class="flex items-center justify-between gap-2">
 				<p class="text-sm font-semibold">
-					3. {tr('Tautan & Anchor (Opsional)')}
+					3. {tr('Tautan & Anchor')}{sub}
 				</p>
 				<span
 					class="rounded-full px-2 py-0.5 text-[10px] font-bold"
@@ -882,6 +895,10 @@
 						: 'background-color: var(--muted); color: var(--muted-foreground);'}
 				>{linkRows.length}/{maxLinkRows}</span>
 			</div>
+
+			{#if note}
+				<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">{note}</p>
+			{/if}
 
 			{#if linkRows.length === 0}
 				<p class="mt-3 rounded-lg border border-dashed px-3 py-4 text-left text-xs text-muted-foreground" style="border-color: var(--border);">
@@ -1433,38 +1450,159 @@
 							</p>
 						</div>
 						{:else}
-							<!-- PANE "YANG PROPER": isian berdiri sendiri, beda dari Sederhana. -->
-							<div class="mt-5 w-full text-left">
-								<div class="mb-4 min-w-0">
-									<span class="text-sm font-semibold">2. {tr('Unggah Dokumen Brief')} <span style="color: var(--destructive);">*</span></span>
-									<p class="mt-1 text-xs text-muted-foreground">{tr('Rilis resmi, brosur, atau dokumen fakta brand menjadi sumber utama artikel.')}</p>
-									<div
-										class="mt-2 flex h-full min-h-[190px] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
-										style="border-color: var(--border); background-color: var(--muted);"
-										role="button"
-										tabindex="0"
-										aria-label={tr('Unggah dokumen brief')}
-									>
-										<div class="flex h-12 w-12 items-center justify-center rounded-full" style="background-color: var(--primary); color: var(--primary-foreground);">
-											<Upload size={20} />
-										</div>
-										<p class="mt-2 text-sm font-bold">{tr('Tarik & lepas dokumen brief di sini')}</p>
-										<p class="text-xs text-muted-foreground">{tr('DOCX, PDF, TXT (Maks 10MB) — logika unggah menyusul')}</p>
+					<!-- PANE "YANG PROPER": isian berbeda dari Sederhana — grounding ke Copilot & fakta. -->
+							<div class="w-full text-left">
+								<div class="min-w-0">
+									<span class="text-sm font-semibold">2. {tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
+									{#if angleChannelName}
+										<p class="mt-1 break-words text-xs text-muted-foreground">{tr(angleChannelName)}</p>
+									{/if}
+									<div class="angle-field mt-2">
+										<Select
+											ariaLabel={tr('Angle Artikel')}
+											bind:value={angleSlug}
+											options={angleSelectOptions}
+											placeholder={tr('Pilih angle artikel')}
+											searchable
+											searchPlaceholder={tr('Cari angle…')}
+											disabled={anglesLoading || !!anglesError || angleOptions.length === 0 || genBusy}
+										/>
+									</div>
+									<div id="naskah-angle-help" class="mt-2 break-words text-xs" aria-live="polite">
+										{#if anglesLoading}
+											<p class="text-muted-foreground">{tr('Memuat pilihan angle…')}</p>
+										{:else if anglesError}
+											<p role="alert" style="color: var(--destructive);">{tr(anglesError)}</p>
+											<button type="button" class="app-btn app-btn-soft mt-2 min-h-11" onclick={onRetryAngles}>{tr('Coba lagi')}</button>
+										{:else if angleOptions.length === 0}
+											<p class="text-muted-foreground">{tr('Belum ada angle dengan prompt aktif untuk media ini. Hubungi admin Tauthub.')}</p>
+										{:else}
+											{#if selectedAngle?.description}
+												<p class="text-muted-foreground">{tr(selectedAngle.description)}</p>
+											{/if}
+										{/if}
 									</div>
 								</div>
 
-								<div class="mb-4 min-w-0">
-									<span class="text-sm font-semibold">3. {tr('Tempel Teks Mentahan')} <span style="color: var(--destructive);">*</span></span>
-									<p class="mt-1 text-xs text-muted-foreground">{tr('Alternatif unggahan: tempel isi rilis/bromos/materi press mentah — Copilot mengurutkan jadi artikel.')}</p>
+								<!-- Memori Brand (Copilot) + Fakta Terkunci -->
+								<div class="mt-5">
+									<div class="flex flex-wrap items-center justify-between gap-2">
+										<span class="text-sm font-semibold">{tr('Memori Brand (Tauthub Copilot)')}</span>
+										<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold" style="background-color: var(--success-soft, #e8f7ee); color: var(--success);">
+											<span class="h-1.5 w-1.5 rounded-full" style="background-color: var(--success);"></span>
+											{tr('Anti-Capek Ketik')}
+										</span>
+									</div>
+									<div class="mt-2 rounded-xl border p-3" style="border-color: var(--border);">
+										<p class="flex items-center gap-2 text-xs font-semibold">
+											<span class="inline-flex items-center gap-1.5">
+												<span class="h-2 w-2 rounded-full" style="background-color: var(--success);"></span>
+												<span>{tr('Brand:')} <strong>Tuathub</strong> ({tr('Profil & Produk Terkunci')})</span>
+											</span>
+										</p>
+										<p class="mt-1 leading-relaxed">
+											<span class="text-xs font-semibold">{tr('Data Copilot Aktif')}:</span>
+											<span class="text-xs text-muted-foreground"> {tr('SaaS PR & GEO Marketplace')} • {tr('Fitur: AI Trust Score, SLA Tracked, Link Guardian.')}</span>
+										</p>
+
+										<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+											<span class="text-xs font-semibold">{tr('Fakta / Data Produk yang Wajib Masuk')} <span style="color: var(--destructive);">*</span></span>
+											<span class="flex items-center gap-1.5">
+												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika Copilot menyusul')}>
+													<Sparkles size={12} /> {tr('Tarik dari Copilot')}
+												</button>
+												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika contoh menyusul')}>
+													<Lightbulb size={12} /> {tr('Contoh Paste Chat WA')}
+												</button>
+											</span>
+										</div>
+										<textarea
+											class="app-input mt-2 min-h-[130px] w-full resize-y text-sm"
+											placeholder={tr('Malas merangkai kalimat? Copy-paste saja teks mentahan dari chat WA, brosur, atau spesifikasi produk di sini. AI hanya akan menggunakan fakta dari kotak ini & Copilot…')}
+											bind:value={faktaTerkunci}
+										></textarea>
+										<p class="mt-1.5 text-[11px] leading-relaxed" style="color: var(--warning);">
+											{tr('AI dilarang mengarang fitur, harga, atau klaim di luar data yang tertulis di atas.')}
+										</p>
+									</div>
+								</div>
+
+								<!-- Pengunci standar redaksi -->
+								<div class="mt-5">
+									<div class="flex flex-wrap items-center gap-2">
+										<span class="text-sm font-semibold">{tr('Pengunci Standar Redaksi')}</span>
+										<span class="text-[11px] text-muted-foreground">{tr('Opsional • Cegah Kutipan Fiktif')}</span>
+									</div>
+									<div class="mt-2 grid gap-3 sm:grid-cols-2">
+										<label class="block">
+											<span class="text-xs font-semibold text-muted-foreground">{tr('Kota Rilis (Dateline)')}</span>
+											<input class="app-input mt-1 w-full text-sm uppercase" placeholder="JAKARTA" bind:value={kotaRilis} />
+										</label>
+										<label class="block">
+											<span class="text-xs font-semibold text-muted-foreground">{tr('Nama & Jabatan Narasumber Kutipan')}</span>
+											<input class="app-input mt-1 w-full text-sm" placeholder="Budi Santoso, CEO Tuathub Indonesia" bind:value={narasumber} />
+										</label>
+									</div>
+
+									<div class="mt-3">
+										<p class="text-xs font-semibold">{tr('Pagar Pembatas AI (Aktif Otomatis)')}</p>
+										<p class="mt-0.5 text-[11px] text-muted-foreground">{tr('Klik chip untuk ubah')}</p>
+										<div class="mt-2 flex flex-wrap gap-2">
+											{#each pagarChips as chip (chip.key)}
+												<button
+													type="button"
+													class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors {chip.on
+														? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+														: 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}"
+													onclick={() => (pagarAktif = { ...pagarAktif, [chip.key]: !chip.on })}
+												>
+													{#if chip.on}<ShieldCheck size={12} />{:else}<ShieldAlert size={12} />{/if}
+													{chip.label}
+												</button>
+											{/each}
+										</div>
+									</div>
+								</div>
+
+								<!-- 3. Tautan & Anchor (Backlink) -->
+								<div class="mt-5">
+									{#if linkLimit > 0}
+										{@render linkEditor(' (Backlink)', tr('Disisipkan natural di paragraf yang relevan'))}
+									{:else}
+										<p class="text-xs text-muted-foreground">{tr('Media ini tidak mengizinkan tautan dalam artikel.')}</p>
+									{/if}
+								</div>
+
+								<!-- 4. Instruksi tambahan -->
+								<div class="mt-5">
+									<div class="flex flex-wrap items-baseline justify-between gap-2">
+										<span class="text-sm font-semibold">4. {tr('Instruksi Tambahan / Fokus Cerita')}</span>
+										<span class="text-[11px] text-muted-foreground">{tr('Opsional jika Copilot/Fakta sudah terisi')}</span>
+									</div>
+									<div class="mt-2 flex items-center gap-2">
+										<span class="flex items-center gap-1.5">
+											<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika bias-up menyusul')}>
+												<LoaderCircle size={12} /> {tr('Malas Mikir? Racik dari Anchor')}
+											</button>
+											<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika contoh menyusul')}>
+												<Lightbulb size={12} /> {tr('Contoh')}
+											</button>
+										</span>
+									</div>
 									<textarea
-										class="app-input mt-2 min-h-[160px] w-full resize-y text-sm"
-										placeholder={tr('Tempel teks mentahan brief di sini (Ctrl/Cmd+V)…')}
-										bind:value={properPaste}
+										class="app-input mt-2 min-h-[120px] w-full resize-y text-sm"
+										placeholder={tr('Bahas tentang tren dan keunggulan penggunaan epoxy lantai pada bangunan modern (mulai dari ketahanan beban, estetika seamless, hingga kemudahan perawatan), lalu sisipkan tautan jasa epoxy lantai secara natural.')}
+										bind:value={fokusSisa}
 									></textarea>
 								</div>
 
-								<button class="app-btn app-btn-primary mt-3 w-full" type="button" disabled title={tr('Logika generate Proper menyusul')}>
-									<Sparkles size={15} /> {tr('Buat Draf dengan AI')} ({tr('Copilot & Paste Mentahan')})
+								<div class="mt-4 rounded-lg px-3 py-2 text-xs" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">
+									<p class="font-semibold">{tr('Mode Proper (Strict Grounding)')}</p>
+									<p class="mt-0.5 leading-relaxed">{tr('Seluruh klaim produk, fitur & kutipan dikunci 100% hanya dari Memori Copilot & Fakta Input.')}</p>
+								</div>
+
+								<button class="app-btn app-btn-primary mt-4 w-full" type="button" disabled title={tr('Logika generate Proper menyusul')}>
+									<Sparkles size={15} /> {tr('Buat Draf dengan AI')} ({tr('Gaya')} {mediaType === 'blogger' ? tr('Media Blogger') : tr('Media Mainstream')})
 								</button>
 							</div>
 						{/if}
