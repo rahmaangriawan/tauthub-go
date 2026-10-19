@@ -1036,12 +1036,19 @@
 			</div>
 		{/if}
 
+	{#snippet numBadge(n: string)}
+		<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-bold" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">{n}</span>
+	{/snippet}
+
 	{#snippet linkEditor(sub = ' (Opsional)', note = '')}
 		<div class="w-full text-left">
 			<div class="flex items-center justify-between gap-2">
-				<p class="text-sm font-semibold">
-					3. {tr('Tautan & Anchor')}{sub}
-				</p>
+				<div class="flex items-center gap-3">
+					{@render numBadge('3')}
+					<p class="text-sm font-semibold">
+						{tr('Tautan & Anchor')}{sub}
+					</p>
+				</div>
 				<span
 					class="rounded-full px-2 py-0.5 text-[10px] font-bold"
 					style={linkRows.length >= maxLinkRows
@@ -1051,7 +1058,7 @@
 			</div>
 
 			{#if note}
-				<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">{note}</p>
+				<p class="mt-1 pl-[52px] text-[11px] leading-relaxed text-muted-foreground">{note}</p>
 			{/if}
 
 			{#if linkRows.length === 0}
@@ -1432,9 +1439,12 @@
 						{#if gayaArtikel === 'simpel'}
 						<div class="mt-6 w-full text-left">
 							<div class="mb-6 min-w-0">
-									<span class="text-sm font-semibold">2. {tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
+									<div class="flex items-center gap-3">
+										{@render numBadge('2')}
+										<span class="text-sm font-semibold">{tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
+									</div>
 									{#if angleChannelName}
-										<p class="mt-1 break-words text-xs text-muted-foreground">{tr(angleChannelName)}</p>
+										<p class="mt-1 break-words pl-[52px] text-xs text-muted-foreground">{tr(angleChannelName)}</p>
 									{/if}
 									<div class="angle-field mt-2">
 										<Select
@@ -1470,9 +1480,10 @@
 										<p class="text-xs text-muted-foreground">{tr('Media ini tidak mengizinkan tautan dalam artikel.')}</p>
 									{/if}
 								</div>
-							<div class="mt-5 flex items-center gap-2">
+							<div class="mt-5 flex items-center gap-3">
+									{@render numBadge('4')}
 									<label class="text-sm font-semibold" for="naskah-topik">
-										4. {tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
+										{tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
 									</label>
 <span class="ml-auto flex items-center gap-1.5">
 										<button
@@ -1557,9 +1568,12 @@
 					<!-- PANE "YANG PROPER": isian berbeda dari Sederhana — grounding ke Copilot & fakta. -->
 							<div class="mt-6 w-full text-left">
 								<div class="min-w-0">
-									<span class="text-sm font-semibold">2. {tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
+									<div class="flex items-center gap-3">
+										{@render numBadge('2')}
+										<span class="text-sm font-semibold">{tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
+									</div>
 									{#if angleChannelName}
-										<p class="mt-1 break-words text-xs text-muted-foreground">{tr(angleChannelName)}</p>
+										<p class="mt-1 break-words pl-[52px] text-xs text-muted-foreground">{tr(angleChannelName)}</p>
 									{/if}
 									<div class="angle-field mt-2">
 										<Select
@@ -1718,7 +1732,10 @@
 									<!-- 4. Instruksi tambahan -->
 									<div class="mt-6">
 										<div class="flex flex-wrap items-center justify-between gap-2">
-											<span class="text-sm font-semibold">4. {tr('Instruksi Tambahan / Fokus Cerita')}</span>
+											<div class="flex items-center gap-3">
+												{@render numBadge('4')}
+												<span class="text-sm font-semibold">{tr('Instruksi Tambahan / Fokus Cerita')}</span>
+											</div>
 											<span class="flex flex-wrap items-center gap-2">
 												<span class="text-[11px] text-muted-foreground">{tr('Opsional jika Copilot/Fakta sudah terisi')}</span>
 												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika contoh menyusul')}>
