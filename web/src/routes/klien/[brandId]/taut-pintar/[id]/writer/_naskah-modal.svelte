@@ -1018,7 +1018,8 @@
 								{tr('Unggah file Word/TXT. AI Tauthub akan secara cerdas memisahkan Judul, Paragraf, dan Kategori secara otomatis.')}
 							</p>
 						</div>
-						<div class="mt-6 grid flex-1 items-start gap-5 lg:grid-cols-2">
+						<!-- Kolom kiri & kanan sama tinggi (stretch). -->
+						<div class="mt-6 grid flex-1 gap-5 lg:grid-cols-2">
 							<div class="flex flex-col">
 						<div
 							class="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 transition-colors"
