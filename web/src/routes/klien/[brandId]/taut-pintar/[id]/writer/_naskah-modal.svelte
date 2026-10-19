@@ -1725,9 +1725,6 @@
 											placeholder={tr('Malas merangkai kalimat? Copy-paste saja teks mentahan dari chat WA, brosur, atau spesifikasi produk di sini. AI hanya akan menggunakan fakta dari kotak ini & Copilot…')}
 											bind:value={faktaTerkunci}
 										></textarea>
-										<p class="mt-2 text-[11px] leading-relaxed" style="color: var(--warning);">
-											{tr('AI dilarang mengarang fitur, harga, atau klaim di luar data yang tertulis di atas.')}
-										</p>
 									</div>
 								</div>
 
