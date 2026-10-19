@@ -467,6 +467,21 @@
 	<section class="app-card flex min-h-0 flex-col overflow-hidden p-0 max-lg:h-[68dvh] max-lg:min-h-[420px]">
 		{#if active}
 			<div class="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
+				<!-- Favicon media di samping nama, satu sumber dengan daftar percakapan. -->
+				<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold ring-1 ring-slate-100" style="background:{AVA_BG[avatarTone(active.media_name)]};color:{AVA_FG[avatarTone(active.media_name)]};">
+					{#if cleanDomain(active.website_url, active.media_name) && !faviconFailed[active.id]}
+						<img
+							src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleanDomain(active.website_url, active.media_name))}&sz=128`}
+							alt=""
+							class="h-full w-full object-cover"
+							loading="lazy"
+							decoding="async"
+							onerror={() => (faviconFailed = { ...faviconFailed, [active?.id ?? '']: true })}
+						/>
+					{:else}
+						{initialOf(active.media_name)}
+					{/if}
+				</span>
 				<div class="min-w-0 flex-1">
 					<p class="truncate text-[13.5px] font-bold text-slate-900">{active.media_name}</p>
 					<p class="truncate text-[11.5px] text-muted-foreground">
