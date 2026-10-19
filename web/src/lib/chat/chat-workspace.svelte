@@ -114,17 +114,29 @@
 			? new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 			: '—';
 
-	// Hitung mundur berbasis `now` (state yang di-tick tiap 30 detik).
+	// Hitung mundur sampai detik, berbasis `now` (di-tick tiap detik).
 	const countdown = (t: Thread | null): string => {
 		if (!t) return '';
-		if (t.status === 'waiting' || !t.expires_at) return tr('Belum dimulai');
+		if (!t.started_at || !t.expires_at) return tr('Belum dimulai');
 		const left = new Date(t.expires_at).getTime() - now;
 		if (left <= 0) return tr('Sesi berakhir');
-		const h = Math.floor(left / 3_600_000);
-		const m = Math.max(0, Math.floor((left % 3_600_000) / 60_000));
-		if (h <= 0 && m <= 0) return tr('Kurang dari 1 menit');
-		return `${tr('Sisa')} ${h > 0 ? `${h}j ` : ''}${m}m`;
+		const s = Math.floor(left / 1000);
+		const h = Math.floor(s / 3600);
+		const m = Math.floor((s % 3600) / 60);
+		const sec = s % 60;
+		if (h > 0) return `${tr('Sisa')} ${h}j ${m}m ${sec}d`;
+		if (m > 0) return `${tr('Sisa')} ${m}m ${sec}d`;
+		return `${tr('Sisa')} ${sec}d`;
 	};
+
+	// Status live dihitung dari jam perangkat supaya UI berubah tepat saat
+	// sesi habis, tanpa menunggu polling berikutnya. Polling tetap menyegarkan
+	// data server (pesan baru, perubahan status dari sisi lain).
+	const liveStatus = $derived.by<'waiting' | 'open' | 'expired'>(() => {
+		if (!active) return 'expired';
+		if (!active.started_at || !active.expires_at) return 'waiting';
+		return new Date(active.expires_at).getTime() > now ? 'open' : 'expired';
+	});
 
 	const activeCount = $derived(threads.filter((t) => t.status !== 'expired').length);
 	const doneCount = $derived(threads.length - activeCount);
@@ -246,7 +258,7 @@
 	}
 
 	const canSend = $derived(
-		Boolean(active) && (active?.status === 'open' || (side === 'client' && active?.status === 'waiting')) && !sending
+		Boolean(active) && (liveStatus === 'open' || (side === 'client' && liveStatus === 'waiting')) && !sending
 	);
 
 	async function send() {
@@ -306,9 +318,9 @@
 		}, 15_000);
 		msgTimer = setInterval(() => {
 			if (document.visibilityState !== 'visible') return;
-			if (active?.status === 'open') void refreshActive(true);
+			if (liveStatus === 'open') void refreshActive(true);
 		}, 4_000);
-		tickTimer = setInterval(() => (now = Date.now()), 30_000);
+		tickTimer = setInterval(() => (now = Date.now()), 1_000);
 
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -342,8 +354,8 @@
 
 	const statusChip = $derived.by(() => {
 		if (!active) return { label: '', cls: '' };
-		if (active.status === 'open') return { label: countdown(active), cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-		if (active.status === 'waiting') return { label: countdown(active), cls: 'bg-slate-100 text-slate-600 border-slate-200' };
+		if (liveStatus === 'open') return { label: countdown(active), cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+		if (liveStatus === 'waiting') return { label: countdown(active), cls: 'bg-slate-100 text-slate-600 border-slate-200' };
 		return { label: countdown(active), cls: 'bg-rose-50 text-rose-700 border-rose-200' };
 	});
 </script>
@@ -406,9 +418,14 @@
 					{@const tone = avatarTone(t.media_name)}
 					<button
 						type="button"
-						class="flex w-full items-start gap-2.5 border-b border-slate-50 px-3.5 py-3 text-left transition-colors hover:bg-slate-50 {active?.id === t.id ? 'bg-blue-50/60' : ''}"
+						aria-current={active?.id === t.id}
+						class="relative flex w-full items-start gap-2.5 border-b border-slate-50 px-3.5 py-3 text-left transition-colors hover:bg-slate-50 {active?.id === t.id ? 'bg-blue-50/50' : ''}"
 						onclick={() => void openThread(t.id)}
 					>
+						<!-- Aksen bar biru di tepi kiri: tanda percakapan yang sedang terbuka. -->
+						{#if active?.id === t.id}
+							<span class="absolute inset-y-0 left-0 w-1 rounded-r bg-blue-600"></span>
+						{/if}
 						<span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold" style="background:{AVA_BG[tone]};color:{AVA_FG[tone]};">
 							{#if cleanDomain(t.website_url, t.media_name) && !faviconFailed[t.id]}
 								<img
@@ -424,20 +441,21 @@
 							{/if}
 						</span>
 						<span class="min-w-0 flex-1">
-							<span class="flex items-baseline gap-2">
-								<span class="min-w-0 flex-1 truncate text-[12.5px] font-bold text-slate-900">{t.media_name}</span>
-								<span class="shrink-0 text-[10px] text-slate-400">{fmtTime(t.last_message_at ?? t.expires_at)}</span>
-							</span>
+							<span class="block truncate text-[12.5px] font-bold text-slate-900">{t.media_name}</span>
 							<span class="mt-0.5 block truncate text-[11px] text-slate-500">
 								{side === 'client' ? t.partner_name || tr('Mitra') : t.brand_name}
 							</span>
 							<span class="mt-1 flex items-center gap-1.5">
 								<span class="h-1.5 w-1.5 shrink-0 rounded-full {t.status === 'open' ? 'bg-emerald-500' : t.status === 'waiting' ? 'bg-slate-300' : 'bg-rose-400'}"></span>
 								<span class="min-w-0 flex-1 truncate text-[11.5px] text-slate-600">{previewOf(t)}</span>
-								{#if (t.unread_count ?? 0) > 0}
-									<span class="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">{t.unread_count}</span>
-								{/if}
 							</span>
+						</span>
+						<!-- Waktu + jumlah pesan belum dibaca di kanan, gaya aplikasi chat. -->
+						<span class="flex shrink-0 flex-col items-end gap-1.5 self-start">
+							<span class="text-[10px] text-slate-400">{fmtTime(t.last_message_at ?? t.expires_at)}</span>
+							{#if (t.unread_count ?? 0) > 0}
+								<span class="inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white">{t.unread_count}</span>
+							{/if}
 						</span>
 					</button>
 				{/each}
@@ -464,7 +482,7 @@
 				<div class="mx-auto mb-3 max-w-md rounded-xl bg-white/80 px-3 py-2 text-center text-[11px] leading-relaxed text-slate-500 ring-1 ring-slate-100">
 					{tr('Sesi obrolan berlaku 3×24 jam sejak pesan pertama dari klien. Setelah berakhir, riwayat tetap dapat dibaca.')}
 				</div>
-				{#if active.status === 'waiting'}
+				{#if liveStatus === 'waiting'}
 					<div class="mx-auto mb-3 max-w-md rounded-xl bg-blue-50 px-3 py-2 text-center text-[11px] leading-relaxed text-blue-700">
 						{side === 'client'
 							? tr('Sesi dimulai begitu kamu mengirim pesan pertama.')
@@ -517,12 +535,12 @@
 						</button>
 					</div>
 					<p class="mt-1.5 text-[10.5px] text-slate-400">{tr('Enter untuk kirim, Shift+Enter baris baru.')} · {countdown(active)}</p>
-				{:else if active.status === 'expired'}
+				{:else if liveStatus === 'expired'}
 					<div class="flex items-center gap-2.5 rounded-xl bg-slate-100 px-3.5 py-3 text-[12px] text-slate-600">
 						<Clock3 size={15} class="shrink-0 text-slate-400" />
 						{tr('Sesi 3×24 jam sudah berakhir — riwayat tetap dapat dibaca.')}
 					</div>
-				{:else if side === 'partner' && active.status === 'waiting'}
+				{:else if side === 'partner' && liveStatus === 'waiting'}
 					<div class="flex items-center gap-2.5 rounded-xl bg-slate-100 px-3.5 py-3 text-[12px] text-slate-600">
 						<Clock3 size={15} class="shrink-0 text-slate-400" />
 						{tr('Menunggu pesan pertama dari klien sebelum bisa membalas.')}
