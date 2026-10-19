@@ -31,7 +31,6 @@
 		showAllLabel = 'Lihat semua',
 		showLessLabel = 'Tampilkan lebih sedikit',
 		card = false,
-		cardIcon = null,
 		allOptionsLabel = ''
 	}: {
 		value?: string;
@@ -54,9 +53,8 @@
 		popularLabel?: string;
 		showAllLabel?: string;
 		showLessLabel?: string;
-		/** true: opsi mode populer dirender sebagai kartu (ikon + judul + deskripsi). */
+		/** true: opsi mode populer dirender sebagai kartu (judul + deskripsi). */
 		card?: boolean;
-		cardIcon?: Component<{ size?: number; color?: string }> | null;
 		allOptionsLabel?: string;
 	} = $props();
 
@@ -83,9 +81,6 @@
 	);
 	const popularMode = $derived(popularCount > 0 && !searching);
 	const visible = $derived(popularMode && !showAll ? matches.slice(0, popularCount) : matches);
-	// Alias kapital: komponen dinamis Svelte hanya dikenali lewat identifier
-	// berawalan huruf besar di markup.
-	const CardIcon = $derived(cardIcon ?? null);
 
 	function openMenu() {
 		if (!trigger) return;
@@ -314,11 +309,6 @@
 						onclick={() => pick(option)}
 						onmousemove={() => (activeIndex = index)}
 					>
-						<span class="zs-card-icon">
-						{#if CardIcon}
-							<CardIcon size={15} color={option.value === value ? '#2563eb' : '#475569'}></CardIcon>
-						{/if}
-						</span>
 						<span class="zs-card-title">{option.label}</span>
 					{#if option.description}
 						<span class="zs-card-desc">{option.description}</span>
@@ -626,20 +616,21 @@
 	.zs-select-more:hover {
 		background: #eff6ff;
 	}
-	/* Mode kartu (angle populer): grid kartu ikon + judul + deskripsi. */
+	/* Mode kartu (angle populer): grid kartu judul + deskripsi. Padding memberi
+	   ruang untuk centang terpilih yang sedikit keluar dari sudut kartu. */
 	.zs-select-cards {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 		gap: 8px;
-		padding: 5px 1px;
+		padding: 8px 8px 6px;
 	}
 	.zs-card {
 		position: relative;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 1px;
-		padding: 11px 10px 10px;
+		gap: 3px;
+		padding: 10px 11px;
 		border: 1px solid #e2e8f0;
 		border-radius: 10px;
 		background: #ffffff;
@@ -665,22 +656,6 @@
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
-	.zs-card-icon {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 26px;
-		height: 26px;
-		margin-bottom: 6px;
-		border: 1px solid #e2e8f0;
-		border-radius: 8px;
-		background: #f8fafc;
-		flex-shrink: 0;
-	}
-	.zs-card.zs-card-selected .zs-card-icon {
-		border-color: #bfdbfe;
-		background: #dbeafe;
-	}
 	.zs-card-title {
 		font-size: 12.5px;
 		font-weight: 700;
@@ -700,17 +675,21 @@
 		line-height: 1.45;
 		color: #64748b;
 	}
+	/* Centang menumpuk di sudut kanan atas, sedikit keluar dari kartu. Cincin
+	   putih memisahkannya dari border kartu di bawahnya. */
 	.zs-card-check {
 		position: absolute;
-		top: 7px;
-		right: 7px;
+		top: -7px;
+		right: -7px;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		width: 18px;
 		height: 18px;
 		border-radius: 999px;
+		border: 2px solid #ffffff;
 		background: #2563eb;
 		color: #ffffff;
+		box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
 	}
 </style>

@@ -1061,10 +1061,10 @@
 
 	{#snippet linkEditor(sub = ' (Opsional)', note = '')}
 		<div class="w-full text-left">
-				<div class="flex items-start gap-3">
+				<div class="flex items-center gap-3">
 					{@render numBadge('3')}
 					<div class="min-w-0 flex-1">
-						<div class="flex items-start justify-between gap-2">
+						<div class="flex items-center justify-between gap-2">
 							<p class="min-w-0 text-sm font-semibold leading-5">
 								{tr('Tautan & Anchor')}{sub}
 							</p>
@@ -1478,7 +1478,6 @@
 											searchPlaceholder={tr('Cari angle…')}
 											popularCount={5}
 											card
-											cardIcon={Crosshair}
 											allOptionsLabel={tr('Semua angle')}
 											popularLabel={tr('Angle paling populer')}
 											showAllLabel={tr('Lihat semua angle')}
@@ -1617,7 +1616,6 @@
 											searchPlaceholder={tr('Cari angle…')}
 											popularCount={5}
 											card
-											cardIcon={Crosshair}
 											allOptionsLabel={tr('Semua angle')}
 											popularLabel={tr('Angle paling populer')}
 											showAllLabel={tr('Lihat semua angle')}
