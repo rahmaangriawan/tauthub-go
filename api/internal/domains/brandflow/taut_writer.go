@@ -54,6 +54,10 @@ type tautWriterOptions struct {
 	// system prompt pengganti The Writer. Kosong = prompt agent apa adanya.
 	ArticleType string
 	AngleSlug   *string
+	// Proper (opsional): isian mode "Yang Proper" — strict grounding ke fakta
+	// terkunci / Brief Copilot / kutipan resmi. Nil vs isian kosong = gaya
+	// Sederhana (perilaku lama).
+	Proper *tautProperInput
 	// StreamHTML (opsional): dipanggil dengan TAMBAHAN html parsial setiap kali
 	// LLM menulis lebih banyak isi — untuk streaming SSE ke editor. Nilai masih
 	// mentah (belum lewat finalizeTautArticleHTML); finalize hanya di akhir.
@@ -326,12 +330,14 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	clientTopic := ""
 	articleType := ""
 	var requestedAngle *string
+	var proper *tautProperInput
 	customLinks := []tautWriterLink{}
 	var streamFn func(string)
 	if len(opts) > 0 {
 		clientTopic = strings.TrimSpace(opts[0].Topic)
 		articleType = strings.TrimSpace(opts[0].ArticleType)
 		requestedAngle = opts[0].AngleSlug
+		proper = opts[0].Proper
 		customLinks = opts[0].Links
 		streamFn = opts[0].StreamHTML
 	}
@@ -391,6 +397,19 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		referenceMaterial = referenceMaterial + "\n\n" + profilerText
 		hasFacts = true
 	}
+	// Mode "Yang Proper": strict grounding ke fakta terkunci/Brief Copilot.
+	// Kiriman klien disimpan per media (regenerasi & Gatekeeper memakai isian
+	// yang sama), lalu blok grounding bak masuk bahan rujukan Writer.
+	if proper == nil {
+		proper = d.loadTautProperStored(ctx, item.strOr("id", ""))
+	}
+	if proper != nil {
+		d.saveTautProperFields(ctx, item.strOr("id", ""), proper)
+		if properBlock := buildTautProperBlock(proper, d.loadTautProperBrief(ctx, brandID, proper.BriefID)); properBlock != "" {
+			referenceMaterial = strings.TrimSpace(referenceMaterial + "\n\n" + properBlock)
+			hasFacts = true
+		}
+	}
 	backlinkEnabled, smartVariations := d.loadTautBacklinkSettings(ctx, campaignID)
 	smartVariationRule := ""
 	if smartVariations {
@@ -446,7 +465,12 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	// kolom topik) MENANG atas aturan panjang bawaan media. Tanpa ini, model
 	// mengikuti batas media (mis. "minimal 300 kata") lalu berhenti jauh dari
 	// permintaan — kasus nyata: minta 2500 kata, hasil hanya ~1873.
-	wordTarget, hasClientWords := requestedWordTarget(writerTopic)
+	// Mode Proper: target kata juga dicek dari Instruksi Tambahan klien.
+	wordsSource := writerTopic
+	if wordsSource == "" && proper != nil {
+		wordsSource = proper.Fokus
+	}
+	wordTarget, hasClientWords := requestedWordTarget(wordsSource)
 	if hasClientWords {
 		wordRule = clientWordRule(wordTarget)
 	}

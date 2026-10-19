@@ -4191,6 +4191,7 @@ export const PHRASE_EN: Record<string, string> = {
 	"Pilih Brief Copilot…": "Pick a Copilot brief…",
 	"Belum ada Brief Copilot untuk brand ini": "No Copilot Brief yet for this brand",
 	"Buat dulu Taut Brief-nya — setelah ada, fakta bisa ditarik otomatis ke sini.": "Create a Taut Brief first — once it exists, its facts can be pulled here automatically.",
+	"Isi fakta produk atau pilih Brief Copilot dulu — mode Proper ditulis terkunci ke fakta.": "Fill in the product facts or pick a Copilot brief first — Proper mode is locked to the facts.",
 	"Buka Taut Brief": "Open Taut Brief",
 	"Pilih sesuai tujuan publikasi dan kebutuhan konten kamu.": "Pick based on your publishing goal and content needs.",
 	"Cepat & Praktis": "Fast & Practical",

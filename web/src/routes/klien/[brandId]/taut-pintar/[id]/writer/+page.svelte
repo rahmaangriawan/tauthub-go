@@ -793,18 +793,27 @@
 	// Generate dengan arahan topik dari modal Pengelola Naskah. Penulisan
 	// ditagih 1× tarif per generate: artikel baru maupun setiap regenerasi
 	// (tarif & penagihan ada di backend).
+	/** Isian mode "Yang Proper" dari modal Pengelola Naskah — strict grounding. */
+	type ProperGenPayload = { fakta: string; dateline: string; narasumber: string; kutipan: string; fokus: string; brief_id: string };
+
 	async function generateNaskah(
 		mediaId: string,
 		topic: string,
 		links: { anchor_text: string; url: string }[] = [],
-		angleSlug = ''
+		angleSlug = '',
+		proper: ProperGenPayload | null = null
 	): Promise<{ title: string; html: string; imagesGenerated?: number; imagesCostCredits?: number }> {
 		const mediaType = placement.find((p) => p.media_id === mediaId)?.media_type;
 		const angle = angleChannels.find((ch) => ch.slug === mediaType)?.angles.find((a) => a.slug === angleSlug && a.has_prompt);
 		if (anglesLoading || anglesError || !angle) throw new Error(tr('Pilih angle artikel yang tersedia untuk media ini.'));
+		// Mode Proper membawa isian fakta terkunci + Brief Copilot: backend
+		// memakainya untuk prompt strict grounding & verifikasi Gatekeeper.
+		const payload = proper
+			? { topic, links, angle_slug: angleSlug, gaya: 'proper', proper }
+			: { topic, links, angle_slug: angleSlug };
 		const res = await apiRequest(`${apiBase}/produce/${mediaId}`, {
 			method: 'POST',
-			body: JSON.stringify({ topic, links, angle_slug: angleSlug })
+			body: JSON.stringify(payload)
 		}, 240_000);
 		const data = await res.json().catch(() => null);
 		if (!res.ok) throw new Error(data?.detail ?? tr('Gagal membuat draf AI.'));
@@ -1955,7 +1964,7 @@
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveEditor(title, html, coverUrl, category, metaDescription)}
 			onUploadCover={uploadCover}
 			onUploadDoc={uploadDocNaskah}
-			onGenerate={(topic, links, angleSlug) => generateNaskah(ed.mediaId, topic, links, angleSlug)}
+			onGenerate={(topic, links, angleSlug, proper) => generateNaskah(ed.mediaId, topic, links, angleSlug, proper ?? null)}
 			streamingHtml={streamHtml}
 		/>
 	{/key}

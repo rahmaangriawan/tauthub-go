@@ -56,6 +56,14 @@ func (d *Deps) tautReferenceMaterial(ctx context.Context, campaign bsRow, campai
 	if angleHasSources {
 		hasFacts = true
 	}
+	// Mode Proper tersimpan per media: Checker memverifikasi klaim ke blok yang
+	// sama dengan [DATA FAKTA TERKUNCI]/[MEMORI BRAND COPILOT] milik Writer.
+	if proper := d.loadTautProperStored(ctx, item.strOr("id", "")); proper != nil {
+		if block := buildTautProperBlock(proper, d.loadTautProperBrief(ctx, campaign.strOr("brand_id", ""), proper.BriefID)); block != "" {
+			text = strings.TrimSpace(text + "\n\n" + block)
+			hasFacts = true
+		}
+	}
 	return text, hasFacts, nil
 }
 

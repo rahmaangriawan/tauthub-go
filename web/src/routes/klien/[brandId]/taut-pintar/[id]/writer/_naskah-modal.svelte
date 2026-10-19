@@ -80,7 +80,7 @@
 		onSave: (title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) => void;
 		onUploadCover: (file: File) => Promise<string>;
 		onUploadDoc: (file: File, onPhase?: (phase: 'extract' | 'clean') => void, links?: WriterLink[]) => Promise<{ title: string; html: string; warning?: string }>;
-		onGenerate: (topic: string, links: WriterLink[], angleSlug: string) => Promise<{ title: string; html: string; imagesGenerated?: number; imagesCostCredits?: number }>;
+		onGenerate: (topic: string, links: WriterLink[], angleSlug: string, proper?: ProperGenPayload) => Promise<{ title: string; html: string; imagesGenerated?: number; imagesCostCredits?: number }>;
 		/** null = belum tahu; false = AI Gatekeeper belum dikonfigurasi admin. */
 			/** Pratinjau streaming: html parsial yang tampil read-only saat AI menulis; null = tidak streaming. */
 		streamingHtml?: string | null;
@@ -89,15 +89,18 @@
 // Nilai awal disalin sekali per mount — writer memakai {#key mediaId}
 // sehingga setiap buka modal adalah instance baru.
 	type Tab = 'tulis' | 'unggah' | 'generate';
+	/** Isian mode "Yang Proper" dikirim ke backend generate (grounding ke fakta). */
+	type ProperGenPayload = { fakta: string; dateline: string; narasumber: string; kutipan: string; fokus: string; brief_id: string };
 	let tab = $state<Tab>(untrack(() => initialTab));
-	// Pilihan gaya (1. kamu mau buat artikel seperti apa?) — UI dulu, logika menyusul.
+	// Pilihan gaya (1. kamu mau buat artikel seperti apa?) — simpel = pipeline
+	// lama; proper = strict grounding ke fakta terkunci/Brief Copilot.
 	let gayaArtikel = $state<'simpel' | 'proper'>('simpel');
 	// Isian mode Proper (copilot & paste) — UI dulu, logika menyusul.
 	let properPaste = $state('');
 	// Racik instruksi topik dari anchor (AI): ganti Tips/Contoh manual.
 	let racikBusy = $state(false);
-	let racikError = $state('');	// Isian Proper (UI dulu — logika generate menyusul): fakta terkunci,
-	// dateline & narasumber.
+	let racikError = $state('');
+	// Isian Proper: fakta terkunci, dateline & narasumber.
 	let faktaTerkunci = $state('');
 	let kotaRilis = $state('');
 	let narasumber = $state('');
@@ -846,8 +849,33 @@
 		faktaTerkunci = copilotEntries.map((e) => `${e.label}: ${e.value}`).join('\n\n');
 	}
 
+	/** Isian mode "Yang Proper" — grounding ke fakta (dikirim saat gaya proper). */
+	const properLocked = $derived(
+		faktaTerkunci.trim() === '' && (copilotBriefId === '' || copilotEntries.length === 0)
+	);
+
 	async function generate() {
-		if (genBusy || !topic.trim() || (linkLimit > 0 && !linksValid) || !angleReady) return;
+		if (genBusy) return;
+		const isProper = gayaArtikel === 'proper';
+		const properPayload: ProperGenPayload = {
+			fakta: faktaTerkunci.trim(),
+			dateline: kotaRilis.trim(),
+			narasumber: narasumber.trim(),
+			kutipan: kutipanNarasumber.trim(),
+			fokus: fokusSisa.trim(),
+			brief_id: copilotBriefId
+		};
+		if (isProper) {
+			// Proper wajib punya dasar fakta: manual ATAU Brief Copilot. Selama
+			// keduanya kosong, ditolak sebelum menyia-nyiakan token AI.
+			if (!properPayload.fakta && !properPayload.brief_id) {
+				genError = tr('Isi fakta produk atau pilih Brief Copilot dulu — mode Proper ditulis terkunci ke fakta.');
+				return;
+			}
+		} else if (!topic.trim()) {
+			return;
+		}
+		if ((linkLimit > 0 && !linksValid) || !angleReady) return;
 		genBusy = true;
 		genError = '';
 		genNotice = '';
@@ -855,7 +883,7 @@
 		genStage = 1; // permintaan dikirim
 		try {
 			genStage = 2; // menunggu respons AI
-			const hasil = await onGenerate(topic.trim(), linkLimit > 0 ? payloadLinks : [], angleSlug);
+			const hasil = await onGenerate(isProper ? '' : topic.trim(), linkLimit > 0 ? payloadLinks : [], angleSlug, isProper ? properPayload : undefined);
 			genStage = 3; // memproses hasil (muat draf tersimpan + isi editor)
 			title = hasil.title || title;
 			if (hasil.imagesGenerated && hasil.imagesGenerated > 0) {
@@ -1321,6 +1349,86 @@
 								</button>
 							</div>
 						</div>
+				{#snippet genStagePanel()}
+				{#if genBusy || genOutcome !== 'idle'}
+					<div class="genPanel mt-3" role="status" aria-live="polite">
+						<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+							<div class="min-w-0 flex-1">
+								<div class="flex items-start gap-2">
+									{#if genOutcome === 'error'}
+										<CircleAlert size={17} class="mt-0.5 shrink-0" style="color: var(--destructive);" />
+									{:else if genOutcome === 'success'}
+										<CircleCheck size={17} class="mt-0.5 shrink-0" style="color: var(--success);" />
+									{:else}
+										<LoaderCircle size={17} class="mt-0.5 shrink-0 animate-spin" style="color: var(--primary);" />
+									{/if}
+									<div class="min-w-0">
+										<p class="text-sm font-bold">
+											{genOutcome === 'error'
+												? tr('Gagal membuat draf artikel')
+												: genOutcome === 'success'
+													? tr('Draf artikel berhasil dibuat')
+													: tr('AI sedang menyusun draf artikel...')}
+										</p>
+										<p class="mt-0.5 text-xs text-muted-foreground">
+											{genOutcome === 'error'
+												? genError
+												: genOutcome === 'success'
+													? tr('Draf siap ditinjau di tab Editor Post.')
+													: tr('Proses ini berjalan di server AI. Kamu bisa menunggu di halaman ini — draf akan muncul otomatis setelah selesai.')}
+										</p>
+									</div>
+								</div>
+
+								<!-- Bar progres: lebar mengikuti tahap nyata yang sedang berjalan,
+								     tanpa angka persentase karena backend tidak mengirimkannya. -->
+								<div class="genTrack mt-3" aria-hidden="true">
+									<div class="genFill" class:fillError={genOutcome === 'error'} style="width: {genStagePct}%"></div>
+								</div>
+
+								<ul class="mt-4 space-y-0">
+									{#each GEN_STAGES as s, i}
+										{@const done = genOutcome === 'success' || i < genStage - 1}
+										{@const active = genOutcome === 'idle' && i === genStage - 1}
+										{@const failed = genOutcome === 'error' && i === genStage - 1}
+										<li class="flex gap-2.5">
+											<div class="flex flex-col items-center">
+												{#if done}
+													<span class="genDot genDotDone"><CircleCheck size={13} /></span>
+												{:else if failed}
+													<span class="genDot genDotError"><CircleAlert size={13} /></span>
+												{:else if active}
+													<span class="genDot genDotActive"></span>
+												{:else}
+													<span class="genDot genDotPending"></span>
+												{/if}
+												{#if i < GEN_STAGES.length - 1}
+													<!-- Garis terisi hijau saat tahap selesai; saat tahap
+													     sedang berjalan, aliran gradasi biru mengalir turun
+													     menandai proses yang benar-benar aktif. -->
+													<span class="genLine" class:genLineDone={done} class:genLineActive={active}></span>
+												{/if}
+											</div>
+											<div class="pb-3">
+												<p class="text-xs font-semibold" class:text-muted-foreground={!done && !active && !failed}>
+													{tr(s.label)}
+												</p>
+												<p class="mt-0.5 text-[11px] leading-snug text-muted-foreground">{tr(s.desc)}</p>
+											</div>
+										</li>
+									{/each}
+								</ul>
+
+								{#if genOutcome === 'error' && !genBusy}
+									<button class="app-btn app-btn-soft mt-1 !min-h-8 !px-3 !text-xs" type="button" onclick={generate}>
+										{tr('Coba lagi')}
+									</button>
+								{/if}
+							</div>
+						</div>
+					</div>
+				{/if}
+				{/snippet}
 						{#if gayaArtikel === 'simpel'}
 						<div class="mt-6 w-full text-left">
 							<div class="mb-6 min-w-0">
@@ -1439,84 +1547,7 @@
 									: `${tr('Buat Draf dengan AI')} (${tr('Gaya')} ${mediaType === 'blogger' ? tr('Media Blogger') : tr('Media Mainstream')})`}
 							</button>
 
-							{#if genBusy || genOutcome !== 'idle'}
-								<div class="genPanel mt-3" role="status" aria-live="polite">
-									<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-										<div class="min-w-0 flex-1">
-											<div class="flex items-start gap-2">
-												{#if genOutcome === 'error'}
-													<CircleAlert size={17} class="mt-0.5 shrink-0" style="color: var(--destructive);" />
-												{:else if genOutcome === 'success'}
-													<CircleCheck size={17} class="mt-0.5 shrink-0" style="color: var(--success);" />
-												{:else}
-													<LoaderCircle size={17} class="mt-0.5 shrink-0 animate-spin" style="color: var(--primary);" />
-												{/if}
-												<div class="min-w-0">
-													<p class="text-sm font-bold">
-														{genOutcome === 'error'
-															? tr('Gagal membuat draf artikel')
-															: genOutcome === 'success'
-																? tr('Draf artikel berhasil dibuat')
-																: tr('AI sedang menyusun draf artikel...')}
-													</p>
-													<p class="mt-0.5 text-xs text-muted-foreground">
-														{genOutcome === 'error'
-															? genError
-															: genOutcome === 'success'
-																? tr('Draf siap ditinjau di tab Editor Post.')
-																: tr('Proses ini berjalan di server AI. Kamu bisa menunggu di halaman ini — draf akan muncul otomatis setelah selesai.')}
-													</p>
-												</div>
-											</div>
-
-											<!-- Bar progres: lebar mengikuti tahap nyata yang sedang berjalan,
-											     tanpa angka persentase karena backend tidak mengirimkannya. -->
-											<div class="genTrack mt-3" aria-hidden="true">
-												<div class="genFill" class:fillError={genOutcome === 'error'} style="width: {genStagePct}%"></div>
-											</div>
-
-											<ul class="mt-4 space-y-0">
-												{#each GEN_STAGES as s, i}
-													{@const done = genOutcome === 'success' || i < genStage - 1}
-													{@const active = genOutcome === 'idle' && i === genStage - 1}
-													{@const failed = genOutcome === 'error' && i === genStage - 1}
-													<li class="flex gap-2.5">
-														<div class="flex flex-col items-center">
-															{#if done}
-																<span class="genDot genDotDone"><CircleCheck size={13} /></span>
-															{:else if failed}
-																<span class="genDot genDotError"><CircleAlert size={13} /></span>
-															{:else if active}
-																<span class="genDot genDotActive"></span>
-															{:else}
-																<span class="genDot genDotPending"></span>
-															{/if}
-															{#if i < GEN_STAGES.length - 1}
-																<!-- Garis terisi hijau saat tahap selesai; saat tahap
-																     sedang berjalan, aliran gradasi biru mengalir turun
-																     menandai proses yang benar-benar aktif. -->
-																<span class="genLine" class:genLineDone={done} class:genLineActive={active}></span>
-															{/if}
-														</div>
-														<div class="pb-3">
-															<p class="text-xs font-semibold" class:text-muted-foreground={!done && !active && !failed}>
-																{tr(s.label)}
-															</p>
-															<p class="mt-0.5 text-[11px] leading-snug text-muted-foreground">{tr(s.desc)}</p>
-														</div>
-													</li>
-												{/each}
-											</ul>
-
-											{#if genOutcome === 'error' && !genBusy}
-												<button class="app-btn app-btn-soft mt-1 !min-h-8 !px-3 !text-xs" type="button" onclick={generate}>
-													{tr('Coba lagi')}
-												</button>
-											{/if}
-										</div>
-									</div>
-								</div>
-							{/if}
+							{@render genStagePanel()}
 
 							<p class="mt-3 text-xs text-muted-foreground">
 								{tr('Draf akan tampil di tab Editor Post untuk kamu tinjau sebelum disimpan.')}
@@ -1702,9 +1733,27 @@
 										></textarea>
 									</div>
 
-									<button class="app-btn app-btn-primary mt-6 w-full" type="button" disabled title={tr('Logika generate Proper menyusul')}>
-										<Sparkles size={15} /> {tr('Buat Draf dengan AI')} ({tr('Gaya')} {mediaType === 'blogger' ? tr('Media Blogger') : tr('Media Mainstream')})
+									{#if genError}
+										<p class="mt-2 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">
+											<CircleAlert size={15} /> {genError}
+										</p>
+									{/if}
+									<button
+										class="app-btn app-btn-primary mt-6 w-full"
+										type="button"
+										disabled={genBusy || properLocked || (linkLimit > 0 && !linksValid) || !angleReady}
+										title={properLocked
+											? tr('Isi fakta produk atau pilih Brief Copilot dulu — mode Proper ditulis terkunci ke fakta.')
+											: ''}
+										onclick={generate}
+									>
+										{#if genBusy}<Sparkles size={15} class="genSparkle" /><LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
+										{genBusy
+											? tr('Sedang membuat draf artikel...')
+											: `${tr('Buat Draf dengan AI')} (${tr('Gaya')} ${mediaType === 'blogger' ? tr('Media Blogger') : tr('Media Mainstream')})`}
 									</button>
+
+									{@render genStagePanel()}
 								</div>
 						{/if}
 					</div>

@@ -1373,6 +1373,15 @@ func decodeTautWriterOptions(r *http.Request) (tautWriterOptions, error) {
 		Links       []tautWriterLinkInput `json:"links"`
 		ArticleType string                `json:"article_type"`
 		AngleSlug   json.RawMessage       `json:"angle_slug"`
+		Gaya        string                `json:"gaya"`
+		Proper      struct {
+			Fakta      string `json:"fakta"`
+			Dateline   string `json:"dateline"`
+			Narasumber string `json:"narasumber"`
+			Kutipan    string `json:"kutipan"`
+			Fokus      string `json:"fokus"`
+			BriefID    string `json:"brief_id"`
+		} `json:"proper"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(r.Body, 65536))
 	if err := decoder.Decode(&body); err != nil {
@@ -1393,6 +1402,22 @@ func decodeTautWriterOptions(r *http.Request) (tautWriterOptions, error) {
 		}
 		slug = strings.TrimSpace(slug)
 		opts.AngleSlug = &slug
+	}
+	// Gaya "proper": bawa isian tab Yang Proper sebagai konteks strict
+	// grounding — fakta terkunci + memori Brief Copilot + kutipan resmi.
+	if strings.TrimSpace(body.Gaya) == "proper" {
+		p := &tautProperInput{
+			Fakta:      truncateString(strings.TrimSpace(body.Proper.Fakta), 20000),
+			Dateline:   truncateString(strings.TrimSpace(body.Proper.Dateline), 100),
+			Narasumber: truncateString(strings.TrimSpace(body.Proper.Narasumber), 200),
+			Kutipan:    truncateString(strings.TrimSpace(body.Proper.Kutipan), 4000),
+			Fokus:      truncateString(strings.TrimSpace(body.Proper.Fokus), 4000),
+			BriefID:    truncateString(strings.TrimSpace(body.Proper.BriefID), 64),
+		}
+		if err := p.validate(); err != nil {
+			return opts, err
+		}
+		opts.Proper = p
 	}
 	links, err := normalizeTautWriterLinks(body.Links)
 	opts.Links = links
