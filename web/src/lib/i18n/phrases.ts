@@ -4201,6 +4201,11 @@ export const PHRASE_EN: Record<string, string> = {
 	"Bahas tentang tren dan keunggulan penggunaan epoxy lantai pada bangunan modern (mulai dari ketahanan beban, estetika seamless, hingga kemudahan perawatan), lalu sisipkan tautan jasa epoxy lantai secara natural.": "Cover trends and advantages of epoxy flooring for modern buildings (from load resistance, seamless aesthetics, to easier maintenance), then insert the epoxy flooring service link naturally.",
 	"Mode Proper (Strict Grounding)": "Proper Mode (strict grounding)",
 	"Seluruh klaim produk, fitur & kutipan dikunci 100% hanya dari Memori Copilot & Fakta Input.": "All product claims, features & quotations are locked 100% to the Copilot Memory & Input Facts only.",
+	"Isi minimal 1 tautan di bagian Tautan & Anchor dulu — instruksinya diracik dari anchor.": "Fill in at least 1 link under Links & Anchor first — the instruction is brewed from the anchor.",
+	"Susun instruksi topik dari anchor + prinsip SEO/EEAT": "Compose the topic instruction from the anchor + SEO/EEAT principles",
+	"Meracik…": "Brewing…",
+	"Racik Instruksi dari Anchor": "Brew instruction from anchor",
+	"Gagal meracik instruksi. Coba lagi.": "Failed to brew the instruction. Try again.",
 };
 
 /**

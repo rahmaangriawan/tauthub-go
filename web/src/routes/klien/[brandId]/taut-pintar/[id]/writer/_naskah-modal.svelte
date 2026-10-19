@@ -94,6 +94,9 @@
 	let gayaArtikel = $state<'simpel' | 'proper'>('simpel');
 	// Isian mode Proper (copilot & paste) — UI dulu, logika menyusul.
 	let properPaste = $state('');
+	// Racik instruksi topik dari anchor (AI): ganti Tips/Contoh manual.
+	let racikBusy = $state(false);
+	let racikError = $state('');
 	// Isian Proper (UI dulu — logika generate menyusul): fakta terkunci,
 	// dateline & narasumber, dan chip pagarnya.
 	let faktaTerkunci = $state('');
@@ -147,52 +150,8 @@
 		return Math.round(((genStage - 1) / GEN_STAGES.length) * 100);
 	});
 	let topic = $state('');
-	// Contoh prompt siap pakai: dibuka dari tombol di sebelah kanan label topik.
-	let topicHelpOpen = $state(false);
-	// Tips menulis topik: dorong klien menulis prompt detail supaya artikelnya
-	// kaya data, dan jelaskan bahwa AI tidak mengarang fakta di luar bahan.
-	let topicTipsOpen = $state(false);
-	// Popover kondisional: kalau tombol tepat di dekat dasar viewport, panelnya
-	// membuka ke atas supaya tidak terpotong dasar layar. Tinggi panel dipakai
-	// sebagai perkiraan saat mengukur ruang — panelnya sendiri tetap diposisikan
-	// CSS (top/bottom), jadi tidak perlu hitung piksel saat render.
-	let tipsBtnEl = $state<HTMLButtonElement | undefined>(undefined);
-	let tipsUp = $state(false);
-	const TIPS_PANEL_ESTIMATE = 250;
-	function toggleTips() {
-		if (topicTipsOpen) {
-			topicTipsOpen = false;
-			return;
-		}
-		const r = tipsBtnEl?.getBoundingClientRect();
-		// Buka ke atas hanya kalau ruang di bawah tombol kurang dari perkiraan
-		// tinggi panel DAN sisi atasnya lebih lega; bila keduanya pas-pasan,
-		// arah bawah dianggap lebih aman (termasuk tergulir di dalam modal).
-		if (r) {
-			const below = window.innerHeight - r.bottom;
-			const above = r.top;
-			tipsUp = below < TIPS_PANEL_ESTIMATE && above > below;
-		}
-		topicTipsOpen = true;
-	}
-	const TOPIC_EXAMPLES: { label: string; text: string }[] = [
-		{
-			label: 'Peluncuran produk (media mainstream)',
-			text: 'Buatkan artikel pengumuman peluncuran aplikasi kasir digital dari PT Maju Jaya. Tekankan fitur rekonsiliasi otomatis dan laporan harian, sasar pemilik UMKM. Sisipkan 2 gambar isi.'
-		},
-		{
-			label: 'Panduan (blogger)',
-			text: 'Tulis panduan langkah demi langkah memilih laptop untuk desain grafis. Bahas RAM, kartu grafis, dan kualitas layar; sasar mahasiswa desain. Pakai daftar poin dan sertakan 3 gambar.'
-		}
-	];
+	// (Tips/Contoh manual digantikan tombol "Racik Instruksi dari Anchor" — AI.)
 	let angleSlug = $state(untrack(() => initialAngleSlug));
-	// Tombol Tips: selalu ada untuk media mainstream (semua angle), dan muncul
-	// juga untuk angle review/pengalaman di media mana pun ia tersedia —
-	// termasuk media blogger yang memilih salah satu angle itu. Pembanding
-	// memakai slug (bukan nama tampilan) supaya perubahan nama dari admin
-	// tidak mematikan tombolnya. Sumber slug: taut_content_angles.
-	const TIPS_ANGLE_SLUGS = new Set(['product_review', 'success_case', 'unboxing', 'community_event']);
-	const tipsAvailable = $derived(mediaType === 'mainstream' || TIPS_ANGLE_SLUGS.has(angleSlug));
 	const selectedAngle = $derived(angleOptions.find((a) => a.slug === angleSlug));
 	const angleSelectOptions = $derived(angleOptions.map((a) => ({ value: a.slug, label: tr(a.name) })));
 	const angleReady = $derived(!anglesLoading && !anglesError && !!selectedAngle);
@@ -720,6 +679,37 @@
 		}
 	}
 
+	// Susun instruksi topik otomatis dari anchor yang diisi user — memakai AI
+	// yang dikonfigurasi admin (tier default). Aturan: judul/arahan jangan
+	// menyalin anchor persis; pakai kata kunci semantik & kaidah SEO/EEAT, dan
+	// bila ada tautan, instruksi menuntut penyisipan yang natural.
+	async function racikInstruksi() {
+		if (racikBusy) return;
+		const rows = linkRows.filter((r) => (r.anchor ?? '').trim());
+		if (rows.length === 0) return;
+		racikBusy = true;
+		try {
+			const res = await apiRequest(`${apiBase}/produce/topic-instruction`, {
+				method: 'POST',
+				body: JSON.stringify({
+					media_id: mediaId,
+					media_type: mediaType,
+					anchors: rows.map((r) => ({ anchor: r.anchor, url: r.url }))
+				})
+			}, 180_000);
+			if (!res.ok) {
+				racikError = await readApiError(res, tr('Gagal meracik instruksi. Coba lagi.'));
+				return;
+			}
+			const data = await res.json().catch(() => null);
+			if (data?.instruction) topic = String(data.instruction);
+		} catch (reason) {
+			racikError = reason instanceof Error ? reason.message : tr('Gagal meracik instruksi. Coba lagi.');
+		} finally {
+			racikBusy = false;
+		}
+	}
+
 	async function generate() {
 		if (genBusy || !topic.trim() || (linkLimit > 0 && !linksValid) || !angleReady) return;
 		genBusy = true;
@@ -1215,99 +1205,21 @@
 									<label class="text-sm font-semibold" for="naskah-topik">
 										4. {tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
 									</label>
-									<span class="ml-auto flex items-center gap-1.5">
-										{#if tipsAvailable}
-											<span class="relative">
-											<button
-												bind:this={tipsBtnEl}
-												class={`app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]`}
-												type="button"
-												aria-expanded={topicTipsOpen}
-												onclick={toggleTips}
-											>
-												<Info size={13} /> {tr('Tips')}
-											</button>
-											{#if topicTipsOpen}
-												<button
-													class="fixed inset-0 z-20 cursor-default"
-													type="button"
-													aria-label={tr('Tutup tips')}
-													onclick={() => (topicTipsOpen = false)}
-												></button>
-												<div
-													class={`absolute right-0 z-30 w-[min(420px,calc(100vw-48px))] rounded-xl border p-3 ${tipsUp ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'}`}
-													style="border-color: var(--border); background-color: var(--card); box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);"
-													role="dialog"
-													tabindex="-1"
-													aria-label={tr('Tips menulis topik')}
-													onkeydown={(e) => {
-														if (e.key === 'Escape') topicTipsOpen = false;
-													}}
-												>
-													<p class="flex items-center gap-1.5 text-xs font-semibold"><Info size={13} /> {tr('Tips menulis topik')}</p>
-													<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-														{tr('Semakin detail topik yang kamu tulis, semakin kaya data artikelnya. AI hanya memakai fakta dari brief dan bahan yang tersedia, dan tidak mengarang angka, tanggal, atau harga. Data penting seperti itu tulis langsung di topik.')}
-													</p>
-													<ul class="mt-2 list-disc space-y-1 pl-4 text-[11px] text-muted-foreground">
-														<li>{tr('Sebutkan produk atau fitur yang mau ditekankan beserta keunggulannya')}</li>
-														<li>{tr('Sertakan data faktual dari sumber resmi: tanggal, angka, harga, dan nama narasumber yang boleh dikutip')}</li>
-														<li>{tr('Tentukan sasaran pembaca dan panjang artikel, misalnya "minimal 1200 kata"')}</li>
-														<li>{tr('Minta jumlah gambar langsung di topik, misalnya "sertakan 3 gambar"')}</li>
-													</ul>
-												</div>
-												{/if}
-											</span>
-											{/if}
-											<span class="relative">
-											<button
-												class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
-												type="button"
-												aria-expanded={topicHelpOpen}
-												onclick={() => (topicHelpOpen = !topicHelpOpen)}
-											>
-												<Lightbulb size={13} /> {tr('Contoh')}
-											</button>
-										</span>
+<span class="ml-auto flex items-center gap-1.5">
+										<button
+											class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
+											type="button"
+											disabled={racikBusy || linkRows.length === 0}
+											title={linkRows.length === 0 ? tr('Isi minimal 1 tautan di bagian Tautan & Anchor dulu — instruksinya diracik dari anchor.') : tr('Susun instruksi topik dari anchor + prinsip SEO/EEAT')}
+											onclick={() => void racikInstruksi()}
+										>
+											{#if racikBusy}<LoaderCircle size={13} class="animate-spin" />{:else}<Sparkles size={13} />{/if}
+											{racikBusy ? tr('Meracik…') : tr('Racik Instruksi dari Anchor')}
+										</button>
 									</span>
 								</div>
-								{#if topicHelpOpen}
-									<button
-										class="fixed inset-0 z-20 cursor-default"
-										type="button"
-										aria-label={tr('Tutup contoh')}
-										onclick={() => (topicHelpOpen = false)}
-									></button>
-									<div
-										class="relative z-30 mt-2 rounded-xl border p-3"
-										style="border-color: var(--border); background-color: var(--card); box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);"
-										role="dialog"
-										tabindex="-1"
-										aria-label={tr('Contoh topik & konteks')}
-										onkeydown={(e) => {
-											if (e.key === 'Escape') topicHelpOpen = false;
-										}}
-									>
-										<p class="flex items-center gap-1.5 text-xs font-semibold"><Lightbulb size={13} /> {tr('Contoh topik & konteks')}</p>
-										<p class="mt-1 text-[11px] text-muted-foreground">
-											{tr('Klik salah satu untuk memakainya sebagai isi kolom topik — silakan ubah sesuai brand-mu.')}
-										</p>
-										<div class="mt-2 space-y-1.5">
-											{#each TOPIC_EXAMPLES as ex (ex.label)}
-												<button
-													class="w-full rounded-lg border p-2 text-left text-[11px] transition-colors hover:border-[var(--primary)]"
-													type="button"
-													style="border-color: var(--border);"
-													onclick={() => { topic = ex.text; topicHelpOpen = false; }}
-												>
-													<span class="block font-semibold">{tr(ex.label)}</span>
-													<span class="mt-0.5 block text-muted-foreground">{ex.text}</span>
-												</button>
-											{/each}
-										</div>
-										<p class="mt-2 text-[11px] text-muted-foreground">
-											{tr('Tips: kamu bisa sekalian meminta jumlah gambar isi di dalam topik, misalnya "sertakan 4 gambar". Biayanya mengikuti tarif per gambar.')}
-										</p>
-									</div>
+								{#if racikError}
+									<p class="mt-1 text-xs" style="color: var(--destructive);">{racikError}</p>
 								{/if}
 								<div class="relative mt-2">
 									<textarea
