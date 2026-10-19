@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { CalendarClock, Check, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Info, Link, Link2, ListChecks, LoaderCircle, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Trash2, TriangleAlert, Upload, Wallet, X } from '@lucide/svelte';
+	import { CalendarClock, Check, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Info, Link, Link2, ListChecks, LoaderCircle, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Trash2, TriangleAlert, Upload, Wallet, Wrench, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, getAccessToken, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -2075,9 +2075,11 @@
 	{#if bulkPopupOpen}
 		<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={() => (bulkPopupOpen = false)} onkeydown={(e) => { if (e.key === 'Escape') bulkPopupOpen = false; }}>
 			<dialog open class="app-card w-full max-w-sm p-6 text-center" aria-label={tr('Generate Semua')} onclick={(e) => e.stopPropagation()}>
-				<LoaderCircle size={26} class="mx-auto animate-spin" style="color: var(--accent);" />
+				<div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full border" style="background: var(--warning-soft, #fdf3e3); border-color: color-mix(in srgb, var(--warning, #d97706) 35%, transparent); color: var(--warning, #b45309);">
+					<Wrench size={24} strokeWidth={2} />
+				</div>
 				<h3 class="mt-3 text-base font-bold">{tr('Generate Semua')}</h3>
-				<p class="mt-1.5 text-sm text-muted-foreground">{tr('Dalam Pengerjaan')}</p>
+				<p class="mt-1.5 text-sm text-muted-foreground">{tr('Fitur generate artikel di semua media terpilih masih dalam pengerjaan.')}</p>
 				<button class="app-btn app-btn-soft mt-4 !min-h-9 !px-4" type="button" onclick={() => (bulkPopupOpen = false)}>{tr('Tutup')}</button>
 			</dialog>
 		</div>
