@@ -314,27 +314,27 @@
 			</div>
 
 			{#if mediaList.length > 0}
-				<div class="mt-4 overflow-x-auto rounded-lg border border-slate-100">
+				<div class="mt-4 overflow-x-auto rounded-xl border border-slate-200/70">
 					<table class="w-full text-sm">
 						<thead>
-							<tr class="bg-slate-50/80 border-b border-slate-100 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
-								<th class="px-4 py-3">{tr("Media")}</th>
-								<th class="px-4 py-3">Tipe</th>
-								<th class="px-4 py-3">DA</th>
-								<th class="px-4 py-3">Link Artikel</th>
-								<th class="px-4 py-3">{tr("Jadwal Terbit")}</th>
-								<th class="px-4 py-3">Judul Artikel</th>
-								<th class="px-4 py-3">{tr("Status Terbit")}</th>
-								<th class="px-4 py-3 text-right">{tr("Aksi")}</th>
+							<tr class="border-b border-slate-100 bg-white text-left text-[10.5px] font-bold uppercase tracking-[0.07em] text-slate-400">
+								<th class="px-3.5 py-3.5">{tr("Media")}</th>
+								<th class="px-3.5 py-3.5">Tipe</th>
+								<th class="px-3.5 py-3.5">DA</th>
+								<th class="px-3.5 py-3.5">Link Artikel</th>
+								<th class="px-3.5 py-3.5">{tr("Jadwal Terbit")}</th>
+								<th class="px-3.5 py-3.5">Judul Artikel</th>
+								<th class="px-3.5 py-3.5">{tr("Status Terbit")}</th>
+								<th class="px-3.5 py-3.5 text-right">{tr("Aksi")}</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-slate-100 bg-white">
 							{#each mediaList as m (m.media_id)}
 								{@const domain = cleanDomain(m.website_url, m.name)}
-								<tr class="hover:bg-slate-50/50 transition-colors">
-									<td class="px-4 py-3">
+								<tr class="transition-colors hover:bg-slate-50/60">
+									<td class="px-3.5 py-4">
 										<div class="flex items-center gap-3">
-											<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold border border-slate-200/60" style="background-color: {AVA[avatarTone(m.name)]};">
+											<span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/70 text-xs font-bold ring-2 ring-white" style="background-color: {AVA[avatarTone(m.name)]};">
 												{#if domain && !faviconFailed[m.media_id]}
 													<img
 														src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`}
@@ -351,24 +351,24 @@
 											<div class="min-w-0">
 												<span class="block font-bold text-slate-900 text-[13.5px] leading-tight truncate">{m.name || '—'}</span>
 												{#if domain}
-													<span class="block text-[11px] text-slate-400 font-normal mt-0.5 truncate">{domain}</span>
+													<span class="block text-[11.5px] text-slate-400 font-normal mt-0.5 truncate">{domain}</span>
 												{/if}
 											</div>
 										</div>
 									</td>
-									<td class="px-4 py-3 whitespace-nowrap">
+									<td class="px-3.5 py-4 whitespace-nowrap">
 										{#if m.media_type}
-											<span class="rounded-full border border-blue-200/80 bg-blue-50 px-3 py-0.5 text-[11px] font-semibold text-blue-600">
+											<span class="rounded-full border border-blue-200/70 bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-700">
 												{m.media_type}
 											</span>
 										{:else}
 											—
 										{/if}
 									</td>
-									<td class="px-4 py-3 font-semibold text-slate-800">{m.da != null ? m.da : '—'}</td>
-									<td class="px-4 py-3 whitespace-nowrap">
+									<td class="px-3.5 py-4 text-[13px] font-bold text-slate-900">{m.da != null ? m.da : '—'}</td>
+									<td class="px-3.5 py-4 whitespace-nowrap">
 										{#if m.article.links.count > 0}
-											<span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+											<span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
 												<LinkIcon size={12} class="text-slate-400 shrink-0" />
 												{m.article.links.count} link{m.article.links.rels.length > 0 ? ` · ${m.article.links.rels.join(', ')}` : ' dofollow'}
 											</span>
@@ -376,20 +376,20 @@
 											<span class="text-xs text-muted-foreground">{tr("Tidak ada link")}</span>
 										{/if}
 									</td>
-									<td class="px-4 py-3 whitespace-nowrap">
-										<span class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+									<td class="px-3.5 py-4 whitespace-nowrap">
+										<span class="inline-flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600">
 											<Clock size={12} class="text-emerald-500 shrink-0" />
 											{toJakartaDisplay(m.scheduled_at) ?? 'Segera'}
 										</span>
 									</td>
-									<td class="max-w-[280px] px-4 py-3">
+									<td class="max-w-[240px] px-3.5 py-4">
 										{#if m.article.title}
-											<span class="block truncate text-xs text-slate-700" title={m.article.title}>{m.article.title}</span>
+											<span class="block truncate text-[12.5px] text-slate-700" title={m.article.title}>{m.article.title}</span>
 										{:else}
 											<span class="text-xs text-muted-foreground">{tr("Belum ada artikel")}</span>
 										{/if}
 									</td>
-									<td class="px-4 py-3 whitespace-nowrap">
+									<td class="px-3.5 py-4 whitespace-nowrap">
 										{#if m.publish.status === 'published'}
 											<span class="inline-flex items-center gap-1.5">
 												<span class="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600">
@@ -401,7 +401,7 @@
 														href={m.publish.url}
 														target="_blank"
 														rel="noreferrer"
-														class="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50/60 px-2 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-100/70 transition-colors"
+														class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-600 shadow-2xs transition-colors hover:bg-slate-50"
 														title={tr('Buka artikel di situs mitra')}
 													>
 														<ExternalLink size={11} />
@@ -425,12 +425,12 @@
 											<span class="text-xs text-muted-foreground">—</span>
 										{/if}
 									</td>
-									<td class="px-4 py-3 text-right">
+									<td class="px-3.5 py-4 text-right">
 										<!-- Hubungi mitra tentang artikel ini; publikasi belum ada
 										     (belum diajukan) belum punya forum. -->
 										<button
 											type="button"
-											class="app-btn app-btn-soft inline-flex items-center gap-1.5 !min-h-7 !px-2.5 !text-[11.5px]"
+											class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
 											disabled={!m.publication_id}
 											title={!m.publication_id ? tr('Publikasi belum diajukan') : tr('Hubungi mitra tentang artikel ini')}
 											onclick={() => openContact(m)}
