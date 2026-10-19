@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { CalendarClock, Check, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Info, Link, Link2, ListChecks, LoaderCircle, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Trash2, TriangleAlert, Upload, Wallet, Wrench, X } from '@lucide/svelte';
+	import { CalendarClock, Check, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Images, Info, Link, Link2, ListChecks, LoaderCircle, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Target, Trash2, TriangleAlert, Type, Upload, Wallet, Wrench, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, getAccessToken, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -419,12 +419,14 @@
 		return s !== 'none' && s !== 'generating' && s !== 'error' && s !== 'queued';
 	}
 
-	/** Rincian rel link untuk badge "N Dofollow - N Sponsored · N Nofollow". */
-	function linkStatsTail(links: LinkCounts): string {
-		return [
-			...(links.sponsored > 0 ? [`${links.sponsored} Sponsored`] : []),
-			...(links.nofollow > 0 || links.sponsored === 0 ? [`${links.nofollow} Nofollow`] : [])
-		].join(' · ');
+	/** Rincian rel link: "1 Dofollow · 2 Nofollow · 1 Sponsored", atau "0 tautan". */
+	function linkStatsText(links: LinkCounts): string {
+		const parts = [
+			...(links.dofollow > 0 ? [`${links.dofollow} Dofollow`] : []),
+			...(links.nofollow > 0 ? [`${links.nofollow} Nofollow`] : []),
+			...(links.sponsored > 0 ? [`${links.sponsored} Sponsored`] : [])
+		];
+		return parts.length > 0 ? parts.join(' · ') : '0 tautan';
 	}
 
 	function patchLinks(patch: Partial<LinksForm>) {
@@ -1151,7 +1153,72 @@
 
 	const checklistItem = $derived(checklistFor ? (placement.find((p) => p.media_id === checklistFor) ?? null) : null);
 	const checkStats = $derived(checklistItem ? (articleStats[checklistItem.media_id] ?? null) : null);
+	const checkLinks = $derived(checklistItem ? (linkStats[checklistItem.media_id] ?? null) : null);
 	const checkMediaType = $derived(checklistItem ? ((checklistItem as unknown as { media_type?: string }).media_type ?? null) : null);
+
+	// Baris indikator untuk popup Cek Validasi: ikon + nilai + warna chip.
+	// pos = hijau (bagus), warn = merah (perlu perhatian), num = netral.
+	type CheckRow = {
+		Icon: typeof FileText;
+		label: string;
+		sub: string;
+		value: string;
+		tone: 'pos' | 'warn' | 'num';
+	};
+	const checkRows = $derived.by<CheckRow[]>(() => {
+		if (!checklistItem) return [];
+		const st = articleStatusOf(checklistItem);
+		return [
+			{
+				Icon: FileText,
+				label: tr('Status artikel'),
+				sub: tr('Status terkini artikel di sistem.'),
+				value: statusText(st),
+				tone: st === 'ready' ? 'pos' : st === 'blocked' ? 'warn' : 'num'
+			},
+			{
+				Icon: Type,
+				label: tr('Jumlah kata'),
+				sub: tr('Total kata dalam artikel.'),
+				value: checkStats ? `${checkStats.words.toLocaleString('id-ID')} ${tr('kata')}` : tr('Tidak ada'),
+				tone: 'num'
+			},
+			{
+				Icon: Image,
+				label: tr('Cover artikel'),
+				sub: tr('Ketersediaan gambar cover.'),
+				value: checkStats ? (checkStats.cover ? tr('Ada') : tr('Tidak ada')) : tr('Tidak ada'),
+				tone: checkStats?.cover ? 'pos' : 'num'
+			},
+			{
+				Icon: Images,
+				label: tr('Gambar di artikel'),
+				sub: tr('Jumlah gambar yang digunakan.'),
+				value: checkStats ? `${checkStats.images} ${tr('gambar')}` : tr('Tidak ada'),
+				tone: 'num'
+			},
+			{
+				Icon: Link2,
+				label: tr('Tautan aktif'),
+				sub: tr('Jumlah tautan yang berfungsi.'),
+				value: checkLinks ? linkStatsText(checkLinks) : checkStats ? `${checkStats.links} ${tr('tautan')}` : tr('Tidak ada'),
+				tone: 'num'
+			},
+			{
+				Icon: Target,
+				label: tr('Kesesuaian media tujuan'),
+				sub: tr('Kecocokan konten dengan karakter media.'),
+				value: checkMediaType
+					? checkMediaType === 'mainstream'
+						? 'Mainstream'
+						: checkMediaType === 'blogger'
+							? 'Blogger'
+							: checkMediaType
+					: tr('Tidak ada indikator'),
+				tone: checkMediaType ? 'pos' : 'num'
+			}
+		];
+	});
 
 	const qcItem = $derived(qcFor ? (placement.find((p) => p.media_id === qcFor) ?? null) : null);
 	const qcStats = $derived(qcItem ? (articleStats[qcItem.media_id] ?? null) : null);
@@ -1909,23 +1976,49 @@
 
 {#if checklistItem}
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
-		<div class="app-card w-full max-w-md p-5">
-			<p class="flex items-center gap-2 font-bold" style="color: var(--primary);"><ListChecks size={18} /> {tr('Cek Validasi Artikel')}</p>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Ringkasan indikator artikel untuk media")} {checklistItem.name}.</p>
-			<div class="mt-3 space-y-2 text-sm">
-				<div class="flex items-start justify-between gap-3"><span class="text-muted-foreground">{tr("Status artikel")}</span><span class="text-right font-medium">{articleStatusOf(checklistItem)}</span></div>
-				<div class="flex items-start justify-between gap-3"><span class="text-muted-foreground">{tr("Jumlah kata")}</span><span class="text-right font-medium">{checkStats ? `${checkStats.words.toLocaleString('id-ID')} ${tr('kata')}` : tr('Tidak ada')}</span></div>
-				<div class="flex items-start justify-between gap-3"><span class="text-muted-foreground">{tr('Cover artikel')}</span><span class="text-right font-medium">{checkStats ? (checkStats.cover ? tr('Ada') : tr('Tidak ada')) : tr('Tidak ada')}</span></div>
-				<div class="flex items-start justify-between gap-3"><span class="text-muted-foreground">{tr('Gambar di artikel')}</span><span class="text-right font-medium">{checkStats ? `${checkStats.images} ${tr('gambar')}` : tr('Tidak ada')}</span></div>
-				<div class="flex items-start justify-between gap-3"><span class="text-muted-foreground">{tr('Tautan aktif')}</span><span class="text-right font-medium">{checkStats ? `${checkStats.links} ${tr('tautan')}` : tr('Tidak ada')}</span></div>
-				<div class="flex items-start justify-between gap-3">
-					<span class="text-muted-foreground">{tr("Kesesuaian media tujuan")}</span>
-					<span class="text-right font-medium">{checkMediaType ? (checkMediaType === 'mainstream' ? 'Mainstream' : checkMediaType === 'blogger' ? 'Blogger' : checkMediaType) : tr('Tidak ada indikator')}</span>
+		<div class="app-card w-full max-w-2xl max-h-[92dvh] overflow-y-auto">
+			<!-- Kepala: ikon + judul, dan tombol tutup X -->
+			<div class="flex items-start gap-3 border-b border-slate-100 px-5 pb-4 pt-5">
+				<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
+					<ListChecks size={21} />
+				</span>
+				<div class="min-w-0 flex-1">
+					<p class="text-lg leading-tight font-bold text-slate-900">{tr('Cek Validasi Artikel')}</p>
+					<p class="mt-1 text-[13.5px] text-muted-foreground">{tr("Ringkasan indikator artikel untuk media")} {checklistItem.name}.</p>
 				</div>
+				<button class="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" type="button" aria-label={tr('Tutup')} onclick={() => (checklistFor = null)}>
+					<X size={18} />
+				</button>
 			</div>
-			{#if !checkStats}<p class="mt-2 text-xs text-muted-foreground">{tr("Artikel belum dibuat untuk media ini — indikator ditulis \"Tidak ada\".")}</p>{/if}
-			<div class="mt-4 flex justify-end">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (checklistFor = null)}>{tr("Tutup")}</button>
+
+			<!-- Indikator: kartu ikon + keterangan + chip nilai -->
+			<div class="grid grid-cols-1 gap-2.5 p-5 sm:grid-cols-2">
+				{#each checkRows as row (row.label)}
+					<div class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3.5">
+						<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
+							<row.Icon size={17} />
+						</span>
+						<div class="min-w-0 flex-1">
+							<p class="text-[13.5px] font-semibold text-slate-900">{row.label}</p>
+							<p class="mt-0.5 text-xs leading-relaxed text-muted-foreground">{row.sub}</p>
+						</div>
+						<span class="shrink-0 rounded-full px-3 py-1.5 text-xs font-bold whitespace-nowrap {row.tone === 'pos' ? 'bg-emerald-50 text-emerald-700' : row.tone === 'warn' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}">
+							{row.value}
+						</span>
+					</div>
+				{/each}
+			</div>
+
+			<!-- Kaki: catatan khusus + banner saran + tombol tutup -->
+			<div class="px-5 pb-5">
+				{#if !checkStats}
+					<p class="mb-3 rounded-xl bg-amber-50 px-3.5 py-2.5 text-[12.5px] text-amber-800">{tr("Artikel belum dibuat untuk media ini — indikator ditulis \"Tidak ada\".")}</p>
+				{/if}
+				<div class="flex items-center gap-2.5 rounded-xl px-3.5 py-3" style="background-color: color-mix(in srgb, var(--primary) 7%, transparent);">
+					<Info size={16} class="shrink-0" style="color: var(--primary);" />
+					<p class="text-[13px] text-slate-700">{tr('Pastikan semua indikator sesuai sebelum melanjutkan publikasi.')}</p>
+				</div>
+				<button class="app-btn app-btn-primary mt-4 h-11 w-full rounded-xl text-[13.5px] font-semibold" type="button" onclick={() => (checklistFor = null)}>{tr('Tutup')}</button>
 			</div>
 		</div>
 	</div>
