@@ -289,11 +289,9 @@
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div class="flex items-center gap-3">
 					<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-2xs">
-						<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 16 16" aria-hidden="true">
-							<g fill="currentColor">
-								<path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855a.75.75 0 0 0-.124 1.329l4.995 3.178l1.531 2.406a.5.5 0 0 0 .844-.536L6.637 10.07l7.494-7.494l-1.895 4.738a.5.5 0 1 0 .928.372zm-2.54 1.183L5.93 9.363L1.591 6.602z" />
-								<path d="M16 12.5a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0m-1.993-1.679a.5.5 0 0 0-.686.172l-1.17 1.95l-.547-.547a.5.5 0 0 0-.708.708l.774.773a.75.75 0 0 0 1.174-.144l1.335-2.226a.5.5 0 0 0-.172-.686" />
-							</g>
+						<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+							<path d="M0 0h24v24H0z" fill="none" />
+							<path fill="currentColor" d="M21.04 2.96c-.35-.35-.855-.46-1.315-.29l-16.9 6.225c-.47.17-.79.605-.815 1.105c-.03.5.245.965.69 1.19l6.035 3.02l4.735-4.735l1.06 1.06l-4.735 4.735l3.02 6.035c.21.425.645.69 1.115.69H14c.5-.03.93-.35 1.105-.815L21.33 4.275c.17-.46.06-.965-.29-1.315" />
 						</svg>
 					</span>
 					<div>
