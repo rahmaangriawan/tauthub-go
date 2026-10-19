@@ -953,7 +953,8 @@
 		     top-0, jadi harus menempel persis di bawah tab tanpa celah padding
 		     (dulu isi artikel terlihat lewat celah 20px itu). Jaraknya dipindah
 		     ke padding kolom. -->
-		<div class="grid flex-1 gap-5 overflow-y-auto px-5 pb-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+		<!-- Kolom kanan hanya ada di tab Editor Post; tab lain menempati lebar penuh. -->
+		<div class="grid flex-1 gap-5 overflow-y-auto px-5 pb-5 {tab === 'tulis' ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ''}">
 			<!-- Kolom kerja utama -->
 			<div class="min-w-0 pt-5">
 				{#if tab === 'tulis'}
