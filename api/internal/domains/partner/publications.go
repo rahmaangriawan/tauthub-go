@@ -257,7 +257,7 @@ func partnerPublicationJSON(row rowMap) map[string]any {
 	if v, ok := row.num("partner_amount"); ok {
 		partnerAmount = v
 	}
-	// gross = angka sebelum potongan platform 5%; amount = yang diterima mitra.
+	// gross = angka sebelum potongan platform; amount = yang diterima mitra.
 	// Baris lama tanpa gross_amount jatuh kembali ke amount (potongan 0) supaya
 	// rincian tetap masuk akal tanpa mengubah saldo historis.
 	grossAmount := partnerAmount

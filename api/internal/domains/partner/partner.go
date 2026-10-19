@@ -433,9 +433,10 @@ func (d *Deps) partnerServiceChargesTotal(ctx context.Context, partnerID string)
 }
 
 // Potongan platform atas penghasilan mitra per publikasi (aturan pemilik
-// produk: 5% dari angka yang diajukan). Dibagi di sini, bukan per-tampilan,
-// supaya popover rincian dan angka saldo selalu berasal dari hitungan sama.
-const pePlatformCutPercent = 5.0
+// produk: 25% dari angka yang diajukan; mitra menerima 75%). Angka yang
+// ditampilkan tetap diturunkan dari gross_amount vs amount tiap baris, bukan
+// konstanta ini, supaya baris historis tidak tampil menyesatkan.
+const pePlatformCutPercent = 25.0
 
 // earningGross: gross_amount dari baris ledger; baris lama tanpa gross jatuh
 // kembali ke amount (tidak ada potongan yang bisa ditampilkan).

@@ -2290,9 +2290,10 @@ type peRevenueSplit struct {
 }
 
 // Potongan platform atas penghasilan yang diajukan mitra (aturan pemilik
-// produk 5%). amount di ledger menyimpan pendapatan bersih, gross_amount
-// menyimpan angka sebelum potongan supaya popover rincian bisa tampil jujur.
-const pePlatformCutRate = 0.05
+// produk 25%, mitra menerima 75%). amount di ledger menyimpan pendapatan
+// bersih, gross_amount menyimpan angka sebelum potongan supaya popover
+// rincian bisa tampil jujur.
+const pePlatformCutRate = 0.25
 
 func peNetAfterPlatformCut(gross float64) float64 {
 	if gross < 0 {

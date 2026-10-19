@@ -340,7 +340,7 @@
 	let domResult = $state<{ status: string; found_token?: string | null } | null>(null);
 	let domCopied = $state<string | null>(null);
 
-	// ── Harga kolom tabel media = pendapatan bersih (potongan platform 5%),
+	// ── Harga kolom tabel media = pendapatan bersih (potongan platform),
 	//    sama seperti halaman Publikasi; klik membuka rincian. ────────────
 	let openPriceID = $state<string | null>(null);
 	const netPrice = (v: number) => Math.max(Math.round((Number(v) || 0) * 0.95), 0);
@@ -1375,7 +1375,7 @@
 {/snippet}
 
 <!-- Harga media: nominal bersih; klik membuka rincian harga diajukan ·
-     potongan platform 5% · pendapatan. Pola sama dengan halaman Publikasi. -->
+     potongan platform · pendapatan. Pola sama dengan halaman Publikasi. -->
 {#snippet priceCell(m: Media)}
 	{@const net = netPrice(m.price)}
 	{@const cut = priceCut(m.price)}
