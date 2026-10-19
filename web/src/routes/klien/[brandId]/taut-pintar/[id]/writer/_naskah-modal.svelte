@@ -999,7 +999,7 @@
 <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" style="background-color: rgba(15, 23, 42, 0.45);">
 	<div
 		bind:this={panelEl}
-		class="flex max-h-[94vh] w-full max-w-[71rem] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
+		class="flex max-h-[94vh] w-full max-w-[77.25rem] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
 		style="border-color: var(--border); background-color: var(--card, #fff);"
 		tabindex="-1"
 		role="dialog"
