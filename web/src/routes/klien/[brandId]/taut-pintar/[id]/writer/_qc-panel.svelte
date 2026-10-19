@@ -45,11 +45,9 @@
 		canDistribute: boolean;
 	};
 
-	// Empat pemeriksa — heading panel bilang 4, jadi kartunya harus 4 juga
-	// (AI Overview sempat hilang dari daftar inilah yang membuat badge count
-	// terkesan tak cocok dengan panel).
+	// AI Overview Checker dihapus dari panel (aturan pemilik produk) — pemindaian
+	// backendo tetap menyimpan datanya, hanya layar tiga pemeriksa ini.
 	const CHECK_CARDS: Array<{ key: keyof Checks; title: string; gate: boolean }> = [
-		{ key: 'aiOverview', title: 'AI Overview Checker', gate: false },
 		{ key: 'contentSafety', title: 'Illegal Content Guard', gate: true },
 		{ key: 'linkHealth', title: 'Link Health Validator', gate: true },
 		{ key: 'brandVoice', title: 'Brand Voice Limits', gate: false }
@@ -340,7 +338,7 @@
 		{/if}
 
 		<section class="qcBlock" aria-label={tr('Pemeriksaan QC')}>
-			<p class="qcBlockTitle">{tr('Empat Pemeriksa')}</p>
+			<p class="qcBlockTitle">{tr('Pemeriksa Artikel')}</p>
 			<p class="mt-1 text-[11.5px] text-muted-foreground">{tr('Illegal Content & Link Health adalah gerbang wajib untuk bisa distribusi.')}</p>
 			<div class="mt-2.5 space-y-2">
 				{#each CHECK_CARDS as card (card.key)}

@@ -364,7 +364,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Efisien": "Efficient",
   "email@contoh.com": "email@example.com",
   "Embed hanya bisa disisipkan pada media yang mengizinkannya, dan hanya dari penyedia yang didukung. Setelah disimpan, embed ikut terkirim saat artikel terbit di situs mitra.": "An embed can only be inserted into media that allow it, and only from supported providers. Once saved, the embed is sent along when the article is published on the partner site.",
-  "Empat Pemeriksa": "The Four Checkers",
+  "Pemeriksa Artikel": "Article Checkers",
   "Est. Reach Tertinggi": "Highest Est. Reach",
   "Estimasi Biaya Media": "Estimated Media Cost",
   "Filter Lanjutan": "Advanced Filter",
