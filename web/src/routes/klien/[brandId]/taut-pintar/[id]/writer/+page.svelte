@@ -2018,7 +2018,7 @@
 					<Info size={16} class="shrink-0" style="color: var(--primary);" />
 					<p class="text-[13px] text-slate-700">{tr('Pastikan semua indikator sesuai sebelum melanjutkan publikasi.')}</p>
 				</div>
-				<button class="app-btn app-btn-primary mt-4 h-11 w-full rounded-xl text-[13.5px] font-semibold" type="button" onclick={() => (checklistFor = null)}>{tr('Tutup')}</button>
+				<button class="app-btn app-btn-primary mt-4 h-11 w-full rounded-[5px] text-[13.5px] font-semibold" type="button" onclick={() => (checklistFor = null)}>{tr('Tutup')}</button>
 			</div>
 		</div>
 	</div>
