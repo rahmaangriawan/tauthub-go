@@ -1021,7 +1021,7 @@
 							onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
 						/>
 					{/if}
-					<span class="truncate">{tr('Media Target:')} <strong class="text-foreground">{mediaName}</strong></span>
+						<span class="truncate"><strong class="text-foreground">{mediaName}</strong></span>
 					{#if mediaType}
 						<span
 							class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
