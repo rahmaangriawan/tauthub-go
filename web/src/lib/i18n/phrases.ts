@@ -4210,7 +4210,6 @@ export const PHRASE_EN: Record<string, string> = {
 	"Disisipkan natural di paragraf yang relevan": "Inserted naturally into the relevant paragraph",
 	"Instruksi Tambahan / Fokus Cerita": "Additional Instructions / Story Focus",
 	"Opsional jika Copilot/Fakta sudah terisi": "Optional when Copilot/Facts are filled",
-	"Logika bias-up menyusul": "Bias-up logic coming soon",
 	"Logika contoh menyusul": "Example logic coming soon",
 	"Bahas tentang tren dan keunggulan penggunaan epoxy lantai pada bangunan modern (mulai dari ketahanan beban, estetika seamless, hingga kemudahan perawatan), lalu sisipkan tautan jasa epoxy lantai secara natural.": "Cover trends and advantages of epoxy flooring for modern buildings (from load resistance, seamless aesthetics, to easier maintenance), then insert the epoxy flooring service link naturally.",
 	"Mode Proper (Strict Grounding)": "Proper Mode (strict grounding)",

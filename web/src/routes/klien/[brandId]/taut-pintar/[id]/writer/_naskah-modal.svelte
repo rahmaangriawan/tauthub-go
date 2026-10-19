@@ -1642,9 +1642,6 @@
 										</div>
 										<div class="mt-3 flex items-center gap-2">
 											<span class="flex items-center gap-1.5">
-												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika bias-up menyusul')}>
-													<LoaderCircle size={12} /> {tr('Malas Mikir? Racik dari Anchor')}
-												</button>
 												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika contoh menyusul')}>
 													<Lightbulb size={12} /> {tr('Contoh')}
 												</button>
