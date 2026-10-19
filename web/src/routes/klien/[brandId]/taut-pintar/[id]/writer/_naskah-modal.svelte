@@ -1103,12 +1103,12 @@
 						</div>
 
 						<!-- 1. Pilihan gaya artikel (UI dulu — logika menyusul). -->
-						<div class="mt-5">
-							<div class="mb-2.5 flex flex-wrap items-baseline justify-between gap-2">
+						<div class="mt-6">
+							<div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
 								<p class="text-sm font-bold">1. {tr('Kamu mau buat artikel seperti apa?')} <span style="color: var(--destructive);">*</span></p>
 								<p class="text-[11px] text-muted-foreground">{tr('Pilih sesuai tujuan publikasi')}</p>
 							</div>
-							<div class="grid gap-3 lg:grid-cols-2">
+							<div class="grid gap-4 lg:grid-cols-2">
 								<button
 									type="button"
 									class="rounded-xl border-2 p-4 text-left transition-colors {gayaArtikel === 'simpel' ? 'border-blue-500 bg-blue-50/40' : 'border-slate-200 bg-white hover:border-slate-300'}"
@@ -1153,9 +1153,9 @@
 								</button>
 							</div>
 						</div>
-												{#if gayaArtikel === 'simpel'}
-<div class="mt-5 w-full text-left">
-								<div class="mb-4 min-w-0">
+						{#if gayaArtikel === 'simpel'}
+						<div class="mt-6 w-full text-left">
+							<div class="mb-6 min-w-0">
 									<span class="text-sm font-semibold">2. {tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
 									{#if angleChannelName}
 										<p class="mt-1 break-words text-xs text-muted-foreground">{tr(angleChannelName)}</p>
@@ -1187,14 +1187,14 @@
 									</div>
 								</div>
 									<!-- Tautan & anchor: tampil setelah Angle, sebelum Topik. -->
-								<div class="mt-5">
+								<div>
 									{#if linkLimit > 0}
 										{@render linkEditor()}
 									{:else}
 										<p class="text-xs text-muted-foreground">{tr('Media ini tidak mengizinkan tautan dalam artikel.')}</p>
 									{/if}
 								</div>
-							<div class="flex items-center gap-2">
+							<div class="mt-5 flex items-center gap-2">
 									<label class="text-sm font-semibold" for="naskah-topik">
 										4. {tr('Topik & Konteks Pembahasan')} <span style="color: var(--destructive);">*</span>
 									</label>
@@ -1303,7 +1303,7 @@
 									<Sparkles size={16} class="absolute bottom-3 right-3 text-muted-foreground" />
 								</div>
 								{#if imgRequestCount > 0 && !genNotice}
-									<div class="mt-2 rounded-lg px-3 py-2 text-xs" style="background-color: var(--accent); color: var(--accent-foreground);">
+									<div class="mt-3 rounded-lg px-3 py-2 text-xs" style="background-color: var(--accent); color: var(--accent-foreground);">
 										<p class="font-semibold" style="color: var(--primary);">
 											{tr('Terdeteksi permintaan gambar')} (~{imgRequestCount} {tr('gambar isi')})
 										</p>
@@ -1338,7 +1338,7 @@
 								</p>
 							{/if}
 							<button
-								class="app-btn app-btn-primary mt-3 w-full"
+								class="app-btn app-btn-primary mt-4 w-full"
 								type="button"
 								disabled={genBusy || !topic.trim() || (linkLimit > 0 && !linksValid) || !angleReady}
 								onclick={generate}
@@ -1428,7 +1428,7 @@
 								</div>
 							{/if}
 
-							<p class="mt-2 text-xs text-muted-foreground">
+							<p class="mt-3 text-xs text-muted-foreground">
 								{tr('Draf akan tampil di tab Editor Post untuk kamu tinjau sebelum disimpan.')}
 							</p>
 						</div>
