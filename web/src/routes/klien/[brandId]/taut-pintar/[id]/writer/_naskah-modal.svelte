@@ -716,7 +716,12 @@
 	let copilotBusy = $state(false);
 	let copilotError = $state('');
 	const copilotBriefOptions = $derived(copilotBriefs.map((b) => ({ value: b.id, label: b.name })));
-	const copilotBrandName = $derived.by(() => copilotEntries.find((e) => e.key === 'canonical_name')?.value || copilotBriefName);
+	// Nama pada baris Brand mengikuti nama brief (Profiler) yang dipilih —
+	// nilai canonical_name di fakta jadi cadangan bila brief tidak punya nama.
+	const copilotBrandName = $derived.by(() => {
+		const canonical = copilotEntries.find((e) => e.key === 'canonical_name')?.value ?? '';
+		return copilotBriefName || canonical;
+	});
 	const copilotSummary = $derived.by(() => {
 		if (copilotEntries.length === 0) return '';
 		const val = (k: string) => copilotEntries.find((e) => e.key === k)?.value ?? '';
