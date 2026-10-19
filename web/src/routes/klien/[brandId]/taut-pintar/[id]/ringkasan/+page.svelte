@@ -162,6 +162,7 @@
 	// Favicon media di tabel: domain dari website_url, fallback ke inisial nama.
 	const cleanDomain = (url: string | null | undefined, name: string): string =>
 		((url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim() || name.trim()).toLowerCase();
+	const capFirst = (v: string): string => (v ? v.charAt(0).toUpperCase() + v.slice(1) : v);
 	let faviconFailed = $state<Record<string, boolean>>({});
 </script>
 
@@ -478,7 +479,7 @@
 				</span>
 				<div class="min-w-0 flex-1">
 					<p class="text-lg leading-tight font-bold text-slate-900">{tr('Konfirmasi Sesi Obrolan')}</p>
-					<p class="mt-1 truncate text-[13px] text-muted-foreground">{tr('Mitra:')} {cleanDomain(contactTarget.website_url, contactTarget.name)}</p>
+					<p class="mt-1 truncate text-[13px] text-muted-foreground">{tr('Mitra:')} {capFirst(cleanDomain(contactTarget.website_url, contactTarget.name))}</p>
 				</div>
 				<button class="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" type="button" aria-label={tr('Tutup')} onclick={() => (contactTarget = null)}>
 					<X size={18} />

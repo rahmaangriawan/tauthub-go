@@ -994,6 +994,9 @@
 	}
 
 	const kategoriOptions = $derived(categoryOptions.map((c) => ({ value: c, label: c })));
+
+	// Huruf pertama domain ditampilkan kapital (danuadji.com → Danuadji.com).
+	const capFirst = (v: string): string => (v ? v.charAt(0).toUpperCase() + v.slice(1) : v);
 </script>
 
 <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" style="background-color: rgba(15, 23, 42, 0.45);">
@@ -1021,7 +1024,7 @@
 							onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
 						/>
 					{/if}
-						<span class="truncate"><strong class="text-foreground">{mediaDomain || mediaName}</strong></span>
+						<span class="truncate"><strong class="text-foreground">{capFirst(mediaDomain || mediaName)}</strong></span>
 					{#if mediaType}
 						<span
 							class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
