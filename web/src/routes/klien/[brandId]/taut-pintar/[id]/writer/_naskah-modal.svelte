@@ -870,10 +870,10 @@
 		{/if}
 
 	{#snippet linkEditor()}
-		<div class="mt-4 w-full rounded-xl border p-3 text-left" style="border-color: var(--border); background-color: var(--card, #fff);">
+		<div class="w-full text-left">
 			<div class="flex items-center justify-between gap-2">
-				<p class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-					3. <Link2 size={13} /> {tr('Tautan & Anchor (Opsional)')}
+				<p class="text-sm font-semibold">
+					3. {tr('Tautan & Anchor (Opsional)')}
 				</p>
 				<span
 					class="rounded-full px-2 py-0.5 text-[10px] font-bold"
