@@ -3907,6 +3907,7 @@ export const PHRASE_EN: Record<string, string> = {
 	"Pilih Semua": "Select all",
 	"Generate Semua": "Generate all",
 	"Generate artikel untuk semua media terpilih": "Generate articles for all selected media",
+	"Pilih minimal 2 media untuk Generate Semua.": "Select at least 2 media for Generate all.",
 	"Dalam Pengerjaan": "In progress",
 	"Server Uptime": "Server Uptime",
 	"Simpan Prompt": "Save Prompt",

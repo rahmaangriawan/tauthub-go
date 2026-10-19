@@ -1415,7 +1415,13 @@
 						<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={pickAll}>
 							{allPicked ? tr('Batal Pilih Semua') : tr('Pilih Semua')}
 						</button>
-						<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" title={tr('Generate artikel untuk semua media terpilih')} onclick={() => (bulkPopupOpen = true)}>
+						<button
+							class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+							type="button"
+							disabled={pickedList.length < 2}
+							title={pickedList.length < 2 ? tr('Pilih minimal 2 media untuk Generate Semua.') : tr('Generate artikel untuk semua media terpilih')}
+							onclick={() => (bulkPopupOpen = true)}
+						>
 							<Sparkles size={13} /> {tr('Generate Semua')} ({pickedList.length})
 						</button>
 					</div>
