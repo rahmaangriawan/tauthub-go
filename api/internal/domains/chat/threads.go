@@ -195,15 +195,26 @@ func (d *Deps) sendMessage(ctx context.Context, threadID, role, userID, authorNa
 		}
 	}
 
+	// Anti-bypass: sensor kontak/ajakan transaksi di luar platform. Yang
+	// ditampilkan (dan dikirim ke notifikasi) adalah versi tersensor; teks asli
+	// disimpan di original_body hanya untuk bukti super admin.
+	masked, flagged := MaskChatMessage(body)
+
 	var msgID string
 	var createdAt time.Time
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO chat_messages (id, thread_id, author_role, author_user_id, author_name, body)
-		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
-		RETURNING id, created_at`, threadID, role, userID, authorName, body).Scan(&msgID, &createdAt); err != nil {
+		INSERT INTO chat_messages (id, thread_id, author_role, author_user_id, author_name, body, original_body, is_flagged)
+		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, created_at`, threadID, role, userID, authorName, masked, body, flagged).Scan(&msgID, &createdAt); err != nil {
 		return nil, &statusError{http.StatusInternalServerError, "Terjadi kesalahan internal. Coba lagi."}
 	}
-	if _, err := tx.Exec(ctx,
+	if flagged {
+		if _, err := tx.Exec(ctx,
+			"UPDATE chat_threads SET last_message_at = now(), last_message_by = $2, is_flagged = TRUE, updated_at = now() WHERE id = $1",
+			threadID, role); err != nil {
+			return nil, &statusError{http.StatusInternalServerError, "Terjadi kesalahan internal. Coba lagi."}
+		}
+	} else if _, err := tx.Exec(ctx,
 		"UPDATE chat_threads SET last_message_at = now(), last_message_by = $2, updated_at = now() WHERE id = $1",
 		threadID, role); err != nil {
 		return nil, &statusError{http.StatusInternalServerError, "Terjadi kesalahan internal. Coba lagi."}
@@ -219,11 +230,11 @@ func (d *Deps) sendMessage(ctx context.Context, threadID, role, userID, authorNa
 	}
 	if role == "client" {
 		if partnerUserID != nil && *partnerUserID != "" {
-			d.notifyUser(ctx, *partnerUserID, "Pesan baru dari "+brandName, body,
+			d.notifyUser(ctx, *partnerUserID, "Pesan baru dari "+brandName, masked,
 				"/mitra/"+partnerPublicID+"/chat?t="+threadID)
 		}
 	} else {
-		d.notifyBrandMembers(ctx, brandID, "Balasan dari mitra", body,
+		d.notifyBrandMembers(ctx, brandID, "Balasan dari mitra", masked,
 			"/klien/"+brandRef+"/chat?t="+threadID)
 	}
 
@@ -231,7 +242,8 @@ func (d *Deps) sendMessage(ctx context.Context, threadID, role, userID, authorNa
 		"id":          msgID,
 		"author_role": role,
 		"author_name": authorName,
-		"body":        body,
+		"body":        masked,
+		"is_flagged":  flagged,
 		"read_at":     nil,
 		"created_at":  createdAt,
 	}, nil

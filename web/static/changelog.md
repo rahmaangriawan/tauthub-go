@@ -26,6 +26,8 @@ Catatan:
 - **Menu "Pesan" di portal klien dan mitra**, lengkap dengan pencarian percakapan, tab Semua/Aktif/Selesai, penanda pesan belum dibaca, dan badge merah berisi jumlah pesan baru di sidebar.
 - **Badge "Publikasi" untuk mitra**: begitu ada publikasi baru untuk medianya, menu Publikasi menampilkan angka merah; membuka halaman Publikasi menandai semuanya sudah dibaca dan angkanya hilang.
 - **Kartu "Pesan" di dashboard mitra** menampilkan jumlah chat klien yang belum dibaca dan langsung menuju ruang obrolan.
+- **Penyaring anti-bypass di obrolan**: nomor telepon, email, dan ajakan transaksi di luar platform disensor otomatis jadi `[KONTAK DISEMBUNYIKAN OLEH SISTEM]` — termasuk yang disamarkan seperti "0812,3456,7890", "w4ts4pp", "w h a t s a p p", atau "nama [at] domain [dot] com". Link artikel/draft (termasuk domain tanpa https) tetap utuh. Link messenger (wa.me, t.me) ikut disensor.
+- **Jejak audit akses admin**: pesan asli hanya bisa dilihat super admin, dan setiap admin membuka log obrolan tercatat di `admin_chat_audit_logs` (IP, user agent, waktu) dengan penggabungan 15 menit agar log tidak menumpuk.
 - **Admin punya menu "Log Obrolan"** untuk meninjau riwayat percakapan klien ↔ mitra (hanya baca, disertai jejak audit). Admin tidak lagi menerima notifikasi chat; notifikasi hanya dikirim ke peserta percakapan.
 
 ### Perbaikan
