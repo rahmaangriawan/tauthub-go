@@ -11,7 +11,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, Link as LinkIcon, Loader, LoaderCircle, MessageCircle, RefreshCw, RotateCcw } from '@lucide/svelte';
+	import { Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, Link as LinkIcon, Loader, LoaderCircle, MessageCircle, RefreshCw, RotateCcw, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -57,6 +57,23 @@
 	let error = $state('');
 	let manualFlow = $state(false);
 	let loading = $state(true);
+
+	// Klik "Hubungi" tidak langsung pindah halaman: tampilkan pernyataan dulu
+	// dan wajib dicentang sebelum tombol lanjut aktif.
+	let contactTarget = $state<MediaItem | null>(null);
+	let contactAck = $state(false);
+
+	function openContact(m: MediaItem) {
+		contactAck = false;
+		contactTarget = m;
+	}
+
+	function confirmContact() {
+		if (!contactTarget?.publication_id || !contactAck) return;
+		const id = contactTarget.publication_id;
+		contactTarget = null;
+		goto(`/klien/${brandUrl}/chat?pub=${id}`);
+	}
 
 	onMount(() => {
 		void (async () => {
@@ -416,7 +433,7 @@
 											class="app-btn app-btn-soft inline-flex items-center gap-1.5 !min-h-7 !px-2.5 !text-[11.5px]"
 											disabled={!m.publication_id}
 											title={!m.publication_id ? tr('Publikasi belum diajukan') : tr('Hubungi mitra tentang artikel ini')}
-											onclick={() => goto(`/klien/${brandUrl}/chat?pub=${m.publication_id}`)}
+											onclick={() => openContact(m)}
 										>
 											<MessageCircle size={12} />{tr('Hubungi')}
 										</button>
@@ -434,6 +451,61 @@
 	{/if}
 </main>
 
+{#if contactTarget}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center p-4"
+		style="background-color: rgba(0, 0, 0, 0.45);"
+		role="presentation"
+		onclick={(e) => { if (e.target === e.currentTarget) contactTarget = null; }}
+	>
+		<div
+			class="app-card w-full max-w-lg"
+			role="dialog"
+			aria-modal="true"
+			aria-label={tr('Ajukan Revisi lewat Obrolan')}
+			tabindex="-1"
+			onkeydown={(e) => { if (e.key === 'Escape') contactTarget = null; }}
+			onclick={(e) => e.stopPropagation()}
+		>
+			<div class="flex items-start gap-3 border-b border-slate-100 px-5 pb-4 pt-5">
+				<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
+					<MessageCircle size={21} />
+				</span>
+				<div class="min-w-0 flex-1">
+					<p class="text-lg leading-tight font-bold text-slate-900">{tr('Ajukan Revisi lewat Obrolan')}</p>
+					<p class="mt-1 text-[13px] text-muted-foreground">{contactTarget.name}</p>
+				</div>
+				<button class="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" type="button" aria-label={tr('Tutup')} onclick={() => (contactTarget = null)}>
+					<X size={18} />
+				</button>
+			</div>
+
+			<div class="px-5 py-4">
+				<p class="text-[13px] leading-relaxed text-slate-700">
+					{tr('Dengan melanjutkan, kamu membuka sesi obrolan dengan mitra untuk artikel ini. Sesi berlaku 3×24 jam sejak pesan pertama dan riwayatnya dapat dibaca kedua pihak.')}
+				</p>
+				<ul class="mt-3 space-y-1.5 text-[12.5px] leading-relaxed text-slate-600">
+					<li>• {tr('Gunakan untuk mengajukan revisi, penambahan atau perbaikan backlink, dan pertanyaan lain seputar artikel.')}</li>
+					<li>• {tr('Setelah sesi berakhir, riwayat tetap dapat dibaca tetapi pesan baru tidak bisa dikirim.')}</li>
+				</ul>
+
+				<label class="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3 transition-colors hover:border-slate-300">
+					<input type="checkbox" bind:checked={contactAck} class="mt-0.5 h-4 w-4 shrink-0" style="accent-color: var(--primary);" />
+					<span class="text-[12.5px] leading-relaxed text-slate-700">
+						{tr('Saya mengerti dan ingin melanjutkan menghubungi mitra untuk artikel ini.')}
+					</span>
+				</label>
+			</div>
+
+			<div class="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (contactTarget = null)}>{tr('Batal')}</button>
+				<button class="app-btn app-btn-primary" type="button" disabled={!contactAck} onclick={confirmContact}>
+					{tr('Lanjut ke Obrolan')}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.bannerLoader {

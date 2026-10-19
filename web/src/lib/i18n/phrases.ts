@@ -4238,6 +4238,12 @@ export const PHRASE_EN: Record<string, string> = {
   // ---- Obrolan klien ↔ mitra (halaman Pesan) ----
   "Cari percakapan…": "Search conversations…",
   "Pesan klien belum dibaca": "Unread client messages",
+  "Ajukan Revisi lewat Obrolan": "Request a Revision via Chat",
+  "Lanjut ke Obrolan": "Continue to Chat",
+  "Dengan melanjutkan, kamu membuka sesi obrolan dengan mitra untuk artikel ini. Sesi berlaku 3×24 jam sejak pesan pertama dan riwayatnya dapat dibaca kedua pihak.": "By continuing, you open a chat session with the partner about this article. The session lasts 3×24 hours from the first message and its history can be read by both sides.",
+  "Gunakan untuk mengajukan revisi, penambahan atau perbaikan backlink, dan pertanyaan lain seputar artikel.": "Use it to request revisions, add or fix backlinks, and ask other questions about the article.",
+  "Setelah sesi berakhir, riwayat tetap dapat dibaca tetapi pesan baru tidak bisa dikirim.": "Once the session ends, the history stays readable but new messages can no longer be sent.",
+  "Saya mengerti dan ingin melanjutkan menghubungi mitra untuk artikel ini.": "I understand and want to continue contacting the partner about this article.",
   "Semua pesan klien sudah dibaca": "All client messages are read",
   "Filter percakapan": "Filter conversations",
   "Tidak ada percakapan yang cocok.": "No conversations match.",
