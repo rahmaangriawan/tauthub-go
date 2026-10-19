@@ -1062,11 +1062,6 @@
 							</div>
 
 							<div class="flex h-full flex-col text-left">
-								<div class="flex items-center gap-2">
-									<span class="h-px flex-1" style="background-color: var(--border);"></span>
-									<span class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{tr('atau tempel teks')}</span>
-									<span class="h-px flex-1" style="background-color: var(--border);"></span>
-								</div>
 								<textarea
 									class="app-input mt-3 min-h-[220px] w-full flex-1 resize-y text-sm"
 									placeholder={tr('Tempel teks artikel di sini (Ctrl/Cmd+V). Baris pertama yang pendek akan jadi judul.')}
