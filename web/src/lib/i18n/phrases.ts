@@ -4152,7 +4152,7 @@ export const PHRASE_EN: Record<string, string> = {
 	"Kamu mau buat artikel seperti apa?": "What kind of article do you want to create?",
 	"Pilih sesuai tujuan publikasi": "Choose based on your publishing goal",
 	"Sederhana Aja": "Keep It Simple",
-	"Cukup 1 kolom instruksi. Cocok untuk artikel dengan brief ringan — langsung mengalir, muncul natural.": "Just one instruction field. Good for lightly briefed articles — flows naturally, appears organic.",
+	"Cukup instruksi sederhana, cocok untuk artikel brief ringan": "Simple instruction is enough, good for lightly briefed articles",
 	"Tanpa Perlu data perusahaan / Copilot": "No company data / Copilot needed",
 	"Yang Proper": "The Proper Way",
 	"Rilis resmi brand, peluncuran produk, atau artikel yang butuh fakta presisi.": "Official brand releases, product launches, or articles needing precise facts.",

@@ -1284,7 +1284,7 @@
 										{#if gayaArtikel === 'simpel'}<span class="h-2 w-2 rounded-full bg-amber-500"></span>{/if}
 									</span>
 									<p class="relative mt-2 max-w-[58%] text-xs leading-relaxed text-muted-foreground">
-										{tr('Cukup 1 kolom instruksi. Cocok untuk artikel dengan brief ringan — langsung mengalir, muncul natural.')}
+										{tr('Cukup instruksi sederhana, cocok untuk artikel brief ringan')}
 									</p>
 									<span class="relative mt-3 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10.5px] font-semibold text-blue-700">
 										<Zap size={12} class="shrink-0" /> {tr('Tanpa Perlu data perusahaan / Copilot')}
