@@ -325,8 +325,6 @@
 					{/if}
 						{#if option.value === value}
 							<span class="zs-card-check"><Check size={11} /></span>
-						{:else if option.count != null}
-							<span class="zs-card-count">{option.count}×</span>
 						{/if}
 					</button>
 				{/each}
@@ -701,13 +699,5 @@
 		border-radius: 999px;
 		background: #2563eb;
 		color: #ffffff;
-	}
-	.zs-card-count {
-		position: absolute;
-		top: 7px;
-		right: 7px;
-		font-size: 10px;
-		font-weight: 700;
-		color: #94a3b8;
 	}
 </style>

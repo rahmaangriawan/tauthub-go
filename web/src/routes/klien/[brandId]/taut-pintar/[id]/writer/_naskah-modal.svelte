@@ -154,7 +154,7 @@
 	const angleSelectOptions = $derived(
 		[...angleOptions]
 			.sort((a, b) => (b.pick_count ?? 0) - (a.pick_count ?? 0) || tr(a.name).localeCompare(tr(b.name)))
-			.map((a) => ({ value: a.slug, label: tr(a.name), description: tr(a.description ?? ''), count: a.pick_count ?? 0 }))
+			.map((a) => ({ value: a.slug, label: tr(a.name), description: tr(a.description ?? '') }))
 	);
 	const angleReady = $derived(!anglesLoading && !anglesError && !!selectedAngle);
 	// Catat pilihan angle untuk statistik populer. Kegagalan diabaikan: ini
