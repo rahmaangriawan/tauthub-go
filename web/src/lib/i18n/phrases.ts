@@ -4142,6 +4142,21 @@ export const PHRASE_EN: Record<string, string> = {
 	"Belum ada brief.": "No briefs yet.",
 	"Bangun brief brand-mu lewat obrolan": "Build your brand brief through conversation",
 	"Ceritakan brand-mu, sisanya aku tanyakan satu per satu.": "Tell me about your brand. I'll ask for the rest one at a time.",
+	"Standar Blog Santai": "Casual Blog Standard",
+	"Standar Jurnalistik Mainstream": "Mainstream Journalistic Standard",
+	"Standar Penulisan Artikel": "Article Writing Standard",
+	"AI otomatis mengikuti kaidah": "The AI automatically follows the standards of",
+	"(gaya santai mengalir dengan heading, tetap akurat dan bebas bahasa sales berlebihan).": "(casual flowing style with headings, still accurate and free of excessive sales language).",
+	"(gaya berita/feature objektif, piramida terbalik, dan bebas bahasa sales berlebihan).": "(objective news/feature style, inverted pyramid, and free of excessive sales language).",
+	"AI otomatis mengikuti kaidah kanal media terpilih — berita mengalir tanpa heading, tanpa bahasa sales berlebihan.": "The AI automatically follows the standards of the chosen media channel — flowing news style without headings and without excessive sales language.",
+	"Kamu mau buat artikel seperti apa?": "What kind of article do you want to create?",
+	"Pilih sesuai tujuan publikasi": "Choose based on your publishing goal",
+	"Sederhana Aja": "Keep It Simple",
+	"Cukup 1 kolom instruksi. Cocok untuk artikel dengan brief ringan — langsung mengalir, muncul natural.": "Just one instruction field. Good for lightly briefed articles — flows naturally, appears organic.",
+	"Tanpa Perlu data perusahaan / Copilot": "No company data / Copilot needed",
+	"Yang Proper": "The Proper Way",
+	"Rilis resmi brand, peluncuran produk, atau artikel yang butuh fakta presisi.": "Official brand releases, product launches, or articles needing precise facts.",
+	"Terhubung Copilot & Paste Mentahan": "Copilot-connected & raw paste",
 };
 
 /**
@@ -4151,5 +4166,4 @@ export const PHRASE_EN: Record<string, string> = {
  */
 export function tr(text: string): string {
   if (getLocale() !== 'en') return text;
-  return PHRASE_EN[text] ?? text;
-}
+  return PHRASE_EN[text] ?? text;}

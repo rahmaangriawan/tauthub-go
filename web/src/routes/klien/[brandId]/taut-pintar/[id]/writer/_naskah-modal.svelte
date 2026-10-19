@@ -4,7 +4,7 @@
 	// artikel (cover, kategori, meta deskripsi) dan footer validasi.
 	// Reuse: rich-text-editor (toolbar + contentEditable), endpoint /files dan
 	// /produce/{mediaId} lewat callback dari writer, serta saveEditor di writer.
-	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, Info, Link2, Lightbulb, Plus } from '@lucide/svelte';
+	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, Info, Link2, Lightbulb, Plus , Zap, Crosshair, Plug } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { tr } from '$lib/i18n/phrases';
 	import { apiRequest, readApiError } from '$lib/auth';
@@ -90,6 +90,8 @@
 // sehingga setiap buka modal adalah instance baru.
 	type Tab = 'tulis' | 'unggah' | 'generate';
 	let tab = $state<Tab>(untrack(() => initialTab));
+	// Pilihan gaya (1. kamu mau buat artikel seperti apa?) — UI dulu, logika menyusul.
+	let gayaArtikel = $state<'simpel' | 'proper'>('simpel');
 	let title = $state(untrack(() => initialTitle));
 	let html = $state(untrack(() => initialHtml));
 	let cover = $state<string | null>(untrack(() => initialCoverUrl));
@@ -1080,34 +1082,85 @@
 						</div>
 					</div>
 				{:else}
-							<div class="flex h-full min-h-[320px] flex-col items-center py-4 text-center">
-								<div class="flex h-12 w-12 items-center justify-center rounded-xl" style="background-color: var(--primary); color: #ffffff;">
-									<Sparkles size={22} />
+					<div class="flex h-full min-h-[320px] flex-col py-4">
+						<!-- Banner standar penulisan (menggantikan hero + BETA + kotak info). -->
+						<div class="rounded-xl border p-4 text-left" style="border-color: color-mix(in srgb, var(--primary) 25%, transparent); background-color: color-mix(in srgb, var(--primary) 6%, transparent);">
+							<div class="flex items-start gap-3">
+								<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--primary); color: #ffffff;">
+									<Sparkles size={18} />
 								</div>
-								<div class="mt-3">
-									<Tooltip content={tr('Fitur ini masih dalam tahap beta. Hasil draf artikel AI masih perlu dikaji dan diperiksa ulang sebelum diterbitkan.')} maxWidth={280}>
-										<span
-											class="inline-flex cursor-help items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-opacity hover:opacity-85"
-											style="background-color: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary);"
-										>
-											<span>{tr('Beta')}</span>
-											<CircleAlert size={12} class="shrink-0" />
+								<div class="min-w-0">
+									<div class="flex flex-wrap items-center gap-2">
+										<p class="text-sm font-bold">{tr('Delegasikan pada The Writer')}</p>
+										<span class="rounded-full px-2.5 py-0.5 text-[10px] font-bold" style="background-color: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary);">
+											{mediaType === 'blogger' ? tr('Standar Blog Santai') : mediaType === 'mainstream' ? tr('Standar Jurnalistik Mainstream') : tr('Standar Penulisan Artikel')}
 										</span>
-									</Tooltip>
+									</div>
+									<p class="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+										{#if mediaType === 'blogger'}
+											{tr('AI otomatis mengikuti kaidah')} <strong>{tr('Media Blogger')}</strong> {tr('(gaya santai mengalir dengan heading, tetap akurat dan bebas bahasa sales berlebihan).')}
+										{:else if mediaType === 'mainstream'}
+											{tr('AI otomatis mengikuti kaidah')} <strong>{tr('Media Mainstream')}</strong> {tr('(gaya berita/feature objektif, piramida terbalik, dan bebas bahasa sales berlebihan).')}
+										{:else}
+											{tr('AI otomatis mengikuti kaidah kanal media terpilih — berita mengalir tanpa heading, tanpa bahasa sales berlebihan.')}
+										{/if}
+									</p>
 								</div>
-								<h3 class="mt-2 text-xl font-bold">{tr('Delegasikan pada The Writer')}</h3>
-							<p class="mt-2 max-w-md text-sm text-muted-foreground">
-								{tr('Cukup berikan konteks singkat, AI kami akan merangkai artikel yang utuh, relevan, dan teroptimasi SEO.')}
-							</p>
-							<div class="mt-5 w-full rounded-lg p-3 text-left text-xs" style="background-color: var(--accent); color: var(--accent-foreground);">
-								<p class="flex items-center gap-1.5 font-semibold" style="color: var(--primary);">
-									<Info size={14} /> {tr('Penyesuaian Gaya Bahasa Otomatis')}
-								</p>
-								<p class="mt-1 leading-relaxed" style="color: var(--foreground);">
-									{tr('AI Tauthub otomatis menyesuaikan gaya tulisan mengikuti kaidah media target: berita jurnalistik untuk media mainstream, format santai dengan heading untuk blog.')}
-								</p>
 							</div>
-							<div class="mt-5 w-full text-left">
+						</div>
+
+						<!-- 1. Pilihan gaya artikel (UI dulu — logika menyusul). -->
+						<div class="mt-5">
+							<div class="mb-2.5 flex flex-wrap items-baseline justify-between gap-2">
+								<p class="text-sm font-bold">1. {tr('Kamu mau buat artikel seperti apa?')} <span style="color: var(--destructive);">*</span></p>
+								<p class="text-[11px] text-muted-foreground">{tr('Pilih sesuai tujuan publikasi')}</p>
+							</div>
+							<div class="grid gap-3 lg:grid-cols-2">
+								<button
+									type="button"
+									class="rounded-xl border-2 p-4 text-left transition-colors {gayaArtikel === 'simpel' ? 'border-blue-500 bg-blue-50/40' : 'border-slate-200 bg-white hover:border-slate-300'}"
+									onclick={() => (gayaArtikel = 'simpel')}
+								>
+									<div class="flex items-start gap-3">
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning, #b45309);">
+											<Zap size={18} />
+										</div>
+										<p class="flex-1 text-sm font-bold">{tr('Sederhana Aja')}</p>
+										<span class="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-2 {gayaArtikel === 'simpel' ? 'border-blue-600' : 'border-slate-300'}">
+											{#if gayaArtikel === 'simpel'}<span class="h-2 w-2 rounded-full bg-blue-600"></span>{/if}
+										</span>
+									</div>
+									<p class="mt-2 text-xs leading-relaxed text-muted-foreground">
+										{tr('Cukup 1 kolom instruksi. Cocok untuk artikel dengan brief ringan — langsung mengalir, muncul natural.')}
+									</p>
+									<span class="mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
+										<CircleCheck size={12} class="shrink-0" /> {tr('Tanpa Perlu data perusahaan / Copilot')}
+									</span>
+								</button>
+								<button
+									type="button"
+									class="rounded-xl border-2 p-4 text-left transition-colors {gayaArtikel === 'proper' ? 'border-blue-500 bg-blue-50/40' : 'border-slate-200 bg-white hover:border-slate-300'}"
+									onclick={() => (gayaArtikel = 'proper')}
+								>
+									<div class="flex items-start gap-3">
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
+											<Crosshair size={17} />
+										</div>
+										<p class="flex-1 text-sm font-bold">{tr('Yang Proper')}</p>
+										<span class="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-2 {gayaArtikel === 'proper' ? 'border-blue-600' : 'border-slate-300'}">
+											{#if gayaArtikel === 'proper'}<span class="h-2 w-2 rounded-full bg-blue-600"></span>{/if}
+										</span>
+									</div>
+									<p class="mt-2 text-xs leading-relaxed text-muted-foreground">
+										{tr('Rilis resmi brand, peluncuran produk, atau artikel yang butuh fakta presisi.')}
+									</p>
+									<span class="mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold" style="background-color: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);">
+										<Plug size={12} class="shrink-0" /> {tr('Terhubung Copilot & Paste Mentahan')}
+									</span>
+								</button>
+							</div>
+						</div>
+						<div class="mt-5 w-full text-left">
 								<div class="mb-4 min-w-0">
 									<span class="text-sm font-semibold">{tr('Angle Artikel')} <span style="color: var(--destructive);">*</span></span>
 									{#if angleChannelName}
