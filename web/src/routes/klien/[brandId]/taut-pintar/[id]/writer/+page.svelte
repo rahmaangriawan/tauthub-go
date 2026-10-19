@@ -1616,10 +1616,14 @@
 														<span>{links2.dofollow} Dofollow</span>
 													</span>
 												{/if}
-												<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/70 px-2 py-0.5 text-[9px] font-medium text-slate-600">
-													<span class="h-1.5 w-1.5 rounded-full border border-slate-400"></span>
-													<span>{links2.nofollow + links2.dofollow + links2.sponsored === 0 ? '0 Tautan' : `${links2.nofollow} Nofollow`}</span>
-												</span>
+												<!-- Lapor hanya jenis link yang benar-benar ada; badge berangka 0
+												     (mis. "0 Nofollow" di samping "1 Dofollow") tidak berguna. -->
+												{#if links2.nofollow > 0 || links2.nofollow + links2.dofollow + links2.sponsored === 0}
+													<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/70 px-2 py-0.5 text-[9px] font-medium text-slate-600">
+														<span class="h-1.5 w-1.5 rounded-full border border-slate-400"></span>
+														<span>{links2.nofollow > 0 ? `${links2.nofollow} Nofollow` : '0 Tautan'}</span>
+													</span>
+												{/if}
 											{:else}
 												<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2.5 py-0.5 text-[9px] font-medium text-amber-800">
 													<PencilLine size={10.5} />
