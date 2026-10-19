@@ -1014,9 +1014,6 @@
 					<div class="flex h-full min-h-[320px] flex-col justify-center py-6">
 						<div class="text-center">
 							<h3 class="text-xl font-bold">{tr('Punya Draf Sendiri?')}</h3>
-							<p class="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
-								{tr('Unggah file Word/TXT. AI Tauthub akan secara cerdas memisahkan Judul, Paragraf, dan Kategori secara otomatis.')}
-							</p>
 						</div>
 						<!-- Kolom kiri & kanan sama tinggi (stretch). -->
 						<div class="mt-6 grid flex-1 gap-5 lg:grid-cols-2">
@@ -1071,7 +1068,7 @@
 								<button class="app-btn app-btn-soft mt-2 w-full" type="button" disabled={!teksTempel.trim()} onclick={pakaiTeksTempel}>
 									{tr('Gunakan Teks Ini')}
 								</button>
-								<p class="mt-2 text-xs leading-relaxed text-muted-foreground">
+								<p class="mt-2 text-center text-xs leading-relaxed text-muted-foreground">
 									{tr('Artikel akan 100% memakai dokumen yang kamu unggah — tanpa ditulis ulang oleh AI. Sistem tetap memeriksa tautan dan memvalidasi bahwa dokumen ini aman untuk diterbitkan.')}
 								</p>
 							</div>
