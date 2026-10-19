@@ -1374,7 +1374,8 @@
 				{/if}
 			</div>
 
-			<!-- Panel pengaturan artikel (kanan) -->
+			<!-- Panel pengaturan artikel (kanan) — hanya di tab Editor Post. -->
+			{#if tab === 'tulis'}
 			<aside class="min-w-0 space-y-5 border-t pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-5" style="border-color: var(--border);">
 				<div>
 					<div class="flex items-center justify-between gap-2">
@@ -1489,6 +1490,7 @@
 					></textarea>
 				</div>
 			</aside>
+			{/if}
 		</div>
 
 		<!-- Footer tetap -->
