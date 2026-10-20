@@ -5,7 +5,7 @@
 	// Port login-form.tsx: logika bisnis dipertahankan apa adanya (endpoint,
 	// payload, referral code, auto-login setelah daftar, 2FA challenge,
 	// Turnstile single-use). Yang berubah hanya UI/UX.
-	import { untrack } from 'svelte';
+	import { untrack, flushSync } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Eye, EyeOff, Info, CircleAlert, Check } from '@lucide/svelte';
@@ -90,14 +90,26 @@
 
 	function switchMode(next: Mode) {
 		if (mode === next) return;
-		mode = next;
-		error = '';
-		success = '';
-		fieldErrors = {};
-		// Jangan biarkan token Turnstile bekas dipakai ulang.
-		turnstileToken = '';
-		verified = false;
-		turnstileNonce += 1;
+		const apply = () => {
+			mode = next;
+			error = '';
+			success = '';
+			fieldErrors = {};
+			// Jangan biarkan token Turnstile bekas dipakai ulang.
+			turnstileToken = '';
+			verified = false;
+			turnstileNonce += 1;
+		};
+		// Pergantian panel (tukar sisi) dianimasikan lewat View Transitions API;
+		// browser yang tidak mendukungnya cukup langsung memposisikan ulang.
+		if (typeof document !== 'undefined' && document.startViewTransition) {
+			document.startViewTransition(() => {
+				apply();
+				flushSync();
+			});
+		} else {
+			apply();
+		}
 	}
 
 	function applyServerError(message: string) {

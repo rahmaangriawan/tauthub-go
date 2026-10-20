@@ -58,6 +58,32 @@
 /* Arc dekoratif dicerminkan agar tetap di sisi luar panel marketing. */
 .auth:has(#tab-daftar[aria-selected="true"]) .auth-arc { left: auto; right: -180px; }
 
+/* Pergantian mode dianimasikan lewat View Transitions: kedua panel diberi
+   view-transition-name sehingga bertukar posisi dengan gerakan halus
+   (slide+crossfade), bukan lompat instan. */
+.auth-marketing { view-transition-name: auth-pane-marketing; }
+.auth-form-pane { view-transition-name: auth-pane-form; }
+
+::view-transition-group(auth-pane-marketing),
+::view-transition-group(auth-pane-form) {
+  animation-duration: 480ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Crossfade konten dalam panel lebih cepat daripada gerakan panelnya,
+   supaya isian form tidak terasa "melayang" sambil berubah. */
+::view-transition-old(auth-pane-marketing),
+::view-transition-new(auth-pane-marketing),
+::view-transition-old(auth-pane-form),
+::view-transition-new(auth-pane-form) {
+  animation-duration: 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-marketing,
+  .auth-form-pane { view-transition-name: none; }
+}
+
+
 /* Teks marketing tetap di lapisan atas elemen dekoratif. */
 .auth-brand,
 .auth-marketing-body,
