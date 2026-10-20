@@ -34,12 +34,6 @@
 	let mode = $state<Mode>(untrack(() => initialMode));
 	let role = $state<Role>(untrack(() => lockedRole) ?? 'client');
 
-	// Flip kartu form saat Masuk <-> Daftar (business logic offset di atas).
-	const FLIP_OUT_MS = 180;
-	const FLIP_IN_MS = 320;
-	type Flip = 'none' | 'out' | 'in';
-	let flipPhase = $state<Flip>('none');
-
 	let email = $state('');
 	let password = $state('');
 	let displayName = $state('');
@@ -95,34 +89,15 @@
 	});
 
 	function switchMode(next: Mode) {
-		// Safeguard reset saat pergantian mode — dipanggil di tengah animasi flip
-		// atau langsung bila animasi tidak dijalankan.
-		const apply = () => {
-			mode = next;
-			error = '';
-			success = '';
-			fieldErrors = {};
-			// Jangan biarkan token Turnstile bekas dipakai ulang.
-			turnstileToken = '';
-			verified = false;
-			turnstileNonce += 1;
-		};
 		if (mode === next) return;
-		// Flip "buka kartu": kartu form berputar ke posisi menyamping (isi lama),
-		// konten berganti saat kartu tak terlihat, lalu berputar kembali (isi baru).
-		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-			apply();
-			return;
-		}
-		if (flipPhase !== 'none') return;
-		flipPhase = 'out';
-		setTimeout(() => {
-			apply();
-			flipPhase = 'in';
-			setTimeout(() => {
-				flipPhase = 'none';
-			}, FLIP_IN_MS);
-		}, FLIP_OUT_MS);
+		mode = next;
+		error = '';
+		success = '';
+		fieldErrors = {};
+		// Jangan biarkan token Turnstile bekas dipakai ulang.
+		turnstileToken = '';
+		verified = false;
+		turnstileNonce += 1;
 	}
 
 	function applyServerError(message: string) {
@@ -340,7 +315,6 @@
 	onContinue={continueGoogle}
 />
 
-<div class="auth-flip" class:auth-flip-out={flipPhase === 'out'} class:auth-flip-in={flipPhase === 'in'}>
 <h1 class="auth-title">
 	{challenge ? tr('Verifikasi dua langkah') : mode === 'login' ? tr('Selamat datang kembali') : tr('Buat akun Tauthub')}
 </h1>
@@ -594,4 +568,3 @@
 		<a href="https://tauthub.com/kebijakan-privasi/" target="_blank" rel="noreferrer">{tr('kebijakan privasi')}</a>.
 	</p>
 {/if}
-</div>
