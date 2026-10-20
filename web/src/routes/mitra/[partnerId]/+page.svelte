@@ -486,7 +486,7 @@
 					<a
 						class="absolute right-5 top-[17px] inline-flex shrink-0 items-center gap-1 rounded-[6px] px-2 py-1 text-[12.5px] font-semibold transition-colors hover:bg-accent"
 						style="color: var(--primary);"
-						href={`${base}/notifications`}
+						href={`${base}/chat`}
 					>
 						{tr('Lihat semua')}
 						<ArrowRight size={13} />
