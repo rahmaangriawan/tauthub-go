@@ -1525,9 +1525,6 @@
 {/snippet}
 
 {#snippet connectionStatus(m: Media)}
-	{#if m.has_connection}
-		<span class="mt-0.5 block text-[11px]" style="color: var(--success);">{tr('Koneksi siap')}</span>
-	{/if}
 	{#if (m.integration_type === 'blogger' && m.blogger_status !== 'connected') || (m.integration_type === 'custom_web' && m.custom_web_status !== 'connected')}
 		<span class="mt-0.5 block text-[11px]" style="color: var(--destructive);">{tr('Belum terhubung')}</span>
 	{/if}
