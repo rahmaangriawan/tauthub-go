@@ -203,6 +203,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Sudah ditolak": "Rejected",
   "Tanpa Dewan Pers": "No Press Council",
   "Secure Direct": "Secure Direct",
+  "Secure Direct untuk": "Secure Direct for",
   "Rewrite AI": "AI Rewrite",
   "gratis": "free",
   "sisa": "left",

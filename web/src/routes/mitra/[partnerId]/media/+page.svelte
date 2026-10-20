@@ -210,7 +210,7 @@
 		mediaLoaded = true;
 	}
 
-	/** Toggle "Langsung terbit" per media (parity app lama: PUT {auto_publish}). */
+	/** Toggle "Secure Direct" per media (parity app lama: PUT {auto_publish}). */
 	async function toggleAutoPublish(m: Media, checked: boolean) {
 		autoBusy = m.id;
 		error = '';
@@ -290,7 +290,7 @@
 	/** Tooltip header kolom Platform: platform yang dipakai media. */
 	const platformColumnHint = () => tr('Platform yang digunakan media, WordPress, Blogger, Emdash, API');
 
-	/** Tooltip centang Langsung terbit: apa akibatnya dan kapan dipakai. */
+	/** Tooltip centang Secure Direct: apa akibatnya dan kapan dipakai. */
 	const autoPublishHint = () =>
 		tr('Kalau dicentang, artikel dari klien langsung diproses dan terbit ke situs media tanpa menunggu persetujuan mitra. Kalau tidak dicentang, mitra harus menyetujui dulu setiap artikel.');
 
@@ -1346,9 +1346,9 @@
 					checked={m.auto_publish}
 					disabled={autoBusy === m.id}
 					onchange={(e) => void toggleAutoPublish(m, (e.currentTarget as HTMLInputElement).checked)}
-					aria-label={`${tr('Langsung terbit untuk')} ${m.name}`}
+					aria-label={`${tr('Secure Direct untuk')} ${m.name}`}
 				/>
-				{#if showLabel}{tr('Langsung terbit')}{/if}
+				{#if showLabel}{tr('Secure Direct')}{/if}
 			</label>
 			<Tooltip.Provider delayDuration={0}>
 				<Tooltip.Root>
