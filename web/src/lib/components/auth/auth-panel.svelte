@@ -462,6 +462,8 @@
 				<label class="auth-label" for="auth-password">{tr("Password")}</label>
 				{#if mode === 'login'}
 					<a class="auth-link" href="/forgot-password">{tr("Lupa password?")}</a>
+				{:else if !fieldErrors.password}
+					<p class="auth-helper">{tr("Minimal 10 karakter.")}</p>
 				{/if}
 			</div>
 			<span class="auth-input-wrap">
@@ -488,8 +490,6 @@
 			</span>
 			{#if fieldErrors.password}
 				<p class="auth-field-error"><CircleAlert size={13} />{fieldErrors.password}</p>
-			{:else if mode === 'register'}
-				<p class="auth-helper">{tr("Minimal 10 karakter.")}</p>
 			{/if}
 		</div>
 	{/if}
