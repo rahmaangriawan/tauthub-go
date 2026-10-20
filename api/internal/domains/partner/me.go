@@ -76,7 +76,27 @@ func (d *Deps) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := map[string]any{"user": map[string]any{"id": user.ID, "email": user.Email}}
-	resp["partner"] = partnerMeJSON(row)
+	payload := partnerMeJSON(row)
+	// publication_counts: sebaran seluruh 11 status publikasi media mitra
+	// (read-only, untuk distribusi status di dashboard Ringkasan). Field baru —
+	// tidak mengubah respons lama.
+	publisherID := row.strOr("id", "")
+	if publisherID != "" {
+		counts, countErr := d.queryRows(r.Context(), `
+			SELECT p.status, COUNT(*)::int AS count
+			FROM publications p
+			JOIN media m ON m.id = p.media_id
+			WHERE m.partner_id = $1
+			GROUP BY p.status`, publisherID)
+		if countErr == nil {
+			countMap := make(map[string]any, len(counts))
+			for _, c := range counts {
+				countMap[c.strOr("status", "")] = c.intOr("count", 0)
+			}
+			payload["publication_counts"] = countMap
+		}
+	}
+	resp["partner"] = payload
 	w.Header().Set("Cache-Control", "private, max-age=5, stale-while-revalidate=30")
 	writeJSON(w, http.StatusOK, resp)
 }

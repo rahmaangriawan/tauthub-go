@@ -404,24 +404,31 @@ func (d *Deps) getTcConfig(r *http.Request) tcConfig {
 // ---------- finance summary (port lib/finance/service.ts) ----------
 
 type financeSummary struct {
-	PendingEarnings float64
-	SettledEarnings float64
-	PaidSettlements float64
+	PendingEarnings     float64
+	SettledEarnings     float64
+	PaidSettlements     float64
+	LifetimePublication float64
 }
 
 func (d *Deps) partnerFinanceSummary(ctx context.Context, partnerID string) financeSummary {
-	var pending, settled, paid float64
+	var pending, settled, paid, lifetimePublication float64
 	_ = d.Pool.QueryRow(ctx, `
 		SELECT
 		  COALESCE((SELECT SUM(amount) FROM partner_earnings WHERE partner_id = $1 AND status = 'pending'), 0)::numeric(14,2),
 		  (COALESCE((SELECT SUM(amount) FROM partner_earnings WHERE partner_id = $1 AND status = 'settled' AND settlement_id IS NULL), 0)
 		   - COALESCE((SELECT SUM(amount_idr) FROM partner_service_charges WHERE partner_id = $1), 0))::numeric(14,2),
-		  COALESCE((SELECT SUM(total_amount) FROM settlements WHERE partner_id = $1 AND status = 'paid'), 0)::numeric(14,2)`,
-		partnerID).Scan(&pending, &settled, &paid)
+		  COALESCE((SELECT SUM(total_amount) FROM settlements WHERE partner_id = $1 AND status = 'paid'), 0)::numeric(14,2),
+		  COALESCE((SELECT SUM(amount) FROM partner_earnings WHERE partner_id = $1 AND kind = 'publication' AND status <> 'voided'), 0)::numeric(14,2)`,
+		partnerID).Scan(&pending, &settled, &paid, &lifetimePublication)
 	if settled < 0 {
 		settled = 0
 	}
-	return financeSummary{PendingEarnings: pending, SettledEarnings: settled, PaidSettlements: paid}
+	return financeSummary{
+		PendingEarnings:     pending,
+		SettledEarnings:     settled,
+		PaidSettlements:     paid,
+		LifetimePublication: lifetimePublication,
+	}
 }
 
 func (d *Deps) partnerServiceChargesTotal(ctx context.Context, partnerID string) float64 {

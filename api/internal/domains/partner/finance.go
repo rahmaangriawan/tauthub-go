@@ -94,9 +94,10 @@ func (d *Deps) Earnings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"minimum_withdraw_idr": tcCfg.MinimumWithdrawIDR,
 		"summary": map[string]any{
-			"pending":          summary.PendingEarnings,
-			"settled":          summary.SettledEarnings,
-			"paid_settlements": summary.PaidSettlements,
+			"pending":              summary.PendingEarnings,
+			"settled":              summary.SettledEarnings,
+			"paid_settlements":     summary.PaidSettlements,
+			"lifetime_publication": summary.LifetimePublication,
 		},
 		"earnings": earnings,
 		"total":    countRow.intOr("count", 0),
