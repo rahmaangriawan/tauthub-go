@@ -6,6 +6,7 @@
 	// popup media & pengajuan harga, review dokumen Dewan Pers, pengaturan VIP
 	// (VVIP & VIP Reguler), gerbang izin mode otomatis, dan hapus partner.
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import {
 		ArrowUpRight, Check, Copy, Ellipsis, FileText, Image as ImageIcon,
 		MessageCircle, Newspaper, Search, ShieldCheck, Trash, TriangleAlert, UsersRound
@@ -28,7 +29,7 @@
 		document_count: number; created_at: string; is_vip?: boolean; vip_tier?: string;
 		vip_contract_months?: number | null; vip_contract_days?: number | null;
 		vip_expires_at?: string | null; email_alt1?: string | null; email_alt2?: string | null;
-		wa_number?: string | null; wa_consent?: boolean; price_min?: number | null;
+		wa_number?: string | null; wa_consent?: boolean; secure_direct_status?: string | null; price_min?: number | null;
 		price_max?: number | null; auto_publish_enabled?: boolean;
 	};
 	type PartnerDocument = {
@@ -69,8 +70,10 @@
 	let loading = $state(true);
 	let busy = $state(false);
 
-	let search = $state('');
-	let debouncedSearch = $state('');
+	// Deep link notifikasi pengajuan Secure Direct: ?q=<email mitra>.
+	const initialQuery = page.url.searchParams.get('q') ?? '';
+	let search = $state(initialQuery);
+	let debouncedSearch = $state(initialQuery);
 	let filterStatus = $state('');
 	let filterContact = $state('');
 	let filterHasMedia = $state('');
@@ -241,7 +244,7 @@
 			busyId = null;
 			return;
 		}
-		rows = rows.map((p) => (p.id === row.id ? { ...p, auto_publish_enabled: enabled } : p));
+		rows = rows.map((p) => (p.id === row.id ? { ...p, auto_publish_enabled: enabled, secure_direct_status: enabled ? 'approved' : p.secure_direct_status } : p));
 		autoPublishTarget = null;
 		busyId = null;
 	}
@@ -604,6 +607,11 @@
 								<div class="flex items-center gap-2">
 									<UsersRound size={16} class="shrink-0 text-muted-foreground" />
 									<div>
+										{#if row.secure_direct_status === 'pending'}
+											<Tooltip content={tr('Mengajukan Secure Direct — gunakan menu titik-tiga untuk mengizinkan mode otomatis.')}>
+												<Badge label={tr('Pengajuan Secure Direct')} tone="warning" />
+											</Tooltip>
+										{/if}
 										<p class="font-medium">{row.name ?? row.email}</p>
 										<p class="text-xs text-muted-foreground">{row.id.slice(0, 8)}</p>
 									</div>

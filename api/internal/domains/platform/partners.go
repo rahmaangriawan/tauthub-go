@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"strconv"
@@ -22,7 +23,8 @@ import (
 )
 
 const mpPartnerSelect = `SELECT p.*, u.email,
-       (SELECT COUNT(*) FROM media m WHERE m.partner_id = p.id AND m.status <> 'hidden') AS media_count`
+       (SELECT COUNT(*) FROM media m WHERE m.partner_id = p.id AND m.status <> 'hidden') AS media_count,
+       (SELECT r.status FROM secure_direct_requests r WHERE r.partner_id = p.id ORDER BY r.requested_at DESC LIMIT 1) AS secure_direct_status`
 
 const mpShortIDAlphabet = "23456789abcdefghjkmnpqrstuvwxyz"
 
@@ -78,6 +80,7 @@ func mpPartnerJSON(row ptRow) map[string]any {
 		"media_count":          row.intOr("media_count", 0),
 		"document_status":      row.anyOrNil("document_status"),
 		"document_count":       row.intOr("document_count", 0),
+		"secure_direct_status": row.anyOrNil("secure_direct_status"),
 		"created_at":           row.anyOrNil("created_at"),
 		"updated_at":           row.anyOrNil("updated_at"),
 	}
@@ -236,7 +239,8 @@ func (d *Deps) PartnersList(w http.ResponseWriter, r *http.Request) {
 		       (SELECT MAX(m.price) FROM media m WHERE m.partner_id = p.id AND m.status <> 'hidden' AND m.price > 0) AS price_max,
 		       (SELECT COUNT(*) FROM media m WHERE m.partner_id = p.id AND m.status <> 'hidden') AS media_count,
 		       (SELECT d.status FROM partner_documents d WHERE d.partner_id = p.id ORDER BY d.uploaded_at DESC LIMIT 1) AS document_status,
-		       (SELECT COUNT(*) FROM partner_documents d WHERE d.partner_id = p.id) AS document_count
+		       (SELECT COUNT(*) FROM partner_documents d WHERE d.partner_id = p.id) AS document_count,
+		       (SELECT r.status FROM secure_direct_requests r WHERE r.partner_id = p.id ORDER BY r.requested_at DESC LIMIT 1) AS secure_direct_status
 		FROM partners p JOIN users u ON u.id = p.user_id
 		LEFT JOIN notification_preferences np ON np.user_id = p.user_id
 		`+clause+`
@@ -440,12 +444,50 @@ func (d *Deps) PartnerUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		writeAuditBestEffort(d, r.Context(), user.ID, action, "partner", partnerID)
 	}
+	// Pengajuan Secure Direct aktif saat admin memberi izin: tutup baris
+	// pending dan notifkan mitra (best-effort — jangan gagalkan update utama).
+	if hasAutoPublish && autoPublishEnabled {
+		d.closeSecureDirectRequestOnApproval(r.Context(), partnerID, user.ID)
+	}
 	updated, err := d.mpScopedPartner(r.Context(), partnerID)
 	if err != nil {
 		writeErr(w, d, mpPartnerError(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, mpPartnerJSON(updated))
+}
+
+// closeSecureDirectRequestOnApproval: bila partner punya pengajuan Secure
+// Direct berstatus pending, tandai approved + kirim notifikasi ke user mitra
+// dengan link ke halaman media mitra. Best-effort, tanpa error ke pemanggil.
+func (d *Deps) closeSecureDirectRequestOnApproval(ctx context.Context, partnerID, adminUserID string) {
+	row, err := d.queryRow(ctx, `
+		UPDATE secure_direct_requests
+		SET status = 'approved', decided_at = now(), decided_by = $2
+		WHERE partner_id = $1 AND status = 'pending'
+		RETURNING id`, partnerID, adminUserID)
+	if err != nil || row == nil {
+		return
+	}
+	p, perr := d.queryRow(ctx, `
+		SELECT u.id AS user_id, p.public_id AS public_id
+		FROM partners p JOIN users u ON u.id = p.user_id
+		WHERE p.id = $1 LIMIT 1`, partnerID)
+	if perr != nil || p == nil {
+		return
+	}
+	userID := p.strOr("user_id", "")
+	if userID == "" {
+		return
+	}
+	link := fmt.Sprintf("/mitra/%s/media", p.strOr("public_id", ""))
+	title := "Secure Direct diaktifkan untuk akun Anda"
+	body := "Menu 'Izinkan mode otomatis' sudah dikonfirmasi admin Tauthub. Centang 'Secure Direct' pada media yang ingin langsung terbit tanpa ACC per artikel."
+	if err := d.exec(ctx,
+		"INSERT INTO notifications (id, user_id, type, title, body, link) VALUES (gen_random_uuid(), $1, 'secure_direct.approved', $2, $3, $4)",
+		userID, title, body, link); err != nil {
+		slog.Warn("[platform] notify secure_direct.approved gagal", "partner", partnerID, "err", err)
+	}
 }
 
 func (d *Deps) PartnerDelete(w http.ResponseWriter, r *http.Request) {

@@ -6,7 +6,7 @@
 	// (pratinjau → konfirmasi, parity alur bulk import app lama).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { BadgeCheck, Check, CircleAlert, Copy, ExternalLink, FileText, Info, Link, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Trash2, TriangleAlert, Upload, X } from '@lucide/svelte';
+	import { BadgeCheck, Check, CircleAlert, Clock, Copy, ExternalLink, FileText, Info, Link, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Trash2, TriangleAlert, Upload, X, Zap } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { Tooltip } from 'bits-ui';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
@@ -208,6 +208,53 @@
 		// Baru di sini status verifikasi domain dianggap diketahui.
 		bulkUnlocked = Boolean(data.bulk_unlocked);
 		mediaLoaded = true;
+		// Status pengajuan Secure Direct (non-blocking): dipakai tombol Ajuan.
+		void loadSecureDirectStatus();
+	}
+
+	// ── Pengajuan Secure Direct (fitur terbit otomatis) ─────────────────────
+	type SdStatus = 'none' | 'pending' | 'approved' | 'rejected';
+	let sdOpen = $state(false);
+	let sdStatus = $state<SdStatus>('none');
+	let sdNote = $state('');
+	let sdBusy = $state(false);
+	let sdError = $state('');
+	let sdNotice = $state('');
+
+	async function loadSecureDirectStatus() {
+		try {
+			const res = await apiRequest('/v1/partner/secure-direct/request');
+			if (!res.ok) return;
+			const data = await res.json();
+			const req = data?.request ?? null;
+			sdStatus = req?.status === 'pending' || req?.status === 'approved' || req?.status === 'rejected' ? req.status : 'none';
+			sdNote = typeof req?.note === 'string' ? req.note : '';
+		} catch {
+			// Status pengajuan opsional; kegagalan tidak boleh mengganggu daftar media.
+		}
+	}
+
+	function openSecureDirectDialog() {
+		sdError = '';
+		sdNotice = '';
+		sdOpen = true;
+	}
+
+	async function submitSecureDirect() {
+		sdBusy = true;
+		sdError = '';
+		try {
+			const res = await apiRequest('/v1/partner/secure-direct/request', { method: 'POST' });
+			if (!res.ok) {
+				sdError = await readApiError(res, tr('Gagal mengirim pengajuan.'));
+				return;
+			}
+			sdStatus = 'pending';
+			sdNotice = tr('Pengajuan terkirim. Admin Tauthub akan meninjau dan memberi tahu kamu setelah diaktifkan.');
+			await loadSecureDirectStatus();
+		} finally {
+			sdBusy = false;
+		}
 	}
 
 	/** Toggle "Secure Direct" per media (parity app lama: PUT {auto_publish}). */
@@ -887,6 +934,17 @@
 					<Upload size={15} /> Impor XLSX
 				</button>
 			{/if}
+			{#if mediaLoaded && !autoPublishEnabled}
+				<button
+					class="app-btn app-btn-soft"
+					type="button"
+					onclick={openSecureDirectDialog}
+					title={sdStatus === 'pending' ? tr('Pengajuan Secure Direct kamu sedang menunggu persetujuan admin Tauthub.') : tr('Ajukan pemakaian mode terbit otomatis untuk akun mitra kamu.')}
+				>
+					<Zap size={15} /> {tr('Ajukan Secure Direct')}
+					{#if sdStatus === 'pending'}<span class="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none" style="background: var(--warning-soft); color: var(--warning);">●</span>{/if}
+				</button>
+			{/if}
 			<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={15} />{tr("Tambah Media")}</button>
 		</div>
 	</header>
@@ -1031,6 +1089,72 @@
 			{#if importResult.mode === 'preview'}
 				<p class="mt-3 text-xs text-muted-foreground">{tr("Periksa baris di atas, lalu tekan Impor untuk menyimpan. Berkas yang sama dikirim ulang ke server saat konfirmasi.")}</p>
 			{/if}
+		</div>
+	{/if}
+
+	<!-- Dialog pengajuan Secure Direct -->
+	{#if sdOpen}
+		<div
+			class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4"
+			style="background-color: rgba(0,0,0,.45);"
+			role="presentation"
+			tabindex="-1"
+			onclick={(e) => { if (e.target === e.currentTarget) sdOpen = false; }}
+			onkeydown={(e) => { if (e.key === 'Escape') sdOpen = false; }}
+		>
+			<dialog
+				open
+				class="app-card my-12 w-full max-w-md p-5"
+				aria-label={tr('Ajukan Secure Direct')}
+				onclick={(e) => e.stopPropagation()}
+			>
+				<div class="mb-1 flex items-start justify-between gap-3">
+					<div class="flex items-center gap-2.5">
+						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]" style="background: var(--accent); color: var(--primary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 20%, transparent);">
+							<Zap size={17} />
+						</div>
+						<h2 class="m-0 text-[15px] font-semibold tracking-[-0.01em]">{tr('Ajukan Secure Direct')}</h2>
+					</div>
+					<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr('Tutup')} onclick={() => (sdOpen = false)}><X size={18} /></button>
+				</div>
+
+				<div class="flex flex-col gap-3">
+					{#if sdStatus === 'pending'}
+						<div class="flex items-start gap-2.5 rounded-[10px] px-3.5 py-3 text-[13px]" style="background-color: var(--warning-soft); color: var(--warning);">
+							<Clock size={15} class="mt-0.5 shrink-0" />
+							<div>
+								<p class="m-0 font-semibold">{tr('Menunggu persetujuan')}</p>
+								<p class="m-0 mt-0.5 text-[12.5px] leading-relaxed">{tr('Pengajuan kamu sedang menunggu persetujuan admin Tauthub. Kamu akan diberi tahu setelah diaktifkan.')}</p>
+							</div>
+						</div>
+					{:else}
+						{#if sdStatus === 'rejected'}
+							<div class="rounded-[10px] px-3.5 py-3 text-[12.5px]" style="background-color: color-mix(in srgb, var(--destructive) 10%, transparent); color: var(--destructive);">
+								{tr('Pengajuan kamu sebelumnya ditolak.')}{sdNote ? ` ${sdNote}` : ''} {tr('Kamu bisa mengajukan ulang di sini.')}
+							</div>
+						{/if}
+						<p class="m-0 text-[13px] leading-relaxed text-muted-foreground">
+							{tr('Secure Direct adalah mode terbit otomatis untuk media kamu:')}
+						</p>
+						<ul class="m-0 flex flex-col gap-1.5 pl-5 text-[13px] leading-relaxed text-muted-foreground">
+							<li>{tr('Centang “Secure Direct” pada media pilihan, artikel klien langsung diproses tanpa menunggu persetujuan kamu per artikel.')}</li>
+							<li>{tr('Setiap pengaktifan direview admin Tauthub terlebih dahulu, untuk menjaga mutu distribusi.')}</li>
+						</ul>
+						{#if sdError}
+							<p class="m-0 text-[12.5px]" style="color: var(--destructive);">{sdError}</p>
+						{/if}
+						<button type="button" class="app-btn app-btn-primary w-full" disabled={sdBusy} onclick={() => void submitSecureDirect()}>
+							{sdBusy ? tr('Mengirim…') : tr('Kirim pengajuan')}
+						</button>
+					{/if}
+					{#if sdNotice}
+						<div class="flex items-start gap-2 rounded-[10px] px-3.5 py-3 text-[13px]" style="background-color: var(--success-soft); color: var(--success);">
+							<Check size={15} class="mt-0.5 shrink-0" />
+							<span>{sdNotice}</span>
+						</div>
+					{/if}
+				</div>
+			</dialog>
 		</div>
 	{/if}
 

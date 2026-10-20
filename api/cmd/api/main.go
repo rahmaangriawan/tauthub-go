@@ -482,6 +482,8 @@ func run() error {
 			authed.Get("/partner/media", partnerDeps.MediaList)
 			authed.Post("/partner/media", partnerDeps.MediaCreate)
 			authed.Post("/partner/media/import", partnerDeps.MediaImport)
+			authed.Get("/partner/secure-direct/request", partnerDeps.SecureDirectStatus)
+			authed.Post("/partner/secure-direct/request", partnerDeps.SecureDirectRequestCreate)
 			authed.Get("/partner/media/categories", partnerDeps.MediaCategories)
 			authed.Get("/partner/media/template-url", partnerDeps.MediaTemplateURL)
 			authed.Get("/partner/media/{mediaId}", partnerDeps.MediaGet)
