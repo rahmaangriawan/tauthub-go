@@ -51,6 +51,13 @@
   border: 1px solid rgba(37, 99, 235, 0.07);
 }
 
+/* Mode Daftar: panel form pindah ke kiri, panel marketing ke kanan.
+   Cukup tukar `order`; grid tetap 1fr 1fr sehingga lebarnya simetris. */
+.auth:has(#tab-daftar[aria-selected="true"]) .auth-form-pane { order: 1; }
+.auth:has(#tab-daftar[aria-selected="true"]) .auth-marketing { order: 2; }
+/* Arc dekoratif dicerminkan agar tetap di sisi luar panel marketing. */
+.auth:has(#tab-daftar[aria-selected="true"]) .auth-arc { left: auto; right: -180px; }
+
 /* Teks marketing tetap di lapisan atas elemen dekoratif. */
 .auth-brand,
 .auth-marketing-body,
