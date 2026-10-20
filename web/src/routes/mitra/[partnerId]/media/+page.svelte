@@ -1809,14 +1809,15 @@
 			<Tooltip.Root>
 				<Tooltip.Trigger>
 					{#snippet child({ props })}
-						<button
+						<!-- Klik lencana = ke publikasi media ini, tab Menunggu. -->
+						<a
 							{...props}
-							type="button"
-							class="cursor-help rounded-full px-2 py-0.5 text-[11px] font-medium"
+							href={`${base}/publications?media=${encodeURIComponent(m.id)}&tab=waiting`}
+							class="rounded-full px-2 py-0.5 text-[11px] font-medium underline-offset-2 hover:underline"
 							style="border: 0; background-color: var(--warning-soft, #fdf3e3); color: var(--warning);"
 						>
 							{m.pending_publications} {tr('menunggu')}
-						</button>
+						</a>
 					{/snippet}
 				</Tooltip.Trigger>
 				<Tooltip.Portal>

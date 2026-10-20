@@ -19,6 +19,10 @@
 		articleId = null,
 		disabled = false,
 		minHeight = 420,
+		/** Mode kolom penuh: root jadi kolom flex, isinya memakai sisa tinggi
+		 *  kolom (tanpa max-height 60vh) — scroll diatur oleh kolom pemanggil.
+		 *  Dipakai modal editor draf mitra; pemanggil lain tidak berubah. */
+		fill = false,
 		ariaLabel,
 		uploadImage,
 		stats = $bindable({ words: 0, links: 0, images: 0 })
@@ -31,6 +35,7 @@
 		articleId?: string | null;
 		disabled?: boolean;
 		minHeight?: number;
+		fill?: boolean;
 		ariaLabel?: string;
 		/**
 		 * Pengunggah gambar khusus. Bila diisi, editor memakai fungsi ini dan
@@ -536,10 +541,13 @@
 	}
 </script>
 
-<div class="rte" bind:this={rootEl}>
+<div class="rte" class:rte-fill={fill} bind:this={rootEl}>
 	<div class="rte-toolbar flex flex-wrap items-center gap-1 rounded-lg border p-1" role="toolbar" aria-label="Format teks">
-		{#each tools as t (t.cmd + (t.arg ?? ''))}
+		{#each tools as t, i (t.cmd + (t.arg ?? ''))}
 			{@const ToolIcon = t.icon}
+			{#if fill && (i === 3 || i === 5)}
+				<span class="rte-sep" aria-hidden="true"></span>
+			{/if}
 			<button
 				class="rte-tool"
 				type="button"
@@ -612,7 +620,7 @@
 		<div
 			bind:this={bodyEl}
 			class="rte-body prose prose-sm overflow-y-auto rounded-lg border p-3 text-sm"
-			style="min-height: {minHeight}px; max-height: 60vh;"
+			style={`min-height: ${minHeight}px;${fill ? '' : ' max-height: 60vh;'}`}
 			contenteditable={!disabled}
 			role="textbox"
 			tabindex="0"
@@ -637,7 +645,7 @@
 	{:else}
 		<textarea
 			class="rte-body w-full resize-y rounded-lg border p-3 font-mono text-xs"
-			style="min-height: {minHeight}px; max-height: 60vh;"
+			style={`min-height: ${minHeight}px;${fill ? '' : ' max-height: 60vh;'}`}
 			bind:value
 			disabled={disabled}
 			aria-label={ariaLabel ?? 'Isi artikel (HTML)'}
@@ -926,5 +934,41 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
+	}
+
+	/* ── Mode fill (modal editor draf mitra): root jadi kolom flex yang memakai
+	   sisa tinggi kolom pemanggil — isi editor menggulir sendiri, batas 60vh
+	   tidak berlaku. Toolbar berubah jadi pita putih dengan garis bawah tipis
+	   (tanpa kotak border), dan pemisah grup ikon hanya muncul di mode ini. ── */
+	.rte-fill {
+		flex: 1 1 0;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		background: var(--card, #fff);
+	}
+	.rte-fill > .rte-toolbar {
+		position: static;
+		flex: none;
+		border: none;
+		border-bottom: 1px solid var(--border);
+		border-radius: 0;
+		padding: 0 2px 7px;
+	}
+	.rte-fill .rte-body {
+		flex: 1 1 0;
+		min-height: 0;
+		max-height: none;
+		margin-top: 0;
+		border: none;
+		border-radius: 0;
+		overflow-y: auto;
+	}
+	.rte-sep {
+		flex: none;
+		width: 1px;
+		height: 18px;
+		margin: 0 5px 0 7px;
+		background: var(--border);
 	}
 </style>

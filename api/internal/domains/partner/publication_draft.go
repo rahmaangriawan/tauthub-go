@@ -349,8 +349,11 @@ func (d *Deps) syncWPDraft(r *http.Request, publication rowMap, title, contentHT
 
 // ---------- POST /v1/partner/publications/{publicationId}/draft/image ----------
 
+// draftImageMIME: format yang diizinkan — GIF & BMP sengaja ditiadakan
+// (aturan pemilik produk): JPG/PNG otomatis dijadikan WebP oleh klien, jadi
+// yang benar-benar dibutuhkan hanya header PNG/JPG/WebP.
 var draftImageMIME = map[string]bool{
-	"image/png": true, "image/jpeg": true, "image/webp": true, "image/gif": true, "image/bmp": true,
+	"image/png": true, "image/jpeg": true, "image/webp": true,
 }
 
 func (d *Deps) PublicationDraftImage(w http.ResponseWriter, r *http.Request) {
@@ -377,7 +380,7 @@ func (d *Deps) PublicationDraftImage(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	mime := header.Header.Get("Content-Type")
 	if !draftImageMIME[mime] {
-		httpx.Error(w, http.StatusUnprocessableEntity, "Format gambar harus PNG, JPG, WebP, GIF, atau BMP.")
+		httpx.Error(w, http.StatusUnprocessableEntity, "Format gambar harus JPG, PNG, atau WebP.")
 		return
 	}
 	const maxBytes = 10 * 1024 * 1024

@@ -5,7 +5,8 @@
 	// media, filter status, pratinjau/edit draf, setujui, tolak, kirim URL,
 	// dan rewrite AI (berbayar dari saldo mitra).
 	import { onMount } from 'svelte';
-	import { Check, CircleAlert, Eye, ExternalLink, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, Send, SlidersHorizontal, Sparkles, Trash2, X } from '@lucide/svelte';
+	import { page } from '$app/state';
+	import { Check, CircleAlert, Eye, ExternalLink, FileText, Image as ImageIcon, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, Send, SlidersHorizontal, Sparkles, Trash2, X } from '@lucide/svelte';
 	import { Tooltip } from 'bits-ui';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -74,7 +75,10 @@
 		{ key: 'rejected', label: tr('Ditolak Mitra'), status: 'partner_rejected' }
 	]);
 	const activeLabel = $derived(statusTabs.find((t) => t.key === activeTab)?.label ?? '');
-	let activeTab = $state('');
+	// Nilai awal dari URL (?tab= & ?media=) — deep-link dari lencana "N menunggu"
+	// di halaman Daftar Media. Tab tak dikenal jatuh ke "Semua" (find() kosong).
+	let activeTab = $state(page.url.searchParams.get('tab') ?? '');
+	let mediaFilter = $state(page.url.searchParams.get('media') ?? '');
 	let pageNo = $state(1);
 	const PAGE_SIZE = 20;
 	// Status yang masih berjalan → daftar di-polling 4 dtk (parity app lama).
@@ -108,6 +112,12 @@
 	let coverInput = $state<HTMLInputElement | undefined>(undefined);
 	let coverBusy = $state(false);
 	let coverError = $state('');
+	// Statistik isi editor (kata/tautan/gambar) dihitung komponen editor;
+	// footer kolom kiri hanya menampilkan jumlah kata aktual.
+	let editorStats = $state({ words: 0, links: 0, images: 0 });
+	// Umpan balik penyimpanan draf DI DALAM modal (pusat notifikasi halaman ada
+	// di balik overlay modal, jadi tidak terlihat saat mengetik).
+	let draftSavedNotice = $state('');
 
 	// Sesi harus divalidasi lebih dulu (refresh token), baru daftar dimuat.
 	let ready = $state(false);
@@ -155,6 +165,7 @@
 			offset: String((pageNo - 1) * PAGE_SIZE)
 		});
 		if (tab?.status) params.set('status', tab.status);
+		if (mediaFilter) params.set('media', mediaFilter);
 		const res = await apiRequest(`/v1/partner/publications?${params}`);
 		if (!res.ok) {
 			error = await readApiError(res, tr('Gagal memuat publikasi.'));
@@ -203,6 +214,9 @@
 			);
 		})
 	);
+	// Label media untuk chip filter ?media= (server sudah memfilter; semua baris
+	// berasal dari media yang sama). Kosong bila hasilnya 0 — chip tetap tampil.
+	const filteredMediaName = $derived(items[0] ? mediaDomainLabel(items[0].media_website_url, items[0].media_name ?? '') : '');
 
 	async function openDetail(p: Pub) {
 		selected = p;
@@ -305,6 +319,8 @@
 		error = '';
 		coverError = '';
 		coverBusy = false;
+		editorStats = { words: 0, links: 0, images: 0 };
+		draftSavedNotice = '';
 		draft = await loadDraft(p);
 		draftLoading = false;
 		if (draft) {
@@ -379,6 +395,8 @@
 		draftImgBytes = null;
 		draftImgUnknown = false;
 		draftImgFallbackCount = 0;
+		editorStats = { words: 0, links: 0, images: 0 };
+		draftSavedNotice = '';
 	}
 
 	/**
@@ -546,7 +564,9 @@
 	async function saveDraft(e: SubmitEvent) {
 		e.preventDefault();
 		if (!draftPub || !draft) return;
+		if (busy) return; // cegah kirim ganda saat request masih diproses
 		busy = true;
+		draftSavedNotice = '';
 		error = '';
 		try {
 			const payload: Record<string, unknown> = {
@@ -565,6 +585,7 @@
 				return;
 			}
 			notice = 'Perubahan draf tersimpan.';
+			draftSavedNotice = tr('Perubahan draf tersimpan.');
 			void measureDraftImages();
 			await load();
 		} finally {
@@ -608,6 +629,57 @@
 		return data.url;
 	}
 
+	/**
+	 * Kompresi gambar cover: JPG/PNG dijadikan WebP dengan target ukuran
+	 * maksimum COVER_MAX_BYTES. Turunkan kualitas lebih dulu, baru kecilkan
+	 * dimensi (tumbuhkan * bertahap) bila masih melebihi target.
+	 */
+	const COVER_MAX_BYTES = 150 * 1024;
+	// Format yang diizinkan pemilik produk: hanya JPG, PNG, WebP — GIF & BMP
+	// dilarang (callback dipakai untuk pesan).
+	const COVER_TYPES_OK = ['image/png', 'image/jpeg', 'image/webp'];
+
+	async function kompresCoverWebp(file: File): Promise<File> {
+		if (file.type === 'image/webp') return file;
+		try {
+			const bitmap = await createImageBitmap(file);
+			const maxSide = 1600;
+			const skala = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+			const baseW = Math.round(bitmap.width * skala);
+			const baseH = Math.round(bitmap.height * skala);
+			const nama = file.name.replace(/\.[^.]+$/, '') + '.webp';
+			const render = async (w: number, h: number, quality: number): Promise<Blob | null> => {
+				const canvas = document.createElement('canvas');
+				canvas.width = w;
+				canvas.height = h;
+				const ctx = canvas.getContext('2d');
+				if (!ctx) return null;
+				ctx.drawImage(bitmap, 0, 0, w, h);
+				return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+			};
+			let last: Blob | null = null;
+			for (let tile = 1; tile >= 0.4; tile -= 0.2) {
+				const tileW = Math.max(1, Math.round(baseW * tile));
+				const tileH = Math.max(1, Math.round(baseH * tile));
+				for (let quality = 0.85; quality >= 0.25; quality -= 0.15) {
+					const blob = await render(tileW, tileH, quality);
+					if (!blob) continue;
+					last = blob;
+					if (blob.size <= COVER_MAX_BYTES) {
+						bitmap.close?.();
+						return new File([blob], nama, { type: 'image/webp' });
+					}
+				}
+			}
+			// Kualitas terendah paling baik jarang besar: pakai hasil percobaan
+			// terakhir — tetap WebP dan jauh di bawah batas 10 MB server.
+			bitmap.close?.();
+			return last ? new File([last], nama, { type: 'image/webp' }) : file;
+		} catch {
+			return file; // gagal baca bitmap → file asli, server tetap memvalidasi
+		}
+	}
+
 	async function pickCover(e: Event) {
 		const input = e.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
@@ -616,7 +688,12 @@
 		coverBusy = true;
 		coverError = '';
 		try {
-			draft.featured_image_url = await uploadDraftImage(file);
+			if (!COVER_TYPES_OK.includes(file.type)) {
+				coverError = tr('Format gambar harus JPG, PNG, atau WebP.');
+				return;
+			}
+			const readyFile = await kompresCoverWebp(file);
+			draft.featured_image_url = await uploadDraftImage(readyFile);
 			void measureDraftImages();
 		} catch (err) {
 			coverError = err instanceof Error ? err.message : tr('Gagal mengunggah gambar.');
@@ -797,6 +874,19 @@
 	}
 
 	/**
+	 * Preview DARI DALAM editor: isi modanya ya isi yang sedang diketik (belum
+	 * tentu tersimpan), jadi draf TIDAK dimuat ulang dari server — memuat ulang
+	 * akan menghapus hasil suntingan. Modal preview tampil DI ATAS modal editor
+	 * (z-index lebih tinggi bila draftPub masih terbuka).
+	 */
+	function previewCurrentDraft() {
+		if (!draftPub) return;
+		previewPub = draftPub;
+		previewLoading = false;
+		showPreview = true;
+	}
+
+	/**
 	 * Klik item menu baris. stopPropagation wajib: menu ini berada di dalam
 	 * `<tr>` yang onclick-nya membuka Detail, sehingga tanpa ini memilih
 	 * "Pratinjau draf" ikut membuka modal Detail di belakangnya.
@@ -958,6 +1048,21 @@
 				</div>
 			{/if}
 		</div>
+		{#if mediaFilter}
+			<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs" style="border: 1px solid var(--border); background: var(--secondary);">
+				<FileText size={12} class="text-muted-foreground" />
+				<span>{tr('Media')}{#if filteredMediaName}: <strong class="font-semibold">{filteredMediaName}</strong>{/if}</span>
+				<button
+					type="button"
+					class="rounded-full p-0.5 hover:bg-background"
+					aria-label={tr('Hapus filter media')}
+					title={tr('Hapus filter media')}
+					onclick={() => { mediaFilter = ''; pageNo = 1; }}
+				>
+					<X size={12} />
+				</button>
+			</span>
+		{/if}
 		<label class="app-input flex min-w-[200px] flex-1 items-center gap-2 !py-1.5">
 			<Search size={15} class="text-muted-foreground" />
 			<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari judul, media, atau nomor order…")} bind:value={q} />
@@ -1542,7 +1647,15 @@
 {/if}
 
 {#if showPreview && previewPub}
-	<div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={() => (showPreview = false)} onkeydown={(e) => { if (e.key === 'Escape') showPreview = false; }}>
+	<!-- Preview dari baris menu (z-50). Saat editor draf terbuka di belakangnya,
+	     nilainya dinaikkan agar preview tampil DI ATAS editor. -->
+	<div
+		class="fixed inset-0 flex items-center justify-center p-4"
+		style={`z-index: ${draftPub ? 90 : 50}; background-color: rgba(0,0,0,.45);`}
+		role="presentation"
+		onclick={() => (showPreview = false)}
+		onkeydown={(e) => { if (e.key === 'Escape') showPreview = false; }}
+	>
 		<dialog open class="app-card my-8 flex max-h-[85vh] w-full max-w-[720px] flex-col overflow-hidden p-5" aria-label={tr('Preview Artikel')} onclick={(e) => e.stopPropagation()}>
 			<h2 class="text-lg font-semibold">{tr('Preview Artikel')}</h2>
 			<p class="mt-1 text-sm text-muted-foreground">
@@ -1665,14 +1778,27 @@
 	</div>
 {/if}
 
-<!-- Editor draf — modal terpisah (parity tombol "Edit" app lama). -->
+<!-- Editor draf — modal besar dua kolom: editor isi di kiri (scroll sendiri),
+     pengaturan artikel di sidebar kanan (Gambar Utama → Judul → Meta → Kategori);
+     header & footer tetap terlihat saat konten digulir. Mobile = layar penuh
+     dengan kolom bertumpuk. -->
 {#if draftPub}
-	<div class="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={closeDraftEditor}>
-		<dialog open class="app-card my-8 flex max-h-[85vh] w-full max-w-[860px] flex-col overflow-hidden p-5" aria-label={tr('Edit draf')} onclick={(e) => e.stopPropagation()}>
-			<div class="flex items-start justify-between gap-3">
-				<div class="min-w-0">
-					<h2 class="text-lg font-semibold">{tr('Isi Artikel')}</h2>
-					<p class="mt-1 text-sm text-muted-foreground">{draftPub.document_title ?? tr('Artikel')}</p>
+	<div class="fixed inset-0 z-[60] flex items-stretch justify-center p-0 sm:items-center sm:p-4" style="background-color: rgba(0,0,0,.5);" role="presentation" onclick={closeDraftEditor}>
+		<dialog
+			open
+			class="app-card flex h-full w-full flex-col overflow-hidden rounded-none sm:h-[min(92dvh,960px)] sm:max-w-[min(95vw,1600px)] sm:rounded-2xl"
+			style="box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);"
+			aria-label={tr('Edit draf')}
+			onclick={(e) => e.stopPropagation()}
+		>
+			<!-- ── Header tetap ── -->
+			<header class="flex flex-none items-center gap-3 border-b px-4 py-3 sm:px-5" style="border-color: var(--border);">
+				<span class="flex h-10 w-10 flex-none items-center justify-center rounded-xl" style="background: var(--accent); color: var(--primary);" aria-hidden="true">
+					<FileText size={19} />
+				</span>
+				<div class="min-w-0 flex-1">
+					<h2 class="truncate text-base font-semibold">{tr('Isi Artikel')}</h2>
+					<p class="truncate text-xs text-muted-foreground">{draftPub.document_title ?? tr('Artikel')}</p>
 				</div>
 				{#if draft && !draft.error}
 					<button
@@ -1685,151 +1811,204 @@
 						{tr('Rewrite AI')} — {tr('gratis')} · {tr('sisa')} {rewriteLeft}/{2}
 					</button>
 				{/if}
-			</div>
+				<button
+					type="button"
+					class="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary"
+					aria-label={tr('Tutup')}
+					title={tr('Tutup')}
+					onclick={closeDraftEditor}
+				>
+					<X size={18} />
+				</button>
+			</header>
 
-			{#if error}<p class="mt-3 text-sm" style="color: var(--destructive);">{error}</p>{/if}
+			{#if error}<p class="flex-none border-b px-4 py-2 text-sm sm:px-5" style="border-color: var(--border); color: var(--destructive);">{error}</p>{/if}
 
 			{#if draftLoading}
-				<p class="mt-3 text-sm text-muted-foreground">{tr('Memuat draf…')}</p>
+				<div class="min-h-0 flex-1 overflow-y-auto p-5"><p class="text-sm text-muted-foreground">{tr('Memuat draf…')}</p></div>
 			{:else if draft?.error}
-				<p class="mt-3 text-sm" style="color: var(--destructive);">{draft.error}</p>
+				<div class="min-h-0 flex-1 overflow-y-auto p-5"><p class="text-sm" style="color: var(--destructive);">{draft.error}</p></div>
 			{:else if draft}
-				<form class="mt-4 flex min-h-0 flex-1 flex-col gap-4" onsubmit={saveDraft}>
-					<div class="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-						<!-- Tata urut satu kolom: Judul dulu, lalu Meta Deskripsi. -->
-						<div class="space-y-4">
-							<label class="block">
-								<span class="text-xs font-medium text-muted-foreground">{tr('Judul')}</span>
-								<input class="app-input mt-1 w-full" maxlength="200" bind:value={draft.title} />
-							</label>
-							<label class="block">
-								<span class="text-xs font-medium text-muted-foreground">{tr('Meta Deskripsi')}</span>
-								<!-- Textarea: teks panjang membungkus, bukan menggulir ke samping. -->
-								<textarea
-									class="app-input mt-1 w-full resize-y leading-snug"
-									rows="3"
-									maxlength="500"
-									bind:value={draft.meta_description}
-								></textarea>
-							</label>
-						</div>
-
-						<div>
-							<span class="text-xs font-medium text-muted-foreground">{tr('Gambar Utama')}</span>
-					<!-- Cover 16/9 besar selebar kartu; klik gambar/kartu = unggah.
-					     Tombol aksi di bawah cover kanan; kolom input URL dihapus. -->
-					<div class="mt-1 rounded-xl border p-2" style="border-color: var(--border);">
-						<div class="relative overflow-hidden rounded-lg" style="aspect-ratio: 16 / 9; background: var(--secondary);">
-							{#if draft.featured_image_url}
-								<button
-									type="button"
-									class="flex h-full w-full cursor-zoom-in overflow-hidden rounded-lg"
-									title={tr('Ganti gambar')}
-									onclick={() => coverInput?.click()}
-								>
-									<img
-										src={draft.featured_image_url}
-										alt={tr('Gambar cover artikel')}
-										class="h-full w-full object-cover"
-									/>
-								</button>
-							{:else}
-								<button
-									type="button"
-									class="flex h-full w-full items-center justify-center gap-2 text-xs text-muted-foreground"
-									onclick={() => coverInput?.click()}
-								>
-									<Paperclip size={13} /> {tr('Belum ada gambar — klik untuk unggah')}
-								</button>
-							{/if}
-						</div>
-						<div class="mt-2 flex flex-wrap items-center justify-between gap-2 px-1">
-							<p class="text-xs text-muted-foreground">{tr('Gambar disimpan di Tauthub; saat artikel terbit ke media, tautannya dikirim lengkap dengan domain.')}</p>
-							<div class="flex flex-wrap gap-2">
-								<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" disabled={coverBusy} onclick={() => coverInput?.click()}>
-									{#if coverBusy}<LoaderCircle size={13} class="animate-spin" />{:else}<Paperclip size={13} />{/if}
-									{tr('Ganti gambar')}
-								</button>
-								{#if draft.featured_image_url}
-									<a class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" href={draft.featured_image_url} target="_blank" rel="noopener">{tr('Buka di tab baru')}</a>
-									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => { draft.featured_image_url = ''; void measureDraftImages(); }}>{tr('Hapus gambar')}</button>
-								{/if}
+				<form class="flex min-h-0 flex-1 flex-col" onsubmit={saveDraft}>
+					<div class="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+						<!-- ── Kolom kiri: judul di atas editor (bold besar), lalu rich text editor (scroll sendiri) ── -->
+						<div class="flex min-h-0 w-full flex-1 flex-col lg:border-r" style="border-color: var(--border); min-width: 0;">
+							<div class="flex flex-none flex-col px-4 pb-2 pt-3 sm:px-5">
+								<div class="flex items-center justify-between gap-3">
+									<span class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{tr('Judul Artikel')}</span>
+									<span
+										class="pointer-events-none text-[11px] tabular-nums"
+										style={(draft.title ?? '').length >= 200 ? 'color: var(--destructive);' : 'color: var(--muted-foreground);'}
+									>{(draft.title ?? '').length}/200</span>
+								</div>
+								<input
+									class="w-full bg-transparent text-[22px] font-bold leading-snug tracking-tight outline-none"
+									maxlength="200"
+									bind:value={draft.title}
+									aria-label={tr('Judul Artikel')}
+								/>
 							</div>
-						</div>
-					</div>
-							<input bind:this={coverInput} type="file" accept="image/*" class="hidden" onchange={pickCover} />
-						<span class="flex flex-wrap items-center gap-2">
-							<!-- Dropdown berstyle (bukan bawaan browser): awal mengikuti
-							     pilihan klien saat order, mitra boleh pilih lain. -->
-							<span class="text-[11px] text-muted-foreground">{tr('Kategori')} :</span>
-							{#if draft}
-								<Select
-									ariaLabel={tr('Kategori')}
-									variant="plain"
-									minWidth={170}
-									options={(catOptions.includes(draft.category) || !(draft.category ?? '').trim()
-										? catOptions
-										: [(draft.category ?? ''), ...catOptions]).map((c) => ({ value: c, label: c }))}
-									bind:value={draft.category}
-									onchange={() => ensureCatOption(draft.category ?? '')}
-								>
-									{#snippet footer()}
-										<div class="flex items-center gap-1.5 p-2 pt-1">
-											<input
-												class="app-input min-w-0 flex-1 !py-1.5 !text-xs"
-												bind:value={catNewInput}
-												placeholder={tr('Kategori baru…')}
-												onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addCategory(); } }}
-											/>
-											<button
-												type="button"
-												class="app-btn app-btn-primary !min-h-7 !px-2 !text-xs shrink-0"
-												disabled={catNewBusy || !(catNewInput ?? '').trim()}
-												onclick={() => void addCategory()}
-											>{catNewBusy ? tr('Menyimpan…') : tr('Tambah')}</button>
-										</div>
-									{/snippet}
-								</Select>
-							{/if}
-						</span>
-							{#if coverError}<p class="mt-1 text-xs" style="color: var(--destructive);">{coverError}</p>{/if}
-						</div>
-
-						<div>
-							<span class="text-xs font-medium text-muted-foreground">{tr('Isi Artikel')}</span>
-							<div class="mt-1">
+							<div class="flex min-h-0 flex-1 flex-col px-3 pt-1 sm:px-4">
 								<RichTextEditor
 									bind:value={draft.content_html}
+									bind:stats={editorStats}
+									fill
 									ariaLabel={tr('Isi artikel')}
 									minHeight={320}
 									uploadImage={uploadDraftImage}
 									disabled={busy}
 								/>
 							</div>
+							<div class="flex flex-none items-center justify-between gap-3 border-t px-4 py-2.5" style="border-color: var(--border);">
+								<p class="text-xs tabular-nums text-muted-foreground">{editorStats.words} {tr('kata')}</p>
+								<button type="button" class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" onclick={previewCurrentDraft}>
+									<Eye size={14} /> {tr('Preview')}
+								</button>
+							</div>
 						</div>
+
+						<!-- ── Kolom kanan: sidebar metadata (scroll sendiri) ── -->
+						<aside class="min-h-0 w-full flex-none overflow-y-auto px-4 py-4 sm:px-5 lg:w-[352px] xl:w-[400px]">
+							<!-- A. Gambar Utama — selalu paling atas -->
+							<section>
+								<h3 class="text-[13px] font-semibold">{tr('Gambar Utama')}</h3>
+								<p class="mt-0.5 text-xs text-muted-foreground">{tr('Gambar akan ditampilkan di Tauthub & dikirim ke media.')}</p>
+								<div class="mt-2.5 overflow-hidden rounded-xl border" style="border-color: var(--border); background: var(--secondary); aspect-ratio: 16 / 9;">
+									{#if draft.featured_image_url}
+										<div class="relative h-full w-full">
+											<img src={draft.featured_image_url} alt={tr('Gambar cover artikel')} class="h-full w-full object-cover" loading="lazy" />
+											<button
+												type="button"
+												class="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full"
+												style="background: rgba(17, 24, 39, 0.55); color: #fff;"
+												aria-label={tr('Hapus gambar')}
+												title={tr('Hapus gambar')}
+												onclick={() => { draft.featured_image_url = ''; void measureDraftImages(); }}
+											>
+												<X size={13} />
+											</button>
+										</div>
+									{:else}
+										<div class="flex h-full flex-col items-center justify-center gap-1.5 text-center">
+											<ImageIcon size={22} style="color: var(--muted-foreground);" />
+											<p class="text-xs text-muted-foreground">{tr('Belum ada gambar utama')}</p>
+											<button type="button" class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" onclick={() => coverInput?.click()}>
+												<ImageIcon size={13} /> {tr('Tambah gambar')}
+											</button>
+										</div>
+									{/if}
+								</div>
+								{#if draft.featured_image_url}
+									<div class="mt-2 flex flex-wrap gap-1.5">
+										<button
+											type="button"
+											class="app-btn !min-h-8 !flex-1 !px-2 !text-xs"
+											style="background: var(--accent); color: var(--primary);"
+											disabled={coverBusy}
+											onclick={() => coverInput?.click()}
+										>
+											{#if coverBusy}<LoaderCircle size={13} class="animate-spin" />{:else}<ImageIcon size={13} />{/if}
+											{tr('Ganti gambar')}
+										</button>
+										<button
+											type="button"
+											class="app-btn app-btn-soft !min-h-8 !flex-1 !px-2 !text-xs"
+											style="color: var(--destructive); background: color-mix(in srgb, var(--destructive) 8%, transparent);"
+											onclick={() => { draft.featured_image_url = ''; void measureDraftImages(); }}
+										>
+											<Trash2 size={13} /> {tr('Hapus gambar')}
+										</button>
+									</div>
+								{/if}
+								<p class="mt-1.5 text-[11px] text-muted-foreground">{tr('Format: JPG, PNG, atau WebP · JPG/PNG otomatis dikonversi ke WebP maks. 150 KB · disarankan rasio 16:9.')}</p>
+							</section>
+
+							<!-- C. Meta Deskripsi -->
+							<section class="mt-5 border-t pt-4" style="border-color: var(--border);">
+								<label class="block">
+									<span class="text-[13px] font-semibold">{tr('Meta Deskripsi')}</span>
+									<div class="relative mt-1.5">
+										<textarea
+											class="app-input w-full resize-none leading-relaxed pb-7"
+											rows="4"
+											maxlength="500"
+											bind:value={draft.meta_description}
+										></textarea>
+										<span
+											class="pointer-events-none absolute right-3 bottom-2.5 text-[11px] tabular-nums"
+											style={(draft.meta_description ?? '').length >= 500 ? 'color: var(--destructive);' : 'color: var(--muted-foreground);'}
+										>{(draft.meta_description ?? '').length}/500</span>
+									</div>
+								</label>
+							</section>
+
+							<!-- D. Kategori -->
+							<section class="mt-5 border-t pb-4 pt-4" style="border-color: var(--border);">
+								<span class="text-[13px] font-semibold">{tr('Kategori')}</span>
+								{#if draft}
+									<div class="draft-cat mt-1.5">
+										<Select
+											ariaLabel={tr('Kategori')}
+											variant="plain"
+											minWidth={0}
+											options={(catOptions.includes(draft.category) || !(draft.category ?? '').trim()
+												? catOptions
+												: [(draft.category ?? ''), ...catOptions]).map((c) => ({ value: c, label: c }))}
+											bind:value={draft.category}
+											onchange={() => ensureCatOption(draft.category ?? '')}
+										>
+											{#snippet footer()}
+												<div class="flex items-center gap-1.5 p-2 pt-1">
+													<input
+														class="app-input min-w-0 flex-1 !py-1.5 !text-xs"
+														bind:value={catNewInput}
+														placeholder={tr('Kategori baru…')}
+														onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addCategory(); } }}
+													/>
+													<button
+														type="button"
+														class="app-btn app-btn-primary !min-h-7 !px-2 !text-xs shrink-0"
+														disabled={catNewBusy || !(catNewInput ?? '').trim()}
+														onclick={() => void addCategory()}
+													>{catNewBusy ? tr('Menyimpan…') : tr('Tambah')}</button>
+												</div>
+											{/snippet}
+										</Select>
+									</div>
+								{/if}
+							</section>
+
+							<input bind:this={coverInput} type="file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange={pickCover} />
+						</aside>
 					</div>
 
-					<div class="flex flex-wrap items-center justify-between gap-2 border-t pt-3" style="border-color: var(--border);">
-						<p class="text-xs text-muted-foreground">
-							{draft.source === 'wp_draft' ? tr('Sumber: draf WordPress') : tr('Sumber: dokumen klien')}
-							{#if draft.edited_at} · {tr('diedit')} {dt(draft.edited_at)}{/if}
-							{#if draftImgCount > 0}
-								<!-- Total UKURAN gambar artikel yang diminta pemilik produk; kalau
-								     ada gambar luar yang tak terukur, tampil perkiraan jumlah saja. -->
-								<span class="inline-flex items-center gap-1">
-									<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="inline-block text-muted-foreground"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-									{#if !draftImgUnknown && draftImgBytes != null}{fmtBytesID(draftImgBytes)}{:else}±{draftImgCount} {tr('gambar')}{/if}
-								</span>
-							{/if}
-						</p>
-						<div class="flex gap-2">
-							<button class="app-btn app-btn-soft" type="button" onclick={closeDraftEditor}>{tr('Tutup')}</button>
-							<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{tr('Simpan Draf')}</button>
+					<!-- ── Footer tetap ── -->
+					<footer class="flex flex-none flex-wrap items-center justify-between gap-2 border-t px-4 py-3 sm:px-5" style="border-color: var(--border);">
+						<div class="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted-foreground" title={
+							(draft.source === 'wp_draft' ? tr('Sumber: draf WordPress') : tr('Sumber: dokumen klien'))
+							+ (draft.edited_at ? ` · ${tr('diedit')} ${dt(draft.edited_at)}` : '')
+						}>
+							<FileText size={14} class="flex-none" />
+							<span class="min-w-0 truncate">
+								{draft.source === 'wp_draft' ? tr('Sumber: draf WordPress') : tr('Sumber: dokumen klien')}
+								{#if draft.edited_at} · {tr('diedit')} {dt(draft.edited_at)}{/if}
+								{#if draftImgCount > 0}
+									· {#if !draftImgUnknown && draftImgBytes != null}{fmtBytesID(draftImgBytes)}{:else}±{draftImgCount} {tr('gambar')}{/if}
+								{/if}
+							</span>
 						</div>
-				</div>
-			</form>
-		{/if}
-	</dialog>
+						<div class="flex flex-none items-center gap-2">
+							{#if draftSavedNotice}<p class="hidden text-xs sm:block" style="color: var(--success);">{draftSavedNotice}</p>{/if}
+							{#if coverError}<p class="hidden text-xs sm:block" style="color: var(--destructive);">{coverError}</p>{/if}
+							<button type="button" class="app-btn app-btn-soft" onclick={closeDraftEditor}>{tr('Tutup')}</button>
+							<button type="submit" class="app-btn app-btn-primary" disabled={busy}>
+								{#if busy}<LoaderCircle size={14} class="animate-spin" /> {tr('Menyimpan draf…')}{:else}{tr('Simpan Draf')}{/if}
+							</button>
+						</div>
+					</footer>
+				</form>
+			{/if}
+		</dialog>
 	</div>
 {/if}
 
@@ -1876,6 +2055,24 @@
 			transition: none;
 			transform: none;
 		}
+	}
+
+	/* Sidebar Kategori: dropdown berstyle (bukan <select> bawaan) dipaksa
+	   selebar sidebar, tinggi 44px, dengan border/focus yang sama seperti
+	   app-input. Analisis :global diperlukan karena trigger ada di komponen
+	   Select; PENUH lebar tidak mengubah pemakaian Select di halaman lain. */
+	.draft-cat :global(.zs-select-trigger) {
+		width: 100%;
+		max-width: none;
+		height: 44px;
+		justify-content: space-between;
+		border: 1px solid var(--input);
+		border-radius: var(--radius-control);
+		background: var(--card);
+	}
+	.draft-cat :global(.zs-select-trigger:hover:not(:disabled)) {
+		background: var(--secondary);
+		border-color: var(--border);
 	}
 
 	/* Menu aksi baris dipakai bersama tabel (desktop) dan kartu (mobile). Di

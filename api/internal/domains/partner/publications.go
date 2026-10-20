@@ -402,6 +402,9 @@ func (d *Deps) PublicationsList(w http.ResponseWriter, r *http.Request) {
 	}
 	limit := clampInt(q.Get("limit"), 50, 1, 500)
 	offset := clampInt(q.Get("offset"), 0, 0, 1<<30)
+	// media (id) — deep-link dari lencana "N menunggu" Daftar Media. id media
+	// adalah char(36): nilai aneh hanya menghasilkan 0 baris (aman, tanpa cast).
+	mediaFilter := strings.TrimSpace(q.Get("media"))
 
 	args := []any{partner.ID}
 	ph := make([]string, len(statuses))
@@ -410,10 +413,15 @@ func (d *Deps) PublicationsList(w http.ResponseWriter, r *http.Request) {
 		ph[i] = "$" + itoa(i+2)
 	}
 	inClause := strings.Join(ph, ",")
+	mediaClause := ""
+	if mediaFilter != "" {
+		args = append(args, mediaFilter)
+		mediaClause = " AND m.id = $" + itoa(len(args))
+	}
 
 	countRows, err := d.queryRow(r.Context(),
 		`SELECT COUNT(*) AS count FROM publications p JOIN media m ON m.id = p.media_id
-		 WHERE m.partner_id = $1 AND p.status IN (`+inClause+`)`, args...)
+		 WHERE m.partner_id = $1 AND p.status IN (`+inClause+`)`+mediaClause, args...)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -421,7 +429,7 @@ func (d *Deps) PublicationsList(w http.ResponseWriter, r *http.Request) {
 	total := countRows.intOr("count", 0)
 
 	if q.Get("format") == "csv" {
-		all, err := d.queryRows(r.Context(), publicationSelect+" WHERE m.partner_id = $1 AND p.status IN ("+inClause+") ORDER BY p.created_at DESC LIMIT 5000", args...)
+		all, err := d.queryRows(r.Context(), publicationSelect+" WHERE m.partner_id = $1 AND p.status IN ("+inClause+")"+mediaClause+" ORDER BY p.created_at DESC LIMIT 5000", args...)
 		if err != nil {
 			d.writeErr(w, err)
 			return
@@ -436,7 +444,7 @@ func (d *Deps) PublicationsList(w http.ResponseWriter, r *http.Request) {
 
 	pageArgs := append(append([]any{}, args...), limit, offset)
 	items, err := d.queryRows(r.Context(),
-		publicationSelect+" WHERE m.partner_id = $1 AND p.status IN ("+inClause+") ORDER BY p.created_at DESC LIMIT $"+itoa(len(args)+1)+" OFFSET $"+itoa(len(args)+2),
+		publicationSelect+" WHERE m.partner_id = $1 AND p.status IN ("+inClause+")"+mediaClause+" ORDER BY p.created_at DESC LIMIT $"+itoa(len(args)+1)+" OFFSET $"+itoa(len(args)+2),
 		pageArgs...)
 	if err != nil {
 		d.writeErr(w, err)
