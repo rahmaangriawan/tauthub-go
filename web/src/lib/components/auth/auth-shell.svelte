@@ -8,17 +8,19 @@
 
 <div class="auth">
 	<aside class="auth-marketing">
-		<img
-			src="/img/auth-hero.webp"
-			alt=""
-			aria-hidden="true"
-			class="auth-marketing-photo"
-			decoding="async"
-		/>
+		<div class="auth-media">
+			<img
+				src="/img/auth-hero.webp"
+				alt=""
+				aria-hidden="true"
+				class="auth-marketing-photo"
+				decoding="async"
+			/>
 
-		<a class="auth-brand" href="/login" aria-label="Tauthub">
-			<img src="/tauthub-logo.webp" alt="Tauthub" width="130" height="34" class="auth-brand-logo" />
-		</a>
+			<a class="auth-brand" href="/login" aria-label="Tauthub">
+				<img src="/tauthub-logo.webp" alt="Tauthub" width="130" height="34" class="auth-brand-logo" />
+			</a>
+		</div>
 	</aside>
 
 	<main class="auth-form-pane">

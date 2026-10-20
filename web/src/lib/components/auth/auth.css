@@ -20,10 +20,20 @@
 }
 
 /* ── Panel kiri (visual) ────────────────────────────────────────────── */
-/* Foto memenuhi seluruh panel; logo menumpang di atasnya. */
+/* Foto tidak full-bleed: inset 20px dengan sudut membulat; logo menumpang
+   di dalam kartu foto. */
 .auth-marketing {
   position: relative;
+  padding: 20px;
   overflow: hidden;
+  background: #ffffff;
+}
+
+.auth-media {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 20px;
   background: #e8eef3;
 }
 
@@ -37,7 +47,7 @@
 }
 
 /* Overlay biru brand di atas foto, di bawah logo. */
-.auth-marketing::after {
+.auth-media::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -47,11 +57,12 @@
 
 /* Logo tetap jadi identitas, di atas foto. */
 .auth-brand {
-  position: relative;
+  position: absolute;
+  top: 20px;
+  left: 24px;
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  margin: 40px 0 0 48px;
   font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -599,7 +610,6 @@
 /* ── Responsive (brief §10) ────────────────────────────────────────── */
 @media (max-width: 1024px) {
   .auth { grid-template-columns: 0.85fr 1fr; }
-  .auth-brand { margin: 34px 0 0 32px; }
 }
 
 @media (max-width: 768px) {
@@ -630,7 +640,7 @@
 
 /* Sembunyikan panel kiri juga saat tinggi layar sangat pendek. */
 @media (max-height: 560px) and (min-width: 769px) {
-  .auth-brand { margin: 24px 0 0 32px; }
+  .auth-brand { top: 14px; left: 18px; }
 }
 
 /* Lapisan klik-di-luar modal: elemen interaktif transparan, bukan div. */
