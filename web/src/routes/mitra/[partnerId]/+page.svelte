@@ -472,21 +472,19 @@
 			</section>
 
 			<section class="app-card flex flex-col overflow-hidden">
-				<div class="flex flex-wrap items-start justify-between gap-3 border-b px-5 pt-4 pb-4">
-					<div class="flex items-start gap-3">
-						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
-							style="background-color: var(--accent); color: var(--primary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 20%, transparent);"
-						>
-							<Activity size={17} />
-						</div>
-						<div>
-							<h2 class="m-0 text-[15px] font-semibold tracking-[-0.01em]">{tr('Aktivitas Terbaru')}</h2>
-							<p class="m-0 mt-0.5 text-[12.5px] text-muted-foreground">{tr('Pantau aktivitas publikasi dan pesan klien Anda.')}</p>
-						</div>
+				<div class="relative flex items-start gap-3 border-b px-5 pt-4 pb-4">
+					<div
+						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
+						style="background-color: var(--accent); color: var(--primary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 20%, transparent);"
+					>
+						<Activity size={17} />
+					</div>
+					<div class="min-w-0 flex-1 pr-16">
+						<h2 class="m-0 text-[15px] font-semibold tracking-[-0.01em]">{tr('Aktivitas Terbaru')}</h2>
+						<p class="m-0 mt-0.5 text-[12.5px] text-muted-foreground">{tr('Pantau aktivitas publikasi dan pesan klien Anda.')}</p>
 					</div>
 					<a
-						class="inline-flex shrink-0 items-center gap-1 rounded-[6px] px-2 py-1 text-[12.5px] font-semibold transition-colors hover:bg-accent"
+						class="absolute right-5 top-[17px] inline-flex shrink-0 items-center gap-1 rounded-[6px] px-2 py-1 text-[12.5px] font-semibold transition-colors hover:bg-accent"
 						style="color: var(--primary);"
 						href={`${base}/notifications`}
 					>
