@@ -159,6 +159,63 @@
 	let templateUrl = $state<string | null>(null);
 	let templateUrlBusy = $state(false);
 	let importDragOver = $state(false);
+	// Popover kelola kategori (draf lokal dulu, disimpan saat klik Simpan).
+	let openCatID = $state<string | null>(null);
+	let catDraft = $state<string[]>([]);
+	let catInput = $state('');
+	let catBusy = $state(false);
+	let catError = $state('');
+
+	function openCats(m: Media) {
+		// Fallback: media tanpa kategori modern (category lama utuh).
+		catDraft = m.categories.length ? [...m.categories] : m.category ? [m.category] : [];
+		catInput = '';
+		catError = '';
+		openPriceID = null;
+		openCatID = m.id;
+	}
+
+	function removeCat(name: string) {
+		catDraft = catDraft.filter((c) => c !== name);
+	}
+
+	function addCat() {
+		const v = catInput.trim();
+		if (!v) return;
+		if (catDraft.length >= 20) {
+			catError = tr('Maksimal 20 kategori per media.');
+			return;
+		}
+		const lower = v.toLowerCase();
+		if (catDraft.some((c) => c.trim().toLowerCase() === lower)) {
+			catError = tr('Kategori sudah ada.');
+			return;
+		}
+		catDraft = [...catDraft, v];
+		catInput = '';
+		catError = '';
+	}
+
+	async function saveCat(m: Media) {
+		catBusy = true;
+		catError = '';
+		try {
+			const cats = Array.from(new Set(catDraft.map((c) => c.trim()).filter(Boolean)));
+			const res = await apiRequest(`/v1/partner/media/${m.id}`, {
+				method: 'PUT',
+				body: JSON.stringify({ categories: cats })
+			});
+			if (!res.ok) {
+				catError = await readApiError(res, tr('Gagal menyimpan kategori.'));
+				return;
+			}
+			notice = `${tr('Kategori diperbarui untuk')} ${m.name}.`;
+			openCatID = null;
+			await load();
+		} finally {
+			catBusy = false;
+		}
+	}
 
 	onMount(() => {
 		void (async () => {
@@ -1289,7 +1346,9 @@
 							<td class="px-4 py-2.5">
 								{@render verifCell(m)}
 							</td>
-							<td class="px-4 py-2.5 text-muted-foreground">{m.categories.join(', ') || '—'}</td>
+							<td class="px-4 py-2.5">
+								{@render categoryCell(m)}
+							</td>
 								<td class="px-4 py-2.5">
 									<div class="flex flex-col items-start gap-1">
 										{@render modeBadge(m)}
@@ -1551,6 +1610,85 @@
 						<dd>{rp(net)}</dd>
 					</div>
 				</dl>
+		</div>
+	{/if}
+	</div>
+{/snippet}
+
+<!-- Kategori media: klik membuka popover kelola kategori (tambah/hapus/ganti),
+     disimpan per media lewat PUT {categories}. Pola cocok dengan sel Harga. -->
+{#snippet categoryCell(m: Media)}
+	<div class="relative flex justify-start">
+		<button
+			class="inline-flex max-w-[150px] items-center gap-1 truncate text-left text-[13px] text-muted-foreground underline-offset-2 hover:underline"
+			aria-haspopup="dialog"
+			aria-expanded={openCatID === m.id}
+			title={tr('Kelola kategori')}
+			onclick={(e) => { e.stopPropagation(); if (openCatID === m.id) { openCatID = null; } else { openCats(m); } }}
+		>
+			<span class="truncate">{m.categories.join(', ') || '—'}</span>
+			<Pencil size={11} class="shrink-0" />
+		</button>
+		{#if openCatID === m.id}
+			<div
+				class="fixed inset-0 z-40"
+				role="presentation"
+				onclick={(e) => { e.stopPropagation(); openCatID = null; }}
+			></div>
+			<div
+				class="app-card absolute left-0 top-full z-50 mt-1 w-64 p-3 text-left shadow-lg"
+				style="border: 1px solid var(--border);"
+				role="dialog"
+				tabindex="-1"
+				aria-label={tr('Kelola Kategori')}
+				onclick={(e) => e.stopPropagation()}
+				onkeydown={(e) => { if (e.key === 'Escape') openCatID = null; }}
+			>
+				<p class="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Kelola Kategori')}</p>
+				<div class="flex flex-wrap gap-1.5">
+					{#each catDraft as c (c)}
+						<span class="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs" style="border-color: var(--border); color: var(--foreground);">
+							{c}
+							<button
+								type="button"
+								class="inline-flex items-center justify-center rounded p-0.5 hover:bg-secondary"
+								aria-label={`${tr('Hapus kategori')} ${c}`}
+								onclick={() => removeCat(c)}
+							>
+								<X size={11} />
+							</button>
+						</span>
+					{:else}
+						<span class="text-[12.5px] text-muted-foreground">{tr('Belum ada kategori.')}</span>
+					{/each}
+				</div>
+				<div class="mt-2.5 flex items-center gap-1.5">
+					<input
+						class="app-input min-w-0 flex-1 !py-1.5 !text-xs"
+						bind:value={catInput}
+						list="media-category-options"
+						placeholder={tr('Tambah atau ganti kategori…')}
+						onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCat(); } }}
+					/>
+					<button type="button" class="app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs" onclick={addCat}>{tr('Tambah')}</button>
+				</div>
+				<datalist id="media-category-options">
+					{#each categories as c (c)}
+						<option value={c}></option>
+					{/each}
+				</datalist>
+				{#if catError}
+					<p class="mt-2 text-[12px]" style="color: var(--destructive);">{catError}</p>
+				{/if}
+				<div class="mt-3 flex items-center justify-between gap-2 border-t pt-2.5" style="border-color: var(--border);">
+					<span class="text-[11px] text-muted-foreground">{catDraft.length}/20</span>
+					<div class="flex items-center gap-2">
+						<button type="button" class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" onclick={() => (openCatID = null)}>{tr('Batal')}</button>
+						<button type="button" class="app-btn app-btn-primary !min-h-7 !px-2.5 !text-xs" disabled={catBusy || catDraft.length === 0} onclick={() => void saveCat(m)}>
+							{catBusy ? tr('Menyimpan…') : tr('Simpan')}
+						</button>
+					</div>
+				</div>
 			</div>
 		{/if}
 	</div>
