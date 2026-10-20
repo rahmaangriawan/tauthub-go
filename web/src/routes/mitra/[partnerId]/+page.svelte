@@ -78,7 +78,7 @@
 				const notifData = await notifRes.json();
 				activity = ((notifData?.notifications ?? []) as any[])
 					.filter((n) => typeof n?.type === 'string' && (n.type.startsWith('publication.') || n.type === 'chat.message'))
-					.slice(0, 6);
+					.slice(0, 2);
 			}
 			// Permintaan non-OK tidak boleh ditelan — tampilkan callout galat.
 			const failed: string[] = [];
