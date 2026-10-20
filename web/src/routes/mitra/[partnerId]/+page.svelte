@@ -40,6 +40,8 @@
 	let meUser = $state<{ email?: string } | null>(null);
 	let earnings = $state<any>(null);
 	let media = $state<any[]>([]);
+	let pubError = $state(false);
+	let publications = $state<any[]>([]);
 	let activity = $state<any[]>([]);
 
 	onMount(() => {
@@ -63,10 +65,12 @@
 			}
 			if (earnRes.ok) earnings = await earnRes.json();
 			if (mediaRes.ok) media = (await mediaRes.json()).media ?? [];
+			pubError = !pubRes.ok;
 			if (pubRes.ok) {
 				const pubData = await pubRes.json();
+				publications = (pubData?.publications ?? []) as any[];
 				// Deret sparkline "masuk per hari" tetap dari tanggal publikasi.
-				publicationTimes = ((pubData?.publications ?? []) as any[])
+				publicationTimes = publications
 					.map((p) => Date.parse(p?.created_at ?? ''))
 					.filter((t) => Number.isFinite(t));
 			}
@@ -96,6 +100,8 @@
 
 	const fmt = (n: number) => (n ?? 0).toLocaleString('id-ID');
 	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
+	// Soft tint util (dipakai callout error, banner, dan badge status).
+	const soft = (token: string) => `color-mix(in srgb, var(${token}) 26%, transparent)`;
 
 	// ── Deret sparkline: murni dari data API (created_at / amount) ───────────
 	// Tidak ada seri rekaan; tiap titik dihitung dari record nyata.
@@ -206,6 +212,62 @@
 	const pctText = (pct: number, count: number) =>
 		count > 0 && Math.round(pct) < 1 ? tr('<1%') : `${Math.round(pct)}%`;
 
+	// ── Daftar publikasi terbaru (panel bawah) ───────────────────────────────
+	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '-');
+	const latestPublications = $derived(publications.slice(0, 6));
+
+	const badgeStyles: Record<string, string> = {
+		published: `background-color: var(--success-soft); color: var(--success); box-shadow: inset 0 0 0 1px ${soft('--success')};`,
+		waiting_partner: `background-color: var(--warning-soft); color: var(--warning); box-shadow: inset 0 0 0 1px ${soft('--warning')};`,
+		revision: `background-color: var(--warning-soft); color: var(--warning); box-shadow: inset 0 0 0 1px ${soft('--warning')};`,
+		partner_approved: `background-color: var(--accent); color: var(--primary); box-shadow: inset 0 0 0 1px ${soft('--primary')};`,
+		partner_rejected: `background-color: ${soft('--destructive')}; color: var(--destructive); box-shadow: inset 0 0 0 1px ${soft('--destructive')};`,
+		failed: `background-color: ${soft('--destructive')}; color: var(--destructive); box-shadow: inset 0 0 0 1px ${soft('--destructive')};`
+	};
+	const neutralBadge = 'background-color: var(--muted); color: var(--muted-foreground); box-shadow: inset 0 0 0 1px var(--border);';
+	const badgeStyle = (status: string) => badgeStyles[status] ?? neutralBadge;
+	const badgeLabels: Record<string, string> = $derived({
+		published: tr('Terbit'),
+		waiting_partner: tr('Menunggu'),
+		revision: tr('Perlu Revisi'),
+		partner_approved: tr('Disetujui'),
+		partner_rejected: tr('Ditolak'),
+		failed: tr('Gagal'),
+		queued: tr('Antrean'),
+		processing: tr('Diproses'),
+		retrying: tr('Coba ulang'),
+		cancelled: tr('Dibatalkan')
+	});
+	const badgeLabel = (status: string) => badgeLabels[status] ?? status;
+
+	function pubIcon(status: string): Component<{ size?: number }> {
+		switch (status) {
+			case 'published':
+				return CircleCheck;
+			case 'waiting_partner':
+				return Clock;
+			case 'revision':
+				return RotateCcw;
+			case 'partner_approved':
+				return Check;
+			case 'partner_rejected':
+				return X;
+			case 'failed':
+				return TriangleAlert;
+			default:
+				return Megaphone;
+		}
+	}
+	function pubIconBoxStyle(status: string): string {
+		if (status === 'published')
+			return `background-color: var(--success-soft); color: var(--success); box-shadow: inset 0 0 0 1px ${soft('--success')};`;
+		if (status === 'waiting_partner' || status === 'revision')
+			return `background-color: var(--warning-soft); color: var(--warning); box-shadow: inset 0 0 0 1px ${soft('--warning')};`;
+		if (status === 'partner_approved')
+			return `background-color: var(--accent); color: var(--primary); box-shadow: inset 0 0 0 1px ${soft('--primary')};`;
+		return 'background-color: var(--muted); color: var(--muted-foreground); box-shadow: inset 0 0 0 1px var(--border);';
+	}
+
 	// ── Aktivitas: notifikasi publikasi/pesan dari backend (tanpa data rekaan) ─
 	function activityIcon(type: string): Component<{ size?: number }> {
 		switch (type) {
@@ -249,9 +311,6 @@
 		if (days <= 7) return `${days} ${tr('hari lalu')}`;
 		return new Date(t).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 	}
-
-	// Soft tint util (dipakai callout error + banner).
-	const soft = (token: string) => `color-mix(in srgb, var(${token}) 26%, transparent)`;
 </script>
 
 <PageTitle title={tr("Ringkasan Mitra")} />
@@ -472,6 +531,66 @@
 					</ul>
 				{/if}
 			</section>
+		</div>
+
+		<!-- 3. Publikasi Terbaru (list, full-width) -->
+		<div class="app-card overflow-hidden">
+			<div class="flex flex-wrap items-center justify-between gap-3 border-b" style="padding: 16px 20px 14px;">
+				<div class="flex flex-col gap-0.5">
+					<h2 class="m-0 text-[15px] font-semibold tracking-[-0.01em]">{tr('Publikasi Terbaru')}</h2>
+					<p class="m-0 text-[12.5px] text-muted-foreground">{tr('Riwayat distribusi artikel terbaru untuk media Anda')}</p>
+				</div>
+				<a
+					class="inline-flex items-center gap-1 rounded-[6px] px-2 py-1 text-[12.5px] font-semibold transition-colors hover:bg-accent"
+					style="color: var(--primary);"
+					href={`${base}/publications`}
+				>
+					{tr('Lihat semua')}
+					<ArrowRight size={13} />
+				</a>
+			</div>
+
+			{#if pubError}
+				<p class="px-5 py-8 text-center text-[13px]" style="color: var(--destructive);">{tr('Gagal memuat publikasi terbaru.')}</p>
+			{:else if publications.length === 0}
+				<div class="flex flex-col items-center gap-2 px-5 py-[44px] text-center text-muted-foreground">
+					<Newspaper size={34} />
+					<h3 class="m-0 text-[14px] font-semibold text-foreground">{tr('Belum ada publikasi')}</h3>
+					<p class="m-0 text-[13px] text-muted-foreground">{tr('Publikasi dari klien Tauthub akan muncul di sini setelah tersedia.')}</p>
+				</div>
+			{:else}
+				<div class="flex flex-col">
+					{#each latestPublications as p (p.id)}
+						{@const PubIcon = pubIcon(p.status)}
+						<div class="flex flex-col items-start justify-between gap-2 border-b px-5 py-[13px] transition-colors last:border-b-0 hover:bg-accent sm:flex-row sm:items-center sm:gap-4">
+							<div class="flex min-w-0 items-center gap-3">
+								<div class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px]" style={pubIconBoxStyle(p.status)}>
+									<PubIcon size={18} />
+								</div>
+								<div class="flex min-w-0 flex-col gap-0.5">
+									<div class="line-clamp-2 break-words text-[13.5px] leading-[1.35] font-semibold" title={p.document_title ?? tr('Artikel')}>
+										<span>{p.document_title ?? tr('Artikel')}</span>
+										{#if p.media_name}
+											<span class="font-medium" style="color: var(--primary);"> · {p.media_name}</span>
+										{/if}
+									</div>
+									<div class="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+										<span>{p.order_code ?? tr('Tanpa kode')}</span>
+										<span style="color: var(--border);">·</span>
+										<span>{dt(p.created_at)}</span>
+									</div>
+								</div>
+							</div>
+							<div class="flex w-full min-w-0 items-center justify-between gap-3 border-t pt-2 sm:w-auto sm:justify-end sm:border-t-0 sm:pt-0">
+								<span class="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-[3px] text-[12px] font-semibold" style={badgeStyle(p.status)}>
+									{badgeLabel(p.status)}
+								</span>
+								<span class="shrink-0 text-right text-[13.5px] font-bold tabular-nums">{rp(p.partner_amount ?? 0)}</span>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	{/if}
 </section>
