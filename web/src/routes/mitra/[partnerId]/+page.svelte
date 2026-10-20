@@ -1,18 +1,20 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
 
-	// Ringkasan mitra - port setia section "Ringkasan" portal mitra versi lama:
-	// header + pil status, 3 kartu ringkasan (media / menunggu / total penghasilan),
-	// strip 4 statistik publikasi, dan panel Publikasi Terbaru. Blok tambahan yang
-	// sudah ada (saldo, media terbaru, notifikasi, tabel penghasilan) dipertahankan
-	// dengan sistem visual yang sama.
+	// Ringkasan mitra — modern SaaS layout: 4 kartu KPI di atas, lalu layout
+	// asimetris 2:1 berisi panel Status Publikasi (progress bar distribusi +
+	// ringkasan 5 bucket status) dan panel Aktivitas Terbaru (notifikasi nyata
+	// bertipe publikasi/pesan). Semua angka dari data aktual; tanpa data rekaan.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import type { Component } from 'svelte';
 	import {
+		Activity,
 		ArrowRight,
 		Check,
 		CircleCheck,
 		Clock,
+		Layers,
 		Megaphone,
 		MessageCircle,
 		Newspaper,
@@ -24,35 +26,35 @@
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import StatCard from '$lib/components/stat-card.svelte';
 	import { chatUnread, refreshChatUnreadNow } from '$lib/chat/chat-unread.svelte';
 	import WaRequiredBanner from '$lib/components/wa-required-banner.svelte';
-		import Sparkline from '$lib/components/sparkline.svelte';
 
 	const partnerId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || partnerId}`);
 
 	let loading = $state(true);
 	let error = $state('');
-	let pubError = $state(false);
 	let me = $state<any>(null);
-	// /v1/partner/me juga mengirim { user } — email dipakai di baris ringkas
-	// pengganti "ID mitra <kode>" yang tidak berguna bagi mitra.
+	// /v1/partner/me juga mengirim { user } — email dipakai di baris ringkas.
 	let meUser = $state<{ email?: string } | null>(null);
 	let earnings = $state<any>(null);
 	let media = $state<any[]>([]);
-	let publications = $state<any[]>([]);
+	let activity = $state<any[]>([]);
 
 	onMount(() => {
 		void (async () => {
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
 			void refreshChatUnreadNow();
-			const [meRes, earnRes, mediaRes, pubRes] = await Promise.all([
+			const [meRes, earnRes, mediaRes, pubRes, notifRes] = await Promise.all([
 				apiRequest('/v1/partner/me'),
-				// Limit diperbesar khusus untuk deret sparkline; tabel tetap 5 baris (slice).
+				// Limit diperbesar khusus deret sparkline penghasilan.
 				apiRequest('/v1/partner/earnings?limit=200'),
 				apiRequest('/v1/partner/media?limit=500'),
-				apiRequest('/v1/partner/publications?limit=200')
+				apiRequest('/v1/partner/publications?limit=200'),
+				// Feed aktivitas: notifikasi umum terbaru, difilter ke event nyata.
+				apiRequest('/v1/partner/notifications?limit=14&category=general')
 			]);
 			if (meRes.ok) {
 				const meData = await meRes.json();
@@ -61,14 +63,26 @@
 			}
 			if (earnRes.ok) earnings = await earnRes.json();
 			if (mediaRes.ok) media = (await mediaRes.json()).media ?? [];
-			if (pubRes.ok) publications = (await pubRes.json()).publications ?? [];
-			// Permintaan non-OK tidak boleh ditelan - tampilkan callout galat.
+			if (pubRes.ok) {
+				const pubData = await pubRes.json();
+				// Deret sparkline "masuk per hari" tetap dari tanggal publikasi.
+				publicationTimes = ((pubData?.publications ?? []) as any[])
+					.map((p) => Date.parse(p?.created_at ?? ''))
+					.filter((t) => Number.isFinite(t));
+			}
+			if (notifRes.ok) {
+				const notifData = await notifRes.json();
+				activity = ((notifData?.notifications ?? []) as any[])
+					.filter((n) => typeof n?.type === 'string' && (n.type.startsWith('publication.') || n.type === 'chat.message'))
+					.slice(0, 6);
+			}
+			// Permintaan non-OK tidak boleh ditelan — tampilkan callout galat.
 			const failed: string[] = [];
 			if (!meRes.ok) failed.push(tr('Ringkasan mitra'));
 			if (!earnRes.ok) failed.push(tr('Penghasilan'));
 			if (!mediaRes.ok) failed.push(tr('Media'));
 			if (!pubRes.ok) failed.push(tr('Publikasi'));
-			pubError = !pubRes.ok;
+			if (!notifRes.ok) failed.push(tr('Aktivitas'));
 			if (failed.length > 0)
 				error = `${tr('Gagal memuat')}: ${failed.join(', ')}. ${tr('Coba muat ulang halaman.')}`;
 			loading = false;
@@ -78,15 +92,13 @@
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 	});
 
-	const stats = $derived(me?.publication_stats ?? {});
+	let publicationTimes = $state<number[]>([]);
+
 	const fmt = (n: number) => (n ?? 0).toLocaleString('id-ID');
 	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
-	// Total penghasilan = yang sudah settle + yang masih menunggu (parity kartu lama).
-	const totalEarnings = $derived((earnings?.summary?.settled ?? 0) + (earnings?.summary?.pending ?? 0));
-	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '-');
 
 	// ── Deret sparkline: murni dari data API (created_at / amount) ───────────
-	// Tidak ada seri rekaan/smoothstep; tiap titik dihitung dari record nyata.
+	// Tidak ada seri rekaan; tiap titik dihitung dari record nyata.
 	const DAY_MS = 86_400_000;
 	const endOfToday = () => {
 		const d = new Date();
@@ -131,102 +143,115 @@
 		)
 	);
 	// Menunggu: permintaan artikel masuk per hari dari publications[].created_at.
-	const pubSeries = $derived(
-		dailySeries(
-			publications.map((p) => toTime(p?.created_at)).filter((t) => Number.isFinite(t)),
-			14
-		)
+	const pubSeries = $derived(dailySeries(publicationTimes, 14));
+
+	// Total penghasilan aktual = lifetime penghasilan publikasi (net, tanpa voided)
+	// dari backend; fallback ke settled + pending bila field belum tersedia.
+	const totalEarnings = $derived(
+		earnings?.summary?.lifetime_publication ??
+			(earnings?.summary?.settled ?? 0) + (earnings?.summary?.pending ?? 0)
 	);
+	const pendingCount = $derived(me?.pending_count ?? 0);
 
-	// Panel tetap menampilkan baris terbaru saja walau limit fetch diperbesar.
-	const latestPublications = $derived(publications.slice(0, 6));
-
-	// ── Token visual (dipetakan dari mitra-overview.module.css) ──────────────
-	// gray-a5/gray-10/gray-12 → border / muted-foreground / foreground;
-	// green → success(+soft); amber → warning(+soft); red → destructive; accent → primary.
-	type Tone = 'neutral' | 'pending' | 'earning';
-	const soft = (token: string) => `color-mix(in srgb, var(${token}) 26%, transparent)`;
-
-	const cardStyle = (tone: Tone) =>
-		tone === 'earning'
-			? `border-color: ${soft('--success')}; background-color: var(--success-soft);`
-			: tone === 'pending'
-				? `border-color: ${soft('--warning')}; background-color: var(--warning-soft);`
-				: '';
-	const iconBoxStyle = (tone: Tone) =>
-		tone === 'earning'
-			? `background-color: var(--success-soft); color: var(--success); border: 1px solid ${soft('--success')};`
-			: tone === 'pending'
-				? `background-color: var(--warning-soft); color: var(--warning); border: 1px solid ${soft('--warning')};`
-				: `background-color: var(--accent); color: var(--accent-foreground); border: 1px solid ${soft('--primary')};`;
-	const labelStyle = (tone: Tone) =>
-		tone === 'earning' ? 'color: var(--success);' : tone === 'pending' ? 'color: var(--warning);' : '';
-	const valueStyle = (tone: Tone) => (tone === 'earning' ? 'color: var(--success);' : '');
-	const hintStyle = (tone: Tone) =>
-		tone === 'earning'
-			? 'color: var(--success); font-weight: 500;'
-			: tone === 'pending'
-				? 'color: var(--warning); font-weight: 500;'
-				: '';
-
-	// ── Status publikasi (badge + ikon) ──────────────────────────────────────
-	const badgeStyles: Record<string, string> = {
-		published: `background-color: var(--success-soft); color: var(--success); border: 1px solid ${soft('--success')};`,
-		waiting_partner: `background-color: var(--warning-soft); color: var(--warning); border: 1px solid ${soft('--warning')};`,
-		revision: `background-color: var(--warning-soft); color: var(--warning); border: 1px solid ${soft('--warning')};`,
-		partner_approved: `background-color: var(--accent); color: var(--accent-foreground); border: 1px solid ${soft('--primary')};`,
-		partner_rejected: `background-color: ${soft('--destructive')}; color: var(--destructive); border: 1px solid ${soft('--destructive')};`,
-		rejected: `background-color: ${soft('--destructive')}; color: var(--destructive); border: 1px solid ${soft('--destructive')};`,
-		failed: `background-color: ${soft('--destructive')}; color: var(--destructive); border: 1px solid ${soft('--destructive')};`
+	// ── Distribusi status (5 bucket dari publication_counts backend) ─────────
+	type Bucket = {
+		key: string;
+		label: string;
+		count: number;
+		color: string;
+		pct: number;
+		tooltip?: string;
 	};
-	const neutralBadge = `background-color: var(--muted); color: var(--muted-foreground); border: 1px solid var(--border);`;
-	const badgeStyle = (status: string) => badgeStyles[status] ?? neutralBadge;
-
-	const badgeLabels: Record<string, string> = $derived({
-		published: tr('Terbit'),
-		waiting_partner: tr('Menunggu'),
-		revision: tr('Perlu Revisi'),
-		partner_approved: tr('Disetujui'),
-		partner_rejected: tr('Ditolak'),
-		rejected: tr('Ditolak'),
-		failed: tr('Gagal'),
-		queued: tr('Antrean'),
-		processing: tr('Diproses'),
-		retrying: tr('Coba ulang'),
-		cancelled: tr('Dibatalkan')
+	const statusBuckets = $derived.by<Bucket[]>(() => {
+		const c: Record<string, any> = me?.publication_counts ?? {};
+		const g = (keys: string[]) => keys.reduce((sum, k) => sum + (Number(c[k]) || 0), 0);
+		const lainnyaDetail = (['pending', 'revision', 'cancelled', 'partner_rejected'] as const)
+			.map((k) => `${statusName(k)} ${Number(c[k]) || 0}`)
+			.filter((s) => !s.endsWith(' 0'))
+			.join(' · ');
+		const buckets: Omit<Bucket, 'pct'>[] = [
+			{ key: 'menunggu', label: tr('Menunggu'), count: g(['waiting_partner']), color: 'var(--warning)' },
+			{
+				key: 'diproses',
+				label: tr('Diproses'),
+				count: g(['partner_approved', 'queued', 'processing', 'retrying']),
+				color: 'var(--primary)'
+			},
+			{ key: 'terbit', label: tr('Terbit'), count: g(['published']), color: 'var(--success)' },
+			{ key: 'gagal', label: tr('Gagal'), count: g(['failed']), color: 'var(--destructive)' },
+			{
+				key: 'lainnya',
+				label: tr('Lainnya'),
+				count: g(['pending', 'revision', 'cancelled', 'partner_rejected']),
+				color: 'var(--muted-foreground)',
+				tooltip: lainnyaDetail
+			}
+		];
+		const total = buckets.reduce((sum, b) => sum + b.count, 0);
+		return buckets.map((b) => ({ ...b, pct: total > 0 ? (b.count / total) * 100 : 0 }));
 	});
-	const badgeLabel = (status: string) => badgeLabels[status] ?? status;
+	const totalStatusCount = $derived(statusBuckets.reduce((sum, b) => sum + b.count, 0));
+	const statusSegments = $derived(statusBuckets.filter((b) => b.count > 0));
 
-	function pubIcon(status: string) {
-		switch (status) {
-			case 'published':
+	function statusName(status: string): string {
+		const map: Record<string, string> = {
+			pending: tr('Menunggu'),
+			revision: tr('Perlu Revisi'),
+			cancelled: tr('Dibatalkan'),
+			partner_rejected: tr('Ditolak')
+		};
+		return map[status] ?? status;
+	}
+	// "0%" hanya untuk bucket nol; bucket kecil (0<pct<0.5) tetap jelas "<1%".
+	const pctText = (pct: number, count: number) =>
+		count > 0 && Math.round(pct) < 1 ? tr('<1%') : `${Math.round(pct)}%`;
+
+	// ── Aktivitas: notifikasi publikasi/pesan dari backend (tanpa data rekaan) ─
+	function activityIcon(type: string): Component<{ size?: number }> {
+		switch (type) {
+			case 'publication.published':
 				return CircleCheck;
-			case 'waiting_partner':
+			case 'publication.waiting_partner':
 				return Clock;
-			case 'revision':
-				return RotateCcw;
-			case 'partner_approved':
-				return Check;
-			case 'partner_rejected':
-			case 'rejected':
-				return X;
-			case 'failed':
+			case 'publication.failed':
 				return TriangleAlert;
+			case 'publication.revision_requested':
+				return RotateCcw;
+			case 'publication.partner_approved':
+				return Check;
+			case 'publication.partner_rejected':
+				return X;
+			case 'chat.message':
+				return MessageCircle;
 			default:
 				return Megaphone;
 		}
 	}
-	function pubIconBoxStyle(status: string) {
-		if (status === 'published')
-			return `background-color: var(--success-soft); color: var(--success); border: 1px solid ${soft('--success')};`;
-		if (status === 'waiting_partner')
-			return `background-color: var(--warning-soft); color: var(--warning); border: 1px solid ${soft('--warning')};`;
-		if (status === 'revision')
-			return `background-color: var(--warning-soft); color: var(--warning); border: 1px solid ${soft('--warning')};`;
-		if (status === 'partner_approved')
-			return `background-color: var(--accent); color: var(--accent-foreground); border: 1px solid ${soft('--primary')};`;
-		return `background-color: var(--muted); color: var(--muted-foreground); border: 1px solid var(--border);`;
+	function activityIconStyle(type: string): string {
+		if (type === 'publication.published') return 'background: var(--success-soft); color: var(--success);';
+		if (type === 'publication.waiting_partner' || type === 'publication.revision_requested')
+			return 'background: var(--warning-soft); color: var(--warning);';
+		if (type === 'publication.failed' || type === 'publication.partner_rejected')
+			return 'background: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive);';
+		return 'background: var(--accent); color: var(--primary);';
 	}
+
+	function timeAgo(value: string | null | undefined): string {
+		if (!value) return '—';
+		const t = Date.parse(value);
+		if (!Number.isFinite(t)) return '—';
+		const diffMin = Math.floor((Date.now() - t) / 60_000);
+		if (diffMin < 1) return tr('baru saja');
+		if (diffMin < 60) return `${diffMin} ${tr('menit lalu')}`;
+		const hours = Math.floor(diffMin / 60);
+		if (hours < 24) return `${hours} ${tr('jam lalu')}`;
+		const days = Math.floor(hours / 24);
+		if (days <= 7) return `${days} ${tr('hari lalu')}`;
+		return new Date(t).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+	}
+
+	// Soft tint util (dipakai callout error + banner).
+	const soft = (token: string) => `color-mix(in srgb, var(${token}) 26%, transparent)`;
 </script>
 
 <PageTitle title={tr("Ringkasan Mitra")} />
@@ -236,7 +261,7 @@
 </div>
 
 <section class="flex w-full flex-col gap-5">
-	<!-- 1. Header / sambutan (metrik dari mitra-overview.module.css) -->
+	<!-- Header / sambutan -->
 	<header class="flex w-full flex-wrap items-start justify-between gap-4 pt-1 pb-0.5">
 		<div class="flex flex-1 flex-col gap-1">
 			<div class="flex flex-wrap items-center gap-3">
@@ -265,207 +290,188 @@
 
 	{#if error}
 		<div
-			class="rounded-[10px] px-4 py-3 text-[13px]"
+			class="flex flex-wrap items-center justify-between gap-3 rounded-[10px] px-4 py-3 text-[13px]"
 			style="background-color: {soft('--destructive')}; color: var(--destructive); border: 1px solid {soft('--destructive')};"
 		>
-			{error}
+			<span>{error}</span>
+			<button type="button" class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" onclick={() => window.location.reload()}>
+				{tr('Muat ulang')}
+			</button>
 		</div>
 	{/if}
 
 	{#if loading}
-		<p class="text-sm text-muted-foreground">{tr("Memuat ringkasan…")}</p>
+		<!-- Skeleton: bentuk meniru layout final (4 kartu + 2 panel). -->
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+			{#each Array.from({ length: 4 }) as _}
+				<div class="app-card min-h-[138px] animate-pulse" style="background-color: var(--secondary);"></div>
+			{/each}
+		</div>
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+			<div class="app-card min-h-[280px] animate-pulse lg:col-span-2" style="background-color: var(--secondary);"></div>
+			<div class="app-card min-h-[280px] animate-pulse" style="background-color: var(--secondary);"></div>
+		</div>
 	{:else}
-		<!-- 2. Kartu ringkasan (4): media, menunggu, pesan, penghasilan -->
-		<div class="grid grid-cols-1 gap-3.5 md:grid-cols-2 lg:grid-cols-4">
-				<!-- Media Anda -->
-				<div class="app-card flex flex-col justify-between gap-3" style="padding: 16px 18px;">
-					<div class="flex items-center justify-between gap-2">
-						<span class="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">{tr("Media Anda")}</span>
-						<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={iconBoxStyle('neutral')}>
-							<Newspaper size={17} />
+		<!-- 1. Ringkasan statistik — 4 kartu -->
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+			<StatCard
+				label={tr('Media Anda')}
+				value={fmt(me?.media_count ?? 0)}
+				hint={tr('Media Terdaftar')}
+				icon={Newspaper}
+				sparkline={{ values: mediaSeries, stroke: 'var(--primary)', title: tr('Media terdaftar kumulatif, 30 hari terakhir') }}
+			/>
+
+			<StatCard
+				label={tr('Menunggu')}
+				value={fmt(pendingCount)}
+				hint={pendingCount > 0 ? tr('Perlu tindakan segera') : tr('Semua publikasi telah diproses')}
+				tone={pendingCount > 0 ? 'warning' : 'neutral'}
+				icon={Clock}
+				sparkline={{ values: pubSeries, stroke: 'var(--warning)', title: tr('Permintaan artikel masuk per hari, 14 hari terakhir') }}
+			/>
+
+			<StatCard
+				label={tr('Total Penghasilan')}
+				value={rp(totalEarnings)}
+				hint={tr('Penghasilan dari artikel terbit')}
+				tone="success"
+				icon={Wallet}
+				sparkline={{ values: earningSeries, stroke: 'var(--success)', title: tr('Penghasilan kumulatif (nilai aktual per hari), 30 hari terakhir') }}
+			/>
+
+			<StatCard
+				label={tr('Pesan')}
+				value={fmt(chatUnread.count)}
+				hint={chatUnread.count > 0 ? tr('Pesan klien belum dibaca') : tr('Semua pesan klien sudah dibaca')}
+				tone={chatUnread.count > 0 ? 'primary' : 'neutral'}
+				icon={MessageCircle}
+				href={`${base}/chat`}
+			/>
+		</div>
+
+		<!-- 2. Area operasional — Status Publikasi (2/3) + Aktivitas Terbaru (1/3) -->
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+			<section class="app-card flex flex-col overflow-hidden lg:col-span-2">
+				<div class="flex flex-wrap items-start justify-between gap-3 border-b px-5 pt-4 pb-4">
+					<div class="flex items-start gap-3">
+						<div
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
+							style="background-color: var(--accent); color: var(--primary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 20%, transparent);"
+						>
+							<Layers size={17} />
 						</div>
-					</div>
-					<div class="flex items-end justify-between gap-3">
 						<div>
-							<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums" style={valueStyle('neutral')}>{fmt(me?.media_count ?? 0)}</div>
-							<div class="text-[12px] leading-[1.35] text-muted-foreground" style={hintStyle('neutral')}>{tr("Media aktif terdaftar")}</div>
+							<h2 class="m-0 text-[15px] font-semibold tracking-[-0.01em]">{tr('Status Publikasi')}</h2>
+							<p class="m-0 mt-0.5 text-[12.5px] text-muted-foreground">{tr('Ringkasan seluruh artikel Anda saat ini.')}</p>
 						</div>
-						<Sparkline
-							values={mediaSeries}
-							stroke="var(--primary)"
-							title={tr('Media terdaftar kumulatif, 30 hari terakhir')}
-							class="mb-0.5 shrink-0"
-						/>
 					</div>
+					<a
+						class="inline-flex shrink-0 items-center gap-1 rounded-[6px] px-2 py-1 text-[12.5px] font-semibold transition-colors hover:bg-accent"
+						style="color: var(--primary);"
+						href={`${base}/publications`}
+					>
+						{tr('Lihat semua')}
+						<ArrowRight size={13} />
+					</a>
 				</div>
 
-				<!-- Menunggu (alert bila ada tindakan) -->
-				{#if (me?.pending_count ?? 0) > 0}
-					<div class="app-card flex flex-col justify-between gap-3" style="padding: 16px 18px; {cardStyle('pending')}">
-						<div class="flex items-center justify-between gap-2">
-							<span class="text-[11px] font-bold uppercase tracking-[0.05em]" style={labelStyle('pending')}>{tr("Menunggu")}</span>
-							<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={iconBoxStyle('pending')}>
-								<Clock size={17} />
-							</div>
+				<div class="flex flex-1 flex-col justify-center gap-5 px-5 py-5">
+					{#if totalStatusCount === 0}
+						<p class="m-auto text-center text-[13px] text-muted-foreground">{tr('Belum ada publikasi')}</p>
+					{:else}
+						<div
+							class="flex h-2.5 w-full overflow-hidden rounded-full"
+							style="background-color: var(--secondary);"
+							role="img"
+							aria-label={statusBuckets.map((b) => `${b.label} ${b.count}`).join(', ')}
+						>
+							{#each statusSegments as seg (seg.key)}
+								<div
+									style={`width: ${seg.pct}%; background-color: ${seg.color};`}
+									title={`${seg.label}: ${fmt(seg.count)} (${pctText(seg.pct, seg.count)})`}
+								></div>
+							{/each}
 						</div>
-						<div class="flex items-end justify-between gap-3">
-							<div>
-								<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums" style={valueStyle('pending')}>{fmt(me?.pending_count ?? 0)}</div>
-								<div class="text-[12px] leading-[1.35]" style={hintStyle('pending')}>{tr("Perlu tindakan segera")}</div>
-							</div>
-							<Sparkline
-								values={pubSeries}
-								stroke="var(--warning)"
-								title={tr('Permintaan artikel masuk per hari, 14 hari terakhir')}
-								class="mb-0.5 shrink-0"
-							/>
+
+						<div class="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-5">
+							{#each statusBuckets as b, i (b.key)}
+								<div class="flex flex-col gap-1.5 {i > 0 ? 'lg:border-l lg:border-border lg:pl-4' : ''}" title={b.tooltip}>
+									<div class="flex items-baseline gap-2">
+										<span class="h-2 w-2 shrink-0 translate-y-[-1px] rounded-full" style={`background-color: ${b.color};`}></span>
+										<span class="text-[20px] leading-none font-bold tabular-nums">{fmt(b.count)}</span>
+									</div>
+									<span class="flex flex-wrap items-center gap-x-1.5 text-[12px] text-muted-foreground">
+										{b.label}
+										<span class="font-medium" style={`color: ${b.count > 0 ? b.color : 'var(--muted-foreground)'};`}>{pctText(b.pct, b.count)}</span>
+									</span>
+								</div>
+							{/each}
 						</div>
+					{/if}
+				</div>
+			</section>
+
+			<section class="app-card flex flex-col overflow-hidden">
+				<div class="flex flex-wrap items-start justify-between gap-3 border-b px-5 pt-4 pb-4">
+					<div class="flex items-start gap-3">
+						<div
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
+							style="background-color: var(--accent); color: var(--primary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 20%, transparent);"
+						>
+							<Activity size={17} />
+						</div>
+						<div>
+							<h2 class="m-0 text-[15px] font-semibold tracking-[-0.01em]">{tr('Aktivitas Terbaru')}</h2>
+							<p class="m-0 mt-0.5 text-[12.5px] text-muted-foreground">{tr('Pantau aktivitas publikasi dan pesan klien Anda.')}</p>
+						</div>
+					</div>
+					<a
+						class="inline-flex shrink-0 items-center gap-1 rounded-[6px] px-2 py-1 text-[12.5px] font-semibold transition-colors hover:bg-accent"
+						style="color: var(--primary);"
+						href={`${base}/notifications`}
+					>
+						{tr('Lihat semua')}
+						<ArrowRight size={13} />
+					</a>
+				</div>
+
+				{#if activity.length === 0}
+					<div class="flex flex-1 flex-col items-center gap-2.5 px-6 py-12 text-center">
+						<div
+							class="flex h-11 w-11 items-center justify-center rounded-full"
+							style="background-color: var(--accent); color: var(--primary);"
+						>
+							<Activity size={19} />
+						</div>
+						<h3 class="m-0 text-[14px] font-semibold">{tr('Belum ada aktivitas terbaru')}</h3>
+						<p class="m-0 max-w-[260px] text-[12.5px] leading-relaxed text-muted-foreground">
+							{tr('Aktivitas akan muncul di sini setelah ada pembaruan pada publikasi atau pesan.')}
+						</p>
 					</div>
 				{:else}
-					<div class="app-card flex flex-col justify-between gap-3" style="padding: 16px 18px;">
-						<div class="flex items-center justify-between gap-2">
-							<span class="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">{tr("Menunggu")}</span>
-							<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={iconBoxStyle('neutral')}>
-								<Clock size={17} />
-							</div>
-						</div>
-						<div class="flex items-end justify-between gap-3">
-							<div>
-								<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums text-muted-foreground">0</div>
-								<div class="text-[12px] leading-[1.35] text-muted-foreground">{tr("Semua publikasi telah diproses")}</div>
-							</div>
-							<Sparkline
-								values={pubSeries}
-								stroke="var(--warning)"
-								title={tr('Permintaan artikel masuk per hari, 14 hari terakhir')}
-								class="mb-0.5 shrink-0"
-							/>
-						</div>
-					</div>
-				{/if}
-
-				<!-- Total Penghasilan (spotlight) -->
-				<div class="app-card flex flex-col justify-between gap-3" style="padding: 16px 18px; {cardStyle('earning')}">
-					<div class="flex items-center justify-between gap-2">
-						<span class="text-[11px] font-bold uppercase tracking-[0.05em]" style={labelStyle('earning')}>{tr("Total Penghasilan")}</span>
-						<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={iconBoxStyle('earning')}>
-							<Wallet size={17} />
-						</div>
-					</div>
-					<div class="flex items-end justify-between gap-3">
-						<div>
-							<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums" style={valueStyle('earning')}>{rp(totalEarnings)}</div>
-							<div class="text-[12px] leading-[1.35]" style={hintStyle('earning')}>{tr("Penghasilan dari artikel terbit")}</div>
-						</div>
-						<Sparkline
-							values={earningSeries}
-							stroke="var(--success)"
-							title={tr('Penghasilan kumulatif (settled + pending), 30 hari terakhir')}
-							class="mb-0.5 shrink-0"
-						/>
-					</div>
-				</div>
-
-				<!-- Pesan: jumlah chat klien yang belum dibaca (badge di sidebar menu) -->
-				<a
-					class="app-card flex flex-col justify-between gap-3"
-					href={`${base}/chat`}
-					style="padding: 16px 18px; {chatUnread.count > 0 ? cardStyle('pending') : ''}"
-				>
-					<div class="flex items-center justify-between gap-2">
-						<span class="text-[11px] font-bold uppercase tracking-[0.05em]" style={chatUnread.count > 0 ? labelStyle('pending') : 'color: var(--muted-foreground);'}>{tr('Pesan')}</span>
-						<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]" style={chatUnread.count > 0 ? iconBoxStyle('pending') : iconBoxStyle('neutral')}>
-							<MessageCircle size={17} />
-						</div>
-					</div>
-					<div class="flex items-end justify-between gap-3">
-						<div>
-							<div class="my-0.5 text-[24px] leading-[1.15] font-bold tracking-[-0.03em] tabular-nums {chatUnread.count > 0 ? '' : 'text-muted-foreground'}" style={chatUnread.count > 0 ? valueStyle('pending') : ''}>{fmt(chatUnread.count)}</div>
-							<div class="text-[12px] leading-[1.35]" style={chatUnread.count > 0 ? hintStyle('pending') : 'color: var(--muted-foreground);'}>
-								{chatUnread.count > 0 ? tr('Pesan klien belum dibaca') : tr('Semua pesan klien sudah dibaca')}
-							</div>
-						</div>
-					</div>
-				</a>
-		</div>
-
-		<!-- 3. Statistik publikasi -->
-		{#if me?.publication_stats}
-			<div class="grid grid-cols-2 gap-3.5 md:grid-cols-4">
-				<div class="flex flex-col gap-1 rounded-lg border bg-card" style="padding: 14px 16px;">
-					<span class="text-[20px] leading-[1.1] font-bold tabular-nums">{fmt((stats.waiting ?? 0) + (stats.draft_delivered ?? 0))}</span>
-					<span class="text-[12px] text-muted-foreground">{tr("Draf / menunggu tindakan")}</span>
-				</div>
-				<div class="flex flex-col gap-1 rounded-lg border bg-card" style="padding: 14px 16px;">
-					<span class="text-[20px] leading-[1.1] font-bold tabular-nums">{fmt(stats.auto_published ?? 0)}</span>
-					<span class="text-[12px] text-muted-foreground">{tr("Terbit otomatis")}</span>
-				</div>
-				<div class="flex flex-col gap-1 rounded-lg border bg-card" style="padding: 14px 16px;">
-					<span class="text-[20px] leading-[1.1] font-bold tabular-nums">{fmt(stats.failed ?? 0)}</span>
-					<span class="text-[12px] text-muted-foreground">{tr("Gagal")}</span>
-				</div>
-				<div class="flex flex-col gap-1 rounded-lg border bg-card" style="padding: 14px 16px;">
-					<span class="text-[20px] leading-[1.1] font-bold tabular-nums">{fmt(stats.waiting ?? 0)}</span>
-					<span class="text-[12px] text-muted-foreground">{tr("Menunggu")}</span>
-				</div>
-			</div>
-		{/if}
-
-		<!-- 4. Publikasi Terbaru -->
-		<div class="app-card overflow-hidden">
-			<div class="flex flex-wrap items-center justify-between gap-3 border-b" style="padding: 16px 20px 14px;">
-				<div class="flex flex-col gap-0.5">
-					<h2 class="m-0 text-[15px] font-semibold tracking-[-0.015em]">{tr("Publikasi Terbaru")}</h2>
-					<p class="m-0 text-[12.5px] text-muted-foreground">{tr("Riwayat distribusi artikel terbaru untuk media Anda")}</p>
-				</div>
-				<a class="inline-flex items-center gap-1 rounded-[6px] px-2 py-1 text-[12.5px] font-semibold transition-colors hover:bg-accent" style="color: var(--primary);" href={`${base}/publications`}>
-					<span>{tr("Lihat semua")}</span>
-					<ArrowRight size={13} />
-				</a>
-			</div>
-
-			{#if pubError}
-				<p class="px-5 py-8 text-center text-[13px]" style="color: var(--destructive);">{tr("Gagal memuat publikasi terbaru.")}</p>
-			{:else if publications.length === 0}
-				<div class="flex flex-col items-center gap-2 px-5 py-[44px] text-center text-muted-foreground">
-					<Newspaper size={36} />
-					<h3 class="m-0 text-[14px] font-semibold text-foreground">{tr("Belum ada publikasi")}</h3>
-					<p class="m-0 text-[13px] text-muted-foreground">{tr("Publikasi dari klien Tauthub akan muncul di sini setelah tersedia.")}</p>
-				</div>
-			{:else}
-				<div class="flex flex-col">
-					{#each latestPublications as p (p.id)}
-						{@const PubIcon = pubIcon(p.status)}
-						<div class="flex flex-col items-start justify-between gap-2 border-b px-5 py-[13px] transition-colors last:border-b-0 hover:bg-accent sm:flex-row sm:items-center sm:gap-4">
-							<div class="flex min-w-0 items-center gap-3">
-								<div class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px]" style={pubIconBoxStyle(p.status)}>
-									<PubIcon size={18} />
-								</div>
-								<div class="flex min-w-0 flex-col gap-0.5">
-									<div class="line-clamp-2 break-words text-[13.5px] leading-[1.35] font-semibold" title={p.document_title ?? tr('Artikel')}>
-										<span>{p.document_title ?? tr('Artikel')}</span>
-										{#if p.media_name}
-											<span class="font-medium" style="color: var(--primary);"> · {p.media_name}</span>
+					<ul class="flex flex-1 flex-col divide-y divide-border">
+						{#each activity as n (n.id)}
+							{@const NIcon = activityIcon(n.type ?? '')}
+							{@const hrefOf = (n.link as string) || `${base}/publications`}
+							<li>
+								<a href={hrefOf} class="flex items-start gap-3 px-5 py-3.5 transition-colors last:pb-4 hover:bg-accent">
+									<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px]" style={activityIconStyle(n.type ?? '')}>
+										<NIcon size={15} />
+									</div>
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-[13px] font-semibold" title={n.title}>{n.title}</p>
+										{#if typeof n.body === 'string' && n.body}
+											<p class="mt-0.5 truncate text-[11.5px] text-muted-foreground" title={n.body}>{n.body}</p>
 										{/if}
 									</div>
-									<div class="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
-										<span>{p.order_code ?? tr('Tanpa kode')}</span>
-										<span style="color: var(--border);">·</span>
-										<span>{dt(p.created_at)}</span>
-									</div>
-								</div>
-							</div>
-							<div class="flex w-full min-w-0 items-center justify-between gap-3 border-t pt-2 sm:w-auto sm:justify-end sm:border-t-0 sm:pt-0">
-								<span class="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-[3px] text-[12px] font-semibold capitalize" style={badgeStyle(p.status)}>
-									{badgeLabel(p.status)}
-								</span>
-								<span class="shrink-0 text-right text-[13.5px] font-bold tabular-nums">{rp(p.partner_amount ?? 0)}</span>
-							</div>
-						</div>
-					{/each}
-				</div>
-			{/if}
+									<span class="shrink-0 pt-0.5 text-[11px] text-muted-foreground">{timeAgo(n.created_at)}</span>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
 		</div>
-
 	{/if}
 </section>
