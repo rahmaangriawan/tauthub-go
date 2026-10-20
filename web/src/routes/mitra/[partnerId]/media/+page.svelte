@@ -1143,6 +1143,7 @@
 							</span>
 						</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
+						<th class="px-4 py-2.5 font-medium">{tr('Menunggu')}</th>
 						<th class="px-4 py-2.5 text-right font-medium">{tr('Aksi')}</th>
 					</tr>
 				</thead>
@@ -1196,6 +1197,9 @@
 								{@render statusBadges(m)}
 								{@render statusRejection(m)}
 							</td>
+							<td class="px-4 py-2.5">
+								{@render pendingBadge(m)}
+							</td>
 							<td class="px-4 py-2.5 text-right">
 								{@render rowActions(m)}
 							</td>
@@ -1222,6 +1226,7 @@
 									<span class="break-words text-[15px] font-semibold leading-snug">{m.name}</span>
 								{/if}
 								{@render statusBadges(m)}
+								{@render pendingBadge(m)}
 							</div>
 							{#if m.categories.length}
 								<div class="mt-1.5 flex flex-wrap gap-1">
@@ -1534,6 +1539,9 @@
 	<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
 		{statusLabel[m.status] ?? m.status}
 	</span>
+{/snippet}
+
+{#snippet pendingBadge(m: Media)}
 	{#if m.pending_publications > 0}
 		<Tooltip.Provider delayDuration={150}>
 			<Tooltip.Root>
@@ -1542,7 +1550,7 @@
 						<button
 							{...props}
 							type="button"
-							class="ml-1 cursor-help rounded-full px-2 py-0.5 text-[11px] font-medium"
+							class="cursor-help rounded-full px-2 py-0.5 text-[11px] font-medium"
 							style="border: 0; background-color: var(--warning-soft, #fdf3e3); color: var(--warning);"
 						>
 							{m.pending_publications} {tr('menunggu')}
@@ -1557,6 +1565,8 @@
 				</Tooltip.Portal>
 			</Tooltip.Root>
 		</Tooltip.Provider>
+	{:else}
+		<span class="text-[11px] text-muted-foreground">0 {tr('menunggu')}</span>
 	{/if}
 {/snippet}
 
