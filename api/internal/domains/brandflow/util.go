@@ -2,10 +2,13 @@ package brandflow
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -30,6 +33,47 @@ func (d *Deps) saveUpload(storageKey string, data []byte) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, storageKey), data, 0o644)
+}
+
+// uploadKeyFrom: nama berkas ramah-SEO dari petunjuk teks (judul artikel,
+// prompt AI, atau nama asli berkas) + sufiks hash pendek, lalu -2/-3/... bila
+// nama sudah ada di disk. Slug kosong (mis. nama non-latin) → "berkas".
+func (d *Deps) uploadKeyFrom(hint, ext string) string {
+	slug := slugifyPlain(hint)
+	if len(slug) > 60 {
+		slug = strings.Trim(slug[:60], "-")
+	}
+	if slug == "" {
+		slug = "berkas"
+	}
+	suffix := strconv.FormatUint(uint64(fnv32(hint)), 16)
+	if len(suffix) < 8 {
+		suffix = "00000000"[:8-len(suffix)] + suffix
+	}
+	base := slug + "-" + suffix
+	key := base + "." + ext
+	for n := 2; n < 1000; n++ {
+		_, err := os.Stat(filepath.Join(d.uploadDir(), key))
+		if errors.Is(err, fs.ErrNotExist) {
+			return key
+		}
+		if err != nil {
+			// Stat gagal karena hal lain (izin, dsb) — pakai nama hash UUID
+			// supaya berkas tidak mungkin menimpa unggahan lain.
+			return newUUID() + "." + ext
+		}
+		key = base + "-" + strconv.Itoa(n) + "." + ext
+	}
+	return newUUID() + "." + ext
+}
+
+// firstWords: n kata pertama (nama berkas gambar AI dari prompt).
+func firstWords(s string, n int) string {
+	fields := strings.Fields(s)
+	if len(fields) > n {
+		fields = fields[:n]
+	}
+	return strings.Join(fields, " ")
 }
 
 // readAllLimited: baca body multipart dengan batas ukuran.

@@ -150,7 +150,9 @@ func (d *Deps) chargePackageCredits(ctx context.Context, brandID string, amount 
 // storeGeneratedImage: kompres ke WebP lossy (bila memungkinkan) lalu tulis
 // ke UPLOAD_DIR; kembalikan URL publik /uploads/<file>. Gambar AI 1600px bisa
 // 1-1,5 MB bila hanya di-encode lossless — lossy memangkasnya sekitar 10x.
-func (d *Deps) storeGeneratedImage(result *ai.ImageResult) (string, error) {
+// hint = sumber nama berkas: judul artikel (cover), potongan prompt (inline),
+// atau nama asli berkas (unggahan manual).
+func (d *Deps) storeGeneratedImage(result *ai.ImageResult, hint string) (string, error) {
 	payload := result.Data
 	mime := result.MimeType
 	if mime == "" {
@@ -166,7 +168,7 @@ func (d *Deps) storeGeneratedImage(result *ai.ImageResult) (string, error) {
 			ext = "webp"
 		}
 	}
-	key := uuid.NewString() + "." + ext
+	key := d.uploadKeyFrom(hint, ext)
 	if err := d.saveUpload(key, payload); err != nil {
 		return "", err
 	}
@@ -318,7 +320,12 @@ func (d *Deps) ArticleImageGenerate(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
-	url, err := d.storeGeneratedImage(result)
+	// Cover memakai judul artikel; gambar isi memakai 4 kata pertama prompt.
+	nameHint := firstWords(prompt, 4)
+	if role == "cover" && strings.TrimSpace(heading) != "" {
+		nameHint = heading
+	}
+	url, err := d.storeGeneratedImage(result, nameHint)
 	if err != nil {
 		ai.RecordImageEvent(r.Context(), d.Pool, ai.ImageEvent{
 			Kind: "generation", Status: "failed",
@@ -484,12 +491,17 @@ func (d *Deps) ArticleImageUpload(w http.ResponseWriter, r *http.Request) {
 		finalWidth, finalHeight = 0, 0
 	}
 
+	// Unggahan manual: nama asli berkas dipertahankan (spasi → strip).
+	manualHint := filename
+	if i := strings.LastIndex(manualHint, "."); i > 0 {
+		manualHint = manualHint[:i]
+	}
 	storedURL, storeErr := d.storeGeneratedImage(&ai.ImageResult{
 		Data:     finalBytes,
 		MimeType: finalMime,
 		Width:    finalWidth,
 		Height:   finalHeight,
-	})
+	}, manualHint)
 	if storeErr != nil {
 		d.writeErr(w, storeErr)
 		return

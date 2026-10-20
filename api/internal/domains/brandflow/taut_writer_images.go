@@ -106,7 +106,7 @@ func (d *Deps) resolveTautInlineImages(ctx context.Context, brandID, campaignID,
 			})
 			return ""
 		}
-		url, err := d.storeGeneratedImage(res)
+		url, err := d.storeGeneratedImage(res, firstWords(brief, 4))
 		if err != nil {
 			warnings = append(warnings, "gagal menyimpan gambar \""+brief+"\": "+err.Error())
 			return ""

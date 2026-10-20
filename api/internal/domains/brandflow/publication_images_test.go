@@ -44,6 +44,40 @@ func TestPeInlineImageNameUnikDanStabil(t *testing.T) {
 	}
 }
 
+func TestUploadKeyFromNamaRamahSEO(t *testing.T) {
+	d := peTestDeps(t)
+
+	cover := d.uploadKeyFrom("Panduan Lengkap Kopi Arabika", "webp")
+	if !strings.HasPrefix(cover, "panduan-lengkap-kopi-arabika-") || !strings.HasSuffix(cover, ".webp") {
+		t.Fatalf("judul harus jadi slug berstrip: %s", cover)
+	}
+
+	manual := d.uploadKeyFrom("Foto Produk 2026", "png")
+	if !strings.HasPrefix(manual, "foto-produk-2026-") {
+		t.Fatalf("nama asli harus dipertahankan: %s", manual)
+	}
+
+	if got := d.uploadKeyFrom("", "webp"); !strings.HasPrefix(got, "berkas-") {
+		t.Fatalf("hint kosong harus pakai awalan tetap: %s", got)
+	}
+
+	// Nama sama dua kali tidak boleh saling menimpa.
+	first := d.uploadKeyFrom("judul sama", "webp")
+	peWriteUpload(t, d, first, []byte("x"))
+	if second := d.uploadKeyFrom("judul sama", "webp"); second == first {
+		t.Fatalf("nama berkas bentrok: %s", second)
+	}
+}
+
+func TestFirstWordsBatasKata(t *testing.T) {
+	if got := firstWords("ilustrasi kopi hangat di pagi hari", 4); got != "ilustrasi kopi hangat di" {
+		t.Fatalf("harus 4 kata pertama: %q", got)
+	}
+	if got := firstWords("kopi", 4); got != "kopi" {
+		t.Fatalf("teks pendek harus utuh: %q", got)
+	}
+}
+
 func TestPeIsUploadImageRef(t *testing.T) {
 	cases := []struct {
 		value string

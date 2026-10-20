@@ -164,7 +164,13 @@ func (d *Deps) AssetsUpload(w http.ResponseWriter, r *http.Request) {
 			"Tipe berkas tidak didukung. Izinkan: gambar (PNG/JPEG/WebP/GIF/BMP), PDF, atau TXT.")
 		return
 	}
-	filenameOut := newUUID() + "." + ext
+	// Unggahan manual (bukan AI) mempertahankan nama asli berkas — hanya spasi
+	// dan karakter non-alfanumerik yang diubah jadi strip.
+	hint := filename
+	if i := strings.LastIndex(hint, "."); i > 0 {
+		hint = hint[:i]
+	}
+	filenameOut := d.uploadKeyFrom(hint, ext)
 	if err := d.saveUpload(filenameOut, payload); err != nil {
 		d.writeErr(w, err)
 		return
