@@ -43,6 +43,9 @@
 				try {
 					window.turnstile.render(container, {
 						sitekey: siteKey,
+						// Tema terang mengikuti halaman auth; default "auto" ikut dark
+						// mode OS pengguna sehingga widget jadi hitam.
+						theme: 'light',
 						callback: (token: string) => onToken(token),
 						'expired-callback': () => onExpire(),
 						'error-callback': () => onExpire()
