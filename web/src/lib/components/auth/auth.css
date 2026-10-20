@@ -55,10 +55,10 @@
    berada di atas gambar (z-index), gambar tidak menangkap klik. */
 .auth-illustration {
   position: absolute;
-  right: -16px;
-  bottom: 56px;
+  right: -28px;
+  bottom: 28px;
   z-index: 0;
-  width: min(38%, 400px);
+  width: min(48%, 500px);
   height: auto;
   pointer-events: none;
   user-select: none;
@@ -656,7 +656,7 @@
   .auth { grid-template-columns: 0.85fr 1fr; }
   .auth-marketing { padding: 34px 32px; }
   .auth-headline { font-size: clamp(26px, 3.4vw, 32px); }
-  .auth-illustration { width: 34%; right: -12px; bottom: 40px; }
+  .auth-illustration { width: 42%; right: -18px; bottom: 24px; }
 }
 
 @media (max-width: 768px) {
