@@ -343,7 +343,9 @@
 	// ── Harga kolom tabel media = pendapatan bersih (potongan platform),
 	//    sama seperti halaman Publikasi; klik membuka rincian. ────────────
 	let openPriceID = $state<string | null>(null);
-	const netPrice = (v: number) => Math.max(Math.round((Number(v) || 0) * 0.95), 0);
+	// Potongan platform 25% (mitra menerima 75% dari harga pengajuan) — parity
+	// brandflow pePlatformCutRate = 0.25 yang berlaku untuk earning baru.
+	const netPrice = (v: number) => Math.max(Math.round((Number(v) || 0) * 0.75), 0);
 	const priceCut = (v: number) => Math.max((Number(v) || 0) - netPrice(v), 0);
 
 	/** Ringkasan status verifikasi satu media — tooltip wrapper sel tabel. */
@@ -1412,7 +1414,7 @@
 						<dd>{rp(m.price)}</dd>
 					</div>
 					<div class="flex items-center justify-between gap-3" style="color: var(--destructive, #d92d20);">
-						<dt>{tr('Potongan platform')} (5%)</dt>
+						<dt>{tr('Potongan platform')} (25%)</dt>
 						<dd>−{rp(cut)}</dd>
 					</div>
 					<div class="flex items-center justify-between gap-3 border-t pt-1.5 font-semibold" style="border-color: var(--border); color: var(--success);">
