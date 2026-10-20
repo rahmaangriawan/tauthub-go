@@ -316,7 +316,7 @@
 />
 
 <h1 class="auth-title">
-	{challenge ? tr('Verifikasi dua langkah') : mode === 'login' ? tr('Selamat datang kembali') : tr('Buat akun Tauthub')}
+	{challenge ? tr('Verifikasi Dua Langkah') : mode === 'login' ? tr('Selamat Datang Kembali') : tr('Buat Akun Tauthub')}
 </h1>
 <p class="auth-subtitle">
 	{challenge
@@ -457,10 +457,16 @@
 			{/if}
 		</label>
 
-		<label class="auth-field">
-			<span class="auth-label">{tr("Password")}</span>
+		<div class="auth-field">
+			<div class="auth-field-head">
+				<label class="auth-label" for="auth-password">{tr("Password")}</label>
+				{#if mode === 'login'}
+					<a class="auth-link" href="/forgot-password">{tr("Lupa password?")}</a>
+				{/if}
+			</div>
 			<span class="auth-input-wrap">
 				<input
+					id="auth-password"
 					class="auth-input has-affix"
 					type={showPassword ? 'text' : 'password'}
 					bind:value={password}
@@ -485,14 +491,7 @@
 			{:else if mode === 'register'}
 				<p class="auth-helper">{tr("Minimal 10 karakter.")}</p>
 			{/if}
-		</label>
-
-		{#if mode === 'login'}
-			<div class="auth-row-between">
-				<span></span>
-				<a class="auth-link" href="/forgot-password">{tr("Lupa password?")}</a>
-			</div>
-		{/if}
+		</div>
 	{/if}
 
 	{#if error}
