@@ -1288,7 +1288,7 @@
 				</div>
 
 				<div class="advFilterSection">
-					<span class="advFilterSectionLabel">{tr("Secure Direct")}</span>
+					<span class="advFilterSectionLabel">{tr("Mode Publikasi")}</span>
 					<div class="advFilterToggleRow">
 						<label class="advFilterToggle" title={tr("Artikel dari klien langsung diterbitkan ke media tanpa persetujuan manual Mitra.")}>
 							<input type="checkbox" bind:checked={autoPublishOnly} onchange={() => (page_ = 1)} />

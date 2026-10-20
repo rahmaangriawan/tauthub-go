@@ -2274,6 +2274,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Mitra:": "Partner:",
   "Mode Integrasi": "Integration Mode",
   "Mode Manual": "Manual Mode",
+  "Mode Publikasi": "Publication Mode",
   "Mode Otomatis": "Automatic Mode",
   "Mode manual — unggah artikel tulisanmu sendiri untuk tiap media.": "Manual mode — upload your own written article for each outlet.",
   "Harga diajukan": "Submitted price",
