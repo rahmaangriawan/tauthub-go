@@ -12,7 +12,7 @@
   --auth-border: #e2e5e9;
   --auth-soft: #eff6ff;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1.12fr;
   min-height: 100vh;
   background: #ffffff;
   color: var(--auth-text);
@@ -98,7 +98,7 @@
   padding: 48px 32px;
   background: #ffffff;
 }
-.auth-form-inner { width: 100%; max-width: 380px; }
+.auth-form-inner { width: 100%; max-width: 440px; }
 
 /* Logo di mobile: panel kiri disembunyikan (brief §10). */
 .auth-mobile-brand { display: none; }
