@@ -17,7 +17,7 @@
 
 	type Pub = {
 		id: string; order_code: string | null; status: string; client_name: string | null;
-		document_title: string | null; document_id: string; media_name: string | null;
+		document_title: string | null; document_id: string; media_id: string; media_name: string | null;
 		media_category: string | null; media_integration_type: string | null;
 		media_publication_mode: string | null; client_price: number; partner_amount: number;
 		partner_amount_gross?: number; partner_cut_percent?: number;
@@ -259,6 +259,41 @@
 	function ensureCatOption(current: string) {
 		const v = (current ?? '').trim();
 		if (v && !catOptions.includes(v)) catOptions = [v, ...catOptions];
+	}
+
+	// Tambah kategori baru dari dalam dropdown Kategori: dieksekusi ke katalog
+	// kategori media mitra (PUT media.categories) supaya dapat dipakai ulang di
+	// semua halaman dan ikut sinkron ke sistem integrasi saat artikel terbit.
+	let catNewInput = $state('');
+	let catNewBusy = $state(false);
+
+	async function addCategory() {
+		const v = catNewInput.trim();
+		if (!v || catNewBusy || !draftPub?.media_id) return;
+		catNewBusy = true;
+		try {
+			// Kategori milik media dulu (list lengkap — PUT bersifat replace).
+			const cur = await apiRequest(`/v1/partner/media/${draftPub.media_id}`);
+			const existing: string[] = cur.ok ? ((await cur.json())?.categories ?? []) : [];
+			const target = existing.some((c) => c.trim().toLowerCase() === v.toLowerCase())
+				? existing
+				: [...existing, v];
+			const res = await apiRequest(`/v1/partner/media/${draftPub.media_id}`, {
+				method: 'PUT',
+				body: JSON.stringify({ categories: target })
+			});
+			if (!res.ok) {
+				error = await readApiError(res, tr('Gagal menambah kategori.'));
+				return;
+			}
+			ensureCatOption(v);
+			draft.category = v;
+			catNewInput = '';
+			notice = tr('Kategori baru tersimpan dan siap dipakai.');
+			await load();
+		} finally {
+			catNewBusy = false;
+		}
 	}
 
 	/** Editor draf — modal terpisah (parity tombol "Edit" app lama). */
@@ -1737,7 +1772,24 @@
 										: [(draft.category ?? ''), ...catOptions]).map((c) => ({ value: c, label: c }))}
 									bind:value={draft.category}
 									onchange={() => ensureCatOption(draft.category ?? '')}
-								/>
+								>
+									{#snippet footer()}
+										<div class="flex items-center gap-1.5 p-2 pt-1">
+											<input
+												class="app-input min-w-0 flex-1 !py-1.5 !text-xs"
+												bind:value={catNewInput}
+												placeholder={tr('Kategori baru…')}
+												onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addCategory(); } }}
+											/>
+											<button
+												type="button"
+												class="app-btn app-btn-primary !min-h-7 !px-2 !text-xs shrink-0"
+												disabled={catNewBusy || !(catNewInput ?? '').trim()}
+												onclick={() => void addCategory()}
+											>{catNewBusy ? tr('Menyimpan…') : tr('Tambah')}</button>
+										</div>
+									{/snippet}
+								</Select>
 							{/if}
 						</span>
 							{#if coverError}<p class="mt-1 text-xs" style="color: var(--destructive);">{coverError}</p>{/if}

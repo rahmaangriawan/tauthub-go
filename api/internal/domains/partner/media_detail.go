@@ -593,8 +593,21 @@ func (d *Deps) MediaCategories(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := d.queryRows(r.Context(),
-		"SELECT DISTINCT category FROM media WHERE category IS NOT NULL AND TRIM(category) <> '' AND partner_id = $1 ORDER BY category ASC",
+	// Gabungan: field legacy m.category + katalog media_categories yang
+	// tersambung ke media mitra lewat media_category_links. Hasilnya daftar
+	// opsi kategori selalu memuat kategori yang ditambahkan mitra (mis. lewat
+	// editor draf atau popover kelola kategori), supaya bisa dipakai ulang.
+	rows, err := d.queryRows(r.Context(), `
+		SELECT name FROM (
+			SELECT m.category AS name FROM media m
+			WHERE m.category IS NOT NULL AND TRIM(m.category) <> '' AND m.partner_id = $1
+			UNION
+			SELECT c.name FROM media_category_links l
+			JOIN media_categories c ON c.id = l.category_id
+			JOIN media m ON m.id = l.media_id
+			WHERE m.partner_id = $1
+		) cat_names
+		ORDER BY name ASC`,
 		partner.ID)
 	if err != nil {
 		d.writeErr(w, err)
@@ -602,7 +615,9 @@ func (d *Deps) MediaCategories(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]string, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, row.strOr("category", ""))
+		if name := row.strOr("name", ""); name != "" {
+			out = append(out, name)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"categories": out})
 }

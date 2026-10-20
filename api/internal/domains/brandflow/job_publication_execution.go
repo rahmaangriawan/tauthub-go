@@ -460,6 +460,7 @@ func (d *Deps) pePublishViaTulisioAPI(ctx context.Context, jobID string, publica
 			"excerpt": document.raw("meta_description"), "meta_title": document.raw("meta_title"),
 			"meta_description": document.raw("meta_description"), "language": document.raw("language"),
 			"primary_keyword": document.raw("primary_keyword"),
+			"category": strings.TrimSpace(publication.strOr("category_override", "")),
 		},
 		"media": map[string]any{
 			"id": media.raw("id"), "name": media.raw("name"),
@@ -611,7 +612,12 @@ func (d *Deps) peRunCustomWeb(ctx context.Context, publication, media, document,
 	_, html := d.peRenderedHTML(version, publicOrigin)
 	excerpt := truncateString(document.strOr("meta_description", ""), 500)
 	slug := document.strOr("slug", "")
-	categoryName := strings.TrimSpace(media.strOr("category", ""))
+	// Kategori pilihan mitra (dari pengeditan draf) yang lebih dulu memasuki
+	// payload protokol Publisher — plugin target membuat/melampirkan kategori.
+	categoryName := strings.TrimSpace(publication.strOr("category_override", ""))
+	if categoryName == "" {
+		categoryName = strings.TrimSpace(media.strOr("category", ""))
+	}
 	categorySlug := ""
 	if categoryName != "" {
 		categorySlug = strings.ToLower(strings.Join(strings.Fields(categoryName), "-"))
@@ -895,7 +901,11 @@ func (d *Deps) peRunBlogger(ctx context.Context, publication, media, document, v
 	_, html := d.peRenderedHTML(version, publicOrigin)
 	isDraftMode := publication.strOr("publish_status", "draft") == "draft"
 	var labels []string
-	if category := strings.TrimSpace(media.strOr("category", "")); category != "" {
+	// Label Blogger: kategori pilihan mitra lebih dulu, fallback ke kategori
+	// media. Blogger memakai label bebas — kategori baru "tampil" seketika.
+	if category := strings.TrimSpace(publication.strOr("category_override", "")); category != "" {
+		labels = []string{category}
+	} else if category := strings.TrimSpace(media.strOr("category", "")); category != "" {
 		labels = []string{category}
 	}
 	postTitle := document.strOr("title", "")
@@ -1247,8 +1257,12 @@ func (d *Deps) peRunCMS(ctx context.Context, publication, media, document, versi
 	if err := d.exec(ctx, "UPDATE publication_jobs SET progress = 30 WHERE id = $1", jobID); err != nil {
 		return err
 	}
+	// Kategori yang dipilih mitra saat mengedit draf (category_override)
+	// jadi prioritas: artikel masuk kategori tersebut di sistem target,
+	// term dibuat otomatis bila belum ada (WordPress).
+	preferredCategory := strings.TrimSpace(publication.strOr("category_override", ""))
 	if integrationType == "wordpress" {
-		if err := d.peResolveWordPressDefaults(ctx, connection, media, document, snapshot, defaults, secret, jobID); err != nil {
+		if err := d.peResolveWordPressDefaults(ctx, connection, media, document, snapshot, defaults, secret, jobID, preferredCategory); err != nil {
 			return d.peFailDelivery(ctx, publication, jobID, err, startedAt, terminal)
 		}
 	} else {
@@ -1276,7 +1290,7 @@ func (d *Deps) peRunCMS(ctx context.Context, publication, media, document, versi
 		publishErr = d.pePublishToEmdash(ctx, jobID, connection.strOr("base_url", ""), secret,
 			jobRecord.strOr("remote_post_id", ""), document, html,
 			publication.strOr("publish_status", "draft"),
-			bsStringifyAny(defaults["featured_image_url"]), snapshot)
+			bsStringifyAny(defaults["featured_image_url"]), preferredCategory, snapshot)
 	default:
 		publishErr = d.bsPublishToWordpress(ctx, jobID, connection, jobRecord, document, snapshot, secret, html)
 	}
@@ -1291,7 +1305,7 @@ func (d *Deps) peRunCMS(ctx context.Context, publication, media, document, versi
 
 // peResolveWordPressDefaults: resolve kategori/tag + upload featured image
 // sekali, simpan hasil di payload_snapshot.resolved agar retry tidak mengulang.
-func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media, document bsRow, snapshot, defaults map[string]any, secret, jobID string) error {
+func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media, document bsRow, snapshot, defaults map[string]any, secret, jobID, preferredCategory string) error {
 	headers := peWPAuthHeaders(connection.strOr("username", ""), secret)
 	baseURL := connection.strOr("base_url", "")
 	resolvedSoFar, _ := snapshot["resolved"].(map[string]any)
@@ -1310,8 +1324,8 @@ func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media
 	if arr, isArr := resolved["categories"].([]any); isArr {
 		resolvedCategoryCount = len(arr)
 	}
-	needsCategories := (hasMediaCategory || len(peNameList(defaults["categories"])) > 0) && resolvedCategoryCount == 0
-	shouldResolve := (!hasResolved && len(defaults) > 0) || needsFeatured || needsCategories || (!hasResolved && hasMediaCategory)
+	needsCategories := (hasMediaCategory || len(peNameList(defaults["categories"])) > 0 || preferredCategory != "") && resolvedCategoryCount == 0
+	shouldResolve := (!hasResolved && len(defaults) > 0) || needsFeatured || needsCategories || (!hasResolved && (hasMediaCategory || preferredCategory != ""))
 	if !shouldResolve {
 		if author, ok := defaults["author_id"]; ok {
 			snapshot["author_id"] = peNumFromAny(author)
@@ -1326,6 +1340,16 @@ func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media
 	if len(categoryNames) == 0 && hasMediaCategory {
 		categoryNames = append(categoryNames, strings.TrimSpace(media.strOr("category", "")))
 	}
+	// Kategori pilihan mitra (dari pengeditan draf) diutamakan di urutan depan.
+	if preferredCategory != "" {
+		existing := categoryNames
+		categoryNames = []string{preferredCategory}
+		for _, n := range existing {
+			if n != preferredCategory {
+				categoryNames = append(categoryNames, n)
+			}
+		}
+	}
 	tagNames := peNameList(defaults["tags"])
 	if len(categoryNames) > 0 && (!hasResolved || needsCategories) {
 		ids := peIntListAny(peResolveTermIDs(ctx, baseURL, headers, categoryNames, "categories", create))
@@ -1333,7 +1357,7 @@ func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media
 			resolved["categories"] = ids
 		} else if skipCategories := false; !skipCategories {
 			d.peRecordWarning(ctx, jobID, []string{
-				"Kategori media (" + strings.Join(categoryNames, ", ") + ") tidak berhasil dipetakan di WordPress, artikel bisa terbit tanpa kategori.",
+				"Kategori (" + strings.Join(categoryNames, ", ") + ") tidak berhasil dipetakan di WordPress, artikel bisa terbit tanpa kategori.",
 			})
 		}
 	}

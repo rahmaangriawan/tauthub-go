@@ -266,7 +266,7 @@ func TestEmdashContentPayloadDanDialect(t *testing.T) {
 	blocks := []map[string]any{{"_type": "block", "style": "normal"}}
 	featured := map[string]any{"provider": "local", "id": "media-1"}
 
-	data := emdashContentPayload(document, blocks, featured)
+	data := emdashContentPayload(document, blocks, featured, "")
 	if _, ok := data["slug"]; ok {
 		t.Fatalf("slug tidak boleh ada di dalam data: %v", data)
 	}
@@ -276,7 +276,7 @@ func TestEmdashContentPayloadDanDialect(t *testing.T) {
 	if bsStringifyAny(data["featured_image"].(map[string]any)["id"]) != "media-1" {
 		t.Fatalf("featured_image tidak terpasang: %v", data)
 	}
-	if _, ok := emdashContentPayload(document, blocks, nil)["featured_image"]; ok {
+	if _, ok := emdashContentPayload(document, blocks, nil, "")["featured_image"]; ok {
 		t.Fatal("tanpa cover, featured_image tidak boleh dikirim")
 	}
 
@@ -359,7 +359,7 @@ func TestHtmlToPortableTextPakaiRefSetelahRewrite(t *testing.T) {
 func TestEmdashWriteEnvelopeBisaDiMarshal(t *testing.T) {
 	data := emdashContentPayload(bsRow{"title": "T", "slug": "t"}, []map[string]any{
 		{"_type": "image", "_key": "img-1", "asset": map[string]any{"_ref": "m-1", "url": "/x.webp"}},
-	}, map[string]any{"provider": "local", "id": "m-1"})
+	}, map[string]any{"provider": "local", "id": "m-1"}, "")
 	raw, err := json.Marshal(emdashWriteEnvelope(data, "t", "", emdashDialect{modern: true}))
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)

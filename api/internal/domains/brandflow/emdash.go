@@ -140,7 +140,7 @@ func emdashSlug(document bsRow) string {
 
 // emdashContentPayload: data item untuk koleksi posts. slug tidak ikut di sini
 // karena tata letak modern menaruh slug di envelope, dan field asing ditolak.
-func emdashContentPayload(document bsRow, blocks []map[string]any, featured map[string]any) map[string]any {
+func emdashContentPayload(document bsRow, blocks []map[string]any, featured map[string]any, category string) map[string]any {
 	data := map[string]any{
 		"title":   document.strOr("title", ""),
 		"content": blocks,
@@ -151,16 +151,24 @@ func emdashContentPayload(document bsRow, blocks []map[string]any, featured map[
 	if featured != nil {
 		data["featured_image"] = featured
 	}
+	// Kategori artikel (pilihan mitra atau kategori media). Responsibility
+	// pembuatan/e-kategori di sisi EmDash; bila skema koleksi mitra tidak punya
+	// field kategori, field ini ikut dilepas lewat emdashFieldCandidates.
+	if c := strings.TrimSpace(category); c != "" {
+		data["category"] = c
+	}
 	return data
 }
 
 // emdashFieldCandidates: urutan field opsional yang dicoba dilepas bila EmDash
 // menolak suatu field karena tidak ada di skema koleksi mitra — dari yang paling
-// tidak penting (gambar utama) sampai excerpt.
+// tidak penting (gambar utama) sampai excerpt, dan kategori paling terakhir
+// (kategori adalah bagian dari perilaku "buat otomatis di sistem target").
 func emdashFieldCandidates(data map[string]any) []map[string]bool {
 	candidates := []map[string]bool{{}}
 	hasFeatured := data["featured_image"] != nil
 	_, hasExcerpt := data["excerpt"]
+	hasCategory := data["category"] != nil
 	if hasFeatured {
 		candidates = append(candidates, map[string]bool{"featured_image": true})
 	}
@@ -168,6 +176,20 @@ func emdashFieldCandidates(data map[string]any) []map[string]bool {
 		candidates = append(candidates, map[string]bool{"excerpt": true})
 		if hasFeatured {
 			candidates = append(candidates, map[string]bool{"excerpt": true, "featured_image": true})
+		}
+	}
+	if hasCategory {
+		if hasFeatured {
+			candidates = append(candidates, map[string]bool{"category": true, "featured_image": true})
+		} else {
+			candidates = append(candidates, map[string]bool{"category": true})
+		}
+		if hasExcerpt {
+			if hasFeatured {
+				candidates = append(candidates, map[string]bool{"category": true, "excerpt": true, "featured_image": true})
+			} else {
+				candidates = append(candidates, map[string]bool{"category": true, "excerpt": true})
+			}
 		}
 	}
 	return candidates
@@ -302,7 +324,7 @@ func emdashPublishItem(ctx context.Context, baseURL, secret, collection, remoteI
 //
 // Gambar badan artikel diunggah ke media library EmDash lalu dikonversi menjadi
 // blok Portable Text; cover diunggah dan dikirim sebagai featured_image.
-func (d *Deps) pePublishToEmdash(ctx context.Context, jobID, baseURL, secret, remotePostID string, document bsRow, html, publishStatus, coverURL string, snapshot map[string]any) error {
+func (d *Deps) pePublishToEmdash(ctx context.Context, jobID, baseURL, secret, remotePostID string, document bsRow, html, publishStatus, coverURL, category string, snapshot map[string]any) error {
 	if strings.TrimSpace(baseURL) == "" {
 		return pePublishErr("EMDASH_NO_BASE_URL", "Base URL koneksi EmDash belum diisi.")
 	}
@@ -346,7 +368,7 @@ func (d *Deps) pePublishToEmdash(ctx context.Context, jobID, baseURL, secret, re
 	}
 
 	blocks := htmlToPortableText(rewritten, peEmdashImageRefs(cache))
-	data := emdashContentPayload(document, blocks, featured)
+	data := emdashContentPayload(document, blocks, featured, category)
 	slug := emdashSlug(document)
 
 	if err := d.exec(ctx, "UPDATE publication_jobs SET status = 'running', attempts = attempts + 1, progress = 70 WHERE id = $1", jobID); err != nil {
