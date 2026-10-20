@@ -82,6 +82,30 @@
   filter: brightness(0) invert(1);
 }
 
+/* Copy di bagian bawah kartu foto, di atas overlay. */
+.auth-media-copy {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 28px;
+  z-index: 1;
+  color: #ffffff;
+}
+.auth-media-copy h2 {
+  margin: 0;
+  font-size: clamp(28px, 2.8vw, 40px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+.auth-media-copy p {
+  margin: 12px 0 0;
+  max-width: 40ch;
+  font-size: 20px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.84);
+}
+
 /* Focus ring konsisten dengan kontrol lain (bukan outline bawaan browser). */
 .auth-brand:focus-visible,
 .auth-mobile-brand:focus-visible {

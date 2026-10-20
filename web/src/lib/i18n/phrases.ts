@@ -587,6 +587,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Sembunyikan detail": "Hide details",
   "Sembunyikan password": "Hide password",
   "Semua artikel sudah punya hasil pemindaian — tidak ada yang dipindai ulang.": "Every article already has scan results — nothing was rescanned.",
+  "Semua Publikasi, Satu Kendali.": "Every Publication, One Control Center.",
+  "Pantau proses distribusi dan status artikel tanpa berpindah platform.": "Track distribution progress and article status without switching platforms.",
   "Semua hard gate lulus untuk seluruh media terpilih.": "All hard gates passed for every selected media.",
   "Semua link aman": "All links are safe",
   "Semua media sudah memiliki artikel — generate tidak diperlukan.": "Every media already has an article — no generation needed.",

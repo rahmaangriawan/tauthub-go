@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
 	// Shell authentication split-screen — panel kiri foto penuh, panel kanan
 	// form. Panel kiri murni visual dan disembunyikan di mobile (logo di atas form).
 	import type { Snippet } from 'svelte';
@@ -20,6 +22,11 @@
 			<a class="auth-brand" href="/login" aria-label="Tauthub">
 				<img src="/tauthub-logo.webp" alt="Tauthub" width="130" height="34" class="auth-brand-logo" />
 			</a>
+
+			<div class="auth-media-copy">
+				<h2>{tr("Semua Publikasi, Satu Kendali.")}</h2>
+				<p>{tr("Pantau proses distribusi dan status artikel tanpa berpindah platform.")}</p>
+			</div>
 		</div>
 	</aside>
 
