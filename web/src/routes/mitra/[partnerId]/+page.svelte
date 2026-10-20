@@ -481,7 +481,7 @@
 					</div>
 					<div class="min-w-0 flex-1 pr-16">
 						<h2 class="m-0 text-[15px] font-semibold tracking-[-0.01em]">{tr('Aktivitas Terbaru')}</h2>
-						<p class="m-0 mt-0.5 text-[12.5px] text-muted-foreground">{tr('Pantau aktivitas publikasi dan pesan klien Anda.')}</p>
+						<p class="m-0 mt-0.5 text-[12.5px] text-muted-foreground">{tr('Pantau publikasi dan klien Anda.')}</p>
 					</div>
 					<a
 						class="absolute right-5 top-[17px] inline-flex shrink-0 items-center gap-1 rounded-[6px] px-2 py-1 text-[12.5px] font-semibold transition-colors hover:bg-accent"
