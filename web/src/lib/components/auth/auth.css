@@ -51,20 +51,7 @@
   border: 1px solid rgba(37, 99, 235, 0.07);
 }
 
-/* Ilustrasi dekoratif di sisi kanan panel marketing. Teks tetap di kiri dan
-   berada di atas gambar (z-index), gambar tidak menangkap klik. */
-.auth-illustration {
-  position: absolute;
-  right: 4px;
-  bottom: 92px;
-  z-index: 0;
-  width: min(48%, 500px);
-  height: auto;
-  pointer-events: none;
-  user-select: none;
-}
-
-/* Lapisan teks di atas ilustrasi. */
+/* Teks marketing tetap di lapisan atas elemen dekoratif. */
 .auth-brand,
 .auth-marketing-body,
 .auth-caption {
@@ -656,7 +643,6 @@
   .auth { grid-template-columns: 0.85fr 1fr; }
   .auth-marketing { padding: 34px 32px; }
   .auth-headline { font-size: clamp(26px, 3.4vw, 32px); }
-  .auth-illustration { width: 42%; right: 12px; bottom: 76px; }
 }
 
 @media (max-width: 768px) {

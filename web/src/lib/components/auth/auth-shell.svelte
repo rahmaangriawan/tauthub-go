@@ -12,13 +12,6 @@
 <div class="auth">
 	<aside class="auth-marketing">
 		<div class="auth-arc" aria-hidden="true"></div>
-		<img
-			src="/img/auth-publishing.webp"
-			alt=""
-			aria-hidden="true"
-			class="auth-illustration"
-			decoding="async"
-		/>
 
 		<a class="auth-brand" href="/login" aria-label="Tauthub">
 			<img src="/tauthub-logo.webp" alt="Tauthub" width="130" height="34" class="auth-brand-logo" />
