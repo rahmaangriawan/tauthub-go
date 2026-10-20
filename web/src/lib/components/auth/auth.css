@@ -51,17 +51,9 @@
   border: 1px solid rgba(37, 99, 235, 0.07);
 }
 
-/* Mode Daftar: panel form pindah ke kiri, panel marketing ke kanan.
-   Cukup tukar `order`; grid tetap 1fr 1fr sehingga lebarnya simetris. */
-.auth:has(#tab-daftar[aria-selected="true"]) .auth-form-pane { order: 1; }
-.auth:has(#tab-daftar[aria-selected="true"]) .auth-marketing { order: 2; }
-/* Arc dekoratif dicerminkan agar tetap di sisi luar panel marketing. */
-.auth:has(#tab-daftar[aria-selected="true"]) .auth-arc { left: auto; right: -180px; }
-
-/* Pergantian mode Masuk <-> Daftar: panel bertukar sisi secara instan
-   (tanpa pergeseran), isi form beranimasi flip 3D seperti kartu terbuka —
-   fase pertama berputar sampai menyamping, konten berganti saat kartu tak
-   terlihat, fase kedua berputar kembali membawa isi baru. */
+/* Pergantian mode Masuk <-> Daftar: isi form beranimasi flip 3D seperti kartu
+   terbuka — fase pertama berputar sampai menyamping, konten berganti saat
+   kartu tak terlihat, fase kedua berputar kembali membawa isi baru. */
 .auth-form-pane { perspective: 1400px; }
 .auth-flip-out { animation: auth-flip-out 180ms cubic-bezier(0.32, 0, 0.67, 0) both; }
 .auth-flip-in {
