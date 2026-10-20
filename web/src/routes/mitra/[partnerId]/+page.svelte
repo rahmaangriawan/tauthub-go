@@ -212,6 +212,19 @@
 	const pctText = (pct: number, count: number) =>
 		count > 0 && Math.round(pct) < 1 ? tr('<1%') : `${Math.round(pct)}%`;
 
+	// Deret datar? pembanding 30-hari = nilai kumulatif hari pertama jendela.
+	// Kembali null (→ tampil "—") bila pembanding nol: tanpa klaim persentase
+	// dari data yang tidak ada (spec §5).
+	const monthPct = (series: number[]): number | null => {
+		if (!series?.length) return null;
+		const cur = series[series.length - 1];
+		const prev = series[0];
+		if (prev <= 0) return null;
+		return ((cur - prev) / prev) * 100;
+	};
+	const mediaDelta = $derived(monthPct(mediaSeries));
+	const earningDelta = $derived(monthPct(earningSeries));
+
 	// ── Daftar publikasi terbaru (panel bawah) ───────────────────────────────
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '-');
 	const latestPublications = $derived(publications.slice(0, 6));
@@ -376,8 +389,9 @@
 			<StatCard
 				label={tr('Media Anda')}
 				value={fmt(me?.media_count ?? 0)}
-				hint={tr('Media Terdaftar')}
+				hint={tr('Media aktif terdaftar')}
 				icon={Newspaper}
+				delta={mediaDelta}
 				sparkline={{ values: mediaSeries, stroke: 'var(--primary)', title: tr('Media terdaftar kumulatif, 30 hari terakhir') }}
 			/>
 
@@ -396,6 +410,7 @@
 				hint={tr('Penghasilan dari artikel terbit')}
 				tone="success"
 				icon={Wallet}
+				delta={earningDelta}
 				sparkline={{ values: earningSeries, stroke: 'var(--success)', title: tr('Penghasilan kumulatif (nilai aktual per hari), 30 hari terakhir') }}
 			/>
 

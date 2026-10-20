@@ -2078,6 +2078,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Media Tersimpan": "Saved Media",
   "Media akan ditandai Terverifikasi Dewan Pers dan Mitra mendapat notifikasi.": "The media will be marked as Verified by the Press Council and the Partner will be notified.",
   "Media aktif terdaftar": "Active registered media",
+  "dari bulan lalu": "vs last month",
   "Media belum mengisi Website/Domain. Minta mitra melengkapinya.": "Media has not filled in Website/Domain. Ask the partner to complete it.",
   "Media diajukan ulang untuk review admin.": "Media was resubmitted for admin review.",
   "Media diajukan untuk review admin.": "Media was submitted for admin review.",
