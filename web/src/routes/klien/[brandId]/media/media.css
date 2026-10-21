@@ -465,20 +465,7 @@ button.categoryPlusTag:focus-visible {
   width: 100%;
   max-width: none;
 }
-.dewanPersBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #059669;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  padding: 1.5px 7px;
-  border-radius: 999px;
-  width: fit-content;
-  margin-top: 2px;
-}
+.dewanPersTick { color: #059669; }
 .emptyState {
   padding: 48px 24px;
   text-align: center;
@@ -911,6 +898,23 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   color: #334155;
   white-space: nowrap;
   cursor: help;
+}
+
+/* Rating kecepatan terbit dari klien: rata-rata bintang di bawah pill SLA.
+   Sengaja kecil dan tanpa border supaya SLA tetap jadi info utama kolom. */
+.ratingPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #b45309;
+  white-space: nowrap;
+  cursor: help;
+}
+.ratingPill svg {
+  color: #f59e0b;
 }
 .releaseTimeSub {
   font-size: 11px;
@@ -2113,7 +2117,6 @@ button.selectedStepChip:disabled,
     gap: 4px 6px;
   }
   .mediaRowCol .mediaTitleLine { grid-column: 1; order: 1; min-width: 0; }
-  .mediaRowCol .dewanPersBadge { grid-column: 2; order: 2; justify-self: start; }
   .priceMobile {
     display: block; grid-column: 1 / -1; order: 3; margin-top: 0;
     font-size: 12px; font-weight: 500; color: #64748b;

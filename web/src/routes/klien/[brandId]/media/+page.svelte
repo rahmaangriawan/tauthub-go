@@ -15,7 +15,7 @@
 	import {
 		ArrowRight, Bookmark, Check, CircleAlert, Clock, Database, FileText, Info, LayoutGrid,
 		Link as LinkIcon,
-		Plus, RotateCcw, Search, SlidersHorizontal, Trash2, Upload, Wallet, X, Zap,
+		Plus, RotateCcw, Search, SlidersHorizontal, Star, Trash2, Upload, Wallet, X, Zap,
 		ChevronLeft, ChevronRight
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
@@ -53,6 +53,7 @@
 		seo_checked_at?: string | null; seo_ai_trust?: number | null; seo_ai_citation?: boolean | null;
 		sw_visits?: number | null; sw_snapshot_date?: string | null;
 		published_count?: number | null;
+		rating_avg?: number | null; rating_count?: number | null;
 		gsc_connected?: boolean; image_required?: boolean | null;
 		label_sponsor?: string | null; topik_terlarang?: string[];
 		max_links?: number | null; allow_hyperlink?: boolean | null;
@@ -274,6 +275,22 @@
 	function slaSortKey(m: Media): number {
 		const hours = avgPublishHours(m);
 		return hours == null ? -1 : -hours;
+	}
+
+	/** Rating kecepatan terbit dari klien — sumbernya bintang di dialog
+	 *  "Hubungi" (halaman ringkasan), dirata-ratakan per media. Media yang belum
+	 *  pernah dinilai tidak menampilkan apa pun (bukan bintang kosong). */
+	function mediaRating(m: Media): { avg: number; count: number } | null {
+		const avg = m.rating_avg;
+		if (typeof avg !== 'number' || !(avg > 0)) return null;
+		return { avg, count: m.rating_count ?? 0 };
+	}
+
+	function ratingTip(r: { avg: number; count: number }): string {
+		const base = tr('Rating kecepatan terbit {avg}/5 dari klien yang menghubungi mitra.')
+			.replace('{avg}', r.avg.toFixed(1));
+		if (r.count <= 0) return base;
+		return base + ' ' + tr('Berdasarkan {n} penilaian.').replace('{n}', String(r.count));
 	}
 
 	function getDa(m: Media): string | number {
@@ -1510,6 +1527,7 @@
 						{#each visible as m (m.id)}
 							{@const traffic = formatTraffic(m.sw_visits, m.traffic_estimate)}
 							{@const sla = getSla(m)}
+							{@const rating = mediaRating(m)}
 							{@const cats = m.categories && m.categories.length ? m.categories : m.category ? [m.category] : ['Umum']}
 							{@const dist = distribution(m)}
 							<tr
@@ -1562,6 +1580,23 @@
 											</Tooltip.Content>
 											</Tooltip.Portal>
 										</Tooltip.Root>
+											{/if}
+											{#if m.dewan_pers_verified}
+												<Tooltip.Root>
+													<Tooltip.Trigger>
+														{#snippet child({ props })}
+															<span {...props} class="verifiedTick dewanPersTick" aria-label="Terverifikasi Dewan Pers">
+																<Check size={15} strokeWidth={3} aria-hidden="true" />
+															</span>
+														{/snippet}
+													</Tooltip.Trigger>
+													<Tooltip.Portal>
+														<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+															<Tooltip.Arrow class="uiTipArrow" />
+															Terverifikasi Dewan Pers
+														</Tooltip.Content>
+													</Tooltip.Portal>
+												</Tooltip.Root>
 											{/if}
 										</div>
 										{#if m.contoh_artikel_url || dist.known || m.link_duration_months != null}
@@ -1626,9 +1661,6 @@
 												{/if}
 											</div>
 										{/if}
-										{#if m.dewan_pers_verified}
-											<div class="dewanPersBadge"><Check size={13} /><span>Dewan Pers</span></div>
-										{/if}
 										{#if archivedIds.has(m.id)}
 											<span class="maintBadge" title={tr('Media sedang diperbaiki oleh mitra')}>{tr('Maintenance')}</span>
 										{/if}
@@ -1685,19 +1717,27 @@
 
 								<td class="modernTd">
 									<!-- SLA = rata-rata waktu terbit nyata media (bukan label taksiran). -->
-									<Tooltip.Root>
-										<Tooltip.Trigger>
-											{#snippet child({ props })}
-												<span {...props} class="slaPill">{sla}</span>
-											{/snippet}
-										</Tooltip.Trigger>
-										<Tooltip.Portal>
-											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
-											<Tooltip.Arrow class="uiTipArrow" />
-											{slaTip(m)}
-										</Tooltip.Content>
-										</Tooltip.Portal>
-									</Tooltip.Root>
+									<div class="flex flex-col items-start gap-1">
+										<Tooltip.Root>
+											<Tooltip.Trigger>
+												{#snippet child({ props })}
+													<span {...props} class="slaPill">{sla}</span>
+												{/snippet}
+											</Tooltip.Trigger>
+											<Tooltip.Portal>
+												<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+												<Tooltip.Arrow class="uiTipArrow" />
+												{slaTip(m)}
+											</Tooltip.Content>
+											</Tooltip.Portal>
+										</Tooltip.Root>
+										{#if rating}
+											<span class="ratingPill" title={ratingTip(rating)}>
+												<Star size={11} fill="currentColor" strokeWidth={0} />
+												{rating.avg.toFixed(1)}/5
+											</span>
+										{/if}
+									</div>
 								</td>
 
 								<td class="modernTd"><span class="priceBoldText">Rp {fmt(m.client_price ?? m.price ?? 0)}</span></td>

@@ -80,7 +80,17 @@
 	function confirmContact() {
 		if (!contactTarget?.publication_id || !contactAck) return;
 		const id = contactTarget.publication_id;
+		const rating = contactRating;
 		contactTarget = null;
+		// Rating bintang dikirim bersama pembukaan forum (endpoint idempoten),
+		// jadi nilainya tersimpan sebagai rating media dan muncul di kolom SLA
+		// katalog. Kegagalan simpan tidak boleh menghalangi klien menghubungi mitra.
+		if (rating > 0) {
+			void apiRequest(`/v1/brands/${brandId}/chat/threads`, {
+				method: 'POST',
+				body: JSON.stringify({ publication_id: id, rating })
+			}).catch(() => {});
+		}
 		goto(`/klien/${brandUrl}/chat?pub=${id}`);
 	}
 

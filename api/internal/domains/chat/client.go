@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -48,7 +49,8 @@ func (d *Deps) ClientThreadCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	publicationID := strField(decodeJSON(r), "publication_id")
+	body := decodeJSON(r)
+	publicationID := strField(body, "publication_id")
 	if publicationID == "" {
 		httpx.Error(w, http.StatusUnprocessableEntity, "publication_id wajib diisi.")
 		return
@@ -66,6 +68,25 @@ func (d *Deps) ClientThreadCreate(w http.ResponseWriter, r *http.Request) {
 	if pub == nil {
 		httpx.Error(w, http.StatusNotFound, "Publikasi tidak ditemukan.")
 		return
+	}
+
+	// Rating kecepatan terbit (1–5) ikut terkirim saat klien menekan "Hubungi"
+	// di halaman ringkasan. Satu brand hanya punya satu rating per media, jadi
+	// penilaian ulang menimpa nilai lama; kegagalan di sini tidak boleh
+	// menggagalkan pembuatan forum obrolan.
+	if rating, ok := ratingField(body); ok {
+		if mediaID := pub.strOr("media_id", ""); mediaID != "" {
+			if err := d.exec(r.Context(), `
+				INSERT INTO media_ratings (id, media_id, brand_id, rating, publication_id, created_by)
+				VALUES ((gen_random_uuid())::text, $1, $2, $3, $4, $5)
+				ON CONFLICT (brand_id, media_id) DO UPDATE
+				   SET rating = EXCLUDED.rating,
+				       publication_id = EXCLUDED.publication_id,
+				       updated_at = now()`,
+				mediaID, brand.ID, rating, publicationID, user.ID); err != nil {
+				slog.Warn("[chat] simpan rating media gagal", "publication", publicationID, "err", err)
+			}
+		}
 	}
 
 	if err := d.exec(r.Context(), `

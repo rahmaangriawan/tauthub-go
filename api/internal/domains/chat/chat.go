@@ -228,3 +228,21 @@ func strField(body map[string]any, key string) string {
 	s, _ := v.(string)
 	return strings.TrimSpace(s)
 }
+
+// ratingField: rating bintang bulat 1–5 dari body JSON. Nilai di luar rentang
+// atau pecahan dianggap tidak ada — lebih baik rating tidak tersimpan daripada
+// menyimpan angka yang tidak pernah bisa dipilih di UI.
+func ratingField(body map[string]any) (int, bool) {
+	switch n := body["rating"].(type) {
+	case float64:
+		r := int(n)
+		if n == float64(r) && r >= 1 && r <= 5 {
+			return r, true
+		}
+	case int:
+		if n >= 1 && n <= 5 {
+			return n, true
+		}
+	}
+	return 0, false
+}

@@ -8,7 +8,7 @@
 	import { page } from '$app/state';
 	import {
 		Check, ChevronDown, Coins, ExternalLink, FileText, Hand, Info,
-		Search, SlidersHorizontal, Sparkles, Target, X
+		Search, SlidersHorizontal, Sparkles, Star, Target, X
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -63,6 +63,8 @@
 		health_breakdown?: Record<string, unknown> | null;
 		health_computed_at?: string | null;
 		published_count?: number | null;
+		rating_avg?: number | null;
+		rating_count?: number | null;
 		dewan_pers_verified: boolean | null;
 		domain_verified?: boolean | null;
 		seo_da: number | null;
@@ -462,6 +464,19 @@
 		return tr('SLA ± {waktu} — rata-rata waktu terbit nyata media ini: artikel tayang sekitar {waktu} setelah dikirim.')
 			.replace('{waktu}', slaDurationText(hours));
 	}
+	/** Rating kecepatan terbit dari klien (bintang di dialog "Hubungi" pada
+	 *  ringkasan), dirata-ratakan per media. Tanpa penilaian = tidak ditampilkan. */
+	function mediaRating(m: MediaRow): { avg: number; count: number } | null {
+		const avg = m.rating_avg;
+		if (typeof avg !== 'number' || !(avg > 0)) return null;
+		return { avg, count: m.rating_count ?? 0 };
+	}
+	function ratingTip(r: { avg: number; count: number }): string {
+		const base = tr('Rating kecepatan terbit {avg}/5 dari klien yang menghubungi mitra.')
+			.replace('{avg}', r.avg.toFixed(1));
+		if (r.count <= 0) return base;
+		return base + ' ' + tr('Berdasarkan {n} penilaian.').replace('{n}', String(r.count));
+	}
 	// DA & AI Trust hanya menampilkan hasil pemeriksaan nyata; jangan menurunkan
 	// angka dari skor kualitas media karena itu bukan hasil pemeriksaan apa pun.
 	function getDa(m: MediaRow): string | number {
@@ -573,6 +588,7 @@
 					{@const m = entry.media}
 					{@const traffic = formatTraffic(m.sw_visits, m.traffic_estimate)}
 					{@const sla = getSla(m)}
+					{@const rating = mediaRating(m)}
 					{@const cats = Array.isArray(m.categories) && m.categories.length > 0 ? m.categories : m.category ? [m.category] : ['Umum']}
 						{@const isSel = selectedIds.has(m.id)}
 						{@const dist = distribution(m)}
@@ -664,9 +680,17 @@
 						</td>
 						<td class="modernTd">
 							<!-- SLA = rata-rata waktu terbit nyata media (bukan label taksiran). -->
-							<Tooltip label={slaTip(m)} maxWidth={280}>
-								<span class="slaPill">{sla}</span>
-							</Tooltip>
+							<div class="flex flex-col items-start gap-1">
+								<Tooltip label={slaTip(m)} maxWidth={280}>
+									<span class="slaPill">{sla}</span>
+								</Tooltip>
+								{#if rating}
+									<span class="ratingPill" title={ratingTip(rating)}>
+										<Star size={11} fill="currentColor" strokeWidth={0} />
+										{rating.avg.toFixed(1)}/5
+									</span>
+								{/if}
+							</div>
 						</td>
 						<td class="modernTd"><span class="priceBoldText">Rp {fmtIdr(m.client_price ?? m.price ?? 0)}</span></td>
 						<td class="modernTd" style="text-align:right" onclick={(e) => e.stopPropagation()}>

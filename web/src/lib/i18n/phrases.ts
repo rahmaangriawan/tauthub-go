@@ -4404,6 +4404,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Seberapa cepat mitra memproses dan menayangkan artikel Anda?": "How fast did the partner process and publish your article?",
   "Sangat Lambat": "Very Slow",
   "Sangat Cepat": "Very Fast",
+  "Rating kecepatan terbit {avg}/5 dari klien yang menghubungi mitra.": "Publication speed rating {avg}/5 from clients who contacted the partner.",
+  "Berdasarkan {n} penilaian.": "Based on {n} ratings.",
   "Ketentuan Ruang Obrolan": "Chat Room Terms",
   "Lanjut ke Ruang Obrolan": "Continue to Chat Room",
   "Lanjut ke Obrolan": "Continue to Chat",

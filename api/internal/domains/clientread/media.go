@@ -159,7 +159,11 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		       EXISTS (SELECT 1 FROM gsc_connections g WHERE g.partner_id = media.partner_id AND g.status = 'active') AS gsc_connected,
 	       sw.visits AS sw_visits, sw.created_at AS sw_snapshot_date,
 	       (SELECT COUNT(*)::int FROM publications p
-	          WHERE p.media_id = media.id AND p.status = 'published') AS published_count
+	          WHERE p.media_id = media.id AND p.status = 'published') AS published_count,
+	       (SELECT ROUND(AVG(r.rating)::numeric, 1)::float8 FROM media_ratings r
+	          WHERE r.media_id = media.id) AS rating_avg,
+	       (SELECT COUNT(*)::int FROM media_ratings r
+	          WHERE r.media_id = media.id) AS rating_count
 	FROM media
 	LEFT JOIN media_seo_metrics sm ON sm.media_id = media.id
 	LEFT JOIN media_content_standards mcs ON mcs.media_id = media.id AND mcs.status = 'active'
@@ -214,6 +218,8 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		var swVisits *int64
 		var swSnapshotDate *time.Time
 		var publishedCount int
+		var ratingAvg *float64
+		var ratingCount int
 		scanErr := rowsQ.Scan(&id, &name, &category, &description, &websiteURL, &contohArtikelURL, &price, &creditCost,
 			&integrationType, &trafficEstimate, &mediaTier, &qualityScore, &healthScore, &healthBreakdown,
 			&healthComputedAt, &autoPublish, &dewanPersVerified, &dewanPersNote, &dewanPersCertNo,
@@ -222,7 +228,8 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			&linkDurationMonths,
 			&publicationMode, &wordCountMode, &allowEmbed, &pricingType, &priceStatus,
 			&categoriesCSV, &seoDA, &seoPA, &seoSpam, &seoCheckedAt, &seoAITrust, &seoAICitation,
-			&standardImageRequired, &gscConnected, &swVisits, &swSnapshotDate, &publishedCount)
+			&standardImageRequired, &gscConnected, &swVisits, &swSnapshotDate, &publishedCount,
+			&ratingAvg, &ratingCount)
 		if scanErr != nil {
 			// catat supaya penyebab drop tidak pernah kembali diam —
 			// dulu kegagalan scan ini gulir senyap dan katalog klien menyusut
@@ -286,6 +293,11 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			// kesegaran health_breakdown (health engine jalan berkala).
 			"published_count":     publishedCount,
 			"gsc_connected":       gscConnected,
+			// Rating kecepatan terbit dari klien (dialog "Hubungi" di ringkasan).
+			// NULL = belum ada penilaian; 0 = sudah dinilai tapi rata-ratanya nol
+			// (tidak mungkin, karena skala 1–5).
+			"rating_avg":   ratingAvg,
+			"rating_count": ratingCount,
 			"image_required":      standardImageRequired,
 			"is_available":        status == "active",
 			"availability_reason": availabilityReason(status),
