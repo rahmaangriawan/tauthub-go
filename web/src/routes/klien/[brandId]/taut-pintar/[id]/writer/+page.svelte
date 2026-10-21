@@ -17,7 +17,6 @@
 	import { tcToRp } from '$lib/credits/rupiah';
 	import { ARTICLE_DEFAULT_COVER, sameOriginAssetUrl } from '$lib/media/cover';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
-	import { linkDurationBadge, isPermanentLink } from '$lib/media/link-duration';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import SlideOver from '$lib/components/slide-over.svelte';
 	import DateTimePicker from '$lib/components/date-time-picker.svelte';
@@ -41,8 +40,6 @@
 		credit_cost: number | null;
 		allow_hyperlink: boolean | null;
 		max_links: number | null;
-		/** Masa berlaku tautan media: 0 = permanen, >0 = bulan. */
-		link_duration_months?: number | null;
 		allow_embed: boolean;
 		price?: number | null;
 		/** Kredit penempatan hasil konversi harga media — SAMA dengan yang ditagih. */
@@ -1787,23 +1784,6 @@
 												<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2.5 py-0.5 text-[9px] font-medium text-amber-800">
 													<PencilLine size={10.5} />
 													<span>{m.label_sponsor === 'ada_sponsor' ? 'Sponsored' : 'Dofollow'} (Maks. {m.max_links != null && m.max_links > 0 ? m.max_links : 1})</span>
-												</span>
-											{/if}
-											<!-- Masa berlaku tautan media: permanen atau sekian bulan.
-											     Info ini yang menentukan sampai kapan tautan dijamin tetap tayang. -->
-											{#if m.link_duration_months != null}
-												<span
-													class={`inline-flex items-center gap-1 rounded-[5px] border px-2 py-0.5 text-[9px] font-medium ${
-														isPermanentLink(m.link_duration_months)
-															? 'border-emerald-200/80 bg-emerald-50 text-emerald-700'
-															: 'border-slate-200 bg-slate-100/70 text-slate-600'
-													}`}
-													title={isPermanentLink(m.link_duration_months)
-														? tr('Media ini menjamin tautannya permanen — tidak pernah dilepas.')
-														: tr('Media ini menjamin tautannya {bulan} bulan sejak artikel tayang.').replace('{bulan}', String(m.link_duration_months))}
-												>
-													<Link size={10.5} />
-													<span>{linkDurationBadge(m.link_duration_months)}</span>
 												</span>
 											{/if}
 										</div>
