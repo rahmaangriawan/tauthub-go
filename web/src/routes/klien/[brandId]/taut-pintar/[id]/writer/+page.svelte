@@ -13,7 +13,7 @@
 	import TautBottomBar from '../../_bottom-bar.svelte';
 	import NaskahModal from './_naskah-modal.svelte';
 	import QcPanel, { QC_CHECK_COUNT } from './_qc-panel.svelte';
-	import { MANUAL_PROFILER_REASON, buildTrackedUrl, stripScheme, withScheme, textToHtml, toJakartaDisplay, toLocalInput, isCampaignDone } from '../../_shared';
+	import { MANUAL_PROFILER_REASON, buildTrackedUrl, stripScheme, withScheme, textToHtml, cleanPastedText, toJakartaDisplay, toLocalInput, isCampaignDone } from '../../_shared';
 	import { tcToRp } from '$lib/credits/rupiah';
 	import { ARTICLE_DEFAULT_COVER, sameOriginAssetUrl } from '$lib/media/cover';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
@@ -808,7 +808,8 @@
 		let judul = file.name.replace(/\.[^.]+$/, '');
 		let isi = text;
 		if (lines.length > 1 && lines[0].length <= 120) {
-			judul = lines[0];
+			// Bersihkan judul dari artefak copy-paste (zero-width, NBSP).
+			judul = cleanPastedText(lines[0]).replace(/\n+/g, ' ');
 			isi = lines.slice(1).join('\n');
 		}
 		// DOCX bergambar: server sudah memindahkan gambarnya ke Tauthub dan

@@ -15,7 +15,7 @@
 	import Select from '$lib/components/select.svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
 	import { tcToRp } from '$lib/credits/rupiah';
-	import { textToHtml } from '../../_shared';
+	import { textToHtml, cleanPastedText } from '../../_shared';
 	import { angleInstructionExample } from '$lib/taut/angle-examples';
 
 	let {
@@ -736,15 +736,16 @@
 	}
 
 	// Tempel teks artikel langsung: judul diambil dari baris pertama bila pendek,
-	// sisanya jadi isi — sama seperti pemisahan pada unggahan dokumen.
+	// sisanya jadi isi — sama seperti pemisahan pada unggahan dokumen. Judul ikut
+	// dibersihkan (zero-width/NBSP) dan isinya lewat cleaner tempelan dokumen.
 	function pakaiTeksTempel() {
 		const teks = teksTempel.trim();
 		if (!teks) return;
-		const lines = teks.split('\n').map((l) => l.trim()).filter(Boolean);
+		const lines = teks.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 		let judul = title;
 		let isi = teks;
 		if (lines.length > 1 && lines[0].length <= 120) {
-			judul = lines[0];
+			judul = cleanPastedText(lines[0]).replace(/\n+/g, ' ');
 			isi = lines.slice(1).join('\n');
 		}
 		title = judul;

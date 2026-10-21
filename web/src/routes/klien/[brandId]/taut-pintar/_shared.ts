@@ -299,12 +299,86 @@ export function withScheme(raw: string): string {
 	return /^https?:\/\//i.test(v) ? v : `https://${v}`;
 }
 
+const BULLET_RE = /^[•◦▪‣∙·*\-–—]\s+/;
+const NUMBERED_RE = /^\(?\d{1,2}[.)]\s+/;
+
+/**
+ * Bersihkan teks tempelan dari Google Docs / Word / PDF sebelum jadi artikel.
+ *
+ * Yang ditangani (semuanya khas copy-paste dokumen):
+ * - CRLF/CR → LF, NBSP → spasi, tab → spasi, zero-width & BOM dibuang;
+ * - spasi ganda dan spasi di ujung baris dirapikan;
+ * - baris yang terpotong (hard wrap) disatukan kembali: baris sebelumnya tidak
+ *   berakhir tanda baca DAN baris berikutnya mulai huruf kecil/angka — kecuali
+ *   baris berikutnya adalah item bullet/nomor (penanda daftar tidak boleh
+ *   tersedot ke item sebelumnya);
+ * - lebih dari satu baris kosong berturut-turut diciutkan jadi satu.
+ */
+export function cleanPastedText(text: string): string {
+	const normalized = text
+		.replace(/\r\n?/g, '\n')
+		.replace(/[\u200B-\u200D\uFEFF]/g, '')
+		.replace(/\u00A0/g, ' ')
+		.replace(/[\u2028\u2029]/g, '\n')
+		.replace(/\t/g, ' ')
+		.replace(/[ ]{2,}/g, ' ')
+		.replace(/ +\n/g, '\n');
+
+	const merged: string[] = [];
+	for (const raw of normalized.split('\n')) {
+		const line = raw.trim();
+		if (line === '') {
+			merged.push('');
+			continue;
+		}
+		const prev = merged.length > 0 ? merged[merged.length - 1] : '';
+		const penandaDaftar = BULLET_RE.test(line) || NUMBERED_RE.test(line);
+		const lanjutan = prev !== '' && !penandaDaftar && !/[.!?;:"”’)\]]$/.test(prev) && /^[a-z0-9(]/.test(line);
+		if (lanjutan) merged[merged.length - 1] = `${prev} ${line}`;
+		else merged.push(line);
+	}
+	return merged.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Teks tempelan → HTML artikel. Paragraf mengikuti baris (Google Docs memberi
+ * satu newline per paragraf), bullet/nomor berurutan dikelompokkan jadi
+ * <ul>/<ol>, dan seluruh teks di-escape.
+ */
 export function textToHtml(text: string): string {
-	const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-	return esc
-		.split(/\n{2,}/)
-		.map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
-		.join('');
+	const clean = cleanPastedText(text);
+	if (!clean) return '';
+	const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+	const out: string[] = [];
+	let list: { type: 'ul' | 'ol'; items: string[] } | null = null;
+	const flush = () => {
+		if (!list) return;
+		out.push(`<${list.type}>${list.items.map((i) => `<li>${i}</li>`).join('')}</${list.type}>`);
+		list = null;
+	};
+
+	for (const block of clean.split(/\n{2,}/)) {
+		for (const line of block.split('\n')) {
+			const bullet = line.match(BULLET_RE);
+			const numbered = bullet ? null : line.match(NUMBERED_RE);
+			const marker = bullet ?? numbered;
+			if (marker) {
+				const type = bullet ? 'ul' : 'ol';
+				const item = esc(line.slice(marker[0].length).trim());
+				if (list && list.type === type) list.items.push(item);
+				else {
+					flush();
+					list = { type, items: [item] };
+				}
+			} else {
+				flush();
+				out.push(`<p>${esc(line)}</p>`);
+			}
+		}
+		flush();
+	}
+	return out.join('');
 }
 
 /* ─── Format ──────────────────────────────────────────────────────────── */
