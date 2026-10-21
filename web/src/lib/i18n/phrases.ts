@@ -218,6 +218,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Tautan backlink dan anchor text diatur di The Writer setelah media dipilih. The Profiler lengkap": "Backlink and anchor text are set in The Writer after media are selected. The full Profiler",
   "Tautan melebihi batas media.": "Links exceed the media's limit.",
   "Tempel teks artikel di sini (Ctrl/Cmd+V). Baris pertama yang pendek akan jadi judul.": "Paste the article text here (Ctrl/Cmd+V). A short first line becomes the title.",
+  "Terdeteksi tempelan Google Docs — heading, tabel, dan daftar ikut terjaga.": "Google Docs paste detected — headings, tables, and lists are preserved.",
+  "Format dari clipboard ikut terjaga (heading, tabel, daftar).": "Clipboard formatting is preserved (headings, tables, lists).",
   "Terima Revisi": "Accept Revision",
   "Terima pemberitahuan status publikasi, revisi, dan pengumuman langsung di desktop atau ponsel Anda.": "Get publication status, revision, and announcement alerts straight on your desktop or phone.",
   "Terima untuk mengirim ulang artikel revisi ke media Anda, atau tolak dengan alasan bila masih belum sesuai.": "Accept to re-send the revised article to your media, or reject with a reason if it still does not fit.",

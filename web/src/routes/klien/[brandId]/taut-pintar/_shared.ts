@@ -6,6 +6,8 @@
  * client Next.js. Disimpan privat (prefiks `_`) supaya tidak jadi route.
  */
 
+import { sanitizeHtml } from '$lib/sanitize-html';
+
 /* ─── Daftar kampanye ─────────────────────────────────────────────────── */
 
 export const STAGE_LABEL: Record<string, string> = {
@@ -379,6 +381,117 @@ export function textToHtml(text: string): string {
 		flush();
 	}
 	return out.join('');
+}
+
+/* ─── Tempelan kaya (clipboard HTML) ────────────────────────────────── */
+
+/**
+ * Clipboard Google Docs menandai akar kopiannya dengan
+ * id="docs-internal-guid-…". Dipakai hanya untuk memberi tahu klien bahwa
+ * struktur aslinya terbaca — bukan syarat pemrosesan.
+ */
+export function isDocsClipboardHtml(html: string): boolean {
+	return /docs-internal-guid|id="docs-[^"]*"|class="[^"]*\bdocs-/.test(html);
+}
+
+export type TempelKaya = { title: string; html: string; plain: string };
+
+/**
+ * HTML clipboard (Google Docs / Word web) → HTML artikel yang rapi.
+ *
+ * Textarea hanya menerima plain text, padahal clipboard membawa dua flavor
+ * sekaligus (text/plain + text/html) dan yang HTML memuat struktur asli:
+ * `<h1>/<h2>/<h3>`, `<table>`, `<ul>/<ol>`. Fungsi ini mempertahankan struktur
+ * itu dan membuang sampah ekspor Docs:
+ * - `<meta>`/`<style>`/`<colgroup>` dan pembungkus
+ *   `<b style="font-weight:normal" id="docs-internal-guid-…">`;
+ * - seluruh atribut kecuali href/src/alt/colspan/rowspan (style, class, id,
+ *   dir, role) — penyebab tampilan "tempelan" yang berantakan di editor;
+ * - NBSP, zero-width, dan blok kosong.
+ *
+ * Hierarki heading digeser satu tingkat (h1→h2, h2→h3, h3→h4) karena judul
+ * halaman sudah berdiri sendiri di luar isi artikel.
+ */
+export function clipboardHtmlToArticle(rawHtml: string): TempelKaya | null {
+	if (typeof DOMParser === 'undefined' || !rawHtml.trim()) return null;
+	const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+	const body = doc.body;
+	if (!body) return null;
+
+	body.querySelectorAll('meta, style, link, title, colgroup, col, script, noscript').forEach((el) => el.remove());
+
+	// Judul dokumen Docs: <h1 class="title"> (judul halaman) — dipisah dari isi.
+	let title = '';
+	const judulNode = body.querySelector('h1.title, h1[class*="title"]');
+	if (judulNode) {
+		title = (judulNode.textContent ?? '').replace(/\s+/g, ' ').trim();
+		judulNode.remove();
+	}
+
+	// Pembungkus ekspor Docs: <b style="font-weight: normal" id="docs-internal-guid-…">.
+	body.querySelectorAll('b[style*="font-weight"], b[id*="docs-internal-guid"]').forEach((el) => {
+		el.replaceWith(...Array.from(el.childNodes));
+	});
+
+	const KEEP_ATTR = new Set(['href', 'src', 'alt', 'colspan', 'rowspan']);
+	for (const el of Array.from(body.querySelectorAll('*'))) {
+		for (const attr of Array.from(el.attributes)) {
+			if (!KEEP_ATTR.has(attr.name.toLowerCase())) el.removeAttribute(attr.name);
+		}
+		const tag = el.tagName.toLowerCase();
+		if (/^h[1-6]$/.test(tag)) {
+			const target = tag === 'h1' ? 'h2' : tag === 'h2' ? 'h3' : 'h4';
+			if (target !== tag) {
+				const baru = doc.createElement(target);
+				for (const attr of Array.from(el.attributes)) baru.setAttribute(attr.name, attr.value);
+				while (el.firstChild) baru.appendChild(el.firstChild);
+				el.replaceWith(baru);
+			}
+		}
+	}
+
+	const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+	const teksNodes: Text[] = [];
+	while (walker.nextNode()) teksNodes.push(walker.currentNode as Text);
+	for (const node of teksNodes) {
+		node.data = node.data
+			.replace(/[\u200B-\u200D\uFEFF]/g, '')
+			.replace(/\u00A0/g, ' ')
+			.replace(/[ \t]{2,}/g, ' ');
+	}
+
+	// <span> tanpa atribut hanyalah sisa pembungkus ekspor Docs — dibuka.
+	body.querySelectorAll('span').forEach((el) => {
+		if (el.attributes.length === 0) el.replaceWith(...Array.from(el.childNodes));
+	});
+
+	body.querySelectorAll('p, h2, h3, h4, li, td, th, tr, ul, ol, table').forEach((el) => {
+		const adaMedia = el.querySelector('img, iframe, br, td, th, li');
+		if (!adaMedia && !(el.textContent ?? '').trim()) el.remove();
+	});
+	// <tr> kosong yang tersisa (semua selnya terhapus) ikut dibuang.
+	body.querySelectorAll('tr').forEach((tr) => {
+		if (!tr.querySelector('td, th')) tr.remove();
+	});
+
+	const html = sanitizeHtml(body.innerHTML).trim();
+
+	// Teks biasa per blok, dipakai untuk mengisi kotak tempel (perilaku lama).
+	// Hanya blok terdalam yang diambil agar isi <li><p>…</p></li> tidak dobel,
+	// dan tiap blok jadi satu baris (bukan hasil textContent yang menempel).
+	const BLOK = 'p, h2, h3, h4, li, th, td';
+	const plain = Array.from(body.querySelectorAll(BLOK))
+		.filter((el) => !el.querySelector(BLOK))
+		.map((el) => (el.textContent ?? '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim())
+		.filter(Boolean)
+		.join('\n');
+
+	if (!html || !plain) return null;
+	if (!title) {
+		const barisPertama = plain.split('\n')[0] ?? '';
+		if (barisPertama.length > 0 && barisPertama.length <= 120) title = barisPertama;
+	}
+	return { title, html, plain };
 }
 
 /* ─── Format ──────────────────────────────────────────────────────────── */

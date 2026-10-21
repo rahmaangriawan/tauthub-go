@@ -15,7 +15,7 @@
 	import Select from '$lib/components/select.svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
 	import { tcToRp } from '$lib/credits/rupiah';
-	import { textToHtml, cleanPastedText } from '../../_shared';
+	import { textToHtml, cleanPastedText, clipboardHtmlToArticle, isDocsClipboardHtml } from '../../_shared';
 	import { angleInstructionExample } from '$lib/taut/angle-examples';
 
 	let {
@@ -311,6 +311,11 @@
 		})();
 	});
 	let teksTempel = $state('');
+	// Hasil tempelan kaya (clipboard HTML): heading/tabel/daftar yang tidak bisa
+	// dibawa textarea. Diisi oleh listener paste, dipakai "Gunakan Teks Ini".
+	let tempelKaya = $state<{ title: string; html: string } | null>(null);
+	let tempelDariDocs = $state(false);
+	let teksInput = $state<HTMLTextAreaElement | null>(null);
 
 	// ---------- tautan tambahan (anchor + URL) ----------
 	// Dipakai di tab "Generate dengan AI" dan "Unggah Dokumen": AI diminta
@@ -423,6 +428,24 @@
 				if (e.key === 'Escape') close();
 			};
 		const onPaste = (e: ClipboardEvent) => {
+			// Tempelan ke kotak teks artikel: textarea hanya menerima plain text,
+			// padahal clipboard (Google Docs, Word web) membawa flavor text/html
+			// yang memuat heading, tabel, dan daftar asli. Tangkap di sini sebelum
+			// textarea menelannya, simpan versi kaya, lalu isi kotaknya dengan teks
+			// biasa supaya perilaku yang terlihat tetap sama.
+			if (teksInput && e.target === teksInput) {
+				const htmlFlavor = e.clipboardData?.getData('text/html') ?? '';
+				const kaya = htmlFlavor ? clipboardHtmlToArticle(htmlFlavor) : null;
+				if (kaya) {
+					e.preventDefault();
+					tempelKaya = { title: kaya.title, html: kaya.html };
+					tempelDariDocs = isDocsClipboardHtml(htmlFlavor);
+					teksTempel = kaya.plain;
+					return;
+				}
+				tempelKaya = null;
+				tempelDariDocs = false;
+			}
 			const files = Array.from(e.clipboardData?.files ?? []);
 			const gambar = files.find((f) => f.type.startsWith('image/'));
 			if (gambar) {
@@ -739,6 +762,17 @@
 	// sisanya jadi isi — sama seperti pemisahan pada unggahan dokumen. Judul ikut
 	// dibersihkan (zero-width/NBSP) dan isinya lewat cleaner tempelan dokumen.
 	function pakaiTeksTempel() {
+		// Tempelan kaya: pakai HTML hasil konversi clipboard apa adanya, karena
+		// textarea sudah tidak memuat info heading/tabel/daftarnya.
+		if (tempelKaya) {
+			title = tempelKaya.title || title;
+			html = tempelKaya.html;
+			teksTempel = '';
+			tempelKaya = null;
+			tempelDariDocs = false;
+			tab = 'tulis';
+			return;
+		}
 		const teks = teksTempel.trim();
 		if (!teks) return;
 		const lines = teks.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -1400,8 +1434,24 @@
 								<textarea
 									class="app-input mt-3 min-h-[220px] w-full flex-1 resize-y text-sm"
 									placeholder={tr('Tempel teks artikel di sini (Ctrl/Cmd+V). Baris pertama yang pendek akan jadi judul.')}
+									bind:this={teksInput}
 									bind:value={teksTempel}
+									oninput={() => {
+										// Teks diedit manual → versi kaya hasil paste tidak lagi
+										// mewakili isi kotak; kembali ke pipeline teks.
+										tempelKaya = null;
+										tempelDariDocs = false;
+									}}
 								></textarea>
+								{#if tempelDariDocs}
+									<p class="mt-1.5 text-left text-xs" style="color: var(--success);">
+										{tr('Terdeteksi tempelan Google Docs — heading, tabel, dan daftar ikut terjaga.')}
+									</p>
+								{:else if tempelKaya}
+									<p class="mt-1.5 text-left text-xs" style="color: var(--success);">
+										{tr('Format dari clipboard ikut terjaga (heading, tabel, daftar).')}
+									</p>
+								{/if}
 								<button class="app-btn app-btn-soft mt-2 w-full" type="button" disabled={!teksTempel.trim()} onclick={pakaiTeksTempel}>
 									{tr('Gunakan Teks Ini')}
 								</button>
