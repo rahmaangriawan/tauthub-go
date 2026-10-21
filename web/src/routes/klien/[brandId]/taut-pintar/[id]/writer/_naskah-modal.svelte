@@ -16,6 +16,7 @@
 	import Tooltip from '$lib/components/tooltip.svelte';
 	import { tcToRp } from '$lib/credits/rupiah';
 	import { textToHtml } from '../../_shared';
+	import { angleInstructionExample } from '$lib/taut/angle-examples';
 
 	let {
 		mediaName,
@@ -213,6 +214,12 @@
 	$effect(() => {
 		if (!anglesLoading && !anglesError && angleSlug && !selectedAngle) angleSlug = '';
 	});
+
+	/** Isi kotak "Instruksi Tambahan" dengan contoh sesuai angle + jenis media. */
+	function isiContohInstruksi() {
+		if (fokusSisa.trim() && !window.confirm(tr('Ganti instruksi yang sudah ada dengan contoh ini?'))) return;
+		fokusSisa = angleInstructionExample(angleSlug, mediaType);
+	}
 	// Transparansi biaya gambar isi: kalau topik/konteks meminta gambar, tampilkan
 	// perkiraan biayanya. Harga per gambar diambil dari endpoint pustaka gambar.
 	let imgCost = $state(0);
@@ -1207,7 +1214,7 @@
 				</div>
 			{/if}
 			<button
-				class="app-btn app-btn-soft mt-3 w-full !min-h-8 !px-3 !text-xs"
+				class="app-btn app-btn-soft mt-3 !min-h-8 !px-3 !text-xs"
 				type="button"
 				disabled={linkRows.length >= maxLinkRows}
 				onclick={addLinkRow}
@@ -1865,7 +1872,15 @@
 											</div>
 											<span class="flex flex-wrap items-center gap-2">
 												<span class="text-[11px] text-muted-foreground">{tr('Opsional jika Copilot/Fakta sudah terisi')}</span>
-												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika contoh menyusul')}>
+												<button
+													class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
+													type="button"
+													disabled={!angleReady || genBusy}
+													title={selectedAngle
+														? `${tr('Isi dengan contoh untuk angle')} ${tr(selectedAngle.name)}${mediaType === 'blogger' ? ` (${tr('Media Blogger')})` : ''}`
+														: tr('Pilih angle dulu untuk melihat contohnya')}
+													onclick={isiContohInstruksi}
+												>
 													<Lightbulb size={12} /> {tr('Contoh')}
 												</button>
 											</span>
