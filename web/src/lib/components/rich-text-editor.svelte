@@ -160,6 +160,9 @@
 
 	function sync() {
 		if (!bodyEl) return;
+		// execCommand kadang meninggalkan atribut style kosong (mis. saat melepas
+		// <i> di dalam <u>) — dibuang supaya HTML artikel bersih.
+		bodyEl.querySelectorAll('[style=""]').forEach((el) => el.removeAttribute('style'));
 		lastExternal = bodyEl.innerHTML;
 		value = bodyEl.innerHTML;
 		publishStats();
@@ -180,11 +183,106 @@
 		if (bodyEl) publishStats();
 	});
 
+	/**
+	 * Rentang kata di bawah kursor (bila kursor hanya titik, tanpa seleksi).
+	 * Dipakai B/I/U supaya format dikenakan ke kata tersebut, bukan sekadar
+	 * menyiapkan format untuk ketikan berikutnya.
+	 */
+	function wordRangeAtCaret(): { range: Range; textNode: Text; word: string } | null {
+		const body = bodyEl;
+		const sel = window.getSelection();
+		if (!body || !sel || sel.rangeCount === 0 || !sel.isCollapsed) return null;
+		const range = sel.getRangeAt(0);
+		const node = range.startContainer;
+		if (node.nodeType !== Node.TEXT_NODE) return null;
+		const textNode = node as Text;
+		const text = textNode.data ?? '';
+		const offset = range.startOffset;
+		const WORD = /[\p{L}\p{N}]/u;
+		let start = offset;
+		let end = offset;
+		while (start > 0 && WORD.test(text[start - 1])) start--;
+		while (end < text.length && WORD.test(text[end])) end++;
+		if (start === end) return null; // kursor di spasi/tanda baca — perilaku lama
+		const wordRange = document.createRange();
+		wordRange.setStart(textNode, start);
+		wordRange.setEnd(textNode, end);
+		return { range: wordRange, textNode, word: text.slice(start, end) };
+	}
+
+	/** Elemen inline (b/strong, i/em, u) terdekat yang membungkus node. */
+	function inlineAncestor(node: Node, tags: string[]): Element | null {
+		const body = bodyEl;
+		for (let el = node.parentElement; el && el !== body; el = el.parentElement) {
+			if (tags.includes(el.tagName.toLowerCase())) return el;
+		}
+		return null;
+	}
+
 	function exec(cmd: string, arg?: string) {
 		const body = bodyEl;
 		if (!body || disabled) return;
 		body.focus();
+		const inlineTags = cmd === 'bold' ? ['b', 'strong'] : cmd === 'italic' ? ['i', 'em'] : cmd === 'underline' ? ['u'] : null;
+		if (inlineTags) {
+			const word = wordRangeAtCaret();
+			if (word) {
+				const anc = inlineAncestor(word.textNode, inlineTags);
+				if (!anc) {
+					// Kata belum ber-tag: bungkus langsung. execCommand() tidak dipakai
+					// di sini karena di dalam heading ia menghasilkan
+					// <span style="font-weight: normal"> (tebal heading berasal dari
+					// CSS), sampah inline style yang bisa ikut terbit.
+					const tag = cmd === 'bold' ? 'b' : cmd === 'italic' ? 'i' : 'u';
+					const wrapper = document.createElement(tag);
+					word.range.surroundContents(wrapper);
+					const after = document.createRange();
+					const isiWrapper = wrapper.firstChild;
+					if (isiWrapper && isiWrapper.nodeType === Node.TEXT_NODE) {
+						// Kursor harus berada DI DALAM teks, bukan di elemen pembungkus:
+						// kalau tidak, klik format berikutnya tidak menemukan kata.
+						after.setStart(isiWrapper, (isiWrapper as Text).data.length);
+					} else {
+						after.selectNodeContents(wrapper);
+					}
+					after.collapse(true);
+					const sel = window.getSelection();
+					sel?.removeAllRanges();
+					sel?.addRange(after);
+					sync();
+					refreshToolState();
+					commitHistory();
+					return;
+				}
+				// Pembungkus hanya berisi kata ini (hasil tombol toolbar sendiri) →
+				// lepas manual. execCommand('bold') tidak selalu melepas tag saat
+				// seleksinya persis seluruh isi elemen tersebut.
+				if (anc.childNodes.length === 1 && anc.firstChild === word.textNode) {
+					const parent = anc.parentNode;
+					const kata = document.createTextNode(anc.textContent ?? '');
+					anc.replaceWith(kata);
+					const after = document.createRange();
+					after.setStart(kata, kata.data.length);
+					after.collapse(true);
+					const sel = window.getSelection();
+					sel?.removeAllRanges();
+					sel?.addRange(after);
+					parent?.normalize();
+					sync();
+					refreshToolState();
+					commitHistory();
+					return;
+				}
+				// Pembungkus memuat teks lain: pilih kata lalu biarkan execCommand
+				// memecah tag-nya.
+				const sel = window.getSelection();
+				sel?.removeAllRanges();
+				sel?.addRange(word.range);
+			}
+		}
 		document.execCommand(cmd, false, arg);
+		const after = window.getSelection();
+		if (inlineTags && after && after.rangeCount > 0 && !after.isCollapsed) after.collapseToEnd();
 		sync();
 		refreshToolState();
 		// Tindakan dari toolbar selalu jadi satu langkah riwayat.
@@ -681,6 +779,7 @@
 				title={t.name}
 				aria-label={t.name}
 				aria-pressed={isToggleTool(t) ? toolActive(t) : undefined}
+				onmousedown={(e: MouseEvent) => e.preventDefault()}
 				disabled={disabled ||
 					mode === 'html' ||
 					(t.cmd === 'undo' && !canUndo) ||
