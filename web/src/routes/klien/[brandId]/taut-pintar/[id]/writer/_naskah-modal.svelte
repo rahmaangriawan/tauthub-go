@@ -88,7 +88,7 @@
 		onSave: (title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) => void;
 		onUploadCover: (file: File) => Promise<string>;
 		onUploadDoc: (file: File, onPhase?: (phase: 'extract' | 'clean') => void, links?: WriterLink[]) => Promise<{ title: string; html: string; warning?: string }>;
-		onGenerate: (topic: string, links: WriterLink[], angleSlug: string, proper?: ProperGenPayload) => Promise<{ title: string; html: string; imagesGenerated?: number; imagesCostCredits?: number }>;
+		onGenerate: (topic: string, links: WriterLink[], angleSlug: string, proper?: ProperGenPayload) => Promise<{ title: string; html: string; category?: string; imagesGenerated?: number; imagesCostCredits?: number }>;
 		/** null = belum tahu; false = AI Gatekeeper belum dikonfigurasi admin. */
 			/** Pratinjau streaming: html parsial yang tampil read-only saat AI menulis; null = tidak streaming. */
 		streamingHtml?: string | null;
@@ -982,12 +982,18 @@
 			// artikel baru (ikut terbawa sampai terbit).
 			if (draf?.metaDescription) meta = draf.metaDescription;
 			tab = 'tulis';
-			// Rubrik wajib ada sebelum simpan; setelah draf AI jadi, pilih
-			// otomatis dari rubrik yang tersedia agar tidak menahan proses.
-			// User tetap bisa menggantinya di panel pengaturan.
-			if (!category.trim() && categoryOptions.length > 0) {
-				category = categoryOptions[0];
-				autoCategory = category;
+			// Rubrik: server sudah memilihkannya dari kategori media (lihat
+			// matchAllowedCategory di taut_writer.go). Dipakai apa adanya supaya
+			// pilihan AI terlihat di panel pengaturan; kalau server tidak
+			// mengirim apa-apa, jatuh ke rubrik pertama daftar agar tidak
+			// menahan proses. User tetap bisa menggantinya.
+			if (!category.trim()) {
+				const dariAI = (hasil.category ?? '').trim();
+				const pilihan = dariAI || categoryOptions[0] || '';
+				if (pilihan) {
+					category = pilihan;
+					autoCategory = pilihan;
+				}
 			}
 			genOutcome = 'success';
 			draftReady = true;

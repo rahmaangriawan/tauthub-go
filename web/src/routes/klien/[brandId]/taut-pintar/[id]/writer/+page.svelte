@@ -857,7 +857,7 @@
 		links: { anchor_text: string; url: string }[] = [],
 		angleSlug = '',
 		proper: ProperGenPayload | null = null
-	): Promise<{ title: string; html: string; imagesGenerated?: number; imagesCostCredits?: number }> {
+	): Promise<{ title: string; html: string; category?: string; imagesGenerated?: number; imagesCostCredits?: number }> {
 		const mediaType = placement.find((p) => p.media_id === mediaId)?.media_type;
 		const angle = angleChannels.find((ch) => ch.slug === mediaType)?.angles.find((a) => a.slug === angleSlug && a.has_prompt);
 		if (anglesLoading || anglesError || !angle) throw new Error(tr('Pilih angle artikel yang tersedia untuk media ini.'));
@@ -882,6 +882,9 @@
 		return {
 			title: String(data?.title ?? ''),
 			html: String(data?.content_html ?? ''),
+			// Rubrik pilihan AI (server memvalidasinya ke kategori media; kosong
+			// hanya bila media memang tidak punya daftar kategori).
+			category: String(data?.category ?? ''),
 			imagesGenerated: Number(data?.images_generated ?? 0) || 0,
 			imagesCostCredits: Number(data?.images_cost_credits ?? 0) || 0
 		};

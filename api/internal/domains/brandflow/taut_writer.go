@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
+	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
@@ -28,6 +29,9 @@ type writerItemResult struct {
 	Status     string `json:"status"`
 	DocumentID any    `json:"document_id"`
 	Title      string `json:"title"`
+	// Rubrik yang dipilih AI dari daftar kategori media (lihat matchAllowedCategory);
+	// kosong bila media tidak punya daftar kategori.
+	Category string `json:"category"`
 	// Gambar isi yang dibuat otomatis dari instruksi klien + biayanya (transparansi).
 	ImagesGenerated   int `json:"images_generated"`
 	ImagesCostCredits int `json:"images_cost_credits"`
@@ -348,7 +352,8 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	item, err := d.queryRow(ctx, `
 		SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.regen_count, tcm.angle_slug,
 		       m.media_type, m.category, m.website_url, m.allow_hyperlink, m.max_links,
-		       m.label_sponsor, m.word_count_mode, m.topik_terlarang, m.bahasa_artikel
+		       m.label_sponsor, m.word_count_mode, m.topik_terlarang, m.bahasa_artikel,
+		       COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv
 		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 AND tcm.status = 'selected' LIMIT 1`,
 		campaignID, mediaID)
@@ -358,6 +363,11 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if item == nil {
 		return writerItemResult{}, errStatus(500, "Media tidak terpilih di kampanye ini.")
 	}
+	// Rubrik media yang diizinkan mitra (urut nama). Dipakai dua hal: daftar
+	// pilihan untuk AI, dan cadangan bila model tidak memilih dengan yakin —
+	// supaya artikel hasil generate tidak pernah tertahan "Kategori belum
+	// dipilih" di popover kesiapan terbit.
+	allowedCategories := catutil.Split(item.strOr("categories_csv", ""))
 	mediaType := resolveTautMediaType(item.strOr("media_type", ""), campaign.strOr("media_type", ""))
 	angle, angleOverride, err := d.resolveTautWriterAngle(ctx, campaignID, mediaType, item.strOr("angle_slug", ""), requestedAngle)
 	if err != nil {
@@ -723,6 +733,22 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		promptLines = append(promptLines,
 			"BAHAN KOSONG (PENTING): tidak ada brief/bahan rujukan untuk kampanye ini. JANGAN menyebut nama orang, nama perusahaan/lembaga, studi kasus, angka statistik, persentase, harga, tanggal, atau kutipan narasumber yang spesifik — tulis penjelasan generik tanpa mengarang fakta. Bila butuh contoh, pakai kalimat umum (mis. \"umumnya\", \"banyak pelaku industri\") TANPA angka atau nama.")
 	}
+
+	// Rubrik: AI memilih dari daftar kategori media (bukan diketik klien).
+	// Daftar hanya dikirim bila medianya memang punya kategori; aturan cadangan
+	// "pilih yang pertama" dipasang di prompt dan ditegakkan lagi di Go saat
+	// jawabannya divalidasi (matchAllowedCategory), jadi hasilnya tidak
+	// bergantung pada kepatuhan model.
+	categoryRule := ""
+	schemaLine := "Tulis artikel unik utk media ini. Output JSON valid {title, content_html, meta_description}"
+	if len(allowedCategories) > 0 {
+		categoryRule = "Aturan rubrik/kategori (WAJIB): pilih SATU rubrik paling relevan dengan isi artikel HANYA dari daftar kategori media berikut (sudah urut): " +
+			strings.Join(allowedCategories, " | ") +
+			". Tulis di field category persis seperti tertulis di daftar, tanpa menambah atau mengarang rubrik baru. Bila isinya tidak jelas condong ke mana, pilih rubrik pertama pada daftar itu."
+		schemaLine += ", category"
+	}
+	schemaLine += ". Penanda [[IMAGE: ...]] (bila klien minta gambar) ditulis di dalam content_html — JANGAN sebagai field terpisah."
+
 	promptLines = append(promptLines,
 		languageBlock,
 		identity.String(),
@@ -739,9 +765,10 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		"Aturan hyperlink media (bila media tidak mengizinkan, gunakan ATURAN PENANAMAN LINK nol): "+jsonStringify(orEmptySliceValue(hyperlink)),
 		"Kutipan/fakta hanya dari bahan/brief di atas — jangan mengarang angka, tanggal, atau harga. Soal narasumber: pakai [SPOKESPERSON] bila tersedia; bila brief tidak memuatnya dan [PROMPT ANGLE (dari Admin)] di atas mewajibkan kutipan bernama, penuhi mandat angle itu dengan satu figur strategis yang wajar.",
 		"Aturan meta deskripsi (WAJIB): sertakan meta_description 120-160 karakter bahasa Indonesia aktif.",
+		categoryRule,
 		"Variasi tulisan: gunakan sudut pembuka yang berbeda dari draf sebelumnya; jangan menyalin kalimat pembuka yang sama.",
 		"Nonce variasi (abaikan isinya, hanya penanda sesi agar tiap generate berbeda): "+itoa(int(time.Now().UnixNano())),
-		"", "Tulis artikel unik utk media ini. Output JSON valid {title, content_html, meta_description}. Penanda [[IMAGE: ...]] (bila klien minta gambar) ditulis di dalam content_html — JANGAN sebagai field terpisah.",
+		"", schemaLine,
 	)
 	filtered := []string{}
 	for _, line := range promptLines {
@@ -788,18 +815,24 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	title := ""
 	contentHTML := ""
 	metaDescription := ""
+	chosenCategory := ""
 	var parsed struct {
 		Title           string `json:"title"`
 		ContentHTML     string `json:"content_html"`
 		MetaDescription string `json:"meta_description"`
+		Category        string `json:"category"`
 	}
 	if json.Unmarshal([]byte(result.Content), &parsed) == nil {
 		title = truncateString(parsed.Title, 300)
 		contentHTML = truncateString(parsed.ContentHTML, 200000)
 		metaDescription = truncateString(strings.TrimSpace(parsed.MetaDescription), 500)
+		chosenCategory = matchAllowedCategory(parsed.Category, allowedCategories)
 	} else {
 		title = campaign.strOr("name", "") + " — " + name
 		contentHTML = truncateString(result.Content, 200000)
+		// Jawaban bukan JSON: pilihan rubrik dari model tidak terbaca, pakai
+		// cadangan supaya artikel tetap punya rubrik.
+		chosenCategory = matchAllowedCategory("", allowedCategories)
 	}
 	if strings.TrimSpace(contentHTML) == "" {
 		return writerItemResult{MediaID: mediaID, MediaType: mediaType, Status: "generating", DocumentID: nil}, nil
@@ -911,6 +944,15 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 				return err
 			}
 		}
+		if chosenCategory != "" {
+			// Isi kolom rubrik hanya bila masih kosong: pilihan manual klien
+			// tidak ditimpa saat artikel diregenerasi.
+			if _, err := tx.Exec(ctx,
+				"UPDATE taut_campaign_media SET category = $1 WHERE id = $2 AND (category IS NULL OR category = '')",
+				chosenCategory, itemID); err != nil {
+				return err
+			}
+		}
 		if angleOverride {
 			// The article and its QC context must change together. Empty article_type
 			// clears legacy editorial/advertorial policy without reusing it for angles.
@@ -933,7 +975,29 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		}
 	}
 	return writerItemResult{MediaID: mediaID, MediaType: mediaType, Status: "draft", DocumentID: docID, Title: title,
-		ImagesGenerated: imagesGenerated, ImagesCostCredits: imagesCost}, nil
+		Category: chosenCategory, ImagesGenerated: imagesGenerated, ImagesCostCredits: imagesCost}, nil
+}
+
+// matchAllowedCategory: cocokkan pilihan rubrik dari model dengan daftar
+// kategori media (abaikan besar-kecil huruf, spasi, dan tanda kutip yang biasa
+// ditambahkan model). Jawaban yang tidak ada di daftar — termasuk jawaban
+// kosong karena model ragu atau outputnya bukan JSON — jatuh ke kategori
+// PERTAMA pada daftar, karena daftar media sudah diurutkan dan mitra memilih
+// urutan itu. Daftar kosong berarti media tidak punya kategori: kembalikan
+// kosong, jangan mengarang rubrik baru.
+func matchAllowedCategory(answer string, allowed []string) string {
+	if len(allowed) == 0 {
+		return ""
+	}
+	want := strings.ToLower(strings.Trim(strings.TrimSpace(answer), `"'`))
+	if want != "" {
+		for _, a := range allowed {
+			if strings.ToLower(strings.TrimSpace(a)) == want {
+				return a
+			}
+		}
+	}
+	return allowed[0]
 }
 
 // userGenerateUsed: total generate akun (generate pertama + regenerasi) pada
