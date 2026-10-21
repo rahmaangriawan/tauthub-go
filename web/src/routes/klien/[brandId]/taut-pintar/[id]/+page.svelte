@@ -11,7 +11,14 @@
 	//   - produksi                                        → The Writer
 	//   - review (QC selesai, menunggu terbit)            → The Writer
 	//   - placement (media terkunci)                      → The Writer
-	//   - sisanya (draft/profiling/status wizard lama)    → The Profiler
+	//   - draft/profiling TANPA media                     → The Profiler (jalur lama)
+	//   - draft/profiling/media lain dengan media terpasang → The Writer
+	//
+	// Penanda jalur lama: kampanye wizard lama mengumpulkan medianya SETELAH
+	// The Profiler, jadi kampanye berstatus draft dan tanpa media hanya bisa
+	// dilanjutkan di halaman itu. Kampanye dari Katalog Media (dan Kilat) sudah
+	// membawa media sejak dibuat, jadi lanjutannya adalah produksi artikel —
+	// bukan The Profiler yang sudah tidak ditawarkan lagi.
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -52,7 +59,8 @@
 		// Penanda "kampanye SELESAI" yang andal: sudah ada baris publikasi.
 		// Dipakai lebih dulu — status string kampanye lama bisa legacy dan tidak
 		// bisa dipercaya. Cek lewat matriks Gatekeeper (publication_id/publish).
-		const hasPublication = await checkPublication();
+		const media = await loadAuditMedia();
+		const hasPublication = media.some((m) => Boolean(m.publication_id) || Boolean(m.publish?.status));
 		if (hasPublication || DONE_STATUSES.has(status ?? '')) {
 			await goto(`${base}/ringkasan`, { replaceState: true });
 			return;
@@ -85,19 +93,23 @@
 			return;
 		}
 
-		// Status wizard lama (materials/budget/...) dan tanpa status → The Profiler.
-		await goto(`${base}/profiler`, { replaceState: true });
+		// Status wizard lama (materials/budget/...) dan tanpa status tanpa media →
+		// The Profiler (jalur lama, masih dipakai kampanye yang dibuat sebelum
+		// Katalog Media). Kalau medianya sudah terpasang, lanjutannya produksi
+		// artikel di The Writer.
+		await goto(media.length > 0 ? `${base}/writer` : `${base}/profiler`, { replaceState: true });
 	}
 
-	async function checkPublication(): Promise<boolean> {
+	type AuditMedia = { publication_id?: string | null; publish?: { status?: string | null } };
+
+	async function loadAuditMedia(): Promise<AuditMedia[]> {
 		try {
 			const res = await apiRequest(`/v1/brands/${brandId}/taut/campaigns/${campaignId}/gatekeeper/audits`);
-			if (!res.ok) return false;
+			if (!res.ok) return [];
 			const data = await res.json();
-			const media: Array<{ publication_id?: string | null; publish?: { status?: string | null } }> = data?.media ?? [];
-			return media.some((m) => Boolean(m.publication_id) || Boolean(m.publish?.status));
+			return (data?.media ?? []) as AuditMedia[];
 		} catch {
-			return false;
+			return [];
 		}
 	}
 

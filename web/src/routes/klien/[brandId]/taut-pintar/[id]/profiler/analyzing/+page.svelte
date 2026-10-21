@@ -13,7 +13,6 @@
 	import { ArrowLeft, Check } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
-	import AgentSteps from '../../../_agent-steps.svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
@@ -181,7 +180,9 @@
 <PageTitle title="Taut Pintar — Menganalisis Profil" />
 
 <main>
-	<AgentSteps current={1} />
+	<div class="app-card px-4 py-2.5 text-xs text-muted-foreground">
+		{tr('Jalur lama — hanya untuk kampanye yang dibuat sebelum alur Kilat/Katalog Media. Kampanye baru memakai Kampanye Kilat atau jalur Manual.')}
+	</div>
 
 	<div class="mt-6 flex flex-col items-center gap-4 text-center">
 		{#if !error && !stalled}

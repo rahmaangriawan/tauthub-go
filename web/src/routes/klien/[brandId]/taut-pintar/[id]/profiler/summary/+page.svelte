@@ -10,7 +10,6 @@
 	import { LoaderCircle } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
-	import AgentSteps from '../../../_agent-steps.svelte';
 	import BriefView from '../_brief-view.svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 
@@ -113,7 +112,9 @@
 			<a class="font-semibold underline" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`}>{tr('Buka Ringkasan Distribusi')}</a>
 		</div>
 	{/if}
-	<AgentSteps current={1} />
+	<div class="app-card px-4 py-2.5 text-xs text-muted-foreground">
+		{tr('Jalur lama — hanya untuk kampanye yang dibuat sebelum alur Kilat/Katalog Media. Kampanye baru memakai Kampanye Kilat atau jalur Manual.')}
+	</div>
 	{#if loading}
 		<div class="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
 			<LoaderCircle size={18} class="animate-spin" />{tr("Memuat Executive PR Brief…")}</div>

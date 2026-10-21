@@ -140,7 +140,12 @@
 		switch (s) {
 			case 'draft':
 			case 'profiling':
-				return { slug: 'profiler', label: 'Lengkapi The Profiler' };
+				// Kampanye yang sudah membawa media (jalur Katalog Media/Kilat)
+				// lanjut ke produksi artikel; yang belum punya media hanya bisa
+				// dilanjutkan di The Profiler jalur lama.
+				return mediaList.length > 0
+					? { slug: 'writer', label: tr('Lanjut ke The Writer') }
+					: { slug: 'profiler', label: tr('Lanjutkan kampanye lama (The Profiler)') };
 			case 'profiled':
 				return { slug: 'matchmaker', label: 'Lanjut ke The Matchmaker' };
 			case 'placement':

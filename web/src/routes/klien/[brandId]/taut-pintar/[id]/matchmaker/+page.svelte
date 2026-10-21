@@ -792,7 +792,7 @@
 		{#if loading || running}
 			<div class="app-card mt-3 flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
 				<div class="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
-				<p>{running ? tr('AI Matchmaker sedang mencocokkan media dengan hasil The Profiler…') : tr('Memuat rekomendasi…')}</p>
+				<p>{running ? tr('AI Matchmaker sedang mencocokkan media dengan kebutuhan kampanye…') : tr('Memuat rekomendasi…')}</p>
 			</div>
 		{:else if recommendedCards.length === 0}
 			<div class="app-card mt-3 px-4 py-10 text-center text-sm text-muted-foreground">{tr('Belum ada rekomendasi.')}{#if !viewOnly}<button class="ml-1 font-medium" style="color: var(--primary);" type="button" onclick={() => void loadPlacement(true)}>{tr('Jalankan ulang Matchmaker')}</button>{/if}
@@ -915,7 +915,7 @@
 			</div>
 		</div>
 		<div class="bottomActions">
-			<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/profiler`}>{tr('Kembali')}</a>
+			<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/campaigns`}>{tr('Kembali ke daftar kampanye')}</a>
 			{#if viewOnly}
 				<a class="app-btn app-btn-primary" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan`}>{tr('Lihat Ringkasan →')}</a>
 			{:else}

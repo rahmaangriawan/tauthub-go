@@ -96,7 +96,7 @@
 	let createBusy = $state(false);
 	let createErr = $state('');
 	let createName = $state('');
-	let createMode = $state<'ai' | 'manual' | 'kilat' | null>(null);
+	let createMode = $state<'kilat' | 'manual' | null>('kilat');
 
 	// Popup Top Up
 	let topUpOpen = $state(false);
@@ -177,7 +177,7 @@
 
 	const fmt = (n: number) => n.toLocaleString(i18n.locale);
 
-	async function createTautCampaign(mode: 'ai' | 'manual' | 'kilat') {
+	async function createTautCampaign(mode: 'manual' | 'kilat') {
 		const campaignName = createName.trim();
 		if (campaignName.length < 2) {
 			createErr = tr('Nama kampanye minimal 2 karakter.');
@@ -203,9 +203,7 @@
 			await goto(
 				mode === 'kilat'
 					? `${fallbackBase}/taut-pintar/${target}/kilat`
-					: mode === 'ai'
-						? `${fallbackBase}/taut-pintar/${target}/profiler`
-						: `${fallbackBase}/taut-pintar/${target}/matchmaker?mode=manual`
+					: `${fallbackBase}/taut-pintar/${target}/matchmaker?mode=manual`
 			);
 		} catch (reason) {
 			createErr = reason instanceof Error ? reason.message : tr('Gagal membuat kampanye.');
@@ -580,19 +578,6 @@
 			<div class="modeGrid">
 				<button
 					type="button"
-					onclick={() => (createMode = 'ai')}
-					disabled={createBusy}
-					class="modeCard"
-					class:modeCardActive={createMode === 'ai'}
-				>
-					<div class="modeCardTitle">
-						<Sparkles size={16} strokeWidth={2.4} color="var(--primary)" />
-						<strong>AI Pintar</strong>
-					</div>
-					<p class="modeCardDesc">{tr("Profiler: AI menyusun strategi & brief, lalu Matchmaker pilih media. Butuh Rp 10.000.")}</p>
-				</button>
-				<button
-					type="button"
 					onclick={() => (createMode = 'manual')}
 					disabled={createBusy}
 					class="modeCard"
@@ -615,7 +600,7 @@
 						<Zap size={16} strokeWidth={2.4} color="var(--primary)" />
 						<strong>Kampanye Kilat</strong>
 					</div>
-					<p class="modeCardDesc">{tr("Cukup URL website + anggaran. AI menyusun ringkasan & memilih medianya, tanpa The Profiler.")}</p>
+					<p class="modeCardDesc">{tr("Cukup URL website + anggaran. AI menyusun ringkasan & memilih medianya, lalu kamu langsung ke produksi artikel.")}</p>
 				</button>
 			</div>
 
@@ -1339,8 +1324,8 @@
 	.dialogBox {
 		position: relative;
 		width: 100%;
-		/* Tiga kartu mode (AI Pintar / Manual / Kampanye Kilat) butuh ruang
-		   supaya deskripsinya tidak terpotong jadi satu kata per baris. */
+		/* Dua kartu mode (Manual / Kampanye Kilat) butuh ruang supaya
+		   deskripsinya tidak terpotong jadi satu kata per baris. */
 		max-width: 768px;
 		border-radius: 16px;
 		border: 1px solid var(--border);
@@ -1397,7 +1382,7 @@
 	}
 	.modeGrid {
 		display: grid;
-		grid-template-columns: 1fr 1fr 1fr;
+		grid-template-columns: 1fr 1fr;
 		gap: 12px;
 		margin-top: 16px;
 	}

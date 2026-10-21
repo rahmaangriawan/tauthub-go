@@ -2,13 +2,13 @@
 	import { tr } from '$lib/i18n/phrases';
 
 	// Kampanye Kilat — jalur ringkas untuk klien yang tidak mau mengisi form
-	// Profiler yang panjang. Dua isian saja (URL website + anggaran Rupiah),
-	// lalu The Matchmaker memilih medianya dan klien langsung menuju The Writer.
-	// Wizard lama tidak diubah: The Profiler tetap bisa dibuka kalau perlu.
+	// panjang. Dua isian saja (URL website + anggaran Rupiah), lalu The
+	// Matchmaker memilih medianya dan klien langsung menuju The Writer. Jalur
+	// The Profiler sudah tidak ditawarkan dari sini (hanya untuk kampanye lama).
 	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { CircleCheck, ExternalLink, LoaderCircle, Sparkles, TriangleAlert, Wallet, X, Zap } from '@lucide/svelte';
+	import { CircleCheck, LoaderCircle, Sparkles, TriangleAlert, Wallet, X, Zap } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import TautBottomBar from '../../_bottom-bar.svelte';
@@ -471,12 +471,9 @@
 					{#if busy !== 'idle'}<LoaderCircle size={16} class="animate-spin" />{:else}<Sparkles size={16} />{/if}
 					{busy === 'crawl' ? tr('Membaca website…') : busy === 'place' ? tr('AI memilih media…') : ready ? tr('Racik Ulang Kampanye Kilat') : tr('Racik Kampanye Kilat')}
 				</button>
-				<button class="app-btn app-btn-soft" type="button" disabled={busy !== 'idle'} onclick={() => goto(`/klien/${brandUrl}/taut-pintar/${campaignId}/profiler`)}>
-					{tr('Mau detail lengkap? Buka The Profiler')}
-				</button>
 			</div>
 			<p class="mt-2 text-[11px] text-muted-foreground">
-				{tr('Tautan backlink dan anchor text diatur di The Writer setelah media dipilih. The Profiler lengkap')} ({tcToRp(10, rateIdr)}) {tr('tetap tersedia lewat tombol di atas.')}
+				{tr('Tautan backlink dan anchor text diatur di The Writer setelah media dipilih.')}
 			</p>
 		</section>
 
@@ -526,7 +523,6 @@
 					{:else}
 						<p class="mt-2 text-sm text-muted-foreground">{tr('Ringkasan strategi muncul setelah website dibaca.')}</p>
 					{/if}
-					<a class="app-btn app-btn-soft mt-3 !min-h-8 !px-3 !text-xs" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/profiler`}>{tr('Ubah di The Profiler')} <ExternalLink size={13} /></a>
 				</section>
 
 				<section class="app-card p-4" aria-label={tr('Rekomendasi media')}>

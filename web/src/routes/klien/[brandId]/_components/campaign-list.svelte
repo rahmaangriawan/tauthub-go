@@ -57,7 +57,7 @@
 	// Popup buat kampanye.
 	let createOpen = $state(false);
 	let createName = $state('');
-	let createMode = $state<'ai' | 'manual' | 'kilat' | null>(null);
+	let createMode = $state<'kilat' | 'manual' | null>('kilat');
 
 	let filterTimer: number | null = null;
 
@@ -196,7 +196,7 @@
 		createMode = null;
 	}
 
-	async function createCampaign(mode: 'ai' | 'manual' | 'kilat') {
+	async function createCampaign(mode: 'manual' | 'kilat') {
 		if (busy) {
 			error = tr('Mohon tunggu, kampanye sedang dibuat…');
 			return;
@@ -223,12 +223,11 @@
 			const data = await res.json();
 			// URL memakai public_id 6 karakter (migrasi 170); API menerima keduanya.
 			const target = campaignUrlId(data);
-			// Mode menentukan step awal: AI → Profiler; Kilat → halaman ringkas;
-			// Manual → Matchmaker tanpa AI.
+			// Mode menentukan step awal: Kilat → halaman ringkasnya sendiri;
+			// Manual → Matchmaker tanpa AI. (Mode AI Pintar/The Profiler sudah
+			// tidak ditawarkan untuk kampanye baru.)
 			if (mode === 'kilat') {
 				await goto(`/klien/${brandUrl}/taut-pintar/${target}/kilat`);
-			} else if (mode === 'ai') {
-				await goto(`/klien/${brandUrl}/taut-pintar/${target}/profiler`);
 			} else {
 				await goto(`/klien/${brandUrl}/taut-pintar/${target}/matchmaker?mode=manual`);
 			}
@@ -490,20 +489,7 @@
 
 			{#if error}<p class="mt-2 text-sm" style="color: var(--destructive);">{error}</p>{/if}
 
-			<div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-				<button
-					type="button"
-					class="rounded-xl border p-3 text-left transition-colors"
-					style="border-color: {createMode === 'ai' ? 'var(--primary)' : 'var(--border)'}; background-color: {createMode === 'ai' ? 'var(--accent)' : 'transparent'};"
-					disabled={busy}
-					onclick={() => (createMode = 'ai')}
-				>
-					<span class="flex items-center gap-2">
-						<Sparkles size={16} style="color: var(--primary);" />
-						<span class="font-bold">AI Pintar</span>
-					</span>
-					<span class="mt-1 block text-xs text-muted-foreground">{tr("Profiler: AI menyusun strategi & brief, lalu Matchmaker pilih media. Butuh")} {tcToRp(10, rateIdr)}.</span>
-				</button>
+			<div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<button
 					type="button"
 					class="rounded-xl border p-3 text-left transition-colors"
@@ -530,7 +516,7 @@
 						<Zap size={16} style="color: var(--primary);" />
 						<span class="font-bold">Kampanye Kilat</span>
 					</span>
-					<span class="mt-1 block text-xs text-muted-foreground">{tr("Cukup URL website + anggaran. AI menyusun ringkasan & memilih medianya, tanpa The Profiler.")}</span>
+					<span class="mt-1 block text-xs text-muted-foreground">{tr("Cukup URL website + anggaran. AI menyusun ringkasan & memilih medianya, lalu kamu langsung ke produksi artikel.")}</span>
 				</button>
 			</div>
 

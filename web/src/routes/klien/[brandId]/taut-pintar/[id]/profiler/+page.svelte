@@ -13,7 +13,6 @@
 	import { Activity, LoaderCircle } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
-	import AgentSteps from '../../_agent-steps.svelte';
 	import TautBottomBar from '../../_bottom-bar.svelte';
 	import ProfilerSections from './_sections.svelte';
 	import { tcToRp } from '$lib/credits/rupiah';
@@ -335,8 +334,8 @@
 		</div>
 	</header>
 
-	<div class="mt-3">
-		<AgentSteps current={1} />
+	<div class="app-card mt-3 px-4 py-2.5 text-xs text-muted-foreground">
+		{tr('Jalur lama — hanya untuk kampanye yang dibuat sebelum alur Kilat/Katalog Media. Kampanye baru memakai Kampanye Kilat atau jalur Manual.')}
 	</div>
 
 	{#if error}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>{/if}
