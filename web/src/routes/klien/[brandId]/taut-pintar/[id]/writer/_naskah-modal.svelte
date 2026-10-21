@@ -1759,6 +1759,8 @@
 													bind:value={copilotBriefId}
 													options={copilotBriefOptions}
 													placeholder={tr('Pilih Brief Copilot…')}
+													searchable
+													searchPlaceholder={tr('Cari brief…')}
 													disabled={copilotBusy || genBusy}
 													onchange={(v) => void pickCopilotBrief(v)}
 												/>

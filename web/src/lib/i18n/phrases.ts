@@ -4122,6 +4122,7 @@ export const PHRASE_EN: Record<string, string> = {
 	"Angle Artikel": "Article Angle",
 	"Pilih angle artikel": "Choose an article angle",
 	"Cari angle…": "Search angle…",
+	"Cari brief…": "Search brief…",
 	"Angle paling populer": "Most popular angles",
 	"Lihat semua angle": "Show all angles",
 	"Semua angle": "All angles",
