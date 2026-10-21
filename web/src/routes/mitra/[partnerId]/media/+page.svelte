@@ -13,7 +13,7 @@
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
-	import { LINK_DURATION_OPTIONS, normalizeLinkDurationMonths } from '$lib/media/link-duration';
+	import { normalizeLinkDurationMonths } from '$lib/media/link-duration';
 
 	const partnerId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || partnerId}`);
@@ -95,7 +95,7 @@
 	const emptyMediaForm = (): MediaForm => ({
 		name: '', media_type: 'mainstream', categories: [], categoryQuery: '',
 		website_url: '', adapter_url: '', price: '', pricing_type: 'nett',
-		traffic_estimate: 0, max_links: '1', link_duration_months: '12', description: '', notes: '',
+		traffic_estimate: 0, max_links: '1', link_duration_months: '0', description: '', notes: '',
 		integration_type: 'wordpress', publication_mode: 'draft',
 		bahasa_artikel: ['Indonesia'], label_sponsor: 'tidak_ada',
 		word_count_mode: 'sesuai_permintaan', allow_embed: false,
@@ -105,6 +105,17 @@
 	let editingId = $state<string | null>(null);
 	let editingRow = $state<Media | null>(null);
 	let form = $state<MediaForm>(emptyMediaForm());
+	// Masa berlaku tautan punya dua mode: Permanen (0 bulan) atau Jangka Waktu
+	// (12/24/36 bulan). Pilihan bulannya baru muncul setelah mode Jangka Waktu
+	// dipilih, jadi mitra tidak perlu membaca daftar angka panjang.
+	const linkDurationPermanent = $derived(Number(form.link_duration_months) === 0);
+	const linkDurationChoices = $derived.by(() => {
+		const current = Number(form.link_duration_months);
+		const base = [12, 24, 36];
+		// Nilai lama di luar daftar (mis. 6 bulan dari data sebelumnya) tetap
+		// ditampilkan supaya tidak berubah diam-diam saat disimpan.
+		return current > 0 && !base.includes(current) ? [...base, current].sort((a, b) => a - b) : base;
+	});
 	let integrasiConsent = $state(false);
 	let dialogError = $state('');
 	let editConfirmOpen = $state(false);
@@ -2191,18 +2202,39 @@
 							</div>
 							<span class="mt-1 block text-xs text-muted-foreground">{tr('Jumlah maksimal backlink yang boleh ditanam dalam satu artikel di media ini. Default 1; pilih 0 bila artikel tidak boleh memuat backlink.')}</span>
 						</div>
-						<div class="mt-2">
-							<span class="mb-1 block text-xs font-bold text-muted-foreground">{tr('Masa berlaku tautan (backlink)')}</span>
-							<div class="[&_.zs-select-trigger]:w-full [&_.zs-select-trigger]:max-w-none">
-								<Select
-									bind:value={form.link_duration_months}
-									ariaLabel={tr('Masa berlaku tautan (backlink)')}
-									minWidth={220}
-									options={LINK_DURATION_OPTIONS.map((o) => ({ value: String(o.value), label: tr(o.label) }))}
-								/>
+							<div class="mt-2">
+								<span class="mb-1 block text-xs font-bold text-muted-foreground">{tr('Masa berlaku tautan (backlink)')}</span>
+								<div class="inline-flex w-full max-w-[320px] rounded-lg border p-0.5" style="border-color: var(--border); background: var(--muted);">
+									<button
+										type="button"
+										class="flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors {linkDurationPermanent ? 'bg-white text-slate-900 shadow-sm' : 'text-muted-foreground hover:text-slate-700'}"
+										aria-pressed={linkDurationPermanent}
+										onclick={() => (form.link_duration_months = '0')}
+									>{tr('Permanen')}</button>
+									<button
+										type="button"
+										class="flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors {!linkDurationPermanent ? 'bg-white text-slate-900 shadow-sm' : 'text-muted-foreground hover:text-slate-700'}"
+										aria-pressed={!linkDurationPermanent}
+										onclick={() => { if (linkDurationPermanent) form.link_duration_months = '12'; }}
+									>{tr('Jangka Waktu')}</button>
+								</div>
+								{#if !linkDurationPermanent}
+									<div class="mt-2 rounded-xl border p-3" style="border-color: var(--border); background: var(--accent);">
+										<p class="text-[12px] leading-relaxed font-medium" style="color: var(--primary);">
+											{tr('Klien akan memprioritaskan website yang memberikan garansi hyperlink tayang permanen')}
+										</p>
+										<div class="mt-2.5 space-y-1.5">
+											{#each linkDurationChoices as months (months)}
+												<label class="flex cursor-pointer items-center gap-2 text-sm">
+													<input type="radio" name="link-duration-months" value={String(months)} bind:group={form.link_duration_months} />
+													<span>{months === 12 ? tr('12 Bulan (standar Tauthub)') : `${months} ${tr('Bulan')}`}</span>
+												</label>
+											{/each}
+										</div>
+									</div>
+								{/if}
+								<span class="mt-1 block text-xs text-muted-foreground">{tr('Apakah tautan yang sudah tayang dijamin tetap ada. Pilih "Permanen" bila tautan tidak akan pernah dilepas; pilih "Jangka Waktu" lalu tentukan berapa bulan tautan dijamin (mis. 12 bulan). Nilai ini menentukan masa pemantauan 404 dan masa garansi klaim klien.')}</span>
 							</div>
-							<span class="mt-1 block text-xs text-muted-foreground">{tr('Apakah tautan yang sudah tayang dijamin tetap ada. Pilih "Permanen" bila tautan tidak akan pernah dilepas; pilih jumlah bulan bila hanya dijamin sekian lama (mis. 12 bulan). Nilai ini menentukan masa pemantauan 404 dan masa garansi klaim klien.')}</span>
-						</div>
 					</div>
 
 					<!-- C. Harga & Model Kerja Sama -->
