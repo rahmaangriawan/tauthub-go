@@ -194,6 +194,20 @@
 	let genWithCover = $state(false);
 	// Dialog pilihan sebelum generate: tanpa cover atau dengan cover.
 	let genChoiceOpen = $state(false);
+	// Pilihan di dalam dialog. Terpisah dari genWithCover supaya menutup dialog
+	// dengan Batal tidak mengubah preferensi generate terakhir yang dipakai.
+	let genChoiceWithCover = $state(false);
+	function openGenChoice() {
+		genChoiceWithCover = genWithCover;
+		genChoiceOpen = true;
+	}
+	// Tombol "Buat Draf": jalankan proses sesuai kartu yang dipilih, lalu tutup
+	// dialog — progres pembuatan tetap ditampilkan panel generate yang sudah ada.
+	function startDraftFromChoice() {
+		if (genBusy) return;
+		genChoiceOpen = false;
+		void generate(genChoiceWithCover);
+	}
 	const GEN_STAGES = $derived(
 		genWithCover ? [...GEN_STAGES_BASE, GEN_STAGE_COVER] : [...GEN_STAGES_BASE]
 	);
@@ -1772,7 +1786,7 @@
 								class="app-btn app-btn-primary mt-4 w-full"
 								type="button"
 								disabled={genBusy || !topic.trim() || (linkLimit > 0 && !linksValid) || !angleReady}
-								onclick={() => (genChoiceOpen = true)}
+								onclick={openGenChoice}
 							>
 								{#if genBusy}<Sparkles size={15} class="genSparkle" /><LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
 								{genBusy
@@ -2034,7 +2048,7 @@
 											title={properLocked
 												? tr('Isi fakta produk atau pilih Brief Copilot dulu — mode Proper ditulis terkunci ke fakta.')
 												: ''}
-											onclick={() => (genChoiceOpen = true)}
+											onclick={openGenChoice}
 										>
 										{#if genBusy}<Sparkles size={15} class="genSparkle" /><LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
 										{genBusy
@@ -2233,23 +2247,23 @@
 				}}
 			>
 				<div
-					class="flex w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl"
+					class="flex max-h-[92vh] w-full max-w-[880px] flex-col overflow-hidden rounded-3xl border shadow-2xl"
 					style="border-color: var(--border); background-color: var(--card, #fff);"
 					role="dialog"
 					aria-modal="true"
-					aria-label={tr('Buat Draf dengan AI')}
+					aria-labelledby="gen-choice-title"
 					tabindex="-1"
 					onclick={(e) => e.stopPropagation()}
 					onkeydown={(e) => e.stopPropagation()}
 				>
-					<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
-						<div class="flex items-center gap-3">
-							<div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background-color: var(--accent); color: var(--primary);">
-								<Sparkles size={20} />
+					<div class="flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-7" style="border-color: var(--border);">
+						<div class="flex items-start gap-3.5">
+							<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style="background-color: var(--accent); color: var(--primary);">
+								<Sparkles size={22} />
 							</div>
 							<div>
-								<h4 class="text-sm font-bold leading-tight text-foreground">{tr('Buat Draf dengan AI')}</h4>
-								<p class="mt-0.5 text-xs text-muted-foreground">{tr('Pilih dulu: draf saja, atau sekalian dengan gambar utamanya.')}</p>
+								<h4 id="gen-choice-title" class="text-lg font-bold leading-tight text-foreground sm:text-xl">{tr('Buat Draf dengan AI')}</h4>
+								<p class="mt-1 text-[13px] leading-relaxed text-muted-foreground">{tr('Pilih cara membuat draf artikel sesuai kebutuhan kamu.')}</p>
 							</div>
 						</div>
 						<button
@@ -2258,41 +2272,67 @@
 							aria-label={tr('Tutup')}
 							onclick={() => (genChoiceOpen = false)}
 						>
-							<X size={16} />
+							<X size={18} />
 						</button>
 					</div>
 
-					<div class="space-y-2.5 p-5">
-						<button
-							class="flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-colors hover:bg-secondary"
-							type="button"
-							style="border-color: var(--border);"
-							onclick={() => {
-								genChoiceOpen = false;
-								void generate(false);
-							}}
-						>
-							<FileText size={16} class="mt-0.5 shrink-0 text-muted-foreground" />
-							<span class="min-w-0">
-								<span class="block text-sm font-semibold">{tr('Tanpa cover')}</span>
-								<span class="mt-0.5 block text-xs text-muted-foreground">{tr('Draf dibuat seperti biasa — gambar utama bisa ditambahkan kapan saja.')}</span>
+					<div class="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5 sm:px-7">
+						<label class={`genChoiceCard ${!genChoiceWithCover ? 'genChoiceCardOn' : ''}`}>
+							<input
+								type="radio"
+								name="draft-method"
+								class="mt-1 h-[18px] w-[18px] shrink-0 cursor-pointer"
+								style="accent-color: var(--primary);"
+								checked={!genChoiceWithCover}
+								onchange={() => (genChoiceWithCover = false)}
+							/>
+							<span class="genChoiceArt">
+								<img src="/illustrations/draft-no-cover.webp" alt="" loading="lazy" decoding="async" />
 							</span>
+							<span class="min-w-0 flex-1">
+								<span class="block text-[15px] font-bold leading-snug text-foreground">{tr('Draf tanpa gambar')}</span>
+								<span class="mt-1 block text-[13px] leading-relaxed text-muted-foreground">{tr('AI akan membuat draf artikel berupa teks saja. Gambar utama bisa kamu tambahkan nanti setelah draf selesai.')}</span>
+							</span>
+						</label>
+
+						<label class={`genChoiceCard ${genChoiceWithCover ? 'genChoiceCardOn' : ''}`}>
+							<input
+								type="radio"
+								name="draft-method"
+								class="mt-1 h-[18px] w-[18px] shrink-0 cursor-pointer"
+								style="accent-color: var(--primary);"
+								checked={genChoiceWithCover}
+								onchange={() => (genChoiceWithCover = true)}
+							/>
+							<span class="genChoiceArt">
+								<img src="/illustrations/draft-with-cover.webp" alt="" loading="lazy" decoding="async" />
+							</span>
+							<span class="min-w-0 flex-1">
+								<span class="flex flex-wrap items-center gap-2">
+									<span class="text-[15px] font-bold leading-snug text-foreground">{tr('Draf dengan gambar utama')}</span>
+									<span class="rounded-full px-2 py-0.5 text-[10.5px] font-bold" style="background-color: var(--accent); color: var(--primary);">{tr('Direkomendasikan')}</span>
+								</span>
+								<span class="mt-1 block text-[13px] leading-relaxed text-muted-foreground">{tr('AI akan membuat draf artikel sekaligus menyiapkan gambar utama yang sesuai dengan judul dan isi artikel.')}</span>
+								<span class="mt-2 flex items-start gap-1.5 rounded-lg px-2.5 py-2 text-[11.5px] font-medium leading-snug" style="background-color: var(--warning-soft); color: var(--warning);">
+									<CircleAlert size={13} class="mt-px shrink-0" />
+									<span>{tr('Prosesnya membutuhkan waktu lebih lama karena AI juga membuat gambar utama.')}</span>
+								</span>
+							</span>
+						</label>
+					</div>
+
+					<div class="flex flex-col-reverse gap-2 border-t px-5 py-4 sm:flex-row sm:justify-end sm:px-7" style="border-color: var(--border);">
+						<button class="app-btn app-btn-soft w-full justify-center sm:w-auto" type="button" onclick={() => (genChoiceOpen = false)}>
+							{tr('Batal')}
 						</button>
 						<button
-							class="flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-colors hover:bg-secondary"
+							class="app-btn app-btn-primary inline-flex w-full items-center justify-center gap-1.5 sm:w-auto"
 							type="button"
-							style="border-color: var(--border);"
-							onclick={() => {
-								genChoiceOpen = false;
-								void generate(true);
-							}}
+							disabled={genBusy}
+							onclick={startDraftFromChoice}
 						>
-							<Sparkles size={16} class="mt-0.5 shrink-0" style="color: var(--primary);" />
-							<span class="min-w-0">
-								<span class="block text-sm font-semibold">{tr('Dengan cover')}</span>
-								<span class="mt-0.5 block text-xs text-muted-foreground">{tr('AI juga membuat gambar utama dari judul artikel.')}</span>
-								<span class="mt-1 block text-[11px] font-medium" style="color: var(--warning);">{tr('Prosesnya sedikit lebih lama karena menunggu gambar selesai dibuat.')}</span>
-							</span>
+							{#if genBusy}<LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
+							{tr('Buat Draf')}
 						</button>
 					</div>
 				</div>
@@ -2456,6 +2496,61 @@
 	</div>
 
 <style>
+	/* Kartu pilihan metode draf AI. Seluruh kartu = label, jadi klik di mana pun
+	   memilih radio; focus-within menjaga cincin fokus saat navigasi keyboard. */
+	.genChoiceCard {
+		display: flex;
+		align-items: flex-start;
+		gap: 14px;
+		padding: 14px 16px;
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		background: var(--card, #fff);
+		cursor: pointer;
+		transition:
+			border-color 0.15s ease,
+			background-color 0.15s ease,
+			box-shadow 0.15s ease;
+	}
+	.genChoiceCard:hover {
+		border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+	}
+	.genChoiceCard:focus-within {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+	}
+	.genChoiceCardOn {
+		border-color: var(--primary);
+		background: color-mix(in srgb, var(--accent) 60%, #fff);
+		box-shadow: inset 0 0 0 1px var(--primary);
+	}
+	.genChoiceCardOn:hover {
+		border-color: var(--primary);
+	}
+	.genChoiceArt {
+		flex-shrink: 0;
+		display: flex;
+		width: 148px;
+		height: 116px;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+	}
+	.genChoiceArt img {
+		max-width: 100%;
+		max-height: 100%;
+		object-fit: contain;
+	}
+	@media (max-width: 640px) {
+		.genChoiceCard {
+			gap: 10px;
+			padding: 12px;
+		}
+		.genChoiceArt {
+			width: 96px;
+			height: 84px;
+		}
+	}
 	/* Dropdown "Angle Artikel" memakai komponen Select bawaan app. Di dalam
 	   modal ini trigger-nya dilebarkan mengikuti lebar field supaya sejajar
 	   dengan textarea Topik & Konteks; warna, hover, dan menu mengambang
