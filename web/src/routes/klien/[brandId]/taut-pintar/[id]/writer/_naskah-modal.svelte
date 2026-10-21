@@ -132,6 +132,9 @@
 	let faktaTerkunci = $state('');
 	let properQuotes = $state<ProperQuote[]>([{ dateline: '', narasumber: '', kutipan: '' }]);
 	let fokusSisa = $state('');
+	// Media blogger (blog santai) tidak memakai pengunci standar redaksi, jadi
+	// blok dateline + kutipan disembunyikan dan syaratnya tidak dipaksakan.
+	const isBloggerMedia = $derived(mediaType === 'blogger');
 
 	function addProperQuote() {
 		properQuotes = [...properQuotes, { dateline: '', narasumber: '', kutipan: '' }];
@@ -1012,8 +1015,9 @@
 				genError = tr('Isi fakta produk atau pilih Brief Copilot dulu — mode Proper ditulis terkunci ke fakta.');
 				return;
 			}
-			// Pengunci Standar Redaksi bersifat WAJIB di mode Proper.
-			if (quotes.length === 0 || quotes.some((q) => !q.dateline || !q.narasumber || !q.kutipan)) {
+			// Pengunci Standar Redaksi bersifat WAJIB di mode Proper — kecuali untuk
+			// media blogger yang blok kutipannya memang tidak ditampilkan.
+			if (!isBloggerMedia && (quotes.length === 0 || quotes.some((q) => !q.dateline || !q.narasumber || !q.kutipan))) {
 				genError = tr('Lengkapi kota rilis, nama & jabatan narasumber, dan isi kutipan — wajib diisi.');
 				return;
 			}
@@ -1933,50 +1937,52 @@
 									</div>
 								</div>
 
-									<!-- Pengunci standar redaksi -->
-									<div class="mt-6">
-										<div class="flex flex-wrap items-center gap-2">
-											<span class="text-sm font-semibold">{tr('Pengunci Standar Redaksi')}</span>
-											<span class="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-600">{tr('Wajib')}</span>
-											<span class="text-[11px] text-muted-foreground">{tr('Cegah Kutipan Fiktif')}</span>
-										</div>
-										<div class="mt-3 space-y-3">
-											{#each properQuotes as q, i (i)}
-												<div class="rounded-xl border p-3" style="border-color: var(--border);">
-													<div class="flex items-center justify-between gap-2">
-														<p class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Kutipan')} {i + 1}</p>
-														{#if properQuotes.length > 1}
-															<button class="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-rose-600" type="button" aria-label={`${tr('Hapus kutipan')} ${i + 1}`} onclick={() => removeProperQuote(i)}>
-																<X size={14} />
-															</button>
-														{/if}
+									{#if !isBloggerMedia}
+										<!-- Pengunci standar redaksi — tidak dipakai media blogger -->
+										<div class="mt-6">
+											<div class="flex flex-wrap items-center gap-2">
+												<span class="text-sm font-semibold">{tr('Pengunci Standar Redaksi')}</span>
+												<span class="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-600">{tr('Wajib')}</span>
+												<span class="text-[11px] text-muted-foreground">{tr('Cegah Kutipan Fiktif')}</span>
+											</div>
+											<div class="mt-3 space-y-3">
+												{#each properQuotes as q, i (i)}
+													<div class="rounded-xl border p-3" style="border-color: var(--border);">
+														<div class="flex items-center justify-between gap-2">
+															<p class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Kutipan')} {i + 1}</p>
+															{#if properQuotes.length > 1}
+																<button class="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-rose-600" type="button" aria-label={`${tr('Hapus kutipan')} ${i + 1}`} onclick={() => removeProperQuote(i)}>
+																	<X size={14} />
+																</button>
+															{/if}
+														</div>
+														<div class="mt-2 grid gap-3 sm:grid-cols-2">
+															<label class="block">
+																<span class="text-xs font-semibold text-muted-foreground">{tr('Kota Rilis (Dateline)')}</span>
+																<input class="app-input mt-1 w-full text-sm uppercase" placeholder="JAKARTA" bind:value={q.dateline} />
+															</label>
+															<label class="block">
+																<span class="text-xs font-semibold text-muted-foreground">{tr('Nama & Jabatan Narasumber Kutipan')}</span>
+																<input class="app-input mt-1 w-full text-sm" placeholder="Budi Santoso, CEO Tuathub Indonesia" bind:value={q.narasumber} />
+															</label>
+															<label class="block sm:col-span-2">
+																<span class="text-xs font-semibold text-muted-foreground">{tr('Isi Kutipan (Apa Adanya)')}</span>
+																<textarea
+																	rows="3"
+																	class="app-input mt-1 w-full resize-y text-sm"
+																	placeholder={tr('Pernyataan yang diketik AI pakai persis seperti tulisanmu — tanpa menambah kutipan fiktif.')}
+																	bind:value={q.kutipan}
+																></textarea>
+															</label>
+														</div>
 													</div>
-													<div class="mt-2 grid gap-3 sm:grid-cols-2">
-														<label class="block">
-															<span class="text-xs font-semibold text-muted-foreground">{tr('Kota Rilis (Dateline)')}</span>
-															<input class="app-input mt-1 w-full text-sm uppercase" placeholder="JAKARTA" bind:value={q.dateline} />
-														</label>
-														<label class="block">
-															<span class="text-xs font-semibold text-muted-foreground">{tr('Nama & Jabatan Narasumber Kutipan')}</span>
-															<input class="app-input mt-1 w-full text-sm" placeholder="Budi Santoso, CEO Tuathub Indonesia" bind:value={q.narasumber} />
-														</label>
-														<label class="block sm:col-span-2">
-															<span class="text-xs font-semibold text-muted-foreground">{tr('Isi Kutipan (Apa Adanya)')}</span>
-															<textarea
-																rows="3"
-																class="app-input mt-1 w-full resize-y text-sm"
-																placeholder={tr('Pernyataan yang diketik AI pakai persis seperti tulisanmu — tanpa menambah kutipan fiktif.')}
-																bind:value={q.kutipan}
-															></textarea>
-														</label>
-													</div>
-												</div>
-											{/each}
-											<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={addProperQuote}>
-												<Plus size={14} /> {tr('Tambah kutipan')}
-											</button>
+												{/each}
+												<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={addProperQuote}>
+													<Plus size={14} /> {tr('Tambah kutipan')}
+												</button>
+											</div>
 										</div>
-									</div>
+									{/if}
 
 									<!-- 3. Tautan & Anchor (Backlink) -->
 									<div class="mt-6">
