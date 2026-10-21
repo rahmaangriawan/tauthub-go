@@ -409,8 +409,10 @@ export type TempelKaya = { title: string; html: string; plain: string };
  *   dir, role) — penyebab tampilan "tempelan" yang berantakan di editor;
  * - NBSP, zero-width, dan blok kosong.
  *
- * Hierarki heading digeser satu tingkat (h1→h2, h2→h3, h3→h4) karena judul
- * halaman sudah berdiri sendiri di luar isi artikel.
+ * Heading dipertahankan PERSIS seperti di Docs: "Judul 1" (`<h1>`) tetap `<h1>`,
+ * "Judul 2" tetap `<h2>`, dan seterusnya. Hanya `<h1 class="title">` — gaya
+ * "Judul" (title dokumen) di Docs, bukan Heading 1 — yang diangkat menjadi judul
+ * artikel dan dikeluarkan dari isi.
  */
 export function clipboardHtmlToArticle(rawHtml: string): TempelKaya | null {
 	if (typeof DOMParser === 'undefined' || !rawHtml.trim()) return null;
@@ -437,16 +439,6 @@ export function clipboardHtmlToArticle(rawHtml: string): TempelKaya | null {
 	for (const el of Array.from(body.querySelectorAll('*'))) {
 		for (const attr of Array.from(el.attributes)) {
 			if (!KEEP_ATTR.has(attr.name.toLowerCase())) el.removeAttribute(attr.name);
-		}
-		const tag = el.tagName.toLowerCase();
-		if (/^h[1-6]$/.test(tag)) {
-			const target = tag === 'h1' ? 'h2' : tag === 'h2' ? 'h3' : 'h4';
-			if (target !== tag) {
-				const baru = doc.createElement(target);
-				for (const attr of Array.from(el.attributes)) baru.setAttribute(attr.name, attr.value);
-				while (el.firstChild) baru.appendChild(el.firstChild);
-				el.replaceWith(baru);
-			}
 		}
 	}
 
