@@ -13,6 +13,7 @@
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
+	import { LINK_DURATION_OPTIONS, normalizeLinkDurationMonths } from '$lib/media/link-duration';
 
 	const partnerId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || partnerId}`);
@@ -22,6 +23,8 @@
 		website_url: string | null; price: number; effective_price: number; client_price: number;
 		markup_percent: number; status: string; integration_type: string;
 		publication_mode: string; traffic_estimate: number; max_links: number | null;
+		/** Masa berlaku tautan: 0 = permanen, >0 = bulan. */
+		link_duration_months?: number | null;
 		bahasa_artikel: string[]; label_sponsor: string; dewan_pers_verified: boolean;
 		pending_publications: number; total_terbit: number; price_status: string;
 		topik_terlarang: string[]; contoh_artikel_url: string | null;
@@ -76,7 +79,7 @@
 	type MediaForm = {
 		name: string; media_type: string; categories: string[]; categoryQuery: string;
 		website_url: string; adapter_url: string; price: string; pricing_type: string;
-		traffic_estimate: number; max_links: string; description: string; notes: string;
+		traffic_estimate: number; max_links: string; link_duration_months: string; description: string; notes: string;
 		integration_type: string; publication_mode: string; bahasa_artikel: string[];
 		label_sponsor: string; word_count_mode: string; allow_embed: boolean;
 		topik_terlarang: string[]; topikQuery: string; contoh_artikel_url: string;
@@ -92,7 +95,7 @@
 	const emptyMediaForm = (): MediaForm => ({
 		name: '', media_type: 'mainstream', categories: [], categoryQuery: '',
 		website_url: '', adapter_url: '', price: '', pricing_type: 'nett',
-		traffic_estimate: 0, max_links: '1', description: '', notes: '',
+		traffic_estimate: 0, max_links: '1', link_duration_months: '12', description: '', notes: '',
 		integration_type: 'wordpress', publication_mode: 'draft',
 		bahasa_artikel: ['Indonesia'], label_sponsor: 'tidak_ada',
 		word_count_mode: 'sesuai_permintaan', allow_embed: false,
@@ -116,7 +119,7 @@
 	const comparableForm = (f: MediaForm) =>
 		JSON.stringify([
 			f.name, f.media_type, f.categories, f.website_url, f.adapter_url, f.price,
-			f.pricing_type, f.traffic_estimate, f.max_links, f.description, f.notes,
+			f.pricing_type, f.traffic_estimate, f.max_links, f.link_duration_months, f.description, f.notes,
 			f.integration_type, f.publication_mode, f.bahasa_artikel, f.label_sponsor,
 			f.word_count_mode, f.allow_embed, f.topik_terlarang, f.contoh_artikel_url
 		]);
@@ -707,6 +710,7 @@
 			pricing_type: m.pricing_type ?? 'nett',
 			traffic_estimate: m.traffic_estimate ?? 0,
 			max_links: ['0', '1', '2', '3'].includes(String(m.max_links ?? 1)) ? String(m.max_links ?? 1) : '1',
+			link_duration_months: String(normalizeLinkDurationMonths(m.link_duration_months)),
 			description: m.description ?? '',
 			notes: m.notes ?? '',
 			integration_type: m.integration_type || 'manual',
@@ -804,8 +808,9 @@
 				adapter_url: form.adapter_url.trim() || null,
 				price: Number(form.price) || 0,
 				pricing_type: form.pricing_type,
-				traffic_estimate: Number(form.traffic_estimate) || 0,
-				max_links: Number(form.max_links),
+			traffic_estimate: Number(form.traffic_estimate) || 0,
+			max_links: Number(form.max_links),
+			link_duration_months: Number(form.link_duration_months),
 				description: form.description.trim() || null,
 				notes: form.notes.trim() || null,
 				integration_type: form.integration_type,
@@ -2185,6 +2190,18 @@
 								/>
 							</div>
 							<span class="mt-1 block text-xs text-muted-foreground">{tr('Jumlah maksimal backlink yang boleh ditanam dalam satu artikel di media ini. Default 1; pilih 0 bila artikel tidak boleh memuat backlink.')}</span>
+						</div>
+						<div class="mt-2">
+							<span class="mb-1 block text-xs font-bold text-muted-foreground">{tr('Masa berlaku tautan (backlink)')}</span>
+							<div class="[&_.zs-select-trigger]:w-full [&_.zs-select-trigger]:max-w-none">
+								<Select
+									bind:value={form.link_duration_months}
+									ariaLabel={tr('Masa berlaku tautan (backlink)')}
+									minWidth={220}
+									options={LINK_DURATION_OPTIONS.map((o) => ({ value: String(o.value), label: tr(o.label) }))}
+								/>
+							</div>
+							<span class="mt-1 block text-xs text-muted-foreground">{tr('Apakah tautan yang sudah tayang dijamin tetap ada. Pilih "Permanen" bila tautan tidak akan pernah dilepas; pilih jumlah bulan bila hanya dijamin sekian lama (mis. 12 bulan). Nilai ini menentukan masa pemantauan 404 dan masa garansi klaim klien.')}</span>
 						</div>
 					</div>
 

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -38,7 +39,7 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 			JOIN media m ON m.id = p.media_id
 			LEFT JOIN publication_link_checks c ON c.publication_id = p.id
 			WHERE m.partner_id = $1 AND p.status = 'published' AND p.published_url IS NOT NULL
-			  AND p.published_at > NOW() - INTERVAL '12 months'
+			  AND `+db.LinkWarrantySQL("p", "m")+`
 			  AND p.publish_status <> 'draft'`, partner.ID)
 		if err != nil {
 			d.writeErr(w, err)
@@ -112,7 +113,7 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 
 		filters := []string{
 			"m.partner_id = $1", "p.status = 'published'", "p.published_url IS NOT NULL",
-			"p.published_at > NOW() - INTERVAL '12 months'",
+			db.LinkWarrantySQL("p", "m"),
 			// Artikel yang terbit sebagai DRAF di website mitra belum tampil publik,
 			// jadi tidak ikut dipantau 404 (lihat PublicationLinkCheckJob).
 			"p.publish_status <> 'draft'",

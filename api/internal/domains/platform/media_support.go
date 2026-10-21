@@ -287,6 +287,7 @@ func (d *Deps) mpMediaJSON(row ptRow, markupPercent float64) map[string]any {
 		"media_quality_notes":    row.anyOrNil("media_quality_notes"),
 		"publication_mode":       row.strOr("publication_mode", "draft"),
 		"word_count_mode":        mpNormalizeWordCountMode(row.anyOrNil("word_count_mode")),
+		"link_duration_months":   row.intOr("link_duration_months", 12),
 		"dewan_pers_verified":    row.boolOr("dewan_pers_verified", false),
 		"dewan_pers_note":        row.anyOrNil("dewan_pers_note"),
 		"dewan_pers_cert_no":     row.anyOrNil("dewan_pers_cert_no"),

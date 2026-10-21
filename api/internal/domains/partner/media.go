@@ -16,7 +16,7 @@ import (
 // ---------- media JSON (port mediaJson di partner/media/route.ts) ----------
 
 const mediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.media_type, m.description, m.traffic_estimate, m.health_score, m.health_breakdown, m.website_url, m.adapter_url, m.custom_web_endpoint_url, m.custom_web_api_key_sealed, m.custom_web_status, m.custom_web_last_test_at, m.custom_web_last_test_message, m.blogger_credentials_sealed, m.blogger_blog_id, m.blogger_blog_name, m.blogger_status, m.blogger_last_test_at, m.blogger_last_test_message, m.price, m.pricing_type, m.price_status, m.negotiated_price, m.status,
-               m.integration_type, m.notes, m.publication_mode, m.bahasa_artikel, m.label_sponsor, m.word_count_mode, m.allow_embed, m.topik_terlarang, m.contoh_artikel_url, m.max_links, m.allow_hyperlink, m.auto_publish, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.domain_verified, m.domain_verified_at, m.rejection_reason, m.reviewed_at, m.created_at, m.updated_at, m.ai_summary, m.ai_summary_generated_at,
+               m.integration_type, m.notes, m.publication_mode, m.bahasa_artikel, m.label_sponsor, m.word_count_mode, m.allow_embed, m.topik_terlarang, m.contoh_artikel_url, m.max_links, m.allow_hyperlink, m.link_duration_months, m.auto_publish, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.domain_verified, m.domain_verified_at, m.rejection_reason, m.reviewed_at, m.created_at, m.updated_at, m.ai_summary, m.ai_summary_generated_at,
                COALESCE(
                  (SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id),
                  m.category
@@ -115,6 +115,7 @@ func (d *Deps) mediaJSON(r *http.Request, row rowMap, markupPercent float64) map
 		"contoh_artikel_url":            row.raw("contoh_artikel_url"),
 		"max_links":                     row.numPtr("max_links"),
 		"allow_hyperlink":               row.boolPtr("allow_hyperlink"),
+		"link_duration_months":          row.intOr("link_duration_months", 12),
 		"dewan_pers_verified":           row.boolOr("dewan_pers_verified", false),
 		"dewan_pers_note":               row.raw("dewan_pers_note"),
 		"dewan_pers_cert_no":            row.raw("dewan_pers_cert_no"),
@@ -351,6 +352,15 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		maxLinks = v
 	}
+	// Masa berlaku tautan: 0 = permanen, >0 = bulan (default 12).
+	linkDuration := 12
+	if v, present := intField(body, "link_duration_months"); present {
+		if v < 0 || v > 120 {
+			httpx.Error(w, http.StatusUnprocessableEntity, "Invalid link_duration_months")
+			return
+		}
+		linkDuration = v
+	}
 	bahasa, hasBahasa := stringSliceField(body, "bahasa_artikel")
 	if !hasBahasa || len(bahasa) == 0 {
 		bahasa = []string{"Indonesia"}
@@ -406,12 +416,12 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := d.exec(r.Context(), `
-		INSERT INTO media (id, name, slug, category, media_type, description, traffic_estimate, max_links, allow_hyperlink, website_url, price, pricing_type, price_status, credit_cost, status, integration_type, partner_id, notes, publication_mode, bahasa_artikel, label_sponsor, word_count_mode, allow_embed, topik_terlarang, contoh_artikel_url, dewan_pers_verified, dewan_pers_note, dewan_pers_cert_no, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'menunggu_review', $13, 'pending_review', $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)`,
+		INSERT INTO media (id, name, slug, category, media_type, description, traffic_estimate, max_links, allow_hyperlink, website_url, price, pricing_type, price_status, credit_cost, status, integration_type, partner_id, notes, publication_mode, bahasa_artikel, label_sponsor, word_count_mode, allow_embed, topik_terlarang, contoh_artikel_url, dewan_pers_verified, dewan_pers_note, dewan_pers_cert_no, created_by, link_duration_months)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'menunggu_review', $13, 'pending_review', $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
 		id, name, slug, legacyCategory, mediaType, ptrOrNil(description), traffic, maxLinks, maxLinks > 0,
 		ptrOrNil(websiteURL), price, pricingType, creditCost, integrationType, partner.ID, ptrOrNil(notes),
 		publicationMode, bahasaJSON, labelSponsor, wordCountMode, allowEmbed, topikJSON,
-		ptrOrNil(contohArtikel), dewanPersVerified, ptrOrNil(dewanPersNote), ptrOrNil(dewanPersCertNo), user.ID); err != nil {
+		ptrOrNil(contohArtikel), dewanPersVerified, ptrOrNil(dewanPersNote), ptrOrNil(dewanPersCertNo), user.ID, linkDuration); err != nil {
 		d.writeErr(w, err)
 		return
 	}

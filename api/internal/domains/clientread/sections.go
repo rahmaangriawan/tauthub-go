@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -147,8 +148,9 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 			       MAX(c.last_checked_at)
 			FROM publications p
 			LEFT JOIN publication_link_checks c ON c.publication_id = p.id
+			JOIN media m ON m.id = p.media_id
 			WHERE p.brand_id = $1 AND p.status = 'published' AND p.published_url IS NOT NULL
-			  AND p.published_at > NOW() - INTERVAL '12 months'
+			  AND `+db.LinkWarrantySQL("p", "m")+`
 			  AND p.publish_status <> 'draft'`, brandID).
 			Scan(&watched, &live, &gone, &unreachable, &noURL, &lastChecked)
 
@@ -182,7 +184,7 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 	// pelacak 404: URL-nya belum bisa diakses publik, jadi pengecekan hanya akan
 	// melaporkan "hilang" palsu.
 	clause := "WHERE p.brand_id = $1 AND p.status = 'published' AND p.published_url IS NOT NULL" +
-		" AND p.published_at > NOW() - INTERVAL '12 months'" +
+		" AND " + db.LinkWarrantySQL("p", "m") +
 		" AND p.publish_status <> 'draft'"
 	args := []any{brandID}
 	addArg := func(v any) string {
@@ -228,7 +230,7 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 		       c.in_article_state, c.in_article_anchor, c.in_article_found,
 		       c.in_article_checked_at, c.in_article_error,
 		       COALESCE(m.domain_verified, FALSE) AS domain_verified,
-		       (p.published_at > NOW() - INTERVAL '12 months') AS in_warranty,
+		       `+db.LinkWarrantySQL("p", "m")+` AS in_warranty,
 		       g.id AS claim_id, g.status AS claim_status, g.refund_idr, g.refund_tc
 		FROM publications p
 		LEFT JOIN publication_link_checks c ON c.publication_id = p.id

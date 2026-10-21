@@ -1616,6 +1616,18 @@ button.selectedStepChip:disabled,
 }
 .distCountMuted { color: #64748b; font-weight: 500; }
 
+/* Kebijakan tautan media di baris katalog: kuota backlink + masa berlakunya
+   ("2 Dofollow • Permanen" / "1 Nofollow • 12 Bln SLA"). */
+.linkPolicyPill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 7px; border-radius: 999px;
+  border: 1px solid #dbe4f5; background: #f5f8ff;
+  font-size: 10.5px; font-weight: 600; line-height: 1.5;
+  color: #2b67ec; white-space: nowrap; cursor: default;
+}
+.linkPolicyPill svg { flex-shrink: 0; }
+.linkPolicyPillPermanent { border-color: #cfe9d8; background: #f2fbf5; color: #17794a; }
+
 /* Badge versi teks — masih dipakai halaman matchmaker. */
 .distBadge {
   display: inline-flex; align-items: center;

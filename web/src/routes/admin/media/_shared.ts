@@ -107,6 +107,8 @@ export type Media = {
 	dewan_pers_doc_key?: string | null;
 	publication_mode?: string;
 	word_count_mode?: string | null;
+	/** Masa berlaku tautan: 0 = permanen, >0 = bulan (default 12). */
+	link_duration_months?: number | null;
 	rejection_reason?: string | null;
 	seo_da?: number | null;
 	seo_ai_trust?: number | null;

@@ -18,7 +18,7 @@ import (
 )
 
 // mpMediaListSelect: kolom daftar media admin (parity SELECT di route GET).
-const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.description, m.website_url, m.contoh_artikel_url, m.adapter_url, m.price, m.credit_cost, m.status, m.integration_type, m.partner_id, p.name AS partner_name, u.referred_by_partner_id, referrer.name AS referrer_name, m.publish_defaults, m.notes, m.traffic_estimate, m.media_tier, m.media_quality_score, m.media_quality_notes, m.health_score, m.health_breakdown, m.health_computed_at, m.auto_publish, m.word_count_mode, m.pending_changes, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.rejection_reason, m.reviewed_by, m.reviewed_at, m.created_by, m.created_at, m.updated_at, m.pricing_type, m.price_status, m.negotiated_price,
+const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.description, m.website_url, m.contoh_artikel_url, m.adapter_url, m.price, m.credit_cost, m.status, m.integration_type, m.partner_id, p.name AS partner_name, u.referred_by_partner_id, referrer.name AS referrer_name, m.publish_defaults, m.notes, m.traffic_estimate, m.media_tier, m.media_quality_score, m.media_quality_notes, m.health_score, m.health_breakdown, m.health_computed_at, m.auto_publish, m.word_count_mode, m.pending_changes, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.rejection_reason, m.reviewed_by, m.reviewed_at, m.created_by, m.created_at, m.updated_at, m.pricing_type, m.price_status, m.negotiated_price, m.link_duration_months,
        COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv,
        sm.da AS seo_da, sm.ai_trust_score AS seo_ai_trust, sm.ai_citation AS seo_ai_citation, sm.checked_at AS seo_checked_at,
        COALESCE(np.wa_number, '') AS partner_wa_number, COALESCE(np.wa_consent, FALSE) AS partner_wa_consent,
@@ -306,6 +306,16 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	partnerID, hasPartner := strField(body, "partner_id")
 
+	// Masa berlaku tautan media (kebijakan media): 0 = permanen, >0 = bulan.
+	linkDuration := 12
+	if v, has := intField(body, "link_duration_months"); has {
+		if v < 0 || v > 120 {
+			writeErr(w, d, errUnprocessable("Invalid link_duration_months"))
+			return
+		}
+		linkDuration = v
+	}
+
 	id := uuid.NewString()
 	markup := d.mpGetMarkupPercent(r.Context())
 	clientPrice := mpComputeClientPrice(price, markup)
@@ -317,13 +327,14 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := d.exec(r.Context(), `
-		INSERT INTO media (id, name, slug, category, description, website_url, adapter_url, price, credit_cost, status, integration_type, partner_id, publish_defaults, notes, traffic_estimate, media_tier, media_quality_score, media_quality_notes, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+		INSERT INTO media (id, name, slug, category, description, website_url, adapter_url, price, credit_cost, status, integration_type, partner_id, publish_defaults, notes, traffic_estimate, media_tier, media_quality_score, media_quality_notes, created_by, link_duration_months)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
 		id, name, slug, ptNullableArgStr(category, hasCategory), ptNullableArgStr(description, hasDescription),
 		ptNullableArgStr(websiteURL, hasWebsite), ptNullableArgStr(adapterURL, hasAdapter), price, creditCost,
 		status, integrationType, ptNullableArgStr(partnerID, hasPartner), publishDefaults,
 		ptNullableArgStr(notes, hasNotes), mpIntArgDefault(body, "traffic_estimate", 0), mediaTier,
-		mpNullableAnyIntFromBody(body, "media_quality_score"), ptNullableArgStr(qualityNotes, hasQualityNotes), user.ID); err != nil {
+		mpNullableAnyIntFromBody(body, "media_quality_score"), ptNullableArgStr(qualityNotes, hasQualityNotes), user.ID,
+		linkDuration); err != nil {
 		writeErr(w, d, mpMediaError(err))
 		return
 	}
@@ -474,6 +485,12 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	partnerID, hasPartner := strField(body, "partner_id")
+	// Masa berlaku tautan (kebijakan media): 0 = permanen, >0 = bulan.
+	linkDuration, hasLinkDuration := intField(body, "link_duration_months")
+	if hasLinkDuration && (linkDuration < 0 || linkDuration > 120) {
+		writeErr(w, d, errUnprocessable("Invalid link_duration_months"))
+		return
+	}
 	autoPublish, hasAutoPublish := boolField(body, "auto_publish")
 	// DA manual: admin boleh mengisi Domain Authority sendiri saat deteksi
 	// otomatis tidak menemukannya. Hanya divalidasi sebagai bilangan bulat 0-100.
@@ -525,9 +542,10 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		  media_quality_score = COALESCE($17, media_quality_score),
 		  media_quality_notes = COALESCE($18, media_quality_notes),
 		  pricing_type = COALESCE($19, pricing_type),
-			  price_status = CASE WHEN $20::text IS NOT NULL THEN 'final' ELSE price_status END,
+		  link_duration_months = COALESCE($20, link_duration_months),
+			  price_status = CASE WHEN $21::text IS NOT NULL THEN 'final' ELSE price_status END,
 		  updated_at = NOW()
-		WHERE id = $21`,
+		WHERE id = $22`,
 		ptNullableArgStr(name, hasName), ptNullableArgStr(slug, hasSlug), ptNullableArgStr(category, hasCategory),
 		ptNullableArgStr(description, hasDescription), ptNullableArgStr(websiteURL, hasWebsite), ptNullableArgStr(adapterURL, hasAdapter),
 		mpNullableArgFloat(price, hasPrice), creditCost, ptNullableArgStr(status, hasStatus),
@@ -535,7 +553,8 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		ptNullableArgBool(autoPublish, hasAutoPublish), publishDefaults, ptNullableArgStr(notes, hasNotes),
 		ptNullableArgInt(traffic, hasTraffic), ptNullableArgStr(mediaTier, hasTier),
 		ptNullableAnyInt(qualityScore, hasQualityScore), ptNullableArgStr(qualityNotes, hasQualityNotes),
-		ptNullableArgStr(pricingType, hasPricingType), ptNullableArgStr(pricingType, hasPricingType), mediaID); err != nil {
+		ptNullableArgStr(pricingType, hasPricingType), ptNullableArgInt(linkDuration, hasLinkDuration),
+		ptNullableArgStr(pricingType, hasPricingType), mediaID); err != nil {
 		writeErr(w, d, mpMediaError(err))
 		return
 	}

@@ -14,6 +14,7 @@
 	import AgentSteps from '../taut-pintar/_agent-steps.svelte';
 	import {
 		ArrowRight, Bookmark, Check, CircleAlert, Clock, Database, FileText, Info, LayoutGrid,
+		Link as LinkIcon,
 		Plus, RotateCcw, Search, SlidersHorizontal, Trash2, Upload, Wallet, X, Zap,
 		ChevronLeft, ChevronRight
 	} from '@lucide/svelte';
@@ -22,6 +23,7 @@
 	import { campaignUrlId } from '$lib/campaign-url';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { mediaDistribution } from '$lib/media/distribution';
+	import { linkPolicyBadge, isPermanentLink } from '$lib/media/link-duration';
 	import { seededShuffle, randomShuffleSeed } from '$lib/media/shuffle';
 	import { apiRequest, ensureValidSession, readApiError, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
@@ -53,6 +55,7 @@
 		gsc_connected?: boolean; image_required?: boolean | null;
 		label_sponsor?: string | null; topik_terlarang?: string[];
 		max_links?: number | null; allow_hyperlink?: boolean | null;
+		link_duration_months?: number | null;
 		publication_mode?: string | null; auto_publish?: boolean | null; word_count_mode?: string | null;
 		allow_embed?: boolean; pricing_type_raw?: string | null;
 		status?: string | null;
@@ -1576,7 +1579,7 @@
 										</Tooltip.Root>
 											{/if}
 										</div>
-										{#if m.contoh_artikel_url || dist.known}
+										{#if m.contoh_artikel_url || dist.known || m.link_duration_months != null}
 											<div class="mediaMetaLine">
 												{#if m.contoh_artikel_url}
 													<a
@@ -1586,6 +1589,32 @@
 														class="sampleDocLink"
 														onclick={(e) => e.stopPropagation()}
 													><FileText size={13} /><span>Sample</span></a>
+												{/if}
+												<!-- Kebijakan tautan media: kuota backlink + masa berlakunya
+												     (permanen atau sekian bulan). -->
+												{#if m.link_duration_months != null}
+													<Tooltip.Root>
+														<Tooltip.Trigger>
+															{#snippet child({ props })}
+																<span
+																	{...props}
+																	class="linkPolicyPill"
+																	class:linkPolicyPillPermanent={isPermanentLink(m.link_duration_months)}
+																>
+																	<LinkIcon size={11} />
+																	<span>{linkPolicyBadge(m)}</span>
+																</span>
+															{/snippet}
+														</Tooltip.Trigger>
+														<Tooltip.Portal>
+															<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+																<Tooltip.Arrow class="uiTipArrow" />
+																{isPermanentLink(m.link_duration_months)
+																	? tr('Media ini menjamin tautannya permanen — tidak pernah dilepas.')
+																	: tr('Media ini menjamin tautannya {bulan} bulan sejak artikel tayang.').replace('{bulan}', String(m.link_duration_months))}
+															</Tooltip.Content>
+														</Tooltip.Portal>
+													</Tooltip.Root>
 												{/if}
 												{#if dist.known}
 												<Tooltip.Root>

@@ -10,6 +10,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import Select from '$lib/components/select.svelte';
+	import { LINK_DURATION_OPTIONS, normalizeLinkDurationMonths } from '$lib/media/link-duration';
 	import { fmtDateTime, statusLabel } from '$lib/admin-format';
 	import {
 		compactNumber,
@@ -106,6 +107,7 @@
 		media_quality_score: '',
 		media_quality_notes: '',
 		seo_da: '',
+		link_duration_months: '12',
 		pricing_type: 'nett' as 'nett' | 'nego'
 	});
 
@@ -193,6 +195,7 @@
 			media_quality_score: '',
 			media_quality_notes: '',
 			seo_da: '',
+			link_duration_months: '12',
 			pricing_type: 'nett'
 		};
 		createOpen = true;
@@ -214,6 +217,7 @@
 			media_quality_score: row.media_quality_score != null ? String(row.media_quality_score) : '',
 			media_quality_notes: row.media_quality_notes ?? '',
 			seo_da: row.seo_da != null ? String(row.seo_da) : '',
+			link_duration_months: String(normalizeLinkDurationMonths(row.link_duration_months)),
 			pricing_type: row.pricing_type ?? 'nett'
 		};
 		detailAudit = null;
@@ -263,6 +267,7 @@
 					// DA manual hanya dikirim saat mengedit (media harus sudah ada).
 					// Kosong = hapus nilai DA (dikirim null).
 					seo_da: !editing ? undefined : form.seo_da.trim() === '' ? null : Number(form.seo_da),
+					link_duration_months: Number(form.link_duration_months),
 					pricing_type: form.pricing_type,
 				price_change_note:
 					form.pricing_type !== (editing?.pricing_type ?? 'nett') ? priceNote.trim() || null : undefined
@@ -1354,6 +1359,19 @@
 					placeholder={tr("Contoh: otoritas tinggi di sektor teknologi")}
 					bind:value={form.media_quality_notes}
 				/>
+			</label>
+
+			<label class="block">
+				<span class="text-xs font-medium text-muted-foreground">{tr("Masa berlaku tautan (backlink)")}</span>
+				<Select
+					bind:value={form.link_duration_months}
+					ariaLabel={tr("Masa berlaku tautan (backlink)")}
+					minWidth={220}
+					options={LINK_DURATION_OPTIONS.map((o) => ({ value: String(o.value), label: tr(o.label) }))}
+				/>
+				<span class="mt-1 block text-xs text-muted-foreground"
+					>{tr("Permanen bila tautan tidak pernah dilepas; atau jumlah bulan jaminan tayang. Nilai ini menentukan masa pemantauan 404 dan masa garansi klaim klien.")}</span
+				>
 			</label>
 
 			<div class="grid gap-3 sm:grid-cols-2">

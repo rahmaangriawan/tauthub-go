@@ -497,7 +497,7 @@
 <section>
 	<PageHeader
 		title="Link Guardian"
-		description={tr("Halaman ini menjaga garansi tayang 12 bulan: sistem memeriksa apakah artikel yang sudah terbit di situs media mitra masih bisa dibuka. Kalau ada halaman yang hilang, artikel itu ditandai di baris daftar supaya bisa segera diganti di media lain. Pengecekan ulang berjalan otomatis tiap 7 hari dan bisa diantrekan manual lewat tombol Cek Sekarang.")}
+		description={tr("Halaman ini menjaga garansi tayang setiap artikel: sistem memeriksa apakah artikel yang sudah terbit di situs media mitra masih bisa dibuka selama masa garansi medianya (12 bulan, atau tanpa batas bila medianya menjamin tautan permanen). Kalau ada halaman yang hilang, artikel itu ditandai di baris daftar supaya bisa segera diganti di media lain. Pengecekan ulang berjalan otomatis tiap 7 hari dan bisa diantrekan manual lewat tombol Cek Sekarang.")}
 	>
 		<Badge
 			tone={(summary?.gone ?? 0) > 0 ? 'danger' : 'success'}
@@ -545,7 +545,7 @@
 
 	<div class="pt-4">
 		{#if tab === 'claims'}
-			<div class="app-card mb-3 px-4 py-2.5 text-sm text-muted-foreground">{tr("Klaim garansi dari klien. Periksa kondisi domain, hubungi pemilik domain, lalu kembalikan saldo bila masalahnya tidak bisa diselesaikan. Kelayakan (garansi 12 bulan, media terverifikasi, dan kerusakan 404 atau tautan dicabut) sudah diperiksa server.")}</div>
+			<div class="app-card mb-3 px-4 py-2.5 text-sm text-muted-foreground">{tr("Klaim garansi dari klien. Periksa kondisi domain, hubungi pemilik domain, lalu kembalikan saldo bila masalahnya tidak bisa diselesaikan. Kelayakan (masih dalam masa garansi media — 12 bulan atau permanen, media terverifikasi, dan kerusakan 404 atau tautan dicabut) sudah diperiksa server.")}</div>
 
 			{#if claims.length === 0}
 				<div class="app-card px-6 py-10 text-center text-sm text-muted-foreground">{tr("Belum ada klaim masuk.")}</div>
@@ -827,5 +827,5 @@
 		{/if}
 	</div>
 
-	<p class="mt-4 text-xs text-muted-foreground">{tr("Artikel dipantau selama 12 bulan sejak terbit. Status Hilang (404) berarti halaman sudah tidak ada dan bisa diganti ke media lain; Tak Terjangkau berarti situs menolak akses atau sedang error dan tidak dianggap hilang.")}</p>
+	<p class="mt-4 text-xs text-muted-foreground">{tr("Artikel dipantau selama masa garansi medianya: 12 bulan sejak terbit, atau tanpa batas bila medianya menjamin tautan permanen. Status Hilang (404) berarti halaman sudah tidak ada dan bisa diganti ke media lain; Tak Terjangkau berarti situs menolak akses atau sedang error dan tidak dianggap hilang.")}</p>
 </section>

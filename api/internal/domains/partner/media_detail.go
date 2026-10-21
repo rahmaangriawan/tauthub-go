@@ -163,6 +163,12 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid max_links")
 		return
 	}
+	// Masa berlaku tautan: 0 = permanen, >0 = bulan.
+	linkDuration, hasLinkDuration := intField(body, "link_duration_months")
+	if hasLinkDuration && (linkDuration < 0 || linkDuration > 120) {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid link_duration_months")
+		return
+	}
 	autoPublish, hasAutoPublish := boolField(body, "auto_publish")
 	pricingType, hasPricingType := strField(body, "pricing_type")
 	if hasPricingType && pricingType != "nett" && pricingType != "nego" {
@@ -203,6 +209,9 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		if maxLinks != existingMax {
 			changed = true
 		}
+	}
+	if hasLinkDuration && linkDuration != existing.intOr("link_duration_months", 12) {
+		changed = true
 	}
 	if hasIntegrationType && integrationType != existing.strOr("integration_type", "") {
 		changed = true
@@ -309,8 +318,9 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		  dewan_pers_doc_key = COALESCE($24, dewan_pers_doc_key),
 		  auto_publish = COALESCE($25, auto_publish),
 		  pricing_type = COALESCE($26, pricing_type),
+		  link_duration_months = COALESCE($27, link_duration_months),
 		  updated_at = NOW()
-		WHERE id = $27 AND partner_id = $28`,
+		WHERE id = $28 AND partner_id = $29`,
 		nullIfUnset(hasName, name), nullIfUnset(hasName, slug),
 		nullIfUnset(hasCategory, category), nullIfUnset(hasMediaType, mediaType),
 		nullIfUnset(hasDescription, description), nullIfUnset(hasWebsiteURL, websiteURL),
@@ -323,7 +333,8 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		nullIfUnset(hasLabelSponsor, labelSponsor), nullIfUnset(hasWordCountMode, wordCountMode),
 		allowEmbedVal, topikVal, nullIfUnset(hasContohArtikel, contohArtikel),
 		nullIfUnset(hasDewanPersDocKey, dewanPersDocKey), autoPublishVal,
-		nullIfUnset(hasPricingType, pricingType), mediaID, partner.ID); err != nil {
+		nullIfUnset(hasPricingType, pricingType), nullIfUnset(hasLinkDuration, linkDuration),
+		mediaID, partner.ID); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -433,7 +444,7 @@ func (d *Deps) buildPendingChanges(body map[string]any, existing rowMap) any {
 	changed := map[string]any{}
 	for _, key := range []string{
 		"name", "category", "description", "website_url", "adapter_url", "price",
-		"traffic_estimate", "max_links", "integration_type", "notes", "publication_mode",
+		"traffic_estimate", "max_links", "link_duration_months", "integration_type", "notes", "publication_mode",
 		"bahasa_artikel", "label_sponsor", "topik_terlarang", "contoh_artikel_url",
 		"pricing_type", "dewan_pers_doc_key",
 	} {

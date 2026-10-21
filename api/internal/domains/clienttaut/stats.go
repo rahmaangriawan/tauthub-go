@@ -145,7 +145,7 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 	}
 	items, err := d.queryRows(ctx,
 		`SELECT tcm.media_id, m.name, m.media_type, m.website_url, tcm.status, tcm.article_status, tcm.match_reason, tcm.ai_score, tcm.match_rank,
-		        m.credit_cost, m.allow_hyperlink, m.max_links, m.allow_embed, m.label_sponsor, tcm.regen_count, tcm.angle_slug,
+		        m.credit_cost, m.allow_hyperlink, m.max_links, m.link_duration_months, m.allow_embed, m.label_sponsor, tcm.regen_count, tcm.angle_slug,
 		        COALESCE(tcm.price, m.price, 0) AS price,
 		        COALESCE((SELECT (length(cv.content) - length(replace(cv.content, '<img', ''))) / 4
 		                  FROM content_documents cd
@@ -207,6 +207,7 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 			"credit_cost":     creditCost,
 			"allow_hyperlink": allowHyperlink,
 			"max_links":       maxLinks,
+			"link_duration_months": i.intOr("link_duration_months", 12),
 			"allow_embed":     i.boolOr("allow_embed", false),
 			"regen_count":     regenCount,
 			"angle_slug":      i.raw("angle_slug"),

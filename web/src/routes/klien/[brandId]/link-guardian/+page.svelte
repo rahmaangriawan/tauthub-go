@@ -369,10 +369,10 @@
 			<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--primary);">LINK GUARDIAN</p>
 			<h1 class="mt-1 text-2xl font-semibold tracking-tight">{tr("Link Guardian")}</h1>
 			<p class="lg-sub mt-1 text-sm text-muted-foreground">
-				{tr('Sistem memantau tautan Anda secara berkala.')}
-				<strong>{tr('Garansi tayang 12 bulan')}</strong>
-				{tr('berlaku sejak tanggal tayang, dan eksklusif untuk')}
-				<strong style="color: var(--primary);">{tr('Media Terverifikasi')}</strong>.
+					{tr('Sistem memantau tautan Anda secara berkala.')}
+					<strong>{tr('Garansi tayang mengikuti kebijakan media')}</strong>
+					{tr('— 12 bulan, atau permanen bila medianya menjamin tautan tidak pernah dilepas. Masa garansi berlaku sejak tanggal tayang, dan eksklusif untuk')}
+					<strong style="color: var(--primary);">{tr('Media Terverifikasi')}</strong>.
 			</p>
 		</div>
 		<div class="lg-sync">
@@ -518,7 +518,7 @@
 		{#if !loading && items.length === 0}
 			<div class="app-card mt-4 px-6 py-12 text-center">
 				<p class="font-medium">{tr("Tidak ada masalah pada artikel Anda")}</p>
-				<p class="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">{tr("Semua artikel yang tayang dalam masa garansi 12 bulan terpantau masih bisa diakses. Halaman ini akan menampilkan artikel begitu ada yang hilang atau tidak terjangkau.")}</p>
+				<p class="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">{tr("Semua artikel yang tayang dalam masa garansi medianya masih terpantau bisa diakses (12 bulan, atau tanpa batas untuk media dengan tautan permanen). Halaman ini akan menampilkan artikel begitu ada yang hilang atau tidak terjangkau.")}</p>
 			</div>
 		{:else}
 			<div class="app-card mt-4 lg-list-card">

@@ -18,6 +18,7 @@
 	} from '@lucide/svelte';
 	import { apiRequest } from '$lib/auth';
 	import { wordCountLabel, normalizeWordCountMode } from '$lib/media/word-count';
+	import { normalizeLinkDurationMonths } from '$lib/media/link-duration';
 	import { getCategoryTone } from '$lib/media/category-tone';
 	import { MEDIA_LABEL } from '../taut-pintar/_shared';
 
@@ -61,6 +62,7 @@
 		topik_terlarang?: string[] | null;
 		max_links?: number | null;
 		allow_hyperlink?: boolean | null;
+		link_duration_months?: number | null;
 		image_required?: boolean | null;
 		publication_mode?: string | null;
 		word_count_mode?: string | null;
@@ -163,6 +165,12 @@
 	);
 
 	const maxLinksCount = $derived(media.max_links);
+	// Masa berlaku tautan mengikuti kebijakan media (0 = permanen).
+	const linkDurationMonths = $derived(normalizeLinkDurationMonths(media.link_duration_months));
+	const permanentLink = $derived(linkDurationMonths === 0);
+	const linkDurationText = $derived(
+		permanentLink ? tr('Permanen — tautan tidak pernah dilepas') : `${linkDurationMonths} ${tr('Bulan')} · ${tr('kebijakan media')}`
+	);
 	const linkPolicy = $derived(
 		maxLinksCount == null
 			? 'Maks. 2 Dofollow'
@@ -294,7 +302,9 @@
 				parameters: [
 					{
 						label: tr('Garansi Tayang (SLA)'),
-						value: `12 ${tr('Bulan')} (${tr('jaminan retensi standar platform Tauthub')})`
+						value: permanentLink
+							? tr('Permanen — tautan tidak pernah dilepas')
+							: `${linkDurationMonths} ${tr('Bulan')} (${tr('mengikuti kebijakan media')})`
 					},
 					{
 						label: tr('Label Sponsor / Adv'),
@@ -640,13 +650,16 @@
 							</div>
 
 							<div class="paramRows">
-								<div class="paramItemRow">
-									<div class="paramItemLeftGroup">
-										<Calendar size={18} class="paramRowIcon" />
-										<span>Garansi Tayang (SLA)</span>
+									<div class="paramItemRow">
+										<div class="paramItemLeftGroup">
+											<Calendar size={18} class="paramRowIcon" />
+											<span>Garansi Tayang (SLA)</span>
+										</div>
+										<span
+											class="paramBadgePill"
+											class:paramBadgePillPermanent={permanentLink}
+										>{linkDurationText}</span>
 									</div>
-									<span class="paramBadgePill">12 Bulan · platform</span>
-								</div>
 
 								<div class="paramItemRow">
 									<div class="paramItemLeftGroup">
@@ -1466,6 +1479,11 @@
 		color: #1d4ed8;
 		font-size: 12px;
 		font-weight: 700;
+	}
+	/* Tautan permanen = kabar baik: hijau, bukan biru. */
+	.paramBadgePillPermanent {
+		background: #ecfdf5;
+		color: #047857;
 	}
 	.paramBadgePillGreen {
 		display: inline-flex;

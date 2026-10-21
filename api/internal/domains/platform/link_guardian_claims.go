@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/db"
 )
 
 // link_guardian_claims.go: klaim garansi tayang Link Guardian.
@@ -18,7 +20,8 @@ import (
 // ref_type='refund' bernilai negatif, sehingga pemasukan Tauthub ikut turun.
 //
 // Kelayakan ditegakkan di server, bukan hanya di tampilan:
-//   - artikel masih dalam garansi 12 bulan sejak tanggal tayang,
+//   - artikel masih dalam masa garansi tayang medianya (12 bulan, atau tanpa
+//     batas untuk media yang tautannya permanen — media.link_duration_months),
 //   - medianya terverifikasi (bukan domain makelar),
 //   - kerusakannya 'gone' (404/410) atau tautan di dalam artikel dicabut.
 
@@ -46,7 +49,8 @@ func (d *Deps) LinkGuardianClaimsList(w http.ResponseWriter, r *http.Request) {
 		       m.name AS media_name, COALESCE(m.domain_verified, FALSE) AS domain_verified,
 		       b.name AS brand_name,
 		       lc.state AS link_state, lc.in_article_state, lc.last_checked_at,
-		       (p.published_at > NOW() - INTERVAL '12 months') AS in_warranty
+		       m.link_duration_months AS link_duration_months,
+		       `+db.LinkWarrantySQL("p", "m")+` AS in_warranty
 		FROM link_guardian_claims c
 		JOIN publications p ON p.id = c.publication_id
 		LEFT JOIN media m ON m.id = p.media_id
@@ -155,7 +159,8 @@ func (d *Deps) LinkGuardianClaimRefund(w http.ResponseWriter, r *http.Request) {
 		SELECT c.id, c.publication_id, c.brand_id, c.status,
 		       COALESCE(m.domain_verified, FALSE) AS domain_verified,
 		       lc.state AS link_state, lc.in_article_state,
-		       (p.published_at > NOW() - INTERVAL '12 months') AS in_warranty
+		       m.link_duration_months AS link_duration_months,
+		       `+db.LinkWarrantySQL("p", "m")+` AS in_warranty
 		FROM link_guardian_claims c
 		JOIN publications p ON p.id = c.publication_id
 		LEFT JOIN media m ON m.id = p.media_id
@@ -235,7 +240,8 @@ func (d *Deps) LinkGuardianClaimReject(w http.ResponseWriter, r *http.Request) {
 // perhitungan tanggal yang tersebar di Go.
 func (d *Deps) lgEligibilityReason(row rowMap) string {
 	if !row.boolOr("in_warranty", false) {
-		return "Garansi 12 bulan sudah habis untuk artikel ini."
+		months := row.intOr("link_duration_months", 12)
+		return fmt.Sprintf("Masa garansi tayang media ini (%d bulan) sudah habis untuk artikel ini.", months)
 	}
 	if !row.boolOr("domain_verified", false) {
 		return "Artikel ini diterbitkan di media yang belum terverifikasi, jadi tidak masuk garansi."

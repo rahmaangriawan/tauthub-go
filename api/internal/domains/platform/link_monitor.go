@@ -8,6 +8,8 @@ package platform
 import (
 	"net/http"
 	"strings"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/db"
 )
 
 // mpLinkStates: state tautan yang bisa difilter halaman Pelacak 404.
@@ -45,9 +47,10 @@ func (d *Deps) LinkMonitorGlobal(w http.ResponseWriter, r *http.Request) {
 			       COUNT(*) FILTER (WHERE c.state = 'no_url')::int AS no_url
 			FROM publications p
 			LEFT JOIN publication_link_checks c ON c.publication_id = p.id
+			JOIN media m ON m.id = p.media_id
 			WHERE p.status = 'published'
 			  AND p.published_url IS NOT NULL
-			  AND p.published_at > NOW() - INTERVAL '12 months'
+			  AND `+db.LinkWarrantySQL("p", "m")+`
 			  AND p.publish_status <> 'draft'`)
 		if err != nil {
 			writeErr(w, d, err)
@@ -144,7 +147,8 @@ func (d *Deps) LinkMonitorGlobal(w http.ResponseWriter, r *http.Request) {
 	filters := []string{
 		"p.status = 'published'",
 		"p.published_url IS NOT NULL",
-		"p.published_at > NOW() - INTERVAL '12 months'",
+		// Masa pemantauan mengikuti kebijakan media (0 = tautan permanen).
+		db.LinkWarrantySQL("p", "m"),
 		// Publikasi berstatus DRAF di website mitra belum tampil publik → tidak
 		// dipantau 404 (sama dengan aturan di scheduler & PublicationLinkCheckJob).
 		"p.publish_status <> 'draft'",
@@ -257,9 +261,10 @@ func (d *Deps) LinkMonitorCheck(w http.ResponseWriter, r *http.Request) {
 		pubRows, err := d.queryRows(r.Context(), `
 			SELECT p.id FROM publications p
 			LEFT JOIN publication_link_checks c ON c.publication_id = p.id
+			JOIN media m ON m.id = p.media_id
 			WHERE p.status = 'published'
 			  AND p.published_url IS NOT NULL
-			  AND p.published_at > NOW() - INTERVAL '12 months'
+			  AND `+db.LinkWarrantySQL("p", "m")+`
 			  AND p.publish_status <> 'draft'
 			  AND (c.last_checked_at IS NULL OR c.last_checked_at < NOW() - INTERVAL '7 days')
 			  AND NOT EXISTS (

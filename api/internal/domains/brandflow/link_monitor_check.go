@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -63,10 +64,11 @@ func (d *Deps) LinkMonitorCheckBrand(w http.ResponseWriter, r *http.Request) {
 	rows, err := d.queryRows(r.Context(), `
 		SELECT p.id FROM publications p
 		LEFT JOIN publication_link_checks c ON c.publication_id = p.id
+		JOIN media m ON m.id = p.media_id
 		WHERE p.brand_id = $1
 		  AND p.status = 'published'
 		  AND p.published_url IS NOT NULL
-		  AND p.published_at > NOW() - INTERVAL '12 months'
+		  AND `+db.LinkWarrantySQL("p", "m")+`
 		  AND p.publish_status <> 'draft'
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j

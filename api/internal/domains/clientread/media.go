@@ -150,6 +150,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		       media.health_computed_at, media.auto_publish, dewan_pers_verified, dewan_pers_note, dewan_pers_cert_no,
 		       domain_verified, media.status, media.created_at, media.media_type, media.bahasa_artikel,
 		       media.label_sponsor, media.topik_terlarang, media.max_links, media.allow_hyperlink,
+		       media.link_duration_months,
 		       media.publication_mode, media.word_count_mode, media.allow_embed, media.pricing_type, media.price_status,
 		       COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l
 		                 JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = media.id), media.category) AS categories_csv,
@@ -203,6 +204,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		var createdAt time.Time
 		var mediaType, bahasaArtikel, labelSponsor, topikTerlarang, publicationMode, wordCountMode, pricingType, priceStatus *string
 		var maxLinks *int
+		var linkDurationMonths int
 		var categoriesCSV *string
 		var seoDA, seoPA, seoSpam, seoAITrust *int
 		var seoCheckedAt *time.Time
@@ -217,6 +219,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			&healthComputedAt, &autoPublish, &dewanPersVerified, &dewanPersNote, &dewanPersCertNo,
 			&domainVerified, &status, &createdAt, &mediaType, &bahasaArtikel,
 			&labelSponsor, &topikTerlarang, &maxLinks, &allowHyperlink,
+			&linkDurationMonths,
 			&publicationMode, &wordCountMode, &allowEmbed, &pricingType, &priceStatus,
 			&categoriesCSV, &seoDA, &seoPA, &seoSpam, &seoCheckedAt, &seoAITrust, &seoAICitation,
 			&standardImageRequired, &gscConnected, &swVisits, &swSnapshotDate, &publishedCount)
@@ -259,6 +262,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			"media_type": mediaType, "bahasa_artikel": parseMediaBahasa(bahasaArtikel),
 			"label_sponsor": labelSponsor, "topik_terlarang": parseTopikTerlarang(topikTerlarang),
 			"max_links": maxLinks, "allow_hyperlink": allowHyperlink,
+			"link_duration_months": linkDurationMonths,
 			"publication_mode": publicationMode, "word_count_mode": wordCountMode, "allow_embed": allowEmbed,
 			"pricing_type": pricingType, "price_status": priceStatus,
 			"categories":     categories,
@@ -350,17 +354,18 @@ func (d *Deps) MediaDetail(w http.ResponseWriter, r *http.Request) {
 	var mediaTier *string
 	var maxLinks *int
 	var allowHyperlink bool
+	var linkDurationMonths int
 	var publicationMode, wordCountMode *string
 	var labelSponsor, topikTerlarang *string
 	var dewanPersVerified, domainVerified bool
 	var dewanPersNote, dewanPersCertNo *string
 	err := d.Pool.QueryRow(r.Context(), `
 		SELECT id, name, status, category, description, website_url, price, credit_cost, traffic_estimate,
-		       media_tier, max_links, allow_hyperlink, publication_mode, word_count_mode, media_type,
+		       media_tier, max_links, allow_hyperlink, link_duration_months, publication_mode, word_count_mode, media_type,
 		       label_sponsor, topik_terlarang, dewan_pers_verified, dewan_pers_note, dewan_pers_cert_no, domain_verified
 		FROM media WHERE id = $1 AND status = 'active' LIMIT 1`, mediaID).
 		Scan(&id, &name, &status, &category, &description, &websiteURL, &price, &creditCost, &trafficEstimate,
-			&mediaTier, &maxLinks, &allowHyperlink, &publicationMode, &wordCountMode, &mediaType,
+			&mediaTier, &maxLinks, &allowHyperlink, &linkDurationMonths, &publicationMode, &wordCountMode, &mediaType,
 			&labelSponsor, &topikTerlarang, &dewanPersVerified, &dewanPersNote, &dewanPersCertNo, &domainVerified)
 	if err != nil {
 		httpx.Error(w, http.StatusNotFound, "Media tidak ditemukan")
@@ -371,7 +376,8 @@ func (d *Deps) MediaDetail(w http.ResponseWriter, r *http.Request) {
 		"id": id, "name": name, "status": status, "category": category, "description": description,
 		"website_url": websiteURL, "price": price, "credit_cost": creditCost,
 		"traffic_estimate": trafficEstimate, "media_tier": mediaTier, "max_links": maxLinks,
-		"allow_hyperlink": allowHyperlink, "publication_mode": publicationMode, "word_count_mode": wordCountMode,
+		"allow_hyperlink": allowHyperlink, "link_duration_months": linkDurationMonths,
+		"publication_mode": publicationMode, "word_count_mode": wordCountMode,
 		"media_type": mediaType, "label_sponsor": labelSponsor, "topik_terlarang": parseTopikTerlarang(topikTerlarang),
 		"dewan_pers_verified": dewanPersVerified, "dewan_pers_note": dewanPersNote, "dewan_pers_cert_no": dewanPersCertNo,
 		"domain_verified": domainVerified,
