@@ -1790,6 +1790,20 @@
 											{#if copilotError}
 												<p class="mt-1 text-xs" style="color: var(--destructive);">{copilotError}</p>
 											{/if}
+											{#if copilotBriefId && !copilotBusy && !copilotSummary}
+												<!-- Brief terpilih belum menyimpan fakta: tawarkan langsung ke brief
+												     ITU (halaman Taut Brief menerima id maupun short_code). Dibuka di
+												     tab baru supaya isian popup tidak hilang. -->
+												<a
+													href={`${profilerHref}/${copilotBriefId}`}
+													target="_blank"
+													rel="noopener noreferrer"
+													class="app-btn app-btn-soft mt-2 !min-h-7 !px-2.5 !text-[11px] font-semibold"
+													aria-label={`${tr('Buka Taut Brief')}: ${copilotBriefName}`}
+												>
+													{tr('Buka Taut Brief')}
+												</a>
+											{/if}
 
 											<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
 												<span class="text-xs font-semibold">{tr('Fakta / Data Produk yang Wajib Masuk')} <span style="color: var(--destructive);">*</span></span>
