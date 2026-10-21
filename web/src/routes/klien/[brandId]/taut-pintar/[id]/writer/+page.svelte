@@ -1121,23 +1121,25 @@
 		}
 	}
 
-	/** Cek QC semua artikel sekaligus dari popover kesiapan terbit. */
-	async function runQcAll() {
+	/** Cek QC sekaligus dari popover kesiapan terbit. `ids` diisi bila dipanggil
+	 *  dari tombol grup (hanya media di daftar grup itu); tanpa `ids` dipakai
+	 *  seluruh target QC kampanye. */
+	async function runQcAll(ids?: string[]) {
 		if (bulkQcRunning || viewOnly) return;
-		const targets = qcTargets.length > 0 ? qcTargets : selected.filter((m) => hasDoc(m));
+		const fallback = qcTargets.length > 0 ? qcTargets : selected.filter((m) => hasDoc(m));
+		const targets = ids && ids.length > 0 ? ids : fallback.map((m) => m.media_id);
 		if (targets.length === 0) return;
-		const ids = targets.map((m) => m.media_id);
 		bulkQcRunning = true;
 		error = '';
 		const running: Record<string, boolean> = { ...qcRunning };
-		for (const id of ids) running[id] = true;
+		for (const id of targets) running[id] = true;
 		qcRunning = running;
 		try {
 			// Satu panggilan untuk semua media: server memindai paralel dan baru
 			// membalas setelah selesai, jadi progress di UI bersifat animasi.
 			const res = await apiRequest(
 				`${apiBase}/gatekeeper/audit-all`,
-				{ method: 'POST', body: JSON.stringify({ mediaIds: ids }) },
+				{ method: 'POST', body: JSON.stringify({ mediaIds: targets }) },
 				900_000
 			);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menjalankan pemindaian QC.')));
@@ -1145,7 +1147,7 @@
 			error = reason instanceof Error ? reason.message : tr('Gagal menjalankan pemindaian QC.');
 		} finally {
 			const next = { ...qcRunning };
-			for (const id of ids) delete next[id];
+			for (const id of targets) delete next[id];
 			qcRunning = next;
 			bulkQcRunning = false;
 			qcToken += 1;
@@ -2173,12 +2175,23 @@
 														</div>
 														{#if g.key === 'article'}
 															<p class="mt-1.5 text-[11px] leading-snug text-slate-500">{tr('Buat artikel lewat Generate Konten atau Unggah Artikel.')}</p>
-														{:else if g.key === 'cover'}
-															<button class="app-btn app-btn-soft mt-2 !min-h-7 !px-2.5 !text-[11px]" type="button" disabled={coverBusy} onclick={() => void useDefaultCovers(g.items)}>
-																{#if coverBusy}<LoaderCircle size={12} class="animate-spin" />{:else}<Image size={12} />{/if}
-																{coverBusy ? tr('Menerapkan…') : tr('Pakai cover default')}
-															</button>
-														{/if}
+													{:else if g.key === 'cover'}
+														<button class="app-btn app-btn-soft mt-2 !min-h-7 !px-2.5 !text-[11px]" type="button" disabled={coverBusy} onclick={() => void useDefaultCovers(g.items)}>
+															{#if coverBusy}<LoaderCircle size={12} class="animate-spin" />{:else}<Image size={12} />{/if}
+															{coverBusy ? tr('Menerapkan…') : tr('Pakai cover default')}
+														</button>
+													{:else if g.key === 'qc' || g.key === 'qc-fail'}
+														<button
+															class="app-btn app-btn-soft mt-2 !min-h-7 !px-2.5 !text-[11px]"
+															type="button"
+															disabled={bulkQcRunning || viewOnly}
+															title={tr('Pindai QC semua media di daftar ini sekaligus')}
+															onclick={() => void runQcAll(g.items.map((i) => i.mediaId))}
+														>
+															{#if bulkQcRunning}<LoaderCircle size={12} class="animate-spin" />{:else}<ShieldCheck size={12} />{/if}
+															{bulkQcRunning ? tr('Memeriksa…') : tr('Cek QC Sekarang')}
+														</button>
+													{/if}
 													</div>
 												{/each}
 											</div>
