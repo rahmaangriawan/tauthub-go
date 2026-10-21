@@ -186,6 +186,7 @@
 		body.focus();
 		document.execCommand(cmd, false, arg);
 		sync();
+		refreshToolState();
 		// Tindakan dari toolbar selalu jadi satu langkah riwayat.
 		commitHistory();
 	}
@@ -282,6 +283,131 @@
 		{ cmd: 'undo', icon: RotateCcw, name: 'Urungkan' },
 		{ cmd: 'redo', icon: RotateCw, name: 'Ulangi' }
 	];
+
+	/** Format yang berlaku di posisi kursor — dipakai menyalakan tombol toolbar. */
+	type ToolState = {
+		bold: boolean;
+		italic: boolean;
+		underline: boolean;
+		h2: boolean;
+		h3: boolean;
+		blockquote: boolean;
+		ul: boolean;
+		ol: boolean;
+		inTable: boolean;
+	};
+	const TOOL_STATE_OFF: ToolState = {
+		bold: false,
+		italic: false,
+		underline: false,
+		h2: false,
+		h3: false,
+		blockquote: false,
+		ul: false,
+		ol: false,
+		inTable: false
+	};
+	let toolState = $state<ToolState>({ ...TOOL_STATE_OFF });
+
+	/** Tombol undo/redo bukan status format — jangan diberi penanda aktif. */
+	const isToggleTool = (t: (typeof tools)[number]) => t.cmd !== 'undo' && t.cmd !== 'redo';
+
+	function toolActive(t: (typeof tools)[number]): boolean {
+		switch (t.cmd) {
+			case 'bold':
+				return toolState.bold;
+			case 'italic':
+				return toolState.italic;
+			case 'underline':
+				return toolState.underline;
+			case 'formatBlock':
+				return t.arg === 'h2' ? toolState.h2 : t.arg === 'h3' ? toolState.h3 : toolState.blockquote;
+			case 'insertUnorderedList':
+				return toolState.ul;
+			case 'insertOrderedList':
+				return toolState.ol;
+			default:
+				return false;
+		}
+	}
+
+	/**
+	 * Selaraskan tombol toolbar dengan format pada posisi kursor/seleksi.
+	 * queryCommandState/queryCommandValue memang deprecated, tapi masih satu-
+	 * satunya cara membaca format aktif di contenteditable tanpa library.
+	 * Diperbarui saat seleksi berubah, saat tombol dipakai, dan saat klik/ketik.
+	 */
+	function refreshToolState() {
+		const body = bodyEl;
+		if (!body || disabled || mode === 'html') {
+			toolState = { ...TOOL_STATE_OFF };
+			return;
+		}
+		const sel = window.getSelection();
+		if (!sel || sel.rangeCount === 0) {
+			toolState = { ...TOOL_STATE_OFF };
+			return;
+		}
+		const anchor = sel.anchorNode;
+		const el = anchor
+			? anchor.nodeType === Node.ELEMENT_NODE
+				? (anchor as Element)
+				: anchor.parentElement
+			: null;
+		if (!el || !body.contains(el)) {
+			toolState = { ...TOOL_STATE_OFF };
+			return;
+		}
+		let format = '';
+		try {
+			format = String(document.queryCommandValue('formatBlock') ?? '').toLowerCase();
+		} catch {
+			format = '';
+		}
+		const commandOn = (cmd: string) => {
+			try {
+				return document.queryCommandState(cmd);
+			} catch {
+				return false;
+			}
+		};
+		// queryCommandState('bold') membaca GAYA terhitung, sehingga heading yang
+		// memang tebal lewat CSS selalu melaporkan bold. Untuk format inline,
+		// deteksi berbasis tag lebih jujur: hanya <b>/<strong>, <i>/<em>, <u>.
+		const punyaTagInduk = (tags: string[]) => {
+			for (let node: Node | null = el; node && node !== body; node = node.parentNode) {
+				if (node.nodeType === Node.ELEMENT_NODE && tags.includes((node as Element).tagName.toLowerCase())) {
+					return true;
+				}
+			}
+			return false;
+		};
+		toolState = {
+			bold: punyaTagInduk(['b', 'strong']),
+			italic: punyaTagInduk(['i', 'em']),
+			underline: punyaTagInduk(['u']),
+			h2: format === 'h2',
+			h3: format === 'h3',
+			blockquote: format === 'blockquote',
+			ul: commandOn('insertUnorderedList'),
+			ol: commandOn('insertOrderedList'),
+			inTable: Boolean(el.closest('table'))
+		};
+	}
+
+	$effect(() => {
+		if (!bodyEl || disabled || mode !== 'rich') return;
+		const sync = () => refreshToolState();
+		document.addEventListener('selectionchange', sync);
+		window.addEventListener('keyup', sync);
+		window.addEventListener('mouseup', sync);
+		sync();
+		return () => {
+			document.removeEventListener('selectionchange', sync);
+			window.removeEventListener('keyup', sync);
+			window.removeEventListener('mouseup', sync);
+		};
+	});
 
 	function openImageModal() {
 		if (!bodyEl || disabled || mode === 'html') return;
@@ -550,9 +676,11 @@
 			{/if}
 			<button
 				class="rte-tool"
+				class:rte-tool-active={isToggleTool(t) && toolActive(t)}
 				type="button"
 				title={t.name}
 				aria-label={t.name}
+				aria-pressed={isToggleTool(t) ? toolActive(t) : undefined}
 				disabled={disabled ||
 					mode === 'html' ||
 					(t.cmd === 'undo' && !canUndo) ||
@@ -566,6 +694,11 @@
 				{#if ToolIcon}<ToolIcon size={15} />{:else}{t.label}{/if}
 			</button>
 		{/each}
+		{#if mode === 'rich' && toolState.inTable}
+			<!-- Penanda posisi: tabel tidak punya tombol toolbar, jadi statusnya
+			     ditunjukkan chip ini saat kursor berada di dalam tabel. -->
+			<span class="rte-table-hint" title="Kursor berada di dalam tabel">Tabel</span>
+		{/if}
 		<input
 			bind:this={imageInput}
 			type="file"
@@ -886,6 +1019,24 @@
 		background: var(--primary);
 		color: var(--primary-foreground);
 		border-color: var(--primary);
+	}
+	/* Tombol format yang menyala tetap menyala saat di-hover (jangan berubah
+	   jadi latar terang dengan teks putih yang tak terbaca). */
+	.rte-tool.rte-tool-active:hover:not(:disabled) {
+		background: var(--primary);
+		color: var(--primary-foreground);
+	}
+	.rte-table-hint {
+		display: inline-flex;
+		align-items: center;
+		min-height: 24px;
+		margin-left: 4px;
+		padding: 0 8px;
+		border-radius: 999px;
+		background: var(--accent);
+		color: var(--primary);
+		font-size: 11px;
+		font-weight: 600;
 	}
 	/* Toggle HTML saat AKTIF lalu di-hover: ikon tetap terlihat — biru di atas
 	   latar terang. Dulu warna ikonnya tetap putih (primary-foreground) sementara

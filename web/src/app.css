@@ -732,7 +732,20 @@ dialog.app-card {
 .rte-body :is(ul, ol),
 .article-html :is(ul, ol) {
   margin: 0.6em 0;
-  padding-left: 1.4em;
+  /* Preflight Tailwind membuang padding bawaan daftar; 2em membuat bullet/nomor
+     jelas menjorok dari tepi teks (1.4em terasa menempel). */
+  padding-left: 2em;
+}
+.rte-body :is(ul, ol) :is(ul, ol),
+.article-html :is(ul, ol) :is(ul, ol) {
+  margin: 0.35em 0;
+  padding-left: 1.5em;
+}
+/* Item daftar hasil tempelan Docs berisi <li><p>…</p></li> — margin paragraf di
+   dalam item membuat jaraknya dobel, jadi dirapatkan. */
+.rte-body li > p,
+.article-html li > p {
+  margin: 0.15em 0;
 }
 .rte-body ul,
 .article-html ul {
