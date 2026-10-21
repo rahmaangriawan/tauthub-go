@@ -507,14 +507,14 @@
 {/snippet}
 
 <div
-	class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4"
+	class="fixed inset-0 z-50 flex items-stretch justify-center p-0 sm:items-center sm:p-4"
 	style="background-color: rgba(15, 23, 42, 0.45);"
 	role="dialog"
 	aria-modal="true"
 	aria-label={`${tr('Editor artikel')} ${mediaName}`}
 	onscroll={() => (coverMenuOpen = false)}
 >
-	<div class="app-card my-auto w-full max-w-3xl p-5">
+	<div class="app-card flex h-full w-full flex-col overflow-hidden rounded-none p-5 sm:h-auto sm:max-h-[92dvh] sm:max-w-[min(95vw,1200px)] sm:rounded-2xl">
 		<div class="flex items-start justify-between gap-3">
 			<div>
 				<p class="font-bold">{mediaName}</p>
@@ -531,152 +531,166 @@
 			</button>
 		</div>
 
-			<div class="mt-3 space-y-3">
-				<input class="app-input w-full text-base font-semibold" aria-label="Judul artikel" maxlength="300" placeholder={tr("Judul artikel")} readonly={readOnly} bind:value={title} />
+			<div class="mt-3 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto lg:flex-row lg:overflow-hidden">
+				<!-- Kolom kiri: judul + toolbar + isi artikel -->
+				<div class="flex min-w-0 flex-1 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
+					<input class="app-input w-full text-base font-semibold" aria-label="Judul artikel" maxlength="300" placeholder={tr("Judul artikel")} readonly={readOnly} bind:value={title} />
 
-				<!-- Cover artikel -->
-				<div>
 					{#if !readOnly}
-						<input
-							bind:this={coverInput}
-							type="file"
-							accept="image/*"
-							class="hidden"
-							onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; if (f) void pickCover(f); }}
-						/>
+						<!-- Toolbar -->
+						<div class="flex flex-wrap items-center gap-1 rounded-lg border p-1" role="toolbar" aria-label={tr('Format teks')}>
+							{#each tools as t (t.cmd + (t.arg ?? ''))}
+								{@const ToolIcon = t.icon}
+								<button class="min-h-8 min-w-8 rounded px-2 text-sm font-semibold hover:bg-secondary" type="button" title={t.name} onclick={() => exec(t.cmd, t.arg)}>
+									{#if ToolIcon}
+										<ToolIcon size={15} />
+									{:else}
+										{t.label}
+									{/if}
+								</button>
+							{/each}
+							<input
+								bind:this={articleImageInput}
+								type="file"
+								accept="image/*"
+								class="hidden"
+								onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; if (f) void insertArticleImage(f); }}
+							/>
+							<button class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary" type="button" title={articleBusy ? tr('Mengunggah…') : tr('Unggah gambar')} disabled={articleBusy} onclick={() => articleImageInput?.click()}>
+								{#if articleBusy}<LoaderCircle size={15} class="animate-spin" />{:else}<Image size={15} />{/if}
+							</button>
+							<button
+								class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary"
+								style="color: {linkActive ? 'var(--primary)' : 'inherit'};"
+								type="button"
+								onmousedown={(e: MouseEvent) => e.preventDefault()}
+								title={linkActive ? tr('Ubah / hapus tautan') : tr('Sisipkan tautan')}
+								aria-pressed={linkActive}
+								onclick={openLinkDialog}
+							><Link size={15} /></button>
+							{#if allowEmbed}
+								<button class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary" type="button" onmousedown={(e: MouseEvent) => e.preventDefault()} title={tr("Sisipkan video atau peta")} onclick={openEmbedDialog}><Video size={15} /></button>
+							{/if}
+						</div>
 					{/if}
-					{#if coverUrl}
-						<div class="relative">
-							<img src={sameOriginAssetUrl(coverUrl) ?? ''} alt={tr('Cover artikel')} class="aspect-video w-full rounded-lg object-cover" />
-							{#if !readOnly}
-								<button class="app-btn absolute right-2.5 bottom-2.5 !min-h-7 !px-3 !text-xs" type="button" style="background-color: rgba(15, 23, 42, 0.72); color: #fff;" disabled={coverBusy} onclick={onCoverPickClick}>
-									{coverBusy ? tr('Mengunggah…') : tr('Ganti Cover')}
+
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<div
+						bind:this={bodyEl}
+						class="prose prose-sm min-h-[360px] flex-1 overflow-y-auto rounded-lg border p-3 text-sm"
+						contenteditable={!saving && !readOnly}
+						role="textbox"
+						tabindex="0"
+						aria-label={tr('Isi artikel')}
+						oninput={sync}
+						onclick={handleBodyClick}
+					></div>
+
+					{#if saveError}<p class="text-sm" style="color: var(--destructive);">{saveError}</p>{/if}
+					{#if linkOverLimit}
+						<p class="text-sm" style="color: var(--destructive);"><TriangleAlert size={13} class="inline" /> {tr('Terlalu banyak link aktif. Maks')} {linkLimit} {tr("tautan per media.")}</p>
+					{/if}
+				</div>
+
+				<!-- Kolom kanan: gambar utama, kategori, meta, info editor -->
+				<aside class="flex w-full flex-none flex-col gap-4 lg:w-[340px] lg:overflow-y-auto lg:pr-1 xl:w-[380px]">
+					<!-- Cover artikel -->
+					<div>
+						<p class="text-[13px] font-semibold">{tr('Gambar Utama')}</p>
+						<p class="mt-0.5 text-xs text-muted-foreground">{tr('Gambar akan ditampilkan di Tauthub & dikirim ke media.')}</p>
+						<div class="mt-2">
+						{#if !readOnly}
+							<input
+								bind:this={coverInput}
+								type="file"
+								accept="image/*"
+								class="hidden"
+								onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; if (f) void pickCover(f); }}
+							/>
+						{/if}
+						{#if coverUrl}
+							<div class="relative">
+								<img src={sameOriginAssetUrl(coverUrl) ?? ''} alt={tr('Cover artikel')} class="aspect-video w-full rounded-lg object-cover" />
+								{#if !readOnly}
+									<button class="app-btn absolute right-2.5 bottom-2.5 !min-h-7 !px-3 !text-xs" type="button" style="background-color: rgba(15, 23, 42, 0.72); color: #fff;" disabled={coverBusy} onclick={onCoverPickClick}>
+										{coverBusy ? tr('Mengunggah…') : tr('Ganti Cover')}
+									</button>
+									{#if coverMenuOpen}
+										{@render coverMenu()}
+									{/if}
+								{/if}
+							</div>
+						{:else if readOnly}
+							<div class="flex min-h-[72px] w-full flex-col items-center justify-center rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
+								{tr('Cover artikel belum diunggah')}
+							</div>
+						{:else}
+							<div class="relative">
+								<button class="flex min-h-[132px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-5 text-center" type="button" disabled={coverBusy} onclick={onCoverPickClick}>
+									<Upload size={20} class="text-muted-foreground" />
+									<span class="text-sm font-medium">{coverBusy ? tr('Mengunggah cover…') : tr('Cover artikel belum diunggah')}</span>
+									<span class="text-xs text-muted-foreground">{tr("Klik untuk mengunggah, atau tempel gambar (Ctrl+V) · Maksimal 200KB · Lebih dari itu otomatis dikompres & diubah ke WebP oleh sistem TautHub")}</span>
 								</button>
 								{#if coverMenuOpen}
 									{@render coverMenu()}
 								{/if}
-							{/if}
-						</div>
-					{:else if readOnly}
-						<div class="flex min-h-[72px] w-full flex-col items-center justify-center rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
-							{tr('Cover artikel belum diunggah')}
-						</div>
-					{:else}
-						<div class="relative">
-							<button class="flex min-h-[132px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-5 text-center" type="button" disabled={coverBusy} onclick={onCoverPickClick}>
-								<Upload size={20} class="text-muted-foreground" />
-								<span class="text-sm font-medium">{coverBusy ? tr('Mengunggah cover…') : tr('Cover artikel belum diunggah')}</span>
-								<span class="text-xs text-muted-foreground">{tr("Klik untuk mengunggah, atau tempel gambar (Ctrl+V) · Maksimal 200KB · Lebih dari itu otomatis dikompres & diubah ke WebP oleh sistem TautHub")}</span>
-							</button>
-							{#if coverMenuOpen}
-								{@render coverMenu()}
-							{/if}
-						</div>
-					{/if}
-				</div>
-
-				<div class="flex flex-wrap items-center gap-2">
-					<span class="text-xs font-medium text-muted-foreground">{tr('Kategori artikel')}</span>
-					{#if categoryOptions.length > 0}
-						<Select
-							bind:value={category}
-							ariaLabel={tr('Kategori artikel')}
-							minWidth={200}
-							disabled={readOnly}
-							options={[
-								...(category && !categoryOptions.includes(category) ? [{ value: category, label: category }] : []),
-								...categoryOptions.map((c) => ({ value: c, label: c }))
-							]}
-						/>
-					{:else}
-						<span class="text-xs text-muted-foreground">{tr("Media ini belum punya kategori dari mitra — atur di dashboard mitra.")}</span>
-					{/if}
-				</div>
-
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr('Meta deskripsi')}</span>
-					<textarea class="app-input mt-1 w-full" rows="2" maxlength="500" readonly={readOnly} placeholder={tr("Ringkasan 120-160 karakter untuk hasil pencarian — terisi otomatis oleh AI")} bind:value={metaDescription}></textarea>
-				</label>
-
-				{#if uploadError}<p class="text-sm" style="color: var(--destructive);">{uploadError}</p>{/if}
-
-				{#if !readOnly}
-					<!-- Info kemampuan editor: caption + bullet, dibuka lewat trigger kecil. -->
-					<div class="relative">
-						<button class="inline-flex items-center gap-1.5 self-start text-xs text-muted-foreground hover:text-foreground" type="button" onclick={() => (coverInfoOpen = !coverInfoOpen)}>
-							<Info size={13} />
-							{tr('Kemampuan editor artikel')}
-						</button>
-						{#if coverInfoOpen}
-							<div class="mt-2 flex max-w-[360px] flex-col gap-2 rounded-lg border p-3" style="background-color: var(--card);">
-								<div class="flex items-center gap-1.5">
-									<Info size={14} style="color: var(--primary);" />
-									<p class="text-sm font-bold">{tr('Kemampuan editor artikel')}</p>
-								</div>
-								<ul class="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-									<li>{tr('Cover adalah gambar utama artikel yang tampil sebagai thumbnail di media')}</li>
-									<li>{tr('Bisa mengubah judul dan seluruh isi teks jika diperlukan')}</li>
-									<li>{tr('Bisa tambahkan gambar dalam artikel')}</li>
-									<li>{tr('Bisa menambah atau mengubah hyperlink jika fitur tersedia')}</li>
-									<li>{tr('Jika cover tidak diisi, artikel memakai gambar fallback bawaan saat ditinjau & didistribusikan')}</li>
-								</ul>
 							</div>
 						{/if}
+						</div>
 					</div>
 
-					<!-- Toolbar -->
-					<div class="flex flex-wrap items-center gap-1 rounded-lg border p-1" role="toolbar" aria-label={tr('Format teks')}>
-						{#each tools as t (t.cmd + (t.arg ?? ''))}
-							{@const ToolIcon = t.icon}
-							<button class="min-h-8 min-w-8 rounded px-2 text-sm font-semibold hover:bg-secondary" type="button" title={t.name} onclick={() => exec(t.cmd, t.arg)}>
-								{#if ToolIcon}
-									<ToolIcon size={15} />
-								{:else}
-									{t.label}
-								{/if}
-							</button>
-						{/each}
-						<input
-							bind:this={articleImageInput}
-							type="file"
-							accept="image/*"
-							class="hidden"
-							onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; if (f) void insertArticleImage(f); }}
-						/>
-						<button class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary" type="button" title={articleBusy ? tr('Mengunggah…') : tr('Unggah gambar')} disabled={articleBusy} onclick={() => articleImageInput?.click()}>
-							{#if articleBusy}<LoaderCircle size={15} class="animate-spin" />{:else}<Image size={15} />{/if}
-						</button>
-						<button
-							class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary"
-							style="color: {linkActive ? 'var(--primary)' : 'inherit'};"
-							type="button"
-							onmousedown={(e: MouseEvent) => e.preventDefault()}
-							title={linkActive ? tr('Ubah / hapus tautan') : tr('Sisipkan tautan')}
-							aria-pressed={linkActive}
-							onclick={openLinkDialog}
-						><Link size={15} /></button>
-						{#if allowEmbed}
-							<button class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary" type="button" onmousedown={(e: MouseEvent) => e.preventDefault()} title={tr("Sisipkan video atau peta")} onclick={openEmbedDialog}><Video size={15} /></button>
+					<div>
+						<p class="text-[13px] font-semibold">{tr('Kategori artikel')}</p>
+						<div class="mt-1.5">
+						{#if categoryOptions.length > 0}
+							<Select
+								bind:value={category}
+								ariaLabel={tr('Kategori artikel')}
+								minWidth={200}
+								disabled={readOnly}
+								options={[
+									...(category && !categoryOptions.includes(category) ? [{ value: category, label: category }] : []),
+									...categoryOptions.map((c) => ({ value: c, label: c }))
+								]}
+							/>
+						{:else}
+							<span class="text-xs text-muted-foreground">{tr("Media ini belum punya kategori dari mitra — atur di dashboard mitra.")}</span>
 						{/if}
+						</div>
 					</div>
-				{/if}
 
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<div
-					bind:this={bodyEl}
-					class="prose prose-sm max-h-[46vh] min-h-[200px] overflow-y-auto rounded-lg border p-3 text-sm"
-					contenteditable={!saving && !readOnly}
-					role="textbox"
-					tabindex="0"
-					aria-label={tr('Isi artikel')}
-					oninput={sync}
-					onclick={handleBodyClick}
-				></div>
+					<label class="block">
+						<span class="text-[13px] font-semibold">{tr('Meta deskripsi')}</span>
+						<textarea class="app-input mt-1.5 w-full" rows="3" maxlength="500" readonly={readOnly} placeholder={tr("Ringkasan 120-160 karakter untuk hasil pencarian — terisi otomatis oleh AI")} bind:value={metaDescription}></textarea>
+					</label>
 
-				{#if saveError}<p class="text-sm" style="color: var(--destructive);">{saveError}</p>{/if}
-				{#if linkOverLimit}
-					<p class="text-sm" style="color: var(--destructive);"><TriangleAlert size={13} class="inline" /> {tr('Terlalu banyak link aktif. Maks')} {linkLimit} {tr("tautan per media.")}</p>
-				{/if}
+					{#if uploadError}<p class="text-sm" style="color: var(--destructive);">{uploadError}</p>{/if}
+
+					{#if !readOnly}
+						<!-- Info kemampuan editor: caption + bullet, dibuka lewat trigger kecil. -->
+						<div class="relative">
+							<button class="inline-flex items-center gap-1.5 self-start text-xs text-muted-foreground hover:text-foreground" type="button" onclick={() => (coverInfoOpen = !coverInfoOpen)}>
+								<Info size={13} />
+								{tr('Kemampuan editor artikel')}
+							</button>
+							{#if coverInfoOpen}
+								<div class="mt-2 flex flex-col gap-2 rounded-lg border p-3" style="background-color: var(--card);">
+									<div class="flex items-center gap-1.5">
+										<Info size={14} style="color: var(--primary);" />
+										<p class="text-sm font-bold">{tr('Kemampuan editor artikel')}</p>
+									</div>
+									<ul class="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+										<li>{tr('Cover adalah gambar utama artikel yang tampil sebagai thumbnail di media')}</li>
+										<li>{tr('Bisa mengubah judul dan seluruh isi teks jika diperlukan')}</li>
+										<li>{tr('Bisa tambahkan gambar dalam artikel')}</li>
+										<li>{tr('Bisa menambah atau mengubah hyperlink jika fitur tersedia')}</li>
+										<li>{tr('Jika cover tidak diisi, artikel memakai gambar fallback bawaan saat ditinjau & didistribusikan')}</li>
+									</ul>
+								</div>
+							{/if}
+						</div>
+					{/if}
+				</aside>
 			</div>
 
 			{#if extraFields}

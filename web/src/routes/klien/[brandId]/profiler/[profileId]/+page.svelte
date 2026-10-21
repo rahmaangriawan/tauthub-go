@@ -87,6 +87,11 @@
 	}
 	let renameId = $state<string | null>(null);
 	let renameValue = $state('');
+	// Aksi di panel brief melayang (terpisah dari sidebar supaya dua menu tidak
+	// terbuka bersamaan).
+	let popMenuId = $state<string | null>(null);
+	let popRenameId = $state<string | null>(null);
+	let popRenameValue = $state('');
 
 	// URL memakai kode pendek (maks 5 karakter, migrasi 213). Param bisa berupa
 	// kode ATAU id 36 karakter lama, jadi diterjemahkan dulu ke id internal —
@@ -382,6 +387,11 @@
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal membuat brief baru.')));
 			const data = await res.json();
 			await loadBriefs();
+			// Navigasi ke brief baru memakai route yang sama (hanya param berubah),
+			// jadi komponen TIDAK di-mount ulang. Tanpa reset di sini, tombol
+			// "Brief baru" tetap disabled setelah brief pertama dibuat — terlihat
+			// seolah jumlah brief dibatasi.
+			working(false);
 			await goto(`/klien/${brandUrl}/profiler/${data.short_code || data.id}`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : tr('Gagal membuat brief baru.');
@@ -422,10 +432,44 @@
 		}
 	}
 
+	// ---------- Aksi di panel brief melayang ----------
+
+	function togglePopMenu(id: string) {
+		popRenameId = null;
+		popMenuId = popMenuId === id ? null : id;
+	}
+
+	function startPopRename(id: string, current: string) {
+		popMenuId = null;
+		popRenameId = id;
+		popRenameValue = current;
+	}
+
+	async function savePopRename(id: string) {
+		const name = popRenameValue.trim();
+		if (!name) {
+			popRenameId = null;
+			return;
+		}
+		try {
+			const res = await apiRequest(`${apiBase}/profiles/${id}`, {
+				method: 'PUT',
+				body: JSON.stringify({ name })
+			});
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan nama.')));
+			await loadBriefs();
+			if (id === profileId) profileName = name;
+			popRenameId = null;
+		} catch (e) {
+			error = e instanceof Error ? e.message : tr('Gagal menyimpan nama.');
+		}
+	}
+
 	// Sematkan/lepas: ditulis di server, jadi seluruh anggota brand melihat pin
 	// yang sama dan urutannya otomatis menaruh yang disematkan di atas.
 	async function togglePin(id: string, pinned: boolean) {
 		menuId = null;
+		popMenuId = null;
 		try {
 			const res = await apiRequest(`${apiBase}/profiles/${id}`, {
 				method: 'PUT',
@@ -466,6 +510,7 @@
 	async function deleteBrief(id: string) {
 		working(true);
 		menuId = null;
+		popMenuId = null;
 		try {
 			const res = await apiRequest(`${apiBase}/profiles/${id}`, { method: 'DELETE' });
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menghapus brief.')));
@@ -1234,15 +1279,58 @@
 									{/if}
 									{#each briefs as b (b.id)}
 										{@const isActive = b.id === profileId}
-										<a
-												class="brief-pop-row"
-												class:active={isActive}
-												href={`/klien/${brandUrl}/profiler/${b.short_code || b.id}`}
-												onclick={() => (cardOpen = false)}
-										>
-												<span class="min-w-0 flex-1 truncate">{b.name}</span>
-												{#if b.pinned}<Pin size={12} class="shrink-0" style="color: var(--muted-foreground);" />{/if}
-										</a>
+										<div class="brief-pop-item">
+											{#if popRenameId === b.id}
+												<input
+													class="app-input min-h-7 min-w-0 flex-1 !px-1.5 !py-0.5 text-[12.5px]"
+													bind:value={popRenameValue}
+													aria-label={tr('Ubah nama')}
+													onkeydown={(e) => {
+														if (e.key === 'Enter') { e.preventDefault(); void savePopRename(b.id); }
+														if (e.key === 'Escape') popRenameId = null;
+													}}
+												/>
+												<button class="brief-pop-icon brief-pop-save" type="button" aria-label={tr('Simpan nama')} onclick={() => void savePopRename(b.id)}>✓</button>
+											{:else}
+												<a
+														class="brief-pop-row"
+														class:active={isActive}
+														href={`/klien/${brandUrl}/profiler/${b.short_code || b.id}`}
+												>
+														<span class="min-w-0 flex-1 truncate">{b.name}</span>
+												</a>
+												<button
+													class="brief-pop-icon brief-pop-pin"
+													class:pinned={b.pinned}
+													type="button"
+													aria-pressed={b.pinned}
+													aria-label={b.pinned ? tr('Lepas sematan') : tr('Sematkan brief')}
+													title={b.pinned ? tr('Lepas sematan') : tr('Sematkan brief')}
+													onclick={(e) => { e.preventDefault(); void togglePin(b.id, b.pinned); }}
+												>
+													<Pin size={12} />
+												</button>
+												<button
+													class="brief-pop-icon brief-pop-kebab"
+													type="button"
+													aria-label={tr('Aksi brief')}
+													title={tr('Aksi brief')}
+													onclick={(e) => { e.preventDefault(); togglePopMenu(b.id); }}
+												>
+													<MoreHorizontal size={14} />
+												</button>
+											{/if}
+											{#if popMenuId === b.id}
+												<div class="brief-menu brief-pop-menu">
+													<button type="button" onclick={() => startPopRename(b.id, b.name)}>
+														<Pencil size={13} />{tr('Ubah nama')}
+													</button>
+													<button type="button" class="brief-menu-danger" onclick={() => { popMenuId = null; requestDelete(b); }}>
+														<Trash2 size={13} />{tr('Hapus')}
+													</button>
+												</div>
+											{/if}
+										</div>
 									{/each}
 								</div>
 					</div>
@@ -2445,9 +2533,16 @@
 		position: static;
 		top: auto;
 		left: auto;
-		width: 320px;
-		max-height: none;
+		width: 280px;
+		/* Batasi tinggi supaya panel tidak keluar viewport; hanya daftar brief
+		   yang menggulir, header tetap terlihat. */
+		max-height: calc(100dvh - 200px);
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
 	}
+	.brief-pop-static > .brief-pop-id,
+	.brief-pop-static > .brief-pop-head { flex: 0 0 auto; }
 	.brief-pop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 	/* Identitas Copilot di dalam popover: panel lembut selebar popover. */
 	.brief-pop-id {
@@ -2469,7 +2564,55 @@
 		transition: background-color 0.12s ease, color 0.12s ease;
 	}
 	.brief-pop-icon:hover:not(:disabled) { background: var(--secondary); color: var(--foreground); }
-	.brief-pop-list { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+	.brief-pop-list {
+		margin-top: 4px;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-height: 0;
+		overflow-y: auto;
+		/* Tampilkan maksimal 10 baris; sisanya lewat scroll internal. */
+		max-height: calc(33px * 10 + 2px * 9);
+		padding-right: 2px;
+		scrollbar-width: thin;
+		scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent) transparent;
+	}
+	.brief-pop-list::-webkit-scrollbar { width: 6px; }
+	.brief-pop-list::-webkit-scrollbar-track { background: transparent; }
+	.brief-pop-list::-webkit-scrollbar-thumb {
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--foreground) 22%, transparent);
+	}
+	.brief-pop-list::-webkit-scrollbar-thumb:hover {
+		background: color-mix(in srgb, var(--foreground) 35%, transparent);
+	}
+	/* Baris brief: aksi menumpuk DI DALAM baris (absolute), jadi lebar baris
+	   tidak bertambah dan nama tetap terpotong rapi di dalam panel. */
+	.brief-pop-item {
+		position: relative;
+		border-radius: 7px;
+	}
+	.brief-pop-item .brief-pop-row { width: 100%; padding-right: 56px; }
+	.brief-pop-item > .app-input { width: 100%; padding-right: 34px; }
+	.brief-pop-pin, .brief-pop-kebab, .brief-pop-save {
+		position: absolute;
+		top: 50%;
+		transform: translateY(-50%);
+		z-index: 2;
+	}
+	.brief-pop-pin { right: 30px; }
+	.brief-pop-kebab, .brief-pop-save { right: 3px; }
+	.brief-pop-pin, .brief-pop-kebab { opacity: 0; }
+	.brief-pop-item:hover .brief-pop-pin,
+	.brief-pop-item:hover .brief-pop-kebab,
+	.brief-pop-item:focus-within .brief-pop-pin,
+	.brief-pop-item:focus-within .brief-pop-kebab,
+	.brief-pop-item:has(.brief-menu) .brief-pop-pin,
+	.brief-pop-item:has(.brief-menu) .brief-pop-kebab { opacity: 1; }
+	.brief-pop-pin.pinned { opacity: 1; color: var(--primary); }
+	.brief-pop-menu { right: 4px; }
+	/* Baris paling bawah: buka menu ke atas supaya tidak terpotong panel. */
+	.brief-pop-item:nth-last-child(-n + 3) .brief-pop-menu { top: auto; bottom: calc(100% - 2px); }
 	.brief-pop-empty { padding: 6px 4px; font-size: 12px; color: var(--muted-foreground); }
 	/* Baris brief: yang tidak aktif abu-abu, yang aktif hitam dengan latar abu tipis. */
 	.brief-pop-row {

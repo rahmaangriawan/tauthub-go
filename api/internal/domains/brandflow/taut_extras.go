@@ -849,8 +849,8 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	campaignID := chiParam(r, "campaignId")
-		campaign, err := d.queryRow(r.Context(),
-			"SELECT id, name, taut_status, taut_entry_mode FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandRow.ID)
+	campaign, err := d.queryRow(r.Context(),
+		"SELECT id, name, taut_status, taut_entry_mode FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandRow.ID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -1020,11 +1020,11 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 	if tokensRow != nil {
 		tokensUsed = tokensRow.intOr("total", 0)
 	}
-		writeNoStore(w, http.StatusOK, map[string]any{
-			"campaign": map[string]any{
-				"id": campaignID, "name": campaign.strOr("name", ""), "taut_status": campaign.raw("taut_status"),
-				"entry_mode": campaign.raw("taut_entry_mode"),
-			},
+	writeNoStore(w, http.StatusOK, map[string]any{
+		"campaign": map[string]any{
+			"id": campaignID, "name": campaign.strOr("name", ""), "taut_status": campaign.raw("taut_status"),
+			"entry_mode": campaign.raw("taut_entry_mode"),
+		},
 		"media":         mediaOut,
 		"canDistribute": canDistribute,
 		"totalCostIdr":  totalCostIDR,
@@ -1375,12 +1375,13 @@ func decodeTautWriterOptions(r *http.Request) (tautWriterOptions, error) {
 		AngleSlug   json.RawMessage       `json:"angle_slug"`
 		Gaya        string                `json:"gaya"`
 		Proper      struct {
-			Fakta      string `json:"fakta"`
-			Dateline   string `json:"dateline"`
-			Narasumber string `json:"narasumber"`
-			Kutipan    string `json:"kutipan"`
-			Fokus      string `json:"fokus"`
-			BriefID    string `json:"brief_id"`
+			Fakta      string            `json:"fakta"`
+			Dateline   string            `json:"dateline"`
+			Narasumber string            `json:"narasumber"`
+			Kutipan    string            `json:"kutipan"`
+			Quotes     []tautProperQuote `json:"quotes"`
+			Fokus      string            `json:"fokus"`
+			BriefID    string            `json:"brief_id"`
 		} `json:"proper"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(r.Body, 65536))
@@ -1413,6 +1414,18 @@ func decodeTautWriterOptions(r *http.Request) (tautWriterOptions, error) {
 			Kutipan:    truncateString(strings.TrimSpace(body.Proper.Kutipan), 4000),
 			Fokus:      truncateString(strings.TrimSpace(body.Proper.Fokus), 4000),
 			BriefID:    truncateString(strings.TrimSpace(body.Proper.BriefID), 64),
+		}
+		for _, q := range body.Proper.Quotes {
+			p.Quotes = append(p.Quotes, tautProperQuote{
+				Dateline:   truncateString(strings.TrimSpace(q.Dateline), 100),
+				Narasumber: truncateString(strings.TrimSpace(q.Narasumber), 200),
+				Kutipan:    truncateString(strings.TrimSpace(q.Kutipan), 4000),
+			})
+		}
+		if len(p.Quotes) > 0 {
+			p.Dateline = p.Quotes[0].Dateline
+			p.Narasumber = p.Quotes[0].Narasumber
+			p.Kutipan = p.Quotes[0].Kutipan
 		}
 		if err := p.validate(); err != nil {
 			return opts, err

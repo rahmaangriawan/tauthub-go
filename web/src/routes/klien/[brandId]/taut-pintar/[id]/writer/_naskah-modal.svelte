@@ -24,6 +24,7 @@
 		campaignId = '',
 		mediaId = '',
 		initialTab = 'tulis',
+		initialSource = null,
 		initialTitle = '',
 		initialHtml = '',
 		initialCoverUrl = null,
@@ -58,6 +59,9 @@
 		campaignId?: string;
 		mediaId?: string;
 		initialTab?: 'tulis' | 'unggah' | 'generate';
+		/** Asal artikel tersimpan: 'ai' (Generate) atau 'manual' (unggah dokumen).
+		 *  Hanya dipakai saat Edit Artikel, supaya tab yang tampil sesuai asalnya. */
+		initialSource?: 'ai' | 'manual' | null;
 		initialTitle?: string;
 		initialHtml?: string;
 		initialCoverUrl?: string | null;
@@ -93,10 +97,12 @@
 // sehingga setiap buka modal adalah instance baru.
 	type Tab = 'tulis' | 'unggah' | 'generate';
 
-	// Tab yang tersedia mengikuti pintu masuk modal:
-	//   - dibuka dari "Generate Konten"  → hanya Generate dengan AI + Editor Post;
-	//   - dibuka dari "Unggah Artikel"   → hanya Unggah Dokumen + Editor Post;
-	//   - pintu masuk lain (Edit Artikel) → ketiganya tetap tampil.
+	// Tab yang tersedia mengikuti pintu masuk modal DAN asal artikel tersimpan:
+	//   - dibuka dari "Generate Konten"  → Generate dengan AI + Editor Post;
+	//   - dibuka dari "Unggah Artikel"   → Unggah Dokumen + Editor Post;
+	//   - Edit Artikel artikel AI        → Generate dengan AI + Editor Post;
+	//   - Edit Artikel hasil unggahan    → Unggah Dokumen + Editor Post;
+	//   - asal tidak diketahui           → ketiganya tampil.
 	const availableTabs = $derived.by<Array<{ key: Tab; label: string }>>(() => {
 		const all: Array<{ key: Tab; label: string }> = [
 			{ key: 'unggah', label: tr('Unggah Dokumen') },
@@ -105,10 +111,13 @@
 		];
 		if (initialTab === 'generate') return all.filter((t) => t.key === 'generate' || t.key === 'tulis');
 		if (initialTab === 'unggah') return all.filter((t) => t.key === 'unggah' || t.key === 'tulis');
+		if (initialSource === 'ai') return all.filter((t) => t.key === 'generate' || t.key === 'tulis');
+		if (initialSource === 'manual') return all.filter((t) => t.key === 'unggah' || t.key === 'tulis');
 		return all;
 	});
 	/** Isian mode "Yang Proper" dikirim ke backend generate (grounding ke fakta). */
-	type ProperGenPayload = { fakta: string; dateline: string; narasumber: string; kutipan: string; fokus: string; brief_id: string };
+	type ProperQuote = { dateline: string; narasumber: string; kutipan: string };
+	type ProperGenPayload = { fakta: string; dateline: string; narasumber: string; kutipan: string; quotes: ProperQuote[]; fokus: string; brief_id: string };
 	let tab = $state<Tab>(untrack(() => initialTab));
 	// Pilihan gaya (1. kamu mau buat artikel seperti apa?) — simpel = pipeline
 	// lama; proper = strict grounding ke fakta terkunci/Brief Copilot.
@@ -118,12 +127,19 @@
 	// Racik instruksi topik dari anchor (AI): ganti Tips/Contoh manual.
 	let racikBusy = $state(false);
 	let racikError = $state('');
-	// Isian Proper: fakta terkunci, dateline & narasumber.
+	// Isian Proper: fakta terkunci + daftar kutipan resmi (bisa lebih dari satu).
 	let faktaTerkunci = $state('');
-	let kotaRilis = $state('');
-	let narasumber = $state('');
-	let kutipanNarasumber = $state('');
+	let properQuotes = $state<ProperQuote[]>([{ dateline: '', narasumber: '', kutipan: '' }]);
 	let fokusSisa = $state('');
+
+	function addProperQuote() {
+		properQuotes = [...properQuotes, { dateline: '', narasumber: '', kutipan: '' }];
+	}
+
+	function removeProperQuote(index: number) {
+		if (properQuotes.length <= 1) return;
+		properQuotes = properQuotes.filter((_, i) => i !== index);
+	}
 	let title = $state(untrack(() => initialTitle));
 	let html = $state(untrack(() => initialHtml));
 	let cover = $state<string | null>(untrack(() => initialCoverUrl));
@@ -153,6 +169,12 @@
 	// tanpa persentase fiktif, tanpa interval palsu.
 	let genStage = $state(0); // 0 idle; 1 mengirim; 2 menunggu respons; 3 memproses
 	let genOutcome = $state<'idle' | 'success' | 'error'>('idle');
+	// Gerbang "Generate dengan AI" belum punya artikel sampai AI selesai menulis.
+	// Editor Post dikunci sampai itu terjadi — editor kosong tidak bisa disimpan
+	// dan hanya membuat user mengira tabnya rusak. Draf yang sudah ada saat modal
+	// dibuka (mis. media dengan artikel) tetap membuka tab ini.
+	let draftReady = $state(untrack(() => initialHtml.trim().length > 0));
+	const editorLocked = $derived(initialTab === 'generate' && !draftReady);
 	const GEN_STAGES = [
 		{ key: 'send', label: 'Mengirim permintaan', desc: 'Permintaan generate dikirim ke AI Writer.' },
 		{ key: 'wait', label: 'Menunggu respons AI', desc: 'AI sedang menulis artikel sesuai topik dan angle yang kamu pilih.' },
@@ -894,11 +916,17 @@
 	async function generate() {
 		if (genBusy) return;
 		const isProper = gayaArtikel === 'proper';
+		// Entri yang masih kosong semua diabaikan; entri yang terisi sebagian
+		// tetap dianggap belum lengkap dan menahan generate.
+		const quotes = properQuotes
+			.map((q) => ({ dateline: q.dateline.trim(), narasumber: q.narasumber.trim(), kutipan: q.kutipan.trim() }))
+			.filter((q) => q.dateline || q.narasumber || q.kutipan);
 		const properPayload: ProperGenPayload = {
 			fakta: faktaTerkunci.trim(),
-			dateline: kotaRilis.trim(),
-			narasumber: narasumber.trim(),
-			kutipan: kutipanNarasumber.trim(),
+			dateline: quotes[0]?.dateline ?? '',
+			narasumber: quotes[0]?.narasumber ?? '',
+			kutipan: quotes[0]?.kutipan ?? '',
+			quotes,
 			fokus: fokusSisa.trim(),
 			brief_id: copilotBriefId
 		};
@@ -907,6 +935,11 @@
 			// keduanya kosong, ditolak sebelum menyia-nyiakan token AI.
 			if (!properPayload.fakta && !properPayload.brief_id) {
 				genError = tr('Isi fakta produk atau pilih Brief Copilot dulu — mode Proper ditulis terkunci ke fakta.');
+				return;
+			}
+			// Pengunci Standar Redaksi bersifat WAJIB di mode Proper.
+			if (quotes.length === 0 || quotes.some((q) => !q.dateline || !q.narasumber || !q.kutipan)) {
+				genError = tr('Lengkapi kota rilis, nama & jabatan narasumber, dan isi kutipan — wajib diisi.');
 				return;
 			}
 		} else if (!topic.trim()) {
@@ -950,6 +983,7 @@
 				autoCategory = category;
 			}
 			genOutcome = 'success';
+			draftReady = true;
 		} catch (reason) {
 			genError = reason instanceof Error ? tr(reason.message) : tr('Gagal membuat draf AI.');
 			genOutcome = 'error';
@@ -1046,30 +1080,43 @@
 
 		<!-- Tab -->
 		<div class="border-b px-5 pt-3" style="border-color: var(--border);">
+			{#snippet tabButton(t: { key: Tab; label: string })}
+				<button
+					class="relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors {t.key === 'tulis' && editorLocked ? 'cursor-not-allowed opacity-45' : ''}"
+					style="border-color: {tab === t.key ? 'var(--primary)' : 'transparent'}; color: {tab === t.key ? 'var(--primary)' : 'var(--muted-foreground)'};"
+					type="button"
+					role="tab"
+					aria-selected={tab === t.key}
+					disabled={t.key === 'tulis' && editorLocked}
+					aria-disabled={t.key === 'tulis' && editorLocked}
+					title={t.key === 'generate' ? tr('Fitur ini masih dalam tahap beta. Hasil draf artikel AI masih perlu dikaji dan diperiksa ulang sebelum diterbitkan.') : undefined}
+					onclick={() => (tab = t.key as Tab)}
+				>
+					{#if t.key === 'generate'}
+						<div class="pointer-events-auto absolute -top-1.5 right-0">
+							<Tooltip content={tr('Fitur ini masih dalam tahap beta. Hasil draf artikel AI masih perlu dikaji dan diperiksa ulang sebelum diterbitkan.')} maxWidth={280}>
+								<span
+									class="cursor-help text-[9px] font-bold uppercase tracking-wide leading-none transition-opacity hover:opacity-80"
+									style="color: var(--primary);">{tr('Beta')}</span
+								>
+							</Tooltip>
+						</div>
+					{/if}
+					{#if t.key === 'tulis'}<FileText size={14} />{:else if t.key === 'unggah'}<Upload size={14} />{:else}<Sparkles size={14} />{/if}
+					{t.label}
+				</button>
+			{/snippet}
 			<div class="flex flex-wrap gap-1" role="tablist" aria-label={tr('Cara menyusun naskah')}>
 				{#each availableTabs as t (t.key)}
-						<button
-							class="relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors"
-							style="border-color: {tab === t.key ? 'var(--primary)' : 'transparent'}; color: {tab === t.key ? 'var(--primary)' : 'var(--muted-foreground)'};"
-							type="button"
-							role="tab"
-							aria-selected={tab === t.key}
-							title={t.key === 'generate' ? tr('Fitur ini masih dalam tahap beta. Hasil draf artikel AI masih perlu dikaji dan diperiksa ulang sebelum diterbitkan.') : undefined}
-							onclick={() => (tab = t.key as Tab)}
-						>
-							{#if t.key === 'generate'}
-								<div class="pointer-events-auto absolute -top-1.5 right-0">
-									<Tooltip content={tr('Fitur ini masih dalam tahap beta. Hasil draf artikel AI masih perlu dikaji dan diperiksa ulang sebelum diterbitkan.')} maxWidth={280}>
-										<span
-											class="cursor-help text-[9px] font-bold uppercase tracking-wide leading-none transition-opacity hover:opacity-80"
-											style="color: var(--primary);">{tr('Beta')}</span
-										>
-									</Tooltip>
-								</div>
-							{/if}
-							{#if t.key === 'tulis'}<FileText size={14} />{:else if t.key === 'unggah'}<Upload size={14} />{:else}<Sparkles size={14} />{/if}
-							{t.label}
-						</button>
+					{#if t.key === 'tulis' && editorLocked}
+						<!-- Tombol disabled tidak memicu event hover, jadi tooltip dipasang
+						     pada anchor span di sekitarnya. -->
+						<Tooltip content={tr('Anda harus bikin artikel dengan AI dulu')}>
+							{@render tabButton(t)}
+						</Tooltip>
+					{:else}
+						{@render tabButton(t)}
+					{/if}
 				{/each}
 			</div>
 		</div>
@@ -1759,26 +1806,44 @@
 									<div class="mt-6">
 										<div class="flex flex-wrap items-center gap-2">
 											<span class="text-sm font-semibold">{tr('Pengunci Standar Redaksi')}</span>
-											<span class="text-[11px] text-muted-foreground">{tr('Opsional • Cegah Kutipan Fiktif')}</span>
+											<span class="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-600">{tr('Wajib')}</span>
+											<span class="text-[11px] text-muted-foreground">{tr('Cegah Kutipan Fiktif')}</span>
 										</div>
-										<div class="mt-3 grid gap-4 sm:grid-cols-2">
-										<label class="block">
-											<span class="text-xs font-semibold text-muted-foreground">{tr('Kota Rilis (Dateline)')}</span>
-											<input class="app-input mt-1 w-full text-sm uppercase" placeholder="JAKARTA" bind:value={kotaRilis} />
-										</label>
-										<label class="block">
-											<span class="text-xs font-semibold text-muted-foreground">{tr('Nama & Jabatan Narasumber Kutipan')}</span>
-											<input class="app-input mt-1 w-full text-sm" placeholder="Budi Santoso, CEO Tuathub Indonesia" bind:value={narasumber} />
-										</label>
-										<label class="block sm:col-span-2">
-											<span class="text-xs font-semibold text-muted-foreground">{tr('Isi Kutipan (Apa Adanya)')}</span>
-											<textarea
-												rows="3"
-												class="app-input mt-1 w-full resize-y text-sm"
-												placeholder={tr('Pernyataan yang diketik AI pakai persis seperti tulisanmu — tanpa menambah kutipan fiktif.')}
-												bind:value={kutipanNarasumber}
-											></textarea>
-										</label>
+										<div class="mt-3 space-y-3">
+											{#each properQuotes as q, i (i)}
+												<div class="rounded-xl border p-3" style="border-color: var(--border);">
+													<div class="flex items-center justify-between gap-2">
+														<p class="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Kutipan')} {i + 1}</p>
+														{#if properQuotes.length > 1}
+															<button class="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-rose-600" type="button" aria-label={`${tr('Hapus kutipan')} ${i + 1}`} onclick={() => removeProperQuote(i)}>
+																<X size={14} />
+															</button>
+														{/if}
+													</div>
+													<div class="mt-2 grid gap-3 sm:grid-cols-2">
+														<label class="block">
+															<span class="text-xs font-semibold text-muted-foreground">{tr('Kota Rilis (Dateline)')}</span>
+															<input class="app-input mt-1 w-full text-sm uppercase" placeholder="JAKARTA" bind:value={q.dateline} />
+														</label>
+														<label class="block">
+															<span class="text-xs font-semibold text-muted-foreground">{tr('Nama & Jabatan Narasumber Kutipan')}</span>
+															<input class="app-input mt-1 w-full text-sm" placeholder="Budi Santoso, CEO Tuathub Indonesia" bind:value={q.narasumber} />
+														</label>
+														<label class="block sm:col-span-2">
+															<span class="text-xs font-semibold text-muted-foreground">{tr('Isi Kutipan (Apa Adanya)')}</span>
+															<textarea
+																rows="3"
+																class="app-input mt-1 w-full resize-y text-sm"
+																placeholder={tr('Pernyataan yang diketik AI pakai persis seperti tulisanmu — tanpa menambah kutipan fiktif.')}
+																bind:value={q.kutipan}
+															></textarea>
+														</label>
+													</div>
+												</div>
+											{/each}
+											<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={addProperQuote}>
+												<Plus size={14} /> {tr('Tambah kutipan')}
+											</button>
 										</div>
 									</div>
 

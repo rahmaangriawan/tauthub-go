@@ -590,6 +590,58 @@ func (d *Deps) PublicationRetry(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, payload)
 }
 
+// PublicationSchedule: POST /v1/brands/{brandId}/publications/{publicationId}/schedule
+// Atur ulang waktu terbit publikasi yang belum terbit. `scheduled_at` kosong/null
+// berarti terbit sekarang — scheduler mengambilnya pada sweep berikutnya.
+func (d *Deps) PublicationSchedule(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	publicationID := chiParam(r, "publicationId")
+	body := decodeJSON(r)
+	parsed, err := optionalDatetime(body, "scheduled_at")
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	row, err := d.queryRow(r.Context(),
+		"SELECT id, status, publish_status, published_at FROM publications WHERE id = $1 AND brand_id = $2 LIMIT 1",
+		publicationID, brandRow.ID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if row == nil {
+		d.writeErr(w, errNotFound("Publication not found"))
+		return
+	}
+	if row.timePtr("published_at") != nil || row.strOr("publish_status", "") == "published" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Publikasi sudah terbit; jadwal tidak bisa diubah.")
+		return
+	}
+	switch row.strOr("status", "") {
+	case "pending", "waiting_partner", "partner_approved", "retrying", "queued":
+	default:
+		httpx.Error(w, http.StatusConflict, "Status publikasi ini tidak bisa dijadwalkan ulang.")
+		return
+	}
+	scheduled := time.Now().UTC()
+	if t, ok := parsed.(time.Time); ok {
+		scheduled = t.UTC()
+	}
+	if err := d.exec(r.Context(),
+		"UPDATE publications SET scheduled_at = $1, updated_at = NOW() WHERE id = $2 AND brand_id = $3",
+		scheduled, publicationID, brandRow.ID); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	d.auditPublication(r.Context(), brandRow.ID, user.ID, "publication.rescheduled", publicationID)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "scheduled_at": scheduled.Format(time.RFC3339)})
+}
+
 var resettablePublicationStatuses = map[string]bool{
 	"processing": true, "failed": true, "retrying": true, "cancelled": true, "queued": true,
 }

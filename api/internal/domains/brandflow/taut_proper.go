@@ -19,21 +19,32 @@ import (
 
 // tautProperInput: isian lengkap dari tab "Yang Proper" di modal Pengelola
 // Naskah — dipakai saat gaya = "proper".
+type tautProperQuote struct {
+	Dateline   string `json:"dateline"`
+	Narasumber string `json:"narasumber"`
+	Kutipan    string `json:"kutipan"`
+}
+
 type tautProperInput struct {
 	Fakta      string
 	Dateline   string
 	Narasumber string
 	Kutipan    string
+	Quotes     []tautProperQuote
 	Fokus      string
 	BriefID    string
 }
+
+// properQuotesJSONPrefix: penanda bahwa proper_kutipan berisi JSON array
+// kutipan (bukan teks kutipan tunggal versi lama).
+const properQuotesJSONPrefix = "__quotes__:"
 
 // empty: true bila seluruh isian kosong (tidak ada data Proper tersimpan).
 func (p *tautProperInput) empty() bool {
 	if p == nil {
 		return true
 	}
-	return p.Fakta == "" && p.Dateline == "" && p.Narasumber == "" && p.Kutipan == "" && p.Fokus == "" && p.BriefID == ""
+	return p.Fakta == "" && p.Dateline == "" && p.Narasumber == "" && p.Kutipan == "" && len(p.Quotes) == 0 && p.Fokus == "" && p.BriefID == ""
 }
 
 // validate: mode Proper boleh jalan dengan fakta manual ATAU Brief Copilot;
@@ -55,6 +66,20 @@ func (p *tautProperInput) validate() error {
 	if utf8.RuneCountInString(p.Kutipan) > 4000 {
 		return errUnprocessable("Isi kutipan maksimal 4.000 karakter.")
 	}
+	for i, q := range p.Quotes {
+		if strings.TrimSpace(q.Dateline) == "" || strings.TrimSpace(q.Narasumber) == "" || strings.TrimSpace(q.Kutipan) == "" {
+			return errUnprocessable("Kutipan " + itoa(i+1) + " belum lengkap: isi kota rilis, narasumber, dan isi kutipan.")
+		}
+		if utf8.RuneCountInString(q.Dateline) > 100 {
+			return errUnprocessable("Kota rilis kutipan " + itoa(i+1) + " maksimal 100 karakter.")
+		}
+		if utf8.RuneCountInString(q.Narasumber) > 200 {
+			return errUnprocessable("Nama & jabatan narasumber kutipan " + itoa(i+1) + " maksimal 200 karakter.")
+		}
+		if utf8.RuneCountInString(q.Kutipan) > 4000 {
+			return errUnprocessable("Isi kutipan " + itoa(i+1) + " maksimal 4.000 karakter.")
+		}
+	}
 	if utf8.RuneCountInString(p.Fokus) > 4000 {
 		return errUnprocessable("Instruksi tambahan maksimal 4.000 karakter.")
 	}
@@ -70,14 +95,32 @@ func (d *Deps) saveTautProperFields(ctx context.Context, itemID string, p *tautP
 	if p == nil || itemID == "" {
 		return
 	}
+	dateline := strings.TrimSpace(p.Dateline)
+	narasumber := strings.TrimSpace(p.Narasumber)
+	kutipan := strings.TrimSpace(p.Kutipan)
+	if len(p.Quotes) > 0 {
+		dateline = strings.TrimSpace(p.Quotes[0].Dateline)
+		names := make([]string, 0, len(p.Quotes))
+		for _, q := range p.Quotes {
+			if n := strings.TrimSpace(q.Narasumber); n != "" {
+				names = append(names, n)
+			}
+		}
+		narasumber = strings.Join(names, "; ")
+		if raw, err := json.Marshal(p.Quotes); err == nil {
+			// Kutipan tunggal lama tetap terbaca oleh buildTautProperBlock;
+			// array lengkap disimpan dengan penanda supaya load bisa mem-parse.
+			kutipan = properQuotesJSONPrefix + string(raw)
+		}
+	}
 	err := d.exec(ctx,
 		`UPDATE taut_campaign_media SET
 		   proper_fakta = NULLIF($1, ''), proper_dateline = NULLIF($2, ''),
 		   proper_narasumber = NULLIF($3, ''), proper_kutipan = NULLIF($4, ''),
 		   proper_fokus = NULLIF($5, ''), proper_brief_id = NULLIF($6, '')
 		 WHERE id = $7`,
-		strings.TrimSpace(p.Fakta), strings.TrimSpace(p.Dateline), strings.TrimSpace(p.Narasumber),
-		strings.TrimSpace(p.Kutipan), strings.TrimSpace(p.Fokus), strings.TrimSpace(p.BriefID), itemID)
+		strings.TrimSpace(p.Fakta), dateline, narasumber,
+		kutipan, strings.TrimSpace(p.Fokus), strings.TrimSpace(p.BriefID), itemID)
 	if err != nil {
 		slog.Warn("[taut-proper] gagal menyimpan isian proper", "media_id", itemID, "err", truncateString(err.Error(), 200))
 	}
@@ -110,6 +153,15 @@ func (d *Deps) loadTautProperStored(ctx context.Context, itemID string) *tautPro
 		Kutipan:    row.strOr("proper_kutipan", ""),
 		Fokus:      row.strOr("proper_fokus", ""),
 		BriefID:    row.strOr("proper_brief_id", ""),
+	}
+	if raw, ok := strings.CutPrefix(p.Kutipan, properQuotesJSONPrefix); ok {
+		var quotes []tautProperQuote
+		if err := json.Unmarshal([]byte(raw), &quotes); err == nil && len(quotes) > 0 {
+			p.Quotes = quotes
+			p.Dateline = quotes[0].Dateline
+			p.Narasumber = quotes[0].Narasumber
+			p.Kutipan = quotes[0].Kutipan
+		}
 	}
 	if p.empty() {
 		return nil
@@ -242,7 +294,14 @@ func buildTautProperBlock(p *tautProperInput, briefFacts string) string {
 	if s := strings.TrimSpace(briefFacts); s != "" {
 		b.WriteString("\n[MEMORI BRAND COPILOT — fakta kanonik yang boleh dipakai]\n" + s + "\n")
 	}
-	if strings.TrimSpace(p.Narasumber) != "" && strings.TrimSpace(p.Kutipan) != "" {
+	if len(p.Quotes) > 0 {
+		b.WriteString("\n[KUTIPAN RESMI — pakai persis seperti ini, tanpa mengubah kata]\n")
+		for i, q := range p.Quotes {
+			b.WriteString("(" + itoa(i+1) + ") Kota: " + strings.TrimSpace(q.Dateline) + "\n")
+			b.WriteString("Narasumber: " + strings.TrimSpace(q.Narasumber) + "\n")
+			b.WriteString("Kutipan: \"" + strings.TrimSpace(q.Kutipan) + "\"\n")
+		}
+	} else if strings.TrimSpace(p.Narasumber) != "" && strings.TrimSpace(p.Kutipan) != "" {
 		b.WriteString("\n[KUTIPAN RESMI — pakai persis seperti ini, tanpa mengubah kata]\n")
 		b.WriteString("Narasumber: " + strings.TrimSpace(p.Narasumber) + "\n")
 		b.WriteString("Kutipan: \"" + strings.TrimSpace(p.Kutipan) + "\"\n")

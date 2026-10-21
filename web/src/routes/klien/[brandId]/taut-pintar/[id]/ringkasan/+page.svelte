@@ -11,12 +11,14 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { ArrowRight, Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, Info, Link as LinkIcon, Loader, LoaderCircle, MessageCircle, RefreshCw, RotateCcw, Star, X } from '@lucide/svelte';
+	import { ArrowRight, CalendarClock, Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, Info, Link as LinkIcon, Loader, LoaderCircle, MessageCircle, Pencil, RefreshCw, RotateCcw, Send, Star, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
 	import { MANUAL_PROFILER_REASON, rpCurrency, toJakartaDisplay } from '../../_shared';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import DateTimePicker from '$lib/components/date-time-picker.svelte';
+	import EditorModal from '../writer/_editor-modal.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);
@@ -47,6 +49,7 @@
 		media: MediaItem[];
 		totalCostIdr: number;
 		totalCostTc: number;
+		canDistribute?: boolean;
 		tokens?: { used: number };
 	};
 
@@ -164,6 +167,155 @@
 		((url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim() || name.trim()).toLowerCase();
 	const capFirst = (v: string): string => (v ? v.charAt(0).toUpperCase() + v.slice(1) : v);
 	let faviconFailed = $state<Record<string, boolean>>({});
+
+	/* ─── Jadwal terbit publikasi (hanya media yang terbit belakangan) ─── */
+	let pickerFor = $state<MediaItem | null>(null);
+	let pickerInitial = $state<Date | null>(null);
+	let afterSaveFor = $state<MediaItem | null>(null);
+
+	// Editor artikel.
+	let editorFor = $state<MediaItem | null>(null);
+	let edTitle = $state('');
+	let edHtml = $state('');
+	let edCover = $state<string | null>(null);
+	let edCategory = $state('');
+	let edMeta = $state('');
+	let edLoading = $state(false);
+	let edSaving = $state(false);
+	let edError = $state('');
+
+	// QC ulang setelah artikel diedit: gerbang keras (konten & tautan) wajib
+	// masih lulus sebelum kampanye boleh diterbitkan.
+	let qcRunning = $state<Record<string, boolean>>({});
+
+	async function runQc(mediaId: string) {
+		if (qcRunning[mediaId]) return;
+		qcRunning = { ...qcRunning, [mediaId]: true };
+		try {
+			await apiRequest(`${apiBase}/gatekeeper/audit-all`, { method: 'POST', body: JSON.stringify({ mediaIds: [mediaId] }) }, 900_000);
+		} catch {
+			/* senyap — status QC tampil dari data audits */
+		} finally {
+			qcRunning = { ...qcRunning, [mediaId]: false };
+			await loadData();
+		}
+	}
+
+	const scheduleFor = (m: MediaItem): string => m.scheduled_at ?? '';
+	const fmtSchedule = (m: MediaItem): string => toJakartaDisplay(scheduleFor(m) || null) ?? 'Segera';
+	/**
+	 * Hanya publikasi yang MASIH MENUNGGU (terjadwal/menunggu mitra) yang boleh
+	 * diedit & dijadwalkan ulang — bukan yang sedang diproses atau sudah terbit.
+	 */
+	const canEdit = (m: MediaItem): boolean => {
+		if (!m.publication_id || !m.document_id) return false;
+		const s = m.publish.status ?? '';
+		if (s === 'published' || s === 'processing' || s === 'queued') return false;
+		if (s === 'waiting_partner' || s === 'partner_approved' || s === 'pending') return true;
+		return m.scheduled_at ? new Date(m.scheduled_at).getTime() > Date.now() : false;
+	};
+
+	function openPicker(m: MediaItem) {
+		pickerFor = m;
+		const at = scheduleFor(m);
+		pickerInitial = at ? new Date(at) : null;
+	}
+
+	async function reschedule(m: MediaItem, iso: string | null) {
+		if (!m.publication_id) return;
+		try {
+			const res = await apiRequest(`/v1/brands/${brandId}/publications/${m.publication_id}/schedule`, {
+				method: 'POST',
+				body: JSON.stringify({ scheduled_at: iso })
+			});
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengubah jadwal terbit.')));
+			await loadData();
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : tr('Gagal mengubah jadwal terbit.');
+		}
+	}
+
+	function applySchedule(date: Date) {
+		const target = pickerFor;
+		if (!target) return;
+		pickerFor = null;
+		// "Sekarang" = terbit pada pemrosesan berikutnya (bukan timestamp beku).
+		const iso = date.getTime() <= Date.now() + 60_000 ? null : date.toISOString();
+		void reschedule(target, iso);
+	}
+
+	/** Popover pasca simpan: pilih terbit sekarang atau jadwalkan. */
+	function choosePublishNow() {
+		const target = afterSaveFor;
+		afterSaveFor = null;
+		if (target) void reschedule(target, null);
+	}
+
+	function choosePublishSchedule() {
+		const target = afterSaveFor;
+		afterSaveFor = null;
+		if (target) openPicker(target);
+	}
+
+	/* ─── Editor artikel ─── */
+
+	async function openEditor(m: MediaItem) {
+		if (!m.document_id) return;
+		editorFor = m;
+		edLoading = true;
+		edError = '';
+		edTitle = m.article.title ?? '';
+		edHtml = '';
+		edCover = m.featured_image_url;
+		edCategory = '';
+		edMeta = '';
+		try {
+			const res = await apiRequest(`${apiBase}/articles/${m.media_id}`);
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat artikel.')));
+			const d = await res.json();
+			edTitle = d.title ?? edTitle;
+			edHtml = d.content_html ?? '';
+			edCover = d.featured_image_url ?? edCover;
+			edCategory = d.category ?? '';
+			edMeta = d.meta_description ?? '';
+		} catch (reason) {
+			edError = reason instanceof Error ? reason.message : tr('Gagal memuat artikel.');
+		} finally {
+			edLoading = false;
+		}
+	}
+
+	async function uploadCover(file: File): Promise<string> {
+		const form = new FormData();
+		form.append('file', file);
+		const res = await apiRequest(`/v1/brands/${brandId}/assets`, { method: 'POST', body: form });
+		const d = await res.json().catch(() => null);
+		if (!res.ok || !d?.url) throw new Error(d?.detail ?? tr('Gagal mengunggah cover.'));
+		return d.url as string;
+	}
+
+	async function saveArticle(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) {
+		const target = editorFor;
+		if (!target || edSaving) return;
+		edSaving = true;
+		edError = '';
+		try {
+			const res = await apiRequest(`${apiBase}/articles/${target.media_id}`, {
+				method: 'PUT',
+				body: JSON.stringify({ title, content_html: html, featured_image_url: coverUrl ?? undefined, category, meta_description: metaDescription })
+			});
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan artikel.')));
+			editorFor = null;
+			afterSaveFor = target;
+			void runQc(target.media_id);
+			await loadData();
+		} catch (reason) {
+			edError = reason instanceof Error ? reason.message : tr('Gagal menyimpan artikel.');
+		} finally {
+			edSaving = false;
+		}
+	}
+
 </script>
 
 <PageTitle title="Taut Pintar — Ringkasan Distribusi" />
@@ -306,7 +458,7 @@
 						<p class="text-xs text-slate-500 mt-0.5">{tr("Daftar media untuk distribusi konten kampanye ini.")}</p>
 					</div>
 				</div>
-				<div class="flex items-center gap-2">
+				<div class="flex flex-wrap items-center justify-end gap-2">
 					<button
 						class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors"
 						type="button"
@@ -382,10 +534,37 @@
 										{/if}
 									</td>
 									<td class="px-3.5 py-4 whitespace-nowrap">
-										<span class="inline-flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600">
-											<Clock size={12} class="text-emerald-500 shrink-0" />
-											{toJakartaDisplay(m.scheduled_at) ?? 'Segera'}
-										</span>
+										{#if canEdit(m)}
+											<div class="flex items-center gap-1">
+												<button
+													type="button"
+													class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors {scheduleFor(m)
+														? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+														: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}"
+													title={tr('Atur waktu terbit media ini')}
+													onclick={() => openPicker(m)}
+												>
+													<CalendarClock size={12} />
+													{scheduleFor(m) ? fmtSchedule(m) : tr('Segera')}
+												</button>
+												{#if scheduleFor(m)}
+													<button
+														type="button"
+														class="rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+														aria-label={tr('Batalkan jadwal')}
+														title={tr('Batalkan jadwal — terbit sekarang')}
+														onclick={() => void reschedule(m, null)}
+													>
+														<X size={12} />
+													</button>
+												{/if}
+											</div>
+										{:else}
+											<span class="inline-flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600">
+												<Clock size={12} class="text-emerald-500 shrink-0" />
+												{toJakartaDisplay(m.scheduled_at) ?? 'Segera'}
+											</span>
+										{/if}
 									</td>
 									<td class="max-w-[240px] px-3.5 py-4">
 										{#if m.article.title}
@@ -430,18 +609,32 @@
 											<span class="text-xs text-muted-foreground">—</span>
 										{/if}
 									</td>
-									<td class="px-3.5 py-4 text-right">
-										<!-- Hubungi mitra tentang artikel ini; publikasi belum ada
-										     (belum diajukan) belum punya forum. -->
-										<button
-											type="button"
-											class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-											disabled={!m.publication_id}
-											title={!m.publication_id ? tr('Publikasi belum diajukan') : tr('Hubungi mitra tentang artikel ini')}
-											onclick={() => openContact(m)}
-										>
-											<MessageCircle size={12} />{tr('Hubungi')}
-										</button>
+									<td class="px-3.5 py-4">
+										<div class="flex flex-wrap items-center justify-end gap-1.5">
+											{#if canEdit(m)}
+												<button
+													type="button"
+													class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300"
+													aria-label={tr('Edit Artikel')}
+													title={tr('Edit artikel lalu atur waktu terbitnya')}
+													onclick={() => void openEditor(m)}
+												>
+													<Pencil size={13} />
+												</button>
+											{/if}
+											<!-- Hubungi mitra tentang artikel ini; publikasi belum ada
+											     (belum diajukan) belum punya forum. -->
+											<button
+												type="button"
+												class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+												disabled={!m.publication_id}
+												aria-label={tr('Hubungi')}
+												title={!m.publication_id ? tr('Publikasi belum diajukan') : tr('Hubungi mitra tentang artikel ini')}
+												onclick={() => openContact(m)}
+											>
+												<MessageCircle size={13} />
+											</button>
+										</div>
 									</td>
 																		</tr>
 								{/each}
@@ -455,6 +648,75 @@
 		</section>
 	{/if}
 </main>
+
+<!-- Editor artikel: dipakai untuk memperbaiki artikel sebelum terbit. -->
+{#if editorFor}
+	{#if edLoading}
+		<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.45);" role="presentation">
+			<div class="app-card flex items-center gap-2 px-5 py-4 text-sm font-semibold">
+				<LoaderCircle size={17} class="animate-spin" /> {tr('Memuat artikel…')}
+			</div>
+		</div>
+	{:else}
+		<EditorModal
+			mediaName={editorFor.name}
+			initialTitle={edTitle}
+			initialHtml={edHtml}
+			initialCoverUrl={edCover}
+			initialCategory={edCategory}
+			initialMetaDescription={edMeta}
+			categoryOptions={edCategory ? [edCategory] : []}
+			linkLimit={editorFor.link_capacity && editorFor.link_capacity > 0 ? editorFor.link_capacity : 2}
+			enforceLinkLimit={false}
+			requireCover={false}
+			saving={edSaving}
+			saveError={edError}
+			subtitle={tr('Edit artikel, simpan, lalu pilih kapan artikel ini terbit.')}
+			onClose={() => { if (!edSaving) editorFor = null; }}
+			onSave={(title, html, coverUrl, category, metaDescription) => void saveArticle(title, html, coverUrl, category, metaDescription)}
+			onUploadCover={uploadCover}
+		/>
+	{/if}
+{/if}
+
+<!-- Popover pasca simpan: terbit sekarang atau jadwalkan. -->
+{#if afterSaveFor}
+	<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.5);" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) afterSaveFor = null; }}>
+		<div class="app-card w-full max-w-sm overflow-hidden" role="dialog" aria-modal="true" aria-label={tr('Artikel tersimpan')} tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') afterSaveFor = null; }}>
+			<div class="flex items-start gap-3 px-5 pb-2 pt-5">
+				<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl" style="background-color: var(--success-soft); color: var(--success);"><CircleCheck size={20} /></span>
+				<div class="min-w-0 flex-1">
+					<p class="text-base leading-tight font-bold text-slate-900">{tr('Artikel tersimpan')}</p>
+					<p class="mt-1 text-[13px] leading-relaxed text-muted-foreground">{tr('Mau artikel ini terbit sekarang atau dijadwalkan dulu?')}</p>
+					<p class="mt-1 truncate text-[12px] font-semibold text-slate-700">{afterSaveFor.name}</p>
+					<p class="mt-1 text-[11px] leading-snug text-muted-foreground">{tr('Perubahan jadwal langsung diterapkan ke publikasi media ini.')}</p>
+				</div>
+			</div>
+			<div class="grid gap-2 px-5 pb-3 pt-3">
+				<button class="app-btn app-btn-primary inline-flex w-full items-center justify-center gap-1.5 !min-h-10 !px-3 !text-xs" type="button" onclick={choosePublishNow}>
+					<Send size={14} /> {tr('Terbit sekarang')}
+				</button>
+				<button class="app-btn app-btn-soft inline-flex w-full items-center justify-center gap-1.5 !min-h-10 !px-3 !text-xs" type="button" onclick={choosePublishSchedule}>
+					<CalendarClock size={14} /> {tr('Jadwalkan dulu')}
+				</button>
+			</div>
+			<div class="border-t px-5 py-3" style="border-color: var(--border);">
+				<button class="text-xs font-medium text-muted-foreground transition-colors hover:text-slate-700" type="button" onclick={() => (afterSaveFor = null)}>{tr('Nanti saja')}</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if pickerFor}
+	<DateTimePicker
+		open
+		title={pickerFor ? `${tr('Jadwal terbit')} — ${pickerFor.name}` : tr('Jadwal terbit')}
+		value={pickerInitial}
+		min={new Date()}
+		onClose={() => { pickerFor = null; }}
+		onApply={applySchedule}
+	/>
+{/if}
 
 {#if contactTarget}
 	<div

@@ -242,12 +242,12 @@
 	 *  `Math.abs(val % 31)` — angka palsu, jadi tidak disalin ke sini. */
 	function formatTraffic(swVisits?: number | null, est?: number | null): { text: string; source: string } {
 		const val = swVisits && swVisits > 0 ? swVisits : est && est > 0 ? est : 0;
-		if (!val) return { text: 'Estimasi', source: 'Via Estimasi Media' };
+		if (!val) return { text: 'Estimasi', source: 'Via SimilarWeb' };
 		let text: string;
 		if (val >= 1_000_000) text = `± ${(val / 1_000_000).toFixed(1).replace(/\.0$/, '')}M / bulan`;
 		else if (val >= 1_000) text = `± ${Math.round(val / 1_000)} rb / bulan`;
 		else text = `± ${val.toLocaleString('id-ID')} / bulan`;
-		return { text, source: swVisits ? 'Via Similarweb' : 'Via Estimasi Media' };
+		return { text, source: 'Via SimilarWeb' };
 	}
 
 	const AUTO_TYPES = ['wordpress', 'blogger', 'tulisio_api', 'custom_web', 'webhook'];

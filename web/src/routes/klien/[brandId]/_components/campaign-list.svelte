@@ -265,12 +265,10 @@
 			<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola semua kampanye distribusi konten Anda di satu tempat.")}</p>
 		</div>
 		<div class="flex flex-wrap items-center justify-end gap-2">
-			<!-- SEMENTARA: tombol masuk ke Brief (chatbot Profiler) disembunyikan
-			     sebelum deploy — fiturnya belum dirilis. Kembalikan blok ini saat siap.
-			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => void goto(`/klien/${brandUrl}/profiler`)}>
+			<!-- Tombol Profiler: langsung masuk ke brief terakhir (chatbot Profiler). -->
+			<button class="app-btn app-btn-soft" type="button" disabled={busy} title={tr('Buka Taut Brief')} onclick={() => void goto(`/klien/${brandUrl}/profiler`)}>
 				<Sparkles size={16} /> {tr('Profiler')}
 			</button>
-			-->
 			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={toggleArchiveView}>
 				{#if showArchive}<RotateCcw size={16} />{:else}<Archive size={16} />{/if}
 				{showArchive ? tr('Kembali ke Daftar') : tr('Arsip')}

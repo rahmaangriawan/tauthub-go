@@ -14,13 +14,13 @@ import (
 // Port v1/brands/[brandId]/credits/route.ts + invoices/route.ts (read-only).
 
 // ledgerCampaignExpr: SQL yang menormalkan PEMILIK KAMPANYE tiap entri ledger.
-// - reserve/capture/release memakai id publikasi sebagai ref_id → dipetakan
-//   lewat join `publications p`.
-// - charge AI/Taut Pintar memakai prefiks ref_id: "taut-writer:{campaign}:…",
-//   "taut-writer-regen:{campaign}:…", "ai-image:{campaign}:…", dan
-//   "profiler-{campaign}-{hash}" (campaign = UUID 36 karakter setelah prefiks).
-// - entri lain (topup, koreksi admin, legacy tanpa ref_id) → NULL = tanpa
-//   kampanye; ditampilkan sebagai grup terpisah di UI.
+//   - reserve/capture/release memakai id publikasi sebagai ref_id → dipetakan
+//     lewat join `publications p`.
+//   - charge AI/Taut Pintar memakai prefiks ref_id: "taut-writer:{campaign}:…",
+//     "taut-writer-regen:{campaign}:…", "ai-image:{campaign}:…", dan
+//     "profiler-{campaign}-{hash}" (campaign = UUID 36 karakter setelah prefiks).
+//   - entri lain (topup, koreksi admin, legacy tanpa ref_id) → NULL = tanpa
+//     kampanye; ditampilkan sebagai grup terpisah di UI.
 const ledgerCampaignExpr = `(CASE
 		WHEN e.ref_id LIKE 'taut-writer:%' THEN split_part(e.ref_id, ':', 2)
 		WHEN e.ref_id LIKE 'taut-writer-regen:%' THEN split_part(e.ref_id, ':', 2)

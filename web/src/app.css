@@ -161,6 +161,10 @@
     color: var(--foreground);
     font-feature-settings: 'cv11', 'ss01';
     -webkit-font-smoothing: antialiased;
+    /* Guard layout: elemen dekoratif/tooltip bisa meluber 1–8px dan memunculkan
+       scrollbar horizontal tingkat halaman. Tabel yang memang butuh geser
+       horizontal tetap punya overflow-x sendiri. */
+    overflow-x: clip;
   }
 }
 

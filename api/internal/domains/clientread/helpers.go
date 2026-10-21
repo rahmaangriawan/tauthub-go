@@ -113,10 +113,10 @@ func priceBreakdown(partnerPrice, markupPercent float64) map[string]float64 {
 	}
 	client := round2(partner * (1 + markup/100))
 	return map[string]float64{
-		"partner_price": partner,
+		"partner_price":  partner,
 		"markup_percent": markup,
-		"markup_amount": round2(client - partner),
-		"client_price":  client,
+		"markup_amount":  round2(client - partner),
+		"client_price":   client,
 	}
 }
 

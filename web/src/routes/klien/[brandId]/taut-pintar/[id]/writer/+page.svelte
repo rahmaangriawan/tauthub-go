@@ -13,12 +13,13 @@
 	import TautBottomBar from '../../_bottom-bar.svelte';
 	import NaskahModal from './_naskah-modal.svelte';
 	import QcPanel, { QC_CHECK_COUNT } from './_qc-panel.svelte';
-	import { MANUAL_PROFILER_REASON, buildTrackedUrl, stripScheme, withScheme, textToHtml, toLocalInput, isCampaignDone } from '../../_shared';
+	import { MANUAL_PROFILER_REASON, buildTrackedUrl, stripScheme, withScheme, textToHtml, toJakartaDisplay, toLocalInput, isCampaignDone } from '../../_shared';
 	import { tcToRp } from '$lib/credits/rupiah';
 	import { ARTICLE_DEFAULT_COVER, sameOriginAssetUrl } from '$lib/media/cover';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import SlideOver from '$lib/components/slide-over.svelte';
+	import DateTimePicker from '$lib/components/date-time-picker.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);
@@ -51,6 +52,10 @@
 		media_type?: string | null;
 		angle_slug?: string | null;
 		website_url?: string | null;
+		/** Standar media mewajibkan kategori saat terbit. */
+		category_required?: boolean;
+		/** 'ai' bila artikel pernah dibuat The Writer; 'manual' bila diunggah. */
+		article_source?: 'ai' | 'manual' | null;
 	};
 	type LinksForm = {
 		tracking_mode: 'direct' | 'tauthub';
@@ -60,7 +65,7 @@
 		backup_anchor: string;
 	};
 	type LinkCounts = { dofollow: number; nofollow: number; sponsored: number };
-	type ArticleStats = { words: number; images: number; links: number; cover: string | null };
+	type ArticleStats = { words: number; images: number; links: number; cover: string | null; category: string | null };
 
 	const EMPTY_LINKS: LinksForm = { tracking_mode: 'direct', primary_url: '', primary_anchor: '', backup_url: '', backup_anchor: '' };
 
@@ -165,6 +170,10 @@
 	// Popover rincian biaya di bar bawah: terbuka saat hover, tetap terbuka saat diklik.
 	let costPopoverOpen = $state(false);
 	let costPinned = $state(false);
+	// Popover kesiapan terbit: daftar prasyarat yang belum terpenuhi + aksi
+	// "Cek Semua QC". Menggantikan pembukaan panel QC otomatis dari tombol terbit.
+	let readinessOpen = $state(false);
+	let bulkQcRunning = $state(false);
 	// media_id -> nilai datetime-local; tidak ada entri = terbit langsung.
 	let scheduleByMedia = $state<Record<string, string>>({});
 	// Preset cepat yang sedang berlaku per media, untuk sorotan tombol. Kosong
@@ -187,6 +196,8 @@
 		category: string | null;
 		metaDescription: string | null;
 		linkLimit: number;
+		/** Asal artikel tersimpan — menentukan tab yang tampil saat Edit Artikel. */
+		source?: 'ai' | 'manual' | null;
 	} | null>(null);
 	let editorSaving = $state(false);
 	let editorError = $state('');
@@ -403,7 +414,7 @@
 					else if (tokens.includes('nofollow')) nofollow++;
 				}
 				linkStats = { ...linkStats, [item.media_id]: { dofollow: tags.length - nofollow - sponsored, nofollow, sponsored } };
-				articleStats = { ...articleStats, [item.media_id]: { words, images: imgs.length, links: tags.length, cover: d.featured_image_url ?? null } };
+				articleStats = { ...articleStats, [item.media_id]: { words, images: imgs.length, links: tags.length, cover: d.featured_image_url ?? null, category: d.category ?? null } };
 				if (d.title?.trim()) articleTitles = { ...articleTitles, [item.media_id]: d.title.trim() };
 			} catch {
 				/* fallback badge */
@@ -418,6 +429,40 @@
 		const s = articleStatusOf(item);
 		return s !== 'none' && s !== 'generating' && s !== 'error' && s !== 'queued';
 	}
+
+	// ---------- Kesiapan terbit (popover prasyarat) ----------
+	type ReadinessGroup = { key: string; label: string; items: { mediaId: string; name: string }[] };
+
+	const readinessGroups = $derived.by((): ReadinessGroup[] => {
+		const groups: ReadinessGroup[] = [];
+		const docs = selected.filter((m) => hasDoc(m));
+		const toItems = (list: PlacementItem[]) => list.map((m) => ({ mediaId: m.media_id, name: m.name }));
+		const add = (key: string, label: string, list: PlacementItem[]) => {
+			if (list.length > 0) groups.push({ key, label: tr(label), items: toItems(list) });
+		};
+
+		add('article', 'Artikel belum dibuat', selected.filter((m) => !hasDoc(m)));
+
+		// QC dianggap belum dicek bila belum ada audit untuk media itu; gagal bila
+		// sudah dipindai tetapi artikel belum berstatus "ready".
+		add('qc', 'QC belum dicek', docs.filter((m) => (qcCounts[m.media_id] ?? 0) === 0));
+		add('qc-fail', 'QC belum lulus', docs.filter((m) => (qcCounts[m.media_id] ?? 0) > 0 && articleStatusOf(m) !== 'ready'));
+
+		add('cover', 'Cover belum ada', docs.filter((m) => articleStats[m.media_id] && !articleStats[m.media_id].cover));
+
+		add(
+			'category',
+			'Kategori belum dipilih',
+			docs.filter((m) => m.category_required === true && articleStats[m.media_id] && !articleStats[m.media_id].category)
+		);
+		return groups;
+	});
+
+	/** Media yang masih perlu dipindai: belum punya audit atau belum lulus. */
+	const qcTargets = $derived(
+		selected.filter((m) => hasDoc(m) && ((qcCounts[m.media_id] ?? 0) === 0 || articleStatusOf(m) !== 'ready'))
+	);
+	const readyToPublish = $derived(distributable === true && readinessGroups.length === 0);
 
 	/** Rincian rel link: "1 Dofollow · 2 Nofollow · 1 Sponsored", atau "0 tautan". */
 	function linkStatsText(links: LinkCounts): string {
@@ -536,7 +581,8 @@
 				cover: null,
 				category: null,
 				metaDescription: null,
-				linkLimit
+				linkLimit,
+				source: 'ai'
 			};
 			streamHtml = '';
 			const token = getAccessToken();
@@ -690,7 +736,8 @@
 				cover: d.featured_image_url ?? null,
 				category: d.category ?? null,
 				metaDescription: d.meta_description ?? null,
-				linkLimit
+				linkLimit,
+				source: item.article_source ?? null
 			};
 			editorBaseline = { title: editor.title, html: editor.html };
 		} catch (reason) {
@@ -715,7 +762,8 @@
 			cover: null,
 			category: null,
 			metaDescription: null,
-			linkLimit: upLimit
+			linkLimit: upLimit,
+			source: 'manual'
 		};
 		editorBaseline = null;
 	}
@@ -736,7 +784,8 @@
 			cover: null,
 			category: null,
 			metaDescription: null,
-			linkLimit: genLimit
+			linkLimit: genLimit,
+			source: 'ai'
 		};
 		editorBaseline = null;
 	}
@@ -800,7 +849,7 @@
 	// ditagih 1× tarif per generate: artikel baru maupun setiap regenerasi
 	// (tarif & penagihan ada di backend).
 	/** Isian mode "Yang Proper" dari modal Pengelola Naskah — strict grounding. */
-	type ProperGenPayload = { fakta: string; dateline: string; narasumber: string; kutipan: string; fokus: string; brief_id: string };
+	type ProperGenPayload = { fakta: string; dateline: string; narasumber: string; kutipan: string; quotes: Array<{ dateline: string; narasumber: string; kutipan: string }>; fokus: string; brief_id: string };
 
 	async function generateNaskah(
 		mediaId: string,
@@ -865,7 +914,9 @@
 				genState = { ...genState, [mediaId]: 'draft' };
 			}
 			qcToken += 1;
-			await load();
+			// Jangan tunggu reload: kalau load lambat/tertahan, modal tetap
+			// terlihat "menyimpan" dan spinner QC tidak pernah sempat muncul.
+			void load();
 			return true;
 		} catch (reason) {
 			editorError = reason instanceof Error ? reason.message : tr('Gagal menyimpan artikel.');
@@ -876,9 +927,21 @@
 	// QC otomatis pasca simpan: pemindaian gatekeeper untuk artikel yang baru
 	// disimpan, level-artikel (sama dengan tombol pemindaian ulang di panel QC).
 	// Setiap selesai, qcToken dinaikkan supaya panel & badge muat data baru.
-	async function runQcAfterSave(mediaId: string) {
-		if (qcRunning[mediaId]) return;
-		qcRunning = { ...qcRunning, [mediaId]: true };
+	//
+	// qcQueued: simpan yang datang saat QC media itu masih berjalan. Setelah
+	// pemindaian selesai, satu putaran ulang dijalankan supaya hasil QC selalu
+	// mencerminkan versi artikel terakhir — dulu simpan seperti itu diabaikan
+	// diam-diam oleh guard.
+	let qcQueued = $state<Record<string, boolean>>({});
+
+	async function runQcAfterSave(mediaId: string, alreadyBusy = false) {
+		if (!alreadyBusy) {
+			if (qcRunning[mediaId]) {
+				qcQueued = { ...qcQueued, [mediaId]: true };
+				return;
+			}
+			qcRunning = { ...qcRunning, [mediaId]: true };
+		}
 		try {
 			const res = await apiRequest(`${apiBase}/gatekeeper/audit-all`, {
 				method: 'POST',
@@ -888,9 +951,19 @@
 		} catch {
 			// Senyap: QC manual tetap tersedia lewat tombol/panel bila otomatis gagal.
 		} finally {
-			qcToken += 1;
-			await load();
+			// Spinner dimatikan SEGERA begitu request selesai. Dulu status baru
+			// dibersihkan setelah `await load()` — dengan banyak media, load bisa
+			// lambat/tertahan sehingga spinner terlihat tidak pernah hilang dan
+			// simpan berikutnya ikut terblokir guard.
 			qcRunning = { ...qcRunning, [mediaId]: false };
+			qcToken += 1;
+			void load();
+			if (qcQueued[mediaId]) {
+				const next = { ...qcQueued };
+				delete next[mediaId];
+				qcQueued = next;
+				void runQcAfterSave(mediaId);
+			}
 		}
 	}
 
@@ -898,18 +971,26 @@
 		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		if (!editor) return;
 		const mediaId = editor.mediaId;
+		// QC otomatis hanya saat ada PERUBAHAN vs backend: judul/isi sama
+		// persis (mis. klien hanya ganti cover/meta tanpa menulis ulang)
+		// → pemindaian dipindai hasil lama cukup, jangan bakar token AI.
+		const kontenBerubah = !editorBaseline
+			|| editorBaseline.title !== (title ?? '')
+			|| editorBaseline.html !== (html ?? '');
+		// Nyalakan spinner sejak Simpan ditekan, bukan setelah artikel tersimpan.
+		// QC baru bisa mulai setelah PUT/POST selesai; tanpa ini ada jeda kosong
+		// sehingga saat menyimpan satu per satu spinner terlihat hilang/berkedip.
+		const spinnerStartedHere = kontenBerubah && qcRunning[mediaId] !== true;
+		if (spinnerStartedHere) qcRunning = { ...qcRunning, [mediaId]: true };
 		editorSaving = true;
 		const saved = await persistEditor(title, html, coverUrl, category, metaDescription);
 		editorSaving = false;
 		if (saved) {
 			editor = null;
-			// QC otomatis hanya saat ada PERUBAHAN vs backend: judul/isi sama
-			// persis (mis. klien hanya ganti cover/meta tanpa menulis ulang)
-			// → pemindaian dipindai hasil lama cukup, jangan bakar token AI.
-			const kontenBerubah = !editorBaseline
-				|| editorBaseline.title !== (title ?? '')
-				|| editorBaseline.html !== (html ?? '');
-			if (kontenBerubah) void runQcAfterSave(mediaId);
+			if (kontenBerubah) void runQcAfterSave(mediaId, spinnerStartedHere);
+		} else if (spinnerStartedHere) {
+			// Penyimpanan gagal → tidak ada QC yang berjalan; jangan tinggalkan spinner.
+			qcRunning = { ...qcRunning, [mediaId]: false };
 		}
 	}
 
@@ -1014,11 +1095,17 @@
 	async function publish() {
 		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		if (coverChecking || distributing) return;
-		// QC belum lulus → buka panel QC agar alasan terlihat (halaman Gatekeeper dihapus).
-		if (!distributable) {
-			openQcPanel();
+		// Prasyarat belum beres → tampilkan popover penjelas.
+		if (!readyToPublish) {
+			readinessOpen = true;
+			void loadArticleInfo();
 			return;
 		}
+		readinessOpen = false;
+		await openPublishPanel();
+	}
+
+	async function openPublishPanel() {
 		coverChecking = true;
 		error = '';
 		publishError = '';
@@ -1031,6 +1118,43 @@
 			publishOpen = true;
 		} finally {
 			coverChecking = false;
+		}
+	}
+
+	/** Cek QC semua artikel sekaligus dari popover kesiapan terbit. */
+	async function runQcAll() {
+		if (bulkQcRunning || viewOnly) return;
+		const targets = qcTargets.length > 0 ? qcTargets : selected.filter((m) => hasDoc(m));
+		if (targets.length === 0) return;
+		const ids = targets.map((m) => m.media_id);
+		bulkQcRunning = true;
+		error = '';
+		const running: Record<string, boolean> = { ...qcRunning };
+		for (const id of ids) running[id] = true;
+		qcRunning = running;
+		try {
+			// Satu panggilan untuk semua media: server memindai paralel dan baru
+			// membalas setelah selesai, jadi progress di UI bersifat animasi.
+			const res = await apiRequest(
+				`${apiBase}/gatekeeper/audit-all`,
+				{ method: 'POST', body: JSON.stringify({ mediaIds: ids }) },
+				900_000
+			);
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menjalankan pemindaian QC.')));
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : tr('Gagal menjalankan pemindaian QC.');
+		} finally {
+			const next = { ...qcRunning };
+			for (const id of ids) delete next[id];
+			qcRunning = next;
+			bulkQcRunning = false;
+			qcToken += 1;
+			await load();
+			// Semua prasyarat beres → popover ditutup dan lanjut ke Ringkasan.
+			if (readyToPublish) {
+				readinessOpen = false;
+				await publish();
+			}
 		}
 	}
 
@@ -1052,19 +1176,19 @@
 	}
 
 	/** Pakai thumbnail default Tauthub untuk artikel yang belum punya cover. */
-	async function useDefaultCovers() {
-		if (missingCovers.length === 0 || coverBusy) return;
+	async function useDefaultCovers(list: { mediaId: string; name: string }[] = missingCovers) {
+		if (list.length === 0 || coverBusy) return;
 		coverBusy = true;
 		publishError = '';
 		try {
-			for (const item of missingCovers) {
+			for (const item of list) {
 				const res = await apiRequest(`${apiBase}/articles/${item.mediaId}`, {
 					method: 'PUT',
 					body: JSON.stringify({ featured_image_url: ARTICLE_DEFAULT_COVER })
 				});
 				if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan cover default.')));
 			}
-			missingCovers = [];
+			if (list === missingCovers) missingCovers = [];
 			await loadArticleInfo();
 		} catch (reason) {
 			publishError = reason instanceof Error ? reason.message : tr('Gagal menyimpan cover default.');
@@ -1096,6 +1220,32 @@
 	/** Sorotan untuk tombol preset yang sedang berlaku. */
 	const quickBtnStyle = (isActive: boolean) =>
 		isActive ? 'background-color: var(--primary); color: var(--primary-foreground);' : '';
+
+	// Pemilih tanggal untuk opsi "terbit belakangan".
+	let schedulePickerFor = $state<PlacementItem | null>(null);
+	let schedulePickerInitial = $state<Date | null>(null);
+
+	function openSchedulePicker(m: PlacementItem) {
+		schedulePickerFor = m;
+		const at = scheduleByMedia[m.media_id];
+		schedulePickerInitial = at ? new Date(at) : null;
+	}
+
+	function applySchedulePicker(date: Date) {
+		const target = schedulePickerFor;
+		if (!target) return;
+		schedulePickerFor = null;
+		// Waktu yang sudah lewat/±1 menit diperlakukan sebagai "Sekarang".
+		if (date.getTime() <= Date.now() + 60_000) {
+			setMediaSchedule(target.media_id, 'now');
+			return;
+		}
+		scheduleByMedia = { ...scheduleByMedia, [target.media_id]: date.toISOString() };
+		// Waktu manual tidak mewakili preset mana pun.
+		const picks = { ...quickPick };
+		delete picks[target.media_id];
+		quickPick = picks;
+	}
 
 	// Jumlah media yang dijadwalkan, untuk label tombol dan ringkasan panel.
 	const scheduledCount = $derived(selected.filter((m) => Boolean(scheduleByMedia[m.media_id])).length);
@@ -1962,7 +2112,7 @@
 								<span class="text-slate-600 font-medium">{tr('QC sudah lulus')}</span>
 							{:else if distributable === false}
 								<TriangleAlert size={16} class="text-amber-600 shrink-0" />
-								<span class="text-amber-800 font-medium">{tr('QC belum lulus. Jalankan Cek Validasi sekarang')}</span>
+								<span class="text-amber-800 font-medium">{tr('QC belum lulus — klik Lanjut Tinjau & Terbit untuk melihat prasyarat.')}</span>
 							{/if}
 						</div>
 
@@ -1972,12 +2122,87 @@
 							     (klien memilih/menambah media), dengan konteks kampanye
 							     dibawa agar centang pilihan tetap terjaga. -->
 								<button class="h-10 px-4.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-[13px] font-medium transition-all whitespace-nowrap" type="button" onclick={() => goto(`/klien/${brandUrl}/media?campaign=${campaignId}`)}>{tr('Kembali')}</button>
-								<button class="h-10 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 hover:-translate-y-px text-white text-[13px] font-semibold inline-flex items-center gap-1.5 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} onclick={publish}>
-								{#if coverChecking || distributing}<LoaderCircle size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
-								<span>{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
-							</button>
+								<div class="relative">
+									<button class="h-10 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 hover:-translate-y-px text-white text-[13px] font-semibold inline-flex items-center gap-1.5 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} aria-haspopup="dialog" aria-expanded={readinessOpen} onclick={publish}>
+										{#if coverChecking || distributing}<LoaderCircle size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
+										<span>{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
+									</button>
+
+									{#if readinessOpen}
+										<button class="fixed inset-0 z-30 cursor-default" type="button" aria-label={tr('Tutup')} onclick={() => (readinessOpen = false)}></button>
+										<div
+											class="readyPopover"
+											role="dialog"
+											aria-modal="true"
+											aria-label={tr('Prasyarat terbit')}
+											tabindex="-1"
+											onkeydown={(e) => { if (e.key === 'Escape') readinessOpen = false; }}
+										>
+											<div class="flex items-start justify-between gap-3">
+												<div class="flex items-center gap-2">
+													<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style="background-color: #fff7ed; color: #c2410c;">
+														<TriangleAlert size={16} />
+													</span>
+													<div>
+														<p class="text-[13.5px] font-bold text-slate-900">{tr('Belum siap terbit')}</p>
+														<p class="text-[11.5px] leading-snug text-muted-foreground">{tr('Selesaikan prasyarat berikut dulu.')}</p>
+													</div>
+												</div>
+												<button class="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" type="button" aria-label={tr('Tutup')} onclick={() => (readinessOpen = false)}>
+													<X size={15} />
+												</button>
+											</div>
+
+											<div class="mt-3 space-y-2">
+												{#if readinessGroups.length === 0}
+													<p class="text-[12px] leading-snug text-slate-600">{tr('QC belum bisa diverifikasi. Muat ulang halaman lalu coba lagi.')}</p>
+												{/if}
+												{#each readinessGroups as g (g.key)}
+													<div class="rounded-lg border border-slate-200 bg-white p-2.5">
+														<div class="flex items-center justify-between gap-2">
+															<span class="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-800">
+																{#if g.key === 'qc' || g.key === 'qc-fail'}<ShieldCheck size={13} />{:else if g.key === 'cover'}<Image size={13} />{:else if g.key === 'category'}<FileText size={13} />{:else}<Sparkles size={13} />{/if}
+																{g.label}
+															</span>
+															<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-bold text-slate-600">{g.items.length}</span>
+														</div>
+														<div class="mt-1.5 flex flex-wrap gap-1.5">
+															{#each g.items as item (item.mediaId)}
+																<span class="readyChip">{item.name}</span>
+															{/each}
+														</div>
+														{#if g.key === 'article'}
+															<p class="mt-1.5 text-[11px] leading-snug text-slate-500">{tr('Buat artikel lewat Generate Konten atau Unggah Artikel.')}</p>
+														{:else if g.key === 'cover'}
+															<button class="app-btn app-btn-soft mt-2 !min-h-7 !px-2.5 !text-[11px]" type="button" disabled={coverBusy} onclick={() => void useDefaultCovers(g.items)}>
+																{#if coverBusy}<LoaderCircle size={12} class="animate-spin" />{:else}<Image size={12} />{/if}
+																{coverBusy ? tr('Menerapkan…') : tr('Pakai cover default')}
+															</button>
+														{/if}
+													</div>
+												{/each}
+											</div>
+
+											<div class="mt-3">
+												{#if bulkQcRunning}
+													<div class="readyProgress" aria-hidden="true"><span></span></div>
+													<p class="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-slate-600">
+														<LoaderCircle size={13} class="animate-spin" />
+														{tr('Memeriksa')} {qcTargets.length || selected.length} {tr('artikel')}…
+													</p>
+												{:else if qcTargets.length > 0}
+													<button class="app-btn app-btn-primary inline-flex w-full items-center justify-center gap-1.5 !min-h-9 !px-3 !text-xs" type="button" disabled={viewOnly} onclick={() => void runQcAll()}>
+														<ShieldCheck size={14} /> {tr('Cek Semua QC')} ({qcTargets.length})
+													</button>
+												{:else}
+													<button class="app-btn app-btn-soft w-full !min-h-9 !px-3 !text-xs" type="button" onclick={() => (readinessOpen = false)}>{tr('Tutup')}</button>
+												{/if}
+											</div>
+										</div>
+									{/if}
+								</div>
+							</div>
 						</div>
-					</div>
 				</TautBottomBar>
 	{/if}
 </main>
@@ -2044,6 +2269,7 @@
 			mediaName={ed.mediaName}
 			mediaDomain={mediaDomainOf(targetMedia)}
 			initialTab={ed.tab}
+			initialSource={ed.source ?? null}
 			initialTitle={ed.title}
 			initialHtml={ed.html}
 			initialCoverUrl={ed.cover}
@@ -2084,15 +2310,16 @@
 			<div class="rounded-[5px] border p-3">
 				<p class="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Waktu Terbit per Media')}</p>
 				<p class="mt-1 text-[11px] text-muted-foreground">{tr('Atur satu per satu: biarkan "Sekarang" untuk terbit langsung, atau pilih tanggal untuk menjadwalkan media itu saja.')}</p>
+				<p class="mt-1 text-[11px] text-muted-foreground">{tr('Media yang dijadwalkan terbit belakangan bisa diedit dan diubah jadwalnya dari halaman Ringkasan.')}</p>
 				<!-- Daftar ini punya area gulir sendiri: dengan puluhan media, bloknya tidak
 				     memanjang sampai mendorong isi lain keluar panel. -->
 				<div class="mt-2 max-h-[42vh] space-y-2 overflow-y-auto pr-1">
 					{#each selected as m (m.media_id)}
-						{@const at = scheduleByMedia[m.media_id] ?? ''}
+						{@const explicit = scheduleByMedia[m.media_id] ?? ''}
 						<div class="rounded-[5px] border p-2">
 							<div class="flex items-center justify-between gap-2">
 								<span class="min-w-0 flex-1 truncate text-[13px] font-semibold">{m.name}</span>
-								<span class="shrink-0 text-[11px] font-medium" style="color: {at ? 'var(--primary)' : 'var(--success)'};">{at ? tr('Terjadwal') : tr('Langsung')}</span>
+								<span class="shrink-0 text-[11px] font-medium" style="color: {explicit ? 'var(--primary)' : 'var(--success)'};">{explicit ? tr('Terjadwal') : tr('Langsung')}</span>
 							</div>
 							<div class="mt-1.5 flex flex-wrap items-center gap-1.5">
 								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" style={quickBtnStyle(quickPick[m.media_id] === 'now')} onclick={() => setMediaSchedule(m.media_id, 'now')}>{tr('Sekarang')}</button>
@@ -2100,13 +2327,32 @@
 								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" style={quickBtnStyle(quickPick[m.media_id] === '24h')} onclick={() => setMediaSchedule(m.media_id, '24h')}>+24 jam</button>
 								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" style={quickBtnStyle(quickPick[m.media_id] === '3d')} onclick={() => setMediaSchedule(m.media_id, '3d')}>+3 hari</button>
 							</div>
-							<input
-								class="app-input mt-1.5 w-full !text-xs"
-								type="datetime-local"
-								aria-label={`${tr('Jadwal terbit')} ${m.name}`}
-								value={at}
-								oninput={(e) => setMediaSchedule(m.media_id, (e.currentTarget as HTMLInputElement).value)}
-							/>
+							<button
+								type="button"
+								class="mt-1.5 inline-flex w-full items-center justify-between gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors {explicit
+									? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+									: 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}"
+								aria-label={`${tr('Pilih tanggal terbit')} ${m.name}`}
+								onclick={() => openSchedulePicker(m)}
+							>
+								<span class="inline-flex min-w-0 items-center gap-1.5">
+									<CalendarClock size={12} class="shrink-0" />
+									<span class="truncate">{explicit ? toJakartaDisplay(explicit) : tr('Pilih tanggal terbit…')}</span>
+								</span>
+								{#if explicit}
+									<span
+										role="button"
+										tabindex="0"
+										class="shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:bg-white/70 hover:text-slate-600"
+										aria-label={tr('Batalkan jadwal')}
+										title={tr('Batalkan jadwal — terbit sekarang')}
+										onclick={(e) => { e.stopPropagation(); setMediaSchedule(m.media_id, 'now'); }}
+										onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setMediaSchedule(m.media_id, 'now'); } }}
+									>
+										<X size={11} />
+									</span>
+								{/if}
+							</button>
 						</div>
 					{/each}
 				</div>
@@ -2201,6 +2447,17 @@
 		</div>
 	{/if}
 
+	{#if schedulePickerFor}
+		<DateTimePicker
+			open
+			title={`${tr('Jadwal terbit')} — ${schedulePickerFor.name}`}
+			value={schedulePickerInitial}
+			min={new Date()}
+			onClose={() => (schedulePickerFor = null)}
+			onApply={applySchedulePicker}
+		/>
+	{/if}
+
 	<style>
 		/* Bar biaya bawah (referensi style dari katalog media):
 		   Stat item rapi dengan pembatas vertikal tipis, tombol hitam untuk aksi utama,
@@ -2246,6 +2503,60 @@
 			border: 1px solid var(--border);
 			background: var(--card);
 			box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+		}
+		/* Popover prasyarat terbit: menempel di atas tombol "Lanjut Tinjau & Terbit". */
+		.readyPopover {
+			position: absolute;
+			bottom: calc(100% + 10px);
+			right: 0;
+			z-index: 40;
+			width: min(380px, calc(100vw - 28px));
+			padding: 14px;
+			border-radius: 10px;
+			border: 1px solid var(--border);
+			background: var(--card);
+			box-shadow: 0 18px 45px rgba(15, 23, 42, 0.2);
+			animation: readyPopIn 180ms ease-out;
+		}
+		.readyChip {
+			display: inline-flex;
+			align-items: center;
+			max-width: 100%;
+			padding: 2px 8px;
+			border-radius: 999px;
+			background: #f1f5f9;
+			color: #475569;
+			font-size: 11px;
+			font-weight: 600;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.readyProgress {
+			height: 6px;
+			border-radius: 999px;
+			background: #e2e8f0;
+			overflow: hidden;
+		}
+		.readyProgress span {
+			display: block;
+			width: 40%;
+			height: 100%;
+			border-radius: 999px;
+			background: linear-gradient(90deg, #2563eb, #93c5fd, #2563eb);
+			animation: readySweep 1.1s linear infinite;
+		}
+		@keyframes readyPopIn {
+			from { opacity: 0; transform: translateY(8px) scale(0.98); }
+			to { opacity: 1; transform: translateY(0) scale(1); }
+		}
+		@keyframes readySweep {
+			from { transform: translateX(-110%); }
+			to { transform: translateX(300%); }
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.readyPopover { animation: none; }
+			.readyProgress span { animation-duration: 3s; }
 		}
 		.costPopoverTitle {
 			font-size: 10.5px;
@@ -2296,8 +2607,12 @@
 		.expTip {
 			position: absolute;
 			bottom: calc(100% + 8px);
-			left: 50%;
-			transform: translate(-50%, 4px) scale(0.96);
+			/* Anchor ke kanan tombol: tooltip memanjang ke kiri, jadi tidak
+			   menambah lebar dokumen saat tombol berada di tepi kanan. */
+			right: 0;
+			left: auto;
+			transform: translateY(4px) scale(0.96);
+			transform-origin: right bottom;
 			padding: 5px 9px;
 			border-radius: 5px;
 			background: #0f172a;
@@ -2315,15 +2630,15 @@
 			content: '';
 			position: absolute;
 			top: 100%;
-			left: 50%;
-			transform: translateX(-50%);
+			right: 10px;
+			transform: none;
 			border: 4px solid transparent;
 			border-top-color: #0f172a;
 		}
 		.expAction:hover .expTip,
 		.expAction:focus-visible .expTip {
 			opacity: 1;
-			transform: translate(-50%, 0) scale(1);
+			transform: translateY(0) scale(1);
 		}
 		@media (prefers-reduced-motion: reduce) {
 			.expTip { transition: none; }

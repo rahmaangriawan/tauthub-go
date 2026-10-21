@@ -151,6 +151,13 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 		                  FROM content_documents cd
 		                  JOIN content_versions cv ON cv.document_id = cd.id AND cv.version = cd.current_version
 		                  WHERE cd.id = tcm.article_document_id), 0) AS images_count,
+		        COALESCE((SELECT s.category_required FROM media_content_standards s
+		                  WHERE s.media_id = m.id AND s.status = 'active' LIMIT 1), FALSE) AS category_required,
+		        CASE WHEN EXISTS (
+		                  SELECT 1 FROM taut_agent_runs r
+		                  WHERE r.campaign_id = tcm.campaign_id AND r.media_id = tcm.media_id
+		                    AND r.agent IN ('writer','writer_mainstream','writer_blogger') AND r.status = 'done'
+		                ) THEN 'ai' ELSE 'manual' END AS article_source,
 		        COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv
 		 FROM taut_campaign_media tcm
 		 JOIN media m ON m.id = tcm.media_id
@@ -212,6 +219,11 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 			"price":        i.numOr("price"),
 			"cost_tc":      (int(i.numOr("price")) + rateIDR/2) / rateIDR,
 			"images_count": int(i.numOr("images_count")),
+			// Dipakai popover kesiapan terbit: kategori hanya jadi penghalang
+			// bila standar media memang mewajibkannya.
+			"category_required": i.boolOr("category_required", false),
+			// Sumber artikel: menentukan tab mana yang tampil saat Edit Artikel.
+			"article_source": i.strOr("article_source", "manual"),
 		})
 	}
 	return out, nil

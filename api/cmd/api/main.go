@@ -361,6 +361,7 @@ func run() error {
 			authed.Post("/brands/{brandId}/publications/{publicationId}/request-url", brandFlowDeps.PublicationRequestURL)
 			authed.Post("/brands/{brandId}/publications/{publicationId}/reset-approval", brandFlowDeps.PublicationResetApproval)
 			authed.Post("/brands/{brandId}/publications/{publicationId}/retry", brandFlowDeps.PublicationRetry)
+			authed.Post("/brands/{brandId}/publications/{publicationId}/schedule", brandFlowDeps.PublicationSchedule)
 			authed.Get("/brands/{brandId}/publications/{publicationId}/tracking", brandFlowDeps.PublicationTrackingGet)
 			authed.Post("/brands/{brandId}/publications/{publicationId}/tracking", brandFlowDeps.PublicationTrackingPost)
 			authed.Get("/brands/{brandId}/analyze/{topic}", brandFlowDeps.TautAnalyzeTopic)
