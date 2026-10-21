@@ -70,6 +70,32 @@ func imageSizeFor(role string) string {
 	return "1920x1080"
 }
 
+// imageRolePromptRules: aturan teks yang ditempel ke setiap prompt gambar.
+//
+// Provider gambar cenderung MENULISKAN teks prompt ke dalam gambar — judul
+// artikel, subjudul H2, bahkan cuplikan paragraf — sehingga hasilnya terlihat
+// seperti slide presentasi, bukan ilustrasi editorial. Aturannya dibedakan:
+//   - cover: tanpa teks sama sekali. Judul artikel sudah tampil di halaman;
+//     menuliskannya lagi di gambar hanya membuat cover berantakan.
+//   - inline: teks seminimal mungkin. Teks hanya boleh bila gambarnya memang
+//     visualisasi data (grafik/infografis/diagram), dan sebatas label, angka,
+//     serta sumbu yang dibutuhkan untuk membaca data itu.
+func imageRolePromptRules(role string) string {
+	if role == "cover" {
+		return "\n\nEditorial illustration. STRICT: render NO text of any kind — no words, letters, numbers, captions, headlines, titles, logos, watermarks, or UI labels. Communicate the idea only through imagery, composition, and color."
+	}
+	return "\n\nEditorial illustration with MINIMAL text: no headlines, no paragraphs, no slogans, no logos, no watermarks. Text is allowed ONLY when the image is a data visualization (chart, graph, infographic, or diagram), and then only the short labels, values, and axis text needed to read the data."
+}
+
+// imagePromptWithRoleRules: prompt akhir yang dikirim ke provider gambar.
+func imagePromptWithRoleRules(prompt, role string) string {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		prompt = "Editorial illustration"
+	}
+	return prompt + imageRolePromptRules(role)
+}
+
 // parseImageSize: "WxH" → (w, h); fallback 1024x1024.
 func parseImageSize(size string) (int, int) {
 	parts := strings.SplitN(strings.ToLower(strings.TrimSpace(size)), "x", 2)
@@ -172,7 +198,11 @@ func GenerateImage(ctx context.Context, pool *pgxpool.Pool, opts GenerateImageOp
 			rt.ImageBaseURL, started)
 	}
 
-	data, mime, err := callImageProvider(ctx, rt, model, opts.Prompt, size, "/images/generations", true)
+	// Aturan teks per role ditempel di sini (satu titik) supaya berlaku untuk
+	// semua pemanggil: cover dari modal, gambar isi otomatis, dan pustaka gambar.
+	prompt := imagePromptWithRoleRules(opts.Prompt, opts.Role)
+
+	data, mime, err := callImageProvider(ctx, rt, model, prompt, size, "/images/generations", true)
 	// Endpoint beda antar provider: OpenAI-compatible umumnya
 	// /images/generations, OpenRouter memakai /images. Sebagian juga menolak
 	// parameter size/aspect ratio. Coba berurutan sampai ada yang berhasil.
@@ -193,7 +223,7 @@ func GenerateImage(ctx context.Context, pool *pgxpool.Pool, opts GenerateImageOp
 		if err != nil {
 			slog.Warn("[ai] generate gambar gagal, coba varian lain", "path", attempt.path, "with_size", attempt.withSize, "err", err)
 		}
-		data, mime, err = callImageProvider(ctx, rt, model, opts.Prompt, size, attempt.path, attempt.withSize)
+		data, mime, err = callImageProvider(ctx, rt, model, prompt, size, attempt.path, attempt.withSize)
 	}
 	if err != nil {
 		slog.Warn("[ai] generate gambar gagal, memakai placeholder", "err", err)
