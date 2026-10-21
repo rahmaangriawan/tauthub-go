@@ -328,7 +328,56 @@
 	const TABLE_GRID_ROWS = 6;
 	const TABLE_GRID_COLS = 8;
 	let tablePickerOpen = $state(false);
+	/** Dibuka lewat klik → menahan picker sampai klik di luar atau Escape. */
+	let tablePickerPinned = $state(false);
+	let tableWrapEl = $state<HTMLSpanElement | null>(null);
 	let tableHover = $state({ rows: 0, cols: 0 });
+	let tableCloseTimer: ReturnType<typeof setTimeout> | null = null;
+	// Tenggang tutup: memberi kesempatan pointer menyeberang tombol → grid.
+	const TABLE_PICKER_GRACE_MS = 240;
+
+	function cancelTableClose() {
+		if (tableCloseTimer === null) return;
+		clearTimeout(tableCloseTimer);
+		tableCloseTimer = null;
+	}
+
+	function openTablePicker() {
+		cancelTableClose();
+		tablePickerOpen = true;
+	}
+
+	/** Tutup dengan jeda singkat; batal kalau pointer masih di tombol/picker. */
+	function closeTablePickerSoon() {
+		if (tablePickerPinned) return;
+		cancelTableClose();
+		tableCloseTimer = setTimeout(() => {
+			tableCloseTimer = null;
+			if (tablePickerPinned) return;
+			// Picker ada di dalam wrapper, jadi :hover ikut menyala saat pointer
+			// berada di grid — celah beberapa piksel pun tidak menutupnya.
+			if (tableWrapEl?.matches(':hover')) return;
+			tablePickerOpen = false;
+			tableHover = { rows: 0, cols: 0 };
+		}, TABLE_PICKER_GRACE_MS);
+	}
+
+	function closeTablePicker() {
+		cancelTableClose();
+		tablePickerPinned = false;
+		tablePickerOpen = false;
+		tableHover = { rows: 0, cols: 0 };
+	}
+
+	/** Klik tombol: kunci picker terbuka, klik kedua menutupnya. */
+	function toggleTablePickerPin() {
+		if (tablePickerPinned) {
+			closeTablePicker();
+			return;
+		}
+		tablePickerPinned = true;
+		openTablePicker();
+	}
 	/** Menu klik kanan untuk mengelola tabel yang sedang disentuh kursor. */
 	let tableMenu = $state<{ x: number; y: number; table: HTMLTableElement; cell: HTMLTableCellElement } | null>(null);
 
@@ -450,6 +499,26 @@
 		return () => {
 			window.removeEventListener('click', close);
 			window.removeEventListener('scroll', close, true);
+			window.removeEventListener('keydown', onKey);
+		};
+	});
+
+	// Picker yang dikunci klik menutup saat klik di luar, Escape, atau tombolnya
+	// diaktifkan lagi (ditangani toggleTablePickerPin).
+	$effect(() => {
+		if (!tablePickerOpen || !tablePickerPinned) return;
+		const onPointerDown = (ev: PointerEvent) => {
+			const target = ev.target instanceof Node ? ev.target : null;
+			if (target && tableWrapEl?.contains(target)) return;
+			closeTablePicker();
+		};
+		const onKey = (ev: KeyboardEvent) => {
+			if (ev.key === 'Escape') closeTablePicker();
+		};
+		window.addEventListener('pointerdown', onPointerDown, true);
+		window.addEventListener('keydown', onKey);
+		return () => {
+			window.removeEventListener('pointerdown', onPointerDown, true);
 			window.removeEventListener('keydown', onKey);
 		};
 	});
@@ -717,26 +786,34 @@
 		{#each tools as t, i (t.cmd + (t.arg ?? ''))}
 			{@const ToolIcon = t.icon}
 			{#if t.cmd === 'undo'}
-				<!-- Tabel: hover menampilkan grid ukuran (baris × kolom). -->
+				<!-- Tabel: hover menampilkan grid ukuran (baris × kolom); klik menahannya. -->
 				<span
 					class="rte-table-picker-wrap"
 					role="presentation"
-					onmouseenter={() => (tablePickerOpen = true)}
-					onmouseleave={() => (tablePickerOpen = false)}
+					bind:this={tableWrapEl}
+					onmouseenter={openTablePicker}
+					onmouseleave={closeTablePickerSoon}
 				>
 					<button
 						class="rte-tool"
+						class:rte-tool-active={tablePickerPinned}
 						type="button"
 						title={tr('Sisipkan tabel')}
 						aria-label={tr('Sisipkan tabel')}
+						aria-haspopup="dialog"
+						aria-expanded={tablePickerOpen}
 						disabled={disabled || mode === 'html'}
 						onmousedown={(e: MouseEvent) => e.preventDefault()}
-						onclick={() => (tablePickerOpen = !tablePickerOpen)}
+						onclick={toggleTablePickerPin}
 					>
 						<TableIcon size={15} />
 					</button>
 					{#if tablePickerOpen && !disabled && mode === 'rich'}
-						<div class="rte-table-picker" role="dialog" aria-label={tr('Pilih ukuran tabel')}>
+						<div
+							class="rte-table-picker"
+							role="dialog"
+							aria-label={tr('Pilih ukuran tabel')}
+						>
 							<p class="rte-table-picker-label">
 								{tableHover.rows > 0 ? `${tableHover.cols} × ${tableHover.rows}` : tr('Pilih ukuran')}
 							</p>
@@ -748,11 +825,12 @@
 											class:rte-table-cell-on={r < tableHover.rows && c < tableHover.cols}
 											type="button"
 											aria-label={`${c + 1} × ${r + 1}`}
+											onmousedown={(e: MouseEvent) => e.preventDefault()}
 											onmouseenter={() => (tableHover = { rows: r + 1, cols: c + 1 })}
+											onfocus={() => (tableHover = { rows: r + 1, cols: c + 1 })}
 											onclick={() => {
 												insertTable(r + 1, c + 1);
-												tablePickerOpen = false;
-												tableHover = { rows: 0, cols: 0 };
+												closeTablePicker();
 											}}
 										></button>
 									{/each}
@@ -1164,6 +1242,16 @@
 		border-radius: 8px;
 		background: var(--card, #fff);
 		box-shadow: 0 10px 26px rgba(15, 23, 42, 0.18);
+	}
+	/* Jembatan transparan menutup celah antara tombol dan kartu: tanpa ini
+	   pointer yang menyeberang melewati area di luar wrapper → picker menutup. */
+	.rte-table-picker::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: -6px;
+		height: 8px;
 	}
 	.rte-table-picker-label {
 		margin: 0 0 6px;
