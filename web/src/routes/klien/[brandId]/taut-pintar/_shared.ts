@@ -410,9 +410,10 @@ export type TempelKaya = { title: string; html: string; plain: string };
  * - NBSP, zero-width, dan blok kosong.
  *
  * Heading dipertahankan PERSIS seperti di Docs: "Judul 1" (`<h1>`) tetap `<h1>`,
- * "Judul 2" tetap `<h2>`, dan seterusnya. Hanya `<h1 class="title">` — gaya
- * "Judul" (title dokumen) di Docs, bukan Heading 1 — yang diangkat menjadi judul
- * artikel dan dikeluarkan dari isi.
+ * "Judul 2" tetap `<h2>`, dan seterusnya. Judul artikel diambil dengan dua pola:
+ * `<h1 class="title">` (gaya "Judul" dokumen di Docs), atau — bila tidak ada —
+ * H1 pertama yang menjadi blok berisi pertama (pola umum "Judul 1" sebagai judul
+ * artikel). Heading yang diangkat menjadi judul dikeluarkan dari isi.
  */
 export function clipboardHtmlToArticle(rawHtml: string): TempelKaya | null {
 	if (typeof DOMParser === 'undefined' || !rawHtml.trim()) return null;
@@ -422,18 +423,41 @@ export function clipboardHtmlToArticle(rawHtml: string): TempelKaya | null {
 
 	body.querySelectorAll('meta, style, link, title, colgroup, col, script, noscript').forEach((el) => el.remove());
 
-	// Judul dokumen Docs: <h1 class="title"> (judul halaman) — dipisah dari isi.
+	// Pembungkus ekspor Docs: <b style="font-weight: normal" id="docs-internal-guid-…">.
+	// Dibuka dulu supaya penilaian "H1 pertama di awal dokumen" melihat sibling
+	// yang sebenarnya.
+	body.querySelectorAll('b[style*="font-weight"], b[id*="docs-internal-guid"]').forEach((el) => {
+		el.replaceWith(...Array.from(el.childNodes));
+	});
+
+	// Judul artikel, dua pola Docs:
+	// 1. Gaya "Judul" (<h1 class="title">) — judul dokumen, selalu dipakai.
+	// 2. Gaya "Judul 1" (<h1>) yang ditulis sebagai judul artikel — dipakai bila
+	//    ia blok berisi PERTAMA (tidak ada isi lain sebelumnya). H1 berikutnya
+	//    dibiarkan di badan sebagai sub-bagian.
 	let title = '';
 	const judulNode = body.querySelector('h1.title, h1[class*="title"]');
 	if (judulNode) {
 		title = (judulNode.textContent ?? '').replace(/\s+/g, ' ').trim();
 		judulNode.remove();
 	}
-
-	// Pembungkus ekspor Docs: <b style="font-weight: normal" id="docs-internal-guid-…">.
-	body.querySelectorAll('b[style*="font-weight"], b[id*="docs-internal-guid"]').forEach((el) => {
-		el.replaceWith(...Array.from(el.childNodes));
-	});
+	if (!title) {
+		const h1Pertama = body.querySelector('h1');
+		if (h1Pertama) {
+			let adaIsiSebelumnya = false;
+			for (let s = h1Pertama.previousElementSibling; s; s = s.previousElementSibling) {
+				if ((s.textContent ?? '').trim()) {
+					adaIsiSebelumnya = true;
+					break;
+				}
+			}
+			const teks = (h1Pertama.textContent ?? '').replace(/\s+/g, ' ').trim();
+			if (!adaIsiSebelumnya && teks && teks.length <= 200) {
+				title = teks;
+				h1Pertama.remove();
+			}
+		}
+	}
 
 	const KEEP_ATTR = new Set(['href', 'src', 'alt', 'colspan', 'rowspan']);
 	for (const el of Array.from(body.querySelectorAll('*'))) {
