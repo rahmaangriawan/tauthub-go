@@ -15,7 +15,7 @@
 	}: {
 		title: string;
 		label?: string;
-		maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+		maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl';
 		onClose: () => void;
 		children: Snippet;
 		footer?: Snippet;
@@ -26,6 +26,7 @@
 		: maxWidth === 'md' ? 'max-w-md'
 		: maxWidth === 'xl' ? 'max-w-xl'
 		: maxWidth === '2xl' ? 'max-w-2xl'
+		: maxWidth === '4xl' ? 'max-w-4xl'
 		: 'max-w-lg'
 	);
 </script>

@@ -8,7 +8,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import {
-		ArrowUpRight, Check, Copy, Ellipsis, FileText, Image as ImageIcon,
+		ArrowUpRight, Check, Copy, Download, Ellipsis, FileText, Image as ImageIcon,
 		MessageCircle, Newspaper, Search, ShieldCheck, Trash, TriangleAlert, UsersRound
 	} from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
@@ -431,6 +431,22 @@
 		mediaLoading = false;
 	}
 
+	/** Domain telanjang dari URL media — tanpa skema, www, dan garis miring akhir. */
+	function domainOf(m: PartnerMedia) {
+		return (m.website_url ?? '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+	}
+
+	function downloadDomains() {
+		const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+		const rows = partnerMedia.map((m) => `${cell(m.name)},${cell(domainOf(m))}`);
+		const blob = new Blob([['Media,Domain', ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
+		const a = document.createElement('a');
+		a.href = URL.createObjectURL(blob);
+		a.download = `domain-media-${(mediaPartner?.name ?? 'mitra').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${new Date().toISOString().slice(0, 10)}.csv`;
+		a.click();
+		URL.revokeObjectURL(a.href);
+	}
+
 	async function copyContact(key: string, value: string) {
 		try {
 			await navigator.clipboard.writeText(value);
@@ -800,7 +816,7 @@
 {/if}
 
 {#if mediaPartner}
-	<Modal title={`Media mitra — ${mediaPartner.name ?? mediaPartner.email}`} label={tr("Media mitra")} maxWidth="2xl" onClose={() => (mediaPartner = null)}>
+	<Modal title={`Media mitra — ${mediaPartner.name ?? mediaPartner.email}`} label={tr("Media mitra")} maxWidth="4xl" onClose={() => (mediaPartner = null)}>
 		<p class="text-sm text-muted-foreground">{tr("Media yang terdeteksi milik mitra ini beserta harga yang mereka ajukan.")}</p>
 
 		{#if mediaPartner.email || mediaPartner.wa_number || mediaPartner.email_alt1 || mediaPartner.email_alt2}
@@ -889,7 +905,18 @@
 								<td class="py-2 pr-3">
 									<p class="font-medium">{m.name}</p>
 									{#if m.website_url}
-										<p class="text-xs text-muted-foreground">{m.website_url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</p>
+										<div class="flex items-center gap-1">
+											<p class="text-xs text-muted-foreground">{domainOf(m)}</p>
+											<button
+												class="rounded p-0.5 hover:bg-secondary"
+												type="button"
+												title={tr("Salin domain")}
+												aria-label={`Salin domain ${domainOf(m)}`}
+												onclick={() => void copyContact(`dom-${m.id}`, domainOf(m))}
+											>
+												{#if copyFeedback?.key === `dom-${m.id}` && copyFeedback?.ok}<Check size={12} style="color: var(--success);" />{:else}<Copy size={12} />{/if}
+											</button>
+										</div>
 									{/if}
 								</td>
 								<td class="py-2 pr-3">{m.category ?? '—'}</td>
@@ -921,6 +948,13 @@
 		{/if}
 
 		{#snippet footer()}
+			<button
+				class="app-btn app-btn-soft"
+				type="button"
+				disabled={mediaLoading || partnerMedia.length === 0}
+				title={tr("Unduh semua domain media sebagai CSV")}
+				onclick={downloadDomains}
+			><Download size={14} />{tr("Unduh domain (CSV)")}</button>
 			<button class="app-btn app-btn-soft" type="button" onclick={() => (mediaPartner = null)}>{tr("Tutup")}</button>
 		{/snippet}
 	</Modal>
