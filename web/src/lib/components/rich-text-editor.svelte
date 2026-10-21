@@ -10,6 +10,7 @@
 	import { sanitizeHtml } from '$lib/sanitize-html';
 	import { tr } from '$lib/i18n/phrases';
 	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
+	import { applyInlineFormat, readToolState, isToggleCommand, toolCommandActive, NO_TOOL_STATE, type ToolState } from '$lib/editor/inline-format';
 
 	let {
 		value = $bindable(''),
@@ -183,102 +184,18 @@
 		if (bodyEl) publishStats();
 	});
 
-	/**
-	 * Rentang kata di bawah kursor (bila kursor hanya titik, tanpa seleksi).
-	 * Dipakai B/I/U supaya format dikenakan ke kata tersebut, bukan sekadar
-	 * menyiapkan format untuk ketikan berikutnya.
-	 */
-	function wordRangeAtCaret(): { range: Range; textNode: Text; word: string } | null {
-		const body = bodyEl;
-		const sel = window.getSelection();
-		if (!body || !sel || sel.rangeCount === 0 || !sel.isCollapsed) return null;
-		const range = sel.getRangeAt(0);
-		const node = range.startContainer;
-		if (node.nodeType !== Node.TEXT_NODE) return null;
-		const textNode = node as Text;
-		const text = textNode.data ?? '';
-		const offset = range.startOffset;
-		const WORD = /[\p{L}\p{N}]/u;
-		let start = offset;
-		let end = offset;
-		while (start > 0 && WORD.test(text[start - 1])) start--;
-		while (end < text.length && WORD.test(text[end])) end++;
-		if (start === end) return null; // kursor di spasi/tanda baca — perilaku lama
-		const wordRange = document.createRange();
-		wordRange.setStart(textNode, start);
-		wordRange.setEnd(textNode, end);
-		return { range: wordRange, textNode, word: text.slice(start, end) };
-	}
-
-	/** Elemen inline (b/strong, i/em, u) terdekat yang membungkus node. */
-	function inlineAncestor(node: Node, tags: string[]): Element | null {
-		const body = bodyEl;
-		for (let el = node.parentElement; el && el !== body; el = el.parentElement) {
-			if (tags.includes(el.tagName.toLowerCase())) return el;
-		}
-		return null;
-	}
-
+	// Logika word-range/inline-format dipakai bersama dengan _editor-modal.svelte
+	// (lib/editor/inline-format.ts) supaya kedua editor berperilaku identik.
 	function exec(cmd: string, arg?: string) {
 		const body = bodyEl;
 		if (!body || disabled) return;
 		body.focus();
 		const inlineTags = cmd === 'bold' ? ['b', 'strong'] : cmd === 'italic' ? ['i', 'em'] : cmd === 'underline' ? ['u'] : null;
-		if (inlineTags) {
-			const word = wordRangeAtCaret();
-			if (word) {
-				const anc = inlineAncestor(word.textNode, inlineTags);
-				if (!anc) {
-					// Kata belum ber-tag: bungkus langsung. execCommand() tidak dipakai
-					// di sini karena di dalam heading ia menghasilkan
-					// <span style="font-weight: normal"> (tebal heading berasal dari
-					// CSS), sampah inline style yang bisa ikut terbit.
-					const tag = cmd === 'bold' ? 'b' : cmd === 'italic' ? 'i' : 'u';
-					const wrapper = document.createElement(tag);
-					word.range.surroundContents(wrapper);
-					const after = document.createRange();
-					const isiWrapper = wrapper.firstChild;
-					if (isiWrapper && isiWrapper.nodeType === Node.TEXT_NODE) {
-						// Kursor harus berada DI DALAM teks, bukan di elemen pembungkus:
-						// kalau tidak, klik format berikutnya tidak menemukan kata.
-						after.setStart(isiWrapper, (isiWrapper as Text).data.length);
-					} else {
-						after.selectNodeContents(wrapper);
-					}
-					after.collapse(true);
-					const sel = window.getSelection();
-					sel?.removeAllRanges();
-					sel?.addRange(after);
-					sync();
-					refreshToolState();
-					commitHistory();
-					return;
-				}
-				// Pembungkus hanya berisi kata ini (hasil tombol toolbar sendiri) →
-				// lepas manual. execCommand('bold') tidak selalu melepas tag saat
-				// seleksinya persis seluruh isi elemen tersebut.
-				if (anc.childNodes.length === 1 && anc.firstChild === word.textNode) {
-					const parent = anc.parentNode;
-					const kata = document.createTextNode(anc.textContent ?? '');
-					anc.replaceWith(kata);
-					const after = document.createRange();
-					after.setStart(kata, kata.data.length);
-					after.collapse(true);
-					const sel = window.getSelection();
-					sel?.removeAllRanges();
-					sel?.addRange(after);
-					parent?.normalize();
-					sync();
-					refreshToolState();
-					commitHistory();
-					return;
-				}
-				// Pembungkus memuat teks lain: pilih kata lalu biarkan execCommand
-				// memecah tag-nya.
-				const sel = window.getSelection();
-				sel?.removeAllRanges();
-				sel?.addRange(word.range);
-			}
+		if (inlineTags && applyInlineFormat(body, cmd)) {
+			sync();
+			refreshToolState();
+			commitHistory();
+			return;
 		}
 		document.execCommand(cmd, false, arg);
 		const after = window.getSelection();
@@ -382,115 +299,15 @@
 		{ cmd: 'redo', icon: RotateCw, name: 'Ulangi' }
 	];
 
-	/** Format yang berlaku di posisi kursor — dipakai menyalakan tombol toolbar. */
-	type ToolState = {
-		bold: boolean;
-		italic: boolean;
-		underline: boolean;
-		h2: boolean;
-		h3: boolean;
-		blockquote: boolean;
-		ul: boolean;
-		ol: boolean;
-		inTable: boolean;
-	};
-	const TOOL_STATE_OFF: ToolState = {
-		bold: false,
-		italic: false,
-		underline: false,
-		h2: false,
-		h3: false,
-		blockquote: false,
-		ul: false,
-		ol: false,
-		inTable: false
-	};
-	let toolState = $state<ToolState>({ ...TOOL_STATE_OFF });
-
-	/** Tombol undo/redo bukan status format — jangan diberi penanda aktif. */
-	const isToggleTool = (t: (typeof tools)[number]) => t.cmd !== 'undo' && t.cmd !== 'redo';
-
-	function toolActive(t: (typeof tools)[number]): boolean {
-		switch (t.cmd) {
-			case 'bold':
-				return toolState.bold;
-			case 'italic':
-				return toolState.italic;
-			case 'underline':
-				return toolState.underline;
-			case 'formatBlock':
-				return t.arg === 'h2' ? toolState.h2 : t.arg === 'h3' ? toolState.h3 : toolState.blockquote;
-			case 'insertUnorderedList':
-				return toolState.ul;
-			case 'insertOrderedList':
-				return toolState.ol;
-			default:
-				return false;
-		}
-	}
+	let toolState = $state<ToolState>({ ...NO_TOOL_STATE });
 
 	/**
 	 * Selaraskan tombol toolbar dengan format pada posisi kursor/seleksi.
-	 * queryCommandState/queryCommandValue memang deprecated, tapi masih satu-
-	 * satunya cara membaca format aktif di contenteditable tanpa library.
-	 * Diperbarui saat seleksi berubah, saat tombol dipakai, dan saat klik/ketik.
+	 * Implementasinya di lib/editor/inline-format.ts (dipakai juga _editor-modal).
 	 */
 	function refreshToolState() {
 		const body = bodyEl;
-		if (!body || disabled || mode === 'html') {
-			toolState = { ...TOOL_STATE_OFF };
-			return;
-		}
-		const sel = window.getSelection();
-		if (!sel || sel.rangeCount === 0) {
-			toolState = { ...TOOL_STATE_OFF };
-			return;
-		}
-		const anchor = sel.anchorNode;
-		const el = anchor
-			? anchor.nodeType === Node.ELEMENT_NODE
-				? (anchor as Element)
-				: anchor.parentElement
-			: null;
-		if (!el || !body.contains(el)) {
-			toolState = { ...TOOL_STATE_OFF };
-			return;
-		}
-		let format = '';
-		try {
-			format = String(document.queryCommandValue('formatBlock') ?? '').toLowerCase();
-		} catch {
-			format = '';
-		}
-		const commandOn = (cmd: string) => {
-			try {
-				return document.queryCommandState(cmd);
-			} catch {
-				return false;
-			}
-		};
-		// queryCommandState('bold') membaca GAYA terhitung, sehingga heading yang
-		// memang tebal lewat CSS selalu melaporkan bold. Untuk format inline,
-		// deteksi berbasis tag lebih jujur: hanya <b>/<strong>, <i>/<em>, <u>.
-		const punyaTagInduk = (tags: string[]) => {
-			for (let node: Node | null = el; node && node !== body; node = node.parentNode) {
-				if (node.nodeType === Node.ELEMENT_NODE && tags.includes((node as Element).tagName.toLowerCase())) {
-					return true;
-				}
-			}
-			return false;
-		};
-		toolState = {
-			bold: punyaTagInduk(['b', 'strong']),
-			italic: punyaTagInduk(['i', 'em']),
-			underline: punyaTagInduk(['u']),
-			h2: format === 'h2',
-			h3: format === 'h3',
-			blockquote: format === 'blockquote',
-			ul: commandOn('insertUnorderedList'),
-			ol: commandOn('insertOrderedList'),
-			inTable: Boolean(el.closest('table'))
-		};
+		toolState = !body || disabled || mode === 'html' ? { ...NO_TOOL_STATE } : readToolState(body);
 	}
 
 	$effect(() => {
@@ -774,11 +591,11 @@
 			{/if}
 			<button
 				class="rte-tool"
-				class:rte-tool-active={isToggleTool(t) && toolActive(t)}
+				class:rte-tool-active={isToggleCommand(t.cmd) && toolCommandActive(toolState, t.cmd, t.arg)}
 				type="button"
 				title={t.name}
 				aria-label={t.name}
-				aria-pressed={isToggleTool(t) ? toolActive(t) : undefined}
+				aria-pressed={isToggleCommand(t.cmd) ? toolCommandActive(toolState, t.cmd, t.arg) : undefined}
 				onmousedown={(e: MouseEvent) => e.preventDefault()}
 				disabled={disabled ||
 					mode === 'html' ||

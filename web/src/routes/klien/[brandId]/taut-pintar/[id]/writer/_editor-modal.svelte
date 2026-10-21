@@ -10,6 +10,10 @@
 	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
 	import { sameOriginAssetUrl, TAUTHUB_FALLBACK_COVER } from '$lib/media/cover';
 	import { sanitizeHtml } from '$lib/sanitize-html';
+	// Logika format inline (B/I/U pada kata di bawah kursor + status tombol)
+	// dipakai bersama dengan rich-text-editor.svelte agar perilaku kedua editor
+	// portal klien & mitra identik.
+	import { applyInlineFormat, readToolState, isToggleCommand, toolCommandActive, NO_TOOL_STATE, type ToolState } from '$lib/editor/inline-format';
 
 	// Fallback cover "pakai logo Tauthub": konstantanya di $lib/media/cover agar
 	// sama dengan yang dipakai konfirmasi "lanjut tanpa cover" di The Writer.
@@ -83,6 +87,28 @@
 	let bodyEl = $state<HTMLDivElement | null>(null);
 	let coverInput = $state<HTMLInputElement | null>(null);
 	let articleImageInput = $state<HTMLInputElement | null>(null);
+
+	// Format aktif di posisi kursor — menyalakan tombol toolbar (logika bersama
+	// dengan rich-text-editor.svelte lewat lib/editor/inline-format.ts).
+	let toolState = $state<ToolState>({ ...NO_TOOL_STATE });
+
+	function refreshToolState() {
+		toolState = bodyEl && !readOnly ? readToolState(bodyEl) : { ...NO_TOOL_STATE };
+	}
+
+	$effect(() => {
+		if (!bodyEl || readOnly) return;
+		const syncTools = () => refreshToolState();
+		document.addEventListener('selectionchange', syncTools);
+		window.addEventListener('keyup', syncTools);
+		window.addEventListener('mouseup', syncTools);
+		syncTools();
+		return () => {
+			document.removeEventListener('selectionchange', syncTools);
+			window.removeEventListener('keyup', syncTools);
+			window.removeEventListener('mouseup', syncTools);
+		};
+	});
 
 	let title = $state('');
 	let words = $state(0);
@@ -234,6 +260,9 @@
 	function sync() {
 		const body = bodyEl;
 		if (!body) return;
+		// execCommand kadang meninggalkan atribut style kosong saat melepas tag —
+		// dibuang supaya HTML artikel bersih (sama seperti editor utama).
+		body.querySelectorAll('[style=""]').forEach((el) => el.removeAttribute('style'));
 		const text = body.innerText || '';
 		words = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
 		linkCount = body.querySelectorAll('a').length;
@@ -257,8 +286,19 @@
 		const body = bodyEl;
 		if (!body) return;
 		body.focus();
+		// B/I/U dengan kursor saja: kenakan ke kata di bawah kursor (logika yang
+		// sama dengan editor utama; lihat lib/editor/inline-format.ts).
+		const inline = cmd === 'bold' || cmd === 'italic' || cmd === 'underline';
+		if (inline && applyInlineFormat(body, cmd)) {
+			sync();
+			refreshToolState();
+			return;
+		}
 		document.execCommand(cmd, false, arg);
+		const sel = window.getSelection();
+		if (inline && sel && sel.rangeCount > 0 && !sel.isCollapsed) sel.collapseToEnd();
 		sync();
+		refreshToolState();
 	}
 
 	const tools: Array<{ cmd: string; label?: string; icon?: Component; arg?: string; name: string }> = $derived([
@@ -541,7 +581,16 @@
 						<div class="flex flex-wrap items-center gap-1 rounded-lg border p-1" role="toolbar" aria-label={tr('Format teks')}>
 							{#each tools as t (t.cmd + (t.arg ?? ''))}
 								{@const ToolIcon = t.icon}
-								<button class="min-h-8 min-w-8 rounded px-2 text-sm font-semibold hover:bg-secondary" type="button" title={t.name} onclick={() => exec(t.cmd, t.arg)}>
+								{@const aktif = isToggleCommand(t.cmd) && toolCommandActive(toolState, t.cmd, t.arg)}
+								<button
+									class="min-h-8 min-w-8 rounded px-2 text-sm font-semibold hover:bg-secondary"
+									type="button"
+									title={t.name}
+									aria-pressed={isToggleCommand(t.cmd) ? aktif : undefined}
+									style={aktif ? 'background: var(--primary); color: var(--primary-foreground);' : ''}
+									onmousedown={(e: MouseEvent) => e.preventDefault()}
+									onclick={() => exec(t.cmd, t.arg)}
+								>
 									{#if ToolIcon}
 										<ToolIcon size={15} />
 									{:else}
