@@ -176,11 +176,24 @@
 	// dibuka (mis. media dengan artikel) tetap membuka tab ini.
 	let draftReady = $state(untrack(() => initialHtml.trim().length > 0));
 	const editorLocked = $derived(initialTab === 'generate' && !draftReady);
-	const GEN_STAGES = [
+	const GEN_STAGES_BASE = [
 		{ key: 'send', label: 'Mengirim permintaan', desc: 'Permintaan generate dikirim ke AI Writer.' },
 		{ key: 'wait', label: 'Menunggu respons AI', desc: 'AI sedang menulis artikel sesuai topik dan angle yang kamu pilih.' },
 		{ key: 'process', label: 'Memproses hasil', desc: 'Draf tersimpan diambil dan disiapkan di tab Editor Post.' }
 	] as const;
+	// Tahap tambahan hanya muncul bila klien memilih "dengan cover" — gambar
+	// utama dibuat setelah draf jadi, jadi urutannya di akhir.
+	const GEN_STAGE_COVER = {
+		key: 'cover',
+		label: 'Membuat gambar utama',
+		desc: 'AI membuat gambar cover dari judul artikel — tahap ini yang paling lama.'
+	} as const;
+	let genWithCover = $state(false);
+	// Dialog pilihan sebelum generate: tanpa cover atau dengan cover.
+	let genChoiceOpen = $state(false);
+	const GEN_STAGES = $derived(
+		genWithCover ? [...GEN_STAGES_BASE, GEN_STAGE_COVER] : [...GEN_STAGES_BASE]
+	);
 	const genStagePct = $derived.by(() => {
 		if (genOutcome === 'success') return 100;
 		if (genOutcome === 'error') return 0;
@@ -406,7 +419,7 @@
 
 		$effect(() => {
 			const onKey = (e: KeyboardEvent) => {
-				if (coverPickerOpen || h2ConfirmOpen) return;
+				if (coverPickerOpen || h2ConfirmOpen || genChoiceOpen) return;
 				if (e.key === 'Escape') close();
 			};
 		const onPaste = (e: ClipboardEvent) => {
@@ -515,6 +528,22 @@
 		} catch {
 			return { cost: imageCost, balance: null };
 		}
+	}
+
+	/** Buat gambar utama dari judul artikel (role: cover). */
+	async function generateCoverFor(prompt: string): Promise<string> {
+		const res = await apiRequest(
+			`${apiBase}/images/generate`,
+			{ method: 'POST', body: JSON.stringify({ media_id: mediaId, heading: prompt, prompt, role: 'cover' }) },
+			180_000
+		);
+		const d = await res.json().catch(() => null);
+		if (!res.ok) throw new Error(await readApiError(res, tr('Gagal membuat gambar utama.')));
+		const url = String(d?.url ?? '');
+		if (!url) throw new Error(tr('Server tidak mengembalikan URL gambar.'));
+		imageCost = Number(d?.cost_credits ?? imageCost);
+		if (Number(d?.rate_idr) > 0) imageRateIdr = Number(d.rate_idr);
+		return url;
 	}
 
 	/** Buat satu gambar AI untuk satu heading, kembalikan URL-nya. */
@@ -920,7 +949,7 @@
 		faktaTerkunci.trim() === '' && (copilotBriefId === '' || copilotEntries.length === 0)
 	);
 
-	async function generate() {
+	async function generate(withCover = false) {
 		if (genBusy) return;
 		const isProper = gayaArtikel === 'proper';
 		// Entri yang masih kosong semua diabaikan; entri yang terisi sebagian
@@ -953,6 +982,7 @@
 			return;
 		}
 		if ((linkLimit > 0 && !linksValid) || !angleReady) return;
+		genWithCover = withCover;
 		genBusy = true;
 		genError = '';
 		genNotice = '';
@@ -993,6 +1023,23 @@
 				if (pilihan) {
 					category = pilihan;
 					autoCategory = pilihan;
+				}
+			}
+			// Gambar utama (pilihan "dengan cover"): dibuat dari judul artikel
+			// SETELAH drafnya ada, supaya cover & artikel tersimpan bersamaan.
+			// Gagal cover tidak membatalkan draf — artikelnya sudah terbit di
+			// server dan klien bisa memakai cover lain kapan saja.
+			if (withCover) {
+				genStage = 4;
+				coverError = '';
+				try {
+					const url = await generateCoverFor(title.trim() || topic.trim());
+					cover = url;
+					coverNote = tr('Gambar utama dibuat otomatis oleh AI.');
+					const kredit = imageCost > 0 ? ` (${imageCost} ${tr('kredit')})` : '';
+					genNotice = [genNotice, tr('Gambar utama dibuat otomatis') + kredit + '.'].filter(Boolean).join(' ');
+				} catch (reason) {
+					coverError = reason instanceof Error ? tr(reason.message) : tr('Gagal membuat gambar utama.');
 				}
 			}
 			genOutcome = 'success';
@@ -1534,7 +1581,7 @@
 								</ul>
 
 								{#if genOutcome === 'error' && !genBusy}
-									<button class="app-btn app-btn-soft mt-1 !min-h-8 !px-3 !text-xs" type="button" onclick={generate}>
+									<button class="app-btn app-btn-soft mt-1 !min-h-8 !px-3 !text-xs" type="button" onclick={() => void generate(genWithCover)}>
 										{tr('Coba lagi')}
 									</button>
 								{/if}
@@ -1666,7 +1713,7 @@
 								class="app-btn app-btn-primary mt-4 w-full"
 								type="button"
 								disabled={genBusy || !topic.trim() || (linkLimit > 0 && !linksValid) || !angleReady}
-								onclick={generate}
+								onclick={() => (genChoiceOpen = true)}
 							>
 								{#if genBusy}<Sparkles size={15} class="genSparkle" /><LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
 								{genBusy
@@ -1919,15 +1966,15 @@
 											<CircleAlert size={15} /> {genError}
 										</p>
 									{/if}
-									<button
-										class="app-btn app-btn-primary mt-6 w-full"
-										type="button"
-										disabled={genBusy || properLocked || (linkLimit > 0 && !linksValid) || !angleReady}
-										title={properLocked
-											? tr('Isi fakta produk atau pilih Brief Copilot dulu — mode Proper ditulis terkunci ke fakta.')
-											: ''}
-										onclick={generate}
-									>
+										<button
+											class="app-btn app-btn-primary mt-6 w-full"
+											type="button"
+											disabled={genBusy || properLocked || (linkLimit > 0 && !linksValid) || !angleReady}
+											title={properLocked
+												? tr('Isi fakta produk atau pilih Brief Copilot dulu — mode Proper ditulis terkunci ke fakta.')
+												: ''}
+											onclick={() => (genChoiceOpen = true)}
+										>
 										{#if genBusy}<Sparkles size={15} class="genSparkle" /><LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
 										{genBusy
 											? tr('Sedang membuat draf artikel...')
@@ -2106,6 +2153,89 @@
 				}}
 				onClose={() => (coverPickerOpen = false)}
 			/>
+		{/if}
+
+		<!-- Dialog pilihan sebelum generate: draf saja, atau sekalian dengan cover. -->
+		{#if genChoiceOpen}
+			<div
+				class="fixed inset-0 z-[70] flex items-center justify-center p-4"
+				style="background-color: rgba(15, 23, 42, 0.55);"
+				role="presentation"
+				onclick={(e) => {
+					if (e.target === e.currentTarget) genChoiceOpen = false;
+				}}
+				onkeydown={(e) => {
+					if (e.key === 'Escape') {
+						e.stopPropagation();
+						genChoiceOpen = false;
+					}
+				}}
+			>
+				<div
+					class="flex w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl"
+					style="border-color: var(--border); background-color: var(--card, #fff);"
+					role="dialog"
+					aria-modal="true"
+					aria-label={tr('Buat Draf dengan AI')}
+					tabindex="-1"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.stopPropagation()}
+				>
+					<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
+						<div class="flex items-center gap-3">
+							<div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background-color: var(--accent); color: var(--primary);">
+								<Sparkles size={20} />
+							</div>
+							<div>
+								<h4 class="text-sm font-bold leading-tight text-foreground">{tr('Buat Draf dengan AI')}</h4>
+								<p class="mt-0.5 text-xs text-muted-foreground">{tr('Pilih dulu: draf saja, atau sekalian dengan gambar utamanya.')}</p>
+							</div>
+						</div>
+						<button
+							class="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+							type="button"
+							aria-label={tr('Tutup')}
+							onclick={() => (genChoiceOpen = false)}
+						>
+							<X size={16} />
+						</button>
+					</div>
+
+					<div class="space-y-2.5 p-5">
+						<button
+							class="flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-colors hover:bg-secondary"
+							type="button"
+							style="border-color: var(--border);"
+							onclick={() => {
+								genChoiceOpen = false;
+								void generate(false);
+							}}
+						>
+							<FileText size={16} class="mt-0.5 shrink-0 text-muted-foreground" />
+							<span class="min-w-0">
+								<span class="block text-sm font-semibold">{tr('Tanpa cover')}</span>
+								<span class="mt-0.5 block text-xs text-muted-foreground">{tr('Draf dibuat seperti biasa — gambar utama bisa ditambahkan kapan saja.')}</span>
+							</span>
+						</button>
+						<button
+							class="flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-colors hover:bg-secondary"
+							type="button"
+							style="border-color: var(--border);"
+							onclick={() => {
+								genChoiceOpen = false;
+								void generate(true);
+							}}
+						>
+							<Sparkles size={16} class="mt-0.5 shrink-0" style="color: var(--primary);" />
+							<span class="min-w-0">
+								<span class="block text-sm font-semibold">{tr('Dengan cover')}</span>
+								<span class="mt-0.5 block text-xs text-muted-foreground">{tr('AI juga membuat gambar utama dari judul artikel.')}</span>
+								<span class="mt-1 block text-[11px] font-medium" style="color: var(--warning);">{tr('Prosesnya sedikit lebih lama karena menunggu gambar selesai dibuat.')}</span>
+							</span>
+						</button>
+					</div>
+				</div>
+			</div>
 		{/if}
 
 		<!-- Modal Konfirmasi Generate Gambar H2 (Bukan browser confirm bawaan) -->
