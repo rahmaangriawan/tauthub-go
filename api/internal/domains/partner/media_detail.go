@@ -3,11 +3,14 @@ package partner
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -371,12 +374,31 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 			mediaID, partner.ID)
 	}
 
-	pending := d.buildPendingChanges(body, existing)
+	// Satu sumber kebenaran: daftar perubahan dipakai untuk snapshot review
+	// (media.pending_changes) sekaligus riwayat permanen di audit_logs.
+	changes := pendingChangesList(body, existing)
+	pending := any(nil)
+	if len(changes) > 0 {
+		if b, err := json.Marshal(changes); err == nil {
+			pending = string(b)
+		}
+	}
 	if err := d.exec(r.Context(),
 		"UPDATE media SET pending_changes = $1::jsonb, updated_at = NOW() WHERE id = $2 AND partner_id = $3",
 		pending, mediaID, partner.ID); err != nil {
 		d.writeErr(w, err)
 		return
+	}
+	// Riwayat: satu entri audit per field yang berubah, lengkap dengan
+	// before/after, supaya admin bisa menelusuri "apa yang diajukan mitra"
+	// kapan pun (tidak hilang setelah pengajuan disetujui).
+	for _, c := range changes {
+		d.auditLogDetail(r.Context(), user.ID, "media.setting_changed", "media", mediaID, map[string]any{
+			"field": c.Field,
+			"label": c.Label,
+			"from":  c.From,
+			"to":    c.To,
+		})
 	}
 
 	if hasPublicationMode {
@@ -439,27 +461,241 @@ func nullableCategory(categories []string) any {
 	return categories[0]
 }
 
-// buildPendingChanges: ringkas perubahan yang menunggu review admin.
-func (d *Deps) buildPendingChanges(body map[string]any, existing rowMap) any {
-	changed := map[string]any{}
-	for _, key := range []string{
-		"name", "category", "description", "website_url", "adapter_url", "price",
-		"traffic_estimate", "max_links", "link_duration_months", "integration_type", "notes", "publication_mode",
-		"bahasa_artikel", "label_sponsor", "topik_terlarang", "contoh_artikel_url",
-		"pricing_type", "dewan_pers_doc_key",
-	} {
-		if v, present := body[key]; present {
-			changed[key] = v
+// mediaChange: satu baris perubahan konfigurasi media. Bentuknya sengaja sama
+// dengan yang dibaca tabel "Perubahan" di panel admin: {field, label, from, to}
+// sehingga admin melihat apa yang berubah, bukan objek mentah.
+type mediaChange struct {
+	Field string `json:"field"`
+	Label string `json:"label"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+}
+
+// pendingChangesList: bandingkan body pengajuan mitra dengan data tersimpan.
+// Cakupannya sengaja LENGKAP — apa pun yang bisa diubah mitra pada konfigurasi
+// medianya harus muncul di panel admin (termasuk masa berlaku tautan).
+func pendingChangesList(body map[string]any, existing rowMap) []mediaChange {
+	changes := make([]mediaChange, 0, 6)
+	add := func(field, label, from, to string) {
+		if strings.TrimSpace(from) == strings.TrimSpace(to) {
+			return
+		}
+		changes = append(changes, mediaChange{Field: field, Label: label, From: from, To: to})
+	}
+
+	if v, ok := strField(body, "name"); ok {
+		add("name", "Nama Media", existing.strOr("name", ""), v)
+	}
+	if v, ok := strField(body, "media_type"); ok {
+		add("media_type", "Tipe Media", mediaTypeLabel(existing.strOr("media_type", "mainstream")), mediaTypeLabel(v))
+	}
+	if cats, ok := stringSliceField(body, "categories"); ok {
+		add("categories", "Kategori", strings.Join(categoriesArray(existing), ", "), strings.Join(cats, ", "))
+	} else if v, ok := strField(body, "category"); ok {
+		add("category", "Kategori", existing.strOr("category", ""), v)
+	}
+	if v, ok := strField(body, "website_url"); ok {
+		add("website_url", "Website", existing.strOr("website_url", ""), v)
+	}
+	if v, ok := strField(body, "adapter_url"); ok {
+		add("adapter_url", "URL Adapter", existing.strOr("adapter_url", ""), v)
+	}
+	if v, ok := strField(body, "custom_web_endpoint_url"); ok {
+		add("custom_web_endpoint_url", "Endpoint Web Custom", existing.strOr("custom_web_endpoint_url", ""), v)
+	}
+	if v, ok := strField(body, "description"); ok {
+		add("description", "Deskripsi", existing.strOr("description", ""), v)
+	}
+	if v, ok := strField(body, "notes"); ok {
+		add("notes", "Catatan", existing.strOr("notes", ""), v)
+	}
+	if v, ok := strField(body, "integration_type"); ok {
+		add("integration_type", "Tipe Integrasi", existing.strOr("integration_type", ""), v)
+	}
+	if v, ok := strField(body, "publication_mode"); ok {
+		add("publication_mode", "Mode Publikasi",
+			publicationModeLabel(existing.strOr("publication_mode", "draft")), publicationModeLabel(v))
+	}
+	if v, ok := strField(body, "label_sponsor"); ok {
+		add("label_sponsor", "Label Sponsor",
+			sponsorLabel(existing.strOr("label_sponsor", "tidak_ada")), sponsorLabel(v))
+	}
+	if v, ok := strField(body, "word_count_mode"); ok {
+		add("word_count_mode", "Panjang Artikel",
+			wordCountModeLabel(existing.strOr("word_count_mode", "sesuai_permintaan")), wordCountModeLabel(v))
+	}
+	if v, ok := strField(body, "contoh_artikel_url"); ok {
+		add("contoh_artikel_url", "Contoh Artikel", existing.strOr("contoh_artikel_url", ""), v)
+	}
+	if v, ok := stringSliceField(body, "bahasa_artikel"); ok {
+		add("bahasa_artikel", "Bahasa Artikel",
+			joinOrNone(existing.parseJSONArray("bahasa_artikel")), joinOrNone(v))
+	}
+	if v, ok := stringSliceField(body, "topik_terlarang"); ok {
+		add("topik_terlarang", "Topik Dilarang",
+			joinOrNone(existing.parseJSONArray("topik_terlarang")), joinOrNone(v))
+	}
+	if v, ok := intField(body, "max_links"); ok {
+		add("max_links", "Batas Link", linkLimitLabel(existing.intOr("max_links", 1)), linkLimitLabel(v))
+	}
+	// Masa berlaku tautan: 0 = permanen, >0 = bulan. Inilah perubahan yang
+	// paling sering luput terlihat admin sebelum ringkasan ini diperbaiki.
+	if v, ok := intField(body, "link_duration_months"); ok {
+		add("link_duration_months", "Masa Berlaku Tautan",
+			linkDurationLabel(existing.intOr("link_duration_months", 12)), linkDurationLabel(v))
+	}
+	if v, ok := numField(body, "price"); ok {
+		add("price", "Harga", fmtThousands(existing.numOr("price")), fmtThousands(v))
+	}
+	if v, ok := strField(body, "pricing_type"); ok {
+		add("pricing_type", "Model Harga", pricingTypeLabel(existing.strOr("pricing_type", "nett")), pricingTypeLabel(v))
+	}
+	if v, ok := intField(body, "traffic_estimate"); ok {
+		add("traffic_estimate", "Estimasi Trafik",
+			fmtThousands(float64(existing.intOr("traffic_estimate", 0))), fmtThousands(float64(v)))
+	}
+	if v, ok := boolField(body, "allow_embed"); ok {
+		add("allow_embed", "Dukung Embed", yesNo(existing.boolOr("allow_embed", false)), yesNo(v))
+	}
+	if v, ok := boolField(body, "auto_publish"); ok {
+		add("auto_publish", "Mode Otomatis", yesNo(existing.boolOr("auto_publish", false)), yesNo(v))
+	}
+	if v, ok := strField(body, "dewan_pers_doc_key"); ok {
+		add("dewan_pers_doc_key", "Dokumen Dewan Pers",
+			docPresenceLabel(existing.strOr("dewan_pers_doc_key", "")), docPresenceLabel(v))
+	}
+	return changes
+}
+
+// ---------- label bantuan untuk ringkasan perubahan ----------
+
+func mediaTypeLabel(v string) string {
+	switch v {
+	case "blogger":
+		return "Blogger"
+	case "mainstream":
+		return "Mainstream"
+	}
+	return v
+}
+
+func publicationModeLabel(v string) string {
+	switch v {
+	case "publish":
+		return "Langsung terbit"
+	case "rss":
+		return "RSS"
+	case "draft":
+		return "Draf (diterbitkan media)"
+	}
+	return v
+}
+
+func sponsorLabel(v string) string {
+	switch v {
+	case "ada_sponsor":
+		return "Ada label sponsor/adv"
+	case "tidak_ada":
+		return "Tidak ada (organik)"
+	}
+	return v
+}
+
+func wordCountModeLabel(v string) string {
+	switch v {
+	case "kata_300_700":
+		return "300–700 kata"
+	case "kata_800_1500":
+		return "800–1500 kata"
+	case "sesuai_permintaan":
+		return "Sesuai permintaan klien"
+	}
+	return v
+}
+
+func pricingTypeLabel(v string) string {
+	switch v {
+	case "nett":
+		return "Nett"
+	case "nego":
+		return "Nego"
+	}
+	return v
+}
+
+func linkLimitLabel(v int) string {
+	if v <= 0 {
+		return "Tanpa backlink"
+	}
+	return fmt.Sprintf("%d link", v)
+}
+
+// linkDurationLabel: 0 = permanen, >0 = jumlah bulan ("12 bulan").
+func linkDurationLabel(months int) string {
+	if months <= 0 {
+		return "Permanen"
+	}
+	return fmt.Sprintf("%d bulan", months)
+}
+
+func yesNo(v bool) string {
+	if v {
+		return "Ya"
+	}
+	return "Tidak"
+}
+
+func docPresenceLabel(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "Tidak ada"
+	}
+	return "Ada dokumen"
+}
+
+func joinOrNone(v []string) string {
+	clean := make([]string, 0, len(v))
+	for _, s := range v {
+		if strings.TrimSpace(s) != "" {
+			clean = append(clean, strings.TrimSpace(s))
 		}
 	}
-	if len(changed) == 0 {
-		return nil
+	if len(clean) == 0 {
+		return "Tidak ada"
 	}
-	b, err := json.Marshal(changed)
+	return strings.Join(clean, ", ")
+}
+
+// fmtThousands: 50000 → "50.000" (pemisah ribuan gaya Indonesia).
+func fmtThousands(v float64) string {
+	whole := int64(math.Round(v))
+	sign := ""
+	if whole < 0 {
+		sign = "-"
+		whole = -whole
+	}
+	digits := strconv.FormatInt(whole, 10)
+	var b strings.Builder
+	for i, r := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 {
+			b.WriteByte('.')
+		}
+		b.WriteRune(r)
+	}
+	return sign + b.String()
+}
+
+// auditLogDetail: catat perubahan konfigurasi media beserta detail before/after
+// supaya panel admin punya riwayat permanen (bukan hanya snapshot pending).
+func (d *Deps) auditLogDetail(ctx context.Context, userID, action, targetType, targetID string, detail any) {
+	payload, err := json.Marshal(detail)
 	if err != nil {
-		return nil
+		return
 	}
-	return string(b)
+	if _, err := d.Pool.Exec(ctx,
+		"INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id, detail) VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
+		uuid.NewString(), userID, action, targetType, targetID, string(payload)); err != nil {
+		slog.Warn("[partner] audit detail gagal", "action", action, "err", err)
+	}
 }
 
 func (d *Deps) MediaDelete(w http.ResponseWriter, r *http.Request) {

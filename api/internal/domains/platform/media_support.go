@@ -245,6 +245,24 @@ func mpCreditCostFor(clientPrice, rateIDR float64) int {
 
 // ---------- mediaJson (port mediaJson di _media.ts) ----------
 
+// mpJSONValue: kolom jsonb datang sebagai string (lihat normalizeValue), jadi
+// UI menerima teks JSON mentah dan `Array.isArray` selalu gagal. Parse dulu
+// supaya bentuknya benar-benar array/objek di response.
+func mpJSONValue(v any) any {
+	s, ok := v.(string)
+	if !ok {
+		return v
+	}
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	var out any
+	if json.Unmarshal([]byte(s), &out) != nil {
+		return nil
+	}
+	return out
+}
+
 func (d *Deps) mpMediaJSON(row ptRow, markupPercent float64) map[string]any {
 	if row == nil {
 		return nil
@@ -260,7 +278,7 @@ func (d *Deps) mpMediaJSON(row ptRow, markupPercent float64) map[string]any {
 		"slug":                   row.anyOrNil("slug"),
 		"categories":             categories,
 		"category":               row.anyOrNil("category"),
-		"pending_changes":        row.anyOrNil("pending_changes"),
+		"pending_changes":        mpJSONValue(row.anyOrNil("pending_changes")),
 		"description":            row.anyOrNil("description"),
 		"website_url":            row.anyOrNil("website_url"),
 		"contoh_artikel_url":     row.anyOrNil("contoh_artikel_url"),
@@ -279,7 +297,7 @@ func (d *Deps) mpMediaJSON(row ptRow, markupPercent float64) map[string]any {
 		"auto_publish":           row.boolOr("auto_publish", false),
 		"referred_by_partner_id": row.anyOrNil("referred_by_partner_id"),
 		"referrer_name":          row.anyOrNil("referrer_name"),
-		"publish_defaults":       row.anyOrNil("publish_defaults"),
+		"publish_defaults":       mpJSONValue(row.anyOrNil("publish_defaults")),
 		"notes":                  row.anyOrNil("notes"),
 		"traffic_estimate":       row.numOr("traffic_estimate"),
 		"media_tier":             row.strOr("media_tier", "tier3"),

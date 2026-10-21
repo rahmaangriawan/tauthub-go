@@ -10,6 +10,7 @@ package platform
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"regexp"
 	"strings"
@@ -685,12 +686,12 @@ func (d *Deps) MediaAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items, err := d.queryRows(r.Context(), `
-		SELECT a.id, a.action, u.email AS actor_email, a.created_at
+		SELECT a.id, a.action, u.email AS actor_email, a.created_at, a.detail
 		FROM audit_logs a
 		LEFT JOIN users u ON u.id = a.actor_user_id
 		WHERE a.target_type = 'media' AND a.target_id = $1
 		ORDER BY a.created_at DESC
-		LIMIT 50`, mediaID)
+		LIMIT 100`, mediaID)
 	if err != nil {
 		writeErr(w, d, mpMediaError(err))
 		return
@@ -698,9 +699,18 @@ func (d *Deps) MediaAudit(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(items))
 	for _, raw := range items {
 		row := ptRow(ptNormalizeMap(raw))
+		// detail JSONB: kirim sebagai objek, bukan string ter-escape.
+		var detail any
+		if s := row.strOr("detail", ""); s != "" {
+			var parsed any
+			if json.Unmarshal([]byte(s), &parsed) == nil {
+				detail = parsed
+			}
+		}
 		out = append(out, map[string]any{
 			"id":          row.anyOrNil("id"),
 			"action":      row.anyOrNil("action"),
+			"detail":      detail,
 			"actor_email": row.anyOrNil("actor_email"),
 			"created_at":  row.anyOrNil("created_at"),
 		})

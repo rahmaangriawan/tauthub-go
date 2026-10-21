@@ -132,7 +132,20 @@ export type Breakdown = {
 	avg_publish_hours?: number | null;
 };
 
-export type AuditItem = { id: string; action: string; actor_email: string | null; created_at: string };
+export type AuditDetail = {
+	field?: string;
+	label?: string;
+	from?: string | null;
+	to?: string | null;
+};
+
+export type AuditItem = {
+	id: string;
+	action: string;
+	actor_email: string | null;
+	created_at: string;
+	detail?: AuditDetail | null;
+};
 
 export const AUDIT_LABEL: Record<string, string> = {
 	'media.restored': 'Dipulihkan',
@@ -141,7 +154,9 @@ export const AUDIT_LABEL: Record<string, string> = {
 	'media.deleted': 'Dihapus permanen',
 	'media.updated': 'Diperbarui',
 	'media.da_updated': 'DA diperbarui manual',
-	'media.created': 'Dibuat'
+	'media.created': 'Dibuat',
+	// Perubahan konfigurasi oleh mitra (satu entri per field yang berubah).
+	'media.setting_changed': 'Pengajuan perubahan'
 };
 
 export function auditTone(action: string): 'neutral' | 'accent' | 'success' | 'warning' | 'danger' {

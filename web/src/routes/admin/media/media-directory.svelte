@@ -791,16 +791,6 @@
 			style="color: var(--primary);"
 			title={tr('Situs ini disebut sebagai salah satu sumber jawaban AI Google')}
 		>GEO ✓</span>
-	{:else if row.seo_ai_citation === false}
-		<span
-			class="mt-1 block text-xs text-muted-foreground"
-			title={tr('Sudah diperiksa: ada jawaban AI, tapi situs ini bukan salah satu sumbernya')}
-		>GEO —</span>
-	{:else}
-		<span
-			class="mt-1 block text-xs text-muted-foreground"
-			title={tr('Belum bisa dinilai — pemeriksaan terakhir tidak menerima data jawaban AI untuk situs ini')}
-		>GEO —</span>
 	{/if}
 {/snippet}
 
@@ -1040,7 +1030,7 @@
 			{ key: 'credit', label: tr('Kredit'), render: creditCell },
 			{ key: 'traffic', label: 'Trafik', align: 'right' as const, render: trafficCell },
 			{ key: 'health', label: 'Health', render: healthCell },
-			{ key: 'ai_trust', label: 'AI Trust / GEO', render: aiTrustCell },
+			{ key: 'ai_trust', label: 'GEO / AI Trust', render: aiTrustCell },
 			{ key: 'da', label: 'DA', align: 'center' as const, render: daCell },
 			{ key: 'integration', label: 'Integrasi', render: integrationCell },
 			{ key: 'actions', label: 'Aksi', align: 'center' as const, render: actionsCell }
@@ -1204,9 +1194,21 @@
 				{:else}
 					<div class="max-h-36 space-y-1 overflow-y-auto pr-1">
 						{#each detailAudit as a (a.id)}
-							<div class="flex items-center justify-between gap-2">
-								<Badge tone={auditTone(a.action)} label={AUDIT_LABEL[a.action] ?? a.action} />
-								<span class="text-xs text-muted-foreground">{fmtDateTime(a.created_at)}</span>
+							<div class="border-b border-slate-100 pb-1.5 last:border-0">
+								<div class="flex items-center justify-between gap-2">
+									<Badge tone={auditTone(a.action)} label={AUDIT_LABEL[a.action] ?? a.action} />
+									<span class="text-xs text-muted-foreground">{fmtDateTime(a.created_at)}</span>
+								</div>
+								{#if a.detail?.label}
+									<p class="mt-1 text-xs leading-snug">
+										<span class="font-medium">{a.detail.label}:</span>
+										<span class="text-muted-foreground">{a.detail.from || '(kosong)'}</span>
+										<span style="color: var(--primary);"> → {a.detail.to || '(kosong)'}</span>
+									</p>
+								{/if}
+								{#if a.actor_email}
+									<p class="text-[11px] text-muted-foreground">{a.actor_email}</p>
+								{/if}
 							</div>
 						{/each}
 					</div>

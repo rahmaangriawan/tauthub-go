@@ -539,14 +539,14 @@
 					<th class="modernTh">{tr('Kategori')}</th>
 					<th class="modernTh">{tr('Trafik (Est)')}</th>
 					<th class="modernTh" style="text-align:center">DA</th>
-<th class="modernTh" style="text-align:center">
-							<span class="thWithInfo">AI TRUST
-								<Tooltip label={tr('Keterangan AI Trust Score')} maxWidth={260}>
+						<th class="modernTh" style="text-align:center">
+							<span class="thWithInfo">GEO / AI TRUST
+								<Tooltip label={tr('Keterangan GEO dan AI Trust')} maxWidth={260}>
 									{#snippet rich()}
-										<strong>AI Trust Score</strong> {tr('— Nilai 0-100: seberapa siap situs media ini dibaca dan dipercaya oleh mesin AI, dilihat dari kecepatan halaman dan kelengkapan data situsnya. Tanda — berarti kecepatannya belum bisa diukur.')}
-										<br /><strong>GEO</strong> — {tr('Menandai apakah situs media ini disebut sebagai salah satu sumber pada jawaban AI Google. Tanda — berarti pemeriksaan terakhir tidak menerima data jawaban AI untuk situs ini, jadi belum bisa dinilai.')}
+										<strong>GEO</strong> — {tr('Centang biru menandai situs media ini disebut sebagai salah satu sumber pada jawaban AI Google.')}
+										<br /><strong>AI Trust Score</strong> {tr('— Nilai 0-100: seberapa siap situs media ini dibaca dan dipercaya oleh mesin AI, dilihat dari kecepatan halaman dan kelengkapan data situsnya. Tanda — berarti kecepatannya belum bisa diukur.')}
 									{/snippet}
-									<button type="button" class="infoDot" aria-label={tr('Keterangan AI Trust Score')} onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+									<button type="button" class="infoDot" aria-label={tr('Keterangan GEO dan AI Trust')} onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
 								</Tooltip>
 							</span>
 						</th>
@@ -656,15 +656,10 @@
 						<td class="modernTd" style="text-align:center">
 							<div class="flex flex-col items-center gap-1">
 								<span class="scoreBoxPill">{getAiTrust(m)}</span>
-								<!-- Indikator GEO memakai indikator AI Cited yang sudah ada. -->
-								<span class="flex items-center gap-1">
-									{#if m.seo_ai_citation === true}
-										<span class="aiCitationBadge" title={tr('Sumber AI')} aria-label={tr('Sumber AI')}><Check size={11} /></span>
-									{:else}
-										<span class="mutedDash">—</span>
-									{/if}
-									<span class="text-[10px] font-semibold" style="color: var(--muted-foreground, #64748b);">GEO</span>
-								</span>
+								<!-- Indikator GEO = centang AI Cited; disembunyikan bila tidak ada. -->
+								{#if m.seo_ai_citation === true}
+									<span class="aiCitationBadge" title={tr('Sumber AI')} aria-label={tr('Sumber AI')}><Check size={11} /></span>
+								{/if}
 							</div>
 						</td>
 						<td class="modernTd">

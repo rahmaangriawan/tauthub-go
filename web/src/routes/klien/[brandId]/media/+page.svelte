@@ -1463,18 +1463,18 @@
 								</span>{sortIndicator('da')}
 							</th>
 								<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_trust')}>
-									<span class="thWithInfo">{tr('AI Trust')}
+									<span class="thWithInfo">{tr('GEO / AI Trust')}
 										<Tooltip.Root>
 											<Tooltip.Trigger>
 												{#snippet child({ props })}
-													<button {...props} type="button" class="infoDot" aria-label="Keterangan AI Trust Score" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+													<button {...props} type="button" class="infoDot" aria-label="Keterangan GEO dan AI Trust" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
 												{/snippet}
 											</Tooltip.Trigger>
 											<Tooltip.Portal>
 												<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
 												<Tooltip.Arrow class="uiTipArrow" />
-												<strong>AI Trust Score</strong> {tr("— Nilai 0-100: seberapa siap situs media ini dibaca dan dipercaya oleh mesin AI, dilihat dari kecepatan halaman dan kelengkapan data situsnya. Tanda — berarti kecepatannya belum bisa diukur.")}
-												<br /><strong>GEO</strong> — menandai apakah situs media ini disebut sebagai salah satu sumber pada jawaban AI Google. Tanda — berarti pemeriksaan terakhir tidak menerima data jawaban AI untuk situs ini, jadi belum bisa dinilai.
+												<strong>GEO</strong> — centang biru menandai situs media ini disebut sebagai salah satu sumber pada jawaban AI Google.
+												<br /><strong>AI Trust Score</strong> {tr("— Nilai 0-100: seberapa siap situs media ini dibaca dan dipercaya oleh mesin AI, dilihat dari kecepatan halaman dan kelengkapan data situsnya. Tanda — berarti kecepatannya belum bisa diukur.")}
 											</Tooltip.Content>
 											</Tooltip.Portal>
 										</Tooltip.Root>
@@ -1675,15 +1675,11 @@
 								<td class="modernTd" style="text-align:center">
 									<div class="flex flex-col items-center gap-1">
 										<span class="scoreBoxPill aiTrustPill" style={aiTrustToneStyle(getAiTrust(m))}>{getAiTrust(m)}</span>
-										<!-- Indikator GEO memakai indikator AI Cited yang sudah ada. -->
-										<span class="flex items-center gap-1">
-											{#if m.seo_ai_citation === true}
-												<span class="aiCitationBadge" title={tr('Sumber AI')} aria-label={tr('Sumber AI')}><Check size={11} /></span>
-											{:else}
-												<span class="mutedDash">—</span>
-											{/if}
-											<span class="text-[10px] font-semibold" style="color: var(--muted-foreground, #64748b);">GEO</span>
-										</span>
+										<!-- Indikator GEO = centang AI Cited. Tidak ada centang
+										     berarti tidak ada indikator → disembunyikan. -->
+										{#if m.seo_ai_citation === true}
+											<span class="aiCitationBadge" title={tr('Sumber AI')} aria-label={tr('Sumber AI')}><Check size={11} /></span>
+										{/if}
 									</div>
 								</td>
 
