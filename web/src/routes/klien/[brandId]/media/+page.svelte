@@ -922,7 +922,9 @@
 	}
 
 	function exportProposal() {
-		const headers = ['Nama Media', 'Website', 'Kategori', 'Kecepatan', 'DA', 'AI Trust', 'AI Cited', tr('Harga IDR')];
+		// AI Trust & GEO (AI Cited) digabung jadi satu kolom: skor trust dulu,
+		// lalu status GEO di belakangnya dengan tanda "|".
+		const headers = ['Nama Media', 'Website', 'Kategori', 'Kecepatan', 'DA', 'AI Trust / GEO', tr('Harga IDR')];
 		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 		// Pemisah ";" dipakai karena Excel/Sheets ber-locale Indonesia (dan Eropa)
 		// memakai titik-koma sebagai list separator; CSV berkoma tampil menyatu
@@ -932,11 +934,11 @@
 			const price = m.client_price ?? m.price ?? 0;
 			return [
 				esc(m.name), esc(m.website_url ?? ''), esc(m.category ?? 'Umum'),
-				esc(`${speed.label} (${speed.sub})`), esc(getDa(m)), esc(getAiTrust(m)),
-				// Tiga keadaan: Ya / Tidak / belum bisa ditentukan (Google tidak
-				// menampilkan AI Overview) — jangan ditulis "Tidak" untuk yang
-				// belum pernah bisa dinilai.
-				esc(m.seo_ai_citation === true ? 'Ya' : m.seo_ai_citation === false ? 'Tidak' : 'Belum bisa ditentukan'),
+				esc(`${speed.label} (${speed.sub})`), esc(getDa(m)),
+				// Satu sel gabungan: skor trust + status GEO (AI Cited). Tiga keadaan
+				// GEO: Ya / Tidak / belum bisa ditentukan (Google tidak menampilkan
+				// AI Overview) — jangan ditulis "Tidak" untuk yang belum dinilai.
+				esc(`${getAiTrust(m)} | GEO:${m.seo_ai_citation === true ? 'Ya' : m.seo_ai_citation === false ? 'Tidak' : '—'}`),
 				esc(price)
 			].join(';');
 		});
@@ -1219,7 +1221,7 @@
 				<div class="quickInfoRow"><span>{tr('Trafik (est)')}</span><strong>{qtraffic.text}</strong></div>
 				<div class="quickInfoRow"><span>DA</span><strong>{qi.da ?? '—'}</strong></div>
 				<div class="quickInfoRow"><span>{tr('AI Trust')}</span><strong>{qi.ai_trust_score ?? '—'}</strong></div>
-				<div class="quickInfoRow"><span>{tr('AI Cited')}</span><strong>{qi.ai_cited === true ? tr('Dikutip') : qi.ai_cited === false ? tr('Belum dikutip') : '—'}</strong></div>
+				<div class="quickInfoRow"><span>GEO</span><strong>{qi.ai_cited === true ? tr('Dikutip') : qi.ai_cited === false ? tr('Belum dikutip') : '—'}</strong></div>
 				<div class="quickInfoRow"><span>{tr('Waktu Rilis')}</span><strong>{qspeed?.label ?? '—'}</strong></div>
 				<div class="quickInfoRow">
 					<span>{tr('Bookmark')}</span>
@@ -1460,41 +1462,25 @@
 									</Tooltip.Root>
 								</span>{sortIndicator('da')}
 							</th>
-							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_trust')}>
-								<span class="thWithInfo">{tr('AI Trust')}
-									<Tooltip.Root>
-										<Tooltip.Trigger>
-											{#snippet child({ props })}
-												<button {...props} type="button" class="infoDot" aria-label="Keterangan AI Trust Score" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
-											{/snippet}
-										</Tooltip.Trigger>
-										<Tooltip.Portal>
-											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
-											<Tooltip.Arrow class="uiTipArrow" />
-											<strong>AI Trust Score</strong> {tr("— Nilai 0-100: seberapa siap situs media ini dibaca dan dipercaya oleh mesin AI, dilihat dari kecepatan halaman dan kelengkapan data situsnya. Tanda — berarti kecepatannya belum bisa diukur.")}
-										</Tooltip.Content>
-										</Tooltip.Portal>
-									</Tooltip.Root>
-								</span>{sortIndicator('ai_trust')}
-							</th>
-							<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_cited')}>
-								<span class="thWithInfo">{tr('AI Cited')}
-									<Tooltip.Root>
-										<Tooltip.Trigger>
-											{#snippet child({ props })}
-												<button {...props} type="button" class="infoDot" aria-label="Keterangan AI Citation" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
-											{/snippet}
-										</Tooltip.Trigger>
-										<Tooltip.Portal>
-											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
-											<Tooltip.Arrow class="uiTipArrow" />
-											Menandai apakah situs media ini disebut sebagai salah satu sumber pada jawaban AI Google. Tanda — berarti pemeriksaan terakhir tidak menerima data jawaban AI untuk situs ini, jadi belum bisa dinilai.
-										</Tooltip.Content>
-										</Tooltip.Portal>
-									</Tooltip.Root>
-								</span>{sortIndicator('ai_cited')}
-							</th>
-							<th class="modernTh modernThSortable" onclick={() => toggleSort('speed')}>
+								<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_trust')}>
+									<span class="thWithInfo">{tr('AI Trust')}
+										<Tooltip.Root>
+											<Tooltip.Trigger>
+												{#snippet child({ props })}
+													<button {...props} type="button" class="infoDot" aria-label="Keterangan AI Trust Score" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+												{/snippet}
+											</Tooltip.Trigger>
+											<Tooltip.Portal>
+												<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+												<Tooltip.Arrow class="uiTipArrow" />
+												<strong>AI Trust Score</strong> {tr("— Nilai 0-100: seberapa siap situs media ini dibaca dan dipercaya oleh mesin AI, dilihat dari kecepatan halaman dan kelengkapan data situsnya. Tanda — berarti kecepatannya belum bisa diukur.")}
+												<br /><strong>GEO</strong> — menandai apakah situs media ini disebut sebagai salah satu sumber pada jawaban AI Google. Tanda — berarti pemeriksaan terakhir tidak menerima data jawaban AI untuk situs ini, jadi belum bisa dinilai.
+											</Tooltip.Content>
+											</Tooltip.Portal>
+										</Tooltip.Root>
+									</span>{sortIndicator('ai_trust')}
+								</th>
+								<th class="modernTh modernThSortable" onclick={() => toggleSort('speed')}>
 								<span class="thWithInfo">{tr('Waktu Rilis')}
 									<Tooltip.Root>
 										<Tooltip.Trigger>
@@ -1686,14 +1672,20 @@
 								</td>
 
 								<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getDa(m)}</span></td>
-								<td class="modernTd" style="text-align:center"><span class="scoreBoxPill aiTrustPill" style={aiTrustToneStyle(getAiTrust(m))}>{getAiTrust(m)}</span></td>
 
 								<td class="modernTd" style="text-align:center">
-									{#if m.seo_ai_citation === true}
-										<span class="aiCitationBadge" title="Sumber AI" aria-label="Sumber AI"><Check size={11} /></span>
-									{:else}
-										<span class="mutedDash">—</span>
-									{/if}
+									<div class="flex flex-col items-center gap-1">
+										<span class="scoreBoxPill aiTrustPill" style={aiTrustToneStyle(getAiTrust(m))}>{getAiTrust(m)}</span>
+										<!-- Indikator GEO memakai indikator AI Cited yang sudah ada. -->
+										<span class="flex items-center gap-1">
+											{#if m.seo_ai_citation === true}
+												<span class="aiCitationBadge" title={tr('Sumber AI')} aria-label={tr('Sumber AI')}><Check size={11} /></span>
+											{:else}
+												<span class="mutedDash">—</span>
+											{/if}
+											<span class="text-[10px] font-semibold" style="color: var(--muted-foreground, #64748b);">GEO</span>
+										</span>
+									</div>
 								</td>
 
 								<td class="modernTd">

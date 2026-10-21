@@ -785,21 +785,22 @@
 	{#if row.seo_da != null}
 		<p class="mt-1 text-xs text-muted-foreground" title={tr('Domain Authority: nilai otoritas domain (0-100)')}>DA {row.seo_da}</p>
 	{/if}
-{/snippet}
-
-{#snippet aiCitedCell(row: Media)}
 	{#if row.seo_ai_citation === true}
-		<span title={tr('Situs ini disebut sebagai salah satu sumber jawaban AI Google')}>
-			<Badge tone="accent" label="🤖 Sumber AI" />
-		</span>
+		<span
+			class="mt-1 block text-xs font-semibold"
+			style="color: var(--primary);"
+			title={tr('Situs ini disebut sebagai salah satu sumber jawaban AI Google')}
+		>GEO ✓</span>
 	{:else if row.seo_ai_citation === false}
-		<span title={tr('Sudah diperiksa: ada jawaban AI, tapi situs ini bukan salah satu sumbernya')}>
-			<Badge tone="neutral" value="Tidak" />
-		</span>
+		<span
+			class="mt-1 block text-xs text-muted-foreground"
+			title={tr('Sudah diperiksa: ada jawaban AI, tapi situs ini bukan salah satu sumbernya')}
+		>GEO —</span>
 	{:else}
-		<span title={tr('Belum bisa dinilai — pemeriksaan terakhir tidak menerima data jawaban AI untuk situs ini')}>
-			<Badge tone="neutral" value="—" />
-		</span>
+		<span
+			class="mt-1 block text-xs text-muted-foreground"
+			title={tr('Belum bisa dinilai — pemeriksaan terakhir tidak menerima data jawaban AI untuk situs ini')}
+		>GEO —</span>
 	{/if}
 {/snippet}
 
@@ -1039,9 +1040,8 @@
 			{ key: 'credit', label: tr('Kredit'), render: creditCell },
 			{ key: 'traffic', label: 'Trafik', align: 'right' as const, render: trafficCell },
 			{ key: 'health', label: 'Health', render: healthCell },
-			{ key: 'ai_trust', label: 'AI Trust', render: aiTrustCell },
+			{ key: 'ai_trust', label: 'AI Trust / GEO', render: aiTrustCell },
 			{ key: 'da', label: 'DA', align: 'center' as const, render: daCell },
-			{ key: 'ai_cited', label: 'AI Cited', render: aiCitedCell },
 			{ key: 'integration', label: 'Integrasi', render: integrationCell },
 			{ key: 'actions', label: 'Aksi', align: 'center' as const, render: actionsCell }
 		]}
