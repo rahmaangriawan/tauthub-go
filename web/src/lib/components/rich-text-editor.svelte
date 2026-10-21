@@ -4,13 +4,13 @@
 	// dipakai di luar modal: perintah format, pustaka gambar AI (bila scope
 	// brand+campaign+media tersedia) atau unggah gambar ke /brands/:id/assets,
 	// dialog tautan, dan sinkronisasi HTML dua arah.
-	import { CircleAlert, Image, Link, List, ListOrdered, LoaderCircle, Quote, RotateCcw, RotateCw, Trash2, Upload, X } from '@lucide/svelte';
+	import { CircleAlert, Image, Link, List, ListOrdered, LoaderCircle, Quote, RotateCcw, RotateCw, Table2 as TableIcon, Trash2, Upload, X } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 	import { apiRequest } from '$lib/auth';
 	import { sanitizeHtml } from '$lib/sanitize-html';
 	import { tr } from '$lib/i18n/phrases';
 	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
-	import { applyInlineFormat, readToolState, isToggleCommand, toolCommandActive, NO_TOOL_STATE, type ToolState } from '$lib/editor/inline-format';
+	import { applyInlineFormat, readToolState, isToggleCommand, toolCommandActive, placeCaretAtStart, NO_TOOL_STATE, type ToolState } from '$lib/editor/inline-format';
 
 	let {
 		value = $bindable(''),
@@ -324,6 +324,136 @@
 		};
 	});
 
+	// ---------- tabel ----------
+	const TABLE_GRID_ROWS = 6;
+	const TABLE_GRID_COLS = 8;
+	let tablePickerOpen = $state(false);
+	let tableHover = $state({ rows: 0, cols: 0 });
+	/** Menu klik kanan untuk mengelola tabel yang sedang disentuh kursor. */
+	let tableMenu = $state<{ x: number; y: number; table: HTMLTableElement; cell: HTMLTableCellElement } | null>(null);
+
+	function insertTable(rows: number, cols: number) {
+		const body = bodyEl;
+		if (!body || disabled || mode === 'html') return;
+		body.focus();
+		const sel = window.getSelection();
+		// Tanpa kursor di editor, sisipkan di akhir isi supaya tabel tetap masuk.
+		if (!sel || sel.rangeCount === 0 || !body.contains(sel.anchorNode)) {
+			const end = document.createRange();
+			end.selectNodeContents(body);
+			end.collapse(false);
+			sel?.removeAllRanges();
+			sel?.addRange(end);
+		}
+		const head = `<tr>${Array.from({ length: cols }, () => '<th>&nbsp;</th>').join('')}</tr>`;
+		const isi = Array.from({ length: Math.max(0, rows - 1) }, () =>
+			`<tr>${Array.from({ length: cols }, () => '<td>&nbsp;</td>').join('')}</tr>`
+		).join('');
+		document.execCommand('insertHTML', false, `<table><thead>${head}</thead><tbody>${isi}</tbody></table><p><br></p>`);
+		// Kursor ke sel pertama tabel yang baru saja dibuat (tabel terakhir yang
+		// isinya masih kosong).
+		const fresh = Array.from(body.querySelectorAll('table'))
+			.reverse()
+			.find((t) => (t.textContent ?? '').replace(/\u00A0/g, '').trim() === '');
+		const selPertama = fresh?.querySelector('th, td');
+		if (selPertama) placeCaretAtStart(selPertama);
+		sync();
+		refreshToolState();
+		commitHistory();
+	}
+
+	function onBodyContextMenu(e: MouseEvent) {
+		const body = bodyEl;
+		if (!body || disabled || mode !== 'rich') return;
+		const el = e.target instanceof Element ? e.target : null;
+		const cell = el?.closest('td, th') as HTMLTableCellElement | null;
+		const table = el?.closest('table') as HTMLTableElement | null;
+		if (!cell || !table || !body.contains(table)) return;
+		e.preventDefault();
+		// Jaga menu tetap di dalam jendela (lebar ±208px, tinggi ±260px).
+		const x = Math.max(8, Math.min(e.clientX, window.innerWidth - 220));
+		const y = Math.max(8, Math.min(e.clientY, window.innerHeight - 280));
+		tableMenu = { x, y, table, cell };
+	}
+
+	type TableOp = 'baris-atas' | 'baris-bawah' | 'kolom-kiri' | 'kolom-kanan' | 'hapus-baris' | 'hapus-kolom' | 'hapus-tabel';
+
+	function tableOp(op: TableOp) {
+		const menu = tableMenu;
+		if (!menu) return;
+		const { table, cell } = menu;
+		const row = cell.closest('tr') as HTMLTableRowElement | null;
+		const colIndex = row ? Array.from(row.cells).indexOf(cell) : -1;
+		const selKosong = (el: HTMLTableCellElement) => {
+			el.innerHTML = '&nbsp;';
+			el.removeAttribute('colspan');
+			el.removeAttribute('rowspan');
+			return el;
+		};
+
+		if (row && colIndex >= 0) {
+			switch (op) {
+				case 'baris-atas':
+				case 'baris-bawah': {
+					const clone = row.cloneNode(true) as HTMLTableRowElement;
+					Array.from(clone.cells).forEach((c) => selKosong(c as HTMLTableCellElement));
+					if (op === 'baris-atas') row.before(clone);
+					else row.after(clone);
+					break;
+				}
+				case 'kolom-kiri':
+				case 'kolom-kanan': {
+					for (const tr of Array.from(table.rows)) {
+						const ref = tr.cells[Math.min(colIndex, tr.cells.length - 1)];
+						if (!ref) continue;
+						const baru = selKosong(ref.cloneNode(true) as HTMLTableCellElement);
+						if (op === 'kolom-kiri') ref.before(baru);
+						else ref.after(baru);
+					}
+					break;
+				}
+				case 'hapus-baris':
+					row.remove();
+					break;
+				case 'hapus-kolom':
+					for (const tr of Array.from(table.rows)) {
+						const target = tr.cells[colIndex];
+						// Sisakan minimal satu kolom agar tabel tidak jadi tak terpakai.
+						if (target && tr.cells.length > 1) target.remove();
+					}
+					break;
+				case 'hapus-tabel':
+					table.remove();
+					break;
+			}
+		}
+
+		if (table.isConnected && (table.rows.length === 0 || Array.from(table.rows).every((tr) => tr.cells.length === 0))) {
+			table.remove();
+		}
+		tableMenu = null;
+		sync();
+		refreshToolState();
+		commitHistory();
+	}
+
+	// Menu tabel menutup saat klik di luar, Escape, atau halaman digulir.
+	$effect(() => {
+		if (!tableMenu) return;
+		const close = () => (tableMenu = null);
+		const onKey = (ev: KeyboardEvent) => {
+			if (ev.key === 'Escape') close();
+		};
+		window.addEventListener('click', close);
+		window.addEventListener('scroll', close, true);
+		window.addEventListener('keydown', onKey);
+		return () => {
+			window.removeEventListener('click', close);
+			window.removeEventListener('scroll', close, true);
+			window.removeEventListener('keydown', onKey);
+		};
+	});
+
 	function openImageModal() {
 		if (!bodyEl || disabled || mode === 'html') return;
 		const sel = window.getSelection();
@@ -586,7 +716,52 @@
 	<div class="rte-toolbar flex flex-wrap items-center gap-1 rounded-lg border p-1" role="toolbar" aria-label="Format teks">
 		{#each tools as t, i (t.cmd + (t.arg ?? ''))}
 			{@const ToolIcon = t.icon}
-			{#if fill && (i === 3 || i === 5)}
+			{#if t.cmd === 'undo'}
+				<!-- Tabel: hover menampilkan grid ukuran (baris × kolom). -->
+				<span
+					class="rte-table-picker-wrap"
+					role="presentation"
+					onmouseenter={() => (tablePickerOpen = true)}
+					onmouseleave={() => (tablePickerOpen = false)}
+				>
+					<button
+						class="rte-tool"
+						type="button"
+						title={tr('Sisipkan tabel')}
+						aria-label={tr('Sisipkan tabel')}
+						disabled={disabled || mode === 'html'}
+						onmousedown={(e: MouseEvent) => e.preventDefault()}
+						onclick={() => (tablePickerOpen = !tablePickerOpen)}
+					>
+						<TableIcon size={15} />
+					</button>
+					{#if tablePickerOpen && !disabled && mode === 'rich'}
+						<div class="rte-table-picker" role="dialog" aria-label={tr('Pilih ukuran tabel')}>
+							<p class="rte-table-picker-label">
+								{tableHover.rows > 0 ? `${tableHover.cols} × ${tableHover.rows}` : tr('Pilih ukuran')}
+							</p>
+							<div class="rte-table-grid" role="group" aria-label={tr('Pilih ukuran tabel')} onmouseleave={() => (tableHover = { rows: 0, cols: 0 })}>
+								{#each Array(TABLE_GRID_ROWS) as _, r (r)}
+									{#each Array(TABLE_GRID_COLS) as _, c (c)}
+										<button
+											class="rte-table-cell"
+											class:rte-table-cell-on={r < tableHover.rows && c < tableHover.cols}
+											type="button"
+											aria-label={`${c + 1} × ${r + 1}`}
+											onmouseenter={() => (tableHover = { rows: r + 1, cols: c + 1 })}
+											onclick={() => {
+												insertTable(r + 1, c + 1);
+												tablePickerOpen = false;
+												tableHover = { rows: 0, cols: 0 };
+											}}
+										></button>
+									{/each}
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</span>
+			{:else if fill && (i === 3 || i === 5)}
 				<span class="rte-sep" aria-hidden="true"></span>
 			{/if}
 			<button
@@ -677,6 +852,7 @@
 			oninput={sync}
 			onclick={handleBodyClick}
 			onkeydown={onBodyKeydown}
+			oncontextmenu={onBodyContextMenu}
 			onscroll={placeImageBar}
 			onpaste={onBodyPaste}
 			ondragover={(e) => { if (!disabled && mode === 'rich') e.preventDefault(); }}
@@ -702,6 +878,25 @@
 	{/if}
 
 	{#if imageError}<p class="mt-1 text-sm" style="color: var(--destructive);">{imageError}</p>{/if}
+
+	{#if tableMenu}
+		<!-- Menu klik kanan di dalam tabel: kelola baris/kolom/tabel. -->
+		<div
+			class="rte-table-menu"
+			role="menu"
+			aria-label={tr('Kelola tabel')}
+			style="left: {tableMenu.x}px; top: {tableMenu.y}px;"
+		>
+			<button type="button" role="menuitem" onclick={() => tableOp('baris-atas')}>{tr('Tambah baris di atas')}</button>
+			<button type="button" role="menuitem" onclick={() => tableOp('baris-bawah')}>{tr('Tambah baris di bawah')}</button>
+			<button type="button" role="menuitem" onclick={() => tableOp('kolom-kiri')}>{tr('Tambah kolom di kiri')}</button>
+			<button type="button" role="menuitem" onclick={() => tableOp('kolom-kanan')}>{tr('Tambah kolom di kanan')}</button>
+			<span class="rte-table-menu-sep" aria-hidden="true"></span>
+			<button type="button" role="menuitem" onclick={() => tableOp('hapus-baris')}>{tr('Hapus baris')}</button>
+			<button type="button" role="menuitem" onclick={() => tableOp('hapus-kolom')}>{tr('Hapus kolom')}</button>
+			<button type="button" role="menuitem" class="rte-table-menu-danger" onclick={() => tableOp('hapus-tabel')}>{tr('Hapus tabel')}</button>
+		</div>
+	{/if}
 
 		{#if linkDialog.open}
 			<div class="rte-link-backdrop" role="presentation" onclick={closeLinkDialog}></div>
@@ -953,6 +1148,81 @@
 		color: var(--primary);
 		font-size: 11px;
 		font-weight: 600;
+	}
+	/* Pemilih ukuran tabel: hover tombol → grid baris × kolom. */
+	.rte-table-picker-wrap {
+		position: relative;
+		display: inline-flex;
+	}
+	.rte-table-picker {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 0;
+		z-index: 40;
+		padding: 8px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--card, #fff);
+		box-shadow: 0 10px 26px rgba(15, 23, 42, 0.18);
+	}
+	.rte-table-picker-label {
+		margin: 0 0 6px;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--muted-foreground);
+	}
+	.rte-table-grid {
+		display: grid;
+		grid-template-columns: repeat(8, 16px);
+		gap: 3px;
+	}
+	.rte-table-cell {
+		width: 16px;
+		height: 16px;
+		padding: 0;
+		border: 1px solid var(--border);
+		border-radius: 3px;
+		background: var(--card, #fff);
+		cursor: pointer;
+	}
+	.rte-table-cell-on {
+		background: var(--primary);
+		border-color: var(--primary);
+	}
+	/* Menu klik kanan tabel. */
+	.rte-table-menu {
+		position: fixed;
+		z-index: 80;
+		min-width: 208px;
+		padding: 4px;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: var(--card, #fff);
+		box-shadow: 0 12px 30px rgba(15, 23, 42, 0.2);
+	}
+	.rte-table-menu button {
+		display: block;
+		width: 100%;
+		padding: 6px 8px;
+		border: none;
+		border-radius: 6px;
+		background: transparent;
+		color: var(--foreground);
+		font-size: 12px;
+		text-align: left;
+		cursor: pointer;
+	}
+	.rte-table-menu button:hover {
+		background: var(--secondary);
+	}
+	.rte-table-menu-sep {
+		display: block;
+		height: 1px;
+		margin: 4px 2px;
+		background: var(--border);
+	}
+	.rte-table-menu-danger {
+		color: var(--destructive);
 	}
 	/* Toggle HTML saat AKTIF lalu di-hover: ikon tetap terlihat — biru di atas
 	   latar terang. Dulu warna ikonnya tetap putih (primary-foreground) sementara

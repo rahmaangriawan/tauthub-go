@@ -206,3 +206,15 @@ export function toolCommandActive(state: ToolState, cmd: string, arg?: string): 
 			return false;
 	}
 }
+
+/** Letakkan kursor di awal isi elemen (dipakai setelah menyisipkan tabel). */
+export function placeCaretAtStart(el: Element) {
+	const r = document.createRange();
+	const first = el.firstChild;
+	if (first && first.nodeType === Node.TEXT_NODE) r.setStart(first, 0);
+	else r.selectNodeContents(el);
+	r.collapse(true);
+	const sel = window.getSelection();
+	sel?.removeAllRanges();
+	sel?.addRange(r);
+}
