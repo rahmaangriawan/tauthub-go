@@ -25,8 +25,7 @@
 				<p class="font-semibold" style="color: var(--destructive);">{tr('Nomor WhatsApp wajib diisi')}</p>
 				<p class="mt-1 text-sm text-muted-foreground">
 					{tr('Media Anda sudah')}
-					<strong>{mediaCount}</strong>
-					{tr('. Media berikutnya baru bisa ditambahkan setelah nomor WhatsApp aktif dan izin dihubungi diisi, supaya pesanan dari klien bisa kami konfirmasi lebih cepat.')}
+					<strong>{mediaCount}</strong>{tr('. Media berikutnya baru bisa ditambahkan setelah nomor WhatsApp aktif dan izin dihubungi diisi, supaya pesanan dari klien bisa kami konfirmasi lebih cepat.')}
 				</p>
 				{#if profileHref}
 					<a class="app-btn app-btn-primary mt-3 !min-h-8 !px-3 !text-xs" href={profileHref}>

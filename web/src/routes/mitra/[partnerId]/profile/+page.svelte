@@ -7,6 +7,7 @@
 	// (ganti password + panel 2FA TOTP). Struktur & label mengikuti
 	// partner-profile.tsx; token warna memakai design token app ini.
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import {
 		Building2, CircleCheck, Eye, EyeOff, Globe, Info, Lock, Mail, Newspaper, Pencil, Rss, Save,
 		ShieldCheck, Smartphone, User, Wallet, Bell
@@ -58,7 +59,12 @@
 	let rssEnabled = $state<boolean | null>(null);
 
 	// Tab: "profile" | "withdraw" | "notification" | "security" (urutan app lama).
-	let activeTab = $state<'profile' | 'withdraw' | 'notification' | 'security'>('profile');
+	// Bisa ditentukan lewat URL (?tab=notification) supaya tautan dari dalam app
+	// — mis. banner "Isi nomor WhatsApp sekarang" — mendarat di tab yang memuat
+	// kolomnya, bukan selalu di tab Profil.
+	const TABS = ['profile', 'withdraw', 'notification', 'security'] as const;
+	type Tab = (typeof TABS)[number];
+	let activeTab = $state<Tab>(TABS.find((t) => t === page.url.searchParams.get('tab')) ?? 'profile');
 
 	// Profil
 	let editing = $state(false);
@@ -95,6 +101,17 @@
 	let notificationBusy = $state(false);
 	let notificationNotice = $state('');
 	let notificationError = $state('');
+
+	// Kartu nomor WhatsApp di tab Profil: bisa disimpan sendiri tanpa menunggu
+	// kedua email tambahan. Server memang tidak mewajibkan email — PUT
+	// /v1/partner/notification-preferences hanya memvalidasi format email bila
+	// diisi (api/internal/domains/partner/misc.go). Kartu ini memakai `prefs`
+	// yang sama dengan form di tab Notifikasi, jadi mengetik di salah satu
+	// langsung mengisi yang lain.
+	let waBusy = $state(false);
+	let waNotice = $state('');
+	let waError = $state('');
+	const waSiap = $derived(prefs.wa_number.trim() !== '' && prefs.wa_consent);
 
 	// Keamanan
 	let showPasswordForm = $state(false);
@@ -361,29 +378,54 @@
 
 	// ---- Tab Notifikasi ----
 
+	// Endpoint preferensi notifikasi mengganti keempat kolom sekaligus, jadi
+	// kedua form (email di tab Notifikasi, nomor di tab Profil) mengirim muatan
+	// yang sama dari `prefs` — tidak ada kolom yang tertimpa kosong.
+	async function putNotificationPrefs() {
+		const res = await apiRequest('/v1/partner/notification-preferences', {
+			method: 'PUT',
+			body: JSON.stringify({
+				email_alt1: prefs.email_alt1.trim(),
+				email_alt2: prefs.email_alt2.trim(),
+				wa_number: prefs.wa_number.trim(),
+				wa_consent: prefs.wa_consent
+			})
+		});
+		if (res.ok) await loadPrefs();
+		return res;
+	}
+
 	async function savePrefs(e: SubmitEvent) {
 		e.preventDefault();
 		notificationBusy = true;
 		notificationError = '';
 		notificationNotice = '';
 		try {
-			const res = await apiRequest('/v1/partner/notification-preferences', {
-				method: 'PUT',
-				body: JSON.stringify({
-					email_alt1: prefs.email_alt1.trim(),
-					email_alt2: prefs.email_alt2.trim(),
-					wa_number: prefs.wa_number.trim(),
-					wa_consent: prefs.wa_consent
-				})
-			});
+			const res = await putNotificationPrefs();
 			if (!res.ok) {
 				notificationError = await readApiError(res, "Permintaan gagal.");
 				return;
 			}
 			notificationNotice = tr('Pengaturan notifikasi berhasil disimpan!');
-			await loadPrefs();
 		} finally {
 			notificationBusy = false;
+		}
+	}
+
+	async function saveWa(e: SubmitEvent) {
+		e.preventDefault();
+		waBusy = true;
+		waError = '';
+		waNotice = '';
+		try {
+			const res = await putNotificationPrefs();
+			if (!res.ok) {
+				waError = await readApiError(res, "Permintaan gagal.");
+				return;
+			}
+			waNotice = tr('Nomor WhatsApp berhasil disimpan!');
+		} finally {
+			waBusy = false;
 		}
 	}
 
@@ -529,7 +571,7 @@
 
 <section>
 	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">{tr("Profil & Rekening Mitra")}</h1>
+		<h1 class="text-2xl font-semibold tracking-tight">{tr("Konfigurasi Akun")}</h1>
 		<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola informasi identitas media partner, pengaturan rekening withdraw, keamanan, dan dokumen legalitas.")}</p>
 	</header>
 
@@ -640,6 +682,30 @@
 						</div>
 					</form>
 				{/if}
+			</div>
+
+			<div class="app-card mt-3 p-4">
+				<div class="flex items-start gap-2.5">
+					<Smartphone size={15} class="mt-0.5 shrink-0 text-muted-foreground" />
+					<div class="min-w-0">
+						<h2 class="text-sm font-semibold leading-tight">{tr("Nomor WhatsApp")}</h2>
+						<p class="mt-1 text-xs leading-snug text-muted-foreground">{tr("Nomor untuk konfirmasi pesanan klien. Menambah media baru diblokir sampai nomor dan izin dihubungi diisi.")}</p>
+					</div>
+				</div>
+				{#if waNotice}<div class="mt-3 rounded-lg border px-3 py-2 text-xs" style="border-color: var(--success); background-color: var(--success-soft); color: var(--success);">{waNotice}</div>{/if}
+				{#if waError}<div class="mt-3 rounded-lg border px-3 py-2 text-xs" style="border-color: var(--destructive); color: var(--destructive);">{waError}</div>{/if}
+				<form class="mt-3 space-y-3" onsubmit={saveWa}>
+					<input class="app-input w-full" placeholder="6281234567890" aria-label={tr("Nomor WhatsApp")} bind:value={prefs.wa_number} disabled={waBusy} />
+					<label class="flex items-start gap-2.5 text-sm">
+						<input class="mt-0.5" type="checkbox" bind:checked={prefs.wa_consent} disabled={waBusy} />
+						<span class="text-xs leading-relaxed text-muted-foreground">{tr("Saya setuju nomor ini disimpan dan dihubungi lewat WhatsApp untuk konfirmasi pesanan klien.")}</span>
+					</label>
+					<div class="flex justify-end border-t pt-3">
+						<button class="app-btn app-btn-primary" type="submit" disabled={waBusy || !waSiap}>
+							{waBusy ? tr('Menyimpan…') : tr('Simpan nomor WhatsApp')}
+						</button>
+					</div>
+				</form>
 			</div>
 
 			{#if partner && !partner.integration_terms_accepted_at}
