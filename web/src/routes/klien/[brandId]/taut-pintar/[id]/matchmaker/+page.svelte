@@ -7,8 +7,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
-		Check, ChevronDown, Clock, Coins, ExternalLink, FileText, Hand, Info,
-		Search, SlidersHorizontal, Sparkles, Target, X, Zap
+		Check, ChevronDown, Coins, ExternalLink, FileText, Hand, Info,
+		Search, SlidersHorizontal, Sparkles, Target, X
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -21,6 +21,7 @@
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { mediaDistribution } from '$lib/media/distribution';
 	import { getCategoryTone } from '$lib/media/category-tone';
+	import { avgPublishHours, formatSla, slaDurationText } from '$lib/media/sla';
 	import PageTitle from '$lib/components/page-title.svelte';
 	// Kelas tabel bersama (port media-intelligence.module.css) — dipakai persis
 	// seperti app lama yang mengimpor modul CSS Katalog Media.
@@ -448,12 +449,18 @@
 		}
 	}
 
-	function getReleaseSpeed(integrationType: string) {
-		const autoTypes = ['wordpress', 'blogger', 'tulisio_api', 'custom_web', 'webhook'];
-		if (integrationType && autoTypes.includes(integrationType))
-			return { cls: 'releaseBadgeSuper', label: 'Super Cepat', sub: '< 3 Jam', isSuper: true };
-		if (integrationType === 'rss') return { cls: 'releaseBadgeFast', label: 'Cepat', sub: '< 24 Jam', isSuper: false };
-		return { cls: 'releaseBadgeStandard', label: 'Standar', sub: '1 - 2 Hari', isSuper: false };
+	// SLA waktu terbit = rata-rata waktu penerbitan NYATA media
+	// (health_breakdown.avg_publish_hours), bukan taksiran dari tipe integrasi.
+	function getSla(m: MediaRow): string {
+		return formatSla(avgPublishHours(m));
+	}
+	function slaTip(m: MediaRow): string {
+		const hours = avgPublishHours(m);
+		if (hours == null) {
+			return tr('Belum ada riwayat penerbitan yang cukup untuk menghitung SLA media ini.');
+		}
+		return tr('SLA ± {waktu} — rata-rata waktu terbit nyata media ini: artikel tayang sekitar {waktu} setelah dikirim.')
+			.replace('{waktu}', slaDurationText(hours));
 	}
 	// DA & AI Trust hanya menampilkan hasil pemeriksaan nyata; jangan menurunkan
 	// angka dari skor kualitas media karena itu bukan hasil pemeriksaan apa pun.
@@ -544,17 +551,16 @@
 							</span>
 						</th>
 					<th class="modernTh">
-						<span class="thWithInfo">{tr('Waktu Rilis')}
-							<Tooltip label={tr('Keterangan estimasi waktu rilis')} maxWidth={260}>
+						<span class="thWithInfo">{tr('Waktu Rilis & SLA')}
+							<Tooltip label={tr('Keterangan SLA waktu terbit')} maxWidth={280}>
 								{#snippet rich()}
 									<span class="tipStack">
-										<strong>{tr('Indikator Waktu Rilis')}</strong>
-										<span><span style="color:#4ade80;font-weight:700;">{tr('Super Cepat:')}</span> &lt; 3 Jam</span>
-										<span><span style="color:#60a5fa;font-weight:700;">{tr('Cepat:')}</span> &lt; 24 Jam</span>
-										<span><span style="color:#d1d5db;font-weight:700;">{tr('Standar:')}</span> 1 - 2 Hari</span>
+										<strong>{tr('SLA Waktu Terbit')}</strong>
+										<span>{tr('Rata-rata waktu terbit NYATA media ini, dihitung dari riwayat publikasinya: dari artikel dikirim sampai tayang. Media yang biasanya terbit 1 jam setelah dikirim akan tampil "SLA ± 1 jam".')}</span>
+										<span>{tr('Tanda — berarti belum ada riwayat penerbitan yang cukup untuk menghitung SLA-nya.')}</span>
 									</span>
 								{/snippet}
-								<button type="button" class="infoDot" aria-label={tr('Keterangan estimasi waktu rilis')} onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+								<button type="button" class="infoDot" aria-label={tr('Keterangan SLA waktu terbit')} onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
 							</Tooltip>
 						</span>
 					</th>
@@ -566,7 +572,7 @@
 				{#each entries as entry (entry.media.id)}
 					{@const m = entry.media}
 					{@const traffic = formatTraffic(m.sw_visits, m.traffic_estimate)}
-					{@const speed = getReleaseSpeed(m.integration_type)}
+					{@const sla = getSla(m)}
 					{@const cats = Array.isArray(m.categories) && m.categories.length > 0 ? m.categories : m.category ? [m.category] : ['Umum']}
 						{@const isSel = selectedIds.has(m.id)}
 						{@const dist = distribution(m)}
@@ -662,12 +668,10 @@
 							</div>
 						</td>
 						<td class="modernTd">
-							<div class="releaseStack">
-								<span class={speed.cls}>
-									{#if speed.isSuper}<Zap size={12} />{:else}<Clock size={12} />{/if}<span>{tr(speed.label)}</span>
-								</span>
-								<span class="releaseTimeSub">{tr(speed.sub)}</span>
-							</div>
+							<!-- SLA = rata-rata waktu terbit nyata media (bukan label taksiran). -->
+							<Tooltip label={slaTip(m)} maxWidth={280}>
+								<span class="slaPill">{sla}</span>
+							</Tooltip>
 						</td>
 						<td class="modernTd"><span class="priceBoldText">Rp {fmtIdr(m.client_price ?? m.price ?? 0)}</span></td>
 						<td class="modernTd" style="text-align:right" onclick={(e) => e.stopPropagation()}>

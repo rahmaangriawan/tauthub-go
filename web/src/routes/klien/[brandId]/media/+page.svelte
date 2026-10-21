@@ -24,6 +24,7 @@
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { mediaDistribution } from '$lib/media/distribution';
 	import { linkPolicyBadge, isPermanentLink } from '$lib/media/link-duration';
+	import { avgPublishHours, formatSla, slaBucket, slaDurationText } from '$lib/media/sla';
 	import { seededShuffle, randomShuffleSeed } from '$lib/media/shuffle';
 	import { apiRequest, ensureValidSession, readApiError, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
@@ -253,21 +254,26 @@
 		return { text, source: 'Via SimilarWeb' };
 	}
 
-	const AUTO_TYPES = ['wordpress', 'blogger', 'tulisio_api', 'custom_web', 'webhook'];
-	function getReleaseSpeed(integrationType: string): { cls: string; label: string; sub: string; isSuper: boolean } {
-		if (AUTO_TYPES.includes(integrationType)) {
-			return { cls: 'releaseBadgeSuper', label: 'Super Cepat', sub: '< 3 Jam', isSuper: true };
-		}
-		if (integrationType === 'rss') {
-			return { cls: 'releaseBadgeFast', label: 'Cepat', sub: '< 24 Jam', isSuper: false };
-		}
-		return { cls: 'releaseBadgeStandard', label: 'Standar', sub: '1 - 2 Hari', isSuper: false };
+	// SLA waktu terbit = rata-rata waktu penerbitan NYATA media
+	// (health_breakdown.avg_publish_hours), bukan taksiran dari tipe integrasi.
+	// Media yang biasanya terbit 1 jam setelah artikel dikirim tampil "SLA ± 1 jam".
+	function getSla(m: Media): string {
+		return formatSla(avgPublishHours(m));
 	}
 
-	// Tooltip badge kecepatan: ambangnya sama dengan legenda di header kolom
-	// (Super Cepat < 3 jam, Cepat < 24 jam, Standar 1-2 hari).
-	function releaseTip(sub: string): string {
-		return tr('Estimasi terbit {waktu} setelah artikel dikirim.').replace('{waktu}', sub);
+	function slaTip(m: Media): string {
+		const hours = avgPublishHours(m);
+		if (hours == null) {
+			return tr('Belum ada riwayat penerbitan yang cukup untuk menghitung SLA media ini.');
+		}
+		return tr('SLA ± {waktu} — rata-rata waktu terbit nyata media ini: artikel tayang sekitar {waktu} setelah dikirim.')
+			.replace('{waktu}', slaDurationText(hours));
+	}
+
+	/** Kunci urut SLA: jam lebih kecil = lebih cepat; tanpa data paling bawah. */
+	function slaSortKey(m: Media): number {
+		const hours = avgPublishHours(m);
+		return hours == null ? -1 : -hours;
 	}
 
 	function getDa(m: Media): string | number {
@@ -785,9 +791,8 @@
 			if (verifiedOnly && !m.domain_verified) return false;
 			if (dewanPersOnly && !m.dewan_pers_verified) return false;
 			if (speedFilter) {
-				const speed = getReleaseSpeed(m.integration_type);
-				const bucket = speed.isSuper ? 'super' : m.integration_type === 'rss' ? 'fast' : 'standard';
-				if (bucket !== speedFilter) return false;
+				// Kelompok SLA dihitung dari rata-rata waktu terbit nyata media.
+				if (slaBucket(avgPublishHours(m)) !== speedFilter) return false;
 			}
 			if (priceFilter) {
 				const price = m.client_price ?? m.price ?? 0;
@@ -819,7 +824,10 @@
 				case 'da': av = num(getDa(a)); bv = num(getDa(b)); break;
 				case 'ai_trust': av = num(getAiTrust(a)); bv = num(getAiTrust(b)); break;
 				case 'ai_cited': av = a.seo_ai_citation ? 1 : 0; bv = b.seo_ai_citation ? 1 : 0; break;
-				case 'speed': av = AUTO_TYPES.includes(a.integration_type) ? 2 : 1; bv = AUTO_TYPES.includes(b.integration_type) ? 2 : 1; break;
+				// SLA: makin kecil jamnya makin cepat. Dibalik agar arah "desc"
+				// (klik pertama) menampilkan yang paling cepat lebih dulu; media
+				// tanpa data ditaruh paling akhir.
+				case 'speed': av = slaSortKey(a); bv = slaSortKey(b); break;
 				case 'price': av = a.client_price ?? a.price ?? 0; bv = b.client_price ?? b.price ?? 0; break;
 				default: av = domainLabel(a).toLowerCase(); bv = domainLabel(b).toLowerCase();
 			}
@@ -874,13 +882,6 @@
 			};
 		})
 	);
-	// Waktu rilis terlama di antara media terpilih — ekspektasi jujur di modal.
-	const slowestRelease = $derived.by(() => {
-		const pick = selectedMedia.map((m) => getReleaseSpeed(m.integration_type));
-		if (pick.some((s) => s.label === 'Standar')) return getReleaseSpeed('manual');
-		if (pick.some((s) => s.label === 'Cepat')) return getReleaseSpeed('rss');
-		return pick[0] ?? null;
-	});
 
 	function toggleSort(key: typeof sortKey) {
 		if (sortKey === key) {
@@ -924,17 +925,16 @@
 	function exportProposal() {
 		// AI Trust & GEO (AI Cited) digabung jadi satu kolom: skor trust dulu,
 		// lalu status GEO di belakangnya dengan tanda "|".
-		const headers = ['Nama Media', 'Website', 'Kategori', 'Kecepatan', 'DA', 'AI Trust / GEO', tr('Harga IDR')];
+		const headers = ['Nama Media', 'Website', 'Kategori', 'SLA Terbit', 'DA', 'AI Trust / GEO', tr('Harga IDR')];
 		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 		// Pemisah ";" dipakai karena Excel/Sheets ber-locale Indonesia (dan Eropa)
 		// memakai titik-koma sebagai list separator; CSV berkoma tampil menyatu
 		// jadi satu kolom di aplikasi sheet tersebut.
 		const lines = selectedMedia.map((m) => {
-			const speed = getReleaseSpeed(m.integration_type);
 			const price = m.client_price ?? m.price ?? 0;
 			return [
 				esc(m.name), esc(m.website_url ?? ''), esc(m.category ?? 'Umum'),
-				esc(`${speed.label} (${speed.sub})`), esc(getDa(m)),
+				esc(getSla(m)), esc(getDa(m)),
 				// Satu sel gabungan: skor trust + status GEO (AI Cited). Tiga keadaan
 				// GEO: Ya / Tidak / belum bisa ditentukan (Google tidak menampilkan
 				// AI Overview) — jangan ditulis "Tidak" untuk yang belum dinilai.
@@ -1210,7 +1210,7 @@
 			{@const qi = quickInfo}
 			{@const qtraffic = formatTraffic(qi.sw_visits, qi.traffic_estimate)}
 			{@const qcats = qi.categories && qi.categories.length ? qi.categories : qi.category ? [qi.category] : ['Umum']}
-			{@const qspeed = getReleaseSpeed(qi.integration_type)}
+			{@const qsla = getSla(qi)}
 			<div class="quickInfoPanel">
 				<div class="quickInfoRow">
 					<span>{tr('Kategori')}</span>
@@ -1222,7 +1222,7 @@
 				<div class="quickInfoRow"><span>DA</span><strong>{qi.da ?? '—'}</strong></div>
 				<div class="quickInfoRow"><span>{tr('AI Trust')}</span><strong>{qi.ai_trust_score ?? '—'}</strong></div>
 				<div class="quickInfoRow"><span>GEO</span><strong>{qi.ai_cited === true ? tr('Dikutip') : qi.ai_cited === false ? tr('Belum dikutip') : '—'}</strong></div>
-				<div class="quickInfoRow"><span>{tr('Waktu Rilis')}</span><strong>{qspeed?.label ?? '—'}</strong></div>
+				<div class="quickInfoRow"><span>{tr('Waktu Rilis & SLA')}</span><strong>{qsla}</strong></div>
 				<div class="quickInfoRow">
 					<span>{tr('Bookmark')}</span>
 					<button
@@ -1266,9 +1266,9 @@
 
 {#snippet advFields()}
 				<div class="advFilterSection">
-					<span class="advFilterSectionLabel">Kecepatan Rilis</span>
+					<span class="advFilterSectionLabel">SLA Waktu Terbit</span>
 					<div class="advFilterChipsGroup">
-						{#each [{ v: 'super', l: 'Super Cepat' }, { v: 'fast', l: 'Cepat' }, { v: 'standard', l: 'Standar' }] as opt (opt.v)}
+						{#each [{ v: 'super', l: '< 3 jam' }, { v: 'fast', l: '≤ 24 jam' }, { v: 'standard', l: '> 24 jam' }] as opt (opt.v)}
 							<button
 								class="advFilterChip {speedFilter === opt.v ? 'advFilterChipActive' : ''}"
 								type="button"
@@ -1481,21 +1481,20 @@
 									</span>{sortIndicator('ai_trust')}
 								</th>
 								<th class="modernTh modernThSortable" onclick={() => toggleSort('speed')}>
-								<span class="thWithInfo">{tr('Waktu Rilis')}
+								<span class="thWithInfo">{tr('Waktu Rilis & SLA')}
 									<Tooltip.Root>
 										<Tooltip.Trigger>
 											{#snippet child({ props })}
-												<button {...props} type="button" class="infoDot" aria-label="Keterangan estimasi waktu rilis" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
+												<button {...props} type="button" class="infoDot" aria-label="Keterangan SLA waktu terbit" onclick={(e) => e.stopPropagation()}><Info size={14} /></button>
 											{/snippet}
 										</Tooltip.Trigger>
 										<Tooltip.Portal>
 											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
 											<Tooltip.Arrow class="uiTipArrow" />
 											<span class="tipStack">
-												<strong>Indikator Waktu Rilis</strong>
-												<span><span style="color:#4ade80;font-weight:700;">Super Cepat:</span> &lt; 3 Jam</span>
-												<span><span style="color:#60a5fa;font-weight:700;">Cepat:</span> &lt; 24 Jam</span>
-												<span><span style="color:#d1d5db;font-weight:700;">Standar:</span> 1 - 2 Hari</span>
+												<strong>SLA Waktu Terbit</strong>
+												<span>{tr('Rata-rata waktu terbit NYATA media ini, dihitung dari riwayat publikasinya: dari artikel dikirim sampai tayang. Media yang biasanya terbit 1 jam setelah dikirim akan tampil "SLA ± 1 jam".')}</span>
+												<span>{tr('Tanda — berarti belum ada riwayat penerbitan yang cukup untuk menghitung SLA-nya.')}</span>
 											</span>
 										</Tooltip.Content>
 										</Tooltip.Portal>
@@ -1510,7 +1509,7 @@
 					<tbody>
 						{#each visible as m (m.id)}
 							{@const traffic = formatTraffic(m.sw_visits, m.traffic_estimate)}
-							{@const speed = getReleaseSpeed(m.integration_type)}
+							{@const sla = getSla(m)}
 							{@const cats = m.categories && m.categories.length ? m.categories : m.category ? [m.category] : ['Umum']}
 							{@const dist = distribution(m)}
 							<tr
@@ -1689,24 +1688,20 @@
 								</td>
 
 								<td class="modernTd">
-									<div class="releaseStack">
-										<Tooltip.Root>
-									<Tooltip.Trigger>
-										{#snippet child({ props })}
-											<span {...props} class={speed.cls}>
-											{#if speed.isSuper}<Zap size={12} />{:else}<Clock size={12} />{/if}
-											<span>{speed.label}</span>
-											</span>
-										{/snippet}
-									</Tooltip.Trigger>
-									<Tooltip.Portal>
-										<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
-										<Tooltip.Arrow class="uiTipArrow" />
-										{releaseTip(speed.sub)}
-									</Tooltip.Content>
-									</Tooltip.Portal>
-								</Tooltip.Root>
-									</div>
+									<!-- SLA = rata-rata waktu terbit nyata media (bukan label taksiran). -->
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<span {...props} class="slaPill">{sla}</span>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Portal>
+											<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+											<Tooltip.Arrow class="uiTipArrow" />
+											{slaTip(m)}
+										</Tooltip.Content>
+										</Tooltip.Portal>
+									</Tooltip.Root>
 								</td>
 
 								<td class="modernTd"><span class="priceBoldText">Rp {fmt(m.client_price ?? m.price ?? 0)}</span></td>
