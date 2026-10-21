@@ -86,7 +86,7 @@
 		}
 
 		// Kampanye dari jalur Kilat kembali ke halamannya sendiri — statusnya
-		// 'draft' sama seperti kampanye AI Pintar yang belum diisi, jadi penanda
+		// 'draft' sama seperti kampanye lain yang belum diisi, jadi penanda
 		// entry_mode yang membedakan (migrasi 169).
 		if (campaign?.entry_mode === 'kilat') {
 			await goto(`${base}/kilat`, { replaceState: true });
