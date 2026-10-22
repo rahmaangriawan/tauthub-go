@@ -4591,6 +4591,9 @@ export const PHRASE_EN: Record<string, string> = {
 	  "Media ini tidak mengizinkan embed.": "This media does not allow embeds.",
 	  "Ganti tautan": "Change link",
 	  "Hapus embed": "Remove embed",
+	  "Mitra menerima": "Partners receive",
+	  "dari harga pengajuan.": "of the submitted price.",
+	  "Bagian Tauthub": "Tauthub share",
 	};
 
 /**

@@ -471,8 +471,14 @@
 	let openPriceID = $state<string | null>(null);
 	// Potongan platform 25% (mitra menerima 75% dari harga pengajuan) — parity
 	// brandflow pePlatformCutRate = 0.25 yang berlaku untuk earning baru.
-	const netPrice = (v: number) => Math.max(Math.round((Number(v) || 0) * 0.75), 0);
+	const PLATFORM_CUT_RATE = 0.25;
+	const PARTNER_SHARE_PCT = Math.round((1 - PLATFORM_CUT_RATE) * 100);
+	const PLATFORM_CUT_PCT = Math.round(PLATFORM_CUT_RATE * 100);
+	const netPrice = (v: number) => Math.max(Math.round((Number(v) || 0) * (1 - PLATFORM_CUT_RATE)), 0);
 	const priceCut = (v: number) => Math.max((Number(v) || 0) - netPrice(v), 0);
+	const formPriceNumber = $derived(Math.max(Number(form.price) || 0, 0));
+	const formPartnerIncome = $derived(netPrice(formPriceNumber));
+	const formPlatformCut = $derived(priceCut(formPriceNumber));
 
 	/** Ringkasan status verifikasi satu media — tooltip wrapper sel tabel. */
 	function verifHint(m: Media) {
@@ -2544,13 +2550,16 @@
 											<div>
 												<p class="text-xs font-bold text-emerald-950">{tr('Kesepakatan')}</p>
 												<p class="text-xs text-emerald-800 leading-snug mt-0.5">
-													{tr('Mitra mendapatkan 75% dari harga pengajuan per website yang didaftarkan. Tauthub digunakan untuk menetapkan atau menyesuaikan harga jual kepada pelanggan.')}
+													{tr('Mitra menerima')} {PARTNER_SHARE_PCT}% {tr('dari harga pengajuan.')}
 												</p>
 											</div>
 										</div>
-										<div class="text-right shrink-0 sm:pl-3">
+										<div class="text-left sm:text-right shrink-0 sm:pl-3">
 											<p class="text-xl sm:text-2xl font-extrabold text-emerald-600 tabular-nums">
-												{form.price ? `Rp ${Number(form.price).toLocaleString('id-ID')}` : 'Rp 0'}
+												Rp{formPartnerIncome.toLocaleString('id-ID')}
+											</p>
+											<p class="text-[11px] font-medium text-emerald-800/80 mt-0.5 tabular-nums">
+												{tr('Bagian Tauthub')} {PLATFORM_CUT_PCT}% · Rp{formPlatformCut.toLocaleString('id-ID')}
 											</p>
 										</div>
 									</div>
