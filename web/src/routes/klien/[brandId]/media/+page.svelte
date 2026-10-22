@@ -1761,10 +1761,22 @@
 											</Tooltip.Portal>
 										</Tooltip.Root>
 										{#if rating}
-											<span class="ratingPill" title={ratingTip(rating)}>
-												<Star size={11} fill="currentColor" strokeWidth={0} />
-												{rating.avg.toFixed(1)}/5
-											</span>
+											<Tooltip.Root>
+												<Tooltip.Trigger>
+													{#snippet child({ props })}
+														<span {...props} class="ratingPill" aria-label={ratingTip(rating)}>
+															<Star size={11} fill="currentColor" strokeWidth={0} aria-hidden="true" />
+															{rating.avg.toFixed(1)}/5
+														</span>
+													{/snippet}
+												</Tooltip.Trigger>
+												<Tooltip.Portal>
+													<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+														<Tooltip.Arrow class="uiTipArrow" />
+														{ratingTip(rating)}
+													</Tooltip.Content>
+												</Tooltip.Portal>
+											</Tooltip.Root>
 										{/if}
 									</div>
 								</td>
