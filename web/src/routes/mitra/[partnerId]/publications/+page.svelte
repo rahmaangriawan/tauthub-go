@@ -6,7 +6,7 @@
 	// dan rewrite AI (berbayar dari saldo mitra).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { Check, CircleAlert, Eye, ExternalLink, FileText, Image as ImageIcon, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, Search, Send, SlidersHorizontal, Sparkles, Trash2, X } from '@lucide/svelte';
+	import { Building2, Calendar, CalendarClock, Check, CheckCircle2, CircleAlert, Clock, Copy, ExternalLink, Eye, FileText, Globe, Image as ImageIcon, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, RefreshCw, Search, Send, SlidersHorizontal, Smile, Sparkles, Trash2, User, Wallet, X } from '@lucide/svelte';
 	import { Tooltip } from 'bits-ui';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -89,10 +89,20 @@
 	let detailLoading = $state(false);
 	// Koreksi URL inline di kotak "URL Terbit" (parity app lama): input read-only
 	// sampai mitra menekan "Perbarui URL", lalu disimpan + verifikasi diulang.
-	let urlValue = $state('');
-	let urlEditMode = $state(false);
-	let urlSavedNotice = $state('');
-	let urlUpdating = $state(false);
+		let urlValue = $state('');
+		let urlEditMode = $state(false);
+		let urlSavedNotice = $state('');
+		let urlUpdating = $state(false);
+		let copiedKey = $state<string | null>(null);
+
+		function copyText(val: string | null | undefined, key: string) {
+			if (!val) return;
+			navigator.clipboard.writeText(val);
+			copiedKey = key;
+			setTimeout(() => {
+				if (copiedKey === key) copiedKey = null;
+			}, 2000);
+		}
 
 	// Modal-modal terpisah — parity app lama memisahkan tolak, kirim URL cepat,
 	// dan editor draf dari dialog Detail (dialog Detail murni baca + setujui).
@@ -554,14 +564,22 @@
 			const current = selected;
 			await load();
 			// openDetail mereset catatan; set ulang setelah detail dimuat.
-			if (current) await openDetail(current);
-			urlSavedNotice = saved;
-		} finally {
-			urlUpdating = false;
+				if (current) await openDetail(current);
+				urlSavedNotice = saved;
+			} finally {
+				urlUpdating = false;
+			}
 		}
-	}
 
-	async function saveDraft(e: SubmitEvent) {
+		/** Verifikasi ulang URL yang sudah terbit */
+		async function reverifyUrl() {
+			if (!detail) return;
+			const live = effectiveUrl(detail);
+			if (live) urlValue = live;
+			await updatePublishedUrl();
+		}
+
+		async function saveDraft(e: SubmitEvent) {
 		e.preventDefault();
 		if (!draftPub || !draft) return;
 		if (busy) return; // cegah kirim ganda saat request masih diproses
@@ -1410,241 +1428,661 @@
 	</div>
 {/snippet}
 
-{#if selected}
-	<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={closeDetail}>
-		<dialog open class="app-card my-8 w-full max-w-[680px] p-5" aria-label={tr('Detail publikasi')} onclick={(e) => e.stopPropagation()}>
-			<h2 class="text-lg font-semibold">{tr('Detail publikasi')}</h2>
-			<p class="mt-1 text-sm text-muted-foreground">{tr('Informasi lengkap artikel dan riwayat pengiriman ke media Anda.')}</p>
-
-			{#if error}
-				<p class="mt-3 text-sm" style="color: var(--destructive);">{error}</p>
-			{/if}
-
-			{#if detailLoading}
-				<p class="mt-3 text-sm text-muted-foreground">{tr('Memuat detail…')}</p>
-			{:else if detail}
-				{@const pub = detail}
-				{@const vBadge = verificationBadge(detail.verification)}
-				{@const sBadge = sentimentBadge(detail.sentiment_analysis)}
-				{@const mBadge = messageBadge(detail.message_analysis)}
-				{@const liveUrl = effectiveUrl(detail)}
-				<div class="mt-3 flex flex-col gap-5">
-					<!-- A. Informasi Publikasi -->
-					<section>
-						<p class="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-muted-foreground">{tr('Informasi Publikasi')}</p>
-						<div class="flex items-start justify-between gap-3">
-							<div class="min-w-0">
-								<p class="text-base font-bold">{detail.document_title ?? tr('Artikel')}</p>
-								<p class="text-sm text-muted-foreground">
-									{detail.client_name ?? tr('Klien')} · {detail.media_name ?? tr('Media')}
-								</p>
-							</div>
-							{@render toneBadge(detailStatusLabel[detail.status] ?? detail.status, detailStatusTone[detail.status] ?? 'gray')}
+	{#if selected}
+		<div
+			class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5"
+			style="background-color: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px);"
+			role="presentation"
+			onclick={closeDetail}
+			onkeydown={(e) => { if (e.key === 'Escape') closeDetail(); }}
+		>
+			<dialog
+				open
+				class="app-card my-auto flex max-h-[90vh] w-full max-w-[960px] flex-col overflow-hidden rounded-2xl border border-slate-200/80 p-0 bg-white shadow-2xl"
+				aria-label={tr('Detail publikasi')}
+				onclick={(e) => e.stopPropagation()}
+			>
+				<!-- ── Header tetap ── -->
+				<header class="flex flex-none items-center justify-between border-b border-slate-100 bg-white px-5 py-3.5 sm:px-6 sm:py-4">
+					<div class="flex items-center gap-3 min-w-0">
+						<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+							<FileText size={20} />
 						</div>
-						<div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-							<div>
-								<p class="text-xs text-muted-foreground">{tr('No. Order')}</p>
-								<p class="text-sm font-medium">{detail.order_code ?? '—'}</p>
-							</div>
-							<div>
-								<p class="text-xs text-muted-foreground">{tr('Klien')}</p>
-								<p class="text-sm font-medium">{detail.client_name ?? '—'}</p>
-							</div>
-							<div>
-								<p class="text-xs text-muted-foreground">{tr('Media')}</p>
-								<p class="text-sm font-medium">{detail.media_name ?? '—'}</p>
-							</div>
-							<div>
-								<p class="text-xs text-muted-foreground">{tr('Dibuat')}</p>
-								<p class="text-sm font-medium">{dt(detail.created_at)}</p>
-							</div>
-							<div>
-								<p class="text-xs text-muted-foreground">{tr('Terbit')}</p>
-								<p class="text-sm font-medium">{detail.published_at ? dt(detail.published_at) : '—'}</p>
-							</div>
-							{#if detail.scheduled_at}
-								<div>
-									<p class="text-xs text-muted-foreground">{tr('Terjadwal')}</p>
-									<p class="text-sm font-medium">{dt(detail.scheduled_at)}</p>
-								</div>
-							{/if}
-							{#if detail.media_website_url}
-								<div>
-									<p class="text-xs text-muted-foreground">{tr('Situs media')}</p>
-									<p class="break-all text-sm">{detail.media_website_url}</p>
-								</div>
-							{/if}
-							<div>
-								<p class="text-xs text-muted-foreground">{tr('Integrasi')}</p>
-								<p class="text-sm font-medium">{detail.media_integration_type ?? '—'}</p>
-							</div>
+						<div class="min-w-0">
+							<h2 class="text-base sm:text-lg font-bold text-slate-900 truncate tracking-tight">{tr('Detail publikasi')}</h2>
+							<p class="text-xs text-muted-foreground truncate">{tr('Informasi lengkap artikel dan riwayat pengiriman ke media Anda.')}</p>
 						</div>
-					</section>
+					</div>
+					<button
+						type="button"
+						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+						onclick={closeDetail}
+						aria-label={tr('Tutup')}
+					>
+						<X size={18} />
+					</button>
+				</header>
 
-					<!-- B. Pendapatan mitra dari harga pengajuan. -->
-					<section>
-						<p class="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-muted-foreground">{tr('Pendapatan')}</p>
-						<div class="rounded-[10px] p-3" style="background: var(--success-soft); border: 1px solid color-mix(in srgb, var(--success) 22%, transparent);">
-							<div class="flex items-center justify-between gap-3">
-								<div>
-									<p class="text-sm font-bold">{tr('Pendapatan Anda')}</p>
-									<p class="text-xs text-muted-foreground">{tr('Harga pengajuan')} {rp(incomeGross(detail))} · {tr('potongan platform')} {cutPercentLabel(detail) ?? 0}% ({rp(incomeCut(detail))})</p>
-								</div>
-								<p class="text-xl font-semibold tabular-nums" style="color: var(--success);">{rp(detail.partner_amount)}</p>
-							</div>
+				<!-- ── Area Konten Scrollable ── -->
+				<div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5 bg-slate-50/40">
+					{#if error}
+						<div class="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-700">
+							{error}
 						</div>
-					</section>
-
-					<!-- C. Preview / Content -->
-					{#if detail.document}
-						<section>
-							<p class="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-muted-foreground">{tr('Preview / Content')}</p>
-							<p class="text-xs text-muted-foreground">{tr('Slug')}</p>
-							<p class="mt-0.5 break-all rounded-md px-2 py-1 font-mono text-xs" style="background: var(--muted);">{detail.document.slug ?? '—'}</p>
-							{#if detail.document.meta_description}
-								<p class="mt-1 text-sm text-muted-foreground">{detail.document.meta_description}</p>
-							{/if}
-						</section>
 					{/if}
 
-					<!-- D. URL Terbit + verifikasi (hanya setelah artikel terbit). -->
-					{#if detail.status === 'published'}
-						<section class="rounded-[10px] border p-3" style="border-color: var(--border); background: var(--card);">
-							<div class="mb-2 flex flex-wrap items-center justify-between gap-3">
-								<p class="text-xs font-bold uppercase tracking-[0.4px] text-muted-foreground">{tr('URL Terbit')}</p>
-								{#if vBadge}{@render toneBadge(vBadge.label, vBadge.tone)}{/if}
-							</div>
-							{#if sBadge || mBadge}
-								<div class="mb-2 flex flex-wrap gap-1">
-									{#if sBadge}{@render toneBadge(sBadge.label, sBadge.tone)}{/if}
-									{#if mBadge}{@render toneBadge(mBadge.label, mBadge.tone)}{/if}
-								</div>
-							{/if}
-							{#if liveUrl}
-								<p class="mb-2 text-sm">
-									<a href={liveUrl} target="_blank" rel="noreferrer" class="break-all" style="color: var(--primary);">{liveUrl}</a>
-								</p>
-							{/if}
-							{#if detail.verification?.error_message}
-								<p class="mb-2 text-xs" style="color: var(--warning);">{verificationHint(detail.verification.error_message)}</p>
-							{/if}
-							{#if urlSavedNotice}
-								<p class="mb-2 text-xs" style="color: var(--success);">{urlSavedNotice}</p>
-							{/if}
-							<div class="flex items-center gap-2">
-								<input
-									type="url"
-									class="app-input w-full flex-1"
-									placeholder={tr('https://situs-mitra.example/artikel/…')}
-									readonly={!urlEditMode}
-									disabled={!urlEditMode}
-									bind:value={urlValue}
-								/>
-								{#if urlEditMode}
-									<button class="app-btn app-btn-primary" disabled={urlUpdating || !urlValue.trim()} onclick={() => void updatePublishedUrl()}>
-										{urlUpdating ? tr('Menyimpan…') : tr('Simpan URL')}
-									</button>
-								{:else}
-									<button class="app-btn app-btn-soft" disabled={urlUpdating} title={tr('Perbarui URL & verifikasi ulang')} onclick={() => (urlEditMode = true)}>{tr('Perbarui URL')}</button>
+					{#if detailLoading}
+						<div class="flex flex-col items-center justify-center py-12 text-slate-400">
+							<LoaderCircle size={28} class="animate-spin text-primary" />
+							<p class="mt-2 text-xs font-medium text-muted-foreground">{tr('Memuat detail…')}</p>
+						</div>
+					{:else if detail}
+						{@const pub = detail}
+						{@const vBadge = verificationBadge(detail.verification)}
+						{@const sBadge = sentimentBadge(detail.sentiment_analysis)}
+						{@const mBadge = messageBadge(detail.message_analysis)}
+						{@const liveUrl = effectiveUrl(detail)}
+
+						<!-- 1. Section Informasi Publikasi (Top banner card) -->
+						<section class="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm">
+							<div class="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
+								{#if detail.thumbnail_url ?? detail.featured_image_url}
+									<img
+										src={detail.thumbnail_url ?? detail.featured_image_url}
+										alt=""
+										class="h-24 w-36 sm:h-28 sm:w-44 shrink-0 rounded-xl object-cover border border-slate-200/60 shadow-sm"
+										loading="lazy"
+									/>
 								{/if}
-							</div>
-							<p class="mt-2 text-xs text-muted-foreground">{tr('URL otomatis terisi dari WordPress. Untuk mengganti, klik Perbarui URL lalu simpan — Tauthub akan memverifikasi ulang otomatis.')}</p>
-						</section>
-					{/if}
-
-					{#if detail.notes}
-						<section>
-							<p class="text-xs text-muted-foreground">{tr('Catatan klien')}</p>
-							<p class="text-sm">{detail.notes}</p>
-						</section>
-					{/if}
-
-					{#if detail.rejection_reason}
-						<p class="rounded-[10px] px-3 py-2 text-sm" style="background: #fdecee; color: var(--destructive);">{tr('Ditolak:')} {detail.rejection_reason}</p>
-					{/if}
-
-					<!-- Revisi dari klien: klien mengubah artikel & memintanya dikirim ulang. -->
-					{#if detail.status === 'revision'}
-						<section class="rounded-xl p-3" style="background: var(--warning-soft);">
-							<p class="text-xs font-bold uppercase tracking-[0.4px]" style="color: var(--warning);">{tr('Permintaan Revisi Klien')}</p>
-							{#if (detail.revision_comments ?? []).length === 0}
-								<p class="mt-1 text-sm text-muted-foreground">{tr('Klien meminta revisi tanpa catatan tambahan.')}</p>
-							{:else}
-								{#each detail.revision_comments ?? [] as c (c.id)}
-									<div class="mt-2 border-t pt-2 first:mt-1 first:border-0 first:pt-0" style="border-color: var(--border);">
-										<p class="text-sm">{c.body}</p>
-										<p class="mt-0.5 text-xs text-muted-foreground">{dt(c.created_at)}</p>
-										{#if c.attachment_url}
-											<a href={c.attachment_url} target="_blank" rel="noreferrer" class="mt-1 inline-flex items-center gap-1 text-xs underline" style="color: var(--primary);">
-												<Paperclip size={12} />{c.attachment_name ?? tr('Lampiran')}
-											</a>
-										{/if}
-									</div>
-								{/each}
-							{/if}
-							<p class="mt-2 text-xs text-muted-foreground">
-								{tr('Terima untuk mengirim ulang artikel revisi ke media Anda, atau tolak dengan alasan bila masih belum sesuai.')}
-								{#if (detail.revision_reject_count ?? 0) > 0}
-									{tr('Sudah ditolak')} {detail.revision_reject_count}/{detail.revision_reject_limit ?? 3} {tr('kali.')}
-								{/if}
-							</p>
-						</section>
-					{/if}
-
-					<!-- E. Riwayat pengiriman -->
-					<section>
-						<p class="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-muted-foreground">{tr('Riwayat')}</p>
-						{#if (detail.attempts ?? []).length === 0}
-							<p class="text-sm text-muted-foreground">{tr('Belum ada percobaan pengiriman tercatat.')}</p>
-						{:else}
-							{#each detail.attempts as a (a.attempt_number)}
-								<div class="flex items-start justify-between gap-3 border-b py-2" style="border-color: var(--border);">
-									<div class="min-w-0">
-										<p class="text-sm font-medium">#{a.attempt_number} {attemptLabels[a.status] ?? a.status}</p>
-										{#if a.error_message}
-											<p class="mt-1 text-xs" style="color: var(--destructive);">{a.error_message}</p>
-										{/if}
-									</div>
-									<p class="flex-none text-xs text-muted-foreground">{dt(a.completed_at ?? a.started_at)}</p>
+								<div class="min-w-0 flex-1">
+									<p class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+										{tr('Informasi Publikasi')}
+									</p>
+									<h3 class="text-base sm:text-lg font-bold text-slate-900 leading-snug break-words">
+										{detail.document_title ?? tr('Artikel')}
+									</h3>
+									<p class="text-xs sm:text-sm text-muted-foreground mt-1.5 flex items-center gap-1.5 flex-wrap">
+										<span class="font-medium text-slate-700">{detail.client_name ?? tr('Klien')}</span>
+										<span class="text-slate-300">•</span>
+										<span class="font-medium text-slate-700">{detail.media_name ?? tr('Media')}</span>
+									</p>
 								</div>
-							{/each}
+
+								<div class="flex sm:flex-col items-end justify-between sm:justify-start gap-2 shrink-0 w-full sm:w-auto">
+									{#if detail.status === 'published'}
+										<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+											<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+											{detailStatusLabel[detail.status] ?? detail.status}
+										</span>
+										<div class="rounded-lg bg-emerald-50/70 border border-emerald-100/80 px-2.5 py-1.5 text-center text-[11px] font-medium text-emerald-800 leading-tight">
+											{tr('Artikel telah dipublikasikan di media Anda.')}
+										</div>
+									{:else if detail.status === 'waiting_partner'}
+										<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/70">
+											<span class="h-2 w-2 rounded-full bg-amber-500"></span>
+											{detailStatusLabel[detail.status] ?? detail.status}
+										</span>
+										<div class="rounded-lg bg-amber-50/70 border border-amber-100/80 px-2.5 py-1.5 text-center text-[11px] font-medium text-amber-800 leading-tight">
+											{tr('Menunggu konfirmasi persetujuan dari Anda.')}
+										</div>
+									{:else if detail.status === 'revision'}
+										<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/70">
+											<span class="h-2 w-2 rounded-full bg-amber-500"></span>
+											{detailStatusLabel[detail.status] ?? detail.status}
+										</span>
+										<div class="rounded-lg bg-amber-50/70 border border-amber-100/80 px-2.5 py-1.5 text-center text-[11px] font-medium text-amber-800 leading-tight">
+											{tr('Klien mengirimkan revisi untuk artikel ini.')}
+										</div>
+									{:else if detail.status === 'partner_rejected' || detail.status === 'failed'}
+										<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/70">
+											<span class="h-2 w-2 rounded-full bg-rose-500"></span>
+											{detailStatusLabel[detail.status] ?? detail.status}
+										</span>
+									{:else}
+										<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+											<span class="h-2 w-2 rounded-full bg-slate-400"></span>
+											{detailStatusLabel[detail.status] ?? detail.status}
+										</span>
+									{/if}
+								</div>
+							</div>
+						</section>
+
+						<!-- 2. Section Informasi Transaksi dan Media (2 Kolom dengan Ikon Bulat) -->
+						<section class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8">
+								<!-- Kolom Kiri -->
+								<div class="space-y-4">
+									<!-- 1. No. Order -->
+									<div class="flex items-start gap-3">
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+											<FileText size={17} />
+										</div>
+										<div class="min-w-0 flex-1">
+											<p class="text-xs text-muted-foreground">{tr('No. Order')}</p>
+											<div class="flex items-center gap-1.5 mt-0.5">
+												<p class="text-sm font-semibold text-slate-800 font-mono">{detail.order_code ?? '—'}</p>
+													{#if detail.order_code}
+														<button
+															type="button"
+															class="text-slate-400 hover:text-slate-700 transition-colors p-0.5 rounded"
+															title={copiedKey === 'order' ? tr('Tersalin!') : tr('Salin No. Order')}
+															onclick={() => copyText(pub.order_code, 'order')}
+														>
+															{#if copiedKey === 'order'}
+																<Check size={13} class="text-emerald-600" />
+															{:else}
+																<Copy size={13} />
+															{/if}
+														</button>
+													{/if}
+											</div>
+										</div>
+									</div>
+
+									<!-- 2. Media -->
+									<div class="flex items-start gap-3">
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+											<Building2 size={17} />
+										</div>
+										<div class="min-w-0 flex-1">
+											<p class="text-xs text-muted-foreground">{tr('Media')}</p>
+											<p class="text-sm font-semibold text-slate-800 mt-0.5 truncate">{detail.media_name ?? '—'}</p>
+										</div>
+									</div>
+
+									<!-- 3. Situs media -->
+									<div class="flex items-start gap-3">
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+											<Globe size={17} />
+										</div>
+										<div class="min-w-0 flex-1">
+											<p class="text-xs text-muted-foreground">{tr('Situs media')}</p>
+											{#if detail.media_website_url}
+												<a
+													href={detail.media_website_url}
+													target="_blank"
+													rel="noreferrer"
+													class="text-sm font-semibold text-blue-600 hover:underline mt-0.5 inline-flex items-center gap-1 truncate max-w-full"
+												>
+													<span class="truncate">{detail.media_website_url}</span>
+													<ExternalLink size={12} class="shrink-0" />
+												</a>
+											{:else}
+												<p class="text-sm font-semibold text-slate-800 mt-0.5">—</p>
+											{/if}
+										</div>
+									</div>
+
+									<!-- 4. Status -->
+									<div class="flex items-start gap-3">
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+											<CheckCircle2 size={17} />
+										</div>
+										<div class="min-w-0 flex-1">
+											<p class="text-xs text-muted-foreground">{tr('Status')}</p>
+											<div class="mt-0.5">
+												<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+													{detailStatusLabel[detail.status] ?? detail.status}
+												</span>
+												<p class="text-xs text-muted-foreground mt-1">
+													{#if detail.published_at}
+														{tr('Dipublikasikan pada')} {dt(detail.published_at)}
+													{:else if detail.status === 'waiting_partner'}
+														{tr('Menunggu konfirmasi persetujuan')}
+													{:else}
+														{dt(detail.created_at)}
+													{/if}
+												</p>
+											</div>
+										</div>
+									</div>
+								</div>
+
+								<!-- Kolom Kanan -->
+								<div class="space-y-4">
+									<!-- 1. Klien -->
+									<div class="flex items-start gap-3">
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+											<User size={17} />
+										</div>
+										<div class="min-w-0 flex-1">
+											<p class="text-xs text-muted-foreground">{tr('Klien')}</p>
+											<p class="text-sm font-semibold text-slate-800 mt-0.5 truncate">{detail.client_name ?? '—'}</p>
+										</div>
+									</div>
+
+									<!-- 2. Dibuat -->
+									<div class="flex items-start gap-3">
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+											<Calendar size={17} />
+										</div>
+										<div class="min-w-0 flex-1">
+											<p class="text-xs text-muted-foreground">{tr('Dibuat')}</p>
+											<p class="text-sm font-semibold text-slate-800 mt-0.5">{dt(detail.created_at)}</p>
+										</div>
+									</div>
+
+									<!-- 3. Terjadwal -->
+									<div class="flex items-start gap-3">
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+											<CalendarClock size={17} />
+										</div>
+										<div class="min-w-0 flex-1">
+											<p class="text-xs text-muted-foreground">{tr('Terjadwal')}</p>
+											<p class="text-sm font-semibold text-slate-800 mt-0.5">
+												{detail.scheduled_at ? dt(detail.scheduled_at) : '—'}
+											</p>
+										</div>
+									</div>
+
+									<!-- 4. Integrasi -->
+									<div class="flex items-start gap-3">
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+											<Globe size={17} />
+										</div>
+										<div class="min-w-0 flex-1">
+											<p class="text-xs text-muted-foreground">{tr('Integrasi')}</p>
+											<p class="text-sm font-semibold text-slate-800 mt-0.5 capitalize">
+												{integrationLabel[detail.media_integration_type ?? ''] ?? (detail.media_integration_type ?? '—')}
+											</p>
+										</div>
+									</div>
+								</div>
+							</div>
+						</section>
+
+						<!-- 3. Section Pendapatan (Horizontal Green Card) -->
+						<section class="rounded-2xl border border-emerald-200/90 bg-emerald-50/25 p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+							<div class="flex items-center gap-3">
+								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 border border-emerald-200/50">
+									<Wallet size={20} />
+								</div>
+								<div>
+									<p class="text-sm font-bold text-slate-900">{tr('Pendapatan')}</p>
+									<p class="text-xs text-muted-foreground">{tr('Pendapatan Anda dari publikasi ini.')}</p>
+								</div>
+							</div>
+
+							<div class="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm">
+								<div>
+									<p class="text-[11px] text-muted-foreground">{tr('Harga pengajuan')}</p>
+									<p class="font-semibold text-slate-800 mt-0.5">{rp(incomeGross(detail))}</p>
+								</div>
+								<span class="text-slate-400 font-medium">—</span>
+								<div>
+									<p class="text-[11px] text-muted-foreground">{tr('Potongan platform')}</p>
+									<p class="font-semibold text-slate-800 mt-0.5">{cutPercentLabel(detail) ?? 0}% ({rp(incomeCut(detail))})</p>
+								</div>
+								<span class="text-slate-400 font-medium">=</span>
+								<div class="rounded-xl bg-emerald-100/60 border border-emerald-200 px-3.5 py-1.5 text-left">
+									<p class="text-[10px] font-bold uppercase tracking-wider text-emerald-800">{tr('Pendapatan Anda')}</p>
+									<p class="text-xl sm:text-2xl font-extrabold text-emerald-600 tabular-nums">{rp(detail.partner_amount)}</p>
+								</div>
+							</div>
+						</section>
+
+						<!-- 4. Section Preview / Content -->
+						{#if detail.document}
+							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
+								<div class="flex items-center gap-3">
+									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+										<FileText size={18} />
+									</div>
+									<div>
+										<p class="text-sm font-bold text-slate-900">{tr('Preview / Content')}</p>
+										<p class="text-xs text-muted-foreground">{tr('Lihat judul, slug, dan cuplikan konten artikel.')}</p>
+									</div>
+								</div>
+
+								<div class="space-y-3 pt-1">
+										{#if detail.document.slug}
+											<div>
+												<p class="text-xs font-medium text-muted-foreground mb-1">{tr('Slug')}</p>
+												<div class="rounded-xl bg-slate-50 border border-slate-200/80 px-3.5 py-2.5 flex items-center justify-between gap-2">
+													<span class="font-mono text-xs text-slate-700 truncate select-all">{detail.document.slug}</span>
+													<button
+														type="button"
+														class="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded shrink-0"
+														title={copiedKey === 'slug' ? tr('Tersalin!') : tr('Salin Slug')}
+														onclick={() => copyText(pub.document?.slug, 'slug')}
+													>
+														{#if copiedKey === 'slug'}
+															<Check size={14} class="text-emerald-600" />
+														{:else}
+															<Copy size={14} />
+														{/if}
+													</button>
+												</div>
+											</div>
+										{/if}
+
+										{#if detail.document.meta_description}
+											<div>
+												<p class="text-xs font-medium text-muted-foreground mb-1">{tr('Cuplikan konten')}</p>
+												<p class="text-xs sm:text-sm text-slate-600 leading-relaxed bg-slate-50/60 rounded-xl p-3 border border-slate-100">
+													{detail.document.meta_description}
+												</p>
+											</div>
+										{/if}
+
+										<div>
+											<button
+												type="button"
+												class="app-btn app-btn-soft !text-xs !py-1.5 !px-3 inline-flex items-center gap-1.5 font-medium"
+												onclick={() => void previewDraft(pub)}
+											>
+												<ExternalLink size={13} />
+												{tr('Lihat artikel lengkap')}
+											</button>
+										</div>
+								</div>
+							</section>
 						{/if}
-					</section>
 
-					{#if detail.status === 'revision'}
-						<div class="flex flex-wrap justify-end gap-2">
-							{#if (detail.revision_reject_count ?? 0) < (detail.revision_reject_limit ?? 3)}
+						<!-- 5. Section URL Terbit & Verifikasi -->
+						{#if detail.status === 'published' || liveUrl}
+							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
+								<div class="flex flex-wrap items-center justify-between gap-3">
+									<div class="flex items-center gap-3">
+										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+											<Link2 size={18} />
+										</div>
+										<div>
+											<p class="text-sm font-bold text-slate-900">{tr('URL Terbit')}</p>
+											<p class="text-xs text-muted-foreground">{tr('Link artikel yang sudah terpublish di media.')}</p>
+										</div>
+									</div>
+									<div class="flex flex-wrap items-center gap-2">
+										{#if vBadge}
+											<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+												<CheckCircle2 size={13} class="text-emerald-600" />
+												{vBadge.label}
+											</span>
+										{/if}
+										{#if sBadge}
+											<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+												<Smile size={13} class="text-emerald-600" />
+												{sBadge.label}
+											</span>
+										{/if}
+										{#if mBadge}
+											<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+												{mBadge.label}
+											</span>
+										{/if}
+									</div>
+								</div>
+
+								{#if liveUrl}
+									<p class="text-xs sm:text-sm">
+										<a href={liveUrl} target="_blank" rel="noreferrer" class="font-medium text-blue-600 hover:underline break-all inline-flex items-center gap-1">
+											<span>{liveUrl}</span>
+											<ExternalLink size={13} class="shrink-0" />
+										</a>
+									</p>
+								{/if}
+
+								<!-- Input bar + Tombol Buka URL / Edit URL -->
+								<div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+									<div class="relative flex-1 min-w-[240px]">
+										<input
+											type="url"
+											class="app-input w-full pr-9 text-xs sm:text-sm font-mono"
+											placeholder={tr('https://situs-mitra.example/artikel/…')}
+											readonly={!urlEditMode}
+											disabled={!urlEditMode}
+											bind:value={urlValue}
+										/>
+										{#if urlValue}
+											<button
+												type="button"
+												class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors p-1 rounded"
+												title={copiedKey === 'url' ? tr('Tersalin!') : tr('Salin URL')}
+												onclick={() => copyText(urlValue, 'url')}
+											>
+												{#if copiedKey === 'url'}
+													<Check size={14} class="text-emerald-600" />
+												{:else}
+													<Copy size={14} />
+												{/if}
+											</button>
+										{/if}
+									</div>
+
+									{#if urlEditMode}
+										<button
+											type="button"
+											class="app-btn app-btn-primary !text-xs !py-2 !px-4 shrink-0 inline-flex items-center gap-1.5 font-semibold"
+											disabled={urlUpdating || !urlValue.trim()}
+											onclick={() => void updatePublishedUrl()}
+										>
+											{urlUpdating ? tr('Menyimpan…') : tr('Simpan URL')}
+										</button>
+										<button
+											type="button"
+											class="app-btn app-btn-soft !text-xs !py-2 !px-3 shrink-0"
+											disabled={urlUpdating}
+											onclick={() => { urlEditMode = false; urlValue = liveUrl ?? ''; }}
+										>
+											{tr('Batal')}
+										</button>
+									{:else}
+										{#if liveUrl}
+											<button
+												type="button"
+												class="app-btn app-btn-primary !text-xs !py-2 !px-4 shrink-0 inline-flex items-center gap-1.5 font-semibold"
+												onclick={() => window.open(liveUrl, '_blank', 'noopener')}
+											>
+												<ExternalLink size={13} />
+												{tr('Buka URL')}
+											</button>
+										{/if}
+										<button
+											type="button"
+											class="app-btn app-btn-soft !text-xs !py-2 !px-3 shrink-0 font-medium"
+											disabled={urlUpdating}
+											title={tr('Perbarui URL & verifikasi ulang')}
+											onclick={() => (urlEditMode = true)}
+										>
+											{tr('Perbarui URL')}
+										</button>
+									{/if}
+								</div>
+
+								{#if urlSavedNotice}
+									<p class="text-xs font-medium text-emerald-600">{urlSavedNotice}</p>
+								{/if}
+								{#if detail.verification?.error_message}
+									<p class="text-xs font-medium text-amber-600">{verificationHint(detail.verification.error_message)}</p>
+								{/if}
+
+								<!-- Box status verifikasi URL -->
+								<div class="rounded-xl border border-emerald-200/90 bg-emerald-50/50 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+									<div class="flex items-start gap-3">
+										<CheckCircle2 size={20} class="text-emerald-600 shrink-0 mt-0.5" />
+										<div>
+											<p class="text-xs sm:text-sm font-bold text-emerald-950">{tr('Verifikasi URL')}</p>
+											<p class="text-xs text-emerald-800 leading-snug mt-0.5">
+												{tr('URL ini telah diverifikasi dan memenuhi kriteria untuk berpotensi tampil di AI Overview.')}
+											</p>
+										</div>
+									</div>
+										<button
+											type="button"
+											class="app-btn app-btn-soft !border-emerald-200 !bg-white hover:!bg-emerald-50 !text-emerald-800 !text-xs !py-1.5 !px-3 shrink-0 inline-flex items-center gap-1.5 font-semibold self-end sm:self-center"
+											disabled={urlUpdating}
+											onclick={() => void reverifyUrl()}
+										>
+											<RefreshCw size={13} class={urlUpdating ? 'animate-spin' : ''} />
+											{urlUpdating ? tr('Memeriksa…') : tr('Cek Ulang')}
+										</button>
+								</div>
+							</section>
+						{/if}
+
+						{#if detail.notes}
+							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+								<p class="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">{tr('Catatan klien')}</p>
+								<p class="text-sm text-slate-800 leading-relaxed bg-slate-50/60 p-3 rounded-xl border border-slate-100">{detail.notes}</p>
+							</section>
+						{/if}
+
+						{#if detail.rejection_reason}
+							<div class="rounded-xl border border-rose-200 bg-rose-50/70 p-3.5 text-xs text-rose-700">
+								<span class="font-bold">{tr('Ditolak:')}</span> {detail.rejection_reason}
+							</div>
+						{/if}
+
+						<!-- Revisi dari klien: klien mengubah artikel & memintanya dikirim ulang. -->
+						{#if detail.status === 'revision'}
+							<section class="rounded-2xl border border-amber-200/80 bg-amber-50/30 p-5 shadow-sm space-y-3">
+								<p class="text-xs font-bold uppercase tracking-wider text-amber-800">{tr('Permintaan Revisi Klien')}</p>
+								{#if (detail.revision_comments ?? []).length === 0}
+									<p class="text-sm text-muted-foreground">{tr('Klien meminta revisi tanpa catatan tambahan.')}</p>
+								{:else}
+									{#each detail.revision_comments ?? [] as c (c.id)}
+										<div class="border-t border-amber-100 pt-2.5 first:border-0 first:pt-0">
+											<p class="text-sm text-slate-800 leading-relaxed">{c.body}</p>
+											<p class="mt-0.5 text-xs text-muted-foreground">{dt(c.created_at)}</p>
+											{#if c.attachment_url}
+												<a href={c.attachment_url} target="_blank" rel="noreferrer" class="mt-1 inline-flex items-center gap-1 text-xs text-blue-600 underline font-medium">
+													<Paperclip size={12} />{c.attachment_name ?? tr('Lampiran')}
+												</a>
+											{/if}
+										</div>
+									{/each}
+								{/if}
+								<p class="text-xs text-amber-800/80 leading-relaxed pt-1">
+									{tr('Terima untuk mengirim ulang artikel revisi ke media Anda, atau tolak dengan alasan bila masih belum sesuai.')}
+									{#if (detail.revision_reject_count ?? 0) > 0}
+										{tr('Sudah ditolak')} {detail.revision_reject_count}/{detail.revision_reject_limit ?? 3} {tr('kali.')}
+									{/if}
+								</p>
+							</section>
+						{/if}
+
+						<!-- 6. Section Riwayat Publikasi (Vertical Timeline) -->
+						<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
+							<div class="flex items-center gap-3">
+								<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+									<Clock size={18} />
+								</div>
+								<div>
+									<p class="text-sm font-bold text-slate-900">{tr('Riwayat')}</p>
+									<p class="text-xs text-muted-foreground">{tr('Riwayat proses pengiriman dan publikasi artikel.')}</p>
+								</div>
+							</div>
+
+							<div class="pt-2">
+								{#if (detail.attempts ?? []).length > 0}
+									<div class="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
+										{#each detail.attempts as a, idx (a.attempt_number)}
+											{@const isFirst = idx === 0}
+											<div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+												<span
+													class="absolute -left-6 top-1 h-4 w-4 rounded-full border-2 border-white"
+													class:bg-emerald-500={a.status === 'published'}
+													class:ring-4={a.status === 'published'}
+													class:ring-emerald-100={a.status === 'published'}
+													class:bg-blue-400={a.status !== 'published' && isFirst}
+													class:ring-blue-100={a.status !== 'published' && isFirst}
+													class:bg-slate-300={a.status !== 'published' && !isFirst}
+												></span>
+												<div class="min-w-0 pr-4">
+													<p class="text-sm font-semibold text-slate-800">
+														#{a.attempt_number} {attemptLabels[a.status] ?? a.status}
+													</p>
+													{#if a.status === 'published'}
+														<p class="text-xs text-muted-foreground mt-0.5">
+															{tr('Artikel berhasil dipublikasikan di')} {detail.media_name ?? tr('media')}.
+														</p>
+													{:else if a.error_message}
+														<p class="text-xs text-destructive mt-0.5">{a.error_message}</p>
+													{:else}
+														<p class="text-xs text-muted-foreground mt-0.5">
+															{tr('Artikel diproses untuk')} {detail.media_name ?? tr('media')}.
+														</p>
+													{/if}
+												</div>
+												<span class="text-xs text-muted-foreground font-mono shrink-0">
+													{dt(a.completed_at ?? a.started_at)}
+												</span>
+											</div>
+										{/each}
+
+										{#if detail.created_at}
+											<div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+												<span class="absolute -left-6 top-1 h-4 w-4 rounded-full border-2 border-white bg-slate-300 ring-4 ring-slate-100"></span>
+												<div>
+													<p class="text-sm font-semibold text-slate-800">{tr('Pesanan dibuat')}</p>
+													<p class="text-xs text-muted-foreground mt-0.5">{tr('Pesanan berhasil dibuat.')}</p>
+												</div>
+												<span class="text-xs text-muted-foreground font-mono shrink-0">{dt(detail.created_at)}</span>
+											</div>
+										{/if}
+									</div>
+								{:else}
+									<div class="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
+										{#if detail.published_at}
+											<div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+												<span class="absolute -left-6 top-1 h-4 w-4 rounded-full border-2 border-white bg-emerald-500 ring-4 ring-emerald-100"></span>
+												<div>
+													<p class="text-sm font-semibold text-slate-800">#1 {tr('Terbit')}</p>
+													<p class="text-xs text-muted-foreground mt-0.5">{tr('Artikel berhasil dipublikasikan di')} {detail.media_name ?? tr('media')}.</p>
+												</div>
+												<span class="text-xs text-muted-foreground font-mono shrink-0">{dt(detail.published_at)}</span>
+											</div>
+										{/if}
+										{#if detail.created_at}
+											<div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+												<span class="absolute -left-6 top-1 h-4 w-4 rounded-full border-2 border-white bg-slate-300 ring-4 ring-slate-100"></span>
+												<div>
+													<p class="text-sm font-semibold text-slate-800">{tr('Pesanan dibuat')}</p>
+													<p class="text-xs text-muted-foreground mt-0.5">{tr('Pesanan berhasil dibuat.')}</p>
+												</div>
+												<span class="text-xs text-muted-foreground font-mono shrink-0">{dt(detail.created_at)}</span>
+											</div>
+										{/if}
+									</div>
+								{/if}
+							</div>
+						</section>
+					{/if}
+				</div>
+
+					<!-- ── Footer Aksi (jika ada tombol persetujuan atau revisi) ── -->
+					{#if detail && (detail.status === 'revision' || detail.status === 'waiting_partner')}
+						{@const p = detail}
+						<footer class="flex-none border-t border-slate-100 bg-white px-5 py-3.5 sm:px-6 sm:py-4 flex flex-wrap justify-end gap-2.5">
+							{#if p.status === 'revision'}
+								{#if (p.revision_reject_count ?? 0) < (p.revision_reject_limit ?? 3)}
+									<button
+										class="app-btn app-btn-soft"
+										style="color: var(--destructive);"
+										disabled={busy}
+										onclick={() => { rejectTarget = p; rejectReason = ''; }}
+									><Trash2 size={15} />{tr('Tolak Revisi')}</button>
+								{/if}
+								<button class="app-btn app-btn-primary" disabled={busy} onclick={() => void acceptRevision(p)}><Check size={15} />{tr('Terima Revisi')}</button>
+							{:else if p.status === 'waiting_partner'}
 								<button
 									class="app-btn app-btn-soft"
 									style="color: var(--destructive);"
 									disabled={busy}
-									onclick={() => { rejectTarget = pub; rejectReason = ''; }}
-								><Trash2 size={15} />{tr('Tolak Revisi')}</button>
+									onclick={() => { rejectTarget = p; rejectReason = ''; }}
+								><Trash2 size={15} />{tr('Tolak')}</button>
+								{#if isManualRow(p)}
+									<button class="app-btn app-btn-primary" disabled={busy} onclick={() => void approve(p, 'publish')}><Check size={15} />{tr('Setujui')}</button>
+								{:else}
+									<button class="app-btn app-btn-primary" disabled={busy} onclick={() => void approve(p, 'publish')}><Check size={15} />{tr('Setujui & Terbitkan')}</button>
+								{/if}
 							{/if}
-							<button class="app-btn app-btn-primary" disabled={busy} onclick={() => void acceptRevision(pub)}><Check size={15} />{tr('Terima Revisi')}</button>
-						</div>
+						</footer>
 					{/if}
-
-					{#if detail.status === 'waiting_partner'}
-						<div class="flex flex-wrap justify-end gap-2">
-							<button
-								class="app-btn app-btn-soft"
-								style="color: var(--destructive);"
-								disabled={busy}
-								onclick={() => { rejectTarget = pub; rejectReason = ''; }}
-							><Trash2 size={15} />{tr('Tolak')}</button>
-							{#if isManualRow(pub)}
-								<button class="app-btn app-btn-primary" disabled={busy} onclick={() => void approve(pub, 'publish')}><Check size={15} />{tr('Setujui')}</button>
-							{:else}
-								<button class="app-btn app-btn-primary" disabled={busy} onclick={() => void approve(pub, 'publish')}><Check size={15} />{tr('Setujui & Terbitkan')}</button>
-							{/if}
-						</div>
-					{/if}
-				</div>
-			{/if}
-		</dialog>
-	</div>
-{/if}
+			</dialog>
+		</div>
+	{/if}
 
 {#if showPreview && previewPub}
 	<!-- Preview dari baris menu (z-50). Saat editor draf terbuka di belakangnya,
