@@ -817,13 +817,13 @@ func (d *Deps) OperationsCreditAdjustment(w http.ResponseWriter, r *http.Request
 		writeErr(w, d, errUnprocessable("Data tidak valid."))
 		return
 	}
-	if !hasTC || !tcIsNum || !opIsInt(tc) || tc <= 0 {
-		writeErr(w, d, errUnprocessable("Jumlah TC harus bilangan bulat lebih dari 0."))
+	if !hasTC || !tcIsNum || !opIsInt(tc) || tc == 0 {
+		writeErr(w, d, errUnprocessable("Jumlah TC harus bilangan bulat dan tidak boleh 0."))
 		return
 	}
-	// Batas atas per penyesuaian manual: mencegah salah ketik nol yang
-	// mengubah saldo brand berkali-kali lipat dalam satu transaksi.
-	if tc > 10000000 {
+	// Nilai negatif = kurangi saldo. Batas atas & bawah per penyesuaian manual
+	// mencegah salah ketik nol yang mengubah saldo brand berkali-kali lipat.
+	if tc > 10000000 || tc < -10000000 {
 		writeErr(w, d, errUnprocessable("Jumlah TC maksimal 10.000.000 per penyesuaian."))
 		return
 	}
@@ -850,6 +850,19 @@ func (d *Deps) OperationsCreditAdjustment(w http.ResponseWriter, r *http.Request
 		return
 	}
 	tcInt := int(tc)
+	// Pengurangan harus dijawab dengan pesan yang bisa ditindaklanjuti admin,
+	// bukan error server dari constraint saldo non-negatif di database.
+	if tcInt < 0 {
+		available := 0
+		if wRow, wErr := d.queryRow(ctx,
+			"SELECT COALESCE(available_tc, 0) AS available_tc FROM credit_wallets WHERE brand_id = $1 LIMIT 1", brandID); wErr == nil && wRow != nil {
+			available = wRow.intOr("available_tc", 0)
+		}
+		if available+tcInt < 0 {
+			writeErr(w, d, errUnprocessable(fmt.Sprintf("Saldo tidak cukup: tersedia %d TC, tidak bisa dikurangi %d TC.", available, -tcInt)))
+			return
+		}
+	}
 	if err := d.opAdjustCredit(ctx, brandID, tcInt, reason, user.ID, ""); err != nil {
 		writeErr(w, d, err)
 		return

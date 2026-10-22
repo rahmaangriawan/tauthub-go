@@ -62,6 +62,8 @@
 	let tcBrands = $state<BrandOption[]>([]);
 	let tcBrandId = $state('');
 	let tcAmount = $state('');
+	// Mode penyesuaian: tambah atau kurangi saldo brand tujuan.
+	let tcMode = $state<'add' | 'deduct'>('add');
 	// Batas server: POST /credit-adjustment menolak > 10.000.000 TC.
 	const TC_MAX = 10_000_000;
 	let tcReason = $state('');
@@ -362,6 +364,7 @@
 		tcReason = '';
 		tcError = '';
 		tcNotice = '';
+		tcMode = 'add';
 		const res = await apiRequest(`/v1/platform/operations/users/${user.id}/brands`);
 		if (!res.ok) {
 			tcError = await platformError(res);
@@ -377,19 +380,29 @@
 			tcError = tr('Pilih brand dulu.');
 			return;
 		}
-		const tc = parseInt(tcAmount, 10);
-		if (isNaN(tc) || tc <= 0) {
+		const amount = parseInt(tcAmount, 10);
+		if (isNaN(amount) || amount <= 0) {
 			tcError = tr('Jumlah TC harus angka positif.');
 			return;
 		}
-		if (tc > TC_MAX) {
+		if (amount > TC_MAX) {
 			tcError = tr('Maksimal 10.000.000 TC per penyesuaian (1 TC = Rp1.000).');
 			return;
+		}
+		if (tcMode === 'deduct') {
+			const brand = tcBrands.find((b) => b.id === tcBrandId);
+			if (brand && amount > brand.available_tc) {
+				tcError = tr('Saldo tidak cukup: tersedia {n} TC.').replace('{n}', fmtNum(brand.available_tc));
+				return;
+			}
 		}
 		if (tcReason.trim().length < 3) {
 			tcError = 'Alasan minimal 3 karakter.';
 			return;
 		}
+		// Nilai negatif = kurangi saldo; server yang menyimpan sebagai satu entri
+		// ledger bertanda, jadi riwayatnya tetap satu baris per penyesuaian.
+		const tc = tcMode === 'deduct' ? -amount : amount;
 		tcBusy = true;
 		tcError = '';
 		tcNotice = '';
@@ -403,7 +416,10 @@
 			return;
 		}
 		const result = await res.json();
-		tcNotice = `${fmtNum(result.tc_added)} TC ditambahkan. Saldo available sekarang ${fmtNum(result.wallet.available_tc)} TC.`;
+		tcNotice =
+			tcMode === 'deduct'
+				? `${fmtNum(Math.abs(result.tc_added))} TC dikurangi. Saldo available sekarang ${fmtNum(result.wallet.available_tc)} TC.`
+				: `${fmtNum(result.tc_added)} TC ditambahkan. Saldo available sekarang ${fmtNum(result.wallet.available_tc)} TC.`;
 		// Kolom "Jumlah Saldo" ikut bertambah tanpa menunggu muat ulang daftar.
 		const targetId = tcUser.id;
 		rows = rows.map((item) =>
@@ -552,7 +568,7 @@
 													</button>
 												{/if}
 												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openTcDialog(user); }}>
-													<Coins size={15} />{tr("Tambah TC")}</button>
+													<Coins size={15} />{tr("Sesuaikan Saldo")}</button>
 												{#if isSuperAdmin}
 													<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; openPasswordDialog(user); }}>
 														<Key size={15} /> Set password
@@ -666,8 +682,8 @@
 {/if}
 
 {#if tcUser}
-	<Modal title={`Tambah TC — ${tcUser.display_name}`} label={tr("Tambah TC")} maxWidth="lg" onClose={() => (tcUser = null)}>
-		<p class="text-sm text-muted-foreground">{tr("Tambahkan Tauthub Credit (TC) manual ke wallet brand milik user ini. Gunakan untuk kompensasi topup gagal atau penyesuaian.")}</p>
+	<Modal title={`Sesuaikan Saldo — ${tcUser.display_name}`} label={tr("Sesuaikan Saldo")} maxWidth="lg" onClose={() => (tcUser = null)}>
+		<p class="text-sm text-muted-foreground">{tr("Tambahkan atau kurangi Tauthub Credit (TC) pada wallet brand milik user ini. Gunakan untuk kompensasi topup gagal, koreksi saldo, atau penyesuaian lain.")}</p>
 		<div class="mt-4 flex flex-col gap-3">
 			{#if tcError}
 				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{tcError}</div>
@@ -693,10 +709,31 @@
 					/>
 				{/if}
 			</div>
+			<div>
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr('Jenis penyesuaian')}</span>
+				<div class="inline-flex w-full max-w-[320px] rounded-lg border p-0.5" style="border-color: var(--border); background: var(--muted);">
+					<button
+						type="button"
+						class="flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors {tcMode === 'add' ? 'bg-white text-slate-900 shadow-sm' : 'text-muted-foreground hover:text-slate-700'}"
+						aria-pressed={tcMode === 'add'}
+						onclick={() => (tcMode = 'add')}
+					>{tr('Tambah saldo')}</button>
+					<button
+						type="button"
+						class="flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors {tcMode === 'deduct' ? 'bg-white text-slate-900 shadow-sm' : 'text-muted-foreground hover:text-slate-700'}"
+						aria-pressed={tcMode === 'deduct'}
+						onclick={() => (tcMode = 'deduct')}
+					>{tr('Kurangi saldo')}</button>
+				</div>
+			</div>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Jumlah TC")}</span>
 				<input class="app-input w-full" type="number" min="1" max={TC_MAX} placeholder={tr("cth: 1000")} value={tcAmount} oninput={(e) => (tcAmount = (e.currentTarget as HTMLInputElement).value)} />
-				<span class="mt-1 block text-xs text-muted-foreground">{tr('Maksimal 10.000.000 TC per penyesuaian, 1 TC = Rp1.000.')}</span>
+				<span class="mt-1 block text-xs text-muted-foreground">
+					{tcMode === 'deduct'
+						? tr('Masukkan angka positif — saldo brand akan dikurangi sebesar angka ini, maksimal 10.000.000 TC.')
+						: tr('Maksimal 10.000.000 TC per penyesuaian, 1 TC = Rp1.000.')}
+				</span>
 			</label>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Alasan (wajib)</span>
@@ -712,7 +749,10 @@
 		{#snippet footer()}
 			<button class="app-btn app-btn-soft" type="button" onclick={() => (tcUser = null)}>{tr("Batal")}</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={tcBusy || tcBrands.length === 0} onclick={() => void submitTcAdjustment()}>
-				<Coins size={15} />{tcBusy ? 'Menambah…' : tr('Tambah TC')}
+				<Coins size={15} />
+				{tcBusy
+					? (tcMode === 'deduct' ? tr('Mengurangi…') : tr('Menambah…'))
+					: (tcMode === 'deduct' ? tr('Kurangi TC') : tr('Tambah TC'))}
 			</button>
 		{/snippet}
 	</Modal>
