@@ -2309,6 +2309,7 @@
 			onRetryAngles={() => void loadAngles()}
 			mediaType={targetMedia?.media_type ?? ''}
 			wordCountMode={targetMedia?.word_count_mode ?? ed.wordCountMode ?? ''}
+			embedAllowed={targetMedia?.allow_embed ?? true}
 			linkLimit={ed.linkLimit}
 			sponsored={targetMedia?.label_sponsor === 'ada_sponsor'}
 			saving={editorSaving}

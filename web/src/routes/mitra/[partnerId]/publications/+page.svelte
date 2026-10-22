@@ -30,6 +30,8 @@
 		thumbnail_url: string | null; featured_image_url: string | null;
 		revision_reject_count?: number; revision_reject_limit?: number;
 		media_website_url: string | null; publish_progress: number | null;
+		/** Media target mengizinkan embed peta/video di artikel. */
+		media_allow_embed?: boolean;
 		rss_import_status: string | null; rss_published_at: string | null;
 		partner_draft_edits: Record<string, unknown> | null;
 		created_at: string;
@@ -2206,6 +2208,7 @@
 									bind:value={draft.content_html}
 									bind:stats={editorStats}
 									fill
+									embedAllowed={draftPub?.media_allow_embed !== false}
 									ariaLabel={tr('Isi artikel')}
 									minHeight={320}
 									uploadImage={uploadDraftImage}

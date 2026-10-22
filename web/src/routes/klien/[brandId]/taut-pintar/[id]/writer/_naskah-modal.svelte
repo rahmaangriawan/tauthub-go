@@ -42,6 +42,7 @@
 		onRetryAngles,
 		mediaType = '',
 		wordCountMode = '',
+		embedAllowed = true,
 		linkLimit,
 		sponsored = false,
 		saving = false,
@@ -82,6 +83,8 @@
 		mediaType?: string;
 		/** Aturan panjang artikel media — target kata dari mitra (termasuk custom). */
 		wordCountMode?: string;
+		/** Media target mengizinkan embed peta/video; false → tombol sematan mati. */
+		embedAllowed?: boolean;
 		/** Media mitra berstatus sponsor: tautan ditulis rel="sponsored", bukan dofollow. */
 		sponsored?: boolean;
 		linkLimit: number;
@@ -1392,13 +1395,14 @@
 									<div class="article-html max-w-none text-sm" style="min-height: 320px;">{@html sanitizeHtml(streamingHtml ?? '')}</div>
 								</div>
 							{:else}
-								<RichTextEditor
-									bind:value={html}
-									bind:stats={editorStats}
-									brandId={brandId}
-									campaignId={campaignId}
-									mediaId={mediaId}
-									ariaLabel={tr('Isi artikel')}
+									<RichTextEditor
+										bind:value={html}
+										bind:stats={editorStats}
+										brandId={brandId}
+										campaignId={campaignId}
+										mediaId={mediaId}
+										{embedAllowed}
+										ariaLabel={tr('Isi artikel')}
 									minHeight={360}
 									takeTitleFromPaste={title.trim() === ''}
 									onPasteTitle={(t) => (title = t)}

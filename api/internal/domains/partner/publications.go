@@ -198,6 +198,7 @@ func (d *Deps) partnerScopedPublication(ctx context.Context, partnerID, publicat
 		SELECT p.*, m.name AS media_name, m.category AS media_category, COALESCE(p.category_override, '') AS category_override, m.partner_id AS media_partner_id,
 		       m.website_url AS media_website_url, m.publication_mode AS media_publication_mode,
 		       m.integration_type AS media_integration_type,
+		       m.allow_embed AS media_allow_embed,
 		       d.title AS document_title, d.slug AS document_slug,
 		       b.client_name AS client_name, b.name AS brand_name, b.public_id AS brand_public_id,
 		       pa.public_id AS partner_public_id,
@@ -279,6 +280,7 @@ func partnerPublicationJSON(row rowMap) map[string]any {
 		"media_id":                      row.raw("media_id"),
 		"media_name":                    row.raw("media_name"),
 		"media_integration_type":        row.raw("media_integration_type"),
+		"media_allow_embed":             row.boolOr("media_allow_embed", false),
 		"media_website_url":             row.raw("media_website_url"),
 		"media_publication_mode":        row.raw("media_publication_mode"),
 		"media_category":                draftCategory(row),
@@ -356,6 +358,7 @@ const revisionRejectLimit = 3
 
 const publicationSelect = `SELECT p.*, m.name AS media_name, m.category AS media_category, COALESCE(p.category_override, '') AS category_override, m.partner_id AS media_partner_id,
               m.integration_type AS media_integration_type,
+              m.allow_embed AS media_allow_embed,
               m.website_url AS media_website_url,
               m.publication_mode AS media_publication_mode,
               d.title AS document_title, d.slug AS document_slug,

@@ -4,12 +4,13 @@
 	// dipakai di luar modal: perintah format, pustaka gambar AI (bila scope
 	// brand+campaign+media tersedia) atau unggah gambar ke /brands/:id/assets,
 	// dialog tautan, dan sinkronisasi HTML dua arah.
-	import { CircleAlert, Image, Link, List, ListOrdered, LoaderCircle, Quote, RotateCcw, RotateCw, Table2 as TableIcon, Trash2, Upload, X } from '@lucide/svelte';
+	import { CircleAlert, Image, Link, List, ListOrdered, LoaderCircle, MapPin, Pencil, Quote, RotateCcw, RotateCw, Table2 as TableIcon, Trash2, Upload, X, Play } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 	import { apiRequest } from '$lib/auth';
 	import { sanitizeHtml } from '$lib/sanitize-html';
 	import { tr } from '$lib/i18n/phrases';
 	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
+	import Tooltip from '$lib/components/tooltip.svelte';
 	import { applyInlineFormat, readToolState, isToggleCommand, toolCommandActive, placeCaretAtEnd, placeCaretAtStart, NO_TOOL_STATE, type ToolState } from '$lib/editor/inline-format';
 	import { clipboardHtmlToArticle, isDocumentClipboardHtml } from '$lib/editor/clipboard-html';
 
@@ -31,6 +32,8 @@
 		/** Tempelan dokumen (Google Docs/Word) mengisi judul artikel dari H1
 		 *  pertama — hanya bila pemanggil masih punya kolom judul kosong. */
 		takeTitleFromPaste = false,
+		/** Media target mengizinkan embed peta/video. false → tombol sematan mati. */
+		embedAllowed = true,
 		onPasteTitle
 	}: {
 		value?: string;
@@ -42,6 +45,8 @@
 		disabled?: boolean;
 		minHeight?: number;
 		fill?: boolean;
+		/** false = tombol "Sisipkan peta/video" tampil tapi tidak bisa diklik. */
+		embedAllowed?: boolean;
 		ariaLabel?: string;
 		/**
 		 * Pengunggah gambar khusus. Bila diisi, editor memakai fungsi ini dan
@@ -104,6 +109,68 @@
 		sync();
 		commitHistory();
 	}
+
+	/** Sematan peta/video yang sedang dipilih — bisa diganti tautannya atau dihapus. */
+	let selectedEmbed = $state<HTMLIFrameElement | null>(null);
+	let editingEmbed = $state<HTMLIFrameElement | null>(null);
+	let embedBarPos = $state<{ top: number; left: number }>({ top: 0, left: 0 });
+
+	function clearEmbedSelection() {
+		selectedEmbed?.classList.remove('rte-embed-selected');
+		selectedEmbed = null;
+	}
+
+	function selectEmbed(iframe: HTMLIFrameElement) {
+		clearImageSelection();
+		clearEmbedSelection();
+		selectedEmbed = iframe;
+		iframe.classList.add('rte-embed-selected');
+		placeEmbedBar();
+	}
+
+	function placeEmbedBar() {
+		if (!selectedEmbed || !rootEl) return;
+		const r = selectedEmbed.getBoundingClientRect();
+		const root = rootEl.getBoundingClientRect();
+		embedBarPos = {
+			top: Math.max(4, r.top - root.top - 38),
+			left: Math.max(4, r.left - root.left)
+		};
+	}
+
+	/** Wrapper div langsung di atas iframe, kalau ada — ikut dihapus bersama sematan. */
+	function embedBlockOf(iframe: HTMLIFrameElement): HTMLElement {
+		const parent = iframe.parentElement;
+		return parent && parent !== bodyEl && parent.children.length === 1 ? parent : iframe;
+	}
+
+	function deleteSelectedEmbed() {
+		const iframe = selectedEmbed;
+		if (!iframe || !bodyEl?.contains(iframe)) {
+			clearEmbedSelection();
+			return;
+		}
+		embedBlockOf(iframe).remove();
+		clearEmbedSelection();
+		sync();
+		commitHistory();
+	}
+
+	function editSelectedEmbed() {
+		const iframe = selectedEmbed;
+		if (!iframe) return;
+		const src = iframe.getAttribute('src') ?? '';
+		editingEmbed = iframe;
+		// Popover butuh titik jangkar: pakai kotak iframe itu sendiri.
+		const rect = iframe.getBoundingClientRect();
+		embedAnchorEl = null;
+		embedPos = {
+			left: Math.max(8, Math.min(rect.left, window.innerWidth - 368)),
+			top: Math.min(rect.bottom + 6, window.innerHeight - 308)
+		};
+		savedRange = null;
+		embedDialog = { open: true, kind: /youtu|vimeo/i.test(src) ? 'video' : 'maps', url: src, error: '' };
+	}
 	let mode = $state<'rich' | 'html'>('rich');
 		// Saat kembali dari mode HTML, elemen contenteditable dibuat ulang oleh
 		// {#if} — isinya harus diisi ulang dari value.
@@ -124,6 +191,17 @@
 			sponsored: tr('Untuk tautan berbayar: iklan atau kerja sama. Google mewajibkan penanda ini. Pakai kalau tautannya disponsori.')
 		};
 		let savedRange: Range | null = null;
+		/** Dialog sematan: peta Google Maps atau video YouTube/Vimeo lewat tautan. */
+		let embedDialog = $state<{ open: boolean; kind: 'maps' | 'video'; url: string; error: string }>({
+			open: false,
+			kind: 'video',
+			url: '',
+			error: ''
+		});
+		/** Popover sematan menempel pada tombol toolbar yang diklik. */
+		let embedPop = $state<HTMLDivElement | null>(null);
+		let embedAnchorEl: HTMLElement | null = null;
+		let embedPos = $state({ left: 8, top: 120 });
 		let imageModalOpen = $state(false);
 		let mediaPickerOpen = $state(false);
 		let imageDragOver = $state(false);
@@ -174,6 +252,8 @@
 
 	function sync() {
 		if (!bodyEl) return;
+		// Kelas seleksi hanya penanda UI — jangan ikut tersimpan ke HTML artikel.
+		bodyEl.querySelectorAll('.rte-embed-selected').forEach((el) => el.classList.remove('rte-embed-selected'));
 		// execCommand kadang meninggalkan atribut style kosong (mis. saat melepas
 		// <i> di dalam <u>) — dibuang supaya HTML artikel bersih.
 		bodyEl.querySelectorAll('[style=""]').forEach((el) => el.removeAttribute('style'));
@@ -296,6 +376,11 @@
 		if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImg) {
 			e.preventDefault();
 			deleteSelectedImage();
+			return;
+		}
+		if ((e.key === 'Delete' || e.key === 'Backspace') && selectedEmbed) {
+			e.preventDefault();
+			deleteSelectedEmbed();
 		}
 	}
 
@@ -424,8 +509,194 @@
 		commitHistory();
 	}
 
-	function onBodyContextMenu(e: MouseEvent) {
+	/** Simpan posisi kursor lalu buka popover sematan di bawah tombol toolbar. */
+	function openEmbedDialog(kind: 'maps' | 'video', anchor: HTMLElement | null = null) {
+		if (!bodyEl || disabled) return;
+		editingEmbed = null;
+		const sel = window.getSelection();
+		savedRange = sel && sel.rangeCount > 0 && bodyEl.contains(sel.anchorNode) ? sel.getRangeAt(0).cloneRange() : null;
+		embedAnchorEl = anchor;
+		const rect = anchor?.getBoundingClientRect();
+		const width = 360;
+		const estimated = 300;
+		const left = Math.max(8, Math.min(rect?.left ?? 8, window.innerWidth - width - 8));
+		const below = (rect?.bottom ?? 120) + 6;
+		// Tidak muat ke bawah → buka ke atas tombol.
+		const top = below + estimated > window.innerHeight - 8 && rect ? Math.max(8, rect.top - estimated - 6) : below;
+		embedPos = { left, top };
+		embedDialog = { open: true, kind, url: '', error: '' };
+	}
+
+	function closeEmbedDialog() {
+		editingEmbed = null;
+		embedDialog = { ...embedDialog, open: false, error: '' };
+	}
+
+	// Popover ditutup saat klik di luar (tombol pemicu tetap dianggap "dalam").
+	$effect(() => {
+		if (!embedDialog.open) return;
+		const onDown = (event: MouseEvent) => {
+			const target = event.target as Node | null;
+			if (!target) return;
+			if (embedPop?.contains(target) || embedAnchorEl?.contains(target)) return;
+			closeEmbedDialog();
+		};
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') closeEmbedDialog();
+		};
+		window.addEventListener('mousedown', onDown, true);
+		window.addEventListener('keydown', onKey);
+		return () => {
+			window.removeEventListener('mousedown', onDown, true);
+			window.removeEventListener('keydown', onKey);
+		};
+	});
+
+	/** Input bisa berupa tautan biasa ATAU seluruh kode <iframe> hasil "Sematkan peta". */
+	function extractEmbedSrc(raw: string): string | null {
+		if (!/<iframe/i.test(raw)) return null;
+		const doc = new DOMParser().parseFromString(raw, 'text/html');
+		const src = doc.querySelector('iframe')?.getAttribute('src')?.trim();
+		return src || null;
+	}
+
+	/** youtu.be/ID, watch?v=ID, shorts/ID, embed/ID → URL sematan kanonis. */
+	function youtubeEmbedUrl(u: URL): string | null {
+		const host = u.hostname.replace(/^www\./, '').toLowerCase();
+		const id = (v: string | null | undefined) => (v && /^[\w-]{6,}$/.test(v) ? v : null);
+		if (host === 'youtu.be') {
+			const vid = id(u.pathname.split('/').filter(Boolean)[0]);
+			return vid ? `https://www.youtube.com/embed/${vid}` : null;
+		}
+		if (host !== 'youtube.com' && host !== 'youtube-nocookie.com' && host !== 'm.youtube.com') return null;
+		const parts = u.pathname.split('/').filter(Boolean);
+		if ((parts[0] === 'embed' || parts[0] === 'shorts' || parts[0] === 'live')) {
+			const vid = id(parts[1]);
+			if (vid) return `https://www.youtube.com/embed/${vid}`;
+		}
+		const v = id(u.searchParams.get('v'));
+		return v ? `https://www.youtube.com/embed/${v}` : null;
+	}
+
+	function vimeoEmbedUrl(u: URL): string | null {
+		const host = u.hostname.replace(/^www\./, '').toLowerCase();
+		if (host !== 'vimeo.com' && host !== 'player.vimeo.com') return null;
+		const m = u.pathname.match(/(\d{5,})/);
+		return m ? `https://player.vimeo.com/video/${m[1]}` : null;
+	}
+
+	/** Tautan Google Maps → URL ?output=embed (host yang diizinkan sanitizer). */
+	function mapsEmbedUrl(u: URL): string | null {
+		const host = u.hostname.toLowerCase();
+		// Tautan pendek maps.app.goo.gl mengarahkan lewat redirect, tidak bisa
+		// dimuat di iframe. Mitra harus memakai tautan peta penuh / kode sematan.
+		if (host === 'maps.app.goo.gl' || host === 'goo.gl') return null;
+		if (!/(^|\.)google\.com$/.test(host) && host !== 'maps.google.com') return null;
+		if (u.pathname.includes('/maps/embed')) return u.toString();
+		let q = u.searchParams.get('q')?.trim() ?? '';
+		if (!q) {
+			const at = u.pathname.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+			if (at) q = `${at[1]},${at[2]}`;
+		}
+		if (!q) {
+			const place = u.pathname.match(/\/maps\/place\/([^/]+)/);
+			if (place) q = decodeURIComponent(place[1].replace(/\+/g, ' '));
+		}
+		if (!q) {
+			const ll = u.searchParams.get('ll')?.trim();
+			if (ll) q = ll;
+		}
+		if (!q) return null;
+		return `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed`;
+	}
+
+	function escapeAttr(v: string) {
+		return v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	}
+
+	function applyEmbed() {
+		const raw = embedDialog.url.trim();
+		if (!raw) {
+			embedDialog = { ...embedDialog, error: tr('Tempel tautan atau kode sematan terlebih dahulu.') };
+			return;
+		}
+		// Terima dua bentuk: tautan biasa, atau seluruh kode <iframe> dari dialog
+		// "Sematkan peta"/"Sematkan video" Google Maps/YouTube.
+		const srcInput = extractEmbedSrc(raw) ?? raw;
+		let parsed: URL;
+		try {
+			parsed = new URL(srcInput);
+		} catch {
+			embedDialog = { ...embedDialog, error: tr('Tautan tidak valid. Pastikan diawali https:// atau tempel kode <iframe> lengkap.') };
+			return;
+		}
+		if (parsed.protocol !== 'https:') {
+			embedDialog = { ...embedDialog, error: tr('Hanya tautan https:// yang didukung.') };
+			return;
+		}
+		// Jenis mengikuti isi tautan, bukan tombol yang diklik: kode sematan peta
+		// yang ditempel lewat tombol video tetap dikenali sebagai peta.
+		const videoSrc = youtubeEmbedUrl(parsed) ?? vimeoEmbedUrl(parsed);
+		const mapSrc = mapsEmbedUrl(parsed);
+		const src = videoSrc ?? mapSrc;
+		const kind = videoSrc ? 'video' : 'maps';
+		if (!src) {
+			embedDialog = {
+				...embedDialog,
+				error: tr('Tautan belum dikenali. Pakai tautan/kode sematan Google Maps, YouTube, atau Vimeo.')
+			};
+			return;
+		}
+		const height = kind === 'maps' ? 360 : 315;
+		const title = kind === 'maps' ? tr('Peta lokasi') : tr('Video');
+
+		// Mode ganti: perbarui iframe yang sedang dipilih, jangan sisipkan baru.
+		if (editingEmbed && bodyEl?.contains(editingEmbed)) {
+			editingEmbed.setAttribute('src', src);
+			editingEmbed.setAttribute('height', String(height));
+			editingEmbed.setAttribute('title', title);
+			editingEmbed.setAttribute('style', 'width:100%;max-width:100%;border:0;border-radius:8px');
+			editingEmbed.removeAttribute('class');
+			clearEmbedSelection();
+			sync();
+			refreshToolState();
+			commitHistory();
+			closeEmbedDialog();
+			return;
+		}
+
 		const body = bodyEl;
+		if (!body) return closeEmbedDialog();
+		body.focus();
+		const sel = window.getSelection();
+		if (sel && savedRange) {
+			sel.removeAllRanges();
+			try {
+				sel.addRange(savedRange);
+			} catch {
+				/* range basi */
+			}
+		}
+		// Tanpa kursor di editor, sisipkan di akhir isi.
+		if (!sel || sel.rangeCount === 0 || !body.contains(sel.anchorNode)) {
+			const end = document.createRange();
+			end.selectNodeContents(body);
+			end.collapse(false);
+			sel?.removeAllRanges();
+			sel?.addRange(end);
+		}
+		const html =
+			`<div style="margin:16px 0"><iframe src="${escapeAttr(src)}" width="100%" height="${height}" ` +
+			`style="width:100%;max-width:100%;border:0;border-radius:8px" title="${escapeAttr(title)}" ` +
+			`loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div><p><br></p>`;
+		document.execCommand('insertHTML', false, html);
+		sync();
+		refreshToolState();
+		commitHistory();
+		closeEmbedDialog();
+	}
+
+	function onBodyContextMenu(e: MouseEvent) {		const body = bodyEl;
 		if (!body || disabled || mode !== 'rich') return;
 		const el = e.target instanceof Element ? e.target : null;
 		const cell = el?.closest('td, th') as HTMLTableCellElement | null;
@@ -831,6 +1102,16 @@
 		}
 		clearImageSelection();
 
+		// iframe diberi pointer-events:none saat diedit, jadi klik mendarat di
+		// wrapper div-nya. Pilih sematan supaya bisa diganti atau dihapus.
+		const embed = el instanceof HTMLIFrameElement ? el : el.querySelector(':scope > iframe');
+		if (embed instanceof HTMLIFrameElement && body.contains(embed)) {
+			e.preventDefault();
+			selectEmbed(embed);
+			return;
+		}
+		clearEmbedSelection();
+
 		const anchor = el.closest('a');
 		if (!anchor || !body.contains(anchor)) return;
 		e.preventDefault();
@@ -957,7 +1238,31 @@
 			disabled={disabled || mode === 'html'}
 			onmousedown={(e: MouseEvent) => e.preventDefault()}
 			onclick={openLinkDialog}
-		><Link size={15} /></button>
+			><Link size={15} /></button>
+			<Tooltip content={embedAllowed ? tr('Sisipkan peta (Google Maps)') : tr('Media ini tidak mengizinkan embed.')}>
+				<button
+					class="rte-tool"
+					class:rte-tool-locked={!embedAllowed}
+					type="button"
+					aria-label={embedAllowed ? tr('Sisipkan peta (Google Maps)') : tr('Media ini tidak mengizinkan embed.')}
+					aria-disabled={!embedAllowed || undefined}
+					disabled={disabled || mode === 'html'}
+					onmousedown={(e: MouseEvent) => e.preventDefault()}
+					onclick={(e) => { if (embedAllowed) openEmbedDialog('maps', e.currentTarget as HTMLElement); }}
+				><MapPin size={15} /></button>
+			</Tooltip>
+			<Tooltip content={embedAllowed ? tr('Sisipkan video (YouTube/Vimeo)') : tr('Media ini tidak mengizinkan embed.')}>
+				<button
+					class="rte-tool"
+					class:rte-tool-locked={!embedAllowed}
+					type="button"
+					aria-label={embedAllowed ? tr('Sisipkan video (YouTube/Vimeo)') : tr('Media ini tidak mengizinkan embed.')}
+					aria-disabled={!embedAllowed || undefined}
+					disabled={disabled || mode === 'html'}
+					onmousedown={(e: MouseEvent) => e.preventDefault()}
+					onclick={(e) => { if (embedAllowed) openEmbedDialog('video', e.currentTarget as HTMLElement); }}
+				><Play size={15} /></button>
+			</Tooltip>
 		<span class="flex-1"></span>
 		<button
 			class="rte-tool rte-tool-toggle"
@@ -992,7 +1297,7 @@
 			onclick={handleBodyClick}
 			onkeydown={onBodyKeydown}
 			oncontextmenu={onBodyContextMenu}
-			onscroll={placeImageBar}
+			onscroll={() => { placeImageBar(); placeEmbedBar(); }}
 			onpaste={onBodyPaste}
 			ondragover={(e) => { if (!disabled && mode === 'rich') e.preventDefault(); }}
 			ondrop={onBodyDrop}
@@ -1003,6 +1308,18 @@
 			<div class="rte-imgbar" style="top: {imgBarPos.top}px; left: {imgBarPos.left}px;">
 				<button class="rte-imgbar-btn" type="button" onclick={deleteSelectedImage}>
 					<Trash2 size={13} />{tr('Hapus gambar')}
+				</button>
+			</div>
+		{/if}
+
+		{#if selectedEmbed}
+			<!-- Bar aksi sematan: ganti tautan atau hapus peta/video. -->
+			<div class="rte-imgbar" style="top: {embedBarPos.top}px; left: {embedBarPos.left}px;">
+				<button class="rte-imgbar-btn rte-imgbar-btn-neutral" type="button" onclick={editSelectedEmbed}>
+					<Pencil size={13} />{tr('Ganti tautan')}
+				</button>
+				<button class="rte-imgbar-btn" type="button" onclick={deleteSelectedEmbed}>
+					<Trash2 size={13} />{tr('Hapus embed')}
 				</button>
 			</div>
 		{/if}
@@ -1103,7 +1420,55 @@
 			</div>
 		{/if}
 
-		{#if imageModalOpen}
+		{#if embedDialog.open}
+			<div
+				bind:this={embedPop}
+				class="rte-embed-pop"
+				role="dialog"
+				aria-label={embedDialog.kind === 'maps' ? tr('Sisipkan peta') : tr('Sisipkan video')}
+				style={`left:${embedPos.left}px;top:${embedPos.top}px`}
+			>
+				<div class="rte-link-modal-head">
+					<strong class="text-sm">{embedDialog.kind === 'maps' ? tr('Sisipkan peta') : tr('Sisipkan video')}</strong>
+					<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" aria-label={tr('Tutup')} onclick={closeEmbedDialog}>
+						<X size={14} />
+					</button>
+				</div>
+
+				<label class="mt-3 block">
+					<span class="text-xs font-medium text-muted-foreground">
+						{embedDialog.kind === 'maps' ? tr('Tautan atau kode sematan peta') : tr('Tautan atau kode sematan video')}
+					</span>
+					<textarea
+						class="app-input mt-1 w-full text-sm"
+						rows="3"
+						placeholder={embedDialog.kind === 'maps'
+							? 'https://www.google.com/maps/... atau <iframe src="https://www.google.com/maps/embed?...">'
+							: 'https://www.youtube.com/watch?v=... atau <iframe src="https://www.youtube.com/embed/...">'}
+						bind:value={embedDialog.url}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); applyEmbed(); }
+							if (e.key === 'Escape') closeEmbedDialog();
+						}}
+					></textarea>
+					<span class="mt-1 block text-[11px] text-muted-foreground">
+						{embedDialog.kind === 'maps'
+							? tr('Tempel tautan Google Maps, atau seluruh kode <iframe> dari Bagikan → Sematkan peta.')
+							: tr('Tempel tautan YouTube/Vimeo, atau seluruh kode <iframe> dari menu Sematkan.')}
+					</span>
+				</label>
+
+				{#if embedDialog.error}
+					<p class="mt-2 text-sm" style="color: var(--destructive);">{embedDialog.error}</p>
+				{/if}
+
+				<div class="mt-4 flex justify-end gap-2">
+					<button class="app-btn app-btn-soft" type="button" onclick={closeEmbedDialog}>{tr('Batal')}</button>
+					<button class="app-btn app-btn-primary" type="button" onclick={applyEmbed}>{tr('Sisipkan')}</button>
+				</div>
+			</div>
+		{/if}
+			{#if imageModalOpen}
 			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 					<div
 						class="fixed inset-0 z-[60] flex items-center justify-center p-4"
@@ -1229,6 +1594,18 @@
 	}
 	.rte-imgbar-btn:hover { background: var(--secondary); }
 	.rte-imgbar-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+	.rte-imgbar-btn-neutral { color: var(--foreground); }
+	/* Saat diedit, iframe tidak menangkap klik supaya wrapper-nya bisa dipilih
+	   dan bar "Ganti tautan / Hapus embed" muncul. */
+	.rte-body :global(iframe) {
+		pointer-events: none;
+		max-width: 100%;
+	}
+	.rte-body :global(iframe.rte-embed-selected) {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+		border-radius: 8px;
+	}
 
 	.rte-toolbar {
 		position: sticky;
@@ -1261,6 +1638,15 @@
 	.rte-tool:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
+	}
+	/* Media tidak mengizinkan embed: tombol tetap terlihat untuk menjelaskan
+	   alasannya lewat tooltip, tapi tidak bisa diklik. */
+	.rte-tool-locked {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+	.rte-tool.rte-tool-locked:hover {
+		background: transparent;
 	}
 	.rte-tool-toggle {
 		border: 1px solid var(--border);
@@ -1414,6 +1800,30 @@
 		border-radius: 12px;
 		background: var(--card, #fff);
 		box-shadow: 0 18px 44px rgba(15, 23, 42, 0.22);
+	}
+	/* Popover sematan: menempel di bawah tombol toolbar, bukan modal tengah. */
+	.rte-embed-pop {
+		position: fixed;
+		z-index: 1100;
+		width: min(92vw, 360px);
+		max-height: 70vh;
+		overflow-y: auto;
+		padding: 14px;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--card, #fff);
+		box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
+		animation: rteEmbedIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+	}
+	@keyframes rteEmbedIn {
+		from {
+			opacity: 0;
+			transform: translateY(-4px) scale(0.98);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+		}
 	}
 	.rte-link-modal-head {
 		display: flex;
