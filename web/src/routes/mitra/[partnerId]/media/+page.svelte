@@ -2172,8 +2172,8 @@
 										</div>
 									{/if}
 
-									<div class="flex items-stretch gap-2">
-										<div class="relative flex-1 min-w-[200px]">
+									<div class="flex flex-wrap items-stretch gap-2">
+										<div class="relative min-w-0 flex-1 basis-full sm:basis-0">
 											<Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
 											<input
 												class="app-input w-full pl-8 text-xs sm:text-sm"
@@ -2182,7 +2182,7 @@
 												onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFormCategory(form.categoryQuery); } }}
 											/>
 										</div>
-										<button type="button" class="app-btn app-btn-soft shrink-0 !text-xs !px-3 font-medium whitespace-nowrap" onclick={() => addFormCategory(form.categoryQuery)}>＋ {tr('Tambah kategori')}</button>
+										<button type="button" class="app-btn app-btn-soft shrink-0 !text-xs !px-3 font-medium whitespace-nowrap w-full sm:w-auto" onclick={() => addFormCategory(form.categoryQuery)}>＋ {tr('Tambah kategori')}</button>
 									</div>
 
 									{#if form.categories.length >= 20}
