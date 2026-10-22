@@ -518,6 +518,14 @@
 
 	{#if error}
 		<p class="auth-alert" role="alert"><CircleAlert size={15} />{error}</p>
+	{:else if page.url.searchParams.get('oauth') === 'invalid_state'}
+		<!-- Callback Google memanggil /login?oauth=invalid_state saat cookie tiket
+		     (goauth_state, 10 menit, sekali pakai) tidak ada — biasanya karena
+		     alur dibuka dari tautan/tab lama yang sudah kedaluwarsa. -->
+		<p class="auth-alert" role="alert">
+			<CircleAlert size={15} />
+			{tr('Sesi Google sudah kedaluwarsa. Klik tombol Google sekali lagi untuk mulai dari awal.')}
+		</p>
 	{/if}
 	{#if success}
 		<p class="auth-verify-ok" role="status"><Check size={15} />{success}</p>

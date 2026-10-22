@@ -1453,6 +1453,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Endpoint / Adapter URL (Opsional)": "Endpoint / Adapter URL (Optional)",
   "Endpoint URL, API Key, dan Test Connection diatur di halaman": "Endpoint URL, API Key, and Test Connection are configured on the page",
   "Error, coba lagi nanti.": "Error, try again later.",
+  "Sesi Google sudah kedaluwarsa. Klik tombol Google sekali lagi untuk mulai dari awal.": "Your Google session expired. Click the Google button once more to start again.",
   "Estimasi trafik bulanan (untuk estimated reach)": "Estimated monthly traffic (for estimated reach)",
   "Estimated PR value = nilai media + Σ(reach ÷ 1.000 × rate). Rate tier global (Tier 1/2/3) dikelola di menu PR Calculator. Skor bukan AVE dan bukan jaminan dampak bisnis.": "Estimated PR value = media value + Σ(reach ÷ 1.000 × rate). Global tier rates (Tier 1/2/3) are managed in the PR Calculator menu. The score is not AVE and is not a guarantee of business impact.",
   "Event keterbacaan artikel per hari dari pelacakan publikasi.": "Daily article readability events from publication tracking.",
