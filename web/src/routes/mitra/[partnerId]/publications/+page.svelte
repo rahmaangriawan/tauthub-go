@@ -1710,69 +1710,11 @@
 									<p class="text-[10px] font-bold uppercase tracking-wider text-emerald-800">{tr('Pendapatan Anda')}</p>
 									<p class="text-xl sm:text-2xl font-extrabold text-emerald-600 tabular-nums">{rp(detail.partner_amount)}</p>
 								</div>
-							</div>
-						</section>
-
-						<!-- 4. Section Preview / Content -->
-						{#if detail.document}
-							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
-								<div class="flex items-center gap-3">
-									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
-										<FileText size={18} />
-									</div>
-									<div>
-										<p class="text-sm font-bold text-slate-900">{tr('Preview / Content')}</p>
-										<p class="text-xs text-muted-foreground">{tr('Lihat judul, slug, dan cuplikan konten artikel.')}</p>
-									</div>
-								</div>
-
-								<div class="space-y-3 pt-1">
-										{#if detail.document.slug}
-											<div>
-												<p class="text-xs font-medium text-muted-foreground mb-1">{tr('Slug')}</p>
-												<div class="rounded-xl bg-slate-50 border border-slate-200/80 px-3.5 py-2.5 flex items-center justify-between gap-2">
-													<span class="font-mono text-xs text-slate-700 truncate select-all">{detail.document.slug}</span>
-													<button
-														type="button"
-														class="text-slate-400 hover:text-slate-700 transition-colors p-1 rounded shrink-0"
-														title={copiedKey === 'slug' ? tr('Tersalin!') : tr('Salin Slug')}
-														onclick={() => copyText(pub.document?.slug, 'slug')}
-													>
-														{#if copiedKey === 'slug'}
-															<Check size={14} class="text-emerald-600" />
-														{:else}
-															<Copy size={14} />
-														{/if}
-													</button>
-												</div>
-											</div>
-										{/if}
-
-										{#if detail.document.meta_description}
-											<div>
-												<p class="text-xs font-medium text-muted-foreground mb-1">{tr('Cuplikan konten')}</p>
-												<p class="text-xs sm:text-sm text-slate-600 leading-relaxed bg-slate-50/60 rounded-xl p-3 border border-slate-100">
-													{detail.document.meta_description}
-												</p>
-											</div>
-										{/if}
-
-										<div>
-											<button
-												type="button"
-												class="app-btn app-btn-soft !text-xs !py-1.5 !px-3 inline-flex items-center gap-1.5 font-medium"
-												onclick={() => void previewDraft(pub)}
-											>
-												<ExternalLink size={13} />
-												{tr('Lihat artikel lengkap')}
-											</button>
-										</div>
 								</div>
 							</section>
-						{/if}
 
-						<!-- 5. Section URL Terbit & Verifikasi -->
-						{#if detail.status === 'published' || liveUrl}
+							<!-- 4. Section URL Terbit & Verifikasi -->
+							{#if detail.status === 'published' || liveUrl}
 							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
 								<div class="flex flex-wrap items-center justify-between gap-3">
 									<div class="flex items-center gap-3">
