@@ -1508,43 +1508,34 @@
 									</p>
 								</div>
 
-								<div class="flex sm:flex-col items-end justify-between sm:justify-start gap-2 shrink-0 w-full sm:w-auto">
-									{#if detail.status === 'published'}
-										<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
-											<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-											{detailStatusLabel[detail.status] ?? detail.status}
-										</span>
-										<div class="rounded-lg bg-emerald-50/70 border border-emerald-100/80 px-2.5 py-1.5 text-center text-[11px] font-medium text-emerald-800 leading-tight">
-											{tr('Artikel telah dipublikasikan di media Anda.')}
-										</div>
-									{:else if detail.status === 'waiting_partner'}
-										<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/70">
-											<span class="h-2 w-2 rounded-full bg-amber-500"></span>
-											{detailStatusLabel[detail.status] ?? detail.status}
-										</span>
-										<div class="rounded-lg bg-amber-50/70 border border-amber-100/80 px-2.5 py-1.5 text-center text-[11px] font-medium text-amber-800 leading-tight">
-											{tr('Menunggu konfirmasi persetujuan dari Anda.')}
-										</div>
-									{:else if detail.status === 'revision'}
-										<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/70">
-											<span class="h-2 w-2 rounded-full bg-amber-500"></span>
-											{detailStatusLabel[detail.status] ?? detail.status}
-										</span>
-										<div class="rounded-lg bg-amber-50/70 border border-amber-100/80 px-2.5 py-1.5 text-center text-[11px] font-medium text-amber-800 leading-tight">
-											{tr('Klien mengirimkan revisi untuk artikel ini.')}
-										</div>
-									{:else if detail.status === 'partner_rejected' || detail.status === 'failed'}
-										<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/70">
-											<span class="h-2 w-2 rounded-full bg-rose-500"></span>
-											{detailStatusLabel[detail.status] ?? detail.status}
-										</span>
-									{:else}
-										<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-											<span class="h-2 w-2 rounded-full bg-slate-400"></span>
-											{detailStatusLabel[detail.status] ?? detail.status}
-										</span>
-									{/if}
-								</div>
+									<div class="flex items-center shrink-0">
+										{#if detail.status === 'published'}
+											<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+												<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+												{detailStatusLabel[detail.status] ?? detail.status}
+											</span>
+										{:else if detail.status === 'waiting_partner'}
+											<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/70">
+												<span class="h-2 w-2 rounded-full bg-amber-500"></span>
+												{detailStatusLabel[detail.status] ?? detail.status}
+											</span>
+										{:else if detail.status === 'revision'}
+											<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/70">
+												<span class="h-2 w-2 rounded-full bg-amber-500"></span>
+												{detailStatusLabel[detail.status] ?? detail.status}
+											</span>
+										{:else if detail.status === 'partner_rejected' || detail.status === 'failed'}
+											<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/70">
+												<span class="h-2 w-2 rounded-full bg-rose-500"></span>
+												{detailStatusLabel[detail.status] ?? detail.status}
+											</span>
+										{:else}
+											<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+												<span class="h-2 w-2 rounded-full bg-slate-400"></span>
+												{detailStatusLabel[detail.status] ?? detail.status}
+											</span>
+										{/if}
+									</div>
 							</div>
 						</section>
 
