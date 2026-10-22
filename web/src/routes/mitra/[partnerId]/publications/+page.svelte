@@ -1989,10 +1989,10 @@
 													class:ring-blue-100={a.status !== 'published' && isFirst}
 													class:bg-slate-300={a.status !== 'published' && !isFirst}
 												></span>
-												<div class="min-w-0 pr-4">
-													<p class="text-sm font-semibold text-slate-800">
-														#{a.attempt_number} {attemptLabels[a.status] ?? a.status}
-													</p>
+													<div class="min-w-0 pr-4">
+														<p class="text-sm font-semibold text-slate-800">
+															{attemptLabels[a.status] ?? a.status}
+														</p>
 													{#if a.status === 'published'}
 														<p class="text-xs text-muted-foreground mt-0.5">
 															{tr('Artikel berhasil dipublikasikan di')} {detail.media_name ?? tr('media')}.
@@ -2024,16 +2024,16 @@
 									</div>
 								{:else}
 									<div class="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
-										{#if detail.published_at}
-											<div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
-												<span class="absolute -left-6 top-1 h-4 w-4 rounded-full border-2 border-white bg-emerald-500 ring-4 ring-emerald-100"></span>
-												<div>
-													<p class="text-sm font-semibold text-slate-800">#1 {tr('Terbit')}</p>
-													<p class="text-xs text-muted-foreground mt-0.5">{tr('Artikel berhasil dipublikasikan di')} {detail.media_name ?? tr('media')}.</p>
+											{#if detail.published_at}
+												<div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+													<span class="absolute -left-6 top-1 h-4 w-4 rounded-full border-2 border-white bg-emerald-500 ring-4 ring-emerald-100"></span>
+													<div>
+														<p class="text-sm font-semibold text-slate-800">{tr('Terbit')}</p>
+														<p class="text-xs text-muted-foreground mt-0.5">{tr('Artikel berhasil dipublikasikan di')} {detail.media_name ?? tr('media')}.</p>
+													</div>
+													<span class="text-xs text-muted-foreground font-mono shrink-0">{dt(detail.published_at)}</span>
 												</div>
-												<span class="text-xs text-muted-foreground font-mono shrink-0">{dt(detail.published_at)}</span>
-											</div>
-										{/if}
+											{/if}
 										{#if detail.created_at}
 											<div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
 												<span class="absolute -left-6 top-1 h-4 w-4 rounded-full border-2 border-white bg-slate-300 ring-4 ring-slate-100"></span>
