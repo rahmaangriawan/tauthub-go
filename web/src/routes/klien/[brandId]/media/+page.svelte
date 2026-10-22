@@ -1722,7 +1722,19 @@
 										<!-- Indikator GEO = centang AI Cited. Tidak ada centang
 										     berarti tidak ada indikator → disembunyikan. -->
 										{#if m.seo_ai_citation === true}
-											<span class="aiCitationBadge" title={tr('Sumber AI')} aria-label={tr('Sumber AI')}><Check size={11} /></span>
+											<Tooltip.Root>
+												<Tooltip.Trigger>
+													{#snippet child({ props })}
+														<span {...props} class="aiCitationBadge" aria-label={tr('Sumber AI')}><Check size={11} aria-hidden="true" /></span>
+													{/snippet}
+												</Tooltip.Trigger>
+												<Tooltip.Portal>
+													<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+														<Tooltip.Arrow class="uiTipArrow" />
+														{tr('Situs ini disebut sebagai salah satu sumber jawaban AI Google')}
+													</Tooltip.Content>
+												</Tooltip.Portal>
+											</Tooltip.Root>
 										{/if}
 									</div>
 								</td>
