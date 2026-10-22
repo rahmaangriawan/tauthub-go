@@ -40,7 +40,7 @@
 	// GET /v1/partner/publications/{id} — payload lebih kaya dari baris tabel
 	// (parity PublicationDetail di app lama).
 	type PubDetail = Pub & {
-		document: { slug: string | null; meta_description: string | null } | null;
+		document: { slug: string | null; meta_description: string | null; excerpt?: string | null } | null;
 		attempts: Array<{
 			attempt_number: number; status: string;
 			error_code: string | null; error_message: string | null;
@@ -1522,9 +1522,9 @@
 										<h3 class="text-base sm:text-lg font-bold text-slate-900 leading-snug break-words">
 											{detail.document_title ?? tr('Artikel')}
 										</h3>
-										{#if detail.document?.meta_description}
+										{#if detail.document?.meta_description || detail.document?.excerpt}
 											<p class="mt-1.5 line-clamp-3 text-xs sm:text-sm leading-relaxed text-slate-500">
-												{detail.document.meta_description}
+												{detail.document.meta_description || detail.document.excerpt}
 											</p>
 										{/if}
 									<p class="text-xs sm:text-sm text-muted-foreground mt-1.5 flex items-center gap-1.5 flex-wrap">
@@ -1786,15 +1786,6 @@
 										{/if}
 									</div>
 								</div>
-
-								{#if liveUrl}
-									<p class="text-xs sm:text-sm">
-										<a href={liveUrl} target="_blank" rel="noreferrer" class="font-medium text-blue-600 hover:underline break-all inline-flex items-center gap-1">
-											<span>{liveUrl}</span>
-											<ExternalLink size={13} class="shrink-0" />
-										</a>
-									</p>
-								{/if}
 
 								<!-- Input bar + Tombol Buka URL / Edit URL -->
 								<div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">

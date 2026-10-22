@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -539,7 +541,11 @@ func (d *Deps) PublicationGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	document, _ := d.queryRow(r.Context(),
-		"SELECT title, slug, meta_title, meta_description, status, current_version FROM content_documents WHERE id = $1 LIMIT 1",
+		`SELECT title, slug, meta_title, meta_description, status, current_version,
+		        COALESCE((SELECT cv.content FROM content_versions cv
+		                  WHERE cv.document_id = content_documents.id AND cv.version = content_documents.current_version
+		                  LIMIT 1), '') AS content_html
+		 FROM content_documents WHERE id = $1 LIMIT 1`,
 		publication.raw("document_id"))
 	media, _ := d.queryRow(r.Context(),
 		"SELECT website_url, integration_type FROM media WHERE id = $1 LIMIT 1", publication.raw("media_id"))
@@ -606,6 +612,36 @@ func (d *Deps) PublicationGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, payload)
 }
 
+// publicationExcerptMaxWords: batas kata ringkasan otomatis dari isi artikel.
+// Dipakai hanya bila klien tidak mengisi meta deskripsi.
+const publicationExcerptMaxWords = 17
+
+var (
+	reExcerptDropBlocks = regexp.MustCompile(`(?is)<script[^>]*>.*?</script\s*>|<style[^>]*>.*?</style\s*>|<noscript[^>]*>.*?</noscript\s*>|<svg[^>]*>.*?</svg\s*>|<iframe[^>]*>.*?</iframe\s*>`)
+	reExcerptTags       = regexp.MustCompile(`(?s)<[^>]+>`)
+	reExcerptSpace      = regexp.MustCompile(`\s+`)
+)
+
+// excerptFromHTML: teks polos awal artikel, dibatasi jumlah kata supaya rapi
+// dipakai sebagai pengganti meta deskripsi yang kosong.
+func excerptFromHTML(raw string, maxWords int) string {
+	if strings.TrimSpace(raw) == "" || maxWords <= 0 {
+		return ""
+	}
+	s := reExcerptDropBlocks.ReplaceAllString(raw, " ")
+	s = reExcerptTags.ReplaceAllString(s, " ")
+	s = html.UnescapeString(s)
+	s = strings.TrimSpace(reExcerptSpace.ReplaceAllString(s, " "))
+	if s == "" {
+		return ""
+	}
+	words := strings.Fields(s)
+	if len(words) > maxWords {
+		return strings.Join(words[:maxWords], " ") + "…"
+	}
+	return s
+}
+
 func documentJSON(row rowMap) any {
 	if row == nil {
 		return nil
@@ -615,6 +651,7 @@ func documentJSON(row rowMap) any {
 		"slug":             row.raw("slug"),
 		"meta_title":       row.raw("meta_title"),
 		"meta_description": row.raw("meta_description"),
+		"excerpt":          excerptFromHTML(row.strOr("content_html", ""), publicationExcerptMaxWords),
 		"status":           row.raw("status"),
 		"current_version":  row.raw("current_version"),
 	}
