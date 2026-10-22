@@ -179,6 +179,28 @@
   border-radius: 50%;
   cursor: help;
 }
+/* Kolom GEO / AI Trust: dua slot tetap supaya badge skor tidak bergeser
+   antar baris ketika centang AI Cited muncul atau tidak. */
+.geoAiTrustIndicators {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.geoAiTrustScore {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 40px;
+  flex-shrink: 0;
+}
+.geoAiTrustVerify {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
 .bookmarkActionBtn {
   background: transparent;
   border: none;

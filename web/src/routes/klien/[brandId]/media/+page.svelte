@@ -1720,25 +1720,27 @@
 								<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getDa(m)}</span></td>
 
 								<td class="modernTd" style="text-align:center">
-									<div class="inline-flex items-center gap-1.5 whitespace-nowrap">
-										<span class="scoreBoxPill aiTrustPill" style={aiTrustToneStyle(getAiTrust(m))}>{getAiTrust(m)}</span>
-										<!-- Indikator GEO = centang AI Cited. Tidak ada centang
-										     berarti tidak ada indikator → disembunyikan. -->
-										{#if m.seo_ai_citation === true}
-											<Tooltip.Root>
-												<Tooltip.Trigger>
-													{#snippet child({ props })}
-														<span {...props} class="aiCitationBadge" aria-label={tr('Sumber AI')}><Check size={11} aria-hidden="true" /></span>
-													{/snippet}
-												</Tooltip.Trigger>
-												<Tooltip.Portal>
-													<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
-														<Tooltip.Arrow class="uiTipArrow" />
-														{tr('Situs ini disebut sebagai salah satu sumber jawaban AI Google')}
-													</Tooltip.Content>
-												</Tooltip.Portal>
-											</Tooltip.Root>
-										{/if}
+									<div class="geoAiTrustIndicators">
+										<span class="geoAiTrustScore"><span class="scoreBoxPill aiTrustPill" style={aiTrustToneStyle(getAiTrust(m))}>{getAiTrust(m)}</span></span>
+										<!-- Slot centang berukuran tetap supaya posisi skor tidak
+										     bergeser antar baris; kosong bila tidak dikutip AI. -->
+										<span class="geoAiTrustVerify">
+											{#if m.seo_ai_citation === true}
+												<Tooltip.Root>
+													<Tooltip.Trigger>
+														{#snippet child({ props })}
+															<span {...props} class="aiCitationBadge" aria-label={tr('Sumber AI')}><Check size={11} aria-hidden="true" /></span>
+														{/snippet}
+													</Tooltip.Trigger>
+													<Tooltip.Portal>
+														<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+															<Tooltip.Arrow class="uiTipArrow" />
+															{tr('Situs ini disebut sebagai salah satu sumber jawaban AI Google')}
+														</Tooltip.Content>
+													</Tooltip.Portal>
+												</Tooltip.Root>
+											{/if}
+										</span>
 									</div>
 								</td>
 
