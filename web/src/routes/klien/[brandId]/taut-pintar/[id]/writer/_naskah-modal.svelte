@@ -15,7 +15,8 @@
 	import Select from '$lib/components/select.svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
 	import { tcToRp } from '$lib/credits/rupiah';
-	import { textToHtml, cleanPastedText, clipboardHtmlToArticle, isDocsClipboardHtml } from '../../_shared';
+	import { textToHtml, cleanPastedText } from '../../_shared';
+	import { clipboardHtmlToArticle, isDocsClipboardHtml } from '$lib/editor/clipboard-html';
 	import { angleInstructionExample } from '$lib/taut/angle-examples';
 
 	let {
@@ -1373,7 +1374,17 @@
 									<div class="article-html max-w-none text-sm" style="min-height: 320px;">{@html sanitizeHtml(streamingHtml ?? '')}</div>
 								</div>
 							{:else}
-								<RichTextEditor bind:value={html} bind:stats={editorStats} brandId={brandId} campaignId={campaignId} mediaId={mediaId} ariaLabel={tr('Isi artikel')} minHeight={360} />
+								<RichTextEditor
+									bind:value={html}
+									bind:stats={editorStats}
+									brandId={brandId}
+									campaignId={campaignId}
+									mediaId={mediaId}
+									ariaLabel={tr('Isi artikel')}
+									minHeight={360}
+									takeTitleFromPaste={title.trim() === ''}
+									onPasteTitle={(t) => (title = t)}
+								/>
 							{/if}
 						</div>
 						{#if campaignId && mediaId}

@@ -10,7 +10,8 @@
 	import { sanitizeHtml } from '$lib/sanitize-html';
 	import { tr } from '$lib/i18n/phrases';
 	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
-	import { applyInlineFormat, readToolState, isToggleCommand, toolCommandActive, placeCaretAtStart, NO_TOOL_STATE, type ToolState } from '$lib/editor/inline-format';
+	import { applyInlineFormat, readToolState, isToggleCommand, toolCommandActive, placeCaretAtEnd, placeCaretAtStart, NO_TOOL_STATE, type ToolState } from '$lib/editor/inline-format';
+	import { clipboardHtmlToArticle, isDocumentClipboardHtml } from '$lib/editor/clipboard-html';
 
 	let {
 		value = $bindable(''),
@@ -26,7 +27,11 @@
 		fill = false,
 		ariaLabel,
 		uploadImage,
-		stats = $bindable({ words: 0, links: 0, images: 0 })
+		stats = $bindable({ words: 0, links: 0, images: 0 }),
+		/** Tempelan dokumen (Google Docs/Word) mengisi judul artikel dari H1
+		 *  pertama — hanya bila pemanggil masih punya kolom judul kosong. */
+		takeTitleFromPaste = false,
+		onPasteTitle
 	}: {
 		value?: string;
 		brandId?: string;
@@ -45,6 +50,14 @@
 		uploadImage?: (file: File) => Promise<string>;
 		/** Statistik isi (kata, tautan aktif, gambar) — dihitung saat konten berubah. */
 		stats?: { words: number; links: number; images: number };
+		/**
+		 * `true` = H1 pertama dari tempelan dokumen diangkat jadi judul artikel
+		 * dan dikeluarkan dari isi. Pemanggil mengisi ini hanya saat kolom
+		 * judulnya masih kosong, supaya judul yang sudah ditulis tidak tertimpa.
+		 */
+		takeTitleFromPaste?: boolean;
+		/** Menerima judul hasil H1 tempelan (dipanggil hanya bila diangkat). */
+		onPasteTitle?: (title: string) => void;
 	} = $props();
 
 	let bodyEl = $state<HTMLDivElement | null>(null);
@@ -560,10 +573,58 @@
 	// /assets) tanpa membuka modal.
 	function onBodyPaste(e: ClipboardEvent) {
 		if (disabled || mode !== 'rich') return;
+		// Clipboard dokumen (Google Docs, Word web) membawa flavor text/html berisi
+		// inline style ekspor: <span style="font-family:…;font-size:11pt">, <p dir="ltr"
+		// style="line-height:1.38">, pembungkus docs-internal-guid. Kalau dibiarkan,
+		// browser menempelkannya apa adanya dan artikel jadi penuh style inline.
+		// Diperiksa SEBELUM berkas gambar: dokumen yang memuat gambar juga membawa
+		// item gambar di clipboard, dan dulu itu berubah jadi unggahan gambar saja
+		// sehingga teks dokumennya hilang.
+		const htmlFlavor = e.clipboardData?.getData('text/html') ?? '';
+		if (isDocumentClipboardHtml(htmlFlavor)) {
+			const kaya = clipboardHtmlToArticle(htmlFlavor, {
+				takeTitle: takeTitleFromPaste,
+				fallbackTitleFromFirstLine: false
+			});
+			if (kaya) {
+				e.preventDefault();
+				// Modal pemanggil punya listener paste global (gambar → cover, berkas
+				// → unggah dokumen). Dokumen yang sudah dikonversi tidak boleh ikut
+				// diproses dua kali di sana.
+				e.stopPropagation();
+				insertPastedArticle(kaya.html);
+				if (takeTitleFromPaste && kaya.title) onPasteTitle?.(kaya.title);
+				return;
+			}
+		}
 		const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'));
 		if (!file) return;
 		e.preventDefault();
 		void pickImage(file);
+	}
+
+	/**
+	 * Sisipkan HTML hasil konversi. Editor yang masih kosong diisi langsung:
+	 * `insertHTML` di dalam paragraf kosong menaruh blok (h2/table/ul) di dalam
+	 * <p>, dan browser lalu menebak-nebak struktur hasilnya.
+	 */
+	function insertPastedArticle(html: string) {
+		const body = bodyEl;
+		if (!body || !html) return;
+		body.focus();
+		const teksKosong = (body.textContent ?? '').replace(/\u00A0/g, '').trim() === '';
+		const adaBlok = Boolean(body.querySelector('img, iframe, table, ul, ol, h1, h2, h3, h4, h5, h6'));
+		if (teksKosong && !adaBlok) {
+			body.innerHTML = html;
+			placeCaretAtEnd(body);
+		} else {
+			const sel = window.getSelection();
+			if (!sel || sel.rangeCount === 0 || !body.contains(sel.anchorNode)) placeCaretAtEnd(body);
+			document.execCommand('insertHTML', false, html);
+		}
+		sync();
+		refreshToolState();
+		commitHistory();
 	}
 
 	function onBodyDrop(e: DragEvent) {

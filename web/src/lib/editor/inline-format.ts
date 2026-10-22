@@ -218,3 +218,13 @@ export function placeCaretAtStart(el: Element) {
 	sel?.removeAllRanges();
 	sel?.addRange(r);
 }
+
+/** Letakkan kursor di akhir isi elemen (dipakai setelah menempel dokumen). */
+export function placeCaretAtEnd(el: Element) {
+	const r = document.createRange();
+	r.selectNodeContents(el);
+	r.collapse(false);
+	const sel = window.getSelection();
+	sel?.removeAllRanges();
+	sel?.addRange(r);
+}
