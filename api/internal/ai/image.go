@@ -147,8 +147,9 @@ func fixedImageEndpoint(base string) bool {
 	return isPollinations(base) || isOpenRouter(base)
 }
 
-// DefaultImageCreditCost: tarif kredit default per gambar AI (2 TC ≈ Rp 2.000).
-const DefaultImageCreditCost = 2
+// DefaultImageCreditCost: nominal default per gambar AI. Satuan saldo sudah
+// rupiah penuh (konversi TC): 2 TC lama ≈ Rp 2.000.
+const DefaultImageCreditCost = 2000
 
 // ImageCreditCost: tarif per gambar dari runtime (kolom
 // platform_ai_configuration.image_credit_cost, diatur admin lewat tab "Atur
