@@ -1520,6 +1520,11 @@
 										<h3 class="text-base sm:text-lg font-bold text-slate-900 leading-snug break-words">
 											{detail.document_title ?? tr('Artikel')}
 										</h3>
+										{#if detail.document?.meta_description}
+											<p class="mt-1.5 line-clamp-3 text-xs sm:text-sm leading-relaxed text-slate-500">
+												{detail.document.meta_description}
+											</p>
+										{/if}
 									<p class="text-xs sm:text-sm text-muted-foreground mt-1.5 flex items-center gap-1.5 flex-wrap">
 										<span class="font-medium text-slate-700">{detail.client_name ?? tr('Klien')}</span>
 										<span class="text-slate-300">•</span>
