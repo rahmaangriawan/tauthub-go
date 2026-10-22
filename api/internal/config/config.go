@@ -35,6 +35,10 @@ type Config struct {
 	CmsEncryptionSecret     string
 	AuthRateLimitPerMinute  int
 	WriteRateLimitPerMinute int
+	// SSRGateRateLimitPerMinute: batas per pengguna untuk /v1/auth/ssr-gate.
+	// Endpoint ini dipanggil setiap layout server-side, jadi ambangnya jauh
+	// lebih longgar dari bucket kredensial.
+	SSRGateRateLimitPerMinute int
 
 	GoogleClientID     string
 	GoogleClientSecret string
@@ -100,6 +104,9 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if c.WriteRateLimitPerMinute, err = getInt("WRITE_RATE_LIMIT_PER_MINUTE", 120); err != nil {
+		return nil, err
+	}
+	if c.SSRGateRateLimitPerMinute, err = getInt("SSR_GATE_RATE_LIMIT_PER_MINUTE", 120); err != nil {
 		return nil, err
 	}
 

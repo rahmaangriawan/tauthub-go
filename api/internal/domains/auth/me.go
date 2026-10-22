@@ -95,18 +95,21 @@ func (d *Deps) TwoFactorVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ip := authRequestIp(r)
-	if err := auth.CheckAuthRate(r.Context(), d.Pool, "2fa:ip:"+orUnknown(ip), 10); err != nil {
+	payload, ok := auth.VerifyTicket(d.Cfg.Secret, body.Challenge)
+	if !ok {
+		httpx.Error(w, http.StatusUnauthorized, "Sesi verifikasi kedaluwarsa. Login ulang.")
+		return
+	}
+
+	// Kunci per pengguna dari tiket (tiket sudah diverifikasi), plus kunci per
+	// challenge supaya satu tiket tidak bisa ditebak berulang. Bucket per IP
+	// dibuang: membuat tiket baru sudah dibatasi oleh rate limit login.
+	if err := auth.CheckAuthRate(r.Context(), d.Pool, "2fa:user:"+orUnknown(payload.UID), 10); err != nil {
 		writeRateErr(w, err)
 		return
 	}
 	if err := auth.CheckAuthRate(r.Context(), d.Pool, "2fa:code:"+truncate24(body.Challenge), 5); err != nil {
 		writeRateErr(w, err)
-		return
-	}
-
-	payload, ok := auth.VerifyTicket(d.Cfg.Secret, body.Challenge)
-	if !ok {
-		httpx.Error(w, http.StatusUnauthorized, "Sesi verifikasi kedaluwarsa. Login ulang.")
 		return
 	}
 

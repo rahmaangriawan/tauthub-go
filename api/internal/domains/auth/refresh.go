@@ -37,14 +37,16 @@ func (d *Deps) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := auth.CheckAuthRate(r.Context(), d.Pool, "refresh:ip:"+orUnknown(auth.RequestIp(r.Header)), d.Cfg.AuthRateLimitPerMinute); err != nil {
-		writeRateErr(w, err)
-		return
-	}
-
 	claims, err := auth.VerifyRefreshToken(d.Cfg.Secret, d.Cfg.AppName, token)
 	if err != nil {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid refresh token")
+		return
+	}
+
+	// Rate limit per pengguna (sub = user ID pada refresh token), bukan per IP:
+	// beberapa pengguna di satu jaringan tidak boleh saling menghabiskan kuota.
+	if err := auth.CheckAuthRate(r.Context(), d.Pool, "refresh:user:"+orUnknown(claims.Sub), d.Cfg.AuthRateLimitPerMinute); err != nil {
+		writeRateErr(w, err)
 		return
 	}
 

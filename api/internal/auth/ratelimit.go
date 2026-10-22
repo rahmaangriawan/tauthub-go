@@ -106,6 +106,14 @@ func CheckRate(ctx context.Context, pool *pgxpool.Pool, bucket string, maxPerMin
 	return nil
 }
 
+// Kunci bucket: endpoint yang sudah punya identitas memakai user ID
+// (`refresh:user:<id>`, `ssr:user:<id>`, `change-pass:user:<id>`,
+// `verify-pass:user:<id>`, `2fa:user:<id>`, `google:link:user:<id>`, dan
+// `write:*:<userID>`), supaya beberapa pengguna di satu IP tidak saling
+// menghabiskan kuota. Bucket per IP hanya dipakai endpoint pra-login yang belum
+// punya identitas (login, register, forgot/reset password, referral, callback
+// publik) — di sana IP adalah satu-satunya penahan brute-force.
+//
 // CheckAuthRate: login/register/2fa (default env AUTH_RATE_LIMIT_PER_MINUTE).
 func CheckAuthRate(ctx context.Context, pool *pgxpool.Pool, bucket string, defaultPerMinute int) error {
 	return CheckRate(ctx, pool, bucket, defaultPerMinute, 60)

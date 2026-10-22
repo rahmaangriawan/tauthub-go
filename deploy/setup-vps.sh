@@ -120,6 +120,7 @@ DB_POOL_SIZE=10
 PLATFORM_ADMIN_EMAILS=wantek@gmail.com
 AUTH_RATE_LIMIT_PER_MINUTE=10
 WRITE_RATE_LIMIT_PER_MINUTE=120
+SSR_GATE_RATE_LIMIT_PER_MINUTE=120
 
 # JOB_INLINE=false: job domain content tidak jalan inline — antrean hanya
 # terkuras oleh tauthub-scheduler.service (wajib hidup, lihat .env.example).

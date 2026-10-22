@@ -21,7 +21,8 @@ func (d *Deps) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := auth.CheckAuthRate(r.Context(), d.Pool, "change-pass:ip:"+orUnknown(authRequestIp(r)), d.Cfg.AuthRateLimitPerMinute); err != nil {
+	// Rate limit per pengguna (token Bearer sudah diverifikasi di atas).
+	if err := auth.CheckAuthRate(r.Context(), d.Pool, "change-pass:user:"+user.ID, d.Cfg.AuthRateLimitPerMinute); err != nil {
 		writeRateErr(w, err)
 		return
 	}
@@ -96,7 +97,8 @@ func (d *Deps) VerifyPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := auth.CheckAuthRate(r.Context(), d.Pool, "verify-pass:ip:"+orUnknown(authRequestIp(r)), d.Cfg.AuthRateLimitPerMinute); err != nil {
+	// Rate limit per pengguna (token Bearer sudah diverifikasi di atas).
+	if err := auth.CheckAuthRate(r.Context(), d.Pool, "verify-pass:user:"+user.ID, d.Cfg.AuthRateLimitPerMinute); err != nil {
 		writeRateErr(w, err)
 		return
 	}

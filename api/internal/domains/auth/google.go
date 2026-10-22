@@ -316,13 +316,14 @@ func (d *Deps) GoogleLink(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusConflict, "Sesi penghubung akun Google tidak valid atau kedaluwarsa. Coba lagi.")
 		return
 	}
-	if err := auth.CheckAuthRate(r.Context(), d.Pool, "google:link:"+orUnknown(authRequestIp(r)), 30); err != nil {
-		writeRateErr(w, err)
-		return
-	}
 	uid, sub, email, name, picture := ticket.Data["uid"], ticket.Data["sub"], ticket.Data["email"], ticket.Data["name"], ticket.Data["picture"]
 	if uid == "" || sub == "" {
 		httpx.Error(w, http.StatusConflict, "Sesi penghubung akun Google tidak valid.")
+		return
+	}
+	// Kunci per pengguna dari tiket (tiket sudah diverifikasi di atas).
+	if err := auth.CheckAuthRate(r.Context(), d.Pool, "google:link:user:"+uid, 30); err != nil {
+		writeRateErr(w, err)
 		return
 	}
 

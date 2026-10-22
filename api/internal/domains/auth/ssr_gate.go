@@ -44,14 +44,18 @@ func (d *Deps) SSRGate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := auth.CheckAuthRate(r.Context(), d.Pool, "ssr:ip:"+orUnknown(auth.RequestIp(r.Header)), d.Cfg.AuthRateLimitPerMinute); err != nil {
-		writeRateErr(w, err)
-		return
-	}
-
 	claims, err := auth.VerifyRefreshToken(d.Cfg.Secret, d.Cfg.AppName, token)
 	if err != nil {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid refresh token")
+		return
+	}
+
+	// Rate limit per pengguna, bukan per IP: gate ini dipanggil setiap layout
+	// server-side (admin/klien/mitra), jadi kunci per IP membuat semua pengguna
+	// di satu jaringan berbagi satu kuota dan pengguna aktif cepat terkunci.
+	// Token sudah diverifikasi di atas, jadi `sub` (user ID) tepercaya.
+	if err := auth.CheckAuthRate(r.Context(), d.Pool, "ssr:user:"+orUnknown(claims.Sub), d.Cfg.SSRGateRateLimitPerMinute); err != nil {
+		writeRateErr(w, err)
 		return
 	}
 
