@@ -308,7 +308,8 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 	partnerID, hasPartner := strField(body, "partner_id")
 
 	// Masa berlaku tautan media (kebijakan media): 0 = permanen, >0 = bulan.
-	linkDuration := 12
+	// Bawaan permanen — tautan media Tauthub dijaga tetap tayang.
+	linkDuration := 0
 	if v, has := intField(body, "link_duration_months"); has {
 		if v < 0 || v > 120 {
 			writeErr(w, d, errUnprocessable("Invalid link_duration_months"))

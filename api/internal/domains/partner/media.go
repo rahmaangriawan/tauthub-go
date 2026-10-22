@@ -352,8 +352,8 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		maxLinks = v
 	}
-	// Masa berlaku tautan: 0 = permanen, >0 = bulan (default 12).
-	linkDuration := 12
+	// Masa berlaku tautan: 0 = permanen, >0 = bulan (bawaan permanen).
+	linkDuration := 0
 	if v, present := intField(body, "link_duration_months"); present {
 		if v < 0 || v > 120 {
 			httpx.Error(w, http.StatusUnprocessableEntity, "Invalid link_duration_months")

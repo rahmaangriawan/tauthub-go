@@ -19,7 +19,7 @@ export const LINK_DURATION_OPTIONS = [
 	{ value: 36, label: '36 Bulan', short: '36 Bln SLA' }
 ] as const;
 
-export const DEFAULT_LINK_DURATION_MONTHS = 12;
+export const DEFAULT_LINK_DURATION_MONTHS = 0;
 
 /** Nilai apa pun dari API → bulan yang wajar (0 tetap 0 = permanen). */
 export function normalizeLinkDurationMonths(value: unknown): number {

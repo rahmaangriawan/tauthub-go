@@ -2218,7 +2218,13 @@
 										onclick={() => { if (linkDurationPermanent) form.link_duration_months = '12'; }}
 									>{tr('Jangka Waktu')}</button>
 								</div>
-								{#if !linkDurationPermanent}
+								{#if linkDurationPermanent}
+									<div class="mt-2 rounded-xl border p-3" style="border-color: var(--border); background: var(--accent);">
+										<p class="text-[12px] leading-relaxed font-medium" style="color: var(--primary);">
+											{tr('Tautan tetap tayang terus — tidak pernah dilepas dan tidak ada masa kedaluwarsanya. Klien tidak perlu khawatir tautannya hilang sendiri.')}
+										</p>
+									</div>
+								{:else}
 									<div class="mt-2 rounded-xl border p-3" style="border-color: var(--border); background: var(--accent);">
 										<p class="text-[12px] leading-relaxed font-medium" style="color: var(--primary);">
 											{tr('Klien akan memprioritaskan website yang memberikan garansi hyperlink tayang permanen')}
@@ -2233,7 +2239,6 @@
 										</div>
 									</div>
 								{/if}
-								<span class="mt-1 block text-xs text-muted-foreground">{tr('Apakah tautan yang sudah tayang dijamin tetap ada. Pilih "Permanen" bila tautan tidak akan pernah dilepas; pilih "Jangka Waktu" lalu tentukan berapa bulan tautan dijamin (mis. 12 bulan). Nilai ini menentukan masa pemantauan 404 dan masa garansi klaim klien.')}</span>
 							</div>
 					</div>
 
