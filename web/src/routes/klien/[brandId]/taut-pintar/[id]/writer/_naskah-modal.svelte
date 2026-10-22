@@ -2497,7 +2497,7 @@
 
 <style>
 	/* Kartu pilihan metode draf AI. Seluruh kartu = label, jadi klik di mana pun
-	   memilih radio; focus-within menjaga cincin fokus saat navigasi keyboard. */
+	   memilih radio; cincin fokus keyboard dijaga lewat :has(input:focus-visible). */
 	.genChoiceCard {
 		display: flex;
 		align-items: flex-start;
@@ -2515,14 +2515,16 @@
 	.genChoiceCard:hover {
 		border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
 	}
-	.genChoiceCard:focus-within {
+	/* Cincin fokus hanya untuk navigasi keyboard: kalau ikut muncul saat kartu
+	   diklik (focus-within), garisnya bertumpuk dengan border kartu terpilih
+	   dan terlihat seperti border ganda. */
+	.genChoiceCard:has(input:focus-visible) {
 		outline: 2px solid var(--primary);
 		outline-offset: 2px;
 	}
 	.genChoiceCardOn {
 		border-color: var(--primary);
 		background: color-mix(in srgb, var(--accent) 60%, #fff);
-		box-shadow: inset 0 0 0 1px var(--primary);
 	}
 	.genChoiceCardOn:hover {
 		border-color: var(--primary);
