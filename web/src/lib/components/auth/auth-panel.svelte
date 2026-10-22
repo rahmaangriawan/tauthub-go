@@ -18,8 +18,7 @@
 		type TokenResponse
 	} from '$lib/auth';
 	import TurnstileWidget from '$lib/components/turnstile.svelte';
-	import GoogleRoleModal from './google-role-modal.svelte';
-
+	
 	type Mode = 'login' | 'register';
 	type Role = 'client' | 'partner';
 
@@ -57,12 +56,7 @@
 	let turnstileNonce = $state(0);
 	let verified = $state(false);
 
-	// Modal pemilihan peran untuk Daftar dengan Google. `googleRole` sengaja
-	// mulai null supaya tombol "Lanjut ke Google" disabled sampai user memilih
-	// (brief §8); nilai awal ini terpisah dari radio peran di form.
-	let googleModalOpen = $state(false);
 	let googleBusy = $state(false);
-	let googleRole = $state<Role | null>(untrack(() => lockedRole));
 
 	const home = (r?: string) => resolveHomeRoute(r);
 
@@ -159,18 +153,55 @@
 	}
 
 	async function doRegister() {
+		// Welcome Gate: form daftar tidak lagi menanyakan peran. Setelah isian
+		// lengkap, draf disimpan supaya halaman /register-role (pemilihan peran)
+		// bisa melanjutkan pendaftaran dengan peran pilihan user.
+		if (!lockedRole) {
+			const draft = {
+				display_name: displayName.trim(),
+				email: email.trim().toLowerCase(),
+				password,
+				turnstile_token: turnstileToken
+			};
+			try {
+				sessionStorage.setItem('tauthub_reg_draft', JSON.stringify(draft));
+			} catch {
+				// sessionStorage bisa diblokir: jatuh ke pendaftaran dengan default,
+				// lebih baik daripada pendaftaran macet.
+				const payload: Record<string, unknown> = {
+					email: draft.email, password: draft.password, display_name: draft.display_name,
+					role: 'client', turnstile_token: draft.turnstile_token
+				};
+				await postRegister(payload);
+				return;
+			}
+			const params = new URLSearchParams();
+			const ref = referralCode();
+			if (ref) params.set('ref', ref);
+			const returnTo = page.url.searchParams.get('returnTo');
+			if (returnTo) params.set('returnTo', returnTo);
+			await goto('/register-role' + (params.size ? `?${params}` : ''));
+			return;
+		}
+
 		const ref = referralCode();
 		const payload: Record<string, unknown> = {
 			email: email.trim().toLowerCase(),
 			password,
 			display_name: displayName.trim(),
-			role,
+			role: lockedRole,
 			// App lama tidak lagi menanyakan kategori media; nilai tetap 'lainnya'
 			// karena backend mewajibkannya untuk peran Mitra.
-			partner_category: role === 'partner' ? 'lainnya' : undefined,
+			partner_category: lockedRole === 'partner' ? 'lainnya' : undefined,
 			turnstile_token: turnstileToken
 		};
-		if (ref) payload.referral_code = ref;
+		await postRegister(payload);
+	}
+
+	/** Kirim pendaftaran + auto-login; dipakai dari panel auth dan gate. */
+	async function postRegister(payload: Record<string, unknown>) {
+		const ref = referralCode();
+		if (ref) (payload as Record<string, unknown>).referral_code = ref;
 
 		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 		if (ref) headers['x-referral-code'] = ref;
@@ -186,7 +217,7 @@
 		const loginRes = await fetch('/v1/auth/login', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ email: email.trim().toLowerCase(), password })
+			body: JSON.stringify({ email: payload.email, password: payload.password })
 		});
 		if (!loginRes.ok) {
 			// Akun dibuat tetapi auto-login gagal: arahkan ke mode Masuk.
@@ -249,25 +280,28 @@
 		turnstileNonce += 1;
 	}
 
-	/** Tombol Google: mode Daftar membuka modal peran dulu (brief §6). */
+	/** Tombol Google: mode Daftar langsung ke consent Google; peran dipilih di
+	 *  Welcome Gate (/register-role) setelah callback — bukan sebelum consent. */
 	function startGoogle() {
 		if (mode === 'login') {
 			void goGoogle('login', 'client');
 			return;
 		}
 		// Halaman peran terkunci (mis. /register/mitra) langsung ke OAuth tanpa
-		// dialog: perannya sudah pasti dari URL.
+		// gate: perannya sudah pasti dari URL.
 		if (lockedRole) {
 			void goGoogle('register', lockedRole);
 			return;
 		}
-		// Modal peran selalu mulai tanpa pilihan, walau radio form punya default.
-		googleRole = null;
-		googleModalOpen = true;
+		// Tanpa peran → callback menaruh user di gate pemilihan peran.
+		void goGoogle('register', '');
 	}
 
-	function googleUrl(m: Mode, r: Role): string {
-		const params = new URLSearchParams({ mode: m, role: r });
+	function googleUrl(m: Mode, r: Role | ''): string {
+		const params = new URLSearchParams({ mode: m });
+		// Gate: tanpa role → callback menaruh user di /register-role (pemilihan
+		// peran) alih-alih langsung membuat akun dengan peran tertentu.
+		if (r) params.set('role', r);
 		const returnTo = page.url.searchParams.get('returnTo');
 		if (returnTo) params.set('returnTo', returnTo);
 		return `/v1/auth/google/url?${params}`;
@@ -278,7 +312,7 @@
 	 * Tanpa ini, konfigurasi yang belum lengkap melempar user ke halaman JSON
 	 * 503 dan mereka buntu tanpa cara kembali selain tombol back.
 	 */
-	async function goGoogle(m: Mode, r: Role) {
+	async function goGoogle(m: Mode, r: Role | '') {
 		const url = googleUrl(m, r);
 		googleBusy = true;
 		error = '';
@@ -297,23 +331,7 @@
 		window.location.href = url;
 	}
 
-	function continueGoogle() {
-		if (!googleRole) return;
-		void goGoogle('register', googleRole);
-	}
 </script>
-
-<GoogleRoleModal
-	open={googleModalOpen}
-	role={googleRole}
-	busy={googleBusy}
-	onSelect={(r) => (googleRole = r)}
-	onClose={() => {
-		googleModalOpen = false;
-		googleBusy = false;
-	}}
-	onContinue={continueGoogle}
-/>
 
 <h1 class="auth-title">
 	{challenge ? tr('Verifikasi Dua Langkah') : mode === 'login' ? tr('Selamat Datang Kembali') : tr('Buat Akun Tauthub')}
@@ -402,6 +420,9 @@
 				{/if}
 			</label>
 
+			<!-- Welcome Gate: peran dipilih di /register-role setelah form; radios ini
+     tersisa hanya untuk halaman peran terkunci (/register/klien, /register/mitra). -->
+		{#if lockedRole}
 			<div class="auth-field">
 				<span class="auth-label">{tr("Daftar sebagai")}<!-- Tooltip penjelas peran: muncul saat hover DAN focus agar dapat
 					     diakses keyboard (parity Tooltip app lama pada label ini). -->
@@ -439,6 +460,7 @@
 						/>{tr("Mitra")}</label>
 				</div>
 			</div>
+			{/if}
 		{/if}
 
 		<label class="auth-field">
