@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -46,30 +47,38 @@ var safeResolver = &net.Resolver{
 	},
 }
 
-// SafeClient: dialer dengan Control yang memeriksa setiap IP hasil
-// resolve (mencegah rebinding ke IP privat), redirect maks 5.
-func SafeClient(timeout time.Duration) *http.Client {
-	dialer := &net.Dialer{
-		Timeout:  timeout,
-		Resolver: safeResolver,
-		Control: func(_ string, address string, _ syscall.RawConn) error {
-			host, _, err := net.SplitHostPort(address)
-			if err != nil {
-				return err
-			}
-			ip := net.ParseIP(host)
-			if ip == nil {
-				return fmt.Errorf("alamat tidak valid")
-			}
-			if isBlockedIP(ip) {
-				return fmt.Errorf("diblokir safe-fetch: alamat privat/loopback")
-			}
-			return nil
-		},
-	}
-	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
+// safeSharedTransport: SATU transport untuk semua SafeClient. Sebelumnya tiap
+// panggilan SafeClient membuat transport baru → keep-alive tidak pernah
+// terpakai ulang dan tiap request membayar handshake TLS lagi (LLM, WordPress,
+// cek link). Dial timeout tetap dibatasi; batas total per request dipegang
+// http.Client.Timeout milik pemanggil.
+var (
+	safeTransportOnce   sync.Once
+	safeSharedTransport *http.Transport
+)
+
+func sharedSafeTransport() *http.Transport {
+	safeTransportOnce.Do(func() {
+		dialer := &net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			Resolver:  safeResolver,
+			Control: func(_ string, address string, _ syscall.RawConn) error {
+				host, _, err := net.SplitHostPort(address)
+				if err != nil {
+					return err
+				}
+				ip := net.ParseIP(host)
+				if ip == nil {
+					return fmt.Errorf("alamat tidak valid")
+				}
+				if isBlockedIP(ip) {
+					return fmt.Errorf("diblokir safe-fetch: alamat privat/loopback")
+				}
+				return nil
+			},
+		}
+		safeSharedTransport = &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				// Coba tcp4 terlebih dahulu agar koneksi ke CDN/host publik tidak terhambat
 				// rute IPv6 yang reset/timeout di ISP lokal (mis. rute IPv6 Cloudflare).
@@ -79,7 +88,26 @@ func SafeClient(timeout time.Duration) *http.Client {
 				}
 				return dialer.DialContext(ctx, network, addr)
 			},
-		},
+			// Tuning mengikuti goperf.dev: default Go hanya menyimpan 2 idle conn
+			// per host — terlalu kecil untuk backend yang memanggil host yang sama
+			// terus-menerus (LLM/Google/WordPress).
+			MaxIdleConns:          200,
+			MaxIdleConnsPerHost:   25,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
+	})
+	return safeSharedTransport
+}
+
+// SafeClient: klien dengan guard anti-SSRF (IP privat/loopback ditolak saat
+// dial, termasuk setelah DNS rebinding) + redirect maks 5. Transport dipakai
+// bersama supaya koneksi tetap hidup (keep-alive) antar panggilan.
+func SafeClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: sharedSafeTransport(),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("terlalu banyak redirect")

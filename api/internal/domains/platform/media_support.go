@@ -1983,7 +1983,7 @@ func (d *Deps) mpRecommendMedia(ctx context.Context, category string, budget *fl
 	if err != nil {
 		return nil, err
 	}
-	scored := []mpMediaRecommendation{}
+	scored := make([]mpMediaRecommendation, 0, len(rows))
 	for _, raw := range rows {
 		row := ptRow(ptNormalizeMap(raw))
 		id := row.strOr("id", "")

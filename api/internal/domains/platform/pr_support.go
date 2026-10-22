@@ -272,7 +272,7 @@ func (d *Deps) prCoverageQuality(ctx context.Context, ids []string) *prIndicator
 	if err != nil {
 		return nil
 	}
-	scores := []float64{}
+	scores := make([]float64, 0, len(rows))
 	tiers := map[string]int{}
 	for _, r := range rows {
 		if r.has("media_quality_score") {
@@ -305,7 +305,7 @@ func (d *Deps) prMessageConsistency(ctx context.Context, ids []string) *prIndica
 	if err != nil {
 		return nil
 	}
-	scores := []float64{}
+	scores := make([]float64, 0, len(rows))
 	for _, r := range rows {
 		if r.has("consistency_score") {
 			scores = append(scores, r.numOr("consistency_score"))
@@ -331,7 +331,7 @@ func (d *Deps) prCompliance(ctx context.Context, ids []string) *prIndicator {
 	if err != nil {
 		return nil
 	}
-	scores := []float64{}
+	scores := make([]float64, 0, len(rows))
 	passed, failed := 0, 0
 	for _, r := range rows {
 		if r.has("compliance_score") {

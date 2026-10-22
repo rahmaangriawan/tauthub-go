@@ -71,7 +71,7 @@ func (d *Deps) TautProfileAnalyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fakta dari file upload ready (extracted_text) sebagai source material.
-	fileFacts := []string{}
+	fileFacts := make([]string, 0, len(value.MaterialsFileIDs))
 	if len(value.MaterialsFileIDs) > 0 {
 		rows, err := d.queryRows(r.Context(),
 			`SELECT original_filename, extracted_text FROM taut_campaign_files

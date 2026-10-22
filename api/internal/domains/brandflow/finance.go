@@ -1162,7 +1162,7 @@ func (d *Deps) bsCoverageQuality(ctx context.Context, ids []string) map[string]a
 	if err != nil {
 		return nil
 	}
-	scores := []float64{}
+	scores := make([]float64, 0, len(rows))
 	tierBreakdown := map[string]int{}
 	for _, row := range rows {
 		if row.has("media_quality_score") {
@@ -1199,7 +1199,7 @@ func (d *Deps) bsMessageConsistency(ctx context.Context, ids []string) map[strin
 	if err != nil {
 		return nil
 	}
-	scores := []float64{}
+	scores := make([]float64, 0, len(rows))
 	for _, row := range rows {
 		if row.has("consistency_score") {
 			scores = append(scores, row.numOr("consistency_score"))
@@ -1262,7 +1262,7 @@ func (d *Deps) bsCompliance(ctx context.Context, ids []string) map[string]any {
 	if err != nil {
 		return nil
 	}
-	scores := []float64{}
+	scores := make([]float64, 0, len(rows))
 	passed, failed := 0, 0
 	for _, row := range rows {
 		if row.has("compliance_score") {

@@ -75,7 +75,6 @@ func (d *Deps) AIImageLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	topErrors := []map[string]any{}
 	topRows, err := d.queryRows(ctx,
 		`SELECT COALESCE(NULLIF(TRIM(e.error_detail), ''), 'Tanpa keterangan') AS detail,
 		        COUNT(*) AS total, MAX(e.created_at) AS last_at
@@ -86,6 +85,7 @@ func (d *Deps) AIImageLogs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
+	topErrors := make([]map[string]any, 0, len(topRows))
 	for _, row := range topRows {
 		topErrors = append(topErrors, map[string]any{
 			"detail": row.strOr("detail", ""), "total": row.intOr("total", 0), "last_at": row.timePtr("last_at"),

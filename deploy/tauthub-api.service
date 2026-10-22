@@ -9,6 +9,11 @@ User=tauthub
 Group=tauthub
 WorkingDirectory=__APP_DIR__/api
 EnvironmentFile=__APP_DIR__/.env
+# Soft limit memori Go: GC jadi lebih agresif hanya saat mendekati batas, sehingga
+# proses tidak di-OOM-killer kernel dan tidak memboroskan CPU saat memori longgar.
+# VPS 2 GB + swap 2 GB: 512MiB per proses Go (api/scheduler) masih menyisakan
+# ruang untuk PostgreSQL + nginx. Naikkan ke 768MiB bila VPS di-upgrade.
+Environment=GOMEMLIMIT=512MiB
 # Path upload absolut — sebelumnya relatif working directory (.data/uploads
 # di bawah cwd service). Nilai sama dengan path efektif lama, jadi berkas
 # yang sudah ada tetap terbaca.
