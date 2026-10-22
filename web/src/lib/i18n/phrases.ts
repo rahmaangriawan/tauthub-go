@@ -4525,8 +4525,10 @@ export const PHRASE_EN: Record<string, string> = {
   "Rata-rata waktu terbit NYATA media ini, dihitung dari riwayat publikasinya: dari artikel dikirim sampai tayang. Media yang biasanya terbit 1 jam setelah dikirim akan tampil \"SLA ± 1 jam\".": "This media's ACTUAL average publishing time, computed from its publication history: from article submission to going live. A media that usually publishes 1 hour after submission shows \"SLA ± 1 hour\".",
   "Tanda — berarti belum ada riwayat penerbitan yang cukup untuk menghitung SLA-nya.": "A dash means there is not enough publishing history yet to compute its SLA.",
   "Belum ada riwayat penerbitan yang cukup untuk menghitung SLA media ini.": "There is not enough publishing history yet to compute this media's SLA.",
-  "SLA ± {waktu} — rata-rata waktu terbit nyata media ini: artikel tayang sekitar {waktu} setelah dikirim.": "SLA ± {waktu} — this media's actual average publishing time: articles go live about {waktu} after submission.",
-};
+	  "SLA ± {waktu} — rata-rata waktu terbit nyata media ini: artikel tayang sekitar {waktu} setelah dikirim.": "SLA ± {waktu} — this media's actual average publishing time: articles go live about {waktu} after submission.",
+	  "Tulis Sendiri": "Write Yourself",
+	  "Buat artikel lewat Generate Konten atau Tulis Sendiri.": "Create the article via Generate Content or Write Yourself.",
+	};
 
 /**
  * Terjemahkan frasa UI. Saat locale = 'en', cari di PHRASE_EN;

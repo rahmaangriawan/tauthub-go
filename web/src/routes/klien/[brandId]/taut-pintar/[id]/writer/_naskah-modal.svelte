@@ -1931,18 +1931,15 @@
 												</a>
 											{/if}
 
-											<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
-												<span class="text-xs font-semibold">{tr('Fakta / Data Produk yang Wajib Masuk')} <span style="color: var(--destructive);">*</span></span>
-												<span class="flex items-center gap-1.5">
-													<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" disabled={copilotBusy || genBusy} title={tr('Serap fakta dari Brief Copilot yang dipilih')} onclick={() => void tarikFaktaCopilot()}>
-														{#if copilotBusy}<LoaderCircle size={12} class="animate-spin" />{:else}<Sparkles size={12} />{/if}
-														{copilotBusy ? tr('Menyerap…') : tr('Tarik dari Copilot')}
-													</button>
-													<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" title={tr('Logika contoh menyusul')}>
-														<Lightbulb size={12} /> {tr('Contoh Paste Chat WA')}
-													</button>
-												</span>
-											</div>
+												<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
+													<span class="text-xs font-semibold">{tr('Fakta / Data Produk yang Wajib Masuk')} <span style="color: var(--destructive);">*</span></span>
+													<span class="flex items-center gap-1.5">
+														<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" disabled={copilotBusy || genBusy} title={tr('Serap fakta dari Brief Copilot yang dipilih')} onclick={() => void tarikFaktaCopilot()}>
+															{#if copilotBusy}<LoaderCircle size={12} class="animate-spin" />{:else}<Sparkles size={12} />{/if}
+															{copilotBusy ? tr('Menyerap…') : tr('Tarik dari Copilot')}
+														</button>
+													</span>
+												</div>
 										<textarea
 											class="app-input mt-2 min-h-[130px] w-full resize-y text-sm"
 											placeholder={tr('Malas merangkai kalimat? Copy-paste saja teks mentahan dari chat WA, brosur, atau spesifikasi produk di sini. AI hanya akan menggunakan fakta dari kotak ini & Copilot…')}

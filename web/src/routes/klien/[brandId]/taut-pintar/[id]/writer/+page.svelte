@@ -1936,16 +1936,16 @@
 												{/if}
 											</button>
 
-											<button
-												type="button"
-												class="expAction h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors"
-												aria-label={tr('Unggah Artikel')}
-												disabled={bulkRunning || viewOnly}
-												onclick={() => openNaskahUpload(m)}
-											>
-												<Upload size={12} strokeWidth={2} class="text-slate-500 shrink-0" />
-												<span class="expTip">{tr('Unggah Artikel')}</span>
-											</button>
+												<button
+													type="button"
+													class="expAction h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors"
+													aria-label={tr('Tulis Sendiri')}
+													disabled={bulkRunning || viewOnly}
+													onclick={() => openNaskahUpload(m)}
+												>
+													<PencilLine size={12} strokeWidth={2} class="text-slate-500 shrink-0" />
+													<span class="expTip">{tr('Tulis Sendiri')}</span>
+												</button>
 										{/if}
 
 										<!-- Hapus: ikon saja (tidak ikut auto expand), nama tetap lewat
@@ -2177,8 +2177,8 @@
 																<span class="readyChip">{item.name}</span>
 															{/each}
 														</div>
-														{#if g.key === 'article'}
-															<p class="mt-1.5 text-[11px] leading-snug text-slate-500">{tr('Buat artikel lewat Generate Konten atau Unggah Artikel.')}</p>
+															{#if g.key === 'article'}
+																<p class="mt-1.5 text-[11px] leading-snug text-slate-500">{tr('Buat artikel lewat Generate Konten atau Tulis Sendiri.')}</p>
 													{:else if g.key === 'cover'}
 														<button class="app-btn app-btn-soft mt-2 !min-h-7 !px-2.5 !text-[11px]" type="button" disabled={coverBusy} onclick={() => void useDefaultCovers(g.items)}>
 															{#if coverBusy}<LoaderCircle size={12} class="animate-spin" />{:else}<Image size={12} />{/if}
