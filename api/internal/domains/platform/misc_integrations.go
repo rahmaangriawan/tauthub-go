@@ -343,6 +343,22 @@ func (d *Deps) igChSyncCrawlTarget(ctx context.Context, cfg igChConfig, mediaID 
 		lastCrawled = statusObj["last_crawled_at"]
 		lastStatus = statusObj["last_status"]
 	}
+	// Anti-loop: beberapa respons Crawlhub meletakkan waktu crawl di dalam
+	// last_run, dan target yang baru terdaftar memang belum pernah di-crawl.
+	// Bila tetap kosong, simpan waktu sukses sinkronisasi ini — sweep menambah
+	// ulang job pada siklus stale 3 bulan, bukan ulang tiap menit (root cause
+	// 41 ribu job crawl_target_sync di production).
+	if lastCrawled == nil && lastRun != nil {
+		if v, ok := lastRun["last_crawled_at"]; ok && v != nil {
+			lastCrawled = v
+		}
+	}
+	if lastCrawled == nil {
+		lastCrawled = time.Now()
+		if lastStatus == nil || lastStatus == "" {
+			lastStatus = "registered"
+		}
+	}
 	if err := d.exec(ctx,
 		`INSERT INTO crawl_targets (media_id, website_url, active, articles_7d, confidence, source, last_crawled_at, last_status, consecutive_failures, last_error, updated_at)
 		 VALUES ($1, $2, TRUE, $3, $4, $5, $6, $7, 0, NULL, NOW())
@@ -527,6 +543,7 @@ func (d *Deps) igChEnqueueCrawlTargetSyncs(ctx context.Context, limit int) (int,
 		          AND ct.updated_at < NOW() - INTERVAL '24 hours')
 		      OR ct.last_crawled_at < NOW() - make_interval(months => $1::int)
 		    )
+		    AND (ct.updated_at IS NULL OR ct.updated_at < NOW() - INTERVAL '24 hours')
 		    AND NOT EXISTS (
 		      SELECT 1 FROM jobs j
 		      WHERE j.kind = 'crawl_target_sync' AND j.status IN ('pending', 'running')

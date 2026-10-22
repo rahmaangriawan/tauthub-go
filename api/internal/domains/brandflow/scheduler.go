@@ -804,6 +804,11 @@ func (d *Deps) schEnqueueDomainRechecks(ctx context.Context, limit int) {
 		WHERE partner_id IS NOT NULL
 		  AND website_url IS NOT NULL AND TRIM(website_url) <> ''
 		  AND (domain_last_checked_at IS NULL OR domain_last_checked_at < NOW() - INTERVAL '7 days')
+		  AND NOT EXISTS (
+		    SELECT 1 FROM jobs j
+		    WHERE j.kind = 'domain_verify' AND j.status IN ('pending', 'running')
+		      AND j.payload->>'mediaId' = media.id
+		  )
 		ORDER BY domain_last_checked_at NULLS FIRST
 		LIMIT $1`, limit)
 	if err != nil {
@@ -848,6 +853,7 @@ func (d *Deps) schEnqueueCrawlTargetSyncs(ctx context.Context, limit int) {
 		        AND ct.updated_at < NOW() - INTERVAL '24 hours')
 		    OR ct.last_crawled_at < NOW() - make_interval(months => $1::int)
 		  )
+		  AND (ct.updated_at IS NULL OR ct.updated_at < NOW() - INTERVAL '24 hours')
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'crawl_target_sync' AND j.status IN ('pending','running')
