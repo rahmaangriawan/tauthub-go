@@ -2,8 +2,8 @@
 	import { tr } from '$lib/i18n/phrases';
 
 	// Laporan topup gagal — port app/admin/credit-reports/page.tsx: klien
-	// melaporkan topup gagal (pembayaran sukses tapi saldo TC tidak masuk).
-	// Admin review: setujui (tambah TC manual) atau tolak (wajib catatan).
+	// melaporkan topup gagal (pembayaran sukses tapi saldo tidak masuk).
+	// Admin review: setujui (tambah saldo manual) atau tolak (wajib catatan).
 	import { onMount } from 'svelte';
 	import { CircleCheck, Coins, TriangleAlert, XCircle } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
@@ -14,6 +14,7 @@
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDate, fmtRp, fmtNum } from '$lib/admin-format';
+	import { rp } from '$lib/credits/rupiah';
 	import { platformError } from '../_platform';
 
 	type CreditReport = {
@@ -110,7 +111,7 @@
 <section>
 	<PageHeader
 		title={tr("Laporan Topup Gagal")}
-		description={tr("Klien melaporkan topup yang gagal (pembayaran sukses tapi saldo TC tidak masuk). Setujui untuk menambahkan TC manual ke wallet brand.")}
+		description={tr("Klien melaporkan topup yang gagal (pembayaran sukses tapi saldo tidak masuk). Setujui untuk menambahkan saldo manual ke wallet brand.")}
 	>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{total} laporan</span>
 	</PageHeader>
@@ -147,7 +148,7 @@
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">{tr("Klien")}</th>
 						<th class="px-4 py-2.5 font-medium">Brand</th>
-						<th class="px-4 py-2.5 font-medium">Klaim TC</th>
+						<th class="px-4 py-2.5 font-medium">Klaim Saldo</th>
 						<th class="px-4 py-2.5 font-medium">Referensi</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Dibuat")}</th>
@@ -163,7 +164,7 @@
 							</td>
 							<td class="px-4 py-2.5">{row.brand_name ?? '—'}</td>
 							<td class="px-4 py-2.5">
-								<p class="font-medium">{fmtNum(row.claimed_tc)} TC</p>
+								<p class="font-medium">{rp(row.claimed_tc)}</p>
 								<p class="text-xs text-muted-foreground">{row.amount_idr != null ? fmtRp(row.amount_idr) : '—'}</p>
 							</td>
 							<td class="px-4 py-2.5">{row.payment_reference ?? '—'}</td>
@@ -212,7 +213,7 @@
 			{/if}
 			<div>
 				<p class="text-xs font-bold text-muted-foreground">Klaim</p>
-				<p class="text-sm">{fmtNum(review.claimed_tc)} TC {review.amount_idr != null ? `(${fmtRp(review.amount_idr)})` : ''}</p>
+				<p class="text-sm">{rp(review.claimed_tc)}{review.amount_idr != null ? ` (${fmtRp(review.amount_idr)})` : ''}</p>
 			</div>
 			{#if review.payment_reference}
 				<div>
@@ -226,7 +227,7 @@
 			</div>
 			<div>
 				<p class="text-xs font-bold text-muted-foreground">{tr("Saldo brand saat ini")}</p>
-				<p class="text-sm">{fmtNum(review.available_tc)} TC tersedia</p>
+				<p class="text-sm">Saldo tersedia {rp(review.available_tc)}</p>
 			</div>
 			{#if review.status !== 'pending'}
 				<div>
@@ -245,7 +246,7 @@
 					<textarea
 						class="app-input w-full"
 						rows={3}
-						placeholder={tr("cth: Terverifikasi — TC ditambahkan. / Data tidak cocok dengan transaksi.")}
+						placeholder={tr("cth: Terverifikasi — saldo ditambahkan. / Data tidak cocok dengan transaksi.")}
 						value={reviewNote}
 						oninput={(e) => { reviewNote = (e.currentTarget as HTMLTextAreaElement).value; reviewError = ''; }}
 					></textarea>
@@ -260,7 +261,7 @@
 					<XCircle size={15} />{busy ? 'Menyimpan…' : 'Tolak'}
 				</button>
 				<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void submitReview('approve')}>
-					<CircleCheck size={15} />{busy ? 'Menyimpan…' : tr('Setujui & Tambah TC')}
+					<CircleCheck size={15} />{busy ? 'Menyimpan…' : tr('Setujui & Tambah Saldo')}
 				</button>
 			{/if}
 		{/snippet}

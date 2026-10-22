@@ -286,15 +286,16 @@ func (d *Deps) CreditReportsCreate(w http.ResponseWriter, r *http.Request) {
 	// jadi laporan ber-public_id tidak akan pernah muncul meski tersimpan.
 	brandID := brandRow.ID
 	body := decodeJSON(r)
-	// reportSchema: claimed_tc int positif max 10_000_000; payment_reference trim
-	// max200 nullable optional; description trim 10..2000.
+	// reportSchema: claimed_tc int positif (rupiah penuh, satuan basis data
+	// sudah 1 unit = Rp1) max Rp10 miliar; payment_reference trim max200
+	// nullable optional; description trim 10..2000.
 	rawClaimed, hasClaimed := body["claimed_tc"]
 	if !hasClaimed || rawClaimed == nil {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Data laporan tidak valid.")
 		return
 	}
 	claimedFloat, isNum := rawClaimed.(float64)
-	if !isNum || claimedFloat != math.Trunc(claimedFloat) || claimedFloat <= 0 || claimedFloat > 10_000_000 {
+	if !isNum || claimedFloat != math.Trunc(claimedFloat) || claimedFloat <= 0 || claimedFloat > 10_000_000_000 {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Data laporan tidak valid.")
 		return
 	}

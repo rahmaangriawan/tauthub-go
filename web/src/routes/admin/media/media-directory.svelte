@@ -12,6 +12,7 @@
 	import Select from '$lib/components/select.svelte';
 	import { LINK_DURATION_OPTIONS, normalizeLinkDurationMonths } from '$lib/media/link-duration';
 	import { fmtDateTime, statusLabel } from '$lib/admin-format';
+	import { rp } from '$lib/credits/rupiah';
 	import {
 		compactNumber,
 		errMessage,
@@ -410,7 +411,7 @@
 			const result = await platformRequest<{ synced: number; rate_idr: number }>('/media/sync-credit-cost', {
 				method: 'POST'
 			});
-			error = `Sinkronisasi kredit selesai: ${result.synced} media diperbarui (1 TC = Rp${result.rate_idr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}).`;
+			error = `Sinkronisasi kredit selesai: ${result.synced} media diperbarui.`;
 			await load();
 		} catch (reason) {
 			error = errMessage(reason);
@@ -721,7 +722,7 @@
 			<span
 				class="rounded-full px-2 py-0.5 text-[11px] font-medium"
 				style="background-color: var(--warning-soft); color: var(--warning);"
-				title={`Harga klien ${idr(clientPriceFor(row.price))} (dasar ${row.price.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })} + markup ${markupPercent}%) → kredit ${creditForPrice(row.price)} TC`}
+				title={`Harga klien ${idr(clientPriceFor(row.price))} (dasar ${row.price.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })} + markup ${markupPercent}%) → kredit ${rp(creditForPrice(row.price))}`}
 				>→ {creditForPrice(row.price)}</span
 			>
 		{/if}
@@ -1299,10 +1300,10 @@
 			</div>
 
 			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Biaya kredit (TC)</span>
+				<span class="text-xs font-medium text-muted-foreground">Biaya kredit (Rp)</span>
 				<input class="app-input mt-1 w-full" readonly value={creditForPrice(Number(form.price) || 0).toLocaleString('id-ID')} />
 				<span class="mt-1 block text-xs text-muted-foreground"
-					>{tr("Otomatis dari harga klien ÷ rate (1 TC = Rp")}{tcRate.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}) — tidak diisi manual;
+					>{tr("Otomatis dari harga klien ÷ kurs saldo")}{tcRate ? ' (kurs aktif ×' + tcRate.toLocaleString('id-ID') + ')' : ''} — tidak diisi manual;
 					server menghitung ulang saat disimpan.</span
 				>
 			</label>

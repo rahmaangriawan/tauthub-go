@@ -6,6 +6,7 @@
 	// /v1/campaign-reports/{token} (sumber sama dengan halaman lama).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { rp } from '$lib/credits/rupiah';
 
 	const token = $derived(page.params.token as string);
 
@@ -100,8 +101,8 @@
 						<p class="mt-1 text-xl font-bold tabular-nums">{report.summary.media_published_count}</p>
 					</div>
 					<div class="rounded-lg border p-3">
-						<p class="text-xs text-muted-foreground">TC terpakai</p>
-						<p class="mt-1 text-xl font-bold tabular-nums">{report.summary.tc_used.toLocaleString('id-ID')}</p>
+						<p class="text-xs text-muted-foreground">Saldo terpakai</p>
+						<p class="mt-1 text-xl font-bold tabular-nums">{rp(report.summary.tc_used)}</p>
 					</div>
 				</div>
 
@@ -149,7 +150,7 @@
 				</section>
 
 				<p class="mt-6 border-t pt-4 text-xs text-muted-foreground"> {tr("Dokumen berita acara digenerate otomatis dari data kampanye Tauthub pada")} {fmtDateTime(report.generated_at)} WIB.
-					TC terpakai mencakup biaya pembuatan dan distribusi konten kampanye ini.
+					Saldo terpakai mencakup biaya pembuatan dan distribusi konten kampanye ini (rupiah).
 				</p>
 			</article>
 		{/if}

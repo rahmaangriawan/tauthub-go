@@ -818,13 +818,14 @@ func (d *Deps) OperationsCreditAdjustment(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if !hasTC || !tcIsNum || !opIsInt(tc) || tc == 0 {
-		writeErr(w, d, errUnprocessable("Jumlah TC harus bilangan bulat dan tidak boleh 0."))
+		writeErr(w, d, errUnprocessable("Jumlah saldo harus bilangan bulat dan tidak boleh 0."))
 		return
 	}
-	// Nilai negatif = kurangi saldo. Batas atas & bawah per penyesuaian manual
-	// mencegah salah ketik nol yang mengubah saldo brand berkali-kali lipat.
-	if tc > 10000000 || tc < -10000000 {
-		writeErr(w, d, errUnprocessable("Jumlah TC maksimal 10.000.000 per penyesuaian."))
+	// Nilai negatif = kurangi saldo. Nominal memakai rupiah penuh (satuan basis
+	// data sudah 1 unit = Rp1), batas per penyesuaian Rp10 miliar — setara batas
+	// lama 10.000.000 TC sebelum konversi satuan.
+	if tc > 10000000000 || tc < -10000000000 {
+		writeErr(w, d, errUnprocessable("Nominal maksimal Rp10.000.000.000 per penyesuaian."))
 		return
 	}
 	if !reasonIsStr {
@@ -859,7 +860,7 @@ func (d *Deps) OperationsCreditAdjustment(w http.ResponseWriter, r *http.Request
 			available = wRow.intOr("available_tc", 0)
 		}
 		if available+tcInt < 0 {
-			writeErr(w, d, errUnprocessable(fmt.Sprintf("Saldo tidak cukup: tersedia %d TC, tidak bisa dikurangi %d TC.", available, -tcInt)))
+			writeErr(w, d, errUnprocessable(fmt.Sprintf("Saldo tidak cukup: tersedia %d, tidak bisa dikurangi %d.", available, -tcInt)))
 			return
 		}
 	}

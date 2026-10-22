@@ -11,7 +11,8 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
-	import { fmtDateTime, fmtRp } from '$lib/admin-format';
+	import { fmtDateTime, fmtRp, fmtNum } from '$lib/admin-format';
+	import { rp } from '$lib/credits/rupiah';
 	import { platformError } from '../_platform';
 
 	type CredentialField = { key: string; label: string; secret?: boolean; required?: boolean; placeholder?: string };
@@ -279,7 +280,7 @@
 									<td class="px-4 py-2.5">{t.provider} · {t.environment}</td>
 									<td class="px-4 py-2.5 font-bold tabular-nums">{fmtRp(t.amount)}</td>
 									<td class="px-4 py-2.5"><Badge label={meta?.label ?? t.status} tone={meta?.tone ?? 'neutral'} /></td>
-									<td class="px-4 py-2.5">{t.purpose === 'topup' ? `Top Up ${t.purpose_ref_id ?? ''} TC` : t.purpose}</td>
+									<td class="px-4 py-2.5">{t.purpose === 'topup' ? `Top Up Rp ${Number.isFinite(Number(t.purpose_ref_id)) && Number(t.purpose_ref_id) > 0 ? fmtNum(Number(t.purpose_ref_id)) : (t.purpose_ref_id ?? '')}` : t.purpose}</td>
 									<td class="px-4 py-2.5">
 										{#if t.has_invoice}<Badge label="Ya" tone="accent" />{:else}<span class="text-xs text-muted-foreground">-</span>{/if}
 									</td>

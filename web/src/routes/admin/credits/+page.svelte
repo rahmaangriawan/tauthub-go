@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
 
-	// Konfigurasi TC — port app/admin/credits/page.tsx: konfigurasi denominasi
+	// Konfigurasi Saldo — port app/admin/credits/page.tsx: konfigurasi denominasi
 	// (rate + paket topup), penyesuaian manual ledger (kredit/debit), dan daftar
-	// wallet Client (available/reserved/captured/total TC, topup, publikasi).
+	// wallet Client (available/reserved/captured/total, topup, publikasi).
 	import { onMount } from 'svelte';
 	import { Coins } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
@@ -12,6 +12,7 @@
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtNum, fmtRp } from '$lib/admin-format';
+	import { rp } from '$lib/credits/rupiah';
 	import { platformError } from '../_platform';
 
 	type WalletRow = {
@@ -91,7 +92,7 @@
 			busy = false;
 			return;
 		}
-		notice = 'Konfigurasi TC tersimpan.';
+		notice = 'Konfigurasi saldo tersimpan.';
 		busy = false;
 		await load();
 	}
@@ -124,10 +125,10 @@
 <section>
 	<PageHeader
 		title="Tauthub Credit"
-		description={tr("Saldo internal Client dalam TC (1 TC = Rp1.000 default). Client melihat TC, Partner melihat Rupiah, Admin melihat keduanya. TC bukan uang yang dapat dicairkan.")}
+		description={tr("Saldo internal Client dalam rupiah. Client, Partner, dan Admin melihat nominal yang sama. Nilai ini bukan uang yang dapat dicairkan.")}
 	>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
-			{config ? `1 TC = Rp${config.rate_idr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}` : 'Konfigurasi'}
+			{config ? `Kurs aktif: ${config.rate_idr.toLocaleString('id-ID')} × (1 unit = Rp1)` : 'Konfigurasi'}
 		</span>
 	</PageHeader>
 
@@ -143,7 +144,7 @@
 			<p class="mt-1 text-xs text-muted-foreground">{tr("Rate baru hanya berlaku untuk transaksi baru — semua entri ledger lama menyimpan snapshot rate saat transaksi terjadi. Paket Top Up harus memenuhi tc × rate = idr.")}</p>
 			<div class="mt-3 flex flex-wrap items-end gap-3">
 				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Rate (1 TC = ? Rupiah)</span>
+					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Kurs lama (referensi)</span>
 					<input class="app-input !w-[140px]" type="number" min="1" value={rate} oninput={(e) => (rate = (e.currentTarget as HTMLInputElement).value)} />
 				</label>
 				<label class="block">
@@ -173,7 +174,7 @@
 					/>
 				</label>
 				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Jumlah TC")}</span>
+					<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Jumlah Saldo")}</span>
 					<input class="app-input !w-[120px]" type="number" min="1" value={adjTc} oninput={(e) => (adjTc = (e.currentTarget as HTMLInputElement).value)} />
 				</label>
 				<label class="block">
@@ -184,8 +185,8 @@
 						value={adjDirection}
 						onchange={(v) => (adjDirection = v === 'debit' ? 'debit' : 'credit')}
 						options={[
-							{ value: 'credit', label: tr('Kredit (+TC)') },
-							{ value: 'debit', label: 'Debit (−TC)' }
+							{ value: 'credit', label: tr('Kredit (+ saldo)') },
+							{ value: 'debit', label: 'Debit (−saldo)' }
 						]}
 					/>
 				</label>
@@ -214,13 +215,13 @@
 				<thead>
 					<tr class="text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 text-left font-medium">Brand / Client</th>
-						<th class="px-4 py-2.5 text-right font-medium">Available TC</th>
-						<th class="px-4 py-2.5 text-right font-medium">Reserved TC</th>
-						<th class="px-4 py-2.5 text-right font-medium">Captured TC</th>
-						<th class="px-4 py-2.5 text-right font-medium">{tr("Total TC")}</th>
+						<th class="px-4 py-2.5 text-right font-medium">Available (Rp)</th>
+						<th class="px-4 py-2.5 text-right font-medium">Reserved (Rp)</th>
+						<th class="px-4 py-2.5 text-right font-medium">Captured (Rp)</th>
+						<th class="px-4 py-2.5 text-right font-medium">{tr("Total (Rp)")}</th>
 						<th class="px-4 py-2.5 text-right font-medium">≈ IDR</th>
 						<th class="px-4 py-2.5 text-right font-medium">Top Up</th>
-						<th class="px-4 py-2.5 text-right font-medium">{tr("Publikasi (TC)")}</th>
+						<th class="px-4 py-2.5 text-right font-medium">{tr("Publikasi (Rp)")}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -230,10 +231,10 @@
 								<p class="font-bold">{w.brand_name ?? '—'}</p>
 								<p class="text-xs text-muted-foreground">{w.client_name ?? w.brand_id}</p>
 							</td>
-							<td class="px-4 py-2.5 text-right tabular-nums">{fmtNum(w.available_tc)} TC</td>
-							<td class="px-4 py-2.5 text-right tabular-nums">{fmtNum(w.reserved_tc)} TC</td>
-							<td class="px-4 py-2.5 text-right tabular-nums">{fmtNum(w.captured_tc)} TC</td>
-							<td class="px-4 py-2.5 text-right font-bold tabular-nums">{fmtNum(w.total_tc)} TC</td>
+							<td class="px-4 py-2.5 text-right tabular-nums">{rp(w.available_tc)}</td>
+							<td class="px-4 py-2.5 text-right tabular-nums">{rp(w.reserved_tc)}</td>
+							<td class="px-4 py-2.5 text-right tabular-nums">{rp(w.captured_tc)}</td>
+							<td class="px-4 py-2.5 text-right font-bold tabular-nums">{rp(w.total_tc)}</td>
 							<td class="px-4 py-2.5 text-right tabular-nums">{fmtRp(w.total_tc * (config?.rate_idr ?? 1000))}</td>
 							<td class="px-4 py-2.5 text-right tabular-nums">
 								{#if w.topup_tc > 0}

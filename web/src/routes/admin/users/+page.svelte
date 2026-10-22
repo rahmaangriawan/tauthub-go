@@ -3,7 +3,7 @@
 
 	// Kelola user (klien & mitra) — port app/admin/users/page.tsx:
 	// setujui pendaftaran, suspend/reactivate, kuota token harian, jatah
-	// generate Writer, tambah TC manual, set password (super admin),
+	// generate Writer, sesuaikan saldo manual, set password (super admin),
 	// ubah peran, dan tambah pengguna manual.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -19,6 +19,7 @@
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDate, fmtNum } from '$lib/admin-format';
+	import { rp } from '$lib/credits/rupiah';
 	import { platformError } from '../_platform';
 	import { swrPeek, swrPut } from '$lib/swr';
 
@@ -57,15 +58,16 @@
 
 	// Dialog status (approve/suspend/reactivate)
 	let statusTarget = $state<User | null>(null);
-	// Dialog tambah TC manual
+	// Dialog penyesuaian saldo manual
 	let tcUser = $state<User | null>(null);
 	let tcBrands = $state<BrandOption[]>([]);
 	let tcBrandId = $state('');
 	let tcAmount = $state('');
 	// Mode penyesuaian: tambah atau kurangi saldo brand tujuan.
 	let tcMode = $state<'add' | 'deduct'>('add');
-	// Batas server: POST /credit-adjustment menolak > 10.000.000 TC.
-	const TC_MAX = 10_000_000;
+	// Batas server: POST /credit-adjustment menolak nominal > Rp10 miliar.
+	// Satuan saldo = rupiah penuh (bawaan konversi satuan dari TC, 1 TC lama = Rp1.000).
+	const SALDO_MAX = 10_000_000_000;
 	let tcReason = $state('');
 	let tcError = $state('');
 	let tcBusy = $state(false);
@@ -382,17 +384,17 @@
 		}
 		const amount = parseInt(tcAmount, 10);
 		if (isNaN(amount) || amount <= 0) {
-			tcError = tr('Jumlah TC harus angka positif.');
+			tcError = tr('Jumlah saldo harus angka positif.');
 			return;
 		}
-		if (amount > TC_MAX) {
-			tcError = tr('Maksimal 10.000.000 TC per penyesuaian (1 TC = Rp1.000).');
+		if (amount > SALDO_MAX) {
+			tcError = tr('Nominal maksimal Rp10.000.000.000 per penyesuaian.');
 			return;
 		}
 		if (tcMode === 'deduct') {
 			const brand = tcBrands.find((b) => b.id === tcBrandId);
 			if (brand && amount > brand.available_tc) {
-				tcError = tr('Saldo tidak cukup: tersedia {n} TC.').replace('{n}', fmtNum(brand.available_tc));
+				tcError = tr('Saldo tidak cukup: tersedia Rp {n}.').replace('{n}', fmtNum(brand.available_tc));
 				return;
 			}
 		}
@@ -418,8 +420,8 @@
 		const result = await res.json();
 		tcNotice =
 			tcMode === 'deduct'
-				? `${fmtNum(Math.abs(result.tc_added))} TC dikurangi. Saldo available sekarang ${fmtNum(result.wallet.available_tc)} TC.`
-				: `${fmtNum(result.tc_added)} TC ditambahkan. Saldo available sekarang ${fmtNum(result.wallet.available_tc)} TC.`;
+				? `${rp(Math.abs(result.tc_added))} dikurangi. Saldo tersisa ${rp(result.wallet.available_tc)}.`
+				: `${rp(result.tc_added)} ditambahkan. Saldo tersisa ${rp(result.wallet.available_tc)}.`;
 		// Kolom "Jumlah Saldo" ikut bertambah tanpa menunggu muat ulang daftar.
 		const targetId = tcUser.id;
 		rows = rows.map((item) =>
@@ -504,10 +506,9 @@
 							<td class="px-4 py-2.5"><Badge label={meta.label} tone={meta.tone} /></td>
 							<td class="px-4 py-2.5 tabular-nums">{user.brand_count}</td>
 							<td class="px-4 py-2.5">
-								<!-- Saldo TC akun klien: total available di semua brand milik user. -->
-								<span class="font-semibold tabular-nums">{fmtNum(user.available_tc ?? 0)}</span>
-								<span class="ml-1 text-xs text-muted-foreground">TC</span>
-							</td>
+								<!-- Saldo akun klien (rupiah): total available di semua brand milik user. -->
+								<span class="font-semibold tabular-nums">{rp(user.available_tc ?? 0)}</span>
+															</td>
 							<td class="px-4 py-2.5">
 								<div class="flex items-center gap-2">
 									<input
@@ -683,7 +684,7 @@
 
 {#if tcUser}
 	<Modal title={`Sesuaikan Saldo — ${tcUser.display_name}`} label={tr("Sesuaikan Saldo")} maxWidth="lg" onClose={() => (tcUser = null)}>
-		<p class="text-sm text-muted-foreground">{tr("Tambahkan atau kurangi Tauthub Credit (TC) pada wallet brand milik user ini. Gunakan untuk kompensasi topup gagal, koreksi saldo, atau penyesuaian lain.")}</p>
+		<p class="text-sm text-muted-foreground">{tr("Tambahkan atau kurangi saldo (rupiah) pada wallet brand milik user ini. Gunakan untuk kompensasi topup gagal, koreksi saldo, atau penyesuaian lain.")}</p>
 		<div class="mt-4 flex flex-col gap-3">
 			{#if tcError}
 				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{tcError}</div>
@@ -704,7 +705,7 @@
 						onchange={(v) => (tcBrandId = v)}
 						options={[
 							{ value: '', label: tr('Pilih brand…') },
-							...tcBrands.map((b) => ({ value: b.id, label: `${b.name} — ${fmtNum(b.available_tc)} TC tersedia` }))
+							...tcBrands.map((b) => ({ value: b.id, label: `${b.name} — saldo ${rp(b.available_tc)}` }))
 						]}
 					/>
 				{/if}
@@ -727,12 +728,12 @@
 				</div>
 			</div>
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Jumlah TC")}</span>
-				<input class="app-input w-full" type="number" min="1" max={TC_MAX} placeholder={tr("cth: 1000")} value={tcAmount} oninput={(e) => (tcAmount = (e.currentTarget as HTMLInputElement).value)} />
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Jumlah Saldo")}</span>
+				<input class="app-input w-full" type="number" min="1" max={SALDO_MAX} placeholder={tr("cth: 1000000")} value={tcAmount} oninput={(e) => (tcAmount = (e.currentTarget as HTMLInputElement).value)} />
 				<span class="mt-1 block text-xs text-muted-foreground">
 					{tcMode === 'deduct'
-						? tr('Masukkan angka positif — saldo brand akan dikurangi sebesar angka ini, maksimal 10.000.000 TC.')
-						: tr('Maksimal 10.000.000 TC per penyesuaian, 1 TC = Rp1.000.')}
+						? tr('Masukkan nominal rupiah penuh — saldo brand akan dikurangi sebesar angka ini, maksimal Rp10.000.000.000.')
+						: tr('Nominal rupiah penuh, maksimal Rp10.000.000.000 per penyesuaian.')}
 				</span>
 			</label>
 			<label class="block">
@@ -752,7 +753,7 @@
 				<Coins size={15} />
 				{tcBusy
 					? (tcMode === 'deduct' ? tr('Mengurangi…') : tr('Menambah…'))
-					: (tcMode === 'deduct' ? tr('Kurangi TC') : tr('Tambah TC'))}
+					: (tcMode === 'deduct' ? tr('Kurangi saldo') : tr('Tambah saldo'))}
 			</button>
 		{/snippet}
 	</Modal>

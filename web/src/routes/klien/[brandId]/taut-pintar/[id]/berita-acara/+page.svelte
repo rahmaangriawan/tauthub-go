@@ -190,7 +190,7 @@
 				</table>
 			</div>
 
-			<p class="mt-4 text-[13px] text-muted-foreground">{tr("Dokumen ini dihasilkan dari data sistem pada saat dicetak. Angka artikel, media terbit, dan TC terpakai adalah hasil penjumlahan agregat basis data (publikasi terbit, ledger debit TC) milik kampanye ini.")}</p>
+			<p class="mt-4 text-[13px] text-muted-foreground">{tr("Dokumen ini dihasilkan dari data sistem pada saat dicetak. Angka artikel, media terbit, dan saldo terpakai adalah hasil penjumlahan agregat basis data (publikasi terbit, ledger debit saldo) milik kampanye ini.")}</p>
 
 			<div class="mt-10 flex justify-around gap-6 text-sm">
 				<div class="min-w-0 flex-1 text-center sm:min-w-[200px] sm:flex-none">

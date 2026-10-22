@@ -11,6 +11,7 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { rp } from '$lib/credits/rupiah';
 
 	const PAGE_SIZE = 20;
 
@@ -224,7 +225,7 @@
 {/snippet}
 
 {#snippet totalCell(pkg: MediaPackage)}
-	<span class="tabular-nums">{pkg.total_credit_cost.toLocaleString('id-ID')} TC</span>
+	<span class="tabular-nums">{rp(pkg.total_credit_cost)}</span>
 {/snippet}
 
 {#snippet discountCell(pkg: MediaPackage)}
@@ -241,7 +242,7 @@
 
 {#snippet savingsCell(pkg: MediaPackage)}
 	{#if pkg.discount_percent > 0}
-		<span class="font-bold" style="color: var(--success);">Hemat {pkg.savings_credit.toLocaleString('id-ID')} TC</span>
+		<span class="font-bold" style="color: var(--success);">Hemat {rp(pkg.savings_credit)}</span>
 	{:else}
 		<span class="text-xs text-muted-foreground">—</span>
 	{/if}
@@ -273,7 +274,7 @@
 <section>
 	<PageHeader
 		title={tr("Media Packages")}
-		description={tr("Bundel media yang bisa dipilih klien satu klik. Diskon persen (0–100) benar-benar dipakai saat billing TC publikasi — setiap media anggota dihitung dengan harga diskon, dan klien melihat 'Hemat X TC' di tombol paket. Paket yang dihapus otomatis hilang dari daftar klien.")}
+		description={tr("Bundel media yang bisa dipilih klien satu klik. Diskon persen (0–100) benar-benar dipakai saat billing saldo publikasi — setiap media anggota dihitung dengan harga diskon, dan klien melihat 'Hemat X' di tombol paket. Paket yang dihapus otomatis hilang dari daftar klien.")}
 	>
 		<Badge tone="accent" value={`${rows.length} paket`} />
 	</PageHeader>
@@ -341,9 +342,9 @@
 		columns={[
 			{ key: 'package', label: 'Paket', render: packageCell },
 			{ key: 'media', label: tr('Media'), render: mediaCountCell },
-			{ key: 'total', label: 'Total (TC)', render: totalCell },
+			{ key: 'total', label: 'Total', render: totalCell },
 			{ key: 'discount', label: 'Diskon %', render: discountCell },
-			{ key: 'savings', label: 'Hemat (TC)', render: savingsCell },
+			{ key: 'savings', label: 'Hemat', render: savingsCell },
 			{ key: 'status', label: 'Status', render: packageStatusCell },
 			{ key: 'actions', label: '', align: 'right' as const, render: packageActions }
 		]}
@@ -360,5 +361,5 @@
 		onChange={(next) => (page = next / PAGE_SIZE + 1)}
 	/>
 
-	<p class="mt-2 text-xs text-muted-foreground">{tr("Catatan: diskon dihitung per media saat reservasi TC publikasi (pembulatan ke bawah per media, minimal 1 TC bila harga asli > 0). Transaksi lama tidak terpengaruh — hanya publikasi baru yang membawa package_id memakai diskon ini.")}</p>
+	<p class="mt-2 text-xs text-muted-foreground">{tr("Catatan: diskon dihitung per media saat reservasi saldo publikasi (pembulatan ke bawah per media, minimal Rp1 bila harga asli > 0). Transaksi lama tidak terpengaruh — hanya publikasi baru yang membawa package_id memakai diskon ini.")}</p>
 </section>

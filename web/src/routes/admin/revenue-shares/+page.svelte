@@ -270,7 +270,7 @@
 				{#if markupLoading}
 					<p class="text-sm text-muted-foreground">{tr("Memuat konfigurasi finance…")}</p>
 				{:else}
-					<p class="text-sm text-muted-foreground">{tr("Harga klien = harga mitra × (1 + markup%). Nilai disimpan sekali di database dan dibaca lewat cache server (bukan query berat tiap halaman) — katalog klien, kredit TC, dan checkout langsung memakai nilai baru begitu disimpan. Publikasi yang sudah dibuat tidak berubah (harganya ter-snapshot saat dibuat).")}</p>
+					<p class="text-sm text-muted-foreground">{tr("Harga klien = harga mitra × (1 + markup%). Nilai disimpan sekali di database dan dibaca lewat cache server (bukan query berat tiap halaman) — katalog klien, kredit saldo, dan checkout langsung memakai nilai baru begitu disimpan. Publikasi yang sudah dibuat tidak berubah (harganya ter-snapshot saat dibuat).")}</p>
 					<div class="my-4 border-t"></div>
 					<form class="flex max-w-[420px] flex-col gap-3" onsubmit={saveMarkup}>
 						<label class="block">
