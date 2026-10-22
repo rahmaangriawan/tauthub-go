@@ -305,6 +305,12 @@
 </AuthShell>
 
 <style>
+	/* Gerbang butuh kanvas lebih lebar daripada batas 440px form auth di
+	   auth.css — tanpa ini kartu perannya sesak. Hanya berlaku di halaman ini
+	   (style halaman dibongkar saat pindah route), login/register tetap 440px. */
+	:global(.auth-form-inner) {
+		max-width: 720px;
+	}
 	/* Dua kartu peran: ikon di kiri, judul + deskripsi di kanan, lingkaran radio
 	   kecil di pojok kanan atas. Terpilih = ring biru + latar biru sangat lembut. */
 	.gate-grid {
