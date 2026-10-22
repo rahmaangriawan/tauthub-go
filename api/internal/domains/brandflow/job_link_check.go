@@ -32,6 +32,17 @@ const LinkFailureThreshold = 2
 
 const linkFetchTimeout = 15 * time.Second
 
+// linkCrawlerHeaders: identitas browser pada pengecekan tautan. Tanpa ini Go
+// mengirim User-Agent telanjang ("Go-http-client/1.1") dan WAF/CDN media
+// (Blogger, Cloudflare, dst.) memanakan request dari IP datacenter dengan
+// 403/429 — artikel yang sehat lalu tercatat "Tak Terjangkau" (lihat
+// mjCrawlerHeaders di platform/job_media.go yang sudah memakai pola sama).
+var linkCrawlerHeaders = map[string]string{
+	"user-agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 TauthubLinkCheckBot/1.0",
+	"accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+	"accept-language": "id-ID,id;q=0.9,en;q=0.8",
+}
+
 // classifyLinkState: peta status HTTP → LinkState. Sengaja konservatif: HANYA
 // 404/410 yang dianggap artikel benar-benar hilang; 403/robots dan 5xx masuk
 // "unreachable" tanpa menuduh mitra menghapus artikel.
@@ -112,7 +123,7 @@ func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string
 	var finalURL string
 	var errorMessage string
 	liveHTML := ""
-	if resp, fErr := security.Get(ctx, url, nil, linkFetchTimeout); fErr != nil {
+	if resp, fErr := security.Get(ctx, url, linkCrawlerHeaders, linkFetchTimeout); fErr != nil {
 		// Timeout / DNS gagal / diblokir SSRF guard — bukan bukti artikel hilang.
 		msg := fErr.Error()
 		if len(msg) > 500 {

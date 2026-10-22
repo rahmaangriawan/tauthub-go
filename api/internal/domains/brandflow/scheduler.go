@@ -871,9 +871,10 @@ func (d *Deps) schEnqueueCrawlTargetSyncs(ctx context.Context, limit int) {
 
 // schEnqueuePublicationLinkChecks: artikel published yang masih dalam masa
 // garansi medianya (lihat db.LinkWarrantySQL; media dengan tautan permanen
-// = 0 tidak pernah kedaluwarsa) dan belum pernah dicek atau > 7 hari lalu,
-// dedupe job pending/running. Publikasi berstatus DRAF di website mitra
-// dilewati — URL-nya belum tampil publik.
+// = 0 tidak pernah kedaluwarsa) dan belum pernah dicek atau terakhir dicek
+// sebulan lalu (SEbulan SEKALI, diinginkan pemilik), dedupe job
+// pending/running. Publikasi berstatus DRAF di website mitra dilewati —
+// URL-nya belum tampil publik.
 func (d *Deps) schEnqueuePublicationLinkChecks(ctx context.Context, limit int) {
 	stale, err := d.queryRows(ctx, `
 		SELECT p.id FROM publications p
@@ -883,7 +884,7 @@ func (d *Deps) schEnqueuePublicationLinkChecks(ctx context.Context, limit int) {
 		  AND p.published_url IS NOT NULL
 		  AND `+db.LinkWarrantySQL("p", "m")+`
 		  AND p.publish_status <> 'draft'
-		  AND (c.last_checked_at IS NULL OR c.last_checked_at < NOW() - INTERVAL '7 days')
+		  AND (c.last_checked_at IS NULL OR c.last_checked_at < NOW() - INTERVAL '30 days')
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'publication_link_check' AND j.status IN ('pending','running')
