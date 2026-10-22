@@ -1133,7 +1133,7 @@
 											<img
 												src={p.thumbnail_url ?? p.featured_image_url}
 												alt=""
-												class="h-10 w-10 flex-none rounded-lg border object-cover"
+												class="h-10 w-10 flex-none rounded-[5px] border object-cover"
 												style="border-color: var(--border); background-color: var(--muted);"
 												loading="lazy"
 											/>
@@ -1199,7 +1199,7 @@
 							<img
 								src={p.thumbnail_url ?? p.featured_image_url}
 								alt=""
-								class="h-11 w-11 flex-none rounded-lg border object-cover"
+								class="h-11 w-11 flex-none rounded-[5px] border object-cover"
 								style="border-color: var(--border); background-color: var(--muted);"
 								loading="lazy"
 							/>
