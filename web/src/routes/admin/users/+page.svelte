@@ -22,12 +22,12 @@
 	import { platformError } from '../_platform';
 	import { swrPeek, swrPut } from '$lib/swr';
 
-	type Quota = { user_id: string; daily_token_limit: number };
 	type GenQuota = { user_id: string; writer_generate_quota: number | null; effective: number };
 	type User = {
 		id: string; email: string; display_name: string; role?: string;
 		is_active: boolean; is_approved?: boolean; brand_count: number; created_at: string;
-		daily_token_limit?: number; writer_generate_quota?: number | null;
+		writer_generate_quota?: number | null;
+		available_tc?: number | null;
 	};
 	type BrandOption = {
 		id: string; name: string; public_id: string | null; role: string;
@@ -197,35 +197,6 @@
 		rows = rows.map((item) => (item.id === updated.id ? updated : item));
 		statusTarget = null;
 		busy = false;
-	}
-
-	async function updateQuota(userId: string, value: string) {
-		const limit = parseInt(value, 10);
-		if (isNaN(limit) || limit < 0) return;
-		saving = userId;
-		error = '';
-		const res = await apiRequest(`/v1/platform/operations/users/${userId}/daily-quota`, {
-			method: 'PUT',
-			body: JSON.stringify({ daily_token_limit: limit })
-		});
-		if (res.ok) {
-			const updated: Quota = await res.json();
-			rows = rows.map((item) =>
-				item.id === updated.user_id ? { ...item, daily_token_limit: updated.daily_token_limit } : item
-			);
-		} else {
-			error = await platformError(res);
-		}
-		saving = null;
-	}
-
-	async function loadQuota(userId: string) {
-		const res = await apiRequest(`/v1/platform/operations/users/${userId}/daily-quota`);
-		if (!res.ok) return;
-		const quota: Quota = await res.json();
-		rows = rows.map((item) =>
-			item.id === quota.user_id ? { ...item, daily_token_limit: quota.daily_token_limit } : item
-		);
 	}
 
 	async function updateGenQuota(userId: string, value: string) {
@@ -433,6 +404,11 @@
 		}
 		const result = await res.json();
 		tcNotice = `${fmtNum(result.tc_added)} TC ditambahkan. Saldo available sekarang ${fmtNum(result.wallet.available_tc)} TC.`;
+		// Kolom "Jumlah Saldo" ikut bertambah tanpa menunggu muat ulang daftar.
+		const targetId = tcUser.id;
+		rows = rows.map((item) =>
+			item.id === targetId ? { ...item, available_tc: (item.available_tc ?? 0) + result.tc_added } : item
+		);
 		tcAmount = '';
 		tcReason = '';
 		tcBusy = false;
@@ -480,7 +456,7 @@
 						<th class="px-4 py-2.5 font-medium">User</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
 						<th class="px-4 py-2.5 font-medium">Brands</th>
-						<th class="px-4 py-2.5 font-medium">Daily Token Limit</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Jumlah Saldo")}</th>
 						<th class="px-4 py-2.5 font-medium">Jatah Generate</th>
 						<th class="px-4 py-2.5 font-medium">Created</th>
 						<th class="px-4 py-2.5"></th>
@@ -512,34 +488,9 @@
 							<td class="px-4 py-2.5"><Badge label={meta.label} tone={meta.tone} /></td>
 							<td class="px-4 py-2.5 tabular-nums">{user.brand_count}</td>
 							<td class="px-4 py-2.5">
-								<div class="flex items-center gap-2">
-									<input
-										class="app-input !w-[100px] !py-1 !text-xs"
-										inputmode="numeric"
-										value={user.daily_token_limit ?? ''}
-										placeholder="0"
-										disabled={saving === user.id}
-										onblur={(e) => {
-											const v = (e.currentTarget as HTMLInputElement).value.trim();
-											if (v && parseInt(v, 10) !== (user.daily_token_limit ?? 0)) void updateQuota(user.id, v);
-										}}
-										onfocus={() => {
-											if (user.daily_token_limit === undefined) void loadQuota(user.id);
-										}}
-									/>
-									<button
-										class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs"
-										type="button"
-										disabled={saving === user.id}
-										onclick={() => {
-											const next = prompt('Batas token harian (0 = unlimited):', String(user.daily_token_limit ?? 0));
-											if (next !== null) void updateQuota(user.id, next);
-										}}
-									>{saving === user.id ? '...' : 'Set'}</button>
-									{#if user.daily_token_limit !== undefined && user.daily_token_limit > 0}
-										<Badge label={`${fmtNum(user.daily_token_limit)}`} tone="accent" />
-									{/if}
-								</div>
+								<!-- Saldo TC akun klien: total available di semua brand milik user. -->
+								<span class="font-semibold tabular-nums">{fmtNum(user.available_tc ?? 0)}</span>
+								<span class="ml-1 text-xs text-muted-foreground">TC</span>
 							</td>
 							<td class="px-4 py-2.5">
 								<div class="flex items-center gap-2">
