@@ -817,8 +817,14 @@ func (d *Deps) OperationsCreditAdjustment(w http.ResponseWriter, r *http.Request
 		writeErr(w, d, errUnprocessable("Data tidak valid."))
 		return
 	}
-	if !hasTC || !tcIsNum || !opIsInt(tc) || tc <= 0 || tc > 10000000 {
-		writeErr(w, d, errUnprocessable("Data tidak valid."))
+	if !hasTC || !tcIsNum || !opIsInt(tc) || tc <= 0 {
+		writeErr(w, d, errUnprocessable("Jumlah TC harus bilangan bulat lebih dari 0."))
+		return
+	}
+	// Batas atas per penyesuaian manual: mencegah salah ketik nol yang
+	// mengubah saldo brand berkali-kali lipat dalam satu transaksi.
+	if tc > 10000000 {
+		writeErr(w, d, errUnprocessable("Jumlah TC maksimal 10.000.000 per penyesuaian."))
 		return
 	}
 	if !reasonIsStr {

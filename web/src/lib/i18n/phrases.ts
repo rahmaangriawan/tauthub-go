@@ -1798,6 +1798,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Jumlah Penarikan": "Withdrawal Amount",
   "Jumlah TC": "TC Amount",
   "Jumlah TC harus angka positif.": "TC amount must be a positive number.",
+  "Maksimal 10.000.000 TC per penyesuaian (1 TC = Rp1.000).": "Maximum 10,000,000 TC per adjustment (1 TC = Rp1,000).",
+  "Maksimal 10.000.000 TC per penyesuaian, 1 TC = Rp1.000.": "Maximum 10,000,000 TC per adjustment, 1 TC = Rp1,000.",
   "Jumlah TC harus lebih dari 0.": "TC amount must be greater than 0.",
   "Jumlah TC yang dibayar": "Amount of TC paid",
   "Jumlah backlink yang diperbolehkan dalam artikel": "Number of backlinks allowed in an article",

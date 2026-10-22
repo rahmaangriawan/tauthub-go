@@ -62,6 +62,8 @@
 	let tcBrands = $state<BrandOption[]>([]);
 	let tcBrandId = $state('');
 	let tcAmount = $state('');
+	// Batas server: POST /credit-adjustment menolak > 10.000.000 TC.
+	const TC_MAX = 10_000_000;
 	let tcReason = $state('');
 	let tcError = $state('');
 	let tcBusy = $state(false);
@@ -409,6 +411,10 @@
 			tcError = tr('Jumlah TC harus angka positif.');
 			return;
 		}
+		if (tc > TC_MAX) {
+			tcError = tr('Maksimal 10.000.000 TC per penyesuaian (1 TC = Rp1.000).');
+			return;
+		}
 		if (tcReason.trim().length < 3) {
 			tcError = 'Alasan minimal 3 karakter.';
 			return;
@@ -738,7 +744,8 @@
 			</div>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Jumlah TC")}</span>
-				<input class="app-input w-full" type="number" min="1" placeholder={tr("cth: 1000")} value={tcAmount} oninput={(e) => (tcAmount = (e.currentTarget as HTMLInputElement).value)} />
+				<input class="app-input w-full" type="number" min="1" max={TC_MAX} placeholder={tr("cth: 1000")} value={tcAmount} oninput={(e) => (tcAmount = (e.currentTarget as HTMLInputElement).value)} />
+				<span class="mt-1 block text-xs text-muted-foreground">{tr('Maksimal 10.000.000 TC per penyesuaian, 1 TC = Rp1.000.')}</span>
 			</label>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Alasan (wajib)</span>
