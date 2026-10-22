@@ -14,6 +14,7 @@
 	import PageTitle from '$lib/components/page-title.svelte';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { normalizeLinkDurationMonths } from '$lib/media/link-duration';
+	import { WORD_COUNT_MODES, parseCustomWordCount, formatCustomWordCount } from '$lib/media/word-count';
 
 	const partnerId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || partnerId}`);
@@ -84,14 +85,18 @@
 		label_sponsor: string; word_count_mode: string; allow_embed: boolean;
 		topik_terlarang: string[]; topikQuery: string; contoh_artikel_url: string;
 	};
-	const WORD_COUNT_MODES = [
-		{ value: 'sesuai_permintaan', label: 'Sesuai permintaan klien (bebas)' },
-		{ value: 'kata_300_700', label: '300–700 kata' },
-		{ value: 'kata_800_1500', label: '800–1500 kata' }
+	/** Pilihan dropdown: mode bawaan atau 'custom' (rentang angka sendiri). */
+	const WORD_COUNT_OPTIONS = [
+		...WORD_COUNT_MODES.map((m) => ({ value: m.value as string, label: m.label })),
+		{ value: 'custom', label: 'Custom…' }
 	];
 	/** Nilai tak dikenal dari DB → mode bawaan (parity lib/media/word-count). */
-	const normalizeWordCountMode = (v: unknown) =>
-		WORD_COUNT_MODES.some((m) => m.value === v) ? String(v) : 'sesuai_permintaan';
+	const normalizeWordCountMode = (v: unknown) => {
+		const raw = typeof v === 'string' ? v.trim() : '';
+		return WORD_COUNT_MODES.some((m) => m.value === raw) || parseCustomWordCount(raw) ? raw : 'sesuai_permintaan';
+	};
+	/** Isi form menyimpan 'custom' sebagai pilihan; angka min/max di state terpisah. */
+	const openWordCountMode = (v: unknown) => (parseCustomWordCount(v) ? 'custom' : normalizeWordCountMode(v));
 	const emptyMediaForm = (): MediaForm => ({
 		name: '', media_type: 'mainstream', categories: [], categoryQuery: '',
 		website_url: '', adapter_url: '', price: '', pricing_type: 'nett',
@@ -105,6 +110,9 @@
 	let editingId = $state<string | null>(null);
 	let editingRow = $state<Media | null>(null);
 	let form = $state<MediaForm>(emptyMediaForm());
+	/** Rentang kata untuk pilihan "Custom…" di dropdown jumlah kata. */
+	let customWordMin = $state('500');
+	let customWordMax = $state('1000');
 	// Masa berlaku tautan punya dua mode: Permanen (0 bulan) atau Jangka Waktu
 	// (12/24/36 bulan). Pilihan bulannya baru muncul setelah mode Jangka Waktu
 	// dipilih, jadi mitra tidak perlu membaca daftar angka panjang.
@@ -132,7 +140,7 @@
 			f.name, f.media_type, f.categories, f.website_url, f.adapter_url, f.price,
 			f.pricing_type, f.traffic_estimate, f.max_links, f.link_duration_months, f.description, f.notes,
 			f.integration_type, f.publication_mode, f.bahasa_artikel, f.label_sponsor,
-			f.word_count_mode, f.allow_embed, f.topik_terlarang, f.contoh_artikel_url
+			f.word_count_mode, customWordMin, customWordMax, f.allow_embed, f.topik_terlarang, f.contoh_artikel_url
 		]);
 	const isDirty = $derived(editingId !== null && formSnapshot !== comparableForm(form));
 
@@ -700,6 +708,8 @@
 			confirmDeleteContoh = false;
 			aiSummaryStatus = null;
 			form = emptyMediaForm();
+			customWordMin = '500';
+			customWordMax = '1000';
 			showForm = true;
 		}
 
@@ -731,12 +741,15 @@
 			publication_mode: m.publication_mode === 'publish' ? 'publish' : 'draft',
 			bahasa_artikel: m.bahasa_artikel.length ? [...m.bahasa_artikel] : ['Indonesia'],
 			label_sponsor: m.label_sponsor === 'ada_sponsor' ? 'ada_sponsor' : 'tidak_ada',
-			word_count_mode: normalizeWordCountMode(m.word_count_mode),
+			word_count_mode: openWordCountMode(m.word_count_mode),
 			allow_embed: m.allow_embed === true,
 			topik_terlarang: [...m.topik_terlarang],
 			topikQuery: '',
 			contoh_artikel_url: m.contoh_artikel_url ?? ''
 		};
+		const custom = parseCustomWordCount(m.word_count_mode);
+		customWordMin = String(custom?.min ?? 500);
+		customWordMax = String(custom?.max ?? 1000);
 		formSnapshot = comparableForm(form);
 		showForm = true;
 		// Status "Kesimpulan Website" (endpoint Go tersedia) — sekali, best-effort.
@@ -813,6 +826,20 @@
 				dialogError = tr('Centang persetujuan Ketentuan Kerja Sama Mitra terlebih dahulu sebelum menyimpan media integrasi.');
 				return;
 			}
+			let wordCountMode = form.word_count_mode;
+			if (wordCountMode === 'custom') {
+				const min = Math.floor(Number(customWordMin));
+				const max = Math.floor(Number(customWordMax));
+				if (!Number.isFinite(min) || !Number.isFinite(max) || min < 50 || max > 50000) {
+					dialogError = tr('Rentang jumlah kata harus antara 50 dan 50.000 kata.');
+					return;
+				}
+				if (max < min) {
+					dialogError = tr('Jumlah kata maksimal tidak boleh lebih kecil dari minimal.');
+					return;
+				}
+				wordCountMode = formatCustomWordCount(min, max);
+			}
 			const payload: Record<string, unknown> = {
 				name: form.name.trim(),
 				media_type: form.media_type,
@@ -831,7 +858,7 @@
 				publication_mode: form.publication_mode,
 				bahasa_artikel: form.bahasa_artikel.length ? form.bahasa_artikel : ['Indonesia'],
 				label_sponsor: form.label_sponsor,
-				word_count_mode: form.word_count_mode,
+				word_count_mode: wordCountMode,
 				allow_embed: form.allow_embed,
 				topik_terlarang: form.topik_terlarang,
 				contoh_artikel_url: form.contoh_artikel_url.trim() || null
@@ -1955,7 +1982,7 @@
 
 				<!-- ── Form Body Scrollable ── -->
 				<form class="flex min-h-0 flex-1 flex-col overflow-hidden" onsubmit={saveMedia}>
-					<div class="min-h-0 flex-1 overflow-y-auto p-6 bg-slate-50/40">
+					<div class="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-6 bg-slate-50/40">
 						{#if dialogError}
 							<div class="mb-5 flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-700" role="alert">
 								<TriangleAlert size={15} class="mt-0.5 shrink-0" />
@@ -2008,19 +2035,43 @@
 											</div>
 										</div>
 
-										<div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-											<div>
-												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Jumlah kata')}</span>
+											<div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
 												<div>
-													<Select
-														bind:value={form.word_count_mode}
-														ariaLabel={tr('Jumlah kata artikel')}
-														minWidth={0}
-														fitContent
-														options={WORD_COUNT_MODES.map((m) => ({ value: m.value, label: tr(m.label) }))}
-													/>
+													<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Jumlah kata')}</span>
+													<div class="flex flex-wrap items-center gap-2">
+														<Select
+															bind:value={form.word_count_mode}
+															ariaLabel={tr('Jumlah kata artikel')}
+															minWidth={0}
+															fitContent
+															options={WORD_COUNT_OPTIONS.map((m) => ({ value: m.value, label: tr(m.label) }))}
+														/>
+														{#if form.word_count_mode === 'custom'}
+															<div class="flex items-center gap-1.5">
+																<input
+																	type="number"
+																	min="50"
+																	max="50000"
+																	step="50"
+																	bind:value={customWordMin}
+																	aria-label={tr('Jumlah kata minimal')}
+																	class="h-[38px] w-24 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 tabular-nums outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10"
+																/>
+																<span class="text-sm text-slate-400">–</span>
+																<input
+																	type="number"
+																	min="50"
+																	max="50000"
+																	step="50"
+																	bind:value={customWordMax}
+																	aria-label={tr('Jumlah kata maksimal')}
+																	class="h-[38px] w-24 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 tabular-nums outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10"
+																/>
+																<span class="text-sm text-slate-500">{tr('kata')}</span>
+															</div>
+														{/if}
+													</div>
 												</div>
-											</div>
 											<div>
 												<div class="mb-1 flex items-center gap-1.5">
 													<span class="text-xs font-semibold text-slate-700">{tr('Support embed (Video/Maps)')}</span>

@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -570,11 +571,22 @@ func (d *Deps) mediaNameFor(ctx context.Context, mediaID string) string {
 
 // wordCountRangeFor: port resolveWordRange (lib/media/word-count.ts).
 func wordCountRangeFor(mode string) (int, int, bool) {
-	switch strings.TrimSpace(mode) {
+	m := strings.TrimSpace(mode)
+	switch m {
 	case "kata_300_700":
 		return 300, 700, true
 	case "kata_800_1500":
 		return 800, 1500, true
+	}
+	if strings.HasPrefix(m, "custom_") {
+		parts := strings.Split(strings.TrimPrefix(m, "custom_"), "_")
+		if len(parts) == 2 {
+			min, err1 := strconv.Atoi(parts[0])
+			max, err2 := strconv.Atoi(parts[1])
+			if err1 == nil && err2 == nil && min > 0 && max >= min {
+				return min, max, true
+			}
+		}
 	}
 	return 0, 0, false
 }

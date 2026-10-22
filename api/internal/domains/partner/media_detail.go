@@ -141,7 +141,7 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	wordCountMode, hasWordCountMode := strField(body, "word_count_mode")
-	if hasWordCountMode && !wordCountModes[wordCountMode] {
+	if hasWordCountMode && !isValidWordCountMode(wordCountMode) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid word_count_mode")
 		return
 	}
@@ -609,6 +609,12 @@ func wordCountModeLabel(v string) string {
 		return "800–1500 kata"
 	case "sesuai_permintaan":
 		return "Sesuai permintaan klien"
+	}
+	if strings.HasPrefix(v, "custom_") {
+		parts := strings.Split(strings.TrimPrefix(v, "custom_"), "_")
+		if len(parts) == 2 {
+			return parts[0] + "–" + parts[1] + " kata"
+		}
 	}
 	return v
 }

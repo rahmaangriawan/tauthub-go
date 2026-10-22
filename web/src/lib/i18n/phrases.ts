@@ -4560,6 +4560,12 @@ export const PHRASE_EN: Record<string, string> = {
 	  "Harga dan kesepakatan untuk kerja sama publikasi.": "Pricing and partnership agreement for publications.",
 	  "Hapus contoh artikel?": "Delete article example?",
 	  "Tautan contoh artikel yang tersimpan akan dikosongkan.": "The saved article example link will be cleared.",
+	  "Custom…": "Custom…",
+	  "Jumlah kata minimal": "Minimum word count",
+	  "Jumlah kata maksimal": "Maximum word count",
+	  "Rentang jumlah kata harus antara 50 dan 50.000 kata.": "Word count range must be between 50 and 50,000 words.",
+	  "Jumlah kata maksimal tidak boleh lebih kecil dari minimal.": "Maximum word count cannot be lower than the minimum.",
+	  "Aturan panjang artikel dari media": "Article length rule from the media",
 	};
 
 /**

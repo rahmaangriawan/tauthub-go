@@ -313,7 +313,7 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	wordCountMode := defaultWordCountMode
 	if v, present := strField(body, "word_count_mode"); present {
-		if !wordCountModes[v] {
+		if !isValidWordCountMode(v) {
 			httpx.Error(w, http.StatusUnprocessableEntity, "Invalid word_count_mode")
 			return
 		}

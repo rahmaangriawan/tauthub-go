@@ -3,6 +3,7 @@ package clienttaut
 import (
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -34,19 +35,43 @@ func normalizeWordCountMode(value *string) string {
 	if value == nil {
 		return defaultWordCountMode
 	}
-	if _, ok := wordCountModes[*value]; ok {
-		return *value
+	v := strings.TrimSpace(*value)
+	if _, ok := wordCountModes[v]; ok {
+		return v
+	}
+	if strings.HasPrefix(v, "custom_") {
+		parts := strings.Split(strings.TrimPrefix(v, "custom_"), "_")
+		if len(parts) == 2 {
+			min, err1 := strconv.Atoi(parts[0])
+			max, err2 := strconv.Atoi(parts[1])
+			if err1 == nil && err2 == nil && min > 0 && max >= min {
+				return v
+			}
+		}
 	}
 	return defaultWordCountMode
 }
 
 // resolveWordRange: rentang kata; nil bila tidak dibatasi.
 func resolveWordRange(mode *string) *wordCountMode {
-	entry := wordCountModes[normalizeWordCountMode(mode)]
-	if entry.min == nil || entry.max == nil {
-		return nil
+	norm := normalizeWordCountMode(mode)
+	if entry, ok := wordCountModes[norm]; ok {
+		if entry.min == nil || entry.max == nil {
+			return nil
+		}
+		return &entry
 	}
-	return &entry
+	if strings.HasPrefix(norm, "custom_") {
+		parts := strings.Split(strings.TrimPrefix(norm, "custom_"), "_")
+		if len(parts) == 2 {
+			min, err1 := strconv.Atoi(parts[0])
+			max, err2 := strconv.Atoi(parts[1])
+			if err1 == nil && err2 == nil && min > 0 && max >= min {
+				return &wordCountMode{min: intPtr(min), max: intPtr(max)}
+			}
+		}
+	}
+	return nil
 }
 
 // buildWordRule: port buildWordRule — rentang mitra menang atas aturan tipe media.

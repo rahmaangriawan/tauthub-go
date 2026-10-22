@@ -18,6 +18,7 @@
 	import { textToHtml, cleanPastedText } from '../../_shared';
 	import { clipboardHtmlToArticle, isDocsClipboardHtml } from '$lib/editor/clipboard-html';
 	import { angleInstructionExample } from '$lib/taut/angle-examples';
+	import { wordCountLabel } from '$lib/media/word-count';
 
 	let {
 		mediaName,
@@ -40,6 +41,7 @@
 		anglesError = '',
 		onRetryAngles,
 		mediaType = '',
+		wordCountMode = '',
 		linkLimit,
 		sponsored = false,
 		saving = false,
@@ -78,6 +80,8 @@
 		onRetryAngles: () => void;
 		/** Jenis media target (mainstream | blogger) — untuk keterangan dinamis di header. */
 		mediaType?: string;
+		/** Aturan panjang artikel media — target kata dari mitra (termasuk custom). */
+		wordCountMode?: string;
 		/** Media mitra berstatus sponsor: tautan ditulis rel="sponsored", bukan dofollow. */
 		sponsored?: boolean;
 		linkLimit: number;
@@ -136,6 +140,13 @@
 	// Media blogger (blog santai) tidak memakai pengunci standar redaksi, jadi
 	// blok dateline + kutipan disembunyikan dan syaratnya tidak dipaksakan.
 	const isBloggerMedia = $derived(mediaType === 'blogger');
+	// Target kata dari mitra (termasuk rentang custom). null = media membebaskan
+	// panjang artikel, jadi tidak ada badge yang ditampilkan.
+	// Target kata dari mitra (termasuk rentang custom). Kosong bila media
+	// membebaskan panjang artikel — tidak ada batas yang perlu diumumkan.
+	const wordRuleLabel = $derived(
+		wordCountMode && wordCountMode !== 'sesuai_permintaan' ? wordCountLabel(wordCountMode) : ''
+	);
 
 	function addProperQuote() {
 		properQuotes = [...properQuotes, { dateline: '', narasumber: '', kutipan: '' }];
@@ -1182,6 +1193,13 @@
 							class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
 							style="background: {mediaType === 'blogger' ? 'var(--warning-soft)' : 'var(--accent)'}; color: {mediaType === 'blogger' ? 'var(--warning)' : 'var(--primary)'};"
 						>{mediaType === 'blogger' ? tr('Media Blogger') : tr('Media Mainstream')}</span>
+					{/if}
+					{#if wordRuleLabel}
+						<span
+							class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+							style="background: var(--secondary); color: var(--muted-foreground);"
+							title={tr('Aturan panjang artikel dari media')}
+						>{wordRuleLabel}</span>
 					{/if}
 				</p>
 			</div>

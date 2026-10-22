@@ -56,6 +56,8 @@
 		category_required?: boolean;
 		/** 'ai' bila artikel pernah dibuat The Writer; 'manual' bila diunggah. */
 		article_source?: 'ai' | 'manual' | null;
+		/** Aturan panjang artikel media (mis. kata_300_700 / custom_500_1000). */
+		word_count_mode?: string | null;
 	};
 	type LinksForm = {
 		tracking_mode: 'direct' | 'tauthub';
@@ -198,6 +200,8 @@
 		linkLimit: number;
 		/** Asal artikel tersimpan — menentukan tab yang tampil saat Edit Artikel. */
 		source?: 'ai' | 'manual' | null;
+		/** Aturan panjang artikel media (ditampilkan di Pengelola Naskah). */
+		wordCountMode?: string | null;
 	} | null>(null);
 	let editorSaving = $state(false);
 	let editorError = $state('');
@@ -582,7 +586,8 @@
 				category: null,
 				metaDescription: null,
 				linkLimit,
-				source: 'ai'
+				source: 'ai',
+				wordCountMode: item.word_count_mode ?? null
 			};
 			streamHtml = '';
 			const token = getAccessToken();
@@ -737,7 +742,8 @@
 				category: d.category ?? null,
 				metaDescription: d.meta_description ?? null,
 				linkLimit,
-				source: item.article_source ?? null
+				source: item.article_source ?? null,
+				wordCountMode: item.word_count_mode ?? null
 			};
 			editorBaseline = { title: editor.title, html: editor.html };
 		} catch (reason) {
@@ -763,7 +769,8 @@
 			category: null,
 			metaDescription: null,
 			linkLimit: upLimit,
-			source: 'manual'
+			source: 'manual',
+			wordCountMode: item.word_count_mode ?? null
 		};
 		editorBaseline = null;
 	}
@@ -785,7 +792,8 @@
 			category: null,
 			metaDescription: null,
 			linkLimit: genLimit,
-			source: 'ai'
+			source: 'ai',
+			wordCountMode: item.word_count_mode ?? null
 		};
 		editorBaseline = null;
 	}
@@ -2300,6 +2308,7 @@
 			{anglesError}
 			onRetryAngles={() => void loadAngles()}
 			mediaType={targetMedia?.media_type ?? ''}
+			wordCountMode={targetMedia?.word_count_mode ?? ed.wordCountMode ?? ''}
 			linkLimit={ed.linkLimit}
 			sponsored={targetMedia?.label_sponsor === 'ada_sponsor'}
 			saving={editorSaving}

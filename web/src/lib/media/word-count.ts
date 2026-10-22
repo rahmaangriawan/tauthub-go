@@ -30,25 +30,53 @@ export const WORD_COUNT_MODES = [
 	}
 ] as const;
 
-export type WordCountMode = (typeof WORD_COUNT_MODES)[number]['value'];
+export type StandardWordCountMode = (typeof WORD_COUNT_MODES)[number]['value'];
+export type WordCountMode = StandardWordCountMode | string;
 
-export const DEFAULT_WORD_COUNT_MODE: WordCountMode = 'sesuai_permintaan';
+export const DEFAULT_WORD_COUNT_MODE: StandardWordCountMode = 'sesuai_permintaan';
 
 const BY_VALUE = new Map<string, (typeof WORD_COUNT_MODES)[number]>(
 	WORD_COUNT_MODES.map((m) => [m.value, m])
 );
 
-export function normalizeWordCountMode(value: unknown): WordCountMode {
+/** Parse format custom_{min}_{max} menjadi objek { min, max } */
+export function parseCustomWordCount(mode: unknown): { min: number; max: number } | null {
+	if (typeof mode !== 'string') return null;
+	const trimmed = mode.trim();
+	if (!trimmed.startsWith('custom_')) return null;
+	const parts = trimmed.slice(7).split('_');
+	if (parts.length !== 2) return null;
+	const min = Number(parts[0]);
+	const max = Number(parts[1]);
+	if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max < min) return null;
+	return { min, max };
+}
+
+export function formatCustomWordCount(min: number, max: number): string {
+	const safeMin = Math.max(50, Math.floor(min) || 500);
+	const safeMax = Math.max(safeMin, Math.floor(max) || 1000);
+	return `custom_${safeMin}_${safeMax}`;
+}
+
+export function normalizeWordCountMode(value: unknown): string {
 	const raw = typeof value === 'string' ? value.trim() : '';
-	return BY_VALUE.has(raw) ? (raw as WordCountMode) : DEFAULT_WORD_COUNT_MODE;
+	if (BY_VALUE.has(raw)) return raw;
+	if (parseCustomWordCount(raw) != null) return raw;
+	return DEFAULT_WORD_COUNT_MODE;
 }
 
 export function resolveWordRange(mode: unknown): { min: number; max: number } | null {
+	const custom = parseCustomWordCount(mode);
+	if (custom) return custom;
 	const entry = BY_VALUE.get(normalizeWordCountMode(mode));
 	if (!entry || entry.min == null || entry.max == null) return null;
 	return { min: entry.min, max: entry.max };
 }
 
 export function wordCountLabel(mode: unknown): string {
+	const custom = parseCustomWordCount(mode);
+	if (custom) {
+		return `${custom.min.toLocaleString('id-ID')}–${custom.max.toLocaleString('id-ID')} kata`;
+	}
 	return BY_VALUE.get(normalizeWordCountMode(mode))?.short ?? WORD_COUNT_MODES[0].short;
 }

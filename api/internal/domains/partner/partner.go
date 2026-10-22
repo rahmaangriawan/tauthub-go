@@ -549,14 +549,30 @@ var wordCountModes = map[string]bool{
 	"sesuai_permintaan": true, "kata_300_700": true, "kata_800_1500": true,
 }
 
+func isValidWordCountMode(v string) bool {
+	if wordCountModes[v] {
+		return true
+	}
+	if strings.HasPrefix(v, "custom_") {
+		parts := strings.Split(strings.TrimPrefix(v, "custom_"), "_")
+		if len(parts) == 2 {
+			min, err1 := strconv.Atoi(parts[0])
+			max, err2 := strconv.Atoi(parts[1])
+			return err1 == nil && err2 == nil && min >= 50 && max >= min && max <= 50000
+		}
+	}
+	return false
+}
+
 const defaultWordCountMode = "sesuai_permintaan"
 
 func normalizeWordCountMode(v *string) string {
 	if v == nil {
 		return defaultWordCountMode
 	}
-	if wordCountModes[*v] {
-		return *v
+	trimmed := strings.TrimSpace(*v)
+	if isValidWordCountMode(trimmed) {
+		return trimmed
 	}
 	return defaultWordCountMode
 }

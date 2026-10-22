@@ -102,8 +102,19 @@ func mpNormalizeWordCountMode(v any) string {
 	if !ok {
 		return mpDefaultWordCountMode
 	}
-	if mpWordCountModes[strings.TrimSpace(s)] {
-		return strings.TrimSpace(s)
+	trimmed := strings.TrimSpace(s)
+	if mpWordCountModes[trimmed] {
+		return trimmed
+	}
+	if strings.HasPrefix(trimmed, "custom_") {
+		parts := strings.Split(strings.TrimPrefix(trimmed, "custom_"), "_")
+		if len(parts) == 2 {
+			min, err1 := strconv.Atoi(parts[0])
+			max, err2 := strconv.Atoi(parts[1])
+			if err1 == nil && err2 == nil && min > 0 && max >= min {
+				return trimmed
+			}
+		}
 	}
 	return mpDefaultWordCountMode
 }

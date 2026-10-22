@@ -143,9 +143,9 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 	if rateIDR < 1 {
 		rateIDR = 1
 	}
-	items, err := d.queryRows(ctx,
-		`SELECT tcm.media_id, m.name, m.media_type, m.website_url, tcm.status, tcm.article_status, tcm.match_reason, tcm.ai_score, tcm.match_rank,
-		        m.credit_cost, m.allow_hyperlink, m.max_links, m.link_duration_months, m.allow_embed, m.label_sponsor, tcm.regen_count, tcm.angle_slug,
+		items, err := d.queryRows(ctx,
+			`SELECT tcm.media_id, m.name, m.media_type, m.website_url, tcm.status, tcm.article_status, tcm.match_reason, tcm.ai_score, tcm.match_rank,
+			        m.credit_cost, m.allow_hyperlink, m.max_links, m.link_duration_months, m.allow_embed, m.label_sponsor, m.word_count_mode, tcm.regen_count, tcm.angle_slug,
 		        COALESCE(tcm.price, m.price, 0) AS price,
 		        COALESCE((SELECT (length(cv.content) - length(replace(cv.content, '<img', ''))) / 4
 		                  FROM content_documents cd
@@ -211,9 +211,10 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 			"allow_embed":     i.boolOr("allow_embed", false),
 			"regen_count":     regenCount,
 			"angle_slug":      i.raw("angle_slug"),
-			"categories":      categories,
-			"label_sponsor":   i.strOr("label_sponsor", "tidak_ada"),
-			// price + cost_tc: sumber biaya media yang SAMA dengan penagihan
+				"categories":      categories,
+				"label_sponsor":   i.strOr("label_sponsor", "tidak_ada"),
+				"word_count_mode": i.strOr("word_count_mode", "sesuai_permintaan"),
+				// price + cost_tc: sumber biaya media yang SAMA dengan penagihan
 			// (COALESCE(price penempatan, harga media) → kredit dibulatkan).
 			// credit_cost lama tetap dikirim untuk kompatibilitas, tapi bukan
 			// angka yang ditagihkan.
