@@ -142,20 +142,12 @@
 			void markPubSeen();
 			void refreshPubsUnreadNow();
 		})();
-		const onExpired = () => (window.location.href = '/login');
-		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
-		// Menu aksi memakai posisi fixed: tutup saat digulir atau ukuran jendela
-		// berubah supaya tidak tampak melayang menjauh dari barisnya. capture=true
-		// agar gulir di dalam kontainer (bukan hanya window) ikut tertangkap.
-		const onViewportChange = () => closeRowMenu();
-		window.addEventListener('scroll', onViewportChange, true);
-		window.addEventListener('resize', onViewportChange);
-		return () => {
-			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
-			window.removeEventListener('scroll', onViewportChange, true);
-			window.removeEventListener('resize', onViewportChange);
-		};
-	});
+			const onExpired = () => (window.location.href = '/login');
+			window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+			return () => {
+				window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+			};
+		});
 
 	// Muat ulang setiap tab filter atau halaman berubah. Sebelumnya tombol tab
 	// dan tombol halaman hanya mengubah state tanpa memanggil load(), sehingga
@@ -840,120 +832,19 @@
 	};
 
 	// Menu aksi titik-tiga per baris (parity PublicationRowActions).
-	let rowMenu = $state<string | null>(null);
-	function closeRowMenu() {
-		rowMenu = null;
-	}
-
-	// Menu diposisikan `fixed` mengikuti tombolnya: tidak ikut mempengaruhi layout
-	// tabel, dan dibuka ke atas saat ruang di bawah tidak cukup (mis. baris
-	// terakhir). Untuk arah ke atas, DASAR menu yang ditempelkan ke tombol, jadi
-	// tingginya tidak perlu ditebak.
-	const MENU_SPACE_NEEDED = 230; // perkiraan tinggi menu 6 item
-	let menuRight = $state(0);
-	let menuTop = $state(0);
-	let menuBottom = $state<number | null>(null);
-
-	function positionRowMenu(trigger: HTMLElement) {
-		const rect = trigger.getBoundingClientRect();
-		menuRight = Math.max(8, window.innerWidth - rect.right);
-		const spaceBelow = window.innerHeight - rect.bottom;
-		const spaceAbove = rect.top;
-		if (spaceBelow < MENU_SPACE_NEEDED && spaceAbove > spaceBelow) {
-			menuBottom = Math.max(8, window.innerHeight - rect.top + 4);
-			menuTop = 0;
-		} else {
-			menuBottom = null;
-			menuTop = rect.bottom + 4;
+		/** Muat draf dari API — dipakai editor draf. */
+		async function loadDraft(p: Pub) {
+			const res = await apiRequest(`/v1/partner/publications/${p.id}/draft`);
+			if (res.ok) return await res.json();
+			return { error: await readApiError(res, "Permintaan gagal.") };
 		}
-	}
 
-	const menuPositionStyle = $derived(
-		menuBottom !== null ? `right: ${menuRight}px; bottom: ${menuBottom}px;` : `right: ${menuRight}px; top: ${menuTop}px;`
-	);
-	let showPreview = $state(false);
-	let previewPub = $state<Pub | null>(null);
-	let previewLoading = $state(false);
-
-	/** Muat draf dari API — dipakai pratinjau dan editor (endpoint sama). */
-	async function loadDraft(p: Pub) {
-		const res = await apiRequest(`/v1/partner/publications/${p.id}/draft`);
-		if (res.ok) return await res.json();
-		return { error: await readApiError(res, "Permintaan gagal.") };
-	}
-
-	async function previewDraft(p: Pub) {
-		previewPub = p;
-		showPreview = true;
-		previewLoading = true;
-		draft = null;
-		draft = await loadDraft(p);
-		previewLoading = false;
-	}
-
-	/**
-	 * Preview DARI DALAM editor: isi modanya ya isi yang sedang diketik (belum
-	 * tentu tersimpan), jadi draf TIDAK dimuat ulang dari server — memuat ulang
-	 * akan menghapus hasil suntingan. Modal preview tampil DI ATAS modal editor
-	 * (z-index lebih tinggi bila draftPub masih terbuka).
-	 */
-	function previewCurrentDraft() {
-		if (!draftPub) return;
-		previewPub = draftPub;
-		previewLoading = false;
-		showPreview = true;
-	}
-
-	/**
-	 * Klik item menu baris. stopPropagation wajib: menu ini berada di dalam
-	 * `<tr>` yang onclick-nya membuka Detail, sehingga tanpa ini memilih
-	 * "Pratinjau draf" ikut membuka modal Detail di belakangnya.
-	 */
-	function menuAction(event: MouseEvent, p: Pub, action: 'detail' | 'preview' | 'edit' | 'url' | 'reject' | 'publish' | 'draft' | 'accept-revision') {
-		event.stopPropagation();
-		void rowAction(p, action);
-	}
-
-	/** Aksi dari menu baris (parity PublicationRowActions app lama). */
-	async function rowAction(p: Pub, action: 'detail' | 'preview' | 'edit' | 'url' | 'reject' | 'publish' | 'draft' | 'accept-revision') {
-		closeRowMenu();
-		if (action === 'detail') {
-			await openDetail(p);
-			return;
-		}
-		if (action === 'preview') {
-			await previewDraft(p);
-			return;
-		}
-		if (action === 'edit') {
-			await openDraftEditor(p);
-			return;
-		}
-		if (action === 'url') {
-			openQuickUrl(p);
-			return;
-		}
-		if (action === 'reject') {
-			rejectTarget = p;
-			rejectReason = '';
-			return;
-		}
-		if (action === 'publish') {
-			await approve(p, 'publish');
-			return;
-		}
-		if (action === 'accept-revision') {
-			await acceptRevision(p);
-			return;
-		}
-		await approve(p, 'draft');
-	}
-	let statusMenuOpen = $state(false);
-</script>
+		let statusMenuOpen = $state(false);
+	</script>
 
 <PageTitle title={tr("Publikasi")} />
 
-<svelte:window onclick={closeRowMenu} onkeydown={(e) => { if (e.key === 'Escape') { closeRowMenu(); publishConfirm = null; openIncomeID = null; } }} />
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { publishConfirm = null; openIncomeID = null; } }} />
 
 <!-- ── Penghasilan: nominal = pendapatan bersih; klik membuka rincian
      (harga diajukan · potongan platform · pendapatan diterima). ───────── -->
@@ -1136,12 +1027,12 @@
 								</Tooltip.Provider>
 							</span>
 						</th>
-						<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
-						<th class="px-4 py-2.5 text-right font-medium">{tr("Penghasilan")}</th>
-						<th class="px-4 py-2.5 font-medium">Status</th>
-						<th class="w-[136px] whitespace-nowrap px-4 py-2.5 text-right font-medium">{tr('Aksi')}</th>
-					</tr>
-				</thead>
+							<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
+							<th class="px-4 py-2.5 text-right font-medium">{tr("Penghasilan")}</th>
+							<th class="px-4 py-2.5 font-medium">Status</th>
+							<th class="whitespace-nowrap px-4 py-2.5 text-right font-medium">{tr('Aksi')}</th>
+						</tr>
+					</thead>
 				<tbody>
 					{#each filtered as p (p.id)}
 						<tr class="cursor-pointer border-t align-top hover:bg-secondary" onclick={() => void openDetail(p)}>
@@ -1302,24 +1193,49 @@
 	</span>
 {/snippet}
 
-{#snippet statusExtras(p: any)}
-	{#if !isManualRow(p) && LIVE.includes(p.status) && p.publish_progress != null}
-		<span class="mt-1 block text-[11px] text-muted-foreground">{p.publish_progress}%</span>
-	{/if}
-	{#if p.rejection_reason}
-		<span class="mt-1 block max-w-[220px] text-[11px]" style="color: var(--destructive);">{p.rejection_reason}</span>
-	{/if}
-	{#if rssBadge(p.rss_import_status)}
-		<span class="mt-1 block rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid var(--primary); color: var(--primary);">{rssBadge(p.rss_import_status)}</span>
-	{/if}
-	{#if p.status === 'published' && !p.published_url}
-		<span class="mt-1 block text-[11px] font-medium" style="color: var(--warning);">{tr('URL belum terisi')}</span>
-	{/if}
-{/snippet}
+	{#snippet statusExtras(p: any)}
+		{#if !isManualRow(p) && LIVE.includes(p.status) && p.publish_progress != null}
+			<span class="mt-1 block text-[11px] text-muted-foreground">{p.publish_progress}%</span>
+		{/if}
+		{#if p.rejection_reason}
+			<span class="mt-1 block max-w-[220px] text-[11px]" style="color: var(--destructive);">{p.rejection_reason}</span>
+		{/if}
+		{#if rssBadge(p.rss_import_status)}
+			<span class="mt-1 block rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid var(--primary); color: var(--primary);">{rssBadge(p.rss_import_status)}</span>
+		{/if}
+		{#if p.status === 'published' && !p.published_url}
+			<span class="mt-1 block text-[11px] font-medium" style="color: var(--warning);">{tr('URL belum terisi')}</span>
+		{/if}
+	{/snippet}
 
-{#snippet rowActions(p: any)}
-	<div class="relative inline-flex items-center gap-1">
-		{#if p.status === 'waiting_partner'}
+	{#snippet infoTip(text: string)}
+		<Tooltip.Provider delayDuration={100}>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					{#snippet child({ props })}
+						<button
+							{...props}
+							type="button"
+							class="inline-flex cursor-help items-center text-slate-400 hover:text-slate-600 transition-colors"
+							aria-label={text}
+						>
+							<CircleAlert size={12} />
+						</button>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Portal>
+					<Tooltip.Content class="uiTip max-w-xs text-xs" strategy="fixed" sideOffset={4}>
+						<Tooltip.Arrow class="uiTipArrow" />
+						{text}
+					</Tooltip.Content>
+				</Tooltip.Portal>
+			</Tooltip.Root>
+		</Tooltip.Provider>
+	{/snippet}
+
+	{#snippet rowActions(p: any)}
+		<div class="inline-flex items-center justify-end gap-1.5 flex-wrap">
+			<!-- 1. Detail Publikasi (paling kiri) -->
 			<Tooltip.Provider delayDuration={150}>
 				<Tooltip.Root>
 					<Tooltip.Trigger>
@@ -1327,106 +1243,212 @@
 							<button
 								{...props}
 								type="button"
-								class="pub-act pub-act-publish"
-								aria-label={tr('Setuju & Terbitkan')}
+								class="pub-act pub-act-neutral"
+								aria-label={tr('Detail')}
 								onclick={(e) => {
 									e.stopPropagation();
-									closeRowMenu();
-									error = '';
-									publishConfirm = p;
+									void openDetail(p);
 								}}
 							>
-								<Send size={16} />
+								<Eye size={15} />
 							</button>
 						{/snippet}
 					</Tooltip.Trigger>
 					<Tooltip.Portal>
 						<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
 							<Tooltip.Arrow class="uiTipArrow" />
-							{tr('Setuju & Terbitkan')}
+							{tr('Detail')}
 						</Tooltip.Content>
 					</Tooltip.Portal>
 				</Tooltip.Root>
 			</Tooltip.Provider>
-		{/if}
-		{#if canReject(p)}
-			<Tooltip.Provider delayDuration={150}>
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						{#snippet child({ props })}
-							<button
-								{...props}
-								type="button"
-								class="pub-act pub-act-reject"
-								aria-label={rejectLabel(p)}
-								onclick={(e) => {
-									e.stopPropagation();
-									closeRowMenu();
-									error = '';
-									rejectTarget = p;
-									rejectReason = '';
-								}}
-							>
-								<X size={16} />
-							</button>
-						{/snippet}
-					</Tooltip.Trigger>
-					<Tooltip.Portal>
-						<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
-							<Tooltip.Arrow class="uiTipArrow" />
-							{rejectLabel(p)}
-						</Tooltip.Content>
-					</Tooltip.Portal>
-				</Tooltip.Root>
-			</Tooltip.Provider>
-		{/if}
-		<button
-			type="button"
-			class="pub-menu-trigger inline-flex items-center justify-center rounded-lg p-1.5 hover:bg-secondary"
-			aria-haspopup="menu"
-			aria-expanded={rowMenu === p.id}
-			aria-label={`${tr('Aksi untuk')} ${p.document_title ?? tr('publikasi')}`}
-			onclick={(e) => {
-				e.stopPropagation();
-				if (rowMenu === p.id) { rowMenu = null; } else { positionRowMenu(e.currentTarget as HTMLElement); rowMenu = p.id; }
-			}}
-		>
-			<MoreVertical size={16} />
-		</button>
-		{#if rowMenu === p.id}
-			<div class="pub-row-menu fixed z-40 w-56 rounded-xl border py-1 shadow-lg" style="border-color: var(--border); background: var(--card, #fff); {menuPositionStyle}" role="menu" aria-label={tr('Aksi publikasi')}>
-				<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'detail')}>
-					<Eye size={14} /> {tr('Detail')}
-				</button>
-				{#if p.status === 'published' || p.status === 'waiting_partner' || p.status === 'revision'}
-					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'preview')}>
-						<Eye size={14} /> {tr('Pratinjau draf')}
-					</button>
-				{/if}
-				{#if p.status === 'revision'}
-					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'accept-revision')}>
-						<Check size={14} /> {tr('Terima Revisi')}
-					</button>
-				{/if}
-				{#if p.status === 'waiting_partner'}
-					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'edit')}>
-						<Pencil size={14} /> {tr('Edit draf')}
-					</button>
-				{/if}
-				{#if p.published_url}
-					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => { e.stopPropagation(); closeRowMenu(); window.open(p.published_url ?? '', '_blank', 'noopener'); }}>
-						<ExternalLink size={14} /> {tr('Lihat Langsung')}
-					</button>
-				{/if}
-				{#if p.status === 'partner_approved'}
-					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={(e) => menuAction(e, p, 'url')}>
-						<Link2 size={14} /> {tr('Kirim URL')}
-					</button>
-				{/if}
-			</div>
-		{/if}
-	</div>
-{/snippet}
+
+			<!-- 2. Setuju & Terbitkan (hanya waiting_partner) -->
+			{#if p.status === 'waiting_partner'}
+				<Tooltip.Provider delayDuration={150}>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									{...props}
+									type="button"
+									class="pub-act pub-act-publish"
+									aria-label={tr('Setuju & Terbitkan')}
+									onclick={(e) => {
+										e.stopPropagation();
+										error = '';
+										publishConfirm = p;
+									}}
+								>
+									<Send size={15} />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Portal>
+							<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+								<Tooltip.Arrow class="uiTipArrow" />
+								{tr('Setuju & Terbitkan')}
+							</Tooltip.Content>
+						</Tooltip.Portal>
+					</Tooltip.Root>
+				</Tooltip.Provider>
+			{/if}
+
+			<!-- 3. Terima Revisi (hanya revision) -->
+			{#if p.status === 'revision'}
+				<Tooltip.Provider delayDuration={150}>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									{...props}
+									type="button"
+									class="pub-act pub-act-publish"
+									aria-label={tr('Terima Revisi')}
+									onclick={(e) => {
+										e.stopPropagation();
+										void acceptRevision(p);
+									}}
+								>
+									<Check size={15} />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Portal>
+							<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+								<Tooltip.Arrow class="uiTipArrow" />
+								{tr('Terima Revisi')}
+							</Tooltip.Content>
+						</Tooltip.Portal>
+					</Tooltip.Root>
+				</Tooltip.Provider>
+			{/if}
+
+			<!-- 4. Edit draf (hanya waiting_partner) -->
+			{#if p.status === 'waiting_partner'}
+				<Tooltip.Provider delayDuration={150}>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									{...props}
+									type="button"
+									class="pub-act pub-act-edit"
+									aria-label={tr('Edit draf')}
+									onclick={(e) => {
+										e.stopPropagation();
+										void openDraftEditor(p);
+									}}
+								>
+									<Pencil size={15} />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Portal>
+							<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+								<Tooltip.Arrow class="uiTipArrow" />
+								{tr('Edit draf')}
+							</Tooltip.Content>
+						</Tooltip.Portal>
+					</Tooltip.Root>
+				</Tooltip.Provider>
+			{/if}
+
+			<!-- 5. Kirim URL (hanya partner_approved) -->
+			{#if p.status === 'partner_approved'}
+				<Tooltip.Provider delayDuration={150}>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									{...props}
+									type="button"
+									class="pub-act pub-act-link"
+									aria-label={tr('Kirim URL')}
+									onclick={(e) => {
+										e.stopPropagation();
+										quickUrlTarget = p;
+										quickUrlValue = '';
+										quickUrlError = '';
+									}}
+								>
+									<Link2 size={15} />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Portal>
+							<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+								<Tooltip.Arrow class="uiTipArrow" />
+								{tr('Kirim URL')}
+							</Tooltip.Content>
+						</Tooltip.Portal>
+					</Tooltip.Root>
+				</Tooltip.Provider>
+			{/if}
+
+			<!-- 6. Lihat Langsung (jika ada published_url) -->
+			{#if p.published_url}
+				<Tooltip.Provider delayDuration={150}>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									{...props}
+									type="button"
+									class="pub-act pub-act-link"
+									aria-label={tr('Lihat Langsung')}
+									onclick={(e) => {
+										e.stopPropagation();
+										window.open(p.published_url ?? '', '_blank', 'noopener');
+									}}
+								>
+									<ExternalLink size={15} />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Portal>
+							<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+								<Tooltip.Arrow class="uiTipArrow" />
+								{tr('Lihat Langsung')}
+							</Tooltip.Content>
+						</Tooltip.Portal>
+					</Tooltip.Root>
+				</Tooltip.Provider>
+			{/if}
+
+			<!-- 7. Tolak / Tolak Revisi (paling kanan) -->
+			{#if canReject(p)}
+				<Tooltip.Provider delayDuration={150}>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									{...props}
+									type="button"
+									class="pub-act pub-act-reject"
+									aria-label={rejectLabel(p)}
+									onclick={(e) => {
+										e.stopPropagation();
+										error = '';
+										rejectTarget = p;
+										rejectReason = '';
+									}}
+								>
+									<X size={15} />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Portal>
+							<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+								<Tooltip.Arrow class="uiTipArrow" />
+								{rejectLabel(p)}
+							</Tooltip.Content>
+						</Tooltip.Portal>
+					</Tooltip.Root>
+				</Tooltip.Provider>
+			{/if}
+		</div>
+	{/snippet}
 
 	{#if selected}
 		<div
@@ -1494,13 +1516,10 @@
 										loading="lazy"
 									/>
 								{/if}
-								<div class="min-w-0 flex-1">
-									<p class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-										{tr('Informasi Publikasi')}
-									</p>
-									<h3 class="text-base sm:text-lg font-bold text-slate-900 leading-snug break-words">
-										{detail.document_title ?? tr('Artikel')}
-									</h3>
+									<div class="min-w-0 flex-1">
+										<h3 class="text-base sm:text-lg font-bold text-slate-900 leading-snug break-words">
+											{detail.document_title ?? tr('Artikel')}
+										</h3>
 									<p class="text-xs sm:text-sm text-muted-foreground mt-1.5 flex items-center gap-1.5 flex-wrap">
 										<span class="font-medium text-slate-700">{detail.client_name ?? tr('Klien')}</span>
 										<span class="text-slate-300">•</span>
@@ -1605,67 +1624,81 @@
 										</div>
 									</div>
 
-									<!-- 4. Status -->
-									<div class="flex items-start gap-3">
-										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
-											<CheckCircle2 size={17} />
-										</div>
-										<div class="min-w-0 flex-1">
-											<p class="text-xs text-muted-foreground">{tr('Status')}</p>
-											<div class="mt-0.5">
-												<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-													{detailStatusLabel[detail.status] ?? detail.status}
-												</span>
-												<p class="text-xs text-muted-foreground mt-1">
-													{#if detail.published_at}
-														{tr('Dipublikasikan pada')} {dt(detail.published_at)}
-													{:else if detail.status === 'waiting_partner'}
-														{tr('Menunggu konfirmasi persetujuan')}
-													{:else}
-														{dt(detail.created_at)}
-													{/if}
-												</p>
+										<!-- 4. Status -->
+										<div class="flex items-start gap-3">
+											<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+												<CheckCircle2 size={17} />
+											</div>
+											<div class="min-w-0 flex-1">
+												<p class="text-xs text-muted-foreground">{tr('Status')}</p>
+												<div class="mt-0.5">
+													<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+														{detailStatusLabel[detail.status] ?? detail.status}
+													</span>
+												</div>
 											</div>
 										</div>
 									</div>
-								</div>
 
-								<!-- Kolom Kanan -->
-								<div class="space-y-4">
-									<!-- 1. Klien -->
-									<div class="flex items-start gap-3">
-										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
-											<User size={17} />
+									<!-- Kolom Kanan -->
+									<div class="space-y-4">
+										<!-- 1. Klien -->
+										<div class="flex items-start gap-3">
+											<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+												<User size={17} />
+											</div>
+											<div class="min-w-0 flex-1">
+												<p class="text-xs text-muted-foreground">{tr('Klien')}</p>
+												<p class="text-sm font-semibold text-slate-800 mt-0.5 truncate">{detail.client_name ?? '—'}</p>
+											</div>
 										</div>
-										<div class="min-w-0 flex-1">
-											<p class="text-xs text-muted-foreground">{tr('Klien')}</p>
-											<p class="text-sm font-semibold text-slate-800 mt-0.5 truncate">{detail.client_name ?? '—'}</p>
-										</div>
-									</div>
 
-									<!-- 2. Dibuat -->
-									<div class="flex items-start gap-3">
-										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
-											<Calendar size={17} />
-										</div>
-										<div class="min-w-0 flex-1">
-											<p class="text-xs text-muted-foreground">{tr('Dibuat')}</p>
-											<p class="text-sm font-semibold text-slate-800 mt-0.5">{dt(detail.created_at)}</p>
-										</div>
-									</div>
+											<!-- 2. Dibuat -->
+											<div class="flex items-start gap-3">
+												<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+													<Calendar size={17} />
+												</div>
+												<div class="min-w-0 flex-1">
+													<div class="flex items-center gap-1.5">
+														<p class="text-xs text-muted-foreground">{tr('Dibuat')}</p>
+														{@render infoTip(tr('Waktu ketika pesanan publikasi ini pertama kali dibuat oleh klien.'))}
+													</div>
+													<p class="text-sm font-semibold text-slate-800 mt-0.5">{dt(detail.created_at)}</p>
+												</div>
+											</div>
 
-									<!-- 3. Terjadwal -->
-									<div class="flex items-start gap-3">
-										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
-											<CalendarClock size={17} />
-										</div>
-										<div class="min-w-0 flex-1">
-											<p class="text-xs text-muted-foreground">{tr('Terjadwal')}</p>
-											<p class="text-sm font-semibold text-slate-800 mt-0.5">
-												{detail.scheduled_at ? dt(detail.scheduled_at) : '—'}
-											</p>
-										</div>
-									</div>
+											<!-- 3. Terbit (jika sudah published) atau Terjadwal (jika dijadwalkan) -->
+											{#if detail.status === 'published'}
+												<div class="flex items-start gap-3">
+													<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+														<CalendarClock size={17} />
+													</div>
+													<div class="min-w-0 flex-1">
+														<div class="flex items-center gap-1.5">
+															<p class="text-xs text-muted-foreground">{tr('Terbit')}</p>
+															{@render infoTip(tr('Waktu ketika artikel berhasil terbit dan tayang di website media Anda.'))}
+														</div>
+														<p class="text-sm font-semibold text-slate-800 mt-0.5">
+															{detail.published_at ? dt(detail.published_at) : '—'}
+														</p>
+													</div>
+												</div>
+											{:else if detail.scheduled_at}
+												<div class="flex items-start gap-3">
+													<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+														<CalendarClock size={17} />
+													</div>
+													<div class="min-w-0 flex-1">
+														<div class="flex items-center gap-1.5">
+															<p class="text-xs text-muted-foreground">{tr('Terjadwal')}</p>
+															{@render infoTip(tr('Jadwal tanggal dan waktu yang diminta oleh klien untuk menerbitkan artikel ini.'))}
+														</div>
+														<p class="text-sm font-semibold text-slate-800 mt-0.5">
+															{dt(detail.scheduled_at)}
+														</p>
+													</div>
+												</div>
+											{/if}
 
 									<!-- 4. Integrasi -->
 									<div class="flex items-start gap-3">
@@ -2013,68 +2046,12 @@
 							{/if}
 						</footer>
 					{/if}
-			</dialog>
-		</div>
-	{/if}
-
-{#if showPreview && previewPub}
-	<!-- Preview dari baris menu (z-50). Saat editor draf terbuka di belakangnya,
-	     nilainya dinaikkan agar preview tampil DI ATAS editor. -->
-	<div
-		class="fixed inset-0 flex items-center justify-center p-4"
-		style={`z-index: ${draftPub ? 90 : 50}; background-color: rgba(0,0,0,.45);`}
-		role="presentation"
-		onclick={() => (showPreview = false)}
-		onkeydown={(e) => { if (e.key === 'Escape') showPreview = false; }}
-	>
-		<dialog open class="app-card my-8 flex max-h-[85vh] w-full max-w-[720px] flex-col overflow-hidden p-5" aria-label={tr('Preview Artikel')} onclick={(e) => e.stopPropagation()}>
-			<h2 class="text-lg font-semibold">{tr('Preview Artikel')}</h2>
-			<p class="mt-1 text-sm text-muted-foreground">
-				{draft?.source === 'client_document'
-					? tr('Artikel asli klien (dokumen Tauthub) — bukan dari WordPress.')
-					: `${tr('Artikel saat ini di WordPress')} (${draft?.wp_status ?? 'draft'}) — ${tr('bukan dokumen asli klien.')}`}
-			</p>
-
-			{#if previewLoading}
-				<p class="mt-3 text-sm text-muted-foreground">{tr('Memuat preview…')}</p>
-			{:else if draft?.error}
-				<p class="mt-3 text-sm" style="color: var(--destructive);">{draft.error}</p>
-			{:else}
-				<div class="mt-3 min-h-0 flex-1 overflow-y-auto rounded-xl border" style="border-color: var(--border); background: var(--card);">
-					<div class="border-b p-4" style="border-color: var(--border); background: var(--muted);">
-						<p class="text-xl font-bold leading-snug">{draft?.title || tr('(tanpa judul)')}</p>
-						{#if draft?.meta_description}
-							<p class="mt-2 text-sm text-muted-foreground">{draft.meta_description}</p>
-						{/if}
-					</div>
-					{#if draft?.featured_image_url}
-						<div class="border-b" style="border-color: var(--border); background: var(--background);">
-							<img
-								src={draft.featured_image_url}
-								alt={tr('Gambar cover artikel')}
-								class="mx-auto block w-full max-w-[600px] object-cover"
-								style="max-height: 360px; aspect-ratio: 16 / 9;"
-							/>
-						</div>
-					{/if}
-					<div class="p-4">
-						<article class="article-html max-w-full break-words text-sm leading-relaxed [&_a]:underline [&_a]:text-[var(--primary)] [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:font-semibold [&_img]:mx-auto [&_img]:my-3 [&_img]:max-h-[360px] [&_img]:w-auto [&_img]:rounded-lg [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:my-2">
-							<!-- eslint-disable-next-line svelte/no-at-html-tags -- konten draf milik mitra sendiri dan sudah melalui editor -->
-							{@html sanitizeHtml(draft?.content_html ?? draft?.html ?? '')}
-						</article>
-					</div>
-				</div>
-			{/if}
-
-			<div class="mt-3 flex justify-end gap-2">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (showPreview = false)}>{tr('Tutup')}</button>
+				</dialog>
 			</div>
-		</dialog>
-	</div>
-{/if}
+		{/if}
 
-<!-- Konfirmasi ganda "Setuju & Terbitkan" — dipicu ikon pesawat di kolom Aksi. -->
-{#if publishConfirm}
+	<!-- Konfirmasi ganda "Setuju & Terbitkan" — dipicu ikon pesawat di kolom Aksi. -->
+	{#if publishConfirm}
 	<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={() => (publishConfirm = null)}>
 		<dialog open class="app-card w-full max-w-[480px] p-5" aria-label={tr('Setuju & Terbitkan')} onclick={(e) => e.stopPropagation()}>
 			<h2 class="text-lg font-semibold">{tr('Setuju & Terbitkan')}</h2>
@@ -2230,12 +2207,9 @@
 									disabled={busy}
 								/>
 							</div>
-							<div class="flex flex-none items-center justify-between gap-3 border-t px-4 py-2.5" style="border-color: var(--border);">
-								<p class="text-xs tabular-nums text-muted-foreground">{editorStats.words} {tr('kata')}</p>
-								<button type="button" class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" onclick={previewCurrentDraft}>
-									<Eye size={14} /> {tr('Preview')}
-								</button>
-							</div>
+								<div class="flex flex-none items-center justify-between gap-3 border-t px-4 py-2.5" style="border-color: var(--border);">
+									<p class="text-xs tabular-nums text-muted-foreground">{editorStats.words} {tr('kata')}</p>
+								</div>
 						</div>
 
 						<!-- ── Kolom kanan: sidebar metadata (scroll sendiri) ── -->
@@ -2406,57 +2380,79 @@
 		transform: translateY(-1px) scale(1.05);
 		box-shadow: 0 4px 10px color-mix(in srgb, var(--primary) 24%, transparent);
 	}
-	.pub-act-reject {
-		background: color-mix(in srgb, var(--destructive) 10%, transparent);
-		color: var(--destructive);
-	}
-	.pub-act-reject:hover {
-		background: color-mix(in srgb, var(--destructive) 18%, transparent);
-		transform: translateY(-1px) scale(1.05);
-		box-shadow: 0 4px 10px color-mix(in srgb, var(--destructive) 22%, transparent);
-	}
-	.pub-act:active {
-		transform: translateY(0) scale(0.96);
-		box-shadow: none;
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.pub-act,
-		.pub-act:hover,
+		.pub-act-reject {
+			background: color-mix(in srgb, var(--destructive) 10%, transparent);
+			color: var(--destructive);
+		}
+		.pub-act-reject:hover {
+			background: color-mix(in srgb, var(--destructive) 18%, transparent);
+			transform: translateY(-1px) scale(1.05);
+			box-shadow: 0 4px 10px color-mix(in srgb, var(--destructive) 22%, transparent);
+		}
+		.pub-act-edit {
+			background: color-mix(in srgb, var(--warning) 12%, transparent);
+			color: var(--warning);
+		}
+		.pub-act-edit:hover {
+			background: color-mix(in srgb, var(--warning) 20%, transparent);
+			transform: translateY(-1px) scale(1.05);
+			box-shadow: 0 4px 10px color-mix(in srgb, var(--warning) 24%, transparent);
+		}
+		.pub-act-link {
+			background: color-mix(in srgb, var(--primary) 10%, transparent);
+			color: var(--primary);
+		}
+		.pub-act-link:hover {
+			background: color-mix(in srgb, var(--primary) 18%, transparent);
+			transform: translateY(-1px) scale(1.05);
+			box-shadow: 0 4px 10px color-mix(in srgb, var(--primary) 22%, transparent);
+		}
+		.pub-act-neutral {
+			background: var(--secondary);
+			color: var(--muted-foreground);
+		}
+		.pub-act-neutral:hover {
+			background: color-mix(in srgb, var(--foreground) 8%, transparent);
+			color: var(--foreground);
+			transform: translateY(-1px) scale(1.05);
+			box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+		}
 		.pub-act:active {
-			transition: none;
-			transform: none;
+			transform: translateY(0) scale(0.96);
+			box-shadow: none;
 		}
-	}
+		@media (prefers-reduced-motion: reduce) {
+			.pub-act,
+			.pub-act:hover,
+			.pub-act:active {
+				transition: none;
+				transform: none;
+			}
+		}
 
-	/* Sidebar Kategori: dropdown berstyle (bukan <select> bawaan) dipaksa
-	   selebar sidebar, tinggi 44px, dengan border/focus yang sama seperti
-	   app-input. Analisis :global diperlukan karena trigger ada di komponen
-	   Select; PENUH lebar tidak mengubah pemakaian Select di halaman lain. */
-	.draft-cat :global(.zs-select-trigger) {
-		width: 100%;
-		max-width: none;
-		height: 44px;
-		justify-content: space-between;
-		border: 1px solid var(--input);
-		border-radius: var(--radius-control);
-		background: var(--card);
-	}
-	.draft-cat :global(.zs-select-trigger:hover:not(:disabled)) {
-		background: var(--secondary);
-		border-color: var(--border);
-	}
+		/* Sidebar Kategori: dropdown berstyle (bukan <select> bawaan) dipaksa
+		   selebar sidebar, tinggi 44px, dengan border/focus yang sama seperti
+		   app-input. Analisis :global diperlukan karena trigger ada di komponen
+		   Select; PENUH lebar tidak mengubah pemakaian Select di halaman lain. */
+		.draft-cat :global(.zs-select-trigger) {
+			width: 100%;
+			max-width: none;
+			height: 44px;
+			justify-content: space-between;
+			border: 1px solid var(--input);
+			border-radius: var(--radius-control);
+			background: var(--card);
+		}
+		.draft-cat :global(.zs-select-trigger:hover:not(:disabled)) {
+			background: var(--secondary);
+			border-color: var(--border);
+		}
 
-	/* Menu aksi baris dipakai bersama tabel (desktop) dan kartu (mobile). Di
-		layar sentuh (<768px) pemicu, tombol aksi, dan item menunya minimal 44px;
-		desktop tidak berubah. */
-	@media (max-width: 767px) {
-		.pub-menu-trigger,
-		.pub-act {
-			min-width: 44px;
-			min-height: 44px;
+		/* Tombol aksi baris di layar sentuh (<768px) minimal 40px */
+		@media (max-width: 767px) {
+			.pub-act {
+				min-width: 40px;
+				min-height: 40px;
+			}
 		}
-		.pub-row-menu button[role='menuitem'] {
-			min-height: 44px;
-		}
-	}
 </style>

@@ -4551,6 +4551,15 @@ export const PHRASE_EN: Record<string, string> = {
 	  "Salin Slug": "Copy Slug",
 	  "Salin URL": "Copy URL",
 	  "Tersalin!": "Copied!",
+	  "Waktu ketika pesanan publikasi ini pertama kali dibuat oleh klien.": "Time when this publication order was first created by the client.",
+	  "Waktu ketika artikel berhasil terbit dan tayang di website media Anda.": "Time when the article was successfully published on your media website.",
+	  "Jadwal tanggal dan waktu yang diminta oleh klien untuk menerbitkan artikel ini.": "Target date and time requested by the client to publish this article.",
+	  "Daftarkan media baru dan atur kerja sama untuk media ini.": "Register a new media outlet and configure partnership details.",
+	  "Informasi dasar media yang digunakan untuk publikasi artikel.": "Basic information of the media outlet used for publishing articles.",
+	  "Pilih metode integrasi untuk pengiriman artikel.": "Select the integration method for article delivery.",
+	  "Harga dan kesepakatan untuk kerja sama publikasi.": "Pricing and partnership agreement for publications.",
+	  "Hapus contoh artikel?": "Delete article example?",
+	  "Tautan contoh artikel yang tersimpan akan dikosongkan.": "The saved article example link will be cleared.",
 	};
 
 /**

@@ -30,33 +30,36 @@
 		popularLabel = 'Paling populer',
 		showAllLabel = 'Lihat semua',
 		showLessLabel = 'Tampilkan lebih sedikit',
-		card = false,
-		allOptionsLabel = ''
-	}: {
-		value?: string;
-		options: SelectOption[];
-		ariaLabel: string;
-		placeholder?: string;
-		Icon?: Component<{ size?: number; color?: string }> | null;
-		minWidth?: number;
-		align?: 'start' | 'end';
-		menuMaxHeight?: number;
-		variant?: 'default' | 'plain';
-		disabled?: boolean;
-		/** Tampilkan kolom pencarian di dalam menu (untuk daftar panjang). */
-		searchable?: boolean;
-		searchPlaceholder?: string;
-		onchange?: (value: string, option: SelectOption | null) => void;
-		footer?: Snippet;
-		/** >0: tampilkan hanya N opsi teratas (urut populer) plus tombol "Lihat semua". */
-		popularCount?: number;
-		popularLabel?: string;
-		showAllLabel?: string;
-		showLessLabel?: string;
-		/** true: opsi mode populer dirender sebagai kartu (judul + deskripsi). */
-		card?: boolean;
-		allOptionsLabel?: string;
-	} = $props();
+			card = false,
+			allOptionsLabel = '',
+			fitContent = false
+		}: {
+			value?: string;
+			options: SelectOption[];
+			ariaLabel: string;
+			placeholder?: string;
+			Icon?: Component<{ size?: number; color?: string }> | null;
+			minWidth?: number;
+			align?: 'start' | 'end';
+			menuMaxHeight?: number;
+			variant?: 'default' | 'plain';
+			disabled?: boolean;
+			/** Tampilkan kolom pencarian di dalam menu (untuk daftar panjang). */
+			searchable?: boolean;
+			searchPlaceholder?: string;
+			onchange?: (value: string, option: SelectOption | null) => void;
+			footer?: Snippet;
+			/** >0: tampilkan hanya N opsi teratas (urut populer) plus tombol "Lihat semua". */
+			popularCount?: number;
+			popularLabel?: string;
+			showAllLabel?: string;
+			showLessLabel?: string;
+			/** true: opsi mode populer dirender sebagai kartu (judul + deskripsi). */
+			card?: boolean;
+			allOptionsLabel?: string;
+			/** true: tombol trigger dan label teks menyesuaikan lebar konten (fit-content) */
+			fitContent?: boolean;
+		} = $props();
 
 	let open = $state(false);
 	let trigger = $state<HTMLButtonElement | null>(null);
@@ -253,13 +256,14 @@
 	});
 </script>
 
-<button
-	bind:this={trigger}
-	type="button"
-	class="zs-select-trigger"
-	class:zs-select-active={hasValue}
-	class:zs-select-plain={variant === 'plain'}
-	aria-haspopup="listbox"
+	<button
+		bind:this={trigger}
+		type="button"
+		class="zs-select-trigger"
+		class:zs-select-active={hasValue}
+		class:zs-select-plain={variant === 'plain'}
+		class:zs-select-fit={fitContent}
+		aria-haspopup="listbox"
 	aria-expanded={open}
 	aria-label={ariaLabel}
 	disabled={disabled}
@@ -420,10 +424,18 @@
 		border-color: #bfdbfe;
 		color: #2563eb;
 	}
-	.zs-select-plain {
-		border-color: transparent;
-		background: transparent;
-	}
+		.zs-select-plain {
+			border-color: transparent;
+			background: transparent;
+		}
+		.zs-select-trigger.zs-select-fit {
+			width: fit-content;
+			min-width: 0;
+			max-width: 100%;
+		}
+		.zs-select-trigger.zs-select-fit .zs-select-label {
+			max-width: none;
+		}
 
 	.zs-select-icon {
 		display: inline-flex;
