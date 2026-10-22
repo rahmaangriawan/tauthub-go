@@ -1705,7 +1705,7 @@
 								<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getDa(m)}</span></td>
 
 								<td class="modernTd" style="text-align:center">
-									<div class="flex flex-col items-center gap-1">
+									<div class="inline-flex items-center gap-1.5 whitespace-nowrap">
 										<span class="scoreBoxPill aiTrustPill" style={aiTrustToneStyle(getAiTrust(m))}>{getAiTrust(m)}</span>
 										<!-- Indikator GEO = centang AI Cited. Tidak ada centang
 										     berarti tidak ada indikator → disembunyikan. -->
