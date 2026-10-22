@@ -1955,7 +1955,7 @@
 	>
 			<dialog
 				open
-				class="app-card my-auto flex max-h-[92vh] w-fit max-w-[95vw] flex-col overflow-hidden rounded-2xl border border-slate-200/80 p-0 bg-white shadow-2xl"
+				class="app-card my-auto flex max-h-[92vh] w-full max-w-[95vw] lg:max-w-[1600px] flex-col overflow-hidden rounded-2xl border border-slate-200/80 p-0 bg-white shadow-2xl"
 				aria-label={editingId ? tr('Edit media') : tr('Tambah media')}
 				onclick={(e) => e.stopPropagation()}
 			>
