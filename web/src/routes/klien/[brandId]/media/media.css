@@ -592,6 +592,13 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   align-items: center;
   gap: 6px;
 }
+.mediaFavicon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: #f1f5f9;
+}
 .modernActionsGroup {
   display: flex;
   align-items: center;

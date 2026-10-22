@@ -1555,6 +1555,18 @@
 									<!-- Harga versi HP: kolom Harganya disembunyikan di layar kecil. -->
 									<span class="priceMobile">Rp {fmt(m.client_price ?? m.price ?? 0)}</span>
 										<div class="mediaTitleLine">
+											<!-- Favicon situs media (Google s2; pola sama dengan bar
+											     terpilih di bawah). Gagal memuat → dihilangkan. -->
+											{#if m.website_url && !faviconFailed[m.id]}
+												<img
+													class="mediaFavicon"
+													src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domainOf(m.website_url, ''))}&sz=64`}
+													alt=""
+													loading="lazy"
+													decoding="async"
+													onerror={() => (faviconFailed = { ...faviconFailed, [m.id]: true })}
+												/>
+											{/if}
 											<button
 												type="button"
 												class="mediaHeading mediaHeadingLink"
