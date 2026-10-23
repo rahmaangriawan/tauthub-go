@@ -719,12 +719,17 @@ func (d *Deps) TautBriefLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	status := strings.TrimSpace(q.Get("status"))
+	agent := strings.TrimSpace(q.Get("agent"))
 	limit := adminshared.ClampInt(q.Get("limit"), 100, 1, 500)
 	conds := []string{}
 	params := []any{}
 	if status == "running" || status == "done" || status == "failed" {
 		params = append(params, status)
 		conds = append(conds, fmt.Sprintf("r.status = $%d", len(params)))
+	}
+	if agent != "" {
+		params = append(params, agent)
+		conds = append(conds, fmt.Sprintf("r.agent = $%d", len(params)))
 	}
 	where := ""
 	if len(conds) > 0 {

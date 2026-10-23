@@ -144,9 +144,6 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi.")
 		return
 	}
-	if len(instruction) > 600 {
-		instruction = instruction[:600]
-	}
 	d.logRacikRun(r.Context(), brandRow.ID, agentCfg.Model, material, instruction,
 		result.InputTokens, result.OutputTokens, int(time.Since(started).Milliseconds()), nil)
 	writeNoStore(w, http.StatusOK, map[string]any{"ok": true, "instruction": instruction})
