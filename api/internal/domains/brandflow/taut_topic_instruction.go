@@ -83,7 +83,7 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 	// permintaan ditolak dengan pesan yang menunjuk halaman konfigurasinya.
 	masterPrompt := summary.LoadActivePrompt(r.Context(), d.Pool, summary.AgentRacik)
 	if strings.TrimSpace(masterPrompt) == "" {
-		httpx.Error(w, http.StatusUnprocessableEntity, "Prompt Racik Agent belum diatur. Buka admin Taut Brief > Racik Agent.")
+		httpx.Error(w, http.StatusUnprocessableEntity, "Prompt Racik Agent belum diatur. Buka admin Taut Pintar > Racik Agent.")
 		return
 	}
 	secret := ""
@@ -92,7 +92,7 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 	}
 	agentCfg := summary.LoadAgentConfig(r.Context(), d.Pool, secret, summary.AgentRacik)
 	if !agentCfg.Configured() {
-		httpx.Error(w, http.StatusUnprocessableEntity, "Racik Agent belum dikonfigurasi. Isi base URL, API key, dan model di admin Taut Brief > Racik Agent.")
+		httpx.Error(w, http.StatusUnprocessableEntity, "Racik Agent belum dikonfigurasi. Isi base URL, API key, dan model di admin Taut Pintar > Racik Agent.")
 		return
 	}
 

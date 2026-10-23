@@ -72,12 +72,13 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 								label: i18n.t.nav_admin.taut_pintar,
 								href: '/admin/taut-pintar',
 								icon: Sparkle,
-								active: pathname.startsWith('/admin/taut-pintar') || pathname.startsWith('/admin/taut-agents') || pathname.startsWith('/admin/prompt-angle'),
+								active: pathname.startsWith('/admin/taut-pintar') || pathname.startsWith('/admin/taut-agents') || pathname.startsWith('/admin/prompt-angle') || pathname.startsWith('/admin/taut-brief/racik-agent'),
 								children: [
 								{ label: tr('Monitoring'), href: '/admin/taut-pintar', active: pathname === '/admin/taut-pintar' },
 								{ label: 'AI Gambar', href: '/admin/taut-pintar/ai-image', active: pathname.startsWith('/admin/taut-pintar/ai-image') },
 								{ label: 'Agent Config', href: '/admin/taut-agents', active: pathname.startsWith('/admin/taut-agents') },
-									{ label: 'Prompt Angle', href: '/admin/prompt-angle', active: pathname.startsWith('/admin/prompt-angle') }
+									{ label: 'Prompt Angle', href: '/admin/prompt-angle', active: pathname.startsWith('/admin/prompt-angle') },
+									{ label: tr('Racik Agent'), href: '/admin/taut-brief/racik-agent', active: pathname.startsWith('/admin/taut-brief/racik-agent') }
 								]
 							},
 							{
@@ -94,12 +95,11 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 								label: tr('Taut Brief'),
 								href: '/admin/taut-brief',
 								icon: MessageSquare,
-								active: pathname.startsWith('/admin/taut-brief'),
+								active: pathname.startsWith('/admin/taut-brief') && !pathname.startsWith('/admin/taut-brief/racik-agent'),
 								children: [
 									{ label: tr('Konfigurasi'), href: '/admin/taut-brief', active: pathname === '/admin/taut-brief' },
 									{ label: tr('Agent Entitas'), href: '/admin/taut-brief/agent-entitas', active: pathname.startsWith('/admin/taut-brief/agent-entitas') },
-									{ label: tr('Agent File'), href: '/admin/taut-brief/agent-file', active: pathname.startsWith('/admin/taut-brief/agent-file') },
-									{ label: tr('Racik Agent'), href: '/admin/taut-brief/racik-agent', active: pathname.startsWith('/admin/taut-brief/racik-agent') }
+									{ label: tr('Agent File'), href: '/admin/taut-brief/agent-file', active: pathname.startsWith('/admin/taut-brief/agent-file') }
 								]
 							}
 						]
