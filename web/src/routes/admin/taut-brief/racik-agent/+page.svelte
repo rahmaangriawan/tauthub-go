@@ -10,6 +10,7 @@
 
 	type RunLog = {
 		id: string;
+		agent: string | null;
 		brand_name: string;
 		status: string;
 		model: string | null;
@@ -34,7 +35,9 @@
 			const res = await apiRequest(`${BASE}/logs?agent=racik_instruksi&limit=100`);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat log.')));
 			const data = await res.json();
-			logs = data?.items ?? [];
+			// Filter server (?agent=) sudah aktif; saringan ini menjaga tab tetap
+			// racik-only bila API yang dilayani masih versi lama.
+			logs = (data?.items ?? []).filter((r: RunLog) => r.agent === 'racik_instruksi');
 		} catch (e) {
 			logsError = e instanceof Error ? e.message : tr('Gagal memuat log.');
 		} finally {
