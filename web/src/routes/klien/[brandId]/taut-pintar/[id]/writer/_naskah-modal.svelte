@@ -231,6 +231,9 @@
 		if (genOutcome === 'error') return 0;
 		return Math.round(((genStage - 1) / GEN_STAGES.length) * 100);
 	});
+	// Editor sudah tampil sebelum cover selesai dibuat (tab pindah di tahap 3).
+	// Tanpa status ini, kotak cover terlihat kosong tanpa tanda proses apa pun.
+	const coverGenerating = $derived(genBusy && genWithCover && genStage >= GEN_STAGES.length);
 	let topic = $state('');
 	// (Tips/Contoh manual digantikan tombol "Racik Instruksi dari Anchor" — AI.)
 	let angleSlug = $state(untrack(() => initialAngleSlug));
@@ -954,8 +957,9 @@
 		return rows.map(({ key, label, value }) => ({ key, label, value }));
 	}
 
-	async function loadCopilotBriefs(): Promise<boolean> {
-		if (copilotBriefsLoaded || copilotBusy) return copilotBriefs.length > 0;
+	async function loadCopilotBriefs(force = false): Promise<boolean> {
+		if (copilotBusy) return copilotBriefs.length > 0;
+		if (copilotBriefsLoaded && !force) return copilotBriefs.length > 0;
 		copilotBusy = true;
 		try {
 			const res = await apiRequest(`${profilerBase}/profiles`);
@@ -973,6 +977,13 @@
 			copilotBriefsLoaded = true;
 			copilotBusy = false;
 		}
+	}
+
+	// Dipakai tombol "Cek ulang": pengguna membuat brief di tab lain, lalu
+	// kembali ke popup ini tanpa kehilangan isian.
+	async function refreshCopilotBriefs() {
+		copilotError = '';
+		await loadCopilotBriefs(true);
 	}
 
 	async function pickCopilotBrief(id: string) {
@@ -1059,6 +1070,12 @@
 			brief_id: copilotBriefId
 		};
 		if (isProper) {
+			// Memori Brand wajib: tanpa Brief Copilot, artikel Proper tidak boleh
+			// dibuat — brand harus punya brief dulu (dibuat dari halaman Profiler).
+			if (!copilotBriefId) {
+				genError = tr('Memori Brand wajib diisi — pilih atau buat Brief Copilot dulu sebelum membuat artikel.');
+				return;
+			}
 			// Proper wajib punya dasar fakta: manual ATAU Brief Copilot. Selama
 			// keduanya kosong, ditolak sebelum menyia-nyiakan token AI.
 			if (!properPayload.fakta && !properPayload.brief_id) {
@@ -1912,26 +1929,38 @@
 									</div>
 										<div class="mt-3 w-full">
 											{#if copilotBriefsLoaded && copilotBriefs.length === 0}
-												<!-- Peringatan: brand belum punya Brief Copilot (Profiler).
-												     Tombol membuka halaman Profiler di tab baru — isi
-												     popup tetap aman. -->
-												<div class="flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-xs" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">
+												<!-- Memori Brand wajib. Selama brand belum punya Brief
+												     Copilot, pembuatan artikel ditahan dan pengguna
+												     diarahkan membuat brief dulu. Halaman Profiler
+												     dibuka di tab baru supaya isian popup aman. -->
+												<div class="rounded-lg px-3 py-2.5 text-xs" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">
 													<div class="flex min-w-0 items-start gap-2">
 														<CircleAlert size={14} class="mt-0.5 shrink-0" />
 														<div class="min-w-0">
-															<p class="font-semibold">{tr('Belum ada Brief Copilot untuk brand ini')}</p>
-															<p class="mt-0.5 leading-relaxed">{tr('Buat dulu Taut Brief-nya — setelah ada, fakta bisa ditarik otomatis ke sini.')}</p>
+															<p class="font-semibold">{tr('Memori Brand wajib diisi')}</p>
+															<p class="mt-0.5 leading-relaxed">{tr('Brand ini belum punya Brief Copilot. Buat dulu — artikel baru bisa dibuat setelah brief tersedia.')}</p>
 														</div>
 													</div>
-													<a
-														href={profilerHref}
-														target="_blank"
-														rel="noopener noreferrer"
-														class="app-btn app-btn-soft !min-h-7 shrink-0 border px-2.5 text-[11px] font-semibold"
-														style="border-color: var(--warning);"
-													>
-														{tr('Buka Taut Brief')}
-													</a>
+													<div class="mt-2 flex flex-wrap items-center gap-2">
+														<a
+															href={profilerHref}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="app-btn app-btn-soft !min-h-7 border px-2.5 text-[11px] font-semibold"
+															style="border-color: var(--warning);"
+														>
+															{tr('Buat Brief Copilot')}
+														</a>
+														<button
+															class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-[11px] font-semibold"
+															type="button"
+															disabled={copilotBusy}
+															onclick={() => void refreshCopilotBriefs()}
+														>
+															{#if copilotBusy}<LoaderCircle size={12} class="animate-spin" />{/if}
+															{tr('Cek ulang')}
+														</button>
+													</div>
 												</div>
 											{:else}
 												<Select
@@ -1993,7 +2022,7 @@
 												<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
 													<span class="text-xs font-semibold">{tr('Fakta / Data Produk yang Wajib Masuk')} <span style="color: var(--destructive);">*</span></span>
 													<span class="flex items-center gap-1.5">
-														<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" disabled={copilotBusy || genBusy} title={tr('Serap fakta dari Brief Copilot yang dipilih')} onclick={() => void tarikFaktaCopilot()}>
+														<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" disabled={copilotBusy || genBusy || copilotBriefs.length === 0} title={tr('Serap fakta dari Brief Copilot yang dipilih')} onclick={() => void tarikFaktaCopilot()}>
 															{#if copilotBusy}<LoaderCircle size={12} class="animate-spin" />{:else}<Sparkles size={12} />{/if}
 															{copilotBusy ? tr('Menyerap…') : tr('Tarik dari Copilot')}
 														</button>
@@ -2100,10 +2129,12 @@
 										<button
 											class="app-btn app-btn-primary mt-6 w-full"
 											type="button"
-											disabled={genBusy || properLocked || (linkLimit > 0 && !linksValid) || !angleReady}
-											title={properLocked
-												? tr('Isi fakta produk atau pilih Brief Copilot dulu — mode Proper ditulis terkunci ke fakta.')
-												: ''}
+											disabled={genBusy || !copilotBriefId || properLocked || (linkLimit > 0 && !linksValid) || !angleReady}
+											title={!copilotBriefId
+												? tr('Memori Brand wajib diisi — pilih atau buat Brief Copilot dulu sebelum membuat artikel.')
+												: properLocked
+													? tr('Isi fakta produk atau pilih Brief Copilot dulu — mode Proper ditulis terkunci ke fakta.')
+													: ''}
 											onclick={openGenChoice}
 										>
 										{#if genBusy}<Sparkles size={15} class="genSparkle" /><LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
@@ -2129,7 +2160,17 @@
 						</p>
 						<span class="rounded-full px-2 py-0.5 text-[10px] font-bold" style="background-color: var(--destructive); color: #fff;">{tr('WAJIB')}</span>
 					</div>
-						{#if cover}
+						{#if coverGenerating}
+							<div
+								class="mt-3 flex aspect-video w-full animate-pulse flex-col items-center justify-center gap-2 rounded-lg border"
+								style="border-color: var(--border); background-color: var(--muted);"
+								aria-live="polite"
+							>
+								<LoaderCircle size={24} class="animate-spin" style="color: var(--primary);" />
+								<p class="text-xs font-semibold">{tr('Membuat gambar utama…')}</p>
+								<p class="text-[11px] text-muted-foreground">{tr('AI sedang membuat cover dari judul artikel.')}</p>
+							</div>
+						{:else if cover}
 							<div class="relative mt-3">
 								<img src={sameOriginAssetUrl(cover) ?? ''} alt={tr('Gambar utama artikel')} class="aspect-video w-full rounded-lg border object-cover" style="border-color: var(--border);" />
 								<button
@@ -2172,12 +2213,12 @@
 					{:else if coverNote}
 						<p class="mt-2 text-[11px] text-muted-foreground">{coverNote}</p>
 					{/if}
-					{#if campaignId && mediaId}
+					{#if campaignId && mediaId && !coverGenerating}
 						<button class="app-btn app-btn-soft mt-2 w-full !min-h-8 !px-3 !text-xs" type="button" onclick={() => (coverPickerOpen = true)}>
 							<Sparkles size={14} /> {tr('Generate Gambar (AI)')}
 						</button>
 					{/if}
-					{#if !cover}
+					{#if !cover && !coverGenerating}
 						<div class="mt-2 text-center">
 							<button class="text-xs underline hover:no-underline" type="button" onclick={useFallbackCover}>
 								{tr('Pakai thumbnail default Tauthub')}

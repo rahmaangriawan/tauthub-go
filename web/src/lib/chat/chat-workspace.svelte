@@ -5,16 +5,20 @@
 	// karena bentuk respons API-nya identik. Layout tiga kolom:
 	// sidebar daftar forum — kolom pesan — sidebar info.
 	//
-	// Sesi: window 3×24 jam mulai saat pesan pertama KLIEN dikirim. Sebelum
-	// itu "Belum dimulai"; setelah lewat "expired" → komposer mati, riwayat
-	// tetap bisa dibaca dua pihak.
+	// Sesi: window 3×24 jam mulai saat pesan pertama dikirim (klien atau mitra).
+	// Sebelum itu "Belum dimulai"; setelah lewat "expired" → komposer mati,
+	// riwayat tetap bisa dibaca dua pihak.
 	import { onMount, onDestroy } from 'svelte';
-	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search } from '@lucide/svelte';
+	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search, Pencil } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { refreshChatUnreadNow } from '$lib/chat/chat-unread.svelte';
+	import PostEditor from '$lib/chat/post-editor.svelte';
 
 	type Thread = {
 		id: string;
+		brand_id: string;
+		campaign_id: string | null;
+		document_id: string | null;
 		media_id: string;
 		media_name: string;
 		media_type: string;
@@ -33,6 +37,8 @@
 		last_message_at: string | null;
 		last_message_by: string | null;
 		status: 'waiting' | 'open' | 'expired';
+		topic: string | null;
+		topic_note?: string;
 		unread_count?: number;
 		last_message?: { body: string; author_role: string; created_at: string } | null;
 	};
@@ -72,6 +78,7 @@
 	let loadingList = $state(true);
 	let loadingThread = $state(false);
 	let now = $state(Date.now());
+	let postEditorOpen = $state(false);
 
 	let messagesEl = $state<HTMLDivElement | null>(null);
 	let composerEl = $state<HTMLTextAreaElement | null>(null);
@@ -94,8 +101,11 @@
 		((url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim() || name.trim()).toLowerCase();
 	let faviconFailed = $state<Record<string, boolean>>({});
 
-	const otherName = (t: Thread) => (side === 'client' ? t.partner_name || t.media_name : t.brand_name || tr('Klien'));
+	// Sisi klien tidak pernah menampilkan identitas mitra — hanya nama media.
+	const otherName = (t: Thread) => (side === 'client' ? t.media_name : t.brand_name || tr('Klien'));
 	const otherLabel = $derived(side === 'client' ? tr('Mitra') : tr('Klien'));
+	const topicLabel = (topic: string | null) =>
+		topic === 'confirm' ? tr('Konfirmasi') : topic === 'revision' ? tr('Revisi') : topic === 'quote' ? tr('Butuh Kutipan') : '';
 
 	// ---------- waktu ----------
 
@@ -154,7 +164,7 @@
 		const q = threadQuery.trim().toLowerCase();
 		if (!q) return byStatus;
 		return byStatus.filter((t) =>
-			`${t.media_name} ${side === 'client' ? t.partner_name : t.brand_name} ${t.last_message?.body ?? ''}`.toLowerCase().includes(q)
+			`${t.media_name} ${side === 'partner' ? t.brand_name : ''} ${t.last_message?.body ?? ''}`.toLowerCase().includes(q)
 		);
 	});
 
@@ -260,7 +270,7 @@
 	}
 
 	const canSend = $derived(
-		Boolean(active) && (liveStatus === 'open' || (side === 'client' && liveStatus === 'waiting')) && !sending
+		Boolean(active) && (liveStatus === 'open' || liveStatus === 'waiting') && !sending
 	);
 
 	async function send() {
@@ -446,7 +456,7 @@
 						<span class="min-w-0 flex-1">
 							<span class="block truncate text-[12.5px] font-bold text-slate-900">{t.media_name}</span>
 							<span class="mt-0.5 block truncate text-[11px] text-slate-500">
-								{side === 'client' ? t.partner_name || tr('Mitra') : t.brand_name}
+								{side === 'client' ? t.article_title || tr('Belum ada artikel') : t.brand_name}
 							</span>
 							<span class="mt-1 flex items-center gap-1.5">
 								<span class="h-1.5 w-1.5 shrink-0 rounded-full {t.status === 'open' ? 'bg-emerald-500' : t.status === 'waiting' ? 'bg-slate-300' : 'bg-rose-400'}"></span>
@@ -488,9 +498,14 @@
 				<div class="min-w-0 flex-1">
 					<p class="truncate text-[13.5px] font-bold text-slate-900">{active.media_name}</p>
 					<p class="truncate text-[11.5px] text-muted-foreground">
-						{otherLabel}: {otherName(active)}{#if active.article_title} · {active.article_title}{/if}
+						{side === 'partner' ? `${otherLabel}: ${otherName(active)}` : `${tr('Judul Artikel')}: ${active.article_title || tr('Belum ada artikel')}`}
 					</p>
 				</div>
+				{#if active.topic}
+					<span class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+						{topicLabel(active.topic)}
+					</span>
+				{/if}
 				<span class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold {statusChip.cls}">
 					{statusChip.label}
 				</span>
@@ -498,13 +513,13 @@
 
 			<div bind:this={messagesEl} class="min-h-0 flex-1 space-y-1 overflow-y-auto bg-slate-50/60 px-4 py-4">
 				<div class="mx-auto mb-3 max-w-md rounded-xl bg-white/80 px-3 py-2 text-center text-[11px] leading-relaxed text-slate-500 ring-1 ring-slate-100">
-					{tr('Sesi obrolan berlaku 3×24 jam sejak pesan pertama dari klien. Setelah berakhir, riwayat tetap dapat dibaca.')}
+					{tr('Sesi obrolan berlaku 3×24 jam sejak pesan pertama. Setelah berakhir, riwayat tetap dapat dibaca.')}
 				</div>
 				{#if liveStatus === 'waiting'}
 					<div class="mx-auto mb-3 max-w-md rounded-xl bg-blue-50 px-3 py-2 text-center text-[11px] leading-relaxed text-blue-700">
 						{side === 'client'
 							? tr('Sesi dimulai begitu kamu mengirim pesan pertama.')
-							: tr('Menunggu pesan pertama dari klien.')}
+							: tr('Sesi dimulai saat pesan pertama dikirim.')}
 					</div>
 				{/if}
 				{#each rows as row (row.kind === 'day' ? `d-${row.label}` : row.m.id)}
@@ -515,7 +530,7 @@
 						<div class="flex {mine ? 'justify-end' : 'justify-start'}">
 							<div class="max-w-[78%] rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed shadow-2xs {mine ? 'rounded-br-md text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-800'}" style={mine ? 'background-color: var(--primary);' : ''}>
 								{#if !mine}
-									<p class="mb-0.5 text-[10.5px] font-bold opacity-70">{row.m.author_role === 'partner' ? active.partner_name || tr('Mitra') : active.brand_name}</p>
+									<p class="mb-0.5 text-[10.5px] font-bold opacity-70">{row.m.author_role === 'partner' ? active.media_name : active.brand_name}</p>
 								{/if}
 								<p class="whitespace-pre-wrap break-words">{row.m.body}</p>
 								<p class="mt-1 text-right text-[10px] {mine ? 'text-white/70' : 'text-slate-400'}">{fmtTime(row.m.created_at)}</p>
@@ -557,11 +572,6 @@
 					<div class="flex items-center gap-2.5 rounded-xl bg-slate-100 px-3.5 py-3 text-[12px] text-slate-600">
 						<Clock3 size={15} class="shrink-0 text-slate-400" />
 						{tr('Sesi 3×24 jam sudah berakhir — riwayat tetap dapat dibaca.')}
-					</div>
-				{:else if side === 'partner' && liveStatus === 'waiting'}
-					<div class="flex items-center gap-2.5 rounded-xl bg-slate-100 px-3.5 py-3 text-[12px] text-slate-600">
-						<Clock3 size={15} class="shrink-0 text-slate-400" />
-						{tr('Menunggu pesan pertama dari klien sebelum bisa membalas.')}
 					</div>
 				{/if}
 			</div>
@@ -605,8 +615,16 @@
 				<div class="mt-3 space-y-1.5 text-[12px]">
 					<div class="flex justify-between gap-2"><span class="text-slate-500">{tr('Tipe')}</span><span class="font-semibold capitalize">{active.media_type || '—'}</span></div>
 					<div class="flex justify-between gap-2"><span class="text-slate-500">DA</span><span class="font-semibold">{active.da ?? '—'}</span></div>
-					<div class="flex justify-between gap-2"><span class="text-slate-500">{otherLabel}</span><span class="max-w-[60%] truncate text-right font-semibold">{otherName(active)}</span></div>
 				</div>
+				{#if side === 'client' && active.campaign_id}
+					<button
+						class="app-btn app-btn-soft mt-3 inline-flex w-full items-center justify-center gap-1.5"
+						type="button"
+						onclick={() => (postEditorOpen = true)}
+					>
+						<Pencil size={13} /> {tr('Edit Post')}
+					</button>
+				{/if}
 			</div>
 
 			<div class="app-card p-4">
@@ -631,9 +649,21 @@
 				</div>
 				<div class="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-[11.5px] leading-relaxed text-slate-500">
 					<Info size={13} class="mt-0.5 shrink-0" />
-					{tr('Batas 3×24 jam dihitung dari pesan pertama klien. Setelahnya riwayat tetap dapat dibaca.')}
+					{tr('Batas 3×24 jam dihitung dari pesan pertama. Setelahnya riwayat tetap dapat dibaca.')}
 				</div>
 			</div>
 		{/if}
 	</aside>
 </div>
+
+{#if postEditorOpen && active && active.campaign_id}
+	<PostEditor
+		{apiBase}
+		thread={active}
+		onClose={() => {
+			postEditorOpen = false;
+			void refreshActive(true);
+			void loadThreads(true);
+		}}
+	/>
+{/if}

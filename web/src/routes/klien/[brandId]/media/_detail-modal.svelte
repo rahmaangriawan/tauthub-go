@@ -57,6 +57,11 @@
 		gsc_connected?: boolean;
 		sw_visits?: number | null;
 		sw_snapshot_date?: string | null;
+		rating_avg?: number | null;
+		rating_count?: number | null;
+		partner_id?: string | null;
+		partner_public_id?: string | null;
+		partner_name?: string | null;
 		status?: string | null;
 		label_sponsor?: string | null;
 		topik_terlarang?: string[] | null;
@@ -99,6 +104,20 @@
 	const trafficText = $derived(trafficSw ? `${trafficSw} / bln` : trafficEst ?? '—');
 	const daText = $derived(media.seo_da != null ? String(media.seo_da) : '—');
 	const aiTrustText = $derived(media.seo_ai_trust != null ? String(media.seo_ai_trust) : '—');
+	const ratingText = $derived(
+		media.rating_avg != null && media.rating_avg > 0
+			? `${media.rating_avg.toFixed(1).replace('.', ',')}/5`
+			: '—'
+	);
+	const ratingTitle = $derived.by(() => {		const avg = media.rating_avg;
+		if (avg == null || !(avg > 0)) return tr('Belum ada penilaian dari klien.');
+		const base = tr('Rating kecepatan terbit {avg}/5 dari klien yang menghubungi mitra.').replace(
+			'{avg}',
+			avg.toFixed(1)
+		);
+		const count = media.rating_count ?? 0;
+		return count > 0 ? base + ' ' + tr('Berdasarkan {n} penilaian.').replace('{n}', String(count)) : base;
+	});
 
 	let crawlArticles = $state<number | null>(null);
 	let copiedShare = $state(false);
@@ -499,6 +518,10 @@
 				<div class="detailMetricItem">
 					<span class="detailMetricLabel">AI Trust Score:</span>
 					<span class="detailMetricValueGood">{aiTrustText}</span>
+				</div>
+				<div class="detailMetricItem" title={ratingTitle}>
+					<span class="detailMetricLabel">Rating:</span>
+					<span class="detailMetricValue">{ratingText}</span>
 				</div>
 			</div>
 

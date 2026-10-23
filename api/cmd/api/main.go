@@ -476,6 +476,7 @@ func run() error {
 
 			// ---------- Portal mitra (/mitra) — port app/v1/partner/* ----------
 			authed.Get("/partner/chat/threads", chatDeps.PartnerThreadsList)
+			authed.Post("/partner/chat/threads", chatDeps.PartnerThreadCreate)
 			authed.Get("/partner/chat/threads/{threadId}", chatDeps.PartnerThreadGet)
 			authed.Post("/partner/chat/threads/{threadId}/messages", chatDeps.PartnerMessageSend)
 			authed.Get("/partner/me", partnerDeps.Me)

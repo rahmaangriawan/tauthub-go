@@ -18,7 +18,7 @@
 	import { MANUAL_PROFILER_REASON, rpCurrency, toJakartaDisplay } from '../../_shared';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import DateTimePicker from '$lib/components/date-time-picker.svelte';
-	import EditorModal from '../writer/_editor-modal.svelte';
+	import EditorModal from '$lib/components/article-editor-modal.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const campaignId = $derived(page.params.id as string);

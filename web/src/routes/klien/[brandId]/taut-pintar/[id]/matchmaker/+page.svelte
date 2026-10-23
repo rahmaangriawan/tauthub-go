@@ -555,7 +555,7 @@
 					<th class="modernTh">{tr('Trafik (Est)')}</th>
 					<th class="modernTh" style="text-align:center">DA</th>
 						<th class="modernTh" style="text-align:center">
-							<span class="thWithInfo">GEO / AI TRUST
+							<span class="thWithInfo">GEO
 								<Tooltip label={tr('Keterangan GEO dan AI Trust')} maxWidth={260}>
 									{#snippet rich()}
 										<strong>GEO</strong> — {tr('Centang biru menandai situs media ini disebut sebagai salah satu sumber pada jawaban AI Google.')}
@@ -566,7 +566,7 @@
 							</span>
 						</th>
 					<th class="modernTh">
-						<span class="thWithInfo">{tr('Waktu Rilis & SLA')}
+						<span class="thWithInfo">{tr('SLA')}
 							<Tooltip label={tr('Keterangan SLA waktu terbit')} maxWidth={280}>
 								{#snippet rich()}
 									<span class="tipStack">

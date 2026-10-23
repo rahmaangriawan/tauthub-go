@@ -16,6 +16,7 @@ import (
 const threadSelect = `
 	SELECT t.id, t.brand_id, t.campaign_id, t.media_id, t.partner_id, t.publication_id, t.document_id,
 	       t.started_at, t.expires_at, t.last_message_at, t.last_message_by, t.created_at,
+	       t.topic, t.topic_note,
 	       m.name AS media_name, m.media_type, m.website_url, sm.da,
 	       COALESCE(ptn.name, '') AS partner_name, COALESCE(ptn.public_id, '') AS partner_public_id,
 	       b.name AS brand_name, COALESCE(b.public_id, '') AS brand_public_id,
@@ -33,6 +34,7 @@ const threadSelect = `
 const threadListSelect = `
 	SELECT t.id, t.brand_id, t.campaign_id, t.media_id, t.partner_id, t.publication_id, t.document_id,
 	       t.started_at, t.expires_at, t.last_message_at, t.last_message_by, t.created_at,
+	       t.topic, t.topic_note,
 	       m.name AS media_name, m.media_type, m.website_url, sm.da,
 	       COALESCE(ptn.name, '') AS partner_name, COALESCE(ptn.public_id, '') AS partner_public_id,
 	       b.name AS brand_name, COALESCE(b.public_id, '') AS brand_public_id,
@@ -90,6 +92,8 @@ func threadPayload(r row, includeLast bool) map[string]any {
 		"expires_at":        expires,
 		"last_message_at":   r.timePtr("last_message_at"),
 		"last_message_by":   r.raw("last_message_by"),
+		"topic":             r.raw("topic"),
+		"topic_note":        r.strOr("topic_note", ""),
 		"status":            threadStatus(started, expires),
 		"created_at":        r.raw("created_at"),
 	}
@@ -105,6 +109,16 @@ func threadPayload(r row, includeLast bool) map[string]any {
 			out["last_message"] = nil
 		}
 	}
+	return out
+}
+
+// clientThreadPayload: bentuk forum untuk portal klien. Identitas mitra (nama
+// perusahaan & public id) tidak pernah dikirim ke klien — klien hanya mengenal
+// media partner-nya.
+func clientThreadPayload(r row, includeLast bool) map[string]any {
+	out := threadPayload(r, includeLast)
+	delete(out, "partner_name")
+	delete(out, "partner_public_id")
 	return out
 }
 
@@ -148,8 +162,8 @@ func (d *Deps) messagesPayload(ctx context.Context, threadID string) ([]map[stri
 
 // sendMessage: aturan sesi + simpan pesan + kabari pihak lain.
 //   - hanya boleh kirim saat window terbuka (waiting/open),
-//   - sesi dimulai oleh pesan PERTAMA klien (expires = now + 72 jam),
-//   - mitra tidak bisa mengirim sebelum klien memulai.
+//   - sesi 72 jam dimulai oleh pesan PERTAMA dari pihak mana pun (klien atau
+//     mitra — mitra memakai jalur "Hubungi Klien").
 func (d *Deps) sendMessage(ctx context.Context, threadID, role, userID, authorName, body string) (map[string]any, *statusError) {
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {
@@ -164,17 +178,19 @@ func (d *Deps) sendMessage(ctx context.Context, threadID, role, userID, authorNa
 		brandName            string
 		brandPublicID        string
 		partnerPublicID      string
+		mediaName            string
 	)
 	var partnerUserID *string
 	row := tx.QueryRow(ctx, `
 		SELECT t.started_at, t.expires_at, t.brand_id, t.partner_id,
 		       b.name, COALESCE(b.public_id, ''),
-		       COALESCE(ptn.public_id, ''), ptn.user_id
+		       COALESCE(ptn.public_id, ''), ptn.user_id, COALESCE(m.name, '')
 		FROM chat_threads t
 		JOIN brands b ON b.id = t.brand_id
+		JOIN media m ON m.id = t.media_id
 		LEFT JOIN partners ptn ON ptn.id = t.partner_id
 		WHERE t.id = $1 FOR UPDATE OF t`, threadID)
-	if err := row.Scan(&startedAt, &expiresAt, &brandID, &partnerID, &brandName, &brandPublicID, &partnerPublicID, &partnerUserID); err != nil {
+	if err := row.Scan(&startedAt, &expiresAt, &brandID, &partnerID, &brandName, &brandPublicID, &partnerPublicID, &partnerUserID, &mediaName); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, &statusError{http.StatusNotFound, "Forum obrolan tidak ditemukan."}
 		}
@@ -184,10 +200,7 @@ func (d *Deps) sendMessage(ctx context.Context, threadID, role, userID, authorNa
 	if startedAt != nil && expiresAt != nil && time.Now().After(*expiresAt) {
 		return nil, &statusError{http.StatusConflict, "Sesi obrolan sudah berakhir. Riwayat tetap dapat dibaca."}
 	}
-	if role == "partner" && startedAt == nil {
-		return nil, &statusError{http.StatusConflict, "Menunggu pesan pertama dari klien."}
-	}
-	if role == "client" && startedAt == nil {
+	if startedAt == nil {
 		if _, err := tx.Exec(ctx,
 			"UPDATE chat_threads SET started_at = now(), expires_at = now() + interval '72 hours', updated_at = now() WHERE id = $1",
 			threadID); err != nil {
@@ -234,7 +247,11 @@ func (d *Deps) sendMessage(ctx context.Context, threadID, role, userID, authorNa
 				"/mitra/"+partnerPublicID+"/chat?t="+threadID)
 		}
 	} else {
-		d.notifyBrandMembers(ctx, brandID, userID, "Balasan dari mitra", masked,
+		title := "Pesan baru dari mitra"
+		if mediaName != "" {
+			title = "Pesan baru dari " + mediaName
+		}
+		d.notifyBrandMembers(ctx, brandID, userID, title, masked,
 			"/klien/"+brandRef+"/chat?t="+threadID)
 	}
 

@@ -115,12 +115,17 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		// Sebelumnya klausa ini hanya ditambahkan bila bentuk bare BERBEDA dari teks
 		// aslinya, sehingga pencarian domain polos tidak pernah menyentuh website_url
 		// dan selalu berakhir "media tidak ditemukan".
-		clause += " AND (name ILIKE " + p1 + " OR category ILIKE " + p2 +
-			" OR website_url ILIKE " + addArg(likeBare)
+		clause += " AND (media.name ILIKE " + p1 + " OR media.category ILIKE " + p2 +
+			" OR media.website_url ILIKE " + addArg(likeBare)
 		if likeBare != like {
 			// URL lengkap ("https://situs.com/") juga dicocokkan apa adanya.
-			clause += " OR website_url ILIKE " + addArg(like)
+			clause += " OR media.website_url ILIKE " + addArg(like)
 		}
+		// ID mitra ikut dicari supaya klien bisa mengetik public_id mitra
+		// (6 karakter di URL /mitra/<id>) atau nama mitra, lalu katalog
+		// langsung menyusut ke media milik mitra tersebut.
+		clause += " OR EXISTS (SELECT 1 FROM partners pa WHERE pa.id = media.partner_id AND (pa.public_id ILIKE " +
+			addArg(likeBare) + " OR pa.id ILIKE " + addArg(likeBare) + " OR pa.name ILIKE " + addArg(like) + "))"
 		clause += ")"
 	}
 	if seoFilter == "checked" {
@@ -145,7 +150,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 	limitArg := addArg(limit)
 	offsetArg := addArg(offset)
 	rowsQ, err := d.Pool.Query(r.Context(), `
-		SELECT media.id, name, category, description, website_url, contoh_artikel_url, price, credit_cost,
+		SELECT media.id, media.name, media.category, description, website_url, contoh_artikel_url, price, credit_cost,
 		       integration_type, traffic_estimate, media_tier, media_quality_score, health_score, health_breakdown,
 		       media.health_computed_at, media.auto_publish, dewan_pers_verified, dewan_pers_note, dewan_pers_cert_no,
 		       domain_verified, media.status, media.created_at, media.media_type, media.bahasa_artikel,
@@ -156,6 +161,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		                 JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = media.id), media.category) AS categories_csv,
 		       sm.da, sm.pa, sm.spam_score, sm.checked_at, sm.ai_trust_score, sm.ai_citation,
 		       mcs.image_required AS standard_image_required,
+		       pa.id AS partner_id, pa.public_id AS partner_public_id, pa.name AS partner_name,
 		       EXISTS (SELECT 1 FROM gsc_connections g WHERE g.partner_id = media.partner_id AND g.status = 'active') AS gsc_connected,
 	       sw.visits AS sw_visits, sw.created_at AS sw_snapshot_date,
 	       (SELECT COUNT(*)::int FROM publications p
@@ -166,7 +172,8 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 	          WHERE r.media_id = media.id) AS rating_count
 	FROM media
 	LEFT JOIN media_seo_metrics sm ON sm.media_id = media.id
-	LEFT JOIN media_content_standards mcs ON mcs.media_id = media.id AND mcs.status = 'active'
+		LEFT JOIN media_content_standards mcs ON mcs.media_id = media.id AND mcs.status = 'active'
+		LEFT JOIN partners pa ON pa.id = media.partner_id
 	LEFT JOIN LATERAL (SELECT CASE WHEN s.insights->>'visits' ~ '^-?[0-9]+([.][0-9]+)?$'
 	                          THEN ((s.insights->>'visits')::numeric)::bigint END AS visits, s.created_at
 	                  FROM media_similarweb_snapshots s WHERE s.media_id = media.id ORDER BY s.created_at DESC LIMIT 1) sw ON TRUE
@@ -214,6 +221,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		var seoCheckedAt *time.Time
 		var seoAICitation *bool
 		var standardImageRequired *bool
+		var partnerID, partnerPublicID, partnerName *string
 		var gscConnected bool
 		var swVisits *int64
 		var swSnapshotDate *time.Time
@@ -228,7 +236,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			&linkDurationMonths,
 			&publicationMode, &wordCountMode, &allowEmbed, &pricingType, &priceStatus,
 			&categoriesCSV, &seoDA, &seoPA, &seoSpam, &seoCheckedAt, &seoAITrust, &seoAICitation,
-			&standardImageRequired, &gscConnected, &swVisits, &swSnapshotDate, &publishedCount,
+			&standardImageRequired, &partnerID, &partnerPublicID, &partnerName, &gscConnected, &swVisits, &swSnapshotDate, &publishedCount,
 			&ratingAvg, &ratingCount)
 		if scanErr != nil {
 			// catat supaya penyebab drop tidak pernah kembali diam —
@@ -299,6 +307,13 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			"rating_avg":   ratingAvg,
 			"rating_count": ratingCount,
 			"image_required":      standardImageRequired,
+			// Identitas mitra pemilik media. partner_id ditampilkan sebagai 8
+			// karakter pertama (sama seperti daftar Mitra di admin) dan bisa
+			// dicari langsung dari kotak pencarian katalog; public_id tetap
+			// dikirim karena dipakai URL /mitra/<id>.
+			"partner_id":        partnerID,
+			"partner_public_id": partnerPublicID,
+			"partner_name":      partnerName,
 			"is_available":        status == "active",
 			"availability_reason": availabilityReason(status),
 		}

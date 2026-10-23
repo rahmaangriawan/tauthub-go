@@ -13,9 +13,9 @@
 	import { cubicOut, cubicIn } from 'svelte/easing';
 	import AgentSteps from '../taut-pintar/_agent-steps.svelte';
 	import {
-		ArrowRight, Bookmark, Check, CircleAlert, Clock, Database, FileText, Info, LayoutGrid,
-		Link as LinkIcon,
-		Plus, RotateCcw, Search, SlidersHorizontal, Star, Trash2, Upload, Wallet, X, Zap,
+		ArrowRight, BarChart3, Bookmark, Check, CircleAlert, Clock, Database, FileText, Info, LayoutGrid,
+		Link as LinkIcon, Lock,
+		Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Tag, Trash2, Upload, Wallet, X, Zap,
 		ChevronLeft, ChevronRight
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
@@ -54,6 +54,7 @@
 		sw_visits?: number | null; sw_snapshot_date?: string | null;
 		published_count?: number | null;
 		rating_avg?: number | null; rating_count?: number | null;
+		partner_id?: string | null; partner_public_id?: string | null; partner_name?: string | null;
 		gsc_connected?: boolean; image_required?: boolean | null;
 		label_sponsor?: string | null; topik_terlarang?: string[];
 		max_links?: number | null; allow_hyperlink?: boolean | null;
@@ -75,7 +76,64 @@
 	let debouncedSearch = $state('');
 	let category = $state('');
 	let speedFilter = $state<'' | 'super' | 'fast' | 'standard'>('');
-	let priceFilter = $state<'' | 'low' | 'mid' | 'high'>('');
+	// Rentang harga bebas (Rupiah). Chip lama jadi preset yang mengisi input
+	// ini, jadi budget aneh seperti 700rb–1,5jt tetap bisa dicari.
+	let priceMinText = $state('');
+	let priceMaxText = $state('');
+	// Media tanpa harga pasti (price 0) tidak punya angka untuk dibandingkan.
+	// Opsi ini memunculkannya kembali saat filter rentang aktif.
+	let includePricePending = $state(false);
+	const priceMin = $derived(parseRupiahInput(priceMinText));
+	const priceMax = $derived(parseRupiahInput(priceMaxText));
+	const priceRange = $derived.by(() => {
+		let lo = priceMin;
+		let hi = priceMax;
+		if (lo != null && hi != null && lo > hi) [lo, hi] = [hi, lo];
+		return { lo, hi };
+	});
+	const priceActive = $derived(priceRange.lo != null || priceRange.hi != null);
+	const PRICE_PRESETS = [
+		{ v: 'low', l: '≤ Rp 500rb', min: '', max: '500.000' },
+		{ v: 'mid', l: 'Rp 500rb – 2jt', min: '500.000', max: '2.000.000' },
+		{ v: 'high', l: '> Rp 2jt', min: '2.000.001', max: '' }
+	] as const;
+	const pricePreset = $derived.by(() => {
+		const lo = priceRange.lo;
+		const hi = priceRange.hi;
+		if (lo == null && hi === 500_000) return 'low';
+		if (lo === 500_000 && hi === 2_000_000) return 'mid';
+		if (lo === 2_000_001 && hi == null) return 'high';
+		return '';
+	});
+	function parseRupiahInput(value: string): number | null {
+		const digits = value.replace(/\D/g, '');
+		return digits ? Number(digits) : null;
+	}
+	function formatRupiahInput(value: string): string {
+		const n = parseRupiahInput(value);
+		return n == null ? '' : new Intl.NumberFormat('id-ID').format(n);
+	}
+	function normalizePriceInputs() {
+		priceMinText = formatRupiahInput(priceMinText);
+		priceMaxText = formatRupiahInput(priceMaxText);
+		const lo = parseRupiahInput(priceMinText);
+		const hi = parseRupiahInput(priceMaxText);
+		// Urutan terbalik ditukar saat blur supaya yang tersimpan selalu masuk akal.
+		if (lo != null && hi != null && lo > hi) {
+			priceMinText = formatRupiahInput(String(hi));
+			priceMaxText = formatRupiahInput(String(lo));
+		}
+	}
+	function applyPricePreset(preset: { v: string; min: string; max: string }) {
+		if (pricePreset === preset.v) {
+			priceMinText = '';
+			priceMaxText = '';
+		} else {
+			priceMinText = preset.min;
+			priceMaxText = preset.max;
+		}
+		page_ = 1;
+	}
 	// Minimum DA memakai slider (0 = tanpa batas), menggantikan chip DA ≥ 10/20/30.
 	let minDa = $state(0);
 	// Terbit otomatis: jalur bypass tanpa persetujuan mitra. Ini flag "Mode
@@ -275,22 +333,6 @@
 	function slaSortKey(m: Media): number {
 		const hours = avgPublishHours(m);
 		return hours == null ? -1 : -hours;
-	}
-
-	/** Rating kecepatan terbit dari klien — sumbernya bintang di dialog
-	 *  "Hubungi" (halaman ringkasan), dirata-ratakan per media. Media yang belum
-	 *  pernah dinilai tidak menampilkan apa pun (bukan bintang kosong). */
-	function mediaRating(m: Media): { avg: number; count: number } | null {
-		const avg = m.rating_avg;
-		if (typeof avg !== 'number' || !(avg > 0)) return null;
-		return { avg, count: m.rating_count ?? 0 };
-	}
-
-	function ratingTip(r: { avg: number; count: number }): string {
-		const base = tr('Rating kecepatan terbit {avg}/5 dari klien yang menghubungi mitra.')
-			.replace('{avg}', r.avg.toFixed(1));
-		if (r.count <= 0) return base;
-		return base + ' ' + tr('Berdasarkan {n} penilaian.').replace('{n}', String(r.count));
 	}
 
 	function getDa(m: Media): string | number {
@@ -811,11 +853,15 @@
 				// Kelompok SLA dihitung dari rata-rata waktu terbit nyata media.
 				if (slaBucket(avgPublishHours(m)) !== speedFilter) return false;
 			}
-			if (priceFilter) {
+			if (priceActive) {
 				const price = m.client_price ?? m.price ?? 0;
-				if (priceFilter === 'low' && !(price > 0 && price <= 500_000)) return false;
-				if (priceFilter === 'mid' && !(price > 500_000 && price <= 2_000_000)) return false;
-				if (priceFilter === 'high' && !(price > 2_000_000)) return false;
+				// Media tanpa harga pasti hanya lolos bila opsi "harga nego /
+				// menyusul" dicentang; selain itu tidak ada angka untuk dibandingkan.
+				const pending = !(price > 0);
+				if (!(includePricePending && pending)) {
+					if (priceRange.lo != null && price < priceRange.lo) return false;
+					if (priceRange.hi != null && price > priceRange.hi) return false;
+				}
 			}
 			if (minDa > 0) {
 				const da = getDa(m);
@@ -869,7 +915,7 @@
 	});
 
 	const activeFilterCount = $derived(
-		(speedFilter ? 1 : 0) + (priceFilter ? 1 : 0) + (minDa > 0 ? 1 : 0) +
+		(speedFilter ? 1 : 0) + (priceActive ? 1 : 0) + (priceActive && includePricePending ? 1 : 0) + (minDa > 0 ? 1 : 0) +
 		(autoPublishOnly ? 1 : 0) + (aiCitationOnly ? 1 : 0) +
 		(verifiedOnly ? 1 : 0) + (dewanPersOnly ? 1 : 0) + (category ? 1 : 0)
 	);
@@ -912,7 +958,9 @@
 
 	function resetFilters() {
 		speedFilter = '';
-		priceFilter = '';
+		priceMinText = '';
+		priceMaxText = '';
+		includePricePending = false;
 		minDa = 0;
 		autoPublishOnly = false;
 		aiCitationOnly = false;
@@ -1239,7 +1287,7 @@
 				<div class="quickInfoRow"><span>DA</span><strong>{qi.da ?? '—'}</strong></div>
 				<div class="quickInfoRow"><span>{tr('AI Trust')}</span><strong>{qi.ai_trust_score ?? '—'}</strong></div>
 				<div class="quickInfoRow"><span>GEO</span><strong>{qi.ai_cited === true ? tr('Dikutip') : qi.ai_cited === false ? tr('Belum dikutip') : '—'}</strong></div>
-				<div class="quickInfoRow"><span>{tr('Waktu Rilis & SLA')}</span><strong>{qsla}</strong></div>
+				<div class="quickInfoRow"><span>{tr('SLA')}</span><strong>{qsla}</strong></div>
 				<div class="quickInfoRow">
 					<span>{tr('Bookmark')}</span>
 					<button
@@ -1283,8 +1331,11 @@
 
 {#snippet advFields()}
 				<div class="advFilterSection">
-					<span class="advFilterSectionLabel">SLA Waktu Terbit</span>
-					<div class="advFilterChipsGroup">
+					<div class="advFilterSectionHead">
+						<Clock size={15} />
+						<span class="advFilterSectionLabel">{tr('SLA Waktu Terbit')}</span>
+					</div>
+					<div class="advFilterChipsGroup advFilterChipsGroupEqual">
 						{#each [{ v: 'super', l: '< 3 jam' }, { v: 'fast', l: '≤ 24 jam' }, { v: 'standard', l: '> 24 jam' }] as opt (opt.v)}
 							<button
 								class="advFilterChip {speedFilter === opt.v ? 'advFilterChipActive' : ''}"
@@ -1296,54 +1347,92 @@
 				</div>
 
 				<div class="advFilterSection">
-					<span class="advFilterSectionLabel">{tr("Status Verifikasi")}</span>
+					<div class="advFilterSectionHead">
+						<ShieldCheck size={15} />
+						<span class="advFilterSectionLabel">{tr('Status Verifikasi')}</span>
+					</div>
 					<div class="advFilterToggleRow">
 						<label class="advFilterToggle">
 							<input type="checkbox" bind:checked={verifiedOnly} onchange={() => (page_ = 1)} />
-							<span>Domain terverifikasi</span>
+							<span>{tr('Domain terverifikasi')}</span>
 						</label>
 						<label class="advFilterToggle">
 							<input type="checkbox" bind:checked={dewanPersOnly} onchange={() => (page_ = 1)} />
-							<span>Dewan Pers</span>
+							<span>{tr('Dewan Pers')}</span>
 						</label>
 					</div>
 				</div>
 
 				<div class="advFilterSection">
-					<span class="advFilterSectionLabel">{tr("Secure Direct")}</span>
-					<div class="advFilterToggleRow">
-						<label class="advFilterToggle" title={tr("Artikel dari klien langsung diterbitkan ke media tanpa persetujuan manual Mitra.")}>
-							<input type="checkbox" bind:checked={autoPublishOnly} onchange={() => (page_ = 1)} />
-							<span>{tr("Secure Direct")}</span>
-						</label>
+					<div class="advFilterSectionHead">
+						<Lock size={15} />
+						<span class="advFilterSectionLabel">{tr('Secure Direct')}</span>
 					</div>
+					<label class="advFilterToggle" title={tr("Artikel dari klien langsung diterbitkan ke media tanpa persetujuan manual Mitra.")}>
+						<input type="checkbox" bind:checked={autoPublishOnly} onchange={() => (page_ = 1)} />
+						<span>{tr('Secure Direct')}</span>
+					</label>
 				</div>
 
 				<div class="advFilterSection">
-					<span class="advFilterSectionLabel">{tr("AI Citation")}</span>
-					<div class="advFilterToggleRow">
-						<label class="advFilterToggle" title={tr("Indikator otomatis via API apakah media ini terdeteksi aktif sebagai rujukan/referensi oleh mesin AI.")}>
-							<input type="checkbox" bind:checked={aiCitationOnly} onchange={() => (page_ = 1)} />
-							<span>{tr("Dikutip AI Overview")}</span>
-						</label>
+					<div class="advFilterSectionHead">
+						<Sparkles size={15} />
+						<span class="advFilterSectionLabel">{tr('AI Citation')}</span>
 					</div>
+					<label class="advFilterToggle" title={tr("Indikator otomatis via API apakah media ini terdeteksi aktif sebagai rujukan/referensi oleh mesin AI.")}>
+						<input type="checkbox" bind:checked={aiCitationOnly} onchange={() => (page_ = 1)} />
+						<span>{tr('Dikutip AI Overview')}</span>
+					</label>
 				</div>
 
 				<div class="advFilterSection">
-					<span class="advFilterSectionLabel">{tr("Rentang Harga")}</span>
-					<div class="advFilterChipsGroup">
-						{#each [{ v: 'low', l: '≤ Rp 500rb' }, { v: 'mid', l: 'Rp 500rb – 2jt' }, { v: 'high', l: '> Rp 2jt' }] as opt (opt.v)}
+					<div class="advFilterSectionHead">
+						<Tag size={15} />
+						<span class="advFilterSectionLabel">{tr('Rentang Harga')}</span>
+					</div>
+					<div class="priceRangeRow">
+						<input
+							class="priceRangeInput"
+							type="text"
+							inputmode="numeric"
+							placeholder={tr('Rp Min')}
+							bind:value={priceMinText}
+							oninput={() => (page_ = 1)}
+							onblur={normalizePriceInputs}
+						/>
+						<span class="priceRangeDash">–</span>
+						<input
+							class="priceRangeInput"
+							type="text"
+							inputmode="numeric"
+							placeholder={tr('Rp Maks')}
+							bind:value={priceMaxText}
+							oninput={() => (page_ = 1)}
+							onblur={normalizePriceInputs}
+						/>
+					</div>
+					<div class="advFilterChipsGroup advFilterChipsGroupEqual mt-3">
+						{#each PRICE_PRESETS as opt (opt.v)}
 							<button
-								class="advFilterChip {priceFilter === opt.v ? 'advFilterChipActive' : ''}"
+								class="advFilterChip {pricePreset === opt.v ? 'advFilterChipActive' : ''}"
 								type="button"
-								onclick={() => { priceFilter = priceFilter === opt.v ? '' : (opt.v as typeof priceFilter); page_ = 1; }}
+								onclick={() => applyPricePreset(opt)}
 							>{opt.l}</button>
 						{/each}
 					</div>
+					{#if priceActive}
+						<label class="advFilterToggle advFilterToggleCompact" title={tr('Ikut tampilkan media yang harganya belum pasti (nego / menyusul).')}>
+							<input type="checkbox" bind:checked={includePricePending} onchange={() => (page_ = 1)} />
+							<span>{tr('Sertakan harga nego / menyusul')}</span>
+						</label>
+					{/if}
 				</div>
 
 				<div class="advFilterSection">
-					<span class="advFilterSectionLabel">Minimum DA</span>
+					<div class="advFilterSectionHead">
+						<BarChart3 size={15} />
+						<span class="advFilterSectionLabel">{tr('Minimum DA')}</span>
+					</div>
 					<div class="advFilterSliderRow">
 						<input
 							class="advFilterRange"
@@ -1353,6 +1442,7 @@
 							step="1"
 							bind:value={minDa}
 							oninput={() => (page_ = 1)}
+							style="--pct: {minDa}%"
 							aria-label={tr("Minimum DA")}
 						/>
 						<span class="advFilterRangeValue">{minDa > 0 ? `DA ≥ ${minDa}` : tr('Semua DA')}</span>
@@ -1369,19 +1459,25 @@
 			aria-label={tr("Tutup filter")}
 			onclick={() => (advOpen = false)}
 		></button>
-		<div class="advFilterPanel" style="left: {advPos.left}px; top: {advPos.top}px;">
+		<div class="advFilterPanel" style="left: {advPos.left}px; top: {advPos.top}px; max-height: calc(100vh - {advPos.top}px - 12px);">
 			<div class="advFilterCard">
 				<div class="advFilterHeader">
-					<div class="advFilterTitle"><SlidersHorizontal size={16} /> Filter Lanjutan</div>
-					<button class="advFilterResetBtn" type="button" onclick={() => (advOpen = false)} aria-label={tr("Tutup filter")}>
+					<div class="advFilterTitle">
+						<span class="advFilterTitleIcon"><SlidersHorizontal size={16} /></span>
+						<span>{tr('Filter Lanjutan')}</span>
+					</div>
+					<button class="advFilterCloseBtn" type="button" onclick={() => (advOpen = false)} aria-label={tr("Tutup filter")}>
 						<X size={16} />
 					</button>
 				</div>
 
-				{@render advFields()}
+				<div class="advFilterBody">
+					{@render advFields()}
+				</div>
+
 				<div class="advFilterFooter">
-					<button class="advFilterResetBtn" type="button" onclick={resetFilters}>Reset semua</button>
-					<button class="advFilterApplyBtn" type="button" onclick={() => (advOpen = false)}>Terapkan</button>
+					<button class="advFilterResetLink" type="button" onclick={resetFilters}>{tr('Reset semua')}</button>
+					<button class="advFilterApplyBtn" type="button" onclick={() => (advOpen = false)}>{tr('Terapkan')}</button>
 				</div>
 			</div>
 		</div>
@@ -1480,7 +1576,7 @@
 								</span>{sortIndicator('da')}
 							</th>
 								<th class="modernTh modernThSortable" style="text-align:center" onclick={() => toggleSort('ai_trust')}>
-									<span class="thWithInfo">{tr('GEO / AI Trust')}
+									<span class="thWithInfo">{tr('GEO')}
 										<Tooltip.Root>
 											<Tooltip.Trigger>
 												{#snippet child({ props })}
@@ -1498,7 +1594,7 @@
 									</span>{sortIndicator('ai_trust')}
 								</th>
 								<th class="modernTh modernThSortable" onclick={() => toggleSort('speed')}>
-								<span class="thWithInfo">{tr('Waktu Rilis & SLA')}
+								<span class="thWithInfo">{tr('SLA')}
 									<Tooltip.Root>
 										<Tooltip.Trigger>
 											{#snippet child({ props })}
@@ -1527,7 +1623,6 @@
 						{#each visible as m (m.id)}
 							{@const traffic = formatTraffic(m.sw_visits, m.traffic_estimate)}
 							{@const sla = getSla(m)}
-							{@const rating = mediaRating(m)}
 							{@const cats = m.categories && m.categories.length ? m.categories : m.category ? [m.category] : ['Umum']}
 							{@const dist = distribution(m)}
 							<tr
@@ -1720,28 +1815,7 @@
 								<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getDa(m)}</span></td>
 
 								<td class="modernTd" style="text-align:center">
-									<div class="geoAiTrustIndicators">
-										<span class="geoAiTrustScore"><span class="scoreBoxPill aiTrustPill" style={aiTrustToneStyle(getAiTrust(m))}>{getAiTrust(m)}</span></span>
-										<!-- Slot centang berukuran tetap supaya posisi skor tidak
-										     bergeser antar baris; kosong bila tidak dikutip AI. -->
-										<span class="geoAiTrustVerify">
-											{#if m.seo_ai_citation === true}
-												<Tooltip.Root>
-													<Tooltip.Trigger>
-														{#snippet child({ props })}
-															<span {...props} class="aiCitationBadge" aria-label={tr('Sumber AI')}><Check size={11} aria-hidden="true" /></span>
-														{/snippet}
-													</Tooltip.Trigger>
-													<Tooltip.Portal>
-														<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
-															<Tooltip.Arrow class="uiTipArrow" />
-															{tr('Situs ini disebut sebagai salah satu sumber jawaban AI Google')}
-														</Tooltip.Content>
-													</Tooltip.Portal>
-												</Tooltip.Root>
-											{/if}
-										</span>
-									</div>
+									<span class="scoreBoxPill aiTrustPill" style={aiTrustToneStyle(getAiTrust(m))}>{getAiTrust(m)}</span>
 								</td>
 
 								<td class="modernTd">
@@ -1759,26 +1833,8 @@
 												{slaTip(m)}
 											</Tooltip.Content>
 											</Tooltip.Portal>
-										</Tooltip.Root>
-										{#if rating}
-											<Tooltip.Root>
-												<Tooltip.Trigger>
-													{#snippet child({ props })}
-														<span {...props} class="ratingPill" aria-label={ratingTip(rating)}>
-															<Star size={11} fill="currentColor" strokeWidth={0} aria-hidden="true" />
-															{rating.avg.toFixed(1)}/5
-														</span>
-													{/snippet}
-												</Tooltip.Trigger>
-												<Tooltip.Portal>
-													<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
-														<Tooltip.Arrow class="uiTipArrow" />
-														{ratingTip(rating)}
-													</Tooltip.Content>
-												</Tooltip.Portal>
 											</Tooltip.Root>
-										{/if}
-									</div>
+										</div>
 								</td>
 
 								<td class="modernTd"><span class="priceBoldText">Rp {fmt(m.client_price ?? m.price ?? 0)}</span></td>

@@ -13,8 +13,9 @@
 		agent: string;
 		title: string;
 		description: string;
+		disabledHint?: string;
 	};
-	let { agent, title, description }: Props = $props();
+	let { agent, title, description, disabledHint }: Props = $props();
 
 	const BASE = '/v1/platform/taut-brief';
 
@@ -271,12 +272,12 @@
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Temperature</span>
 				<input class="app-input mt-1 w-full" type="number" step="0.1" min="0" max="2" bind:value={form.temperature} />
-				<span class="text-[11px] text-muted-foreground">{tr('Ringkasan sebaiknya deterministik (0.1-0.3).')}</span>
+				<span class="text-[11px] text-muted-foreground">{tr('Hasil sebaiknya deterministik (0.1-0.3).')}</span>
 			</label>
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Max tokens</span>
 				<input class="app-input mt-1 w-full" type="number" placeholder={tr('opsional')} bind:value={form.max_tokens} />
-				<span class="text-[11px] text-muted-foreground">{tr('Batas panjang ringkasan. Kosongkan untuk bawaan provider.')}</span>
+				<span class="text-[11px] text-muted-foreground">{tr('Batas panjang hasil. Kosongkan untuk bawaan provider.')}</span>
 			</label>
 			<label class="block">
 				<span class="text-xs font-medium text-muted-foreground">Timeout (ms)</span>
@@ -292,7 +293,7 @@
 		{#if !form.enabled}
 			<p class="mt-3 flex items-start gap-2 text-xs" style="color: var(--warning);">
 				<TriangleAlert size={14} class="mt-0.5 shrink-0" />
-				{tr('Selama nonaktif, ringkasan tidak diperbarui dan Writer mode proper akan menolak brief ini.')}
+				{disabledHint ?? tr('Selama nonaktif, ringkasan tidak diperbarui dan Writer mode proper akan menolak brief ini.')}
 			</p>
 		{/if}
 
@@ -313,7 +314,7 @@
 	<section class="app-card mt-4 p-5">
 		<h2 class="text-sm font-semibold">{tr('Prompt agent')}</h2>
 		<p class="mt-1 text-xs text-muted-foreground">
-			{tr('Prompt statis. Bahan brief dikirim backend sebagai pesan user setiap kali ringkasan dibuat.')}
+			{tr('Prompt statis. Bahan dikirim backend sebagai pesan user setiap kali agent dipanggil.')}
 		</p>
 
 		<div class="mt-3 flex flex-wrap gap-1">
@@ -337,7 +338,7 @@
 			class="app-input mt-3 w-full font-mono text-xs"
 			rows="16"
 			bind:value={promptText}
-			placeholder={tr('Instruksi agent ringkasan…')}
+				placeholder={tr('Instruksi agent…')}
 		></textarea>
 
 		<div class="mt-3 grid gap-3 sm:grid-cols-2">

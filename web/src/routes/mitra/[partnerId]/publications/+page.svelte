@@ -6,7 +6,8 @@
 	// dan rewrite AI (berbayar dari saldo mitra).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { Building2, Calendar, CalendarClock, Check, CheckCircle2, CircleAlert, Clock, Copy, ExternalLink, Eye, FileText, Globe, Image as ImageIcon, Link2, LoaderCircle, MoreVertical, Paperclip, Pencil, RefreshCw, Search, Send, SlidersHorizontal, Smile, Sparkles, Trash2, User, Wallet, X } from '@lucide/svelte';
+	import { goto } from '$app/navigation';
+	import { Building2, Calendar, CalendarClock, Check, CheckCircle2, CircleAlert, Clock, Copy, ExternalLink, Eye, FileText, Globe, Image as ImageIcon, Link2, LoaderCircle, MessageSquare, MoreVertical, Paperclip, Pencil, RefreshCw, Search, Send, SlidersHorizontal, Smile, Sparkles, Trash2, User, Wallet, X } from '@lucide/svelte';
 	import { Tooltip } from 'bits-ui';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -20,6 +21,7 @@
 		id: string; order_code: string | null; status: string; client_name: string | null;
 		document_title: string | null; document_id: string; media_id: string; media_name: string | null;
 		media_category: string | null; media_integration_type: string | null;
+		media_type?: string | null;
 		media_publication_mode: string | null; client_price: number; partner_amount: number;
 		partner_amount_gross?: number; partner_cut_percent?: number;
 		rewrite_ai_count?: number; rewrite_remain?: number;
@@ -118,8 +120,74 @@
 	let quickUrlValue = $state('');
 	let quickUrlBusy = $state(false);
 	let quickUrlError = $state('');
+
+	// Hubungi Klien: mitra membuka obrolan dengan alasan terstruktur. Hanya
+	// untuk artikel yang belum terbit; "Butuh Kutipan" khusus media mainstream.
+	let contactPub = $state<Pub | null>(null);
+	let contactTopic = $state<'confirm' | 'revision' | 'quote'>('confirm');
+	let contactNote = $state('');
+	let contactBusy = $state(false);
+	let contactError = $state('');
+	// Popover ditambatkan ke tombol yang diklik (bukan modal tengah layar).
+	// Hanya sumbu X yang mengikuti tombol; sumbu Y dipusatkan agar popover
+	// setinggi ini tidak jatuh ke bawah viewport.
+	let contactAnchor = $state<{ left: number } | null>(null);
+
+	const CONTACTABLE = ['waiting_partner', 'partner_approved', 'revision'];
+	const canContact = (p: Pub) => CONTACTABLE.includes(p.status);
+
+	function openContact(p: Pub, ev: MouseEvent) {
+		contactPub = p;
+		contactTopic = 'confirm';
+		contactNote = '';
+		contactError = '';
+		const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+		const width = 420;
+		contactAnchor = {
+			left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
+		};
+	}
+
+	function closeContact() {
+		if (contactBusy) return;
+		contactPub = null;
+		contactAnchor = null;
+	}
+
+	async function submitContact() {
+		if (!contactPub || contactBusy) return;
+		contactBusy = true;
+		contactError = '';
+		try {
+			const res = await apiRequest('/v1/partner/chat/threads', {
+				method: 'POST',
+				body: JSON.stringify({
+					publication_id: contactPub.id,
+					topic: contactTopic,
+					note: contactNote.trim()
+				})
+			});
+			if (!res.ok) {
+				contactError = await readApiError(res, tr('Gagal menghubungi klien.'));
+				return;
+			}
+			const data = await res.json().catch(() => null);
+			const threadId = String(data?.thread?.id ?? '');
+			contactPub = null;
+			contactAnchor = null;
+			await goto(`/mitra/${page.params.partnerId}/chat${threadId ? `?t=${encodeURIComponent(threadId)}` : ''}`);
+		} finally {
+			contactBusy = false;
+		}
+	}
+
 	let draftPub = $state<Pub | null>(null);
 	let draft = $state<any>(null);
+	/** Artikel manual yang sudah terbit: editor hanya untuk dibaca & disalin,
+	 *  karena server menolak PUT draf setelah publish_status = 'publish'. */
+	const draftLocked = $derived(
+		!!draftPub && draftPub.status === 'published' && draftPub.publish_status === 'publish'
+	);
 	let draftLoading = $state(false);
 	let coverInput = $state<HTMLInputElement | undefined>(undefined);
 	let coverBusy = $state(false);
@@ -602,6 +670,29 @@
 			await load();
 		} finally {
 			busy = false;
+		}
+	}
+
+	/** Salin isi artikel sebagai rich text (HTML) + fallback teks biasa, supaya
+	 *  mitra media manual bisa menempelkannya ke editor website sendiri. */
+	async function copyArticleContent() {
+		if (!draft) return;
+		const html = String(draft.content_html ?? '');
+		const plain = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+		try {
+			if (navigator.clipboard && 'write' in navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+				await navigator.clipboard.write([
+					new ClipboardItem({
+						'text/html': new Blob([html], { type: 'text/html' }),
+						'text/plain': new Blob([plain], { type: 'text/plain' })
+					})
+				]);
+			} else {
+				await navigator.clipboard.writeText(plain);
+			}
+			notice = tr('Artikel disalin. Tempel ke editor website Anda.');
+		} catch {
+			error = tr('Gagal menyalin artikel. Blok teks lalu salin manual.');
 		}
 	}
 
@@ -1265,6 +1356,36 @@
 				</Tooltip.Root>
 			</Tooltip.Provider>
 
+			<!-- 1b. Hubungi Klien (artikel belum terbit) -->
+			{#if canContact(p)}
+				<Tooltip.Provider delayDuration={150}>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									{...props}
+									type="button"
+									class="pub-act pub-act-neutral"
+									aria-label={tr('Hubungi Klien')}
+									onclick={(e) => {
+										e.stopPropagation();
+										openContact(p, e);
+									}}
+								>
+									<MessageSquare size={15} />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Portal>
+							<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+								<Tooltip.Arrow class="uiTipArrow" />
+								{tr('Hubungi Klien')}
+							</Tooltip.Content>
+						</Tooltip.Portal>
+					</Tooltip.Root>
+				</Tooltip.Provider>
+			{/if}
+
 			<!-- 2. Setuju & Terbitkan (hanya waiting_partner) -->
 			{#if p.status === 'waiting_partner'}
 				<Tooltip.Provider delayDuration={150}>
@@ -1326,8 +1447,9 @@
 				</Tooltip.Provider>
 			{/if}
 
-			<!-- 4. Edit draf (hanya waiting_partner) -->
-			{#if p.status === 'waiting_partner'}
+			<!-- 4. Edit draf (menunggu) — atau baca & salin isi untuk media manual
+			     yang sudah terbit (salah klik terbit tidak boleh mengunci artikel). -->
+			{#if p.status === 'waiting_partner' || (isManualRow(p) && p.status === 'published')}
 				<Tooltip.Provider delayDuration={150}>
 					<Tooltip.Root>
 						<Tooltip.Trigger>
@@ -1336,7 +1458,7 @@
 									{...props}
 									type="button"
 									class="pub-act pub-act-edit"
-									aria-label={tr('Edit draf')}
+									aria-label={p.status === 'published' ? tr('Lihat & Salin Artikel') : tr('Edit draf')}
 									onclick={(e) => {
 										e.stopPropagation();
 										void openDraftEditor(p);
@@ -1350,6 +1472,7 @@
 							<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
 								<Tooltip.Arrow class="uiTipArrow" />
 								{tr('Edit draf')}
+								{p.status === 'published' ? tr('— atau salin isi artikel') : ''}
 							</Tooltip.Content>
 						</Tooltip.Portal>
 					</Tooltip.Root>
@@ -2073,7 +2196,126 @@
 	</div>
 {/if}
 
-<!-- Tolak publikasi — modal terpisah (parity FormDialog "Tolak publikasi"). -->
+	<!-- Hubungi Klien — popover yang ditambatkan ke tombol aksi (bukan modal tengah). -->
+	{#if contactPub && contactAnchor}
+		<button class="fixed inset-0 z-[65] cursor-default" type="button" aria-label={tr('Tutup')} onclick={closeContact}></button>
+		<div
+			class="fixed z-[70] w-[420px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-2xl border bg-white"
+			style="top:50%; left:{contactAnchor.left}px; transform:translateY(-50%); max-height:calc(100vh - 16px); border-color: var(--border); box-shadow: 0 24px 64px rgba(15,23,42,.22);"
+			role="dialog"
+			aria-label={tr('Hubungi Klien')}
+		>
+			<!-- Header -->
+			<div class="flex items-start justify-between gap-3 px-5 pt-5">
+				<div class="flex items-start gap-3">
+					<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl" style="background: #e8f0ff; color: var(--primary);">
+						<MessageSquare size={20} />
+					</span>
+					<div class="min-w-0">
+						<p class="text-[17px] font-bold leading-tight text-slate-900">{tr('Hubungi Klien')}</p>
+						<p class="mt-1 text-[12px] leading-snug text-muted-foreground">
+							{tr('Pilih alasan agar klien langsung memahami pesanmu.')}
+						</p>
+					</div>
+				</div>
+				<button
+					type="button"
+					class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+					aria-label={tr('Tutup')}
+					onclick={closeContact}
+				>
+					<X size={15} />
+				</button>
+			</div>
+
+			<div class="px-5 pb-5 pt-4">
+				<!-- Info sesi -->
+				<div class="flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-[12.5px] text-slate-700" style="border-color: #cfe0ff; background: #f3f8ff;">
+					<Clock size={15} class="shrink-0" style="color: var(--primary);" />
+					{tr('Obrolan berlaku 3×24 jam sejak pesan pertama.')}
+				</div>
+
+				<p class="mt-4 text-[13px] font-bold text-slate-900">{tr('Alasan menghubungi')}</p>
+
+				<div class="mt-2 space-y-2">
+					<button
+						type="button"
+						class="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors {contactTopic === 'confirm' ? 'border-blue-400 bg-blue-50/60' : 'hover:bg-secondary'}"
+						style="border-color: {contactTopic === 'confirm' ? undefined : 'var(--border)'};"
+						aria-pressed={contactTopic === 'confirm'}
+						onclick={() => (contactTopic = 'confirm')}
+					>
+						<span class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 {contactTopic === 'confirm' ? 'border-blue-600' : 'border-slate-300'}">
+							{#if contactTopic === 'confirm'}<span class="h-2 w-2 rounded-full bg-blue-600"></span>{/if}
+						</span>
+						<span class="min-w-0">
+							<span class="block text-[13px] font-semibold text-slate-900">{tr('Konfirmasi')}</span>
+							<span class="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">{tr('Ada hal yang perlu dikonfirmasi sebelum artikel terbit.')}</span>
+						</span>
+					</button>
+					<button
+						type="button"
+						class="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors {contactTopic === 'revision' ? 'border-blue-400 bg-blue-50/60' : 'hover:bg-secondary'}"
+						style="border-color: {contactTopic === 'revision' ? undefined : 'var(--border)'};"
+						aria-pressed={contactTopic === 'revision'}
+						onclick={() => (contactTopic = 'revision')}
+					>
+						<span class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 {contactTopic === 'revision' ? 'border-blue-600' : 'border-slate-300'}">
+							{#if contactTopic === 'revision'}<span class="h-2 w-2 rounded-full bg-blue-600"></span>{/if}
+						</span>
+						<span class="min-w-0">
+							<span class="block text-[13px] font-semibold text-slate-900">{tr('Revisi')}</span>
+							<span class="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">{tr('Artikel perlu diperbaiki sebelum terbit.')}</span>
+						</span>
+					</button>
+					{#if contactPub.media_type === 'mainstream'}
+						<button
+							type="button"
+							class="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors {contactTopic === 'quote' ? 'border-blue-400 bg-blue-50/60' : 'hover:bg-secondary'}"
+							style="border-color: {contactTopic === 'quote' ? undefined : 'var(--border)'};"
+							aria-pressed={contactTopic === 'quote'}
+							onclick={() => (contactTopic = 'quote')}
+						>
+							<span class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 {contactTopic === 'quote' ? 'border-blue-600' : 'border-slate-300'}">
+								{#if contactTopic === 'quote'}<span class="h-2 w-2 rounded-full bg-blue-600"></span>{/if}
+							</span>
+							<span class="min-w-0">
+								<span class="block text-[13px] font-semibold text-slate-900">{tr('Butuh Kutipan')}</span>
+								<span class="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">{tr('Artikel memerlukan kutipan narasumber sebelum terbit.')}</span>
+							</span>
+						</button>
+					{/if}
+				</div>
+
+				<label class="mt-4 block">
+					<span class="flex items-center gap-2 text-[13px] font-bold text-slate-900">
+						{tr('Catatan untuk klien')}
+						<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-medium text-slate-500">{tr('(opsional)')}</span>
+					</span>
+					<textarea
+						class="app-input mt-2 w-full"
+						rows="3"
+						maxlength="1000"
+						placeholder={tr('Contoh: Mohon konfirmasi nama narasumber dan jabatan sebelum artikel diterbitkan.')}
+						bind:value={contactNote}
+					></textarea>
+				</label>
+
+				{#if contactError}<p class="mt-2 text-[11.5px]" style="color: var(--destructive);">{contactError}</p>{/if}
+			</div>
+
+			<!-- Footer -->
+			<div class="flex items-center justify-end gap-2.5 border-t px-5 py-3.5" style="border-color: var(--border); background: #fbfcfe;">
+				<button class="app-btn app-btn-soft" type="button" disabled={contactBusy} onclick={closeContact}>{tr('Batal')}</button>
+				<button class="app-btn app-btn-primary inline-flex items-center gap-1.5" type="button" disabled={contactBusy} onclick={() => void submitContact()}>
+					<MessageSquare size={14} />
+					{contactBusy ? tr('Mengirim…') : tr('Kirim pesan & buka obrolan')}
+				</button>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Tolak publikasi — modal terpisah (parity FormDialog "Tolak publikasi"). -->
 {#if rejectTarget}
 	<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={() => (rejectTarget = null)}>
 		<dialog open class="app-card w-full max-w-[480px] p-5" aria-label={tr('Tolak publikasi')} onclick={(e) => e.stopPropagation()}>
@@ -2146,7 +2388,7 @@
 					<h2 class="truncate text-base font-semibold">{tr('Isi Artikel')}</h2>
 					<p class="truncate text-xs text-muted-foreground">{draftPub.document_title ?? tr('Artikel')}</p>
 				</div>
-				{#if draft && !draft.error}
+				{#if draft && !draft.error && !draftLocked}
 					<button
 						class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
 						disabled={busy || rewriteLeft <= 0}
@@ -2169,6 +2411,11 @@
 			</header>
 
 			{#if error}<p class="flex-none border-b px-4 py-2 text-sm sm:px-5" style="border-color: var(--border); color: var(--destructive);">{error}</p>{/if}
+			{#if draftLocked}
+				<p class="flex-none border-b px-4 py-2 text-xs sm:px-5" style="border-color: var(--border); color: var(--muted-foreground);">
+					{tr('Artikel sudah terbit — isi hanya bisa dibaca dan disalin.')}
+				</p>
+			{/if}
 
 			{#if draftLoading}
 				<div class="min-h-0 flex-1 overflow-y-auto p-5"><p class="text-sm text-muted-foreground">{tr('Memuat draf…')}</p></div>
@@ -2187,12 +2434,13 @@
 										style={(draft.title ?? '').length >= 200 ? 'color: var(--destructive);' : 'color: var(--muted-foreground);'}
 									>{(draft.title ?? '').length}/200</span>
 								</div>
-								<input
-									class="w-full bg-transparent text-[22px] font-bold leading-snug tracking-tight outline-none"
-									maxlength="200"
-									bind:value={draft.title}
-									aria-label={tr('Judul Artikel')}
-								/>
+									<input
+										class="w-full bg-transparent text-[22px] font-bold leading-snug tracking-tight outline-none disabled:opacity-70"
+										maxlength="200"
+										bind:value={draft.title}
+										disabled={draftLocked}
+										aria-label={tr('Judul Artikel')}
+									/>
 							</div>
 							<div class="flex min-h-0 flex-1 flex-col px-3 pt-1 sm:px-4">
 								<RichTextEditor
@@ -2203,7 +2451,7 @@
 									ariaLabel={tr('Isi artikel')}
 									minHeight={320}
 									uploadImage={uploadDraftImage}
-									disabled={busy}
+									disabled={busy || draftLocked}
 								/>
 							</div>
 								<div class="flex flex-none items-center justify-between gap-3 border-t px-4 py-2.5" style="border-color: var(--border);">
@@ -2212,7 +2460,7 @@
 						</div>
 
 						<!-- ── Kolom kanan: sidebar metadata (scroll sendiri) ── -->
-						<aside class="min-h-0 w-full flex-none overflow-y-auto px-4 py-4 sm:px-5 lg:w-[352px] xl:w-[400px]">
+						<aside class="min-h-0 w-full flex-none overflow-y-auto px-4 py-4 sm:px-5 lg:w-[352px] xl:w-[400px]" inert={draftLocked || undefined}>
 							<!-- A. Gambar Utama — selalu paling atas -->
 							<section>
 								<h3 class="text-[13px] font-semibold">{tr('Gambar Utama')}</h3>
@@ -2344,10 +2592,15 @@
 						<div class="flex flex-none items-center gap-2">
 							{#if draftSavedNotice}<p class="hidden text-xs sm:block" style="color: var(--success);">{draftSavedNotice}</p>{/if}
 							{#if coverError}<p class="hidden text-xs sm:block" style="color: var(--destructive);">{coverError}</p>{/if}
-							<button type="button" class="app-btn app-btn-soft" onclick={closeDraftEditor}>{tr('Tutup')}</button>
-							<button type="submit" class="app-btn app-btn-primary" disabled={busy}>
-								{#if busy}<LoaderCircle size={14} class="animate-spin" /> {tr('Menyimpan draf…')}{:else}{tr('Simpan Draf')}{/if}
+							<button type="button" class="app-btn app-btn-soft" onclick={() => void copyArticleContent()}>
+								<Copy size={14} /> {tr('Salin Artikel')}
 							</button>
+							<button type="button" class="app-btn app-btn-soft" onclick={closeDraftEditor}>{tr('Tutup')}</button>
+							{#if !draftLocked}
+								<button type="submit" class="app-btn app-btn-primary" disabled={busy}>
+									{#if busy}<LoaderCircle size={14} class="animate-spin" /> {tr('Menyimpan draf…')}{:else}{tr('Simpan Draf')}{/if}
+								</button>
+							{/if}
 						</div>
 					</footer>
 				</form>

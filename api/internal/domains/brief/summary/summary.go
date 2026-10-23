@@ -29,6 +29,10 @@ const (
 const (
 	AgentEntity = "brief_entity_summary"
 	AgentFile   = "brief_file_summary"
+	// AgentRacik menyusun instruksi topik dari anchor di Pengelola Naskah.
+	// Bukan ringkasan brief, tetapi memakai transport + prompt berversi yang
+	// sama supaya bisa diatur admin tanpa deploy.
+	AgentRacik = "racik_instruksi"
 )
 
 const JobKind = "brief_summary"
@@ -64,7 +68,7 @@ func ParseKind(raw string) (Kind, bool) {
 }
 
 func ValidAgent(agent string) bool {
-	return agent == AgentEntity || agent == AgentFile
+	return agent == AgentEntity || agent == AgentFile || agent == AgentRacik
 }
 
 // KindOfAgent: kebalikan AgentName.

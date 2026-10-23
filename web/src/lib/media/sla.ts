@@ -23,24 +23,25 @@ export function avgPublishHours(media: MediaLike): number | null {
 }
 
 /**
- * Label SLA ringkas untuk sel tabel:
- * "SLA ± <1 jam" / "SLA ± 6 jam" / "SLA ± 4,2 hari" / "—" bila belum ada data.
+ * Label ringkas untuk sel tabel: "± <1 jam" / "± 6 jam" / "± 4,2 hari" / "—"
+ * bila belum ada data. Awalan "SLA" sengaja tidak ditulis — judul kolomnya
+ * sudah menjelaskan.
  */
 export function formatSla(hours: number | null): string {
 	if (hours == null) return '—';
-	if (hours < 1) return 'SLA ± <1 jam';
-	if (hours < 24) return `SLA ± ${Math.max(1, Math.round(hours))} jam`;
+	if (hours < 1) return '± <1 jam';
+	if (hours < 24) return `± ${Math.max(1, Math.round(hours))} jam`;
 	const days = Math.round((hours / 24) * 10) / 10;
 	const daysText = Number.isInteger(days)
 		? String(days)
 		: days.toLocaleString('id-ID', { maximumFractionDigits: 1 });
-	return `SLA ± ${daysText} hari`;
+	return `± ${daysText} hari`;
 }
 
-/** Durasi tanpa awalan "SLA ±", untuk kalimat tooltip. */
+/** Durasi tanpa "±", untuk kalimat tooltip yang sudah menulis "SLA ±". */
 export function slaDurationText(hours: number | null): string {
 	if (hours == null) return '';
-	return formatSla(hours).replace('SLA ± ', '');
+	return formatSla(hours).replace('± ', '');
 }
 
 /** Kelompokkan SLA untuk filter cepat: <3 jam, ≤24 jam, >24 jam. */

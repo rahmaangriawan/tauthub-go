@@ -1,12 +1,15 @@
 package brandflow
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
+	"github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -75,40 +78,47 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		mediaLabel = "blogger"
 	}
 
-	prompt := strings.Join([]string{
-		"Kamu perancang instruksi penulisan artikel untuk platform Tauthub (bahasa Indonesia).",
-		"Berdasarkan tautan/anchor berikut yang diisi user:",
+	// Master prompt & koneksi datang dari agent "Racik Agent" di admin Taut
+	// Brief. Tidak ada fallback ke AI runtime lama: bila admin belum mengisi,
+	// permintaan ditolak dengan pesan yang menunjuk halaman konfigurasinya.
+	masterPrompt := summary.LoadActivePrompt(r.Context(), d.Pool, summary.AgentRacik)
+	if strings.TrimSpace(masterPrompt) == "" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Prompt Racik Agent belum diatur. Buka admin Taut Brief > Racik Agent.")
+		return
+	}
+	secret := ""
+	if d.Cfg != nil {
+		secret = d.Cfg.CmsEncryptionSecret
+	}
+	agentCfg := summary.LoadAgentConfig(r.Context(), d.Pool, secret, summary.AgentRacik)
+	if !agentCfg.Configured() {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Racik Agent belum dikonfigurasi. Isi base URL, API key, dan model di admin Taut Brief > Racik Agent.")
+		return
+	}
+
+	material := strings.Join([]string{
+		"Bahan dari user:",
 		anchorLines.String(),
 		"Jenis media target: " + mediaLabel + ".",
-		"",
-		"Tulis SATU instruksi penulisan (1-2 kalimat) berisi:",
-		"1. Arah bahasan & tema judul artikel — WAJIB BERBEDA dari anchor text di atas; jangan menyalin anchor persis sebagai judul. Pakai kata kunci semantik yang relevan lalu terhubung ke niat pencarian (search intent), dan cermin kaidah SEO & E-E-A-T (keahlian/pengalaman/otoritas topik).",
-		"2. Arahan penyisipan tautan secara natural di bagian yang relevan HANYA bila ada URL di daftar; kalau anchor tidak punya URL, tetap sebut mengikuti konteksnya.",
-		"3. Gaya mengikuti jenis media: mainstream = berita/feature objektif kaidah berita; blogger = santai mengalir dengan heading.",
-		"",
-		"Jangan mengarang fakta, angka, harga, atau nama produk yang tidak ada di daftar anchor.",
-		"Kembalikan JSON valid persis bentuk: {\"instruction\": \"...\"}. Tanpa penjelasan di luar JSON.",
 	}, "\n")
 
-	runtime, err := ai.LoadAIRuntime(r.Context(), d.Pool)
-	if err != nil {
-		d.writeErr(w, err)
-		return
+	client := &ai.ChatClient{
+		BaseURL:     agentCfg.BaseURL,
+		APIKey:      agentCfg.APIKey,
+		Model:       agentCfg.Model,
+		Temperature: agentCfg.Temperature,
+		MaxTokens:   agentCfg.MaxTokens,
+		Timeout:     time.Duration(agentCfg.TimeoutMS) * time.Millisecond,
 	}
-	if !ai.IsAIConfigured(runtime) {
-		httpx.Error(w, http.StatusBadGateway, "AI belum dikonfigurasi. Atur AI di admin Tauthub.")
-		return
-	}
-	result, err := ai.GenerateChat(r.Context(), d.Pool, ai.GenerateChatOptions{
-		Prompt:   prompt,
-		Tier:     "economy",
-		TaskType: "topic_instruction",
-		BrandID:  &brandRow.ID,
-		UserID:   &user.ID,
-		Runtime:  runtime,
-	})
+	started := time.Now()
+	result, err := client.CompleteMessages(r.Context(), []ai.ChatMessage{
+		{Role: "system", Content: masterPrompt},
+		{Role: "user", Content: material},
+	}, false)
 	if err != nil {
 		slog.Warn("[taut] racik instruksi gagal", "err", err)
+		d.logRacikRun(r.Context(), brandRow.ID, agentCfg.Model, material, "", 0, 0,
+			int(time.Since(started).Milliseconds()), err)
 		httpx.Error(w, http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi.")
 		return
 	}
@@ -137,5 +147,37 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 	if len(instruction) > 600 {
 		instruction = instruction[:600]
 	}
+	d.logRacikRun(r.Context(), brandRow.ID, agentCfg.Model, material, instruction,
+		result.InputTokens, result.OutputTokens, int(time.Since(started).Milliseconds()), nil)
 	writeNoStore(w, http.StatusOK, map[string]any{"ok": true, "instruction": instruction})
+}
+
+// logRacikRun mencatat pemakaian agent racik instruksi ke taut_brief_runs
+// (agent 'racik_instruksi') supaya ikut tampil di tab Log admin. Best-effort:
+// kegagalan mencatat tidak boleh menggagalkan respons.
+func (d *Deps) logRacikRun(ctx context.Context, brandID, model, input, output string, tokIn, tokOut, durationMS int, runErr error) {
+	if strings.TrimSpace(brandID) == "" {
+		return
+	}
+	status := "done"
+	errText := ""
+	if runErr != nil {
+		status = "failed"
+		errText = runErr.Error()
+	}
+	_ = d.exec(ctx, `
+		INSERT INTO taut_brief_runs
+		  (id, brand_id, profile_id, agent, status, model, token_input, token_output,
+		   duration_ms, error, input_preview, output_preview, created_at, finished_at)
+		VALUES (gen_random_uuid()::text, $1, NULL, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10, now(), now())`,
+		brandID, summary.AgentRacik, status, model,
+		nullInt(tokIn), nullInt(tokOut), durationMS, errText,
+		truncateString(input, 2000), truncateString(output, 2000))
+}
+
+func nullInt(v int) any {
+	if v <= 0 {
+		return nil
+	}
+	return v
 }

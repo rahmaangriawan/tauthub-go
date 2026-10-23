@@ -30,7 +30,7 @@ func (d *Deps) ClientThreadsList(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]map[string]any, 0, len(rows))
 	for _, t := range rows {
-		out = append(out, threadPayload(t, true))
+		out = append(out, clientThreadPayload(t, true))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"threads": out})
 }
@@ -108,7 +108,7 @@ func (d *Deps) ClientThreadCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusInternalServerError, "Forum obrolan gagal dibuat.")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"thread": threadPayload(thread, false)})
+	writeJSON(w, http.StatusOK, map[string]any{"thread": clientThreadPayload(thread, false)})
 }
 
 // ClientThreadGet: GET /v1/brands/{brandId}/chat/threads/{threadId}
@@ -139,7 +139,7 @@ func (d *Deps) ClientThreadGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.markRead(r.Context(), thread.strOr("id", ""), "client")
-	writeJSON(w, http.StatusOK, map[string]any{"thread": threadPayload(thread, false), "messages": messages})
+	writeJSON(w, http.StatusOK, map[string]any{"thread": clientThreadPayload(thread, false), "messages": messages})
 }
 
 // ClientMessageSend: POST /v1/brands/{brandId}/chat/threads/{threadId}/messages
@@ -178,6 +178,6 @@ func (d *Deps) ClientMessageSend(w http.ResponseWriter, r *http.Request) {
 	updated, _ := d.loadThread(r.Context(), threadID)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"message": message,
-		"thread":  threadPayload(updated, false),
+		"thread":  clientThreadPayload(updated, false),
 	})
 }

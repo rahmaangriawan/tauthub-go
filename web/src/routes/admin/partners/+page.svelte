@@ -629,7 +629,19 @@
 											</Tooltip>
 										{/if}
 										<p class="font-medium">{row.name ?? row.email}</p>
-										<p class="text-xs text-muted-foreground">{row.id.slice(0, 8)}</p>
+										<p class="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground" title={tr('ID mitra ini bisa dicari di katalog media.')}>
+											<span>{tr('ID Mitra')}:</span>
+											<code class="font-mono">{row.id.slice(0, 8)}</code>
+											<button
+												class="rounded p-0.5 hover:bg-secondary"
+												type="button"
+												title={tr('Salin ID mitra')}
+												aria-label={tr('Salin ID mitra')}
+												onclick={(e) => { e.stopPropagation(); void copyContact(`pid-${row.id}`, row.id.slice(0, 8)); }}
+											>
+												{#if copyFeedback?.key === `pid-${row.id}` && copyFeedback?.ok}<Check size={12} style="color: var(--success);" />{:else}<Copy size={12} />{/if}
+											</button>
+										</p>
 									</div>
 								</div>
 							</td>
