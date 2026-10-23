@@ -426,8 +426,17 @@
 		}
 	}
 
+	// genState hanya menang untuk status SEMENTARA (proses generate). Status
+	// 'draft' yang tersimpan di memori tidak boleh menutupi hasil server: setelah
+	// QC selesai, server sudah menulis article_status = 'ready', sedangkan
+	// genState masih 'draft' dari proses generate — popover prasyarat lalu terus
+	// menyuruh "Cek QC" padahal badge artikel sudah hijau. 'draft' lokal hanya
+	// dipakai selama server belum sempat melaporkan dokumennya (anti-kedip).
 	function articleStatusOf(item: PlacementItem): string {
-		return genState[item.media_id] ?? item.article_status;
+		const local = genState[item.media_id];
+		if (local === 'generating' || local === 'queued' || local === 'error') return local;
+		if (local === 'draft' && item.article_status === 'none') return 'draft';
+		return item.article_status;
 	}
 	function hasDoc(item: PlacementItem): boolean {
 		const s = articleStatusOf(item);

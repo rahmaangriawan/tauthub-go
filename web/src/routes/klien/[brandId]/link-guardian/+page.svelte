@@ -71,6 +71,10 @@
 		dateDesc = !dateDesc;
 	}
 	let loading = $state(true);
+	// Penjaga non-reaktif: efek filter baru boleh memuat ulang setelah muatan
+	// pertama selesai. Jangan memakai `loading` di dalam efek — efek akan
+	// membaca state itu, lalu memicu dirinya sendiri tanpa henti.
+	let ready = false;
 	let error = $state('');
 	let claimingId = $state<string | null>(null);
 	let crawling = $state(false);
@@ -82,6 +86,7 @@
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
 			await load();
+			ready = true;
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -117,7 +122,7 @@
 		void query;
 		void mediaFilter;
 		void daysFilter;
-		if (loading) return;
+		if (!ready) return;
 		void load();
 	});
 
@@ -227,7 +232,6 @@
 
 	function applyFilters() {
 		offset = 0;
-		void load();
 	}
 	function resetFilters() {
 		searchInput = '';
@@ -237,12 +241,10 @@
 		daysFilter = '';
 		offset = 0;
 		filterOpen = false;
-		void load();
 	}
 	function commitSearch() {
 		query = searchInput.trim();
 		offset = 0;
-		void load();
 	}
 
 	/** Label sinkronisasi bergaya "Hari ini, 08:30 WIB" (zona Asia/Jakarta). */
@@ -648,18 +650,18 @@
 							ariaLabel={tr("Jumlah per halaman")}
 							minWidth={150}
 							align="end"
-							onchange={(v) => { pageSize = Number(v); offset = 0; void load(); }}
+							onchange={(v) => { pageSize = Number(v); offset = 0; }}
 							options={[
 								{ value: '10', label: tr('10 per halaman') },
 								{ value: '20', label: tr('20 per halaman') },
 								{ value: '50', label: tr('50 per halaman') }
 							]}
 						/>
-						<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={currentPage <= 1 || loading} onclick={() => { offset = Math.max(0, (currentPage - 2) * pageSize); void load(); }}>
+						<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={currentPage <= 1 || loading} onclick={() => { offset = Math.max(0, (currentPage - 2) * pageSize); }}>
 							‹ Sebelumnya
 						</button>
 						<span class="text-[12.5px] tabular-nums text-muted-foreground">{currentPage} / {totalPages}</span>
-						<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={currentPage >= totalPages || loading} onclick={() => { offset = currentPage * pageSize; void load(); }}>
+						<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={currentPage >= totalPages || loading} onclick={() => { offset = currentPage * pageSize; }}>
 							Berikutnya ›
 						</button>
 					</div>

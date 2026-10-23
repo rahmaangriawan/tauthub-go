@@ -17,7 +17,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
-		ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Code2, Copy, ExternalLink, FileText, Images, Link2, LoaderCircle,
+		ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Copy, ExternalLink, FileText, Images, Link2, LoaderCircle,
 		MoreHorizontal, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, ShieldAlert, Sparkle, Square, SquarePen, Trash2, Upload, UserCircle, X
 	} from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -293,18 +293,6 @@
 			if (secs < 60) return tr('Baru saja');
 			if (secs < 3600) return `${Math.round(secs / 60)} ${tr('menit lalu')}`;
 			return `${Math.round(secs / 3600)} ${tr('jam lalu')}`;
-		}
-
-		let jsonPreviewOpen = $state(false);
-		const previewJson = $derived(JSON.stringify(values, null, 2));
-
-		function copyJson() {
-			try {
-				void navigator.clipboard.writeText(previewJson);
-				showToast(tr('JSON disalin ke papan klip.'));
-			} catch {
-				showToast(tr('Gagal menyalin JSON.'), 'error');
-			}
 		}
 
 		// Bersihkan percakapan di layar; data profil yang sudah tersimpan di
@@ -1432,15 +1420,6 @@
 							<Save size={14} />
 						</button>
 						<button
-							class="app-btn app-btn-soft !min-h-8 !min-w-8 !p-1"
-							type="button"
-							aria-label={tr('Pratinjau JSON')}
-							title={tr('Pratinjau JSON')}
-							onclick={() => (jsonPreviewOpen = true)}
-						>
-							<Code2 size={14} />
-						</button>
-						<button
 							class="app-btn app-btn-primary !min-h-8 !min-w-8 !p-1"
 							type="button"
 							aria-label={tr('Gunakan untuk Kampanye')}
@@ -1454,9 +1433,6 @@
 						</button>
 					{:else}
 						<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={() => void saveRingkasan()}>{tr('Simpan Draf')}</button>
-						<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={() => (jsonPreviewOpen = true)}>
-							<Code2 size={14} />{tr('Pratinjau JSON')}
-						</button>
 						<button class="app-btn app-btn-primary !min-h-8 !text-xs" type="button" onclick={() => void goto(`/klien/${brandUrl}/campaigns`)}>
 							{tr('Gunakan untuk Kampanye')}<ArrowRight size={14} />
 						</button>
@@ -2404,31 +2380,6 @@
 			{/if}
 	</main>
 
-	<!-- ── Pratinjau JSON (Entity Source of Truth) ───────────────────── -->
-	{#if jsonPreviewOpen}
-		<div class="brief-modal-overlay" role="presentation">
-			<button class="brief-modal-backdrop" type="button" aria-label={tr('Tutup')} onclick={() => (jsonPreviewOpen = false)}></button>
-			<div
-				class="brief-modal brief-modal-wide"
-				role="dialog"
-				aria-modal="true"
-				aria-label={tr('Pratinjau JSON')}
-				tabindex="-1"
-				onkeydown={(e) => {
-					if (e.key === 'Escape') jsonPreviewOpen = false;
-				}}
-			>
-				<h2 class="brief-modal-title">{tr('Pratinjau JSON')}</h2>
-				<p class="brief-modal-text">{tr('Data profil entitas yang sudah tersimpan di brief ini.')}</p>
-				<pre class="brief-json">{previewJson}</pre>
-				<div class="brief-modal-actions">
-					<button class="app-btn app-btn-soft" type="button" onclick={() => (jsonPreviewOpen = false)}>{tr('Tutup')}</button>
-					<button class="app-btn app-btn-primary" type="button" onclick={copyJson}>{tr('Salin JSON')}</button>
-				</div>
-			</div>
-		</div>
-	{/if}
-
 	<!-- ── Dialog konfirmasi (hapus brief / percakapan baru) ─────────── -->
 	{#if confirmReq}
 		<div class="brief-modal-overlay" role="presentation">
@@ -3039,23 +2990,6 @@
 		border-color: color-mix(in srgb, var(--primary) 35%, transparent);
 		color: var(--accent-foreground);
 		font-weight: 700;
-	}
-
-	/* Dialog pratinjau JSON: lebih lebar + blok data yang bisa digulir. */
-	.brief-modal-wide { max-width: 640px; }
-	.brief-json {
-		margin-top: 12px;
-		max-height: 320px;
-		overflow: auto;
-		padding: 12px;
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		background: var(--secondary);
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 11.5px;
-		line-height: 1.55;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
 	}
 
 	/* Popover pemilih brief: kartu terang, header + hitungan + daftar. */
