@@ -74,6 +74,7 @@
 		id: string;
 		profile_name: string;
 		brand_name: string;
+		agent: string | null;
 		status: string;
 		model: string | null;
 		token_input: number | null;
@@ -758,6 +759,7 @@
 									<th class="py-1 pr-3">Waktu</th>
 									<th class="py-1 pr-3">Brand</th>
 									<th class="py-1 pr-3">Profiler</th>
+									<th class="py-1 pr-3">Agent</th>
 									<th class="py-1 pr-3">Status</th>
 									<th class="py-1 pr-3">Model</th>
 									<th class="py-1 pr-3">Token</th>
@@ -770,6 +772,7 @@
 										<td class="py-1.5 pr-3 whitespace-nowrap">{fmtDateTime(r.created_at)}</td>
 										<td class="py-1.5 pr-3">{r.brand_name || '—'}</td>
 										<td class="py-1.5 pr-3">{r.profile_name || '—'}</td>
+										<td class="py-1.5 pr-3">{r.agent || 'chat'}</td>
 										<td class="py-1.5 pr-3">
 											<span style="color: {r.status === 'done' ? 'var(--success)' : r.status === 'failed' ? 'var(--destructive)' : 'var(--muted-foreground)'};">{r.status}</span>
 											{#if r.error}<span class="ml-1 text-muted-foreground" title={r.error}>·</span>{/if}

@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -35,8 +37,10 @@ func main() {
 	jobwire.Register(database.Pool, cfg)
 
 	interval := envDuration("WORKER_POLL_SECONDS", 5*time.Second)
+	summaryWorkers := envInt("BRIEF_SUMMARY_CONCURRENCY", 6)
 	runner := jobs.NewRunner(database.Pool)
-	slog.Info("worker aktif", "poll", interval.String(), "kinds", len(jobs.Registered()))
+	slog.Info("worker aktif", "poll", interval.String(), "kinds", len(jobs.Registered()),
+		"summary_workers", summaryWorkers)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -70,8 +74,81 @@ func main() {
 		}
 	}()
 
-	runner.Loop(ctx, interval, jobs.WorkerID("worker"))
+	// Antrean umum: semua kind KECUALI ringkasan brief, satu job pada satu waktu.
+	// Ringkasan brief dipisah ke worker sendiri karena sifatnya burst: ratusan
+	// brief bisa berubah hampir bersamaan, dan satu panggilan model bisa lama.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		runWorkerLoop(ctx, runner, interval, jobs.WorkerID("worker"), "", "brief_summary")
+	}()
+	for i := 0; i < summaryWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runWorkerLoop(ctx, runner, interval, jobs.WorkerID("summary"), "brief_summary", "")
+		}()
+	}
+	wg.Wait()
 	slog.Info("worker berhenti")
+}
+
+// runWorkerLoop: klaim & proses job terus-menerus selama antrean berisi, lalu
+// tidur `idle` saat kosong. onlyKind != "" membatasi ke satu kind; exceptKind
+// != "" mengecualikan satu kind.
+func runWorkerLoop(ctx context.Context, runner *jobs.Runner, idle time.Duration, workerID, onlyKind, exceptKind string) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		var (
+			job *jobs.JobRow
+			err error
+		)
+		switch {
+		case onlyKind != "":
+			job, err = runner.ProcessOnceOfKind(ctx, workerID, onlyKind)
+		case exceptKind != "":
+			job, err = runner.ProcessOnceExceptKind(ctx, workerID, exceptKind)
+		default:
+			job, err = runner.ProcessOnce(ctx, workerID)
+		}
+		if err != nil {
+			if !errors.Is(err, context.Canceled) {
+				slog.Error("[jobs] worker error", "err", err)
+			}
+			sleepCtx(ctx, idle)
+			continue
+		}
+		if job == nil {
+			sleepCtx(ctx, idle)
+			continue
+		}
+		// Jeda kecil supaya DB tidak dihantam saat antrean panjang.
+		sleepCtx(ctx, 100*time.Millisecond)
+	}
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) {
+	select {
+	case <-ctx.Done():
+	case <-time.After(d):
+	}
+}
+
+func envInt(key string, def int) int {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return def
+	}
+	if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+		return n
+	}
+	return def
 }
 
 func envDuration(key string, def time.Duration) time.Duration {

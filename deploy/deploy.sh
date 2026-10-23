@@ -5,7 +5,7 @@
 #   - migrasi memakai runner additive (tidak pernah drop tabel/data)
 #   - .env dan .data/ tidak pernah disentuh (rsync meng-exclude keduanya)
 #
-# Binary di api/bin/{api,scheduler,migrate} dibangun di runner CI
+# Binary di api/bin/{api,scheduler,worker,migrate} dibangun di runner CI
 # (CGO_ENABLED=0 GOOS=linux GOARCH=amd64). Web dibangun di VPS (bun).
 #
 # Env: APP_DIR (default /opt/tauthub/app). Harus dijalankan sebagai root
@@ -55,7 +55,7 @@ log "3/4 build web (SvelteKit adapter-node)"
 as_user "cd '$APP_DIR/web' && bun install --frozen-lockfile && bun run build"
 
 log "4/4 restart service"
-$SUDO systemctl restart "${UNIT_PREFIX}-api" "${UNIT_PREFIX}-web" "${UNIT_PREFIX}-scheduler"
+$SUDO systemctl restart "${UNIT_PREFIX}-api" "${UNIT_PREFIX}-web" "${UNIT_PREFIX}-scheduler" "${UNIT_PREFIX}-worker"
 
 # Health check: api /healthz (ping DB) + respons web di :$WEB_PORT.
 for i in $(seq 1 30); do
@@ -68,5 +68,5 @@ for i in $(seq 1 30); do
   sleep 2
 done
 echo "Service belum sehat setelah 60 detik — cek:" >&2
-echo "  journalctl -u ${UNIT_PREFIX}-api -u ${UNIT_PREFIX}-web -u ${UNIT_PREFIX}-scheduler -n 50" >&2
+echo "  journalctl -u ${UNIT_PREFIX}-api -u ${UNIT_PREFIX}-web -u ${UNIT_PREFIX}-scheduler -u ${UNIT_PREFIX}-worker -n 50" >&2
 exit 1

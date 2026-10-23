@@ -415,7 +415,11 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 	if proper != nil {
 		d.saveTautProperFields(ctx, item.strOr("id", ""), proper)
-		if properBlock := buildTautProperBlock(proper, d.loadTautProperBrief(ctx, brandID, proper.BriefID)); properBlock != "" {
+		briefCtx, briefErr := d.loadTautProperBriefContext(ctx, brandID, proper.BriefID)
+		if briefErr != nil {
+			return writerItemResult{}, briefErr
+		}
+		if properBlock := buildTautProperBlock(proper, briefCtx); properBlock != "" {
 			referenceMaterial = strings.TrimSpace(referenceMaterial + "\n\n" + properBlock)
 			hasFacts = true
 		}

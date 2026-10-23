@@ -731,7 +731,7 @@ func (d *Deps) TautBriefLogs(w http.ResponseWriter, r *http.Request) {
 		where = "WHERE " + strings.Join(conds, " AND ")
 	}
 	rows, err := d.Pool.Query(r.Context(),
-		`SELECT r.id, r.brand_id, r.profile_id, r.status, r.model, r.token_input, r.token_output,
+		`SELECT r.id, r.brand_id, r.profile_id, r.agent, r.status, r.model, r.token_input, r.token_output,
 		        r.duration_ms, r.error, r.input_preview, r.output_preview, r.created_at, r.finished_at,
 		        COALESCE(p.name, '') AS profile_name, COALESCE(b.name, '') AS brand_name
 		 FROM taut_brief_runs r
@@ -747,19 +747,19 @@ func (d *Deps) TautBriefLogs(w http.ResponseWriter, r *http.Request) {
 	items := []map[string]any{}
 	for rows.Next() {
 		var (
-			id, brandID, st                           string
+			id, brandID, st, agent                    string
 			profileID, model, errMsg, inPrev, outPrev *string
 			profileName, brandName                    string
 			in, out, dur                              *int
 			createdAt                                 time.Time
 			finishedAt                                *time.Time
 		)
-		if rows.Scan(&id, &brandID, &profileID, &st, &model, &in, &out, &dur, &errMsg,
+		if rows.Scan(&id, &brandID, &profileID, &agent, &st, &model, &in, &out, &dur, &errMsg,
 			&inPrev, &outPrev, &createdAt, &finishedAt, &profileName, &brandName) != nil {
 			continue
 		}
 		items = append(items, map[string]any{
-			"id": id, "brand_id": brandID, "profile_id": profileID,
+			"id": id, "brand_id": brandID, "profile_id": profileID, "agent": agent,
 			"profile_name": profileName, "brand_name": brandName,
 			"status": st, "model": model,
 			"token_input": in, "token_output": out, "duration_ms": dur, "error": errMsg,

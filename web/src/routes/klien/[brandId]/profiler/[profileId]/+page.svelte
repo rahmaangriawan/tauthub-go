@@ -13,11 +13,11 @@
 	//
 	// Streaming memakai fetch + pembaca SSE manual (pola yang sama dengan
 	// halaman The Writer), bukan apiRequest yang timeout bawaannya 12 detik.
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
-		ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Code2, Copy, FileText, Link2, LoaderCircle,
+		ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Code2, Copy, ExternalLink, FileText, Images, Link2, LoaderCircle,
 		MoreHorizontal, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, ShieldAlert, Sparkle, Square, SquarePen, Trash2, Upload, UserCircle, X
 	} from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -148,8 +148,9 @@
 	// dibuka saat diklik, ditutup lewat backdrop atau Escape.
 	let betaOpen = $state(false);
 
-	// Tab workspace: percakapan Copilot vs ringkasan entitas (satu halaman).
-	let activeTab = $state<'copilot' | 'ringkasan'>('copilot');
+	// Tab workspace: percakapan Copilot, ringkasan entitas, media brief, dan
+	// ringkasan AI (entitas/file) yang dipakai Writer mode proper.
+	let activeTab = $state<'copilot' | 'entitas' | 'media' | 'ringkasan'>('copilot');
 	let showLayer2 = $state(false);
 
 	// Header band bisa diciutkan jadi strip judul tipis; default termuat jejak.
@@ -171,6 +172,69 @@
 	// Panel Ringkasan
 	let ringkasan = $state<Record<string, string>>({});
 	let saving = $state(false);
+
+	// Panel Media: dokumen & gambar milik brief ini. Sumbernya sama dengan yang
+	// dipakai Copilot, jadi berkas yang diunggah lewat obrolan ikut tampil.
+	type MediaDoc = {
+		id: string;
+		original_filename: string;
+		mime_type: string | null;
+		size_bytes: number | null;
+		parse_status: string;
+		parse_error: string | null;
+		created_at: string | null;
+		url: string;
+	};
+	type MediaImage = {
+		id: string;
+		url: string;
+		file_name: string | null;
+		mime_type: string | null;
+		size_bytes: number | null;
+		note: string | null;
+		created_at: string | null;
+	};
+	let mediaDocs = $state<MediaDoc[]>([]);
+	let mediaImages = $state<MediaImage[]>([]);
+	let mediaLoading = $state(false);
+	let mediaError = $state('');
+	let mediaUploading = $state(false);
+	let mediaDragging = $state(false);
+	let mediaDragDepth = 0;
+	// Nomor urut permintaan: jawaban lama tidak boleh menimpa brief yang baru.
+	let mediaLoadSeq = 0;
+
+	// Panel Ringkasan (AI): dua ringkasan yang dibaca Writer mode proper.
+	type SummaryKind = 'entity' | 'file';
+	type SummaryItem = {
+		kind: SummaryKind;
+		status: 'idle' | 'queued' | 'running' | 'ready' | 'failed';
+		content: string;
+		source_chars: number;
+		token_input: number;
+		token_output: number;
+		model: string;
+		error: string;
+		generated_at: string | null;
+		updated_at: string | null;
+		stale: boolean;
+	};
+	let summaryTab = $state<SummaryKind>('entity');
+	let summaries = $state<SummaryItem[]>([]);
+	let summaryLoading = $state(false);
+	let summaryError = $state('');
+	let summaryBusy = $state<SummaryKind | null>(null);
+	let summaryTimer: ReturnType<typeof setTimeout> | null = null;
+	let summarySeq = 0;
+	const summaryCurrent = $derived(summaryOf(summaryTab));
+	const summaryBadge = $derived(summaryStatus(summaryCurrent));
+	const summaryActionLabel = $derived(
+		summaryCurrent.status === 'idle'
+			? tr('Buat ringkasan')
+			: summaryCurrent.status === 'failed'
+				? tr('Coba lagi')
+				: tr('Perbarui sekarang')
+	);
 
 	let controller: AbortController | null = null;
 	let threadEl: HTMLElement | null = $state<HTMLElement | null>(null);
@@ -305,6 +369,20 @@
 	$effect(() => {
 		// Berganti brief lewat sidebar tanpa me-reload halaman → hidrasi ulang.
 		if (profileId && !loading) void hydrate();
+	});
+
+	$effect(() => {
+		// Tab Media memuat daftar berkas saat dibuka dan saat brief berganti.
+		if (activeTab === 'media' && profileId) void loadMedia();
+	});
+
+	$effect(() => {
+		// Tab Ringkasan memuat hasil agent saat dibuka / brief berganti.
+		if (activeTab === 'ringkasan' && profileId) void loadSummaries();
+	});
+
+	onDestroy(() => {
+		if (summaryTimer) clearTimeout(summaryTimer);
 	});
 
 	// Gulir ke pesan terbaru setiap daftar/teks bertambah. Dibaca eksplisit di
@@ -556,8 +634,13 @@
 		if (pendingDocs.length > 0) {
 			uploadingNow = true;
 			const names: string[] = [];
+			const imageNames: string[] = [];
 			try {
-				for (const d of pendingDocs) names.push(await uploadBriefFile(d.file));
+				for (const d of pendingDocs) {
+					const up = await uploadBriefFile(d.file);
+					if (up.kind === 'image') imageNames.push(up.name);
+					else names.push(up.name);
+				}
 			} catch (e) {
 				uploadingNow = false;
 				// Chip dipertahankan supaya bisa mencoba lagi tanpa memilih ulang.
@@ -567,11 +650,24 @@
 			uploadingNow = false;
 			pendingDocs = [];
 			if (!message) {
-				const list = names.map((n) => `\u{22}${n}\u{22}`).join(', ');
-				message =
-					names.length === 1
-						? tr(`Aku baru unggah dokumen ${list}. Baca dulu ya, lalu tunjukkan apa yang kamu tangkap.`)
-						: tr(`Aku baru mengunggah ${names.length} dokumen: ${list}. Baca dulu ya, lalu tunjukkan apa yang kamu tangkap.`);
+				const parts: string[] = [];
+				if (names.length > 0) {
+					const list = names.map((n) => `\u{22}${n}\u{22}`).join(', ');
+					parts.push(
+						names.length === 1
+							? tr(`Aku baru unggah dokumen ${list}. Baca dulu ya, lalu tunjukkan apa yang kamu tangkap.`)
+							: tr(`Aku baru mengunggah ${names.length} dokumen: ${list}. Baca dulu ya, lalu tunjukkan apa yang kamu tangkap.`)
+					);
+				}
+				if (imageNames.length > 0) {
+					const list = imageNames.map((n) => `\u{22}${n}\u{22}`).join(', ');
+					parts.push(
+						imageNames.length === 1
+							? tr(`Aku juga unggah gambar ${list} sebagai aset brand.`)
+							: tr(`Aku juga mengunggah ${imageNames.length} gambar: ${list} sebagai aset brand.`)
+					);
+				}
+				message = parts.join(' ');
 			}
 		}
 
@@ -698,16 +794,236 @@
 
 	const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
-	// Unggah satu dokumen; nama file dikembalikan untuk disebut di pesan.
-	async function uploadBriefFile(file: File): Promise<string> {
+	// Gambar disimpan sebagai aset brand (profiler_images), dokumen masuk ke
+	// profiler_documents supaya teksnya bisa dibaca AI.
+	const IMAGE_FILE = /^image\/(jpeg|png|webp|gif)$/i;
+
+	function isImageFile(file: File): boolean {
+		return IMAGE_FILE.test(file.type) || /\.(jpe?g|png|webp|gif)$/i.test(file.name);
+	}
+
+	// Unggah satu berkas; jenisnya dikembalikan untuk menyusun pesan.
+	async function uploadBriefFile(file: File): Promise<{ name: string; kind: 'doc' | 'image' }> {
+		const image = isImageFile(file);
 		const form = new FormData();
 		form.append('file', file);
-		const res = await apiRequest(`${apiBase}/profiles/${profileId}/documents`, {
+		const res = await apiRequest(`${apiBase}/profiles/${profileId}/${image ? 'images' : 'documents'}`, {
 			method: 'POST',
 			body: form
 		}, 120_000);
-		if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengunggah dokumen.')));
-		return file.name;
+		if (!res.ok) {
+			throw new Error(
+				await readApiError(res, image ? tr('Gagal mengunggah gambar.') : tr('Gagal mengunggah dokumen.'))
+			);
+		}
+		return { name: file.name, kind: image ? 'image' : 'doc' };
+	}
+
+	async function loadMedia() {
+		if (!profileId) return;
+		const seq = ++mediaLoadSeq;
+		mediaLoading = true;
+		mediaError = '';
+		try {
+			const res = await apiRequest(`${apiBase}/profiles/${profileId}`);
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat media.')));
+			const data = await res.json();
+			if (seq !== mediaLoadSeq) return;
+			mediaDocs = Array.isArray(data?.documents) ? data.documents : [];
+			mediaImages = Array.isArray(data?.images) ? data.images : [];
+		} catch (e) {
+			if (seq === mediaLoadSeq) mediaError = e instanceof Error ? e.message : tr('Gagal memuat media.');
+		} finally {
+			if (seq === mediaLoadSeq) mediaLoading = false;
+		}
+	}
+
+	// Unggah dari tab Media: satu jalur dengan lampiran Copilot, langsung segar
+	// daftarnya setelah selesai.
+	async function uploadMediaFiles(list: FileList | File[] | null | undefined) {
+		if (!list || mediaUploading) return;
+		const files = Array.from(list);
+		if (files.length === 0) return;
+		const tooBig = files.filter((f) => f.size > MAX_UPLOAD_BYTES).map((f) => `${f.name} (${fmtSize(f.size)})`);
+		const accepted = files.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+		mediaError = tooBig.length > 0 ? `${tr('Melebihi 10 MB, tidak dilampirkan')}: ${tooBig.join(', ')}` : '';
+		if (accepted.length === 0) return;
+		mediaUploading = true;
+		try {
+			for (const file of accepted) await uploadBriefFile(file);
+			await loadMedia();
+		} catch (e) {
+			mediaError = e instanceof Error ? e.message : tr('Gagal mengunggah media.');
+		} finally {
+			mediaUploading = false;
+		}
+	}
+
+	function removeMediaDoc(doc: MediaDoc) {
+		openConfirm({
+			title: tr('Hapus dokumen?'),
+			body: tr(`Dokumen "${doc.original_filename}" akan dihapus dari brief ini dan tidak dipakai AI sebagai referensi lagi.`),
+			confirmLabel: tr('Hapus'),
+			danger: true,
+			action: async () => {
+				const res = await apiRequest(`${apiBase}/documents/${doc.id}`, { method: 'DELETE' });
+				if (!res.ok) {
+					mediaError = await readApiError(res, tr('Gagal menghapus dokumen.'));
+					return;
+				}
+				mediaDocs = mediaDocs.filter((d) => d.id !== doc.id);
+			}
+		});
+	}
+
+	function removeMediaImage(img: MediaImage) {
+		const label = img.file_name || tr('gambar');
+		openConfirm({
+			title: tr('Hapus gambar?'),
+			body: tr(`Gambar "${label}" akan dihapus dari brief ini.`),
+			confirmLabel: tr('Hapus'),
+			danger: true,
+			action: async () => {
+				const res = await apiRequest(`${apiBase}/images/${img.id}`, { method: 'DELETE' });
+				if (!res.ok) {
+					mediaError = await readApiError(res, tr('Gagal menghapus gambar.'));
+					return;
+				}
+				mediaImages = mediaImages.filter((i) => i.id !== img.id);
+			}
+		});
+	}
+
+	function mediaDate(iso?: string | null): string {
+		if (!iso) return '';
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return '';
+		return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+	}
+
+	// ---------- ringkasan AI (entitas & file) ----------
+
+	function summaryOf(kind: SummaryKind): SummaryItem {
+		return (
+			summaries.find((s) => s.kind === kind) ?? {
+				kind,
+				status: 'idle',
+				content: '',
+				source_chars: 0,
+				token_input: 0,
+				token_output: 0,
+				model: '',
+				error: '',
+				generated_at: null,
+				updated_at: null,
+				stale: false
+			}
+		);
+	}
+
+	async function loadSummaries(silent = false, statusOnly = false) {
+		if (!profileId) return;
+		const seq = ++summarySeq;
+		if (!silent) summaryLoading = true;
+		let transitioned = false;
+		try {
+			const res = await apiRequest(`${briefBase}/summaries${statusOnly ? '?status=1' : ''}`);
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat ringkasan.')));
+			const data = await res.json();
+			if (seq !== summarySeq) return;
+			summaries = Array.isArray(data?.items) ? data.items : [];
+			summaryError = '';
+			// Polling status: begitu tidak ada job berjalan, ambil versi lengkap
+			// (termasuk penanda kedaluwarsa).
+			transitioned = statusOnly && !summaries.some((s) => s.status === 'queued' || s.status === 'running');
+		} catch (e) {
+			if (seq === summarySeq) summaryError = e instanceof Error ? e.message : tr('Gagal memuat ringkasan.');
+		}
+		if (seq !== summarySeq) return;
+		summaryLoading = false;
+		if (transitioned) {
+			await loadSummaries(true, false);
+			return;
+		}
+		scheduleSummaryPoll();
+	}
+
+	// Polling hanya selama ada job berjalan; berhenti sendiri saat selesai.
+	// Jitter 4–7 detik mencegah ratusan tab memukul API serentak.
+	function scheduleSummaryPoll() {
+		if (summaryTimer) {
+			clearTimeout(summaryTimer);
+			summaryTimer = null;
+		}
+		if (!summaries.some((s) => s.status === 'queued' || s.status === 'running')) return;
+		summaryTimer = setTimeout(() => void loadSummaries(true, true), 4000 + Math.random() * 3000);
+	}
+
+	async function regenerateSummary(kind: SummaryKind) {
+		if (summaryBusy) return;
+		summaryBusy = kind;
+		summaryError = '';
+		try {
+			const res = await apiRequest(`${briefBase}/summaries/${kind}/regenerate`, { method: 'POST' });
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menjadwalkan ringkasan.')));
+			await loadSummaries(true);
+		} catch (e) {
+			summaryError = e instanceof Error ? e.message : tr('Gagal menjadwalkan ringkasan.');
+		} finally {
+			summaryBusy = null;
+		}
+	}
+
+	async function copySummary(item: SummaryItem) {
+		try {
+			await navigator.clipboard.writeText(item.content);
+			showToast(tr('Ringkasan disalin.'));
+		} catch {
+			showToast(tr('Gagal menyalin.'), 'error');
+		}
+	}
+
+	function summaryDate(iso?: string | null): string {
+		if (!iso) return '';
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return '';
+		return d.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+	}
+
+	function summaryStatus(item: SummaryItem): { label: string; bg: string; color: string } {
+		if (item.status === 'queued' || item.status === 'running') {
+			return { label: tr('Sedang dibuat…'), bg: 'var(--warning-soft)', color: 'var(--warning)' };
+		}
+		if (item.status === 'failed') {
+			return { label: tr('Gagal'), bg: 'color-mix(in srgb, var(--destructive) 10%, white)', color: 'var(--destructive)' };
+		}
+		if (item.status === 'ready' && item.stale) {
+			return { label: tr('Kedaluwarsa'), bg: 'var(--warning-soft)', color: 'var(--warning)' };
+		}
+		if (item.status === 'ready') {
+			return { label: tr('Siap'), bg: 'var(--success-soft)', color: 'var(--success)' };
+		}
+		return { label: tr('Belum dibuat'), bg: 'var(--secondary)', color: 'var(--muted-foreground)' };
+	}
+
+	function onMediaDragEnter(e: DragEvent) {
+		if (!hasFileDrag(e)) return;
+		e.preventDefault();
+		e.stopPropagation();
+		mediaDragDepth += 1;
+		mediaDragging = true;
+	}
+	function onMediaDragLeave(e: DragEvent) {
+		e.stopPropagation();
+		mediaDragDepth = Math.max(0, mediaDragDepth - 1);
+		if (mediaDragDepth === 0) mediaDragging = false;
+	}
+	function onMediaDrop(e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		mediaDragDepth = 0;
+		mediaDragging = false;
+		void uploadMediaFiles(e.dataTransfer?.files);
 	}
 
 	function autoGrow(el: HTMLTextAreaElement) {
@@ -743,15 +1059,17 @@
 		return Array.from(e.dataTransfer?.types ?? []).includes('Files');
 	}
 	function onChatDragEnter(e: DragEvent) {
-		if (!hasFileDrag(e)) return;
+		if (activeTab !== 'copilot' || !hasFileDrag(e)) return;
 		dragDepth += 1;
 		draggingFiles = true;
 	}
 	function onChatDragLeave() {
+		if (activeTab !== 'copilot') return;
 		dragDepth = Math.max(0, dragDepth - 1);
 		if (dragDepth === 0) draggingFiles = false;
 	}
 	function onChatDrop(e: DragEvent) {
+		if (activeTab !== 'copilot') return;
 		e.preventDefault();
 		dragDepth = 0;
 		draggingFiles = false;
@@ -1046,7 +1364,7 @@
 						class="brief-summary w-full"
 						type="button"
 						aria-label={tr('Buka panel Ringkasan')}
-						onclick={() => { sidebarOpen = false; activeTab = 'ringkasan'; }}
+						onclick={() => { sidebarOpen = false; activeTab = 'entitas'; }}
 					>
 						<span class="flex items-center justify-between gap-2 text-[13px] font-medium">
 							{tr('Ringkasan')}
@@ -1102,6 +1420,7 @@
 					{/if}
 				</div>
 				<div class="brief-head-actions flex flex-shrink-0 flex-wrap items-center gap-2">
+					{#if activeTab !== 'media' && activeTab !== 'ringkasan'}
 					{#if headerCollapsed}
 						<button
 							class="app-btn app-btn-soft !min-h-8 !min-w-8 !p-1"
@@ -1142,6 +1461,7 @@
 							{tr('Gunakan untuk Kampanye')}<ArrowRight size={14} />
 						</button>
 					{/if}
+					{/if}
 					<button
 						class="app-btn app-btn-soft !min-h-8 !min-w-8 !p-1"
 						type="button"
@@ -1173,13 +1493,13 @@
 					</button>
 					<button
 						class="brief-tab"
-						class:brief-tab-active={activeTab === 'ringkasan'}
+						class:brief-tab-active={activeTab === 'entitas'}
 						type="button"
 						role="tab"
-						aria-selected={activeTab === 'ringkasan'}
-						onclick={() => (activeTab = 'ringkasan')}
+						aria-selected={activeTab === 'entitas'}
+						onclick={() => (activeTab = 'entitas')}
 					>
-						<FileText size={14} />{tr('Ringkasan Entitas')}
+						<FileText size={14} />{tr('Entitas')}
 						<span
 							class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
 							style="background: {progressPct >= 100 ? 'var(--success-soft)' : 'var(--warning-soft)'}; color: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"
@@ -1187,9 +1507,37 @@
 							<span class="h-1.5 w-1.5 rounded-full" style="background: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"></span>{progressPct}% {tr('Siap Rilis')}
 						</span>
 					</button>
-				</div>
-				<div class="flex items-center gap-3 text-[11px] text-muted-foreground">
-						<div class="relative flex items-center">
+					<button
+						class="brief-tab"
+						class:brief-tab-active={activeTab === 'media'}
+						type="button"
+						role="tab"
+						aria-selected={activeTab === 'media'}
+						onclick={() => (activeTab = 'media')}
+					>
+						<Images size={14} />{tr('Media')}
+						{#if mediaImages.length + mediaDocs.length > 0}
+							<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold" style="background: var(--secondary); color: var(--muted-foreground);">
+								{mediaImages.length + mediaDocs.length}
+							</span>
+						{/if}
+					</button>
+					<button
+						class="brief-tab"
+						class:brief-tab-active={activeTab === 'ringkasan'}
+						type="button"
+						role="tab"
+						aria-selected={activeTab === 'ringkasan'}
+						onclick={() => (activeTab = 'ringkasan')}
+					>
+						<Sparkle size={14} />{tr('Ringkasan')}
+						{#if summaries.some((s) => s.status === 'queued' || s.status === 'running')}
+							<span class="h-1.5 w-1.5 animate-pulse rounded-full" style="background: var(--warning);"></span>
+						{/if}
+					</button>
+					</div>
+					<div class="flex items-center gap-3 text-[11px] text-muted-foreground">
+							<div class="relative flex items-center">
 							<button
 								class="brief-beta-chip"
 								class:active={betaOpen}
@@ -1382,7 +1730,7 @@
 									<RotateCcw size={13} />{tr('Mulai Ulang')}
 								</button>
 								<button class="brief-pop-row" type="button" onclick={() => { actionsOpen = false; document.getElementById('brief-doc-input')?.click(); }}>
-									<Upload size={13} />{tr('Unggah Dokumen (PDF/DOCX)')}
+									<Upload size={13} />{tr('Unggah Dokumen/Gambar')}
 								</button>
 							</div>
 						</div>
@@ -1396,12 +1744,12 @@
 				<p class="mx-3 mt-2 rounded-lg p-2 text-sm" style="background: var(--warning-soft); color: var(--warning);">{error}</p>
 			{/if}
 
-			{#if draggingFiles}
+			{#if draggingFiles && activeTab === 'copilot'}
 				<div
 					class="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed"
 					style="border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent);"
 				>
-					<p class="text-sm font-medium" style="color: var(--primary);">{tr('Lepaskan untuk melampirkan dokumen')}</p>
+					<p class="text-sm font-medium" style="color: var(--primary);">{tr('Lepaskan untuk melampirkan berkas')}</p>
 				</div>
 			{/if}
 
@@ -1562,14 +1910,14 @@
 						></textarea>
 
 						<div class="brief-composer-bar">
-							<label class="brief-composer-icon cursor-pointer" aria-label={tr('Lampirkan dokumen')}>
+							<label class="brief-composer-icon cursor-pointer" aria-label={tr('Lampirkan berkas')}>
 								<Plus size={19} />
 								<input
 									id="brief-doc-input"
 									class="hidden"
 									type="file"
 									multiple
-									accept=".pdf,.docx,.txt,.md,.csv,application/pdf"
+									accept=".pdf,.docx,.txt,.md,.csv,application/pdf,image/png,image/jpeg,image/webp,image/gif"
 									onchange={(e) => {
 										stageFiles((e.currentTarget as HTMLInputElement).files);
 										(e.currentTarget as HTMLInputElement).value = '';
@@ -1602,15 +1950,15 @@
 						{#if streaming}
 							{tr('Sedang menyusun balasan — tombol stop menghentikannya.')}
 						{:else}
-							{tr('Enter kirim, Shift+Enter baris baru. Seret file ke sini atau tempel (Ctrl+V) untuk melampirkan dokumen.')}{#if sources.length > 0}&nbsp;·&nbsp;{sources.length} {tr('sumber dibaca')}{/if}
+							{tr('Enter kirim, Shift+Enter baris baru. Seret berkas ke sini atau tempel (Ctrl+V) untuk melampirkan.')}{#if sources.length > 0}&nbsp;·&nbsp;{sources.length} {tr('sumber dibaca')}{/if}
 						{/if}
 					</p>
 				</div>
 			</div>
 			</div>
-		{:else}
+			{:else if activeTab === 'entitas'}
 
-			<!-- ── Panel tab Ringkasan Entitas (desain GEO) ─────────────── -->
+				<!-- ── Panel tab Ringkasan Entitas (desain GEO) ─────────────── -->
 			<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
 				<div class="w-full">
 					<section class="app-card p-4">
@@ -1777,7 +2125,283 @@
 					</div>
 				</div>
 			</div>
-		{/if}
+			{:else if activeTab === 'media'}
+				<!-- ── Panel tab Media: dokumen & gambar brief ─────────────── -->
+				<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
+					<div class="w-full space-y-4">
+						<!-- Kotak unggah: jalur yang sama dengan lampiran Copilot. -->
+						<section class="app-card p-4">
+							<div
+								class="rounded-xl border-2 border-dashed px-4 py-7 text-center transition-colors"
+								class:cursor-pointer={!mediaUploading}
+								style="border-color: {mediaDragging ? 'var(--primary)' : 'var(--border)'}; background: {mediaDragging ? 'color-mix(in srgb, var(--primary) 8%, transparent)' : 'color-mix(in srgb, var(--muted) 45%, white)'};"
+								role="button"
+								tabindex="0"
+								aria-label={tr('Unggah berkas ke brief')}
+								onclick={() => {
+									if (!mediaUploading) document.getElementById('brief-media-input')?.click();
+								}}
+								onkeydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										if (!mediaUploading) document.getElementById('brief-media-input')?.click();
+									}
+								}}
+								ondragenter={onMediaDragEnter}
+								ondragover={(e) => {
+									if (hasFileDrag(e)) {
+										e.preventDefault();
+										e.stopPropagation();
+									}
+								}}
+								ondragleave={onMediaDragLeave}
+								ondrop={onMediaDrop}
+							>
+								<span class="mx-auto flex h-11 w-11 items-center justify-center rounded-xl" style="background: var(--accent); color: var(--accent-foreground);">
+									{#if mediaUploading}<LoaderCircle size={20} class="animate-spin" />{:else}<Upload size={20} />{/if}
+								</span>
+								<p class="mt-3 text-sm font-semibold">
+									{mediaUploading ? tr('Mengunggah…') : tr('Seret berkas ke sini atau klik untuk mengunggah')}
+								</p>
+								<p class="mt-1 text-[11px] text-muted-foreground">
+									{tr('Dokumen PDF, DOCX, TXT, MD, CSV · Gambar JPG, PNG, WebP · maksimal 10 MB per berkas')}
+								</p>
+								<input
+									id="brief-media-input"
+									class="hidden"
+									type="file"
+									multiple
+									accept=".pdf,.docx,.txt,.md,.csv,application/pdf,image/png,image/jpeg,image/webp,image/gif"
+									onclick={(e) => e.stopPropagation()}
+									onchange={(e) => {
+										const input = e.currentTarget as HTMLInputElement;
+										void uploadMediaFiles(input.files);
+										input.value = '';
+									}}
+								/>
+							</div>
+							{#if mediaError}
+								<p class="mt-3 rounded-lg p-2 text-xs" style="background: var(--warning-soft); color: var(--warning);">{mediaError}</p>
+							{/if}
+						</section>
+
+						{#if mediaLoading && mediaImages.length + mediaDocs.length === 0}
+							<p class="flex items-center gap-2 text-xs text-muted-foreground">
+								<LoaderCircle size={14} class="animate-spin" />{tr('Memuat media…')}
+							</p>
+						{/if}
+
+						<section class="app-card p-5">
+							<div class="flex flex-wrap items-center justify-between gap-2 border-b pb-4" style="border-color: var(--border);">
+								<div class="flex items-center gap-3">
+									<span class="flex h-9 w-9 items-center justify-center rounded-xl" style="background: var(--accent); color: var(--accent-foreground);">
+										<Images size={18} />
+									</span>
+									<div>
+										<h3 class="text-sm font-bold">{tr('Gambar')}</h3>
+										<p class="text-[11px] text-muted-foreground">{tr('Aset visual brand dari Copilot atau tab ini.')}</p>
+									</div>
+								</div>
+								<span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style="background: var(--secondary); color: var(--muted-foreground);">{mediaImages.length}</span>
+							</div>
+							{#if mediaImages.length > 0}
+								<div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+									{#each mediaImages as im (im.id)}
+										<figure class="group relative overflow-hidden rounded-xl border" style="border-color: var(--border);">
+											<a href={im.url} target="_blank" rel="noreferrer" class="block">
+												<img src={im.url} alt={im.file_name ?? ''} class="h-32 w-full object-cover" loading="lazy" />
+											</a>
+											<button
+												class="absolute right-1.5 top-1.5 rounded-lg p-1.5 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+												style="background: var(--card); color: var(--destructive);"
+												type="button"
+												aria-label={tr('Hapus gambar')}
+												onclick={() => removeMediaImage(im)}
+											>
+												<Trash2 size={13} />
+											</button>
+											<figcaption class="px-2.5 py-2">
+												<p class="truncate text-[11px] font-medium" title={im.file_name ?? ''}>{im.file_name ?? tr('Gambar')}</p>
+												<p class="mt-0.5 text-[10px] text-muted-foreground">{im.size_bytes ? fmtSize(im.size_bytes) : '—'} · {mediaDate(im.created_at)}</p>
+											</figcaption>
+										</figure>
+									{/each}
+								</div>
+							{:else}
+								<p class="mt-4 rounded-xl border px-3.5 py-3 text-xs italic" style="border-color: var(--border); color: var(--muted-foreground);">
+									{tr('Belum ada gambar. Unggah lewat kotak di atas atau lampirkan saat mengobrol dengan Copilot.')}
+								</p>
+							{/if}
+						</section>
+
+						<section class="app-card p-5">
+							<div class="flex flex-wrap items-center justify-between gap-2 border-b pb-4" style="border-color: var(--border);">
+								<div class="flex items-center gap-3">
+									<span class="flex h-9 w-9 items-center justify-center rounded-xl" style="background: var(--accent); color: var(--accent-foreground);">
+										<FileText size={18} />
+									</span>
+									<div>
+										<h3 class="text-sm font-bold">{tr('Dokumen')}</h3>
+										<p class="text-[11px] text-muted-foreground">{tr('Referensi yang dibaca AI saat menyusun brief.')}</p>
+									</div>
+								</div>
+								<span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold" style="background: var(--secondary); color: var(--muted-foreground);">{mediaDocs.length}</span>
+							</div>
+							{#if mediaDocs.length > 0}
+								<ul class="mt-4 space-y-2">
+									{#each mediaDocs as doc (doc.id)}
+										<li class="flex items-center gap-3 rounded-xl border p-3" style="border-color: var(--border); background: color-mix(in srgb, var(--muted) 55%, white);">
+											<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background: var(--accent); color: var(--accent-foreground);">
+												<FileText size={16} />
+											</span>
+											<div class="min-w-0 flex-1">
+												<p class="truncate text-xs font-semibold" title={doc.original_filename}>{doc.original_filename}</p>
+												<p class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+													<span>{doc.size_bytes ? fmtSize(doc.size_bytes) : '—'}</span>
+													<span>·</span>
+													<span>{mediaDate(doc.created_at)}</span>
+													{#if doc.parse_status === 'ready'}
+														<span class="rounded px-1.5 py-0.5 font-bold" style="background: var(--success-soft); color: var(--success);">{tr('Terbaca AI')}</span>
+													{:else if doc.parse_status === 'failed'}
+														<span class="rounded px-1.5 py-0.5 font-bold" style="background: var(--warning-soft); color: var(--warning);" title={doc.parse_error ?? ''}>{tr('Gagal dibaca')}</span>
+													{/if}
+												</p>
+											</div>
+											<a class="brief-icon-btn" href={doc.url} target="_blank" rel="noreferrer" aria-label={tr('Buka dokumen')} title={tr('Buka dokumen')}>
+												<ExternalLink size={15} />
+											</a>
+											<button class="brief-icon-btn" type="button" aria-label={tr('Hapus dokumen')} title={tr('Hapus dokumen')} onclick={() => removeMediaDoc(doc)}>
+												<Trash2 size={15} />
+											</button>
+										</li>
+									{/each}
+								</ul>
+							{:else}
+								<p class="mt-4 rounded-xl border px-3.5 py-3 text-xs italic" style="border-color: var(--border); color: var(--muted-foreground);">
+									{tr('Belum ada dokumen. Unggah lewat kotak di atas atau lampirkan saat mengobrol dengan Copilot.')}
+								</p>
+							{/if}
+						</section>
+					</div>
+			</div>
+			{:else}
+				<!-- ── Panel tab Ringkasan: hasil agent entitas & file ─────── -->
+				<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
+					<div class="w-full space-y-4">
+						<section class="app-card p-4">
+							<div class="flex items-center gap-3">
+								<span class="flex h-9 w-9 items-center justify-center rounded-xl" style="background: var(--accent); color: var(--accent-foreground);">
+									<Sparkle size={18} />
+								</span>
+								<div>
+									<h3 class="text-sm font-bold">{tr('Ringkasan Brief')}</h3>
+									<p class="text-[11px] text-muted-foreground">{tr('Ringkasan ini yang dibaca AI Writer mode Yang Proper — hemat token, fakta tetap terkunci.')}</p>
+								</div>
+							</div>
+						</section>
+
+						<div class="flex flex-wrap items-center gap-1.5" role="tablist">
+							<button
+								class="brief-tab"
+								class:brief-tab-active={summaryTab === 'entity'}
+								type="button"
+								role="tab"
+								aria-selected={summaryTab === 'entity'}
+								onclick={() => (summaryTab = 'entity')}
+							>
+								<UserCircle size={14} />{tr('Ringkasan Entitas')}
+							</button>
+							<button
+								class="brief-tab"
+								class:brief-tab-active={summaryTab === 'file'}
+								type="button"
+								role="tab"
+								aria-selected={summaryTab === 'file'}
+								onclick={() => (summaryTab = 'file')}
+							>
+								<FileText size={14} />{tr('Ringkasan File')}
+							</button>
+						</div>
+
+						{#if summaryError}
+							<p class="rounded-lg p-2 text-xs" style="background: var(--warning-soft); color: var(--warning);">{summaryError}</p>
+						{/if}
+
+						<section class="app-card p-5">
+							<div class="flex flex-wrap items-start justify-between gap-3 border-b pb-4" style="border-color: var(--border);">
+								<div class="min-w-0">
+									<div class="flex flex-wrap items-center gap-2">
+										<h3 class="text-sm font-bold">{summaryTab === 'entity' ? tr('Ringkasan Entitas') : tr('Ringkasan File')}</h3>
+										<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold" style="background: {summaryBadge.bg}; color: {summaryBadge.color};">
+											<span class="h-1.5 w-1.5 rounded-full" style="background: {summaryBadge.color};"></span>{summaryBadge.label}
+										</span>
+									</div>
+									<p class="mt-1 text-[11px] text-muted-foreground">
+										{summaryTab === 'entity'
+											? tr('Identitas & fakta kanonik dari profil brief.')
+											: tr('Isi dokumen, tautan, dan catatan gambar brief.')}
+									</p>
+								</div>
+								<div class="flex flex-wrap items-center gap-2">
+									<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={() => void copySummary(summaryCurrent)} disabled={!summaryCurrent.content}>
+										<Copy size={14} />{tr('Salin')}
+									</button>
+									{#if summaryCurrent.status !== 'queued' && summaryCurrent.status !== 'running'}
+										<button
+											class="app-btn app-btn-primary !min-h-8 !text-xs"
+											type="button"
+											onclick={() => void regenerateSummary(summaryTab)}
+											disabled={summaryBusy !== null}
+										>
+											{#if summaryBusy === summaryTab}
+												<LoaderCircle size={14} class="animate-spin" />
+											{:else}
+												<RotateCcw size={14} />
+											{/if}
+											{summaryActionLabel}
+										</button>
+									{/if}
+								</div>
+							</div>
+
+							{#if summaryCurrent.status === 'queued' || summaryCurrent.status === 'running'}
+								<div class="mt-4 flex items-center gap-2 rounded-xl border px-4 py-3 text-xs" style="border-color: var(--border); background: color-mix(in srgb, var(--muted) 55%, white);">
+									<LoaderCircle size={15} class="animate-spin" style="color: var(--primary);" />
+									{tr('Agent sedang menyusun ringkasan dari data brief. Hasil muncul otomatis di sini.')}
+								</div>
+							{:else if summaryCurrent.status === 'failed'}
+								<div class="mt-4 rounded-xl border p-4 text-xs" style="border-color: color-mix(in srgb, var(--destructive) 30%, transparent); background: color-mix(in srgb, var(--destructive) 7%, white);">
+									<p class="font-bold" style="color: var(--destructive);">{tr('Ringkasan gagal dibuat')}</p>
+									<p class="mt-1 leading-relaxed" style="color: var(--destructive);">{summaryCurrent.error || tr('Tidak ada pesan error.')}</p>
+									<p class="mt-1 text-muted-foreground">{tr('Periksa konfigurasi agent di admin, lalu coba lagi.')}</p>
+								</div>
+							{:else if summaryCurrent.content}
+								<div class="brief-markdown mt-4 text-sm leading-relaxed">
+									{@html sanitizeHtml(renderMarkdown(summaryCurrent.content))}
+								</div>
+							{:else}
+								<p class="mt-4 rounded-xl border px-3.5 py-3 text-xs italic" style="border-color: var(--border); color: var(--muted-foreground);">
+									{tr('Belum ada ringkasan. Ringkasan dibuat otomatis saat data brief berubah.')}
+								</p>
+							{/if}
+
+							<div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-[11px] text-muted-foreground" style="border-color: var(--border);">
+								{#if summaryCurrent.generated_at}<span>{tr('Dibuat')}: {summaryDate(summaryCurrent.generated_at)}</span>{/if}
+								{#if summaryCurrent.source_chars > 0}
+									<span>{summaryCurrent.source_chars.toLocaleString('id-ID')} {tr('karakter bahan')} → {summaryCurrent.content.length.toLocaleString('id-ID')} {tr('karakter ringkasan')}</span>
+								{/if}
+								{#if summaryCurrent.token_input + summaryCurrent.token_output > 0}
+									<span>{summaryCurrent.token_input + summaryCurrent.token_output} token</span>
+								{/if}
+								{#if summaryCurrent.model}<span>{summaryCurrent.model}</span>{/if}
+								{#if summaryCurrent.stale && summaryCurrent.status === 'ready'}
+									<span style="color: var(--warning);">{tr('Data brief berubah sejak ringkasan ini dibuat.')}</span>
+								{/if}
+							</div>
+						</section>
+					</div>
+				</div>
+			{/if}
 	</main>
 
 	<!-- ── Pratinjau JSON (Entity Source of Truth) ───────────────────── -->

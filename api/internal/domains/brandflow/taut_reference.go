@@ -57,9 +57,11 @@ func (d *Deps) tautReferenceMaterial(ctx context.Context, campaign bsRow, campai
 		hasFacts = true
 	}
 	// Mode Proper tersimpan per media: Checker memverifikasi klaim ke blok yang
-	// sama dengan [DATA FAKTA TERKUNCI]/[MEMORI BRAND COPILOT] milik Writer.
+	// sama dengan [DATA FAKTA TERKUNCI]/[RINGKASAN ENTITAS BRIEF] milik Writer.
+	// Best-effort: bila ringkasan belum ada, QC tetap jalan tanpa blok itu.
 	if proper := d.loadTautProperStored(ctx, item.strOr("id", "")); proper != nil {
-		if block := buildTautProperBlock(proper, d.loadTautProperBrief(ctx, campaign.strOr("brand_id", ""), proper.BriefID)); block != "" {
+		briefCtx, _ := d.loadTautProperBriefContext(ctx, campaign.strOr("brand_id", ""), proper.BriefID)
+		if block := buildTautProperBlock(proper, briefCtx); block != "" {
 			text = strings.TrimSpace(text + "\n\n" + block)
 			hasFacts = true
 		}

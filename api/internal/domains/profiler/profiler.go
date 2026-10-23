@@ -24,6 +24,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/doctext"
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
+	briefsummary "github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
@@ -231,6 +232,7 @@ func (d *Deps) ProfileCreate(w http.ResponseWriter, r *http.Request) {
 			lastErr = err
 			continue
 		}
+		d.queueBriefSummary(r.Context(), brandID, id, briefsummary.KindEntity, briefsummary.KindFile)
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id, "short_code": code})
 		return
 	}
@@ -359,6 +361,7 @@ func (d *Deps) ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Profiler tidak ditemukan.")
 		return
 	}
+	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindEntity)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -441,6 +444,7 @@ func (d *Deps) ProfileDuplicate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	d.queueBriefSummary(ctx, brandID, newID, briefsummary.KindEntity, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"id": newID, "short_code": shortCode})
 }
 
@@ -499,6 +503,7 @@ func (d *Deps) BlockCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindEntity)
 	writeJSON(w, http.StatusOK, map[string]any{"id": id})
 }
 
@@ -507,6 +512,24 @@ func (d *Deps) profileInBrand(ctx context.Context, profileID, brandID string) bo
 	_ = d.Pool.QueryRow(ctx,
 		"SELECT true FROM profiler_profiles WHERE id = $1 AND brand_id = $2 AND deleted_at IS NULL", profileID, brandID).Scan(&exists)
 	return exists
+}
+
+// queueBriefSummary: tandai ringkasan brief perlu dibuat ulang. Job-nya async
+// (diproses scheduler), jadi respons HTTP tidak menunggu model.
+func (d *Deps) queueBriefSummary(ctx context.Context, brandID, profileID string, kinds ...briefsummary.Kind) {
+	if profileID == "" {
+		return
+	}
+	for _, kind := range kinds {
+		_ = briefsummary.Queue(ctx, d.Pool, profileID, brandID, kind)
+	}
+}
+
+// profileIDOfChild: pemilik baris anak (blocks/documents/images/urls).
+func (d *Deps) profileIDOfChild(ctx context.Context, table, id string) string {
+	var profileID string
+	_ = d.Pool.QueryRow(ctx, fmt.Sprintf("SELECT profile_id FROM %s WHERE id = $1", table), id).Scan(&profileID)
+	return profileID
 }
 
 // BlockUpdate: PUT /v1/brands/{brandId}/profiler/blocks/{blockId}
@@ -559,6 +582,7 @@ func (d *Deps) BlockUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	d.queueBriefSummary(r.Context(), brandID, d.profileIDOfChild(r.Context(), "profiler_blocks", blockID), briefsummary.KindEntity)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -579,10 +603,12 @@ func (d *Deps) BlockDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Blok tidak ditemukan.")
 		return
 	}
+	profileID := d.profileIDOfChild(r.Context(), "profiler_blocks", blockID)
 	if _, err := d.Pool.Exec(r.Context(), "DELETE FROM profiler_blocks WHERE id = $1", blockID); err != nil {
 		writeErr(w, err)
 		return
 	}
+	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindEntity)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -690,6 +716,7 @@ func (d *Deps) DocumentUpload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"id": docID, "parse_status": status, "parse_error": errMsg})
 }
 
@@ -710,7 +737,9 @@ func (d *Deps) DocumentDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Dokumen tidak ditemukan.")
 		return
 	}
+	profileID := d.profileIDOfChild(r.Context(), "profiler_documents", docID)
 	_, _ = d.Pool.Exec(r.Context(), "UPDATE profiler_documents SET deleted_at = NOW() WHERE id = $1", docID)
+	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -767,7 +796,7 @@ func (d *Deps) ImageUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	filename := filepath.Base(header.Filename)
 	mime := docMime(filename, header.Header.Get("Content-Type"))
-	if !strings.HasPrefix(mime, "image/") {
+	if !acceptedImageMimes[mime] {
 		httpx.Error(w, http.StatusUnprocessableEntity, "File harus berupa gambar (JPG, PNG, WebP).")
 		return
 	}
@@ -790,6 +819,7 @@ func (d *Deps) ImageUpload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"id": imgID, "url": url})
 }
 
@@ -810,7 +840,9 @@ func (d *Deps) ImageDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Gambar tidak ditemukan.")
 		return
 	}
+	profileID := d.profileIDOfChild(r.Context(), "profiler_images", imageID)
 	_, _ = d.Pool.Exec(r.Context(), "UPDATE profiler_images SET deleted_at = NOW() WHERE id = $1", imageID)
+	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -841,6 +873,7 @@ func (d *Deps) ImageUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	d.queueBriefSummary(r.Context(), brandID, d.profileIDOfChild(r.Context(), "profiler_images", imageID), briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -900,6 +933,7 @@ func (d *Deps) URLAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	// Ambil isi langsung; kegagalan tidak membatalkan penambahan.
 	d.syncURL(r.Context(), id, brandID)
+	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"id": id})
 }
 
@@ -920,7 +954,9 @@ func (d *Deps) URLSync(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Referensi URL tidak ditemukan.")
 		return
 	}
+	profileID := d.profileIDOfChild(r.Context(), "profiler_urls", urlID)
 	d.syncURL(r.Context(), urlID, brandID)
+	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -981,7 +1017,9 @@ func (d *Deps) URLDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Referensi URL tidak ditemukan.")
 		return
 	}
+	profileID := d.profileIDOfChild(r.Context(), "profiler_urls", urlID)
 	_, _ = d.Pool.Exec(r.Context(), "UPDATE profiler_urls SET deleted_at = NOW() WHERE id = $1", urlID)
+	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -1033,6 +1071,14 @@ var acceptedDocMimes = map[string]bool{
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
 }
 
+// Hanya raster: SVG bisa membawa skrip dan disajikan dari origin aplikasi.
+var acceptedImageMimes = map[string]bool{
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/webp": true,
+	"image/gif":  true,
+}
+
 func docMime(filename, contentType string) string {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filename), "."))
 	switch ext {
@@ -1046,9 +1092,17 @@ func docMime(filename, contentType string) string {
 		return "text/csv"
 	case "txt":
 		return "text/plain"
+	case "jpg", "jpeg":
+		return "image/jpeg"
+	case "png":
+		return "image/png"
+	case "webp":
+		return "image/webp"
+	case "gif":
+		return "image/gif"
 	}
 	ct := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
-	if acceptedDocMimes[ct] {
+	if acceptedDocMimes[ct] || acceptedImageMimes[ct] {
 		return ct
 	}
 	return "text/plain"

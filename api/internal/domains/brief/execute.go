@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 )
 
 // executeInput: satu giliran percakapan.
@@ -105,6 +107,10 @@ func (d *Deps) executeTurn(inCtx context.Context, in executeInput) (result *turn
 		d.finishRun(ctx, runID, "failed", run.Result.InputTokens, run.Result.OutputTokens,
 			run.Result.DurationMS, "", err.Error())
 		return nil, err
+	}
+	// Data entitas berubah → ringkasan Writer perlu dibuat ulang (async).
+	if len(accepted) > 0 {
+		_ = summary.Queue(ctx, d.Pool, in.ProfileID, in.BrandID, summary.KindEntity)
 	}
 
 	reply := strings.TrimSpace(run.Output.Reply)

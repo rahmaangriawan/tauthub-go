@@ -262,6 +262,8 @@ func run() error {
 			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/brief/chat/stream", briefDeps.BriefChatStream)
 			authed.Delete("/brands/{brandId}/profiler/profiles/{profileId}/brief/chat", briefDeps.BriefChatReset)
 			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/brief/fields", briefDeps.BriefFieldsPost)
+			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}/brief/summaries", briefDeps.BriefSummariesGet)
+			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/brief/summaries/{kind}/regenerate", briefDeps.BriefSummaryRegenerate)
 
 			// Content pipeline (fase 4).
 			authed.Get("/brands/{brandId}/content-jobs", contentDeps.JobsList)
@@ -803,6 +805,16 @@ func run() error {
 			authed.Post("/platform/taut-brief/fields/{versionId}/activate", briefDeps.TautBriefFieldActivate)
 			authed.Post("/platform/taut-brief/test", briefDeps.TautBriefTest)
 			authed.Get("/platform/taut-brief/logs", briefDeps.TautBriefLogs)
+			// Agent ringkasan brief (entitas & file) — config + prompt berversi.
+			authed.Get("/platform/taut-brief/agents/{agent}/config", briefDeps.TautBriefAgentConfigGet)
+			authed.Put("/platform/taut-brief/agents/{agent}/config", briefDeps.TautBriefAgentConfigUpdate)
+			authed.Post("/platform/taut-brief/agents/{agent}/config/test", briefDeps.TautBriefAgentConfigTest)
+			authed.Get("/platform/taut-brief/agents/{agent}/prompts", briefDeps.TautBriefAgentPromptsList)
+			authed.Post("/platform/taut-brief/agents/{agent}/prompts", briefDeps.TautBriefAgentPromptCreate)
+			authed.Get("/platform/taut-brief/agents/{agent}/prompts/{versionId}", briefDeps.TautBriefAgentPromptGet)
+			authed.Patch("/platform/taut-brief/agents/{agent}/prompts/{versionId}", briefDeps.TautBriefAgentPromptUpdate)
+			authed.Delete("/platform/taut-brief/agents/{agent}/prompts/{versionId}", briefDeps.TautBriefAgentPromptDelete)
+			authed.Post("/platform/taut-brief/agents/{agent}/prompts/{versionId}/activate", briefDeps.TautBriefAgentPromptActivate)
 			authed.Get("/platform/taut-agents", platformDeps.TautAgentsList)
 			authed.Get("/platform/taut-agents/{agent}", platformDeps.TautAgentGet)
 			authed.Put("/platform/taut-agents/{agent}", platformDeps.TautAgentUpdate)

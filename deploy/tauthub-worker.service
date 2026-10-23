@@ -1,0 +1,30 @@
+[Unit]
+Description=Tauthub staging worker (drain antrean jobs + ringkasan brief)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tauthub
+Group=tauthub
+WorkingDirectory=__APP_DIR__/api
+EnvironmentFile=__APP_DIR__/.env
+# Soft limit memori Go (GC lebih agresif hanya saat mendekati batas) — VPS 2 GB
+# + swap 2 GB; 512MiB per proses Go menyisakan ruang untuk PostgreSQL + nginx.
+Environment=GOMEMLIMIT=512MiB
+# Path upload absolut — sebelumnya relatif working directory (.data/uploads
+# di bawah cwd service). Nilai sama dengan path efektif lama, jadi berkas
+# yang sudah ada tetap terbaca.
+Environment=UPLOAD_DIR=__APP_DIR__/api/.data/uploads
+Environment=LEGACY_UPLOAD_DIR=__APP_DIR__/web/public/uploads
+# Ringkasan brief berjalan di worker terpisah di dalam proses ini; batasi
+# konkurensi supaya provider AI tidak kena rate limit saat banyak brief berubah.
+Environment=BRIEF_SUMMARY_CONCURRENCY=6
+ExecStart=__APP_DIR__/api/bin/worker
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

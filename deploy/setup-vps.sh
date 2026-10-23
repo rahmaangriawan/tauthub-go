@@ -11,7 +11,7 @@
 #      disentuh lagi (rsync workflow meng-exclude .env)
 #   6. Database PostgreSQL: role + db, lalu baseline schema-full.sql (159
 #      tabel) hanya saat DB masih kosong
-#   7. Unit systemd: tauthub-api, tauthub-web, tauthub-scheduler
+#   7. Unit systemd: tauthub-api, tauthub-web, tauthub-scheduler, tauthub-worker
 #   8. Nginx: $DOMAIN → web :$WEB_PORT, /v1 /uploads /t /feed /healthz
 #      → api :8080 + sertifikat Let's Encrypt (jika DNS sudah mengarah ke sini)
 #
@@ -223,10 +223,10 @@ EOSQL
   run_as_app "cd '$APP_DIR/api' && set -a && . '$APP_DIR/.env' && set +a && xargs -r -a '$APP_DIR/deploy/prebaseline.txt' ./bin/migrate mark" >/dev/null
 fi
 
-log "6/8 Unit systemd (${UNIT_PREFIX}-api, ${UNIT_PREFIX}-web, ${UNIT_PREFIX}-scheduler)"
+log "6/8 Unit systemd (${UNIT_PREFIX}-api, ${UNIT_PREFIX}-web, ${UNIT_PREFIX}-scheduler, ${UNIT_PREFIX}-worker)"
 # Template di repo tetap bernama tauthub-<svc>.service; nama unit di host mengikuti
 # UNIT_PREFIX supaya bisa berdampingan dengan production tauthub-* di host yang sama.
-for svc in api web scheduler; do
+for svc in api web scheduler worker; do
   target="/etc/systemd/system/${UNIT_PREFIX}-${svc}.service"
   # Unit dianggap milik deployment ini kalau menyebut APP_DIR di mana pun: unit
   # web memakai ExecStart=/usr/bin/node build (APP_DIR hanya muncul di
@@ -242,7 +242,7 @@ for svc in api web scheduler; do
     "$APP_DIR/deploy/tauthub-$svc.service" > "$target"
 done
 $SUDO systemctl daemon-reload
-$SUDO systemctl enable "${UNIT_PREFIX}-api" "${UNIT_PREFIX}-web" "${UNIT_PREFIX}-scheduler" >/dev/null 2>&1 || true
+$SUDO systemctl enable "${UNIT_PREFIX}-api" "${UNIT_PREFIX}-web" "${UNIT_PREFIX}-scheduler" "${UNIT_PREFIX}-worker" >/dev/null 2>&1 || true
 
 # Nginx + TLS hanya dikelola di sini untuk host polos (staging). Di host
 # CloudPanel (MANAGE_NGINX=0) vhost & sertifikat dibuat/dikelola lewat

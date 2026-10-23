@@ -888,6 +888,9 @@
 	let copilotLoadedBriefId = $state('');
 	let copilotBusy = $state(false);
 	let copilotError = $state('');
+	// Status ringkasan brief (agent entitas/file). Writer mode proper menolak
+	// brief yang ringkasannya belum siap, jadi peringatkan lebih awal di sini.
+	let copilotSummaryNotice = $state('');
 	const copilotBriefOptions = $derived(copilotBriefs.map((b) => ({ value: b.id, label: b.name })));
 	// Nama pada baris Brand mengikuti nama brief (Profiler) yang dipilih —
 	// nilai canonical_name di fakta jadi cadangan bila brief tidak punya nama.
@@ -978,6 +981,7 @@
 		copilotEntries = [];
 		copilotLoadedBriefId = '';
 		copilotError = '';
+		copilotSummaryNotice = '';
 		if (!id) return;
 		copilotBusy = true;
 		try {
@@ -990,6 +994,23 @@
 			copilotBriefName = String(data?.profile?.name ?? copilotBriefName);
 			copilotEntries = copilotCollectEntries(data?.values ?? {}, Array.isArray(data?.fields) ? data.fields : []);
 			copilotLoadedBriefId = id;
+
+			// Ringkasan entitas wajib siap sebelum Writer mode proper bisa jalan.
+			const sres = await apiRequest(`${profilerBase}/profiles/${encodeURIComponent(id)}/brief/summaries`);
+			if (sres.ok) {
+				const sdata = await sres.json().catch(() => null);
+				const items: any[] = Array.isArray(sdata?.items) ? sdata.items : [];
+				const entity = items.find((s) => s?.kind === 'entity');
+				const file = items.find((s) => s?.kind === 'file');
+				const pending = [entity, file].some((s) => s?.status === 'queued' || s?.status === 'running');
+				if (!entity || entity.status !== 'ready') {
+					copilotSummaryNotice = pending
+						? tr('Ringkasan brief sedang dibuat. Tunggu sampai selesai sebelum membuat artikel.')
+						: tr('Ringkasan brief belum siap. Buka Taut Brief → Ringkasan, lalu buat ringkasannya dulu.');
+				} else if (file && file.status === 'failed') {
+					copilotSummaryNotice = tr('Ringkasan File brief gagal dibuat. Perbarui di Taut Brief → Ringkasan.');
+				}
+			}
 		} catch (reason) {
 			copilotError = reason instanceof Error ? reason.message : tr('Gagal memuat data Brief Copilot.');
 		} finally {
@@ -1948,6 +1969,11 @@
 											{/if}
 											{#if copilotError}
 												<p class="mt-1 text-xs" style="color: var(--destructive);">{copilotError}</p>
+											{/if}
+											{#if copilotSummaryNotice}
+												<p class="mt-2 rounded-lg p-2 text-xs" style="background: var(--warning-soft); color: var(--warning);">
+													{copilotSummaryNotice}
+												</p>
 											{/if}
 											{#if copilotBriefId && !copilotBusy && !copilotSummary}
 												<!-- Brief terpilih belum menyimpan fakta: tawarkan langsung ke brief

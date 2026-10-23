@@ -35,6 +35,16 @@ type tautProperInput struct {
 	BriefID    string
 }
 
+// tautProperBriefContext: dua ringkasan brief yang dipakai mode Proper.
+type tautProperBriefContext struct {
+	EntitySummary string
+	FileSummary   string
+}
+
+func (c tautProperBriefContext) empty() bool {
+	return c.EntitySummary == "" && c.FileSummary == ""
+}
+
 // properQuotesJSONPrefix: penanda bahwa proper_kutipan berisi JSON array
 // kutipan (bukan teks kutipan tunggal versi lama).
 const properQuotesJSONPrefix = "__quotes__:"
@@ -169,53 +179,75 @@ func (d *Deps) loadTautProperStored(ctx context.Context, itemID string) *tautPro
 	return p
 }
 
-// loadTautProperBrief: gabungan fakta Brief Copilot (profiler_profiles milik
-// brand ini). Lintas-tenant tersaring via brand_id. "" bila brief tidak
-// ditemukan atau seluruh kolomnya kosong.
-func (d *Deps) loadTautProperBrief(ctx context.Context, brandID, briefID string) string {
+// loadTautProperBriefContext: memori brand untuk mode Proper. Sejak ringkasan
+// brief tersedia, Writer TIDAK lagi membaca seluruh entity_core/identity/
+// style/seo — hanya dua ringkasan yang dibuat agent khusus. Ini yang membuat
+// prompt jauh lebih pendek.
+//
+// Aturan siap-pakai:
+//   - ringkasan entitas WAJIB `ready` (brief tanpa memori brand tidak boleh
+//     menghasilkan rilis resmi);
+//   - ringkasan file wajib bila brief punya dokumen/tautan; brief tanpa file
+//     tidak perlu ringkasan file.
+func (d *Deps) loadTautProperBriefContext(ctx context.Context, brandID, briefID string) (tautProperBriefContext, error) {
+	var out tautProperBriefContext
 	id := strings.TrimSpace(briefID)
 	if id == "" {
-		return ""
+		return out, nil
 	}
+	var profileID string
 	row, err := d.queryRow(ctx, `
-		SELECT COALESCE(entity_core, '{}'::jsonb) AS entity_core,
-		       COALESCE(identity, '{}'::jsonb) AS identity,
-		       COALESCE(style, '{}'::jsonb) AS style,
-		       COALESCE(seo, '{}'::jsonb) AS seo
-		FROM profiler_profiles
+		SELECT id FROM profiler_profiles
 		WHERE (id = $1 OR short_code = $1) AND brand_id = $2 AND deleted_at IS NULL
 		LIMIT 1`, id, brandID)
 	if err != nil || row == nil {
-		return ""
+		return out, errUnprocessable("Brief tidak ditemukan untuk brand ini.")
 	}
-	merged := map[string]any{}
-	for _, key := range []string{"entity_core", "identity", "style", "seo"} {
-		var obj map[string]any
-		if json.Unmarshal([]byte(row.strOr(key, "")), &obj) == nil {
-			for k, v := range obj {
-				if s, isStr := v.(string); isStr && strings.TrimSpace(s) == "" {
-					continue
-				}
-				merged[k] = v
-			}
+	profileID = row.strOr("id", "")
+	if profileID == "" {
+		return out, errUnprocessable("Brief tidak ditemukan untuk brand ini.")
+	}
+
+	entityRow, _ := d.queryRow(ctx, `
+		SELECT status, COALESCE(content, '') AS content FROM profiler_brief_summaries
+		WHERE profile_id = $1 AND kind = 'entity'`, profileID)
+	entityStatus := ""
+	if entityRow != nil {
+		entityStatus = entityRow.strOr("status", "")
+	}
+	if entityStatus == "" || entityStatus == "idle" {
+		return out, errUnprocessable("Brief ini belum punya data entitas. Isi brief lewat Copilot dulu sebelum memakai mode Proper.")
+	}
+	if entityStatus != "ready" {
+		return out, errUnprocessable("Ringkasan Entitas brief belum siap. Buka Taut Brief → Ringkasan, tunggu proses selesai lalu coba lagi.")
+	}
+	out.EntitySummary = strings.TrimSpace(entityRow.strOr("content", ""))
+	if out.EntitySummary == "" {
+		return out, errUnprocessable("Brief ini belum punya data entitas. Isi brief lewat Copilot dulu sebelum memakai mode Proper.")
+	}
+
+	fileRow, _ := d.queryRow(ctx, `
+		SELECT status, COALESCE(content, '') AS content FROM profiler_brief_summaries
+		WHERE profile_id = $1 AND kind = 'file'`, profileID)
+	countRow, _ := d.queryRow(ctx, `
+		SELECT (SELECT COUNT(*) FROM profiler_documents WHERE profile_id = $1 AND deleted_at IS NULL)
+		     + (SELECT COUNT(*) FROM profiler_urls WHERE profile_id = $1 AND deleted_at IS NULL) AS file_sources`,
+		profileID)
+	fileSources := 0
+	if countRow != nil {
+		if n, ok := countRow.num("file_sources"); ok {
+			fileSources = int(n)
 		}
 	}
-	lines := make([]string, 0, len(merged))
-	for _, key := range tautProperKnownKeys {
-		if v, ok := merged[key]; ok {
-			if line := properFactLine(key, v); line != "" {
-				lines = append(lines, line)
-			}
-			delete(merged, key)
+	if fileSources > 0 {
+		if fileRow == nil || fileRow.strOr("status", "") != "ready" || strings.TrimSpace(fileRow.strOr("content", "")) == "" {
+			return out, errUnprocessable("Ringkasan File brief belum siap. Buka Taut Brief → Ringkasan, tunggu proses selesai lalu coba lagi.")
 		}
+		out.FileSummary = strings.TrimSpace(fileRow.strOr("content", ""))
+	} else if fileRow != nil && fileRow.strOr("status", "") == "ready" {
+		out.FileSummary = strings.TrimSpace(fileRow.strOr("content", ""))
 	}
-	// Sisa kunci tak dikenal (field admin baru) tetap diserahkan ke AI.
-	for k, v := range merged {
-		if line := properFactLine(k, v); line != "" {
-			lines = append(lines, line)
-		}
-	}
-	return strings.Join(lines, "\n")
+	return out, nil
 }
 
 // properFactLine: satu baris "Label: value" untuk blok memori AI.
@@ -274,15 +306,16 @@ var tautProperKnownKeys = []string{
 }
 
 // buildTautProperBlock: teks aturan strict grounding + semua sumber fakta
-// Proper untuk prompt Writer DAN Checker.
-func buildTautProperBlock(p *tautProperInput, briefFacts string) string {
-	if p == nil || (strings.TrimSpace(p.Fakta) == "" && briefFacts == "") {
+// Proper untuk prompt Writer DAN Checker. Memori brand datang dari ringkasan
+// entitas/file brief (bukan dump seluruh profil).
+func buildTautProperBlock(p *tautProperInput, brief tautProperBriefContext) string {
+	if p == nil || (strings.TrimSpace(p.Fakta) == "" && brief.empty()) {
 		return ""
 	}
 	var b strings.Builder
 	b.WriteString("[MODE PROPER — RILIS RESMI, STRICT GROUNDING (WAJIB)]\n")
 	b.WriteString("Klien memilih mode PROPER: ini rilis resmi berbasis fakta terkunci, bukan tulisan bebas. Aturan berikut MENANG atas gaya menulis mana pun:\n")
-	b.WriteString("1. SELURUH klaim produk (nama, fitur, keunggulan, angka, harga, tanggal, lokasi, dan kutipan) WAJIB berasal dari [DATA FAKTA TERKUNCI] dan/atau [MEMORI BRAND COPILOT] di bawah. DILARANG menambah, menebak, atau menurunkan klaim di luar sumber itu (contoh dilarang: harga yang tidak tertulis, sertifikat/partnership yang tidak tertulis).\n")
+	b.WriteString("1. SELURUH klaim produk (nama, fitur, keunggulan, angka, harga, tanggal, lokasi, dan kutipan) WAJIB berasal dari [DATA FAKTA TERKUNCI], [RINGKASAN ENTITAS BRIEF], dan/atau [RINGKASAN FILE BRIEF] di bawah. DILARANG menambah, menebak, atau menurunkan klaim di luar sumber itu (contoh dilarang: harga yang tidak tertulis, sertifikat/partnership yang tidak tertulis).\n")
 	b.WriteString("2. JANGAN menambahkan fitur, layanan, penghargaan, atau kemitraan baru yang tidak muncul di sumber.\n")
 	b.WriteString("3. TANPA menyebut nama kompetitor atau menyandingkan brand ini dengan perusahaan lain.\n")
 	b.WriteString("4. DILARANG klaim \"nomor 1\", \"terbaik\", \"paling terpercaya\" dan sejenisnya KECUALI tertulis persis di sumber.\n")
@@ -291,8 +324,11 @@ func buildTautProperBlock(p *tautProperInput, briefFacts string) string {
 	if s := strings.TrimSpace(p.Fakta); s != "" {
 		b.WriteString("\n[DATA FAKTA TERKUNCI — dipakai persis seperti ini]\n" + s + "\n")
 	}
-	if s := strings.TrimSpace(briefFacts); s != "" {
-		b.WriteString("\n[MEMORI BRAND COPILOT — fakta kanonik yang boleh dipakai]\n" + s + "\n")
+	if s := strings.TrimSpace(brief.EntitySummary); s != "" {
+		b.WriteString("\n[RINGKASAN ENTITAS BRIEF — memori brand kanonik yang boleh dipakai]\n" + s + "\n")
+	}
+	if s := strings.TrimSpace(brief.FileSummary); s != "" {
+		b.WriteString("\n[RINGKASAN FILE BRIEF — referensi pendukung dari dokumen/tautan klien]\n" + s + "\n")
 	}
 	if len(p.Quotes) > 0 {
 		b.WriteString("\n[KUTIPAN RESMI — pakai persis seperti ini, tanpa mengubah kata]\n")

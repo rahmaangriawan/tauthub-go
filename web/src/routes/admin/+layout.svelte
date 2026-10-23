@@ -90,10 +90,16 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 							{
 								// Taut Brief berdiri sendiri, bukan anak Taut Pintar: config,
 								// prompt, skema field, dan log-nya tabel taut_brief_* sendiri.
+								// Dua agent ringkasan punya halaman sendiri di submenu ini.
 								label: tr('Taut Brief'),
 								href: '/admin/taut-brief',
 								icon: MessageSquare,
-								active: pathname.startsWith('/admin/taut-brief')
+								active: pathname.startsWith('/admin/taut-brief'),
+								children: [
+									{ label: tr('Konfigurasi'), href: '/admin/taut-brief', active: pathname === '/admin/taut-brief' },
+									{ label: tr('Agent Entitas'), href: '/admin/taut-brief/agent-entitas', active: pathname.startsWith('/admin/taut-brief/agent-entitas') },
+									{ label: tr('Agent File'), href: '/admin/taut-brief/agent-file', active: pathname.startsWith('/admin/taut-brief/agent-file') }
+								]
 							}
 						]
 					: [])

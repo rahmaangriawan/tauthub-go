@@ -98,11 +98,36 @@ func backoff(attempt int) time.Duration {
 // batas (attempts pernah tercatat 156 dari batas 2) dan menghajar penyedia
 // eksternal terus-menerus.
 func (r *Runner) ClaimNextJob(ctx context.Context, workerID string) (*JobRow, error) {
+	return r.claimNext(ctx, workerID, "", false)
+}
+
+// ClaimNextJobOfKind / ClaimNextJobExceptKind: varian claim untuk worker yang
+// mengkhususkan diri pada satu jenis job (mis. ringkasan brief) tanpa berebut
+// dengan antrean umum.
+func (r *Runner) ClaimNextJobOfKind(ctx context.Context, workerID, kind string) (*JobRow, error) {
+	return r.claimNext(ctx, workerID, kind, false)
+}
+
+func (r *Runner) ClaimNextJobExceptKind(ctx context.Context, workerID, kind string) (*JobRow, error) {
+	return r.claimNext(ctx, workerID, kind, true)
+}
+
+func (r *Runner) claimNext(ctx context.Context, workerID, kind string, exclude bool) (*JobRow, error) {
+	filter := ""
+	args := []any{workerID}
+	if kind != "" {
+		if exclude {
+			filter = " AND kind <> $2"
+		} else {
+			filter = " AND kind = $2"
+		}
+		args = append(args, kind)
+	}
 	row := r.Pool.QueryRow(ctx, `
 		WITH picked AS (
 		  SELECT id FROM jobs
 		  WHERE status IN ('pending','failed') AND run_at <= NOW()
-		    AND attempts < max_attempts
+		    AND attempts < max_attempts`+filter+`
 		  ORDER BY run_at
 		  LIMIT 1
 		  FOR UPDATE SKIP LOCKED
@@ -110,11 +135,11 @@ func (r *Runner) ClaimNextJob(ctx context.Context, workerID string) (*JobRow, er
 		UPDATE jobs SET status = 'running', locked_at = NOW(), locked_by = $1,
 		                attempts = attempts + 1, updated_at = NOW()
 		WHERE id IN (SELECT id FROM picked)
-		RETURNING id, kind, payload, attempts, max_attempts`, workerID)
-	var id, kind string
+		RETURNING id, kind, payload, attempts, max_attempts`, args...)
+	var id, jobKind string
 	var raw []byte
 	var attempts, maxAttempts int
-	if err := row.Scan(&id, &kind, &raw, &attempts, &maxAttempts); err != nil {
+	if err := row.Scan(&id, &jobKind, &raw, &attempts, &maxAttempts); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
@@ -123,10 +148,10 @@ func (r *Runner) ClaimNextJob(ctx context.Context, workerID string) (*JobRow, er
 	payload := map[string]any{}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &payload); err != nil {
-			slog.Warn("[jobs] payload bukan objek JSON", "id", id, "kind", kind, "err", err)
+			slog.Warn("[jobs] payload bukan objek JSON", "id", id, "kind", jobKind, "err", err)
 		}
 	}
-	return &JobRow{ID: id, Kind: kind, Payload: payload, Attempts: attempts, MaxAttempts: maxAttempts}, nil
+	return &JobRow{ID: id, Kind: jobKind, Payload: payload, Attempts: attempts, MaxAttempts: maxAttempts}, nil
 }
 
 // MarkCompleted: tandai job selesai (locked_* dilepas). Parity markCompleted —
@@ -187,6 +212,20 @@ func (r *Runner) ReapStuck(ctx context.Context, staleAfter time.Duration) (int, 
 // antrean kosong. Error yang dikembalikan adalah kegagalan infra (DB), bukan
 // kegagalan handler — kegagalan handler sudah tercatat ke baris job.
 func (r *Runner) ProcessOnce(ctx context.Context, workerID string) (*JobRow, error) {
+	return r.processOnce(ctx, workerID, "", false)
+}
+
+// ProcessOnceOfKind: klaim & proses satu job dengan kind tertentu.
+func (r *Runner) ProcessOnceOfKind(ctx context.Context, workerID, kind string) (*JobRow, error) {
+	return r.processOnce(ctx, workerID, kind, false)
+}
+
+// ProcessOnceExceptKind: klaim & proses satu job selain kind yang dikecualikan.
+func (r *Runner) ProcessOnceExceptKind(ctx context.Context, workerID, kind string) (*JobRow, error) {
+	return r.processOnce(ctx, workerID, kind, true)
+}
+
+func (r *Runner) processOnce(ctx context.Context, workerID, kind string, exclude bool) (*JobRow, error) {
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
@@ -194,7 +233,17 @@ func (r *Runner) ProcessOnce(ctx context.Context, workerID string) (*JobRow, err
 	}
 	r.mu.Unlock()
 
-	job, err := r.ClaimNextJob(ctx, workerID)
+	var (
+		job *JobRow
+		err error
+	)
+	if kind == "" {
+		job, err = r.ClaimNextJob(ctx, workerID)
+	} else if exclude {
+		job, err = r.ClaimNextJobExceptKind(ctx, workerID, kind)
+	} else {
+		job, err = r.ClaimNextJobOfKind(ctx, workerID, kind)
+	}
 	if err != nil || job == nil {
 		return nil, err
 	}

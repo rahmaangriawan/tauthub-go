@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
+	"github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -252,7 +253,6 @@ func (d *Deps) BriefFieldsPost(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	_ = brandID
 	body := decodeJSON(r)
 	key, hasKey := strField(body, "key")
 	value, hasValue := strField(body, "value")
@@ -295,6 +295,7 @@ func (d *Deps) BriefFieldsPost(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	_ = summary.Queue(r.Context(), d.Pool, profileID, brandID, summary.KindEntity)
 	states, _ = d.loadStates(r.Context(), profileID)
 	filled, total := Progress(fields, states)
 	writeJSON(w, http.StatusOK, map[string]any{
