@@ -4845,6 +4845,9 @@ export const PHRASE_EN: Record<string, string> = {
 	  // Folder Taut Brief di dalam explorer Taut Pintar.
 	  "Konfigurasi Taut Brief dan agent ringkasannya: Konfigurasi, Agent Entitas, Agent File.": "Taut Brief configuration and its summarizing agents: Configuration, Entity Agent, File Agent.",
 	  "Semua pengaturan Taut Brief dalam satu folder. Buka folder untuk membuka halamannya.": "All Taut Brief settings in one folder. Open a folder to open its page.",
+	  "Dua agent AI Media Matchmaker: Agent Ringkasan (brief menjadi kriteria) dan Agent Pemilih Media (memilih paket dari katalog).": "The two AI Media Matchmaker agents: Summary Agent (brief into criteria) and Media Picker Agent (picks the package from the catalog).",
+	  "Konfigurasi dua agent AI Media Matchmaker: peringkas brief dan pemilih media. Buka folder untuk membuka halamannya.": "Configure the two AI Media Matchmaker agents: the brief summarizer and the media picker. Open a folder to open its page.",
+	  "Agent Ringkasan": "Summary Agent",
 	};
 
 /**

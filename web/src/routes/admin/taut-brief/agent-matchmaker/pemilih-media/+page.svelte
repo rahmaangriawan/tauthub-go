@@ -2,11 +2,11 @@
 	import { tr } from '$lib/i18n/phrases';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
-	import AgentPanel from '../_agent-panel.svelte';
+	import AgentPanel from '../../_agent-panel.svelte';
 </script>
 
 <section>
-	<ExplorerFrame parents={[{ label: tr('Taut Pintar'), href: '/admin/taut-pintar' }]} crumb={tr('Agent Pemilih Media')} path="/admin/taut-brief/agent-matchmaker-select">
+	<ExplorerFrame parents={[{ label: tr('Taut Pintar'), href: '/admin/taut-pintar' }, { label: tr('Agent Matchmaker'), href: '/admin/taut-brief/agent-matchmaker' }]} crumb={tr('Agent Pemilih Media')} path="/admin/taut-brief/agent-matchmaker/pemilih-media">
 		<PageHeader
 			title={tr('Agent AI Pemilih Media')}
 			description={tr('Memilih media dari kandidat katalog nyata berdasarkan ringkasan kebutuhan. Server tetap menentukan kandidat, harga, dan total — agent hanya memilih dari daftar.')}

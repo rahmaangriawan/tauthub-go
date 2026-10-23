@@ -42,16 +42,11 @@
 			tag: 'racik.config'
 		},
 		{
+			// Folder bertingkat: dua agent AI Media Matchmaker di dalamnya.
 			label: tr('Agent Matchmaker'),
 			href: '/admin/taut-brief/agent-matchmaker',
-			description: tr('Mengubah brief kampanye bebas menjadi kriteria media. Penyaringan dan skor tetap deterministik di server terhadap katalog nyata.'),
-			tag: 'matchmaker.config'
-		},
-		{
-			label: tr('Agent Pemilih Media'),
-			href: '/admin/taut-brief/agent-matchmaker-select',
-			description: tr('Memilih media dari kandidat katalog nyata berdasarkan ringkasan kebutuhan. Server tetap menentukan kandidat, harga, dan total — agent hanya memilih dari daftar.'),
-			tag: 'media-picker.config'
+			description: tr('Dua agent AI Media Matchmaker: Agent Ringkasan (brief menjadi kriteria) dan Agent Pemilih Media (memilih paket dari katalog).'),
+			tag: 'matchmaker/'
 		},
 		{
 			// Folder bertingkat: isinya Konfigurasi, Agent Entitas, Agent File.
