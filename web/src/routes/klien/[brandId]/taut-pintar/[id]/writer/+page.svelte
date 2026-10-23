@@ -874,7 +874,8 @@
 		topic: string,
 		links: { anchor_text: string; url: string }[] = [],
 		angleSlug = '',
-		proper: ProperGenPayload | null = null
+		proper: ProperGenPayload | null = null,
+		onDelta?: (append: string) => void
 	): Promise<{ title: string; html: string; category?: string; imagesGenerated?: number; imagesCostCredits?: number }> {
 		const mediaType = placement.find((p) => p.media_id === mediaId)?.media_type;
 		const angle = angleChannels.find((ch) => ch.slug === mediaType)?.angles.find((a) => a.slug === angleSlug && a.has_prompt);
@@ -884,27 +885,82 @@
 		const payload = proper
 			? { topic, links, angle_slug: angleSlug, gaya: 'proper', proper }
 			: { topic, links, angle_slug: angleSlug };
-		const res = await apiRequest(`${apiBase}/produce/${mediaId}`, {
-			method: 'POST',
-			body: JSON.stringify(payload)
-		}, 240_000);
-		const data = await res.json().catch(() => null);
-		if (!res.ok) throw new Error(data?.detail ?? tr('Gagal membuat draf AI.'));
+		const token = getAccessToken();
+		const controller = new AbortController();
+		const abortTimer = window.setTimeout(() => controller.abort(), 300_000);
+		let streamErr = '';
+		let result: { title?: string; category?: string; images_generated?: number; images_cost_credits?: number } | null = null;
+		try {
+			// Endpoint stream: potongan HTML dikirim selagi AI menulis, jadi modal
+			// bisa pindah ke Editor Post dan menampilkan artikel yang sedang tumbuh.
+			const res = await fetch(`${apiBase}/produce/${mediaId}/stream`, {
+				method: 'POST',
+				headers: {
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+					'Content-Type': 'application/json'
+				},
+				credentials: 'include',
+				signal: controller.signal,
+				body: JSON.stringify(payload)
+			});
+			if (!res.ok || !res.body) throw new Error(await readApiError(res, tr('Gagal membuat draf AI.')));
+			const reader = res.body.getReader();
+			const dec = new TextDecoder();
+			let buf = '';
+			let finished = false;
+			while (!finished) {
+				const { value, done } = await reader.read();
+				if (done) break;
+				buf += dec.decode(value, { stream: true });
+				let idx;
+				while ((idx = buf.indexOf('\n\n')) >= 0) {
+					const block = buf.slice(0, idx);
+					buf = buf.slice(idx + 2);
+					let ev = 'message';
+					let data = '';
+					for (const line of block.split('\n')) {
+						if (line.startsWith('event:')) ev = line.slice(6).trim();
+						else if (line.startsWith('data:')) data += line.slice(5).trim();
+					}
+					if (!data) continue;
+					let payloadEvent: { append?: string; message?: string; title?: string; category?: string; images_generated?: number; images_cost_credits?: number } | null = null;
+					try {
+						payloadEvent = JSON.parse(data);
+					} catch {
+						continue;
+					}
+					if (ev === 'delta' && typeof payloadEvent?.append === 'string') {
+						onDelta?.(payloadEvent.append);
+					} else if (ev === 'done') {
+						result = payloadEvent;
+						finished = true;
+					} else if (ev === 'error') {
+						streamErr = String(payloadEvent?.message ?? tr('Gagal membuat draf AI.'));
+						finished = true;
+					}
+				}
+			}
+			if (streamErr) throw new Error(streamErr);
+			if (!finished) throw new Error(tr('Koneksi streaming terputus.'));
+		} finally {
+			window.clearTimeout(abortTimer);
+		}
 		placement = placement.map((p) => p.media_id === mediaId ? { ...p, angle_slug: angleSlug } : p);
 		genState = { ...genState, [mediaId]: 'draft' };
 		qcToken += 1;
 		// Setiap generate menambah tagihan (regenerasi ditagih lagi) — segarkan
 		// data kampanye supaya regen_count, gambar, dan Total Tagihan Akhir di
 		// bar bawah ikut naik tanpa reload halaman.
-		await load();
+		void load();
 		return {
-			title: String(data?.title ?? ''),
-			html: String(data?.content_html ?? ''),
+			// HTML tidak ikut di event done; modal mengambil draf tersimpan.
+			title: String(result?.title ?? ''),
+			html: '',
 			// Rubrik pilihan AI (server memvalidasinya ke kategori media; kosong
 			// hanya bila media memang tidak punya daftar kategori).
-			category: String(data?.category ?? ''),
-			imagesGenerated: Number(data?.images_generated ?? 0) || 0,
-			imagesCostCredits: Number(data?.images_cost_credits ?? 0) || 0
+			category: String(result?.category ?? ''),
+			imagesGenerated: Number(result?.images_generated ?? 0) || 0,
+			imagesCostCredits: Number(result?.images_cost_credits ?? 0) || 0
 		};
 	}
 
@@ -2328,7 +2384,7 @@
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveEditor(title, html, coverUrl, category, metaDescription)}
 			onUploadCover={uploadCover}
 			onUploadDoc={uploadDocNaskah}
-			onGenerate={(topic, links, angleSlug, proper) => generateNaskah(ed.mediaId, topic, links, angleSlug, proper ?? null)}
+			onGenerate={(topic, links, angleSlug, proper, onDelta) => generateNaskah(ed.mediaId, topic, links, angleSlug, proper ?? null, onDelta)}
 			streamingHtml={streamHtml}
 		/>
 	{/key}
