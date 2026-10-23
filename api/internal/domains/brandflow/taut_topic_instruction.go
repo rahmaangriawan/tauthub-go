@@ -38,6 +38,7 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 	body := decodeJSON(r)
 	mediaType, _ := strField(body, "media_type")
 	mediaID, _ := strField(body, "media_id")
+	angleSlug, _ := strField(body, "angle_slug")
 	rawAnchors, hasAnchors := body["anchors"]
 	if !hasAnchors {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid request")
@@ -99,7 +100,7 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	material := d.buildRacikMaterial(r.Context(), brandRow, chiParam(r, "campaignId"), mediaID, mediaLabel, anchorLines.String())
+	material := d.buildRacikMaterial(r.Context(), brandRow, chiParam(r, "campaignId"), mediaID, mediaLabel, angleSlug, anchorLines.String())
 
 	client := &ai.ChatClient{
 		BaseURL:     agentCfg.BaseURL,
@@ -201,7 +202,7 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 // buildRacikMaterial menyusun bahan yang dikirim ke agent racik. Master prompt
 // admin meminta data kampanye (keyword, domain, angle, karakter media), bukan
 // hanya anchor — tanpa blok ini model hanya bisa menebak dari anchor.
-func (d *Deps) buildRacikMaterial(ctx context.Context, brandRow brandsdomain.BrandRow, campaignID, mediaID, mediaLabel, anchorLines string) string {
+func (d *Deps) buildRacikMaterial(ctx context.Context, brandRow brandsdomain.BrandRow, campaignID, mediaID, mediaLabel, angleSlug, anchorLines string) string {
 	parts := []string{"Bahan dari user:", anchorLines, "Jenis media target: " + mediaLabel + "."}
 
 	brandLine := "Brand: " + brandRow.Name
@@ -240,7 +241,17 @@ func (d *Deps) buildRacikMaterial(ctx context.Context, brandRow brandsdomain.Bra
 		}
 	}
 
-	if block, _ := tautAngleBriefBlock(d.loadTautAngleContext(ctx, campaignID, mediaLabel)); block != "" {
+	// Angle yang dipakai adalah yang sedang dipilih di modal. Dropdown itu belum
+	// tersimpan ke kampanye saat racik diklik, jadi slug-nya datang dari body —
+	// tanpa ini instruksi diracik tanpa angle (hasilnya generik dan tidak nyambung
+	// dengan pilihan user). Slug tersimpan hanya jadi cadangan.
+	angle := d.loadTautAngleContext(ctx, campaignID, mediaLabel)
+	if slug := strings.TrimSpace(angleSlug); slug != "" {
+		if picked, err := d.loadTautAngleBySlug(ctx, slug, mediaLabel, false); err == nil && picked != nil {
+			angle = picked
+		}
+	}
+	if block, _ := tautAngleBriefBlock(angle); block != "" {
 		parts = append(parts, block)
 	}
 	return strings.Join(parts, "\n")

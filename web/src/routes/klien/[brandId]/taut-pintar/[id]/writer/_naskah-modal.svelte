@@ -859,6 +859,7 @@
 				body: JSON.stringify({
 					media_id: mediaId,
 					media_type: mediaType,
+					angle_slug: angleSlug,
 					anchors: rows.map((r) => ({ anchor: r.anchor, url: r.url }))
 				})
 			});
@@ -1797,8 +1798,12 @@
 										<button
 											class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
 											type="button"
-											disabled={racikBusy || linkRows.length === 0}
-											title={linkRows.length === 0 ? tr('Isi minimal 1 tautan di bagian Tautan & Anchor dulu — instruksinya diracik dari anchor.') : tr('Susun instruksi topik dari anchor + prinsip SEO/EEAT')}
+											disabled={racikBusy || linkRows.length === 0 || !angleReady}
+											title={linkRows.length === 0
+												? tr('Isi minimal 1 tautan di bagian Tautan & Anchor dulu — instruksinya diracik dari anchor.')
+												: !angleReady
+													? tr('Pilih angle artikel dulu supaya instruksinya mengikuti sudut bahasan yang kamu mau.')
+													: tr('Susun instruksi topik dari anchor + prinsip SEO/EEAT')}
 											onclick={() => void racikInstruksi()}
 										>
 											{#if racikBusy}<LoaderCircle size={13} class="animate-spin" />{:else}<Sparkles size={13} />{/if}
