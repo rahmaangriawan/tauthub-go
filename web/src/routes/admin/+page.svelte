@@ -386,7 +386,7 @@
 						{ href: '/admin/revenue-shares', label: tr('Markup Harga & Bagi Hasil') },
 						{ href: '/admin/konfigurasi', label: tr('Pengaturan Platform & Integrasi') },
 						{ href: '/admin/media-summaries', label: 'Kesimpulan & Crawler Media' },
-						{ href: '/admin/taut-pintar', label: tr('Kampanye Taut Pintar') }
+						{ href: '/admin/taut-pintar/monitoring', label: tr('Kampanye Taut Pintar') }
 					] as link (link.href)}
 						<a
 							class="flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"

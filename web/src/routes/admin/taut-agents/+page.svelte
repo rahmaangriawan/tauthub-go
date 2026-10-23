@@ -8,6 +8,7 @@
 	import { onMount } from 'svelte';
 	import { Bot, CheckCircle2, RefreshCw, ShieldCheck, TriangleAlert } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
+	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import AgentCard from './agent-card.svelte';
 	import AgentLogsPanel from './agent-logs-panel.svelte';
@@ -31,7 +32,7 @@
 
 	const AGENT_META: Record<string, { label: string; role: string; hint: string }> = {
 		profiler: { label: 'Profiler', role: 'Strategis', hint: 'Menerjemahkan profil bisnis + anggaran menjadi strategy_brief.' },
-		matchmaker: { label: 'Matchmaker', role: 'Placement', hint: 'AI ranking media berdasarkan brief Profiler — wajib dikonfigurasi, tanpa fallback formula.' },
+		matchmaker: { label: 'Matchmaker (Kampanye Taut Pintar)', role: 'Placement', hint: 'AI ranking media untuk alur Placement kampanye Taut Pintar (Profiler → Matchmaker). Bukan AI Matchmaker di katalog media — konfigurasi fitur katalog ada di menu Taut Pintar > Agent Matchmaker.' },
 		writer_mainstream: { label: 'Media Mainstream', role: 'Subagent The Writer', hint: 'Artikel gaya berita 5W+1H tanpa heading — untuk media mainstream.' },
 		writer_blogger: { label: 'Blogger', role: 'Subagent The Writer', hint: 'Artikel dengan subjudul H2/H3 + daftar — untuk media blogger/niche.' },
 		gatekeeper: { label: 'Gatekeeper', role: 'Editor & Compliance', hint: 'Tanam hyperlink natural + editorial + pre-check; hard gate tetap moderateContent.' }
@@ -222,6 +223,7 @@
 </script>
 
 <section>
+	<ExplorerFrame parents={[{ label: tr('Taut Pintar'), href: '/admin/taut-pintar' }]} crumb="Agent Config" path="/admin/taut-agents">
 	<PageHeader
 		title="Taut Pintar — Agent"
 		description="Per-agent LLM (base_url, api key, model, system prompt). Hanya super admin. Kecepatan generate mengikuti model: model opus-class ±70 token/detik (artikel 20-35 detik), model flash-class (mis. via OpenRouter, base URL https://openrouter.ai/api/v1) bisa 5x lebih cepat. Perubahan langsung aktif tanpa restart."
@@ -448,4 +450,5 @@
 			<AgentLogsPanel />
 		{/if}
 	{/if}
+	</ExplorerFrame>
 </section>

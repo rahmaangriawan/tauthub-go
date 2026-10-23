@@ -37,6 +37,9 @@ const (
 	// terstruktur untuk katalog. Sama seperti Racik: transport + prompt
 	// berversi yang sama, bukan ringkasan brief.
 	AgentMatchmaker = "media_matchmaker"
+	// AgentMatchmakerSelect memilih media dari kandidat katalog nyata
+	// berdasarkan ringkasan kebutuhan yang dibuat AgentMatchmaker.
+	AgentMatchmakerSelect = "media_matchmaker_select"
 )
 
 const JobKind = "brief_summary"
@@ -72,7 +75,7 @@ func ParseKind(raw string) (Kind, bool) {
 }
 
 func ValidAgent(agent string) bool {
-	return agent == AgentEntity || agent == AgentFile || agent == AgentRacik || agent == AgentMatchmaker
+	return agent == AgentEntity || agent == AgentFile || agent == AgentRacik || agent == AgentMatchmaker || agent == AgentMatchmakerSelect
 }
 
 // KindOfAgent: kebalikan AgentName.

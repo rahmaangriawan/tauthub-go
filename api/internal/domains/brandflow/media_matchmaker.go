@@ -18,10 +18,16 @@ import (
 
 // media_matchmaker.go: POST /v1/brands/{brandId}/media/matchmaker
 //
-// AI hanya menerjemahkan brief bebas menjadi kriteria. Penyaringan, skor, dan
-// penyusunan paket dikerjakan deterministik di server terhadap katalog nyata,
-// sehingga hasil bisa dipertanggungjawabkan dan bisa diulang tanpa memanggil
-// model lagi. Tidak ada mutasi: kampanye/pesanan tidak dibuat di sini.
+// Dua agent berversi, satu pipeline:
+//  1. media_matchmaker — menerjemahkan brief bebas menjadi kriteria
+//     terstruktur (ringkasan kebutuhan).
+//  2. media_matchmaker_select — memilih paket dari kandidat katalog nyata
+//     berdasarkan ringkasan itu; hanya pada fase "Pilih media" eksplisit.
+//
+// Penyaringan kandidat, harga, skor, dan total tetap dihitung server dari
+// katalog; agent pemilih hanya boleh memilih id dari daftar. Tanpa agent
+// kedua, paket disusun skor deterministik. Tidak ada mutasi: kampanye/pesanan
+// tidak dibuat di sini.
 
 const (
 	mmPoolLimit      = 400 // kandidat maksimum yang diambil dari katalog
@@ -117,6 +123,12 @@ func (d *Deps) MediaMatchmaker(w http.ResponseWriter, r *http.Request) {
 	if len(brief) > 4000 {
 		brief = brief[:4000]
 	}
+	// Ringkasan kebutuhan hasil agent pertama — bahan konteks untuk agent
+	// pemilih. Teks bebas, tidak dipercaya sebagai data terstruktur.
+	briefSummary, _ := strField(body, "summary")
+	if len(briefSummary) > 600 {
+		briefSummary = briefSummary[:600]
+	}
 	rawCriteria, hasCriteria := body["criteria"].(map[string]any)
 
 	if brief == "" && !hasCriteria {
@@ -169,6 +181,37 @@ func (d *Deps) MediaMatchmaker(w http.ResponseWriter, r *http.Request) {
 	pkg, pkgWarnings := mmBuildPackage(candidates, crit)
 	warnings = append(warnings, pkgWarnings...)
 
+	// Agent kedua (pemilih media): hanya pada fase "Pilih media" eksplisit
+	// (mode criteria) supaya analisis brief tetap cepat. Kalau agent tidak
+	// dikonfigurasi, paket deterministik di atas tetap dipakai tanpa noise;
+	// kalau agent dipanggil tapi gagal, warning diberikan ke user.
+	selector := "auto"
+	pkgSummary := ""
+	if hasCriteria {
+		picks, aiSummary, selStatus := d.mmAgentSelect(r.Context(), brandRow, crit, briefSummary, candidates)
+		switch selStatus {
+		case "agent":
+			if applyWarn, ok := mmApplyAgentPicks(candidates, picks, crit); ok {
+				selector = "agent"
+				pkgSummary = aiSummary
+				warnings = append(warnings, applyWarn...)
+				pkg = nil // paket sekarang milik pilihan agent; dihitung ulang di bawah
+			} else {
+				warnings = append(warnings, "Pilihan agent pemilih tidak valid — paket memakai skor otomatis.")
+			}
+		case "failed":
+			warnings = append(warnings, "Agent pemilih media gagal dijalankan — paket memakai skor otomatis.")
+		}
+	}
+	pkgCount := len(pkg)
+	if pkg == nil {
+		for i := range candidates {
+			if candidates[i].InPackage {
+				pkgCount++
+			}
+		}
+	}
+
 	// Kandidat yang ditampilkan: paket dulu, lalu sisanya menurut skor.
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].InPackage != candidates[j].InPackage {
@@ -201,8 +244,8 @@ func (d *Deps) MediaMatchmaker(w http.ResponseWriter, r *http.Request) {
 	}
 
 	unmet := []string{}
-	if len(pkg) < crit.Count {
-		unmet = append(unmet, "Hanya "+itoa(len(pkg))+" dari "+itoa(crit.Count)+" media yang bisa dipenuhi dengan kriteria dan budget ini.")
+	if pkgCount < crit.Count {
+		unmet = append(unmet, "Hanya "+itoa(pkgCount)+" dari "+itoa(crit.Count)+" media yang bisa dipenuhi dengan kriteria dan budget ini.")
 	}
 	if poolTruncated {
 		warnings = append(warnings, "Kandidat dibatasi ke "+itoa(mmPoolLimit)+" media terbaik menurut kualitas & DA; persempit kategori atau budget untuk pencocokan yang lebih tepat.")
@@ -218,11 +261,13 @@ func (d *Deps) MediaMatchmaker(w http.ResponseWriter, r *http.Request) {
 		"criteria":       crit,
 		"candidates":     mmCandidatePayload(shown),
 		"composition":    composition,
+		"selector":       selector,
 		"package": map[string]any{
-			"count":       len(pkg),
+			"count":       pkgCount,
 			"total":       round2(total),
 			"budget":      round2(crit.BudgetTotal),
 			"remaining":   round2(math.Max(0, crit.BudgetTotal-total)),
+			"summary":     pkgSummary,
 			"by_category": byCategory,
 			"by_type":     byType,
 			"unmet":       unmet,
@@ -266,7 +311,7 @@ func (d *Deps) mmInterpretBrief(ctx context.Context, brandRow brandsdomain.Brand
 		{Role: "user", Content: material},
 	}, true)
 	if err != nil {
-		d.logMatchmakerRun(ctx, brandRow.ID, agentCfg.Model, material, err.Error(), 0, 0, time.Since(startedAt), err)
+		d.logMatchmakerRun(ctx, summary.AgentMatchmaker, brandRow.ID, agentCfg.Model, material, err.Error(), 0, 0, time.Since(startedAt), err)
 		return zero, nil, http.StatusBadGateway, "AI Matchmaker gagal memproses brief. Coba lagi."
 	}
 
@@ -279,11 +324,11 @@ func (d *Deps) mmInterpretBrief(ctx context.Context, brandRow brandsdomain.Brand
 	}
 	raw := mmExtractJSON(result.Content)
 	if raw == "" || json.Unmarshal([]byte(raw), &parsed) != nil {
-		d.logMatchmakerRun(ctx, brandRow.ID, agentCfg.Model, material, result.Content, result.InputTokens, result.OutputTokens, time.Since(startedAt), nil)
+		d.logMatchmakerRun(ctx, summary.AgentMatchmaker, brandRow.ID, agentCfg.Model, material, result.Content, result.InputTokens, result.OutputTokens, time.Since(startedAt), nil)
 		return zero, nil, http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi."
 	}
 
-	d.logMatchmakerRun(ctx, brandRow.ID, agentCfg.Model, material, result.Content,
+	d.logMatchmakerRun(ctx, summary.AgentMatchmaker, brandRow.ID, agentCfg.Model, material, result.Content,
 		result.InputTokens, result.OutputTokens, time.Since(startedAt), nil)
 
 	interp := &mmInterpretation{
@@ -293,6 +338,266 @@ func (d *Deps) mmInterpretBrief(ctx context.Context, brandRow brandsdomain.Brand
 		Unknowns:    mmClipList(parsed.Unknowns, 8, 240),
 	}
 	return parsed.Criteria, interp, 0, ""
+}
+
+// mmAgentSelect: agent kedua yang memilih paket dari kandidat katalog nyata
+// berdasarkan ringkasan kebutuhan. Status: "agent" (sukses), "unconfigured"
+// (agent tidak dipakai — fallback deterministik tanpa warning), "failed"
+// (dipanggil tapi gagal — user diberi tahu). Kandidat, harga, dan total tetap
+// ditentukan server; agent hanya memilih id dari daftar dan memberi alasan.
+func (d *Deps) mmAgentSelect(ctx context.Context, brandRow brandsdomain.BrandRow, crit mmCriteria, briefSummary string, list []mmCandidate) (map[string]string, string, string) {
+	masterPrompt := summary.LoadActivePrompt(ctx, d.Pool, summary.AgentMatchmakerSelect)
+	if strings.TrimSpace(masterPrompt) == "" {
+		return nil, "", "unconfigured"
+	}
+	secret := ""
+	if d.Cfg != nil {
+		secret = d.Cfg.CmsEncryptionSecret
+	}
+	agentCfg := summary.LoadAgentConfig(ctx, d.Pool, secret, summary.AgentMatchmakerSelect)
+	if !agentCfg.Configured() || len(list) == 0 {
+		return nil, "", "unconfigured"
+	}
+
+	// Kandidat terbaik saja yang dikirim ke model (pool bisa sampai 400).
+	shown := make([]mmCandidate, len(list))
+	copy(shown, list)
+	sort.SliceStable(shown, func(i, j int) bool { return shown[i].Score > shown[j].Score })
+	if len(shown) > mmMaxCandidates {
+		shown = shown[:mmMaxCandidates]
+	}
+
+	client := &ai.ChatClient{
+		BaseURL:     agentCfg.BaseURL,
+		APIKey:      agentCfg.APIKey,
+		Model:       agentCfg.Model,
+		Temperature: agentCfg.Temperature,
+		MaxTokens:   agentCfg.MaxTokens,
+		Timeout:     time.Duration(agentCfg.TimeoutMS) * time.Millisecond,
+	}
+	material := mmSelectMaterial(crit, briefSummary, shown)
+	startedAt := time.Now()
+	result, err := client.CompleteMessages(ctx, []ai.ChatMessage{
+		{Role: "system", Content: masterPrompt},
+		{Role: "user", Content: material},
+	}, true)
+	if err != nil {
+		d.logMatchmakerRun(ctx, summary.AgentMatchmakerSelect, brandRow.ID, agentCfg.Model, material, err.Error(), 0, 0, time.Since(startedAt), err)
+		return nil, "", "failed"
+	}
+
+	var parsed struct {
+		PackageSummary string `json:"package_summary"`
+		Picks          []struct {
+			ID     string `json:"id"`
+			Reason string `json:"reason"`
+		} `json:"picks"`
+	}
+	raw := mmExtractJSON(result.Content)
+	if raw == "" || json.Unmarshal([]byte(raw), &parsed) != nil {
+		d.logMatchmakerRun(ctx, summary.AgentMatchmakerSelect, brandRow.ID, agentCfg.Model, material, result.Content, result.InputTokens, result.OutputTokens, time.Since(startedAt), nil)
+		return nil, "", "failed"
+	}
+	d.logMatchmakerRun(ctx, summary.AgentMatchmakerSelect, brandRow.ID, agentCfg.Model, material, result.Content,
+		result.InputTokens, result.OutputTokens, time.Since(startedAt), nil)
+
+	valid := make(map[string]bool, len(shown))
+	for _, c := range shown {
+		valid[c.ID] = true
+	}
+	picks := map[string]string{}
+	for _, p := range parsed.Picks {
+		id := strings.TrimSpace(p.ID)
+		if id == "" || !valid[id] {
+			continue // id di luar kandidat = buang, jangan pernah dipercaya
+		}
+		if _, dup := picks[id]; !dup {
+			picks[id] = mmClip(p.Reason, 240)
+		}
+	}
+	if len(picks) == 0 {
+		return nil, "", "failed"
+	}
+	return picks, mmClip(parsed.PackageSummary, 300), "agent"
+}
+
+// mmApplyAgentPicks menandai pilihan agent pada kandidat, mengganti alasan
+// dengan alasan agent, lalu menegakkan batas count dan budget total. Return
+// ok=false bila hasil akhir tidak masuk akal (panggilan boleh mempertahankan
+// paket deterministik yang sudah ada).
+func mmApplyAgentPicks(list []mmCandidate, picks map[string]string, crit mmCriteria) ([]string, bool) {
+	if len(picks) == 0 {
+		return nil, false
+	}
+	byID := make(map[string]int, len(list))
+	for i := range list {
+		byID[list[i].ID] = i
+		list[i].InPackage = false
+	}
+
+	// Clamp jumlah pilihan ke count, prioritas skor tertinggi bila lebih.
+	idx := make([]int, 0, len(picks))
+	for id := range picks {
+		if i, ok := byID[id]; ok {
+			idx = append(idx, i)
+		}
+	}
+	if len(idx) > crit.Count {
+		sort.SliceStable(idx, func(a, b int) bool { return list[idx[a]].Score > list[idx[b]].Score })
+		idx = idx[:crit.Count]
+	}
+
+	total := 0.0
+	picked := make([]int, 0, len(idx))
+	for _, i := range idx {
+		if crit.BudgetTotal > 0 && total+list[i].ClientPrice > crit.BudgetTotal {
+			continue
+		}
+		picked = append(picked, i)
+		total += list[i].ClientPrice
+	}
+	// Budget sempit tapi masih ada ruang: isi sisa slot dengan skor tertinggi
+	// yang terjangkau supaya paket tidak setengah kosong gara-gara urutan AI.
+	if len(picked) < crit.Count {
+		sort.SliceStable(idx, func(a, b int) bool { return list[idx[a]].Score > list[idx[b]].Score })
+		for _, i := range idx {
+			if len(picked) >= crit.Count {
+				break
+			}
+			inPicked := false
+			for _, p := range picked {
+				if p == i {
+					inPicked = true
+					break
+				}
+			}
+			if inPicked {
+				continue
+			}
+			if crit.BudgetTotal > 0 && total+list[i].ClientPrice > crit.BudgetTotal {
+				continue
+			}
+			picked = append(picked, i)
+			total += list[i].ClientPrice
+		}
+	}
+	if len(picked) == 0 {
+		return nil, false
+	}
+
+	warnings := []string{}
+	if crit.BudgetTotal > 0 && total > crit.BudgetTotal { // tidak mungkin, tapi jaga
+		warnings = append(warnings, "Total pilihan AI melebihi budget total.")
+	}
+	if len(picks) > len(picked) {
+		warnings = append(warnings, "Sebagian pilihan agent dilepas agar jumlah media dan budget tetap sesuai kriteria.")
+	}
+	for _, i := range picked {
+		list[i].InPackage = true
+		if r := strings.TrimSpace(picks[list[i].ID]); r != "" {
+			list[i].Reasons = []string{r}
+		}
+	}
+	return warnings, true
+}
+
+func mmSelectMaterial(crit mmCriteria, briefSummary string, list []mmCandidate) string {
+	var b strings.Builder
+	b.WriteString("Ringkasan kebutuhan (dari agent peringkas):\n")
+	if s := strings.TrimSpace(briefSummary); s != "" {
+		b.WriteString(s)
+	} else {
+		b.WriteString("(tidak tersedia — gunakan kriteria di bawah)")
+	}
+	b.WriteString("\n\nKriteria: jumlah media=")
+	b.WriteString(itoa(crit.Count))
+	if crit.BudgetTotal > 0 {
+		b.WriteString(", budget_total=Rp")
+		b.WriteString(bsIntlIDR(crit.BudgetTotal))
+	}
+	if len(crit.Categories) > 0 {
+		b.WriteString(", kategori=")
+		b.WriteString(strings.Join(crit.Categories, "/"))
+	}
+	if len(crit.MediaTypes) > 0 {
+		b.WriteString(", jenis=")
+		b.WriteString(strings.Join(crit.MediaTypes, "/"))
+	}
+	if crit.MinWords > 0 {
+		b.WriteString(", minimal ")
+		b.WriteString(itoa(crit.MinWords))
+		b.WriteString(" kata")
+	}
+	if crit.MinBacklinks > 0 {
+		b.WriteString(", minimal ")
+		b.WriteString(itoa(crit.MinBacklinks))
+		b.WriteString(" backlink")
+	}
+	if crit.RequireHyperlink {
+		b.WriteString(", wajib hyperlink")
+	}
+	if crit.RequirePermanentLink {
+		b.WriteString(", wajib tautan permanen")
+	}
+	if len(crit.ExcludeTopics) > 0 {
+		b.WriteString(", hindari topik=")
+		b.WriteString(strings.Join(crit.ExcludeTopics, "/"))
+	}
+	if crit.Objective != "" {
+		b.WriteString(", tujuan=")
+		b.WriteString(crit.Objective)
+	}
+	b.WriteString("\n\nDaftar kandidat (format: id | nama | kategori | tier | harga klien | DA | AI Trust | traffic/bln | durasi link | hyperlink | maks link | Dewan Pers | artikel terbit | rentang kata):\n")
+	for _, c := range list {
+		b.WriteString(c.ID)
+		b.WriteString(" | ")
+		b.WriteString(c.Name)
+		b.WriteString(" | ")
+		b.WriteString(mmCategoryKey(c))
+		b.WriteString(" | ")
+		b.WriteString(derefStr(c.MediaTier))
+		b.WriteString(" | Rp")
+		b.WriteString(bsIntlIDR(c.ClientPrice))
+		b.WriteString(" | DA ")
+		b.WriteString(itoa(mmIntOr(c.DA, 0)))
+		b.WriteString(" | AI ")
+		b.WriteString(itoa(mmIntOr(c.AITrust, 0)))
+		b.WriteString(" | ")
+		b.WriteString(itoa64(c.Traffic))
+		b.WriteString(" | link ")
+		if c.LinkMonths == 0 {
+			b.WriteString("permanen")
+		} else {
+			b.WriteString(itoa(c.LinkMonths) + " bln")
+		}
+		b.WriteString(" | hyperlink ")
+		if c.AllowHyperlink {
+			b.WriteString("ya")
+		} else {
+			b.WriteString("tidak")
+		}
+		b.WriteString(" | maks link ")
+		b.WriteString(itoa(mmIntOr(c.MaxLinks, 0)))
+		b.WriteString(" | Dewan Pers ")
+		if c.DewanPers {
+			b.WriteString("ya")
+		} else {
+			b.WriteString("tidak")
+		}
+		b.WriteString(" | ")
+		b.WriteString(itoa(c.PublishedCount))
+		b.WriteString(" artikel")
+		if minW, maxW, flexible := mmWordRange(c.WordCountMode); !flexible && maxW > 0 {
+			b.WriteString(" | kata ")
+			b.WriteString(itoa(minW) + "-" + itoa(maxW))
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func itoa64(n int64) string {
+	return strconv.FormatInt(n, 10)
 }
 
 func mmBuildMaterial(brandRow brandsdomain.BrandRow, brief string, cats []string) string {
@@ -343,7 +648,7 @@ func mmExtractJSON(raw string) string {
 	return s[start : end+1]
 }
 
-func (d *Deps) logMatchmakerRun(ctx context.Context, brandID, model, input, output string, tokIn, tokOut int, dur time.Duration, runErr error) {
+func (d *Deps) logMatchmakerRun(ctx context.Context, agent, brandID, model, input, output string, tokIn, tokOut int, dur time.Duration, runErr error) {
 	if strings.TrimSpace(brandID) == "" {
 		return
 	}
@@ -362,7 +667,7 @@ func (d *Deps) logMatchmakerRun(ctx context.Context, brandID, model, input, outp
 		  (id, brand_id, profile_id, agent, status, model, token_input, token_output,
 		   duration_ms, error, input_preview, output_preview, created_at, finished_at)
 		VALUES (gen_random_uuid()::text, $1, NULL, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10, now(), now())`,
-		brandID, summary.AgentMatchmaker, status, model,
+		brandID, agent, status, model,
 		nullInt(tokIn), nullInt(tokOut), int(dur.Milliseconds()), errText,
 		truncateString(input, 2000), truncateString(output, 2000))
 }

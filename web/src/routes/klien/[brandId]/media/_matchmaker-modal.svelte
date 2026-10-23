@@ -76,11 +76,15 @@
 		criteria: Criteria;
 		candidates: Candidate[];
 		composition: { total: number; items: CompositionItem[] };
+		// agent = paket dipilih agent kedua (media_matchmaker_select),
+		// auto = paket disusun skor deterministik server.
+		selector: 'agent' | 'auto';
 		package: {
 			count: number;
 			total: number;
 			budget: number;
 			remaining: number;
+			summary: string;
 			by_category: Record<string, number>;
 			by_type: Record<string, number>;
 			unmet: string[];
@@ -155,6 +159,42 @@
 		if (criteria.budget_min > 0) return moneyShort(criteria.budget_min);
 		if (criteria.budget_max > 0) return moneyShort(criteria.budget_max);
 		return '';
+	});
+
+	// Prompt Matchmaker meminta model menuliskan NAMA FIELD ke `unknowns` untuk
+	// data yang tidak disebut brief (lihat migrasi 238). Tanpa peta ini daftar
+	// itu tampil sebagai key JSON mentah di kartu ringkasan.
+	const UNKNOWN_LABELS: Record<string, string> = {
+		objective: 'Tujuan publikasi',
+		audience: 'Target audiens',
+		categories: 'Kategori media',
+		media_types: 'Jenis media',
+		count: 'Jumlah media',
+		budget_total: 'Total anggaran',
+		budget_min: 'Anggaran minimum',
+		budget_max: 'Anggaran maksimum',
+		min_da: 'DA minimal',
+		min_ai_trust: 'AI Trust minimal',
+		min_traffic: 'Traffic minimal',
+		min_words: 'Minimal kata',
+		min_backlinks: 'Minimal backlink',
+		require_hyperlink: 'Tautan aktif',
+		require_permanent_link: 'Tautan permanen',
+		languages: 'Bahasa',
+		exclude_topics: 'Topik yang dihindari',
+		notes: 'Catatan'
+	};
+
+	// Kalimat bebas dari model diteruskan apa adanya; key dikenal diganti label.
+	const unknownLabels = $derived.by(() => {
+		const out: string[] = [];
+		for (const raw of interpretation?.unknowns ?? []) {
+			const text = raw.trim();
+			if (!text) continue;
+			const label = tr(UNKNOWN_LABELS[text.toLowerCase()] ?? text);
+			if (!out.includes(label)) out.push(label);
+		}
+		return out;
 	});
 
 	const articleRules = $derived.by(() => {
@@ -242,7 +282,9 @@
 		try {
 			const res = await apiRequest(
 				`${apiBase}/media/matchmaker`,
-				{ method: 'POST', body: JSON.stringify({ criteria }) },
+				// summary = ringkasan dari agent pertama; jadi bahan konteks
+				// agent pemilih media di server.
+				{ method: 'POST', body: JSON.stringify({ criteria, summary: interpretation?.summary ?? '' }) },
 				SEARCH_TIMEOUT_MS
 			);
 			if (!res.ok) {
@@ -473,9 +515,10 @@
 							</div>
 						</div>
 
-						{#if interpretation && interpretation.unknowns.length > 0}
+						{#if unknownLabels.length > 0}
+							<p class="mmUnknownsHead">{tr('Belum disebut di brief')}</p>
 							<ul class="mmUnknowns">
-								{#each interpretation.unknowns as u (u)}<li>{u}</li>{/each}
+								{#each unknownLabels as u (u)}<li>{u}</li>{/each}
 							</ul>
 						{/if}
 
@@ -550,6 +593,14 @@
 
 				<section class="mmCol mmColRight">
 					<h3 class="mmColTitle">{tr('Ringkasan paket')}</h3>
+					{#if result}
+						{#if result.package.summary}<p class="mmPkgSummary">{result.package.summary}</p>{/if}
+						<p class="mmSelectorNote">
+							{result.selector === 'agent'
+								? tr('Paket dipilih AI dari kandidat katalog nyata.')
+								: tr('Paket disusun skor otomatis dari kandidat katalog nyata.')}
+						</p>
+					{/if}
 					<div class="mmStats">
 						<div class="mmStat"><span>{tr('Media terpilih')}</span><strong>{selected.size}</strong></div>
 						<div class="mmStat"><span>{tr('Total harga')}</span><strong>{money(selectedTotal)}</strong></div>
@@ -1025,6 +1076,14 @@
 		border-radius: 999px;
 		display: inline-block;
 	}
+	.mmUnknownsHead {
+		margin: 0 0 4px;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		text-transform: uppercase;
+		color: #8a5a00;
+	}
 	.mmUnknowns {
 		margin: 0;
 		padding-left: 18px;
@@ -1179,6 +1238,17 @@
 		gap: 4px;
 		white-space: nowrap;
 		font-size: 13px;
+	}
+	.mmPkgSummary {
+		margin: -4px 0 0;
+		font-size: 13.5px;
+		line-height: 1.55;
+		color: #0f172a;
+	}
+	.mmSelectorNote {
+		margin: 0;
+		font-size: 12px;
+		color: var(--muted-foreground, #667085);
 	}
 	.mmStats {
 		display: grid;

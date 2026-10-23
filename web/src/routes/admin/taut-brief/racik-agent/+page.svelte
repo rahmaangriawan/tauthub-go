@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
+	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
 	import { RefreshCw } from '@lucide/svelte';
@@ -52,6 +53,7 @@
 </script>
 
 <section>
+	<ExplorerFrame parents={[{ label: tr('Taut Pintar'), href: '/admin/taut-pintar' }]} crumb={tr('Racik Agent')} path="/admin/taut-brief/racik-agent">
 	<PageHeader
 		title={tr('Racik Agent')}
 		description={tr('Menyusun instruksi topik dari anchor di Pengelola Naskah. Dipakai tombol Racik Instruksi dari Anchor.')}
@@ -133,4 +135,5 @@
 			{/if}
 		</section>
 	{/if}
+	</ExplorerFrame>
 </section>

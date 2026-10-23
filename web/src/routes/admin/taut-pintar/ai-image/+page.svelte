@@ -8,6 +8,7 @@
 	// default_model) tetap dikirim apa adanya karena wajib oleh API.
 	import { onMount } from 'svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
+	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import DataTable from '$lib/components/admin/data-table.svelte';
@@ -296,6 +297,7 @@
 {/snippet}
 
 <section>
+	<ExplorerFrame parents={[{ label: tr('Taut Pintar'), href: '/admin/taut-pintar' }]} crumb="AI Gambar" path="/admin/taut-pintar/ai-image">
 	<PageHeader
 		title="AI Gambar"
 		description="Konfigurasi provider generate gambar (cover & gambar per H2) Taut Pintar Writer, plus log hasil dan monitoring error."
@@ -593,4 +595,5 @@
 			{/if}
 		{/if}
 	</div>
+	</ExplorerFrame>
 </section>

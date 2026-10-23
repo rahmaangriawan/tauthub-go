@@ -12,7 +12,7 @@
 	import { page } from '$app/state';
 	import {
 		Bell, Binoculars, BookOpenText, Bug, ChartBar, ChevronDown, ClipboardList, Coins,
-		Gauge, Gift, House, Megaphone, MessageCircle, MessageSquare, Newspaper, Percent, Receipt, ScrollText,
+		Gauge, Gift, House, Megaphone, MessageCircle, Newspaper, PenTool, Percent, Receipt, ScrollText,
 		Settings, ShieldCheck, Sparkle, TriangleAlert, Users, Wallet, Zap
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -69,17 +69,22 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				...(isSuper
 					? [
 							{
+								// Taut Pintar tanpa submenu: semua sub-halaman (Monitoring,
+								// AI Gambar, Agent Config, Racik Agent, dua agent
+								// Matchmaker, dan folder Taut Brief) ditampilkan sebagai
+								// folder di halaman explorer /admin/taut-pintar — menu
+								// tetap menyala saat user berada di salah satu folder
+								// itu. Prompt Angle bukan agent: menu terpisah di bawahnya.
 								label: i18n.t.nav_admin.taut_pintar,
 								href: '/admin/taut-pintar',
 								icon: Sparkle,
-								active: pathname.startsWith('/admin/taut-pintar') || pathname.startsWith('/admin/taut-agents') || pathname.startsWith('/admin/prompt-angle') || pathname.startsWith('/admin/taut-brief/racik-agent'),
-								children: [
-								{ label: tr('Monitoring'), href: '/admin/taut-pintar', active: pathname === '/admin/taut-pintar' },
-								{ label: 'AI Gambar', href: '/admin/taut-pintar/ai-image', active: pathname.startsWith('/admin/taut-pintar/ai-image') },
-								{ label: 'Agent Config', href: '/admin/taut-agents', active: pathname.startsWith('/admin/taut-agents') },
-									{ label: 'Prompt Angle', href: '/admin/prompt-angle', active: pathname.startsWith('/admin/prompt-angle') },
-									{ label: tr('Racik Agent'), href: '/admin/taut-brief/racik-agent', active: pathname.startsWith('/admin/taut-brief/racik-agent') }
-								]
+								active: pathname.startsWith('/admin/taut-pintar') || pathname.startsWith('/admin/taut-agents') || pathname.startsWith('/admin/taut-brief')
+							},
+							{
+								label: 'Prompt Angle',
+								href: '/admin/prompt-angle',
+								icon: PenTool,
+								active: pathname.startsWith('/admin/prompt-angle')
 							},
 							{
 								label: i18n.t.nav_admin.ai_gateway,
@@ -87,22 +92,12 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 								icon: Zap,
 								active: pathname.startsWith('/admin/ai') && !pathname.startsWith('/admin/ai-usage'),
 								children: [{ label: 'AI Token Usage', href: '/admin/ai-usage', active: pathname.startsWith('/admin/ai-usage') }]
-							},
-							{
-								// Taut Brief berdiri sendiri, bukan anak Taut Pintar: config,
-								// prompt, skema field, dan log-nya tabel taut_brief_* sendiri.
-								// Dua agent ringkasan punya halaman sendiri di submenu ini.
-								label: tr('Taut Brief'),
-								href: '/admin/taut-brief',
-								icon: MessageSquare,
-								active: pathname.startsWith('/admin/taut-brief') && !pathname.startsWith('/admin/taut-brief/racik-agent'),
-								children: [
-									{ label: tr('Konfigurasi'), href: '/admin/taut-brief', active: pathname === '/admin/taut-brief' },
-									{ label: tr('Agent Entitas'), href: '/admin/taut-brief/agent-entitas', active: pathname.startsWith('/admin/taut-brief/agent-entitas') },
-									{ label: tr('Agent File'), href: '/admin/taut-brief/agent-file', active: pathname.startsWith('/admin/taut-brief/agent-file') },
-									{ label: tr('Agent Matchmaker'), href: '/admin/taut-brief/agent-matchmaker', active: pathname.startsWith('/admin/taut-brief/agent-matchmaker') }
-								]
 							}
+							// Menu Taut Brief dihapus dari sidebar: sekarang menjadi
+							// folder di dalam explorer Taut Pintar (isinya Konfigurasi,
+							// Agent Entitas, Agent File). Log-nya tetap tabel
+							// taut_brief_* sendiri; dua agent AI Media Matchmaker
+							// tetap folder langsung di Taut Pintar.
 						]
 					: [])
 			]

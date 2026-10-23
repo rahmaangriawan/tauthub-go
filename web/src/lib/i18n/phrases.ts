@@ -33,6 +33,15 @@ export const PHRASE_EN: Record<string, string> = {
   "Belum ada pengumuman dari tim Tauthub.": "No announcements from the Tauthub team yet.",
   "Belum ada pengumuman untuk filter ini.": "No announcements for this filter.",
   "Belum ada pengumuman yang dikirim.": "No announcements sent yet.",
+  "Belum disebut di brief": "Not stated in the brief",
+  "Anggaran maksimum": "Maximum budget",
+  "Anggaran minimum": "Minimum budget",
+  "Bahasa": "Language",
+  "DA minimal": "Minimum DA",
+  "Kategori media": "Media category",
+  "Total anggaran": "Total budget",
+  "Traffic minimal": "Minimum traffic",
+  "AI Trust minimal": "Minimum AI Trust",
   "Biaya Distribusi Media": "Media Distribution Cost",
   "Brand Ambassador": "Brand Ambassador",
   "Browser ini tidak mendukung notifikasi perangkat.": "This browser does not support device notifications.",
@@ -4813,6 +4822,29 @@ export const PHRASE_EN: Record<string, string> = {
 	  "Min": "Min",
 	  "Maks": "Max",
 	  "backlink": "backlinks",
+
+	  // AI Media Matchmaker — agent kedua (pemilih media).
+	  "Agent Pemilih Media": "Media Picker Agent",
+	  "Agent AI Pemilih Media": "AI Media Picker Agent",
+	  "Memilih media dari kandidat katalog nyata berdasarkan ringkasan kebutuhan. Server tetap menentukan kandidat, harga, dan total — agent hanya memilih dari daftar.": "Picks media from real catalog candidates based on the requirements summary. The server still decides candidates, prices, and totals — the agent only picks from the list.",
+	  "Atur transport, model, dan prompt yang dipakai agent pemilih media pada langkah \"Pilih media\" di katalog.": "Set the transport, model, and prompt used by the media picker agent in the catalog's \"Pick media\" step.",
+	  "Paket dipilih AI dari kandidat katalog nyata.": "The package was picked by AI from real catalog candidates.",
+	  "Paket disusun skor otomatis dari kandidat katalog nyata.": "The package was composed by automatic scoring from real catalog candidates.",
+
+	  // Explorer folder Taut Pintar.
+	  "Semua alat AI Taut Pintar dalam satu folder. Buka folder untuk membuka halamannya.": "All Taut Pintar AI tools in one folder. Open a folder to open its page.",
+	  "Lokasi": "Location",
+	  "folder": "folders",
+	  "Buka folder": "Open folder",
+	  "Konfigurasi per-agent LLM Taut Pintar: base URL, API key, model, dan gatekeeper.": "Per-agent LLM configuration for Taut Pintar: base URL, API key, model, and gatekeeper.",
+	  "Kelola prompt per angle artikel untuk The Writer.": "Manage per-article-angle prompts for The Writer.",
+	  "Agent penyusun instruksi topik per potongan naskah dari Anchor.": "Agent that composes per-segment topic instructions from Anchor.",
+	  "Konfigurasi provider generate gambar (cover & gambar per H2) Taut Pintar Writer, plus log hasil.": "Configure the image generation provider (cover & per-H2 images) for Taut Pintar Writer, plus result logs.",
+	  "Pipeline estafet 4 agent per kampanye + retry per-step.": "4-agent relay pipeline per campaign + per-step retries.",
+
+	  // Folder Taut Brief di dalam explorer Taut Pintar.
+	  "Konfigurasi Taut Brief dan agent ringkasannya: Konfigurasi, Agent Entitas, Agent File.": "Taut Brief configuration and its summarizing agents: Configuration, Entity Agent, File Agent.",
+	  "Semua pengaturan Taut Brief dalam satu folder. Buka folder untuk membuka halamannya.": "All Taut Brief settings in one folder. Open a folder to open its page.",
 	};
 
 /**
