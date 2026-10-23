@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
+	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
 	"github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
@@ -36,6 +37,7 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 	}
 	body := decodeJSON(r)
 	mediaType, _ := strField(body, "media_type")
+	mediaID, _ := strField(body, "media_id")
 	rawAnchors, hasAnchors := body["anchors"]
 	if !hasAnchors {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid request")
@@ -97,11 +99,7 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	material := strings.Join([]string{
-		"Bahan dari user:",
-		anchorLines.String(),
-		"Jenis media target: " + mediaLabel + ".",
-	}, "\n")
+	material := d.buildRacikMaterial(r.Context(), brandRow, chiParam(r, "campaignId"), mediaID, mediaLabel, anchorLines.String())
 
 	client := &ai.ChatClient{
 		BaseURL:     agentCfg.BaseURL,
@@ -184,6 +182,54 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sendEvent("done", map[string]any{"ok": true, "instruction": instruction})
+}
+
+// buildRacikMaterial menyusun bahan yang dikirim ke agent racik. Master prompt
+// admin meminta data kampanye (keyword, domain, angle, karakter media), bukan
+// hanya anchor — tanpa blok ini model hanya bisa menebak dari anchor.
+func (d *Deps) buildRacikMaterial(ctx context.Context, brandRow brandsdomain.BrandRow, campaignID, mediaID, mediaLabel, anchorLines string) string {
+	parts := []string{"Bahan dari user:", anchorLines, "Jenis media target: " + mediaLabel + "."}
+
+	brandLine := "Brand: " + brandRow.Name
+	if brandRow.Industry != nil && strings.TrimSpace(*brandRow.Industry) != "" {
+		brandLine += " (industri: " + strings.TrimSpace(*brandRow.Industry) + ")"
+	}
+	parts = append(parts, brandLine)
+
+	if campaign, err := d.loadTautCampaignRow(ctx, campaignID, brandRow.ID); err == nil && campaign != nil {
+		if name := campaign.strOr("name", ""); name != "" {
+			parts = append(parts, "Kampanye: "+name)
+		}
+		if domain := campaign.strOr("primary_url", ""); domain != "" {
+			parts = append(parts, "Domain/website brand: "+domain)
+		}
+		if kw := campaign.strOr("trigger_keywords", ""); kw != "" {
+			parts = append(parts, "Keyword utama: "+kw)
+		}
+		if brief, bErr := d.loadTautBriefContext(ctx, campaignID); bErr == nil && strings.TrimSpace(brief) != "" {
+			parts = append(parts, "Profil bisnis & arahan brand:\n"+truncateString(brief, 4000))
+		}
+	}
+
+	if mediaID != "" {
+		if row, err := d.queryRow(ctx, `
+			SELECT name, COALESCE(website_url, '') AS website_url, COALESCE(category, '') AS category
+			FROM media WHERE id = $1 LIMIT 1`, mediaID); err == nil && row != nil {
+			line := "Media tujuan: " + row.strOr("name", "")
+			if site := row.strOr("website_url", ""); site != "" {
+				line += " (" + site + ")"
+			}
+			if cat := row.strOr("category", ""); cat != "" {
+				line += " · kategori " + cat
+			}
+			parts = append(parts, line)
+		}
+	}
+
+	if block, _ := tautAngleBriefBlock(d.loadTautAngleContext(ctx, campaignID, mediaLabel)); block != "" {
+		parts = append(parts, block)
+	}
+	return strings.Join(parts, "\n")
 }
 
 // logRacikRun mencatat pemakaian agent racik instruksi ke taut_brief_runs
