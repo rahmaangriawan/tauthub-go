@@ -137,12 +137,26 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		sendEvent("error", map[string]any{"status": status, "message": message})
 	}
 
+	// Textarea topik itu teks polos, jadi penanda **bold** dari model cuma tampil
+	// sebagai bintang nyasar. Dibuang di sini, termasuk saat pasangan ** terbelah
+	// antar potongan stream (bintang di ujung ditahan dulu).
 	field := ai.NewJSONStringFieldStream("instruction")
+	pendingStars := ""
+	stripEmphasis := func(s string) string {
+		pendingStars += s
+		keep := len(pendingStars)
+		for keep > 0 && pendingStars[keep-1] == '*' {
+			keep--
+		}
+		out := strings.ReplaceAll(pendingStars[:keep], "*", "")
+		pendingStars = pendingStars[keep:]
+		return out
+	}
 	result, err := client.CompleteStreamMessages(r.Context(), []ai.ChatMessage{
 		{Role: "system", Content: masterPrompt},
 		{Role: "user", Content: material},
 	}, false, func(chunk string) {
-		if delta := field.Write(chunk); delta != "" {
+		if delta := stripEmphasis(field.Write(chunk)); delta != "" {
 			sendEvent("delta", map[string]any{"append": delta})
 		}
 	})
@@ -170,7 +184,7 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	instruction, _ := parsed["instruction"].(string)
-	instruction = strings.TrimSpace(instruction)
+	instruction = strings.ReplaceAll(strings.TrimSpace(instruction), "*", "")
 	if instruction == "" {
 		fail(http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi.")
 		return
