@@ -7,6 +7,7 @@
 	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, CircleDot, Info, Link2, Lightbulb, Plus , Zap, Crosshair, Plug  } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { tr } from '$lib/i18n/phrases';
+	import { getLocale } from '$lib/i18n/i18n.svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
 	import { ARTICLE_DEFAULT_COVER, sameOriginAssetUrl } from '$lib/media/cover';
 	import RichTextEditor from '$lib/components/rich-text-editor.svelte';
@@ -1188,8 +1189,15 @@
 		if (editorStats.words === 0) bagian.push(tr('artikel'));
 		if (!cover) bagian.push(tr('thumbnail'));
 		if (bagian.length === 0) return '';
-		return `${tr('Lengkapi')} ${bagian.join(' & ')} ${tr('untuk menyimpan.')}`;
+		return `${tr('Lengkapi')} ${daftarBagian(bagian)} ${tr('untuk menyimpan.')}`;
 	});
+
+	function daftarBagian(items: string[]): string {
+		if (items.length < 2) return items[0] ?? '';
+		const conj = getLocale() === 'en' ? 'and' : 'dan';
+		const head = items.slice(0, -1).join(', ');
+		return items.length === 2 ? `${head} ${conj} ${items[1]}` : `${head}, ${conj} ${items[items.length - 1]}`;
+	}
 
 	/** Simpan artikel apa adanya. Pemeriksaan QC tidak lagi dipicu dari sini. */
 	async function save() {
