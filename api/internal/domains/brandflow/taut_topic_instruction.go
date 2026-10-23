@@ -3,6 +3,7 @@ package brandflow
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -110,16 +111,48 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		MaxTokens:   agentCfg.MaxTokens,
 		Timeout:     time.Duration(agentCfg.TimeoutMS) * time.Millisecond,
 	}
-	started := time.Now()
-	result, err := client.CompleteMessages(r.Context(), []ai.ChatMessage{
+	startedAt := time.Now()
+	// Balasan model berupa {"instruction": "..."}; field stream membaca isinya
+	// per potongan supaya teks muncul di textarea selagi model menulis.
+	flusher, canFlush := w.(http.Flusher)
+	streamStarted := false
+	sendEvent := func(event string, payload any) {
+		if !canFlush {
+			return
+		}
+		if !streamStarted {
+			h := w.Header()
+			h.Set("Content-Type", "text/event-stream")
+			h.Set("Cache-Control", "no-cache")
+			h.Set("X-Accel-Buffering", "no")
+			w.WriteHeader(http.StatusOK)
+			streamStarted = true
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, jsonStringify(payload))
+		flusher.Flush()
+	}
+	fail := func(status int, message string) {
+		if !streamStarted {
+			httpx.Error(w, status, message)
+			return
+		}
+		sendEvent("error", map[string]any{"status": status, "message": message})
+	}
+
+	field := ai.NewJSONStringFieldStream("instruction")
+	result, err := client.CompleteStreamMessages(r.Context(), []ai.ChatMessage{
 		{Role: "system", Content: masterPrompt},
 		{Role: "user", Content: material},
-	}, false)
+	}, false, func(chunk string) {
+		if delta := field.Write(chunk); delta != "" {
+			sendEvent("delta", map[string]any{"append": delta})
+		}
+	})
 	if err != nil {
 		slog.Warn("[taut] racik instruksi gagal", "err", err)
 		d.logRacikRun(r.Context(), brandRow.ID, agentCfg.Model, material, "", 0, 0,
-			int(time.Since(started).Milliseconds()), err)
-		httpx.Error(w, http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi.")
+			int(time.Since(startedAt).Milliseconds()), err)
+		fail(http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi.")
 		return
 	}
 
@@ -130,23 +163,27 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 	start := strings.Index(text, "{")
 	end := strings.LastIndex(text, "}")
 	if start < 0 || end <= start {
-		httpx.Error(w, http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi.")
+		fail(http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi.")
 		return
 	}
 	var parsed map[string]any
 	if json.Unmarshal([]byte(text[start:end+1]), &parsed) != nil {
-		httpx.Error(w, http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi.")
+		fail(http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi.")
 		return
 	}
 	instruction, _ := parsed["instruction"].(string)
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" {
-		httpx.Error(w, http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi.")
+		fail(http.StatusBadGateway, "AI tidak mengembalikan hasil valid. Coba lagi.")
 		return
 	}
 	d.logRacikRun(r.Context(), brandRow.ID, agentCfg.Model, material, instruction,
-		result.InputTokens, result.OutputTokens, int(time.Since(started).Milliseconds()), nil)
-	writeNoStore(w, http.StatusOK, map[string]any{"ok": true, "instruction": instruction})
+		result.InputTokens, result.OutputTokens, int(time.Since(startedAt).Milliseconds()), nil)
+	if !canFlush {
+		writeNoStore(w, http.StatusOK, map[string]any{"ok": true, "instruction": instruction})
+		return
+	}
+	sendEvent("done", map[string]any{"ok": true, "instruction": instruction})
 }
 
 // logRacikRun mencatat pemakaian agent racik instruksi ke taut_brief_runs

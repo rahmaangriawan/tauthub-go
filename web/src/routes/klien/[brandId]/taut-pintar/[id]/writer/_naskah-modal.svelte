@@ -5,10 +5,10 @@
 	// Reuse: rich-text-editor (toolbar + contentEditable), endpoint /files dan
 	// /produce/{mediaId} lewat callback dari writer, serta saveEditor di writer.
 	import { X, Upload, FileText, Sparkles, LoaderCircle, Image as ImageIcon, Trash2, CircleAlert, CircleCheck, CircleDot, Info, Link2, Lightbulb, Plus , Zap, Crosshair, Plug  } from '@lucide/svelte';
-	import { untrack } from 'svelte';
+	import { untrack, tick } from 'svelte';
 	import { tr } from '$lib/i18n/phrases';
 	import { getLocale } from '$lib/i18n/i18n.svelte';
-	import { apiRequest, readApiError } from '$lib/auth';
+	import { apiRequest, readApiError, getAccessToken } from '$lib/auth';
 	import { ARTICLE_DEFAULT_COVER, sameOriginAssetUrl } from '$lib/media/cover';
 	import RichTextEditor from '$lib/components/rich-text-editor.svelte';
 	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
@@ -137,6 +137,7 @@
 	// Racik instruksi topik dari anchor (AI): ganti Tips/Contoh manual.
 	let racikBusy = $state(false);
 	let racikError = $state('');
+	let topicEl = $state<HTMLTextAreaElement | null>(null);
 	// Isian Proper: fakta terkunci + daftar kutipan resmi (bisa lebih dari satu).
 	let faktaTerkunci = $state('');
 	let properQuotes = $state<ProperQuote[]>([{ dateline: '', narasumber: '', kutipan: '' }]);
@@ -854,24 +855,87 @@
 		const rows = linkRows.filter((r) => (r.anchor ?? '').trim());
 		if (rows.length === 0) return;
 		racikBusy = true;
+		racikError = '';
+		const token = getAccessToken();
+		const controller = new AbortController();
+		const abortTimer = window.setTimeout(() => controller.abort(), 180_000);
 		try {
-			const res = await apiRequest(`${apiBase}/produce/topic-instruction`, {
+			// fetch langsung, bukan apiRequest: toast "berhasil disimpan" akan muncul
+			// saat header tiba, padahal teksnya masih mengalir.
+			const res = await fetch(`${apiBase}/produce/topic-instruction`, {
 				method: 'POST',
+				headers: {
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+					'Content-Type': 'application/json'
+				},
+				credentials: 'include',
+				signal: controller.signal,
 				body: JSON.stringify({
 					media_id: mediaId,
 					media_type: mediaType,
 					anchors: rows.map((r) => ({ anchor: r.anchor, url: r.url }))
 				})
-			}, 180_000);
+			});
 			if (!res.ok) {
 				racikError = await readApiError(res, tr('Gagal meracik instruksi. Coba lagi.'));
 				return;
 			}
-			const data = await res.json().catch(() => null);
-			if (data?.instruction) topic = String(data.instruction);
+			// Server lama membalas JSON utuh; server baru mengalirkan SSE per potongan.
+			if (!res.headers.get('content-type')?.includes('text/event-stream') || !res.body) {
+				const data = await res.json().catch(() => null);
+				if (data?.instruction) topic = String(data.instruction);
+				return;
+			}
+			const reader = res.body.getReader();
+			const dec = new TextDecoder();
+			let buf = '';
+			let streamed = '';
+			let finished = false;
+			while (!finished) {
+				const { value, done } = await reader.read();
+				if (done) break;
+				buf += dec.decode(value, { stream: true });
+				let idx;
+				while ((idx = buf.indexOf('\n\n')) >= 0) {
+					const block = buf.slice(0, idx);
+					buf = buf.slice(idx + 2);
+					let ev = 'message';
+					let data = '';
+					for (const line of block.split('\n')) {
+						if (line.startsWith('event:')) ev = line.slice(6).trim();
+						else if (line.startsWith('data:')) data += line.slice(5).trim();
+					}
+					if (!data) continue;
+					let payload: { append?: string; instruction?: string; message?: string } | null = null;
+					try {
+						payload = JSON.parse(data);
+					} catch {
+						continue;
+					}
+					if (ev === 'delta' && typeof payload?.append === 'string') {
+						streamed += payload.append;
+						topic = streamed;
+						void tick().then(() => {
+							if (topicEl) topicEl.scrollTop = topicEl.scrollHeight;
+						});
+					} else if (ev === 'done') {
+						if (typeof payload?.instruction === 'string') topic = payload.instruction;
+						finished = true;
+					} else if (ev === 'error') {
+						throw new Error(String(payload?.message ?? tr('Gagal meracik instruksi. Coba lagi.')));
+					}
+				}
+			}
+			if (!finished) throw new Error(tr('Koneksi streaming terputus.'));
 		} catch (reason) {
-			racikError = reason instanceof Error ? reason.message : tr('Gagal meracik instruksi. Coba lagi.');
+			racikError =
+				reason instanceof DOMException && reason.name === 'AbortError'
+					? tr('Waktu racik habis. Coba lagi.')
+					: reason instanceof Error
+						? reason.message
+						: tr('Gagal meracik instruksi. Coba lagi.');
 		} finally {
+			window.clearTimeout(abortTimer);
 			racikBusy = false;
 		}
 	}
@@ -1822,6 +1886,7 @@
 										class="app-input min-h-[120px] w-full resize-y pr-10"
 										placeholder={tr('Contoh: Buatkan artikel pengumuman peluncuran software akuntansi baru dari PT Maju Bersama. Tekankan pada fitur rekonsiliasi otomatis dan targetkan pembaca UMKM…')}
 										bind:value={topic}
+										bind:this={topicEl}
 										maxlength={2000}
 									></textarea>
 									<Sparkles size={16} class="absolute bottom-3 right-3 text-muted-foreground" />

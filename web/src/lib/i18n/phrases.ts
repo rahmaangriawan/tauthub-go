@@ -689,6 +689,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Urungkan": "Undo",
   "untuk menyimpan.": "to save.",
   "wajib memiliki gambar cover": "must have a cover image",
+  "Waktu racik habis. Coba lagi.": "Racik timed out. Try again.",
   "Waktu Rilis": "Release Time",
   "Website tidak bisa dibaca. Coba URL halaman utama, atau pakai wizard lengkap.": "The website could not be read. Try the homepage URL, or use the full wizard.",
   "Ya, pakai logo Tauthub": "Yes, use the Tauthub logo",
