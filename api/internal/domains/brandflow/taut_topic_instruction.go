@@ -251,10 +251,40 @@ func (d *Deps) buildRacikMaterial(ctx context.Context, brandRow brandsdomain.Bra
 			angle = picked
 		}
 	}
-	if block, _ := tautAngleBriefBlock(angle); block != "" {
+	if block := racikAngleBlock(angle); block != "" {
 		parts = append(parts, block)
 	}
 	return strings.Join(parts, "\n")
+}
+
+// racikAngleBlock: blok angle untuk agent racik. Berbeda dari
+// tautAngleBriefBlock (dipakai Writer/Gatekeeper) yang memangkas prompt jadi
+// 1500 karakter: prompt angle di Prompt Studio adalah master prompt utuh yang
+// menjelaskan cara menulis sudut itu, dan potongannya habis di bagian pembuka
+// generik sebelum aturan khas angle-nya terbaca. Di sini prompt dibawa utuh
+// (batas 16.000 sama dengan loadTautChosenAnglePrompt) supaya instruksi yang
+// diracik benar-benar mengikuti angle pilihan user.
+func racikAngleBlock(a *tautAngleContext) string {
+	if a == nil {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("[ANGLE PILIHAN KLIEN — " + a.Channel + "/" + a.Name + "]")
+	if a.Slug != "" {
+		b.WriteString("\nSlug angle: " + a.Slug)
+	}
+	if a.Description != "" {
+		b.WriteString("\nDeskripsi angle: " + a.Description)
+	}
+	if strings.TrimSpace(a.SourceNotes) != "" {
+		b.WriteString("\nSumber informasi angle (bahan fakta dari admin — pakai yang relevan, jangan menambah fakta di luar ini):\n" +
+			truncateString(a.SourceNotes, 4000))
+	}
+	if a.Prompt != "" {
+		b.WriteString("\nMaster prompt angle (arahan menulis untuk sudut ini — WAJIB diikuti saat menyusun instruksi; format keluaran tetap JSON seperti aturan di atas):\n" +
+			truncateString(a.Prompt, 16000))
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // logRacikRun mencatat pemakaian agent racik instruksi ke taut_brief_runs
