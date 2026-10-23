@@ -29,6 +29,7 @@
 	import { apiRequest, ensureValidSession, readApiError, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import MediaDetailModal from './_detail-modal.svelte';
+	import MatchmakerModal from './_matchmaker-modal.svelte';
 	import Select from '$lib/components/select.svelte';
 	import SlideOver from '$lib/components/slide-over.svelte';
 	import { Tooltip } from 'bits-ui';
@@ -159,6 +160,11 @@
 	let bookmarkToolbarBtn = $state<HTMLButtonElement | null>(null);
 	let bookmarkPulse = $state(false);
 	let detail = $state<Media | null>(null);
+	// AI Media Matchmaker: brief bebas → kriteria → pilihan media katalog.
+	let matchmakerOpen = $state(false);
+	// Detail yang dibuka dari dalam Matchmaker: tombol "Tambahkan" harus
+	// mencentang media, bukan membuka modal kampanye di belakang modal AI.
+	let detailFromMatchmaker = $state(false);
 	// Media terarsip (soft delete oleh mitra) tetap tampil sebagai "maintenance"
 	// di katalog klien, tapi tidak bisa dipilih untuk distribusi.
 	const archivedIds = $derived(new Set(rows.filter((m) => m.status === 'archived').map((m) => m.id)));
@@ -1082,6 +1088,40 @@
 		importText = '';
 	}
 
+	// Matchmaker hanya MENGISI pilihan katalog (sama seperti Impor List);
+	// kampanye tetap dibuat lewat tombol yang sudah ada.
+	function applyMatchmaker(items: Array<{ id: string; name: string; price: number; credits: number }>) {
+		const snap: typeof selectedSnapshot = {};
+		for (const it of items) snap[it.id] = { name: it.name, price: it.price, credits: it.credits };
+		selectedIds = new Set(items.map((it) => it.id));
+		selectedSnapshot = { ...selectedSnapshot, ...snap };
+		matchmakerOpen = false;
+	}
+
+	function openMatchmakerDetail(id: string) {
+		const hit = rows.find((m) => m.id === id);
+		if (hit) {
+			detailFromMatchmaker = true;
+			detail = hit;
+		}
+	}
+
+	// Detail dibuka dari Matchmaker: "Tambahkan" cukup mencentang media itu di
+	// katalog lalu menutup kedua modal — modal kampanye tidak boleh terbuka di
+	// belakang Matchmaker yang masih tampil.
+	function pickFromMatchmakerDetail(m: Media) {
+		const snap = selectedSnapshot[m.id] ?? {
+			name: domainLabel(m),
+			price: m.client_price ?? m.price ?? 0,
+			credits: m.credit_cost ?? 0
+		};
+		selectedIds = new Set([...selectedIds, m.id]);
+		selectedSnapshot = { ...selectedSnapshot, [m.id]: snap };
+		detail = null;
+		detailFromMatchmaker = false;
+		matchmakerOpen = false;
+	}
+
 	function proceedFromDetail(m: Media) {
 		const snap = selectedSnapshot[m.id] ?? {
 			name: domainLabel(m),
@@ -1091,6 +1131,7 @@
 		selectedIds = new Set([...selectedIds, m.id]);
 		selectedSnapshot = { ...selectedSnapshot, [m.id]: snap };
 		detail = null;
+		detailFromMatchmaker = false;
 		// Mode tambah: cukup pilih medianya; penyimpanan lewat tombol
 		// "Tambahkan ke Kampanye" di bar bawah, bukan modal kampanye baru.
 		if (addToCampaignId) return;
@@ -1187,6 +1228,10 @@
 			<!-- Desktop: alat katalog di samping KANAN search box (kategori,
 			     Filter, Impor List, Bookmark) — corong + panel kanan hanya mobile. -->
 			<div class="modernActionsGroup catalogToolsInline">
+				<!-- AI Matchmaker: di kiri pemilih kategori. -->
+				<button class="modernActionBtn matchmakerBtn" type="button" onclick={() => (matchmakerOpen = true)}>
+					<Sparkles size={15} /><span>{tr('AI Matchmaker')}</span>
+				</button>
 				<!-- Kategori desktop: satu tombol, diklik membuka dropdown-nya. -->
 				<div class="modernSelectWrap toolsInlineCats">
 					<Select
@@ -1243,6 +1288,10 @@
 			{@render catRadios()}
 
 			<div class="advFilterInline">{@render advFields()}</div>
+
+			<button class="modernActionBtn matchmakerBtn" type="button" onclick={() => { toolsOpen = false; matchmakerOpen = true; }}>
+				<Sparkles size={15} /><span>{tr('AI Matchmaker')}</span>
+			</button>
 
 			<button class="modernActionBtn" type="button" onclick={() => { toolsOpen = false; importOpen = true; }}>
 				<Upload size={15} /><span>{tr('Impor List')}</span>
@@ -2078,13 +2127,27 @@
 		</div>
 	{/if}
 
+	<!-- Modal AI Media Matchmaker -->
+	{#if matchmakerOpen}
+		<MatchmakerModal
+			apiBase={apiBase}
+			categories={categories.map(([name]) => name)}
+			detailIds={new Set(rows.map((m) => m.id))}
+			hasSelection={selectedIds.size > 0}
+			escapeDisabled={detail !== null}
+			onClose={() => (matchmakerOpen = false)}
+			onShowDetail={openMatchmakerDetail}
+			onApply={applyMatchmaker}
+		/>
+	{/if}
+
 	<!-- Modal Detail Media -->
 	{#if detail}
 		{@const d = detail}
 		<MediaDetailModal
 			media={d}
-			onclose={() => (detail = null)}
-			onProceed={() => proceedFromDetail(d)}
+			onclose={() => { detail = null; detailFromMatchmaker = false; }}
+			onProceed={() => (detailFromMatchmaker ? pickFromMatchmakerDetail(d) : proceedFromDetail(d))}
 		/>
 	{/if}
 

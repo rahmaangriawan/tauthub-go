@@ -376,6 +376,7 @@ func run() error {
 			authed.Delete("/brands/{brandId}/cms-connections/{connectionId}", brandFlowDeps.CmsConnectionDelete)
 			authed.Patch("/brands/{brandId}/documents/{documentId}", brandFlowDeps.ContentDocumentPatch)
 			authed.Get("/brands/{brandId}/media/recommendations", brandFlowDeps.MediaRecommendations)
+			authed.Post("/brands/{brandId}/media/matchmaker", brandFlowDeps.MediaMatchmaker)
 			authed.Put("/brands/{brandId}/notification-webhooks/{webhookId}", brandFlowDeps.NotificationWebhookUpdate)
 			authed.Delete("/brands/{brandId}/notification-webhooks/{webhookId}", brandFlowDeps.NotificationWebhookDelete)
 			authed.Get("/brands/{brandId}/publication-plans/{planId}", brandFlowDeps.PublicationPlanGet)

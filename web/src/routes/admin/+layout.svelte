@@ -99,7 +99,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 								children: [
 									{ label: tr('Konfigurasi'), href: '/admin/taut-brief', active: pathname === '/admin/taut-brief' },
 									{ label: tr('Agent Entitas'), href: '/admin/taut-brief/agent-entitas', active: pathname.startsWith('/admin/taut-brief/agent-entitas') },
-									{ label: tr('Agent File'), href: '/admin/taut-brief/agent-file', active: pathname.startsWith('/admin/taut-brief/agent-file') }
+									{ label: tr('Agent File'), href: '/admin/taut-brief/agent-file', active: pathname.startsWith('/admin/taut-brief/agent-file') },
+									{ label: tr('Agent Matchmaker'), href: '/admin/taut-brief/agent-matchmaker', active: pathname.startsWith('/admin/taut-brief/agent-matchmaker') }
 								]
 							}
 						]
