@@ -14,6 +14,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
+	"github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 	"github.com/rahmaangriawan/tauthub-go/internal/email"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
 )
@@ -149,6 +150,14 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	// 10. Retensi data: pangkas log/cache/event yang melebihi ambang supaya
 	//     database tidak membengkak. Maksimal sekali sehari (klaim harian).
 	res.RetentionDeleted, res.RetentionArchived = d.schRetention(ctx)
+
+	// 11. Ringkasan brief: lepaskan baris yang macet 'queued'/'running' tanpa
+	//     job hidup (proses pemiliknya mati saat deploy) supaya UI klien tidak
+	//     berputar selamanya. Ringkasan kini manual-only — sapuan ini hanya
+	//     membersihkan sisa, bukan memicu pembuatan.
+	if n := summary.UnstickStale(ctx, d.Pool); n > 0 {
+		slog.Info("[scheduler] ringkasan brief macet dilepas", "jumlah", n)
+	}
 
 	return res
 }

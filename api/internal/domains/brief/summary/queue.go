@@ -29,6 +29,32 @@ func QueueForce(ctx context.Context, pool *pgxpool.Pool, profileID, brandID stri
 	return enqueue(ctx, pool, profileID, brandID, kind, true)
 }
 
+// UnstickStale: baris ringkasan tertinggal 'queued'/'running' padahal tidak
+// ada job yang hidup lagi — terjadi bila worker/proses mati di tengah
+// pemrosesan (mis. restart saat deploy) sehingga status tak pernah
+// tertutup dan UI klien berputar selamanya. Kembalikan ke status diam
+// (ready bila isinya sudah ada, idle bila belum); tombol manual selalu bisa
+// memicu ulang. Guard 5 menit mencegah balapan dengan enqueue yang baru.
+func UnstickStale(ctx context.Context, pool *pgxpool.Pool) int64 {
+	tag, err := pool.Exec(ctx, `
+		UPDATE profiler_brief_summaries s
+		SET status = CASE WHEN COALESCE(s.content, '') <> '' THEN 'ready' ELSE 'idle' END
+		WHERE s.status IN ('queued', 'running')
+		  AND s.updated_at < now() - interval '5 minutes'
+		  AND NOT EXISTS (
+			SELECT 1 FROM jobs j
+			WHERE j.kind = $1
+			  AND j.status IN ('pending', 'running')
+			  AND j.payload->>'profileId' = s.profile_id
+			  AND j.payload->>'kind' = s.kind
+		  )`, JobKind)
+	if err != nil {
+		slog.Warn("[brief-summary] gagal melepas status macet", "err", err)
+		return 0
+	}
+	return tag.RowsAffected()
+}
+
 func enqueue(ctx context.Context, pool *pgxpool.Pool, profileID, brandID string, kind Kind, force bool) error {
 	if profileID == "" {
 		return nil
