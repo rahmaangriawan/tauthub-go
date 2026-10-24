@@ -17,7 +17,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
-		ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Copy, ExternalLink, FileText, Images, Link2, LoaderCircle,
+		ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Copy, ExternalLink, FileText, Images, LoaderCircle,
 		MoreHorizontal, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, ShieldAlert, Sparkle, Square, SquarePen, Trash2, Upload, UserCircle, X
 	} from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -119,6 +119,7 @@
 	let profileName = $state('');
 	let messages = $state<ChatRow[]>([]);
 	let composer = $state('');
+	let composerExpanded = $state(false);
 	let streaming = $state(false);
 	let streamingText = $state('');
 	let streamError = $state('');
@@ -140,9 +141,6 @@
 
 	// Layanan pendukung percakapan
 	let uploading = $state(false);
-	let urlOpen = $state(false);
-	let urlValue = $state('');
-	let pasteOpen = $state(false);
 
 	// Lencana "Beta" di pojok kanan atas judul percakapan — keterangannya
 	// dibuka saat diklik, ditutup lewat backdrop atau Escape.
@@ -161,6 +159,7 @@
 
 	// Popover tindakan Copilot (pill kanan).
 	let actionsOpen = $state(false);
+	let attachOpen = $state(false);
 
 	// Lampiran dokumen: dipasang dulu sebagai chip, baru diunggah saat Kirim.
 	type PendingDoc = { file: File };
@@ -182,6 +181,7 @@
 		size_bytes: number | null;
 		parse_status: string;
 		parse_error: string | null;
+		file_deleted_at: string | null;
 		created_at: string | null;
 		url: string;
 	};
@@ -612,6 +612,7 @@
 		if ((!text && pendingDocs.length === 0) || streaming || uploadingNow) return;
 		streamError = '';
 		composer = '';
+		composerExpanded = false;
 		const composerEl = document.getElementById('brief-composer') as HTMLTextAreaElement | null;
 		if (composerEl) composerEl.style.height = '';
 
@@ -761,24 +762,6 @@
 
 	// ---------- layanan pendukung: URL & dokumen ----------
 
-	async function addWebsiteUrl() {
-		const url = urlValue.trim();
-		if (!url) return;
-		urlOpen = false;
-		urlValue = '';
-		working(true);
-		try {
-			const res = await apiRequest(`${apiBase}/profiles/${profileId}/urls`, {
-				method: 'POST',
-				body: JSON.stringify({ url })
-			}, 60_000);
-			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menambahkan URL.')));
-			await send(`Ini website resmi brand-ku: ${url}. Baca dulu ya, lalu tunjukkan apa yang kamu tangkap.`);
-		} catch (e) {
-			error = e instanceof Error ? e.message : tr('Gagal menambahkan URL.');
-			working(false);
-		}
-	}
 
 	const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
@@ -791,10 +774,13 @@
 	}
 
 	// Unggah satu berkas; jenisnya dikembalikan untuk menyusun pesan.
-	async function uploadBriefFile(file: File): Promise<{ name: string; kind: 'doc' | 'image' }> {
+	// source 'chat' (composer Copilot) memakan kuota percakapan (maks 5 berkas
+	// / 25 MB per brief); 'library' (tab Media) hanya kena kuota harian user.
+	async function uploadBriefFile(file: File, source: 'chat' | 'library' = 'chat'): Promise<{ name: string; kind: 'doc' | 'image' }> {
 		const image = isImageFile(file);
 		const form = new FormData();
 		form.append('file', file);
+		form.append('source', source);
 		const res = await apiRequest(`${apiBase}/profiles/${profileId}/${image ? 'images' : 'documents'}`, {
 			method: 'POST',
 			body: form
@@ -838,7 +824,7 @@
 		if (accepted.length === 0) return;
 		mediaUploading = true;
 		try {
-			for (const file of accepted) await uploadBriefFile(file);
+			for (const file of accepted) await uploadBriefFile(file, 'library');
 			await loadMedia();
 		} catch (e) {
 			mediaError = e instanceof Error ? e.message : tr('Gagal mengunggah media.');
@@ -1014,9 +1000,24 @@
 		void uploadMediaFiles(e.dataTransfer?.files);
 	}
 
+	// Textarea tumbuh ke atas sampai 50vh; composer berubah pill ⇄ kartu besar
+	// berdasarkan baris visual (teks yang membungkus ikut dihitung).
+	// Ukur dua kali: lebar pill berbeda dari lebar kartu besar, jadi tinggi
+	// disetel ulang setelah mode berganti agar tidak tersisa ruang kosong.
 	function autoGrow(el: HTMLTextAreaElement) {
-		el.style.height = 'auto';
-		el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+		function measure() {
+			el.style.height = 'auto';
+			el.style.overflowY = 'hidden';
+			const max = Math.round(window.innerHeight * 0.5);
+			const next = Math.min(el.scrollHeight, max);
+			el.style.height = `${Math.max(36, next)}px`;
+			if (el.scrollHeight > max) el.style.overflowY = 'auto';
+			return el.scrollHeight;
+		}
+		const line = parseFloat(getComputedStyle(el).lineHeight) || 20;
+		const measured = measure();
+		composerExpanded = measured > line * 1.5 || composer.includes('\n');
+		if (composerExpanded) void requestAnimationFrame(() => measure());
 	}
 
 	function fmtSize(bytes: number): string {
@@ -1026,21 +1027,70 @@
 	}
 
 	// Pasang file sebagai lampiran (chip). Yang dobel nama+ukuran diabaikan,
-	// yang melebihi 10 MB ditolak dengan menyebut namanya.
-	function stageFiles(list: FileList | File[] | null | undefined) {
+	// yang melebihi 10 MB ditolak dengan menyebut namanya. `kind` membatasi
+	// jalur: 'image' (popover Gambar) hanya menerima gambar, 'doc' (popover
+	// Dokumen) hanya pdf/docx/txt/md/csv — picker bisa dipaksa "All Files",
+	// validasi ini yang menjamin pemisahannya.
+	//
+	// Guard kuota percakapan (backend tetap penentu akhir): maks 5 berkas dan
+	// 25 MB per brief untuk lampiran chat.
+	const CHAT_MAX_FILES = 5;
+	const CHAT_MAX_BYTES = 25 * 1024 * 1024;
+	const DOC_EXTS = new Set(['pdf', 'docx', 'txt', 'md', 'csv']);
+	function isDocFile(f: File): boolean {
+		if (f.type === 'application/pdf') return true;
+		const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
+		return DOC_EXTS.has(ext);
+	}
+
+	function stageFiles(list: FileList | File[] | null | undefined, kind?: 'image' | 'doc') {
 		if (!list) return;
 		const rejected: string[] = [];
+		const wrongKind: string[] = [];
+		const acceptedFiles: File[] = [];
 		for (const file of Array.from(list)) {
 			if (file.size > MAX_UPLOAD_BYTES) {
 				rejected.push(`${file.name} (${fmtSize(file.size)})`);
 				continue;
 			}
+			if (kind === 'image' && !isImageFile(file)) {
+				wrongKind.push(file.name);
+				continue;
+			}
+			if (kind === 'doc' && !isDocFile(file)) {
+				wrongKind.push(file.name);
+				continue;
+			}
+			acceptedFiles.push(file);
+		}
+		// Sisa slot & sisa porsi ukuran percakapan.
+		const slot = Math.max(0, CHAT_MAX_FILES - pendingDocs.length);
+		let stagedBytes = pendingDocs.reduce((n, d) => n + d.file.size, 0);
+		const overflow: string[] = [];
+		const staged: File[] = [];
+		for (const file of acceptedFiles) {
 			const dup = pendingDocs.some((d) => d.file.name === file.name && d.file.size === file.size);
-			if (!dup) pendingDocs = [...pendingDocs, { file }];
+			if (dup) continue;
+			if (staged.length >= slot || stagedBytes + file.size > CHAT_MAX_BYTES) {
+				overflow.push(file.name);
+				continue;
+			}
+			staged.push(file);
+			stagedBytes += file.size;
 		}
-		if (rejected.length > 0) {
-			streamError = `${tr('Melebihi 10 MB, tidak dilampirkan')}: ${rejected.join(', ')}`;
+		if (staged.length > 0) pendingDocs = [...pendingDocs, ...staged.map((file) => ({ file }))];
+		const problems: string[] = [];
+		if (rejected.length > 0) problems.push(`${tr('Melebihi 10 MB, tidak dilampirkan')}: ${rejected.join(', ')}`);
+		if (wrongKind.length > 0) {
+			const label = kind === 'image' ? tr('Bukan gambar, tidak dilampirkan') : tr('Bukan dokumen (pdf, docx, txt, md), tidak dilampirkan');
+			problems.push(`${label}: ${wrongKind.join(', ')}`);
 		}
+		if (overflow.length > 0) {
+			problems.push(
+				`${tr(`Maksimal ${CHAT_MAX_FILES} berkas / 25 MB lampiran per brief, tidak dilampirkan`)}: ${overflow.join(', ')}`
+			);
+		}
+		if (problems.length > 0) streamError = problems.join(' · ');
 	}
 
 	function hasFileDrag(e: DragEvent): boolean {
@@ -1399,7 +1449,7 @@
 				<div class="min-w-0">
 					<div class="flex min-w-0 items-center gap-2.5">
 						<h1 class="truncate text-2xl font-semibold tracking-tight">Brand Brief &amp; Entity Builder</h1>
-						<span class="flex-shrink-0 rounded border px-2 py-0.5 text-[10px] font-bold" style="background: var(--accent); border-color: color-mix(in srgb, var(--primary) 25%, transparent); color: var(--accent-foreground);">GEO v2.4</span>
+						<span class="flex-shrink-0 rounded border px-2 py-0.5 text-[10px] font-bold" style="background: var(--accent); border-color: color-mix(in srgb, var(--primary) 25%, transparent); color: var(--accent-foreground);">Beta</span>
 					</div>
 					{#if !headerCollapsed}
 						<p class="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -1814,34 +1864,113 @@
 				{/if}
 
 				<div class="mx-auto max-w-2xl">
-					{#if urlOpen}
-						<div class="mb-1.5 flex items-center gap-1.5">
-							<input class="app-input flex-1 !min-h-8 !py-1 text-sm" placeholder="https://brand-ku.com" bind:value={urlValue}
-								onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addWebsiteUrl(); } }} />
-							<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-sm" type="button" disabled={workingState || !urlValue.trim()} onclick={() => void addWebsiteUrl()}>
-								{tr('Baca')}
-							</button>
-							<button class="app-btn app-btn-soft !min-h-8 !px-2" type="button" aria-label={tr('Batal')} onclick={() => { urlOpen = false; urlValue = ''; }}>
-								<X size={14} />
-							</button>
-						</div>
-					{/if}
 
-					{#if pasteOpen}
-						<div class="mb-1.5">
-							<textarea class="app-input w-full !py-1 text-sm" rows="3" placeholder={tr('Tempel teks tentang brand-mu di sini…')} bind:value={composer}></textarea>
-							<div class="mt-1 flex justify-end gap-1.5">
-								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => (pasteOpen = false)}>{tr('Tutup')}</button>
+					<div class="brief-composer" class:brief-composer-lg={composerExpanded}>
+						<div class="brief-composer-row">
+							<div class="brief-attach">
+								<button
+									class="brief-composer-icon"
+									type="button"
+									aria-label={tr('Lampirkan berkas')}
+									aria-expanded={attachOpen}
+									onclick={() => (attachOpen = !attachOpen)}
+								>
+									<Plus size={18} />
+								</button>
+
+								{#if attachOpen}
+									<button class="brief-pop-backdrop" type="button" aria-label={tr('Tutup')} onclick={() => (attachOpen = false)}></button>
+									<div
+										class="brief-attach-pop"
+										role="menu"
+										tabindex="-1"
+										onkeydown={(e) => {
+											if (e.key === 'Escape') attachOpen = false;
+										}}
+									>
+										<button
+											class="brief-attach-item"
+											type="button"
+											role="menuitem"
+											onclick={() => { attachOpen = false; document.getElementById('brief-image-input')?.click(); }}
+										>
+											<span class="brief-attach-icon" aria-hidden="true">
+												<svg width="21" height="21" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+													<path d="M25.6 0H6.4C2.86538 0 0 2.86538 0 6.4V25.6C0 29.1346 2.86538 32 6.4 32H25.6C29.1346 32 32 29.1346 32 25.6V6.4C32 2.86538 29.1346 0 25.6 0Z" fill="url(#brief-attach-img-grad)" />
+													<path d="M5.9577 24.8845C5.42578 25.9483 6.19937 27.2 7.38878 27.2H18.2111C19.4005 27.2 20.1741 25.9483 19.6422 24.8845L14.231 14.0622C13.6414 12.8829 11.9585 12.8829 11.3688 14.0622L5.9577 24.8845Z" fill="white" />
+													<path d="M15.5577 24.8845C15.0258 25.9483 15.7994 27.2 16.9888 27.2H24.6111C25.8005 27.2 26.5741 25.9483 26.0422 24.8845L22.231 17.2622C21.6414 16.0829 19.9585 16.0829 19.3688 17.2622L15.5577 24.8845Z" fill="white" fill-opacity="0.6" />
+													<path d="M24.0002 11.2C25.7675 11.2 27.2002 9.76726 27.2002 7.99995C27.2002 6.23264 25.7675 4.79995 24.0002 4.79995C22.2329 4.79995 20.8002 6.23264 20.8002 7.99995C20.8002 9.76726 22.2329 11.2 24.0002 11.2Z" fill="white" />
+													<defs>
+														<linearGradient id="brief-attach-img-grad" x1="16" y1="0" x2="16" y2="32" gradientUnits="userSpaceOnUse">
+															<stop stop-color="#00E676" />
+															<stop offset="1" stop-color="#00C853" />
+														</linearGradient>
+													</defs>
+												</svg>
+											</span>
+											{tr('Gambar')}
+										</button>
+										<button
+											class="brief-attach-item"
+											type="button"
+											role="menuitem"
+											onclick={() => { attachOpen = false; document.getElementById('brief-doc-input')?.click(); }}
+										>
+											<span class="brief-attach-icon" aria-hidden="true">
+												<svg width="21" height="21" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+													<polygon fill="#FFB74D" points="406.941,98.68 406.941,473.339 39.241,473.339 39.241,0 308.793,0 406.794,98.534" />
+													<polygon fill="#FFA91E" points="406.941,98.68 406.941,473.339 223.091,473.339 223.091,0 308.793,0 406.794,98.534" />
+													<g fill="#FFFFFF">
+														<rect x="98.858" y="257.526" width="137.927" height="31.347" />
+														<rect x="97.865" y="130.675" width="137.927" height="31.347" />
+														<rect x="97.865" y="194.414" width="250.775" height="31.347" />
+													</g>
+													<polygon fill="#FF8900" points="406.794,98.532 308.794,98.532 308.794,0" />
+													<path fill="#67BFFF" d="M472.759,406.601C472.759,464.812,425.571,512,367.36,512c-0.251,0-0.502,0-0.752-0.01c-28.473-0.188-54.251-11.682-73.101-30.208c-16.927-16.635-28.264-38.933-30.929-63.843c-0.397-3.72-0.616-7.502-0.616-11.337c0-31.587,13.908-59.925,35.913-79.245c0.24-0.209,0.481-0.418,0.721-0.616c8.579-7.398,18.369-13.427,29.017-17.774c12.048-4.901,25.203-7.659,38.996-7.743c0.251-0.01,0.502-0.01,0.752-0.01C425.571,301.213,472.759,348.39,472.759,406.601z" />
+													<path fill="#0088FF" d="M472.759,406.601C472.759,464.812,425.571,512,367.36,512c-0.251,0-0.502,0-0.752-0.01V301.223c0.251-0.01,0.502-0.01,0.752-0.01C425.571,301.213,472.759,348.39,472.759,406.601z" />
+													<polygon fill="#FFFFFF" points="422.823,391.952 422.823,423.299 383.033,423.299 383.033,465.157 351.687,465.157 351.687,423.299 311.897,423.299 311.897,391.952 351.687,391.952 351.687,350.103 383.033,350.103 383.033,391.952" />
+													<g fill="#D9D8DB">
+														<polygon points="422.823,391.952 422.823,423.299 383.033,423.299 383.033,465.157 366.608,465.157 366.608,350.103 383.033,350.103 383.033,391.952" />
+														<rect x="223.086" y="130.675" width="12.696" height="31.347" />
+														<rect x="223.086" y="257.526" width="13.688" height="31.347" />
+														<rect x="223.086" y="194.414" width="125.544" height="31.347" />
+													</g>
+												</svg>
+											</span>
+											{tr('Dokumen')}
+										</button>
+									</div>
+								{/if}
+
+								<input
+									id="brief-image-input"
+									class="hidden"
+									type="file"
+									multiple
+									accept="image/png,image/jpeg,image/webp,image/gif"
+									onchange={(e) => {
+										stageFiles((e.currentTarget as HTMLInputElement).files, 'image');
+										(e.currentTarget as HTMLInputElement).value = '';
+									}}
+								/>
+								<input
+									id="brief-doc-input"
+									class="hidden"
+									type="file"
+									multiple
+									accept=".pdf,.docx,.txt,.md,.csv,application/pdf"
+									onchange={(e) => {
+										stageFiles((e.currentTarget as HTMLInputElement).files, 'doc');
+										(e.currentTarget as HTMLInputElement).value = '';
+									}}
+								/>
 							</div>
-						</div>
-					{/if}
 
-					<div class="brief-composer">
-						{#if uploadingNow}
-							<p class="flex items-center gap-1.5 pb-1 text-[11px] text-muted-foreground">
-								<LoaderCircle size={12} class="animate-spin" />{tr('Mengunggah dokumen…')}
-							</p>
-						{/if}
+							{#if uploadingNow}
+								<p class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+									<LoaderCircle size={12} class="animate-spin" />{tr('Mengunggah dokumen…')}
+								</p>
+							{/if}
 
 						{#if pendingDocs.length > 0}
 							<div class="brief-composer-files">
@@ -1859,67 +1988,70 @@
 										</button>
 									</span>
 								{/each}
+								<span class="self-center text-[10.5px] font-semibold text-muted-foreground">{pendingDocs.length}/{CHAT_MAX_FILES}</span>
 							</div>
 						{/if}
 
-						<textarea
-							id="brief-composer"
-							class="brief-composer-input"
-							rows="1"
-							placeholder={tr('Tulis balasan…')}
-							bind:value={composer}
-							disabled={streaming}
-							oninput={(e) => autoGrow(e.currentTarget as HTMLTextAreaElement)}
-							onpaste={(e: ClipboardEvent) => {
-								const files = e.clipboardData?.files;
-								if (files && files.length > 0) {
-									e.preventDefault();
-									stageFiles(files);
-								}
-							}}
-							onkeydown={(e) => {
-								if (e.key === 'Enter' && !(e as KeyboardEvent).shiftKey) {
-									e.preventDefault();
-									void send();
-								}
-							}}
-						></textarea>
+							<textarea
+								id="brief-composer"
+								class="brief-composer-input"
+								class:brief-composer-input-docked={composerExpanded}
+								rows="1"
+								placeholder={tr('Tulis balasan…')}
+								bind:value={composer}
+								disabled={streaming}
+								oninput={(e) => autoGrow(e.currentTarget as HTMLTextAreaElement)}
+								onpaste={(e: ClipboardEvent) => {
+									const files = e.clipboardData?.files;
+									if (files && files.length > 0) {
+										e.preventDefault();
+										stageFiles(files);
+									}
+								}}
+								onkeydown={(e) => {
+									if (e.key === 'Enter' && !(e as KeyboardEvent).shiftKey) {
+										e.preventDefault();
+										void send();
+									}
+								}}
+							></textarea>
 
-						<div class="brief-composer-bar">
-							<label class="brief-composer-icon cursor-pointer" aria-label={tr('Lampirkan berkas')}>
-								<Plus size={19} />
-								<input
-									id="brief-doc-input"
-									class="hidden"
-									type="file"
-									multiple
-									accept=".pdf,.docx,.txt,.md,.csv,application/pdf,image/png,image/jpeg,image/webp,image/gif"
-									onchange={(e) => {
-										stageFiles((e.currentTarget as HTMLInputElement).files);
-										(e.currentTarget as HTMLInputElement).value = '';
-									}}
-								/>
-							</label>
-							<button
-								class="brief-composer-icon"
-								class:active={urlOpen}
-								type="button"
-								aria-label={tr('Tempel URL website')}
-								onclick={() => (urlOpen = !urlOpen)}
-							>
-								<Link2 size={17} />
-							</button>
-							<span class="flex-1"></span>
-							<button
-								class="brief-composer-send"
-								type="button"
-								aria-label={streaming ? tr('Hentikan generasi') : tr('Kirim')}
-								disabled={streaming || uploadingNow ? true : !composer.trim() && pendingDocs.length === 0}
-								onclick={() => (streaming ? controller?.abort() : void send())}
-							>
-								{#if streaming}<Square size={13} /><span>{tr('Hentikan')}</span>{:else}<ArrowUp size={16} /><span>{tr('Kirim')}</span>{/if}
-							</button>
+							{#if !composerExpanded}
+								<button
+									class="brief-composer-send"
+									class:brief-composer-stop={streaming}
+									type="button"
+									aria-label={streaming ? tr('Hentikan generasi') : tr('Kirim')}
+									disabled={streaming || uploadingNow ? false : !composer.trim() && pendingDocs.length === 0}
+									onclick={() => (streaming ? controller?.abort() : void send())}
+								>
+									{#if streaming}<Square size={13} />{:else}<ArrowUp size={16} />{/if}
+								</button>
+							{/if}
 						</div>
+
+						{#if composerExpanded}
+							<div class="brief-composer-footer">
+								<div class="brief-composer-actions">
+									{#if streaming}
+										<span class="brief-composer-thinking">
+											<LoaderCircle size={12} class="animate-spin" />
+											{tr('Berpikir')}
+										</span>
+									{/if}
+								</div>
+								<button
+									class="brief-composer-send"
+									class:brief-composer-stop={streaming}
+									type="button"
+									aria-label={streaming ? tr('Hentikan generasi') : tr('Kirim')}
+									disabled={streaming || uploadingNow ? false : !composer.trim() && pendingDocs.length === 0}
+									onclick={() => (streaming ? controller?.abort() : void send())}
+								>
+									{#if streaming}<Square size={13} />{:else}<ArrowUp size={16} />{/if}
+								</button>
+							</div>
+						{/if}
 					</div>
 
 					<p class="mt-1 text-center text-[11px] text-muted-foreground">
@@ -1931,8 +2063,8 @@
 					</p>
 				</div>
 			</div>
-			</div>
-			{:else if activeTab === 'entitas'}
+		</div>
+						{:else if activeTab === 'entitas'}
 
 				<!-- ── Panel tab Ringkasan Entitas (desain GEO) ─────────────── -->
 			<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
@@ -2236,16 +2368,21 @@
 													<span>{doc.size_bytes ? fmtSize(doc.size_bytes) : '—'}</span>
 													<span>·</span>
 													<span>{mediaDate(doc.created_at)}</span>
-													{#if doc.parse_status === 'ready'}
-														<span class="rounded px-1.5 py-0.5 font-bold" style="background: var(--success-soft); color: var(--success);">{tr('Terbaca AI')}</span>
-													{:else if doc.parse_status === 'failed'}
-														<span class="rounded px-1.5 py-0.5 font-bold" style="background: var(--warning-soft); color: var(--warning);" title={doc.parse_error ?? ''}>{tr('Gagal dibaca')}</span>
-													{/if}
-												</p>
-											</div>
+												{#if doc.parse_status === 'ready'}
+													<span class="rounded px-1.5 py-0.5 font-bold" style="background: var(--success-soft); color: var(--success);">{tr('Terbaca AI')}</span>
+												{:else if doc.parse_status === 'failed'}
+													<span class="rounded px-1.5 py-0.5 font-bold" style="background: var(--warning-soft); color: var(--warning);" title={doc.parse_error ?? ''}>{tr('Gagal dibaca')}</span>
+												{/if}
+												{#if doc.file_deleted_at}
+													<span class="rounded px-1.5 py-0.5 font-bold" style="background: var(--secondary); color: var(--muted-foreground);" title={tr('Berkas fisik dibersihkan otomatis; isinya tetap diingat AI.')}>{tr('Berkas dibersihkan')}</span>
+												{/if}
+											</p>
+										</div>
+										{#if doc.url}
 											<a class="brief-icon-btn" href={doc.url} target="_blank" rel="noreferrer" aria-label={tr('Buka dokumen')} title={tr('Buka dokumen')}>
 												<ExternalLink size={15} />
 											</a>
+										{/if}
 											<button class="brief-icon-btn" type="button" aria-label={tr('Hapus dokumen')} title={tr('Hapus dokumen')} onclick={() => removeMediaDoc(doc)}>
 												<Trash2 size={15} />
 											</button>
@@ -2814,25 +2951,86 @@
 	.brief-markdown :global(del) { opacity: 0.65; }
 	.brief-markdown :global(li) { margin: 0.15rem 0; }
 
-	/* Kartu composer ala referensi: lampiran di atas, kolom teks di tengah,
-	   tombol lampirkan di kiri bawah, tombol kirim bulat di kanan bawah. */
+	/* Composer adaptif: pill 44px saat satu baris, kartu besar saat teks membungkus. */
 	.brief-composer {
-		padding: 10px 12px 8px;
-		border: 1px solid var(--input);
-		border-radius: 16px;
-		background: var(--card);
-		box-shadow: var(--shadow-sm);
-		transition: border-color 0.15s ease, box-shadow 0.15s ease;
+		display: flex;
+		flex-direction: column;
+		padding: 4px 6px 4px 6px;
+		border: 1px solid var(--border, #e2e8f0);
+		border-radius: 999px;
+		background: #ffffff;
+		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+		transition: border-radius 0.18s ease, padding 0.18s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+	}
+	.brief-composer.brief-composer-lg {
+		padding: 6px 8px 6px;
+		border-radius: 22px;
 	}
 	.brief-composer:focus-within {
-		border-color: var(--primary);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
+		border-color: var(--primary, #2b67ec);
+		box-shadow: 0 0 0 3px rgba(43, 103, 236, 0.1);
+	}
+	/* Pill: satu baris, semua kontrol terpusat secara vertikal. */
+	.brief-composer-row {
+		display: flex;
+		align-items: center;
+		gap: 4px;
 	}
 	.brief-composer-files {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 6px;
-		padding-bottom: 8px;
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.brief-composer-input {
+		box-sizing: border-box;
+		display: block;
+		flex: 1 1 auto;
+		width: 100%;
+		min-width: 0;
+		height: 36px;
+		min-height: 36px;
+		max-height: 50vh;
+		margin: 0;
+		padding: 8px 4px;
+		border: none;
+		outline: none;
+		background: transparent;
+		color: var(--foreground, #0f172a);
+		font: inherit;
+		font-size: 14.5px;
+		line-height: 20px;
+		resize: none;
+		overflow-y: hidden;
+		transition: height 0.18s ease;
+	}
+	/* Mode besar: teks selebar kartu di atas, toolbar di barisnya sendiri. */
+	.brief-composer-lg .brief-composer-row {
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: 0;
+	}
+	.brief-composer-lg .brief-composer-files {
+		flex: 0 0 100%;
+		padding: 2px 2px 6px;
+	}
+	.brief-composer-input-docked {
+		order: -1;
+		flex: 0 0 100%;
+		padding: 6px 4px 2px;
+	}
+	.brief-composer-input::placeholder { color: var(--muted-foreground, #94a3b8); }
+	.brief-composer-footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+	}
+	.brief-composer-actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 	}
 	.brief-file-chip {
 		display: inline-flex;
@@ -2841,62 +3039,139 @@
 		max-width: 100%;
 		padding: 4px 6px 4px 8px;
 		border-radius: 10px;
-		border: 1px solid var(--border);
-		background: var(--secondary);
+		border: 1px solid var(--border, #e2e8f0);
+		background: var(--secondary, #f8fafc);
 		font-size: 12px;
 	}
-	.brief-composer-input {
-		display: block;
-		width: 100%;
-		min-height: 26px;
-		max-height: 160px;
-		padding: 2px 2px 8px;
-		border: none;
-		outline: none;
-		background: transparent;
-		color: var(--foreground);
-		font-size: 15px;
-		line-height: 1.6;
-		resize: none;
-	}
-	.brief-composer-input::placeholder { color: var(--muted-foreground); }
-	.brief-composer-bar {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
 	.brief-composer-icon {
-		display: flex;
+		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 32px;
-		height: 32px;
-		border-radius: var(--radius-button);
-		color: var(--muted-foreground);
+		flex: 0 0 auto;
+		width: 36px;
+		height: 36px;
+		padding: 0;
+		border-radius: 999px;
+		color: var(--muted-foreground, #64748b);
+		background: transparent;
+		border: none;
 		transition: background-color 0.12s ease, color 0.12s ease;
 	}
-	.brief-composer-icon:hover { background: var(--secondary); color: var(--foreground); }
-	.brief-composer-icon.active { background: var(--accent); color: var(--accent-foreground); }
-	/* Tombol kirim berlabel, sejajar gaya tombol aksi utama di desain referensi. */
+	/* Popover lampiran: mengapung ke atas dari tombol tambah. */
+	.brief-attach {
+		position: relative;
+		flex: 0 0 auto;
+	}
+	.brief-attach-pop {
+		position: absolute;
+		left: -6px;
+		bottom: calc(100% + 12px);
+		z-index: 50;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 176px;
+		padding: 6px;
+		border: 1px solid var(--border, #e2e8f0);
+		border-radius: 14px;
+		background: var(--card, #ffffff);
+		box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
+		animation: brief-attach-in 0.14s ease;
+	}
+	.brief-attach-pop::after {
+		content: '';
+		position: absolute;
+		left: 20px;
+		bottom: -5px;
+		width: 10px;
+		height: 10px;
+		border-right: 1px solid var(--border, #e2e8f0);
+		border-bottom: 1px solid var(--border, #e2e8f0);
+		background: var(--card, #ffffff);
+		transform: rotate(45deg);
+	}
+	.brief-attach-item {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 7px 8px;
+		border: none;
+		border-radius: 9px;
+		background: transparent;
+		color: var(--foreground, #0f172a);
+		font-size: 13.5px;
+		font-weight: 550;
+		text-align: left;
+		transition: background-color 0.12s ease;
+	}
+	.brief-attach-item:hover {
+		background: var(--secondary, #f1f5f9);
+	}
+	.brief-attach-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 auto;
+		width: 26px;
+		height: 26px;
+	}
+	@keyframes brief-attach-in {
+		from { opacity: 0; transform: translateY(4px) scale(0.98); }
+		to { opacity: 1; transform: translateY(0) scale(1); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.brief-attach-pop { animation: none; }
+	}
+	.brief-composer-icon:hover {
+		background: var(--secondary, #f1f5f9);
+		color: var(--foreground, #0f172a);
+	}
+	.brief-composer-icon[aria-expanded='true'] {
+		background: var(--secondary, #f1f5f9);
+		color: var(--foreground, #0f172a);
+	}
+	.brief-composer-thinking {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 10px;
+		border-radius: 999px;
+		background: #eff6ff;
+		color: var(--primary, #2b67ec);
+		font-size: 11.5px;
+		font-weight: 650;
+	}
+	/* Tombol kirim: lingkaran biru Tauthub, seukuran kontrol lain. */
 	.brief-composer-send {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		gap: 7px;
-		min-height: 34px;
-		padding: 0 14px;
-		border-radius: var(--radius-button);
-		background: var(--primary);
-		color: var(--primary-foreground);
-		font-size: 12.5px;
-		font-weight: 700;
-		box-shadow: 0 1px 2px color-mix(in srgb, var(--primary) 32%, transparent);
-		transition: opacity 0.12s ease, background-color 0.12s ease;
+		flex: 0 0 auto;
+		width: 36px;
+		height: 36px;
+		padding: 0;
+		border-radius: 999px;
+		background: var(--primary, #2b67ec);
+		color: #ffffff;
+		border: none;
+		box-shadow: 0 1px 2px rgba(43, 103, 236, 0.25);
+		cursor: pointer;
+		transition: opacity 0.12s ease, background-color 0.12s ease, transform 0.08s ease;
 	}
-	.brief-composer-send:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 88%, black); }
+	.brief-composer-send:hover:not(:disabled) {
+		background: #2053c7;
+	}
+	.brief-composer-send:active:not(:disabled) {
+		transform: scale(0.96);
+	}
+	.brief-composer-send.brief-composer-stop {
+		background: #dc2626;
+		box-shadow: 0 1px 2px rgba(220, 38, 38, 0.25);
+	}
 	.brief-composer-send:disabled {
-		background: var(--secondary);
-		color: var(--muted-foreground);
+		background: #e2e8f0;
+		color: #94a3b8;
 		box-shadow: none;
 		cursor: not-allowed;
 	}
