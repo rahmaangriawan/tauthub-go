@@ -1150,13 +1150,13 @@ func mmCandidateWarnings(c mmCandidate, crit mmCriteria) []string {
 	}
 	if crit.MinWords > 0 {
 		if minWords, maxWords, flexible := mmWordRange(c.WordCountMode); !flexible && maxWords > 0 && maxWords < crit.MinWords {
-			out = append(out, "Batas kata media ini "+itoa(maxWords)+" — di bawah syarat "+itoa(crit.MinWords)+" kata.")
+			out = append(out, "Panjang artikel di media ini maksimal "+itoa(maxWords)+" kata — kurang dari syarat brief minimal "+itoa(crit.MinWords)+" kata.")
 		} else if !flexible && minWords > 0 && minWords < crit.MinWords {
-			out = append(out, "Rentang kata media "+itoa(minWords)+"–"+itoa(maxWords)+", syarat brief "+itoa(crit.MinWords)+" kata.")
+			out = append(out, "Panjang artikel di media ini "+itoa(minWords)+"-"+itoa(maxWords)+" kata — kurang dari syarat brief minimal "+itoa(crit.MinWords)+" kata.")
 		}
 	}
 	if crit.MinBacklinks > 0 && mmIntOr(c.MaxLinks, 0) < crit.MinBacklinks {
-		out = append(out, "Maksimal "+itoa(mmIntOr(c.MaxLinks, 0))+" tautan per artikel, syarat brief "+itoa(crit.MinBacklinks)+".")
+		out = append(out, "Media ini hanya mengizinkan maksimal "+itoa(mmIntOr(c.MaxLinks, 0))+" tautan per artikel — kurang dari syarat brief minimal "+itoa(crit.MinBacklinks)+" backlink. Sisanya harus ditaruh di artikel lain.")
 	}
 	if len(crit.ExcludeTopics) > 0 {
 		for _, t := range c.TopikTerlarang {

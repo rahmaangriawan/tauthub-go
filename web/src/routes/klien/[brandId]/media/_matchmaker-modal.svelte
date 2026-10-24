@@ -321,13 +321,26 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		}, 0);
 	}
 
-	// Avatar huruf dengan warna stabil per domain — memudahkan pemindaian
-	// daftar kandidat tanpa menambah aset logo.
+	// Avatar huruf dengan warna stabil per domain — fallback bila favicon
+	// gagal dimuat atau media tidak punya website_url.
 	const AVATAR_COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#0f766e', '#475569'];
 	function avatarColor(seed: string) {
 		let h = 7;
 		for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) % 9973;
 		return AVATAR_COLORS[h % AVATAR_COLORS.length];
+	}
+
+	// Favicon asli dari web media via layanan favicon Google; kalau gagal
+	// dimuat (domain mati/tanpa favicon), fallback ke avatar huruf.
+	let faviconFailed = $state<Set<string>>(new Set());
+	function faviconSrc(url: string | null) {
+		if (!url) return '';
+		try {
+			const host = new URL(url.includes('://') ? url : `https://${url}`).hostname;
+			return `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+		} catch {
+			return '';
+		}
 	}
 
 	function addDetail() {
@@ -543,12 +556,6 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 							</div>
 						</div>
 
-						<!-- Pengganti daftar "Belum disebut di brief": satu kalimat
-						     penenang, bukan daftar tugas. -->
-						<p class="mmAutoNote">
-							{tr('Sisanya — harga aktual, ketersediaan, aturan editorial, dan metrik tiap media — dicek otomatis dari data katalog saat pencarian. Kamu tidak perlu menulisnya di brief.')}
-						</p>
-
 						<div class="mmInfoBox">
 							<Info size={16} />
 							<span>{tr('Anggaran dan syarat artikel bisa kamu koreksi sebelum pencarian media dimulai.')}</span>
@@ -604,7 +611,17 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 											onchange={() => toggle(c.id)}
 											aria-label={cardName}
 										/>
-										<span class="mmAvatar" style={`background:${avatarColor(cardName)}`}>{cardName.charAt(0).toUpperCase()}</span>
+										{#if !faviconFailed.has(c.id) && faviconSrc(c.website_url)}
+											<img
+												class="mmAvatar mmAvatarImg"
+												src={faviconSrc(c.website_url)}
+												alt=""
+												loading="lazy"
+												onerror={() => (faviconFailed = new Set(faviconFailed).add(c.id))}
+											/>
+										{:else}
+											<span class="mmAvatar" style={`background:${avatarColor(cardName)}`}>{cardName.charAt(0).toUpperCase()}</span>
+										{/if}
 										<div class="mmCard2Info">
 											<div class="mmCard2Top">
 												<strong class="mmCard2Name">{cardName}</strong>
@@ -887,6 +904,22 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		flex-direction: column;
 		gap: 12px;
 		min-height: 0;
+		/* Scrollbar custom — tipis, bulat, abu lembut (bukan default browser). */
+		scrollbar-width: thin;
+		scrollbar-color: #cbd5e1 transparent;
+	}
+	.mmCol::-webkit-scrollbar {
+		width: 6px;
+	}
+	.mmCol::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.mmCol::-webkit-scrollbar-thumb {
+		background: #cbd5e1;
+		border-radius: 999px;
+	}
+	.mmCol:hover::-webkit-scrollbar-thumb {
+		background: #94a3b8;
 	}
 	.mmColRight {
 		border-left: 1px solid var(--border, #dfe5ef);
@@ -1170,12 +1203,6 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		font-size: 12.5px;
 		color: #94a3b8;
 	}
-	.mmAutoNote {
-		margin: 0;
-		font-size: 12px;
-		line-height: 1.55;
-		color: #94a3b8;
-	}
 	.mmBar {
 		display: flex;
 		height: 9px;
@@ -1402,6 +1429,11 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		align-items: center;
 		justify-content: center;
 		margin-top: 1px;
+	}
+	.mmAvatarImg {
+		object-fit: cover;
+		background: #fff;
+		border: 1px solid var(--border, #dfe5ef);
 	}
 	.mmCard2Info {
 		flex: 1;
