@@ -82,7 +82,7 @@ jobs:
             -e "ssh $SSH_OPTS" \
             --exclude='.git/' --exclude='node_modules/' --exclude='.svelte-kit/' \
             --exclude='.data/' --exclude='.env' --exclude='.env.*' \
-            --exclude='web/build/' --exclude='api/api' --exclude='.DS_Store' \
+            --exclude='web/build/' --exclude='api/api' --exclude='api/bin/*.bak*' --exclude='.DS_Store' \
             --exclude='tmp_*' --exclude='*.log' \
             --exclude='web/public/uploads/' --exclude='api/public/uploads/' \
             --exclude='apps/' --exclude='packages/' --exclude='.next/' \
