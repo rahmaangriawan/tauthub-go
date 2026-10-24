@@ -4831,6 +4831,8 @@ export const PHRASE_EN: Record<string, string> = {
 	  "Baru": "New",
 	  "Berdasarkan brief dan kriteria yang kamu tentukan, berikut media yang paling sesuai.": "Based on your brief and the criteria you set, these are the most suitable media.",
 	  "Pilih otomatis": "Auto-pick",
+	  "Contoh": "Example",
+	  "Isi textarea dengan contoh brief lengkap": "Fill the textarea with a complete example brief",
 	  "Media yang cocok": "Matching media",
 	  "kandidat": "candidates",
 	  "Belum ada media yang cocok dengan kriteria ini.": "No media matches these criteria yet.",

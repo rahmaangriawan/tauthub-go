@@ -9,7 +9,7 @@
 	// Modal ini tidak membuat kampanye/pesanan; "Terapkan" hanya mencentang
 	// media di katalog.
 	import {
-		ArrowRight, BarChart3, Check, CircleAlert, CircleDollarSign, Clock, FileText, Info, Layers,
+		ArrowRight, BarChart3, Check, CircleAlert, CircleDollarSign, ClipboardList, Clock, FileText, Info, Layers,
 		LoaderCircle, Pencil, Plus, ShieldCheck, Sparkles, Target, Wallet, Wand2, X, Paperclip, TriangleAlert
 	} from '@lucide/svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
@@ -333,6 +333,27 @@
 		selected = new Set(result.candidates.filter((c) => c.in_package).map((c) => c.id));
 	}
 
+	// Contoh brief yang menutup SEMUA field kriteria (tujuan, audiens, jumlah,
+	// kategori yang ada di katalog, anggaran total + per media, DA, AI Trust,
+	// trafik, syarat artikel, hyperlink/permanen, bahasa, exclude topics)
+	// supaya daftar "Belum disebut di brief" kosong saat diringkas.
+	const EXAMPLE_BRIEF = `Kami brand skincare pria Ravencare ingin meningkatkan brand awareness dan SEO lewat artikel rekomendasi dan perbandingan produk, menyasar pria usia 20-35 tahun yang tertarik perawatan wajah. Susunkan 10 media dalam bahasa Indonesia dari kategori Bisnis, Lifestyle, dan Media Nasional.
+
+Anggaran total kampanye Rp7.500.000. Harga per media yang kami inginkan Rp250.000 - Rp750.000. Pilih media dengan DA minimal 25, AI Trust minimal 70, dan estimasi trafik minimal 10.000 kunjungan per bulan.
+
+Setiap artikel minimal 1.000 kata dan wajib mendapat 2 backlink dofollow permanen. Hindari klaim medis yang tidak terbukti, klaim memutihkan secara instan, dan judul yang menjanjikan hasil berlebihan.
+
+Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturizer, dan Sunscreen SPF 50 PA++++, dibandingkan dengan produk sejenis dari Kahf dan Nivea Men.`;
+
+	function fillExample() {
+		brief = EXAMPLE_BRIEF;
+		// Fokus + kursor di akhir supaya user bisa langsung menyesuaikan.
+		setTimeout(() => {
+			briefEl?.focus();
+			briefEl?.setSelectionRange(brief.length, brief.length);
+		}, 0);
+	}
+
 	// Avatar huruf dengan warna stabil per domain — memudahkan pemindaian
 	// daftar kandidat tanpa menambah aset logo.
 	const AVATAR_COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#0f766e', '#475569'];
@@ -397,7 +418,12 @@
 			<div class="mmBody">
 				<!-- Kiri: brief -->
 				<section class="mmCol">
-					<h3 class="mmColTitle">{tr('Ceritakan kebutuhan kampanye')}</h3>
+					<div class="mmColHead">
+						<h3 class="mmColTitle">{tr('Ceritakan kebutuhan kampanye')}</h3>
+						<button class="mmExampleBtn" type="button" onclick={fillExample} title={tr('Isi textarea dengan contoh brief lengkap')}>
+							<ClipboardList size={14} />{tr('Contoh')}
+						</button>
+					</div>
 					<p class="mmColSub">{tr('Tulis seperti biasa. AI akan merangkum brief kamu sebelum memilih media.')}</p>
 
 					<div class="mmTextWrap">
@@ -905,6 +931,31 @@
 		font-size: 19px;
 		font-weight: 700;
 		letter-spacing: -0.01em;
+	}
+	.mmColHead {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+	.mmExampleBtn {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border: 1px solid #c7dbff;
+		background: #eff6ff;
+		color: var(--primary, #2b67ec);
+		font-size: 12px;
+		font-weight: 650;
+		padding: 6px 11px;
+		border-radius: 8px;
+		cursor: pointer;
+		transition: background 0.15s ease, border-color 0.15s ease;
+	}
+	.mmExampleBtn:hover {
+		background: #dbeafe;
+		border-color: #a5c8fc;
 	}
 	.mmColSub {
 		margin: -6px 0 2px;
