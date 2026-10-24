@@ -18,6 +18,12 @@
 			href: '/admin/taut-brief/agent-matchmaker/pemilih-media',
 			description: tr('Memilih media dari kandidat katalog nyata berdasarkan ringkasan kebutuhan. Server tetap menentukan kandidat, harga, dan total — agent hanya memilih dari daftar.'),
 			tag: 'media-picker.config'
+		},
+		{
+			label: tr('Log'),
+			href: '/admin/taut-brief/agent-matchmaker/log',
+			description: tr('Pemakaian token, durasi, dan error dua agent AI Media Matchmaker (ringkasan brief & pemilih media).'),
+			tag: 'matchmaker.log'
 		}
 	];
 

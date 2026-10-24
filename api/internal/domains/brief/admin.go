@@ -728,8 +728,21 @@ func (d *Deps) TautBriefLogs(w http.ResponseWriter, r *http.Request) {
 		conds = append(conds, fmt.Sprintf("r.status = $%d", len(params)))
 	}
 	if agent != "" {
-		params = append(params, agent)
-		conds = append(conds, fmt.Sprintf("r.agent = $%d", len(params)))
+		// Dukung beberapa agent sekaligus via koma (mis. halaman Log folder
+		// Agent Matchmaker memakai media_matchmaker,media_matchmaker_select).
+		agents := []string{}
+		for _, a := range strings.Split(agent, ",") {
+			if a = strings.TrimSpace(a); a != "" {
+				agents = append(agents, a)
+			}
+		}
+		if len(agents) == 1 {
+			params = append(params, agents[0])
+			conds = append(conds, fmt.Sprintf("r.agent = $%d", len(params)))
+		} else if len(agents) > 1 {
+			params = append(params, agents)
+			conds = append(conds, fmt.Sprintf("r.agent = ANY($%d)", len(params)))
+		}
 	}
 	where := ""
 	if len(conds) > 0 {

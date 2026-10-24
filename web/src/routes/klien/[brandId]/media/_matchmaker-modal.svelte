@@ -9,8 +9,8 @@
 	// Modal ini tidak membuat kampanye/pesanan; "Terapkan" hanya mencentang
 	// media di katalog.
 	import {
-		ArrowRight, Check, CircleAlert, FileText, Info, Layers, LoaderCircle, Pencil, Plus,
-		ShieldCheck, Sparkles, Target, Wallet, X, Paperclip, TriangleAlert
+		ArrowRight, BarChart3, Check, CircleAlert, CircleDollarSign, Clock, FileText, Info, Layers,
+		LoaderCircle, Pencil, Plus, ShieldCheck, Sparkles, Target, Wallet, Wand2, X, Paperclip, TriangleAlert
 	} from '@lucide/svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
@@ -177,9 +177,11 @@
 		categories: 'Kategori media',
 		media_types: 'Jenis media',
 		count: 'Jumlah media',
-		budget_total: 'Total anggaran',
-		budget_min: 'Anggaran minimum',
-		budget_max: 'Anggaran maksimum',
+		budget_total: 'Anggaran total kampanye',
+		// Diberi awalan "harga per media" supaya tidak terbaca kontradiktif
+		// dengan anggaran total yang mungkin sudah disebut di brief.
+		budget_min: 'Harga per media minimum',
+		budget_max: 'Harga per media maksimum',
 		min_da: 'DA minimal',
 		min_ai_trust: 'AI Trust minimal',
 		min_traffic: 'Traffic minimal',
@@ -221,6 +223,13 @@
 			return 'ok';
 		}
 		return 'idle';
+	});
+
+	// Tier dengan porsi terbesar — ditampilkan di kanan kepala komposisi.
+	const compositionTop = $derived.by(() => {
+		const items = result?.composition.items ?? [];
+		if (items.length === 0) return null;
+		return items.reduce((a, b) => (b.percent > a.percent ? b : a));
 	});
 
 	const tierColor = (key: string) => (key === 'tier1' ? '#2b67ec' : key === 'tier2' ? '#9db9ff' : key === 'tier3' ? '#f3b45f' : '#cbd5e1');
@@ -315,6 +324,22 @@
 		// Ringkasan tidak lagi diringkas otomatis, jadi koreksi user tidak bisa
 		// tertimpa; lastAnalyzed hanya penanda "brief ini yang terakhir diringkas".
 		editing = !editing;
+	}
+
+	// "Pilih otomatis": kembalikan seleksi ke paket rekomendasi (agent pemilih
+	// atau skor server) — membatalkan centang/hilang centang manual.
+	function pilihOtomatis() {
+		if (!result) return;
+		selected = new Set(result.candidates.filter((c) => c.in_package).map((c) => c.id));
+	}
+
+	// Avatar huruf dengan warna stabil per domain — memudahkan pemindaian
+	// daftar kandidat tanpa menambah aset logo.
+	const AVATAR_COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#0f766e', '#475569'];
+	function avatarColor(seed: string) {
+		let h = 7;
+		for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) % 9973;
+		return AVATAR_COLORS[h % AVATAR_COLORS.length];
 	}
 
 	function addDetail() {
@@ -493,31 +518,10 @@
 								{/if}
 							</div>
 
-							<!-- Komposisi media -->
-							<div class="mmCardBlock">
-								<div class="mmCardHead">
-									<span class="mmCardIcon"><FileText size={18} /></span>
-									<span class="mmCardLabel">{tr('Komposisi media')}</span>
-									<span class="mmCardHint">{result?.composition.total ?? 0} {tr('media cocok')}</span>
-								</div>
-								{#if result && result.composition.items.length > 0}
-									<div class="mmBar" role="img" aria-label={tr('Komposisi media')}>
-										{#each result.composition.items as item (item.key)}
-											<span class="mmBarSeg" style={`width:${item.percent}%;background:${tierColor(item.key)}`}></span>
-										{/each}
-									</div>
-									<div class="mmLegend">
-										{#each result.composition.items as item (item.key)}
-											<span class="mmLegendItem">
-												<span class="mmDot" style={`background:${tierColor(item.key)}`}></span>
-												{item.label} {item.percent}%
-											</span>
-										{/each}
-									</div>
-								{:else}
-									<p class="mmMuted">{tr('Belum ada media yang cocok dengan kriteria ini.')}</p>
-								{/if}
-							</div>
+							<!-- Komposisi media sengaja TIDAK ada di ringkasan: itu hasil
+							     pencocokan katalog di tahap "Pilih media", bukan bagian
+							     kebutuhan yang dirangkum AI. -->
+
 
 							<!-- Syarat artikel -->
 							<div class="mmCardBlock">
@@ -555,7 +559,7 @@
 
 						<div class="mmInfoBox">
 							<Info size={16} />
-							<span>{tr('Komposisi dan syarat bisa kamu koreksi sebelum pencarian media dimulai.')}</span>
+							<span>{tr('Anggaran dan syarat artikel bisa kamu koreksi sebelum pencarian media dimulai.')}</span>
 						</div>
 					{:else}
 						<div class="mmEmpty">
@@ -578,40 +582,62 @@
 				</section>
 			</div>
 		{:else}
-			<!-- Tahap 2: hasil pencarian -->
-			<div class="mmBody">
-				<section class="mmCol">
-					<div class="mmRightHead">
-						<h3 class="mmColTitle">{tr('Media yang cocok')}</h3>
-						<span class="mmBadge mmBadgeMuted">{result?.candidates.length ?? 0} {tr('kandidat')}</span>
+			<!-- Tahap 2: hasil pencarian — daftar kandidat (kiri) + ringkasan paket (kanan). -->
+			<div class="mmBody mmBodyResults">
+				<section class="mmCol mmColLeft">
+					<div class="mmResHead">
+						<span class="mmResIcon"><Sparkles size={22} /></span>
+						<div class="mmResHeadText">
+							<div class="mmResTitleRow">
+								<h3 class="mmResTitle">{tr('Media yang cocok')}</h3>
+								<span class="mmResCount">{result?.candidates.length ?? 0} {tr('kandidat')}</span>
+							</div>
+							<p class="mmResSub">{tr('Berdasarkan brief dan kriteria yang kamu tentukan, berikut media yang paling sesuai.')}</p>
+						</div>
+						<button class="mmAutoBtn" type="button" onclick={pilihOtomatis}>
+							<Wand2 size={15} />{tr('Pilih otomatis')}
+						</button>
 					</div>
+
 					{#if result && result.candidates.length > 0}
-						<ul class="mmList">
+						<ul class="mmCards">
 							{#each result.candidates as c (c.id)}
-								<li class="mmItem" class:mmItemOn={selected.has(c.id)}>
-									<input type="checkbox" checked={selected.has(c.id)} onchange={() => toggle(c.id)} aria-label={mediaDomainLabel(c.website_url, c.name)} />
-									<div class="mmItemBody">
-										<div class="mmItemTop">
-											<strong>{mediaDomainLabel(c.website_url, c.name)}</strong>
-											<span class="mmScore">{Math.round(c.score)} · {tr(c.match_label)}</span>
-											{#if c.in_package}<span class="mmPick">{tr('Rekomendasi paket')}</span>{/if}
+								{@const cardName = mediaDomainLabel(c.website_url, c.name)}
+								<li class="mmCard2" class:mmCard2On={selected.has(c.id)}>
+									<div class="mmCard2Main">
+										<input
+											class="mmCheck"
+											type="checkbox"
+											checked={selected.has(c.id)}
+											onchange={() => toggle(c.id)}
+											aria-label={cardName}
+										/>
+										<span class="mmAvatar" style={`background:${avatarColor(cardName)}`}>{cardName.charAt(0).toUpperCase()}</span>
+										<div class="mmCard2Info">
+											<div class="mmCard2Top">
+												<strong class="mmCard2Name">{cardName}</strong>
+												<span class="mmScoreChip">{Math.round(c.score)} · {tr(c.match_label)}</span>
+												{#if c.in_package}<span class="mmRecBadge">{tr('Rekomendasi paket')}</span>{/if}
+											</div>
+											<div class="mmMeta2">
+												<span>{c.category || tr('Tanpa kategori')}</span>
+												<span>DA {c.seo_da ?? '—'}</span>
+												<span>AI Trust {c.seo_ai_trust ?? '—'}</span>
+												<span>{trafficFmt(c.traffic_estimate)} / bln</span>
+												<span>{c.link_duration_months === 0 ? tr('Tautan permanen') : `${c.link_duration_months} bln`}</span>
+											</div>
 										</div>
-										<div class="mmItemMeta">
-											<span>{c.category || tr('Tanpa kategori')}</span>
-											<span>DA {c.seo_da ?? '—'}</span>
-											<span>AI Trust {c.seo_ai_trust ?? '—'}</span>
-											<span>{trafficFmt(c.traffic_estimate)} / bln</span>
-											<span>{c.link_duration_months === 0 ? tr('Tautan permanen') : `${c.link_duration_months} bln`}</span>
+										<div class="mmCard2Side">
+											<strong class="mmPrice">{money(c.client_price)}</strong>
+											{#if detailIds.has(c.id)}
+												<button class="mmDetailBtn" type="button" onclick={() => onShowDetail(c.id)}>
+													{tr('Detail')} <ArrowRight size={13} />
+												</button>
+											{/if}
 										</div>
-										{#if c.reasons.length > 0}<p class="mmReason">{c.reasons.join(' ')}</p>{/if}
-										{#if c.warnings.length > 0}<p class="mmItemWarn"><CircleAlert size={13} /> {c.warnings.join(' ')}</p>{/if}
 									</div>
-									<div class="mmItemRight">
-										<strong>{money(c.client_price)}</strong>
-										{#if detailIds.has(c.id)}
-											<button class="mmLinkBtn" type="button" onclick={() => onShowDetail(c.id)}>{tr('Detail')}</button>
-										{/if}
-									</div>
+									{#if c.reasons.length > 0}<p class="mmReason2">{c.reasons.join(' ')}</p>{/if}
+									{#if c.warnings.length > 0}<p class="mmItemWarn2"><CircleAlert size={13} /> {c.warnings.join(' ')}</p>{/if}
 								</li>
 							{/each}
 						</ul>
@@ -623,27 +649,51 @@
 				</section>
 
 				<section class="mmCol mmColRight">
-					<h3 class="mmColTitle">{tr('Ringkasan paket')}</h3>
-					{#if result}
-						{#if result.package.summary}<p class="mmPkgSummary">{result.package.summary}</p>{/if}
-						<p class="mmSelectorNote">
-							{result.selector === 'agent'
-								? tr('Paket dipilih AI dari kandidat katalog nyata.')
-								: tr('Paket disusun skor otomatis dari kandidat katalog nyata.')}
-						</p>
-					{/if}
-					<div class="mmStats">
-						<div class="mmStat"><span>{tr('Media terpilih')}</span><strong>{selected.size}</strong></div>
-						<div class="mmStat"><span>{tr('Total harga')}</span><strong>{money(selectedTotal)}</strong></div>
-						<div class="mmStat"><span>{tr('Anggaran')}</span><strong>{result && result.package.budget > 0 ? money(result.package.budget) : '—'}</strong></div>
-						<div class="mmStat"><span>{tr('Sisa anggaran')}</span><strong>{result && result.package.budget > 0 ? money(Math.max(0, result.package.budget - selectedTotal)) : '—'}</strong></div>
+					<div class="mmResHead">
+						<span class="mmResIcon mmResIconPlain"><BarChart3 size={22} /></span>
+						<div class="mmResHeadText">
+							<div class="mmResTitleRow">
+								<h3 class="mmResTitle">{tr('Ringkasan paket')}</h3>
+							</div>
+							<p class="mmResSub">
+								{result?.selector === 'agent'
+									? tr('Paket dipilih AI dari kandidat katalog nyata.')
+									: tr('Paket disusun skor otomatis dari kandidat katalog nyata.')}
+							</p>
+						</div>
 					</div>
 
+					<div class="mmStatGrid">
+						<div class="mmStatCard">
+							<span class="mmStatIcon" style="background:#eff6ff;color:#2563eb"><Layers size={16} /></span>
+							<span class="mmStatLabel">{tr('Media terpilih')}</span>
+							<strong class="mmStatValue">{selected.size}</strong>
+							<span class="mmStatSub">{result?.candidates.length ?? 0} {tr('kandidat')}</span>
+						</div>
+						<div class="mmStatCard">
+							<span class="mmStatIcon" style="background:#ecfdf5;color:#059669"><CircleDollarSign size={16} /></span>
+							<span class="mmStatLabel">{tr('Total harga')}</span>
+							<strong class="mmStatValue">{money(selectedTotal)}</strong>
+						</div>
+						<div class="mmStatCard">
+							<span class="mmStatIcon" style="background:#fff7ed;color:#ea580c"><Wallet size={16} /></span>
+							<span class="mmStatLabel">{tr('Anggaran')}</span>
+							<strong class="mmStatValue">{result && result.package.budget > 0 ? money(result.package.budget) : '—'}</strong>
+						</div>
+						<div class="mmStatCard">
+							<span class="mmStatIcon" style="background:#eff6ff;color:#2563eb"><Clock size={16} /></span>
+							<span class="mmStatLabel">{tr('Sisa anggaran')}</span>
+							<strong class="mmStatValue">{result && result.package.budget > 0 ? money(Math.max(0, result.package.budget - selectedTotal)) : '—'}</strong>
+						</div>
+					</div>
+
+					{#if result && result.package.summary}<p class="mmPkgSummary">{result.package.summary}</p>{/if}
+
 					{#if result && result.composition.items.length > 0}
-						<div class="mmCardBlock mmCardBlockPlain">
-							<div class="mmCardHead">
-								<span class="mmCardIcon"><FileText size={18} /></span>
-								<span class="mmCardLabel">{tr('Komposisi media')}</span>
+						<div class="mmComp">
+							<div class="mmCompHead">
+								<span class="mmCompLabel"><FileText size={15} /> {tr('Komposisi media')}</span>
+								{#if compositionTop}<span class="mmCompMeta">{compositionTop.label} | {compositionTop.percent}%</span>{/if}
 							</div>
 							<div class="mmBar">
 								{#each result.composition.items as item (item.key)}
@@ -999,11 +1049,6 @@
 		flex-direction: column;
 		gap: 9px;
 	}
-	.mmCardBlockPlain {
-		border: none;
-		padding: 0;
-		background: transparent;
-	}
 	.mmCardHead {
 		display: flex;
 		align-items: center;
@@ -1017,11 +1062,6 @@
 	.mmCardLabel {
 		font-size: 13px;
 		color: var(--muted-foreground, #667085);
-	}
-	.mmCardHint {
-		margin-left: auto;
-		font-size: 11.5px;
-		color: #94a3b8;
 	}
 	.mmCardValue {
 		margin-left: auto;
@@ -1099,9 +1139,14 @@
 	.mmRules {
 		margin: 0;
 		padding-left: 18px;
+		/* Preflight Tailwind mematikan bullet list — aktifkan lagi. */
+		list-style: disc;
 		font-size: 12.5px;
 		line-height: 1.7;
 		color: #334155;
+	}
+	.mmRules li::marker {
+		color: #94a3b8;
 	}
 	.mmMuted {
 		margin: 0;
@@ -1223,45 +1268,157 @@
 	.mmWarnBox ul {
 		margin: 5px 0 0;
 		padding-left: 18px;
+		list-style: disc;
+	}
+	.mmWarnBox li {
+		margin-bottom: 3px;
+	}
+	.mmWarnBox li::marker {
+		color: #d97706;
 	}
 
 	/* ── Tahap 2 ────────────────────────────────────────────── */
-	.mmList {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
+	/* ── Tahap 2: hasil pencarian ───────────────────────────── */
+	.mmBodyResults {
+		grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+		gap: 20px;
 	}
-	.mmItem {
-		display: flex;
-		align-items: flex-start;
-		gap: 10px;
-		border: 1px solid var(--border, #dfe5ef);
-		border-radius: 10px;
-		padding: 11px 12px;
+	.mmBodyResults .mmCol {
+		padding: 18px 22px 22px;
+	}
+	.mmBodyResults .mmColRight {
 		background: #fff;
 	}
-	.mmItemOn {
-		border-color: #b7c9f7;
-		background: #f7faff;
+	.mmResHead {
+		display: flex;
+		align-items: flex-start;
+		gap: 12px;
 	}
-	.mmItem input[type='checkbox'] {
-		margin-top: 2px;
+	.mmResIcon {
+		flex: none;
+		width: 44px;
+		height: 44px;
+		border-radius: 12px;
+		background: #eff6ff;
+		color: #2563eb;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 	}
-	.mmItemBody {
+	.mmResIconPlain {
+		background: #f1f5f9;
+		color: #334155;
+	}
+	.mmResHeadText {
 		flex: 1;
 		min-width: 0;
 	}
-	.mmItemTop {
+	.mmResTitleRow {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.mmResTitle {
+		margin: 0;
+		font-size: 18px;
+		font-weight: 700;
+		letter-spacing: -0.01em;
+	}
+	.mmResCount {
+		font-size: 11.5px;
+		font-weight: 600;
+		color: #475569;
+		background: #f1f5f9;
+		border-radius: 999px;
+		padding: 2px 9px;
+	}
+	.mmResSub {
+		margin: 3px 0 0;
+		font-size: 12.5px;
+		color: var(--muted-foreground, #667085);
+	}
+	.mmAutoBtn {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border: 1px solid #c7dbff;
+		background: #eff6ff;
+		color: var(--primary, #2b67ec);
+		font-size: 12.5px;
+		font-weight: 650;
+		padding: 8px 13px;
+		border-radius: 9px;
+		cursor: pointer;
+		transition: background 0.15s ease, border-color 0.15s ease;
+	}
+	.mmAutoBtn:hover {
+		background: #dbeafe;
+		border-color: #a5c8fc;
+	}
+
+	/* Kartu kandidat */
+	.mmCards {
+		list-style: none;
+		margin: 16px 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.mmCard2 {
+		border: 1px solid var(--border, #dfe5ef);
+		border-radius: 12px;
+		padding: 12px 14px;
+		background: #fff;
+		transition: border-color 0.15s ease, background 0.15s ease;
+	}
+	.mmCard2On {
+		border-color: var(--primary, #2b67ec);
+		background: #f5f9ff;
+	}
+	.mmCard2Main {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+	}
+	.mmCheck {
+		margin-top: 10px;
+		flex: none;
+		width: 15px;
+		height: 15px;
+		accent-color: var(--primary, #2b67ec);
+	}
+	.mmAvatar {
+		flex: none;
+		width: 34px;
+		height: 34px;
+		border-radius: 9px;
+		color: #fff;
+		font-size: 15px;
+		font-weight: 700;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		margin-top: 1px;
+	}
+	.mmCard2Info {
+		flex: 1;
+		min-width: 0;
+	}
+	.mmCard2Top {
 		display: flex;
 		align-items: center;
 		flex-wrap: wrap;
 		gap: 7px;
-		font-size: 13px;
 	}
-	.mmScore {
+	.mmCard2Name {
+		font-size: 13.5px;
+		font-weight: 700;
+		overflow-wrap: anywhere;
+	}
+	.mmScoreChip {
 		font-size: 10.5px;
 		font-weight: 650;
 		background: #f1f5f9;
@@ -1269,76 +1426,142 @@
 		padding: 2px 7px;
 		border-radius: 999px;
 	}
-	.mmPick {
+	.mmRecBadge {
 		font-size: 10.5px;
 		font-weight: 650;
 		background: var(--success-soft, #eaf8f1);
 		color: var(--success, #16794b);
-		padding: 2px 7px;
+		padding: 2px 8px;
 		border-radius: 999px;
 	}
-	.mmItemMeta {
+	.mmMeta2 {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 10px;
-		margin-top: 4px;
+		margin-top: 5px;
 		font-size: 11.5px;
 		color: #7c8aa0;
 	}
-	.mmReason {
-		margin: 6px 0 0;
+	.mmMeta2 > span {
+		display: inline-flex;
+		align-items: center;
+	}
+	.mmMeta2 > span + span::before {
+		content: '';
+		display: inline-block;
+		width: 1px;
+		height: 10px;
+		background: #e2e8f0;
+		margin: 0 8px;
+	}
+	.mmCard2Side {
+		flex: none;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 6px;
+		margin-left: 8px;
+	}
+	.mmPrice {
+		font-size: 13.5px;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+	.mmDetailBtn {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		border: none;
+		background: #eff6ff;
+		color: var(--primary, #2b67ec);
+		font-size: 11.5px;
+		font-weight: 650;
+		padding: 5px 10px;
+		border-radius: 8px;
+		cursor: pointer;
+		transition: background 0.15s ease;
+	}
+	.mmDetailBtn:hover {
+		background: #dbeafe;
+	}
+	.mmReason2 {
+		margin: 9px 0 0 59px;
 		font-size: 11.5px;
 		line-height: 1.5;
 		color: #475569;
 	}
-	.mmItemWarn {
+	.mmItemWarn2 {
 		display: flex;
 		align-items: flex-start;
 		gap: 5px;
-		margin: 5px 0 0;
+		margin: 5px 0 0 59px;
 		font-size: 11.5px;
 		color: #a15c00;
 	}
-	.mmItemRight {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 4px;
-		white-space: nowrap;
-		font-size: 13px;
-	}
+
+	/* Ringkasan paket */
 	.mmPkgSummary {
-		margin: -4px 0 0;
-		font-size: 13.5px;
+		margin: 14px 0 0;
+		font-size: 13px;
 		line-height: 1.55;
 		color: #0f172a;
 	}
-	.mmSelectorNote {
-		margin: 0;
-		font-size: 12px;
-		color: var(--muted-foreground, #667085);
-	}
-	.mmStats {
+	.mmStatGrid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 8px;
+		gap: 10px;
+		margin-top: 16px;
 	}
-	.mmStat {
+	.mmStatCard {
 		border: 1px solid var(--border, #dfe5ef);
-		border-radius: 10px;
+		border-radius: 12px;
 		background: #fff;
-		padding: 10px 12px;
+		padding: 12px 13px;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 3px;
 	}
-	.mmStat span {
+	.mmStatIcon {
+		width: 30px;
+		height: 30px;
+		border-radius: 9px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 3px;
+	}
+	.mmStatLabel {
 		font-size: 11.5px;
 		color: var(--muted-foreground, #667085);
 	}
-	.mmStat strong {
-		font-size: 14.5px;
+	.mmStatValue {
+		font-size: 16.5px;
+		font-weight: 750;
+		letter-spacing: -0.01em;
+		overflow-wrap: anywhere;
+	}
+
+	/* Komposisi */
+	.mmComp {
+		margin-top: 18px;
+	}
+	.mmCompHead {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		margin-bottom: 8px;
+	}
+	.mmCompLabel {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		font-size: 13px;
 		font-weight: 700;
+		color: #0f172a;
+	}
+	.mmCompMeta {
+		font-size: 12px;
+		color: var(--muted-foreground, #667085);
 	}
 
 	/* ── Footer ─────────────────────────────────────────────── */
@@ -1495,8 +1718,15 @@
 			text-align: left;
 			margin-left: 28px;
 		}
-		.mmStats {
+		.mmStatGrid {
 			grid-template-columns: 1fr;
+		}
+		.mmReason2,
+		.mmItemWarn2 {
+			margin-left: 0;
+		}
+		.mmAutoBtn {
+			margin-left: 56px;
 		}
 	}
 </style>

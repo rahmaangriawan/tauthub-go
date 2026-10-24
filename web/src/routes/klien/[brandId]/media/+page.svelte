@@ -1230,7 +1230,7 @@
 			<div class="modernActionsGroup catalogToolsInline">
 				<!-- AI Matchmaker: di kiri pemilih kategori. -->
 				<button class="modernActionBtn matchmakerBtn" type="button" onclick={() => (matchmakerOpen = true)}>
-					<Sparkles size={15} /><span>{tr('AI Matchmaker')}</span>
+					<Sparkles size={15} /><span>{tr('AI Matchmaker')}</span><span class="matchmakerNew">{tr('Baru')}</span>
 				</button>
 				<!-- Kategori desktop: satu tombol, diklik membuka dropdown-nya. -->
 				<div class="modernSelectWrap toolsInlineCats">
@@ -1290,7 +1290,7 @@
 			<div class="advFilterInline">{@render advFields()}</div>
 
 			<button class="modernActionBtn matchmakerBtn" type="button" onclick={() => { toolsOpen = false; matchmakerOpen = true; }}>
-				<Sparkles size={15} /><span>{tr('AI Matchmaker')}</span>
+				<Sparkles size={15} /><span>{tr('AI Matchmaker')}</span><span class="matchmakerNew">{tr('Baru')}</span>
 			</button>
 
 			<button class="modernActionBtn" type="button" onclick={() => { toolsOpen = false; importOpen = true; }}>

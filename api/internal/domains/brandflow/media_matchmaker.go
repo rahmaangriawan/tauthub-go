@@ -170,11 +170,16 @@ func (d *Deps) MediaMatchmaker(w http.ResponseWriter, r *http.Request) {
 	crit, catWarnings := mmNormalizeCriteria(crit, catalogCats)
 	warnings = append(warnings, catWarnings...)
 
-	candidates, poolTruncated, err := d.mmCandidates(r.Context(), crit)
+	// Tangga pelonggaran: kalau katalog tidak punya cukup kandidat dengan
+	// ambang ketat, turunkan bertahap (kualitas −10, lalu ambang dilepas)
+	// sampai permintaan `count` terpenuhi. Setiap pelonggaran diumumkan di
+	// warnings — tidak pernah melonggarkan diam-diam.
+	relaxWarn, candidates, poolTruncated, err := d.mmPoolWithRelaxation(r.Context(), crit)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	warnings = append(warnings, relaxWarn...)
 	poolSize := len(candidates)
 	mmScoreCandidates(candidates, crit)
 
@@ -311,8 +316,11 @@ func (d *Deps) mmInterpretBrief(ctx context.Context, brandRow brandsdomain.Brand
 		{Role: "user", Content: material},
 	}, true)
 	if err != nil {
+		// Detail penyebab (kredit habis, API key salah, rate limit, dst.) tetap
+		// tercatat di taut_brief_runs untuk admin (folder Log). Pesan ke klien
+		// netral — jangan pernah mengekspos instruksi admin di UI klien.
 		d.logMatchmakerRun(ctx, summary.AgentMatchmaker, brandRow.ID, agentCfg.Model, material, err.Error(), 0, 0, time.Since(startedAt), err)
-		return zero, nil, http.StatusBadGateway, "AI Matchmaker gagal memproses brief. Coba lagi."
+		return zero, nil, http.StatusBadGateway, "Layanan AI sedang tidak tersedia. Coba lagi beberapa saat lagi."
 	}
 
 	var parsed struct {
@@ -719,7 +727,10 @@ func (d *Deps) mmCandidates(ctx context.Context, crit mmCriteria) ([]mmCandidate
 		where += " AND sm.ai_trust_score >= " + add(crit.MinAITrust)
 	}
 	if crit.MinTraffic > 0 {
-		where += " AND GREATEST(COALESCE(media.traffic_estimate, 0), COALESCE(sw.visits, 0)) >= " + add(crit.MinTraffic)
+		// Trafik 0 / tanpa data dianggap "belum terverifikasi", bukan gagal —
+		// media tidak ditolak hanya karena katalognya belum punya angkanya.
+		where += " AND (GREATEST(COALESCE(media.traffic_estimate, 0), COALESCE(sw.visits, 0)) >= " + add(crit.MinTraffic) +
+			" OR GREATEST(COALESCE(media.traffic_estimate, 0), COALESCE(sw.visits, 0)) = 0)"
 	}
 	if crit.RequireHyperlink {
 		where += " AND media.allow_hyperlink = TRUE"
@@ -917,6 +928,90 @@ func mmClampMoney(v float64) float64 {
 	return math.Round(v)
 }
 
+// ---------- tangga pelonggaran kriteria ----------
+
+// mmPoolWithRelaxation mengambil pool kandidat dengan ambang ketat dulu;
+// bila jumlahnya kurang dari permintaan `count`, ambang diturunkan bertahap
+// (kualitas −10, lalu ambang dilepas, lalu harga minimum dilepas) sampai
+// cukup atau tangga habis. Setiap pelonggaran yang benar-benar dipakai
+// diumumkan di warnings supaya user tahu paketnya tidak memenuhi ambang
+// aslinya.
+func (d *Deps) mmPoolWithRelaxation(ctx context.Context, crit mmCriteria) ([]string, []mmCandidate, bool, error) {
+	type mmStep struct {
+		da, ai   int
+		traffic  int64
+		minPrice float64
+	}
+	steps := []mmStep{{crit.MinDA, crit.MinAITrust, crit.MinTraffic, crit.BudgetMin}}
+	if crit.MinDA > 0 || crit.MinAITrust > 0 || crit.MinTraffic > 0 || crit.BudgetMin > 0 {
+		steps = append(steps,
+			mmStep{max(crit.MinDA-10, 0), max(crit.MinAITrust-10, 0), crit.MinTraffic, crit.BudgetMin},
+			mmStep{0, 0, crit.MinTraffic, crit.BudgetMin},
+			mmStep{0, 0, 0, crit.BudgetMin},
+			mmStep{0, 0, 0, 0},
+		)
+	}
+
+	warnings := []string{}
+	var (
+		candidates []mmCandidate
+		truncated  bool
+	)
+	for i, st := range steps {
+		tryCrit := crit
+		tryCrit.MinDA = st.da
+		tryCrit.MinAITrust = st.ai
+		tryCrit.MinTraffic = st.traffic
+		tryCrit.BudgetMin = st.minPrice
+		cands, trunc, err := d.mmCandidates(ctx, tryCrit)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		candidates, truncated = cands, trunc
+		if len(cands) >= crit.Count || i == len(steps)-1 {
+			if i > 0 {
+				warnings = append(warnings, mmRelaxWarning(crit, st))
+			}
+			break
+		}
+	}
+	return warnings, candidates, truncated, nil
+}
+
+// mmRelaxWarning menjelaskan ambang mana yang diturunkan dibanding kriteria
+// asli — angka 0 berarti ambang dilepas sama sekali.
+func mmRelaxWarning(orig mmCriteria, st struct {
+	da, ai   int
+	traffic  int64
+	minPrice float64
+}) string {
+	parts := []string{}
+	if st.da < orig.MinDA {
+		if st.da == 0 {
+			parts = append(parts, "ambang DA dilepas")
+		} else {
+			parts = append(parts, "DA ≥ "+itoa(st.da))
+		}
+	}
+	if st.ai < orig.MinAITrust {
+		if st.ai == 0 {
+			parts = append(parts, "ambang AI Trust dilepas")
+		} else {
+			parts = append(parts, "AI Trust ≥ "+itoa(st.ai))
+		}
+	}
+	if st.traffic < orig.MinTraffic {
+		parts = append(parts, "ambang trafik dilepas")
+	}
+	if st.minPrice < orig.BudgetMin {
+		parts = append(parts, "harga per media minimum dilepas")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Katalog tidak punya cukup kandidat dengan ambang ketat, jadi kriteria dilonggarkan otomatis (" + strings.Join(parts, ", ") + "). Perketat lagi lewat Edit ringkasan bila perlu."
+}
+
 // ---------- skor & paket ----------
 
 func mmScoreCandidates(list []mmCandidate, crit mmCriteria) {
@@ -1031,6 +1126,11 @@ func mmReasons(c mmCandidate, capPerMedia float64) []string {
 
 func mmCandidateWarnings(c mmCandidate, crit mmCriteria) []string {
 	out := []string{}
+	// Brief sering meminta ambang trafik; media tanpa data tidak ditolak,
+	// tapi statusnya diberitahu agar tidak dianggap "terverifikasi".
+	if crit.MinTraffic > 0 && c.Traffic <= 0 {
+		out = append(out, "Traffic belum terverifikasi — katalog belum punya angkanya.")
+	}
 	if c.PriceStatus != nil {
 		switch strings.ToLower(strings.TrimSpace(*c.PriceStatus)) {
 		case "menunggu_review":

@@ -1569,6 +1569,14 @@ button.selectedStepChip:disabled,
    tombol alat biasa tanpa mengubah tinggi toolbar. */
 .matchmakerBtn { border-color: #c7d2fe; background: #eef2ff; color: #3730a3; font-weight: 600; }
 .matchmakerBtn:hover { border-color: #a5b4fc; background: #e0e7ff; color: #312e81; }
+/* Pil "Baru" di samping label — penanda fitur baru ala mockup. */
+.matchmakerNew {
+  margin-left: 2px; padding: 2px 8px; border-radius: 999px;
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
+  line-height: 1.2; text-transform: none; white-space: nowrap;
+}
+.matchmakerBtn:hover .matchmakerNew { background: linear-gradient(135deg, #7c3aed, #5b21b6); }
 
 /* Panel filter lanjutan mengambang (parity Radix Popover.Content align="end"
    sideOffset={8}): fixed supaya tidak menggeser layout tabel di bawahnya. */
