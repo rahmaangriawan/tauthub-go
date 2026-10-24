@@ -1019,18 +1019,41 @@
 		}
 	}
 
-	// Lanjut obrolan: tutup popup dan beri pesan pembuka ke Copilot supaya LLM
-	// yang menawarkan field mana yang mau diedit (bukan user menebak).
-	// Teks yang sudah terlanjur diketik user ikut disertakan, jangan dibuang.
+	// Rekap field terisi sebagai teks: disodorkan langsung di chat saat user
+	// memilih "lanjut edit", jadi ia memilih editor dari data nyata — bukan
+	// mulai dari percakapan kosong.
+	function filledFieldDigest(): string {
+		const rows: string[] = [];
+		for (const f of fields) {
+			if (!f.enabled || !isFilled(f.key)) continue;
+			const raw = values[f.key];
+			const val = Array.isArray(raw) ? raw.join(', ') : String(raw ?? '').trim();
+			if (!val) continue;
+			const clipped = val.length > 160 ? val.slice(0, 160) + '…' : val;
+			rows.push(`- ${f.label}: ${clipped}`);
+		}
+		return rows.join('\n');
+	}
+
+	// Lanjut obrolan setelah ringkasan jadi. Pesan pembuka memuat DATA TERISI
+	// supaya LLM langsung menanyakannya sebagai pilihan yang bisa dijawab
+	// user, bukan bertanya dari nol.
 	async function continueToEdit() {
 		summaryPrompt = 'idle';
 		editModeIntent = true;
 		activeTab = 'copilot';
 		const typed = composer.trim();
-		const opener = tr(
-			'Entitas sudah lengkap 100%. Aku ingin meninjau dan mengeditnya. Tanya aku satu per satu field mana yang perlu diubah — mulai dari yang paling berpengaruh untuk ringkasan.'
-		);
-		await send(typed ? `${opener}\n\nCatatan/editanku: ${typed}` : opener);
+		const digest = filledFieldDigest();
+		const lines = [
+			tr('Entitas sudah 100% dan ringkasannya sudah dibuat. Aku ingin meninjau dan mengedit.'),
+			'',
+			tr('Ini data yang sudah terisi:'),
+			digest || tr('(belum ada field terisi yang bisa ditampilkan)'),
+			'',
+			tr('Tampilkan data di atas sebagai daftar bernomor, lalu tanya aku mau mengubah nomor yang mana. Jangan mengubah apa pun sebelum aku menjawab.')
+		];
+		if (typed) lines.push('', tr('Catatan/editanku: ') + typed);
+		await send(lines.join('\n'));
 	}
 
 	async function copySummary(item: SummaryItem) {
