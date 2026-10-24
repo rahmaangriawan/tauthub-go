@@ -4838,6 +4838,16 @@ export const PHRASE_EN: Record<string, string> = {
 	  "Mengenali tujuan dan anggaran": "Recognizing objectives and budget",
 	  "Mengekstrak persyaratan media": "Extracting media requirements",
 	  "Menyusun ringkasan kebutuhan": "Composing the requirements summary",
+
+	  // Chip filter + urut daftar kandidat matchmaker.
+	  "Terpilih": "Selected",
+	  "Rekomendasi": "Recommended",
+	  "Skor tertinggi": "Highest score",
+	  "Harga termurah": "Cheapest first",
+	  "DA tertinggi": "Highest DA",
+	  "Urut kandidat": "Sort candidates",
+	  "Filter kandidat": "Filter candidates",
+	  "Tidak ada kandidat pada filter ini.": "No candidates match this filter.",
 	  "Media yang cocok": "Matching media",
 	  "kandidat": "candidates",
 	  "Belum ada media yang cocok dengan kriteria ini.": "No media matches these criteria yet.",

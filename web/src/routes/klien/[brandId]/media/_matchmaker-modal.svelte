@@ -10,10 +10,11 @@
 	// media di katalog.
 	import {
 		ArrowRight, BarChart3, Check, CircleAlert, CircleDollarSign, ClipboardList, Clock, FileText, Info, Layers,
-		LoaderCircle, Pencil, Plus, ShieldCheck, Sparkles, Target, Wallet, Wand2, X, Paperclip, TriangleAlert
+		LoaderCircle, Pencil, Plus, ShieldCheck, Sparkles, Target, Wallet, X, Paperclip, TriangleAlert
 	} from '@lucide/svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
+	import Select from '$lib/components/select.svelte';
 
 	type Criteria = {
 		objective: string;
@@ -201,6 +202,41 @@
 
 	const tierColor = (key: string) => (key === 'tier1' ? '#2b67ec' : key === 'tier2' ? '#9db9ff' : key === 'tier3' ? '#f3b45f' : '#cbd5e1');
 
+	// ── Filter + urut daftar kandidat (tahap 2) ─────────────────────────
+	// Daftar panjang (hingga 40 kandidat) dipangkas secara visual lewat chip
+	// filter; tidak ada data yang disembunyikan permanen.
+	type CandFilter = 'semua' | 'terpilih' | 'rekomendasi' | 'tier1' | 'tier2' | 'tier3';
+	type CandSort = 'skor' | 'harga' | 'da';
+	let candFilter = $state<CandFilter>('semua');
+	let candSort = $state<CandSort>('skor');
+
+	const tierKey = (t: string | null) => (t ?? '').trim().toLowerCase();
+
+	const filterCounts = $derived.by(() => {
+		const list = result?.candidates ?? [];
+		return {
+			semua: list.length,
+			terpilih: list.filter((c) => selected.has(c.id)).length,
+			rekomendasi: list.filter((c) => c.in_package).length,
+			tier1: list.filter((c) => tierKey(c.media_tier) === 'tier1').length,
+			tier2: list.filter((c) => tierKey(c.media_tier) === 'tier2').length,
+			tier3: list.filter((c) => tierKey(c.media_tier) === 'tier3').length
+		};
+	});
+
+	const visibleCandidates = $derived.by(() => {
+		const list = result?.candidates ?? [];
+		let out = list;
+		if (candFilter === 'terpilih') out = list.filter((c) => selected.has(c.id));
+		else if (candFilter === 'rekomendasi') out = list.filter((c) => c.in_package);
+		else if (candFilter.startsWith('tier')) out = list.filter((c) => tierKey(c.media_tier) === candFilter);
+		const sorted = [...out];
+		if (candSort === 'harga') sorted.sort((a, b) => (a.client_price ?? 0) - (b.client_price ?? 0));
+		else if (candSort === 'da') sorted.sort((a, b) => (b.seo_da ?? 0) - (a.seo_da ?? 0));
+		// 'skor' = urutan server (paket dulu, lalu skor) — biarkan apa adanya.
+		return sorted;
+	});
+
 	const selectedItems = $derived((result?.candidates ?? []).filter((c) => selected.has(c.id)));
 	const selectedTotal = $derived(selectedItems.reduce((sum, c) => sum + (c.client_price ?? 0), 0));
 	const overBudget = $derived(Boolean(result && result.package.budget > 0 && selectedTotal > result.package.budget));
@@ -295,13 +331,6 @@
 		// Ringkasan tidak lagi diringkas otomatis, jadi koreksi user tidak bisa
 		// tertimpa; lastAnalyzed hanya penanda "brief ini yang terakhir diringkas".
 		editing = !editing;
-	}
-
-	// "Pilih otomatis": kembalikan seleksi ke paket rekomendasi (agent pemilih
-	// atau skor server) — membatalkan centang/hilang centang manual.
-	function pilihOtomatis() {
-		if (!result) return;
-		selected = new Set(result.candidates.filter((c) => c.in_package).map((c) => c.id));
 	}
 
 	// Contoh brief yang menutup semua field kriteria (tujuan, audiens, jumlah,
@@ -641,23 +670,58 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 			<!-- Tahap 2: hasil pencarian — daftar kandidat (kiri) + ringkasan paket (kanan). -->
 			<div class="mmBody mmBodyResults">
 				<section class="mmCol mmColLeft">
-					<div class="mmResHead">
-						<span class="mmResIcon"><Sparkles size={22} /></span>
-						<div class="mmResHeadText">
-							<div class="mmResTitleRow">
-								<h3 class="mmResTitle">{tr('Media yang cocok')}</h3>
-								<span class="mmResCount">{result?.candidates.length ?? 0} {tr('kandidat')}</span>
-							</div>
-							<p class="mmResSub">{tr('Berdasarkan brief dan kriteria yang kamu tentukan, berikut media yang paling sesuai.')}</p>
-						</div>
-						<button class="mmAutoBtn" type="button" onclick={pilihOtomatis}>
-							<Wand2 size={15} />{tr('Pilih otomatis')}
-						</button>
-					</div>
-
 					{#if result && result.candidates.length > 0}
+						<!-- Chip filter + urut: memangkas daftar panjang tanpa
+						     menyembunyikan data — semua kandidat tetap satu klik jauh. -->
+						<div class="mmFilterBar">
+							<div class="mmChips" role="group" aria-label={tr('Filter kandidat')}>
+								<button class="mmChip" class:mmChipOn={candFilter === 'semua'} type="button" onclick={() => (candFilter = 'semua')}>
+									{tr('Semua')}<em>{filterCounts.semua}</em>
+								</button>
+								<button class="mmChip" class:mmChipOn={candFilter === 'terpilih'} type="button" onclick={() => (candFilter = 'terpilih')}>
+									{tr('Terpilih')}<em>{filterCounts.terpilih}</em>
+								</button>
+								<button class="mmChip" class:mmChipOn={candFilter === 'rekomendasi'} type="button" onclick={() => (candFilter = 'rekomendasi')}>
+									{tr('Rekomendasi')}<em>{filterCounts.rekomendasi}</em>
+								</button>
+								{#if filterCounts.tier1 > 0}
+									<button class="mmChip" class:mmChipOn={candFilter === 'tier1'} type="button" onclick={() => (candFilter = 'tier1')}>
+										Tier 1<em>{filterCounts.tier1}</em>
+									</button>
+								{/if}
+								{#if filterCounts.tier2 > 0}
+									<button class="mmChip" class:mmChipOn={candFilter === 'tier2'} type="button" onclick={() => (candFilter = 'tier2')}>
+										Tier 2<em>{filterCounts.tier2}</em>
+									</button>
+								{/if}
+								{#if filterCounts.tier3 > 0}
+									<button class="mmChip" class:mmChipOn={candFilter === 'tier3'} type="button" onclick={() => (candFilter = 'tier3')}>
+										Tier 3<em>{filterCounts.tier3}</em>
+									</button>
+								{/if}
+							</div>
+							<div class="mmSortWrap">
+								<Select
+									value={candSort}
+									onchange={(v) => (candSort = v as CandSort)}
+									options={[
+										{ value: 'skor', label: tr('Skor tertinggi') },
+										{ value: 'harga', label: tr('Harga termurah') },
+										{ value: 'da', label: tr('DA tertinggi') }
+									]}
+									ariaLabel={tr('Urut kandidat')}
+									minWidth={0}
+									align="end"
+									fitContent
+								/>
+							</div>
+						</div>
+
+						{#if visibleCandidates.length === 0}
+							<p class="mmMuted">{tr('Tidak ada kandidat pada filter ini.')}</p>
+						{:else}
 						<ul class="mmCards">
-							{#each result.candidates as c (c.id)}
+							{#each visibleCandidates as c (c.id)}
 								{@const cardName = mediaDomainLabel(c.website_url, c.name)}
 								<li class="mmCard2" class:mmCard2On={selected.has(c.id)}>
 									<div class="mmCard2Main">
@@ -707,6 +771,7 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 								</li>
 							{/each}
 						</ul>
+						{/if}
 					{:else}
 						<div class="mmEmpty">
 							<p>{tr('Tidak ada media yang memenuhi kriteria ini. Longgarkan budget, DA, atau kategori lalu cari lagi.')}</p>
@@ -1276,6 +1341,7 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		display: flex;
 		flex-wrap: wrap;
 		gap: 12px;
+		margin-top: 9px;
 		font-size: 11.5px;
 		color: #475569;
 	}
@@ -1540,7 +1606,8 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		gap: 20px;
 	}
 	.mmBodyResults .mmCol {
-		padding: 18px 22px 22px;
+		padding: 20px 22px 24px;
+		gap: 20px;
 	}
 	.mmBodyResults .mmColRight {
 		background: #fff;
@@ -1581,47 +1648,72 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		font-weight: 700;
 		letter-spacing: -0.01em;
 	}
-	.mmResCount {
-		font-size: 11.5px;
-		font-weight: 600;
-		color: #475569;
-		background: #f1f5f9;
-		border-radius: 999px;
-		padding: 2px 9px;
-	}
 	.mmResSub {
 		margin: 3px 0 0;
 		font-size: 12.5px;
 		color: var(--muted-foreground, #667085);
 	}
-	.mmAutoBtn {
-		flex: none;
+
+	/* Chip filter + urut daftar kandidat */
+	.mmFilterBar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+	.mmChips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.mmChip {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
-		border: 1px solid #c7dbff;
-		background: #eff6ff;
-		color: var(--primary, #2b67ec);
-		font-size: 12.5px;
-		font-weight: 650;
-		padding: 8px 13px;
-		border-radius: 9px;
+		gap: 5px;
+		border: 1px solid var(--border, #dfe5ef);
+		background: #fff;
+		border-radius: 999px;
+		padding: 5px 11px;
+		font-size: 12px;
+		font-weight: 600;
+		color: #475569;
 		cursor: pointer;
-		transition: background 0.15s ease, border-color 0.15s ease;
+		transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 	}
-	.mmAutoBtn:hover {
-		background: #dbeafe;
-		border-color: #a5c8fc;
+	.mmChip em {
+		font-style: normal;
+		font-size: 11px;
+		color: #94a3b8;
+	}
+	.mmChip:hover {
+		border-color: #b9cdf5;
+	}
+	.mmChipOn {
+		background: #eff6ff;
+		border-color: #c7dbff;
+		color: var(--primary, #2b67ec);
+	}
+	.mmChipOn em {
+		color: var(--primary, #2b67ec);
+	}
+	.mmSortWrap :global(.zs-select-trigger) {
+		height: 30px;
+		padding: 0 10px;
+		font-size: 12px;
+		font-weight: 600;
+		color: #475569;
+		border-radius: 999px;
 	}
 
 	/* Kartu kandidat */
 	.mmCards {
 		list-style: none;
-		margin: 16px 0 0;
+		margin: 0;
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 12px;
 	}
 	.mmCard2 {
 		border: 1px solid var(--border, #dfe5ef);
@@ -1761,7 +1853,7 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 
 	/* Ringkasan paket */
 	.mmPkgSummary {
-		margin: 14px 0 0;
+		margin: 0;
 		font-size: 13px;
 		line-height: 1.55;
 		color: #0f172a;
@@ -1770,7 +1862,6 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 10px;
-		margin-top: 16px;
 	}
 	.mmStatCard {
 		border: 1px solid var(--border, #dfe5ef);
@@ -1803,14 +1894,14 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 
 	/* Komposisi */
 	.mmComp {
-		margin-top: 18px;
+		margin: 0;
 	}
 	.mmCompHead {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 10px;
-		margin-bottom: 8px;
+		margin-bottom: 10px;
 	}
 	.mmCompLabel {
 		display: inline-flex;
@@ -1985,9 +2076,6 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		.mmReason2,
 		.mmItemWarn2 {
 			margin-left: 0;
-		}
-		.mmAutoBtn {
-			margin-left: 56px;
 		}
 	}
 </style>

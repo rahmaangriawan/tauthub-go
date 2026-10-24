@@ -2054,7 +2054,7 @@
 
 						
 					<label class="modalField">
-						<span>{tr("Nama Kampanye")} <span class="campaignSummaryMuted">({tr("opsional")})</span></span>
+						<span>{tr("Nama Kampanye")} <span class="campaignSummaryMuted">{tr("opsional")}</span></span>
 						<input
 							class="app-input"
 							bind:value={campaignName}
@@ -2066,7 +2066,7 @@
 					{#if SHOW_PROFILER_FIELD}
 						<label class="modalField">
 							<span class="inline-flex items-center gap-1">
-								{tr("Profiler")} <span class="campaignSummaryMuted">({tr("opsional")})</span>
+								{tr("Profiler")} <span class="campaignSummaryMuted">{tr("opsional")}</span>
 								<Tooltip.Root>
 									<Tooltip.Trigger>
 										{#snippet child({ props })}
@@ -2104,7 +2104,7 @@
 								searchPlaceholder={tr("Cari Profiler…")}
 								minWidth={0}
 							/>
-						<span class="campaignSummaryMuted">{tr("Acuan brand & gaya penulisan untuk The Writer.")}</span>
+						<span class="campaignHint">{tr("Acuan brand & gaya penulisan untuk The Writer.")}</span>
 							{#if !profilerLoading && profilerOptions.length === 0}
 								<!-- SEMENTARA: pintasan ke Brief (chatbot Profiler) disembunyikan
 								     sebelum deploy. Kembalikan saat fiturnya dirilis.
@@ -2435,6 +2435,22 @@
 	}
 	.walletStatus a:hover { text-decoration: underline; }
 		/* Ringkasan konfirmasi di modal kampanye (kartu beraksen biru dengan ikon svg). */
+		/* Jarak antarbagian modal kampanye di desktop: header → ringkasan →
+		   saldo → field. Mobile punya aturannya sendiri di media.css. */
+		@media (min-width: 768px) {
+			.campaignBody {
+				display: flex;
+				flex-direction: column;
+				gap: 16px;
+				padding-bottom: 6px;
+			}
+			.campaignSummary {
+				padding: 8px 18px;
+			}
+			.campaignSummaryRow {
+				padding: 13px 0;
+			}
+		}
 		.campaignSummary {
 			margin: 0;
 			padding: 4px 18px;
@@ -2479,5 +2495,18 @@
 			color: #0f172a;
 			white-space: nowrap;
 		}
-		.campaignSummaryMuted { font-weight: 500; color: var(--muted-foreground); }
+		.campaignHint {
+			display: block;
+			font-weight: 500;
+			font-size: 11.5px;
+			color: var(--muted-foreground);
+		}
+		.campaignSummaryMuted {
+			font-weight: 550;
+			color: var(--muted-foreground);
+			background: var(--secondary, #f1f5f9);
+			border-radius: 6px;
+			padding: 1px 7px;
+			font-size: 11.5px;
+		}
 </style>
