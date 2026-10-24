@@ -75,8 +75,8 @@ func enqueue(ctx context.Context, pool *pgxpool.Pool, profileID, brandID string,
 			UPDATE jobs SET payload = payload || '{"force":true}'::jsonb, updated_at = now()
 			WHERE id = (
 				SELECT id FROM jobs
-				WHERE kind = $1 AND status = 'pending'
-				  AND payload->>'profileId' = $2 AND payload->>'kind' = $3
+				WHERE kind = $1::text AND status = 'pending'
+				  AND payload->>'profileId' = $2::text AND payload->>'kind' = $3::text
 				LIMIT 1
 			)`, JobKind, profileID, string(kind)); err != nil {
 			slog.Warn("[brief-summary] gagal menandai force", "profile_id", profileID, "kind", kind, "err", err)
@@ -85,18 +85,18 @@ func enqueue(ctx context.Context, pool *pgxpool.Pool, profileID, brandID string,
 	}
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO jobs (id, kind, payload, status, attempts, max_attempts, run_at)
-		SELECT gen_random_uuid()::text, $1,
+		SELECT gen_random_uuid()::text, $1::text,
 		       jsonb_build_object('profileId', $2::text, 'brandId', $3::text, 'kind', $4::text)
 		         || CASE WHEN $5::boolean THEN '{"force":true}'::jsonb ELSE '{}'::jsonb END,
 		       'pending', 0, 2,
 		       now() + interval '20 seconds'
-		         + CASE WHEN $4 = 'file' THEN interval '15 seconds' ELSE interval '0 seconds' END
+		         + CASE WHEN $4::text = 'file' THEN interval '15 seconds' ELSE interval '0 seconds' END
 		         + (random() * interval '20 seconds')
 		WHERE NOT EXISTS (
 			SELECT 1 FROM jobs
-			WHERE kind = $1 AND status = 'pending'
-			  AND payload->>'profileId' = $2
-			  AND payload->>'kind' = $4
+			WHERE kind = $1::text AND status = 'pending'
+			  AND payload->>'profileId' = $2::text
+			  AND payload->>'kind' = $4::text
 		)`, JobKind, profileID, brandID, string(kind), force); err != nil {
 		slog.Warn("[brief-summary] gagal menjadwalkan job", "profile_id", profileID, "kind", kind, "err", err)
 		return err
