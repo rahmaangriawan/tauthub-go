@@ -78,6 +78,9 @@ func (d *Deps) executeTurn(inCtx context.Context, in executeInput) (result *turn
 	// giliran — AI tetap menjawab (tanpa bahan halaman itu).
 	d.absorbMessageLinks(ctx, in.ProfileID, in.UserID, in.Message, in.OnStatus)
 
+	if in.OnStatus != nil {
+		in.OnStatus("Menyisir memori brief lama…")
+	}
 	t, err := d.loadTurn(ctx, in.ProfileID, in.BrandID, in.UserName)
 	if err != nil {
 		return nil, err
@@ -126,6 +129,10 @@ func (d *Deps) executeTurn(inCtx context.Context, in executeInput) (result *turn
 			run.Result.DurationMS, "", err.Error())
 		return nil, err
 	}
+
+	// Ringkasan bergulir: dicatat per giliran (best-effort) supaya pesan yang
+	// keluar dari jendela riwayat tetap terwakili di konteks giliran berikutnya.
+	d.appendChatSummary(ctx, in.ProfileID, in.Message, accepted, run.Output)
 
 	d.finishRun(ctx, runID, "done", run.Result.InputTokens, run.Result.OutputTokens,
 		run.Result.DurationMS, reply, "")

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 
@@ -26,24 +27,102 @@ const (
 
 var reURLInText = regexp.MustCompile(`https?://[^\s<>"'\])}]+`)
 
+// Domain tanpa skema ("salsariresto.com", "www.kedai.id") — cara paling
+// umum user menyebut situsnya di obrolan. Whitelist TLD menjaga agar kata
+// biasa tidak salah dianggap domain.
+var reBareDomain = regexp.MustCompile(`^(?:www\.)?[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+$`)
+
+var linkTLDs = map[string]bool{
+	"com": true, "net": true, "org": true, "id": true, "io": true, "ai": true,
+	"co": true, "my": true, "me": true, "tv": true, "fm": true, "app": true,
+	"dev": true, "site": true, "online": true, "store": true, "shop": true,
+	"xyz": true, "info": true, "biz": true, "news": true, "blog": true,
+	"cloud": true, "website": true, "digital": true, "link": true, "space": true,
+}
+
 // extractURLs: URL http(s) di dalam teks pesan, bersih dari tanda baca
 // penutup yang biasanya ikut terbawa (titik, koma, kutip), maksimal dua.
+// Domain telanjang dinormalisasi ke https:// supaya ikut terbaca.
 func extractURLs(message string) []string {
 	matches := reURLInText.FindAllString(message, -1)
 	out := make([]string, 0, len(matches))
 	seen := map[string]bool{}
+	seenHosts := map[string]bool{}
 	for _, m := range matches {
 		trimmed := strings.TrimRight(m, ".,;:!?…")
-		if trimmed == "" || seen[trimmed] {
+		if trimmed == "" {
 			continue
 		}
-		seen[trimmed] = true
+		if key := linkDedupeKey(trimmed); seen[key] {
+			continue
+		}
+		seen[linkDedupeKey(trimmed)] = true
+		if h := linkHostKey(trimmed); h != "" {
+			seenHosts[h] = true
+		}
 		out = append(out, trimmed)
+		if len(out) >= maxLinksPerMessage {
+			return out
+		}
+	}
+
+	// Token domain telanjang: pecah pada karakter yang bukan bagian domain.
+	// Token mengandung '@' dilewati (email) supaya "aku@resto.com" tidak
+	// dianggap menyebut resto.com.
+	tokens := strings.FieldsFunc(message, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '-' && r != '@'
+	})
+	for _, tok := range tokens {
+		if strings.Contains(tok, "@") {
+			continue
+		}
+		lower := strings.ToLower(strings.Trim(tok, ".-"))
+		if !reBareDomain.MatchString(lower) {
+			continue
+		}
+		labels := strings.Split(lower, ".")
+		if len(labels) < 2 || !linkTLDs[labels[len(labels)-1]] {
+			continue
+		}
+		normalized := "https://" + lower
+		if seen[linkDedupeKey(normalized)] || seenHosts[linkHostKey(normalized)] {
+			continue
+		}
+		seen[linkDedupeKey(normalized)] = true
+		out = append(out, normalized)
 		if len(out) >= maxLinksPerMessage {
 			break
 		}
 	}
 	return out
+}
+
+// linkDedupeKey: host (+path bila ada), tanpa www — "https://a.com/x" dan
+// "a.com" pada pesan yang sama dihitung sekali.
+func linkDedupeKey(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return strings.ToLower(raw)
+	}
+	key := strings.ToLower(u.Host + u.Path)
+	if strings.HasPrefix(key, "www.") {
+		key = key[4:]
+	}
+	return key
+}
+
+// linkHostKey: host tanpa www — dipakai agar domain telanjang dari host yang
+// sudah ada URL lengkapnya tidak dihitung dua kali.
+func linkHostKey(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	h := strings.ToLower(u.Host)
+	if strings.HasPrefix(h, "www.") {
+		h = h[4:]
+	}
+	return h
 }
 
 // absorbMessageLinks: pastikan setiap tautan dari pesan user sudah dibaca

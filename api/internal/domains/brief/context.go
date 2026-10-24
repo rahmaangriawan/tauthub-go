@@ -24,6 +24,7 @@ type StateView struct {
 	Values      map[string]any // key field → nilai saat ini (dari jsonb)
 	Phase       Phase
 	Sources     []SourceItem
+	Memory      []MemoryFact
 	UserName    string
 	ProfileName string
 	// AskedField: field yang AI tanyakan giliran sebelumnya. Dipakai supaya
@@ -79,6 +80,9 @@ func BuildUserMessage(v StateView) string {
 	}
 
 	b.WriteString("\n## Dokumen & website yang sudah dibaca sistem\n")
+	if mem := memoryBlock(v.Memory); mem != "" {
+		b.WriteString(mem + "\n\n")
+	}
 	b.WriteString(clip(sourceBlock(v.Sources), maxSourcesChars))
 	return b.String()
 }

@@ -17,15 +17,15 @@ const briefConfigEntityID = "taut_brief_config"
 // sehingga fitur langsung jalan setelah migrasi tanpa admin mengisi API key
 // ulang. Agent tetap bisa punya model/key sendiri (mis. model murah).
 type AgentConfig struct {
-	Agent      string
-	BaseURL    string
-	APIKey     string
-	Model      string
+	Agent       string
+	BaseURL     string
+	APIKey      string
+	Model       string
 	Temperature float64
-	MaxTokens  *int
-	TimeoutMS  int
-	Enabled    bool
-	Inherited  bool
+	MaxTokens   *int
+	TimeoutMS   int
+	Enabled     bool
+	Inherited   bool
 }
 
 func (c *AgentConfig) Configured() bool {

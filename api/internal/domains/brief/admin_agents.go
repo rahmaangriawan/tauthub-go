@@ -42,7 +42,7 @@ func (d *Deps) TautBriefAgentConfigGet(w http.ResponseWriter, r *http.Request) {
 		baseURL, sealed, model *string
 		temperature            float64 = 0.2
 		maxTokens              *int
-		timeoutMS              int = 120000
+		timeoutMS              int  = 120000
 		enabled                bool = true
 	)
 	_ = d.Pool.QueryRow(r.Context(), `

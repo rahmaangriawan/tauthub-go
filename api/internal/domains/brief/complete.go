@@ -3,6 +3,7 @@ package brief
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +34,13 @@ type turn struct {
 	History      []message
 	ProfileName  string
 	UserName     string
+	// ChatSummary: ringkasan bergulir percakapan (kolom profiler_profiles.
+	// chat_summary) — jembatan bagi pesan-pesan yang sudah keluar dari
+	// jendela riwayat maxHistoryMessages.
+	ChatSummary string
+	// Memory: fakta relevan dari brief LAIN di brand yang sama (recall
+	// embedding lokal atas pesan user terakhir).
+	Memory []MemoryFact
 }
 
 func (d *Deps) loadTurn(ctx context.Context, profileID, brandID, userName string) (*turn, error) {
@@ -73,7 +81,11 @@ func (d *Deps) loadTurn(ctx context.Context, profileID, brandID, userName string
 		Config: cfg, Prompt: prompt, Fields: fields, FieldVersion: fieldVersion,
 		States: states, Values: values, Sources: sources, History: history,
 		ProfileName: name, UserName: userName, AskedField: askedField,
+		ChatSummary: d.loadChatSummary(ctx, profileID),
 	}
+	// Memori lintas brief: pakai pesan user TERAKHIR sebagai query; field
+	// yang sedang ditanyakan diberi boost saat pencocokan.
+	t.Memory = d.RecallFacts(ctx, brandID, profileID, lastUserMessage(history), askedField, 5)
 	t.Phase = DeterminePhase(PhaseInput{
 		HasUserMessage:           hasUser,
 		HasMaterial:              materialAt > 0,
@@ -87,10 +99,20 @@ func (d *Deps) loadTurn(ctx context.Context, profileID, brandID, userName string
 	return t, nil
 }
 
+// lastUserMessage: isi pesan user terbaru dari riwayat (query recall memori).
+func lastUserMessage(history []message) string {
+	for i := len(history) - 1; i >= 0; i-- {
+		if history[i].Role == "user" {
+			return history[i].Content
+		}
+	}
+	return ""
+}
+
 func (t *turn) stateView() StateView {
 	return StateView{
 		Fields: t.Fields, States: t.States, Values: t.Values,
-		Phase: t.Phase, Sources: t.Sources,
+		Phase: t.Phase, Sources: t.Sources, Memory: t.Memory,
 		UserName: t.UserName, ProfileName: t.ProfileName,
 		AskedField: t.AskedField,
 	}
@@ -101,7 +123,9 @@ func (t *turn) stateView() StateView {
 // yang dikirim harus menggambarkan kondisi SEBELUM pesan itu diekstrak.
 func (t *turn) buildMessages() []ai.ChatMessage {
 	history := t.History
+	dropped := 0
 	if len(history) > maxHistoryMessages {
+		dropped = len(history) - maxHistoryMessages
 		history = history[len(history)-maxHistoryMessages:]
 	}
 	stateBlock := BuildUserMessage(t.stateView())
@@ -110,6 +134,15 @@ func (t *turn) buildMessages() []ai.ChatMessage {
 	system := t.Prompt
 	if strings.TrimSpace(system) == "" {
 		system = "Kamu adalah Brief Assistant Tauthub. Balas dalam JSON sesuai kontrak yang diberikan."
+	}
+	// Pesan yang jatuh di luar jendela riwayat digantikan ringkasan bergulir
+	// supaya giliran tetap tahu koreksi/preferensi/fakta awal percakapan.
+	if dropped > 0 {
+		system += "\n\n# PERCAKAPAN SEBELUM JENDELA RIWAYAT\n"
+		if s := strings.TrimSpace(t.ChatSummary); s != "" {
+			system += s + "\n"
+		}
+		system += "(" + strconv.Itoa(dropped) + " pesan paling awal tidak disertakan; ringkasan di atas menggantikannya. Jangan menanyakan ulang informasi yang sudah ada di ringkasan atau di state.)\n"
 	}
 	msgs = append(msgs, ai.ChatMessage{Role: "system", Content: system})
 

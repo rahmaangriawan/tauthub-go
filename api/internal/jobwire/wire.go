@@ -7,6 +7,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
 	brandflowdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brandflow"
+	briefdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brief"
 	briefsummary "github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 	platformdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/platform"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
@@ -20,6 +21,7 @@ func Register(pool *pgxpool.Pool, cfg *config.Config) {
 	Platform(pool, cfg).RegisterMediaJobs()
 	Platform(pool, cfg).RegisterPRJobs()
 	briefsummary.RegisterJobs(pool, cfg)
+	briefdomain.RegisterMemoryJobs(pool)
 	registerContentJobs(pool, cfg)
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -278,6 +279,9 @@ func (d *Deps) applyUpdates(ctx context.Context, profileID, userID string, field
 			return err
 		}
 	}
+	// Nilai field berubah -> indeks memori lintas brief ikut diperbarui
+	// (async, best-effort — tidak boleh menggagalkan giliran).
+	d.QueueMemoryReindex(ctx, profileID)
 	return nil
 }
 
@@ -300,6 +304,53 @@ type message struct {
 	Content   string
 	Meta      map[string]any
 	CreatedAt time.Time
+}
+
+// loadChatSummary: ringkasan bergulir percakapan untuk profile ini.
+func (d *Deps) loadChatSummary(ctx context.Context, profileID string) string {
+	var s string
+	_ = d.Pool.QueryRow(ctx,
+		`SELECT chat_summary FROM profiler_profiles WHERE id = $1`, profileID).Scan(&s)
+	return s
+}
+
+// appendChatSummary: tambah satu baris ringkasan untuk giliran yang baru
+// selesai, lalu pangkas dari depan supaya total tetap ringkas (maks 24 baris
+// / 2400 karakter). Deterministik dari data giliran — tanpa panggilan LLM
+// tambahan.
+func (d *Deps) appendChatSummary(ctx context.Context, profileID, userMsg string, accepted []FieldUpdate, out *EngineOutput) {
+	const maxLines = 24
+	const maxChars = 2400
+
+	line := "User: \"" + truncateRunes(strings.TrimSpace(userMsg), 140) + "\""
+	var parts []string
+	for _, u := range accepted {
+		parts = append(parts, u.Key+"="+truncateRunes(fmt.Sprint(u.Value), 60))
+	}
+	if len(parts) > 0 {
+		line += " -> diisi: " + strings.Join(parts, ", ")
+	}
+	if out != nil && out.AskedField != nil && strings.TrimSpace(*out.AskedField) != "" {
+		line += "; ditanya: " + *out.AskedField
+	}
+	line += "\n"
+
+	var prev string
+	_ = d.Pool.QueryRow(ctx,
+		`SELECT chat_summary FROM profiler_profiles WHERE id = $1`, profileID).Scan(&prev)
+	lines := append(strings.Split(prev, "\n"), line)
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	s := strings.Join(lines, "\n")
+	if len(s) > maxChars {
+		s = s[len(s)-maxChars:]
+		if i := strings.IndexByte(s, '\n'); i >= 0 {
+			s = s[i+1:]
+		}
+	}
+	_, _ = d.Pool.Exec(ctx,
+		`UPDATE profiler_profiles SET chat_summary = $1, updated_at = NOW() WHERE id = $2`, s, profileID)
 }
 
 func (d *Deps) loadMessages(ctx context.Context, profileID string, limit int) ([]message, error) {
@@ -425,6 +476,30 @@ func (d *Deps) loadSources(ctx context.Context, profileID string) ([]SourceItem,
 			}
 			items = append(items, SourceItem{Kind: "url", Label: label, Text: derefStr(text)})
 		}
+	}
+
+	// URL yang SUDAH DICOBA tetapi gagal dibaca tetap diperlihatkan ke model
+	// dengan status gagal — supaya ia bisa menjelaskan keterbatasannya secara
+	// jujur dan menawarkan alternatif, bukan menganggap user belum memberi
+	// apa-apa. Gagal membaca TIDAK dianggap material (tidak menggeser `latest`,
+	// jadi fase tidak melompat ke confirm).
+	failRows, err := d.Pool.Query(ctx,
+		`SELECT url, COALESCE(NULLIF(fetch_error, ''), 'tidak diketahui penyebabnya') FROM profiler_urls
+		 WHERE profile_id = $1 AND deleted_at IS NULL AND fetch_status IN ('failed', 'fetching')
+		 ORDER BY created_at DESC LIMIT 5`, profileID)
+	if err == nil {
+		for failRows.Next() {
+			var url, reason string
+			if failRows.Scan(&url, &reason) != nil {
+				continue
+			}
+			items = append(items, SourceItem{
+				Kind:  "url",
+				Label: url,
+				Text:  "Sistem SUDAH mencoba membaca halaman ini tetapi GAGAL: " + reason + ". Isi halaman TIDAK tersedia — jangan mengarang isinya, jelaskan ke user dan tawarkan alternatif (jawab singkat atau tempel teksnya).",
+			})
+		}
+		failRows.Close()
 	}
 
 	// Skema lama: material dianggap ada hanya bila isinya benar-benar terbaca.

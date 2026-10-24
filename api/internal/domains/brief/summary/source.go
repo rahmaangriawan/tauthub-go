@@ -21,9 +21,9 @@ func BuildSource(ctx context.Context, pool *pgxpool.Pool, profileID string, kind
 
 func buildEntitySource(ctx context.Context, pool *pgxpool.Pool, profileID string) (Source, error) {
 	var (
-		name                       *string
+		name                             *string
 		entityCore, identity, style, seo []byte
-		instructions               *string
+		instructions                     *string
 	)
 	err := pool.QueryRow(ctx, `
 		SELECT name,
