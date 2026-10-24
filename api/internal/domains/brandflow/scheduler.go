@@ -135,9 +135,12 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	res.MediaHealthRefreshed = d.schRefreshStaleMediaHealth(ctx, 3)
 
 	// 8. Sweep enqueue berkala — semua best-effort, urutan mengikuti legacy.
+	//    Batch domain/crawl diperkecil (20 -> 5): cooldown di query sudah
+	//    membatasi percobaan per media, dan batch kecil memuluskan beban job
+	//    per siklus alih-alih meledak sekaligus.
 	d.schSweepMediaAiSummaries(ctx, 3)
-	d.schEnqueueDomainRechecks(ctx, 20)
-	d.schEnqueueCrawlTargetSyncs(ctx, 20)
+	d.schEnqueueDomainRechecks(ctx, 5)
+	d.schEnqueueCrawlTargetSyncs(ctx, 5)
 	d.schEnqueuePublicationLinkChecks(ctx, 20)
 	d.schEnqueueMediaAiRefreshes(ctx, 20)
 	// Media aktif tanpa data trafik SimilarWeb otomatis masuk antrean; media
@@ -807,6 +810,12 @@ func (d *Deps) schTierDefaultQuality(ctx context.Context) map[string]float64 {
 
 // schEnqueueDomainRechecks: enqueue domain_verify untuk SEMUA media mitra yang
 // punya website dan terakhir dicek > 7 hari lalu (atau belum pernah).
+//
+// Cooldown 6 jam berdasarkan riwayat job (bukan hanya status pending): bila
+// verifikasi gagal sebelum sempat memperbarui domain_last_checked_at, media
+// yang sama akan lolos gate 7-hari SETIAP siklus scheduler (10 detik) dan
+// menghasilkan ribuan job sia-sia. Satu percobaan per media per 6 jam sudah
+// cukup responsif untuk pemulihan.
 func (d *Deps) schEnqueueDomainRechecks(ctx context.Context, limit int) {
 	stale, err := d.queryRows(ctx, `
 		SELECT id FROM media
@@ -815,8 +824,9 @@ func (d *Deps) schEnqueueDomainRechecks(ctx context.Context, limit int) {
 		  AND (domain_last_checked_at IS NULL OR domain_last_checked_at < NOW() - INTERVAL '7 days')
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
-		    WHERE j.kind = 'domain_verify' AND j.status IN ('pending', 'running')
+		    WHERE j.kind = 'domain_verify'
 		      AND j.payload->>'mediaId' = media.id
+		      AND (j.status IN ('pending', 'running') OR j.created_at > NOW() - INTERVAL '6 hours')
 		  )
 		ORDER BY domain_last_checked_at NULLS FIRST
 		LIMIT $1`, limit)
@@ -865,8 +875,13 @@ func (d *Deps) schEnqueueCrawlTargetSyncs(ctx context.Context, limit int) {
 		  AND (ct.updated_at IS NULL OR ct.updated_at < NOW() - INTERVAL '24 hours')
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
-		    WHERE j.kind = 'crawl_target_sync' AND j.status IN ('pending','running')
+		    WHERE j.kind = 'crawl_target_sync'
 		      AND j.payload->>'mediaId' = m.id
+		      -- Cooldown 24 jam dari percobaan terakhir, bukan hanya status
+		      -- pending: media tanpa baris crawl_targets (sync selalu gagal
+		      -- sebelum menulis ct) akan memenuhi gate SETIAP siklus dan
+		      -- membanjiri antrean.
+		      AND (j.status IN ('pending', 'running') OR j.created_at > NOW() - INTERVAL '24 hours')
 		  )
 		ORDER BY ct.last_crawled_at ASC NULLS FIRST
 		LIMIT $2`, staleMonths, limit)
@@ -902,8 +917,11 @@ func (d *Deps) schEnqueuePublicationLinkChecks(ctx context.Context, limit int) {
 		  AND (c.last_checked_at IS NULL OR c.last_checked_at < NOW() - INTERVAL '30 days')
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
-		    WHERE j.kind = 'publication_link_check' AND j.status IN ('pending','running')
+		    WHERE j.kind = 'publication_link_check'
 		      AND j.payload->>'publicationId' = p.id
+		      -- Cooldown 24 jam: cek yang gagal sebelum mencatat hasil tidak
+		      -- boleh memicu percobaan baru setiap siklus scheduler.
+		      AND (j.status IN ('pending', 'running') OR j.created_at > NOW() - INTERVAL '24 hours')
 		  )
 		ORDER BY c.last_checked_at NULLS FIRST
 		LIMIT $1`, limit)

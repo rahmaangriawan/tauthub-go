@@ -50,11 +50,14 @@ func DefaultRetentionConfig() RetentionConfig {
 		TrainingSamplesDays: 30,
 		UserSessionDays:     30,
 		// Job antrean cuma riwayat internal (debug). Laju produksi ±4 ribu
-		// job/hari dari crawl_target_sync + domain_verify; 7 hari cukup untuk
-		// investigasi dan menjaga tabel tetap ramping (~28 ribu baris).
-		JobsDoneDays:      7,
+		// job/hari dari crawl_target_sync + domain_verify; 3 hari cukup untuk
+		// investigasi insiden terbaru dan menjaga tabel tetap ramping.
+		JobsDoneDays:      3,
 		AuthRateLimitDays: 7,
-		NotificationDays:  90,
+		// Lonceng: 30 hari untuk yang sudah dibaca cukup (feed bukan arsip),
+		// sedangkan yang TAK terbaca kedaluwarsa 90 hari — lihat kondisi
+		// notifications di bawah.
+		NotificationDays:  30,
 		EmailDeliveryDays: 90,
 		TrackingEventDays: 180,
 		AuditLogDays:      365,
@@ -131,10 +134,9 @@ func RunRetention(ctx context.Context, pool *pgxpool.Pool, cfg RetentionConfig) 
 		dest  *int64
 	}{
 		// Notifikasi: yang sudah dibaca dipangkas menurut NotificationDays;
-		// yang TIDAK pernah dibaca tetap kedaluwarsa setelah 180 hari — tanpa
-		// ini lonceng menumpuk selamanya (10 ribu notifikasi tak terbaca
-		// menahan ~14 MB).
-		{"notifications", "((read_at IS NOT NULL AND read_at < NOW() - ($1 * INTERVAL '1 day')) OR (read_at IS NULL AND created_at < NOW() - INTERVAL '180 days')) AND id > $2", cfg.NotificationDays, &rep.Notifications},
+		// yang TIDAK pernah dibaca tetap kedaluwarsa setelah 90 hari — tanpa
+		// ini lonceng menumpuk selamanya.
+		{"notifications", "((read_at IS NOT NULL AND read_at < NOW() - ($1 * INTERVAL '1 day')) OR (read_at IS NULL AND created_at < NOW() - INTERVAL '90 days')) AND id > $2", cfg.NotificationDays, &rep.Notifications},
 		{"email_deliveries", "created_at < NOW() - ($1 * INTERVAL '1 day') AND id > $2", cfg.EmailDeliveryDays, &rep.EmailDeliveries},
 		{"tracking_events", "created_at < NOW() - ($1 * INTERVAL '1 day') AND id > $2", cfg.TrackingEventDays, &rep.TrackingEvents},
 		{"audit_logs", "created_at < NOW() - ($1 * INTERVAL '1 day') AND id > $2", cfg.AuditLogDays, &rep.AuditLogs},

@@ -562,21 +562,40 @@ func (d *Deps) DomainVerifyJob(ctx context.Context, mediaID string) error {
 // dengan dedupe per media (24 jam). Jaring pengaman: guard transisi di
 // DomainVerifyJob bergantung pada domain_health yang tersimpan — bila penulisan
 // diagnostik gagal, guard itu lolos tiap siklus scheduler dan notifikasi akan
-// terulang. Dedupe ini menahannya.
+// terulang.
+//
+// Cek-dan-insert dijalankan DI BAWAH advisory lock per media. Sebelumnya
+// keduanya terpisah, sehingga beberapa worker yang memverifikasi media yang
+// sama secara bersamaan bisa sama-sama lolos cek lalu menulis duplikat
+// (badai 2–3 Okt: 16 ribu baris untuk hanya 23 media).
 func (d *Deps) notifyPlatformAdminsDomainDown(ctx context.Context, mediaID, title, body string, link *string) {
 	dedupeKey := "media.domain_down:" + mediaID
-	dup, err := d.queryRow(ctx,
-		"SELECT id FROM notifications WHERE dedupe_key = $1 AND created_at > NOW() - INTERVAL '24 hours' LIMIT 1", dedupeKey)
-	if err != nil || dup != nil {
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		d.logWarn("notifikasi domain_down ke admin gagal", mediaID, err)
 		return
 	}
-	if err := d.exec(ctx, `
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, dedupeKey); err != nil {
+		d.logWarn("lock notifikasi domain_down gagal", mediaID, err)
+		return
+	}
+	var dup int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM notifications WHERE dedupe_key = $1 AND created_at > NOW() - INTERVAL '24 hours'`,
+		dedupeKey).Scan(&dup); err != nil || dup > 0 {
+		return
+	}
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key)
 		SELECT gen_random_uuid(), id, 'media.domain_down', $1, $2, $3, $4
 		FROM users WHERE role = 'admin' AND is_active = TRUE`,
 		title, body, link, dedupeKey); err != nil {
 		d.logWarn("notifikasi domain_down ke admin gagal", mediaID, err)
+		return
 	}
+	_ = tx.Commit(ctx)
 }
 
 // notifyPartnerCrawlBlocked: notifikasi ke mitra pemilik media bila situsnya
