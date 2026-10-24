@@ -226,6 +226,36 @@
 	let summaryTimer: ReturnType<typeof setTimeout> | null = null;
 	let summarySeq = 0;
 	const summaryCurrent = $derived(summaryOf(summaryTab));
+
+	// ---------- popup "entitas 100% → ringkas" ----------
+	// Fase: 'idle' (tak tampil) → 'invite' (ajakan) → 'working' (animasi) →
+	// 'done' (berhasil) atau 'error'. 'edit' menandai user meneruskan obrolan
+	// dengan niat mengedit, supaya pesan berikutnya diarahkan ke tanya-jawab
+	// entitas alih-alih disangka sinyal siap rilis.
+	type SummaryPromptPhase = 'idle' | 'invite' | 'working' | 'done' | 'error';
+	let summaryPrompt = $state<SummaryPromptPhase>('idle');
+	let summaryPromptError = $state('');
+	// Penanda "sudah pernah ditawari utk progres 100% ini" agar popup tidak
+	// muncul berulang tiap render.
+	let summaryInvitedFor = $state('');
+	let editModeIntent = $state(false);
+
+	const entitySummaryReady = $derived(summaryOf('entity').status === 'ready');
+	const entitySummaryBusy = $derived(
+		summaryOf('entity').status === 'queued' || summaryOf('entity').status === 'running'
+	);
+
+	// Kunci undangan per kombinasi progres+ringkasan: begitu ringkasan jadi,
+	// kuncinya berubah sehingga undangan berikutnya (setelah data berubah lagi)
+	// tetap bisa muncul.
+	$effect(() => {
+		if (progressPct < 100) return;
+		const key = `${progress.filled}/${progress.total}:${entitySummaryReady}`;
+		if (summaryInvitedFor === key) return;
+		summaryInvitedFor = key;
+		if (entitySummaryReady || summaryPrompt !== 'idle') return;
+		summaryPrompt = 'invite';
+	});
 	const summaryBadge = $derived(summaryStatus(summaryCurrent));
 	const summaryActionLabel = $derived(
 		summaryCurrent.status === 'idle'
@@ -610,6 +640,17 @@
 	async function send(preset?: string) {
 		const text = (preset ?? composer).trim();
 		if ((!text && pendingDocs.length === 0) || streaming || uploadingNow) return;
+
+		// Entitas sudah 100% & sudah diringkas, lalu user mau mengetik lagi:
+		// tawarkan dulu "lanjut edit?" — kecuali pesan ini memang berasal dari
+		// alur edit (continueToEdit) agar tidak memicu popup berulang.
+		if (!editModeIntent && summaryPrompt === 'idle' && progressPct >= 100 && entitySummaryReady) {
+			summaryInvitedFor = '';
+			summaryPrompt = 'invite';
+			return;
+		}
+		editModeIntent = false;
+
 		streamError = '';
 		composer = '';
 		const composerEl = document.getElementById('brief-composer') as HTMLTextAreaElement | null;
@@ -945,6 +986,51 @@
 		} finally {
 			summaryBusy = null;
 		}
+	}
+
+	// Popup: user setuju diringkas. Animasi 'working' ditahan minimal ~1,6 detik
+	// supaya transisi terasa disengaja walau job-nya cepat, lalu menunggu job
+	// benar-benar selesai (status ready/failed).
+	async function runSummaryFromPrompt() {
+		summaryPrompt = 'working';
+		summaryPromptError = '';
+		const startedAt = Date.now();
+		await regenerateSummary('entity');
+		if (summaryOf('entity').status === 'failed') {
+			summaryPromptError = summaryOf('entity').error || tr('Ringkasan gagal dibuat. Cek log agent di admin.');
+			summaryPrompt = 'error';
+			return;
+		}
+		for (let i = 0; i < 60; i++) {
+			if (summaryOf('entity').status === 'failed') {
+				summaryPromptError = summaryOf('entity').error || tr('Ringkasan gagal dibuat.');
+				summaryPrompt = 'error';
+				return;
+			}
+			if (summaryOf('entity').status === 'ready') break;
+			await new Promise((r) => setTimeout(r, 800));
+			await loadSummaries(true, true);
+		}
+		const elapsed = Date.now() - startedAt;
+		if (elapsed < 1600) await new Promise((r) => setTimeout(r, 1600 - elapsed));
+		summaryPrompt = summaryOf('entity').status === 'ready' ? 'done' : 'error';
+		if (summaryPrompt === 'error' && !summaryPromptError) {
+			summaryPromptError = tr('Ringkasan belum selesai. Cek log agent di admin.');
+		}
+	}
+
+	// Lanjut obrolan: tutup popup dan beri pesan pembuka ke Copilot supaya LLM
+	// yang menawarkan field mana yang mau diedit (bukan user menebak).
+	// Teks yang sudah terlanjur diketik user ikut disertakan, jangan dibuang.
+	async function continueToEdit() {
+		summaryPrompt = 'idle';
+		editModeIntent = true;
+		activeTab = 'copilot';
+		const typed = composer.trim();
+		const opener = tr(
+			'Entitas sudah lengkap 100%. Aku ingin meninjau dan mengeditnya. Tanya aku satu per satu field mana yang perlu diubah — mulai dari yang paling berpengaruh untuk ringkasan.'
+		);
+		await send(typed ? `${opener}\n\nCatatan/editanku: ${typed}` : opener);
 	}
 
 	async function copySummary(item: SummaryItem) {
@@ -1879,6 +1965,79 @@
 				{/if}
 			</div>
 
+			<!-- Popup ajakan ringkas: muncul saat entitas 100% (sekali per progres)
+			     dan saat user hendak mengirim pesan setelah ringkasan jadi. -->
+			{#if summaryPrompt !== 'idle'}
+				<div class="brief-summary-nudge-wrap">
+					<div class="brief-summary-nudge" role="status" aria-live="polite">
+						{#if summaryPrompt === 'invite'}
+							<span class="brief-nudge-icon" aria-hidden="true"><Sparkle size={16} /></span>
+							<div class="min-w-0 flex-1">
+								<p class="text-[13px] font-bold">Entitas sudah 100%, ringkas sekarang!</p>
+								<p class="mt-0.5 text-[11.5px] text-muted-foreground">
+									{entitySummaryReady
+										? tr('Mau lanjut mengedit entitas yang sudah ada?')
+										: tr('Ringkasan ini yang dibaca AI Writer — hemat token, fakta tetap terkunci.')}
+								</p>
+							</div>
+							<div class="flex shrink-0 items-center gap-1.5">
+								{#if entitySummaryReady}
+									<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" onclick={() => void continueToEdit()}>
+										{tr('Ya, lanjut edit')}
+									</button>
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => (summaryPrompt = 'idle')}>
+										{tr('Nanti')}
+									</button>
+								{:else}
+									<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" onclick={() => void runSummaryFromPrompt()}>
+										{tr('Ya, Ringkas')}
+									</button>
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => (summaryPrompt = 'idle')}>
+										{tr('Nanti')}
+									</button>
+								{/if}
+							</div>
+						{:else if summaryPrompt === 'working'}
+							<span class="brief-nudge-icon brief-nudge-spin" aria-hidden="true"><LoaderCircle size={16} /></span>
+							<div class="min-w-0 flex-1">
+								<p class="text-[13px] font-bold">{tr('Menyusun ringkasan…')}</p>
+								<div class="brief-nudge-bar mt-1.5"><span></span></div>
+								<p class="mt-1 text-[11.5px] text-muted-foreground">{tr('Membaca identitas & fakta kanonik brief-mu.')}</p>
+							</div>
+						{:else if summaryPrompt === 'done'}
+							<span class="brief-nudge-icon brief-nudge-ok" aria-hidden="true"><Check size={16} /></span>
+							<div class="min-w-0 flex-1">
+								<p class="text-[13px] font-bold">{tr('Ringkasan siap!')}</p>
+								<p class="mt-0.5 text-[11.5px] text-muted-foreground">
+									{#if summaryOf('entity').source_chars > 0 && summaryOf('entity').content}
+										{tr('Hemat')} {Math.max(0, Math.round((1 - summaryOf('entity').content.length / summaryOf('entity').source_chars) * 100))}% {tr('dibanding bahan aslinya.')}
+									{:else}
+										{tr('Ringkasan entitas sudah dibuat.')}
+									{/if}
+								</p>
+							</div>
+							<div class="flex shrink-0 items-center gap-1.5">
+								<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => (activeTab = 'ringkasan')}>
+									{tr('Lihat')}
+								</button>
+								<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" onclick={() => void continueToEdit()}>
+									{tr('Lanjut edit')}
+								</button>
+							</div>
+						{:else if summaryPrompt === 'error'}
+							<span class="brief-nudge-icon brief-nudge-err" aria-hidden="true"><ShieldAlert size={16} /></span>
+							<div class="min-w-0 flex-1">
+								<p class="text-[13px] font-bold">{tr('Ringkasan gagal dibuat')}</p>
+								<p class="mt-0.5 line-clamp-2 text-[11.5px]" style="color: var(--destructive);">{summaryPromptError}</p>
+							</div>
+							<button class="app-btn app-btn-soft !min-h-8 !shrink-0 !px-3 !text-xs" type="button" onclick={() => (summaryPrompt = 'idle')}>
+								{tr('Tutup')}
+							</button>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
 			<!-- Composer + layanan, menempel di bawah tanpa ikut kerek halaman. -->
 			<div class="border-t px-3 py-2" style="border-color: var(--border);">
 				{#if !configured}
@@ -2508,7 +2667,7 @@
 									<p class="mt-1 text-muted-foreground">{tr('Periksa konfigurasi agent di admin, lalu coba lagi.')}</p>
 								</div>
 							{:else if summaryCurrent.content}
-								<div class="brief-markdown mt-4 text-sm leading-relaxed">
+								<div class="brief-markdown brief-summary-body mt-4 text-sm leading-relaxed">
 									{@html sanitizeHtml(renderMarkdown(summaryCurrent.content))}
 								</div>
 							{:else}
@@ -2522,10 +2681,11 @@
 								{#if summaryCurrent.source_chars > 0}
 									<span>{summaryCurrent.source_chars.toLocaleString('id-ID')} {tr('karakter bahan')} → {summaryCurrent.content.length.toLocaleString('id-ID')} {tr('karakter ringkasan')}</span>
 								{/if}
-								{#if summaryCurrent.token_input + summaryCurrent.token_output > 0}
-									<span>{summaryCurrent.token_input + summaryCurrent.token_output} token</span>
+								{#if summaryCurrent.source_chars > 0 && summaryCurrent.content}
+									<span style="color: var(--success); font-weight: 650;">
+										{tr('Hemat')} {Math.max(0, Math.round((1 - summaryCurrent.content.length / summaryCurrent.source_chars) * 100))}%
+									</span>
 								{/if}
-								{#if summaryCurrent.model}<span>{summaryCurrent.model}</span>{/if}
 								{#if summaryCurrent.stale && summaryCurrent.status === 'ready'}
 									<span style="color: var(--warning);">{tr('Data brief berubah sejak ringkasan ini dibuat.')}</span>
 								{/if}
@@ -2887,15 +3047,39 @@
 	}
 	.brief-modal-danger:hover { opacity: 0.92; }
 
+	/* Wadah hasil ringkasan: kartu lembut dengan batas tipis supaya isinya
+	   terbaca sebagai dokumen, bukan teks polos menumpuk. */
+	.brief-summary-body {
+		padding: 14px 16px;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: color-mix(in srgb, var(--muted) 45%, white);
+		max-height: 62vh;
+		overflow-y: auto;
+	}
+
 	/* Isi dalam .brief-markdown berasal dari {@html} hasil renderMarkdown, jadi
 	   penyeleksinya harus :global — Svelte tidak bisa melihat elemen yang ada
 	   di dalam string HTML. */
 	.brief-markdown :global(p) { margin: 0 0 0.5rem; }
 	.brief-markdown :global(p:last-child) { margin-bottom: 0; }
+	/* Tailwind Preflight mematikan list-style & padding bawaan daftar. Tanpa
+	   padding-left penandanya menempel/terpotong — ini yang membuat ringkasan
+	   berpoin tampak rata kiri. */
 	.brief-markdown :global(ul),
-	.brief-markdown :global(ol) { margin: 0.25rem 0 0.5rem 1.1rem; }
+	.brief-markdown :global(ol) {
+		margin: 0.35rem 0 0.65rem;
+		padding-left: 1.5rem;
+	}
 	.brief-markdown :global(ul) { list-style: disc; }
 	.brief-markdown :global(ol) { list-style: decimal; }
+	.brief-markdown :global(ul ul) { list-style: circle; margin: 0.2rem 0; }
+	.brief-markdown :global(li) { margin: 0.25rem 0; padding-left: 0.25rem; }
+	.brief-markdown :global(li)::marker { color: var(--muted-foreground); }
+	.brief-markdown :global(li > p) { margin: 0 0 0.25rem; }
+	/* Judul kecil di dalam ringkasan jadi pemisah bagian yang jelas. */
+	.brief-markdown :global(h3),
+	.brief-markdown :global(h4) { color: var(--foreground); margin-bottom: 0.35rem; }
 	.brief-markdown :global(code) {
 		padding: 0.05rem 0.3rem;
 		border-radius: 6px;
@@ -2969,6 +3153,81 @@
 	}
 	.brief-markdown :global(del) { opacity: 0.65; }
 	.brief-markdown :global(li) { margin: 0.15rem 0; }
+
+	/* Popup ajakan ringkas di atas composer Copilot. */
+	.brief-summary-nudge-wrap {
+		padding: 8px 12px 0;
+		animation: brief-nudge-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+	}
+	.brief-summary-nudge {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		max-width: 42rem;
+		margin: 0 auto;
+		padding: 10px 12px;
+		border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+		border-radius: 14px;
+		background: color-mix(in srgb, var(--primary) 6%, white);
+		box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+	}
+	.brief-nudge-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 auto;
+		width: 32px;
+		height: 32px;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--primary) 12%, white);
+		color: var(--primary);
+	}
+	.brief-nudge-ok {
+		background: var(--success-soft);
+		color: var(--success);
+		animation: brief-nudge-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+	.brief-nudge-err {
+		background: var(--warning-soft);
+		color: var(--warning);
+	}
+	.brief-nudge-spin :global(svg) { animation: brief-nudge-spin 0.9s linear infinite; }
+	/* Bar progres tak-tentu: memberi kesan pekerjaan berjalan tanpa angka palsu. */
+	.brief-nudge-bar {
+		position: relative;
+		height: 3px;
+		overflow: hidden;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--primary) 15%, white);
+	}
+	.brief-nudge-bar span {
+		position: absolute;
+		inset-block: 0;
+		width: 40%;
+		border-radius: 999px;
+		background: var(--primary);
+		animation: brief-nudge-slide 1.1s ease-in-out infinite;
+	}
+	@keyframes brief-nudge-in {
+		from { opacity: 0; transform: translateY(6px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+	@keyframes brief-nudge-pop {
+		0% { transform: scale(0.6); }
+		60% { transform: scale(1.12); }
+		100% { transform: scale(1); }
+	}
+	@keyframes brief-nudge-spin { to { transform: rotate(360deg); } }
+	@keyframes brief-nudge-slide {
+		0% { left: -40%; }
+		100% { left: 100%; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.brief-summary-nudge-wrap,
+		.brief-nudge-ok,
+		.brief-nudge-spin :global(svg) { animation: none; }
+		.brief-nudge-bar span { animation: none; left: 0; width: 100%; }
+	}
 
 	/* Composer dua area: teks di atas, toolbar SATU baris di bawah.
 	   Tinggi satu baris: 16+14 padding + 2 border + 21 teks + 8 jarak + 36 toolbar ≈ 97px. */
