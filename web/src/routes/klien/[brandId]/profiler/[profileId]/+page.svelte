@@ -2401,12 +2401,6 @@
 										</p>
 									{/if}
 								</div>
-								<div class="mt-4 flex items-center justify-between gap-2 border-t pt-3 text-[11px]" style="border-color: var(--border);">
-									<span class="text-muted-foreground">{tr('Mesin Terhubung: ChatGPT 4o, Gemini 1.5, Perplexity AI')}</span>
-									<button class="font-bold underline-offset-2 hover:underline" style="color: var(--primary);" type="button" onclick={() => (activeTab = 'copilot')}>
-										{tr('Uji Respon LLM')} →
-									</button>
-								</div>
 							</section>
 						</div>
 					</div>
