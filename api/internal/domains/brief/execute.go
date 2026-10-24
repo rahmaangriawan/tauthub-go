@@ -78,9 +78,6 @@ func (d *Deps) executeTurn(inCtx context.Context, in executeInput) (result *turn
 	// giliran — AI tetap menjawab (tanpa bahan halaman itu).
 	d.absorbMessageLinks(ctx, in.ProfileID, in.UserID, in.Message, in.OnStatus)
 
-	if in.OnStatus != nil {
-		in.OnStatus("Menyisir memori brief lama…")
-	}
 	t, err := d.loadTurn(ctx, in.ProfileID, in.BrandID, in.UserName)
 	if err != nil {
 		return nil, err
