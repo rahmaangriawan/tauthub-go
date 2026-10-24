@@ -50,6 +50,7 @@ type UploadCleanupStats struct {
 	DeleteFailures  int64 // os.Remove gagal (dicoba lagi siklus berikutnya)
 	OrphansFound    int64 // berkas tanpa metadata melewati grace
 	OrphansDeleted  int64
+	TimelinePurged  int64 // post timeline > 3 bulan yang dihapus
 	ActiveFiles     int64
 	ActiveBytes     int64
 	DiskFreeBytes   uint64
@@ -136,6 +137,13 @@ func (d *Deps) RunUploadCleanup(ctx context.Context) UploadCleanupStats {
 
 	// 4. Sapuan yatim (default: lapor saja; hapus fisik via opt-in env).
 	d.sweepOrphans(ctx, lim, &st)
+
+	// 4b. Timeline brief: post lebih tua dari 3 bulan dihapus beserta
+	//     gambarnya (gambar ikut delete_pending lewat releaseTimelineImage).
+	if n := d.purgeExpiredTimeline(ctx); n > 0 {
+		st.TimelinePurged = n
+		slog.Info("[upload-cleanup] timeline kedaluwarsa dihapus", "jumlah", n)
+	}
 
 	// 5. Metrik penyimpanan.
 	d.collectStorageStats(ctx, &st)

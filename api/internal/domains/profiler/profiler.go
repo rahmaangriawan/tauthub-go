@@ -275,6 +275,7 @@ func (d *Deps) ProfileGet(w http.ResponseWriter, r *http.Request) {
 		"documents": d.listDocuments(r.Context(), profileID),
 		"images":    d.listImages(r.Context(), profileID),
 		"urls":      d.listURLs(r.Context(), profileID),
+		"timeline":  d.listTimeline(r.Context(), profileID),
 	}
 	writeJSON(w, http.StatusOK, out)
 }

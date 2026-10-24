@@ -78,6 +78,40 @@ func buildEntitySource(ctx context.Context, pool *pgxpool.Pool, profileID string
 func buildFileSource(ctx context.Context, pool *pgxpool.Pool, profileID string) (Source, error) {
 	var b strings.Builder
 
+	// TIMELINE ditaruh PALING ATAS: kabar terbaru (promo, kunjungan, peluncuran)
+	// adalah bahan paling unik, jadi tidak boleh terpotong oleh cap ukuran di
+	// akhir. Tanggal kejadian disertakan supaya Writer tahu mana yang segar.
+	tlRows, err := pool.Query(ctx, `
+		SELECT body, hashtags, COALESCE(occurred_on::text, created_at::date::text)
+		FROM profiler_timeline_posts
+		WHERE profile_id = $1 AND deleted_at IS NULL
+		ORDER BY COALESCE(occurred_on, created_at::date) DESC, created_at DESC
+		LIMIT $2`, profileID, maxTimeline)
+	if err == nil {
+		var lines []string
+		for tlRows.Next() {
+			var body, when string
+			var tags []string
+			if tlRows.Scan(&body, &tags, &when) != nil {
+				continue
+			}
+			body = strings.TrimSpace(body)
+			if body == "" {
+				continue
+			}
+			line := "[" + when + "] " + clip(body, timelineTextCap)
+			if len(tags) > 0 {
+				line += " #" + strings.Join(tags, " #")
+			}
+			lines = append(lines, line)
+		}
+		tlRows.Close()
+		if len(lines) > 0 {
+			b.WriteString("[TIMELINE TERBARU (kabar terbaru brand — utamakan sebagai sudut unik)]\n")
+			b.WriteString(strings.Join(lines, "\n") + "\n\n")
+		}
+	}
+
 	docRows, err := pool.Query(ctx, `
 		SELECT original_filename, COALESCE(extracted_text, '')
 		FROM profiler_documents

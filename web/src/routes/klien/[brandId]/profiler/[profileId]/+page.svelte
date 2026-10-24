@@ -18,7 +18,7 @@
 	import { page } from '$app/state';
 	import {
 		ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Copy, ExternalLink, FileText, Images, LoaderCircle,
-		Mic, MoreHorizontal, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, ShieldAlert, Sparkle, Square, SquarePen, Trash2, Upload, UserCircle, X
+		Mic, MoreHorizontal, Newspaper, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, ShieldAlert, Sparkle, Square, SquarePen, Trash2, Upload, UserCircle, X
 	} from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import Select from '$lib/components/select.svelte';
@@ -147,7 +147,7 @@
 
 	// Tab workspace: percakapan Copilot, ringkasan entitas, media brief, dan
 	// ringkasan AI (entitas/file) yang dipakai Writer mode proper.
-	let activeTab = $state<'copilot' | 'entitas' | 'media' | 'ringkasan'>('copilot');
+	let activeTab = $state<'copilot' | 'entitas' | 'timeline' | 'media' | 'ringkasan'>('copilot');
 	let showLayer2 = $state(false);
 
 	// Header band bisa diciutkan jadi strip judul tipis; default termuat jejak.
@@ -200,6 +200,30 @@
 	let mediaUploading = $state(false);
 	let mediaDragging = $state(false);
 	let mediaDragDepth = 0;
+
+	// ---------- Timeline (feed kabar terbaru brand) ----------
+	// Post kedaluwarsa otomatis 3 bulan; gambar memakai jalur unggah Media.
+	type TimelinePost = {
+		id: string;
+		body: string;
+		hashtags: string[];
+		image_url: string | null;
+		image_id: string | null;
+		occurred_on: string | null;
+		created_at: string | null;
+		author_name: string;
+	};
+	let timeline = $state<TimelinePost[]>([]);
+	let timelineLoading = $state(false);
+	let timelineError = $state('');
+	let timelinePosting = $state(false);
+	let timelineBody = $state('');
+	let timelineTags = $state('');
+	let timelineOccurredOn = $state('');
+	let timelineImageFile = $state<File | null>(null);
+	let timelineImagePreview = $state('');
+	const TIMELINE_BODY_MAX = 2000;
+	const TIMELINE_TAG_MAX = 10;
 	// Nomor urut permintaan: jawaban lama tidak boleh menimpa brief yang baru.
 	let mediaLoadSeq = 0;
 
@@ -422,6 +446,7 @@
 	$effect(() => {
 		// Tab Media memuat daftar berkas saat dibuka dan saat brief berganti.
 		if (activeTab === 'media' && profileId) void loadMedia();
+		if (activeTab === 'timeline' && profileId) void loadTimeline();
 	});
 
 	$effect(() => {
@@ -949,6 +974,118 @@
 		const d = new Date(iso);
 		if (Number.isNaN(d.getTime())) return '';
 		return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+	}
+
+	// ---------- timeline ----------
+
+	async function loadTimeline() {
+		if (!profileId) return;
+		timelineLoading = true;
+		timelineError = '';
+		try {
+			const res = await apiRequest(`${apiBase}/profiles/${profileId}/timeline`);
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat timeline.')));
+			const data = await res.json();
+			timeline = Array.isArray(data?.items) ? data.items : [];
+		} catch (e) {
+			timelineError = e instanceof Error ? e.message : tr('Gagal memuat timeline.');
+		} finally {
+			timelineLoading = false;
+		}
+	}
+
+	function pickTimelineImage(list: FileList | null | undefined) {
+		const file = list?.[0];
+		if (!file) return;
+		if (!isImageFile(file)) {
+			timelineError = tr('Timeline hanya menerima gambar (JPG, PNG, WebP, GIF). Video tidak didukung.');
+			return;
+		}
+		if (file.size > MAX_UPLOAD_BYTES) {
+			timelineError = `${tr('Gambar melebihi 10 MB')}: ${file.name} (${fmtSize(file.size)})`;
+			return;
+		}
+		timelineError = '';
+		timelineImageFile = file;
+		if (timelineImagePreview) URL.revokeObjectURL(timelineImagePreview);
+		timelineImagePreview = URL.createObjectURL(file);
+	}
+
+	function clearTimelineImage() {
+		if (timelineImagePreview) URL.revokeObjectURL(timelineImagePreview);
+		timelineImagePreview = '';
+		timelineImageFile = null;
+	}
+
+	async function submitTimelinePost() {
+		const body = timelineBody.trim();
+		if ((!body && !timelineImageFile) || timelinePosting) return;
+		timelinePosting = true;
+		timelineError = '';
+		try {
+			let imageId = '';
+			// Gambar diunggah dulu lewat jalur Media (kuota & validasi sama).
+			if (timelineImageFile) {
+				const up = await uploadTimelineImage(timelineImageFile);
+				imageId = up.id;
+			}
+			const tags = timelineTags
+				.split(/[\s,]+/)
+				.map((t) => t.trim().replace(/^#+/, ''))
+				.filter(Boolean)
+				.slice(0, TIMELINE_TAG_MAX);
+			const res = await apiRequest(`${apiBase}/profiles/${profileId}/timeline`, {
+				method: 'POST',
+				body: JSON.stringify({
+					body,
+					hashtags: tags,
+					image_id: imageId || undefined,
+					occurred_on: timelineOccurredOn || undefined
+				})
+			});
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memposting timeline.')));
+			timelineBody = '';
+			timelineTags = '';
+			timelineOccurredOn = '';
+			clearTimelineImage();
+			await loadTimeline();
+			await loadMedia();
+		} catch (e) {
+			timelineError = e instanceof Error ? e.message : tr('Gagal memposting timeline.');
+		} finally {
+			timelinePosting = false;
+		}
+	}
+
+	// Unggah gambar timeline ke koleksi media brief, kembalikan id-nya.
+	async function uploadTimelineImage(file: File): Promise<{ id: string; url: string }> {
+		const form = new FormData();
+		form.append('file', file);
+		form.append('source', 'library');
+		const res = await apiRequest(`${apiBase}/profiles/${profileId}/images`, { method: 'POST', body: form }, 120_000);
+		if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengunggah gambar timeline.')));
+		return await res.json();
+	}
+
+	async function deleteTimelinePost(post: TimelinePost) {
+		openConfirm({
+			title: tr('Hapus post timeline?'),
+			body: tr('Post ini akan dihapus dari timeline dan tidak dipakai lagi sebagai bahan artikel.'),
+			confirmLabel: tr('Hapus'),
+			danger: true,
+			action: async () => {
+				const res = await apiRequest(`${apiBase}/timeline/${post.id}`, { method: 'DELETE' });
+				if (!res.ok) {
+					timelineError = await readApiError(res, tr('Gagal menghapus post.'));
+					return;
+				}
+				timeline = timeline.filter((p) => p.id !== post.id);
+			}
+		});
+	}
+
+	function timelineWhen(post: TimelinePost): string {
+		return mediaDate(post.occurred_on || post.created_at);
 	}
 
 	// ---------- ringkasan AI (entitas & file) ----------
@@ -1730,6 +1867,21 @@
 					</button>
 					<button
 						class="brief-tab"
+						class:brief-tab-active={activeTab === 'timeline'}
+						type="button"
+						role="tab"
+						aria-selected={activeTab === 'timeline'}
+						onclick={() => (activeTab = 'timeline')}
+					>
+						<Newspaper size={14} />{tr('Timeline')}
+						{#if timeline.length > 0}
+							<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold" style="background: var(--secondary); color: var(--muted-foreground);">
+								{timeline.length}
+							</span>
+						{/if}
+					</button>
+					<button
+						class="brief-tab"
 						class:brief-tab-active={activeTab === 'ringkasan'}
 						type="button"
 						role="tab"
@@ -2488,6 +2640,133 @@
 					</div>
 				</div>
 			</div>
+			{:else if activeTab === 'timeline'}
+				<!-- ── Panel tab Timeline: feed kabar terbaru brand ─────────── -->
+				<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
+					<div class="mx-auto w-full max-w-2xl space-y-4">
+						<section class="app-card p-4">
+							<div class="flex items-center gap-3">
+								<span class="flex h-9 w-9 items-center justify-center rounded-xl" style="background: var(--accent); color: var(--accent-foreground);">
+									<Newspaper size={18} />
+								</span>
+								<div class="min-w-0">
+									<h3 class="text-sm font-bold">{tr('Timeline Brand')}</h3>
+									<p class="text-[11px] text-muted-foreground">
+										{tr('Kabar terbaru brand-mu — promo, kunjungan, peluncuran. Semakin baru, artikel Writer semakin unik. Otomatis kedaluwarsa 3 bulan.')}
+									</p>
+								</div>
+							</div>
+
+							<div class="mt-3 rounded-xl border p-3" style="border-color: var(--border); background: color-mix(in srgb, var(--muted) 40%, white);">
+								<textarea
+									class="w-full resize-none bg-transparent text-sm leading-relaxed outline-none"
+									rows="3"
+									maxlength={TIMELINE_BODY_MAX}
+									placeholder={tr('Contoh: Restoran kami kedatangan Chef Juna hari ini — ia memuji rendang dan menyarankan menu baru untuk akhir bulan.')}
+									bind:value={timelineBody}
+								></textarea>
+
+								{#if timelineImagePreview}
+									<div class="relative mt-2 w-fit">
+										<img src={timelineImagePreview} alt="" class="max-h-56 rounded-lg border" style="border-color: var(--border);" />
+										<button
+											class="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white"
+											type="button"
+											aria-label={tr('Lepaskan gambar')}
+											onclick={clearTimelineImage}
+										>
+											<X size={12} />
+										</button>
+									</div>
+								{/if}
+
+								<div class="mt-2 flex flex-wrap items-center gap-2">
+									<label class="app-btn app-btn-soft !min-h-8 !cursor-pointer !px-3 !text-xs">
+										<Images size={14} />{tr('Gambar')}
+										<input
+											class="hidden"
+											type="file"
+											accept="image/png,image/jpeg,image/webp,image/gif"
+											onchange={(e) => {
+												pickTimelineImage((e.currentTarget as HTMLInputElement).files);
+												(e.currentTarget as HTMLInputElement).value = '';
+											}}
+										/>
+									</label>
+									<input
+										class="app-input !min-h-8 min-w-[9rem] flex-1 !text-xs"
+										type="date"
+										aria-label={tr('Tanggal kejadian')}
+										bind:value={timelineOccurredOn}
+									/>
+									<input
+										class="app-input !min-h-8 min-w-[10rem] flex-1 !text-xs"
+										placeholder={tr('Hashtag: promo, chefjuna')}
+										bind:value={timelineTags}
+									/>
+									<span class="ml-auto text-[10.5px] text-muted-foreground">{timelineBody.length}/{TIMELINE_BODY_MAX}</span>
+									<button
+										class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs"
+										type="button"
+										disabled={timelinePosting || (!timelineBody.trim() && !timelineImageFile)}
+										onclick={() => void submitTimelinePost()}
+									>
+										{#if timelinePosting}<LoaderCircle size={13} class="animate-spin" />{tr('Memposting…')}{:else}<Plus size={13} />{tr('Posting')}{/if}
+									</button>
+								</div>
+							</div>
+							{#if timelineError}
+								<p class="mt-2 text-[11.5px]" style="color: var(--destructive);">{timelineError}</p>
+							{/if}
+						</section>
+
+						{#if timelineLoading}
+							<p class="py-6 text-center text-sm text-muted-foreground">{tr('Memuat timeline…')}</p>
+						{:else if timeline.length === 0}
+							<p class="rounded-xl border px-3.5 py-6 text-center text-xs italic" style="border-color: var(--border); color: var(--muted-foreground);">
+								{tr('Belum ada kabar. Posting promo atau info terbaru brand-mu supaya artikel Writer terasa segar.')}
+							</p>
+						{:else}
+							{#each timeline as post (post.id)}
+								<article class="app-card overflow-hidden">
+									<div class="flex items-start gap-3 p-4">
+										<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style="background: var(--primary); color: var(--primary-foreground);">
+											{(post.author_name || 'T').slice(0, 2).toUpperCase()}
+										</span>
+										<div class="min-w-0 flex-1">
+											<p class="text-[12.5px] font-semibold">{post.author_name || profileName}</p>
+											<p class="text-[10.5px] text-muted-foreground">{timelineWhen(post)}</p>
+										</div>
+										<button
+											class="brief-icon-btn"
+											type="button"
+											aria-label={tr('Hapus post')}
+											title={tr('Hapus post')}
+											onclick={() => void deleteTimelinePost(post)}
+										>
+											<Trash2 size={14} />
+										</button>
+									</div>
+									{#if post.body}
+										<p class="whitespace-pre-wrap px-4 pb-3 text-[13.5px] leading-relaxed">{post.body}</p>
+									{/if}
+									{#if post.image_url}
+										<img src={post.image_url} alt="" class="max-h-[28rem] w-full object-cover" loading="lazy" />
+									{/if}
+									{#if post.hashtags.length > 0}
+										<div class="flex flex-wrap gap-1.5 px-4 py-3">
+											{#each post.hashtags as tag (tag)}
+												<span class="rounded-full px-2 py-0.5 text-[11px] font-semibold" style="background: color-mix(in srgb, var(--primary) 10%, white); color: var(--primary);">
+													#{tag}
+												</span>
+											{/each}
+										</div>
+									{/if}
+								</article>
+							{/each}
+						{/if}
+					</div>
+				</div>
 			{:else if activeTab === 'media'}
 				<!-- ── Panel tab Media: dokumen & gambar brief ─────────────── -->
 				<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">

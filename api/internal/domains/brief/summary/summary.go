@@ -54,6 +54,10 @@ const (
 	blockTextCap    = 1500
 	maxDocs         = 5
 	maxURLs         = 5
+	// Timeline: kabar terbaru brand. 12 post terbaru cukup untuk sudut artikel
+	// yang segar tanpa membanjiri konteks; tiap post dibatasi 600 karakter.
+	maxTimeline    = 12
+	timelineTextCap = 600
 )
 
 // AgentName: nama agent penyimpan config/prompt untuk sebuah kind.
