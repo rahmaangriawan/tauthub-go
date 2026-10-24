@@ -222,6 +222,10 @@
 		const seq = ++analyzeSeq;
 		analyzing = true;
 		analyzeError = '';
+		// Kosongkan hasil lama di awal supaya panel animasi pemrosesan tampil
+		// selama meringkas — bukan spinner di bawah kartu yang basi.
+		criteria = null;
+		interpretation = null;
 		try {
 			const res = await apiRequest(
 				`${apiBase}/media/matchmaker`,
@@ -300,20 +304,31 @@
 		selected = new Set(result.candidates.filter((c) => c.in_package).map((c) => c.id));
 	}
 
-	// Contoh brief yang menutup SEMUA field kriteria (tujuan, audiens, jumlah,
+	// Contoh brief yang menutup semua field kriteria (tujuan, audiens, jumlah,
 	// kategori yang ada di katalog, anggaran total + per media, DA, AI Trust,
 	// trafik, syarat artikel, hyperlink/permanen, bahasa, exclude topics)
 	// supaya daftar "Belum disebut di brief" kosong saat diringkas.
-	const EXAMPLE_BRIEF = `Kami brand skincare pria Ravencare ingin meningkatkan brand awareness dan SEO lewat artikel rekomendasi dan perbandingan produk, menyasar pria usia 20-35 tahun yang tertarik perawatan wajah. Susunkan 10 media dalam bahasa Indonesia dari kategori Bisnis, Lifestyle, dan Media Nasional.
+	// Dirotasi tiap klik: dasar-murah-sedikit → lengkap → dst.
+	const EXAMPLE_BRIEFS = [
+		`Kami UMKM katering sehat yang baru buka, mau memperkenalkan brand lewat publikasi artikel sederhana di beberapa media berita. Cukup 3 media dalam bahasa Indonesia dari kategori Berita atau Media Nasional.
+
+Total anggaran kami Rp900.000, dengan harga per media sekitar Rp250.000 - Rp350.000. Syaratnya tidak rumit: DA minimal 20, AI Trust minimal 60, dan estimasi trafik minimal 5.000 kunjungan per bulan.
+
+Setiap artikel minimal 500 kata dengan 1 backlink dofollow permanen. Hindari judul clickbait dan klaim yang berlebihan. Isinya perkenalan layanan katering sehat kami dan manfaat makan sehat setiap hari.`,
+		`Kami brand skincare pria Ravencare ingin meningkatkan brand awareness dan SEO lewat artikel rekomendasi dan perbandingan produk, menyasar pria usia 20-35 tahun yang tertarik perawatan wajah. Susunkan 10 media dalam bahasa Indonesia dari kategori Bisnis, Lifestyle, dan Media Nasional.
 
 Anggaran total kampanye Rp7.500.000. Harga per media yang kami inginkan Rp250.000 - Rp750.000. Pilih media dengan DA minimal 25, AI Trust minimal 70, dan estimasi trafik minimal 10.000 kunjungan per bulan.
 
 Setiap artikel minimal 1.000 kata dan wajib mendapat 2 backlink dofollow permanen. Hindari klaim medis yang tidak terbukti, klaim memutihkan secara instan, dan judul yang menjanjikan hasil berlebihan.
 
-Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturizer, dan Sunscreen SPF 50 PA++++, dibandingkan dengan produk sejenis dari Kahf dan Nivea Men.`;
+Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturizer, dan Sunscreen SPF 50 PA++++, dibandingkan dengan produk sejenis dari Kahf dan Nivea Men.`
+	];
+	let exampleIdx = $state(0);
 
 	function fillExample() {
-		brief = EXAMPLE_BRIEF;
+		// Rotasi: setiap klik mengganti ke contoh berikutnya, bukan yang sama.
+		brief = EXAMPLE_BRIEFS[exampleIdx % EXAMPLE_BRIEFS.length];
+		exampleIdx++;
 		// Fokus + kursor di akhir supaya user bisa langsung menyesuaikan.
 		setTimeout(() => {
 			briefEl?.focus();
@@ -329,6 +344,29 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) % 9973;
 		return AVATAR_COLORS[h % AVATAR_COLORS.length];
 	}
+
+	// Tahapan tampilan selama meringkas — dekoratif, tanpa progres palsu:
+	// tidak ada persentase, dan selesai HANYA ketika response benar-benar datang.
+	const PROCESS_STAGES = [
+		'Membaca brief kampanye',
+		'Mengenali tujuan dan anggaran',
+		'Mengekstrak persyaratan media',
+		'Menyusun ringkasan kebutuhan'
+	];
+	let stageIdx = $state(0);
+	$effect(() => {
+		if (!analyzing) {
+			stageIdx = 0;
+			return;
+		}
+		// Hormati prefers-reduced-motion: teks tahap tetap statis.
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+		const t = setInterval(() => {
+			stageIdx = (stageIdx + 1) % PROCESS_STAGES.length;
+		}, 2400);
+		return () => clearInterval(t);
+	});
+	const stageLabel = $derived(PROCESS_STAGES[stageIdx]);
 
 	// Favicon asli dari web media via layanan favicon Google; kalau gagal
 	// dimuat (domain mati/tanpa favicon), fallback ke avatar huruf.
@@ -373,7 +411,7 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 	<dialog open class="mmDialog" aria-label={tr('AI Media Matchmaker')} onclick={(e) => e.stopPropagation()}>
 		<!-- Header -->
 		<div class="mmHeader">
-			<div class="mmHeaderIcon"><Sparkles size={28} /></div>
+			<div class="mmHeaderIcon"><img src="/matchmaker-icon.webp" alt="" draggable="false" /></div>
 			<div class="mmHeaderText">
 				<h2>{tr('AI Media Matchmaker')}</h2>
 				<p>{tr('Terjemahkan brief kampanye menjadi rekomendasi media yang relevan')}</p>
@@ -400,7 +438,7 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 				<section class="mmCol">
 					<div class="mmColHead">
 						<h3 class="mmColTitle">{tr('Ceritakan kebutuhan kampanye')}</h3>
-						<button class="mmExampleBtn" type="button" onclick={fillExample} title={tr('Isi textarea dengan contoh brief lengkap')}>
+						<button class="mmExampleBtn" type="button" onclick={fillExample} title={tr('Isi textarea dengan contoh brief — klik lagi untuk contoh lain')}>
 							<ClipboardList size={14} />{tr('Contoh')}
 						</button>
 					</div>
@@ -473,17 +511,18 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 					{/if}
 
 					{#if criteria}
-						<div class="mmCards">
-							<!-- Jumlah media -->
-							<div class="mmCardRow">
-								<span class="mmCardIcon"><Layers size={18} /></span>
-								<span class="mmCardLabel">{tr('Jumlah media')}</span>
-								{#if editing}
-									<input class="mmInlineInput" type="number" min="1" max="30" bind:value={criteria.count} />
-								{:else}
-									<strong class="mmCardValue">{criteria.count} {tr('media')}</strong>
-								{/if}
-							</div>
+						{#key lastAnalyzed}
+							<div class="mmCards mmReveal">
+								<!-- Jumlah media -->
+								<div class="mmCardRow">
+									<span class="mmCardIcon"><Layers size={18} /></span>
+									<span class="mmCardLabel">{tr('Jumlah media')}</span>
+									{#if editing}
+										<input class="mmInlineInput" type="number" min="1" max="30" bind:value={criteria.count} />
+									{:else}
+										<strong class="mmCardValue">{criteria.count} {tr('media')}</strong>
+									{/if}
+								</div>
 
 							<!-- Anggaran: total kampanye dan harga per media ditampilkan
 							     terpisah — brief sering menyebut keduanya sekaligus. -->
@@ -554,18 +593,36 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 									<p class="mmMuted">{tr('Belum disebutkan dalam brief.')}</p>
 								{/if}
 							</div>
-						</div>
+							</div>
+						{/key}
 
 						<div class="mmInfoBox">
 							<Info size={16} />
 							<span>{tr('Anggaran dan syarat artikel bisa kamu koreksi sebelum pencarian media dimulai.')}</span>
 						</div>
+					{:else if analyzing}
+						<!-- Animasi pemrosesan premium: maskot melayang + skeleton
+						     yang meniru struktur kartu hasil + scan line tipis.
+						     Mengikuti state `analyzing` yang sebenarnya. -->
+						<div class="mmProc">
+							<img class="mmMascot" src="/brief-empty-mascot.webp" alt="" draggable="false" />
+							<p class="mmProcStatus">
+								{tr(PROCESS_STAGES[stageIdx])}<span class="mmProcDots" aria-hidden="true"><i></i><i></i><i></i></span>
+							</p>
+							<div class="mmSkList" aria-hidden="true">
+								{#each [44, 58, 70, 50] as w, i (i)}
+									<div class="mmSkRow">
+										<span class="mmSkIcon"></span>
+										<span class="mmSkBar" style={`width:${w}%`}></span>
+										<span class="mmSkVal" style={`width:${18 + i * 4}%`}></span>
+									</div>
+								{/each}
+							</div>
+							<span class="mmScan" aria-hidden="true"></span>
+						</div>
 					{:else}
 						<div class="mmEmpty">
-							{#if analyzing}
-								<span class="mmSpin"><LoaderCircle size={22} /></span>
-								<p>{tr('Membaca brief dan menyusun ringkasan kebutuhan…')}</p>
-							{:else if summaryState === 'error'}
+							{#if summaryState === 'error'}
 								<p>{tr('Ringkasan belum bisa dibuat. Perbaiki brief lalu coba lagi.')}</p>
 							{:else}
 								<p>{tr('Ringkasan kebutuhan akan muncul di sini setelah kamu menekan Ringkas Brief.')}</p>
@@ -805,12 +862,14 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		flex: none;
 		width: 58px;
 		height: 58px;
-		border-radius: 999px;
-		background: #eaf1ff;
-		color: var(--primary, #2b67ec);
 		display: flex;
 		align-items: center;
 		justify-content: center;
+	}
+	.mmHeaderIcon img {
+		max-width: 100%;
+		max-height: 100%;
+		user-select: none;
 	}
 	.mmHeaderText {
 		flex: 1;
@@ -1265,6 +1324,176 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		margin: 0;
 		max-width: 320px;
 		line-height: 1.55;
+	}
+
+	/* ── Animasi pemrosesan premium (kolom ringkasan) ───────── */
+	.mmProc {
+		position: relative;
+		overflow: hidden;
+		flex: 1;
+		min-height: 260px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 12px;
+		border: 1px solid #d8e4fb;
+		border-radius: 12px;
+		background: linear-gradient(180deg, #f7faff, #eef4ff);
+		padding: 22px 20px 26px;
+	}
+	.mmMascot {
+		width: 84px;
+		height: 84px;
+		object-fit: contain;
+		animation: mmFloat 3s ease-in-out infinite;
+	}
+	@keyframes mmFloat {
+		0%,
+		100% {
+			transform: translateY(0);
+		}
+		50% {
+			transform: translateY(-7px);
+		}
+	}
+	.mmProcStatus {
+		margin: 0;
+		font-size: 13.5px;
+		font-weight: 650;
+		color: var(--primary, #2b67ec);
+		display: inline-flex;
+		align-items: baseline;
+	}
+	.mmProcDots i {
+		display: inline-block;
+		width: 3px;
+		height: 3px;
+		margin-left: 3px;
+		border-radius: 999px;
+		background: var(--primary, #2b67ec);
+		animation: mmDot 1.2s ease-in-out infinite;
+	}
+	.mmProcDots i:nth-child(2) {
+		animation-delay: 0.2s;
+	}
+	.mmProcDots i:nth-child(3) {
+		animation-delay: 0.4s;
+	}
+	@keyframes mmDot {
+		0%,
+		100% {
+			opacity: 0.25;
+		}
+		50% {
+			opacity: 1;
+		}
+	}
+
+	/* Skeleton meniru struktur kartu hasil (ikon + label + nilai). */
+	.mmSkList {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.mmSkRow {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		border: 1px solid #e2e9f8;
+		border-radius: 10px;
+		background: #fff;
+		padding: 10px 12px;
+	}
+	.mmSkIcon {
+		flex: none;
+		width: 26px;
+		height: 26px;
+		border-radius: 8px;
+		background: #e4ecfb;
+	}
+	.mmSkBar,
+	.mmSkVal {
+		height: 9px;
+		border-radius: 999px;
+		background: linear-gradient(90deg, #e6edf9 25%, #f2f6fd 50%, #e6edf9 75%);
+		background-size: 200% 100%;
+		animation: mmShimmer 1.6s ease-in-out infinite;
+	}
+	.mmSkVal {
+		margin-left: auto;
+	}
+	@keyframes mmShimmer {
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
+	}
+
+	/* Garis pemindaian horizontal di dalam panel ringkasan. */
+	.mmScan {
+		position: absolute;
+		left: 6%;
+		right: 6%;
+		height: 2px;
+		border-radius: 999px;
+		background: linear-gradient(90deg, transparent, rgba(43, 103, 236, 0.45), transparent);
+		animation: mmScanMove 3.2s ease-in-out infinite;
+		pointer-events: none;
+	}
+	@keyframes mmScanMove {
+		0%,
+		100% {
+			top: 12%;
+			opacity: 0;
+		}
+		15%,
+		85% {
+			opacity: 1;
+		}
+		50% {
+			top: 88%;
+		}
+	}
+
+	/* Hasil muncul bertahap: fade + geser vertikal pendek, stagger 90ms. */
+	.mmReveal > * {
+		animation: mmFadeUp 240ms ease both;
+	}
+	.mmReveal > *:nth-child(2) {
+		animation-delay: 90ms;
+	}
+	.mmReveal > *:nth-child(3) {
+		animation-delay: 180ms;
+	}
+	.mmReveal > *:nth-child(4) {
+		animation-delay: 270ms;
+	}
+	@keyframes mmFadeUp {
+		from {
+			opacity: 0;
+			transform: translateY(6px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.mmMascot,
+		.mmProcDots i,
+		.mmSkBar,
+		.mmSkVal,
+		.mmReveal > * {
+			animation: none;
+		}
+		.mmScan {
+			display: none;
+		}
 	}
 	.mmErrorBox {
 		display: flex;
