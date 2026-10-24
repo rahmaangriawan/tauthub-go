@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -142,8 +143,14 @@ func setStatus(ctx context.Context, pool *pgxpool.Pool, profileID string, kind K
 
 // logRun mencatat pemakaian ke taut_brief_runs dengan nama agent, sehingga
 // ikut tampil di tab Log admin bersama percakapan Copilot.
+//
+// Kegagalan INSERT TIDAK boleh ditelan: tanpa ini, agent tampak "tidak punya
+// log" padahal justru insert-nya yang gagal (pernah terjadi: brand_id kosong
+// membuat penulisan dilewati tanpa jejak apa pun).
 func logRun(ctx context.Context, pool *pgxpool.Pool, brandID, profileID, agent, model, input string, tokIn, tokOut, durationMS int, runErr error) {
 	if strings.TrimSpace(brandID) == "" {
+		slog.Error("[brief-summary] log run dilewati: brand_id kosong",
+			"agent", agent, "profile_id", profileID)
 		return
 	}
 	status := "done"
@@ -152,14 +159,17 @@ func logRun(ctx context.Context, pool *pgxpool.Pool, brandID, profileID, agent, 
 		status = "failed"
 		errText = runErr.Error()
 	}
-	_, _ = pool.Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO taut_brief_runs
 		  (id, brand_id, profile_id, agent, status, model, token_input, token_output,
 		   duration_ms, error, input_preview, output_preview, created_at, finished_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10, ''), $11, $12, now(), now())`,
 		uuid.NewString(), brandID, profileID, agent, status, model,
 		nullInt(tokIn), nullInt(tokOut), durationMS, errText,
-		clip(input, 2000), clip(errText, 2000))
+		clip(input, 2000), clip(errText, 2000)); err != nil {
+		slog.Error("[brief-summary] gagal menulis log run",
+			"agent", agent, "profile_id", profileID, "brand_id", brandID, "err", err)
+	}
 }
 
 func nullInt(v int) any {
