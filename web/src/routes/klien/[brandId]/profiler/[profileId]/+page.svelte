@@ -1978,7 +1978,7 @@
 								<p class="mt-0.5 text-[11.5px] text-muted-foreground">
 									{entitySummaryReady
 										? tr('Mau lanjut mengedit entitas yang sudah ada?')
-										: tr('Ringkasan ini yang dibaca AI Writer — hemat token, fakta tetap terkunci.')}
+										: tr('Satukan fakta brand-mu jadi satu ringkasan siap pakai.')}
 								</p>
 							</div>
 							<div class="flex shrink-0 items-center gap-1.5">
@@ -2587,7 +2587,7 @@
 								</span>
 								<div>
 									<h3 class="text-sm font-bold">{tr('Ringkasan Brief')}</h3>
-									<p class="text-[11px] text-muted-foreground">{tr('Ringkasan ini yang dibaca AI Writer mode Yang Proper — hemat token, fakta tetap terkunci.')}</p>
+									<p class="text-[11px] text-muted-foreground">{tr('Fakta brand yang dipakai AI Writer saat menulis artikel.')}</p>
 								</div>
 							</div>
 						</section>
