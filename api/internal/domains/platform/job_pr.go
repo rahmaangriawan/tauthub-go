@@ -302,56 +302,12 @@ func (d *Deps) PublicationPRVerifyJob(ctx context.Context, publicationID string)
 
 // ---------- skor kampanye ----------
 
-// prRecalcAndNotifyScore: hitung ulang skor PR kampanye lalu beri tahu brand
-// members bila perubahan berarti (port recalculateAndNotifyPrScore).
+// prRecalcAndNotifyScore: hitung ulang skor PR kampanye setelah aktivitas yang
+// relevan. Notifikasi "skor berubah" SENGAJA tidak dikirim lagi — nilainya
+// rendah (user sendiri yang memicu analisis) dan hanya mengotori lonceng.
+// Skor tetap tersimpan dan terlihat di halaman PR Calculator.
 func (d *Deps) prRecalcAndNotifyScore(ctx context.Context, campaignID string) {
-	previous, _ := d.queryRow(ctx,
-		"SELECT score, status FROM pr_campaign_scores WHERE campaign_id = $1 ORDER BY calculated_at DESC LIMIT 1", campaignID)
-	var prevScore *float64
-	prevStatus := ""
-	if previous != nil {
-		if previous.has("score") {
-			v := previous.numOr("score")
-			prevScore = &v
-		}
-		prevStatus = previous.strOr("status", "")
-	}
-
-	res := d.prCalculateCampaignScore(ctx, campaignID, true, "")
-	if res == nil {
-		return
-	}
-
-	scoreChanged := res.Score == nil || prevScore == nil || prAbsDiff(*res.Score, *prevScore) >= 1
-	becameFinal := res.Status == "final" && prevStatus != "final"
-	if !scoreChanged && !becameFinal {
-		return
-	}
-
-	campaign, err := d.queryRow(ctx, `
-		SELECT c.brand_id, c.name, b.public_id AS brand_public_id
-		FROM campaigns c JOIN brands b ON b.id = c.brand_id
-		WHERE c.id = $1 LIMIT 1`, campaignID)
-	if err != nil || campaign == nil {
-		return
-	}
-	brandID := campaign.strOr("brand_id", "")
-	campaignName := campaign.strOr("name", "")
-	if campaignName == "" {
-		campaignName = "Kampanye"
-	}
-	scoreText := "belum tersedia"
-	if res.Score != nil {
-		scoreText = prFormatScore(*res.Score) + "/100"
-	}
-	labelText := ""
-	if s, ok := res.Label.(string); ok && s != "" {
-		labelText = " (" + s + ")"
-	}
-	title := "Skor PR kampanye diperbarui"
-	body := "Skor PR \"" + campaignName + "\" kini " + scoreText + labelText + " — status " + res.Status + "."
-	link := "/klien/" + campaign.strOr("brand_public_id", brandID) + "/pr-calculator"
-	d.mpNotifyBrandMembers(ctx, brandID, "pr.score_updated", title, body, &link)
+	_ = d.prCalculateCampaignScore(ctx, campaignID, true, "")
 }
 
 // prNotifyVerification: beri tahu mitra pemilik media saat hasil verifikasi

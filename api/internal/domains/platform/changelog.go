@@ -9,7 +9,6 @@ package platform
 
 import (
 	"errors"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -178,11 +177,10 @@ func (d *Deps) AdminChangelogImport(w http.ResponseWriter, r *http.Request) {
 
 	created := 0
 	updated := 0
-	notified := int64(0)
 	items := make([]map[string]any, 0, len(arr))
 	firstID := ""
 
-	for idx, rawItem := range arr {
+	for _, rawItem := range arr {
 		item, itemOK := rawItem.(map[string]any)
 		if !itemOK {
 			writeErr(w, d, errUnprocessable("Setiap entri harus berupa objek."))
@@ -264,46 +262,10 @@ func (d *Deps) AdminChangelogImport(w http.ResponseWriter, r *http.Request) {
 		}
 		if isNew {
 			created++
-			// Lonceng + web push: satu baris per user aktif (klien & mitra).
-			notifTitle := "Apa yang Baru: " + title
-			if runes := []rune(notifTitle); len(runes) > 180 {
-				notifTitle = string(runes[:180])
-			}
-			// Tautan per peran: tanpa ini lonceng memakai cadangan bawaan
-			// ({base}/publications) sehingga entri "Apa yang Baru" membuka halaman
-			// publikasi, bukan halaman changelog-nya.
-			// created_at dibuat EKSPLISIT menurut urutan entri: entri pertama di
-			// payload = versi terbaru (changelog.md terbaru-di-atas), jadi diberi
-			// timestamp paling baru. Tanpa ini semua notifikasi satu batch berbagi
-			// waktu yang (hampir) sama dan urutan lonceng jadi acak — versi lama
-			// bisa muncul di atas versi baru.
-			n, err := d.execRows(r.Context(), `
-				INSERT INTO notifications (id, user_id, type, title, body, link, created_at)
-				SELECT gen_random_uuid()::text, x.id, 'changelog.new', $1, left($2, 500),
-				       CASE x.role
-				         WHEN 'client' THEN (
-				           SELECT '/klien/' || b.public_id || '/changelog'
-				           FROM brand_memberships bm
-				           JOIN brands b ON b.id = bm.brand_id
-				           WHERE bm.user_id = x.id
-				           ORDER BY bm.created_at, bm.id
-				           LIMIT 1
-				         )
-				         WHEN 'partner' THEN (
-				           SELECT '/mitra/' || p.public_id || '/changelog'
-				           FROM partners p WHERE p.user_id = x.id ORDER BY p.id LIMIT 1
-				         )
-				       END,
-				       NOW() - ($3 * INTERVAL '1 second')
-				FROM users x
-				WHERE x.is_active = TRUE AND x.role IN ('client', 'partner')`,
-				notifTitle, summary, idx)
-			if err != nil {
-				// Kegagalan ping tidak membatalkan entri yang sudah masuk.
-				slog.Warn("[platform] fan-out notifikasi changelog gagal", "err", err)
-			} else {
-				notified += n
-			}
+			// Fan-out lonceng "changelog.new" DIHENTIKAN: satu baris per user
+			// per entri rilis terbukti jadi noise (1.493 dari 1.555 tidak
+			// pernah dibaca). Halaman "Apa yang Baru" tetap jadi kanal resmi
+			// dan sudah punya penanda dibaca sendiri (changelog_reads).
 		} else {
 			updated++
 		}
@@ -312,11 +274,10 @@ func (d *Deps) AdminChangelogImport(w http.ResponseWriter, r *http.Request) {
 
 	d.audit(r.Context(), user.ID, "changelog.imported", "changelog", firstID)
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"ok":       true,
-		"created":  created,
-		"updated":  updated,
-		"notified": notified,
-		"items":    items,
+		"ok":      true,
+		"created": created,
+		"updated": updated,
+		"items":   items,
 	})
 }
 

@@ -130,7 +130,11 @@ func RunRetention(ctx context.Context, pool *pgxpool.Pool, cfg RetentionConfig) 
 		days  int
 		dest  *int64
 	}{
-		{"notifications", "read_at IS NOT NULL AND read_at < NOW() - ($1 * INTERVAL '1 day') AND id > $2", cfg.NotificationDays, &rep.Notifications},
+		// Notifikasi: yang sudah dibaca dipangkas menurut NotificationDays;
+		// yang TIDAK pernah dibaca tetap kedaluwarsa setelah 180 hari — tanpa
+		// ini lonceng menumpuk selamanya (10 ribu notifikasi tak terbaca
+		// menahan ~14 MB).
+		{"notifications", "((read_at IS NOT NULL AND read_at < NOW() - ($1 * INTERVAL '1 day')) OR (read_at IS NULL AND created_at < NOW() - INTERVAL '180 days')) AND id > $2", cfg.NotificationDays, &rep.Notifications},
 		{"email_deliveries", "created_at < NOW() - ($1 * INTERVAL '1 day') AND id > $2", cfg.EmailDeliveryDays, &rep.EmailDeliveries},
 		{"tracking_events", "created_at < NOW() - ($1 * INTERVAL '1 day') AND id > $2", cfg.TrackingEventDays, &rep.TrackingEvents},
 		{"audit_logs", "created_at < NOW() - ($1 * INTERVAL '1 day') AND id > $2", cfg.AuditLogDays, &rep.AuditLogs},
