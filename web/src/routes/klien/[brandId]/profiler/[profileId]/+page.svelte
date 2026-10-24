@@ -245,6 +245,32 @@
 		summaryOf('entity').status === 'queued' || summaryOf('entity').status === 'running'
 	);
 
+	// Undangan yang sudah ditutup disimpan di localStorage per brief, supaya
+	// refresh halaman TIDAK memunculkannya lagi ("jangan tampil lagi dulu").
+	// Kunci = progres + tahap, jadi bila datanya berubah (progres turun lalu
+	// naik lagi ke 100%) undangan boleh muncul kembali.
+	function inviteSignature(): string {
+		return `${progress.filled}/${progress.total}:${entitySummaryReady ? 'edit' : 'pre'}`;
+	}
+	function inviteStorageKey(sig: string): string {
+		return `brief.summaryInvite.${profileId}.${sig}`;
+	}
+	function inviteDismissed(sig: string): boolean {
+		try {
+			return localStorage.getItem(inviteStorageKey(sig)) === '1';
+		} catch {
+			return false;
+		}
+	}
+	function dismissInvite() {
+		try {
+			localStorage.setItem(inviteStorageKey(inviteSignature()), '1');
+		} catch {
+			// Mode privat / storage penuh: cukup tutup untuk sesi ini.
+		}
+		summaryPrompt = 'idle';
+	}
+
 	// Kunci undangan per kombinasi progres+ringkasan: begitu ringkasan jadi,
 	// kuncinya berubah sehingga undangan berikutnya (setelah data berubah lagi)
 	// tetap bisa muncul.
@@ -254,6 +280,7 @@
 		if (summaryInvitedFor === key) return;
 		summaryInvitedFor = key;
 		if (entitySummaryReady || summaryPrompt !== 'idle') return;
+		if (inviteDismissed(key)) return;
 		summaryPrompt = 'invite';
 	});
 	const summaryBadge = $derived(summaryStatus(summaryCurrent));
@@ -645,9 +672,14 @@
 		// tawarkan dulu "lanjut edit?" — kecuali pesan ini memang berasal dari
 		// alur edit (continueToEdit) agar tidak memicu popup berulang.
 		if (!editModeIntent && summaryPrompt === 'idle' && progressPct >= 100 && entitySummaryReady) {
-			summaryInvitedFor = '';
-			summaryPrompt = 'invite';
-			return;
+			// Sekali ditutup ("Nanti"), jangan menahan pengiriman lagi untuk
+			// progres yang sama — termasuk setelah refresh.
+			const sig = `${progress.filled}/${progress.total}:edit`;
+			if (!inviteDismissed(sig)) {
+				summaryInvitedFor = '';
+				summaryPrompt = 'invite';
+				return;
+			}
 		}
 		editModeIntent = false;
 
@@ -992,6 +1024,13 @@
 	// supaya transisi terasa disengaja walau job-nya cepat, lalu menunggu job
 	// benar-benar selesai (status ready/failed).
 	async function runSummaryFromPrompt() {
+		// Tandai sudah ditawari sebelum mulai: bila admin refresh saat proses
+		// berjalan, popup ajakan tidak muncul lagi.
+		try {
+			localStorage.setItem(inviteStorageKey(inviteSignature()), '1');
+		} catch {
+			// abaikan mode privat
+		}
 		summaryPrompt = 'working';
 		summaryPromptError = '';
 		const startedAt = Date.now();
@@ -1986,14 +2025,14 @@
 									<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" onclick={() => void continueToEdit()}>
 										{tr('Ya, lanjut edit')}
 									</button>
-									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => (summaryPrompt = 'idle')}>
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={dismissInvite}>
 										{tr('Nanti')}
 									</button>
 								{:else}
 									<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" onclick={() => void runSummaryFromPrompt()}>
 										{tr('Ya, Ringkas')}
 									</button>
-									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => (summaryPrompt = 'idle')}>
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={dismissInvite}>
 										{tr('Nanti')}
 									</button>
 								{/if}
