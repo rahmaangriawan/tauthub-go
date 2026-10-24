@@ -7,7 +7,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Archive, ArrowRight, Clock, FileText, LoaderCircle, RotateCcw, Search, Share2, Sparkles, Trash, X, Zap } from '@lucide/svelte';
+	import { Archive, ArrowRight, Clock, FileText, LoaderCircle, RotateCcw, Search, Share2, Trash, X, Zap } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { campaignUrlId } from '$lib/campaign-url';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -264,9 +264,12 @@
 			<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola semua kampanye distribusi konten Anda di satu tempat.")}</p>
 		</div>
 		<div class="flex flex-wrap items-center justify-end gap-2">
-			<!-- Tombol Profiler: langsung masuk ke brief terakhir (chatbot Profiler). -->
-			<button class="app-btn app-btn-soft" type="button" disabled={busy} title={tr('Buka Taut Brief')} onclick={() => void goto(`/klien/${brandUrl}/profiler`)}>
-				<Sparkles size={16} /> {tr('Profiler')}
+			<!-- Tombol Profiler: langsung masuk ke brief terakhir (chatbot Profiler).
+			     Maskot + badge AI menandai tombol ini sebagai fitur AI. -->
+			<button class="app-btn app-btn-soft profilerBtn" type="button" disabled={busy} title={tr('Buka Taut Brief')} onclick={() => void goto(`/klien/${brandUrl}/profiler`)}>
+				<img class="profilerMascot" src="/taut-brief-mascot.webp" alt="" draggable="false" />
+				{tr('Profiler')}
+				<span class="profilerAiBadge">AI</span>
 			</button>
 			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={toggleArchiveView}>
 				{#if showArchive}<RotateCcw size={16} />{:else}<Archive size={16} />{/if}
@@ -531,3 +534,27 @@
 		</dialog>
 	</div>
 {/if}
+
+<style>
+	/* Tombol Profiler: maskot robot + badge AI (tanpa ikon garis generik). */
+	.profilerMascot {
+		width: 28px;
+		height: 28px;
+		margin: -6px 2px -6px -6px;
+		object-fit: contain;
+		user-select: none;
+		pointer-events: none;
+	}
+	.profilerAiBadge {
+		display: inline-flex;
+		align-items: center;
+		background: var(--primary, #2b67ec);
+		color: #fff;
+		font-size: 10.5px;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		padding: 2px 8px;
+		border-radius: 999px;
+		margin-left: 2px;
+	}
+</style>
