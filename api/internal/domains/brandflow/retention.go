@@ -49,17 +49,20 @@ func DefaultRetentionConfig() RetentionConfig {
 		AgentRunsDays:       30,
 		TrainingSamplesDays: 30,
 		UserSessionDays:     30,
-		JobsDoneDays:        14,
-		AuthRateLimitDays:   7,
-		NotificationDays:    90,
-		EmailDeliveryDays:   90,
-		TrackingEventDays:   180,
-		AuditLogDays:        365,
+		// Job antrean cuma riwayat internal (debug). Laju produksi ±4 ribu
+		// job/hari dari crawl_target_sync + domain_verify; 7 hari cukup untuk
+		// investigasi dan menjaga tabel tetap ramping (~28 ribu baris).
+		JobsDoneDays:      7,
+		AuthRateLimitDays: 7,
+		NotificationDays:  90,
+		EmailDeliveryDays: 90,
+		TrackingEventDays: 180,
+		AuditLogDays:      365,
 		// Editor tidak menyimpan riwayat versi (regenerasi/edit menimpa), jadi
 		// cukup satu versi terbaru per dokumen — menyamakan dengan perilaku app.
 		ContentVersionKeep: 1,
-		BatchSize:           500,
-		ArchiveDir:          defaultArchiveDir(),
+		BatchSize:          500,
+		ArchiveDir:         defaultArchiveDir(),
 	}
 }
 
