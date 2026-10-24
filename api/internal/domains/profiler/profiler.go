@@ -626,7 +626,7 @@ func (d *Deps) childInBrand(ctx context.Context, table, id, brandID string) bool
 
 func (d *Deps) listDocuments(ctx context.Context, profileID string) []map[string]any {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT id, original_filename, storage_key, mime_type, size_bytes, parse_status, parse_error, created_at
+		SELECT id, original_filename, storage_key, mime_type, size_bytes, parse_status, parse_error, file_deleted_at, created_at
 		FROM profiler_documents WHERE profile_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`, profileID)
 	if err != nil {
 		return []map[string]any{}
@@ -637,20 +637,34 @@ func (d *Deps) listDocuments(ctx context.Context, profileID string) []map[string
 		var id, filename, status, storageKey string
 		var mime, parseErr *string
 		var size *int64
-		var createdAt any
-		if err := rows.Scan(&id, &filename, &storageKey, &mime, &size, &status, &parseErr, &createdAt); err != nil {
+		var fileDeletedAt, createdAt any
+		if err := rows.Scan(&id, &filename, &storageKey, &mime, &size, &status, &parseErr, &fileDeletedAt, &createdAt); err != nil {
 			continue
+		}
+		// Berkas fisik yang sudah dibersihkan tidak punya URL unduhan; teks
+		// ekstraksinya tetap dipakai AI dari DB.
+		url := ""
+		if fileDeletedAt == nil {
+			url = "/uploads/" + storageKey
 		}
 		out = append(out, map[string]any{
 			"id": id, "original_filename": filename, "mime_type": mime, "size_bytes": size,
-			"parse_status": status, "parse_error": parseErr, "created_at": createdAt,
-			"url": "/uploads/" + storageKey,
+			"parse_status": status, "parse_error": parseErr, "file_deleted_at": fileDeletedAt, "created_at": createdAt,
+			"url": url,
 		})
 	}
 	return out
 }
 
 // DocumentUpload: POST /v1/brands/{brandId}/profiler/profiles/{profileId}/documents (multipart)
+//
+// Urutan pemrosesan (kuota & siklus hidup — lihat uploadquota.go):
+//   body cap (MaxBytesReader) → baca berkas → validasi ukuran aktual →
+//   allowlist MIME → sniff magic number → dedup checksum → RESERVASI kuota
+//   (advisory lock + insert ledger 'processing') → simpan berkas → ekstrak
+//   teks → INSERT profiler_documents → finalisasi ledger.
+// Teks hasil ekstraksi tetap di DB sebagai memori AI; berkas fisiknya
+// sementara dan dibersihkan worker sesuai retensi.
 func (d *Deps) DocumentUpload(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
 	if user == nil {
@@ -667,15 +681,33 @@ func (d *Deps) DocumentUpload(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Profiler tidak ditemukan.")
 		return
 	}
+	lim := LoadUploadLimits()
+	// Batasi body di tingkat HTTP: berkas + overhead multipart. Mencegah
+	// request raksasa memakan memori sebelum validasi apa pun jalan.
+	r.Body = http.MaxBytesReader(w, r.Body, lim.MaxFileBytes+(2<<20))
+	if r.ContentLength > 0 && r.ContentLength > lim.MaxFileBytes+(2<<20) {
+		httpx.Error(w, http.StatusRequestEntityTooLarge, "Berkas melebihi batas ukuran unggahan.")
+		return
+	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			httpx.Error(w, http.StatusRequestEntityTooLarge, "Berkas melebihi batas ukuran unggahan.")
+			return
+		}
 		httpx.Error(w, http.StatusBadRequest, "File tidak ditemukan.")
 		return
 	}
 	defer file.Close()
-	buf, err := io.ReadAll(io.LimitReader(file, 10<<20))
+	buf, err := io.ReadAll(io.LimitReader(file, lim.MaxFileBytes+1))
 	if err != nil {
 		httpx.Error(w, http.StatusBadRequest, "File tidak dapat dibaca.")
+		return
+	}
+	// Ukuran AKTUAL, bukan klaim header.
+	if int64(len(buf)) > lim.MaxFileBytes {
+		httpx.Error(w, http.StatusRequestEntityTooLarge, "Berkas melebihi batas ukuran unggahan.")
 		return
 	}
 	filename := filepath.Base(header.Filename)
@@ -684,9 +716,17 @@ func (d *Deps) DocumentUpload(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Tipe file tidak diizinkan. Izinkan: PDF, DOCX, TXT, MD, CSV.")
 		return
 	}
+	if !sniffFormatOK(buf, mime) {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Isi berkas tidak cocok dengan formatnya. Berkas mungkin rusak atau menyamar.")
+		return
+	}
+	source := "chat"
+	if r.FormValue("source") == "library" {
+		source = "library"
+	}
 	sum := sha256.Sum256(buf)
 	checksum := hex.EncodeToString(sum[:])
-	// Idempotensi: file identik tidak digandakan.
+	// Idempotensi: file identik tidak digandakan (tidak memakan kuota).
 	var existingID string
 	if err := d.Pool.QueryRow(r.Context(),
 		"SELECT id FROM profiler_documents WHERE profile_id = $1 AND checksum = $2 AND deleted_at IS NULL LIMIT 1",
@@ -697,7 +737,16 @@ func (d *Deps) DocumentUpload(w http.ResponseWriter, r *http.Request) {
 	docID := uuid.NewString()
 	ext := sanitizeExt(filename)
 	storageKey := docID + "." + ext
+	if err := d.reserveAttachment(r.Context(), user.ID, profileID, "document", source, storageKey, filename, mime, int64(len(buf))); err != nil {
+		if v := quotaViolationOf(err); v != nil {
+			httpx.Error(w, v.Status, v.Message)
+			return
+		}
+		writeErr(w, err)
+		return
+	}
 	if err := saveUpload(storageKey, buf); err != nil {
+		d.finalizeAttachment(r.Context(), storageKey, "document", "failed", truncate(err.Error(), 500))
 		writeErr(w, err)
 		return
 	}
@@ -713,8 +762,14 @@ func (d *Deps) DocumentUpload(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO profiler_documents (id, profile_id, original_filename, storage_key, mime_type, size_bytes, checksum, parse_status, extracted_text, parse_error, created_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		docID, profileID, filename, storageKey, mime, len(buf), checksum, status, nullIfEmpty(truncate(text, 200000)), errMsg, user.ID); err != nil {
+		d.finalizeAttachment(r.Context(), storageKey, "document", "failed", truncate(err.Error(), 500))
 		writeErr(w, err)
 		return
+	}
+	if parseErr != nil {
+		d.finalizeAttachment(r.Context(), storageKey, "document", "failed", truncate(parseErr.Error(), 500))
+	} else {
+		d.finalizeAttachment(r.Context(), storageKey, "document", "processed", "")
 	}
 	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"id": docID, "parse_status": status, "parse_error": errMsg})
@@ -738,7 +793,11 @@ func (d *Deps) DocumentDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profileID := d.profileIDOfChild(r.Context(), "profiler_documents", docID)
+	var storageKey string
+	_ = d.Pool.QueryRow(r.Context(), `SELECT storage_key FROM profiler_documents WHERE id = $1`, docID).Scan(&storageKey)
 	_, _ = d.Pool.Exec(r.Context(), "UPDATE profiler_documents SET deleted_at = NOW() WHERE id = $1", docID)
+	// Berkas fisik menyusul dihapus worker pada siklus berikutnya (delete_pending).
+	d.markAttachmentPendingDelete(r.Context(), storageKey)
 	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
@@ -767,6 +826,11 @@ func (d *Deps) listImages(ctx context.Context, profileID string) []map[string]an
 }
 
 // ImageUpload: POST /v1/brands/{brandId}/profiler/profiles/{profileId}/images (multipart)
+//
+// Mengikuti pola kuota DocumentUpload. Gambar adalah aset pustaka media —
+// retensinya lebih panjang (default 30 hari) dan baris profiler_images
+// di-soft-delete saat berkas fisiknya dibersihkan, supaya tab Media tidak
+// menampilkan thumbnail mati.
 func (d *Deps) ImageUpload(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
 	if user == nil {
@@ -783,22 +847,46 @@ func (d *Deps) ImageUpload(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "Profiler tidak ditemukan.")
 		return
 	}
+	lim := LoadUploadLimits()
+	r.Body = http.MaxBytesReader(w, r.Body, lim.MaxFileBytes+(2<<20))
+	if r.ContentLength > 0 && r.ContentLength > lim.MaxFileBytes+(2<<20) {
+		httpx.Error(w, http.StatusRequestEntityTooLarge, "Gambar melebihi batas ukuran unggahan.")
+		return
+	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			httpx.Error(w, http.StatusRequestEntityTooLarge, "Gambar melebihi batas ukuran unggahan.")
+			return
+		}
 		httpx.Error(w, http.StatusBadRequest, "File gambar tidak ditemukan.")
 		return
 	}
 	defer file.Close()
-	buf, err := io.ReadAll(io.LimitReader(file, 10<<20))
+	buf, err := io.ReadAll(io.LimitReader(file, lim.MaxFileBytes+1))
 	if err != nil {
 		httpx.Error(w, http.StatusBadRequest, "File tidak dapat dibaca.")
+		return
+	}
+	if int64(len(buf)) > lim.MaxFileBytes {
+		httpx.Error(w, http.StatusRequestEntityTooLarge, "Gambar melebihi batas ukuran unggahan.")
 		return
 	}
 	filename := filepath.Base(header.Filename)
 	mime := docMime(filename, header.Header.Get("Content-Type"))
 	if !acceptedImageMimes[mime] {
-		httpx.Error(w, http.StatusUnprocessableEntity, "File harus berupa gambar (JPG, PNG, WebP).")
+		httpx.Error(w, http.StatusUnprocessableEntity, "File harus berupa gambar (JPG, PNG, WebP, GIF).")
 		return
+	}
+	// Sniff isi: ekstensi .png yang sebenarnya skrip/HTML harus tertolak.
+	if !sniffFormatOK(buf, mime) {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Isi berkas bukan gambar yang valid.")
+		return
+	}
+	source := "chat"
+	if r.FormValue("source") == "library" {
+		source = "library"
 	}
 	note, _ := strField(decodeJSON(r), "note")
 	imgID := uuid.NewString()
@@ -807,7 +895,16 @@ func (d *Deps) ImageUpload(w http.ResponseWriter, r *http.Request) {
 		ext = "png"
 	}
 	storageKey := imgID + "." + ext
+	if err := d.reserveAttachment(r.Context(), user.ID, profileID, "image", source, storageKey, filename, mime, int64(len(buf))); err != nil {
+		if v := quotaViolationOf(err); v != nil {
+			httpx.Error(w, v.Status, v.Message)
+			return
+		}
+		writeErr(w, err)
+		return
+	}
 	if err := saveUpload(storageKey, buf); err != nil {
+		d.finalizeAttachment(r.Context(), storageKey, "image", "failed", truncate(err.Error(), 500))
 		writeErr(w, err)
 		return
 	}
@@ -816,9 +913,11 @@ func (d *Deps) ImageUpload(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO profiler_images (id, profile_id, storage_key, url, file_name, mime_type, size_bytes, note, created_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8,''), $9)`,
 		imgID, profileID, storageKey, url, filename, mime, len(buf), note, user.ID); err != nil {
+		d.finalizeAttachment(r.Context(), storageKey, "image", "failed", truncate(err.Error(), 500))
 		writeErr(w, err)
 		return
 	}
+	d.finalizeAttachment(r.Context(), storageKey, "image", "processed", "")
 	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"id": imgID, "url": url})
 }
@@ -841,7 +940,10 @@ func (d *Deps) ImageDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profileID := d.profileIDOfChild(r.Context(), "profiler_images", imageID)
+	var storageKey string
+	_ = d.Pool.QueryRow(r.Context(), `SELECT storage_key FROM profiler_images WHERE id = $1`, imageID).Scan(&storageKey)
 	_, _ = d.Pool.Exec(r.Context(), "UPDATE profiler_images SET deleted_at = NOW() WHERE id = $1", imageID)
+	d.markAttachmentPendingDelete(r.Context(), storageKey)
 	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

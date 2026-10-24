@@ -1085,6 +1085,25 @@ func (d *Deps) schPurgeStaleUploads(ctx context.Context) int {
 	// Kumpulkan nama berkas yang masih dipakai di mana pun. Bila scan DB gagal,
 	// jangan hapus apa pun (parity catch → purged 0).
 	used := map[string]struct{}{}
+	// Unggahan profiler/chatbot (dokumen, gambar, dan ledger siklus hidupnya —
+	// termasuk status deleted: berkasnya mungkin belum tersapu worker cleanup,
+	// biarkan worker profiler yang mengelola, bukan sweep 30-hari ini).
+	for _, scan := range []string{
+		"SELECT storage_key FROM chat_attachments",
+		"SELECT storage_key FROM profiler_documents WHERE storage_key IS NOT NULL",
+		"SELECT storage_key FROM profiler_images WHERE storage_key IS NOT NULL",
+	} {
+		rows, err := d.queryRows(ctx, scan)
+		if err != nil {
+			slog.Error("[scheduler] purge upload: scan storage_key profiler gagal", "query", scan, "err", err)
+			return 0
+		}
+		for _, r := range rows {
+			if key := r.strOr("storage_key", ""); key != "" {
+				used[schUploadBasename(key)] = struct{}{}
+			}
+		}
+	}
 	files, err := d.queryRows(ctx, "SELECT storage_key FROM taut_campaign_files WHERE storage_key IS NOT NULL")
 	if err != nil {
 		slog.Error("[scheduler] purge upload: scan storage_key gagal", "err", err)

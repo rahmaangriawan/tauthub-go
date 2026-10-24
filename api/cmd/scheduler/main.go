@@ -12,6 +12,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	brandflowdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brandflow"
+	"github.com/rahmaangriawan/tauthub-go/internal/domains/profiler"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobwire"
 )
@@ -42,6 +43,13 @@ func main() {
 	slog.Info("scheduler aktif", "interval", interval.String(), "max_jobs", maxJobs)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Worker pembersih berkas unggahan sementara chatbot (kuota & siklus
+	// hidup — internal/domains/profiler/uploadquota.go). Goroutine sendiri;
+	// berhenti rapi saat ctx dibatalkan (SIGTERM/SIGINT).
+	profilerDeps := &profiler.Deps{Pool: database.Pool}
+	go profilerDeps.RunUploadCleanupLoop(ctx)
+
 	brandFlow.RunSchedulerLoop(ctx, interval, maxJobs, runner)
 	slog.Info("scheduler berhenti")
 }
