@@ -4813,6 +4813,8 @@ export const PHRASE_EN: Record<string, string> = {
 	  "Ringkas ulang": "Summarize again",
 	  "Meringkas…": "Summarizing…",
 	  "Brief berubah — ringkas ulang untuk memperbarui.": "The brief changed — summarize again to update.",
+	  "Per media min": "Per media min",
+	  "Per media maks": "Per media max",
 	  "Media yang cocok": "Matching media",
 	  "kandidat": "candidates",
 	  "Belum ada media yang cocok dengan kriteria ini.": "No media matches these criteria yet.",

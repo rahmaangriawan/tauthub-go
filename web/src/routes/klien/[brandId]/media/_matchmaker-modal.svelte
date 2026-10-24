@@ -150,14 +150,21 @@
 		return n.toLocaleString('id-ID');
 	};
 
-	const budgetLabel = $derived.by(() => {
+	// Anggaran punya dua makna berbeda: total kampanye (budget_total) dan
+	// preferensi harga per media (budget_min/max). Ditampilkan terpisah supaya
+	// rentang per-media tidak terbaca sebagai budget kampanye.
+	const budgetTotalLabel = $derived.by(() => {
+		if (!criteria || criteria.budget_total <= 0) return '';
+		return moneyShort(criteria.budget_total);
+	});
+
+	const perMediaLabel = $derived.by(() => {
 		if (!criteria) return '';
-		if (criteria.budget_min > 0 && criteria.budget_max > 0) {
-			return `${moneyShort(criteria.budget_min)} – ${moneyShort(criteria.budget_max)}`;
-		}
-		if (criteria.budget_total > 0) return moneyShort(criteria.budget_total);
-		if (criteria.budget_min > 0) return moneyShort(criteria.budget_min);
-		if (criteria.budget_max > 0) return moneyShort(criteria.budget_max);
+		const mn = criteria.budget_min;
+		const mx = criteria.budget_max;
+		if (mn > 0 && mx > 0) return `${moneyShort(mn)} – ${moneyShort(mx)} /media`;
+		if (mn > 0) return `≥ ${moneyShort(mn)} /media`;
+		if (mx > 0) return `≤ ${moneyShort(mx)} /media`;
 		return '';
 	});
 
@@ -447,18 +454,31 @@
 								{/if}
 							</div>
 
-							<!-- Anggaran -->
+							<!-- Anggaran: total kampanye dan harga per media ditampilkan
+							     terpisah — brief sering menyebut keduanya sekaligus. -->
 							<div class="mmCardRow">
 								<span class="mmCardIcon"><Wallet size={18} /></span>
 								<span class="mmCardLabel">{tr('Anggaran')}</span>
 								{#if editing}
-									<span class="mmRangeEdit">
-										<input class="mmInlineInput" type="number" min="0" step="100000" bind:value={criteria.budget_min} placeholder={tr('Min')} />
-										<span>–</span>
-										<input class="mmInlineInput" type="number" min="0" step="100000" bind:value={criteria.budget_max} placeholder={tr('Maks')} />
+									<span class="mmBudgetEdit">
+										<label>
+											<span>{tr('Total')}</span>
+											<input class="mmInlineInput" type="number" min="0" step="100000" bind:value={criteria.budget_total} placeholder={tr('Total')} />
+										</label>
+										<label>
+											<span>{tr('Per media min')}</span>
+											<input class="mmInlineInput" type="number" min="0" step="50000" bind:value={criteria.budget_min} placeholder={tr('Min')} />
+										</label>
+										<label>
+											<span>{tr('Per media maks')}</span>
+											<input class="mmInlineInput" type="number" min="0" step="50000" bind:value={criteria.budget_max} placeholder={tr('Maks')} />
+										</label>
 									</span>
 								{:else}
-									<strong class="mmCardValue">{budgetLabel || tr('Belum disebutkan')}</strong>
+									<span class="mmBudgetCol">
+										<strong class="mmCardValue">{budgetTotalLabel || perMediaLabel || tr('Belum disebutkan')}</strong>
+										{#if budgetTotalLabel && perMediaLabel}<span class="mmBudgetSub">{perMediaLabel}</span>{/if}
+									</span>
 								{/if}
 							</div>
 
@@ -1032,17 +1052,33 @@
 		width: auto;
 		text-align: left;
 	}
-	.mmRangeEdit {
+	.mmBudgetEdit {
 		margin-left: auto;
 		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		color: #94a3b8;
-		font-size: 12px;
+		flex-wrap: wrap;
+		gap: 8px;
 	}
-	.mmRangeEdit .mmInlineInput {
+	.mmBudgetEdit label {
+		display: inline-flex;
+		flex-direction: column;
+		gap: 3px;
+		font-size: 10.5px;
+		color: var(--muted-foreground, #667085);
+	}
+	.mmBudgetEdit .mmInlineInput {
 		margin-left: 0;
-		width: 84px;
+		width: 110px;
+	}
+	.mmBudgetCol {
+		margin-left: auto;
+		display: inline-flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 2px;
+	}
+	.mmBudgetSub {
+		font-size: 11.5px;
+		color: var(--muted-foreground, #667085);
 	}
 	.mmRuleEdit {
 		display: flex;
