@@ -83,13 +83,21 @@ func enqueue(ctx context.Context, pool *pgxpool.Pool, profileID, brandID string,
 			return err
 		}
 	}
+
+	// Delay: tombol manual tidak perlu menunggu debounce. Debounce 20–40 detik
+	// hanya berguna untuk enqueue otomatis beruntun (yang kini sudah mati);
+	// untuk klik admin, ditunda justru terasa seperti sistem menggantung.
+	delay := "interval '0 seconds'"
+	if !force {
+		delay = "interval '20 seconds'"
+	}
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO jobs (id, kind, payload, status, attempts, max_attempts, run_at)
 		SELECT gen_random_uuid()::text, $1::text,
 		       jsonb_build_object('profileId', $2::text, 'brandId', $3::text, 'kind', $4::text)
 		         || CASE WHEN $5::boolean THEN '{"force":true}'::jsonb ELSE '{}'::jsonb END,
 		       'pending', 0, 2,
-		       now() + interval '20 seconds'
+		       now() + `+delay+`
 		         + CASE WHEN $4::text = 'file' THEN interval '15 seconds' ELSE interval '0 seconds' END
 		         + (random() * interval '20 seconds')
 		WHERE NOT EXISTS (
@@ -99,9 +107,25 @@ func enqueue(ctx context.Context, pool *pgxpool.Pool, profileID, brandID string,
 			  AND payload->>'kind' = $4::text
 		)`, JobKind, profileID, brandID, string(kind), force); err != nil {
 		slog.Warn("[brief-summary] gagal menjadwalkan job", "profile_id", profileID, "kind", kind, "err", err)
+		// Jangan tinggalkan status 'queued' tanpa job — UI akan berputar
+		// selamanya. Tandai gagal dengan alasan yang terbaca admin di panel.
+		_, _ = pool.Exec(ctx, `
+			UPDATE profiler_brief_summaries
+			SET status = 'failed', error = $3, updated_at = now()
+			WHERE profile_id = $1 AND kind = $2`,
+			profileID, string(kind), "Gagal menjadwalkan ringkasan: "+truncForSummary(err.Error()))
 		return err
 	}
 	return nil
+}
+
+// truncForSummary: pesan error untuk kolom UI — cukup bagian pembukanya.
+func truncForSummary(s string) string {
+	const max = 300
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "…"
 }
 
 // QueueAll: kedua ringkasan (dipakai saat brief baru dibuat/diduplikasi).

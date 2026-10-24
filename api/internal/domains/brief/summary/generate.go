@@ -31,6 +31,9 @@ func Generate(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, profi
 	src, err := BuildSource(ctx, pool, profileID, kind)
 	if err != nil {
 		_ = setStatus(ctx, pool, profileID, kind, "failed", err.Error())
+		// Tetap catat ke Log admin: kegagalan menyusun bahan juga harus
+		// terlihat per-agent, bukan hanya di log server.
+		logRun(ctx, pool, brandID, profileID, agent, agentCfg.Model, "", 0, 0, 0, err)
 		return err
 	}
 	storedStatus, storedHash, storedContent := loadStored(ctx, pool, profileID, kind)
@@ -106,6 +109,10 @@ func Generate(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, profi
 		WHERE profile_id = $1 AND kind = $2`,
 		profileID, string(kind), content, src.Chars, src.Hash,
 		agentCfg.Model, res.InputTokens, res.OutputTokens); err != nil {
+		// Model SUDAH dibayar tokennya — catat pemakaiannya di Log walau
+		// penyimpanan gagal, supaya angka biaya admin tidak bolong.
+		logRun(ctx, pool, brandID, profileID, agent, agentCfg.Model, material,
+			res.InputTokens, res.OutputTokens, int(time.Since(started).Milliseconds()), err)
 		return err
 	}
 
