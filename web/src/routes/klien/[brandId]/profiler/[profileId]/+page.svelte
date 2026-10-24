@@ -1062,6 +1062,24 @@
 		}
 	}
 
+	// Field opsional (USP, fakta penting, dsb.) tidak dihitung progres dan tidak
+	// ditanyakan otomatis oleh agent. Tombol ini meminta Copilot menawarkan
+	// isiannya — tetap LLM yang menyusun, dari state & sumber yang sudah ada.
+	async function askCopilotForOptionals() {
+		if (streaming) return;
+		const missing = optionalEmpty.slice(0, 10).map((f) => f.label);
+		if (missing.length === 0) return;
+		editModeIntent = true;
+		summaryPrompt = 'idle';
+		activeTab = 'copilot';
+		await send(
+			tr(
+				`Semua field wajib sudah terisi. Sekarang tawarkan isian untuk field opsional yang masih kosong ini: ${missing.join(', ')}. ` +
+					'Untuk tiap field, ajukan satu nilai berdasar fakta yang sudah ada di brief (source "ai_suggested"), tampilkan sebagai draft yang bisa kujawab singkat: pakai / ubah / lewati. Mulai dari Keunggulan (USP) dan Fakta penting yang wajib dipertahankan.'
+			)
+		);
+	}
+
 	// Lanjut obrolan setelah ringkasan jadi. Klien TIDAK menyusun daftar data:
 	// konteks giliran (stateBlock) sudah memuat setiap field beserta status dan
 	// nilainya, jadi LLM sendirilah yang membaca dan menyajikan pilihannya.
@@ -1291,6 +1309,14 @@
 
 	// Persentase ringkas untuk lencana di rel Ringkasan dan panelnya.
 	const progressPct = $derived(progress.total ? Math.round((progress.filled / progress.total) * 100) : 0);
+
+	// Field opsional (layer 2) yang masih kosong. Progres "field wajib" hanya
+	// menghitung field WAJIB, jadi 100% bukan berarti semua yang tampak di tab
+	// Entitas sudah terisi — mis. Keunggulan/USP dan Fakta penting. Angka ini
+	// dipakai untuk memberi tahu jujur + jalan pintas melengkapinya.
+	const optionalEmpty = $derived(
+		fields.filter((f) => f.enabled && !f.required && f.layer !== 3 && !isFilled(f.key))
+	);
 
 	// Widget hanya bila field-nya memang butuh kontrol khusus. Pertanyaan biasa
 	// cukup dijawab di composer, jadi tidak ada kartu yang menganggu.
@@ -1684,7 +1710,7 @@
 							class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
 							style="background: {progressPct >= 100 ? 'var(--success-soft)' : 'var(--warning-soft)'}; color: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"
 						>
-							<span class="h-1.5 w-1.5 rounded-full" style="background: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"></span>{progressPct}% {tr('Siap Rilis')}
+							<span class="h-1.5 w-1.5 rounded-full" style="background: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"></span>{progressPct}% {tr('field wajib')}
 						</span>
 					</button>
 					<button
@@ -2017,7 +2043,7 @@
 						{#if summaryPrompt === 'invite'}
 							<span class="brief-nudge-icon" aria-hidden="true"><Sparkle size={16} /></span>
 							<div class="min-w-0 flex-1">
-								<p class="text-[13px] font-bold">Entitas sudah 100%, ringkas sekarang!</p>
+								<p class="text-[13px] font-bold">Field wajib sudah lengkap, ringkas sekarang!</p>
 								<p class="mt-0.5 text-[11.5px] text-muted-foreground">
 									{entitySummaryReady
 										? tr('Mau lanjut mengedit entitas yang sudah ada?')
@@ -2299,14 +2325,27 @@
 								</div>
 								<p class="mt-1.5 text-xs text-muted-foreground">
 									{progress.filled} / {progress.total} {tr('field wajib terisi')} · {sources.length} {tr('sumber dibaca')}
+									{#if progressPct >= 100 && optionalEmpty.length > 0}
+										&nbsp;·&nbsp;{optionalEmpty.length} {tr('field opsional masih kosong')}
+									{/if}
 								</p>
+								{#if progressPct >= 100 && optionalEmpty.length > 0}
+									<button
+										class="mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold underline-offset-2 hover:underline"
+										style="color: var(--primary);"
+										type="button"
+										onclick={() => void askCopilotForOptionals()}
+									>
+										{tr('Lengkapi field opsional lewat Copilot')} →
+									</button>
+								{/if}
 							</div>
 							<span
 								class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold"
 								style="background: {progressPct >= 100 ? 'var(--success-soft)' : 'var(--warning-soft)'}; color: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"
 							>
 								<span class="h-1.5 w-1.5 rounded-full" style="background: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"></span>
-								{progressPct}% {tr('Siap Rilis')}
+								{progressPct}% {tr('field wajib')}
 							</span>
 						</div>
 					</section>
