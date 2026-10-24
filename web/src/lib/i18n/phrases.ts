@@ -4833,6 +4833,7 @@ export const PHRASE_EN: Record<string, string> = {
 	  "Pilih otomatis": "Auto-pick",
 	  "Contoh": "Example",
 	  "Isi textarea dengan contoh brief lengkap": "Fill the textarea with a complete example brief",
+	  "Sisanya — harga aktual, ketersediaan, aturan editorial, dan metrik tiap media — dicek otomatis dari data katalog saat pencarian. Kamu tidak perlu menulisnya di brief.": "The rest — actual prices, availability, editorial rules, and per-media metrics — is checked automatically from catalog data during the search. You don't need to write it in the brief.",
 	  "Media yang cocok": "Matching media",
 	  "kandidat": "candidates",
 	  "Belum ada media yang cocok dengan kriteria ini.": "No media matches these criteria yet.",

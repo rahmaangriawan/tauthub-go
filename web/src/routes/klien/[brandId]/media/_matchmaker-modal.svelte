@@ -171,41 +171,6 @@
 	// Prompt Matchmaker meminta model menuliskan NAMA FIELD ke `unknowns` untuk
 	// data yang tidak disebut brief (lihat migrasi 238). Tanpa peta ini daftar
 	// itu tampil sebagai key JSON mentah di kartu ringkasan.
-	const UNKNOWN_LABELS: Record<string, string> = {
-		objective: 'Tujuan publikasi',
-		audience: 'Target audiens',
-		categories: 'Kategori media',
-		media_types: 'Jenis media',
-		count: 'Jumlah media',
-		budget_total: 'Anggaran total kampanye',
-		// Diberi awalan "harga per media" supaya tidak terbaca kontradiktif
-		// dengan anggaran total yang mungkin sudah disebut di brief.
-		budget_min: 'Harga per media minimum',
-		budget_max: 'Harga per media maksimum',
-		min_da: 'DA minimal',
-		min_ai_trust: 'AI Trust minimal',
-		min_traffic: 'Traffic minimal',
-		min_words: 'Minimal kata',
-		min_backlinks: 'Minimal backlink',
-		require_hyperlink: 'Tautan aktif',
-		require_permanent_link: 'Tautan permanen',
-		languages: 'Bahasa',
-		exclude_topics: 'Topik yang dihindari',
-		notes: 'Catatan'
-	};
-
-	// Kalimat bebas dari model diteruskan apa adanya; key dikenal diganti label.
-	const unknownLabels = $derived.by(() => {
-		const out: string[] = [];
-		for (const raw of interpretation?.unknowns ?? []) {
-			const text = raw.trim();
-			if (!text) continue;
-			const label = tr(UNKNOWN_LABELS[text.toLowerCase()] ?? text);
-			if (!out.includes(label)) out.push(label);
-		}
-		return out;
-	});
-
 	const articleRules = $derived.by(() => {
 		if (!criteria) return [] as string[];
 		const out: string[] = [];
@@ -214,12 +179,14 @@
 		return out;
 	});
 
-	// Status ringkasan: loading → error → perlu klarifikasi → terdeteksi.
+	// Status ringkasan. Daftar unknowns sengaja tidak memicu "Perlu
+	// klarifikasi" — daftar itu sudah dihilangkan dari UI klien (terasa
+	// seperti PR); detailnya tetap tersimpan untuk admin di folder Log.
 	const summaryState = $derived.by<'idle' | 'loading' | 'error' | 'clarify' | 'ok'>(() => {
 		if (analyzing) return 'loading';
 		if (analyzeError) return 'error';
 		if (interpretation) {
-			if (interpretation.unknowns.length > 0 || (criteria?.count ?? 0) <= 0) return 'clarify';
+			if ((criteria?.count ?? 0) <= 0) return 'clarify';
 			return 'ok';
 		}
 		return 'idle';
@@ -576,12 +543,11 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 							</div>
 						</div>
 
-						{#if unknownLabels.length > 0}
-							<p class="mmUnknownsHead">{tr('Belum disebut di brief')}</p>
-							<ul class="mmUnknowns">
-								{#each unknownLabels as u (u)}<li>{u}</li>{/each}
-							</ul>
-						{/if}
+						<!-- Pengganti daftar "Belum disebut di brief": satu kalimat
+						     penenang, bukan daftar tugas. -->
+						<p class="mmAutoNote">
+							{tr('Sisanya — harga aktual, ketersediaan, aturan editorial, dan metrik tiap media — dicek otomatis dari data katalog saat pencarian. Kamu tidak perlu menulisnya di brief.')}
+						</p>
 
 						<div class="mmInfoBox">
 							<Info size={16} />
@@ -1204,6 +1170,12 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		font-size: 12.5px;
 		color: #94a3b8;
 	}
+	.mmAutoNote {
+		margin: 0;
+		font-size: 12px;
+		line-height: 1.55;
+		color: #94a3b8;
+	}
 	.mmBar {
 		display: flex;
 		height: 9px;
@@ -1231,29 +1203,6 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		height: 8px;
 		border-radius: 999px;
 		display: inline-block;
-	}
-	.mmUnknownsHead {
-		margin: 0 0 4px;
-		font-size: 11px;
-		font-weight: 600;
-		letter-spacing: 0.02em;
-		text-transform: uppercase;
-		color: #8a5a00;
-	}
-	.mmUnknowns {
-		margin: 0;
-		padding-left: 18px;
-		/* Preflight Tailwind mematikan bullet; daftar ini butuh bullet. */
-		list-style: disc;
-		font-size: 12px;
-		line-height: 1.6;
-		color: #a15c00;
-	}
-	.mmUnknowns li {
-		margin-bottom: 3px;
-	}
-	.mmUnknowns li::marker {
-		color: #d97706;
 	}
 	.mmInfoBox {
 		display: flex;
