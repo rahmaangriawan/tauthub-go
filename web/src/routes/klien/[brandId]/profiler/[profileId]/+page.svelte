@@ -1019,41 +1019,19 @@
 		}
 	}
 
-	// Rekap field terisi sebagai teks: disodorkan langsung di chat saat user
-	// memilih "lanjut edit", jadi ia memilih editor dari data nyata — bukan
-	// mulai dari percakapan kosong.
-	function filledFieldDigest(): string {
-		const rows: string[] = [];
-		for (const f of fields) {
-			if (!f.enabled || !isFilled(f.key)) continue;
-			const raw = values[f.key];
-			const val = Array.isArray(raw) ? raw.join(', ') : String(raw ?? '').trim();
-			if (!val) continue;
-			const clipped = val.length > 160 ? val.slice(0, 160) + '…' : val;
-			rows.push(`- ${f.label}: ${clipped}`);
-		}
-		return rows.join('\n');
-	}
-
-	// Lanjut obrolan setelah ringkasan jadi. Pesan pembuka memuat DATA TERISI
-	// supaya LLM langsung menanyakannya sebagai pilihan yang bisa dijawab
-	// user, bukan bertanya dari nol.
+	// Lanjut obrolan setelah ringkasan jadi. Klien TIDAK menyusun daftar data:
+	// konteks giliran (stateBlock) sudah memuat setiap field beserta status dan
+	// nilainya, jadi LLM sendirilah yang membaca dan menyajikan pilihannya.
+	// Klien hanya menyampaikan niat user.
 	async function continueToEdit() {
 		summaryPrompt = 'idle';
 		editModeIntent = true;
 		activeTab = 'copilot';
 		const typed = composer.trim();
-		const digest = filledFieldDigest();
-		const lines = [
-			tr('Entitas sudah 100% dan ringkasannya sudah dibuat. Aku ingin meninjau dan mengedit.'),
-			'',
-			tr('Ini data yang sudah terisi:'),
-			digest || tr('(belum ada field terisi yang bisa ditampilkan)'),
-			'',
-			tr('Tampilkan data di atas sebagai daftar bernomor, lalu tanya aku mau mengubah nomor yang mana. Jangan mengubah apa pun sebelum aku menjawab.')
-		];
-		if (typed) lines.push('', tr('Catatan/editanku: ') + typed);
-		await send(lines.join('\n'));
+		const intent = tr(
+			'Entitas sudah lengkap dan ringkasannya sudah dibuat. Aku ingin meninjau dan mengedit entitas ini.'
+		);
+		await send(typed ? `${intent}\n\n${typed}` : intent);
 	}
 
 	async function copySummary(item: SummaryItem) {
