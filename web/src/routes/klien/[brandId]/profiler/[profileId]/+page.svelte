@@ -276,7 +276,11 @@
 	// tetap bisa muncul.
 	$effect(() => {
 		if (progressPct < 100) return;
-		const key = `${progress.filled}/${progress.total}:${entitySummaryReady}`;
+		// WAJIB memakai inviteSignature() yang sama dengan dismissInvite():
+		// sebelumnya di sini dipakai boolean mentah (`:false`), sedangkan yang
+		// disimpan `:pre`, sehingga penanda penolakan tidak pernah cocok dan
+		// popup muncul lagi setiap refresh.
+		const key = inviteSignature();
 		if (summaryInvitedFor === key) return;
 		summaryInvitedFor = key;
 		if (entitySummaryReady || summaryPrompt !== 'idle') return;
