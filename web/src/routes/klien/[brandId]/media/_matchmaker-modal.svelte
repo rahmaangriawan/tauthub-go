@@ -222,22 +222,17 @@
 	const selectedTotal = $derived(selectedItems.reduce((sum, c) => sum + (c.client_price ?? 0), 0));
 	const overBudget = $derived(Boolean(result && result.package.budget > 0 && selectedTotal > result.package.budget));
 
-	// Brief → AI otomatis setelah user berhenti mengetik. Ditahan saat user
-	// sedang mengoreksi ringkasan supaya hasil AI tidak menimpa editan.
+	// Ringkasan TIDAK dibuat otomatis saat mengetik — user menekan "Ringkas
+	// Brief". Effect ini hanya membersihkan hasil lama ketika brief dikosongkan
+	// di bawah ambang minimal, supaya ringkasan basi tidak tertinggal.
 	$effect(() => {
-		const text = brief.trim();
-		if (editing) return;
-		if (text.length < MIN_ANALYZE_CHARS) {
-			criteria = null;
-			interpretation = null;
-			result = null;
-			analyzeError = '';
-			lastAnalyzed = '';
-			return;
-		}
-		if (text === lastAnalyzed) return;
-		const timer = setTimeout(() => void analyze(text), 900);
-		return () => clearTimeout(timer);
+		if (brief.trim().length >= MIN_ANALYZE_CHARS) return;
+		criteria = null;
+		interpretation = null;
+		result = null;
+		analyzeError = '';
+		lastAnalyzed = '';
+		analyzeSeq++;
 	});
 
 	async function analyze(text: string) {
@@ -276,7 +271,8 @@
 
 	async function search() {
 		searchError = '';
-		if (!criteria && brief.trim()) await analyze(brief.trim());
+		// Tanpa ringkasan tidak ada kriteria yang bisa dicari; tombolnya pun
+		// disabled. Tidak ada panggilan AI implisit di sini.
 		if (!criteria) return;
 		searching = true;
 		try {
@@ -309,12 +305,9 @@
 	}
 
 	function toggleEdit() {
+		// Ringkasan tidak lagi diringkas otomatis, jadi koreksi user tidak bisa
+		// tertimpa; lastAnalyzed hanya penanda "brief ini yang terakhir diringkas".
 		editing = !editing;
-		if (!editing) {
-			// Anggap editan sudah final: jangan biarkan debounce berikutnya
-			// menimpa nilai yang baru dikoreksi user.
-			lastAnalyzed = brief.trim();
-		}
 	}
 
 	function addDetail() {
@@ -392,6 +385,24 @@
 						<button class="mmLinkBtn" type="button" onclick={addDetail}>
 							<Plus size={15} />{tr('Tambah detail')}
 						</button>
+					</div>
+
+					<!-- Ringkas hanya saat user menekan tombol — tidak otomatis
+					     saat mengetik, supaya brief panjang tidak terpotong
+					     ringkasannya di tengah jalan. -->
+					<div class="mmBriefActions">
+						<button
+							class="mmBtnPrimary mmSummarize"
+							type="button"
+							disabled={analyzing || brief.trim().length < MIN_ANALYZE_CHARS}
+							onclick={() => void analyze(brief.trim())}
+						>
+							{#if analyzing}<span class="mmSpin"><LoaderCircle size={15} /></span>{:else}<Sparkles size={15} />{/if}
+							{analyzing ? tr('Meringkas…') : interpretation ? tr('Ringkas ulang') : tr('Ringkas Brief')}
+						</button>
+						{#if interpretation && brief.trim() !== lastAnalyzed}
+							<span class="mmStaleHint">{tr('Brief berubah — ringkas ulang untuk memperbarui.')}</span>
+						{/if}
 					</div>
 				</section>
 
@@ -534,7 +545,7 @@
 							{:else if summaryState === 'error'}
 								<p>{tr('Ringkasan belum bisa dibuat. Perbaiki brief lalu coba lagi.')}</p>
 							{:else}
-								<p>{tr('Ringkasan kebutuhan akan muncul di sini setelah kamu menulis brief.')}</p>
+								<p>{tr('Ringkasan kebutuhan akan muncul di sini setelah kamu menekan Ringkas Brief.')}</p>
 							{/if}
 						</div>
 						<div class="mmInfoBox">
@@ -883,6 +894,19 @@
 		color: var(--muted-foreground, #667085);
 		flex-wrap: wrap;
 	}
+	.mmBriefActions {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+	.mmSummarize {
+		align-self: flex-start;
+	}
+	.mmStaleHint {
+		font-size: 12px;
+		color: #a15c00;
+	}
 	.mmAttachIcons {
 		display: inline-flex;
 		color: #94a3b8;
@@ -1087,9 +1111,17 @@
 	.mmUnknowns {
 		margin: 0;
 		padding-left: 18px;
+		/* Preflight Tailwind mematikan bullet; daftar ini butuh bullet. */
+		list-style: disc;
 		font-size: 12px;
 		line-height: 1.6;
 		color: #a15c00;
+	}
+	.mmUnknowns li {
+		margin-bottom: 3px;
+	}
+	.mmUnknowns li::marker {
+		color: #d97706;
 	}
 	.mmInfoBox {
 		display: flex;
