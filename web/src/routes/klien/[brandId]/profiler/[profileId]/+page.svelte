@@ -18,7 +18,7 @@
 	import { page } from '$app/state';
 	import {
 		ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Copy, ExternalLink, FileText, Images, LoaderCircle,
-		MoreHorizontal, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, ShieldAlert, Sparkle, Square, SquarePen, Trash2, Upload, UserCircle, X
+		Mic, MoreHorizontal, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, ShieldAlert, Sparkle, Square, SquarePen, Trash2, Upload, UserCircle, X
 	} from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import Select from '$lib/components/select.svelte';
@@ -119,7 +119,6 @@
 	let profileName = $state('');
 	let messages = $state<ChatRow[]>([]);
 	let composer = $state('');
-	let composerExpanded = $state(false);
 	let streaming = $state(false);
 	let streamingText = $state('');
 	let streamError = $state('');
@@ -371,6 +370,7 @@
 
 	onDestroy(() => {
 		if (summaryTimer) clearTimeout(summaryTimer);
+		try { recognition?.stop(); } catch { /* sudah berhenti */ }
 	});
 
 	// Gulir ke pesan terbaru setiap daftar/teks bertambah. Dibaca eksplisit di
@@ -612,7 +612,6 @@
 		if ((!text && pendingDocs.length === 0) || streaming || uploadingNow) return;
 		streamError = '';
 		composer = '';
-		composerExpanded = false;
 		const composerEl = document.getElementById('brief-composer') as HTMLTextAreaElement | null;
 		if (composerEl) composerEl.style.height = '';
 
@@ -1000,24 +999,49 @@
 		void uploadMediaFiles(e.dataTransfer?.files);
 	}
 
-	// Textarea tumbuh ke atas sampai 50vh; composer berubah pill ⇄ kartu besar
-	// berdasarkan baris visual (teks yang membungkus ikut dihitung).
-	// Ukur dua kali: lebar pill berbeda dari lebar kartu besar, jadi tinggi
-	// disetel ulang setelah mode berganti agar tidak tersisa ruang kosong.
+	// Textarea tumbuh mengikuti isi sampai 50vh. Composer selalu dua area
+	// (teks di atas, toolbar satu baris di bawah) — tanpa mode ganda, jadi
+	// cukup ukur sekali: height auto dulu agar bisa menyusut.
 	function autoGrow(el: HTMLTextAreaElement) {
-		function measure() {
-			el.style.height = 'auto';
-			el.style.overflowY = 'hidden';
-			const max = Math.round(window.innerHeight * 0.5);
-			const next = Math.min(el.scrollHeight, max);
-			el.style.height = `${Math.max(36, next)}px`;
-			if (el.scrollHeight > max) el.style.overflowY = 'auto';
-			return el.scrollHeight;
+		el.style.height = 'auto';
+		el.style.overflowY = 'hidden';
+		const max = Math.round(window.innerHeight * 0.5);
+		el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+		if (el.scrollHeight > max) el.style.overflowY = 'auto';
+	}
+
+	// Dikte suara (Web Speech API). Browser tanpa dukungan tidak menampilkan
+	// tombol mikrofon sama sekali. Hasil final ditambahkan ke composer.
+	const speechSupported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+	let listening = $state(false);
+	let recognition: any = null;
+	function toggleMic() {
+		if (!speechSupported) return;
+		if (listening) {
+			recognition?.stop();
+			return;
 		}
-		const line = parseFloat(getComputedStyle(el).lineHeight) || 20;
-		const measured = measure();
-		composerExpanded = measured > line * 1.5 || composer.includes('\n');
-		if (composerExpanded) void requestAnimationFrame(() => measure());
+		const Ctor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+		if (!Ctor) return;
+		recognition = new Ctor();
+		recognition.lang = 'id-ID';
+		recognition.continuous = true;
+		recognition.interimResults = false;
+		recognition.onresult = (ev: any) => {
+			let text = '';
+			for (let i = ev.resultIndex; i < ev.results.length; i++) {
+				if (ev.results[i].isFinal) text += ev.results[i][0].transcript;
+			}
+			if (text.trim()) {
+				composer = composer ? composer.trimEnd() + ' ' + text.trim() : text.trim();
+				const el = document.getElementById('brief-composer') as HTMLTextAreaElement | null;
+				if (el) autoGrow(el);
+			}
+		};
+		recognition.onend = () => (listening = false);
+		recognition.onerror = () => (listening = false);
+		recognition.start();
+		listening = true;
 	}
 
 	function fmtSize(bytes: number): string {
@@ -1865,113 +1889,7 @@
 
 				<div class="mx-auto max-w-2xl">
 
-					<div class="brief-composer" class:brief-composer-lg={composerExpanded}>
-						<div class="brief-composer-row">
-							<div class="brief-attach">
-								<button
-									class="brief-composer-icon"
-									type="button"
-									aria-label={tr('Lampirkan berkas')}
-									aria-expanded={attachOpen}
-									onclick={() => (attachOpen = !attachOpen)}
-								>
-									<Plus size={18} />
-								</button>
-
-								{#if attachOpen}
-									<button class="brief-pop-backdrop" type="button" aria-label={tr('Tutup')} onclick={() => (attachOpen = false)}></button>
-									<div
-										class="brief-attach-pop"
-										role="menu"
-										tabindex="-1"
-										onkeydown={(e) => {
-											if (e.key === 'Escape') attachOpen = false;
-										}}
-									>
-										<button
-											class="brief-attach-item"
-											type="button"
-											role="menuitem"
-											onclick={() => { attachOpen = false; document.getElementById('brief-image-input')?.click(); }}
-										>
-											<span class="brief-attach-icon" aria-hidden="true">
-												<svg width="21" height="21" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-													<path d="M25.6 0H6.4C2.86538 0 0 2.86538 0 6.4V25.6C0 29.1346 2.86538 32 6.4 32H25.6C29.1346 32 32 29.1346 32 25.6V6.4C32 2.86538 29.1346 0 25.6 0Z" fill="url(#brief-attach-img-grad)" />
-													<path d="M5.9577 24.8845C5.42578 25.9483 6.19937 27.2 7.38878 27.2H18.2111C19.4005 27.2 20.1741 25.9483 19.6422 24.8845L14.231 14.0622C13.6414 12.8829 11.9585 12.8829 11.3688 14.0622L5.9577 24.8845Z" fill="white" />
-													<path d="M15.5577 24.8845C15.0258 25.9483 15.7994 27.2 16.9888 27.2H24.6111C25.8005 27.2 26.5741 25.9483 26.0422 24.8845L22.231 17.2622C21.6414 16.0829 19.9585 16.0829 19.3688 17.2622L15.5577 24.8845Z" fill="white" fill-opacity="0.6" />
-													<path d="M24.0002 11.2C25.7675 11.2 27.2002 9.76726 27.2002 7.99995C27.2002 6.23264 25.7675 4.79995 24.0002 4.79995C22.2329 4.79995 20.8002 6.23264 20.8002 7.99995C20.8002 9.76726 22.2329 11.2 24.0002 11.2Z" fill="white" />
-													<defs>
-														<linearGradient id="brief-attach-img-grad" x1="16" y1="0" x2="16" y2="32" gradientUnits="userSpaceOnUse">
-															<stop stop-color="#00E676" />
-															<stop offset="1" stop-color="#00C853" />
-														</linearGradient>
-													</defs>
-												</svg>
-											</span>
-											{tr('Gambar')}
-										</button>
-										<button
-											class="brief-attach-item"
-											type="button"
-											role="menuitem"
-											onclick={() => { attachOpen = false; document.getElementById('brief-doc-input')?.click(); }}
-										>
-											<span class="brief-attach-icon" aria-hidden="true">
-												<svg width="21" height="21" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-													<polygon fill="#FFB74D" points="406.941,98.68 406.941,473.339 39.241,473.339 39.241,0 308.793,0 406.794,98.534" />
-													<polygon fill="#FFA91E" points="406.941,98.68 406.941,473.339 223.091,473.339 223.091,0 308.793,0 406.794,98.534" />
-													<g fill="#FFFFFF">
-														<rect x="98.858" y="257.526" width="137.927" height="31.347" />
-														<rect x="97.865" y="130.675" width="137.927" height="31.347" />
-														<rect x="97.865" y="194.414" width="250.775" height="31.347" />
-													</g>
-													<polygon fill="#FF8900" points="406.794,98.532 308.794,98.532 308.794,0" />
-													<path fill="#67BFFF" d="M472.759,406.601C472.759,464.812,425.571,512,367.36,512c-0.251,0-0.502,0-0.752-0.01c-28.473-0.188-54.251-11.682-73.101-30.208c-16.927-16.635-28.264-38.933-30.929-63.843c-0.397-3.72-0.616-7.502-0.616-11.337c0-31.587,13.908-59.925,35.913-79.245c0.24-0.209,0.481-0.418,0.721-0.616c8.579-7.398,18.369-13.427,29.017-17.774c12.048-4.901,25.203-7.659,38.996-7.743c0.251-0.01,0.502-0.01,0.752-0.01C425.571,301.213,472.759,348.39,472.759,406.601z" />
-													<path fill="#0088FF" d="M472.759,406.601C472.759,464.812,425.571,512,367.36,512c-0.251,0-0.502,0-0.752-0.01V301.223c0.251-0.01,0.502-0.01,0.752-0.01C425.571,301.213,472.759,348.39,472.759,406.601z" />
-													<polygon fill="#FFFFFF" points="422.823,391.952 422.823,423.299 383.033,423.299 383.033,465.157 351.687,465.157 351.687,423.299 311.897,423.299 311.897,391.952 351.687,391.952 351.687,350.103 383.033,350.103 383.033,391.952" />
-													<g fill="#D9D8DB">
-														<polygon points="422.823,391.952 422.823,423.299 383.033,423.299 383.033,465.157 366.608,465.157 366.608,350.103 383.033,350.103 383.033,391.952" />
-														<rect x="223.086" y="130.675" width="12.696" height="31.347" />
-														<rect x="223.086" y="257.526" width="13.688" height="31.347" />
-														<rect x="223.086" y="194.414" width="125.544" height="31.347" />
-													</g>
-												</svg>
-											</span>
-											{tr('Dokumen')}
-										</button>
-									</div>
-								{/if}
-
-								<input
-									id="brief-image-input"
-									class="hidden"
-									type="file"
-									multiple
-									accept="image/png,image/jpeg,image/webp,image/gif"
-									onchange={(e) => {
-										stageFiles((e.currentTarget as HTMLInputElement).files, 'image');
-										(e.currentTarget as HTMLInputElement).value = '';
-									}}
-								/>
-								<input
-									id="brief-doc-input"
-									class="hidden"
-									type="file"
-									multiple
-									accept=".pdf,.docx,.txt,.md,.csv,application/pdf"
-									onchange={(e) => {
-										stageFiles((e.currentTarget as HTMLInputElement).files, 'doc');
-										(e.currentTarget as HTMLInputElement).value = '';
-									}}
-								/>
-							</div>
-
-							{#if uploadingNow}
-								<p class="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-									<LoaderCircle size={12} class="animate-spin" />{tr('Mengunggah dokumen…')}
-								</p>
-							{/if}
-
+					<div class="brief-composer">
 						{#if pendingDocs.length > 0}
 							<div class="brief-composer-files">
 								{#each pendingDocs as d, i (d.file.name + String(d.file.size) + i)}
@@ -1992,54 +1910,155 @@
 							</div>
 						{/if}
 
-							<textarea
-								id="brief-composer"
-								class="brief-composer-input"
-								class:brief-composer-input-docked={composerExpanded}
-								rows="1"
-								placeholder={tr('Tulis balasan…')}
-								bind:value={composer}
-								disabled={streaming}
-								oninput={(e) => autoGrow(e.currentTarget as HTMLTextAreaElement)}
-								onpaste={(e: ClipboardEvent) => {
-									const files = e.clipboardData?.files;
-									if (files && files.length > 0) {
-										e.preventDefault();
-										stageFiles(files);
-									}
-								}}
-								onkeydown={(e) => {
-									if (e.key === 'Enter' && !(e as KeyboardEvent).shiftKey) {
-										e.preventDefault();
-										void send();
-									}
-								}}
-							></textarea>
+						<textarea
+							id="brief-composer"
+							class="brief-composer-input"
+							rows="1"
+							placeholder={tr('Tulis balasan…')}
+							bind:value={composer}
+							disabled={streaming}
+							oninput={(e) => autoGrow(e.currentTarget as HTMLTextAreaElement)}
+							onpaste={(e: ClipboardEvent) => {
+								const files = e.clipboardData?.files;
+								if (files && files.length > 0) {
+									e.preventDefault();
+									stageFiles(files);
+								}
+							}}
+							onkeydown={(e) => {
+								if (e.key === 'Enter' && !(e as KeyboardEvent).shiftKey) {
+									e.preventDefault();
+									void send();
+								}
+							}}
+						></textarea>
 
-							{#if !composerExpanded}
-								<button
-									class="brief-composer-send"
-									class:brief-composer-stop={streaming}
-									type="button"
-									aria-label={streaming ? tr('Hentikan generasi') : tr('Kirim')}
-									disabled={streaming || uploadingNow ? false : !composer.trim() && pendingDocs.length === 0}
-									onclick={() => (streaming ? controller?.abort() : void send())}
-								>
-									{#if streaming}<Square size={13} />{:else}<ArrowUp size={16} />{/if}
-								</button>
-							{/if}
-						</div>
+						<div class="brief-composer-toolbar">
+							<div class="brief-composer-tools">
+								<div class="brief-attach">
+									<button
+										class="brief-composer-icon"
+										type="button"
+										aria-label={tr('Lampirkan berkas')}
+										aria-expanded={attachOpen}
+										onclick={() => (attachOpen = !attachOpen)}
+									>
+										<Plus size={18} />
+									</button>
 
-						{#if composerExpanded}
-							<div class="brief-composer-footer">
-								<div class="brief-composer-actions">
-									{#if streaming}
-										<span class="brief-composer-thinking">
-											<LoaderCircle size={12} class="animate-spin" />
-											{tr('Berpikir')}
-										</span>
+									{#if attachOpen}
+										<button class="brief-pop-backdrop" type="button" aria-label={tr('Tutup')} onclick={() => (attachOpen = false)}></button>
+										<div
+											class="brief-attach-pop"
+											role="menu"
+											tabindex="-1"
+											onkeydown={(e) => {
+												if (e.key === 'Escape') attachOpen = false;
+											}}
+										>
+											<button
+												class="brief-attach-item"
+												type="button"
+												role="menuitem"
+												onclick={() => { attachOpen = false; document.getElementById('brief-image-input')?.click(); }}
+											>
+												<span class="brief-attach-icon" aria-hidden="true">
+													<svg width="21" height="21" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+														<path d="M25.6 0H6.4C2.86538 0 0 2.86538 0 6.4V25.6C0 29.1346 2.86538 32 6.4 32H25.6C29.1346 32 32 29.1346 32 25.6V6.4C32 2.86538 29.1346 0 25.6 0Z" fill="url(#brief-attach-img-grad)" />
+														<path d="M5.9577 24.8845C5.42578 25.9483 6.19937 27.2 7.38878 27.2H18.2111C19.4005 27.2 20.1741 25.9483 19.6422 24.8845L14.231 14.0622C13.6414 12.8829 11.9585 12.8829 11.3688 14.0622L5.9577 24.8845Z" fill="white" />
+														<path d="M15.5577 24.8845C15.0258 25.9483 15.7994 27.2 16.9888 27.2H24.6111C25.8005 27.2 26.5741 25.9483 26.0422 24.8845L22.231 17.2622C21.6414 16.0829 19.9585 16.0829 19.3688 17.2622L15.5577 24.8845Z" fill="white" fill-opacity="0.6" />
+														<path d="M24.0002 11.2C25.7675 11.2 27.2002 9.76726 27.2002 7.99995C27.2002 6.23264 25.7675 4.79995 24.0002 4.79995C22.2329 4.79995 20.8002 6.23264 20.8002 7.99995C20.8002 9.76726 22.2329 11.2 24.0002 11.2Z" fill="white" />
+														<defs>
+															<linearGradient id="brief-attach-img-grad" x1="16" y1="0" x2="16" y2="32" gradientUnits="userSpaceOnUse">
+																<stop stop-color="#00E676" />
+																<stop offset="1" stop-color="#00C853" />
+															</linearGradient>
+														</defs>
+													</svg>
+												</span>
+												{tr('Gambar')}
+											</button>
+											<button
+												class="brief-attach-item"
+												type="button"
+												role="menuitem"
+												onclick={() => { attachOpen = false; document.getElementById('brief-doc-input')?.click(); }}
+											>
+												<span class="brief-attach-icon" aria-hidden="true">
+													<svg width="21" height="21" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+														<polygon fill="#FFB74D" points="406.941,98.68 406.941,473.339 39.241,473.339 39.241,0 308.793,0 406.794,98.534" />
+														<polygon fill="#FFA91E" points="406.941,98.68 406.941,473.339 223.091,473.339 223.091,0 308.793,0 406.794,98.534" />
+														<g fill="#FFFFFF">
+															<rect x="98.858" y="257.526" width="137.927" height="31.347" />
+															<rect x="97.865" y="130.675" width="137.927" height="31.347" />
+															<rect x="97.865" y="194.414" width="250.775" height="31.347" />
+														</g>
+														<polygon fill="#FF8900" points="406.794,98.532 308.794,98.532 308.794,0" />
+														<path fill="#67BFFF" d="M472.759,406.601C472.759,464.812,425.571,512,367.36,512c-0.251,0-0.502,0-0.752-0.01c-28.473-0.188-54.251-11.682-73.101-30.208c-16.927-16.635-28.264-38.933-30.929-63.843c-0.397-3.72-0.616-7.502-0.616-11.337c0-31.587,13.908-59.925,35.913-79.245c0.24-0.209,0.481-0.418,0.721-0.616c8.579-7.398,18.369-13.427,29.017-17.774c12.048-4.901,25.203-7.659,38.996-7.743c0.251-0.01,0.502-0.01,0.752-0.01C425.571,301.213,472.759,348.39,472.759,406.601z" />
+														<path fill="#0088FF" d="M472.759,406.601C472.759,464.812,425.571,512,367.36,512c-0.251,0-0.502,0-0.752-0.01V301.223c0.251-0.01,0.502-0.01,0.752-0.01C425.571,301.213,472.759,348.39,472.759,406.601z" />
+														<polygon fill="#FFFFFF" points="422.823,391.952 422.823,423.299 383.033,423.299 383.033,465.157 351.687,465.157 351.687,423.299 311.897,423.299 311.897,391.952 351.687,391.952 351.687,350.103 383.033,350.103 383.033,391.952" />
+														<g fill="#D9D8DB">
+															<polygon points="422.823,391.952 422.823,423.299 383.033,423.299 383.033,465.157 366.608,465.157 366.608,350.103 383.033,350.103 383.033,391.952" />
+															<rect x="223.086" y="130.675" width="12.696" height="31.347" />
+															<rect x="223.086" y="257.526" width="13.688" height="31.347" />
+															<rect x="223.086" y="194.414" width="125.544" height="31.347" />
+														</g>
+													</svg>
+												</span>
+												{tr('Dokumen')}
+											</button>
+										</div>
 									{/if}
+
+									<input
+										id="brief-image-input"
+										class="hidden"
+										type="file"
+										multiple
+										accept="image/png,image/jpeg,image/webp,image/gif"
+										onchange={(e) => {
+											stageFiles((e.currentTarget as HTMLInputElement).files, 'image');
+											(e.currentTarget as HTMLInputElement).value = '';
+										}}
+									/>
+									<input
+										id="brief-doc-input"
+										class="hidden"
+										type="file"
+										multiple
+										accept=".pdf,.docx,.txt,.md,.csv,application/pdf"
+										onchange={(e) => {
+											stageFiles((e.currentTarget as HTMLInputElement).files, 'doc');
+											(e.currentTarget as HTMLInputElement).value = '';
+										}}
+									/>
 								</div>
+
+								{#if uploadingNow}
+									<span class="brief-composer-uploading">
+										<LoaderCircle size={12} class="animate-spin" />{tr('Mengunggah…')}
+									</span>
+								{/if}
+							</div>
+
+							<div class="brief-composer-actions">
+								{#if streaming}
+									<span class="brief-composer-thinking">
+										<LoaderCircle size={12} class="animate-spin" />
+										{tr('Berpikir')}
+									</span>
+								{/if}
+								{#if speechSupported}
+									<button
+										class="brief-composer-icon"
+										class:brief-mic-active={listening}
+										type="button"
+										aria-label={listening ? tr('Berhenti mendikte') : tr('Dikte suara')}
+										onclick={toggleMic}
+									>
+										<Mic size={17} />
+									</button>
+								{/if}
 								<button
 									class="brief-composer-send"
 									class:brief-composer-stop={streaming}
@@ -2051,7 +2070,7 @@
 									{#if streaming}<Square size={13} />{:else}<ArrowUp size={16} />{/if}
 								</button>
 							</div>
-						{/if}
+						</div>
 					</div>
 
 					<p class="mt-1 text-center text-[11px] text-muted-foreground">
@@ -2494,7 +2513,7 @@
 								</div>
 							{:else}
 								<p class="mt-4 rounded-xl border px-3.5 py-3 text-xs italic" style="border-color: var(--border); color: var(--muted-foreground);">
-									{tr('Belum ada ringkasan. Ringkasan dibuat otomatis saat data brief berubah.')}
+									{tr('Belum ada ringkasan. Klik "Buat ringkasan" untuk menyusunnya dari data brief terbaru.')}
 								</p>
 							{/if}
 
@@ -2951,86 +2970,27 @@
 	.brief-markdown :global(del) { opacity: 0.65; }
 	.brief-markdown :global(li) { margin: 0.15rem 0; }
 
-	/* Composer adaptif: pill 44px saat satu baris, kartu besar saat teks membungkus. */
+	/* Composer dua area: teks di atas, toolbar SATU baris di bawah.
+	   Tinggi satu baris: 16+14 padding + 2 border + 21 teks + 8 jarak + 36 toolbar ≈ 97px. */
 	.brief-composer {
 		display: flex;
 		flex-direction: column;
-		padding: 4px 6px 4px 6px;
+		padding: 16px 14px 14px;
 		border: 1px solid var(--border, #e2e8f0);
-		border-radius: 999px;
+		border-radius: 20px;
 		background: #ffffff;
 		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-		transition: border-radius 0.18s ease, padding 0.18s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-	}
-	.brief-composer.brief-composer-lg {
-		padding: 6px 8px 6px;
-		border-radius: 22px;
+		transition: border-color 0.15s ease, box-shadow 0.15s ease;
 	}
 	.brief-composer:focus-within {
 		border-color: var(--primary, #2b67ec);
 		box-shadow: 0 0 0 3px rgba(43, 103, 236, 0.1);
 	}
-	/* Pill: satu baris, semua kontrol terpusat secara vertikal. */
-	.brief-composer-row {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-	}
 	.brief-composer-files {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 6px;
-		flex: 1 1 auto;
-		min-width: 0;
-	}
-	.brief-composer-input {
-		box-sizing: border-box;
-		display: block;
-		flex: 1 1 auto;
-		width: 100%;
-		min-width: 0;
-		height: 36px;
-		min-height: 36px;
-		max-height: 50vh;
-		margin: 0;
-		padding: 8px 4px;
-		border: none;
-		outline: none;
-		background: transparent;
-		color: var(--foreground, #0f172a);
-		font: inherit;
-		font-size: 14.5px;
-		line-height: 20px;
-		resize: none;
-		overflow-y: hidden;
-		transition: height 0.18s ease;
-	}
-	/* Mode besar: teks selebar kartu di atas, toolbar di barisnya sendiri. */
-	.brief-composer-lg .brief-composer-row {
-		flex-wrap: wrap;
-		align-items: flex-end;
-		gap: 0;
-	}
-	.brief-composer-lg .brief-composer-files {
-		flex: 0 0 100%;
-		padding: 2px 2px 6px;
-	}
-	.brief-composer-input-docked {
-		order: -1;
-		flex: 0 0 100%;
-		padding: 6px 4px 2px;
-	}
-	.brief-composer-input::placeholder { color: var(--muted-foreground, #94a3b8); }
-	.brief-composer-footer {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-	}
-	.brief-composer-actions {
-		display: flex;
-		align-items: center;
-		gap: 8px;
+		margin-bottom: 8px;
 	}
 	.brief-file-chip {
 		display: inline-flex;
@@ -3042,6 +3002,53 @@
 		border: 1px solid var(--border, #e2e8f0);
 		background: var(--secondary, #f8fafc);
 		font-size: 12px;
+	}
+	.brief-composer-input {
+		display: block;
+		box-sizing: border-box;
+		width: 100%;
+		margin: 0;
+		padding: 0 2px;
+		min-height: 21px;
+		max-height: 50vh;
+		border: none;
+		outline: none;
+		background: transparent;
+		color: var(--foreground, #0f172a);
+		font: inherit;
+		font-size: 14.5px;
+		line-height: 21px;
+		resize: none;
+		overflow-y: hidden;
+		transition: height 0.18s ease;
+	}
+	.brief-composer-input::placeholder { color: var(--muted-foreground, #94a3b8); }
+	/* Toolbar tunggal di dasar composer: + dan status di kiri,
+	   berpikir/mikrofon/kirim di kanan. */
+	.brief-composer-toolbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		margin-top: 8px;
+	}
+	.brief-composer-tools {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+	.brief-composer-uploading {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 11.5px;
+		color: var(--muted-foreground, #64748b);
+	}
+	.brief-composer-actions {
+		display: flex;
+		align-items: center;
+		gap: 4px;
 	}
 	.brief-composer-icon {
 		display: inline-flex;
@@ -3130,6 +3137,10 @@
 	.brief-composer-icon[aria-expanded='true'] {
 		background: var(--secondary, #f1f5f9);
 		color: var(--foreground, #0f172a);
+	}
+	.brief-composer-icon.brief-mic-active {
+		background: #fee2e2;
+		color: #dc2626;
 	}
 	.brief-composer-thinking {
 		display: inline-flex;

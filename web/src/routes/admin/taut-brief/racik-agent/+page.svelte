@@ -28,17 +28,24 @@
 	let logs = $state<RunLog[]>([]);
 	let logsLoading = $state(false);
 	let logsError = $state('');
+	// Paginasi log: halaman pertama 50 baris, sisanya lazy load dari sentinel.
+	let logsLoadingMore = $state(false);
+	let logsNextBefore = $state('');
+	let logsSentinel = $state<HTMLDivElement | null>(null);
+	const LOG_PAGE_SIZE = 50;
 
 	async function loadLogs() {
 		logsLoading = true;
 		logsError = '';
+		logsNextBefore = '';
 		try {
-			const res = await apiRequest(`${BASE}/logs?agent=racik_instruksi&limit=100`);
+			const res = await apiRequest(`${BASE}/logs?agent=racik_instruksi&limit=${LOG_PAGE_SIZE}`);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat log.')));
 			const data = await res.json();
 			// Filter server (?agent=) sudah aktif; saringan ini menjaga tab tetap
 			// racik-only bila API yang dilayani masih versi lama.
 			logs = (data?.items ?? []).filter((r: RunLog) => r.agent === 'racik_instruksi');
+			logsNextBefore = data?.next_before ?? '';
 		} catch (e) {
 			logsError = e instanceof Error ? e.message : tr('Gagal memuat log.');
 		} finally {
@@ -46,10 +53,43 @@
 		}
 	}
 
+	async function loadMoreLogs() {
+		if (logsLoading || logsLoadingMore || !logsNextBefore) return;
+		logsLoadingMore = true;
+		try {
+			const res = await apiRequest(
+				`${BASE}/logs?agent=racik_instruksi&limit=${LOG_PAGE_SIZE}&before=${encodeURIComponent(logsNextBefore)}`
+			);
+			if (!res.ok) return;
+			const data = await res.json();
+			const seen = new Set(logs.map((l) => l.id));
+			const more = ((data?.items ?? []) as RunLog[]).filter(
+				(r) => r.agent === 'racik_instruksi' && !seen.has(r.id)
+			);
+			logs = [...logs, ...more];
+			logsNextBefore = data?.next_before ?? '';
+		} finally {
+			logsLoadingMore = false;
+		}
+	}
+
 	function openTab(next: 'agent' | 'log') {
 		tab = next;
 		if (next === 'log' && logs.length === 0 && !logsLoading) void loadLogs();
 	}
+
+	// Sentinel log: saat terlihat di viewport, otomatis muat halaman berikutnya.
+	$effect(() => {
+		if (!logsSentinel) return;
+		const io = new IntersectionObserver(
+			(entries) => {
+				if (entries.some((e) => e.isIntersecting)) void loadMoreLogs();
+			},
+			{ rootMargin: '240px' }
+		);
+		io.observe(logsSentinel);
+		return () => io.disconnect();
+	});
 </script>
 
 <section>
@@ -132,6 +172,18 @@
 						</tbody>
 					</table>
 				</div>
+				{#if logsNextBefore}
+					<div bind:this={logsSentinel} class="flex justify-center py-3">
+						<button
+							class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+							type="button"
+							disabled={logsLoadingMore}
+							onclick={() => void loadMoreLogs()}
+						>
+							{logsLoadingMore ? tr('Memuat…') : tr('Muat lebih banyak')}
+						</button>
+					</div>
+				{/if}
 			{/if}
 		</section>
 	{/if}

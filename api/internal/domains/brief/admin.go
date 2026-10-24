@@ -720,9 +720,18 @@ func (d *Deps) TautBriefLogs(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	status := strings.TrimSpace(q.Get("status"))
 	agent := strings.TrimSpace(q.Get("agent"))
-	limit := adminshared.ClampInt(q.Get("limit"), 100, 1, 500)
+	// Paginasi keyset: `before` = created_at item terakhir halaman sebelumnya
+	// (ISO milidetik dari field `next_before`). Stabil terhadap baris baru
+	// yang masuk saat admin sedang men-scroll, tidak seperti OFFSET.
+	limit := adminshared.ClampInt(q.Get("limit"), 50, 1, 200)
 	conds := []string{}
 	params := []any{}
+	if before := strings.TrimSpace(q.Get("before")); before != "" {
+		if t, err := time.Parse(time.RFC3339Nano, before); err == nil {
+			params = append(params, t)
+			conds = append(conds, fmt.Sprintf("r.created_at < $%d", len(params)))
+		}
+	}
 	if status == "running" || status == "done" || status == "failed" {
 		params = append(params, status)
 		conds = append(conds, fmt.Sprintf("r.status = $%d", len(params)))
@@ -786,7 +795,13 @@ func (d *Deps) TautBriefLogs(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	adminshared.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+	resp := map[string]any{"items": items}
+	// Cursor halaman berikutnya: created_at item terakhir. Hanya dikirim bila
+	// halaman penuh — kalau tidak, pasti sudah baris terakhir.
+	if len(items) >= limit && len(items) > 0 {
+		resp["next_before"] = items[len(items)-1]["created_at"]
+	}
+	adminshared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // ---------- util admin ----------

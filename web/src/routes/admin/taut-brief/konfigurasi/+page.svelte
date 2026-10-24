@@ -117,6 +117,11 @@
 
 	// Log
 	let logs = $state<RunLog[]>([]);
+	// Paginasi log: halaman pertama 50 baris, sisanya lazy load dari sentinel.
+	let logsLoadingMore = $state(false);
+	let logsNextBefore = $state('');
+	let logsSentinel = $state<HTMLDivElement | null>(null);
+	const LOG_PAGE_SIZE = 50;
 
 	onMount(() => {
 		void (async () => {
@@ -360,15 +365,44 @@
 	}
 
 	async function loadLogs() {
-		const res = await apiRequest(`${BASE}/logs?limit=100`);
+		const res = await apiRequest(`${BASE}/logs?limit=${LOG_PAGE_SIZE}`);
 		if (!res.ok) return;
 		const data = await res.json();
 		logs = data?.items ?? [];
+		logsNextBefore = data?.next_before ?? '';
+	}
+
+	async function loadMoreLogs() {
+		if (logsLoadingMore || !logsNextBefore) return;
+		logsLoadingMore = true;
+		try {
+			const res = await apiRequest(`${BASE}/logs?limit=${LOG_PAGE_SIZE}&before=${encodeURIComponent(logsNextBefore)}`);
+			if (!res.ok) return;
+			const data = await res.json();
+			const seen = new Set(logs.map((l) => l.id));
+			logs = [...logs, ...(data?.items ?? []).filter((i: RunLog) => !seen.has(i.id))];
+			logsNextBefore = data?.next_before ?? '';
+		} finally {
+			logsLoadingMore = false;
+		}
 	}
 
 	const layerLabel = (n: number) => (n === 1 ? 'Lapis 1 — Entity Core' : n === 2 ? 'Lapis 2 — Brand Context' : 'Lapis 3 — Campaign Memory');
 	const caps = $derived(config?.capabilities ?? null);
 	const streamFlag = $derived(caps?.stream_json === true);
+
+	// Sentinel log: saat terlihat di viewport, otomatis muat halaman berikutnya.
+	$effect(() => {
+		if (!logsSentinel) return;
+		const io = new IntersectionObserver(
+			(entries) => {
+				if (entries.some((e) => e.isIntersecting)) void loadMoreLogs();
+			},
+			{ rootMargin: '240px' }
+		);
+		io.observe(logsSentinel);
+		return () => io.disconnect();
+	});
 </script>
 
 <section>
@@ -787,6 +821,18 @@
 							</tbody>
 						</table>
 					</div>
+					{#if logsNextBefore}
+						<div bind:this={logsSentinel} class="flex justify-center py-3">
+							<button
+								class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+								type="button"
+								disabled={logsLoadingMore}
+								onclick={() => void loadMoreLogs()}
+							>
+								{logsLoadingMore ? tr('Memuat…') : tr('Muat lebih banyak')}
+							</button>
+						</div>
+					{/if}
 				{/if}
 			</section>
 		{/if}

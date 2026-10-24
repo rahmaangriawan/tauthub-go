@@ -7,12 +7,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Queue menandai ringkasan `queued` lalu menjadwalkan job (debounce 20 detik).
-//
-// Dedupe hanya terhadap job `pending`: bila job sedang berjalan dan data
-// berubah lagi, job baru tetap dibuat supaya perubahan terakhir tidak hilang.
+// Queue: NONAKTIF — ringkasan brief HANYA dibuat lewat tombol manual
+// "Buat ringkasan" (QueueForce) di panel Ringkasan. Panggilan otomatis lama
+// (setelah chat, upload dokumen/gambar, edit profil, dsb.) tetap memanggil
+// fungsi ini sebagai no-op supaya puluhan call site tidak perlu disentuh;
+// kembalikan ke `enqueue(ctx, pool, profileID, brandID, kind, false)` bila
+// kebijakan otomatis diaktifkan lagi.
 func Queue(ctx context.Context, pool *pgxpool.Pool, profileID, brandID string, kind Kind) error {
-	return enqueue(ctx, pool, profileID, brandID, kind, false)
+	_ = ctx
+	_ = pool
+	_ = profileID
+	_ = brandID
+	_ = kind
+	return nil
 }
 
 // QueueForce: dipakai tombol manual. Job yang menunggu ikut ditandai force

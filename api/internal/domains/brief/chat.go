@@ -216,6 +216,9 @@ func (d *Deps) BriefChatStream(w http.ResponseWriter, r *http.Request) {
 		OnStatus: func(status string) { sendEvent("status", map[string]any{"message": status}) },
 	})
 	if err != nil {
+		// Detail lengkap (respons mentah provider LLM, dsb.) hanya untuk log
+		// server + taut_brief_runs (Log admin Taut Brief). Klien menerima
+		// pesan yang sudah disanitasi.
 		slog.Error("brief stream: giliran gagal", "profile_id", profileID, "err", err.Error())
 		if !started {
 			writeEngineErr(w, err)
@@ -223,7 +226,7 @@ func (d *Deps) BriefChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 		// Sebagian balasan sudah terkirim: kirim error sebagai event, bukan
 		// status HTTP, supaya klien bisa menampilkan apa yang sudah ada.
-		sendEvent("error", map[string]any{"message": err.Error()})
+		sendEvent("error", map[string]any{"message": clientBriefErrMsg(err)})
 		return
 	}
 	sendEvent("done", run.response())
@@ -306,14 +309,29 @@ func (d *Deps) BriefFieldsPost(w http.ResponseWriter, r *http.Request) {
 
 // ---------- util ----------
 
+// clientBriefErrMsg: pesan error yang boleh sampai ke klien. Hanya dua pesan
+// yang memang ditujukan untuk klien (belum dikonfigurasi admin, format balasan
+// tidak valid); sisanya — respons mentah provider LLM (mis. kredit OpenRouter
+// habis), kegagalan internal, dll. — diganti pesan umum agar tidak bocor ke
+// bubble chat. Detail lengkapnya tetap tercatat di log server (slog) dan
+// taut_brief_runs yang tampil di Log admin Taut Brief.
+func clientBriefErrMsg(err error) string {
+	switch {
+	case errors.Is(err, errNotConfigured), errors.Is(err, errBadOutput):
+		return err.Error()
+	default:
+		return "Maaf, AI Copilot sedang mengalami gangguan. Detail teknisnya sudah tercatat di log admin — coba lagi beberapa saat ya."
+	}
+}
+
 func writeEngineErr(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errNotConfigured):
-		httpx.Error(w, http.StatusServiceUnavailable, err.Error())
+		httpx.Error(w, http.StatusServiceUnavailable, clientBriefErrMsg(err))
 	case errors.Is(err, errBadOutput):
-		httpx.Error(w, http.StatusBadGateway, err.Error())
+		httpx.Error(w, http.StatusBadGateway, clientBriefErrMsg(err))
 	default:
-		httpx.Error(w, http.StatusInternalServerError, err.Error())
+		httpx.Error(w, http.StatusInternalServerError, clientBriefErrMsg(err))
 	}
 }
 

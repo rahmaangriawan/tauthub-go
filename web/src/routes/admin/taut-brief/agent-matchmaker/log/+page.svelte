@@ -28,8 +28,16 @@
 
 	let logs = $state<RunLog[]>([]);
 	let loading = $state(true);
+	let loadingMore = $state(false);
+	let nextBefore = $state('');
 	let error = $state('');
 	let openId = $state('');
+	let sentinel = $state<HTMLDivElement | null>(null);
+
+	// Paginasi + lazy load: halaman pertama 50 baris, sisanya menyusul saat
+	// sentinel terlihat (atau lewat tombol) — tabel panjang tidak dimuat
+	// sekaligus lagi.
+	const PAGE_SIZE = 50;
 
 	const agentLabel = (agent: string) =>
 		agent === 'media_matchmaker_select' ? tr('Agent Pemilih Media') : tr('Agent Ringkasan');
@@ -49,8 +57,9 @@
 	async function load() {
 		loading = true;
 		error = '';
+		nextBefore = '';
 		try {
-			const res = await apiRequest(`/v1/platform/taut-brief/logs?agent=${AGENTS}&limit=200`);
+			const res = await apiRequest(`/v1/platform/taut-brief/logs?agent=${AGENTS}&limit=${PAGE_SIZE}`);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat log.')));
 			const data = await res.json();
 			// Server sudah menyaring agent; saringan ini menjaga daftar tetap
@@ -58,10 +67,35 @@
 			logs = (data?.items ?? []).filter(
 				(r: RunLog) => r.agent === 'media_matchmaker' || r.agent === 'media_matchmaker_select'
 			);
+			nextBefore = data?.next_before ?? '';
 		} catch (e) {
 			error = e instanceof Error ? e.message : tr('Gagal memuat log.');
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadMore() {
+		if (loading || loadingMore || !nextBefore) return;
+		loadingMore = true;
+		try {
+			const res = await apiRequest(
+				`/v1/platform/taut-brief/logs?agent=${AGENTS}&limit=${PAGE_SIZE}&before=${encodeURIComponent(nextBefore)}`
+			);
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat log.')));
+			const data = await res.json();
+			const seen = new Set(logs.map((l) => l.id));
+			const more = ((data?.items ?? []) as RunLog[]).filter(
+				(r) =>
+					(r.agent === 'media_matchmaker' || r.agent === 'media_matchmaker_select') && !seen.has(r.id)
+			);
+			logs = [...logs, ...more];
+			nextBefore = data?.next_before ?? '';
+		} catch {
+			// Halaman berikutnya gagal: biarkan yang sudah termuat, pengguna
+			// bisa menekan tombol lagi.
+		} finally {
+			loadingMore = false;
 		}
 	}
 
@@ -70,6 +104,20 @@
 	}
 
 	onMount(() => void load());
+
+	// Sentinel di bawah tabel: menyentuh area itu otomatis memuat halaman
+	// berikutnya (lazy load); dibongkar saat komponen hilang.
+	$effect(() => {
+		if (!sentinel) return;
+		const io = new IntersectionObserver(
+			(entries) => {
+				if (entries.some((e) => e.isIntersecting)) void loadMore();
+			},
+			{ rootMargin: '240px' }
+		);
+		io.observe(sentinel);
+		return () => io.disconnect();
+	});
 </script>
 
 <section>
@@ -151,10 +199,24 @@
 									</tr>
 								{/if}
 							{/each}
-						</tbody>
-					</table>
+					</tbody>
+				</table>
+				{#if nextBefore}
+					<div bind:this={sentinel} class="flex justify-center py-4">
+						<button
+							class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+							type="button"
+							disabled={loadingMore}
+							onclick={() => void loadMore()}
+						>
+							{loadingMore ? tr('Memuat…') : tr('Muat lebih banyak')}
+						</button>
+					</div>
+				{:else if logs.length >= PAGE_SIZE}
+					<p class="py-2 text-center text-[11px] text-muted-foreground">{tr('Semua run yang tersedia sudah dimuat.')}</p>
 				{/if}
-			</section>
+			{/if}
+		</section>
 		{/if}
 	</ExplorerFrame>
 </section>
