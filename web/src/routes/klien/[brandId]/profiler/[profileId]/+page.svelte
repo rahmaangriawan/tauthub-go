@@ -95,6 +95,10 @@
 	// Aksi di panel brief melayang (terpisah dari sidebar supaya dua menu tidak
 	// terbuka bersamaan).
 	let popMenuId = $state<string | null>(null);
+	// Menu kebab memakai position:fixed di ujung tombolnya — kalau tetap
+	// absolute di dalam baris, menu ini terpotong overflow daftar brief saat
+	// barisnya berada di tepi atas/bawah panel (kotaknya tak terlihat).
+	let popMenuPos = $state<{ left: number; top: number; placeUp: boolean } | null>(null);
 	let popRenameId = $state<string | null>(null);
 	let popRenameValue = $state('');
 
@@ -110,6 +114,11 @@
 	});
 	const activeShortCode = $derived(briefs.find((b) => b.id === profileId)?.short_code ?? routeParam);
 	const briefBase = $derived(profileId ? `${apiBase}/profiles/${profileId}/brief` : '');
+
+	// Gerbang 2 (Instan Brief): masuk lewat /profiler?gate=instan (halaman
+	// perutean). Murni dari URL — deep-link/refresh tanpa param kembali ke
+	// mode chat, dan popup gerbang tidak muncul di dalam workspace ini.
+	let gateMode = $state<'chat' | 'instan'>(page.url.searchParams.get('gate') === 'instan' ? 'instan' : 'chat');
 
 	let loading = $state(true);
 	let error = $state('');
@@ -524,6 +533,8 @@
 	$effect(() => {
 		// Tab Media memuat daftar berkas saat dibuka dan saat brief berganti.
 		if (activeTab === 'media' && profileId) void loadMedia();
+		// Pane Instan Brief (gerbang 2) juga menampilkan daftar berkas.
+		if (gateMode === 'instan' && activeTab === 'copilot' && profileId) void loadMedia();
 		if (activeTab === 'timeline' && profileId) void loadTimeline();
 		// Menu titik tiga tidak boleh ikut terbawa ke brief/tab lain.
 		timelineMenuFor = null;
@@ -669,13 +680,30 @@
 
 	// ---------- Aksi di panel brief melayang ----------
 
-	function togglePopMenu(id: string) {
+	function togglePopMenu(id: string, ev?: MouseEvent) {
 		popRenameId = null;
-		popMenuId = popMenuId === id ? null : id;
+		popMenuPos = null;
+		if (popMenuId === id) {
+			popMenuId = null;
+			return;
+		}
+		popMenuId = id;
+		if (ev?.currentTarget instanceof HTMLElement) {
+			const rect = ev.currentTarget.getBoundingClientRect();
+			const width = 150;
+			const height = 70; // dua tombol menu + padding
+			const gap = 6;
+			const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+			// Default membuka ke bawah; bila di bawah tidak cukup ruang dan di
+			// atasnya masih ada, bar menu terbuka ke ATAS supaya kotaknya tampil.
+			const placeUp = window.innerHeight - rect.bottom < height + gap && rect.top >= height + gap;
+			popMenuPos = { left, top: placeUp ? rect.top - gap - height : rect.bottom + gap, placeUp };
+		}
 	}
 
 	function startPopRename(id: string, current: string) {
 		popMenuId = null;
+		popMenuPos = null;
 		popRenameId = id;
 		popRenameValue = current;
 	}
@@ -705,6 +733,7 @@
 	async function togglePin(id: string, pinned: boolean) {
 		menuId = null;
 		popMenuId = null;
+		popMenuPos = null;
 		try {
 			const res = await apiRequest(`${apiBase}/profiles/${id}`, {
 				method: 'PUT',
@@ -746,6 +775,7 @@
 		working(true);
 		menuId = null;
 		popMenuId = null;
+		popMenuPos = null;
 		try {
 			const res = await apiRequest(`${apiBase}/profiles/${id}`, { method: 'DELETE' });
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menghapus brief.')));
@@ -1727,8 +1757,11 @@
 			}
 			if (text.trim()) {
 				composer = composer ? composer.trimEnd() + ' ' + text.trim() : text.trim();
-				const el = document.getElementById('brief-composer') as HTMLTextAreaElement | null;
-				if (el) autoGrow(el);
+				// Sama seperti template: DOM menghorus setelah tick, ukur di sana.
+				void tick().then(() => {
+					const el = document.getElementById('brief-composer') as HTMLTextAreaElement | null;
+					if (el) autoGrow(el);
+				});
 			}
 		};
 		recognition.onend = () => (listening = false);
@@ -1741,6 +1774,123 @@
 		if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 		if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
 		return `${bytes} B`;
+	}
+
+	// Template brief siap pakai untuk klien yang mau satu set langsung.
+	// Data yang AI TIDAK boleh mengarang (nama, angka, tahun, budget, URL)
+	// ditanda [KURUNG SIKU] — user tinggal menggantinya dengan data asli
+	// sebelum mengirim; teks lain sudah cukup untuk mengisi Entity Core.
+	type BriefTemplate = { title: string; desc: string; text: string };
+
+	const BRIEF_TEMPLATES: BriefTemplate[] = [
+		{
+			title: 'Agensi — Satu Set',
+			desc: 'Brief lengkap untuk klien agensi: identitas, budget, syarat publikasi — angka tinggal diganti.',
+			text: [
+				'Brief gaya agensi — target profil entitas lengkap dalam satu sesi.',
+				'',
+				'IDENTITAS (WAJIB GANTI DENGAN DATA ASLI)',
+				'Nama brand: [NAMA BRAND — ejaan resmi]',
+				'Kategori: [PLATFORM / AGENSI / TOKO / LAINNYA]',
+				'Deskripsi 1 kalimat: [apa yang membantu siapa untuk apa]',
+				'Fakta resmi: berdiri [TAHUN] di [KOTA], [ANGKA MITRA/NASABAH/KLIENT] sampai hari ini — angka ini tidak boleh dikarang.',
+				'Website resmi: [URL] — silakan baca dulu semua isinya.',
+				'',
+				'ANGGARAN & MEDIA',
+				'Budget: maksimal Rp[NOMINAL] per media — angka ini plafon, bukan harga minimum.',
+				'Jumlah media: [JUMLAH]',
+				'Minimum DA: [ANGKA], minimum AI Trust: [ANGKA]',
+				'Syarat artikel: minimal [ANGKA] kata, [ANGKA] backlink per artikel, tautan [permanen / tidak permanen]',
+				'Jenis media: Media Mainstream dan Media Blogger',
+				'',
+				'ATURAN & TUJUAN',
+				'Kata/frasa terlarang: [misal "nomor 1", "terbaik", "terjangkau"]',
+				'Klaim yang boleh dikutip (dengan buktinya): [DAFTAR KLAIM]',
+				'Pertanyaan yang ingin dimenangkan di ChatGPT/Perplexity: [2-3 pertanyaan]'
+			].join('\n')
+		},
+		{
+			title: 'Personal Brand',
+			desc: 'Tokoh & expert: posisi, kredibilitas, pertanyaan AI yang ingin dimenangkan.',
+			text: [
+				'Brief personal brand.',
+				'',
+				'IDENTITAS (WAJIB GANTI DENGAN DATA ASLI)',
+				'Nama: [NAMA LENGKAP + GELAR]',
+				'Profesi: [JABATAN — founder / dokter / dosen / praktisi]',
+				'Deskripsi 1 kalimat: [siapa, membantu siapa, untuk apa]',
+				'Fakta resmi: pengalaman [TAHUN] di [BIDANG], afiliasi [PERUSAHAAN/INSTITUSI], prestasi [YANG BISA DIBUKTIKAN] — kalau tidak ada datanya, biarkan kosong dan tanyakan padaku.',
+				'',
+				'POSISI DIGITAL',
+				'Audiens: [SEGMENTASI KLIEN — mis. korporat, pemula, rekan sebaya]',
+				'Pertanyaan yang ingin dimenangkan di ChatGPT/Perplexity: [2-3 pertanyaan]',
+				'Keyword prioritas: [KEYWORD] — target tautan: [URL]',
+				'Kata/frasa terlarang: [KATA YANG DILARANG]',
+				'',
+				'GAYA & MEDIA',
+				'Gaya bahasa: [PROFESIONAL / SANTAI PROFESIONAL]',
+				'Budget: maksimal Rp[NOMINAL] per media, dengan [JUMLAH] media.',
+				'Syarat artikel: minimal [ANGKA] kata, [ANGKA] backlink, tautan [permanen / tidak permanen]'
+			].join('\n')
+		},
+		{
+			title: 'Peluncuran Produk',
+			desc: 'Produk baru: cerita produk, target pasar, rencana distribusi publikasi.',
+			text: [
+				'Brief peluncuran produk.',
+				'',
+				'PRODUK (WAJIB GANTI DENGAN DATA ASLI)',
+				'Nama brand/produk: [NAMA]',
+				'Kategori: [PRODUK DIGITAL / PRODUK FISIK / JASA]',
+				'Deskripsi 2 kalimat: [apa yang dijual, siapa targetnya, apa bedanya]',
+				'Fakta resmi: diluncurkan [TANGGAL/TAHUN] oleh [NAMA PERUSAHAAN], harga mulai Rp[ANGKA]',
+				'Keunggulan utama (USP): [FITUR YANG BENAR-BENAR NYATA — jangan turun-temurunkan]',
+				'',
+				'DISTRIBUSI',
+				'Budget: maksimal Rp[NOMINAL] per media — angka ini plafon, bukan harga minimum.',
+				'Jumlah media: [JUMLAH]',
+				'Minimum DA: [ANGKA], minimum AI Trust: [ANGKA]',
+				'Syarat artikel: minimal [ANGKA] kata, [ANGKA] backlink per artikel, tautan [permanen / tidak permanen]',
+				'Jenis media: Media Mainstream dan Media Blogger',
+				'',
+				'TUJUAN',
+				'Pertanyaan yang ingin dimenangkan di ChatGPT/Perplexity: [2-3 pertanyaan]',
+				'Kata/frasa terlarang: [KATA YANG DILARANG]'
+			].join('\n')
+		}
+	];
+
+	function applyBriefTemplate(tpl: BriefTemplate) {
+		composer = tpl.text;
+		showToast(tr('Template dimuat — tinggal ganti bagian [KURUNG SIKU] dengan data asli.'));
+		document.getElementById('brief-composer')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		// autoGrow mengukur dari el.value — nilai state itu baru menghorus di
+		// DOM setelah tick. Tanpa menunggu tick, pengukurannya memakai isi lama
+		// (masih kosong) sehingga textarea tetap satu baris dan isinya tak terlihat.
+		void tick().then(() => {
+			const el = document.getElementById('brief-composer') as HTMLTextAreaElement | null;
+			if (el) autoGrow(el);
+			el?.focus();
+		});
+	}
+
+	// ---------- Gerbang 2: Instan Brief ----------
+	// Kartu template punya dua aksi: salin teks (clipboard) dan unduh versi
+	// .docx statis dari web/static/templates — agensi mengisinya sendiri.
+	const INSTAN_TPL_FILES = ['brief-agensi.docx', 'brief-personal.docx', 'brief-produk.docx'];
+	let copiedTemplate = $state('');
+	let copiedTemplateTimer: number | null = null;
+
+	async function copyTemplate(tpl: { title: string; text: string }) {
+		try {
+			await navigator.clipboard.writeText(tpl.text);
+			copiedTemplate = tpl.title;
+			if (copiedTemplateTimer) window.clearTimeout(copiedTemplateTimer);
+			copiedTemplateTimer = window.setTimeout(() => (copiedTemplate = ''), 1600);
+			showToast(tr('Template disalin — tempel ke dokumen, isi bagian [KURUNG SIKU].'));
+		} catch {
+			showToast(tr('Gagal menyalin. Salin manual ya.'), 'error');
+		}
 	}
 
 	// Pasang file sebagai lampiran (chip). Yang dobel nama+ukuran diabaikan,
@@ -1814,7 +1964,9 @@
 		return Array.from(e.dataTransfer?.types ?? []).includes('Files');
 	}
 	function onChatDragEnter(e: DragEvent) {
-		if (activeTab !== 'copilot' || !hasFileDrag(e)) return;
+		// Gerbang 2 (instan) punya dropzone sendiri di panenya — jangan
+		// memicu overlay/penanganan composer chat yang tak tampil.
+		if (activeTab !== 'copilot' || gateMode !== 'chat' || !hasFileDrag(e)) return;
 		dragDepth += 1;
 		draggingFiles = true;
 	}
@@ -2245,7 +2397,11 @@
 						aria-selected={activeTab === 'copilot'}
 						onclick={() => (activeTab = 'copilot')}
 					>
-						<Bot size={14} />{tr('Copilot Chat')}
+						{#if gateMode === 'instan'}
+							<Upload size={14} />{tr('Instan Brief')}
+						{:else}
+							<Bot size={14} />{tr('Copilot Chat')}
+						{/if}
 						{#if activeTab === 'copilot'}<span class="h-2 w-2 animate-pulse rounded-full" style="background: var(--primary);"></span>{/if}
 					</button>
 					<button
@@ -2343,7 +2499,143 @@
 				</div>
 			</section>
 
+	{#snippet instanPane()}
+			<!-- Gerbang 2: isi template → unggah berkas → analisis. Reuse
+			     uploadMediaFiles/loadMedia (tab Media) supaya sinkron otomatis. -->
+			<div class="instan-scroll min-h-0 flex-1 overflow-y-auto">
+				<div class="instan-page">
+					<section class="instan-intro">
+						<h2>{tr('Instan Brief — isi template, unggah, langsung terbaca')}</h2>
+						<p>{tr('Untuk agensi yang butuh cepat: salin atau unduh template, isi bersama klien, lalu unggah dokumennya di sini. Berkas muncul juga di tab Media dan menjadi bahan Ringkasan serta konteks artikel.')}</p>
+					</section>
+
+					<section class="instan-card">
+						<h3><span class="instan-step">1</span>{tr('Pilih & isi template bersama agensi')}</h3>
+						<div class="instan-templates">
+							{#each BRIEF_TEMPLATES as tpl, i (tpl.title)}
+								<div class="instan-tpl">
+									<div class="instan-tpl-info">
+										<strong>{tpl.title}</strong>
+										<p>{tpl.desc}</p>
+									</div>
+									<div class="instan-tpl-actions">
+										<button
+											class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
+											type="button"
+											onclick={() => void copyTemplate(tpl)}
+										>
+											{copiedTemplate === tpl.title ? tr('Tersalin') : tr('Salin')}
+										</button>
+										<a
+											class="app-btn app-btn-primary !min-h-7 !px-2 !text-[11px]"
+											href={`/templates/${INSTAN_TPL_FILES[i]}`}
+											download
+										>
+											{tr('Unduh .docx')}
+										</a>
+									</div>
+								</div>
+							{/each}
+						</div>
+						<p class="instan-hint">{tr('Bagian [KURUNG SIKU] wajib diganti data asli — Tubi AI tidak mengarang angka yang tak ia punya.')}</p>
+					</section>
+
+					<section class="instan-card">
+						<h3><span class="instan-step">2</span>{tr('Unggah berkas brand di sini')}</h3>
+						<div
+							class="instan-drop"
+							class:instan-drag={mediaDragging}
+							role="button"
+							tabindex="0"
+							aria-label={tr('Unggah berkas brand')}
+							onclick={() => document.getElementById('brief-instan-input')?.click()}
+							onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('brief-instan-input')?.click(); } }}
+							ondragover={(e) => onMediaDragEnter(e)}
+							ondragenter={(e) => onMediaDragEnter(e)}
+							ondragleave={(e) => onMediaDragLeave(e)}
+							ondrop={(e) => onMediaDrop(e)}
+						>
+							<Upload size={20} />
+							<p>{mediaUploading ? tr('Mengunggah…') : tr('Seret berkas ke sini atau klik untuk mengunggah')}</p>
+							<p class="instan-drop-note">
+								{tr('PDF, DOCX, TXT, MD, CSV · Gambar JPG, PNG, WebP · maksimal 10 MB per berkas')}
+							</p>
+							<input
+								id="brief-instan-input"
+								class="hidden"
+								type="file"
+								multiple
+								accept=".pdf,.docx,.txt,.md,.csv,application/pdf,image/png,image/jpeg,image/webp,image/gif"
+								onclick={(e) => e.stopPropagation()}
+								onchange={(e) => {
+									const input = e.currentTarget as HTMLInputElement;
+									void uploadMediaFiles(input.files);
+									input.value = '';
+								}}
+							/>
+						</div>
+						{#if mediaError}
+							<p class="mt-3 rounded-lg p-2 text-xs" style="background: var(--warning-soft); color: var(--warning);">{mediaError}</p>
+						{/if}
+
+						<div class="instan-uploads">
+							{#if mediaDocs.length + mediaImages.length === 0}
+								<p class="instan-empty">{tr('Belum ada berkas unggahan. Semua berkas yang diunggah di sini akan tampil juga di tab Media.')}</p>
+							{:else}
+								{#each mediaDocs as doc (doc.id)}
+									<a class="instan-file" href={doc.url} target="_blank" rel="noreferrer">
+										<FileText size={13} />
+										<span class="truncate">{doc.original_filename}</span>
+										{#if doc.parse_status === 'ready'}
+											<span class="instan-badge" style="background: var(--success-soft); color: var(--success);">{tr('Terbaca AI')}</span>
+										{:else if doc.parse_status === 'failed'}
+											<span class="instan-badge" style="background: var(--warning-soft); color: var(--warning);" title={doc.parse_error ?? ''}>{tr('Gagal dibaca')}</span>
+										{/if}
+										{#if doc.file_deleted_at}
+											<span class="instan-badge" style="background: var(--secondary); color: var(--muted-foreground);">{tr('Berkas dibersihkan')}</span>
+										{/if}
+									</a>
+								{/each}
+								{#each mediaImages as im (im.id)}
+									<a class="instan-file" href={im.url} target="_blank" rel="noreferrer">
+										<Images size={13} />
+										<span class="truncate">{im.file_name || tr('Gambar')}</span>
+									</a>
+								{/each}
+							{/if}
+						</div>
+						{#if mediaDocs.length + mediaImages.length > 0}
+							<p class="instan-hint">
+								{tr('Daftar lengkap + hapus berkas ada di tab')}
+								<button class="instan-link" type="button" onclick={() => (activeTab = 'media')}>{tr('Media')}</button>.
+							</p>
+						{/if}
+					</section>
+
+					<section class="instan-card">
+						<h3><span class="instan-step">3</span>{tr('Analisis & ringkasan')}</h3>
+						<p class="instan-cta-text">{tr('Setelah berkas bertanda "Terbaca AI", Ringkasan mengubahnya jadi Entity Core yang bisa dikoreksi. Dokumen dan gambar ini juga jadi konteks artikel saat Copilot aktif.')}</p>
+						<div class="instan-cta">
+							<button class="app-btn app-btn-primary !min-h-8 !text-xs" type="button" onclick={() => (activeTab = 'ringkasan')}>
+								{tr('Lanjut ke Ringkasan')}<ArrowRight size={14} />
+							</button>
+							<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={() => (activeTab = 'entitas')}>
+								{tr('Lihat Entity Core')}
+							</button>
+						</div>
+						{#if sources.length > 0}
+							<p class="instan-sources">{tr('Sumber yang sudah terbaca')}: {sources.length}</p>
+						{/if}
+					</section>
+				</div>
+			</div>
+	{/snippet}
+
 	{#if activeTab === 'copilot'}
+		{#if gateMode === 'instan'}
+			<!-- Gerbang 2: pane Instan Brief menggantikan area chat. -->
+			{@render instanPane()}
+		{:else}
 			<!-- Pane Copilot: lapisan melayang di atas, obrolan mengisi sisanya. -->
 			<div class="relative flex min-h-0 flex-1 flex-col">
 				<!-- Lapisan melayang: kartu brief kiri, pill Copilot kanan, di atas obrolan. -->
@@ -2373,7 +2665,10 @@
 										<span>{tr('Obrolan Baru')}</span>
 									</button>
 								</div>
-								<div class="brief-pop-list">
+								<div
+									class="brief-pop-list"
+									onscroll={() => { if (popMenuId) { popMenuId = null; popMenuPos = null; } }}
+								>
 									{#if briefs.length === 0}
 										<p class="brief-pop-empty">{tr('Belum ada brief.')}</p>
 									{/if}
@@ -2416,17 +2711,28 @@
 													type="button"
 													aria-label={tr('Aksi brief')}
 													title={tr('Aksi brief')}
-													onclick={(e) => { e.preventDefault(); togglePopMenu(b.id); }}
+													onclick={(e) => { e.preventDefault(); togglePopMenu(b.id, e); }}
 												>
 													<MoreHorizontal size={14} />
 												</button>
 											{/if}
 											{#if popMenuId === b.id}
-												<div class="brief-menu brief-pop-menu">
-													<button type="button" onclick={() => startPopRename(b.id, b.name)}>
+												<button
+													class="brief-pop-backdrop"
+													type="button"
+													aria-label={tr('Tutup')}
+													onclick={() => { popMenuId = null; popMenuPos = null; }}
+													onkeydown={(e) => { if (e.key === 'Escape') { popMenuId = null; popMenuPos = null; } }}
+												></button>
+												<div
+													class="brief-menu brief-pop-menu"
+													style="position: fixed; left: {popMenuPos?.left ?? 8}px; top: {popMenuPos?.top ?? 8}px; z-index: {popMenuPos?.placeUp ? 260 : 250};"
+													role="menu"
+												>
+													<button type="button" role="menuitem" onclick={() => startPopRename(b.id, b.name)}>
 														<Pencil size={13} />{tr('Ubah nama')}
 													</button>
-													<button type="button" class="brief-menu-danger" onclick={() => { popMenuId = null; requestDelete(b); }}>
+													<button type="button" class="brief-menu-danger" role="menuitem" onclick={() => { popMenuId = null; popMenuPos = null; requestDelete(b); }}>
 														<Trash2 size={13} />{tr('Hapus')}
 													</button>
 												</div>
@@ -2481,22 +2787,29 @@
 				</div>
 			{/if}
 
-			<div bind:this={threadEl} class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
-				{#if !loading && messages.length === 0}
-					<div class="m-auto w-full max-w-2xl px-4">
-						<!-- Sapaan pembuka: maskot + judul besar + deskripsi, bukan gelembung chat. -->
-						<img
-							src="/brief-empty-mascot.webp"
-							alt=""
-							class="mx-auto mb-6 w-full max-w-[440px] select-none"
-							draggable="false"
-						/>
-						<h1 class="text-center text-2xl font-semibold tracking-tight">{tr('Bangun brief brand-mu lewat obrolan')}</h1>
-						<p class="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
-							{tr('Ceritakan brand-mu, sisanya aku tanyakan satu per satu.')}
-						</p>
-					</div>
-				{:else}
+				<div bind:this={threadEl} class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
+					{#if !loading && messages.length === 0}
+						<div class="m-auto w-full max-w-2xl px-4">
+							<!-- Sapaan pembuka: judul besar + deskripsi, bukan gelembung chat. -->
+							<h1 class="text-center text-2xl font-semibold tracking-tight">{tr('Bangun brief brand-mu lewat obrolan')}</h1>
+							<p class="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
+								{tr('Ceritakan brand-mu, sisanya aku tanyakan satu per satu.')}
+							</p>
+
+							<!-- Template siap pakai: klien sat-set tinggal klik lalu
+							     mengganti bagian [KURUNG SIKU] dengan data aslinya. -->
+							<p class="brief-tpl-label">{tr('Atau mulai dari template')}</p>
+							<div class="brief-templates">
+								{#each BRIEF_TEMPLATES as tpl (tpl.title)}
+									<button class="brief-tpl" type="button" onclick={() => applyBriefTemplate(tpl)}>
+										<span class="brief-tpl-title">{tpl.title}</span>
+										<span class="brief-tpl-desc">{tpl.desc}</span>
+									</button>
+								{/each}
+							</div>
+							<p class="brief-tpl-note">{tr('Semua bagian [KURUNG SIKU] wajib diganti data asli — aku tidak akan mengarang angka yang tidak ia punya.')}</p>
+						</div>
+					{:else}
 					<div class="mx-auto max-w-2xl space-y-2.5">
 						{#each messages as m, i (m.id ?? `msg-${i}`)}
 							{#if m.role === 'user'}
@@ -2831,10 +3144,11 @@
 							{tr('Enter kirim, Shift+Enter baris baru. Seret berkas ke sini atau tempel (Ctrl+V) untuk melampirkan.')}{#if sources.length > 0}&nbsp;·&nbsp;{sources.length} {tr('sumber dibaca')}{/if}
 						{/if}
 					</p>
+					</div>
 				</div>
 			</div>
-		</div>
-						{:else if activeTab === 'entitas'}
+		{/if}
+							{:else if activeTab === 'entitas'}
 
 				<!-- ── Panel tab Ringkasan Entitas (desain GEO) ─────────────── -->
 			<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
@@ -4413,6 +4727,196 @@
 
 	/* Jam kirim pesan (waktu lokal browser) di bawah gelembung. */
 	.brief-time { padding: 0 4px; font-size: 11px; color: var(--muted-foreground); }
+
+	/* ── Gerbang 2: pane Instan Brief ─────────────────────────────────── */
+	.instan-page {
+		max-width: 860px;
+		margin: 0 auto;
+		padding: 20px 20px 28px;
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+	.instan-intro h2 {
+		margin: 0;
+		font-size: 18px;
+		font-weight: 700;
+		letter-spacing: -0.01em;
+		color: var(--foreground, #111827);
+	}
+	.instan-intro p {
+		margin: 6px 0 0;
+		max-width: 620px;
+		font-size: 12.5px;
+		line-height: 1.6;
+		color: var(--muted-foreground);
+	}
+	.instan-card {
+		padding: 16px;
+		border: 1px solid var(--border, #e2e8f0);
+		border-radius: 14px;
+		background: var(--card, #fff);
+	}
+	.instan-card h3 {
+		margin: 0 0 10px;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 13px;
+		font-weight: 700;
+		color: var(--foreground, #111827);
+	}
+	.instan-step {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border-radius: 999px;
+		background: var(--primary, #2b67ec);
+		color: #fff;
+		font-size: 11px;
+		font-weight: 700;
+	}
+	.instan-card p { font-size: 12px; line-height: 1.6; }
+
+	.instan-templates { display: flex; flex-direction: column; gap: 8px; }
+	.instan-tpl {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 12px;
+		border: 1px solid var(--border, #e2e8f0);
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--muted) 40%, white);
+	}
+	.instan-tpl-info { min-width: 0; flex: 1 1 auto; }
+	.instan-tpl-info strong { font-size: 12.5px; color: var(--foreground, #111827); }
+	.instan-tpl-info p { margin: 1px 0 0; font-size: 11.5px; color: var(--muted-foreground); }
+	.instan-tpl-actions { display: flex; flex-shrink: 0; gap: 6px; }
+
+	.instan-hint {
+		margin: 8px 0 0;
+		font-size: 11.5px !important;
+		color: var(--muted-foreground);
+	}
+
+	.instan-drop {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		padding: 26px 16px;
+		border: 1.5px dashed color-mix(in srgb, var(--primary) 40%, var(--border, #e2e8f0));
+		border-radius: 12px;
+		background: color-mix(in srgb, var(--primary) 4%, white);
+		cursor: pointer;
+		text-align: center;
+		color: var(--primary, #2b67ec);
+		outline: none;
+	}
+	.instan-drop p { margin: 0; font-size: 12.5px; font-weight: 600; }
+	.instan-drop-note { font-weight: 400 !important; font-size: 11px !important; color: var(--muted-foreground); }
+	.instan-drop:hover,
+	.instan-drop:focus-visible,
+	.instan-drag { background: color-mix(in srgb, var(--primary) 9%, white); }
+
+	.instan-uploads { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+	.instan-empty { margin: 4px 0 0; font-size: 11.5px; color: var(--muted-foreground); }
+	.instan-file {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		padding: 8px 10px;
+		border: 1px solid var(--border, #e2e8f0);
+		border-radius: 9px;
+		font-size: 12px;
+		color: var(--foreground, #111827);
+		text-decoration: none;
+		background: var(--card, #fff);
+	}
+	.instan-file:hover { border-color: color-mix(in srgb, var(--primary) 35%, var(--border, #e2e8f0)); }
+	.instan-file > span:first-of-type { flex: 1 1 auto; min-width: 0; }
+	.instan-badge {
+		flex-shrink: 0;
+		border-radius: 6px;
+		padding: 1px 7px;
+		font-size: 10px;
+		font-weight: 700;
+	}
+	.instan-link {
+		padding: 0;
+		border: none;
+		background: none;
+		font: inherit;
+		font-size: 11.5px;
+		font-weight: 700;
+		color: var(--primary, #2b67ec);
+		cursor: pointer;
+		text-decoration: underline;
+	}
+
+	.instan-cta-text { margin: 0; }
+	.instan-cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+	.instan-sources { margin: 10px 0 0 !important; font-size: 11px !important; color: var(--muted-foreground); }
+
+	/* Kartu template di layar sapaan: klik = isi composer, ganti [KURUNG
+	   SIKU] saja. Grid 3 kolom, 1 kolom di layar sempit. */
+	.brief-tpl-label {
+		margin: 26px auto 0;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--muted-foreground);
+		text-align: center;
+	}
+	.brief-templates {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 8px;
+		margin: 10px auto 0;
+		max-width: 680px;
+	}
+	.brief-tpl {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		padding: 11px 12px;
+		text-align: left;
+		border: 1px solid var(--border, #e2e8f0);
+		border-radius: 12px;
+		background: var(--card, #fff);
+		cursor: pointer;
+		transition: border-color 0.12s ease, background-color 0.12s ease;
+	}
+	.brief-tpl:hover {
+		border-color: color-mix(in srgb, var(--primary) 45%, var(--border, #e2e8f0));
+		background: color-mix(in srgb, var(--primary) 5%, var(--card, #fff));
+	}
+	.brief-tpl:disabled { opacity: 0.55; cursor: not-allowed; }
+	.brief-tpl-title {
+		font-size: 12.5px;
+		font-weight: 700;
+		color: var(--foreground, #111827);
+	}
+	.brief-tpl-desc {
+		font-size: 11px;
+		line-height: 1.5;
+		color: var(--muted-foreground, #667085);
+	}
+	.brief-tpl-note {
+		margin: 10px auto 0;
+		max-width: 480px;
+		text-align: center;
+		font-size: 11.5px;
+		color: var(--muted-foreground);
+	}
+	@media (max-width: 720px) {
+		.brief-templates { grid-template-columns: 1fr; }
+	}
 
 	/* Tab workspace (desain GEO): pil lembut berikon; tab aktif berlatar aksen. */
 	.brief-tab {
