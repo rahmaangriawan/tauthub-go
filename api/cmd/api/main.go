@@ -241,6 +241,7 @@ func run() error {
 			authed.Get("/brands/{brandId}/profiler/profiles", profilerDeps.ProfilesList)
 			authed.Post("/brands/{brandId}/profiler/profiles", profilerDeps.ProfileCreate)
 			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}", profilerDeps.ProfileGet)
+			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}/export", profilerDeps.ProfileExport)
 			authed.Put("/brands/{brandId}/profiler/profiles/{profileId}", profilerDeps.ProfileUpdate)
 			authed.Delete("/brands/{brandId}/profiler/profiles/{profileId}", profilerDeps.ProfileDelete)
 			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/duplicate", profilerDeps.ProfileDuplicate)

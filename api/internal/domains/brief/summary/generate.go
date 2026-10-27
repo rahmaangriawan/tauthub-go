@@ -2,6 +2,7 @@ package summary
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -166,7 +167,10 @@ func logRun(ctx context.Context, pool *pgxpool.Pool, brandID, profileID, agent, 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10, ''), $11, $12, now(), now())`,
 		uuid.NewString(), brandID, profileID, agent, status, model,
 		nullInt(tokIn), nullInt(tokOut), durationMS, errText,
-		clip(input, 2000), clip(errText, 2000)); err != nil {
+		// input_preview TIDAK lagi menyimpan potongan bahan (bahan ringkasan
+		// memuat kutipan dokumen privat). Yang disimpan hanya sidik + ukuran,
+		// cukup untuk audit biaya/troubleshooting tanpa menduplikasi data klien.
+		inputDigest(input), clip(errText, 2000)); err != nil {
 		slog.Error("[brief-summary] gagal menulis log run",
 			"agent", agent, "profile_id", profileID, "brand_id", brandID, "err", err)
 	}
@@ -177,4 +181,12 @@ func nullInt(v int) any {
 		return nil
 	}
 	return v
+}
+
+// inputDigest: sidik isi prompt tanpa menyimpan isinya. Format:
+// "sha256:<hex12> chars:<n>" — bisa dicocokkan dengan hash bahan asli bila
+// perlu investigasi, tapi tidak membocorkan teks.
+func inputDigest(input string) string {
+	sum := sha256.Sum256([]byte(input))
+	return fmt.Sprintf("sha256:%x chars:%d", sum[:6], len(input))
 }

@@ -19,6 +19,11 @@ func BuildContextText(ctx context.Context, pool *pgxpool.Pool, profileID string)
 
 // BuildContextTextForTopic: susun konteks Profiler yang siap dipakai The Writer.
 //
+// KONTRAK: fungsi ini 100% deterministik — tidak memanggil LLM, tidak memanggil
+// jaringan. Semua pemilihan (field, blok, dokumen, URL) memakai skor lokal
+// (embedding lokal + leksikal) dengan batas karakter tetap, sehingga hasilnya
+// bisa diulang dan biaya token Writer dapat diprediksi.
+//
 // Bukan menyerahkan system prompt mentah: field terstruktur, instruksi khusus,
 // blok knowledge, dan cuplikan dokumen/URL yang sudah diekstrak dirangkai jadi
 // blok berlabel, lalu DIPILIH berdasarkan relevansi ke topik artikel (retrieval)

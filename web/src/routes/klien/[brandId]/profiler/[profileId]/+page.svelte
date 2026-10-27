@@ -18,7 +18,7 @@
 	import { page } from '$app/state';
 	import {
 		ArrowLeft, ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Clipboard, Copy, ExternalLink, FileText, ImagePlus, Images, LoaderCircle,
-		Mic, MoreHorizontal, Newspaper, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, Send, ShieldAlert, Sparkle, Square, SquarePen, Store, Trash2, Upload, UserCircle, X
+		Mic, MoreHorizontal, Newspaper, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, Send, ShieldAlert, ShieldCheck, Sparkle, Square, SquarePen, Store, Trash2, Upload, UserCircle, X
 	} from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import Select from '$lib/components/select.svelte';
@@ -1941,6 +1941,28 @@
 	// Simpan langsung ke field terstruktur (POST /brief/fields) — tanpa LLM dan
 	// tanpa unggah berkas. Nilai masuk ke Entity Core, progres 0-100% langsung
 	// bergerak, dan AI Writer memakainya sebagai fakta kanonik.
+	// Ekspor seluruh data brief (JSON) — hak portabilitas data klien.
+	async function exportBrief() {
+		try {
+			const token = getAccessToken();
+			const res = await fetch(`${apiBase}/profiles/${profileId}/export`, {
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
+				credentials: 'include'
+			});
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengekspor data brief.')));
+			const blob = await res.blob();
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `brief-${activeShortCode || profileId}.json`;
+			a.click();
+			URL.revokeObjectURL(url);
+			showToast(tr('Data brief diunduh.'));
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : tr('Gagal mengekspor data brief.'), 'error');
+		}
+	}
+
 	async function saveInstanBrief() {
 		if (instanFormBusy) return;
 		if (!instanForm.nama.trim()) {
@@ -2724,6 +2746,23 @@
 						{#if sources.length > 0}
 							<p class="instan-sources">{tr('Sumber yang sudah terbaca')}: {sources.length}</p>
 						{/if}
+					</section>
+
+					<!-- Disclosure: apa yang terjadi dengan data yang diunggah/diisi.
+					     Ditulis apa adanya, termasuk keterbatasan (log/backup). -->
+					<section class="instan-card instan-privacy">
+						<h3><ShieldCheck size={14} />{tr('Apa yang terjadi dengan datamu')}</h3>
+						<ul>
+							<li>{tr('Dokumen dibaca di server Tauthub dengan parser lokal (PDF/DOCX/TXT) — proses ini tidak memakai AI.')}</li>
+							<li>{tr('Ringkasan baru dibuat saat kamu menekan tombol; itu satu-satunya langkah yang mengirim teks ke model AI sesuai konfigurasi admin.')}</li>
+							<li>{tr('Berkas fisik diunggahan dihapus otomatis setelah masa retensi; teks hasil ekstraksi tetap tersimpan selama brief ini ada.')}</li>
+							<li>{tr('Menghapus dokumen ikut menghapus teksnya. Ringkasan dan log yang sudah terlanjur dibuat bisa masih memuat kutipan — tidak bisa dihapus surut.')}</li>
+						</ul>
+						<div class="instan-privacy-actions">
+							<button class="app-btn app-btn-soft !min-h-7 !text-[11.5px]" type="button" onclick={exportBrief}>
+								{tr('Ekspor data brief (JSON)')}
+							</button>
+						</div>
 					</section>
 				</div>
 			</div>
@@ -4982,6 +5021,18 @@
 	}
 
 	.instan-cta-text { margin: 0; }
+	.instan-privacy h3 { color: var(--muted-foreground); }
+	.instan-privacy ul {
+		margin: 4px 0 0;
+		padding-left: 18px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: 11.5px;
+		line-height: 1.6;
+		color: var(--muted-foreground);
+	}
+	.instan-privacy-actions { margin-top: 10px; }
 	.instan-cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 	.instan-sources { margin: 10px 0 0 !important; font-size: 11px !important; color: var(--muted-foreground); }
 

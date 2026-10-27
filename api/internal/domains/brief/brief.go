@@ -520,6 +520,8 @@ func (d *Deps) loadSources(ctx context.Context, profileID string) ([]SourceItem,
 
 func (d *Deps) startRun(ctx context.Context, brandID, profileID, model, input string) string {
 	id := uuid.NewString()
+	// input_preview = pesan user (bukan prompt lengkap) — itu memang isi
+	// percakapan yang diketik sendiri oleh klien, bukan kutipan dokumen privat.
 	_, _ = d.Pool.Exec(ctx,
 		`INSERT INTO taut_brief_runs (id, brand_id, profile_id, status, model, input_preview)
 		 VALUES ($1, $2, $3, 'running', $4, $5)`,
