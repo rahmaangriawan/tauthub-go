@@ -19,6 +19,18 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.5.7 — 2026-10-25
+
+### Fitur
+- **Tab Timeline di Taut Brief**: tempat mencatat kabar terbaru brand — promo, kunjungan, peluncuran, atau momen lain — lengkap dengan gambar, tautan, dan tagar. Kabar yang kamu tulis di sini ikut dibaca AI Writer, jadi artikel yang dihasilkan terasa baru dan tidak sama dengan kompetitor.
+- **Jendela "Utas baru"** untuk menulis kabar: tinggal klik kolom "Apa yang baru?", lalu tulis, lampirkan gambar, atau tempel tautan. Kursor langsung siap menulis saat jendela terbuka.
+- **Pratinjau tautan otomatis**: tempel alamat situs dan muncul kartu berisi gambar, judul, serta ringkasan halaman tersebut — tanpa perlu mengunggah gambar sendiri.
+- **Gambar bisa ditempel atau diseret** langsung ke jendela tulis. Pratinjaunya langsung tampil, dan proses unggah berjalan di belakang layar dengan penanda "Mengunggah…" lalu "Siap dikirim", jadi kamu bisa lanjut menulis tanpa menunggu.
+- **Tagar otomatis berwarna**: cukup ketik #promo atau #peluncuran di dalam tulisan; setelah terbit, tagar tampil berwarna biru.
+- **Draf**: kalau belum selesai, tutup jendela tulis dan pilih "Simpan ke draf". Draf bisa dibuka lagi kapan saja lewat ikon dokumen di kanan atas, lalu dilanjutkan atau dihapus. Kalau menutup jendela saat tulisan sudah ada isinya, sistem menawarkan simpan ke draf lebih dulu agar tulisan tidak hilang.
+- **Tampilan Timeline seperti beranda media sosial**: kabar terbaru tampil berurutan dalam satu kartu, dengan menu titik tiga untuk menyalin tautan atau menghapus postingan. Postingan otomatis kedaluwarsa setelah 3 bulan.
+- **Tab terakhir yang kamu buka diingat**: setelah halaman dimuat ulang, kamu tetap berada di tab yang sama — Copilot Chat, Entitas, Media, Timeline, atau Ringkasan — dan tiap brief menyimpan tab-nya sendiri.
+
 ## v0.5.6 — 2026-10-20
 
 ### Fitur

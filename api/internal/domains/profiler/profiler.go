@@ -24,6 +24,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/doctext"
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
+	briefdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brief"
 	briefsummary "github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
@@ -150,32 +151,99 @@ func (d *Deps) ProfilesList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	defer rows.Close()
-	items := []map[string]any{}
+	type profileRow struct {
+		id, name                  string
+		description, instructions *string
+		shortCode                 *string
+		identity, style, seo      []byte
+		pinnedAt, updatedAt       any
+		docs, imgs, urls, blocks  int
+	}
+	profs := []profileRow{}
 	for rows.Next() {
-		var (
-			id, name                      string
-			description, instructions     *string
-			shortCode                     *string
-			identity, style, seo          []byte
-			pinnedAt, updatedAt           any
-			docs, imgs, urls, blocksCount int
-		)
-		if err := rows.Scan(&id, &name, &description, &shortCode, &identity, &style, &seo, &instructions,
-			&pinnedAt, &updatedAt, &docs, &imgs, &urls, &blocksCount); err != nil {
+		var pr profileRow
+		if err := rows.Scan(&pr.id, &pr.name, &pr.description, &pr.shortCode, &pr.identity, &pr.style, &pr.seo, &pr.instructions,
+			&pr.pinnedAt, &pr.updatedAt, &pr.docs, &pr.imgs, &pr.urls, &pr.blocks); err != nil {
+			rows.Close()
 			writeErr(w, err)
 			return
 		}
+		profs = append(profs, pr)
+	}
+	rows.Close()
+
+	// Progres field wajib per brief. Satu set skema aktif + state semua brief
+	// di brand ini diambil batch, supaya daftar bisa menampilkan persen nyata
+	// tanpa N koneksi. 0/0 (belum ada skema) = 0%.
+	fields, _ := d.briefRequiredFields(r.Context())
+	ids := make([]string, len(profs))
+	for i := range profs {
+		ids[i] = profs[i].id
+	}
+	statesBy := d.briefProfileStates(r.Context(), ids)
+
+	items := []map[string]any{}
+	for _, pr := range profs {
+		filled, total := briefdomain.Progress(fields, statesBy[pr.id])
+		pct := 0
+		if total > 0 {
+			pct = filled * 100 / total
+		}
 		items = append(items, map[string]any{
-			"id": id, "name": name, "description": description,
-			"short_code":      shortCode,
-			"pinned":          pinnedAt != nil,
-			"readiness":       readiness(identity, style, seo, instructions, docs, imgs, urls, blocksCount),
-			"documents_count": docs, "images_count": imgs, "urls_count": urls, "blocks_count": blocksCount,
-			"updated_at": updatedAt,
+			"id": pr.id, "name": pr.name, "description": pr.description,
+			"short_code":      pr.shortCode,
+			"pinned":          pr.pinnedAt != nil,
+			"readiness":       readiness(pr.identity, pr.style, pr.seo, pr.instructions, pr.docs, pr.imgs, pr.urls, pr.blocks),
+			"documents_count": pr.docs, "images_count": pr.imgs, "urls_count": pr.urls, "blocks_count": pr.blocks,
+			"updated_at":      pr.updatedAt,
+			"progress":        map[string]any{"filled": filled, "total": total, "pct": pct},
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"profiles": items})
+}
+
+// briefRequiredFields: field wajib aktif (bukan layer 3) dari versi skema
+// Taut Brief. Dipakai untuk menghitung progres di daftar Profiler.
+func (d *Deps) briefRequiredFields(ctx context.Context) ([]briefdomain.Field, error) {
+	var raw []byte
+	err := d.Pool.QueryRow(ctx,
+		`SELECT fields FROM taut_brief_field_versions WHERE status = 'active' ORDER BY version DESC LIMIT 1`).Scan(&raw)
+	if err != nil {
+		// Belum ada skema aktif: progres 0/0, bukan error.
+		return nil, nil
+	}
+	var fields []briefdomain.Field
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	return fields, nil
+}
+
+// briefProfileStates: state field semua brief sekaligus (satu batch).
+func (d *Deps) briefProfileStates(ctx context.Context, ids []string) map[string]map[string]briefdomain.FieldState {
+	out := map[string]map[string]briefdomain.FieldState{}
+	if len(ids) == 0 {
+		return out
+	}
+	rows, err := d.Pool.Query(ctx,
+		`SELECT profile_id, field_key, status FROM taut_brief_field_state WHERE profile_id = ANY($1)`, ids)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var profileID, key, status string
+		if err := rows.Scan(&profileID, &key, &status); err != nil {
+			continue
+		}
+		states, ok := out[profileID]
+		if !ok {
+			states = map[string]briefdomain.FieldState{}
+			out[profileID] = states
+		}
+		states[key] = briefdomain.FieldState{Status: status}
+	}
+	return out
 }
 
 // readiness: status kesiapan data sederhana (belum diisi / siap / perlu diperiksa).

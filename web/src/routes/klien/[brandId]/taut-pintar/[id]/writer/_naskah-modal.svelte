@@ -48,6 +48,8 @@
 		sponsored = false,
 		saving = false,
 		saveError = null,
+		/** Kampanye sudah selesai: hanya boleh dilihat, semua aksi ubah dimatikan. */
+		readOnly = false,
 		onClose,
 		/** Kaba writer bahwa ada aksi yang mengubah tagihan (mis. gambar AI) — bar biaya disegarkan. */
 		onRefresh,
@@ -91,6 +93,7 @@
 		linkLimit: number;
 		saving?: boolean;
 		saveError?: string | null;
+		readOnly?: boolean;
 		onClose: () => void;
 		/** Diberi tahu writer bahwa ada aksi yang mengubah tagihan (mis. gambar AI) — bar biaya disegarkan. */
 		onRefresh?: () => void;
@@ -119,6 +122,8 @@
 			{ key: 'generate', label: tr('Generate dengan AI') },
 			{ key: 'tulis', label: tr('Editor Post') }
 		];
+		// Kampanye selesai: yang tampil hanya isi artikel, tanpa pintu menulis.
+		if (readOnly) return all.filter((t) => t.key === 'tulis');
 		if (initialTab === 'generate') return all.filter((t) => t.key === 'generate' || t.key === 'tulis');
 		if (initialTab === 'unggah') return all.filter((t) => t.key === 'unggah' || t.key === 'tulis');
 		if (initialSource === 'ai') return all.filter((t) => t.key === 'generate' || t.key === 'tulis');
@@ -128,7 +133,7 @@
 	/** Isian mode "Yang Proper" dikirim ke backend generate (grounding ke fakta). */
 	type ProperQuote = { dateline: string; narasumber: string; kutipan: string };
 	type ProperGenPayload = { fakta: string; dateline: string; narasumber: string; kutipan: string; quotes: ProperQuote[]; fokus: string; brief_id: string };
-	let tab = $state<Tab>(untrack(() => initialTab));
+	let tab = $state<Tab>(untrack(() => (readOnly ? 'tulis' : initialTab)));
 	// Pilihan gaya (1. kamu mau buat artikel seperti apa?) — simpel = pipeline
 	// lama; proper = strict grounding ke fakta terkunci/Brief Copilot.
 	let gayaArtikel = $state<'simpel' | 'proper'>('simpel');
@@ -1332,6 +1337,7 @@
 		</div>
 
 		<!-- Tab -->
+		{#if !readOnly}
 		<div class="border-b px-5 pt-3" style="border-color: var(--border);">
 			{#snippet tabButton(t: { key: Tab; label: string })}
 				<button
@@ -1373,6 +1379,7 @@
 				{/each}
 			</div>
 		</div>
+		{/if}
 
 		{#if docWarning}
 			<div class="mx-5 mt-4 flex items-start gap-2 rounded-xl border px-3 py-2.5 text-xs" style="border-color: var(--destructive); background-color: color-mix(in srgb, var(--destructive) 8%, var(--card)); color: var(--destructive);" role="alert">
@@ -1493,6 +1500,7 @@
 						class="app-input mt-2 w-full"
 						placeholder={tr('Masukkan judul yang memikat…')}
 						bind:value={title}
+						readonly={readOnly}
 						maxlength={300}
 					/>
 					{#if genError}
@@ -1521,14 +1529,15 @@
 										campaignId={campaignId}
 										mediaId={mediaId}
 										{embedAllowed}
+										disabled={saving || readOnly}
 										ariaLabel={tr('Isi artikel')}
 									minHeight={360}
-									takeTitleFromPaste={title.trim() === ''}
+									takeTitleFromPaste={!readOnly && title.trim() === ''}
 									onPasteTitle={(t) => (title = t)}
 								/>
 							{/if}
 						</div>
-						{#if campaignId && mediaId}
+						{#if campaignId && mediaId && !readOnly}
 							<div class="mt-3 rounded-xl border p-3" style="border-color: var(--border); background-color: var(--muted);">
 								<div class="flex flex-wrap items-center justify-between gap-2">
 									<p class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
@@ -1636,9 +1645,7 @@
 						<!-- Banner standar penulisan (menggantikan hero + BETA + kotak info). -->
 						<div class="rounded-xl border p-4 text-left" style="border-color: color-mix(in srgb, var(--primary) 25%, transparent); background-color: color-mix(in srgb, var(--primary) 6%, transparent);">
 							<div class="flex items-start gap-3">
-								<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--primary); color: #ffffff;">
-									<Sparkles size={18} />
-								</div>
+								<img src="/naskah-writer-mascot.webp" alt="" draggable="false" class="naskahWriterMascot" />
 								<div class="min-w-0">
 									<div class="flex flex-wrap items-center gap-2">
 										<p class="text-sm font-bold">{tr('Delegasikan pada The Writer')}</p>
@@ -2176,6 +2183,7 @@
 						{:else if cover}
 							<div class="relative mt-3">
 								<img src={sameOriginAssetUrl(cover) ?? ''} alt={tr('Gambar utama artikel')} class="aspect-video w-full rounded-lg border object-cover" style="border-color: var(--border);" />
+								{#if !readOnly}
 								<button
 								class="absolute right-2 top-2 rounded-lg border bg-card p-1.5 hover:bg-secondary"
 								type="button"
@@ -2187,7 +2195,8 @@
 							>
 								<Trash2 size={14} />
 							</button>
-						</div>
+								{/if}
+							</div>
 					{:else}
 						<div
 							class="mt-3 flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed py-8 text-center transition-colors"
@@ -2196,9 +2205,9 @@
 							role="button"
 							tabindex="0"
 							aria-label={tr('Unggah gambar utama')}
-							onclick={() => coverInput?.click()}
-							onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); coverInput?.click(); } }}
-							ondragover={(e) => { e.preventDefault(); dragging = true; }}
+							onclick={() => { if (!readOnly) coverInput?.click(); }}
+							onkeydown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !readOnly) { e.preventDefault(); coverInput?.click(); } }}
+							ondragover={(e) => { if (readOnly) return; e.preventDefault(); dragging = true; }}
 							ondragleave={() => (dragging = false)}
 							ondrop={onDropCover}
 						>
@@ -2216,12 +2225,12 @@
 					{:else if coverNote}
 						<p class="mt-2 text-[11px] text-muted-foreground">{coverNote}</p>
 					{/if}
-					{#if campaignId && mediaId && !coverBusy}
+					{#if campaignId && mediaId && !coverBusy && !readOnly}
 						<button class="app-btn app-btn-soft mt-2 w-full !min-h-8 !px-3 !text-xs" type="button" onclick={() => (coverPickerOpen = true)}>
 							<Sparkles size={14} /> {tr('Generate Gambar (AI)')}
 						</button>
 					{/if}
-					{#if !cover && !coverBusy}
+					{#if !cover && !coverBusy && !readOnly}
 						<div class="mt-2 text-center">
 							<button class="text-xs underline hover:no-underline" type="button" onclick={useFallbackCover}>
 								{tr('Pakai thumbnail default Tauthub')}
@@ -2253,6 +2262,7 @@
 							ariaLabel={tr('Kategori / Rubrik')}
 							placeholder={tr('Pilih Rubrik…')}
 							options={kategoriOptions}
+							disabled={readOnly}
 							onchange={() => (autoCategory = '')}
 						/>
 					</div>
@@ -2275,6 +2285,7 @@
 						class="app-input mt-2 min-h-[90px] w-full resize-y text-sm"
 						placeholder={tr('Tulis 1-2 kalimat ringkasan artikel…')}
 						bind:value={meta}
+						readonly={readOnly}
 						maxlength={500}
 					></textarea>
 				</div>
@@ -2290,7 +2301,7 @@
 				disabled={saving}
 				aria-disabled={composeBusy || saving}
 				onclick={close}
-			>{tr('Batal')}</button>
+			>{readOnly ? tr('Tutup') : tr('Batal')}</button>
 			<span class="flex-1"></span>
 			{#if closeNotice}
 				<p class="flex min-w-0 items-center gap-1.5 text-xs" style="color: var(--warning, #b45309);">
@@ -2305,10 +2316,12 @@
 			{:else if saveError}
 				<p class="text-xs" style="color: var(--destructive);">{saveError}</p>
 			{/if}
-			<button class="app-btn app-btn-primary" type="button" disabled={!canSave} onclick={save}>
-				{#if saving}<LoaderCircle size={15} class="animate-spin" />{/if}
-				{tr('Simpan Artikel')}
-			</button>
+			{#if !readOnly}
+				<button class="app-btn app-btn-primary" type="button" disabled={!canSave} onclick={save}>
+					{#if saving}<LoaderCircle size={15} class="animate-spin" />{/if}
+					{tr('Simpan Artikel')}
+				</button>
+			{/if}
 		</div>
 	</div>
 
@@ -2596,6 +2609,14 @@
 	</div>
 
 <style>
+	/* Maskot The Writer di banner "Delegasikan pada The Writer": gambar aslinya
+	   non-persegi (514×566) dan sudah transparan, jadi tanpa kotak latar. */
+	.naskahWriterMascot {
+		flex: none;
+		width: 36px;
+		height: 40px;
+		object-fit: contain;
+	}
 	/* Kartu pilihan metode draf AI. Seluruh kartu = label, jadi klik di mana pun
 	   memilih radio; cincin fokus keyboard dijaga lewat :has(input:focus-visible). */
 	.genChoiceCard {

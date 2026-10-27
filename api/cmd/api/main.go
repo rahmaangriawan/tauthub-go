@@ -255,6 +255,7 @@ func run() error {
 			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}/timeline", profilerDeps.TimelineList)
 			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/timeline", profilerDeps.TimelineCreate)
 			authed.Delete("/brands/{brandId}/profiler/timeline/{postId}", profilerDeps.TimelineDelete)
+			authed.Get("/brands/{brandId}/profiler/link-preview", profilerDeps.TimelineLinkPreview)
 			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/urls", profilerDeps.URLAdd)
 			authed.Post("/brands/{brandId}/profiler/urls/{urlId}/sync", profilerDeps.URLSync)
 			authed.Delete("/brands/{brandId}/profiler/urls/{urlId}", profilerDeps.URLDelete)

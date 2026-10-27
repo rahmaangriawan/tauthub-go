@@ -98,9 +98,12 @@ type mmCandidate struct {
 	LabelSponsor     *string
 	WordCountMode    *string
 
-	Score      float64
-	Reasons    []string
-	Warnings   []string
+	Score    float64
+	Reasons  []string
+	Warnings []string
+	// Gaps: kekurangan terhadap syarat klien. Hanya terisi untuk media
+	// alternatif (bukan hasil cocok) supaya UI bisa menampilkan alasannya.
+	Gaps       []string
 	InPackage  bool
 	MatchLabel string
 }
@@ -170,16 +173,15 @@ func (d *Deps) MediaMatchmaker(w http.ResponseWriter, r *http.Request) {
 	crit, catWarnings := mmNormalizeCriteria(crit, catalogCats)
 	warnings = append(warnings, catWarnings...)
 
-	// Tangga pelonggaran: kalau katalog tidak punya cukup kandidat dengan
-	// ambang ketat, turunkan bertahap (kualitas −10, lalu ambang dilepas)
-	// sampai permintaan `count` terpenuhi. Setiap pelonggaran diumumkan di
-	// warnings — tidak pernah melonggarkan diam-diam.
-	relaxWarn, candidates, poolTruncated, err := d.mmPoolWithRelaxation(r.Context(), crit)
+	// Syarat klien diperlakukan apa adanya. Tidak ada penurunan ambang otomatis:
+	// media yang tidak memenuhi backlink/hyperlink/permanen/DA/AI Trust/trafik
+	// TIDAK boleh tampil sebagai hasil cocok. Kalau katalog tidak punya cukup
+	// media, server menawarkan alternatif terdekat secara terpisah.
+	candidates, poolTruncated, err := d.mmCandidates(r.Context(), crit)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	warnings = append(warnings, relaxWarn...)
 	poolSize := len(candidates)
 	mmScoreCandidates(candidates, crit)
 
@@ -256,6 +258,18 @@ func (d *Deps) MediaMatchmaker(w http.ResponseWriter, r *http.Request) {
 		warnings = append(warnings, "Kandidat dibatasi ke "+itoa(mmPoolLimit)+" media terbaik menurut kualitas & DA; persempit kategori atau budget untuk pencocokan yang lebih tepat.")
 	}
 
+	// Syarat tidak terpenuhi: tawarkan media terdekat sebagai alternatif yang
+	// tetap bisa dipilih, bukan sekadar pesan "tidak ada hasil".
+	alternatives := []mmCandidate{}
+	if pkgCount < crit.Count {
+		alts, altErr := d.mmAlternatives(r.Context(), crit, candidates)
+		if altErr != nil {
+			d.writeErr(w, altErr)
+			return
+		}
+		alternatives = alts
+	}
+
 	// Komposisi media = sebaran tier pada kandidat yang lolos filter. Dihitung
 	// dari data katalog, bukan dari tebakan model, dan dipakai UI sebagai
 	// progress bar. Persentase dibulatkan; sisa pembulatan masuk ke item terakhir.
@@ -279,6 +293,14 @@ func (d *Deps) MediaMatchmaker(w http.ResponseWriter, r *http.Request) {
 		},
 		"pool_size": poolSize,
 		"warnings":  warnings,
+		// Ringkasan saringan: UI memakai angka ini untuk pemberitahuan
+		// "X dari Y media memenuhi syarat" tanpa menebak dari teks warning.
+		"strict": map[string]any{
+			"requested": crit.Count,
+			"matched":   pkgCount,
+		},
+		// Media terdekat yang TIDAK memenuhi semua syarat. Boleh dipilih klien.
+		"alternatives": mmCandidatePayload(alternatives),
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -699,6 +721,20 @@ func (d *Deps) mmCatalogCategories(ctx context.Context) ([]string, error) {
 }
 
 func (d *Deps) mmCandidates(ctx context.Context, crit mmCriteria) ([]mmCandidate, bool, error) {
+	return d.mmQueryCandidates(ctx, crit, true)
+}
+
+// mmLooseCandidates: pool yang HANYA disaring kategori & jenis media. Dipakai
+// untuk menyusun media alternatif — kekurangan syarat angka dihitung di Go
+// supaya bisa dijelaskan satu per satu ke klien, bukan sekadar dibuang.
+func (d *Deps) mmLooseCandidates(ctx context.Context, crit mmCriteria) ([]mmCandidate, bool, error) {
+	return d.mmQueryCandidates(ctx, crit, false)
+}
+
+// mmQueryCandidates: `hard=true` menerapkan SEMUA syarat klien apa adanya
+// (tidak ada pelonggaran otomatis); `hard=false` hanya memakai lingkup
+// kategori & jenis media.
+func (d *Deps) mmQueryCandidates(ctx context.Context, crit mmCriteria, hard bool) ([]mmCandidate, bool, error) {
 	args := []any{}
 	add := func(v any) string {
 		args = append(args, v)
@@ -720,23 +756,31 @@ func (d *Deps) mmCandidates(ctx context.Context, crit mmCriteria) ([]mmCandidate
 	if len(crit.MediaTypes) > 0 {
 		where += " AND LOWER(COALESCE(media.media_type, '')) = ANY(" + add(crit.MediaTypes) + ")"
 	}
-	if crit.MinDA > 0 {
-		where += " AND sm.da >= " + add(crit.MinDA)
-	}
-	if crit.MinAITrust > 0 {
-		where += " AND sm.ai_trust_score >= " + add(crit.MinAITrust)
-	}
-	if crit.MinTraffic > 0 {
-		// Trafik 0 / tanpa data dianggap "belum terverifikasi", bukan gagal —
-		// media tidak ditolak hanya karena katalognya belum punya angkanya.
-		where += " AND (GREATEST(COALESCE(media.traffic_estimate, 0), COALESCE(sw.visits, 0)) >= " + add(crit.MinTraffic) +
-			" OR GREATEST(COALESCE(media.traffic_estimate, 0), COALESCE(sw.visits, 0)) = 0)"
-	}
-	if crit.RequireHyperlink {
-		where += " AND media.allow_hyperlink = TRUE"
-	}
-	if crit.RequirePermanentLink {
-		where += " AND media.link_duration_months = 0"
+	if hard {
+		if crit.MinDA > 0 {
+			where += " AND sm.da >= " + add(crit.MinDA)
+		}
+		if crit.MinAITrust > 0 {
+			where += " AND sm.ai_trust_score >= " + add(crit.MinAITrust)
+		}
+		if crit.MinTraffic > 0 {
+			// Angka yang diminta klien harus benar-benar terpenuhi. Media tanpa
+			// data trafik TIDAK lagi lolos sebagai "belum terverifikasi": itu
+			// pernah membuat hasil tampak memenuhi syarat padahal tidak ada
+			// angkanya sama sekali.
+			where += " AND GREATEST(COALESCE(media.traffic_estimate, 0), COALESCE(sw.visits, 0)) >= " + add(crit.MinTraffic)
+		}
+		if crit.RequireHyperlink {
+			// max_links ikut dicek: allow_hyperlink saja tidak cukup — penjagaan
+			// terbit memperlakukan max_links = 0 sebagai "tidak boleh ada tautan".
+			where += " AND media.allow_hyperlink = TRUE AND COALESCE(media.max_links, 0) > 0"
+		}
+		if crit.MinBacklinks > 0 {
+			where += " AND media.allow_hyperlink = TRUE AND COALESCE(media.max_links, 0) >= " + add(crit.MinBacklinks)
+		}
+		if crit.RequirePermanentLink {
+			where += " AND media.link_duration_months = 0"
+		}
 	}
 
 	// Urutan menentukan media mana yang masuk pool terbatas. Tanpa plafon harga
@@ -745,7 +789,7 @@ func (d *Deps) mmCandidates(ctx context.Context, crit mmCriteria) ([]mmCandidate
 	order := `ORDER BY COALESCE(media.media_quality_score,
 		                  CASE media.media_tier WHEN 'tier1' THEN 90 WHEN 'tier2' THEN 80 WHEN 'tier3' THEN 70 ELSE 60 END) DESC,
 		         sm.da DESC NULLS LAST, media.name`
-	if crit.BudgetMax > 0 {
+	if hard && crit.BudgetMax > 0 {
 		order = "ORDER BY media.price ASC, sm.da DESC NULLS LAST, media.name"
 	}
 
@@ -818,12 +862,16 @@ func (d *Deps) mmCandidates(ctx context.Context, crit mmCriteria) ([]mmCandidate
 			}
 		}
 		// Filter harga dilakukan di Go karena harga klien = harga mitra + markup,
-		// yang tidak tersimpan sebagai kolom.
-		if crit.BudgetMax > 0 && c.ClientPrice > crit.BudgetMax {
-			continue
-		}
-		if crit.BudgetMin > 0 && c.ClientPrice < crit.BudgetMin {
-			continue
+		// yang tidak tersimpan sebagai kolom. Untuk pool alternatif filter ini
+		// sengaja dilewati: media di atas budget justru kandidat yang berguna
+		// ditawarkan dengan catatan "lewat budget".
+		if hard {
+			if crit.BudgetMax > 0 && c.ClientPrice > crit.BudgetMax {
+				continue
+			}
+			if crit.BudgetMin > 0 && c.ClientPrice < crit.BudgetMin {
+				continue
+			}
 		}
 		out = append(out, c)
 	}
@@ -871,6 +919,13 @@ func mmNormalizeCriteria(crit mmCriteria, catalogCats []string) (mmCriteria, []s
 	crit.BudgetMax = mmClampMoney(crit.BudgetMax)
 	if crit.BudgetMin > 0 && crit.BudgetMax > 0 && crit.BudgetMin > crit.BudgetMax {
 		crit.BudgetMin, crit.BudgetMax = crit.BudgetMax, crit.BudgetMin
+	}
+	// Plafon yang tertulis dua kali (min == max) hampir selalu salah tangkap:
+	// klien menulis "maksimal 500rb per media", model mengisi keduanya. Itu
+	// bukan rentang sempit yang disengaja — filter min akan membuang semua
+	// media di bawah 500rb, padahal klien hanya memasang batas atas.
+	if crit.BudgetMin > 0 && crit.BudgetMin == crit.BudgetMax {
+		crit.BudgetMin = 0
 	}
 	crit.MinDA = clampIntValue(crit.MinDA, 0, 100)
 	crit.MinAITrust = clampIntValue(crit.MinAITrust, 0, 100)
@@ -928,88 +983,102 @@ func mmClampMoney(v float64) float64 {
 	return math.Round(v)
 }
 
-// ---------- tangga pelonggaran kriteria ----------
+// ---------- media alternatif ----------
 
-// mmPoolWithRelaxation mengambil pool kandidat dengan ambang ketat dulu;
-// bila jumlahnya kurang dari permintaan `count`, ambang diturunkan bertahap
-// (kualitas −10, lalu ambang dilepas, lalu harga minimum dilepas) sampai
-// cukup atau tangga habis. Setiap pelonggaran yang benar-benar dipakai
-// diumumkan di warnings supaya user tahu paketnya tidak memenuhi ambang
-// aslinya.
-func (d *Deps) mmPoolWithRelaxation(ctx context.Context, crit mmCriteria) ([]string, []mmCandidate, bool, error) {
-	type mmStep struct {
-		da, ai   int
-		traffic  int64
-		minPrice float64
-	}
-	steps := []mmStep{{crit.MinDA, crit.MinAITrust, crit.MinTraffic, crit.BudgetMin}}
-	if crit.MinDA > 0 || crit.MinAITrust > 0 || crit.MinTraffic > 0 || crit.BudgetMin > 0 {
-		steps = append(steps,
-			mmStep{max(crit.MinDA-10, 0), max(crit.MinAITrust-10, 0), crit.MinTraffic, crit.BudgetMin},
-			mmStep{0, 0, crit.MinTraffic, crit.BudgetMin},
-			mmStep{0, 0, 0, crit.BudgetMin},
-			mmStep{0, 0, 0, 0},
-		)
-	}
+// mmMaxAlternatives: jumlah saran yang ditampilkan di bawah pemberitahuan.
+const mmMaxAlternatives = 12
 
-	warnings := []string{}
-	var (
-		candidates []mmCandidate
-		truncated  bool
-	)
-	for i, st := range steps {
-		tryCrit := crit
-		tryCrit.MinDA = st.da
-		tryCrit.MinAITrust = st.ai
-		tryCrit.MinTraffic = st.traffic
-		tryCrit.BudgetMin = st.minPrice
-		cands, trunc, err := d.mmCandidates(ctx, tryCrit)
-		if err != nil {
-			return nil, nil, false, err
-		}
-		candidates, truncated = cands, trunc
-		if len(cands) >= crit.Count || i == len(steps)-1 {
-			if i > 0 {
-				warnings = append(warnings, mmRelaxWarning(crit, st))
-			}
-			break
-		}
+// mmAlternatives: media terdekat yang TIDAK memenuhi semua syarat. Dipakai UI
+// sebagai daftar "rekomendasi lain" bergaya marketplace — boleh dipilih, tapi
+// setiap kartu menyebutkan kekurangannya. Hanya kandidat dengan <= 2 jenis
+// kekurangan yang diambil supaya saran tetap relevan, bukan tumpukan media acak.
+func (d *Deps) mmAlternatives(ctx context.Context, crit mmCriteria, matched []mmCandidate) ([]mmCandidate, error) {
+	loose, _, err := d.mmLooseCandidates(ctx, crit)
+	if err != nil {
+		return nil, err
 	}
-	return warnings, candidates, truncated, nil
+	// Media yang sudah cocok tidak perlu diulang sebagai "alternatif".
+	seen := make(map[string]bool, len(matched))
+	for _, c := range matched {
+		seen[c.ID] = true
+	}
+	mmScoreCandidates(loose, crit)
+	out := make([]mmCandidate, 0, mmMaxAlternatives)
+	for i := range loose {
+		c := loose[i]
+		if seen[c.ID] {
+			continue
+		}
+		gaps := mmCandidateGaps(crit, c)
+		if len(gaps) == 0 || len(gaps) > 2 {
+			continue
+		}
+		c.Gaps = gaps
+		// Kekurangan yang sama tercermin di badge UI; warning mentah hanya
+		// mengulang informasi yang sama dan membuat kartu terlalu ramai.
+		c.Warnings = nil
+		out = append(out, c)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if len(out[i].Gaps) != len(out[j].Gaps) {
+			return len(out[i].Gaps) < len(out[j].Gaps)
+		}
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
+		}
+		return out[i].Name < out[j].Name
+	})
+	if len(out) > mmMaxAlternatives {
+		out = out[:mmMaxAlternatives]
+	}
+	return out, nil
 }
 
-// mmRelaxWarning menjelaskan ambang mana yang diturunkan dibanding kriteria
-// asli — angka 0 berarti ambang dilepas sama sekali.
-func mmRelaxWarning(orig mmCriteria, st struct {
-	da, ai   int
-	traffic  int64
-	minPrice float64
-}) string {
-	parts := []string{}
-	if st.da < orig.MinDA {
-		if st.da == 0 {
-			parts = append(parts, "ambang DA dilepas")
-		} else {
-			parts = append(parts, "DA ≥ "+itoa(st.da))
+// mmCandidateGaps: daftar kekurangan kandidat terhadap syarat klien. Kalimatnya
+// siap tampil di kartu alternatif — angka asli disertakan supaya klien bisa
+// menilai sendiri apakah masih layak.
+func mmCandidateGaps(crit mmCriteria, c mmCandidate) []string {
+	gaps := []string{}
+	if crit.MinDA > 0 {
+		if c.DA == nil {
+			gaps = append(gaps, "DA belum terdata (butuh ≥ "+itoa(crit.MinDA)+").")
+		} else if *c.DA < crit.MinDA {
+			gaps = append(gaps, "DA "+itoa(*c.DA)+" — butuh ≥ "+itoa(crit.MinDA)+".")
 		}
 	}
-	if st.ai < orig.MinAITrust {
-		if st.ai == 0 {
-			parts = append(parts, "ambang AI Trust dilepas")
-		} else {
-			parts = append(parts, "AI Trust ≥ "+itoa(st.ai))
+	if crit.MinAITrust > 0 {
+		if c.AITrust == nil {
+			gaps = append(gaps, "AI Trust belum terdata (butuh ≥ "+itoa(crit.MinAITrust)+").")
+		} else if *c.AITrust < crit.MinAITrust {
+			gaps = append(gaps, "AI Trust "+itoa(*c.AITrust)+" — butuh ≥ "+itoa(crit.MinAITrust)+".")
 		}
 	}
-	if st.traffic < orig.MinTraffic {
-		parts = append(parts, "ambang trafik dilepas")
+	if crit.MinTraffic > 0 && c.Traffic < crit.MinTraffic {
+		if c.Traffic <= 0 {
+			gaps = append(gaps, "Trafik belum terdata (butuh ≥ "+bsIntlCompact(float64(crit.MinTraffic))+" /bulan).")
+		} else {
+			gaps = append(gaps, "Trafik "+bsIntlCompact(float64(c.Traffic))+" /bulan — butuh ≥ "+bsIntlCompact(float64(crit.MinTraffic))+".")
+		}
 	}
-	if st.minPrice < orig.BudgetMin {
-		parts = append(parts, "harga per media minimum dilepas")
+	if crit.MinBacklinks > 0 {
+		capacity := mmIntOr(c.MaxLinks, 0)
+		if !c.AllowHyperlink || capacity < crit.MinBacklinks {
+			gaps = append(gaps, "Maksimal "+itoa(capacity)+" tautan per artikel — butuh "+itoa(crit.MinBacklinks)+".")
+		}
 	}
-	if len(parts) == 0 {
-		return ""
+	if crit.RequireHyperlink && (!c.AllowHyperlink || mmIntOr(c.MaxLinks, 0) <= 0) {
+		gaps = append(gaps, "Tidak menerima tautan aktif.")
 	}
-	return "Katalog tidak punya cukup kandidat dengan ambang ketat, jadi kriteria dilonggarkan otomatis (" + strings.Join(parts, ", ") + "). Perketat lagi lewat Edit ringkasan bila perlu."
+	if crit.RequirePermanentLink && c.LinkMonths > 0 {
+		gaps = append(gaps, "Tautan hanya "+itoa(c.LinkMonths)+" bulan — butuh permanen.")
+	}
+	if crit.BudgetMax > 0 && c.ClientPrice > crit.BudgetMax {
+		gaps = append(gaps, bsIntlIDR(c.ClientPrice)+" — lewat "+bsIntlIDR(c.ClientPrice-crit.BudgetMax)+" dari batas per media.")
+	}
+	if crit.BudgetMin > 0 && c.ClientPrice < crit.BudgetMin {
+		gaps = append(gaps, bsIntlIDR(c.ClientPrice)+" — di bawah batas minimum per media.")
+	}
+	return gaps
 }
 
 // ---------- skor & paket ----------
@@ -1289,7 +1358,7 @@ func mmCandidatePayload(list []mmCandidate) []map[string]any {
 			"bahasa_artikel": c.Bahasa, "topik_terlarang": c.TopikTerlarang,
 			"label_sponsor": c.LabelSponsor, "word_count_mode": c.WordCountMode,
 			"score": c.Score, "match_label": c.MatchLabel,
-			"reasons": c.Reasons, "warnings": c.Warnings, "in_package": c.InPackage,
+			"reasons": c.Reasons, "warnings": c.Warnings, "gaps": c.Gaps, "in_package": c.InPackage,
 		})
 	}
 	return out

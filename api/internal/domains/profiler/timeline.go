@@ -13,13 +13,18 @@ package profiler
 
 import (
 	"context"
+	"fmt"
+	"html"
+	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
 const (
@@ -32,6 +37,19 @@ const (
 
 // hashtagRe: huruf/angka/underscore, termasuk huruf beraksen.
 var hashtagRe = regexp.MustCompile(`^[\p{L}\p{N}_]+$`)
+var inlineHashtagRe = regexp.MustCompile(`#([\p{L}\p{N}_]{1,40})`)
+
+// hashtagsInBody: ambil #tagar yang diketik langsung di caption.
+func hashtagsInBody(body string) []string {
+	matches := inlineHashtagRe.FindAllStringSubmatch(body, -1)
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		if len(m) > 1 {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
 
 // normalizeHashtags: buang "#" di depan, rapikan spasi, dedupe (case-insensitive),
 // batasi jumlah & panjang. Nilai invalid dilewati, bukan menggagalkan post.
@@ -56,22 +74,42 @@ func normalizeHashtags(raw []string) []string {
 	return out
 }
 
-// timelinePostView: satu kartu feed.
-func timelinePostView(id, body string, hashtags []string, imageURL, occurredOn *string, imageID *string, createdAt any, authorName string) map[string]any {
+// timelinePost: satu baris post beserta kolom turunannya.
+type timelinePost struct {
+	id, body        string
+	hashtags        []string
+	imageID         *string
+	imageURL        *string
+	linkURL         *string
+	linkTitle       *string
+	linkDescription *string
+	linkImage       *string
+	linkSite        *string
+	occurredOn      *string
+	createdAt       any
+	authorName      string
+}
+
+func (p timelinePost) view() map[string]any {
+	hashtags := p.hashtags
 	if hashtags == nil {
 		hashtags = []string{}
 	}
 	return map[string]any{
-		"id": id, "body": body, "hashtags": hashtags,
-		"image_url": imageURL, "image_id": imageID,
-		"occurred_on": occurredOn, "created_at": createdAt,
-		"author_name": authorName,
+		"id": p.id, "body": p.body, "hashtags": hashtags,
+		"image_url": p.imageURL, "image_id": p.imageID,
+		"link_url": p.linkURL, "link_title": p.linkTitle,
+		"link_description": p.linkDescription, "link_image": p.linkImage,
+		"link_site": p.linkSite,
+		"occurred_on": p.occurredOn, "created_at": p.createdAt,
+		"author_name": p.authorName,
 	}
 }
 
 func (d *Deps) listTimeline(ctx context.Context, profileID string) []map[string]any {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT t.id, t.body, t.hashtags, t.image_url, t.occurred_on, t.image_id, t.created_at,
+		       t.link_url, t.link_title, t.link_description, t.link_image, t.link_site,
 		       COALESCE(u.display_name, '') AS author_name
 		FROM profiler_timeline_posts t
 		LEFT JOIN users u ON u.id = t.created_by
@@ -84,17 +122,12 @@ func (d *Deps) listTimeline(ctx context.Context, profileID string) []map[string]
 	defer rows.Close()
 	out := []map[string]any{}
 	for rows.Next() {
-		var (
-			id, body, author string
-			hashtags         []string
-			imageURL, occ    *string
-			imageID          *string
-			createdAt        any
-		)
-		if rows.Scan(&id, &body, &hashtags, &imageURL, &occ, &imageID, &createdAt, &author) != nil {
+		var p timelinePost
+		if rows.Scan(&p.id, &p.body, &p.hashtags, &p.imageURL, &p.occurredOn, &p.imageID, &p.createdAt,
+			&p.linkURL, &p.linkTitle, &p.linkDescription, &p.linkImage, &p.linkSite, &p.authorName) != nil {
 			continue
 		}
-		out = append(out, timelinePostView(id, body, hashtags, imageURL, occ, imageID, createdAt, author))
+		out = append(out, p.view())
 	}
 	return out
 }
@@ -118,6 +151,142 @@ func (d *Deps) TimelineList(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"items": d.listTimeline(r.Context(), profileID)})
+}
+
+// ---------- pratinjau tautan (Open Graph) ----------
+
+type linkMeta struct {
+	URL, Title, Description, Image, Site string
+}
+
+var (
+	reTitleTag = regexp.MustCompile(`(?is)<title[^>]*>([\s\S]*?)</title>`)
+	reMetaTag  = regexp.MustCompile(`(?is)<meta\s[^>]*>`)
+	reAttrProp = regexp.MustCompile(`(?is)(?:property|name)\s*=\s*["']([^"']+)["']`)
+	reAttrCont = regexp.MustCompile(`(?is)content\s*=\s*["']([^"']*)["']`)
+)
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// linkMetaFromHTML: kumpulkan og:*, twitter:*, dan meta description. Urutan
+// atribut tidak dijamin, jadi property/name dan content dibaca terpisah per tag.
+func linkMetaFromHTML(doc string) map[string]string {
+	out := map[string]string{}
+	for _, tag := range reMetaTag.FindAllString(doc, -1) {
+		prop := reAttrProp.FindStringSubmatch(tag)
+		cont := reAttrCont.FindStringSubmatch(tag)
+		if len(prop) < 2 || len(cont) < 2 {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(prop[1]))
+		val := strings.Join(strings.Fields(html.UnescapeString(cont[1])), " ")
+		if key != "" && val != "" && out[key] == "" {
+			out[key] = val
+		}
+	}
+	return out
+}
+
+func normalizeLinkURL(raw string) (*url.URL, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("url kosong")
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" {
+		return nil, fmt.Errorf("url tidak valid")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, fmt.Errorf("skema tidak didukung")
+	}
+	return u, nil
+}
+
+// fetchLinkMeta: ambil <head> sekali (maks 512 KB) lalu baca metadata OG.
+// security.Get memblokir alamat privat/loopback (anti-SSRF).
+func fetchLinkMeta(ctx context.Context, rawURL string) (linkMeta, error) {
+	u, err := normalizeLinkURL(rawURL)
+	if err != nil {
+		return linkMeta{}, err
+	}
+	meta := linkMeta{URL: u.String(), Site: strings.TrimPrefix(u.Hostname(), "www.")}
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	resp, err := security.Get(ctx, u.String(), map[string]string{
+		"User-Agent": "Tauthub-LinkPreview/1.0 (+https://tauthub.com)",
+		"Accept":     "text/html,application/xhtml+xml",
+	}, 8*time.Second)
+	if err != nil {
+		return meta, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return meta, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 512<<10))
+	if err != nil {
+		return meta, err
+	}
+	doc := string(body)
+	og := linkMetaFromHTML(doc)
+	meta.Title = firstNonEmpty(og["og:title"], og["twitter:title"])
+	meta.Description = firstNonEmpty(og["og:description"], og["twitter:description"], og["description"])
+	meta.Image = firstNonEmpty(og["og:image"], og["og:image:url"], og["twitter:image"])
+	meta.Site = firstNonEmpty(og["og:site_name"], meta.Site)
+	if meta.Title == "" {
+		if m := reTitleTag.FindStringSubmatch(doc); len(m) > 1 {
+			meta.Title = strings.Join(strings.Fields(html.UnescapeString(m[1])), " ")
+		}
+	}
+	if meta.Image != "" {
+		if ref, err := url.Parse(meta.Image); err == nil {
+			meta.Image = resp.Request.URL.ResolveReference(ref).String()
+		}
+	}
+	meta.Title = truncate(meta.Title, 200)
+	meta.Description = truncate(meta.Description, 400)
+	return meta, nil
+}
+
+// TimelineLinkPreview: GET .../profiler/link-preview?url=…
+// Selalu 200; `ok:false` berarti pratinjau tidak tersedia dan UI cukup
+// menampilkan tautannya saja.
+func (d *Deps) TimelineLinkPreview(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	if user == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
+		return
+	}
+	brandID := chiParam(r, "brandId")
+	if _, err := d.access(r, brandID, user.ID, "viewer"); err != nil {
+		writeErr(w, err)
+		return
+	}
+	raw := strings.TrimSpace(r.URL.Query().Get("url"))
+	if raw == "" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "URL kosong.")
+		return
+	}
+	meta, err := fetchLinkMeta(r.Context(), raw)
+	w.Header().Set("Cache-Control", "no-store")
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "url": raw})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "url": meta.URL, "title": meta.Title,
+		"description": meta.Description, "image": meta.Image, "site": meta.Site,
+	})
 }
 
 // TimelineCreate: POST .../profiler/profiles/{profileId}/timeline (JSON)
@@ -145,8 +314,10 @@ func (d *Deps) TimelineCreate(w http.ResponseWriter, r *http.Request) {
 	body = strings.TrimSpace(body)
 	imageID, _ := strField(payload, "image_id")
 	imageID = strings.TrimSpace(imageID)
-	if body == "" && imageID == "" {
-		httpx.Error(w, http.StatusUnprocessableEntity, "Tulis caption atau lampirkan gambar.")
+	linkRaw, _ := strField(payload, "link_url")
+	linkRaw = strings.TrimSpace(linkRaw)
+	if body == "" && imageID == "" && linkRaw == "" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Tulis caption, lampirkan gambar, atau tempel tautan.")
 		return
 	}
 	if len([]rune(body)) > timelineBodyMax {
@@ -154,7 +325,8 @@ func (d *Deps) TimelineCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Hashtag: array string, atau string bertanda spasi.
+	// Hashtag: array string, atau string bertanda spasi. Tagar yang diketik
+	// langsung di caption (#promo) ikut dikumpulkan supaya bahan AI lengkap.
 	var rawTags []string
 	if arr, ok := payload["hashtags"].([]any); ok {
 		for _, v := range arr {
@@ -165,7 +337,7 @@ func (d *Deps) TimelineCreate(w http.ResponseWriter, r *http.Request) {
 	} else if s, _ := strField(payload, "hashtags"); strings.TrimSpace(s) != "" {
 		rawTags = strings.Fields(s)
 	}
-	tags := normalizeHashtags(rawTags)
+	tags := normalizeHashtags(append(rawTags, hashtagsInBody(body)...))
 
 	var occurredOn any
 	if raw, _ := strField(payload, "occurred_on"); strings.TrimSpace(raw) != "" {
@@ -194,10 +366,39 @@ func (d *Deps) TimelineCreate(w http.ResponseWriter, r *http.Request) {
 	if imageID != "" {
 		imgRef = imageID
 	}
+
+	// Tautan: pratinjau diambil sekali di sini lalu disimpan, supaya feed tidak
+	// perlu menghubungi situs pihak ketiga setiap kali dibuka.
+	var linkURL, linkTitle, linkDescription, linkImage, linkSite *string
+	if linkRaw != "" {
+		meta, err := fetchLinkMeta(r.Context(), linkRaw)
+		if err != nil {
+			if u, e := normalizeLinkURL(linkRaw); e == nil {
+				plain, host := u.String(), strings.TrimPrefix(u.Hostname(), "www.")
+				linkURL, linkSite = &plain, &host
+			}
+		} else {
+			linkURL = &meta.URL
+			linkSite = &meta.Site
+			if meta.Title != "" {
+				linkTitle = &meta.Title
+			}
+			if meta.Description != "" {
+				linkDescription = &meta.Description
+			}
+			if meta.Image != "" {
+				linkImage = &meta.Image
+			}
+		}
+	}
+
 	if _, err := d.Pool.Exec(r.Context(), `
-		INSERT INTO profiler_timeline_posts (id, profile_id, body, hashtags, image_id, image_url, occurred_on, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		postID, profileID, body, tags, imgRef, imageURL, occurredOn, user.ID); err != nil {
+		INSERT INTO profiler_timeline_posts
+			(id, profile_id, body, hashtags, image_id, image_url, occurred_on, created_by,
+			 link_url, link_title, link_description, link_image, link_site)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		postID, profileID, body, tags, imgRef, imageURL, occurredOn, user.ID,
+		linkURL, linkTitle, linkDescription, linkImage, linkSite); err != nil {
 		writeErr(w, err)
 		return
 	}

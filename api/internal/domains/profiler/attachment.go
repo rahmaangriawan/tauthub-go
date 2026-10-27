@@ -7,6 +7,8 @@ package profiler
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // reserveAttachment: cek kuota lalu pesan slotnya dalam SATU transaksi.
@@ -51,7 +53,10 @@ func (d *Deps) reserveAttachment(ctx context.Context, userID, profileID, kind, s
 	_, err = tx.Exec(ctx, `
 		INSERT INTO chat_attachments (id, user_id, profile_id, kind, source, storage_key, original_filename, mime_type, size_bytes, status)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'processing')`,
-		storageKey, userID, profileID, kind, source, storageKey, filename, mime, size)
+		// id adalah UUID murni (kolom character(36)); storage_key memuat
+		// ekstensi sehingga panjangnya >36 dan TIDAK boleh dipakai sebagai id —
+		// itulah penyebab SQLSTATE 22001 saat unggah gambar.
+		uuid.NewString(), userID, profileID, kind, source, storageKey, filename, mime, size)
 	if err != nil {
 		return err
 	}

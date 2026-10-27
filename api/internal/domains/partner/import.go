@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -500,7 +501,7 @@ func validateBulkRow(rowNumber int, raw map[string]string) bulkRowParsed {
 		errors = append(errors, "Nama Media maksimal 160 karakter.")
 	}
 
-	category := strings.TrimSpace(raw["kategori"])
+	category := catutil.Canonical(raw["kategori"])
 	var categoryVal any
 	if category == "" {
 		errors = append(errors, "Kategori wajib diisi.")

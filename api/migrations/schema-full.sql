@@ -2784,7 +2784,7 @@ CREATE TABLE public.settlements (
     payout_method character varying(10) DEFAULT 'bank'::character varying NOT NULL,
     transfer_fee_idr integer DEFAULT 0 NOT NULL,
     net_amount_idr integer DEFAULT 0 NOT NULL,
-    invoice_number character varying(40),
+    invoice_number character varying(64),
     CONSTRAINT ck_settlement_amount CHECK ((total_amount >= (0)::numeric)),
     CONSTRAINT ck_settlement_period CHECK ((period_end >= period_start)),
     CONSTRAINT ck_settlement_status CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('approved'::character varying)::text, ('processing'::character varying)::text, ('paid'::character varying)::text, ('failed'::character varying)::text])))

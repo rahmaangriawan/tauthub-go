@@ -169,13 +169,24 @@ func (d *Deps) findLink(ctx context.Context, profileID, raw string) (id, status 
 // Paritas dengan profiler.syncURL — dipisah karena beda paket.
 func (d *Deps) fetchLink(ctx context.Context, id, raw string) {
 	_, _ = d.Pool.Exec(ctx, "UPDATE profiler_urls SET fetch_status = 'fetching', fetch_error = NULL WHERE id = $1", id)
-	resp, err := security.Get(ctx, raw, map[string]string{"User-Agent": "TauthubBot/1.0"}, linkFetchTimeout)
+	// Browser UA: banyak situs memblokir UA "bot" yang tidak mereka kenal,
+	// padahal halamannya halaman publik biasa. Ini bukan crawler berulang —
+	// hanya membaca halaman yang user tempel sendiri.
+	resp, err := security.Get(ctx, raw, map[string]string{
+		"User-Agent":      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+		"Accept":          "text/html,application/xhtml+xml",
+		"Accept-Language": "id-ID,id;q=0.9,en;q=0.8",
+	}, linkFetchTimeout)
 	if err != nil {
 		d.markLinkFailed(ctx, id, "Gagal mengambil halaman: "+err.Error())
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if note := socialFetchNote(raw); note != "" {
+			d.markLinkFailed(ctx, id, note)
+			return
+		}
 		d.markLinkFailed(ctx, id, fmt.Sprintf("Halaman mengembalikan status %d.", resp.StatusCode))
 		return
 	}
@@ -187,6 +198,10 @@ func (d *Deps) fetchLink(ctx context.Context, id, raw string) {
 	htmlBody := string(body)
 	text := linkHTMLToText(htmlBody)
 	if len([]rune(text)) < 80 {
+		if note := socialFetchNote(raw); note != "" {
+			d.markLinkFailed(ctx, id, note)
+			return
+		}
 		d.markLinkFailed(ctx, id, "Isi halaman terlalu pendek untuk dijadikan referensi (mungkin butuh login atau memblokir crawler).")
 		return
 	}
@@ -195,6 +210,32 @@ func (d *Deps) fetchLink(ctx context.Context, id, raw string) {
 		UPDATE profiler_urls SET fetch_status = 'ready', extracted_text = $1, fetch_error = NULL,
 		       title = COALESCE(NULLIF(title, ''), NULLIF($2, '')), last_synced_at = NOW() WHERE id = $3`,
 		truncateRunes(text, maxLinkRunes), title, id)
+}
+
+// socialFetchNote: penjelasan khusus untuk platform sosial yang memblokir
+// pembacaan otomatis dari server (Instagram, TikTok, dll. membatasi
+// datacenter IP dan menuntut login) — supaya model menjelaskan ke user
+// dengan jujur dan benar, bukan sekadar "gagal kubuka".
+func socialFetchNote(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	h := strings.ToLower(u.Host)
+	h = strings.TrimPrefix(h, "www.")
+	switch {
+	case h == "instagram.com" || strings.HasSuffix(h, ".instagram.com"):
+		return "Instagram menolak pembacaan otomatis dari server (butuh login / membatasi bot). Mintalah user menuliskan info yang dibutuhkan secara manual di pesan."
+	case h == "facebook.com" || strings.HasSuffix(h, ".facebook.com"):
+		return "Facebook menolak pembacaan otomatis dari server (butuh login). Mintalah user menuliskan info yang dibutuhkan secara manual di pesan."
+	case h == "tiktok.com" || strings.HasSuffix(h, ".tiktok.com"):
+		return "TikTok membatasi pembacaan otomatis dari server. Mintalah user menuliskan info yang dibutuhkan secara manual di pesan."
+	case h == "x.com" || h == "twitter.com" || strings.HasSuffix(h, ".x.com"):
+		return "X/Twitter membatasi pembacaan otomatis dari server. Mintalah user menuliskan info yang dibutuhkan secara manual di pesan."
+	case h == "linkedin.com" || strings.HasSuffix(h, ".linkedin.com"):
+		return "LinkedIn menolak pembacaan otomatis dari server (butuh login). Mintalah user menuliskan info yang dibutuhkan secara manual di pesan."
+	}
+	return ""
 }
 
 func (d *Deps) markLinkFailed(ctx context.Context, id, msg string) {

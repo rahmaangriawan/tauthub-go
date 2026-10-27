@@ -4,16 +4,15 @@
 	// Modal editor rich untuk Writer — dipakai untuk Preview hasil generate
 	// maupun edit hasil Unggah Artikel. Port writer/editor-modal.tsx.
 	// contentEditable + execCommand (tanpa dependensi baru).
-	import { Image, Info, Link, List, ListOrdered, LoaderCircle, Quote, RotateCcw, RotateCw, Sparkles, TriangleAlert, Upload, Video, X } from '@lucide/svelte';
-	import type { Component, Snippet } from 'svelte';
+	import { Image, Info, Link, LoaderCircle, RotateCcw, Sparkles, TriangleAlert, Upload, X } from '@lucide/svelte';
+	import type { Snippet } from 'svelte';
 	import Select from '$lib/components/select.svelte';
 	import MediaLibraryPicker from '$lib/components/media-library-picker.svelte';
+	// Toolbar + isi artikel memakai komponen yang sama dengan Pengelola Naskah
+	// (tabel, gambar, tautan, peta/video, mode HTML) supaya tidak ada dua editor
+	// dengan kemampuan berbeda di portal klien.
+	import RichTextEditor from '$lib/components/rich-text-editor.svelte';
 	import { sameOriginAssetUrl, TAUTHUB_FALLBACK_COVER } from '$lib/media/cover';
-	import { sanitizeHtml } from '$lib/sanitize-html';
-	// Logika format inline (B/I/U pada kata di bawah kursor + status tombol)
-	// dipakai bersama dengan rich-text-editor.svelte agar perilaku kedua editor
-	// portal klien & mitra identik.
-	import { applyInlineFormat, readToolState, isToggleCommand, toolCommandActive, NO_TOOL_STATE, type ToolState } from '$lib/editor/inline-format';
 
 	// Fallback cover "pakai logo Tauthub": konstantanya di $lib/media/cover agar
 	// sama dengan yang dipakai konfirmasi "lanjut tanpa cover" di The Writer.
@@ -48,7 +47,15 @@
 		// Konteks untuk opsi "Generate Gambar AI" pada tombol Ganti Cover.
 		// Null = perilaku lama: tombol langsung membuka pemilih berkas.
 		coverAi = null,
-		extraFields
+		// Snippet di kolom kanan, MENGGANTIKAN blok "Kemampuan editor artikel".
+		// Dipakai editor yang dibuka dari obrolan: yang lebih relevan di sana
+		// adalah riwayat permintaan mitra, bukan daftar kemampuan editor.
+		asideExtra,
+		// Scope brand/campaign/media untuk tombol gambar di editor. Kosong =
+		// editor memakai unggahan berkas biasa (mis. editor dokumen mandiri).
+		brandId = '',
+		campaignId = '',
+		mediaId = ''
 	}: {
 		mediaName: string;
 		initialTitle: string;
@@ -75,7 +82,10 @@
 		showSaveButton?: boolean;
 		readOnly?: boolean;
 		coverAi?: { brandId: string; campaignId: string; mediaId: string; articleId?: string | null } | null;
-		extraFields?: Snippet;
+		asideExtra?: Snippet;
+		brandId?: string;
+		campaignId?: string;
+		mediaId?: string;
 	} = $props();
 
 	function extractH1(html: string): { h1: string; body: string } {
@@ -84,31 +94,11 @@
 		return { h1: m[1].replace(/<[^>]+>/g, '').trim(), body: html.replace(m[0], '') };
 	}
 
-	let bodyEl = $state<HTMLDivElement | null>(null);
 	let coverInput = $state<HTMLInputElement | null>(null);
-	let articleImageInput = $state<HTMLInputElement | null>(null);
 
-	// Format aktif di posisi kursor — menyalakan tombol toolbar (logika bersama
-	// dengan rich-text-editor.svelte lewat lib/editor/inline-format.ts).
-	let toolState = $state<ToolState>({ ...NO_TOOL_STATE });
-
-	function refreshToolState() {
-		toolState = bodyEl && !readOnly ? readToolState(bodyEl) : { ...NO_TOOL_STATE };
-	}
-
-	$effect(() => {
-		if (!bodyEl || readOnly) return;
-		const syncTools = () => refreshToolState();
-		document.addEventListener('selectionchange', syncTools);
-		window.addEventListener('keyup', syncTools);
-		window.addEventListener('mouseup', syncTools);
-		syncTools();
-		return () => {
-			document.removeEventListener('selectionchange', syncTools);
-			window.removeEventListener('keyup', syncTools);
-			window.removeEventListener('mouseup', syncTools);
-		};
-	});
+	// Isi artikel dikelola RichTextEditor lewat nilai dua arah, bukan DOM lokal.
+	let html = $state('');
+	let editorStats = $state({ words: 0, links: 0, images: 0 });
 
 	let title = $state('');
 	let words = $state(0);
@@ -117,17 +107,21 @@
 	let metaDescription = $state('');
 	// Nilai awal disalin dari prop lewat $effect (menghindari peringatan
 	// state_referenced_locally): setelah itu form dikendalikan state lokal.
+	// H1 pertama di isi artikel diangkat jadi judul, sisanya jadi isi editor.
+	let seeded = false;
 	$effect(() => {
-		title = initialTitle ?? '';
+		if (seeded) return;
+		seeded = true;
+		const parsed = extractH1(initialHtml);
+		html = parsed.body || initialHtml;
+		title = initialTitle || parsed.h1;
 		coverUrl = initialCoverUrl ?? null;
 		category = initialCategory ?? categoryOptions?.[0] ?? '';
 		metaDescription = initialMetaDescription ?? '';
 	});
 	let coverBusy = $state(false);
-	let articleBusy = $state(false);
 	let uploadError = $state('');
-	let linkCount = $state(0);
-	let linkActive = $state(false);
+	const linkCount = $derived(editorStats.links);
 	let coverConfirmOpen = $state(false);
 	let warnOpen = $state(false);
 	let coverInfoOpen = $state(false);
@@ -164,9 +158,6 @@
 	// Ukuran gambar (byte) — cover + gambar di dalam artikel, untuk footer editor.
 	let coverBytes = $state(0);
 	let articleBytes = $state(0);
-	let linkDialog = $state<{ open: boolean; url: string; isEdit: boolean }>({ open: false, url: '', isEdit: false });
-	let embedDialog = $state<{ open: boolean; url: string; error: string }>({ open: false, url: '', error: '' });
-	let savedRange: Range | null = null;
 
 	const linkOverLimit = $derived(linkCount > linkLimit);
 	const totalImageKb = $derived(coverBytes + articleBytes);
@@ -188,15 +179,13 @@
 	}
 
 	async function measureArticleImages() {
-		const imgs = Array.from(bodyEl?.querySelectorAll('img') ?? [])
-			.map((i) => i.getAttribute('src') ?? '')
-			.filter(Boolean);
+		const imgs = Array.from(html.matchAll(/<img[^>]+src="([^"]+)"/gi)).map((m) => m[1]).filter(Boolean);
 		articleBytes = (await Promise.all(imgs.map(measureBytes))).reduce((a, b) => a + b, 0);
 	}
 
-	// Ukur gambar di dalam artikel setiap isi berubah (words jadi penanda isi).
+	// Ukur gambar di dalam artikel setiap isi berubah.
 	$effect(() => {
-		words;
+		html;
 		void measureArticleImages();
 	});
 
@@ -218,11 +207,12 @@
 	});
 
 	// Tempel (Ctrl+V) gambar dari clipboard → jadi cover, bila cover masih kosong.
+	// Tempelan di dalam isi artikel diurus editor (menjadi gambar artikel).
 	$effect(() => {
 		function onPaste(e: ClipboardEvent) {
 			if (coverUrl || coverBusy) return;
 			const target = e.target as Node | null;
-			if (target && bodyEl?.contains(target)) return;
+			if (target instanceof Element && target.closest('.rte-body')) return;
 			const img = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith('image/'));
 			const file = img?.getAsFile();
 			if (!file) return;
@@ -233,19 +223,9 @@
 		return () => document.removeEventListener('paste', onPaste);
 	});
 
-	// Isi body sekali saat mount: ekstrak H1 ke field judul, sisanya jadi body.
-	// Sanitasi di sini defense-in-depth — konten tersimpan sudah disanitasi
-	// server-side, dan sanitizer sama dipakai rich-text-editor.
+	// Statistik editor (kata/tautan) dipakai footer & validasi batas tautan.
 	$effect(() => {
-		const body = bodyEl;
-		if (!body) return;
-		const { h1, body: rest } = extractH1(initialHtml);
-		body.innerHTML = sanitizeHtml(rest || initialHtml);
-		const t = window.setTimeout(() => {
-			if (h1) title = h1;
-			sync();
-		}, 0);
-		return () => window.clearTimeout(t);
+		words = editorStats.words;
 	});
 
 	// Escape menutup modal.
@@ -256,63 +236,6 @@
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);
 	});
-
-	function sync() {
-		const body = bodyEl;
-		if (!body) return;
-		// execCommand kadang meninggalkan atribut style kosong saat melepas tag —
-		// dibuang supaya HTML artikel bersih (sama seperti editor utama).
-		body.querySelectorAll('[style=""]').forEach((el) => el.removeAttribute('style'));
-		const text = body.innerText || '';
-		words = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
-		linkCount = body.querySelectorAll('a').length;
-	}
-
-	/* Klik pada tautan: cegah navigasi, seleksi isi link agar terlihat bedanya. */
-	function handleBodyClick(e: MouseEvent) {
-		const body = bodyEl;
-		const el = e.target instanceof Element ? e.target : null;
-		const anchor = el?.closest('a');
-		if (!body || !anchor || !body.contains(anchor)) return;
-		e.preventDefault();
-		const range = document.createRange();
-		range.selectNodeContents(anchor);
-		const sel = window.getSelection();
-		sel?.removeAllRanges();
-		sel?.addRange(range);
-	}
-
-	function exec(cmd: string, arg?: string) {
-		const body = bodyEl;
-		if (!body) return;
-		body.focus();
-		// B/I/U dengan kursor saja: kenakan ke kata di bawah kursor (logika yang
-		// sama dengan editor utama; lihat lib/editor/inline-format.ts).
-		const inline = cmd === 'bold' || cmd === 'italic' || cmd === 'underline';
-		if (inline && applyInlineFormat(body, cmd)) {
-			sync();
-			refreshToolState();
-			return;
-		}
-		document.execCommand(cmd, false, arg);
-		const sel = window.getSelection();
-		if (inline && sel && sel.rangeCount > 0 && !sel.isCollapsed) sel.collapseToEnd();
-		sync();
-		refreshToolState();
-	}
-
-	const tools: Array<{ cmd: string; label?: string; icon?: Component; arg?: string; name: string }> = $derived([
-		{ cmd: 'bold', label: 'B', name: tr('Tebal') },
-		{ cmd: 'italic', label: 'I', name: tr('Miring') },
-		{ cmd: 'underline', label: 'U', name: tr('Garis bawah') },
-		{ cmd: 'formatBlock', label: 'H2', arg: 'h2', name: tr('Judul bagian') },
-		{ cmd: 'formatBlock', label: 'H3', arg: 'h3', name: tr('Sub-judul') },
-		{ cmd: 'formatBlock', arg: 'blockquote', icon: Quote, name: tr('Kutipan') },
-		{ cmd: 'insertUnorderedList', icon: List, name: tr('Daftar poin') },
-		{ cmd: 'insertOrderedList', icon: ListOrdered, name: tr('Daftar bernomor') },
-		{ cmd: 'undo', icon: RotateCcw, name: tr('Urungkan') },
-		{ cmd: 'redo', icon: RotateCw, name: tr('Ulangi') }
-	]);
 
 	async function pickCover(file: File) {
 		if (!file || coverBusy) return;
@@ -329,166 +252,6 @@
 		}
 	}
 
-	async function insertArticleImage(file: File) {
-		if (!file || articleBusy) return;
-		const body = bodyEl;
-		if (!body) return;
-		body.focus();
-		articleBusy = true;
-		uploadError = '';
-		try {
-			const url = await onUploadCover(file);
-			document.execCommand('insertImage', false, url);
-			sync();
-		} catch {
-			uploadError = tr('Gagal mengunggah gambar artikel.');
-		} finally {
-			articleBusy = false;
-			if (articleImageInput) articleImageInput.value = '';
-		}
-	}
-
-	/** Anchor di bawah seleksi saat ini (bila ada). */
-	function closestAnchor(): HTMLAnchorElement | null {
-		const body = bodyEl;
-		if (!body) return null;
-		const sel = window.getSelection();
-		if (!sel || sel.rangeCount === 0) return null;
-		for (const node of [sel.anchorNode, sel.focusNode]) {
-			const el = node instanceof Element ? node : (node?.parentElement ?? null);
-			const anchor = el?.closest('a');
-			if (anchor && body.contains(anchor)) return anchor as HTMLAnchorElement;
-		}
-		return null;
-	}
-
-	function openLinkDialog() {
-		const body = bodyEl;
-		if (!body || saving) return;
-		const sel = window.getSelection();
-		savedRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
-		const anchor = closestAnchor();
-		linkDialog = { open: true, url: anchor?.getAttribute('href') ?? '', isEdit: Boolean(anchor) };
-	}
-
-	function applyLinkDialog() {
-		const body = bodyEl;
-		if (!body) {
-			linkDialog = { ...linkDialog, open: false };
-			return;
-		}
-		const url = linkDialog.url.trim();
-		body.focus();
-		const sel = window.getSelection();
-		if (sel && savedRange) {
-			sel.removeAllRanges();
-			try {
-				sel.addRange(savedRange);
-			} catch {
-				/* range basi */
-			}
-		}
-		const anchor = closestAnchor();
-		if (!url) {
-			if (anchor) {
-				const range = document.createRange();
-				range.selectNodeContents(anchor);
-				sel?.removeAllRanges();
-				sel?.addRange(range);
-				document.execCommand('unlink', false);
-			}
-		} else {
-			if (anchor && sel && sel.isCollapsed) {
-				const range = document.createRange();
-				range.selectNodeContents(anchor);
-				sel.removeAllRanges();
-				sel.addRange(range);
-			}
-			document.execCommand('createLink', false, url);
-		}
-		savedRange = null;
-		linkDialog = { ...linkDialog, open: false };
-		sync();
-	}
-
-	function openEmbedDialog() {
-		if (!bodyEl || saving) return;
-		const sel = window.getSelection();
-		savedRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
-		embedDialog = { open: true, url: '', error: '' };
-	}
-
-	/**
-	 * Sisipkan embed video/peta di posisi kursor. Hanya url dari penyedia yang
-	 * dikenal yang diterima (parity lib/media/embed).
-	 */
-	function resolveEmbed(url: string): string | null {
-		const raw = url.trim();
-		if (!raw) return null;
-		let u: URL;
-		try {
-			u = new URL(raw);
-		} catch {
-			return null;
-		}
-		if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
-		const host = u.hostname.toLowerCase();
-		let videoId: string | null = null;
-		if (host.includes('youtube.com')) videoId = u.searchParams.get('v');
-		else if (host === 'youtu.be') videoId = u.pathname.slice(1);
-		if (videoId) {
-			return `<iframe width="560" height="315" src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
-		}
-		if (host.includes('vimeo.com')) {
-			const id = u.pathname.split('/').filter(Boolean)[0];
-			if (id) return `<iframe width="560" height="315" src="https://player.vimeo.com/video/${encodeURIComponent(id)}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
-		}
-		if (host.includes('google.') && (u.pathname.startsWith('/maps') || u.searchParams.has('pb'))) {
-			return `<iframe width="600" height="450" src="${u.toString()}" loading="lazy" allowfullscreen></iframe>`;
-		}
-		return null;
-	}
-
-	function applyEmbedDialog() {
-		const body = bodyEl;
-		if (!body) {
-			embedDialog = { ...embedDialog, open: false };
-			return;
-		}
-		const html = resolveEmbed(embedDialog.url);
-		if (!html) {
-			embedDialog = { ...embedDialog, error: tr('Tautan tidak dikenali. Yang didukung: YouTube, Vimeo, Google Maps.') };
-			return;
-		}
-		// Bangun node dari string hasil resolveEmbed (bukan input mentah).
-		const holder = document.createElement('div');
-		holder.innerHTML = html;
-		const node = holder.firstElementChild;
-		if (!node) {
-			embedDialog = { ...embedDialog, error: tr('Gagal menyiapkan embed.') };
-			return;
-		}
-		body.focus();
-		const sel = window.getSelection();
-		if (sel && savedRange && body.contains(savedRange.commonAncestorContainer)) {
-			sel.removeAllRanges();
-			sel.addRange(savedRange);
-		}
-		const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
-		if (range) {
-			range.deleteContents();
-			range.insertNode(node);
-			range.setStartAfter(node);
-			range.collapse(true);
-			sel?.removeAllRanges();
-			sel?.addRange(range);
-		} else {
-			body.appendChild(node);
-		}
-		sync();
-		embedDialog = { open: false, url: '', error: '' };
-	}
-
 	function handleSave() {
 		if (enforceLinkLimit && linkOverLimit) {
 			warnOpen = true;
@@ -498,23 +261,14 @@
 			coverConfirmOpen = true;
 			return;
 		}
-		onSave(title.trim() || tr('Artikel'), bodyEl?.innerHTML ?? '', coverUrl, category.trim(), metaDescription.trim());
+		onSave(title.trim() || tr('Artikel'), html, coverUrl, category.trim(), metaDescription.trim());
 	}
 
 	function saveWithFallbackCover() {
 		coverUrl = TAUTHUB_FALLBACK_COVER;
 		coverConfirmOpen = false;
-		onSave(title.trim() || tr('Artikel'), bodyEl?.innerHTML ?? '', TAUTHUB_FALLBACK_COVER, category.trim(), metaDescription.trim());
+		onSave(title.trim() || tr('Artikel'), html, TAUTHUB_FALLBACK_COVER, category.trim(), metaDescription.trim());
 	}
-
-	// Pantau seleksi: tombol link aktif bila kursor di dalam <a>.
-	$effect(() => {
-		function onSelectionChange() {
-			linkActive = Boolean(closestAnchor());
-		}
-		document.addEventListener('selectionchange', onSelectionChange);
-		return () => document.removeEventListener('selectionchange', onSelectionChange);
-	});
 </script>
 
 <!-- Menu dua opsi untuk Ganti Cover sebagai POPUP mengambang, anchor tepat di
@@ -576,64 +330,21 @@
 				<div class="flex min-w-0 flex-1 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
 					<input class="app-input w-full text-base font-semibold" aria-label="Judul artikel" maxlength="300" placeholder={tr("Judul artikel")} readonly={readOnly} bind:value={title} />
 
-					{#if !readOnly}
-						<!-- Toolbar -->
-						<div class="flex flex-wrap items-center gap-1 rounded-lg border p-1" role="toolbar" aria-label={tr('Format teks')}>
-							{#each tools as t (t.cmd + (t.arg ?? ''))}
-								{@const ToolIcon = t.icon}
-								{@const aktif = isToggleCommand(t.cmd) && toolCommandActive(toolState, t.cmd, t.arg)}
-								<button
-									class="min-h-8 min-w-8 rounded px-2 text-sm font-semibold hover:bg-secondary"
-									type="button"
-									title={t.name}
-									aria-pressed={isToggleCommand(t.cmd) ? aktif : undefined}
-									style={aktif ? 'background: var(--primary); color: var(--primary-foreground);' : ''}
-									onmousedown={(e: MouseEvent) => e.preventDefault()}
-									onclick={() => exec(t.cmd, t.arg)}
-								>
-									{#if ToolIcon}
-										<ToolIcon size={15} />
-									{:else}
-										{t.label}
-									{/if}
-								</button>
-							{/each}
-							<input
-								bind:this={articleImageInput}
-								type="file"
-								accept="image/*"
-								class="hidden"
-								onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; if (f) void insertArticleImage(f); }}
-							/>
-							<button class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary" type="button" title={articleBusy ? tr('Mengunggah…') : tr('Unggah gambar')} disabled={articleBusy} onclick={() => articleImageInput?.click()}>
-								{#if articleBusy}<LoaderCircle size={15} class="animate-spin" />{:else}<Image size={15} />{/if}
-							</button>
-							<button
-								class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary"
-								style="color: {linkActive ? 'var(--primary)' : 'inherit'};"
-								type="button"
-								onmousedown={(e: MouseEvent) => e.preventDefault()}
-								title={linkActive ? tr('Ubah / hapus tautan') : tr('Sisipkan tautan')}
-								aria-pressed={linkActive}
-								onclick={openLinkDialog}
-							><Link size={15} /></button>
-							{#if allowEmbed}
-								<button class="min-h-8 min-w-8 rounded px-2 hover:bg-secondary" type="button" onmousedown={(e: MouseEvent) => e.preventDefault()} title={tr("Sisipkan video atau peta")} onclick={openEmbedDialog}><Video size={15} /></button>
-							{/if}
-						</div>
-					{/if}
-
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<div
-						bind:this={bodyEl}
-						class="prose prose-sm min-h-[360px] flex-1 overflow-y-auto rounded-lg border p-3 text-sm"
-						contenteditable={!saving && !readOnly}
-						role="textbox"
-						tabindex="0"
-						aria-label={tr('Isi artikel')}
-						oninput={sync}
-						onclick={handleBodyClick}
-					></div>
+					<!-- Editor yang sama dengan Pengelola Naskah: toolbar lengkap
+					     (tabel, gambar, tautan, peta/video, mode HTML) dan isi bergaya
+					     .rte-body termasuk tabel. -->
+					<RichTextEditor
+						bind:value={html}
+						bind:stats={editorStats}
+						{brandId}
+						{campaignId}
+						{mediaId}
+						uploadImage={brandId ? undefined : onUploadCover}
+						embedAllowed={allowEmbed}
+						disabled={saving || readOnly}
+						minHeight={360}
+						ariaLabel={tr('Isi artikel')}
+					/>
 
 					{#if saveError}<p class="text-sm" style="color: var(--destructive);">{saveError}</p>{/if}
 					{#if linkOverLimit}
@@ -715,7 +426,9 @@
 
 					{#if uploadError}<p class="text-sm" style="color: var(--destructive);">{uploadError}</p>{/if}
 
-					{#if !readOnly}
+					{#if asideExtra}
+						{@render asideExtra()}
+					{:else if !readOnly}
 						<!-- Info kemampuan editor: caption + bullet, dibuka lewat trigger kecil. -->
 						<div class="relative">
 							<button class="inline-flex items-center gap-1.5 self-start text-xs text-muted-foreground hover:text-foreground" type="button" onclick={() => (coverInfoOpen = !coverInfoOpen)}>
@@ -731,8 +444,9 @@
 									<ul class="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
 										<li>{tr('Cover adalah gambar utama artikel yang tampil sebagai thumbnail di media')}</li>
 										<li>{tr('Bisa mengubah judul dan seluruh isi teks jika diperlukan')}</li>
-										<li>{tr('Bisa tambahkan gambar dalam artikel')}</li>
+										<li>{tr('Bisa tambahkan gambar, tabel, dan kutipan dalam artikel')}</li>
 										<li>{tr('Bisa menambah atau mengubah hyperlink jika fitur tersedia')}</li>
+										<li>{tr('Bisa menyisipkan video atau peta pada media yang mengizinkannya')}</li>
 										<li>{tr('Jika cover tidak diisi, artikel memakai gambar fallback bawaan saat ditinjau & didistribusikan')}</li>
 									</ul>
 								</div>
@@ -742,16 +456,12 @@
 				</aside>
 			</div>
 
-			{#if extraFields}
-				<div class="mt-4 space-y-3 border-t pt-3">{@render extraFields()}</div>
-			{/if}
-
 			<div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
 				<span class="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
 					{words} {tr('kata')}
 					<span style="opacity: .6;">·</span>
 					<Image size={13} />
-					<span>{fmtKb(totalImageKb)} ({tr('Cover')} {fmtKb(coverBytes)} · {tr('Artikel')} {fmtKb(articleBytes)})</span>
+					<span>{fmtKb(totalImageKb)}</span>
 					{#if enforceLinkLimit}
 						<span style="opacity: .6;">·</span>
 						<Link size={13} />
@@ -802,52 +512,6 @@
 			<div class="mt-4 flex justify-end gap-3">
 				<button class="app-btn app-btn-soft" type="button" onclick={() => { coverConfirmOpen = false; coverInput?.click(); }}>{tr("Tidak, saya tambah gambar")}</button>
 				<button class="app-btn app-btn-primary" type="button" onclick={saveWithFallbackCover}>{tr('Ya, pakai logo Tauthub')}</button>
-			</div>
-		</div>
-	</div>
-{/if}
-
-{#if linkDialog.open}
-	<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.5);" role="presentation">
-		<div class="app-card w-full max-w-md p-5">
-			<p class="font-bold">{linkDialog.isEdit ? tr('Ubah tautan') : tr('Sisipkan tautan')}</p>
-			<p class="mt-1 text-sm text-muted-foreground">
-				{linkDialog.isEdit ? tr('Ubah URL di bawah, atau kosongkan untuk melepas tautan.') : tr('Masukkan URL untuk teks yang dipilih.')}
-			</p>
-			<input
-				class="app-input mt-3 w-full"
-				aria-label={tr('URL tautan')}
-				placeholder={tr("https://contoh.com/halaman")}
-				inputmode="url"
-				bind:value={linkDialog.url}
-				onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyLinkDialog(); } }}
-			/>
-			<div class="mt-4 flex justify-end gap-3">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (linkDialog = { ...linkDialog, open: false })}>{tr("Batal")}</button>
-				<button class="app-btn app-btn-primary" type="button" onclick={applyLinkDialog}>{linkDialog.url.trim() ? tr('Terapkan') : tr('Lepas tautan')}</button>
-			</div>
-		</div>
-	</div>
-{/if}
-
-{#if embedDialog.open}
-	<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.5);" role="presentation">
-		<div class="app-card w-full max-w-lg p-5">
-			<p class="font-bold">{tr("Sisipkan video atau peta")}</p>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Tempel tautan video (YouTube/Vimeo) atau tautan embed peta dari Google Maps.")}</p>
-			<input
-				class="app-input mt-3 w-full"
-				aria-label="URL embed"
-				placeholder={tr("https://www.youtube.com/watch?v=... atau https://www.google.com/maps/...&pb=...")}
-				bind:value={embedDialog.url}
-				oninput={() => (embedDialog = { ...embedDialog, error: '' })}
-				onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyEmbedDialog(); } }}
-			/>
-			{#if embedDialog.error}<p class="mt-2 text-xs" style="color: var(--destructive);">{embedDialog.error}</p>{/if}
-			<p class="mt-2 text-xs text-muted-foreground">{tr("Embed hanya bisa disisipkan pada media yang mengizinkannya, dan hanya dari penyedia yang didukung. Setelah disimpan, embed ikut terkirim saat artikel terbit di situs mitra.")}</p>
-			<div class="mt-4 flex justify-end gap-3">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (embedDialog = { ...embedDialog, open: false })}>{tr("Batal")}</button>
-				<button class="app-btn app-btn-primary" type="button" onclick={applyEmbedDialog}>{tr('Sisipkan')}</button>
 			</div>
 		</div>
 	</div>

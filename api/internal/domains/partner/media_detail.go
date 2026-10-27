@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
 	"github.com/rahmaangriawan/tauthub-go/internal/crypto"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/imageconvert"
@@ -458,7 +459,7 @@ func nullableCategory(categories []string) any {
 	if len(categories) == 0 {
 		return nil
 	}
-	return categories[0]
+	return catutil.Canonical(categories[0])
 }
 
 // mediaChange: satu baris perubahan konfigurasi media. Bentuknya sengaja sama
@@ -829,6 +830,7 @@ func (d *Deps) MediaCategory(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid category")
 		return
 	}
+	category = catutil.Canonical(category)
 	if err := d.exec(r.Context(),
 		"UPDATE media SET category = $1, updated_at = NOW() WHERE id = $2 AND partner_id = $3",
 		category, mediaID, partner.ID); err != nil {

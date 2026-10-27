@@ -13,12 +13,12 @@
 	//
 	// Streaming memakai fetch + pembaca SSE manual (pola yang sama dengan
 	// halaman The Writer), bukan apiRequest yang timeout bawaannya 12 detik.
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
-		ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Copy, ExternalLink, FileText, Images, LoaderCircle,
-		Mic, MoreHorizontal, Newspaper, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, ShieldAlert, Sparkle, Square, SquarePen, Trash2, Upload, UserCircle, X
+		ArrowLeft, ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Clipboard, Copy, ExternalLink, FileText, ImagePlus, Images, LoaderCircle,
+		Mic, MoreHorizontal, Newspaper, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, Send, ShieldAlert, Sparkle, Square, SquarePen, Store, Trash2, Upload, UserCircle, X
 	} from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import Select from '$lib/components/select.svelte';
@@ -30,8 +30,13 @@
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
 	const apiBase = $derived(`/v1/brands/${brandId}/profiler`);
+	const brandApi = $derived(`/v1/brands/${brandId}`);
 
-	type BriefListItem = { id: string; name: string; description: string | null; short_code: string | null; pinned: boolean; updated_at: string | null };
+	type BriefListItem = {
+		id: string; name: string; description: string | null; short_code: string | null; pinned: boolean; updated_at: string | null;
+		// Progres field wajib per brief dari GET /profiles; null bila API lama.
+		progress: { filled: number; total: number; pct: number } | null
+	};
 	type FieldMeta = {
 		key: string; layer: number; section: string; label: string; widget: string;
 		required: boolean; sort_order: number; example_question: string; enabled: boolean;
@@ -145,9 +150,10 @@
 	// dibuka saat diklik, ditutup lewat backdrop atau Escape.
 	let betaOpen = $state(false);
 
-	// Tab workspace: percakapan Copilot, ringkasan entitas, media brief, dan
-	// ringkasan AI (entitas/file) yang dipakai Writer mode proper.
-	let activeTab = $state<'copilot' | 'entitas' | 'timeline' | 'media' | 'ringkasan'>('copilot');
+	// Tab workspace: Copilot, Entitas, Timeline, Media, dan Ringkasan AI.
+	type BriefTab = 'copilot' | 'entitas' | 'timeline' | 'media' | 'ringkasan';
+	const BRIEF_TABS: readonly BriefTab[] = ['copilot', 'entitas', 'timeline', 'media', 'ringkasan'];
+	let activeTab = $state<BriefTab>('copilot');
 	let showLayer2 = $state(false);
 
 	// Header band bisa diciutkan jadi strip judul tipis; default termuat jejak.
@@ -156,8 +162,7 @@
 	// Kartu brief bisa diciutkan jadi ikon Tauthub; klik ikon membuka lagi.
 	let cardOpen = $state(true);
 
-	// Popover tindakan Copilot (pill kanan).
-	let actionsOpen = $state(false);
+	// Popover lampiran berkas di composer.
 	let attachOpen = $state(false);
 
 	// Lampiran dokumen: dipasang dulu sebagai chip, baru diunggah saat Kirim.
@@ -203,6 +208,7 @@
 
 	// ---------- Timeline (feed kabar terbaru brand) ----------
 	// Post kedaluwarsa otomatis 3 bulan; gambar memakai jalur unggah Media.
+	type TimelineLink = { url: string; title: string; description: string; image: string; site: string };
 	type TimelinePost = {
 		id: string;
 		body: string;
@@ -212,18 +218,52 @@
 		occurred_on: string | null;
 		created_at: string | null;
 		author_name: string;
+		link_url: string | null;
+		link_title: string | null;
+		link_description: string | null;
+		link_image: string | null;
+		link_site: string | null;
 	};
 	let timeline = $state<TimelinePost[]>([]);
 	let timelineLoading = $state(false);
 	let timelineError = $state('');
+	let timelinePostError = $state('');
 	let timelinePosting = $state(false);
 	let timelineBody = $state('');
-	let timelineTags = $state('');
-	let timelineOccurredOn = $state('');
+	let timelineBrandName = $state('');
+	let timelineBrandSlug = $state('');
+	// Composer rich dibuka sebagai modal ("Utas baru"), seperti feed sosial.
+	let timelineComposerOpen = $state(false);
 	let timelineImageFile = $state<File | null>(null);
 	let timelineImagePreview = $state('');
+	// Unggahan gambar berjalan di belakang layar sejak dipasang; Kirim hanya
+	// melanjutkan/menunggu hasilnya. Nomor urut membatalkan hasil upload lama
+	// saat gambar diganti atau dilepas.
+	let timelineImageId = $state('');
+	let timelineImageUrl = $state('');
+	let timelineUploading = $state(false);
+	let timelineUploadFailed = $state(false);
+	let timelineUploadSeq = 0;
+	let timelineUploadPromise: Promise<string> | null = null;
+	let timelineLink = $state<TimelineLink | null>(null);
+	let timelineLinkLoading = $state(false);
+	let timelineDragging = $state(false);
+	// Draf disimpan di browser per brief: bertahan saat refresh, tanpa antrean
+	// server. Gambar yang sudah terunggah ikut disimpan sebagai URL.
+	type TimelineDraft = {
+		id: string;
+		body: string;
+		link: TimelineLink | null;
+		imageId: string;
+		imageUrl: string;
+		savedAt: number;
+	};
+	let timelineDrafts = $state<TimelineDraft[]>([]);
+	let timelineDraftsOpen = $state(false);
+	let timelineDiscardAsk = $state(false);
+	// Menu titik tiga per post: hanya satu yang terbuka pada satu waktu.
+	let timelineMenuFor = $state<string | null>(null);
 	const TIMELINE_BODY_MAX = 2000;
-	const TIMELINE_TAG_MAX = 10;
 	// Nomor urut permintaan: jawaban lama tidak boleh menimpa brief yang baru.
 	let mediaLoadSeq = 0;
 
@@ -379,24 +419,39 @@
 			return `${Math.round(secs / 3600)} ${tr('jam lalu')}`;
 		}
 
-		// Bersihkan percakapan di layar; data profil yang sudah tersimpan di
-		// Ringkasan tidak ikut terhapus (server tidak disentuh).
-		function restartChat() {
-			openConfirm({
-				title: tr('Mulai ulang obrolan?'),
-				body: tr('Percakapan di layar ini dikembalikan ke awal. Data profil entitas yang sudah tersimpan di Ringkasan tetap aman.'),
-				confirmLabel: tr('Mulai Ulang'),
-				danger: false,
-				action: () => {
-					messages = [];
-					streamError = '';
-					streamingText = '';
-					showToast(tr('Obrolan dimulai ulang.'));
-				}
-			});
-		}
+		/**
+	 * Marquee saat hover untuk teks yang terpotong: bila teks memang lebih
+	 * lebar dari wadahnya, kursor masuk memicu geser bolak-balik supaya nama
+	 * panjang bisa terbaca utuh tanpa memperlebar panel. Nama pendek tidak
+	 * ikut bergerak. Interaksi dipasang pakai action, bukan handler inline,
+	 * supaya elemen statis tidak butuh role a11y.
+	 */
+	function marqueeOnHover(node: HTMLElement) {
+		const text = node.firstElementChild as HTMLElement | null;
+		if (!text) return {};
+		const start = () => {
+			const overflow = text.scrollWidth - node.clientWidth;
+			if (overflow <= 2) return;
+			text.style.setProperty('--marquee-shift', `-${overflow + 6}px`);
+			text.style.setProperty('--marquee-duration', `${Math.min(14, Math.max(2.5, overflow / 28))}s`);
+			text.classList.add('brief-marquee-run');
+		};
+		const stop = () => text.classList.remove('brief-marquee-run');
+		node.addEventListener('mouseenter', start);
+		node.addEventListener('mouseleave', stop);
+		node.addEventListener('focusin', start);
+		node.addEventListener('focusout', stop);
+		return {
+			destroy() {
+				node.removeEventListener('mouseenter', start);
+				node.removeEventListener('mouseleave', stop);
+				node.removeEventListener('focusin', start);
+				node.removeEventListener('focusout', stop);
+			}
+		};
+	}
 
-		/** Pecah jawaban longtext jadi butir untuk kartu guardrails/target AI. */
+	/** Pecah jawaban longtext jadi butir untuk kartu guardrails/target AI. */
 	function items(key: string): string[] {
 		const raw = String(ringkasan[key] ?? '').trim();
 		if (!raw) return [];
@@ -443,10 +498,37 @@
 		if (profileId && !loading) void hydrate();
 	});
 
+	// Tab terakhir per brief disimpan di browser: reload tetap di tab yang sama,
+	// dan tiap brief punya tab-nya sendiri saat berpindah lewat sidebar.
+	let tabRestoredFor = '';
+	$effect(() => {
+		if (!profileId || tabRestoredFor === profileId) return;
+		tabRestoredFor = profileId;
+		try {
+			const saved = localStorage.getItem(`brief.tab.${profileId}`);
+			if (saved && (BRIEF_TABS as readonly string[]).includes(saved)) activeTab = saved as BriefTab;
+		} catch {
+			// localStorage diblokir → tetap di tab default.
+		}
+	});
+
+	$effect(() => {
+		if (!profileId || tabRestoredFor !== profileId) return;
+		try {
+			localStorage.setItem(`brief.tab.${profileId}`, activeTab);
+		} catch {
+			// Penyimpanan penuh/diblokir bukan alasan mengganggu UI.
+		}
+	});
+
 	$effect(() => {
 		// Tab Media memuat daftar berkas saat dibuka dan saat brief berganti.
 		if (activeTab === 'media' && profileId) void loadMedia();
 		if (activeTab === 'timeline' && profileId) void loadTimeline();
+		// Menu titik tiga tidak boleh ikut terbawa ke brief/tab lain.
+		timelineMenuFor = null;
+		// Draf terikat ke brief: muat ulang saat brief berganti.
+		if (profileId) loadTimelineDrafts();
 	});
 
 	$effect(() => {
@@ -494,7 +576,8 @@
 			description: p.description ?? null,
 			short_code: p.short_code ?? null,
 			pinned: Boolean(p.pinned),
-			updated_at: p.updated_at ?? null
+			updated_at: p.updated_at ?? null,
+			progress: p.progress ?? null
 		}));
 	}
 
@@ -983,10 +1066,22 @@
 		timelineLoading = true;
 		timelineError = '';
 		try {
-			const res = await apiRequest(`${apiBase}/profiles/${profileId}/timeline`);
-			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat timeline.')));
-			const data = await res.json();
-			timeline = Array.isArray(data?.items) ? data.items : [];
+			// Identitas brand hanya pelengkap tampilan: gagal di sini tidak boleh
+			// membuat feed ikut kosong.
+			const [brandRes, timelineRes] = await Promise.all([
+				apiRequest(brandApi).catch(() => null),
+				apiRequest(`${apiBase}/profiles/${profileId}/timeline`)
+			]);
+			if (!timelineRes.ok) throw new Error(await readApiError(timelineRes, tr('Gagal memuat timeline.')));
+			const timelineData = await timelineRes.json();
+			timeline = Array.isArray(timelineData?.items) ? timelineData.items : [];
+			if (brandRes?.ok) {
+				const brandData = await brandRes.json().catch(() => null);
+				timelineBrandName = String(brandData?.name || profileName || tr('Brand'));
+				timelineBrandSlug = String(brandData?.slug || brandData?.public_id || '');
+			} else {
+				timelineBrandName = String(profileName || tr('Brand'));
+			}
 		} catch (e) {
 			timelineError = e instanceof Error ? e.message : tr('Gagal memuat timeline.');
 		} finally {
@@ -994,70 +1089,317 @@
 		}
 	}
 
-	function pickTimelineImage(list: FileList | null | undefined) {
-		const file = list?.[0];
+	async function openTimelineComposer() {
+		timelinePostError = '';
+		timelineDraftsOpen = false;
+		timelineComposerOpen = true;
+		await tick();
+		growTimelineInput();
+		// Kursor langsung siap menulis begitu modal terbuka.
+		timelineInputEl?.focus();
+	}
+
+	// Kembali dari daftar draf ke kolom tulis, kursor ikut aktif lagi.
+	async function backToTimelineComposer() {
+		timelineDraftsOpen = false;
+		await tick();
+		growTimelineInput();
+		const el = timelineInputEl;
+		if (el) {
+			el.focus();
+			el.setSelectionRange(el.value.length, el.value.length);
+		}
+	}
+
+	// Textarea modal ringkas saat kosong, tumbuh mengikuti isi sampai batas 40vh.
+	let timelineInputEl = $state<HTMLTextAreaElement | null>(null);
+	function growTimelineInput() {
+		const el = timelineInputEl;
+		if (!el) return;
+		el.style.height = 'auto';
+		const max = Math.round(window.innerHeight * 0.4);
+		el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+	}
+
+	// Menutup composer dengan isi → tawarkan simpan sebagai draf dulu.
+	// `intent` menentukan tujuan setelah jawaban: tutup modal atau buka daftar draf.
+	let timelineDiscardIntent = $state<'close' | 'drafts'>('close');
+
+	function timelineHasDraftContent(): boolean {
+		return Boolean(timelineBody.trim() || timelineImageFile || timelineImageId || timelineLink);
+	}
+
+	function requestCloseTimelineComposer() {
+		if (timelineHasDraftContent()) {
+			timelineDiscardIntent = 'close';
+			timelineDiscardAsk = true;
+			return;
+		}
+		closeTimelineComposer();
+	}
+
+	// Ikon draf: kalau ada isi yang belum dikirim, simpan dulu (bukan langsung
+	// pindah layar dan meninggalkan tulisan).
+	function openTimelineDrafts() {
+		if (timelineHasDraftContent()) {
+			timelineDiscardIntent = 'drafts';
+			timelineDiscardAsk = true;
+			return;
+		}
+		timelineDraftsOpen = true;
+	}
+
+	function closeTimelineComposer() {
+		timelineComposerOpen = false;
+		timelineDragging = false;
+		timelineDiscardAsk = false;
+		timelineDraftsOpen = false;
+	}
+
+	// ---------- draf timeline (localStorage per brief) ----------
+
+	function timelineDraftsKey(): string {
+		return `timeline.drafts.${profileId}`;
+	}
+
+	function loadTimelineDrafts() {
+		try {
+			const raw = localStorage.getItem(timelineDraftsKey());
+			const parsed = raw ? JSON.parse(raw) : [];
+			timelineDrafts = Array.isArray(parsed) ? parsed : [];
+		} catch {
+			timelineDrafts = [];
+		}
+	}
+
+	function persistTimelineDrafts() {
+		try {
+			localStorage.setItem(timelineDraftsKey(), JSON.stringify(timelineDrafts));
+		} catch {
+			// Penyimpanan penuh/diblokir bukan alasan menggagalkan penulisan.
+		}
+	}
+
+	function resetTimelineComposer() {
+		timelineBody = '';
+		clearTimelineImage();
+		clearTimelineLink();
+		timelinePostError = '';
+	}
+
+	async function saveTimelineDraft() {
+		// Gambar yang masih diunggah ditunggu sebentar supaya draf tidak
+		// kehilangan gambarnya; kalau gagal, draf tetap disimpan tanpa gambar.
+		let imageId = timelineImageId;
+		let imageUrl = timelineImageUrl;
+		if (!imageId && timelineImageFile) {
+			try {
+				imageId = await (timelineUploadPromise ?? startTimelineUpload(timelineImageFile));
+				imageUrl = timelineImageUrl;
+			} catch {
+				imageId = '';
+				imageUrl = '';
+			}
+		}
+		timelineDrafts = [
+			{
+				id: crypto.randomUUID(),
+				body: timelineBody,
+				link: timelineLink,
+				imageId,
+				imageUrl,
+				savedAt: Date.now()
+			},
+			...timelineDrafts
+		].slice(0, 20);
+		persistTimelineDrafts();
+		resetTimelineComposer();
+		timelineDiscardAsk = false;
+		if (timelineDiscardIntent === 'drafts') {
+			timelineDraftsOpen = true;
+		} else {
+			closeTimelineComposer();
+		}
+	}
+
+	function discardTimelineDraft() {
+		resetTimelineComposer();
+		timelineDiscardAsk = false;
+		if (timelineDiscardIntent === 'drafts') {
+			timelineDraftsOpen = true;
+		} else {
+			closeTimelineComposer();
+		}
+	}
+
+	async function resumeTimelineDraft(draft: TimelineDraft) {
+		resetTimelineComposer();
+		timelineBody = draft.body;
+		timelineLink = draft.link;
+		if (draft.imageId) {
+			timelineImageId = draft.imageId;
+			timelineImageUrl = draft.imageUrl;
+			timelineImagePreview = draft.imageUrl;
+		}
+		timelineDraftsOpen = false;
+		timelineComposerOpen = true;
+		await tick();
+		growTimelineInput();
+		const el = timelineInputEl;
+		if (el) {
+			el.focus();
+			el.setSelectionRange(el.value.length, el.value.length);
+		}
+	}
+
+	function deleteTimelineDraft(id: string) {
+		timelineDrafts = timelineDrafts.filter((d) => d.id !== id);
+		persistTimelineDrafts();
+	}
+
+	// Gambar: berkas dipasang lokal untuk pratinjau, unggahannya langsung jalan
+	// di latar belakang supaya saat Kirim tinggal menunggu/melanjutkan.
+	function attachTimelineImage(file: File | null | undefined) {
 		if (!file) return;
 		if (!isImageFile(file)) {
-			timelineError = tr('Timeline hanya menerima gambar (JPG, PNG, WebP, GIF). Video tidak didukung.');
+			timelinePostError = tr('Hanya gambar (JPG, PNG, WebP, GIF) yang bisa dilampirkan.');
 			return;
 		}
 		if (file.size > MAX_UPLOAD_BYTES) {
-			timelineError = `${tr('Gambar melebihi 10 MB')}: ${file.name} (${fmtSize(file.size)})`;
+			timelinePostError = `${tr('Gambar melebihi 10 MB')}: ${file.name} (${fmtSize(file.size)})`;
 			return;
 		}
-		timelineError = '';
-		timelineImageFile = file;
+		timelinePostError = '';
 		if (timelineImagePreview) URL.revokeObjectURL(timelineImagePreview);
+		timelineImageFile = file;
 		timelineImagePreview = URL.createObjectURL(file);
+		timelineImageId = '';
+		void startTimelineUpload(file);
+	}
+
+	// startTimelineUpload: mulai (atau ulangi) unggahan latar belakang.
+	function startTimelineUpload(file: File): Promise<string> {
+		const seq = ++timelineUploadSeq;
+		timelineUploading = true;
+		timelineUploadFailed = false;
+		const p = uploadTimelineImage(file)
+			.then((up) => {
+				if (seq === timelineUploadSeq) {
+					timelineImageId = up.id;
+					timelineImageUrl = up.url;
+					timelineUploading = false;
+					timelineUploadFailed = false;
+				}
+				return up.id;
+			})
+			.catch((e) => {
+				if (seq === timelineUploadSeq) {
+					timelineUploading = false;
+					timelineUploadFailed = true;
+				}
+				throw e;
+			});
+		// Tangani penolakan tanpa menelan hasilnya: promise aslinya tetap
+		// di-await oleh submitTimelinePost.
+		void p.catch(() => {});
+		timelineUploadPromise = p;
+		return p;
 	}
 
 	function clearTimelineImage() {
+		// Naikkan nomor urut supaya hasil upload yang masih jalan diabaikan.
+		timelineUploadSeq++;
 		if (timelineImagePreview) URL.revokeObjectURL(timelineImagePreview);
 		timelineImagePreview = '';
 		timelineImageFile = null;
+		timelineImageId = '';
+		timelineImageUrl = '';
+		timelineUploading = false;
+		timelineUploadFailed = false;
+		timelineUploadPromise = null;
 	}
 
-	async function submitTimelinePost() {
-		const body = timelineBody.trim();
-		if ((!body && !timelineImageFile) || timelinePosting) return;
-		timelinePosting = true;
-		timelineError = '';
+	function clearTimelineLink() {
+		timelineLink = null;
+		timelineLinkLoading = false;
+	}
+
+	// Ambil metadata OG lewat API (server yang fetch, jadi tidak kena CORS).
+	async function loadTimelineLink(raw: string) {
+		const url = raw.trim();
+		if (!url) return;
+		if (timelineLink?.url === url) return;
+		timelineLink = { url, title: '', description: '', image: '', site: '' };
+		timelineLinkLoading = true;
 		try {
-			let imageId = '';
-			// Gambar diunggah dulu lewat jalur Media (kuota & validasi sama).
-			if (timelineImageFile) {
-				const up = await uploadTimelineImage(timelineImageFile);
-				imageId = up.id;
-			}
-			const tags = timelineTags
-				.split(/[\s,]+/)
-				.map((t) => t.trim().replace(/^#+/, ''))
-				.filter(Boolean)
-				.slice(0, TIMELINE_TAG_MAX);
-			const res = await apiRequest(`${apiBase}/profiles/${profileId}/timeline`, {
-				method: 'POST',
-				body: JSON.stringify({
-					body,
-					hashtags: tags,
-					image_id: imageId || undefined,
-					occurred_on: timelineOccurredOn || undefined
-				})
-			});
-			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memposting timeline.')));
-			timelineBody = '';
-			timelineTags = '';
-			timelineOccurredOn = '';
-			clearTimelineImage();
-			await loadTimeline();
-			await loadMedia();
-		} catch (e) {
-			timelineError = e instanceof Error ? e.message : tr('Gagal memposting timeline.');
+			const res = await apiRequest(`${apiBase}/link-preview?url=${encodeURIComponent(url)}`);
+			if (!res.ok) return;
+			const data = await res.json();
+			if (!data?.ok) return;
+			timelineLink = {
+				url: String(data.url || url),
+				title: String(data.title || ''),
+				description: String(data.description || ''),
+				image: String(data.image || ''),
+				site: String(data.site || '')
+			};
+		} catch {
+			// Pratinjau gagal bukan alasan menggagalkan posting: tautan tetap dikirim.
 		} finally {
-			timelinePosting = false;
+			timelineLinkLoading = false;
 		}
 	}
 
-	// Unggah gambar timeline ke koleksi media brief, kembalikan id-nya.
+	function firstURLIn(text: string): string {
+		const m = text.match(/https?:\/\/[^\s<>"]+/i);
+		return m ? m[0].replace(/[),.;]+$/, '') : '';
+	}
+
+	function handleTimelinePaste(e: ClipboardEvent) {
+		const files = e.clipboardData?.files;
+		if (files && files.length > 0) {
+			const image = Array.from(files).find((f) => isImageFile(f));
+			if (image) {
+				e.preventDefault();
+				attachTimelineImage(image);
+				return;
+			}
+		}
+		const text = e.clipboardData?.getData('text') ?? '';
+		const url = firstURLIn(text);
+		if (url && !timelineLink) void loadTimelineLink(url);
+	}
+
+	function handleTimelineDrop(e: DragEvent) {
+		e.preventDefault();
+		timelineDragging = false;
+		const file = Array.from(e.dataTransfer?.files ?? []).find((f) => isImageFile(f));
+		if (file) attachTimelineImage(file);
+	}
+
+	// Tagar yang diketik langsung (#promo) ikut dikirim sebagai bahan AI.
+	function timelineHashtagsOf(body: string): string[] {
+		const out = Array.from(body.matchAll(/#([\p{L}\p{N}_]{1,40})/gu)).map((m) => m[1]);
+		return Array.from(new Set(out)).slice(0, 10);
+	}
+
+	// Pecah caption jadi potongan teks + tagar agar tagar bisa diwarnai
+	// tanpa menjadi tautan.
+	type BodyPart = { text: string; tag: boolean };
+	function timelineBodyParts(body: string): BodyPart[] {
+		const parts: BodyPart[] = [];
+		const re = /#[\p{L}\p{N}_]{1,40}/gu;
+		let last = 0;
+		for (const m of body.matchAll(re)) {
+			const at = m.index ?? 0;
+			if (at > last) parts.push({ text: body.slice(last, at), tag: false });
+			parts.push({ text: m[0], tag: true });
+			last = at + m[0].length;
+		}
+		if (last < body.length) parts.push({ text: body.slice(last), tag: false });
+		return parts;
+	}
+
 	async function uploadTimelineImage(file: File): Promise<{ id: string; url: string }> {
 		const form = new FormData();
 		form.append('file', file);
@@ -1065,6 +1407,43 @@
 		const res = await apiRequest(`${apiBase}/profiles/${profileId}/images`, { method: 'POST', body: form }, 120_000);
 		if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengunggah gambar timeline.')));
 		return await res.json();
+	}
+
+	async function submitTimelinePost() {
+		const body = timelineBody.trim();
+		if ((!body && !timelineImageFile && !timelineLink) || timelinePosting) return;
+		timelinePosting = true;
+		timelinePostError = '';
+		try {
+			let imageId = timelineImageId;
+			if (timelineImageFile && !imageId) {
+				// Lanjutkan unggahan yang masih berjalan; kalau sebelumnya gagal,
+				// ulangi sekarang (jenis berkas & ukuran sudah divalidasi saat pasang).
+				const pending = !timelineUploadPromise || timelineUploadFailed
+					? startTimelineUpload(timelineImageFile)
+					: timelineUploadPromise;
+				imageId = await pending;
+			}
+			const res = await apiRequest(`${apiBase}/profiles/${profileId}/timeline`, {
+				method: 'POST',
+				body: JSON.stringify({
+					body,
+					hashtags: timelineHashtagsOf(body),
+					image_id: imageId || undefined,
+					link_url: timelineLink?.url || undefined
+				})
+			});
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memposting timeline.')));
+			timelineBody = '';
+			clearTimelineImage();
+			clearTimelineLink();
+			timelineComposerOpen = false;
+			await loadTimeline();
+		} catch (e) {
+			timelinePostError = e instanceof Error ? e.message : tr('Gagal memposting timeline.');
+		} finally {
+			timelinePosting = false;
+		}
 	}
 
 	async function deleteTimelinePost(post: TimelinePost) {
@@ -1076,7 +1455,7 @@
 			action: async () => {
 				const res = await apiRequest(`${apiBase}/timeline/${post.id}`, { method: 'DELETE' });
 				if (!res.ok) {
-					timelineError = await readApiError(res, tr('Gagal menghapus post.'));
+					timelinePostError = await readApiError(res, tr('Gagal menghapus post.'));
 					return;
 				}
 				timeline = timeline.filter((p) => p.id !== post.id);
@@ -1084,8 +1463,37 @@
 		});
 	}
 
-	function timelineWhen(post: TimelinePost): string {
-		return mediaDate(post.occurred_on || post.created_at);
+	function timelineRelativeTime(iso?: string | null): string {
+		if (!iso) return '';
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return '';
+		const seconds = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+		if (seconds < 60) return tr('Baru saja');
+		if (seconds < 3600) return `${Math.floor(seconds / 60)} ${tr('menit lalu')}`;
+		if (seconds < 86400) return `${Math.floor(seconds / 3600)} ${tr('jam lalu')}`;
+		if (seconds < 30 * 86400) return `${Math.floor(seconds / 86400)} ${tr('hari lalu')}`;
+		return mediaDate(iso);
+	}
+
+	function timelineInitials(name: string): string {
+		const words = name.trim().split(/\s+/).filter(Boolean);
+		if (words.length > 1) return (words[0][0] + words[1][0]).toLocaleUpperCase('id-ID');
+		return (words[0]?.slice(0, 2) || 'TH').toLocaleUpperCase('id-ID');
+	}
+
+	// Identitas penulis = akun yang login (sama dengan halaman Profil & Akun),
+	// bukan nama brand. Brand tetap jadi konteks halaman ("Timeline Brand").
+	function timelineAuthorName(): string {
+		return String(userName || timelineBrandName || profileName || tr('Brand'));
+	}
+
+	function timelinePostAuthor(post: TimelinePost): string {
+		return String(post.author_name || timelineAuthorName());
+	}
+
+	function copyTimelineLink(post: TimelinePost) {
+		const url = `${window.location.origin}/klien/${brandUrl}/profiler/${activeShortCode}#timeline-${post.id}`;
+		void navigator.clipboard.writeText(url).then(() => showToast(tr('Tautan post disalin.'))).catch(() => showToast(tr('Gagal menyalin tautan.'), 'error'));
 	}
 
 	// ---------- ringkasan AI (entitas & file) ----------
@@ -1447,6 +1855,11 @@
 	// Persentase ringkas untuk lencana di rel Ringkasan dan panelnya.
 	const progressPct = $derived(progress.total ? Math.round((progress.filled / progress.total) * 100) : 0);
 
+	// Persen progres per brief: brief aktif memakai angka hidup (progressPct,
+	// ikut naik saat chat mengisi field), brief lain memakai angka dari daftar.
+	const briefPct = (b: BriefListItem) =>
+		b.id === profileId ? progressPct : (b.progress?.pct ?? 0);
+
 	// Field opsional (layer 2) yang masih kosong. Progres "field wajib" hanya
 	// menghitung field WAJIB, jadi 100% bukan berarti semua yang tampak di tab
 	// Entitas sudah terisi — mis. Keunggulan/USP dan Fakta penting. Angka ini
@@ -1677,6 +2090,7 @@
 									<span class="block truncate text-[11px] text-muted-foreground">{b.description}</span>
 								{/if}
 							</a>
+							<span class="brief-pct">{briefPct(b)}%</span>
 							<button
 								class="brief-pin"
 								class:pinned={b.pinned}
@@ -1831,7 +2245,7 @@
 						aria-selected={activeTab === 'copilot'}
 						onclick={() => (activeTab = 'copilot')}
 					>
-						<Bot size={14} />{tr('Copilot (Obrolan & Ekstraksi AI)')}
+						<Bot size={14} />{tr('Copilot Chat')}
 						{#if activeTab === 'copilot'}<span class="h-2 w-2 animate-pulse rounded-full" style="background: var(--primary);"></span>{/if}
 					</button>
 					<button
@@ -1847,7 +2261,7 @@
 							class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
 							style="background: {progressPct >= 100 ? 'var(--success-soft)' : 'var(--warning-soft)'}; color: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"
 						>
-							<span class="h-1.5 w-1.5 rounded-full" style="background: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"></span>{progressPct}% {tr('field wajib')}
+							<span class="h-1.5 w-1.5 rounded-full" style="background: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"></span>{progressPct}%
 						</span>
 					</button>
 					<button
@@ -1924,14 +2338,10 @@
 							</div>
 						{/if}
 						</div>
-					<span class="inline-flex items-center gap-1.5">
-						<span class="h-2 w-2 rounded-full" style="background: {configured ? 'var(--success)' : 'var(--warning)'};"></span>{tr('Mode Interaktif GEO Aktif')}
-					</span>
-					<span style="color: var(--border);">|</span>
-					<span>{tr('Sinkronisasi Terakhir')}: {syncText()}</span>
+						<span>{tr('Sinkronisasi Terakhir')}: {syncText()}</span>
+					</div>
 				</div>
-			</div>
-		</section>
+			</section>
 
 	{#if activeTab === 'copilot'}
 			<!-- Pane Copilot: lapisan melayang di atas, obrolan mengisi sisanya. -->
@@ -1942,19 +2352,8 @@
 						{#if cardOpen}
 					<div class="brief-pop brief-pop-static">
 							<div class="brief-pop-id">
-					<div class="flex items-start gap-3.5">
-						<div class="relative">
-							<span class="brief-avatar brief-avatar-ai" style="width: 36px; height: 36px;" aria-hidden="true">
-								<img src="/tauthub-icon.png" alt="" />
-							</span>
-							<span class="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-white" style="background: {streaming ? 'var(--warning)' : 'var(--success)'};"></span>
-						</div>
-						<div>
-							<div class="flex flex-wrap items-center gap-2">
-								<h2 class="text-sm font-bold">Tauthub AI Copilot</h2>
-							</div>
-							<p class="mt-0.5 text-[10px] leading-snug text-muted-foreground">{tr('Ekstraktor Pengetahuan Entitas Otomatis & Sinkronisasi GEO Source of Truth')}</p>
-						</div>
+						<!-- Header simpel ala toolbar: judul produk kiri, tombol kecilkan kanan. -->
+						<h2 class="brief-pop-brand">Tubi AI</h2>
 						<button
 							class="brief-card-toggle"
 							type="button"
@@ -1963,21 +2362,16 @@
 							title={tr('Kecilkan')}
 							onclick={() => (cardOpen = false)}
 						>
-												<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true">
-													<path d="M0 0h24v24H0z" fill="none" />
-													<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.55 2.73h1.8c1.9 0 2.84 0 3.42.58c.59.59.59 1.53.59 3.42v1.8M8.97 21.28H6.73c-1.9 0-2.84 0-3.42-.58c-.59-.59-.59-1.53-.59-3.42v-2.25m11.7-5.36l5.94-5.94M9.7 14.3l-5.98 5.97" />
-												</svg>
+							<ChevronDown size={14} />
 						</button>
-					</div>
-						</div>
-						<div class="brief-pop-head">
-									<span class="brief-pop-title">{tr('Semua Brief')} ({briefs.length})</span>
-									<span class="brief-pop-actions">
-										<span class="brief-pop-count">{progressPct}%</span>
-										<button class="brief-pop-icon" type="button" aria-label={tr('Brief baru')} disabled={workingState} onclick={() => void createBrief()}>
-												<Plus size={14} />
-										</button>
-									</span>
+							</div>
+							<div class="brief-pop-head">
+									<!-- Tombol "Obrolan Baru" saja di header; nama & progres
+									     brief tampil di baris daftar. -->
+									<button class="brief-newchat-sm" type="button" disabled={workingState} onclick={() => void createBrief()}>
+										<SquarePen size={14} />
+										<span>{tr('Obrolan Baru')}</span>
+									</button>
 								</div>
 								<div class="brief-pop-list">
 									{#if briefs.length === 0}
@@ -2003,7 +2397,8 @@
 														class:active={isActive}
 														href={`/klien/${brandUrl}/profiler/${b.short_code || b.id}`}
 												>
-														<span class="min-w-0 flex-1 truncate">{b.name}</span>
+														<span class="brief-marquee" use:marqueeOnHover title={b.name}><span>{b.name}</span></span>
+														<span class="brief-pct">{briefPct(b)}%</span>
 												</a>
 												<button
 													class="brief-pop-icon brief-pop-pin"
@@ -2054,45 +2449,20 @@
 					</div>
 					<div class="pointer-events-auto">
 						<div class="relative flex flex-shrink-0 items-center">
+					<!-- Obrolan baru = jalur yang sama dengan "+ Brief baru": brief
+					     lama tetap tersimpan (masih ada di daftar), layar pindah ke
+					     obrolan yang benar-benar baru. -->
 					<button
 						class="brief-picker"
-						class:brief-picker-open={actionsOpen}
 						type="button"
-						aria-expanded={actionsOpen}
-						aria-label={tr('Tindakan Copilot')}
-						onclick={() => (actionsOpen = !actionsOpen)}
+						disabled={streaming || workingState}
+						aria-label={tr('Brief baru')}
+						title={tr('Brief baru')}
+						onclick={() => void createBrief()}
 					>
-						<span class="truncate">{tr('Copilot')}</span>
-						<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" aria-hidden="true">
-							<path d="M0 0h24v24H0z" fill="none" />
-							<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.55 2.73h1.8c1.9 0 2.84 0 3.42.58c.59.59.59 1.53.59 3.42v1.8M8.97 21.28H6.73c-1.9 0-2.84 0-3.42-.58c-.59-.59-.59-1.53-.59-3.42v-2.25m11.7-5.36l5.94-5.94M9.7 14.3l-5.98 5.97" />
-						</svg>
+						<SquarePen size={13} />
+						<span class="truncate">{tr('Obrolan Baru')}</span>
 					</button>
-
-					{#if actionsOpen}
-						<button class="brief-pop-backdrop" type="button" aria-label={tr('Tutup')} onclick={() => (actionsOpen = false)}></button>
-						<div
-							class="brief-pop brief-pop-right"
-							role="dialog"
-							aria-label={tr('Tindakan Copilot')}
-							tabindex="-1"
-							onkeydown={(e) => {
-								if (e.key === 'Escape') actionsOpen = false;
-							}}
-						>
-							<div class="brief-pop-head">
-								<span class="brief-pop-title">{tr('Tindakan Copilot')}</span>
-							</div>
-							<div class="brief-pop-list">
-								<button class="brief-pop-row" type="button" onclick={() => { actionsOpen = false; restartChat(); }}>
-									<RotateCcw size={13} />{tr('Mulai Ulang')}
-								</button>
-								<button class="brief-pop-row" type="button" onclick={() => { actionsOpen = false; document.getElementById('brief-doc-input')?.click(); }}>
-									<Upload size={13} />{tr('Unggah Dokumen/Gambar')}
-								</button>
-							</div>
-						</div>
-					{/if}
 
 				</div>
 				</div>
@@ -2139,7 +2509,7 @@
 								</div>
 							{:else}
 								<div class="brief-msg flex items-start gap-2.5">
-									<span class="brief-avatar brief-avatar-ai" aria-hidden="true"><img src="/tauthub-icon.png" alt="" /></span>
+									<span class="brief-avatar brief-avatar-ai" aria-hidden="true"><img src="/brief-chat-ai.webp" alt="" /></span>
 									<div class="flex min-w-0 flex-col items-start gap-1">
 										<div class="brief-markdown max-w-[92%] rounded-2xl rounded-tl-sm border px-4 py-3 text-[13px] leading-relaxed shadow-sm" style="border-color: var(--border); background: var(--card);">
 											{@html sanitizeHtml(renderMarkdown(m.content))}
@@ -2165,14 +2535,14 @@
 
 						{#if streamingText}
 							<div class="flex items-start gap-2.5">
-								<span class="brief-avatar brief-avatar-ai" aria-hidden="true"><img src="/tauthub-icon.png" alt="" /></span>
+								<span class="brief-avatar brief-avatar-ai" aria-hidden="true"><img src="/brief-chat-ai.webp" alt="" /></span>
 								<div class="max-w-[92%] whitespace-pre-wrap rounded-2xl rounded-tl-sm border px-4 py-3 text-[13px] leading-relaxed shadow-sm" style="border-color: var(--border); background: var(--card);">
 									{streamingText}<span class="inline-block animate-pulse">▍</span>
 								</div>
 							</div>
 						{:else if streaming}
 							<div class="flex items-start gap-2.5">
-								<span class="brief-avatar brief-avatar-ai" aria-hidden="true"><img src="/tauthub-icon.png" alt="" /></span>
+								<span class="brief-avatar brief-avatar-ai" aria-hidden="true"><img src="/brief-chat-ai.webp" alt="" /></span>
 								<div class="brief-thinking">
 									<span class="thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
 									<span>{streamStatus || tr('Sedang berpikir…')}</span>
@@ -2497,7 +2867,7 @@
 								style="background: {progressPct >= 100 ? 'var(--success-soft)' : 'var(--warning-soft)'}; color: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"
 							>
 								<span class="h-1.5 w-1.5 rounded-full" style="background: {progressPct >= 100 ? 'var(--success)' : 'var(--warning)'};"></span>
-								{progressPct}% {tr('field wajib')}
+								{progressPct}%
 							</span>
 						</div>
 					</section>
@@ -2640,133 +3010,303 @@
 					</div>
 				</div>
 			</div>
-			{:else if activeTab === 'timeline'}
-				<!-- ── Panel tab Timeline: feed kabar terbaru brand ─────────── -->
-				<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
+{:else if activeTab === 'timeline'}
+				<!-- Timeline Brand: feed gaya Threads — kartu putih, pemisah garis. -->
+				<div class="min-h-0 flex-1 overflow-y-auto timeline-scroll bg-[var(--muted)] px-4 py-5 md:px-6">
 					<div class="mx-auto w-full max-w-2xl space-y-4">
-						<section class="app-card p-4">
-							<div class="flex items-center gap-3">
-								<span class="flex h-9 w-9 items-center justify-center rounded-xl" style="background: var(--accent); color: var(--accent-foreground);">
-									<Newspaper size={18} />
+						<header class="flex items-center gap-3 px-1">
+							<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style="background: color-mix(in srgb, var(--primary) 10%, white); color: var(--primary);">
+								<Store size={18} />
+							</span>
+							<div class="min-w-0">
+								<h2 class="text-lg font-bold tracking-tight">{tr('Timeline Brand')}</h2>
+								<p class="text-[12.5px] text-muted-foreground">
+									{tr('Bagikan kabar terbaru brand-mu kepada audiens.')}
+									<span class="ml-1 text-[11px] opacity-80">{tr('Kedaluwarsa otomatis 3 bulan.')}</span>
+								</p>
+							</div>
+						</header>
+
+						<section class="timeline-card">
+							<div
+								class="timeline-compose-row"
+								role="button"
+								tabindex="0"
+								aria-label={tr('Tulis post baru')}
+								onclick={openTimelineComposer}
+								onkeydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										openTimelineComposer();
+									}
+								}}
+							>
+								<span class="timeline-avatar" aria-hidden="true">{timelineInitials(timelineAuthorName())}</span>
+								<span class="timeline-trigger-text" class:timeline-trigger-empty={!timelineBody.trim()}>
+									{timelineBody.trim() || tr('Apa yang baru?')}
 								</span>
-								<div class="min-w-0">
-									<h3 class="text-sm font-bold">{tr('Timeline Brand')}</h3>
-									<p class="text-[11px] text-muted-foreground">
-										{tr('Kabar terbaru brand-mu — promo, kunjungan, peluncuran. Semakin baru, artikel Writer semakin unik. Otomatis kedaluwarsa 3 bulan.')}
-									</p>
-								</div>
+								<button class="timeline-kirim" type="button" onclick={openTimelineComposer}>{tr('Kirim')}</button>
 							</div>
 
-							<div class="mt-3 rounded-xl border p-3" style="border-color: var(--border); background: color-mix(in srgb, var(--muted) 40%, white);">
-								<textarea
-									class="w-full resize-none bg-transparent text-sm leading-relaxed outline-none"
-									rows="3"
-									maxlength={TIMELINE_BODY_MAX}
-									placeholder={tr('Contoh: Restoran kami kedatangan Chef Juna hari ini — ia memuji rendang dan menyarankan menu baru untuk akhir bulan.')}
-									bind:value={timelineBody}
-								></textarea>
-
-								{#if timelineImagePreview}
-									<div class="relative mt-2 w-fit">
-										<img src={timelineImagePreview} alt="" class="max-h-56 rounded-lg border" style="border-color: var(--border);" />
-										<button
-											class="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white"
-											type="button"
-											aria-label={tr('Lepaskan gambar')}
-											onclick={clearTimelineImage}
-										>
-											<X size={12} />
-										</button>
-									</div>
-								{/if}
-
-								<div class="mt-2 flex flex-wrap items-center gap-2">
-									<label class="app-btn app-btn-soft !min-h-8 !cursor-pointer !px-3 !text-xs">
-										<Images size={14} />{tr('Gambar')}
-										<input
-											class="hidden"
-											type="file"
-											accept="image/png,image/jpeg,image/webp,image/gif"
-											onchange={(e) => {
-												pickTimelineImage((e.currentTarget as HTMLInputElement).files);
-												(e.currentTarget as HTMLInputElement).value = '';
-											}}
-										/>
-									</label>
-									<input
-										class="app-input !min-h-8 min-w-[9rem] flex-1 !text-xs"
-										type="date"
-										aria-label={tr('Tanggal kejadian')}
-										bind:value={timelineOccurredOn}
-									/>
-									<input
-										class="app-input !min-h-8 min-w-[10rem] flex-1 !text-xs"
-										placeholder={tr('Hashtag: promo, chefjuna')}
-										bind:value={timelineTags}
-									/>
-									<span class="ml-auto text-[10.5px] text-muted-foreground">{timelineBody.length}/{TIMELINE_BODY_MAX}</span>
-									<button
-										class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs"
-										type="button"
-										disabled={timelinePosting || (!timelineBody.trim() && !timelineImageFile)}
-										onclick={() => void submitTimelinePost()}
-									>
-										{#if timelinePosting}<LoaderCircle size={13} class="animate-spin" />{tr('Memposting…')}{:else}<Plus size={13} />{tr('Posting')}{/if}
-									</button>
+							{#if timelinePostError}
+								<div class="timeline-error" role="alert">
+									<span class="min-w-0 flex-1">{timelinePostError}</span>
 								</div>
-							</div>
-							{#if timelineError}
-								<p class="mt-2 text-[11.5px]" style="color: var(--destructive);">{timelineError}</p>
 							{/if}
 						</section>
 
 						{#if timelineLoading}
-							<p class="py-6 text-center text-sm text-muted-foreground">{tr('Memuat timeline…')}</p>
+							<div class="timeline-card timeline-empty"><LoaderCircle size={18} class="animate-spin" /><span>{tr('Memuat timeline…')}</span></div>
+						{:else if timelineError}
+							<div class="timeline-card timeline-empty timeline-empty-error">
+								<p>{timelineError}</p>
+								<button class="timeline-error-retry" type="button" onclick={() => void loadTimeline()}>{tr('Coba lagi')}</button>
+							</div>
 						{:else if timeline.length === 0}
-							<p class="rounded-xl border px-3.5 py-6 text-center text-xs italic" style="border-color: var(--border); color: var(--muted-foreground);">
-								{tr('Belum ada kabar. Posting promo atau info terbaru brand-mu supaya artikel Writer terasa segar.')}
-							</p>
+							<div class="timeline-card timeline-empty">
+								<span class="timeline-empty-icon"><Newspaper size={18} /></span>
+								<strong>{tr('Belum ada kabar terbaru')}</strong>
+								<p>{tr('Bagikan informasi, promo, atau pembaruan brand-mu agar tampil di Timeline Brand.')}</p>
+							</div>
 						{:else}
-							{#each timeline as post (post.id)}
-								<article class="app-card overflow-hidden">
-									<div class="flex items-start gap-3 p-4">
-										<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style="background: var(--primary); color: var(--primary-foreground);">
-											{(post.author_name || 'T').slice(0, 2).toUpperCase()}
-										</span>
-										<div class="min-w-0 flex-1">
-											<p class="text-[12.5px] font-semibold">{post.author_name || profileName}</p>
-											<p class="text-[10.5px] text-muted-foreground">{timelineWhen(post)}</p>
+							<section class="timeline-card timeline-feed">
+								{#each timeline as post (post.id)}
+									<article id={`timeline-${post.id}`} class="timeline-post">
+										<span class="timeline-avatar" aria-hidden="true">{timelineInitials(timelinePostAuthor(post))}</span>
+										<div class="timeline-post-main min-w-0 flex-1">
+											<div class="timeline-post-meta">
+												<span class="timeline-post-name">{timelinePostAuthor(post)}</span>
+												<span class="timeline-post-time">{timelineRelativeTime(post.created_at)}</span>
+												<button
+													class="timeline-more"
+													type="button"
+													aria-label={tr('Menu post')}
+													aria-expanded={timelineMenuFor === post.id}
+													title={tr('Menu post')}
+													onclick={() => (timelineMenuFor = timelineMenuFor === post.id ? null : post.id)}
+												>
+													<MoreHorizontal size={17} />
+												</button>
+											</div>
+											{#if post.body}
+												<p class="timeline-post-body">
+													{#each timelineBodyParts(post.body) as part, i (`b-${i}`)}{#if part.tag}<span class="timeline-body-tag">{part.text}</span>{:else}{part.text}{/if}{/each}
+												</p>
+											{/if}
+											{#if post.link_url}
+												<a class="timeline-link-card" href={post.link_url} target="_blank" rel="noopener noreferrer">
+													<span class="timeline-link-body">
+														<span class="timeline-link-site">{post.link_site || post.link_url}</span>
+														<strong class="timeline-link-title">{post.link_title || post.link_url}</strong>
+														{#if post.link_description}<span class="timeline-link-desc">{post.link_description}</span>{/if}
+													</span>
+													{#if post.link_image}<img class="timeline-link-thumb" src={post.link_image} alt="" loading="lazy" />{/if}
+												</a>
+											{/if}
+											{#if post.image_url}<img src={post.image_url} alt={tr('Gambar postingan') + ' ' + (timelineBrandName || profileName)} class="timeline-post-image" loading="lazy" />{/if}
+											{#if timelineMenuFor === post.id}
+												<button class="timeline-menu-backdrop" type="button" aria-label={tr('Tutup menu')} onclick={() => (timelineMenuFor = null)}></button>
+												<div class="timeline-menu" role="menu">
+													<button
+														type="button"
+														role="menuitem"
+														onclick={() => {
+															timelineMenuFor = null;
+															void copyTimelineLink(post);
+														}}
+													>
+														<Clipboard size={15} />{tr('Salin tautan')}
+													</button>
+													<button
+														class="timeline-menu-danger"
+														type="button"
+														role="menuitem"
+														onclick={() => {
+															timelineMenuFor = null;
+															void deleteTimelinePost(post);
+														}}
+													>
+														<Trash2 size={15} />{tr('Hapus post')}
+													</button>
+												</div>
+											{/if}
 										</div>
-										<button
-											class="brief-icon-btn"
-											type="button"
-											aria-label={tr('Hapus post')}
-											title={tr('Hapus post')}
-											onclick={() => void deleteTimelinePost(post)}
-										>
-											<Trash2 size={14} />
-										</button>
-									</div>
-									{#if post.body}
-										<p class="whitespace-pre-wrap px-4 pb-3 text-[13.5px] leading-relaxed">{post.body}</p>
-									{/if}
-									{#if post.image_url}
-										<img src={post.image_url} alt="" class="max-h-[28rem] w-full object-cover" loading="lazy" />
-									{/if}
-									{#if post.hashtags.length > 0}
-										<div class="flex flex-wrap gap-1.5 px-4 py-3">
-											{#each post.hashtags as tag (tag)}
-												<span class="rounded-full px-2 py-0.5 text-[11px] font-semibold" style="background: color-mix(in srgb, var(--primary) 10%, white); color: var(--primary);">
-													#{tag}
-												</span>
-											{/each}
-										</div>
-									{/if}
-								</article>
-							{/each}
+									</article>
+								{/each}
+							</section>
 						{/if}
 					</div>
 				</div>
+
+				{#if timelineComposerOpen}
+					<!-- Modal composer: rich field (tautan, gambar, tagar) sebelum dikirim. -->
+					<div class="timeline-modal-backdrop" role="presentation" onclick={requestCloseTimelineComposer}></div>
+					<div class="timeline-modal" role="dialog" aria-modal="true" aria-label={tr('Utas baru')}>
+						{#if timelineDraftsOpen}
+							<header class="timeline-modal-head">
+								<button class="timeline-modal-icon-btn timeline-modal-back" type="button" aria-label={tr('Kembali')} onclick={() => void backToTimelineComposer()}>
+									<ArrowLeft size={18} />
+								</button>
+								<span class="timeline-modal-title">{tr('Draf')}</span>
+								<span class="timeline-modal-spacer"></span>
+							</header>
+							<div class="timeline-drafts-body">
+								{#if timelineDrafts.length === 0}
+									<div class="timeline-drafts-empty">
+										<FileText size={46} strokeWidth={1.4} />
+										<strong>{tr('Belum ada draf')}</strong>
+										<p>{tr('Draf Anda akan ditampilkan di sini.')}</p>
+									</div>
+								{:else}
+									{#each timelineDrafts as draft (draft.id)}
+										<div class="timeline-draft-row">
+											<button class="timeline-draft-open" type="button" onclick={() => resumeTimelineDraft(draft)}>
+												<span class="timeline-draft-text">{draft.body.trim() || tr('(tanpa teks)')}</span>
+												<span class="timeline-draft-meta">
+													{new Date(draft.savedAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+												</span>
+											</button>
+											{#if draft.imageUrl}
+												<img src={draft.imageUrl} alt="" class="timeline-draft-thumb" loading="lazy" />
+											{/if}
+											<button class="timeline-more" type="button" aria-label={tr('Hapus draf')} title={tr('Hapus draf')} onclick={() => deleteTimelineDraft(draft.id)}>
+												<Trash2 size={16} />
+											</button>
+										</div>
+									{/each}
+								{/if}
+							</div>
+						{:else}
+						<header class="timeline-modal-head">
+							<button class="timeline-modal-cancel" type="button" onclick={requestCloseTimelineComposer}>{tr('Batal')}</button>
+							<span class="timeline-modal-title">{tr('Utas baru')}</span>
+							<button class="timeline-modal-icon-btn" type="button" aria-label={tr('Draf')} title={tr('Draf')} onclick={openTimelineDrafts}>
+								<FileText size={18} />
+							</button>
+						</header>
+
+						<div
+							class="timeline-modal-body"
+							class:timeline-modal-dragging={timelineDragging}
+							role="group"
+							aria-label={tr('Isi post')}
+							ondragover={(e) => {
+								e.preventDefault();
+								timelineDragging = true;
+							}}
+							ondragleave={() => (timelineDragging = false)}
+							ondrop={handleTimelineDrop}
+						>
+							<div class="timeline-compose-top">
+								<div class="timeline-compose-rail">
+									<span class="timeline-avatar timeline-avatar-sm" aria-hidden="true">{timelineInitials(timelineAuthorName())}</span>
+									<span class="timeline-compose-line" aria-hidden="true"></span>
+								</div>
+								<div class="timeline-compose-content">
+									<p class="timeline-modal-name">
+										<span>{timelineAuthorName()}</span>
+										<svg class="timeline-verified" width="14" height="14" viewBox="0 0 16 16" fill="none" role="img" aria-label={tr('Terverifikasi')}>
+											<path
+												d="M16 8.375C16 8.93437 15.8656 9.45312 15.5969 9.92813C15.3281 10.4031 14.9688 10.775 14.5156 11.0344C14.5281 11.1188 14.5344 11.25 14.5344 11.4281C14.5344 12.275 14.25 12.9937 13.6875 13.5875C13.1219 14.1844 12.4406 14.4812 11.6438 14.4812C11.2875 14.4812 10.9469 14.4156 10.625 14.2844C10.375 14.7969 10.0156 15.2094 9.54375 15.525C9.075 15.8438 8.55937 16 8 16C7.42812 16 6.90938 15.8469 6.44688 15.5344C5.98125 15.225 5.625 14.8094 5.375 14.2844C5.05312 14.4156 4.71562 14.4812 4.35625 14.4812C3.55937 14.4812 2.875 14.1844 2.30312 13.5875C1.73125 12.9937 1.44687 12.2719 1.44687 11.4281C1.44687 11.3344 1.45938 11.2031 1.48125 11.0344C1.02813 10.7719 0.66875 10.4031 0.4 9.92813C0.134375 9.45312 0 8.93437 0 8.375C0 7.78125 0.15 7.23438 0.446875 6.74062C0.74375 6.24687 1.14375 5.88125 1.64375 5.64375C1.5125 5.2875 1.44687 4.92812 1.44687 4.57188C1.44687 3.72813 1.73125 3.00625 2.30312 2.4125C2.875 1.81875 3.55937 1.51875 4.35625 1.51875C4.7125 1.51875 5.05312 1.58438 5.375 1.71563C5.625 1.20312 5.98438 0.790625 6.45625 0.475C6.925 0.159375 7.44063 0 8 0C8.55937 0 9.075 0.159375 9.54375 0.471875C10.0125 0.7875 10.375 1.2 10.625 1.7125C10.9469 1.58125 11.2844 1.51562 11.6438 1.51562C12.4406 1.51562 13.1219 1.8125 13.6875 2.40937C14.2531 3.00625 14.5344 3.725 14.5344 4.56875C14.5344 4.9625 14.475 5.31875 14.3562 5.64062C14.8562 5.87813 15.2563 6.24375 15.5531 6.7375C15.85 7.23438 16 7.78125 16 8.375ZM7.65938 10.7844L10.9625 5.8375C11.0469 5.70625 11.0719 5.5625 11.0437 5.40938C11.0125 5.25625 10.9344 5.13438 10.8031 5.05312C10.6719 4.96875 10.5281 4.94063 10.375 4.9625C10.2188 4.9875 10.0938 5.0625 10 5.19375L7.09062 9.56875L5.75 8.23125C5.63125 8.1125 5.49375 8.05625 5.34062 8.0625C5.18437 8.06875 5.05 8.125 4.93125 8.23125C4.825 8.3375 4.77187 8.47187 4.77187 8.63437C4.77187 8.79375 4.825 8.92813 4.93125 9.0375L6.77187 10.8781L6.8625 10.95C6.96875 11.0219 7.07812 11.0562 7.18437 11.0562C7.39375 11.0531 7.55313 10.9656 7.65938 10.7844Z"
+												fill="#3897F0"
+											/>
+										</svg>
+									</p>
+
+									<textarea
+										class="timeline-modal-input"
+										rows="1"
+										maxlength={TIMELINE_BODY_MAX}
+										placeholder={tr('Apa yang baru?')}
+										bind:value={timelineBody}
+										bind:this={timelineInputEl}
+										oninput={growTimelineInput}
+										onpaste={handleTimelinePaste}
+									></textarea>
+
+							{#if timelineImagePreview}
+								<div class="timeline-preview-wrap">
+									<img src={timelineImagePreview} alt={tr('Pratinjau gambar postingan')} class="timeline-preview-image" />
+									<button class="timeline-remove-image" type="button" aria-label={tr('Lepaskan gambar')} onclick={clearTimelineImage}>
+										<X size={15} />
+									</button>
+									<span
+										class="timeline-upload-badge"
+										class:timeline-upload-badge-error={timelineUploadFailed}
+									>
+										{#if timelineUploading}
+											<LoaderCircle size={12} class="animate-spin" />{tr('Mengunggah…')}
+										{:else if timelineUploadFailed}
+											{tr('Gagal — dicoba lagi saat Kirim')}
+										{:else}
+											<Check size={12} />{tr('Siap dikirim')}
+										{/if}
+									</span>
+								</div>
+							{/if}
+
+								{#if timelineLink}
+									<div class="timeline-link-card timeline-link-card-edit">
+										<span class="timeline-link-body">
+											<span class="timeline-link-site">{timelineLinkLoading ? tr('Memuat pratinjau…') : timelineLink.site || timelineLink.url}</span>
+											<strong class="timeline-link-title">{timelineLink.title || timelineLink.url}</strong>
+											{#if timelineLink.description}<span class="timeline-link-desc">{timelineLink.description}</span>{/if}
+										</span>
+										{#if timelineLink.image && !timelineLinkLoading}<img class="timeline-link-thumb" src={timelineLink.image} alt="" loading="lazy" />{/if}
+										<button class="timeline-link-remove" type="button" aria-label={tr('Lepaskan tautan')} onclick={clearTimelineLink}>
+											<X size={13} />
+										</button>
+									</div>
+								{/if}
+								</div>
+							</div>
+
+							<div class="timeline-modal-tools">
+								<label class="timeline-tool timeline-file-tool" title={tr('Gambar')}>
+									<ImagePlus size={17} />
+									<span>{tr('Gambar')}</span>
+									<input class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange={(e) => {
+										attachTimelineImage((e.currentTarget as HTMLInputElement).files?.[0]);
+										(e.currentTarget as HTMLInputElement).value = '';
+									}} />
+								</label>
+								<span class="timeline-modal-hint">{tr('Tempel tautan atau seret gambar.')}</span>
+							</div>
+
+							{#if timelinePostError}
+								<div class="timeline-error timeline-error-modal" role="alert">
+									<span class="min-w-0 flex-1">{timelinePostError}</span>
+								</div>
+							{/if}
+						</div>
+
+						<footer class="timeline-modal-foot">
+							<span class="timeline-char-count" class:timeline-char-limit={timelineBody.length >= TIMELINE_BODY_MAX}>{timelineBody.length}/{TIMELINE_BODY_MAX}</span>
+							<button
+								class="timeline-kirim"
+								class:timeline-kirim-ready={Boolean(timelineBody.trim() || timelineImageFile || timelineLink)}
+								type="button"
+								disabled={timelinePosting || (!timelineBody.trim() && !timelineImageFile && !timelineLink)}
+								onclick={() => void submitTimelinePost()}
+							>
+								{#if timelinePosting}<LoaderCircle size={14} class="animate-spin" />{/if}{tr('Kirim')}
+							</button>
+						</footer>
+						{/if}
+					</div>
+
+					{#if timelineDiscardAsk}
+						<!-- Konfirmasi sebelum isi yang belum terkirim hilang. -->
+						<div class="timeline-confirm-backdrop" role="presentation" onclick={() => (timelineDiscardAsk = false)}></div>
+						<div class="timeline-confirm" role="dialog" aria-modal="true" aria-label={tr('Simpan ke draf?')}>
+							<strong class="timeline-confirm-title">{tr('Simpan ke draf?')}</strong>
+							<p class="timeline-confirm-text">{tr('Simpan konsep untuk diedit dan diposting di lain waktu.')}</p>
+							<button class="timeline-confirm-btn" type="button" onclick={() => void saveTimelineDraft()}>{tr('Simpan')}</button>
+							<button class="timeline-confirm-btn timeline-confirm-danger" type="button" onclick={discardTimelineDraft}>{tr('Jangan simpan')}</button>
+							<button class="timeline-confirm-btn" type="button" onclick={() => (timelineDiscardAsk = false)}>{tr('Batal')}</button>
+						</div>
+					{/if}
+				{/if}
 			{:else if activeTab === 'media'}
 				<!-- ── Panel tab Media: dokumen & gambar brief ─────────────── -->
 				<div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
@@ -3159,14 +3699,15 @@
 		border-radius: 10px;
 		box-shadow: 0 1px 2px rgba(23, 43, 77, 0.12);
 	}
-	/* Avatar AI memakai lencana logo Tauthub (bukan ikon petir). */
-	.brief-avatar-ai { background: var(--card); overflow: hidden; }
+	/* Avatar AI memakai maskot robot transparan; gambar aslinya lebih lebar
+	   dari kotak avatar, jadi object-fit contain supaya tidak kepangkas. */
+	.brief-avatar-ai { background: transparent; overflow: hidden; }
 	.brief-avatar-ai img {
 		display: block;
 		width: 100%;
 		height: 100%;
 		border-radius: inherit;
-		object-fit: cover;
+		object-fit: contain;
 	}
 	/* Avatar pengguna: inisial nama dari sesi (app ini tidak menyimpan foto profil). */
 	.brief-avatar-user {
@@ -3851,7 +4392,7 @@
 		0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
 		30% { transform: translateY(-4px); opacity: 1; }
 	}
-	/* Pemilih brief di kiri area kerja: nama brief sebagai tombol buka daftar. */
+	/* Tombol "Obrolan Baru" di kanan area kerja: satu klik, tanpa popover. */
 	.brief-picker {
 		display: inline-flex;
 		min-width: 0;
@@ -3867,7 +4408,8 @@
 		font-weight: 600;
 		transition: border-color 0.12s ease, color 0.12s ease, background-color 0.12s ease;
 	}
-	.brief-picker:hover { border-color: var(--primary); background: var(--accent); color: var(--accent-foreground); }
+	.brief-picker:hover:not(:disabled) { border-color: var(--primary); background: var(--accent); color: var(--accent-foreground); }
+	.brief-picker:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	/* Jam kirim pesan (waktu lokal browser) di bawah gelembung. */
 	.brief-time { padding: 0 4px; font-size: 11px; color: var(--muted-foreground); }
@@ -3893,8 +4435,7 @@
 		font-weight: 700;
 	}
 
-	/* Popover pemilih brief: kartu terang, header + hitungan + daftar. */
-	.brief-picker-open { border-color: var(--primary); background: var(--accent); color: var(--accent-foreground); }
+	/* Popover lampiran: kartu terang, header + hitungan + daftar. */
 	.brief-pop-backdrop { position: fixed; inset: 0; z-index: 40; cursor: default; }
 	.brief-pop {
 		position: absolute;
@@ -3957,7 +4498,8 @@
 	}
 	.brief-card-toggle:hover { background: var(--secondary); color: var(--foreground); }
 	.brief-card-toggle:active { transform: scale(0.88); }
-	.brief-card-toggle svg { transition: transform 0.22s ease; }
+	/* Ikon toggle kini lucide komponen (ChevronDown), jadi perlu :global. */
+	.brief-card-toggle :global(svg) { transition: transform 0.22s ease; display: block; }
 
 	/* Kartu ciut: hanya ikon Tauthub bulat yang melayang; klik untuk membuka lagi. */
 	.brief-card-icon {
@@ -4002,21 +4544,83 @@
 	}
 	.brief-pop-static > .brief-pop-id,
 	.brief-pop-static > .brief-pop-head { flex: 0 0 auto; }
-	.brief-pop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-	/* Identitas Copilot di dalam popover: panel lembut selebar popover. */
+	/* Header panel: tombol "Obrolan Baru" kiri, nama brief mengikuti;
+	   persen progres ada di baris daftar, bukan di kepala panel. */
+	.brief-pop-head { display: flex; align-items: center; gap: 8px; }
+	/* "Obrolan Baru": baris menu polos berikon — bukan pill berwarna. */
+	.brief-newchat-sm {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 9px;
+		border: none;
+		border-radius: 8px;
+		background: none;
+		font-size: 12.5px;
+		font-weight: 500;
+		color: var(--muted-foreground);
+		cursor: pointer;
+		transition: background-color 0.12s ease, color 0.12s ease;
+	}
+	.brief-newchat-sm :global(svg) { color: var(--muted-foreground); }
+	.brief-newchat-sm:hover:not(:disabled) { background: var(--secondary); color: var(--foreground); }
+	.brief-newchat-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+	/* Header panel: judul produk ("Tubi AI") kiri, tombol kecilkan kanan. */
 	.brief-pop-id {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		justify-content: space-between;
 		margin: -12px -12px 10px;
-		padding: 12px;
+		padding: 10px 12px;
 		border-bottom: 1px solid var(--border);
 		border-radius: 14px 14px 0 0;
 		background: color-mix(in srgb, var(--muted) 45%, white);
 	}
-	.brief-pop-title { font-size: 13px; font-weight: 700; color: var(--foreground); }
-	.brief-pop-actions { display: inline-flex; align-items: center; gap: 4px; }
-	.brief-pop-count { font-size: 12px; font-weight: 700; color: var(--success); }
+	.brief-pop-brand {
+		font-size: 14px;
+		font-weight: 700;
+		letter-spacing: -0.01em;
+		color: var(--foreground);
+	}
+	/* Nama brief di baris daftar: terpotong dengan ellipsis, saat dihover
+	   bergeser (marquee, dipasang action) supaya nama panjang terbaca utuh.
+	   Tidak di-grow supaya chip persen menempel di ajir nama, bukan
+	   terdorong ke tepi kanan baris. */
+	.brief-marquee {
+		display: block;
+		min-width: 0;
+		flex: 0 1 auto;
+		overflow: hidden;
+	}
+	.brief-marquee > span {
+		display: block;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	/* Kelas brief-marquee-run dipasang action saat hover (runtime), jadi
+	   harus lewat :global agar svelte-check tidak menandainya unused. */
+	.brief-marquee > :global(.brief-marquee-run) {
+		max-width: none;
+		overflow: visible;
+		text-overflow: clip;
+		will-change: transform;
+		animation: brief-name-marquee var(--marquee-duration, 4s) ease-in-out infinite alternate;
+	}
+	@keyframes brief-name-marquee {
+		from { transform: translateX(0); }
+		to { transform: translateX(var(--marquee-shift, 0px)); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.brief-marquee > :global(.brief-marquee-run) { animation: none; }
+	}
+	/* Persen progres field wajib di tiap baris brief (panel melayang + rail kiri). */
+	.brief-pct {
+		flex-shrink: 0;
+		font-size: 10.5px;
+		font-weight: 600;
+		color: var(--muted-foreground);
+	}
 	.brief-pop-icon {
 		display: inline-flex; align-items: center; justify-content: center;
 		width: 26px; height: 26px; border-radius: 7px; color: var(--muted-foreground);
@@ -4024,7 +4628,8 @@
 	}
 	.brief-pop-icon:hover:not(:disabled) { background: var(--secondary); color: var(--foreground); }
 	.brief-pop-list {
-		margin-top: 4px;
+		/* Baris "Obrolan Baru" di head butuh napas sebelum daftar dimulai. */
+		margin-top: 10px;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
@@ -4082,10 +4687,500 @@
 		background: none; border: none; text-align: left; cursor: pointer;
 		transition: background-color 0.12s ease, color 0.12s ease;
 	}
-	/* Popover aksi Copilot melayang di sisi kanan. */
-	.brief-pop-right { left: auto; right: 16px; }
 	.brief-pop-row:hover { background: var(--secondary); color: var(--foreground); }
 	.brief-pop-row.active { background: var(--secondary); color: var(--foreground); font-weight: 600; }
+
+	/* ── Timeline Brand: feed gaya Threads — kartu putih, pemisah garis ── */
+	.timeline-scroll { background: var(--muted); }
+	.timeline-card {
+		background: var(--card);
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+	}
+	.timeline-avatar {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 auto;
+		width: 40px;
+		height: 40px;
+		border-radius: 9999px;
+		color: var(--primary-foreground);
+		background: var(--primary);
+		font-size: 13px;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+	}
+	/* Composer ringkas: avatar + teks draf + Kirim. Klik di mana pun membuka modal. */
+	.timeline-compose-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 14px 16px;
+		cursor: text;
+	}
+	.timeline-trigger-text {
+		flex: 1 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 15px;
+		line-height: 1.5;
+		color: var(--foreground);
+	}
+	.timeline-trigger-empty { color: var(--muted-foreground); }
+	.timeline-kirim {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: 2px;
+		padding: 9px 18px;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: var(--card);
+		font-size: 13.5px;
+		font-weight: 700;
+		color: var(--foreground);
+		transition: background-color 0.12s ease, border-color 0.12s ease;
+	}
+	.timeline-kirim:hover:not(:disabled) {
+		background: var(--secondary);
+		border-color: color-mix(in srgb, var(--border) 55%, var(--foreground));
+	}
+	/* Terisi → tombol jadi utama: biru padat, teks putih. */
+	.timeline-kirim-ready,
+	.timeline-kirim-ready:hover:not(:disabled) {
+		background: var(--primary);
+		border-color: var(--primary);
+		color: var(--primary-foreground);
+	}
+	.timeline-kirim-ready:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--primary) 88%, black);
+	}
+	.timeline-kirim:disabled { opacity: 0.45; cursor: not-allowed; }
+	.timeline-error {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin: 0 16px 12px;
+		border-radius: 10px;
+		padding: 8px 12px;
+		font-size: 12px;
+		background: color-mix(in srgb, var(--destructive) 8%, white);
+		color: var(--destructive);
+	}
+	.timeline-error-retry {
+		border: none;
+		background: transparent;
+		font-size: 12px;
+		font-weight: 700;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+		color: var(--destructive);
+	}
+	/* Feed: satu kartu, tiap post dipisah garis tipis (bukan kartu terpisah). */
+	.timeline-post { display: flex; gap: 12px; padding: 16px; }
+	.timeline-post + .timeline-post { border-top: 1px solid var(--border); }
+	.timeline-post-meta { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+	.timeline-post-name {
+		font-size: 14.5px;
+		font-weight: 700;
+		color: var(--foreground);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.timeline-post-time { font-size: 13px; color: var(--muted-foreground); white-space: nowrap; }
+	.timeline-post-body {
+		margin-top: 2px;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		font-size: 15px;
+		line-height: 1.55;
+		color: var(--foreground);
+	}
+	.timeline-post-image {
+		display: block;
+		width: 100%;
+		margin-top: 10px;
+		border-radius: 12px;
+		border: 1px solid var(--border);
+		object-fit: contain;
+		max-height: 520px;
+		background: var(--muted);
+	}
+	/* Titik tiga di kanan atas post → popover aksi. */
+	.timeline-post-main { position: relative; }
+	.timeline-more {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 auto;
+		align-self: center;
+		width: 28px;
+		height: 28px;
+		margin: -4px -6px 0 auto;
+		border-radius: 9999px;
+		color: var(--muted-foreground);
+		transition: background-color 0.12s ease, color 0.12s ease;
+	}
+	.timeline-more:hover { background: var(--secondary); color: var(--foreground); }
+	.timeline-menu-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 30;
+		background: transparent;
+		border: none;
+		cursor: default;
+	}
+	.timeline-menu {
+		position: absolute;
+		right: 0;
+		top: 28px;
+		z-index: 40;
+		min-width: 178px;
+		padding: 5px;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--card);
+		box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+	}
+	.timeline-menu button {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		width: 100%;
+		padding: 8px 10px;
+		border-radius: 8px;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--foreground);
+		text-align: left;
+	}
+	.timeline-menu button:hover { background: var(--secondary); }
+	.timeline-menu .timeline-menu-danger { color: var(--destructive); }
+
+	/* Tagar di dalam caption: berwarna, sengaja bukan tautan. */
+	.timeline-body-tag { color: var(--primary); font-weight: 600; }
+
+	/* Kartu pratinjau tautan (Open Graph). */
+	.timeline-link-card {
+		display: flex;
+		align-items: stretch;
+		gap: 12px;
+		margin-top: 10px;
+		padding: 12px;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: color-mix(in srgb, var(--muted) 45%, white);
+		text-decoration: none;
+		color: inherit;
+	}
+	a.timeline-link-card:hover { border-color: color-mix(in srgb, var(--border) 45%, var(--foreground)); }
+	.timeline-link-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+	.timeline-link-site { font-size: 11.5px; color: var(--muted-foreground); }
+	.timeline-link-title { font-size: 13.5px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
+	.timeline-link-desc {
+		display: -webkit-box;
+		line-clamp: 2;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		font-size: 12.5px;
+		line-height: 1.45;
+		color: var(--muted-foreground);
+	}
+	.timeline-link-thumb {
+		flex: 0 0 auto;
+		width: 96px;
+		height: 96px;
+		border-radius: 8px;
+		object-fit: cover;
+		background: var(--muted);
+	}
+	.timeline-link-card-edit { position: relative; margin-top: 0; }
+	.timeline-link-remove {
+		position: absolute;
+		right: 6px;
+		top: 6px;
+		display: inline-flex;
+		padding: 5px;
+		border-radius: 9999px;
+		background: rgba(15, 23, 42, 0.65);
+		color: #fff;
+	}
+
+	/* ── Modal composer ("Utas baru") ───────────────────────────────────── */
+	.timeline-modal-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 60;
+		background: rgba(15, 23, 42, 0.45);
+	}
+	/* Modal dipusatkan ke area konten (main), bukan viewport: nav kiri 264px
+	   membuat pusat viewport meleset ke kiri dari kolom timeline. */
+	.timeline-modal {
+		position: absolute;
+		z-index: 61;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		display: flex;
+		flex-direction: column;
+		width: min(620px, calc(100vw - 32px));
+		max-height: min(82vh, 720px);
+		border: 1px solid var(--border);
+		border-radius: 18px;
+		background: var(--card);
+		box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24);
+	}
+	.timeline-modal-head {
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 16px;
+		border-bottom: 1px solid var(--border);
+	}
+	.timeline-modal-cancel { justify-self: start; font-size: 13.5px; font-weight: 600; color: var(--foreground); }
+	.timeline-modal-icon-btn {
+		justify-self: end;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 9999px;
+		color: var(--foreground);
+		transition: background-color 0.12s ease;
+	}
+	.timeline-modal-icon-btn:hover { background: var(--secondary); }
+	/* Tombol kembali di tampilan Draf menempel di ujung kiri. */
+	.timeline-modal-back { justify-self: start; margin-left: -6px; }
+	.timeline-modal-title { font-size: 14.5px; font-weight: 700; }
+	.timeline-modal-spacer { justify-self: end; width: 44px; }
+	.timeline-modal-body {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 10px 16px 12px;
+		overflow-y: auto;
+		transition: background-color 0.12s ease;
+	}
+	.timeline-modal-dragging { background: color-mix(in srgb, var(--primary) 6%, transparent); }
+	/* Rel kiri: avatar + garis penghubung turun ke baris tool. */
+	.timeline-compose-top { display: flex; gap: 10px; }
+	.timeline-compose-rail { display: flex; flex-direction: column; align-items: center; flex: 0 0 auto; width: 34px; }
+	.timeline-compose-line { flex: 1 1 auto; width: 1.5px; min-height: 10px; margin-top: 6px; border-radius: 2px; background: var(--border); }
+	.timeline-compose-content { flex: 1 1 auto; min-width: 0; }
+	.timeline-avatar-sm { width: 34px; height: 34px; font-size: 11.5px; }
+	.timeline-modal-name {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+		font-size: 13.5px;
+		font-weight: 700;
+		line-height: 1.3;
+	}
+	.timeline-modal-name > span {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.timeline-verified { flex: 0 0 auto; }
+	.timeline-modal-input {
+		width: 100%;
+		min-height: 28px;
+		max-height: 40vh;
+		padding: 2px 0;
+		overflow-y: auto;
+		resize: none;
+		border: none;
+		outline: none;
+		background: transparent;
+		font-size: 15px;
+		line-height: 1.5;
+		color: var(--foreground);
+	}
+	.timeline-modal-input::placeholder { color: var(--muted-foreground); font-size: 13.5px; }
+	/* Baris tool di luar kolom konten; padding tombol (9px) menaruh ikon tepat
+	   di sumbu avatar/garis di atasnya. */
+	.timeline-modal-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: 0; }
+	.timeline-modal-hint { font-size: 11.5px; color: var(--muted-foreground); }
+	.timeline-modal-foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		padding: 10px 16px;
+		border-top: 1px solid var(--border);
+	}
+	.timeline-error-modal { margin: 0; }
+
+	/* Daftar draf di dalam modal. */
+	.timeline-drafts-body { flex: 1 1 auto; min-height: 320px; padding: 12px 16px 16px; overflow-y: auto; }
+	.timeline-drafts-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		height: 100%;
+		min-height: 280px;
+		text-align: center;
+		color: var(--muted-foreground);
+	}
+	.timeline-drafts-empty strong { font-size: 14px; color: var(--foreground); }
+	.timeline-drafts-empty p { font-size: 13px; }
+	.timeline-draft-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px;
+		border-radius: 12px;
+		transition: background-color 0.12s ease;
+	}
+	.timeline-draft-row:hover { background: var(--secondary); }
+	.timeline-draft-open {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		flex: 1 1 auto;
+		min-width: 0;
+		text-align: left;
+	}
+	.timeline-draft-text {
+		display: -webkit-box;
+		line-clamp: 2;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		font-size: 13.5px;
+		line-height: 1.45;
+		color: var(--foreground);
+	}
+	.timeline-draft-meta { font-size: 11.5px; color: var(--muted-foreground); }
+	.timeline-draft-thumb { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: var(--muted); }
+
+	/* Konfirmasi "Simpan ke draf?" — lembar kecil di atas modal. */
+	.timeline-confirm-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 70;
+		background: rgba(15, 23, 42, 0.35);
+	}
+	.timeline-confirm {
+		position: absolute;
+		z-index: 71;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		display: flex;
+		flex-direction: column;
+		width: min(320px, calc(100vw - 40px));
+		padding: 18px 0 0;
+		overflow: hidden;
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		background: var(--card);
+		box-shadow: 0 20px 48px rgba(15, 23, 42, 0.22);
+		text-align: center;
+	}
+	.timeline-confirm-title { padding: 0 18px; font-size: 14.5px; font-weight: 700; }
+	.timeline-confirm-text { margin: 6px 0 14px; padding: 0 18px; font-size: 12.5px; line-height: 1.5; color: var(--muted-foreground); }
+	.timeline-confirm-btn {
+		width: 100%;
+		padding: 11px 0;
+		border-top: 1px solid var(--border);
+		font-size: 13.5px;
+		font-weight: 600;
+		color: var(--foreground);
+	}
+	.timeline-confirm-btn:hover { background: var(--secondary); }
+	.timeline-confirm-danger { color: var(--destructive); }
+	.timeline-preview-wrap { position: relative; max-width: 420px; }
+	.timeline-preview-image {
+		display: block;
+		width: 100%;
+		max-height: 260px;
+		object-fit: contain;
+		border-radius: 12px;
+		border: 1px solid var(--border);
+	}
+	.timeline-remove-image {
+		position: absolute;
+		right: 8px;
+		top: 8px;
+		display: inline-flex;
+		padding: 6px;
+		border-radius: 9999px;
+		background: rgba(15, 23, 42, 0.65);
+		color: white;
+	}
+	/* Status unggahan latar belakang di bawah pratinjau. */
+	.timeline-upload-badge {
+		position: absolute;
+		left: 8px;
+		bottom: 8px;
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		padding: 4px 9px;
+		border-radius: 9999px;
+		background: rgba(15, 23, 42, 0.72);
+		color: #fff;
+		font-size: 11px;
+		font-weight: 600;
+	}
+	.timeline-upload-badge-error { background: color-mix(in srgb, var(--destructive) 88%, black); }
+	.timeline-tool {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 7px 9px;
+		border: none;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--muted-foreground);
+		font-size: 12.5px;
+		font-weight: 600;
+	}
+	.timeline-tool:hover { background: var(--secondary); color: var(--foreground); }
+	.timeline-file-tool { cursor: pointer; }
+	.timeline-char-count { padding-right: 6px; font-size: 11.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+	.timeline-char-limit { color: var(--destructive); font-weight: 700; }
+	.timeline-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 8px;
+		padding: 40px 20px;
+		text-align: center;
+		border-style: dashed;
+	}
+	.timeline-empty strong { font-size: 14.5px; color: var(--foreground); }
+	.timeline-empty p { max-width: 380px; font-size: 13px; color: var(--muted-foreground); }
+	.timeline-empty-icon {
+		display: inline-flex;
+		padding: 12px;
+		border-radius: 9999px;
+		background: color-mix(in srgb, var(--primary) 10%, white);
+		color: var(--primary);
+	}
+	.timeline-empty-error { border-style: solid; gap: 6px; }
+	@media (max-width: 640px) {
+		.timeline-compose-row { padding: 12px; gap: 10px; }
+		.timeline-kirim { padding: 8px 14px; }
+		.timeline-post { padding: 14px 12px; }
+		.timeline-error { margin-left: 12px; margin-right: 12px; }
+		.timeline-modal { max-height: 88vh; }
+		.timeline-link-thumb { width: 72px; height: 72px; }
+	}
 	@media (prefers-reduced-motion: reduce) {
 		.thinking-dots span { animation: none; opacity: 0.6; }
 	}

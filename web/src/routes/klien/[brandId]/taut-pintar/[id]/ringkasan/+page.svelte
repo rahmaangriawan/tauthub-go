@@ -55,6 +55,20 @@
 
 	const DONE_STATUSES = new Set(['submitted', 'scheduled', 'distributed']);
 
+	/** Forum obrolan mitra. `topic` hanya diisi saat MITRA yang menginisiasi
+	 *  (konfirmasi/revisi/kutipan); `last_message_by` menandai siapa bicara
+	 *  terakhir — dua-duanya dipakai agar balasan mitra di forum yang dibuka
+	 *  klien tetap terbaca sebagai "mitra sudah memberi kabar". */
+	type PartnerThread = {
+		publication_id?: string | null;
+		topic?: string | null;
+		last_message_by?: string | null;
+		last_message?: { author_role?: string | null } | null;
+	};
+	const PARTNER_TOPICS = new Set(['confirm', 'revision', 'quote']);
+	// null = belum/gagal dimuat → jangan memblokir edit karena masalah jaringan.
+	let partnerAskedIds = $state<Set<string> | null>(null);
+
 	let data = $state<AuditsData | null>(null);
 	let campaignName = $state('');
 	let error = $state('');
@@ -109,12 +123,31 @@
 		loading = true;
 		error = '';
 		try {
-			const res = await apiRequest(`${apiBase}/gatekeeper/audits`);
+			const [res, threadsRes] = await Promise.all([
+				apiRequest(`${apiBase}/gatekeeper/audits`),
+				// Forum obrolan dipakai menentukan publikasi mana yang sudah
+				// dihubungi mitra (konfirmasi/revisi/kutipan). Gagal memuat
+				// bukan alasan memblokir edit — set-nya dibiarkan null.
+				apiRequest(`/v1/brands/${brandId}/chat/threads`).catch(() => null)
+			]);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat ringkasan distribusi.')));
 			const audits: AuditsData = await res.json();
 			data = audits;
 			manualFlow = audits.campaign.entry_mode === 'manual';
 			campaignName = audits.campaign?.name ?? '';
+			if (threadsRes?.ok) {
+				const t = (await threadsRes.json().catch(() => null)) as { threads?: PartnerThread[] } | null;
+				if (t?.threads) partnerAskedIds = new Set(
+					t.threads
+						.filter((th) =>
+							th.publication_id &&
+							(PARTNER_TOPICS.has(th.topic ?? '') ||
+								th.last_message_by === 'partner' ||
+								th.last_message?.author_role === 'partner')
+						)
+						.map((th) => th.publication_id as string)
+				);
+			}
 			if (!campaignName) {
 				const draftRes = await apiRequest(`${apiBase}/profile/draft`).catch(() => null);
 				if (draftRes?.ok) {
@@ -230,6 +263,23 @@
 		return m.scheduled_at ? new Date(m.scheduled_at).getTime() > Date.now() : false;
 	};
 
+	/** Mitra sudah mengirim konfirmasi/revisi/kutipan untuk publikasi ini. */
+	const partnerAsked = (m: MediaItem): boolean => {
+		if (!partnerAskedIds) return true; // tidak diketahui → jangan blokir
+		return Boolean(m.publication_id && partnerAskedIds.has(m.publication_id));
+	};
+
+	/**
+	 * Boleh diedit sekarang? Selama kampanye belum selesai, aturan lama berlaku.
+	 * Setelah kampanye selesai, edit hanya dibuka bila mitra sudah lebih dulu
+	 * menghubungi (konfirmasi/revisi/kutipan) atau artikel sudah berstatus
+	 * revisi — supaya artikel yang masih ditinjau tidak diubah diam-diam.
+	 */
+	const editableNow = (m: MediaItem): boolean =>
+		canEdit(m) && (!done || partnerAsked(m) || m.publish.status === 'revision');
+
+	const editorLocked = $derived(done && !(editorFor ? editableNow(editorFor) : false));
+
 	function openPicker(m: MediaItem) {
 		pickerFor = m;
 		const at = scheduleFor(m);
@@ -312,6 +362,7 @@
 	async function saveArticle(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) {
 		const target = editorFor;
 		if (!target || edSaving) return;
+		if (editorLocked) return; // kampanye selesai & artikel sudah terbit/diproses
 		edSaving = true;
 		edError = '';
 		try {
@@ -336,7 +387,15 @@
 <PageTitle title="Taut Pintar — Ringkasan Distribusi" />
 
 <main>
-	<AgentSteps current={3} tone={bannerState === 'published' ? 'published' : bannerState === 'waiting' ? 'waiting' : undefined} extra="ringkasan" />
+	<!-- Kampanye selesai: langkah pemilihan media & profil ikut terkunci supaya
+	     tidak ada jalan menambah media ke kampanye yang sudah ditutup. -->
+	<AgentSteps
+		current={3}
+		tone={bannerState === 'published' ? 'published' : bannerState === 'waiting' ? 'waiting' : undefined}
+		extra="ringkasan"
+		lockedSteps={done ? [1, 2] : []}
+		lockedReason={tr('Kampanye sudah selesai — mode lihat saja.')}
+	/>
 
 	{#if loading}
 		<div class="app-card mt-4 flex items-center justify-between gap-3 p-4">
@@ -626,7 +685,7 @@
 									</td>
 									<td class="px-3.5 py-4">
 										<div class="flex flex-wrap items-center justify-end gap-1.5">
-											{#if canEdit(m)}
+											{#if editableNow(m)}
 												<button
 													type="button"
 													class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300"
@@ -675,6 +734,9 @@
 	{:else}
 		<EditorModal
 			mediaName={editorFor.name}
+			{brandId}
+			{campaignId}
+			mediaId={editorFor.media_id}
 			initialTitle={edTitle}
 			initialHtml={edHtml}
 			initialCoverUrl={edCover}
@@ -686,6 +748,8 @@
 			requireCover={false}
 			saving={edSaving}
 			saveError={edError}
+			readOnly={editorLocked}
+			showSaveButton={!editorLocked}
 			subtitle={tr('Edit artikel, simpan, lalu pilih kapan artikel ini terbit.')}
 			onClose={() => { if (!edSaving) editorFor = null; }}
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveArticle(title, html, coverUrl, category, metaDescription)}

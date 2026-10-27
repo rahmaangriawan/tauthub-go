@@ -265,9 +265,8 @@
 		</div>
 		<div class="flex flex-wrap items-center justify-end gap-2">
 			<!-- Tombol Profiler: langsung masuk ke brief terakhir (chatbot Profiler).
-			     Maskot + badge AI menandai tombol ini sebagai fitur AI. -->
+			     Badge AI menandai tombol ini sebagai fitur AI. -->
 			<button class="app-btn app-btn-soft profilerBtn" type="button" disabled={busy} title={tr('Buka Taut Brief')} onclick={() => void goto(`/klien/${brandUrl}/profiler`)}>
-				<img class="profilerMascot" src="/taut-brief-mascot.webp" alt="" draggable="false" />
 				{tr('Profiler')}
 				<span class="profilerAiBadge">AI</span>
 			</button>
@@ -536,15 +535,7 @@
 {/if}
 
 <style>
-	/* Tombol Profiler: maskot robot + badge AI (tanpa ikon garis generik). */
-	.profilerMascot {
-		width: 28px;
-		height: 28px;
-		margin: -6px 2px -6px -6px;
-		object-fit: contain;
-		user-select: none;
-		pointer-events: none;
-	}
+	/* Tombol Profiler: badge AI saja (tanpa ikon garis generik). */
 	.profilerAiBadge {
 		display: inline-flex;
 		align-items: center;

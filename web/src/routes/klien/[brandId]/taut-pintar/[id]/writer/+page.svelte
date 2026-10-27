@@ -1503,7 +1503,7 @@
 		<!-- Header Halaman dihapus: informasi judul sudah diwakili banner produksi. -->
 
 		<div class="mt-3">
-			<AgentSteps current={2} />
+			<AgentSteps current={2} lockedSteps={viewOnly ? [1] : []} lockedReason={tr(VIEW_ONLY_MSG)} />
 		</div>
 
 	{#if spokepersons.length > 0}
@@ -1943,12 +1943,12 @@
 											<button
 												type="button"
 												class="expAction h-8 min-w-8 inline-flex items-center justify-center rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-colors"
-												aria-label={tr('Edit Artikel')}
+												aria-label={viewOnly ? tr('Lihat Artikel') : tr('Edit Artikel')}
 												disabled={bulkRunning}
 												onclick={() => void openPreview(m)}
 											>
 												<Pencil size={12} strokeWidth={2} class="shrink-0" />
-												<span class="expTip">{tr('Edit Artikel')}</span>
+												<span class="expTip">{viewOnly ? tr('Lihat Artikel') : tr('Edit Artikel')}</span>
 											</button>
 
 											{@const qcCount = qcCounts[m.media_id] ?? 0}
@@ -2379,6 +2379,7 @@
 			sponsored={targetMedia?.label_sponsor === 'ada_sponsor'}
 			saving={editorSaving}
 			saveError={editorError}
+			readOnly={viewOnly}
 			onClose={() => { if (!editorSaving) editor = null; }}
 			onRefresh={() => void load()}
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveEditor(title, html, coverUrl, category, metaDescription)}

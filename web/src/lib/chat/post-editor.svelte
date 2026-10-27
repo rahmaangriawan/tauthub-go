@@ -259,6 +259,6 @@
 		onSave={(nextTitle, nextHtml, nextCover, nextCategory, nextMeta) =>
 			void save(nextTitle, nextHtml, nextCover, nextCategory, nextMeta)}
 		onUploadCover={uploadCover}
-		extraFields={historyPanel}
+		asideExtra={historyPanel}
 	/>
 {/if}

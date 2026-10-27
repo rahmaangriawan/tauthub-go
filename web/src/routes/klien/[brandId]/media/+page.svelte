@@ -12,6 +12,7 @@
 	import { flip } from 'svelte/animate';
 	import { cubicOut, cubicIn } from 'svelte/easing';
 	import AgentSteps from '../taut-pintar/_agent-steps.svelte';
+	import { DONE_STATUSES } from '../taut-pintar/_shared';
 	import {
 		ArrowRight, BarChart3, Bookmark, Check, CircleAlert, Clock, Database, FileText, Info, LayoutGrid,
 		Link as LinkIcon, Lock,
@@ -93,19 +94,6 @@
 		return { lo, hi };
 	});
 	const priceActive = $derived(priceRange.lo != null || priceRange.hi != null);
-	const PRICE_PRESETS = [
-		{ v: 'low', l: '≤ Rp 500rb', min: '', max: '500.000' },
-		{ v: 'mid', l: 'Rp 500rb – 2jt', min: '500.000', max: '2.000.000' },
-		{ v: 'high', l: '> Rp 2jt', min: '2.000.001', max: '' }
-	] as const;
-	const pricePreset = $derived.by(() => {
-		const lo = priceRange.lo;
-		const hi = priceRange.hi;
-		if (lo == null && hi === 500_000) return 'low';
-		if (lo === 500_000 && hi === 2_000_000) return 'mid';
-		if (lo === 2_000_001 && hi == null) return 'high';
-		return '';
-	});
 	function parseRupiahInput(value: string): number | null {
 		const digits = value.replace(/\D/g, '');
 		return digits ? Number(digits) : null;
@@ -124,16 +112,6 @@
 			priceMinText = formatRupiahInput(String(hi));
 			priceMaxText = formatRupiahInput(String(lo));
 		}
-	}
-	function applyPricePreset(preset: { v: string; min: string; max: string }) {
-		if (pricePreset === preset.v) {
-			priceMinText = '';
-			priceMaxText = '';
-		} else {
-			priceMinText = preset.min;
-			priceMaxText = preset.max;
-		}
-		page_ = 1;
 	}
 	// Minimum DA memakai slider (0 = tanpa batas), menggantikan chip DA ≥ 10/20/30.
 	let minDa = $state(0);
@@ -302,6 +280,9 @@
 	let originalCampaignIds = $state<Set<string>>(new Set());
 	let adding = $state(false);
 	let addError = $state('');
+	// Kampanye tujuan sudah selesai (submitted/scheduled/distributed): katalog
+	// tetap boleh dilihat, tapi tidak boleh menambah media lagi.
+	let campaignDone = $state(false);
 
 	const BOOKMARK_KEY = 'tauthub_client_bookmarked_media';
 	const SELECTED_KEY = 'tauthub_client_selected_media';
@@ -439,6 +420,12 @@
 	async function preselectCampaign() {
 		if (!addToCampaignId) return;
 		try {
+			// Status kampanye menentukan boleh-tidaknya menambah media.
+			const statusRes = await apiRequest(`${apiBase}/taut/campaigns/${addToCampaignId}`);
+			if (statusRes.ok) {
+				const campaign = (await statusRes.json()) as { taut_status?: string | null };
+				campaignDone = DONE_STATUSES.has(campaign?.taut_status ?? '');
+			}
 			const res = await apiRequest(`${apiBase}/taut/campaigns/${addToCampaignId}/placement`);
 			if (!res.ok) return;
 			const data = (await res.json()) as {
@@ -473,6 +460,10 @@
 	 *  lama tidak tersentuh dan tidak ada kampanye baru yang dibuat. */
 	async function addToCampaign() {
 		if (!addToCampaignId) return;
+		if (campaignDone) {
+			addError = tr('Kampanye ini sudah selesai — mode lihat saja. Media tidak bisa ditambahkan lagi.');
+			return;
+		}
 		const target = `/klien/${brandUrl}/taut-pintar/${addToCampaignId}/writer`;
 		const toAdd = [...selectedIds].filter((id) => !originalCampaignIds.has(id));
 		if (toAdd.length === 0) {
@@ -1187,7 +1178,7 @@
 	{#if addToCampaignId}
 		<div class="catalogContextBanner">
 			<Plus size={14} />
-			<span>{tr('Kamu sedang menambah media ke kampanye yang sudah dibuat. Media yang sudah dipilih tetap tercentang — pilih tambahanmu, lalu klik "Tambahkan ke Kampanye" untuk kembali ke Penyedia Konten.')}</span>
+			<span>{campaignDone ? tr('Kampanye ini sudah selesai — mode lihat saja. Katalog tetap bisa dijelajahi, tapi media tidak bisa ditambahkan lagi.') : tr('Kamu sedang menambah media ke kampanye yang sudah dibuat. Media yang sudah dipilih tetap tercentang — pilih tambahanmu, lalu klik "Tambahkan ke Kampanye" untuk kembali ke Penyedia Konten.')}</span>
 		</div>
 		{#if addError}<div class="errorBanner">{addError}</div>{/if}
 	{/if}
@@ -1230,7 +1221,7 @@
 			<div class="modernActionsGroup catalogToolsInline">
 				<!-- AI Matchmaker: di kiri pemilih kategori. -->
 				<button class="modernActionBtn matchmakerBtn" type="button" onclick={() => (matchmakerOpen = true)}>
-					<Sparkles size={15} /><span>{tr('AI Matchmaker')}</span><span class="matchmakerNew">{tr('Baru')}</span>
+					<span>{tr('AI Matchmaker')}</span><span class="matchmakerNew">{tr('Baru')}</span>
 				</button>
 				<!-- Kategori desktop: satu tombol, diklik membuka dropdown-nya. -->
 				<div class="modernSelectWrap toolsInlineCats">
@@ -1290,7 +1281,7 @@
 			<div class="advFilterInline">{@render advFields()}</div>
 
 			<button class="modernActionBtn matchmakerBtn" type="button" onclick={() => { toolsOpen = false; matchmakerOpen = true; }}>
-				<Sparkles size={15} /><span>{tr('AI Matchmaker')}</span><span class="matchmakerNew">{tr('Baru')}</span>
+				<span>{tr('AI Matchmaker')}</span><span class="matchmakerNew">{tr('Baru')}</span>
 			</button>
 
 			<button class="modernActionBtn" type="button" onclick={() => { toolsOpen = false; importOpen = true; }}>
@@ -1459,15 +1450,6 @@
 							oninput={() => (page_ = 1)}
 							onblur={normalizePriceInputs}
 						/>
-					</div>
-					<div class="advFilterChipsGroup advFilterChipsGroupEqual mt-3">
-						{#each PRICE_PRESETS as opt (opt.v)}
-							<button
-								class="advFilterChip {pricePreset === opt.v ? 'advFilterChipActive' : ''}"
-								type="button"
-								onclick={() => applyPricePreset(opt)}
-							>{opt.l}</button>
-						{/each}
 					</div>
 					{#if priceActive}
 						<label class="advFilterToggle advFilterToggleCompact" title={tr('Ikut tampilkan media yang harganya belum pasti (nego / menyusul).')}>
@@ -2363,7 +2345,7 @@
 			<button class="selectedExportBtn" type="button" onclick={exportProposal} title={tr("Unduh proposal ringkasan media terpilih (format CSV)")}>
 				<FileText size={15} /><span>Ekspor Proposal</span>
 			</button>
-			<button bind:this={createBtnEl} class="selectedCreateBtn" type="button" disabled={creating || adding} onclick={() => (addToCampaignId ? void addToCampaign() : void openCampaignModal())}>
+			<button bind:this={createBtnEl} class="selectedCreateBtn" type="button" disabled={creating || adding || campaignDone} onclick={() => (addToCampaignId ? void addToCampaign() : void openCampaignModal())}>
 				<Plus size={14} /><span>{addToCampaignId ? (adding ? tr('Menambahkan…') : tr('Tambahkan ke Kampanye')) : tr("Buat Kampanye")}</span>
 			</button>
 		</div>
