@@ -164,7 +164,7 @@
 					<p class="mt-2.5 text-3xl font-bold tracking-tight">{fmtNum(eco.total_publications)}</p>
 					<div class="mt-auto flex items-center justify-between pt-2">
 						<span class="text-xs text-muted-foreground">{fmtNum(eco.published_publications)} {tr("Terbit di media partner")}</span>
-						<a class="text-xs" style="color: var(--primary);" href="/admin/publications">{tr("Riwayat →")}</a>
+						<a class="text-xs" style="color: var(--primary);" href="/admin/publications/daftar">{tr("Riwayat →")}</a>
 					</div>
 				</div>
 
@@ -198,7 +198,7 @@
 						<Newspaper size={20} class="text-muted-foreground" />
 						<h2 class="text-base font-semibold">{tr("Publikasi Media Terkini")}</h2>
 					</span>
-					<a class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" href="/admin/publications">{tr("Lihat Semua")}</a>
+					<a class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" href="/admin/publications/daftar">{tr("Lihat Semua")}</a>
 				</div>
 				<p class="mt-2 text-sm text-muted-foreground">{tr("Rilis artikel terbaru yang berhasil didistribusikan ke jaringan media rekanan.")}</p>
 

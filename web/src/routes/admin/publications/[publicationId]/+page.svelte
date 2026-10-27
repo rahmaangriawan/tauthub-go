@@ -8,6 +8,7 @@
 	import { page } from '$app/state';
 	import { ArrowLeft, ExternalLink, ImagePlus, RefreshCw } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
+	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import { fmtDateTime } from '$lib/admin-format';
@@ -283,13 +284,14 @@
 </script>
 
 <section>
+	<ExplorerFrame parents={[{ label: tr('Publikasi'), href: '/admin/publications' }, { label: tr('Daftar Publikasi'), href: '/admin/publications/daftar' }]} crumb={tr('Detail publikasi')} path={`/admin/publications/${publicationId}`}>
 	<PageHeader
 		title={pub?.document_title ?? tr('Detail publikasi')}
 		description={`Publication ${publicationId}${pub?.campaign_name ? ` · Campaign: ${pub.campaign_name}` : ''}`}
 	>
 		{#if pub}<Badge tone={STATUS_TONE[pub.status] ?? 'neutral'} value={pub.status} />{/if}
 		<a
-			href="/admin/publications"
+			href="/admin/publications/daftar"
 			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
 			style="text-decoration: none;"
 		>
@@ -769,4 +771,5 @@
 			</div>
 		{/if}
 	{/if}
+	</ExplorerFrame>
 </section>

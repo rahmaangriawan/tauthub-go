@@ -1877,21 +1877,83 @@
 	// ---------- Gerbang 2: Instan Brief ----------
 	// Kartu template punya dua aksi: salin teks (clipboard) dan unduh versi
 	// .docx statis dari web/static/templates — agensi mengisinya sendiri.
-	const INSTAN_TPL_FILES = ['brief-agensi.docx', 'brief-personal.docx', 'brief-produk.docx'];
-	let copiedTemplate = $state('');
-	let copiedTemplateTimer: number | null = null;
+	// Isi field langsung (alternatif unduh template): nilai yang diisi user
+	// dirangkai jadi teks brief, lalu diunggah sebagai .txt — server mem-parse
+	// seperti dokumen lain, jadi ikut muncul di tab Media dan bahan Ringkasan.
+	let instanFormOpen = $state(false);
+	let instanFormBusy = $state(false);
+	let instanForm = $state({
+		nama: '', kategori: '', deskripsi: '', fakta: '', website: '',
+		budget: '', jumlah: '', minDa: '', minKata: '', minBacklink: '',
+		kataTerlarang: '', pertanyaan: ''
+	});
 
-	async function copyTemplate(tpl: { title: string; text: string }) {
+	function instanBriefText(): string {
+		const f = instanForm;
+		const lines: string[] = ['Brief brand (diisi lewat form Instan Brief).', ''];
+		const add = (label: string, value: string) => {
+			const v = value.trim();
+			if (v) lines.push(`${label}: ${v}`);
+		};
+		add('Nama brand', f.nama);
+		add('Kategori', f.kategori);
+		add('Deskripsi 1 kalimat', f.deskripsi);
+		add('Fakta resmi', f.fakta);
+		add('Website resmi', f.website);
+		const budget = f.budget.trim();
+		const jumlah = f.jumlah.trim();
+		if (budget) lines.push(`Budget: maksimal Rp${budget} per media — angka ini plafon, bukan harga minimum.`);
+		if (jumlah) lines.push(`Jumlah media: ${jumlah}`);
+		if (f.minDa.trim()) lines.push(`Minimum DA: ${f.minDa.trim()}`);
+		const syarat: string[] = [];
+		if (f.minKata.trim()) syarat.push(`minimal ${f.minKata.trim()} kata`);
+		if (f.minBacklink.trim()) syarat.push(`${f.minBacklink.trim()} backlink per artikel`);
+		if (syarat.length > 0) lines.push(`Syarat artikel: ${syarat.join(', ')}`);
+		add('Kata/frasa terlarang', f.kataTerlarang);
+		add('Pertanyaan yang ingin dimenangkan di ChatGPT/Perplexity', f.pertanyaan);
+		lines.push('', 'Catatan: hanya data di atas yang boleh dipakai; jangan mengarang angka atau klaim.');
+		return lines.join('\n');
+	}
+
+	function instanFileName(): string {
+		const slug = (instanForm.nama || 'brand')
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-+|-+$/g, '')
+			.slice(0, 40) || 'brand';
+		return `brief-${slug}.txt`;
+	}
+
+	function downloadInstanTxt() {
+		const blob = new Blob([instanBriefText()], { type: 'text/plain;charset=utf-8' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = instanFileName();
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	async function saveInstanBrief() {
+		if (instanFormBusy) return;
+		if (!instanForm.nama.trim()) {
+			showToast(tr('Nama brand wajib diisi dulu.'), 'error');
+			return;
+		}
+		instanFormBusy = true;
 		try {
-			await navigator.clipboard.writeText(tpl.text);
-			copiedTemplate = tpl.title;
-			if (copiedTemplateTimer) window.clearTimeout(copiedTemplateTimer);
-			copiedTemplateTimer = window.setTimeout(() => (copiedTemplate = ''), 1600);
-			showToast(tr('Template disalin — tempel ke dokumen, isi bagian [KURUNG SIKU].'));
-		} catch {
-			showToast(tr('Gagal menyalin. Salin manual ya.'), 'error');
+			const file = new File([instanBriefText()], instanFileName(), { type: 'text/plain' });
+			await uploadBriefFile(file, 'library');
+			await loadMedia();
+			showToast(tr('Brief dari field diunggah. Tunggu status "Terbaca AI" lalu buka Ringkasan.'));
+			instanFormOpen = false;
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : tr('Gagal menyimpan brief dari field.'), 'error');
+		} finally {
+			instanFormBusy = false;
 		}
 	}
+
 
 	// Pasang file sebagai lampiran (chip). Yang dobel nama+ukuran diabaikan,
 	// yang melebihi 10 MB ditolak dengan menyebut namanya. `kind` membatasi
@@ -2509,36 +2571,77 @@
 						<p>{tr('Untuk agensi yang butuh cepat: salin atau unduh template, isi bersama klien, lalu unggah dokumennya di sini. Berkas muncul juga di tab Media dan menjadi bahan Ringkasan serta konteks artikel.')}</p>
 					</section>
 
-					<section class="instan-card">
-						<h3><span class="instan-step">1</span>{tr('Pilih & isi template bersama agensi')}</h3>
-						<div class="instan-templates">
-							{#each BRIEF_TEMPLATES as tpl, i (tpl.title)}
-								<div class="instan-tpl">
-									<div class="instan-tpl-info">
-										<strong>{tpl.title}</strong>
-										<p>{tpl.desc}</p>
-									</div>
-									<div class="instan-tpl-actions">
-										<button
-											class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]"
-											type="button"
-											onclick={() => void copyTemplate(tpl)}
-										>
-											{copiedTemplate === tpl.title ? tr('Tersalin') : tr('Salin')}
-										</button>
-										<a
-											class="app-btn app-btn-primary !min-h-7 !px-2 !text-[11px]"
-											href={`/templates/${INSTAN_TPL_FILES[i]}`}
-											download
-										>
-											{tr('Unduh .docx')}
-										</a>
-									</div>
+						<section class="instan-card">
+							<h3><span class="instan-step">1</span>{tr('Template brief')}</h3>
+							<p class="instan-lead">{tr('Pilih satu jalan: unduh template kosong untuk diisi di Word, atau isi field-nya langsung di sini.')}</p>
+
+							<div class="instan-tpl instan-tpl-main">
+								<div class="instan-tpl-info">
+									<strong>{tr('Template Brief Brand (satu set)')}</strong>
+									<p>{tr('Identitas, fakta resmi, budget per media, jumlah media, syarat artikel, dan aturan klaim.')}</p>
 								</div>
-							{/each}
-						</div>
-						<p class="instan-hint">{tr('Bagian [KURUNG SIKU] wajib diganti data asli — Tubi AI tidak mengarang angka yang tak ia punya.')}</p>
-					</section>
+								<div class="instan-tpl-actions">
+									<a class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-[11.5px]" href="/templates/brief-agensi.docx" download>{tr('Unduh .docx')}</a>
+									<button class="app-btn app-btn-primary !min-h-7 !px-2.5 !text-[11.5px]" type="button" onclick={() => (instanFormOpen = !instanFormOpen)}>
+										{instanFormOpen ? tr('Tutup form') : tr('Isi field di sini')}
+									</button>
+								</div>
+							</div>
+
+							{#if instanFormOpen}
+								<div class="instan-form">
+									<label><span>{tr('Nama brand')} *</span>
+										<input class="app-input" bind:value={instanForm.nama} placeholder={tr('Ejaan resmi')} />
+									</label>
+									<label><span>{tr('Kategori')}</span>
+										<input class="app-input" bind:value={instanForm.kategori} placeholder={tr('Platform / Agensi / Toko / Lainnya')} />
+									</label>
+									<label class="instan-form-wide"><span>{tr('Deskripsi 1 kalimat')}</span>
+										<input class="app-input" bind:value={instanForm.deskripsi} placeholder={tr('Membantu siapa untuk apa')} />
+									</label>
+									<label class="instan-form-wide"><span>{tr('Fakta resmi')}</span>
+										<input class="app-input" bind:value={instanForm.fakta} placeholder={tr('Tahun berdiri, kota, jumlah mitra — data asli saja')} />
+									</label>
+									<label><span>{tr('Website resmi')}</span>
+										<input class="app-input" bind:value={instanForm.website} placeholder="https://" />
+									</label>
+									<label><span>{tr('Budget maksimal per media (Rp)')}</span>
+										<input class="app-input" type="number" min="0" bind:value={instanForm.budget} placeholder="100000" />
+									</label>
+									<label><span>{tr('Jumlah media')}</span>
+										<input class="app-input" type="number" min="1" bind:value={instanForm.jumlah} placeholder="8" />
+									</label>
+									<label><span>{tr('Minimum DA')}</span>
+										<input class="app-input" type="number" min="0" max="100" bind:value={instanForm.minDa} placeholder="20" />
+									</label>
+									<label><span>{tr('Minimal kata per artikel')}</span>
+										<input class="app-input" type="number" min="0" bind:value={instanForm.minKata} placeholder="600" />
+									</label>
+									<label><span>{tr('Minimal backlink')}</span>
+										<input class="app-input" type="number" min="0" bind:value={instanForm.minBacklink} placeholder="2" />
+									</label>
+									<label class="instan-form-wide"><span>{tr('Kata/frasa terlarang')}</span>
+										<input class="app-input" bind:value={instanForm.kataTerlarang} placeholder={tr('misal: nomor 1, terbaik, terjangkau')} />
+									</label>
+									<label class="instan-form-wide"><span>{tr('Pertanyaan yang ingin dimenangkan di AI')}</span>
+										<input class="app-input" bind:value={instanForm.pertanyaan} placeholder={tr('2-3 pertanyaan, pisahkan dengan titik koma')} />
+									</label>
+									<div class="instan-form-actions">
+										<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={downloadInstanTxt}>{tr('Unduh .txt')}</button>
+										<button class="app-btn app-btn-primary !min-h-8 !text-xs" type="button" disabled={instanFormBusy} onclick={() => void saveInstanBrief()}>
+											{instanFormBusy ? tr('Menyimpan…') : tr('Simpan & unggah ke brief')}
+										</button>
+									</div>
+									<p class="instan-hint">{tr('Field kosong dilewati. Data yang diisi di sini diunggah sebagai dokumen brief — tidak dikarang AI.')}</p>
+								</div>
+							{/if}
+
+							<p class="instan-hint">
+								{tr('Template lain:')}
+								<a class="instan-link" href="/templates/brief-personal.docx" download>{tr('Personal Brand')}</a> ·
+								<a class="instan-link" href="/templates/brief-produk.docx" download>{tr('Peluncuran Produk')}</a>
+							</p>
+						</section>
 
 					<section class="instan-card">
 						<h3><span class="instan-step">2</span>{tr('Unggah berkas brand di sini')}</h3>
@@ -4780,7 +4883,6 @@
 	}
 	.instan-card p { font-size: 12px; line-height: 1.6; }
 
-	.instan-templates { display: flex; flex-direction: column; gap: 8px; }
 	.instan-tpl {
 		display: flex;
 		align-items: center;
@@ -4794,6 +4896,44 @@
 	.instan-tpl-info strong { font-size: 12.5px; color: var(--foreground, #111827); }
 	.instan-tpl-info p { margin: 1px 0 0; font-size: 11.5px; color: var(--muted-foreground); }
 	.instan-tpl-actions { display: flex; flex-shrink: 0; gap: 6px; }
+	.instan-lead {
+		margin: -4px 0 10px !important;
+		font-size: 12px !important;
+		color: var(--muted-foreground);
+	}
+	.instan-tpl-main { margin-top: 4px; }
+	/* Form isian cepat: grid dua kolom, field lebar penuh untuk yang panjang. */
+	.instan-form {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 10px 12px;
+		margin-top: 12px;
+		padding: 14px;
+		border: 1px solid var(--border, #e2e8f0);
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--muted) 35%, white);
+	}
+	.instan-form label {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		min-width: 0;
+	}
+	.instan-form label > span {
+		font-size: 11.5px;
+		font-weight: 600;
+		color: var(--muted-foreground);
+	}
+	.instan-form-wide { grid-column: 1 / -1; }
+	.instan-form-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 8px;
+		grid-column: 1 / -1;
+	}
+	@media (max-width: 720px) {
+		.instan-form { grid-template-columns: 1fr; }
+	}
 
 	.instan-hint {
 		margin: 8px 0 0;

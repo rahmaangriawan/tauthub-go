@@ -4,9 +4,13 @@
 	// Monitoring Order — port app/admin/orders/page.tsx: satu baris = satu order
 	// distribusi (satu media). Nomor order per media (ORD-) dan nomor kampanye
 	// induk (CAM-) dipakai melacak masalah; detail teknis ada di publikasi.
+	// Tab "Per Kampanye": satu baris = satu order kampanye (CAM-) sebagai
+	// entitas — media terorder, terbit, rencana vs terpakai rupiah.
 	import { onMount } from 'svelte';
 	import { Receipt, Search, TriangleAlert } from '@lucide/svelte';
+	import { page as routePage } from '$app/state';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
+	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -52,6 +56,9 @@
 			if (!fresh) return;
 			await load();
 			loading = false;
+			// Langsung dibuka dengan ?tab=kampanye (link/refresh): tab sudah
+			// 'kampanye' tanpa lewat setTab, jadi datanya harus dimuat di sini.
+			if (tab === 'kampanye') void loadCampaigns();
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -107,9 +114,85 @@
 	const filters = ['', ...PROBLEM_STATUSES, 'waiting_partner', 'queued', 'processing', 'published'];
 	const totalPages = $derived(Math.max(1, Math.ceil(total / PAGE_SIZE)));
 	const denied = $derived(Boolean(!loading && isAccessDenied(error)));
+
+	// ---------- tab Per Kampanye ----------
+	type CampaignRow = {
+		campaign_id: string; order_code: string | null; name: string;
+		brand_name: string | null; brand_public_id: string | null;
+		taut_status: string | null; campaign_status: string | null; budget: number;
+		media_count: number; publication_count: number; published_count: number;
+		planned_cost: number; realized_cost: number; created_at: string;
+	};
+
+	const CAMP_STATUS_TONE: Record<string, 'success' | 'neutral' | 'warning' | 'accent' | 'danger'> = {
+		submitted: 'success', scheduled: 'success', distributed: 'success',
+		review: 'accent', placement: 'accent', production: 'accent', submitted_review: 'accent',
+		draft: 'neutral', budget: 'neutral', materials: 'neutral', active: 'warning'
+	};
+	const CAMP_STATUS_LABEL: Record<string, string> = $derived({
+		draft: 'Draf', materials: 'Materi', budget: 'Budget', profiled: 'Profil selesai',
+		production: 'Produksi', review: 'Review', placement: 'Media terkunci',
+		submitted: 'Disubmit', scheduled: 'Terjadwal', distributed: 'Tersebar',
+		active: 'Aktif', paused: 'Dijeda'
+	});
+
+	let tab = $state(routePage.url.searchParams.get('tab') === 'kampanye' ? 'kampanye' : 'artikel');
+	let campaigns = $state<CampaignRow[]>([]);
+	let campQuery = $state('');
+	let campError = $state('');
+	let campLoading = $state(true);
+	let campPage = $state(1);
+	let campTotal = $state(0);
+	const CAMP_PAGE_SIZE = 25;
+	let campTimer: ReturnType<typeof setTimeout> | null = null;
+	const campTotalPages = $derived(Math.max(1, Math.ceil(campTotal / CAMP_PAGE_SIZE)));
+
+	function setTab(next: 'artikel' | 'kampanye') {
+		tab = next;
+		history.replaceState({}, '', `/admin/orders${next === 'kampanye' ? '?tab=kampanye' : ''}`);
+		if (next === 'kampanye' && campaigns.length === 0) void loadCampaigns();
+	}
+
+	async function loadCampaigns() {
+		campLoading = true;
+		campError = '';
+		const params = new URLSearchParams();
+		if (campQuery.trim()) params.set('q', campQuery.trim());
+		params.set('limit', String(CAMP_PAGE_SIZE));
+		params.set('offset', String((campPage - 1) * CAMP_PAGE_SIZE));
+		const res = await apiRequest(`/v1/platform/orders/campaigns?${params.toString()}`);
+		if (res.ok) {
+			const data = await res.json();
+			campaigns = data.campaigns ?? [];
+			campTotal = data.total ?? 0;
+		} else {
+			campError = await platformError(res);
+		}
+		campLoading = false;
+	}
+
+	function onCampQuery(value: string) {
+		campQuery = value;
+		if (campTimer) clearTimeout(campTimer);
+		campTimer = setTimeout(() => {
+			campPage = 1;
+			void loadCampaigns();
+		}, 300);
+	}
+
+	function changeCampPage(next: number) {
+		campPage = next;
+		void loadCampaigns();
+	}
+
+	function campStatusLabel(row: CampaignRow): string {
+		const st = row.taut_status ?? row.campaign_status ?? '';
+		return CAMP_STATUS_LABEL[st] ?? st;
+	}
 </script>
 
 <section>
+	<ExplorerFrame parents={[{ label: tr('Publikasi'), href: '/admin/publications' }]} crumb={tr('Monitoring Order')} path='/admin/orders'>
 	<PageHeader
 		title="Monitoring Order"
 		description={tr("Satu baris = satu order distribusi (satu media). Nomor order per media dan nomor kampanye induknya dipakai untuk melacak masalah; detail teknis (attempts, job, retry) ada di halaman publikasi.")}
@@ -117,6 +200,96 @@
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{fmtNum(total)} order</span>
 	</PageHeader>
 
+	<div class="mt-4 flex items-center gap-1 rounded-full p-1" style="width: fit-content; background-color: var(--secondary);">
+		<button
+			class="rounded-full px-4 py-1.5 text-xs font-medium transition-colors"
+			style="background-color: {tab === 'artikel' ? 'var(--primary)' : 'transparent'}; color: {tab === 'artikel' ? 'var(--primary-foreground)' : 'var(--muted-foreground)'};"
+			type="button"
+			onclick={() => setTab('artikel')}
+		>Per Artikel</button>
+		<button
+			class="rounded-full px-4 py-1.5 text-xs font-medium transition-colors"
+			style="background-color: {tab === 'kampanye' ? 'var(--primary)' : 'transparent'}; color: {tab === 'kampanye' ? 'var(--primary-foreground)' : 'var(--muted-foreground)'};"
+			type="button"
+			onclick={() => setTab('kampanye')}
+		>Per Kampanye</button>
+	</div>
+
+	{#if tab === 'kampanye'}
+		{#if denied}
+			<div class="app-card mt-6 px-6 py-10 text-center">
+				<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke monitoring order.")}</p>
+			</div>
+		{:else}
+			<Feedback loading={campLoading} error={campError} loadingText="Memuat kampanye…" />
+
+			<div class="mt-4 flex flex-wrap items-center gap-2">
+				<label class="app-input flex min-w-[260px] flex-1 items-center gap-2 !py-1.5" style="max-width: 400px;">
+					<Search size={16} class="text-muted-foreground" />
+					<input
+						class="w-full bg-transparent text-sm outline-none"
+						placeholder="Cari no. kampanye (CAM-), nama kampanye, klien…"
+						value={campQuery}
+						oninput={(e) => onCampQuery((e.currentTarget as HTMLInputElement).value)}
+					/>
+				</label>
+				<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{fmtNum(campTotal)} kampanye</span>
+			</div>
+
+			<div class="app-card mt-3 overflow-x-auto">
+				<table class="w-full text-sm" style="min-width: 1180px;">
+					<thead>
+						<tr class="text-left text-xs text-muted-foreground">
+							<th class="px-4 py-2.5 font-medium">No. Kampanye</th>
+							<th class="px-4 py-2.5 font-medium">Nama</th>
+							<th class="px-4 py-2.5 font-medium">Klien</th>
+							<th class="px-4 py-2.5 font-medium">Status</th>
+							<th class="px-4 py-2.5 font-medium">Media</th>
+							<th class="px-4 py-2.5 font-medium">Terbit</th>
+							<th class="px-4 py-2.5 font-medium">Rencana</th>
+							<th class="px-4 py-2.5 font-medium">Terpakai</th>
+							<th class="px-4 py-2.5 font-medium">Waktu</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each campaigns as row (row.campaign_id)}
+							<tr class="border-t">
+								<td class="px-4 py-2.5">
+									<a class="font-semibold" style="color: var(--primary);" href={`/admin/orders/kampanye/${row.campaign_id}`}>
+										{row.order_code ?? row.campaign_id.slice(0, 8)}
+									</a>
+								</td>
+								<td class="max-w-[240px] px-4 py-2.5">{row.name ?? '—'}</td>
+								<td class="px-4 py-2.5">{row.brand_name ?? '—'}</td>
+								<td class="px-4 py-2.5">
+									<Badge label={campStatusLabel(row)} tone={CAMP_STATUS_TONE[row.taut_status ?? row.campaign_status ?? ''] ?? 'neutral'} />
+								</td>
+								<td class="px-4 py-2.5 tabular-nums">{fmtNum(row.media_count)}</td>
+								<td class="px-4 py-2.5 tabular-nums">{fmtNum(row.published_count)}</td>
+								<td class="px-4 py-2.5 tabular-nums">{fmtRp(row.planned_cost)}</td>
+								<td class="px-4 py-2.5 tabular-nums">{fmtRp(row.realized_cost)}</td>
+								<td class="px-4 py-2.5 text-xs text-muted-foreground">{fmtDateTime(row.created_at)}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+				{#if !campLoading && campaigns.length === 0}
+					<div class="flex flex-col items-center px-4 py-12 text-center">
+						<Receipt size={26} class="text-muted-foreground" />
+						<p class="mt-2 text-sm text-muted-foreground">Tidak ada kampanye untuk pencarian ini.</p>
+					</div>
+				{/if}
+			</div>
+
+			<div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+				<span>{fmtNum(campTotal)} kampanye · halaman {campPage} dari {campTotalPages}</span>
+				<div class="flex gap-2">
+					<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={campPage <= 1 || campLoading} onclick={() => changeCampPage(Math.max(1, campPage - 1))}>‹ Sebelumnya</button>
+					<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={campPage >= campTotalPages || campLoading} onclick={() => changeCampPage(campPage + 1)}>Berikutnya ›</button>
+				</div>
+			</div>
+		{/if}
+	{:else}
 	{#if denied}
 		<div class="app-card mt-6 px-6 py-10 text-center">
 			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke monitoring order.")}</p>
@@ -224,5 +397,8 @@
 				<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={page >= totalPages || loading} onclick={() => changePage(page + 1)}>Berikutnya ›</button>
 			</div>
 		</div>
+		{/if}
 	{/if}
+	</ExplorerFrame>
 </section>
+

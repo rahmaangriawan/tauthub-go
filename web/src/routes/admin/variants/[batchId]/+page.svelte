@@ -7,6 +7,7 @@
 	import { page } from '$app/state';
 	import { ArrowLeft, ChevronDown, ChevronRight, ExternalLink } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
+	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import { fmtDateTime } from '$lib/admin-format';
@@ -131,6 +132,7 @@
 </script>
 
 <section>
+	<ExplorerFrame parents={[{ label: tr('Publikasi'), href: '/admin/publications' }, { label: tr('Varian'), href: '/admin/variants' }]} crumb={tr('Detail Batch')} path={`/admin/variants/${batchId}`}>
 	<PageHeader
 		title={tr("Detail batch variant")}
 		description={batch
@@ -324,4 +326,5 @@
 			<p class="mt-3 text-xs text-muted-foreground">{tr("Satu batch = satu sumber → satu artikel per media dengan sudut pandang berbeda (PRNG seeded). Klik varian untuk melihat riwayat job generasi di queue.")}</p>
 		</div>
 	{/if}
+	</ExplorerFrame>
 </section>

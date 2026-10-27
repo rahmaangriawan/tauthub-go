@@ -159,6 +159,15 @@ func ptMaxInt(a, b int) int {
 
 func ptItoa(n int) string { return strconv.Itoa(n) }
 
+// ptPadLeft: taikep "001" untuk nomor invoice (port padLeft di
+// partner/finance.go supaya format nomor persis sama antar-jalur).
+func ptPadLeft(s string, n int) string {
+	for len(s) < n {
+		s = "0" + s
+	}
+	return s
+}
+
 func ptTruncate(s string, n int) string {
 	runes := []rune(s)
 	if len(runes) <= n {

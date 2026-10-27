@@ -927,6 +927,15 @@ func mmNormalizeCriteria(crit mmCriteria, catalogCats []string) (mmCriteria, []s
 	if crit.BudgetMin > 0 && crit.BudgetMin == crit.BudgetMax {
 		crit.BudgetMin = 0
 	}
+	// Failsafe salah tangkap kedua: rentang harga per media yang sebenarnya
+	// anggaran TOTAL (kasus nyata: "Anggaran ideal Rp6-7 juta" terbaca
+	// budget_min=6jt & budget_max=7jt PER MEDIA padahal budget_total=7jt).
+	// Rentang per media ≥ anggaran total tidak pernah mungkin diminta klien —
+	// bila dimaksud serius, 20 media berarti 120jt, jauh dari total di atas.
+	if crit.BudgetMin > 0 && crit.BudgetTotal > 0 && crit.BudgetMin >= crit.BudgetTotal {
+		crit.BudgetMin = 0
+		warnings = append(warnings, "Kriteria harga minimum per media tampak berasal dari anggaran total dan diabaikan.")
+	}
 	crit.MinDA = clampIntValue(crit.MinDA, 0, 100)
 	crit.MinAITrust = clampIntValue(crit.MinAITrust, 0, 100)
 	crit.MinWords = clampIntValue(crit.MinWords, 0, 10000)
@@ -1042,6 +1051,63 @@ func (d *Deps) mmAlternatives(ctx context.Context, crit mmCriteria, matched []mm
 	if len(out) > mmMaxAlternatives {
 		out = out[:mmMaxAlternatives]
 	}
+	// Langkah pelebaran ala marketplace ("Hasil dari luar pencarian Anda"):
+	// kalau lingkup kategori/jenis media hanya menyediakan sedikit saran
+	// (atau kosong — mis. tipe "blogger" + kategori tidak punya irisan di
+	// katalog), cari di SELURUH katalog aktif tanpa lingkup itu. Kategorinya
+	// tetap disebut sebagai gap, jadi klien tahu media ini di luar pilihannya
+	// tapi masih berdekatan secara angka & harga.
+	if len(out) < mmMaxAlternatives {
+		wide := crit
+		wide.Categories = nil
+		wide.MediaTypes = nil
+		pool, _, wideErr := d.mmQueryCandidates(ctx, wide, false)
+		if wideErr == nil && len(pool) > 0 {
+			mmScoreCandidates(pool, crit)
+			for i := range pool {
+				c := pool[i]
+				if seen[c.ID] {
+					continue
+				}
+				if crit.BudgetMax > 0 && c.ClientPrice > crit.BudgetMax {
+					continue
+				}
+				if crit.BudgetMin > 0 && c.ClientPrice < crit.BudgetMin {
+					continue
+				}
+				// Plafon gap 3 untuk hasil pelebaran: gap kategori/jenis ikut
+				// terhitung di sini (pool sempit tidak pernah membawanya),
+				// plus syarat angka — tetap disebut supaya kartunya jujur.
+				gaps := mmCandidateGaps(crit, c)
+				if len(gaps) == 0 || len(gaps) > 3 {
+					continue
+				}
+				c.Gaps = gaps
+				c.Warnings = nil
+				seen[c.ID] = true
+				out = append(out, c)
+				if len(out) >= mmMaxAlternatives {
+					break
+				}
+			}
+			sort.SliceStable(out, func(i, j int) bool {
+				if len(out[i].Gaps) != len(out[j].Gaps) {
+					return len(out[i].Gaps) < len(out[j].Gaps)
+				}
+				if out[i].Score != out[j].Score {
+					return out[i].Score > out[j].Score
+				}
+				return out[i].Name < out[j].Name
+			})
+			if len(out) > mmMaxAlternatives {
+				out = out[:mmMaxAlternatives]
+			}
+		}
+		// Kegagalan kueri pelebaran dibiarkan: saran dari pool sempit tetap
+		// dikembalikan; bila keduanya kosong dengan error, pool utama sudah
+		// memutuskan responsnya.
+		_ = wideErr
+	}
 	return out, nil
 }
 
@@ -1050,6 +1116,39 @@ func (d *Deps) mmAlternatives(ctx context.Context, crit mmCriteria, matched []mm
 // menilai sendiri apakah masih layak.
 func mmCandidateGaps(crit mmCriteria, c mmCandidate) []string {
 	gaps := []string{}
+	// Gap kategori & jenis media: pool terlingkup selalu cocok pada dua hal
+	// ini sehingga tidak pernah menambah gap; gap ini aktif hanya untuk hasil
+	// pelebaran (seluruh katalog) supaya kartunya jujur soal bedanya.
+	if len(crit.Categories) > 0 {
+		match := false
+		for _, cat := range c.Categories {
+			for _, want := range crit.Categories {
+				if strings.EqualFold(strings.TrimSpace(cat), want) {
+					match = true
+					break
+				}
+			}
+			if match {
+				break
+			}
+		}
+		if !match {
+			gaps = append(gaps, "Kategori \""+derefStr(c.Category)+"\" — di luar pilihan ("+strings.Join(crit.Categories, ", ")+").")
+		}
+	}
+	if len(crit.MediaTypes) > 0 {
+		mt := strings.ToLower(derefStr(c.MediaType))
+		match := false
+		for _, want := range crit.MediaTypes {
+			if mt == want {
+				match = true
+				break
+			}
+		}
+		if !match {
+			gaps = append(gaps, "Jenis media \""+derefStr(c.MediaType)+"\" — bukan pilihan ("+strings.Join(crit.MediaTypes, ", ")+").")
+		}
+	}
 	if crit.MinDA > 0 {
 		if c.DA == nil {
 			gaps = append(gaps, "DA belum terdata (butuh ≥ "+itoa(crit.MinDA)+").")

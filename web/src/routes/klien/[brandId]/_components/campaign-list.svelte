@@ -12,6 +12,7 @@
 	import { campaignUrlId } from '$lib/campaign-url';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
+	import ProfilerGateModal from '$lib/components/profiler-gate-modal.svelte';
 	import { STAGE_LABEL, STAGE_TONE, STATUS_OPTIONS, statusAccent } from '../taut-pintar/_shared';
 	import { tcToRp } from '$lib/credits/rupiah';
 
@@ -41,6 +42,8 @@
 	let pageNum = $state(1);
 	let loading = $state(true);
 	let busy = $state(false);
+	// Popup gerbang Taut Brief — dipilih dulu sebelum masuk workspace.
+	let profilerGateOpen = $state(false);
 	let error = $state('');
 	let showArchive = $state(false);
 	let rowBusyId = $state('');
@@ -264,9 +267,9 @@
 			<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola semua kampanye distribusi konten Anda di satu tempat.")}</p>
 		</div>
 		<div class="flex flex-wrap items-center justify-end gap-2">
-			<!-- Tombol Profiler: langsung masuk ke brief terakhir (chatbot Profiler).
-			     Badge AI menandai tombol ini sebagai fitur AI. -->
-			<button class="app-btn app-btn-soft profilerBtn" type="button" disabled={busy} title={tr('Buka Taut Brief')} onclick={() => void goto(`/klien/${brandUrl}/profiler`)}>
+			<!-- Tombol Profiler: buka popup gerbang (Chat Brief / Instan Brief)
+			     tanpa meninggalkan halaman kampanye dulu. -->
+			<button class="app-btn app-btn-soft profilerBtn" type="button" disabled={busy} title={tr('Buka Taut Brief')} onclick={() => (profilerGateOpen = true)}>
 				{tr('Profiler')}
 				<span class="profilerAiBadge">AI</span>
 			</button>
@@ -533,6 +536,13 @@
 		</dialog>
 	</div>
 {/if}
+
+<ProfilerGateModal
+	open={profilerGateOpen}
+	brandId={brandId}
+	{brandUrl}
+	onClose={() => (profilerGateOpen = false)}
+/>
 
 <style>
 	/* Tombol Profiler: badge AI saja (tanpa ikon garis generik). */

@@ -1,0 +1,345 @@
+<script lang="ts">
+	import { tr } from '$lib/i18n/phrases';
+
+	// Publikasi admin — semua publikasi seluruh brand (staff visibility).
+	// Port apps/web/src/app/admin/publications/page.tsx.
+	import { onMount } from 'svelte';
+	import { Download, ImagePlus, Megaphone, Search } from '@lucide/svelte';
+	import PageHeader from '$lib/components/admin/page-header.svelte';
+	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
+	import Feedback from '$lib/components/admin/feedback.svelte';
+	import DataTable from '$lib/components/admin/data-table.svelte';
+	import Badge from '$lib/components/admin/badge.svelte';
+	import { fmtDateTime } from '$lib/admin-format';
+	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+
+	const PAGE_SIZE = 20;
+
+	type Row = {
+		id: string;
+		status: string;
+		client_price: number;
+		document_title: string | null;
+		media_name: string | null;
+		brand_name: string | null;
+		campaign_name: string | null;
+		created_at: string;
+		error_code: string | null;
+		variant: { angle_label: string; mode: string | null } | null;
+		media_integration_type: string | null;
+		published_url: string | null;
+		remote_post_id: string | null;
+	};
+
+	const STATUS_TONE: Record<string, 'neutral' | 'accent' | 'success' | 'warning' | 'danger'> = {
+		published: 'success',
+		pending: 'warning',
+		waiting_partner: 'warning',
+		revision: 'warning',
+		partner_approved: 'accent',
+		partner_rejected: 'danger',
+		queued: 'accent',
+		processing: 'accent',
+		failed: 'danger',
+		retrying: 'warning',
+		cancelled: 'neutral'
+	};
+
+	const filters = [
+		'',
+		'pending',
+		'waiting_partner',
+		'revision',
+		'queued',
+		'processing',
+		'published',
+		'failed',
+		'retrying',
+		'partner_rejected',
+		'cancelled'
+	];
+
+	let rows = $state<Row[]>([]);
+	let filter = $state('');
+	let query = $state('');
+	let error = $state('');
+	let loading = $state(true);
+	let exporting = $state(false);
+	let page = $state(1);
+	let total = $state(0);
+	let syncBusyId = $state('');
+	let syncNotice = $state('');
+	let syncError = $state('');
+
+	onMount(() => {
+		void (async () => {
+			const fresh = await ensureValidSession();
+			if (!fresh) return;
+			await load();
+			loading = false;
+		})();
+		const onExpired = () => (window.location.href = '/login');
+		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+	});
+
+	let queryTimer: ReturnType<typeof setTimeout> | null = null;
+	$effect(() => {
+		const value = query;
+		if (queryTimer) clearTimeout(queryTimer);
+		queryTimer = setTimeout(() => {
+			page = 1;
+			void load();
+		}, 300);
+		return () => {
+			if (queryTimer) clearTimeout(queryTimer);
+		};
+	});
+	async function load() {
+		loading = true;
+		error = '';
+		try {
+			const params = new URLSearchParams();
+			if (filter) params.set('status', filter);
+			if (query.trim()) params.set('q', query.trim());
+			params.set('limit', String(PAGE_SIZE));
+			params.set('offset', String((page - 1) * PAGE_SIZE));
+			const res = await apiRequest(`/v1/platform/operations/publications?${params}`);
+			if (!res.ok) {
+				error = await readApiError(res, 'Permintaan gagal.');
+				return;
+			}
+			const data = await res.json();
+			rows = data.publications ?? [];
+			total = data.total ?? 0;
+		} catch {
+			error = 'Permintaan gagal.';
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function exportCsv() {
+		exporting = true;
+		error = '';
+		try {
+			const params = new URLSearchParams({ format: 'csv' });
+			if (filter) params.set('status', filter);
+			if (query.trim()) params.set('q', query.trim());
+			const response = await apiRequest(`/v1/platform/operations/publications?${params}`);
+			if (!response.ok) throw new Error(await response.text());
+			const blob = await response.blob();
+			const a = document.createElement('a');
+			a.href = URL.createObjectURL(blob);
+			a.download = `tauthub-publikasi-${new Date().toISOString().slice(0, 10)}.csv`;
+			a.click();
+			URL.revokeObjectURL(a.href);
+		} catch {
+			error = 'Permintaan gagal.';
+		} finally {
+			exporting = false;
+		}
+	}
+
+	const idr = (n: unknown) =>
+		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(
+			Number(n ?? 0)
+		);
+
+	// Tombol sinkron hanya masuk akal untuk post WordPress yang sudah terbit dan
+	// masih bisa ditelusuri post-nya (ID tersimpan, atau tautannya berbentuk ?p=).
+	const canResync = (row: Row) =>
+		row.status === 'published' &&
+		row.media_integration_type === 'wordpress' &&
+		(!!row.remote_post_id || /\?p=\d+/.test(row.published_url ?? ''));
+
+	async function resyncRow(row: Row) {
+		if (
+			!confirm(
+				`Sinkronkan ulang gambar utama & kategori untuk “${row.document_title ?? row.id.slice(0, 8)}”?\n\n` +
+					'Post di WordPress akan DIPERBARUI (judul dan isi ikut dikirim ulang), bukan dibuat baru.'
+			)
+		)
+			return;
+		syncBusyId = row.id;
+		syncNotice = '';
+		syncError = '';
+		try {
+			const res = await apiRequest(
+				`/v1/platform/operations/publications/${row.id}/resync-wordpress`,
+				{ method: 'POST' }
+			);
+			if (!res.ok) {
+				syncError = await readApiError(res, 'Permintaan gagal.');
+				return;
+			}
+			syncNotice = `Sinkronisasi diantrekan untuk “${row.document_title ?? row.id.slice(0, 8)}”. Gambar utama dan kategori akan dikirim ulang ke post WordPress yang sama.`;
+			void load();
+		} finally {
+			syncBusyId = '';
+		}
+	}
+	const showAccess = $derived(rows.length === 0 && error.includes('Akses platform'));
+</script>
+
+{#snippet articleCell(row: Row)}
+	<a href={`/admin/publications/${row.id}`} class="block" style="color: var(--primary); text-decoration: none;">
+		<div class="flex items-center gap-2">
+			<Megaphone size={16} />
+			<div class="min-w-0">
+				<div class="flex items-center gap-2">
+					<p class="truncate font-medium" style="color: inherit;">{row.document_title ?? row.id.slice(0, 8)}</p>
+					{#if row.variant}<Badge tone="accent" label="Variant" />{/if}
+				</div>
+				{#if row.variant}
+					<p class="text-xs" style="color: var(--primary);">
+						{row.variant.mode === 'generate' ? 'Dibuatkan' : 'Parafrase'} · {row.variant.angle_label}
+					</p>
+				{:else}
+					<p class="text-xs text-muted-foreground">{row.id.slice(0, 8)}</p>
+				{/if}
+			</div>
+		</div>
+	</a>
+{/snippet}
+
+{#snippet brandCell(row: Row)}
+	<span>{row.brand_name ?? '—'}</span>
+{/snippet}
+
+{#snippet mediaCell(row: Row)}
+	<div>
+		<p>{row.media_name ?? '—'}</p>
+		{#if row.campaign_name}
+			<p class="text-xs text-muted-foreground">Campaign: {row.campaign_name}</p>
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet priceCell(row: Row)}
+	<span class="tabular-nums">{idr(row.client_price)}</span>
+{/snippet}
+
+{#snippet pubStatusCell(row: Row)}
+	<div>
+		<Badge tone={STATUS_TONE[row.status] ?? 'neutral'} value={row.status} />
+		{#if row.error_code}
+			<p class="mt-1 text-xs" style="color: var(--destructive);">{row.error_code}</p>
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet createdAtCell(row: Row)}
+	<span class="text-xs text-muted-foreground">{fmtDateTime(row.created_at)}</span>
+{/snippet}
+
+{#snippet actionCell(row: Row)}
+	{#if canResync(row)}
+		<button
+			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+			disabled={syncBusyId === row.id}
+			onclick={() => resyncRow(row)}
+		>
+			<ImagePlus size={14} />{syncBusyId === row.id ? 'Mengantrekan…' : tr('Sinkron ulang')}
+		</button>
+	{:else}
+		<span class="text-xs text-muted-foreground">—</span>
+	{/if}
+{/snippet}
+
+<section>
+	<ExplorerFrame parents={[{ label: tr('Publikasi'), href: '/admin/publications' }]} crumb={tr('Daftar Publikasi')} path='/admin/publications/daftar'>
+	<PageHeader
+		title={tr("Publikasi")}
+		description={tr("Semua publikasi seluruh brand (staff visibility). Klik baris untuk detail lengkap: riwayat attempts, job delivery, dan payload.")}
+	>
+		<Badge tone="accent" value={`${total} publikasi`} />
+	</PageHeader>
+
+	<Feedback {loading} {error} />
+
+	{#if syncNotice}
+		<p class="mt-3 text-sm" style="color: var(--success);">{syncNotice}</p>
+	{/if}
+	{#if syncError}
+		<p class="mt-3 text-sm" style="color: var(--destructive);">{syncError}</p>
+	{/if}
+
+	<div class="mt-4 flex flex-wrap items-center gap-2">
+		<label class="app-input flex min-w-[240px] max-w-[360px] flex-1 items-center gap-2 !py-1.5">
+			<Search size={16} class="text-muted-foreground" />
+			<input
+				class="w-full bg-transparent text-sm outline-none"
+				placeholder={tr("Cari artikel, brand, media, campaign, partner, atau ID…")}
+				bind:value={query}
+			/>
+		</label>
+		<button class="app-btn app-btn-soft" onclick={exportCsv} disabled={exporting}>
+			<Download size={16} />{exporting ? 'Menyiapkan…' : 'Export CSV'}
+		</button>
+	</div>
+
+	<div class="mt-3 flex flex-wrap gap-2">
+		{#each filters as f (f)}
+			<button
+				type="button"
+				class="app-btn !min-h-8 !px-3 !text-xs"
+				class:app-btn-primary={filter === f}
+				class:app-btn-soft={filter !== f}
+				onclick={() => {
+					filter = f;
+					page = 1;
+					void load();
+				}}>{f === '' ? tr('Semua') : f}</button
+			>
+		{/each}
+	</div>
+
+	{#if showAccess}
+		<div class="app-card mt-6 px-6 py-10 text-center">
+			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke data publikasi.")}</p>
+		</div>
+	{:else}
+		<DataTable
+			columns={[
+				{ key: 'article', label: 'Artikel', render: articleCell },
+				{ key: 'brand', label: 'Brand', render: brandCell },
+				{ key: 'media', label: tr('Media'), render: mediaCell },
+				{ key: 'price', label: tr('Harga'), render: priceCell },
+				{ key: 'status', label: 'Status', render: pubStatusCell },
+				{ key: 'created', label: 'Waktu', render: createdAtCell },
+				{ key: 'action', label: tr('Aksi'), render: actionCell }
+			]}
+			rows={rows}
+			rowKey={(row: Row) => row.id}
+			{loading}
+			empty={tr("Tidak ada publikasi untuk filter ini.")}
+			minWidth="1100px"
+		/>
+
+		<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+			<p class="text-xs text-muted-foreground">
+				{total} publikasi · halaman {page} {tr("dari")} {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+			</p>
+			<div class="flex gap-2">
+				<button
+					class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+					disabled={page <= 1 || loading}
+					onclick={() => {
+						page = Math.max(1, page - 1);
+						void load();
+					}}>‹ Sebelumnya</button
+				>
+				<button
+					class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+					disabled={page >= Math.max(1, Math.ceil(total / PAGE_SIZE)) || loading}
+					onclick={() => {
+						page = page + 1;
+						void load();
+					}}>Berikutnya ›</button
+				>
+			</div>
+		</div>
+	{/if}
+	</ExplorerFrame>
+</section>

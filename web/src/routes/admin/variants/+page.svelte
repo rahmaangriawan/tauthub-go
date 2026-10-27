@@ -8,6 +8,7 @@
 	import { ChevronDown, ChevronRight, Download, Search } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
+	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import DataTable from '$lib/components/admin/data-table.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
@@ -226,6 +227,7 @@
 {/snippet}
 
 <section>
+	<ExplorerFrame parents={[{ label: tr('Publikasi'), href: '/admin/publications' }]} crumb={tr('Varian')} path='/admin/variants'>
 	<PageHeader
 		title="Variant Batches"
 		description={tr("Monitoring multi-artikel Tauthub: satu bahan/artikel → N artikel per media (sudut pandang diacak, diproses worker). Klik baris untuk audit sudut pandang per media.")}
@@ -373,4 +375,5 @@
 			</div>
 		</div>
 	{/if}
+	</ExplorerFrame>
 </section>

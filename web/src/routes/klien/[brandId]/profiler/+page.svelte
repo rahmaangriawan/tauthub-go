@@ -11,7 +11,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Bot, LoaderCircle, Upload } from '@lucide/svelte';
+	import { ArrowRight, FileUp, LoaderCircle, MessageSquare } from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
@@ -93,14 +93,16 @@
 			<p class="gate-sub">{tr('Gunakan gerbang mana untuk brand ini?')}</p>
 			<div class="gate-options">
 				<button class="gate-option" type="button" disabled={routing} onclick={() => enterGate('chat')}>
-					<span class="gate-icon"><Bot size={16} /></span>
-					<span class="gate-name">{tr('Gerbang 1 · Chat Brief')}</span>
-					<span class="gate-desc">{tr('Obrolan dengan Tubi AI satu per satu untuk mengisi Entity Core hingga 100%. Paling cocok mulai dari nol.')}</span>
+					<span class="gate-icon"><MessageSquare size={28} strokeWidth={1.6} /></span>
+					<span class="gate-name">{tr('Chat Brief')}</span>
+					<span class="gate-desc">{tr('Isi Entity Core bersama Tubi lewat percakapan bertahap hingga lengkap.')}</span>
+					<span class="gate-cta">{tr('Mulai percakapan')} <ArrowRight size={14} /></span>
 				</button>
 				<button class="gate-option" type="button" disabled={routing} onclick={() => enterGate('instan')}>
-					<span class="gate-icon"><Upload size={16} /></span>
-					<span class="gate-name">{tr('Gerbang 2 · Instan Brief')}</span>
-					<span class="gate-desc">{tr('Unduh template, isi bersama agensi, unggah dokumen dan gambar — datanya langsung sinkron ke tab Media dan jadi bahan Ringkasan.')}</span>
+					<span class="gate-icon"><FileUp size={28} strokeWidth={1.6} /></span>
+					<span class="gate-name">{tr('Instan Brief')}</span>
+					<span class="gate-desc">{tr('Unduh template, isi bersama tim, lalu unggah dokumen atau gambar untuk diringkas otomatis.')}</span>
+					<span class="gate-cta">{tr('Gunakan template')} <ArrowRight size={14} /></span>
 				</button>
 			</div>
 			{#if routing}
@@ -130,8 +132,8 @@
 	}
 	.gate-card {
 		width: 100%;
-		max-width: 560px;
-		padding: 26px 24px 22px;
+		max-width: 1080px;
+		padding: 28px 28px 24px;
 		border: 1px solid var(--border, #e2e8f0);
 		border-radius: 16px;
 		background: var(--card, #fff);
@@ -139,53 +141,75 @@
 	}
 	.gate-title {
 		margin: 0;
-		font-size: 19px;
+		text-align: center;
+		font-size: 22px;
 		font-weight: 700;
 		letter-spacing: -0.01em;
 		color: var(--foreground, #111827);
 	}
 	.gate-sub {
-		margin: 4px 0 18px;
-		font-size: 13px;
+		margin: 6px 0 20px;
+		text-align: center;
+		font-size: 13.5px;
 		color: var(--muted-foreground, #667085);
 	}
+	/* Dua gerbang sejajar bersebelahan (menginsa satu kolom di layar sempit). */
 	.gate-options {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+	}
+	@media (max-width: 720px) {
+		.gate-options { grid-template-columns: 1fr; }
 	}
 	.gate-option {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 4px;
-		padding: 14px 16px;
+		gap: 8px;
+		padding: 24px 26px 22px;
 		text-align: left;
 		border: 1px solid var(--border, #e2e8f0);
-		border-radius: 12px;
+		border-radius: 14px;
 		background: var(--card, #fff);
 		cursor: pointer;
-		transition: border-color 0.12s ease, background-color 0.12s ease;
+		transition: border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
 	}
 	.gate-option:hover:not(:disabled) {
 		border-color: color-mix(in srgb, var(--primary, #2b67ec) 45%, var(--border, #e2e8f0));
-		background: color-mix(in srgb, var(--primary, #2b67ec) 5%, var(--card, #fff));
+		background: color-mix(in srgb, var(--primary, #2b67ec) 4%, var(--card, #fff));
+		box-shadow: 0 8px 20px rgba(43, 103, 236, 0.08);
 	}
 	.gate-option:disabled { opacity: 0.6; cursor: wait; }
 	.gate-icon {
 		display: inline-flex;
 		align-items: center;
+		color: var(--primary, #2b67ec);
+		margin-bottom: 2px;
 	}
 	.gate-name {
-		font-size: 14px;
+		font-size: 18px;
 		font-weight: 700;
+		letter-spacing: -0.01em;
 		color: var(--foreground, #111827);
 	}
 	.gate-desc {
-		font-size: 12px;
-		line-height: 1.55;
+		max-width: 460px;
+		font-size: 13.5px;
+		line-height: 1.6;
 		color: var(--muted-foreground, #667085);
 	}
+	.gate-cta {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: auto;
+		padding-top: 10px;
+		font-size: 13.5px;
+		font-weight: 600;
+		color: var(--primary, #2b67ec);
+	}
+	.gate-option:hover:not(:disabled) .gate-cta { text-decoration: underline; }
 	.gate-loading {
 		margin: 14px 0 0;
 		display: inline-flex;

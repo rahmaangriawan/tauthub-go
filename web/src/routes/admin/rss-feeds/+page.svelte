@@ -7,6 +7,7 @@
 	import { onMount } from 'svelte';
 	import { Radio } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
+	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import DataTable from '$lib/components/admin/data-table.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
@@ -210,6 +211,7 @@
 {/snippet}
 
 <section>
+	<ExplorerFrame parents={[{ label: tr('Publikasi'), href: '/admin/publications' }]} crumb={tr('RSS Feeds')} path='/admin/rss-feeds'>
 	<PageHeader
 		title="RSS Feeds"
 		description={tr("Channel RSS pull per partner (Phase 4). Media feed wajib milik partner; token = otentikasi feed publik.")}
@@ -252,6 +254,7 @@
 			}}
 		/>
 	{/if}
+	</ExplorerFrame>
 </section>
 
 {#if createOpen}

@@ -2,11 +2,13 @@
 	import { tr } from '$lib/i18n/phrases';
 
 	// Settlement — port app/admin/settlements/page.tsx: payout ke partner.
-	// Create meng-agregasi earnings pending dalam periode. Review withdraw:
-	// tolak wajib alasan, bayar + nomor referensi & bukti transfer, void.
-	// Plus pengaturan saldo minimal penarikan.
+	// Create meng-agregasi earnings pending dalam periode dan menguncinya (Phase 6).
+	// Review withdraw: tolak wajib alasan, bayar + nomor referensi & bukti transfer,
+	// void. Plus pengaturan saldo minimal penarikan. Total kolom memakai NET
+	// (setelah potongan transfer) agar sama dengan yang diterima mitra; detail
+	// memuat rekening mitra untuk transfer manual.
 	import { onMount } from 'svelte';
-	import { TriangleAlert, Wallet } from '@lucide/svelte';
+	import { Landmark, TriangleAlert, Wallet } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
@@ -20,6 +22,9 @@
 	type Settlement = {
 		id: string; partner_id: string; partner_name: string | null; period_start: string;
 		period_end: string; status: string; total_amount: number; notes: string | null;
+		payout_method: string | null; transfer_fee_idr: number | null; net_amount_idr: number | null;
+		invoice_number: string | null;
+		bank_name: string | null; bank_account_number: string | null; bank_account_name: string | null;
 		receipt_url: string | null; payment_reference: string | null;
 		rejection_reason: string | null; paid_at: string | null; created_at: string;
 	};
@@ -30,6 +35,21 @@
 	const STATUS_TONE: Record<string, 'success' | 'neutral' | 'warning' | 'accent' | 'danger'> = {
 		pending: 'warning', approved: 'accent', processing: 'neutral', paid: 'success', failed: 'danger'
 	};
+	// Warna tombol langkah berbeda per tujuan supaya "approved" tidak dilahap
+	// sama seperti Void/Tolak.
+	const NEXT_TONE: Record<string, { bg: string; color: string }> = {
+		approved: { bg: 'var(--success-soft)', color: 'var(--success)' },
+		processing: { bg: 'var(--accent-soft, #eef4ff)', color: 'var(--accent-foreground, #2b67ec)' }
+	};
+
+	// Jumlah yang harus ditransfer = net (setelah potongan transfer). Baris
+	// backend selalu mengisi kedua nilai (baris lama dihitung runtime di API).
+	function payoutOf(row: Settlement): number {
+		return row.net_amount_idr ?? row.total_amount;
+	}
+	function feeOf(row: Settlement): number {
+		return row.transfer_fee_idr ?? 0;
+	}
 
 	let rows = $state<Settlement[]>([]);
 	let total = $state(0);
@@ -58,6 +78,8 @@
 	let search = $state('');
 	let debouncedSearch = $state('');
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
+	// Detail: rekening mitra + rincian potongan, untuk transfer manual.
+	let detailTarget = $state<Settlement | null>(null);
 
 	onMount(() => {
 		void (async () => {
@@ -314,9 +336,8 @@
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">{tr('Mitra')}</th>
 						<th class="px-4 py-2.5 font-medium">Periode</th>
-						<th class="px-4 py-2.5 font-medium">{tr("Total")}</th>
-						<th class="px-4 py-2.5 font-medium">Status</th>
-						<th class="px-4 py-2.5 font-medium">Dibayar</th>
+					<th class="px-4 py-2.5 font-medium">Total (neto)</th>
+					<th class="px-4 py-2.5 font-medium">Status</th>						<th class="px-4 py-2.5 font-medium">Dibayar</th>
 						<th class="px-4 py-2.5"></th>
 					</tr>
 				</thead>
@@ -333,7 +354,12 @@
 								</div>
 							</td>
 							<td class="px-4 py-2.5">{fmtDate(row.period_start)} — {fmtDate(row.period_end)}</td>
-							<td class="px-4 py-2.5 tabular-nums">{fmtRp(row.total_amount)}</td>
+							<td class="px-4 py-2.5 tabular-nums">
+								<span class="font-semibold">{fmtRp(payoutOf(row))}</span>
+								{#if feeOf(row) > 0}
+									<span class="mt-0.5 block text-[11px] text-muted-foreground">Bruto {fmtRp(row.total_amount)} − potongan {fmtRp(feeOf(row))}</span>
+								{/if}
+							</td>
 							<td class="px-4 py-2.5">
 								<Badge label={row.status} tone={STATUS_TONE[row.status] ?? 'neutral'} />
 								{#if row.status === 'failed' && row.rejection_reason}
@@ -345,7 +371,12 @@
 							</td>
 							<td class="px-4 py-2.5 text-muted-foreground">{row.paid_at ? fmtDate(row.paid_at) : '—'}</td>
 							<td class="px-4 py-2.5">
-								<div class="flex gap-2">
+								<div class="flex items-center gap-1.5">
+									<button
+										class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+										type="button"
+										onclick={() => { detailTarget = row; error = ''; }}
+									>Detail</button>
 									{#if row.status === 'processing'}
 										<button
 											class="app-btn !min-h-7 !px-2.5 !text-xs"
@@ -355,7 +386,13 @@
 										>Bayar + Bukti</button>
 									{/if}
 									{#if NEXT_STATUS[row.status] && row.status !== 'processing'}
-										<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => void transition(row, NEXT_STATUS[row.status])}>{NEXT_STATUS[row.status]}</button>
+										{@const tone = NEXT_TONE[NEXT_STATUS[row.status]]}
+										<button
+											class="app-btn !min-h-7 !px-2.5 !text-xs"
+											style="background-color: {tone.bg}; color: {tone.color};"
+											type="button"
+											onclick={() => void transition(row, NEXT_STATUS[row.status])}
+										>{NEXT_STATUS[row.status]}</button>
 									{/if}
 									{#if ['pending', 'approved'].includes(row.status)}
 										<button class="app-btn !min-h-7 !px-2.5 !text-xs" style="background-color: var(--destructive-soft, #fdecee); color: var(--destructive);" type="button" onclick={() => { rejectTarget = row; rejectReason = ''; error = ''; }}>Tolak</button>
@@ -429,8 +466,7 @@
 {/if}
 
 {#if rejectTarget}
-	<Modal title="Tolak Withdrawal" label="Tolak withdrawal" maxWidth="md" onClose={() => (rejectTarget = null)}>
-		<p class="text-sm text-muted-foreground">
+	<Modal title="Tolak Withdrawal" label="Tolak withdrawal" maxWidth="md" onClose={() => (rejectTarget = null)}>		<p class="text-sm text-muted-foreground">
 			Tolak penarikan <strong>{fmtRp(rejectTarget.total_amount)}</strong>{tr("? Saldo earnings akan dikembalikan ke mitra dan alasan ini terlihat olehnya.")}</p>
 		<label class="mt-3 block">
 			<span class="mb-1 block text-xs font-semibold text-muted-foreground">Alasan Penolakan *</span>
@@ -453,7 +489,8 @@
 {#if payTarget}
 	<Modal title="Konfirmasi Pembayaran" label="Konfirmasi pembayaran" maxWidth="md" onClose={() => (payTarget = null)}>
 		<p class="text-sm text-muted-foreground">
-			Tandai penarikan <strong>{fmtRp(payTarget.total_amount)}</strong>{tr("sebagai PAID setelah transfer manual selesai.")}</p>
+			Tandai penarikan <strong>{fmtRp(payoutOf(payTarget))}</strong>{tr("sebagai PAID setelah transfer manual selesai ke rekening di Detail.")}
+			{#if feeOf(payTarget) > 0}<span class="block mt-1 text-xs">Bruto {fmtRp(payTarget.total_amount)} − potongan {fmtRp(feeOf(payTarget))} = neto {fmtRp(payoutOf(payTarget))}.</span>{/if}</p>
 		<div class="mt-3 flex flex-col gap-3">
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">Nomor Referensi Transfer (opsional)</span>
@@ -480,6 +517,81 @@
 			<button class="app-btn app-btn-primary" type="button" disabled={payBusy} onclick={() => void markPaid()}>
 				{payBusy ? 'Menyimpan…' : 'Konfirmasi Dibayar'}
 			</button>
+		{/snippet}
+	</Modal>
+{/if}
+
+{#if detailTarget}
+	{@const d = detailTarget}
+	{@const hasRek = Boolean(d.bank_account_number)}
+	<Modal title="Detail Settlement" label="Detail settlement" maxWidth="md" onClose={() => (detailTarget = null)}>
+		<div class="flex flex-col gap-4 text-sm">
+			<div class="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+				<div>
+					<p class="text-xs font-semibold text-muted-foreground">Mitra</p>
+					<p class="font-medium">{d.partner_name ?? d.partner_id.slice(0, 8)}</p>
+				</div>
+				<div>
+					<p class="text-xs font-semibold text-muted-foreground">Periode</p>
+					<p>{fmtDate(d.period_start)} — {fmtDate(d.period_end)}</p>
+				</div>
+				<div>
+					<p class="text-xs font-semibold text-muted-foreground">Status</p>
+					<p><Badge label={d.status} tone={STATUS_TONE[d.status] ?? 'neutral'} /></p>
+				</div>
+				<div>
+					<p class="text-xs font-semibold text-muted-foreground">Nomor Invoice</p>
+					<p class="tabular-nums" style="color: var(--muted-foreground);">{d.invoice_number ?? '—'}</p>
+				</div>
+			</div>
+
+			<div class="rounded-xl border p-3" style="border-color: var(--border); background: color-mix(in srgb, var(--muted) 40%, white);">
+				<p class="text-xs font-semibold text-muted-foreground">Pembayaran</p>
+				<div class="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+					<span class="text-base font-bold tabular-nums">{fmtRp(payoutOf(d))}</span>
+					<span class="text-[11px] rounded-full px-2 py-0.5" style="background: var(--secondary); color: var(--muted-foreground);">
+						{d.payout_method === 'ewallet' ? 'E-Wallet' : 'Transfer Bank'}
+					</span>
+				</div>
+				<p class="mt-1 text-xs text-muted-foreground">
+					Bruto {fmtRp(d.total_amount)}{#if feeOf(d) > 0} − potongan transfer {fmtRp(feeOf(d))}{/if} → neto {fmtRp(payoutOf(d))}
+				</p>
+				{#if d.payment_reference}<p class="mt-1 text-xs">Ref: {d.payment_reference}</p>{/if}
+				{#if d.receipt_url}<p class="mt-1 text-xs"><a class="underline" href={d.receipt_url} target="_blank" rel="noreferrer">Bukti transfer</a></p>{/if}
+				{#if d.status === 'failed' && d.rejection_reason}<p class="mt-1 text-xs" style="color: var(--destructive);">Alasan tolak: {d.rejection_reason}</p>{/if}
+			</div>
+
+			<div class="rounded-xl border p-3" style="border-color: {hasRek ? 'var(--border)' : 'var(--warning, #d97706)'}; background: {hasRek ? 'color-mix(in srgb, var(--muted) 40%, white)' : 'var(--warning-soft, #fff8e6)'};">
+				<p class="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+					<Landmark size={13} />Rekening Mitra
+				</p>
+				{#if hasRek}
+					<div class="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-[auto_1fr] sm:gap-x-6">
+						<p class="text-xs font-medium text-muted-foreground">Bank</p>
+						<p class="font-medium">{d.bank_name ?? '—'}</p>
+						<p class="text-xs font-medium text-muted-foreground">Nomor</p>
+						<p class="font-bold tabular-nums text-base" >{d.bank_account_number}</p>
+						<p class="text-xs font-medium text-muted-foreground">Nama Pemilik</p>
+						<p class="font-medium">{d.bank_account_name ?? '—'}</p>
+					</div>
+					<p class="mt-2 text-xs text-muted-foreground">Transfer manual ke rekening ini dengan jumlah neto di atas.</p>
+				{:else}
+					<p class="mt-1.5 text-xs" style="color: var(--destructive);">
+						Mitra belum melengkapi data rekening ({d.payout_method === 'ewallet' ? 'e-wallet' : 'bank'}).
+						Minta mitra mengisi di profilnya sebelum dibayar.
+					</p>
+				{/if}
+			</div>
+
+			{#if d.notes}
+				<div>
+					<p class="text-xs font-semibold text-muted-foreground">Catatan</p>
+					<p class="whitespace-pre-wrap text-xs">{d.notes}</p>
+				</div>
+			{/if}
+		</div>
+		{#snippet footer()}
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (detailTarget = null)}>Tutup</button>
 		{/snippet}
 	</Modal>
 {/if}

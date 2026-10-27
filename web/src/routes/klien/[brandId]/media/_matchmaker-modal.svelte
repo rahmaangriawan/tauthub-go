@@ -135,6 +135,9 @@
 		lastAnalyzed: string;
 		selected: string[];
 		pickedTypes: string[];
+		// Sidik kriteria saat hasil pencarian terakhir diambil; dipakai untuk
+		// kembali ke step 2 tanpa panggilan server bila kriteria tak berubah.
+		resultCriteria?: string;
 	};
 	function loadDraft(): Draft | null {
 		// SSR: sessionStorage tidak ada di server — modal dirender ulang di klien.
@@ -143,15 +146,21 @@
 			const raw = sessionStorage.getItem(draftKey());
 			if (!raw) return null;
 			const d = JSON.parse(raw) as Partial<Draft>;
+			// Hasil dari server berprotokol lama (sebelum strict+alternatif)
+			// tidak boleh hidrasi jadi tampilan — buang result-nya, teks brief
+			// dan kriterianya tetap dipakai. Cukup tandai dengan `strict` yang
+			// wajib ada di respons server sekarang.
+			const staleResult = Boolean(d.result) && !(d.result as Result | null)?.strict;
 			return {
 				brief: typeof d.brief === 'string' ? d.brief : '',
-				step: d.step === 2 ? 2 : 1,
+				step: d.step === 2 && !staleResult ? 2 : 1,
 				interpretation: d.interpretation ?? null,
 				criteria: d.criteria ?? null,
-				result: d.result ?? null,
+				result: staleResult ? null : (d.result ?? null),
 				lastAnalyzed: typeof d.lastAnalyzed === 'string' ? d.lastAnalyzed : '',
 				selected: Array.isArray(d.selected) ? d.selected.filter((x) => typeof x === 'string') : [],
-				pickedTypes: Array.isArray(d.pickedTypes) ? d.pickedTypes.filter((x) => typeof x === 'string') : []
+				pickedTypes: Array.isArray(d.pickedTypes) ? d.pickedTypes.filter((x) => typeof x === 'string') : [],
+				resultCriteria: typeof d.resultCriteria === 'string' ? d.resultCriteria : ''
 			};
 		} catch {
 			return null;
@@ -161,6 +170,12 @@
 
 	let brief = $state(draft?.brief ?? '');
 	let step = $state<1 | 2>(draft?.step ?? 1);
+	// Sidik kriteria hasil search terakhir. Bila user kembali ke step 1 lalu
+	// menekan "Cari Media yang Cocok" tanpa mengubah ringkasan, hasil lama
+	// dipakai lagi (tanpa panggilan AI/server dan tanpa kehilangan pilihan).
+	let resultCriteria = $state(
+		draft?.resultCriteria || (draft?.result && draft?.criteria ? JSON.stringify(draft.criteria) : '')
+	);
 	let analyzing = $state(false);
 	let analyzeError = $state('');
 	let interpretation = $state<Interpretation | null>(draft?.interpretation ?? null);
@@ -213,7 +228,8 @@
 				result,
 				lastAnalyzed,
 				selected: [...selected],
-				pickedTypes
+				pickedTypes,
+				resultCriteria
 			};
 			sessionStorage.setItem(draftKey(), JSON.stringify(snapshot));
 		} catch {
@@ -237,6 +253,7 @@
 		lastAnalyzed;
 		selected;
 		pickedTypes;
+		resultCriteria;
 		const t = window.setTimeout(saveDraft, 250);
 		return () => window.clearTimeout(t);
 	});
@@ -358,7 +375,24 @@
 		Boolean(result && result.strict && result.strict.matched < result.strict.requested)
 	);
 	const selectedTotal = $derived(selectedItems.reduce((sum, c) => sum + (c.client_price ?? 0), 0));
-	const overBudget = $derived(Boolean(result && result.package.budget > 0 && selectedTotal > result.package.budget));
+	// Anggaran yang dipakai tiga kartu ringkasan: total kampanye bila brief
+	// menyebutnya; kalau klien hanya menulis plafon PER MEDIA (mis. "maksimal
+	// 100rb per media"), anggaran diturunkan dari plafon × jumlah media supaya
+	// kolom Anggaran / Sisa anggaran tidak kosong.
+	const effectiveBudget = $derived(
+		result && result.package.budget > 0
+			? result.package.budget
+			: criteria && criteria.count > 0 && criteria.budget_max > 0
+				? criteria.budget_max * criteria.count
+				: 0
+	);
+	// Anggaran diturunkan dari plafon per media — diberi keterangan kecil
+	// supaya tidak disangka angka total yang disebut klien.
+	const budgetDerived = $derived(
+		Boolean(result && result.package.budget <= 0 && criteria && criteria.count > 0 && criteria.budget_max > 0)
+	);
+	const remainingBudget = $derived(effectiveBudget > 0 ? effectiveBudget - selectedTotal : 0);
+	const overBudget = $derived(Boolean(effectiveBudget > 0 && selectedTotal > effectiveBudget));
 
 	// Ringkasan TIDAK dibuat otomatis saat mengetik — user menekan "Ringkas
 	// Brief". Effect ini hanya membersihkan hasil lama ketika brief dikosongkan
@@ -416,6 +450,14 @@
 		// Tanpa ringkasan tidak ada kriteria yang bisa dicari; tombolnya pun
 		// disabled. Tidak ada panggilan AI implisit di sini.
 		if (!criteria) return;
+		// Hasil sudah ada untuk kriteria yang sama (user kembali dari step 2):
+		// tampilkan lagi apa adanya — pilihan yang sudah dicentang tetap utuh,
+		// tanpa memanggil server/AI lagi.
+		const criteriaSig = JSON.stringify(criteria);
+		if (result && resultCriteria === criteriaSig) {
+			step = 2;
+			return;
+		}
 		searching = true;
 		try {
 			const res = await apiRequest(
@@ -431,6 +473,7 @@
 			}
 			const data = (await res.json()) as Result;
 			result = data;
+			resultCriteria = criteriaSig;
 			selected = new Set(data.candidates.filter((c) => c.in_package).map((c) => c.id));
 			step = 2;
 		} catch (reason) {
@@ -1029,12 +1072,18 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 						<div class="mmStatCard">
 							<span class="mmStatIcon" style="background:#fff7ed;color:#ea580c"><Wallet size={16} /></span>
 							<span class="mmStatLabel">{tr('Anggaran')}</span>
-							<strong class="mmStatValue">{result && result.package.budget > 0 ? money(result.package.budget) : '—'}</strong>
+							<strong class="mmStatValue">{effectiveBudget > 0 ? money(effectiveBudget) : '—'}</strong>
+							{#if budgetDerived}
+								<span class="mmStatSub">{money(criteria?.budget_max ?? 0)} × {criteria?.count} {tr('media')}</span>
+							{/if}
 						</div>
 						<div class="mmStatCard">
 							<span class="mmStatIcon" style="background:#eff6ff;color:#2563eb"><Clock size={16} /></span>
 							<span class="mmStatLabel">{tr('Sisa anggaran')}</span>
-							<strong class="mmStatValue">{result && result.package.budget > 0 ? money(Math.max(0, result.package.budget - selectedTotal)) : '—'}</strong>
+							<strong class="mmStatValue">{effectiveBudget > 0 ? money(Math.max(0, remainingBudget)) : '—'}</strong>
+							{#if effectiveBudget > 0 && overBudget}
+								<span class="mmStatSub" style="color: var(--destructive, #dc2626);">{tr('Lewat')} {money(selectedTotal - effectiveBudget)}</span>
+							{/if}
 						</div>
 					</div>
 

@@ -935,6 +935,8 @@ func run() error {
 			authed.Put("/platform/packages/{packageId}", platformDeps.CreditPackageUpdate)
 			authed.Delete("/platform/packages/{packageId}", platformDeps.CreditPackageRevoke)
 			authed.Get("/platform/orders", platformDeps.OrdersList)
+			authed.Get("/platform/orders/campaigns", platformDeps.OrdersCampaignsList)
+			authed.Get("/platform/orders/campaigns/{campaignId}", platformDeps.OrdersCampaignDetail)
 			authed.Get("/platform/revenue-shares", platformDeps.RevenueSharesList)
 			authed.Post("/platform/revenue-shares", platformDeps.RevenueShareCreate)
 			authed.Get("/platform/revenue-shares/{ruleId}", platformDeps.RevenueShareGet)

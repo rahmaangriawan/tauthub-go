@@ -152,6 +152,9 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				...(can('publications')
 					? [
 							{
+								// Publikasi = folder explorer: anak-anaknya tampil sebagai
+								// kartu folder di /admin/publications (ala Taut Pintar),
+								// bukan submenu sidebar.
 								label: tr('Publikasi'),
 								href: '/admin/publications',
 								icon: Megaphone,
@@ -159,13 +162,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 									pathname.startsWith('/admin/publications') ||
 									pathname.startsWith('/admin/variants') ||
 									pathname.startsWith('/admin/auto-replace') ||
-									pathname.startsWith('/admin/rss-feeds'),
-								children: [
-									{ label: tr('Daftar Publikasi'), href: '/admin/publications', active: pathname.startsWith('/admin/publications') },
-									{ label: i18n.t.nav_admin.variants, href: '/admin/variants', active: pathname.startsWith('/admin/variants') },
-									{ label: i18n.t.nav_admin.auto_replace, href: '/admin/auto-replace', active: pathname.startsWith('/admin/auto-replace') },
-									{ label: i18n.t.nav_admin.rss_feeds, href: '/admin/rss-feeds', active: pathname.startsWith('/admin/rss-feeds') }
-								]
+									pathname.startsWith('/admin/rss-feeds') ||
+									pathname.startsWith('/admin/orders')
 							}
 						]
 					: []),
@@ -297,9 +295,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				...(can('errors')
 					? [{ label: i18n.t.nav_admin.errors, href: '/admin/errors', icon: TriangleAlert, active: pathname.startsWith('/admin/errors') }]
 					: []),
-				...(can('publications')
-					? [{ label: i18n.t.nav_admin.orders, href: '/admin/orders', icon: Receipt, active: pathname.startsWith('/admin/orders') }]
-					: []),
+				// Monitoring Order pindah ke folder Publikasi (group MEDIA & KONTEN),
+				// jadi tidak lagi berdiri sendiri di bagian Operasional.
 				{ label: i18n.t.nav_admin.media_summaries, href: '/admin/media-summaries', icon: Binoculars, active: pathname.startsWith('/admin/media-summaries') },
 				...(isSuper
 					? [

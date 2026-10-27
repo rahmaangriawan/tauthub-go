@@ -988,6 +988,218 @@ func (d *Deps) OrdersList(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ---------- orders per kampanye (level order CAM-) ----------
+
+// OrdersCampaignsList: GET /v1/platform/orders/campaigns?q=&limit=&offset=
+// Daftar kampanye sebagai entitas order: Rencana = SUM harga media terorder
+// (COALESCE(tcm.price, m.price)), fallback publikasi untuk kampanye legacy
+// tanpa taut_campaign_media; Terpakai = SUM publications.client_price
+// non-cancelled (paritas dengan Ringkasan klien totalCostIdr).
+func (d *Deps) OrdersCampaignsList(w http.ResponseWriter, r *http.Request) {
+	_, _, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	search := strings.TrimSpace(q.Get("q"))
+	limit := clampInt(q.Get("limit"), 25, 1, 200)
+	offset := clampInt(q.Get("offset"), 0, 0, 1<<30)
+
+	where := ""
+	params := []any{}
+	if search != "" {
+		like := "%" + search + "%"
+		params = append(params, like, like, like)
+		where = "WHERE c.order_code ILIKE $1 OR c.name ILIKE $2 OR b.name ILIKE $3"
+	}
+	from := `FROM campaigns c JOIN brands b ON b.id = c.brand_id ` + where
+	countRow, err := d.queryRow(r.Context(), "SELECT COUNT(*) AS count "+from, params...)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	plannedSub := `CASE WHEN EXISTS (SELECT 1 FROM taut_campaign_media tcm WHERE tcm.campaign_id = c.id AND tcm.status = 'selected')
+	     THEN (SELECT COALESCE(SUM(COALESCE(tcm2.price, m2.price, 0)), 0) FROM taut_campaign_media tcm2 JOIN media m2 ON m2.id = tcm2.media_id WHERE tcm2.campaign_id = c.id AND tcm2.status = 'selected')
+	     ELSE (SELECT COALESCE(SUM(p2.client_price), 0) FROM publications p2 WHERE p2.campaign_id = c.id AND p2.status <> 'cancelled') END`
+	selectColumns := `c.id, c.order_code, c.name, c.taut_status, c.status AS campaign_status, c.budget, c.created_at,
+	                  b.name AS brand_name, b.public_id AS brand_public_id,
+	                  (SELECT COUNT(*) FROM taut_campaign_media tcm WHERE tcm.campaign_id = c.id AND tcm.status = 'selected') AS media_count,
+	                  (SELECT COUNT(*) FROM publications p WHERE p.campaign_id = c.id AND p.status <> 'cancelled') AS publication_count,
+	                  (SELECT COUNT(*) FROM publications p WHERE p.campaign_id = c.id AND p.status = 'published') AS published_count,
+	                  (SELECT COALESCE(SUM(p.client_price), 0) FROM publications p WHERE p.campaign_id = c.id AND p.status <> 'cancelled') AS realized_cost,
+	                  ` + plannedSub + ` AS planned_cost`
+	args := append([]any{}, params...)
+	args = append(args, limit, offset)
+	items, err := d.queryRows(r.Context(),
+		"SELECT "+selectColumns+" "+from+" ORDER BY c.created_at DESC LIMIT $"+ptItoa(len(params)+1)+" OFFSET $"+ptItoa(len(params)+2), args...)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, raw := range items {
+		row := ptRow(ptNormalizeMap(raw))
+		out = append(out, map[string]any{
+			"campaign_id": row.strOr("id", ""), "order_code": ptNullableStr(row, "order_code"),
+			"name": row.strOr("name", ""), "taut_status": ptNullableStr(row, "taut_status"),
+			"campaign_status": row.strOr("campaign_status", ""), "budget": int(row.numOr("budget")),
+			"created_at":      row.anyOrNil("created_at"),
+			"brand_name":      ptNullableStr(row, "brand_name"), "brand_public_id": ptNullableStr(row, "brand_public_id"),
+			"media_count": int(row.numOr("media_count")), "publication_count": int(row.numOr("publication_count")),
+			"published_count": int(row.numOr("published_count")),
+			"planned_cost":    int(row.numOr("planned_cost")), "realized_cost": int(row.numOr("realized_cost")),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"campaigns": out, "total": countRow.intOr("count", 0), "limit": limit, "offset": offset,
+	})
+}
+
+// OrdersCampaignDetail: GET /v1/platform/orders/campaigns/{campaignId}
+func (d *Deps) OrdersCampaignDetail(w http.ResponseWriter, r *http.Request) {
+	_, _, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	campaignID := chiParam(r, "campaignId")
+	camp, err := d.queryRow(r.Context(), `SELECT c.id, c.order_code, c.name, c.taut_status, c.status AS campaign_status, c.budget,
+	       c.starts_at, c.ends_at, c.created_at, b.name AS brand_name, b.public_id AS brand_public_id
+	    FROM campaigns c JOIN brands b ON b.id = c.brand_id WHERE c.id = $1 LIMIT 1`, campaignID)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	if camp == nil {
+		writeErr(w, d, errNotFound("Campaign not found"))
+		return
+	}
+	campRow := ptRow(ptNormalizeMap(camp))
+
+	items, err := d.queryRows(r.Context(), `
+		SELECT tcm.id::text AS tcm_id, tcm.media_id, m.name AS media_name, m.website_url,
+		       tcm.category AS tcm_category, m.category AS media_category,
+		       COALESCE(tcm.price, m.price, 0) AS price,
+		       d.id AS document_id, d.title AS article_title, tcm.article_status,
+		       pub.id AS publication_id, pub.status AS pub_status, pub.client_price AS pub_client_price,
+		       pub.published_url, pub.published_at, pub.scheduled_at
+		FROM taut_campaign_media tcm
+		JOIN media m ON m.id = tcm.media_id
+		LEFT JOIN content_documents d ON d.id = tcm.article_document_id
+		LEFT JOIN publications pub ON pub.document_id = tcm.article_document_id AND pub.media_id = tcm.media_id
+		WHERE tcm.campaign_id = $1
+		ORDER BY tcm.match_rank ASC NULLS LAST, m.name ASC`, campaignID)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	mode := "campaign_media"
+	if len(items) == 0 {
+		// Kampanye legacy (jalur lama) menyimpan medianya langsung di
+		// publications tanpa baris taut_campaign_media — fallback grup per
+		// publikasi, harga per baris = client_price publikasinya.
+		mode = "publications_legacy"
+		items, err = d.queryRows(r.Context(), `
+			SELECT p.id AS publication_id, p.media_id, m.name AS media_name, m.website_url,
+			       m.category AS media_category, COALESCE(p.client_price, 0) AS price,
+			       p.document_id, d.title AS article_title, p.status AS article_status,
+			       p.id AS publication_id, p.status AS pub_status, p.client_price AS pub_client_price,
+			       p.published_url, p.published_at, p.scheduled_at
+			FROM publications p
+			JOIN media m ON m.id = p.media_id
+			LEFT JOIN content_documents d ON d.id = p.document_id
+			WHERE p.campaign_id = $1
+			ORDER BY p.created_at ASC`, campaignID)
+		if err != nil {
+			writeErr(w, d, err)
+			return
+		}
+	}
+
+	monthly := make([]map[string]any, 0, len(items))
+	seenMedia := map[string]int{}
+	planned, realized, published, pubCount := 0, 0, 0, 0
+	for _, raw := range items {
+		row := ptRow(ptNormalizeMap(raw))
+		// Pub join doc+media bisa mengembalikan beberapa revisi publikasi per
+		// baris media — dedupe: baris yang sudah punya publikasi menang.
+		key := row.strOr("tcm_id", "")
+		if key == "" {
+			key = row.strOr("media_id", "")
+		}
+		hasPub := row.strOr("publication_id", "") != ""
+		if idx, ok := seenMedia[key]; ok {
+			if hasPub && monthly[idx]["publication_id"] == "" {
+				monthly[idx] = campaignMediaRow(row)
+			}
+			continue
+		}
+		seenMedia[key] = len(monthly)
+		entry := campaignMediaRow(row)
+		monthly = append(monthly, entry)
+
+		price := int(row.numOr("price"))
+		if price < 0 {
+			price = 0
+		}
+		planned += price
+		pubStatus := row.strOr("pub_status", "")
+		if hasPub && pubStatus != "" && pubStatus != "cancelled" {
+			pubCount++
+			pubPrice := int(row.numOr("pub_client_price"))
+			if pubPrice == 0 {
+				pubPrice = price
+			}
+			realized += pubPrice
+			if pubStatus == "published" {
+				published++
+			}
+		}
+	}
+	budget := int(campRow.numOr("budget"))
+	remaining := planned - realized
+	if remaining < 0 {
+		remaining = 0
+	}
+	if budget > 0 {
+		remaining = budget - realized
+		if remaining < 0 {
+			remaining = 0
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"campaign": map[string]any{
+			"id": campRow.strOr("id", ""), "order_code": ptNullableStr(campRow, "order_code"),
+			"name": campRow.strOr("name", ""), "taut_status": ptNullableStr(campRow, "taut_status"),
+			"campaign_status": campRow.strOr("campaign_status", ""), "brand_name": ptNullableStr(campRow, "brand_name"),
+			"brand_public_id": ptNullableStr(campRow, "brand_public_id"), "budget": budget,
+			"starts_at": campRow.anyOrNil("starts_at"), "ends_at": campRow.anyOrNil("ends_at"),
+			"created_at": campRow.anyOrNil("created_at"),
+		},
+		"mode": mode,
+		"media": monthly,
+		"totals": map[string]any{
+			"planned": planned, "realized": realized, "remaining": remaining, "budget": budget,
+			"media_count": len(monthly), "publication_count": pubCount, "published_count": published,
+		},
+	})
+}
+
+func campaignMediaRow(row ptRow) map[string]any {
+	category := row.strOr("tcm_category", "")
+	if category == "" {
+		category = row.strOr("media_category", "")
+	}
+	return map[string]any{
+		"media_id": row.strOr("media_id", ""), "media_name": row.strOr("media_name", ""),
+		"website_url": row.strOr("website_url", ""), "category": category,
+		"price": int(row.numOr("price")), "document_id": ptNullableStr(row, "document_id"),
+		"article_title": ptNullableStr(row, "article_title"), "article_status": row.strOr("article_status", ""),
+		"publication_id": ptNullableStr(row, "publication_id"), "pub_status": row.strOr("pub_status", ""),
+		"published_url": ptNullableStr(row, "published_url"), "published_at": row.anyOrNil("published_at"),
+		"scheduled_at": row.anyOrNil("scheduled_at"),
+	}
+}
+
 // ---------- revenue shares ----------
 
 func revShareJSON(row ptRow) map[string]any {
@@ -1257,12 +1469,64 @@ func (d *Deps) RevenueShareArchive(w http.ResponseWriter, r *http.Request) {
 
 // ---------- settlements ----------
 
-func settJSON(row ptRow) map[string]any {
+// finFeeCfg: biaya penarikan dari tc_config — dipakai jalur payout. Default
+/// sama seperti partner/partner.go (bank Rp2.400, e-wallet 0,7%) bila baris
+// config belum ada.
+type finFeeCfg struct {
+	bankIDR    float64
+	ewalletPct float64
+}
+
+func (d *Deps) finFeeCfg(ctx context.Context) finFeeCfg {
+	cfg := finFeeCfg{bankIDR: 2400, ewalletPct: 0.7}
+	row, err := d.queryRow(ctx,
+		"SELECT withdraw_bank_fee_idr, withdraw_ewallet_fee_percent FROM tc_config WHERE id = 1 LIMIT 1")
+	if err != nil || row == nil {
+		return cfg
+	}
+	m := ptRow(ptNormalizeMap(row))
+	cfg.bankIDR = m.numOr("withdraw_bank_fee_idr")
+	cfg.ewalletPct = m.numOr("withdraw_ewallet_fee_percent")
+	return cfg
+}
+
+// settPayout: jumlah yang benar-benar harus ditransfer ke mitra. Baris yang
+// mengandung net_amount_idr (dibuat mitra / admin versi baru) dipakai apa
+// adanya; baris lama buatan admin (belum ada fee/net) dihitung runtime —
+// aturannya identik partner/finance.go: bank = fee flat, ewallet = persen.
+func settPayout(row ptRow, cfg finFeeCfg) (method string, fee, gross, net float64) {
+	gross = row.numOr("total_amount")
+	method = row.strOr("payout_method", "bank")
+	if f, ok := row.num("net_amount_idr"); ok {
+		// net tersimpan (jalur mitra / admin pasca-fix): pakai apa adanya.
+		net = f
+		fee = row.numOr("transfer_fee_idr")
+		return method, fee, gross, round2(net)
+	}
+	if method == "ewallet" {
+		fee = round2(gross * cfg.ewalletPct / 100)
+	} else {
+		fee = cfg.bankIDR
+	}
+	net = round2(gross - fee)
+	if net < 0 {
+		net = 0
+	}
+	return method, fee, gross, net
+}
+
+func settJSON(row ptRow, cfg finFeeCfg) map[string]any {
+	method, fee, gross, net := settPayout(row, cfg)
 	return map[string]any{
 		"id": row.strOr("id", ""), "partner_id": row.strOr("partner_id", ""),
 		"partner_name": ptNullableStr(row, "partner_name"), "period_start": row.anyOrNil("period_start"),
 		"period_end": row.anyOrNil("period_end"), "status": row.strOr("status", ""),
-		"total_amount": row.numOr("total_amount"), "notes": ptNullableStr(row, "notes"),
+		"total_amount": gross, "notes": ptNullableStr(row, "notes"),
+		"payout_method": method, "transfer_fee_idr": fee, "net_amount_idr": net,
+		"invoice_number":  ptNullableStr(row, "invoice_number"),
+		"bank_name":       ptNullableStr(row, "bank_name"),
+		"bank_account_number": ptNullableStr(row, "bank_account_number"),
+		"bank_account_name":   ptNullableStr(row, "bank_account_name"),
 		"receipt_url": ptNullableStr(row, "receipt_url"), "payment_reference": ptNullableStr(row, "payment_reference"),
 		"rejection_reason": ptNullableStr(row, "rejection_reason"), "paid_at": row.anyOrNil("paid_at"),
 		"created_by": ptNullableStr(row, "created_by"),
@@ -1272,7 +1536,8 @@ func settJSON(row ptRow) map[string]any {
 
 func (d *Deps) settScoped(r *http.Request, settlementID string) (ptRow, error) {
 	row, err := d.queryRow(r.Context(),
-		"SELECT s.*, p.name AS partner_name FROM settlements s LEFT JOIN partners p ON p.id = s.partner_id WHERE s.id = $1 LIMIT 1", settlementID)
+		"SELECT s.*, p.name AS partner_name, p.bank_name, p.bank_account_number, p.bank_account_name, p.payout_type AS partner_payout_type "+
+			"FROM settlements s LEFT JOIN partners p ON p.id = s.partner_id WHERE s.id = $1 LIMIT 1", settlementID)
 	if err != nil {
 		return nil, err
 	}
@@ -1329,15 +1594,17 @@ func (d *Deps) SettlementsList(w http.ResponseWriter, r *http.Request) {
 	args := append([]any{}, params...)
 	args = append(args, limit, offset)
 	items, err := d.queryRows(r.Context(),
-		"SELECT s.*, p.name AS partner_name FROM settlements s LEFT JOIN partners p ON p.id = s.partner_id "+
+		"SELECT s.*, p.name AS partner_name, p.bank_name, p.bank_account_number, p.bank_account_name, p.payout_type AS partner_payout_type "+
+			"FROM settlements s LEFT JOIN partners p ON p.id = s.partner_id "+
 			clause+" ORDER BY s.created_at DESC LIMIT $"+ptItoa(len(params)+1)+" OFFSET $"+ptItoa(len(params)+2), args...)
 	if err != nil {
 		writeErr(w, d, err)
 		return
 	}
+	feeCfg := d.finFeeCfg(r.Context())
 	out := make([]map[string]any, 0, len(items))
 	for _, raw := range items {
-		out = append(out, settJSON(ptRow(ptNormalizeMap(raw))))
+		out = append(out, settJSON(ptRow(ptNormalizeMap(raw)), feeCfg))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"settlements": out, "total": countRow.intOr("count", 0), "limit": limit, "offset": offset,
@@ -1393,10 +1660,13 @@ func (d *Deps) SettlementCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, settJSON(settlement))
+	writeJSON(w, http.StatusCreated, settJSON(settlement, d.finFeeCfg(r.Context())))
 }
 
 // finCreateSettlement: port finCreateSettlement (locks pending earnings in period).
+// Konsisten jalur mitra: fee transfer & net dihitung dari payout_type partner
+// (bank = flat, ewallet = persen) sehingga Total yang dilihat admin sama
+// dengan yang dilihat mitra di dashboard-nya.
 func (d *Deps) finCreateSettlement(r *http.Request, partnerID string, start, end time.Time, notes any, userID string) (ptRow, error) {
 	earnings, err := d.queryRows(r.Context(),
 		"SELECT id, amount FROM partner_earnings WHERE partner_id = $1 AND status = 'pending' AND created_at >= $2 AND created_at < $3",
@@ -1410,9 +1680,30 @@ func (d *Deps) finCreateSettlement(r *http.Request, partnerID string, start, end
 	}
 	total = round2(total)
 	id := uuid.NewString()
+
+	// Metode + fee + net mengikuti pengaturan mitra & tc_config (aturan sama
+	// dengan PartnerPost /finance.go).
+	pool, _ := d.queryRow(r.Context(),
+		"SELECT payout_type FROM partners WHERE id = $1 LIMIT 1", partnerID)
+	cfg := d.finFeeCfg(r.Context())
+	payoutMethod := "bank"
+	fee := cfg.bankIDR
+	if pool != nil && strings.EqualFold(ptRow(ptNormalizeMap(pool)).strOr("payout_type", "bank"), "ewallet") {
+		payoutMethod = "ewallet"
+		fee = round2(total * cfg.ewalletPct / 100)
+	}
+	net := round2(total - fee)
+	if net < 0 {
+		net = 0
+	}
+	// Nomor invoice — format sama dengan jalur mitra supaya riwayatnya seragam.
+	invCount, _ := d.queryRow(r.Context(),
+		"SELECT COUNT(*) AS count FROM settlements WHERE partner_id = $1 AND invoice_number IS NOT NULL", partnerID)
+	invoiceNumber := fmt.Sprintf("INV/%s/%s", partnerID, ptPadLeft(ptItoa(invCount.intOr("count", 0)+1), 3))
+
 	if err := d.exec(r.Context(),
-		"INSERT INTO settlements (id, partner_id, period_start, period_end, status, total_amount, notes, created_by) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)",
-		id, partnerID, start, end, total, notes, userID); err != nil {
+		"INSERT INTO settlements (id, partner_id, period_start, period_end, status, total_amount, payout_method, transfer_fee_idr, net_amount_idr, invoice_number, notes, created_by) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11)",
+		id, partnerID, start, end, total, payoutMethod, fee, net, invoiceNumber, notes, userID); err != nil {
 		return nil, err
 	}
 	if len(earnings) > 0 {
@@ -1458,15 +1749,38 @@ func (d *Deps) finTransitionSettlement(r *http.Request, settlementID, to, userID
 		return nil, errConflict(fmt.Sprintf("Settlement cannot transition from %s to %s", current, to))
 	}
 	if to == "paid" {
-		total := settlement.numOr("total_amount")
+		payout := settlement.numOr("total_amount")
+		// Baris lama buatan admin belum bere fee/net: isikan sekarang (aturan
+		// sama dengan jalur mitra) supaya jumlah payout = jumlah yang
+		// diterima mitra (setelah potongan transfer).
+		if settlement.raw("net_amount_idr") == nil {
+			cfg := d.finFeeCfg(r.Context())
+			method := settlement.strOr("payout_method", "bank")
+			fee := cfg.bankIDR
+			if strings.EqualFold(method, "ewallet") {
+				fee = round2(payout * cfg.ewalletPct / 100)
+			}
+			net := round2(payout - fee)
+			if net < 0 {
+				net = 0
+			}
+			if err := d.exec(r.Context(),
+				"UPDATE settlements SET payout_method = $2, transfer_fee_idr = $3, net_amount_idr = $4 WHERE id = $1",
+				settlementID, method, fee, net); err != nil {
+				return nil, err
+			}
+			payout = net
+		} else {
+			payout = settlement.numOr("net_amount_idr")
+		}
 		if err := d.exec(r.Context(),
 			"UPDATE settlements SET status = 'paid', paid_at = NOW(), updated_at = NOW() WHERE id = $1", settlementID); err != nil {
 			return nil, err
 		}
-		if total > 0 {
+		if payout > 0 {
 			if err := d.exec(r.Context(),
 				"INSERT INTO transactions (id, partner_id, amount, type, created_by) VALUES ($1, $2, $3, 'settlement.payout', $4)",
-				uuid.NewString(), settlement.strOr("partner_id", ""), -total, userID); err != nil {
+				uuid.NewString(), settlement.strOr("partner_id", ""), -payout, userID); err != nil {
 				return nil, err
 			}
 		}
@@ -1501,7 +1815,7 @@ func (d *Deps) SettlementGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, settJSON(row))
+	writeJSON(w, http.StatusOK, settJSON(row, d.finFeeCfg(r.Context())))
 }
 
 // SettlementUpdate: PUT /v1/platform/settlements/{settlementId}
@@ -1570,7 +1884,7 @@ func (d *Deps) SettlementUpdate(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, d, uErr)
 			return
 		}
-		writeJSON(w, http.StatusOK, settJSON(updated))
+		writeJSON(w, http.StatusOK, settJSON(updated, d.finFeeCfg(r.Context())))
 		return
 	}
 	if hasNotes && notes != "" {
@@ -1590,7 +1904,7 @@ func (d *Deps) SettlementUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, uErr)
 		return
 	}
-	writeJSON(w, http.StatusOK, settJSON(updated))
+	writeJSON(w, http.StatusOK, settJSON(updated, d.finFeeCfg(r.Context())))
 }
 
 // settNotifyPartner: notifikasi withdrawal.* ke user mitra (best-effort).
@@ -1722,7 +2036,7 @@ func (d *Deps) SettlementVoid(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, settJSON(refreshed))
+	writeJSON(w, http.StatusOK, settJSON(refreshed, d.finFeeCfg(r.Context())))
 }
 
 // SettlementReceiptUpload: POST /v1/platform/settlements/{settlementId}/receipt
@@ -1794,7 +2108,7 @@ func (d *Deps) SettlementReceiptUpload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, settJSON(updated))
+	writeJSON(w, http.StatusCreated, settJSON(updated, d.finFeeCfg(r.Context())))
 }
 
 // ---------- referrals / referred-domains / vip-partners ----------

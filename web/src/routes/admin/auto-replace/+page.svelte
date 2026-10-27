@@ -8,6 +8,7 @@
 	import { onMount } from 'svelte';
 	import { Shuffle } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
+	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
@@ -140,6 +141,7 @@
 </script>
 
 <section>
+	<ExplorerFrame parents={[{ label: tr('Publikasi'), href: '/admin/publications' }]} crumb={tr('Auto-Replace')} path='/admin/auto-replace'>
 	<PageHeader
 		title="Auto-Replace"
 		description="Saat partner menolak publikasi, Tauthub otomatis membuat publikasi pengganti ke media rekomendasi terbaik. Atur aktif/nonaktif global atau per brand, dan batas penolakan beruntun."
@@ -272,4 +274,5 @@
 
 	<div class="app-card mt-3 p-4 text-xs text-muted-foreground">
 		<Shuffle size={14} class="mr-1 inline align-[-2px]" />{tr("Alur: partner menolak → Tauthub mencari media alternatif (media yang sudah dicoba untuk artikel yang sama dieksklusi, standard check tetap dijalankan) → publikasi pengganti dibuat otomatis → klien diberi notifikasi. Jika melebihi batas beruntun atau tidak ada kandidat, publikasi tetap ditolak tanpa penggantian.")}</div>
+	</ExplorerFrame>
 </section>
