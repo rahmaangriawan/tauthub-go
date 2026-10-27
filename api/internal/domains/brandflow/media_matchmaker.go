@@ -988,10 +988,12 @@ func mmClampMoney(v float64) float64 {
 // mmMaxAlternatives: jumlah saran yang ditampilkan di bawah pemberitahuan.
 const mmMaxAlternatives = 12
 
-// mmAlternatives: media terdekat yang TIDAK memenuhi semua syarat. Dipakai UI
-// sebagai daftar "rekomendasi lain" bergaya marketplace — boleh dipilih, tapi
-// setiap kartu menyebutkan kekurangannya. Hanya kandidat dengan <= 2 jenis
-// kekurangan yang diambil supaya saran tetap relevan, bukan tumpukan media acak.
+// mmAlternatives: media terdekat yang TIDAK memenuhi syarat ANGKA (DA, trafik,
+// backlink, dan sejenisnya). Dipakai UI sebagai daftar "rekomendasi lain"
+// bergaya marketplace — media di atas/bawah ANGARAN tidak masuk sini: anggaran
+// bukan syarat yang boleh ditawar, itu plafon uang klien. Hanya kandidat
+// dengan <= 2 jenis kekurangan yang diambil supaya saran tetap relevan, bukan
+// tumpukan media acak.
 func (d *Deps) mmAlternatives(ctx context.Context, crit mmCriteria, matched []mmCandidate) ([]mmCandidate, error) {
 	loose, _, err := d.mmLooseCandidates(ctx, crit)
 	if err != nil {
@@ -1007,6 +1009,15 @@ func (d *Deps) mmAlternatives(ctx context.Context, crit mmCriteria, matched []mm
 	for i := range loose {
 		c := loose[i]
 		if seen[c.ID] {
+			continue
+		}
+		// Plafon harga per media tidak boleh dilewati walau kualitasnya bagus —
+		// media Rp150rb tidak pernah jadi "alternatif" untuk brief "maksimal
+		// 100rb". Buang kandidatnya di sini, bukan hanya tanda kekurangan.
+		if crit.BudgetMax > 0 && c.ClientPrice > crit.BudgetMax {
+			continue
+		}
+		if crit.BudgetMin > 0 && c.ClientPrice < crit.BudgetMin {
 			continue
 		}
 		gaps := mmCandidateGaps(crit, c)

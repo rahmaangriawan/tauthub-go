@@ -2113,7 +2113,6 @@
 	{#if matchmakerOpen}
 		<MatchmakerModal
 			apiBase={apiBase}
-			categories={categories.map(([name]) => name)}
 			detailIds={new Set(rows.map((m) => m.id))}
 			hasSelection={selectedIds.size > 0}
 			escapeDisabled={detail !== null}

@@ -102,7 +102,6 @@
 
 	type Props = {
 		apiBase: string;
-		categories: string[];
 		detailIds: Set<string>;
 		hasSelection: boolean;
 		// Modal detail dirender di atas modal ini; Escape di sana hanya boleh
@@ -113,7 +112,7 @@
 		onApply: (items: Array<{ id: string; name: string; price: number; credits: number }>) => void;
 	};
 
-	let { apiBase, categories, detailIds, hasSelection, escapeDisabled, onClose, onShowDetail, onApply }: Props = $props();
+	let { apiBase, detailIds, hasSelection, escapeDisabled, onClose, onShowDetail, onApply }: Props = $props();
 
 	const BRIEF_MAX = 2000;
 	const MIN_ANALYZE_CHARS = 15;
@@ -136,7 +135,6 @@
 		lastAnalyzed: string;
 		selected: string[];
 		pickedTypes: string[];
-		pickedCats: string[];
 	};
 	function loadDraft(): Draft | null {
 		// SSR: sessionStorage tidak ada di server — modal dirender ulang di klien.
@@ -153,8 +151,7 @@
 				result: d.result ?? null,
 				lastAnalyzed: typeof d.lastAnalyzed === 'string' ? d.lastAnalyzed : '',
 				selected: Array.isArray(d.selected) ? d.selected.filter((x) => typeof x === 'string') : [],
-				pickedTypes: Array.isArray(d.pickedTypes) ? d.pickedTypes.filter((x) => typeof x === 'string') : [],
-				pickedCats: Array.isArray(d.pickedCats) ? d.pickedCats.filter((x) => typeof x === 'string') : []
+				pickedTypes: Array.isArray(d.pickedTypes) ? d.pickedTypes.filter((x) => typeof x === 'string') : []
 			};
 		} catch {
 			return null;
@@ -183,26 +180,19 @@
 		{ value: 'blogger', label: 'Media Blogger' }
 	] as const;
 	let pickedTypes = $state<string[]>(draft?.pickedTypes ?? []);
-	let pickedCats = $state<string[]>(draft?.pickedCats ?? []);
-	let openPicker = $state<'types' | 'cats' | null>(null);
+	let openPicker = $state<'types' | null>(null);
 
-	function togglePick(field: 'types' | 'cats', value: string) {
-		const list = field === 'types' ? pickedTypes : pickedCats;
-		const next = list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
-		if (field === 'types') pickedTypes = next;
-		else pickedCats = next;
+	function togglePick(value: string) {
+		const next = pickedTypes.includes(value) ? pickedTypes.filter((v) => v !== value) : [...pickedTypes, value];
+		pickedTypes = next;
 		// Ringkasan yang sudah ada ikut dikoreksi saat itu juga, supaya user
 		// melihat efek pilihannya tanpa harus menekan "Ringkas ulang".
-		if (criteria) {
-			if (field === 'types') criteria.media_types = [...next];
-			else criteria.categories = [...next];
-		}
+		if (criteria) criteria.media_types = [...next];
 	}
 
 	/** Terapkan pilihan manual ke kriteria hasil AI (kalau ada). */
 	function applyPicks(c: Criteria): Criteria {
 		if (pickedTypes.length > 0) c.media_types = [...pickedTypes];
-		if (pickedCats.length > 0) c.categories = [...pickedCats];
 		return c;
 	}
 
@@ -223,8 +213,7 @@
 				result,
 				lastAnalyzed,
 				selected: [...selected],
-				pickedTypes,
-				pickedCats
+				pickedTypes
 			};
 			sessionStorage.setItem(draftKey(), JSON.stringify(snapshot));
 		} catch {
@@ -248,7 +237,6 @@
 		lastAnalyzed;
 		selected;
 		pickedTypes;
-		pickedCats;
 		const t = window.setTimeout(saveDraft, 250);
 		return () => window.clearTimeout(t);
 	});
@@ -700,7 +688,7 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 											type="button"
 											role="option"
 											aria-selected={on}
-											onclick={() => togglePick('types', opt.value)}
+											onclick={() => togglePick(opt.value)}
 										>
 											<span class="mmPickerCheck" class:mmPickerCheckOn={on}>{#if on}<Check size={12} />{/if}</span>
 											{opt.label}
@@ -709,40 +697,8 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 								</div>
 							{/if}
 						</div>
-
-						<div class="mmPickerWrap">
-							<button
-								class="mmPickerBtn"
-								class:mmPickerBtnOn={pickedCats.length > 0}
-								type="button"
-								aria-haspopup="listbox"
-								aria-expanded={openPicker === 'cats'}
-								onclick={() => (openPicker = openPicker === 'cats' ? null : 'cats')}
-							>
-								<Tag size={14} />
-								<span class="mmPickerText">{pickerLabel(pickedCats, (v) => v, tr('Kategori media'))}</span>
-								{#if pickedCats.length > 1}<span class="mmPickerCount">{pickedCats.length}</span>{/if}
-							</button>
-							{#if openPicker === 'cats'}
-								<div class="mmPickerMenu mmPickerMenuScroll" role="listbox" aria-multiselectable="true" aria-label={tr('Kategori media')}>
-									{#each categories as cat (cat)}
-										{@const on = pickedCats.includes(cat)}
-										<button
-											class="mmPickerItem"
-											class:mmPickerItemOn={on}
-											type="button"
-											role="option"
-											aria-selected={on}
-											onclick={() => togglePick('cats', cat)}
-										>
-											<span class="mmPickerCheck" class:mmPickerCheckOn={on}>{#if on}<Check size={12} />{/if}</span>
-											{cat}
-										</button>
-									{/each}
-								</div>
-							{/if}
-						</div>
 					</div>
+
 					{#if openPicker}
 						<button class="mmPickerBackdrop" type="button" aria-label={tr('Tutup')} onclick={() => (openPicker = null)}></button>
 					{/if}
@@ -948,16 +904,25 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 			<div class="mmBody mmBodyResults">
 				<section class="mmCol mmColLeft">
 					{#if strictShortfall && result}
-						<div class="mmWarnBox mmStrictNotice">
-							<strong><TriangleAlert size={14} /> {tr('Belum semua syarat bisa dipenuhi')}</strong>
-							<p>
-								{result.strict.matched === 0
-									? tr('Tidak ada media di katalog yang memenuhi seluruh syarat brief.')
-									: `${result.strict.matched} ${tr('dari')} ${result.strict.requested} ${tr('media memenuhi seluruh syarat.')}`}
-							</p>
-							{#if alternatives.length > 0}
-								<p>{tr('Media terdekat ada di daftar "Media alternatif untukmu" di bawah — kekurangannya disebutkan per media.')}</p>
-							{/if}
+						<div class="mmNoticeCard">
+							<span class="mmNoticeIcon"><TriangleAlert size={15} /></span>
+							<div class="mmNoticeBody">
+								<strong>{tr('Belum semua syarat terpenuhi')}</strong>
+								<p>
+									{result.strict.matched === 0
+										? tr('Belum ada media yang memenuhi seluruh kriteria brief.')
+										: `${result.strict.matched} ${tr('dari')} ${result.strict.requested} ${tr('media memenuhi seluruh syarat.')}`}
+								</p>
+								{#if alternatives.length > 0}
+									<button
+										class="mmNoticeLink"
+										type="button"
+										onclick={() => document.getElementById('mm-alternatives')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+									>
+										{tr('Lihat media alternatif')} <span aria-hidden="true">↓</span>
+									</button>
+								{/if}
+							</div>
 						</div>
 					{/if}
 
@@ -1022,7 +987,7 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 					{/if}
 
 					{#if alternatives.length > 0}
-						<div class="mmAltSection">
+						<div class="mmAltSection" id="mm-alternatives">
 							<div class="mmAltHead">
 								<h4>{tr('Media alternatif untukmu')}</h4>
 								<span>{tr('Belum memenuhi semua syarat, tapi bisa tetap dipilih')}</span>
@@ -1467,10 +1432,6 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		border-radius: 10px;
 		background: #fff;
 		box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
-	}
-	.mmPickerMenuScroll {
-		max-height: 240px;
-		overflow-y: auto;
 	}
 	.mmPickerItem {
 		display: flex;
@@ -2230,17 +2191,65 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		color: #a15c00;
 	}
 
-	/* Pemberitahuan syarat tidak terpenuhi: memakai bahasa visual mmWarnBox,
-	   ditambah baris penjelasan dan jarak ke filter di bawahnya. */
-	.mmStrictNotice {
+	/* Kartu peringatan "belum semua syarat terpenuhi": gaya kuning lembut
+	   berikon, bukan kotak merah. Baris akhirnya tautan yang menggeser
+	   (anchor lembut) ke daftar media alternatif di bawah (#mm-alternatives). */
+	.mmNoticeCard {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
 		margin-bottom: 12px;
+		padding: 12px 14px;
+		border: 1px solid #f2dc9b;
+		border-radius: 14px;
+		background: #fffbe9;
 	}
-	.mmStrictNotice p {
-		margin: 5px 0 0;
+	.mmNoticeIcon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		width: 30px;
+		height: 30px;
+		border-radius: 9px;
+		background: #fdf1c6;
+		color: #a15c00;
 	}
-	.mmStrictNotice p + p {
-		margin-top: 3px;
-		color: #7a4a00;
+	.mmNoticeBody { min-width: 0; }
+	.mmNoticeBody strong {
+		display: block;
+		font-size: 12.5px;
+		font-weight: 700;
+		color: #0f172a;
+	}
+	.mmNoticeBody p {
+		margin: 3px 0 0;
+		font-size: 12px;
+		line-height: 1.55;
+		color: var(--muted-foreground, #667085);
+	}
+	.mmNoticeBody p + .mmNoticeLink {
+		margin-top: 4px;
+	}
+	.mmNoticeLink {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		margin-top: 4px;
+		padding: 0;
+		border: none;
+		background: none;
+		font-size: 12.5px;
+		font-weight: 700;
+		color: #b45309;
+		cursor: pointer;
+	}
+	.mmNoticeLink:hover { color: #92400e; text-decoration: underline; }
+
+	/* Target anchor: tasen sedikit supaya judul bagian tidak menempel tepi
+	   atas viewport/modal saat scrollIntoView melompat ke sini. */
+	.mmAltSection {
+		scroll-margin-top: 16px;
 	}
 	/* Daftar media alternatif di bawah hasil cocok. */
 	.mmAltSection {
