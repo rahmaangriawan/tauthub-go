@@ -405,6 +405,23 @@ func (d *Deps) getResultByID(ctx context.Context, resultID string) (*profilerRes
 	return &r, nil
 }
 
+// getResultByIDScoped: hasil profiler yang WAJIB milik campaign di brand yang
+// sudah diverifikasi. Dipakai endpoint HTTP — result id saja tidak cukup
+// (IDOR: result milik tenant lain bisa dibaca bila UUID-nya diketahui).
+func (d *Deps) getResultByIDScoped(ctx context.Context, resultID, campaignID, brandID string) (*profilerResult, error) {
+	m, err := d.queryRow(ctx,
+		"SELECT "+profilerResultCols+" FROM taut_profiler_results "+
+			"WHERE id = $1 AND EXISTS ("+
+			"  SELECT 1 FROM taut_profiler_submissions s JOIN campaigns c ON c.id = s.campaign_id "+
+			"  WHERE s.id = taut_profiler_results.submission_id AND s.campaign_id = $2 AND c.brand_id = $3"+
+			") LIMIT 1", resultID, campaignID, brandID)
+	if err != nil || m == nil {
+		return nil, err
+	}
+	r := mapProfilerResult(m)
+	return &r, nil
+}
+
 // ---------- prompt resolver (port profiler/prompt-resolver.ts) ----------
 
 type resolvedAngleBlock struct {

@@ -1882,36 +1882,32 @@
 	// seperti dokumen lain, jadi ikut muncul di tab Media dan bahan Ringkasan.
 	let instanFormOpen = $state(false);
 	let instanFormBusy = $state(false);
+	// Profil brand saja — kebutuhan kampanye (budget, jumlah media, backlink)
+	// BUKAN bagian brief brand; itu masuk Matchmaker saat membuat kampanye.
 	let instanForm = $state({
 		nama: '', kategori: '', deskripsi: '', fakta: '', website: '',
-		budget: '', jumlah: '', minDa: '', minKata: '', minBacklink: '',
 		kataTerlarang: '', pertanyaan: ''
 	});
 
+	// Pemetaan field form → key skema brief (Lapis 1 Entity Core). Hanya key
+	// yang ada di skema aktif yang dikirim; sisanya dilaporkan.
+	const INSTAN_FIELD_MAP: Array<{ form: keyof typeof instanForm; key: string; label: string }> = [
+		{ form: 'nama', key: 'canonical_name', label: 'Nama brand' },
+		{ form: 'kategori', key: 'entity_category', label: 'Kategori' },
+		{ form: 'deskripsi', key: 'canonical_description', label: 'Deskripsi 1 kalimat' },
+		{ form: 'fakta', key: 'official_facts', label: 'Fakta resmi' },
+		{ form: 'website', key: 'canonical_links', label: 'Website resmi' },
+		{ form: 'kataTerlarang', key: 'forbidden_words', label: 'Kata/frasa terlarang' },
+		{ form: 'pertanyaan', key: 'target_questions', label: 'Pertanyaan yang ingin dimenangkan di AI' }
+	];
+
+	// Teks ringkas untuk diunduh (.txt) — bukan jalur simpan utama.
 	function instanBriefText(): string {
-		const f = instanForm;
-		const lines: string[] = ['Brief brand (diisi lewat form Instan Brief).', ''];
-		const add = (label: string, value: string) => {
-			const v = value.trim();
-			if (v) lines.push(`${label}: ${v}`);
-		};
-		add('Nama brand', f.nama);
-		add('Kategori', f.kategori);
-		add('Deskripsi 1 kalimat', f.deskripsi);
-		add('Fakta resmi', f.fakta);
-		add('Website resmi', f.website);
-		const budget = f.budget.trim();
-		const jumlah = f.jumlah.trim();
-		if (budget) lines.push(`Budget: maksimal Rp${budget} per media — angka ini plafon, bukan harga minimum.`);
-		if (jumlah) lines.push(`Jumlah media: ${jumlah}`);
-		if (f.minDa.trim()) lines.push(`Minimum DA: ${f.minDa.trim()}`);
-		const syarat: string[] = [];
-		if (f.minKata.trim()) syarat.push(`minimal ${f.minKata.trim()} kata`);
-		if (f.minBacklink.trim()) syarat.push(`${f.minBacklink.trim()} backlink per artikel`);
-		if (syarat.length > 0) lines.push(`Syarat artikel: ${syarat.join(', ')}`);
-		add('Kata/frasa terlarang', f.kataTerlarang);
-		add('Pertanyaan yang ingin dimenangkan di ChatGPT/Perplexity', f.pertanyaan);
-		lines.push('', 'Catatan: hanya data di atas yang boleh dipakai; jangan mengarang angka atau klaim.');
+		const lines: string[] = ['Profil brand (form Instan Brief).', ''];
+		for (const m of INSTAN_FIELD_MAP) {
+			const v = String(instanForm[m.form] ?? '').trim();
+			if (v) lines.push(`${m.label}: ${v}`);
+		}
 		return lines.join('\n');
 	}
 
@@ -1934,21 +1930,37 @@
 		URL.revokeObjectURL(url);
 	}
 
+	// Simpan langsung ke field terstruktur (POST /brief/fields) — tanpa LLM dan
+	// tanpa unggah berkas. Nilai masuk ke Entity Core, progres 0-100% langsung
+	// bergerak, dan AI Writer memakainya sebagai fakta kanonik.
 	async function saveInstanBrief() {
 		if (instanFormBusy) return;
 		if (!instanForm.nama.trim()) {
 			showToast(tr('Nama brand wajib diisi dulu.'), 'error');
 			return;
 		}
+		const known = new Set(fields.map((f) => f.key));
+		const updates = INSTAN_FIELD_MAP
+			.map((m) => ({ key: m.key, value: String(instanForm[m.form] ?? '').trim() }))
+			.filter((u) => u.value !== '' && known.has(u.key));
+		if (updates.length === 0) {
+			showToast(tr('Skema brief belum memuat field yang cocok — isi lewat chat dulu.'), 'error');
+			return;
+		}
 		instanFormBusy = true;
 		try {
-			const file = new File([instanBriefText()], instanFileName(), { type: 'text/plain' });
-			await uploadBriefFile(file, 'library');
-			await loadMedia();
-			showToast(tr('Brief dari field diunggah. Tunggu status "Terbaca AI" lalu buka Ringkasan.'));
+			for (const u of updates) {
+				const res = await apiRequest(`${briefBase}/fields`, {
+					method: 'POST',
+					body: JSON.stringify({ key: u.key, value: u.value, status: 'confirmed', source: 'user' })
+				});
+				if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan field brief.')));
+			}
+			await hydrate();
+			showToast(tr(`${updates.length} field brief tersimpan. Ringkasan bisa dibuat kapan saja.`));
 			instanFormOpen = false;
 		} catch (e) {
-			showToast(e instanceof Error ? e.message : tr('Gagal menyimpan brief dari field.'), 'error');
+			showToast(e instanceof Error ? e.message : tr('Gagal menyimpan field brief.'), 'error');
 		} finally {
 			instanFormBusy = false;
 		}
@@ -2605,22 +2617,7 @@
 									<label><span>{tr('Website resmi')}</span>
 										<input class="app-input" bind:value={instanForm.website} placeholder="https://" />
 									</label>
-									<label><span>{tr('Budget maksimal per media (Rp)')}</span>
-										<input class="app-input" type="number" min="0" bind:value={instanForm.budget} placeholder="100000" />
-									</label>
-									<label><span>{tr('Jumlah media')}</span>
-										<input class="app-input" type="number" min="1" bind:value={instanForm.jumlah} placeholder="8" />
-									</label>
-									<label><span>{tr('Minimum DA')}</span>
-										<input class="app-input" type="number" min="0" max="100" bind:value={instanForm.minDa} placeholder="20" />
-									</label>
-									<label><span>{tr('Minimal kata per artikel')}</span>
-										<input class="app-input" type="number" min="0" bind:value={instanForm.minKata} placeholder="600" />
-									</label>
-									<label><span>{tr('Minimal backlink')}</span>
-										<input class="app-input" type="number" min="0" bind:value={instanForm.minBacklink} placeholder="2" />
-									</label>
-									<label class="instan-form-wide"><span>{tr('Kata/frasa terlarang')}</span>
+																																																						<label class="instan-form-wide"><span>{tr('Kata/frasa terlarang')}</span>
 										<input class="app-input" bind:value={instanForm.kataTerlarang} placeholder={tr('misal: nomor 1, terbaik, terjangkau')} />
 									</label>
 									<label class="instan-form-wide"><span>{tr('Pertanyaan yang ingin dimenangkan di AI')}</span>
@@ -2629,10 +2626,10 @@
 									<div class="instan-form-actions">
 										<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={downloadInstanTxt}>{tr('Unduh .txt')}</button>
 										<button class="app-btn app-btn-primary !min-h-8 !text-xs" type="button" disabled={instanFormBusy} onclick={() => void saveInstanBrief()}>
-											{instanFormBusy ? tr('Menyimpan…') : tr('Simpan & unggah ke brief')}
+											{instanFormBusy ? tr('Menyimpan…') : tr('Simpan ke brief')}
 										</button>
 									</div>
-									<p class="instan-hint">{tr('Field kosong dilewati. Data yang diisi di sini diunggah sebagai dokumen brief — tidak dikarang AI.')}</p>
+									<p class="instan-hint">{tr('Field kosong dilewati. Nilai langsung masuk ke Entity Core — tanpa AI, tanpa unggah berkas.')}</p>
 								</div>
 							{/if}
 

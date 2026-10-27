@@ -598,11 +598,14 @@ func (d *Deps) TautProfileResultGet(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	if _, err := d.brandID(r, user.ID, "viewer"); err != nil {
+	brandID, err := d.brandID(r, user.ID, "viewer")
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	result, err := d.getResultByID(r.Context(), chiParam(r, "resultId"))
+	// Scope ganda: result wajib milik campaign di URL DAN brand yang sudah
+	// diverifikasi — mencegah IDOR lewat resultId milik tenant lain.
+	result, err := d.getResultByIDScoped(r.Context(), chiParam(r, "resultId"), chiParam(r, "campaignId"), brandID)
 	if err != nil {
 		d.writeErr(w, err)
 		return

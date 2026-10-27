@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -277,6 +278,11 @@ func (d *Deps) ProfileCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	brandID := chiParam(r, "brandId")
+	// Catatan: nilai `brandID` dari URL disimpan apa adanya ke
+	// profiler_profiles.brand_id (kompatibel dengan baris lama yang memakai
+	// public_id). Normalisasi ke UUID butuh migrasi data menyeluruh untuk
+	// profiler_profiles + campaigns sekaligus — dicatat sebagai backlog, bukan
+	// diubah setengah jalan di sini.
 	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
 		writeErr(w, err)
 		return
@@ -409,6 +415,13 @@ func (d *Deps) ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, k := range []string{"identity", "style", "seo", "entity_core"} {
 		if raw := jsonField(body, k); raw != nil {
+			// Validasi terhadap skema aktif: key tak dikenal / tipe salah ditolak
+			// supaya JSONB tidak jadi tempat sampah data yang tak pernah dibaca
+			// UI maupun konteks AI.
+			if err := d.validateProfileColumn(r.Context(), k, raw); err != nil {
+				httpx.Error(w, http.StatusUnprocessableEntity, err.Error())
+				return
+			}
 			// Kirim sebagai string supaya pgx mengirim teks JSON (bukan bytea).
 			add(k, string(raw))
 		}
@@ -594,6 +607,93 @@ func (d *Deps) queueBriefSummary(ctx context.Context, brandID, profileID string,
 	}
 }
 
+// validateProfileColumn: PUT /profiler/profiles menerima objek JSON per kolom
+// (identity/style/seo/entity_core). Sebelumnya apa pun diterima — termasuk key
+// yang tidak ada di skema. Sekarang setiap key wajib terdaftar di versi skema
+// aktif DAN berada di kolom yang sama; tipe nilai mengikuti widget-nya.
+func (d *Deps) validateProfileColumn(ctx context.Context, column string, raw []byte) error {
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return fmt.Errorf("Format %s tidak valid.", column)
+	}
+	if len(obj) == 0 {
+		return nil
+	}
+	fields, err := d.briefRequiredFields(ctx)
+	if err != nil {
+		// Skema tidak terbaca: jangan blokir edit yang sah, cukup lewati.
+		return nil
+	}
+	byKey := make(map[string]briefdomain.Field, len(fields))
+	for _, f := range fields {
+		if f.Layer == 3 || !f.Enabled {
+			continue
+		}
+		if col, ok := briefdomain.StorageColumn(f); ok && col == column {
+			byKey[f.Key] = f
+		}
+	}
+	for key, value := range obj {
+		f, ok := byKey[key]
+		if !ok {
+			return fmt.Errorf("Field %q tidak ada di skema %s.", key, column)
+		}
+		if !valueMatchesWidget(f.Widget, value) {
+			return fmt.Errorf("Nilai field %q tidak sesuai tipe %s.", key, f.Widget)
+		}
+	}
+	return nil
+}
+
+// valueMatchesWidget: tipe nilai yang sah untuk sebuah widget. Widget yang
+// belum dikenal diperlakukan sebagai teks (kompatibel dengan skema lama yang
+// hanya memakai text/longtext).
+func valueMatchesWidget(widget string, value any) bool {
+	switch widget {
+	case "number":
+		switch v := value.(type) {
+		case float64, int, int64:
+			return true
+		case string:
+			if strings.TrimSpace(v) == "" {
+				return true
+			}
+			_, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+			return err == nil
+		}
+		return false
+	case "boolean":
+		switch value.(type) {
+		case bool, string:
+			return true
+		}
+		return false
+	case "multiselect":
+		if list, ok := value.([]any); ok {
+			for _, item := range list {
+				if _, ok := item.(string); !ok {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	default: // text, longtext, url, select
+		switch value.(type) {
+		case string, nil:
+			return true
+		case []any:
+			for _, item := range value.([]any) {
+				if _, ok := item.(string); !ok {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	}
+}
+
 // profileIDOfChild: pemilik baris anak (blocks/documents/images/urls).
 func (d *Deps) profileIDOfChild(ctx context.Context, table, id string) string {
 	var profileID string
@@ -687,6 +787,12 @@ func (d *Deps) childInBrand(ctx context.Context, table, id, brandID string) bool
 	var exists bool
 	q := fmt.Sprintf(`SELECT true FROM %s c JOIN profiler_profiles p ON p.id = c.profile_id
 		WHERE c.id = $1 AND p.brand_id = $2 AND p.deleted_at IS NULL`, table)
+	// Anak yang sudah soft-deleted tidak boleh lagi diubah/dihapus lewat ID.
+	// Hanya tabel yang memang punya kolom deleted_at (blocks tidak punya).
+	switch table {
+	case "profiler_documents", "profiler_images", "profiler_urls", "profiler_timeline_posts":
+		q += " AND c.deleted_at IS NULL"
+	}
 	_ = d.Pool.QueryRow(ctx, q, id, brandID).Scan(&exists)
 	return exists
 }
@@ -864,7 +970,12 @@ func (d *Deps) DocumentDelete(w http.ResponseWriter, r *http.Request) {
 	profileID := d.profileIDOfChild(r.Context(), "profiler_documents", docID)
 	var storageKey string
 	_ = d.Pool.QueryRow(r.Context(), `SELECT storage_key FROM profiler_documents WHERE id = $1`, docID).Scan(&storageKey)
-	_, _ = d.Pool.Exec(r.Context(), "UPDATE profiler_documents SET deleted_at = NOW() WHERE id = $1", docID)
+	// Teks hasil ekstraksi ikut dikosongkan: dokumen yang dihapus user tidak
+	// boleh terus tersimpan (dan berpotensi ikut konteks AI bila ada bug query).
+	// Ringkasan/log yang SUDAH dibuat tetap bisa memuat kutipan — itu batasan
+	// yang didokumentasikan, bukan sesuatu yang bisa dihapus surut.
+	_, _ = d.Pool.Exec(r.Context(),
+		"UPDATE profiler_documents SET deleted_at = NOW(), extracted_text = NULL WHERE id = $1", docID)
 	// Berkas fisik menyusul dihapus worker pada siklus berikutnya (delete_pending).
 	d.markAttachmentPendingDelete(r.Context(), storageKey)
 	d.queueBriefSummary(r.Context(), brandID, profileID, briefsummary.KindFile)

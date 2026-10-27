@@ -22,13 +22,18 @@ func RegisterJobs(pool *pgxpool.Pool, cfg *config.Config) {
 		if profileID == "" || !ok {
 			return fmt.Errorf("payload brief_summary tidak lengkap")
 		}
-		// Brief sudah dihapus: tidak ada yang perlu dikerjakan.
-		var exists bool
+		// Brief sudah dihapus: tidak ada yang perlu dikerjakan. Brand diambil
+		// dari baris profil (sumber kebenaran) — payload job tidak dipercaya
+		// untuk menentukan tenant, dan ketidakcocokan ditolak.
+		var profileBrand string
 		if err := pool.QueryRow(ctx,
-			`SELECT true FROM profiler_profiles WHERE id = $1 AND deleted_at IS NULL`, profileID).
-			Scan(&exists); err != nil || !exists {
+			`SELECT brand_id FROM profiler_profiles WHERE id = $1 AND deleted_at IS NULL`, profileID).
+			Scan(&profileBrand); err != nil || profileBrand == "" {
 			return nil
 		}
-		return Generate(ctx, pool, cfg, profileID, brandID, kind, force)
+		if brandID != "" && brandID != profileBrand {
+			return fmt.Errorf("payload brand tidak cocok dengan profil brief")
+		}
+		return Generate(ctx, pool, cfg, profileID, profileBrand, kind, force)
 	})
 }
