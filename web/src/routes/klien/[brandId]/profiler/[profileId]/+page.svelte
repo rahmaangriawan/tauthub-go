@@ -22,6 +22,7 @@
 	} from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import Select from '$lib/components/select.svelte';
+	import BriefFieldInput from '$lib/components/brief-field-input.svelte';
 	import { apiRequest, readApiError, ensureValidSession, getAccessToken, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { renderMarkdown } from '$lib/markdown-lite';
@@ -1891,14 +1892,21 @@
 
 	// Pemetaan field form → key skema brief (Lapis 1 Entity Core). Hanya key
 	// yang ada di skema aktif yang dikirim; sisanya dilaporkan.
-	const INSTAN_FIELD_MAP: Array<{ form: keyof typeof instanForm; key: string; label: string }> = [
-		{ form: 'nama', key: 'canonical_name', label: 'Nama brand' },
-		{ form: 'kategori', key: 'entity_category', label: 'Kategori' },
-		{ form: 'deskripsi', key: 'canonical_description', label: 'Deskripsi 1 kalimat' },
-		{ form: 'fakta', key: 'official_facts', label: 'Fakta resmi' },
-		{ form: 'website', key: 'canonical_links', label: 'Website resmi' },
-		{ form: 'kataTerlarang', key: 'forbidden_words', label: 'Kata/frasa terlarang' },
-		{ form: 'pertanyaan', key: 'target_questions', label: 'Pertanyaan yang ingin dimenangkan di AI' }
+	type InstanFieldSpec = {
+		form: keyof typeof instanForm;
+		key: string;
+		label: string;
+		placeholder: string;
+		required?: boolean;
+	};
+	const INSTAN_FIELD_MAP: InstanFieldSpec[] = [
+		{ form: 'nama', key: 'canonical_name', label: 'Nama brand', placeholder: 'Ejaan resmi', required: true },
+		{ form: 'kategori', key: 'entity_category', label: 'Kategori', placeholder: 'Platform / Agensi / Toko / Lainnya' },
+		{ form: 'deskripsi', key: 'canonical_description', label: 'Deskripsi 1 kalimat', placeholder: 'Membantu siapa untuk apa' },
+		{ form: 'fakta', key: 'official_facts', label: 'Fakta resmi', placeholder: 'Tahun berdiri, kota, jumlah mitra — data asli saja' },
+		{ form: 'website', key: 'canonical_links', label: 'Website resmi', placeholder: 'https://' },
+		{ form: 'kataTerlarang', key: 'forbidden_words', label: 'Kata/frasa terlarang', placeholder: 'misal: nomor 1, terbaik, terjangkau' },
+		{ form: 'pertanyaan', key: 'target_questions', label: 'Pertanyaan yang ingin dimenangkan di AI', placeholder: '2-3 pertanyaan, pisahkan dengan titik koma' }
 	];
 
 	// Teks ringkas untuk diunduh (.txt) — bukan jalur simpan utama.
@@ -2589,40 +2597,30 @@
 
 							<div class="instan-tpl instan-tpl-main">
 								<div class="instan-tpl-info">
-									<strong>{tr('Template Brief Brand (satu set)')}</strong>
-									<p>{tr('Identitas, fakta resmi, budget per media, jumlah media, syarat artikel, dan aturan klaim.')}</p>
+									<strong>{tr('Profil Brand (Entity Core)')}</strong>
+									<p>{tr('Identitas, fakta resmi, kanal resmi, aturan klaim, dan pertanyaan AI yang ingin dimenangkan.')}</p>
 								</div>
 								<div class="instan-tpl-actions">
-									<a class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-[11.5px]" href="/templates/brief-agensi.docx" download>{tr('Unduh .docx')}</a>
+									<a class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-[11.5px]" href="/templates/brief-brand.docx" download>{tr('Unduh .docx')}</a>
 									<button class="app-btn app-btn-primary !min-h-7 !px-2.5 !text-[11.5px]" type="button" onclick={() => (instanFormOpen = !instanFormOpen)}>
 										{instanFormOpen ? tr('Tutup form') : tr('Isi field di sini')}
 									</button>
 								</div>
 							</div>
 
-							{#if instanFormOpen}
+														{#if instanFormOpen}
 								<div class="instan-form">
-									<label><span>{tr('Nama brand')} *</span>
-										<input class="app-input" bind:value={instanForm.nama} placeholder={tr('Ejaan resmi')} />
-									</label>
-									<label><span>{tr('Kategori')}</span>
-										<input class="app-input" bind:value={instanForm.kategori} placeholder={tr('Platform / Agensi / Toko / Lainnya')} />
-									</label>
-									<label class="instan-form-wide"><span>{tr('Deskripsi 1 kalimat')}</span>
-										<input class="app-input" bind:value={instanForm.deskripsi} placeholder={tr('Membantu siapa untuk apa')} />
-									</label>
-									<label class="instan-form-wide"><span>{tr('Fakta resmi')}</span>
-										<input class="app-input" bind:value={instanForm.fakta} placeholder={tr('Tahun berdiri, kota, jumlah mitra — data asli saja')} />
-									</label>
-									<label><span>{tr('Website resmi')}</span>
-										<input class="app-input" bind:value={instanForm.website} placeholder="https://" />
-									</label>
-																																																						<label class="instan-form-wide"><span>{tr('Kata/frasa terlarang')}</span>
-										<input class="app-input" bind:value={instanForm.kataTerlarang} placeholder={tr('misal: nomor 1, terbaik, terjangkau')} />
-									</label>
-									<label class="instan-form-wide"><span>{tr('Pertanyaan yang ingin dimenangkan di AI')}</span>
-										<input class="app-input" bind:value={instanForm.pertanyaan} placeholder={tr('2-3 pertanyaan, pisahkan dengan titik koma')} />
-									</label>
+									{#each INSTAN_FIELD_MAP as m (m.key)}
+										{@const meta = fields.find((f) => f.key === m.key)}
+										<BriefFieldInput
+											keyName={m.key}
+											label={meta?.label ?? tr(m.label)}
+											widget={meta?.widget ?? 'text'}
+											required={m.required}
+											placeholder={tr(m.placeholder)}
+											bind:value={instanForm[m.form]}
+										/>
+									{/each}
 									<div class="instan-form-actions">
 										<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={downloadInstanTxt}>{tr('Unduh .txt')}</button>
 										<button class="app-btn app-btn-primary !min-h-8 !text-xs" type="button" disabled={instanFormBusy} onclick={() => void saveInstanBrief()}>
@@ -2635,8 +2633,8 @@
 
 							<p class="instan-hint">
 								{tr('Template lain:')}
-								<a class="instan-link" href="/templates/brief-personal.docx" download>{tr('Personal Brand')}</a> ·
-								<a class="instan-link" href="/templates/brief-produk.docx" download>{tr('Peluncuran Produk')}</a>
+								<a class="instan-link" href="/templates/brief-produk.docx" download>{tr('Produk & Layanan')}</a> ·
+								<a class="instan-link" href="/templates/brief-kampanye.docx" download>{tr('Kebutuhan Kampanye')}</a>
 							</p>
 						</section>
 
@@ -4910,18 +4908,6 @@
 		border-radius: 10px;
 		background: color-mix(in srgb, var(--muted) 35%, white);
 	}
-	.instan-form label {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		min-width: 0;
-	}
-	.instan-form label > span {
-		font-size: 11.5px;
-		font-weight: 600;
-		color: var(--muted-foreground);
-	}
-	.instan-form-wide { grid-column: 1 / -1; }
 	.instan-form-actions {
 		display: flex;
 		justify-content: flex-end;

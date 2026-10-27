@@ -14,6 +14,7 @@ package brief
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -29,6 +30,61 @@ type Field struct {
 	SortOrder       int    `json:"sort_order"`
 	ExampleQuestion string `json:"example_question"`
 	Enabled         bool   `json:"enabled"`
+}
+
+// WidgetKinds: kosakata widget yang dikenali renderer & validasi. Skema lama
+// hanya memakai text/longtext; daftar ini yang jadi kontrak saat admin
+// menambah field baru (number/url/select/multiselect/boolean).
+var WidgetKinds = map[string]bool{
+	"text":        true,
+	"longtext":    true,
+	"number":      true,
+	"url":         true,
+	"select":      true,
+	"multiselect": true,
+	"boolean":     true,
+}
+
+// NormalizeWidget: widget kosong/tak dikenal diperlakukan sebagai teks supaya
+// skema lama tetap valid.
+func NormalizeWidget(w string) string {
+	w = strings.ToLower(strings.TrimSpace(w))
+	if WidgetKinds[w] {
+		return w
+	}
+	return "text"
+}
+
+// ValidateWidgetValue: tipe nilai (string dari UI/LLM) sesuai widget.
+// Multiselect memakai pemisah ";" dan boolean menerima true/false/1/0/ya/tidak.
+func ValidateWidgetValue(widget, value string) bool {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return false
+	}
+	switch NormalizeWidget(widget) {
+	case "number":
+		_, err := strconv.ParseFloat(strings.ReplaceAll(v, ",", "."), 64)
+		return err == nil
+	case "url":
+		return strings.HasPrefix(strings.ToLower(v), "http://") || strings.HasPrefix(strings.ToLower(v), "https://")
+	case "boolean":
+		switch strings.ToLower(v) {
+		case "true", "false", "1", "0", "ya", "tidak", "yes", "no":
+			return true
+		}
+		return false
+	case "multiselect":
+		parts := strings.Split(v, ";")
+		for _, p := range parts {
+			if strings.TrimSpace(p) == "" {
+				return false
+			}
+		}
+		return true
+	default:
+		return true
+	}
 }
 
 // sectionColumn: pemetaan bawaan seksi → kolom penyimpanan.
@@ -136,6 +192,13 @@ func ValidateUpdates(fields []Field, current map[string]FieldState, updates []Fi
 		value := strings.TrimSpace(u.Value)
 		if value == "" {
 			rejected = append(rejected, key+": nilai kosong")
+			continue
+		}
+		// Tipe nilai harus cocok dengan widget field (number/url/boolean/…).
+		// Tanpa ini skema bisa menyimpan "12rb" di field angka dan merusak
+		// konteks AI Writer.
+		if !ValidateWidgetValue(f.Widget, value) {
+			rejected = append(rejected, key+": nilai tidak sesuai tipe "+NormalizeWidget(f.Widget))
 			continue
 		}
 		status := strings.TrimSpace(u.Status)
