@@ -268,6 +268,7 @@ func run() error {
 			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/brief/chat/stream", briefDeps.BriefChatStream)
 			authed.Delete("/brands/{brandId}/profiler/profiles/{profileId}/brief/chat", briefDeps.BriefChatReset)
 			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/brief/fields", briefDeps.BriefFieldsPost)
+			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/brief/fields/batch", briefDeps.BriefFieldsBatchPost)
 			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}/brief/summaries", briefDeps.BriefSummariesGet)
 			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/brief/summaries/{kind}/regenerate", briefDeps.BriefSummaryRegenerate)
 

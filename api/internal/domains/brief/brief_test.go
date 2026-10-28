@@ -230,3 +230,41 @@ func TestBuildUserMessageInjectsAskedField(t *testing.T) {
 		t.Fatalf("penanda 'belum ada pertanyaan menggantung' tidak ada")
 	}
 }
+
+// Form Profil Brand (Instan Brief) mengirim semua isian sekaligus. Validasi
+// batch harus menolak nama/kategori kosong dan URL kanal yang bukan http(s),
+// tanpa memanggil LLM.
+func TestValidateBatchValues(t *testing.T) {
+	valid := []FieldUpdate{
+		{Key: "canonical_name", Value: "Giovani Barbershop"},
+		{Key: "entity_category", Value: "Perusahaan"},
+		{Key: "canonical_links", Value: "https://giovani.example; https://instagram.com/giovani"},
+	}
+	if msg := validateBatchValues(valid); msg != "" {
+		t.Fatalf("isian valid ditolak: %s", msg)
+	}
+
+	cases := map[string][]FieldUpdate{
+		"nama kosong": {
+			{Key: "canonical_name", Value: "   "},
+			{Key: "entity_category", Value: "Perusahaan"},
+		},
+		"kategori kosong": {
+			{Key: "canonical_name", Value: "Giovani"},
+		},
+		"url tanpa skema": {
+			{Key: "canonical_name", Value: "Giovani"},
+			{Key: "entity_category", Value: "Perusahaan"},
+			{Key: "canonical_links", Value: "instagram.com/giovani"},
+		},
+		"nama terlalu panjang": {
+			{Key: "canonical_name", Value: strings.Repeat("a", maxNameLen+1)},
+			{Key: "entity_category", Value: "Perusahaan"},
+		},
+	}
+	for name, updates := range cases {
+		if msg := validateBatchValues(updates); msg == "" {
+			t.Fatalf("%s: harus ditolak", name)
+		}
+	}
+}

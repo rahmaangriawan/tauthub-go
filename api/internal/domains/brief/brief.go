@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/adminshared"
@@ -244,6 +245,41 @@ func mergeJSONObject(dst map[string]any, raw []byte) {
 // menyimpan status + sumbernya. Penggabungan per kolom memakai operator `||`
 // supaya tidak menimpa field lain yang mungkin sedang diubah paralel.
 func (d *Deps) applyUpdates(ctx context.Context, profileID, userID string, fields []Field, states map[string]FieldState, accepted []FieldUpdate) error {
+	if err := d.writeUpdates(ctx, d.Pool, profileID, userID, fields, accepted); err != nil {
+		return err
+	}
+	// Nilai field berubah -> indeks memori lintas brief ikut diperbarui
+	// (async, best-effort — tidak boleh menggagalkan giliran).
+	d.QueueMemoryReindex(ctx, profileID)
+	return nil
+}
+
+// applyUpdatesAtomic: versi transaksi untuk jalur yang menyimpan beberapa field
+// sekaligus (form Profil Brand). Semua nilai dan status ditulis dalam satu
+// transaksi, jadi kegagalan di tengah tidak meninggalkan simpanan separuh.
+func (d *Deps) applyUpdatesAtomic(ctx context.Context, profileID, userID string, fields []Field, accepted []FieldUpdate) error {
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := d.writeUpdates(ctx, tx, profileID, userID, fields, accepted); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	d.QueueMemoryReindex(ctx, profileID)
+	return nil
+}
+
+// dbExec: irisan metode yang dipakai pgxpool.Pool dan pgx.Tx, supaya penulisan
+// field bisa jalan di luar maupun di dalam transaksi dengan kode yang sama.
+type dbExec interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
+func (d *Deps) writeUpdates(ctx context.Context, ex dbExec, profileID, userID string, fields []Field, accepted []FieldUpdate) error {
 	if len(accepted) == 0 {
 		return nil
 	}
@@ -267,7 +303,7 @@ func (d *Deps) applyUpdates(ctx context.Context, profileID, userID string, field
 		if err != nil {
 			continue
 		}
-		if _, err := d.Pool.Exec(ctx,
+		if _, err := ex.Exec(ctx,
 			`UPDATE profiler_profiles SET `+col+` = `+col+` || $2::jsonb, updated_at = NOW(), updated_by = $3
 			 WHERE id = $1 AND deleted_at IS NULL`,
 			profileID, string(raw), nullIfEmpty(userID)); err != nil {
@@ -275,18 +311,15 @@ func (d *Deps) applyUpdates(ctx context.Context, profileID, userID string, field
 		}
 	}
 	for _, u := range accepted {
-		if err := d.upsertFieldState(ctx, profileID, u.Key, u.Status, u.Source, u.Note); err != nil {
+		if err := upsertFieldStateOn(ctx, ex, profileID, u.Key, u.Status, u.Source, u.Note); err != nil {
 			return err
 		}
 	}
-	// Nilai field berubah -> indeks memori lintas brief ikut diperbarui
-	// (async, best-effort — tidak boleh menggagalkan giliran).
-	d.QueueMemoryReindex(ctx, profileID)
 	return nil
 }
 
-func (d *Deps) upsertFieldState(ctx context.Context, profileID, key, status, source, note string) error {
-	_, err := d.Pool.Exec(ctx,
+func upsertFieldStateOn(ctx context.Context, ex dbExec, profileID, key, status, source, note string) error {
+	_, err := ex.Exec(ctx,
 		`INSERT INTO taut_brief_field_state (profile_id, field_key, status, source, note, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, NOW())
 		 ON CONFLICT (profile_id, field_key) DO UPDATE SET
@@ -294,6 +327,10 @@ func (d *Deps) upsertFieldState(ctx context.Context, profileID, key, status, sou
 		   note = EXCLUDED.note, updated_at = NOW()`,
 		profileID, key, status, source, nullIfEmpty(note))
 	return err
+}
+
+func (d *Deps) upsertFieldState(ctx context.Context, profileID, key, status, source, note string) error {
+	return upsertFieldStateOn(ctx, d.Pool, profileID, key, status, source, note)
 }
 
 // ---------- pesan ----------

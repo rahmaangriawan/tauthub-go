@@ -6,6 +6,7 @@
 	// di panel Entitas bila nanti mode edit dibuka penuh). Tidak memanggil API
 	// sendiri — nilai dikendalikan parent lewat bind:value.
 	import { tr } from '$lib/i18n/phrases';
+	import Select from '$lib/components/select.svelte';
 
 	type Props = {
 		keyName: string;
@@ -17,6 +18,10 @@
 		options?: string[];
 		wide?: boolean;
 		disabled?: boolean;
+		/** Petunjuk singkat di bawah label. */
+		hint?: string;
+		/** Pesan kesalahan validasi; warna merah di bawah input. */
+		error?: string;
 	};
 	let {
 		keyName,
@@ -27,7 +32,9 @@
 		required = false,
 		options = [],
 		wide = false,
-		disabled = false
+		disabled = false,
+		hint = '',
+		error = ''
 	}: Props = $props();
 
 	const kind = $derived(
@@ -56,23 +63,31 @@
 		{label}
 		{#if required}<em>*</em>{/if}
 	</span>
+	{#if hint}<span class="brief-field-hint">{hint}</span>{/if}
 
 	{#if kind === 'longtext'}
 		<textarea
 			class="app-input brief-field-input"
-			rows={3}
+			rows={4}
 			{placeholder}
 			{disabled}
 			bind:value
 			aria-label={label}
+			aria-invalid={error ? 'true' : undefined}
 		></textarea>
 	{:else if kind === 'select'}
-		<select class="app-input brief-field-input" {disabled} bind:value aria-label={label}>
-			<option value="">{tr('Pilih…')}</option>
-			{#each options as opt (opt)}
-				<option value={opt}>{opt}</option>
-			{/each}
-		</select>
+		<!-- Dropdown bergaya (komponen Select bersama), bukan <select> bawaan:
+		     tampilan trigger dan menunya sama dengan filter di halaman lain. -->
+		<div class="brief-field-select">
+			<Select
+				bind:value
+				options={options.map((opt) => ({ value: opt, label: opt }))}
+				ariaLabel={label}
+				placeholder={tr('Pilih…')}
+				minWidth={0}
+				{disabled}
+			/>
+		</div>
 	{:else if kind === 'multiselect'}
 		<div class="brief-field-chips" role="group" aria-label={label}>
 			{#each options as opt (opt)}
@@ -100,29 +115,61 @@
 			{disabled}
 			bind:value
 			aria-label={label}
+			aria-invalid={error ? 'true' : undefined}
 			data-field={keyName}
 		/>
 	{/if}
+
+	{#if error}<span class="brief-field-error">{error}</span>{/if}
 </label>
 
 <style>
 	.brief-field {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 8px;
 		min-width: 0;
 	}
 	.brief-field-wide { grid-column: 1 / -1; }
 	.brief-field-label {
-		font-size: 11.5px;
+		font-size: 13.5px;
 		font-weight: 600;
-		color: var(--muted-foreground);
+		color: var(--foreground, #111827);
 	}
 	.brief-field-label em {
 		font-style: normal;
 		color: var(--destructive, #dc2626);
 	}
-	.brief-field-input { width: 100%; }
+	.brief-field-hint {
+		font-size: 13px;
+		line-height: 1.65;
+		color: var(--muted-foreground);
+	}
+	.brief-field-error {
+		font-size: 13px;
+		line-height: 1.65;
+		color: var(--destructive, #dc2626);
+	}
+	.brief-field-input {
+		width: 100%;
+		min-height: 42px;
+		padding: 0.62rem 0.8rem;
+		font-size: 15px;
+	}
+	/* Trigger Select mengikuti lebar kolom form, bukan 260px bawaan komponen.
+	   !important dipakai karena aturan komponen Select punya spesifisitas setara. */
+	.brief-field-select :global(.zs-select-trigger) {
+		width: 100% !important;
+		max-width: none !important;
+		height: 42px !important;
+		justify-content: space-between;
+		font-size: 15px;
+	}
+	.brief-field-select :global(.zs-select-label) {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.brief-field-chips {
 		display: flex;
 		flex-wrap: wrap;
