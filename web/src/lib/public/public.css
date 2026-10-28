@@ -1,0 +1,1835 @@
+/* Gaya situs publik data.tauthub.com.
+   Kelas ber-prefix `pub-` supaya tidak bertabrakan dengan gaya dashboard yang
+   di-scope komponen. Token warna mengikuti app.css (accent #2b67ec). */
+
+.pub-skip {
+	position: absolute;
+	left: 12px;
+	top: -60px;
+	z-index: 100;
+	padding: 10px 14px;
+	border-radius: 9px;
+	background: var(--primary, #2b67ec);
+	color: #fff;
+	font-size: 13px;
+	font-weight: 600;
+	text-decoration: none;
+	transition: top 120ms ease;
+}
+
+.pub-skip:focus {
+	top: 12px;
+}
+
+.pub-page {
+	min-height: 100vh;
+	background: var(--background, #f6f8fc);
+	color: var(--foreground, #111827);
+	display: flex;
+	flex-direction: column;
+	font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.pub-container {
+	width: 100%;
+	max-width: 1180px;
+	margin: 0 auto;
+	padding: 0 20px;
+}
+
+/* ---------- header / footer ---------- */
+
+.pub-header {
+	background: #fff;
+	border-bottom: 1px solid var(--border, #dfe5ef);
+	/* Menempel di atas supaya toolbar pencarian punya acuan saat sticky. */
+	position: sticky;
+	top: 0;
+	z-index: 40;
+}
+
+.pub-header-inner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	height: 64px;
+}
+
+.pub-brand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-weight: 800;
+	font-size: 18px;
+	letter-spacing: -0.02em;
+	color: inherit;
+	text-decoration: none;
+}
+
+.pub-brand-logo {
+	display: block;
+	height: 22px;
+	width: auto;
+}
+
+.pub-brand-tag {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--primary, #2b67ec);
+	background: var(--accent, #eef4ff);
+	border: 1px solid #d6e4ff;
+	border-radius: 999px;
+	padding: 3px 9px;
+}
+
+.pub-nav {
+	display: flex;
+	align-items: center;
+	gap: 20px;
+	font-size: 14px;
+}
+
+/* Hanya tautan teks; tombol (a.pub-btn) memakai warnanya sendiri. Tanpa
+   :not(.pub-btn), aturan ini menimpa warna putih tombol CTA sehingga teksnya
+   hilang di atas latar biru. */
+.pub-nav a:not(.pub-btn) {
+	color: var(--muted-foreground, #667085);
+	text-decoration: none;
+	font-weight: 500;
+}
+
+.pub-nav a:not(.pub-btn):hover {
+	color: var(--foreground, #111827);
+}
+
+.pub-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border-radius: 9px;
+	border: 1px solid transparent;
+	padding: 9px 16px;
+	font-size: 14px;
+	font-weight: 600;
+	text-decoration: none;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.pub-btn-primary {
+	background: var(--primary, #2b67ec);
+	color: #fff;
+}
+
+.pub-btn-primary:hover {
+	background: #2459d4;
+}
+
+.pub-btn-ghost {
+	background: #fff;
+	border-color: var(--border, #dfe5ef);
+	color: var(--foreground, #111827);
+}
+
+.pub-btn-ghost:hover {
+	border-color: #c3cee0;
+	background: #f9fbff;
+}
+
+.pub-footer {
+	margin-top: 64px;
+	background: #fff;
+	border-top: 1px solid var(--border, #dfe5ef);
+	padding: 22px 0;
+	font-size: 13px;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-footer-inner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px 24px;
+}
+
+.pub-footer-copy {
+	margin: 0;
+	color: #55637a;
+}
+
+.pub-footer-legal {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 14px;
+}
+
+.pub-footer-legal a {
+	color: #344054;
+	text-decoration: none;
+	font-weight: 500;
+}
+
+.pub-footer-legal a:hover {
+	color: var(--primary, #2b67ec);
+	text-decoration: underline;
+}
+
+.pub-footer-legal a:focus-visible {
+	outline: 2px solid var(--ring, #2b67ec);
+	outline-offset: 2px;
+	border-radius: 3px;
+}
+
+.pub-footer-sep {
+	color: #d0d7e2;
+}
+
+@media (max-width: 560px) {
+	.pub-footer {
+		padding: 18px 0;
+	}
+	.pub-footer-inner {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+}
+
+/* ---------- hero ---------- */
+
+.pub-hero {
+	position: relative;
+	isolation: isolate;
+	/* Lapisan dasar tetap gradasi terang; foto langit ditumpuk di atasnya
+	   lewat ::before dengan opacity rendah supaya teks tetap terbaca. */
+	background: linear-gradient(180deg, #ffffff 0%, #f7f9fe 100%);
+	border-bottom: 1px solid var(--border, #dfe5ef);
+	padding: 56px 0 34px;
+	overflow: hidden;
+}
+
+.pub-hero::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	background-image: url('/images/hero-sky.jpg');
+	background-size: cover;
+	background-position: center;
+	background-repeat: no-repeat;
+	opacity: 0.4;
+	pointer-events: none;
+}
+
+/* Peredam di sisi kiri: foto langit paling terang di kanan, sedangkan judul
+   dan deskripsi ada di kiri. Gradasi ini menjaga kontras teks tanpa membuat
+   gambarnya hilang. */
+.pub-hero::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	background: linear-gradient(90deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.45) 55%, rgba(255, 255, 255, 0.1) 100%);
+	pointer-events: none;
+}
+
+.pub-hero > .pub-container {
+	position: relative;
+	z-index: 1;
+}
+
+.pub-hero-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+	gap: 48px;
+	align-items: center;
+}
+
+.pub-hero-copy {
+	min-width: 0;
+}
+
+.pub-eyebrow {
+	display: inline-block;
+	font-size: 11.5px;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--primary, #2b67ec);
+}
+
+.pub-hero h1 {
+	margin: 14px 0 0;
+	max-width: 660px;
+	font-size: clamp(28px, 3.2vw, 42px);
+	line-height: 1.12;
+	letter-spacing: -0.035em;
+	color: #0b1b34;
+	text-wrap: balance;
+}
+
+.pub-hero p.pub-lead {
+	margin: 16px 0 0;
+	max-width: 560px;
+	font-size: 15.5px;
+	line-height: 1.65;
+	color: #55637a;
+}
+
+.pub-hero p.pub-lead strong {
+	font-weight: 600;
+	color: #fff;
+	background: var(--primary, #2b67ec);
+	border-radius: 6px;
+	padding: 1px 7px;
+	box-decoration-break: clone;
+	-webkit-box-decoration-break: clone;
+}
+
+.pub-popular {
+	margin-top: 18px;
+	max-width: 620px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-popular p {
+	margin: 0;
+}
+
+.pub-popular ul {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pub-popular .pub-chip {
+	padding: 5px 12px;
+	font-size: 12.5px;
+}
+
+/* preview listing nyata di kanan hero */
+
+.pub-hero-preview {
+	position: relative;
+	min-width: 0;
+}
+
+.pub-hero-panel {
+	position: absolute;
+	inset: -18px -10px -18px 26px;
+	background: #f4f7fe;
+	border: 1px solid #e6ecf8;
+	border-radius: 22px;
+	z-index: 0;
+}
+
+.pub-hero-cards {
+	position: relative;
+	z-index: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.hero-media {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	background: #fff;
+	border: 1px solid var(--border, #dfe5ef);
+	border-radius: 12px;
+	padding: 12px 14px;
+	text-decoration: none;
+	color: inherit;
+	box-shadow: 0 8px 20px rgba(23, 43, 77, 0.05);
+	transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.hero-media:hover {
+	border-color: #c3d3ee;
+	transform: translateY(-1px);
+	box-shadow: 0 12px 26px rgba(23, 43, 77, 0.09);
+}
+
+.pub-favicon {
+	width: 32px;
+	height: 32px;
+	border-radius: 8px;
+	background: #fff;
+	object-fit: contain;
+	flex: 0 0 auto;
+}
+
+.pub-favicon-fallback {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: #8a97ac;
+	background: #f7f9fc;
+	border: 1px solid var(--border, #dfe5ef);
+}
+
+.hero-media-body {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.hero-media-name {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	font-size: 13.5px;
+	font-weight: 600;
+	color: #0b1b34;
+}
+
+.hero-media-name > span:first-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.hero-media-check {
+	display: inline-flex;
+	flex: 0 0 auto;
+	color: var(--primary, #2b67ec);
+}
+
+.hero-media-cat {
+	margin-top: 2px;
+	font-size: 11.5px;
+	color: var(--muted-foreground, #667085);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.hero-media-metric {
+	flex: 0 0 auto;
+	min-width: 58px;
+	padding-left: 12px;
+	border-left: 1px solid #eef1f7;
+}
+
+.hero-media-metric span {
+	display: block;
+	font-size: 9.5px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--muted-foreground, #667085);
+}
+
+.hero-media-metric strong {
+	display: block;
+	margin-top: 1px;
+	font-size: 13.5px;
+	color: #0b1b34;
+}
+
+.hero-media-arrow {
+	flex: 0 0 auto;
+	color: #9aa6b8;
+	transition: color 160ms ease;
+}
+
+.hero-media:hover .hero-media-arrow {
+	color: var(--primary, #2b67ec);
+}
+
+.pub-hero-caption {
+	position: relative;
+	z-index: 1;
+	margin: 12px 0 0;
+	font-size: 11.5px;
+	color: var(--muted-foreground, #667085);
+	text-align: right;
+}
+
+.pub-hero-empty {
+	background: #fff;
+	border: 1px dashed var(--border, #dfe5ef);
+	border-radius: 12px;
+	padding: 28px 18px;
+	text-align: center;
+	font-size: 13px;
+	color: var(--muted-foreground, #667085);
+}
+
+/* ---------- konten ---------- */
+
+.pub-main {
+	flex: 1;
+}
+
+/* Section katalog: jarak atas di sini, bukan di main, supaya hero tetap
+   menempel ke header tanpa celah. */
+.pub-catalog {
+	padding: 32px 0 0;
+}
+
+.pub-section-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px 16px;
+	margin-bottom: 14px;
+}
+
+.pub-section-head h2 {
+	margin: 0;
+	font-size: 20px;
+	letter-spacing: -0.02em;
+}
+
+.pub-section-head p {
+	margin: 0;
+	font-size: 13px;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-chips {
+	margin-bottom: 22px;
+}
+
+.pub-chips ul {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pub-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border: 1px solid var(--border, #dfe5ef);
+	background: #fff;
+	border-radius: 999px;
+	padding: 6px 12px;
+	font-size: 13px;
+	color: var(--foreground, #111827);
+	text-decoration: none;
+	transition: border-color 160ms ease, background 160ms ease;
+}
+
+.pub-chip:hover {
+	border-color: #c3cee0;
+	background: #f9fbff;
+}
+
+.pub-chip.is-active {
+	background: var(--accent, #eef4ff);
+	border-color: #c9dcff;
+	color: var(--primary, #2b67ec);
+	font-weight: 600;
+}
+
+.pub-chip em {
+	font-style: normal;
+	font-size: 11px;
+	color: var(--muted-foreground, #667085);
+}
+
+/* ---------- toolbar pencarian + filter ---------- */
+
+.pub-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	/* Sticky tepat di bawah header (64px) selama daftar media digulir.
+	   Padding vertikal + margin negatif memberi latar solid tanpa mengubah
+	   jarak visual ke elemen di atas/bawahnya. */
+	position: sticky;
+	top: 64px;
+	z-index: 30;
+	padding: 12px 0;
+	margin: -12px 0 10px;
+	background: var(--background, #f6f8fc);
+	/* Bayangan tipis supaya kartu yang lewat di bawahnya tidak terlihat
+	   terpotong begitu saja saat toolbar menempel. */
+	box-shadow: 0 10px 12px -10px rgba(23, 43, 77, 0.16);
+}
+
+.pub-toolbar-search {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	height: 44px;
+	padding: 0 14px;
+	background: #fff;
+	border: 1px solid var(--border, #dfe5ef);
+	border-radius: 11px;
+	transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.pub-toolbar-search:focus-within {
+	border-color: var(--primary, #2b67ec);
+	box-shadow: 0 0 0 3px rgba(43, 103, 236, 0.14);
+}
+
+.pub-toolbar-icon {
+	flex: 0 0 auto;
+	color: #8a97ac;
+}
+
+.pub-toolbar-search input {
+	flex: 1 1 auto;
+	min-width: 0;
+	border: 0;
+	background: transparent;
+	padding: 0;
+	height: 100%;
+	font-size: 14px;
+	color: inherit;
+}
+
+.pub-toolbar-search input:focus,
+.pub-toolbar-search input:focus-visible {
+	outline: none;
+}
+
+.pub-filter-wrap {
+	position: relative;
+	flex: 0 0 auto;
+}
+
+.pub-filter-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	height: 44px;
+	padding: 0 15px;
+	border: 1px solid var(--border, #dfe5ef);
+	border-radius: 11px;
+	background: #fff;
+	font-size: 13.5px;
+	font-weight: 600;
+	color: var(--foreground, #111827);
+	cursor: pointer;
+	white-space: nowrap;
+	transition: border-color 160ms ease, background 160ms ease;
+}
+
+.pub-filter-btn:hover {
+	border-color: #c3cee0;
+	background: #f9fbff;
+}
+
+.pub-filter-btn.is-active {
+	border-color: #c9dcff;
+	background: var(--accent, #eef4ff);
+	color: var(--primary, #2b67ec);
+}
+
+.pub-filter-btn:focus-visible {
+	outline: 2px solid var(--ring, #2b67ec);
+	outline-offset: 1px;
+}
+
+.pub-filter-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 5px;
+	border-radius: 999px;
+	background: var(--primary, #2b67ec);
+	color: #fff;
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.pub-popover {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	z-index: 60;
+	width: 420px;
+	max-width: calc(100vw - 32px);
+	background: #fff;
+	border: 1px solid var(--border, #dfe5ef);
+	border-radius: 14px;
+	box-shadow: 0 18px 40px rgba(23, 43, 77, 0.14);
+	padding: 16px;
+}
+
+.pub-popover-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 14px;
+}
+
+.pub-popover-head strong {
+	font-size: 14px;
+	font-weight: 600;
+	color: #0b1b34;
+}
+
+.pub-reset {
+	border: 0;
+	background: none;
+	padding: 0;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--primary, #2b67ec);
+	cursor: pointer;
+}
+
+.pub-reset:hover:not(:disabled) {
+	text-decoration: underline;
+}
+
+.pub-reset.is-idle,
+.pub-reset:disabled {
+	color: #98a2b3;
+	cursor: default;
+}
+
+.pub-popover-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.pub-popover-wide {
+	grid-column: 1 / -1;
+}
+
+.pub-popover-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.pub-popover-field > span {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-popover-field input,
+.pub-popover-field select {
+	width: 100%;
+	height: 40px;
+	border: 1px solid var(--border, #dfe5ef);
+	border-radius: 9px;
+	background: #fff;
+	padding: 0 10px;
+	font-size: 13px;
+	color: inherit;
+}
+
+.pub-popover-field input:focus-visible {
+	outline: 2px solid var(--ring, #2b67ec);
+	outline-offset: 1px;
+}
+
+/* Dropdown Select (komponen bersama) dijejalkan selebar kolom popover.
+   Komponennya sendiri memakai lebar/tinggi untuk toolbar dashboard; di sini
+   ukurannya disamakan dengan input teks di sebelahnya. */
+/* Specificity dinaikkan (.pub-popover-grid ...) karena gaya komponen Select
+   memakai kelas ber-hash pada elemen yang sama. */
+.pub-popover-grid .pub-popover-field .zs-select-trigger {
+	width: 100%;
+	max-width: none;
+	height: 40px;
+	padding: 0 10px;
+	border-radius: 9px;
+	font-size: 13px;
+	font-weight: 400;
+}
+
+.pub-popover-grid .pub-popover-field .zs-select-label {
+	max-width: none;
+	flex: 1 1 auto;
+	text-align: left;
+}
+
+/* Urutkan selalu punya nilai (default "Nama A-Z"), jadi komponen Select
+   menandainya sebagai aktif dan mewarnai biru. Di sini biru hanya boleh
+   berarti "filter berubah dari default", jadi tampilan aktif dinetralkan. */
+/* Specificity harus menandingi gaya aktif Select yang memakai kelas ber-hash
+   (.zs-select-trigger.zs-select-active.svelte-xxx). */
+.pub-popover-grid .pub-popover-sort .zs-select-trigger.zs-select-active {
+	background: #fff;
+	border-color: var(--border, #dfe5ef);
+	color: inherit;
+}
+
+.pub-popover-grid .pub-popover-sort .zs-select-caret-active {
+	color: #64748b;
+}
+
+.pub-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 16px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* Setiap kartu adalah <li>; anchor di dalamnya mengisi tinggi penuh supaya
+   kartu dalam satu baris tetap sejajar. */
+.pub-grid > li {
+	display: flex;
+	min-width: 0;
+}
+
+.pub-grid > li > .pub-card {
+	flex: 1 1 auto;
+}
+
+.pub-card {
+	background: #fff;
+	border: 1px solid var(--border, #dfe5ef);
+	border-radius: 14px;
+	padding: 16px 18px 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	text-decoration: none;
+	color: inherit;
+	transition: box-shadow 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.pub-card:hover {
+	border-color: #c3d3ee;
+	box-shadow: 0 12px 28px rgba(23, 43, 77, 0.08);
+	transform: translateY(-1px);
+}
+
+.pub-card-top {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.pub-card-name {
+	font-size: 16px;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	line-height: 1.3;
+	margin: 0;
+}
+
+.pub-card-domain {
+	font-size: 12px;
+	color: var(--muted-foreground, #667085);
+	margin-top: 2px;
+	word-break: break-all;
+}
+
+.pub-tier {
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	border-radius: 999px;
+	padding: 3px 8px;
+	white-space: nowrap;
+	background: #eef2f8;
+	color: #475467;
+}
+
+.pub-tier.tier1 {
+	background: #eef4ff;
+	color: #2b67ec;
+}
+
+.pub-tier.tier2 {
+	background: #fef4e6;
+	color: #a15c00;
+}
+
+.pub-card-desc {
+	font-size: 13px;
+	line-height: 1.55;
+	color: var(--muted-foreground, #667085);
+	margin: 0;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.pub-metrics {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 14px;
+	font-size: 12px;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-metrics b {
+	color: var(--foreground, #111827);
+	font-weight: 600;
+}
+
+.pub-card-bottom {
+	margin-top: auto;
+	padding-top: 12px;
+	border-top: 1px dashed var(--border, #dfe5ef);
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.pub-price {
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--foreground, #111827);
+	line-height: 1.2;
+}
+
+.pub-price small {
+	display: block;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-card-cta {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--primary, #2b67ec);
+	white-space: nowrap;
+}
+
+.pub-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.pub-tag {
+	font-size: 11px;
+	background: #f2f5fa;
+	color: #475467;
+	border-radius: 999px;
+	padding: 2px 8px;
+	text-decoration: none;
+}
+
+/* ---------- empty / notice ---------- */
+
+.pub-empty {
+	background: #fff;
+	border: 1px dashed var(--border, #dfe5ef);
+	border-radius: 14px;
+	padding: 40px 24px;
+	text-align: center;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-notice {
+	background: #fffbe9;
+	border: 1px solid #f2dc9b;
+	border-radius: 12px;
+	padding: 12px 14px;
+	font-size: 13px;
+	color: #7a5300;
+	margin-bottom: 20px;
+}
+
+/* ---------- pagination ---------- */
+
+.pub-pagination {
+	margin-top: 26px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	justify-content: center;
+}
+
+.pub-page-btn {
+	min-width: 36px;
+	height: 36px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--border, #dfe5ef);
+	background: #fff;
+	border-radius: 9px;
+	font-size: 13px;
+	color: var(--foreground, #111827);
+	text-decoration: none;
+	padding: 0 10px;
+}
+
+.pub-page-btn:hover {
+	border-color: #c3cee0;
+}
+
+.pub-page-btn.is-active {
+	background: var(--primary, #2b67ec);
+	border-color: var(--primary, #2b67ec);
+	color: #fff;
+	font-weight: 600;
+}
+
+.pub-page-btn.is-disabled {
+	opacity: 0.45;
+	pointer-events: none;
+}
+
+/* ---------- detail ---------- */
+
+.pub-breadcrumb {
+	font-size: 12px;
+	color: var(--muted-foreground, #667085);
+	margin-bottom: 18px;
+}
+
+.pub-breadcrumb ol {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.pub-breadcrumb li + li::before {
+	content: '/';
+	margin-right: 6px;
+	color: #b6c0d0;
+}
+
+.pub-breadcrumb a {
+	color: var(--muted-foreground, #667085);
+	text-decoration: none;
+}
+
+.pub-breadcrumb a:hover {
+	color: var(--primary, #2b67ec);
+}
+
+.pub-detail {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 320px;
+	gap: 24px;
+	align-items: start;
+}
+
+.pub-panel {
+	background: #fff;
+	border: 1px solid var(--border, #dfe5ef);
+	border-radius: 16px;
+	padding: 22px;
+}
+
+.pub-panel + .pub-panel {
+	margin-top: 16px;
+}
+
+.pub-detail h1 {
+	margin: 0;
+	font-size: clamp(24px, 3vw, 32px);
+	letter-spacing: -0.03em;
+	line-height: 1.2;
+}
+
+.pub-detail-domain {
+	margin-top: 6px;
+	font-size: 14px;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-detail-domain a {
+	color: var(--primary, #2b67ec);
+	text-decoration: none;
+}
+
+.pub-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 14px;
+}
+
+.pub-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 11px;
+	font-weight: 600;
+	font-family: inherit;
+	line-height: 1.4;
+	border: 0;
+	border-radius: 999px;
+	padding: 4px 9px;
+	background: #f2f5fa;
+	color: #475467;
+}
+
+/* Badge verifikasi dirender sebagai <button> supaya tooltip-nya bisa dibuka
+   lewat keyboard, bukan hanya hover. Tampilannya tetap seperti label. */
+button.pub-badge {
+	cursor: help;
+}
+
+button.pub-badge:focus-visible {
+	outline: 2px solid var(--ring, #2b67ec);
+	outline-offset: 1px;
+}
+
+.pub-badge.ok {
+	background: var(--success-soft, #eaf8f1);
+	color: var(--success, #16794b);
+}
+
+.pub-metric-grid {
+	margin: 18px 0 0;
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.pub-metric {
+	background: #f9fbfe;
+	border: 1px solid var(--border, #dfe5ef);
+	border-radius: 11px;
+	padding: 12px;
+}
+
+.pub-metric dt {
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-metric dd {
+	margin: 4px 0 0;
+	font-size: 17px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+.pub-panel h2 {
+	margin: 0 0 10px;
+	font-size: 16px;
+	letter-spacing: -0.01em;
+}
+
+.pub-panel p {
+	margin: 0 0 10px;
+	font-size: 14px;
+	line-height: 1.7;
+	color: #344054;
+}
+
+.pub-panel p:last-child {
+	margin-bottom: 0;
+}
+
+.pub-about {
+	white-space: pre-line;
+}
+
+.pub-spec {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px 18px;
+}
+
+.pub-spec div {
+	font-size: 13px;
+}
+
+.pub-spec dt {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--muted-foreground, #667085);
+	margin-bottom: 2px;
+}
+
+.pub-spec dd {
+	margin: 0;
+	color: #344054;
+}
+
+.pub-aside {
+	position: sticky;
+	top: 20px;
+}
+
+.pub-cta-card {
+	background: #fff;
+	border: 1px solid var(--border, #dfe5ef);
+	border-radius: 16px;
+	padding: 20px;
+	box-shadow: 0 12px 32px rgba(23, 43, 77, 0.06);
+}
+
+.pub-cta-price {
+	font-size: 26px;
+	font-weight: 800;
+	letter-spacing: -0.03em;
+}
+
+.pub-cta-note {
+	margin-top: 4px;
+	font-size: 12px;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-cta-card .pub-btn {
+	width: 100%;
+	justify-content: center;
+	margin-top: 16px;
+}
+
+.pub-related {
+	margin-top: 32px;
+}
+
+@media (max-width: 1024px) {
+	.pub-hero {
+		padding: 44px 0 30px;
+	}
+	.pub-hero-grid {
+		gap: 32px;
+	}
+	.pub-hero h1 {
+		font-size: clamp(27px, 3vw, 34px);
+	}
+	.pub-hero p.pub-lead {
+		font-size: 14.5px;
+	}
+	.pub-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.pub-detail {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.pub-aside {
+		position: static;
+	}
+}
+
+/* Di bawah 900px dua kolom jadi terlalu sempit: headline dan preview ditumpuk. */
+@media (max-width: 900px) {
+	.pub-hero-grid {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 30px;
+	}
+	.pub-hero-preview {
+		max-width: 560px;
+	}
+	.pub-hero-panel {
+		inset: -12px 0 0 14px;
+	}
+	.pub-hero-caption {
+		margin-top: 10px;
+		text-align: left;
+	}
+	.pub-hero h1 {
+		max-width: 100%;
+	}
+}
+
+@media (max-width: 680px) {
+	.pub-hero {
+		padding: 32px 0 26px;
+	}
+	.pub-hero-grid {
+		gap: 26px;
+	}
+	.pub-hero-panel {
+		display: none;
+	}
+	.pub-hero-caption {
+		margin-top: 10px;
+	}
+	.pub-nav .pub-btn {
+		padding: 8px 12px;
+		font-size: 13px;
+	}
+	.hero-media {
+		gap: 10px;
+		padding: 10px 12px;
+	}
+	.hero-media-metric {
+		min-width: 46px;
+		padding-left: 10px;
+	}
+	/* Di layar sempit, satu metrik cukup — sisakan ruang untuk nama domain. */
+	.hero-media-metric + .hero-media-metric {
+		display: none;
+	}
+	.pub-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.pub-metric-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.pub-spec {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.pub-nav a:not(.pub-btn) {
+		display: none;
+	}
+	/* Popover filter jadi panel bawah di layar sempit: lebar penuh dikurangi
+	   margin, tinggi maksimum dengan scroll internal. */
+	.pub-popover {
+		position: fixed;
+		left: 12px;
+		right: 12px;
+		top: auto;
+		bottom: 12px;
+		width: auto;
+		max-width: none;
+		max-height: calc(100vh - 24px);
+		overflow-y: auto;
+	}
+	.pub-toolbar {
+		gap: 8px;
+		padding: 10px 0;
+		margin: -10px 0 8px;
+	}
+	.pub-filter-btn {
+		padding: 0 13px;
+	}
+	/* Panel bawah: satu kolom supaya kontrol tidak sempit. */
+	.pub-popover-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* ---------- tabel direktori media ---------- */
+
+.pub-table-wrap {
+	background: #fff;
+	border: 1px solid var(--border, #dfe5ef);
+	border-radius: 12px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	-webkit-overflow-scrolling: touch;
+}
+
+.pub-table {
+	width: 100%;
+	/* Cukup untuk sembilan kolom pada layar 1024px tanpa scroll; di bawah itu
+	   kolom metrik disembunyikan (lihat media query 700px). */
+	min-width: 940px;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+
+.pub-table caption {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+.pub-table thead th {
+	height: 42px;
+	padding: 0 14px;
+	background: #f8fafd;
+	border-bottom: 1px solid var(--border, #dfe5ef);
+	font-size: 10.5px;
+	font-weight: 700;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	color: var(--muted-foreground, #667085);
+	text-align: left;
+	white-space: nowrap;
+	vertical-align: middle;
+}
+
+.pub-table thead th.col-num,
+.pub-table thead th.col-geo,
+.pub-table thead th.col-sla {
+	text-align: center;
+}
+
+.pub-table thead th.col-price,
+.pub-table thead th.col-action {
+	text-align: right;
+}
+
+.pub-th-sort {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	color: inherit;
+	text-decoration: none;
+}
+
+.pub-th-sort:hover {
+	color: var(--foreground, #111827);
+}
+
+.pub-th-info {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 15px;
+	height: 15px;
+	margin-left: 3px;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: #98a2b3;
+	cursor: help;
+	vertical-align: -2px;
+}
+
+.pub-th-info:hover {
+	color: var(--primary, #2b67ec);
+}
+
+.pub-table tbody th,
+.pub-table tbody td {
+	padding: 8px 14px;
+	border-bottom: 1px solid #eef1f7;
+	vertical-align: middle;
+}
+
+.pub-table tbody tr:last-child th,
+.pub-table tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.pub-table tbody tr:hover {
+	background: #fafcff;
+}
+
+.pub-table tbody th.col-name {
+	text-align: left;
+	font-weight: 400;
+	min-width: 280px;
+}
+
+.pub-media {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	min-width: 0;
+}
+
+.pub-media-text {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+
+.pub-media-name {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 13.5px;
+	font-weight: 600;
+	color: #0b1b34;
+	line-height: 1.3;
+}
+
+.pub-media-name > span:first-child,
+.pub-media-name {
+	overflow-wrap: anywhere;
+}
+
+.pub-media-check {
+	display: inline-flex;
+	flex: 0 0 auto;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--primary, #2b67ec);
+	cursor: help;
+	line-height: 1;
+}
+
+.pub-media-domain {
+	font-size: 11.5px;
+	color: var(--muted-foreground, #667085);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 240px;
+}
+
+.pub-media-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0 6px;
+	font-size: 11px;
+	color: #98a2b3;
+	max-width: 260px;
+}
+
+/* Pemisah digambar CSS, bukan karakter "·" di teks: kalau baris membungkus,
+   titik pemisah tidak tertinggal di ujung baris. */
+.pub-media-meta > span + span::before {
+	content: '·';
+	margin-right: 6px;
+	color: #c3cbd8;
+}
+
+.pub-media-none {
+	color: #b3bccb;
+}
+
+.pub-table td.col-num {
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.pub-num {
+	font-size: 13px;
+	font-weight: 600;
+	color: #0b1b34;
+}
+
+.pub-dash {
+	color: #b3bccb;
+}
+
+.pub-geo {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.pub-geo.is-yes {
+	background: var(--success-soft, #eaf8f1);
+	color: var(--success, #16794b);
+}
+
+.pub-geo.is-no {
+	background: #f4f6fa;
+	color: #7a8798;
+}
+
+.pub-table td.col-geo,
+.pub-table td.col-sla {
+	text-align: center;
+}
+
+.pub-sla {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 6px;
+	background: #f4f6fa;
+	color: #475467;
+	font-size: 11.5px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.pub-cat-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	max-width: 190px;
+}
+
+.pub-cat {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: #f4f6fa;
+	color: #475467;
+	font-size: 11px;
+	white-space: nowrap;
+}
+
+button.pub-cat {
+	border: 0;
+	font-family: inherit;
+	cursor: help;
+}
+
+.pub-table td.col-price {
+	text-align: right;
+	white-space: nowrap;
+}
+
+.pub-price-label {
+	display: block;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: #98a2b3;
+}
+
+.pub-price-value {
+	display: block;
+	margin-top: 1px;
+	font-size: 13.5px;
+	font-weight: 700;
+	color: #0b1b34;
+	font-variant-numeric: tabular-nums;
+}
+
+.pub-table td.col-action {
+	text-align: right;
+	white-space: nowrap;
+}
+
+.pub-row-cta {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid #c9dcff;
+	border-radius: 8px;
+	background: #fff;
+	color: var(--primary, #2b67ec);
+	font-size: 12.5px;
+	font-weight: 600;
+	text-decoration: none;
+	transition: background 160ms ease, border-color 160ms ease;
+}
+
+.pub-row-cta:hover {
+	background: var(--accent, #eef4ff);
+	border-color: #a9c7ff;
+}
+
+.pub-row-cta:focus-visible {
+	outline: 2px solid var(--ring, #2b67ec);
+	outline-offset: 1px;
+}
+
+@media (max-width: 900px) {
+	.pub-table thead th,
+	.pub-table tbody th,
+	.pub-table tbody td {
+		padding-left: 12px;
+		padding-right: 12px;
+	}
+	.pub-table tbody th.col-name {
+		min-width: 240px;
+	}
+}
+
+/* Di layar sempit tabel dipangkas jadi dua kolom: identitas media + aksi.
+   Sembilan kolom di layar 390px praktis tidak terbaca walau bisa digeser;
+   metrik lengkap tetap ada di halaman detail tiap media. */
+@media (max-width: 700px) {
+	.pub-table {
+		min-width: 0;
+	}
+
+	.pub-table thead th.col-num,
+	.pub-table thead th.col-geo,
+	.pub-table thead th.col-sla,
+	.pub-table thead th.col-cat,
+	.pub-table thead th.col-price,
+	.pub-table tbody td.col-num,
+	.pub-table tbody td.col-geo,
+	.pub-table tbody td.col-sla,
+	.pub-table tbody td.col-cat,
+	.pub-table tbody td.col-price {
+		display: none;
+	}
+
+	.pub-table tbody th.col-name {
+		min-width: 0;
+	}
+
+	.pub-media {
+		gap: 8px;
+	}
+
+	/* Metadata boleh membungkus di layar sempit supaya domain dan info
+	   backlink tidak terpotong elipsis. */
+	.pub-media-domain {
+		max-width: none;
+		white-space: normal;
+		overflow: visible;
+		text-overflow: clip;
+	}
+
+	.pub-media-meta {
+		max-width: none;
+		line-height: 1.45;
+	}
+
+	.pub-row-cta {
+		height: 30px;
+		padding: 0 10px;
+		font-size: 12px;
+	}
+}
+
+/* ---------- panel "Dari mana angka di halaman ini" ---------- */
+
+.pub-sources {
+	margin-top: 40px;
+	padding: 22px 24px;
+	background: #fff;
+	border: 1px solid var(--border, #dfe5ef);
+	border-radius: 14px;
+	display: grid;
+	grid-template-columns: minmax(0, 0.9fr) minmax(0, 2.1fr);
+	gap: 8px 32px;
+	align-items: start;
+}
+
+.pub-sources-eyebrow {
+	margin: 0;
+	font-size: 10.5px;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-sources-intro h2 {
+	margin: 8px 0 0;
+	font-size: clamp(19px, 1.6vw, 23px);
+	line-height: 1.25;
+	letter-spacing: -0.02em;
+	color: #0b1b34;
+}
+
+.pub-sources-intro > p:last-child {
+	margin: 8px 0 0;
+	font-size: 13px;
+	line-height: 1.6;
+	color: var(--muted-foreground, #667085);
+	max-width: 300px;
+}
+
+.pub-sources-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* Setiap butir menumpuk vertikal: ikon, judul, lalu deskripsi. */
+.pub-sources-grid > li {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0;
+	padding: 4px 20px;
+	border-left: 1px solid #eef1f7;
+}
+
+.pub-sources-grid > li:first-child {
+	border-left: 0;
+	padding-left: 0;
+}
+
+.pub-sources-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	flex: 0 0 auto;
+	margin-bottom: 12px;
+	border-radius: 11px;
+	background: var(--accent, #eef4ff);
+	color: var(--primary, #2b67ec);
+}
+
+.pub-sources-grid h3 {
+	margin: 0 0 6px;
+	font-size: 13.5px;
+	font-weight: 700;
+	line-height: 1.35;
+	color: #0b1b34;
+}
+
+.pub-sources-grid p {
+	margin: 0;
+	font-size: 12.5px;
+	line-height: 1.6;
+	color: var(--muted-foreground, #667085);
+}
+
+.pub-sources-note {
+	grid-column: 1 / -1;
+	margin: 16px 0 0;
+	padding-top: 14px;
+	border-top: 1px solid #eef1f7;
+	font-size: 12.5px;
+	line-height: 1.6;
+	color: var(--muted-foreground, #667085);
+}
+
+@media (max-width: 1024px) {
+	.pub-sources {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 18px;
+	}
+	.pub-sources-intro > p:last-child {
+		max-width: none;
+	}
+	.pub-sources-grid > li {
+		padding: 0 16px;
+	}
+}
+
+@media (max-width: 760px) {
+	.pub-sources {
+		padding: 18px 16px;
+	}
+	.pub-sources-grid {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 16px;
+	}
+	.pub-sources-grid > li {
+		padding: 0;
+		border-left: 0;
+	}
+}

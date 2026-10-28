@@ -57,6 +57,11 @@ type Config struct {
 
 	JobInline bool
 
+	// PublicCatalogEnabled: kill switch katalog media publik
+	// (data.tauthub.com). false → seluruh endpoint /v1/public/* menjawab 503
+	// dan situs publik men-disallow crawler. Default true.
+	PublicCatalogEnabled bool
+
 	// Web Push (VAPID). Kosong → fitur push nonaktif: endpoint mengembalikan
 	// enabled=false dan worker melewati antrean. Subject wajib mailto: / https:.
 	VAPIDPrivateKey string
@@ -129,6 +134,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	c.JobInline = strings.EqualFold(getEnv("JOB_INLINE", "true"), "true")
+	c.PublicCatalogEnabled = !strings.EqualFold(getEnv("PUBLIC_CATALOG_ENABLED", "true"), "false")
 
 	c.VAPIDPrivateKey = strings.TrimSpace(os.Getenv("VAPID_PRIVATE_KEY"))
 	c.VAPIDSubject = getEnv("VAPID_SUBJECT", "mailto:ops@tauthub.com")

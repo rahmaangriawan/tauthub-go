@@ -2609,13 +2609,21 @@
 			<div class="instan-scroll min-h-0 flex-1 overflow-y-auto">
 				<div class="instan-page">
 					<section class="instan-intro">
-						<h2>{tr('Instan Brief — isi template, unggah, langsung terbaca')}</h2>
-						<p>{tr('Untuk agensi yang butuh cepat: salin atau unduh template, isi bersama klien, lalu unggah dokumennya di sini. Berkas muncul juga di tab Media dan menjadi bahan Ringkasan serta konteks artikel.')}</p>
+						<h2>{tr('Instan Brief — isi field atau unggah dokumen, pilih salah satu')}</h2>
+						<p>
+							{instanFormOpen
+								? tr('Field yang kamu isi langsung tersimpan ke Entity Core tanpa AI dan tanpa unggah berkas, jadi langkah unggah tidak diperlukan.')
+								: tr('Untuk agensi yang butuh cepat: unduh template untuk diisi di Word lalu unggah di sini, atau isi field-nya langsung tanpa berkas. Berkas yang diunggah juga muncul di tab Media dan menjadi bahan Ringkasan serta konteks artikel.')}
+						</p>
 					</section>
 
 						<section class="instan-card">
 							<h3><span class="instan-step">1</span>{tr('Template brief')}</h3>
-							<p class="instan-lead">{tr('Pilih satu jalan: unduh template kosong untuk diisi di Word, atau isi field-nya langsung di sini.')}</p>
+							<p class="instan-lead">
+								{instanFormOpen
+									? tr('Isi field di bawah ini. Setiap field yang disimpan langsung masuk ke Entity Core, jadi tidak perlu mengunggah berkas.')
+									: tr('Pilih satu jalan: unduh template kosong untuk diisi di Word, atau isi field-nya langsung di sini.')}
+							</p>
 
 							<div class="instan-tpl instan-tpl-main">
 								<div class="instan-tpl-info">
@@ -2660,6 +2668,7 @@
 							</p>
 						</section>
 
+					{#if !instanFormOpen}
 					<section class="instan-card">
 						<h3><span class="instan-step">2</span>{tr('Unggah berkas brand di sini')}</h3>
 						<div
@@ -2731,10 +2740,15 @@
 							</p>
 						{/if}
 					</section>
+					{/if}
 
 					<section class="instan-card">
-						<h3><span class="instan-step">3</span>{tr('Analisis & ringkasan')}</h3>
-						<p class="instan-cta-text">{tr('Setelah berkas bertanda "Terbaca AI", Ringkasan mengubahnya jadi Entity Core yang bisa dikoreksi. Dokumen dan gambar ini juga jadi konteks artikel saat Copilot aktif.')}</p>
+						<h3><span class="instan-step">{instanFormOpen ? '2' : '3'}</span>{tr('Analisis & ringkasan')}</h3>
+						<p class="instan-cta-text">
+							{instanFormOpen
+								? tr('Field yang sudah tersimpan bisa langsung dipakai Ringkasan dan konteks artikel. Tidak ada berkas yang perlu diunggah.')
+								: tr('Setelah berkas bertanda "Terbaca AI", Ringkasan mengubahnya jadi Entity Core yang bisa dikoreksi. Dokumen dan gambar ini juga jadi konteks artikel saat Copilot aktif.')}
+						</p>
 						<div class="instan-cta">
 							<button class="app-btn app-btn-primary !min-h-8 !text-xs" type="button" onclick={() => (activeTab = 'ringkasan')}>
 								{tr('Lanjut ke Ringkasan')}<ArrowRight size={14} />
@@ -2753,10 +2767,15 @@
 					<section class="instan-card instan-privacy">
 						<h3><ShieldCheck size={14} />{tr('Apa yang terjadi dengan datamu')}</h3>
 						<ul>
-							<li>{tr('Dokumen dibaca di server Tauthub dengan parser lokal (PDF/DOCX/TXT) — proses ini tidak memakai AI.')}</li>
-							<li>{tr('Ringkasan baru dibuat saat kamu menekan tombol; itu satu-satunya langkah yang mengirim teks ke model AI sesuai konfigurasi admin.')}</li>
-							<li>{tr('Berkas fisik diunggahan dihapus otomatis setelah masa retensi; teks hasil ekstraksi tetap tersimpan selama brief ini ada.')}</li>
-							<li>{tr('Menghapus dokumen ikut menghapus teksnya. Ringkasan dan log yang sudah terlanjur dibuat bisa masih memuat kutipan — tidak bisa dihapus surut.')}</li>
+							{#if instanFormOpen}
+								<li>{tr('Field yang kamu isi disimpan apa adanya ke Entity Core. Langkah ini tidak memanggil AI dan tidak membuat berkas.')}</li>
+								<li>{tr('Ringkasan baru dibuat saat kamu menekan tombol; itu satu-satunya langkah yang mengirim teks ke model AI sesuai konfigurasi admin.')}</li>
+							{:else}
+								<li>{tr('Dokumen dibaca di server Tauthub dengan parser lokal (PDF/DOCX/TXT) — proses ini tidak memakai AI.')}</li>
+								<li>{tr('Ringkasan baru dibuat saat kamu menekan tombol; itu satu-satunya langkah yang mengirim teks ke model AI sesuai konfigurasi admin.')}</li>
+								<li>{tr('Berkas fisik diunggahan dihapus otomatis setelah masa retensi; teks hasil ekstraksi tetap tersimpan selama brief ini ada.')}</li>
+								<li>{tr('Menghapus dokumen ikut menghapus teksnya. Ringkasan dan log yang sudah terlanjur dibuat bisa masih memuat kutipan — tidak bisa dihapus surut.')}</li>
+							{/if}
 						</ul>
 						<div class="instan-privacy-actions">
 							<button class="app-btn app-btn-soft !min-h-7 !text-[11.5px]" type="button" onclick={exportBrief}>

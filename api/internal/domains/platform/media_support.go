@@ -287,6 +287,8 @@ func (d *Deps) mpMediaJSON(row ptRow, markupPercent float64) map[string]any {
 		"id":                     row.anyOrNil("id"),
 		"name":                   row.anyOrNil("name"),
 		"slug":                   row.anyOrNil("slug"),
+		"public_slug":            row.anyOrNil("public_slug"),
+		"public_listed":          row.boolOr("public_listed", true),
 		"categories":             categories,
 		"category":               row.anyOrNil("category"),
 		"pending_changes":        mpJSONValue(row.anyOrNil("pending_changes")),

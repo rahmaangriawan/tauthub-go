@@ -31,6 +31,7 @@ import (
 	partnerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/partner"
 	platformdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/platform"
 	profilerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/profiler"
+	publiccatalogdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/publiccatalog"
 	pushdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/push"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
@@ -458,6 +459,16 @@ func run() error {
 		// Berita acara kampanye by token share — PUBLIK (tautan dibagikan ke
 		// pihak ketiga), parity app/v1/campaign-reports/[token].
 		v1.Get("/campaign-reports/{token}", clientRead.CampaignReportGet)
+
+		// ---------- Katalog media PUBLIK (/v1/public/*) — data.tauthub.com ----------
+		// Tanpa autentikasi; hanya media active + public_listed yang tampil.
+		// Kill switch: PUBLIC_CATALOG_ENABLED=false → semua balas 503.
+		publicCatalog := &publiccatalogdomain.Deps{Pool: database.Pool, Enabled: cfg.PublicCatalogEnabled}
+		v1.Get("/public/media", publicCatalog.MediaList)
+		v1.Get("/public/media/{publicSlug}", publicCatalog.MediaDetail)
+		v1.Get("/public/kategori", publicCatalog.Categories)
+		v1.Get("/public/statistik", publicCatalog.Stats)
+		v1.Get("/public/sitemap", publicCatalog.Sitemap)
 		// Endpoint publik & infra (§7): feed JSON mitra, tracking event, callback
 		// publishing, laporan bug (butuh login), trigger worker/scheduler.
 		v1.Get("/publishing/feed.json", platformDeps.PublishingFeedJSON)

@@ -19,7 +19,7 @@ import (
 )
 
 // mpMediaListSelect: kolom daftar media admin (parity SELECT di route GET).
-const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.description, m.website_url, m.contoh_artikel_url, m.adapter_url, m.price, m.credit_cost, m.status, m.integration_type, m.partner_id, p.name AS partner_name, u.referred_by_partner_id, referrer.name AS referrer_name, m.publish_defaults, m.notes, m.traffic_estimate, m.media_tier, m.media_quality_score, m.media_quality_notes, m.health_score, m.health_breakdown, m.health_computed_at, m.auto_publish, m.word_count_mode, m.pending_changes, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.rejection_reason, m.reviewed_by, m.reviewed_at, m.created_by, m.created_at, m.updated_at, m.pricing_type, m.price_status, m.negotiated_price, m.link_duration_months,
+const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.public_slug, m.public_listed, m.category, m.description, m.website_url, m.contoh_artikel_url, m.adapter_url, m.price, m.credit_cost, m.status, m.integration_type, m.partner_id, p.name AS partner_name, u.referred_by_partner_id, referrer.name AS referrer_name, m.publish_defaults, m.notes, m.traffic_estimate, m.media_tier, m.media_quality_score, m.media_quality_notes, m.health_score, m.health_breakdown, m.health_computed_at, m.auto_publish, m.word_count_mode, m.pending_changes, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.rejection_reason, m.reviewed_by, m.reviewed_at, m.created_by, m.created_at, m.updated_at, m.pricing_type, m.price_status, m.negotiated_price, m.link_duration_months,
        COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv,
        sm.da AS seo_da, sm.ai_trust_score AS seo_ai_trust, sm.ai_citation AS seo_ai_citation, sm.checked_at AS seo_checked_at,
        COALESCE(np.wa_number, '') AS partner_wa_number, COALESCE(np.wa_consent, FALSE) AS partner_wa_consent,
@@ -69,6 +69,9 @@ func mpMediaError(err error) error {
 		return nil
 	}
 	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "uq_media_public_slug") {
+		return errConflict("Slug publik sudah dipakai media lain")
+	}
 	if strings.Contains(msg, "duplicate") || strings.Contains(msg, "uq_media_slug") || strings.Contains(msg, "23505") {
 		return errConflict("Media slug already exists")
 	}
@@ -223,6 +226,22 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 		slug = mpSlugifyMediaName(name)
 	}
 
+	// Slug publik (data.tauthub.com/media/...) dipisah dari slug internal supaya
+	// rename media tidak memutus URL yang sudah terindeks. Default = slug saat
+	// dibuat; setelah itu hanya berubah bila admin mengirimkannya eksplisit.
+	publicSlug := slug
+	if v, has := strField(body, "public_slug"); has {
+		if len(v) > 160 || !mpSlugRe.MatchString(v) {
+			writeErr(w, d, errUnprocessable("Invalid public_slug"))
+			return
+		}
+		publicSlug = v
+	}
+	publicListed := true
+	if v, has := boolField(body, "public_listed"); has {
+		publicListed = v
+	}
+
 	category, hasCategory := strField(body, "category")
 	if hasCategory && len(category) > 120 {
 		writeErr(w, d, errUnprocessable("Too big: expected string to have <=120 characters"))
@@ -329,9 +348,9 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := d.exec(r.Context(), `
-		INSERT INTO media (id, name, slug, category, description, website_url, adapter_url, price, credit_cost, status, integration_type, partner_id, publish_defaults, notes, traffic_estimate, media_tier, media_quality_score, media_quality_notes, created_by, link_duration_months)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
-		id, name, slug, ptNullableArgStr(category, hasCategory), ptNullableArgStr(description, hasDescription),
+		INSERT INTO media (id, name, slug, public_slug, public_listed, category, description, website_url, adapter_url, price, credit_cost, status, integration_type, partner_id, publish_defaults, notes, traffic_estimate, media_tier, media_quality_score, media_quality_notes, created_by, link_duration_months)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
+		id, name, slug, publicSlug, publicListed, ptNullableArgStr(category, hasCategory), ptNullableArgStr(description, hasDescription),
 		ptNullableArgStr(websiteURL, hasWebsite), ptNullableArgStr(adapterURL, hasAdapter), price, creditCost,
 		status, integrationType, ptNullableArgStr(partnerID, hasPartner), publishDefaults,
 		ptNullableArgStr(notes, hasNotes), mpIntArgDefault(body, "traffic_estimate", 0), mediaTier,
@@ -494,6 +513,15 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	autoPublish, hasAutoPublish := boolField(body, "auto_publish")
+	// Keterlihatan di katalog publik (data.tauthub.com) — hanya admin.
+	publicListed, hasPublicListed := boolField(body, "public_listed")
+	// Slug publik untuk URL yang sudah terindeks. Hanya berubah bila dikirim
+	// eksplisit; rename media tidak boleh memutus tautan lama.
+	publicSlug, hasPublicSlug := strField(body, "public_slug")
+	if hasPublicSlug && (len(publicSlug) > 160 || !mpSlugRe.MatchString(publicSlug)) {
+		writeErr(w, d, errUnprocessable("Invalid public_slug"))
+		return
+	}
 	// DA manual: admin boleh mengisi Domain Authority sendiri saat deteksi
 	// otomatis tidak menemukannya. Hanya divalidasi sebagai bilangan bulat 0-100.
 	// Dikirim null = hapus nilai; tipe lain yang tak terbaca = tolak.
@@ -543,11 +571,13 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		  media_tier = COALESCE($16, media_tier),
 		  media_quality_score = COALESCE($17, media_quality_score),
 		  media_quality_notes = COALESCE($18, media_quality_notes),
-		  pricing_type = COALESCE($19, pricing_type),
-		  link_duration_months = COALESCE($20, link_duration_months),
-			  price_status = CASE WHEN $21::text IS NOT NULL THEN 'final' ELSE price_status END,
-		  updated_at = NOW()
-		WHERE id = $22`,
+			  pricing_type = COALESCE($19, pricing_type),
+			  link_duration_months = COALESCE($20, link_duration_months),
+			  public_listed = COALESCE($21, public_listed),
+			  public_slug = COALESCE($22, public_slug),
+			  price_status = CASE WHEN $23::text IS NOT NULL THEN 'final' ELSE price_status END,
+			  updated_at = NOW()
+		WHERE id = $24`,
 		ptNullableArgStr(name, hasName), ptNullableArgStr(slug, hasSlug), ptNullableArgStr(category, hasCategory),
 		ptNullableArgStr(description, hasDescription), ptNullableArgStr(websiteURL, hasWebsite), ptNullableArgStr(adapterURL, hasAdapter),
 		mpNullableArgFloat(price, hasPrice), creditCost, ptNullableArgStr(status, hasStatus),
@@ -556,6 +586,7 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		ptNullableArgInt(traffic, hasTraffic), ptNullableArgStr(mediaTier, hasTier),
 		ptNullableAnyInt(qualityScore, hasQualityScore), ptNullableArgStr(qualityNotes, hasQualityNotes),
 		ptNullableArgStr(pricingType, hasPricingType), ptNullableArgInt(linkDuration, hasLinkDuration),
+		ptNullableArgBool(publicListed, hasPublicListed), ptNullableArgStr(publicSlug, hasPublicSlug),
 		ptNullableArgStr(pricingType, hasPricingType), mediaID); err != nil {
 		writeErr(w, d, mpMediaError(err))
 		return

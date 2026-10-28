@@ -5,6 +5,7 @@ import { jwtVerify } from 'jose';
 import type { Handle } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { redirect } from '@sveltejs/kit';
+import { appOrigin, dataOrigin, isAppHost, isAppOnlyPath, isCatalogPath, isDataHost } from '$lib/server/data-site';
 
 const secretString = env.APP_SECRET ?? 'local-development-secret-change-before-production';
 const secret = new TextEncoder().encode(secretString);
@@ -35,6 +36,18 @@ const LEGACY_REDIRECTS: Array<[string, string]> = [
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
+	const host = event.url.hostname;
+
+	// Dua host, satu aplikasi:
+	//   data.tauthub.com → katalog publik (path dashboard dialihkan ke app)
+	//   app.tauthub.com  → dashboard (path katalog dialihkan ke data)
+	// Host lain (localhost, IP, staging) tidak dialihkan supaya dev tetap jalan.
+	if (isDataHost(host) && isAppOnlyPath(pathname)) {
+		throw redirect(302, `${appOrigin()}${pathname}${event.url.search}`);
+	}
+	if (isAppHost(host) && isCatalogPath(pathname)) {
+		throw redirect(308, `${dataOrigin()}${pathname}${event.url.search}`);
+	}
 
 	for (const [from, to] of LEGACY_REDIRECTS) {
 		if (pathname === from || pathname.startsWith(`${from}/`)) {

@@ -12,10 +12,14 @@ EnvironmentFile=__APP_DIR__/.env
 Environment=NODE_ENV=production
 Environment=PORT=__WEB_PORT__
 Environment=HOST=127.0.0.1
-# Origin eksplisit + header proxy supaya CSRF/form-action dan cookie
-# secure memakai domain publik (https://$DOMAIN), bukan http://127.0.0.1.
-# __WEB_PORT__ dan __ORIGIN__ diisi deploy/setup-vps.sh per environment.
-Environment=ORIGIN=__ORIGIN__
+# JANGAN set ORIGIN di sini. adapter-node memakai ORIGIN sebagai basis URL
+# untuk SEMUA request dan mengabaikan header host — akibatnya SvelteKit selalu
+# melihat satu host saja, sehingga situs kedua (data.tauthub.com) ikut tampil
+# sebagai host aplikasi (redirect ke /login). Dengan hanya dua header di bawah,
+# origin dihitung per request dari nginx: https://app.tauthub.com untuk
+# dashboard dan https://data.tauthub.com untuk katalog publik. CSRF/form action
+# tetap benar karena SvelteKit membandingkan Origin dengan origin request itu.
+# __WEB_PORT__ diisi deploy/setup-vps.sh per environment.
 Environment=PROTOCOL_HEADER=x-forwarded-proto
 Environment=HOST_HEADER=x-forwarded-host
 ExecStart=/usr/bin/node build

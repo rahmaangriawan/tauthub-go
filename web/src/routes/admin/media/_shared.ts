@@ -72,6 +72,10 @@ export type Media = {
 	id: string;
 	name: string;
 	slug: string | null;
+	/** Slug URL publik (data.tauthub.com/media/<public_slug>). */
+	public_slug?: string | null;
+	/** false = disembunyikan dari katalog publik. */
+	public_listed?: boolean | null;
 	pricing_type?: 'nett' | 'nego' | null;
 	price_status?: string | null;
 	negotiated_price?: number | null;

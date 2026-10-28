@@ -11,7 +11,18 @@ declare global {
 	namespace App {
 		// interface Error {}
 		// interface Locals {}
-		// interface PageData {}
+		interface PageData {
+			// Metadata SEO halaman publik (data.tauthub.com). Halaman dashboard
+			// tidak mengisinya — +layout.svelte memakai fallback "Tauthub".
+			seo?: {
+				title: string;
+				description?: string;
+				canonical?: string;
+				robots?: string;
+				ogType?: string;
+				jsonLd?: unknown;
+			};
+		}
 		// interface PageState {}
 		// interface Platform {}
 	}

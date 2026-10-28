@@ -48,8 +48,11 @@
 		const a = anchor.getBoundingClientRect();
 		const p = panel.getBoundingClientRect();
 		const gap = 8;
-		// Balik ke bawah bila ruang atas tidak cukup.
-		const above = a.top - p.height - gap >= 8;
+		// `side` adalah preferensi, bukan paksaan: tetap dibalik bila ruang di
+		// sisi itu tidak cukup (mis. badge dekat tepi atas viewport).
+		const fitsAbove = a.top - p.height - gap >= 8;
+		const fitsBelow = a.bottom + p.height + gap <= window.innerHeight - 8;
+		const above = side === 'bottom' ? !fitsBelow && fitsAbove : fitsAbove || !fitsBelow;
 		const top = above ? a.top - p.height - gap : a.bottom + gap;
 		let left: number;
 		if (align === 'start') left = a.left;

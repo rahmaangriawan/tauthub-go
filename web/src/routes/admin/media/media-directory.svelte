@@ -109,7 +109,10 @@
 		media_quality_notes: '',
 		seo_da: '',
 		link_duration_months: '12',
-		pricing_type: 'nett' as 'nett' | 'nego'
+		pricing_type: 'nett' as 'nett' | 'nego',
+		// Katalog publik (data.tauthub.com) — hanya admin yang boleh mengubah.
+		public_listed: true,
+		public_slug: ''
 	});
 
 	// Pencarian sisi server (debounced) — cari nama/slug/kategori media.
@@ -197,7 +200,9 @@
 			media_quality_notes: '',
 			seo_da: '',
 			link_duration_months: '12',
-			pricing_type: 'nett'
+			pricing_type: 'nett',
+			public_listed: true,
+			public_slug: ''
 		};
 		createOpen = true;
 	}
@@ -219,7 +224,9 @@
 			media_quality_notes: row.media_quality_notes ?? '',
 			seo_da: row.seo_da != null ? String(row.seo_da) : '',
 			link_duration_months: String(normalizeLinkDurationMonths(row.link_duration_months)),
-			pricing_type: row.pricing_type ?? 'nett'
+			pricing_type: row.pricing_type ?? 'nett',
+			public_listed: row.public_listed !== false,
+			public_slug: row.public_slug ?? ''
 		};
 		detailAudit = null;
 		detailLoading = true;
@@ -270,6 +277,10 @@
 					seo_da: !editing ? undefined : form.seo_da.trim() === '' ? null : Number(form.seo_da),
 					link_duration_months: Number(form.link_duration_months),
 					pricing_type: form.pricing_type,
+					public_listed: form.public_listed,
+					// Slug publik hanya dikirim bila diisi; rename media tidak boleh
+					// memutus URL yang sudah terindeks.
+					public_slug: form.public_slug.trim() || undefined,
 				price_change_note:
 					form.pricing_type !== (editing?.pricing_type ?? 'nett') ? priceNote.trim() || null : undefined
 			};
@@ -666,6 +677,7 @@
 		<div class="flex items-center gap-1">
 			<p class="font-medium">{row.name}</p>
 			{#if row.partner_id}<Badge tone="accent" value="Mitra" />{/if}
+			{#if row.public_listed === false}<Badge tone="neutral" label={tr('Tidak publik')} />{/if}
 		</div>
 		<p class="text-xs text-muted-foreground">{row.slug ?? row.id.slice(0, 8)}</p>
 		{#if row.contoh_artikel_url}
@@ -1398,10 +1410,37 @@
 						options={MEDIA_STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))}
 					/>
 				</label>
-			</div>
+				</div>
 
-			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">{tr("Mitra (opsional)")}</span>
+				<!-- Katalog publik (data.tauthub.com). Flag ini hanya untuk admin;
+				     mitra tidak bisa mengubahnya. -->
+				<div class="rounded-xl border bg-muted/30 p-3">
+					<label class="flex items-start gap-2 text-sm">
+						<input type="checkbox" class="mt-0.5" bind:checked={form.public_listed} />
+						<span>
+							<strong>{tr('Tampilkan di katalog publik')}</strong>
+							<span class="block text-xs text-muted-foreground">
+								{tr('Media ini tampil di data.tauthub.com lengkap dengan harga publik, DA, trafik, dan kebijakan tautan. Matikan untuk menyembunyikannya tanpa mengubah status.')}
+							</span>
+						</span>
+					</label>
+					{#if editing}
+						<label class="mt-3 block">
+							<span class="text-xs font-medium text-muted-foreground">{tr('Slug URL publik')}</span>
+							<input
+								class="app-input mt-1 w-full font-mono text-xs"
+								bind:value={form.public_slug}
+								placeholder={editing.public_slug ?? ''}
+							/>
+							<span class="mt-1 block text-xs text-muted-foreground">
+								data.tauthub.com/media/<strong>{form.public_slug || '…'}</strong> — {tr('mengubahnya memutus tautan lama yang sudah terindeks mesin pencari.')}
+							</span>
+						</label>
+					{/if}
+				</div>
+
+				<label class="block">
+					<span class="text-xs font-medium text-muted-foreground">{tr("Mitra (opsional)")}</span>
 				<Select
 					ariaLabel={tr("Mitra (opsional)")}
 					minWidth={220}
