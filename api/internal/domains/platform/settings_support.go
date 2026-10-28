@@ -99,12 +99,14 @@ type stSMTPClassification struct {
 }
 
 var stSMTPMessages = map[string]string{
-	"SMTP_CONFIG_MISSING":     "SMTP belum dikonfigurasi lengkap. Isi host, username, password, lalu simpan konfigurasi.",
-	"SMTP_DECRYPTION_FAILED":  "Gagal mendekripsi kredensial SMTP. Simpan ulang SMTP key dan coba lagi.",
-	"SMTP_CONNECTION_FAILED":  "Gagal terhubung ke SMTP relay. Periksa host/port dan koneksi jaringan server.",
-	"SMTP_TLS_FAILED":         "Gagal menegosiasi TLS/STARTTLS dengan SMTP relay. Periksa port 587 + STARTTLS atau coba port 465.",
-	"SMTP_AUTH_FAILED":        "Autentikasi SMTP gagal. Periksa SMTP login dan SMTP key Brevo.",
-	"SMTP_SENDER_REJECTED":    "Alamat pengirim ditolak. Pastikan domain/no-reply@tauthub.com sudah diverifikasi di Brevo.",
+	"SMTP_CONFIG_MISSING":    "SMTP belum dikonfigurasi lengkap. Isi host, username, password, lalu simpan konfigurasi.",
+	"SMTP_DECRYPTION_FAILED": "Gagal mendekripsi kredensial SMTP. Simpan ulang SMTP key dan coba lagi.",
+	"SMTP_CONNECTION_FAILED": "Gagal terhubung ke SMTP relay. Periksa host/port dan koneksi jaringan server.",
+	"SMTP_TLS_FAILED":        "Gagal menegosiasi TLS/STARTTLS dengan SMTP relay. Periksa port 587 + STARTTLS atau coba port 465.",
+	// Kirim.id: 535 = login salah, 550 5.7.1 = pengirim bukan domain aktif /
+	// saldo koin habis, 452 = rate limit atau antrean penuh, 451 = gangguan.
+	"SMTP_AUTH_FAILED":        "Autentikasi SMTP gagal. Periksa username (kir + 6 angka) dan password 32 karakter dari dashboard Kirim.id.",
+	"SMTP_SENDER_REJECTED":    "Alamat pengirim ditolak. Pastikan domain alamat From sudah aktif di akun Kirim.id dan saldo koin masih ada.",
 	"SMTP_RECIPIENT_REJECTED": "Alamat penerima ditolak oleh provider.",
 	"SMTP_SEND_FAILED":        "Gagal mengirim email via SMTP. Cek log server dan coba lagi.",
 }

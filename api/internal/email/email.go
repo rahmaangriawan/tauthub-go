@@ -21,14 +21,14 @@ import (
 // ---------- resolver (port email/resolver.ts) ----------
 
 type Config struct {
-	Enabled    bool
-	Host       string
-	Port       int
-	Secure     bool
-	Username   string
-	Password   string
-	FromEmail  string
-	FromName   string
+	Enabled   bool
+	Host      string
+	Port      int
+	Secure    bool
+	Username  string
+	Password  string
+	FromEmail string
+	FromName  string
 }
 
 var ErrNotConfigured = fmt.Errorf("SMTP belum dikonfigurasi lengkap. Isi host, username, password, lalu simpan konfigurasi.")
@@ -44,6 +44,15 @@ var (
 	cfgMu    sync.Mutex
 	cfgCache *emailCfgCache
 )
+
+// InvalidateConfigCache: buang cache config (dipanggil setelah admin menyimpan
+// smtp_settings) supaya email berikutnya langsung memakai host/kredensial baru
+// alih-alih menunggu TTL 60 detik.
+func InvalidateConfigCache() {
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
+	cfgCache = nil
+}
 
 // ResolveConfig: smtp_settings id='default' (cache 60s). Tanpa row → ErrNotConfigured.
 func ResolveConfig(ctx context.Context, pool *pgxpool.Pool, cmsSecret string) (*Config, error) {
@@ -76,7 +85,7 @@ func ResolveConfig(ctx context.Context, pool *pgxpool.Pool, cmsSecret string) (*
 	}
 	cfg := &Config{
 		Enabled: true, Host: *host, Port: p,
-		Secure: secure != nil && *secure,
+		Secure:   secure != nil && *secure,
 		Username: derefS(username), Password: password,
 		FromEmail: derefS(fromEmail), FromName: derefS(fromName),
 	}
@@ -212,13 +221,13 @@ func truncate(s string, n int) string {
 // ---------- sender (port email/sender.ts) ----------
 
 type SendOptions struct {
-	Template       string
-	To             string
+	Template        string
+	To              string
 	RecipientUserID *string
-	ReferenceID    *string
-	Event          string
-	DedupeKey      *string
-	Data           map[string]string
+	ReferenceID     *string
+	Event           string
+	DedupeKey       *string
+	Data            map[string]string
 }
 
 // SendTransactionalEmail: render template → enqueue → job send_email.

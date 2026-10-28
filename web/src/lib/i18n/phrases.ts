@@ -4978,4 +4978,10 @@ export const PHRASE_EN: Record<string, string> = {
  */
 export function tr(text: string): string {
   if (getLocale() !== 'en') return text;
+  "Konfigurasi SMTP relay Kirim.id untuk email transaksional. Password disimpan terenkripsi (AES-256-GCM) dan tidak pernah ditampilkan kembali.": "Kirim.id SMTP relay configuration for transactional email. The password is stored encrypted (AES-256-GCM) and never shown again.",
+  "Setelan Kirim.id": "Kirim.id settings",
+  "Domain alamat From wajib sudah berstatus aktif di akun Kirim.id.": "The From address domain must already be active in your Kirim.id account.",
+  "Batas: 50 penerima dan 10 MB per email; kecepatan mengikuti paket akun.": "Limits: 50 recipients and 10 MB per email; throughput follows your account plan.",
+  "32 karakter dari dashboard Kirim.id": "32 characters from the Kirim.id dashboard",
+  "SMTP berhasil disimpan — email berikutnya langsung memakai konfigurasi ini.": "SMTP saved — the next emails use this configuration immediately.",
   return PHRASE_EN[text] ?? text;}

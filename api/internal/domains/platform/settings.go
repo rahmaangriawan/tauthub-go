@@ -198,11 +198,11 @@ func (d *Deps) SettingsEmailPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Catatan: cache config internal/email (TTL 60s) tidak punya fungsi
-	// invalidasi yang diekspor, jadi proses ini bisa memakai config lama maks
-	// 60 detik setelah simpan. Handler test-connection/test-send membaca ulang
-	// smtp_settings langsung dari DB sehingga hasil uji selalu memakai nilai
-	// yang baru disimpan.
+	// Cache config internal/email (TTL 60s) dibuang supaya email berikutnya
+	// langsung memakai host/kredensial baru — penting saat ganti provider.
+	// Handler test-connection/test-send tetap membaca ulang smtp_settings dari
+	// DB, jadi hasil uji selalu memakai nilai yang baru disimpan.
+	email.InvalidateConfigCache()
 	d.audit(ctx, user.ID, "smtp.config_updated", "smtp_settings", "default")
 
 	updated := d.stSMTPRow(ctx)

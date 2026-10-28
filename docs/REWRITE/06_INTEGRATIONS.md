@@ -78,6 +78,24 @@ Dispatcher `executor.ts`: `publishNow / executePublication / publishToWordpress 
 - **Direct SMTP** `lib/mail/service.ts` (nodemailer): config `SMTP_HOST/PORT/USER/PASS/SECURE`, `MAIL_FROM(_ADDRESS)`; dipakai email event publikasi, skor PR, kegagalan batch. Config alternatif dari `smtp_settings` (admin settings).
 - **Queued** `lib/email/*`: tabel `email_deliveries` status queued→sending→sent/failed/skipped/rate_limited, attempts ≤3, `next_attempt_at`, **dedupe_key + window** (query pakai `INTERVAL '...'` interpolasi — R11), template registry `lib/email/templates/`, routing `lib/email/routing.ts` dengan **fallback magic-link bila SMTP off**. Diproses job `send_email` + retry scheduler.
 - Go: `wneessen/go-mail` atau `net/smtp`; antrean tetap DB.
+- **Provider aktif: Kirim.id (SMTP relay)**, menggantikan Brevo. Setelan dari
+  dashboard [panduan.kirim.id — SMTP relay](https://panduan.kirim.id/email/developer/smtp-relay):
+
+  | Setelan | Nilai |
+  |---|---|
+  | Host | `mail.kirim.id` |
+  | Port | `587` (STARTTLS) atau `465` (TLS, centang Secure) |
+  | Username | `kir` + 6 angka |
+  | Password | 32 karakter |
+  | Auth | PLAIN / LOGIN (sudah didukung `internal/email/smtp.go`) |
+  | Syarat | domain alamat From wajib `active` di akun Kirim.id |
+
+  **Kredensial tidak pernah ditaruh di `.env`, docs, atau kode.** Admin mengisinya
+  sendiri di `/admin/konfigurasi` → tab **Email / SMTP**; password disimpan terenkripsi
+  (`crypto.Seal`, AES-256-GCM, envelope `t2:`) di tabel `smtp_settings` dan hanya
+  dikembalikan ke klien sebagai `password_configured: bool`. Menyimpan konfigurasi
+  membuang cache config email (`email.InvalidateConfigCache`) supaya pergantian
+  provider langsung berlaku.
 
 ## 8. WhatsApp (Fonnte) — `lib/wa/*` (752 baris)
 - `POST https://api.fonnte.com/send` (+ `/device`), token dari `platform_wa_config`.

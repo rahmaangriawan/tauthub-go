@@ -363,7 +363,7 @@
 		if (!res.ok) smtpMsg = { text: res.error, ok: false };
 		else {
 			smtpPassword = '';
-			smtpMsg = { text: 'SMTP berhasil disimpan.', ok: true };
+			smtpMsg = { text: tr('SMTP berhasil disimpan — email berikutnya langsung memakai konfigurasi ini.'), ok: true };
 			await loadSmtp();
 		}
 		smtpBusy = false;
@@ -996,7 +996,17 @@
 					<Badge tone={smtp?.enabled ? 'success' : 'warning'} label={smtp?.enabled ? tr('Aktif') : tr('Nonaktif')} />
 					{#if smtp?.smtp_configured}<Badge tone="success" label="Terkonfigurasi" />{/if}
 				</div>
-				<p class="mt-2 text-sm text-muted-foreground">{tr("Konfigurasi Brevo SMTP untuk email transactional. Password disimpan terenkripsi (AES-256-GCM) dan tidak pernah tampil plaintext.")}</p>
+				<p class="mt-2 text-sm text-muted-foreground">{tr("Konfigurasi SMTP relay Kirim.id untuk email transaksional. Password disimpan terenkripsi (AES-256-GCM) dan tidak pernah ditampilkan kembali.")}</p>
+
+				<details class="mt-3 rounded-lg border px-3 py-2 text-sm">
+					<summary class="cursor-pointer font-medium">{tr("Setelan Kirim.id")}</summary>
+					<ul class="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+						<li>Host <code>mail.kirim.id</code> — port <code>587</code> (STARTTLS) atau <code>465</code> (TLS, centang Secure).</li>
+						<li>Username <code>kir</code> + 6 angka dan password 32 karakter dari Settings → Kredensial SMTP.</li>
+						<li>{tr("Domain alamat From wajib sudah berstatus aktif di akun Kirim.id.")}</li>
+						<li>{tr("Batas: 50 penerima dan 10 MB per email; kecepatan mengikuti paket akun.")}</li>
+					</ul>
+				</details>
 
 				{#if smtp?.last_test_at}
 					<div class="mt-3 rounded-lg border px-3 py-2 text-sm" style="border-color: {smtp.last_test_ok ? 'var(--success)' : 'var(--warning)'};">
@@ -1011,8 +1021,8 @@
 					<div class="flex flex-wrap gap-3">
 						<label class="block min-w-[220px] flex-1">
 							<span class="text-sm font-medium">SMTP Host</span>
-							<span class="block text-xs text-muted-foreground">smtp-relay.brevo.com</span>
-							<input class="app-input mt-1 w-full" placeholder="smtp-relay.brevo.com" bind:value={smtpHost} />
+							<span class="block text-xs text-muted-foreground">mail.kirim.id</span>
+							<input class="app-input mt-1 w-full" placeholder="mail.kirim.id" bind:value={smtpHost} />
 						</label>
 						<label class="block w-[120px]">
 							<span class="text-sm font-medium">Port</span>
@@ -1030,7 +1040,8 @@
 					<div class="flex flex-wrap gap-3">
 						<label class="block min-w-[220px] flex-1">
 							<span class="text-sm font-medium">Username / Login</span>
-							<input class="app-input mt-1 w-full" placeholder="ops@tauthub.com" bind:value={smtpUsername} />
+							<span class="block text-xs text-muted-foreground">kir + 6 angka</span>
+							<input class="app-input mt-1 w-full" placeholder="kir123456" autocomplete="off" bind:value={smtpUsername} />
 						</label>
 						<label class="block min-w-[220px] flex-1">
 							<span class="text-sm font-medium">{tr("SMTP Password / Key")}</span>
@@ -1040,7 +1051,8 @@
 							<input
 								class="app-input mt-1 w-full"
 								type="password"
-								placeholder={smtp?.password_configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan SMTP key'}
+								autocomplete="new-password"
+								placeholder={smtp?.password_configured ? tr('Kosongkan jika tidak diubah') : tr('32 karakter dari dashboard Kirim.id')}
 								bind:value={smtpPassword}
 							/>
 						</label>
