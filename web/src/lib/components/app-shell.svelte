@@ -21,8 +21,8 @@
 		// Sub-halaman bertingkat (parity navSublinks app lama): tampil menjorok
 			// di bawah induknya, selalu terbuka.
 			children?: Array<{ label: string; href: string; active: boolean }>;
-			/** Badge angka (merah) di kanan label — mis. jumlah pesan belum dibaca. */
-			badge?: number | null;
+		/** Badge angka (merah) di kanan label — mis. jumlah pesan belum dibaca. */
+		badge?: number | null;
 	};
 	export type ShellNavGroup = { label: string; items: ShellNavItem[] };
 

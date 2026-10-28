@@ -483,6 +483,25 @@
 		box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
 		animation: zsSelectIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
 		transform-origin: top center;
+		/* Scrollbar bawaan browser terlalu lebar dan memotong padding menu.
+		   Gaya tipis ini dipakai saat daftar opsi lebih panjang dari menu. */
+		scrollbar-width: thin;
+		scrollbar-color: #cbd5e1 transparent;
+		overscroll-behavior: contain;
+	}
+	.zs-select-menu::-webkit-scrollbar {
+		width: 10px;
+	}
+	.zs-select-menu::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.zs-select-menu::-webkit-scrollbar-thumb {
+		background: #cbd5e1;
+		border: 3px solid #ffffff;
+		border-radius: 999px;
+	}
+	.zs-select-menu::-webkit-scrollbar-thumb:hover {
+		background: #94a3b8;
 	}
 	/* Drop-up: dibuka ke atas saat ruang di bawah tidak cukup. Animasi dan
 	   titik asal transform dibalik supaya arah geraknya konsisten. */

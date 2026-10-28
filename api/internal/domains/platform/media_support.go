@@ -2422,6 +2422,8 @@ var mpEmailCategories = map[string]string{
 	"media.dewan_pers.approved": "partner",
 	"media.dewan_pers.rejected": "partner",
 	"publication.auto_replaced": "campaign",
+	"ticket.replied":            "partner",
+	"ticket.closed":             "partner",
 }
 
 // mpRouteEmailDecision: parity routeEmailDecision — matriks event + preferensi.
@@ -2458,6 +2460,8 @@ var mpEmailSubjects = map[string]string{
 	"media.dewan_pers.approved": "Verifikasi Dewan Pers disetujui",
 	"media.dewan_pers.rejected": "Verifikasi Dewan Pers ditolak",
 	"publication.auto_replaced": "Artikel Anda diganti otomatis",
+	"ticket.replied":            "Balasan baru tiket dukungan",
+	"ticket.closed":             "Tiket dukungan ditandai selesai",
 }
 
 // mpEmailFollowUp: kirim email transaksional ke mitra (best-effort). Hanya
@@ -2513,6 +2517,8 @@ func mpEmailBodyRows(event string, data map[string]string) [][2]string {
 		return [][2]string{{"Media", mpOrDash(data["media_name"])}, {"Alasan", mpOrDash(data["reason"])}}
 	case "publication.auto_replaced":
 		return [][2]string{{"Artikel", mpOrDash(data["document_title"])}, {"Media", mpOrDash(data["media_name"])}}
+	case "ticket.replied", "ticket.closed":
+		return [][2]string{{"Subjek", mpOrDash(data["judul"])}, {"Keterangan", mpOrDash(data["status"])}}
 	}
 	return nil
 }

@@ -12,13 +12,14 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 		import {
-			Bell, ChevronDown, Coins, Gauge, Gift, House, Link2, MessageCircle, Newspaper, PlugZap,
+			ChevronDown, Coins, Gauge, Gift, Headset, House, Link2, MessageCircle, Newspaper, PlugZap,
 			Receipt, ScrollText, Server, Settings, ShieldCheck, TriangleAlert,
 			UserCircle, Wallet
 		} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, AUTH_EXPIRED_EVENT } from '$lib/auth';
  import { chatUnread, startChatUnreadPolling, stopChatUnreadPolling } from '$lib/chat/chat-unread.svelte';
 	import { pubsUnread, startPubsUnreadPolling, stopPubsUnreadPolling } from '$lib/partner/pubs-unread.svelte';
+	import { supportUnread, startSupportUnreadPolling, stopSupportUnreadPolling } from '$lib/partner/support-unread.svelte';
 	import { swr } from '$lib/swr-cache.svelte';
 	import { setPartnerUrlId } from '$lib/partner-url.svelte';
 	import AppShell from '$lib/components/app-shell.svelte';
@@ -93,12 +94,14 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		const partnerIdNow = page.params.partnerId as string;
 		startChatUnreadPolling('/v1/partner');
 		startPubsUnreadPolling();
+		startSupportUnreadPolling();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
 		return () => {
 			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 			stopChatUnreadPolling();
 			stopPubsUnreadPolling();
+			stopSupportUnreadPolling();
 		};
 	});
 
@@ -168,7 +171,9 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				{ label: i18n.t.nav_partner.integrations, href: `${base}/integrations`, icon: PlugZap, active: isActive(`${base}/integrations`) },
 				{ label: i18n.t.nav_partner.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`), badge: chatUnread.count },
 				{ label: i18n.t.nav_partner.profile, href: `${base}/profile`, icon: Settings, active: isActive(`${base}/profile`) },
-				{ label: i18n.t.nav_partner.notifications, href: `${base}/notifications`, icon: Bell, active: isActive(`${base}/notifications`) },
+				// Notifikasi tetap ada di lonceng topbar; menu sidebar dipakai untuk
+				// tiket dukungan (percakapan dengan admin, bukan halaman luar).
+				{ label: i18n.t.nav_partner.support, href: `${base}/dukungan`, icon: Headset, active: isActive(`${base}/dukungan`), badge: supportUnread.count },
 				{ label: i18n.t.nav_partner.changelog, href: `${base}/changelog`, icon: ScrollText, active: isActive(`${base}/changelog`) }
 			]
 		}

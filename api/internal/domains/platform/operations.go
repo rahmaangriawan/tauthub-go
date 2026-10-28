@@ -1469,7 +1469,7 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 	// Tanpa ini lonceng admin hanya menampilkan masalah "saat ini" dari feed
 	// sintetis dan tidak punya riwayat sama sekali.
 	notifs, err := d.queryRows(ctx,
-		`SELECT id, type, title, body, read_at, created_at FROM notifications
+		`SELECT id, type, title, body, link, read_at, created_at FROM notifications
 		 WHERE user_id = $1 AND created_at > NOW() - INTERVAL '7 days'
 		 ORDER BY created_at DESC LIMIT 20`, user.ID)
 	if err != nil {
@@ -1479,11 +1479,15 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 	for _, raw := range notifs {
 		row := ptRow(ptNormalizeMap(raw))
 		notifType := row.strOr("type", "notification")
-		// Tautan selalu ke halaman admin sendiri: link tersimpan bisa menunjuk
-		// ke halaman klien/mitra yang bukan milik admin ini.
+		// Tautan hanya boleh ke halaman admin sendiri: link tersimpan bisa
+		// menunjuk ke halaman klien/mitra yang bukan milik admin ini. Tautan
+		// admin yang valid (mis. tiket dukungan /admin/dukungan?t=...) dipakai
+		// apa adanya supaya klik notifikasi langsung membuka konteksnya.
 		link := "/admin/notifications"
 		if strings.HasPrefix(notifType, "announcement") {
 			link = "/admin/pengumuman"
+		} else if stored := strings.TrimSpace(row.strOr("link", "")); strings.HasPrefix(stored, "/admin/") {
+			link = stored
 		}
 		items = append(items, opNotifItem{
 			ID: "ntf-" + row.strOr("id", ""), Type: notifType,

@@ -248,6 +248,7 @@ const id = {
     integrations: "Integrasi",
     profile: "Konfigurasi",
     notifications: "Notifikasi",
+    support: "Dukungan",
   },
   nav_admin: {
     group_summary: "RINGKASAN",
@@ -554,6 +555,7 @@ const en = {
     integrations: "Integrations",
     profile: "Configuration",
     notifications: "Notifications",
+    support: "Support",
   },
   nav_admin: {
     group_summary: "SUMMARY",

@@ -1014,6 +1014,8 @@ var igWADefaultTemplates = map[string]string{
 	"withdrawal.paid":              "Halo {nama}, pencairan {jumlah} sudah DIBAYAR.\n\nDetail: {link}",
 	"withdrawal.rejected":          "Halo {nama}, pencairan {jumlah} ditolak.\n\nAlasan: {status}\nDetail: {link}",
 	"referral.cpa.credited":        "Halo {nama}, fee referral {jumlah} sudah dikreditkan untuk domain {judul}.\n\nDetail: {link}",
+	"ticket.replied":               "Halo {nama}, tiket dukungan \"{judul}\" dibalas admin.\n\nBalasan: {status}\nDetail: {link}",
+	"ticket.closed":                "Halo {nama}, tiket dukungan \"{judul}\" sudah ditandai selesai.\n\nDetail: {link}",
 }
 
 var igWAPreviewLinks = map[string]string{
@@ -1028,6 +1030,8 @@ var igWAPreviewLinks = map[string]string{
 	"withdrawal.paid":              "https://app.tauthub.com/mitra/mitra-contoh/settlements",
 	"withdrawal.rejected":          "https://app.tauthub.com/mitra/mitra-contoh/settlements",
 	"referral.cpa.credited":        "https://app.tauthub.com/mitra/mitra-contoh/referral",
+	"ticket.replied":               "https://app.tauthub.com/mitra/mitra-contoh/dukungan/tiket-contoh",
+	"ticket.closed":                "https://app.tauthub.com/mitra/mitra-contoh/dukungan/tiket-contoh",
 }
 
 // igWAConfigJSON: token tidak pernah dikembalikan — hanya status + hint.

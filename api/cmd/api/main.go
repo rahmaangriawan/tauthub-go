@@ -563,6 +563,14 @@ func run() error {
 			authed.Get("/partner/notifications", partnerDeps.Notifications)
 			authed.Post("/partner/notifications", partnerDeps.Notifications)
 			authed.Post("/partner/notifications/{notificationId}/read", partnerDeps.NotificationRead)
+			// Tiket dukungan mitra: tiket + percakapan dengan admin.
+			authed.Get("/partner/tickets", partnerDeps.Tickets)
+			authed.Post("/partner/tickets", partnerDeps.Tickets)
+			authed.Get("/partner/tickets/unread-count", partnerDeps.TicketUnreadCount)
+			authed.Get("/partner/tickets/{ticketId}", partnerDeps.TicketDetail)
+			authed.Post("/partner/tickets/{ticketId}/messages", partnerDeps.TicketReply)
+			authed.Post("/partner/tickets/{ticketId}/status", partnerDeps.TicketStatus)
+
 			authed.Get("/partner/notification-preferences", partnerDeps.NotificationPreferences)
 			authed.Put("/partner/notification-preferences", partnerDeps.NotificationPreferences)
 			authed.Get("/partner/notification-webhooks", partnerDeps.NotificationWebhooks)
@@ -636,6 +644,11 @@ func run() error {
 			// ubah status terbit, hapus entri.
 			authed.Get("/platform/chat/threads", platformDeps.AdminChatThreads)
 			authed.Get("/platform/chat/threads/{threadId}", platformDeps.AdminChatThreadDetail)
+			// Tiket dukungan: semua admin boleh membalas.
+			authed.Get("/platform/tickets", platformDeps.AdminTickets)
+			authed.Get("/platform/tickets/{ticketId}", platformDeps.AdminTicketDetail)
+			authed.Post("/platform/tickets/{ticketId}/messages", platformDeps.AdminTicketReply)
+			authed.Patch("/platform/tickets/{ticketId}", platformDeps.AdminTicketStatus)
 			authed.Get("/platform/changelog", platformDeps.AdminChangelogList)
 			authed.Post("/platform/changelog/import", platformDeps.AdminChangelogImport)
 			authed.Patch("/platform/changelog/{entryId}", platformDeps.AdminChangelogUpdate)

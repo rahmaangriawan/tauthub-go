@@ -12,7 +12,7 @@
 	import { page } from '$app/state';
 	import {
 		Bell, Binoculars, BookOpenText, Bug, ChartBar, ChevronDown, ClipboardList, Coins,
-		Gauge, Gift, House, Megaphone, MessageCircle, Newspaper, PenTool, Percent, Receipt, ScrollText,
+		Gauge, Gift, Headset, House, Megaphone, MessageCircle, Newspaper, PenTool, Percent, Receipt, ScrollText,
 		Settings, ShieldCheck, Sparkle, TriangleAlert, Users, Wallet, Zap
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -240,6 +240,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				{ label: tr('Kotak Pengumuman'), href: '/admin/pengumuman', icon: Megaphone, active: pathname.startsWith('/admin/pengumuman') },
 				{ label: tr('Notifikasi'), href: '/admin/notifications', icon: Bell, active: pathname.startsWith('/admin/notifications') },
 				{ label: tr('Log Obrolan'), href: '/admin/obrolan', icon: MessageCircle, active: pathname.startsWith('/admin/obrolan') },
+				{ label: tr('Dukungan'), href: '/admin/dukungan', icon: Headset, active: pathname.startsWith('/admin/dukungan') },
 				{ label: tr('Changelog'), href: '/admin/changelog', icon: ScrollText, active: pathname.startsWith('/admin/changelog') }
 			]
 		},
