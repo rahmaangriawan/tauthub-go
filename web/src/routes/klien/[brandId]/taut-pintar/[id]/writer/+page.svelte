@@ -1923,7 +1923,7 @@
 					<div class="rounded-[5px] border p-3">
 						<div class="flex items-center justify-between">
 							<p class="flex items-center gap-2 text-sm font-bold text-muted-foreground"><Link2 size={16} /> {tr('Tautan Cadangan (Prioritas 2)')}</p>
-							<span class="rounded-[5px] px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px]" style={badge('muted')}>{tr("Opsional")}</span>
+							<span class="rounded-[5px] px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px]" style={badge('muted')}>{tr("Opsional")}</span>
 						</div>
 						<p class="mt-1 text-xs text-muted-foreground">{tr("Hanya akan digunakan secara dinamis oleh AI pada media mitra yang mengizinkan penanaman")} <strong>{tr('Maksimal 2 Link')}</strong>.</p>
 						<div class="mt-3 grid gap-3 sm:grid-cols-2">
@@ -2086,12 +2086,12 @@
 
 							<div class="min-w-0 flex-1">
 								<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-									<p class="truncate font-bold text-[14.5px] leading-tight text-slate-900 max-sm:text-[15.5px]" title={m.name}>
+									<p class="truncate font-bold text-[14.5px] leading-tight text-slate-900 max-sm:text-[15px]" title={m.name}>
 										{mediaDomainLabel(m.website_url, m.name)}
 									</p>
 									{#if m.media_type}
 										<span
-											class="shrink-0 rounded-[5px] border px-2 py-0.5 text-[8.5px] font-bold tracking-wider uppercase max-sm:text-[10px] {m.media_type === 'blogger' ? 'border-amber-200/80 bg-amber-50 text-amber-700' : 'border-blue-200/80 bg-blue-50 text-blue-600'}"
+											class="shrink-0 rounded-[5px] border px-2 py-0.5 text-[8.5px] font-bold tracking-wider uppercase max-sm:text-[9.5px] {m.media_type === 'blogger' ? 'border-amber-200/80 bg-amber-50 text-amber-700' : 'border-blue-200/80 bg-blue-50 text-blue-600'}"
 										>
 											{m.media_type === 'blogger' ? tr('Blogger') : tr('Mainstream')}
 										</span>
@@ -2101,7 +2101,7 @@
 								     jumlah artikel yang direncanakan untuk media itu, bukan
 								     pilihan. Yang berguna dibaca adalah berapa yang belum
 								     dibuat. -->
-								<p class="mt-0.5 text-[11.5px] font-medium text-slate-500 max-sm:text-[12.5px]">
+								<p class="mt-0.5 text-[11.5px] font-medium text-slate-500 max-sm:text-[12px]">
 									{#if pendingCount === 0}
 										{qty} {tr('artikel')} · {tr('semua sudah ada naskahnya')}
 									{:else if qty === 1}
@@ -2124,7 +2124,7 @@
 								     konsisten dengan media yang artikelnya banyak. -->
 								{#if qty > 1 && pendingCount > 0}
 									<button
-										class="inline-flex h-8 items-center gap-1 rounded-[5px] bg-blue-600 px-2.5 text-[12px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50 max-sm:h-11 max-sm:flex-1 max-sm:justify-center max-sm:px-2 max-sm:text-[13px]"
+										class="inline-flex h-8 items-center gap-1 rounded-[5px] bg-blue-600 px-2.5 text-[12px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50 max-sm:h-10 max-sm:flex-1 max-sm:justify-center max-sm:px-2 max-sm:text-[12px]"
 										type="button"
 										disabled={viewOnly || bulkRunning}
 										title={tr('Buat semua artikel yang belum ada dalam satu dialog')}
@@ -2134,9 +2134,9 @@
 										{tr('Buat')} {pendingCount}<span class="max-sm:hidden"> {tr('artikel')}</span>
 									</button>
 								{/if}
-								<div class="inline-flex h-8 items-center overflow-hidden rounded-[5px] border border-slate-300 bg-white max-sm:h-11">
+								<div class="inline-flex h-8 items-center overflow-hidden rounded-[5px] border border-slate-300 bg-white max-sm:h-10">
 									<button
-										class="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 max-sm:h-11 max-sm:w-11"
+										class="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 max-sm:h-10 max-sm:w-10"
 										type="button"
 										disabled={viewOnly || qty <= 1 || qtyBusy === m.media_id}
 										aria-label={tr('Kurangi jumlah artikel')}
@@ -2144,7 +2144,7 @@
 									>−</button>
 									<span class="w-7 text-center text-[13px] font-bold tabular-nums text-slate-800 max-sm:w-9">{qtyBusy === m.media_id ? '…' : qty}</span>
 									<button
-										class="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 max-sm:h-11 max-sm:w-11"
+										class="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 max-sm:h-10 max-sm:w-10"
 										type="button"
 										disabled={viewOnly || qtyBusy === m.media_id}
 										aria-label={tr('Tambah jumlah artikel')}
@@ -2152,7 +2152,7 @@
 									>+</button>
 								</div>
 								<button
-									class="flex h-8 w-8 items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 max-sm:ml-auto max-sm:h-11 max-sm:w-11"
+									class="flex h-8 w-8 items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 max-sm:ml-auto max-sm:h-10 max-sm:w-10"
 									type="button"
 									aria-expanded={!collapsed}
 									aria-label={collapsed ? tr('Buka daftar artikel') : tr('Ciutkan daftar artikel')}
@@ -2162,7 +2162,7 @@
 									{#if collapsed}<ChevronDown size={15} />{:else}<ChevronUp size={15} />{/if}
 								</button>
 								<button
-									class="flex h-8 w-8 items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700 max-sm:h-11 max-sm:w-11"
+									class="flex h-8 w-8 items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700 max-sm:h-10 max-sm:w-10"
 									type="button"
 									disabled={bulkRunning || removeBusy || viewOnly}
 									aria-label={tr('Hapus media dari kampanye')}
@@ -2213,50 +2213,50 @@
 											<div class="min-w-0 flex-1">
 												<div class="flex flex-wrap items-center gap-1.5">
 													{#if statusKind === 'ready'}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-emerald-700">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px] text-emerald-700">
 															<CircleCheck size={11} strokeWidth={2.2} />
 															<span>{tr('Siap Terbit')}</span>
 														</span>
 													{:else if statusKind === 'draft'}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-blue-700">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px] text-blue-700">
 															<FileText size={11} />
 															<span>{tr('Draft Tersedia')}</span>
 														</span>
 													{:else if statusKind === 'generating'}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-blue-600">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px] text-blue-600">
 															<LoaderCircle size={11} class="animate-spin" />
 															<span>{tr('Generasi AI…')}</span>
 														</span>
 													{:else if statusKind === 'queued'}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/80 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-slate-600">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/80 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px] text-slate-600">
 															<Clock size={11} />
 															<span>{tr('Dalam Antrean…')}</span>
 														</span>
 													{:else if statusKind === 'blocked'}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-rose-700">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px] text-rose-700">
 															<X size={11} />
 															<span>{tr('Diblokir')}</span>
 														</span>
 													{:else}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200/70 bg-slate-100/80 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-slate-600">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200/70 bg-slate-100/80 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px] text-slate-600">
 															<Clock size={11} />
 															<span>{tr('Menunggu Artikel')}</span>
 														</span>
 													{/if}
 
 													{#if !mediaAllowsLink(m)}
-														<span class="rounded-[5px] border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium max-sm:text-[11px] text-slate-500">
+														<span class="rounded-[5px] border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium max-sm:text-[10.5px] text-slate-500">
 															{tr('Tidak Tersedia Backlink')}
 														</span>
 													{:else if links2}
 														{#if links2.sponsored > 0}
-															<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium max-sm:text-[11px] text-amber-800">
+															<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium max-sm:text-[10.5px] text-amber-800">
 																<PencilLine size={10.5} />
 																<span>{links2.sponsored} Sponsored</span>
 															</span>
 														{/if}
 														{#if links2.dofollow > 0}
-															<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium max-sm:text-[11px] text-amber-800">
+															<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium max-sm:text-[10.5px] text-amber-800">
 																<PencilLine size={10.5} />
 																<span>{links2.dofollow} Dofollow</span>
 															</span>
@@ -2264,22 +2264,22 @@
 														<!-- Lapor hanya jenis link yang benar-benar ada; badge berangka 0
 														     (mis. "0 Nofollow" di samping "1 Dofollow") tidak berguna. -->
 														{#if links2.nofollow > 0 || links2.nofollow + links2.dofollow + links2.sponsored === 0}
-															<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/70 px-2 py-0.5 text-[10px] font-medium max-sm:text-[11px] text-slate-600">
+															<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/70 px-2 py-0.5 text-[10px] font-medium max-sm:text-[10.5px] text-slate-600">
 																<span class="h-1.5 w-1.5 rounded-full border border-slate-400"></span>
 																<span>{links2.nofollow > 0 ? `${links2.nofollow} Nofollow` : '0 Tautan'}</span>
 															</span>
 														{/if}
 													{:else}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium max-sm:text-[11px] text-amber-800">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium max-sm:text-[10.5px] text-amber-800">
 															<PencilLine size={10.5} />
 															<span>{m.label_sponsor === 'ada_sponsor' ? 'Sponsored' : 'Dofollow'} (Maks. {m.max_links != null && m.max_links > 0 ? m.max_links : 1})</span>
 														</span>
 													{/if}
 												</div>
-												<p class="mt-1 line-clamp-2 text-[13.5px] font-semibold leading-snug text-slate-900 max-sm:text-[14.5px]" title={articleTitles[pkey(item)] ?? ''}>
+												<p class="mt-1 line-clamp-2 text-[13.5px] font-semibold leading-snug text-slate-900 max-sm:text-[14px]" title={articleTitles[pkey(item)] ?? ''}>
 													{articleTitles[pkey(item)] ?? (doc ? tr('Tanpa judul') : tr('Belum ada artikel'))}
 												</p>
-												<p class="mt-0.5 text-[11.5px] font-normal text-slate-500 max-sm:text-[12.5px]">
+												<p class="mt-0.5 text-[11.5px] font-normal text-slate-500 max-sm:text-[12px]">
 													{#if doc && stats}
 														{stats.words.toLocaleString('id-ID')} {tr('kata')}
 													{:else}
@@ -2295,7 +2295,7 @@
 											<div class="flex min-w-[92px] flex-col gap-0.5">
 												{#if doc && stats}
 													{#if stats.cover}
-														<span class="inline-flex items-center gap-1 text-[11.5px] font-semibold text-emerald-600 max-sm:text-[12.5px]">
+														<span class="inline-flex items-center gap-1 text-[11.5px] font-semibold text-emerald-600 max-sm:text-[12px]">
 															<Check size={12} strokeWidth={2.4} />
 															<span>{tr('Cover ada')}</span>
 														</span>
@@ -2306,7 +2306,7 @@
 														</span>
 													{/if}
 												{:else}
-													<span class="inline-flex items-center gap-1 text-[11.5px] font-medium text-slate-500 max-sm:text-[12.5px]">
+													<span class="inline-flex items-center gap-1 text-[11.5px] font-medium text-slate-500 max-sm:text-[12px]">
 														<FileText size={12} class="text-slate-400" />
 														<span>{tr('Cover belum ada')}</span>
 													</span>
@@ -2316,7 +2316,7 @@
 											<div class="flex flex-wrap items-center gap-1.5">
 												<button
 													type="button"
-													class={`expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-11 max-sm:min-w-11 text-xs font-semibold transition-colors ${
+													class={`expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 text-xs font-semibold transition-colors ${
 														doc
 															? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
 															: 'bg-blue-50/90 hover:bg-blue-100 text-blue-600 border border-blue-200/80'
@@ -2332,7 +2332,7 @@
 												{#if doc}
 													<button
 														type="button"
-														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-11 max-sm:min-w-11 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
 														aria-label={viewOnly ? tr('Lihat Artikel') : tr('Edit Artikel')}
 														disabled={bulkRunning}
 														onclick={() => void openPreview(item)}
@@ -2382,7 +2382,7 @@
 												{:else}
 													<button
 														type="button"
-														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-11 max-sm:min-w-11 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
 														aria-label={generating ? tr('Membuat…') : queued ? tr('Mengantre…') : tr('Generate Konten')}
 														disabled={generating || bulkRunning || viewOnly}
 														onclick={() => openNaskahGenerate(item)}
@@ -2401,7 +2401,7 @@
 
 													<button
 														type="button"
-														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-11 max-sm:min-w-11 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
 														aria-label={tr('Tulis Sendiri')}
 														disabled={bulkRunning || viewOnly}
 														onclick={() => openNaskahUpload(item)}
@@ -2417,7 +2417,7 @@
 												{#if qty > 1}
 													<button
 														type="button"
-														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-11 max-sm:min-w-11 border border-rose-200 bg-rose-50 text-rose-600 text-xs font-semibold transition-colors hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-rose-200 bg-rose-50 text-rose-600 text-xs font-semibold transition-colors hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
 														aria-label={`${tr('Hapus artikel')} ${item.slot ?? 1}`}
 														disabled={bulkRunning || viewOnly || slotDeleteBusy}
 														onclick={() => askDeleteArticle(m, item)}
