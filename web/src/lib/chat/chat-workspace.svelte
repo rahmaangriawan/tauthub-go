@@ -10,7 +10,7 @@
 	// riwayat tetap bisa dibaca dua pihak.
 	import { onMount, onDestroy } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
-	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search, Pencil, ArrowLeft, ChevronRight, X } from '@lucide/svelte';
+	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search, Pencil, ArrowLeft, PanelRightOpen, X } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { refreshChatUnreadNow } from '$lib/chat/chat-unread.svelte';
 	import PostEditor from '$lib/chat/post-editor.svelte';
@@ -560,14 +560,15 @@
 					{statusChip.label}
 				</span>
 
+				<!-- Ikon panel kanan: membuka laci info media, artikel, dan sesi. -->
 				<button
 					type="button"
-					class="inline-flex h-9 max-w-[48%] shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white pl-2.5 pr-2 text-[12px] font-bold text-slate-800 transition-colors hover:bg-slate-50 lg:hidden"
+					class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 lg:hidden"
 					aria-label={`${tr('Info media')} — ${active.media_name}`}
+					title={tr('Info media')}
 					onclick={() => (infoOpen = true)}
 				>
-					<span class="truncate">{active.media_name}</span>
-					<ChevronRight size={14} class="shrink-0 text-slate-400" />
+					<PanelRightOpen size={17} />
 				</button>
 			</div>
 
