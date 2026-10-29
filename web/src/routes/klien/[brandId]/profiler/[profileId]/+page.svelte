@@ -19,7 +19,8 @@
 	import {
 		ArrowLeft, ArrowRight, ArrowUp, Bot, ChartLine, Check, ChevronDown, Clipboard, Copy, ExternalLink, FileDown, FileText, ImagePlus, Images, LoaderCircle,
 		Clock, FileCheck, FileSearch,
-		Mic, MoreHorizontal, Newspaper, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, Send, ShieldAlert, ShieldCheck, Sparkle, Square, SquarePen, Store, Trash2, Upload, UserCircle, X
+		Mic, MoreHorizontal, Newspaper, PanelRight, Pencil, Pin, Plus, RotateCcw, Save, Search, Send, ShieldAlert, ShieldCheck, Sparkle, Square, SquarePen, Store, Trash2, Upload, UserCircle, X,
+		History
 	} from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import Select from '$lib/components/select.svelte';
@@ -851,6 +852,50 @@
 		}
 	}
 
+	// Simpan isi sebuah brief sebagai template: nama + deskripsi diminta lewat
+	// modal kecil, isinya disalin oleh server. Template lalu muncul sebagai opsi
+	// ketiga di gerbang Taut Brief.
+	let templateSaveFor = $state<BriefListItem | null>(null);
+	let templateSaveName = $state('');
+	let templateSaveDesc = $state('');
+	let templateSaveBusy = $state(false);
+	let templateSaveError = $state('');
+
+	function startSaveTemplate(item: BriefListItem) {
+		popMenuId = null;
+		popMenuPos = null;
+		templateSaveFor = item;
+		templateSaveName = item.name;
+		templateSaveDesc = item.description ?? '';
+		templateSaveError = '';
+	}
+
+	async function saveAsTemplate(e: SubmitEvent) {
+		e.preventDefault();
+		const item = templateSaveFor;
+		if (!item || templateSaveBusy) return;
+		const name = templateSaveName.trim();
+		if (name.length < 2) {
+			templateSaveError = tr('Nama template minimal 2 karakter.');
+			return;
+		}
+		templateSaveBusy = true;
+		templateSaveError = '';
+		try {
+			const res = await apiRequest(`${apiBase}/profiles/${item.id}/save-as-template`, {
+				method: 'POST',
+				body: JSON.stringify({ name, description: templateSaveDesc.trim() })
+			});
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan template.')));
+			templateSaveFor = null;
+			showToast(tr('Template tersimpan. Template ini muncul saat membuka brief baru.'));
+		} catch (reason) {
+			templateSaveError = reason instanceof Error ? reason.message : tr('Gagal menyimpan template.');
+		} finally {
+			templateSaveBusy = false;
+		}
+	}
+
 	function requestDelete(item: BriefListItem) {
 		openConfirm({
 			title: tr('Hapus brief ini?'),
@@ -1648,6 +1693,94 @@
 		);
 	}
 
+	// ---------- riwayat perubahan brief ----------
+	// Dimuat malas saat panel dibuka, tanpa polling. Filter field dikirim ke
+	// server (?field=) supaya daftar panjang tidak perlu disaring di browser.
+
+	type HistoryEntry = {
+		field_key: string;
+		old_value: string | null;
+		new_value: string | null;
+		changed_by_name: string | null;
+		changed_at: string | null;
+	};
+
+	let historyOpen = $state(false);
+	let historyFilter = $state('');
+	let historyEntries = $state<HistoryEntry[]>([]);
+	let historyLoading = $state(false);
+	let historyError = $state('');
+	// Kunci brief+filter yang datanya sudah dimuat; kosong = belum pernah.
+	let historyLoadedFor = $state('');
+	let historyPanelFor = $state('');
+
+	function historyFieldLabel(key: string): string {
+		return fields.find((f) => f.key === key)?.label ?? key.replace(/_/g, ' ');
+	}
+
+	const historyOptions = $derived.by(() => {
+		const opts = [{ value: '', label: tr('Semua field') }];
+		const seen = new Set<string>();
+		for (const f of fields) {
+			if (seen.has(f.key)) continue;
+			seen.add(f.key);
+			opts.push({ value: f.key, label: f.label });
+		}
+		// Kunci lama yang tidak lagi ada di skema tetap bisa disaring.
+		for (const entry of historyEntries) {
+			if (seen.has(entry.field_key)) continue;
+			seen.add(entry.field_key);
+			opts.push({ value: entry.field_key, label: historyFieldLabel(entry.field_key) });
+		}
+		return opts;
+	});
+
+	function truncateHistoryValue(value: string | null, max = 80): string {
+		const text = (value ?? '').replace(/\s+/g, ' ').trim();
+		if (!text) return '—';
+		return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+	}
+
+	async function loadHistory(field = historyFilter) {
+		if (!profileId) return;
+		historyLoading = true;
+		historyError = '';
+		try {
+			const query = field ? `?field=${encodeURIComponent(field)}` : '';
+			const res = await apiRequest(`${apiBase}/profiles/${profileId}/history${query}`);
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat riwayat perubahan.')));
+			const data = await res.json();
+			historyEntries = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+			historyLoadedFor = `${profileId}|${field}`;
+		} catch (e) {
+			historyError = e instanceof Error ? e.message : tr('Gagal memuat riwayat perubahan.');
+		} finally {
+			historyLoading = false;
+		}
+	}
+
+	function toggleHistory(open: boolean) {
+		historyOpen = open;
+		if (!open) return;
+		// Brief berganti: buang sisa riwayat brief sebelumnya sebelum memuat.
+		if (!historyLoadedFor.startsWith(`${profileId}|`)) {
+			historyEntries = [];
+			historyError = '';
+		}
+		if (historyLoadedFor !== `${profileId}|${historyFilter}`) void loadHistory();
+	}
+
+	$effect(() => {
+		// Reset saat brief berganti; panel yang sedang terbuka langsung memuat
+		// riwayat brief yang baru.
+		if (historyPanelFor === profileId) return;
+		historyPanelFor = profileId;
+		historyEntries = [];
+		historyError = '';
+		historyLoadedFor = '';
+		if (historyOpen && profileId) void loadHistory();
+	});
+
 	async function loadSummaries(silent = false, statusOnly = false) {
 		if (!profileId) return;
 		const seq = ++summarySeq;
@@ -2004,10 +2137,10 @@
 	// Dua cara mengisi Profil Brand: langsung di sini, atau lewat template DOCX.
 	// Default ke form karena itu jalur utama; pilihan disimpan selama halaman terbuka.
 	let instanPath = $state<'field' | 'template'>('field');
-	let instanErrors = $state<Partial<Record<'nama' | 'alias' | 'kategori' | 'kategoriLain' | 'deskripsi' | 'fakta' | 'kanal' | 'kataTerlarang' | 'aturanKlaim' | 'pertanyaan', string>>>({});
+	let instanErrors = $state<Partial<Record<'nama' | 'alias' | 'kategori' | 'kategoriLain' | 'deskripsi' | 'boilerplate' | 'fakta' | 'kanal' | 'kataTerlarang' | 'aturanKlaim' | 'klaim' | 'pertanyaan' | 'keywordUrl', string>>>({});
 	let instanForm = $state({
-		nama: '', alias: '', kategori: '', kategoriLain: '', deskripsi: '',
-		fakta: '', kanal: '', kataTerlarang: '', aturanKlaim: '', pertanyaan: ''
+		nama: '', alias: '', kategori: '', kategoriLain: '', deskripsi: '', boilerplate: '',
+		fakta: '', kanal: '', kataTerlarang: '', aturanKlaim: '', klaim: '', pertanyaan: '', keywordUrl: ''
 	});
 
 	const INSTAN_CATEGORIES = ['Perusahaan', 'Produk', 'Layanan', 'Organisasi', 'Personal brand', 'Lainnya'];
@@ -2036,11 +2169,14 @@
 		{ form: 'alias', key: 'preferred_terms', label: 'Nama alternatif atau alias', hint: 'Cantumkan sebutan lain yang sah, seperti singkatan, nama populer, atau variasi ejaan. Pisahkan dengan titik koma.', placeholder: 'mis. GB; Giovani; Barbershop Giovani' },
 		{ form: 'kategori', key: 'entity_category', label: 'Kategori brand', hint: 'Pilih satu kategori yang paling tepat mewakili entitas ini.', required: true, widget: 'select' },
 		{ form: 'deskripsi', key: 'canonical_description', label: 'Deskripsi resmi', hint: 'Tuliskan satu kalimat inti, kemudian deskripsi lengkap sebagai rujukan penulisan konten.', placeholder: 'Siapa yang dibantu dan untuk apa', widget: 'longtext' },
+		{ form: 'boilerplate', key: 'boilerplate', label: 'Boilerplate "Tentang brand"', hint: 'Tulis paragraf singkat siap tempel yang merangkum brand. Paragraf ini dipakai apa adanya di bagian penutup konten.', placeholder: 'mis. Giovani Barbershop melayani perawatan pria di Bandung sejak 2018.', widget: 'longtext' },
 		{ form: 'fakta', key: 'official_facts', label: 'Fakta resmi', hint: 'Cantumkan tahun berdiri, lokasi, jumlah cabang, atau sertifikasi. Sertakan sumber bila tersedia dan hanya masukkan data yang dapat diverifikasi.', placeholder: 'Berdiri 2018 di Bandung, 12 cabang. Sumber: situs resmi', widget: 'longtext' },
 		{ form: 'kanal', key: 'canonical_links', label: 'Kanal resmi', hint: 'Tuliskan satu URL per baris, termasuk situs web, Instagram, LinkedIn, atau marketplace. Setiap URL harus diawali http:// atau https://.', placeholder: 'https://giovani.example\nhttps://instagram.com/giovani', widget: 'longtext' },
 		{ form: 'kataTerlarang', key: 'forbidden_words', label: 'Kata atau frasa yang harus dihindari', hint: 'Cantumkan istilah atau penyebutan yang tidak boleh muncul dalam artikel. Pisahkan dengan titik koma.', placeholder: 'mis. nomor 1, terbaik, termurah' },
 		{ form: 'aturanKlaim', key: 'forbidden_claims', label: 'Aturan klaim dan batasan penulisan', hint: 'Tetapkan batasan agar artikel tidak memuat klaim tanpa bukti. Contoh: jangan menyebut produk sebagai nomor satu tanpa data resmi.', placeholder: 'Jangan mengklaim nomor satu tanpa data resmi', widget: 'longtext' },
-		{ form: 'pertanyaan', key: 'target_questions', label: 'Target pertanyaan di mesin pencari AI', hint: 'Tuliskan pertanyaan yang ingin dijawab konten tentang brand ini. Ini target editorial, bukan jaminan brand muncul dalam jawaban AI.', placeholder: 'Apa rekomendasi barbershop di Bandung untuk pria?', widget: 'longtext' }
+		{ form: 'klaim', key: 'allowed_claims', label: 'Klaim yang boleh dipakai', hint: 'Cantumkan klaim yang sudah terbukti dan boleh ditulis, beserta buktinya. Pisahkan dengan titik koma.', placeholder: 'mis. 12 cabang di Bandung; bersertifikat halal', widget: 'longtext' },
+		{ form: 'pertanyaan', key: 'target_questions', label: 'Target pertanyaan di mesin pencari AI', hint: 'Tuliskan pertanyaan yang ingin dijawab konten tentang brand ini. Ini target editorial, bukan jaminan brand muncul dalam jawaban AI.', placeholder: 'Apa rekomendasi barbershop di Bandung untuk pria?', widget: 'longtext' },
+		{ form: 'keywordUrl', key: 'target_keywords_urls', label: 'Keyword prioritas dan URL target', hint: 'Tulis satu pasangan per baris: keyword, lalu URL halaman yang dituju. Dipakai untuk mengarahkan tautan di dalam konten.', placeholder: 'barbershop bandung https://giovani.example/bandung', widget: 'longtext' }
 	];
 
 	function splitUrlTokens(value: string): string[] {
@@ -3165,6 +3301,12 @@
 												>
 													<button type="button" role="menuitem" onclick={() => startPopRename(b.id, b.name)}>
 														<Pencil size={13} />{tr('Ubah nama')}
+													</button>
+													<button type="button" role="menuitem" onclick={() => { popMenuId = null; popMenuPos = null; void duplicateBrief(b.id); }}>
+														<Copy size={13} />{tr('Duplikat')}
+													</button>
+													<button type="button" role="menuitem" onclick={() => startSaveTemplate(b)}>
+														<FileText size={13} />{tr('Simpan sebagai template')}
 													</button>
 													<button type="button" class="brief-menu-danger" role="menuitem" onclick={() => { popMenuId = null; popMenuPos = null; requestDelete(b); }}>
 														<Trash2 size={13} />{tr('Hapus')}
@@ -4363,10 +4505,127 @@
 								{/if}
 							</div>
 						</section>
+
+						<!-- Riwayat perubahan: terlipat, dimuat saat dibuka. -->
+						<section class="app-card">
+							<button
+								class="history-toggle"
+								type="button"
+								aria-expanded={historyOpen}
+								onclick={() => toggleHistory(!historyOpen)}
+							>
+								<span class="flex items-center gap-2">
+									<History size={15} style="color: var(--primary);" />
+									<span class="text-sm font-bold">{tr('Riwayat perubahan')}</span>
+								</span>
+								<span class={historyOpen ? 'history-chevron open' : 'history-chevron'}>
+									<ChevronDown size={15} />
+								</span>
+							</button>
+
+							{#if historyOpen}
+								<div class="border-t px-4 pb-4 pt-3" style="border-color: var(--border);">
+									<div class="flex flex-wrap items-center justify-between gap-2">
+										<p class="text-[11.5px] text-muted-foreground">{tr('Catatan perubahan field brief, terbaru dulu.')}</p>
+										<Select
+											bind:value={historyFilter}
+											options={historyOptions}
+											ariaLabel={tr('Saring riwayat berdasarkan field')}
+											minWidth={220}
+											onchange={(value) => { if (historyOpen) void loadHistory(value); }}
+										/>
+									</div>
+
+									{#if historyLoading}
+										<p class="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+											<LoaderCircle size={14} class="animate-spin" /> {tr('Memuat riwayat…')}
+										</p>
+									{:else if historyError}
+										<div class="mt-3 flex flex-wrap items-center gap-2 text-xs" style="color: var(--destructive);">
+											<span>{historyError}</span>
+											<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11.5px]" type="button" onclick={() => void loadHistory()}>{tr('Coba lagi')}</button>
+										</div>
+									{:else if historyEntries.length === 0}
+										<p class="mt-3 text-xs italic text-muted-foreground">{tr('Belum ada perubahan tercatat untuk filter ini.')}</p>
+									{:else}
+										<ul class="mt-2 divide-y" style="border-color: var(--border);">
+											{#each historyEntries as entry, i (`${entry.field_key}-${entry.changed_at}-${i}`)}
+												<li class="py-2.5">
+													<div class="flex flex-wrap items-baseline justify-between gap-2">
+														<span class="text-[12.5px] font-semibold">{historyFieldLabel(entry.field_key)}</span>
+														<span class="text-[11px] text-muted-foreground">{timelineRelativeTime(entry.changed_at)}</span>
+													</div>
+													<p class="mt-1 text-[12px] leading-relaxed">
+														<span class="text-muted-foreground line-through">{truncateHistoryValue(entry.old_value)}</span>
+														<span class="mx-1.5 text-muted-foreground">→</span>
+														<span style="color: var(--foreground);">{truncateHistoryValue(entry.new_value)}</span>
+													</p>
+													{#if entry.changed_by_name}
+														<p class="mt-0.5 text-[11px] text-muted-foreground">{tr('oleh')} {entry.changed_by_name}</p>
+													{/if}
+												</li>
+											{/each}
+										</ul>
+									{/if}
+								</div>
+							{/if}
+						</section>
 					</div>
 				</div>
 			{/if}
 	</main>
+
+	<!-- ── Modal simpan sebagai template (dari menu kartu brief) ─────── -->
+	{#if templateSaveFor}
+		<div class="brief-modal-overlay" role="presentation">
+			<button
+				class="brief-modal-backdrop"
+				type="button"
+				aria-label={tr('Tutup')}
+				onclick={() => (templateSaveFor = null)}
+			></button>
+			<div
+				class="brief-modal"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="brief-template-title"
+			>
+				<form onsubmit={saveAsTemplate}>
+					<h2 id="brief-template-title" class="brief-modal-title">{tr('Simpan sebagai template')}</h2>
+					<p class="brief-modal-text">
+						{tr('Isi brief ini disalin menjadi template. Template bisa dipakai saat membuka brief baru untuk brand ini.')}
+					</p>
+					<div class="mt-3 grid gap-3">
+						<label class="flex flex-col gap-1 text-[12.5px]">
+							<span class="font-medium" style="color: var(--muted-foreground);">{tr('Nama template')}</span>
+							<input class="app-input" bind:value={templateSaveName} required minlength={2} maxlength={160} />
+						</label>
+						<label class="flex flex-col gap-1 text-[12.5px]">
+							<span class="font-medium" style="color: var(--muted-foreground);">{tr('Deskripsi (opsional)')}</span>
+							<textarea
+								class="app-input"
+								rows="2"
+								maxlength={300}
+								bind:value={templateSaveDesc}
+								style="min-height: 60px; resize: vertical;"
+							></textarea>
+						</label>
+					</div>
+					{#if templateSaveError}
+						<p class="mt-2 text-[12px]" style="color: var(--destructive);" role="alert">{templateSaveError}</p>
+					{/if}
+					<div class="brief-modal-actions">
+						<button class="app-btn app-btn-soft" type="button" onclick={() => (templateSaveFor = null)}>
+							{tr('Batal')}
+						</button>
+						<button class="app-btn" type="submit" disabled={templateSaveBusy}>
+							{templateSaveBusy ? tr('Menyimpan…') : tr('Simpan template')}
+						</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	{/if}
 
 	<!-- ── Dialog konfirmasi (hapus brief / percakapan baru) ─────────── -->
 	{#if confirmReq}
@@ -4669,6 +4928,33 @@
 	.brief-menu-danger { color: var(--destructive); }
 
 
+
+	/* Riwayat perubahan: baris pembuka datar selebar kartu, isi di bawahnya. */
+	.history-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		width: 100%;
+		padding: 12px 16px;
+		border: none;
+		border-radius: 12px;
+		background: transparent;
+		color: var(--foreground);
+		text-align: left;
+		cursor: pointer;
+	}
+	.history-toggle:hover {
+		background: color-mix(in srgb, var(--secondary) 60%, transparent);
+	}
+	.history-chevron {
+		display: inline-flex;
+		color: var(--muted-foreground);
+		transition: transform 160ms ease;
+	}
+	.history-chevron.open {
+		transform: rotate(180deg);
+	}
 
 	.brief-modal-overlay {
 		position: fixed;

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +39,12 @@ func uniqueBrandPublicID(ctx context.Context, pool *pgxpool.Pool) string {
 	return auth.BuildShortPublicId()
 }
 
+// NewBrandPublicID: id publik pendek untuk brand baru. Dipakai juga domain
+// workspace supaya aturan keunikan public_id tidak ditulis dua kali.
+func NewBrandPublicID(ctx context.Context, pool *pgxpool.Pool) string {
+	return uniqueBrandPublicID(ctx, pool)
+}
+
 func strPtr(s string) *string { return &s }
 
 func nullIfEmpty(s string) *string {
@@ -56,22 +63,36 @@ func (d *Deps) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows := []BrandRow{}
+	// Brand bisa diakses dua cara: baris membership eksplisit, atau keanggotaan
+	// workspace tempat brand bernaung. Keduanya digabung supaya daftar ini sama
+	// dengan yang lolos BrandAccess; kalau hanya membership yang dibaca, brand
+	// workspace tidak pernah muncul di /klien.
+	// COALESCE: peran eksplisit tetap menang, workspace hanya fallback.
 	qrows, err := d.Pool.Query(r.Context(), `
 		SELECT b.id, b.name, b.slug, b.public_id, b.ownership_type, b.status, b.client_name, b.industry,
-		       b.primary_language, b.created_at, m.role
+		       b.primary_language, b.created_at, b.workspace_id,
+		       COALESCE(m.role, wm.role) AS role
 		FROM brands b
-		JOIN brand_memberships m ON m.brand_id = b.id
-		WHERE m.user_id = $1 AND b.deleted_at IS NULL
+		LEFT JOIN brand_memberships m ON m.brand_id = b.id AND m.user_id = $1
+		LEFT JOIN workspace_members wm ON wm.workspace_id = b.workspace_id AND wm.user_id = $1
+		WHERE b.deleted_at IS NULL AND (m.id IS NOT NULL OR wm.user_id IS NOT NULL)
 		ORDER BY b.created_at LIMIT 500`, user.ID)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	defer qrows.Close()
+	seen := map[string]bool{}
 	for qrows.Next() {
 		var row BrandRow
 		if err := qrows.Scan(&row.ID, &row.Name, &row.Slug, &row.PublicID, &row.OwnershipType, &row.Status,
-			&row.ClientName, &row.Industry, &row.PrimaryLanguage, &row.CreatedAt, &row.Role); err == nil {
+			&row.ClientName, &row.Industry, &row.PrimaryLanguage, &row.CreatedAt, &row.WorkspaceID, &row.Role); err == nil {
+			// Dedupe: konstrain unik mencegah duplikat hari ini, tapi hasil
+			// gabungan dua jalur akses tidak boleh bergantung pada itu.
+			if seen[row.ID] {
+				continue
+			}
+			seen[row.ID] = true
 			rows = append(rows, row)
 		}
 	}
@@ -632,4 +653,89 @@ func clamp1to5(v *int, def int) int {
 		return 5
 	}
 	return *v
+}
+
+// ---------- PUT /v1/brands/{brandId} ----------
+
+// brandUpdateBody: field yang boleh diubah klien sendiri. slug, public_id,
+// ownership_type, dan status sengaja tidak ada di sini — itu urusan platform,
+// dan mengubahnya bisa memutus URL atau akses yang sudah dibagikan.
+type brandUpdateBody struct {
+	Name            *string `json:"name"`
+	ClientName      *string `json:"client_name"`
+	Industry        *string `json:"industry"`
+	PrimaryLanguage *string `json:"primary_language"`
+}
+
+// Update: PUT /v1/brands/{brandId}
+//
+// Sebelumnya identitas brand hanya bisa diisi saat admin membuat brand; klien
+// tidak punya cara memperbaiki ejaan nama atau industrinya sendiri. Handler ini
+// menutup celah itu tanpa membuka kolom yang berisiko (slug/public_id).
+func (d *Deps) Update(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	if user == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
+		return
+	}
+	// admin ke atas: mengubah identitas brand memengaruhi semua anggota.
+	row, err := BrandAccess(r.Context(), d.Pool, chiURLParam(r, "brandId"), user.ID, "admin")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	var body brandUpdateBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid Input")
+		return
+	}
+
+	sets := make([]string, 0, 4)
+	args := make([]any, 0, 5)
+	add := func(col string, v *string) {
+		if v == nil {
+			return
+		}
+		args = append(args, strings.TrimSpace(*v))
+		sets = append(sets, col+" = $"+strconv.Itoa(len(args)))
+	}
+	add("name", body.Name)
+	add("client_name", body.ClientName)
+	add("industry", body.Industry)
+	add("primary_language", body.PrimaryLanguage)
+	if len(sets) == 0 {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Tidak ada perubahan yang dikirim.")
+		return
+	}
+	// Nama brand tidak boleh kosong: dipakai di notifikasi dan judul halaman.
+	if body.Name != nil && strings.TrimSpace(*body.Name) == "" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Nama brand tidak boleh kosong.")
+		return
+	}
+	args = append(args, row.ID)
+	if _, err := d.Pool.Exec(r.Context(),
+		"UPDATE brands SET "+strings.Join(sets, ", ")+", updated_at = NOW() WHERE id = $"+strconv.Itoa(len(args)),
+		args...); err != nil {
+		writeError(w, err)
+		return
+	}
+	InvalidateBrandCache(row.ID)
+	if _, err := d.Pool.Exec(r.Context(),
+		"INSERT INTO audit_logs (id, brand_id, actor_user_id, action, target_type, target_id) VALUES ($1, $2, $3, 'brand.updated', 'brand', $4)",
+		uuid.NewString(), row.ID, user.ID, row.ID); err != nil {
+		// Audit best-effort: kegagalan mencatat tidak membatalkan perubahan.
+	}
+
+	updated, err := BrandAccess(r.Context(), d.Pool, row.ID, user.ID, "viewer")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	out, err := BrandJsonList(r.Context(), d.Pool, []BrandRow{updated})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out[0])
 }

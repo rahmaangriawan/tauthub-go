@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -244,8 +246,8 @@ func mergeJSONObject(dst map[string]any, raw []byte) {
 // applyUpdates menulis nilai yang lolos validasi ke profiler_profiles, lalu
 // menyimpan status + sumbernya. Penggabungan per kolom memakai operator `||`
 // supaya tidak menimpa field lain yang mungkin sedang diubah paralel.
-func (d *Deps) applyUpdates(ctx context.Context, profileID, userID string, fields []Field, states map[string]FieldState, accepted []FieldUpdate) error {
-	if err := d.writeUpdates(ctx, d.Pool, profileID, userID, fields, accepted); err != nil {
+func (d *Deps) applyUpdates(ctx context.Context, profileID, userID string, fieldVersion int, fields []Field, states map[string]FieldState, accepted []FieldUpdate) error {
+	if err := d.writeUpdates(ctx, d.Pool, profileID, userID, fieldVersion, fields, accepted); err != nil {
 		return err
 	}
 	// Nilai field berubah -> indeks memori lintas brief ikut diperbarui
@@ -257,13 +259,13 @@ func (d *Deps) applyUpdates(ctx context.Context, profileID, userID string, field
 // applyUpdatesAtomic: versi transaksi untuk jalur yang menyimpan beberapa field
 // sekaligus (form Profil Brand). Semua nilai dan status ditulis dalam satu
 // transaksi, jadi kegagalan di tengah tidak meninggalkan simpanan separuh.
-func (d *Deps) applyUpdatesAtomic(ctx context.Context, profileID, userID string, fields []Field, accepted []FieldUpdate) error {
+func (d *Deps) applyUpdatesAtomic(ctx context.Context, profileID, userID string, fieldVersion int, fields []Field, accepted []FieldUpdate) error {
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := d.writeUpdates(ctx, tx, profileID, userID, fields, accepted); err != nil {
+	if err := d.writeUpdates(ctx, tx, profileID, userID, fieldVersion, fields, accepted); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -277,12 +279,17 @@ func (d *Deps) applyUpdatesAtomic(ctx context.Context, profileID, userID string,
 // field bisa jalan di luar maupun di dalam transaksi dengan kode yang sama.
 type dbExec interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, arguments ...any) pgx.Row
 }
 
-func (d *Deps) writeUpdates(ctx context.Context, ex dbExec, profileID, userID string, fields []Field, accepted []FieldUpdate) error {
+func (d *Deps) writeUpdates(ctx context.Context, ex dbExec, profileID, userID string, fieldVersion int, fields []Field, accepted []FieldUpdate) error {
 	if len(accepted) == 0 {
 		return nil
 	}
+	// Baca nilai lama SEBELUM menimpa. FOR UPDATE mengunci baris supaya dua
+	// penulisan paralel tidak saling menimpa tanpa jejak, dan hasil bacaan ini
+	// jadi pembanding riwayat field.
+	brandID, oldValues, oldFound := d.loadOldFieldValues(ctx, ex, profileID)
 	grouped := map[string]map[string]any{}
 	for _, u := range accepted {
 		f, ok := fieldByKey(fields, u.Key)
@@ -310,12 +317,58 @@ func (d *Deps) writeUpdates(ctx context.Context, ex dbExec, profileID, userID st
 			return err
 		}
 	}
+	// Riwayat ditulis setelah nilai baru tersimpan. Kegagalannya tidak boleh
+	// menggagalkan penyimpanan: audit bersifat best-effort.
+	if oldFound {
+		d.recordFieldHistory(ctx, ex, profileID, brandID, userID, fieldVersion, accepted, oldValues)
+	}
 	for _, u := range accepted {
 		if err := upsertFieldStateOn(ctx, ex, profileID, u.Key, u.Status, u.Source, u.Note); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// loadOldFieldValues: brand + nilai field gabungan sebelum update. found=false
+// berarti profil tidak ada (sudah terhapus) sehingga riwayat tidak ditulis.
+func (d *Deps) loadOldFieldValues(ctx context.Context, ex dbExec, profileID string) (brandID string, values map[string]any, found bool) {
+	var entityCore, identity, style, seo []byte
+	err := ex.QueryRow(ctx,
+		`SELECT brand_id, entity_core, identity, style, seo FROM profiler_profiles
+		 WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, profileID).
+		Scan(&brandID, &entityCore, &identity, &style, &seo)
+	if err != nil {
+		return "", nil, false
+	}
+	values = map[string]any{}
+	for _, raw := range [][]byte{entityCore, identity, style, seo} {
+		mergeJSONObject(values, raw)
+	}
+	return brandID, values, true
+}
+
+// recordFieldHistory: satu baris per field yang nilainya benar-benar berubah.
+// Nilai lama dan baru dibandingkan lewat renderValue supaya bentuk jsonb lama
+// (string, angka, array) sebanding dengan nilai string dari form.
+func (d *Deps) recordFieldHistory(ctx context.Context, ex dbExec, profileID, brandID, userID string, fieldVersion int, accepted []FieldUpdate, oldValues map[string]any) {
+	for _, u := range accepted {
+		oldText := renderValue(oldValues[u.Key])
+		newText := strings.TrimSpace(u.Value)
+		if oldText == newText {
+			continue
+		}
+		if _, err := ex.Exec(ctx,
+			`INSERT INTO profiler_field_history
+			   (id, profile_id, brand_id, field_key, old_value, new_value, status, source, changed_by, field_version)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+			uuid.NewString(), profileID, brandID, u.Key,
+			nullIfEmpty(oldText), nullIfEmpty(newText), nullIfEmpty(u.Status),
+			nullIfEmpty(u.Source), nullIfEmpty(userID), nullIfZero(fieldVersion)); err != nil {
+			slog.Warn("brief: gagal mencatat riwayat field",
+				"profile_id", profileID, "field", u.Key, "err", err)
+		}
+	}
 }
 
 func upsertFieldStateOn(ctx context.Context, ex dbExec, profileID, key, status, source, note string) error {
@@ -615,6 +668,34 @@ func (d *Deps) finishRun(ctx context.Context, runID string, status string, in, o
 		 WHERE id = $1`,
 		runID, status, nullIfZero(in), nullIfZero(out), nullIfZero64(durationMS),
 		nullIfEmpty(truncate(output, 4000)), nullIfEmpty(errMsg))
+}
+
+// auditBriefWrite mencatat mutasi brief oleh klien ke audit_logs, dengan brand_id
+// supaya muncul di feed aktivitas brand.
+func (d *Deps) auditBriefWrite(ctx context.Context, brandID, userID, action, profileID string, detail map[string]any) {
+	var detailArg any
+	if len(detail) > 0 {
+		if raw, err := json.Marshal(detail); err == nil {
+			detailArg = string(raw)
+		}
+	}
+	if _, err := d.Pool.Exec(ctx,
+		`INSERT INTO audit_logs (id, brand_id, actor_user_id, action, target_type, target_id, detail)
+		 VALUES ($1, $2, $3, $4, 'taut_brief', $5, $6::jsonb)`,
+		uuid.NewString(), nullIfEmpty(brandID), nullIfEmpty(userID), action,
+		nullIfEmpty(profileID), detailArg); err != nil {
+		slog.Warn("brief: audit gagal", "action", action, "profile_id", profileID, "err", err)
+	}
+}
+
+// fieldUpdateKeys: daftar key yang tersimpan, dipakai sebagai ringkasan detail
+// audit tanpa menyalin seluruh nilai field ke audit_logs.
+func fieldUpdateKeys(updates []FieldUpdate) []string {
+	keys := make([]string, 0, len(updates))
+	for _, u := range updates {
+		keys = append(keys, u.Key)
+	}
+	return keys
 }
 
 // ---------- util ----------

@@ -33,6 +33,7 @@ import (
 	profilerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/profiler"
 	publiccatalogdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/publiccatalog"
 	pushdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/push"
+	workspacedomain "github.com/rahmaangriawan/tauthub-go/internal/domains/workspace"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobwire"
@@ -160,6 +161,7 @@ func run() error {
 		brands := &brandsdomain.Deps{Pool: database.Pool}
 		knowledge := &knowledgedomain.Deps{Pool: database.Pool}
 		profilerDeps := &profilerdomain.Deps{Pool: database.Pool}
+		workspaceDeps := &workspacedomain.Deps{Pool: database.Pool}
 		briefDeps := &briefdomain.Deps{Pool: database.Pool, Cfg: cfg, Admin: &adminshared.Deps{Pool: database.Pool, Cfg: cfg}}
 		contentDeps := &contentdomain.Deps{Pool: database.Pool, JobInline: cfg.JobInline, WriteRateLimitPerMinute: cfg.WriteRateLimitPerMinute}
 		clientRead := &clientreaddomain.Deps{Pool: database.Pool}
@@ -208,10 +210,26 @@ func run() error {
 			authed.Get("/brands", brands.List)
 			authed.Post("/brands", brands.Create)
 			authed.Get("/brands/{brandId}", brands.Get)
+			authed.Put("/brands/{brandId}", brands.Update)
 			authed.Post("/brands/{brandId}/activate", brands.Activate)
 			authed.Put("/brands/{brandId}/profile", brands.UpdateProfile)
 			authed.Put("/brands/{brandId}/voice", brands.UpdateVoice)
 			authed.Put("/brands/{brandId}/editorial-rules", brands.UpdateRules)
+
+			// Workspace agensi: pengelompokan brand, anggota, dan aturan induk.
+			// Otorisasi tetap per brand lewat BrandAccess; workspace menjadi
+			// fallback peran untuk brand yang punya workspace_id.
+			authed.Get("/workspaces", workspaceDeps.List)
+			authed.Post("/workspaces", workspaceDeps.Create)
+			authed.Get("/workspaces/{workspaceId}/members", workspaceDeps.MembersList)
+			authed.Post("/workspaces/{workspaceId}/members", workspaceDeps.MembersCreate)
+			authed.Delete("/workspaces/{workspaceId}/members/{userId}", workspaceDeps.MemberDelete)
+			authed.Get("/workspaces/{workspaceId}/rules", workspaceDeps.RulesGet)
+			authed.Put("/workspaces/{workspaceId}/rules", workspaceDeps.RulesUpdate)
+			authed.Get("/workspaces/{workspaceId}/brands", workspaceDeps.BrandsList)
+			authed.Post("/workspaces/{workspaceId}/brands", workspaceDeps.BrandCreate)
+			authed.Post("/workspaces/{workspaceId}/brands/{brandId}/attach", workspaceDeps.BrandAttach)
+			authed.Delete("/workspaces/{workspaceId}/brands/{brandId}/attach", workspaceDeps.BrandDetach)
 			authed.Get("/brands/{brandId}/configuration", brands.Configuration)
 			authed.Get("/brands/{brandId}/dashboard", brands.Dashboard)
 			authed.Get("/brands/{brandId}/overview", brands.Overview)
@@ -243,9 +261,16 @@ func run() error {
 			authed.Post("/brands/{brandId}/profiler/profiles", profilerDeps.ProfileCreate)
 			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}", profilerDeps.ProfileGet)
 			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}/export", profilerDeps.ProfileExport)
+			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}/history", profilerDeps.ProfileHistory)
 			authed.Put("/brands/{brandId}/profiler/profiles/{profileId}", profilerDeps.ProfileUpdate)
 			authed.Delete("/brands/{brandId}/profiler/profiles/{profileId}", profilerDeps.ProfileDelete)
 			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/duplicate", profilerDeps.ProfileDuplicate)
+			// Pustaka template brief: simpan brief sebagai template, lalu buat
+			// brief baru dari template itu (lintas brand dalam workspace).
+			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/save-as-template", profilerDeps.SaveAsTemplate)
+			authed.Get("/templates", profilerDeps.ListTemplates)
+			authed.Post("/templates/{templateId}/apply", profilerDeps.ApplyTemplate)
+			authed.Delete("/templates/{templateId}", profilerDeps.DeleteTemplate)
 			authed.Post("/brands/{brandId}/profiler/profiles/{profileId}/blocks", profilerDeps.BlockCreate)
 			authed.Put("/brands/{brandId}/profiler/blocks/{blockId}", profilerDeps.BlockUpdate)
 			authed.Delete("/brands/{brandId}/profiler/blocks/{blockId}", profilerDeps.BlockDelete)

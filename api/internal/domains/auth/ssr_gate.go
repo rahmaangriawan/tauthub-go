@@ -117,6 +117,9 @@ func (d *Deps) SSRGate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Akses brand (parity gate.ts: membership wajib, brand unknown → null).
+	// BrandAccess memakai peran efektif, jadi anggota workspace brand ini juga
+	// lolos walau tidak punya baris brand_memberships. Selain itu peran yang
+	// dikirim ke layout adalah peran efektifnya, bukan "viewer" karangan.
 	if body.BrandID != "" {
 		brandRow, brandErr := brands.BrandAccess(r.Context(), d.Pool, body.BrandID, u.ID, "viewer")
 		if brandErr == nil {

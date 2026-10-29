@@ -11,7 +11,7 @@
 	import { page } from '$app/state';
 	import {
 		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, MessageCircle, Newspaper, Receipt,
-		ScrollText, ShieldCheck, TriangleAlert, UserCircle
+		ScrollText, Settings, ShieldCheck, TriangleAlert, UserCircle
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { swr } from '$lib/swr-cache.svelte';
@@ -52,6 +52,19 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		async () => {
 			const res = await apiRequest(`/v1/brands/${brandId}/overview`);
 			if (!res.ok) throw new Error('gagal memuat overview');
+			return res.json();
+		}
+	);
+
+	// Daftar brand milik pengguna (termasuk brand milik workspace) untuk pemilih
+	// brand di menu akun. SWR dipakai agar satu kali fetch melayani sidebar dan
+	// halaman; tidak ada polling — daftar berubah hanya lewat aksi pengguna.
+	type BrandOption = { id: string; public_id?: string | null; name: string; role?: string };
+	const brands = swr<BrandOption[]>(
+		() => (getStoredSession() ? '/v1/brands' : null),
+		async () => {
+			const res = await apiRequest('/v1/brands');
+			if (!res.ok) throw new Error('gagal memuat daftar brand');
 			return res.json();
 		}
 	);
@@ -207,6 +220,20 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	const brandUrlId = $derived(overview.data?.public_id ?? brandId);
 	$effect(() => setBrandUrlId(brandUrlId));
 
+	// Brand terakhir yang dibuka disimpan lokal: halaman /klien memakainya
+	// sebagai petunjuk "terakhir dibuka" saat pengguna punya beberapa brand.
+	// Hanya preferensi tampilan, bukan sumber kebenaran data brand.
+	const LAST_BRAND_KEY = 'tauthub:last-brand';
+	$effect(() => {
+		if (!brandUrlId) return;
+		try {
+			localStorage.setItem(LAST_BRAND_KEY, brandUrlId);
+		} catch {
+			// penyimpanan diblokir/penuh: petunjuk dilewati, halaman tetap jalan
+		}
+	});
+
+
 	const base = $derived(`/klien/${brandUrlId}`);
 	/**
 	 * Menu aktif hanya bila path persis sama atau berada DI BAWAH href-nya.
@@ -252,6 +279,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			label: i18n.t.nav.group_settings,
 			items: [
 				{ label: i18n.t.nav.profile, href: `${base}/profile`, icon: UserCircle, active: isActive(`${base}/profile`) },
+				{ label: i18n.t.nav.settings, href: `${base}/pengaturan`, icon: Settings, active: isActive(`${base}/pengaturan`) },
 				{ label: i18n.t.nav.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`), badge: chatUnread.count },
 				{ label: i18n.t.nav.changelog, href: `${base}/changelog`, icon: ScrollText, active: isActive(`${base}/changelog`) }
 			]
@@ -268,6 +296,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 					profileHref={`${base}/profile`}
 					workspaceSwitchHref={user.role === 'partner' ? '/mitra' : undefined}
 					workspaceSwitchLabel={user.role === 'partner' ? tr('Portal Mitra') : undefined}
+					brands={brands.data ?? []}
+					currentBrandId={brandUrlId}
 				/>
 			{/if}
 		{/snippet}

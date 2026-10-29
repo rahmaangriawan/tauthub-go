@@ -43,12 +43,12 @@ func buildEntitySource(ctx context.Context, pool *pgxpool.Pool, profileID string
 	if v := strings.TrimSpace(deref(name)); v != "" {
 		b.WriteString("[NAMA BRIEF]\n" + v + "\n\n")
 	}
-	writeJSONSection(&b, "ENTITY CORE", entityCore)
-	writeJSONSection(&b, "IDENTITAS", identity)
-	writeJSONSection(&b, "GAYA", style)
-	writeJSONSection(&b, "SEO", seo)
+	writeJSONSection(&b, "ENTITY CORE", entityCore, entityCoreCap)
+	writeJSONSection(&b, "IDENTITAS", identity, identityCap)
+	writeJSONSection(&b, "GAYA", style, styleCap)
+	writeJSONSection(&b, "SEO", seo, seoCap)
 	if v := strings.TrimSpace(deref(instructions)); v != "" {
-		b.WriteString("[INSTRUKSI KHUSUS KLIEN]\n" + clip(v, 4000) + "\n\n")
+		b.WriteString("[INSTRUKSI KHUSUS KLIEN]\n" + clip(v, instructionsCap) + "\n\n")
 	}
 
 	rows, err := pool.Query(ctx, `
@@ -65,10 +65,10 @@ func buildEntitySource(ctx context.Context, pool *pgxpool.Pool, profileID string
 			if strings.TrimSpace(content) == "" {
 				continue
 			}
-			blocks.WriteString("- " + strings.TrimSpace(title) + ": " + clip(strings.TrimSpace(content), blockTextCap) + "\n")
+			blocks.WriteString("- " + strings.TrimSpace(title) + ": " + clip(strings.TrimSpace(content), knowledgeBlockCap) + "\n")
 		}
 		if blocks.Len() > 0 {
-			b.WriteString("[KNOWLEDGE BLOCKS]\n" + blocks.String() + "\n")
+			b.WriteString("[KNOWLEDGE BLOCKS]\n" + clip(blocks.String(), knowledgeBlocksCap) + "\n")
 		}
 	}
 
@@ -81,6 +81,10 @@ func buildFileSource(ctx context.Context, pool *pgxpool.Pool, profileID string) 
 	// TIMELINE ditaruh PALING ATAS: kabar terbaru (promo, kunjungan, peluncuran)
 	// adalah bahan paling unik, jadi tidak boleh terpotong oleh cap ukuran di
 	// akhir. Tanggal kejadian disertakan supaya Writer tahu mana yang segar.
+	//
+	// Tiap seksi punya builder + jatah sendiri. Dulu seluruh teks dipotong di
+	// 24000 sehingga seksi yang ditulis belakangan (gambar) selalu kalah.
+	var timeline strings.Builder
 	tlRows, err := pool.Query(ctx, `
 		SELECT body, hashtags, COALESCE(occurred_on::text, created_at::date::text)
 		FROM profiler_timeline_posts
@@ -107,11 +111,13 @@ func buildFileSource(ctx context.Context, pool *pgxpool.Pool, profileID string) 
 		}
 		tlRows.Close()
 		if len(lines) > 0 {
-			b.WriteString("[TIMELINE TERBARU (kabar terbaru brand — utamakan sebagai sudut unik)]\n")
-			b.WriteString(strings.Join(lines, "\n") + "\n\n")
+			timeline.WriteString("[TIMELINE TERBARU (kabar terbaru brand — utamakan sebagai sudut unik)]\n")
+			timeline.WriteString(strings.Join(lines, "\n"))
 		}
 	}
+	appendBlock(&b, timeline.String(), fileTimelineCap)
 
+	var docs strings.Builder
 	docRows, err := pool.Query(ctx, `
 		SELECT original_filename, COALESCE(extracted_text, '')
 		FROM profiler_documents
@@ -128,11 +134,13 @@ func buildFileSource(ctx context.Context, pool *pgxpool.Pool, profileID string) 
 			if strings.TrimSpace(text) == "" {
 				continue
 			}
-			b.WriteString("[DOKUMEN: " + strings.TrimSpace(filename) + "]\n")
-			b.WriteString(clip(strings.TrimSpace(text), docTextCap) + "\n\n")
+			docs.WriteString("[DOKUMEN: " + strings.TrimSpace(filename) + "]\n")
+			docs.WriteString(clip(strings.TrimSpace(text), docTextCap) + "\n\n")
 		}
 	}
+	appendBlock(&b, docs.String(), fileDocsCap)
 
+	var urls strings.Builder
 	urlRows, err := pool.Query(ctx, `
 		SELECT url, COALESCE(extracted_text, '')
 		FROM profiler_urls
@@ -149,11 +157,13 @@ func buildFileSource(ctx context.Context, pool *pgxpool.Pool, profileID string) 
 			if strings.TrimSpace(text) == "" {
 				continue
 			}
-			b.WriteString("[TAUTAN: " + strings.TrimSpace(url) + "]\n")
-			b.WriteString(clip(strings.TrimSpace(text), urlTextCap) + "\n\n")
+			urls.WriteString("[TAUTAN: " + strings.TrimSpace(url) + "]\n")
+			urls.WriteString(clip(strings.TrimSpace(text), urlTextCap) + "\n\n")
 		}
 	}
+	appendBlock(&b, urls.String(), fileURLsCap)
 
+	var images strings.Builder
 	imgRows, err := pool.Query(ctx, `
 		SELECT COALESCE(file_name, ''), COALESCE(note, '')
 		FROM profiler_images
@@ -177,16 +187,31 @@ func buildFileSource(ctx context.Context, pool *pgxpool.Pool, profileID string) 
 			}
 		}
 		if len(lines) > 0 {
-			b.WriteString("[GAMBAR (metadata)]\n" + strings.Join(lines, "\n") + "\n")
+			images.WriteString("[GAMBAR (metadata)]\n" + strings.Join(lines, "\n"))
 		}
 	}
+	appendBlock(&b, images.String(), fileImagesCap)
 
 	return newSource(clip(b.String(), fileSourceCap)), nil
 }
 
+// appendBlock: tempel satu seksi bahan yang sudah dipotong jatahnya. Pemisah
+// satu baris kosong menjaga format antar seksi walau isinya terpotong.
+func appendBlock(b *strings.Builder, body string, max int) {
+	if strings.TrimSpace(body) == "" {
+		return
+	}
+	if b.Len() > 0 {
+		b.WriteString("\n")
+	}
+	b.WriteString(strings.TrimRight(clip(body, max), "\n"))
+	b.WriteString("\n")
+}
+
 // writeJSONSection: render objek JSON menjadi baris "label: nilai" dengan
-// urutan kunci tetap (kunci umum dulu, sisanya alfabetis).
-func writeJSONSection(b *strings.Builder, title string, raw []byte) {
+// urutan kunci tetap (kunci umum dulu, sisanya alfabetis). max membatasi isi
+// seksi ini saja, bukan seluruh bahan, supaya seksi lain tetap kebagian.
+func writeJSONSection(b *strings.Builder, title string, raw []byte, max int) {
 	var obj map[string]any
 	if len(raw) == 0 || json.Unmarshal(raw, &obj) != nil || len(obj) == 0 {
 		return
@@ -219,7 +244,7 @@ func writeJSONSection(b *strings.Builder, title string, raw []byte) {
 	if len(lines) == 0 {
 		return
 	}
-	b.WriteString("[" + title + "]\n" + strings.Join(lines, "\n") + "\n\n")
+	b.WriteString("[" + title + "]\n" + clip(strings.Join(lines, "\n"), max) + "\n\n")
 }
 
 var sectionKeyOrder = []string{

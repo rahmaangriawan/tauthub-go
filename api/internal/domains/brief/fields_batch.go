@@ -32,7 +32,7 @@ type batchField struct {
 // dalam satu transaksi: tidak ada simpan separuh kalau satu field ditolak.
 // Jalur ini deterministik dan tidak memanggil LLM.
 func (d *Deps) BriefFieldsBatchPost(w http.ResponseWriter, r *http.Request) {
-	userID, _, profileID, ok := d.accessOrFail(w, r, "writer")
+	userID, brandID, profileID, ok := d.accessOrFail(w, r, "writer")
 	if !ok {
 		return
 	}
@@ -53,7 +53,7 @@ func (d *Deps) BriefFieldsBatchPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fields, _, err := d.loadActiveFieldSet(r.Context())
+	fields, fieldVersion, err := d.loadActiveFieldSet(r.Context())
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -88,10 +88,13 @@ func (d *Deps) BriefFieldsBatchPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := d.applyUpdatesAtomic(r.Context(), profileID, userID, fields, accepted); err != nil {
+	if err := d.applyUpdatesAtomic(r.Context(), profileID, userID, fieldVersion, fields, accepted); err != nil {
 		writeErr(w, err)
 		return
 	}
+	d.auditBriefWrite(r.Context(), brandID, userID, "brief.fields_batch_saved", profileID, map[string]any{
+		"saved": len(accepted), "keys": fieldUpdateKeys(accepted),
+	})
 
 	states, _ = d.loadStates(r.Context(), profileID)
 	filled, total := Progress(fields, states)

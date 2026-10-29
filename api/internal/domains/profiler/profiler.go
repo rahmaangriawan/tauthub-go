@@ -489,40 +489,49 @@ func (d *Deps) ProfileDuplicate(w http.ResponseWriter, r *http.Request) {
 	profileID := chiParam(r, "profileId")
 	ctx := r.Context()
 	var (
-		name                      string
+		srcName                   string
 		description, instructions *string
+		entityCore                []byte
 		identity, style, seo      []byte
 	)
+	// entity_core ikut disalin: brief yang diisi lewat Instan Brief menyimpan
+	// jawabannya di kolom itu, jadi tanpa kolom ini salinan lahir kosong dan
+	// progresnya 0% walau brief asalnya penuh.
 	if err := d.Pool.QueryRow(ctx,
-		"SELECT name, description, identity, style, seo, instructions FROM profiler_profiles WHERE id = $1 AND brand_id = $2 AND deleted_at IS NULL",
-		profileID, brandID).Scan(&name, &description, &identity, &style, &seo, &instructions); err != nil {
+		"SELECT name, description, entity_core, identity, style, seo, instructions FROM profiler_profiles WHERE id = $1 AND brand_id = $2 AND deleted_at IS NULL",
+		profileID, brandID).Scan(&srcName, &description, &entityCore, &identity, &style, &seo, &instructions); err != nil {
 		httpx.Error(w, http.StatusNotFound, "Profiler tidak ditemukan.")
 		return
 	}
-	newID := uuid.NewString()
-	var insertErr error
-	var shortCode string
-	for attempt := 0; attempt < 3; attempt++ {
-		shortCode = shortCodeFromUUID()
-		_, insertErr = d.Pool.Exec(ctx, `
-			INSERT INTO profiler_profiles
-			  (id, brand_id, name, description, identity, style, seo, instructions, short_code, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			newID, brandID, truncate(name+" (salinan)", 160), description,
-			string(identity), string(style), string(seo), instructions, shortCode, user.ID)
-		if insertErr == nil {
-			break
-		}
-	}
-	if insertErr != nil {
-		writeErr(w, insertErr)
+
+	// Satu transaksi untuk profil + blok + state field. Dulu dua Exec terpisah,
+	// sehingga kegagalan di langkah kedua meninggalkan salinan setengah jadi
+	// (profil tanpa blok) yang tetap tampak sah di daftar.
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		writeErr(w, err)
 		return
 	}
-	// Salin blok knowledge kustom.
-	if _, err := d.Pool.Exec(ctx, `
-		INSERT INTO profiler_blocks (id, profile_id, title, kind, content, note, sort_order)
-		SELECT gen_random_uuid()::text, $1, title, kind, content, note, sort_order FROM profiler_blocks WHERE profile_id = $2`,
-		newID, profileID); err != nil {
+	defer tx.Rollback(ctx)
+
+	newID, shortCode, err := insertProfileCopy(ctx, tx, brandID, profileCopy{
+		Name:         truncate(srcName+" (salinan)", 160),
+		Description:  description,
+		EntityCore:   entityCore,
+		Identity:     identity,
+		Style:        style,
+		SEO:          seo,
+		Instructions: instructions,
+	}, user.ID)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := copyProfileAssets(ctx, tx, profileID, newID); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
 		writeErr(w, err)
 		return
 	}

@@ -13,6 +13,7 @@
 	import { page } from '$app/state';
 	import { ArrowRight, FileUp, LoaderCircle, MessageSquare } from '@lucide/svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
+	import GateTemplateList from '$lib/components/gate-template-list.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 
@@ -105,6 +106,8 @@
 					<span class="gate-cta">{tr('Gunakan template')} <ArrowRight size={14} /></span>
 				</button>
 			</div>
+			<!-- Opsi sekunder: brief baru dari template yang sudah disimpan. -->
+			<GateTemplateList {brandId} {brandUrl} disabled={routing} />
 			{#if routing}
 				<p class="gate-loading"><LoaderCircle size={14} class="animate-spin" /> {tr('Membuka brief…')}</p>
 			{/if}

@@ -44,19 +44,38 @@ const (
 
 const JobKind = "brief_summary"
 
-// Batas bahan yang dikirim ke model. Cukup untuk konteks brief normal, tetapi
-// tetap membatasi biaya bila klien mengunggah banyak dokumen.
+// Batas bahan yang dikirim ke model. Cap tunggal untuk seluruh teks membuat
+// seksi yang ditulis terakhir ([SEO], [KNOWLEDGE BLOCKS]) selalu habis duluan.
+// Karena itu tiap seksi punya jatah sendiri, dan totalnya hanya pagar terakhir.
 const (
-	entitySourceCap = 12000
-	fileSourceCap   = 24000
-	docTextCap      = 4000
-	urlTextCap      = 3000
-	blockTextCap    = 1500
-	maxDocs         = 5
-	maxURLs         = 5
+	// Bahan ringkasan entitas.
+	entityCoreCap      = 4000
+	identityCap        = 2500
+	styleCap           = 1500
+	seoCap             = 2500
+	instructionsCap    = 2000
+	knowledgeBlocksCap = 4000
+	knowledgeBlockCap  = 1200
+	// entitySourceCap: jumlah jatah seksi + ruang untuk baris [NAMA BRIEF]
+	// (kolom nama maksimal 160 karakter). Pagar terakhir ini tidak memotong
+	// jatah seksi mana pun.
+	entitySourceCap = entityCoreCap + identityCap + styleCap + seoCap + instructionsCap + knowledgeBlocksCap + 200
+
+	// Bahan ringkasan file: 24000 dibagi per seksi supaya timeline, dokumen,
+	// tautan, dan gambar semuanya terwakili.
+	fileTimelineCap = 6000
+	fileDocsCap     = 10000
+	fileURLsCap     = 6000
+	fileImagesCap   = 2000
+	fileSourceCap   = fileTimelineCap + fileDocsCap + fileURLsCap + fileImagesCap
+
+	docTextCap = 4000
+	urlTextCap = 3000
+	maxDocs    = 5
+	maxURLs    = 5
 	// Timeline: kabar terbaru brand. 12 post terbaru cukup untuk sudut artikel
 	// yang segar tanpa membanjiri konteks; tiap post dibatasi 600 karakter.
-	maxTimeline    = 12
+	maxTimeline     = 12
 	timelineTextCap = 600
 )
 

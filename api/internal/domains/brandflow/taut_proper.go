@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 )
 
 // taut_proper.go: mode "Yang Proper" — rilis resmi dengan strict grounding.
@@ -39,6 +41,10 @@ type tautProperInput struct {
 type tautProperBriefContext struct {
 	EntitySummary string
 	FileSummary   string
+	// Stale: ada ringkasan yang dibuat dari bahan yang sudah berubah. Tidak
+	// menggagalkan generate (memori lama masih lebih baik daripada kosong),
+	// tetapi caller bisa menampilkan peringatan ke pengguna.
+	Stale bool `json:"stale,omitempty"`
 }
 
 func (c tautProperBriefContext) empty() bool {
@@ -208,27 +214,35 @@ func (d *Deps) loadTautProperBriefContext(ctx context.Context, brandID, briefID 
 		return out, errUnprocessable("Brief tidak ditemukan untuk brand ini.")
 	}
 
-	entityRow, _ := d.queryRow(ctx, `
-		SELECT status, COALESCE(content, '') AS content FROM profiler_brief_summaries
-		WHERE profile_id = $1 AND kind = 'entity'`, profileID)
-	entityStatus := ""
-	if entityRow != nil {
-		entityStatus = entityRow.strOr("status", "")
+	// Ringkasan bisa sudah usang: bahan brief berubah setelah ringkasan dibuat.
+	// LoadWithStale membandingkan hash bahan saat ini dengan source_hash yang
+	// tersimpan. Usang TIDAK menggagalkan generate; hanya ditandai + dicatat,
+	// karena memori lama masih lebih berguna daripada tidak ada memori.
+	views, _ := summary.LoadWithStale(ctx, d.Pool, profileID)
+	byKind := make(map[summary.Kind]summary.View, len(views))
+	for _, v := range views {
+		byKind[v.Kind] = v
 	}
+
+	entity := byKind[summary.KindEntity]
+	entityStatus := entity.Status
 	if entityStatus == "" || entityStatus == "idle" {
 		return out, errUnprocessable("Brief ini belum punya data entitas. Isi brief lewat Copilot dulu sebelum memakai mode Proper.")
 	}
 	if entityStatus != "ready" {
 		return out, errUnprocessable("Ringkasan Entitas brief belum siap. Buka Taut Brief → Ringkasan, tunggu proses selesai lalu coba lagi.")
 	}
-	out.EntitySummary = strings.TrimSpace(entityRow.strOr("content", ""))
+	out.EntitySummary = strings.TrimSpace(entity.Content)
 	if out.EntitySummary == "" {
 		return out, errUnprocessable("Brief ini belum punya data entitas. Isi brief lewat Copilot dulu sebelum memakai mode Proper.")
 	}
+	if entity.Stale {
+		out.Stale = true
+		slog.Warn("[taut-proper] ringkasan brief usang dipakai",
+			"profile_id", profileID, "kind", string(summary.KindEntity))
+	}
 
-	fileRow, _ := d.queryRow(ctx, `
-		SELECT status, COALESCE(content, '') AS content FROM profiler_brief_summaries
-		WHERE profile_id = $1 AND kind = 'file'`, profileID)
+	fileView := byKind[summary.KindFile]
 	countRow, _ := d.queryRow(ctx, `
 		SELECT (SELECT COUNT(*) FROM profiler_documents WHERE profile_id = $1 AND deleted_at IS NULL)
 		     + (SELECT COUNT(*) FROM profiler_urls WHERE profile_id = $1 AND deleted_at IS NULL) AS file_sources`,
@@ -240,12 +254,17 @@ func (d *Deps) loadTautProperBriefContext(ctx context.Context, brandID, briefID 
 		}
 	}
 	if fileSources > 0 {
-		if fileRow == nil || fileRow.strOr("status", "") != "ready" || strings.TrimSpace(fileRow.strOr("content", "")) == "" {
+		if fileView.Status != "ready" || strings.TrimSpace(fileView.Content) == "" {
 			return out, errUnprocessable("Ringkasan File brief belum siap. Buka Taut Brief → Ringkasan, tunggu proses selesai lalu coba lagi.")
 		}
-		out.FileSummary = strings.TrimSpace(fileRow.strOr("content", ""))
-	} else if fileRow != nil && fileRow.strOr("status", "") == "ready" {
-		out.FileSummary = strings.TrimSpace(fileRow.strOr("content", ""))
+		out.FileSummary = strings.TrimSpace(fileView.Content)
+		if fileView.Stale {
+			out.Stale = true
+			slog.Warn("[taut-proper] ringkasan brief usang dipakai",
+				"profile_id", profileID, "kind", string(summary.KindFile))
+		}
+	} else if fileView.Status == "ready" {
+		out.FileSummary = strings.TrimSpace(fileView.Content)
 	}
 	return out, nil
 }

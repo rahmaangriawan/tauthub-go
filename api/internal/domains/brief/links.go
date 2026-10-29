@@ -32,6 +32,23 @@ var reURLInText = regexp.MustCompile(`https?://[^\s<>"'\])}]+`)
 // biasa tidak salah dianggap domain.
 var reBareDomain = regexp.MustCompile(`^(?:www\.)?[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+$`)
 
+// Skema non-http yang menempel tepat sebelum sebuah token, mis. "ftp://",
+// "mailto:", "file:". Alamat seperti itu bukan situs web, jadi host di
+// belakangnya tidak boleh ditebak sebagai domain telanjang.
+var reForeignScheme = regexp.MustCompile(`(?i)([a-z][a-z0-9+.\-]*):(?://)?$`)
+
+// precededByForeignScheme: prefix sebelum token diakhiri skema selain
+// http/https. http(s) tetap diloloskan karena URL lengkapnya sudah ditangani
+// regex di atas; kalau lolos pun host-nya terdedupe.
+func precededByForeignScheme(prefix string) bool {
+	m := reForeignScheme.FindStringSubmatch(prefix)
+	if m == nil {
+		return false
+	}
+	scheme := strings.ToLower(m[1])
+	return scheme != "http" && scheme != "https"
+}
+
 var linkTLDs = map[string]bool{
 	"com": true, "net": true, "org": true, "id": true, "io": true, "ai": true,
 	"co": true, "my": true, "me": true, "tv": true, "fm": true, "app": true,
@@ -68,15 +85,16 @@ func extractURLs(message string) []string {
 
 	// Token domain telanjang: pecah pada karakter yang bukan bagian domain.
 	// Token mengandung '@' dilewati (email) supaya "aku@resto.com" tidak
-	// dianggap menyebut resto.com.
-	tokens := strings.FieldsFunc(message, func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '-' && r != '@'
-	})
-	for _, tok := range tokens {
-		if strings.Contains(tok, "@") {
+	// dianggap menyebut resto.com. Posisi token dicatat supaya token yang
+	// menempel pada skema lain ("ftp://contoh.id") tidak ikut dinormalisasi.
+	for _, tok := range bareDomainTokens(message) {
+		if strings.Contains(tok.text, "@") {
 			continue
 		}
-		lower := strings.ToLower(strings.Trim(tok, ".-"))
+		if precededByForeignScheme(message[:tok.start]) {
+			continue
+		}
+		lower := strings.ToLower(strings.Trim(tok.text, ".-"))
 		if !reBareDomain.MatchString(lower) {
 			continue
 		}
@@ -93,6 +111,41 @@ func extractURLs(message string) []string {
 		if len(out) >= maxLinksPerMessage {
 			break
 		}
+	}
+	return out
+}
+
+// bareToken: potongan teks yang mungkin domain telanjang + posisi byte awalnya.
+type bareToken struct {
+	text  string
+	start int
+}
+
+// isBareTokenRune: karakter yang boleh menyusun token domain (paritas dengan
+// strings.FieldsFunc yang dulu dipakai).
+func isBareTokenRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '.' || r == '-' || r == '@'
+}
+
+// bareDomainTokens: token maksimal dari karakter domain, lengkap dengan index
+// byte awalnya supaya pemanggil bisa memeriksa teks sebelumnya.
+func bareDomainTokens(message string) []bareToken {
+	var out []bareToken
+	start := -1
+	for i, r := range message {
+		if isBareTokenRune(r) {
+			if start < 0 {
+				start = i
+			}
+			continue
+		}
+		if start >= 0 {
+			out = append(out, bareToken{text: message[start:i], start: start})
+			start = -1
+		}
+	}
+	if start >= 0 {
+		out = append(out, bareToken{text: message[start:], start: start})
 	}
 	return out
 }

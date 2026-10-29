@@ -10,6 +10,7 @@
 	import { ArrowRight, FileUp, LoaderCircle, MessageSquare, } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { apiRequest, readApiError, ensureValidSession } from '$lib/auth';
+	import GateTemplateList from '$lib/components/gate-template-list.svelte';
 
 	type Props = {
 		open: boolean;
@@ -116,6 +117,8 @@
 						<span class="gate-cta">{tr('Gunakan template')} <ArrowRight size={14} /></span>
 					</button>
 				</div>
+				<!-- Opsi sekunder: brief baru dari template yang sudah disimpan. -->
+				<GateTemplateList {brandId} {brandUrl} disabled={loading || routing} />
 				{#if loading || routing}
 					<p class="gate-loading"><LoaderCircle size={14} class="animate-spin" /> {loading ? tr('Menyiapkan brief…') : tr('Membuka brief…')}</p>
 				{/if}

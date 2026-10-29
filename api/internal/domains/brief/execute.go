@@ -111,13 +111,16 @@ func (d *Deps) executeTurn(inCtx context.Context, in executeInput) (result *turn
 	}
 
 	accepted, rejected := ValidateUpdates(t.Fields, t.States, run.Output.FieldUpdates)
-	if err := d.applyUpdates(ctx, in.ProfileID, in.UserID, t.Fields, t.States, accepted); err != nil {
+	if err := d.applyUpdates(ctx, in.ProfileID, in.UserID, t.FieldVersion, t.Fields, t.States, accepted); err != nil {
 		d.finishRun(ctx, runID, "failed", run.Result.InputTokens, run.Result.OutputTokens,
 			run.Result.DurationMS, "", err.Error())
 		return nil, err
 	}
 	// Data entitas berubah → ringkasan Writer perlu dibuat ulang (async).
 	if len(accepted) > 0 {
+		d.auditBriefWrite(ctx, in.BrandID, in.UserID, "brief.chat_fields_applied", in.ProfileID, map[string]any{
+			"saved": len(accepted), "keys": fieldUpdateKeys(accepted),
+		})
 		_ = summary.Queue(ctx, d.Pool, in.ProfileID, in.BrandID, summary.KindEntity)
 	}
 

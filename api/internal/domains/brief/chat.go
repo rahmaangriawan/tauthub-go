@@ -232,7 +232,7 @@ func (d *Deps) BriefChatStream(w http.ResponseWriter, r *http.Request) {
 // ---------- DELETE: mulai percakapan baru ----------
 
 func (d *Deps) BriefChatReset(w http.ResponseWriter, r *http.Request) {
-	_, _, profileID, ok := d.accessOrFail(w, r, "writer")
+	userID, brandID, profileID, ok := d.accessOrFail(w, r, "writer")
 	if !ok {
 		return
 	}
@@ -241,6 +241,7 @@ func (d *Deps) BriefChatReset(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	d.auditBriefWrite(r.Context(), brandID, userID, "brief.chat_reset", profileID, nil)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -270,7 +271,7 @@ func (d *Deps) BriefFieldsPost(w http.ResponseWriter, r *http.Request) {
 	}
 	note, _ := strField(body, "note")
 
-	fields, _, err := d.loadActiveFieldSet(r.Context())
+	fields, fieldVersion, err := d.loadActiveFieldSet(r.Context())
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -291,10 +292,13 @@ func (d *Deps) BriefFieldsPost(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, reason)
 		return
 	}
-	if err := d.applyUpdates(r.Context(), profileID, userID, fields, states, accepted); err != nil {
+	if err := d.applyUpdates(r.Context(), profileID, userID, fieldVersion, fields, states, accepted); err != nil {
 		writeErr(w, err)
 		return
 	}
+	d.auditBriefWrite(r.Context(), brandID, userID, "brief.fields_saved", profileID, map[string]any{
+		"key": key, "status": status, "source": source,
+	})
 	_ = summary.Queue(r.Context(), d.Pool, profileID, brandID, summary.KindEntity)
 	states, _ = d.loadStates(r.Context(), profileID)
 	filled, total := Progress(fields, states)

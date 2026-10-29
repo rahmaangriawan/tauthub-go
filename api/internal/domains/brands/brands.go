@@ -24,6 +24,10 @@ var roleRank = map[string]int{
 
 type BrandRole = string
 
+// RoleRank: peringkat peran brand/workspace, dipakai juga domain lain (mis.
+// workspace) supaya aturan "cukup tinggi" hanya didefinisikan di satu tempat.
+func RoleRank(role string) int { return roleRank[role] }
+
 // ---------- error mapping (port errorResponse) ----------
 
 func writeError(w http.ResponseWriter, err error) {
@@ -62,6 +66,7 @@ type BrandRow struct {
 	Industry        *string   `json:"industry"`
 	PrimaryLanguage string    `json:"primary_language"`
 	CreatedAt       time.Time `json:"created_at"`
+	WorkspaceID     *string   `json:"workspace_id"`
 	Role            string    `json:"role"`
 }
 
@@ -71,7 +76,7 @@ type brandCacheEntry struct {
 }
 
 var (
-	cacheMu   sync.Mutex
+	cacheMu    sync.Mutex
 	brandCache = map[string]brandCacheEntry{}
 )
 
@@ -90,7 +95,59 @@ func InvalidateBrandCache(brandID string) {
 	}
 }
 
-// BrandAccess: port brand() — lookup by id ATAU public_id + membership, cache 30s.
+// InvalidateWorkspaceCache: buang semua entri cache yang perannya berasal dari
+// workspace tersebut.
+//
+// Cache BrandAccess dikunci brandID+userID, jadi perubahan keanggotaan
+// workspace tidak terlihat dari kunci itu. Tanpa sapuan ini, anggota yang baru
+// dikeluarkan masih bisa membaca brand sampai 30 detik (dan anggota baru
+// tertahan 404 selama itu). brandCache menyimpan WorkspaceID pada row, jadi
+// penyaringan cukup di memori tanpa query.
+func InvalidateWorkspaceCache(workspaceID string) {
+	if workspaceID == "" {
+		return
+	}
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	for k, v := range brandCache {
+		if v.row.WorkspaceID != nil && *v.row.WorkspaceID == workspaceID {
+			delete(brandCache, k)
+		}
+	}
+}
+
+// EffectiveRole: peran user pada brand. Baris brand_memberships eksplisit
+// menang; kalau tidak ada, peran workspace dipakai sebagai fallback.
+//
+// Kenapa dua lapis: agency mengelola banyak brand klien, dan mendaftarkan
+// setiap orang ke setiap brand membuat setiap brand baru berarti mengulang
+// kerja admin. Urutannya penting untuk keamanan: izin yang lebih sempit di
+// tingkat brand tidak boleh tertimpa izin workspace yang lebih luas.
+//
+// BrandRow tetap diisi penuh (nama, public_id, workspace_id) supaya pemanggil
+// seperti gate SSR dan cek unduhan tidak perlu query kedua.
+func EffectiveRole(ctx context.Context, pool *pgxpool.Pool, brandID, userID string) (BrandRow, BrandRole, error) {
+	var row BrandRow
+	var role *string
+	err := pool.QueryRow(ctx, `
+		SELECT b.id, b.name, b.slug, b.public_id, b.ownership_type, b.status, b.client_name, b.industry,
+		       b.primary_language, b.created_at, b.workspace_id,
+		       COALESCE(bm.role, wm.role) AS role
+		FROM brands b
+		LEFT JOIN brand_memberships bm ON bm.brand_id = b.id AND bm.user_id = $2
+		LEFT JOIN workspace_members wm ON wm.workspace_id = b.workspace_id AND wm.user_id = $2
+		WHERE (b.id = $1 OR b.public_id = $1) AND b.deleted_at IS NULL
+		LIMIT 1`, brandID, userID).
+		Scan(&row.ID, &row.Name, &row.Slug, &row.PublicID, &row.OwnershipType, &row.Status,
+			&row.ClientName, &row.Industry, &row.PrimaryLanguage, &row.CreatedAt, &row.WorkspaceID, &role)
+	if err != nil || role == nil {
+		return BrandRow{}, "", errNotFound()
+	}
+	row.Role = *role
+	return row, row.Role, nil
+}
+
+// BrandAccess: port brand() — lookup by id ATAU public_id + peran efektif, cache 30s.
 func BrandAccess(ctx context.Context, pool *pgxpool.Pool, brandID, userID string, minRole string) (BrandRow, error) {
 	cacheKey := brandID + ":" + userID
 	now := time.Now()
@@ -104,20 +161,11 @@ func BrandAccess(ctx context.Context, pool *pgxpool.Pool, brandID, userID string
 	}
 	cacheMu.Unlock()
 
-	var row BrandRow
-	err := pool.QueryRow(ctx, `
-		SELECT b.id, b.name, b.slug, b.public_id, b.ownership_type, b.status, b.client_name, b.industry,
-		       b.primary_language, b.created_at, COALESCE(m.role, 'viewer') AS role
-		FROM brands b
-		JOIN brand_memberships m ON m.brand_id = b.id
-		WHERE (b.id = $1 OR b.public_id = $1) AND m.user_id = $2 AND b.deleted_at IS NULL
-		LIMIT 1`, brandID, userID).
-		Scan(&row.ID, &row.Name, &row.Slug, &row.PublicID, &row.OwnershipType, &row.Status,
-			&row.ClientName, &row.Industry, &row.PrimaryLanguage, &row.CreatedAt, &row.Role)
+	row, role, err := EffectiveRole(ctx, pool, brandID, userID)
 	if err != nil {
-		return BrandRow{}, errNotFound()
+		return BrandRow{}, err
 	}
-	if roleRank[row.Role] < roleRank[minRole] {
+	if roleRank[role] < roleRank[minRole] {
 		return BrandRow{}, errNotFound()
 	}
 
@@ -267,7 +315,7 @@ func BrandJsonList(ctx context.Context, pool *pgxpool.Pool, rows []BrandRow) ([]
 			"id": row.ID, "name": row.Name, "slug": row.Slug, "public_id": row.PublicID,
 			"ownership_type": row.OwnershipType, "status": row.Status, "client_name": row.ClientName,
 			"industry": row.Industry, "primary_language": row.PrimaryLanguage,
-			"created_at": isoMilli(row.CreatedAt),
+			"created_at": isoMilli(row.CreatedAt), "workspace_id": row.WorkspaceID,
 			"readiness_score": score, "websites": websites,
 		}
 		// Parity: JSON create dari app lama tidak punya field role (row polos);

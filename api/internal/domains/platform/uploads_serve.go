@@ -230,11 +230,18 @@ func (d *Deps) uploadKeyOwner(ctx context.Context, key string) (uploadOwner, boo
 //     (alur verifikasi dokumen) — akses admin dicatat ke audit log.
 func (d *Deps) uploadOwnerAllows(ctx context.Context, p uploadPrincipal, owner uploadOwner, key string) bool {
 	if owner.BrandID != "" {
+		// Anggota brand ATAU anggota workspace brand itu. Pemeriksaan langsung ke
+		// DB (bukan lewat BrandAccess yang ber-cache 30 detik) supaya berkas
+		// langsung tertutup begitu keanggotaan dicabut.
 		var member bool
-		if err := d.Pool.QueryRow(ctx,
-			"SELECT EXISTS (SELECT 1 FROM brand_memberships m JOIN brands b ON b.id = m.brand_id "+
-				"WHERE m.brand_id = $1 AND m.user_id = $2 AND b.deleted_at IS NULL)",
-			owner.BrandID, p.UserID).Scan(&member); err == nil && member {
+		if err := d.Pool.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM brand_memberships m JOIN brands b ON b.id = m.brand_id
+				WHERE m.brand_id = $1 AND m.user_id = $2 AND b.deleted_at IS NULL
+			) OR EXISTS (
+				SELECT 1 FROM brands b JOIN workspace_members wm ON wm.workspace_id = b.workspace_id
+				WHERE b.id = $1 AND wm.user_id = $2 AND b.deleted_at IS NULL
+			)`, owner.BrandID, p.UserID).Scan(&member); err == nil && member {
 			return true
 		}
 		return false
