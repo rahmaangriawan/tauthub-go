@@ -582,20 +582,26 @@
 						</svg>
 					</span>
 					<div>
-						<p class="font-bold text-base text-slate-900">{tr("Media Terpilih (")}{mediaCount})</p>
-						<p class="text-xs text-slate-500 mt-0.5">
-							{#if mediaList.length !== mediaCount}{mediaList.length} {tr('Artikel')} · {/if}{tr("Daftar media untuk distribusi konten kampanye ini.")}
-						</p>
+						<div class="flex flex-wrap items-center gap-2">
+							<p class="font-bold text-base text-slate-900">{tr("Media Terpilih (")}{mediaCount})</p>
+							{#if mediaList.length !== mediaCount}
+								<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10.5px] font-semibold text-slate-500">
+									{mediaList.length} {tr('Artikel')}
+								</span>
+							{/if}
+						</div>
+						<p class="text-xs text-slate-500 mt-0.5">{tr("Daftar media untuk distribusi konten kampanye ini.")}</p>
 					</div>
 				</div>
 				<div class="flex flex-wrap items-center justify-end gap-2">
 					<button
-						class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors"
+						class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"
 						type="button"
+						aria-label={tr('Segarkan')}
+						title={tr('Segarkan')}
 						onclick={loadData}
 					>
-						<RefreshCw size={13} class="text-blue-600" />
-						Segarkan
+						<RefreshCw size={15} class="text-blue-600" />
 					</button>
 				</div>
 			</div>
