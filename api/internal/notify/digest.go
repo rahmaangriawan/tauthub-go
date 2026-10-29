@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/email"
 )
 
 // Digest harian untuk notifikasi tier 3.
@@ -123,16 +125,74 @@ func EnqueueDigestJobs(ctx context.Context, pool *pgxpool.Pool, now time.Time, m
 		if used >= EmailHourlyLimit {
 			continue
 		}
-		payload := fmt.Sprintf(`{"digest":true,"userId":%q}`, userID)
-		if _, err := pool.Exec(ctx, `
-			INSERT INTO jobs (id, kind, payload, status, attempts, max_attempts, run_at)
-			VALUES (gen_random_uuid(), 'send_email', $1::jsonb, 'pending', 0, 2, $2)`,
-			payload, now); err != nil {
+
+		// Alamat email diambil di sini, bukan di job: baris email_deliveries
+		// mewajibkan recipient_email, dan job send_email hanya menguras tabel
+		// itu. Job tanpa baris delivery tidak akan mengirim apa pun.
+		var recipient string
+		if err := pool.QueryRow(ctx,
+			`SELECT COALESCE(email, '') FROM users WHERE id = $1 AND is_active`, userID).Scan(&recipient); err != nil {
+			continue
+		}
+		if recipient == "" {
+			continue
+		}
+
+		items, err := loadDigestItems(ctx, pool, userID, types, now.Add(-minAge))
+		if err != nil || len(items) == 0 {
+			continue
+		}
+		subject, htmlBody := BuildDigestBody(items)
+		if subject == "" {
+			continue
+		}
+
+		// Dedupe per hari: satu email ringkasan per user per hari. Kunci
+		// memakai tanggal supaya besok boleh kirim lagi.
+		dedupeKey := "digest:" + now.Format("2006-01-02")
+		uid := userID
+		if _, _, err := email.EnqueueEmail(ctx, pool, email.EnqueueOptions{
+			Template:       "notify-digest",
+			RecipientEmail: recipient,
+			UserID:         &uid,
+			Event:          "notify.digest",
+			Subject:        subject,
+			HTML:           htmlBody,
+			DedupeKey:      &dedupeKey,
+		}); err != nil {
 			continue
 		}
 		queued++
 	}
 	return queued, nil
+}
+
+// loadDigestItems mengambil notifikasi tier 3 yang belum dibaca untuk satu
+// user, terbaru lebih dulu, dibatasi jumlahnya supaya email tidak memanjang.
+func loadDigestItems(ctx context.Context, pool *pgxpool.Pool, userID string, types []string, before time.Time) ([]DigestItem, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT title, COALESCE(body, ''), COALESCE(link, '')
+		FROM notifications
+		WHERE user_id = $1
+		  AND read_at IS NULL
+		  AND expired_at IS NULL
+		  AND type = ANY($2)
+		  AND created_at < $3
+		ORDER BY created_at DESC
+		LIMIT 20`, userID, types, before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]DigestItem, 0, 20)
+	for rows.Next() {
+		var it DigestItem
+		if err := rows.Scan(&it.Title, &it.Body, &it.Link); err != nil {
+			return nil, err
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
 }
 
 // TierTypes mengembalikan daftar tipe notifikasi yang terdaftar pada satu tier,
