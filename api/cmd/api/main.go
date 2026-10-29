@@ -471,6 +471,8 @@ func run() error {
 			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/placement", resolveCampaign(tautDeps.TautPlacementPut))
 			// Jumlah artikel per media (satu domain boleh beberapa artikel).
 			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/placement/{mediaId}/quantity", resolveCampaign(tautDeps.TautPlacementQuantity))
+			// Hapus satu artikel tertentu pada satu media (tombol tong sampah).
+			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/placement/{mediaId}/article/{slot}", resolveCampaign(tautDeps.TautPlacementDeleteArticle))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/finish", resolveCampaign(tautDeps.TautCampaignFinish))
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/profile", resolveCampaign(tautDeps.TautProfileGet))
 			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/profile", resolveCampaign(tautDeps.TautProfilePut))

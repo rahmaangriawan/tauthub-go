@@ -4,10 +4,13 @@ import (
 	"context"
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -610,6 +613,137 @@ func (d *Deps) trimPlacementSlots(ctx context.Context, campaignID, mediaID strin
 			"Artikel "+strings.Join(blocked, ", ")+" sudah punya naskah. Hapus naskahnya dulu sebelum mengurangi jumlah artikel.")
 	}
 	return nil
+}
+
+// TautPlacementDeleteArticle: DELETE /v1/brands/{brandId}/taut/campaigns/{campaignId}/placement/{mediaId}/article/{slot}
+//
+// Menghapus SATU artikel pada media tertentu. Dipakai tombol tong sampah di
+// tiap baris artikel: mengurangi lewat stepper selalu mengambil slot terakhir,
+// padahal yang salah bisa artikel mana saja.
+//
+// Aturan:
+//   - artikel yang sudah punya publikasi tidak bisa dihapus (jejaknya nyata);
+//   - artikel terakhir tidak bisa dihapus dari sini — itu artinya melepas
+//     medianya, dan jalurnya tombol hapus media;
+//   - naskah yang belum pernah terbit ikut dihapus bersama barisnya supaya
+//     tidak tertinggal sebagai dokumen yatim.
+func (d *Deps) TautPlacementDeleteArticle(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	if user == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
+		return
+	}
+	brandID, err := d.brandID(r, user.ID, "writer")
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	campaignID := chiParam(r, "campaignId")
+	mediaID := chiParam(r, "mediaId")
+	slot, convErr := strconv.Atoi(chiParam(r, "slot"))
+	if convErr != nil || slot < 1 {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Nomor artikel tidak valid.")
+		return
+	}
+	if _, err := d.loadCampaignForAgents(r.Context(), campaignID, brandID); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+
+	rows, err := d.queryRows(r.Context(),
+		`SELECT id, slot, status, article_document_id
+		 FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2
+		 ORDER BY slot ASC`, campaignID, mediaID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	active := make([]rowMap, 0, len(rows))
+	hasInactive := false
+	var target *rowMap
+	for i := range rows {
+		row := rows[i]
+		if row.strOr("status", "") != "selected" {
+			hasInactive = true
+			continue
+		}
+		active = append(active, row)
+		if row.intOr("slot", 1) == slot {
+			target = &active[len(active)-1]
+		}
+	}
+	if target == nil {
+		httpx.Error(w, http.StatusNotFound, "Artikel itu tidak ada di media ini.")
+		return
+	}
+	if len(active) <= 1 {
+		httpx.Error(w, http.StatusConflict,
+			"Media ini hanya punya satu artikel. Pakai tombol hapus media kalau ingin melepasnya dari kampanye.")
+		return
+	}
+
+	itemID := target.strOr("id", "")
+	documentID := target.strOr("article_document_id", "")
+	if documentID != "" {
+		pub, pubErr := d.queryRow(r.Context(),
+			"SELECT id FROM publications WHERE document_id = $1 AND media_id = $2 LIMIT 1", documentID, mediaID)
+		if pubErr != nil {
+			d.writeErr(w, pubErr)
+			return
+		}
+		if pub != nil {
+			httpx.Error(w, http.StatusConflict,
+				"Artikel ini sudah punya publikasi, jadi tidak bisa dihapus.")
+			return
+		}
+	}
+
+	// Sisa slot setelah baris ini dibuang, dipakai untuk penomoran ulang.
+	remaining := make([]rowMap, 0, len(active))
+	for _, row := range active {
+		if row.strOr("id", "") != itemID {
+			remaining = append(remaining, row)
+		}
+	}
+
+	err = db.WithPoolTx(r.Context(), d.Pool, func(tx pgx.Tx) error {
+		if _, delErr := tx.Exec(r.Context(),
+			"DELETE FROM taut_campaign_media WHERE id = $1", itemID); delErr != nil {
+			return delErr
+		}
+		if documentID != "" {
+			if _, docErr := tx.Exec(r.Context(),
+				"DELETE FROM content_versions WHERE document_id = $1", documentID); docErr != nil {
+				return docErr
+			}
+			if _, docErr := tx.Exec(r.Context(),
+				"DELETE FROM content_documents WHERE id = $1", documentID); docErr != nil {
+				return docErr
+			}
+		}
+		// Nomor artikel dirapatkan supaya tetap 1..N, tapi hanya bila tidak ada
+		// baris non-aktif: baris 'removed' masih memegang nomornya dan bisa
+		// bertabrakan dengan unique (campaign, media, slot).
+		if hasInactive {
+			return nil
+		}
+		for i, row := range remaining {
+			want := i + 1
+			if row.intOr("slot", 1) == want {
+				continue
+			}
+			if _, upErr := tx.Exec(r.Context(),
+				"UPDATE taut_campaign_media SET slot = $1 WHERE id = $2", want, row.strOr("id", "")); upErr != nil {
+				return upErr
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "media_id": mediaID, "quantity": len(remaining)})
 }
 
 // ---------- finish (tahap 7, Gatekeeper) ----------

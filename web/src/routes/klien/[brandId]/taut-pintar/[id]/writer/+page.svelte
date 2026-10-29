@@ -278,6 +278,45 @@
 	const articleCount = $derived(selected.length);
 	let qtyBusy = $state<string | null>(null);
 
+	// Hapus satu artikel tertentu. Stepper hanya mengurangi dari slot terakhir,
+	// padahal yang kelebihan bisa artikel mana saja; tombol tong sampah di tiap
+	// baris menunjuk langsung artikelnya.
+	let slotDeleteTarget = $state<{ media: PlacementItem; slot: number } | null>(null);
+	let slotDeleteBusy = $state(false);
+	let slotDeleteError = $state('');
+
+	function askDeleteArticle(media: PlacementItem, item: PlacementItem) {
+		if (viewOnly || bulkRunning) return;
+		const slot = item.slot ?? 1;
+		slotDeleteError = '';
+		// Slot yang belum punya naskah tidak perlu dikonfirmasi: isinya kosong,
+		// dan menambah lagi cukup satu klik.
+		if (!hasDoc(item)) {
+			void deleteArticle(media, slot);
+			return;
+		}
+		slotDeleteTarget = { media, slot };
+	}
+
+	async function deleteArticle(media: PlacementItem, slot: number) {
+		if (slotDeleteBusy) return;
+		slotDeleteBusy = true;
+		slotDeleteError = '';
+		try {
+			const res = await apiRequest(`${apiBase}/placement/${media.media_id}/article/${slot}`, { method: 'DELETE' });
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menghapus artikel.')));
+			slotDeleteTarget = null;
+			await load();
+			await loadArticleInfo();
+		} catch (reason) {
+			const msg = reason instanceof Error ? reason.message : tr('Gagal menghapus artikel.');
+			if (slotDeleteTarget) slotDeleteError = msg;
+			else error = msg;
+		} finally {
+			slotDeleteBusy = false;
+		}
+	}
+
 	// ── Buat beberapa artikel sekaligus untuk satu media ────────────────────
 	// Klien yang memesan 4 artikel di satu domain tidak mungkin membuka modal
 	// editor empat kali. Satu dialog berisi satu baris per artikel: topik
@@ -2368,6 +2407,22 @@
 														<span class="expTip">{tr('Tulis Sendiri')}</span>
 													</button>
 												{/if}
+
+												<!-- Hapus artikel INI saja (bukan seluruh media). Hanya
+												     muncul saat media punya lebih dari satu artikel;
+												     kalau tinggal satu, jalurnya tombol hapus media. -->
+												{#if qty > 1}
+													<button
+														type="button"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 text-xs font-semibold transition-colors hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
+														aria-label={`${tr('Hapus artikel')} ${item.slot ?? 1}`}
+														disabled={bulkRunning || viewOnly || slotDeleteBusy}
+														onclick={() => askDeleteArticle(m, item)}
+													>
+														<Trash2 size={14} class="shrink-0" />
+														<span class="expTip">{tr('Hapus artikel ini')}</span>
+													</button>
+												{/if}
 											</div>
 										</div>
 									</div>
@@ -2376,6 +2431,63 @@
 						{/if}
 					</div>
 				{/each}
+				</div>
+			{/if}
+
+			{#if slotDeleteTarget}
+				<!-- Konfirmasi hanya untuk artikel yang sudah punya naskah: yang kosong
+				     dihapus langsung karena isinya memang belum ada. -->
+				<div
+					class="fixed inset-0 z-[70] flex items-center justify-center p-4"
+					style="background-color: rgba(15, 23, 42, 0.55);"
+					role="presentation"
+					onclick={(e) => { if (e.target === e.currentTarget && !slotDeleteBusy) slotDeleteTarget = null; }}
+				>
+					<div
+						class="flex w-full max-w-md flex-col overflow-hidden rounded-[5px] border shadow-2xl"
+						style="border-color: var(--border); background-color: var(--card, #fff);"
+						role="dialog"
+						aria-modal="true"
+						tabindex="-1"
+						aria-label={tr('Hapus artikel')}
+						onclick={(e) => e.stopPropagation()}
+						onkeydown={(e) => { if (e.key === 'Escape' && !slotDeleteBusy) slotDeleteTarget = null; }}
+					>
+						<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
+							<div class="flex items-center gap-2.5 text-sm font-bold" style="color: var(--destructive);">
+								<Trash2 size={18} />
+								<span>{tr('Hapus Artikel')} {slotDeleteTarget.slot}?</span>
+							</div>
+							<button
+								class="rounded-[5px] p-1.5 text-muted-foreground hover:bg-secondary disabled:opacity-40"
+								type="button"
+								aria-label={tr('Tutup')}
+								disabled={slotDeleteBusy}
+								onclick={() => (slotDeleteTarget = null)}
+							><X size={16} /></button>
+						</div>
+						<div class="space-y-3 p-5">
+							<p class="text-sm font-semibold">{slotDeleteTarget.media.name}</p>
+							<p class="text-xs leading-relaxed text-muted-foreground">
+								{tr('Artikel ini sudah punya naskah tetapi belum terbit. Naskahnya ikut terhapus dan tidak bisa dikembalikan.')}
+							</p>
+							{#if slotDeleteError}
+								<p class="flex items-center gap-1.5 text-xs" style="color: var(--destructive);"><CircleAlert size={14} /> {slotDeleteError}</p>
+							{/if}
+						</div>
+						<div class="flex items-center justify-end gap-2.5 border-t px-5 py-3.5" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
+							<button class="app-btn app-btn-soft text-xs" type="button" disabled={slotDeleteBusy} onclick={() => (slotDeleteTarget = null)}>{tr('Batal')}</button>
+							<button
+								class="app-btn text-xs font-semibold"
+								style="background-color: var(--destructive); color: #fff;"
+								type="button"
+								disabled={slotDeleteBusy}
+								onclick={() => { if (slotDeleteTarget) void deleteArticle(slotDeleteTarget.media, slotDeleteTarget.slot); }}
+							>
+								{#if slotDeleteBusy}<LoaderCircle size={13} class="animate-spin" /> <span>{tr('Menghapus…')}</span>{:else}<Trash2 size={13} /> <span>{tr('Ya, Hapus Artikel')}</span>{/if}
+							</button>
+						</div>
+					</div>
 				</div>
 			{/if}
 
