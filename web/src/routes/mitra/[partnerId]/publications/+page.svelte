@@ -960,12 +960,15 @@
 		{#if openIncomeID === p.id}
 			<!-- Penutup transparan: klik di luar menutup popover tanpa membuka detail. -->
 			<div
-				class="fixed inset-0 z-40"
+				class="fixed inset-0 z-40 max-md:touch-none max-md:bg-slate-900/30"
 				role="presentation"
 				onclick={(e) => { e.stopPropagation(); openIncomeID = null; }}
 			></div>
+			<!-- HP: popover dilepas dari kolom tabel dan dipasang sebagai panel
+			     mengambang selebar layar minus margin, supaya tidak pernah keluar
+			     viewport. Desktop tetap menempel di bawah nominal. -->
 			<div
-				class="app-card absolute right-0 top-full z-50 mt-1 w-64 p-3 text-left shadow-lg"
+				class="app-card absolute right-0 top-full z-50 mt-1 w-64 p-3 text-left shadow-lg max-md:fixed max-md:inset-x-3 max-md:bottom-3 max-md:top-auto max-md:mt-0 max-md:w-auto max-md:max-h-[70dvh] max-md:overflow-y-auto max-md:p-4 max-md:shadow-xl"
 				style="border: 1px solid var(--border);"
 				role="dialog"
 				tabindex="-1"
@@ -973,7 +976,19 @@
 				onclick={(e) => e.stopPropagation()}
 				onkeydown={(e) => { if (e.key === 'Escape') openIncomeID = null; }}
 			>
-				<p class="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Rincian penghasilan')}</p>
+				<div class="mb-2 flex items-start justify-between gap-2">
+					<p class="mt-0.5 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Rincian penghasilan')}</p>
+					<!-- Tombol tutup hanya di HP: panel mengambang menyisakan ruang
+					     di atasnya, jadi butuh jalan keluar yang terlihat jelas. -->
+					<button
+						type="button"
+						class="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 md:hidden"
+						aria-label={tr('Tutup')}
+						onclick={(e) => { e.stopPropagation(); openIncomeID = null; }}
+					>
+						<X size={15} />
+					</button>
+				</div>
 				<dl class="space-y-1.5 text-[13px] tabular-nums">
 					<div class="flex items-center justify-between gap-3">
 						<dt class="text-muted-foreground">{tr('Harga diajukan')}</dt>
