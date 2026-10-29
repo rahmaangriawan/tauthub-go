@@ -19,6 +19,7 @@
 	import { apiRequest } from '$lib/auth';
 	import { wordCountLabel, normalizeWordCountMode } from '$lib/media/word-count';
 	import { normalizeLinkDurationMonths } from '$lib/media/link-duration';
+	import { mediaDistribution } from '$lib/media/distribution';
 	import { getCategoryTone } from '$lib/media/category-tone';
 	import { MEDIA_LABEL } from '../taut-pintar/_shared';
 
@@ -46,6 +47,7 @@
 		health_score: number | null;
 		health_computed_at?: string | null;
 		health_breakdown?: Record<string, unknown> | null;
+		published_count?: number | null;
 		dewan_pers_verified?: boolean | null;
 		domain_verified?: boolean | null;
 		seo_da?: number | null;
@@ -108,6 +110,19 @@
 		media.rating_avg != null && media.rating_avg > 0
 			? `${media.rating_avg.toFixed(1).replace('.', ',')}/5`
 			: '—'
+	);
+	// Rekam jejak distribusi: jumlah artikel yang sudah terbit lewat media ini
+	// di seluruh platform. Di tabel katalog ini tampil sebagai baris kecil di
+	// bawah nama media; di modal perlu ikut tampil supaya informasinya tidak
+	// hilang di layar kecil.
+	const dist = $derived(mediaDistribution(media.health_breakdown, media.published_count));
+	const distText = $derived(
+		!dist.known ? '—' : dist.published > 0 ? `${dist.published} ${tr('artikel')}` : tr('Belum ada distribusi')
+	);
+	const distTitle = $derived(
+		dist.published > 0
+			? `${dist.published} ${tr('artikel terdistribusi')} ${tr('— jumlah artikel yang sudah terbit lewat media ini di seluruh platform Tauthub.')}`
+			: tr('Belum ada distribusi')
 	);
 	const ratingTitle = $derived.by(() => {		const avg = media.rating_avg;
 		if (avg == null || !(avg > 0)) return tr('Belum ada penilaian dari klien.');
@@ -522,6 +537,10 @@
 				<div class="detailMetricItem" title={ratingTitle}>
 					<span class="detailMetricLabel">Rating:</span>
 					<span class="detailMetricValue">{ratingText}</span>
+				</div>
+				<div class="detailMetricItem" title={distTitle}>
+					<span class="detailMetricLabel">{tr('Distribusi')}:</span>
+					<span class="detailMetricValue" class:detailMetricMuted={dist.published === 0}>{distText}</span>
 				</div>
 			</div>
 
@@ -1140,6 +1159,12 @@
 		font-weight: 700;
 		color: #16a34a;
 		font-variant-numeric: tabular-nums;
+	}
+	/* Nilai kosong/nol (mis. "Belum ada distribusi") dibedakan dari angka nyata
+	   supaya tidak terbaca sebagai data. */
+	.detailMetricMuted {
+		font-weight: 500;
+		color: #64748b;
 	}
 
 	/* Body & Columns */

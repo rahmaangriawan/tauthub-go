@@ -3496,6 +3496,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Acak": "Shuffle",
   "Acak urutan media — berubah otomatis tiap muat ulang halaman": "Shuffle media order — changes automatically on every page load",
   "Belum ada distribusi": "No distributions yet",
+  "Distribusi": "Distribution",
   "Jumlah artikel yang sudah terbit lewat media ini di seluruh platform Tauthub.": "Articles already published through this media across the Tauthub platform.",
   "Kategori / rubrik wajib dipilih.": "Category / rubric is required.",
   "OPSIONAL": "OPTIONAL",
