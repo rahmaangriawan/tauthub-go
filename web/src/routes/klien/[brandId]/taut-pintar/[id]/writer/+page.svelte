@@ -2735,7 +2735,7 @@
 	<!-- Kolom Kiri: Total Tagihan Akhir -->
 	<div class="relative inline-flex items-center max-sm:order-2 max-sm:min-w-0 max-sm:flex-1">
 		<button
-			class="flex items-center gap-3 rounded-[5px] border border-emerald-200/90 bg-emerald-50/70 hover:bg-emerald-50/90 px-4 py-2 text-left transition-colors cursor-pointer max-sm:h-11 max-sm:w-full max-sm:min-w-0 max-sm:items-center max-sm:gap-2 max-sm:px-3 max-sm:py-0"
+			class="flex items-center gap-3 rounded-lg border border-emerald-200/90 bg-emerald-50/70 hover:bg-emerald-50/90 px-4 py-2 text-left transition-colors cursor-pointer max-sm:h-11 max-sm:w-full max-sm:min-w-0 max-sm:items-center max-sm:gap-2 max-sm:px-3 max-sm:py-0"
 			type="button"
 			aria-expanded={costPopoverOpen}
 			onmouseenter={() => (costPopoverOpen = true)}
