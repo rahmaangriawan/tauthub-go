@@ -208,7 +208,7 @@ func (d *Deps) OperationsBrands(w http.ResponseWriter, r *http.Request) {
 	}
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 	base := `
-	  SELECT b.id, b.name, b.slug, u.email AS owner_email,
+	  SELECT b.id, b.name, b.slug, u.email AS owner_email, np.wa_number AS owner_wa_number,
 	    (SELECT COUNT(*) FROM brand_memberships bm WHERE bm.brand_id = b.id) AS member_count,
 	    COALESCE(q.plan_code, 'starter') AS plan_code,
 	    COALESCE(q.generation_enabled, TRUE) AS generation_enabled,

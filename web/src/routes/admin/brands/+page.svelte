@@ -14,7 +14,7 @@
 	import { platformError } from '../_platform';
 
 	type Brand = {
-		id: string; name: string; slug: string; owner_email: string;
+		id: string; name: string; slug: string; owner_email: string; owner_wa_number: string | null;
 		member_count: number; plan_code: string; generation_enabled: boolean; created_at: string;
 	};
 
@@ -103,7 +103,16 @@
 									</div>
 								</div>
 							</td>
-							<td class="px-4 py-2.5">{brand.owner_email}</td>
+							<td class="px-4 py-2.5">
+								<div class="min-w-0">
+									<p class="truncate">{brand.owner_email}</p>
+									{#if brand.owner_wa_number}
+										<p class="truncate text-xs text-muted-foreground">{brand.owner_wa_number}</p>
+									{:else}
+										<p class="text-xs text-muted-foreground">Nomor WA belum diisi</p>
+									{/if}
+								</div>
+							</td>
 							<td class="px-4 py-2.5"><Badge label={brand.plan_code} tone="accent" /></td>
 							<td class="px-4 py-2.5 tabular-nums">{brand.member_count}</td>
 							<td class="px-4 py-2.5">
