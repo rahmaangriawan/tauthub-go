@@ -25,7 +25,7 @@
 
 	type GenQuota = { user_id: string; writer_generate_quota: number | null; effective: number };
 	type User = {
-		id: string; email: string; display_name: string; role?: string;
+		id: string; email: string; display_name: string; role?: string; wa_number?: string | null;
 		is_active: boolean; is_approved?: boolean; brand_count: number; created_at: string;
 		writer_generate_quota?: number | null;
 		available_tc?: number | null;
@@ -459,7 +459,7 @@
 						class="w-full bg-transparent text-sm outline-none"
 						name="search"
 						aria-label={tr("Cari user")}
-						placeholder={tr("Cari nama atau email...")}
+						placeholder={tr("Cari nama, email, atau nomor WA...")}
 						bind:value={searchText}
 					/>
 				</label>
@@ -495,6 +495,13 @@
 											{#if user.id === currentUserId}<Badge label="Anda" tone="neutral" />{/if}
 										</p>
 										<p class="text-xs text-muted-foreground">{user.email}</p>
+										<p class="text-xs text-muted-foreground">
+											{#if user.wa_number}
+												<span class="font-medium">{tr("WA")}</span> <a class="underline" style="color: inherit;" href={`https://wa.me/${user.wa_number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer">{user.wa_number}</a>
+											{:else}
+												{tr("Nomor WA belum diisi")}
+											{/if}
+										</p>
 										{#if user.role === 'partner'}
 											<Badge label={tr("Mitra")} tone="accent" />
 										{:else if user.role === 'client'}

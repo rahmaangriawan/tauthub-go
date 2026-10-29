@@ -3138,6 +3138,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Tayang": "Live",
   "Tautan": "Link",
   "Cari nama, email, atau nomor WA…": "Search name, email, or WA number…",
+  "Cari nama, email, atau nomor WA...": "Search name, email, or WA number...",
+  "Nomor WA belum diisi": "WA number not set yet",
   "Cari nama, slug, owner, atau nomor WA...": "Search name, slug, owner, or WA number...",
   "Dofollow": "Dofollow",
   "Nofollow": "Nofollow",

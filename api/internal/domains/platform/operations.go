@@ -208,7 +208,7 @@ func (d *Deps) OperationsBrands(w http.ResponseWriter, r *http.Request) {
 	}
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 	base := `
-	  SELECT b.id, b.name, b.slug, u.email AS owner_email, np.wa_number AS owner_wa_number,
+	  SELECT b.id, b.name, b.slug, u.email AS owner_email,
 	    (SELECT COUNT(*) FROM brand_memberships bm WHERE bm.brand_id = b.id) AS member_count,
 	    COALESCE(q.plan_code, 'starter') AS plan_code,
 	    COALESCE(q.generation_enabled, TRUE) AS generation_enabled,
@@ -216,22 +216,14 @@ func (d *Deps) OperationsBrands(w http.ResponseWriter, r *http.Request) {
 	  FROM brands b
 	  JOIN users u ON u.id = b.created_by
 	  LEFT JOIN brand_ai_quotas q ON q.brand_id = b.id
-	  LEFT JOIN notification_preferences np ON np.user_id = b.created_by
 	  WHERE b.deleted_at IS NULL`
 	var rows []rowMap
 	var err error
 	if search != "" {
 		like := "%" + search + "%"
-		args := []any{like, like, like}
-		where := "b.name LIKE $1 OR b.slug LIKE $2 OR u.email LIKE $3"
-		// Nomor WhatsApp pemilik brand, dicocokkan pada digitnya saja supaya
-		// "2922" menemukan "+62 812-2922".
-		for _, term := range phoneSearchTerms(search) {
-			args = append(args, "%"+term+"%")
-			where += " OR regexp_replace(COALESCE(np.wa_number, ''), '[^0-9]', '', 'g') LIKE $" + ptItoa(len(args))
-		}
 		rows, err = d.queryRows(r.Context(),
-			base+" AND ("+where+") ORDER BY b.created_at DESC LIMIT 200", args...)
+			base+" AND (b.name LIKE $1 OR b.slug LIKE $2 OR u.email LIKE $3) ORDER BY b.created_at DESC LIMIT 200",
+			like, like, like)
 	} else {
 		rows, err = d.queryRows(r.Context(), base+" ORDER BY b.created_at DESC LIMIT 200")
 	}
@@ -2082,8 +2074,9 @@ func (d *Deps) operationsUsersList(w http.ResponseWriter, r *http.Request) {
                     FROM brand_memberships bm
                     JOIN credit_wallets w ON w.brand_id = bm.brand_id
                    WHERE bm.user_id = u.id), 0) AS available_tc,
-        u.created_at
-      FROM users u`
+        u.created_at, np.wa_number AS wa_number
+      FROM users u
+      LEFT JOIN notification_preferences np ON np.user_id = u.id`
 	conditions := []string{}
 	params := []any{}
 	if role == "client" || role == "partner" {
@@ -2094,7 +2087,14 @@ func (d *Deps) operationsUsersList(w http.ResponseWriter, r *http.Request) {
 		like := "%" + search + "%"
 		params = append(params, like, like)
 		base2 := len(params) - 1
-		conditions = append(conditions, "(u.email LIKE $"+ptItoa(base2)+" OR u.display_name LIKE $"+ptItoa(base2+1)+")")
+		// Email/nama, plus nomor WhatsApp pada digitnya saja — "2922" harus
+		// menemukan nomor yang tersimpan "+62 812-2922".
+		cond := "u.email LIKE $" + ptItoa(base2) + " OR u.display_name LIKE $" + ptItoa(base2+1)
+		for _, term := range phoneSearchTerms(search) {
+			params = append(params, "%"+term+"%")
+			cond += " OR regexp_replace(COALESCE(np.wa_number, ''), '[^0-9]', '', 'g') LIKE $" + ptItoa(len(params))
+		}
+		conditions = append(conditions, "("+cond+")")
 	}
 	clause := ""
 	if len(conditions) > 0 {
@@ -2117,6 +2117,7 @@ func (d *Deps) operationsUsersList(w http.ResponseWriter, r *http.Request) {
 			"writer_generate_quota": row.anyOrNil("writer_generate_quota"),
 			// Saldo TC akun klien: total available di seluruh brand miliknya.
 			"available_tc": row.numOr("available_tc"),
+			"wa_number":    row.anyOrNil("wa_number"),
 			"created_at":   row.anyOrNil("created_at"),
 		})
 	}

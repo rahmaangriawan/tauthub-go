@@ -202,13 +202,11 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 								active:
 									pathname.startsWith('/admin/partners') ||
 									pathname.startsWith('/admin/sindikasi-konten') ||
-									pathname.startsWith('/admin/integrations') ||
-									pathname.startsWith('/admin/brands'),
+									pathname.startsWith('/admin/integrations'),
 								children: [
 									{ label: i18n.t.nav_admin.partners, href: '/admin/partners', active: pathname.startsWith('/admin/partners') },
 									{ label: i18n.t.nav_admin.sindikasi, href: '/admin/sindikasi-konten', active: pathname.startsWith('/admin/sindikasi-konten') },
-									{ label: tr('Listing Media Mitra'), href: '/admin/integrations', active: pathname.startsWith('/admin/integrations') },
-									{ label: i18n.t.nav_admin.brands, href: '/admin/brands', active: pathname.startsWith('/admin/brands') }
+									{ label: tr('Listing Media Mitra'), href: '/admin/integrations', active: pathname.startsWith('/admin/integrations') }
 								]
 							}
 						]
