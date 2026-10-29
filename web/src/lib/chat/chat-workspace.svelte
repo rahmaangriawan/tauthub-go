@@ -9,6 +9,7 @@
 	// Sebelum itu "Belum dimulai"; setelah lewat "expired" → komposer mati,
 	// riwayat tetap bisa dibaca dua pihak.
 	import { onMount, onDestroy } from 'svelte';
+	import { fade, fly } from 'svelte/transition';
 	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search, Pencil, ArrowLeft, ChevronRight, X } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { refreshChatUnreadNow } from '$lib/chat/chat-unread.svelte';
@@ -89,6 +90,9 @@
 	let composerEl = $state<HTMLTextAreaElement | null>(null);
 
 	const DAY_MS = 86_400_000;
+	// Animasi dimatikan untuk pengguna yang meminta gerak minimal di OS.
+	const reduceMotion =
+		typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 	// Palet avatar sama dengan tabel ringkasan (hash nama → indeks).
 	const AVA_BG = ['#e0e7ff', '#dcfce7', '#fef3c7', '#f1f5f9', '#dbeafe', '#fce7f3'];
@@ -210,6 +214,12 @@
 		if (opts.reveal !== false) {
 			mobilePane = 'thread';
 			infoOpen = false;
+			// Kepala ruang pesan langsung memakai data dari daftar, dan pesan lama
+			// dibuang. Tanpa ini percakapan sebelumnya sempat tampil sekejap di
+			// bawah nama media yang baru dibuka.
+			const known = threads.find((t) => t.id === id);
+			if (known) active = known;
+			messages = [];
 		}
 		loadingThread = true;
 		sendError = '';
@@ -394,7 +404,7 @@
 
 <div class="grid h-full min-h-0 gap-3 lg:grid-cols-[290px_minmax(0,1fr)] xl:grid-cols-[290px_minmax(0,1fr)_310px]">
 	<!-- Kolom 1: daftar forum -->
-	<section class="app-card flex min-h-0 flex-col overflow-hidden p-0 {mobilePane === 'thread' ? 'max-lg:hidden' : ''}">
+	<section class="paneList app-card flex min-h-0 flex-col overflow-hidden p-0 {mobilePane === 'thread' ? 'max-lg:hidden' : ''}">
 		<div class="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
 			<MessagesSquare size={15} style="color: var(--primary);" />
 			<p class="text-[13px] font-bold">{tr('Percakapan')}</p>
@@ -496,7 +506,7 @@
 	</section>
 
 	<!-- Kolom 2: ruang pesan -->
-	<section class="app-card flex min-h-0 flex-col overflow-hidden p-0 {mobilePane === 'list' ? 'max-lg:hidden' : ''}">
+	<section class="paneThread app-card flex min-h-0 flex-col overflow-hidden p-0 {mobilePane === 'list' ? 'max-lg:hidden' : ''}">
 		{#if active}
 			<!-- HP: kembali ke daftar, judul artikel sebagai konteks, dan tombol nama
 			     media di kanan untuk membuka panel info. Desktop memakai judul lengkap. -->
@@ -561,6 +571,13 @@
 			</div>
 
 			<div bind:this={messagesEl} class="min-h-0 flex-1 space-y-1 overflow-y-auto bg-slate-50/60 px-4 py-4">
+				{#if loadingThread && messages.length === 0}
+					<!-- Ruang pesan baru dibuka: tampilkan satu keadaan memuat saja, bukan
+					     catatan sesi yang sedetik kemudian berganti jadi pesan. -->
+					<div class="flex h-full items-center justify-center">
+						<p class="text-xs text-muted-foreground">{tr('Memuat…')}</p>
+					</div>
+				{:else}
 				<div class="mx-auto mb-3 max-w-md rounded-xl bg-white/80 px-3 py-2 text-center text-[11px] leading-relaxed text-slate-500 ring-1 ring-slate-100">
 					{tr('Sesi obrolan berlaku 3×24 jam sejak pesan pertama. Setelah berakhir, riwayat tetap dapat dibaca.')}
 				</div>
@@ -587,8 +604,6 @@
 						</div>
 					{/if}
 				{/each}
-				{#if loadingThread}
-					<p class="py-3 text-center text-xs text-muted-foreground">{tr('Memuat…')}</p>
 				{/if}
 			</div>
 
@@ -715,9 +730,11 @@
 			class="absolute inset-0 h-full w-full cursor-default bg-slate-900/40"
 			aria-label={tr('Tutup')}
 			onclick={() => (infoOpen = false)}
+			transition:fade={{ duration: reduceMotion ? 0 : 160 }}
 		></button>
 		<div
 			class="absolute inset-y-0 right-0 flex w-[88%] max-w-sm flex-col gap-3 overflow-y-auto rounded-l-2xl bg-slate-100 p-3 shadow-2xl"
+			transition:fly={{ x: reduceMotion ? 0 : 340, duration: reduceMotion ? 0 : 240 }}
 			role="dialog"
 			aria-modal="true"
 			aria-label={`${tr('Info media')} — ${active.media_name}`}
@@ -749,3 +766,44 @@
 		}}
 	/>
 {/if}
+
+<style>
+	/* HP: daftar dan ruang pesan bergantian di kartu yang sama. Pergantiannya
+	   digeser halus supaya terbaca sebagai satu layar yang berganti isi, bukan
+	   dua kartu yang berkedip. Di layar lebar animasinya mati karena keduanya
+	   tampil berdampingan. */
+	@media (max-width: 1023.98px) {
+		.paneList {
+			animation: paneFromLeft 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+		}
+		.paneThread {
+			animation: paneFromRight 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+		}
+	}
+	@keyframes paneFromLeft {
+		from {
+			opacity: 0;
+			transform: translateX(-16px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
+	}
+	@keyframes paneFromRight {
+		from {
+			opacity: 0;
+			transform: translateX(20px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.paneList,
+		.paneThread {
+			animation: none;
+		}
+	}
+</style>
