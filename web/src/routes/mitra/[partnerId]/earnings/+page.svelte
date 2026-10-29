@@ -15,6 +15,11 @@
 
 	const PAGE_SIZE = 20;
 
+	// Favicon media di baris transaksi: domain diambil dari website_url media.
+	const mediaDomain = (url: string | null | undefined): string =>
+		(url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').toLowerCase();
+	let faviconFailed = $state<Record<string, boolean>>({});
+
 	const partnerId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || partnerId}`);
 
@@ -398,9 +403,21 @@
 {/snippet}
 
 {#snippet earnMediaCell(e: any)}
+	{@const domain = mediaDomain(e.media_website_url)}
 	<div class="flex min-w-0 items-center gap-2">
-		<span class="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[11px] font-semibold" style="background: var(--muted); color: var(--muted-foreground);">
-			{(e.media_name ?? '?').charAt(0).toUpperCase()}
+		<span class="flex h-7 w-7 flex-none items-center justify-center overflow-hidden rounded-full text-[11px] font-semibold" style="background: var(--muted); color: var(--muted-foreground);">
+			{#if domain && !faviconFailed[e.id]}
+				<img
+					src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`}
+					alt=""
+					class="h-full w-full object-cover"
+					loading="lazy"
+					decoding="async"
+					onerror={() => (faviconFailed = { ...faviconFailed, [e.id]: true })}
+				/>
+			{:else}
+				{(e.media_name ?? '?').charAt(0).toUpperCase()}
+			{/if}
 		</span>
 		<span class="min-w-0 text-muted-foreground" title={e.media_name ?? ''}>{e.media_name ?? '-'}</span>
 	</div>
