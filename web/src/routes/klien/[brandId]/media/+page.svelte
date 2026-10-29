@@ -1285,6 +1285,19 @@
 			<div class="selectedListItems">
 				{#each selectedListFiltered as it (it.id)}
 					<div class="selectedListRow">
+						<span class="selectedListRowFavicon">
+							{#if it.domain && !faviconFailed[it.id]}
+								<img
+									src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(it.domain)}&sz=128`}
+									alt=""
+									loading="lazy"
+									decoding="async"
+									onerror={() => (faviconFailed = { ...faviconFailed, [it.id]: true })}
+								/>
+							{:else}
+								{it.name.trim().charAt(0).toUpperCase() || '?'}
+							{/if}
+						</span>
 						<span class="selectedListRowName" title={it.name}>{it.name}</span>
 						<span class="selectedListRowPrice">Rp {fmt(it.price)}</span>
 						<button
