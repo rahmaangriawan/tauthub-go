@@ -1662,7 +1662,14 @@
 		}
 		.detailHeaderActions {
 			width: 100%;
-			justify-content: space-between;
+			/* Bagikan dan Ekspor Info menempel di kiri sebagai satu kelompok,
+			   tombol tutup didorong mentok ke kanan (margin-left: auto di
+			   bawah). space-between menyebar ketiganya rata, sehingga tombol
+			   tutup berhenti di tengah dan tidak lagi di pojok. */
+			justify-content: flex-start;
+		}
+		.detailCloseBtn {
+			margin-left: auto;
 		}
 		.detailMetricsRow {
 			padding: 12px 18px;
