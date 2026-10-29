@@ -738,7 +738,7 @@
 											class="whitespace-nowrap text-[11.5px] font-medium text-slate-600"
 											title={m.article.links.count > 0 ? linkReport(m.article.links) : undefined}
 										>
-											{#if m.article.links.count > 0}{m.article.links.count} link{:else}{tr('Tidak ada link')}{/if}
+											{#if m.article.links.count > 0}{linkReport(m.article.links)}{:else}{tr('Tidak ada link')}{/if}
 										</span>
 									</div>
 								</div>
@@ -840,7 +840,7 @@
 										{#if m.article.links.count > 0}
 											<span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
 												<LinkIcon size={12} class="text-slate-400 shrink-0" />
-												{m.article.links.count} link · {linkReport(m.article.links)}
+												{linkReport(m.article.links)}
 											</span>
 										{:else}
 											<span class="text-xs text-muted-foreground">{tr("Tidak ada link")}</span>
