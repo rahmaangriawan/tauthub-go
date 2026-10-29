@@ -2731,11 +2731,11 @@
 			{/if}
 
 				<TautBottomBar fullWidth>
-<div class="flex w-full flex-wrap items-center justify-between gap-4 py-1 max-sm:gap-3.5 max-sm:py-0">
+<div class="flex w-full flex-wrap items-center justify-between gap-4 py-1 max-sm:flex-nowrap max-sm:items-center max-sm:gap-2 max-sm:py-0">
 	<!-- Kolom Kiri: Total Tagihan Akhir -->
-	<div class="relative inline-flex items-center">
+	<div class="relative inline-flex items-center max-sm:order-2 max-sm:min-w-0 max-sm:flex-1">
 		<button
-			class="flex items-center gap-3 rounded-[5px] border border-emerald-200/90 bg-emerald-50/70 hover:bg-emerald-50/90 px-4 py-2 text-left transition-colors cursor-pointer"
+			class="flex items-center gap-3 rounded-[5px] border border-emerald-200/90 bg-emerald-50/70 hover:bg-emerald-50/90 px-4 py-2 text-left transition-colors cursor-pointer max-sm:w-full max-sm:min-w-0 max-sm:gap-2 max-sm:px-2.5 max-sm:py-1.5"
 			type="button"
 			aria-expanded={costPopoverOpen}
 			onmouseenter={() => (costPopoverOpen = true)}
@@ -2744,7 +2744,7 @@
 			onblur={() => { if (!costPinned) costPopoverOpen = false; }}
 			onclick={() => { costPinned = !costPinned; costPopoverOpen = costPinned; }}
 		>
-			<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[5px] bg-emerald-100/90 text-emerald-700">
+			<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[5px] bg-emerald-100/90 text-emerald-700 max-sm:hidden">
 				<Wallet size={18} strokeWidth={2.2} />
 			</div>
 			<div>
@@ -2752,7 +2752,7 @@
 					{tr('TOTAL TAGIHAN AKHIR')}
 					<Info size={11} class="opacity-70" />
 				</span>
-				<span class="selectedStatPriceVal selectedStatTotalVal text-lg sm:text-xl font-extrabold text-emerald-700 leading-tight">
+				<span class="selectedStatPriceVal selectedStatTotalVal text-lg sm:text-xl font-extrabold text-emerald-700 leading-tight max-sm:text-[16px]">
 					{toRp(cost.total)}
 				</span>
 			</div>
@@ -2833,16 +2833,16 @@
 	</div>
 
 	<!-- Kolom Kanan: Tombol Aksi -->
-	<div class="flex items-center gap-2.5 max-sm:grid max-sm:w-full max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:gap-2.5">
+	<div class="flex items-center gap-2.5 max-sm:contents">
 		<!-- Kembali mengarah ke langkah sebelumnya: Katalog Media
 		     (klien memilih/menambah media), dengan konteks kampanye
 		     dibawa agar centang pilihan tetap terjaga. -->
-			<button class="inline-flex h-10 items-center justify-center px-4.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-[13px] font-medium transition-all whitespace-nowrap max-sm:h-12 max-sm:w-12 max-sm:px-0" type="button" aria-label={tr('Kembali')} title={tr('Kembali')} onclick={() => goto(`/klien/${brandUrl}/media?campaign=${campaignId}`)}>
+			<button class="inline-flex h-10 items-center justify-center px-4.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-[13px] font-medium transition-all whitespace-nowrap max-sm:order-1 max-sm:h-11 max-sm:w-11 max-sm:shrink-0 max-sm:px-0" type="button" aria-label={tr('Kembali')} title={tr('Kembali')} onclick={() => goto(`/klien/${brandUrl}/media?campaign=${campaignId}`)}>
 				<ArrowLeft size={17} class="hidden max-sm:block" />
 				<span class="max-sm:hidden">{tr('Kembali')}</span>
 			</button>
-			<div class="relative">
-				<button class="h-10 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 hover:-translate-y-px text-white text-[13px] font-semibold inline-flex items-center justify-center gap-1.5 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 max-sm:h-12 max-sm:w-full max-sm:px-3" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} aria-haspopup="dialog" aria-expanded={readinessOpen} onclick={publish}>
+			<div class="relative max-sm:order-3 max-sm:shrink-0">
+				<button class="h-10 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 hover:-translate-y-px text-white text-[13px] font-semibold inline-flex items-center justify-center gap-1.5 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 max-sm:h-11 max-sm:w-auto max-sm:px-4" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} aria-haspopup="dialog" aria-expanded={readinessOpen} onclick={publish}>
 					{#if coverChecking || distributing}<LoaderCircle size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
 					<span class="max-sm:hidden">{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
 					<span class="hidden max-sm:inline">{coverChecking ? tr('Memeriksa…') : distributing ? tr('Menerbitkan…') : tr('Lanjut')}</span>
