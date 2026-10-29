@@ -945,9 +945,10 @@
 	{@const gross = incomeGross(p)}
 	{@const cut = incomeCut(p)}
 	{@const pct = cutPercentLabel(p)}
-	<div class="relative flex justify-end">
+	<!-- Di tabel nominal rata kanan; di kartu HP dia mengikuti kolom, jadi rata kiri. -->
+	<div class="relative flex justify-end max-md:justify-start">
 		<button
-			class="inline-flex items-center gap-1 text-right tabular-nums underline-offset-2 hover:underline"
+			class="inline-flex items-center gap-1 text-right tabular-nums underline-offset-2 hover:underline max-md:text-left"
 			aria-haspopup="dialog"
 			aria-expanded={openIncomeID === p.id}
 			title={tr('Lihat rincian penghasilan')}
