@@ -2214,6 +2214,17 @@
 							<strong>{selectedIds.size} {tr('Media dipilih')}</strong>
 							<span>{tr('Total')} Rp {fmt(totalSelectedPrice)}</span>
 						</div>
+						<!-- Kosongkan pilihan. Ikon saja dan merah supaya beda jelas
+						     dari tombol ringkasan di sebelahnya. -->
+						<button
+							class="selectedBarClear"
+							type="button"
+							aria-label={tr('Hapus pilihan')}
+							title={tr('Hapus pilihan')}
+							onclick={clearSelection}
+						>
+							<Trash2 size={17} />
+						</button>
 						<!-- Buka modal ringkasan kampanye (fungsi sama dengan tombol utama). -->
 						<button
 							class="selectedBarToggle"

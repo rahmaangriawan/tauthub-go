@@ -2189,17 +2189,22 @@ button.selectedStepChip:disabled,
 @media (max-width: 768px) {
   .vdFull { display: none; }
   .vdShort { display: inline; }
-  /* Bookmark di kolom Aksi disembunyikan di HP — sudah ada di panel Detail. */
 }
 
-/* Harga: kolomnya disembunyikan di HP, nilainya dipindah ke bawah nama media. */
+/* Harga: kolomnya disembunyikan di HP, nilainya dipindah ke bawah nama media.
+   Kolom Harga adalah kolom ke-8 sejak AI Trust dan AI Cited digabung jadi satu
+   kolom (10 → 9 kolom). Dulu ada aturan tambahan nth-child(9) yang menunjuk
+   Harga saat tabel masih 10 kolom; setelah penggabungan nomor itu bergeser ke
+   kolom Aksi, sehingga bookmark dan tombol Detail ikut hilang di HP. */
 .priceMobile { display: none; }
 @media (max-width: 768px) {
-  .modernTable th:nth-child(9), .modernTable td:nth-child(9) { display: none; }
   /* Di HP: grid 2 kolom — nama domain di kiri, badge Dewan Pers di kanan
      (sebaris dengan centang verifikasi), lalu harga dan meta selebar penuh. */
   .mediaRowCol {
     display: grid;
+    /* Kolom Aksi (bookmark + Detail) sekarang ikut tampil di HP, jadi kolom
+       nama harus boleh menyusut. min-width 180px hanya relevan di layar lebar. */
+    min-width: 0;
     /* Nama domain dan badge Dewan Pers berdempetan di kiri (bukan ditarik ke
        ujung kanan kolom), kolom sisa menyerap kelegaan. */
     grid-template-columns: minmax(0, max-content) max-content minmax(0, 1fr);
@@ -2364,9 +2369,27 @@ button.selectedStepChip:disabled,
   border: 1px solid var(--border, #e2e8f0); border-radius: 9px;
   background: transparent; color: var(--muted-foreground);
   cursor: pointer; transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
-  margin-left: auto;
 }
 .selectedBarToggle:hover { background: var(--secondary, #f1f5f9); }
+
+/* Hapus pilihan: ikon saja, merah, di kiri tombol ringkasan. margin-left:auto
+   ada di tombol ini supaya pasangan tombol tetap menempel di kanan baris. */
+.selectedBarClear {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border: 1px solid color-mix(in srgb, var(--destructive, #c52b36) 30%, transparent);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--destructive, #c52b36);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.selectedBarClear:hover {
+  background: color-mix(in srgb, var(--destructive, #c52b36) 10%, transparent);
+  border-color: color-mix(in srgb, var(--destructive, #c52b36) 55%, transparent);
+}
 
 
 

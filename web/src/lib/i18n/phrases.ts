@@ -3752,6 +3752,7 @@ export const PHRASE_EN: Record<string, string> = {
 	"Media terpilih": "Selected media",
 	"Lihat media terpilih": "View selected media",
 	"Reset pilihan": "Reset selection",
+	"Hapus pilihan": "Remove selection",
 	"Total biaya publikasi": "Total publication cost",
 	"Saldo kamu": "Your balance",
 	"Saldo kurang": "Insufficient balance",
