@@ -1987,7 +1987,9 @@
 
 				<!-- Banner Informasi Dapur Produksi -->
 				<div class="relative mt-4 overflow-hidden rounded-[5px] border border-blue-100/80 bg-gradient-to-r from-blue-50/70 via-slate-50/40 to-blue-50/40 py-5 pl-5 pr-3.5 shadow-2xs max-sm:py-4 max-sm:pl-4">
-				<div class="pointer-events-none absolute -right-2 -top-2 h-28 w-44 opacity-60">
+				<!-- Ilustrasi dekoratif di pojok banner: disembunyikan di HP karena
+					     hanya memakan ruang tanpa menambah informasi. -->
+					<div class="pointer-events-none absolute -right-2 -top-2 h-28 w-44 opacity-60 max-sm:hidden">
 					<svg viewBox="0 0 160 120" fill="none" class="h-full w-full">
 						<path d="M110 20h30a6 6 0 0 1 6 6v70a6 6 0 0 1-6 6h-30a6 6 0 0 1-6-6V26a6 6 0 0 1 6-6z" fill="#93c5fd" fill-opacity="0.25" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="3 3"/>
 						<path d="M120 12h32a6 6 0 0 1 6 6v70a6 6 0 0 1-6 6h-32a6 6 0 0 1-6-6V18a6 6 0 0 1 6-6z" fill="#ffffff" fill-opacity="0.8" stroke="#3b82f6" stroke-width="1.5"/>
