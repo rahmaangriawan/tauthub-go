@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { CalendarClock, Check, ChevronDown, ChevronUp, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Images, Info, Link, Link2, ListChecks, LoaderCircle, MoreVertical, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Target, Trash2, TriangleAlert, Type, Upload, Wallet, Wrench, X } from '@lucide/svelte';
+	import { ArrowLeft, CalendarClock, Check, ChevronDown, ChevronUp, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Images, Info, Link, Link2, ListChecks, LoaderCircle, MoreVertical, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Target, Trash2, TriangleAlert, Type, Upload, Wallet, Wrench, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, getAccessToken, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -2833,15 +2833,19 @@
 	</div>
 
 	<!-- Kolom Kanan: Tombol Aksi -->
-	<div class="flex items-center gap-2.5 max-sm:grid max-sm:w-full max-sm:grid-cols-[minmax(0,0.35fr)_minmax(0,1fr)] max-sm:gap-2">
+	<div class="flex items-center gap-2.5 max-sm:grid max-sm:w-full max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:gap-2.5">
 		<!-- Kembali mengarah ke langkah sebelumnya: Katalog Media
 		     (klien memilih/menambah media), dengan konteks kampanye
 		     dibawa agar centang pilihan tetap terjaga. -->
-			<button class="h-10 px-4.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-[13px] font-medium transition-all whitespace-nowrap max-sm:h-12 max-sm:w-full max-sm:px-2 max-sm:text-center" type="button" onclick={() => goto(`/klien/${brandUrl}/media?campaign=${campaignId}`)}>{tr('Kembali')}</button>
+			<button class="inline-flex h-10 items-center justify-center px-4.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-[13px] font-medium transition-all whitespace-nowrap max-sm:h-12 max-sm:w-12 max-sm:px-0" type="button" aria-label={tr('Kembali')} title={tr('Kembali')} onclick={() => goto(`/klien/${brandUrl}/media?campaign=${campaignId}`)}>
+				<ArrowLeft size={17} class="hidden max-sm:block" />
+				<span class="max-sm:hidden">{tr('Kembali')}</span>
+			</button>
 			<div class="relative">
 				<button class="h-10 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 hover:-translate-y-px text-white text-[13px] font-semibold inline-flex items-center justify-center gap-1.5 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 max-sm:h-12 max-sm:w-full max-sm:px-3" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} aria-haspopup="dialog" aria-expanded={readinessOpen} onclick={publish}>
 					{#if coverChecking || distributing}<LoaderCircle size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
-					<span>{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
+					<span class="max-sm:hidden">{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
+					<span class="hidden max-sm:inline">{coverChecking ? tr('Memeriksa…') : distributing ? tr('Menerbitkan…') : tr('Lanjut')}</span>
 				</button>
 
 				{#if readinessOpen}
