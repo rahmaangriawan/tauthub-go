@@ -74,7 +74,7 @@
 		<form class="app-card mt-4 flex flex-wrap items-center gap-2 p-3" role="search" onsubmit={submitSearch}>
 			<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
 				<Search size={15} class="text-muted-foreground" />
-				<input class="w-full bg-transparent text-sm outline-none" name="search" aria-label={tr("Cari brand")} placeholder={tr("Cari nama, slug, atau owner...")} bind:value={search} />
+				<input class="w-full bg-transparent text-sm outline-none" name="search" aria-label={tr("Cari brand")} placeholder={tr("Cari nama, slug, owner, atau nomor WA...")} bind:value={search} />
 			</label>
 			<button class="app-btn app-btn-soft" type="submit" disabled={loading}>{tr("Cari")}</button>
 		</form>

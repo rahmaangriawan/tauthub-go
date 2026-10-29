@@ -3137,6 +3137,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Tauthub mengirim artikel hasil generate ke website custom Anda melalui endpoint yang Anda buat. Anda hanya perlu membuat satu endpoint": "Tauthub sends generated articles to your custom website via the endpoint you create. You only need to create one endpoint",
   "Tayang": "Live",
   "Tautan": "Link",
+  "Cari nama, email, atau nomor WA…": "Search name, email, or WA number…",
+  "Cari nama, slug, owner, atau nomor WA...": "Search name, slug, owner, or WA number...",
   "Dofollow": "Dofollow",
   "Nofollow": "Nofollow",
   "Sponsored": "Sponsored",

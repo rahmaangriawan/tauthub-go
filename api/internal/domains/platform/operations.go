@@ -216,14 +216,22 @@ func (d *Deps) OperationsBrands(w http.ResponseWriter, r *http.Request) {
 	  FROM brands b
 	  JOIN users u ON u.id = b.created_by
 	  LEFT JOIN brand_ai_quotas q ON q.brand_id = b.id
+	  LEFT JOIN notification_preferences np ON np.user_id = b.created_by
 	  WHERE b.deleted_at IS NULL`
 	var rows []rowMap
 	var err error
 	if search != "" {
 		like := "%" + search + "%"
+		args := []any{like, like, like}
+		where := "b.name LIKE $1 OR b.slug LIKE $2 OR u.email LIKE $3"
+		// Nomor WhatsApp pemilik brand, dicocokkan pada digitnya saja supaya
+		// "2922" menemukan "+62 812-2922".
+		for _, term := range phoneSearchTerms(search) {
+			args = append(args, "%"+term+"%")
+			where += " OR regexp_replace(COALESCE(np.wa_number, ''), '[^0-9]', '', 'g') LIKE $" + ptItoa(len(args))
+		}
 		rows, err = d.queryRows(r.Context(),
-			base+" AND (b.name LIKE $1 OR b.slug LIKE $2 OR u.email LIKE $3) ORDER BY b.created_at DESC LIMIT 200",
-			like, like, like)
+			base+" AND ("+where+") ORDER BY b.created_at DESC LIMIT 200", args...)
 	} else {
 		rows, err = d.queryRows(r.Context(), base+" ORDER BY b.created_at DESC LIMIT 200")
 	}

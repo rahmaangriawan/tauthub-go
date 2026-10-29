@@ -525,7 +525,7 @@
 	<div class="mt-4 flex flex-wrap items-center gap-2">
 		<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
 			<Search size={15} class="text-muted-foreground" />
-			<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama atau email…")} aria-label={tr("Cari partner")} value={search} oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)} />
+			<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama, email, atau nomor WA…")} aria-label={tr("Cari partner")} value={search} oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)} />
 		</label>
 		<Select
 			ariaLabel="Filter status"

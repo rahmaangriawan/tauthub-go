@@ -154,7 +154,14 @@ func (d *Deps) PartnersList(w http.ResponseWriter, r *http.Request) {
 	if search != "" {
 		pattern := "%" + search + "%"
 		ph := next(pattern)
-		where = append(where, "(p.name ILIKE "+ph+" OR u.email ILIKE "+ph+")")
+		// Nama/email, plus nomor WhatsApp (boleh hanya sebagian angka di
+		// belakang). Nomor dinormalisasi ke digit saja karena format simpanan
+		// bebas: +62, 0, spasi, tanda hubung.
+		cond := "p.name ILIKE " + ph + " OR u.email ILIKE " + ph
+		for _, term := range phoneSearchTerms(search) {
+			cond += " OR regexp_replace(COALESCE(np.wa_number, ''), '[^0-9]', '', 'g') LIKE " + next("%"+term+"%")
+		}
+		where = append(where, "("+cond+")")
 	}
 	switch contact {
 	case "wa":
