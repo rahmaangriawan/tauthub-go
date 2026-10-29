@@ -324,7 +324,7 @@
 	// supaya empat artikelnya benar-benar berbeda, bukan empat versi cerita
 	// yang sama.
 	type BatchRow = { slot: number; topic: string; angle: string; state: 'idle' | 'running' | 'done' | 'error'; message: string };
-	let batchFor = $state<{ mediaId: string; name: string; mediaType: string } | null>(null);
+	let batchFor = $state<{ mediaId: string; name: string; domain: string; mediaType: string } | null>(null);
 	let batchRows = $state<BatchRow[]>([]);
 	let batchRunning = $state(false);
 	// Kampanye hasil Profiler punya brief (USP, audiens, nada) yang dibaca
@@ -351,7 +351,7 @@
 		const pending = pendingSlots(m);
 		if (pending.length === 0) return;
 		const angles = angleOptionsFor(m.media_type);
-		batchFor = { mediaId: m.media_id, name: m.name, mediaType: m.media_type ?? '' };
+		batchFor = { mediaId: m.media_id, name: m.name, domain: mediaDomainLabel(m.website_url, m.name), mediaType: m.media_type ?? '' };
 		batchRows = pending.map((p, i) => ({
 			slot: p.slot ?? 1,
 			topic: '',
@@ -2470,7 +2470,6 @@
 							><X size={16} /></button>
 						</div>
 						<div class="space-y-3 p-5">
-							<p class="text-sm font-semibold">{slotDeleteTarget.media.name}</p>
 							<p class="text-xs leading-relaxed text-muted-foreground">
 								{tr('Artikel ini sudah punya naskah tetapi belum terbit. Naskahnya ikut terhapus dan tidak bisa dikembalikan.')}
 							</p>
@@ -2516,7 +2515,7 @@
 						<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
 							<div class="min-w-0">
 								<p class="text-sm font-bold">{tr('Buat')} {batchRows.length} {tr('artikel')}</p>
-								<p class="mt-0.5 truncate text-xs text-muted-foreground">{batchFor.name}</p>
+								<p class="mt-0.5 truncate text-xs text-muted-foreground">{batchFor.domain}</p>
 							</div>
 							<button
 								class="rounded-[5px] p-1.5 text-muted-foreground hover:bg-secondary disabled:opacity-40"
@@ -2655,7 +2654,7 @@
 		</button>
 	</div>
 	<div class="space-y-3 p-5">
-		<p class="text-sm font-semibold">{removeTarget.name}</p>
+		<p class="text-sm font-semibold">{mediaDomainLabel(removeTarget.website_url, removeTarget.name)}</p>
 		{#if (slotCounts[removeTarget.media_id] ?? 1) > 1}
 			<p class="text-xs leading-relaxed" style="color: var(--destructive);">
 				{tr('Media ini punya')} {slotCounts[removeTarget.media_id]} {tr('artikel di kampanye ini. Semua artikelnya ikut dilepas dari kampanye (naskahnya tetap tersimpan).')}
