@@ -546,9 +546,13 @@
 					</p>
 				</div>
 
-				<p class="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-slate-600 lg:hidden">
-					{side === 'partner' ? `${otherLabel}: ${otherName(active)}` : active.article_title || tr('Belum ada artikel')}
-				</p>
+				<!-- HP: judul artikel dengan jenis media di bawahnya. -->
+				<div class="min-w-0 flex-1 lg:hidden">
+					<p class="truncate text-[12.5px] font-semibold text-slate-700">
+						{side === 'partner' ? `${otherLabel}: ${otherName(active)}` : active.article_title || tr('Belum ada artikel')}
+					</p>
+					<p class="truncate text-[10.5px] capitalize text-slate-400">{active.media_type || '—'}</p>
+				</div>
 
 				{#if active.topic}
 					<span class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
