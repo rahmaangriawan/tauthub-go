@@ -546,9 +546,9 @@ func (d *Deps) TautFilesUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ekstraksi teks server-side. TXT langsung; PDF/DOCX butuh parser pihak
-	// ketiga yang belum tersedia di runtime Go → status 'failed' dengan pesan
-	// konfigurasi jelas (bukan 500), file tetap tersimpan untuk audit.
+	// Ekstraksi teks server-side: TXT apa adanya, DOCX dari word/document.xml,
+	// PDF lewat pembaca PDF (doctext.FromPDF). Gagal parse bukan 500 — berkas
+	// tetap tersimpan, statusnya 'failed' beserta alasannya supaya klien tahu.
 	extracted, parseErr := extractDocument(buffer, mime)
 	if parseErr != nil {
 		msg := truncateString(parseErr.Error(), 500)
