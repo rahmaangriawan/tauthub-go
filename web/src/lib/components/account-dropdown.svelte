@@ -5,21 +5,15 @@
 	// dari Next.js product-shell.tsx.
 	// Menampilkan info user, link ke profil akun, alih dashboard/workspace (jika ada),
 	// link platform admin (jika admin), dan tombol Keluar (logout).
-	import { CircleUser, Building, Check, Settings, LogOut, ChevronDown } from '@lucide/svelte';
+	import { CircleUser, Building, Settings, LogOut, ChevronDown } from '@lucide/svelte';
 	import { clearSession } from '$lib/auth';
-
-	// Satu brand di daftar pemilih. `public_id` adalah kunci URL; `id` dipakai
-	// sebagai cadangan bila API lama belum mengirim public_id.
-	type BrandOption = { id: string; public_id?: string | null; name: string; role?: string };
 
 	let {
 		user,
 		roleLabel = 'Klien',
 		profileHref = '/klien',
 		workspaceSwitchHref,
-		workspaceSwitchLabel,
-		brands = [],
-		currentBrandId
+		workspaceSwitchLabel
 	}: {
 		user: {
 			id: string;
@@ -31,17 +25,7 @@
 		profileHref?: string;
 		workspaceSwitchHref?: string;
 		workspaceSwitchLabel?: string;
-		/** Brand yang bisa dipilih; baris saat ini ditandai dan tidak ditautkan. */
-		brands?: BrandOption[];
-		/** public_id (atau UUID) brand yang sedang dibuka. */
-		currentBrandId?: string;
 	} = $props();
-
-	const brandHref = (brand: BrandOption) => `/klien/${brand.public_id ?? brand.id}`;
-	const isCurrent = (brand: BrandOption) => Boolean(currentBrandId) && (brand.public_id ?? brand.id) === currentBrandId;
-	// Satu brand tidak perlu pemilih: tidak ada tujuan lain. Selebihnya daftar
-	// pendek di atas "Beralih Workspace".
-	const showBrands = $derived(brands.length > 1);
 
 	let open = $state(false);
 	let wrapper = $state<HTMLDivElement | null>(null);
@@ -109,29 +93,6 @@
 			</div>
 
 			<div class="app-account-menu-divider"></div>
-
-			{#if showBrands}
-				<p class="app-account-section-label">Brand</p>
-				<div class="app-account-brands">
-					{#each brands as brand (brand.id)}
-						{@const current = isCurrent(brand)}
-						{#if current}
-							<span class="app-account-menu-item app-account-brand-current" role="menuitem" aria-current="true">
-								<Check size={16} />
-								<span class="app-account-brand-name">{brand.name}</span>
-								{#if brand.role}<span class="app-account-brand-role">{brand.role}</span>{/if}
-							</span>
-						{:else}
-							<a href={brandHref(brand)} class="app-account-menu-item" role="menuitem">
-								<Building size={16} />
-								<span class="app-account-brand-name">{brand.name}</span>
-								{#if brand.role}<span class="app-account-brand-role">{brand.role}</span>{/if}
-							</a>
-						{/if}
-					{/each}
-				</div>
-				<div class="app-account-menu-divider"></div>
-			{/if}
 
 			{#if workspaceSwitchHref}
 				<a href={workspaceSwitchHref} class="app-account-menu-item" role="menuitem">
@@ -256,50 +217,6 @@
 		height: 1px;
 		margin: 4px 0;
 		background-color: var(--border);
-	}
-
-	/* Pemilih brand: daftar pendek dengan label kecil di atasnya. Bila brand
-	   banyak (agensi), daftar digulir agar menu tidak melampaui viewport. */
-	.app-account-section-label {
-		margin: 2px 0 2px;
-		padding: 2px 10px;
-		font-size: 10.5px;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--muted-foreground);
-	}
-
-	.app-account-brands {
-		display: flex;
-		flex-direction: column;
-		max-height: 200px;
-		overflow-y: auto;
-	}
-
-	.app-account-brand-name {
-		min-width: 0;
-		flex: 1;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.app-account-brand-role {
-		flex-shrink: 0;
-		font-size: 10.5px;
-		font-weight: 600;
-		text-transform: capitalize;
-		color: var(--muted-foreground);
-	}
-
-	.app-account-brand-current {
-		cursor: default;
-		background-color: color-mix(in srgb, var(--primary) 8%, transparent);
-	}
-
-	.app-account-brand-current:hover {
-		background-color: color-mix(in srgb, var(--primary) 8%, transparent);
 	}
 
 	.app-account-menu-item {

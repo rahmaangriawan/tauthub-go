@@ -56,19 +56,6 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		}
 	);
 
-	// Daftar brand milik pengguna (termasuk brand milik workspace) untuk pemilih
-	// brand di menu akun. SWR dipakai agar satu kali fetch melayani sidebar dan
-	// halaman; tidak ada polling — daftar berubah hanya lewat aksi pengguna.
-	type BrandOption = { id: string; public_id?: string | null; name: string; role?: string };
-	const brands = swr<BrandOption[]>(
-		() => (getStoredSession() ? '/v1/brands' : null),
-		async () => {
-			const res = await apiRequest('/v1/brands');
-			if (!res.ok) throw new Error('gagal memuat daftar brand');
-			return res.json();
-		}
-	);
-
 	onMount(() => {
 		void (async () => {
 			const fresh = await ensureValidSession();
@@ -295,8 +282,6 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 					profileHref={`${base}/profile`}
 					workspaceSwitchHref={user.role === 'partner' ? '/mitra' : undefined}
 					workspaceSwitchLabel={user.role === 'partner' ? tr('Portal Mitra') : undefined}
-					brands={brands.data ?? []}
-					currentBrandId={brandUrlId}
 				/>
 			{/if}
 		{/snippet}
