@@ -229,6 +229,12 @@
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '-');
 	const latestPublications = $derived(publications.slice(0, 6));
 
+	// Domain media untuk baris keterangan publikasi (ditulis apa adanya, tanpa
+	// protokol dan www), ditemani favicon dari Google.
+	const mediaDomain = (url: string | null | undefined): string =>
+		(url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').toLowerCase();
+	let faviconFailed = $state<Record<string, boolean>>({});
+
 	const badgeStyles: Record<string, string> = {
 		published: `background-color: var(--success-soft); color: var(--success); box-shadow: inset 0 0 0 1px ${soft('--success')};`,
 		waiting_partner: `background-color: var(--warning-soft); color: var(--warning); box-shadow: inset 0 0 0 1px ${soft('--warning')};`,
@@ -598,13 +604,29 @@
 								{/if}
 								<div class="flex min-w-0 flex-col gap-0.5">
 									<div class="line-clamp-2 break-words text-[13.5px] leading-[1.35] font-semibold" title={p.document_title ?? tr('Artikel')}>
-										<span>{p.document_title ?? tr('Artikel')}</span>
-										{#if p.media_name}
-											<span class="font-medium" style="color: var(--primary);"> · {p.media_name}</span>
-										{/if}
+										{p.document_title ?? tr('Artikel')}
 									</div>
 									<div class="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
 										<span>{p.order_code ?? tr('Tanpa kode')}</span>
+										<span style="color: var(--border);">·</span>
+										{#if p.media_website_url}
+											{@const domain = mediaDomain(p.media_website_url)}
+											<span class="inline-flex min-w-0 items-center gap-1">
+												{#if !faviconFailed[p.id]}
+													<img
+														src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`}
+														alt=""
+														class="h-3.5 w-3.5 shrink-0 rounded-[3px]"
+														loading="lazy"
+														decoding="async"
+														onerror={() => (faviconFailed = { ...faviconFailed, [p.id]: true })}
+													/>
+												{/if}
+												<span class="truncate">{domain}</span>
+											</span>
+										{:else if p.media_name}
+											<span class="truncate">{p.media_name}</span>
+										{/if}
 										<span style="color: var(--border);">·</span>
 										<span>{dt(p.created_at)}</span>
 									</div>
