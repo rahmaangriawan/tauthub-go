@@ -103,6 +103,7 @@
 		return h;
 	};
 	const initialOf = (name: string) => (name || '?').trim().charAt(0).toUpperCase() || '?';
+	const capFirst = (v: string) => (v ? v.charAt(0).toUpperCase() + v.slice(1) : v);
 
 	// Favicon media dari website_url (pola sama dengan tabel Ringkasan);
 	// gagal muat → jatuh kembali ke inisial nama.
@@ -673,16 +674,24 @@
 					{initialOf(t.media_name)}
 				{/if}
 			</span>
+			<!-- Judul kartu: domain medianya, bukan nama orang di baliknya. Jenis
+			     media jadi keterangan di bawahnya. -->
 			<div class="min-w-0">
-				<p class="truncate text-[13px] font-bold text-slate-900">{t.media_name}</p>
 				{#if t.website_url}
-					<a class="truncate text-[11.5px] text-blue-600 hover:underline" href={t.website_url} target="_blank" rel="noreferrer">{t.website_url.replace(/^https?:\/\//, '')}</a>
+					<a
+						class="block truncate text-[13.5px] font-bold text-slate-900 hover:underline"
+						href={t.website_url}
+						target="_blank"
+						rel="noreferrer"
+					>{capFirst(cleanDomain(t.website_url, t.media_name))}</a>
+				{:else}
+					<p class="truncate text-[13.5px] font-bold text-slate-900">{capFirst(cleanDomain(t.website_url, t.media_name))}</p>
 				{/if}
+				<p class="truncate text-[11.5px] capitalize text-slate-500">{t.media_type || '—'}</p>
 			</div>
 		</div>
-		<div class="mt-3 space-y-1.5 text-[12px]">
-			<div class="flex justify-between gap-2"><span class="text-slate-500">{tr('Tipe')}</span><span class="font-semibold capitalize">{t.media_type || '—'}</span></div>
-			<div class="flex justify-between gap-2"><span class="text-slate-500">DA</span><span class="font-semibold">{t.da ?? '—'}</span></div>
+		<div class="mt-3 flex justify-between gap-2 text-[12px]">
+			<span class="text-slate-500">DA</span><span class="font-semibold">{t.da ?? '—'}</span>
 		</div>
 		{#if side === 'client' && t.campaign_id}
 			<button
