@@ -37,7 +37,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 	}
 
 	items, err := d.queryRows(ctx,
-		`SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode
+		`SELECT tcm.id, tcm.media_id, tcm.slot, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode
 		 FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		 WHERE tcm.campaign_id = $1 AND tcm.status = 'selected' AND tcm.article_document_id IS NOT NULL
 		       AND tcm.article_status IN ('draft','revision')`, campaignID)
@@ -57,6 +57,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 	for _, item := range items {
 		itemID := item.strOr("id", "")
 		mediaID := item.strOr("media_id", "")
+		slot := item.intOr("slot", 1)
 		documentID := item.strOr("article_document_id", "")
 		itemBriefContext := briefContext
 		if strings.TrimSpace(item.strOr("angle_slug", "")) != "" {
@@ -189,7 +190,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			overallVerdict = "review_required"
 		}
 
-		latestAudit, err := d.getLatestGatekeeperAudit(ctx, campaignID, mediaID)
+		latestAudit, err := d.getLatestGatekeeperAudit(ctx, campaignID, mediaID, slot)
 		if err != nil {
 			return nil, err
 		}
@@ -277,7 +278,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			if rechecked != nil {
 				aiOverview = rechecked
 				checks["aiOverview"] = rechecked
-				if err := d.updateGatekeeperAuditChecks(ctx, campaignID, mediaID, runRevision, checks); err != nil {
+				if err := d.updateGatekeeperAuditChecks(ctx, campaignID, mediaID, slot, runRevision, checks); err != nil {
 					return nil, err
 				}
 			}
@@ -432,11 +433,19 @@ func (d *Deps) contentSafetyAndOverview(ctx context.Context, title, mediaType, c
 
 // updateGatekeeperAuditChecks: perbarui checks baris audit yang baru dibuat
 // (dipakai setelah penilaian ulang AI Overview pasca-revisi).
-func (d *Deps) updateGatekeeperAuditChecks(ctx context.Context, campaignID, mediaID string, runRevision int, checks map[string]any) error {
+func (d *Deps) updateGatekeeperAuditChecks(ctx context.Context, campaignID, mediaID string, slot, runRevision int, checks map[string]any) error {
 	return d.exec(ctx,
 		`UPDATE taut_gatekeeper_audits SET checks = $1::jsonb, updated_at = NOW()
-		 WHERE campaign_id = $2 AND media_id = $3 AND run_revision = $4`,
-		jsonString(checks), campaignID, mediaID, runRevision)
+		 WHERE campaign_id = $2 AND media_id = $3 AND slot = $4 AND run_revision = $5`,
+		jsonString(checks), campaignID, mediaID, slot, runRevision)
+}
+
+// auditSlot: normalisasi nomor slot (0/kosong berarti artikel pertama).
+func auditSlot(slot int) int {
+	if slot < 1 {
+		return 1
+	}
+	return slot
 }
 
 func strPtrOrNilPtr(s string) *string {
@@ -465,6 +474,7 @@ type gatekeeperAudit struct {
 	ID             string
 	CampaignID     string
 	MediaID        string
+	Slot           int
 	AgentRunID     any
 	RunRevision    int
 	Status         string
@@ -477,6 +487,7 @@ type gatekeeperAudit struct {
 type saveGatekeeperAuditInput struct {
 	CampaignID     string
 	MediaID        string
+	Slot           int
 	AgentRunID     *string
 	RunRevision    int
 	Status         string
@@ -485,7 +496,7 @@ type saveGatekeeperAuditInput struct {
 	UserID         string
 }
 
-const gatekeeperAuditCols = "id, campaign_id, media_id, agent_run_id, run_revision, status, checks, overall_verdict, created_at, updated_at"
+const gatekeeperAuditCols = "id, campaign_id, media_id, slot, agent_run_id, run_revision, status, checks, overall_verdict, created_at, updated_at"
 
 func mapGatekeeperAudit(m rowMap) gatekeeperAudit {
 	checks, _ := jsonField(m, "checks").(map[string]any)
@@ -494,6 +505,7 @@ func mapGatekeeperAudit(m rowMap) gatekeeperAudit {
 	}
 	return gatekeeperAudit{
 		ID: m.strOr("id", ""), CampaignID: m.strOr("campaign_id", ""), MediaID: m.strOr("media_id", ""),
+		Slot:       m.intOr("slot", 1),
 		AgentRunID: m.raw("agent_run_id"), RunRevision: m.intOr("run_revision", 1),
 		Status: m.strOr("status", ""), Checks: checks, OverallVerdict: m.strOr("overall_verdict", ""),
 		CreatedAt: m.timeStr("created_at"), UpdatedAt: m.timeStr("updated_at"),
@@ -503,22 +515,22 @@ func mapGatekeeperAudit(m rowMap) gatekeeperAudit {
 // saveGatekeeperAudit: INSERT dengan id baru setiap run (revisi naik per audit ulang).
 func (d *Deps) saveGatekeeperAudit(ctx context.Context, in saveGatekeeperAuditInput) error {
 	return d.exec(ctx,
-		`INSERT INTO taut_gatekeeper_audits (id, campaign_id, media_id, agent_run_id, run_revision, status, checks, overall_verdict, created_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
+		`INSERT INTO taut_gatekeeper_audits (id, campaign_id, media_id, slot, agent_run_id, run_revision, status, checks, overall_verdict, created_by)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
 		 ON CONFLICT (id) DO UPDATE SET
 		   status = EXCLUDED.status,
 		   checks = EXCLUDED.checks,
 		   overall_verdict = EXCLUDED.overall_verdict,
 		   updated_at = NOW()`,
-		uuid.NewString(), in.CampaignID, in.MediaID, in.AgentRunID, in.RunRevision,
+		uuid.NewString(), in.CampaignID, in.MediaID, auditSlot(in.Slot), in.AgentRunID, in.RunRevision,
 		in.Status, jsonString(in.Checks), in.OverallVerdict, strPtrOrNil(in.UserID))
 }
 
-// getLatestGatekeeperAudit: audit terbaru per (campaign, media).
-func (d *Deps) getLatestGatekeeperAudit(ctx context.Context, campaignID, mediaID string) (*gatekeeperAudit, error) {
+// getLatestGatekeeperAudit: audit terbaru per (campaign, media, slot).
+func (d *Deps) getLatestGatekeeperAudit(ctx context.Context, campaignID, mediaID string, slot int) (*gatekeeperAudit, error) {
 	m, err := d.queryRow(ctx,
-		"SELECT "+gatekeeperAuditCols+" FROM taut_gatekeeper_audits WHERE campaign_id = $1 AND media_id = $2 ORDER BY created_at DESC LIMIT 1",
-		campaignID, mediaID)
+		"SELECT "+gatekeeperAuditCols+" FROM taut_gatekeeper_audits WHERE campaign_id = $1 AND media_id = $2 AND slot = $3 ORDER BY created_at DESC LIMIT 1",
+		campaignID, mediaID, auditSlot(slot))
 	if err != nil || m == nil {
 		return nil, err
 	}

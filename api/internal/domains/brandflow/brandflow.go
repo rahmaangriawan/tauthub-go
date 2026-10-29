@@ -21,6 +21,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -115,6 +116,25 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 // chiParam: pembaca parameter path chi (router memakai {param}).
 func chiParam(r *http.Request, name string) string { return chi.URLParam(r, name) }
+
+// slotParam: nomor slot artikel pada satu media (?slot=N), default 1.
+//
+// Sejak migrasi 272 satu domain bisa punya beberapa artikel, masing-masing
+// satu baris taut_campaign_media dengan nomor slot. Parameter ini yang
+// membedakan "artikel pertama" dari "artikel kedua" pada media yang sama.
+// Nilai kosong/tidak valid jatuh ke slot 1 supaya pemanggil lama (tanpa
+// parameter) tetap bekerja apa adanya.
+func slotParam(r *http.Request) int {
+	raw := strings.TrimSpace(r.URL.Query().Get("slot"))
+	if raw == "" {
+		return 1
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 || n > 1000 {
+		return 1
+	}
+	return n
+}
 
 // ---------- body parsing ----------
 

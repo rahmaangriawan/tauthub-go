@@ -21,18 +21,21 @@ func (d *Deps) TautWriterReferenceMaterial(ctx context.Context, campaignID, bran
 	if err != nil {
 		return "", err
 	}
-	text, _, err := d.tautReferenceMaterial(ctx, campaign, campaignID, mediaID)
+	text, _, err := d.tautReferenceMaterial(ctx, campaign, campaignID, mediaID, 1)
 	return text, err
 }
 
 // tautReferenceMaterial: rangkai bahan fakta untuk satu media. hasFacts=false
 // berarti benar-benar tidak ada rujukan: Writer harus menulis generik (tanpa
 // nama/angka karangan) dan Checker memperlakukan bahan sebagai kosong.
-func (d *Deps) tautReferenceMaterial(ctx context.Context, campaign bsRow, campaignID, mediaID string) (string, bool, error) {
+func (d *Deps) tautReferenceMaterial(ctx context.Context, campaign bsRow, campaignID, mediaID string, slot int) (string, bool, error) {
+	if slot < 1 {
+		slot = 1
+	}
 	item, err := d.queryRow(ctx, `
 		SELECT tcm.angle_slug, m.media_type FROM taut_campaign_media tcm
 		JOIN media m ON m.id = tcm.media_id
-		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 LIMIT 1`, campaignID, mediaID)
+		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 AND tcm.slot = $3 LIMIT 1`, campaignID, mediaID, slot)
 	if err != nil {
 		return "", false, err
 	}
@@ -49,7 +52,7 @@ func (d *Deps) tautReferenceMaterial(ctx context.Context, campaign bsRow, campai
 		return "", false, err
 	}
 	materials := asMapValue(campaign.jsonField("editorial_standard_snapshot"))
-	topic := d.loadTautWriterTopic(ctx, campaignID, mediaID)
+	topic := d.loadTautWriterTopic(ctx, campaignID, mediaID, slot)
 	spokes := spokespersonListValue(campaign.jsonField("spokepersons"))
 	angleBlock, angleHasSources := tautAngleBriefBlock(angle)
 	text, hasFacts := buildTautReferenceMaterial(brief, materials, topic, spokes, angleBlock)
@@ -149,10 +152,13 @@ func materialHasContent(m map[string]any) bool {
 // loadTautWriterTopic: topik/konteks klien yang tersimpan untuk media ini
 // (kolom taut_campaign_media.writer_topic). "" bila belum ada atau kolom belum
 // dimigrasi — error dianggap kosong supaya generate/audit tidak ikut gagal.
-func (d *Deps) loadTautWriterTopic(ctx context.Context, campaignID, mediaID string) string {
+func (d *Deps) loadTautWriterTopic(ctx context.Context, campaignID, mediaID string, slot int) string {
+	if slot < 1 {
+		slot = 1
+	}
 	row, err := d.queryRow(ctx,
-		"SELECT writer_topic FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 LIMIT 1",
-		campaignID, mediaID)
+		"SELECT writer_topic FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND slot = $3 LIMIT 1",
+		campaignID, mediaID, slot)
 	if err != nil || row == nil {
 		return ""
 	}

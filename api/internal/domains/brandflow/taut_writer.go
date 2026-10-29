@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -121,7 +122,7 @@ func (d *Deps) runTautWriter(ctx context.Context, campaignID, brandID, userID st
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			result, gErr := d.generateTautWriterArticle(ctx, campaignID, brandID, userID, item.MediaID)
+			result, gErr := d.generateTautWriterArticle(ctx, campaignID, brandID, userID, item.MediaID, item.Slot)
 			results[i], errs[i] = result, gErr
 		}(i, item)
 	}
@@ -137,19 +138,20 @@ func (d *Deps) runTautWriter(ctx context.Context, campaignID, brandID, userID st
 type selectedTautMediaRow struct {
 	ID       string
 	MediaID  string
+	Slot     int
 	Document *string
 }
 
 func (d *Deps) selectedTautMedia(ctx context.Context, campaignID string) ([]selectedTautMediaRow, error) {
 	rows, err := d.queryRows(ctx,
-		"SELECT id, media_id, article_document_id FROM taut_campaign_media WHERE campaign_id = $1 AND status = 'selected' ORDER BY created_at", campaignID)
+		"SELECT id, media_id, slot, article_document_id FROM taut_campaign_media WHERE campaign_id = $1 AND status = 'selected' ORDER BY media_id, slot", campaignID)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]selectedTautMediaRow, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, selectedTautMediaRow{
-			ID: r.strOr("id", ""), MediaID: r.strOr("media_id", ""), Document: r.strPtr("article_document_id"),
+			ID: r.strOr("id", ""), MediaID: r.strOr("media_id", ""), Slot: r.intOr("slot", 1), Document: r.strPtr("article_document_id"),
 		})
 	}
 	return out, nil
@@ -330,7 +332,10 @@ func (d *Deps) pruneContentVersions(ctx context.Context, documentID string, keep
 // Idempoten: media yang sudah punya dokumen = regenerasi (tambah versi).
 // opts opsional: arahan topik/konteks + daftar tautan tambahan dari klien
 // (modal Pengelola Naskah). Kosong = perilaku lama (topik murni dari brief).
-func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandID, userID, mediaID string, opts ...tautWriterOptions) (writerItemResult, error) {
+func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandID, userID, mediaID string, slot int, opts ...tautWriterOptions) (writerItemResult, error) {
+	if slot < 1 {
+		slot = 1
+	}
 	clientTopic := ""
 	articleType := ""
 	var requestedAngle *string
@@ -355,8 +360,8 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		       m.label_sponsor, m.word_count_mode, m.topik_terlarang, m.bahasa_artikel,
 		       COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv
 		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
-		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 AND tcm.status = 'selected' LIMIT 1`,
-		campaignID, mediaID)
+		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 AND tcm.slot = $3 AND tcm.status = 'selected' LIMIT 1`,
+		campaignID, mediaID, slot)
 	if err != nil {
 		return writerItemResult{}, err
 	}
@@ -387,7 +392,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	// yang sama.
 	writerTopic := clientTopic
 	if writerTopic == "" {
-		writerTopic = d.loadTautWriterTopic(ctx, campaignID, mediaID)
+		writerTopic = d.loadTautWriterTopic(ctx, campaignID, mediaID, slot)
 	}
 	// Editorial zero-link: instruksi tautan pada topik klien dianggap batal.
 	// Skema URL ikut dibuang supaya model tidak menyalin alamat web ke badan
@@ -1033,32 +1038,46 @@ func (d *Deps) userGenerateQuota(ctx context.Context, userID string) int {
 
 type tautTimelineItem struct {
 	MediaID     string `json:"media_id"`
+	Slot        int    `json:"slot"`
 	ScheduledAt string `json:"scheduled_at"`
 }
 
 type tautCreatedPublication struct {
 	MediaID       string `json:"media_id"`
+	Slot          int    `json:"slot"`
 	PublicationID string `json:"publication_id,omitempty"`
 	Status        string `json:"status"`
 	Detail        string `json:"detail,omitempty"`
 }
 
+// tautPlacementRef: satu slot artikel pada satu media. Sejak migrasi 272 satu
+// domain bisa punya beberapa artikel, jadi alamatnya (media, slot) — bukan
+// media saja.
+type tautPlacementRef struct {
+	MediaID string
+	Slot    int
+}
+
+func placementKey(mediaID string, slot int) string { return mediaID + ":" + itoa(slot) }
+
 // timelineFromBody: jadwal dari klien; entri tak dikenal dibuang, waktu lampau
-// di-clamp ke sekarang, media tanpa entri default sekarang (serentak).
-func timelineFromBody(body map[string]any, readyIDs map[string]bool) ([]tautTimelineItem, error) {
+// di-clamp ke sekarang, slot tanpa entri default sekarang (serentak).
+func timelineFromBody(body map[string]any, ready []tautPlacementRef) ([]tautTimelineItem, error) {
 	schedule, ok := body["schedule"].([]any)
 	if !ok || len(schedule) == 0 {
 		now := isoNow()
-		out := make([]tautTimelineItem, 0, len(readyIDs))
-		for _, id := range sortedStrings(readyIDs) {
-			out = append(out, tautTimelineItem{MediaID: id, ScheduledAt: now})
+		out := make([]tautTimelineItem, 0, len(ready))
+		for _, ref := range ready {
+			out = append(out, tautTimelineItem{MediaID: ref.MediaID, Slot: ref.Slot, ScheduledAt: now})
 		}
 		return out, nil
 	}
-	if len(schedule) > 20 {
-		return nil, errUnprocessable("Array must contain at most 20 element(s)")
+	// Batas lama 20 terlalu kecil: 4 artikel di satu domain sudah memakai 4
+	// entri, jadi lima media saja sudah melewatinya.
+	if len(schedule) > 200 {
+		return nil, errUnprocessable("Array must contain at most 200 element(s)")
 	}
-	byID := map[string]any{}
+	byKey := map[string]any{}
 	for _, entry := range schedule {
 		item, ok := entry.(map[string]any)
 		if !ok {
@@ -1067,6 +1086,14 @@ func timelineFromBody(body map[string]any, readyIDs map[string]bool) ([]tautTime
 		mediaID, _ := item["media_id"].(string)
 		if mediaID == "" {
 			return nil, errUnprocessable("Invalid uuid")
+		}
+		slot := 1
+		if rawSlot, present := item["slot"]; present && rawSlot != nil {
+			n, isNum := rawSlot.(float64)
+			if !isNum || n < 1 {
+				return nil, errUnprocessable("Invalid slot")
+			}
+			slot = int(n)
 		}
 		if raw, present := item["scheduled_at"]; present && raw != nil {
 			s, isStr := raw.(string)
@@ -1079,20 +1106,24 @@ func timelineFromBody(body map[string]any, readyIDs map[string]bool) ([]tautTime
 				}
 			}
 		}
-		byID[mediaID] = item["scheduled_at"]
+		byKey[placementKey(mediaID, slot)] = item["scheduled_at"]
 	}
 	now := time.Now()
-	out := make([]tautTimelineItem, 0, len(readyIDs))
-	for _, id := range sortedStrings(readyIDs) {
+	out := make([]tautTimelineItem, 0, len(ready))
+	sorted := append([]tautPlacementRef(nil), ready...)
+	sort.Slice(sorted, func(i, j int) bool {
+		return placementKey(sorted[i].MediaID, sorted[i].Slot) < placementKey(sorted[j].MediaID, sorted[j].Slot)
+	})
+	for _, ref := range sorted {
 		scheduled := now.UTC().Format("2006-01-02T15:04:05.000Z")
-		if raw, ok := byID[id]; ok {
+		if raw, ok := byKey[placementKey(ref.MediaID, ref.Slot)]; ok {
 			if s, isStr := raw.(string); isStr && s != "" {
 				if t, ok := parseISO(s); ok && t.After(now) {
 					scheduled = t.UTC().Format("2006-01-02T15:04:05.000Z")
 				}
 			}
 		}
-		out = append(out, tautTimelineItem{MediaID: id, ScheduledAt: scheduled})
+		out = append(out, tautTimelineItem{MediaID: ref.MediaID, Slot: ref.Slot, ScheduledAt: scheduled})
 	}
 	return out, nil
 }
@@ -1103,8 +1134,8 @@ func (d *Deps) createTautPublications(ctx context.Context, campaignID, brandID, 
 	out := []tautCreatedPublication{}
 	for _, t := range timeline {
 		ready, err := d.queryRow(ctx,
-			"SELECT article_document_id, featured_image_url FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND article_status = 'ready' LIMIT 1",
-			campaignID, t.MediaID)
+			"SELECT article_document_id, featured_image_url FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND slot = $3 AND article_status = 'ready' LIMIT 1",
+			campaignID, t.MediaID, t.Slot)
 		if err != nil {
 			return nil, err
 		}
@@ -1130,18 +1161,18 @@ func (d *Deps) createTautPublications(ctx context.Context, campaignID, brandID, 
 			if strings.Contains(strings.ToLower(message), "already published") {
 				existing, qErr := d.queryRow(ctx,
 					"SELECT id FROM publications WHERE document_id = $1 AND media_id = $2 LIMIT 1", documentID, t.MediaID)
-				entry := tautCreatedPublication{MediaID: t.MediaID, Status: "already_published"}
+				entry := tautCreatedPublication{MediaID: t.MediaID, Slot: t.Slot, Status: "already_published"}
 				if qErr == nil && existing != nil {
 					entry.PublicationID = existing.strOr("id", "")
 				}
 				out = append(out, entry)
 				continue
 			}
-			out = append(out, tautCreatedPublication{MediaID: t.MediaID, Status: "failed", Detail: message})
+			out = append(out, tautCreatedPublication{MediaID: t.MediaID, Slot: t.Slot, Status: "failed", Detail: message})
 			continue
 		}
 		out = append(out, tautCreatedPublication{
-			MediaID: t.MediaID, PublicationID: created.Row.strOr("id", ""), Status: created.Path,
+			MediaID: t.MediaID, Slot: t.Slot, PublicationID: created.Row.strOr("id", ""), Status: created.Path,
 		})
 	}
 	return out, nil

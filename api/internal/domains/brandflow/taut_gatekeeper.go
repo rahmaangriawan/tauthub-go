@@ -26,6 +26,7 @@ import (
 // gatekeeperItemResult: parity GatekeeperItemResult.
 type gatekeeperItemResult struct {
 	MediaID string `json:"media_id"`
+	Slot    int    `json:"slot"`
 	Status  string `json:"status"`
 	Verdict string `json:"verdict,omitempty"`
 	Reason  string `json:"reason,omitempty"`
@@ -35,6 +36,7 @@ type gatekeeperAuditRow struct {
 	ID             string
 	CampaignID     string
 	MediaID        string
+	Slot           int
 	AgentRunID     any
 	RunRevision    int
 	Status         string
@@ -44,7 +46,7 @@ type gatekeeperAuditRow struct {
 	UpdatedAt      string
 }
 
-const gatekeeperAuditCols = "id, campaign_id, media_id, agent_run_id, run_revision, status, checks, overall_verdict, created_at, updated_at"
+const gatekeeperAuditCols = "id, campaign_id, media_id, slot, agent_run_id, run_revision, status, checks, overall_verdict, created_at, updated_at"
 
 func mapGatekeeperAudit(row bsRow) gatekeeperAuditRow {
 	checks, _ := row.jsonField("checks").(map[string]any)
@@ -53,6 +55,7 @@ func mapGatekeeperAudit(row bsRow) gatekeeperAuditRow {
 	}
 	return gatekeeperAuditRow{
 		ID: row.strOr("id", ""), CampaignID: row.strOr("campaign_id", ""), MediaID: row.strOr("media_id", ""),
+		Slot:       row.intOr("slot", 1),
 		AgentRunID: row.raw("agent_run_id"), RunRevision: row.intOr("run_revision", 1),
 		Status: row.strOr("status", ""), Checks: checks, OverallVerdict: row.strOr("overall_verdict", ""),
 		CreatedAt: row.timeStr("created_at"), UpdatedAt: row.timeStr("updated_at"),
@@ -73,11 +76,11 @@ func (d *Deps) listGatekeeperAudits(ctx context.Context, campaignID string) ([]g
 	return out, nil
 }
 
-// getLatestGatekeeperAudit: audit terbaru per (campaign, media).
-func (d *Deps) getLatestGatekeeperAudit(ctx context.Context, campaignID, mediaID string) (*gatekeeperAuditRow, error) {
+// getLatestGatekeeperAudit: audit terbaru per (campaign, media, slot).
+func (d *Deps) getLatestGatekeeperAudit(ctx context.Context, campaignID, mediaID string, slot int) (*gatekeeperAuditRow, error) {
 	row, err := d.queryRow(ctx,
-		"SELECT "+gatekeeperAuditCols+" FROM taut_gatekeeper_audits WHERE campaign_id = $1 AND media_id = $2 ORDER BY created_at DESC LIMIT 1",
-		campaignID, mediaID)
+		"SELECT "+gatekeeperAuditCols+" FROM taut_gatekeeper_audits WHERE campaign_id = $1 AND media_id = $2 AND slot = $3 ORDER BY created_at DESC LIMIT 1",
+		campaignID, mediaID, slot)
 	if err != nil || row == nil {
 		return nil, err
 	}
@@ -86,11 +89,11 @@ func (d *Deps) getLatestGatekeeperAudit(ctx context.Context, campaignID, mediaID
 }
 
 // saveGatekeeperAudit: INSERT id baru setiap run (revisi naik per audit ulang).
-func (d *Deps) saveGatekeeperAudit(ctx context.Context, campaignID, mediaID string, runRevision int, checks map[string]any, overallVerdict, userID string) error {
+func (d *Deps) saveGatekeeperAudit(ctx context.Context, campaignID, mediaID string, slot, runRevision int, checks map[string]any, overallVerdict, userID string) error {
 	return d.exec(ctx,
-		`INSERT INTO taut_gatekeeper_audits (id, campaign_id, media_id, agent_run_id, run_revision, status, checks, overall_verdict, created_by)
-		 VALUES ($1, $2, $3, NULL, $4, $5, $6::jsonb, $7, $8)`,
-		uuid.NewString(), campaignID, mediaID, runRevision, overallVerdict,
+		`INSERT INTO taut_gatekeeper_audits (id, campaign_id, media_id, slot, agent_run_id, run_revision, status, checks, overall_verdict, created_by)
+		 VALUES ($1, $2, $3, $4, NULL, $5, $6, $7::jsonb, $8, $9)`,
+		uuid.NewString(), campaignID, mediaID, slot, runRevision, overallVerdict,
 		marshalJSON(checks), overallVerdict, nullIfEmpty(userID))
 }
 
@@ -102,7 +105,7 @@ func (d *Deps) saveGatekeeperAudit(ctx context.Context, campaignID, mediaID stri
 // onlyMediaIDs (opsional): batasi + paksa pindai media tertentu meski
 // article_status-nya sudah 'ready' — dipakai tombol "Scan QC Sekarang"/"Cek
 // Validasi" per artikel supaya cek baru (mis. AI Overview) benar-benar jalan.
-func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID string, onlyMediaIDs []string) ([]gatekeeperItemResult, error) {
+func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID string, onlyMediaIDs []string, onlySlots []int) ([]gatekeeperItemResult, error) {
 	if !d.getAgentConfig(ctx, "gatekeeper").Configured {
 		return nil, &agentNotConfiguredError{agent: "gatekeeper"}
 	}
@@ -111,7 +114,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		return nil, err
 	}
 
-	itemsQuery := `SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode, m.website_url
+	itemsQuery := `SELECT tcm.id, tcm.media_id, tcm.slot, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode, m.website_url
 		 FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		 WHERE tcm.campaign_id = $1 AND tcm.status = 'selected' AND tcm.article_document_id IS NOT NULL`
 	queryArgs := []any{campaignID}
@@ -120,6 +123,12 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		// permintaan), tetap kecualikan 'blocked'.
 		itemsQuery += ` AND tcm.article_status IN ('draft','revision','ready') AND tcm.media_id = ANY($2)`
 		queryArgs = append(queryArgs, onlyMediaIDs)
+		if len(onlySlots) > 0 {
+			// Satu kartu artikel = satu slot. Tanpa filter ini, memindai artikel 1
+			// ikut memindai artikel 2..4 di domain yang sama (biaya AI berlipat).
+			itemsQuery += ` AND tcm.slot = ANY($3)`
+			queryArgs = append(queryArgs, onlySlots)
+		}
 	} else {
 		itemsQuery += ` AND tcm.article_status IN ('draft','revision')`
 	}
@@ -163,12 +172,16 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 	startedAt := time.Now()
 	itemID := item.strOr("id", "")
 	mediaID := item.strOr("media_id", "")
+	slot := item.intOr("slot", 1)
+	if slot < 1 {
+		slot = 1
+	}
 	documentID := item.strOr("article_document_id", "")
 
 	// Bahan fakta kanonik yang SAMA dengan yang dipakai Writer (brief Profiler +
 	// materials klien + topik klien + narasumber). Tanpa ini, Checker menilai
 	// klaim bersumber sebagai "tanpa dasar" dan skor entitas/E-E-A-T jatuh.
-	refMaterial, _, err := d.tautReferenceMaterial(ctx, campaign, campaignID, mediaID)
+	refMaterial, _, err := d.tautReferenceMaterial(ctx, campaign, campaignID, mediaID, slot)
 	if err != nil {
 		return gatekeeperItemResult{}, err
 	}
@@ -206,7 +219,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 		}
 		moderation.RecordAudit(ctx, d.Pool, "document", documentID, mod, &brandID)
 		return gatekeeperItemResult{
-			MediaID: mediaID, Status: "blocked", Verdict: "gagal",
+			MediaID: mediaID, Slot: slot, Status: "blocked", Verdict: "gagal",
 			Reason: "Diblokir moderasi (" + mod.Category + ")",
 		}, nil
 	}
@@ -273,7 +286,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 		overallVerdict = "review_required"
 	}
 
-	latestAudit, err := d.getLatestGatekeeperAudit(ctx, campaignID, mediaID)
+	latestAudit, err := d.getLatestGatekeeperAudit(ctx, campaignID, mediaID, slot)
 	if err != nil {
 		return gatekeeperItemResult{}, err
 	}
@@ -281,7 +294,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 	if latestAudit != nil {
 		runRevision = latestAudit.RunRevision + 1
 	}
-	if err := d.saveGatekeeperAudit(ctx, campaignID, mediaID, runRevision, checks, overallVerdict, userID); err != nil {
+	if err := d.saveGatekeeperAudit(ctx, campaignID, mediaID, slot, runRevision, checks, overallVerdict, userID); err != nil {
 		return gatekeeperItemResult{}, err
 	}
 
@@ -411,7 +424,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 	slog.Info("[gatekeeper] audit selesai", "media", mediaID,
 		"batch_ms", batchMS, "revisi", needsRepair, "revisi_ms", revisiMS, "reeval_ms", reevalMS,
 		"total_ms", time.Since(startedAt).Milliseconds(), "status", status)
-	return gatekeeperItemResult{MediaID: mediaID, Status: status, Verdict: verdict}, nil
+	return gatekeeperItemResult{MediaID: mediaID, Slot: slot, Status: status, Verdict: verdict}, nil
 }
 
 // updateGatekeeperAuditChecks: perbarui checks baris audit yang baru dibuat

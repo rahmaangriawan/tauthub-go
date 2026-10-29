@@ -441,6 +441,165 @@ func (d *Deps) TautPlacementPut(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, payload)
 }
 
+// maxSlotsPerMedia: batas teknis satu permintaan, bukan batas produk. Dipakai
+// supaya nilai yang kacau (mis. 999999 dari klien rusak) tidak membuat ribuan
+// baris. Penambahan normal dilakukan satu per satu lewat stepper.
+const maxSlotsPerMedia = 200
+
+// TautPlacementQuantity: PUT /v1/brands/{brandId}/taut/campaigns/{campaignId}/placement/{mediaId}/quantity
+//
+// Mengatur berapa artikel untuk satu media. Tiap artikel adalah baris sendiri
+// di taut_campaign_media dengan nomor `slot`, jadi menaikkan jumlah = menambah
+// baris, menurunkan = menghapus baris slot tertinggi.
+//
+// Slot yang sudah punya artikel TIDAK dihapus: klien harus menghapus artikelnya
+// dulu (aksi eksplisit), supaya naskah tidak hilang tanpa jejak saat stepper
+// ditekan.
+func (d *Deps) TautPlacementQuantity(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	if user == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
+		return
+	}
+	brandID, err := d.brandID(r, user.ID, "writer")
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	campaignID := chiParam(r, "campaignId")
+	mediaID := chiParam(r, "mediaId")
+	if _, err := d.loadCampaignForAgents(r.Context(), campaignID, brandID); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+
+	body, err := requireJSONObject(r)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	rawQty, ok := body["quantity"]
+	if !ok {
+		httpx.Error(w, http.StatusUnprocessableEntity, "quantity wajib diisi.")
+		return
+	}
+	qtyFloat, isNum := rawQty.(float64)
+	if !isNum || qtyFloat != float64(int(qtyFloat)) {
+		httpx.Error(w, http.StatusUnprocessableEntity, "quantity harus bilangan bulat.")
+		return
+	}
+	quantity := int(qtyFloat)
+	if quantity < 1 {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Jumlah artikel minimal 1.")
+		return
+	}
+	if quantity > maxSlotsPerMedia {
+		httpx.Error(w, http.StatusUnprocessableEntity,
+			"Jumlah artikel paling banyak "+itoa(maxSlotsPerMedia)+" per media.")
+		return
+	}
+
+	// Media harus benar-benar ada di kampanye ini.
+	rows, err := d.queryRows(r.Context(),
+		`SELECT id, slot, status, article_document_id
+		 FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2
+		 ORDER BY slot ASC`, campaignID, mediaID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if len(rows) == 0 {
+		httpx.Error(w, http.StatusNotFound, "Media tidak terpilih di kampanye ini.")
+		return
+	}
+
+	// Hanya baris 'selected' yang dihitung sebagai artikel aktif.
+	active := make([]rowMap, 0, len(rows))
+	maxSlot := 0
+	for _, row := range rows {
+		if slot := row.intOr("slot", 1); slot > maxSlot {
+			maxSlot = slot
+		}
+		if row.strOr("status", "") == "selected" {
+			active = append(active, row)
+		}
+	}
+
+	// Media yang seluruh barisnya 'removed' (pernah dilepas lalu dipilih lagi
+	// lewat jalur lain): hidupkan baris slot terendah dulu, bukan menambah slot
+	// baru di atasnya — supaya penomoran artikel tetap mulai dari 1.
+	if len(active) == 0 {
+		if err := d.exec(r.Context(),
+			`UPDATE taut_campaign_media SET status = 'selected'
+			 WHERE id = (SELECT id FROM taut_campaign_media
+			             WHERE campaign_id = $1 AND media_id = $2
+			             ORDER BY slot ASC LIMIT 1)`, campaignID, mediaID); err != nil {
+			d.writeErr(w, err)
+			return
+		}
+		active = append(active, rows[0])
+	}
+
+	if quantity > len(active) {
+		if err := d.addPlacementSlots(r.Context(), campaignID, mediaID, maxSlot, quantity-len(active)); err != nil {
+			d.writeErr(w, err)
+			return
+		}
+	} else if quantity < len(active) {
+		if err := d.trimPlacementSlots(r.Context(), campaignID, mediaID, active, quantity); err != nil {
+			d.writeErr(w, err)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "media_id": mediaID, "quantity": quantity})
+}// addPlacementSlots: tambahkan n baris slot baru di atas nomor slot tertinggi.
+// Harga dan status menyalin slot 1 (harga yang sama seperti tabel media).
+func (d *Deps) addPlacementSlots(ctx context.Context, campaignID, mediaID string, maxSlot, n int) error {
+	for i := 1; i <= n; i++ {
+		// Salin dari slot TERENDAH yang ada (biasanya slot 1) supaya tetap
+		// bekerja walau artikel pertama sudah tidak ada.
+		if err := d.exec(ctx,
+			`INSERT INTO taut_campaign_media (id, campaign_id, media_id, slot, source, status, price, match_rank, match_reason, angle_slug)
+			 SELECT $1, $2, $3, $4, 'manual', 'selected', tcm1.price, tcm1.match_rank, tcm1.match_reason, tcm1.angle_slug
+			 FROM taut_campaign_media tcm1
+			 WHERE tcm1.campaign_id = $2 AND tcm1.media_id = $3
+			 ORDER BY tcm1.slot ASC
+			 LIMIT 1`,
+			newUUID(), campaignID, mediaID, maxSlot+i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// trimPlacementSlots: hapus slot dari nomor tertinggi ke bawah sampai tersisa
+// `keep` baris. Slot yang sudah berisi artikel ditolak, bukan dihapus diam-diam.
+func (d *Deps) trimPlacementSlots(ctx context.Context, campaignID, mediaID string, active []rowMap, keep int) error {
+	toRemove := len(active) - keep
+	blocked := []string{}
+	for i := len(active) - 1; i >= 0 && toRemove > 0; i-- {
+		row := active[i]
+		slot := row.intOr("slot", 1)
+		if row.has("article_document_id") && row.strOr("article_document_id", "") != "" {
+			blocked = append(blocked, itoa(slot))
+			continue
+		}
+		if err := d.exec(ctx,
+			"DELETE FROM taut_campaign_media WHERE id = $1", row.strOr("id", "")); err != nil {
+			return err
+		}
+		toRemove--
+	}
+	if toRemove > 0 {
+		// Pesan menyebut nomor artikelnya supaya klien tahu yang mana yang harus
+		// dibereskan dulu.
+		return errStatus(http.StatusConflict,
+			"Artikel "+strings.Join(blocked, ", ")+" sudah punya naskah. Hapus naskahnya dulu sebelum mengurangi jumlah artikel.")
+	}
+	return nil
+}
+
 // ---------- finish (tahap 7, Gatekeeper) ----------
 
 // TautCampaignFinish: POST /v1/brands/{brandId}/taut/campaigns/{campaignId}/finish

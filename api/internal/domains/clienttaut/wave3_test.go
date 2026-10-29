@@ -91,8 +91,8 @@ func TestPlanMatchmakerWrites(t *testing.T) {
 		t.Fatalf("match_reason m1 salah: %v", upd["match_reason"])
 	}
 
-	wantSQL := "INSERT INTO taut_campaign_media (id, campaign_id, media_id, source, status, match_reason, ai_score, match_rank) " +
-		"VALUES ($1, $2, $3, $4, $5, $6, $7), ($8, $9, $10, $11, $12, $13, $14)"
+	wantSQL := "INSERT INTO taut_campaign_media (id, campaign_id, media_id, slot, source, status, match_reason, ai_score, match_rank) " +
+		"VALUES ($1, $2, $3, 1, $4, $5, $6, $7), ($8, $9, $10, 1, $11, $12, $13, $14)"
 	if plan.insertSQL != wantSQL {
 		t.Fatalf("SQL insert salah:\n got: %s\nwant: %s", plan.insertSQL, wantSQL)
 	}
@@ -129,10 +129,10 @@ func TestPlanMatchmakerWritesEmpty(t *testing.T) {
 // SQL insert memakai kolom yang sama dengan statement lama.
 func TestPlanMatchmakerWritesSQLShape(t *testing.T) {
 	_, plan := planMatchmakerWrites("camp-1", []candidateLine{{MediaID: "m1", Name: "M1"}}, nil, map[string]bool{})
-	if !strings.HasPrefix(plan.insertSQL, "INSERT INTO taut_campaign_media (id, campaign_id, media_id, source, status, match_reason, ai_score, match_rank)") {
+	if !strings.HasPrefix(plan.insertSQL, "INSERT INTO taut_campaign_media (id, campaign_id, media_id, slot, source, status, match_reason, ai_score, match_rank)") {
 		t.Fatalf("kolom insert berubah: %s", plan.insertSQL)
 	}
-	if !strings.Contains(plan.insertSQL, "($1, $2, $3, $4, $5, $6, $7)") {
+	if !strings.Contains(plan.insertSQL, "($1, $2, $3, 1, $4, $5, $6, $7)") {
 		t.Fatalf("placeholder per baris salah: %s", plan.insertSQL)
 	}
 }

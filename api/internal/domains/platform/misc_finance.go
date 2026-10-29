@@ -1023,7 +1023,8 @@ func (d *Deps) OrdersCampaignsList(w http.ResponseWriter, r *http.Request) {
 	     ELSE (SELECT COALESCE(SUM(p2.client_price), 0) FROM publications p2 WHERE p2.campaign_id = c.id AND p2.status <> 'cancelled') END`
 	selectColumns := `c.id, c.order_code, c.name, c.taut_status, c.status AS campaign_status, c.budget, c.created_at,
 	                  b.name AS brand_name, b.public_id AS brand_public_id,
-	                  (SELECT COUNT(*) FROM taut_campaign_media tcm WHERE tcm.campaign_id = c.id AND tcm.status = 'selected') AS media_count,
+	                  (SELECT COUNT(DISTINCT tcm.media_id) FROM taut_campaign_media tcm WHERE tcm.campaign_id = c.id AND tcm.status = 'selected') AS media_count,
+	                  (SELECT COUNT(*) FROM taut_campaign_media tcm WHERE tcm.campaign_id = c.id AND tcm.status = 'selected') AS article_count,
 	                  (SELECT COUNT(*) FROM publications p WHERE p.campaign_id = c.id AND p.status <> 'cancelled') AS publication_count,
 	                  (SELECT COUNT(*) FROM publications p WHERE p.campaign_id = c.id AND p.status = 'published') AS published_count,
 	                  (SELECT COALESCE(SUM(p.client_price), 0) FROM publications p WHERE p.campaign_id = c.id AND p.status <> 'cancelled') AS realized_cost,
@@ -1045,7 +1046,8 @@ func (d *Deps) OrdersCampaignsList(w http.ResponseWriter, r *http.Request) {
 			"campaign_status": row.strOr("campaign_status", ""), "budget": int(row.numOr("budget")),
 			"created_at":      row.anyOrNil("created_at"),
 			"brand_name":      ptNullableStr(row, "brand_name"), "brand_public_id": ptNullableStr(row, "brand_public_id"),
-			"media_count": int(row.numOr("media_count")), "publication_count": int(row.numOr("publication_count")),
+			"media_count": int(row.numOr("media_count")), "article_count": int(row.numOr("article_count")),
+			"publication_count": int(row.numOr("publication_count")),
 			"published_count": int(row.numOr("published_count")),
 			"planned_cost":    int(row.numOr("planned_cost")), "realized_cost": int(row.numOr("realized_cost")),
 		})

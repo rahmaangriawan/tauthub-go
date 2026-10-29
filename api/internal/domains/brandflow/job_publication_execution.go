@@ -2119,6 +2119,19 @@ func (d *Deps) peResolveCoverURL(ctx context.Context, publication, media bsRow) 
 	if campaignID == "" || mediaID == "" {
 		return ""
 	}
+	// Satu media bisa punya beberapa artikel, jadi utamakan slot yang artikelnya
+	// SAMA dengan publikasi ini (dicocokkan lewat document_id). Tanpa ini, empat
+	// artikel satu domain bisa saling meminjam cover.
+	if documentID := publication.strOr("document_id", ""); documentID != "" {
+		own, ownErr := d.queryRow(ctx,
+			"SELECT featured_image_url FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND article_document_id = $3 AND featured_image_url IS NOT NULL AND featured_image_url <> '' LIMIT 1",
+			campaignID, mediaID, documentID)
+		if ownErr == nil && own != nil {
+			if v := strings.TrimSpace(own.strOr("featured_image_url", "")); v != "" {
+				return v
+			}
+		}
+	}
 	row, err := d.queryRow(ctx,
 		"SELECT featured_image_url FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND featured_image_url IS NOT NULL AND featured_image_url <> '' LIMIT 1",
 		campaignID, mediaID)

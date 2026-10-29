@@ -143,7 +143,9 @@ func (d *Deps) runMatchmaker(ctx context.Context, campaignID, brandID string) (m
 		byID[p.MediaID] = p
 	}
 
-	existing, err := d.queryRows(ctx, "SELECT media_id FROM taut_campaign_media WHERE campaign_id = $1", campaignID)
+	// Hanya slot 1 yang menentukan apakah media sudah "ada" di kampanye; slot
+	// tambahan adalah artikel kedua dan seterusnya pada media yang sama.
+	existing, err := d.queryRows(ctx, "SELECT media_id FROM taut_campaign_media WHERE campaign_id = $1 AND slot = 1", campaignID)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +164,7 @@ func (d *Deps) runMatchmaker(ctx context.Context, campaignID, brandID string) (m
 			`UPDATE taut_campaign_media tcm
 			 SET match_reason = v.match_reason, status = v.status, ai_score = v.ai_score, match_rank = v.match_rank
 			 FROM jsonb_to_recordset($1::jsonb) AS v(media_id text, match_reason text, status text, ai_score int, match_rank int)
-			 WHERE tcm.campaign_id = $2 AND tcm.media_id::text = v.media_id`,
+			 WHERE tcm.campaign_id = $2 AND tcm.media_id::text = v.media_id AND tcm.slot = 1`,
 			jsonString(plan.updateRows), campaignID); err != nil {
 			return nil, err
 		}
@@ -238,7 +240,7 @@ func planMatchmakerWrites(campaignID string, pool []candidateLine, ranked []rank
 				"ai_score": aiScore, "match_rank": rank,
 			})
 		} else {
-			insertValues = append(insertValues, "("+placeholders(insertParam, 7)+")")
+			insertValues = append(insertValues, "("+placeholders(insertParam, 7)+", 1)")
 			plan.insertArgs = append(plan.insertArgs, newUUID(), campaignID, item.MediaID, status, reason, aiScore, rank)
 			insertParam += 7
 		}
@@ -247,7 +249,7 @@ func planMatchmakerWrites(campaignID string, pool []candidateLine, ranked []rank
 		})
 	}
 	if len(insertValues) > 0 {
-		plan.insertSQL = "INSERT INTO taut_campaign_media (id, campaign_id, media_id, source, status, match_reason, ai_score, match_rank) VALUES " + strings.Join(insertValues, ", ")
+		plan.insertSQL = "INSERT INTO taut_campaign_media (id, campaign_id, media_id, slot, source, status, match_reason, ai_score, match_rank) VALUES " + strings.Join(insertValues, ", ")
 	}
 	return out, plan
 }

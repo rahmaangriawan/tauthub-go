@@ -88,8 +88,8 @@ func (d *Deps) TautArticleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item, err := d.queryRow(r.Context(),
-		"SELECT id, article_document_id, featured_image_url, category FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 LIMIT 1",
-		campaignID, mediaID)
+		"SELECT id, article_document_id, featured_image_url, category FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND slot = $3 LIMIT 1",
+		campaignID, mediaID, slotParam(r))
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -153,8 +153,8 @@ func (d *Deps) TautArticlePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item, err := d.queryRow(r.Context(),
-		"SELECT id, article_document_id FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 LIMIT 1",
-		campaignID, mediaID)
+		"SELECT id, article_document_id FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND slot = $3 LIMIT 1",
+		campaignID, mediaID, slotParam(r))
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -331,8 +331,8 @@ func (d *Deps) TautArticleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	item, err := d.queryRow(r.Context(),
-		"SELECT id, article_document_id FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND status = 'selected' LIMIT 1",
-		campaignID, mediaID)
+		"SELECT id, article_document_id FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND slot = $3 AND status = 'selected' LIMIT 1",
+		campaignID, mediaID, slotParam(r))
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -860,7 +860,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items, err := d.queryRows(r.Context(), `
-		SELECT tcm.media_id, m.name, m.media_type, m.website_url,
+		SELECT tcm.media_id, tcm.slot, m.name, m.media_type, m.website_url,
 		       COALESCE(tcm.price, m.price, 0) AS price,
 		       m.max_links, sm.da, sm.spam_score, m.traffic_estimate,
 		       p.scheduled_at, tcm.article_document_id, d.title AS article_title, d.updated_at AS article_updated_at,
@@ -872,7 +872,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN content_documents d ON d.id = tcm.article_document_id
 		LEFT JOIN publications p ON p.document_id = tcm.article_document_id AND p.media_id = tcm.media_id
 		WHERE tcm.campaign_id = $1 AND tcm.status = 'selected'
-		ORDER BY tcm.match_rank ASC NULLS LAST, m.name ASC`, campaignID)
+		ORDER BY tcm.match_rank ASC NULLS LAST, m.name ASC, tcm.slot ASC`, campaignID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -888,7 +888,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 	// menampilkan badge "sudah berapa kali dianalisis".
 	auditCounts := map[string]int{}
 	for i := range audits {
-		auditCounts[audits[i].MediaID]++
+		auditCounts[placementKey(audits[i].MediaID, audits[i].Slot)]++
 	}
 
 	docIDs := []string{}
@@ -931,9 +931,10 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		totalCostTC += (price + safeRate/2) / safeRate
 
 		mediaID := item.strOr("media_id", "")
+		slot := item.intOr("slot", 1)
 		var latest *gatekeeperAuditRow
 		for i := range audits {
-			if audits[i].MediaID == mediaID {
+			if audits[i].MediaID == mediaID && audits[i].Slot == slot {
 				latest = &audits[i]
 				break
 			}
@@ -980,7 +981,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		}
 
 		mediaOut = append(mediaOut, map[string]any{
-			"media_id": item.raw("media_id"), "name": item.raw("name"), "media_type": item.raw("media_type"),
+			"media_id": item.raw("media_id"), "slot": slot, "name": item.raw("name"), "media_type": item.raw("media_type"),
 			"website_url":        item.raw("website_url"),
 			"featured_image_url": coverURL,
 			"price_idr":          price,
@@ -999,7 +1000,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 			"client_approved_at": item.timePtr("pub_client_approved_at"),
 			"audit": map[string]any{
 				"status": auditStatus,
-				"count":  auditCounts[item.strOr("media_id", "")],
+				"count":  auditCounts[placementKey(mediaID, slot)],
 				"checks": map[string]any{
 					"aiOverview":    aiOverview,
 					"contentSafety": contentSafety,
@@ -1049,8 +1050,25 @@ func (d *Deps) TautGatekeeperAuditAll(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Array must contain at most 50 element(s)")
 		return
 	}
+	// slots opsional: batasi pemindaian ke nomor artikel tertentu pada media
+	// yang diminta. Kosong = semua slot (perilaku lama).
+	requestedSlots := []int{}
+	if raw, ok := body["slots"].([]any); ok {
+		if len(raw) > 50 {
+			httpx.Error(w, http.StatusUnprocessableEntity, "Array must contain at most 50 element(s)")
+			return
+		}
+		for _, v := range raw {
+			n, isNum := v.(float64)
+			if !isNum || n < 1 {
+				httpx.Error(w, http.StatusUnprocessableEntity, "Invalid slot")
+				return
+			}
+			requestedSlots = append(requestedSlots, int(n))
+		}
+	}
 	selected, err := d.queryRows(r.Context(),
-		"SELECT media_id, article_status FROM taut_campaign_media WHERE campaign_id = $1 AND status = 'selected' ORDER BY created_at", campaignID)
+		"SELECT media_id, slot, article_status FROM taut_campaign_media WHERE campaign_id = $1 AND status = 'selected' ORDER BY created_at", campaignID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -1083,9 +1101,12 @@ func (d *Deps) TautGatekeeperAuditAll(w http.ResponseWriter, r *http.Request) {
 		allReady := true
 		for _, row := range scope {
 			mediaID := row.strOr("media_id", "")
+			slot := row.intOr("slot", 1)
 			var latest *gatekeeperAuditRow
 			for i := range audits {
-				if audits[i].MediaID == mediaID {
+				// Audit menilai isi satu artikel, jadi pencocokannya harus
+				// (media, slot) — bukan media saja.
+				if audits[i].MediaID == mediaID && audits[i].Slot == slot {
 					latest = &audits[i]
 					break
 				}
@@ -1104,7 +1125,7 @@ func (d *Deps) TautGatekeeperAuditAll(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := d.runGatekeeper(r.Context(), campaignID, brandRow.ID, user.ID, requested)
+	results, err := d.runGatekeeper(r.Context(), campaignID, brandRow.ID, user.ID, requested, requestedSlots)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -1148,36 +1169,50 @@ func (d *Deps) TautGatekeeperDistribute(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ready, err := d.queryRows(r.Context(),
-		"SELECT media_id FROM taut_campaign_media WHERE campaign_id = $1 AND status = 'selected' AND article_status = 'ready' AND article_document_id IS NOT NULL", campaignID)
+		"SELECT media_id, slot FROM taut_campaign_media WHERE campaign_id = $1 AND status = 'selected' AND article_status = 'ready' AND article_document_id IS NOT NULL ORDER BY media_id, slot", campaignID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	readyIDs := map[string]bool{}
+	readyRefs := make([]tautPlacementRef, 0, len(ready))
+	readyKeys := map[string]bool{}
 	for _, row := range ready {
-		readyIDs[row.strOr("media_id", "")] = true
+		ref := tautPlacementRef{MediaID: row.strOr("media_id", ""), Slot: row.intOr("slot", 1)}
+		readyRefs = append(readyRefs, ref)
+		readyKeys[placementKey(ref.MediaID, ref.Slot)] = true
 	}
 	selectedMedia, err := d.queryRows(r.Context(), `
-		SELECT tcm.media_id, m.name, tcm.article_status
+		SELECT tcm.media_id, tcm.slot, m.name, tcm.article_status
 		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		WHERE tcm.campaign_id = $1 AND tcm.status = 'selected'`, campaignID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	// Hitung berapa slot per media supaya pesan "belum ready" bisa menyebut
+	// artikel ke berapa pada domain itu.
+	slotsPerMedia := map[string]int{}
+	for _, row := range selectedMedia {
+		slotsPerMedia[row.strOr("media_id", "")]++
+	}
 	notReady := []string{}
 	for _, row := range selectedMedia {
-		if !readyIDs[row.strOr("media_id", "")] {
-			name := row.strOr("name", "")
-			if name == "" {
-				id := row.strOr("media_id", "")
-				if len(id) > 8 {
-					id = id[:8]
-				}
-				name = id
-			}
-			notReady = append(notReady, name+" ("+row.strOr("article_status", "")+")")
+		mediaID := row.strOr("media_id", "")
+		if readyKeys[placementKey(mediaID, row.intOr("slot", 1))] {
+			continue
 		}
+		name := row.strOr("name", "")
+		if name == "" {
+			if len(mediaID) > 8 {
+				name = mediaID[:8]
+			} else {
+				name = mediaID
+			}
+		}
+		if slotsPerMedia[mediaID] > 1 {
+			name = name + " (artikel " + itoa(row.intOr("slot", 1)) + ")"
+		}
+		notReady = append(notReady, name+" ("+row.strOr("article_status", "")+")")
 	}
 	if len(notReady) > 0 {
 		httpx.Error(w, http.StatusUnprocessableEntity,
@@ -1189,7 +1224,7 @@ func (d *Deps) TautGatekeeperDistribute(w http.ResponseWriter, r *http.Request) 
 		d.writeErr(w, err)
 		return
 	}
-	timeline, err := timelineFromBody(body, readyIDs)
+	timeline, err := timelineFromBody(body, readyRefs)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -1275,10 +1310,11 @@ type canDistributeResult struct {
 	MediaCount   int
 }
 
-// checkCanDistribute: server-side gate — setiap media punya audit hard gate passed.
+// checkCanDistribute: server-side gate — setiap slot artikel punya audit hard
+// gate passed, dan total biaya dihitung per slot (4 artikel satu domain = 4x).
 func (d *Deps) checkCanDistribute(ctx context.Context, campaignID string) (canDistributeResult, error) {
 	items, err := d.queryRows(ctx, `
-		SELECT tcm.media_id, COALESCE(tcm.price, m.price, 0) AS price
+		SELECT tcm.media_id, tcm.slot, COALESCE(tcm.price, m.price, 0) AS price
 		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		WHERE tcm.campaign_id = $1 AND tcm.status = 'selected'`, campaignID)
 	if err != nil {
@@ -1308,9 +1344,10 @@ func (d *Deps) checkCanDistribute(ctx context.Context, campaignID string) (canDi
 	can := true
 	for _, item := range items {
 		mediaID := item.strOr("media_id", "")
+		slot := item.intOr("slot", 1)
 		var latest *gatekeeperAuditRow
 		for i := range audits {
-			if audits[i].MediaID == mediaID {
+			if audits[i].MediaID == mediaID && audits[i].Slot == slot {
 				latest = &audits[i]
 				break
 			}
@@ -1452,7 +1489,7 @@ func (d *Deps) TautProduceOne(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
-	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID, opts)
+	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID, slotParam(r), opts)
 	if err != nil {
 		var ic *insufficientCreditsError
 		if asInsufficient(err, &ic) {
@@ -1507,7 +1544,7 @@ func (d *Deps) TautProduceOneStream(w http.ResponseWriter, r *http.Request) {
 	opts.StreamHTML = func(partial string) {
 		sendEvent("delta", map[string]any{"append": partial})
 	}
-	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID, opts)
+	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID, slotParam(r), opts)
 	if err != nil {
 		var ic *insufficientCreditsError
 		if asInsufficient(err, &ic) {

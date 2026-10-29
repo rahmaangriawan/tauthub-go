@@ -39,12 +39,13 @@ func (d *Deps) runWriter(ctx context.Context, campaignID, brandID, userID, appBa
 type selectedMediaRow struct {
 	ID       string
 	MediaID  string
+	Slot     int
 	Document *string
 }
 
 func (d *Deps) selectedMedia(ctx context.Context, campaignID string) ([]selectedMediaRow, error) {
 	rows, err := d.queryRows(ctx,
-		"SELECT id, media_id, article_document_id FROM taut_campaign_media WHERE campaign_id = $1 AND status = 'selected' ORDER BY created_at", campaignID)
+		"SELECT id, media_id, slot, article_document_id FROM taut_campaign_media WHERE campaign_id = $1 AND status = 'selected' ORDER BY media_id, slot", campaignID)
 	if err != nil {
 		return nil, err
 	}

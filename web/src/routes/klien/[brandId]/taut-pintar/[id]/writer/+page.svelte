@@ -58,6 +58,8 @@
 		article_source?: 'ai' | 'manual' | null;
 		/** Aturan panjang artikel media (mis. kata_300_700 / custom_500_1000). */
 		word_count_mode?: string | null;
+		/** Nomor artikel pada media ini (1 = artikel pertama). */
+		slot?: number;
 	};
 	type LinksForm = {
 		tracking_mode: 'direct' | 'tauthub';
@@ -70,6 +72,20 @@
 	type ArticleStats = { words: number; images: number; links: number; cover: string | null; category: string | null };
 
 	const EMPTY_LINKS: LinksForm = { tracking_mode: 'direct', primary_url: '', primary_anchor: '', backup_url: '', backup_anchor: '' };
+
+	/** Kunci per-artikel. Media dengan satu artikel tetap memakai media_id
+	 *  (kampanye lama tidak berubah sama sekali); artikel kedua dan seterusnya
+	 *  memakai "media_id:slot". */
+	function pkey(m: { media_id: string; slot?: number | null }): string {
+		const slot = m.slot ?? 1;
+		return slot > 1 ? `${m.media_id}:${slot}` : m.media_id;
+	}
+
+	/** Query string slot untuk endpoint artikel/produce (default server = 1). */
+	function slotQuery(slot?: number | null): string {
+		const s = slot ?? 1;
+		return s > 1 ? `?slot=${s}` : '';
+	}
 
 	/** Izin backlink media: keputusan mitra via max_links (0 = tidak boleh);
 	 *  allow_hyperlink hanya fallback baris legacy yang max_links-nya kosong. */
@@ -181,7 +197,7 @@
 	// Preset cepat yang sedang berlaku per media, untuk sorotan tombol. Kosong
 	// berarti waktunya diketik manual sehingga tidak ada preset yang aktif.
 	let quickPick = $state<Record<string, 'now' | '1h' | '24h' | '3d'>>({});
-	let missingCovers = $state<{ mediaId: string; name: string }[]>([]);
+	let missingCovers = $state<{ mediaId: string; name: string; slot: number }[]>([]);
 	let coverBusy = $state(false);
 	let publishError = $state('');
 	let shortLinkDomain = $state<string | null>(null);
@@ -190,6 +206,8 @@
 
 	let editor = $state<{
 		mediaId: string;
+		/** Nomor artikel pada media ini; ikut menentukan endpoint artikel. */
+		slot: number;
 		mediaName: string;
 		tab: 'tulis' | 'unggah' | 'generate';
 		title: string;
@@ -228,13 +246,53 @@
 	const manualMode = $derived(page.url.searchParams.get('mode') === 'manual');
 	const manualFlow = $derived(entryMode ? entryMode === 'manual' : manualMode);
 	const selected = $derived(placement.filter((p) => p.status === 'selected'));
+
+	// ── Jumlah artikel per media ────────────────────────────────────────────
+	// Satu domain boleh punya beberapa artikel (migrasi 272). Baris placement
+	// adalah artikelnya, jadi jumlah = banyak baris 'selected' untuk media itu.
+	const slotCounts = $derived.by(() => {
+		const counts: Record<string, number> = {};
+		for (const m of selected) counts[m.media_id] = (counts[m.media_id] ?? 0) + 1;
+		return counts;
+	});
+	// Media yang barisnya pertama kali muncul — tempat stepper dipasang supaya
+	// tidak ada kontrol dobel di tiap artikel.
+	function isGroupStart(list: PlacementItem[], index: number): boolean {
+		return index === 0 || list[index - 1].media_id !== list[index].media_id;
+	}
+	const mediaCount = $derived(Object.keys(slotCounts).length);
+	// cost.count menghitung SEMUA baris placement = jumlah artikel. Label biaya
+	// memakai dua angka terpisah supaya 4 artikel di satu domain tidak terbaca
+	// sebagai 4 media.
+	const articleCount = $derived(selected.length);
+	let qtyBusy = $state<string | null>(null);
+	async function setQuantity(m: PlacementItem, next: number) {
+		if (viewOnly || qtyBusy) return;
+		const target = Math.max(1, next);
+		if (target === (slotCounts[m.media_id] ?? 1)) return;
+		qtyBusy = m.media_id;
+		error = '';
+		try {
+			const res = await apiRequest(`${apiBase}/placement/${m.media_id}/quantity`, {
+				method: 'PUT',
+				body: JSON.stringify({ quantity: target })
+			});
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengubah jumlah artikel.')));
+			await load();
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : tr('Gagal mengubah jumlah artikel.');
+		} finally {
+			qtyBusy = null;
+		}
+	}
+
 	// ── Seleksi Dapur Produksi (aturan pemilik produk): centang per media,
 	//    bar aksi muncul di bawah header; "Generate Semua" masih placeholder
 	//    popup "Dalam Pengerjaan" — mesin bulk menyusul.
 	let pickedIds = $state<Record<string, boolean>>({});
 	let bulkPopupOpen = $state(false);
 	const pickedList = $derived(
-		Object.keys(pickedIds).filter((id) => pickedIds[id] && selected.some((m) => m.media_id === id))
+		Object.keys(pickedIds).filter((id) => pickedIds[id] && selected.some((m) => pkey(m) === id))
 	);
 	const allPicked = $derived(selected.length > 0 && pickedList.length === selected.length);
 	function togglePicked(id: string) {
@@ -245,7 +303,7 @@
 			pickedIds = {};
 			return;
 		}
-		pickedIds = Object.fromEntries(selected.map((m) => [m.media_id, true]));
+		pickedIds = Object.fromEntries(selected.map((m) => [pkey(m), true]));
 	}
 
 	onMount(() => {
@@ -400,7 +458,7 @@
 		for (const item of placement) {
 			if (!hasDoc(item)) continue;
 			try {
-				const res = await apiRequest(`${apiBase}/articles/${item.media_id}`);
+				const res = await apiRequest(`${apiBase}/articles/${item.media_id}${slotQuery(item.slot)}`);
 				if (!res.ok) continue;
 				const d = await res.json();
 				const html = d.content_html ?? '';
@@ -417,9 +475,9 @@
 					if (tokens.includes('sponsored')) sponsored++;
 					else if (tokens.includes('nofollow')) nofollow++;
 				}
-				linkStats = { ...linkStats, [item.media_id]: { dofollow: tags.length - nofollow - sponsored, nofollow, sponsored } };
-				articleStats = { ...articleStats, [item.media_id]: { words, images: imgs.length, links: tags.length, cover: d.featured_image_url ?? null, category: d.category ?? null } };
-				if (d.title?.trim()) articleTitles = { ...articleTitles, [item.media_id]: d.title.trim() };
+				linkStats = { ...linkStats, [pkey(item)]: { dofollow: tags.length - nofollow - sponsored, nofollow, sponsored } };
+				articleStats = { ...articleStats, [pkey(item)]: { words, images: imgs.length, links: tags.length, cover: d.featured_image_url ?? null, category: d.category ?? null } };
+				if (d.title?.trim()) articleTitles = { ...articleTitles, [pkey(item)]: d.title.trim() };
 			} catch {
 				/* fallback badge */
 			}
@@ -433,7 +491,7 @@
 	// menyuruh "Cek QC" padahal badge artikel sudah hijau. 'draft' lokal hanya
 	// dipakai selama server belum sempat melaporkan dokumennya (anti-kedip).
 	function articleStatusOf(item: PlacementItem): string {
-		const local = genState[item.media_id];
+		const local = genState[pkey(item)];
 		if (local === 'generating' || local === 'queued' || local === 'error') return local;
 		if (local === 'draft' && item.article_status === 'none') return 'draft';
 		return item.article_status;
@@ -458,22 +516,22 @@
 
 		// QC dianggap belum dicek bila belum ada audit untuk media itu; gagal bila
 		// sudah dipindai tetapi artikel belum berstatus "ready".
-		add('qc', 'QC belum dicek', docs.filter((m) => (qcCounts[m.media_id] ?? 0) === 0));
-		add('qc-fail', 'QC belum lulus', docs.filter((m) => (qcCounts[m.media_id] ?? 0) > 0 && articleStatusOf(m) !== 'ready'));
+		add('qc', 'QC belum dicek', docs.filter((m) => (qcCounts[pkey(m)] ?? 0) === 0));
+		add('qc-fail', 'QC belum lulus', docs.filter((m) => (qcCounts[pkey(m)] ?? 0) > 0 && articleStatusOf(m) !== 'ready'));
 
-		add('cover', 'Cover belum ada', docs.filter((m) => articleStats[m.media_id] && !articleStats[m.media_id].cover));
+		add('cover', 'Cover belum ada', docs.filter((m) => articleStats[pkey(m)] && !articleStats[pkey(m)].cover));
 
 		add(
 			'category',
 			'Kategori belum dipilih',
-			docs.filter((m) => m.category_required === true && articleStats[m.media_id] && !articleStats[m.media_id].category)
+			docs.filter((m) => m.category_required === true && articleStats[pkey(m)] && !articleStats[pkey(m)].category)
 		);
 		return groups;
 	});
 
 	/** Media yang masih perlu dipindai: belum punya audit atau belum lulus. */
 	const qcTargets = $derived(
-		selected.filter((m) => hasDoc(m) && ((qcCounts[m.media_id] ?? 0) === 0 || articleStatusOf(m) !== 'ready'))
+		selected.filter((m) => hasDoc(m) && ((qcCounts[pkey(m)] ?? 0) === 0 || articleStatusOf(m) !== 'ready'))
 	);
 	const readyToPublish = $derived(distributable === true && readinessGroups.length === 0);
 
@@ -570,7 +628,7 @@
 
 	async function generateOne(item: PlacementItem, openAfter = true) {
 		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
-		genState = { ...genState, [item.media_id]: 'generating' };
+		genState = { ...genState, [pkey(item)]: 'generating' };
 		error = '';
 		try {
 			if (linksStatus === 'dirty' && linksComplete()) {
@@ -587,6 +645,7 @@
 			const linkLimit = mediaAllowsLink(item) ? (item.max_links && item.max_links > 0 ? item.max_links : 2) : 0;
 			editor = {
 				mediaId: item.media_id,
+				slot: item.slot ?? 1,
 				mediaName: item.name,
 				tab: 'tulis',
 				title: '',
@@ -602,7 +661,7 @@
 			const token = getAccessToken();
 			const controller = new AbortController();
 			const abortTimer = window.setTimeout(() => controller.abort(), 300_000);
-			const res = await fetch(`${apiBase}/produce/${item.media_id}/stream`, {
+			const res = await fetch(`${apiBase}/produce/${item.media_id}/stream${slotQuery(item.slot)}`, {
 				method: 'POST',
 				headers: {
 					...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -653,7 +712,7 @@
 			window.clearTimeout(abortTimer);
 			if (streamErr) throw new Error(streamErr);
 			if (!finished) throw new Error(tr('Koneksi streaming terputus.'));
-			genState = { ...genState, [item.media_id]: 'draft' };
+			genState = { ...genState, [pkey(item)]: 'draft' };
 			qcToken += 1;
 			// Penulisan/gambar AI di atas mengubah tagihan — segarkan data biaya
 			// supaya bar Total Tagihan Akhir berubah begitu generate selesai.
@@ -669,7 +728,7 @@
 		} catch (reason) {
 			streamHtml = null;
 			editor = null;
-			genState = { ...genState, [item.media_id]: 'error' };
+			genState = { ...genState, [pkey(item)]: 'error' };
 			error = reason instanceof Error ? reason.message : tr('Gagal generate artikel.');
 		}
 	}
@@ -691,7 +750,7 @@
 		error = '';
 		bulkProgress = { done: 0, total: targets.length };
 		const queued: Record<string, string> = { ...genState };
-		for (const m of targets) queued[m.media_id] = 'queued';
+		for (const m of targets) queued[pkey(m)] = 'queued';
 		genState = queued;
 		let done = 0;
 		let stop = false;
@@ -706,15 +765,15 @@
 				if (idx >= targets.length) return;
 				const m = targets[idx];
 				const isRegen = hasDoc(m);
-				genState = { ...genState, [m.media_id]: 'generating' };
+				genState = { ...genState, [pkey(m)]: 'generating' };
 				try {
 					// Sama seperti generate satu artikel: ini panggilan LLM.
-					const res = await apiRequest(`${apiBase}/produce/${m.media_id}`, { method: 'POST' }, 240_000);
+					const res = await apiRequest(`${apiBase}/produce/${m.media_id}${slotQuery(m.slot)}`, { method: 'POST' }, 240_000);
 					if (!res.ok) throw new Error(await readApiError(res, isRegen ? 'Gagal generate ulang artikel.': tr('Gagal generate artikel.')));
-					genState = { ...genState, [m.media_id]: 'draft' };
+					genState = { ...genState, [pkey(m)]: 'draft' };
 				} catch (reason) {
 					const msg = reason instanceof Error ? reason.message : tr('Gagal generate artikel.');
-					genState = { ...genState, [m.media_id]: 'error' };
+					genState = { ...genState, [pkey(m)]: 'error' };
 					error = `${m.name}: ${msg}`;
 					if (/kredit|saldo|402/i.test(msg)) stop = true;
 				}
@@ -736,13 +795,14 @@
 	async function openPreview(item: PlacementItem) {
 		error = '';
 		try {
-			const res = await apiRequest(`${apiBase}/articles/${item.media_id}`);
+			const res = await apiRequest(`${apiBase}/articles/${item.media_id}${slotQuery(item.slot)}`);
 			if (!res.ok) throw new Error(await readApiError(res, 'Artikel belum tersedia.'));
 			const d = await res.json();
 			const linkLimit = mediaAllowsLink(item) ? (item.max_links && item.max_links > 0 ? item.max_links : 2) : 0;
 			editorError = '';
 			editor = {
 				mediaId: item.media_id,
+				slot: item.slot ?? 1,
 				mediaName: item.name,
 				tab: 'tulis',
 				title: d.title ?? '',
@@ -770,6 +830,7 @@
 		editorError = '';
 		editor = {
 			mediaId: item.media_id,
+			slot: item.slot ?? 1,
 			mediaName: item.name,
 			tab: 'unggah',
 			title: '',
@@ -793,6 +854,7 @@
 		editorError = '';
 		editor = {
 			mediaId: item.media_id,
+			slot: item.slot ?? 1,
 			mediaName: item.name,
 			tab: 'generate',
 			title: '',
@@ -871,6 +933,7 @@
 
 	async function generateNaskah(
 		mediaId: string,
+		slot: number,
 		topic: string,
 		links: { anchor_text: string; url: string }[] = [],
 		angleSlug = '',
@@ -893,7 +956,7 @@
 		try {
 			// Endpoint stream: potongan HTML dikirim selagi AI menulis, jadi modal
 			// bisa pindah ke Editor Post dan menampilkan artikel yang sedang tumbuh.
-			const res = await fetch(`${apiBase}/produce/${mediaId}/stream`, {
+			const res = await fetch(`${apiBase}/produce/${mediaId}/stream${slotQuery(slot)}`, {
 				method: 'POST',
 				headers: {
 					...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -945,8 +1008,8 @@
 		} finally {
 			window.clearTimeout(abortTimer);
 		}
-		placement = placement.map((p) => p.media_id === mediaId ? { ...p, angle_slug: angleSlug } : p);
-		genState = { ...genState, [mediaId]: 'draft' };
+		placement = placement.map((p) => p.media_id === mediaId && (p.slot ?? 1) === slot ? { ...p, angle_slug: angleSlug } : p);
+		genState = { ...genState, [pkey({ media_id: mediaId, slot })]: 'draft' };
 		qcToken += 1;
 		// Setiap generate menambah tagihan (regenerasi ditagih lagi) — segarkan
 		// data kampanye supaya regen_count, gambar, dan Total Tagihan Akhir di
@@ -972,23 +1035,24 @@
 		const current = editor;
 		if (!current) return false;
 		const mediaId = current.mediaId;
+		const slotQs = slotQuery(current.slot);
 		editorError = '';
 		try {
 			// Ada dokumen → PUT; belum ada (hasil upload) → POST upload.
-			const checkRes = await apiRequest(`${apiBase}/articles/${mediaId}`);
+			const checkRes = await apiRequest(`${apiBase}/articles/${mediaId}${slotQs}`);
 			if (checkRes.ok) {
-				const putRes = await apiRequest(`${apiBase}/articles/${mediaId}`, {
+				const putRes = await apiRequest(`${apiBase}/articles/${mediaId}${slotQs}`, {
 					method: 'PUT',
 					body: JSON.stringify({ title, content_html: html, featured_image_url: coverUrl ?? undefined, category, meta_description: metaDescription })
 				});
 				if (!putRes.ok) throw new Error(await readApiError(putRes, tr('Gagal menyimpan artikel.')));
 			} else {
-				const postRes = await apiRequest(`${apiBase}/articles/${mediaId}/upload`, {
+				const postRes = await apiRequest(`${apiBase}/articles/${mediaId}/upload${slotQs}`, {
 					method: 'POST',
 					body: JSON.stringify({ title, content_html: html, featured_image_url: coverUrl ?? undefined, category, meta_description: metaDescription })
 				});
 				if (!postRes.ok) throw new Error(await readApiError(postRes, tr('Gagal menyimpan artikel.')));
-				genState = { ...genState, [mediaId]: 'draft' };
+				genState = { ...genState, [pkey({ media_id: mediaId, slot: current.slot })]: 'draft' };
 			}
 			qcToken += 1;
 			// Jangan tunggu reload: kalau load lambat/tertahan, modal tetap
@@ -1011,18 +1075,21 @@
 	// diam-diam oleh guard.
 	let qcQueued = $state<Record<string, boolean>>({});
 
-	async function runQcAfterSave(mediaId: string, alreadyBusy = false) {
+	async function runQcAfterSave(mediaId: string, slot: number, alreadyBusy = false) {
+		const key = pkey({ media_id: mediaId, slot });
 		if (!alreadyBusy) {
-			if (qcRunning[mediaId]) {
-				qcQueued = { ...qcQueued, [mediaId]: true };
+			if (qcRunning[key]) {
+				qcQueued = { ...qcQueued, [key]: true };
 				return;
 			}
-			qcRunning = { ...qcRunning, [mediaId]: true };
+			qcRunning = { ...qcRunning, [key]: true };
 		}
 		try {
+			// slots membatasi pemindaian ke artikel ini saja; tanpa itu satu
+			// artikel memicu audit untuk semua artikel di domain yang sama.
 			const res = await apiRequest(`${apiBase}/gatekeeper/audit-all`, {
 				method: 'POST',
-				body: JSON.stringify({ mediaIds: [mediaId] })
+				body: JSON.stringify({ mediaIds: [mediaId], slots: [slot] })
 			}, 900_000);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menjalankan pemindaian QC.')));
 		} catch {
@@ -1032,14 +1099,14 @@
 			// dibersihkan setelah `await load()` — dengan banyak media, load bisa
 			// lambat/tertahan sehingga spinner terlihat tidak pernah hilang dan
 			// simpan berikutnya ikut terblokir guard.
-			qcRunning = { ...qcRunning, [mediaId]: false };
+			qcRunning = { ...qcRunning, [key]: false };
 			qcToken += 1;
 			void load();
-			if (qcQueued[mediaId]) {
+			if (qcQueued[key]) {
 				const next = { ...qcQueued };
-				delete next[mediaId];
+				delete next[key];
 				qcQueued = next;
-				void runQcAfterSave(mediaId);
+				void runQcAfterSave(mediaId, slot);
 			}
 		}
 	}
@@ -1048,6 +1115,7 @@
 		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		if (!editor) return;
 		const mediaId = editor.mediaId;
+		const slot = editor.slot;
 		// QC otomatis hanya saat ada PERUBAHAN vs backend: judul/isi sama
 		// persis (mis. klien hanya ganti cover/meta tanpa menulis ulang)
 		// → pemindaian dipindai hasil lama cukup, jangan bakar token AI.
@@ -1057,17 +1125,18 @@
 		// Nyalakan spinner sejak Simpan ditekan, bukan setelah artikel tersimpan.
 		// QC baru bisa mulai setelah PUT/POST selesai; tanpa ini ada jeda kosong
 		// sehingga saat menyimpan satu per satu spinner terlihat hilang/berkedip.
-		const spinnerStartedHere = kontenBerubah && qcRunning[mediaId] !== true;
-		if (spinnerStartedHere) qcRunning = { ...qcRunning, [mediaId]: true };
+		const slotKey = pkey({ media_id: mediaId, slot });
+		const spinnerStartedHere = kontenBerubah && qcRunning[slotKey] !== true;
+		if (spinnerStartedHere) qcRunning = { ...qcRunning, [slotKey]: true };
 		editorSaving = true;
 		const saved = await persistEditor(title, html, coverUrl, category, metaDescription);
 		editorSaving = false;
 		if (saved) {
 			editor = null;
-			if (kontenBerubah) void runQcAfterSave(mediaId, spinnerStartedHere);
+			if (kontenBerubah) void runQcAfterSave(mediaId, slot, spinnerStartedHere);
 		} else if (spinnerStartedHere) {
 			// Penyimpanan gagal → tidak ada QC yang berjalan; jangan tinggalkan spinner.
-			qcRunning = { ...qcRunning, [mediaId]: false };
+			qcRunning = { ...qcRunning, [slotKey]: false };
 		}
 	}
 
@@ -1166,7 +1235,7 @@
 	const editorMedia = $derived.by(() => {
 		const current = editor;
 		if (!current) return null;
-		return selected.find((m) => m.media_id === current.mediaId) ?? null;
+		return selected.find((m) => m.media_id === current.mediaId && (m.slot ?? 1) === current.slot) ?? null;
 	});
 
 	async function publish() {
@@ -1191,7 +1260,7 @@
 			// menampilkan artikel mana yang belum punya cover.
 			missingCovers = await articlesWithoutCover();
 			// Media tanpa waktu terbit dianggap memakai preset "Sekarang".
-			quickPick = Object.fromEntries(selected.filter((m) => !scheduleByMedia[m.media_id]).map((m) => [m.media_id, 'now']));
+			quickPick = Object.fromEntries(selected.filter((m) => !scheduleByMedia[pkey(m)]).map((m) => [m.media_id, 'now']));
 			publishOpen = true;
 		} finally {
 			coverChecking = false;
@@ -1238,15 +1307,15 @@
 	}
 
 	/** Artikel terpilih yang sudah punya dokumen tetapi belum punya cover. */
-	async function articlesWithoutCover(): Promise<{ mediaId: string; name: string }[]> {
-		const missing: { mediaId: string; name: string }[] = [];
+	async function articlesWithoutCover(): Promise<{ mediaId: string; name: string; slot: number }[]> {
+		const missing: { mediaId: string; name: string; slot: number }[] = [];
 		for (const m of selected) {
 			if (!hasDoc(m)) continue;
 			try {
-				const res = await apiRequest(`${apiBase}/articles/${m.media_id}`);
+				const res = await apiRequest(`${apiBase}/articles/${m.media_id}${slotQuery(m.slot)}`);
 				if (!res.ok) continue;
 				const d = await res.json();
-				if (!d.featured_image_url?.trim()) missing.push({ mediaId: m.media_id, name: m.name });
+				if (!d.featured_image_url?.trim()) missing.push({ mediaId: m.media_id, name: m.name, slot: m.slot ?? 1 });
 			} catch {
 				/* tak diketahui — tidak memblokir */
 			}
@@ -1255,13 +1324,13 @@
 	}
 
 	/** Pakai thumbnail default Tauthub untuk artikel yang belum punya cover. */
-	async function useDefaultCovers(list: { mediaId: string; name: string }[] = missingCovers) {
+	async function useDefaultCovers(list: { mediaId: string; name: string; slot?: number }[] = missingCovers) {
 		if (list.length === 0 || coverBusy) return;
 		coverBusy = true;
 		publishError = '';
 		try {
 			for (const item of list) {
-				const res = await apiRequest(`${apiBase}/articles/${item.mediaId}`, {
+				const res = await apiRequest(`${apiBase}/articles/${item.mediaId}${slotQuery(item.slot)}`, {
 					method: 'PUT',
 					body: JSON.stringify({ featured_image_url: ARTICLE_DEFAULT_COVER })
 				});
@@ -1277,20 +1346,21 @@
 	}
 
 	/** Setel jadwal satu media. 'now'/'' = terbit langsung; '1h'|'24h'|'3d' = preset. */
-	function setMediaSchedule(mediaId: string, value: string) {
+	function setMediaSchedule(item: { media_id: string; slot?: number | null }, value: string) {
+		const key = pkey(item);
 		const next = { ...scheduleByMedia };
 		const picks = { ...quickPick };
 		if (value === '' || value === 'now') {
-			delete next[mediaId];
-			picks[mediaId] = 'now';
+			delete next[key];
+			picks[key] = 'now';
 		} else if (value === '1h' || value === '24h' || value === '3d') {
 			const ms = value === '1h' ? 3_600_000 : value === '24h' ? 86_400_000 : 3 * 86_400_000;
-			next[mediaId] = toLocalInput(new Date(Date.now() + ms).toISOString());
-			picks[mediaId] = value;
+			next[key] = toLocalInput(new Date(Date.now() + ms).toISOString());
+			picks[key] = value;
 		} else {
 			// Waktu yang diketik manual tidak lagi mewakili preset mana pun.
-			next[mediaId] = value;
-			delete picks[mediaId];
+			next[key] = value;
+			delete picks[key];
 		}
 		scheduleByMedia = next;
 		quickPick = picks;
@@ -1306,7 +1376,7 @@
 
 	function openSchedulePicker(m: PlacementItem) {
 		schedulePickerFor = m;
-		const at = scheduleByMedia[m.media_id];
+		const at = scheduleByMedia[pkey(m)];
 		schedulePickerInitial = at ? new Date(at) : null;
 	}
 
@@ -1316,28 +1386,34 @@
 		schedulePickerFor = null;
 		// Waktu yang sudah lewat/±1 menit diperlakukan sebagai "Sekarang".
 		if (date.getTime() <= Date.now() + 60_000) {
-			setMediaSchedule(target.media_id, 'now');
+			setMediaSchedule(target, 'now');
 			return;
 		}
-		scheduleByMedia = { ...scheduleByMedia, [target.media_id]: date.toISOString() };
+		scheduleByMedia = { ...scheduleByMedia, [pkey(target)]: date.toISOString() };
 		// Waktu manual tidak mewakili preset mana pun.
 		const picks = { ...quickPick };
-		delete picks[target.media_id];
+		delete picks[pkey(target)];
 		quickPick = picks;
 	}
 
 	// Jumlah media yang dijadwalkan, untuk label tombol dan ringkasan panel.
-	const scheduledCount = $derived(selected.filter((m) => Boolean(scheduleByMedia[m.media_id])).length);
+	const scheduledCount = $derived(selected.filter((m) => Boolean(scheduleByMedia[pkey(m)])).length);
 
 	/**
 	 * Payload jadwal: hanya media yang punya waktu. Backend memperlakukan media
 	 * yang tidak disebut sebagai "terbit sekarang" (`timelineFromBody`), jadi
 	 * daftar parsial memang berarti campuran langsung + terjadwal.
 	 */
-	function schedulePayload(): { media_id: string; scheduled_at: string }[] {
-		return Object.entries(scheduleByMedia)
-			.filter(([mediaId, at]) => Boolean(at) && selected.some((m) => m.media_id === mediaId))
-			.map(([media_id, at]) => ({ media_id, scheduled_at: new Date(at).toISOString() }));
+	// Daftar jadwal per slot artikel. Disusun dari `selected` (bukan dari peta
+	// jadwal) supaya kunci "media:slot" tidak perlu diurai lagi.
+	function schedulePayload(): { media_id: string; slot: number; scheduled_at: string }[] {
+		const out: { media_id: string; slot: number; scheduled_at: string }[] = [];
+		for (const m of selected) {
+			const at = scheduleByMedia[pkey(m)];
+			if (!at) continue;
+			out.push({ media_id: m.media_id, slot: m.slot ?? 1, scheduled_at: new Date(at).toISOString() });
+		}
+		return out;
 	}
 
 	/** Kirim terbit dari panel, lalu buka Ringkasan. Cover wajib sudah beres. */
@@ -1356,7 +1432,7 @@
 		await distributeNow(schedulePayload());
 	}
 
-	async function distributeNow(schedule: { media_id: string; scheduled_at: string }[] = []) {
+	async function distributeNow(schedule: { media_id: string; slot: number; scheduled_at: string }[] = []) {
 		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		distributing = true;
 		try {
@@ -1683,7 +1759,7 @@
 						</div>
 						<div>
 							<h3 class="text-base font-bold text-slate-900 leading-tight">
-								{manualFlow ? tr('Dapur Produksi') : tr('Dapur Produksi AI')} ({cost.count} {tr('Media Terpilih')})
+								{manualFlow ? tr('Dapur Produksi') : tr('Dapur Produksi AI')} ({mediaCount} {tr('Media')}{articleCount !== mediaCount ? ` · ${articleCount} ${tr('Artikel')}` : ''})
 							</h3>
 							<p class="mt-1 text-xs text-slate-500">
 								{#if manualFlow}
@@ -1737,16 +1813,43 @@
 				</div>
 			{:else}
 				<div class="mt-4 space-y-3">
-					{#each selected as m (m.media_id)}
+					{#each selected as m, idx (pkey(m))}
 						{@const st = articleStatusOf(m)}
+						{@const qty = slotCounts[m.media_id] ?? 1}
 						{@const statusKind = st === 'error' ? 'none' : st}
 						{@const generating = st === 'generating'}
 						{@const queued = st === 'queued'}
-						{@const links2 = linkStats[m.media_id] ?? null}
+						{@const links2 = linkStats[pkey(m)] ?? null}
 						{@const domain = cleanDomain(m.website_url, m.name)}
 						{@const av = avatarStyle(m.name)}
+						{#if isGroupStart(selected, idx)}
+							<!-- Jumlah artikel untuk domain ini. Ditempel sekali per media
+							     supaya tidak ada kontrol dobel di setiap artikel. -->
+							<div class="flex items-center justify-between gap-3 rounded-[5px] border border-slate-200 bg-slate-50/70 px-3.5 py-2">
+								<span class="min-w-0 truncate text-[12.5px] font-semibold text-slate-600">
+									{tr('Jumlah artikel untuk')} {m.name}
+								</span>
+								<span class="flex shrink-0 items-center gap-1">
+									<button
+										class="flex h-7 w-7 items-center justify-center rounded-[5px] border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+										type="button"
+										disabled={viewOnly || qty <= 1 || qtyBusy === m.media_id}
+										aria-label={tr('Kurangi jumlah artikel')}
+										onclick={() => void setQuantity(m, qty - 1)}
+									>−</button>
+									<span class="min-w-6 text-center text-[13px] font-bold text-slate-800">{qty}</span>
+									<button
+										class="flex h-7 w-7 items-center justify-center rounded-[5px] border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+										type="button"
+										disabled={viewOnly || qtyBusy === m.media_id}
+										aria-label={tr('Tambah jumlah artikel')}
+										onclick={() => void setQuantity(m, qty + 1)}
+									>{qtyBusy === m.media_id ? '…' : '+'}</button>
+								</span>
+							</div>
+						{/if}
 						<div
-							class="rounded-[5px] border bg-white p-4.5 sm:p-5 shadow-2xs transition-all duration-200 {pickedIds[m.media_id]
+							class="rounded-[5px] border bg-white p-4.5 sm:p-5 shadow-2xs transition-all duration-200 {pickedIds[pkey(m)]
 								? 'border-blue-400 bg-blue-50/20 hover:border-blue-400'
 								: 'border-slate-200/80 hover:border-slate-300 hover:shadow-xs'}"
 						>
@@ -1756,25 +1859,25 @@
 									<input
 										type="checkbox"
 										class="h-4 w-4 shrink-0 cursor-pointer rounded-[4px] accent-blue-600"
-										checked={!!pickedIds[m.media_id]}
+										checked={!!pickedIds[pkey(m)]}
 										title={tr('Pilih media ini')}
 										aria-label={`${tr('Pilih media ini')}: ${m.name}`}
-										onclick={(e) => { e.stopPropagation(); togglePicked(m.media_id); }}
+										onclick={(e) => { e.stopPropagation(); togglePicked(pkey(m)); }}
 									/>
 									<div
 										class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] overflow-hidden border border-slate-200/60 font-bold text-base"
-										style={domain && !avatarFailed[m.media_id]
+										style={domain && !avatarFailed[pkey(m)]
 											? 'background-color: transparent;'
 											: `background-color: ${av.bg}; color: ${av.text};`}
 									>
-										{#if domain && !avatarFailed[m.media_id]}
+										{#if domain && !avatarFailed[pkey(m)]}
 											<img
 												src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`}
 												alt={m.name}
 												loading="lazy"
 												decoding="async"
 												class="h-full w-full object-cover"
-												onerror={() => { avatarFailed = { ...avatarFailed, [m.media_id]: true }; }}
+												onerror={() => { avatarFailed = { ...avatarFailed, [pkey(m)]: true }; }}
 											/>
 										{:else}
 											<span>{initialOf(m.name)}</span>
@@ -1785,6 +1888,9 @@
 										<div class="flex items-center gap-2">
 											<p class="font-bold text-[14.5px] leading-tight text-slate-900 truncate" title={m.name}>
 												{mediaDomainLabel(m.website_url, m.name)}
+												{#if qty > 1}
+													<span class="ml-1.5 rounded-full bg-slate-100 px-2 py-0.5 align-middle text-[10.5px] font-semibold text-slate-600">{tr('Artikel')} {m.slot ?? 1}</span>
+												{/if}
 											</p>
 											{#if m.media_type}
 												<span
@@ -1865,11 +1971,11 @@
 
 								<!-- Kolom 2: Informasi Artikel (mengisi sisa lebar, tanpa batas atas) -->
 								<div class="min-w-0 flex-1">
-									{#if articleTitles[m.media_id]}
+									{#if articleTitles[pkey(m)]}
 										<div>
 											<p class="text-[11px] font-medium text-slate-400 mb-0.5">{tr('Judul Artikel')}</p>
-											<p class="line-clamp-2 text-[13.5px] font-semibold text-slate-900 leading-snug" title={articleTitles[m.media_id]}>
-												{articleTitles[m.media_id]}
+											<p class="line-clamp-2 text-[13.5px] font-semibold text-slate-900 leading-snug" title={articleTitles[pkey(m)]}>
+												{articleTitles[pkey(m)]}
 											</p>
 										</div>
 									{:else}
@@ -1888,15 +1994,15 @@
 										<!-- Thumbnail cover: di mobile & tablet diperbesar supaya gambarnya
 										     terbaca jelas; ukuran desktop tetap seperti desain awal. -->
 										<div class="h-24 w-36 sm:h-30 sm:w-44 lg:h-13 lg:w-18 shrink-0 overflow-hidden rounded-[5px] border border-slate-200/80 bg-slate-100/70 flex items-center justify-center">
-											{#if hasDoc(m) && articleStats[m.media_id]?.cover}
-												<img src={sameOriginAssetUrl(articleStats[m.media_id].cover) ?? ''} alt="Cover" class="h-full w-full object-cover" />
+											{#if hasDoc(m) && articleStats[pkey(m)]?.cover}
+												<img src={sameOriginAssetUrl(articleStats[pkey(m)].cover) ?? ''} alt="Cover" class="h-full w-full object-cover" />
 											{:else}
 												<Image size={20} class="text-slate-400 stroke-[1.5] h-8 w-8 sm:h-9 sm:w-9 lg:h-5 lg:w-5" />
 											{/if}
 										</div>
 									<div class="flex flex-col gap-0.5">
-										{#if hasDoc(m) && articleStats[m.media_id]}
-											{#if articleStats[m.media_id].cover}
+										{#if hasDoc(m) && articleStats[pkey(m)]}
+											{#if articleStats[pkey(m)].cover}
 												<span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
 													<Check size={12} strokeWidth={2.4} />
 													<span>{tr('Cover ada')}</span>
@@ -1908,7 +2014,7 @@
 												</span>
 											{/if}
 											<span class="text-xs text-slate-500 font-normal">
-												{articleStats[m.media_id].words.toLocaleString('id-ID')} {tr('kata')}
+												{articleStats[pkey(m)].words.toLocaleString('id-ID')} {tr('kata')}
 											</span>
 										{:else}
 											<span class="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
@@ -1951,8 +2057,8 @@
 												<span class="expTip">{viewOnly ? tr('Lihat Artikel') : tr('Edit Artikel')}</span>
 											</button>
 
-											{@const qcCount = qcCounts[m.media_id] ?? 0}
-											{@const qcBusy = qcRunning[m.media_id] === true}
+											{@const qcCount = qcCounts[pkey(m)] ?? 0}
+											{@const qcBusy = qcRunning[pkey(m)] === true}
 											<!-- Badge menampilkan JUMLAH PEMERIKSA panel (satu ceklis),
 											     bukan jumlah riwayat pemindaian — angkanya selalu
 											     sinkron dengan daftar kartu pada panel Analisis QC. -->
@@ -2054,6 +2160,11 @@
 						</div>
 						<div class="space-y-3 p-5">
 							<p class="text-sm font-semibold">{removeTarget.name}</p>
+							{#if (slotCounts[removeTarget.media_id] ?? 1) > 1}
+								<p class="text-xs leading-relaxed" style="color: var(--destructive);">
+									{tr('Media ini punya')} {slotCounts[removeTarget.media_id]} {tr('artikel di kampanye ini. Semua artikelnya ikut dilepas dari kampanye (naskahnya tetap tersimpan).')}
+								</p>
+							{/if}
 							<p class="text-xs leading-relaxed text-muted-foreground">
 								{tr('Media ini akan dilepas dari kampanye (tidak dihapus permanen). Artikel dan datanya tetap tersimpan, jadi bisa dipakai lagi nanti.')}
 							</p>
@@ -2147,7 +2258,7 @@
 
 									<div class="costPopoverRow">
 										<span>
-											{tr('Biaya media')} <span class="text-muted-foreground">({cost.count} {tr('media')})</span>
+											{tr('Biaya media')} <span class="text-muted-foreground">({articleCount} {tr('artikel')})</span>
 										</span>
 										<span class="font-medium">{toRp(cost.media)}</span>
 									</div>
@@ -2349,9 +2460,9 @@
 
 {#if editor}
 	{@const ed = editor}
-	{@const targetMedia = placement.find((p) => p.media_id === ed.mediaId)}
+	{@const targetMedia = placement.find((p) => p.media_id === ed.mediaId && (p.slot ?? 1) === ed.slot)}
 	{@const angleChannel = angleChannels.find((ch) => ch.slug === targetMedia?.media_type)}
-	{#key ed.mediaId}
+	{#key `${ed.mediaId}:${ed.slot}`}
 		<NaskahModal
 			{brandId}
 			{campaignId}
@@ -2385,7 +2496,7 @@
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveEditor(title, html, coverUrl, category, metaDescription)}
 			onUploadCover={uploadCover}
 			onUploadDoc={uploadDocNaskah}
-			onGenerate={(topic, links, angleSlug, proper, onDelta) => generateNaskah(ed.mediaId, topic, links, angleSlug, proper ?? null, onDelta)}
+			onGenerate={(topic, links, angleSlug, proper, onDelta) => generateNaskah(ed.mediaId, ed.slot, topic, links, angleSlug, proper ?? null, onDelta)}
 			streamingHtml={streamHtml}
 		/>
 	{/key}
@@ -2407,18 +2518,18 @@
 				<!-- Daftar ini punya area gulir sendiri: dengan puluhan media, bloknya tidak
 				     memanjang sampai mendorong isi lain keluar panel. -->
 				<div class="mt-2 max-h-[42vh] space-y-2 overflow-y-auto pr-1">
-					{#each selected as m (m.media_id)}
-						{@const explicit = scheduleByMedia[m.media_id] ?? ''}
+					{#each selected as m (pkey(m))}
+						{@const explicit = scheduleByMedia[pkey(m)] ?? ''}
 						<div class="rounded-[5px] border p-2">
 							<div class="flex items-center justify-between gap-2">
 								<span class="min-w-0 flex-1 truncate text-[13px] font-semibold">{m.name}</span>
 								<span class="shrink-0 text-[11px] font-medium" style="color: {explicit ? 'var(--primary)' : 'var(--success)'};">{explicit ? tr('Terjadwal') : tr('Langsung')}</span>
 							</div>
 							<div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" style={quickBtnStyle(quickPick[m.media_id] === 'now')} onclick={() => setMediaSchedule(m.media_id, 'now')}>{tr('Sekarang')}</button>
-								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" style={quickBtnStyle(quickPick[m.media_id] === '1h')} onclick={() => setMediaSchedule(m.media_id, '1h')}>+1 jam</button>
-								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" style={quickBtnStyle(quickPick[m.media_id] === '24h')} onclick={() => setMediaSchedule(m.media_id, '24h')}>+24 jam</button>
-								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" style={quickBtnStyle(quickPick[m.media_id] === '3d')} onclick={() => setMediaSchedule(m.media_id, '3d')}>+3 hari</button>
+								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" style={quickBtnStyle(quickPick[pkey(m)] === 'now')} onclick={() => setMediaSchedule(m, 'now')}>{tr('Sekarang')}</button>
+								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" style={quickBtnStyle(quickPick[pkey(m)] === '1h')} onclick={() => setMediaSchedule(m, '1h')}>+1 jam</button>
+								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" style={quickBtnStyle(quickPick[pkey(m)] === '24h')} onclick={() => setMediaSchedule(m, '24h')}>+24 jam</button>
+								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" style={quickBtnStyle(quickPick[pkey(m)] === '3d')} onclick={() => setMediaSchedule(m, '3d')}>+3 hari</button>
 							</div>
 							<button
 								type="button"
@@ -2439,8 +2550,8 @@
 										class="shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:bg-white/70 hover:text-slate-600"
 										aria-label={tr('Batalkan jadwal')}
 										title={tr('Batalkan jadwal — terbit sekarang')}
-										onclick={(e) => { e.stopPropagation(); setMediaSchedule(m.media_id, 'now'); }}
-										onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setMediaSchedule(m.media_id, 'now'); } }}
+										onclick={(e) => { e.stopPropagation(); setMediaSchedule(m, 'now'); }}
+										onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setMediaSchedule(m, 'now'); } }}
 									>
 										<X size={11} />
 									</span>
@@ -2472,7 +2583,7 @@
 				</div>
 
 				<div class="rounded-[5px] border p-3 text-sm">
-					<div class="flex items-center justify-between gap-2"><span class="text-muted-foreground">{tr('Media terpilih')}</span><span class="font-semibold">{cost.count} {tr('Media')}</span></div>
+					<div class="flex items-center justify-between gap-2"><span class="text-muted-foreground">{tr('Media terpilih')}</span><span class="font-semibold">{mediaCount} {tr('Media')}{articleCount !== mediaCount ? ` · ${articleCount} ${tr('Artikel')}` : ''}</span></div>
 					<div class="mt-1 flex items-center justify-between gap-2"><span class="text-muted-foreground">{tr('Waktu terbit')}</span><span class="font-medium">{cost.count - scheduledCount} {tr('langsung')} · {scheduledCount} {tr('terjadwal')}</span></div>
 					<div class="mt-1 flex items-center justify-between gap-2"><span class="text-muted-foreground">{tr('Total tagihan')}</span><span class="font-bold">{toRp(cost.total)}</span></div>
 				</div>

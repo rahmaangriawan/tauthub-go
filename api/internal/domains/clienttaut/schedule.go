@@ -11,22 +11,27 @@ import (
 
 type timelineItem struct {
 	MediaID     string `json:"media_id"`
+	Slot        int    `json:"slot"`
 	ScheduledAt string `json:"scheduled_at"`
 }
+
+// placementKey: alamat satu slot artikel (media + nomor slot). Dipakai sebagai
+// kunci peta supaya empat artikel di satu domain tidak saling menimpa jadwal.
+func placementKey(mediaID string, slot int) string { return mediaID + "#" + itoa(slot) }
 
 // readyItems: baris taut_campaign_media siap (article ready).
 func (d *Deps) readyItems(ctx context.Context, campaignID string) ([]selectedMediaRow, error) {
 	rows, err := d.queryRows(ctx,
-		`SELECT id, media_id, article_document_id FROM taut_campaign_media
+		`SELECT id, media_id, slot, article_document_id FROM taut_campaign_media
 		 WHERE campaign_id = $1 AND status = 'selected' AND article_status = 'ready' AND article_document_id IS NOT NULL
-		 ORDER BY created_at`, campaignID)
+		 ORDER BY media_id, slot`, campaignID)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]selectedMediaRow, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, selectedMediaRow{
-			ID: r.strOr("id", ""), MediaID: r.strOr("media_id", ""), Document: r.strPtr("article_document_id"),
+			ID: r.strOr("id", ""), MediaID: r.strOr("media_id", ""), Slot: r.intOr("slot", 1), Document: r.strPtr("article_document_id"),
 		})
 	}
 	return out, nil
@@ -58,7 +63,7 @@ func (d *Deps) buildTimeline(ctx context.Context, campaignID, brandID, mode stri
 		now := nowISO()
 		out := make([]timelineItem, 0, len(items))
 		for _, it := range items {
-			out = append(out, timelineItem{MediaID: it.MediaID, ScheduledAt: now})
+			out = append(out, timelineItem{MediaID: it.MediaID, Slot: it.Slot, ScheduledAt: now})
 		}
 		return out, nil
 	}
@@ -77,6 +82,9 @@ func (d *Deps) buildTimeline(ctx context.Context, campaignID, brandID, mode stri
 		ids := make([]string, 0, len(items))
 		byID := map[string]bool{}
 		for _, it := range items {
+			if byID[it.MediaID] {
+				continue
+			}
 			ids = append(ids, it.MediaID)
 			byID[it.MediaID] = true
 		}
@@ -123,17 +131,22 @@ func (d *Deps) buildTimeline(ctx context.Context, campaignID, brandID, mode stri
 						step = 1
 					}
 					idx := 0
-					for _, it := range items {
-						if covered[it.MediaID] {
-							continue
-						}
-						plan = append(plan, timelineItem{
-							MediaID:     it.MediaID,
-							ScheduledAt: isoMilli(base.Add(time.Duration(idx*step) * time.Millisecond)),
-						})
-						idx++
+					byMedia := map[string]string{}
+					for _, p := range plan {
+						byMedia[p.MediaID] = p.ScheduledAt
 					}
-					return plan, nil
+					// Semua slot satu media memakai jadwal media itu; media yang
+					// belum dijadwalkan AI disebar merata.
+					full := make([]timelineItem, 0, len(items))
+					for _, it := range items {
+						scheduled, ok := byMedia[it.MediaID]
+						if !ok {
+							scheduled = isoMilli(base.Add(time.Duration(idx*step) * time.Millisecond))
+							idx++
+						}
+						full = append(full, timelineItem{MediaID: it.MediaID, Slot: it.Slot, ScheduledAt: scheduled})
+					}
+					return full, nil
 				}
 			}
 		}
@@ -149,6 +162,7 @@ func (d *Deps) buildTimeline(ctx context.Context, campaignID, brandID, mode stri
 	for idx, it := range items {
 		out = append(out, timelineItem{
 			MediaID:     it.MediaID,
+			Slot:        it.Slot,
 			ScheduledAt: isoMilli(base.Add(time.Duration(idx*step) * time.Millisecond)),
 		})
 	}
@@ -167,6 +181,7 @@ func parseISO(s string) (time.Time, bool) {
 // createdPublication: parity {media_id, publication_id?, status, detail?}.
 type createdPublication struct {
 	MediaID       string `json:"media_id"`
+	Slot          int    `json:"slot"`
 	PublicationID any    `json:"publication_id,omitempty"`
 	Status        string `json:"status"`
 	Detail        any    `json:"detail,omitempty"`
@@ -178,8 +193,8 @@ func (d *Deps) createPublications(ctx context.Context, campaignID, brandID, user
 	out := []createdPublication{}
 	for _, t := range timeline {
 		ready, err := d.queryRow(ctx,
-			"SELECT article_document_id, featured_image_url FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND article_status = 'ready' LIMIT 1",
-			campaignID, t.MediaID)
+			"SELECT article_document_id, featured_image_url FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND slot = $3 AND article_status = 'ready' LIMIT 1",
+			campaignID, t.MediaID, t.Slot)
 		if err != nil {
 			return nil, err
 		}
@@ -207,17 +222,17 @@ func (d *Deps) createPublications(ctx context.Context, campaignID, brandID, user
 			if reAlreadyPublished.MatchString(message) {
 				existing, qErr := d.queryRow(ctx,
 					"SELECT id FROM publications WHERE document_id = $1 AND media_id = $2 LIMIT 1", documentID, t.MediaID)
-				entry := createdPublication{MediaID: t.MediaID, Status: "already_published"}
+				entry := createdPublication{MediaID: t.MediaID, Slot: t.Slot, Status: "already_published"}
 				if qErr == nil && existing != nil {
 					entry.PublicationID = existing.strOr("id", "")
 				}
 				out = append(out, entry)
 				continue
 			}
-			out = append(out, createdPublication{MediaID: t.MediaID, Status: "failed", Detail: truncateString(message, 300)})
+			out = append(out, createdPublication{MediaID: t.MediaID, Slot: t.Slot, Status: "failed", Detail: truncateString(message, 300)})
 			continue
 		}
-		out = append(out, createdPublication{MediaID: t.MediaID, PublicationID: created.PublicationID, Status: created.Path})
+		out = append(out, createdPublication{MediaID: t.MediaID, Slot: t.Slot, PublicationID: created.PublicationID, Status: created.Path})
 	}
 	return out, nil
 }

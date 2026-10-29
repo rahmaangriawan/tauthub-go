@@ -123,7 +123,7 @@ func (d *Deps) addManualMedia(ctx context.Context, campaignID, brandID string, m
 			continue
 		}
 		err = d.exec(ctx,
-			"INSERT INTO taut_campaign_media (id, campaign_id, media_id, source, status) VALUES ($1, $2, $3, 'manual', 'selected')",
+			"INSERT INTO taut_campaign_media (id, campaign_id, media_id, slot, source, status) VALUES ($1, $2, $3, 1, 'manual', 'selected')",
 			newUUID(), campaignID, mediaID)
 		if err != nil {
 			skipped = append(skipped, mediaID)
@@ -144,7 +144,7 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 		rateIDR = 1
 	}
 		items, err := d.queryRows(ctx,
-			`SELECT tcm.media_id, m.name, m.media_type, m.website_url, tcm.status, tcm.article_status, tcm.match_reason, tcm.ai_score, tcm.match_rank,
+			`SELECT tcm.id AS placement_id, tcm.media_id, tcm.slot, m.name, m.media_type, m.website_url, tcm.status, tcm.article_status, tcm.match_reason, tcm.ai_score, tcm.match_rank,
 			        m.credit_cost, m.allow_hyperlink, m.max_links, m.link_duration_months, m.allow_embed, m.label_sponsor, m.word_count_mode, tcm.regen_count, tcm.angle_slug,
 		        COALESCE(tcm.price, m.price, 0) AS price,
 		        COALESCE((SELECT (length(cv.content) - length(replace(cv.content, '<img', ''))) / 4
@@ -156,13 +156,14 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 		        CASE WHEN EXISTS (
 		                  SELECT 1 FROM taut_agent_runs r
 		                  WHERE r.campaign_id = tcm.campaign_id AND r.media_id = tcm.media_id
+		                    AND r.slot = tcm.slot
 		                    AND r.agent IN ('writer','writer_mainstream','writer_blogger') AND r.status = 'done'
 		                ) THEN 'ai' ELSE 'manual' END AS article_source,
 		        COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv
 		 FROM taut_campaign_media tcm
 		 JOIN media m ON m.id = tcm.media_id
 		 WHERE tcm.campaign_id = $1
-		 ORDER BY tcm.match_rank ASC NULLS LAST, m.name ASC`, campaignID)
+		 ORDER BY tcm.match_rank ASC NULLS LAST, m.name ASC, tcm.slot ASC`, campaignID)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +197,11 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 		}
 		categories := catutil.Split(i.strOr("categories_csv", ""))
 		out = append(out, map[string]any{
-			"media_id":        mediaID,
+			// placement_id = identitas satu slot artikel. Dipakai frontend sebagai
+			// kunci per-artikel; media_id tetap untuk metadata & harga.
+			"placement_id": i.strOr("placement_id", ""),
+			"slot":         i.intOr("slot", 1),
+			"media_id":     mediaID,
 			"name":            name,
 			"media_type":      i.strOr("media_type", ""),
 			"website_url":     i.raw("website_url"),

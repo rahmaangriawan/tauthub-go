@@ -26,8 +26,17 @@
 	const apiBase = $derived(`/v1/brands/${brandId}/taut/campaigns/${campaignId}`);
 
 	type CheckStatus = 'pending' | 'running' | 'passed' | 'failed' | 'review_required';
+
+	/** Kunci per-artikel: media satu artikel tetap memakai media_id. */
+	const pkey = (m: { media_id: string; slot?: number | null }) => {
+		const slot = m.slot ?? 1;
+		return slot > 1 ? `${m.media_id}:${slot}` : m.media_id;
+	};
+	const slotQuery = (slot?: number | null) => ((slot ?? 1) > 1 ? `?slot=${slot}` : '');
 	type MediaItem = {
 		media_id: string;
+		/** Nomor artikel pada media ini (1 = artikel pertama). */
+		slot?: number;
 		name: string;
 		website_url: string | null;
 		media_type: string | null;
@@ -236,15 +245,21 @@
 	// masih lulus sebelum kampanye boleh diterbitkan.
 	let qcRunning = $state<Record<string, boolean>>({});
 
-	async function runQc(mediaId: string) {
-		if (qcRunning[mediaId]) return;
-		qcRunning = { ...qcRunning, [mediaId]: true };
+	async function runQc(mediaId: string, slot: number) {
+		const key = pkey({ media_id: mediaId, slot });
+		if (qcRunning[key]) return;
+		qcRunning = { ...qcRunning, [key]: true };
 		try {
-			await apiRequest(`${apiBase}/gatekeeper/audit-all`, { method: 'POST', body: JSON.stringify({ mediaIds: [mediaId] }) }, 900_000);
+			// slots membatasi audit ke artikel ini; tanpa itu satu artikel memicu
+			// audit untuk semua artikel di domain yang sama (biaya AI berlipat).
+			await apiRequest(`${apiBase}/gatekeeper/audit-all`, {
+				method: 'POST',
+				body: JSON.stringify({ mediaIds: [mediaId], slots: [slot] })
+			}, 900_000);
 		} catch {
 			/* senyap — status QC tampil dari data audits */
 		} finally {
-			qcRunning = { ...qcRunning, [mediaId]: false };
+			qcRunning = { ...qcRunning, [key]: false };
 			await loadData();
 		}
 	}
@@ -335,7 +350,7 @@
 		edCategory = '';
 		edMeta = '';
 		try {
-			const res = await apiRequest(`${apiBase}/articles/${m.media_id}`);
+			const res = await apiRequest(`${apiBase}/articles/${m.media_id}${slotQuery(m.slot)}`);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memuat artikel.')));
 			const d = await res.json();
 			edTitle = d.title ?? edTitle;
@@ -366,14 +381,14 @@
 		edSaving = true;
 		edError = '';
 		try {
-			const res = await apiRequest(`${apiBase}/articles/${target.media_id}`, {
+			const res = await apiRequest(`${apiBase}/articles/${target.media_id}${slotQuery(target.slot)}`, {
 				method: 'PUT',
 				body: JSON.stringify({ title, content_html: html, featured_image_url: coverUrl ?? undefined, category, meta_description: metaDescription })
 			});
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan artikel.')));
 			editorFor = null;
 			afterSaveFor = target;
-			void runQc(target.media_id);
+			void runQc(target.media_id, target.slot ?? 1);
 			await loadData();
 		} catch (reason) {
 			edError = reason instanceof Error ? reason.message : tr('Gagal menyimpan artikel.');
@@ -560,13 +575,13 @@
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-slate-100 bg-white">
-							{#each mediaList as m (m.media_id)}
+							{#each mediaList as m (pkey(m))}
 								{@const domain = cleanDomain(m.website_url, m.name)}
 								<tr class="transition-colors hover:bg-slate-50/60">
 									<td class="px-3.5 py-4">
 										<div class="flex items-center gap-3">
 											<span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/70 text-xs font-bold ring-2 ring-white" style="background-color: {AVA[avatarTone(m.name)]};">
-												{#if domain && !faviconFailed[m.media_id]}
+												{#if domain && !faviconFailed[pkey(m)]}
 													<img
 														src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`}
 														alt=""
