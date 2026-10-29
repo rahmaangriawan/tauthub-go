@@ -43,7 +43,7 @@ func (d *Deps) Earnings(w http.ResponseWriter, r *http.Request) {
 	pageArgs := append(append([]any{}, baseArgs...), limit, offset)
 	items, err := d.queryRows(r.Context(), `
 		SELECT e.id, e.publication_id, e.media_id, e.rule_id, e.amount, e.gross_amount, e.client_price, e.status, e.settlement_id, e.created_at,
-		       m.name AS media_name, m.website_url AS media_website_url, d.title AS document_title, r.name AS rule_name,
+		       m.name AS media_name, m.website_url AS media_website_url, m.media_type AS media_type, d.title AS document_title, r.name AS rule_name,
 		       p.partner_price AS partner_price,
 		       r.partner_percent AS rule_partner_percent
 		FROM partner_earnings e
@@ -77,6 +77,7 @@ func (d *Deps) Earnings(w http.ResponseWriter, r *http.Request) {
 			"media_id":             row.raw("media_id"),
 			"media_name":           row.raw("media_name"),
 			"media_website_url":    row.raw("media_website_url"),
+			"media_type":           row.raw("media_type"),
 			"document_title":       row.raw("document_title"),
 			"rule_id":              row.raw("rule_id"),
 			"rule_name":            row.raw("rule_name"),

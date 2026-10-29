@@ -417,7 +417,12 @@
 				{(e.media_name ?? '?').charAt(0).toUpperCase()}
 			{/if}
 		</span>
-		<span class="min-w-0 text-muted-foreground" title={e.media_name ?? ''}>{e.media_name ?? '-'}</span>
+		<span class="min-w-0 leading-tight">
+			<span class="block truncate text-muted-foreground" title={e.media_name ?? ''}>{e.media_name ?? '-'}</span>
+			{#if e.media_type}
+				<span class="block truncate text-[10.5px] font-medium capitalize text-muted-foreground/80">{e.media_type}</span>
+			{/if}
+		</span>
 	</div>
 {/snippet}
 
