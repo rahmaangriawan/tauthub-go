@@ -1950,7 +1950,7 @@
 		{/if}
 
 				<!-- Banner Informasi Dapur Produksi -->
-				<div class="relative mt-4 overflow-hidden rounded-[5px] border border-blue-100/80 bg-gradient-to-r from-blue-50/70 via-slate-50/40 to-blue-50/40 py-5 pl-5 pr-3.5 shadow-2xs">
+				<div class="relative mt-4 overflow-hidden rounded-[5px] border border-blue-100/80 bg-gradient-to-r from-blue-50/70 via-slate-50/40 to-blue-50/40 py-5 pl-5 pr-3.5 shadow-2xs max-sm:py-4 max-sm:pl-4">
 				<div class="pointer-events-none absolute -right-2 -top-2 h-28 w-44 opacity-60">
 					<svg viewBox="0 0 160 120" fill="none" class="h-full w-full">
 						<path d="M110 20h30a6 6 0 0 1 6 6v70a6 6 0 0 1-6 6h-30a6 6 0 0 1-6-6V26a6 6 0 0 1 6-6z" fill="#93c5fd" fill-opacity="0.25" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="3 3"/>
@@ -1981,7 +1981,7 @@
 							</p>
 						</div>
 					</div>
-					<div class="flex shrink-0 items-center gap-2 lg:mr-15">
+					<div class="flex shrink-0 items-center gap-2 max-sm:w-full max-sm:flex-wrap max-sm:shrink-0 lg:mr-15">
 						<!-- Generate Semua di header: klik membuka popup yang sama dengan
 						     bar seleksi (masih placeholder "Dalam Pengerjaan");
 						     grup digeser ke kiri ~40px agar tidak tembus ke tepi. -->
@@ -1995,7 +1995,7 @@
 							<Sparkles size={13} /> {tr('Generate Semua')}
 						</button>
 						{#if campaignName}
-							<span class="inline-flex max-w-[260px] cursor-help items-center gap-1.5 truncate rounded-[5px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" title={`${tr('Ini adalah nama kampanye Anda')}: ${campaignName}`}>
+							<span class="inline-flex max-w-[260px] cursor-help items-center gap-1.5 truncate rounded-[5px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs max-sm:max-w-full" title={`${tr('Ini adalah nama kampanye Anda')}: ${campaignName}`}>
 								<FileText size={13} class="shrink-0 text-slate-400" />
 								<span class="truncate">{campaignName}</span>
 							</span>
@@ -2058,7 +2058,7 @@
 						>
 							<input
 								type="checkbox"
-								class="h-4 w-4 shrink-0 cursor-pointer rounded-[4px] accent-blue-600"
+								class="h-4 w-4 shrink-0 cursor-pointer rounded-[4px] accent-blue-600 max-sm:h-5 max-sm:w-5"
 								checked={allMediaPicked}
 								title={tr('Pilih semua artikel media ini')}
 								aria-label={`${tr('Pilih semua artikel media ini')}: ${m.name}`}
@@ -2114,14 +2114,17 @@
 
 							<!-- Kontrol media: buat sekaligus, stepper jumlah artikel,
 							     ciutkan daftar, lepas media. -->
-							<div class="ml-auto flex shrink-0 items-center gap-1.5">
+							<!-- Di HP grup kontrol turun ke baris sendiri selebar kartu: lima kontrol
+							     yang dipaksa sebaris membuat tombol "Buat N artikel" terjepit. Di layar
+							     lebar tetap menempel kanan seperti sebelumnya. -->
+							<div class="ml-auto flex shrink-0 items-center gap-1.5 max-sm:mt-0.5 max-sm:w-full max-sm:flex-wrap max-sm:gap-2">
 								<!-- Muncul begitu media punya lebih dari satu artikel dan masih ada
 								     slot tanpa naskah. Termasuk saat tinggal SATU slot tersisa:
 								     dialognya tetap jalan dan isinya satu baris, jadi jalurnya
 								     konsisten dengan media yang artikelnya banyak. -->
 								{#if qty > 1 && pendingCount > 0}
 									<button
-										class="inline-flex h-8 items-center gap-1 rounded-[5px] bg-blue-600 px-2.5 text-[11.5px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+										class="inline-flex h-8 items-center gap-1 rounded-[5px] bg-blue-600 px-2.5 text-[11.5px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50 max-sm:h-11 max-sm:w-full max-sm:justify-center max-sm:text-xs"
 										type="button"
 										disabled={viewOnly || bulkRunning}
 										title={tr('Buat semua artikel yang belum ada dalam satu dialog')}
@@ -2131,17 +2134,17 @@
 										{tr('Buat')} {pendingCount} {tr('artikel')}
 									</button>
 								{/if}
-								<div class="inline-flex h-8 items-center overflow-hidden rounded-[5px] border border-slate-300 bg-white">
+								<div class="inline-flex h-8 items-center overflow-hidden rounded-[5px] border border-slate-300 bg-white max-sm:h-11">
 									<button
-										class="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+										class="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 max-sm:h-11 max-sm:w-11"
 										type="button"
 										disabled={viewOnly || qty <= 1 || qtyBusy === m.media_id}
 										aria-label={tr('Kurangi jumlah artikel')}
 										onclick={() => void setQuantity(m, qty - 1)}
 									>−</button>
-									<span class="w-7 text-center text-[13px] font-bold tabular-nums text-slate-800">{qtyBusy === m.media_id ? '…' : qty}</span>
+									<span class="w-7 text-center text-[13px] font-bold tabular-nums text-slate-800 max-sm:w-9">{qtyBusy === m.media_id ? '…' : qty}</span>
 									<button
-										class="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+										class="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-40 max-sm:h-11 max-sm:w-11"
 										type="button"
 										disabled={viewOnly || qtyBusy === m.media_id}
 										aria-label={tr('Tambah jumlah artikel')}
@@ -2149,7 +2152,7 @@
 									>+</button>
 								</div>
 								<button
-									class="flex h-8 w-8 items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+									class="flex h-8 w-8 items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 max-sm:ml-auto max-sm:h-11 max-sm:w-11"
 									type="button"
 									aria-expanded={!collapsed}
 									aria-label={collapsed ? tr('Buka daftar artikel') : tr('Ciutkan daftar artikel')}
@@ -2159,7 +2162,7 @@
 									{#if collapsed}<ChevronDown size={15} />{:else}<ChevronUp size={15} />{/if}
 								</button>
 								<button
-									class="flex h-8 w-8 items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
+									class="flex h-8 w-8 items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700 max-sm:h-11 max-sm:w-11"
 									type="button"
 									disabled={bulkRunning || removeBusy || viewOnly}
 									aria-label={tr('Hapus media dari kampanye')}
@@ -2187,14 +2190,14 @@
 										<div class="flex min-w-0 flex-1 items-start gap-3">
 											<input
 												type="checkbox"
-												class="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-[4px] accent-blue-600"
+												class="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-[4px] accent-blue-600 max-sm:h-5 max-sm:w-5"
 												checked={!!pickedIds[pkey(item)]}
 												title={tr('Pilih artikel ini')}
 												aria-label={`${tr('Pilih artikel ini')}: ${m.name} ${item.slot ?? 1}`}
 												onclick={() => togglePicked(pkey(item))}
 											/>
 											<!-- Thumbnail = cover artikel ini (bukan favicon media). -->
-											<div class="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[5px] border border-slate-200/80 bg-slate-100/70">
+											<div class="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[5px] border border-slate-200/80 bg-slate-100/70 max-sm:h-14 max-sm:w-20">
 												{#if doc && stats?.cover}
 													<img
 														src={sameOriginAssetUrl(stats.cover) ?? ''}
@@ -2313,7 +2316,7 @@
 											<div class="flex flex-wrap items-center gap-1.5">
 												<button
 													type="button"
-													class={`expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] text-xs font-semibold transition-colors ${
+													class={`expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-11 max-sm:min-w-11 text-xs font-semibold transition-colors ${
 														doc
 															? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
 															: 'bg-blue-50/90 hover:bg-blue-100 text-blue-600 border border-blue-200/80'
@@ -2329,7 +2332,7 @@
 												{#if doc}
 													<button
 														type="button"
-														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-11 max-sm:min-w-11 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
 														aria-label={viewOnly ? tr('Lihat Artikel') : tr('Edit Artikel')}
 														disabled={bulkRunning}
 														onclick={() => void openPreview(item)}
@@ -2379,7 +2382,7 @@
 												{:else}
 													<button
 														type="button"
-														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-11 max-sm:min-w-11 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
 														aria-label={generating ? tr('Membuat…') : queued ? tr('Mengantre…') : tr('Generate Konten')}
 														disabled={generating || bulkRunning || viewOnly}
 														onclick={() => openNaskahGenerate(item)}
@@ -2398,7 +2401,7 @@
 
 													<button
 														type="button"
-														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-11 max-sm:min-w-11 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
 														aria-label={tr('Tulis Sendiri')}
 														disabled={bulkRunning || viewOnly}
 														onclick={() => openNaskahUpload(item)}
@@ -2414,7 +2417,7 @@
 												{#if qty > 1}
 													<button
 														type="button"
-														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 text-xs font-semibold transition-colors hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-11 max-sm:min-w-11 border border-rose-200 bg-rose-50 text-rose-600 text-xs font-semibold transition-colors hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
 														aria-label={`${tr('Hapus artikel')} ${item.slot ?? 1}`}
 														disabled={bulkRunning || viewOnly || slotDeleteBusy}
 														onclick={() => askDeleteArticle(m, item)}
