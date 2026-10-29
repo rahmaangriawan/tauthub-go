@@ -351,6 +351,38 @@ func (d *Deps) loadChatSummary(ctx context.Context, profileID string) string {
 	return s
 }
 
+// loadRecentTimeline mengambil caption post Timeline terbaru untuk brief ini.
+//
+// Dipakai sebagai konteks anti-duplikat saat model mempertimbangkan usulan aksi
+// "timeline_post": tanpa daftar ini, model cenderung mengusulkan ulang kabar
+// yang sudah tayang. Error apa pun menghasilkan daftar kosong, bukan kegagalan
+// giliran — aksi hanya kehilangan pembanding.
+func (d *Deps) loadRecentTimeline(ctx context.Context, profileID string, limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+	rows, err := d.Pool.Query(ctx, `
+		SELECT body FROM profiler_timeline_posts
+		WHERE profile_id = $1 AND deleted_at IS NULL
+		ORDER BY COALESCE(occurred_on, created_at::date) DESC, created_at DESC
+		LIMIT $2`, profileID, limit)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	out := make([]string, 0, limit)
+	for rows.Next() {
+		var body string
+		if rows.Scan(&body) != nil {
+			continue
+		}
+		if body = strings.TrimSpace(body); body != "" {
+			out = append(out, body)
+		}
+	}
+	return out
+}
+
 // appendChatSummary: tambah satu baris ringkasan untuk giliran yang baru
 // selesai, lalu pangkas dari depan supaya total tetap ringkas (maks 24 baris
 // / 2400 karakter). Deterministik dari data giliran — tanpa panggilan LLM
@@ -418,18 +450,28 @@ func (d *Deps) loadMessages(ctx context.Context, profileID string, limit int) ([
 	return out, nil
 }
 
-func (d *Deps) insertMessage(ctx context.Context, profileID, brandID, role, content, userID string, meta map[string]any) error {
+// insertMessage menyimpan satu pesan dan mengembalikan id-nya.
+//
+// Id perlu dikembalikan karena pesan assistant yang membawa aksi harus bisa
+// dirujuk frontend saat tombolnya diklik (POST /brief/actions/consume butuh
+// message_id). Sebelumnya id dibuat di dalam fungsi ini tanpa dikembalikan,
+// sehingga respons giliran tidak punya id dan tombol aksi mati senyap.
+func (d *Deps) insertMessage(ctx context.Context, profileID, brandID, role, content, userID string, meta map[string]any) (string, error) {
 	var metaArg any
 	if len(meta) > 0 {
 		if raw, err := json.Marshal(meta); err == nil {
 			metaArg = string(raw)
 		}
 	}
+	id := uuid.NewString()
 	_, err := d.Pool.Exec(ctx,
 		`INSERT INTO taut_brief_messages (id, profile_id, brand_id, role, content, meta, created_by)
 		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
-		uuid.NewString(), profileID, brandID, role, content, metaArg, nullIfEmpty(userID))
-	return err
+		id, profileID, brandID, role, content, metaArg, nullIfEmpty(userID))
+	if err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 // lastAssistantMeta: apakah pesan assistant terakhir menandai brief siap

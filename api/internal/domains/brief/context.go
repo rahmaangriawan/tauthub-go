@@ -15,6 +15,10 @@ const (
 	maxStateChars   = 4000
 	maxSourcesChars = 5000
 	maxSourceItem   = 1200
+	// Batas daftar Timeline di konteks. Dua belas post terbaru cukup untuk
+	// mencegah usulan duplikat tanpa membengkakkan prompt.
+	maxTimelineContext = 12
+	maxTimelineLine    = 160
 )
 
 // StateView: seluruh yang dibutuhkan untuk merakit satu giliran.
@@ -31,6 +35,9 @@ type StateView struct {
 	// jawaban pendek user (satu kata pun) menempel ke pertanyaan itu — bukan
 	// dinilai sebagai pesan yang berdiri sendiri lalu ditolak/tanya ulang.
 	AskedField string
+	// Timeline: post Timeline terbaru (caption saja, sudah dipotong). Dipakai
+	// model untuk menghindari mengusulkan kabar yang sudah tayang.
+	Timeline []string
 }
 
 // SourceItem: potongan dokumen/URL yang sudah dibaca sistem.
@@ -84,6 +91,18 @@ func BuildUserMessage(v StateView) string {
 		b.WriteString(mem + "\n\n")
 	}
 	b.WriteString(clip(sourceBlock(v.Sources), maxSourcesChars))
+
+	// Timeline terbaru: bahan pembanding untuk usulan aksi, bukan bagian dari
+	// skema field. Ditaruh paling akhir supaya tidak menggeser konteks inti.
+	if len(v.Timeline) > 0 {
+		b.WriteString("\n## TIMELINE TERBARU (sudah tayang, jangan diusulkan ulang)\n")
+		for i, line := range v.Timeline {
+			if i >= maxTimelineContext {
+				break
+			}
+			b.WriteString("- " + clip(strings.TrimSpace(line), maxTimelineLine) + "\n")
+		}
+	}
 	return b.String()
 }
 
@@ -167,8 +186,76 @@ func RenderOutputContract() string {
     { "key": "nama_field", "value": "draft yang kamu tawarkan", "reason": "kenapa" }
   ],
   "asked_field": "key field yang kamu tanyakan di reply, atau null",
-  "ready_for_confirmation": false
+  "ready_for_confirmation": false,
+  "actions": [
+    { "kind": "timeline_post", "label": "Tambahkan ke Timeline",
+      "payload": { "caption": "teks post siap tayang", "hashtags": ["promo"],
+                   "occurred_on": "YYYY-MM-DD atau kosong" },
+      "reason": "kenapa ini layak jadi post" }
+  ]
 }`
+}
+
+// RenderActionRules: aturan kapan model boleh mengisi "actions".
+//
+// Ditempelkan ke kontrak, bukan ke prompt sistem, supaya aturan aksi selalu
+// sejalan dengan bentuk JSON yang diminta. Tanpa batasan ini model cenderung
+// mengusulkan tombol untuk setiap balasan.
+func RenderActionRules() string {
+	return `ATURAN "actions" (opsional, biarkan [] kalau tidak ada yang cocok):
+- Isi hanya kalau user menyebut kabar baru yang konkret dan layak tayang sebagai
+  post Timeline: promo/diskon, peluncuran produk, event, kunjungan tokoh,
+  penghargaan, atau pencapaian. Bukan untuk pertanyaan umum, koreksi data, atau
+  obrolan biasa.
+- "caption" harus siap tayang apa adanya: kalimat utuh, tanpa placeholder
+  [KURUNG SIKU], tanpa mengarang angka yang tidak disebut user.
+- Jangan mengusulkan kabar yang sudah ada di daftar TIMELINE TERBARU.
+- Maksimal satu aksi per balasan.
+- "occurred_on" hanya diisi kalau user menyebut tanggal; kalau tidak, kosongkan.
+- Aksi ini hanya usulan. Jangan bilang "sudah saya posting"; tulis bahwa user
+  bisa menekan tombolnya.`
+}
+
+// actionPromptBlock: blok yang disuntikkan ke system prompt setiap giliran.
+//
+// Kenapa terpisah dari RenderActionRules: prompt aktif hidup di database dan
+// punya blok "FORMAT OUTPUT" sendiri yang tidak memuat "actions". Tanpa
+// suntikan ini model tidak tahu field itu ada, sehingga tombol tidak pernah
+// muncul walau kode dan kontrak sudah siap.
+//
+// Bentuk JSON-nya ditulis ulang di sini, bukan merujuk ke RenderOutputContract,
+// supaya model melihat potongan yang bisa langsung ditiru tanpa harus mencari
+// blok lain di prompt panjang.
+func actionPromptBlock() string {
+	return `# TAMBAHAN FORMAT OUTPUT — "actions" (opsional)
+
+Selain key yang sudah diwajibkan di atas, kamu BOLEH menambahkan key "actions"
+berisi daftar aksi yang ditawarkan ke user. Sertakan di dalam objek JSON yang
+sama, setelah "ready_for_confirmation":
+
+  "actions": [
+    { "kind": "timeline_post",
+      "label": "Tambahkan ke Timeline",
+      "payload": { "caption": "teks post siap tayang", "hashtags": ["promo"],
+                   "occurred_on": "YYYY-MM-DD atau string kosong" },
+      "reason": "kenapa ini layak jadi post" }
+  ]
+
+Kalau tidak ada yang cocok, tulis "actions": [].
+
+Aturan pengisian:
+- Isi hanya kalau user menyebut kabar baru yang konkret dan layak tayang di
+  Timeline: promo/diskon, peluncuran produk, event, kunjungan tokoh,
+  penghargaan, atau pencapaian.
+- Jangan isi untuk pertanyaan umum, koreksi data, obrolan biasa, atau saat kamu
+  sedang menanyakan field brief.
+- "caption" harus siap tayang apa adanya: kalimat utuh, tanpa [KURUNG SIKU],
+  tanpa mengarang angka atau fakta yang tidak disebut user.
+- Jangan mengusulkan kabar yang sudah ada di bagian TIMELINE TERBARU.
+- Maksimal satu aksi per balasan.
+- "occurred_on" hanya diisi kalau user menyebut tanggal.
+- Ini hanya usulan. Di "reply", jangan bilang sudah diposting; sebut bahwa user
+  bisa menekan tombolnya.`
 }
 
 // ---------- util ----------
@@ -242,4 +329,33 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+// injectAfterOutputFormat menaruh blok tambahan tepat setelah blok "FORMAT
+// OUTPUT" milik prompt aktif.
+//
+// Kenapa tidak ditempel di akhir saja: prompt aktif panjang (belasan bagian
+// aturan perilaku), dan model cenderung mengikuti skema JSON pertama yang ia
+// baca. Menaruh tambahan skema jauh di bawah membuat field baru mudah
+// terlewat. Kalau penanda tidak ditemukan, blok ditaruh di akhir supaya
+// perilakunya tetap terdefinisi.
+func injectAfterOutputFormat(system, block string) string {
+	if strings.TrimSpace(block) == "" {
+		return system
+	}
+	const marker = "# FORMAT OUTPUT"
+	idx := strings.Index(system, marker)
+	if idx < 0 {
+		return system + "\n\n" + block
+	}
+	// Sisipkan sebelum heading level-1 berikutnya setelah blok FORMAT OUTPUT,
+	// supaya tambahan tetap berada di bagian format, bukan menumpuk di tengah
+	// aturan lain.
+	rest := system[idx+len(marker):]
+	next := strings.Index(rest, "\n# ")
+	if next < 0 {
+		return system + "\n\n" + block
+	}
+	cut := idx + len(marker) + next
+	return system[:cut] + "\n\n" + block + "\n" + system[cut:]
 }

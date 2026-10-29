@@ -45,7 +45,24 @@
 	};
 	type FieldStateView = { status: string; source: string; note: string };
 	type SourceView = { kind: string; label: string };
-	type ChatRow = { id?: string; role: 'user' | 'assistant'; content: string; created_at?: string };
+	// Aksi yang diusulkan AI untuk sebuah balasan. Backend sudah menyaringnya
+	// ke allowlist, jadi frontend hanya perlu tahu bentuknya.
+	type ReplyAction = {
+		kind: 'timeline_post';
+		label: string;
+		caption?: string;
+		hashtags?: string[];
+		occurred_on?: string;
+		reason?: string;
+	};
+	type ChatRow = {
+		id?: string;
+		role: 'user' | 'assistant';
+		content: string;
+		created_at?: string;
+		actions?: ReplyAction[];
+		actions_used?: string[];
+	};
 
 	// Sidebar brief = riwayat brief milik brand ini. Nantinya diisi onMount.
 	let briefs = $state<BriefListItem[]>([]);
@@ -412,6 +429,60 @@
 			copiedTimer = window.setTimeout(() => (copiedIndex = null), 1600);
 		} catch {
 			showToast(tr('Gagal menyalin. Salin manual ya.'), 'error');
+		}
+	}
+
+	// ---------- Aksi usulan AI pada balasan ----------
+	// Aksi disimpan di meta pesan oleh backend, jadi tombolnya bertahan setelah
+	// reload. Setelah dijalankan, kind-nya ditandai lewat endpoint consume agar
+	// tidak bisa diklik dua kali dan membuat post duplikat.
+	let actionBusy = $state<string | null>(null);
+
+	function actionUsed(m: ChatRow, kind: string): boolean {
+		return (m.actions_used ?? []).includes(kind);
+	}
+
+	async function runTimelineAction(m: ChatRow, action: ReplyAction) {
+		if (actionBusy) return;
+		if (!m.id) {
+			// Sebelumnya kondisi ini menyebabkan tombol tampak mati tanpa
+			// penjelasan. Sekarang user diberi tahu apa yang harus dilakukan.
+			showToast(tr('Muat ulang halaman dulu, lalu coba lagi.'), 'error');
+			return;
+		}
+		const caption = (action.caption ?? '').trim();
+		if (!caption) {
+			showToast(tr('Usulan ini tidak punya isi yang bisa disimpan.'), 'error');
+			return;
+		}
+		actionBusy = m.id;
+		try {
+			const res = await apiRequest(`${apiBase}/profiles/${profileId}/timeline`, {
+				method: 'POST',
+				body: JSON.stringify({
+					body: caption,
+					hashtags: action.hashtags ?? [],
+					occurred_on: action.occurred_on || ''
+				})
+			});
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menambahkan ke Timeline.')));
+			// Tandai dipakai. Kalau penandaan gagal, post tetap sudah dibuat;
+			// yang hilang hanya status tombol, jadi tidak perlu menggagalkan.
+			await apiRequest(`${briefBase}/actions/consume`, {
+				method: 'POST',
+				body: JSON.stringify({ message_id: m.id, kind: action.kind })
+			}).catch(() => null);
+			messages = messages.map((row) =>
+				row.id === m.id
+					? { ...row, actions_used: [...(row.actions_used ?? []), action.kind] }
+					: row
+			);
+			showToast(tr('Ditambahkan ke Timeline.'));
+			void loadTimeline();
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : tr('Gagal menambahkan ke Timeline.'), 'error');
+		} finally {
+			actionBusy = null;
 		}
 	}
 
@@ -944,7 +1015,19 @@
 						streamStatus = String(data.message ?? '');
 					} else if (ev === 'done') {
 						finished = true;
-						messages = [...messages, { role: 'assistant', content: String(data.reply ?? partial), created_at: new Date().toISOString() }];
+						messages = [...messages, {
+							role: 'assistant',
+							// id dari server: wajib ada supaya tombol aksi bisa
+							// menandai dirinya terpakai. Tanpa id, klik tidak
+							// mengirim apa pun dan tombol tampak mati.
+							id: typeof data.message_id === 'string' ? data.message_id : undefined,
+							content: String(data.reply ?? partial),
+							created_at: new Date().toISOString(),
+							// Aksi usulan ikut di respons "done", supaya tombolnya
+							// muncul tanpa menunggu reload.
+							actions: Array.isArray(data.actions) ? data.actions : undefined,
+							actions_used: []
+						}];
 						applyDone(data);
 					} else if (ev === 'error') {
 						streamError = String(data.message ?? tr('Generasi gagal.'));
@@ -3143,7 +3226,7 @@
 						<div class="m-auto w-full max-w-2xl px-4">
 							<!-- Sapaan pembuka: judul besar + deskripsi, bukan gelembung chat. -->
 							<h1 class="text-center text-2xl font-semibold tracking-tight">{tr('Bangun brief brand-mu lewat obrolan')}</h1>
-							<p class="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
+							<p class="mx-auto mt-3 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
 								{tr('Ceritakan brand-mu, sisanya aku tanyakan satu per satu.')}
 							</p>
 
@@ -3171,29 +3254,57 @@
 									</div>
 									<span class="brief-avatar brief-avatar-user" aria-hidden="true" title={userName}>{userInitials}</span>
 								</div>
-							{:else}
-								<div class="brief-msg flex items-start gap-2.5">
-									<span class="brief-avatar brief-avatar-ai" aria-hidden="true"><img src="/brief-chat-ai.webp" alt="" /></span>
-									<div class="flex min-w-0 flex-col items-start gap-1">
-										<div class="brief-markdown max-w-[92%] rounded-2xl rounded-tl-sm border px-4 py-3 text-[13px] leading-relaxed shadow-sm" style="border-color: var(--border); background: var(--card);">
-											{@html sanitizeHtml(renderMarkdown(m.content))}
-										</div>
-										<div class="flex items-center gap-1">
-											{#if timeLabel(m.created_at)}<span class="brief-time">{timeLabel(m.created_at)}</span>{/if}
-											<button
-												class="brief-msg-action"
-												type="button"
-												onclick={() => void copyReply(i, m.content)}
-											>
-												{#if copiedIndex === i}
-													<Check size={13} />{tr('Tersalin')}
-												{:else}
-													<Copy size={13} />{tr('Salin')}
-												{/if}
-											</button>
+								{:else}
+									<div class="brief-msg flex items-start gap-2.5">
+										<span class="brief-avatar brief-avatar-ai" aria-hidden="true"><img src="/brief-chat-ai.webp" alt="" /></span>
+										<div class="flex min-w-0 flex-col items-start gap-1">
+											<div class="brief-markdown max-w-[92%] rounded-2xl rounded-tl-sm border px-4 py-3 text-[13px] leading-relaxed shadow-sm" style="border-color: var(--border); background: var(--card);">
+												{@html sanitizeHtml(renderMarkdown(m.content))}
+											</div>
+											{#if m.actions?.length}
+												<div class="brief-actions">
+													{#each m.actions as action (action.kind)}
+														{@const used = actionUsed(m, action.kind)}
+														<button
+															class="brief-action-btn"
+															class:is-used={used}
+															type="button"
+															disabled={used || actionBusy === m.id}
+															title={action.reason ?? ''}
+															onclick={() => {
+																if (action.kind === 'timeline_post') void runTimelineAction(m, action);
+															}}
+														>
+															{#if used}
+																<Check size={14} />{tr('Sudah ditambahkan')}
+															{:else if actionBusy === m.id}
+																<LoaderCircle size={14} class="animate-spin" />{tr('Menambahkan…')}
+															{:else}
+																<Newspaper size={14} />{tr(action.label)}
+															{/if}
+														</button>
+														{#if !used && action.caption}
+															<p class="brief-action-preview">{action.caption}</p>
+														{/if}
+													{/each}
+												</div>
+											{/if}
+											<div class="flex items-center gap-1">
+												{#if timeLabel(m.created_at)}<span class="brief-time">{timeLabel(m.created_at)}</span>{/if}
+												<button
+													class="brief-msg-action"
+													type="button"
+													onclick={() => void copyReply(i, m.content)}
+												>
+													{#if copiedIndex === i}
+														<Check size={13} />{tr('Tersalin')}
+													{:else}
+														<Copy size={13} />{tr('Salin')}
+													{/if}
+												</button>
+											</div>
 										</div>
 									</div>
-								</div>
 							{/if}
 				{/each}
 
@@ -5027,6 +5138,57 @@
 	.brief-msg-action { opacity: 0.75; }
 	}
 
+	/* Aksi usulan AI: tombol menempel di bawah balasan, dengan cuplikan caption
+	   supaya user tahu apa yang akan ditambahkan sebelum menekan. */
+	.brief-actions {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 6px;
+		max-width: 92%;
+		margin-top: 2px;
+	}
+	.brief-action-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		padding: 7px 12px;
+		border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+		border-radius: 8px;
+		background: color-mix(in srgb, var(--primary) 7%, var(--card));
+		font-size: 12.5px;
+		font-weight: 600;
+		color: var(--primary);
+		cursor: pointer;
+		transition: background-color 0.12s ease, border-color 0.12s ease;
+	}
+	.brief-action-btn:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--primary) 12%, var(--card));
+		border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
+	}
+	.brief-action-btn:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+	}
+	.brief-action-btn.is-used {
+		border-color: var(--border);
+		background: var(--secondary);
+		color: var(--muted-foreground);
+		cursor: default;
+	}
+	.brief-action-preview {
+		margin: 0;
+		padding: 0 2px;
+		font-size: 11.5px;
+		line-height: 1.55;
+		color: var(--muted-foreground);
+		display: -webkit-box;
+		line-clamp: 2;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
 	.brief-thinking {
 		display: inline-flex;
 		align-items: center;
@@ -5401,12 +5563,14 @@
 
 
 	/* Kartu template di layar sapaan: klik = isi composer, ganti [KURUNG
-	   SIKU] saja. Grid 3 kolom, 1 kolom di layar sempit. */
+	   SIKU] saja. Grid 3 kolom, 1 kolom di layar sempit. Jarak mengikuti tiga
+	   tingkat: judul ke subjudul rapat, blok template terpisah jelas, catatan
+	   menutup dengan jeda sedang. */
 	.brief-tpl-label {
-		margin: 26px auto 0;
-		font-size: 11px;
+		margin: 34px auto 0;
+		font-size: 11.5px;
 		font-weight: 600;
-		letter-spacing: 0.05em;
+		letter-spacing: 0.06em;
 		text-transform: uppercase;
 		color: var(--muted-foreground);
 		text-align: center;
@@ -5414,15 +5578,15 @@
 	.brief-templates {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
-		gap: 8px;
-		margin: 10px auto 0;
-		max-width: 680px;
+		gap: 12px;
+		margin: 14px auto 0;
+		max-width: 700px;
 	}
 	.brief-tpl {
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
-		padding: 11px 12px;
+		gap: 6px;
+		padding: 16px;
 		text-align: left;
 		border: 1px solid var(--border, #e2e8f0);
 		border-radius: 12px;
@@ -5436,20 +5600,22 @@
 	}
 	.brief-tpl:disabled { opacity: 0.55; cursor: not-allowed; }
 	.brief-tpl-title {
-		font-size: 12.5px;
+		font-size: 13.5px;
 		font-weight: 700;
+		line-height: 1.4;
 		color: var(--foreground, #111827);
 	}
 	.brief-tpl-desc {
-		font-size: 11px;
-		line-height: 1.5;
+		font-size: 12.5px;
+		line-height: 1.6;
 		color: var(--muted-foreground, #667085);
 	}
 	.brief-tpl-note {
-		margin: 10px auto 0;
-		max-width: 480px;
+		margin: 18px auto 0;
+		max-width: 520px;
 		text-align: center;
-		font-size: 11.5px;
+		font-size: 12.5px;
+		line-height: 1.6;
 		color: var(--muted-foreground);
 	}
 	@media (max-width: 720px) {
@@ -5508,10 +5674,10 @@
 		top: calc(100% + 6px);
 		left: 16px;
 		z-index: 50;
-		width: 300px;
-		max-height: 340px;
+		width: 320px;
+		max-height: 360px;
 		overflow-y: auto;
-		padding: 12px;
+		padding: 14px;
 		border: 1px solid var(--border);
 		border-radius: 14px;
 		background: var(--card);
@@ -5617,12 +5783,12 @@
 	.brief-newchat-sm {
 		display: inline-flex;
 		align-items: center;
-		gap: 8px;
-		padding: 6px 9px;
+		gap: 9px;
+		padding: 8px 10px;
 		border: none;
 		border-radius: 8px;
 		background: none;
-		font-size: 12.5px;
+		font-size: 13px;
 		font-weight: 500;
 		color: var(--muted-foreground);
 		cursor: pointer;
@@ -5636,14 +5802,14 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		margin: -12px -12px 10px;
-		padding: 10px 12px;
+		margin: -14px -14px 12px;
+		padding: 12px 14px;
 		border-bottom: 1px solid var(--border);
 		border-radius: 14px 14px 0 0;
 		background: color-mix(in srgb, var(--muted) 45%, white);
 	}
 	.brief-pop-brand {
-		font-size: 14px;
+		font-size: 15px;
 		font-weight: 700;
 		letter-spacing: -0.01em;
 		color: var(--foreground);
@@ -5683,26 +5849,26 @@
 	/* Persen progres field wajib di tiap baris brief (panel melayang + rail kiri). */
 	.brief-pct {
 		flex-shrink: 0;
-		font-size: 10.5px;
+		font-size: 11.5px;
 		font-weight: 600;
 		color: var(--muted-foreground);
 	}
 	.brief-pop-icon {
 		display: inline-flex; align-items: center; justify-content: center;
-		width: 26px; height: 26px; border-radius: 7px; color: var(--muted-foreground);
+		width: 28px; height: 28px; border-radius: 7px; color: var(--muted-foreground);
 		transition: background-color 0.12s ease, color 0.12s ease;
 	}
 	.brief-pop-icon:hover:not(:disabled) { background: var(--secondary); color: var(--foreground); }
 	.brief-pop-list {
 		/* Baris "Obrolan Baru" di head butuh napas sebelum daftar dimulai. */
-		margin-top: 10px;
+		margin-top: 12px;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 		min-height: 0;
 		overflow-y: auto;
 		/* Tampilkan maksimal 10 baris; sisanya lewat scroll internal. */
-		max-height: calc(33px * 10 + 2px * 9);
+		max-height: calc(38px * 10 + 4px * 9);
 		padding-right: 2px;
 		scrollbar-width: thin;
 		scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent) transparent;
@@ -5722,7 +5888,7 @@
 		position: relative;
 		border-radius: 7px;
 	}
-	.brief-pop-item .brief-pop-row { width: 100%; padding-right: 56px; }
+	.brief-pop-item .brief-pop-row { width: 100%; padding-right: 64px; }
 	.brief-pop-item > .app-input { width: 100%; padding-right: 34px; }
 	.brief-pop-pin, .brief-pop-kebab, .brief-pop-save {
 		position: absolute;
@@ -5730,8 +5896,8 @@
 		transform: translateY(-50%);
 		z-index: 2;
 	}
-	.brief-pop-pin { right: 30px; }
-	.brief-pop-kebab, .brief-pop-save { right: 3px; }
+	.brief-pop-pin { right: 34px; }
+	.brief-pop-kebab, .brief-pop-save { right: 5px; }
 	.brief-pop-pin, .brief-pop-kebab { opacity: 0; }
 	.brief-pop-item:hover .brief-pop-pin,
 	.brief-pop-item:hover .brief-pop-kebab,
@@ -5746,10 +5912,10 @@
 	.brief-pop-empty { padding: 6px 4px; font-size: 12px; color: var(--muted-foreground); }
 	/* Baris brief: yang tidak aktif abu-abu, yang aktif hitam dengan latar abu tipis. */
 	.brief-pop-row {
-		display: flex; align-items: center; gap: 9px;
+		display: flex; align-items: center; gap: 10px;
 		width: 100%;
-		padding: 7px 9px; border-radius: 8px;
-		font-size: 12.5px; color: var(--muted-foreground); text-decoration: none;
+		padding: 10px 10px; border-radius: 8px;
+		font-size: 13px; color: var(--muted-foreground); text-decoration: none;
 		background: none; border: none; text-align: left; cursor: pointer;
 		transition: background-color 0.12s ease, color 0.12s ease;
 	}

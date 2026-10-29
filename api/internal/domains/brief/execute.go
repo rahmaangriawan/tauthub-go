@@ -27,10 +27,16 @@ type turnResult struct {
 	Output   *EngineOutput
 	Accepted []FieldUpdate
 	Rejected []string
-	Phase    Phase
-	Filled   int
-	Total    int
-	Streamed bool
+	// Actions: usulan aksi yang sudah lolos validasi. Sama dengan yang
+	// disimpan di meta pesan assistant.
+	Actions []ActionView
+	// MessageID: id baris pesan assistant yang baru disimpan. Frontend butuh
+	// id ini untuk menandai aksi terpakai; tanpa itu tombol tidak bisa diklik.
+	MessageID string
+	Phase     Phase
+	Filled    int
+	Total     int
+	Streamed  bool
 }
 
 func (t *turnResult) response() map[string]any {
@@ -41,6 +47,8 @@ func (t *turnResult) response() map[string]any {
 		"suggested_values":       out.SuggestedValues,
 		"asked_field":            out.AskedField,
 		"ready_for_confirmation": out.ReadyForConfirmation,
+		"actions":                t.Actions,
+		"message_id":             t.MessageID,
 		"phase":                  string(t.Phase),
 		"progress":               map[string]any{"filled": t.Filled, "total": t.Total},
 		"streamed":               t.Streamed,
@@ -69,7 +77,7 @@ func (d *Deps) executeTurn(inCtx context.Context, in executeInput) (result *turn
 		return nil, errNotConfigured
 	}
 
-	if err := d.insertMessage(ctx, in.ProfileID, in.BrandID, "user", in.Message, in.UserID, nil); err != nil {
+	if _, err := d.insertMessage(ctx, in.ProfileID, in.BrandID, "user", in.Message, in.UserID, nil); err != nil {
 		return nil, err
 	}
 
@@ -121,7 +129,16 @@ func (d *Deps) executeTurn(inCtx context.Context, in executeInput) (result *turn
 	if run.Output.AskedField != nil && strings.TrimSpace(*run.Output.AskedField) != "" {
 		meta["asked_field"] = *run.Output.AskedField
 	}
-	if err := d.insertMessage(ctx, in.ProfileID, in.BrandID, "assistant", reply, in.UserID, meta); err != nil {
+	// Aksi dari model disaring dulu ke allowlist. Yang lolos disimpan bersama
+	// pesan supaya tombolnya tetap ada setelah reload, bukan hanya di respons
+	// sekali ini. Yang tidak lolos dibuang diam-diam: satu usulan ngawur tidak
+	// boleh menggagalkan balasan.
+	actions := ValidateActions(run.Output.Actions)
+	if len(actions) > 0 {
+		meta["actions"] = actions
+	}
+	assistantMsgID, err := d.insertMessage(ctx, in.ProfileID, in.BrandID, "assistant", reply, in.UserID, meta)
+	if err != nil {
 		d.finishRun(ctx, runID, "failed", run.Result.InputTokens, run.Result.OutputTokens,
 			run.Result.DurationMS, "", err.Error())
 		return nil, err
@@ -136,7 +153,7 @@ func (d *Deps) executeTurn(inCtx context.Context, in executeInput) (result *turn
 
 	result = &turnResult{
 		Output: run.Output, Accepted: accepted, Rejected: rejected,
-		Streamed: run.Streamed,
+		Actions: actions, MessageID: assistantMsgID, Streamed: run.Streamed,
 	}
 	if states, err := d.loadStates(ctx, in.ProfileID); err == nil {
 		result.Filled, result.Total = Progress(t.Fields, states)

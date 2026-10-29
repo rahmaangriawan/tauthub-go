@@ -96,10 +96,7 @@ func (d *Deps) BriefChatGet(w http.ResponseWriter, r *http.Request) {
 
 	msgOut := make([]map[string]any, 0, len(messages))
 	for _, m := range messages {
-		msgOut = append(msgOut, map[string]any{
-			"id": m.ID, "role": m.Role, "content": m.Content,
-			"created_at": m.CreatedAt.UTC().Format("2006-01-02T15:04:05.000Z"),
-		})
+		msgOut = append(msgOut, assistantMessageRow(m))
 	}
 	stateOut := make(map[string]any, len(states))
 	for k, v := range states {
@@ -351,4 +348,67 @@ func jsonStringify(v any) string {
 		return "{}"
 	}
 	return string(raw)
+}
+
+// ---------- POST: tandai aksi balasan sudah dipakai ----------
+
+// BriefActionConsume menandai satu aksi pada pesan assistant sudah dijalankan.
+//
+// Kenapa perlu endpoint: aksi disimpan di meta pesan supaya tombolnya bertahan
+// setelah reload. Tanpa penanda "sudah dipakai", tombol yang sama akan tampil
+// aktif lagi di kunjungan berikutnya dan user bisa membuat post duplikat.
+//
+// Endpoint ini hanya mengubah meta, tidak membuat post. Post tetap dibuat oleh
+// pemanggil ke endpoint timeline yang sudah ada.
+func (d *Deps) BriefActionConsume(w http.ResponseWriter, r *http.Request) {
+	userID, brandID, profileID, ok := d.accessOrFail(w, r, "writer")
+	if !ok {
+		return
+	}
+	_ = userID
+	body := decodeJSON(r)
+	messageID, _ := strField(body, "message_id")
+	kind, _ := strField(body, "kind")
+	if messageID == "" || kind == "" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "message_id dan kind wajib diisi.")
+		return
+	}
+	if !allowedActions[kind] {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Jenis aksi tidak dikenal.")
+		return
+	}
+
+	// Pesan harus milik brief ini, dan hanya pesan assistant yang punya aksi.
+	var raw []byte
+	err := d.Pool.QueryRow(r.Context(), `
+		SELECT meta FROM taut_brief_messages
+		WHERE id = $1 AND profile_id = $2 AND brand_id = $3 AND role = 'assistant'`,
+		messageID, profileID, brandID).Scan(&raw)
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, "Pesan tidak ditemukan.")
+		return
+	}
+	var meta map[string]any
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &meta)
+	}
+	updated, already := markActionUsed(meta, kind)
+	if already {
+		// Sudah ditandai; idempoten supaya klik ganda tidak error.
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "already": true})
+		return
+	}
+	payload, err := encodeMeta(updated)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "Gagal menyimpan status aksi.")
+		return
+	}
+	if _, err := d.Pool.Exec(r.Context(), `
+		UPDATE taut_brief_messages SET meta = $1::jsonb
+		WHERE id = $2 AND profile_id = $3 AND brand_id = $4`,
+		payload, messageID, profileID, brandID); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

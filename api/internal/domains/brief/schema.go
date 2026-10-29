@@ -152,6 +152,10 @@ type EngineOutput struct {
 	SuggestedValues      []SuggestedValue `json:"suggested_values"`
 	AskedField           *string          `json:"asked_field"`
 	ReadyForConfirmation bool             `json:"ready_for_confirmation"`
+	// Actions: usulan tombol aksi untuk balasan ini. Model hanya mengusulkan;
+	// ValidateActions yang memutuskan mana yang boleh tampil, dan user yang
+	// memutuskan mana yang dijalankan.
+	Actions []EngineAction `json:"actions"`
 }
 
 var validSources = map[string]bool{

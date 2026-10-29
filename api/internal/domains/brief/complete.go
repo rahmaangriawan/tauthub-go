@@ -41,6 +41,9 @@ type turn struct {
 	// Memory: fakta relevan dari brief LAIN di brand yang sama (recall
 	// embedding lokal atas pesan user terakhir).
 	Memory []MemoryFact
+	// Timeline: caption post Timeline terbaru. Diberikan ke model supaya ia
+	// tidak mengusulkan aksi untuk kabar yang sudah tayang.
+	Timeline []string
 }
 
 func (d *Deps) loadTurn(ctx context.Context, profileID, brandID, userName string) (*turn, error) {
@@ -83,6 +86,10 @@ func (d *Deps) loadTurn(ctx context.Context, profileID, brandID, userName string
 		ProfileName: name, UserName: userName, AskedField: askedField,
 		ChatSummary: d.loadChatSummary(ctx, profileID),
 	}
+	// Caption Timeline terbaru: bahan pembanding untuk aksi usulan. Gagal
+	// membaca bukan alasan menggagalkan giliran — model hanya kehilangan
+	// konteks anti-duplikat.
+	t.Timeline = d.loadRecentTimeline(ctx, profileID, maxTimelineContext)
 	// Memori lintas brief: pakai pesan user TERAKHIR sebagai query; field
 	// yang sedang ditanyakan diberi boost saat pencocokan.
 	t.Memory = d.RecallFacts(ctx, brandID, profileID, lastUserMessage(history), askedField, 5)
@@ -114,7 +121,7 @@ func (t *turn) stateView() StateView {
 		Fields: t.Fields, States: t.States, Values: t.Values,
 		Phase: t.Phase, Sources: t.Sources, Memory: t.Memory,
 		UserName: t.UserName, ProfileName: t.ProfileName,
-		AskedField: t.AskedField,
+		AskedField: t.AskedField, Timeline: t.Timeline,
 	}
 }
 
@@ -135,6 +142,15 @@ func (t *turn) buildMessages() []ai.ChatMessage {
 	if strings.TrimSpace(system) == "" {
 		system = "Kamu adalah Brief Assistant Tauthub. Balas dalam JSON sesuai kontrak yang diberikan."
 	}
+	// Blok aksi disuntikkan ke system prompt, bukan hanya ke kontrak pratinjau
+	// admin. Prompt aktif hidup di tabel taut_brief_prompt_versions dan punya
+	// blok "FORMAT OUTPUT" sendiri; tanpa suntikan ini model tidak pernah tahu
+	// field "actions" ada, sehingga tombol Timeline tidak pernah muncul.
+	//
+	// Ditempel TEPAT SETELAH blok FORMAT OUTPUT, bukan di akhir prompt: model
+	// mengikuti skema JSON pertama yang ia lihat, dan blok di akhir mudah
+	// diabaikan setelah belasan aturan perilaku di antaranya.
+	system = injectAfterOutputFormat(system, actionPromptBlock())
 	// Pesan yang jatuh di luar jendela riwayat digantikan ringkasan bergulir
 	// supaya giliran tetap tahu koreksi/preferensi/fakta awal percakapan.
 	if dropped > 0 {
