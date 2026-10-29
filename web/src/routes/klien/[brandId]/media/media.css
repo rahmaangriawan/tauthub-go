@@ -2263,7 +2263,15 @@ button.selectedStepChip:disabled,
 
 /* ── Bar aksi bawah (mobile): ringkas, ringkasan + tombol utama penuh ────── */
 .selectedBarMobile { display: none; align-items: center; gap: 10px; min-width: 0; }
-.selectedBarMobileIcons { display: inline-flex; align-items: center; flex: 0 0 auto; }
+/* Tumpukan favicon kini tombol: membuka popover daftar media terpilih. */
+.selectedBarMobileIcons {
+  display: inline-flex; align-items: center; flex: 0 0 auto;
+  padding: 0; border: none; background: none; cursor: pointer;
+  border-radius: 999px;
+  transition: opacity 0.14s ease;
+}
+.selectedBarMobileIcons:hover { opacity: 0.85; }
+.selectedBarMobileIcons:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 .selectedBarAvatar {
   display: inline-flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; margin-right: -12px;
@@ -2289,6 +2297,8 @@ button.selectedStepChip:disabled,
   /* Stat desktop diganti ringkasan mobile (node tahap sudah dipindah ke header). */
   .selectedBarStats { display: none; }
   .selectedBarMobile { display: flex; }
+  /* Popover daftar media ikut lebar bar dan tidak boleh melebihi layar. */
+  .selectedBarMobile .selectedListPop { left: 0; right: 0; width: auto; max-height: min(320px, 55dvh); }
   .selectedBarRight { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; }
   /* Mobile: cukup tombol utama — Batal & Ekspor Proposal disembunyikan
      (fungsinya tetap tersedia di desktop). */
@@ -2352,7 +2362,7 @@ button.selectedStepChip:disabled,
 .campaignBalanceBadgeLow a { font-weight: 700; color: inherit; text-decoration: underline; }
 
 /* ── Bar aksi mobile: kartu membulat, ringkasan + expand, tombol navy ────── */
-.selectedBarMobile { width: 100%; }
+.selectedBarMobile { position: relative; width: 100%; }
 /* Desktop: stat item kembali sebaris horizontal (dulu ada di .selectedBarLeft).
    Ditulis sebagai min-width supaya TIDAK menimpa aturan sembunyikan di mobile. */
 @media (min-width: 768px) {

@@ -256,6 +256,9 @@
 	// Daftar media terpilih di dalam modal kampanye: di HP barisnya jadi
 	// accordion supaya bisa diperiksa dan dikurangi tanpa menutup modal.
 	let campaignListOpen = $state(false);
+	// Filter daftar media terpilih di modal kampanye; baru berguna saat
+	// pilihannya panjang, jadi kotaknya hanya muncul di atas 5 media.
+	let campaignListQuery = $state('');
 	let creating = $state(false);
 	// Profiler (workspace knowledge klien) opsional untuk kampanye baru.
 	// Sementara disembunyikan atas permintaan: ubah ke true untuk memunculkan
@@ -276,6 +279,8 @@
 	let restoredSelectionCount = $state(0);
 	// Popover daftar media terpilih (dibuka dari kartu "MEDIA TERPILIH" di bar bawah).
 	let selectedListOpen = $state(false);
+	// Kotak cari di popover tersebut, juga hanya muncul saat pilihan > 5 media.
+	let selectedListQuery = $state('');
 	// Pilihan bisa memuat media di luar 250 baris yang sedang dimuat (filter lain)
 	// — snapshot harga disimpan supaya total di bar tidak bohong.
 	let selectedSnapshot = $state<Record<string, { name: string; price: number; credits: number; domain?: string }>>({});
@@ -553,6 +558,7 @@
 		campaignError = '';
 		profilerId = '';
 		campaignListOpen = false;
+		campaignListQuery = '';
 		campaignOpen = true;
 		if (walletAvailableTc === null) void loadWallet();
 		if (SHOW_PROFILER_FIELD && profilerOptions.length === 0) void loadProfilerOptions();
@@ -987,6 +993,24 @@
 		})
 	);
 
+	// Filter daftar di modal kampanye: cocokkan nama domain media. Kotak cari
+	// hanya ada saat pilihan > 5, jadi filter pun hanya aktif di kondisi itu.
+	const campaignListFiltered = $derived.by(() => {
+		if (selectedItems.length <= 5) return selectedItems;
+		const q = campaignListQuery.trim().toLowerCase();
+		if (!q) return selectedItems;
+		return selectedItems.filter((it) => `${it.name} ${it.domain ?? ''}`.toLowerCase().includes(q));
+	});
+
+	// Daftar di popover bar bawah memakai aturan sama: filter hanya aktif
+	// saat pilihan > 5, karena hanya saat itu kotak cari ditampilkan.
+	const selectedListFiltered = $derived.by(() => {
+		if (selectedItems.length <= 5) return selectedItems;
+		const q = selectedListQuery.trim().toLowerCase();
+		if (!q) return selectedItems;
+		return selectedItems.filter((it) => `${it.name} ${it.domain ?? ''}`.toLowerCase().includes(q));
+	});
+
 	function toggleSort(key: typeof sortKey) {
 		if (sortKey === key) {
 			sortDir = sortDir === 'asc' ? 'desc' : 'asc';
@@ -1214,6 +1238,77 @@
 </script>
 
 <PageTitle title={tr("Eksplorasi Media")} />
+
+<!-- Popover daftar media terpilih: dipakai bar desktop dan bar HP. -->
+{#snippet selectedListPopover()}
+	{#if selectedListOpen}
+		<button class="selectedListBackdrop" type="button" aria-label={tr('Tutup')} onclick={() => (selectedListOpen = false)}></button>
+		<div class="selectedListPop" role="dialog" aria-label={tr('Media terpilih')}>
+			<div class="selectedListHead">
+				<span class="selectedListTitle">{tr('Media terpilih')} ({selectedIds.size})</span>
+				<span class="selectedListActions">
+					<button
+						class="selectedListReset"
+						type="button"
+						aria-label={tr('Reset pilihan')}
+						title={tr('Reset pilihan')}
+						onclick={() => { clearSelection(); selectedListOpen = false; }}
+					>
+						<RotateCcw size={13} />
+					</button>
+					<button class="selectedListClose" type="button" aria-label={tr('Tutup')} onclick={() => (selectedListOpen = false)}>
+						<X size={14} />
+					</button>
+				</span>
+			</div>
+			{#if selectedItems.length > 5}
+				<div class="campaignListSearch selectedListSearch">
+					<Search size={15} aria-hidden="true" />
+					<input
+						class="campaignListSearchInput"
+						type="search"
+						bind:value={selectedListQuery}
+						placeholder={tr("Cari media terpilih…")}
+						aria-label={tr("Cari media terpilih")}
+					/>
+					{#if selectedListQuery}
+						<button
+							class="campaignListSearchClear"
+							type="button"
+							aria-label={tr("Bersihkan pencarian")}
+							title={tr("Bersihkan pencarian")}
+							onclick={() => (selectedListQuery = '')}
+						><X size={14} /></button>
+					{/if}
+				</div>
+			{/if}
+			<div class="selectedListItems">
+				{#each selectedListFiltered as it (it.id)}
+					<div class="selectedListRow">
+						<span class="selectedListRowName" title={it.name}>{it.name}</span>
+						<span class="selectedListRowPrice">Rp {fmt(it.price)}</span>
+						<button
+							class="selectedListRemove"
+							type="button"
+							aria-label={`${tr('Hapus')} ${it.name}`}
+							onclick={() => removeSelected(it.id)}
+						>
+							<X size={12} />
+						</button>
+					</div>
+				{:else}
+					<p class="campaignSelectedEmpty">
+						{tr("Tidak ada media yang cocok dengan")} “{selectedListQuery}”.
+					</p>
+				{/each}
+			</div>
+			<div class="selectedListFoot">
+				<span>{tr('Total')}</span>
+				<strong>Rp {fmt(totalSelectedPrice)}</strong>
+			</div>
+		</div>
+	{/if}
+{/snippet}
 
 <Tooltip.Provider delayDuration={0} skipDelayDuration={300}>
 <div class="katalogMedia">
@@ -2026,8 +2121,29 @@
 								</span>
 							</button>
 							{#if campaignListOpen}
+								{#if selectedItems.length > 5}
+									<div class="campaignListSearch">
+										<Search size={15} aria-hidden="true" />
+										<input
+											class="campaignListSearchInput"
+											type="search"
+											bind:value={campaignListQuery}
+											placeholder={tr("Cari media terpilih…")}
+											aria-label={tr("Cari media terpilih")}
+										/>
+										{#if campaignListQuery}
+											<button
+												class="campaignListSearchClear"
+												type="button"
+												aria-label={tr("Bersihkan pencarian")}
+												title={tr("Bersihkan pencarian")}
+												onclick={() => (campaignListQuery = '')}
+											><X size={14} /></button>
+										{/if}
+									</div>
+								{/if}
 								<ul class="campaignSelectedList" id="campaign-selected-list">
-									{#each selectedItems as it (it.id)}
+									{#each campaignListFiltered as it (it.id)}
 										<li class="campaignSelectedItem">
 											<span class="campaignSelectedFavicon" aria-hidden="true">
 												{#if it.domain && !faviconFailed[it.id]}
@@ -2051,6 +2167,10 @@
 												title={`${tr('Hapus')} ${it.name}`}
 												onclick={() => removeFromCampaign(it.id)}
 											><Trash2 size={15} /></button>
+										</li>
+									{:else}
+										<li class="campaignSelectedEmpty">
+											{tr("Tidak ada media yang cocok dengan")} “{campaignListQuery}”.
 										</li>
 									{/each}
 								</ul>
@@ -2248,7 +2368,17 @@
 		>
 				<div class="selectedBarMobile">
 					<div class="selectedBarMobileRow">
-						<div class="selectedBarMobileIcons" aria-hidden="true">
+						<!-- Tumpukan favicon sekaligus tombol: membuka daftar media terpilih. -->
+						<button
+							class="selectedBarMobileIcons"
+							type="button"
+							aria-expanded={selectedListOpen}
+							aria-label={tr('Lihat media terpilih')}
+							onclick={() => {
+								selectedListOpen = !selectedListOpen;
+								selectedListQuery = '';
+							}}
+						>
 							{#each selectedItems.slice(0, 3) as it (it.id)}
 								<span class="selectedBarAvatar">
 									{#if it.domain && !faviconFailed[it.id]}
@@ -2267,7 +2397,7 @@
 							{#if selectedIds.size > 3}
 								<span class="selectedBarAvatar selectedBarAvatarMore">+{selectedIds.size - 3}</span>
 							{/if}
-						</div>
+						</button>
 						<div class="selectedBarMobileText">
 							<strong>{selectedIds.size} {tr('Media dipilih')}</strong>
 							<span>{tr('Total')} Rp {fmt(totalSelectedPrice)}</span>
@@ -2298,6 +2428,7 @@
 					</div>
 
 					<!-- Detail (expand/collapse): saldo + daftar media terpilih. -->
+					{@render selectedListPopover()}
 				</div>
 				<div class="selectedBarStats">
 					<div class="selectedStatItem selectedStatClickable">
@@ -2307,7 +2438,7 @@
 							type="button"
 							aria-expanded={selectedListOpen}
 							aria-label={tr('Lihat media terpilih')}
-							onclick={() => (selectedListOpen = !selectedListOpen)}
+							onclick={() => { selectedListOpen = !selectedListOpen; selectedListQuery = ''; }}
 						>
 							<span class="selectedStatFaviconRow">
 								<span class="selectedStatFavicons" aria-hidden="true">
@@ -2343,48 +2474,7 @@
 							</span>
 						</button>
 
-						{#if selectedListOpen}
-							<button class="selectedListBackdrop" type="button" aria-label={tr('Tutup')} onclick={() => (selectedListOpen = false)}></button>
-							<div class="selectedListPop" role="dialog" aria-label={tr('Media terpilih')}>
-								<div class="selectedListHead">
-									<span class="selectedListTitle">{tr('Media terpilih')} ({selectedIds.size})</span>
-									<span class="selectedListActions">
-									<button
-										class="selectedListReset"
-										type="button"
-										aria-label={tr('Reset pilihan')}
-										title={tr('Reset pilihan')}
-										onclick={() => { clearSelection(); selectedListOpen = false; }}
-									>
-										<RotateCcw size={13} />
-									</button>
-									<button class="selectedListClose" type="button" aria-label={tr('Tutup')} onclick={() => (selectedListOpen = false)}>
-										<X size={14} />
-									</button>
-									</span>
-								</div>
-								<div class="selectedListItems">
-									{#each selectedItems as it (it.id)}
-										<div class="selectedListRow">
-											<span class="selectedListRowName" title={it.name}>{it.name}</span>
-											<span class="selectedListRowPrice">Rp {fmt(it.price)}</span>
-											<button
-												class="selectedListRemove"
-												type="button"
-												aria-label={`${tr('Hapus')} ${it.name}`}
-												onclick={() => removeSelected(it.id)}
-											>
-												<X size={12} />
-											</button>
-										</div>
-									{/each}
-								</div>
-								<div class="selectedListFoot">
-									<span>{tr('Total')}</span>
-									<strong>Rp {fmt(totalSelectedPrice)}</strong>
-								</div>
-							</div>
-						{/if}
+{@render selectedListPopover()}
 					</div>
 					<div class="selectedBarDivider"></div>
 					<!-- Ringkasan finansial: total publikasi + status kecukupan saldo
@@ -2598,6 +2688,64 @@
 		.campaignSelectedList::-webkit-scrollbar-thumb {
 			background: #cbd5e1;
 			border-radius: 999px;
+		}
+		/* Kotak cari di daftar terpilih: hanya muncul kalau pilihan > 5 media. */
+		.campaignListSearch {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			margin: 0 0 6px;
+			padding: 0 10px;
+			background: #f7faff;
+			border: 1px solid #e1effe;
+			border-radius: 10px;
+			color: #64748b;
+		}
+		.campaignListSearch:focus-within {
+			border-color: #93c5fd;
+			background: #ffffff;
+		}
+		.campaignListSearchInput {
+			flex: 1;
+			min-width: 0;
+			height: 34px;
+			border: 0;
+			background: transparent;
+			font-size: 12.5px;
+			color: #0f172a;
+			outline: none;
+		}
+		.campaignListSearchInput::placeholder {
+			color: #94a3b8;
+		}
+		/* Sembunyikan tombol clear bawaan browser agar tidak dobel. */
+		.campaignListSearchInput::-webkit-search-cancel-button {
+			appearance: none;
+		}
+		.campaignListSearchClear {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+			width: 22px;
+			height: 22px;
+			border: 0;
+			border-radius: 999px;
+			background: #e2e8f0;
+			color: #475569;
+			cursor: pointer;
+		}
+		.campaignListSearchClear:hover {
+			background: #cbd5e1;
+		}
+		.campaignSelectedEmpty {
+			padding: 10px 2px;
+			font-size: 12.5px;
+			color: #94a3b8;
+		}
+		/* Versi di popover bar bawah: beri jarak dari tepi kartu. */
+		.selectedListSearch {
+			margin: 8px 10px 2px;
 		}
 		.campaignSelectedItem {
 			display: flex;
