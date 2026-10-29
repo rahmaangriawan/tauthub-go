@@ -10,7 +10,7 @@
 	// riwayat tetap bisa dibaca dua pihak.
 	import { onMount, onDestroy } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
-	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search, Pencil, ArrowLeft, PanelRightOpen, X } from '@lucide/svelte';
+	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search, Pencil, ArrowLeft, X } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { refreshChatUnreadNow } from '$lib/chat/chat-unread.svelte';
 	import PostEditor from '$lib/chat/post-editor.svelte';
@@ -568,7 +568,13 @@
 					title={tr('Info media')}
 					onclick={() => (infoOpen = true)}
 				>
-					<PanelRightOpen size={17} />
+					<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+						<path d="M0 0h24v24H0z" fill="none" />
+						<g fill="none" stroke="currentColor" stroke-width="2">
+							<rect width="20" height="18" x="2" y="3" stroke-linecap="round" stroke-linejoin="round" rx="2" />
+							<path d="M15 3v18" />
+						</g>
+					</svg>
 				</button>
 			</div>
 
