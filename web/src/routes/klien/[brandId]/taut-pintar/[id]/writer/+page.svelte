@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { CalendarClock, Check, ChevronDown, ChevronUp, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Images, Info, Link, Link2, ListChecks, LoaderCircle, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Target, Trash2, TriangleAlert, Type, Upload, Wallet, Wrench, X } from '@lucide/svelte';
+	import { CalendarClock, Check, ChevronDown, ChevronUp, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Images, Info, Link, Link2, ListChecks, LoaderCircle, MoreVertical, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Target, Trash2, TriangleAlert, Type, Upload, Wallet, Wrench, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, getAccessToken, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -284,6 +284,42 @@
 	let slotDeleteTarget = $state<{ media: PlacementItem; slot: number } | null>(null);
 	let slotDeleteBusy = $state(false);
 	let slotDeleteError = $state('');
+
+	// Menu ⋮ per artikel: menampung aksi yang jarang dipakai (Analisis QC,
+	// hapus artikel) supaya di HP hanya dua tombol yang tampil.
+	let rowMenu = $state<{ key: string; left: number; top: number; media: PlacementItem; item: PlacementItem; hasDoc: boolean } | null>(null);
+
+	function openRowMenu(e: MouseEvent, media: PlacementItem, item: PlacementItem, hasDocItem: boolean) {
+		e.stopPropagation();
+		const key = pkey(item);
+		if (rowMenu?.key === key) {
+			rowMenu = null;
+			return;
+		}
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		const width = 210;
+		const len = hasDocItem ? 132 : 88;
+		const left = Math.min(Math.max(8, rect.right - width), Math.max(8, window.innerWidth - width - 8));
+		const below = window.innerHeight - rect.bottom - 12;
+		const top = below < len ? Math.max(8, rect.top - len - 6) : rect.bottom + 6;
+		rowMenu = { key, left, top, media, item, hasDoc: hasDocItem };
+	}
+
+	$effect(() => {
+		if (!rowMenu) return;
+		const close = () => (rowMenu = null);
+		const onKey = (ev: KeyboardEvent) => {
+			if (ev.key === 'Escape') close();
+		};
+		window.addEventListener('scroll', close, true);
+		window.addEventListener('resize', close);
+		window.addEventListener('keydown', onKey);
+		return () => {
+			window.removeEventListener('scroll', close, true);
+			window.removeEventListener('resize', close);
+			window.removeEventListener('keydown', onKey);
+		};
+	});
 
 	function askDeleteArticle(media: PlacementItem, item: PlacementItem) {
 		if (viewOnly || bulkRunning) return;
@@ -2050,7 +2086,7 @@
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<div
-							class="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2.5 px-3.5 py-3 sm:px-4"
+							class="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2.5 px-3.5 py-3 sm:px-4 max-sm:grid max-sm:grid-cols-[auto_auto_minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-2.5 max-sm:gap-y-2"
 							onclick={(e) => {
 								if ((e.target as HTMLElement).closest('button, input, select, a, label')) return;
 								toggleGroup(m.media_id);
@@ -2065,7 +2101,7 @@
 								onclick={() => toggleMediaPicked(g.slots)}
 							/>
 							<div
-								class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[5px] overflow-hidden border border-slate-200/60 font-bold text-base"
+								class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[5px] border border-slate-200/60 font-bold text-base max-sm:h-10 max-sm:w-10"
 								style={domain && !avatarFailed[m.media_id]
 									? 'background-color: transparent;'
 									: `background-color: ${av.bg}; color: ${av.text};`}
@@ -2112,12 +2148,23 @@
 								</p>
 							</div>
 
+								<button
+									class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 max-sm:h-10 max-sm:w-10"
+									type="button"
+									aria-expanded={!collapsed}
+									aria-label={collapsed ? tr('Buka daftar artikel') : tr('Ciutkan daftar artikel')}
+									title={collapsed ? tr('Buka daftar artikel') : tr('Ciutkan daftar artikel')}
+									onclick={() => toggleGroup(m.media_id)}
+								>
+									{#if collapsed}<ChevronDown size={15} />{:else}<ChevronUp size={15} />{/if}
+								</button>
+
 							<!-- Kontrol media: buat sekaligus, stepper jumlah artikel,
 							     ciutkan daftar, lepas media. -->
 							<!-- Di HP grup kontrol turun ke baris sendiri selebar kartu: lima kontrol
 							     yang dipaksa sebaris membuat tombol "Buat N artikel" terjepit. Di layar
 							     lebar tetap menempel kanan seperti sebelumnya. -->
-							<div class="ml-auto flex shrink-0 items-center gap-1.5 max-sm:mt-0.5 max-sm:w-full max-sm:flex-wrap max-sm:gap-2">
+							<div class="ml-auto flex shrink-0 items-center gap-1.5 max-sm:col-span-full max-sm:w-full max-sm:flex-wrap max-sm:gap-2">
 								<!-- Muncul begitu media punya lebih dari satu artikel dan masih ada
 								     slot tanpa naskah. Termasuk saat tinggal SATU slot tersisa:
 								     dialognya tetap jalan dan isinya satu baris, jadi jalurnya
@@ -2151,16 +2198,6 @@
 										onclick={() => void setQuantity(m, qty + 1)}
 									>+</button>
 								</div>
-								<button
-									class="flex h-8 w-8 items-center justify-center rounded-[5px] border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 max-sm:ml-auto max-sm:h-10 max-sm:w-10"
-									type="button"
-									aria-expanded={!collapsed}
-									aria-label={collapsed ? tr('Buka daftar artikel') : tr('Ciutkan daftar artikel')}
-									title={collapsed ? tr('Buka daftar artikel') : tr('Ciutkan daftar artikel')}
-									onclick={() => toggleGroup(m.media_id)}
-								>
-									{#if collapsed}<ChevronDown size={15} />{:else}<ChevronUp size={15} />{/if}
-								</button>
 								<button
 									class="flex h-8 w-8 items-center justify-center rounded-[5px] border border-rose-200 bg-rose-50 text-rose-600 hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700 max-sm:h-10 max-sm:w-10"
 									type="button"
@@ -2197,7 +2234,7 @@
 												onclick={() => togglePicked(pkey(item))}
 											/>
 											<!-- Thumbnail = cover artikel ini (bukan favicon media). -->
-											<div class="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[5px] border border-slate-200/80 bg-slate-100/70 max-sm:h-14 max-sm:w-20">
+											<div class="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[5px] border border-slate-200/80 bg-slate-100/70 max-sm:h-[66px] max-sm:w-[88px]">
 												{#if doc && stats?.cover}
 													<img
 														src={sameOriginAssetUrl(stats.cover) ?? ''}
@@ -2314,25 +2351,13 @@
 											</div>
 
 											<div class="flex flex-wrap items-center gap-1.5">
-												<button
-													type="button"
-													class={`expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 text-xs font-semibold transition-colors ${
-														doc
-															? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
-															: 'bg-blue-50/90 hover:bg-blue-100 text-blue-600 border border-blue-200/80'
-													}`}
-													aria-label={tr('Cek Validasi')}
-													disabled={bulkRunning || viewOnly}
-													onclick={() => (checklistFor = pkey(item))}
-												>
-													<ShieldCheck size={16} strokeWidth={2.2} class="shrink-0" />
-													<span class="expTip">{tr('Cek Validasi')}</span>
-												</button>
-
+												<!-- Aksi utama: buka naskah (kalau sudah ada) atau buat baru.
+												     Aksi lain masuk menu ⋮ supaya di HP tidak ada empat tombol
+												     kecil berdesakan. -->
 												{#if doc}
 													<button
 														type="button"
-														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 bg-blue-600 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-blue-700"
 														aria-label={viewOnly ? tr('Lihat Artikel') : tr('Edit Artikel')}
 														disabled={bulkRunning}
 														onclick={() => void openPreview(item)}
@@ -2340,65 +2365,33 @@
 														<Pencil size={15} strokeWidth={2} class="shrink-0" />
 														<span class="expTip">{viewOnly ? tr('Lihat Artikel') : tr('Edit Artikel')}</span>
 													</button>
-
-													{@const qcCount = qcCounts[pkey(item)] ?? 0}
-													{@const qcBusy = qcRunning[pkey(item)] === true}
-													<!-- Badge menampilkan JUMLAH PEMERIKSA panel (satu ceklis),
-													     bukan jumlah riwayat pemindaian — angkanya selalu
-													     sinkron dengan daftar kartu pada panel Analisis QC. -->
-													{@const qcBadge = qcCount > 0 ? QC_CHECK_COUNT : 0}
-													<!-- HIJAU = hasil QC terakhir lulus (artikel Siap Terbit):
-													     dibaca dari status artikel, bukan memori sesi, supaya
-													     tetap hijau setelah refresh halaman. -->
-													{@const qcSelesai = !qcBusy && m.article_status === 'ready' && qcCount > 0}
 													<button
 														type="button"
-														class="expAction relative inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] border transition-colors {qcSelesai
-															? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
-															: 'border-blue-200/70 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700'}"
-														aria-label={qcBusy
-															? tr('QC sedang memeriksa artikel…')
-															: qcCount > 0 ? `${tr('Analisis QC')} (${QC_CHECK_COUNT})` : tr('Analisis QC')}
-														disabled={bulkRunning || qcBusy}
-														onclick={() => (qcFor = pkey(item))}
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
+														aria-label={tr('Cek Validasi')}
+														disabled={bulkRunning || viewOnly}
+														onclick={() => (checklistFor = pkey(item))}
 													>
-														{#if qcBusy}
-															<LoaderCircle size={15} strokeWidth={2} class="shrink-0 animate-spin" />
-														{:else}
-															<ListChecks size={15} strokeWidth={2} class="shrink-0" />
-														{/if}
-														<span class="expTip">{qcBusy ? tr('QC sedang memeriksa artikel…') : qcCount > 0 ? `${tr('Analisis QC')} (${QC_CHECK_COUNT})` : tr('Analisis QC')}</span>
-														<!-- Angka QC nempel di pojok kanan atas pill, tetap tampil
-														     meski tombol sedang menciut jadi ikon saja; hijau = QC selesai. -->
-														<span
-															class="pointer-events-none absolute -right-1.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-[5px] px-1 text-[10px] font-bold leading-none ring-2 ring-white"
-															style={qcSelesai
-																? 'background-color: var(--success, #16794b); color: #fff;'
-																: qcCount > 0 ? 'background-color: #2563eb; color: #fff;' : 'background-color: #e2e8f0; color: #64748b;'}
-														>
-															{qcBadge}
-														</span>
+														<ShieldCheck size={16} strokeWidth={2.2} class="shrink-0" />
+														<span class="expTip">{tr('Cek Validasi')}</span>
 													</button>
 												{:else}
 													<button
 														type="button"
-														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 bg-blue-600 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-blue-700 disabled:opacity-60"
 														aria-label={generating ? tr('Membuat…') : queued ? tr('Mengantre…') : tr('Generate Konten')}
 														disabled={generating || bulkRunning || viewOnly}
 														onclick={() => openNaskahGenerate(item)}
 													>
 														{#if generating}
-															<LoaderCircle size={14} class="animate-spin text-blue-600 shrink-0" />
-															<span class="expTip">{tr('Membuat…')}</span>
+															<LoaderCircle size={15} class="shrink-0 animate-spin" />
 														{:else if queued}
-															<Clock size={14} class="text-slate-400 shrink-0" />
-															<span class="expTip">{tr('Mengantre…')}</span>
+															<Clock size={15} class="shrink-0" />
 														{:else}
-															<Sparkles size={14} class="text-slate-500 shrink-0" />
-															<span class="expTip">{tr('Generate Konten')}</span>
+															<Sparkles size={15} class="shrink-0" />
 														{/if}
+														<span class="expTip">{generating ? tr('Membuat…') : queued ? tr('Mengantre…') : tr('Generate Konten')}</span>
 													</button>
-
 													<button
 														type="button"
 														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
@@ -2406,26 +2399,21 @@
 														disabled={bulkRunning || viewOnly}
 														onclick={() => openNaskahUpload(item)}
 													>
-														<PencilLine size={14} strokeWidth={2} class="text-slate-500 shrink-0" />
+														<PencilLine size={14} strokeWidth={2} class="shrink-0 text-slate-500" />
 														<span class="expTip">{tr('Tulis Sendiri')}</span>
 													</button>
 												{/if}
-
-												<!-- Hapus artikel INI saja (bukan seluruh media). Hanya
-												     muncul saat media punya lebih dari satu artikel;
-												     kalau tinggal satu, jalurnya tombol hapus media. -->
-												{#if qty > 1}
-													<button
-														type="button"
-														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-rose-200 bg-rose-50 text-rose-600 text-xs font-semibold transition-colors hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
-														aria-label={`${tr('Hapus artikel')} ${item.slot ?? 1}`}
-														disabled={bulkRunning || viewOnly || slotDeleteBusy}
-														onclick={() => askDeleteArticle(m, item)}
-													>
-														<Trash2 size={14} class="shrink-0" />
-														<span class="expTip">{tr('Hapus artikel ini')}</span>
-													</button>
-												{/if}
+												<button
+													type="button"
+													class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
+													aria-label={tr('Aksi lain')}
+													aria-haspopup="menu"
+													aria-expanded={rowMenu?.key === pkey(item)}
+													onclick={(e) => openRowMenu(e, m, item, !!doc)}
+												>
+													<MoreVertical size={16} class="shrink-0" />
+													<span class="expTip">{tr('Aksi lain')}</span>
+												</button>
 											</div>
 										</div>
 									</div>
@@ -2434,6 +2422,49 @@
 						{/if}
 					</div>
 				{/each}
+				</div>
+			{/if}
+
+			{#if rowMenu}
+				<!-- Menu ⋮ per artikel. Backdrop menutup saat klik di luar; posisi
+				     fixed supaya tidak terpotong overflow kartu. -->
+				<button
+					class="fixed inset-0 z-[65] cursor-default"
+					type="button"
+					aria-label={tr('Tutup menu')}
+					onclick={() => (rowMenu = null)}
+				></button>
+				<div
+					class="fixed z-[66] w-[210px] overflow-hidden rounded-[6px] border bg-white py-1 shadow-xl"
+					style="left: {rowMenu.left}px; top: {rowMenu.top}px; border-color: var(--border);"
+					role="menu"
+				>
+					{#if rowMenu.hasDoc}
+						<button
+							class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-slate-700 hover:bg-slate-50"
+							type="button"
+							role="menuitem"
+							onclick={() => { qcFor = pkey(rowMenu!.item); rowMenu = null; }}
+						>
+							<ListChecks size={15} class="shrink-0 text-slate-500" />
+							<span>{tr('Analisis QC')}</span>
+							{#if (qcCounts[pkey(rowMenu!.item)] ?? 0) > 0}
+								<span class="ml-auto rounded-full bg-slate-100 px-1.5 text-[11px] font-bold text-slate-600">{QC_CHECK_COUNT}</span>
+							{/if}
+						</button>
+					{/if}
+					{#if (slotCounts[rowMenu!.media.media_id] ?? 1) > 1}
+						<button
+							class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-medium hover:bg-rose-50"
+							style="color: var(--destructive);"
+							type="button"
+							role="menuitem"
+							onclick={() => { const media = rowMenu!.media; const item = rowMenu!.item; rowMenu = null; askDeleteArticle(media, item); }}
+						>
+							<Trash2 size={15} class="shrink-0" />
+							<span>{tr('Hapus artikel')} {rowMenu!.item.slot ?? 1}</span>
+						</button>
+					{/if}
 				</div>
 			{/if}
 
@@ -2700,7 +2731,7 @@
 			{/if}
 
 				<TautBottomBar fullWidth>
-<div class="flex w-full flex-wrap items-center justify-between gap-4 py-1">
+<div class="flex w-full flex-wrap items-center justify-between gap-4 py-1 max-sm:gap-3 max-sm:py-0">
 	<!-- Kolom Kiri: Total Tagihan Akhir -->
 	<div class="relative inline-flex items-center">
 		<button
@@ -2802,13 +2833,13 @@
 	</div>
 
 	<!-- Kolom Kanan: Tombol Aksi -->
-	<div class="flex items-center gap-2.5">
+	<div class="flex items-center gap-2.5 max-sm:grid max-sm:w-full max-sm:grid-cols-[minmax(0,0.35fr)_minmax(0,1fr)] max-sm:gap-2">
 		<!-- Kembali mengarah ke langkah sebelumnya: Katalog Media
 		     (klien memilih/menambah media), dengan konteks kampanye
 		     dibawa agar centang pilihan tetap terjaga. -->
-			<button class="h-10 px-4.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-[13px] font-medium transition-all whitespace-nowrap" type="button" onclick={() => goto(`/klien/${brandUrl}/media?campaign=${campaignId}`)}>{tr('Kembali')}</button>
+			<button class="h-10 px-4.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-[13px] font-medium transition-all whitespace-nowrap max-sm:h-12 max-sm:w-full max-sm:px-2 max-sm:text-center" type="button" onclick={() => goto(`/klien/${brandUrl}/media?campaign=${campaignId}`)}>{tr('Kembali')}</button>
 			<div class="relative">
-				<button class="h-10 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 hover:-translate-y-px text-white text-[13px] font-semibold inline-flex items-center gap-1.5 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} aria-haspopup="dialog" aria-expanded={readinessOpen} onclick={publish}>
+				<button class="h-10 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 hover:-translate-y-px text-white text-[13px] font-semibold inline-flex items-center justify-center gap-1.5 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 max-sm:h-12 max-sm:w-full max-sm:px-3" type="button" disabled={coverChecking || distributing || viewOnly} title={viewOnly ? tr(VIEW_ONLY_MSG) : undefined} aria-haspopup="dialog" aria-expanded={readinessOpen} onclick={publish}>
 					{#if coverChecking || distributing}<LoaderCircle size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
 					<span>{coverChecking ? tr('Memeriksa cover…') : distributing ? tr('Menerbitkan…') : tr('Lanjut Tinjau & Terbit')}</span>
 				</button>
@@ -3162,26 +3193,7 @@
 		   Stat item rapi dengan pembatas vertikal tipis, tombol hitam untuk aksi utama,
 		   dan membentang penuh (full-width) mengikuti area konten. */
 
-		.selectedBarLeftCol {
-			display: flex;
-			flex-direction: column;
-			gap: 3px;
-			min-width: 0;
-		}
 
-		.selectedStatItem {
-			display: flex;
-			flex-direction: column;
-			gap: 3px;
-		}
-		.selectedStatLabel {
-			font-size: 10.5px;
-			font-weight: 700;
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
-			color: #94a3b8;
-			white-space: nowrap;
-		}
 		.selectedStatPriceVal {
 			font-size: 17.5px;
 			font-weight: 750;
@@ -3389,100 +3401,9 @@
 			font-weight: 800;
 			color: var(--success);
 		}
-		.selectedBarRight {
-			display: flex;
-			flex-direction: column;
-			align-items: flex-end;
-			gap: 6px;
-		}
-		.writerQcNotice {
-			max-width: 380px;
-			text-align: right;
-			font-size: 11px;
-			line-height: 1.35;
-		}
-		.writerActionBtns {
-			display: flex;
-			align-items: center;
-			gap: 10px;
-		}
-		.selectedCancelBtn {
-			background: #ffffff;
-			border: 1px solid #e2e8f0;
-			color: #334155;
-			font-size: 13px;
-			font-weight: 500;
-			padding: 8px 18px;
-			min-height: 40px;
-			border-radius: 5px;
-			cursor: pointer;
-			outline: none;
-			transition: all 0.12s ease;
-			white-space: nowrap;
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-		}
-		.selectedCancelBtn:hover {
-			background: #f8fafc;
-			border-color: #cbd5e1;
-			color: #0f172a;
-		}
-		.selectedCreateBtn {
-			background: #0f172a;
-			color: #ffffff;
-			font-size: 13px;
-			font-weight: 600;
-			padding: 9px 20px;
-			min-height: 40px;
-			border-radius: 5px;
-			border: none;
-			cursor: pointer;
-			outline: none;
-			transition: all 0.15s ease;
-			display: inline-flex;
-			align-items: center;
-			gap: 6px;
-			white-space: nowrap;
-		}
-		.selectedCreateBtn:hover:not(:disabled) {
-			background: #1e293b;
-			transform: translateY(-1px);
-		}
-		.selectedCreateBtn:disabled {
-			opacity: 0.5;
-			cursor: not-allowed;
-			transform: none;
-		}
 
 		/* Kolom kiri bar: total tagihan + popover rinciannya. */
-		.selectedBarLeftCol {
-			display: flex;
-			flex-direction: column;
-			gap: 3px;
-			min-width: 0;
-		}
 
 		@media (max-width: 767px) {
-			.selectedBarRight {
-				width: 100%;
-				align-items: stretch;
-			}
-			.writerQcNotice {
-				text-align: left;
-				max-width: none;
-			}
-			.writerActionBtns {
-				width: 100%;
-			}
-			.selectedCancelBtn {
-				flex: 1;
-				min-height: 44px;
-			}
-			.selectedCreateBtn {
-				flex: 2;
-				justify-content: center;
-				min-height: 44px;
-			}
 		}
 	</style>
