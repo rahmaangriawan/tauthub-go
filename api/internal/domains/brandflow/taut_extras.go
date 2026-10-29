@@ -514,18 +514,23 @@ func (d *Deps) TautFilesUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	existing, err := d.queryRow(r.Context(),
-		"SELECT id, original_filename, mime_type, size_bytes, parse_status, created_at FROM taut_campaign_files WHERE campaign_id = $1 AND checksum = $2 AND deleted_at IS NULL LIMIT 1",
+		"SELECT id, original_filename, mime_type, size_bytes, parse_status, extracted_text, created_at FROM taut_campaign_files WHERE campaign_id = $1 AND checksum = $2 AND deleted_at IS NULL LIMIT 1",
 		campaignID, checksum)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
 	if existing != nil {
+		// extracted_text wajib ikut: klien memakai isi dokumen untuk mengisi
+		// editor. Tanpa teks, mengunggah ulang berkas yang sama terlihat gagal
+		// ("file gagal dibaca") padahal berkasnya sudah tersimpan.
 		writeJSON(w, http.StatusOK, map[string]any{
 			"file": map[string]any{
 				"id": existing.raw("id"), "original_filename": existing.raw("original_filename"),
 				"mime_type": existing.raw("mime_type"), "size_bytes": existing.intOr("size_bytes", 0),
-				"parse_status": existing.raw("parse_status"), "created_at": existing.timePtr("created_at"),
+				"parse_status":  existing.raw("parse_status"),
+				"extracted_text": existing.raw("extracted_text"),
+				"created_at":    existing.timePtr("created_at"),
 			},
 			"deduplicated": true,
 		})

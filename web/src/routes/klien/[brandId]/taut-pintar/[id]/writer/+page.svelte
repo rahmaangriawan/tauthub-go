@@ -1127,7 +1127,17 @@
 		const upRes = await apiRequest(`${apiBase}/files`, { method: 'POST', body: form });
 		const upData = await upRes.json().catch(() => null);
 		const text = upData?.file && typeof upData.file.extracted_text === 'string' ? String(upData.file.extracted_text) : '';
-		if (!upRes.ok || !text.trim()) throw new Error(upData?.detail ?? 'File gagal dibaca. Gunakan DOCX, PDF, atau TXT.');
+		// DOCX bergambar bisa tanpa teks sama sekali; HTML-nya tetap berguna.
+		const richHtml = upData?.file && typeof upData.file.extracted_html === 'string' ? String(upData.file.extracted_html) : '';
+		if (!upRes.ok || (!text.trim() && !richHtml.trim())) {
+			// Sebut sebab yang sebenarnya: alasan dari server kalau ada, kalau tidak
+			// status HTTP-nya — jangan menyamakan semua kegagalan jadi satu kalimat.
+			const detail = upData?.detail ? String(upData.detail) : '';
+			const parseStatus = upData?.file?.parse_status ? String(upData.file.parse_status) : '';
+			if (detail) throw new Error(detail);
+			if (parseStatus === 'failed') throw new Error(tr('Dokumen tersimpan, tetapi teksnya tidak bisa dibaca. Coba PDF lain atau tempel teksnya.'));
+			throw new Error(`${tr('File gagal dibaca')} (HTTP ${upRes.status}). ${tr('Gunakan DOCX, PDF, atau TXT.')}`);
+		}
 		// Pisahkan judul otomatis: baris pertama pendek (< 120 karakter) dianggap
 		// judul; selain itu pakai nama file.
 		const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -1141,7 +1151,6 @@
 		// DOCX bergambar: server sudah memindahkan gambarnya ke Tauthub dan
 		// mengembalikan HTML teks + gambar. Pakai apa adanya (tanpa AI merapikan)
 		// supaya dokumen pindah sama persis dan gambarnya tidak hilang.
-		const richHtml = upData?.file && typeof upData.file.extracted_html === 'string' ? String(upData.file.extracted_html) : '';
 		if (richHtml.trim()) {
 			return { title: judul.slice(0, 200), html: richHtml };
 		}
