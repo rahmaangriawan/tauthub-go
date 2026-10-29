@@ -1671,9 +1671,37 @@
 		.detailCloseBtn {
 			margin-left: auto;
 		}
+		/* Deretan metrik jadi slider mendatar: empat metrik tidak cukup lebar
+		   untuk satu baris di HP, dan membungkusnya membuat strip ini setinggi
+		   85px sehingga isi utama terdorong ke bawah. Digeser mendatar dengan
+		   scrollbar tipis sebagai penanda masih ada metrik lain di kanan. */
 		.detailMetricsRow {
-			padding: 12px 18px;
+			padding: 12px 18px 8px;
 			gap: 16px;
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			overflow-y: hidden;
+			overscroll-behavior-x: contain;
+			-webkit-overflow-scrolling: touch;
+			scrollbar-width: thin;
+			scrollbar-color: #cbd5e1 transparent;
+		}
+		.detailMetricsRow::-webkit-scrollbar {
+			height: 6px;
+		}
+		.detailMetricsRow::-webkit-scrollbar-track {
+			background: transparent;
+		}
+		.detailMetricsRow::-webkit-scrollbar-thumb {
+			background: #cbd5e1;
+			border-radius: 999px;
+		}
+		.detailMetricsRow::-webkit-scrollbar-thumb:hover {
+			background: #94a3b8;
+		}
+		/* Tiap metrik selebar isinya sendiri, tidak boleh mengempis. */
+		.detailMetricItem {
+			flex: 0 0 auto;
 		}
 		.detailBody {
 			padding: 16px 18px;
