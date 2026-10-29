@@ -17,7 +17,7 @@
 		ArrowRight, BarChart3, Bookmark, Check, CircleAlert, Clock, Database, FileText, Info, LayoutGrid,
 		Link as LinkIcon, Lock,
 		Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Tag, Trash2, Upload, Wallet, X, Zap,
-		ChevronLeft, ChevronRight
+		ChevronLeft, ChevronRight, ChevronDown
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { aiTrustToneStyle } from '$lib/media/ai-trust-tone';
@@ -253,6 +253,9 @@
 	let campaignOpen = $state(false);
 	let campaignName = $state('');
 	let campaignError = $state('');
+	// Daftar media terpilih di dalam modal kampanye: di HP barisnya jadi
+	// accordion supaya bisa diperiksa dan dikurangi tanpa menutup modal.
+	let campaignListOpen = $state(false);
 	let creating = $state(false);
 	// Profiler (workspace knowledge klien) opsional untuk kampanye baru.
 	// Sementara disembunyikan atas permintaan: ubah ke true untuk memunculkan
@@ -549,9 +552,23 @@
 		campaignName = presetName;
 		campaignError = '';
 		profilerId = '';
+		campaignListOpen = false;
 		campaignOpen = true;
 		if (walletAvailableTc === null) void loadWallet();
 		if (SHOW_PROFILER_FIELD && profilerOptions.length === 0) void loadProfilerOptions();
+	}
+
+	/**
+	 * Hapus satu media dari pilihan di dalam modal kampanye. Kalau pilihan jadi
+	 * kosong, modal ditutup: tidak ada yang bisa disimpan dan daftar kosong di
+	 * tengah form hanya membingungkan.
+	 */
+	function removeFromCampaign(id: string) {
+		removeSelected(id);
+		if (selectedIds.size === 0) {
+			campaignOpen = false;
+			campaignListOpen = false;
+		}
 	}
 
 	/** Daftar Profiler milik klien yang login (untuk dipilih saat simpan kampanye). */
@@ -1983,13 +2000,48 @@
 						<button class="modalClose" type="button" aria-label={tr("Tutup")} onclick={() => (campaignOpen = false)}><X size={18} /></button>
 					</div>
 						<div class="campaignSummary">
-							<div class="campaignSummaryRow">
-								<div class="campaignSummaryLabel">
-									<div class="campaignSummaryIcon"><FileText size={18} /></div>
+							<!-- Baris "Media terpilih" bisa dibuka: di HP tidak ada
+							     panel daftar lain, jadi ini satu-satunya tempat
+							     memeriksa dan mengurangi pilihan tanpa menutup
+							     modal. -->
+							<button
+								class="campaignSummaryRow campaignSummaryToggle"
+								type="button"
+								aria-expanded={campaignListOpen}
+								aria-controls="campaign-selected-list"
+								onclick={() => (campaignListOpen = !campaignListOpen)}
+							>
+								<span class="campaignSummaryLabel">
+									<span class="campaignSummaryIcon"><FileText size={18} /></span>
 									<span>{tr("Media terpilih")}</span>
-								</div>
-								<strong>{selectedIds.size}</strong>
-							</div>
+								</span>
+								<span class="campaignSummaryValue">
+									<strong>{selectedIds.size}</strong>
+									<span
+										class="campaignSummaryChevron"
+										class:campaignSummaryChevronOpen={campaignListOpen}
+									>
+										<ChevronDown size={16} />
+									</span>
+								</span>
+							</button>
+							{#if campaignListOpen}
+								<ul class="campaignSelectedList" id="campaign-selected-list">
+									{#each selectedItems as it (it.id)}
+										<li class="campaignSelectedItem">
+											<span class="campaignSelectedName" title={it.name}>{it.name}</span>
+											<span class="campaignSelectedPrice">Rp {fmt(it.price)}</span>
+											<button
+												class="campaignSelectedRemove"
+												type="button"
+												aria-label={`${tr('Hapus')} ${it.name}`}
+												title={`${tr('Hapus')} ${it.name}`}
+												onclick={() => removeFromCampaign(it.id)}
+											><Trash2 size={15} /></button>
+										</li>
+									{/each}
+								</ul>
+							{/if}
 							<div class="campaignSummaryRow">
 								<div class="campaignSummaryLabel">
 									<div class="campaignSummaryIcon"><Database size={18} /></div>
@@ -2452,7 +2504,10 @@
 			gap: 12px;
 			padding: 12px 0;
 		}
-		.campaignSummaryRow + .campaignSummaryRow {
+		/* Pemisah antar baris ringkasan. Memakai general sibling, bukan
+		   adjacent, karena daftar media terpilih bisa tersisip di antara baris
+		   pertama dan baris biaya. */
+		.campaignSummaryRow ~ .campaignSummaryRow {
 			border-top: 1px solid #e5effd;
 		}
 		.campaignSummaryLabel {
@@ -2479,6 +2534,105 @@
 			font-weight: 700;
 			color: #0f172a;
 			white-space: nowrap;
+		}
+		/* Baris pembuka daftar media terpilih: tampil seperti baris ringkasan
+		   lain, tetapi seluruh area bisa diklik. */
+		.campaignSummaryToggle {
+			width: 100%;
+			border: 0;
+			background: transparent;
+			font: inherit;
+			text-align: left;
+			cursor: pointer;
+			border-radius: 10px;
+			transition: background-color 0.12s ease;
+		}
+		.campaignSummaryToggle:hover {
+			background: rgba(37, 99, 235, 0.05);
+		}
+		.campaignSummaryToggle:focus-visible {
+			outline: 2px solid #2563eb;
+			outline-offset: 2px;
+		}
+		.campaignSummaryValue {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			color: #64748b;
+		}
+		.campaignSummaryChevron {
+			flex: none;
+			transition: transform 0.18s ease;
+		}
+		.campaignSummaryChevronOpen {
+			transform: rotate(180deg);
+		}
+		.campaignSelectedList {
+			list-style: none;
+			margin: 0 0 4px;
+			padding: 4px 0 6px;
+			border-top: 1px solid #e5effd;
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+			/* Daftar panjang digulir sendiri supaya tombol simpan tetap terjangkau. */
+			max-height: 240px;
+			overflow-y: auto;
+			scrollbar-width: thin;
+			scrollbar-color: #cbd5e1 transparent;
+		}
+		.campaignSelectedList::-webkit-scrollbar { width: 6px; }
+		.campaignSelectedList::-webkit-scrollbar-thumb {
+			background: #cbd5e1;
+			border-radius: 999px;
+		}
+		.campaignSelectedItem {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 7px 2px 7px 48px;
+			border-radius: 8px;
+		}
+		.campaignSelectedItem:hover {
+			background: rgba(255, 255, 255, 0.7);
+		}
+		.campaignSelectedName {
+			flex: 1;
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			font-size: 13px;
+			color: #334155;
+		}
+		.campaignSelectedPrice {
+			flex-shrink: 0;
+			font-size: 12.5px;
+			font-weight: 600;
+			color: #0f172a;
+			font-variant-numeric: tabular-nums;
+			white-space: nowrap;
+		}
+		.campaignSelectedRemove {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+			width: 30px;
+			height: 30px;
+			border: 0;
+			border-radius: 8px;
+			background: transparent;
+			color: #dc2626;
+			cursor: pointer;
+			transition: background-color 0.12s ease;
+		}
+		.campaignSelectedRemove:hover {
+			background: #fee2e2;
+		}
+		.campaignSelectedRemove:focus-visible {
+			outline: 2px solid #dc2626;
+			outline-offset: 1px;
 		}
 		.campaignHint {
 			display: block;
