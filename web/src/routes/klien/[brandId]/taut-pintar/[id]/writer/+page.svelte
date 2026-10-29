@@ -2066,7 +2066,11 @@
 							<!-- Kontrol media: buat sekaligus, stepper jumlah artikel,
 							     ciutkan daftar, lepas media. -->
 							<div class="ml-auto flex shrink-0 items-center gap-1.5">
-								{#if pendingCount > 1}
+								<!-- Muncul begitu media punya lebih dari satu artikel dan masih ada
+								     slot tanpa naskah. Termasuk saat tinggal SATU slot tersisa:
+								     dialognya tetap jalan dan isinya satu baris, jadi jalurnya
+								     konsisten dengan media yang artikelnya banyak. -->
+								{#if qty > 1 && pendingCount > 0}
 									<button
 										class="inline-flex h-8 items-center gap-1 rounded-[5px] bg-blue-600 px-2.5 text-[11.5px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
 										type="button"
