@@ -183,6 +183,23 @@
 	});
 	/** Jumlah domain, bukan jumlah kartu: satu domain bisa memuat beberapa artikel. */
 	const mediaCount = $derived(Object.keys(slotTotals).length);
+
+	// Daftar dibatasi per halaman: kampanye bisa memuat puluhan artikel, dan
+	// merender semuanya sekaligus membuat halaman panjang sekaligus berat.
+	const PAGE_SIZE = 10;
+	let pageIndex = $state(1);
+	const totalPages = $derived(Math.max(1, Math.ceil(mediaList.length / PAGE_SIZE)));
+	const pagedMedia = $derived(mediaList.slice((pageIndex - 1) * PAGE_SIZE, pageIndex * PAGE_SIZE));
+	// Setelah data dimuat ulang jumlah baris bisa menyusut: jaga halaman tetap valid.
+	$effect(() => {
+		if (pageIndex > totalPages) pageIndex = totalPages;
+	});
+
+	let listSection: HTMLElement | null = $state(null);
+	function goToPage(n: number) {
+		pageIndex = Math.min(Math.max(1, n), totalPages);
+		listSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
 	const done = $derived(DONE_STATUSES.has(data?.campaign.taut_status ?? ''));
 	const publishedCount = $derived(mediaList.filter((m) => m.publish.status === 'published').length);
 	const allPublished = $derived(mediaList.length > 0 && publishedCount === mediaList.length);
@@ -572,7 +589,7 @@
 			{/if}
 		{/snippet}
 
-		<section class="app-card mt-3 p-4 sm:p-5">
+		<section class="app-card mt-3 p-4 sm:p-5" bind:this={listSection}>
 			<!-- Judul dan tombol segarkan satu baris; teksnya yang menyusut, bukan tombolnya. -->
 			<div class="flex items-start gap-3">
 				<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-2xs">
@@ -608,7 +625,7 @@
 				     di HP, jadi isinya dibaca sebagai kartu; di desktop kartu yang sama
 				     mengalir dua–tiga kolom. -->
 				<div class="mt-4 grid gap-3 md:hidden">
-					{#each mediaList as m (pkey(m))}
+					{#each pagedMedia as m (pkey(m))}
 						{@const domain = cleanDomain(m.website_url, m.name)}
 						{@const total = slotTotals[m.media_id] ?? 1}
 						{@const scheduleText = canEdit(m) ? (scheduleFor(m) ? fmtSchedule(m) : tr('Segera')) : (toJakartaDisplay(m.scheduled_at) ?? tr('Segera'))}
@@ -758,7 +775,7 @@
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-slate-100 bg-white">
-							{#each mediaList as m (pkey(m))}
+							{#each pagedMedia as m (pkey(m))}
 								{@const domain = cleanDomain(m.website_url, m.name)}
 								<tr class="transition-colors hover:bg-slate-50/60">
 									<td class="px-3.5 py-4">
@@ -878,6 +895,33 @@
 							</tbody>
 						</table>
 					</div>
+
+				{#if mediaList.length > PAGE_SIZE}
+					<div class="mt-3 flex flex-wrap items-center justify-between gap-2.5 border-t border-slate-100 pt-3">
+						<p class="text-[11.5px] text-slate-500">
+							{tr('Menampilkan')} {(pageIndex - 1) * PAGE_SIZE + 1}–{Math.min(pageIndex * PAGE_SIZE, mediaList.length)} {tr('dari')} {mediaList.length} media
+						</p>
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								class="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[11.5px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+								disabled={pageIndex <= 1}
+								onclick={() => goToPage(pageIndex - 1)}
+							>
+								{tr('Sebelumnya')}
+							</button>
+							<span class="text-[11.5px] font-semibold text-slate-500">Hal {pageIndex} / {totalPages}</span>
+							<button
+								type="button"
+								class="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[11.5px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+								disabled={pageIndex >= totalPages}
+								onclick={() => goToPage(pageIndex + 1)}
+							>
+								{tr('Berikutnya')}
+							</button>
+						</div>
+					</div>
+				{/if}
 			{:else}
 				<p class="mt-3 text-sm text-muted-foreground">{tr("Belum ada media terpilih.")}</p>
 			{/if}
