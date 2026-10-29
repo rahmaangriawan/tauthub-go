@@ -1014,6 +1014,31 @@
 
 <svelte:window onclick={closeMenu} onkeydown={(e) => { if (e.key === 'Escape') closeMenu(); }} />
 
+<!-- Kesimpulan Website dipakai di dua tempat: kolom kiri (desktop) dan bagian
+     paling bawah form (HP). -->
+{#snippet summarySection()}
+	<!-- 4. Kesimpulan Website (hanya edit) -->
+	{#if editingRow}
+		<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-2.5 shadow-sm">
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<h3 class="text-xs font-bold uppercase tracking-wider text-muted-foreground">{tr('Kesimpulan Website')}</h3>
+				{#if editingRow.ai_summary_generated_at}
+					<span class="text-[11px] text-muted-foreground font-medium">{tr('Dibuat otomatis oleh AI')} · {dt(editingRow.ai_summary_generated_at)}</span>
+				{/if}
+			</div>
+			{#if editingRow.ai_summary}
+				<div class="whitespace-pre-wrap text-xs sm:text-sm text-slate-700 leading-relaxed bg-slate-50/60 p-3.5 rounded-xl border border-slate-100">{editingRow.ai_summary}</div>
+			{:else}
+				<div class="text-xs text-muted-foreground leading-relaxed">{tr('Dibuat otomatis oleh AI setelah media melewati antrean global. Kesimpulan akan tampil di sini untuk dicek ulang, dan dipakai Taut Pintar saat mencocokkan kampanye.')}</div>
+			{/if}
+			{#if aiSummaryLine}
+				<div class="text-xs italic text-muted-foreground pt-1">{aiSummaryLine}</div>
+			{/if}
+		</section>
+	{/if}
+{/snippet}
+
+
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
@@ -2314,25 +2339,8 @@
 									</p>
 								</section>
 
-								<!-- 4. Kesimpulan Website (hanya edit) -->
-								{#if editingRow}
-									<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-2.5 shadow-sm">
-										<div class="flex flex-wrap items-center justify-between gap-2">
-											<h3 class="text-xs font-bold uppercase tracking-wider text-muted-foreground">{tr('Kesimpulan Website')}</h3>
-											{#if editingRow.ai_summary_generated_at}
-												<span class="text-[11px] text-muted-foreground font-medium">{tr('Dibuat otomatis oleh AI')} · {dt(editingRow.ai_summary_generated_at)}</span>
-											{/if}
-										</div>
-										{#if editingRow.ai_summary}
-											<div class="whitespace-pre-wrap text-xs sm:text-sm text-slate-700 leading-relaxed bg-slate-50/60 p-3.5 rounded-xl border border-slate-100">{editingRow.ai_summary}</div>
-										{:else}
-											<div class="text-xs text-muted-foreground leading-relaxed">{tr('Dibuat otomatis oleh AI setelah media melewati antrean global. Kesimpulan akan tampil di sini untuk dicek ulang, dan dipakai Taut Pintar saat mencocokkan kampanye.')}</div>
-										{/if}
-										{#if aiSummaryLine}
-											<div class="text-xs italic text-muted-foreground pt-1">{aiSummaryLine}</div>
-										{/if}
-									</section>
-								{/if}
+								<!-- Kesimpulan Website: di HP bagian ini dipindah ke paling bawah form. -->
+								<div class="hidden lg:block">{@render summarySection()}</div>
 							</div>
 
 							<!-- ════════ KOLOM KANAN (5 cols ~42%) ════════ -->
@@ -2565,6 +2573,7 @@
 									</div>
 								</section>
 							</div>
+							<div class="lg:hidden">{@render summarySection()}</div>
 						</div>
 					</div>
 
