@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { CalendarClock, Check, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Images, Info, Link, Link2, ChevronDown, ChevronUp, ListChecks, LoaderCircle, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Target, Trash2, TriangleAlert, Type, Upload, Wallet, Wrench, X } from '@lucide/svelte';
+	import { CalendarClock, Check, ChevronDown, ChevronUp, CircleAlert, CircleCheck, Clock, Eye, FileText, Image, Images, Info, Link, Link2, ListChecks, LoaderCircle, Pencil, PencilLine, Send, ShieldCheck, Sparkles, Target, Trash2, TriangleAlert, Type, Upload, Wallet, Wrench, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, getAccessToken, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -2274,6 +2274,105 @@
 						{/if}
 					</div>
 				{/each}
+				</div>
+			{/if}
+
+			{#if batchFor}
+				<!-- Satu dialog untuk semua artikel yang belum dibuat pada satu media.
+				     Tanpa ini klien harus membuka modal editor berkali-kali. -->
+				<div
+					class="fixed inset-0 z-[70] flex items-center justify-center p-4"
+					style="background-color: rgba(15, 23, 42, 0.55);"
+					role="presentation"
+					onclick={(e) => { if (e.target === e.currentTarget && !batchRunning) batchFor = null; }}
+				>
+					<div
+						class="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-[5px] border shadow-2xl"
+						style="border-color: var(--border); background-color: var(--card, #fff);"
+						role="dialog"
+						aria-modal="true"
+						tabindex="-1"
+						aria-label={tr('Buat beberapa artikel')}
+						onclick={(e) => e.stopPropagation()}
+						onkeydown={(e) => { if (e.key === 'Escape' && !batchRunning) batchFor = null; }}
+					>
+						<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
+							<div class="min-w-0">
+								<p class="text-sm font-bold">{tr('Buat')} {batchRows.length} {tr('artikel')}</p>
+								<p class="mt-0.5 truncate text-xs text-muted-foreground">{batchFor.name}</p>
+							</div>
+							<button
+								class="rounded-[5px] p-1.5 text-muted-foreground hover:bg-secondary disabled:opacity-40"
+								type="button"
+								aria-label={tr('Tutup')}
+								disabled={batchRunning}
+								onclick={() => (batchFor = null)}
+							><X size={16} /></button>
+						</div>
+
+						<div class="space-y-3 overflow-y-auto p-5">
+							<p class="text-xs leading-relaxed text-muted-foreground">
+								{tr('Topik boleh dikosongkan — artikel akan mengikuti brief kampanye. Angle tiap artikel sudah diisi berbeda supaya hasilnya tidak mirip.')}
+							</p>
+							{#each batchRows as row, i (row.slot)}
+								<div class="rounded-[5px] border p-3" style="border-color: var(--border);">
+									<div class="mb-2 flex items-center justify-between gap-2">
+										<span class="text-[11.5px] font-bold uppercase tracking-wide text-muted-foreground">
+											{tr('Artikel')} {row.slot}
+										</span>
+										<span
+											class="truncate text-[11px] font-medium"
+											style:color={row.state === 'error' ? 'var(--destructive)' : row.state === 'done' ? 'var(--success, #16794b)' : 'var(--muted-foreground)'}
+										>
+											{#if row.state === 'running'}… {tr('membuat')}
+											{:else if row.state === 'done'}✓ {tr('selesai')}
+											{:else if row.state === 'error'}{row.message}
+											{/if}
+										</span>
+									</div>
+									<input
+										class="app-input w-full"
+										bind:value={batchRows[i].topic}
+										disabled={batchRunning}
+										maxlength={2000}
+										placeholder={tr('Topik atau instruksi (opsional)')}
+									/>
+									<label class="mt-2 flex items-center gap-2 text-[11.5px] text-muted-foreground">
+										<span class="shrink-0">{tr('Angle')}</span>
+										<select
+											class="app-input h-9 flex-1"
+											bind:value={batchRows[i].angle}
+											disabled={batchRunning || angleOptionsFor(batchFor.mediaType).length === 0}
+										>
+											{#if angleOptionsFor(batchFor.mediaType).length === 0}
+												<option value="">{tr('Belum ada angle untuk kanal ini')}</option>
+											{:else}
+												{#each angleOptionsFor(batchFor.mediaType) as opt (opt.slug)}
+													<option value={opt.slug}>{opt.name}</option>
+												{/each}
+											{/if}
+										</select>
+									</label>
+								</div>
+							{/each}
+						</div>
+
+						<div class="flex items-center justify-end gap-2.5 border-t px-5 py-3.5" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
+							<button class="app-btn app-btn-soft text-xs" type="button" disabled={batchRunning} onclick={() => (batchFor = null)}>{tr('Batal')}</button>
+							<button
+								class="app-btn app-btn-primary text-xs"
+								type="button"
+								disabled={batchRunning}
+								onclick={() => void runBatchGenerate()}
+							>
+								{#if batchRunning}
+									<LoaderCircle size={13} class="animate-spin" /> <span>{tr('Membuat…')}</span>
+								{:else}
+									<Sparkles size={13} /> <span>{tr('Buat')} {batchRows.filter((r) => r.state !== 'done').length} {tr('artikel')}</span>
+								{/if}
+							</button>
+						</div>
+					</div>
 				</div>
 			{/if}
 
