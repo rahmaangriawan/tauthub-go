@@ -577,11 +577,25 @@
 				<div class="flex flex-col">
 					{#each latestPublications as p (p.id)}
 						{@const PubIcon = pubIcon(p.status)}
+						{@const cover = p.thumbnail_url ?? p.featured_image_url ?? null}
 						<div class="flex flex-col items-start justify-between gap-2 border-b px-5 py-[13px] transition-colors last:border-b-0 hover:bg-accent sm:flex-row sm:items-center sm:gap-4">
 							<div class="flex min-w-0 items-center gap-3">
-								<div class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px]" style={pubIconBoxStyle(p.status)}>
-									<PubIcon size={18} />
-								</div>
+								<!-- Sampul artikel lebih informatif daripada ikon status; ikon
+								     tetap dipakai bila artikel belum punya sampul. -->
+								{#if cover}
+									<img
+										src={cover}
+										alt=""
+										class="h-[38px] w-[56px] shrink-0 rounded-[8px] border object-cover"
+										style="border-color: var(--border); background-color: var(--muted);"
+										loading="lazy"
+										decoding="async"
+									/>
+								{:else}
+									<div class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px]" style={pubIconBoxStyle(p.status)}>
+										<PubIcon size={18} />
+									</div>
+								{/if}
 								<div class="flex min-w-0 flex-col gap-0.5">
 									<div class="line-clamp-2 break-words text-[13.5px] leading-[1.35] font-semibold" title={p.document_title ?? tr('Artikel')}>
 										<span>{p.document_title ?? tr('Artikel')}</span>
