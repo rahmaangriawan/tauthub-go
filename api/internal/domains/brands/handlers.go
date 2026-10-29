@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -655,87 +654,4 @@ func clamp1to5(v *int, def int) int {
 	return *v
 }
 
-// ---------- PUT /v1/brands/{brandId} ----------
 
-// brandUpdateBody: field yang boleh diubah klien sendiri. slug, public_id,
-// ownership_type, dan status sengaja tidak ada di sini — itu urusan platform,
-// dan mengubahnya bisa memutus URL atau akses yang sudah dibagikan.
-type brandUpdateBody struct {
-	Name            *string `json:"name"`
-	ClientName      *string `json:"client_name"`
-	Industry        *string `json:"industry"`
-	PrimaryLanguage *string `json:"primary_language"`
-}
-
-// Update: PUT /v1/brands/{brandId}
-//
-// Sebelumnya identitas brand hanya bisa diisi saat admin membuat brand; klien
-// tidak punya cara memperbaiki ejaan nama atau industrinya sendiri. Handler ini
-// menutup celah itu tanpa membuka kolom yang berisiko (slug/public_id).
-func (d *Deps) Update(w http.ResponseWriter, r *http.Request) {
-	user := httpx.AuthUserFromCtx(r)
-	if user == nil {
-		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
-		return
-	}
-	// admin ke atas: mengubah identitas brand memengaruhi semua anggota.
-	row, err := BrandAccess(r.Context(), d.Pool, chiURLParam(r, "brandId"), user.ID, "admin")
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	var body brandUpdateBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid Input")
-		return
-	}
-
-	sets := make([]string, 0, 4)
-	args := make([]any, 0, 5)
-	add := func(col string, v *string) {
-		if v == nil {
-			return
-		}
-		args = append(args, strings.TrimSpace(*v))
-		sets = append(sets, col+" = $"+strconv.Itoa(len(args)))
-	}
-	add("name", body.Name)
-	add("client_name", body.ClientName)
-	add("industry", body.Industry)
-	add("primary_language", body.PrimaryLanguage)
-	if len(sets) == 0 {
-		httpx.Error(w, http.StatusUnprocessableEntity, "Tidak ada perubahan yang dikirim.")
-		return
-	}
-	// Nama brand tidak boleh kosong: dipakai di notifikasi dan judul halaman.
-	if body.Name != nil && strings.TrimSpace(*body.Name) == "" {
-		httpx.Error(w, http.StatusUnprocessableEntity, "Nama brand tidak boleh kosong.")
-		return
-	}
-	args = append(args, row.ID)
-	if _, err := d.Pool.Exec(r.Context(),
-		"UPDATE brands SET "+strings.Join(sets, ", ")+", updated_at = NOW() WHERE id = $"+strconv.Itoa(len(args)),
-		args...); err != nil {
-		writeError(w, err)
-		return
-	}
-	InvalidateBrandCache(row.ID)
-	if _, err := d.Pool.Exec(r.Context(),
-		"INSERT INTO audit_logs (id, brand_id, actor_user_id, action, target_type, target_id) VALUES ($1, $2, $3, 'brand.updated', 'brand', $4)",
-		uuid.NewString(), row.ID, user.ID, row.ID); err != nil {
-		// Audit best-effort: kegagalan mencatat tidak membatalkan perubahan.
-	}
-
-	updated, err := BrandAccess(r.Context(), d.Pool, row.ID, user.ID, "viewer")
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	out, err := BrandJsonList(r.Context(), d.Pool, []BrandRow{updated})
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out[0])
-}

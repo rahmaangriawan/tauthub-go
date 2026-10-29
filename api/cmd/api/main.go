@@ -210,7 +210,6 @@ func run() error {
 			authed.Get("/brands", brands.List)
 			authed.Post("/brands", brands.Create)
 			authed.Get("/brands/{brandId}", brands.Get)
-			authed.Put("/brands/{brandId}", brands.Update)
 			authed.Post("/brands/{brandId}/activate", brands.Activate)
 			authed.Put("/brands/{brandId}/profile", brands.UpdateProfile)
 			authed.Put("/brands/{brandId}/voice", brands.UpdateVoice)
