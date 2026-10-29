@@ -2002,7 +2002,21 @@
 							: 'border-slate-200/80 hover:border-slate-300'}"
 					>
 						<!-- ── Header media ─────────────────────────────────────── -->
-						<div class="flex flex-wrap items-center gap-x-3 gap-y-2.5 px-3.5 py-3 sm:px-4">
+						<!-- Seluruh header ikut membuka/menutup daftar artikel, sama seperti
+						     tombol chevron. Klik pada kontrol di dalamnya (centang, stepper,
+						     chevron, hapus) tidak ikut memicu, jadi tidak ada aksi ganda.
+						     Keyboard tidak perlu handler sendiri: chevron di dalam header
+						     sudah fokusable dan membawa aria-expanded. Memberi role/tabindex
+						     pada div ini justru akan menyarangkan tombol di dalam tombol. -->
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<div
+							class="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2.5 px-3.5 py-3 sm:px-4"
+							onclick={(e) => {
+								if ((e.target as HTMLElement).closest('button, input, select, a, label')) return;
+								toggleGroup(m.media_id);
+							}}
+						>
 							<input
 								type="checkbox"
 								class="h-4 w-4 shrink-0 cursor-pointer rounded-[4px] accent-blue-600"
