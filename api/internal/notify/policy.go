@@ -145,6 +145,7 @@ var policies = map[string]ChannelPolicy{
 	"partner.wa_required":                   {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"variant_batch.failed":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"changelog.new":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"billing.topup_needed":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 }
 
 // prefixPolicies menangani tipe yang belum terdaftar tetapi keluarganya tidak

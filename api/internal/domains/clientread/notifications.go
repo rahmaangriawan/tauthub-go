@@ -1,6 +1,7 @@
 package clientread
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -47,6 +48,47 @@ func nilIfEmptyStrKey(m rowMap, key string) any {
 // BrandNotifications: GET /v1/brands/{brandId}/notifications — daftar notifikasi
 // user dengan hitungan unread/total + filter status.
 // POST pada path yang sama menandai SEMUA notifikasi user sebagai dibaca.
+// ensureTopupNudge: notifikasi "saldo masih kosong" untuk brand yang belum
+// pernah menerima kredit sama sekali. Idempoten lewat dedupe_key, dan tidak
+// pernah menggangu brand yang sudah punya saldo maupun riwayat top up.
+func (d *Deps) ensureTopupNudge(ctx context.Context, brandID, userID string) {
+	// Brand yang sudah top up: pengingatnya tidak relevan lagi, jadi ditutup
+	// (expired) alih-alih dibiarkan menumpuk sebagai belum dibaca.
+	_, _ = d.Pool.Exec(ctx, `
+		UPDATE notifications n SET expired_at = NOW()
+		WHERE n.user_id = $1 AND n.type = 'billing.topup_needed' AND n.expired_at IS NULL
+		  AND EXISTS (
+		      SELECT 1 FROM brands b
+		      LEFT JOIN credit_wallets w ON w.brand_id = b.id
+		      WHERE (b.id::text = $2 OR b.public_id = $2)
+		        AND n.dedupe_key = 'billing.topup_needed:' || b.id
+		        AND (COALESCE(w.available_tc, 0) > 0
+		             OR EXISTS (SELECT 1 FROM credit_transactions ct WHERE ct.brand_id = b.id AND ct.amount > 0))
+		  )`, userID, brandID)
+	_, _ = d.Pool.Exec(ctx, `
+		INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key)
+		SELECT gen_random_uuid(), bm.user_id,
+		       'billing.topup_needed',
+		       'Saldo kampanye masih kosong',
+		       'Belum ada top up sama sekali. Isi saldo dulu supaya The Writer bisa menulis artikel dan mendistribusikannya ke media.',
+		       '/klien/' || b.public_id || '/credits',
+		       'billing.topup_needed:' || b.id
+		FROM brands b
+		JOIN brand_memberships bm ON bm.brand_id = b.id AND bm.user_id = $1
+		JOIN users u ON u.id = bm.user_id
+		LEFT JOIN credit_wallets w ON w.brand_id = b.id
+		WHERE (b.id::text = $2 OR b.public_id = $2)
+		  AND b.deleted_at IS NULL
+		  AND u.role <> 'admin'
+		  AND COALESCE(w.available_tc, 0) <= 0
+		  AND COALESCE(w.reserved_tc, 0) <= 0
+		  AND NOT EXISTS (SELECT 1 FROM credit_transactions ct WHERE ct.brand_id = b.id AND ct.amount > 0)
+		  AND NOT EXISTS (
+		      SELECT 1 FROM notifications n
+		      WHERE n.user_id = $1 AND n.dedupe_key = 'billing.topup_needed:' || b.id
+		  )`, userID, brandID)
+}
+
 func (d *Deps) BrandNotifications(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
 	if user == nil {
@@ -61,6 +103,11 @@ func (d *Deps) BrandNotifications(w http.ResponseWriter, r *http.Request) {
 		d.brandNotificationsMarkAll(w, r, user.ID)
 		return
 	}
+	// Pintu masuk klien baru: kalau saldo masih nol dan belum pernah top up,
+	// tanam satu notifikasi onboarding. Ditaruh di sini (bukan sapuan latar)
+	// supaya lonceng langsung berisi begitu klien membuka aplikasi; dedupe_key
+	// per brand menjaga notifikasinya tetap satu seumur akun.
+	d.ensureTopupNudge(r.Context(), chiParam(r, "brandId"), user.ID)
 
 	q := r.URL.Query()
 	status := q.Get("status")
