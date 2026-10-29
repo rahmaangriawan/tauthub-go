@@ -161,14 +161,14 @@
 />
 
 <section>
-	<header class="flex flex-wrap items-start justify-between gap-3">
-		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{tr('Dukungan')}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
-				{tr('Buat tiket untuk masalah teknis, pembayaran, atau publikasi. Admin membalas di tiket yang sama.')}
-			</p>
-		</div>
+	<!-- Judul dan tombol berbagi satu baris (juga di HP); keterangan mengambil
+	     satu baris penuh di bawahnya. -->
+	<header class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+		<h1 class="text-2xl font-semibold tracking-tight">{tr('Dukungan')}</h1>
 		<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={15} /> {tr('Buat tiket')}</button>
+		<p class="w-full text-sm text-muted-foreground">
+			{tr('Buat tiket untuk masalah teknis, pembayaran, atau publikasi. Admin membalas di tiket yang sama.')}
+		</p>
 	</header>
 
 	{#if error}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>{/if}
