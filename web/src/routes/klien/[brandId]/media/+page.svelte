@@ -2029,6 +2029,19 @@
 								<ul class="campaignSelectedList" id="campaign-selected-list">
 									{#each selectedItems as it (it.id)}
 										<li class="campaignSelectedItem">
+											<span class="campaignSelectedFavicon" aria-hidden="true">
+												{#if it.domain && !faviconFailed[it.id]}
+													<img
+														src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(it.domain)}&sz=64`}
+														alt=""
+														loading="lazy"
+														decoding="async"
+														onerror={() => (faviconFailed = { ...faviconFailed, [it.id]: true })}
+													/>
+												{:else}
+													{(it.name ?? it.id).trim().charAt(0).toUpperCase() || '•'}
+												{/if}
+											</span>
 											<span class="campaignSelectedName" title={it.name}>{it.name}</span>
 											<span class="campaignSelectedPrice">Rp {fmt(it.price)}</span>
 											<button
@@ -2590,11 +2603,33 @@
 			display: flex;
 			align-items: center;
 			gap: 8px;
-			padding: 7px 2px 7px 48px;
+			/* Indentasi kiri sekarang datang dari favicon, bukan padding. */
+			padding: 6px 2px;
 			border-radius: 8px;
 		}
 		.campaignSelectedItem:hover {
 			background: rgba(255, 255, 255, 0.7);
+		}
+		.campaignSelectedFavicon {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+			width: 22px;
+			height: 22px;
+			border-radius: 5px;
+			background: #ffffff;
+			border: 1px solid #e1effe;
+			overflow: hidden;
+			font-size: 10.5px;
+			font-weight: 700;
+			color: #2563eb;
+		}
+		.campaignSelectedFavicon img {
+			width: 100%;
+			height: 100%;
+			object-fit: contain;
+			display: block;
 		}
 		.campaignSelectedName {
 			flex: 1;
