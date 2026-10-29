@@ -35,6 +35,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
 	"github.com/rahmaangriawan/tauthub-go/internal/email"
 	"github.com/rahmaangriawan/tauthub-go/internal/moderation"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
@@ -2478,11 +2479,25 @@ func (d *Deps) mpEmailFollowUp(ctx context.Context, event, recipientUserID, reci
 		return
 	}
 	html := mpRenderDetailEmail(subject, mpEmailBodyRows(event, data), d.absoluteAppURL(data["link"]), mpEmailLinkLabel(event))
+	// Keputusan kanal diambil dari registry pusat: mode event, kelengkapan
+	// kontak, gate baca in-app, dedupe per event, dan kuota per jam. Tanpa
+	// pemeriksaan ini setiap review media menjadi satu email berbayar, walau
+	// mitra sudah membaca kabarnya di aplikasi.
+	dedupeKey := event + ":" + referenceID
+	decision := notify.ShouldSend(ctx, d.Pool, notify.Request{
+		UserID: recipientUserID, Type: event, DedupeKey: dedupeKey, Channel: "email",
+	})
+	notify.LogDecision(decision, notify.Request{
+		UserID: recipientUserID, Type: event, DedupeKey: dedupeKey, Channel: "email",
+	})
+	if !decision.Send {
+		return
+	}
 	// EnqueueEmail menulis baris email_deliveries; worker existing yang mengirim.
 	if _, _, err := email.EnqueueEmail(ctx, d.Pool, email.EnqueueOptions{
 		Template: event, RecipientEmail: recipientEmail, UserID: mpStrPtr(recipientUserID),
 		ReferenceID: mpStrPtr(referenceID), Event: event, Subject: subject, HTML: html,
-		DedupeKey: mpStrPtr(event + ":" + referenceID),
+		DedupeKey: mpStrPtr(dedupeKey),
 	}); err != nil {
 		d.logWarn("email follow-up gagal", event, err)
 	}
@@ -2586,12 +2601,30 @@ func (d *Deps) mpWAFollowUp(ctx context.Context, event, recipientUserID, referen
 	if target == "" {
 		return
 	}
-	body := igWADefaultTemplates[event]
+	// Template diambil dari wa_templates lebih dulu, supaya admin yang
+	// mematikan atau menyunting template di UI benar-benar berpengaruh.
+	// Sebelumnya pengirim selalu memakai teks hardcoded dan mengabaikan tabel
+	// itu, jadi tombol "Nonaktif" di halaman admin tidak menghentikan apa pun.
+	body, allowed := d.igWATemplateBody(ctx, event)
+	if !allowed {
+		return
+	}
 	for k, v := range data {
 		body = strings.ReplaceAll(body, "{"+k+"}", v)
 	}
 	body = strings.ReplaceAll(body, "{link}", d.absoluteAppURL(data["link"]))
 	dedupe := event + ":" + referenceID + ":" + target
+	// Gate yang sama seperti email: event tier 3 (mis. ticket.replied) tidak
+	// punya mode WA, jadi langsung ditolak di sini tanpa biaya.
+	decision := notify.ShouldSend(ctx, d.Pool, notify.Request{
+		UserID: recipientUserID, Type: event, DedupeKey: dedupe, Channel: "wa",
+	})
+	notify.LogDecision(decision, notify.Request{
+		UserID: recipientUserID, Type: event, DedupeKey: dedupe, Channel: "wa",
+	})
+	if !decision.Send {
+		return
+	}
 	_ = d.exec(ctx,
 		"INSERT INTO wa_deliveries (id, user_id, target, event, rendered_body, dedupe_key, reference_id, status, attempts) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'queued', 0) ON CONFLICT DO NOTHING",
 		recipientUserID, target, event, body, dedupe, referenceID)

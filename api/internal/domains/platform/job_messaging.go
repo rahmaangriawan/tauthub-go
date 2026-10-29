@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"unicode/utf8"
 
 	emailqueue "github.com/rahmaangriawan/tauthub-go/internal/email"
@@ -129,14 +130,33 @@ type mjWADueRow struct {
 	Attempts     int
 }
 
-// mjPickDueWA: parity pickDueWa — hanya status 'queued' dengan attempts < 3,
-// terurut created_at ASC. wa_deliveries tidak punya next_attempt_at: baris yang
-// gagal retryable dikembalikan ke 'queued' dan langsung bisa dipungut lagi.
+// mjPickDueWA: klaim atomik baris yang siap kirim, lalu kembalikan isinya.
+//
+// Klaim memakai satu UPDATE ... RETURNING yang menandai baris 'sending' dan
+// mengisi claimed_at. Ini menggantikan SELECT ... FOR UPDATE SKIP LOCKED:
+// kunci baris hanya bertahan selama transaksi, sedangkan pemungutan di sini
+// autocommit, jadi tanpa penandaan status dua job send_wa (worker dan
+// scheduler bisa sama-sama memungut) akan mengambil baris yang sama dan
+// mengirim pesan dua kali.
+//
+// next_attempt_at memberi jeda setelah kegagalan; sebelumnya baris yang gagal
+// langsung kembali 'queued' sehingga dicoba lagi dalam hitungan detik.
 func (d *Deps) mjPickDueWA(ctx context.Context, limit int) ([]mjWADueRow, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT id, target, rendered_body, attempts FROM wa_deliveries
-		WHERE status = 'queued' AND attempts < $1
-		ORDER BY created_at ASC LIMIT $2`, mjWAMaxAttempts, limit)
+		WITH due AS (
+			SELECT id FROM wa_deliveries
+			WHERE status = 'queued'
+			  AND attempts < $1
+			  AND (next_attempt_at IS NULL OR next_attempt_at <= now())
+			ORDER BY created_at ASC
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE wa_deliveries w
+		SET status = 'sending', claimed_at = now()
+		FROM due
+		WHERE w.id = due.id
+		RETURNING w.id, w.target, w.rendered_body, w.attempts`, mjWAMaxAttempts, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -155,26 +175,42 @@ func (d *Deps) mjPickDueWA(ctx context.Context, limit int) ([]mjWADueRow, error)
 // mjWAMarkSent: parity markSent.
 func (d *Deps) mjWAMarkSent(ctx context.Context, id string) {
 	_, _ = d.Pool.Exec(ctx,
-		"UPDATE wa_deliveries SET status = 'sent', sent_at = NOW(), attempts = attempts + 1, last_error = NULL WHERE id = $1", id)
+		"UPDATE wa_deliveries SET status = 'sent', sent_at = NOW(), attempts = attempts + 1, last_error = NULL, claimed_at = NULL WHERE id = $1", id)
 }
 
-// mjWAMarkFailed: parity markFailed — kembali 'queued' selama percobaan belum
-// habis, 'failed' saat attempts+1 mencapai MAX_ATTEMPTS.
+// mjWAMarkFailed: kembali 'queued' selama percobaan belum habis, 'failed' saat
+// attempts+1 mencapai MAX_ATTEMPTS.
+//
+// next_attempt_at diisi jarak eksponensial (2^attempts menit) supaya gateway
+// tidak ditembak berulang dalam hitungan detik. Tanpa jeda ini, scheduler yang
+// berjalan tiap 10 detik akan mencoba pesan yang sama tiga kali hampir
+// bersamaan dan menghabiskan kuota Fonnte untuk penolakan yang sama.
 func (d *Deps) mjWAMarkFailed(ctx context.Context, id, message string, attempts int) {
 	status := "queued"
 	if attempts+1 >= mjWAMaxAttempts {
 		status = "failed"
 	}
+	// 2^attempts menit: 1, 2, 4 menit. Dibatasi supaya tidak melompat jauh.
+	delayMinutes := 1 << attempts
+	if delayMinutes > 30 {
+		delayMinutes = 30
+	}
 	_, _ = d.Pool.Exec(ctx,
-		"UPDATE wa_deliveries SET status = $1, attempts = attempts + 1, last_error = $2 WHERE id = $3",
-		status, mjClip500(message), id)
+		`UPDATE wa_deliveries
+		    SET status = $1, attempts = attempts + 1, last_error = $2,
+		        claimed_at = NULL,
+		        next_attempt_at = CASE WHEN $1 = 'queued'
+		                               THEN now() + ($4 || ' minutes')::interval
+		                               ELSE next_attempt_at END
+		  WHERE id = $3`,
+		status, mjClip500(message), id, strconv.Itoa(delayMinutes))
 }
 
 // mjWAMarkFailedPermanent: penolakan permanen (token invalid, nomor salah, kuota)
 // — langsung 'failed' supaya tidak membuang percobaan berulang.
 func (d *Deps) mjWAMarkFailedPermanent(ctx context.Context, id, message string) {
 	_, _ = d.Pool.Exec(ctx,
-		"UPDATE wa_deliveries SET status = 'failed', attempts = attempts + 1, last_error = $1 WHERE id = $2",
+		"UPDATE wa_deliveries SET status = 'failed', attempts = attempts + 1, last_error = $1, claimed_at = NULL WHERE id = $2",
 		mjClip500(message), id)
 }
 

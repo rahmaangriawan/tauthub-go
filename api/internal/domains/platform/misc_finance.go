@@ -1948,7 +1948,7 @@ func (d *Deps) settNotifyPartner(ctx context.Context, settlement ptRow, to, reje
 // finNotifyUser: INSERT notifications (dedupe_key opsional).
 func (d *Deps) finNotifyUser(ctx context.Context, userID, notifType, title, body, link, dedupeKey string) {
 	if err := d.exec(ctx,
-		"INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (dedupe_key) DO NOTHING",
+		"INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (user_id, dedupe_key) DO NOTHING",
 		uuid.NewString(), userID, notifType, title, body, link, nullIfEmpty(dedupeKey)); err != nil {
 		// best-effort
 	}
@@ -2332,7 +2332,7 @@ func (d *Deps) ReferredDomainsReview(w http.ResponseWriter, r *http.Request) {
 		if err := d.exec(r.Context(),
 			`INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key)
 			 SELECT $1, owner_user_id, 'referral.domain.rejected', 'Domain ditolak', $2, '/mitra', $3 FROM referred_domains WHERE id = $4
-			 ON CONFLICT (dedupe_key) DO NOTHING`,
+			 ON CONFLICT (user_id, dedupe_key) DO NOTHING`,
 			uuid.NewString(), finCoalesceStr(reason, "Domain ditolak"), "referred_domain:rejected:"+id, id); err != nil {
 			// best-effort
 		}
@@ -2340,7 +2340,7 @@ func (d *Deps) ReferredDomainsReview(w http.ResponseWriter, r *http.Request) {
 		if err := d.exec(r.Context(),
 			`INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key)
 			 SELECT $1, owner_user_id, 'referral.domain.approved', 'Domain disetujui', $2, '/mitra', $3 FROM referred_domains WHERE id = $4
-			 ON CONFLICT (dedupe_key) DO NOTHING`,
+			 ON CONFLICT (user_id, dedupe_key) DO NOTHING`,
 			uuid.NewString(), "Domain Anda disetujui — CPA akan diproses.", "referred_domain:approved:"+id, id); err != nil {
 			// best-effort
 		}

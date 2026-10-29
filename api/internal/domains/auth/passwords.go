@@ -180,9 +180,16 @@ func (d *Deps) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		DedupeKey:       strPtr("password_reset:" + userID),
 		Data:            map[string]string{"email": userEmail, "link": resetLink},
 	})
-	if sendErr == nil && status == "queued" && deliveryID != "" {
-		emailqueue.ProcessEmailInline(r.Context(), d.Pool, d.Cfg.CmsEncryptionSecret, deliveryID)
-	}
+	// Sengaja TIDAK dikirim inline di request ini.
+	//
+	// Dulu email dikirim langsung di sini, sehingga (a) request menunggu dial
+	// SMTP, dan (b) waktu respons berbeda antara email yang ada dan yang tidak,
+	// padahal handler ini justru dirancang supaya kedua kasus tidak bisa
+	// dibedakan. Sekarang cukup diantrekan: worker dan drain scheduler
+	// mengambilnya dalam hitungan detik.
+	_ = deliveryID
+	_ = status
+	_ = sendErr
 	ok()
 }
 
@@ -273,9 +280,11 @@ func (d *Deps) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		DedupeKey:       strPtr("password_changed:" + result.UserID),
 		Data:            map[string]string{"changed_at": time.Now().UTC().Format(time.RFC3339)},
 	})
-	if sendErr == nil && status == "queued" && deliveryID != "" {
-		emailqueue.ProcessEmailInline(r.Context(), d.Pool, d.Cfg.CmsEncryptionSecret, deliveryID)
-	}
+	// Diantrekan saja, tidak dikirim inline. Alasannya sama dengan ForgotPassword:
+	// request tidak perlu menunggu SMTP, dan antrean yang mengurus retry.
+	_ = deliveryID
+	_ = status
+	_ = sendErr
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})

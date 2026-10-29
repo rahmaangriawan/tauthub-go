@@ -17,6 +17,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 	"github.com/rahmaangriawan/tauthub-go/internal/email"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 )
 
 // scheduler.go: port lib/scheduler/publish-scheduler.ts (runScheduler) + helper
@@ -154,6 +155,24 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	//     database tidak membengkak. Maksimal sekali sehari (klaim harian).
 	res.RetentionDeleted, res.RetentionArchived = d.schRetention(ctx)
 
+	// 10b. Digest notifikasi: kumpulkan event tier 3 yang belum dibaca jadi
+	//      satu email per user per hari. Memakai klaim harian yang sama dengan
+	//      retensi, jadi tidak perlu tabel penanda baru dan tidak mungkin
+	//      berjalan dua kali dalam sehari.
+	//
+	//      Tanpa digest, event informasi yang dipetakan ke email menjadi satu
+	//      email berbayar per event. Dengan digest, satu user menerima paling
+	//      banyak satu email ringkasan per hari, dan hanya kalau ada yang
+	//      benar-benar belum ia buka di aplikasi.
+	if d.schClaimDaily(ctx, "notify_digest") {
+		if n, err := notify.EnqueueDigestJobs(ctx, d.Pool, time.Now(), 12*time.Hour); err != nil {
+			slog.Error("[scheduler] enqueue digest notifikasi gagal", "err", err)
+			d.schReleaseDaily(ctx, "notify_digest")
+		} else if n > 0 {
+			slog.Info("[scheduler] digest notifikasi diantrekan", "jumlah_user", n)
+		}
+	}
+
 	// 11. Ringkasan brief: lepaskan baris yang macet 'queued'/'running' tanpa
 	//     job hidup (proses pemiliknya mati saat deploy) supaya UI klien tidak
 	//     berputar selamanya. Ringkasan kini manual-only — sapuan ini hanya
@@ -188,6 +207,32 @@ func (d *Deps) reapStuckTautRuns(ctx context.Context, staleAfter time.Duration) 
 }
 
 // ---------- 10. retensi data (brandflow/retention.go) ----------
+
+// schClaimDaily mengklaim satu tugas harian bernama name.
+//
+// Mengembalikan true hanya untuk proses yang berhasil memasukkan baris hari
+// ini. Scheduler berjalan tiap 10-60 detik, jadi tanpa klaim tugas seperti
+// digest akan diantrekan berkali-kali. Pola ini sama dengan schRetention, hanya
+// dipisah per nama tugas karena retention_runs memakai tanggal sebagai kunci.
+func (d *Deps) schClaimDaily(ctx context.Context, name string) bool {
+	tag, err := d.Pool.Exec(ctx,
+		`INSERT INTO daily_claims (name, day) VALUES ($1, current_date) ON CONFLICT DO NOTHING`, name)
+	if err != nil {
+		slog.Error("[scheduler] klaim tugas harian gagal", "tugas", name, "err", err)
+		return false
+	}
+	return tag.RowsAffected() > 0
+}
+
+// schReleaseDaily melepaskan klaim supaya siklus berikutnya mencoba lagi.
+// Dipakai saat tugas gagal di tengah jalan; tanpa ini satu kegagalan berarti
+// seharian penuh tanpa tugas tersebut.
+func (d *Deps) schReleaseDaily(ctx context.Context, name string) {
+	if _, err := d.Pool.Exec(ctx,
+		`DELETE FROM daily_claims WHERE name = $1 AND day = current_date`, name); err != nil {
+		slog.Error("[scheduler] lepas klaim tugas harian gagal", "tugas", name, "err", err)
+	}
+}
 
 // schRetention: pangkas log/cache/event melebihi ambang retensi — MAKSIMAL
 // SEKALI SEHARI. Klaim hari ini lewat tabel retention_runs (INSERT ON CONFLICT
@@ -522,6 +567,19 @@ func (d *Deps) schEmailFollowUp(ctx context.Context, event, recipientUserID, rec
 	if recipientEmail == "" || !d.schRouteEmailEnabled(ctx, event, recipientUserID) {
 		return
 	}
+	// Registry pusat: publication.reminder dan publication.late_approval
+	// sengaja bermode WA, bukan email, jadi keduanya berhenti di sini tanpa
+	// biaya. Pemeriksaan tetap dipanggil supaya kalau nanti email diaktifkan
+	// lagi, gate baca dan kuota otomatis ikut berlaku.
+	decision := notify.ShouldSend(ctx, d.Pool, notify.Request{
+		UserID: recipientUserID, Type: event, DedupeKey: dedupeKey, Channel: "email",
+	})
+	notify.LogDecision(decision, notify.Request{
+		UserID: recipientUserID, Type: event, DedupeKey: dedupeKey, Channel: "email",
+	})
+	if !decision.Send {
+		return
+	}
 	var subject, html string
 	if event == "publication.late_approval" {
 		subject, html = d.schRenderDetailEmail(ctx, "Publikasi melewati batas waktu",
@@ -599,11 +657,25 @@ func (d *Deps) schEnqueueQueueDrain(ctx context.Context, kind, table string) {
 	}
 }
 
-// schEnqueueWADrain: safety net processWaQueue(10) — wa_deliveries memakai
-// predikat due sendiri (tanpa next_attempt_at; hanya status 'queued').
+// schEnqueueWADrain: safety net processWaQueue(10).
+//
+// Predikat due mengikuti kolom next_attempt_at: baris yang baru gagal tidak
+// ikut dipungut sampai jeda percobaannya lewat, jadi scheduler tidak menembak
+// gateway yang sama berulang tiap 10 detik.
+//
+// Sebelum memeriksa antrean, baris 'sending' yang macet dilepas lebih dulu.
+// Tanpa itu, proses yang mati di tengah pengiriman meninggalkan pesan
+// tergantung selamanya.
 func (d *Deps) schEnqueueWADrain(ctx context.Context) {
+	if _, err := d.Pool.Exec(ctx, `SELECT wa_release_stuck(interval '10 minutes')`); err != nil {
+		// Fungsi belum ada sebelum migrasi 266 diterapkan; bukan alasan
+		// melewati pengurasan antrean.
+		slog.Debug("[scheduler] lepas WA macet gagal", "err", err)
+	}
 	row, err := d.queryRow(ctx,
-		"SELECT COUNT(*)::int AS pending FROM wa_deliveries WHERE status = 'queued' AND attempts < 3")
+		`SELECT COUNT(*)::int AS pending FROM wa_deliveries
+		 WHERE status = 'queued' AND attempts < 3
+		   AND (next_attempt_at IS NULL OR next_attempt_at <= now())`)
 	if err != nil || row == nil || row.intOr("pending", 0) == 0 {
 		return
 	}

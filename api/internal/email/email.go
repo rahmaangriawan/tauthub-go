@@ -304,6 +304,11 @@ func RenderTemplate(name string, data map[string]string) (Rendered, error) {
 		return renderPasswordReset(data), nil
 	case "password-changed":
 		return renderPasswordChanged(data), nil
+	case "account-invite":
+		// Tanpa entri ini, user yang dibuat admin tanpa password tidak pernah
+		// menerima email aktivasi: SendTransactionalEmail mengembalikan error
+		// "template not registered" dan tidak ada baris yang diantrekan.
+		return renderAccountInvite(data), nil
 	default:
 		return Rendered{}, fmt.Errorf("Email template not registered: %s", name)
 	}

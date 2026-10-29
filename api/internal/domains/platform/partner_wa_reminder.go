@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/email"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 )
 
 const partnerWAThreshold = 1
@@ -98,7 +99,17 @@ func (d *Deps) AdminPartnerWAReminder(w http.ResponseWriter, r *http.Request) {
 
 	emailed := false
 	recipientEmail := row.strOr("email", "")
-	if recipientEmail != "" {
+	// Registry menandai partner.wa_required sebagai tier 3 (in-app saja), jadi
+	// keputusan ini menolak emailnya tanpa biaya. Pemeriksaan tetap dipanggil
+	// supaya kalau nanti tier-nya dinaikkan, tidak ada jalur yang melewatkan
+	// gate baca dan kuota.
+	reminderDecision := notify.ShouldSend(r.Context(), d.Pool, notify.Request{
+		UserID: partnerUserID, Type: "partner.wa_required", DedupeKey: dedupeKey, Channel: "email",
+	})
+	notify.LogDecision(reminderDecision, notify.Request{
+		UserID: partnerUserID, Type: "partner.wa_required", DedupeKey: dedupeKey, Channel: "email",
+	})
+	if recipientEmail != "" && reminderDecision.Send {
 		appURL := strings.TrimRight(os.Getenv("NEXT_PUBLIC_APP_URL"), "/")
 		if appURL == "" {
 			appURL = "https://app.tauthub.com"

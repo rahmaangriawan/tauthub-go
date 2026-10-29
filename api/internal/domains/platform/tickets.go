@@ -197,20 +197,31 @@ func (d *Deps) AdminTicketReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := d.exec(r.Context(), `
+	// Id balasan diambil kembali lewat RETURNING supaya bisa dipakai sebagai
+	// bagian kunci dedupe notifikasi. Tanpa id ini, dua balasan admin pada
+	// tiket yang sama memakai kunci yang sama dan balasan kedua tidak pernah
+	// dikirim (notifikasi, email, dan WA sama-sama tertahan).
+	replyRow, err := d.queryRow(r.Context(), `
 		WITH m AS (
 			INSERT INTO support_ticket_messages (ticket_id, author_role, author_user_id, body)
 			VALUES ($1, 'admin', $2, $3)
+			RETURNING id
 		)
 		UPDATE support_tickets SET
 			status = CASE WHEN status = 'buka' THEN 'diproses' ELSE status END,
 			last_message_at = now(), last_message_by = 'admin', updated_at = now()
-		WHERE id = $1`, ticketID, admin.ID, in.Body); err != nil {
+		WHERE id = $1
+		RETURNING (SELECT id FROM m) AS reply_id`, ticketID, admin.ID, in.Body)
+	if err != nil {
 		writeErr(w, d, err)
 		return
 	}
+	replyID := ""
+	if replyRow != nil {
+		replyID = replyRow.strOr("reply_id", "")
+	}
 
-	d.notifyTicketPartner(r, ticket, "ticket.replied", "Balasan baru tiket dukungan", in.Body)
+	d.notifyTicketPartner(r, ticket, "ticket.replied", "Balasan baru tiket dukungan", in.Body, replyID)
 
 	fresh, err := d.queryRow(r.Context(), adminTicketSelect+" WHERE t.id = $1", ticketID)
 	if err != nil {
@@ -261,8 +272,10 @@ func (d *Deps) AdminTicketStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if in.Status == "selesai" {
+		// Tutup tiket tidak punya id balasan; kuncinya cukup id tiket karena
+		// event ini memang hanya boleh terjadi sekali per tiket.
 		d.notifyTicketPartner(r, ticket, "ticket.closed", "Tiket dukungan ditandai selesai",
-			"Tiket dukungan Anda sudah ditandai selesai oleh admin.")
+			"Tiket dukungan Anda sudah ditandai selesai oleh admin.", "")
 	}
 
 	fresh, err := d.queryRow(r.Context(), adminTicketSelect+" WHERE t.id = $1", ticketID)
@@ -280,7 +293,11 @@ func (d *Deps) AdminTicketStatus(w http.ResponseWriter, r *http.Request) {
 
 // notifyTicketPartner: lonceng + email + WhatsApp ke mitra pemilik tiket.
 // Email/WA best-effort: kegagalan tidak menggagalkan balasan yang sudah tersimpan.
-func (d *Deps) notifyTicketPartner(r *http.Request, ticket rowMap, notifType, title, preview string) {
+//
+// replyID membedakan dua balasan pada tiket yang sama. Sebelumnya kunci dedupe
+// hanya memakai id tiket, sehingga balasan kedua dan seterusnya tidak pernah
+// terkirim ke email maupun WA.
+func (d *Deps) notifyTicketPartner(r *http.Request, ticket rowMap, notifType, title, preview, replyID string) {
 	userID := ticket.strOr("partner_user_id", "")
 	if userID == "" {
 		return
@@ -295,7 +312,13 @@ func (d *Deps) notifyTicketPartner(r *http.Request, ticket rowMap, notifType, ti
 		if len(cut) > 140 {
 			preview = string(cut[:140]) + "…"
 		}
-		body = subject + " — " + preview
+		body = subject + ": " + preview
+	}
+	// Identitas referensi untuk dedupe: sertakan id balasan bila ada, supaya
+	// dua balasan berbeda tidak bertabrakan.
+	referenceID := ticketID
+	if replyID != "" {
+		referenceID = ticketID + ":" + replyID
 	}
 	if err := d.exec(r.Context(),
 		"INSERT INTO notifications (id, user_id, type, title, body, link) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)",
@@ -310,7 +333,7 @@ func (d *Deps) notifyTicketPartner(r *http.Request, ticket rowMap, notifType, ti
 		"link":   link,
 	}
 	if email := ticket.strOr("partner_email", ""); email != "" {
-		d.mpEmailFollowUp(r.Context(), notifType, userID, email, ticketID, data)
+		d.mpEmailFollowUp(r.Context(), notifType, userID, email, referenceID, data)
 	}
-	d.mpWAFollowUp(r.Context(), notifType, userID, ticketID, data)
+	d.mpWAFollowUp(r.Context(), notifType, userID, referenceID, data)
 }

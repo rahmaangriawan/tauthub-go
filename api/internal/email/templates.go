@@ -91,4 +91,28 @@ func renderPasswordChanged(data map[string]string) Rendered {
 	)
 }
 
+// renderAccountInvite: email aktivasi untuk user yang dibuat admin.
+//
+// Data yang tersedia dari pemanggil (operations.go:2214): link reset token yang
+// berlaku 60 menit, display_name, dan role. Token itu memang token reset, jadi
+// tautannya mengarah ke halaman atur password, bukan halaman login.
+func renderAccountInvite(data map[string]string) Rendered {
+	name := strings.TrimSpace(data["display_name"])
+	greeting := "Akun Tauthub Anda sudah dibuat."
+	if name != "" {
+		greeting = "Halo " + name + ", akun Tauthub Anda sudah dibuat."
+	}
+	rows := [][2]string{}
+	if role := strings.TrimSpace(data["role"]); role != "" {
+		rows = append(rows, [2]string{"Peran", role})
+	}
+	return detailTemplate(
+		"Aktifkan akun Tauthub Anda",
+		greeting+" Atur password lewat tombol di bawah untuk mulai masuk. Tautan berlaku 60 menit.",
+		rows,
+		data["link"],
+		"Atur Password",
+	)
+}
+
 func jsonMarshal(v any) ([]byte, error) { return json.Marshal(v) }

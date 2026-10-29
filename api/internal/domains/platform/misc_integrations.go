@@ -16,9 +16,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/adminshared"
+	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
@@ -1613,7 +1616,7 @@ func (d *Deps) igWADeviceStatus(ctx context.Context) (map[string]any, int, error
 
 // WATest: POST /v1/platform/wa/test
 func (d *Deps) WATest(w http.ResponseWriter, r *http.Request) {
-	_, _, ok := d.adminGuard(w, r, "")
+	admin, _, ok := d.adminGuard(w, r, "")
 	if !ok {
 		return
 	}
@@ -1626,6 +1629,16 @@ func (d *Deps) WATest(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(message) > 1000 {
 		writeErr(w, d, errUnprocessable("Payload tidak valid"))
+		return
+	}
+	// Tes kirim adalah satu-satunya jalur WA yang tidak lewat antrean, jadi
+	// satu-satunya juga yang tidak tercatat. Dua penjagaan di bawah menutup
+	// kebocoran kuota yang tidak terlihat: batas laju per admin, dan baris
+	// riwayat di wa_deliveries untuk setiap percobaan.
+	if err := auth.CheckWriteRate(r.Context(), d.Pool,
+		"write:wa_test:"+admin.ID, d.Cfg.WriteRateLimitPerMinute); err != nil {
+		writeErr(w, d, adminshared.Err(http.StatusTooManyRequests,
+			"Terlalu banyak percobaan. Tunggu satu menit lalu coba lagi."))
 		return
 	}
 	device, status, err := d.igWADeviceStatus(r.Context())
@@ -1653,13 +1666,19 @@ func (d *Deps) WATest(w http.ResponseWriter, r *http.Request) {
 	}
 	result, sendStatus, sendErr := d.igWASendMessage(r.Context(), normalized, sendMsg)
 	if sendErr != nil {
+		// Catat percobaan yang gagal di level transport juga: Fonnte tetap
+		// menghitung percobaan koneksi pada sebagian paket.
+		d.igWALogTestSend(r.Context(), admin.ID, normalized, sendMsg, "failed", sendErr.Error())
 		writeJSON(w, sendStatus, map[string]any{"ok": false, "detail": sendErr.Error()})
 		return
 	}
 	detail := "Gateway menolak: " + result.Detail
+	rowStatus := "failed"
 	if result.OK {
 		detail = "Pesan uji terkirim ke " + normalized + "."
+		rowStatus = "sent"
 	}
+	d.igWALogTestSend(r.Context(), admin.ID, normalized, sendMsg, rowStatus, detail)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": result.OK, "device": device, "target": normalized, "detail": detail,
 		"message_id": nullIfEmpty(result.MessageID),
@@ -2262,4 +2281,63 @@ func igMinInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// igWALogTestSend mencatat tes kirim WA ke wa_deliveries.
+//
+// Tes kirim tidak lewat antrean, jadi tanpa baris ini tidak ada jejak sama
+// sekali bahwa kuota Fonnte terpakai. reference_id diisi user admin yang
+// menekan tombol, supaya pemakaian kuota bisa ditelusuri ke orangnya.
+func (d *Deps) igWALogTestSend(ctx context.Context, adminUserID, target, message, status, detail string) {
+	_, err := d.Pool.Exec(ctx, `
+		INSERT INTO wa_deliveries
+		  (id, user_id, target, event, rendered_body, status, attempts, last_error, reference_id, sent_at)
+		VALUES (gen_random_uuid(), $1, $2, 'wa.test', $3, $4, 1, $5, $1, CASE WHEN $4 = 'sent' THEN now() ELSE NULL END)`,
+		nullIfEmpty(adminUserID), target, message, status, igWAClipDetail(detail))
+	if err != nil {
+		// Best-effort: kegagalan mencatat tidak boleh mengubah hasil tes.
+		d.logWarn("catat tes WA gagal", target, err)
+	}
+}
+
+// igWAClipDetail memotong detail ke panjang kolom last_error.
+func igWAClipDetail(s string) string {
+	const max = 500
+	if len(s) <= max {
+		return s
+	}
+	cut := max
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
+}
+
+// igWATemplateBody mengambil isi template WA untuk satu event.
+//
+// Mengembalikan allowed=false kalau admin menonaktifkan template itu, sehingga
+// pemanggil berhenti tanpa mengirim apa pun. Kalau belum ada baris di
+// wa_templates, dipakai teks bawaan supaya event lama tetap berjalan seperti
+// sebelumnya.
+func (d *Deps) igWATemplateBody(ctx context.Context, event string) (string, bool) {
+	row, err := d.queryRow(ctx,
+		"SELECT body, enabled FROM wa_templates WHERE event = $1 LIMIT 1", event)
+	if err != nil || row == nil {
+		// Belum dikustomisasi: pakai bawaan.
+		if body, ok := igWADefaultTemplates[event]; ok {
+			return body, true
+		}
+		return "", false
+	}
+	if !row.boolOr("enabled", true) {
+		return "", false
+	}
+	body := strings.TrimSpace(row.strOr("body", ""))
+	if body == "" {
+		if def, ok := igWADefaultTemplates[event]; ok {
+			return def, true
+		}
+		return "", false
+	}
+	return body, true
 }
