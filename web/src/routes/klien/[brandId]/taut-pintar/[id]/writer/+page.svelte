@@ -1923,7 +1923,7 @@
 					<div class="rounded-[5px] border p-3">
 						<div class="flex items-center justify-between">
 							<p class="flex items-center gap-2 text-sm font-bold text-muted-foreground"><Link2 size={16} /> {tr('Tautan Cadangan (Prioritas 2)')}</p>
-							<span class="rounded-[5px] px-2 py-0.5 text-[10px] font-semibold" style={badge('muted')}>{tr("Opsional")}</span>
+							<span class="rounded-[5px] px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px]" style={badge('muted')}>{tr("Opsional")}</span>
 						</div>
 						<p class="mt-1 text-xs text-muted-foreground">{tr("Hanya akan digunakan secara dinamis oleh AI pada media mitra yang mengizinkan penanaman")} <strong>{tr('Maksimal 2 Link')}</strong>.</p>
 						<div class="mt-3 grid gap-3 sm:grid-cols-2">
@@ -2086,12 +2086,12 @@
 
 							<div class="min-w-0 flex-1">
 								<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-									<p class="truncate font-bold text-[14.5px] leading-tight text-slate-900" title={m.name}>
+									<p class="truncate font-bold text-[14.5px] leading-tight text-slate-900 max-sm:text-[15.5px]" title={m.name}>
 										{mediaDomainLabel(m.website_url, m.name)}
 									</p>
 									{#if m.media_type}
 										<span
-											class="shrink-0 rounded-[5px] border px-2 py-0.5 text-[8.5px] font-bold tracking-wider uppercase {m.media_type === 'blogger' ? 'border-amber-200/80 bg-amber-50 text-amber-700' : 'border-blue-200/80 bg-blue-50 text-blue-600'}"
+											class="shrink-0 rounded-[5px] border px-2 py-0.5 text-[8.5px] font-bold tracking-wider uppercase max-sm:text-[10px] {m.media_type === 'blogger' ? 'border-amber-200/80 bg-amber-50 text-amber-700' : 'border-blue-200/80 bg-blue-50 text-blue-600'}"
 										>
 											{m.media_type === 'blogger' ? tr('Blogger') : tr('Mainstream')}
 										</span>
@@ -2101,7 +2101,7 @@
 								     jumlah artikel yang direncanakan untuk media itu, bukan
 								     pilihan. Yang berguna dibaca adalah berapa yang belum
 								     dibuat. -->
-								<p class="mt-0.5 text-[11.5px] font-medium text-slate-500">
+								<p class="mt-0.5 text-[11.5px] font-medium text-slate-500 max-sm:text-[12.5px]">
 									{#if pendingCount === 0}
 										{qty} {tr('artikel')} · {tr('semua sudah ada naskahnya')}
 									{:else if qty === 1}
@@ -2124,7 +2124,7 @@
 								     konsisten dengan media yang artikelnya banyak. -->
 								{#if qty > 1 && pendingCount > 0}
 									<button
-										class="inline-flex h-8 items-center gap-1 rounded-[5px] bg-blue-600 px-2.5 text-[11.5px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50 max-sm:h-11 max-sm:flex-1 max-sm:justify-center max-sm:px-2 max-sm:text-[11.5px]"
+										class="inline-flex h-8 items-center gap-1 rounded-[5px] bg-blue-600 px-2.5 text-[12px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50 max-sm:h-11 max-sm:flex-1 max-sm:justify-center max-sm:px-2 max-sm:text-[13px]"
 										type="button"
 										disabled={viewOnly || bulkRunning}
 										title={tr('Buat semua artikel yang belum ada dalam satu dialog')}
@@ -2213,50 +2213,50 @@
 											<div class="min-w-0 flex-1">
 												<div class="flex flex-wrap items-center gap-1.5">
 													{#if statusKind === 'ready'}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-emerald-700">
 															<CircleCheck size={11} strokeWidth={2.2} />
 															<span>{tr('Siap Terbit')}</span>
 														</span>
 													{:else if statusKind === 'draft'}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-blue-700">
 															<FileText size={11} />
 															<span>{tr('Draft Tersedia')}</span>
 														</span>
 													{:else if statusKind === 'generating'}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-blue-600">
 															<LoaderCircle size={11} class="animate-spin" />
 															<span>{tr('Generasi AI…')}</span>
 														</span>
 													{:else if statusKind === 'queued'}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/80 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/80 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-slate-600">
 															<Clock size={11} />
 															<span>{tr('Dalam Antrean…')}</span>
 														</span>
 													{:else if statusKind === 'blocked'}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-rose-700">
 															<X size={11} />
 															<span>{tr('Diblokir')}</span>
 														</span>
 													{:else}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200/70 bg-slate-100/80 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200/70 bg-slate-100/80 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[11px] text-slate-600">
 															<Clock size={11} />
 															<span>{tr('Menunggu Artikel')}</span>
 														</span>
 													{/if}
 
 													{#if !mediaAllowsLink(m)}
-														<span class="rounded-[5px] border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+														<span class="rounded-[5px] border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium max-sm:text-[11px] text-slate-500">
 															{tr('Tidak Tersedia Backlink')}
 														</span>
 													{:else if links2}
 														{#if links2.sponsored > 0}
-															<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+															<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium max-sm:text-[11px] text-amber-800">
 																<PencilLine size={10.5} />
 																<span>{links2.sponsored} Sponsored</span>
 															</span>
 														{/if}
 														{#if links2.dofollow > 0}
-															<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+															<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium max-sm:text-[11px] text-amber-800">
 																<PencilLine size={10.5} />
 																<span>{links2.dofollow} Dofollow</span>
 															</span>
@@ -2264,22 +2264,22 @@
 														<!-- Lapor hanya jenis link yang benar-benar ada; badge berangka 0
 														     (mis. "0 Nofollow" di samping "1 Dofollow") tidak berguna. -->
 														{#if links2.nofollow > 0 || links2.nofollow + links2.dofollow + links2.sponsored === 0}
-															<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/70 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+															<span class="inline-flex items-center gap-1 rounded-[5px] border border-slate-200 bg-slate-100/70 px-2 py-0.5 text-[10px] font-medium max-sm:text-[11px] text-slate-600">
 																<span class="h-1.5 w-1.5 rounded-full border border-slate-400"></span>
 																<span>{links2.nofollow > 0 ? `${links2.nofollow} Nofollow` : '0 Tautan'}</span>
 															</span>
 														{/if}
 													{:else}
-														<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-medium max-sm:text-[11px] text-amber-800">
 															<PencilLine size={10.5} />
 															<span>{m.label_sponsor === 'ada_sponsor' ? 'Sponsored' : 'Dofollow'} (Maks. {m.max_links != null && m.max_links > 0 ? m.max_links : 1})</span>
 														</span>
 													{/if}
 												</div>
-												<p class="mt-1 line-clamp-2 text-[13.5px] font-semibold leading-snug text-slate-900" title={articleTitles[pkey(item)] ?? ''}>
+												<p class="mt-1 line-clamp-2 text-[13.5px] font-semibold leading-snug text-slate-900 max-sm:text-[14.5px]" title={articleTitles[pkey(item)] ?? ''}>
 													{articleTitles[pkey(item)] ?? (doc ? tr('Tanpa judul') : tr('Belum ada artikel'))}
 												</p>
-												<p class="mt-0.5 text-[11.5px] font-normal text-slate-500">
+												<p class="mt-0.5 text-[11.5px] font-normal text-slate-500 max-sm:text-[12.5px]">
 													{#if doc && stats}
 														{stats.words.toLocaleString('id-ID')} {tr('kata')}
 													{:else}
@@ -2295,7 +2295,7 @@
 											<div class="flex min-w-[92px] flex-col gap-0.5">
 												{#if doc && stats}
 													{#if stats.cover}
-														<span class="inline-flex items-center gap-1 text-[11.5px] font-semibold text-emerald-600">
+														<span class="inline-flex items-center gap-1 text-[11.5px] font-semibold text-emerald-600 max-sm:text-[12.5px]">
 															<Check size={12} strokeWidth={2.4} />
 															<span>{tr('Cover ada')}</span>
 														</span>
@@ -2306,7 +2306,7 @@
 														</span>
 													{/if}
 												{:else}
-													<span class="inline-flex items-center gap-1 text-[11.5px] font-medium text-slate-500">
+													<span class="inline-flex items-center gap-1 text-[11.5px] font-medium text-slate-500 max-sm:text-[12.5px]">
 														<FileText size={12} class="text-slate-400" />
 														<span>{tr('Cover belum ada')}</span>
 													</span>
@@ -2536,7 +2536,7 @@
 									{tr('Kampanye ini belum punya brief, jadi Writer hanya tahu profil medianya. Isi konteks di bawah sekali untuk semua artikel. Tanpa itu artikelnya akan generik dan mirip satu sama lain.')}
 								</p>
 								<div class="rounded-[5px] border p-3" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
-									<p class="mb-2 text-[11.5px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Konteks untuk semua artikel')}</p>
+									<p class="mb-2 text-[11.5px] font-bold uppercase tracking-wide text-muted-foreground max-sm:text-[12px]">{tr('Konteks untuk semua artikel')}</p>
 									<div class="grid gap-2">
 										<input
 											class="app-input w-full"
@@ -2579,7 +2579,7 @@
 							{#each batchRows as row, i (row.slot)}
 								<div class="rounded-[5px] border p-3" style="border-color: var(--border);">
 									<div class="mb-2 flex items-center justify-between gap-2">
-										<span class="text-[11.5px] font-bold uppercase tracking-wide text-muted-foreground">
+										<span class="text-[11.5px] font-bold uppercase tracking-wide text-muted-foreground max-sm:text-[12px]">
 											{tr('Artikel')} {row.slot}
 										</span>
 										<span
@@ -2599,7 +2599,7 @@
 										maxlength={2000}
 										placeholder={tr('Topik atau instruksi (opsional)')}
 									/>
-									<label class="mt-2 flex items-center gap-2 text-[11.5px] text-muted-foreground">
+									<label class="mt-2 flex items-center gap-2 text-[11.5px] text-muted-foreground max-sm:text-xs">
 										<span class="shrink-0">{tr('Angle')}</span>
 										<select
 											class="app-input h-9 flex-1"
