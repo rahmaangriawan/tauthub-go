@@ -2177,17 +2177,6 @@ button.selectedStepChip:disabled,
   .modernToolsWrap { flex: none; }
 }
 
-/* Panel info media (mobile): baris label–nilai rapi. */
-.quickInfoPanel { display: flex; flex-direction: column; gap: 2px; }
-.quickInfoRow {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 11px 0; border-bottom: 1px solid #f1f5f9; font-size: 13.5px;
-}
-.quickInfoRow:last-child { border-bottom: none; }
-.quickInfoRow > span:first-child { color: #64748b; }
-.quickInfoRow strong { color: #0f172a; font-variant-numeric: tabular-nums; }
-.quickInfoCats { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
-
 /* Label tombol detail: versi panjang di layar lebar, versi pendek di HP. */
 .vdShort { display: none; }
 @media (max-width: 768px) {

@@ -186,11 +186,8 @@
 		const close = () => (catPopoverId = null);
 		const onKey = (event: KeyboardEvent) => {
 			if (event.key !== 'Escape') return;
-			// Popover bisa terbuka DI ATAS panel geser (Info Media). Keduanya
-			// mendengarkan Escape; tanpa ini Escape menutup panel sekaligus
-			// popover, padahal yang dimaksud user hanya popover-nya. Listener
-			// ini fase capture supaya berjalan lebih dulu, lalu menghentikan
-			// perambatan ke handler panel.
+			// Popover punya backdrop sendiri, jadi Escape cukup menutupnya dan
+			// tidak perlu diteruskan ke handler lain di halaman.
 			event.stopPropagation();
 			close();
 		};
@@ -268,16 +265,6 @@
 	let toolsOpen = $state(false);
 	// Kategori: radio (maks 5 tampil, sisanya lewat tombol expand).
 	let catExpand = $state(false);
-	// Panel info cepat (mobile): detail kolom yang disembunyikan di tabel.
-	let quickInfo = $state<any | null>(null);
-
-	// Tutup panel Info Media sekaligus popover kategorinya. Kalau popover
-	// dibiarkan terbuka, ia menempel ke posisi lama dan melayang di atas
-	// halaman setelah panelnya hilang.
-	function closeQuickInfo() {
-		catPopoverId = null;
-		quickInfo = null;
-	}
 	// Cek pesanan ganda: media yang sudah dipesan di kampanye aktif lain.
 	// Saldo kredit (bar seleksi & modal) — null = belum/gagal terbaca.
 	let walletAvailableTc = $state<number | null>(null);
@@ -1345,59 +1332,6 @@
 		</SlideOver>
 	{/if}
 
-	<!-- Info media (mobile): kolom yang disembunyikan di tabel, dibuka dari tombol Aksi. -->
-	<SlideOver
-		open={quickInfo !== null}
-		title={quickInfo ? domainLabel(quickInfo) : tr('Info Media')}
-		subtitle={tr('Rincian yang tidak ditampilkan di tabel versi HP.')}
-		closeLabel={tr('Tutup')}
-		onClose={closeQuickInfo}
-	>
-		{#if quickInfo}
-			{@const qi = quickInfo}
-			{@const qtraffic = formatTraffic(qi.sw_visits, qi.traffic_estimate)}
-			{@const qcats = qi.categories && qi.categories.length ? qi.categories : qi.category ? [qi.category] : ['Umum']}
-			{@const qsla = getSla(qi)}
-			<div class="quickInfoPanel">
-				<div class="quickInfoRow">
-					<span>{tr('Kategori')}</span>
-					<span class="quickInfoCats">
-						<!-- Tiga kategori pertama saja. Media bisa punya belasan
-						     kategori; daftar penuh membuat panel ini memanjang
-						     dan mendorong metrik lain ke bawah. Sisanya dibuka
-						     lewat badge +N yang menampilkan popover yang sama
-						     dengan badge di tabel. -->
-						{#each qcats.slice(0, 3) as c (c)}<span class="categoryPill categoryPill--{getCategoryTone(c)}">{c}</span>{/each}
-						{#if qcats.length > 3}
-							<button
-								type="button"
-								class="categoryPlusTag"
-								title={`${qcats.length} ${tr('kategori')}`}
-								aria-label={`${qcats.length} ${tr('kategori')}: ${qcats.join(', ')}`}
-								aria-expanded={catPopoverId === qi.id}
-								onclick={(e) => openCategoryPopover(e, qi.id, qcats)}
-							>+{qcats.length - 3}</button>
-						{/if}
-					</span>
-				</div>
-			<div class="quickInfoRow"><span>{tr('Trafik (est)')}</span><strong>{qtraffic.text}</strong></div>
-			<div class="quickInfoRow"><span>DA</span><strong>{qi.da ?? '—'}</strong></div>
-			<div class="quickInfoRow"><span>{tr('AI Trust')}</span><strong>{qi.ai_trust_score ?? '—'}</strong></div>
-			<div class="quickInfoRow"><span>GEO</span><strong>{qi.ai_cited === true ? tr('Dikutip') : qi.ai_cited === false ? tr('Belum dikutip') : '—'}</strong></div>
-			<div class="quickInfoRow"><span>{tr('SLA')}</span><strong>{qsla}</strong></div>
-			<div class="quickInfoRow">
-				<span>{tr('Bookmark')}</span>
-				<button
-					class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
-					type="button"
-					class:app-btn-primary={bookmarkedIds.has(qi.id)}
-					onclick={(e) => toggleBookmark(qi.id, e)}
-				><Bookmark size={13} /> {bookmarkedIds.has(qi.id) ? tr('Tersimpan') : tr('Simpan')}</button>
-			</div>
-			</div>
-		{/if}
-	</SlideOver>
-
 {#snippet catRadios()}
 	<div class="catRadioGroup" role="radiogroup" aria-label={tr('Kategori')}>
 		<button
@@ -1941,9 +1875,11 @@
 											class="viewDetailBtn"
 											onclick={(e) => {
 												e.stopPropagation();
-												// Mobile: panel kanan berisi info kolom yang disembunyikan.
-												if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) quickInfo = m;
-												else detail = m;
+												// Detail selalu modal penuh, termasuk di HP. Panel
+												// ringkas dulu dipakai di mobile karena kolom tabel
+												// disembunyikan; sekarang kolom Aksi tampil lagi dan
+												// modal penuh sudah menyesuaikan diri ke satu kolom.
+												detail = m;
 											}}
 										><span class="vdFull">{tr("Lihat Detail")}</span><span class="vdShort">{tr("Detail")}</span><ArrowRight size={13} /></button>
 									</div>

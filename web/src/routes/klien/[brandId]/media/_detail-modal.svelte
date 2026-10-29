@@ -1654,6 +1654,22 @@
 
 	/* Responsive per antislop-layoutmobile */
 	@media (max-width: 768px) {
+		/* Di HP modal jadi sheet penuh: menempel tepi kiri-kanan dan dasar
+		   layar. Overlay yang diberi padding 16px membuat modal mengambang
+		   sempit dengan dua lapis bingkai, padahal isinya sudah panjang. */
+		.detailOverlay {
+			padding: 0;
+			align-items: flex-end;
+		}
+		.detailModalWrapper {
+			max-height: 100dvh;
+			gap: 0;
+		}
+		.detailModal {
+			max-height: 96dvh;
+			border-radius: 16px 16px 0 0;
+			border-bottom: 0;
+		}
 		.detailHeader {
 			padding: 16px 18px;
 			flex-direction: column;
@@ -1728,7 +1744,7 @@
 		.detailFooter {
 			flex-direction: column;
 			align-items: stretch;
-			padding: 16px 18px;
+			padding: 16px 18px calc(16px + env(safe-area-inset-bottom, 0px));
 			gap: 12px;
 		}
 		.detailCtaBtnBlue {
