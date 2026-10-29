@@ -336,8 +336,10 @@
 	<!-- Header / sambutan -->
 	<header class="flex w-full flex-wrap items-start justify-between gap-4 pt-1 pb-0.5">
 		<div class="flex flex-1 flex-col gap-1">
-			<div class="flex flex-wrap items-center gap-3">
-				<h1 class="m-0 text-[24px] leading-[1.2] font-bold tracking-[-0.025em]">
+			<!-- HP: nama di baris sendiri, lalu lencana status sejajar dengan baris
+			     keterangan. Desktop tetap menaruh lencana di samping nama. -->
+			<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+				<h1 class="m-0 max-sm:w-full text-[24px] leading-[1.2] font-bold tracking-[-0.025em]">
 					{tr('Halo')}, {me?.name ?? tr('Mitra')}
 				</h1>
 				{#if me?.status}
@@ -350,7 +352,7 @@
 					</span>
 				{/if}
 			</div>
-			<p class="m-0 text-[13.5px] leading-normal text-muted-foreground">
+			<p class="m-0 text-[13.5px] leading-normal text-muted-foreground sm:w-full">
 				{me?.media_count ?? 0} {tr("media terdaftar")}{#if meUser?.email} · {meUser.email}{/if}
 			</p>
 		</div>
