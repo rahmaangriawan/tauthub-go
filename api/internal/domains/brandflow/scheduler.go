@@ -164,12 +164,24 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	//      email berbayar per event. Dengan digest, satu user menerima paling
 	//      banyak satu email ringkasan per hari, dan hanya kalau ada yang
 	//      benar-benar belum ia buka di aplikasi.
-	if d.schClaimDaily(ctx, "notify_digest") {
-		if n, err := notify.EnqueueDigestJobs(ctx, d.Pool, time.Now(), 12*time.Hour); err != nil {
-			slog.Error("[scheduler] enqueue digest notifikasi gagal", "err", err)
-			d.schReleaseDaily(ctx, "notify_digest")
-		} else if n > 0 {
-			slog.Info("[scheduler] digest notifikasi diantrekan", "jumlah_user", n)
+	//
+	//      MATI SECARA DEFAULT. Digest menyentuh seluruh basis user sekaligus,
+	//      jadi tidak boleh aktif karena deploy. Nyalakan sengaja lewat
+	//      NOTIFY_DIGEST_ENABLED=true setelah volume dan isinya ditinjau.
+	//      Batas per putaran dibatasi NOTIFY_DIGEST_MAX_USERS supaya kesalahan
+	//      konfigurasi tidak langsung mengirim ke semua orang.
+	if schBoolEnv("NOTIFY_DIGEST_ENABLED") {
+		if d.schClaimDaily(ctx, "notify_digest") {
+			maxUsers := schEnvInt("NOTIFY_DIGEST_MAX_USERS", 25)
+			if maxUsers < 1 {
+				maxUsers = 1
+			}
+			if n, err := notify.EnqueueDigestJobs(ctx, d.Pool, time.Now(), 12*time.Hour, maxUsers); err != nil {
+				slog.Error("[scheduler] enqueue digest notifikasi gagal", "err", err)
+				d.schReleaseDaily(ctx, "notify_digest")
+			} else if n > 0 {
+				slog.Info("[scheduler] digest notifikasi diantrekan", "jumlah_user", n)
+			}
 		}
 	}
 

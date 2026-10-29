@@ -65,9 +65,12 @@ func BuildDigestBody(items []DigestItem) (subject, htmlBody string) {
 // Kuota tidak dipesan di sini: enqueue belum tentu jadi email kalau job gagal.
 // Yang dicek hanya apakah user sudah penuh di jam berjalan, supaya job tidak
 // menumpuk untuk user yang jelas akan ditolak.
-func EnqueueDigestJobs(ctx context.Context, pool *pgxpool.Pool, now time.Time, minAge time.Duration) (int, error) {
+func EnqueueDigestJobs(ctx context.Context, pool *pgxpool.Pool, now time.Time, minAge time.Duration, maxUsers int) (int, error) {
 	if pool == nil {
 		return 0, nil
+	}
+	if maxUsers < 1 {
+		maxUsers = 1
 	}
 	// Ambil kandidat: user dengan notifikasi tier 3 yang belum dibaca dan
 	// sudah berumur lebih dari minAge. Daftar tipe tier 3 diambil dari
@@ -95,7 +98,9 @@ func EnqueueDigestJobs(ctx context.Context, pool *pgxpool.Pool, now time.Time, m
 		      AND j.payload->>'digest' = 'true'
 		      AND j.payload->>'userId' = n.user_id
 		  )
-		GROUP BY n.user_id`, types, now.Add(-minAge))
+		GROUP BY n.user_id
+		ORDER BY count(*) DESC
+		LIMIT $3`, types, now.Add(-minAge), maxUsers)
 	if err != nil {
 		return 0, err
 	}
