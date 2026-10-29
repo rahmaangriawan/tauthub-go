@@ -3136,6 +3136,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Tauthub diijinkan untuk menetapkan atau menyesuaikan harga jual kepada pelanggan, baik menggunakan harga yang disepakati bersama mitra dalam hal ini": "Tauthub is permitted to set or adjust the selling price to customers, whether using the price agreed with the partner in this case",
   "Tauthub mengirim artikel hasil generate ke website custom Anda melalui endpoint yang Anda buat. Anda hanya perlu membuat satu endpoint": "Tauthub sends generated articles to your custom website via the endpoint you create. You only need to create one endpoint",
   "Tayang": "Live",
+  "Tautan": "Link",
   "Tayang — artikel masih bisa diakses": "Live — article is still accessible",
   "Tempel bahan / fakta / produk / masalah yang ingin diuji… (maks 8000 karakter)": "Paste the material / facts / product / problem you want to test… (max 8000 characters)",
   "Tempel di kolom Application Password di atas": "Paste it into the Application Password field above",

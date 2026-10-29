@@ -686,31 +686,37 @@
 									<p class="text-[10.5px] font-medium text-slate-400">DA</p>
 									<p class="mt-0.5 text-[13.5px] font-bold leading-none text-slate-900">{m.da != null ? m.da : '—'}</p>
 								</div>
-								<div class="flex items-center gap-1.5 self-center">
-									<LinkIcon size={12} class="shrink-0 text-slate-400" />
-									<span
-										class="whitespace-nowrap text-[11.5px] font-medium text-slate-600"
-										title={m.article.links.count > 0 && m.article.links.rels.length > 0 ? m.article.links.rels.join(', ') : undefined}
-									>
-										{#if m.article.links.count > 0}{m.article.links.count} link{:else}{tr('Tidak ada link')}{/if}
-									</span>
-								</div>
-								<div class="flex items-center gap-1.5 self-center">
-									{#if canEdit(m)}
-										<!-- Jadwal sekaligus jadi tombol pengatur waktu terbit. -->
-										<button
-											type="button"
-											class="-m-1 inline-flex items-center gap-1.5 rounded-md p-1 text-[11.5px] font-semibold transition-colors hover:bg-slate-50 {scheduleFor(m) ? 'text-indigo-600' : 'text-emerald-600'}"
-											title={tr('Atur waktu terbit media ini')}
-											onclick={() => openPicker(m)}
+								<div class="min-w-0">
+									<p class="text-[10.5px] font-medium text-slate-400">{tr('Tautan')}</p>
+									<div class="mt-0.5 flex items-center gap-1.5">
+										<LinkIcon size={12} class="shrink-0 text-slate-400" />
+										<span
+											class="whitespace-nowrap text-[11.5px] font-medium text-slate-600"
+											title={m.article.links.count > 0 && m.article.links.rels.length > 0 ? m.article.links.rels.join(', ') : undefined}
 										>
-											<Clock size={12} class="shrink-0 {scheduleFor(m) ? 'text-indigo-500' : 'text-emerald-500'}" />
-											<span class="whitespace-nowrap">{scheduleText}</span>
-										</button>
-									{:else}
-										<Clock size={12} class="shrink-0 text-emerald-500" />
-										<span class="whitespace-nowrap text-[11.5px] font-semibold text-emerald-600">{scheduleText}</span>
-									{/if}
+											{#if m.article.links.count > 0}{m.article.links.count} link{:else}{tr('Tidak ada link')}{/if}
+										</span>
+									</div>
+								</div>
+								<div class="min-w-0">
+									<p class="text-[10.5px] font-medium text-slate-400">{tr('Tayang')}</p>
+									<div class="mt-0.5 flex items-center gap-1.5">
+										{#if canEdit(m)}
+											<!-- Jadwal sekaligus jadi tombol pengatur waktu terbit. -->
+											<button
+												type="button"
+												class="-m-1 inline-flex items-center gap-1.5 rounded-md p-1 text-[11.5px] font-semibold transition-colors hover:bg-slate-50 {scheduleFor(m) ? 'text-indigo-600' : 'text-emerald-600'}"
+												title={tr('Atur waktu terbit media ini')}
+												onclick={() => openPicker(m)}
+											>
+												<Clock size={12} class="shrink-0 {scheduleFor(m) ? 'text-indigo-500' : 'text-emerald-500'}" />
+												<span class="whitespace-nowrap">{scheduleText}</span>
+											</button>
+										{:else}
+											<Clock size={12} class="shrink-0 text-emerald-500" />
+											<span class="whitespace-nowrap text-[11.5px] font-semibold text-emerald-600">{scheduleText}</span>
+										{/if}
+									</div>
 								</div>
 								<div>
 									<p class="text-[10.5px] font-medium text-slate-400">{tr('Status terbit')}</p>
