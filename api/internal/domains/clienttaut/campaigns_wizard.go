@@ -322,8 +322,20 @@ func (d *Deps) TautPlacementGet(w http.ResponseWriter, r *http.Request) {
 		imageCost = ai.ImageCreditCost(rt)
 	}
 	writerTC, writerN, writerRegenN, imageTC, imageN := d.tautCampaignCharges(r.Context(), campaignID)
+	// has_brief: modal "Buat N artikel" memakainya untuk memutuskan apakah
+	// perlu menampilkan blok konteks. Kampanye tanpa hasil Profiler tidak punya
+	// bahan apa pun selain profil media, jadi topik tidak boleh dibiarkan kosong.
+	hasBrief := false
+	if row, qErr := d.queryRow(r.Context(), `
+		SELECT EXISTS(
+			SELECT 1 FROM taut_profiler_results r
+			JOIN taut_profiler_submissions s ON s.id = r.submission_id
+			WHERE s.campaign_id = $1) AS has_brief`, campaignID); qErr == nil && row != nil {
+		hasBrief = row.boolOr("has_brief", false)
+	}
 	writeNoStore(w, http.StatusOK, map[string]any{
 		"media":               media,
+		"has_brief":           hasBrief,
 		"regen_max":           quota - 1,
 		"writer_cost_credits": d.writerCreditCost(r.Context()),
 		"image_credit_cost":   imageCost,

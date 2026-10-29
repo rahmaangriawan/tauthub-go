@@ -288,6 +288,14 @@
 	let batchFor = $state<{ mediaId: string; name: string; mediaType: string } | null>(null);
 	let batchRows = $state<BatchRow[]>([]);
 	let batchRunning = $state(false);
+	// Kampanye hasil Profiler punya brief (USP, audiens, nada) yang dibaca
+	// Writer, jadi topik boleh kosong. Tanpa brief, satu-satunya bahan adalah
+	// profil media — topik HARUS diisi, kalau tidak artikelnya generik.
+	let hasBrief = $state<boolean | null>(null);
+	// Konteks singkat yang diisi SEKALI untuk semua artikel di dialog ini.
+	let batchContext = $state({ product: '', audience: '', message: '' });
+	let suggestBusy = $state(false);
+	let suggestNote = $state('');
 
 	function angleOptionsFor(mediaType: string | null | undefined) {
 		const channel = angleChannels.find((ch) => ch.slug === (mediaType ?? ''));
@@ -316,6 +324,69 @@
 		}));
 	}
 
+	/** Konteks bersama dianggap terisi bila minimal produk atau pesan utama ada. */
+	const batchContextFilled = $derived(
+		batchContext.product.trim() !== '' || batchContext.message.trim() !== ''
+	);
+
+	/**
+	 * Topik final yang dikirim ke Writer: konteks bersama (sekali isi) + topik
+	 * per artikel. Konteks ditempel sebagai blok, bukan disatukan jadi satu
+	 * kalimat, supaya Writer membacanya sebagai fakta kampanye — bukan sebagai
+	 * judul artikel.
+	 */
+	function composedTopic(row: BatchRow): string {
+		const parts: string[] = [];
+		if (batchContext.product.trim()) parts.push(`Produk/jasa: ${batchContext.product.trim()}`);
+		if (batchContext.audience.trim()) parts.push(`Target pembaca: ${batchContext.audience.trim()}`);
+		if (batchContext.message.trim()) parts.push(`Pesan utama: ${batchContext.message.trim()}`);
+		const own = row.topic.trim();
+		if (parts.length === 0) return own;
+		let out = `[KONTEKS KAMPANYE]\n${parts.join('\n')}`;
+		if (own) out += `\n\n[ARAHAN ARTIKEL INI]\n${own}`;
+		return out;
+	}
+
+	/** Isi semua kolom topik dari konteks + angle tiap artikel (satu panggilan). */
+	async function suggestTopics() {
+		if (!batchFor || suggestBusy || !batchContextFilled) return;
+		suggestBusy = true;
+		suggestNote = '';
+		try {
+			const angles = batchRows.map((r) => {
+				const opt = angleOptionsFor(batchFor?.mediaType).find((a) => a.slug === r.angle);
+				return { slot: r.slot, slug: r.angle, name: opt?.name ?? '' };
+			});
+			const res = await apiRequest(
+				`${apiBase}/produce/topics`,
+				{
+					method: 'POST',
+					body: JSON.stringify({
+						media_name: batchFor.name,
+						product: batchContext.product.trim(),
+						audience: batchContext.audience.trim(),
+						message: batchContext.message.trim(),
+						angles
+					})
+				},
+				120_000
+			);
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyusun topik.')));
+			const data = await res.json().catch(() => null);
+			const topics: Array<{ slot: number; topic: string }> = Array.isArray(data?.topics) ? data.topics : [];
+			if (topics.length === 0) throw new Error(tr('Gagal menyusun topik.'));
+			batchRows = batchRows.map((r) => {
+				const hit = topics.find((t) => Number(t.slot) === r.slot);
+				return hit && typeof hit.topic === 'string' ? { ...r, topic: hit.topic } : r;
+			});
+			if (data?.fallback) suggestNote = tr('Topik disusun tanpa AI (model tidak menjawab). Silakan periksa dan rapikan.');
+		} catch (reason) {
+			suggestNote = reason instanceof Error ? reason.message : tr('Gagal menyusun topik.');
+		} finally {
+			suggestBusy = false;
+		}
+	}
+
 	async function runBatchGenerate() {
 		if (!batchFor || batchRunning) return;
 		batchRunning = true;
@@ -331,7 +402,7 @@
 					// angle_slug dihilangkan sama sekali bila kosong: server menolak
 					// string kosong (422), dan tanpa field itu Writer memakai angle
 					// tersimpan atau sudut bawaan kanal.
-					const payload: Record<string, string> = { topic: row.topic.trim() };
+					const payload: Record<string, string> = { topic: composedTopic(row) };
 					if (row.angle) payload.angle_slug = row.angle;
 					const res = await apiRequest(
 						`${apiBase}/produce/${mediaId}${slotQuery(row.slot)}`,
@@ -471,6 +542,9 @@
 			if (placeRes.ok) {
 				const d = await placeRes.json();
 				placement = d.media ?? [];
+				// Ada brief Profiler = Writer punya bahan (USP, audiens, nada).
+				// Tanpa brief, dialog "Buat N artikel" wajib meminta konteks.
+				if (typeof d.has_brief === 'boolean') hasBrief = d.has_brief;
 				const rm = Number(d.regen_max ?? 2);
 				if (Number.isFinite(rm) && rm >= 0) regenMax = rm;
 				const wc = Number(d.writer_cost_credits ?? 2);
@@ -2311,9 +2385,55 @@
 						</div>
 
 						<div class="space-y-3 overflow-y-auto p-5">
-							<p class="text-xs leading-relaxed text-muted-foreground">
-								{tr('Topik boleh dikosongkan — artikel akan mengikuti brief kampanye. Angle tiap artikel sudah diisi berbeda supaya hasilnya tidak mirip.')}
-							</p>
+							{#if hasBrief === true}
+								<p class="rounded-[5px] px-3 py-2 text-xs leading-relaxed" style="background-color: var(--success-soft, #ecfdf3); color: var(--success, #166534);">
+									{tr('Brief kampanye sudah lengkap (USP, audiens, nada). Topik boleh dikosongkan, artikel mengikuti brief. Angle tiap artikel sudah diisi berbeda supaya hasilnya tidak mirip.')}
+								</p>
+							{:else}
+								<p class="rounded-[5px] px-3 py-2 text-xs leading-relaxed" style="background-color: var(--warning-soft, #fffbeb); color: var(--warning, #b45309);">
+									{tr('Kampanye ini belum punya brief, jadi Writer hanya tahu profil medianya. Isi konteks di bawah sekali untuk semua artikel. Tanpa itu artikelnya akan generik dan mirip satu sama lain.')}
+								</p>
+								<div class="rounded-[5px] border p-3" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
+									<p class="mb-2 text-[11.5px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Konteks untuk semua artikel')}</p>
+									<div class="grid gap-2">
+										<input
+											class="app-input w-full"
+											bind:value={batchContext.product}
+											disabled={batchRunning}
+											maxlength={300}
+											placeholder={tr('Produk/jasa yang dipromosikan')}
+										/>
+										<input
+											class="app-input w-full"
+											bind:value={batchContext.audience}
+											disabled={batchRunning}
+											maxlength={300}
+											placeholder={tr('Target pembaca (opsional)')}
+										/>
+										<input
+											class="app-input w-full"
+											bind:value={batchContext.message}
+											disabled={batchRunning}
+											maxlength={600}
+											placeholder={tr('Pesan utama yang ingin disampaikan')}
+										/>
+									</div>
+									<div class="mt-2 flex flex-wrap items-center gap-2">
+										<button
+											class="app-btn app-btn-soft text-[11.5px]"
+											type="button"
+											disabled={suggestBusy || batchRunning || !batchContextFilled}
+											onclick={() => void suggestTopics()}
+										>
+											{#if suggestBusy}<LoaderCircle size={12} class="animate-spin" /> <span>{tr('Menyusun…')}</span>{:else}<Sparkles size={12} /> <span>{tr('Isi topik dari konteks')}</span>{/if}
+										</button>
+										<span class="text-[11px] text-muted-foreground">{tr('Satu klik, semua kolom topik terisi. Tetap bisa kamu ubah.')}</span>
+									</div>
+									{#if suggestNote}
+										<p class="mt-1.5 text-[11px] leading-relaxed" style="color: var(--warning, #b45309);">{suggestNote}</p>
+									{/if}
+								</div>
+							{/if}
 							{#each batchRows as row, i (row.slot)}
 								<div class="rounded-[5px] border p-3" style="border-color: var(--border);">
 									<div class="mb-2 flex items-center justify-between gap-2">
@@ -2362,7 +2482,10 @@
 							<button
 								class="app-btn app-btn-primary text-xs"
 								type="button"
-								disabled={batchRunning}
+								disabled={batchRunning || (hasBrief === false && !batchContextFilled && batchRows.every((r) => !r.topic.trim()))}
+								title={hasBrief === false && !batchContextFilled && batchRows.every((r) => !r.topic.trim())
+									? tr('Isi konteks atau topik dulu supaya artikelnya tidak generik.')
+									: undefined}
 								onclick={() => void runBatchGenerate()}
 							>
 								{#if batchRunning}

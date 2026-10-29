@@ -355,6 +355,9 @@ func run() error {
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/distribute", resolveCampaign(brandFlowDeps.TautGatekeeperDistribute))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/produce/{mediaId}", resolveCampaign(brandFlowDeps.TautProduceOne))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/produce/topic-instruction", resolveCampaign(brandFlowDeps.TautTopicInstruction))
+			// Usulan topik untuk dialog "Buat N artikel" (satu panggilan untuk
+			// seluruh artikel pada satu media).
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/produce/topics", resolveCampaign(brandFlowDeps.TautSuggestTopics))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/produce/{mediaId}/stream", resolveCampaign(brandFlowDeps.TautProduceOneStream))
 			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/analyze", resolveCampaign(brandFlowDeps.CampaignFlowAnalyze))
 			authed.Post("/brands/{brandId}/campaigns/{campaignId}/flow/article-regen", resolveCampaign(brandFlowDeps.CampaignFlowArticleRegen))
