@@ -1031,6 +1031,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Belum ada angle terpilih — pertanyaan khusus muncul setelah Anda memilih angle di Jalur Distribusi. Sementara isi dulu pertanyaan umum berikut.": "No angle selected yet — specific questions appear after you choose an angle in the Distribution Path. In the meantime, fill in the following general questions first.",
   "Belum ada angle untuk channel ini.": "No angle for this channel yet.",
   "Belum ada artikel": "No articles yet",
+  "Belum terbit": "Not published yet",
+  "Tambahkan artikel untuk media ini.": "Add an article for this media.",
   "Lanjut": "Next",
   "Hapus artikel": "Delete article",
   "Hapus artikel ini": "Delete this article",
