@@ -1840,8 +1840,11 @@ button.selectedStepChip:disabled,
   40% { transform: scale(1.28); }
   100% { transform: scale(1); }
 }
-/* Pulse tombol Bookmark di toolbar saat chip tiba. */
-.modernActionBtn.bookmarkPulse {
+/* Pulse tombol Bookmark di toolbar saat chip tiba. Di HP tombol tujuan adalah
+   corong alat katalog (tombol Bookmark ada di dalam panel yang tertutup), jadi
+   kelas yang sama juga berlaku untuk .modernToolsBtn. */
+.modernActionBtn.bookmarkPulse,
+.modernToolsBtn.bookmarkPulse {
   animation: bookmarkPulse 480ms ease-out;
 }
 @keyframes bookmarkPulse {
@@ -1852,7 +1855,8 @@ button.selectedStepChip:disabled,
 }
 @media (prefers-reduced-motion: reduce) {
   .bookmarkActionBtn.bookmarkPop svg,
-  .modernActionBtn.bookmarkPulse {
+  .modernActionBtn.bookmarkPulse,
+  .modernToolsBtn.bookmarkPulse {
     animation: none;
   }
 }

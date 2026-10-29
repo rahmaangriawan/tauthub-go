@@ -136,6 +136,9 @@
 	let barPulse = $state(false);
 	let createBtnEl = $state<HTMLButtonElement | null>(null);
 	let bookmarkToolbarBtn = $state<HTMLButtonElement | null>(null);
+	// Di HP tombol Bookmark tidak dirender (ada di dalam panel alat yang
+	// tertutup); tujuan animasi terbang adalah tombol corong di toolbar.
+	let toolsBtnEl = $state<HTMLButtonElement | null>(null);
 	let bookmarkPulse = $state(false);
 	let detail = $state<Media | null>(null);
 	// AI Media Matchmaker: brief bebas → kriteria → pilihan media katalog.
@@ -795,6 +798,24 @@
 	}
 
 	/**
+	 * Tombol tujuan animasi terbang. Di layar lebar itu tombol Bookmark di
+	 * toolbar; di HP tombol itu ada di dalam panel alat yang tertutup, jadi
+	 * yang dituju tombol corong di toolbar (satu-satunya pintu ke Bookmark).
+	 * Elemen yang tidak terlihat dilewati supaya chip tidak terbang ke titik
+	 * (0,0) saat panel sedang tertutup.
+	 */
+	function bookmarkTargetEl(): HTMLElement | null {
+		const visible = (el: HTMLElement | null) => {
+			if (!el || !el.isConnected) return false;
+			const rect = el.getBoundingClientRect();
+			return rect.width > 0 && rect.height > 0;
+		};
+		if (visible(bookmarkToolbarBtn)) return bookmarkToolbarBtn;
+		if (visible(toolsBtnEl)) return toolsBtnEl;
+		return null;
+	}
+
+	/**
 	 * Animasi chip ikon bookmark terbang dari baris media menuju tombol Bookmark
 	 * di toolbar kanan atas. Lintasan melengkung ke atas, elemen sementara
 	 * dibersihkan setelah selesai, dan aman untuk klik beruntun.
@@ -815,8 +836,11 @@
 			const sy = start.top + start.height / 2 - 11;
 			const ex = end.left + end.width / 2 - 11;
 			const ey = end.top + end.height / 2 - 11;
+			// Busur ditarik ke atas supaya chip terlihat melengkung, tetapi
+			// tidak melewati tepi atas layar (di HP tombol tujuan dekat
+			// puncak, jadi busur 70px bisa keluar viewport).
 			const mx = (sx + ex) / 2;
-			const my = Math.min(sy, ey) - 70;
+			const my = Math.max(8, Math.min(sy, ey) - 70);
 
 			const anim = chip.animate(
 				[
@@ -834,11 +858,12 @@
 			};
 			anim.oncancel = cleanup;
 		};
-		if (bookmarkToolbarBtn) {
-			run(bookmarkToolbarBtn.getBoundingClientRect());
+		const target = bookmarkTargetEl();
+		if (target) {
+			run(target.getBoundingClientRect());
 		} else {
 			// Tombol tujuan tidak ada → state tetap berubah, tanpa animasi terbang.
-			requestAnimationFrame(() => run(bookmarkToolbarBtn?.getBoundingClientRect()));
+			requestAnimationFrame(() => run(bookmarkTargetEl()?.getBoundingClientRect()));
 		}
 	}
 
@@ -1214,8 +1239,10 @@
 		{#if isNarrow}
 			<div class="modernToolsWrap">
 				<button
+					bind:this={toolsBtnEl}
 					class="modernToolsBtn {activeFilterCount > 0 || bookmarkOnly || category ? 'modernToolsBtnActive' : ''}"
 					type="button"
+					class:bookmarkPulse
 					aria-expanded={toolsOpen}
 					aria-label={tr('Buka alat katalog')}
 					title={tr('Alat katalog: kategori, filter, impor, bookmark')}
