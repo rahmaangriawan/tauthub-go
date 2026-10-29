@@ -1999,7 +1999,7 @@
 						<path d="M154 84l1.5 3 3 1.5-3 1.5-1.5 3-1.5-3-3-1.5 3-1.5 1.5-3z" fill="#93c5fd"/>
 					</svg>
 				</div>
-				<div class="relative z-10 flex flex-wrap items-center justify-between gap-2.5">
+				<div class="relative z-10 flex flex-wrap items-center justify-between gap-2.5 max-sm:gap-3.5">
 					<div class="flex items-center gap-3.5">
 						<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[5px] border border-blue-200/70 bg-white text-blue-600 shadow-2xs">
 							<FileText size={20} class="stroke-[2.2]" />
@@ -2059,7 +2059,7 @@
 					{tr("Belum ada media terpilih. Kembali ke Matchmaker untuk memilih media.")}
 				</div>
 			{:else}
-				<div class="mt-4 space-y-3">
+				<div class="mt-4 space-y-3 max-sm:mt-5 max-sm:space-y-4">
 					{#each groupedSelected as g (g.media.media_id)}
 					{@const m = g.media}
 					{@const qty = g.slots.length}
@@ -2086,7 +2086,7 @@
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<div
-							class="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2.5 px-3.5 py-3 sm:px-4 max-sm:grid max-sm:grid-cols-[auto_auto_minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-2.5 max-sm:gap-y-2"
+							class="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2.5 px-3.5 py-3 sm:px-4 max-sm:grid max-sm:grid-cols-[auto_auto_minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-3 max-sm:px-4 max-sm:py-3.5"
 							onclick={(e) => {
 								if ((e.target as HTMLElement).closest('button, input, select, a, label')) return;
 								toggleGroup(m.media_id);
@@ -2164,7 +2164,7 @@
 							<!-- Di HP grup kontrol turun ke baris sendiri selebar kartu: lima kontrol
 							     yang dipaksa sebaris membuat tombol "Buat N artikel" terjepit. Di layar
 							     lebar tetap menempel kanan seperti sebelumnya. -->
-							<div class="ml-auto flex shrink-0 items-center gap-1.5 max-sm:col-span-full max-sm:w-full max-sm:flex-wrap max-sm:gap-2">
+							<div class="ml-auto flex shrink-0 items-center gap-1.5 max-sm:col-span-full max-sm:w-full max-sm:flex-wrap max-sm:gap-2.5">
 								<!-- Muncul begitu media punya lebih dari satu artikel dan masih ada
 								     slot tanpa naskah. Termasuk saat tinggal SATU slot tersisa:
 								     dialognya tetap jalan dan isinya satu baris, jadi jalurnya
@@ -2222,7 +2222,7 @@
 									{@const links2 = linkStats[pkey(item)] ?? null}
 									{@const stats = articleStats[pkey(item)] ?? null}
 									{@const doc = hasDoc(item)}
-									<div class="flex flex-col gap-3 border-t border-slate-100 px-3.5 py-3 first:border-t-0 sm:px-4 lg:flex-row lg:items-center">
+									<div class="flex flex-col gap-3 border-t border-slate-100 px-3.5 py-3 first:border-t-0 sm:px-4 lg:flex-row lg:items-center max-sm:gap-3.5 max-sm:px-4 max-sm:py-4">
 										<!-- Kiri: centang + thumbnail cover artikel + info -->
 										<div class="flex min-w-0 flex-1 items-start gap-3">
 											<input
@@ -2248,7 +2248,7 @@
 												{/if}
 											</div>
 											<div class="min-w-0 flex-1">
-												<div class="flex flex-wrap items-center gap-1.5">
+												<div class="flex flex-wrap items-center gap-1.5 max-sm:gap-2">
 													{#if statusKind === 'ready'}
 														<span class="inline-flex items-center gap-1 rounded-[5px] border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px] text-emerald-700">
 															<CircleCheck size={11} strokeWidth={2.2} />
@@ -2313,10 +2313,10 @@
 														</span>
 													{/if}
 												</div>
-												<p class="mt-1 line-clamp-2 text-[13.5px] font-semibold leading-snug text-slate-900 max-sm:text-[14px]" title={articleTitles[pkey(item)] ?? ''}>
+												<p class="mt-1 line-clamp-2 text-[13.5px] font-semibold leading-snug text-slate-900 max-sm:mt-1.5 max-sm:text-[14px]" title={articleTitles[pkey(item)] ?? ''}>
 													{articleTitles[pkey(item)] ?? (doc ? tr('Tanpa judul') : tr('Belum ada artikel'))}
 												</p>
-												<p class="mt-0.5 text-[11.5px] font-normal text-slate-500 max-sm:text-[12px]">
+												<p class="mt-0.5 text-[11.5px] font-normal text-slate-500 max-sm:mt-1 max-sm:text-[12px]">
 													{#if doc && stats}
 														{stats.words.toLocaleString('id-ID')} {tr('kata')}
 													{:else}
@@ -2328,7 +2328,7 @@
 										</div>
 
 										<!-- Kanan: status cover + aksi artikel -->
-										<div class="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end max-sm:w-full max-sm:justify-between max-sm:gap-2.5 max-sm:border-t max-sm:border-slate-100 max-sm:pt-2.5">
+										<div class="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end max-sm:w-full max-sm:justify-between max-sm:gap-3 max-sm:border-t max-sm:border-slate-100 max-sm:pt-3">
 											<div class="flex min-w-[92px] flex-col gap-0.5">
 												{#if doc && stats}
 													{#if stats.cover}
@@ -2350,7 +2350,7 @@
 												{/if}
 											</div>
 
-											<div class="flex flex-wrap items-center gap-1.5">
+											<div class="flex flex-wrap items-center gap-1.5 max-sm:gap-2">
 												<!-- Aksi utama: buka naskah (kalau sudah ada) atau buat baru.
 												     Aksi lain masuk menu ⋮ supaya di HP tidak ada empat tombol
 												     kecil berdesakan. -->
@@ -2731,7 +2731,7 @@
 			{/if}
 
 				<TautBottomBar fullWidth>
-<div class="flex w-full flex-wrap items-center justify-between gap-4 py-1 max-sm:gap-3 max-sm:py-0">
+<div class="flex w-full flex-wrap items-center justify-between gap-4 py-1 max-sm:gap-3.5 max-sm:py-0">
 	<!-- Kolom Kiri: Total Tagihan Akhir -->
 	<div class="relative inline-flex items-center">
 		<button
