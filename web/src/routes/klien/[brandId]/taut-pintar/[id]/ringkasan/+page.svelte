@@ -249,6 +249,15 @@
 	const cleanDomain = (url: string | null | undefined, name: string): string =>
 		((url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim() || name.trim()).toLowerCase();
 	const capFirst = (v: string): string => (v ? v.charAt(0).toUpperCase() + v.slice(1) : v);
+	// Rel tautan disebut dengan istilah yang dikenal klien — dofollow, nofollow,
+	// sponsored. Nilai mentah seperti "noopener" atau "nofollownoopener" hanya
+	// bising dan tidak menjawab pertanyaan "link ini bernilai atau tidak".
+	const relLabel = (rels: string[]): string => {
+		const norm = rels.map((r) => r.toLowerCase().replace(/[\s,_-]/g, ''));
+		if (norm.some((r) => r.includes('sponsored'))) return tr('Sponsored');
+		if (norm.some((r) => r.includes('nofollow'))) return tr('Nofollow');
+		return tr('Dofollow');
+	};
 	let faviconFailed = $state<Record<string, boolean>>({});
 
 	/* ─── Jadwal terbit publikasi (hanya media yang terbit belakangan) ─── */
@@ -712,7 +721,7 @@
 										<LinkIcon size={12} class="shrink-0 text-slate-400" />
 										<span
 											class="whitespace-nowrap text-[11.5px] font-medium text-slate-600"
-											title={m.article.links.count > 0 && m.article.links.rels.length > 0 ? m.article.links.rels.join(', ') : undefined}
+											title={m.article.links.count > 0 ? relLabel(m.article.links.rels) : undefined}
 										>
 											{#if m.article.links.count > 0}{m.article.links.count} link{:else}{tr('Tidak ada link')}{/if}
 										</span>
@@ -816,7 +825,7 @@
 										{#if m.article.links.count > 0}
 											<span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
 												<LinkIcon size={12} class="text-slate-400 shrink-0" />
-												{m.article.links.count} link{m.article.links.rels.length > 0 ? ` · ${m.article.links.rels.join(', ')}` : ' dofollow'}
+												{m.article.links.count} link · {relLabel(m.article.links.rels)}
 											</span>
 										{:else}
 											<span class="text-xs text-muted-foreground">{tr("Tidak ada link")}</span>
