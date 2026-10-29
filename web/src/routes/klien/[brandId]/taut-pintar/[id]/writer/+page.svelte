@@ -1937,7 +1937,7 @@
 								{#if manualFlow}
 									{tr('Unggah artikel tulisanmu sendiri, atau buat dengan AI lewat tombol di tiap media.')}
 								{:else}
-									{tr('Biaya penulisan konten organik oleh The Writer:')} <strong class="text-slate-700">{toRp(writerCostCredits)}</strong> {tr('/ artikel — baru maupun tulis ulang.')}
+									{tr('Biaya menulis artikel dengan The Writer:')} <strong class="text-slate-700">{toRp(writerCostCredits)}</strong> {tr('per artikel, baik artikel baru maupun tulis ulang.')}
 								{/if}
 							</p>
 						</div>
@@ -2058,8 +2058,18 @@
 										</span>
 									{/if}
 								</div>
+								<!-- Status, bukan jumlah yang sudah "dipilih": angka ini adalah
+								     jumlah artikel yang direncanakan untuk media itu, bukan
+								     pilihan. Yang berguna dibaca adalah berapa yang belum
+								     dibuat. -->
 								<p class="mt-0.5 text-[11.5px] font-medium text-slate-500">
-									{qty} {tr('artikel dipilih')}
+									{#if pendingCount === 0}
+										{qty} {tr('artikel')} · {tr('semua sudah ada naskahnya')}
+									{:else if qty === 1}
+										{tr('Belum ada artikel')}
+									{:else}
+										{pendingCount} {tr('artikel belum dibuat')}
+									{/if}
 								</p>
 							</div>
 
@@ -2673,7 +2683,7 @@
 			<span class="text-slate-600 font-medium">{tr('QC sudah lulus')}</span>
 		{:else if distributable === false}
 			<TriangleAlert size={16} class="text-amber-600 shrink-0" />
-			<span class="text-amber-800 font-medium">{tr('QC belum lulus — klik Lanjut Tinjau & Terbit untuk melihat prasyarat.')}</span>
+			<span class="text-amber-800 font-medium">{tr('QC belum lulus. Klik Lanjut Tinjau & Terbit untuk melihat apa yang kurang.')}</span>
 		{/if}
 	</div>
 
