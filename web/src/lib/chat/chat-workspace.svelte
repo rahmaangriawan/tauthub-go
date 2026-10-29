@@ -521,9 +521,9 @@
 					<ArrowLeft size={18} />
 				</button>
 
-				<!-- Identitas desktop: favicon + nama media + judul artikel. -->
+				<!-- Favicon media: dipakai di HP maupun desktop. -->
 				<span
-					class="hidden h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold ring-1 ring-slate-100 lg:flex"
+					class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold ring-1 ring-slate-100"
 					style="background:{AVA_BG[avatarTone(active.media_name)]};color:{AVA_FG[avatarTone(active.media_name)]};"
 				>
 					{#if cleanDomain(active.website_url, active.media_name) && !faviconFailed[active.id]}
