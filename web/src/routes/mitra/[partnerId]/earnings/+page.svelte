@@ -255,13 +255,14 @@
 			<span class="flex h-9 w-9 flex-none items-center justify-center rounded-lg" style="background: var(--accent);">
 				<Landmark size={16} style="color: var(--primary);" />
 			</span>
-			<p class="text-sm">
-				<span class="font-semibold">{tr("Biaya transfer")}</span>
-				<span class="text-muted-foreground">
-					{tr("Bank")} {rp(withdrawFee)} · {tr("E-Wallet")} {ewalletFeePct}%
-				</span>
-			</p>
-			<p class="text-sm font-medium" style="color: var(--primary);">{tr("Biaya ditanggung mitra.")}</p>
+			<!-- Tarif diletakkan di bawah pernyataan "ditanggung mitra" supaya kalimat
+			     pokoknya terbaca lebih dulu, rinciannya jadi keterangan. -->
+			<div class="min-w-0">
+				<p class="text-sm font-medium" style="color: var(--primary);">{tr("Biaya ditanggung mitra.")}</p>
+				<p class="mt-0.5 text-xs text-muted-foreground">
+					{tr("Biaya transfer")}: {tr("Bank")} {rp(withdrawFee)} · {tr("E-Wallet")} {ewalletFeePct}%
+				</p>
+			</div>
 			<p class="ml-auto text-xs text-muted-foreground">
 				{tr("Pembayaran diproses tim Tauthub setelah review Admin dan setiap pengajuan dibuatkan invoice otomatis.")}
 			</p>
