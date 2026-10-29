@@ -351,13 +351,11 @@
 									<h3 class="line-clamp-3 text-[15px] font-semibold leading-snug" title={e.document_title ?? ''}>{e.document_title ?? '-'}</h3>
 								</div>
 							</div>
-							<!-- Media -->
-							<div class="mt-2.5 min-w-0">
-								{@render earnMediaCell(e)}
-							</div>
-							<!-- Ringkasan nominal -->
-							<dl class="mt-3 border-t pt-3" style="border-color: var(--border);">
-								<div class="min-w-0">
+							<!-- Media dan nominal berdampingan supaya kartu tidak memanjang
+							     ke bawah; nominal rata kanan agar mudah dibandingkan. -->
+							<dl class="mt-2.5 flex items-center justify-between gap-3 border-t pt-2.5" style="border-color: var(--border);">
+								<div class="min-w-0 flex-1">{@render earnMediaCell(e)}</div>
+								<div class="min-w-0 shrink-0 text-right">
 									<dt class="text-[11px] text-muted-foreground">{tr("Nilai Diterima")}</dt>
 									<dd class="mt-0.5 text-[15px] font-semibold tabular-nums" style="color: var(--success);">+{rp(e.amount)}</dd>
 								</div>
