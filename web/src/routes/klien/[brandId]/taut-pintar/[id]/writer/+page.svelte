@@ -2124,14 +2124,14 @@
 								     konsisten dengan media yang artikelnya banyak. -->
 								{#if qty > 1 && pendingCount > 0}
 									<button
-										class="inline-flex h-8 items-center gap-1 rounded-[5px] bg-blue-600 px-2.5 text-[11.5px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50 max-sm:h-11 max-sm:w-full max-sm:justify-center max-sm:text-xs"
+										class="inline-flex h-8 items-center gap-1 rounded-[5px] bg-blue-600 px-2.5 text-[11.5px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50 max-sm:h-11 max-sm:flex-1 max-sm:justify-center max-sm:px-2 max-sm:text-[11.5px]"
 										type="button"
 										disabled={viewOnly || bulkRunning}
 										title={tr('Buat semua artikel yang belum ada dalam satu dialog')}
 										onclick={() => openBatchGenerate(m)}
 									>
 										<Sparkles size={12} strokeWidth={2.2} />
-										{tr('Buat')} {pendingCount} {tr('artikel')}
+										{tr('Buat')} {pendingCount}<span class="max-sm:hidden"> {tr('artikel')}</span>
 									</button>
 								{/if}
 								<div class="inline-flex h-8 items-center overflow-hidden rounded-[5px] border border-slate-300 bg-white max-sm:h-11">
@@ -2291,7 +2291,7 @@
 										</div>
 
 										<!-- Kanan: status cover + aksi artikel -->
-										<div class="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+										<div class="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end max-sm:w-full max-sm:justify-between max-sm:gap-2.5 max-sm:border-t max-sm:border-slate-100 max-sm:pt-2.5">
 											<div class="flex min-w-[92px] flex-col gap-0.5">
 												{#if doc && stats}
 													{#if stats.cover}
