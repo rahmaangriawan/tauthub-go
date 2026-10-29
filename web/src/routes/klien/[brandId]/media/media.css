@@ -2301,6 +2301,10 @@ button.selectedStepChip:disabled,
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
 .selectedBarAvatarMore { background: #0f172a; color: #fff; margin-right: 0; }
+/* Avatar ditumpuk dengan margin negatif; tanpa ini avatar TERAKHIR ikut
+   menarik teks di kanannya sehingga judul pilihan tertimpa favicon saat
+   pilihan hanya 1–3 (belum ada chip +N yang me-reset margin). */
+.selectedBarMobileIcons .selectedBarAvatar:last-child { margin-right: 0; }
 /* Dua baris ringkasan (jumlah media + total) butuh jarak: dengan line-height
    1.25 keduanya hampir menempel. */
 .selectedBarMobileText { display: flex; flex-direction: column; gap: 3px; line-height: 1.3; min-width: 0; }
