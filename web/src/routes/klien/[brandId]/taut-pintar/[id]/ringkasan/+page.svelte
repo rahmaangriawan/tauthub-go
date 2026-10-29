@@ -573,37 +573,34 @@
 		{/snippet}
 
 		<section class="app-card mt-3 p-4 sm:p-5">
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<div class="flex items-center gap-3">
-					<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-2xs">
-						<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-							<path d="M0 0h24v24H0z" fill="none" />
-							<path fill="currentColor" d="M21.04 2.96c-.35-.35-.855-.46-1.315-.29l-16.9 6.225c-.47.17-.79.605-.815 1.105c-.03.5.245.965.69 1.19l6.035 3.02l4.735-4.735l1.06 1.06l-4.735 4.735l3.02 6.035c.21.425.645.69 1.115.69H14c.5-.03.93-.35 1.105-.815L21.33 4.275c.17-.46.06-.965-.29-1.315" />
-						</svg>
-					</span>
-					<div>
-						<div class="flex flex-wrap items-center gap-2">
-							<p class="font-bold text-base text-slate-900">{tr("Media Terpilih (")}{mediaCount})</p>
-							{#if mediaList.length !== mediaCount}
-								<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10.5px] font-semibold text-slate-500">
-									{mediaList.length} {tr('Artikel')}
-								</span>
-							{/if}
-						</div>
-						<p class="text-xs text-slate-500 mt-0.5">{tr("Daftar media untuk distribusi konten kampanye ini.")}</p>
+			<!-- Judul dan tombol segarkan satu baris; teksnya yang menyusut, bukan tombolnya. -->
+			<div class="flex items-start gap-3">
+				<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-2xs">
+					<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+						<path d="M0 0h24v24H0z" fill="none" />
+						<path fill="currentColor" d="M21.04 2.96c-.35-.35-.855-.46-1.315-.29l-16.9 6.225c-.47.17-.79.605-.815 1.105c-.03.5.245.965.69 1.19l6.035 3.02l4.735-4.735l1.06 1.06l-4.735 4.735l3.02 6.035c.21.425.645.69 1.115.69H14c.5-.03.93-.35 1.105-.815L21.33 4.275c.17-.46.06-.965-.29-1.315" />
+					</svg>
+				</span>
+				<div class="min-w-0 flex-1">
+					<div class="flex flex-wrap items-center gap-2">
+						<p class="font-bold text-base text-slate-900">{tr("Media Terpilih (")}{mediaCount})</p>
+						{#if mediaList.length !== mediaCount}
+							<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10.5px] font-semibold text-slate-500">
+								{mediaList.length} {tr('Artikel')}
+							</span>
+						{/if}
 					</div>
+					<p class="mt-0.5 text-xs text-slate-500">{tr("Daftar media untuk distribusi konten kampanye ini.")}</p>
 				</div>
-				<div class="flex flex-wrap items-center justify-end gap-2">
-					<button
-						class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"
-						type="button"
-						aria-label={tr('Segarkan')}
-						title={tr('Segarkan')}
-						onclick={loadData}
-					>
-						<RefreshCw size={15} class="text-blue-600" />
-					</button>
-				</div>
+				<button
+					class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"
+					type="button"
+					aria-label={tr('Segarkan')}
+					title={tr('Segarkan')}
+					onclick={loadData}
+				>
+					<RefreshCw size={15} class="text-blue-600" />
+				</button>
 			</div>
 
 			{#if mediaList.length > 0}
