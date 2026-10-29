@@ -18,8 +18,10 @@
 
 <PageTitle title="Pesan" />
 
-<div class="flex min-h-0 flex-col px-1 lg:h-[calc(100dvh-160px)] lg:min-h-[560px]">
-	<div class="mb-4 shrink-0">
+<div class="flex min-h-0 flex-col px-1 max-lg:h-[calc(100dvh-130px)] max-lg:min-h-[420px] lg:h-[calc(100dvh-160px)] lg:min-h-[560px]">
+	<!-- Di HP judul halaman disembunyikan supaya kartu percakapan memakai seluruh
+	     tinggi layar, seperti aplikasi chat. -->
+	<div class="mb-4 hidden shrink-0 lg:block">
 		<h1 class="text-xl font-bold text-slate-900">{tr('Pesan')}</h1>
 		<p class="mt-1 text-[13px] text-muted-foreground">
 			{tr('Obrolan langsung dengan mitra per artikel.')}

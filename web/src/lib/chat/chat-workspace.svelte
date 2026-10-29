@@ -9,7 +9,7 @@
 	// Sebelum itu "Belum dimulai"; setelah lewat "expired" → komposer mati,
 	// riwayat tetap bisa dibaca dua pihak.
 	import { onMount, onDestroy } from 'svelte';
-	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search, Pencil } from '@lucide/svelte';
+	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search, Pencil, ArrowLeft, ChevronRight, X } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { refreshChatUnreadNow } from '$lib/chat/chat-unread.svelte';
 	import PostEditor from '$lib/chat/post-editor.svelte';
@@ -79,6 +79,11 @@
 	let loadingThread = $state(false);
 	let now = $state(Date.now());
 	let postEditorOpen = $state(false);
+	// Di HP hanya satu kartu yang tampil: daftar percakapan atau ruang pesan.
+	// Desktop mengabaikan ini karena kedua kolom tampil berdampingan.
+	let mobilePane = $state<'list' | 'thread'>('list');
+	// Panel info (media, artikel, sesi) di HP: laci kanan yang dibuka dari header.
+	let infoOpen = $state(false);
 
 	let messagesEl = $state<HTMLDivElement | null>(null);
 	let composerEl = $state<HTMLTextAreaElement | null>(null);
@@ -198,8 +203,14 @@
 		if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
 	}
 
-	async function openThread(id: string, opts: { push?: boolean } = {}) {
+	async function openThread(id: string, opts: { push?: boolean; reveal?: boolean } = {}) {
 		if (!id) return;
+		// reveal=false dipakai saat memilih percakapan pertama otomatis: di HP
+		// daftar tetap yang tampil dulu, bukan langsung masuk ke satu obrolan.
+		if (opts.reveal !== false) {
+			mobilePane = 'thread';
+			infoOpen = false;
+		}
 		loadingThread = true;
 		sendError = '';
 		try {
@@ -221,6 +232,8 @@
 			void refreshChatUnreadNow();
 		} catch (reason) {
 			bootError = reason instanceof Error ? reason.message : tr('Gagal membuka obrolan.');
+			// Pesan galat tampil di kartu daftar; di HP kembalikan tampilan ke sana.
+			if (opts.reveal !== false) mobilePane = 'list';
 		} finally {
 			loadingThread = false;
 		}
@@ -306,6 +319,12 @@
 		}
 	}
 
+	/** HP: kembali ke daftar percakapan tanpa melepas pilihan (baris tetap ditandai). */
+	function backToList() {
+		mobilePane = 'list';
+		infoOpen = false;
+	}
+
 	// ---------- lifecycle ----------
 
 	let listTimer: ReturnType<typeof setInterval> | null = null;
@@ -322,7 +341,7 @@
 			} else if (initialThread) {
 				await openThread(initialThread, { push: false });
 			} else if (threads.length > 0) {
-				await openThread(threads[0].id, { push: false });
+				await openThread(threads[0].id, { push: false, reveal: false });
 			}
 		})();
 
@@ -373,9 +392,9 @@
 	});
 </script>
 
-<div class="grid h-auto min-h-0 gap-3 lg:h-full lg:grid-cols-[290px_minmax(0,1fr)] xl:grid-cols-[290px_minmax(0,1fr)_310px]">
+<div class="grid h-full min-h-0 gap-3 lg:grid-cols-[290px_minmax(0,1fr)] xl:grid-cols-[290px_minmax(0,1fr)_310px]">
 	<!-- Kolom 1: daftar forum -->
-	<section class="app-card flex min-h-0 flex-col overflow-hidden p-0 max-lg:h-[40dvh] max-lg:min-h-[280px]">
+	<section class="app-card flex min-h-0 flex-col overflow-hidden p-0 {mobilePane === 'thread' ? 'max-lg:hidden' : ''}">
 		<div class="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
 			<MessagesSquare size={15} style="color: var(--primary);" />
 			<p class="text-[13px] font-bold">{tr('Percakapan')}</p>
@@ -477,11 +496,25 @@
 	</section>
 
 	<!-- Kolom 2: ruang pesan -->
-	<section class="app-card flex min-h-0 flex-col overflow-hidden p-0 max-lg:h-[68dvh] max-lg:min-h-[420px]">
+	<section class="app-card flex min-h-0 flex-col overflow-hidden p-0 {mobilePane === 'list' ? 'max-lg:hidden' : ''}">
 		{#if active}
-			<div class="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
-				<!-- Favicon media di samping nama, satu sumber dengan daftar percakapan. -->
-				<span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold ring-1 ring-slate-100" style="background:{AVA_BG[avatarTone(active.media_name)]};color:{AVA_FG[avatarTone(active.media_name)]};">
+			<!-- HP: kembali ke daftar, judul artikel sebagai konteks, dan tombol nama
+			     media di kanan untuk membuka panel info. Desktop memakai judul lengkap. -->
+			<div class="flex items-center gap-2 border-b border-slate-100 px-3 py-2.5 lg:flex-wrap lg:gap-2 lg:px-4 lg:py-3">
+				<button
+					type="button"
+					class="-ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 lg:hidden"
+					aria-label={tr('Kembali ke daftar')}
+					onclick={backToList}
+				>
+					<ArrowLeft size={18} />
+				</button>
+
+				<!-- Identitas desktop: favicon + nama media + judul artikel. -->
+				<span
+					class="hidden h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold ring-1 ring-slate-100 lg:flex"
+					style="background:{AVA_BG[avatarTone(active.media_name)]};color:{AVA_FG[avatarTone(active.media_name)]};"
+				>
 					{#if cleanDomain(active.website_url, active.media_name) && !faviconFailed[active.id]}
 						<img
 							src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleanDomain(active.website_url, active.media_name))}&sz=128`}
@@ -495,20 +528,36 @@
 						{initialOf(active.media_name)}
 					{/if}
 				</span>
-				<div class="min-w-0 flex-1">
+				<div class="hidden min-w-0 flex-1 lg:block">
 					<p class="truncate text-[13.5px] font-bold text-slate-900">{active.media_name}</p>
 					<p class="truncate text-[11.5px] text-muted-foreground">
 						{side === 'partner' ? `${otherLabel}: ${otherName(active)}` : `${tr('Judul Artikel')}: ${active.article_title || tr('Belum ada artikel')}`}
 					</p>
 				</div>
+
+				<p class="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-slate-600 lg:hidden">
+					{side === 'partner' ? `${otherLabel}: ${otherName(active)}` : active.article_title || tr('Belum ada artikel')}
+				</p>
+
 				{#if active.topic}
 					<span class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
 						{topicLabel(active.topic)}
 					</span>
 				{/if}
-				<span class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold {statusChip.cls}">
+				<!-- Status sesi sudah tampil di panel info dan pengitung di bawah kotak pesan. -->
+				<span class="hidden shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold lg:inline-flex {statusChip.cls}">
 					{statusChip.label}
 				</span>
+
+				<button
+					type="button"
+					class="inline-flex h-9 max-w-[48%] shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white pl-2.5 pr-2 text-[12px] font-bold text-slate-800 transition-colors hover:bg-slate-50 lg:hidden"
+					aria-label={`${tr('Info media')} — ${active.media_name}`}
+					onclick={() => (infoOpen = true)}
+				>
+					<span class="truncate">{active.media_name}</span>
+					<ChevronRight size={14} class="shrink-0 text-slate-400" />
+				</button>
 			</div>
 
 			<div bind:this={messagesEl} class="min-h-0 flex-1 space-y-1 overflow-y-auto bg-slate-50/60 px-4 py-4">
@@ -584,77 +633,110 @@
 		{/if}
 	</section>
 
-	<!-- Kolom 3: info forum (desktop lebar) -->
-	<aside class="flex min-h-0 flex-col gap-3 lg:col-span-2 xl:col-span-1 xl:overflow-y-auto">
-		{#if active}
-			{@const tone = avatarTone(active.media_name)}
-			<div class="app-card p-4">
-				<p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{tr('Info media')}</p>
-				<div class="mt-2.5 flex items-center gap-2.5">
-					<span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-[14px] font-bold" style="background:{AVA_BG[tone]};color:{AVA_FG[tone]};">
-						{#if cleanDomain(active.website_url, active.media_name) && !faviconFailed[active.id]}
-							<img
-								src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleanDomain(active.website_url, active.media_name))}&sz=128`}
-								alt=""
-								class="h-full w-full object-cover"
-								loading="lazy"
-								decoding="async"
-								onerror={() => (faviconFailed = { ...faviconFailed, [active?.id ?? '']: true })}
-							/>
-						{:else}
-							{initialOf(active.media_name)}
-						{/if}
-					</span>
-					<div class="min-w-0">
-						<p class="truncate text-[13px] font-bold text-slate-900">{active.media_name}</p>
-						{#if active.website_url}
-							<a class="truncate text-[11.5px] text-blue-600 hover:underline" href={active.website_url} target="_blank" rel="noreferrer">{active.website_url.replace(/^https?:\/\//, '')}</a>
-						{/if}
-					</div>
-				</div>
-				<div class="mt-3 space-y-1.5 text-[12px]">
-					<div class="flex justify-between gap-2"><span class="text-slate-500">{tr('Tipe')}</span><span class="font-semibold capitalize">{active.media_type || '—'}</span></div>
-					<div class="flex justify-between gap-2"><span class="text-slate-500">DA</span><span class="font-semibold">{active.da ?? '—'}</span></div>
-				</div>
-				{#if side === 'client' && active.campaign_id}
-					<button
-						class="app-btn app-btn-soft mt-3 inline-flex w-full items-center justify-center gap-1.5"
-						type="button"
-						onclick={() => (postEditorOpen = true)}
-					>
-						<Pencil size={13} /> {tr('Edit Post')}
-					</button>
-				{/if}
-			</div>
-
-			<div class="app-card p-4">
-				<p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{tr('Artikel')}</p>
-				<p class="mt-2 text-[12.5px] font-semibold leading-snug text-slate-900">{active.article_title || tr('Belum ada artikel')}</p>
-				{#if active.pub_status}
-					<p class="mt-1 text-[11.5px] text-slate-500">{tr('Status terbit')}: <span class="font-semibold capitalize">{active.pub_status}</span></p>
-				{/if}
-				{#if active.pub_url}
-					<a class="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-blue-600 hover:underline" href={active.pub_url} target="_blank" rel="noreferrer">
-						<ExternalLink size={12} />{tr('Buka artikel di situs mitra')}
-					</a>
-				{/if}
-			</div>
-
-			<div class="app-card p-4">
-				<p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{tr('Sesi obrolan')}</p>
-				<div class="mt-2 space-y-1.5 text-[12px]">
-					<div class="flex justify-between gap-2"><span class="text-slate-500">{tr('Mulai')}</span><span class="font-semibold">{fmtDateTime(active.started_at)}</span></div>
-					<div class="flex justify-between gap-2"><span class="text-slate-500">{tr('Berakhir')}</span><span class="font-semibold">{fmtDateTime(active.expires_at)}</span></div>
-					<div class="flex justify-between gap-2"><span class="text-slate-500">{tr('Status')}</span><span class="font-semibold">{statusChip.label}</span></div>
-				</div>
-				<div class="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-[11.5px] leading-relaxed text-slate-500">
-					<Info size={13} class="mt-0.5 shrink-0" />
-					{tr('Batas 3×24 jam dihitung dari pesan pertama. Setelahnya riwayat tetap dapat dibaca.')}
-				</div>
-			</div>
-		{/if}
+	<!-- Kolom 3: info forum. Di HP isinya dipindah ke laci kanan (lihat infoCards). -->
+	<aside class="hidden min-h-0 flex-col gap-3 lg:col-span-2 lg:flex xl:col-span-1 xl:overflow-y-auto">
+		{#if active}{@render infoCards(active)}{/if}
 	</aside>
 </div>
+
+{#snippet infoCards(t: Thread)}
+	{@const tone = avatarTone(t.media_name)}
+	<div class="app-card p-4">
+		<p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{tr('Info media')}</p>
+		<div class="mt-2.5 flex items-center gap-2.5">
+			<span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-[14px] font-bold" style="background:{AVA_BG[tone]};color:{AVA_FG[tone]};">
+				{#if cleanDomain(t.website_url, t.media_name) && !faviconFailed[t.id]}
+					<img
+						src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleanDomain(t.website_url, t.media_name))}&sz=128`}
+						alt=""
+						class="h-full w-full object-cover"
+						loading="lazy"
+						decoding="async"
+						onerror={() => (faviconFailed = { ...faviconFailed, [t.id]: true })}
+					/>
+				{:else}
+					{initialOf(t.media_name)}
+				{/if}
+			</span>
+			<div class="min-w-0">
+				<p class="truncate text-[13px] font-bold text-slate-900">{t.media_name}</p>
+				{#if t.website_url}
+					<a class="truncate text-[11.5px] text-blue-600 hover:underline" href={t.website_url} target="_blank" rel="noreferrer">{t.website_url.replace(/^https?:\/\//, '')}</a>
+				{/if}
+			</div>
+		</div>
+		<div class="mt-3 space-y-1.5 text-[12px]">
+			<div class="flex justify-between gap-2"><span class="text-slate-500">{tr('Tipe')}</span><span class="font-semibold capitalize">{t.media_type || '—'}</span></div>
+			<div class="flex justify-between gap-2"><span class="text-slate-500">DA</span><span class="font-semibold">{t.da ?? '—'}</span></div>
+		</div>
+		{#if side === 'client' && t.campaign_id}
+			<button
+				class="app-btn app-btn-soft mt-3 inline-flex w-full items-center justify-center gap-1.5"
+				type="button"
+				onclick={() => (postEditorOpen = true)}
+			>
+				<Pencil size={13} /> {tr('Edit Post')}
+			</button>
+		{/if}
+	</div>
+
+	<div class="app-card p-4">
+		<p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{tr('Artikel')}</p>
+		<p class="mt-2 text-[12.5px] font-semibold leading-snug text-slate-900">{t.article_title || tr('Belum ada artikel')}</p>
+		{#if t.pub_status}
+			<p class="mt-1 text-[11.5px] text-slate-500">{tr('Status terbit')}: <span class="font-semibold capitalize">{t.pub_status}</span></p>
+		{/if}
+		{#if t.pub_url}
+			<a class="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-blue-600 hover:underline" href={t.pub_url} target="_blank" rel="noreferrer">
+				<ExternalLink size={12} />{tr('Buka artikel di situs mitra')}
+			</a>
+		{/if}
+	</div>
+
+	<div class="app-card p-4">
+		<p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{tr('Sesi obrolan')}</p>
+		<div class="mt-2 space-y-1.5 text-[12px]">
+			<div class="flex justify-between gap-2"><span class="text-slate-500">{tr('Mulai')}</span><span class="font-semibold">{fmtDateTime(t.started_at)}</span></div>
+			<div class="flex justify-between gap-2"><span class="text-slate-500">{tr('Berakhir')}</span><span class="font-semibold">{fmtDateTime(t.expires_at)}</span></div>
+			<div class="flex justify-between gap-2"><span class="text-slate-500">{tr('Status')}</span><span class="font-semibold">{statusChip.label}</span></div>
+		</div>
+		<div class="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-[11.5px] leading-relaxed text-slate-500">
+			<Info size={13} class="mt-0.5 shrink-0" />
+			{tr('Batas 3×24 jam dihitung dari pesan pertama. Setelahnya riwayat tetap dapat dibaca.')}
+		</div>
+	</div>
+{/snippet}
+
+<!-- HP: laci kanan berisi info media, artikel, dan sesi. -->
+{#if infoOpen && active}
+	<div class="fixed inset-0 z-[60] lg:hidden">
+		<button
+			type="button"
+			class="absolute inset-0 h-full w-full cursor-default bg-slate-900/40"
+			aria-label={tr('Tutup')}
+			onclick={() => (infoOpen = false)}
+		></button>
+		<div
+			class="absolute inset-y-0 right-0 flex w-[88%] max-w-sm flex-col gap-3 overflow-y-auto rounded-l-2xl bg-slate-100 p-3 shadow-2xl"
+			role="dialog"
+			aria-modal="true"
+			aria-label={`${tr('Info media')} — ${active.media_name}`}
+		>
+			<div class="flex items-center justify-between gap-2 pl-1.5 pr-0.5 pt-0.5">
+				<p class="min-w-0 truncate text-[13.5px] font-bold text-slate-900">{active.media_name}</p>
+				<button
+					type="button"
+					class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white"
+					aria-label={tr('Tutup')}
+					onclick={() => (infoOpen = false)}
+				>
+					<X size={18} />
+				</button>
+			</div>
+			{@render infoCards(active)}
+		</div>
+	</div>
+{/if}
 
 {#if postEditorOpen && active && active.campaign_id}
 	<PostEditor
