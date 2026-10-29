@@ -47,7 +47,7 @@
 		est_traffic: number | null;
 		link_capacity: number | null;
 		scheduled_at: string | null;
-		article: { title: string; updated_at: string | null; links: { count: number; rels: string[] } };
+		article: { title: string; updated_at: string | null; links: { count: number; rels: string[]; kinds?: Record<string, number> } };
 		audit: { status: CheckStatus };
 		publish: { status: string | null; url: string | null };
 		publication_id: string | null;
@@ -252,6 +252,21 @@
 	// Rel tautan disebut dengan istilah yang dikenal klien — dofollow, nofollow,
 	// sponsored. Nilai mentah seperti "noopener" atau "nofollownoopener" hanya
 	// bising dan tidak menjawab pertanyaan "link ini bernilai atau tidak".
+	/** Ringkasan sifat tautan per jumlah, mis. "1 Dofollow · 1 Nofollow". */
+	const linkReport = (links: { count: number; rels: string[]; kinds?: Record<string, number> }): string => {
+		const kinds = links.kinds ?? {};
+		const parts = ([
+			['dofollow', tr('Dofollow')],
+			['nofollow', tr('Nofollow')],
+			['sponsored', tr('Sponsored')]
+		] as const)
+			.filter(([k]) => (kinds[k] ?? 0) > 0)
+			.map(([k, label]) => `${kinds[k]} ${label}`);
+		if (parts.length === 0) return relLabel(links.rels);
+		// Satu tautan tidak perlu angka di depan sifatnya.
+		if (links.count <= 1) return parts[0].replace(/^\d+\s+/, '');
+		return parts.join(' · ');
+	};
 	const relLabel = (rels: string[]): string => {
 		const norm = rels.map((r) => r.toLowerCase().replace(/[\s,_-]/g, ''));
 		if (norm.some((r) => r.includes('sponsored'))) return tr('Sponsored');
@@ -721,7 +736,7 @@
 										<LinkIcon size={12} class="shrink-0 text-slate-400" />
 										<span
 											class="whitespace-nowrap text-[11.5px] font-medium text-slate-600"
-											title={m.article.links.count > 0 ? relLabel(m.article.links.rels) : undefined}
+											title={m.article.links.count > 0 ? linkReport(m.article.links) : undefined}
 										>
 											{#if m.article.links.count > 0}{m.article.links.count} link{:else}{tr('Tidak ada link')}{/if}
 										</span>
@@ -825,7 +840,7 @@
 										{#if m.article.links.count > 0}
 											<span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
 												<LinkIcon size={12} class="text-slate-400 shrink-0" />
-												{m.article.links.count} link · {relLabel(m.article.links.rels)}
+												{m.article.links.count} link · {linkReport(m.article.links)}
 											</span>
 										{:else}
 											<span class="text-xs text-muted-foreground">{tr("Tidak ada link")}</span>

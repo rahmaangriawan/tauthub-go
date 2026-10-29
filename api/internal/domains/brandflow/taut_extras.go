@@ -954,7 +954,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		}
 		unsafeURLs := unsafeURLsFromChecks(checks)
 		articleHTML := contentByDoc[item.strOr("article_document_id", "")]
-		anchorCount, rels := anchorReport(articleHTML)
+		anchorCount, rels, linkKinds := anchorReport(articleHTML)
 
 		contentSafety := checks["contentSafety"]
 		if contentSafety == nil {
@@ -992,7 +992,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 			"scheduled_at":       item.timePtr("scheduled_at"),
 			"article": map[string]any{
 				"title": item.strOr("article_title", ""), "updated_at": item.timePtr("article_updated_at"),
-				"links": map[string]any{"count": anchorCount, "rels": rels},
+				"links": map[string]any{"count": anchorCount, "rels": rels, "kinds": linkKinds},
 			},
 			"publish":            map[string]any{"status": item.raw("pub_status"), "url": item.raw("pub_url")},
 			"publication_id":     item.raw("pub_id"),
@@ -1782,9 +1782,14 @@ func withUnsafeURLs(linkHealth any, unsafeURLs []string) any {
 	return out
 }
 
-func anchorReport(html string) (int, []string) {
+// anchorReport menghitung tautan artikel beserta sifatnya. `kinds` menghitung
+// PER TAUTAN (dofollow/nofollow/sponsored) supaya klien tahu komposisinya:
+// dua tautan bisa satu dofollow dan satu nofollow, dan itu tidak terlihat dari
+// daftar rel unik. `rels` tetap dikirim untuk kompatibilitas nilai mentahnya.
+func anchorReport(html string) (int, []string, map[string]int) {
+	kinds := map[string]int{}
 	if html == "" {
-		return 0, []string{}
+		return 0, []string{}, kinds
 	}
 	matches := reAnchorOpenAll.FindAllString(html, -1)
 	rels := []string{}
@@ -1798,8 +1803,16 @@ func anchorReport(html string) (int, []string) {
 			seen[rel] = true
 			rels = append(rels, rel)
 		}
+		switch {
+		case strings.Contains(rel, "sponsored"):
+			kinds["sponsored"]++
+		case strings.Contains(rel, "nofollow"):
+			kinds["nofollow"]++
+		default:
+			kinds["dofollow"]++
+		}
 	}
-	return len(matches), rels
+	return len(matches), rels, kinds
 }
 
 func numOrNil(row bsRow, key string) any {
