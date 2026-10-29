@@ -607,7 +607,7 @@
 				<!-- Satu kartu per artikel. Tabel delapan kolom harus digeser ke samping
 				     di HP, jadi isinya dibaca sebagai kartu; di desktop kartu yang sama
 				     mengalir dua–tiga kolom. -->
-				<div class="mt-4 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+				<div class="mt-4 grid gap-3 md:hidden">
 					{#each mediaList as m (pkey(m))}
 						{@const domain = cleanDomain(m.website_url, m.name)}
 						{@const total = slotTotals[m.media_id] ?? 1}
@@ -742,6 +742,142 @@
 						</article>
 					{/each}
 				</div>
+
+				<div class="mt-4 hidden overflow-x-auto rounded-xl border border-slate-200/70 md:block">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="border-b border-slate-100 bg-white text-left text-[10.5px] font-bold uppercase tracking-[0.07em] text-slate-400">
+								<th class="px-3.5 py-3.5">{tr("Media")}</th>
+								<th class="px-3.5 py-3.5">Tipe</th>
+								<th class="px-3.5 py-3.5">DA</th>
+								<th class="px-3.5 py-3.5">Link Artikel</th>
+								<th class="px-3.5 py-3.5">{tr("Jadwal Terbit")}</th>
+								<th class="px-3.5 py-3.5">Judul Artikel</th>
+								<th class="px-3.5 py-3.5">{tr("Status Terbit")}</th>
+								<th class="px-3.5 py-3.5 text-right">{tr("Aksi")}</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-slate-100 bg-white">
+							{#each mediaList as m (pkey(m))}
+								{@const domain = cleanDomain(m.website_url, m.name)}
+								<tr class="transition-colors hover:bg-slate-50/60">
+									<td class="px-3.5 py-4">
+										<div class="flex items-center gap-3">
+											<span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/70 text-xs font-bold ring-2 ring-white" style="background-color: {AVA[avatarTone(m.name)]};">
+												{#if domain && !faviconFailed[pkey(m)]}
+													<img
+														src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`}
+														alt=""
+														class="h-full w-full object-cover"
+														loading="lazy"
+														decoding="async"
+														onerror={() => (faviconFailed = { ...faviconFailed, [m.media_id]: true })}
+													/>
+												{:else}
+													{initialOf(m.name)}
+												{/if}
+											</span>
+											<div class="min-w-0">
+												<span class="block font-bold text-slate-900 text-[13.5px] leading-tight truncate">{m.name || '—'}</span>
+												{#if domain}
+													<span class="block text-[11.5px] text-slate-400 font-normal mt-0.5 truncate">{domain}</span>
+												{/if}
+											</div>
+										</div>
+									</td>
+									<td class="px-3.5 py-4 whitespace-nowrap">
+										{#if m.media_type}
+											<span class="rounded-full border border-blue-200/70 bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-700">
+												{m.media_type}
+											</span>
+										{:else}
+											—
+										{/if}
+									</td>
+									<td class="px-3.5 py-4 text-[13px] font-bold text-slate-900">{m.da != null ? m.da : '—'}</td>
+									<td class="px-3.5 py-4 whitespace-nowrap">
+										{#if m.article.links.count > 0}
+											<span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
+												<LinkIcon size={12} class="text-slate-400 shrink-0" />
+												{m.article.links.count} link{m.article.links.rels.length > 0 ? ` · ${m.article.links.rels.join(', ')}` : ' dofollow'}
+											</span>
+										{:else}
+											<span class="text-xs text-muted-foreground">{tr("Tidak ada link")}</span>
+										{/if}
+									</td>
+									<td class="px-3.5 py-4 whitespace-nowrap">
+										{#if canEdit(m)}
+											<div class="flex items-center gap-1">
+												<button
+													type="button"
+													class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors {scheduleFor(m)
+														? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+														: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}"
+													title={tr('Atur waktu terbit media ini')}
+													onclick={() => openPicker(m)}
+												>
+													<CalendarClock size={12} />
+													{scheduleFor(m) ? fmtSchedule(m) : tr('Segera')}
+												</button>
+												{#if scheduleFor(m)}
+													<button
+														type="button"
+														class="rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+														aria-label={tr('Batalkan jadwal')}
+														title={tr('Batalkan jadwal — terbit sekarang')}
+														onclick={() => void reschedule(m, null)}
+													>
+														<X size={12} />
+													</button>
+												{/if}
+											</div>
+										{:else}
+											<span class="inline-flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600">
+												<Clock size={12} class="text-emerald-500 shrink-0" />
+												{toJakartaDisplay(m.scheduled_at) ?? 'Segera'}
+											</span>
+										{/if}
+									</td>
+									<td class="max-w-[240px] px-3.5 py-4">
+										{#if m.article.title}
+											<span class="block truncate text-[12.5px] text-slate-700" title={m.article.title}>{m.article.title}</span>
+										{:else}
+											<span class="text-xs text-muted-foreground">{tr("Belum ada artikel")}</span>
+										{/if}
+									</td>
+									<td class="px-3.5 py-4 whitespace-nowrap">{@render publishStatus(m)}</td>
+									<td class="px-3.5 py-4">
+										<div class="flex flex-wrap items-center justify-end gap-1.5">
+											{#if editableNow(m)}
+												<button
+													type="button"
+													class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300"
+													aria-label={tr('Edit Artikel')}
+													title={tr('Edit artikel lalu atur waktu terbitnya')}
+													onclick={() => void openEditor(m)}
+												>
+													<Pencil size={13} />
+												</button>
+											{/if}
+											<!-- Hubungi mitra tentang artikel ini; publikasi belum ada
+											     (belum diajukan) belum punya forum. -->
+											<button
+												type="button"
+												class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+												disabled={!m.publication_id}
+												aria-label={tr('Hubungi')}
+												title={!m.publication_id ? tr('Publikasi belum diajukan') : tr('Hubungi mitra tentang artikel ini')}
+												onclick={() => openContact(m)}
+											>
+												<MessageCircle size={13} />
+											</button>
+										</div>
+									</td>
+																		</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
 			{:else}
 				<p class="mt-3 text-sm text-muted-foreground">{tr("Belum ada media terpilih.")}</p>
 			{/if}
