@@ -1420,7 +1420,6 @@ export const PHRASE_EN: Record<string, string> = {
   "Buat Akun": "Create Account",
   "Sedang membuat akun…": "Creating account…",
   "Kembali ke form daftar": "Back to the sign-up form",
-  "Bukan kamu? Kembali ke form daftar": "Not you? Back to the sign-up form",
   "Sesi pendaftaran kedaluwarsa. Silakan daftar ulang.": "The sign-up session has expired. Please sign up again.",
   "Daftar · Tauthub": "Sign Up · Tauthub",
   "Daftarkan callback di Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs. Jangan pakai /api/gsc/callback (itu untuk Search Console).": "Register the callback in Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs. Do not use /api/gsc/callback (that one is for Search Console).",

@@ -218,11 +218,6 @@
 			busy = false;
 		}
 	}
-
-	function backToRegister() {
-		clearDraft();
-		void goto('/login?mode=register', { replaceState: true });
-	}
 </script>
 
 <svelte:head>
@@ -296,11 +291,6 @@
 			{busy ? tr('Sedang membuat akun…') : tr('Buat Akun')}
 		</button>
 
-		{#if kind === 'email'}
-			<p class="gate-back-row">
-				<a class="auth-link" href="/login?mode=register" onclick={() => backToRegister()}>{tr('Bukan kamu? Kembali ke form daftar')}</a>
-			</p>
-		{/if}
 	{/if}
 </AuthShell>
 
@@ -390,10 +380,6 @@
 		.gate-cta {
 		width: 100%;
 		margin-top: 18px;
-		text-align: center;
-	}
-	.gate-back-row {
-		margin-top: 14px;
 		text-align: center;
 	}
 </style>
