@@ -184,7 +184,11 @@
 	// tampil sebagai dinding teks. Dua-duanya dihitung langsung dari editor.
 	const linkCap = $derived(linkLimit > 0 ? linkLimit : 0);
 	const linksOver = $derived(linkCap > 0 ? editorStats.links > linkCap : editorStats.links > 0);
-	const imagesMissing = $derived(editorStats.images < 1);
+	// Indikator gambar di kepala mengikuti GAMBAR UTAMA (cover), bukan jumlah
+	// <img> di body artikel: cover yang menentukan artikel boleh disimpan, dan
+	// itulah yang dikirim sebagai thumbnail ke media.
+	const coverCount = $derived(cover ? 1 : 0);
+	const coverMissing = $derived(!cover);
 
 	let coverBusy = $state(false);
 	let coverError = $state('');
@@ -1347,12 +1351,12 @@
 							: tr('Media ini tidak mengizinkan tautan')}
 					>{editorStats.links} {tr('link')}</span>
 					<span
-						class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums {imagesMissing ? 'text-rose-600' : ''}"
-						style={imagesMissing
+						class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums {coverMissing ? 'text-rose-600' : ''}"
+						style={coverMissing
 							? 'background: color-mix(in srgb, var(--destructive) 14%, transparent);'
 							: 'background: var(--secondary); color: var(--muted-foreground);'}
-						title={tr('Artikel perlu minimal 1 gambar')}
-					>{editorStats.images} {tr('gambar')}</span>
+						title={tr('Gambar utama (cover) artikel. Gambar di dalam isi tidak dihitung di sini.')}
+					>{coverCount} {tr('gambar')}</span>
 				</p>
 			</div>
 			<button

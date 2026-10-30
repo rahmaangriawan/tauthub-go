@@ -5173,6 +5173,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Menyakiti diri": "Self-harm",
   "Konten ilegal lain": "Other illegal content",
   "Beri Rating": "Rate This Media",
+  "Gambar utama (cover) artikel. Gambar di dalam isi tidak dihitung di sini.": "The article cover image. Images inside the body are not counted here.",
   "Beri rating kecepatan terbit mitra ini": "Rate this partner's publishing speed",
   "Gagal menyimpan rating.": "Could not save the rating.",
   "Rating tersimpan. Terima kasih!": "Rating saved. Thank you!",
