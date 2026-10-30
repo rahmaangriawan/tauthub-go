@@ -38,6 +38,9 @@
 	let gateTurnstileSiteKey = $state('');
 	let gateToken = $state('');
 	let gateNonce = $state(0);
+	// Callback tunggu: widget di-remount untuk token baru setelah token lama
+	// dipakai register. Turnstile hanya menerima satu token sekali pakai.
+	let gateTokenWaiter: ((token: string) => void) | null = null;
 	let draft = $state<RegDraft | null>(null);
 	let roleChoice = $state<Role | null>(null);
 	let busy = $state(false);
@@ -73,6 +76,23 @@
 		} catch {
 			// abaikan
 		}
+	}
+
+	/** Minta token Turnstile baru: remount widget lalu tunggu callback (maks 20 detik). */
+	function freshGateToken(): Promise<string> {
+		gateToken = '';
+		gateNonce += 1;
+		return new Promise((resolve) => {
+			let done = false;
+			const finish = (token: string) => {
+				if (done) return;
+				done = true;
+				gateTokenWaiter = null;
+				resolve(token);
+			};
+			gateTokenWaiter = finish;
+			setTimeout(() => finish(''), 20_000);
+		});
 	}
 
 	async function homeAfter(data: TokenResponse, fallbackRole: Role) {
@@ -182,13 +202,22 @@
 					return;
 				}
 				clearDraft();
+				// Token register sudah terpakai (single-use). Ambil token baru dari
+				// widget di halaman ini supaya login otomatis tidak ditolak.
+				const loginToken = gateTurnstileEnabled ? await freshGateToken() : '';
 				const loginRes = await fetch('/v1/auth/login', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ email: draft.email, password: draft.password, turnstile_token: gateToken || draft.turnstile_token })
+					body: JSON.stringify({
+						email: draft.email,
+						password: draft.password,
+						turnstile_token: loginToken || undefined
+					})
 				});
 				if (!loginRes.ok) {
-					await goto('/login?mode=register', { replaceState: true });
+					// Akun sudah dibuat — jangan lempar ke form daftar lagi, cukup ke
+					// halaman masuk biasa supaya pengguna bisa login manual.
+					await goto('/login', { replaceState: true });
 					return;
 				}
 				const data = (await loginRes.json()) as TokenResponse;
@@ -278,7 +307,10 @@
 			{#key gateNonce}
 				<TurnstileWidget
 					siteKey={gateTurnstileSiteKey}
-					onToken={(token) => (gateToken = token)}
+					onToken={(token) => {
+						gateToken = token;
+						gateTokenWaiter?.(token);
+					}}
 					onExpire={() => {
 						gateToken = '';
 						gateNonce += 1;
