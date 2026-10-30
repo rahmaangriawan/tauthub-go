@@ -762,12 +762,12 @@
 	}
 
 	// ---------- Kesiapan terbit (popover prasyarat) ----------
-	type ReadinessGroup = { key: string; label: string; items: { mediaId: string; name: string }[] };
+	type ReadinessGroup = { key: string; label: string; items: { mediaId: string; name: string; slot: number }[] };
 
 	const readinessGroups = $derived.by((): ReadinessGroup[] => {
 		const groups: ReadinessGroup[] = [];
 		const docs = selected.filter((m) => hasDoc(m));
-		const toItems = (list: PlacementItem[]) => list.map((m) => ({ mediaId: m.media_id, name: m.name }));
+		const toItems = (list: PlacementItem[]) => list.map((m) => ({ mediaId: m.media_id, name: m.name, slot: m.slot ?? 1 }));
 		const add = (key: string, label: string, list: PlacementItem[]) => {
 			if (list.length > 0) groups.push({ key, label: tr(label), items: toItems(list) });
 		};
@@ -1539,22 +1539,28 @@
 	/** Cek QC sekaligus dari popover kesiapan terbit. `ids` diisi bila dipanggil
 	 *  dari tombol grup (hanya media di daftar grup itu); tanpa `ids` dipakai
 	 *  seluruh target QC kampanye. */
-	async function runQcAll(ids?: string[]) {
+	async function runQcAll(articles?: { mediaId: string; slot: number }[]) {
 		if (bulkQcRunning || viewOnly) return;
 		const fallback = qcTargets.length > 0 ? qcTargets : selected.filter((m) => hasDoc(m));
-		const targets = ids && ids.length > 0 ? ids : fallback.map((m) => m.media_id);
+		const targets = articles && articles.length > 0
+			? articles
+			: fallback.map((m) => ({ mediaId: m.media_id, slot: m.slot ?? 1 }));
 		if (targets.length === 0) return;
 		bulkQcRunning = true;
 		error = '';
 		const running: Record<string, boolean> = { ...qcRunning };
-		for (const id of targets) running[id] = true;
+		for (const t of targets) running[pkey({ media_id: t.mediaId, slot: t.slot })] = true;
 		qcRunning = running;
 		try {
-			// Satu panggilan untuk semua media: server memindai paralel dan baru
+			// Satu panggilan untuk semua artikel: server memindai paralel dan baru
 			// membalas setelah selesai, jadi progress di UI bersifat animasi.
+			// Slot ikut dikirim supaya artikel lain di domain yang sama tidak
+			// ikut dipindai (dan spinner-nya tetap per artikel).
+			const mediaIds = [...new Set(targets.map((t) => t.mediaId))];
+			const slots = [...new Set(targets.map((t) => t.slot))];
 			const res = await apiRequest(
 				`${apiBase}/gatekeeper/audit-all`,
-				{ method: 'POST', body: JSON.stringify({ mediaIds: targets }) },
+				{ method: 'POST', body: JSON.stringify({ mediaIds, slots }) },
 				900_000
 			);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menjalankan pemindaian QC.')));
@@ -1562,7 +1568,7 @@
 			error = reason instanceof Error ? reason.message : tr('Gagal menjalankan pemindaian QC.');
 		} finally {
 			const next = { ...qcRunning };
-			for (const id of targets) delete next[id];
+			for (const t of targets) delete next[pkey({ media_id: t.mediaId, slot: t.slot })];
 			qcRunning = next;
 			bulkQcRunning = false;
 			qcToken += 1;
@@ -2942,7 +2948,7 @@
 										type="button"
 										disabled={bulkQcRunning || viewOnly}
 										title={tr('Pindai QC semua media di daftar ini sekaligus')}
-										onclick={() => void runQcAll(g.items.map((i) => i.mediaId))}
+										onclick={() => void runQcAll(g.items.map((i) => ({ mediaId: i.mediaId, slot: i.slot })))}
 									>
 										{#if bulkQcRunning}<LoaderCircle size={12} class="animate-spin" />{:else}<ShieldCheck size={12} />{/if}
 										{bulkQcRunning ? tr('Memeriksa…') : tr('Cek QC Sekarang')}
