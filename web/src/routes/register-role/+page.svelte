@@ -323,6 +323,11 @@
 			{busy ? tr('Sedang membuat akun…') : tr('Buat Akun')}
 		</button>
 
+		<!-- Jalan keluar bila salah masuk alur: akun belum dibuat di halaman ini. -->
+		<p class="gate-back-row">
+			<a class="auth-link" href="/login">{tr('Kembali ke Halaman Login')}</a>
+		</p>
+
 	{/if}
 </AuthShell>
 
@@ -412,6 +417,10 @@
 		.gate-cta {
 		width: 100%;
 		margin-top: 18px;
+		text-align: center;
+	}
+	.gate-back-row {
+		margin-top: 14px;
 		text-align: center;
 	}
 </style>

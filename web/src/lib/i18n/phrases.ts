@@ -371,6 +371,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Buat Draf Artikel": "Create Article Draft",
   "Buka Gatekeeper": "Open Gatekeeper",
   "Buka tautan": "Open link",
+  "Kembali ke Halaman Login": "Back to the login page",
   "bukan dokumen asli klien.": "not the client's original document.",
   "Cari bank…": "Search bank…",
   "Cari e-wallet…": "Search e-wallet…",
