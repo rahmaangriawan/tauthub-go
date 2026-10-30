@@ -55,8 +55,8 @@
 				apiRequest('/v1/partner/earnings?limit=200'),
 				apiRequest('/v1/partner/media?limit=500'),
 				apiRequest('/v1/partner/publications?limit=200'),
-				// Feed aktivitas: notifikasi umum terbaru, difilter ke event nyata.
-				apiRequest('/v1/partner/notifications?limit=14&category=general')
+					// Feed aktivitas + histori pesan klien (30 hari): difilter ke event nyata.
+					apiRequest('/v1/partner/notifications?limit=50&category=general')
 			]);
 			if (meRes.ok) {
 				const meData = await meRes.json();
@@ -74,12 +74,17 @@
 					.map((p) => Date.parse(p?.created_at ?? ''))
 					.filter((t) => Number.isFinite(t));
 			}
-			if (notifRes.ok) {
-				const notifData = await notifRes.json();
-				activity = ((notifData?.notifications ?? []) as any[])
-					.filter((n) => typeof n?.type === 'string' && (n.type.startsWith('publication.') || n.type === 'chat.message'))
-					.slice(0, 2);
-			}
+				if (notifRes.ok) {
+					const notifData = await notifRes.json();
+					const allNotifs = (notifData?.notifications ?? []) as any[];
+					chatTimes = allNotifs
+						.filter((n) => n?.type === 'chat.message')
+						.map((n) => Date.parse(n?.created_at ?? ''))
+						.filter((t) => Number.isFinite(t));
+					activity = allNotifs
+						.filter((n) => typeof n?.type === 'string' && (n.type.startsWith('publication.') || n.type === 'chat.message'))
+						.slice(0, 2);
+				}
 			// Permintaan non-OK tidak boleh ditelan — tampilkan callout galat.
 			const failed: string[] = [];
 			if (!meRes.ok) failed.push(tr('Ringkasan mitra'));
@@ -97,6 +102,7 @@
 	});
 
 	let publicationTimes = $state<number[]>([]);
+	let chatTimes = $state<number[]>([]);
 
 	const fmt = (n: number) => (n ?? 0).toLocaleString('id-ID');
 	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
@@ -148,8 +154,24 @@
 			30
 		)
 	);
-	// Menunggu: permintaan artikel masuk per hari dari publications[].created_at.
-	const pubSeries = $derived(dailySeries(publicationTimes, 14));
+	// Menunggu: kumulatif/distribusi permintaan artikel masuk (30 hari terakhir + fallback riwayat).
+	const pubSeries = $derived.by(() => {
+		const daily = dailySeries(publicationTimes, 30);
+		if (daily.some((v) => v > 0)) return daily;
+		return cumulativeSeries(
+			publicationTimes.map((t) => ({ t, v: 1 })),
+			30
+		);
+	});
+	// Pesan: distribusi pesan klien masuk dari notifikasi chat.message (30 hari terakhir).
+	const chatSeries = $derived.by(() => {
+		const daily = dailySeries(chatTimes, 30);
+		if (daily.some((v) => v > 0)) return daily;
+		return cumulativeSeries(
+			chatTimes.map((t) => ({ t, v: 1 })),
+			30
+		);
+	});
 
 	// Total penghasilan aktual = lifetime penghasilan publikasi (net, tanpa voided)
 	// dari backend; fallback ke settled + pending bila field belum tersedia.
@@ -392,7 +414,7 @@
 			<div class="app-card min-h-[280px] animate-pulse" style="background-color: var(--secondary);"></div>
 		</div>
 	{:else}
-		<!-- 1. Ringkasan statistik — 4 kartu -->
+		<!-- 1. Ringkasan statistik — 4 kartu (palet kanan→kiri: #406093, #FFF799, #91D06C, #4C8CE4) -->
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 			<StatCard
 				label={tr('Media Anda')}
@@ -400,7 +422,20 @@
 				hint={tr('Media aktif terdaftar')}
 				icon={Newspaper}
 				delta={mediaDelta}
-				sparkline={{ values: mediaSeries, stroke: 'var(--primary)', title: tr('Media terdaftar kumulatif, 30 hari terakhir') }}
+				palette={{
+					cardStyle:
+						'background: linear-gradient(180deg, rgba(76, 140, 228, 0.08) 0%, rgba(76, 140, 228, 0.02) 100%); border-color: rgba(76, 140, 228, 0.28);',
+					iconBoxStyle:
+						'background-color: rgba(76, 140, 228, 0.15); color: #4C8CE4; box-shadow: inset 0 0 0 1px rgba(76, 140, 228, 0.30);',
+					pillStyle: 'background-color: rgba(76, 140, 228, 0.14); color: #2F6EC4;'
+				}}
+				sparkline={{
+					values: mediaSeries,
+					stroke: '#4C8CE4',
+					fillColor: '#4C8CE4',
+					fillOpacity: 0.32,
+					title: tr('Media terdaftar kumulatif, 30 hari terakhir')
+				}}
 			/>
 
 			<StatCard
@@ -409,7 +444,19 @@
 				hint={pendingCount > 0 ? tr('Perlu tindakan segera') : tr('Semua publikasi telah diproses')}
 				tone={pendingCount > 0 ? 'warning' : 'neutral'}
 				icon={Clock}
-				sparkline={{ values: pubSeries, stroke: 'var(--warning)', title: tr('Permintaan artikel masuk per hari, 14 hari terakhir') }}
+				palette={{
+					cardStyle:
+						'background: linear-gradient(180deg, rgba(255, 247, 153, 0.38) 0%, rgba(255, 247, 153, 0.10) 100%); border-color: rgba(216, 184, 34, 0.42);',
+					iconBoxStyle:
+						'background-color: #FFF799; color: #7A5F00; box-shadow: inset 0 0 0 1px rgba(196, 162, 18, 0.38);'
+				}}
+				sparkline={{
+					values: pubSeries,
+					stroke: '#D1A600',
+					fillColor: '#FFF799',
+					fillOpacity: 0.78,
+					title: tr('Permintaan artikel masuk per hari, 30 hari terakhir')
+				}}
 			/>
 
 			<StatCard
@@ -419,7 +466,21 @@
 				tone="success"
 				icon={Wallet}
 				delta={earningDelta}
-				sparkline={{ values: earningSeries, stroke: 'var(--success)', title: tr('Penghasilan kumulatif (nilai aktual per hari), 30 hari terakhir') }}
+				palette={{
+					cardStyle:
+						'background: linear-gradient(180deg, rgba(145, 208, 108, 0.14) 0%, rgba(145, 208, 108, 0.03) 100%); border-color: rgba(145, 208, 108, 0.45);',
+					iconBoxStyle:
+						'background-color: rgba(145, 208, 108, 0.24); color: #3D7A1E; box-shadow: inset 0 0 0 1px rgba(145, 208, 108, 0.48);',
+					valueStyle: 'color: #2E6812;',
+					pillStyle: 'background-color: rgba(145, 208, 108, 0.24); color: #2E6812; box-shadow: inset 0 0 0 1px rgba(145, 208, 108, 0.42);'
+				}}
+				sparkline={{
+					values: earningSeries,
+					stroke: '#72BA48',
+					fillColor: '#91D06C',
+					fillOpacity: 0.40,
+					title: tr('Penghasilan kumulatif (nilai aktual per hari), 30 hari terakhir')
+				}}
 			/>
 
 			<StatCard
@@ -429,6 +490,19 @@
 				tone={chatUnread.count > 0 ? 'primary' : 'neutral'}
 				icon={MessageCircle}
 				href={`${base}/chat`}
+				palette={{
+					cardStyle:
+						'background: linear-gradient(180deg, rgba(64, 96, 147, 0.09) 0%, rgba(64, 96, 147, 0.02) 100%); border-color: rgba(64, 96, 147, 0.28);',
+					iconBoxStyle:
+						'background-color: rgba(64, 96, 147, 0.15); color: #406093; box-shadow: inset 0 0 0 1px rgba(64, 96, 147, 0.32);'
+				}}
+				sparkline={{
+					values: chatSeries,
+					stroke: '#406093',
+					fillColor: '#406093',
+					fillOpacity: 0.30,
+					title: tr('Aktivitas pesan klien, 30 hari terakhir')
+				}}
 			/>
 		</div>
 

@@ -21,6 +21,7 @@
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { mediaDistribution } from '$lib/media/distribution';
 	import { getCategoryTone } from '$lib/media/category-tone';
+	import { aiTrustToneStyle } from '$lib/media/ai-trust-tone';
 	import { avgPublishHours, formatSla, slaDurationText } from '$lib/media/sla';
 	import PageTitle from '$lib/components/page-title.svelte';
 	// Kelas tabel bersama (port media-intelligence.module.css) — dipakai persis
@@ -671,7 +672,7 @@
 						<td class="modernTd" style="text-align:center"><span class="scoreBoxPill">{getDa(m)}</span></td>
 						<td class="modernTd" style="text-align:center">
 							<div class="flex flex-col items-center gap-1">
-								<span class="scoreBoxPill">{getAiTrust(m)}</span>
+								<span class="scoreBoxPill aiTrustPill" style={aiTrustToneStyle(getAiTrust(m))}>{getAiTrust(m)}</span>
 								<!-- Indikator GEO = centang AI Cited; disembunyikan bila tidak ada. -->
 								{#if m.seo_ai_citation === true}
 									<span class="aiCitationBadge" title={tr('Sumber AI')} aria-label={tr('Sumber AI')}><Check size={11} /></span>

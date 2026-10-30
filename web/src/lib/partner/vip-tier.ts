@@ -10,9 +10,9 @@ import { tr } from '$lib/i18n/phrases';
 type TierTone = { bg: string; fg: string; border: string };
 
 const VVIP_TONE: TierTone = {
-	bg: 'var(--vvip-soft, #f5f3ff)',
-	fg: 'var(--vvip, #6d28d9)',
-	border: 'var(--vvip-border, #ddd6fe)'
+	bg: 'var(--vvip-soft, #eef0fb)',
+	fg: 'var(--vvip, #636CCB)',
+	border: 'var(--vvip-border, #d0d4f2)'
 };
 
 const TONES: Record<string, TierTone> = {

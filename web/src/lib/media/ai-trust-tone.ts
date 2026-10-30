@@ -14,11 +14,50 @@ export type AiTrustTone = {
 	border: string;
 };
 
-export const AI_TRUST_TONES: { min: number; tone: AiTrustTone }[] = [
-	{ min: 80, tone: { text: '#15803D', bg: '#DCFCE7', border: '#86EFAC' } },
-	{ min: 60, tone: { text: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0' } },
-	{ min: 40, tone: { text: '#D97706', bg: '#FFFBEB', border: '#FDE68A' } },
-	{ min: 0, tone: { text: '#DC2626', bg: '#FEF2F2', border: '#FECACA' } }
+/**
+ * Palet 4 tingkat skor GEO / AI Trust (0–100), urut dari rendah ke tinggi:
+ * - 0–39  (rendah)       : #D9361E
+ * - 40–59 (menengah-bawah): #F5B52E
+ * - 60–79 (menengah-atas) : #FFD16A
+ * - 80–100 (tinggi)       : #78C841
+ */
+export const AI_TRUST_TONES: { min: number; hex: string; tone: AiTrustTone }[] = [
+	{
+		min: 80,
+		hex: '#78C841',
+		tone: {
+			text: '#2E6B12',
+			bg: 'color-mix(in srgb, #78C841 22%, #ffffff)',
+			border: 'color-mix(in srgb, #78C841 62%, #ffffff)'
+		}
+	},
+	{
+		min: 60,
+		hex: '#FFD16A',
+		tone: {
+			text: '#7A5400',
+			bg: 'color-mix(in srgb, #FFD16A 38%, #ffffff)',
+			border: 'color-mix(in srgb, #FFD16A 85%, #d49b1a)'
+		}
+	},
+	{
+		min: 40,
+		hex: '#F5B52E',
+		tone: {
+			text: '#8A5A00',
+			bg: 'color-mix(in srgb, #F5B52E 24%, #ffffff)',
+			border: 'color-mix(in srgb, #F5B52E 65%, #ffffff)'
+		}
+	},
+	{
+		min: 0,
+		hex: '#D9361E',
+		tone: {
+			text: '#B42814',
+			bg: 'color-mix(in srgb, #D9361E 15%, #ffffff)',
+			border: 'color-mix(in srgb, #D9361E 48%, #ffffff)'
+		}
+	}
 ];
 
 /** Nada untuk satu nilai skor. `null` (belum diperiksa) → tanpa nada. */

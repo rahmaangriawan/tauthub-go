@@ -51,6 +51,8 @@
 	} = $props();
 
 	let drawerOpen = $state(false);
+	// Default sidebar desktop selalu terbuka (collapsible="icon" ala shadcn).
+	let sidebarCollapsed = $state(false);
 	// Animasi drawer (buka & tutup) dimatikan bila pengguna memilih reduce motion.
 	const motionOK = typeof window !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	let panel = $state<HTMLDivElement | null>(null);
@@ -70,14 +72,24 @@
 		navQuery = '';
 	});
 
-	// Ctrl/Cmd+K memfokuskan pencarian menu (parity palette app lama).
+	// Ctrl/Cmd+B untuk toggle expand/collapse sidebar desktop (konvensi shadcn),
+	// dan Ctrl/Cmd+K memfokuskan pencarian menu (bila searchable).
 	$effect(() => {
-		if (!searchable) return;
 		const onKey = (event: KeyboardEvent) => {
-			if ((event.metaKey || event.ctrlKey) && (event.key === 'k' || event.key === 'K')) {
+			const target = event.target as HTMLElement | null;
+			const inInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+			if ((event.metaKey || event.ctrlKey) && (event.key === 'b' || event.key === 'B') && !inInput) {
 				event.preventDefault();
-				searchEl?.focus();
-				searchEl?.select();
+				sidebarCollapsed = !sidebarCollapsed;
+				return;
+			}
+			if (searchable && (event.metaKey || event.ctrlKey) && (event.key === 'k' || event.key === 'K')) {
+				event.preventDefault();
+				if (sidebarCollapsed) sidebarCollapsed = false;
+				queueMicrotask(() => {
+					searchEl?.focus();
+					searchEl?.select();
+				});
 			}
 		};
 		window.addEventListener('keydown', onKey);
@@ -146,20 +158,55 @@
 	});
 </script>
 
-{#snippet sidebar()}
+{#snippet sidebar(inDrawer = false)}
+	{@const isCollapsed = !inDrawer && sidebarCollapsed}
 	<div class="app-sidebar-inner">
 		<div class="app-sidebar-brand">
-			<a href={brandHref} class="app-brand-link" aria-label="Tauthub">
+			<a
+				href={brandHref}
+				class="app-brand-link"
+				aria-label="Tauthub"
+				tabindex={isCollapsed ? -1 : undefined}
+				aria-hidden={isCollapsed ? 'true' : undefined}
+			>
 				<img src="/tauthub-logo.webp" alt="Tauthub" width="140" height="35" class="app-brand-logo" />
 			</a>
+			{#if !inDrawer}
+				<button
+					type="button"
+					class="app-sidebar-collapse-btn"
+					aria-label={isCollapsed ? tr('Perluas sidebar') : tr('Ciutkan sidebar')}
+					aria-expanded={!isCollapsed}
+					title={isCollapsed ? `${tr('Perluas sidebar')} (⌘B)` : `${tr('Ciutkan sidebar')} (⌘B)`}
+					onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
+				>
+					<span class="app-collapse-icon-wrap" data-collapsed={isCollapsed ? 'true' : 'false'}>
+						{#if isCollapsed}
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+								<path d="M0 0h24v24H0z" fill="none" />
+								<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+									<path d="M3 11c0-3.771 0-5.657 1.172-6.828S7.229 3 11 3h2c3.771 0 5.657 0 6.828 1.172S21 7.229 21 11v2c0 3.771 0 5.657-1.172 6.828S16.771 21 13 21h-2c-3.771 0-5.657 0-6.828-1.172S3 16.771 3 13zm12-8v18" />
+									<path d="m8 9l1.108.879C10.37 10.879 11 11.379 11 12s-.63 1.121-1.892 2.121L8 15" />
+								</g>
+							</svg>
+						{:else}
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+								<path d="M0 0h24v24H0z" fill="none" />
+								<g fill="none" stroke="currentColor" stroke-width="1.5">
+									<path d="M2 12c0-3.69 0-5.534.814-6.841a4.8 4.8 0 0 1 1.105-1.243C5.08 3 6.72 3 10 3h4c3.28 0 4.919 0 6.081.916c.43.338.804.759 1.105 1.243C22 6.466 22 8.31 22 12s0 5.534-.814 6.841a4.8 4.8 0 0 1-1.105 1.243C18.92 21 17.28 21 14 21h-4c-3.28 0-4.919 0-6.081-.916a4.8 4.8 0 0 1-1.105-1.243C2 17.534 2 15.69 2 12Z" />
+									<path stroke-linejoin="round" d="M9.5 3v18" />
+									<path stroke-linecap="round" stroke-linejoin="round" d="M5 7h1m-1 3h1" />
+								</g>
+							</svg>
+						{/if}
+					</span>
+				</button>
+			{/if}
 		</div>
 
 		{#if searchable}
 			<div class="app-sidebar-search">
 				<Search size={14} aria-hidden="true" />
-				<!-- Chrome menganggap input pertama di halaman sebagai kolom login
-				     dan mengisinya dengan email tersimpan; readonly dilepas saat
-				     focus sehingga input terbaca bukan kolom kredensial. -->
 				<input
 					bind:this={searchEl}
 					bind:value={navQuery}
@@ -168,6 +215,7 @@
 					autocomplete="off"
 					spellcheck="false"
 					readonly
+					tabindex={isCollapsed ? -1 : undefined}
 					onfocus={(e) => e.currentTarget.removeAttribute('readonly')}
 					placeholder={tr('Cari halaman…')}
 					aria-label={tr('Cari halaman admin')}
@@ -184,12 +232,15 @@
 						href={item.href}
 						class="app-sidebar-link"
 						data-active={item.active ? 'true' : 'false'}
+						data-tooltip={isCollapsed ? item.label : undefined}
+						title={isCollapsed ? item.label : undefined}
+						aria-label={isCollapsed ? item.label : undefined}
 						aria-current={item.active ? 'page' : undefined}
 					>
 						<item.icon size={18} strokeWidth={item.active ? 2.4 : 2} />
-						<span>{item.label}</span>
+						<span class="app-sidebar-link-text">{item.label}</span>
 						{#if (item.badge ?? 0) > 0}
-							<span class="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white" style="background: var(--destructive, #e11d48);">{item.badge}</span>
+							<span class="app-sidebar-badge ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white" style="background: var(--destructive, #e11d48);">{item.badge}</span>
 						{/if}
 					</a>
 					{#if item.children?.length}
@@ -206,7 +257,7 @@
 					{/if}
 				{/each}
 			{/each}
-			{#if filteredGroups.length === 0}
+			{#if filteredGroups.length === 0 && !isCollapsed}
 				<p class="px-2.5 py-2 text-xs" style="color: var(--sidebar-soft);">{tr('Tidak ada menu yang cocok.')}</p>
 			{/if}
 		</nav>
@@ -216,7 +267,7 @@
 {/snippet}
 
 <div class="app-shell">
-	<aside class="app-sidebar">{@render sidebar()}</aside>
+	<aside class="app-sidebar" data-collapsed={sidebarCollapsed ? 'true' : 'false'}>{@render sidebar(false)}</aside>
 
 	<div class="flex min-w-0 flex-1 flex-col">
 		<header class="app-utility-bar">
@@ -279,7 +330,7 @@
 					</g>
 				</svg>
 			</button>
-			{@render sidebar()}
+				{@render sidebar(true)}
 		</div>
 	</div>
 {/if}

@@ -135,35 +135,71 @@
 		margin-top: auto;
 	}
 
-	button.app-account-trigger {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		min-height: 52px;
-		border: 1px solid var(--sidebar-border);
-		border-radius: 10px;
-		padding: 8px 10px;
-		background-color: var(--sidebar-hover);
-		color: var(--sidebar-foreground);
-		cursor: pointer;
-		text-align: left;
-		font: inherit;
-		transition:
-			background-color 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
-			border-color 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
-		touch-action: manipulation;
-	}
+		button.app-account-trigger {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			width: 100%;
+			min-height: 52px;
+			border: 1px solid var(--sidebar-border);
+			border-radius: 10px;
+			padding: 8px 10px;
+			background-color: var(--sidebar-hover);
+			color: var(--sidebar-foreground);
+			cursor: pointer;
+			text-align: left;
+			font: inherit;
+			overflow: hidden;
+			transition:
+				background-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+				border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+				padding 300ms cubic-bezier(0.22, 1, 0.36, 1),
+				gap 300ms cubic-bezier(0.22, 1, 0.36, 1);
+			touch-action: manipulation;
+		}
 
-	button.app-account-trigger:hover {
-		border-color: var(--sidebar-border);
-		background-color: color-mix(in srgb, var(--sidebar-hover) 80%, white);
-	}
+		.app-account-info,
+		.app-account-trigger .app-role-badge,
+		.app-account-trigger :global(svg) {
+			max-width: 160px;
+			opacity: 1;
+			overflow: hidden;
+			transition:
+				max-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+				opacity 160ms ease,
+				transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+		}
 
-	button.app-account-trigger:focus-visible {
-		outline: 2px solid var(--primary);
-		outline-offset: 2px;
-	}
+		button.app-account-trigger:hover {
+			border-color: var(--sidebar-border);
+			background-color: color-mix(in srgb, var(--sidebar-hover) 80%, white);
+		}
+
+		button.app-account-trigger:focus-visible {
+			outline: 2px solid var(--primary);
+			outline-offset: 2px;
+		}
+
+		:global(.app-sidebar[data-collapsed='true']) button.app-account-trigger {
+			padding: 7px 3px;
+			min-height: 46px;
+			gap: 0;
+		}
+
+		:global(.app-sidebar[data-collapsed='true']) .app-account-info,
+		:global(.app-sidebar[data-collapsed='true']) .app-account-trigger .app-role-badge,
+		:global(.app-sidebar[data-collapsed='true']) .app-account-trigger :global(svg) {
+			max-width: 0;
+			opacity: 0;
+			transform: translateX(-6px);
+			pointer-events: none;
+		}
+
+		:global(.app-sidebar[data-collapsed='true']) .app-account-menu {
+			width: 232px;
+			left: 0;
+			right: auto;
+		}
 
 	.app-account-menu {
 		position: absolute;

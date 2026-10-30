@@ -44,6 +44,8 @@
 
 	let summary = $state<Summary | null>(null);
 	let items = $state<Item[]>([]);
+	let seriesItems = $state<Item[]>([]);
+	let seriesLoaded = false;
 	let total = $state(0);
 	let offset = $state(0);
 	let pageSize = $state(10);
@@ -126,7 +128,7 @@
 		void load();
 	});
 
-	async function load() {
+	async function load(refreshSeries = false) {
 		loading = true;
 		error = '';
 		try {
@@ -135,9 +137,11 @@
 			if (query) params.set('q', query);
 			if (mediaFilter) params.set('media', mediaFilter);
 			if (daysFilter) params.set('days', daysFilter);
-			const [sRes, lRes] = await Promise.all([
+			const needSeries = !seriesLoaded || refreshSeries;
+			const [sRes, lRes, allRes] = await Promise.all([
 				apiRequest(`${apiBase}/link-monitor?view=summary`),
-				apiRequest(`${apiBase}/link-monitor?${params}`)
+				apiRequest(`${apiBase}/link-monitor?${params}`),
+				needSeries ? apiRequest(`${apiBase}/link-monitor?limit=500&offset=0&state=all`) : Promise.resolve(null)
 			]);
 			if (sRes.ok) summary = (await sRes.json()) as Summary;
 			else error = await readApiError(sRes, tr('Gagal memuat ringkasan pelacak.'));
@@ -147,6 +151,11 @@
 				total = data.total ?? 0;
 			} else {
 				error = await readApiError(lRes, tr('Gagal memuat daftar artikel.'));
+			}
+			if (allRes && allRes.ok) {
+				const allData = (await allRes.json()) as { publications?: Item[]; items?: Item[] };
+				seriesItems = allData.publications ?? allData.items ?? [];
+				seriesLoaded = true;
 			}
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : tr('Gagal memuat data pelacak.');
@@ -276,10 +285,10 @@
 			}
 			const data = await res.json();
 			const queued = data?.queued_publications ?? 0;
-			notice = queued > 0
-				? `${tr('Antrean pengecekan dibuat:')} ${queued} ${tr('artikel.')}${data?.capped ? ' ' + tr('Dibatasi 200 artikel per sekali jalan, sisanya menyusul pada siklus berikutnya.') : ''} ${tr('Hasil muncul setelah worker selesai.')}`
-				: tr('Semua artikel baru saja diperiksa, belum ada yang perlu dicek ulang.');
-			await load();
+				notice = queued > 0
+					? `${tr('Antrean pengecekan dibuat:')} ${queued} ${tr('artikel.')}${data?.capped ? ' ' + tr('Dibatasi 200 artikel per sekali jalan, sisanya menyusul pada siklus berikutnya.') : ''} ${tr('Hasil muncul setelah worker selesai.')}`
+					: tr('Semua artikel baru saja diperiksa, belum ada yang perlu dicek ulang.');
+				await load(true);
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : tr('Gagal mengantrekan pengecekan.');
 		} finally {
@@ -341,8 +350,8 @@
 				error = await readApiError(res, tr('Gagal mengajukan klaim.'));
 				return;
 			}
-			notice = tr('Klaim diajukan. Tim Tauthub akan memeriksa kondisi tautan dan menindaklanjuti.');
-			await load();
+				notice = tr('Klaim diajukan. Tim Tauthub akan memeriksa kondisi tautan dan menindaklanjuti.');
+				await load(true);
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : tr('Gagal mengajukan klaim.');
 		} finally {
@@ -350,12 +359,214 @@
 		}
 	}
 
-	const statCards = $derived([
-		{ label: tr('Total Dipantau'), value: summary?.watched ?? 0, hint: tr('Dalam masa garansi aktif'), icon: Activity, tone: 'var(--muted-foreground)', strong: false, info: null as string | null },
-		{ label: tr('Tayang & Aman'), value: summary?.live ?? 0, hint: tr('Halaman & Tautan aktif (200 OK)'), icon: CircleCheck, tone: 'var(--success)', strong: false, info: null },
-		{ label: tr('Tak Terjangkau'), value: summary?.unreachable ?? 0, hint: tr('Sistem keamanan media memblokir bot'), icon: CircleAlert, tone: 'var(--warning)', strong: false, info: tr('Situs menolak akses atau sedang bermasalah — belum tentu hilang') },
-		{ label: tr('Bermasalah'), value: summary?.gone ?? 0, hint: tr('404 atau Tautan dihapus (SLA Klaim)'), icon: CircleAlert, tone: 'var(--destructive)', strong: true, info: null }
-	]);
+	const DAY_MS = 86_400_000;
+	const itemTime = (it: Item): number => {
+		const raw = it.published_at ?? it.last_checked_at;
+		const parsed = raw ? Date.parse(raw) : NaN;
+		return Number.isFinite(parsed) ? parsed : NaN;
+	};
+
+	/**
+	 * Bangun kurva wave SVG yang luwes (midpoint quadratic bezier, x = 0..240 penuh)
+	 * dari data nyata artikel di brand ini.
+	 * - Jika total kartu = 0, garis datar halus di dasar.
+	 * - Jika > 0, titik kurva dihitung dari distribusi waktu tayang nyata + smoothing
+	 *   gelombang supaya tidak patah/tangga saat ada jeda antar tanggal rilis.
+	 */
+	function buildSmoothWave(
+		predicate: (it: Item) => boolean,
+		cardCount: number,
+		totalWatched: number,
+		phaseShift: number
+	): { line: string; area: string } {
+		const W = 240;
+		const H = 44;
+		if (cardCount <= 0) {
+			// Saat nilai 0, tetap tampilkan alunan gelombang rendah di dasar kartu agar seragam.
+			const lowPts = Array.from({ length: 9 }, (_, i) => {
+				const x = Math.round((i / 8) * W);
+				const y = Number((35 - (i / 8) * 3 + Math.sin(i * 1.55 + phaseShift) * 2.4).toFixed(1));
+				return { x, y };
+			});
+			let d0 = `M ${lowPts[0].x} ${lowPts[0].y}`;
+			for (let i = 1; i < lowPts.length - 1; i++) {
+				const mx = ((lowPts[i].x + lowPts[i + 1].x) / 2).toFixed(1);
+				const my = ((lowPts[i].y + lowPts[i + 1].y) / 2).toFixed(1);
+				d0 += ` Q ${lowPts[i].x} ${lowPts[i].y}, ${mx} ${my}`;
+			}
+			d0 += ` L ${lowPts[8].x} ${lowPts[8].y}`;
+			return {
+				line: d0,
+				area: `${d0} L ${W} ${H} L 0 ${H} Z`
+			};
+		}
+		const N = 9; // 9 titik dari x=0 s.d. x=240 (jarak 30px)
+		const source = seriesItems.length > 0 ? seriesItems : items;
+		const matched = source.filter(predicate);
+		const times = matched.map(itemTime).filter((t) => Number.isFinite(t)).sort((a, b) => a - b);
+
+		const minT = times.length > 0 ? times[0] : Date.now() - 30 * DAY_MS;
+		const maxT = times.length > 1 ? times[times.length - 1] : Date.now();
+		const span = Math.max(DAY_MS, maxT - minT);
+
+		// Proporsi nyata kartu terhadap total dipantau menentukan tinggi akhir kurva.
+		const share = totalWatched > 0 ? Math.min(1, Math.max(0.25, cardCount / totalWatched)) : 0.75;
+		const yBottom = 36;
+		const yTop = Math.round(11 + (1 - share) * 10);
+
+		const pts: Array<{ x: number; y: number }> = [];
+		for (let i = 0; i < N; i++) {
+			const u = i / (N - 1); // 0..1
+			const x = Math.round(u * W);
+			// Rasio kumulatif nyata pada titik waktu u (dengan Gaussian kernel lebar)
+			let cumRatio = u;
+			if (times.length > 0) {
+				const centerT = minT + u * span;
+				const sigmaT = Math.max(DAY_MS * 2, span * 0.22);
+				let wSum = 0;
+				let cSum = 0;
+				for (let k = 0; k < N; k++) {
+					const tk = minT + (k / (N - 1)) * span;
+					let cnt = 0;
+					for (const t of times) {
+						if (t <= tk) cnt++;
+					}
+					const dist = (tk - centerT) / sigmaT;
+					const w = Math.exp(-0.5 * dist * dist);
+					wSum += w;
+					cSum += (cnt / times.length) * w;
+				}
+				cumRatio = wSum > 0 ? cSum / wSum : u;
+			}
+			const progress = 0.55 * cumRatio + 0.45 * (0.15 + 0.8 * u);
+			const wave = Math.sin(i * 1.6 + phaseShift) * 4.5 + Math.cos(i * 0.95 - phaseShift) * 1.9;
+			const rawY = yBottom - progress * (yBottom - yTop) + wave;
+			const y = Math.max(7, Math.min(39, Number(rawY.toFixed(1))));
+			pts.push({ x, y });
+		}
+
+		// Midpoint quadratic bezier spline: kurva C1 mulus dari x=0 sampai x=240.
+		let d = `M ${pts[0].x} ${pts[0].y}`;
+		for (let i = 1; i < pts.length - 1; i++) {
+			const mx = ((pts[i].x + pts[i + 1].x) / 2).toFixed(1);
+			const my = ((pts[i].y + pts[i + 1].y) / 2).toFixed(1);
+			d += ` Q ${pts[i].x} ${pts[i].y}, ${mx} ${my}`;
+		}
+		const last = pts[pts.length - 1];
+		d += ` L ${last.x} ${last.y}`;
+
+		return {
+			line: d,
+			area: `${d} L ${W} ${H} L 0 ${H} Z`
+		};
+	}
+
+	const pctOfWatched = (val: number, totalWatched: number): string => {
+		if (!totalWatched || totalWatched <= 0) return '0%';
+		const pct = (val / totalWatched) * 100;
+		return `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1).replace('.', ',')}%`;
+	};
+
+	const statCards = $derived.by(() => {
+		const watched = summary?.watched ?? 0;
+		const live = summary?.live ?? 0;
+		const unreachable = summary?.unreachable ?? 0;
+		const gone = summary?.gone ?? 0;
+		const watchedWave = buildSmoothWave(() => true, watched, watched, 0.2);
+		const liveWave = buildSmoothWave((it) => it.state === 'live' && it.in_article_state !== 'removed', live, watched, 1.1);
+		const unreachableWave = buildSmoothWave((it) => it.state === 'unreachable', unreachable, watched, 2.0);
+		const goneWave = buildSmoothWave((it) => it.state === 'gone' || it.in_article_state === 'removed', gone, watched, 2.9);
+		return [
+			{
+				key: 'watched',
+				label: tr('Total Dipantau'),
+				value: watched,
+				pill: watched > 0 ? '100%' : '0%',
+				hint: tr('Dalam masa garansi aktif'),
+				icon: Activity,
+				stroke: '#2C5EAD',
+				gradTop: '#2C5EAD',
+				gradBottom: '#C4E2F5',
+				cardBg: 'linear-gradient(180deg, rgba(44, 94, 173, 0.045) 0%, rgba(196, 226, 245, 0.14) 100%)',
+				cardBorder: 'rgba(44, 94, 173, 0.16)',
+				iconBg: 'rgba(44, 94, 173, 0.12)',
+				iconColor: '#2C5EAD',
+				pillBg: 'rgba(44, 94, 173, 0.12)',
+				pillColor: '#2C5EAD',
+				waveLine: watchedWave.line,
+				waveArea: watchedWave.area,
+				chartTitle: `${tr('Akumulasi artikel dipantau berdasarkan tanggal tayang')} (${watched})`,
+				strong: false,
+				info: null as string | null
+			},
+			{
+				key: 'live',
+				label: tr('Tayang & Aman'),
+				value: live,
+				pill: pctOfWatched(live, watched),
+				hint: tr('Halaman & Tautan aktif (200 OK)'),
+				icon: CircleCheck,
+				stroke: '#1591DC',
+				gradTop: '#1591DC',
+				gradBottom: '#C4E2F5',
+				cardBg: 'linear-gradient(180deg, rgba(21, 145, 220, 0.05) 0%, rgba(196, 226, 245, 0.18) 100%)',
+				cardBorder: 'rgba(21, 145, 220, 0.18)',
+				iconBg: 'rgba(21, 145, 220, 0.13)',
+				iconColor: '#1591DC',
+				pillBg: 'rgba(21, 145, 220, 0.14)',
+				pillColor: '#1591DC',
+				waveLine: liveWave.line,
+				waveArea: liveWave.area,
+				chartTitle: `${tr('Akumulasi artikel tayang & aman')} (${live})`,
+				strong: false,
+				info: null
+			},
+			{
+				key: 'unreachable',
+				label: tr('Tak Terjangkau'),
+				value: unreachable,
+				pill: pctOfWatched(unreachable, watched),
+				hint: tr('Sistem keamanan media memblokir bot'),
+				icon: CircleAlert,
+				stroke: '#4BB8FA',
+				gradTop: '#4BB8FA',
+				gradBottom: '#C4E2F5',
+				cardBg: 'linear-gradient(180deg, rgba(75, 184, 250, 0.065) 0%, rgba(196, 226, 245, 0.22) 100%)',
+				cardBorder: 'rgba(75, 184, 250, 0.26)',
+				iconBg: 'rgba(75, 184, 250, 0.18)',
+				iconColor: '#1591DC',
+				pillBg: 'rgba(75, 184, 250, 0.22)',
+				pillColor: '#2C5EAD',
+				waveLine: unreachableWave.line,
+				waveArea: unreachableWave.area,
+				chartTitle: `${tr('Akumulasi artikel tak terjangkau')} (${unreachable})`,
+				strong: false,
+				info: tr('Situs menolak akses atau sedang bermasalah — belum tentu hilang')
+			},
+			{
+				key: 'gone',
+				label: tr('Bermasalah'),
+				value: gone,
+				pill: pctOfWatched(gone, watched),
+				hint: tr('404 atau Tautan dihapus (SLA Klaim)'),
+				icon: CircleAlert,
+				stroke: '#2C5EAD',
+				gradTop: '#4BB8FA',
+				gradBottom: '#C4E2F5',
+				cardBg: 'linear-gradient(180deg, rgba(196, 226, 245, 0.28) 0%, rgba(196, 226, 245, 0.10) 100%)',
+				cardBorder: '#C4E2F5',
+				iconBg: '#C4E2F5',
+				iconColor: '#2C5EAD',
+				pillBg: '#C4E2F5',
+				pillColor: '#2C5EAD',
+				waveLine: goneWave.line,
+				waveArea: goneWave.area,
+				chartTitle: `${tr('Akumulasi artikel bermasalah 404 / tautan dihapus')} (${gone})`,
+				strong: true,
+				info: null
+			}
+		];
+	});
 </script>
 
 <PageTitle title="Link Guardian" />
@@ -366,36 +577,101 @@
 />
 
 <section>
-	<header class="lg-header">
-		<div class="min-w-0">
-			<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--primary);">LINK GUARDIAN</p>
-			<h1 class="mt-1 text-2xl font-semibold tracking-tight">{tr("Link Guardian")}</h1>
-			<p class="lg-sub mt-1 text-sm text-muted-foreground">
-					{tr('Sistem memantau tautan Anda secara berkala.')}
-					<strong>{tr('Garansi tayang mengikuti kebijakan media')}</strong>
-					{tr('— 12 bulan, atau permanen bila medianya menjamin tautan tidak pernah dilepas. Masa garansi berlaku sejak tanggal tayang, dan eksklusif untuk')}
-					<strong style="color: var(--primary);">{tr('Media Terverifikasi')}</strong>.
-			</p>
+	<div class="app-card lg-overview-panel">
+		<header class="lg-header">
+			<div class="min-w-0 lg-header-copy">
+				<h1 class="lg-title">{tr("Link Guardian")}</h1>
+				<p class="lg-sub">
+					{tr('Pemantauan berkala atas status tayang artikel dan keutuhan backlink klien. Garansi mengikuti SLA tiap publisher (12 bulan atau permanen sejak tanggal terbit) dan berlaku khusus pada')}
+					<strong class="lg-sub-accent">{tr('Media Terverifikasi')}</strong>.
+				</p>
+			</div>
+			<div class="lg-sync">
+				<div class="lg-sync-actions">
+					<button
+						class="lg-crawl"
+						type="button"
+						disabled={crawling || summary?.manual_check_available === false}
+						title={summary?.manual_check_available === false
+							? `${tr('Pengecekan manual dibatasi 1x sehari. Bisa dicoba lagi')} ${syncLabel(summary?.next_manual_check_at)}.`
+							: tr('Antrekan pengecekan tautan sekarang')}
+						onclick={() => void crawlNow()}
+					>
+						<RefreshCw size={14} class={crawling ? 'animate-spin' : ''} />
+						<span>{crawling ? tr('Mengantrekan…') : tr('Crawl Sekarang')}</span>
+					</button>
+					<span class="lg-manual-note"><Info size={13} /> {tr('Cek Manual Maks. 1x Sehari')}</span>
+				</div>
+				<p class="lg-sync-time">
+					{tr('Terakhir sinkronisasi:')} <span class="lg-sync-value">{syncLabel(summary?.last_checked_at)}</span>
+				</p>
+			</div>
+		</header>
+
+		<!-- 4 kartu statistik -->
+		<div class="lg-cards">
+			{#each statCards as c (c.key)}
+				<div
+					class="lg-card"
+					style="--card-bg: {c.cardBg}; --card-border: {c.cardBorder}; --tone: {c.stroke};"
+				>
+					<div class="lg-card-top">
+						<div class="lg-card-icon" style="background-color: {c.iconBg}; color: {c.iconColor};">
+							<c.icon size={20} strokeWidth={2.1} />
+						</div>
+						<div class="lg-card-body">
+							<p class="lg-card-label">
+								<span>{c.label}</span>
+								{#if c.info}
+									<Tooltip content={c.info} label={c.info} maxWidth={280}>
+										<span class="lg-card-info"><Info size={12} /></span>
+									</Tooltip>
+								{/if}
+							</p>
+							<div class="lg-card-metric">
+								<p class="lg-card-value">{c.value}</p>
+								<span
+									class="lg-card-pill"
+									style="background-color: {c.pillBg}; color: {c.pillColor};"
+									title={tr('Proporsi dari total artikel yang dipantau')}
+								>
+									{c.pill}
+								</span>
+							</div>
+							<p class="lg-card-hint" class:lg-card-hint-strong={c.strong}>{c.hint}</p>
+						</div>
+					</div>
+					<div class="lg-card-chart">
+						<svg
+							viewBox="0 0 240 44"
+							preserveAspectRatio="none"
+							class="lg-spark-svg"
+							role="img"
+							aria-label={c.chartTitle}
+						>
+							<title>{c.chartTitle}</title>
+							<defs>
+								<linearGradient id={`lg-grad-${c.key}`} x1="0" y1="0" x2="0" y2="1">
+									<stop offset="0%" stop-color={c.gradTop} stop-opacity="0.28" />
+									<stop offset="100%" stop-color={c.gradBottom} stop-opacity="0.03" />
+								</linearGradient>
+							</defs>
+							<path d={c.waveArea} fill={`url(#lg-grad-${c.key})`} />
+							<path
+								d={c.waveLine}
+								fill="none"
+								stroke={c.stroke}
+								stroke-width="2.2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								vector-effect="non-scaling-stroke"
+							/>
+						</svg>
+					</div>
+				</div>
+			{/each}
 		</div>
-		<div class="lg-sync">
-			<p class="lg-sync-time">
-				{tr('Terakhir sinkronisasi:')} <span class="lg-sync-value">{syncLabel(summary?.last_checked_at)}</span>
-			</p>
-			<button
-				class="app-btn app-btn-soft lg-crawl"
-				type="button"
-				disabled={crawling || summary?.manual_check_available === false}
-				title={summary?.manual_check_available === false
-					? `${tr('Pengecekan manual dibatasi 1x sehari. Bisa dicoba lagi')} ${syncLabel(summary?.next_manual_check_at)}.`
-					: tr('Antrekan pengecekan tautan sekarang')}
-				onclick={() => void crawlNow()}
-			>
-				<RefreshCw size={14} class={crawling ? 'animate-spin' : ''} />
-				{crawling ? tr('Mengantrekan…') : tr('Crawl Sekarang')}
-			</button>
-			<span class="lg-manual-note"><Info size={12} /> {tr('Cek Manual Maks. 1x Sehari')}</span>
-		</div>
-	</header>
+	</div>
 
 	{#if loading && !summary}
 		<p class="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
@@ -407,24 +683,6 @@
 			<button class="app-btn app-btn-soft mt-3" type="button" onclick={() => void load()}>Coba lagi</button>
 		</div>
 	{:else}
-		<!-- 4 kartu statistik -->
-		<div class="lg-cards">
-			{#each statCards as c (c.label)}
-				<div class="app-card lg-card" style="--tone: {c.tone};">
-					<p class="lg-card-label">
-						<c.icon size={14} strokeWidth={2.4} />
-						<span>{c.label}</span>
-						{#if c.info}
-							<Tooltip content={c.info} label={c.info} maxWidth={280}>
-								<span class="lg-card-info"><Info size={12} /></span>
-							</Tooltip>
-						{/if}
-					</p>
-					<p class="lg-card-value">{c.value}</p>
-					<p class="lg-card-hint" style={c.strong ? 'color: var(--tone); font-weight: 500;' : ''}>{c.hint}</p>
-				</div>
-			{/each}
-		</div>
 
 		<!-- Toolbar: pencarian lebar, dropdown status, lalu tombol Filter -->
 		<div class="app-card lg-toolbar">
@@ -672,39 +930,194 @@
 </section>
 
 <style>
-	/* ── Header ─────────────────────────────────────────────────────────── */
-	.lg-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
-	.lg-sub { max-width: 62ch; }
-	.lg-sub strong { color: var(--foreground); }
-
-	/* Sisi kanan header: waktu sinkron terakhir + aksi manual. */
-	.lg-sync { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-	.lg-sync-time { font-size: 11.5px; color: var(--muted-foreground); }
-	.lg-sync-value { font-weight: 600; color: var(--foreground); }
-	.lg-crawl { white-space: nowrap; }
-	.lg-manual-note {
-		display: inline-flex; align-items: center; gap: 5px;
-		padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 500;
-		color: var(--warning); background-color: var(--warning-soft);
+	/* ── Panel Utama (Header + 4 Kartu Statistik menyatu ala SimilarWeb) ── */
+	.lg-overview-panel {
+		padding: 22px 24px;
+		border-radius: 20px;
+		border: 1px solid color-mix(in srgb, #C4E2F5 70%, var(--border));
+		background: var(--card, #ffffff);
+		box-shadow: 0 6px 28px -10px rgba(44, 94, 173, 0.08);
 	}
 
-	/* ── Kartu ringkasan: ikon sebaris label, angka besar, border berwarna ── */
-	.lg-cards { margin-top: 16px; display: grid; gap: 10px; grid-template-columns: 1fr; }
+	/* ── Header ─────────────────────────────────────────────────────────── */
+	.lg-header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 16px;
+	}
+	.lg-header-copy { flex: 1 1 480px; }
+	.lg-title {
+		font-size: 22px;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		line-height: 1.25;
+		color: var(--foreground);
+	}
+	.lg-sub {
+		margin-top: 4px;
+		max-width: 66ch;
+		font-size: 13.5px;
+		line-height: 1.55;
+		color: var(--muted-foreground);
+	}
+	.lg-sub strong { color: var(--foreground); font-weight: 600; }
+	.lg-sub .lg-sub-accent { color: #1591DC; font-weight: 600; }
+
+	/* Sisi kanan header: tombol aksi berbingkai + badge info sejajar, waktu sinkron di bawah. */
+	.lg-sync {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 8px;
+	}
+	.lg-sync-actions {
+		display: flex;
+		flex-wrap: nowrap;
+		align-items: center;
+		gap: 8px;
+	}
+	.lg-crawl {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		min-height: 36px;
+		padding: 6px 14px;
+		border-radius: 10px;
+		border: 1px solid #C4E2F5;
+		background-color: #ffffff;
+		color: #2C5EAD;
+		font-size: 13px;
+		font-weight: 600;
+		white-space: nowrap;
+		box-shadow: 0 1px 2px rgba(44, 94, 173, 0.06);
+		transition: background-color 140ms ease, border-color 140ms ease, transform 120ms ease;
+	}
+	.lg-crawl :global(svg) { color: #1591DC; }
+	.lg-crawl:hover:not(:disabled) {
+		background-color: color-mix(in srgb, #C4E2F5 28%, #ffffff);
+		border-color: #4BB8FA;
+	}
+	.lg-crawl:disabled { opacity: 0.55; cursor: not-allowed; }
+	.lg-manual-note {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		min-height: 36px;
+		padding: 6px 12px;
+		border-radius: 10px;
+		font-size: 12.5px;
+		font-weight: 600;
+		white-space: nowrap;
+		color: #2C5EAD;
+		background-color: color-mix(in srgb, #C4E2F5 42%, #ffffff);
+		border: 1px solid color-mix(in srgb, #4BB8FA 35%, #C4E2F5);
+	}
+	.lg-manual-note :global(svg) { color: #1591DC; flex-shrink: 0; }
+	.lg-sync-time { font-size: 11.5px; color: var(--muted-foreground); }
+	.lg-sync-value { font-weight: 600; color: #2C5EAD; }
+
+	/* ── Kartu ringkasan: kotak ikon kiri, angka + pill, hint, wave di dasar ── */
+	.lg-cards {
+		margin-top: 20px;
+		display: grid;
+		gap: 14px;
+		grid-template-columns: 1fr;
+	}
 	@media (min-width: 640px) { .lg-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 	@media (min-width: 1280px) { .lg-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 	.lg-card {
-		display: flex; flex-direction: column; padding: 14px 16px;
-		border: 1px solid var(--border);
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+		padding: 16px 18px 12px;
+		border-radius: 16px;
+		border: 1px solid var(--card-border, #C4E2F5);
+		background: var(--card-bg, rgba(196, 226, 245, 0.14));
+		transition: transform 150ms ease, box-shadow 150ms ease;
+	}
+	.lg-card:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 6px 18px -8px rgba(21, 145, 220, 0.18);
+	}
+	.lg-card-top {
+		display: flex;
+		align-items: flex-start;
+		gap: 14px;
+		min-width: 0;
+	}
+	.lg-card-icon {
+		width: 44px;
+		height: 44px;
+		flex: 0 0 44px;
+		border-radius: 12px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.lg-card-body {
+		min-width: 0;
+		flex: 1 1 auto;
 	}
 	.lg-card-label {
-		display: inline-flex; align-items: center; gap: 6px;
-		font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-		color: var(--tone);
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		font-size: 13px;
+		font-weight: 600;
+		line-height: 1.3;
+		color: var(--foreground);
 	}
-	.lg-card-info { display: inline-flex; color: var(--muted-foreground); }
-	.lg-card-value { margin-top: 6px; font-size: 30px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-	.lg-card-hint { margin-top: 5px; font-size: 11.5px; line-height: 1.35; color: var(--muted-foreground); }
+	.lg-card-info { display: inline-flex; color: #1591DC; }
+	.lg-card-metric {
+		margin-top: 6px;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+	}
+	.lg-card-value {
+		font-size: 28px;
+		font-weight: 800;
+		line-height: 1.1;
+		letter-spacing: -0.025em;
+		font-variant-numeric: tabular-nums;
+		color: var(--foreground);
+	}
+	.lg-card-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		padding: 2.5px 8px;
+		border-radius: 999px;
+		font-size: 11.5px;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		line-height: 1.2;
+	}
+	.lg-card-hint {
+		margin-top: 6px;
+		font-size: 12px;
+		line-height: 1.35;
+		color: var(--muted-foreground);
+	}
+	.lg-card-hint-strong {
+		color: #2C5EAD;
+		font-weight: 600;
+	}
+	.lg-card-chart {
+		margin-top: 12px;
+		width: 100%;
+		height: 42px;
+	}
+	.lg-spark-svg {
+		width: 100%;
+		height: 100%;
+		display: block;
+		overflow: visible;
+	}
 
 	/* ── Toolbar: pencarian lebar, status, tombol Filter ───────────────── */
 	.lg-toolbar { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; }
@@ -911,32 +1324,35 @@
 		}
 	}
 
-	/* ── Mobile: jarak dirapikan supaya tidak berdesakan/bertumpuk ─────────── */
-	@media (max-width: 700px) {
-		/* Header: subjudul penuh, blok sinkronisasi turun ke baris sendiri. */
-		.lg-header { gap: 10px; }
-		/* Baris: waktu sinkronisasi penuh satu baris, lalu tombol Crawl + catatan
-		   manual berdampingan dalam satu baris. */
-		.lg-sync {
-			flex-direction: row; flex-wrap: wrap; align-items: center;
-			width: 100%; gap: 8px 10px;
-		}
-		.lg-sync-time { flex: 1 1 100%; }
-		/* Tombol Crawl + catatan manual wajib SATU baris: catatannya yang
-		   menyusut & membungkus teks, bukan pindah ke baris baru. */
-		.lg-crawl { flex: 0 0 auto; }
-		.lg-manual-note {
-			flex: 1 1 0; min-width: 0;
-			white-space: normal; line-height: 1.25;
-		}
-		.lg-sync-time { font-size: 11px; }
-		.lg-manual-note { font-size: 10.5px; line-height: 1.3; }
+		/* ── Mobile: jarak dirapikan supaya tidak berdesakan/bertumpuk ─────────── */
+		@media (max-width: 700px) {
+			.lg-overview-panel { padding: 16px 14px; border-radius: 16px; }
+			/* Header: subjudul penuh, blok sinkronisasi turun ke baris sendiri. */
+			.lg-header { gap: 10px; }
+			/* Baris: tombol Crawl + catatan manual berdampingan, waktu sinkronisasi di bawah. */
+			.lg-sync {
+				align-items: flex-start;
+				width: 100%; gap: 6px;
+			}
+			.lg-sync-actions {
+				width: 100%; gap: 8px;
+			}
+			.lg-sync-time { width: 100%; }
+			/* Tombol Crawl + catatan manual wajib SATU baris: catatannya yang
+			   menyusut & membungkus teks, bukan pindah ke baris baru. */
+			.lg-crawl { flex: 0 0 auto; }
+			.lg-manual-note {
+				flex: 1 1 0; min-width: 0;
+				white-space: normal; line-height: 1.25;
+			}
+			.lg-sync-time { font-size: 11px; }
+			.lg-manual-note { font-size: 10.5px; line-height: 1.3; }
 
-		/* Kartu ringkasan: satu kolom, jarak seragam. */
-		.lg-cards { margin-top: 12px; gap: 8px; }
-		.lg-card { padding: 12px 14px; }
-		.lg-card-value { font-size: 26px; margin-top: 4px; }
-		.lg-card-hint { margin-top: 4px; }
+			/* Kartu ringkasan: satu kolom, jarak seragam. */
+			.lg-cards { margin-top: 14px; gap: 10px; }
+			.lg-card { padding: 14px 14px 10px; }
+			.lg-card-value { font-size: 24px; }
+			.lg-card-hint { margin-top: 4px; }
 
 		/* Toolbar: pencarian + filter status + tombol filter dalam SATU baris.
 		   Tombol filter hanya ikon (teksnya disembunyikan) supaya muat. Saat

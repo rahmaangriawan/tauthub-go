@@ -36,9 +36,9 @@
   --success-soft: #eaf8f1;
   --warning: #a15c00;
   --warning-soft: #fff6df;
-  --vvip: #6d28d9;
-  --vvip-soft: #f5f3ff;
-  --vvip-border: #ddd6fe;
+  --vvip: #636CCB;
+  --vvip-soft: #eef0fb;
+  --vvip-border: #d0d4f2;
 
   --shadow-sm: 0 1px 2px rgba(23, 43, 77, 0.05);
   --shadow-md: 0 12px 32px rgba(23, 43, 77, 0.08);
@@ -71,9 +71,9 @@
   --accent-foreground: #bcd0ff;
   --destructive: #f97066;
   --destructive-foreground: #1f2430;
-  --vvip: #c4b5fd;
-  --vvip-soft: rgba(109, 40, 217, 0.22);
-  --vvip-border: rgba(167, 139, 250, 0.4);
+  --vvip: #a8b0ee;
+  --vvip-soft: rgba(99, 108, 203, 0.22);
+  --vvip-border: rgba(99, 108, 203, 0.42);
   --border: rgba(255, 255, 255, 0.1);
   --input: rgba(255, 255, 255, 0.15);
   --ring: #2b67ec;
@@ -213,17 +213,107 @@ dialog.app-card {
     border-right: 1px solid var(--sidebar-border);
     background-color: var(--sidebar);
     color: var(--sidebar-foreground);
+    overflow-x: hidden;
+    transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .app-sidebar-inner { display: flex; flex-direction: column; height: 100%; padding: 16px 10px 12px; }
-  .app-sidebar-brand { display: flex; align-items: center; min-height: 44px; padding: 0 8px; }
+  .app-sidebar[data-collapsed='true'] {
+    width: 68px;
+  }
+  .app-sidebar-inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 16px 10px 12px;
+    transition: padding 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .app-sidebar[data-collapsed='true'] .app-sidebar-inner {
+    padding: 16px 12px 12px;
+  }
+  .app-sidebar-brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 4px 0 8px;
+    margin-bottom: 14px;
+    transition: padding 320ms cubic-bezier(0.22, 1, 0.36, 1), gap 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .app-sidebar[data-collapsed='true'] .app-sidebar-brand {
+    padding: 0 6px;
+    gap: 0;
+  }
   /* Logo asli app lama (public/tauthub-logo.webp 140x35) menggantikan wordmark
      teks; rasio dipertahankan supaya tidak terdistorsi. */
-  .app-brand-link { display: inline-flex; align-items: center; }
-  .app-brand-logo { display: block; width: 140px; height: 35px; object-fit: contain; }
+  .app-brand-link {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 160px;
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    overflow: hidden;
+    transition:
+      max-width 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 180ms ease,
+      transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .app-sidebar[data-collapsed='true'] .app-brand-link {
+    max-width: 0;
+    opacity: 0;
+    transform: translateX(-10px) scale(0.94);
+    pointer-events: none;
+  }
+  .app-brand-logo { display: block; width: 140px; min-width: 140px; height: 35px; object-fit: contain; }
+
+  /* Tombol trigger expand/collapse di kanan pojok logo (ala shadcn SidebarTrigger) */
+  .app-sidebar-collapse-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--sidebar-soft);
+    cursor: pointer;
+    transition: background-color 160ms ease, color 160ms ease, transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .app-collapse-icon-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .app-sidebar-collapse-btn:hover {
+    background-color: var(--sidebar-hover);
+    color: var(--sidebar-foreground);
+  }
+  .app-sidebar-collapse-btn:hover .app-collapse-icon-wrap {
+    transform: scale(1.08);
+  }
+  .app-sidebar-collapse-btn:active {
+    transform: scale(0.92);
+  }
+  .app-sidebar-collapse-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
 
   /* gap 4px = Radix <Flex> di app lama (pembungkus nav), sehingga jarak antar
      item (termasuk ke separator) bertambah 4px persis seperti aslinya. */
-  .app-sidebar-nav { display: flex; flex-direction: column; gap: 4px; min-height: 0; flex: 1; margin-bottom: 10px; overflow-y: auto; }
+  .app-sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    flex: 1;
+    margin-bottom: 10px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
   /* Scrollbar bilah menu: tipis, membulat, menyatu dengan warna sidebar, dan
      hanya menebal saat disentuh — agar tidak memakan lebar menu di layar pendek. */
   .app-sidebar-nav::-webkit-scrollbar { width: 8px; }
@@ -247,18 +337,28 @@ dialog.app-card {
     height: 1px;
     margin: 12px 0;
     background-color: var(--sidebar-border);
+    transition: margin 280ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .app-sidebar-label {
     display: block;
+    max-height: 29px;
     padding: 8px 10px 5px;
     color: var(--sidebar-soft);
-    /* 12px/16px = Radix <Text size="1"> di app lama (navLabel), bukan 11px. */
     font-size: 12px;
     line-height: 16px;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    opacity: 1;
+    transform: translateY(0);
+    transition:
+      max-height 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      padding 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 180ms ease,
+      transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .app-sidebar-link {
@@ -268,23 +368,154 @@ dialog.app-card {
     min-height: 40px;
     gap: 11px;
     border-radius: 9px;
-    padding: 0 10px;
+    padding: 0 10px 0 13px;
     color: var(--sidebar-soft);
     font-size: 13px;
     font-weight: 550;
     text-decoration: none;
-    transition: background-color 160ms cubic-bezier(0.2, 0.8, 0.2, 1), color 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    white-space: nowrap;
+    overflow: hidden;
+    transition:
+      background-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      padding 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      gap 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .app-sidebar-link svg { flex: 0 0 auto; }
-  .app-sidebar-link:hover { background-color: var(--sidebar-hover); color: var(--sidebar-foreground); }
-  .app-sidebar-link[data-active='true'] {
+  /* Indikator bar kapsul di sisi kiri yang mekar (spring scaleY) saat aktif/hover */
+  .app-sidebar-link::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    width: 3px;
+    height: 18px;
+    border-radius: 999px;
     background-color: var(--sidebar-primary);
-    color: var(--sidebar-primary-foreground);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    opacity: 0;
+    transform: translateY(-50%) scaleY(0.2);
+    transition:
+      transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .app-sidebar-link svg {
+    flex: 0 0 auto;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), color 180ms ease;
+  }
+  .app-sidebar-link-text {
+    display: inline-block;
+    max-width: 190px;
+    opacity: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translateX(0);
+    transition:
+      max-width 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 180ms ease,
+      transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .app-sidebar-link:hover {
+    background-color: var(--sidebar-hover);
+    color: var(--sidebar-foreground);
+  }
+  .app-sidebar-link:hover svg {
+    transform: translateX(1.5px) scale(1.08);
+  }
+  .app-sidebar-link:hover .app-sidebar-link-text {
+    transform: translateX(2px);
+  }
+  .app-sidebar-link:active {
+    transform: scale(0.985);
+  }
+  .app-sidebar-link[data-active='true'] {
+    background-color: transparent;
+    color: var(--sidebar-primary);
+    font-weight: 650;
+  }
+  .app-sidebar-link[data-active='true']::before {
+    opacity: 1;
+    transform: translateY(-50%) scaleY(1);
+  }
+  .app-sidebar-link[data-active='true'] svg {
+    transform: scale(1.06);
+  }
+  .app-sidebar-link[data-active='true']:hover {
+    background-color: var(--sidebar-hover);
+    color: var(--sidebar-primary);
   }
 
-  /* Kotak pencarian menu (admin): filter live daftar navigasi. */
-  .app-sidebar-search { position: relative; margin: 0 8px 6px; }
+  /* ── Mode Collapsed (Icon-only Rail, 68px, animasi penuh tanpa display:none) ── */
+  .app-sidebar[data-collapsed='true'] .app-sidebar-label {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+  }
+  .app-sidebar[data-collapsed='true'] .app-sidebar-separator {
+    margin: 6px 4px;
+  }
+  .app-sidebar[data-collapsed='true'] .app-sidebar-link {
+    padding: 0 13px;
+    gap: 0;
+  }
+  .app-sidebar[data-collapsed='true'] .app-sidebar-link::before {
+    opacity: 0;
+    transform: translateY(-50%) scaleY(0);
+  }
+  .app-sidebar[data-collapsed='true'] .app-sidebar-link-text {
+    max-width: 0;
+    opacity: 0;
+    transform: translateX(-8px);
+    pointer-events: none;
+  }
+  .app-sidebar[data-collapsed='true'] .app-sidebar-link:hover svg {
+    transform: scale(1.1);
+  }
+  .app-sidebar[data-collapsed='true'] .app-sidebar-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    margin-left: 0;
+    height: 14px;
+    min-width: 14px;
+    padding: 0 3px;
+    font-size: 9px;
+  }
+  .app-sidebar-search {
+    position: relative;
+    margin: 0 8px 6px;
+    max-height: 40px;
+    opacity: 1;
+    overflow: hidden;
+    transition:
+      max-height 260ms cubic-bezier(0.22, 1, 0.36, 1),
+      margin 260ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 160ms ease;
+  }
+  .app-sidebar[data-collapsed='true'] .app-sidebar-search {
+    max-height: 0;
+    margin-bottom: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .app-sidebar-sublinks {
+    max-height: 320px;
+    opacity: 1;
+    overflow: hidden;
+    transition:
+      max-height 260ms cubic-bezier(0.22, 1, 0.36, 1),
+      margin 260ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 160ms ease;
+  }
+  .app-sidebar[data-collapsed='true'] .app-sidebar-sublinks {
+    max-height: 0;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
   .app-sidebar-search svg {
     position: absolute;
     top: 50%;

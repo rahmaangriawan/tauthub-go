@@ -887,12 +887,12 @@
 					<h2 class="text-sm font-semibold">{tr("Notifikasi")}</h2>
 				</div>
 				<p class="mt-0.5 text-xs text-muted-foreground">{tr("Email tambahan & nomor WhatsApp penerima notifikasi dashboard Tauthub.")}</p>
-				{#if (partner?.media_count ?? 0) > 1 && ((prefs.wa_number ?? '').trim() === '' || !prefs.wa_consent)}
-					<div class="mt-5 rounded-xl border p-4" style="border-color: var(--destructive); background-color: var(--warning-soft, #fff7ed);" role="alert">
-						<p class="font-semibold" style="color: var(--destructive);">{tr('Nomor WhatsApp wajib diisi')}</p>
-						<p class="mt-1 text-sm text-muted-foreground">{tr('Media Anda sudah lebih dari satu, jadi nomor WhatsApp dan izin dihubungi wajib diisi. Menambah media baru diblokir sampai bagian ini lengkap.')}</p>
-					</div>
-				{/if}
+					{#if (partner?.media_count ?? 0) > 1 && ((prefs.wa_number ?? '').trim() === '' || !prefs.wa_consent)}
+						<div class="mt-5 rounded-xl border p-4" style="border-color: #F3BE7A; background-color: color-mix(in srgb, #F3BE7A 26%, #ffffff);" role="alert">
+							<p class="font-semibold" style="color: #7C4509;">{tr('Nomor WhatsApp wajib diisi')}</p>
+							<p class="mt-1 text-sm" style="color: #5C3A14;">{tr('Media Anda sudah lebih dari satu, jadi nomor WhatsApp dan izin dihubungi wajib diisi. Menambah media baru diblokir sampai bagian ini lengkap.')}</p>
+						</div>
+					{/if}
 				<form class="mt-5 space-y-4" onsubmit={savePrefs}>
 					<div class="grid gap-4 sm:grid-cols-2">
 						<label class="block">

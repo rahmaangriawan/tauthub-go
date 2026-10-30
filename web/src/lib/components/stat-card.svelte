@@ -10,12 +10,19 @@
 	import { ArrowDown, ArrowUp } from '@lucide/svelte';
 
 	type Tone = 'neutral' | 'primary' | 'warning' | 'success';
+	type CardPalette = {
+		cardStyle?: string;
+		iconBoxStyle?: string;
+		valueStyle?: string;
+		pillStyle?: string;
+	};
 
 	let {
 		label,
 		value,
 		hint,
 		tone = 'neutral',
+		palette,
 		icon: Icon,
 		sparkline,
 		href,
@@ -25,8 +32,9 @@
 		value: string;
 		hint?: string;
 		tone?: Tone;
+		palette?: CardPalette;
 		icon?: Component<{ size?: number }>;
-		sparkline?: { values: number[]; stroke: string; title: string };
+		sparkline?: { values: number[]; stroke: string; fillColor?: string; fillOpacity?: number; title: string };
 		href?: string;
 		delta?: number | null;
 	} = $props();
@@ -61,13 +69,16 @@
 	};
 
 	const t = $derived(toneStyles[tone]);
-	// Kartu sukses punya dasar hijau-soft dengan border hijau tipis (spec §2).
+	const iconBoxStyle = $derived(palette?.iconBoxStyle ?? t.iconBox);
+	const valueStyle = $derived(palette?.valueStyle ?? t.value);
+	// Kartu sukses punya dasar hijau-soft dengan border hijau tipis (spec §2),
+	// kecuali palette kustom diberikan.
 	const cardStyle = $derived(
-		tone === 'success'
-			? 'background-color: var(--success-soft); border-color: color-mix(in srgb, var(--success) 30%, transparent);'
-			: ''
+		palette?.cardStyle ??
+			(tone === 'success'
+				? 'background-color: var(--success-soft); border-color: color-mix(in srgb, var(--success) 30%, transparent);'
+				: '')
 	);
-	const hasHistory = $derived(Boolean(sparkline?.values?.some((v) => v > 0)));
 	const deltaSign = $derived(
 		delta == null ? '' : delta > 0.5 ? 'up' : delta < -0.5 ? 'down' : 'flat'
 	);
@@ -76,6 +87,7 @@
 	);
 	// Pill hijau = naik; merah = turun; "—"/datar = netral (tanpa klaim angka).
 	const deltaStyle = $derived.by(() => {
+		if (palette?.pillStyle) return palette.pillStyle;
 		if (delta == null || deltaSign === 'flat')
 			return 'background-color: var(--secondary); color: var(--muted-foreground);';
 		if (deltaSign === 'down')
@@ -98,7 +110,7 @@
 	<div class="flex items-center justify-between gap-3">
 		<div class="flex min-w-0 items-center gap-3">
 			{#if Icon}
-				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px]" style={t.iconBox}>
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px]" style={iconBoxStyle}>
 					<Icon size={19} />
 				</div>
 			{/if}
@@ -118,15 +130,17 @@
 		{/if}
 	</div>
 	<div class="mt-auto">
-		<div class="text-[30px] leading-[1.1] font-bold tracking-[-0.03em] tabular-nums" style={t.value}>{value}</div>
+		<div class="text-[30px] leading-[1.1] font-bold tracking-[-0.03em] tabular-nums" style={valueStyle}>{value}</div>
 		{#if hint}
 			<div class="mt-1.5 text-[13px] leading-[1.45]" style={t.hint}>{hint}</div>
 		{/if}
 	</div>
-	{#if sparkline && hasHistory}
+	{#if sparkline}
 		<Sparkline
 			values={sparkline.values}
 			stroke={sparkline.stroke}
+			fillColor={sparkline.fillColor}
+			fillOpacity={sparkline.fillOpacity}
 			title={sparkline.title}
 			width={240}
 			height={44}

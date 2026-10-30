@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
 	import type { Snippet } from 'svelte';
-	import { ExternalLink, Image as ImageIcon, Search } from '@lucide/svelte';
+	import { ArrowUp, ExternalLink, Image as ImageIcon, Search } from '@lucide/svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
 
 	// Tampilan bersama Link Guardian (portal klien dan portal mitra).
@@ -64,36 +64,98 @@
 		v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
 	let imgBroken = $state<Record<string, boolean>>({});
+	const PALETTE = [
+		{
+			stroke: '#2C5EAD', gradTop: '#2C5EAD', gradBottom: '#C4E2F5',
+			cardBg: 'linear-gradient(180deg, rgba(44, 94, 173, 0.045) 0%, rgba(196, 226, 245, 0.14) 100%)',
+			cardBorder: 'rgba(44, 94, 173, 0.16)', iconBg: 'rgba(44, 94, 173, 0.12)', iconColor: '#2C5EAD',
+			pillBg: 'rgba(44, 94, 173, 0.12)', pillColor: '#2C5EAD',
+			waveLine: 'M 4 34 Q 20 26, 36 27 T 70 31 T 104 25 T 138 29 T 172 22 T 206 14 T 236 18',
+			waveArea: 'M 4 34 Q 20 26, 36 27 T 70 31 T 104 25 T 138 29 T 172 22 T 206 14 T 236 18 L 236 44 L 4 44 Z'
+		},
+		{
+			stroke: '#1591DC', gradTop: '#1591DC', gradBottom: '#C4E2F5',
+			cardBg: 'linear-gradient(180deg, rgba(21, 145, 220, 0.05) 0%, rgba(196, 226, 245, 0.18) 100%)',
+			cardBorder: 'rgba(21, 145, 220, 0.18)', iconBg: 'rgba(21, 145, 220, 0.13)', iconColor: '#1591DC',
+			pillBg: 'rgba(21, 145, 220, 0.14)', pillColor: '#1591DC',
+			waveLine: 'M 4 35 Q 22 25, 38 29 T 74 26 T 110 31 T 146 21 T 182 23 T 212 16 T 236 13',
+			waveArea: 'M 4 35 Q 22 25, 38 29 T 74 26 T 110 31 T 146 21 T 182 23 T 212 16 T 236 13 L 236 44 L 4 44 Z'
+		},
+		{
+			stroke: '#4BB8FA', gradTop: '#4BB8FA', gradBottom: '#C4E2F5',
+			cardBg: 'linear-gradient(180deg, rgba(75, 184, 250, 0.065) 0%, rgba(196, 226, 245, 0.22) 100%)',
+			cardBorder: 'rgba(75, 184, 250, 0.26)', iconBg: 'rgba(75, 184, 250, 0.18)', iconColor: '#1591DC',
+			pillBg: 'rgba(75, 184, 250, 0.22)', pillColor: '#2C5EAD',
+			waveLine: 'M 4 36 Q 22 27, 40 28 T 76 32 T 112 24 T 148 27 T 184 17 T 214 19 T 236 12',
+			waveArea: 'M 4 36 Q 22 27, 40 28 T 76 32 T 112 24 T 148 27 T 184 17 T 214 19 T 236 12 L 236 44 L 4 44 Z'
+		},
+		{
+			stroke: '#2C5EAD', gradTop: '#4BB8FA', gradBottom: '#C4E2F5',
+			cardBg: 'linear-gradient(180deg, rgba(196, 226, 245, 0.28) 0%, rgba(196, 226, 245, 0.10) 100%)',
+			cardBorder: '#C4E2F5', iconBg: '#C4E2F5', iconColor: '#2C5EAD',
+			pillBg: '#C4E2F5', pillColor: '#2C5EAD',
+			waveLine: 'M 4 34 Q 20 26, 38 28 T 74 25 T 110 30 T 146 22 T 182 25 T 212 15 T 236 19',
+			waveArea: 'M 4 34 Q 20 26, 38 28 T 74 25 T 110 30 T 146 22 T 182 25 T 212 15 T 236 19 L 236 44 L 4 44 Z'
+		}
+	];
 </script>
 
 <section class="lg-root">
-	<header class="lg-header">
-		<div class="min-w-0">
-			<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--primary);">{eyebrow}</p>
-			<h1 class="mt-1 text-2xl font-semibold tracking-tight">{title}</h1>
-			{#if subtitle}
-				<p class="lg-sub mt-1 text-sm text-muted-foreground">{subtitle}</p>
+	<div class="app-card lg-overview-panel">
+		<header class="lg-header">
+			<div class="min-w-0">
+				<h1 class="text-2xl font-semibold tracking-tight">{title}</h1>
+				{#if subtitle}
+					<p class="lg-sub mt-1 text-sm text-muted-foreground">{subtitle}</p>
+				{/if}
+			</div>
+			{#if headerRight}
+				<div class="lg-sync">{@render headerRight()}</div>
 			{/if}
-		</div>
-		{#if headerRight}
-			<div class="lg-sync">{@render headerRight()}</div>
-		{/if}
-	</header>
+		</header>
 
-	{#if cards.length > 0}
-		<div class="lg-cards">
-			{#each cards as c (c.label)}
-				<div class="app-card lg-card" style="--tone: {c.tone ?? 'var(--muted-foreground)'};">
-					<p class="lg-card-label">
-						{#if c.icon}<c.icon size={14} strokeWidth={2.4} />{/if}
-						<span>{c.label}</span>
-					</p>
-					<p class="lg-card-value">{c.value}</p>
-					{#if c.hint}<p class="lg-card-hint">{c.hint}</p>{/if}
-				</div>
-			{/each}
-		</div>
-	{/if}
+		{#if cards.length > 0}
+			{@const baseTotal = cards[0]?.value ?? 0}
+			<div class="lg-cards">
+				{#each cards as c, idx (c.label)}
+					{@const p = PALETTE[idx % PALETTE.length]}
+					{@const pct = idx === 0 ? (baseTotal > 0 ? '100%' : '0%') : baseTotal > 0 ? `${Math.round((c.value / baseTotal) * 100)}%` : '0%'}
+					<div class="lg-card" style="--card-bg: {p.cardBg}; --card-border: {p.cardBorder};">
+						<div class="lg-card-top">
+							{#if c.icon}
+								<div class="lg-card-icon" style="background-color: {p.iconBg}; color: {p.iconColor};">
+									<c.icon size={20} strokeWidth={2.1} />
+								</div>
+							{/if}
+							<div class="lg-card-body">
+								<p class="lg-card-label"><span>{c.label}</span></p>
+								<div class="lg-card-metric">
+									<p class="lg-card-value">{c.value}</p>
+									<span class="lg-card-pill" style="background-color: {p.pillBg}; color: {p.pillColor};">
+										<ArrowUp size={10} strokeWidth={2.6} />
+										{pct}
+									</span>
+								</div>
+								{#if c.hint}<p class="lg-card-hint">{c.hint}</p>{/if}
+							</div>
+						</div>
+						<div class="lg-card-chart" aria-hidden="true">
+							<svg viewBox="0 0 240 46" preserveAspectRatio="none" class="lg-spark-svg">
+								<defs>
+									<linearGradient id={`lgv-grad-${idx}`} x1="0" y1="0" x2="0" y2="1">
+										<stop offset="0%" stop-color={p.gradTop} stop-opacity="0.28" />
+										<stop offset="100%" stop-color={p.gradBottom} stop-opacity="0.03" />
+									</linearGradient>
+								</defs>
+								<path d={p.waveArea} fill={`url(#lgv-grad-${idx})`} />
+								<path d={p.waveLine} fill="none" stroke={p.stroke} stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+							</svg>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
 
 	{#if toolbar}
 		<div class="app-card lg-toolbar">{@render toolbar()}</div>
@@ -194,19 +256,44 @@
 
 <style>
 	/* ── Header ─────────────────────────────────────────────────────────── */
-	.lg-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
-	.lg-sub { max-width: 62ch; }
-	.lg-sync { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+	.lg-overview-panel {
+		padding: 22px 24px;
+		border-radius: 20px;
+		border: 1px solid color-mix(in srgb, #C4E2F5 70%, var(--border));
+		background: var(--card, #ffffff);
+		box-shadow: 0 6px 28px -10px rgba(44, 94, 173, 0.08);
+	}
+	.lg-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; }
+	.lg-sub { max-width: 66ch; }
+	.lg-sync { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 
 	/* ── Kartu ringkasan ────────────────────────────────────────────────── */
-	.lg-cards { margin-top: 16px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
-	.lg-card { display: flex; flex-direction: column; padding: 14px 16px; border: 1px solid var(--border); }
-	.lg-card-label {
-		display: inline-flex; align-items: center; gap: 6px;
-		font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tone);
+	.lg-cards { margin-top: 20px; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+	.lg-card {
+		display: flex; flex-direction: column; justify-content: space-between;
+		padding: 16px 18px 12px; border-radius: 16px;
+		border: 1px solid var(--card-border, #C4E2F5);
+		background: var(--card-bg, rgba(196, 226, 245, 0.14));
 	}
-	.lg-card-value { margin-top: 6px; font-size: 30px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-	.lg-card-hint { margin-top: 5px; font-size: 11.5px; line-height: 1.35; color: var(--muted-foreground); }
+	.lg-card-top { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+	.lg-card-icon {
+		width: 44px; height: 44px; flex: 0 0 44px; border-radius: 12px;
+		display: flex; align-items: center; justify-content: center;
+	}
+	.lg-card-body { min-width: 0; flex: 1 1 auto; }
+	.lg-card-label {
+		display: inline-flex; align-items: center; gap: 5px;
+		font-size: 13px; font-weight: 600; color: var(--foreground);
+	}
+	.lg-card-metric { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+	.lg-card-value { font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+	.lg-card-pill {
+		display: inline-flex; align-items: center; gap: 3px;
+		padding: 2.5px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+	}
+	.lg-card-hint { margin-top: 6px; font-size: 12px; line-height: 1.35; color: var(--muted-foreground); }
+	.lg-card-chart { margin-top: 12px; width: 100%; height: 42px; }
+	.lg-spark-svg { width: 100%; height: 100%; display: block; overflow: visible; }
 
 	/* ── Toolbar (kontrol disediakan halaman pemakainya) ────────────────── */
 	.lg-toolbar { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; }

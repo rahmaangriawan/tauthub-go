@@ -1079,30 +1079,30 @@
 			background: #f1f5f9;
 			color: #1e293b;
 		}
-		.categoryPill--charcoal { background: #f1f5f9; border-color: #cbd5e1; color: #1e293b; }
-		.categoryPill--slate { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
-		.categoryPill--stone { background: #fafaf9; border-color: #e7e5e4; color: #57534e; }
-		.categoryPill--navy { background: #f0f4f9; border-color: #cbd5e1; color: #0f2744; }
-		.categoryPill--cobalt { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
-		.categoryPill--blue { background: #eef6ff; border-color: #cfe4fe; color: #1e40af; }
-		.categoryPill--sky { background: #f0f9ff; border-color: #bae6fd; color: #0369a1; }
-		.categoryPill--cyan { background: #ecfeff; border-color: #a5f3fc; color: #0e7490; }
-		.categoryPill--teal { background: #f0fdfa; border-color: #99f6e4; color: #0f766e; }
-		.categoryPill--emerald { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
-		.categoryPill--green { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
-		.categoryPill--lime { background: #f7fee7; border-color: #d9f99d; color: #4d7c0f; }
-		.categoryPill--gold { background: #fefce8; border-color: #fef08a; color: #a16207; }
-		.categoryPill--amber { background: #fffbeb; border-color: #fde68a; color: #92400e; }
-		.categoryPill--orange { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
-		.categoryPill--coral { background: #fff4f2; border-color: #ffd5cc; color: #b93815; }
-		.categoryPill--red { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
-		.categoryPill--burgundy { background: #fff1f2; border-color: #fecdd3; color: #9f1239; }
-		.categoryPill--pink { background: #fdf2f8; border-color: #fbcfe8; color: #be185d; }
-		.categoryPill--rose { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
-		.categoryPill--fuchsia { background: #fdf4ff; border-color: #f5d0fe; color: #a21caf; }
-		.categoryPill--purple { background: #faf5ff; border-color: #e9d5ff; color: #7e22ce; }
-		.categoryPill--violet { background: #f5f3ff; border-color: #ddd6fe; color: #6d28d9; }
-		.categoryPill--indigo { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+		.categoryPill--cobalt   { background: color-mix(in srgb, #2373F4 16%, #ffffff); border-color: color-mix(in srgb, #2373F4 48%, #ffffff); color: color-mix(in srgb, #2373F4 85%, #0f172a); }
+		.categoryPill--blue     { background: color-mix(in srgb, #578EF5 18%, #ffffff); border-color: color-mix(in srgb, #578EF5 52%, #ffffff); color: color-mix(in srgb, #578EF5 80%, #0f172a); }
+		.categoryPill--sky      { background: color-mix(in srgb, #65D0F4 26%, #ffffff); border-color: color-mix(in srgb, #65D0F4 68%, #ffffff); color: color-mix(in srgb, #65D0F4 55%, #0c4a6e); }
+		.categoryPill--lime     { background: color-mix(in srgb, #F2F7A0 48%, #ffffff); border-color: color-mix(in srgb, #F2F7A0 85%, #a3b13b); color: #4d5908; }
+		.categoryPill--navy     { background: color-mix(in srgb, #006199 15%, #ffffff); border-color: color-mix(in srgb, #006199 45%, #ffffff); color: #006199; }
+		.categoryPill--cyan     { background: color-mix(in srgb, #8ACFF8 30%, #ffffff); border-color: color-mix(in srgb, #8ACFF8 75%, #ffffff); color: #0b5583; }
+		.categoryPill--gold     { background: color-mix(in srgb, #F4EB6C 42%, #ffffff); border-color: color-mix(in srgb, #F4EB6C 85%, #b8a814); color: #5c5300; }
+		.categoryPill--amber    { background: color-mix(in srgb, #FFD444 32%, #ffffff); border-color: color-mix(in srgb, #FFD444 75%, #d49b00); color: #6e4e00; }
+		.categoryPill--slate    { background: color-mix(in srgb, #2196F3 16%, #ffffff); border-color: color-mix(in srgb, #2196F3 48%, #ffffff); color: #0d5ca1; }
+		.categoryPill--orange   { background: color-mix(in srgb, #FF7F3E 18%, #ffffff); border-color: color-mix(in srgb, #FF7F3E 52%, #ffffff); color: #b5450b; }
+		.categoryPill--purple   { background: color-mix(in srgb, #AC87C5 22%, #ffffff); border-color: color-mix(in srgb, #AC87C5 58%, #ffffff); color: #5e3b76; }
+		.categoryPill--indigo   { background: color-mix(in srgb, #756AB6 18%, #ffffff); border-color: color-mix(in srgb, #756AB6 50%, #ffffff); color: #483d82; }
+		.categoryPill--teal     { background: color-mix(in srgb, #3F979B 18%, #ffffff); border-color: color-mix(in srgb, #3F979B 52%, #ffffff); color: #216063; }
+		.categoryPill--stone    { background: color-mix(in srgb, #91D8E4 34%, #ffffff); border-color: color-mix(in srgb, #91D8E4 78%, #5ba6b3); color: #195661; }
+		.categoryPill--burgundy { background: color-mix(in srgb, #570A57 14%, #ffffff); border-color: color-mix(in srgb, #570A57 42%, #ffffff); color: #570A57; }
+		.categoryPill--emerald  { background: color-mix(in srgb, #42DEE1 26%, #ffffff); border-color: color-mix(in srgb, #42DEE1 68%, #22999b); color: #0d5f61; }
+		.categoryPill--rose     { background: color-mix(in srgb, #F18A9B 22%, #ffffff); border-color: color-mix(in srgb, #F18A9B 58%, #ffffff); color: #9c2b40; }
+		.categoryPill--coral    { background: color-mix(in srgb, #FFB480 30%, #ffffff); border-color: color-mix(in srgb, #FFB480 72%, #d97a3a); color: #873e0b; }
+		.categoryPill--fuchsia  { background: color-mix(in srgb, #A26EA1 20%, #ffffff); border-color: color-mix(in srgb, #A26EA1 54%, #ffffff); color: #663865; }
+		.categoryPill--pink     { background: color-mix(in srgb, #FFCEF3 45%, #ffffff); border-color: color-mix(in srgb, #FFCEF3 88%, #c97ab5); color: #7a2966; }
+		.categoryPill--green    { background: color-mix(in srgb, #C9FDD7 48%, #ffffff); border-color: color-mix(in srgb, #C9FDD7 88%, #5bbd76); color: #17612c; }
+		.categoryPill--violet   { background: color-mix(in srgb, #6892D5 20%, #ffffff); border-color: color-mix(in srgb, #6892D5 54%, #ffffff); color: #2b508c; }
+		.categoryPill--charcoal { background: color-mix(in srgb, #F4EB6C 36%, #ffffff); border-color: color-mix(in srgb, #F4EB6C 80%, #b8a814); color: #5c5300; }
+		.categoryPill--red      { background: color-mix(in srgb, #2373F4 16%, #ffffff); border-color: color-mix(in srgb, #2373F4 48%, #ffffff); color: color-mix(in srgb, #2373F4 85%, #0f172a); }
 
 	.detailHeaderActions {
 		display: flex;
