@@ -1437,6 +1437,7 @@ func decodeTautWriterOptions(r *http.Request) (tautWriterOptions, error) {
 		return opts, errBadRequest("Body JSON tidak valid.")
 	}
 	opts.Topic = truncateString(strings.TrimSpace(body.Topic), 2000)
+	opts.Gaya = strings.TrimSpace(body.Gaya)
 	opts.ArticleType = truncateString(strings.TrimSpace(body.ArticleType), 50)
 	if len(body.AngleSlug) > 0 {
 		var slug string

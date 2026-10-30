@@ -1208,9 +1208,12 @@
 		if (anglesLoading || anglesError || !angle) throw new Error(tr('Pilih angle artikel yang tersedia untuk media ini.'));
 		// Mode Proper membawa isian fakta terkunci + Brief Copilot: backend
 		// memakainya untuk prompt strict grounding & verifikasi Gatekeeper.
+		// Gaya dikirim eksplisit dua-duanya: tanpa penanda "simpel", server memakai
+		// ulang isian Proper tersimpan (sisa percobaan sebelumnya) sehingga generasi
+		// sederhana ikut gagal karena brief lamanya tidak ditemukan.
 		const payload = proper
 			? { topic, links, angle_slug: angleSlug, gaya: 'proper', proper }
-			: { topic, links, angle_slug: angleSlug };
+			: { topic, links, angle_slug: angleSlug, gaya: 'simpel' };
 		const token = getAccessToken();
 		const controller = new AbortController();
 		const abortTimer = window.setTimeout(() => controller.abort(), 300_000);

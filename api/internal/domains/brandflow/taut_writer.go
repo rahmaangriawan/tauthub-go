@@ -63,6 +63,9 @@ type tautWriterOptions struct {
 	// terkunci / Brief Copilot / kutipan resmi. Nil vs isian kosong = gaya
 	// Sederhana (perilaku lama).
 	Proper *tautProperInput
+	// Gaya: pilihan eksplisit dari modal ("proper"/"sederhana"). Kosong = tidak
+	// disebut (regenerasi/Gatekeeper), dan isian Proper tersimpan boleh dipakai.
+	Gaya string
 	// StreamHTML (opsional): dipanggil dengan TAMBAHAN html parsial setiap kali
 	// LLM menulis lebih banyak isi — untuk streaming SSE ke editor. Nilai masih
 	// mentah (belum lewat finalizeTautArticleHTML); finalize hanya di akhir.
@@ -340,6 +343,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	articleType := ""
 	var requestedAngle *string
 	var proper *tautProperInput
+	gaya := ""
 	customLinks := []tautWriterLink{}
 	var streamFn func(string)
 	if len(opts) > 0 {
@@ -347,6 +351,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		articleType = strings.TrimSpace(opts[0].ArticleType)
 		requestedAngle = opts[0].AngleSlug
 		proper = opts[0].Proper
+		gaya = strings.TrimSpace(opts[0].Gaya)
 		customLinks = opts[0].Links
 		streamFn = opts[0].StreamHTML
 	}
@@ -415,16 +420,25 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	// Mode "Yang Proper": strict grounding ke fakta terkunci/Brief Copilot.
 	// Kiriman klien disimpan per media (regenerasi & Gatekeeper memakai isian
 	// yang sama), lalu blok grounding bak masuk bahan rujukan Writer.
-	if proper == nil {
+	// Isian Proper yang dikirim eksplisit wajib punya brief. Isian yang tersimpan
+	// hanya dipakai ulang saat regenerasi tanpa pilihan gaya; kalau klien memilih
+	// "Sederhana", grounding itu tidak boleh ikut — dulu isian lama tetap dipakai
+	// sehingga gaya sederhana pun gagal karena brief lamanya tidak ditemukan.
+	properRequested := proper != nil
+	simpleGaya := strings.EqualFold(gaya, "sederhana") || strings.EqualFold(gaya, "simpel")
+	if proper == nil && !simpleGaya {
 		proper = d.loadTautProperStored(ctx, item.strOr("id", ""))
 	}
 	if proper != nil {
 		d.saveTautProperFields(ctx, item.strOr("id", ""), proper)
 		briefCtx, briefErr := d.loadTautProperBriefContext(ctx, brandID, proper.BriefID)
 		if briefErr != nil {
-			return writerItemResult{}, briefErr
-		}
-		if properBlock := buildTautProperBlock(proper, briefCtx); properBlock != "" {
+			if properRequested {
+				return writerItemResult{}, briefErr
+			}
+			// Data lama tanpa brief yang sah: lanjutkan tanpa grounding.
+			proper = nil
+		} else if properBlock := buildTautProperBlock(proper, briefCtx); properBlock != "" {
 			referenceMaterial = strings.TrimSpace(referenceMaterial + "\n\n" + properBlock)
 			hasFacts = true
 		}
