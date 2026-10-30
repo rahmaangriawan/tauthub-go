@@ -29,6 +29,9 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	let user = $state<{ id: string; email: string; display_name: string } | null>(null);
 	// Badge merah di menu Dukungan: jumlah tiket dengan pesan mitra belum dibaca.
 	let supportUnread = $state(0);
+	// Badge merah di submenu Direktori: jumlah media yang menunggu review.
+	// Dipakai supaya admin tahu ada pengajuan baru tanpa membuka tab Pending.
+	let pendingMedia = $state(0);
 	let admin = $state<{ role: string; permissions: Record<string, boolean> } | null>(null);
 
 	onMount(() => {
@@ -55,15 +58,26 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			if (document.visibilityState === 'visible') void loadSupportUnread();
 		}, 30_000);
 		supportCleanup = () => clearInterval(supportTimer);
+		// Jumlah media menunggu review: segarkan saat tab kembali aktif dan saat
+		// admin menyetujui/menolak dari halaman Media (event di bawah).
+		const pendingTimer = setInterval(() => {
+			if (document.visibilityState === 'visible') void loadPendingMedia();
+		}, 30_000);
+		pendingCleanup = () => clearInterval(pendingTimer);
+		const onPendingRefresh = () => void loadPendingMedia();
+		window.addEventListener('tauthub:media-pending-refresh', onPendingRefresh);
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
 		return () => {
 			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+			window.removeEventListener('tauthub:media-pending-refresh', onPendingRefresh);
 			supportCleanup?.();
+			pendingCleanup?.();
 		};
 	});
 
 	let supportCleanup: (() => void) | null = null;
+	let pendingCleanup: (() => void) | null = null;
 
 	async function loadSupportUnread() {
 		try {
@@ -76,10 +90,27 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		}
 	}
 
+	// Jumlah media menunggu review. Memakai daftar media dengan limit=1 dan
+	// membaca field total — tidak ada endpoint hitung khusus, dan ini sudah
+	// dipakai tab Pending sehingga angkanya pasti sama.
+	async function loadPendingMedia() {
+		try {
+			const res = await apiRequest('/v1/platform/media?limit=1&offset=0&status=pending_review');
+			if (!res.ok) return;
+			const data = await res.json();
+			pendingMedia = Number(data?.total ?? 0);
+		} catch {
+			/* badge bersifat informasi; gagal memuat tidak mengganggu navigasi */
+		}
+	}
+
 	// Segarkan badge setiap kali rute berubah (mis. kembali dari halaman tiket).
 	$effect(() => {
 		pathname;
-		if (user) void loadSupportUnread();
+		if (user) {
+			void loadSupportUnread();
+			void loadPendingMedia();
+		}
 	});
 
 	const isSuper = $derived(admin?.role === 'super_admin');
@@ -153,6 +184,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 									{
 										label: tr('Direktori'),
 										href: '/admin/media',
+										// Badge merah: ada domain/media menunggu review.
+										badge: pendingMedia,
 										active:
 											pathname.startsWith('/admin/media') &&
 											!pathname.startsWith('/admin/media-packages') &&

@@ -89,6 +89,9 @@
 				method: 'POST',
 				body: JSON.stringify({ decision: 'approve' })
 			});
+			// Badge merah di sidebar & tab "Baru Ditambahkan" ikut turun tanpa
+			// menunggu polling 30 detik.
+			window.dispatchEvent(new CustomEvent('tauthub:media-pending-refresh'));
 			await load();
 		} catch (reason) {
 			error = errMessage(reason);
@@ -111,6 +114,7 @@
 				method: 'POST',
 				body: JSON.stringify({ decision: 'reject', reason })
 			});
+			window.dispatchEvent(new CustomEvent('tauthub:media-pending-refresh'));
 			reviewTarget = null;
 			rejectReason = '';
 			await load();
