@@ -736,6 +736,22 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			"KONTEKS UTAMA DARI KLIEN (WAJIB DIPATUHI): "+writerTopic,
 			"Seluruh artikel (judul, lead, isi, penutup) WAJIB mengikuti konteks di atas. Jangan menambah fakta, angka, nama, atau klaim yang tidak ada di konteks tersebut, dan jangan mengganti topik.",
 		)
+		// Instruksi klien kadang menyebut brand LAIN (bukan brand kampanye ini) —
+		// mis. brief Salsari Resto yang menyuruh "integrasikan Giovani Barbershop".
+		// Tanpa penjagaan, model menulis artikel dua brand: judul gabungan, isi
+		// berpindah topik, dan pembaca tidak tahu artikel ini tentang apa.
+		// Brand kampanye selalu diutamakan; brand lain hanya boleh disebut
+		// seperlunya sebagai konteks, bukan jadi subjek kedua.
+		if other := d.otherBrandMentions(ctx, writerTopic, campaign.strOr("brand_name", ""), name); len(other) > 0 {
+			promptLines = append(promptLines,
+				"PERINGATAN BRAND CAMPUR (WAJIB): konteks klien di atas menyebut nama brand lain ("+
+					strings.Join(other, ", ")+") yang BUKAN brand kampanye ini. Artikel ini HANYA tentang "+
+					name+" sebagai subjek utama. DILARANG menjadikan brand lain itu subjek kedua, DILARANG "+
+					"menggabungkannya di judul (mis. \"A dan B\"), dan DILARANG membuat bagian/heading khusus "+
+					"untuk brand itu. Bila penyebutannya tidak diperlukan, JANGAN sebut sama sekali — "+
+					"jangan mengarang fakta tentang brand lain yang tidak ada di bahan.",
+			)
+		}
 		// Konteks menyebut tautan tapi tidak ada SATU pun URL (anchor kampanye
 		// kosong dan klien tidak mengisi Tautan & Anchor): model dilarang
 		// mengarang alamat — cukup sebut frasanya sebagai teks biasa.
