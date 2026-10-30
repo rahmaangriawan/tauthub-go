@@ -14,7 +14,7 @@
 export const LINK_DURATION_OPTIONS = [
 	{ value: 0, label: 'Permanen — Tautan Tidak Pernah Dilepas', short: 'Permanen' },
 	{ value: 6, label: '6 Bulan', short: '6 Bln SLA' },
-	{ value: 12, label: '12 Bulan (standar Tauthub)', short: '12 Bln SLA' },
+	{ value: 12, label: '12 Bulan', short: '12 Bln SLA' },
 	{ value: 24, label: '24 Bulan', short: '24 Bln SLA' },
 	{ value: 36, label: '36 Bulan', short: '36 Bln SLA' }
 ] as const;

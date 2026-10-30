@@ -4697,7 +4697,6 @@ export const PHRASE_EN: Record<string, string> = {
   "Permanen": "Permanent",
   "Permanen — Tautan Tidak Pernah Dilepas": "Permanent — The Link Is Never Removed",
   "Permanen — tautan tidak pernah dilepas": "Permanent — the link is never removed",
-  "12 Bulan (standar Tauthub)": "12 months (Tauthub standard)",
   "Jangka Waktu": "Fixed Term",
   "Klien akan memprioritaskan website yang memberikan garansi hyperlink tayang permanen": "Clients will prioritize websites that guarantee permanently live hyperlinks",
   "Tautan tetap tayang terus — tidak pernah dilepas dan tidak ada masa kedaluwarsanya. Klien tidak perlu khawatir tautannya hilang sendiri.": "The link stays live forever — it is never removed and never expires. Clients do not have to worry about it disappearing on its own.",

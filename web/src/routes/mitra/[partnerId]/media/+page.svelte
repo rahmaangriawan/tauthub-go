@@ -2516,7 +2516,7 @@
 														{#each linkDurationChoices as months (months)}
 															<label class="flex cursor-pointer items-center gap-2 text-xs text-slate-700">
 																<input type="radio" name="link-duration-months" value={String(months)} bind:group={form.link_duration_months} class="h-3.5 w-3.5 text-primary focus:ring-primary/20" />
-																<span>{months === 12 ? tr('12 Bulan (standar Tauthub)') : `${months} ${tr('Bulan')}`}</span>
+																<span>{months === 12 ? tr('12 Bulan') : `${months} ${tr('Bulan')}`}</span>
 															</label>
 														{/each}
 													</div>
