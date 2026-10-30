@@ -252,37 +252,40 @@ func (d *Deps) PublicationsCreate(w http.ResponseWriter, r *http.Request) {
 		connectionPtr = &connectionID
 	}
 
+	// Reserve dijalankan di dalam createPublicationRecord — SEBELUM publikasi
+	// di-enqueue — supaya worker tidak bisa menerbitkan artikel sebelum saldo
+	// ditahan (kalau itu terjadi, captureCredit melihat outstanding 0 dan
+	// artikel terbit tanpa pernah menagih).
+	var reserveFn func(string) error
+	if wallet != nil && cost > 0 {
+		reserveFn = func(pubID string) error {
+			_, err := d.reserveCredit(r.Context(), brandRow.ID, pubID, cost, user.ID)
+			return err
+		}
+	} else if wallet == nil && campaignID != "" && cost > 0 {
+		reserveFn = func(pubID string) error {
+			_, err := d.reservePackageCredits(r.Context(), brandRow.ID, pubID, cost, user.ID)
+			return err
+		}
+	}
+
 	created, err := d.createPublicationRecord(r.Context(), createPublicationInput{
 		BrandID: brandRow.ID, UserID: user.ID, DocumentID: documentID, MediaID: mediaID,
 		ConnectionID: connectionPtr, PublishStatus: publishStatus, ScheduledAt: scheduledPtr,
 		Notes: notesPtr, CampaignID: campaignIDPtr, SkipStandardCheck: skipStandardCheck,
+		ReserveCredit: reserveFn,
 	})
 	if err != nil {
+		var ic *insufficientCreditsError
+		if asInsufficient(err, &ic) {
+			writeCreditError(w, cost, ic.Available)
+			return
+		}
 		d.writeErr(w, err)
 		return
 	}
 	id := created.Row.strOr("id", "")
 
-	if wallet != nil {
-		if cost > 0 {
-			if _, err := d.reserveCredit(r.Context(), brandRow.ID, id, cost, user.ID); err != nil {
-				_ = d.exec(r.Context(), "DELETE FROM publications WHERE id = $1", id)
-				var ic *insufficientCreditsError
-				if asInsufficient(err, &ic) {
-					writeCreditError(w, cost, ic.Available)
-					return
-				}
-				d.writeErr(w, err)
-				return
-			}
-		}
-	} else if campaignID != "" && cost > 0 {
-		if _, err := d.reservePackageCredits(r.Context(), brandRow.ID, id, cost, user.ID); err != nil {
-			_ = d.exec(r.Context(), "DELETE FROM publications WHERE id = $1", id)
-			d.writeErr(w, err)
-			return
-		}
-	}
 	d.auditPublication(r.Context(), brandRow.ID, user.ID, "publication.created", id)
 	payload, err := d.publicationJSON(r.Context(), brandRow.ID, id)
 	if err != nil {

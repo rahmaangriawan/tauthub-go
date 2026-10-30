@@ -286,6 +286,14 @@ func (d *Deps) peFailAttempt(ctx context.Context, publication bsRow, code, messa
 	if err := d.recordPublicationAttempt(ctx, pubID, next, codePtr, msgPtr, startedAt, time.Now()); err != nil {
 		slog.Warn("[brandflow] record attempt gagal", "publication", pubID, "err", err)
 	}
+	// Gagal permanen = pesanan tidak akan terbit. Kredit yang masih ditahan
+	// WAJIB dikembalikan; tanpa ini saldo klien menggantung di reserved_tc
+	// selamanya dan hanya kembali kalau ada manusia membatalkan manual.
+	if terminal {
+		if brandID := publication.strOr("brand_id", ""); brandID != "" {
+			d.releaseCredit(ctx, brandID, pubID, "system")
+		}
+	}
 	return nil
 }
 

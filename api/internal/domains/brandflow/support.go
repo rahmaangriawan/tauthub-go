@@ -562,6 +562,71 @@ func (d *Deps) reservePackageCredits(ctx context.Context, brandID, publicationID
 	return amount, nil
 }
 
+// forfeitBalance: hanguskan SELURUH saldo tersedia akun (akun pasif 12 bulan).
+//
+// Sesuai kebijakan: hangus bersifat final dan TIDAK bisa dipulihkan. Karena itu
+// setiap penghangusan dicatat dua lapis supaya bisa dipertanggungjawabkan:
+//   - credit_ledger_entries ref_type='forfeit', amount negatif → tampil di
+//     riwayat saldo klien ("Saldo hangus — akun pasif 12 bulan").
+//   - balance_forfeitures → satu baris berisi nominal, saldo sebelum hangus,
+//     waktu aktivitas terakhir, dan waktu eksekusi; ini sumber laporan admin.
+//
+// Saldo yang dihanguskan hanya available_tc. reserved_tc TIDAK disentuh karena
+// uang itu masih terikat pesanan berjalan — akun dengan pesanan berjalan juga
+// tidak akan masuk kategori pasif (punya publikasi).
+//
+// Mengembalikan nominal yang dihanguskan (0 bila tidak ada saldo).
+func (d *Deps) forfeitBalance(ctx context.Context, brandID, reason string, lastActivity *time.Time) (int, error) {
+	if strings.TrimSpace(reason) == "" {
+		reason = "akun_pasif_12_bulan"
+	}
+	rate := d.getTcConfig(ctx).RateIDR
+	forfeited := 0
+	err := db.WithPoolTx(ctx, d.Pool, func(tx pgx.Tx) error {
+		// Kunci baris supaya dua proses (scheduler + admin manual) tidak
+		// menghanguskan saldo yang sama dua kali.
+		var available, reserved, captured int
+		if err := tx.QueryRow(ctx,
+			"SELECT available_tc, reserved_tc, captured_tc FROM credit_wallets WHERE brand_id = $1 FOR UPDATE",
+			brandID).Scan(&available, &reserved, &captured); err != nil {
+			return nil // tidak ada wallet = tidak ada saldo untuk dihanguskan
+		}
+		if available <= 0 {
+			return nil
+		}
+		if _, err := tx.Exec(ctx,
+			"UPDATE credit_wallets SET available_tc = 0, updated_at = NOW() WHERE brand_id = $1",
+			brandID); err != nil {
+			return err
+		}
+		key := "forfeit:" + brandID + ":" + time.Now().Format("2006-01")
+		entry := ledgerEntry{
+			BrandID: brandID, RefType: "forfeit", RefID: brandID,
+			AmountTC: -available, BalanceAfterTC: reserved + captured,
+			RateIDR: rate, AmountIDR: available * rate,
+			Reason:         "Saldo hangus — akun pasif 12 bulan tanpa transaksi & publikasi",
+			IdempotencyKey: key, CreatedBy: "system",
+		}
+		if err := insertLedger(ctx, tx, entry); err != nil {
+			return err
+		}
+		var ledgerID string
+		_ = tx.QueryRow(ctx, "SELECT id FROM credit_ledger_entries WHERE idempotency_key = $1", key).Scan(&ledgerID)
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO balance_forfeitures (id, brand_id, amount_tc, reason, last_activity_at, balance_before_tc, ledger_entry_id)
+			VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NULLIF($6, ''))`,
+			brandID, available, reason, lastActivity, available, ledgerID); err != nil {
+			return err
+		}
+		forfeited = available
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return forfeited, nil
+}
+
 // refundPackageCredits: kembalikan kredit paket untuk publikasi batal.
 func (d *Deps) refundPackageCredits(ctx context.Context, brandID, publicationID, userID string) int {
 	usages, err := d.queryRows(ctx,

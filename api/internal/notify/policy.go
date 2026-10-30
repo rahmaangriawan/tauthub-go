@@ -120,6 +120,10 @@ var policies = map[string]ChannelPolicy{
 	// WA tetap off (belum ada pengirim WA di paket ini, sama seperti reminder).
 	"publication.sla_extended":  {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
 	"publication.sla_cancelled": {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
+	// Saldo akun pasif: peringatan H-7 dan pemberitahuan setelah hangus.
+	// Email immediate supaya klien punya kesempatan memakai saldo sebelum hangus.
+	"billing.balance_forfeit_warning": {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
+	"billing.balance_forfeited":       {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
 
 	// --- Tier 3: informasi (in-app + push saja) -------------------------
 	"publication.published":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},

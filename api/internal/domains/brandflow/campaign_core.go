@@ -269,6 +269,17 @@ type createPublicationInput struct {
 	// ConnectionValidated: pemanggil sudah memvalidasi connection_id (parity
 	// endpoint publikasi yang memeriksa cms_connections sendiri).
 	ConnectionValidated bool
+	// ReserveCredit: dipanggil SETELAH baris publikasi dibuat tetapi SEBELUM
+	// publikasi masuk antrean/serah ke mitra. Nilai baliknya adalah jumlah TC
+	// yang ditahan; error membatalkan pembuatan (baris dihapus).
+	//
+	// Kenapa harus di sini: dulu pemanggil melakukan reserve setelah fungsi ini
+	// selesai, padahal fungsi ini sudah meng-enqueue publikasi. Pada media
+	// auto-publish, worker bisa menerbitkan artikel dalam hitungan detik —
+	// sebelum reserve tercatat. Saat itu captureCredit melihat outstanding = 0
+	// dan dilewati tanpa suara, sehingga artikel terbit tanpa pernah menagih
+	// saldo klien (kasus nyata: 2 publikasi, Rp20.000).
+	ReserveCredit func(publicationID string) error
 }
 
 type createdPublication struct {
@@ -435,6 +446,16 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 		publicationMode, connectionArg, scheduledAt, notesArg, campaignArg, featuredImage, in.UserID)
 	if err != nil {
 		return createdPublication{}, err
+	}
+
+	// Tahan saldo SEBELUM publikasi masuk antrean atau diserahkan ke mitra.
+	// Bila gagal, baris publikasi dibuang supaya tidak ada pesanan tanpa
+	// reservasi yang bisa terbit lalu melewati capture.
+	if in.ReserveCredit != nil {
+		if err := in.ReserveCredit(id); err != nil {
+			_ = d.exec(ctx, "DELETE FROM publications WHERE id = $1", id)
+			return createdPublication{}, err
+		}
 	}
 
 	autoPublish := media.boolOr("auto_publish", false) && media.boolOr("auto_publish_enabled", false)

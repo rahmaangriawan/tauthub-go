@@ -885,7 +885,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 	}
 	campaignID := chiParam(r, "campaignId")
 	campaign, err := d.queryRow(r.Context(),
-		"SELECT id, name, taut_status, taut_entry_mode FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandRow.ID)
+		"SELECT id, name, taut_status, COALESCE(taut_round, 1) AS taut_round, taut_entry_mode FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandRow.ID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -895,7 +895,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items, err := d.queryRows(r.Context(), `
-		SELECT tcm.media_id, tcm.slot, m.name, m.media_type, m.website_url,
+		SELECT tcm.media_id, tcm.slot, COALESCE(tcm.round, 1) AS round, m.name, m.media_type, m.website_url,
 		       COALESCE(tcm.price, m.price, 0) AS price,
 		       m.max_links, sm.da, sm.spam_score, m.traffic_estimate,
 		       p.scheduled_at, tcm.article_document_id, d.title AS article_title, d.updated_at AS article_updated_at,
@@ -958,12 +958,17 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		if price < 0 {
 			price = 0
 		}
-		totalCostIDR += price
-		safeRate := rate
-		if safeRate < 1 {
-			safeRate = 1
+		// Slot yang sudah punya publikasi (putaran sebelumnya) tidak menambah
+		// biaya dan tidak menentukan boleh-tidaknya distribusi.
+		hasPub := item.raw("pub_id") != nil && item.strOr("pub_status", "") != "cancelled"
+		if !hasPub {
+			totalCostIDR += price
+			safeRate := rate
+			if safeRate < 1 {
+				safeRate = 1
+			}
+			totalCostTC += (price + safeRate/2) / safeRate
 		}
-		totalCostTC += (price + safeRate/2) / safeRate
 
 		mediaID := item.strOr("media_id", "")
 		slot := item.intOr("slot", 1)
@@ -980,7 +985,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		}
 		safety := asCheckStatus(checks["contentSafety"])
 		linkStatus := asCheckStatus(checks["linkHealth"])
-		if latest == nil || safety != "passed" || linkStatus != "passed" {
+		if !hasPub && (latest == nil || safety != "passed" || linkStatus != "passed") {
 			canDistribute = false
 		}
 		auditStatus := "pending"
@@ -1016,7 +1021,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 		}
 
 		mediaOut = append(mediaOut, map[string]any{
-			"media_id": item.raw("media_id"), "slot": slot, "name": item.raw("name"), "media_type": item.raw("media_type"),
+			"media_id": item.raw("media_id"), "slot": slot, "round": int(item.numOr("round")), "name": item.raw("name"), "media_type": item.raw("media_type"),
 			"website_url":        item.raw("website_url"),
 			"featured_image_url": coverURL,
 			"price_idr":          price,
@@ -1059,7 +1064,7 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 	writeNoStore(w, http.StatusOK, map[string]any{
 		"campaign": map[string]any{
 			"id": campaignID, "name": campaign.strOr("name", ""), "taut_status": campaign.raw("taut_status"),
-			"entry_mode": campaign.raw("taut_entry_mode"),
+			"entry_mode": campaign.raw("taut_entry_mode"), "taut_round": campaign.raw("taut_round"),
 		},
 		"media":         mediaOut,
 		"canDistribute": canDistribute,
@@ -1239,8 +1244,20 @@ func (d *Deps) TautGatekeeperDistribute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	ready, err := d.queryRows(r.Context(),
-		"SELECT media_id, slot FROM taut_campaign_media WHERE campaign_id = $1 AND status = 'selected' AND article_status = 'ready' AND article_document_id IS NOT NULL ORDER BY media_id, slot", campaignID)
+	// Hanya slot yang belum punya publikasi. Slot putaran lama yang sudah
+	// terbit/siap terbit tidak perlu diikutkan lagi: artikelnya sudah
+	// didistribusikan pada putaran sebelumnya.
+	ready, err := d.queryRows(r.Context(), `
+		SELECT tcm.media_id, tcm.slot
+		FROM taut_campaign_media tcm
+		WHERE tcm.campaign_id = $1 AND tcm.status = 'selected'
+		  AND tcm.article_status = 'ready' AND tcm.article_document_id IS NOT NULL
+		  AND NOT EXISTS (
+		    SELECT 1 FROM publications p
+		    WHERE p.campaign_id = tcm.campaign_id AND p.media_id = tcm.media_id
+		      AND p.document_id = tcm.article_document_id AND p.status <> 'cancelled'
+		  )
+		ORDER BY tcm.media_id, tcm.slot`, campaignID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -1255,7 +1272,12 @@ func (d *Deps) TautGatekeeperDistribute(w http.ResponseWriter, r *http.Request) 
 	selectedMedia, err := d.queryRows(r.Context(), `
 		SELECT tcm.media_id, tcm.slot, m.name, tcm.article_status
 		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
-		WHERE tcm.campaign_id = $1 AND tcm.status = 'selected'`, campaignID)
+		WHERE tcm.campaign_id = $1 AND tcm.status = 'selected'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM publications p
+		    WHERE p.campaign_id = tcm.campaign_id AND p.media_id = tcm.media_id
+		      AND p.document_id = tcm.article_document_id AND p.status <> 'cancelled'
+		  )`, campaignID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -1331,23 +1353,20 @@ func (d *Deps) TautGatekeeperDistribute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	targets := []string{}
-	for _, c := range created {
-		if c.PublicationID != "" {
-			targets = append(targets, c.PublicationID)
-		}
-	}
-	perPublication := splitTcAcrossPublications(gate.TotalCostTC, len(targets))
+	// Reservasi per publikasi memakai harga SLOT-nya sendiri, bukan membagi
+	// total kampanye. Pembagian rata dulu membuat publikasi putaran baru
+	// kekurangan reservasi saat harga media berbeda dan saat sebagian slot
+	// sudah terbit pada putaran sebelumnya.
 	reserved := []string{}
-	for i, pubID := range targets {
-		tc := 0
-		if i < len(perPublication) {
-			tc = perPublication[i]
+	for _, c := range created {
+		if c.PublicationID == "" || c.Status == "already_published" {
+			continue
 		}
+		tc := gate.CostTC[placementKey(c.MediaID, c.Slot)]
 		if tc <= 0 {
 			continue
 		}
-		hasReservation, err := d.hasCreditReservation(r.Context(), brandRow.ID, pubID)
+		hasReservation, err := d.hasCreditReservation(r.Context(), brandRow.ID, c.PublicationID)
 		if err != nil {
 			d.writeErr(w, err)
 			return
@@ -1355,7 +1374,7 @@ func (d *Deps) TautGatekeeperDistribute(w http.ResponseWriter, r *http.Request) 
 		if hasReservation {
 			continue
 		}
-		applied, err := d.reserveCredit(r.Context(), brandRow.ID, pubID, tc, user.ID)
+		applied, err := d.reserveCredit(r.Context(), brandRow.ID, c.PublicationID, tc, user.ID)
 		if err != nil {
 			var ic *insufficientCreditsError
 			if asInsufficient(err, &ic) {
@@ -1371,7 +1390,7 @@ func (d *Deps) TautGatekeeperDistribute(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		if applied > 0 {
-			reserved = append(reserved, pubID)
+			reserved = append(reserved, c.PublicationID)
 		}
 	}
 
@@ -1394,15 +1413,27 @@ type canDistributeResult struct {
 	TotalCostIDR int
 	TotalCostTC  int
 	MediaCount   int
+	// CostTC per slot yang AKAN dibuat publikasinya, keyed placementKey.
+	CostTC map[string]int
 }
 
-// checkCanDistribute: server-side gate — setiap slot artikel punya audit hard
-// gate passed, dan total biaya dihitung per slot (4 artikel satu domain = 4x).
+// checkCanDistribute: server-side gate — setiap slot artikel yang BELUM punya
+// publikasi punya audit hard gate passed, dan total biaya dihitung per slot
+// (4 artikel satu domain = 4x).
+//
+// Slot putaran lama yang sudah punya publikasi tidak lagi ikut dihitung: dulu
+// semua slot 'selected' dijumlahkan, jadi saat kampanye diulang biaya putaran
+// pertama ikut tertagih lagi.
 func (d *Deps) checkCanDistribute(ctx context.Context, campaignID string) (canDistributeResult, error) {
 	items, err := d.queryRows(ctx, `
 		SELECT tcm.media_id, tcm.slot, COALESCE(tcm.price, m.price, 0) AS price
 		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
-		WHERE tcm.campaign_id = $1 AND tcm.status = 'selected'`, campaignID)
+		WHERE tcm.campaign_id = $1 AND tcm.status = 'selected'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM publications p
+		    WHERE p.campaign_id = tcm.campaign_id AND p.media_id = tcm.media_id
+		      AND p.document_id = tcm.article_document_id AND p.status <> 'cancelled'
+		  )`, campaignID)
 	if err != nil {
 		return canDistributeResult{}, err
 	}
@@ -1419,13 +1450,16 @@ func (d *Deps) checkCanDistribute(ctx context.Context, campaignID string) (canDi
 	}
 	totalIDR := 0
 	totalTC := 0
+	costs := make(map[string]int, len(items))
 	for _, item := range items {
 		price := int(item.numOr("price"))
 		if price < 0 {
 			price = 0
 		}
 		totalIDR += price
-		totalTC += (price + rate/2) / rate
+		tc := (price + rate/2) / rate
+		totalTC += tc
+		costs[placementKey(item.strOr("media_id", ""), item.intOr("slot", 1))] = tc
 	}
 	can := true
 	for _, item := range items {
@@ -1443,7 +1477,7 @@ func (d *Deps) checkCanDistribute(ctx context.Context, campaignID string) (canDi
 			break
 		}
 	}
-	return canDistributeResult{Can: can, TotalCostIDR: totalIDR, TotalCostTC: totalTC, MediaCount: len(items)}, nil
+	return canDistributeResult{Can: can, TotalCostIDR: totalIDR, TotalCostTC: totalTC, MediaCount: len(items), CostTC: costs}, nil
 }
 
 // hasCreditReservation: idempotensi reservasi per publikasi.
@@ -2003,6 +2037,11 @@ func (d *Deps) tautLinkPolicyViolations(ctx context.Context, campaignID string) 
 			WHERE document_id = cd.id AND version = cd.current_version LIMIT 1
 		) cv ON TRUE
 		WHERE tcm.campaign_id = $1 AND tcm.status = 'selected'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM publications p
+		    WHERE p.campaign_id = tcm.campaign_id AND p.media_id = tcm.media_id
+		      AND p.document_id = tcm.article_document_id AND p.status <> 'cancelled'
+		  )
 		ORDER BY m.name, tcm.slot`, campaignID)
 	if err != nil {
 		return nil, err

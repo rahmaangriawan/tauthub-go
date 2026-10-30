@@ -41,6 +41,8 @@ type SchedulerResult struct {
 	LateApprovalNotified        int `json:"late_approval_notified"`
 	SLAExtended                 int `json:"sla_extended"`
 	SLACancelled                int `json:"sla_cancelled"`
+	ForfeitWarned               int `json:"forfeit_warned"`
+	BalanceForfeited            int `json:"balance_forfeited"`
 	MediaHealthRefreshed        int `json:"media_health_refreshed"`
 	UploadsPurged               int `json:"uploads_purged"`
 	JobsProcessed               int `json:"jobs_processed"`
@@ -58,6 +60,8 @@ func (r SchedulerResult) toMap() map[string]any {
 		"late_approval_notified":        r.LateApprovalNotified,
 		"sla_extended":                  r.SLAExtended,
 		"sla_cancelled":                 r.SLACancelled,
+		"forfeit_warned":                r.ForfeitWarned,
+		"balance_forfeited":             r.BalanceForfeited,
 		"media_health_refreshed":        r.MediaHealthRefreshed,
 		"uploads_purged":                r.UploadsPurged,
 		"jobs_processed":                r.JobsProcessed,
@@ -102,6 +106,9 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	//    otomatis + kembalikan saldo. Menggantikan notifikasi "telat" lama yang
 	//    hanya memberi tahu tanpa pernah menindak.
 	res.SLAExtended, res.SLACancelled = d.schSweepPublicationSLA(ctx, schMinInt(maxJobs, 20))
+
+	// 4b. Saldo akun pasif: peringatan H-7 lalu penghangusan (final, tercatat).
+	res.ForfeitWarned, res.BalanceForfeited = d.schSweepDormantBalances(ctx, schMinInt(maxJobs, 20))
 
 	// 5. Bersihkan job yang tertinggal `running` (proses pemiliknya berhenti saat
 	//    deploy/restart), lalu drain antrean.
@@ -308,7 +315,8 @@ func (d *Deps) RunSchedulerLoop(ctx context.Context, interval time.Duration, max
 				"occurrence", res.PlanOccurrencesMaterialized,
 				"pengingat", res.PartnerRemindersSent,
 				"sla_perpanjangan", res.SLAExtended,
-				"sla_batal", res.SLACancelled)
+				"sla_batal", res.SLACancelled,
+				"saldo_hangus", res.BalanceForfeited)
 		}
 	}
 }
@@ -741,6 +749,164 @@ func (d *Deps) insertNotificationOnce(ctx context.Context, userID, notifType, ti
 		return false
 	}
 	return true
+}
+
+// schSweepDormantBalances: hanguskan saldo akun pasif.
+//
+// Pasif = TIDAK ada transaksi saldo DAN tidak ada publikasi selama 12 bulan.
+// Memakai dua syarat sekaligus supaya klien yang masih menerbitkan artikel
+// tidak kehilangan saldo hanya karena belum top-up lagi.
+//
+// Peringatan H-7 dikirim sekali sebelum penghangusan; penghangusan itu sendiri
+// final dan tidak bisa dipulihkan, tetapi seluruhnya tercatat di ledger
+// (ref_type='forfeit') dan tabel balance_forfeitures untuk laporan.
+//
+// Mengembalikan (peringatan terkirim, saldo dihanguskan).
+func (d *Deps) schSweepDormantBalances(ctx context.Context, limit int) (int, int) {
+	if limit < 1 {
+		return 0, 0
+	}
+	warned, forfeited := 0, 0
+
+	// Fase 1 — peringatan H-7: akun yang akan hangus dalam 7 hari.
+	rows, err := d.queryRows(ctx, `
+		SELECT w.brand_id, w.available_tc,
+		       GREATEST(
+		         COALESCE((SELECT MAX(l.created_at) FROM credit_ledger_entries l
+		                    WHERE l.brand_id = w.brand_id AND l.ref_type <> 'forfeit'), 'epoch'::timestamptz),
+		         COALESCE((SELECT MAX(p.created_at) FROM publications p WHERE p.brand_id = w.brand_id), 'epoch'::timestamptz)
+		       ) AS last_activity
+		FROM credit_wallets w
+		WHERE w.available_tc > 0
+		  AND GREATEST(
+		        COALESCE((SELECT MAX(l.created_at) FROM credit_ledger_entries l
+		                   WHERE l.brand_id = w.brand_id AND l.ref_type <> 'forfeit'), 'epoch'::timestamptz),
+		        COALESCE((SELECT MAX(p.created_at) FROM publications p WHERE p.brand_id = w.brand_id), 'epoch'::timestamptz)
+		      ) < NOW() - INTERVAL '12 months' + INTERVAL '7 days'
+		  AND GREATEST(
+		        COALESCE((SELECT MAX(l.created_at) FROM credit_ledger_entries l
+		                   WHERE l.brand_id = w.brand_id AND l.ref_type <> 'forfeit'), 'epoch'::timestamptz),
+		        COALESCE((SELECT MAX(p.created_at) FROM publications p WHERE p.brand_id = w.brand_id), 'epoch'::timestamptz)
+		      ) >= NOW() - INTERVAL '12 months'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM notifications n
+		    WHERE n.dedupe_key = 'forfeit_warn:' || w.brand_id
+		  )
+		LIMIT $1`, limit)
+	if err != nil {
+		slog.Error("[scheduler] sweep saldo pasif (peringatan) gagal", "err", err)
+	} else {
+		for _, row := range rows {
+			brandID := row.strOr("brand_id", "")
+			amount := row.intOr("available_tc", 0)
+			if brandID == "" || amount <= 0 {
+				continue
+			}
+			body := "Saldo Anda sebesar Rp " + schFormatThousands(amount) +
+				" akan hangus dalam 7 hari karena akun tidak ada transaksi maupun publikasi selama 12 bulan. Gunakan saldo sebelum tenggat."
+			if d.notifyBrandMembersByBrand(ctx, brandID, "billing.balance_forfeit_warning",
+				"Saldo akan hangus dalam 7 hari", body, "forfeit_warn:"+brandID) {
+				warned++
+			}
+		}
+	}
+
+	// Fase 2 — penghangusan: lewat 12 bulan tanpa aktivitas.
+	due, err := d.queryRows(ctx, `
+		SELECT w.brand_id, w.available_tc,
+		       GREATEST(
+		         COALESCE((SELECT MAX(l.created_at) FROM credit_ledger_entries l
+		                    WHERE l.brand_id = w.brand_id AND l.ref_type <> 'forfeit'), 'epoch'::timestamptz),
+		         COALESCE((SELECT MAX(p.created_at) FROM publications p WHERE p.brand_id = w.brand_id), 'epoch'::timestamptz)
+		       ) AS last_activity
+		FROM credit_wallets w
+		WHERE w.available_tc > 0
+		  AND GREATEST(
+		        COALESCE((SELECT MAX(l.created_at) FROM credit_ledger_entries l
+		                   WHERE l.brand_id = w.brand_id AND l.ref_type <> 'forfeit'), 'epoch'::timestamptz),
+		        COALESCE((SELECT MAX(p.created_at) FROM publications p WHERE p.brand_id = w.brand_id), 'epoch'::timestamptz)
+		      ) < NOW() - INTERVAL '12 months'
+		LIMIT $1`, limit)
+	if err != nil {
+		slog.Error("[scheduler] sweep saldo pasif (penghangusan) gagal", "err", err)
+		return warned, forfeited
+	}
+	for _, row := range due {
+		brandID := row.strOr("brand_id", "")
+		if brandID == "" {
+			continue
+		}
+		var lastActivity *time.Time
+		if t := schRowTime(row, "last_activity"); t != nil && t.Year() > 1970 {
+			lastActivity = t
+		}
+		amount, fErr := d.forfeitBalance(ctx, brandID, "akun_pasif_12_bulan", lastActivity)
+		if fErr != nil {
+			slog.Warn("[scheduler] hanguskan saldo gagal", "brand", brandID, "err", fErr)
+			continue
+		}
+		if amount <= 0 {
+			continue
+		}
+		forfeited++
+		body := "Saldo sebesar Rp " + schFormatThousands(amount) +
+			" telah dihanguskan karena akun tidak ada transaksi maupun publikasi selama 12 bulan. Penghangusan bersifat final; rinciannya tercatat di riwayat saldo."
+		d.notifyBrandMembersByBrand(ctx, brandID, "billing.balance_forfeited",
+			"Saldo hangus (akun pasif)", body, "forfeit:"+brandID)
+		slog.Info("[scheduler] saldo akun pasif dihanguskan", "brand", brandID, "amount_tc", amount)
+	}
+	return warned, forfeited
+}
+
+// notifyBrandMembersByBrand: kirim notifikasi ke semua anggota brand, idempoten
+// lewat dedupe_key. Mengembalikan true bila minimal satu notifikasi ditulis.
+func (d *Deps) notifyBrandMembersByBrand(ctx context.Context, brandID, notifType, title, body, dedupeKey string) bool {
+	rows, err := d.queryRows(ctx,
+		"SELECT user_id FROM brand_members WHERE brand_id = $1", brandID)
+	if err != nil || len(rows) == 0 {
+		return false
+	}
+	wrote := false
+	for _, row := range rows {
+		userID := row.strOr("user_id", "")
+		if userID == "" {
+			continue
+		}
+		dup, dErr := d.queryRow(ctx,
+			"SELECT id FROM notifications WHERE user_id = $1 AND dedupe_key = $2 LIMIT 1", userID, dedupeKey)
+		if dErr != nil || dup != nil {
+			continue
+		}
+		if err := d.exec(ctx, `
+			INSERT INTO notifications (id, user_id, type, title, body, dedupe_key)
+			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)`,
+			userID, notifType, title, body, dedupeKey); err != nil {
+			slog.Warn("[scheduler] notifikasi saldo gagal", "brand", brandID, "err", err)
+			continue
+		}
+		wrote = true
+	}
+	return wrote
+}
+
+// schFormatThousands: pemisah ribuan gaya Indonesia (1234567 → 1.234.567).
+func schFormatThousands(n int) string {
+	s := itoa(n)
+	neg := strings.HasPrefix(s, "-")
+	if neg {
+		s = s[1:]
+	}
+	var out []byte
+	for i, c := range []byte(s) {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			out = append(out, '.')
+		}
+		out = append(out, c)
+	}
+	if neg {
+		return "-" + string(out)
+	}
+	return string(out)
 }
 
 // schEmailFollowUp: port routeEmailNotification untuk event pengingat mitra —
