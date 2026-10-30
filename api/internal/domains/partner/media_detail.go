@@ -1184,6 +1184,55 @@ func validDewanPersCert(cert string) bool {
 	return mediaDewanPersCertRegex.MatchString(strings.TrimSpace(cert))
 }
 
+// MediaDewanPersVerificationDelete: DELETE /v1/partner/media/{mediaId}/dewan-pers-verification
+//
+// Mencabut pengajuan Dewan Pers terakhir (pending/rejected/conflict). Sertifikat
+// yang sudah TERVERIFIKASI sengaja tidak bisa dihapus di sini — pencabutan
+// sertifikat yang sah harus lewat admin, bukan tombol mitra.
+func (d *Deps) MediaDewanPersVerificationDelete(w http.ResponseWriter, r *http.Request) {
+	user, partner, ok := d.auth(w, r)
+	if !ok {
+		return
+	}
+	mediaID := chiParam(r, "mediaId")
+	media, err := d.queryRow(r.Context(),
+		"SELECT id, name FROM media WHERE id = $1 AND partner_id = $2 AND status <> 'hidden' LIMIT 1",
+		mediaID, partner.ID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if media == nil {
+		d.writeErr(w, errNotFound("Media tidak ditemukan"))
+		return
+	}
+	latest := d.latestDewanPersVerification(r.Context(), mediaID)
+	if latest == nil {
+		d.writeErr(w, errNotFound("Belum ada pengajuan Dewan Pers untuk media ini."))
+		return
+	}
+	if latest.strOr("status", "") == "verified" {
+		d.writeErr(w, errConflict("Sertifikat Dewan Pers yang sudah terverifikasi tidak bisa dihapus."))
+		return
+	}
+	if err := d.exec(r.Context(),
+		"DELETE FROM media_dewan_pers_verifications WHERE id = $1", latest.raw("id")); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if d.latestDewanPersVerification(r.Context(), mediaID) == nil {
+		// Tidak ada kiriman tersisa: kolom media harus ikut bersih, bukan
+		// menyisakan nomor sertifikat lama yang sudah dicabut.
+		_ = d.exec(r.Context(),
+			"UPDATE media SET dewan_pers_verified = FALSE, dewan_pers_cert_no = NULL, updated_at = NOW() WHERE id = $1",
+			mediaID)
+	} else {
+		d.syncDewanPersMediaColumns(r.Context(), mediaID)
+	}
+	d.auditLog(r.Context(), user.ID, "media.dewan_pers.withdrawn", "media", mediaID)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (d *Deps) MediaDewanPersVerification(w http.ResponseWriter, r *http.Request) {
 	user, partner, ok := d.auth(w, r)
 	if !ok {

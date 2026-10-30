@@ -554,6 +554,7 @@ func run() error {
 			authed.Post("/partner/media/{mediaId}/domain-verification", partnerDeps.MediaDomainVerification)
 			authed.Post("/partner/media/{mediaId}/dewan-pers-document", partnerDeps.MediaDewanPersDocument)
 			authed.Post("/partner/media/{mediaId}/dewan-pers-verification", partnerDeps.MediaDewanPersVerification)
+		authed.Delete("/partner/media/{mediaId}/dewan-pers-verification", partnerDeps.MediaDewanPersVerificationDelete)
 			authed.Get("/partner/media/{mediaId}/seo", partnerDeps.MediaSEO)
 			authed.Post("/partner/media/{mediaId}/seo", partnerDeps.MediaSEO)
 			authed.Post("/partner/media/{mediaId}/test-publishing-api", partnerDeps.MediaTestPublishingAPI)

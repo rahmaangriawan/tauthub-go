@@ -622,6 +622,8 @@
 	let dpDocDragOver = $state(false);
 	let dpDocError = $state('');
 	let dpDocUrl = $state<string | null>(null);
+	// Konfirmasi dua langkah untuk mencabut pengajuan (tanpa dialog tambahan).
+	let dpConfirmDelete = $state(false);
 
 	function clearDpDocUrl() {
 		if (dpDocUrl) URL.revokeObjectURL(dpDocUrl);
@@ -658,12 +660,41 @@
 		dpDocError = '';
 		clearDpDocUrl();
 		dpBusy = false;
+		dpConfirmDelete = false;
 	}
 
 	function openDewanPers(m: Media) {
 		domTarget = m;
 		verifTab = 'dewan';
 		resetDewanForm(m);
+	}
+
+	/** Status pengajuan yang boleh dicabut mitra (bukan yang sudah terverifikasi). */
+	const dpCanDelete = $derived(
+		Boolean(domTarget) && ['pending', 'rejected', 'conflict'].includes(domTarget?.dewan_pers_status ?? '')
+	);
+
+	async function deleteDewanPers() {
+		if (!domTarget || dpBusy) return;
+		if (!dpConfirmDelete) {
+			dpConfirmDelete = true;
+			return;
+		}
+		dpConfirmDelete = false;
+		dpBusy = true;
+		error = '';
+		try {
+			const res = await apiRequest(`/v1/partner/media/${domTarget.id}/dewan-pers-verification`, { method: 'DELETE' });
+			if (!res.ok) {
+				error = await readApiError(res, tr('Gagal menghapus pengajuan Dewan Pers.'));
+				return;
+			}
+			notice = tr('Pengajuan Dewan Pers dihapus. Kamu bisa mengajukan ulang kapan saja.');
+			domTarget = null;
+			await load();
+		} finally {
+			dpBusy = false;
+		}
 	}
 
 	async function submitDewanPers(e: SubmitEvent) {
@@ -2796,7 +2827,20 @@
 					{#if dpDocError}<span class="text-xs" style="color: var(--destructive);">{dpDocError}</span>{/if}
 				</div>
 				{#if error}<p class="text-sm" style="color: var(--destructive);">{error}</p>{/if}
-				<div class="flex justify-end gap-2">
+				<div class="flex flex-wrap items-center justify-end gap-2">
+					{#if dpCanDelete}
+						<!-- Dua langkah: klik pertama meminta konfirmasi, klik kedua menghapus. -->
+						<button
+							class="app-btn app-btn-soft mr-auto"
+							type="button"
+							disabled={dpBusy}
+							style="color: {dpConfirmDelete ? '#fff' : 'var(--destructive)'}; background-color: {dpConfirmDelete ? 'var(--destructive)' : 'var(--secondary)'};"
+							onclick={() => void deleteDewanPers()}
+						>
+							<Trash2 size={14} />
+							{dpConfirmDelete ? tr('Ya, hapus pengajuan') : tr('Hapus pengajuan')}
+						</button>
+					{/if}
 					<button class="app-btn app-btn-soft" type="button" onclick={() => (domTarget = null)}>{tr('Batal')}</button>
 					<button class="app-btn app-btn-primary" type="submit" disabled={dpBusy || dpCert.trim().length < 3}>
 						{dpBusy ? tr('Mengirim…') : tr('Ajukan Verifikasi')}
