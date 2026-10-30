@@ -404,12 +404,12 @@
 	{:else}
 		{#if mode === 'register'}
 			<label class="auth-field">
-				<span class="auth-label">{tr("Nama lengkap / nama perusahaan")}</span>
+				<span class="auth-label">{tr("Nama atau perusahaan")}</span>
 				<input
 					class="auth-input"
 					type="text"
 					bind:value={displayName}
-					placeholder={tr("Nama Anda")}
+					placeholder={tr("Budi Santoso atau PT Maju Jaya")}
 					autocomplete="name"
 					minlength={2}
 					maxlength={120}

@@ -653,8 +653,8 @@
 				<input class="app-input w-full" type="email" placeholder={tr("nama@perusahaan.com")} bind:value={createEmail} />
 			</label>
 			<label class="block">
-				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Nama lengkap / nama perusahaan")}</span>
-				<input class="app-input w-full" placeholder={tr("Nama Anda")} bind:value={createName} />
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Nama atau perusahaan")}</span>
+				<input class="app-input w-full" placeholder={tr("Budi Santoso atau PT Maju Jaya")} bind:value={createName} />
 			</label>
 			<label class="block">
 				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Peran")}</span>
