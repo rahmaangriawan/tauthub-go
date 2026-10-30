@@ -238,9 +238,18 @@ export function parseBriefSummary(raw: string): BriefSummaryDoc {
 		// Bullet.
 		const bullet = trimmed.match(reBullet);
 		if (bullet) {
-			const body = bullet[1].trim();
-			// `- Identitas` (judul tanpa titik dua) → bagian baru.
-			if (!body.includes(':') && looksLikeHeading(body)) {
+			let body = bullet[1].trim();
+			// Label tebal di dalam butir: `- **Nama resmi:** Salsari Resto`
+			// dinormalkan dulu supaya ikut jalur field yang sama.
+			const boldInBullet = body.match(reBoldLine);
+			if (boldInBullet) {
+				const label = boldInBullet[1].trim().replace(/:$/, '');
+				const rest = (boldInBullet[2] ?? '').trim();
+				body = rest ? `${label}: ${rest}` : label;
+			}
+			// `- Identitas` sebagai judul bagian hanya bila bagian ini masih kosong;
+			// butir pendek setelah ada isi tetap butir (mis. "Ramah anak").
+			if (!body.includes(':') && looksLikeHeading(body) && section.blocks.length === 0) {
 				startSection(body);
 				continue;
 			}

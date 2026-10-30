@@ -45,7 +45,7 @@
 
 	/** `Tahun berdiri: 2018. Kapasitas: 1.000 orang.` → pasangan label/nilai. */
 	function pairsOf(f: BriefField): Array<{ label: string; value: string }> {
-		if (!f.value || isLongValue(f.value)) return [];
+		if (!f.value) return [];
 		return splitFactPairs(f.value);
 	}
 </script>
