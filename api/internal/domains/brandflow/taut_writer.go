@@ -163,19 +163,23 @@ func (d *Deps) selectedTautMedia(ctx context.Context, campaignID string) ([]sele
 // tautWordCountRe: frasa "N kata"/"N words" di topik/instruksi klien.
 // reTautLinkMention: konteks klien menyebut tautan/link, dipakai untuk memberi
 // catatan keras saat tidak ada URL yang bisa dipakai (jangan mengarang link).
-// tautListicleAngleSlugs: angle yang strukturnya berupa DAFTAR bernomor
-// (satu item per produk/subjek). Dipakai untuk menyesuaikan jumlah item dengan
-// bahan yang tersedia — lihat angleShapeRule di generateTautWriterArticle.
-var tautListicleAngleSlugs = map[string]bool{
-	"listicle":   true,
-	"comparison": true,
-	"top_list":   true,
-	"roundup":    true,
+// tautNumberedListAngleSlugs: angle yang strukturnya berupa DAFTAR BERNOMOR
+// dengan satu item per produk/subjek (H3 "<n>. Nama"). Hanya ini yang boleh
+// diberi aturan penyesuaian jumlah item.
+//
+// PERHATIAN: "comparison" TIDAK termasuk. Strukturnya duel per aspek
+// (H2 per ronde: performa, kenyamanan, harga, vonis) — bukan daftar produk.
+// Memasukkannya di sini membuat artikel perbandingan dipaksa jadi daftar
+// bernomor dan merusak strukturnya.
+var tautNumberedListAngleSlugs = map[string]bool{
+	"listicle": true,
+	"top_list": true,
+	"roundup":  true,
 }
 
-// tautAngleIsListicle: true bila angle berstruktur daftar bernomor.
-func tautAngleIsListicle(slug string) bool {
-	return tautListicleAngleSlugs[strings.ToLower(strings.TrimSpace(slug))]
+// tautAngleIsNumberedList: true bila angle berstruktur daftar bernomor per item.
+func tautAngleIsNumberedList(slug string) bool {
+	return tautNumberedListAngleSlugs[strings.ToLower(strings.TrimSpace(slug))]
 }
 
 var reTautLinkMention = regexp.MustCompile(`(?i)\b(tautan|link|backlink|hyperlink|anchor)\b`)
@@ -720,18 +724,25 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if angleHasSources {
 		hasFacts = true
 	}
-	// Angle bertipe daftar (listicle) meminta RANGKAIAN produk, tapi bahan
-	// kampanye sering hanya berisi SATU subjek. Tanpa arahan, model bingung:
-	// ia menulis artikel naratif biasa (angle hilang), atau mengarang produk
-	// fiktif (halusinasi). Aturan ini menyuruh menyesuaikan ANGKA daftar dengan
-	// jumlah subjek yang benar-benar ada di bahan.
+	// Angle bertipe daftar bernomor (listicle) meminta RANGKAIAN produk, tapi
+	// bahan kampanye sering hanya berisi SATU subjek. Tanpa arahan, model
+	// bingung: ia menulis artikel naratif biasa (angle hilang), atau mengarang
+	// produk fiktif (halusinasi). Aturan ini menyuruh menyesuaikan ANGKA daftar
+	// dengan jumlah subjek yang benar-benar ada di bahan.
 	angleShapeRule := ""
-	if angle != nil && tautAngleIsListicle(angle.Slug) {
+	if angle != nil && tautAngleIsNumberedList(angle.Slug) {
 		angleShapeRule = "PENYESUAIAN ANGLE DAFTAR (WAJIB): angle ini meminta daftar rekomendasi bernomor. " +
 			"Susun daftar HANYA dari subjek/produk yang benar-benar ada di bahan di atas — JANGAN mengarang produk, merek, atau item lain yang tidak disebut bahan. " +
 			"Bila bahan hanya memuat SATU subjek, tulis daftar berisi satu item (angka di judul dan H2 harus 1, bukan angka karangan), " +
 			"lalu perdalam item itu dengan beberapa sudut bahasan. Bila bahan memuat beberapa subjek, buat satu item per subjek sesuai urutan bahan. " +
 			"Struktur tetap wajib mengikuti angle: satu H2 daftar + H3 bernomor per item + paragraf penutup tanpa subjudul."
+	}
+	// how_to juga memakai H3 bernomor, tetapi per LANGKAH (bukan per produk) dan
+	// mewajibkan angka di judul sama dengan jumlah H3. Langkah boleh disusun dari
+	// pengetahuan umum (tidak harus ada di bahan), tapi angka dan klaimnya tetap
+	// tidak boleh dikarang — itu yang sering meleset.
+	if angle != nil && strings.EqualFold(angle.Slug, "how_to") {
+		angleShapeRule += " PENYESUAIAN ANGLE LANGKAH (WAJIB): angka pada judul HARUS sama dengan jumlah <h3> langkah yang benar-benar ditulis — hitung ulang sebelum menutup artikel, jangan menulis angka lalu menyusun langkah lebih sedikit atau lebih banyak. Langkah boleh berupa panduan umum, tetapi JANGAN mengarang angka, harga, nama alat, atau klaim spesifik yang tidak ada di bahan."
 	}
 
 	var identity strings.Builder
