@@ -9,7 +9,7 @@
 	import { page } from '$app/state';
 	import {
 		ArrowUpRight, Check, Copy, Download, Ellipsis, FileText, Image as ImageIcon,
-		MessageCircle, Newspaper, Search, ShieldCheck, Trash, TriangleAlert, UsersRound
+		MessageCircle, MessageSquare, Newspaper, Search, ShieldCheck, Trash, TriangleAlert, UsersRound
 	} from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
@@ -94,6 +94,15 @@
 	// Aksi baris
 	let openMenu = $state<string | null>(null);
 	let menuPos = $state({ top: 0, right: 0 });
+	// Chat partner: admin memulai percakapan lewat tiket dukungan yang sudah ada
+	// (POST /platform/tickets). Mitra menerima notifikasi lonceng + email + WA
+	// lewat jalur balasan admin yang sama.
+	let chatTarget = $state<Partner | null>(null);
+	let chatSubject = $state('');
+	let chatBody = $state('');
+	let chatBusy = $state(false);
+	let chatNotice = $state('');
+	let chatError = $state('');
 	// Ubah peran (Klien ⇄ Mitra) — endpoint sama dengan /admin/users:
 	// PUT /v1/platform/operations/users/{userId}/role.
 	let roleTarget = $state<Partner | null>(null);
@@ -292,6 +301,56 @@
 		form = { email: '', name: '', status: 'active' };
 		busy = false;
 		await load();
+	}
+
+	/** Buka dialog chat untuk satu partner; subjek diisi otomatis. */
+	function openChat(partner: Partner) {
+		chatTarget = partner;
+		chatSubject = tr('Pesan dari Admin Tauthub');
+		chatBody = '';
+		chatNotice = '';
+		chatError = '';
+	}
+
+	/**
+	 * Kirim pesan pembuka ke mitra lewat tiket dukungan (POST /platform/tickets).
+	 * Mitra menerima notifikasi lonceng + email + WhatsApp lewat jalur balasan
+	 * admin yang sudah ada, dan percakapannya muncul di /admin/dukungan.
+	 */
+	async function sendChat() {
+		const target = chatTarget;
+		if (!target) return;
+		const subject = chatSubject.trim();
+		const body = chatBody.trim();
+		chatError = '';
+		chatNotice = '';
+		if (!subject) {
+			chatError = tr('Subjek wajib diisi.');
+			return;
+		}
+		if (!body) {
+			chatError = tr('Pesan wajib diisi.');
+			return;
+		}
+		chatBusy = true;
+		try {
+			const res = await apiRequest('/v1/platform/tickets', {
+				method: 'POST',
+				body: JSON.stringify({ partner_id: target.id, subject, body })
+			});
+			const data = (await res.json().catch(() => ({}))) as { reused?: boolean; detail?: string };
+			if (!res.ok) throw new Error(data?.detail || tr('Gagal mengirim pesan.'));
+			chatTarget = null;
+			chatBody = '';
+			chatNotice = data?.reused
+				? tr('Pesan ditambahkan ke percakapan yang sudah berjalan. Buka Dukungan untuk melihat balasan mitra.')
+				: tr('Pesan terkirim. Mitra menerima notifikasi; balasannya muncul di menu Dukungan.');
+			window.dispatchEvent(new CustomEvent('tauthub:media-pending-refresh'));
+		} catch (reason) {
+			chatError = reason instanceof Error ? reason.message : tr('Gagal mengirim pesan.');
+		} finally {
+			chatBusy = false;
+		}
 	}
 
 	/** Kirim pengingat isi nomor WA (lonceng + email, maksimal 1x per 30 hari). */
@@ -652,7 +711,7 @@
 			<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke pengelolaan partner.")}</p>
 		</div>
 	{:else}
-		<Feedback {loading} {error} notice={waNotice} loadingText="Memuat partner…" />
+		<Feedback {loading} {error} notice={chatNotice || waNotice} loadingText="Memuat partner…" />
 
 		<div class="app-card mt-4 overflow-x-auto">
 			<table class="w-full text-sm" style="min-width: 1280px;">
@@ -789,6 +848,9 @@
 										class="app-card fixed z-50 min-w-[230px] p-1.5 text-sm shadow-md"
 										style="top: {menuPos.top}px; right: {menuPos.right}px;"
 									>
+											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; openChat(row); }}>
+												<MessageSquare size={14} /> {tr('Chat partner')}
+											</button>
 											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openDocs(row); }}>
 												<ShieldCheck size={14} /> Dokumen
 											</button>
@@ -1281,6 +1343,50 @@
 			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => (deleting = null)}>{tr("Batal")}</button>
 			<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void confirmDelete()}>
 				{busy ? 'Menghapus…' : 'Ya, hapus partner'}
+			</button>
+		{/snippet}
+	</Modal>
+{/if}
+
+{#if chatTarget}
+	<Modal
+		title={`Chat — ${chatTarget.name ?? chatTarget.email}`}
+		label={tr("Chat partner")}
+		maxWidth="md"
+		onClose={() => (chatTarget = null)}
+	>
+		<p class="text-sm text-muted-foreground">
+			{tr(
+				'Pesan ini masuk ke menu Dukungan sebagai tiket. Mitra menerima notifikasi lonceng, email, dan WhatsApp — balasannya muncul di sana.'
+			)}
+		</p>
+		<div class="mt-3 grid gap-1.5">
+			<span class="text-xs font-medium text-muted-foreground">{tr('Subjek')}</span>
+			<input
+				class="app-input text-sm"
+				maxlength="200"
+				bind:value={chatSubject}
+				placeholder={tr('Mis. Pertanyaan tentang media Anda')}
+				aria-label={tr('Subjek pesan')}
+			/>
+		</div>
+		<div class="mt-3 grid gap-1.5">
+			<span class="text-xs font-medium text-muted-foreground">{tr('Pesan')}</span>
+			<textarea
+				class="app-input min-h-[120px] text-sm"
+				maxlength="5000"
+				bind:value={chatBody}
+				placeholder={tr('Tulis pesan untuk mitra…')}
+				aria-label={tr('Isi pesan')}
+			></textarea>
+		</div>
+		{#if chatError}
+			<div class="mt-3 flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{chatError}</div>
+		{/if}
+		{#snippet footer()}
+			<button class="app-btn app-btn-soft" type="button" disabled={chatBusy} onclick={() => (chatTarget = null)}>{tr("Batal")}</button>
+			<button class="app-btn app-btn-primary" type="button" disabled={chatBusy} onclick={() => void sendChat()}>
+				{chatBusy ? tr('Mengirim…') : tr('Kirim pesan')}
 			</button>
 		{/snippet}
 	</Modal>

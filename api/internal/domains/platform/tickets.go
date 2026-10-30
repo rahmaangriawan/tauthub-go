@@ -83,6 +83,148 @@ func (d *Deps) AdminTicketsUnreadCount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"count": count})
 }
 
+// AdminTicketStart: POST /v1/platform/tickets — admin MEMULAI percakapan
+// dengan satu mitra, dipakai tombol "Chat partner" di halaman Partners.
+//
+// Dulu tiket hanya bisa dibuat mitra (POST /partner/tickets), jadi admin yang
+// ingin menanyakan sesuatu harus menunggu mitra lebih dulu. Endpoint ini
+// membuat tiket atas nama mitra + pesan pembuka dari admin dalam satu langkah,
+// lalu memakai jalur notifikasi yang sama dengan balasan admin biasa sehingga
+// mitra menerima lonceng, email, dan WhatsApp.
+//
+// Idempoten per pasangan (partner, subjek): bila sudah ada tiket BERJALAN
+// dengan subjek sama, tiket itu dipakai ulang dan pesan ditambahkan di sana —
+// mencegah antrean penuh tiket kembar saat tombol diklik dua kali.
+func (d *Deps) AdminTicketStart(w http.ResponseWriter, r *http.Request) {
+	admin, _, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	var in struct {
+		PartnerID string `json:"partner_id"`
+		Subject   string `json:"subject"`
+		Body      string `json:"body"`
+		Category  string `json:"category"`
+		Priority  string `json:"priority"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	in.PartnerID = strings.TrimSpace(in.PartnerID)
+	in.Subject = strings.TrimSpace(in.Subject)
+	in.Body = strings.TrimSpace(in.Body)
+	if in.PartnerID == "" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "partner_id wajib diisi")
+		return
+	}
+	if n := utf8.RuneCountInString(in.Subject); n == 0 || n > 200 {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Subjek 1–200 karakter")
+		return
+	}
+	if n := utf8.RuneCountInString(in.Body); n == 0 || n > adminTicketBodyMax {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Isi pesan 1–5000 karakter")
+		return
+	}
+	// Kategori/prioritas mengikuti CHECK di tabel; nilai tak dikenal jatuh ke
+	// bawaan supaya tombol chat tidak gagal hanya karena field opsional.
+	if in.Category != "teknis" && in.Category != "pembayaran" && in.Category != "publikasi" {
+		in.Category = "lainnya"
+	}
+	if in.Priority != "rendah" && in.Priority != "tinggi" {
+		in.Priority = "normal"
+	}
+
+	partnerRow, err := d.queryRow(r.Context(),
+		"SELECT id, name, public_id, user_id FROM partners WHERE id = $1 LIMIT 1", in.PartnerID)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	if partnerRow == nil {
+		httpx.Error(w, http.StatusNotFound, "Mitra tidak ditemukan")
+		return
+	}
+	partner := ptRow(ptNormalizeMap(partnerRow))
+	partnerUserID := partner.strOr("user_id", "")
+	if partnerUserID == "" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Mitra ini belum punya akun user, jadi tidak bisa dihubungi lewat tiket.")
+		return
+	}
+
+	// Tiket berjalan dengan subjek sama dipakai ulang (idempoten).
+	existing, err := d.queryRow(r.Context(), `
+		SELECT id FROM support_tickets
+		WHERE partner_id = $1 AND subject = $2 AND status <> 'selesai'
+		ORDER BY last_message_at DESC LIMIT 1`, in.PartnerID, in.Subject)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+
+	ticketID := ""
+	reused := false
+	if existing != nil {
+		ticketID = existing.strOr("id", "")
+		reused = ticketID != ""
+	}
+	if ticketID == "" {
+		// created_by menunjuk user admin (FK users) — bukan partner.user_id,
+		// supaya jejak "siapa yang membuka" tetap akurat.
+		created, cErr := d.queryRow(r.Context(), `
+			INSERT INTO support_tickets (id, partner_id, created_by, subject, category, priority, status, last_message_by)
+			VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, 'buka', 'admin')
+			RETURNING id`, in.PartnerID, admin.ID, in.Subject, in.Category, in.Priority)
+		if cErr != nil {
+			writeErr(w, d, cErr)
+			return
+		}
+		if created == nil {
+			httpx.Error(w, http.StatusInternalServerError, "Gagal membuat tiket")
+			return
+		}
+		ticketID = created.strOr("id", "")
+	}
+
+	replyRow, err := d.queryRow(r.Context(), `
+		WITH m AS (
+			INSERT INTO support_ticket_messages (ticket_id, author_role, author_user_id, body)
+			VALUES ($1, 'admin', $2, $3)
+			RETURNING id
+		)
+		UPDATE support_tickets SET
+			status = CASE WHEN status = 'buka' THEN 'diproses' ELSE status END,
+			last_message_at = now(), last_message_by = 'admin', updated_at = now()
+		WHERE id = $1
+		RETURNING (SELECT id FROM m) AS reply_id`, ticketID, admin.ID, in.Body)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	replyID := ""
+	if replyRow != nil {
+		replyID = replyRow.strOr("reply_id", "")
+	}
+
+	fresh, err := d.queryRow(r.Context(), adminTicketSelect+" WHERE t.id = $1", ticketID)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	if fresh == nil {
+		httpx.Error(w, http.StatusNotFound, "Tiket tidak ditemukan")
+		return
+	}
+	// Notifikasi ke mitra memakai jalur balasan admin yang sudah ada (lonceng +
+	// email + WhatsApp), jadi mitra tahu ada pesan baru tanpa membuka portal.
+	d.notifyTicketPartner(r, fresh, "ticket.replied", "Pesan baru dari Admin", in.Body, replyID)
+	d.audit(r.Context(), admin.ID, "support.ticket.started_by_admin", "support_ticket", ticketID)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ticket": adminTicketPayload(fresh),
+		"reused": reused,
+	})
+}
+
 func (d *Deps) AdminTickets(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := d.adminGuard(w, r, ""); !ok {
 		return

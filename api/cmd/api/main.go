@@ -685,6 +685,8 @@ func run() error {
 			authed.Get("/platform/chat/threads/{threadId}", platformDeps.AdminChatThreadDetail)
 			// Tiket dukungan: semua admin boleh membalas.
 			authed.Get("/platform/tickets", platformDeps.AdminTickets)
+			// Admin memulai percakapan dengan mitra (tombol "Chat partner").
+			authed.Post("/platform/tickets", platformDeps.AdminTicketStart)
 			authed.Get("/platform/tickets/unread-count", platformDeps.AdminTicketsUnreadCount)
 			authed.Get("/platform/tickets/{ticketId}", platformDeps.AdminTicketDetail)
 			authed.Post("/platform/tickets/{ticketId}/messages", platformDeps.AdminTicketReply)
