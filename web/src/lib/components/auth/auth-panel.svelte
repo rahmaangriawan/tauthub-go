@@ -382,6 +382,7 @@
 	     jadi tidak ada pasangan tab yang perlu dihubungkan. -->
 <form
 	class="auth-form"
+	class:auth-form--register={mode === 'register' && !challenge}
 	id="auth-panel"
 	aria-label={mode === 'login' ? tr('Form masuk') : tr('Form pendaftaran')}
 	onsubmit={submit}
@@ -420,9 +421,63 @@
 				{/if}
 			</label>
 
+		{/if}
+
+		<label class="auth-field">
+			<span class="auth-label">{tr("Email")}</span>
+			<input
+				class="auth-input"
+				type="email"
+				bind:value={email}
+				placeholder={tr("nama@perusahaan.com")}
+				autocomplete="email"
+				aria-invalid={fieldErrors.email ? 'true' : undefined}
+				required
+			/>
+			{#if fieldErrors.email}
+				<p class="auth-field-error"><CircleAlert size={13} />{fieldErrors.email}</p>
+			{/if}
+		</label>
+
+		<div class="auth-field" class:auth-field--span={mode === 'register' && !lockedRole}>
+			<div class="auth-field-head">
+				<label class="auth-label" for="auth-password">{tr("Password")}</label>
+				{#if mode === 'login'}
+					<a class="auth-link" href="/forgot-password">{tr("Lupa password?")}</a>
+				{:else if !fieldErrors.password}
+					<p class="auth-helper">{tr("Minimal 10 karakter.")}</p>
+				{/if}
+			</div>
+			<span class="auth-input-wrap">
+				<input
+					id="auth-password"
+					class="auth-input has-affix"
+					type={showPassword ? 'text' : 'password'}
+					bind:value={password}
+					placeholder={tr("Masukkan password")}
+					autocomplete={mode === 'register' ? 'new-password' : 'current-password'}
+					minlength={mode === 'register' ? 10 : undefined}
+					aria-invalid={fieldErrors.password ? 'true' : undefined}
+					required
+				/>
+				<button
+					type="button"
+					class="auth-eye"
+					aria-label={showPassword ? tr('Sembunyikan password') : tr('Tampilkan password')}
+					aria-pressed={showPassword}
+					onclick={() => (showPassword = !showPassword)}
+				>
+					{#if showPassword}<EyeOff size={16} />{:else}<Eye size={16} />{/if}
+				</button>
+			</span>
+			{#if fieldErrors.password}
+				<p class="auth-field-error"><CircleAlert size={13} />{fieldErrors.password}</p>
+			{/if}
+		</div>
+
 			<!-- Welcome Gate: peran dipilih di /register-role setelah form; radios ini
      tersisa hanya untuk halaman peran terkunci (/register/klien, /register/mitra). -->
-		{#if lockedRole}
+		{#if mode === 'register' && lockedRole}
 			<div class="auth-field">
 				<span class="auth-label">{tr("Daftar sebagai")}<!-- Tooltip penjelas peran: muncul saat hover DAN focus agar dapat
 					     diakses keyboard (parity Tooltip app lama pada label ini). -->
@@ -461,59 +516,6 @@
 				</div>
 			</div>
 			{/if}
-		{/if}
-
-		<label class="auth-field">
-			<span class="auth-label">{tr("Email")}</span>
-			<input
-				class="auth-input"
-				type="email"
-				bind:value={email}
-				placeholder={tr("nama@perusahaan.com")}
-				autocomplete="email"
-				aria-invalid={fieldErrors.email ? 'true' : undefined}
-				required
-			/>
-			{#if fieldErrors.email}
-				<p class="auth-field-error"><CircleAlert size={13} />{fieldErrors.email}</p>
-			{/if}
-		</label>
-
-		<div class="auth-field">
-			<div class="auth-field-head">
-				<label class="auth-label" for="auth-password">{tr("Password")}</label>
-				{#if mode === 'login'}
-					<a class="auth-link" href="/forgot-password">{tr("Lupa password?")}</a>
-				{:else if !fieldErrors.password}
-					<p class="auth-helper">{tr("Minimal 10 karakter.")}</p>
-				{/if}
-			</div>
-			<span class="auth-input-wrap">
-				<input
-					id="auth-password"
-					class="auth-input has-affix"
-					type={showPassword ? 'text' : 'password'}
-					bind:value={password}
-					placeholder={tr("Masukkan password")}
-					autocomplete={mode === 'register' ? 'new-password' : 'current-password'}
-					minlength={mode === 'register' ? 10 : undefined}
-					aria-invalid={fieldErrors.password ? 'true' : undefined}
-					required
-				/>
-				<button
-					type="button"
-					class="auth-eye"
-					aria-label={showPassword ? tr('Sembunyikan password') : tr('Tampilkan password')}
-					aria-pressed={showPassword}
-					onclick={() => (showPassword = !showPassword)}
-				>
-					{#if showPassword}<EyeOff size={16} />{:else}<Eye size={16} />{/if}
-				</button>
-			</span>
-			{#if fieldErrors.password}
-				<p class="auth-field-error"><CircleAlert size={13} />{fieldErrors.password}</p>
-			{/if}
-		</div>
 	{/if}
 
 	{#if error}

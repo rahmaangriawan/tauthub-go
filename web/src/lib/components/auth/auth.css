@@ -218,6 +218,21 @@
 /* ── Form ──────────────────────────────────────────────────────────── */
 .auth-form { display: flex; flex-direction: column; gap: 14px; }
 
+/* Pendaftaran di layar lebar: dua kolom supaya form tidak memanjang ke bawah.
+   Urutan isian tetap: nama | email, lalu password | daftar sebagai. Di HP
+   form kembali satu kolom (aturan .auth-form di atas). */
+@media (min-width: 720px) {
+  .auth-form--register {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+  /* Catatan, peringatan, dan tombol kirim memakai lebar penuh. */
+  .auth-form--register > :not(.auth-field) { grid-column: 1 / -1; }
+  /* Tanpa pemilih peran, password mengisi satu baris penuh. */
+  .auth-form--register > .auth-field--span { grid-column: 1 / -1; }
+}
+
 .auth-field { display: flex; flex-direction: column; gap: 6px; }
 .auth-label {
   display: inline-flex;
