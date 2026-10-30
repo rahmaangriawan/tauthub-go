@@ -1036,6 +1036,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Lanjut": "Next",
   "Hapus artikel": "Delete article",
   "Hapus artikel ini": "Delete this article",
+  "Kelola tautan": "Manage link",
+  "Edit tautan": "Edit link",
   "Gagal menghapus artikel.": "Failed to delete the article.",
   "Hapus Artikel": "Delete Article",
   "Ya, Hapus Artikel": "Yes, delete article",

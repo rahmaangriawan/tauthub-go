@@ -479,6 +479,9 @@
 	/** Menu klik kanan untuk mengelola tabel yang sedang disentuh kursor. */
 	let tableMenu = $state<{ x: number; y: number; table: HTMLTableElement; cell: HTMLTableCellElement } | null>(null);
 
+	// Menu klik kanan pada tautan: buka, edit, atau lepas tautannya.
+	let linkMenu = $state<{ x: number; y: number; href: string; anchor: HTMLAnchorElement } | null>(null);
+
 	function insertTable(rows: number, cols: number) {
 		const body = bodyEl;
 		if (!body || disabled || mode === 'html') return;
@@ -696,9 +699,67 @@
 		closeEmbedDialog();
 	}
 
-	function onBodyContextMenu(e: MouseEvent) {		const body = bodyEl;
+	function closeLinkMenu() {
+		linkMenu = null;
+	}
+
+	function openLinkFromMenu() {
+		const href = linkMenu?.href ?? '';
+		closeLinkMenu();
+		if (!href || href === '#') return;
+		window.open(href, '_blank', 'noreferrer');
+	}
+
+	function editLinkFromMenu() {
+		const menu = linkMenu;
+		closeLinkMenu();
+		if (!menu || !bodyEl?.contains(menu.anchor)) return;
+		// Pilih ulang isi tautan: klik tombol menu bisa memindahkan fokus, dan
+		// openLinkDialog membaca tautan dari seleksi yang aktif.
+		const range = document.createRange();
+		range.selectNodeContents(menu.anchor);
+		const sel = window.getSelection();
+		sel?.removeAllRanges();
+		sel?.addRange(range);
+		openLinkDialog();
+	}
+
+	function removeLinkFromMenu() {
+		const menu = linkMenu;
+		closeLinkMenu();
+		if (!menu || !bodyEl?.contains(menu.anchor)) return;
+		const range = document.createRange();
+		range.selectNodeContents(menu.anchor);
+		const sel = window.getSelection();
+		sel?.removeAllRanges();
+		sel?.addRange(range);
+		document.execCommand('unlink', false);
+		sync();
+		commitHistory();
+	}
+
+	function onBodyContextMenu(e: MouseEvent) {
+		const body = bodyEl;
 		if (!body || disabled || mode !== 'rich') return;
 		const el = e.target instanceof Element ? e.target : null;
+		const anchor = el?.closest('a') as HTMLAnchorElement | null;
+		if (anchor && body.contains(anchor)) {
+			e.preventDefault();
+			// Taruh seleksi di dalam tautan supaya closestAnchor() dan dialog edit
+			// mengenali tautan yang sama.
+			const range = document.createRange();
+			range.selectNodeContents(anchor);
+			const sel = window.getSelection();
+			sel?.removeAllRanges();
+			sel?.addRange(range);
+			linkMenu = {
+				x: Math.max(8, Math.min(e.clientX, window.innerWidth - 220)),
+				y: Math.max(8, Math.min(e.clientY, window.innerHeight - 150)),
+				href: anchor.getAttribute('href') ?? '',
+				anchor
+			};
+			return;
+		}
 		const cell = el?.closest('td, th') as HTMLTableCellElement | null;
 		const table = el?.closest('table') as HTMLTableElement | null;
 		if (!cell || !table || !body.contains(table)) return;
@@ -787,6 +848,23 @@
 		};
 	});
 
+	// Menu tautan menutup dengan aturan yang sama seperti menu tabel.
+	$effect(() => {
+		if (!linkMenu) return;
+		const close = () => (linkMenu = null);
+		const onKey = (ev: KeyboardEvent) => {
+			if (ev.key === 'Escape') close();
+		};
+		window.addEventListener('click', close);
+		window.addEventListener('scroll', close, true);
+		window.addEventListener('keydown', onKey);
+		return () => {
+			window.removeEventListener('click', close);
+			window.removeEventListener('scroll', close, true);
+			window.removeEventListener('keydown', onKey);
+		};
+	});
+
 	// Picker yang dikunci klik menutup saat klik di luar, Escape, atau tombolnya
 	// diaktifkan lagi (ditangani toggleTablePickerPin).
 	$effect(() => {
@@ -842,8 +920,48 @@
 
 	// Tempel/tarik gambar langsung ke isi editor tetap didukung (unggah ke
 	// /assets) tanpa membuka modal.
+	/** URL polos dari clipboard, atau null bila bukan satu URL utuh. */
+	function normalizePastedUrl(raw: string): string | null {
+		const text = raw.trim();
+		if (!text || /\s/.test(text)) return null;
+		if (/^https?:\/\/[^\s]+$/i.test(text)) return text;
+		if (/^www\.[^\s]+$/i.test(text)) return `https://${text}`;
+		return null;
+	}
+
+	/** Bungkus teks yang sedang diseleksi dengan tautan. false = tidak ada seleksi. */
+	function wrapSelectionWithLink(url: string): boolean {
+		const body = bodyEl;
+		const sel = window.getSelection();
+		if (!body || !sel || sel.rangeCount === 0) return false;
+		const range = sel.getRangeAt(0);
+		if (range.collapsed || !body.contains(range.commonAncestorContainer)) return false;
+		const text = range.toString();
+		if (!text.trim()) return false;
+		const anchor = document.createElement('a');
+		anchor.setAttribute('href', url);
+		anchor.textContent = text;
+		range.deleteContents();
+		range.insertNode(anchor);
+		const after = document.createRange();
+		after.setStartAfter(anchor);
+		after.collapse(true);
+		sel.removeAllRanges();
+		sel.addRange(after);
+		sync();
+		commitHistory();
+		return true;
+	}
+
 	function onBodyPaste(e: ClipboardEvent) {
 		if (disabled || mode !== 'rich') return;
+		// Tempel URL di atas teks yang diseleksi: teks itu langsung jadi tautan.
+		const pastedUrl = normalizePastedUrl(e.clipboardData?.getData('text/plain') ?? '');
+		if (pastedUrl && wrapSelectionWithLink(pastedUrl)) {
+			e.preventDefault();
+			e.stopPropagation();
+			return;
+		}
 		// Clipboard dokumen (Google Docs, Word web) membawa flavor text/html berisi
 		// inline style ekspor: <span style="font-family:…;font-size:11pt">, <p dir="ltr"
 		// style="line-height:1.38">, pembungkus docs-internal-guid. Kalau dibiarkan,
@@ -1351,6 +1469,21 @@
 			<button type="button" role="menuitem" onclick={() => tableOp('hapus-baris')}>{tr('Hapus baris')}</button>
 			<button type="button" role="menuitem" onclick={() => tableOp('hapus-kolom')}>{tr('Hapus kolom')}</button>
 			<button type="button" role="menuitem" class="rte-table-menu-danger" onclick={() => tableOp('hapus-tabel')}>{tr('Hapus tabel')}</button>
+		</div>
+	{/if}
+
+	{#if linkMenu}
+		<!-- Menu klik kanan pada tautan di artikel. -->
+		<div
+			class="rte-table-menu"
+			role="menu"
+			aria-label={tr('Kelola tautan')}
+			style="left: {linkMenu.x}px; top: {linkMenu.y}px;"
+		>
+			<button type="button" role="menuitem" onclick={openLinkFromMenu}>{tr('Buka tautan')}</button>
+			<button type="button" role="menuitem" onclick={editLinkFromMenu}>{tr('Edit tautan')}</button>
+			<span class="rte-table-menu-sep" aria-hidden="true"></span>
+			<button type="button" role="menuitem" class="rte-table-menu-danger" onclick={removeLinkFromMenu}>{tr('Hapus tautan')}</button>
 		</div>
 	{/if}
 
