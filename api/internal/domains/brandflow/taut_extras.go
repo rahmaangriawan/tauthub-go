@@ -1041,6 +1041,27 @@ func (d *Deps) TautGatekeeperAudits(w http.ResponseWriter, r *http.Request) {
 }
 
 // TautGatekeeperAuditAll: POST /v1/brands/{brandId}/taut/campaigns/{campaignId}/gatekeeper/audit-all
+// filterScopeBySlots menyaring baris penempatan ke slot yang diminta. Slot
+// kosong berarti SEMUA slot (perilaku lama: pindai seluruh media). Dipakai
+// audit-all supaya permintaan satu artikel tidak ikut memindai artikel lain di
+// domain yang sama.
+func filterScopeBySlots(rows []bsRow, slots []int) []bsRow {
+	if len(slots) == 0 {
+		return rows
+	}
+	wanted := make(map[int]bool, len(slots))
+	for _, n := range slots {
+		wanted[n] = true
+	}
+	out := make([]bsRow, 0, len(rows))
+	for _, row := range rows {
+		if wanted[row.intOr("slot", 1)] {
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
 func (d *Deps) TautGatekeeperAuditAll(w http.ResponseWriter, r *http.Request) {
 	user := httpx.AuthUserFromCtx(r)
 	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
@@ -1091,6 +1112,10 @@ func (d *Deps) TautGatekeeperAuditAll(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// Batasi scope ke slot yang diminta juga: mediaCount dan cek idempoten harus
+	// mencerminkan artikel yang benar-benar dipindai, bukan semua slot media itu.
+	scope = filterScopeBySlots(scope, requestedSlots)
+
 	if len(scope) == 0 {
 		httpx.Error(w, http.StatusNotFound, "Media yang diminta bukan bagian kampanye ini.")
 		return
