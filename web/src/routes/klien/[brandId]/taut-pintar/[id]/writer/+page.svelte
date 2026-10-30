@@ -2386,21 +2386,6 @@
 														<ShieldCheck size={16} strokeWidth={2.2} class="shrink-0" />
 														<span class="expTip">{tr('Cek Validasi')}</span>
 													</button>
-												<!-- Analisis QC berdiri sendiri, bukan di menu ⋮: aksi ini paling
-												     sering dipakai saat memeriksa naskah. -->
-												<button
-													type="button"
-													class="expAction relative inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
-													aria-label={tr('Analisis QC')}
-													disabled={bulkRunning}
-													onclick={() => (qcFor = pkey(item))}
-												>
-													<ListChecks size={16} strokeWidth={2.2} class="shrink-0" />
-													{#if (qcCounts[pkey(item)] ?? 0) > 0}
-														<span class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-blue-600" aria-hidden="true"></span>
-													{/if}
-													<span class="expTip">{tr('Analisis QC')}</span>
-												</button>
 												{:else}
 													<button
 														type="button"
@@ -2429,6 +2414,22 @@
 														<span class="expTip">{tr('Tulis Sendiri')}</span>
 													</button>
 												{/if}
+												<!-- Analisis QC selalu tampil supaya posisinya tidak berpindah saat
+												     naskah dibuat; nonaktif selama artikel belum ada. -->
+												<button
+													type="button"
+													class="expAction relative inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+													aria-label={tr('Analisis QC')}
+													disabled={!doc || bulkRunning}
+													title={doc ? tr('Analisis QC') : tr('Buat artikel dulu untuk menganalisis')}
+													onclick={() => (qcFor = pkey(item))}
+												>
+													<ListChecks size={16} strokeWidth={2.2} class="shrink-0" />
+													{#if (qcCounts[pkey(item)] ?? 0) > 0}
+														<span class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-blue-600" aria-hidden="true"></span>
+													{/if}
+													<span class="expTip">{tr('Analisis QC')}</span>
+												</button>
 												{#if (slotCounts[m.media_id] ?? 1) > 1}
 												<button
 													type="button"
