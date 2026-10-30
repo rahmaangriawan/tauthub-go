@@ -51,6 +51,10 @@ func nilIfEmptyStrKey(m rowMap, key string) any {
 // ensureTopupNudge: notifikasi "saldo masih kosong" untuk brand yang belum
 // pernah menerima kredit sama sekali. Idempoten lewat dedupe_key, dan tidak
 // pernah menggangu brand yang sudah punya saldo maupun riwayat top up.
+//
+// Khusus akun KLIEN: pengingat ini soal mengisi saldo kampanye, dan mitra
+// memakai portalnya sendiri (tidak menop up brand). Mitra yang punya brand VIP
+// tetap bisa menulis, tapi pengingatnya bukan untuk dia.
 func (d *Deps) ensureTopupNudge(ctx context.Context, brandID, userID string) {
 	// Brand yang sudah top up: pengingatnya tidak relevan lagi, jadi ditutup
 	// (expired) alih-alih dibiarkan menumpuk sebagai belum dibaca.
@@ -79,7 +83,7 @@ func (d *Deps) ensureTopupNudge(ctx context.Context, brandID, userID string) {
 		LEFT JOIN credit_wallets w ON w.brand_id = b.id
 		WHERE (b.id::text = $2 OR b.public_id = $2)
 		  AND b.deleted_at IS NULL
-		  AND u.role <> 'admin'
+		  AND u.role = 'client'
 		  AND COALESCE(w.available_tc, 0) <= 0
 		  AND COALESCE(w.reserved_tc, 0) <= 0
 		  AND NOT EXISTS (SELECT 1 FROM credit_transactions ct WHERE ct.brand_id = b.id AND ct.amount > 0)
