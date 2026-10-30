@@ -40,11 +40,26 @@ func stripURLSchemeHTML(html string) string {
 	return mapHTMLTextNodes(html, stripURLSchemeText)
 }
 
-// finalizeTautArticleHTML: pasca-proses struktur + kebijakan link. title
-// opsional dipakai untuk mengenali heading pembuka yang cuma mengulang judul.
-func finalizeTautArticleHTML(html, mediaType string, allowsLink bool, links []tautBacklinkSpec, title ...string) string {
+// finalizeTautArticleHTML: pasca-proses struktur + kebijakan link.
+//
+// headingAllowed menentukan boleh-tidaknya subjudul. Pemanggil mengisinya dari
+// izin media (media.allow_heading) dengan fallback ke tipe media: blogger boleh,
+// mainstream tidak. Parameter opsional:
+//   - title: judul artikel, untuk mengenali heading pembuka yang mengulang judul
+//   - headingAllowed: bila true, subjudul dipertahankan
+func finalizeTautArticleHTML(html, mediaType string, allowsLink bool, links []tautBacklinkSpec, opts ...any) string {
+	articleTitle := ""
+	headingAllowed := mediaType == "blogger"
+	for _, o := range opts {
+		switch v := o.(type) {
+		case string:
+			articleTitle = v
+		case bool:
+			headingAllowed = v
+		}
+	}
 	out := html
-	if mediaType == "blogger" {
+	if headingAllowed {
 		out = normalizeHeadingBlocks(out)
 	} else {
 		out = demoteHeadingBlocks(out)
@@ -52,10 +67,6 @@ func finalizeTautArticleHTML(html, mediaType string, allowsLink bool, links []ta
 	// Body tidak boleh dibuka heading: judul artikel sudah punya field sendiri,
 	// jadi heading di awal body hanya mengulang judul. Model sering membuka
 	// dengan <h2> berisi judul walau sudah diminta menulis paragraf pembuka.
-	articleTitle := ""
-	if len(title) > 0 {
-		articleTitle = title[0]
-	}
 	out = demoteLeadingHeading(out, articleTitle)
 	if allowsLink {
 		out = enforceTautBacklinkPolicy(out, links)

@@ -381,6 +381,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	item, err := d.queryRow(ctx, `
 		SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.regen_count, tcm.angle_slug,
 		       m.media_type, m.category, m.website_url, m.allow_hyperlink, m.max_links,
+		       m.allow_heading,
 		       m.label_sponsor, m.word_count_mode, m.topik_terlarang, m.bahasa_artikel,
 		       COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv
 		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
@@ -527,12 +528,20 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		wordRule = clientWordRule(wordTarget)
 	}
 
+	// Izin subjudul mengikuti media: allow_heading NULL = ikut tipe media.
+	// Media mainstream yang pemiliknya mengizinkan subjudul tetap boleh memakai
+	// H2/H3 (angle mainstream memang punya aturan subjudul adaptif), sementara
+	// media yang melarangnya tetap paragraf mengalir.
+	headingAllowed := mediaType == "blogger"
+	if item.has("allow_heading") {
+		headingAllowed = item.boolOr("allow_heading", headingAllowed)
+	}
 	structureRules := []string{
 		"Aturan gaya mainstream (WAJIB): tulis sebagai artikel berita dengan kaidah 5W+1H — paragraf pembuka (lead) menjawab siapa, apa, kapan, di mana, mengapa, dan bagaimana secara ringkas.",
 		"Aturan format mainstream (WAJIB): JANGAN gunakan heading/subjudul (<h2>/<h3>) dan JANGAN memecah isi menjadi daftar poin (<ul>/<ol>) — seluruh isi adalah paragraf mengalir gaya berita, tanpa markdown.",
 		"Aturan paragraf mainstream (WAJIB): pecah isi menjadi BANYAK paragraf <p> pendek (maksimal 3-5 kalimat per <p>) — DILARANG menulis satu gundukan teks panjang dalam satu <p>.",
 	}
-	if mediaType == "blogger" {
+	if headingAllowed {
 		structureRules = []string{
 			"Aturan heading (WAJIB): tulis judul bagian sebagai tag HTML <h2> atau <h3> (dimulai dari H2, jangan pernah H1); jangan tinggalkan judul bagian sebagai teks biasa.",
 			"Aturan pembuka (WAJIB): body artikel HARUS dibuka dengan paragraf <p> berisi kalimat pembuka — BUKAN heading. Judul artikel sudah punya field sendiri (field title), jadi heading di awal body hanya mengulang judul. Heading pertama baru boleh muncul setelah minimal satu paragraf pembuka.",
@@ -991,7 +1000,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			linkSpecs = append(linkSpecs, tautBacklinkSpec{URL: l.URL, Anchor: l.Anchor, Rel: rel, Mandatory: false, Client: true})
 		}
 	}
-	contentHTML = finalizeTautArticleHTML(contentHTML, mediaType, allowsLink, linkSpecs, title)
+	contentHTML = finalizeTautArticleHTML(contentHTML, mediaType, allowsLink, linkSpecs, title, headingAllowed)
 	// Editorial zero-link: <a> sudah diupas finalize; URL telanjang yang mungkin
 	// ditulis model (mis. karena topik klien menyebut alamat web) dibuat teks
 	// polos tanpa skema supaya tidak terasa seperti tautan.

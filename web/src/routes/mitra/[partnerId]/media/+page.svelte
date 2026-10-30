@@ -26,6 +26,8 @@
 		publication_mode: string; traffic_estimate: number; max_links: number | null;
 		/** Masa berlaku tautan: 0 = permanen, >0 = bulan. */
 		link_duration_months?: number | null;
+		/** Izin subjudul: null = ikut tipe media. */
+		allow_heading?: boolean | null;
 		bahasa_artikel: string[]; label_sponsor: string; dewan_pers_verified: boolean;
 		pending_publications: number; total_terbit: number; price_status: string;
 		topik_terlarang: string[]; contoh_artikel_url: string | null;
@@ -81,6 +83,7 @@
 		name: string; media_type: string; categories: string[]; categoryQuery: string;
 		website_url: string; adapter_url: string; price: string; pricing_type: string;
 		traffic_estimate: number; max_links: string; link_duration_months: string; description: string; notes: string;
+		allow_heading: string;
 		integration_type: string; publication_mode: string; bahasa_artikel: string[];
 		label_sponsor: string; word_count_mode: string; allow_embed: boolean;
 		topik_terlarang: string[]; topikQuery: string; contoh_artikel_url: string;
@@ -101,6 +104,7 @@
 		name: '', media_type: 'mainstream', categories: [], categoryQuery: '',
 		website_url: '', adapter_url: '', price: '', pricing_type: 'nett',
 		traffic_estimate: 0, max_links: '1', link_duration_months: '0', description: '', notes: '',
+		allow_heading: 'default',
 		integration_type: 'wordpress', publication_mode: 'draft',
 		bahasa_artikel: ['Indonesia'], label_sponsor: 'tidak_ada',
 		word_count_mode: 'sesuai_permintaan', allow_embed: false,
@@ -774,6 +778,8 @@
 			label_sponsor: m.label_sponsor === 'ada_sponsor' ? 'ada_sponsor' : 'tidak_ada',
 			word_count_mode: openWordCountMode(m.word_count_mode),
 			allow_embed: m.allow_embed === true,
+			allow_heading:
+				m.allow_heading === true ? 'yes' : m.allow_heading === false ? 'no' : 'default',
 			topik_terlarang: [...m.topik_terlarang],
 			topikQuery: '',
 			contoh_artikel_url: m.contoh_artikel_url ?? ''
@@ -891,6 +897,10 @@
 				label_sponsor: form.label_sponsor,
 				word_count_mode: wordCountMode,
 				allow_embed: form.allow_embed,
+				// 'default' = jangan kirim, biarkan NULL (ikut tipe media).
+				...(form.allow_heading === 'default'
+					? {}
+					: { allow_heading: form.allow_heading === 'yes' }),
 				topik_terlarang: form.topik_terlarang,
 				contoh_artikel_url: form.contoh_artikel_url.trim() || null
 			};
@@ -2537,6 +2547,24 @@
 													/>
 												</div>
 												<span class="mt-1 block text-xs text-muted-foreground">{tr('Jumlah maksimal backlink yang boleh ditanam dalam satu artikel di media ini. Default 1; pilih 0 bila artikel tidak boleh memuat backlink.')}</span>
+											</div>
+
+											<div>
+												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Subjudul (H2/H3) dalam artikel')}</span>
+												<div>
+													<Select
+														bind:value={form.allow_heading}
+														ariaLabel={tr('Izin subjudul dalam artikel')}
+														minWidth={0}
+														fitContent
+														options={[
+															{ value: 'default', label: tr('Ikut bawaan tipe media') },
+															{ value: 'yes', label: tr('Boleh memakai subjudul') },
+															{ value: 'no', label: tr('Tanpa subjudul') }
+														]}
+													/>
+												</div>
+												<span class="mt-1 block text-xs text-muted-foreground">{tr('Bawaan: media blog boleh memakai subjudul, media berita tidak. Pilih "Boleh" bila media berita Anda menerima artikel dengan subjudul.')}</span>
 											</div>
 
 										<div>

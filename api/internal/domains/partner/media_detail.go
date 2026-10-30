@@ -149,6 +149,7 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	allowEmbed, hasAllowEmbed := boolField(body, "allow_embed")
+	allowHeading, hasAllowHeading := boolField(body, "allow_heading")
 	topik, hasTopik := stringSliceField(body, "topik_terlarang")
 	if hasTopik && len(topik) > 20 {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid topik_terlarang")
@@ -349,6 +350,17 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		if err := d.exec(r.Context(),
 			"UPDATE media SET allow_hyperlink = $1, updated_at = NOW() WHERE id = $2 AND partner_id = $3",
 			maxLinks > 0, mediaID, partner.ID); err != nil {
+			d.writeErr(w, err)
+			return
+		}
+	}
+	// Izin subjudul artikel. Diperbarui terpisah (bukan menambah posisi $N di
+	// UPDATE besar di atas) supaya penomoran parameter lain tidak bergeser.
+	// false = media ini dilarang memakai subjudul walau tipe bloggernya.
+	if hasAllowHeading {
+		if err := d.exec(r.Context(),
+			"UPDATE media SET allow_heading = $1, updated_at = NOW() WHERE id = $2 AND partner_id = $3",
+			allowHeading, mediaID, partner.ID); err != nil {
 			d.writeErr(w, err)
 			return
 		}

@@ -18,7 +18,7 @@ import (
 // ---------- media JSON (port mediaJson di partner/media/route.ts) ----------
 
 const mediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.media_type, m.description, m.traffic_estimate, m.health_score, m.health_breakdown, m.website_url, m.adapter_url, m.custom_web_endpoint_url, m.custom_web_api_key_sealed, m.custom_web_status, m.custom_web_last_test_at, m.custom_web_last_test_message, m.blogger_credentials_sealed, m.blogger_blog_id, m.blogger_blog_name, m.blogger_status, m.blogger_last_test_at, m.blogger_last_test_message, m.price, m.pricing_type, m.price_status, m.negotiated_price, m.status,
-               m.integration_type, m.notes, m.publication_mode, m.bahasa_artikel, m.label_sponsor, m.word_count_mode, m.allow_embed, m.topik_terlarang, m.contoh_artikel_url, m.max_links, m.allow_hyperlink, m.link_duration_months, m.auto_publish, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.domain_verified, m.domain_verified_at, m.rejection_reason, m.reviewed_at, m.created_at, m.updated_at, m.ai_summary, m.ai_summary_generated_at,
+               m.integration_type, m.notes, m.publication_mode, m.bahasa_artikel, m.label_sponsor, m.word_count_mode, m.allow_embed, m.topik_terlarang, m.contoh_artikel_url, m.max_links, m.allow_hyperlink, m.allow_heading, m.link_duration_months, m.auto_publish, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.domain_verified, m.domain_verified_at, m.rejection_reason, m.reviewed_at, m.created_at, m.updated_at, m.ai_summary, m.ai_summary_generated_at,
                COALESCE(
                  (SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id),
                  m.category
@@ -117,6 +117,7 @@ func (d *Deps) mediaJSON(r *http.Request, row rowMap, markupPercent float64) map
 		"contoh_artikel_url":            row.raw("contoh_artikel_url"),
 		"max_links":                     row.numPtr("max_links"),
 		"allow_hyperlink":               row.boolPtr("allow_hyperlink"),
+		"allow_heading":                 row.boolPtr("allow_heading"),
 		"link_duration_months":          row.intOr("link_duration_months", 12),
 		"dewan_pers_verified":           row.boolOr("dewan_pers_verified", false),
 		"dewan_pers_note":               row.raw("dewan_pers_note"),
