@@ -227,7 +227,7 @@
 	// cek "ada perubahan?" saat Simpan: kalau sama, QC otomatis TIDAK dipicu
 	// (hemat token) karena hasil pemindaian tetap valid. Upload/generate mulai
 	// dari kosong → baseline null → QC selalu jalan.
-	let editorBaseline = $state<{ title: string; html: string } | null>(null);
+	let editorBaseline = $state<{ title: string; html: string; cover: string | null; category: string | null; metaDescription: string | null } | null>(null);
 	// Pratinjau streaming: html parsial dari SSE saat AI menulis; null = idle.
 	let streamHtml = $state<string | null>(null);
 
@@ -1072,7 +1072,13 @@
 				source: item.article_source ?? null,
 				wordCountMode: item.word_count_mode ?? null
 			};
-			editorBaseline = { title: editor.title, html: editor.html };
+			editorBaseline = {
+				title: editor.title,
+				html: editor.html,
+				cover: editor.cover,
+				category: editor.category,
+				metaDescription: editor.metaDescription
+			};
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : tr('Gagal membuka artikel.');
 		}
@@ -1359,8 +1365,10 @@
 				body: JSON.stringify({ mediaIds: [mediaId], slots: [slot] })
 			}, 900_000);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menjalankan pemindaian QC.')));
-		} catch {
-			// Senyap: QC manual tetap tersedia lewat tombol/panel bila otomatis gagal.
+		} catch (reason) {
+			// Dulu senyap, sehingga simpan yang gagal dipindai terlihat seperti
+			// "QC tidak jalan". Kini alasannya tampil; pemindaian manual tetap bisa.
+			error = reason instanceof Error ? reason.message : tr('Gagal menjalankan pemindaian QC.');
 		} finally {
 			// Spinner dimatikan SEGERA begitu request selesai. Dulu status baru
 			// dibersihkan setelah `await load()` — dengan banyak media, load bisa
@@ -1386,9 +1394,14 @@
 		// QC otomatis hanya saat ada PERUBAHAN vs backend: judul/isi sama
 		// persis (mis. klien hanya ganti cover/meta tanpa menulis ulang)
 		// → pemindaian dipindai hasil lama cukup, jangan bakar token AI.
+		// Setiap perubahan isian dihitung, bukan hanya judul/isi: mengganti cover,
+		// kategori, atau meta juga mengubah artikel dan wajib dipindai ulang.
 		const kontenBerubah = !editorBaseline
 			|| editorBaseline.title !== (title ?? '')
-			|| editorBaseline.html !== (html ?? '');
+			|| editorBaseline.html !== (html ?? '')
+			|| (editorBaseline.cover ?? null) !== (coverUrl ?? null)
+			|| (editorBaseline.category ?? '') !== (category ?? '')
+			|| (editorBaseline.metaDescription ?? '') !== (metaDescription ?? '');
 		// Nyalakan spinner sejak Simpan ditekan, bukan setelah artikel tersimpan.
 		// QC baru bisa mulai setelah PUT/POST selesai; tanpa ini ada jeda kosong
 		// sehingga saat menyimpan satu per satu spinner terlihat hilang/berkedip.
