@@ -7,7 +7,7 @@
 	// (payout_type) + biaya transfer dari tc_config, dan guard rekening.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { Banknote, Calendar, Clock, Coins, FileText, Landmark, Search, Wallet, X } from '@lucide/svelte';
+	import { Banknote, Calendar, Check, Clock, Coins, FileText, Landmark, Search, Wallet, X } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -29,6 +29,8 @@
 	let partner = $state<any>(null);
 	let error = $state('');
 	let notice = $state('');
+	// Penarikan yang baru dikirim: tampilkan arahan arsipnya di halaman invoice.
+	let withdrawDone = $state(false);
 	let busy = $state(false);
 	let showWithdraw = $state(false);
 	let mode = $state<'all' | 'partial'>('all');
@@ -134,6 +136,7 @@
 				return;
 			}
 			notice = tr('Permintaan penarikan dikirim dan menunggu review admin.');
+			withdrawDone = true;
 			showWithdraw = false;
 			await load();
 		} finally {
@@ -191,7 +194,26 @@
 	</header>
 
 	{#if notice}
-		<div class="app-card mt-3 px-4 py-2.5 text-sm" style="border-color: var(--success); background-color: var(--success-soft); color: var(--success);">{notice}</div>
+		<div class="app-card mt-3 px-4 py-3" style="border-color: var(--success); background-color: var(--success-soft); color: var(--success);">
+			{#if withdrawDone}
+				<div class="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+					<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style="background-color: color-mix(in srgb, var(--success) 16%, transparent);">
+						<Check size={16} strokeWidth={2.6} />
+					</span>
+					<div class="min-w-0 flex-1">
+						<p class="m-0 text-[13px] font-semibold">{tr('Permintaan penarikan terkirim')}</p>
+						<p class="m-0 mt-0.5 text-[12.5px] leading-relaxed" style="opacity: .9;">
+							{tr('Menunggu review admin. Arsip penarikan beserta invoice-nya tersedia di halaman Invoice & Penarikan.')}
+						</p>
+					</div>
+					<a class="app-btn !min-h-9 shrink-0 !px-3.5 !text-xs" style="background-color: var(--success); color: #fff;" href={`${base}/settlements`}>
+						{tr('Buka Invoice')}
+					</a>
+				</div>
+			{:else}
+				<p class="m-0 text-sm">{notice}</p>
+			{/if}
+		</div>
 	{/if}
 	{#if error}
 		<div class="app-card mt-3 px-4 py-2.5 text-sm" style="border-color: var(--destructive); color: var(--destructive);">{error}</div>
@@ -244,9 +266,15 @@
 					</div>
 				</div>
 
-				<button class="app-btn app-btn-primary md:ml-auto min-h-11 shrink-0 px-5" disabled={!hasPayoutAccount} onclick={() => (showWithdraw = true)}>
-					<Banknote size={16} />{tr("Tarik Saldo")}
-				</button>
+				<div class="flex shrink-0 flex-col items-end gap-1 md:ml-auto">
+					<button class="app-btn app-btn-primary min-h-11 px-5" disabled={!hasPayoutAccount} onclick={() => (showWithdraw = true)}>
+						<Banknote size={16} />{tr("Tarik Saldo")}
+					</button>
+					<!-- Jalan permanen ke arsip: pesan sukses di atas hilang saat halaman dimuat ulang. -->
+					<a class="text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline" href={`${base}/settlements`}>
+						{tr('Arsip penarikan & invoice')}
+					</a>
+				</div>
 			</div>
 		</div>
 
