@@ -197,15 +197,13 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 		currentVersion = doc.intOr("current_version", 1)
 	}
 	ver, err := d.queryRow(ctx,
-		"SELECT content, attribution FROM content_versions WHERE document_id = $1 AND version = $2 LIMIT 1", documentID, currentVersion)
+		"SELECT content FROM content_versions WHERE document_id = $1 AND version = $2 LIMIT 1", documentID, currentVersion)
 	if err != nil {
 		return gatekeeperItemResult{}, err
 	}
 	content := ""
-	attribution := ""
 	if ver != nil {
 		content = ver.strOr("content", "")
-		attribution = ver.strOr("attribution", "")
 	}
 
 	// Hard gate moderasi (deterministik + AI classifier existing).
@@ -321,44 +319,14 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 		return gatekeeperItemResult{}, err
 	}
 
-	name := d.mediaNameFor(ctx, mediaID)
 	allowLink := d.mediaAllowsHyperlink(ctx, mediaID)
 	// Percepatan: pass revisi akhir (LLM yang menulis ulang SELURUH artikel,
-	// 26-79 dtk) hanya dijalankan bila AI Overview menolak (catatan revisinya
-	// perlu diterapkan). Masalah safety/link bukan tugas penulisan ulang —
-	// statusnya sudah tercermin di overallVerdict + hard gate distribusi.
+	// 26-79 dtk) dijalankan di LATAR setelah verdict dikembalikan. Dulu pass ini
+	// menahan respons sampai selesai — 60-80% waktu QC — padahal status artikel
+	// ditentukan hard gate (safety + link), bukan oleh hasil penulisan ulang.
 	needsRepair := ai.AIOverviewRejected(aiOverview)
-	linkRule := "Media TIDAK mengizinkan hyperlink. JANGAN menanam link apa pun."
-	if allowLink {
-		linkRule = "Media mengizinkan hyperlink. Tanam link sesuai konfigurasi kampanye secara natural bila relevan."
-	}
-	if linkAllowed {
-		linkRule += " MAKSIMAL " + itoa(linkCap) + " tautan keluar di seluruh artikel (sekarang: " + itoa(outgoingLinks) + ")."
-	}
-	promptLines := []string{
-		"Kampanye: " + campaign.strOr("name", ""),
-		"Media tujuan: " + name,
-		linkRule,
-		"Periksa judi/SARA/ujaran kebencian.",
-		"Judul saat ini: " + title,
-		"Isi (HTML): " + truncateString(content, 4000),
-	}
-	if strings.TrimSpace(item.strOr("angle_slug", "")) != "" {
-		promptLines = append(promptLines, "Pertahankan sudut konten dan bahan Writer berikut:\n"+refMaterial)
-	}
-	// Catatan AI Overview disambungkan ke pass revisi: bila indikator lemah,
-	// penulisan ulang wajib memperbaikinya.
-	if notes := ai.AIOverviewRevisionNotes(aiOverview); len(notes) > 0 {
-		promptLines = append(promptLines,
-			"Catatan revisi AI Overview (WAJIB diperbaiki saat menulis ulang artikel):",
-			"- "+strings.Join(notes, "\n- "))
-	}
-	promptLines = append(promptLines, "", "Output JSON valid {final_html, verdict: layak_tayang|revisi|gagal, catatan}.")
-	prompt := strings.Join(promptLines, "\n")
 
-	finalHTML := content
 	verdict := "layak_tayang"
-	revisiMS, reevalMS := int64(0), int64(0)
 	if !needsRepair {
 		// Tanpa LLM: status diturunkan dari hasil pengecekan (failed → blocked,
 		// review_required → revision) supaya artikel berisiko tetap tidak 'ready'.
@@ -369,67 +337,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 			verdict = "revisi"
 		}
 	}
-	if needsRepair {
-		revisiStart := time.Now()
-		result, err := d.runTautAgent(ctx, "gatekeeper", campaignID, prompt, &mediaID, true)
-		if err != nil {
-			return gatekeeperItemResult{}, err
-		}
-		revisiMS = time.Since(revisiStart).Milliseconds()
-		var parsed struct {
-			FinalHTML string `json:"final_html"`
-			Verdict   string `json:"verdict"`
-		}
-		if jsonUnmarshal([]byte(result.Content), &parsed) == nil {
-			if parsed.FinalHTML != "" {
-				finalHTML = truncateString(parsed.FinalHTML, 200000)
-			}
-			if parsed.Verdict != "" {
-				verdict = parsed.Verdict
-			}
-		}
-	}
-	// H1 dilarang di isi artikel (judul ada di field judul) — hasil tulisan
-	// ulang model yang memakai H1 ikut diturunkan; tanpa H1 tidak berubah.
-	finalHTML = demoteH1ToH2(finalHTML)
-	if !allowLink {
-		if url := campaign.strOr("primary_url", ""); url != "" {
-			finalHTML = stripLinksTo(finalHTML, url)
-		}
-		finalHTML = stripAllLinks(finalHTML)
-	}
 
-	// Artikel buatan AI Tauthub sendiri: bila skor di bawah ambang dan pass
-	// revisi di atas sudah menulis ulang artikel, nilai ULANG sekali pada hasil
-	// revisi — skor yang tersimpan adalah kualitas akhir (hijau bila revisi
-	// memperbaiki indikator lemah). Satu putaran saja, tanpa loop.
-	if (attribution == "ai_generated" || attribution == "ai_edited") && ai.AIOverviewRejected(aiOverview) && finalHTML != content {
-		reevalStart := time.Now()
-		rechecked := d.runAIOverviewCheck(ctx, title, mediaType, finalHTML, stripHTMLToText(finalHTML), refMaterial, aiOverviewSet)
-		reevalMS = time.Since(reevalStart).Milliseconds()
-		if rechecked != nil {
-			aiOverview = rechecked
-			checks["aiOverview"] = rechecked
-			if err := d.updateGatekeeperAuditChecks(ctx, campaignID, mediaID, runRevision, checks); err != nil {
-				return gatekeeperItemResult{}, err
-			}
-		}
-	}
-
-	// Versi baru hanya ditulis bila isi benar-benar berubah (revisi LLM atau
-	// penghapusan link deterministik) — menghindari churn versi tiap scan.
-	if finalHTML != content {
-		nextVersion := currentVersion + 1
-		if err := d.exec(ctx,
-			"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, $3, $4, 'html', 'ai_edited', 'Taut Pintar Gatekeeper', $5)",
-			uuid.NewString(), documentID, nextVersion, finalHTML, userID); err != nil {
-			return gatekeeperItemResult{}, err
-		}
-		if err := d.exec(ctx,
-			"UPDATE content_documents SET current_version = $1, updated_at = NOW() WHERE id = $2", nextVersion, documentID); err != nil {
-			return gatekeeperItemResult{}, err
-		}
-	}
 	// Status artikel diturunkan dari GERBANG KERAS yang sama dengan syarat
 	// distribusi (contentSafety + linkHealth) — BUKAN dari verdict yang dilaporkan
 	// model saat pass revisi. Model kerap menjawab "revisi" walaupun pemeriksaan
@@ -447,12 +355,46 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 	if err := d.exec(ctx, "UPDATE taut_campaign_media SET article_status = $1 WHERE id = $2", status, itemID); err != nil {
 		return gatekeeperItemResult{}, err
 	}
+
+	// Penulisan ulang menyusul di latar. Dilewati bila audit sebelumnya sudah
+	// menulis ulang artikel ini dan AI Overview tetap menolak: menulis ulang
+	// lagi terbukti tidak mengubah penilaian (penolakan biasanya soal fakta
+	// yang tidak ada di bahan, bukan soal susunan kalimat), jadi hanya membakar
+	// token tanpa hasil. Klien memperbaikinya lewat editor.
+	if needsRepair && !repairAlreadyAttempted(latestAudit) {
+		repairCtx, cancelRepair := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
+		go func() {
+			defer cancelRepair()
+			d.runGatekeeperRepair(repairCtx, gatekeeperRepairInput{
+				CampaignID: campaignID, BrandID: brandID, UserID: userID,
+				MediaID: mediaID, Slot: slot, ItemID: itemID,
+				DocumentID: documentID, CurrentVersion: currentVersion,
+				RunRevision: runRevision,
+				Title:       title, Content: content, MediaType: mediaType,
+				RefMaterial: refMaterial, Campaign: campaign, Item: item,
+				AIOverview: aiOverview, Checks: checks, AIOverviewSet: aiOverviewSet,
+				AllowLink: allowLink, LinkCap: linkCap, OutgoingLinks: outgoingLinks,
+			})
+		}()
+	}
+
 	// Log timing per tahap: satu-satunya cara menilai di mana waktu habis saat
 	// QC terasa lambat (model lambat vs pass revisi vs re-evaluasi).
 	slog.Info("[gatekeeper] audit selesai", "media", mediaID,
-		"batch_ms", batchMS, "revisi", needsRepair, "revisi_ms", revisiMS, "reeval_ms", reevalMS,
+		"batch_ms", batchMS, "revisi_dijadwalkan", needsRepair, "revisi_ms", 0, "reeval_ms", 0,
 		"total_ms", time.Since(startedAt).Milliseconds(), "status", status)
 	return gatekeeperItemResult{MediaID: mediaID, Slot: slot, Status: status, Verdict: verdict}, nil
+}
+
+// repairAlreadyAttempted: audit terakhir sudah menjalankan pass penulisan ulang
+// untuk artikel ini. Dipakai untuk berhenti mengulang revisi yang tidak pernah
+// mengubah hasil penilaian.
+func repairAlreadyAttempted(a *gatekeeperAuditRow) bool {
+	if a == nil || a.Checks == nil {
+		return false
+	}
+	applied, _ := a.Checks["repairApplied"].(bool)
+	return applied
 }
 
 // updateGatekeeperAuditChecks: perbarui checks baris audit yang baru dibuat
@@ -462,6 +404,166 @@ func (d *Deps) updateGatekeeperAuditChecks(ctx context.Context, campaignID, medi
 		`UPDATE taut_gatekeeper_audits SET checks = $1::jsonb, updated_at = NOW()
 		 WHERE campaign_id = $2 AND media_id = $3 AND run_revision = $4`,
 		marshalJSON(checks), campaignID, mediaID, runRevision)
+}
+
+// gatekeeperRepairInput: semua bahan yang sudah dihitung audit utama, dibawa ke
+// goroutine perbaikan supaya tidak dihitung ulang.
+type gatekeeperRepairInput struct {
+	CampaignID     string
+	BrandID        string
+	UserID         string
+	MediaID        string
+	Slot           int
+	ItemID         string
+	DocumentID     string
+	CurrentVersion int
+	RunRevision    int
+	Title          string
+	Content        string
+	MediaType      string
+	RefMaterial    string
+	Campaign       bsRow
+	Item           bsRow
+	AIOverview     map[string]any
+	Checks         map[string]any
+	AIOverviewSet  ai.AIOverviewSettings
+	AllowLink      bool
+	LinkCap        int
+	OutgoingLinks  int
+}
+
+// runGatekeeperRepair: pass penulisan ulang artikel, dijalankan di LATAR setelah
+// verdict QC dikembalikan ke klien.
+//
+// Dulu pass ini menahan respons: satu audit 30-160 detik dan 60-80% waktunya
+// habis di sini, padahal status artikel sudah ditentukan hard gate. Sekarang
+// klien melihat hasil QC segera; artikel yang lolos penulisan ulang tersimpan
+// sebagai versi baru dan panel menyegarkan sendiri.
+func (d *Deps) runGatekeeperRepair(ctx context.Context, in gatekeeperRepairInput) {
+	startedAt := time.Now()
+	defer func() {
+		// Goroutine latar tidak punya pemanggil yang bisa menerima panic;
+		// tanpa recover, satu panic mematikan seluruh proses API.
+		if r := recover(); r != nil {
+			slog.Error("[gatekeeper] perbaikan latar panic", "media", in.MediaID, "panic", r)
+		}
+	}()
+
+	linkRule := "Media TIDAK mengizinkan hyperlink. JANGAN menanam link apa pun."
+	if in.AllowLink {
+		linkRule = "Media mengizinkan hyperlink. Tanam link sesuai konfigurasi kampanye secara natural bila relevan."
+		if in.LinkCap > 0 {
+			linkRule += " MAKSIMAL " + itoa(in.LinkCap) + " tautan keluar di seluruh artikel (sekarang: " + itoa(in.OutgoingLinks) + ")."
+		}
+	}
+	// Batas isi dinaikkan dari 4.000 karakter: artikel normal 5.000-9.000
+	// karakter, jadi versi terpotong membuat model menulis ulang dari naskah
+	// yang belum utuh (bagian akhir hilang).
+	const repairContentLimit = 24_000
+	promptLines := []string{
+		"Kampanye: " + in.Campaign.strOr("name", ""),
+		"Media tujuan: " + d.mediaNameFor(ctx, in.MediaID),
+		linkRule,
+		"Periksa judi/SARA/ujaran kebencian.",
+		"Judul saat ini: " + in.Title,
+		"Isi (HTML): " + truncateString(in.Content, repairContentLimit),
+	}
+	if strings.TrimSpace(in.Item.strOr("angle_slug", "")) != "" {
+		promptLines = append(promptLines, "Pertahankan sudut konten dan bahan Writer berikut:\n"+in.RefMaterial)
+	}
+	if notes := ai.AIOverviewRevisionNotes(in.AIOverview); len(notes) > 0 {
+		promptLines = append(promptLines,
+			"Catatan revisi AI Overview (WAJIB diperbaiki saat menulis ulang artikel):",
+			"- "+strings.Join(notes, "\n- "))
+	}
+	promptLines = append(promptLines, "", "Output JSON valid {final_html, verdict: layak_tayang|revisi|gagal, catatan}.")
+	prompt := strings.Join(promptLines, "\n")
+
+	revisiStart := time.Now()
+	result, err := d.runTautAgent(ctx, "gatekeeper", in.CampaignID, prompt, &in.MediaID, true)
+	if err != nil {
+		slog.Warn("[gatekeeper] perbaikan latar gagal", "media", in.MediaID, "err", truncateString(err.Error(), 200))
+		return
+	}
+	revisiMS := time.Since(revisiStart).Milliseconds()
+
+	finalHTML := in.Content
+	var parsed struct {
+		FinalHTML string `json:"final_html"`
+		Verdict   string `json:"verdict"`
+	}
+	if jsonUnmarshal([]byte(result.Content), &parsed) == nil && parsed.FinalHTML != "" {
+		finalHTML = truncateString(parsed.FinalHTML, 200000)
+	}
+	// H1 dilarang di isi artikel (judul ada di field judul).
+	finalHTML = demoteH1ToH2(finalHTML)
+	if !in.AllowLink {
+		if url := in.Campaign.strOr("primary_url", ""); url != "" {
+			finalHTML = stripLinksTo(finalHTML, url)
+		}
+		finalHTML = stripAllLinks(finalHTML)
+	}
+
+	checks := in.Checks
+	if checks == nil {
+		checks = map[string]any{}
+	}
+	reevalMS := int64(0)
+	if finalHTML != in.Content {
+		// Nilai ULANG sekali pada hasil perbaikan supaya skor yang tersimpan
+		// adalah kualitas akhir. Satu putaran saja, tanpa loop.
+		reevalStart := time.Now()
+		if rechecked := d.runAIOverviewCheck(ctx, in.Title, in.MediaType, finalHTML,
+			stripHTMLToText(finalHTML), in.RefMaterial, in.AIOverviewSet); rechecked != nil {
+			checks["aiOverview"] = rechecked
+		}
+		reevalMS = time.Since(reevalStart).Milliseconds()
+
+		// Nomor versi dibaca ULANG di sini, bukan memakai CurrentVersion dari
+		// audit: perbaikan berjalan di latar selama puluhan detik, dan klien bisa
+		// menyimpan suntingan di sela itu. Memakai nomor lama akan menimpa versi
+		// yang baru tersimpan atau membuat versi kembar.
+		verRow, verErr := d.queryRow(ctx, "SELECT current_version FROM content_documents WHERE id = $1", in.DocumentID)
+		if verErr != nil {
+			slog.Warn("[gatekeeper] baca versi dokumen gagal", "media", in.MediaID, "err", truncateString(verErr.Error(), 200))
+			return
+		}
+		nextVersion := in.CurrentVersion + 1
+		if verRow != nil {
+			nextVersion = verRow.intOr("current_version", in.CurrentVersion) + 1
+		}
+		// Bila klien sudah menyunting setelah audit dimulai, hasil perbaikan
+		// otomatis TIDAK ditulis: suntingan manual selalu menang atas tulisan
+		// ulang mesin, dan menimpanya akan menghapus pekerjaan klien.
+		if verRow != nil && verRow.intOr("current_version", in.CurrentVersion) != in.CurrentVersion {
+			slog.Info("[gatekeeper] perbaikan dilewati — artikel sudah disunting klien", "media", in.MediaID,
+				"versi_audit", in.CurrentVersion, "versi_sekarang", verRow.intOr("current_version", 0))
+			checks["repairApplied"] = true
+			_ = d.updateGatekeeperAuditChecks(ctx, in.CampaignID, in.MediaID, in.RunRevision, checks)
+			return
+		}
+		if err := d.exec(ctx,
+			"INSERT INTO content_versions (id, document_id, version, content, content_format, attribution, change_note, created_by) VALUES ($1, $2, $3, $4, 'html', 'ai_edited', 'Taut Pintar Gatekeeper', $5)",
+			uuid.NewString(), in.DocumentID, nextVersion, finalHTML, nullIfEmpty(in.UserID)); err != nil {
+			slog.Warn("[gatekeeper] simpan versi perbaikan gagal", "media", in.MediaID, "err", truncateString(err.Error(), 200))
+			return
+		}
+		if err := d.exec(ctx,
+			"UPDATE content_documents SET current_version = $1, updated_at = NOW() WHERE id = $2", nextVersion, in.DocumentID); err != nil {
+			slog.Warn("[gatekeeper] update versi dokumen gagal", "media", in.MediaID, "err", truncateString(err.Error(), 200))
+			return
+		}
+	}
+	// Tandai audit ini sudah menjalankan perbaikan supaya scan berikutnya tidak
+	// mengulang penulisan ulang yang sama (menulis ulang terbukti tidak
+	// mengubah penilaian bila penolakannya soal fakta yang tak ada di bahan).
+	checks["repairApplied"] = true
+	if err := d.updateGatekeeperAuditChecks(ctx, in.CampaignID, in.MediaID, in.RunRevision, checks); err != nil {
+		slog.Warn("[gatekeeper] tandai repairApplied gagal", "media", in.MediaID, "err", truncateString(err.Error(), 200))
+	}
+	slog.Info("[gatekeeper] perbaikan latar selesai", "media", in.MediaID,
+		"berubah", finalHTML != in.Content, "revisi_ms", revisiMS, "reeval_ms", reevalMS,
+		"total_ms", time.Since(startedAt).Milliseconds())
 }
 
 // mediaAllowsHyperlink: kebijakan hyperlink media — max_links (0 = tidak boleh).

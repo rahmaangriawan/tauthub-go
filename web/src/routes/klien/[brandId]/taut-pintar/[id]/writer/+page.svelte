@@ -1399,6 +1399,16 @@
 			qcRunning = { ...qcRunning, [key]: false };
 			qcToken += 1;
 			void load();
+			// Verdict QC dikembalikan lebih dulu; penulisan ulang artikel (bila AI
+			// Overview menolak) menyusul di latar belakang beberapa detik kemudian.
+			// Segarkan beberapa kali supaya hasil perbaikan ikut tampil tanpa klien
+			// menekan tombol apa pun.
+			for (const delay of [20_000, 45_000, 90_000]) {
+				window.setTimeout(() => {
+					qcToken += 1;
+					void load();
+				}, delay);
+			}
 			if (qcQueued[key]) {
 				const next = { ...qcQueued };
 				delete next[key];
