@@ -516,6 +516,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if mediaType == "blogger" {
 		structureRules = []string{
 			"Aturan heading (WAJIB): tulis judul bagian sebagai tag HTML <h2> atau <h3> (dimulai dari H2, jangan pernah H1); jangan tinggalkan judul bagian sebagai teks biasa.",
+			"Aturan pembuka (WAJIB): body artikel HARUS dibuka dengan paragraf <p> berisi kalimat pembuka — BUKAN heading. Judul artikel sudah punya field sendiri (field title), jadi heading di awal body hanya mengulang judul. Heading pertama baru boleh muncul setelah minimal satu paragraf pembuka.",
 			"Aturan daftar (WAJIB): poin, fitur, langkah, atau hal berurutan WAJIB ditulis sebagai daftar HTML <ul><li>…</li></ul> (tanpa urutan) atau <ol><li>…</li></ol> (berurutan) — jangan tulis daftar sebagai paragraf biasa atau kalimat berawal tanda '-' / '1.'.",
 		}
 	}
@@ -917,7 +918,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			linkSpecs = append(linkSpecs, tautBacklinkSpec{URL: l.URL, Anchor: l.Anchor, Rel: rel, Mandatory: false, Client: true})
 		}
 	}
-	contentHTML = finalizeTautArticleHTML(contentHTML, mediaType, allowsLink, linkSpecs)
+	contentHTML = finalizeTautArticleHTML(contentHTML, mediaType, allowsLink, linkSpecs, title)
 	// Editorial zero-link: <a> sudah diupas finalize; URL telanjang yang mungkin
 	// ditulis model (mis. karena topik klien menyebut alamat web) dibuat teks
 	// polos tanpa skema supaya tidak terasa seperti tautan.

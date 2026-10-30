@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -39,14 +40,23 @@ func stripURLSchemeHTML(html string) string {
 	return mapHTMLTextNodes(html, stripURLSchemeText)
 }
 
-// finalizeTautArticleHTML: pasca-proses struktur + kebijakan link.
-func finalizeTautArticleHTML(html, mediaType string, allowsLink bool, links []tautBacklinkSpec) string {
+// finalizeTautArticleHTML: pasca-proses struktur + kebijakan link. title
+// opsional dipakai untuk mengenali heading pembuka yang cuma mengulang judul.
+func finalizeTautArticleHTML(html, mediaType string, allowsLink bool, links []tautBacklinkSpec, title ...string) string {
 	out := html
 	if mediaType == "blogger" {
 		out = normalizeHeadingBlocks(out)
 	} else {
 		out = demoteHeadingBlocks(out)
 	}
+	// Body tidak boleh dibuka heading: judul artikel sudah punya field sendiri,
+	// jadi heading di awal body hanya mengulang judul. Model sering membuka
+	// dengan <h2> berisi judul walau sudah diminta menulis paragraf pembuka.
+	articleTitle := ""
+	if len(title) > 0 {
+		articleTitle = title[0]
+	}
+	out = demoteLeadingHeading(out, articleTitle)
 	if allowsLink {
 		out = enforceTautBacklinkPolicy(out, links)
 	} else {
@@ -159,6 +169,67 @@ func demoteH1ToH2(html string) string {
 	out := reH1OpenTag.ReplaceAllString(html, "<h2>")
 	return reH1CloseTag.ReplaceAllString(out, "</h2>")
 }
+
+// demoteLeadingHeading: tangani heading yang membuka body artikel.
+//
+// Judul artikel punya field sendiri (content_documents.title), jadi heading di
+// awal body hanya mengulang judul dan menghabiskan posisi pembuka yang
+// seharusnya dipakai kalimat pembuka/lead. Perlakuan dibedakan:
+//   - heading pembuka yang isinya SAMA dengan judul artikel → dibuang, karena
+//     hanya pengulangan (judul sudah tampil di atas body);
+//   - heading pembuka yang berbeda → diturunkan jadi paragraf pembuka.
+//
+// Hanya dijalankan bila judul artikel diketahui. Tanpa judul, heading pembuka
+// dibiarkan apa adanya: normalizeHeadingBlocks memang sengaja menaikkan judul
+// bagian pendek menjadi <h2>, dan tanpa judul pembanding kita tidak bisa
+// membedakan "judul bagian" dari "judul artikel yang terulang" — menurunkan
+// semuanya akan merusak struktur yang dimaksud.
+func demoteLeadingHeading(html, title string) string {
+	if strings.TrimSpace(title) == "" {
+		return html
+	}
+	trimmed := strings.TrimLeft(html, " \t\r\n")
+	if !strings.HasPrefix(strings.ToLower(trimmed), "<h") {
+		return html
+	}
+	m := reLeadingHeading.FindStringSubmatchIndex(trimmed)
+	if m == nil {
+		return html
+	}
+	// Satu capture group: m[2]:m[3] = isi heading, m[1] = akhir seluruh tag.
+	inner := trimmed[m[2]:m[3]]
+	plain := strings.TrimSpace(stripTagsForScoring(inner))
+	// Heading berisi kalimat panjang bukan judul — biarkan sebagai heading.
+	if utf8.RuneCountInString(plain) > 200 {
+		return html
+	}
+	leading := html[:len(html)-len(trimmed)]
+	rest := trimmed[m[1]:]
+	if sameHeadingText(plain, title) {
+		return leading + strings.TrimLeft(rest, " \t\r\n")
+	}
+	return leading + "<p>" + strings.TrimSpace(inner) + "</p>" + rest
+}
+
+// sameHeadingText: bandingkan teks heading dengan judul artikel, abaikan beda
+// huruf, tanda baca, spasi ganda, dan penanda markdown sisa.
+func sameHeadingText(a, b string) bool {
+	norm := func(s string) string {
+		s = strings.ToLower(s)
+		var b strings.Builder
+		for _, r := range s {
+			if unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' {
+				b.WriteRune(r)
+			}
+		}
+		return strings.Join(strings.Fields(b.String()), " ")
+	}
+	return norm(a) != "" && norm(a) == norm(b)
+}
+
+// reLeadingHeading: tag heading lengkap di awal teks (h1-h6 beserta isinya).
+var reLeadingHeading = regexp.MustCompile(`(?is)^<h[1-6]\b[^>]*>([\s\S]*?)</h[1-6]\s*>`)
+
 
 // normalizeHeadingBlocks: naikkan blok judul sederhana jadi <h2> untuk blogger
 // (port normalizeHeadings, versi ringkas deterministik: paragraf pendek tanpa
