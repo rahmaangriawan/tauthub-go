@@ -4,12 +4,22 @@
 	import '@fontsource/geist/latin-400.css';
 	import '@fontsource/geist-mono/latin-400.css';
 	import '../app.css';
+	import { untrack } from 'svelte';
 	import { onMount } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import { page } from '$app/state';
 	import ToastHost from '$lib/components/toast-host.svelte';
-	import { initLocaleFromStorage } from '$lib/i18n/i18n.svelte';
+	import { initLocale, initLocaleFromStorage } from '$lib/i18n/i18n.svelte';
 
-	let { children } = $props();
+	let { data, children }: { data?: { locale?: string | null }; children: Snippet } = $props();
+
+	// Set bahasa sebelum anak dirender: SSR memakai cookie (data.locale), dan
+	// saat hidrasi klien memakai nilai yang SAMA → teks sudah benar sejak
+	// paint pertama. Pengguna lama yang bahasanya hanya tersimpan di
+	// localStorage diselaraskan di onMount di bawah.
+	// untrack: sengaja hanya nilai awal; perubahan bahasa berikutnya lewat
+	// setLocale(), bukan lewat data server.
+	initLocale(untrack(() => data?.locale));
 
 	// Metadata SEO: halaman publik (data.tauthub.com) mengisi page.data.seo;
 	// halaman dashboard tidak, jadi memakai nilai bawaan.
@@ -27,6 +37,7 @@
 	// deploy sudah ditangani listener vite:preloadError di bawah.
 
 	onMount(() => {
+		initLocaleFromStorage();
 		// Request yang dibatalkan (timeout 12 dtk / pembatalan sengaja) bukan bug,
 		// tapi browser mencatatnya sebagai "Uncaught (in promise) AbortError".
 		// Telan hanya kelas error itu; error lain tetap dilaporkan apa adanya.
@@ -63,7 +74,6 @@
 		// Parity ThemeProvider: selalu light + bersihkan preferensi dark lama.
 		document.documentElement.setAttribute('data-theme', 'light');
 		localStorage.removeItem('aiw-theme');
-		initLocaleFromStorage();
 	});
 </script>
 

@@ -6,7 +6,7 @@
 	// API), kolom tanggal selesai, modal detail + bukti transfer, dan panduan
 	// saldo minimal pada state kosong.
 	import { onMount } from 'svelte';
-	import { ExternalLink, Receipt, Wallet, X } from '@lucide/svelte';
+	import { Calendar, Clock, ExternalLink, FileText, Image, Landmark, Receipt, Wallet, X } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -94,6 +94,23 @@
 		if (status === 'failed') return 'var(--destructive)';
 		if (status === 'pending' || status === 'approved') return 'var(--warning, #a15c00)';
 		return 'var(--muted-foreground)';
+	}
+	/** Keterangan satu baris sesuai status aktual (murni teks, bukan data baru). */
+	function statusNote(status: string): string {
+		switch (status) {
+			case 'pending':
+				return tr('Pengajuan sedang diperiksa oleh admin Tauthub.');
+			case 'approved':
+				return tr('Pengajuan disetujui admin dan menunggu proses transfer.');
+			case 'processing':
+				return tr('Dana sedang dalam proses transfer ke rekening Anda.');
+			case 'paid':
+				return tr('Dana telah berhasil ditransfer ke rekening Anda.');
+			case 'failed':
+				return tr('Pengajuan ditolak/dibatalkan admin.');
+			default:
+				return '';
+		}
 	}
 </script>
 
@@ -211,92 +228,163 @@
 </section>
 
 {#if detail}
-		<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={(event) => event.currentTarget === event.target && (detail = null)}>
-			<dialog open class="app-card my-auto w-full max-w-lg p-5" aria-label={tr("Detail Invoice Penarikan")}>
-				<div class="flex items-start justify-between gap-4">
-					<h2 class="text-lg font-semibold">{tr("Detail Invoice Penarikan")}</h2>
-					<button class="app-btn app-btn-soft !min-h-11 !w-11 !p-0" aria-label={tr("Tutup")} onclick={() => (detail = null)}><X size={17} /></button>
+	<div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" style="background-color: rgba(15,23,42,.5);" role="presentation">
+		<dialog
+			open
+			class="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border bg-white shadow-2xl sm:max-h-[90vh] sm:max-w-[520px] sm:rounded-2xl"
+			style="border-color: var(--border);"
+			aria-label={tr("Detail Invoice Penarikan")}
+		>
+			<!-- Header -->
+			<div class="flex items-start justify-between gap-4 px-5 pt-5 sm:px-6">
+				<div class="flex items-start gap-3.5">
+					<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style="background-color: var(--accent); color: var(--primary);">
+						<FileText size={20} strokeWidth={2} />
+					</span>
+					<div class="min-w-0">
+						<h2 class="text-xl font-semibold tracking-tight">{tr("Detail Invoice Penarikan")}</h2>
+						<p class="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">{tr("Informasi pengajuan dan bukti transfer dari Tauthub.")}</p>
+					</div>
 				</div>
-			<p class="mt-1 text-xs text-muted-foreground">{tr("Informasi tagihan penarikan dan bukti transfer dari Tauthub.")}</p>
+				<button
+					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-slate-50"
+					style="border-color: var(--border); color: var(--muted-foreground);"
+					aria-label={tr("Tutup")}
+					onclick={() => (detail = null)}
+				>
+					<X size={16} />
+				</button>
+			</div>
 
-			<div class="mt-4 space-y-3">
-				<div class="rounded-lg border p-3" style="background-color: {detail.status === 'paid' ? 'var(--success-soft, rgba(22,121,75,.08))' : 'var(--warning-soft, rgba(161,92,0,.08))'}; border-color: {detail.status === 'paid' ? 'var(--success)' : 'var(--warning, #a15c00)'};">
-					<div class="flex items-center justify-between">
-						<p class="text-xs font-semibold tracking-wide text-muted-foreground">{tr("STATUS PENCAIRAN")}</p>
-						<span class="rounded-full px-2 py-0.5 text-[11px]" style="background-color: var(--secondary); color: {statusColor(detail.status)};">
+			<!-- Body -->
+			<div class="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-4 sm:px-6">
+				<!-- Status + nominal -->
+				<div
+					class="rounded-xl border px-4 py-3.5"
+					style="background-color: {detail.status === 'paid'
+						? 'var(--success-soft, rgba(22,121,75,.08))'
+						: detail.status === 'failed'
+							? 'color-mix(in srgb, var(--destructive) 7%, #fff)'
+							: 'var(--warning-soft, rgba(161,92,0,.08))'}; border-color: {detail.status === 'paid'
+						? 'color-mix(in srgb, var(--success) 35%, var(--border))'
+						: detail.status === 'failed'
+							? 'color-mix(in srgb, var(--destructive) 35%, var(--border))'
+							: 'color-mix(in srgb, var(--warning, #a15c00) 30%, var(--border))'};"
+				>
+					<div class="flex flex-wrap items-start justify-between gap-2">
+						<div class="min-w-0">
+							<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{tr("STATUS PENCAIRAN")}</p>
+							<p class="mt-0.5 text-[26px] font-bold leading-tight tabular-nums" style="color: {statusColor(detail.status)};">
+								{rp(detail.total_amount)}
+							</p>
+						</div>
+						<span class="shrink-0 rounded-full bg-white/70 px-2.5 py-1 text-[11.5px] font-medium" style="color: {statusColor(detail.status)};">
 							{statusLabel[detail.status] ?? detail.status}
 						</span>
 					</div>
-					<p class="mt-1 text-2xl font-bold tabular-nums" style="color: {detail.status === 'paid' ? 'var(--success)' : 'var(--warning, #a15c00)'};">
-						{rp(detail.total_amount)}
-					</p>
+					{#if statusNote(detail.status)}
+						<p class="mt-1 text-[12px] leading-relaxed text-muted-foreground">{statusNote(detail.status)}</p>
+					{/if}
 				</div>
 
-				<div class="grid grid-cols-2 gap-3">
-					<div class="rounded-lg border p-2.5" style="background-color: var(--muted);">
-						<p class="text-[11px] text-muted-foreground">{tr("Nomor Invoice")}</p>
-						<p class="text-sm font-semibold">{detail.invoice_number ?? `INV-${detail.id.slice(0, 8).toUpperCase()}`}</p>
-					</div>
-					<div class="rounded-lg border p-2.5" style="background-color: var(--muted);">
-						<p class="text-[11px] text-muted-foreground">{tr("Tanggal Pengajuan")}</p>
-						<p class="text-sm font-semibold">{dt(detail.created_at || detail.period_start)}</p>
-					</div>
-					<div class="rounded-lg border p-2.5" style="background-color: var(--muted);">
-						<p class="text-[11px] text-muted-foreground">{tr("Tanggal Selesai Transfer")}</p>
-						<p class="text-sm font-semibold">{detail.paid_at ? dt(detail.paid_at) : tr('Menunggu Transfer')}</p>
-					</div>
-					<div class="rounded-lg border p-2.5" style="background-color: var(--muted);">
-						<p class="text-[11px] text-muted-foreground">{tr("Rekening Tujuan")}</p>
-						<p class="text-sm font-semibold">{detail.notes || tr('Rekening terdaftar')}</p>
-						{#if detail.payout_method}
-							<p class="text-[11px] text-muted-foreground">{detail.payout_method === 'ewallet' ? tr('E-Wallet') : tr('Transfer Bank')}</p>
-						{/if}
-					</div>
-				</div>
-
-				{#if detail.status === 'failed'}
-					<div class="rounded-lg border p-3" style="background-color: rgba(197,43,54,.06); border-color: var(--destructive);">
-						<p class="text-sm font-semibold" style="color: var(--destructive);">{tr("Penarikan Ditolak Admin")}</p>
-						<p class="mt-1 text-sm">{detail.rejection_reason || tr('Tidak ada alasan tercatat.')}</p>
-						<p class="mt-1 text-xs text-muted-foreground">{tr("Saldo earnings telah dikembalikan dan dapat diajukan kembali.")}</p>
-					</div>
-				{/if}
-
-				{#if detail.payment_reference}
-					<div class="rounded-lg border p-2.5" style="background-color: var(--muted);">
-						<p class="text-[11px] text-muted-foreground">{tr("Nomor Referensi Transfer")}</p>
-						<p class="text-sm font-semibold">{detail.payment_reference}</p>
-					</div>
-				{/if}
-
-				<div>
-					<p class="text-sm font-semibold">{tr("Bukti Pembayaran / Transfer Bank")}</p>
-					{#if detail.receipt_url}
-						<div class="mt-2 rounded-lg border p-3 text-center" style="border-color: var(--border); background-color: var(--muted);">
-							<img src={detail.receipt_url} alt={tr("Bukti Transfer")} class="mx-auto max-h-60 rounded-md object-contain" />
-							<a class="mt-2 inline-block text-xs" style="color: var(--primary);" href={detail.receipt_url} target="_blank" rel="noreferrer">
-								{tr("Buka gambar ukuran penuh")} <ExternalLink size={11} class="inline" />
-							</a>
+				<!-- Informasi transaksi -->
+				<p class="mt-5 text-sm font-semibold" style="color: var(--foreground);">{tr("Informasi Transaksi")}</p>
+				<div class="mt-2 grid grid-cols-1 gap-x-5 sm:grid-cols-2">
+					<div class="flex items-start gap-3 py-2.5">
+						<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--muted); color: var(--muted-foreground);">
+							<Receipt size={15} strokeWidth={2} />
+						</span>
+						<div class="min-w-0">
+							<p class="text-[11.5px] text-muted-foreground">{tr("Nomor Invoice")}</p>
+							<p class="break-words text-[13.5px] font-semibold" style="color: var(--foreground);">{detail.invoice_number ?? `INV-${detail.id.slice(0, 8).toUpperCase()}`}</p>
 						</div>
-					{:else if detail.status === 'paid'}
-						<div class="mt-2 rounded-lg border p-3" style="background-color: var(--success-soft, rgba(22,121,75,.08)); border-color: var(--success);">
-							<p class="text-sm font-semibold" style="color: var(--success);">{tr("Pembayaran Selesai")}</p>
-							<p class="mt-0.5 text-xs text-muted-foreground">
-								{tr("Transfer dana sebesar")} {rp(detail.total_amount)} {tr("telah berhasil dikirimkan oleh tim Tauthub ke rekening Anda.")}
-							</p>
+					</div>
+					<div class="flex items-start gap-3 border-t py-2.5 sm:border-t-0" style="border-color: var(--border);">
+						<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--muted); color: var(--muted-foreground);">
+							<Calendar size={15} strokeWidth={2} />
+						</span>
+						<div class="min-w-0">
+							<p class="text-[11.5px] text-muted-foreground">{tr("Tanggal Pengajuan")}</p>
+							<p class="break-words text-[13.5px] font-semibold" style="color: var(--foreground);">{dt(detail.created_at || detail.period_start)}</p>
 						</div>
-					{:else}
-						<div class="mt-2 rounded-lg border border-dashed p-3 text-center" style="border-color: var(--border); background-color: var(--muted);">
-							<p class="text-sm text-muted-foreground">
-								{tr("Bukti transfer atau konfirmasi pembayaran akan otomatis tersedia di sini setelah admin Tauthub menyelesaikan transfer.")}
-							</p>
+					</div>
+					<div class="flex items-start gap-3 border-t py-2.5" style="border-color: var(--border);">
+						<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--muted); color: var(--muted-foreground);">
+							<Clock size={15} strokeWidth={2} />
+						</span>
+						<div class="min-w-0">
+							<p class="text-[11.5px] text-muted-foreground">{tr("Status Transfer")}</p>
+							<p class="break-words text-[13.5px] font-semibold" style="color: var(--foreground);">{detail.paid_at ? dt(detail.paid_at) : tr('Menunggu Transfer')}</p>
+							{#if !detail.paid_at}
+								<p class="mt-0.5 text-[11px] text-muted-foreground">{tr("Transfer akan diproses setelah disetujui.")}</p>
+							{/if}
+						</div>
+					</div>
+					<div class="flex items-start gap-3 border-t py-2.5" style="border-color: var(--border);">
+						<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--muted); color: var(--muted-foreground);">
+							<Landmark size={15} strokeWidth={2} />
+						</span>
+						<div class="min-w-0">
+							<p class="text-[11.5px] text-muted-foreground">{tr("Rekening Tujuan")}</p>
+							<p class="break-words text-[13.5px] font-semibold" style="color: var(--foreground);">{detail.notes || tr('Rekening terdaftar')}</p>
+							{#if detail.payout_method}
+								<p class="mt-0.5 text-[11px] text-muted-foreground">{detail.payout_method === 'ewallet' ? tr('E-Wallet') : tr('Transfer Bank')}</p>
+							{/if}
+						</div>
+					</div>
+					{#if detail.payment_reference}
+						<div class="flex items-start gap-3 border-t py-2.5 sm:col-span-2" style="border-color: var(--border);">
+							<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style="background-color: var(--muted); color: var(--muted-foreground);">
+								<Wallet size={15} strokeWidth={2} />
+							</span>
+							<div class="min-w-0">
+								<p class="text-[11.5px] text-muted-foreground">{tr("Nomor Referensi Transfer")}</p>
+								<p class="break-words text-[13.5px] font-semibold" style="color: var(--foreground);">{detail.payment_reference}</p>
+							</div>
 						</div>
 					{/if}
 				</div>
+
+				{#if detail.status === 'failed'}
+					<div class="mt-2 rounded-xl border px-4 py-3" style="background-color: color-mix(in srgb, var(--destructive) 6%, #fff); border-color: color-mix(in srgb, var(--destructive) 30%, var(--border));">
+						<p class="text-[13px] font-semibold" style="color: var(--destructive);">{tr("Penarikan Ditolak Admin")}</p>
+						<p class="mt-0.5 text-[12.5px] leading-relaxed" style="color: var(--foreground);">{detail.rejection_reason || tr('Tidak ada alasan tercatat.')}</p>
+						<p class="mt-0.5 text-[11.5px] text-muted-foreground">{tr("Saldo earnings telah dikembalikan dan dapat diajukan kembali.")}</p>
+					</div>
+				{/if}
+
+				<!-- Bukti pembayaran -->
+				<p class="mt-5 text-sm font-semibold" style="color: var(--foreground);">{tr("Bukti Pembayaran / Transfer Bank")}</p>
+				{#if detail.receipt_url}
+					<div class="mt-2 rounded-xl border p-3 text-center" style="border-color: var(--border); background-color: var(--muted);">
+						<img src={detail.receipt_url} alt={tr("Bukti Transfer")} class="mx-auto max-h-60 rounded-lg object-contain" />
+						<a class="mt-2 inline-flex items-center gap-1 text-xs font-medium" style="color: var(--primary);" href={detail.receipt_url} target="_blank" rel="noreferrer">
+							{tr("Buka gambar ukuran penuh")} <ExternalLink size={11} />
+						</a>
+					</div>
+				{:else if detail.status === 'paid'}
+					<div class="mt-2 rounded-xl border px-4 py-3" style="background-color: var(--success-soft, rgba(22,121,75,.08)); border-color: color-mix(in srgb, var(--success) 30%, var(--border));">
+						<p class="text-[13px] font-semibold" style="color: var(--success);">{tr("Pembayaran Selesai")}</p>
+						<p class="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+							{tr("Transfer dana sebesar")} {rp(detail.total_amount)} {tr("telah berhasil dikirimkan oleh tim Tauthub ke rekening Anda.")}
+						</p>
+					</div>
+				{:else}
+					<div class="mt-2 rounded-xl border border-dashed px-4 py-6 text-center" style="border-color: var(--border); background-color: var(--muted);">
+						<span class="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-white/70" style="color: var(--primary);">
+							<Image size={20} strokeWidth={1.8} />
+						</span>
+						<p class="mt-2 text-[13px] font-semibold" style="color: var(--foreground);">{tr("Belum tersedia")}</p>
+						<p class="mx-auto mt-0.5 max-w-[360px] text-[12px] leading-relaxed text-muted-foreground">
+							{tr("Bukti transfer atau konfirmasi pembayaran akan otomatis tersedia di sini setelah admin Tauthub menyelesaikan transfer.")}
+						</p>
+					</div>
+				{/if}
 			</div>
 
-			<div class="mt-5 flex justify-end">
-				<button class="app-btn app-btn-soft" onclick={() => (detail = null)}>{tr("Tutup")}</button>
+			<!-- Footer -->
+			<div class="flex items-center justify-end border-t px-5 py-3.5 sm:px-6" style="border-color: var(--border); background-color: #fff; padding-bottom: calc(0.875rem + env(safe-area-inset-bottom));">
+				<button class="app-btn app-btn-soft min-h-11 rounded-[9px] px-5" onclick={() => (detail = null)}>{tr("Tutup")}</button>
 			</div>
 		</dialog>
 	</div>

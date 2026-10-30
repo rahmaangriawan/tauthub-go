@@ -218,3 +218,49 @@ func (d *Deps) BrandNotificationRead(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
+
+// ---------- badge "Status Publikasi" ----------
+
+// publicationUnreadTypes: notifikasi yang layak jadi tanda merah di menu Status
+// Publikasi — mitra menyetujui (acc) atau artikel terbit.
+const publicationUnreadTypes = "('publication.partner_approved','publication.published')"
+
+// BrandPublicationUnread: GET menghitung notifikasi publikasi belum dibaca milik
+// user; POST menandai semuanya dibaca (dipanggil saat klien membuka halaman
+// Status Publikasi). Scope selalu user yang login — brandId hanya gerbang akses.
+func (d *Deps) BrandPublicationUnread(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	if user == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
+		return
+	}
+	if _, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer"); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if r.Method == http.MethodPost {
+		tag, err := d.Pool.Exec(r.Context(), `
+			UPDATE notifications SET read_at = NOW()
+			WHERE user_id = $1 AND read_at IS NULL AND expired_at IS NULL
+			  AND publication_id IS NOT NULL AND type IN `+publicationUnreadTypes, user.ID)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"count": 0, "marked": tag.RowsAffected()})
+		return
+	}
+	row, err := d.queryRow(r.Context(), `
+		SELECT COUNT(*)::int AS count FROM notifications
+		WHERE user_id = $1 AND read_at IS NULL AND expired_at IS NULL
+		  AND publication_id IS NOT NULL AND type IN `+publicationUnreadTypes, user.ID)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	count := 0
+	if row != nil {
+		count = row.intOr("count", 0)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"count": count})
+}

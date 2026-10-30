@@ -370,21 +370,26 @@ func (d *Deps) runTautAgent(ctx context.Context, agent, campaignID, userPrompt s
 	}
 	inputHash := tautInputHash(agent, campaignID, mediaKey, userPrompt)
 
-	// Dedup: reuse run done dengan input sama.
-	cached, err := d.queryRow(ctx,
-		"SELECT id, model, token_input, token_output, duration_ms, output FROM taut_agent_runs WHERE agent = $1 AND input_hash = $2 AND status = 'done' ORDER BY created_at DESC LIMIT 1",
-		agent, inputHash)
-	if err == nil && cached != nil {
-		content := outputContent(cached.raw("output"))
-		if content != "" {
-			return &agentLLMResult{
-				Content:    content,
-				Model:      cached.strOr("model", ""),
-				UsageIn:    cached.intOr("token_input", 0),
-				UsageOut:   cached.intOr("token_output", 0),
-				DurationMS: int64(cached.intOr("duration_ms", 0)),
-				RunID:      cached.strOr("id", ""),
-			}, nil
+	// Dedup: reuse run done dengan input sama — KECUALI agen penulis. Generate
+	// draf harus selalu menghasilkan tulisan baru, bukan mengembalikan artikel
+	// lama dari cache saat isiannya identik.
+	creativeWriter := agent == "writer" || strings.HasPrefix(agent, "writer_")
+	if !creativeWriter {
+		cached, err := d.queryRow(ctx,
+			"SELECT id, model, token_input, token_output, duration_ms, output FROM taut_agent_runs WHERE agent = $1 AND input_hash = $2 AND status = 'done' ORDER BY created_at DESC LIMIT 1",
+			agent, inputHash)
+		if err == nil && cached != nil {
+			content := outputContent(cached.raw("output"))
+			if content != "" {
+				return &agentLLMResult{
+					Content:    content,
+					Model:      cached.strOr("model", ""),
+					UsageIn:    cached.intOr("token_input", 0),
+					UsageOut:   cached.intOr("token_output", 0),
+					DurationMS: int64(cached.intOr("duration_ms", 0)),
+					RunID:      cached.strOr("id", ""),
+				}, nil
+			}
 		}
 	}
 

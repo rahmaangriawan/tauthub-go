@@ -20,6 +20,7 @@
 		token_hint: string | null;
 		sender_name: string | null;
 		country_code: string;
+		admin_group_target: string | null;
 		enabled: boolean;
 		updated_at: string | null;
 	};
@@ -114,6 +115,7 @@
 			}
 			config = await cfgRes.json();
 			setupSenderName = config?.sender_name ?? '';
+			setupGroupTarget = config?.admin_group_target ?? '';
 			setupEnabled = Boolean(config?.enabled);
 			if (tplRes.ok) templates = (await tplRes.json()).items ?? [];
 		} catch {
@@ -198,6 +200,8 @@
 	let setupEnabled = $state(false);
 	let setupBusy = $state(false);
 	let setupMsg = $state({ text: '', ok: false });
+	// ID grup WA tujuan notifikasi admin (kosong = kirim ke nomor pribadi admin).
+	let setupGroupTarget = $state('');
 	let testTarget = $state('');
 	let testing = $state(false);
 	let testMsg = $state({ text: '', ok: false });
@@ -213,6 +217,7 @@
 				body: JSON.stringify({
 					token: setupToken.trim() || null,
 					sender_name: setupSenderName.trim() || null,
+					admin_group_target: setupGroupTarget.trim(),
 					enabled: setupEnabled
 				})
 			});
@@ -401,6 +406,13 @@
 							<span class="text-sm font-medium">{tr("Nama pengirim")}</span>
 							<span class="block text-xs text-muted-foreground">{tr("Opsional. Muncul sebagai identitas bila device mendukung.")}</span>
 							<input class="app-input mt-1 w-full" placeholder={tr("mis. Tauthub")} bind:value={setupSenderName} />
+						</label>
+						<label class="block">
+							<span class="text-sm font-medium">{tr("ID Grup WA Admin (opsional)")}</span>
+							<span class="block text-xs text-muted-foreground">
+								{tr("Bila diisi, notifikasi admin (pengajuan media, penarikan dana, tiket dukungan) dikirim SATU pesan ke grup ini — bukan ke nomor pribadi admin. Ambil dari dashboard Fonnte → Group.")}
+							</span>
+							<input class="app-input mt-1 w-full" placeholder="1203630xxxxxxxxx@g.us" bind:value={setupGroupTarget} />
 						</label>
 						<p class="text-xs text-muted-foreground">{tr("Kode negara otomatis “62” — nomor 08xx dikonversi ke 628xx saat pengiriman.")}</p>
 						<div class="flex flex-wrap items-center justify-between gap-3">

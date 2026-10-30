@@ -203,6 +203,32 @@ func (d *Deps) PublicationExecutionJob(ctx context.Context, publicationID string
 	}
 	document, version, publication = peApplyPartnerEdits(document, version, publication, partnerEdits)
 
+	// Batas tautan keluar media — gerbang FINAL sebelum konten dikirim. Isi
+	// artikel dibaca dari versi TERBARU saat pengiriman, jadi klien masih bisa
+	// mengedit tautan setelah menekan "Terbit" (kasus nyata: distribusi 11:39,
+	// edit tautan 11:42, terbit 12:39). Hitung ulang di sini; alih-alih terbit,
+	// publikasi gagal dengan alasan yang bisa diperbaiki klien.
+	var maxLinksPtr *int
+	if media.has("max_links") {
+		v := int(media.numOr("max_links"))
+		maxLinksPtr = &v
+	}
+	capLinks, allowedLinks := mediaLinkCap(media.boolOr("allow_hyperlink", false), maxLinksPtr)
+	outgoing := countOutboundLinks(version.strOr("content", ""), hostSet(media.strOr("website_url", "")))
+	if (!allowedLinks && outgoing > 0) || (allowedLinks && outgoing > capLinks) {
+		msg := "Tautan keluar melebihi kebijakan media: artikel memuat " + itoa(outgoing)
+		if !allowedLinks {
+			msg += " tautan, media tidak menerima tautan."
+		} else {
+			msg += " tautan, maksimal " + itoa(capLinks) + "."
+		}
+		msg += " Hapus kelebihan tautan lalu minta penerbitan ulang."
+		if err := d.peFailAttempt(ctx, publication, "link_policy", msg, startedAt, terminal); err != nil {
+			return err
+		}
+		return pePublishErr("link_policy", msg)
+	}
+
 	// Content Safety: gerbang final publikasi — best-effort, tidak boleh
 	// mematahkan alur yang sudah ada.
 	if modErr := d.peModerationGate(ctx, publicationID, publication, document, version, startedAt); modErr != nil {

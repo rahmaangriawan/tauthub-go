@@ -44,6 +44,8 @@
 		unsourcedEntities?: string[];
 		briefAvailable?: boolean;
 		info?: string;
+		/** Kebijakan tautan media: jumlah tautan keluar vs batas max_links. */
+		policy?: { status: CheckStatus; allowed: boolean; max_links: number; outgoing: number };
 	};
 	type Checks = { aiOverview: Check; contentSafety: Check; linkHealth: Check; brandVoice: Check };
 	type MediaEntry = {
@@ -141,12 +143,40 @@
 		void loadAudits();
 	});
 
-	function startPolling() {
+	// Polling lanjutan setelah koneksi putus: batas waktunya, bukan tanpa akhir.
+	let pollDeadline = 0;
+	// Sidik hasil audit SEBELUM pemindaian dimulai. Dipakai untuk tahu kapan
+	// audit BARU sudah tersimpan: selama sidiknya masih sama, hasil di layar
+	// baru hasil pemindaian sebelumnya.
+	let scanBaseline = '';
+
+	const checksSignature = () => JSON.stringify(checks ?? null);
+
+	function startPolling(deadline?: number) {
+		if (deadline) pollDeadline = deadline;
 		if (pollTimer) return;
 		// audit-all menahan koneksi sampai semua media selesai dan tidak pernah
 		// menulis status "running", jadi hasil per media hanya bisa dilihat
 		// dengan membaca ulang daftar audit selama proses berjalan.
-		pollTimer = window.setInterval(() => void loadAudits(), 4000);
+		pollTimer = window.setInterval(() => {
+			void loadAudits().then(() => {
+				// Audit baru sudah tersimpan: hentikan polling dan beri tahu panel.
+				if (scanBaseline && checksSignature() !== scanBaseline && scannedCount >= totalChecks) {
+					stopPolling();
+					pollDeadline = 0;
+					notice = '';
+					scanBaseline = '';
+					onScanned?.();
+					return;
+				}
+				if (pollDeadline && Date.now() > pollDeadline) {
+					stopPolling();
+					pollDeadline = 0;
+					notice = '';
+					error = tr('Pemindaian belum mengirim hasil. Coba jalankan lagi.');
+				}
+			});
+		}, 4000);
 	}
 	function stopPolling() {
 		if (!pollTimer) return;
@@ -167,6 +197,7 @@
 		scanTimer = window.setInterval(() => (scanSeconds += 1), 1000);
 		error = '';
 		notice = '';
+		scanBaseline = checksSignature();
 		startPolling();
 		try {
 			// Panel ini level-artikel: kirim mediaIds supaya server memindai
@@ -183,14 +214,26 @@
 			if (result?.alreadyAudited) notice = tr('Semua artikel sudah punya hasil pemindaian — tidak ada yang dipindai ulang.');
 			else if ((result?.mediaCount ?? 0) === 0) notice = tr('Tidak ada artikel yang dipindai.');
 		} catch (reason) {
-			if (reason instanceof DOMException && reason.name === 'AbortError') {
-				notice = tr('Pemindaian terputus karena batas waktu koneksi. Sebagian media mungkin sudah tersimpan hasilnya — panel ini menampilkan hasil terbaru.');
+			// Timeout/abort koneksi hanya memutus PANEL dari server; pemindaian di
+			// server tetap lanjut (konteksnya dilepas dari request). Tetap polling
+			// supaya hasil yang tersimpan belakangan ikut tampil, alih-alih panel
+			// berhenti dan terlihat "QC tidak selesai".
+			const timedOut =
+				(reason instanceof Error && reason.name === 'TimeoutError') ||
+				(reason instanceof DOMException && reason.name === 'AbortError');
+			if (timedOut) {
+				notice = tr('Pemindaian masih berjalan di server. Hasilnya muncul otomatis di sini begitu selesai.');
+				// Batas atas 5 menit: cukup untuk tiga panggilan LLM + pass revisi,
+				// tanpa membuat panel memutar selamanya bila server benar-benar macet.
+				startPolling(Date.now() + 5 * 60_000);
 			} else {
 				error = reason instanceof Error ? reason.message : tr('Gagal menjalankan pemindaian QC.');
 			}
 		} finally {
 			await loadAudits();
-			stopPolling();
+			// Polling dihentikan hanya bila pemindaian benar-benar selesai atau
+			// gagal; kasus timeout dibiarkan berjalan sampai hasil datang.
+			if (!notice || error) stopPolling();
 			if (scanTimer) {
 				window.clearInterval(scanTimer);
 				scanTimer = null;
@@ -220,6 +263,13 @@
 				if (check.status === 'review_required') return `Perlu review (risiko ${check.riskLevel ?? '?'})`;
 				return tr('Menunggu pemindaian…');
 			case 'linkHealth': {
+				// Pelanggaran BATAS tautan lebih penting untuk ditampilkan daripada
+				// jumlah URL "tidak aman" — itu yang membuat artikel tidak bisa terbit.
+				if (check.policy?.status === 'failed') {
+					return check.policy.allowed
+						? `${check.policy.outgoing} tautan keluar · maksimal ${check.policy.max_links}`
+						: tr('Media tidak menerima tautan');
+				}
 				const n = check.unsafeUrls?.length ?? check.links?.filter((l) => l.status === 'unsafe' || l.status === 'suspicious').length ?? 0;
 				if (check.status === 'passed') return tr('Semua link aman');
 				if (check.status === 'failed') return `${n} URL tidak aman`;
@@ -430,6 +480,13 @@
 												{/if}
 											</div>
 										{:else if card.key === 'linkHealth'}
+										{#if check.policy}
+											<p class="mb-1.5 text-[11.5px]" style="color: {check.policy.status === 'failed' ? 'var(--destructive)' : 'var(--muted-foreground)'};">
+												{check.policy.allowed
+													? `${tr('Tautan keluar')}: ${check.policy.outgoing} / ${tr('maksimal')} ${check.policy.max_links}`
+													: tr('Media ini tidak menerima tautan keluar')}{#if check.policy.status === 'failed'}{' — '}{tr('hapus kelebihan tautan lalu jalankan Cek Validasi ulang')}{/if}
+											</p>
+										{/if}
 										<ul class="space-y-1.5">
 											{#each check.links ?? [] as link (link.url)}
 												<li class="flex items-start gap-2">

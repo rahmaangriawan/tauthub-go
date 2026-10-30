@@ -237,16 +237,16 @@ func (d *Deps) loadTautProperBriefContext(ctx context.Context, brandID, briefID 
 
 	entity := byKind[summary.KindEntity]
 	entityStatus := entity.Status
-	if entityStatus == "" || entityStatus == "idle" {
-		return out, errUnprocessable("Brief ini belum punya data entitas. Isi brief lewat Copilot dulu sebelum memakai mode Proper.")
-	}
-	if entityStatus != "ready" {
-		return out, errUnprocessable("Ringkasan Entitas brief belum siap. Buka Taut Brief → Ringkasan, tunggu proses selesai lalu coba lagi.")
+	if entityStatus != "ready" || strings.TrimSpace(entity.Content) == "" {
+		// Ringkasan tidak dibuat otomatis (kebijakan "manual only"), padahal
+		// Writer Proper butuh ringkasan entitas sebagai memori brand. Tanpa
+		// pemicu di sini, brief yang sudah 100% terisi tetap ditolak terus
+		// dengan pesan "belum siap" karena tidak ada yang pernah menyusunnya.
+		// Minta dibuat di latar belakang supaya percobaan berikutnya siap.
+		_ = summary.QueueForce(ctx, d.Pool, profileID, brandPublic, summary.KindEntity)
+		return out, errUnprocessable("Ringkasan Entitas brief sedang disiapkan otomatis. Coba lagi beberapa detik lagi.")
 	}
 	out.EntitySummary = strings.TrimSpace(entity.Content)
-	if out.EntitySummary == "" {
-		return out, errUnprocessable("Brief ini belum punya data entitas. Isi brief lewat Copilot dulu sebelum memakai mode Proper.")
-	}
 	if entity.Stale {
 		out.Stale = true
 		slog.Warn("[taut-proper] ringkasan brief usang dipakai",
@@ -264,18 +264,23 @@ func (d *Deps) loadTautProperBriefContext(ctx context.Context, brandID, briefID 
 			fileSources = int(n)
 		}
 	}
-	if fileSources > 0 {
-		if fileView.Status != "ready" || strings.TrimSpace(fileView.Content) == "" {
-			return out, errUnprocessable("Ringkasan File brief belum siap. Buka Taut Brief → Ringkasan, tunggu proses selesai lalu coba lagi.")
-		}
+	if fileView.Status == "ready" && strings.TrimSpace(fileView.Content) != "" {
 		out.FileSummary = strings.TrimSpace(fileView.Content)
 		if fileView.Stale {
 			out.Stale = true
 			slog.Warn("[taut-proper] ringkasan brief usang dipakai",
 				"profile_id", profileID, "kind", string(summary.KindFile))
 		}
-	} else if fileView.Status == "ready" {
-		out.FileSummary = strings.TrimSpace(fileView.Content)
+	} else if fileSources > 0 {
+		// Ringkasan file hanya referensi pendukung. Dulu ketiadaannya
+		// MEMBLOKIR generate dengan pesan "Ringkasan File brief belum siap",
+		// sehingga brief yang terisi lengkap (dokumen/tautan ada, tapi
+		// ringkasannya belum pernah dibuat) tidak bisa dipakai sama sekali.
+		// Sekarang: minta dibuat di latar belakang, lalu lanjut dengan memori
+		// entitas. Grounding ketat tetap berlaku lewat [DATA FAKTA TERKUNCI].
+		_ = summary.QueueForce(ctx, d.Pool, profileID, brandPublic, summary.KindFile)
+		slog.Warn("[taut-proper] ringkasan file belum siap, generate lanjut tanpa ringkasan file",
+			"profile_id", profileID, "file_sources", fileSources)
 	}
 	return out, nil
 }

@@ -34,7 +34,6 @@ func stripURLSchemeHTML(html string) string {
 	return mapHTMLTextNodes(html, stripURLSchemeText)
 }
 
-
 // finalizeTautArticleHTML: pasca-proses struktur + kebijakan link.
 func finalizeTautArticleHTML(html, mediaType string, allowsLink bool, links []tautBacklinkSpec) string {
 	out := html
@@ -320,6 +319,44 @@ func hrefLinkReFor(url string) *regexp.Regexp {
 	return regexp.MustCompile(`(?i)<a\b[^>]*href=["']` + meta + `/?["'][^>]*>([\s\S]*?)</a>`)
 }
 
+// setAnchorTextForURL menimpa teks yang terlihat dari setiap <a href=url> yang
+// SUDAH ada supaya persis sama dengan anchor yang diminta klien.
+//
+// Kasus nyata: klien mengisi anchor "resto murah jogja" untuk
+// https://salsariresto.com, tetapi model menautkan URL itu dengan teks
+// karangannya sendiri ("Salsari Resto website"). Penegak kebijakan lama hanya
+// mengganti anchor ketika model menulis URL telanjang, jadi anchor klien tidak
+// pernah dipakai dan tautannya tetap salah teks.
+//
+// Isi tautan yang mengandung tag (mis. <strong> atau <img>) dilewati: mengganti
+// seluruhnya akan membuang markup yang mungkin disengaja.
+func setAnchorTextForURL(html, url, anchor string) string {
+	if url == "" || anchor == "" {
+		return html
+	}
+	re := hrefLinkReFor(url)
+	return re.ReplaceAllStringFunc(html, func(m string) string {
+		sub := re.FindStringSubmatch(m)
+		if sub == nil {
+			return m
+		}
+		inner := sub[1]
+		if strings.Contains(inner, "<") {
+			return m
+		}
+		if strings.TrimSpace(inner) == strings.TrimSpace(anchor) {
+			return m
+		}
+		// Ganti hanya isi di antara tag pembuka dan penutup.
+		open := strings.Index(m, ">")
+		closeIdx := strings.LastIndex(m, "</a>")
+		if open < 0 || closeIdx < 0 || closeIdx <= open {
+			return m
+		}
+		return m[:open+1] + escapeHTMLText(anchor) + m[closeIdx:]
+	})
+}
+
 // dedupeLinksByURL: satu URL wajib muncul maksimal sekali per artikel
 // (aturan TEPAT 1x). Bila model menanam URL yang sama beberapa kali — dengan
 // anchor diulang atau variasi — sisakan satu (yang memakai anchor spesifikasi
@@ -394,6 +431,9 @@ func enforceTautBacklinkPolicy(html string, links []tautBacklinkSpec) string {
 		})
 		// TEPAT 1x: URL yang sama ditanam lebih dari satu → sisakan satu.
 		out = dedupeLinksByURL(out, spec.URL, spec.Anchor)
+		// Anchor milik klien WAJIB dipakai, termasuk ketika model sudah
+		// menautkan URL yang benar dengan teks karangannya sendiri.
+		out = setAnchorTextForURL(out, spec.URL, spec.Anchor)
 	}
 	if len(links) > 0 {
 		primary := links[0]

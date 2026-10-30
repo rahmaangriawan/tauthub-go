@@ -1579,7 +1579,15 @@ const opPublicationSelectColumns = `p.id, p.order_code, p.status, p.client_price
               (SELECT pa2.error_message FROM publication_attempts pa2 WHERE pa2.publication_id = p.id ORDER BY pa2.attempt_number DESC LIMIT 1) AS error_message,
               (SELECT v.angle_label FROM publication_variants v WHERE v.publication_id = p.id LIMIT 1) AS variant_angle,
               (SELECT b.mode FROM publication_variants v JOIN publication_variant_batches b ON b.id = v.batch_id WHERE v.publication_id = p.id LIMIT 1) AS variant_mode,
-              (SELECT pj.remote_post_id FROM publication_jobs pj WHERE pj.publication_id = p.id ORDER BY pj.created_at DESC LIMIT 1) AS remote_post_id`
+              (SELECT pj.remote_post_id FROM publication_jobs pj WHERE pj.publication_id = p.id ORDER BY pj.created_at DESC LIMIT 1) AS remote_post_id,
+              -- Sumber artikel: 'ai' bila The Writer pernah menghasilkan artikel
+              -- untuk media ini di kampanye yang sama (semantik sama dengan badge
+              -- di Dapur Produksi); selain itu konten masuk lewat "Tulis Sendiri".
+              CASE WHEN p.campaign_id IS NOT NULL AND EXISTS (
+                     SELECT 1 FROM taut_agent_runs r
+                     WHERE r.campaign_id = p.campaign_id AND r.media_id = p.media_id
+                       AND r.agent IN ('writer','writer_mainstream','writer_blogger') AND r.status = 'done'
+                   ) THEN 'ai' ELSE 'manual' END AS article_source`
 
 const opPublicationFromClause = `FROM publications p
        JOIN brands b ON b.id = p.brand_id

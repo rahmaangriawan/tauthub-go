@@ -15,6 +15,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
+	import Tooltip from '$lib/components/tooltip.svelte';
 	import { MANUAL_PROFILER_REASON, rpCurrency, toJakartaDisplay } from '../../_shared';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import DateTimePicker from '$lib/components/date-time-picker.svelte';
@@ -747,25 +748,31 @@
 										<span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">{tr('Artikel')} {m.slot ?? 1}/{total}</span>
 									{/if}
 								</div>
-								<button
-									type="button"
-									class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
-									aria-label={tr('Beri Rating')}
-									title={tr('Beri rating kecepatan terbit mitra ini')}
-									onclick={() => void openRating(m)}
+								<Tooltip content={tr('Beri Rating')} side="top" align="end">
+									<button
+										type="button"
+										class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
+										aria-label={tr('Beri Rating')}
+										onclick={() => void openRating(m)}
+									>
+										<Star size={16} />
+									</button>
+								</Tooltip>
+								<Tooltip
+									content={!m.publication_id ? tr('Publikasi belum diajukan') : tr('Hubungi Media')}
+									side="top"
+									align="end"
 								>
-									<Star size={16} />
-								</button>
-								<button
-									type="button"
-									class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-									disabled={!m.publication_id}
-									aria-label={tr('Hubungi')}
-									title={!m.publication_id ? tr('Publikasi belum diajukan') : tr('Hubungi mitra tentang artikel ini')}
-									onclick={() => openContact(m)}
-								>
-									<MessageCircle size={16} />
-								</button>
+									<button
+										type="button"
+										class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+										disabled={!m.publication_id}
+										aria-label={tr('Hubungi Media')}
+										onclick={() => openContact(m)}
+									>
+										<MessageCircle size={16} />
+									</button>
+								</Tooltip>
 							</div>
 
 							<!-- Isi artikel. Judul yang boleh diedit sekaligus jadi tombol edit,
@@ -783,15 +790,17 @@
 											<Pencil size={13} class="mt-1 shrink-0 text-slate-400" />
 										</button>
 									{:else if m.scheduled_at}
-										<button
-											type="button"
-											class="-m-1 flex w-full items-start gap-2 rounded-lg p-1 text-left transition-colors hover:bg-slate-50"
-											title={tr('Artikel sudah terjadwal — hanya bisa dilihat')}
-											onclick={() => void openEditor(m)}
-										>
-											<span class="line-clamp-2 text-[14.5px] font-semibold leading-snug text-slate-900">{m.article.title}</span>
-											<Lock size={13} class="mt-1 shrink-0 text-slate-400" />
-										</button>
+										<Tooltip content={tr('Preview Artikel')} side="top" align="start">
+											<button
+												type="button"
+												class="-m-1 flex w-full items-start gap-2 rounded-lg p-1 text-left transition-colors hover:bg-slate-50"
+												aria-label={tr('Preview Artikel')}
+												onclick={() => void openEditor(m)}
+											>
+												<span class="line-clamp-2 text-[14.5px] font-semibold leading-snug text-slate-900">{m.article.title}</span>
+												<Lock size={13} class="mt-1 shrink-0 text-slate-400" />
+											</button>
+										</Tooltip>
 									{:else}
 										<p class="line-clamp-2 text-[14.5px] font-semibold leading-snug text-slate-900">{m.article.title}</p>
 									{/if}
@@ -978,38 +987,45 @@
 													<Pencil size={13} />
 												</button>
 											{:else if m.scheduled_at && m.article.title}
-												<button
-													type="button"
-													class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300"
-													aria-label={tr('Lihat Artikel')}
-													title={tr('Artikel sudah terjadwal — hanya bisa dilihat')}
-													onclick={() => void openEditor(m)}
-												>
-													<Eye size={13} />
-												</button>
+												<Tooltip content={tr('Preview Artikel')} side="top" align="end">
+													<button
+														type="button"
+														class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300"
+														aria-label={tr('Preview Artikel')}
+														onclick={() => void openEditor(m)}
+													>
+														<Eye size={13} />
+													</button>
+												</Tooltip>
 											{/if}
 											<!-- Beri rating kecepatan terbit media ini (tanpa harus membuka obrolan). -->
-											<button
-												type="button"
-												class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300"
-												aria-label={tr('Beri Rating')}
-												title={tr('Beri rating kecepatan terbit mitra ini')}
-												onclick={() => void openRating(m)}
-											>
-												<Star size={13} />
-											</button>
+											<Tooltip content={tr('Beri Rating')} side="top" align="end">
+												<button
+													type="button"
+													class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300"
+													aria-label={tr('Beri Rating')}
+													onclick={() => void openRating(m)}
+												>
+													<Star size={13} />
+												</button>
+											</Tooltip>
 											<!-- Hubungi mitra tentang artikel ini; publikasi belum ada
 											     (belum diajukan) belum punya forum. -->
-											<button
-												type="button"
-												class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-												disabled={!m.publication_id}
-												aria-label={tr('Hubungi')}
-												title={!m.publication_id ? tr('Publikasi belum diajukan') : tr('Hubungi mitra tentang artikel ini')}
-												onclick={() => openContact(m)}
+											<Tooltip
+												content={!m.publication_id ? tr('Publikasi belum diajukan') : tr('Hubungi Media')}
+												side="top"
+												align="end"
 											>
-												<MessageCircle size={13} />
-											</button>
+												<button
+													type="button"
+													class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+													disabled={!m.publication_id}
+													aria-label={tr('Hubungi Media')}
+													onclick={() => openContact(m)}
+												>
+													<MessageCircle size={13} />
+												</button>
+											</Tooltip>
 										</div>
 									</td>
 																		</tr>
@@ -1184,7 +1200,7 @@
 							<span class="text-[10.5px] text-slate-400">{tr('Sangat Cepat')}</span>
 						</div>
 						<p class="mt-2.5 text-[11.5px] leading-relaxed text-slate-500">
-							{tr('Rating membantu klien lain melihat kecepatan mitra. Satu media hanya punya satu nilai — menilai ulang akan menimpa nilai sebelumnya.')}
+							{tr('Penilaian ini membantu klien lain melihat kecepatan terbit mitra. Setiap media hanya menyimpan satu nilai, jadi menilai ulang akan memperbarui nilai sebelumnya.')}
 						</p>
 					{/if}
 					{#if ratingError}

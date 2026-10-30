@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/seo"
 )
 
 // ---------- SEO: cek domain (port seo/check) ----------
@@ -130,10 +131,10 @@ func (d *Deps) checkDomainSEO(r *http.Request, domain string) (map[string]any, *
 	result["checked_at"] = isoMilli(nowUTC())
 	result["source"] = "rapidapi-domain-metrics"
 	if result["spam_score"] == nil {
-		if spamKey, spamErr := d.platformSeoAPIKey(r, "sealed_spam_api_key"); spamErr == nil && spamKey != "" {
-			if spam, fetchErr := d.fetchSpamScore(r, domain, spamKey); fetchErr == nil && spam != nil {
-				result["spam_score"] = *spam
-			}
+		// Provider spam checker lama dengan key RapidAPI yang sama (kolom
+		// sealed_spam_api_key tidak ada di skema, jalur lama selalu gagal).
+		if spam, fetchErr := d.fetchSpamScore(r, domain, apiKey); fetchErr == nil && spam != nil {
+			result["spam_score"] = *spam
 		}
 	}
 	return result, nil
@@ -160,45 +161,31 @@ func (d *Deps) platformSeoAPIKey(r *http.Request, column string) (string, *Partn
 	return plain, nil
 }
 
-// fetchSeoMetrics: GET provider domain-metrics (timeout 15s).
+// fetchSeoMetrics: cek DA/PA lewat paket internal/seo (provider sama dengan
+// metrik media di admin — RapidAPI "Bulk DA PA Checker Semrush", KSDeveloper).
 func (d *Deps) fetchSeoMetrics(r *http.Request, domain, apiKey string) (map[string]any, *PartnerError) {
-	target := "https://domain-metrics-check.p.rapidapi.com/domain-metrics/" + urlPathEscape(domain) + "/"
-	headers := map[string]string{
-		"accept":          "application/json",
-		"x-rapidapi-host": "domain-metrics-check.p.rapidapi.com",
-		"x-rapidapi-key":  apiKey,
-	}
-	status, body, _ := d.safeGetWithHeader(r, target, headers, 15*time.Second)
-	if status == 0 {
-		return nil, &PartnerError{http.StatusServiceUnavailable, "Provider SEO tidak dapat dihubungi sekarang."}
-	}
-	if status < 200 || status >= 300 {
-		switch status {
-		case 401, 403:
-			slog.Error("[seo] provider menolak API key", "status", status)
+	cfg := seo.LoadConfig(r.Context(), d.Pool)
+	metrics, seoErr := seo.Fetch(r.Context(), domain, apiKey, cfg)
+	if seoErr != nil {
+		switch seoErr.Kind {
+		case seo.KindAuth:
+			slog.Error("[seo] provider menolak API key", "status", seoErr.Status)
 			return nil, &PartnerError{http.StatusServiceUnavailable, "Konfigurasi integrasi SEO bermasalah. Hubungi admin Tauthub."}
-		case 429:
+		case seo.KindQuota, seo.KindRateLimited:
 			return nil, &PartnerError{http.StatusServiceUnavailable, "Provider SEO sedang rate-limited. Coba lagi nanti."}
-		case 404:
+		case seo.KindNotFound:
 			return nil, &PartnerError{http.StatusServiceUnavailable, "Domain media tidak ditemukan provider."}
+		case seo.KindMalformed:
+			return nil, &PartnerError{http.StatusBadGateway, seo.ErrText(seoErr)}
 		default:
 			return nil, &PartnerError{http.StatusServiceUnavailable, "Provider SEO sedang tidak tersedia."}
 		}
 	}
-	if strings.TrimSpace(body) == "" {
-		return nil, &PartnerError{http.StatusBadGateway, "Respons provider SEO kosong (malformed)."}
+	out := map[string]any{"domain": metrics.Domain, "da": metrics.DA, "pa": metrics.PA, "spam_score": nil}
+	if metrics.Spam != nil {
+		out["spam_score"] = *metrics.Spam
 	}
-	var parsed any
-	if jsonUnmarshal(body, &parsed) != nil {
-		return nil, &PartnerError{http.StatusBadGateway, "Respons provider SEO tidak dapat dibaca (malformed)."}
-	}
-	da := findMetric(parsed, "mozda", 0)
-	pa := findMetric(parsed, "mozpa", 0)
-	spam := findMetric(parsed, "mozspam", 0)
-	if da == nil || pa == nil {
-		return nil, &PartnerError{http.StatusServiceUnavailable, "Provider SEO tidak mengembalikan DA/PA."}
-	}
-	return map[string]any{"domain": domain, "da": *da, "pa": *pa, "spam_score": spam}, nil
+	return out, nil
 }
 
 // fetchSpamScore: provider spam checker opsional (timeout 10s).

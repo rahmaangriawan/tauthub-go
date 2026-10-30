@@ -424,19 +424,26 @@ func (d *Deps) runTautAgentCommon(ctx context.Context, agent, campaignID, userPr
 	}
 	inputHash := tautInputHash(agent, campaignID, mediaKey, userPrompt)
 
-	cached, err := d.queryRow(ctx,
-		"SELECT id, model, token_input, token_output, duration_ms, output FROM taut_agent_runs WHERE agent = $1 AND input_hash = $2 AND status = 'done' ORDER BY created_at DESC LIMIT 1",
-		agent, inputHash)
-	if err == nil && cached != nil {
-		if content := outputContent(cached.raw("output")); content != "" {
-			if onDelta != nil {
-				onDelta(content)
+	// Agen PENULIS selalu menghasilkan draf baru: klik "Buat Draf dengan AI"
+	// berulang dengan isian identik tidak boleh mengembalikan artikel lama dari
+	// cache dedup (dulu hasilnya identik, terasa seperti draf lama dipakai lagi).
+	// Dedup tetap berlaku untuk agen analitis (gatekeeper, profiler, dll).
+	creativeWriter := agent == "writer" || strings.HasPrefix(agent, "writer_")
+	if !creativeWriter {
+		cached, err := d.queryRow(ctx,
+			"SELECT id, model, token_input, token_output, duration_ms, output FROM taut_agent_runs WHERE agent = $1 AND input_hash = $2 AND status = 'done' ORDER BY created_at DESC LIMIT 1",
+			agent, inputHash)
+		if err == nil && cached != nil {
+			if content := outputContent(cached.raw("output")); content != "" {
+				if onDelta != nil {
+					onDelta(content)
+				}
+				return &agentLLMResult{
+					Content: content, Model: cached.strOr("model", ""),
+					UsageIn: cached.intOr("token_input", 0), UsageOut: cached.intOr("token_output", 0),
+					DurationMS: int64(cached.intOr("duration_ms", 0)), RunID: cached.strOr("id", ""),
+				}, nil
 			}
-			return &agentLLMResult{
-				Content: content, Model: cached.strOr("model", ""),
-				UsageIn: cached.intOr("token_input", 0), UsageOut: cached.intOr("token_output", 0),
-				DurationMS: int64(cached.intOr("duration_ms", 0)), RunID: cached.strOr("id", ""),
-			}, nil
 		}
 	}
 

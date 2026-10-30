@@ -37,7 +37,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 	}
 
 	items, err := d.queryRows(ctx,
-		`SELECT tcm.id, tcm.media_id, tcm.slot, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode
+		`SELECT tcm.id, tcm.media_id, tcm.slot, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode, m.website_url, m.allow_hyperlink, m.max_links
 		 FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		 WHERE tcm.campaign_id = $1 AND tcm.status = 'selected' AND tcm.article_document_id IS NOT NULL
 		       AND tcm.article_status IN ('draft','revision')`, campaignID)
@@ -152,6 +152,19 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			})
 		}()
 		checksWG.Wait()
+
+		// Batas tautan keluar (max_links) — aturan yang sama dengan gatekeeper
+		// brandflow: tautan fisik ke domain lain dihitung dan dibandingkan
+		// dengan kebijakan media. Kelebihan = artikel tidak boleh 'ready'.
+		var maxLinksPtr *int
+		if item.has("max_links") {
+			v := int(item.numOr("max_links"))
+			maxLinksPtr = &v
+		}
+		linkCap, linkAllowed := brandflow.MediaLinkCap(item.boolOr("allow_hyperlink", false), maxLinksPtr)
+		outgoingLinks := brandflow.CountOutboundLinks(content, brandflow.HostSet(item.strOr("website_url", "")))
+		linkPolicyFailed := (!linkAllowed && outgoingLinks > 0) || (linkAllowed && outgoingLinks > linkCap)
+
 		minWords, maxWords := 0, 0
 		if voiceRange != nil {
 			minWords, maxWords = *voiceRange.min, *voiceRange.max
@@ -168,6 +181,9 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			safetyStatus = "passed"
 		}
 		linkStatus := links.Verdict
+		if linkPolicyFailed {
+			linkStatus = "failed"
+		}
 		voiceLevel := voice.Level
 		voiceStatus := "passed" // voice informasional: tidak pernah gagal
 
@@ -178,7 +194,11 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			"categories": safety.Categories, "confidence": safety.Confidence,
 			"reasons": capStrings(safety.Reasons, 3),
 		}
-		checks["linkHealth"] = map[string]any{"status": linkStatus, "links": links.Links}
+		linkPolicy := map[string]any{"status": "passed", "allowed": linkAllowed, "max_links": linkCap, "outgoing": outgoingLinks}
+		if linkPolicyFailed {
+			linkPolicy["status"] = "failed"
+		}
+		checks["linkHealth"] = map[string]any{"status": linkStatus, "links": links.Links, "policy": linkPolicy}
 		checks["brandVoice"] = map[string]any{
 			"status": voiceStatus, "level": voiceLevel, "notes": capStrings(voice.Notes, 3),
 		}
@@ -300,6 +320,10 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 
 		// ck_taut_cm_article_status tidak mengenal 'gagal' → dipetakan ke 'blocked'.
 		status := "blocked"
+		if linkPolicyFailed && safetyStatus != "failed" && links.Verdict != "failed" {
+			// Tautan berlebih bisa diperbaiki klien (hapus tautan → Cek ulang).
+			verdict = "revisi"
+		}
 		switch verdict {
 		case "layak_tayang":
 			status = "ready"

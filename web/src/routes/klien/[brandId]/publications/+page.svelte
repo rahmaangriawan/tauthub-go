@@ -7,11 +7,12 @@
 	// KATEGORI + urut) → banner error → daftar baris → footer paginasi → modal
 	// (detail, batalkan, tracking) → toast "macet".
 	import { onMount } from 'svelte';
+	import { markPublicationUnreadRead } from '$lib/notifications/publication-unread.svelte';
 	import { page } from '$app/state';
 	import { sameOriginAssetUrl } from '$lib/media/cover';
 	import { goto } from '$app/navigation';
 	import {
-		Calendar, ChartLine, CircleAlert, CircleCheck, Coins, ExternalLink, FileText, Image as ImageIcon, LoaderCircle, PencilLine, RotateCcw, Search, X
+		Calendar, ChartLine, CircleAlert, CircleCheck, Coins, ExternalLink, FileText, Image as ImageIcon, LoaderCircle, MessageCircle, RotateCcw, Search, X
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -28,6 +29,7 @@
 		publish_status?: string | null; publish_progress?: number | null;
 		published_at: string | null; published_url: string | null; featured_image_url?: string | null;
 		document_title: string | null; media_name: string | null; media_category?: string | null;
+		campaign_id?: string | null;
 		media_categories?: string[] | null; media_status?: string | null; order_code?: string | null;
 		created_at: string; cancel_reason?: string | null;
 		pr_analysis?: {
@@ -61,6 +63,9 @@
 
 	// Modal
 	let detail = $state<Detail | null>(null);
+	/** Halaman ringkasan kampanye (tempat percakapan mitra per artikel). */
+	const campaignChatHref = (campaignId: string | null | undefined): string | null =>
+		campaignId ? `/klien/${brandUrl}/taut-pintar/${campaignId}/ringkasan` : null;
 	let detailBusy = $state(false);
 	let cancelTarget = $state<Pub | null>(null);
 	let cancelReason = $state('');
@@ -95,6 +100,9 @@
 				return;
 			}
 			await Promise.all([load(), loadWallet(), loadMediaCatalog()]);
+			// Halaman Status Publikasi dibuka = notifikasi publikasi (di-acc /
+			// terbit) sudah terbaca → padamkan badge merah di sidebar.
+			void markPublicationUnreadRead();
 		})();
 		const onExpired = () => void goto('/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -599,6 +607,16 @@
 								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none" type="button" onclick={() => void openDetail(row)}>
 									{detailBusy ? tr('Memuat…') : tr('Detail')}
 								</button>
+								{#if campaignChatHref(row.campaign_id)}
+									<a
+										class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none"
+										style="text-decoration: none;"
+										href={campaignChatHref(row.campaign_id)}
+										title={tr('Buka percakapan kampanye dengan mitra')}
+									>
+										<MessageCircle size={13} /> Chat
+									</a>
+								{/if}
 								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none" type="button" onclick={() => void openTracking(row)}>
 									<ChartLine size={14} /> Tracking
 								</button>
@@ -690,21 +708,20 @@
 				</div>
 			{/if}
 
-			<footer class="flex flex-wrap items-center gap-2 border-t px-6 py-4">
-				{#if CANCELLABLE.has(detail.status)}
-					<button class="app-btn app-btn-soft" style="color: var(--destructive);" type="button" onclick={() => { cancelTarget = detail; cancelReason = ''; }}>{tr("Batalkan Publikasi")}</button>
-				{/if}
-				{#if RESETTABLE.has(detail.status)}
-					<button class="app-btn app-btn-soft" type="button" onclick={() => (confirmReset = detail)}>{tr("Kembalikan ke Persetujuan")}</button>
-				{/if}
-				{#if detail.status === 'failed'}
-					<button class="app-btn app-btn-soft" type="button" onclick={() => void retryPublication(detail!.id)}>{tr("Retry Publikasi")}</button>
-				{/if}
-				<a class="app-btn app-btn-primary ml-auto" href={`/klien/${brandUrl}/editor/${detail.document_id}`}>
-					<PencilLine size={14} />
-					{tr("Buka Editor")}
-				</a>
-			</footer>
+			{#if CANCELLABLE.has(detail.status) || RESETTABLE.has(detail.status) || detail.status === 'failed'}
+				<footer class="flex flex-wrap items-center gap-2 border-t px-6 py-4">
+					{#if CANCELLABLE.has(detail.status)}
+						<button class="app-btn app-btn-soft" style="color: var(--destructive);" type="button" onclick={() => { cancelTarget = detail; cancelReason = ''; }}>{tr("Batalkan Publikasi")}</button>
+					{/if}
+					{#if RESETTABLE.has(detail.status)}
+						<button class="app-btn app-btn-soft" type="button" onclick={() => (confirmReset = detail)}>{tr("Kembalikan ke Persetujuan")}</button>
+					{/if}
+					{#if detail.status === 'failed'}
+						<button class="app-btn app-btn-soft" type="button" onclick={() => void retryPublication(detail!.id)}>{tr("Retry Publikasi")}</button>
+					{/if}
+				</footer>
+			{/if}
+
 		</dialog>
 	</div>
 {/if}

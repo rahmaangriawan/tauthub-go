@@ -49,6 +49,24 @@ func (d *Deps) MediaSeoRefreshJob(ctx context.Context, mediaID string) error {
 	return err
 }
 
+// ---------- kind: media_geo_refresh ----------
+
+// MediaGeoRefreshJob: segarkan HANYA sinyal GEO/AI (AI Trust + status kutipan)
+// untuk satu media. Dipisah dari media_seo_refresh supaya tombol "Cek GEO"
+// tidak membakar kuota penyedia DA/PA berbayar.
+func (d *Deps) MediaGeoRefreshJob(ctx context.Context, mediaID string) error {
+	row, err := d.queryRow(ctx,
+		"SELECT website_url FROM media WHERE id = $1 AND website_url IS NOT NULL AND website_url <> '' LIMIT 1", mediaID)
+	if err != nil {
+		return err
+	}
+	if row == nil {
+		return nil
+	}
+	_, err = d.mpCheckAndStoreGeoSignals(ctx, mediaID, row.strOr("website_url", ""), "scheduler")
+	return err
+}
+
 // ---------- kind: media_similarweb_refresh ----------
 
 // MediaSimilarWebJob: job antrean pemeriksaan trafik SimilarWeb satu media
@@ -701,6 +719,13 @@ func (d *Deps) RegisterMediaJobs() {
 			return fmt.Errorf("payload mediaId kosong")
 		}
 		return d.MediaSeoRefreshJob(ctx, id)
+	})
+	jobs.Register("media_geo_refresh", func(ctx context.Context, job jobs.JobRow) error {
+		id, _ := job.Payload["mediaId"].(string)
+		if id == "" {
+			return fmt.Errorf("payload mediaId kosong")
+		}
+		return d.MediaGeoRefreshJob(ctx, id)
 	})
 	jobs.Register("media_ai_summary", func(ctx context.Context, job jobs.JobRow) error {
 		id, _ := job.Payload["mediaId"].(string)

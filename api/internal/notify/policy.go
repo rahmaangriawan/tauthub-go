@@ -62,9 +62,9 @@ var policies = map[string]ChannelPolicy{
 	// Email langsung, tanpa lonceng dan tanpa push. Email keamanan bukan
 	// "kabar", jadi tidak perlu muncul sebagai notifikasi yang bisa
 	// terlewat di antara chat dan status publikasi.
-	"security.password_reset":      {InApp: false, Push: false, Email: ModeImmediate, WA: ModeOff, Tier: TierSecurity},
-	"security.password_changed":    {InApp: false, Push: false, Email: ModeImmediate, WA: ModeOff, Tier: TierSecurity},
-	"security.account_invite":      {InApp: false, Push: false, Email: ModeImmediate, WA: ModeOff, Tier: TierSecurity},
+	"security.password_reset":       {InApp: false, Push: false, Email: ModeImmediate, WA: ModeOff, Tier: TierSecurity},
+	"security.password_changed":     {InApp: false, Push: false, Email: ModeImmediate, WA: ModeOff, Tier: TierSecurity},
+	"security.account_invite":       {InApp: false, Push: false, Email: ModeImmediate, WA: ModeOff, Tier: TierSecurity},
 	"security.admin_password_reset": {InApp: false, Push: false, Email: ModeImmediate, WA: ModeOff, Tier: TierSecurity},
 
 	// --- Tier 1: uang ---------------------------------------------------
@@ -117,35 +117,42 @@ var policies = map[string]ChannelPolicy{
 	"publication.late_approval": {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
 
 	// --- Tier 3: informasi (in-app + push saja) -------------------------
-	"publication.published":                 {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"publication.link_lost":                 {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"publication.published":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"publication.link_lost":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"publication.link_replacement_requested": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"publication.auto_replaced":             {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.approved":                        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.rejected":                        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.submitted":                       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.resubmitted":                     {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.negotiated":                      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.dewan_pers.submitted":            {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.dewan_pers.approved":             {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.dewan_pers.rejected":             {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.domain_down":                     {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.crawl_blocked":                   {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"ticket.created":                        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"ticket.replied":                        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"ticket.closed":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"chat.message":                          {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"announcement.new":                      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"vip.enabled":                           {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"vip.disabled":                          {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"secure_direct.requested":               {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"secure_direct.approved":                {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"pr.verification_completed":             {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"pr.score_updated":                      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"partner.wa_required":                   {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"variant_batch.failed":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"changelog.new":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"billing.topup_needed":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"publication.auto_replaced":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.approved":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.rejected":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.submitted":                        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.resubmitted":                      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.negotiated":                       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.dewan_pers.submitted":             {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.dewan_pers.approved":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.dewan_pers.rejected":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.domain_down":                      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.crawl_blocked":                    {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"ticket.created":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	// --- Khusus admin: WA langsung (Fonnte) ------------------------------
+	// Bukan notifikasi in-app (event aslinya di atas sudah punya), melainkan
+	// kanal WA ke nomor admin agar pengajuan media, penarikan dana, dan tiket
+	// dukungan baru tidak menunggu admin membuka dashboard.
+	"admin.media_submitted":      {InApp: false, Push: false, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
+	"admin.withdrawal_requested": {InApp: false, Push: false, Email: ModeOff, WA: ModeImmediate, Tier: TierMoney},
+	"admin.ticket_created":       {InApp: false, Push: false, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
+	"ticket.replied":             {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"ticket.closed":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"chat.message":               {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"announcement.new":           {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"vip.enabled":                {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"vip.disabled":               {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"secure_direct.requested":    {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"secure_direct.approved":     {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"pr.verification_completed":  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"pr.score_updated":           {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"partner.wa_required":        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"variant_batch.failed":       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"changelog.new":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"billing.topup_needed":       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 }
 
 // prefixPolicies menangani tipe yang belum terdaftar tetapi keluarganya tidak

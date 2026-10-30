@@ -166,14 +166,28 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			]
 		},
 		{
+			// Percakapan mitra jadi kategori sendiri: chat dengan admin dan tiket
+			// dukungan. Sebelumnya berupa sub-menu di dalam Pengaturan.
+			label: i18n.t.nav_partner.group_communication,
+			items: [
+				{ label: i18n.t.nav_partner.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`), badge: chatUnread.count },
+				// Notifikasi tetap ada di lonceng topbar; menu ini untuk tiket
+				// dukungan (percakapan dengan admin, bukan halaman luar).
+				{ label: i18n.t.nav_partner.support, href: `${base}/dukungan`, icon: Headset, active: isActive(`${base}/dukungan`), badge: supportUnread.count }
+			]
+		},
+		{
 			label: i18n.t.nav_partner.group_settings,
 			items: [
 				{ label: i18n.t.nav_partner.integrations, href: `${base}/integrations`, icon: PlugZap, active: isActive(`${base}/integrations`) },
-				{ label: i18n.t.nav_partner.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`), badge: chatUnread.count },
-				{ label: i18n.t.nav_partner.profile, href: `${base}/profile`, icon: Settings, active: isActive(`${base}/profile`) },
-				// Notifikasi tetap ada di lonceng topbar; menu sidebar dipakai untuk
-				// tiket dukungan (percakapan dengan admin, bukan halaman luar).
-				{ label: i18n.t.nav_partner.support, href: `${base}/dukungan`, icon: Headset, active: isActive(`${base}/dukungan`), badge: supportUnread.count },
+				{ label: i18n.t.nav_partner.profile, href: `${base}/profile`, icon: Settings, active: isActive(`${base}/profile`) }
+			]
+		},
+		{
+			// Kategori tersendiri: catatan rilis bukan pengaturan akun, letaknya
+			// dipisah supaya grup Pengaturan tetap fokus.
+			label: tr('Sistem'),
+			items: [
 				{ label: i18n.t.nav_partner.changelog, href: `${base}/changelog`, icon: ScrollText, active: isActive(`${base}/changelog`) }
 			]
 		}

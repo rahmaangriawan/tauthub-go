@@ -356,8 +356,8 @@
 				body: JSON.stringify({ model_tier: genMode })
 			});
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal membuat artikel dari intake.')));
-			const payload = (await res.json()) as { job_id: string; status?: string };
-			window.location.href = `/klien/${brandUrl}/generate?outline=${payload.job_id}`;
+			// Kembali ke dashboard: status job tampil di daftar intake terakhir.
+			window.location.href = `/klien/${brandUrl}/dashboard`;
 		} catch (e) {
 			error = e instanceof Error ? e.message : tr('Gagal membuat artikel.');
 		} finally {
@@ -504,7 +504,6 @@
 							step = 1;
 						}}
 					>Lanjut <ArrowRight size={16} /></button>
-					<a class="app-btn app-btn-soft" href={`/klien/${brandUrl}/generate`}>Langsung isi brief (tanpa intake)</a>
 				</div>
 			{/if}
 
@@ -856,9 +855,6 @@
 								</p>
 							</div>
 							<div class="flex shrink-0 items-center gap-1.5">
-								{#if item.job_id}
-									<a class="app-btn app-btn-soft !min-h-7 !text-xs" href={`/klien/${brandUrl}/generate?outline=${item.job_id}`}>{tr("Lihat artikel")}</a>
-								{/if}
 								{#if item.status !== 'job_created'}
 									<button class="app-btn app-btn-soft !min-h-7 !text-xs" type="button" onclick={() => void resume(item)}>Lanjutkan</button>
 								{/if}

@@ -74,5 +74,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	return resolve(event);
+	// <html lang> ikut bahasa pilihan pengguna (cookie), supaya atribut bahasa
+	// sudah benar di HTML awal — SSR tidak tahu localStorage.
+	const htmlLocale = event.cookies.get('tauthub-locale') === 'en' ? 'en' : 'id';
+	return resolve(event, {
+		transformPageChunk: ({ html }) => html.replace('<html lang="id">', `<html lang="${htmlLocale}">`)
+	});
 };

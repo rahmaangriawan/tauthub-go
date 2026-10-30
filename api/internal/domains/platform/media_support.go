@@ -37,6 +37,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/moderation"
 	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
+	"github.com/rahmaangriawan/tauthub-go/internal/seo"
 )
 
 // ---------- konstanta media (parity _media.ts) ----------
@@ -539,15 +540,10 @@ func mpClamp100(v float64) *float64 {
 	return &v
 }
 
-// mpFetchSeoMetrics: GET provider domain-metrics (timeout 15s).
-// Provider DA/PA (RapidAPI). Akun admin berlangganan "domain-da-pa-checker",
-// bukan "domain-metrics-check" yang dipakai versi lama: host lama menjawab
-// 403 "You are not subscribed to this API." walaupun kuncinya benar (host itu
-// memang masih ada — host yang tidak ada menjawab 404 "API doesn't exists").
-const (
-	mpSeoProviderHost = "domain-da-pa-checker.p.rapidapi.com"
-	mpSeoProviderURL  = "https://" + mpSeoProviderHost + "/v1/getDaPa"
-)
+// Provider DA/PA sekarang "Bulk DA PA Checker Semrush" (RapidAPI, KSDeveloper).
+// Kontrak & parsing dipusatkan di paket internal/seo supaya domain platform dan
+// domain partner memakai sumber yang sama; host/path bisa ditimpa lewat
+// platform_seo_config (lihat migrasi 279).
 
 // mpRecordDAError: catat kegagalan penyedia DA/PA tingkat platform (langganan
 // salah, kuota habis) supaya halaman admin bisa menjelaskan kenapa kolom DA
@@ -582,66 +578,30 @@ func (d *Deps) mpDAProviderPaused(ctx context.Context) bool {
 	return err == nil && row != nil
 }
 
-// mpFetchSeoMetrics: POST provider DA/PA (timeout 15s). Balasannya
-// {domain_authority, page_authority, spam_score, external_urls_to_url, …}.
+// mpFetchSeoMetrics: cek DA/PA satu domain lewat paket internal/seo.
 func (d *Deps) mpFetchSeoMetrics(ctx context.Context, domain, apiKey string) (map[string]any, *mpSeoError) {
-	payload, _ := json.Marshal(map[string]string{"q": domain})
-	status, body := mpSafePostJSON(ctx, mpSeoProviderURL, string(payload), map[string]string{
-		"accept":          "application/json",
-		"content-type":    "application/json",
-		"x-rapidapi-host": mpSeoProviderHost,
-		"x-rapidapi-key":  apiKey,
-	}, 15*time.Second)
-	if status == 0 {
-		return nil, mpSeoErr(http.StatusServiceUnavailable, "Provider SEO tidak dapat dihubungi sekarang.")
-	}
-	if status < 200 || status >= 300 {
-		switch status {
-		case 401, 403:
-			msg := "Autentikasi provider DA/PA ditolak. Pastikan akun yang dipakai berlangganan API domain-da-pa-checker, lalu simpan ulang key-nya di Konfigurasi."
+	cfg := seo.LoadConfig(ctx, d.Pool)
+	metrics, seoErr := seo.Fetch(ctx, domain, apiKey, cfg)
+	if seoErr != nil {
+		msg := seo.ErrText(seoErr)
+		switch seoErr.Kind {
+		case seo.KindAuth, seo.KindQuota, seo.KindRateLimited:
 			d.mpRecordDAError(ctx, &msg)
-			return nil, mpSeoErr(http.StatusServiceUnavailable, msg)
-		case 429:
-			// Bedakan kuota habis (butuh tindakan admin) dari rate limit sesaat.
-			msg := "Provider DA/PA sedang rate-limited. Coba lagi nanti."
-			if strings.Contains(strings.ToLower(body), "quota") {
-				msg = "Kuota permintaan penyedia DA/PA habis untuk periode ini, jadi kolom DA tidak bisa diisi. Naikkan paket API-nya atau tunggu kuota reset."
-			}
-			d.mpRecordDAError(ctx, &msg)
-			return nil, mpSeoErr(http.StatusServiceUnavailable, msg)
-		case 404:
-			return nil, mpSeoErr(http.StatusServiceUnavailable, "Domain media tidak ditemukan provider.")
-		default:
-			return nil, mpSeoErr(http.StatusServiceUnavailable, "Provider SEO sedang tidak tersedia.")
 		}
-	}
-	if strings.TrimSpace(body) == "" {
-		return nil, mpSeoErr(http.StatusBadGateway, "Respons provider SEO kosong (malformed).")
-	}
-	var parsed any
-	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
-		return nil, mpSeoErr(http.StatusBadGateway, "Respons provider SEO tidak dapat dibaca (malformed).")
-	}
-	da := mpFindMetric(parsed, "domain_authority", 0)
-	pa := mpFindMetric(parsed, "page_authority", 0)
-	spam := mpFindMetric(parsed, "spam_score", 0)
-	// Bentuk lama (mozda/mozpa/mozspam) tetap didukung bila providernya berganti lagi.
-	if da == nil {
-		da = mpFindMetric(parsed, "mozda", 0)
-	}
-	if pa == nil {
-		pa = mpFindMetric(parsed, "mozpa", 0)
-	}
-	if spam == nil {
-		spam = mpFindMetric(parsed, "mozspam", 0)
-	}
-	if da == nil || pa == nil {
-		return nil, mpSeoErr(http.StatusServiceUnavailable, "Provider SEO tidak mengembalikan DA/PA.")
+		status := http.StatusServiceUnavailable
+		if seoErr.Kind == seo.KindMalformed {
+			status = http.StatusBadGateway
+		}
+		return nil, mpSeoErr(status, msg)
 	}
 	// Penyedia normal lagi: bersihkan catatan kegagalan supaya peringatan di
 	// halaman admin hilang sendiri.
 	d.mpRecordDAError(ctx, nil)
-	return map[string]any{"domain": domain, "da": *da, "pa": *pa, "spam_score": spam}, nil
+	out := map[string]any{"domain": metrics.Domain, "da": metrics.DA, "pa": metrics.PA, "spam_score": nil}
+	if metrics.Spam != nil {
+		out["spam_score"] = *metrics.Spam
+	}
+	return out, nil
 }
 
 // mpFetchSpamScore: provider spam checker opsional (timeout 10s).
@@ -914,7 +874,11 @@ func mpSeoResultFromRow(mediaID string, row ptRow, domain any, cached bool) mpSe
 	}
 }
 
-func mpSeoIsFresh(checkedAt any) bool {
+// mpSeoIsFresh: data dianggap segar bila checked_at lebih baru dari TTL.
+// TTL berasal dari platform_seo_config.cache_ttl_hours (default 1440 jam = 60
+// hari, setara aturan "2 bulan" sebelumnya) supaya biaya kredit API bisa
+// diatur admin tanpa mengubah kode.
+func (d *Deps) mpSeoIsFresh(ctx context.Context, checkedAt any) bool {
 	t, ok := checkedAt.(string)
 	if !ok {
 		return false
@@ -923,7 +887,11 @@ func mpSeoIsFresh(checkedAt any) bool {
 	if err != nil {
 		return false
 	}
-	return parsed.After(time.Now().AddDate(0, -2, 0))
+	ttlHours := seo.LoadConfig(ctx, d.Pool).CacheTTLHrs
+	if ttlHours <= 0 {
+		ttlHours = seo.DefaultCacheTTLHrs
+	}
+	return parsed.After(time.Now().Add(-time.Duration(ttlHours) * time.Hour))
 }
 
 // mpCheckAndStoreSeoMetrics: port checkAndStoreSeoMetrics (DA/PA + sinyal AI).
@@ -939,7 +907,7 @@ func (d *Deps) mpCheckAndStoreSeoMetrics(ctx context.Context, mediaID string, we
 
 	// Baris "segar" tanpa nilai DA tetap harus diambil ulang: kegagalan penyedia
 	// menyimpan checked_at walau DA-nya kosong (lihat `metrics` awal di bawah).
-	if cached != nil && mpSeoIsFresh(cached.anyOrNil("checked_at")) && cached.has("da") {
+	if cached != nil && d.mpSeoIsFresh(ctx, cached.anyOrNil("checked_at")) && cached.has("da") {
 		serpensKey := d.mpOptionalSeoKey(ctx, "sealed_serpens_api_key")
 		// ai_citation_checked_at, bukan ai_citation: "Google tidak menampilkan AI
 		// Overview" adalah hasil pemeriksaan yang sah, jadi SERPens tidak perlu
@@ -976,11 +944,12 @@ func (d *Deps) mpCheckAndStoreSeoMetrics(ctx context.Context, mediaID string, we
 		providerErr = fetchErr
 	} else {
 		metrics = fetched
+		// API baru tidak selalu menyertakan spam; provider spam checker lama
+		// dipakai sebagai pelengkap dengan key RapidAPI yang sama (kolom
+		// sealed_spam_api_key tidak pernah ada di skema, jadi jalur lama mati).
 		if metrics["spam_score"] == nil {
-			if spamKey := d.mpOptionalSeoKey(ctx, "sealed_spam_api_key"); spamKey != "" {
-				if spam := d.mpFetchSpamScore(ctx, domain, spamKey); spam != nil {
-					metrics["spam_score"] = *spam
-				}
+			if spam := d.mpFetchSpamScore(ctx, domain, apiKey); spam != nil {
+				metrics["spam_score"] = *spam
 			}
 		}
 	}
@@ -1006,6 +975,62 @@ func (d *Deps) mpCheckAndStoreSeoMetrics(ctx context.Context, mediaID string, we
 	stored, _ := d.queryRow(ctx, "SELECT "+mpSeoMetricColumns+" FROM media_seo_metrics WHERE media_id = $1 LIMIT 1", mediaID)
 	if stored == nil {
 		return mpSeoResult{}, mpSeoErr(http.StatusBadGateway, "Metrik SEO gagal disimpan.")
+	}
+	return mpSeoResultFromRow(mediaID, ptRow(ptNormalizeMap(stored)), domain, false), nil
+}
+
+// mpCheckAndStoreGeoSignals: hitung ulang HANYA sinyal GEO/AI (AI Trust +
+// status kutipan) tanpa menyentuh penyedia DA/PA.
+//
+// Dipisah dari mpCheckAndStoreSeoMetrics karena biayanya berbeda jauh: DA/PA
+// memanggil RapidAPI berbayar per media, sementara AI Trust hanya mengukur
+// kecepatan (PageSpeed, kuota gratis) + membaca schema.org dari halaman itu
+// sendiri. Admin yang ingin menyegarkan kolom GEO tidak perlu membakar kuota
+// DA untuk seluruh katalog.
+//
+// Baris metrik tetap dipertahankan: kalau media belum punya baris sama sekali,
+// baris dibuat dengan DA/PA kosong supaya sinyal AI punya tempat menyimpan.
+func (d *Deps) mpCheckAndStoreGeoSignals(ctx context.Context, mediaID string, websiteURL any, actorID string) (mpSeoResult, error) {
+	domain, _ := mpDomainFromWebsite(websiteURL).(string)
+	if domain == "" {
+		return mpSeoResult{}, mpSeoErr(http.StatusBadRequest, "Media belum memiliki website/domain.")
+	}
+	target := "https://" + domain
+
+	aiTrust := d.mpComputeAiTrustScore(ctx, target)
+	if aiTrust == nil {
+		return mpSeoResult{}, mpSeoErr(http.StatusBadGateway,
+			"Skor GEO tidak bisa dihitung: PageSpeed tidak mengembalikan skor. Periksa key PageSpeed di konfigurasi SEO.")
+	}
+
+	cached, err := d.queryRow(ctx, "SELECT "+mpSeoMetricColumns+" FROM media_seo_metrics WHERE media_id = $1 LIMIT 1", mediaID)
+	if err != nil {
+		return mpSeoResult{}, err
+	}
+	var citation *mpCitationResult
+	if d.mpOptionalSeoKey(ctx, "sealed_serpens_api_key") != "" {
+		citation = d.mpCheckAiCitation(ctx, target)
+	}
+	cited, citationChecked := mpCitationArgs(citation, cached)
+
+	if cached == nil {
+		// Baris baru: hanya kolom AI yang diisi, DA/PA dibiarkan NULL. `source`
+		// ditulis 'geo-only' supaya admin tahu angka DA tidak pernah diambil di
+		// baris ini (bukan klaim "sudah dicek RapidAPI").
+		if err := d.exec(ctx, `
+			INSERT INTO media_seo_metrics (media_id, da, pa, spam_score, ai_trust_score, ai_citation, ai_citation_checked_at, checked_at, source, updated_at)
+			VALUES ($1, NULL, NULL, NULL, $2, $3, $4, NOW(), 'geo-only', NOW())`,
+			mediaID, mpFloatArg(aiTrust), cited, citationChecked); err != nil {
+			return mpSeoResult{}, err
+		}
+	} else if err := d.mpUpdateAiSignals(ctx, mediaID, aiTrust, cited, citationChecked); err != nil {
+		return mpSeoResult{}, err
+	}
+	d.audit(ctx, actorID, "media.geo_checked", "media", mediaID)
+
+	stored, _ := d.queryRow(ctx, "SELECT "+mpSeoMetricColumns+" FROM media_seo_metrics WHERE media_id = $1 LIMIT 1", mediaID)
+	if stored == nil {
+		return mpSeoResult{}, mpSeoErr(http.StatusBadGateway, "Sinyal GEO gagal disimpan.")
 	}
 	return mpSeoResultFromRow(mediaID, ptRow(ptNormalizeMap(stored)), domain, false), nil
 }
@@ -1515,7 +1540,7 @@ var mpGetenv = func(key string) string { return os.Getenv(key) }
 // mpComputeMediaHealth: skor 0..100 dari riwayat operasional + kualitas.
 func (d *Deps) mpComputeMediaHealth(ctx context.Context, mediaID string) (int, map[string]any, error) {
 	media, err := d.queryRow(ctx,
-		"SELECT id, status, traffic_estimate, media_quality_score, media_tier FROM media WHERE id = $1 LIMIT 1", mediaID)
+		"SELECT id, status, traffic_estimate, media_quality_score, media_tier, integration_type FROM media WHERE id = $1 LIMIT 1", mediaID)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -1530,7 +1555,11 @@ func (d *Deps) mpComputeMediaHealth(ctx context.Context, mediaID string) (int, m
 		  COUNT(*) FILTER (WHERE status = 'published')::int AS published,
 		  COUNT(*) FILTER (WHERE status = 'partner_rejected')::int AS rejected,
 		  COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
-		  ROUND(AVG(EXTRACT(EPOCH FROM (published_at - created_at)) / 3600.0), 2)::double precision AS avg_publish_hours
+		  -- SLA hanya dari publikasi yang terbit <= 7 hari; publikasi yang
+		  -- menggantung karena mitra lupa ACC dibuang dari data SLA.
+		  ROUND(AVG(CASE WHEN published_at IS NOT NULL
+		                  AND published_at <= created_at + INTERVAL '7 days'
+		                 THEN EXTRACT(EPOCH FROM (published_at - created_at)) / 3600.0 END), 2)::double precision AS avg_publish_hours
 		FROM publications
 		WHERE media_id = $1 AND status <> 'cancelled'`, mediaID)
 	if err != nil {
@@ -1611,20 +1640,28 @@ func (d *Deps) mpComputeMediaHealth(ctx context.Context, mediaID string) (int, m
 	}
 
 	noHistory := total == 0
+	// Lihat schComputeMediaHealth: batas tampilan 72 jam, kecuali integrasi
+	// manual; skor tetap dari nilai mentah.
+	displayAvg := avgPublishHours
+	if displayAvg != nil && *displayAvg > 72 && row.strOr("integration_type", "") != "manual" {
+		v := 72.0
+		displayAvg = &v
+	}
 	breakdown := map[string]any{
-		"availability":      mathOrZero(noHistory, availability),
-		"success_rate":      mathRound2OrZero(noHistory, successRate),
-		"publish_time":      mathOrZero(noHistory, publishTime),
-		"rejection_rate":    mathRound2OrZero(noHistory, rejectionRate),
-		"operational_total": mathOrZero(noHistory, operationalTotal),
-		"quality":           mpFloatArg(quality),
-		"quality_source":    qualitySource,
-		"reach":             nil,
-		"total":             int(totalScore),
-		"published":         published,
-		"rejected":          rejected,
-		"failed":            failed,
-		"avg_publish_hours": mpFloatArg(avgPublishHours),
+		"availability":          mathOrZero(noHistory, availability),
+		"success_rate":          mathRound2OrZero(noHistory, successRate),
+		"publish_time":          mathOrZero(noHistory, publishTime),
+		"rejection_rate":        mathRound2OrZero(noHistory, rejectionRate),
+		"operational_total":     mathOrZero(noHistory, operationalTotal),
+		"quality":               mpFloatArg(quality),
+		"quality_source":        qualitySource,
+		"reach":                 nil,
+		"total":                 int(totalScore),
+		"published":             published,
+		"rejected":              rejected,
+		"failed":                failed,
+		"avg_publish_hours":     mpFloatArg(displayAvg),
+		"avg_publish_hours_raw": mpFloatArg(avgPublishHours),
 	}
 	return int(totalScore), breakdown, nil
 }

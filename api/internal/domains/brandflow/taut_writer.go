@@ -2,7 +2,6 @@ package brandflow
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
+	contentengine "github.com/rahmaangriawan/tauthub-go/internal/content"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
@@ -161,6 +161,10 @@ func (d *Deps) selectedTautMedia(ctx context.Context, campaignID string) ([]sele
 }
 
 // tautWordCountRe: frasa "N kata"/"N words" di topik/instruksi klien.
+// reTautLinkMention: konteks klien menyebut tautan/link, dipakai untuk memberi
+// catatan keras saat tidak ada URL yang bisa dipakai (jangan mengarang link).
+var reTautLinkMention = regexp.MustCompile(`(?i)\b(tautan|link|backlink|hyperlink|anchor)\b`)
+
 var tautWordCountRe = regexp.MustCompile(`(?i)(\d{2,5})\s*(?:kata|words?|word)\b`)
 
 // tautWordRangeRe: rentang eksplisit "800-900 kata", "800–1000 kata",
@@ -301,12 +305,8 @@ func (d *Deps) enforceClientWordTarget(ctx context.Context, campaignID, mediaID,
 		slog.Warn("[taut-writer] tulis ulang koreksi panjang gagal", "media_id", mediaID, "err", err)
 		return html, title, metaDescription
 	}
-	var parsed struct {
-		Title           string `json:"title"`
-		ContentHTML     string `json:"content_html"`
-		MetaDescription string `json:"meta_description"`
-	}
-	if json.Unmarshal([]byte(retry.Content), &parsed) != nil || strings.TrimSpace(parsed.ContentHTML) == "" {
+	parsed, ok := contentengine.ParseWriterPayload(retry.Content)
+	if !ok || strings.TrimSpace(parsed.ContentHTML) == "" {
 		slog.Warn("[taut-writer] hasil tulis ulang tidak bisa diparsing", "media_id", mediaID)
 		return html, title, metaDescription
 	}
@@ -676,7 +676,8 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			lines = append(lines, "- ["+l.Anchor+"] -> "+l.URL)
 		}
 		customLinkBlock = "[TAUTAN DARI KLIEN — MANDAT SISTEM, MENANG ATAS ATURAN TAUTAN DI PROMPT ANGLE MANA PUN]\n" +
-			"Klien secara eksplisit meminta tautan berikut disertakan dalam artikel. Sisipkan masing-masing TEPAT 1x secara natural dan semantik pada bagian yang relevan, dibungkus <a href=\"URL\">anchor text</a>, dan DILARANG menulis URL telanjang:\n" +
+			"Klien secara eksplisit meminta tautan berikut disertakan dalam artikel. Sisipkan masing-masing TEPAT 1x secara natural dan semantik pada bagian yang relevan, dan DILARANG menulis URL telanjang.\n" +
+			"ATURAN TEKS TAUTAN (WAJIB): teks yang terlihat di antara <a> dan </a> harus PERSIS sama dengan teks anchor di dalam tanda kurung siku, huruf per huruf. Jangan mengganti, menerjemahkan, memperpanjang dengan nama situs (\"… website\", \"situs resmi …\"), atau menyingkatnya. Contoh benar untuk [resto murah jogja]: <a href=\"https://salsariresto.com\">resto murah jogja</a>. Contoh SALAH: <a href=\"https://salsariresto.com\">Salsari Resto website</a>.\n" +
 			strings.Join(lines, "\n")
 	}
 
@@ -731,6 +732,14 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			"KONTEKS UTAMA DARI KLIEN (WAJIB DIPATUHI): "+writerTopic,
 			"Seluruh artikel (judul, lead, isi, penutup) WAJIB mengikuti konteks di atas. Jangan menambah fakta, angka, nama, atau klaim yang tidak ada di konteks tersebut, dan jangan mengganti topik.",
 		)
+		// Konteks menyebut tautan tapi tidak ada SATU pun URL (anchor kampanye
+		// kosong dan klien tidak mengisi Tautan & Anchor): model dilarang
+		// mengarang alamat — cukup sebut frasanya sebagai teks biasa.
+		if plantPrimary == "" && len(customLinks) == 0 && reTautLinkMention.MatchString(writerTopic) {
+			promptLines = append(promptLines,
+				"CATATAN TAUTAN (WAJIB): konteks klien menyebut tautan/link, tetapi TIDAK ada URL yang diberikan di data kampanye maupun daftar tautan klien. JANGAN mengarang URL, jangan membuat <a href>, dan jangan menulis alamat web; sebutkan nama/frasa yang diminta sebagai teks biasa.",
+			)
+		}
 		// Editorial zero-link: klien boleh saja menulis "sertakan backlink/link
 		// ke ..." di kolom topik — untuk Editorial itu dianggap tidak pernah
 		// ditulis. Tanpa blok ini model menurutinya dan menuliskan tautan/URL.
@@ -771,6 +780,10 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		schemaLine += ", category"
 	}
 	schemaLine += ". Penanda [[IMAGE: ...]] (bila klien minta gambar) ditulis di dalam content_html — JANGAN sebagai field terpisah."
+	// JSON wajib valid: atribut HTML dengan kutip ganda mentah di dalam string
+	// JSON membuat seluruh payload tidak terbaca. Kutip tunggal tetap sah di
+	// HTML dan tidak perlu di-escape.
+	schemaLine += " PENTING: di dalam content_html pakai KUTIP TUNGGAL untuk semua atribut HTML (contoh: <a href='https://contoh.com'>), jangan kutip ganda, supaya JSON tetap valid."
 
 	promptLines = append(promptLines,
 		languageBlock,
@@ -846,18 +859,23 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	contentHTML := ""
 	metaDescription := ""
 	chosenCategory := ""
-	var parsed struct {
-		Title           string `json:"title"`
-		ContentHTML     string `json:"content_html"`
-		MetaDescription string `json:"meta_description"`
-		Category        string `json:"category"`
-	}
-	if json.Unmarshal([]byte(result.Content), &parsed) == nil {
-		title = truncateString(parsed.Title, 300)
-		contentHTML = truncateString(parsed.ContentHTML, 200000)
-		metaDescription = truncateString(strings.TrimSpace(parsed.MetaDescription), 500)
-		chosenCategory = matchAllowedCategory(parsed.Category, allowedCategories)
+	// Payload Writer dibaca toleran: model kerap menulis atribut HTML dengan
+	// kutip ganda mentah di dalam nilai JSON, sehingga decode ketat gagal dan
+	// seluruh JSON mentah dulu berakhir di isi artikel (judul pun jatuh ke nama
+	// kampanye). Parser ini mengekstrak per-field saat JSON tidak valid.
+	if payload, ok := contentengine.ParseWriterPayload(result.Content); ok {
+		title = truncateString(payload.Title, 300)
+		contentHTML = truncateString(payload.ContentHTML, 200000)
+		metaDescription = truncateString(strings.TrimSpace(payload.MetaDescription), 500)
+		chosenCategory = matchAllowedCategory(payload.Category, allowedCategories)
 	} else {
+		// Jangan pernah menyimpan JSON mentah sebagai isi artikel. Kalau jawaban
+		// dimulai dengan '{' tapi tetap tak terbaca, gagalkan generate supaya
+		// klien bisa mencoba lagi — dulu teks {"title": ...} ikut tersimpan dan
+		// tampil di editor.
+		if strings.HasPrefix(strings.TrimSpace(result.Content), "{") {
+			return writerItemResult{}, errStatus(502, "AI mengembalikan format artikel yang tidak bisa dibaca. Coba generate lagi.")
+		}
 		title = campaign.strOr("name", "") + " — " + name
 		contentHTML = truncateString(result.Content, 200000)
 		// Jawaban bukan JSON: pilihan rubrik dari model tidak terbaca, pakai
@@ -1683,7 +1701,13 @@ func partialContentHTML(acc string) (visible string, closed bool) {
 	for j < len(acc) {
 		c := acc[j]
 		if c == '"' {
-			return out.String(), true
+			if contentengine.WriterValueQuoteIsTerminator(acc, j) {
+				return out.String(), true
+			}
+			// Kutip mentah di dalam HTML (href="…"): bagian dari isi artikel.
+			out.WriteByte(c)
+			j++
+			continue
 		}
 		if c != '\\' {
 			out.WriteByte(c)
@@ -1788,8 +1812,17 @@ func (s *peStreamHTML) Write(delta string) (tail string, closed bool) {
 	for s.j < len(acc) {
 		c := acc[s.j]
 		if c == '"' {
-			s.closed = true
-			break
+			// Kutip di dalam HTML mentah (mis. href="…") bukan penutup nilai;
+			// hanya kutip yang diikuti koma+nama key berikutnya atau `}` yang
+			// menutup content_html. Tanpa pemeriksaan ini pratinjau streaming
+			// terpotong di atribut pertama.
+			if contentengine.WriterValueQuoteIsTerminator(acc, s.j) {
+				s.closed = true
+				break
+			}
+			s.out.WriteByte(c)
+			s.j++
+			continue
 		}
 		if c != '\\' {
 			s.out.WriteByte(c)

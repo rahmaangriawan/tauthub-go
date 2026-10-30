@@ -688,6 +688,51 @@ func (d *Deps) MediaSEORefreshOne(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"queued": true})
 }
 
+// ---------- POST /v1/platform/media/{mediaId}/geo-refresh ----------
+
+// MediaGEORefreshOne: antrekan pemeriksaan GEO/AI Trust untuk SATU media
+// (tombol "Cek GEO" per baris).
+//
+// Beda dari MediaSEORefreshOne: job `media_geo_refresh` hanya menghitung AI
+// Trust (PageSpeed + schema.org) dan status kutipan, TANPA memanggil penyedia
+// DA/PA berbayar. Dipakai admin yang cuma ingin menyegarkan kolom GEO/AI Trust.
+func (d *Deps) MediaGEORefreshOne(w http.ResponseWriter, r *http.Request) {
+	user, _, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	mediaID := chiParam(r, "mediaId")
+	media, err := d.queryRow(r.Context(), `
+		SELECT m.id, COALESCE(m.website_url, '') AS website_url,
+		       EXISTS (SELECT 1 FROM jobs j
+		               WHERE j.kind = 'media_geo_refresh' AND j.status IN ('pending','running')
+		                 AND j.payload->>'mediaId' = m.id) AS queued
+		FROM media m WHERE m.id = $1 AND m.status <> 'hidden' LIMIT 1`, mediaID)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	if media == nil {
+		writeErr(w, d, errNotFound("Media tidak ditemukan"))
+		return
+	}
+	row := ptRow(ptNormalizeMap(media))
+	if strings.TrimSpace(row.strOr("website_url", "")) == "" {
+		writeErr(w, d, errUnprocessable("Media belum memiliki website/domain yang bisa diperiksa."))
+		return
+	}
+	if row.boolOr("queued", false) {
+		writeJSON(w, http.StatusOK, map[string]any{"queued": false, "reason": "already_queued"})
+		return
+	}
+	if _, jErr := d.mpEnqueueJob(r.Context(), "media_geo_refresh", map[string]any{"mediaId": mediaID}, 2); jErr != nil {
+		writeErr(w, d, jErr)
+		return
+	}
+	d.audit(r.Context(), user.ID, "media.geo_refresh_one", "media", mediaID)
+	writeJSON(w, http.StatusAccepted, map[string]any{"queued": true})
+}
+
 // ---------- GET /v1/platform/media/seo-refresh-status ----------
 
 // MediaSEORefreshStatus: indikator antrean cek DA — berapa media yang masih
@@ -719,6 +764,16 @@ func (d *Deps) MediaSEORefreshStatus(w http.ResponseWriter, r *http.Request) {
 		SELECT last_error FROM jobs
 		WHERE kind = 'media_seo_refresh' AND status = 'failed' AND last_error IS NOT NULL
 		ORDER BY updated_at DESC LIMIT 1`)
+	// Domain mana yang gagal (bukan hanya pesan terakhir): admin perlu tahu
+	// media mana yang perlu dicek ulang. Diambil dari payload job (mediaId).
+	failedRows, _ := d.queryRows(r.Context(), `
+		SELECT COALESCE(m.name, '') AS media_name, COALESCE(m.website_url, '') AS website_url,
+		       COALESCE(j.last_error, '') AS last_error, j.updated_at
+		FROM jobs j
+		LEFT JOIN media m ON m.id = (j.payload->>'mediaId')
+		WHERE j.kind = 'media_seo_refresh' AND j.status = 'failed'
+		  AND j.updated_at > NOW() - INTERVAL '1 hour'
+		ORDER BY j.updated_at DESC LIMIT 10`)
 	// Kegagalan penyedia DA/PA tingkat platform (langganan/kuota): tanpa ini
 	// kolom DA tampak "kosong tanpa sebab" karena job tetap selesai berkat AI Trust.
 	daErrRow, _ := d.queryRow(r.Context(), `
@@ -743,11 +798,22 @@ func (d *Deps) MediaSEORefreshStatus(w http.ResponseWriter, r *http.Request) {
 		daError = daErrRow.strOr("last_da_error", "")
 		daErrorAt = daErrRow.anyOrNil("last_da_error_at")
 	}
+	failedItems := make([]map[string]any, 0, len(failedRows))
+	for _, raw := range failedRows {
+		row := ptRow(ptNormalizeMap(raw))
+		failedItems = append(failedItems, map[string]any{
+			"media_name":  row.strOr("media_name", ""),
+			"website_url": row.strOr("website_url", ""),
+			"last_error":  row.strOr("last_error", ""),
+			"at":          row.anyOrNil("updated_at"),
+		})
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pending_jobs":     pending,
 		"queued_jobs":      queued,
 		"running_jobs":     running,
 		"failed_last_hour": failed,
+		"failed_items":     failedItems,
 		"stale":            stale,
 		"last_error":       lastError,
 		"da_error":         daError,
@@ -772,6 +838,21 @@ const mpSimilarWebStaleWhere = `
 			      AND (s.insights->>'visits')::numeric > 0
 			  )`
 
+// mpSimilarWebEmptyWhere: media aktif yang trafiknya BELUM TERISI sama sekali
+// (kolom traffic_estimate masih 0/kosong). Dipakai tombol "Antrekan Cek
+// Trafik Semua" — tombol ini hanya mengisi yang kosong; media yang sudah
+// punya angka tidak disentuh sama sekali, berapa pun umur datanya. Pemeriksaan
+// ulang berkala media berdata tetap urusan scheduler (mpSimilarWebStaleWhere).
+const mpSimilarWebEmptyWhere = `
+			media.status = 'active'
+			  AND media.website_url IS NOT NULL AND media.website_url <> ''
+			  AND (media.traffic_estimate IS NULL OR media.traffic_estimate <= 0)
+			  AND NOT EXISTS (
+			    SELECT 1 FROM media_similarweb_snapshots s
+			    WHERE s.media_id = media.id
+			      AND s.created_at > NOW() - INTERVAL '24 hours'
+			  )`
+
 // MediaSimilarWebBulk: POST /v1/platform/media/similarweb-bulk — tulis ulang
 // jadi ANTREAN, bukan pemeriksaan inline. Dulu fungsi ini memanggil provider
 // hingga `limit` media berurutan di satu request (tiap media bisa 15 detik),
@@ -792,7 +873,7 @@ func (d *Deps) MediaSimilarWebBulk(w http.ResponseWriter, r *http.Request) {
 	stale, err := d.queryRows(r.Context(), `
 		SELECT media.id, media.name
 		FROM media
-		WHERE`+mpSimilarWebStaleWhere+`
+		WHERE`+mpSimilarWebEmptyWhere+`
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'media_similarweb_refresh' AND j.status IN ('pending','running')
@@ -827,7 +908,7 @@ func (d *Deps) MediaSimilarWebBulk(w http.ResponseWriter, r *http.Request) {
 		enqueued++
 	}
 
-	totalRow, err := d.queryRow(r.Context(), "SELECT COUNT(*) AS total FROM media WHERE"+mpSimilarWebStaleWhere)
+	totalRow, err := d.queryRow(r.Context(), "SELECT COUNT(*) AS total FROM media WHERE"+mpSimilarWebEmptyWhere)
 	if err != nil {
 		writeErr(w, d, err)
 		return

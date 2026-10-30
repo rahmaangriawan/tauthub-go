@@ -102,7 +102,7 @@ Dispatcher `executor.ts`: `publishNow / executePublication / publishToWordpress 
 - Queue job `send_wa`, template `wa_templates`, log `wa_deliveries`, test endpoint admin.
 
 ## 9. Metrik SEO — `lib/media/*`
-- **RapidAPI DA/PA**: `domain-da-pa-checker.p.rapidapi.com` (`POST /v1/getDaPa` → domain_authority/page_authority/spam_score) + fallback `website-spam-checker.p.rapidapi.com`; key di config DB. Cache 2 bulan (`media_seo_metrics`). Host lama `domain-metrics-check` diganti karena akun admin berlangganan API yang ini.
+- **RapidAPI DA/PA** (migrasi 279): `bulk-da-pa-checker-semrush.p.rapidapi.com` (`POST /bulk-dapa.php`, "Bulk DA PA Checker Semrush" oleh KSDeveloper) lewat paket `internal/seo` — dipakai metrik media (`media_seo_metrics.da/pa`) DAN tool Cek DA/PA mitra; host/path/nama field body bisa ditimpa di `platform_seo_config` (provider_host/provider_path/provider_domain_field). Fallback spam tetap `website-spam-checker.p.rapidapi.com` dengan key yang sama. Host lama `domain-da-pa-checker`/`domain-metrics-check` sudah tidak dipakai.
 - **PageSpeed Insights** (`lib/media/page-speed.ts`): key `platform_pagespeed_config` / env `GOOGLE_PAGESPEED_API_KEY`.
 - **Serpens AI-citation**: `serpens.p.rapidapi.com/api/v1/search_ai_overview` — cek domain muncul di AI Overview.
 - `ai_trust_score`: fetch situs langsung + deteksi schema.org.

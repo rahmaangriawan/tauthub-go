@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 )
 
 // ---------- tiket dukungan mitra ----------
@@ -204,6 +205,11 @@ func (d *Deps) createTicket(w http.ResponseWriter, r *http.Request, partner Part
 	}
 	link := "/admin/dukungan?t=" + ticketID
 	d.notifyPlatformAdmins(r.Context(), "ticket.created", "Tiket dukungan baru", in.Subject, &link)
+	notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
+		Event: notify.AdminEventTicketCreated, ReferenceID: ticketID,
+		Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": in.Subject},
+		Link: link, BaseURL: d.Cfg.PublicAppURL,
+	})
 	_ = d.exec(r.Context(), `
 		INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id)
 		VALUES (gen_random_uuid(), $1, 'support.ticket.created', 'support_ticket', $2)`,

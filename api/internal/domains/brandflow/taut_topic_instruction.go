@@ -4,14 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
 	"github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
 // ---------- POST /v1/brands/{brandId}/taut/campaigns/{campaignId}/produce/topic-instruction ----------
@@ -72,7 +76,10 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		if a.URL != "" {
 			anchorLines.WriteString(itoa(i+1) + ". anchor: \"" + a.Anchor + "\" -> " + a.URL + "\n")
 		} else {
-			anchorLines.WriteString(itoa(i+1) + ". anchor: \"" + a.Anchor + "\"\n")
+			// Tanpa URL tidak ada tautan yang bisa dipasang. Instruksi yang
+			// menyuruh "sisipkan tautan" hanya membuat Writer menebak/meng- bold
+			// frasa tanpa <a href> — jadi tandai eksplisit di bahan.
+			anchorLines.WriteString(itoa(i+1) + ". anchor: \"" + a.Anchor + "\" (TANPA URL — jangan menyuruh memasang tautan/hyperlink; cukup sebut frasa ini sebagai teks biasa)\n")
 		}
 	}
 
@@ -99,7 +106,7 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	material := d.buildRacikMaterial(r.Context(), chiParam(r, "campaignId"), mediaID, mediaLabel, angleSlug, anchorLines.String())
+	material := d.buildRacikMaterial(r.Context(), chiParam(r, "campaignId"), mediaID, mediaLabel, angleSlug, anchorLines.String(), anchors)
 	// Aturan keluaran ditempel di system prompt supaya berlaku juga bila prompt
 	// admin di database longgar: hasilnya paragraf pendek yang hanya memakai
 	// bahan, bukan artikel mini atau fakta karangan.
@@ -210,6 +217,9 @@ const racikOutputRules = `Aturan keluaran (WAJIB):
 - Tulis SATU paragraf instruksi 3-6 kalimat, bahasa Indonesia, tanpa judul dan tanpa daftar bernomor.
 - Pakai HANYA informasi pada "Bahan dari user" di bawah. JANGAN menambah fakta, angka, nama orang, tanggal, tempat, atau klaim yang tidak ada di bahan.
 - Jangan memakai teks anchor sebagai judul artikel; susun arah bahasan yang relevan dengan angle yang dipilih.
+- Tautan hanya boleh diperintahkan bila anchor MEMILIKI URL (format "anchor -> URL"). Anchor yang ditandai "TANPA URL" hanya disebut sebagai frasa/nama biasa — JANGAN menulis "sisipkan tautan", "backlink", atau "hyperlink" untuk anchor itu.
+- WAJIB menyebut nama subjek/brand (dari anchor atau Konteks domain) secara eksplisit di instruksi, supaya judul artikel yang ditulis Writer jelas konteksnya (bukan frasa industri generik seperti "transformasi model bisnis").
+- "Konteks domain (hasil crawl)" hanya untuk mengenali jenis usaha/subjek. JANGAN menyalin angka, tanggal, atau klaim dari sana.
 - Sebut target panjang artikel dan jumlah tautan sesuai aturan media di bahan.
 - Balas hanya JSON: {"instruction": "..."} tanpa teks lain, tanpa markdown.`
 
@@ -218,8 +228,16 @@ const racikOutputRules = `Aturan keluaran (WAJIB):
 // Profil bisnis/kampanye tidak lagi ikut — model sempat memakainya untuk
 // menambah klaim yang tidak diminta, sehingga instruksi harus diperbaiki manual
 // sebelum generate.
-func (d *Deps) buildRacikMaterial(ctx context.Context, campaignID, mediaID, mediaLabel, angleSlug, anchorLines string) string {
+func (d *Deps) buildRacikMaterial(ctx context.Context, campaignID, mediaID, mediaLabel, angleSlug, anchorLines string, anchors []tautAnchorRow) string {
 	parts := []string{"Bahan dari user:", anchorLines, "Jenis media target: " + mediaLabel + "."}
+
+	// Konteks domain hasil crawl halaman URL anchor: teks anchor saja ("Giovani
+	// Barbershop") tidak memberi tahu jenis usaha/subjeknya, sehingga instruksi
+	// yang diracik jatuh ke frasa industri generik. Crawl ringan (best-effort)
+	// menambahkan judul halaman, deskripsi meta, dan cuplikan teks.
+	if crawl := d.racikCrawlAnchorContext(ctx, anchors); crawl != "" {
+		parts = append(parts, crawl)
+	}
 
 	wordRule := buildWordRule("", mediaLabel)
 	linkRule := "Kapasitas tautan: maksimal 1 tautan; pakai anchor di atas apa adanya sebagai teks tautan dan sisipkan natural di paragraf yang relevan."
@@ -290,6 +308,94 @@ func racikAngleBlock(a *tautAngleContext) string {
 	// dengan tugas racik. Dulu blok itu membuat model menyusun "artikel mini",
 	// bukan instruksi topik. Untuk racik, deskripsi + catatan sumber sudah cukup.
 	return strings.TrimSpace(b.String())
+}
+
+// racikCrawlAnchorContext: ringkasan halaman URL anchor (maks 2 domain) supaya
+// agent racik mengenali konteks bisnisnya. Best-effort: gagal fetch = bagian
+// ini tidak dikirim, instruksi tetap diracik dari bahan lain.
+func (d *Deps) racikCrawlAnchorContext(ctx context.Context, anchors []tautAnchorRow) string {
+	seen := map[string]bool{}
+	lines := []string{}
+	for _, a := range anchors {
+		raw := strings.TrimSpace(a.URL)
+		if raw == "" {
+			continue
+		}
+		if !strings.Contains(raw, "://") {
+			raw = "https://" + raw
+		}
+		parsed, err := url.Parse(raw)
+		if err != nil || parsed.Hostname() == "" {
+			continue
+		}
+		host := strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
+		if seen[host] {
+			continue
+		}
+		seen[host] = true
+		if info := d.racikCrawlPage(ctx, raw); info != "" {
+			lines = append(lines, "- "+host+": "+info)
+		}
+		if len(lines) >= 2 {
+			break
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "Konteks domain (hasil crawl halaman URL anchor — untuk mengenali jenis usaha/subjek, bukan bahan angka):\n" + strings.Join(lines, "\n")
+}
+
+var racikReTitle = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+var racikReMetaDesc = regexp.MustCompile(`(?is)<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']`)
+var racikReOGSite = regexp.MustCompile(`(?is)<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']*)["']`)
+
+func (d *Deps) racikCrawlPage(ctx context.Context, rawURL string) string {
+	reqCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+	req.Header.Set("Accept-Language", "id-ID,id;q=0.9,en;q=0.8")
+	resp, err := security.SafeClient(8 * time.Second).Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return ""
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 300*1024))
+	html := string(body)
+	parts := []string{}
+	if m := racikReOGSite.FindStringSubmatch(html); m != nil {
+		if v := strings.TrimSpace(htmlUnescapeLight(m[1])); v != "" {
+			parts = append(parts, "situs: "+truncateString(v, 120))
+		}
+	}
+	if m := racikReTitle.FindStringSubmatch(html); m != nil {
+		if v := strings.TrimSpace(htmlUnescapeLight(m[1])); v != "" {
+			parts = append(parts, "judul halaman: "+truncateString(v, 160))
+		}
+	}
+	if m := racikReMetaDesc.FindStringSubmatch(html); m != nil {
+		if v := strings.TrimSpace(htmlUnescapeLight(m[1])); v != "" {
+			parts = append(parts, "deskripsi: "+truncateString(v, 240))
+		}
+	}
+	text := stripHTMLToText(html)
+	if text != "" {
+		parts = append(parts, "cuplikan: "+truncateString(text, 400))
+	}
+	return strings.Join(parts, " | ")
+}
+
+// htmlUnescapeLight: bersihkan entitas umum pada judul/deskripsi (cukup untuk
+// bahan prompt, bukan rendering halaman).
+func htmlUnescapeLight(v string) string {
+	return strings.NewReplacer("&amp;", "&", "&quot;", `"`, "&#39;", "'", "&lt;", "<", "&gt;", ">", "&nbsp;", " ").Replace(v)
 }
 
 // logRacikRun mencatat pemakaian agent racik instruksi ke taut_brief_runs

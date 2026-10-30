@@ -86,20 +86,31 @@ func enqueue(ctx context.Context, pool *pgxpool.Pool, profileID, brandID string,
 
 	// Delay: tombol manual tidak perlu menunggu debounce. Debounce 20–40 detik
 	// hanya berguna untuk enqueue otomatis beruntun (yang kini sudah mati);
-	// untuk klik admin, ditunda justru terasa seperti sistem menggantung.
+	// untuk klik manual, ditunda justru terasa seperti sistem menggantung.
+	//
+	// Jitter acak juga hanya untuk jalur otomatis. Dulu jitter sampai 20 detik
+	// (plus 15 detik khusus kind=file) ikut dipakai saat force, sehingga klik
+	// "Buat ringkasan" menunggu rata-rata 10-17 detik SEBELUM job mulai
+	// dikerjakan — terasa seperti agent menggantung padahal modelnya cepat.
 	delay := "interval '0 seconds'"
+	jitter := "interval '0 seconds'"
 	if !force {
 		delay = "interval '20 seconds'"
+		jitter = "interval '20 seconds'"
+	}
+	fileDelay := "interval '0 seconds'"
+	if !force {
+		fileDelay = "interval '15 seconds'"
 	}
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO jobs (id, kind, payload, status, attempts, max_attempts, run_at)
 		SELECT gen_random_uuid()::text, $1::text,
-		       jsonb_build_object('profileId', $2::text, 'brandId', $3::text, 'kind', $4::text)
+		       jsonb_build_object('profileId', $2::text, 'brandId', btrim($3::text), 'kind', $4::text)
 		         || CASE WHEN $5::boolean THEN '{"force":true}'::jsonb ELSE '{}'::jsonb END,
 		       'pending', 0, 2,
 		       now() + `+delay+`
-		         + CASE WHEN $4::text = 'file' THEN interval '15 seconds' ELSE interval '0 seconds' END
-		         + (random() * interval '20 seconds')
+		         + CASE WHEN $4::text = 'file' THEN `+fileDelay+` ELSE interval '0 seconds' END
+		         + (random() * `+jitter+`)
 		WHERE NOT EXISTS (
 			SELECT 1 FROM jobs
 			WHERE kind = $1::text AND status = 'pending'

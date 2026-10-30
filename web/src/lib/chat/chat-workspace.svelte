@@ -10,7 +10,7 @@
 	// riwayat tetap bisa dibaca dua pihak.
 	import { onMount, onDestroy } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
-	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search, Pencil, ArrowLeft, X } from '@lucide/svelte';
+	import { SendHorizonal, MessagesSquare, ExternalLink, Info, Clock3, Search, Pencil, ArrowLeft, X, Star, ChartColumn } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { refreshChatUnreadNow } from '$lib/chat/chat-unread.svelte';
 	import PostEditor from '$lib/chat/post-editor.svelte';
@@ -25,6 +25,11 @@
 		media_type: string;
 		website_url: string;
 		da: number | null;
+		/** Rating brand ini untuk media (1–5), null bila belum pernah menilai. */
+		my_rating?: number | null;
+		/** Rata-rata rating semua klien untuk media ini. */
+		rating_avg?: number | null;
+		rating_count?: number;
 		partner_name: string;
 		partner_public_id: string;
 		brand_name: string;
@@ -104,6 +109,8 @@
 	};
 	const initialOf = (name: string) => (name || '?').trim().charAt(0).toUpperCase() || '?';
 	const capFirst = (v: string) => (v ? v.charAt(0).toUpperCase() + v.slice(1) : v);
+	// Rating selalu satu desimal dengan koma (format Indonesia): 5,0 / 4,7.
+	const ratingText = (v: number) => v.toFixed(1).replace('.', ',');
 
 	// Favicon media dari website_url (pola sama dengan tabel Ringkasan);
 	// gagal muat → jatuh kembali ke inisial nama.
@@ -701,8 +708,42 @@
 				<p class="truncate text-[11.5px] capitalize text-slate-500">{t.media_type || '—'}</p>
 			</div>
 		</div>
-		<div class="mt-3 flex justify-between gap-2 text-[12px]">
-			<span class="text-slate-500">DA</span><span class="font-semibold">{t.da ?? '—'}</span>
+		<!-- DA dan rating berdampingan tanpa garis pemisah. Rating memakai satu
+		     bintang tanpa wadah; nilai dan jumlah ulasan menumpuk di sampingnya
+		     supaya tinggi kedua blok seimbang. -->
+		<div class="mt-3.5 flex items-center justify-between gap-4">
+			<div class="flex min-w-0 items-center gap-2.5">
+				<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+					<ChartColumn size={18} />
+				</span>
+				<div class="min-w-0">
+					<p class="text-[11.5px] leading-tight text-slate-500">DA</p>
+					<p class="text-[20px] font-semibold leading-tight tabular-nums text-slate-900">{t.da ?? '—'}</p>
+				</div>
+			</div>
+			<div class="flex min-w-0 items-center gap-2.5">
+				{#if (t.rating_avg ?? t.my_rating ?? 0) > 0}
+					{@const value = t.rating_avg ?? t.my_rating ?? 0}
+					<Star
+						size={21}
+						fill="currentColor"
+						strokeWidth={0}
+						class="shrink-0 text-amber-400"
+						aria-hidden="true"
+					/>
+					<div class="min-w-0">
+						<p class="text-[21px] font-semibold leading-tight tabular-nums text-slate-900">
+							{ratingText(value)}<span class="text-[13px] font-medium text-slate-400">/5</span>
+						</p>
+						{#if (t.rating_count ?? 0) > 0}
+							<p class="truncate text-[12.5px] leading-tight text-slate-500">{t.rating_count} {tr('ulasan')}</p>
+						{/if}
+					</div>
+				{:else}
+					<Star size={21} class="shrink-0 text-slate-300" aria-hidden="true" />
+					<p class="text-[12.5px] leading-tight text-slate-400">{tr('Belum ada ulasan')}</p>
+				{/if}
+			</div>
 		</div>
 		{#if side === 'client' && t.campaign_id}
 			<button

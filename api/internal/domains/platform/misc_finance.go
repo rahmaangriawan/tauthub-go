@@ -163,7 +163,7 @@ func (d *Deps) CreditsConfigGet(w http.ResponseWriter, r *http.Request) {
 		`SELECT w.*, b.name AS brand_name, b.client_name,
 		        (SELECT COALESCE(SUM(amount_tc), 0)::int FROM credit_ledger_entries e WHERE e.brand_id = w.brand_id AND e.ref_type = 'topup') AS topup_tc,
 		        (SELECT COALESCE(SUM(amount_idr), 0)::int FROM credit_ledger_entries e WHERE e.brand_id = w.brand_id AND e.ref_type = 'topup') AS topup_idr,
-		        (SELECT COALESCE(SUM(-e.amount_tc), 0)::int FROM credit_ledger_entries e WHERE e.brand_id = w.brand_id AND e.ref_type = 'capture') AS spent_tc
+		        (SELECT COALESCE(SUM(e.amount_tc), 0)::bigint FROM credit_ledger_entries e WHERE e.brand_id = w.brand_id AND e.ref_type = 'capture' AND e.amount_tc > 0) AS pub_tc
 		 FROM credit_wallets w JOIN brands b ON b.id = w.brand_id
 		 WHERE 1 = 1 `+clause+`
 		 ORDER BY w.updated_at DESC LIMIT $`+ptItoa(len(params)+1)+` OFFSET $`+ptItoa(len(params)+2), args...)
@@ -183,7 +183,11 @@ func (d *Deps) CreditsConfigGet(w http.ResponseWriter, r *http.Request) {
 			"available_tc": available, "reserved_tc": reserved, "captured_tc": captured,
 			"total_tc": available + reserved + captured,
 			"topup_tc": int(row.numOr("topup_tc")), "topup_idr": int(row.numOr("topup_idr")),
-			"spent_tc": int(row.numOr("spent_tc")), "updated_at": row.anyOrNil("updated_at"),
+			// pub_tc = biaya publikasi saja (entri capture bertanda positif).
+			// Entri capture bertanda negatif adalah biaya AI (Taut Pintar,
+			// gambar, Profiler) yang ditagih langsung dari saldo, jadi tidak
+			// boleh ikut dijumlahkan di sini.
+			"pub_tc": int(row.numOr("pub_tc")), "updated_at": row.anyOrNil("updated_at"),
 		})
 	}
 	cfg := d.finTCConfig(r.Context())
@@ -1730,8 +1734,10 @@ func (d *Deps) finCreateSettlement(r *http.Request, partnerID string, start, end
 
 // settTransitions: parity SETTLEMENT_TRANSITIONS.
 var settTransitions = map[string][]string{
-	"pending":    {"approved", "failed"},
-	"approved":   {"processing", "failed"},
+	"pending": {"approved", "failed"},
+	// approved -> paid langsung: alur admin "Setujui" membuka popup kirim bukti
+	// dan penyelesaiannya menandai paid tanpa mampir ke 'processing'.
+	"approved":   {"processing", "paid", "failed"},
 	"processing": {"paid", "failed"},
 	"paid":       {},
 	"failed":     {"pending"},

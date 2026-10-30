@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 )
 
 // ---------- GET /v1/partner/earnings ----------
@@ -321,6 +322,11 @@ func (d *Deps) createSettlement(w http.ResponseWriter, r *http.Request, partner 
 	link := "/admin/settlements"
 	d.notifyPlatformAdmins(r.Context(), "withdrawal.requested", "Penarikan dana baru",
 		"Mitra mengajukan penarikan "+formatIDR(net)+" (net setelah biaya transfer) dan menunggu review Admin.", &link)
+	notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
+		Event: notify.AdminEventWithdrawalRequested, ReferenceID: id,
+		Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "jumlah": formatIDR(net)},
+		Link: link, BaseURL: d.Cfg.PublicAppURL,
+	})
 	writeJSON(w, http.StatusCreated, map[string]any{"settlement": settlementJSON(created)})
 }
 

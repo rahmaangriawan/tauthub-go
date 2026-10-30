@@ -17,6 +17,7 @@
 	import { swr } from '$lib/swr-cache.svelte';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import { chatUnread, startChatUnreadPolling, stopChatUnreadPolling } from '$lib/chat/chat-unread.svelte';
+	import { publicationUnread, startPublicationUnreadPolling, stopPublicationUnreadPolling } from '$lib/notifications/publication-unread.svelte';
 	import { setBrandUrlId } from '$lib/brand-url.svelte';
 	import AppShell from '$lib/components/app-shell.svelte';
 import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
@@ -89,6 +90,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		// Badge menu "Pesan": poll ringan jumlah pesan belum dibaca.
 		const brandIdNow = page.params.brandId as string;
 		startChatUnreadPolling(`/v1/brands/${brandIdNow}`);
+		startPublicationUnreadPolling(`/v1/brands/${brandIdNow}`);
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
 		// Tab checkout gateway menulis kunci ini setelah pembayaran selesai;
@@ -107,6 +109,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 			window.removeEventListener('storage', onStorage);
 			stopChatUnreadPolling();
+			stopPublicationUnreadPolling();
 		};
 	});
 
@@ -244,7 +247,15 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 					icon: Megaphone,
 					active: isActive(`${base}/campaigns`) || isActive(`${base}/profiler`)
 				},
-				{ label: i18n.t.nav.publications, href: `${base}/publications`, icon: ShieldCheck, active: isActive(`${base}/publications`) },
+				{
+					label: i18n.t.nav.publications,
+					href: `${base}/publications`,
+					icon: ShieldCheck,
+					active: isActive(`${base}/publications`),
+					// Tanda merah angka = publikasi yang baru di-acc mitra atau
+					// sudah terbit dan belum dibaca klien.
+					badge: publicationUnread.count
+				},
 				{ label: i18n.t.nav.link_monitor, href: `${base}/link-guardian`, icon: TriangleAlert, active: isActive(`${base}/link-guardian`) }
 			]
 		},

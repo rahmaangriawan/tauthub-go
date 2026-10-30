@@ -8,6 +8,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+
+	contentengine "github.com/rahmaangriawan/tauthub-go/internal/content"
 )
 
 // Port lib/taut/agents.ts bagian Writer + backlink policy enforcement.
@@ -313,10 +315,17 @@ func (d *Deps) generateWriterArticle(ctx context.Context, campaignID, brandID, u
 			"Target media: "+orDash(campaign.strOr("media_type", "")),
 			"Trigger: "+orDash(campaign.strOr("trigger_keywords", "")))
 	}
+	// Aturan judul: judul harus memperlihatkan SUBJEKNYA. Tanpa aturan ini model
+	// menghasilkan judul frasa industri generik ("Transformasi Model Bisnis dan
+	// Rebranding Pacu Ekspansi Pasar Berkelanjutan") yang tidak menyebut brand
+	// meski anchor/brief sudah menamainya.
+	titleRule := "Aturan judul (WAJIB): judul HARUS menyebut nama subjek/brand yang menjadi fokus artikel (diambil dari anchor, brief, atau bahan) — DILARANG judul yang hanya berisi frasa industri generik. Pola: [Nama brand/entitas] + [aksi/topik yang dibahas]. Panjang 8-15 kata, jelas, tanpa tanda kutip. Contoh BENAR: \"Giovani Barbershop Perluas Layanan lewat Rebranding Barbershop Modern\". Contoh SALAH: \"Transformasi Model Bisnis dan Rebranding Pacu Ekspansi Pasar Berkelanjutan\" (tidak menyebut subjeknya)."
+
 	promptLines = append(promptLines,
 		"Media tujuan: "+name,
 		"Tipe media: "+mediaType,
 		wordRule,
+		titleRule,
 	)
 	promptLines = append(promptLines, structureRules...)
 	promptLines = append(promptLines,
@@ -334,6 +343,7 @@ func (d *Deps) generateWriterArticle(ctx context.Context, campaignID, brandID, u
 		"Kutipan/fakta hanya dari bahan/brief di atas — jangan mengarang angka, tanggal, atau harga. Soal narasumber: pakai [SPOKESPERSON] bila tersedia; bila brief tidak memuatnya dan [PROMPT ANGLE (dari Admin)] di atas mewajibkan kutipan bernama, penuhi mandat angle itu dengan satu figur strategis yang wajar.",
 		"Aturan meta deskripsi (WAJIB): sertakan meta_description 120-160 karakter — ringkasan menarik isi artikel untuk hasil pencarian, bahasa Indonesia aktif, tanpa tanda kutip ganda.",
 		"", "Tulis artikel unik utk media ini. Output JSON valid {title, content_html, meta_description}.",
+		"PENTING: di dalam content_html pakai KUTIP TUNGGAL untuk semua atribut HTML (contoh: <a href='https://contoh.com'>), jangan kutip ganda, supaya JSON tetap valid.",
 	)
 	filtered := []string{}
 	for _, line := range promptLines {
@@ -351,16 +361,18 @@ func (d *Deps) generateWriterArticle(ctx context.Context, campaignID, brandID, u
 	title := ""
 	contentHTML := ""
 	metaDescription := ""
-	var parsed struct {
-		Title           string `json:"title"`
-		ContentHTML     string `json:"content_html"`
-		MetaDescription string `json:"meta_description"`
-	}
-	if err := json.Unmarshal([]byte(result.Content), &parsed); err == nil {
-		title = truncateString(parsed.Title, 300)
-		contentHTML = truncateString(parsed.ContentHTML, 200000)
-		metaDescription = truncateString(strings.TrimSpace(parsed.MetaDescription), 500)
+	// Payload dibaca toleran: model kerap menulis atribut HTML dengan kutip
+	// ganda mentah di dalam nilai JSON, sehingga decode ketat gagal dan seluruh
+	// JSON mentah dulu berakhir di isi artikel.
+	if payload, ok := contentengine.ParseWriterPayload(result.Content); ok {
+		title = truncateString(payload.Title, 300)
+		contentHTML = truncateString(payload.ContentHTML, 200000)
+		metaDescription = truncateString(strings.TrimSpace(payload.MetaDescription), 500)
 	} else {
+		// Jangan simpan JSON mentah sebagai isi artikel (lihat catatan di atas).
+		if strings.HasPrefix(strings.TrimSpace(result.Content), "{") {
+			return writerItemResult{}, errStatus(502, "AI mengembalikan format artikel yang tidak bisa dibaca. Coba generate lagi.")
+		}
 		title = campaign.strOr("name", "") + " — " + name
 		contentHTML = truncateString(result.Content, 200000)
 	}
@@ -668,6 +680,38 @@ func hrefLinkReFor(url string) *regexp.Regexp {
 	return regexp.MustCompile(`(?i)<a\b[^>]*href=["']` + meta + `/?["'][^>]*>([\s\S]*?)</a>`)
 }
 
+// setAnchorTextForURL menimpa teks yang terlihat dari setiap <a href=url> yang
+// sudah ada supaya persis sama dengan anchor yang diminta klien. Model kerap
+// menautkan URL yang benar dengan teks karangannya sendiri, sehingga anchor
+// pilihan klien tidak pernah dipakai (penegak lama hanya mengganti anchor saat
+// model menulis URL telanjang). Isi yang memuat tag dilewati agar markup yang
+// disengaja tidak terhapus.
+func setAnchorTextForURL(html, url, anchor string) string {
+	if url == "" || anchor == "" {
+		return html
+	}
+	re := hrefLinkReFor(url)
+	return re.ReplaceAllStringFunc(html, func(m string) string {
+		sub := re.FindStringSubmatch(m)
+		if sub == nil {
+			return m
+		}
+		inner := sub[1]
+		if strings.Contains(inner, "<") {
+			return m
+		}
+		if strings.TrimSpace(inner) == strings.TrimSpace(anchor) {
+			return m
+		}
+		open := strings.Index(m, ">")
+		closeIdx := strings.LastIndex(m, "</a>")
+		if open < 0 || closeIdx < 0 || closeIdx <= open {
+			return m
+		}
+		return m[:open+1] + escapeHTMLText(anchor) + m[closeIdx:]
+	})
+}
+
 // dedupeLinksByURL: satu URL wajib muncul maksimal sekali per artikel
 // (aturan TEPAT 1x). Bila model menanam URL yang sama beberapa kali — dengan
 // anchor diulang atau variasi — sisakan satu (yang memakai anchor spesifikasi
@@ -744,6 +788,9 @@ func enforceBacklinkPolicy(html string, links []backlinkSpec) string {
 		})
 		// TEPAT 1x: URL yang sama ditanam lebih dari satu → sisakan satu.
 		out = dedupeLinksByURL(out, spec.URL, spec.Anchor)
+		// Anchor milik klien WAJIB dipakai, termasuk ketika model sudah
+		// menautkan URL yang benar dengan teks karangannya sendiri.
+		out = setAnchorTextForURL(out, spec.URL, spec.Anchor)
 	}
 
 	// c) Tautan utama wajib ada.

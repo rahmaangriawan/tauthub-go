@@ -3,26 +3,45 @@
 
 	// Konfigurasi Saldo — port app/admin/credits/page.tsx: konfigurasi denominasi
 	// (rate + paket topup), penyesuaian manual ledger (kredit/debit), dan daftar
-	// wallet Client (available/reserved/captured/total, topup, publikasi).
+	// saldo Client (sisa/ditahan/terpakai/total, topup, publikasi).
 	import { onMount } from 'svelte';
-	import { Coins } from '@lucide/svelte';
+	import { Coins, Info } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import Select from '$lib/components/select.svelte';
+	import Tooltip from '$lib/components/tooltip.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
-	import { fmtNum, fmtRp } from '$lib/admin-format';
 	import { rp } from '$lib/credits/rupiah';
 	import { platformError } from '../_platform';
 
 	type WalletRow = {
 		brand_id: string; brand_name: string | null; client_name: string | null;
 		available_tc: number; reserved_tc: number; captured_tc: number; total_tc: number;
-		topup_tc: number; topup_idr: number; spent_tc: number; updated_at: string | null;
+		topup_tc: number; topup_idr: number; pub_tc: number; updated_at: string | null;
 	};
 	type TcConfig = { rate_idr: number; topup_packages: Array<{ tc: number; idr: number }> };
 
 	const PAGE_SIZE = 20;
+
+	// Keterangan tiap kolom uang. Dipasang sebagai tooltip di header supaya
+	// admin baru tidak perlu menebak arti Sisa Saldo, Ditahan, dan Terpakai.
+	const TIPS = {
+		available: 'Uang yang masih bisa dipakai klien untuk mengajukan publikasi atau memakai fitur AI.',
+		reserved:
+			'Uang yang dikunci saat publikasi diajukan tapi artikelnya belum terbit. Kalau publikasi batal, uangnya kembali ke Sisa Saldo. Kalau artikel terbit, uangnya pindah ke Terpakai.',
+		captured:
+			'Uang yang sudah habis dan tidak kembali ke saldo. Isinya biaya publikasi yang terbit ditambah biaya AI seperti tulis artikel, generate gambar, dan Profiler.',
+		total: 'Jumlah dari Sisa Saldo, Ditahan, dan Terpakai.',
+		topup: 'Total uang yang pernah disetor klien ke akunnya sejak awal.',
+		pub: 'Total biaya publikasi yang sudah terbit. Biaya AI tidak dihitung di sini, biaya AI masuk ke Terpakai.'
+	};
+
+	// Dua kartu alat admin (konfigurasi denominasi + penyesuaian ledger manual)
+	// disembunyikan: kurs sekarang tetap 1 dan paket top up dikelola di halaman
+	// Paket. Kodenya sengaja tidak dihapus supaya bisa dimunculkan lagi dengan
+	// satu baris kalau suatu saat perlu koreksi saldo manual.
+	const SHOW_ADMIN_TOOLS = false;
 
 	let wallets = $state<WalletRow[]>([]);
 	let config = $state<TcConfig | null>(null);
@@ -124,7 +143,7 @@
 
 <section>
 	<PageHeader
-		title="Tauthub Credit"
+		title={tr("Saldo Klien")}
 		description={tr("Saldo internal Client dalam rupiah. Client, Partner, dan Admin melihat nominal yang sama. Nilai ini bukan uang yang dapat dicairkan.")}
 	>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
@@ -139,89 +158,94 @@
 	{:else}
 		<Feedback {loading} {error} {notice} loadingText="Memuat Tauthub Credit…" />
 
-		<div class="app-card mt-4 p-5">
-			<h2 class="text-sm font-semibold">Konfigurasi Denominasi</h2>
-			<p class="mt-1 text-xs text-muted-foreground">{tr("Rate baru hanya berlaku untuk transaksi baru — semua entri ledger lama menyimpan snapshot rate saat transaksi terjadi. Paket Top Up harus memenuhi tc × rate = idr.")}</p>
-			<div class="mt-3 flex flex-wrap items-end gap-3">
-				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Kurs lama (referensi)</span>
-					<input class="app-input !w-[140px]" type="number" min="1" value={rate} oninput={(e) => (rate = (e.currentTarget as HTMLInputElement).value)} />
-				</label>
-				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Paket Top Up (tc:idr, pisahkan koma — contoh 500:500000,1000:1000000)</span>
-					<input class="app-input !w-[380px]" bind:value={packages} />
-				</label>
-				<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void saveConfig()}>{tr("Simpan konfigurasi")}</button>
+		{#if SHOW_ADMIN_TOOLS}
+			<div class="app-card mt-4 p-5">
+				<h2 class="text-sm font-semibold">Konfigurasi Denominasi</h2>
+				<p class="mt-1 text-xs text-muted-foreground">{tr("Rate baru hanya berlaku untuk transaksi baru — semua entri ledger lama menyimpan snapshot rate saat transaksi terjadi. Paket Top Up harus memenuhi tc × rate = idr.")}</p>
+				<div class="mt-3 flex flex-wrap items-end gap-3">
+					<label class="block">
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Kurs lama (referensi)</span>
+						<input class="app-input !w-[140px]" type="number" min="1" value={rate} oninput={(e) => (rate = (e.currentTarget as HTMLInputElement).value)} />
+					</label>
+					<label class="block">
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Paket Top Up (tc:idr, pisahkan koma — contoh 500:500000,1000:1000000)</span>
+						<input class="app-input !w-[380px]" bind:value={packages} />
+					</label>
+					<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void saveConfig()}>{tr("Simpan konfigurasi")}</button>
+				</div>
 			</div>
-		</div>
 
-		<div class="app-card mt-4 p-5">
-			<h2 class="text-sm font-semibold">Penyesuaian Manual (Ledger)</h2>
-			<p class="mt-1 text-xs text-muted-foreground">{tr("Penyesuaian tercatat di ledger + audit log dengan alasan. Debit tidak bisa membuat saldo available negatif.")}</p>
-			<div class="mt-3 flex flex-wrap items-end gap-3">
-				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Brand (ID)</span>
-					<Select
-						ariaLabel="Brand (ID)"
-						placeholder={tr("Pilih brand…")}
-						minWidth={240}
-						value={adjBrand}
-						onchange={(v) => (adjBrand = v)}
-						options={[
-							{ value: '', label: tr('Pilih brand…') },
-							...wallets.map((w) => ({ value: w.brand_id, label: w.brand_name ?? w.client_name ?? w.brand_id }))
-						]}
-					/>
-				</label>
-				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Jumlah Saldo")}</span>
-					<input class="app-input !w-[120px]" type="number" min="1" value={adjTc} oninput={(e) => (adjTc = (e.currentTarget as HTMLInputElement).value)} />
-				</label>
-				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Arah</span>
-					<Select
-						ariaLabel="Arah"
-						minWidth={170}
-						value={adjDirection}
-						onchange={(v) => (adjDirection = v === 'debit' ? 'debit' : 'credit')}
-						options={[
-							{ value: 'credit', label: tr('Kredit (+ saldo)') },
-							{ value: 'debit', label: 'Debit (−saldo)' }
-						]}
-					/>
-				</label>
-				<label class="block">
-					<span class="mb-1 block text-xs font-semibold text-muted-foreground">Alasan</span>
-					<input class="app-input !w-[260px]" placeholder={tr("Contoh: kompensasi pelanggan")} bind:value={adjReason} />
-				</label>
-				<button
-					class="app-btn app-btn-primary"
-					type="button"
-					disabled={busy || !adjBrand || !adjTc || adjReason.trim().length < 3}
-					onclick={() => void adjust(adjBrand)}
-				>Terapkan</button>
+			<div class="app-card mt-4 p-5">
+				<h2 class="text-sm font-semibold">Penyesuaian Manual (Ledger)</h2>
+				<p class="mt-1 text-xs text-muted-foreground">{tr("Penyesuaian tercatat di ledger + audit log dengan alasan. Debit tidak bisa membuat saldo available negatif.")}</p>
+				<div class="mt-3 flex flex-wrap items-end gap-3">
+					<label class="block">
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Brand (ID)</span>
+						<Select
+							ariaLabel="Brand (ID)"
+							placeholder={tr("Pilih brand…")}
+							minWidth={240}
+							value={adjBrand}
+							onchange={(v) => (adjBrand = v)}
+							options={[
+								{ value: '', label: tr('Pilih brand…') },
+								...wallets.map((w) => ({ value: w.brand_id, label: w.brand_name ?? w.client_name ?? w.brand_id }))
+							]}
+						/>
+					</label>
+					<label class="block">
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Jumlah Saldo")}</span>
+						<input class="app-input !w-[120px]" type="number" min="1" value={adjTc} oninput={(e) => (adjTc = (e.currentTarget as HTMLInputElement).value)} />
+					</label>
+					<label class="block">
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Arah</span>
+						<Select
+							ariaLabel="Arah"
+							minWidth={170}
+							value={adjDirection}
+							onchange={(v) => (adjDirection = v === 'debit' ? 'debit' : 'credit')}
+							options={[
+								{ value: 'credit', label: tr('Kredit (+ saldo)') },
+								{ value: 'debit', label: 'Debit (−saldo)' }
+							]}
+						/>
+					</label>
+					<label class="block">
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Alasan</span>
+						<input class="app-input !w-[260px]" placeholder={tr("Contoh: kompensasi pelanggan")} bind:value={adjReason} />
+					</label>
+					<button
+						class="app-btn app-btn-primary"
+						type="button"
+						disabled={busy || !adjBrand || !adjTc || adjReason.trim().length < 3}
+						onclick={() => void adjust(adjBrand)}
+					>Terapkan</button>
+				</div>
 			</div>
-		</div>
+		{/if}
 
-		<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
-			<h2 class="text-sm font-semibold">Wallet Client</h2>
+		<div class="mt-4 flex justify-end">
 			<label class="app-input !w-[240px] !py-1.5">
-				<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari brand…")} value={q} oninput={(e) => onSearch((e.currentTarget as HTMLInputElement).value)} />
+				<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama klien...")} value={q} oninput={(e) => onSearch((e.currentTarget as HTMLInputElement).value)} />
 			</label>
 		</div>
-
 		<div class="app-card mt-3 overflow-x-auto">
-			<table class="w-full text-sm" style="min-width: 1080px;">
+			<table class="w-full text-sm" style="min-width: 980px;">
 				<thead>
 					<tr class="text-xs text-muted-foreground">
-						<th class="px-4 py-2.5 text-left font-medium">Brand / Client</th>
-						<th class="px-4 py-2.5 text-right font-medium">Available (Rp)</th>
-						<th class="px-4 py-2.5 text-right font-medium">Reserved (Rp)</th>
-						<th class="px-4 py-2.5 text-right font-medium">Captured (Rp)</th>
-						<th class="px-4 py-2.5 text-right font-medium">{tr("Total (Rp)")}</th>
-						<th class="px-4 py-2.5 text-right font-medium">≈ IDR</th>
-						<th class="px-4 py-2.5 text-right font-medium">Top Up</th>
-						<th class="px-4 py-2.5 text-right font-medium">{tr("Publikasi (Rp)")}</th>
+						<th class="px-4 py-2.5 text-left font-medium">{tr("Brand / Klien")}</th>
+						{#each [{ label: 'Sisa Saldo', tip: TIPS.available }, { label: 'Ditahan', tip: TIPS.reserved }, { label: 'Terpakai', tip: TIPS.captured }, { label: 'Total Saldo', tip: TIPS.total }, { label: 'Top Up', tip: TIPS.topup }, { label: 'Publikasi', tip: TIPS.pub }] as col (col.label)}
+							<th class="px-4 py-2.5 text-right font-medium">
+								<span class="inline-flex items-center gap-1">
+									{tr(col.label)}
+									<Tooltip content={tr(col.tip)} side="bottom" align="end" maxWidth={300}>
+										<button type="button" class="text-slate-400 transition-colors hover:text-slate-600" aria-label={tr(col.tip)}>
+											<Info size={12} aria-hidden="true" />
+										</button>
+									</Tooltip>
+								</span>
+							</th>
+						{/each}
 					</tr>
 				</thead>
 				<tbody>
@@ -235,15 +259,14 @@
 							<td class="px-4 py-2.5 text-right tabular-nums">{rp(w.reserved_tc)}</td>
 							<td class="px-4 py-2.5 text-right tabular-nums">{rp(w.captured_tc)}</td>
 							<td class="px-4 py-2.5 text-right font-bold tabular-nums">{rp(w.total_tc)}</td>
-							<td class="px-4 py-2.5 text-right tabular-nums">{fmtRp(w.total_tc * (config?.rate_idr ?? 1000))}</td>
 							<td class="px-4 py-2.5 text-right tabular-nums">
 								{#if w.topup_tc > 0}
-									{fmtNum(w.topup_tc)} TC<br /><span class="text-xs text-muted-foreground">{fmtRp(w.topup_idr)}</span>
+									{rp(w.topup_tc)}
 								{:else}
 									—
 								{/if}
 							</td>
-							<td class="px-4 py-2.5 text-right tabular-nums">{w.spent_tc > 0 ? `${fmtNum(w.spent_tc)} TC` : '—'}</td>
+							<td class="px-4 py-2.5 text-right tabular-nums">{w.pub_tc > 0 ? rp(w.pub_tc) : '—'}</td>
 						</tr>
 					{/each}
 				</tbody>

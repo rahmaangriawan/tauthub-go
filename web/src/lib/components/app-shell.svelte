@@ -20,7 +20,7 @@
 		active: boolean;
 		// Sub-halaman bertingkat (parity navSublinks app lama): tampil menjorok
 			// di bawah induknya, selalu terbuka.
-			children?: Array<{ label: string; href: string; active: boolean }>;
+			children?: Array<{ label: string; href: string; active: boolean; badge?: number | null }>;
 		/** Badge angka (merah) di kanan label — mis. jumlah pesan belum dibaca. */
 		badge?: number | null;
 	};
@@ -196,7 +196,10 @@
 						<span class="app-sidebar-sublinks">
 							{#each item.children as child (child.href + child.label)}
 								<a href={child.href} class="app-sidebar-sublink" data-active={child.active ? 'true' : 'false'} aria-current={child.active ? 'page' : undefined}>
-									{child.label}
+									<span>{child.label}</span>
+									{#if (child.badge ?? 0) > 0}
+										<span class="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white" style="background: var(--destructive, #e11d48);">{child.badge}</span>
+									{/if}
 								</a>
 							{/each}
 						</span>

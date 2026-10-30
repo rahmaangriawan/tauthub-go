@@ -203,6 +203,14 @@
 	let docWarning = $state('');
 	let genBusy = $state(false);
 	let genError = $state('');
+	// Peringatan ringkasan brief berasal dari backend (mode Proper). Tautannya
+	// membuka brief MILIK KLIEN di halaman Profiler, langsung pada tab Ringkasan
+	// — bukan halaman admin, karena admin tidak punya brief brand ini.
+	const briefSummaryNotReady = $derived(
+		genError.includes('Ringkasan File brief belum siap') ||
+			genError.includes('Ringkasan Entitas brief belum siap') ||
+			genError.includes('sedang disiapkan otomatis')
+	);
 	// Pratinjau streaming: potongan HTML dari server yang tumbuh selagi AI
 	// menulis. Begitu generate diklik, tab langsung pindah ke Editor Post dan
 	// kotak isi menampilkan teks ini — tanpa panel tahap/loading terpisah.
@@ -404,6 +412,9 @@
 		return errs;
 	});
 	const linksValid = $derived(Object.keys(linkErrors).length === 0);
+	// Anchor yang diisi tanpa URL tidak bisa ditanam sebagai <a href> — Writer
+	// hanya diizinkan memakai URL dari daftar ini/kampanye.
+	const anchorMissingUrl = $derived(linkRows.some((r) => r.anchor.trim() !== '' && r.url.trim() === ''));
 	const payloadLinks = $derived(
 		linkRows
 			.map((row) => ({ anchor_text: row.anchor.trim(), url: row.url.trim() }))
@@ -862,6 +873,10 @@
 		if (racikBusy) return;
 		const rows = linkRows.filter((r) => (r.anchor ?? '').trim());
 		if (rows.length === 0) return;
+		// Klik racik = mulai instruksi baru: snapshot isian lama dibuang dan
+		// kotak instruksi dikosongkan sebelum hasil racikan mengalir masuk.
+		clearGenDraft();
+		topic = '';
 		racikBusy = true;
 		racikError = '';
 		const token = getAccessToken();
@@ -960,6 +975,91 @@
 	let copilotBriefs = $state<{ id: string; name: string }[]>([]);
 	let copilotBriefsLoaded = $state(false);
 	let copilotBriefId = $state('');
+	// Tautan "Buka Ringkasan Brief": brief yang sedang dipilih, langsung di tab
+	// Ringkasan dengan sub-tab yang dilaporkan backend belum siap.
+	const briefSummaryHref = $derived.by(() => {
+		if (!copilotBriefId) return profilerHref;
+		// Pesan backend memakai dua bentuk: "…belum siap" (lama) dan
+		// "Ringkasan Entitas brief sedang disiapkan otomatis" (baru). Keduanya
+		// menunjuk sub-tab yang sama.
+		const entityRelated =
+			genError.includes('Ringkasan Entitas brief') || genError.includes('Ringkasan brief sedang disiapkan');
+		const kind = entityRelated ? 'entity' : 'file';
+		return `${profilerHref}/${copilotBriefId}?tab=ringkasan&summary=${kind}`;
+	});
+
+	// ── Persist isian "Generate dengan AI" ─────────────────────────────────
+	// Menutup modal (X/Batal) TIDAK boleh menghapus isian: snapshot disimpan
+	// per campaign+media+slot di sessionStorage dan dipulihkan saat modal dibuka
+	// lagi. Klik "Racik Instruksi dari Anchor" menghapus snapshot — itu tanda
+	// mulai racikan baru — dan generate berikutnya selalu draf baru (server
+	// tidak memakai cache hasil generate sebelumnya).
+	type GenDraft = {
+		gaya: 'simpel' | 'proper';
+		angleSlug: string;
+		topic: string;
+		links: Array<{ anchor: string; url: string }>;
+		fakta: string;
+		quotes: ProperQuote[];
+		fokus: string;
+		brief: string;
+	};
+	const genDraftKey = () => `tauthub.naskah.gen.${campaignId ?? ''}.${mediaId ?? ''}.${slot ?? 1}`;
+	function clearGenDraft() {
+		if (typeof sessionStorage === 'undefined') return;
+		try {
+			sessionStorage.removeItem(genDraftKey());
+		} catch {
+			/* storage diblokir */
+		}
+	}
+	if (typeof sessionStorage !== 'undefined' && !untrack(() => readOnly)) {
+		try {
+			const raw = sessionStorage.getItem(genDraftKey());
+			const d = raw ? (JSON.parse(raw) as Partial<GenDraft>) : null;
+			if (d) {
+				if (d.gaya === 'proper' || d.gaya === 'simpel') gayaArtikel = d.gaya;
+				if (typeof d.angleSlug === 'string' && d.angleSlug) angleSlug = d.angleSlug;
+				if (typeof d.topic === 'string') topic = d.topic;
+				if (typeof d.fakta === 'string') faktaTerkunci = d.fakta;
+				if (typeof d.fokus === 'string') fokusSisa = d.fokus;
+				if (typeof d.brief === 'string') copilotBriefId = d.brief;
+				if (Array.isArray(d.quotes) && d.quotes.length > 0) {
+					properQuotes = d.quotes.map((q) => ({
+						dateline: String(q?.dateline ?? ''),
+						narasumber: String(q?.narasumber ?? ''),
+						kutipan: String(q?.kutipan ?? '')
+					}));
+				}
+				if (Array.isArray(d.links)) {
+					linkRows = d.links.map((l) => ({ id: ++linkSeq, anchor: String(l?.anchor ?? ''), url: String(l?.url ?? '') }));
+				}
+			}
+		} catch {
+			/* snapshot rusak — abaikan */
+		}
+	}
+	// Simpan setiap perubahan isian (tanpa debounce: objeknya kecil).
+	$effect(() => {
+		if (readOnly) return;
+		const snapshot: GenDraft = {
+			gaya: gayaArtikel,
+			angleSlug,
+			topic,
+			links: linkRows.map((r) => ({ anchor: r.anchor, url: r.url })),
+			fakta: faktaTerkunci,
+			quotes: properQuotes,
+			fokus: fokusSisa,
+			brief: copilotBriefId
+		};
+		if (typeof sessionStorage === 'undefined') return;
+		try {
+			sessionStorage.setItem(genDraftKey(), JSON.stringify(snapshot));
+		} catch {
+			/* kuota penuh — persistensi bersifat best-effort */
+		}
+	});
+
 	let copilotBriefName = $state('');
 	let copilotEntries = $state<{ key: string; label: string; value: string }[]>([]);
 	let copilotLoadedBriefId = $state('');
@@ -1088,12 +1188,29 @@
 				const entity = items.find((s) => s?.kind === 'entity');
 				const file = items.find((s) => s?.kind === 'file');
 				const pending = [entity, file].some((s) => s?.status === 'queued' || s?.status === 'running');
+				// Ringkasan dibuat manual di halaman Profiler, TAPI Writer Proper
+				// tidak bisa jalan tanpa ringkasan entitas. Jadi minta dibuat di
+				// sini juga: pengguna tidak perlu tahu harus membuka tab Ringkasan
+				// dulu. Backend menduplikasi permintaan dengan aman (satu job per
+				// brief+kind), jadi klik berulang tidak menggandakan biaya model.
+				const needsQueue: Array<'entity' | 'file'> = [];
+				if (!entity || (entity.status !== 'ready' && entity.status !== 'queued' && entity.status !== 'running')) {
+					needsQueue.push('entity');
+				}
+				if (file && (file.status === 'failed' || file.status === 'idle')) {
+					needsQueue.push('file');
+				}
+				for (const kind of needsQueue) {
+					void apiRequest(`${profilerBase}/profiles/${encodeURIComponent(id)}/brief/summaries/${kind}/regenerate`, {
+						method: 'POST'
+					}).catch(() => undefined);
+				}
 				if (!entity || entity.status !== 'ready') {
-					copilotSummaryNotice = pending
-						? tr('Ringkasan brief sedang dibuat. Tunggu sampai selesai sebelum membuat artikel.')
-						: tr('Ringkasan brief belum siap. Buka Taut Brief → Ringkasan, lalu buat ringkasannya dulu.');
+					copilotSummaryNotice = pending || needsQueue.length > 0
+						? tr('Ringkasan brief sedang disiapkan otomatis. Tunggu sebentar, lalu buat draf lagi.')
+						: tr('Ringkasan brief akan disiapkan otomatis saat kamu membuat draf.');
 				} else if (file && file.status === 'failed') {
-					copilotSummaryNotice = tr('Ringkasan File brief gagal dibuat. Perbarui di Taut Brief → Ringkasan.');
+					copilotSummaryNotice = tr('Ringkasan File brief sedang dicoba ulang otomatis.');
 				}
 			}
 		} catch (reason) {
@@ -1446,6 +1563,11 @@
 						{#if note}
 							<p class="mt-1 text-[11px] leading-relaxed text-muted-foreground">{note}</p>
 						{/if}
+						{#if anchorMissingUrl}
+							<p class="mt-1 text-[11px] font-medium leading-relaxed" style="color: var(--warning);">
+								{tr('Anchor tanpa URL tidak bisa dijadikan tautan aktif — isi kolom URL-nya.')}
+							</p>
+						{/if}
 					</div>
 				</div>
 
@@ -1538,8 +1660,17 @@
 						maxlength={300}
 					/>
 					{#if genError}
-						<p class="mt-2 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">
+						<p class="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm" style="color: var(--destructive);">
 							<CircleAlert size={15} /> {genError}
+							{#if briefSummaryNotReady}
+								<a
+									class="font-semibold underline underline-offset-2"
+									style="color: var(--primary);"
+									href={briefSummaryHref}
+									target="_blank"
+									rel="noopener noreferrer"
+								>{tr('Buka Ringkasan Brief')}</a>
+							{/if}
 						</p>
 					{/if}
 						<div class="mt-4">
@@ -1897,8 +2028,17 @@
 									</div>
 								{/if}
 							{#if genError}
-								<p class="mt-2 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">
+								<p class="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm" style="color: var(--destructive);">
 									<CircleAlert size={15} /> {genError}
+									{#if briefSummaryNotReady}
+										<a
+											class="font-semibold underline underline-offset-2"
+											style="color: var(--primary);"
+											href={briefSummaryHref}
+											target="_blank"
+											rel="noopener noreferrer"
+										>{tr('Buka Ringkasan Brief')}</a>
+									{/if}
 								</p>
 							{/if}
 							<button
@@ -2048,6 +2188,12 @@
 											{#if copilotSummaryNotice}
 												<p class="mt-2 rounded-lg p-2 text-xs" style="background: var(--warning-soft); color: var(--warning);">
 													{copilotSummaryNotice}
+													<a
+														class="ml-1 font-semibold underline underline-offset-2"
+														href={briefSummaryHref}
+														target="_blank"
+														rel="noopener noreferrer"
+													>{tr('Buka Ringkasan Brief')}</a>
 												</p>
 											{/if}
 											{#if copilotBriefId && !copilotBusy && !copilotSummary}
@@ -2144,6 +2290,7 @@
 											<div class="flex items-center gap-3">
 												{@render numBadge('4')}
 												<span class="text-sm font-semibold">{tr('Instruksi Tambahan / Fokus Cerita')}</span>
+											<span class="rounded-[5px] bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-600">{tr('(Opsional)')}</span>
 											</div>
 											<span class="flex flex-wrap items-center gap-2">
 												<span class="text-[11px] text-muted-foreground">{tr('Opsional jika Copilot/Fakta sudah terisi')}</span>
@@ -2168,8 +2315,17 @@
 									</div>
 
 									{#if genError}
-										<p class="mt-2 flex items-center gap-1.5 text-sm" style="color: var(--destructive);">
+										<p class="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm" style="color: var(--destructive);">
 											<CircleAlert size={15} /> {genError}
+											{#if briefSummaryNotReady}
+												<a
+													class="font-semibold underline underline-offset-2"
+													style="color: var(--primary);"
+													href={briefSummaryHref}
+													target="_blank"
+													rel="noopener noreferrer"
+												>{tr('Buka Ringkasan Brief')}</a>
+											{/if}
 										</p>
 									{/if}
 										<button

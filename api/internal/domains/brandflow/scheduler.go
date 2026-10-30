@@ -755,7 +755,7 @@ func (d *Deps) schRefreshMediaHealth(ctx context.Context, mediaID string) error 
 // rejection rate 20) yang dicampur kualitas editorial 85:15 saat ada riwayat.
 func (d *Deps) schComputeMediaHealth(ctx context.Context, mediaID string) (int, map[string]any, error) {
 	media, err := d.queryRow(ctx,
-		"SELECT id, status, traffic_estimate, media_quality_score, media_tier FROM media WHERE id = $1 LIMIT 1", mediaID)
+		"SELECT id, status, traffic_estimate, media_quality_score, media_tier, integration_type FROM media WHERE id = $1 LIMIT 1", mediaID)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -769,7 +769,13 @@ func (d *Deps) schComputeMediaHealth(ctx context.Context, mediaID string) (int, 
 		  COUNT(*) FILTER (WHERE status = 'published')::int AS published,
 		  COUNT(*) FILTER (WHERE status = 'partner_rejected')::int AS rejected,
 		  COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
-		  ROUND(AVG(EXTRACT(EPOCH FROM (published_at - created_at)) / 3600.0), 2)::double precision AS avg_publish_hours
+		  -- SLA hanya dari publikasi yang terbit <= 7 hari. Publikasi yang
+		  -- menggantung karena mitra lupa ACC (atau baru ACC setelah lewat
+		  -- seminggu) tidak boleh menyeret rata-rata: durasinya dibuang dari
+		  -- data SLA, bukan dicatat sebagai "responsiveness" media.
+		  ROUND(AVG(CASE WHEN published_at IS NOT NULL
+		                  AND published_at <= created_at + INTERVAL '7 days'
+		                 THEN EXTRACT(EPOCH FROM (published_at - created_at)) / 3600.0 END), 2)::double precision AS avg_publish_hours
 		FROM publications
 		WHERE media_id = $1 AND status <> 'cancelled'`, mediaID)
 	if err != nil {
@@ -848,6 +854,16 @@ func (d *Deps) schComputeMediaHealth(ctx context.Context, mediaID string) (int, 
 	}
 
 	noHistory := total == 0
+	// Batas atas TAMPILAN SLA 72 jam untuk media berintegrasi API: rata-rata di
+	// atas 3 hari hampir pasti sisa publikasi ACC yang telat (outlier > 7 hari
+	// sudah dibuang di query). Media integrasi MANUAL dikecualikan — ACC manual
+	// memang butuh hari. Skor tetap dihitung dari nilai mentah supaya kualitas
+	// tidak naik palsu karena pembulatan tampilan.
+	displayAvg := avgPublishHours
+	if displayAvg != nil && *displayAvg > 72 && media.strOr("integration_type", "") != "manual" {
+		v := 72.0
+		displayAvg = &v
+	}
 	breakdown := map[string]any{
 		"availability":      schZeroIf(noHistory, availability),
 		"success_rate":      schRound2If(noHistory, successRate),
@@ -861,7 +877,8 @@ func (d *Deps) schComputeMediaHealth(ctx context.Context, mediaID string) (int, 
 		"published":         published,
 		"rejected":          rejected,
 		"failed":            failed,
-		"avg_publish_hours": schFloatArg(avgPublishHours),
+		"avg_publish_hours":     schFloatArg(displayAvg),
+		"avg_publish_hours_raw": schFloatArg(avgPublishHours),
 	}
 	return int(totalScore), breakdown, nil
 }

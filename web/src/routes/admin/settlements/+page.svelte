@@ -31,15 +31,8 @@
 	type Partner = { id: string; name: string | null; email: string; status: string };
 
 	const PAGE_SIZE = 20;
-	const NEXT_STATUS: Record<string, string> = { pending: 'approved', approved: 'processing', processing: 'paid' };
 	const STATUS_TONE: Record<string, 'success' | 'neutral' | 'warning' | 'accent' | 'danger'> = {
 		pending: 'warning', approved: 'accent', processing: 'neutral', paid: 'success', failed: 'danger'
-	};
-	// Warna tombol langkah berbeda per tujuan supaya "approved" tidak dilahap
-	// sama seperti Void/Tolak.
-	const NEXT_TONE: Record<string, { bg: string; color: string }> = {
-		approved: { bg: 'var(--success-soft)', color: 'var(--success)' },
-		processing: { bg: 'var(--accent-soft, #eef4ff)', color: 'var(--accent-foreground, #2b67ec)' }
 	};
 
 	// Jumlah yang harus ditransfer = net (setelah potongan transfer). Baris
@@ -191,18 +184,23 @@
 		await load();
 	}
 
-	async function transition(settlement: Settlement, status: string) {
+	/** Setujui pengajuan lalu langsung buka popup kirim bukti pembayaran. */
+	async function approveAndPay(settlement: Settlement) {
 		error = '';
 		const res = await apiRequest(`/v1/platform/settlements/${settlement.id}`, {
 			method: 'PUT',
-			body: JSON.stringify({ status })
+			body: JSON.stringify({ status: 'approved' })
 		});
 		if (!res.ok) {
 			error = await platformError(res);
 			return;
 		}
+		payTarget = { ...settlement, status: 'approved' };
+		payForm = { payment_reference: settlement.payment_reference ?? '', receipt_url: settlement.receipt_url ?? '' };
+		payReceiptFile = null;
 		await load();
 	}
+
 
 	async function rejectSettlement() {
 		if (!rejectTarget) return;
@@ -377,22 +375,23 @@
 										type="button"
 										onclick={() => { detailTarget = row; error = ''; }}
 									>Detail</button>
-									{#if row.status === 'processing'}
+									{#if row.status === 'pending'}
+										<!-- Setujui langsung membuka popup kirim bukti: admin tidak
+										     perlu mampir ke state 'processing' dulu. -->
+										<button
+											class="app-btn !min-h-7 !px-2.5 !text-xs"
+											style="background-color: var(--success-soft); color: var(--success);"
+											type="button"
+											onclick={() => void approveAndPay(row)}
+										>{tr('Setujui')}</button>
+									{/if}
+									{#if row.status === 'approved' || row.status === 'processing'}
 										<button
 											class="app-btn !min-h-7 !px-2.5 !text-xs"
 											style="background-color: var(--success-soft); color: var(--success);"
 											type="button"
 											onclick={() => { payTarget = row; payForm = { payment_reference: row.payment_reference ?? '', receipt_url: row.receipt_url ?? '' }; payReceiptFile = null; error = ''; }}
 										>Bayar + Bukti</button>
-									{/if}
-									{#if NEXT_STATUS[row.status] && row.status !== 'processing'}
-										{@const tone = NEXT_TONE[NEXT_STATUS[row.status]]}
-										<button
-											class="app-btn !min-h-7 !px-2.5 !text-xs"
-											style="background-color: {tone.bg}; color: {tone.color};"
-											type="button"
-											onclick={() => void transition(row, NEXT_STATUS[row.status])}
-										>{NEXT_STATUS[row.status]}</button>
 									{/if}
 									{#if ['pending', 'approved'].includes(row.status)}
 										<button class="app-btn !min-h-7 !px-2.5 !text-xs" style="background-color: var(--destructive-soft, #fdecee); color: var(--destructive);" type="button" onclick={() => { rejectTarget = row; rejectReason = ''; error = ''; }}>Tolak</button>

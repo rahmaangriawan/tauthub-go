@@ -108,6 +108,11 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	search := strings.TrimSpace(q.Get("search"))
+	// Filter & urutan skor SEO. Kosong = tidak memfilter; 0 tetap berarti
+	// "minimal 0" (semua), sama seperti yang diharapkan UI.
+	daMinRaw := strings.TrimSpace(q.Get("da_min"))
+	geoMinRaw := strings.TrimSpace(q.Get("geo_min"))
+	sortBy := strings.TrimSpace(q.Get("sort"))
 	limit := mpClampInt(q.Get("limit"), 100, 1, 500)
 	offset := mpClampInt(q.Get("offset"), 0, 0, 1<<30)
 
@@ -138,6 +143,14 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	} else if autoPublish == "0" {
 		where = append(where, "m.auto_publish = FALSE")
 	}
+	if daMinRaw != "" {
+		v := mpClampInt(daMinRaw, 0, 0, 100)
+		where = append(where, "sm.da >= "+next(v))
+	}
+	if geoMinRaw != "" {
+		v := mpClampInt(geoMinRaw, 0, 0, 100)
+		where = append(where, "sm.ai_trust_score >= "+next(v))
+	}
 	if search != "" {
 		pattern := "%" + search + "%"
 		ph := next(pattern)
@@ -154,9 +167,24 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
+	// Urutan skor memakai kolom yang sudah di-LEFT JOIN (sm): media tanpa skor
+	// selalu di belakang (NULLS LAST) berapa pun arahnya.
+	orderBy := "m.updated_at DESC"
+	switch sortBy {
+	case "da_desc":
+		orderBy = "sm.da DESC NULLS LAST, m.name ASC"
+	case "da_asc":
+		orderBy = "sm.da ASC NULLS LAST, m.name ASC"
+	case "geo_desc":
+		orderBy = "sm.ai_trust_score DESC NULLS LAST, m.name ASC"
+	case "geo_asc":
+		orderBy = "sm.ai_trust_score ASC NULLS LAST, m.name ASC"
+	case "name_asc":
+		orderBy = "m.name ASC"
+	}
 	pageArgs := append(append([]any{}, args...), limit, offset)
 	items, err := d.queryRows(r.Context(),
-		mpMediaListSelect+" "+clause+" ORDER BY m.updated_at DESC LIMIT $"+ptItoa(len(args)+1)+" OFFSET $"+ptItoa(len(args)+2),
+		mpMediaListSelect+" "+clause+" ORDER BY "+orderBy+" LIMIT $"+ptItoa(len(args)+1)+" OFFSET $"+ptItoa(len(args)+2),
 		pageArgs...)
 	if err != nil {
 		writeErr(w, d, err)
@@ -1035,7 +1063,13 @@ func mpIntelligenceWarnings(row ptRow, breakdown map[string]any) []string {
 		if published+rejected > 0 && rejected/(published+rejected) > 0.5 {
 			warnings = append(warnings, "rasio penolakan tinggi")
 		}
-		if ah := mpMaybeNumPtr(breakdown["avg_publish_hours"]); ah != nil && *ah > 72 {
+		// Nilai mentah: tampilan sudah dibatasi 72 jam, peringatan admin harus
+		// tetap melihat angka sebenarnya.
+		raw := breakdown["avg_publish_hours_raw"]
+		if raw == nil {
+			raw = breakdown["avg_publish_hours"]
+		}
+		if ah := mpMaybeNumPtr(raw); ah != nil && *ah > 72 {
 			warnings = append(warnings, "publish lambat (>72 jam)")
 		}
 	}

@@ -102,7 +102,7 @@
 <PageTitle title={tr("Editor Artikel")} />
 
 <section>
-	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandUrl}/generate`}>← Generate</a>
+	<a class="text-sm text-muted-foreground underline" href={`/klien/${brandUrl}/publications`}>← Publikasi</a>
 	{#if loading}
 		<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat dokumen…")}</p>
 	{:else if doc}

@@ -18,6 +18,9 @@ const threadSelect = `
 	       t.started_at, t.expires_at, t.last_message_at, t.last_message_by, t.created_at,
 	       t.topic, t.topic_note,
 	       m.name AS media_name, m.media_type, m.website_url, sm.da,
+	       mr.rating AS my_rating,
+	       (SELECT ROUND(AVG(r.rating)::numeric, 1)::float8 FROM media_ratings r WHERE r.media_id = m.id) AS rating_avg,
+	       (SELECT COUNT(*)::int FROM media_ratings r WHERE r.media_id = m.id) AS rating_count,
 	       COALESCE(ptn.name, '') AS partner_name, COALESCE(ptn.public_id, '') AS partner_public_id,
 	       b.name AS brand_name, COALESCE(b.public_id, '') AS brand_public_id,
 	       COALESCE(d.title, '') AS article_title,
@@ -28,7 +31,8 @@ const threadSelect = `
 	LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id
 	LEFT JOIN partners ptn ON ptn.id = t.partner_id
 	LEFT JOIN content_documents d ON d.id = t.document_id
-	LEFT JOIN publications p ON p.id = t.publication_id`
+	LEFT JOIN publications p ON p.id = t.publication_id
+	LEFT JOIN media_ratings mr ON mr.media_id = m.id AND mr.brand_id = t.brand_id`
 
 // threadListSelect: daftar forum + pesan terakhir + jumlah belum dibaca.
 const threadListSelect = `
@@ -36,6 +40,9 @@ const threadListSelect = `
 	       t.started_at, t.expires_at, t.last_message_at, t.last_message_by, t.created_at,
 	       t.topic, t.topic_note,
 	       m.name AS media_name, m.media_type, m.website_url, sm.da,
+	       mr.rating AS my_rating,
+	       (SELECT ROUND(AVG(r.rating)::numeric, 1)::float8 FROM media_ratings r WHERE r.media_id = m.id) AS rating_avg,
+	       (SELECT COUNT(*)::int FROM media_ratings r WHERE r.media_id = m.id) AS rating_count,
 	       COALESCE(ptn.name, '') AS partner_name, COALESCE(ptn.public_id, '') AS partner_public_id,
 	       b.name AS brand_name, COALESCE(b.public_id, '') AS brand_public_id,
 	       COALESCE(d.title, '') AS article_title,
@@ -50,6 +57,7 @@ const threadListSelect = `
 	LEFT JOIN partners ptn ON ptn.id = t.partner_id
 	LEFT JOIN content_documents d ON d.id = t.document_id
 	LEFT JOIN publications p ON p.id = t.publication_id
+	LEFT JOIN media_ratings mr ON mr.media_id = m.id AND mr.brand_id = t.brand_id
 	LEFT JOIN LATERAL (
 		SELECT body, author_role, created_at FROM chat_messages
 		WHERE thread_id = t.id ORDER BY created_at DESC, id DESC LIMIT 1
@@ -83,19 +91,24 @@ func threadPayload(r row, includeLast bool) map[string]any {
 		"media_type":        r.strOr("media_type", ""),
 		"website_url":       r.strOr("website_url", ""),
 		"da":                r.raw("da"),
-		"brand_name":        r.strOr("brand_name", ""),
-		"brand_public_id":   r.strOr("brand_public_id", ""),
-		"article_title":     r.strOr("article_title", ""),
-		"pub_status":        r.raw("pub_status"),
-		"pub_url":           r.raw("pub_url"),
-		"started_at":        started,
-		"expires_at":        expires,
-		"last_message_at":   r.timePtr("last_message_at"),
-		"last_message_by":   r.raw("last_message_by"),
-		"topic":             r.raw("topic"),
-		"topic_note":        r.strOr("topic_note", ""),
-		"status":            threadStatus(started, expires),
-		"created_at":        r.raw("created_at"),
+		// Rating kecepatan terbit: milik brand ini untuk media tersebut (kalau
+		// sudah pernah menilai) + rata-rata semua klien sebagai pembanding.
+		"my_rating":       r.raw("my_rating"),
+		"rating_avg":      r.raw("rating_avg"),
+		"rating_count":    r.intOr("rating_count", 0),
+		"brand_name":      r.strOr("brand_name", ""),
+		"brand_public_id": r.strOr("brand_public_id", ""),
+		"article_title":   r.strOr("article_title", ""),
+		"pub_status":      r.raw("pub_status"),
+		"pub_url":         r.raw("pub_url"),
+		"started_at":      started,
+		"expires_at":      expires,
+		"last_message_at": r.timePtr("last_message_at"),
+		"last_message_by": r.raw("last_message_by"),
+		"topic":           r.raw("topic"),
+		"topic_note":      r.strOr("topic_note", ""),
+		"status":          threadStatus(started, expires),
+		"created_at":      r.raw("created_at"),
 	}
 	if includeLast {
 		out["unread_count"] = r.intOr("unread_count", 0)

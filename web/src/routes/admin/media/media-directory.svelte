@@ -53,6 +53,8 @@
 	let markupPercent = $state(15);
 	let search = $state('');
 	let statusFilter = $state('');
+	// Urutan skor (0-100). Filter minimum DA/GEO sudah dihapus.
+	let sortBy = $state('');
 	let page = $state(1);
 	let detailAudit = $state<AuditItem[] | null>(null);
 	let detailLoading = $state(false);
@@ -72,6 +74,7 @@
 	let swStatusTimer: ReturnType<typeof setTimeout> | undefined;
 	let swVisits = $state<Record<string, number | null>>({});
 	let aiBusyId = $state<string | null>(null);
+	let geoBusyId = $state<string | null>(null);
 	let daBulkBusy = $state(false);
 	let daSummary = $state('');
 	// Indikator antrean pemeriksaan DA/AI (job media_seo_refresh).
@@ -84,6 +87,8 @@
 		last_error: string | null;
 		da_error: string | null;
 		da_error_at: string | null;
+		/** Domain yang gagal diperiksa dalam sejam terakhir (dari payload job). */
+		failed_items?: Array<{ media_name: string; website_url: string; last_error: string; at: string | null }>;
 	} | null>(null);
 	let daStatusTimer: ReturnType<typeof setTimeout> | null = null;
 	let daCancelBusy = $state(false);
@@ -141,6 +146,7 @@
 		if (!ready) return;
 		void debouncedSearch;
 		void statusFilter;
+		void sortBy;
 		void page;
 		void load();
 	});
@@ -154,7 +160,8 @@
 				offset: String((page - 1) * PAGE_SIZE)
 			});
 			if (debouncedSearch) params.set('search', debouncedSearch);
-			if (statusFilter) params.set('status', statusFilter);
+		if (statusFilter) params.set('status', statusFilter);
+		if (sortBy) params.set('sort', sortBy);
 			const [mediaData, partnerData, creditsData, pricingData] = await Promise.all([
 				platformRequest<{ media: Media[]; total: number }>(`/media?${params}`),
 				platformRequest<{ partners: Partner[] }>('/partners'),
@@ -483,7 +490,10 @@
 				total_stale: number;
 			}>('/media/similarweb-bulk', { method: 'POST', body: JSON.stringify({ limit: 25 }) });
 			const sisa = r.total_stale - r.enqueued;
-			swSummary = `Antrean dibuat: ${r.enqueued} media dijadwalkan (sisa kandidat ${Math.max(0, sisa)}${r.skipped ? `, ${r.skipped} gagal antre` : ''}). Scheduler yang memprosesnya otomatis — nilai trafik muncul di tabel begitu tiap media selesai.`;
+			swSummary =
+				r.enqueued === 0
+					? 'Tidak ada media yang perlu diisi trafiknya — semua media aktif sudah punya data. Media berdata tidak diperiksa ulang oleh tombol ini.'
+					: `Antrean dibuat: ${r.enqueued} media tanpa data trafik dijadwalkan (sisa ${Math.max(0, sisa)}${r.skipped ? `, ${r.skipped} gagal antre` : ''}). Media yang sudah punya angka dilewati — scheduler memproses sisanya otomatis.`;
 			await loadSwStatus();
 			void load();
 		} catch (reason) {
@@ -531,6 +541,24 @@
 	 * "Server terlalu lama merespons". Sekarang pekerjaannya diantrekan dan
 	 * tabel menyusul lewat indikator antrean.
 	 */
+	async function checkGeo(media: Media) {
+		error = '';
+		geoBusyId = media.id;
+		try {
+			const r = await platformRequest<{ queued: boolean }>(`/media/${media.id}/geo-refresh`, {
+				method: 'POST'
+			});
+			daSummary = r.queued
+				? `Pemeriksaan GEO "${media.name}" masuk antrean — DA tidak ikut dipanggil.`
+				: `"${media.name}" sudah ada di antrean pemeriksaan GEO.`;
+			await loadDaStatus();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			geoBusyId = null;
+		}
+	}
+
 	async function checkAiSignals(media: Media) {
 		error = '';
 		aiBusyId = media.id;
@@ -711,13 +739,6 @@
 	{:else}<Badge tone="neutral" label={tr("Tidak")} />{/if}
 {/snippet}
 
-{#snippet tierCell(row: Media)}
-	<Badge
-		tone={row.media_tier === 'tier1' ? 'accent' : row.media_tier === 'tier2' ? 'warning' : 'neutral'}
-		value={row.media_tier}
-	/>
-{/snippet}
-
 {#snippet priceCell(row: Media)}
 	<div class="tabular-nums">
 		<p>{idr(row.price ?? 0)}</p>
@@ -852,7 +873,16 @@
 			onclick={(e) => {
 				e.stopPropagation();
 				void checkAiSignals(row);
-			}}>{aiBusyId === row.id ? 'Mengantrekan…' : tr('Cek DA & AI')}</button
+			}}>{aiBusyId === row.id ? 'Mengantrekan…' : tr('Cek DA')}</button
+		>
+		<button
+			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+			disabled={geoBusyId === row.id}
+			title={tr('Cek GEO/AI Trust saja — tidak memanggil penyedia DA/PA, jadi tidak memakai kuota berbayar')}
+			onclick={(e) => {
+				e.stopPropagation();
+				void checkGeo(row);
+			}}>{geoBusyId === row.id ? 'Mengantrekan…' : tr('Cek GEO')}</button
 		>
 		{#if row.status === 'active'}
 			<button
@@ -932,6 +962,23 @@
 				{ value: 'archived', label: tr('Arsip') }
 			]}
 		/>
+		<Select
+			ariaLabel={tr('Urutkan media')}
+			minWidth={210}
+			value={sortBy}
+			onchange={(v) => {
+				sortBy = v;
+				page = 1;
+			}}
+			options={[
+				{ value: '', label: tr('Urut: Terbaru') },
+				{ value: 'da_desc', label: tr('DA: terbesar → terkecil') },
+				{ value: 'da_asc', label: tr('DA: terkecil → terbesar') },
+				{ value: 'geo_desc', label: tr('GEO: terbesar → terkecil') },
+				{ value: 'geo_asc', label: tr('GEO: terkecil → terbesar') },
+				{ value: 'name_asc', label: tr('Nama A-Z') }
+			]}
+		/>
 		<div class="flex-1"></div>
 		<Badge tone="accent" value={`${total} media`} />
 		<label class="flex items-center gap-1 text-xs text-muted-foreground">
@@ -946,7 +993,7 @@
 		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={syncing} onclick={syncCredits}>
 			<RefreshCw size={15} /> Sinkronkan kredit semua
 		</button>
-		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={swBulkBusy} onclick={bulkSimilarWeb} title="Antrekan pemeriksaan trafik semua media yang belum punya data — scheduler yang memprosesnya">
+		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={swBulkBusy} onclick={bulkSimilarWeb} title="Antrekan pemeriksaan trafik HANYA untuk media yang kolom trafiknya masih kosong — media yang sudah punya angka dilewati; scheduler yang memprosesnya">
 			<RefreshCw size={15} /> {swBulkBusy ? 'Mengantrekan…' : swStatus && swStatus.pending_jobs > 0 ? `Antrean Trafik (${swStatus.pending_jobs})` : 'Antrekan Cek Trafik Semua'}
 		</button>
 		<button
@@ -1011,7 +1058,7 @@
 			{/if}
 			{#if daStatus.failed_last_hour > 0}
 				<span class="rounded-full px-2.5 py-1" style="background-color: var(--warning-soft); color: var(--warning);" title={daStatus.last_error ?? ''}>
-					{daStatus.failed_last_hour} {tr('pemeriksaan gagal (sejam terakhir) — arahkan kursor untuk pesan')}
+					{daStatus.failed_last_hour} {tr('pemeriksaan gagal (sejam terakhir)')}
 				</span>
 			{/if}
 			{#if daStatus.pending_jobs > 0}
@@ -1025,6 +1072,20 @@
 			{/if}
 			<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => { void load(); void loadDaStatus(); }}>{tr('Muat ulang')}</button>
 		</div>
+		{#if (daStatus.failed_items?.length ?? 0) > 0}
+			<div class="mt-2 rounded-lg border px-3 py-2 text-xs" style="border-color: color-mix(in srgb, var(--warning) 35%, var(--border)); background-color: var(--warning-soft);">
+				<p class="font-semibold" style="color: var(--warning);">{tr('Domain yang gagal diperiksa (sejam terakhir)')}</p>
+				<ul class="mt-1 space-y-0.5 text-muted-foreground">
+					{#each daStatus.failed_items as f (`${f.website_url}|${f.at}`)}
+						<li>
+							<span class="font-medium" style="color: var(--foreground);">{f.media_name || f.website_url || '—'}</span>
+							{#if f.media_name && f.website_url}<span> ({f.website_url})</span>{/if}
+							<span> — {f.last_error || tr('tanpa pesan')}</span>
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{/if}
 	{/if}
 	{#if error && !isAccessError(error)}
 		<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>
@@ -1038,7 +1099,6 @@
 			{ key: 'publication_mode', label: tr('Mode Integrasi'), render: publicationModeCell },
 			{ key: 'word_count_mode', label: tr('Jumlah Kata'), render: wordCountCell },
 			{ key: 'dewan_pers', label: 'Dewan Pers', render: dewanPersCell },
-			{ key: 'tier', label: 'Tier', render: tierCell },
 			{ key: 'price', label: tr('Harga'), render: priceCell },
 			{ key: 'credit', label: tr('Kredit'), render: creditCell },
 			{ key: 'traffic', label: 'Trafik', align: 'right' as const, render: trafficCell },
@@ -1046,7 +1106,7 @@
 			{ key: 'ai_trust', label: 'GEO / AI Trust', render: aiTrustCell },
 			{ key: 'da', label: 'DA', align: 'center' as const, render: daCell },
 			{ key: 'integration', label: 'Integrasi', render: integrationCell },
-			{ key: 'actions', label: 'Aksi', align: 'center' as const, render: actionsCell }
+			{ key: 'actions', label: 'Aksi', align: 'center' as const, width: '300px', render: actionsCell }
 		]}
 		rows={rows}
 		rowKey={(row: Media) => row.id}

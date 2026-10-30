@@ -114,7 +114,7 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 		return nil, err
 	}
 
-	itemsQuery := `SELECT tcm.id, tcm.media_id, tcm.slot, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode, m.website_url
+	itemsQuery := `SELECT tcm.id, tcm.media_id, tcm.slot, tcm.article_document_id, tcm.article_status, tcm.angle_slug, m.media_type, m.bahasa_artikel, m.word_count_mode, m.website_url, m.allow_hyperlink, m.max_links
 		 FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		 WHERE tcm.campaign_id = $1 AND tcm.status = 'selected' AND tcm.article_document_id IS NOT NULL`
 	queryArgs := []any{campaignID}
@@ -258,6 +258,29 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 	batchMS := time.Since(startedAt).Milliseconds()
 	voice := brandVoiceLimits(text, voiceRange)
 
+	// Batas tautan keluar: media hanya menyetujui N tautan. Hitung tautan fisik
+	// di artikel (self-link situs media tidak dihitung) lalu bandingkan dengan
+	// max_links. Kelebihan tautan = pelanggaran kebijakan media, bukan sekadar
+	// peringatan — artikel tidak boleh menjadi 'ready'.
+	maxLinksPtr := (*int)(nil)
+	if item.has("max_links") {
+		v := int(item.numOr("max_links"))
+		maxLinksPtr = &v
+	}
+	linkCap, linkAllowed := mediaLinkCap(item.boolOr("allow_hyperlink", false), maxLinksPtr)
+	outgoingLinks := countOutboundLinks(content, hostSet(item.strOr("website_url", "")))
+	linkPolicyFailed := (!linkAllowed && outgoingLinks > 0) || (linkAllowed && outgoingLinks > linkCap)
+	linkVerdict := links.Verdict
+	if linkPolicyFailed {
+		linkVerdict = "failed"
+	}
+	linkPolicy := map[string]any{
+		"status": "passed", "allowed": linkAllowed, "max_links": linkCap, "outgoing": outgoingLinks,
+	}
+	if linkPolicyFailed {
+		linkPolicy["status"] = "failed"
+	}
+
 	safetyStatus := "review_required"
 	switch safety.RiskLevel {
 	case "high":
@@ -275,14 +298,14 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 			"categories": safety.Categories, "confidence": safety.Confidence,
 			"reasons": capStrings(safety.Reasons, 3),
 		},
-		"linkHealth": map[string]any{"status": links.Verdict, "links": links.Links},
+		"linkHealth": map[string]any{"status": linkVerdict, "links": links.Links, "policy": linkPolicy},
 		"brandVoice": map[string]any{"status": "passed", "level": voice.Level, "notes": capStrings(voice.Notes, 3)},
 	}
 
 	overallVerdict := "passed"
-	if safetyStatus == "failed" || links.Verdict == "failed" {
+	if safetyStatus == "failed" || linkVerdict == "failed" {
 		overallVerdict = "failed"
-	} else if safetyStatus == "review_required" || links.Verdict == "review_required" {
+	} else if safetyStatus == "review_required" || linkVerdict == "review_required" {
 		overallVerdict = "review_required"
 	}
 
@@ -308,6 +331,9 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 	linkRule := "Media TIDAK mengizinkan hyperlink. JANGAN menanam link apa pun."
 	if allowLink {
 		linkRule = "Media mengizinkan hyperlink. Tanam link sesuai konfigurasi kampanye secara natural bila relevan."
+	}
+	if linkAllowed {
+		linkRule += " MAKSIMAL " + itoa(linkCap) + " tautan keluar di seluruh artikel (sekarang: " + itoa(outgoingLinks) + ")."
 	}
 	promptLines := []string{
 		"Kampanye: " + campaign.strOr("name", ""),
@@ -339,7 +365,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 		switch {
 		case safetyStatus == "failed" || links.Verdict == "failed":
 			verdict = "gagal"
-		case safetyStatus == "review_required" || links.Verdict == "review_required":
+		case safetyStatus == "review_required" || linkVerdict == "review_required" || linkPolicyFailed:
 			verdict = "revisi"
 		}
 	}
@@ -413,7 +439,9 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 	switch {
 	case safetyStatus == "failed" || links.Verdict == "failed":
 		status = "blocked"
-	case safetyStatus == "review_required" || links.Verdict == "review_required":
+	case linkPolicyFailed || safetyStatus == "review_required" || linkVerdict == "review_required":
+		// Tautan berlebih bisa diperbaiki klien (hapus tautan lalu Cek
+		// Validasi ulang) — 'revision', bukan 'blocked' yang terasa final.
 		status = "revision"
 	}
 	if err := d.exec(ctx, "UPDATE taut_campaign_media SET article_status = $1 WHERE id = $2", status, itemID); err != nil {

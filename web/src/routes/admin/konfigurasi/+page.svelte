@@ -18,6 +18,10 @@
 		api_key_configured: boolean;
 		api_key_hint?: string | null;
 		host?: string | null;
+		provider_label?: string | null;
+		provider_url?: string | null;
+		last_da_error?: string | null;
+		last_da_error_at?: string | null;
 		similarweb_api_key_configured?: boolean;
 		databee_token_configured?: boolean;
 		serpens_api_key_configured?: boolean;
@@ -209,6 +213,32 @@
 			await loadSeo();
 		}
 		seoBusy = false;
+	}
+
+	// ── Tes koneksi DA/PA (diagnosa provider, tanpa menyentuh media) ──────
+	let seoDiagDomain = $state('app.tauthub.com');
+	let seoDiagBusy = $state(false);
+	let seoDiag = $state<{ text: string; ok: boolean; raw: string } | null>(null);
+	async function testSeoProvider() {
+		seoDiagBusy = true;
+		seoDiag = null;
+		try {
+			const res = await request<{
+				ok?: boolean; detail?: string; provider_status?: number; da?: number; pa?: number;
+				payload_raw?: string; endpoint?: string; missing?: string[];
+			}>(`/seo/diagnose?domain=${encodeURIComponent(seoDiagDomain.trim() || 'app.tauthub.com')}`);
+			if (!res.ok) seoDiag = { text: res.error, ok: false, raw: '' };
+			else {
+				const d = res.data ?? {};
+				const ok = Boolean(d.ok);
+				const text = ok
+					? `Provider menjawab. DA ${d.da ?? '—'} · PA ${d.pa ?? '—'}${d.missing?.length ? ` · tidak ditemukan: ${d.missing.join(', ')}` : ''}`
+					: d.detail || 'Provider menolak permintaan.';
+				seoDiag = { text, ok, raw: d.payload_raw ?? '' };
+			}
+		} finally {
+			seoDiagBusy = false;
+		}
 	}
 
 	async function saveSimilarWeb(e: SubmitEvent) {
@@ -799,9 +829,45 @@
 						<Badge tone={seoConfig?.api_key_configured ? 'success' : 'warning'} label={seoConfig?.api_key_configured ? 'Terhubung' : tr('Belum Dikonfigurasi')} />
 					</div>
 					<p class="text-sm text-muted-foreground">{tr("API server-side untuk fitur")}<strong>Cek DA/PA</strong>{tr("di dashboard Mitra (Domain & Page Authority media). Tanpa key ini, mitra yang klik Cek DA/PA akan melihat pesan \"RapidAPI SEO belum dikonfigurasi oleh Admin\". Key tidak pernah ditampilkan atau dikirim ke browser.")}</p>
+					<!-- Kredit provider (khusus internal): nama developer RapidAPI yang
+					     dipakai, dibuka di tab baru dan nofollow. -->
+					<p class="text-xs text-muted-foreground">
+						{tr('Provider')}:
+						<a
+							class="font-medium underline underline-offset-2"
+							style="color: var(--primary);"
+							href={seoConfig?.provider_url ?? 'https://rapidapi.com/ksdeveloper/api/bulk-da-pa-checker-semrush'}
+							target="_blank"
+							rel="noopener noreferrer nofollow"
+						>{seoConfig?.provider_label ?? 'KSDeveloper'}</a>
+						<span>· Bulk DA PA Checker (Semrush)</span>
+					</p>
 					<div class="rounded-lg border px-3 py-2 text-xs text-muted-foreground">
-						Host: <code class="rounded bg-secondary px-1">{seoConfig?.host ?? 'domain-da-pa-checker.p.rapidapi.com'}</code>
+						Host: <code class="rounded bg-secondary px-1">{seoConfig?.host ?? 'bulk-da-pa-checker-semrush.p.rapidapi.com'}</code>
 						{seoConfig?.api_key_hint ? ` · Key ${seoConfig.api_key_hint}` : ''}
+					</div>
+					{#if seoConfig?.last_da_error}
+						<div class="rounded-lg border px-3 py-2 text-xs" style="border-color: var(--warning); background-color: var(--warning-soft); color: var(--warning);">
+							<p class="font-semibold">{tr('Percobaan terakhir ditolak provider')}{seoConfig.last_da_error_at ? ` · ${fmtDateTime(seoConfig.last_da_error_at)}` : ''}</p>
+							<p class="mt-0.5">{seoConfig.last_da_error}</p>
+						</div>
+					{/if}
+					<div class="rounded-lg border p-3" style="border-color: var(--border);">
+						<div class="flex flex-wrap items-end gap-2">
+							<label class="min-w-[200px] flex-1">
+								<span class="text-xs font-medium">{tr('Domain uji')}</span>
+								<input class="app-input mt-1 w-full" bind:value={seoDiagDomain} placeholder="contoh.com" />
+							</label>
+							<button class="app-btn app-btn-soft !min-h-9" type="button" disabled={seoDiagBusy} onclick={() => void testSeoProvider()}>
+								{seoDiagBusy ? 'Menguji…' : tr('Tes koneksi provider')}
+							</button>
+						</div>
+						{#if seoDiag}
+							<p class="mt-2 text-xs font-medium" style="color: {seoDiag.ok ? 'var(--success)' : 'var(--destructive)'};">{seoDiag.text}</p>
+							{#if seoDiag.raw}
+								<pre class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-secondary p-2 text-[11px] text-muted-foreground">{seoDiag.raw}</pre>
+							{/if}
+						{/if}
 					</div>
 					<form class="space-y-3" onsubmit={saveSeo}>
 						<label class="block">

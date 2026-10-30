@@ -120,6 +120,9 @@
 	let linksStatus = $state<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle');
 	let loading = $state(true);
 	let error = $state('');
+	// Pemberitahuan netral (bukan kegagalan) — mis. QC yang masih berjalan di
+	// server setelah koneksi browser terputus.
+	let qcNotice = $state('');
 	let backlinkEnabled = $state(false);
 	let entryMode = $state<'ai' | 'manual' | null>(null);
 	let regenMax = $state(2);
@@ -1356,6 +1359,7 @@
 			}
 			qcRunning = { ...qcRunning, [key]: true };
 		}
+		qcNotice = '';
 		try {
 			// slots membatasi pemindaian ke artikel ini saja; tanpa itu satu
 			// artikel memicu audit untuk semua artikel di domain yang sama.
@@ -1365,9 +1369,28 @@
 			}, 900_000);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menjalankan pemindaian QC.')));
 		} catch (reason) {
-			// Dulu senyap, sehingga simpan yang gagal dipindai terlihat seperti
-			// "QC tidak jalan". Kini alasannya tampil; pemindaian manual tetap bisa.
-			error = reason instanceof Error ? reason.message : tr('Gagal menjalankan pemindaian QC.');
+			// Pemindaian di server TIDAK ikut batal saat koneksi browser putus
+			// (lihat TautGatekeeperAuditAll), jadi timeout di sini berarti "masih
+			// berjalan", bukan gagal. Beri tahu apa adanya lalu segarkan hasilnya
+			// beberapa kali sampai audit selesai tersimpan.
+			const timedOut =
+				(reason instanceof Error && reason.name === 'TimeoutError') ||
+				(reason instanceof DOMException && reason.name === 'AbortError');
+			if (timedOut) {
+				// Ini bukan kegagalan: server tetap memindai. Tampilkan sebagai
+				// pemberitahuan netral, bukan banner merah.
+				qcNotice = tr('Pemindaian QC masih berjalan di server. Hasil muncul otomatis beberapa saat lagi.');
+				for (const delay of [15_000, 45_000, 90_000]) {
+					window.setTimeout(() => {
+						qcToken += 1;
+						void load();
+					}, delay);
+				}
+			} else {
+				// Dulu senyap, sehingga simpan yang gagal dipindai terlihat seperti
+				// "QC tidak jalan". Kini alasannya tampil; pemindaian manual tetap bisa.
+				error = reason instanceof Error ? reason.message : tr('Gagal menjalankan pemindaian QC.');
+			}
 		} finally {
 			// Spinner dimatikan SEGERA begitu request selesai. Dulu status baru
 			// dibersihkan setelah `await load()` — dengan banyak media, load bisa
@@ -1879,6 +1902,13 @@
 		<div class="app-card mt-3 flex items-start gap-2 px-4 py-2.5 text-sm" style="background-color: color-mix(in srgb, var(--destructive) 7%, var(--card)); color: var(--destructive);" role="alert">
 			<TriangleAlert size={16} class="mt-0.5 shrink-0" />
 			<span>{REASON_LABEL[agentStatus.reason ?? ''] ?? tr('AI Writer belum dikonfigurasi oleh admin.')} {tr("Generate artikel tidak akan berjalan sampai admin mengaktifkannya.")}</span>
+		</div>
+	{/if}
+
+	{#if qcNotice}
+		<div class="app-card mt-3 flex items-start gap-2 px-4 py-2.5 text-sm" style="background-color: var(--muted); color: var(--muted-foreground);">
+			<span class="flex-1">{qcNotice}</span>
+			<button class="rounded p-0.5 hover:bg-secondary" type="button" aria-label={tr("Tutup pemberitahuan")} onclick={() => (qcNotice = '')}><X size={12} /></button>
 		</div>
 	{/if}
 

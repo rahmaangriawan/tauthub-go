@@ -15,6 +15,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
+
 	"github.com/rahmaangriawan/tauthub-go/internal/crypto"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/imageconvert"
@@ -773,6 +775,11 @@ func (d *Deps) MediaSubmit(w http.ResponseWriter, r *http.Request) {
 	link := "/admin/media?status=pending_review#tab-pending"
 	d.notifyPlatformAdmins(r.Context(), "media.resubmitted", "Media diajukan ulang",
 		`Media "`+row.strOr("name", "")+`" diajukan ulang oleh Mitra untuk direview.`, &link)
+	notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
+		Event: notify.AdminEventMediaSubmitted, ReferenceID: mediaID,
+		Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": row.strOr("name", "") + " (diajukan ulang)"},
+		Link: link, BaseURL: d.Cfg.PublicAppURL,
+	})
 
 	updated, _ := d.queryRow(r.Context(), `
 		SELECT id, name, slug, category, description, traffic_estimate, health_score, health_breakdown, website_url, adapter_url, price, status,
@@ -1265,6 +1272,11 @@ func (d *Deps) MediaDewanPersVerification(w http.ResponseWriter, r *http.Request
 		link := "/admin/dewan-pers-reviews?status=conflict"
 		d.notifyPlatformAdmins(r.Context(), "media.dewan_pers.submitted", "Konflik nomor sertifikat Dewan Pers",
 			`Media "`+media.strOr("name", "")+`" mengajukan sertifikat yang sudah dipakai media lain.`, &link)
+		notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
+			Event: notify.AdminEventMediaSubmitted, ReferenceID: mediaID + ":dewan_pers",
+			Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": media.strOr("name", "") + " — konflik sertifikat Dewan Pers"},
+			Link: link, BaseURL: d.Cfg.PublicAppURL,
+		})
 		httpx.Error(w, http.StatusConflict, "Nomor sertifikat ini sudah digunakan oleh media lain dan memerlukan pemeriksaan Admin.")
 		return
 	}
@@ -1276,6 +1288,11 @@ func (d *Deps) MediaDewanPersVerification(w http.ResponseWriter, r *http.Request
 		link := "/admin/dewan-pers-reviews?status=pending"
 		d.notifyPlatformAdmins(r.Context(), "media.dewan_pers.submitted", "Verifikasi Dewan Pers menunggu review",
 			`Media "`+media.strOr("name", "")+`" mengajukan sertifikat `+cert+`.`, &link)
+		notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
+			Event: notify.AdminEventMediaSubmitted, ReferenceID: mediaID + ":dewan_pers",
+			Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": media.strOr("name", "") + " — verifikasi Dewan Pers"},
+			Link: link, BaseURL: d.Cfg.PublicAppURL,
+		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":             true,

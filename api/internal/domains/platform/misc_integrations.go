@@ -22,7 +22,9 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/adminshared"
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
+	"github.com/rahmaangriawan/tauthub-go/internal/seo"
 )
 
 // Modul integrasi platform: crawlhub, ga4-configs, gsc-config, wa-*, seo,
@@ -1027,6 +1029,10 @@ var igWAEventLabel = map[string]string{
 	"withdrawal.paid":              "Pencairan dibayar",
 	"withdrawal.rejected":          "Pencairan ditolak",
 	"referral.cpa.credited":        "Fee referral (CPA) masuk",
+	// Event khusus admin (WA ke nomor admin — Fonnte).
+	"admin.media_submitted":      "Admin · Pengajuan media/domain",
+	"admin.withdrawal_requested": "Admin · Penarikan dana",
+	"admin.ticket_created":       "Admin · Tiket dukungan baru",
 }
 
 var igWADefaultTemplates = map[string]string{
@@ -1043,6 +1049,18 @@ var igWADefaultTemplates = map[string]string{
 	"referral.cpa.credited":        "Halo {nama}, fee referral {jumlah} sudah dikreditkan untuk domain {judul}.\n\nDetail: {link}",
 	"ticket.replied":               "Halo {nama}, tiket dukungan \"{judul}\" dibalas admin.\n\nBalasan: {status}\nDetail: {link}",
 	"ticket.closed":                "Halo {nama}, tiket dukungan \"{judul}\" sudah ditandai selesai.\n\nDetail: {link}",
+}
+
+// Template khusus admin (pengajuan media, penarikan, tiket) berasal dari paket
+// notify supaya pengirim (notify.EnqueueAdminsWA) dan UI template memakai teks
+// bawaan yang sama.
+func init() {
+	for event, body := range notify.AdminWADefaultTemplates {
+		igWADefaultTemplates[event] = body
+	}
+	for event, link := range notify.AdminWAPreviewLinks {
+		igWAPreviewLinks[event] = link
+	}
 }
 
 var igWAPreviewLinks = map[string]string{
@@ -1067,12 +1085,13 @@ func igWAConfigJSON(row ptRow) map[string]any {
 		return map[string]any{"configured": false, "token_hint": nil, "sender_name": nil, "country_code": "62", "enabled": false, "updated_at": nil}
 	}
 	return map[string]any{
-		"configured":   row.has("sealed_token"),
-		"token_hint":   ptNullableStr(row, "token_hint"),
-		"sender_name":  ptNullableStr(row, "sender_name"),
-		"country_code": row.strOr("country_code", "62"),
-		"enabled":      row.boolOr("enabled", false),
-		"updated_at":   row.anyOrNil("updated_at"),
+		"configured":         row.has("sealed_token"),
+		"token_hint":         ptNullableStr(row, "token_hint"),
+		"sender_name":        ptNullableStr(row, "sender_name"),
+		"country_code":       row.strOr("country_code", "62"),
+		"admin_group_target": ptNullableStr(row, "admin_group_target"),
+		"enabled":            row.boolOr("enabled", false),
+		"updated_at":         row.anyOrNil("updated_at"),
 	}
 }
 
@@ -1149,6 +1168,16 @@ func (d *Deps) WAGatewayConfigUpdate(w http.ResponseWriter, r *http.Request) {
 		countryCode = &cc
 	}
 	enabled, hasEnabled := boolField(body, "enabled")
+	// Tujuan grup admin (opsional). Kosong = kembali ke fan-out per admin.
+	groupTarget, hasGroup := strField(body, "admin_group_target")
+	groupTarget = strings.TrimSpace(groupTarget)
+	if hasGroup && groupTarget != "" {
+		// Format ID grup Fonnte: deretan angka, boleh berakhiran @g.us.
+		if len(groupTarget) > 64 || !regexp.MustCompile(`^[0-9]{8,20}(@g\.us)?$`).MatchString(groupTarget) {
+			writeErr(w, d, errUnprocessable("ID grup WA tidak valid (contoh: 120363012345678901@g.us)"))
+			return
+		}
+	}
 
 	existing, err := d.igWALoadConfigRow(r.Context())
 	if err != nil {
@@ -1184,18 +1213,19 @@ func (d *Deps) WAGatewayConfigUpdate(w http.ResponseWriter, r *http.Request) {
 		effectiveEnabled = enabled
 	}
 	if err := d.exec(r.Context(),
-		`INSERT INTO platform_wa_config (id, sealed_token, token_hint, sender_name, country_code, enabled, updated_by, updated_at)
-		 VALUES ('default', $1, $2, $3, $4, $5, $6, NOW())
+		`INSERT INTO platform_wa_config (id, sealed_token, token_hint, sender_name, country_code, enabled, admin_group_target, updated_by, updated_at)
+		 VALUES ('default', $1, $2, $3, $4, $5, $8, $6, NOW())
 		 ON CONFLICT (id) DO UPDATE SET
 		   sealed_token = COALESCE(EXCLUDED.sealed_token, platform_wa_config.sealed_token),
 		   token_hint = COALESCE(EXCLUDED.token_hint, platform_wa_config.token_hint),
 		   sender_name = COALESCE(EXCLUDED.sender_name, platform_wa_config.sender_name),
 		   country_code = COALESCE(EXCLUDED.country_code, platform_wa_config.country_code),
 		   enabled = COALESCE(EXCLUDED.enabled, platform_wa_config.enabled),
+		   admin_group_target = CASE WHEN $7 THEN EXCLUDED.admin_group_target ELSE platform_wa_config.admin_group_target END,
 		   updated_by = EXCLUDED.updated_by,
 		   updated_at = NOW()`,
 		sealed, nullIfEmpty(hint), ptNullableArgStr(senderName, hasSender && senderName != ""),
-		effectiveCC, effectiveEnabled, user.ID); err != nil {
+		effectiveCC, effectiveEnabled, user.ID, hasGroup, ptNullableArgStr(groupTarget, hasGroup && groupTarget != "")); err != nil {
 		writeErr(w, d, ptErr(http.StatusInternalServerError, err.Error()))
 		return
 	}
@@ -1718,12 +1748,12 @@ func (d *Deps) SEOConfigGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row, err := d.queryRow(r.Context(),
-		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_databee_token, sealed_serpens_api_key, updated_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
+		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_databee_token, sealed_serpens_api_key, updated_at, last_da_error, last_da_error_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
 	if err != nil {
 		writeErr(w, d, err)
 		return
 	}
-	out := igSEOJSON(row)
+	out := igSEOJSON(row, seo.LoadConfig(r.Context(), d.Pool).Host)
 	// Diagnostik admin-only: apakah API key tersimpan masih dapat dibuka.
 	configError := ""
 	configErrorDetail := ""
@@ -1740,15 +1770,21 @@ func (d *Deps) SEOConfigGet(w http.ResponseWriter, r *http.Request) {
 		configErrorDetail = "API key RapidAPI SEO belum dikonfigurasi."
 	}
 	out["api_key_decryptable"] = decryptable
+	out["last_da_error"] = ptNullableStr(row, "last_da_error")
+	out["last_da_error_at"] = row.anyOrNil("last_da_error_at")
 	out["config_error"] = configError
 	out["config_error_detail"] = configErrorDetail
 	writeJSON(w, http.StatusOK, out)
 }
 
-func igSEOJSON(row ptRow) map[string]any {
+func igSEOJSON(row ptRow, host string) map[string]any {
+	if host == "" {
+		host = seo.DefaultHost
+	}
 	if row == nil {
 		return map[string]any{
-			"provider": "rapidapi", "host": mpSeoProviderHost,
+			"provider": "rapidapi", "host": host,
+			"provider_label": seo.ProviderLabel, "provider_url": seo.ProviderPageURL,
 			"api_key_configured": false, "api_key_hint": nil,
 			"similarweb_api_key_configured": false, "databee_token_configured": false,
 			"serpens_api_key_configured": false, "updated_at": nil,
@@ -1756,7 +1792,9 @@ func igSEOJSON(row ptRow) map[string]any {
 	}
 	return map[string]any{
 		"provider":                      "rapidapi",
-		"host":                          mpSeoProviderHost,
+		"host":                          host,
+		"provider_label":                seo.ProviderLabel,
+		"provider_url":                  seo.ProviderPageURL,
 		"api_key_configured":            row.has("sealed_api_key"),
 		"api_key_hint":                  ptNullableStr(row, "api_key_hint"),
 		"similarweb_api_key_configured": row.has("sealed_similarweb_api_key"),
@@ -1863,7 +1901,7 @@ func (d *Deps) SEOConfigPut(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, igSEOJSON(ptRow(ptNormalizeMap(updated))))
+	writeJSON(w, http.StatusOK, igSEOJSON(ptRow(ptNormalizeMap(updated)), seo.LoadConfig(r.Context(), d.Pool).Host))
 }
 
 // SEODiagnose: GET /v1/platform/seo/diagnose
@@ -1891,37 +1929,51 @@ func (d *Deps) SEODiagnose(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "detail": "Gagal membuka kunci tersegel: " + uErr.Error()})
 		return
 	}
-	reqCtx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer cancel()
-	payload, _ := json.Marshal(map[string]string{"q": domain})
-	req, rErr := http.NewRequestWithContext(reqCtx, http.MethodPost, mpSeoProviderURL, strings.NewReader(string(payload)))
-	if rErr != nil {
-		writeErr(w, d, rErr)
-		return
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-rapidapi-host", mpSeoProviderHost)
-	req.Header.Set("x-rapidapi-key", apiKey)
-	resp, doErr := security.SafeClient(15 * time.Second).Do(req)
-	if doErr != nil {
-		writeErr(w, d, doErr)
-		return
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	cfg := seo.LoadConfig(r.Context(), d.Pool)
+	batch, seoErr := seo.FetchMany(r.Context(), []string{domain}, apiKey, cfg)
 	keyHint := ""
 	if config.has("api_key_hint") {
 		keyHint = config.strOr("api_key_hint", "")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":              resp.StatusCode >= 200 && resp.StatusCode < 300,
-		"provider_status": resp.StatusCode,
+	keyMasked := apiKey[:igMinInt(6, len(apiKey))] + "…" + apiKey[max(0, len(apiKey)-4):]
+	if seoErr != nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":              false,
+			"provider_status": seoErr.Status,
+			"detail":          seo.ErrText(seoErr),
+			"api_key_hint":    nullIfEmpty(keyHint),
+			"key_terbaca":     keyMasked,
+			"domain":          domain,
+			"endpoint":        cfg.URL(),
+			"payload_raw":     ptTruncate(seoErr.Body, 2000),
+		})
+		return
+	}
+	out := map[string]any{
+		"ok":              true,
+		"provider_status": http.StatusOK,
 		"api_key_hint":    nullIfEmpty(keyHint),
-		"key_terbaca":     apiKey[:igMinInt(6, len(apiKey))] + "…" + apiKey[max(0, len(apiKey)-4):],
+		"key_terbaca":     keyMasked,
 		"domain":          domain,
-		"payload_raw":     ptTruncate(string(raw), 2000),
-	})
+		"endpoint":        cfg.URL(),
+		"payload_raw":     ptTruncate(batch.Raw, 2000),
+	}
+	if len(batch.Missing) > 0 {
+		out["missing"] = batch.Missing
+	}
+	for _, m := range batch.Metrics {
+		out["da"] = m.DA
+		out["pa"] = m.PA
+		if m.Spam != nil {
+			out["spam_score"] = *m.Spam
+		}
+		break
+	}
+	if _, ok := out["da"]; !ok {
+		out["ok"] = false
+		out["detail"] = "Provider menjawab, tetapi DA/PA untuk domain uji tidak ditemukan di respons."
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // swDiagnoseHint: interpretasi jawaban gateway RapidAPI untuk SimilarWeb.

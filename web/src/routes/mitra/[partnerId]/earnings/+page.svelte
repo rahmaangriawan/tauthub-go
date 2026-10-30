@@ -73,6 +73,60 @@
 			: !(Number(amount) > 0) || Number(amount) < minimumWithdraw || Number(amount) > settledBalance
 	);
 
+	// ── Input nominal berformat ribuan ─────────────────────────────────────
+	// Nilai yang DIKIRIM tetap angka murni (`amount`); teks hanya untuk tampilan.
+	// Aturan bisnis (min/max/biaya) tetap milik backend & derived di atas.
+	let amountText = $state('');
+	const amountDigits = (text: string) => {
+		const d = text.replace(/\D/g, '');
+		return d ? Number(d) : 0;
+	};
+	const amountDisplay = (n: number) =>
+		n > 0 ? n.toLocaleString('id-ID', { maximumFractionDigits: 0 }) : '';
+	// Input hanya menerima ANGKA. Karakter lain ditolak di keydown (huruf,
+	// simbol, titik manual) supaya nilai tidak sempat "kotor"; titik ribuan
+	// ditambahkan otomatis oleh pemformat di oninput.
+	function onAmountKeydown(e: KeyboardEvent) {
+		if (e.ctrlKey || e.metaKey || e.altKey) return;
+		const allowed = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
+		if (allowed.includes(e.key)) return;
+		if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+	}
+	function onAmountInput(e: Event) {
+		const el = e.currentTarget as HTMLInputElement;
+		const n = amountDigits(el.value);
+		amount = n;
+		amountText = amountDisplay(n);
+		el.value = amountText;
+	}
+	function selectMode(next: 'all' | 'partial') {
+		mode = next;
+		amount = next === 'all' ? settledBalance : 0;
+		amountText = amountDisplay(amount);
+	}
+	function openWithdrawal() {
+		error = '';
+		notes = '';
+		mode = 'all';
+		amount = settledBalance;
+		amountText = amountDisplay(settledBalance);
+		showWithdraw = true;
+	}
+	// Pesan validasi di dekat input; tombol submit ikut memakai kondisi ini.
+	const partialError = $derived.by(() => {
+		if (mode !== 'partial') return '';
+		if (!(Number(amount) > 0)) return tr('Masukkan nominal penarikan.');
+		if (Number(amount) < minimumWithdraw) return `${tr('Minimal penarikan')} ${rp(minimumWithdraw)}.`;
+		if (Number(amount) > settledBalance) return `${tr('Nominal melebihi saldo siap ditarik')} (${rp(settledBalance)}).`;
+		return '';
+	});
+	// Nomor rekening disamarkan untuk ditampilkan (data asli tetap di payload).
+	const maskedAccountNumber = $derived.by(() => {
+		const acc = String(partner?.bank_account_number ?? '').trim();
+		if (!acc) return '';
+		return acc.length > 8 ? `${acc.slice(0, 8)}•••` : acc;
+	});
+
 	onMount(() => {
 		void (async () => {
 			const fresh = await ensureValidSession();
@@ -187,7 +241,7 @@
 		</div>
 		<!-- Cadangan aksi penarikan saat ringkasan saldo gagal dimuat. -->
 		{#if !loading && !data}
-			<button class="app-btn app-btn-primary min-h-11 shrink-0" disabled={!hasPayoutAccount} onclick={() => (showWithdraw = true)}>
+			<button class="app-btn app-btn-primary min-h-11 shrink-0" disabled={!hasPayoutAccount} onclick={() => openWithdrawal()}>
 				<Banknote size={16} />{tr("Tarik Saldo")}
 			</button>
 		{/if}
@@ -267,13 +321,9 @@
 				</div>
 
 				<div class="flex shrink-0 flex-col items-end gap-1 md:ml-auto">
-					<button class="app-btn app-btn-primary min-h-11 px-5" disabled={!hasPayoutAccount} onclick={() => (showWithdraw = true)}>
+					<button class="app-btn app-btn-primary min-h-11 px-5" disabled={!hasPayoutAccount} onclick={() => openWithdrawal()}>
 						<Banknote size={16} />{tr("Tarik Saldo")}
 					</button>
-					<!-- Jalan permanen ke arsip: pesan sukses di atas hilang saat halaman dimuat ulang. -->
-					<a class="text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline" href={`${base}/settlements`}>
-						{tr('Arsip penarikan & invoice')}
-					</a>
 				</div>
 			</div>
 		</div>
@@ -463,63 +513,168 @@
 {/snippet}
 
 {#if showWithdraw}
-	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={(event) => event.currentTarget === event.target && (showWithdraw = false)} onkeydown={(e) => { if (e.key === 'Escape') showWithdraw = false; }}>
-		<dialog open class="app-card my-auto w-full max-w-md p-5" aria-label={tr("Tarik Saldo")}>
-			<div class="flex items-start justify-between gap-4">
-				<h2 class="text-lg font-semibold">{tr("Tarik Saldo")}</h2>
-				<button class="app-btn app-btn-soft !min-h-9 !w-9 !p-0" aria-label={tr("Tutup")} onclick={() => (showWithdraw = false)}><X size={16} /></button>
-			</div>
-			<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-				{tr("Metode pencairan dan rekening tujuan diambil otomatis dari Profil (terkunci, tidak bisa diubah di sini).")}
-				{tr("Biaya transfer ditanggung mitra:")} {tr("Bank")} {rp(withdrawFee)} / {tr("E-Wallet")} {ewalletFeePct}% {tr("dari nominal, terpotong otomatis.")}
-				{tr("Saldo siap ditarik")} {rp(settledBalance)}.
-			</p>
-			{#if error}
-				<div class="mt-3 rounded-lg border px-3 py-2 text-sm" style="border-color: var(--destructive); background-color: rgba(197,43,54,.08); color: var(--destructive);">{error}</div>
-			{/if}
-			<div class="mt-4 space-y-4">
-				<div>
-					<p class="text-xs font-semibold text-muted-foreground">{tr("Jumlah Penarikan")}</p>
-					<div class="mt-2 grid gap-2">
-						<label class="flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm" style="border-color: {mode === 'all' ? 'var(--primary)' : 'var(--border)'}; background-color: {mode === 'all' ? 'var(--accent)' : 'transparent'};">
-							<input type="radio" value="all" bind:group={mode} />
-							<span class="min-w-0 break-words">{tr("Tarik seluruh saldo")} <strong class="tabular-nums">({rp(settledBalance)})</strong></span>
-						</label>
-						<label class="flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm" style="border-color: {mode === 'partial' ? 'var(--primary)' : 'var(--border)'}; background-color: {mode === 'partial' ? 'var(--accent)' : 'transparent'};">
-							<input type="radio" value="partial" bind:group={mode} />
-							<span>{tr("Tarik sebagian")}</span>
-						</label>
+	<!-- Klik di luar / Escape sengaja TIDAK menutup: penarikan adalah aksi uang,
+	     jadi hanya Batal, X, atau Ajukan Penarikan yang menutup modal. -->
+	<div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" style="background-color: rgba(15,23,42,.5);" role="presentation">
+		<dialog
+			open
+			class="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl border bg-white shadow-2xl sm:max-h-[90vh] sm:max-w-[700px] sm:rounded-2xl"
+			style="border-color: var(--border);"
+			aria-label={tr("Tarik Saldo")}
+		>
+			<!-- Header -->
+			<div class="flex items-start justify-between gap-4 px-5 pt-5 sm:px-6">
+				<div class="flex items-start gap-3.5">
+					<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style="background-color: var(--accent); color: var(--primary);">
+						<Wallet size={20} strokeWidth={2} />
+					</span>
+					<div class="min-w-0">
+						<h2 class="text-xl font-semibold tracking-tight">{tr("Tarik Saldo")}</h2>
+						<p class="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
+							{tr("Pilih jumlah penarikan dan periksa rincian sebelum mengajukan.")}
+						</p>
 					</div>
 				</div>
+				<button
+					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-slate-50"
+					style="border-color: var(--border); color: var(--muted-foreground);"
+					aria-label={tr("Tutup")}
+					onclick={() => (showWithdraw = false)}
+				>
+					<X size={16} />
+				</button>
+			</div>
+
+			<!-- Body (scroll internal di layar pendek) -->
+			<div class="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-4 sm:px-6">
+				{#if error}
+					<div class="mb-4 rounded-lg border px-3 py-2 text-sm" style="border-color: var(--destructive); background-color: rgba(197,43,54,.08); color: var(--destructive);">{error}</div>
+				{/if}
+
+				<!-- Saldo tersedia -->
+				<div class="flex flex-wrap items-center gap-3.5 rounded-xl border px-4 py-3.5" style="background-color: var(--accent); border-color: color-mix(in srgb, var(--primary) 18%, var(--border));">
+					<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/80" style="color: var(--primary);">
+						<Coins size={18} strokeWidth={2} />
+					</span>
+					<div class="min-w-0 flex-1">
+						<p class="text-xs font-medium text-muted-foreground">{tr("Saldo tersedia")}</p>
+						<p class="text-2xl font-bold leading-tight tabular-nums" style="color: var(--foreground);">{rp(settledBalance)}</p>
+					</div>
+					<p class="hidden max-w-[210px] text-[11.5px] leading-relaxed text-muted-foreground sm:block">
+						{tr("Rekening tujuan diambil dari Profil dan tidak dapat diubah di sini.")}
+					</p>
+				</div>
+
+				<!-- Pilihan jumlah penarikan -->
+				<div class="mt-4 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label={tr("Jumlah Penarikan")}>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={mode === 'all'}
+						class="flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-left text-sm transition-colors"
+						style={mode === 'all'
+							? 'border-color: var(--primary); background-color: var(--accent);'
+							: 'border-color: var(--border); background-color: #fff;'}
+						onclick={() => selectMode('all')}
+					>
+						<span class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2" style={mode === 'all' ? 'border-color: var(--primary);' : 'border-color: #cbd5e1;'}>
+							{#if mode === 'all'}<span class="h-2 w-2 rounded-full" style="background-color: var(--primary);"></span>{/if}
+						</span>
+						<span class="min-w-0">
+							<span class="block text-[13.5px] font-semibold" style="color: var(--foreground);">{tr("Tarik seluruh saldo")}</span>
+							<span class="mt-0.5 block text-xs tabular-nums text-muted-foreground">{rp(settledBalance)}</span>
+						</span>
+					</button>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={mode === 'partial'}
+						class="flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-left text-sm transition-colors"
+						style={mode === 'partial'
+							? 'border-color: var(--primary); background-color: var(--accent);'
+							: 'border-color: var(--border); background-color: #fff;'}
+						onclick={() => selectMode('partial')}
+					>
+						<span class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2" style={mode === 'partial' ? 'border-color: var(--primary);' : 'border-color: #cbd5e1;'}>
+							{#if mode === 'partial'}<span class="h-2 w-2 rounded-full" style="background-color: var(--primary);"></span>{/if}
+						</span>
+						<span class="min-w-0">
+							<span class="block text-[13.5px] font-semibold" style="color: var(--foreground);">{tr("Tarik sebagian")}</span>
+							<span class="mt-0.5 block text-xs text-muted-foreground">{tr("Masukkan nominal yang ingin ditarik.")}</span>
+						</span>
+					</button>
+				</div>
+
+				<!-- Nominal -->
 				{#if mode === 'partial'}
-					<label class="block">
-						<span class="text-xs font-medium text-muted-foreground">{tr("Nominal (IDR)")} *</span>
-						<input class="app-input mt-1 w-full" type="number" min="0" bind:value={amount} disabled={busy} />
-						<span class="mt-1 block text-xs text-muted-foreground">
-							{tr("Minimal")} {rp(minimumWithdraw)} · {tr("maksimal")} {rp(settledBalance)}
+					<label class="mt-4 block">
+						<span class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+							<span class="text-[13px] font-medium" style="color: var(--foreground);">{tr("Nominal (IDR)")} <span style="color: var(--destructive);">*</span></span>
+							{#if partialError}
+								<!-- Pesan validasi menempel pada label dan SELALU merah,
+								     termasuk saat nominal masih kosong. -->
+								<span class="text-[11.5px] font-medium" style="color: var(--destructive);">{partialError}</span>
+							{/if}
+						</span>
+						<input
+							class="app-input mt-1.5 w-full tabular-nums"
+							type="text"
+							inputmode="numeric"
+							autocomplete="off"
+							placeholder={tr("Masukkan nominal penarikan")}
+							value={amountText}
+							disabled={busy}
+							onkeydown={onAmountKeydown}
+							oninput={onAmountInput}
+						/>
+						<span class="mt-1.5 block text-xs text-muted-foreground">
+							{tr("Minimal")} {rp(minimumWithdraw)} · {tr("Maksimal")} {rp(settledBalance)}
 						</span>
 					</label>
 				{/if}
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr("Catatan (opsional)")}</span>
-					<input class="app-input mt-1 w-full" bind:value={notes} disabled={busy} />
+
+				<!-- Catatan -->
+				<label class="mt-4 block">
+					<span class="text-[13px] font-medium" style="color: var(--foreground);">{tr("Catatan (opsional)")}</span>
+					<input class="app-input mt-1.5 w-full" placeholder={tr("Tulis catatan jika diperlukan")} bind:value={notes} disabled={busy} />
 				</label>
-				<div class="rounded-lg border p-3 text-xs" style="background-color: var(--muted);">
-					<div class="flex justify-between"><span>{tr("Bruto")}</span><span class="tabular-nums">{rp(mode === 'partial' ? Number(amount) || 0 : settledBalance)}</span></div>
-					<div class="mt-1 flex justify-between"><span>{tr("Biaya")} ({payoutType === 'ewallet' ? tr('E-Wallet') : tr('Bank')})</span><span class="tabular-nums">{rp(effectiveFee)}</span></div>
-					<div class="mt-2 flex justify-between border-t pt-2 font-semibold" style="color: var(--foreground);"><span>{tr("Diterima (net)")}</span><span class="tabular-nums">{rp(netWithdraw)}</span></div>
+
+				<!-- Rincian penarikan -->
+				<div class="mt-4 rounded-xl border px-4 py-3 text-[13px]" style="background-color: var(--muted); border-color: var(--border);">
+					<div class="flex items-center justify-between gap-3">
+						<span class="text-muted-foreground">{tr("Bruto")}</span>
+						<span class="font-medium tabular-nums">{rp(mode === 'partial' ? Number(amount) || 0 : settledBalance)}</span>
+					</div>
+					<div class="mt-1.5 flex items-center justify-between gap-3">
+						<span class="text-muted-foreground">{tr("Biaya transfer")} ({payoutType === 'ewallet' ? tr('E-Wallet') : tr('Bank')})</span>
+						<span class="font-medium tabular-nums">{rp(effectiveFee)}</span>
+					</div>
+					<div class="mt-2.5 flex items-center justify-between gap-3 border-t pt-2.5" style="border-color: var(--border);">
+						<span class="font-semibold" style="color: var(--foreground);">{tr("Diterima (net)")}</span>
+						<span class="text-[15px] font-bold tabular-nums" style="color: var(--foreground);">{rp(netWithdraw)}</span>
+					</div>
 				</div>
+
+				<!-- Rekening tujuan -->
 				{#if hasPayoutAccount}
-					<div class="rounded-lg border p-3 text-xs" style="background-color: var(--accent); border-color: var(--border);">
-						<div class="flex items-center justify-between gap-2">
-							<p class="font-semibold" style="color: var(--accent-foreground);">{tr("Tujuan Pencairan dari Profil")}</p>
-							<span class="shrink-0 rounded-full px-2 py-0.5 text-[11px]" style="background-color: var(--secondary); color: var(--accent-foreground);">{payoutType === 'ewallet' ? tr('E-Wallet') : tr('Bank')}</span>
+					<div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3" style="background-color: var(--accent); border-color: color-mix(in srgb, var(--primary) 18%, var(--border));">
+						<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/80" style="color: var(--primary);">
+							<Landmark size={17} strokeWidth={2} />
+						</span>
+						<div class="min-w-0 flex-1">
+							<p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{tr("Tujuan penarikan")}</p>
+							<p class="mt-0.5 truncate text-[13.5px] font-semibold" style="color: var(--foreground);">{partner?.bank_name || tr('Bank')}</p>
+							<p class="mt-0.5 truncate text-xs tabular-nums text-muted-foreground">
+								{maskedAccountNumber}{#if partner?.bank_account_name} · {partner.bank_account_name}{/if}
+							</p>
 						</div>
-						<p class="mt-1 font-medium" style="color: var(--accent-foreground);">{payoutAccountLabel}</p>
-						<p class="mt-1 text-muted-foreground">{tr("Untuk mengubah tujuan dana, buka Profil.")}</p>
+						<div class="flex shrink-0 flex-col items-end gap-1">
+							<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: var(--accent-foreground);">{tr("Dari Profil")}</span>
+							<p class="text-[11px] text-muted-foreground">{tr("Ubah di Profil")}</p>
+						</div>
 					</div>
 				{:else}
-					<div class="rounded-lg border p-3 text-xs" style="background-color: var(--warning-soft); border-color: var(--warning);">
+					<div class="mt-4 rounded-xl border px-4 py-3 text-xs" style="background-color: var(--warning-soft); border-color: var(--warning);">
 						<p class="font-medium" style="color: var(--warning);">{tr("Data rekening atau e-wallet belum diisi.")}</p>
 						<p class="mt-1 text-muted-foreground">{tr("Isi tujuan penerimaan dana di profil sebelum mengajukan penarikan.")}</p>
 						<a class="mt-2 inline-flex items-center gap-1 font-medium" style="color: var(--primary);" href={`${base}/profile`}>
@@ -528,9 +683,20 @@
 					</div>
 				{/if}
 			</div>
-			<div class="mt-5 flex justify-end gap-2">
-				<button class="app-btn app-btn-soft min-h-11" onclick={() => (showWithdraw = false)}>{tr("Batal")}</button>
-				<button class="app-btn app-btn-primary min-h-11" disabled={busy || !hasPayoutAccount || withdrawBlocked} onclick={withdraw}>{busy ? tr('Mengirim…') : tr('Ajukan Penarikan')}</button>
+
+			<!-- Footer aksi -->
+			<div
+				class="flex items-center justify-end gap-2.5 border-t px-5 py-3.5 sm:px-6"
+				style="border-color: var(--border); background-color: #fff; padding-bottom: calc(0.875rem + env(safe-area-inset-bottom));"
+			>
+				<button class="app-btn app-btn-soft min-h-11 rounded-[9px] px-5" onclick={() => (showWithdraw = false)}>{tr("Batal")}</button>
+				<button
+					class="app-btn app-btn-primary min-h-11 rounded-[9px] px-5"
+					disabled={busy || !hasPayoutAccount || withdrawBlocked || Boolean(partialError)}
+					onclick={withdraw}
+				>
+					{busy ? tr('Mengirim…') : tr('Ajukan Penarikan')}
+				</button>
 			</div>
 		</dialog>
 	</div>

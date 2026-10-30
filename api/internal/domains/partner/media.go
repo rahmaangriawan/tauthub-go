@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
+
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -440,6 +442,13 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 	link := "/admin/media?status=pending_review#tab-pending"
 	d.notifyPlatformAdmins(r.Context(), "media.submitted", "Media baru menunggu review",
 		`Mitra mengajukan media "`+name+`" untuk direview.`, &link)
+	// WA ke admin (Fonnte): pengajuan media/domain tidak boleh menunggu admin
+	// membuka dashboard.
+	notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
+		Event: notify.AdminEventMediaSubmitted, ReferenceID: id,
+		Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": name},
+		Link: link, BaseURL: d.Cfg.PublicAppURL,
+	})
 
 	created, err := d.queryRow(r.Context(), mediaListSelect+" WHERE m.id = $1 LIMIT 1", id)
 	if err != nil {

@@ -24,6 +24,11 @@
 		brand_name: string | null;
 		campaign_name: string | null;
 		created_at: string;
+		/** Jadwal terbit yang dipesan klien (null = tanpa jadwal). */
+		scheduled_at: string | null;
+		published_at: string | null;
+		/** 'ai' = pernah dibuatkan The Writer; 'manual' = Tulis Sendiri. */
+		article_source: 'ai' | 'manual';
 		error_code: string | null;
 		variant: { angle_label: string; mode: string | null } | null;
 		media_integration_type: string | null;
@@ -187,9 +192,18 @@
 		<div class="flex items-center gap-2">
 			<Megaphone size={16} />
 			<div class="min-w-0">
-				<div class="flex items-center gap-2">
+				<div class="flex flex-wrap items-center gap-2">
 					<p class="truncate font-medium" style="color: inherit;">{row.document_title ?? row.id.slice(0, 8)}</p>
 					{#if row.variant}<Badge tone="accent" label="Variant" />{/if}
+					<!-- Sumber konten: pernah dibuatkan AI atau ditulis sendiri klien. -->
+					<span
+						class="shrink-0 rounded-[5px] border px-2 py-0.5 text-[10px] font-semibold {row.article_source === 'ai'
+							? 'border-violet-200 bg-violet-50 text-violet-700'
+							: 'border-slate-200 bg-slate-100/80 text-slate-600'}"
+						title={row.article_source === 'ai' ? tr('Artikel dihasilkan The Writer (Generate AI)') : tr('Artikel diunggah/ditulis sendiri oleh klien (Tulis Sendiri)')}
+					>
+						{row.article_source === 'ai' ? tr('Generate AI') : tr('Tulis Sendiri')}
+					</span>
 				</div>
 				{#if row.variant}
 					<p class="text-xs" style="color: var(--primary);">
@@ -227,6 +241,19 @@
 			<p class="mt-1 text-xs" style="color: var(--destructive);">{row.error_code}</p>
 		{/if}
 	</div>
+{/snippet}
+
+{#snippet scheduleCell(row: Row)}
+	{#if row.scheduled_at}
+		<span class="text-xs">{fmtDateTime(row.scheduled_at)}</span>
+		{#if row.published_at}
+			<p class="mt-1 text-xs" style="color: var(--success);">{tr('Terbit')} {fmtDateTime(row.published_at)}</p>
+		{/if}
+	{:else if row.published_at}
+		<p class="text-xs" style="color: var(--success);">{tr('Terbit')} {fmtDateTime(row.published_at)}</p>
+	{:else}
+		<span class="text-xs text-muted-foreground">{tr('Tanpa jadwal')}</span>
+	{/if}
 {/snippet}
 
 {#snippet createdAtCell(row: Row)}
@@ -307,6 +334,7 @@
 				{ key: 'media', label: tr('Media'), render: mediaCell },
 				{ key: 'price', label: tr('Harga'), render: priceCell },
 				{ key: 'status', label: 'Status', render: pubStatusCell },
+				{ key: 'schedule', label: tr('Jadwal Terbit'), render: scheduleCell },
 				{ key: 'created', label: 'Waktu', render: createdAtCell },
 				{ key: 'action', label: tr('Aksi'), render: actionCell }
 			]}
@@ -314,7 +342,7 @@
 			rowKey={(row: Row) => row.id}
 			{loading}
 			empty={tr("Tidak ada publikasi untuk filter ini.")}
-			minWidth="1100px"
+			minWidth="1240px"
 		/>
 
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-2">

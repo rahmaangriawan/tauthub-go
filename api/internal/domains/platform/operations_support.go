@@ -378,12 +378,13 @@ func opPublicationListItem(row ptRow) map[string]any {
 		"error_code":             ptNullableStr(row, "error_code"),
 		"error_message":          ptNullableStr(row, "error_message"),
 		"variant":                variant,
+		"article_source":         row.strOr("article_source", "manual"),
 	}
 }
 
 // opPublicationsCSV: parity publicationsCsv (BOM + header Indonesia admin).
 func opPublicationsCSV(items []map[string]any) string {
-	header := []any{"No. Order", "Status", "Artikel", "Brand", "Brand Public ID", "Media", "Integrasi",
+	header := []any{"No. Order", "Status", "Artikel", "Sumber Artikel", "Brand", "Brand Public ID", "Media", "Integrasi",
 		"Campaign", "Partner", "Harga (IDR)", "Draft/Publish", "Jadwal", "Terbit", "URL Terbit",
 		"Kode Error", "Pesan Error", "Dibuat"}
 	lines := []string{opCSVLine(header)}
@@ -393,8 +394,12 @@ func opPublicationsCSV(items []map[string]any) string {
 		if code == nil {
 			code = row.anyOrNil("id")
 		}
+		source := "Tulis Sendiri"
+		if row.strOr("article_source", "manual") == "ai" {
+			source = "Generate AI"
+		}
 		lines = append(lines, opCSVLine([]any{
-			code, row.anyOrNil("status"), row.anyOrNil("document_title"),
+			code, row.anyOrNil("status"), row.anyOrNil("document_title"), source,
 			row.anyOrNil("brand_name"), row.anyOrNil("brand_public_id"),
 			row.anyOrNil("media_name"), row.anyOrNil("media_integration_type"),
 			row.anyOrNil("campaign_name"), row.anyOrNil("partner_name"),

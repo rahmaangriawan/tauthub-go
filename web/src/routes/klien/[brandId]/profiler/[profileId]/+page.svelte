@@ -186,7 +186,13 @@
 	// Tab workspace: Copilot, Entitas, Timeline, Media, dan Ringkasan AI.
 	type BriefTab = 'copilot' | 'entitas' | 'timeline' | 'media' | 'ringkasan';
 	const BRIEF_TABS: readonly BriefTab[] = ['copilot', 'entitas', 'timeline', 'media', 'ringkasan'];
-	let activeTab = $state<BriefTab>('copilot');
+	// Deep-link tab dari halaman lain (mis. Writer mengirim
+	// ?tab=ringkasan&summary=file saat ringkasan brief belum siap), supaya
+	// pengguna langsung mendarat di panel yang harus diselesaikan.
+	const tabParam = page.url.searchParams.get('tab');
+	const summaryParam = page.url.searchParams.get('summary');
+	const tabFromUrl = (BRIEF_TABS as readonly string[]).includes(tabParam ?? '') ? (tabParam as BriefTab) : null;
+	let activeTab = $state<BriefTab>(tabFromUrl ?? 'copilot');
 	let showLayer2 = $state(false);
 
 	// Header band bisa diciutkan jadi strip judul tipis; default termuat jejak.
@@ -315,7 +321,7 @@
 		updated_at: string | null;
 		stale: boolean;
 	};
-	let summaryTab = $state<SummaryKind>('entity');
+	let summaryTab = $state<SummaryKind>(summaryParam === 'file' ? 'file' : 'entity');
 	let summaries = $state<SummaryItem[]>([]);
 	let summaryLoading = $state(false);
 	let summaryError = $state('');
@@ -588,10 +594,16 @@
 
 	// Tab terakhir per brief disimpan di browser: reload tetap di tab yang sama,
 	// dan tiap brief punya tab-nya sendiri saat berpindah lewat sidebar.
+	// Tab dari URL (?tab=ringkasan) menang atas tab tersimpan, karena itu
+	// permintaan eksplisit dari halaman yang mengirim pengguna ke sini.
 	let tabRestoredFor = '';
 	$effect(() => {
 		if (!profileId || tabRestoredFor === profileId) return;
 		tabRestoredFor = profileId;
+		if (tabFromUrl) {
+			activeTab = tabFromUrl;
+			return;
+		}
 		try {
 			const saved = localStorage.getItem(`brief.tab.${profileId}`);
 			if (saved && (BRIEF_TABS as readonly string[]).includes(saved)) activeTab = saved as BriefTab;
@@ -1930,7 +1942,10 @@
 			return { label: tr('Gagal'), bg: 'color-mix(in srgb, var(--destructive) 10%, white)', color: 'var(--destructive)' };
 		}
 		if (item.status === 'ready' && item.stale) {
-			return { label: tr('Kedaluwarsa'), bg: 'var(--warning-soft)', color: 'var(--warning)' };
+			// "stale" bukan kedaluwarsa: isinya masih sah dipakai Writer, hanya
+			// bahan brief berubah setelah ringkasan dibuat. Label "Kedaluwarsa"
+			// membuat klien mengira hasilnya sudah tidak bisa dipakai.
+			return { label: tr('Perlu diperbarui'), bg: 'var(--warning-soft)', color: 'var(--warning)' };
 		}
 		if (item.status === 'ready') {
 			return { label: tr('Siap'), bg: 'var(--success-soft)', color: 'var(--success)' };

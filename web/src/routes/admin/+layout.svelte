@@ -299,7 +299,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 								icon: Coins,
 								active: pathname.startsWith('/admin/credits') || pathname.startsWith('/admin/credit-reports'),
 								children: [
-									{ label: i18n.t.nav_admin.credits, href: '/admin/credits', active: pathname.startsWith('/admin/credits') },
+									{ label: i18n.t.nav_admin.credits_wallet, href: '/admin/credits', active: pathname.startsWith('/admin/credits') },
 									{ label: i18n.t.nav_admin.credit_reports, href: '/admin/credit-reports', active: pathname.startsWith('/admin/credit-reports') }
 								]
 							}

@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -180,6 +181,13 @@ func (d *Deps) TautArticlePut(w http.ResponseWriter, r *http.Request) {
 	}
 	documentID := item.strOr("article_document_id", "")
 	itemID := item.strOr("id", "")
+	if at, locked, err := d.ArticleScheduleLock(r.Context(), campaignID, mediaID, slotParam(r)); err != nil {
+		d.writeErr(w, err)
+		return
+	} else if locked {
+		httpx.Error(w, http.StatusConflict, ScheduleLockMessage(at))
+		return
+	}
 	body := decodeJSON(r)
 
 	title, hasTitle, err := optionalTrimmedString(body, "title", 300)
@@ -350,6 +358,13 @@ func (d *Deps) TautArticleUpload(w http.ResponseWriter, r *http.Request) {
 		campaignID, mediaID, slotParam(r))
 	if err != nil {
 		d.writeErr(w, err)
+		return
+	}
+	if at, locked, err := d.ArticleScheduleLock(r.Context(), campaignID, mediaID, slotParam(r)); err != nil {
+		d.writeErr(w, err)
+		return
+	} else if locked {
+		httpx.Error(w, http.StatusConflict, ScheduleLockMessage(at))
 		return
 	}
 	if item == nil {
@@ -1170,12 +1185,23 @@ func (d *Deps) TautGatekeeperAuditAll(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := d.runGatekeeper(r.Context(), campaignID, brandRow.ID, user.ID, requested, requestedSlots)
+	// Pemindaian QC dilepas dari konteks request. Tiga panggilan LLM per
+	// artikel (safety+AI Overview, klasifikasi link, revisi) berjalan 30-90
+	// detik; kalau klien menutup modal, pindah halaman, atau koneksinya putus,
+	// r.Context() batal dan SEMUA panggilan ikut mati di tengah jalan —
+	// hasilnya: token sudah dibayar, tidak ada audit yang tersimpan, dan panel
+	// klien berhenti tanpa penjelasan (log prod: "context canceled" 18:03:13,
+	// lalu audit baru selesai setelah scan kedua). Batas waktunya tetap ada,
+	// hanya tidak lagi mengikuti koneksi browser.
+	scanCtx, cancelScan := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Minute)
+	defer cancelScan()
+
+	results, err := d.runGatekeeper(scanCtx, campaignID, brandRow.ID, user.ID, requested, requestedSlots)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	if err := d.advanceTautStatus(r.Context(), campaignID, "review"); err != nil {
+	if err := d.advanceTautStatus(scanCtx, campaignID, "review"); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -1262,6 +1288,21 @@ func (d *Deps) TautGatekeeperDistribute(w http.ResponseWriter, r *http.Request) 
 	if len(notReady) > 0 {
 		httpx.Error(w, http.StatusUnprocessableEntity,
 			"Belum bisa distribusi: "+strings.Join(notReady, ", ")+". Jalankan audit ulang (atau perbaiki artikel) sampai semua media berstatus ready.")
+		return
+	}
+
+	// Hard stop terakhir: tautan keluar tiap artikel tidak boleh melebihi
+	// kebijakan media (max_links). Audit QC bisa terlewat/di-bypass admin, jadi
+	// jumlah tautan dihitung ulang dari versi artikel yang AKAN diterbitkan.
+	violations, err := d.tautLinkPolicyViolations(r.Context(), campaignID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if len(violations) > 0 {
+		httpx.Error(w, http.StatusUnprocessableEntity,
+			"Distribusi diblokir — tautan melebihi batas media: "+strings.Join(violations, "; ")+
+				". Hapus kelebihan tautan di artikel (The Writer) lalu jalankan Cek Validasi ulang.")
 		return
 	}
 
@@ -1535,6 +1576,13 @@ func (d *Deps) TautProduceOne(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
+	if at, locked, err := d.ArticleScheduleLock(r.Context(), campaignID, mediaID, slotParam(r)); err != nil {
+		d.writeErr(w, err)
+		return
+	} else if locked {
+		httpx.Error(w, http.StatusConflict, ScheduleLockMessage(at))
+		return
+	}
 	result, err := d.generateTautWriterArticle(r.Context(), campaignID, brandRow.ID, user.ID, mediaID, slotParam(r), opts)
 	if err != nil {
 		var ic *insufficientCreditsError
@@ -1566,6 +1614,13 @@ func (d *Deps) TautProduceOneStream(w http.ResponseWriter, r *http.Request) {
 	opts, err := decodeTautWriterOptions(r)
 	if err != nil {
 		d.writeErr(w, err)
+		return
+	}
+	if at, locked, err := d.ArticleScheduleLock(r.Context(), campaignID, mediaID, slotParam(r)); err != nil {
+		d.writeErr(w, err)
+		return
+	} else if locked {
+		httpx.Error(w, http.StatusConflict, ScheduleLockMessage(at))
 		return
 	}
 
@@ -1932,4 +1987,92 @@ func isAllowedEmbedSrcHTML(src string) bool {
 		host = host[:colon]
 	}
 	return allowedEmbedHostsHTML[host]
+}
+
+// tautLinkPolicyViolations: daftar pelanggaran batas tautan keluar untuk semua
+// artikel terpilih pada kampanye. Kosong = aman diterbitkan. Dipakai sebagai
+// hard stop distribusi (defence in depth di atas audit QC).
+func (d *Deps) tautLinkPolicyViolations(ctx context.Context, campaignID string) ([]string, error) {
+	rows, err := d.queryRows(ctx, `
+		SELECT tcm.media_id, tcm.slot, m.name, m.website_url, m.allow_hyperlink, m.max_links, cv.content
+		FROM taut_campaign_media tcm
+		JOIN media m ON m.id = tcm.media_id
+		JOIN content_documents cd ON cd.id = tcm.article_document_id
+		LEFT JOIN LATERAL (
+			SELECT content FROM content_versions
+			WHERE document_id = cd.id AND version = cd.current_version LIMIT 1
+		) cv ON TRUE
+		WHERE tcm.campaign_id = $1 AND tcm.status = 'selected'
+		ORDER BY m.name, tcm.slot`, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	out := []string{}
+	for _, raw := range rows {
+		row := bsRow(raw)
+		var maxLinksPtr *int
+		if row.has("max_links") {
+			v := int(row.numOr("max_links"))
+			maxLinksPtr = &v
+		}
+		capLinks, allowed := mediaLinkCap(row.boolOr("allow_hyperlink", false), maxLinksPtr)
+		outgoing := countOutboundLinks(row.strOr("content", ""), hostSet(row.strOr("website_url", "")))
+		violated := (!allowed && outgoing > 0) || (allowed && outgoing > capLinks)
+		if !violated {
+			continue
+		}
+		name := row.strOr("name", "")
+		if name == "" {
+			name = row.strOr("media_id", "")
+		}
+		if slot := row.intOr("slot", 1); slot > 1 {
+			name = name + " (artikel " + itoa(slot) + ")"
+		}
+		if !allowed {
+			out = append(out, name+" menyetujui 0 tautan, artikel memuat "+itoa(outgoing))
+		} else {
+			out = append(out, name+" maksimal "+itoa(capLinks)+" tautan, artikel memuat "+itoa(outgoing))
+		}
+	}
+	return out, nil
+}
+
+// ---------- kunci artikel terjadwal ----------
+
+// ArticleScheduleLock: bila artikel (kampanye, media, slot) sudah punya
+// publikasi terjadwal (scheduled_at terisi), kembalikan waktu jadwalnya dan
+// locked=true. Artikel terjadwal terkunci: boleh DILIHAT di editor, tapi tidak
+// boleh diubah, disimpan, digenerate ulang, atau dikirim ulang sebagai draf
+// revisi — mencegah tautan/isi berubah setelah jadwal diset (kasus nyata:
+// distribusi 11:39, artikel diedit 11:42, terbit 12:39).
+func (d *Deps) ArticleScheduleLock(ctx context.Context, campaignID, mediaID string, slot int) (string, bool, error) {
+	if slot < 1 {
+		slot = 1
+	}
+	row, err := d.queryRow(ctx, `
+		SELECT to_char(p.scheduled_at AT TIME ZONE 'Asia/Jakarta', 'DD Mon YYYY HH24:MI') AS at
+		FROM publications p
+		JOIN taut_campaign_media tcm
+		  ON tcm.campaign_id = p.campaign_id AND tcm.media_id = p.media_id
+		 AND tcm.article_document_id = p.document_id AND tcm.slot = $3
+		WHERE p.campaign_id = $1 AND p.media_id = $2
+		  AND p.status <> 'cancelled' AND p.scheduled_at IS NOT NULL
+		ORDER BY p.scheduled_at ASC LIMIT 1`, campaignID, mediaID, slot)
+	if err != nil {
+		return "", false, err
+	}
+	if row == nil {
+		return "", false, nil
+	}
+	return row.strOr("at", ""), true, nil
+}
+
+// ScheduleLockMessage: pesan standar saat aksi tulis ditolak karena jadwal.
+func ScheduleLockMessage(at string) string {
+	when := ""
+	if strings.TrimSpace(at) != "" {
+		when = " (" + at + " WIB)"
+	}
+	return "Artikel sudah masuk jadwal terbit" + when +
+		" — artikel terkunci: boleh dilihat di editor, tapi tidak bisa diubah, disimpan, atau dibuat ulang. Hubungi admin kalau perlu revisi."
 }

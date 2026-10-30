@@ -74,8 +74,12 @@ func (d *Deps) QueueMemoryReindex(ctx context.Context, profileID string) {
 // saat ini. Field yang kini kosong dihapus; profile yang dihapus dibersihkan.
 func (d *Deps) ReindexProfile(ctx context.Context, profileID string) error {
 	var brandID, name string
+	// btrim wajib: profiler_profiles.brand_id bertipe character(36), jadi driver
+	// mengembalikan nilai berpad spasi. brief_memory_facts.brand_id varchar(36),
+	// dan RecallFacts membandingkannya dengan public_id tanpa pad — nilai berpad
+	// membuat semua fakta brand ini tidak pernah ditemukan saat recall.
 	err := d.Pool.QueryRow(ctx,
-		`SELECT brand_id, name FROM profiler_profiles WHERE id = $1 AND deleted_at IS NULL`,
+		`SELECT btrim(brand_id::text), name FROM profiler_profiles WHERE id = $1 AND deleted_at IS NULL`,
 		profileID).Scan(&brandID, &name)
 	if err != nil {
 		// Profile sudah tidak ada: bersihkan fakta-faktanya lalu selesai.

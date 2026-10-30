@@ -334,8 +334,11 @@ func (d *Deps) writeUpdates(ctx context.Context, ex dbExec, profileID, userID st
 // berarti profil tidak ada (sudah terhapus) sehingga riwayat tidak ditulis.
 func (d *Deps) loadOldFieldValues(ctx context.Context, ex dbExec, profileID string) (brandID string, values map[string]any, found bool) {
 	var entityCore, identity, style, seo []byte
+	// btrim: brand_id bertipe character(36) sehingga nilainya berpad spasi.
+	// Nilai ini ditulis ke profiler_field_history.brand_id (varchar) dan dipakai
+	// pembaca yang membandingkannya dengan public_id tanpa pad.
 	err := ex.QueryRow(ctx,
-		`SELECT brand_id, entity_core, identity, style, seo FROM profiler_profiles
+		`SELECT btrim(brand_id::text), entity_core, identity, style, seo FROM profiler_profiles
 		 WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, profileID).
 		Scan(&brandID, &entityCore, &identity, &style, &seo)
 	if err != nil {

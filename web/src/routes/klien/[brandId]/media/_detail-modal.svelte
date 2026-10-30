@@ -12,7 +12,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import {
-		Calendar, ChartBar, Check, CircleCheck, Clock, Coins, Download, FileText,
+		Calendar, ChartBar, Check, CircleCheck, Clock, Download, FileText,
 		Settings, Server, Image as ImageIcon, Info, Link as LinkIcon, Share2,
 		CircleAlert, X, CircleX, Tag
 	} from '@lucide/svelte';
@@ -548,7 +548,7 @@
 					<span class="detailMetricLabel">Rating:</span>
 					<span class="detailMetricValue">{ratingText}</span>
 				</div>
-				<div class="detailMetricItem" title={distTitle}>
+				<div class="detailMetricItem detailMetricDistribution" title={distTitle}>
 					<span class="detailMetricLabel">{tr('Distribusi')}:</span>
 					<span class="detailMetricValue" class:detailMetricMuted={dist.published === 0}>{distText}</span>
 				</div>
@@ -761,6 +761,16 @@
 										<span class="paramValueMuted">{tr("Tidak Diizinkan")}</span>
 									{/if}
 								</div>
+
+								<!-- Rekam jejak distribusi. Di HP baris ini pindah dari
+								     strip metrik ke sini supaya strip tidak penuh digeser. -->
+								<div class="paramItemRow paramRowDistribution" title={distTitle}>
+									<div class="paramItemLeftGroup">
+										<ChartBar size={18} class="paramRowIcon" />
+										<span>{tr('Distribusi')}</span>
+									</div>
+									<span class={dist.published === 0 ? 'paramValueMuted' : 'paramValueBold'}>{distText}</span>
+								</div>
 							</div>
 						</div>
 
@@ -790,7 +800,16 @@
 			<div class="detailFooter">
 				<div class="detailFooterLeft">
 					<div class="detailFooterCoinIcon">
-						<Coins size={26} color="#2563eb" />
+						<!-- Ikon koin kustom (pengganti Lucide Coins) untuk label biaya. -->
+						<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" style="color: #2563eb;">
+							<path d="M0 0h24v24H0z" fill="none" />
+							<g fill="none">
+								<path fill="currentColor" d="m4.23 3.16l-3 4.39h18.6l-3.1-4.22z" opacity=".2" />
+								<rect width="12.66" height="20.39" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" rx="3" transform="matrix(0 -1 -1 0 22.29 20.21)" />
+								<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M1.9 12.07v-2.5c0-2.83 0-4.24.88-5.12s2.3-.88 5.12-.88h6.16c1.74 0 2.61 0 3.32.43c.71.42 1.13 1.19 1.96 2.72l.17.33" />
+								<path fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.44 13.88a.7.7 0 1 1-1.4 0a.7.7 0 0 1 1.4 0" />
+							</g>
+						</svg>
 					</div>
 					<div class="detailFooterAmountCol">
 						<span class="detailFooterLabel">BIAYA PUBLIKASI</span>
@@ -1522,6 +1541,11 @@
 	.paramItemRow:last-child {
 		border-bottom: none;
 	}
+	/* Distribusi hanya tampil di kartu Parameter saat layar HP; di desktop
+	   sudah ada di strip metrik. */
+	.paramRowDistribution {
+		display: none;
+	}
 	.paramItemLeftGroup {
 		display: flex;
 		align-items: center;
@@ -1758,6 +1782,14 @@
 		/* Tiap metrik selebar isinya sendiri, tidak boleh mengempis. */
 		.detailMetricItem {
 			flex: 0 0 auto;
+		}
+		/* Distribusi pindah ke kartu Parameter AI & Redaksi di HP: strip metrik
+		   cukup 4 item dan tidak perlu digeser untuk melihatnya. */
+		.detailMetricDistribution {
+			display: none;
+		}
+		.paramRowDistribution {
+			display: flex;
 		}
 		.detailBody {
 			padding: 16px 18px;
