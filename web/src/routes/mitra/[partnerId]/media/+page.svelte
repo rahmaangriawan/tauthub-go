@@ -1470,7 +1470,7 @@
 				<tbody>
 					{#each filtered as m (m.id)}
 						<tr class="border-t align-top">
-							<td class="px-4 py-2.5">
+							<td class="px-4 py-2.5 text-left">
 								<div class="flex flex-wrap items-center gap-1.5">
 										{#if m.website_url}
 											<a class="font-medium hover:underline" href={m.website_url} target="_blank" rel="noreferrer">
@@ -1558,7 +1558,7 @@
 								</div>
 							{/if}
 							{@render statusRejection(m)}
-							<div class="mt-1.5 flex min-w-0">
+							<div class="mt-1.5 flex min-w-0 items-center justify-start">
 								{@render contohLink(m)}
 							</div>
 						</div>
@@ -1625,9 +1625,9 @@
 
 {#snippet contohLink(m: Media)}
 	{#if m.contoh_artikel_url}
-		<a class="mt-0.5 inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={m.contoh_artikel_url} target="_blank" rel="noreferrer">{tr('Contoh artikel')} <ExternalLink size={10} /></a>
+		<a class="mt-0.5 inline-flex w-fit items-center justify-start gap-1 text-left text-xs" style="color: var(--primary);" href={m.contoh_artikel_url} target="_blank" rel="noreferrer">{tr('Contoh artikel')} <ExternalLink size={10} /></a>
 	{:else}
-		<button type="button" class="media-contoh mt-0.5 inline-flex items-center gap-1 text-[11px]" style="color: var(--primary);" onclick={() => openContoh(m)}>
+		<button type="button" class="media-contoh mt-0.5 inline-flex w-fit items-center justify-start gap-1 text-left text-[11px]" style="color: var(--primary);" onclick={() => openContoh(m)}>
 			<Plus size={11} /> {tr('Tambah contoh artikel')}
 		</button>
 	{/if}
