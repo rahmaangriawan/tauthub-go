@@ -179,6 +179,13 @@
 	let meta = $state(untrack(() => initialMetaDescription) ?? '');
 	let editorStats = $state({ words: 0, links: 0, images: 0 });
 
+	// Batas isi artikel mengikuti data media yang dituju: tautan dibandingkan
+	// dengan kapasitas mitra (max_links), gambar minimal satu agar artikel tidak
+	// tampil sebagai dinding teks. Dua-duanya dihitung langsung dari editor.
+	const linkCap = $derived(linkLimit > 0 ? linkLimit : 0);
+	const linksOver = $derived(linkCap > 0 ? editorStats.links > linkCap : editorStats.links > 0);
+	const imagesMissing = $derived(editorStats.images < 1);
+
 	let coverBusy = $state(false);
 	let coverError = $state('');
 	let coverNote = $state('');
@@ -1329,6 +1336,23 @@
 							title={tr('Aturan panjang artikel dari media')}
 						>{wordRuleLabel}</span>
 					{/if}
+					<!-- Penghitung isi artikel; merah menyala bila melanggar aturan media. -->
+					<span
+						class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums {linksOver ? 'text-rose-600' : ''}"
+						style={linksOver
+							? 'background: color-mix(in srgb, var(--destructive) 14%, transparent);'
+							: 'background: var(--secondary); color: var(--muted-foreground);'}
+						title={linkCap > 0
+							? `${tr('Kapasitas tautan media')}: ${editorStats.links}/${linkCap}`
+							: tr('Media ini tidak mengizinkan tautan')}
+					>{editorStats.links} {tr('link')}</span>
+					<span
+						class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums {imagesMissing ? 'text-rose-600' : ''}"
+						style={imagesMissing
+							? 'background: color-mix(in srgb, var(--destructive) 14%, transparent);'
+							: 'background: var(--secondary); color: var(--muted-foreground);'}
+						title={tr('Artikel perlu minimal 1 gambar')}
+					>{editorStats.images} {tr('gambar')}</span>
 				</p>
 			</div>
 			<button
