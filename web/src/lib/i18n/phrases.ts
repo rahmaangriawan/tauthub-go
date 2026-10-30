@@ -462,6 +462,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Gagal menyimpan URL.": "Failed to save the URL.",
   "Gagal meracik kampanye kilat.": "Failed to assemble the fast campaign.",
   "gambar": "image(s)",
+  "Dijadwalkan": "Scheduled",
   "Kapasitas tautan media": "Media link capacity",
   "Media ini tidak mengizinkan tautan": "This media does not allow links",
   "Artikel perlu minimal 1 gambar": "The article needs at least 1 image",

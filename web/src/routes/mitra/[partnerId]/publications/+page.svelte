@@ -1202,6 +1202,7 @@
 							<td class="px-4 py-2.5">
 								{@render statusBadge(p, false)}
 								{@render statusExtras(p)}
+								{@render scheduleLine(p)}
 							</td>
 							<td class="px-4 py-2.5 text-right">
 								{@render rowActions(p)}
@@ -1282,6 +1283,7 @@
 								<dd class="mt-1">
 									{@render statusBadge(p, true)}
 									{@render statusExtras(p)}
+									{@render scheduleLine(p)}
 								</dd>
 							</div>
 						</dl>
@@ -1313,6 +1315,16 @@
 		{pendingUrl(p) ? tr('Menunggu URL') : statusLabel[p.status] ?? p.status}
 	</span>
 {/snippet}
+
+	{#snippet scheduleLine(p: any)}
+		<!-- Jadwal dari sisi klien: mitra perlu tahu kapan artikel akan terbit. -->
+		{#if p.scheduled_at && ['queued', 'waiting_partner', 'partner_approved', 'processing', 'retrying'].includes(p.status)}
+			<p class="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+				<CalendarClock size={11} class="shrink-0" />
+				<span>{tr('Dijadwalkan')} {dt(p.scheduled_at)}</span>
+			</p>
+		{/if}
+	{/snippet}
 
 	{#snippet statusExtras(p: any)}
 		{#if !isManualRow(p) && LIVE.includes(p.status) && p.publish_progress != null}
