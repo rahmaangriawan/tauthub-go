@@ -27,6 +27,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	const i18n = $derived(getI18n());
 
 	let user = $state<{ id: string; email: string; display_name: string } | null>(null);
+	// Badge merah di menu Dukungan: jumlah tiket dengan pesan mitra belum dibaca.
+	let supportUnread = $state(0);
 	let admin = $state<{ role: string; permissions: Record<string, boolean> } | null>(null);
 
 	onMount(() => {
@@ -47,9 +49,37 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				admin = data.admin ?? data;
 			}
 		})();
+		// Angka tiket berubah saat admin membalas; cukup segarkan berkala dan
+		// setiap kali pindah halaman, bukan polling cepat.
+		const supportTimer = setInterval(() => {
+			if (document.visibilityState === 'visible') void loadSupportUnread();
+		}, 30_000);
+		supportCleanup = () => clearInterval(supportTimer);
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
-		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		return () => {
+			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+			supportCleanup?.();
+		};
+	});
+
+	let supportCleanup: (() => void) | null = null;
+
+	async function loadSupportUnread() {
+		try {
+			const res = await apiRequest('/v1/platform/tickets/unread-count');
+			if (!res.ok) return;
+			const data = await res.json();
+			supportUnread = Number(data?.count ?? 0);
+		} catch {
+			/* badge bersifat informasi; gagal memuat tidak mengganggu navigasi */
+		}
+	}
+
+	// Segarkan badge setiap kali rute berubah (mis. kembali dari halaman tiket).
+	$effect(() => {
+		pathname;
+		if (user) void loadSupportUnread();
 	});
 
 	const isSuper = $derived(admin?.role === 'super_admin');
@@ -238,7 +268,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				{ label: tr('Kotak Pengumuman'), href: '/admin/pengumuman', icon: Megaphone, active: pathname.startsWith('/admin/pengumuman') },
 				{ label: tr('Notifikasi'), href: '/admin/notifications', icon: Bell, active: pathname.startsWith('/admin/notifications') },
 				{ label: tr('Log Obrolan'), href: '/admin/obrolan', icon: MessageCircle, active: pathname.startsWith('/admin/obrolan') },
-				{ label: tr('Dukungan'), href: '/admin/dukungan', icon: Headset, active: pathname.startsWith('/admin/dukungan') },
+				{ label: tr('Dukungan'), href: '/admin/dukungan', icon: Headset, active: pathname.startsWith('/admin/dukungan'), badge: supportUnread },
 				{ label: tr('Changelog'), href: '/admin/changelog', icon: ScrollText, active: pathname.startsWith('/admin/changelog') }
 			]
 		},

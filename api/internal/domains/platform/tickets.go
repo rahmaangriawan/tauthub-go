@@ -58,6 +58,31 @@ func adminTicketPayload(row rowMap) map[string]any {
 }
 
 // AdminTickets: GET antrean tiket semua mitra.
+// AdminTicketsUnreadCount: GET /v1/platform/tickets/unread-count
+//
+// Jumlah tiket yang masih memuat pesan mitra belum dibaca admin — dipakai badge
+// merah di sidebar. Tiket selesai tidak dihitung walau pesannya belum dibaca.
+func (d *Deps) AdminTicketsUnreadCount(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := d.adminGuard(w, r, ""); !ok {
+		return
+	}
+	row, err := d.queryRow(r.Context(), `
+		SELECT COUNT(DISTINCT t.id) AS count
+		FROM support_tickets t
+		JOIN support_ticket_messages m ON m.ticket_id = t.id
+		WHERE m.author_role = 'mitra' AND m.read_at IS NULL AND t.status <> 'selesai'`)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	count := 0
+	if row != nil {
+		count = row.intOr("count", 0)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"count": count})
+}
+
 func (d *Deps) AdminTickets(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := d.adminGuard(w, r, ""); !ok {
 		return
