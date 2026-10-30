@@ -139,6 +139,12 @@ func (d *Deps) PartnersList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, errUnprocessable("Invalid auto_publish filter"))
 		return
 	}
+	// Filter pengajuan Secure Direct: status pengajuan TERAKHIR mitra.
+	secureDirect := strings.TrimSpace(q.Get("secure_direct"))
+	if secureDirect != "" && secureDirect != "pending" && secureDirect != "approved" && secureDirect != "rejected" {
+		writeErr(w, d, errUnprocessable("Invalid secure_direct filter"))
+		return
+	}
 	limit := mpClampInt(q.Get("limit"), 100, 1, 500)
 	offset := mpClampInt(q.Get("offset"), 0, 0, 1<<30)
 
@@ -180,6 +186,9 @@ func (d *Deps) PartnersList(w http.ResponseWriter, r *http.Request) {
 		where = append(where, "p.auto_publish_enabled = TRUE")
 	} else if autoPublish == "0" {
 		where = append(where, "p.auto_publish_enabled = FALSE")
+	}
+	if secureDirect != "" {
+		where = append(where, "(SELECT r.status FROM secure_direct_requests r WHERE r.partner_id = p.id ORDER BY r.requested_at DESC LIMIT 1) = "+next(secureDirect))
 	}
 	clause := ""
 	if len(where) > 0 {

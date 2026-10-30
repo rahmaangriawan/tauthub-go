@@ -78,6 +78,9 @@
 	let filterContact = $state('');
 	let filterHasMedia = $state('');
 	let filterAutoPublish = $state('');
+	// Tab khusus pengajuan Secure Direct: filter status pengajuan terakhir mitra.
+	let sdTab = $state<'all' | 'pending'>('all');
+	let sdPendingTotal = $state(0);
 	let pageNum = $state(1);
 	let exporting = $state(false);
 	let busyId = $state<string | null>(null);
@@ -136,6 +139,7 @@
 		void (async () => {
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
+			void loadPendingTotal();
 			// Kolom Mitra di /admin/media menautkan ke sini dengan ?q=<email|nama>.
 			const q = new URLSearchParams(window.location.search).get('q')?.trim() ?? '';
 			if (q) {
@@ -164,6 +168,25 @@
 		void load();
 	}
 
+	/** Jumlah mitra yang pengajuan Secure Direct-nya masih menunggu. */
+	async function loadPendingTotal() {
+		try {
+			const res = await apiRequest('/v1/platform/partners?secure_direct=pending&limit=1');
+			if (!res.ok) return;
+			const data = await res.json();
+			sdPendingTotal = Number(data?.total ?? 0);
+		} catch {
+			/* angka tab bersifat informasi — gagal memuat tidak menghalangi daftar */
+		}
+	}
+
+	function setSdTab(next: 'all' | 'pending') {
+		if (sdTab === next) return;
+		sdTab = next;
+		pageNum = 1;
+		void load();
+	}
+
 	async function load() {
 		error = '';
 		const params = new URLSearchParams({
@@ -175,6 +198,7 @@
 		if (filterContact) params.set('contact', filterContact);
 		if (filterHasMedia) params.set('has_media', filterHasMedia);
 		if (filterAutoPublish) params.set('auto_publish', filterAutoPublish);
+		if (sdTab === 'pending') params.set('secure_direct', 'pending');
 		const listUrl = `/v1/platform/partners?${params.toString()}`;
 		// Data lama (<=10 menit) tampil seketika, refresh di latar.
 		const cached = swrPeek<{ partners?: typeof rows; total?: number }>(listUrl);
@@ -204,6 +228,7 @@
 		filterContact = '';
 		filterHasMedia = '';
 		filterAutoPublish = '';
+		sdTab = 'all';
 		applyFilters();
 	}
 
@@ -245,6 +270,7 @@
 			return;
 		}
 		rows = rows.map((p) => (p.id === row.id ? { ...p, auto_publish_enabled: enabled, secure_direct_status: enabled ? 'approved' : p.secure_direct_status } : p));
+		if (enabled) void loadPendingTotal();
 		autoPublishTarget = null;
 		busyId = null;
 	}
@@ -522,7 +548,35 @@
 		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><UsersRound size={16} />{tr("Tambah partner")}</button>
 	</PageHeader>
 
-	<div class="mt-4 flex flex-wrap items-center gap-2">
+	<!-- Tab khusus: mitra yang mengajukan Secure Direct dan masih menunggu ACC. -->
+	<div class="mt-4 flex flex-wrap items-center gap-1 rounded-lg border p-1" style="border-color: var(--border); background: var(--card); width: fit-content;" role="tablist" aria-label={tr('Kelompok mitra')}>
+		<button
+			type="button"
+			role="tab"
+			aria-selected={sdTab === 'all'}
+			class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors {sdTab === 'all' ? 'text-white' : 'text-muted-foreground hover:bg-secondary'}"
+			style={sdTab === 'all' ? 'background-color: var(--primary);' : ''}
+			onclick={() => setSdTab('all')}
+		>
+			{tr('Semua mitra')}
+		</button>
+		<button
+			type="button"
+			role="tab"
+			aria-selected={sdTab === 'pending'}
+			class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors {sdTab === 'pending' ? 'text-white' : 'text-muted-foreground hover:bg-secondary'}"
+			style={sdTab === 'pending' ? 'background-color: var(--primary);' : ''}
+			onclick={() => setSdTab('pending')}
+		>
+			<ShieldCheck size={13} />
+			{tr('Pengajuan Secure Direct')}
+			{#if sdPendingTotal > 0}
+				<span class="rounded-full px-1.5 text-[10.5px] font-bold {sdTab === 'pending' ? 'bg-white/20 text-white' : 'bg-secondary text-muted-foreground'}">{sdPendingTotal}</span>
+			{/if}
+		</button>
+	</div>
+
+	<div class="mt-3 flex flex-wrap items-center gap-2">
 		<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
 			<Search size={15} class="text-muted-foreground" />
 			<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama, email, atau nomor WA…")} aria-label={tr("Cari partner")} value={search} oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)} />
