@@ -489,15 +489,28 @@ func (d *Deps) PublicationCancel(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
-	d.refundPackageCredits(r.Context(), brandRow.ID, publicationID, user.ID)
-	d.releaseCredit(r.Context(), brandRow.ID, publicationID, user.ID)
-	d.auditPublication(r.Context(), brandRow.ID, user.ID, "publication.cancelled", publicationID)
+	d.settleCancelledPublication(r.Context(), brandRow.ID, publicationID, user.ID, "publication.cancelled")
 	payload, err := d.publicationJSON(r.Context(), brandRow.ID, publicationID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, payload)
+}
+
+// settleCancelledPublication: efek samping setelah status publikasi menjadi
+// 'cancelled' — kembalikan kredit paket legacy + lepas reservasi TC wallet,
+// lalu catat audit.
+//
+// Dipisah dari PublicationCancel supaya scheduler SLA bisa memakai jalur yang
+// sama persis (satu tempat untuk aturan pengembalian saldo). Pemanggil WAJIB
+// memastikan transisi status benar-benar terjadi lebih dulu: releaseCredit
+// idempoten per publicationID, jadi memanggilnya untuk pesanan yang batal
+// transisi akan mengembalikan saldo pada pesanan yang masih berjalan.
+func (d *Deps) settleCancelledPublication(ctx context.Context, brandID, publicationID, userID, auditAction string) {
+	d.refundPackageCredits(ctx, brandID, publicationID, userID)
+	d.releaseCredit(ctx, brandID, publicationID, userID)
+	d.auditPublication(ctx, brandID, userID, auditAction, publicationID)
 }
 
 // PublicationAccept: POST /v1/brands/{brandId}/publications/{publicationId}/accept

@@ -115,6 +115,11 @@ var policies = map[string]ChannelPolicy{
 	// menghasilkan baris antrean yang tidak pernah dikirim siapa pun.
 	"publication.reminder":      {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
 	"publication.late_approval": {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
+	// SLA 3×24 jam persetujuan media: perpanjangan 1 hari lalu pembatalan
+	// otomatis. Email segera supaya mitra/klien tidak ketinggalan tenggat;
+	// WA tetap off (belum ada pengirim WA di paket ini, sama seperti reminder).
+	"publication.sla_extended":  {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
+	"publication.sla_cancelled": {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
 
 	// --- Tier 3: informasi (in-app + push saja) -------------------------
 	"publication.published":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},

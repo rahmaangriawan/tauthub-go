@@ -245,6 +245,44 @@ func (d *Deps) transitionPublicationWith(ctx context.Context, publicationID, to 
 	return d.exec(ctx, sql, args...)
 }
 
+// transitionPublicationIf: seperti transitionPublicationWith, tetapi
+// MENGEMBALIKAN apakah transisinya benar-benar terjadi (rows affected = 1).
+//
+// Wajib dipakai bila setelah transisi ada efek samping yang tidak boleh
+// berjalan ganda — mis. mengembalikan saldo. Kasusnya nyata: scheduler SLA
+// membaca daftar pesanan, lalu media menekan Setujui sebelum scheduler sempat
+// menulis. Tanpa penanda ini, UPDATE ... WHERE status = 'waiting_partner' tidak
+// mengubah apa pun tetapi kode tetap mengembalikan saldo, sehingga klien
+// menerima uang kembali padahal pesanannya jalan terus.
+func (d *Deps) transitionPublicationIf(ctx context.Context, publicationID, to string, extra map[string]any) (bool, error) {
+	row, err := d.queryRow(ctx, "SELECT status FROM publications WHERE id = $1 LIMIT 1", publicationID)
+	if err != nil {
+		return false, err
+	}
+	if row == nil {
+		return false, errNotFound("Publication not found")
+	}
+	current := row.strOr("status", "")
+	if err := assertPublicationTransition(current, to); err != nil {
+		return false, err
+	}
+	sets := []string{"status = $1"}
+	args := []any{to}
+	i := 2
+	for _, col := range sortedKeys(extra) {
+		sets = append(sets, col+" = $"+itoa(i))
+		args = append(args, extra[col])
+		i++
+	}
+	args = append(args, publicationID, current)
+	sql := "UPDATE publications SET " + strings.Join(sets, ", ") + ", updated_at = NOW() WHERE id = $" + itoa(i) + " AND status = $" + itoa(i+1)
+	n, err := d.execRows(ctx, sql, args...)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 func sortedKeys(m map[string]any) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

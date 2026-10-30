@@ -146,6 +146,10 @@
 	}
 
 	// ── Status (parity PUB_STATUS_CONFIG) ──────────────────────────────
+	// Nilai status dari API: pending, waiting_partner, partner_approved,
+	// partner_rejected, queued, processing, retrying, published, failed,
+	// cancelled, revision. Sebelumnya lima di antaranya tidak punya label
+	// sehingga klien melihat string mentah ("waiting_partner") di badge.
 	const PUB_STATUS_CONFIG: Record<string, { label: string; dot: string; text: string; bg: string }> = {
 		published: { label: 'Published', dot: 'var(--success)', text: 'var(--success)', bg: 'var(--success-soft)' },
 		completed: { label: 'Completed', dot: 'var(--success)', text: 'var(--success)', bg: 'var(--success-soft)' },
@@ -156,12 +160,45 @@
 		rejected: { label: 'Rejected', dot: 'var(--destructive)', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)' },
 		draft: { label: 'Draft', dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' },
 		cancelled: { label: 'Cancelled', dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' },
-		revision: { label: tr('Perlu Revisi'), dot: 'var(--warning)', text: 'var(--warning)', bg: 'var(--warning-soft)' }
+		revision: { label: tr('Perlu Revisi'), dot: 'var(--warning)', text: 'var(--warning)', bg: 'var(--warning-soft)' },
+		// Status perantara yang sebelumnya tampil sebagai string mentah.
+		pending: { label: tr('Menunggu diproses'), dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' },
+		waiting_partner: { label: tr('Menunggu persetujuan media'), dot: 'var(--warning)', text: 'var(--warning)', bg: 'var(--warning-soft)' },
+		partner_approved: { label: tr('Disetujui media'), dot: 'var(--primary)', text: 'var(--primary)', bg: 'var(--accent)' },
+		partner_rejected: { label: tr('Ditolak media'), dot: 'var(--destructive)', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)' },
+		retrying: { label: tr('Mencoba ulang'), dot: 'var(--warning)', text: 'var(--warning)', bg: 'var(--warning-soft)' }
 	};
 	const STATUS_FALLBACK = { dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' };
 	function statusCfg(status: string) {
 		const c = PUB_STATUS_CONFIG[status.toLowerCase()];
 		return c ?? { ...STATUS_FALLBACK, label: status };
+	}
+
+	// ── SLA persetujuan media (3×24 jam + 1 hari perpanjangan) ─────────
+	// Server tetap otoritas pembatalan; ini hanya tampilan supaya klien tahu
+	// pesanannya tidak menggantung tanpa tenggat.
+	const SLA_DAYS = 3;
+	const SLA_GRACE_DAYS = 1;
+	function slaInfo(row: { status: string; scheduled_at?: string | null; created_at?: string | null }) {
+		if (row.status !== 'waiting_partner') return null;
+		const startRaw = row.scheduled_at || row.created_at;
+		if (!startRaw) return null;
+		const start = new Date(startRaw).getTime();
+		if (Number.isNaN(start)) return null;
+		const deadline = start + SLA_DAYS * 86_400_000;
+		const hardStop = deadline + SLA_GRACE_DAYS * 86_400_000;
+		const now = Date.now();
+		if (now >= hardStop) {
+			return { text: tr('Melewati SLA — dibatalkan otomatis'), tone: 'danger' as const };
+		}
+		if (now >= deadline) {
+			return { text: tr('SLA lewat — perpanjangan 1 hari'), tone: 'danger' as const };
+		}
+		const daysLeft = Math.ceil((deadline - now) / 86_400_000);
+		return {
+			text: daysLeft <= 1 ? tr('Sisa kurang dari 1 hari') : `${tr('Sisa')} ${daysLeft} ${tr('hari')}`,
+			tone: daysLeft <= 1 ? ('warning' as const) : ('muted' as const)
+		};
 	}
 
 	// Publikasi yang sudah diterima media tetapi diterbitkan sebagai DRAF di
@@ -469,6 +506,7 @@
 					{@const badge = draftVis ? draftVisibilityCfg : cfg}
 					{@const cats = categoriesOf(row)}
 					{@const thumb = sameOriginAssetUrl(row.featured_image_url)}
+					{@const sla = slaInfo(row)}
 					<div class="flex flex-col gap-4 border-b p-4 last:border-0 md:flex-row">
 						<!-- Cover: mobile 16/9 selebar kartu dengan label status menempel
 						     di pojok kanan atas gambar; desktop thumbnail 140x88. -->
@@ -530,6 +568,16 @@
 
 							{#if row.media_status === 'archived'}
 								<p class="mt-2 text-xs" style="color: var(--warning);">{tr("⚠ Media mitra diarsipkan — permintaan tidak akan lanjut sampai media dipulihkan mitra.")}</p>
+							{/if}
+
+							{#if sla}
+								<p
+									class="mt-2 text-xs"
+									style="color: {sla.tone === 'danger' ? 'var(--destructive)' : sla.tone === 'warning' ? 'var(--warning)' : 'var(--muted-foreground)'};"
+									title={tr('Media punya waktu 3×24 jam untuk menyetujui. Bila lewat, ada 1 hari perpanjangan, lalu pesanan dibatalkan dan saldo dikembalikan.')}
+								>
+									{sla.text}
+								</p>
 							{/if}
 
 							{#if row.status === 'published' && row.pr_analysis}

@@ -39,6 +39,8 @@ type SchedulerResult struct {
 	PublicationsTriggered       int `json:"publications_triggered"`
 	PartnerRemindersSent        int `json:"partner_reminders_sent"`
 	LateApprovalNotified        int `json:"late_approval_notified"`
+	SLAExtended                 int `json:"sla_extended"`
+	SLACancelled                int `json:"sla_cancelled"`
 	MediaHealthRefreshed        int `json:"media_health_refreshed"`
 	UploadsPurged               int `json:"uploads_purged"`
 	JobsProcessed               int `json:"jobs_processed"`
@@ -54,6 +56,8 @@ func (r SchedulerResult) toMap() map[string]any {
 		"publications_triggered":        r.PublicationsTriggered,
 		"partner_reminders_sent":        r.PartnerRemindersSent,
 		"late_approval_notified":        r.LateApprovalNotified,
+		"sla_extended":                  r.SLAExtended,
+		"sla_cancelled":                 r.SLACancelled,
 		"media_health_refreshed":        r.MediaHealthRefreshed,
 		"uploads_purged":                r.UploadsPurged,
 		"jobs_processed":                r.JobsProcessed,
@@ -94,8 +98,10 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	// 3. Pengingat mitra mendekati batas approve (window 2 jam).
 	res.PartnerRemindersSent = d.schSweepPartnerDeadlines(ctx, schMinInt(maxJobs, 20), false)
 
-	// 4. Notifikasi telat menyetujui (jadwal terbit sudah lewat).
-	res.LateApprovalNotified = d.schSweepPartnerDeadlines(ctx, schMinInt(maxJobs, 20), true)
+	// 4. SLA 3×24 jam persetujuan media: perpanjangan 1 hari, lalu batalkan
+	//    otomatis + kembalikan saldo. Menggantikan notifikasi "telat" lama yang
+	//    hanya memberi tahu tanpa pernah menindak.
+	res.SLAExtended, res.SLACancelled = d.schSweepPublicationSLA(ctx, schMinInt(maxJobs, 20))
 
 	// 5. Bersihkan job yang tertinggal `running` (proses pemiliknya berhenti saat
 	//    deploy/restart), lalu drain antrean.
@@ -301,7 +307,8 @@ func (d *Deps) RunSchedulerLoop(ctx context.Context, interval time.Duration, max
 				"job", res.JobsProcessed,
 				"occurrence", res.PlanOccurrencesMaterialized,
 				"pengingat", res.PartnerRemindersSent,
-				"telat", res.LateApprovalNotified)
+				"sla_perpanjangan", res.SLAExtended,
+				"sla_batal", res.SLACancelled)
 		}
 	}
 }
@@ -572,8 +579,171 @@ func (d *Deps) schSweepPartnerDeadlines(ctx context.Context, limit int, late boo
 	return sent
 }
 
+// schSweepPublicationSLA: penegakan SLA 3×24 jam untuk persetujuan media.
+//
+// Kebijakan (lihat migrasi 287): pesanan `waiting_partner` yang melewati
+// COALESCE(scheduled_at, created_at) + 3 hari mendapat PERPANJANGAN 1 hari
+// (diberi tahu ke mitra & klien), lalu pada +4 hari dibatalkan otomatis dan
+// nilainya dikembalikan ke saldo akun klien.
+//
+// Titik mulai memakai scheduled_at bila ada (itu jadwal yang dijanjikan ke
+// klien), dan created_at bila pesanan tidak dijadwalkan — tanpa ini pesanan
+// tanpa jadwal tidak akan pernah punya tenggat.
+//
+// Mengembalikan (perpanjangan, pembatalan).
+func (d *Deps) schSweepPublicationSLA(ctx context.Context, limit int) (int, int) {
+	if limit < 1 {
+		return 0, 0
+	}
+	extended := d.schSweepSLAGrace(ctx, limit)
+	cancelled := d.schSweepSLACancel(ctx, limit)
+	return extended, cancelled
+}
+
+// schSweepSLAGrace: fase perpanjangan — SLA lewat, beri 1 hari tambahan.
+func (d *Deps) schSweepSLAGrace(ctx context.Context, limit int) int {
+	rows, err := d.queryRows(ctx, `
+		SELECT p.id, p.brand_id, p.scheduled_at, p.created_at,
+		       m.name AS media_name, d.title AS document_title,
+		       pa.id AS partner_id, pa.public_id AS partner_public_id, pa.user_id AS partner_user_id,
+		       b.public_id AS brand_public_id
+		FROM publications p
+		JOIN media m ON m.id = p.media_id
+		JOIN brands b ON b.id = p.brand_id
+		JOIN content_documents d ON d.id = p.document_id
+		LEFT JOIN partners pa ON pa.id = m.partner_id
+		WHERE p.status = 'waiting_partner'
+		  AND COALESCE(p.scheduled_at, p.created_at) + INTERVAL '3 days' < NOW()
+		  AND NOT EXISTS (
+		    SELECT 1 FROM notifications n
+		    WHERE n.publication_id = p.id AND n.dedupe_key = 'sla_grace:' || p.id
+		  )
+		ORDER BY COALESCE(p.scheduled_at, p.created_at)
+		LIMIT $1`, limit)
+	if err != nil {
+		slog.Error("[scheduler] sweep SLA (perpanjangan) gagal", "err", err)
+		return 0
+	}
+	sent := 0
+	for _, pub := range rows {
+		publicationID := pub.strOr("id", "")
+		article := pub.strOr("document_title", "Artikel")
+		mediaName := pub.strOr("media_name", "Media")
+		dedupeKey := "sla_grace:" + publicationID
+
+		// Ke mitra: tegaskan tenggatnya supaya bisa segera ditindak.
+		if partnerUserID := pub.strOr("partner_user_id", ""); partnerUserID != "" {
+			link := "/mitra/publications?pub=" + publicationID
+			if publicID := pub.strOr("partner_public_id", ""); publicID != "" {
+				link = "/mitra/" + publicID + "/publications?pub=" + publicationID
+			}
+			body := "Pesanan \"" + article + "\" untuk " + mediaName +
+				" melewati SLA 3×24 jam. Ada 1 hari tambahan sebelum pesanan dibatalkan otomatis."
+			if d.insertNotificationOnce(ctx, partnerUserID, "publication.sla_extended",
+				"SLA terlewati — 1 hari tambahan", body, link, publicationID, dedupeKey) {
+				sent++
+			}
+		}
+		// Ke klien: beri tahu sedang menunggu, jangan biarkan menggantung tanpa kabar.
+		brandID := pub.strOr("brand_id", "")
+		if brandID != "" {
+			brandPublicID := pub.strOr("brand_public_id", brandID)
+			brandLink := "/klien/" + brandPublicID + "/publications?pub=" + publicationID
+			body := mediaName + " belum merespons pesanan \"" + article +
+				". Kami memberi 1 hari tambahan; bila tetap tidak ada respons, pesanan dibatalkan dan saldo Anda dikembalikan."
+			d.notifyBrandMembersOnPub(ctx, brandID, "publication.sla_extended",
+				"Media belum merespons", body, &brandLink, publicationID)
+		}
+	}
+	return sent
+}
+
+// schSweepSLACancel: fase pembatalan — SLA + perpanjangan lewat.
+func (d *Deps) schSweepSLACancel(ctx context.Context, limit int) int {
+	rows, err := d.queryRows(ctx, `
+		SELECT p.id, p.brand_id, m.name AS media_name, d.title AS document_title,
+		       pa.public_id AS partner_public_id, pa.user_id AS partner_user_id,
+		       b.public_id AS brand_public_id
+		FROM publications p
+		JOIN media m ON m.id = p.media_id
+		JOIN brands b ON b.id = p.brand_id
+		JOIN content_documents d ON d.id = p.document_id
+		LEFT JOIN partners pa ON pa.id = m.partner_id
+		WHERE p.status = 'waiting_partner'
+		  AND COALESCE(p.scheduled_at, p.created_at) + INTERVAL '4 days' < NOW()
+		ORDER BY COALESCE(p.scheduled_at, p.created_at)
+		LIMIT $1`, limit)
+	if err != nil {
+		slog.Error("[scheduler] sweep SLA (pembatalan) gagal", "err", err)
+		return 0
+	}
+	cancelled := 0
+	for _, pub := range rows {
+		publicationID := pub.strOr("id", "")
+		brandID := pub.strOr("brand_id", "")
+		if brandID == "" {
+			continue
+		}
+		reason := "Dibatalkan otomatis: media tidak merespons melebihi SLA 3×24 jam (termasuk 1 hari perpanjangan)."
+		// Penanda transisi WAJIB dicek: media bisa menekan Setujui di antara
+		// pembacaan daftar dan penulisan. Bila transisi tidak terjadi, refund
+		// TIDAK boleh jalan — releaseCredit idempoten per publikasi, jadi
+		// memanggilnya untuk pesanan yang masih berjalan akan mengembalikan
+		// saldo pada pesanan yang tetap diterbitkan.
+		ok, err := d.transitionPublicationIf(ctx, publicationID, "cancelled",
+			map[string]any{"cancel_reason": reason})
+		if err != nil {
+			slog.Warn("[scheduler] batalkan pesanan SLA gagal", "pub", publicationID, "err", err)
+			continue
+		}
+		if !ok {
+			continue // sudah berpindah status (mis. disetujui media) — lewati
+		}
+		d.settleCancelledPublication(ctx, brandID, publicationID, "", "publication.sla_cancelled")
+		cancelled++
+
+		article := pub.strOr("document_title", "Artikel")
+		mediaName := pub.strOr("media_name", "Media")
+		dedupeKey := "sla_cancel:" + publicationID
+		if partnerUserID := pub.strOr("partner_user_id", ""); partnerUserID != "" {
+			link := "/mitra/publications?pub=" + publicationID
+			if publicID := pub.strOr("partner_public_id", ""); publicID != "" {
+				link = "/mitra/" + publicID + "/publications?pub=" + publicationID
+			}
+			body := "Pesanan \"" + article + "\" dibatalkan otomatis karena tidak disetujui dalam SLA 3×24 jam + 1 hari perpanjangan."
+			d.insertNotificationOnce(ctx, partnerUserID, "publication.sla_cancelled",
+				"Pesanan dibatalkan (SLA)", body, link, publicationID, dedupeKey)
+		}
+		brandPublicID := pub.strOr("brand_public_id", brandID)
+		brandLink := "/klien/" + brandPublicID + "/publications?pub=" + publicationID
+		brandBody := "Pesanan \"" + article + "\" ke " + mediaName +
+			" dibatalkan otomatis karena media tidak merespons melebihi SLA. Nilai pesanan sudah dikembalikan ke saldo akun Anda."
+		d.notifyBrandMembersOnPub(ctx, brandID, "publication.sla_cancelled",
+			"Pesanan dibatalkan, saldo dikembalikan", brandBody, &brandLink, publicationID)
+	}
+	return cancelled
+}
+
+// insertNotificationOnce: INSERT notifikasi dengan dedupe eksplisit (user +
+// dedupe_key + publication). Mengembalikan true bila benar-benar ditulis.
+func (d *Deps) insertNotificationOnce(ctx context.Context, userID, notifType, title, body, link, publicationID, dedupeKey string) bool {
+	dup, err := d.queryRow(ctx,
+		"SELECT id FROM notifications WHERE user_id = $1 AND dedupe_key = $2 AND publication_id = $3 LIMIT 1",
+		userID, dedupeKey, publicationID)
+	if err != nil || dup != nil {
+		return false
+	}
+	if err := d.exec(ctx, `
+		INSERT INTO notifications (id, user_id, type, title, body, link, publication_id, dedupe_key)
+		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)`,
+		userID, notifType, title, body, link, publicationID, dedupeKey); err != nil {
+		slog.Warn("[scheduler] notifikasi SLA gagal", "pub", publicationID, "err", err)
+		return false
+	}
+	return true
+}
+
 // schEmailFollowUp: port routeEmailNotification untuk event pengingat mitra —
-// gerbang matriks+preferensi, render template, enqueue email_deliveries, lalu
 // pastikan ada job send_email (parity sendTransactionalEmail).
 func (d *Deps) schEmailFollowUp(ctx context.Context, event, recipientUserID, recipientEmail, referenceID, dedupeKey, topic, mediaName, link string) {
 	if recipientEmail == "" || !d.schRouteEmailEnabled(ctx, event, recipientUserID) {

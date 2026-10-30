@@ -864,6 +864,29 @@
 	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 
+	// ── SLA persetujuan (3×24 jam + 1 hari perpanjangan) ───────────────
+	// Server tetap otoritas pembatalan; ini hanya tampilan supaya media tahu
+	// sisa waktunya sebelum pesanan dibatalkan otomatis.
+	const SLA_DAYS = 3;
+	const SLA_GRACE_DAYS = 1;
+	function slaInfo(p: { status: string; scheduled_at?: string | null; created_at?: string | null }) {
+		if (p.status !== 'waiting_partner') return null;
+		const startRaw = p.scheduled_at || p.created_at;
+		if (!startRaw) return null;
+		const start = new Date(startRaw).getTime();
+		if (Number.isNaN(start)) return null;
+		const deadline = start + SLA_DAYS * 86_400_000;
+		const hardStop = deadline + SLA_GRACE_DAYS * 86_400_000;
+		const now = Date.now();
+		if (now >= hardStop) return { text: tr('Melewati SLA — dibatalkan otomatis'), tone: 'danger' as const };
+		if (now >= deadline) return { text: tr('SLA lewat — perpanjangan 1 hari'), tone: 'danger' as const };
+		const daysLeft = Math.ceil((deadline - now) / 86_400_000);
+		return {
+			text: daysLeft <= 1 ? tr('Sisa kurang dari 1 hari') : `${tr('Sisa')} ${daysLeft} ${tr('hari')}`,
+			tone: daysLeft <= 1 ? ('warning' as const) : ('muted' as const)
+		};
+	}
+
 	// ── Rincian penghasilan (popover) ────────────────────────────────────
 	// amount = yang diterima mitra (sudah dipotong platform), gross = angka
 	// sebelum potongan. Baris historis tanpa gross → potongan tampil "—" dan
@@ -1421,11 +1444,22 @@
 {/snippet}
 
 	{#snippet scheduleLine(p: any)}
+		{@const sla = slaInfo(p)}
 		<!-- Jadwal dari sisi klien: mitra perlu tahu kapan artikel akan terbit. -->
 		{#if p.scheduled_at && ['queued', 'waiting_partner', 'partner_approved', 'processing', 'retrying'].includes(p.status)}
 			<p class="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
 				<CalendarClock size={11} class="shrink-0" />
 				<span>{tr('Dijadwalkan')} {dt(p.scheduled_at)}</span>
+			</p>
+		{/if}
+		{#if sla}
+			<p
+				class="mt-1 flex items-center gap-1 text-[11px]"
+				style="color: {sla.tone === 'danger' ? 'var(--destructive)' : sla.tone === 'warning' ? 'var(--warning)' : 'var(--muted-foreground)'};"
+				title={tr('SLA persetujuan 3×24 jam + 1 hari perpanjangan. Bila lewat, pesanan dibatalkan otomatis dan saldo klien dikembalikan.')}
+			>
+				<CalendarClock size={11} class="shrink-0" />
+				<span>{sla.text}</span>
 			</p>
 		{/if}
 	{/snippet}
