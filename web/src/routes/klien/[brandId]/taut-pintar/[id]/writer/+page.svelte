@@ -12,7 +12,7 @@
 	import AgentSteps from '../../_agent-steps.svelte';
 	import TautBottomBar from '../../_bottom-bar.svelte';
 	import NaskahModal from './_naskah-modal.svelte';
-	import QcPanel, { QC_CHECK_COUNT } from './_qc-panel.svelte';
+	import QcPanel from './_qc-panel.svelte';
 	import { MANUAL_PROFILER_REASON, buildTrackedUrl, stripScheme, withScheme, textToHtml, cleanPastedText, toJakartaDisplay, toLocalInput, isCampaignDone } from '../../_shared';
 	import { tcToRp } from '$lib/credits/rupiah';
 	import { ARTICLE_DEFAULT_COVER, sameOriginAssetUrl } from '$lib/media/cover';
@@ -285,8 +285,8 @@
 	let slotDeleteBusy = $state(false);
 	let slotDeleteError = $state('');
 
-	// Menu ⋮ per artikel: menampung aksi yang jarang dipakai (Analisis QC,
-	// hapus artikel) supaya di HP hanya dua tombol yang tampil.
+	// Menu ⋮ per artikel: hanya untuk aksi yang jarang dipakai (hapus artikel
+	// pada media dengan beberapa slot). Analisis QC punya tombol sendiri.
 	let rowMenu = $state<{ key: string; left: number; top: number; media: PlacementItem; item: PlacementItem; hasDoc: boolean } | null>(null);
 
 	function openRowMenu(e: MouseEvent, media: PlacementItem, item: PlacementItem, hasDocItem: boolean) {
@@ -2362,9 +2362,9 @@
 											</div>
 
 											<div class="flex flex-wrap items-center gap-1.5 max-sm:gap-2">
-												<!-- Aksi utama: buka naskah (kalau sudah ada) atau buat baru.
-												     Aksi lain masuk menu ⋮ supaya di HP tidak ada empat tombol
-												     kecil berdesakan. -->
+												<!-- Aksi utama: buka naskah (kalau sudah ada) atau buat baru,
+												     ditambah Cek Validasi dan Analisis QC sebagai tombol sendiri.
+												     Menu ⋮ hanya muncul untuk media dengan beberapa slot. -->
 												{#if doc}
 													<button
 														type="button"
@@ -2386,6 +2386,21 @@
 														<ShieldCheck size={16} strokeWidth={2.2} class="shrink-0" />
 														<span class="expTip">{tr('Cek Validasi')}</span>
 													</button>
+												<!-- Analisis QC berdiri sendiri, bukan di menu ⋮: aksi ini paling
+												     sering dipakai saat memeriksa naskah. -->
+												<button
+													type="button"
+													class="expAction relative inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
+													aria-label={tr('Analisis QC')}
+													disabled={bulkRunning}
+													onclick={() => (qcFor = pkey(item))}
+												>
+													<ListChecks size={16} strokeWidth={2.2} class="shrink-0" />
+													{#if (qcCounts[pkey(item)] ?? 0) > 0}
+														<span class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-blue-600" aria-hidden="true"></span>
+													{/if}
+													<span class="expTip">{tr('Analisis QC')}</span>
+												</button>
 												{:else}
 													<button
 														type="button"
@@ -2414,6 +2429,7 @@
 														<span class="expTip">{tr('Tulis Sendiri')}</span>
 													</button>
 												{/if}
+												{#if (slotCounts[m.media_id] ?? 1) > 1}
 												<button
 													type="button"
 													class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
@@ -2425,6 +2441,7 @@
 													<MoreVertical size={16} class="shrink-0" />
 													<span class="expTip">{tr('Aksi lain')}</span>
 												</button>
+												{/if}
 											</div>
 										</div>
 									</div>
@@ -2450,20 +2467,6 @@
 					style="left: {rowMenu.left}px; top: {rowMenu.top}px; border-color: var(--border);"
 					role="menu"
 				>
-					{#if rowMenu.hasDoc}
-						<button
-							class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-slate-700 hover:bg-slate-50"
-							type="button"
-							role="menuitem"
-							onclick={() => { qcFor = pkey(rowMenu!.item); rowMenu = null; }}
-						>
-							<ListChecks size={15} class="shrink-0 text-slate-500" />
-							<span>{tr('Analisis QC')}</span>
-							{#if (qcCounts[pkey(rowMenu!.item)] ?? 0) > 0}
-								<span class="ml-auto rounded-full bg-slate-100 px-1.5 text-[11px] font-bold text-slate-600">{QC_CHECK_COUNT}</span>
-							{/if}
-						</button>
-					{/if}
 					{#if (slotCounts[rowMenu!.media.media_id] ?? 1) > 1}
 						<button
 							class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] font-medium hover:bg-rose-50"
