@@ -227,7 +227,6 @@
 	// cek "ada perubahan?" saat Simpan: kalau sama, QC otomatis TIDAK dipicu
 	// (hemat token) karena hasil pemindaian tetap valid. Upload/generate mulai
 	// dari kosong → baseline null → QC selalu jalan.
-	let editorBaseline = $state<{ title: string; html: string; cover: string | null; category: string | null; metaDescription: string | null } | null>(null);
 	// Pratinjau streaming: html parsial dari SSE saat AI menulis; null = idle.
 	let streamHtml = $state<string | null>(null);
 
@@ -1072,13 +1071,6 @@
 				source: item.article_source ?? null,
 				wordCountMode: item.word_count_mode ?? null
 			};
-			editorBaseline = {
-				title: editor.title,
-				html: editor.html,
-				cover: editor.cover,
-				category: editor.category,
-				metaDescription: editor.metaDescription
-			};
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : tr('Gagal membuka artikel.');
 		}
@@ -1106,7 +1098,6 @@
 			source: 'manual',
 			wordCountMode: item.word_count_mode ?? null
 		};
-		editorBaseline = null;
 	}
 
 	/** Tombol "Generate Konten": buka Pengelola Naskah langsung di tab
@@ -1130,7 +1121,6 @@
 			source: 'ai',
 			wordCountMode: item.word_count_mode ?? null
 		};
-		editorBaseline = null;
 	}
 
 	async function uploadDocNaskah(
@@ -1394,26 +1384,19 @@
 		// QC otomatis hanya saat ada PERUBAHAN vs backend: judul/isi sama
 		// persis (mis. klien hanya ganti cover/meta tanpa menulis ulang)
 		// → pemindaian dipindai hasil lama cukup, jangan bakar token AI.
-		// Setiap perubahan isian dihitung, bukan hanya judul/isi: mengganti cover,
-		// kategori, atau meta juga mengubah artikel dan wajib dipindai ulang.
-		const kontenBerubah = !editorBaseline
-			|| editorBaseline.title !== (title ?? '')
-			|| editorBaseline.html !== (html ?? '')
-			|| (editorBaseline.cover ?? null) !== (coverUrl ?? null)
-			|| (editorBaseline.category ?? '') !== (category ?? '')
-			|| (editorBaseline.metaDescription ?? '') !== (metaDescription ?? '');
+		// QC selalu menyusul setiap simpan. Dulu ada perbandingan "isi berubah?"
+		// untuk menghemat token, tetapi membandingkan HTML hasil editor dengan
+		// HTML dari server mudah meleset sehingga pemindaian diam-diam terlewat.
 		// Nyalakan spinner sejak Simpan ditekan, bukan setelah artikel tersimpan.
-		// QC baru bisa mulai setelah PUT/POST selesai; tanpa ini ada jeda kosong
-		// sehingga saat menyimpan satu per satu spinner terlihat hilang/berkedip.
 		const slotKey = pkey({ media_id: mediaId, slot });
-		const spinnerStartedHere = kontenBerubah && qcRunning[slotKey] !== true;
+		const spinnerStartedHere = qcRunning[slotKey] !== true;
 		if (spinnerStartedHere) qcRunning = { ...qcRunning, [slotKey]: true };
 		editorSaving = true;
 		const saved = await persistEditor(title, html, coverUrl, category, metaDescription);
 		editorSaving = false;
 		if (saved) {
 			editor = null;
-			if (kontenBerubah) void runQcAfterSave(mediaId, slot, spinnerStartedHere);
+			void runQcAfterSave(mediaId, slot, spinnerStartedHere);
 		} else if (spinnerStartedHere) {
 			// Penyimpanan gagal → tidak ada QC yang berjalan; jangan tinggalkan spinner.
 			qcRunning = { ...qcRunning, [slotKey]: false };
@@ -2284,6 +2267,12 @@
 											</div>
 											<div class="min-w-0 flex-1">
 												<div class="flex flex-wrap items-center gap-1.5 max-sm:gap-2">
+													{#if qcRunning[pkey(item)]}
+														<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px] text-blue-700">
+															<LoaderCircle size={11} class="animate-spin" />
+															<span>{tr('Memindai QC…')}</span>
+														</span>
+													{/if}
 													{#if statusKind === 'ready'}
 														<span class="inline-flex items-center gap-1 rounded-[5px] border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px] text-emerald-700">
 															<CircleCheck size={11} strokeWidth={2.2} />

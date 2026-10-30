@@ -559,6 +559,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Memeriksa cover…": "Checking cover…",
   "Memindai artikel…": "Scanning articles…",
   "Memindai…": "Scanning…",
+  "Memindai QC…": "Scanning QC…",
   "Memuat draf…": "Loading draft…",
   "Memuat hasil pemeriksaan…": "Loading check results…",
   "Memuat Kampanye Kilat…": "Loading the Fast Campaign…",
