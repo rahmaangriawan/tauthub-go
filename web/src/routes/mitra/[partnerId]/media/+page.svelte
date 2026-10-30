@@ -6,7 +6,7 @@
 	// (pratinjau → konfirmasi, parity alur bulk import app lama).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { BadgeCheck, Building2, Check, ChevronRight, CircleAlert, CircleDollarSign, Clock, Copy, ExternalLink, FileText, Info, Layers, Link, Link2, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Tag, Trash2, TriangleAlert, Upload, Wallet, X, Zap } from '@lucide/svelte';
+	import { Building2, Check, ChevronRight, CircleAlert, CircleDollarSign, Clock, Copy, ExternalLink, FileText, Info, Layers, Link, Link2, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Tag, Trash2, TriangleAlert, Upload, Wallet, X, Zap } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { Tooltip } from 'bits-ui';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
@@ -661,12 +661,6 @@
 		clearDpDocUrl();
 		dpBusy = false;
 		dpConfirmDelete = false;
-	}
-
-	function openDewanPers(m: Media) {
-		domTarget = m;
-		verifTab = 'dewan';
-		resetDewanForm(m);
 	}
 
 	/** Status pengajuan yang boleh dicabut mitra (bukan yang sudah terverifikasi). */
@@ -2017,9 +2011,6 @@
 							<RotateCcw size={14} /> {tr('Ajukan Kembali')}
 						</button>
 					{/if}
-					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); openDewanPers(m); }}>
-						<BadgeCheck size={14} /> {tr('Dewan Pers')}
-					</button>
 					<button type="button" role="menuitem" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary" onclick={() => { closeMenu(); openEdit(m); }}>
 						<Pencil size={14} /> Edit
 					</button>
