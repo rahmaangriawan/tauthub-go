@@ -2,6 +2,7 @@ package partner
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"math"
 	"net/http"
@@ -261,9 +262,7 @@ func (d *Deps) createSettlement(w http.ResponseWriter, r *http.Request, partner 
 	}
 	lastDate := time.Now()
 
-	invCount, _ := d.queryRow(r.Context(),
-		"SELECT COUNT(*) AS count FROM settlements WHERE partner_id = $1 AND invoice_number IS NOT NULL", partner.ID)
-	invoiceNumber := fmt.Sprintf("INV/%s/%s", partner.ID, padLeft(itoa(invCount.intOr("count", 0)+1), 3))
+	invoiceNumber := d.newInvoiceNumber(r.Context())
 
 	id := uuid.NewString()
 	if err := d.exec(r.Context(), `
@@ -335,6 +334,33 @@ func actorID(user *httpx.AuthUser) any {
 func mustNum(body map[string]any, key string) float64 {
 	v, _ := numField(body, key)
 	return v
+}
+
+// invoiceAlphabet: tanpa 0/O dan 1/I/L supaya nomor tidak salah baca.
+const invoiceAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+// newInvoiceNumber: nomor invoice 6 karakter yang unik di tabel settlements.
+// Nomor lama sempat memakai format "INV/<uuid mitra>/<urut>" sehingga tampil
+// panjang; invoice baru cukup kode pendek yang mudah dibaca ulang.
+func (d *Deps) newInvoiceNumber(ctx context.Context) string {
+	buf := make([]byte, 6)
+	for attempt := 0; attempt < 10; attempt++ {
+		if _, err := rand.Read(buf); err != nil {
+			break
+		}
+		code := make([]byte, len(buf))
+		for i, b := range buf {
+			code[i] = invoiceAlphabet[int(b)%len(invoiceAlphabet)]
+		}
+		var exists int
+		_ = d.Pool.QueryRow(ctx,
+			"SELECT 1 FROM settlements WHERE invoice_number = $1 LIMIT 1", string(code)).Scan(&exists)
+		if exists == 0 {
+			return string(code)
+		}
+	}
+	// Cadangan: enam heksadesimal dari UUID (masih unik, tetap pendek).
+	return strings.ToUpper(strings.ReplaceAll(uuid.NewString(), "-", "")[:6])
 }
 
 func padLeft(s string, n int) string {
