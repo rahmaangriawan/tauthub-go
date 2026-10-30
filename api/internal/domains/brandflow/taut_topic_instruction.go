@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
-	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
 	"github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
@@ -100,7 +99,11 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	material := d.buildRacikMaterial(r.Context(), brandRow, chiParam(r, "campaignId"), mediaID, mediaLabel, angleSlug, anchorLines.String())
+	material := d.buildRacikMaterial(r.Context(), chiParam(r, "campaignId"), mediaID, mediaLabel, angleSlug, anchorLines.String())
+	// Aturan keluaran ditempel di system prompt supaya berlaku juga bila prompt
+	// admin di database longgar: hasilnya paragraf pendek yang hanya memakai
+	// bahan, bukan artikel mini atau fakta karangan.
+	systemPrompt := strings.TrimSpace(masterPrompt) + "\n\n" + racikOutputRules
 
 	client := &ai.ChatClient{
 		BaseURL:     agentCfg.BaseURL,
@@ -154,7 +157,7 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 		return out
 	}
 	result, err := client.CompleteStreamMessages(r.Context(), []ai.ChatMessage{
-		{Role: "system", Content: masterPrompt},
+		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: material},
 	}, false, func(chunk string) {
 		if delta := stripEmphasis(field.Write(chunk)); delta != "" {
@@ -199,36 +202,31 @@ func (d *Deps) TautTopicInstruction(w http.ResponseWriter, r *http.Request) {
 	sendEvent("done", map[string]any{"ok": true, "instruction": instruction})
 }
 
-// buildRacikMaterial menyusun bahan yang dikirim ke agent racik. Master prompt
-// admin meminta data kampanye (keyword, domain, angle, karakter media), bukan
-// hanya anchor — tanpa blok ini model hanya bisa menebak dari anchor.
-func (d *Deps) buildRacikMaterial(ctx context.Context, brandRow brandsdomain.BrandRow, campaignID, mediaID, mediaLabel, angleSlug, anchorLines string) string {
+// racikOutputRules: batas keluaran agent racik. Ditulis sebagai aturan keras
+// karena instruksi ini dipakai apa adanya sebagai topik Writer — kalau model
+// melebar (menambah fakta, angka, atau struktur artikel), hasil generate ikut
+// melenceng dan harus diperbaiki manual.
+const racikOutputRules = `Aturan keluaran (WAJIB):
+- Tulis SATU paragraf instruksi 3-6 kalimat, bahasa Indonesia, tanpa judul dan tanpa daftar bernomor.
+- Pakai HANYA informasi pada "Bahan dari user" di bawah. JANGAN menambah fakta, angka, nama orang, tanggal, tempat, atau klaim yang tidak ada di bahan.
+- Jangan memakai teks anchor sebagai judul artikel; susun arah bahasan yang relevan dengan angle yang dipilih.
+- Sebut target panjang artikel dan jumlah tautan sesuai aturan media di bahan.
+- Balas hanya JSON: {"instruction": "..."} tanpa teks lain, tanpa markdown.`
+
+// buildRacikMaterial menyusun bahan yang dikirim ke agent racik. Sengaja
+// ramping: anchor + angle + aturan teknis media (panjang & kapasitas tautan).
+// Profil bisnis/kampanye tidak lagi ikut — model sempat memakainya untuk
+// menambah klaim yang tidak diminta, sehingga instruksi harus diperbaiki manual
+// sebelum generate.
+func (d *Deps) buildRacikMaterial(ctx context.Context, campaignID, mediaID, mediaLabel, angleSlug, anchorLines string) string {
 	parts := []string{"Bahan dari user:", anchorLines, "Jenis media target: " + mediaLabel + "."}
 
-	brandLine := "Brand: " + brandRow.Name
-	if brandRow.Industry != nil && strings.TrimSpace(*brandRow.Industry) != "" {
-		brandLine += " (industri: " + strings.TrimSpace(*brandRow.Industry) + ")"
-	}
-	parts = append(parts, brandLine)
-
-	if campaign, err := d.loadTautCampaignRow(ctx, campaignID, brandRow.ID); err == nil && campaign != nil {
-		if name := campaign.strOr("name", ""); name != "" {
-			parts = append(parts, "Kampanye: "+name)
-		}
-		if domain := campaign.strOr("primary_url", ""); domain != "" {
-			parts = append(parts, "Domain/website brand: "+domain)
-		}
-		if kw := campaign.strOr("trigger_keywords", ""); kw != "" {
-			parts = append(parts, "Keyword utama: "+kw)
-		}
-		if brief, bErr := d.loadTautBriefContext(ctx, campaignID); bErr == nil && strings.TrimSpace(brief) != "" {
-			parts = append(parts, "Profil bisnis & arahan brand:\n"+truncateString(brief, 4000))
-		}
-	}
-
+	wordRule := buildWordRule("", mediaLabel)
+	linkRule := "Kapasitas tautan: maksimal 1 tautan; pakai anchor di atas apa adanya sebagai teks tautan dan sisipkan natural di paragraf yang relevan."
 	if mediaID != "" {
 		if row, err := d.queryRow(ctx, `
-			SELECT name, COALESCE(website_url, '') AS website_url, COALESCE(category, '') AS category
+			SELECT name, COALESCE(website_url, '') AS website_url, COALESCE(category, '') AS category,
+			       COALESCE(word_count_mode, '') AS word_count_mode, max_links
 			FROM media WHERE id = $1 LIMIT 1`, mediaID); err == nil && row != nil {
 			line := "Media tujuan: " + row.strOr("name", "")
 			if site := row.strOr("website_url", ""); site != "" {
@@ -238,8 +236,15 @@ func (d *Deps) buildRacikMaterial(ctx context.Context, brandRow brandsdomain.Bra
 				line += " · kategori " + cat
 			}
 			parts = append(parts, line)
+			wordRule = buildWordRule(row.strOr("word_count_mode", ""), mediaLabel)
+			if n := row.intOr("max_links", 0); n > 0 {
+				linkRule = fmt.Sprintf("Kapasitas tautan: maksimal %d tautan dalam artikel; pakai anchor di atas apa adanya sebagai teks tautan dan sisipkan natural di paragraf yang relevan.", n)
+			} else {
+				linkRule = "Media ini tidak mengizinkan tautan: jangan menyuruh menyisipkan anchor."
+			}
 		}
 	}
+	parts = append(parts, wordRule, linkRule)
 
 	// Angle yang dipakai adalah yang sedang dipilih di modal. Dropdown itu belum
 	// tersimpan ke kampanye saat racik diklik, jadi slug-nya datang dari body —
@@ -280,10 +285,10 @@ func racikAngleBlock(a *tautAngleContext) string {
 		b.WriteString("\nSumber informasi angle (bahan fakta dari admin — pakai yang relevan, jangan menambah fakta di luar ini):\n" +
 			truncateString(a.SourceNotes, 4000))
 	}
-	if a.Prompt != "" {
-		b.WriteString("\nMaster prompt angle (arahan menulis untuk sudut ini — WAJIB diikuti saat menyusun instruksi; format keluaran tetap JSON seperti aturan di atas):\n" +
-			truncateString(a.Prompt, 16000))
-	}
+	// Master prompt angle TIDAK ikut dikirim: isinya arahan menulis artikel utuh
+	// (struktur, dateline, kutipan, format keluaran Writer) yang bertabrakan
+	// dengan tugas racik. Dulu blok itu membuat model menyusun "artikel mini",
+	// bukan instruksi topik. Untuk racik, deskripsi + catatan sumber sudah cukup.
 	return strings.TrimSpace(b.String())
 }
 
