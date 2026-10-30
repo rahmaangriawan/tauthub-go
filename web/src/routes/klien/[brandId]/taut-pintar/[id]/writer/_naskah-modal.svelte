@@ -27,6 +27,7 @@
 		brandId,
 		campaignId = '',
 		mediaId = '',
+		slot = 1,
 		initialTab = 'tulis',
 		initialSource = null,
 		initialTitle = '',
@@ -66,6 +67,8 @@
 		/** Scope pustaka gambar AI: brand + campaign + media. */
 		campaignId?: string;
 		mediaId?: string;
+		/** Nomor artikel pada media itu (1 = artikel pertama). */
+		slot?: number;
 		initialTab?: 'tulis' | 'unggah' | 'generate';
 		/** Asal artikel tersimpan: 'ai' (Generate) atau 'manual' (unggah dokumen).
 		 *  Hanya dipakai saat Edit Artikel, supaya tab yang tampil sesuai asalnya. */
@@ -822,8 +825,11 @@
 	// dengan pemuat naskah writer (GET /articles/{mediaId}). null = belum ada.
 	async function fetchSavedArticle(): Promise<{ title: string; html: string; metaDescription: string } | null> {
 		if (!campaignId || !mediaId) return null;
+		// Slot wajib ikut: tanpa ?slot=N endpoint mengembalikan artikel pertama
+		// pada media itu, sehingga draf slot 2 tertimpa isi slot 1.
+		const slotQs = slot > 1 ? `?slot=${slot}` : '';
 		try {
-			const res = await apiRequest(`${apiBase}/articles/${mediaId}`);
+			const res = await apiRequest(`${apiBase}/articles/${mediaId}${slotQs}`);
 			if (!res.ok) return null;
 			const d = await res.json().catch(() => null);
 			if (!d) return null;

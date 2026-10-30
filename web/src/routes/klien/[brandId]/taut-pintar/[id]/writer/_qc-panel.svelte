@@ -18,7 +18,7 @@
 	// hanya pada Illegal Content Guard & Link Health Validator — dua pemeriksa
 	// itulah yang benar-benar menentukan canDistribute di server.
 	import { onDestroy } from 'svelte';
-	import { CheckCircle2, CircleCheck, Clock, Eye, Send, LoaderCircle, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, X, XCircle } from '@lucide/svelte';
+	import { CheckCircle2, CircleCheck, Clock, Send, LoaderCircle, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert, X, XCircle } from '@lucide/svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
 	import SlideOver from '$lib/components/slide-over.svelte';
 
@@ -48,6 +48,8 @@
 	type Checks = { aiOverview: Check; contentSafety: Check; linkHealth: Check; brandVoice: Check };
 	type MediaEntry = {
 		media_id: string;
+		/** Nomor artikel pada media itu (1 = artikel pertama). */
+		slot?: number;
 		name: string;
 		article: { title: string; updated_at: string | null; links: { count: number; rels: string[] } };
 		audit: { status: CheckStatus; checks: Checks };
@@ -62,34 +64,27 @@
 	let {
 		apiBase,
 		mediaId,
+		slot,
 		mediaName,
 		articleStatus,
 		words,
-		regenLabel,
-		canRegen,
-		generating,
 		gatekeeperConfigured,
 		reloadToken,
 		onClose,
-		onEdit,
-		onRegenerate,
 		onScanned,
 		onScanning,
 		onPublish
 	}: {
 		apiBase: string;
 		mediaId: string;
+		/** Nomor artikel pada media itu: panel hanya menilai artikel ini. */
+		slot: number;
 		mediaName: string;
 		articleStatus: string;
 		words: number | null;
-		regenLabel: string;
-		canRegen: boolean;
-		generating: boolean;
 		gatekeeperConfigured: boolean | null;
 		reloadToken: number;
 		onClose: () => void;
-		onEdit: () => void;
-		onRegenerate: () => void;
 		onScanned?: () => void;
 		/** Dipanggil saat pemindaian mulai/selesai, supaya tombol QC di daftar
 		 *  ikut berputar walau pemindaiannya dijalankan dari panel ini. */
@@ -107,14 +102,23 @@
 	let openCheck = $state<string | null>(null);
 	let pollTimer: number | null = null;
 
-	const media = $derived(data?.media.find((m) => m.media_id === mediaId) ?? null);
+	const media = $derived(data?.media.find((m) => m.media_id === mediaId && Number(m.slot ?? 1) === slot) ?? null);
 	const checks = $derived<Checks | null>(media?.audit.checks ?? null);
-	const totalMedia = $derived(data?.media.length ?? 0);
-	const scannedCount = $derived((data?.media ?? []).filter((m) => m.audit.status !== 'pending').length);
+	// Progres dipakai untuk artikel ini saja: tiga pemeriksa di panel. Dulu
+	// angkanya menghitung seluruh baris kampanye sehingga panel satu artikel
+	// menampilkan "x/y artikel" yang membingungkan saat ada beberapa slot.
+	const totalChecks = QC_CHECK_COUNT;
+	const scannedCount = $derived(
+		checks
+			? [checks.contentSafety, checks.linkHealth, checks.brandVoice].filter(
+					(c) => c && c.status !== 'pending' && c.status !== 'running'
+				).length
+			: 0
+	);
 	const blocking = $derived(
-		(data?.media ?? []).filter(
-			(m) => m.audit.status === 'pending' || m.audit.checks.contentSafety?.status !== 'passed' || m.audit.checks.linkHealth?.status !== 'passed'
-		)
+		!checks ||
+			checks.contentSafety?.status !== 'passed' ||
+			checks.linkHealth?.status !== 'passed'
 	);
 	const articleLinks = $derived(media?.article.links ?? null);
 
@@ -171,7 +175,7 @@
 			// menahan koneksi sampai selesai, jadi timeout-nya harus panjang.
 			const res = await apiRequest(
 				`${apiBase}/gatekeeper/audit-all`,
-				{ method: 'POST', body: JSON.stringify({ mediaIds: [mediaId] }) },
+				{ method: 'POST', body: JSON.stringify({ mediaIds: [mediaId], slots: [slot] }) },
 				900_000
 			);
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menjalankan pemindaian QC.')));
@@ -343,9 +347,9 @@
 					<LoaderCircle size={16} class="animate-spin" />{tr('Memindai artikel…')} <span class="font-mono text-[12px]">{Math.floor(scanSeconds / 60)}:{String(scanSeconds % 60).padStart(2, '0')}</span>
 				</div>
 				<p class="mt-1 text-[12px] text-muted-foreground">
-					{scannedCount}/{totalMedia} {tr('artikel sudah punya hasil. Hasil per media muncul bertahap; panel ini memperbarui sendiri setiap 4 detik.')}
+					{scannedCount}/{totalChecks} {tr('pemeriksaan selesai untuk artikel ini. Hasil muncul bertahap; panel ini memperbarui sendiri setiap 4 detik.')}
 				</p>
-				<div class="qcProgressTrack"><div class="qcProgressFill" style="width: {totalMedia > 0 ? Math.round((scannedCount / totalMedia) * 100) : 0}%;"></div></div>
+				<div class="qcProgressTrack"><div class="qcProgressFill" style="width: {totalChecks > 0 ? Math.round((scannedCount / totalChecks) * 100) : 0}%;"></div></div>
 			</div>
 		{/if}
 
@@ -496,13 +500,6 @@
 				{#if scanning}<LoaderCircle size={14} class="animate-spin" />{:else}<ShieldCheck size={14} />{/if}
 				{scanning ? tr('Memindai…') : tr('Scan Ulang Artikel Ini')}
 			</button>
-			<button class="app-btn app-btn-soft !min-h-9 !px-3.5 !text-xs" type="button" onclick={onEdit}><Eye size={14} /> {tr('Edit Artikel')}</button>
-			{#if canRegen}
-				<button class="app-btn app-btn-soft !min-h-9 !px-3.5 !text-xs" type="button" disabled={generating} onclick={onRegenerate}>
-					{#if generating}<LoaderCircle size={14} class="animate-spin" />{:else}<Sparkles size={14} />{/if}
-					{generating ? tr('Membuat…') : regenLabel}
-				</button>
-			{/if}
 		{/if}
 	{/snippet}
 </SlideOver>

@@ -639,7 +639,10 @@
 			const counts: Record<string, number> = {};
 			for (const item of auditsData?.media ?? []) {
 				const id = String(item?.media_id ?? '');
-				if (id) counts[id] = Number(item?.audit?.count ?? 0);
+				if (!id) continue;
+				// Kunci per (media, slot): satu domain bisa punya beberapa artikel,
+				// dan jumlah audit slot 1 tidak boleh menimpa slot 2.
+				counts[pkey({ media_id: id, slot: Number(item?.slot ?? 1) })] = Number(item?.audit?.count ?? 0);
 			}
 			qcCounts = counts;
 			const linksData = linksRes.ok ? await linksRes.json() : null;
@@ -3032,6 +3035,7 @@
 			{brandId}
 			{campaignId}
 			mediaId={ed.mediaId}
+			slot={ed.slot}
 			mediaName={ed.mediaName}
 			mediaDomain={mediaDomainOf(targetMedia)}
 			initialTab={ed.tab}
@@ -3170,16 +3174,14 @@
 
 {#if qcItem}
 	{@const qc = qcItem}
-	{#key qc.media_id}
+	{#key `${qc.media_id}:${qc.slot ?? 1}`}
 		<QcPanel
 			{apiBase}
 			mediaId={qc.media_id}
+			slot={qc.slot ?? 1}
 			mediaName={qc.name}
 			articleStatus={articleStatusOf(qc)}
 			words={qcStats?.words ?? null}
-			regenLabel={`${tr('Generate Ulang')} (${toRp(writerCostCredits)})`}
-			canRegen={canRegen(qc) && !bulkRunning}
-			generating={articleStatusOf(qc) === 'generating'}
 			gatekeeperConfigured={gatekeeperAgent ? gatekeeperAgent.configured : null}
 			reloadToken={qcToken}
 			onScanning={(running) => {
@@ -3187,8 +3189,6 @@
 				qcRunning = { ...qcRunning, [key]: running };
 			}}
 			onClose={() => (qcFor = null)}
-			onEdit={() => void openPreview(qc)}
-			onRegenerate={() => void generateOne(qc, false)}
 				onScanned={() => {
 					qcToken += 1;
 					// Setelah pemindaian selesai: bila seluruh gerbang keras kini lulus,
