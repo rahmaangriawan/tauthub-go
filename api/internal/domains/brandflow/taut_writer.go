@@ -903,15 +903,15 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		{URL: plantPrimary, Anchor: primaryAnchor, Rel: primaryRel, Mandatory: plantPrimary != ""},
 		{URL: plantBackup, Anchor: backupAnchor, Rel: strPtrValue("nofollow sponsored"), Mandatory: false},
 	}
-	// Tautan klien ikut dinegosiasikan lewat pasca-proses (non-mandatory): bila
-	// AI menulis URL telanjang, URL itu dibungkus jadi <a> dengan anchor klien.
+	// Tautan klien: klien mengisinya dengan sadar, jadi penegak kebijakan WAJIB
+	// menanamnya bila model lupa (lihat enforceTautBacklinkPolicy, Client=true).
 	if allowsLink {
 		for _, l := range customLinks {
 			var rel *string
 			if sponsoredMedia {
 				rel = strPtrValue("sponsored")
 			}
-			linkSpecs = append(linkSpecs, tautBacklinkSpec{URL: l.URL, Anchor: l.Anchor, Rel: rel, Mandatory: false})
+			linkSpecs = append(linkSpecs, tautBacklinkSpec{URL: l.URL, Anchor: l.Anchor, Rel: rel, Mandatory: false, Client: true})
 		}
 	}
 	contentHTML = finalizeTautArticleHTML(contentHTML, mediaType, allowsLink, linkSpecs)

@@ -15,6 +15,11 @@ type tautBacklinkSpec struct {
 	Anchor    string
 	Rel       *string
 	Mandatory bool
+	// Client: tautan yang diminta klien lewat modal Pengelola Naskah. Beda dari
+	// tautan kampanye, klien mengisinya dengan sadar dan mengharapkan tautan itu
+	// ADA di artikel. Karena itu penegaknya wajib menanam sendiri saat model
+	// tidak menuliskannya — bukan sekadar menunggu URL muncul di teks.
+	Client bool
 }
 
 // reURLWithScheme: URL ber-skema di dalam teks.
@@ -310,6 +315,49 @@ func weaveContextualLink(html, url, anchor string, rel *string) string {
 	return ""
 }
 
+// weaveExactAnchorLink: seperti weaveContextualLink, tetapi HANYA mencocokkan
+// frasa anchor secara utuh — tidak memecahnya jadi kata tunggal.
+//
+// Dipakai untuk tautan yang diminta klien: teks tautan yang terlihat harus
+// persis anchor yang diketik klien. weaveContextualLink sengaja longgar (coba
+// anchor penuh lalu kata-kata besarnya) karena untuk backlink kampanye frasa
+// apa pun yang relevan masih dapat diterima; untuk tautan klien, melonggarkan
+// berarti menampilkan anchor yang salah — mis. "sewa venue pernikahan" menjadi
+// "venue" saja.
+func weaveExactAnchorLink(html, url, anchor string, rel *string) string {
+	trimmed := strings.TrimSpace(anchor)
+	if trimmed == "" {
+		return ""
+	}
+	attr := ""
+	if rel != nil && *rel != "" {
+		attr = ` rel="` + *rel + `"`
+	}
+	wrap := func(m string) string { return `<a href="` + url + `"` + attr + `>` + m + `</a>` }
+	re, err := regexp.Compile(`(?i)(^|[^\w@./-])(` + regexp.QuoteMeta(trimmed) + `)([\s),.;:!?]|$)`)
+	if err != nil {
+		return ""
+	}
+	replaced := false
+	out := mapHTMLTextNodes(html, func(text string) string {
+		if replaced || !re.MatchString(text) {
+			return text
+		}
+		replaced = true
+		return re.ReplaceAllStringFunc(text, func(m string) string {
+			sub := re.FindStringSubmatch(m)
+			if sub == nil {
+				return m
+			}
+			return sub[1] + wrap(sub[2]) + sub[3]
+		})
+	})
+	if !replaced {
+		return ""
+	}
+	return out
+}
+
 // hrefLinkReFor: pasangan <a> lengkap untuk satu URL. href ditoleransi &amp;
 // (model sering meng-escape & di atribut) dan trailing slash — tanpa ini link
 // yang sudah ditanam dianggap hilang lalu disisipkan lagi jadi link ganda.
@@ -458,6 +506,35 @@ func enforceTautBacklinkPolicy(html string, links []tautBacklinkSpec) string {
 					}
 				}
 			}
+		}
+	}
+	// Tautan klien: model sering mengabaikannya (terutama saat prompt angle
+	// punya aturan tautan sendiri), dan jalur di atas hanya membungkus URL yang
+	// SUDAH ditulis model — jadi anchor klien bisa hilang total. Di sini tiap
+	// tautan klien yang belum ada di naskah ditanam paksa: bungkus frasa anchor
+	// bila frasa itu ada di teks, kalau tidak sisipkan satu kalimat di akhir
+	// paragraf terakhir supaya tautan tetap ada.
+	for _, spec := range links {
+		if !spec.Client || spec.URL == "" || spec.Anchor == "" {
+			continue
+		}
+		if hrefLinkReFor(spec.URL).MatchString(out) {
+			continue
+		}
+		if woven := weaveExactAnchorLink(out, spec.URL, spec.Anchor, spec.Rel); woven != "" {
+			out = woven
+			continue
+		}
+		attr := ""
+		if spec.Rel != nil && *spec.Rel != "" {
+			attr = ` rel="` + *spec.Rel + `"`
+		}
+		sentence := ` Untuk kebutuhan tersebut, <a href="` + spec.URL + `"` + attr + `>` +
+			escapeHTMLText(spec.Anchor) + `</a> bisa jadi pilihan yang layak dipertimbangkan.`
+		if lastP := strings.LastIndex(out, "</p>"); lastP != -1 {
+			out = out[:lastP] + sentence + "</p>" + out[lastP+4:]
+		} else {
+			out += "<p>" + strings.TrimSpace(sentence) + "</p>"
 		}
 	}
 	return out
