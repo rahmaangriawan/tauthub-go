@@ -29,6 +29,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { renderMarkdown } from '$lib/markdown-lite';
 	import { sanitizeHtml } from '$lib/sanitize-html';
+	import BriefSummaryView from './_brief-summary-view.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
@@ -4481,8 +4482,17 @@
 									<p class="mt-1 text-muted-foreground">{tr('Coba lagi sebentar lagi.')}</p>
 								</div>
 							{:else if summaryCurrent.content}
-								<div class="brief-markdown brief-summary-body mt-4 text-sm leading-relaxed">
-									{@html sanitizeHtml(renderMarkdown(summaryCurrent.content))}
+								<div class="brief-summary-body mt-4 text-sm leading-relaxed">
+									{#if summaryTab === 'entity'}
+										<!-- Ringkasan entitas = kumpulan field kanonik. Dirender
+										     sebagai bagian berjudul + baris label/nilai, bukan dump
+										     teks mentah berisi nama field snake_case. -->
+										<BriefSummaryView content={summaryCurrent.content} />
+									{:else}
+										<div class="brief-markdown">
+											{@html sanitizeHtml(renderMarkdown(summaryCurrent.content))}
+										</div>
+									{/if}
 								</div>
 							{:else}
 								<p class="mt-4 rounded-xl border px-3.5 py-3 text-xs italic" style="border-color: var(--border); color: var(--muted-foreground);">
