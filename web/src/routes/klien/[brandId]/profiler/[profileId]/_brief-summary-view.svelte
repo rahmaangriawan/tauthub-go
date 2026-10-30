@@ -74,8 +74,13 @@
 						<dl class="bsv-fields">
 							{#each block.rows as f, fi (f.label + '-' + fi)}
 								{@const pairs = pairsOf(f)}
-								<div class="bsv-field">
-									<dt class="bsv-label">{f.label}</dt>
+								<!-- Label yang sama dengan judul bagian tidak diulang; nilainya
+								     langsung di bawah judul. -->
+								{@const labelRedundant = f.label.trim().toLowerCase() === section.title.trim().toLowerCase()}
+								<div class="bsv-field" class:bsv-field-solo={labelRedundant}>
+									{#if !labelRedundant}
+										<dt class="bsv-label">{f.label}</dt>
+									{/if}
 									<dd class="bsv-value">
 										{#if f.items && f.items.length > 0}
 											<ul class="bsv-ul">
@@ -166,6 +171,9 @@
 		grid-template-columns: minmax(112px, 178px) minmax(0, 1fr);
 		gap: 2px 14px;
 		align-items: start;
+	}
+	.bsv-field-solo {
+		grid-template-columns: minmax(0, 1fr);
 	}
 	.bsv-label {
 		font-size: 12px;
