@@ -3177,6 +3177,10 @@
 			generating={articleStatusOf(qc) === 'generating'}
 			gatekeeperConfigured={gatekeeperAgent ? gatekeeperAgent.configured : null}
 			reloadToken={qcToken}
+			onScanning={(running) => {
+				const key = pkey(qc);
+				qcRunning = { ...qcRunning, [key]: running };
+			}}
 			onClose={() => (qcFor = null)}
 			onEdit={() => void openPreview(qc)}
 			onRegenerate={() => void generateOne(qc, false)}

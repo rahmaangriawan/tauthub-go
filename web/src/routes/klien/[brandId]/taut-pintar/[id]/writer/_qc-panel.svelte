@@ -74,6 +74,7 @@
 		onEdit,
 		onRegenerate,
 		onScanned,
+		onScanning,
 		onPublish
 	}: {
 		apiBase: string;
@@ -90,6 +91,9 @@
 		onEdit: () => void;
 		onRegenerate: () => void;
 		onScanned?: () => void;
+		/** Dipanggil saat pemindaian mulai/selesai, supaya tombol QC di daftar
+		 *  ikut berputar walau pemindaiannya dijalankan dari panel ini. */
+		onScanning?: (running: boolean) => void;
 		onPublish?: () => void;
 	} = $props();
 
@@ -153,6 +157,7 @@
 	async function scan() {
 		if (scanning) return;
 		scanning = true;
+		onScanning?.(true);
 		scanSeconds = 0;
 		if (scanTimer) window.clearInterval(scanTimer);
 		scanTimer = window.setInterval(() => (scanSeconds += 1), 1000);
@@ -187,6 +192,7 @@
 				scanTimer = null;
 			}
 			scanning = false;
+			onScanning?.(false);
 			// Pemindaian mengubah article_status tiap media, jadi halaman induk
 			// harus memuat ulang kalau tidak badge barisnya jadi basi.
 			onScanned?.();
