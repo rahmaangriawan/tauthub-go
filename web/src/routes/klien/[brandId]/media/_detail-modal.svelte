@@ -135,6 +135,8 @@
 	});
 
 	let crawlArticles = $state<number | null>(null);
+	let crawlAt = $state<string | null>(null);
+	let crawlStale = $state(false);
 	let copiedShare = $state(false);
 	let catPopoverOpen = $state(false);
 	let infoTipOpen = $state(false);
@@ -149,8 +151,16 @@
 			try {
 				const res = await apiRequest(`/v1/brands/${brandId}/media/${media.id}/crawl-status`);
 				if (!res.ok || cancelled) return;
-				const data = (await res.json()) as { articles_7d?: number | null };
-				if (!cancelled) crawlArticles = data.articles_7d ?? null;
+				const data = (await res.json()) as {
+					articles_7d?: number | null;
+					last_crawled_at?: string | null;
+					stale?: boolean;
+				};
+				if (!cancelled) {
+					crawlArticles = data.articles_7d ?? null;
+					crawlAt = data.last_crawled_at ?? null;
+					crawlStale = data.stale === true;
+				}
 			} catch {
 				if (!cancelled) crawlArticles = null;
 			}
@@ -659,6 +669,11 @@
 								<div class="velocityContent">
 									<span class="velocityTitle">Content Velocity</span>
 									<span class="velocitySub">Rata-rata artikel terbit / minggu</span>
+									{#if crawlAt}
+										<span class="velocitySub">
+											Data per {jakartaStamp(crawlAt)}{crawlStale ? ' (belum diperbarui)' : ''}
+										</span>
+									{/if}
 								</div>
 								<div class="velocityRight">
 									{#if crawlArticles == null}
@@ -667,7 +682,7 @@
 										<div class="velocityValue">
 											{crawlArticles} <span class="velocityValueUnit">artikel</span>
 										</div>
-										{#if velocityBadge}
+										{#if velocityBadge && !crawlStale}
 											<span
 												class={velocityBadge.isProductive
 													? 'velocityBadge'

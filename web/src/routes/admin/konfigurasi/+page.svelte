@@ -578,7 +578,7 @@
 		monitorError = '';
 		const res = await request<MonitorData>(`/crawlhub/targets?filter=${monitorFilter}&limit=20&offset=${monitorOffset}`, {}, 'Gagal memuat status crawl media.');
 		if (res.ok) {
-			const cutoff = Date.now() - 90 * 24 * 3600 * 1000;
+			const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
 			monitor = {
 				...res.data,
 				targets: res.data.targets.map((t) => ({
@@ -1278,7 +1278,7 @@
 						crawlTab = 'monitoring';
 						void loadMonitor();
 					}}
-				>{tr("Status Crawl Media")}</button>
+				>{tr("Monitoring Velocity")}</button>
 			</div>
 
 			{#if crawlTab === 'endpoint'}
@@ -1463,8 +1463,8 @@
 				<div class="app-card p-4">
 					<div class="flex flex-wrap items-center justify-between gap-3">
 						<div>
-							<h2 class="text-base font-semibold">{tr("Status Crawl Media")}</h2>
-							<p class="mt-1 text-sm text-muted-foreground">{tr("Hasil crawl otomatis per media mitra aktif. Scheduler mengantre crawl baru tiap menit; gagal diulang setelah 24 jam (maks 2x), dan media yang hasilnya lebih tua dari 3 bulan di-crawl ulang.")}</p>
+							<h2 class="text-base font-semibold">{tr("Monitoring Velocity")}</h2>
+							<p class="mt-1 text-sm text-muted-foreground">{tr("Hasil crawl otomatis per media mitra aktif. Scheduler mengantre sinkronisasi tiap menit; hasil disegarkan tiap 7 hari (CRAWLHUB_STALE_DAYS), media yang belum punya angka dicek ulang tiap 24 jam, dan gagal diulang setelah 24 jam (maks 2x).")}</p>
 						</div>
 						<button class="app-btn app-btn-primary" type="button" disabled={syncBusy || monitorLoading} onclick={() => void syncCrawlhub()}>
 							{syncBusy ? 'Menyinkronkan…' : 'Sinkronkan Sekarang'}
@@ -1527,7 +1527,7 @@
 										<th class="px-3 py-2 text-left font-medium">{tr("Media")}</th>
 										<th class="px-3 py-2 text-left font-medium">Artikel / 7 Hari</th>
 										<th class="px-3 py-2 text-left font-medium">Sumber</th>
-										<th class="px-3 py-2 text-left font-medium">Terakhir Crawl</th>
+										<th class="px-3 py-2 text-left font-medium">Terakhir Berhasil</th>
 										<th class="px-3 py-2 text-left font-medium">{tr("Gagal Berturut")}</th>
 										<th class="px-3 py-2 text-left font-medium">Error Terakhir</th>
 										<th class="px-3 py-2 text-left font-medium">Aksi</th>

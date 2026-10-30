@@ -277,39 +277,63 @@ func (d *Deps) MediaCrawlStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sumber utama: salinan lokal hasil crawl.
+	// Salinan lokal jadi sumber utama — tapi hanya selama masih segar. Sweep
+	// hanya menyegarkannya tiap CRAWLHUB_STALE_DAYS, jadi tanpa batas umur ini
+	// angka velocity bisa tampil beku berhari-hari padahal Crawlhub sudah punya
+	// hasil crawl yang lebih baru.
+	ttlDays := schEnvInt("CRAWLHUB_VELOCITY_TTL_DAYS", defaultCrawlStaleDays)
+	if ttlDays <= 0 {
+		ttlDays = defaultCrawlStaleDays
+	}
 	local, err := d.queryRow(r.Context(), `
-		SELECT articles_7d, confidence, source, last_crawled_at
+		SELECT articles_7d, confidence, source, last_crawled_at,
+		       (last_crawled_at IS NOT NULL
+		        AND last_crawled_at >= NOW() - make_interval(days => $2::int)) AS fresh
 		FROM crawl_targets
 		WHERE media_id = $1 AND articles_7d IS NOT NULL
-		LIMIT 1`, mediaID)
+		LIMIT 1`, mediaID, ttlDays)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	if local != nil {
+	if local != nil && local.boolOr("fresh", false) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"configured": true, "articles_7d": local.numPtr("articles_7d"),
 			"confidence": local.raw("confidence"), "source": local.raw("source"),
-			"last_crawled_at": local.timePtr("last_crawled_at"),
+			"last_crawled_at": local.timePtr("last_crawled_at"), "stale": false,
 		})
 		return
+	}
+	// localPayload: angka terakhir yang pernah terukur tetap ditampilkan kalau
+	// Crawlhub tidak terjangkau atau run terakhirnya tidak menghasilkan angka
+	// (mis. diblokir WAF). stale=true supaya UI tidak menyimpulkan status dari
+	// data lama.
+	localPayload := func(configured bool, note string) map[string]any {
+		payload := map[string]any{
+			"configured": configured, "articles_7d": nil, "confidence": nil,
+			"source": nil, "last_crawled_at": nil, "stale": true,
+		}
+		if local != nil {
+			payload["articles_7d"] = local.numPtr("articles_7d")
+			payload["confidence"] = local.raw("confidence")
+			payload["source"] = local.raw("source")
+			payload["last_crawled_at"] = local.timePtr("last_crawled_at")
+		}
+		if note != "" {
+			payload["error"] = note
+		}
+		return payload
 	}
 
 	config := d.bsLoadCrawlhubConfig(r.Context())
 	if !bsCrawlhubConfigured(config) {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"configured": false, "articles_7d": nil, "confidence": nil, "source": nil,
-		})
+		writeJSON(w, http.StatusOK, localPayload(false, ""))
 		return
 	}
 	result, fetchErr := d.bsFetchCrawlhubTargetStatus(r.Context(), config, mediaID)
 	if fetchErr != nil {
-		// Crawlhub tidak terjangkau → kosong, bukan 500.
-		writeJSON(w, http.StatusOK, map[string]any{
-			"configured": true, "articles_7d": nil, "confidence": nil, "source": nil,
-			"error": fetchErr.Error(),
-		})
+		// Crawlhub tidak terjangkau → pakai angka lama, bukan 500.
+		writeJSON(w, http.StatusOK, localPayload(true, fetchErr.Error()))
 		return
 	}
 	var lastRun map[string]any
@@ -324,9 +348,15 @@ func (d *Deps) MediaCrawlStatus(w http.ResponseWriter, r *http.Request) {
 		confidence = lastRun["confidence"]
 		source = lastRun["source"]
 	}
+	if articles == nil && local != nil {
+		// Run terakhir tidak menghasilkan angka: jangan buang angka terakhir
+		// yang pernah terukur hanya karena satu crawl diblokir.
+		writeJSON(w, http.StatusOK, localPayload(true, ""))
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"configured": true, "articles_7d": articles, "confidence": confidence,
-		"source": source, "last_crawled_at": result["last_crawled_at"],
+		"source": source, "last_crawled_at": result["last_crawled_at"], "stale": false,
 	})
 }
 

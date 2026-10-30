@@ -56,6 +56,20 @@ type igChConfig struct {
 	IngestSecret string
 }
 
+// crawlStaleDays: umur maksimum salinan crawl_targets sebelum dianggap basi.
+// Sama dengan default di brandflow/scheduler.go; CRAWLHUB_STALE_MONTHS lama
+// tetap dihormati (×30) supaya env produksi yang sudah terpasang tidak berubah
+// diam-diam.
+func crawlStaleDays() int {
+	if v := clampInt(os.Getenv("CRAWLHUB_STALE_DAYS"), 0, 1, 365); v > 0 {
+		return v
+	}
+	if v := clampInt(os.Getenv("CRAWLHUB_STALE_MONTHS"), 0, 1, 12); v > 0 {
+		return v * 30
+	}
+	return 7
+}
+
 func (d *Deps) igChLoadConfig(ctx context.Context) (igChConfig, error) {
 	cfg := igChConfig{
 		BaseURL:      strings.TrimRight(strings.TrimSpace(os.Getenv("CRAWLHUB_BASE_URL")), "/"),
@@ -367,10 +381,18 @@ func (d *Deps) igChSyncCrawlTarget(ctx context.Context, cfg igChConfig, mediaID 
 		 VALUES ($1, $2, TRUE, $3, $4, $5, $6, $7, 0, NULL, NOW())
 		 ON CONFLICT (media_id) DO UPDATE SET
 		   website_url = EXCLUDED.website_url,
-		   articles_7d = EXCLUDED.articles_7d,
-		   confidence = EXCLUDED.confidence,
-		   source = EXCLUDED.source,
-		   last_crawled_at = EXCLUDED.last_crawled_at,
+		   -- Run yang gagal (diblokir WAF, timeout) tidak boleh menghapus angka
+		   -- terakhir yang pernah terukur; status & error tetap diperbarui.
+		   articles_7d = COALESCE(EXCLUDED.articles_7d, crawl_targets.articles_7d),
+		   confidence = COALESCE(EXCLUDED.confidence, crawl_targets.confidence),
+		   source = COALESCE(EXCLUDED.source, crawl_targets.source),
+		   -- last_crawled_at menandai umur ANGKA, bukan umur percobaan: kalau
+		   -- run tidak menghasilkan angka, waktu lama dipertahankan supaya TTL
+		   -- di crawl-status tetap tahu angkanya sudah basi.
+		   last_crawled_at = CASE
+		     WHEN EXCLUDED.articles_7d IS NOT NULL THEN EXCLUDED.last_crawled_at
+		     ELSE crawl_targets.last_crawled_at
+		   END,
 		   last_status = EXCLUDED.last_status,
 		   consecutive_failures = 0,
 		   last_error = NULL,
@@ -378,7 +400,11 @@ func (d *Deps) igChSyncCrawlTarget(ctx context.Context, cfg igChConfig, mediaID 
 		mediaID, websiteURL, articles7d, confidence, source, lastCrawled, lastStatus); err != nil {
 		return igChSyncOutcome{OK: false, Error: err.Error()}
 	}
-	if articles7d == nil || lastCrawled == nil {
+	// Paksa crawl hanya kalau target belum pernah punya run sama sekali. Kalau
+	// run sudah ada tapi angkanya kosong (blocked/no_source), Crawlhub punya
+	// retry sendiri — memaksa refresh di setiap sync justru menghajar situs yang
+	// sama berulang kali dan memperbesar peluang diblokir WAF-nya.
+	if lastRun == nil {
 		if _, fErr := d.igChSignedFetch(ctx, cfg, "/v1/targets/"+url.PathEscape(mediaID)+"/refresh", http.MethodPost, map[string]any{"mediaId": mediaID}, 15000); fErr != nil {
 			// best-effort: re-crawl gagal akan dicoba lagi nanti
 		}
@@ -443,7 +469,7 @@ func (d *Deps) CrawlhubTargets(w http.ResponseWriter, r *http.Request) {
 		filters = append(filters, "COALESCE(ct.consecutive_failures, 0) > 0")
 	}
 	if filter == "stale" {
-		filters = append(filters, "(ct.last_crawled_at IS NULL OR ct.last_crawled_at < NOW() - make_interval(months => 3))")
+		filters = append(filters, fmt.Sprintf("(ct.last_crawled_at IS NULL OR ct.last_crawled_at < NOW() - make_interval(days => %d))", crawlStaleDays()))
 	}
 	if filter == "unregistered" {
 		filters = append(filters, "ct.media_id IS NULL")
@@ -529,10 +555,7 @@ func (d *Deps) igChEnqueueCrawlTargetSyncs(ctx context.Context, limit int) (int,
 	if !cfg.igConfigured() {
 		return 0, nil
 	}
-	staleMonths := 3
-	if v := strings.TrimSpace(os.Getenv("CRAWLHUB_STALE_MONTHS")); v != "" {
-		staleMonths = clampInt(v, 3, 1, 120)
-	}
+	staleDays := crawlStaleDays()
 	candidates, err := d.queryRows(ctx,
 		`SELECT m.id FROM media m
 		   LEFT JOIN crawl_targets ct ON ct.media_id = m.id
@@ -544,7 +567,8 @@ func (d *Deps) igChEnqueueCrawlTargetSyncs(ctx context.Context, limit int) (int,
 		      OR ct.last_crawled_at IS NULL
 		      OR (COALESCE(ct.consecutive_failures, 0) BETWEEN 1 AND 2
 		          AND ct.updated_at < NOW() - INTERVAL '24 hours')
-		      OR ct.last_crawled_at < NOW() - make_interval(months => $1::int)
+		      OR ct.articles_7d IS NULL
+		      OR ct.last_crawled_at < NOW() - make_interval(days => $1::int)
 		    )
 		    AND (ct.updated_at IS NULL OR ct.updated_at < NOW() - INTERVAL '24 hours')
 		    AND NOT EXISTS (
@@ -553,7 +577,7 @@ func (d *Deps) igChEnqueueCrawlTargetSyncs(ctx context.Context, limit int) (int,
 		        AND j.payload->>'mediaId' = m.id
 		    )
 		  ORDER BY ct.last_crawled_at ASC NULLS FIRST
-		  LIMIT $2`, staleMonths, limit)
+		  LIMIT $2`, staleDays, limit)
 	if err != nil {
 		return 0, err
 	}

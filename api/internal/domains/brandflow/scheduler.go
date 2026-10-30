@@ -928,20 +928,34 @@ func (d *Deps) schEnqueueDomainRechecks(ctx context.Context, limit int) {
 
 // ---------- 8b. crawl target sync (enqueueCrawlTargetSyncs) ----------
 
+// defaultCrawlStaleDays: umur maksimum salinan crawl_targets sebelum dianggap
+// basi. Selaras dengan interval crawl Crawlhub (CRAWL_INTERVAL_HOURS, default
+// 240 jam = 10 hari) plus kelonggaran, jadi angka velocity di katalog bergerak
+// tiap siklus crawl — bukan tiap kuartal seperti default lama (3 bulan).
+const defaultCrawlStaleDays = 7
+
+// crawlStaleDays: CRAWLHUB_STALE_DAYS. CRAWLHUB_STALE_MONTHS yang lama tetap
+// dihormati (×30) supaya env produksi yang sudah terpasang tidak berubah diam-diam.
+func crawlStaleDays() int {
+	if v := schEnvInt("CRAWLHUB_STALE_DAYS", 0); v > 0 {
+		return v
+	}
+	if v := schEnvInt("CRAWLHUB_STALE_MONTHS", 0); v > 0 {
+		return v * 30
+	}
+	return defaultCrawlStaleDays
+}
+
 // schEnqueueCrawlTargetSyncs: kandidat media mitra aktif yang target crawl-nya
-// belum ada, gagal 1-2x > 24 jam, atau hasil terakhir lebih tua dari
-// CRAWLHUB_STALE_MONTHS. No-op bila Crawlhub belum dikonfigurasi.
+// belum ada, gagal 1-2x > 24 jam, belum punya angka sama sekali, atau hasil
+// terakhirnya lebih tua dari CRAWLHUB_STALE_DAYS. No-op bila Crawlhub belum
+// dikonfigurasi.
 func (d *Deps) schEnqueueCrawlTargetSyncs(ctx context.Context, limit int) {
 	cfg := d.bsLoadCrawlhubConfig(ctx)
 	if !bsCrawlhubConfigured(cfg) {
 		return
 	}
-	// Parity `Number(process.env.CRAWLHUB_STALE_MONTHS ?? 3) || 3`: nilai 0/NaN
-	// jatuh ke default 3.
-	staleMonths := schEnvInt("CRAWLHUB_STALE_MONTHS", 3)
-	if staleMonths <= 0 {
-		staleMonths = 3
-	}
+	staleDays := crawlStaleDays()
 
 	candidates, err := d.queryRows(ctx, `
 		SELECT m.id FROM media m
@@ -954,7 +968,10 @@ func (d *Deps) schEnqueueCrawlTargetSyncs(ctx context.Context, limit int) {
 		    OR ct.last_crawled_at IS NULL
 		    OR (COALESCE(ct.consecutive_failures, 0) BETWEEN 1 AND 2
 		        AND ct.updated_at < NOW() - INTERVAL '24 hours')
-		    OR ct.last_crawled_at < NOW() - make_interval(months => $1::int)
+		    -- Belum pernah dapat angka (baru terdaftar / crawl terakhir diblokir):
+		    -- cek ulang tiap hari sampai angkanya ada, jangan tunggu 7 hari.
+		    OR ct.articles_7d IS NULL
+		    OR ct.last_crawled_at < NOW() - make_interval(days => $1::int)
 		  )
 		  AND (ct.updated_at IS NULL OR ct.updated_at < NOW() - INTERVAL '24 hours')
 		  AND NOT EXISTS (
@@ -968,7 +985,7 @@ func (d *Deps) schEnqueueCrawlTargetSyncs(ctx context.Context, limit int) {
 		      AND (j.status IN ('pending', 'running') OR j.created_at > NOW() - INTERVAL '24 hours')
 		  )
 		ORDER BY ct.last_crawled_at ASC NULLS FIRST
-		LIMIT $2`, staleMonths, limit)
+		LIMIT $2`, staleDays, limit)
 	if err != nil {
 		slog.Error("[scheduler] sweep crawl target sync gagal", "err", err)
 		return
