@@ -201,11 +201,22 @@ func (d *Deps) loadTautProperBriefContext(ctx context.Context, brandID, briefID 
 	if id == "" {
 		return out, nil
 	}
+	// brandID bisa datang sebagai UUID (campaign.brand_id) atau public_id (URL).
+	// profiler_profiles.brand_id menyimpan public_id, jadi kedua bentuk
+	// dinormalkan dulu — tanpa ini pemanggil yang membawa UUID selalu dapat
+	// "Brief tidak ditemukan untuk brand ini".
+	brandUUID, brandPublic := strings.TrimSpace(brandID), strings.TrimSpace(brandID)
+	if b, bErr := d.queryRow(ctx, `
+		SELECT id::text AS id, public_id FROM brands
+		WHERE id::text = $1 OR public_id = $1 LIMIT 1`, brandID); bErr == nil && b != nil {
+		brandUUID = b.strOr("id", brandUUID)
+		brandPublic = b.strOr("public_id", brandPublic)
+	}
 	var profileID string
 	row, err := d.queryRow(ctx, `
 		SELECT id FROM profiler_profiles
-		WHERE (id = $1 OR short_code = $1) AND brand_id = $2 AND deleted_at IS NULL
-		LIMIT 1`, id, brandID)
+		WHERE (id = $1 OR short_code = $1) AND (brand_id = $2 OR brand_id = $3) AND deleted_at IS NULL
+		LIMIT 1`, id, brandUUID, brandPublic)
 	if err != nil || row == nil {
 		return out, errUnprocessable("Brief tidak ditemukan untuk brand ini.")
 	}
