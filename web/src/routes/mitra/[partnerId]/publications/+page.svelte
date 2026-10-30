@@ -7,7 +7,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { Building2, Calendar, CalendarClock, Check, CheckCircle2, CircleAlert, Clock, Copy, ExternalLink, Eye, FileText, Globe, Image as ImageIcon, Info, Link2, LoaderCircle, MessageSquare, MoreVertical, Paperclip, Pencil, RefreshCw, Search, Send, SlidersHorizontal, Smile, Sparkles, Trash2, User, Wallet, X } from '@lucide/svelte';
+	import { Building2, BookOpen, Calendar, CalendarClock, Check, CheckCircle2, CircleAlert, Clock, Copy, ExternalLink, Eye, FileText, Globe, Image as ImageIcon, Info, Link2, LoaderCircle, MessageSquare, MoreVertical, Paperclip, Pencil, RefreshCw, Search, Send, ShieldCheck, ShieldAlert, SlidersHorizontal, Smile, Sparkles, Trash2, User, Wallet, X } from '@lucide/svelte';
 	import { Tooltip } from 'bits-ui';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -44,7 +44,16 @@
 	type PubDetail = Pub & {
 		/** Media mitra memakai Secure Direct (auto publish tanpa ACC per artikel). */
 		media_auto_publish?: boolean;
-		document: { slug: string | null; meta_description: string | null; excerpt?: string | null } | null;
+		document: {
+			slug: string | null; meta_title?: string | null; meta_description: string | null; excerpt?: string | null;
+			/** Isi penuh artikel — hanya dikirim endpoint detail untuk pratinjau. */
+			content_html?: string | null; word_count?: number | null;
+		} | null;
+		/** Hasil Guard konten otomatis (Gatekeeper): passed / review_required / failed / unchecked. */
+		content_check?: {
+			status: string; riskLevel?: string; categories?: string[]; reasons?: string[];
+			confidence?: number; checked_at?: string | null;
+		} | null;
 		attempts: Array<{
 			attempt_number: number; status: string;
 			error_code: string | null; error_message: string | null;
@@ -316,6 +325,37 @@
 		detailLoading = false;
 		urlEditMode = false;
 		urlSavedNotice = '';
+	}
+
+	// Pratinjau artikel — pembaca read-only untuk artikel yang belum terbit
+	// (terutama yang sudah dijadwalkan). Mitra perlu membaca isinya untuk
+	// memastikan tidak ada unsur ilegal sebelum artikel tayang otomatis.
+	let previewPub = $state<Pub | null>(null);
+	let previewDetail = $state<PubDetail | null>(null);
+	let previewLoading = $state(false);
+	let previewError = $state('');
+
+	async function openPreview(p: Pub, loaded?: PubDetail | null) {
+		previewPub = p;
+		previewError = '';
+		if (loaded?.document?.content_html) {
+			previewDetail = loaded;
+			previewLoading = false;
+			return;
+		}
+		previewDetail = null;
+		previewLoading = true;
+		const res = await apiRequest(`/v1/partner/publications/${p.id}`);
+		if (res.ok) previewDetail = await res.json();
+		else previewError = await readApiError(res, tr('Gagal memuat pratinjau artikel.'));
+		previewLoading = false;
+	}
+
+	function closePreview() {
+		previewPub = null;
+		previewDetail = null;
+		previewLoading = false;
+		previewError = '';
 	}
 
 	// Jatah Rewrite AI per artikel (gratis, maksimal 2 kali — aturan pemilik produk).
@@ -927,6 +967,70 @@
 	/** URL terbit efektif: koreksi mitra (published_url) → hasil integrasi (remote_url). */
 	const effectiveUrl = (row: { published_url?: string | null; remote_url?: string | null }) =>
 		row.published_url?.trim() || row.remote_url?.trim() || null;
+
+	// Status yang artikelnya sudah ada tapi belum tayang: mitra perlu bisa
+	// membaca isinya (jadwal terbit, ACC, revisi) tanpa harus membuka editor.
+	const previewStatuses = ['waiting_partner', 'partner_approved', 'queued', 'processing', 'retrying', 'revision'];
+	const canPreview = (p: Pub) => previewStatuses.includes(p.status);
+
+	/** Nama kategori Guard konten dalam bahasa mitra. */
+	const contentCategoryLabels: Record<string, string> = $derived({
+		sexual_content: tr('Konten seksual'),
+		child_safety: tr('Keamanan anak'),
+		gambling: tr('Perjudian'),
+		fraud_scam: tr('Penipuan'),
+		violence: tr('Kekerasan'),
+		extortion: tr('Pemerasan'),
+		hate_speech: tr('Ujaran kebencian'),
+		violent_extremism: tr('Ekstremisme kekerasan'),
+		harmful_propaganda: tr('Propaganda berbahaya'),
+		dangerous_activity: tr('Aktivitas berbahaya'),
+		illegal_activity_facilitation: tr('Fasilitasi aktivitas ilegal'),
+		human_exploitation: tr('Eksploitasi manusia'),
+		self_harm: tr('Menyakiti diri'),
+		other_illegal_content: tr('Konten ilegal lain')
+	});
+
+	/**
+	 * Ringkasan pemeriksaan konten untuk ditampilkan di detail & pratinjau.
+	 * `unchecked` bukan berarti aman — artikel manual belum pernah dipindai
+	 * otomatis, jadi mitra diminta membaca sendiri.
+	 */
+	const contentCheckMeta = (c: PubDetail['content_check']) => {
+		const status = c?.status ?? 'unchecked';
+		const cats = (c?.categories ?? []).map((x) => contentCategoryLabels[x] ?? x).filter(Boolean);
+		const reasons = (c?.reasons ?? []).filter((r) => typeof r === 'string' && r.trim() !== '');
+		if (status === 'passed') {
+			return {
+				tone: 'green' as const,
+				title: tr('Lolos pemeriksaan konten'),
+				desc: tr('Tidak terdeteksi unsur judi, pornografi, peretasan, DDoS, penipuan, atau konten ilegal lain.'),
+				detail: ''
+			};
+		}
+		if (status === 'failed') {
+			return {
+				tone: 'red' as const,
+				title: tr('Konten ditandai ilegal'),
+				desc: reasons[0] ?? tr('Sistem menandai artikel ini mengandung unsur ilegal.'),
+				detail: cats.length > 0 ? `${tr('Kategori')}: ${cats.join(', ')}` : ''
+			};
+		}
+		if (status === 'review_required') {
+			return {
+				tone: 'amber' as const,
+				title: tr('Perlu ditinjau manual'),
+				desc: reasons[0] ?? tr('Sistem tidak yakin artikel ini aman. Baca isinya sebelum menerbitkan.'),
+				detail: cats.length > 0 ? `${tr('Kategori dicurigai')}: ${cats.join(', ')}` : ''
+			};
+		}
+		return {
+			tone: 'gray' as const,
+			title: tr('Belum diperiksa otomatis'),
+			desc: tr('Artikel ini tidak melewati pemeriksaan konten otomatis. Baca pratinjau di bawah untuk memastikan isinya aman.'),
+			detail: ''
+		};
+	};
 	/** Pesan teknis verifikasi diterjemahkan jadi petunjuk yang ramah. */
 	const verificationHint = (msg: string | null | undefined) => {
 		if (!msg) return null;
@@ -949,7 +1053,7 @@
 
 <PageTitle title={tr("Publikasi")} />
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { publishConfirm = null; openIncomeID = null; } }} />
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { publishConfirm = null; openIncomeID = null; if (previewPub) closePreview(); } }} />
 
 <!-- ── Penghasilan: nominal = pendapatan bersih; klik membuka rincian
      (harga diajukan · potongan platform · pendapatan diterima). ───────── -->
@@ -1392,11 +1496,43 @@
 							<Tooltip.Arrow class="uiTipArrow" />
 							{tr('Detail')}
 						</Tooltip.Content>
-					</Tooltip.Portal>
-				</Tooltip.Root>
-			</Tooltip.Provider>
+						</Tooltip.Portal>
+					</Tooltip.Root>
+				</Tooltip.Provider>
 
-			<!-- 1b. Hubungi Klien (artikel belum terbit) -->
+				<!-- 1b. Pratinjau Artikel — baca isi artikel yang belum tayang
+				     (termasuk yang sudah dijadwalkan) untuk memastikan tidak ada
+				     unsur ilegal sebelum terbit otomatis. -->
+				{#if canPreview(p)}
+					<Tooltip.Provider delayDuration={150}>
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<button
+										{...props}
+										type="button"
+										class="pub-act pub-act-neutral"
+										aria-label={tr('Pratinjau Artikel')}
+										onclick={(e) => {
+											e.stopPropagation();
+											void openPreview(p);
+										}}
+									>
+										<BookOpen size={15} />
+									</button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Portal>
+								<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+									<Tooltip.Arrow class="uiTipArrow" />
+									{tr('Pratinjau Artikel')}
+								</Tooltip.Content>
+							</Tooltip.Portal>
+						</Tooltip.Root>
+					</Tooltip.Provider>
+				{/if}
+
+				<!-- 1b. Hubungi Klien (artikel belum terbit) -->
 			{#if canContact(p)}
 				<Tooltip.Provider delayDuration={150}>
 					<Tooltip.Root>
@@ -1733,6 +1869,43 @@
 											</span>
 										{/if}
 									</div>
+							</div>
+						</section>
+
+						<!-- 1b. Pemeriksaan konten otomatis + akses pratinjau artikel -->
+						{@const cc = contentCheckMeta(detail.content_check)}
+						{@const ccTone = TONE[cc.tone] ?? TONE.gray}
+						<section class="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm">
+							<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+								<div class="flex items-start gap-3">
+									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style="background: {ccTone.bg}; color: {ccTone.fg};">
+										{#if cc.tone === 'green'}
+											<ShieldCheck size={18} />
+										{:else if cc.tone === 'red' || cc.tone === 'amber'}
+											<ShieldAlert size={18} />
+										{:else}
+											<CircleAlert size={18} />
+										{/if}
+									</div>
+									<div class="min-w-0">
+										<p class="text-sm font-bold" style="color: {ccTone.fg};">{cc.title}</p>
+										<p class="mt-0.5 text-xs leading-relaxed text-slate-600">{cc.desc}</p>
+										{#if cc.detail}
+											<p class="mt-0.5 text-xs leading-relaxed text-slate-500">{cc.detail}</p>
+										{/if}
+										{#if detail.content_check?.checked_at}
+											<p class="mt-1 text-[11px] text-muted-foreground">{tr('Diperiksa')} {dt(detail.content_check.checked_at)}</p>
+										{/if}
+									</div>
+								</div>
+								<button
+									type="button"
+									class="app-btn app-btn-soft !text-xs !py-2 !px-3 shrink-0 inline-flex items-center gap-1.5 font-semibold self-start sm:self-center"
+									onclick={() => void openPreview(pub, detail)}
+								>
+									<BookOpen size={14} />
+									{tr('Pratinjau Artikel')}
+								</button>
 							</div>
 						</section>
 
@@ -2410,6 +2583,126 @@
 					{quickUrlBusy ? tr('Mengirim…') : tr('Kirim URL')}
 				</button>
 			</div>
+		</dialog>
+	</div>
+{/if}
+
+<!-- Pratinjau artikel — pembaca read-only. Muncul dari tombol Pratinjau di
+     daftar/tabel dan dari dialog Detail, terutama untuk artikel yang sudah
+     dijadwalkan agar mitra bisa menilai isinya sebelum terbit otomatis. -->
+{#if previewPub}
+	<div class="fixed inset-0 z-[60] flex items-stretch justify-center p-0 sm:items-center sm:p-4" style="background-color: rgba(0,0,0,.5);" role="presentation" onclick={closePreview}>
+		<dialog
+			open
+			class="app-card flex h-full w-full flex-col overflow-hidden rounded-none sm:h-[min(92dvh,980px)] sm:max-w-[min(96vw,880px)] sm:rounded-2xl"
+			style="box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);"
+			aria-label={tr('Pratinjau Artikel')}
+			onclick={(e) => e.stopPropagation()}
+		>
+			<header class="flex flex-none items-center gap-3 border-b px-4 py-3 sm:px-5" style="border-color: var(--border);">
+				<span class="flex h-10 w-10 flex-none items-center justify-center rounded-xl" style="background: var(--accent); color: var(--primary);" aria-hidden="true">
+					<BookOpen size={19} />
+				</span>
+				<div class="min-w-0 flex-1">
+					<h2 class="truncate text-base font-semibold">{tr('Pratinjau Artikel')}</h2>
+					<p class="truncate text-xs text-muted-foreground">
+						{previewPub.document_title ?? tr('Artikel')} · {mediaDomainLabel(previewPub.media_website_url, previewPub.media_name ?? '')}
+					</p>
+				</div>
+				<button
+					type="button"
+					class="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary"
+					aria-label={tr('Tutup')}
+					title={tr('Tutup')}
+					onclick={closePreview}
+				>
+					<X size={18} />
+				</button>
+			</header>
+
+			<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/50 p-4 sm:p-6">
+				{#if previewLoading}
+					<div class="flex flex-col items-center justify-center py-16 text-slate-400">
+						<LoaderCircle size={28} class="animate-spin text-primary" />
+						<p class="mt-2 text-xs font-medium text-muted-foreground">{tr('Memuat pratinjau…')}</p>
+					</div>
+				{:else if previewError}
+					<div class="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-700">{previewError}</div>
+				{:else if previewDetail}
+					{@const cc = contentCheckMeta(previewDetail.content_check)}
+					{@const ccTone = TONE[cc.tone] ?? TONE.gray}
+					{@const doc = previewDetail.document}
+
+					<div class="flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm">
+						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style="background: {ccTone.bg}; color: {ccTone.fg};">
+							{#if cc.tone === 'green'}
+								<ShieldCheck size={18} />
+							{:else if cc.tone === 'red' || cc.tone === 'amber'}
+								<ShieldAlert size={18} />
+							{:else}
+								<CircleAlert size={18} />
+							{/if}
+						</div>
+						<div class="min-w-0">
+							<p class="text-sm font-bold" style="color: {ccTone.fg};">{cc.title}</p>
+							<p class="mt-0.5 text-xs leading-relaxed text-slate-600">{cc.desc}</p>
+							{#if cc.detail}
+								<p class="mt-0.5 text-xs leading-relaxed text-slate-500">{cc.detail}</p>
+							{/if}
+						</div>
+					</div>
+
+					<article class="mt-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-8">
+						{#if previewDetail.scheduled_at && previewDetail.status !== 'published'}
+							<p class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 border border-blue-100">
+								<CalendarClock size={12} />
+								{tr('Dijadwalkan')} {dt(previewDetail.scheduled_at)}
+							</p>
+						{/if}
+						<h1 class="mt-3 text-xl font-bold leading-snug tracking-tight text-slate-900 sm:text-2xl">
+							{previewDetail.document_title ?? doc?.meta_title ?? tr('Tanpa judul')}
+						</h1>
+						<p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+							<span class="font-medium text-slate-600">{previewDetail.client_name ?? tr('Klien')}</span>
+							<span class="text-slate-300">•</span>
+							<span>{mediaDomainLabel(previewDetail.media_website_url, previewDetail.media_name ?? '')}</span>
+							{#if doc?.word_count}
+								<span class="text-slate-300">•</span>
+								<span>{doc.word_count} {tr('kata')}</span>
+							{/if}
+							<span class="text-slate-300">•</span>
+							<span>{detailStatusLabel[previewDetail.status] ?? previewDetail.status}</span>
+						</p>
+						{#if previewDetail.thumbnail_url ?? previewDetail.featured_image_url}
+							<img
+								src={previewDetail.thumbnail_url ?? previewDetail.featured_image_url}
+								alt=""
+								class="mt-4 w-full rounded-xl border border-slate-200/70 object-cover"
+								loading="lazy"
+							/>
+						{/if}
+						{#if doc?.meta_description}
+							<p class="mt-4 border-l-2 border-slate-200 pl-3 text-sm italic leading-relaxed text-slate-500">
+								{doc.meta_description}
+							</p>
+						{/if}
+						{#if doc?.content_html}
+							<div class="prose prose-sm mt-5 max-w-none text-[15px] leading-relaxed text-slate-800">
+								{@html sanitizeHtml(doc.content_html)}
+							</div>
+						{:else}
+							<p class="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-muted-foreground">{tr('Isi artikel belum tersedia.')}</p>
+						{/if}
+					</article>
+				{/if}
+			</div>
+
+			<footer class="flex flex-none flex-wrap items-center justify-between gap-3 border-t bg-white px-4 py-3 sm:px-5" style="border-color: var(--border);">
+				<p class="text-[11px] leading-relaxed text-muted-foreground">
+					{tr('Pratinjau ini hanya untuk dibaca. Perubahan isi dilakukan dari sisi klien.')}
+				</p>
+				<button type="button" class="app-btn app-btn-soft !text-xs !py-2 !px-4" onclick={closePreview}>{tr('Tutup')}</button>
+			</footer>
 		</dialog>
 	</div>
 {/if}

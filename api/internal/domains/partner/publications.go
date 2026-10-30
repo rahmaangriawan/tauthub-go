@@ -577,8 +577,31 @@ func (d *Deps) PublicationGet(w http.ResponseWriter, r *http.Request) {
 		 WHERE document_id = $1 AND resolved = FALSE
 		 ORDER BY created_at DESC LIMIT 20`, publication.raw("document_id"))
 
+	// Pemeriksaan konten otomatis (Gatekeeper) untuk artikel yang akan tayang.
+	// Publikasi dari kampanye Taut Pintar punya audit per (campaign, media, slot);
+	// publikasi manual tidak punya audit — status "unchecked" berarti mitra perlu
+	// membaca sendiri lewat pratinjau.
+	contentCheck := map[string]any{"status": "unchecked"}
+	if checkRow, _ := d.queryRow(r.Context(),
+		`SELECT (g.checks->'contentSafety')::text AS check_json, g.created_at AS checked_at
+		 FROM taut_campaign_media tcm
+		 JOIN campaigns c ON c.id = tcm.campaign_id
+		 JOIN taut_gatekeeper_audits g
+		   ON g.campaign_id = tcm.campaign_id AND g.media_id = tcm.media_id AND g.slot = tcm.slot
+		 WHERE tcm.article_document_id = $1 AND tcm.media_id = $2 AND c.brand_id = $3
+		 ORDER BY g.created_at DESC
+		 LIMIT 1`,
+		publication.raw("document_id"), publication.raw("media_id"), publication.raw("brand_id")); checkRow != nil {
+		var check map[string]any
+		if jsonUnmarshal(checkRow.strOr("check_json", ""), &check) == nil && check != nil {
+			check["checked_at"] = checkRow.timePtr("checked_at")
+			contentCheck = check
+		}
+	}
+
 	payload := partnerPublicationJSON(publication)
 	payload["document"] = documentJSON(document)
+	payload["content_check"] = contentCheck
 	payload["media_website_url"] = media.raw("website_url")
 	payload["media_integration_type"] = media.raw("integration_type")
 	// publications tidak punya kolom remote_url — URL hasil integrasi hidup di
@@ -630,13 +653,10 @@ var (
 // excerptFromHTML: teks polos awal artikel, dibatasi jumlah kata supaya rapi
 // dipakai sebagai pengganti meta deskripsi yang kosong.
 func excerptFromHTML(raw string, maxWords int) string {
-	if strings.TrimSpace(raw) == "" || maxWords <= 0 {
+	if maxWords <= 0 {
 		return ""
 	}
-	s := reExcerptDropBlocks.ReplaceAllString(raw, " ")
-	s = reExcerptTags.ReplaceAllString(s, " ")
-	s = html.UnescapeString(s)
-	s = strings.TrimSpace(reExcerptSpace.ReplaceAllString(s, " "))
+	s := plainTextFromHTML(raw)
 	if s == "" {
 		return ""
 	}
@@ -647,18 +667,36 @@ func excerptFromHTML(raw string, maxWords int) string {
 	return s
 }
 
+// plainTextFromHTML: buang blok non-teks & tag, sisakan teks yang dibaca
+// pembaca. Dipakai pratinjau mitra untuk menghitung panjang artikel tanpa
+// membawa string HTML ke tempat lain.
+func plainTextFromHTML(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return ""
+	}
+	s := reExcerptDropBlocks.ReplaceAllString(raw, " ")
+	s = reExcerptTags.ReplaceAllString(s, " ")
+	s = html.UnescapeString(s)
+	return strings.TrimSpace(reExcerptSpace.ReplaceAllString(s, " "))
+}
+
 func documentJSON(row rowMap) any {
 	if row == nil {
 		return nil
 	}
+	body := row.strOr("content_html", "")
 	return map[string]any{
 		"title":            row.raw("title"),
 		"slug":             row.raw("slug"),
 		"meta_title":       row.raw("meta_title"),
 		"meta_description": row.raw("meta_description"),
-		"excerpt":          excerptFromHTML(row.strOr("content_html", ""), publicationExcerptMaxWords),
+		"excerpt":          excerptFromHTML(body, publicationExcerptMaxWords),
 		"status":           row.raw("status"),
 		"current_version":  row.raw("current_version"),
+		// Isi penuh hanya dikirim di endpoint detail (GET satu publikasi) supaya
+		// mitra bisa membaca artikel yang dijadwalkan sebelum terbit.
+		"content_html": body,
+		"word_count":   len(strings.Fields(plainTextFromHTML(body))),
 	}
 }
 
