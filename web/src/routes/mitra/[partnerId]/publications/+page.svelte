@@ -7,7 +7,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { Building2, Calendar, CalendarClock, Check, CheckCircle2, CircleAlert, Clock, Copy, ExternalLink, Eye, FileText, Globe, Image as ImageIcon, Link2, LoaderCircle, MessageSquare, MoreVertical, Paperclip, Pencil, RefreshCw, Search, Send, SlidersHorizontal, Smile, Sparkles, Trash2, User, Wallet, X } from '@lucide/svelte';
+	import { Building2, Calendar, CalendarClock, Check, CheckCircle2, CircleAlert, Clock, Copy, ExternalLink, Eye, FileText, Globe, Image as ImageIcon, Info, Link2, LoaderCircle, MessageSquare, MoreVertical, Paperclip, Pencil, RefreshCw, Search, Send, SlidersHorizontal, Smile, Sparkles, Trash2, User, Wallet, X } from '@lucide/svelte';
 	import { Tooltip } from 'bits-ui';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -42,6 +42,8 @@
 	// GET /v1/partner/publications/{id} — payload lebih kaya dari baris tabel
 	// (parity PublicationDetail di app lama).
 	type PubDetail = Pub & {
+		/** Media mitra memakai Secure Direct (auto publish tanpa ACC per artikel). */
+		media_auto_publish?: boolean;
 		document: { slug: string | null; meta_description: string | null; excerpt?: string | null } | null;
 		attempts: Array<{
 			attempt_number: number; status: string;
@@ -849,6 +851,16 @@
 	});
 	const isManualRow = (p: Pub) => (p.media_publication_mode ?? 'draft') !== 'publish';
 	const pendingUrl = (p: Pub) => p.status === 'partner_approved' && isManualRow(p) && !p.published_url;
+
+	/** Kenapa baris antre? Sebut jadwalnya supaya tidak terlihat seperti macet. */
+	const queuedScheduleHint = (p: any): string | undefined => {
+		if (p.status !== 'queued' || !p.scheduled_at) return undefined;
+		const when = new Date(p.scheduled_at).getTime();
+		if (!Number.isFinite(when)) return undefined;
+		return when > Date.now()
+			? `${tr('Terjadwal terbit')} ${dt(p.scheduled_at)}`
+			: tr('Menunggu antrean penerbitan');
+	};
 	// Tolak kini berdiri sendiri di kolom Aksi (tong sampah), bukan lagi item
 	// menu titik-tiga. Batas penolakan revisi tetap dihormati seperti menu lama.
 	const canReject = (p: Pub) =>
@@ -1296,7 +1308,7 @@
 {/snippet}
 
 {#snippet statusBadge(p: any, withDot: boolean)}
-	<span class="inline-flex max-md:whitespace-normal items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--{statusTone[p.status] ?? 'accent'}-soft, var(--accent)); color: {(statusTone[p.status] ?? 'accent') === 'accent' ? 'var(--accent-foreground)' : `var(--${statusTone[p.status]})`};">
+	<span class="inline-flex max-md:whitespace-normal items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium" title={queuedScheduleHint(p)} style="background-color: var(--{statusTone[p.status] ?? 'accent'}-soft, var(--accent)); color: {(statusTone[p.status] ?? 'accent') === 'accent' ? 'var(--accent-foreground)' : `var(--${statusTone[p.status]})`};">
 		{#if withDot}<span class="h-1.5 w-1.5 flex-none rounded-full" style="background-color: currentColor;"></span>{/if}
 		{pendingUrl(p) ? tr('Menunggu URL') : statusLabel[p.status] ?? p.status}
 	</span>
@@ -1645,6 +1657,14 @@
 						{@const sBadge = sentimentBadge(detail.sentiment_analysis)}
 						{@const mBadge = messageBadge(detail.message_analysis)}
 						{@const liveUrl = effectiveUrl(detail)}
+
+						{#if detail.media_auto_publish}
+							<!-- Media mitra memakai Secure Direct: tidak ada langkah ACC per artikel. -->
+							<div class="flex items-start gap-2.5 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-[12.5px] leading-relaxed text-blue-800">
+								<Info size={15} class="mt-0.5 shrink-0 text-blue-600" />
+								<span>{tr('Media ini memakai Secure Direct: artikel terbit otomatis tanpa persetujuan per artikel. Kalau ingin meninjau dulu, nonaktifkan Secure Direct pada media ini.')}</span>
+							</div>
+						{/if}
 
 						<!-- 1. Section Informasi Publikasi (Top banner card) -->
 						<section class="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm">
