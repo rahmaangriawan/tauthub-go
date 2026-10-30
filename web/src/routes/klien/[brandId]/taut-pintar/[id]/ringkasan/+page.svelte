@@ -11,7 +11,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { ArrowRight, CalendarClock, Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, Eye, FileText, Info, Link as LinkIcon, Loader, LoaderCircle, Lock, MessageCircle, Pencil, RefreshCw, RotateCcw, Send, Star, X } from '@lucide/svelte';
+	import { ArrowRight, CalendarClock, Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, Eye, FileText, Info, Link as LinkIcon, Loader, LoaderCircle, Lock, MessageCircle, Pencil, Plus, RefreshCw, RotateCcw, Send, Star, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -38,6 +38,8 @@
 		media_id: string;
 		/** Nomor artikel pada media ini (1 = artikel pertama). */
 		slot?: number;
+		/** Putaran kampanye tempat artikel ini dipesan. */
+		round?: number;
 		name: string;
 		website_url: string | null;
 		media_type: string | null;
@@ -55,7 +57,7 @@
 		document_id: string | null;
 	};
 	type AuditsData = {
-		campaign: { id: string; name?: string; taut_status: string | null; entry_mode?: 'ai' | 'manual' | null };
+		campaign: { id: string; name?: string; taut_status: string | null; entry_mode?: 'ai' | 'manual' | null; taut_round?: number | null };
 		media: MediaItem[];
 		totalCostIdr: number;
 		totalCostTc: number;
@@ -243,6 +245,37 @@
 	/** Jumlah domain, bukan jumlah kartu: satu domain bisa memuat beberapa artikel. */
 	const mediaCount = $derived(Object.keys(slotTotals).length);
 
+	/* ─── Putaran kampanye ─── */
+	const currentRound = $derived(data?.campaign.taut_round ?? 1);
+	/** Jumlah artikel per putaran, urut naik. */
+	const roundCounts = $derived.by(() => {
+		const counts: Record<number, number> = {};
+		for (const m of mediaList) counts[m.round ?? 1] = (counts[m.round ?? 1] ?? 0) + 1;
+		return Object.entries(counts)
+			.map(([round, count]) => ({ round: Number(round), count }))
+			.sort((a, b) => a.round - b.round);
+	});
+	/** Label putaran hanya relevan saat kampanye punya lebih dari satu putaran. */
+	const showRoundLabels = $derived(roundCounts.length > 1);
+	const hasPublications = $derived(mediaList.some((m) => Boolean(m.publication_id)));
+
+	let roundBusy = $state(false);
+	let roundError = $state('');
+
+	async function addRound() {
+		if (roundBusy) return;
+		roundBusy = true;
+		roundError = '';
+		try {
+			const res = await apiRequest(`${apiBase}/rounds`, { method: 'POST' });
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menambah putaran baru.')));
+			goto(`/klien/${brandUrl}/media?campaign=${campaignId}`);
+		} catch (reason) {
+			roundError = reason instanceof Error ? reason.message : tr('Gagal menambah putaran baru.');
+			roundBusy = false;
+		}
+	}
+
 	// Daftar dibatasi per halaman: kampanye bisa memuat puluhan artikel, dan
 	// merender semuanya sekaligus membuat halaman panjang sekaligus berat.
 	const PAGE_SIZE = 10;
@@ -381,6 +414,9 @@
 	 */
 	const canEdit = (m: MediaItem): boolean => {
 		if (!m.publication_id || !m.document_id) return false;
+		// Artikel putaran lama tidak ikut dibuka saat putaran baru berjalan:
+		// statusnya tetap hanya-baca, sesuai kesepakatan pengulangan kampanye.
+		if ((m.round ?? 1) < currentRound) return false;
 		const s = m.publish.status ?? '';
 		if (s === 'published' || s === 'processing' || s === 'queued') return false;
 		// Artikel yang sudah masuk JADWAL terbit terkunci: boleh dilihat di
@@ -558,6 +594,8 @@
 								{tr('Distribusi Selesai — Semua Artikel Terbit')}
 							{:else if bannerState === 'waiting'}
 								{`Distribusi Berhasil — Menunggu ACC Mitra (${publishedCount}/${mediaList.length} Terbit)`}
+							{:else if currentRound > 1 && campaignName}
+								<span>{tr('Kampanye')} <span class="underline underline-offset-4 decoration-current/70">{campaignName}</span> {tr('Putaran')} {currentRound} {tr('sedang disiapkan')}</span>
 							{:else if campaignName}
 								<span>{tr('Kampanye')} <span class="underline underline-offset-4 decoration-current/70">{campaignName}</span> {tr('Belum Terdistribusi')}</span>
 							{:else}
@@ -574,13 +612,45 @@
 						{tr('Terbitkan kampanye dari halaman The Writer untuk mendistribusikan artikel ke media terpilih dan melihat laporan distribusi.')}
 					{/if}
 				</p>
+				{#if done && hasPublications}
+					<p class="mt-1 text-xs" style="opacity: .8;">
+						{tr('Artikel putaran sebelumnya tetap terkunci. Pembelian putaran baru masuk ke order kampanye ini.')}
+					</p>
+				{/if}
 			</div>
-			{#if resume}
-				<a class="app-btn app-btn-primary shrink-0" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/${resume.slug}`}>
-					<RotateCcw size={14} /> {resume.label}
-				</a>
-			{/if}
+			<div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+				{#if resume}
+					<a class="app-btn app-btn-primary" href={`/klien/${brandUrl}/taut-pintar/${campaignId}/${resume.slug}`}>
+						<RotateCcw size={14} /> {resume.label}
+					</a>
+				{/if}
+				{#if done && hasPublications}
+					<Tooltip
+						content={tr('Tambah postingan berikutnya di kampanye yang sama. Klien memilih media baru, lalu kampanye berjalan lagi seperti biasa.')}
+						side="bottom"
+						align="end"
+					>
+						<button
+							type="button"
+							class="inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-[12.5px] font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+							disabled={roundBusy}
+							onclick={() => void addRound()}
+						>
+							{#if roundBusy}
+								<LoaderCircle size={14} class="animate-spin" />
+							{:else}
+								<Plus size={14} />
+							{/if}
+							{tr('Tambah Putaran Baru')}
+						</button>
+					</Tooltip>
+				{/if}
+			</div>
 		</div>
+
+		{#if roundError}
+			<p class="mt-2 text-sm" style="color: var(--destructive);">{roundError}</p>
+		{/if}
 
 		<div class="mt-3 grid gap-3 md:grid-cols-2">
 			<div
@@ -698,6 +768,11 @@
 						{/if}
 					</div>
 					<p class="mt-0.5 text-xs text-slate-500">{tr("Daftar media untuk distribusi konten kampanye ini.")}</p>
+					{#if showRoundLabels}
+						<p class="mt-1 text-[11.5px] text-slate-500">
+							{#each roundCounts as rc, i (rc.round)}{#if i > 0} · {/if}{tr('Putaran')} {rc.round}: {rc.count} {tr('Artikel')}{/each}
+						</p>
+					{/if}
 				</div>
 				<button
 					class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"
@@ -743,6 +818,9 @@
 									<span class="min-w-0 max-w-full truncate text-[15px] font-bold leading-tight text-slate-900">{domain || m.name || '—'}</span>
 									{#if m.media_type}
 										<span class="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.05em] text-blue-600">{m.media_type}</span>
+									{/if}
+									{#if showRoundLabels}
+										<span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">{tr('Putaran')} {m.round ?? 1}</span>
 									{/if}
 									{#if total > 1}
 										<span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">{tr('Artikel')} {m.slot ?? 1}/{total}</span>
@@ -910,6 +988,9 @@
 												<span class="block font-bold text-slate-900 text-[13.5px] leading-tight truncate">{m.name || '—'}</span>
 												{#if domain}
 													<span class="block text-[11.5px] text-slate-400 font-normal mt-0.5 truncate">{domain}</span>
+												{/if}
+												{#if showRoundLabels}
+													<span class="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">{tr('Putaran')} {m.round ?? 1}</span>
 												{/if}
 											</div>
 										</div>

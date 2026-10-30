@@ -61,7 +61,10 @@
 		// bisa dipercaya. Cek lewat matriks Gatekeeper (publication_id/publish).
 		const media = await loadAuditMedia();
 		const hasPublication = media.some((m) => Boolean(m.publication_id) || Boolean(m.publish?.status));
-		if (hasPublication || DONE_STATUSES.has(status ?? '')) {
+		// Kampanye yang dibuka untuk putaran baru tetap membawa publikasi lama,
+		// jadi status yang sedang berjalan harus menang atas jejak publikasi itu.
+		const inProgress = status === 'placement' || status === 'production' || status === 'review';
+		if (!inProgress && (hasPublication || DONE_STATUSES.has(status ?? ''))) {
 			await goto(`${base}/ringkasan`, { replaceState: true });
 			return;
 		}

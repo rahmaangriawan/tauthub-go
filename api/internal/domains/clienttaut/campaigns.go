@@ -119,7 +119,7 @@ func (d *Deps) TautCampaignsList(w http.ResponseWriter, r *http.Request) {
 	}
 	total := totalRow.intOr("n", 0)
 
-	listSQL := "SELECT id, public_id, name, taut_status, taut_entry_mode, media_type, budget_strategy, starts_at, created_at FROM campaigns WHERE " +
+	listSQL := "SELECT id, public_id, name, taut_status, COALESCE(taut_round, 1) AS taut_round, taut_entry_mode, media_type, budget_strategy, starts_at, created_at FROM campaigns WHERE " +
 		where + " ORDER BY created_at DESC LIMIT " + itoa(perPage) + " OFFSET " + itoa((page-1)*perPage)
 	list, err := d.queryRows(r.Context(), listSQL, args...)
 	if err != nil {
@@ -145,6 +145,7 @@ func (d *Deps) TautCampaignsList(w http.ResponseWriter, r *http.Request) {
 			"public_id":       c.raw("public_id"),
 			"name":            c.strOr("name", ""),
 			"taut_status":     c.raw("taut_status"),
+			"taut_round":      c.raw("taut_round"),
 			"entry_mode":      c.raw("taut_entry_mode"),
 			"media_type":      c.raw("media_type"),
 			"budget_strategy": c.raw("budget_strategy"),
@@ -334,6 +335,7 @@ func (d *Deps) loadTautCampaignForSetup(ctx context.Context, campaignID, brandID
 	row, err := d.queryRow(ctx,
 		`SELECT id, public_id, name, business_profile, hyperlink_config, media_type, trigger_keywords,
 		        budget_strategy, budget_config, strategy_brief, taut_status, taut_entry_mode,
+		        COALESCE(taut_round, 1) AS taut_round,
 		        editorial_standard_snapshot AS materials
 		 FROM campaigns WHERE id = $1 AND brand_id = $2 AND taut_status IS NOT NULL LIMIT 1`,
 		campaignID, brandID)
@@ -464,11 +466,85 @@ func (d *Deps) TautCampaignGet(w http.ResponseWriter, r *http.Request) {
 		"budget_config":    jsonField(c, "budget_config"),
 		"strategy_brief":   jsonField(c, "strategy_brief"),
 		"taut_status":      c.raw("taut_status"),
+		"taut_round":       c.raw("taut_round"),
 		"entry_mode":       c.raw("taut_entry_mode"),
 		"stats":            stats,
 		// Kurs aktif supaya biaya kampanye ditampilkan dalam rupiah.
 		"rate_idr": d.getTcConfig(r.Context()).RateIDR,
 	})
+}
+
+// TautCampaignNewRound: POST /v1/brands/{brandId}/taut/campaigns/{campaignId}/rounds
+//
+// Buka putaran baru di kampanye yang sudah terdistribusi supaya klien bisa
+// posting lagi di waktu lain dengan nama kampanye yang sama. Artikel putaran
+// lama tidak disentuh (tetap terkunci lewat ArticleScheduleLock karena sudah
+// punya publikasi); pembelian putaran baru tetap memakai campaign_id yang sama
+// sehingga masuk ke order kampanye CAM-… yang sudah ada.
+func (d *Deps) TautCampaignNewRound(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	if user == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
+		return
+	}
+	brandID, err := d.brandID(r, user.ID, "writer")
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	campaignID := chiParam(r, "campaignId")
+	campaign, err := d.queryRow(r.Context(), `
+		SELECT id, taut_status, COALESCE(taut_round, 1) AS taut_round, archived_at, deleted_at
+		FROM campaigns WHERE id = $1 AND brand_id = $2 AND taut_status IS NOT NULL LIMIT 1`,
+		campaignID, brandID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if campaign == nil {
+		d.writeErr(w, errNotFound("Kampanye tidak ditemukan."))
+		return
+	}
+	if campaign.raw("archived_at") != nil || campaign.raw("deleted_at") != nil {
+		d.writeErr(w, errStatus(http.StatusConflict, "Kampanye ini sudah diarsipkan. Pulihkan dulu sebelum menambah putaran baru."))
+		return
+	}
+	status := campaign.strOr("taut_status", "")
+	if status != "submitted" && status != "scheduled" && status != "distributed" {
+		d.writeErr(w, errStatus(http.StatusConflict,
+			"Kampanye masih berjalan (status "+status+"). Selesaikan distribusinya dulu sebelum menambah putaran baru."))
+		return
+	}
+	// Pengulangan hanya masuk akal bila sudah ada barang yang dibeli. Kampanye
+	// yang belum pernah terdistribusi cukup dilanjutkan seperti biasa.
+	pubCount, err := d.queryRow(r.Context(),
+		"SELECT COUNT(*) AS count FROM publications WHERE campaign_id = $1 AND status <> 'cancelled'", campaignID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if pubCount == nil || pubCount.intOr("count", 0) == 0 {
+		d.writeErr(w, errStatus(http.StatusConflict, "Kampanye ini belum punya publikasi. Lanjutkan kampanye yang ada, tidak perlu membuka putaran baru."))
+		return
+	}
+
+	round := 1
+	updated, err := d.queryRow(r.Context(), `
+		UPDATE campaigns
+		SET taut_round = COALESCE(taut_round, 1) + 1, taut_status = 'placement', updated_at = NOW()
+		WHERE id = $1 AND brand_id = $2 AND taut_status IN ('submitted', 'scheduled', 'distributed')
+		RETURNING taut_round`, campaignID, brandID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if updated == nil {
+		d.writeErr(w, errStatus(http.StatusConflict, "Status kampanye berubah. Muat ulang halaman lalu coba lagi."))
+		return
+	}
+	round = int(updated.numOr("taut_round"))
+	d.auditLogBrand(r, brandID, user.ID, "taut.campaign.new_round", "campaign", campaignID)
+	writeJSON(w, http.StatusOK, map[string]any{"round": round, "taut_status": "placement"})
 }
 
 // TautCampaignUpdate: PUT /v1/brands/{brandId}/taut/campaigns/{campaignId}

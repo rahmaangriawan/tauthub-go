@@ -467,6 +467,9 @@ func run() error {
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}", resolveCampaign(tautDeps.TautCampaignAction))
 			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}", resolveCampaign(tautDeps.TautCampaignDelete))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/advance", resolveCampaign(tautDeps.TautCampaignAdvance))
+			// Putaran baru: pakai ulang kampanye yang sudah terdistribusi untuk
+			// postingan berikutnya di waktu lain.
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/rounds", resolveCampaign(tautDeps.TautCampaignNewRound))
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/validate", resolveCampaign(tautDeps.TautCampaignValidateGet))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/validate", resolveCampaign(tautDeps.TautCampaignValidatePost))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/schedule", resolveCampaign(tautDeps.TautCampaignSchedule))

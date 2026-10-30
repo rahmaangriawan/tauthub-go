@@ -7,7 +7,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Archive, ArrowRight, Clock, FileText, LoaderCircle, RotateCcw, Search, Share2, Trash, X, Zap } from '@lucide/svelte';
+	import { Archive, ArrowRight, Clock, FileText, LoaderCircle, Plus, RotateCcw, Search, Share2, Trash, X, Zap } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { campaignUrlId } from '$lib/campaign-url';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -31,6 +31,8 @@
 		starts_at: string | null;
 		created_at: string | null;
 		archived?: boolean;
+		/** Nomor putaran aktif: kampanye yang diulang menaikkan angka ini. */
+		taut_round?: number | null;
 		stats: { articles: number; published_media: number; tc_used: number };
 	};
 
@@ -125,6 +127,23 @@
 		query = '';
 		pageNum = 1;
 		void loadList();
+	}
+
+	// Buka putaran baru di kampanye yang sudah selesai: status kembali ke
+	// penempatan media, lalu katalog dibuka dalam mode tambah.
+	async function addRound(c: Campaign) {
+		if (rowBusyId) return;
+		rowBusyId = c.id;
+		error = '';
+		try {
+			const res = await apiRequest(`/v1/brands/${brandId}/taut/campaigns/${c.id}/rounds`, { method: 'POST' });
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menambah putaran baru.')));
+			await goto(`/klien/${brandUrl}/media?campaign=${campaignUrlId(c)}`);
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : String(reason);
+		} finally {
+			rowBusyId = '';
+		}
 	}
 
 	async function archiveCampaign(id: string) {
@@ -337,6 +356,9 @@
 							<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={badgeStyle(c.stats.published_media > 0 ? 'success' : (STAGE_TONE[c.taut_status ?? 'draft'] ?? 'muted'))}>
 								{(STAGE_LABEL[c.taut_status ?? 'draft'] ?? c.taut_status ?? 'Draft').toUpperCase()}
 							</span>
+							{#if (c.taut_round ?? 1) > 1}
+								<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={badgeStyle('muted')}>{tr('Putaran')} {c.taut_round}</span>
+							{/if}
 						</div>
 						<div class="flex items-center gap-2">
 							{#if c.created_at}
@@ -344,6 +366,18 @@
 							{/if}
 							{#if !showArchive}
 								<div class="flex gap-1">
+									{#if c.taut_status === 'submitted' || c.taut_status === 'scheduled'}
+										<button
+											class="rounded-lg p-1.5 hover:bg-secondary"
+											type="button"
+											aria-label={tr('Tambah Putaran')}
+											title={tr('Tambah Putaran')}
+											disabled={rowBusyId === c.id}
+											onclick={() => void addRound(c)}
+										>
+											{#if rowBusyId === c.id}<LoaderCircle size={14} class="animate-spin" />{:else}<Plus size={14} />{/if}
+										</button>
+									{/if}
 									<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Berita acara & share")} onclick={() => void openShare(c.id)}>
 										<Share2 size={14} />
 									</button>

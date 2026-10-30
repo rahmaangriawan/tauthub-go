@@ -714,7 +714,7 @@
 		<Feedback {loading} {error} notice={chatNotice || waNotice} loadingText="Memuat partner…" />
 
 		<div class="app-card mt-4 overflow-x-auto">
-			<table class="w-full text-sm" style="min-width: 1280px;">
+			<table class="w-full text-sm" style="min-width: 1360px;">
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">Partner</th>
@@ -726,6 +726,7 @@
 						<th class="px-4 py-2.5 font-medium">Dewan Pers</th>
 						<th class="px-4 py-2.5 font-medium">VIP</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
+						<th class="px-4 py-2.5 font-medium">{tr("Chat")}</th>
 						<th class="px-4 py-2.5 font-medium">Aksi</th>
 					</tr>
 				</thead>
@@ -832,6 +833,18 @@
 							</td>
 							<td class="px-4 py-3"><Badge label={row.status} tone={row.status === 'active' ? 'success' : 'neutral'} /></td>
 							<td class="px-4 py-3">
+								<Tooltip content={tr('Kirim pesan ke mitra lewat tiket dukungan.')}>
+									<button
+										class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-secondary"
+										type="button"
+										aria-label={`${tr('Chat')} ${row.name ?? row.email}`}
+										onclick={() => openChat(row)}
+									>
+										<MessageSquare size={14} /> {tr('Chat')}
+									</button>
+								</Tooltip>
+							</td>
+							<td class="px-4 py-3">
 								<button
 									class="rounded-lg p-1.5 hover:bg-secondary"
 									type="button"
@@ -848,9 +861,6 @@
 										class="app-card fixed z-50 min-w-[230px] p-1.5 text-sm shadow-md"
 										style="top: {menuPos.top}px; right: {menuPos.right}px;"
 									>
-											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; openChat(row); }}>
-												<MessageSquare size={14} /> {tr('Chat partner')}
-											</button>
 											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openDocs(row); }}>
 												<ShieldCheck size={14} /> Dokumen
 											</button>
@@ -1351,7 +1361,7 @@
 {#if chatTarget}
 	<Modal
 		title={`Chat — ${chatTarget.name ?? chatTarget.email}`}
-		label={tr("Chat partner")}
+		label={`Chat — ${chatTarget.name ?? chatTarget.email}`}
 		maxWidth="md"
 		onClose={() => (chatTarget = null)}
 	>

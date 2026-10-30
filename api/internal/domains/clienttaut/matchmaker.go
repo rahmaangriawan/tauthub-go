@@ -240,7 +240,10 @@ func planMatchmakerWrites(campaignID string, pool []candidateLine, ranked []rank
 				"ai_score": aiScore, "match_rank": rank,
 			})
 		} else {
-			insertValues = append(insertValues, "("+placeholders(insertParam, 7)+", 1)")
+			// Slot 1 di putaran aktif kampanye. Subquery round dipakai supaya
+			// media baru di kampanye yang sudah diulang ikut tercatat di
+			// putaran yang benar tanpa menambah parameter.
+			insertValues = append(insertValues, "("+placeholders(insertParam, 3)+", 1, (SELECT COALESCE(taut_round, 1) FROM campaigns WHERE id = $"+itoa(insertParam+1)+"), 'manual', "+placeholders(insertParam+3, 4)+")")
 			plan.insertArgs = append(plan.insertArgs, newUUID(), campaignID, item.MediaID, status, reason, aiScore, rank)
 			insertParam += 7
 		}
@@ -249,7 +252,7 @@ func planMatchmakerWrites(campaignID string, pool []candidateLine, ranked []rank
 		})
 	}
 	if len(insertValues) > 0 {
-		plan.insertSQL = "INSERT INTO taut_campaign_media (id, campaign_id, media_id, slot, source, status, match_reason, ai_score, match_rank) VALUES " + strings.Join(insertValues, ", ")
+		plan.insertSQL = "INSERT INTO taut_campaign_media (id, campaign_id, media_id, slot, round, source, status, match_reason, ai_score, match_rank) VALUES " + strings.Join(insertValues, ", ")
 	}
 	return out, plan
 }

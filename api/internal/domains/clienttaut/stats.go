@@ -107,9 +107,23 @@ func campaignStatsMany(ctx context.Context, d *Deps, campaignIDs []string) (map[
 
 // addManualMedia: port addManualMedia — tambah media manual ke placement.
 // Hanya media active; duplikat diabaikan (UNIQUE guard).
+//
+// Sejak kampanye bisa dipakai beberapa putaran, media yang SUDAH punya
+// publikasi boleh ditambahkan lagi: yang dibuat adalah slot BARU (artikel
+// berikutnya di domain yang sama), bukan ditolak karena unique
+// (campaign_id, media_id, slot). Media yang sudah dipilih tapi belum pernah
+// terbit tetap dilewati supaya tidak ada duplikat dalam satu putaran.
 func (d *Deps) addManualMedia(ctx context.Context, campaignID, brandID string, mediaIDs []string) (map[string]any, error) {
-	if _, err := d.loadCampaignForAgents(ctx, campaignID, brandID); err != nil {
+	campaign, err := d.loadCampaignForAgents(ctx, campaignID, brandID)
+	if err != nil {
 		return nil, err
+	}
+	round := 1
+	if campaign != nil {
+		round = int(campaign.numOr("taut_round"))
+		if round < 1 {
+			round = 1
+		}
 	}
 	added := []string{}
 	skipped := []string{}
@@ -122,10 +136,48 @@ func (d *Deps) addManualMedia(ctx context.Context, campaignID, brandID string, m
 			skipped = append(skipped, mediaID)
 			continue
 		}
-		err = d.exec(ctx,
-			"INSERT INTO taut_campaign_media (id, campaign_id, media_id, slot, source, status) VALUES ($1, $2, $3, 1, 'manual', 'selected')",
-			newUUID(), campaignID, mediaID)
+		existing, err := d.queryRows(ctx, `
+			SELECT tcm.slot, tcm.status,
+			       EXISTS (
+			         SELECT 1 FROM publications p
+			         WHERE p.campaign_id = tcm.campaign_id AND p.media_id = tcm.media_id
+			           AND p.document_id = tcm.article_document_id AND p.status <> 'cancelled'
+			       ) AS published
+			FROM taut_campaign_media tcm
+			WHERE tcm.campaign_id = $1 AND tcm.media_id = $2
+			ORDER BY tcm.slot ASC`, campaignID, mediaID)
 		if err != nil {
+			return nil, err
+		}
+		nextSlot := 1
+		if len(existing) > 0 {
+			published := false
+			hasOpenSlot := false
+			for _, row := range existing {
+				// Nomor slot baru dihitung dari SEMUA baris (termasuk 'removed')
+				// supaya tidak bentrok unique (campaign_id, media_id, slot).
+				if slot := row.intOr("slot", 1); slot >= nextSlot {
+					nextSlot = slot + 1
+				}
+				if row.strOr("status", "") != "selected" {
+					continue
+				}
+				if row.boolOr("published", false) {
+					published = true
+				} else {
+					hasOpenSlot = true
+				}
+			}
+			if hasOpenSlot && !published {
+				// Sudah dipilih di putaran ini dan belum ada yang terbit: tidak
+				// perlu slot kedua.
+				skipped = append(skipped, mediaID)
+				continue
+			}
+		}
+		if err := d.exec(ctx,
+			"INSERT INTO taut_campaign_media (id, campaign_id, media_id, slot, round, source, status) VALUES ($1, $2, $3, $4, $5, 'manual', 'selected')",
+			newUUID(), campaignID, mediaID, nextSlot, round); err != nil {
 			skipped = append(skipped, mediaID)
 			continue
 		}
@@ -143,10 +195,11 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 	if rateIDR < 1 {
 		rateIDR = 1
 	}
-		items, err := d.queryRows(ctx,
-			`SELECT tcm.id AS placement_id, tcm.media_id, tcm.slot, m.name, m.media_type, m.website_url, tcm.status, tcm.article_status, tcm.match_reason, tcm.ai_score, tcm.match_rank,
+	items, err := d.queryRows(ctx,
+		`SELECT tcm.id AS placement_id, tcm.media_id, tcm.slot, COALESCE(tcm.round, 1) AS round, m.name, m.media_type, m.website_url, tcm.status, tcm.article_status, tcm.match_reason, tcm.ai_score, tcm.match_rank,
 			        m.credit_cost, m.allow_hyperlink, m.max_links, m.link_duration_months, m.allow_embed, m.label_sponsor, m.word_count_mode, tcm.regen_count, tcm.angle_slug,
 		        COALESCE(tcm.price, m.price, 0) AS price,
+		        pub.id AS publication_id, pub.status AS publication_status, pub.scheduled_at AS publication_scheduled_at,
 		        COALESCE((SELECT (length(cv.content) - length(replace(cv.content, '<img', ''))) / 4
 		                  FROM content_documents cd
 		                  JOIN content_versions cv ON cv.document_id = cd.id AND cv.version = cd.current_version
@@ -162,6 +215,9 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 		        COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv
 		 FROM taut_campaign_media tcm
 		 JOIN media m ON m.id = tcm.media_id
+		 LEFT JOIN publications pub
+		        ON pub.campaign_id = tcm.campaign_id AND pub.media_id = tcm.media_id
+		       AND pub.document_id = tcm.article_document_id AND pub.status <> 'cancelled'
 		 WHERE tcm.campaign_id = $1
 		 ORDER BY tcm.match_rank ASC NULLS LAST, m.name ASC, tcm.slot ASC`, campaignID)
 	if err != nil {
@@ -199,27 +255,27 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 		out = append(out, map[string]any{
 			// placement_id = identitas satu slot artikel. Dipakai frontend sebagai
 			// kunci per-artikel; media_id tetap untuk metadata & harga.
-			"placement_id": i.strOr("placement_id", ""),
-			"slot":         i.intOr("slot", 1),
-			"media_id":     mediaID,
-			"name":            name,
-			"media_type":      i.strOr("media_type", ""),
-			"website_url":     i.raw("website_url"),
-			"score":           score,
-			"status":          i.strOr("status", ""),
-			"article_status":  i.strOr("article_status", "none"),
-			"reason":          reason,
-			"credit_cost":     creditCost,
-			"allow_hyperlink": allowHyperlink,
-			"max_links":       maxLinks,
+			"placement_id":         i.strOr("placement_id", ""),
+			"slot":                 i.intOr("slot", 1),
+			"media_id":             mediaID,
+			"name":                 name,
+			"media_type":           i.strOr("media_type", ""),
+			"website_url":          i.raw("website_url"),
+			"score":                score,
+			"status":               i.strOr("status", ""),
+			"article_status":       i.strOr("article_status", "none"),
+			"reason":               reason,
+			"credit_cost":          creditCost,
+			"allow_hyperlink":      allowHyperlink,
+			"max_links":            maxLinks,
 			"link_duration_months": i.intOr("link_duration_months", 12),
-			"allow_embed":     i.boolOr("allow_embed", false),
-			"regen_count":     regenCount,
-			"angle_slug":      i.raw("angle_slug"),
-				"categories":      categories,
-				"label_sponsor":   i.strOr("label_sponsor", "tidak_ada"),
-				"word_count_mode": i.strOr("word_count_mode", "sesuai_permintaan"),
-				// price + cost_tc: sumber biaya media yang SAMA dengan penagihan
+			"allow_embed":          i.boolOr("allow_embed", false),
+			"regen_count":          regenCount,
+			"angle_slug":           i.raw("angle_slug"),
+			"categories":           categories,
+			"label_sponsor":        i.strOr("label_sponsor", "tidak_ada"),
+			"word_count_mode":      i.strOr("word_count_mode", "sesuai_permintaan"),
+			// price + cost_tc: sumber biaya media yang SAMA dengan penagihan
 			// (COALESCE(price penempatan, harga media) → kredit dibulatkan).
 			// credit_cost lama tetap dikirim untuk kompatibilitas, tapi bukan
 			// angka yang ditagihkan.
@@ -231,6 +287,13 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 			"category_required": i.boolOr("category_required", false),
 			// Sumber artikel: menentukan tab mana yang tampil saat Edit Artikel.
 			"article_source": i.strOr("article_source", "manual"),
+			// Putaran tempat slot ini dibuat + jejak publikasinya. Dipakai The
+			// Writer untuk mengunci artikel putaran lama (sudah terbit) dan
+			// membiarkan artikel putaran baru tetap bisa dikerjakan.
+			"round":                    int(i.numOr("round")),
+			"publication_id":           i.raw("publication_id"),
+			"publication_status":       i.raw("publication_status"),
+			"publication_scheduled_at": i.raw("publication_scheduled_at"),
 		})
 	}
 	return out, nil

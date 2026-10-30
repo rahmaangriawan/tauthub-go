@@ -29,6 +29,12 @@
 	let campaignStatus = $state<string | null>(null);
 	const viewOnly = $derived(isCampaignDone(campaignStatus));
 	const VIEW_ONLY_MSG = 'Kampanye sudah selesai — mode lihat saja. Hubungi admin kalau perlu revisi.';
+	const ARTICLE_LOCKED_MSG = 'Artikel ini sudah terbit atau terjadwal, jadi hanya bisa dilihat.';
+
+	/** Kunci per artikel: artikel yang sudah punya publikasi (terjadwal/terbit)
+	 *  tidak bisa diubah lagi, sedangkan artikel putaran yang sedang berjalan
+	 *  tetap bisa dikerjakan walau kampanye pernah selesai di putaran lama. */
+	const itemLocked = (m: PlacementItem | null | undefined): boolean => viewOnly || Boolean(m?.publication_id);
 
 	type PlacementItem = {
 		media_id: string;
@@ -60,6 +66,11 @@
 		word_count_mode?: string | null;
 		/** Nomor artikel pada media ini (1 = artikel pertama). */
 		slot?: number;
+		/** Putaran kampanye tempat artikel ini dipesan. */
+		round?: number;
+		/** Publikasi yang sudah dibuat untuk artikel ini (terjadwal/terbit). */
+		publication_id?: string | null;
+		publication_status?: string | null;
 	};
 	type LinksForm = {
 		tracking_mode: 'direct' | 'tauthub';
@@ -248,6 +259,8 @@
 	const manualMode = $derived(page.url.searchParams.get('mode') === 'manual');
 	const manualFlow = $derived(entryMode ? entryMode === 'manual' : manualMode);
 	const selected = $derived(placement.filter((p) => p.status === 'selected'));
+	/** Kampanye yang diulang punya slot dari lebih dari satu putaran. */
+	const hasMultipleRounds = $derived(new Set(placement.map((p) => p.round ?? 1)).size > 1);
 
 	// ── Jumlah artikel per media ────────────────────────────────────────────
 	// Satu domain boleh punya beberapa artikel (migrasi 272). Baris placement
@@ -324,7 +337,7 @@
 	});
 
 	function askDeleteArticle(media: PlacementItem, item: PlacementItem) {
-		if (viewOnly || bulkRunning) return;
+		if (itemLocked(item) || bulkRunning) return;
 		const slot = item.slot ?? 1;
 		slotDeleteError = '';
 		// Slot yang belum punya naskah tidak perlu dikonfirmasi: isinya kosong,
@@ -769,13 +782,13 @@
 
 	const readinessGroups = $derived.by((): ReadinessGroup[] => {
 		const groups: ReadinessGroup[] = [];
-		const docs = selected.filter((m) => hasDoc(m));
+		const docs = selected.filter((m) => !itemLocked(m) && hasDoc(m));
 		const toItems = (list: PlacementItem[]) => list.map((m) => ({ mediaId: m.media_id, name: m.name, slot: m.slot ?? 1 }));
 		const add = (key: string, label: string, list: PlacementItem[]) => {
 			if (list.length > 0) groups.push({ key, label: tr(label), items: toItems(list) });
 		};
 
-		add('article', 'Artikel belum dibuat', selected.filter((m) => !hasDoc(m)));
+		add('article', 'Artikel belum dibuat', selected.filter((m) => !itemLocked(m) && !hasDoc(m)));
 
 		// QC dianggap belum dicek bila belum ada audit untuk media itu; gagal bila
 		// sudah dipindai tetapi artikel belum berstatus "ready".
@@ -794,7 +807,7 @@
 
 	/** Media yang masih perlu dipindai: belum punya audit atau belum lulus. */
 	const qcTargets = $derived(
-		selected.filter((m) => hasDoc(m) && ((qcCounts[pkey(m)] ?? 0) === 0 || articleStatusOf(m) !== 'ready'))
+		selected.filter((m) => !itemLocked(m) && hasDoc(m) && ((qcCounts[pkey(m)] ?? 0) === 0 || articleStatusOf(m) !== 'ready'))
 	);
 	const readyToPublish = $derived(distributable === true && readinessGroups.length === 0);
 
@@ -999,7 +1012,7 @@
 	async function generateAll() {
 		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		if (bulkRunning) return;
-		const targets = selected.filter((m) => !hasDoc(m) || canRegen(m));
+		const targets = selected.filter((m) => !itemLocked(m) && (!hasDoc(m) || canRegen(m)));
 		if (targets.length === 0) return;
 		if (linksStatus === 'dirty' && linksComplete()) {
 			const rd = await persistLinks();
@@ -1306,9 +1319,10 @@
 	// Pemeriksaan QC tidak lagi dijalankan dari sini — pemindaian tetap tersedia
 	// lewat tombol "Analisis QC" per media di daftar.
 	async function persistEditor(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string): Promise<boolean> {
-		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return false; }
 		const current = editor;
 		if (!current) return false;
+		const currentItem = placement.find((p) => p.media_id === current.mediaId && (p.slot ?? 1) === current.slot);
+		if (itemLocked(currentItem)) { error = tr(viewOnly ? VIEW_ONLY_MSG : ARTICLE_LOCKED_MSG); return false; }
 		const mediaId = current.mediaId;
 		const slotQs = slotQuery(current.slot);
 		editorError = '';
@@ -1419,8 +1433,8 @@
 	}
 
 	async function saveEditor(title: string, html: string, coverUrl: string | null, category: string, metaDescription: string) {
-		if (viewOnly) { error = tr(VIEW_ONLY_MSG); return; }
 		if (!editor) return;
+		if (itemLocked(editorMedia)) { error = tr(viewOnly ? VIEW_ONLY_MSG : ARTICLE_LOCKED_MSG); return; }
 		const mediaId = editor.mediaId;
 		const slot = editor.slot;
 		// QC otomatis hanya saat ada PERUBAHAN vs backend: judul/isi sama
@@ -1565,7 +1579,7 @@
 			// menampilkan artikel mana yang belum punya cover.
 			missingCovers = await articlesWithoutCover();
 			// Media tanpa waktu terbit dianggap memakai preset "Sekarang".
-			quickPick = Object.fromEntries(selected.filter((m) => !scheduleByMedia[pkey(m)]).map((m) => [m.media_id, 'now']));
+			quickPick = Object.fromEntries(selected.filter((m) => !itemLocked(m) && !scheduleByMedia[pkey(m)]).map((m) => [m.media_id, 'now']));
 			publishOpen = true;
 		} finally {
 			coverChecking = false;
@@ -1621,7 +1635,7 @@
 	async function articlesWithoutCover(): Promise<{ mediaId: string; name: string; slot: number }[]> {
 		const missing: { mediaId: string; name: string; slot: number }[] = [];
 		for (const m of selected) {
-			if (!hasDoc(m)) continue;
+			if (itemLocked(m) || !hasDoc(m)) continue;
 			try {
 				const res = await apiRequest(`${apiBase}/articles/${m.media_id}${slotQuery(m.slot)}`);
 				if (!res.ok) continue;
@@ -1708,7 +1722,7 @@
 	}
 
 	// Jumlah media yang dijadwalkan, untuk label tombol dan ringkasan panel.
-	const scheduledCount = $derived(selected.filter((m) => Boolean(scheduleByMedia[pkey(m)])).length);
+	const scheduledCount = $derived(selected.filter((m) => !itemLocked(m) && Boolean(scheduleByMedia[pkey(m)])).length);
 
 	/**
 	 * Payload jadwal: hanya media yang punya waktu. Backend memperlakukan media
@@ -1720,6 +1734,7 @@
 	function schedulePayload(): { media_id: string; slot: number; scheduled_at: string }[] {
 		const out: { media_id: string; slot: number; scheduled_at: string }[] = [];
 		for (const m of selected) {
+			if (itemLocked(m)) continue;
 			const at = scheduleByMedia[pkey(m)];
 			if (!at) continue;
 			out.push({ media_id: m.media_id, slot: m.slot ?? 1, scheduled_at: new Date(at).toISOString() });
@@ -2402,6 +2417,12 @@
 														0 {tr('kata')}
 													{/if}
 													<span class="mx-1 text-slate-300">·</span>{tr('Artikel')} {item.slot ?? 1}
+													{#if hasMultipleRounds}
+														<span class="mx-1 text-slate-300">·</span><span class="inline-flex items-center gap-1 rounded-[5px] bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{tr('Putaran')} {item.round ?? 1}</span>
+													{/if}
+													{#if item.publication_id}
+														<span class="mx-1 text-slate-300">·</span><span class="text-[10.5px] font-semibold text-slate-500">{tr('Terkunci')}</span>
+													{/if}
 												</p>
 											</div>
 										</div>
@@ -2437,18 +2458,18 @@
 													<button
 														type="button"
 														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 bg-blue-600 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-blue-700"
-														aria-label={viewOnly ? tr('Lihat Artikel') : tr('Edit Artikel')}
+														aria-label={itemLocked(item) ? tr('Lihat Artikel') : tr('Edit Artikel')}
 														disabled={bulkRunning}
 														onclick={() => void openPreview(item)}
 													>
 														<Pencil size={15} strokeWidth={2} class="shrink-0" />
-														<span class="expTip">{viewOnly ? tr('Lihat Artikel') : tr('Edit Artikel')}</span>
+														<span class="expTip">{itemLocked(item) ? tr('Lihat Artikel') : tr('Edit Artikel')}</span>
 													</button>
 													<button
 														type="button"
 														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
 														aria-label={tr('Cek Validasi')}
-														disabled={bulkRunning || viewOnly}
+														disabled={bulkRunning || itemLocked(item)}
 														onclick={() => (checklistFor = pkey(item))}
 													>
 														<ShieldCheck size={16} strokeWidth={2.2} class="shrink-0" />
@@ -2459,7 +2480,7 @@
 														type="button"
 														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 bg-blue-600 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-blue-700 disabled:opacity-60"
 														aria-label={generating ? tr('Membuat…') : queued ? tr('Mengantre…') : tr('Generate Konten')}
-														disabled={generating || bulkRunning || viewOnly}
+														disabled={generating || bulkRunning || itemLocked(item)}
 														onclick={() => openNaskahGenerate(item)}
 													>
 														{#if generating}
@@ -2475,7 +2496,7 @@
 														type="button"
 														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50"
 														aria-label={tr('Tulis Sendiri')}
-														disabled={bulkRunning || viewOnly}
+														disabled={bulkRunning || itemLocked(item)}
 														onclick={() => openNaskahUpload(item)}
 													>
 														<PencilLine size={14} strokeWidth={2} class="shrink-0 text-slate-500" />
@@ -3108,7 +3129,7 @@
 			sponsored={targetMedia?.label_sponsor === 'ada_sponsor'}
 			saving={editorSaving}
 			saveError={editorError}
-			readOnly={viewOnly}
+			readOnly={itemLocked(targetMedia)}
 			onClose={() => { if (!editorSaving) editor = null; }}
 			onRefresh={() => void load()}
 			onSave={(title, html, coverUrl, category, metaDescription) => void saveEditor(title, html, coverUrl, category, metaDescription)}
@@ -3136,7 +3157,7 @@
 				<!-- Daftar ini punya area gulir sendiri: dengan puluhan media, bloknya tidak
 				     memanjang sampai mendorong isi lain keluar panel. -->
 				<div class="mt-2 max-h-[42vh] space-y-2 overflow-y-auto pr-1">
-{#each selected as m (pkey(m))}
+{#each selected.filter((m) => !itemLocked(m)) as m (pkey(m))}
 	{@const explicit = scheduleByMedia[pkey(m)] ?? ''}
 	<div class="rounded-[5px] border p-2">
 		<div class="flex items-center justify-between gap-2">

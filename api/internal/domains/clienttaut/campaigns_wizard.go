@@ -23,7 +23,8 @@ func (d *Deps) loadCampaignForAgents(ctx context.Context, campaignID, brandID st
 	row, err := d.queryRow(ctx,
 		`SELECT id, brand_id, name, business_profile, hyperlink_config, media_type, trigger_keywords,
 		        budget_strategy, budget_config, editorial_standard_snapshot AS materials,
-		        tracking_mode, primary_url, primary_anchor, backup_url, backup_anchor, spokepersons
+		        tracking_mode, primary_url, primary_anchor, backup_url, backup_anchor, spokepersons,
+		        COALESCE(taut_round, 1) AS taut_round
 		 FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1`, campaignID, brandID)
 	if err != nil {
 		return nil, err
@@ -568,20 +569,29 @@ func (d *Deps) TautPlacementQuantity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "media_id": mediaID, "quantity": quantity})
-}// addPlacementSlots: tambahkan n baris slot baru di atas nomor slot tertinggi.
+} // addPlacementSlots: tambahkan n baris slot baru di atas nomor slot tertinggi.
 // Harga dan status menyalin slot 1 (harga yang sama seperti tabel media).
+// `round` ikut putaran aktif kampanye supaya artikel baru bisa dibedakan dari
+// artikel putaran sebelumnya.
 func (d *Deps) addPlacementSlots(ctx context.Context, campaignID, mediaID string, maxSlot, n int) error {
+	round := 1
+	if row, err := d.queryRow(ctx,
+		"SELECT COALESCE(taut_round, 1) AS taut_round FROM campaigns WHERE id = $1 LIMIT 1", campaignID); err == nil && row != nil {
+		if v := int(row.numOr("taut_round")); v > 0 {
+			round = v
+		}
+	}
 	for i := 1; i <= n; i++ {
 		// Salin dari slot TERENDAH yang ada (biasanya slot 1) supaya tetap
 		// bekerja walau artikel pertama sudah tidak ada.
 		if err := d.exec(ctx,
-			`INSERT INTO taut_campaign_media (id, campaign_id, media_id, slot, source, status, price, match_rank, match_reason, angle_slug)
-			 SELECT $1, $2, $3, $4, 'manual', 'selected', tcm1.price, tcm1.match_rank, tcm1.match_reason, tcm1.angle_slug
+			`INSERT INTO taut_campaign_media (id, campaign_id, media_id, slot, round, source, status, price, match_rank, match_reason, angle_slug)
+			 SELECT $1, $2, $3, $4, $5, 'manual', 'selected', tcm1.price, tcm1.match_rank, tcm1.match_reason, tcm1.angle_slug
 			 FROM taut_campaign_media tcm1
 			 WHERE tcm1.campaign_id = $2 AND tcm1.media_id = $3
 			 ORDER BY tcm1.slot ASC
 			 LIMIT 1`,
-			newUUID(), campaignID, mediaID, maxSlot+i); err != nil {
+			newUUID(), campaignID, mediaID, maxSlot+i, round); err != nil {
 			return err
 		}
 	}

@@ -296,6 +296,10 @@
 	// Kampanye tujuan sudah selesai (submitted/scheduled/distributed): katalog
 	// tetap boleh dilihat, tapi tidak boleh menambah media lagi.
 	let campaignDone = $state(false);
+	// Kampanye sedang dibuka untuk putaran baru (taut_round > 1). Di mode ini
+	// pilihan mulai dari kosong, dan media yang sudah pernah dipakai boleh
+	// dipilih lagi karena akan dibuat sebagai artikel baru.
+	let newRoundMode = $state(false);
 
 	const BOOKMARK_KEY = 'tauthub_client_bookmarked_media';
 	const SELECTED_KEY = 'tauthub_client_selected_media';
@@ -438,9 +442,13 @@
 			// Status kampanye menentukan boleh-tidaknya menambah media.
 			const statusRes = await apiRequest(`${apiBase}/taut/campaigns/${addToCampaignId}`);
 			if (statusRes.ok) {
-				const campaign = (await statusRes.json()) as { taut_status?: string | null };
+				const campaign = (await statusRes.json()) as { taut_status?: string | null; taut_round?: number | null };
 				campaignDone = DONE_STATUSES.has(campaign?.taut_status ?? '');
+				newRoundMode = Number(campaign?.taut_round ?? 1) > 1;
 			}
+			// Putaran baru dimulai dari pilihan kosong: media putaran lama yang
+			// dipilih lagi akan dibuat sebagai artikel baru di domain yang sama.
+			if (newRoundMode) return;
 			const res = await apiRequest(`${apiBase}/taut/campaigns/${addToCampaignId}/placement`);
 			if (!res.ok) return;
 			const data = (await res.json()) as {
@@ -1332,7 +1340,7 @@
 	{#if addToCampaignId}
 		<div class="catalogContextBanner">
 			<Plus size={14} />
-			<span>{campaignDone ? tr('Kampanye ini sudah selesai — mode lihat saja. Katalog tetap bisa dijelajahi, tapi media tidak bisa ditambahkan lagi.') : tr('Kamu sedang menambah media ke kampanye yang sudah dibuat. Media yang sudah dipilih tetap tercentang — pilih tambahanmu, lalu klik "Tambahkan ke Kampanye" untuk kembali ke Penyedia Konten.')}</span>
+				<span>{campaignDone ? tr('Kampanye ini sudah selesai — mode lihat saja. Katalog tetap bisa dijelajahi, tapi media tidak bisa ditambahkan lagi.') : newRoundMode ? tr('Putaran baru: pilih media untuk artikel berikutnya. Media yang sudah pernah dipakai boleh dipilih lagi karena akan dibuat sebagai artikel baru.') : tr('Kamu sedang menambah media ke kampanye yang sudah dibuat. Media yang sudah dipilih tetap tercentang — pilih tambahanmu, lalu klik "Tambahkan ke Kampanye" untuk kembali ke Penyedia Konten.')}</span>
 		</div>
 		{#if addError}<div class="errorBanner">{addError}</div>{/if}
 	{/if}
