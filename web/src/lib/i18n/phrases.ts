@@ -4170,6 +4170,8 @@ export const PHRASE_EN: Record<string, string> = {
 	"Artikel belum dibuat": "Article not created",
 	"QC belum dicek": "QC not checked yet",
 	"QC belum lulus": "QC not passed yet",
+	"QC lulus": "QC passed",
+	"Buat artikel dulu untuk menganalisis": "Create the article first to analyze it",
 	"Kategori belum dipilih": "Category not selected",
 	"Buat artikel lewat Generate Konten atau Unggah Artikel.": "Create the article via Generate Content or Upload Article.",
 	"Pakai cover default": "Use default cover",

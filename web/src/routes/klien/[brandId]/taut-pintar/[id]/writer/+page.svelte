@@ -743,6 +743,17 @@
 		if (local === 'draft' && item.article_status === 'none') return 'draft';
 		return item.article_status;
 	}
+	// Warna tombol Analisis QC mengikuti hasil audit: hijau setelah QC lulus,
+	// merah kalau sudah dicek tapi belum lulus, biru selama pemindaian berjalan.
+	function qcButtonTone(item: PlacementItem): string {
+		const key = pkey(item);
+		if (qcRunning[key]) return 'border-blue-200 bg-blue-50 text-blue-600';
+		if ((qcCounts[key] ?? 0) === 0) return 'border-slate-200 bg-white text-slate-700';
+		return articleStatusOf(item) === 'ready'
+			? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+			: 'border-rose-200 bg-rose-50 text-rose-600';
+	}
+
 	function hasDoc(item: PlacementItem): boolean {
 		const s = articleStatusOf(item);
 		return s !== 'none' && s !== 'generating' && s !== 'error' && s !== 'queued';
@@ -2415,21 +2426,25 @@
 													</button>
 												{/if}
 												<!-- Analisis QC selalu tampil supaya posisinya tidak berpindah saat
-												     naskah dibuat; nonaktif selama artikel belum ada. -->
-												<button
-													type="button"
-													class="expAction relative inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-													aria-label={tr('Analisis QC')}
-													disabled={!doc || bulkRunning}
-													title={doc ? tr('Analisis QC') : tr('Buat artikel dulu untuk menganalisis')}
-													onclick={() => (qcFor = pkey(item))}
-												>
-													<ListChecks size={16} strokeWidth={2.2} class="shrink-0" />
-													{#if (qcCounts[pkey(item)] ?? 0) > 0}
-														<span class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-blue-600" aria-hidden="true"></span>
-													{/if}
-													<span class="expTip">{tr('Analisis QC')}</span>
-												</button>
+							     naskah dibuat; nonaktif selama artikel belum ada. -->
+							<button
+								type="button"
+								class="expAction relative inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 {qcButtonTone(item)}"
+								aria-label={tr('Analisis QC')}
+								disabled={!doc || bulkRunning || qcRunning[pkey(item)]}
+								title={!doc ? tr('Buat artikel dulu untuk menganalisis') : qcRunning[pkey(item)] ? tr('Memindai…') : (qcCounts[pkey(item)] ?? 0) > 0 ? (articleStatusOf(item) === 'ready' ? tr('QC lulus') : tr('QC belum lulus')) : tr('Analisis QC')}
+								onclick={() => (qcFor = pkey(item))}
+							>
+								{#if qcRunning[pkey(item)]}
+									<LoaderCircle size={16} class="shrink-0 animate-spin" />
+								{:else}
+									<ListChecks size={16} strokeWidth={2.2} class="shrink-0" />
+								{/if}
+								{#if (qcCounts[pkey(item)] ?? 0) > 0 && !qcRunning[pkey(item)]}
+									<span class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full {articleStatusOf(item) === 'ready' ? 'bg-emerald-500' : 'bg-rose-500'}" aria-hidden="true"></span>
+								{/if}
+								<span class="expTip">{tr('Analisis QC')}</span>
+							</button>
 												{#if (slotCounts[m.media_id] ?? 1) > 1}
 												<button
 													type="button"
