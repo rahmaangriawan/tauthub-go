@@ -356,6 +356,7 @@ func buildTautProperBlock(p *tautProperInput, brief tautProperBriefContext) stri
 	b.WriteString("4. DILARANG klaim \"nomor 1\", \"terbaik\", \"paling terpercaya\" dan sejenisnya KECUALI tertulis persis di sumber.\n")
 	b.WriteString("5. Kutipan narasumber hanya boleh muncul bila ada [KUTIPAN RESMI]; pakai kata, frasa, dan tanda baca persis seperti yang tertulis dan tulis sebagai <blockquote><p>…</p></blockquote> dengan atribusi nama & jabatan. DILARANG menulis kutipan lain dari narasumber tersebut.\n")
 	b.WriteString("6. Gatekeeper memverifikasi klaim ke blok yang sama — klaim tanpa sumber di sini ditandai gagal QC.\n")
+	b.WriteString("7. TAUTAN DARI KLIEN (WAJIB): bila ada blok [TAUTAN DARI KLIEN], setiap anchor di dalamnya HARUS muncul di badan artikel sebagai teks tautan, persis huruf per huruf. Tempatkan di dalam paragraf yang topiknya memang berkaitan; bila belum ada kalimat yang cocok, tulis kalimat penyambung yang wajar tanpa menambah klaim/fakta baru (kalimat itu hanya merangkai, bukan mengklaim). JANGAN memaksa anchor ke kalimat yang maknanya tidak nyambung, dan JANGAN menaruhnya sebagai kalimat berdiri sendiri, daftar tautan, atau frasa pembatas seperti \"Baca juga\". Kewajiban ini soal KEBERADAAN tautan, bukan izin menambah fakta — aturan grounding di atas tetap berlaku penuh.\n")
 	if s := strings.TrimSpace(p.Fakta); s != "" {
 		b.WriteString("\n[DATA FAKTA TERKUNCI — dipakai persis seperti ini]\n" + s + "\n")
 	}

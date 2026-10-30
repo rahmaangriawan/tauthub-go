@@ -218,6 +218,7 @@ const racikOutputRules = `Aturan keluaran (WAJIB):
 - Pakai HANYA informasi pada "Bahan dari user" di bawah. JANGAN menambah fakta, angka, nama orang, tanggal, tempat, atau klaim yang tidak ada di bahan.
 - Jangan memakai teks anchor sebagai judul artikel; susun arah bahasan yang relevan dengan angle yang dipilih.
 - Tautan hanya boleh diperintahkan bila anchor MEMILIKI URL (format "anchor -> URL"). Anchor yang ditandai "TANPA URL" hanya disebut sebagai frasa/nama biasa — JANGAN menulis "sisipkan tautan", "backlink", atau "hyperlink" untuk anchor itu.
+- Untuk SETIAP anchor yang MEMILIKI URL, instruksimu WAJIB memerintahkan agar anchor itu dipakai PERSIS sebagai teks tautan dan ditempatkan di dalam paragraf yang topiknya memang berkaitan. Sertakan izin eksplisit untuk menulis kalimat baru yang wajar bila belum ada kalimat yang cocok — JANGAN memaksa anchor masuk ke kalimat yang maknanya tidak nyambung, dan JANGAN menaruhnya sebagai kalimat berdiri sendiri, daftar tautan, atau frasa pembatas seperti "Baca juga".
 - WAJIB menyebut nama subjek/brand (dari anchor atau Konteks domain) secara eksplisit di instruksi, supaya judul artikel yang ditulis Writer jelas konteksnya (bukan frasa industri generik seperti "transformasi model bisnis").
 - "Konteks domain (hasil crawl)" hanya untuk mengenali jenis usaha/subjek. JANGAN menyalin angka, tanggal, atau klaim dari sana.
 - Sebut target panjang artikel dan jumlah tautan sesuai aturan media di bahan.

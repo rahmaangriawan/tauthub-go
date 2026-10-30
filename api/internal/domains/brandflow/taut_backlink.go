@@ -511,9 +511,10 @@ func enforceTautBacklinkPolicy(html string, links []tautBacklinkSpec) string {
 	// Tautan klien: model sering mengabaikannya (terutama saat prompt angle
 	// punya aturan tautan sendiri), dan jalur di atas hanya membungkus URL yang
 	// SUDAH ditulis model — jadi anchor klien bisa hilang total. Di sini tiap
-	// tautan klien yang belum ada di naskah ditanam paksa: bungkus frasa anchor
-	// bila frasa itu ada di teks, kalau tidak sisipkan satu kalimat di akhir
-	// paragraf terakhir supaya tautan tetap ada.
+	// tautan klien yang belum ada di naskah ditanam paksa sebagai jaring
+	// pengaman: bungkus frasa anchor bila frasa itu ada di teks, kalau tidak
+	// sisipkan ke paragraf yang PALING BERKAITAN dengan anchor (bukan asal
+	// paragraf terakhir) supaya kalimatnya tidak terasa ditempel.
 	for _, spec := range links {
 		if !spec.Client || spec.URL == "" || spec.Anchor == "" {
 			continue
@@ -529,13 +530,53 @@ func enforceTautBacklinkPolicy(html string, links []tautBacklinkSpec) string {
 		if spec.Rel != nil && *spec.Rel != "" {
 			attr = ` rel="` + *spec.Rel + `"`
 		}
-		sentence := ` Untuk kebutuhan tersebut, <a href="` + spec.URL + `"` + attr + `>` +
-			escapeHTMLText(spec.Anchor) + `</a> bisa jadi pilihan yang layak dipertimbangkan.`
-		if lastP := strings.LastIndex(out, "</p>"); lastP != -1 {
-			out = out[:lastP] + sentence + "</p>" + out[lastP+4:]
-		} else {
-			out += "<p>" + strings.TrimSpace(sentence) + "</p>"
-		}
+		link := `<a href="` + spec.URL + `"` + attr + `>` + escapeHTMLText(spec.Anchor) + `</a>`
+		sentence := " Untuk " + link + ", Anda bisa melihat informasi lengkapnya lebih lanjut."
+		out = insertSentenceIntoBestParagraph(out, spec.Anchor, sentence)
 	}
 	return out
+}
+
+// insertSentenceIntoBestParagraph: sisipkan satu kalimat ke paragraf yang
+// paling berkaitan dengan anchor, diukur dari jumlah kata anchor yang muncul di
+// paragraf itu. Dipakai hanya sebagai jaring pengaman ketika model melewatkan
+// tautan klien sepenuhnya — memilih paragraf yang relevan membuat kalimat
+// sisipan tidak terasa sebagai tempelan acak. Bila tidak ada paragraf yang
+// berbagi satu kata pun dengan anchor, kalimat masuk ke paragraf terakhir.
+func insertSentenceIntoBestParagraph(html, anchor, sentence string) string {
+	lastP := strings.LastIndex(html, "</p>")
+	if lastP == -1 {
+		return html + "<p>" + strings.TrimSpace(sentence) + "</p>"
+	}
+	bestStart, bestScore := -1, 0
+	for _, m := range reBlockP.FindAllStringSubmatchIndex(html, -1) {
+		text := strings.ToLower(stripTagsForScoring(html[m[2]:m[3]]))
+		score := 0
+		for _, w := range strings.Fields(strings.ToLower(anchor)) {
+			if utf8.RuneCountInString(w) < 4 {
+				continue
+			}
+			if strings.Contains(text, w) {
+				score++
+			}
+		}
+		if score > bestScore {
+			// m[3] = akhir isi paragraf (sebelum </p>), bukan m[1] yang sudah
+			// melewati tag penutup — menyisipkan di m[1] menaruh kalimat di luar
+			// paragraf sehingga hasilnya bukan kalimat dalam paragraf.
+			bestScore, bestStart = score, m[3]
+		}
+	}
+	if bestStart == -1 {
+		bestStart = lastP
+	}
+	return html[:bestStart] + sentence + html[bestStart:]
+}
+
+// reAnyTag: semua tag HTML, dipakai untuk mencocokkan kata tanpa terganggu markup.
+var reAnyTag = regexp.MustCompile(`(?is)<[^>]*>`)
+
+// stripTagsForScoring: buang tag supaya pencocokan kata tidak terganggu markup.
+func stripTagsForScoring(s string) string {
+	return reAnyTag.ReplaceAllString(s, " ")
 }

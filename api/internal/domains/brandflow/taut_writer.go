@@ -651,7 +651,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			"   - Tautan utama (" + plantPrimary + ") WAJIB ada TEPAT 1x di artikel dengan anchor \"" + primaryAnchor + "\" " + relRule + primaryObligation + "\n" +
 			"   -" + backupRule + "\n" +
 			"   - Tempatkan tautan secara natural di dalam kalimat (bukan berdampingan, bukan daftar link).\n" +
-			"   - TEKNIK KONTEKSTUAL (WAJIB): tanamkan link dengan mengubah frasa yang SUDAH ada di kalimat menjadi tautan (sebutan brand/layanan/topik yang sedang dibahas). DILARANG KERAS menambahkan kalimat pembatas seperti \"Baca juga:\", \"Baca selengkapnya di\", \"Lihat juga:\", atau membuat paragraf khusus untuk menampung link.\n" +
+			"   - TEKNIK KONTEKSTUAL (WAJIB): tanamkan link di dalam kalimat yang maknanya memang berkaitan. Bila frasa anchor sudah ada di kalimat yang relevan, ubah frasa itu menjadi tautan. Bila belum ada, TULIS kalimat baru yang wajar dan menyambung paragraf, lalu jadikan anchor bagian dari kalimat itu — jangan memaksakan anchor ke kalimat yang topiknya tidak nyambung. DILARANG KERAS menambahkan kalimat pembatas seperti \"Baca juga:\", \"Baca selengkapnya di\", \"Lihat juga:\", atau membuat paragraf khusus untuk menampung link.\n" +
 			"   - JANGAN menanam link lain selain tautan kampanye di atas maupun tautan yang diminta klien di blok TAUTAN DARI KLIEN."
 	} else if allowsLink {
 		// Media mengizinkan hyperlink tapi kampanye tidak mengatur backlink:
@@ -661,7 +661,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		linkRule = "ATURAN PENANAMAN LINK: Media ini mengizinkan hyperlink. Tidak ada backlink kampanye untuk artikel ini — tanam HANYA tautan yang diminta klien pada blok TAUTAN DARI KLIEN di bawah (tidak ada tautan lain).\n" +
 			"   - SEMUA tautan WAJIB berupa <a href=\"URL\">anchor text</a>. DILARANG menulis URL telanjang sebagai teks artikel.\n" +
 			"   - Tempatkan tautan secara natural dan semantik di dalam kalimat yang relevan (bukan berdampingan, bukan daftar link).\n" +
-			"   - TEKNIK KONTEKSTUAL (WAJIB): tanamkan link dengan mengubah frasa yang SUDAH ada di kalimat menjadi tautan (sebutan brand/layanan/topik yang sedang dibahas). DILARANG menambahkan kalimat pembatas seperti \"Baca juga:\"."
+			"   - TEKNIK KONTEKSTUAL (WAJIB): tanamkan link di dalam kalimat yang maknanya memang berkaitan. Bila frasa anchor sudah ada di kalimat yang relevan, ubah frasa itu menjadi tautan. Bila belum ada, TULIS kalimat baru yang wajar dan menyambung paragraf, lalu jadikan anchor bagian dari kalimat itu — jangan memaksakan anchor ke kalimat yang topiknya tidak nyambung. DILARANG menambahkan kalimat pembatas seperti \"Baca juga:\"."
 	}
 
 	// Tautan tambahan dari klien (modal Pengelola Naskah): mandat level sistem
@@ -675,8 +675,11 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		for _, l := range customLinks {
 			lines = append(lines, "- ["+l.Anchor+"] -> "+l.URL)
 		}
-		customLinkBlock = "[TAUTAN DARI KLIEN — MANDAT SISTEM, MENANG ATAS ATURAN TAUTAN DI PROMPT ANGLE MANA PUN]\n" +
+		customLinkBlock = "[TAUTAN DARI KLIEN — MANDAT Wajib, MENANG ATAS ATURAN TAUTAN DI PROMPT ANGLE MANA PUN]\n" +
 			"Klien secara eksplisit meminta tautan berikut disertakan dalam artikel. Sisipkan masing-masing TEPAT 1x secara natural dan semantik pada bagian yang relevan, dan DILARANG menulis URL telanjang.\n" +
+			"KEWAJIBAN KEBERADAAN (WAJIB): setiap anchor di bawah HARUS muncul di badan artikel sebagai teks tautan. Artikel yang tidak memuat salah satu anchor ini dianggap GAGAL, sekalipun isi artikelnya bagus.\n" +
+			"CARA MENEMPATKAN (WAJIB): pilih paragraf yang topiknya memang berkaitan dengan anchor. Bila belum ada kalimat yang cocok, TULIS kalimat baru yang wajar dan menyambung dengan paragraf itu, lalu jadikan anchor sebagai bagian kalimat tersebut. JANGAN memaksakan anchor ke kalimat yang maknanya tidak nyambung — kalimat yang jadi kaku atau melompat topik lebih buruk daripada menambah satu kalimat baru.\n" +
+			"Yang DILARANG: menaruh anchor sebagai kalimat berdiri sendiri tanpa konteks, daftar tautan, atau frasa pembatas \"Baca juga:\", \"Baca selengkapnya di\", \"Lihat juga\", \"Kunjungi website\".\n" +
 			"ATURAN TEKS TAUTAN (WAJIB): teks yang terlihat di antara <a> dan </a> harus PERSIS sama dengan teks anchor di dalam tanda kurung siku, huruf per huruf. Jangan mengganti, menerjemahkan, memperpanjang dengan nama situs (\"… website\", \"situs resmi …\"), atau menyingkatnya. Contoh benar untuk [resto murah jogja]: <a href=\"https://salsariresto.com\">resto murah jogja</a>. Contoh SALAH: <a href=\"https://salsariresto.com\">Salsari Resto website</a>.\n" +
 			strings.Join(lines, "\n")
 	}
