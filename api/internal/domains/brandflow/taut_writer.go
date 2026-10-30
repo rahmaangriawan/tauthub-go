@@ -163,6 +163,21 @@ func (d *Deps) selectedTautMedia(ctx context.Context, campaignID string) ([]sele
 // tautWordCountRe: frasa "N kata"/"N words" di topik/instruksi klien.
 // reTautLinkMention: konteks klien menyebut tautan/link, dipakai untuk memberi
 // catatan keras saat tidak ada URL yang bisa dipakai (jangan mengarang link).
+// tautListicleAngleSlugs: angle yang strukturnya berupa DAFTAR bernomor
+// (satu item per produk/subjek). Dipakai untuk menyesuaikan jumlah item dengan
+// bahan yang tersedia — lihat angleShapeRule di generateTautWriterArticle.
+var tautListicleAngleSlugs = map[string]bool{
+	"listicle":   true,
+	"comparison": true,
+	"top_list":   true,
+	"roundup":    true,
+}
+
+// tautAngleIsListicle: true bila angle berstruktur daftar bernomor.
+func tautAngleIsListicle(slug string) bool {
+	return tautListicleAngleSlugs[strings.ToLower(strings.TrimSpace(slug))]
+}
+
 var reTautLinkMention = regexp.MustCompile(`(?i)\b(tautan|link|backlink|hyperlink|anchor)\b`)
 
 var tautWordCountRe = regexp.MustCompile(`(?i)(\d{2,5})\s*(?:kata|words?|word)\b`)
@@ -705,6 +720,19 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if angleHasSources {
 		hasFacts = true
 	}
+	// Angle bertipe daftar (listicle) meminta RANGKAIAN produk, tapi bahan
+	// kampanye sering hanya berisi SATU subjek. Tanpa arahan, model bingung:
+	// ia menulis artikel naratif biasa (angle hilang), atau mengarang produk
+	// fiktif (halusinasi). Aturan ini menyuruh menyesuaikan ANGKA daftar dengan
+	// jumlah subjek yang benar-benar ada di bahan.
+	angleShapeRule := ""
+	if angle != nil && tautAngleIsListicle(angle.Slug) {
+		angleShapeRule = "PENYESUAIAN ANGLE DAFTAR (WAJIB): angle ini meminta daftar rekomendasi bernomor. " +
+			"Susun daftar HANYA dari subjek/produk yang benar-benar ada di bahan di atas — JANGAN mengarang produk, merek, atau item lain yang tidak disebut bahan. " +
+			"Bila bahan hanya memuat SATU subjek, tulis daftar berisi satu item (angka di judul dan H2 harus 1, bukan angka karangan), " +
+			"lalu perdalam item itu dengan beberapa sudut bahasan. Bila bahan memuat beberapa subjek, buat satu item per subjek sesuai urutan bahan. " +
+			"Struktur tetap wajib mengikuti angle: satu H2 daftar + H3 bernomor per item + paragraf penutup tanpa subjudul."
+	}
 
 	var identity strings.Builder
 	identity.WriteString("[IDENTITAS MEDIA]\n   Nama: " + name + "\n   Tipe: " + mediaType)
@@ -736,6 +764,16 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			"KONTEKS UTAMA DARI KLIEN (WAJIB DIPATUHI): "+writerTopic,
 			"Seluruh artikel (judul, lead, isi, penutup) WAJIB mengikuti konteks di atas. Jangan menambah fakta, angka, nama, atau klaim yang tidak ada di konteks tersebut, dan jangan mengganti topik.",
 		)
+		// Topik klien menentukan BAHAN, angle menentukan BENTUK. Tanpa pernyataan
+		// hierarki ini, model memperlakukan topik sebagai struktur juga — kasus
+		// nyata: angle Listicle (minta rangkaian <h3> per produk) ditulis jadi
+		// artikel naratif dua brand karena topiknya bercerita, sehingga hasilnya
+		// tidak menyerupai listicle sama sekali.
+		if anglePromptBlock != "" {
+			promptLines = append(promptLines,
+				"HIERARKI TOPIK vs ANGLE (WAJIB): topik di atas menetapkan BAHAN dan subjek bahasan; ANGLE yang dipilih menetapkan STRUKTUR dan BENTUK artikel (judul, susunan bagian, gaya penyajian). Bila topik tidak menyebut struktur tertentu, IKUTI STRUKTUR ANGLE SEPENUHNYA — jangan menggantinya dengan artikel naratif biasa.",
+			)
+		}
 		// Instruksi klien kadang menyebut brand LAIN (bukan brand kampanye ini) —
 		// mis. brief Salsari Resto yang menyuruh "integrasikan Giovani Barbershop".
 		// Tanpa penjagaan, model menulis artikel dua brand: judul gabungan, isi
@@ -793,6 +831,13 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	// bergantung pada kepatuhan model.
 	categoryRule := ""
 	schemaLine := "Tulis artikel unik utk media ini. Output JSON valid {title, content_html, meta_description}"
+	// Judul dan meta deskripsi adalah turunan angle, bukan pelengkap bebas.
+	// Angle menentukan pola judul (mis. listicle: "[Angka] Rekomendasi ..."),
+	// lalu judul itu yang mengarahkan kata kunci, meta, dan isi. Tanpa aturan
+	// ini model menulis judul generik yang tidak mencerminkan angle pilihan.
+	if anglePromptBlock != "" {
+		schemaLine += " ATURAN JUDUL & META (WAJIB): susun field title mengikuti POLA JUDUL yang ditentukan angle di atas (bila angle mewajibkan angka, sertakan angka yang benar-benar sesuai jumlah item di artikel). Turunkan meta_description dari judul dan isi itu — sebut subjek utama dan sudut angle-nya, jangan menyalin kalimat pembuka apa adanya."
+	}
 	if len(allowedCategories) > 0 {
 		categoryRule = "Aturan rubrik/kategori (WAJIB): pilih SATU rubrik paling relevan dengan isi artikel HANYA dari daftar kategori media berikut (sudah urut): " +
 			strings.Join(allowedCategories, " | ") +
@@ -811,6 +856,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		topikBlock,
 		channelInstruction,
 		anglePromptBlock,
+		angleShapeRule,
 		angleBriefBlock,
 		linkContext,
 		linkRule,
