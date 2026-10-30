@@ -1228,69 +1228,106 @@
 
 	<!-- Dialog pengajuan Secure Direct -->
 	{#if sdOpen}
-		<div
-			class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4"
-			style="background-color: rgba(0,0,0,.45);"
-			role="presentation"
-			tabindex="-1"
-			onclick={(e) => { if (e.target === e.currentTarget) sdOpen = false; }}
-			onkeydown={(e) => { if (e.key === 'Escape') sdOpen = false; }}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4"
+		style="background-color: rgba(0,0,0,.45);"
+		role="presentation"
+		tabindex="-1"
+		onclick={(e) => { if (e.target === e.currentTarget) sdOpen = false; }}
+		onkeydown={(e) => { if (e.key === 'Escape') sdOpen = false; }}
+	>
+		<dialog
+			open
+			class="app-card my-auto w-full max-w-md overflow-hidden p-0"
+			aria-label={tr('Ajukan Secure Direct')}
+			aria-modal="true"
+			onclick={(e) => e.stopPropagation()}
 		>
-			<dialog
-				open
-				class="app-card my-12 w-full max-w-md p-5"
-				aria-label={tr('Ajukan Secure Direct')}
-				onclick={(e) => e.stopPropagation()}
-			>
-				<div class="mb-1 flex items-start justify-between gap-3">
-					<div class="flex items-center gap-2.5">
-						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]" style="background: var(--accent); color: var(--primary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 20%, transparent);">
-							<Zap size={17} />
-						</div>
-						<h2 class="m-0 text-[15px] font-semibold tracking-[-0.01em]">{tr('Ajukan Secure Direct')}</h2>
-					</div>
-					<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr('Tutup')} onclick={() => (sdOpen = false)}><X size={18} /></button>
+			<!-- Kepala: ikon, judul, dan satu kalimat penjelas. -->
+			<header class="flex items-start gap-3 border-b px-5 py-4" style="border-color: var(--border);">
+				<span
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+					style="background: var(--accent); color: var(--primary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 20%, transparent);"
+				>
+					<Zap size={18} />
+				</span>
+				<div class="min-w-0 flex-1">
+					<h2 class="m-0 text-[15px] font-semibold tracking-[-0.01em]">{tr('Ajukan Secure Direct')}</h2>
+					<p class="m-0 mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
+						{tr('Mode terbit otomatis untuk media Anda.')}
+					</p>
 				</div>
+				<button
+					class="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+					type="button"
+					aria-label={tr('Tutup')}
+					onclick={() => (sdOpen = false)}
+				><X size={18} /></button>
+			</header>
 
-				<div class="flex flex-col gap-3">
-					{#if sdStatus === 'pending'}
-						<div class="flex items-start gap-2.5 rounded-[10px] px-3.5 py-3 text-[13px]" style="background-color: var(--warning-soft); color: var(--warning);">
-							<Clock size={15} class="mt-0.5 shrink-0" />
-							<div>
-								<p class="m-0 font-semibold">{tr('Menunggu persetujuan')}</p>
-								<p class="m-0 mt-0.5 text-[12.5px] leading-relaxed">{tr('Pengajuan kamu sedang menunggu persetujuan admin Tauthub. Kamu akan diberi tahu setelah diaktifkan.')}</p>
-							</div>
+			<div class="flex flex-col gap-3 px-5 py-4">
+				{#if sdStatus === 'pending'}
+					<div class="flex items-start gap-3 rounded-xl px-3.5 py-3.5" style="background-color: var(--warning-soft); color: var(--warning);">
+						<Clock size={16} class="mt-0.5 shrink-0" />
+						<div class="min-w-0">
+							<p class="m-0 text-[13px] font-semibold">{tr('Menunggu persetujuan')}</p>
+							<p class="m-0 mt-1 text-[12.5px] leading-relaxed">
+								{tr('Pengajuan kamu sedang ditinjau admin Tauthub. Kamu akan menerima notifikasi di aplikasi begitu mode ini diaktifkan.')}
+							</p>
 						</div>
-					{:else}
-						{#if sdStatus === 'rejected'}
-							<div class="rounded-[10px] px-3.5 py-3 text-[12.5px]" style="background-color: color-mix(in srgb, var(--destructive) 10%, transparent); color: var(--destructive);">
+					</div>
+				{:else}
+					{#if sdStatus === 'rejected'}
+						<div class="flex items-start gap-2.5 rounded-xl px-3.5 py-3 text-[12.5px] leading-relaxed" style="background-color: color-mix(in srgb, var(--destructive) 10%, transparent); color: var(--destructive);">
+							<CircleAlert size={15} class="mt-0.5 shrink-0" />
+							<span>
 								{tr('Pengajuan kamu sebelumnya ditolak.')}{sdNote ? ` ${sdNote}` : ''} {tr('Kamu bisa mengajukan ulang di sini.')}
-							</div>
-						{/if}
-						<p class="m-0 text-[13px] leading-relaxed text-muted-foreground">
-							{tr('Secure Direct adalah mode terbit otomatis untuk media kamu:')}
-						</p>
-						<ul class="m-0 flex flex-col gap-1.5 pl-5 text-[13px] leading-relaxed text-muted-foreground">
-							<li>{tr('Centang “Secure Direct” pada media pilihan, artikel klien langsung diproses tanpa menunggu persetujuan kamu per artikel.')}</li>
-							<li>{tr('Setiap pengaktifan direview admin Tauthub terlebih dahulu, untuk menjaga mutu distribusi.')}</li>
-						</ul>
-						{#if sdError}
-							<p class="m-0 text-[12.5px]" style="color: var(--destructive);">{sdError}</p>
-						{/if}
-						<button type="button" class="app-btn app-btn-primary w-full" disabled={sdBusy} onclick={() => void submitSecureDirect()}>
-							{sdBusy ? tr('Mengirim…') : tr('Kirim pengajuan')}
-						</button>
-					{/if}
-					{#if sdNotice}
-						<div class="flex items-start gap-2 rounded-[10px] px-3.5 py-3 text-[13px]" style="background-color: var(--success-soft); color: var(--success);">
-							<Check size={15} class="mt-0.5 shrink-0" />
-							<span>{sdNotice}</span>
+							</span>
 						</div>
 					{/if}
-				</div>
-			</dialog>
-		</div>
-	{/if}
+
+					<!-- Ringkasan cara kerja, bukan paragraf berjalan. -->
+					<div class="rounded-xl p-3.5" style="background-color: var(--secondary);">
+						<p class="m-0 text-[13px] font-semibold text-foreground">{tr('Cara kerjanya:')}</p>
+						<ul class="m-0 mt-2 flex list-none flex-col gap-2 p-0 text-[12.5px] leading-relaxed text-muted-foreground">
+							<li class="flex items-start gap-2">
+								<Check size={14} class="mt-0.5 shrink-0" style="color: var(--success);" />
+								<span>{tr('Centang “Secure Direct” pada media pilihan, artikel klien langsung diproses tanpa menunggu persetujuan kamu per artikel.')}</span>
+							</li>
+							<li class="flex items-start gap-2">
+								<Check size={14} class="mt-0.5 shrink-0" style="color: var(--success);" />
+								<span>{tr('Setiap pengaktifan direview admin Tauthub terlebih dahulu, untuk menjaga mutu distribusi.')}</span>
+							</li>
+						</ul>
+					</div>
+
+					{#if sdError}
+						<p class="m-0 text-[12.5px]" style="color: var(--destructive);">{sdError}</p>
+					{/if}
+				{/if}
+
+				{#if sdNotice}
+					<div class="flex items-start gap-2.5 rounded-xl px-3.5 py-3 text-[12.5px] leading-relaxed" style="background-color: var(--success-soft); color: var(--success);">
+						<Check size={15} class="mt-0.5 shrink-0" />
+						<span>{sdNotice}</span>
+					</div>
+				{/if}
+			</div>
+
+			<!-- Kaki: aksi dipisah dari isi supaya jelas mana yang menutup, mana yang mengirim. -->
+			<footer class="flex items-center justify-end gap-2 border-t px-5 py-3.5" style="border-color: var(--border);">
+				<button class="app-btn app-btn-soft !px-4" type="button" onclick={() => (sdOpen = false)}>
+					{sdStatus === 'pending' ? tr('Tutup') : tr('Batal')}
+				</button>
+				{#if sdStatus !== 'pending'}
+					<button class="app-btn app-btn-primary !px-4" type="button" disabled={sdBusy} onclick={() => void submitSecureDirect()}>
+						{sdBusy ? tr('Mengirim…') : tr('Kirim pengajuan')}
+					</button>
+				{/if}
+			</footer>
+		</dialog>
+	</div>
+{/if}
 
 	<form class="app-card mt-4 flex flex-wrap items-center gap-2 p-3" onsubmit={(e) => e.preventDefault()}>
 		<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
