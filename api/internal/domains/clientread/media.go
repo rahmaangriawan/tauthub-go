@@ -121,11 +121,13 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			// URL lengkap ("https://situs.com/") juga dicocokkan apa adanya.
 			clause += " OR media.website_url ILIKE " + addArg(like)
 		}
-		// ID mitra ikut dicari supaya klien bisa mengetik public_id mitra
-		// (6 karakter di URL /mitra/<id>) atau nama mitra, lalu katalog
-		// langsung menyusut ke media milik mitra tersebut.
+		// ID mitra tetap dicari supaya klien bisa menempel public_id mitra
+		// (6 karakter di URL /mitra/<id>) dan katalog menyusut ke media miliknya.
+		// Nama mitra SENGAJA tidak ikut dicocokkan: nama pemilik sering mirip
+		// nama media (mis. "Cirebonbagus"), sehingga pencarian media malah
+		// menampilkan semua media milik pemilik itu — bukan media yang dicari.
 		clause += " OR EXISTS (SELECT 1 FROM partners pa WHERE pa.id = media.partner_id AND (pa.public_id ILIKE " +
-			addArg(likeBare) + " OR pa.id ILIKE " + addArg(likeBare) + " OR pa.name ILIKE " + addArg(like) + "))"
+			addArg(likeBare) + " OR pa.id ILIKE " + addArg(likeBare) + "))"
 		clause += ")"
 	}
 	if seoFilter == "checked" {
