@@ -18,15 +18,23 @@ async function refresh() {
 	}
 }
 
+// Segarkan juga saat tab kembali aktif: admin sering membalas dari tab lain,
+// dan menunggu putaran 20 detik membuat badge terasa tidak berfungsi.
+function onVisible() {
+	if (document.visibilityState === 'visible') void refresh();
+}
+
 export function startSupportUnreadPolling() {
 	void refresh();
 	if (timer) clearInterval(timer);
 	timer = setInterval(() => void refresh(), 20_000);
+	document.addEventListener('visibilitychange', onVisible);
 }
 
 export function stopSupportUnreadPolling() {
 	if (timer) clearInterval(timer);
 	timer = null;
+	document.removeEventListener('visibilitychange', onVisible);
 }
 
 export async function refreshSupportUnreadNow() {
