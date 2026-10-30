@@ -1498,14 +1498,14 @@
 				</p>
 			{/if}
 			<button type="button" role="menuitem" onclick={openLinkFromMenu}>
-				<ExternalLink size={13} class="shrink-0" />{tr('Buka tautan')}
+				<ExternalLink size={13} class="shrink-0" />{tr('Buka')}
 			</button>
 			<button type="button" role="menuitem" onclick={editLinkFromMenu}>
-				<Pencil size={13} class="shrink-0" />{tr('Edit tautan')}
+				<Pencil size={13} class="shrink-0" />{tr('Edit')}
 			</button>
 			<span class="rte-table-menu-sep" aria-hidden="true"></span>
 			<button type="button" role="menuitem" class="rte-table-menu-danger" onclick={removeLinkFromMenu}>
-				<Trash2 size={13} class="shrink-0" />{tr('Hapus tautan')}
+				<Trash2 size={13} class="shrink-0" />{tr('Hapus')}
 			</button>
 		</div>
 	{/if}
@@ -1915,7 +1915,12 @@
 	.rte-table-menu-danger {
 		color: var(--destructive);
 	}
-	/* Menu tautan: baris ikon + label, dengan alamat tujuan di kepala menu. */
+	/* Menu tautan: baris ikon + label, dengan alamat tujuan di kepala menu.
+	   Lebarnya dipatok supaya alamat panjang tidak melebarkan menu. */
+	.rte-link-menu {
+		width: 208px;
+		max-width: 208px;
+	}
 	.rte-link-menu button {
 		display: flex;
 		align-items: center;
@@ -1926,7 +1931,9 @@
 	.rte-link-menu button :global(svg) {
 		opacity: 0.75;
 	}
+	.rte-link-menu .rte-table-menu-danger,
 	.rte-link-menu .rte-table-menu-danger :global(svg) {
+		color: var(--destructive);
 		opacity: 1;
 	}
 	.rte-link-menu-host {
@@ -1941,6 +1948,8 @@
 		min-width: 0;
 	}
 	.rte-link-menu-host span {
+		flex: 1 1 auto;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
