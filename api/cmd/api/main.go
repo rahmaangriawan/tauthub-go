@@ -440,6 +440,8 @@ func run() error {
 			authed.Get("/brands/{brandId}/notifications", clientRead.BrandNotifications)
 			authed.Post("/brands/{brandId}/notifications", clientRead.BrandNotifications)
 			authed.Post("/brands/{brandId}/notifications/{notificationId}/read", clientRead.BrandNotificationRead)
+			authed.Get("/brands/{brandId}/notifications/publication-unread", clientRead.BrandPublicationUnread)
+			authed.Post("/brands/{brandId}/notifications/publication-unread", clientRead.BrandPublicationUnread)
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/writer-links", resolveCampaign(brandFlowDeps.TautWriterLinks))
 			authed.Put("/brands/{brandId}/taut/campaigns/{campaignId}/writer-links", resolveCampaign(brandFlowDeps.TautWriterLinks))
 			// Pustaka gambar AI per artikel (isolasi brand+campaign+media).
@@ -452,6 +454,9 @@ func run() error {
 			// ---------- Obrolan klien ↔ mitra (forum per publikasi, 3×24 jam) ----------
 			authed.Get("/brands/{brandId}/chat/threads", chatDeps.ClientThreadsList)
 			authed.Post("/brands/{brandId}/chat/threads", chatDeps.ClientThreadCreate)
+			// Rating kecepatan terbit per media (tombol "Beri Rating" di ringkasan).
+			authed.Get("/brands/{brandId}/media/{mediaId}/rating", chatDeps.MediaRatingGet)
+			authed.Put("/brands/{brandId}/media/{mediaId}/rating", chatDeps.MediaRatingPut)
 			authed.Get("/brands/{brandId}/chat/threads/{threadId}", chatDeps.ClientThreadGet)
 			authed.Post("/brands/{brandId}/chat/threads/{threadId}/messages", chatDeps.ClientMessageSend)
 

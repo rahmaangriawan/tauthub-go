@@ -11,7 +11,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { ArrowRight, CalendarClock, Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, FileText, Info, Link as LinkIcon, Loader, LoaderCircle, MessageCircle, Pencil, RefreshCw, RotateCcw, Send, Star, X } from '@lucide/svelte';
+	import { ArrowRight, CalendarClock, Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, Eye, FileText, Info, Link as LinkIcon, Loader, LoaderCircle, Lock, MessageCircle, Pencil, RefreshCw, RotateCcw, Send, Star, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
@@ -98,6 +98,64 @@
 		contactRating = 0;
 		contactHover = 0;
 		contactTarget = m;
+	}
+
+	// Beri Rating — penilaian kecepatan terbit per media, terpisah dari dialog
+	// Hubungi supaya klien bisa menilai tanpa membuka obrolan. Nilai disimpan
+	// di media_ratings (satu baris per brand+media) dan dipakai sebagai
+	// rata-rata di kolom SLA katalog media.
+	let ratingTarget = $state<MediaItem | null>(null);
+	let ratingValue = $state(0);
+	let ratingHover = $state(0);
+	let ratingLoading = $state(false);
+	let ratingBusy = $state(false);
+	let ratingError = $state('');
+	let ratingDone = $state(false);
+
+	async function openRating(m: MediaItem) {
+		ratingTarget = m;
+		ratingValue = 0;
+		ratingHover = 0;
+		ratingError = '';
+		ratingDone = false;
+		ratingLoading = true;
+		const res = await apiRequest(`/v1/brands/${brandId}/media/${m.media_id}/rating`);
+		if (res.ok) {
+			const data = await res.json().catch(() => null);
+			const existing = Number(data?.rating ?? 0);
+			if (existing >= 1 && existing <= 5) ratingValue = existing;
+		}
+		ratingLoading = false;
+	}
+
+	function closeRating() {
+		ratingTarget = null;
+		ratingValue = 0;
+		ratingHover = 0;
+		ratingError = '';
+		ratingDone = false;
+	}
+
+	async function saveRating() {
+		if (!ratingTarget || ratingValue < 1 || ratingBusy) return;
+		ratingBusy = true;
+		ratingError = '';
+		const res = await apiRequest(`/v1/brands/${brandId}/media/${ratingTarget.media_id}/rating`, {
+			method: 'PUT',
+			body: JSON.stringify({
+				rating: ratingValue,
+				publication_id: ratingTarget.publication_id ?? undefined
+			})
+		});
+		if (res.ok) {
+			ratingDone = true;
+			setTimeout(() => {
+				if (ratingDone) closeRating();
+			}, 900);
+		} else {
+			ratingError = await readApiError(res, tr('Gagal menyimpan rating.'));
+		}
+		ratingBusy = false;
 	}
 
 	function confirmContact() {
@@ -324,8 +382,12 @@
 		if (!m.publication_id || !m.document_id) return false;
 		const s = m.publish.status ?? '';
 		if (s === 'published' || s === 'processing' || s === 'queued') return false;
+		// Artikel yang sudah masuk JADWAL terbit terkunci: boleh dilihat di
+		// editor, tapi tidak boleh diubah/disimpan/dikirim ulang. Pengecualian
+		// satu-satunya: mitra meminta revisi (status 'revision').
+		if (m.scheduled_at && s !== 'revision') return false;
 		if (s === 'waiting_partner' || s === 'partner_approved' || s === 'pending') return true;
-		return m.scheduled_at ? new Date(m.scheduled_at).getTime() > Date.now() : false;
+		return false;
 	};
 
 	/** Mitra sudah mengirim konfirmasi/revisi/kutipan untuk publikasi ini. */
@@ -343,7 +405,10 @@
 	const editableNow = (m: MediaItem): boolean =>
 		canEdit(m) && (!done || partnerAsked(m) || m.publish.status === 'revision');
 
-	const editorLocked = $derived(done && !(editorFor ? editableNow(editorFor) : false));
+	// Terkunci bilang apa pun yang tidak bisa diedit sekarang (kampanye selesai,
+	// artikel terjadwal, dsb) — editor tetap bisa DIBUKA untuk pengecekan, hanya
+	// tombol simpan yang hilang dan field-nya read-only.
+	const editorLocked = $derived(Boolean(editorFor && !editableNow(editorFor)));
 
 	function openPicker(m: MediaItem) {
 		pickerFor = m;
@@ -684,6 +749,15 @@
 								</div>
 								<button
 									type="button"
+									class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
+									aria-label={tr('Beri Rating')}
+									title={tr('Beri rating kecepatan terbit mitra ini')}
+									onclick={() => void openRating(m)}
+								>
+									<Star size={16} />
+								</button>
+								<button
+									type="button"
 									class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
 									disabled={!m.publication_id}
 									aria-label={tr('Hubungi')}
@@ -708,6 +782,16 @@
 											<span class="line-clamp-2 text-[14.5px] font-semibold leading-snug text-slate-900">{m.article.title}</span>
 											<Pencil size={13} class="mt-1 shrink-0 text-slate-400" />
 										</button>
+									{:else if m.scheduled_at}
+										<button
+											type="button"
+											class="-m-1 flex w-full items-start gap-2 rounded-lg p-1 text-left transition-colors hover:bg-slate-50"
+											title={tr('Artikel sudah terjadwal — hanya bisa dilihat')}
+											onclick={() => void openEditor(m)}
+										>
+											<span class="line-clamp-2 text-[14.5px] font-semibold leading-snug text-slate-900">{m.article.title}</span>
+											<Lock size={13} class="mt-1 shrink-0 text-slate-400" />
+										</button>
 									{:else}
 										<p class="line-clamp-2 text-[14.5px] font-semibold leading-snug text-slate-900">{m.article.title}</p>
 									{/if}
@@ -724,12 +808,8 @@
 								{/if}
 							</div>
 
-							<!-- Empat keterangan: DA, jumlah link, jadwal, status terbit. -->
+							<!-- Tiga keterangan: jumlah link, jadwal, status terbit. -->
 							<div class="mt-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2.5 border-t border-slate-100 pt-3">
-								<div class="min-w-0">
-									<p class="text-[10.5px] font-medium text-slate-400">DA</p>
-									<p class="mt-0.5 text-[13.5px] font-bold leading-none text-slate-900">{m.da != null ? m.da : '—'}</p>
-								</div>
 								<div class="min-w-0">
 									<p class="text-[10.5px] font-medium text-slate-400">{tr('Tautan')}</p>
 									<div class="mt-0.5 flex items-center gap-1.5">
@@ -790,7 +870,6 @@
 							<tr class="border-b border-slate-100 bg-white text-left text-[10.5px] font-bold uppercase tracking-[0.07em] text-slate-400">
 								<th class="px-3.5 py-3.5">{tr("Media")}</th>
 								<th class="px-3.5 py-3.5">Tipe</th>
-								<th class="px-3.5 py-3.5">DA</th>
 								<th class="px-3.5 py-3.5">Link Artikel</th>
 								<th class="px-3.5 py-3.5">{tr("Jadwal Terbit")}</th>
 								<th class="px-3.5 py-3.5">Judul Artikel</th>
@@ -835,7 +914,6 @@
 											—
 										{/if}
 									</td>
-									<td class="px-3.5 py-4 text-[13px] font-bold text-slate-900">{m.da != null ? m.da : '—'}</td>
 									<td class="px-3.5 py-4 whitespace-nowrap">
 										{#if m.article.links.count > 0}
 											<span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
@@ -899,7 +977,27 @@
 												>
 													<Pencil size={13} />
 												</button>
+											{:else if m.scheduled_at && m.article.title}
+												<button
+													type="button"
+													class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300"
+													aria-label={tr('Lihat Artikel')}
+													title={tr('Artikel sudah terjadwal — hanya bisa dilihat')}
+													onclick={() => void openEditor(m)}
+												>
+													<Eye size={13} />
+												</button>
 											{/if}
+											<!-- Beri rating kecepatan terbit media ini (tanpa harus membuka obrolan). -->
+											<button
+												type="button"
+												class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:border-slate-300"
+												aria-label={tr('Beri Rating')}
+												title={tr('Beri rating kecepatan terbit mitra ini')}
+												onclick={() => void openRating(m)}
+											>
+												<Star size={13} />
+											</button>
 											<!-- Hubungi mitra tentang artikel ini; publikasi belum ada
 											     (belum diajukan) belum punya forum. -->
 											<button
@@ -1025,6 +1123,94 @@
 		onClose={() => { pickerFor = null; }}
 		onApply={applySchedule}
 	/>
+{/if}
+
+{#if ratingTarget}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center p-4"
+		style="background-color: rgba(0, 0, 0, 0.45);"
+		role="presentation"
+		onclick={(e) => { if (e.target === e.currentTarget) closeRating(); }}
+	>
+		<div
+			class="app-card w-full max-w-md overflow-hidden"
+			role="dialog"
+			aria-modal="true"
+			aria-label={tr('Beri Rating')}
+			tabindex="-1"
+			onkeydown={(e) => { if (e.key === 'Escape') closeRating(); }}
+			onclick={(e) => e.stopPropagation()}
+		>
+			<div class="flex items-start gap-3 px-5 pb-3 pt-5">
+				<span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-500">
+					<Star size={21} />
+				</span>
+				<div class="min-w-0 flex-1">
+					<p class="text-lg leading-tight font-bold text-slate-900">{tr('Beri Rating')}</p>
+					<p class="mt-1 truncate text-[13px] text-muted-foreground">{capFirst(cleanDomain(ratingTarget.website_url, ratingTarget.name))}</p>
+				</div>
+				<button class="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" type="button" aria-label={tr('Tutup')} onclick={closeRating}>
+					<X size={18} />
+				</button>
+			</div>
+
+			<div class="px-5 pb-4">
+				<div class="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-center">
+					<p class="text-[13.5px] font-bold text-slate-900">{tr('Beri Rating Kecepatan Terbit')}</p>
+					<p class="mt-1 text-[12px] leading-relaxed text-slate-500">{tr('Seberapa cepat mitra memproses dan menayangkan artikel Anda?')}</p>
+					{#if ratingLoading}
+						<div class="mt-4 flex items-center justify-center py-2 text-slate-400">
+							<LoaderCircle size={20} class="animate-spin" />
+						</div>
+					{:else}
+						<div class="mt-3 flex items-center justify-center gap-2" role="radiogroup" aria-label={tr('Beri Rating Kecepatan Terbit')}>
+							{#each [1, 2, 3, 4, 5] as n (n)}
+								<button
+									type="button"
+									role="radio"
+									aria-checked={ratingValue === n}
+									aria-label={`${n} / 5`}
+									class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors {n <= (ratingHover || ratingValue) ? 'text-amber-400' : 'text-slate-300 hover:text-amber-300'}"
+									onmouseenter={() => (ratingHover = n)}
+									onmouseleave={() => (ratingHover = 0)}
+									onclick={() => { ratingValue = n; ratingDone = false; }}
+								>
+									<Star size={22} fill={n <= (ratingHover || ratingValue) ? 'currentColor' : 'none'} strokeWidth={1.8} />
+								</button>
+							{/each}
+						</div>
+						<div class="mt-1.5 flex items-center justify-between px-1">
+							<span class="text-[10.5px] text-slate-400">{tr('Sangat Lambat')}</span>
+							<span class="text-[10.5px] text-slate-400">{tr('Sangat Cepat')}</span>
+						</div>
+						<p class="mt-2.5 text-[11.5px] leading-relaxed text-slate-500">
+							{tr('Rating membantu klien lain melihat kecepatan mitra. Satu media hanya punya satu nilai — menilai ulang akan menimpa nilai sebelumnya.')}
+						</p>
+					{/if}
+					{#if ratingError}
+						<p class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-[12px] text-rose-700">{ratingError}</p>
+					{/if}
+					{#if ratingDone}
+						<p class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-[12px] font-medium text-emerald-700">
+							<Check size={13} /> {tr('Rating tersimpan. Terima kasih!')}
+						</p>
+					{/if}
+				</div>
+			</div>
+
+			<div class="flex flex-col-reverse gap-2 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-end">
+				<button class="app-btn app-btn-soft w-full justify-center sm:w-auto" type="button" onclick={closeRating}>{tr('Batal')}</button>
+				<button
+					class="app-btn app-btn-primary inline-flex w-full items-center justify-center gap-1.5 sm:w-auto"
+					type="button"
+					disabled={ratingBusy || ratingLoading || ratingValue < 1}
+					onclick={() => void saveRating()}
+				>
+					{ratingBusy ? tr('Menyimpan…') : tr('Simpan Rating')}
+				</button>
+			</div>
+		</div>
+	</div>
 {/if}
 
 {#if contactTarget}

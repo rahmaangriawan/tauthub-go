@@ -5172,6 +5172,12 @@ export const PHRASE_EN: Record<string, string> = {
   "Eksploitasi manusia": "Human exploitation",
   "Menyakiti diri": "Self-harm",
   "Konten ilegal lain": "Other illegal content",
+  "Beri Rating": "Rate This Media",
+  "Beri rating kecepatan terbit mitra ini": "Rate this partner's publishing speed",
+  "Gagal menyimpan rating.": "Could not save the rating.",
+  "Rating tersimpan. Terima kasih!": "Rating saved. Thank you!",
+  "Simpan Rating": "Save Rating",
+  "Rating membantu klien lain melihat kecepatan mitra. Satu media hanya punya satu nilai — menilai ulang akan menimpa nilai sebelumnya.": "Ratings help other clients see how fast a partner is. Each media keeps one value — rating again overwrites the previous one.",
 	};
 
 /**
