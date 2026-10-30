@@ -118,6 +118,8 @@ export type Media = {
 	seo_ai_trust?: number | null;
 	seo_ai_citation?: boolean | null;
 	seo_checked_at?: string | null;
+	/** Waktu admin menyetujui (diisi saat keputusan review = approve). */
+	reviewed_at?: string | null;
 	created_at: string;
 	updated_at?: string | null;
 };

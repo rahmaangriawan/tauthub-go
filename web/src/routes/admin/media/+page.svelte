@@ -15,6 +15,7 @@
 	import MediaDirectory from './media-directory.svelte';
 	import MediaArchive from './media-archive.svelte';
 	import MediaPending from './media-pending.svelte';
+	import MediaRecent from './media-recent.svelte';
 	import MediaIntelligenceTab from './media-intelligence-tab.svelte';
 	import MediaSettings from './media-settings.svelte';
 
@@ -63,6 +64,7 @@
 		{ value: 'directory', label: tr('Direktori') },
 		{ value: 'archive', label: tr('Arsip') },
 		{ value: 'pending', label: 'Pending' },
+		{ value: 'recent', label: tr('Baru Ditambahkan') },
 		{ value: 'intelligence', label: 'Intelligence' },
 		{ value: 'settings', label: tr('Pengaturan') }
 	]);
@@ -107,6 +109,8 @@
 			<MediaArchive />
 		{:else if tab === 'pending'}
 			<MediaPending />
+		{:else if tab === 'recent'}
+			<MediaRecent />
 		{:else if tab === 'intelligence'}
 			<MediaIntelligenceTab />
 		{:else if tab === 'settings'}

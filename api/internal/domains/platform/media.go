@@ -99,7 +99,7 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, errUnprocessable("Invalid auto_publish filter"))
 		return
 	}
-	if scope != "" && scope != "archive" && scope != "all" {
+	if scope != "" && scope != "archive" && scope != "all" && scope != "recent" {
 		writeErr(w, d, errUnprocessable("Invalid media scope filter"))
 		return
 	}
@@ -113,6 +113,9 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	daMinRaw := strings.TrimSpace(q.Get("da_min"))
 	geoMinRaw := strings.TrimSpace(q.Get("geo_min"))
 	sortBy := strings.TrimSpace(q.Get("sort"))
+	// recent_days: jendela tampil tab "Baru Ditambahkan". Dihitung di server
+	// supaya tidak bergantung jam perangkat admin.
+	recentDays := mpClampInt(q.Get("recent_days"), 7, 1, 90)
 	limit := mpClampInt(q.Get("limit"), 100, 1, 500)
 	offset := mpClampInt(q.Get("offset"), 0, 0, 1<<30)
 
@@ -125,6 +128,12 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case scope == "archive":
 		where = append(where, "m.status IN ('archived', 'hidden')")
+	case scope == "recent":
+		// Media yang baru disetujui: status aktif DAN disetujui dalam jendela
+		// recentDays. reviewed_at diisi saat admin menekan Setujui, jadi ini
+		// penanda "baru masuk direktori" — bukan created_at (mitra bisa
+		// menyimpan draf berhari-hari sebelum diajukan).
+		where = append(where, "m.status = 'active' AND m.reviewed_at IS NOT NULL AND m.reviewed_at >= NOW() - make_interval(days => "+next(recentDays)+")")
 	case scope == "all":
 		where = append(where, "m.status <> 'hidden'")
 	case status != "":
@@ -170,6 +179,10 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	// Urutan skor memakai kolom yang sudah di-LEFT JOIN (sm): media tanpa skor
 	// selalu di belakang (NULLS LAST) berapa pun arahnya.
 	orderBy := "m.updated_at DESC"
+	if scope == "recent" {
+		// Tab "Baru Ditambahkan": yang paling baru disetujui tampil paling atas.
+		orderBy = "m.reviewed_at DESC, m.name ASC"
+	}
 	switch sortBy {
 	case "da_desc":
 		orderBy = "sm.da DESC NULLS LAST, m.name ASC"
