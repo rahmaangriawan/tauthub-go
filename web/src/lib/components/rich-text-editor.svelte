@@ -4,7 +4,7 @@
 	// dipakai di luar modal: perintah format, pustaka gambar AI (bila scope
 	// brand+campaign+media tersedia) atau unggah gambar ke /brands/:id/assets,
 	// dialog tautan, dan sinkronisasi HTML dua arah.
-	import { CircleAlert, Image, Link, List, ListOrdered, LoaderCircle, MapPin, Pencil, Quote, RotateCcw, RotateCw, Table2 as TableIcon, Trash2, Upload, X, Play } from '@lucide/svelte';
+	import { CircleAlert, ExternalLink, Image, Link, List, ListOrdered, LoaderCircle, MapPin, Pencil, Quote, RotateCcw, RotateCw, Table2 as TableIcon, Trash2, Upload, X, Play } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 	import { apiRequest } from '$lib/auth';
 	import { sanitizeHtml } from '$lib/sanitize-html';
@@ -697,6 +697,17 @@
 		refreshToolState();
 		commitHistory();
 		closeEmbedDialog();
+	}
+
+	/** Alamat ringkas untuk kepala menu: domain + path, tanpa protokol. */
+	function linkMenuHost(href: string): string {
+		try {
+			const u = new URL(href, window.location.origin);
+			const path = u.pathname && u.pathname !== '/' ? u.pathname : '';
+			return `${u.hostname.replace(/^www\./, '')}${path}`;
+		} catch {
+			return href;
+		}
 	}
 
 	function closeLinkMenu() {
@@ -1475,15 +1486,27 @@
 	{#if linkMenu}
 		<!-- Menu klik kanan pada tautan di artikel. -->
 		<div
-			class="rte-table-menu"
+			class="rte-table-menu rte-link-menu"
 			role="menu"
 			aria-label={tr('Kelola tautan')}
 			style="left: {linkMenu.x}px; top: {linkMenu.y}px;"
 		>
-			<button type="button" role="menuitem" onclick={openLinkFromMenu}>{tr('Buka tautan')}</button>
-			<button type="button" role="menuitem" onclick={editLinkFromMenu}>{tr('Edit tautan')}</button>
+			{#if linkMenu.href}
+				<p class="rte-link-menu-host" title={linkMenu.href}>
+					<Link size={12} class="shrink-0" />
+					<span>{linkMenuHost(linkMenu.href)}</span>
+				</p>
+			{/if}
+			<button type="button" role="menuitem" onclick={openLinkFromMenu}>
+				<ExternalLink size={13} class="shrink-0" />{tr('Buka tautan')}
+			</button>
+			<button type="button" role="menuitem" onclick={editLinkFromMenu}>
+				<Pencil size={13} class="shrink-0" />{tr('Edit tautan')}
+			</button>
 			<span class="rte-table-menu-sep" aria-hidden="true"></span>
-			<button type="button" role="menuitem" class="rte-table-menu-danger" onclick={removeLinkFromMenu}>{tr('Hapus tautan')}</button>
+			<button type="button" role="menuitem" class="rte-table-menu-danger" onclick={removeLinkFromMenu}>
+				<Trash2 size={13} class="shrink-0" />{tr('Hapus tautan')}
+			</button>
 		</div>
 	{/if}
 
@@ -1891,6 +1914,36 @@
 	}
 	.rte-table-menu-danger {
 		color: var(--destructive);
+	}
+	/* Menu tautan: baris ikon + label, dengan alamat tujuan di kepala menu. */
+	.rte-link-menu button {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 7px 8px;
+		font-size: 12.5px;
+	}
+	.rte-link-menu button :global(svg) {
+		opacity: 0.75;
+	}
+	.rte-link-menu .rte-table-menu-danger :global(svg) {
+		opacity: 1;
+	}
+	.rte-link-menu-host {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin: 2px 2px 4px;
+		padding: 4px 8px 6px;
+		border-bottom: 1px solid var(--border);
+		color: var(--muted-foreground);
+		font-size: 11px;
+		min-width: 0;
+	}
+	.rte-link-menu-host span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	/* Toggle HTML saat AKTIF lalu di-hover: ikon tetap terlihat — biru di atas
 	   latar terang. Dulu warna ikonnya tetap putih (primary-foreground) sementara
