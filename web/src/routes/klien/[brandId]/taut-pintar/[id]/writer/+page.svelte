@@ -1071,7 +1071,10 @@
 				category: d.category ?? null,
 				metaDescription: d.meta_description ?? null,
 				linkLimit,
-				source: item.article_source ?? null,
+				// Sumber dari server: artikel hasil generate langsung dinilai 'ai'
+				// walau kartu masih memegang data sebelum generate. Tanpa ini tab
+				// "Generate dengan AI" hilang dan berganti "Unggah Dokumen".
+				source: d.article_source ?? item.article_source ?? null,
 				wordCountMode: item.word_count_mode ?? null
 			};
 		} catch (reason) {

@@ -122,6 +122,20 @@ func (d *Deps) TautArticleGet(w http.ResponseWriter, r *http.Request) {
 	if ver != nil {
 		contentHTML = ver.strOr("content", "")
 	}
+	// Asal artikel dibaca dari jejak agent, bukan dari state halaman. Kartu di
+	// daftar bisa memegang data lama (sebelum generate), dan memakai nilai itu
+	// membuat artikel hasil AI terbuka dengan tab "Unggah Dokumen".
+	articleSource := "manual"
+	if src, srcErr := d.queryRow(r.Context(), `
+		SELECT CASE WHEN EXISTS (
+		           SELECT 1 FROM taut_agent_runs r
+		           WHERE r.campaign_id = $1 AND r.media_id = $2 AND r.slot = $3
+		             AND r.agent IN ('writer','writer_mainstream','writer_blogger')
+		             AND r.status = 'done'
+		       ) THEN 'ai' ELSE 'manual' END AS src`,
+		campaignID, mediaID, slotParam(r)); srcErr == nil && src != nil {
+		articleSource = src.strOr("src", "manual")
+	}
 	writeNoStore(w, http.StatusOK, map[string]any{
 		"media_id":           mediaID,
 		"title":              title,
@@ -129,6 +143,7 @@ func (d *Deps) TautArticleGet(w http.ResponseWriter, r *http.Request) {
 		"content_html":       contentHTML,
 		"featured_image_url": item.raw("featured_image_url"),
 		"category":           item.raw("category"),
+		"article_source":     articleSource,
 	})
 }
 

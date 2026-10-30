@@ -835,6 +835,13 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if err != nil {
 		return writerItemResult{}, err
 	}
+	// runTautAgent mencatat run tanpa slot (fungsinya hanya tahu media), padahal
+	// penentuan asal artikel (AI vs unggahan) membandingkan slot. Lengkapi di
+	// sini supaya artikel kedua dan seterusnya di domain yang sama tetap dikenali
+	// sebagai hasil AI, bukan "Unggah Dokumen".
+	if result.RunID != "" {
+		_ = d.exec(ctx, "UPDATE taut_agent_runs SET slot = $1 WHERE id = $2", slot, result.RunID)
+	}
 	title := ""
 	contentHTML := ""
 	metaDescription := ""
