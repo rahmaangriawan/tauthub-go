@@ -1701,7 +1701,9 @@ func (d *Deps) mpCheckSimilarWebInsights(ctx context.Context, mediaID string, we
 			}
 		}
 		if insights, ok := normalized.jsonField("insights").(map[string]any); ok {
-			if visits, ok := insights["visits"].(float64); ok && visits > 0 {
+			// 0 juga hasil sah (provider tidak punya data untuk domain ini),
+			// jadi snapshot berisi 0 tetap dipakai sebagai cache 6 bulan.
+			if _, ok := insights["visits"].(float64); ok {
 				hasValidVisits = true
 			}
 		}

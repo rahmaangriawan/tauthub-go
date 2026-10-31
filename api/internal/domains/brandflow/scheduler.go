@@ -1526,6 +1526,10 @@ func (d *Deps) schTrafficProviderReady(ctx context.Context) (bool, string) {
 // jebol), sementara media yang datanya sudah ada dibiarkan tersimpan sampai
 // usia snapshotnya melewati 6 bulan baru minta ulang. Job-nya kind
 // `media_similarweb_refresh` — processor yang sama dengan tombol admin.
+//
+// Snapshot dengan kunjungan 0 tetap dihitung "sudah punya data": provider
+// menjawab 0 untuk domain yang tidak terindeks, dan mengulanginya tiap siklus
+// hanya membakar kuota RapidAPI. Pemeriksaan ulang terjadi setelah 6 bulan.
 func (d *Deps) schEnqueueSimilarWebChecks(ctx context.Context, limit int) {
 	if limit < 1 {
 		limit = 1
@@ -1544,12 +1548,11 @@ func (d *Deps) schEnqueueSimilarWebChecks(ctx context.Context, limit int) {
 		SELECT media.id FROM media
 		WHERE media.status = 'active'
 		  AND media.website_url IS NOT NULL AND media.website_url <> ''
-		  AND NOT EXISTS (
+		AND NOT EXISTS (
 		    SELECT 1 FROM media_similarweb_snapshots s
 		    WHERE s.media_id = media.id
 		      AND s.created_at >= NOW() - INTERVAL '6 months'
 		      AND (s.insights->>'visits') IS NOT NULL
-		      AND (s.insights->>'visits')::numeric > 0
 		  )
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
