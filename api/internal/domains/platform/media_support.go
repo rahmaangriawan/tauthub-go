@@ -1516,14 +1516,21 @@ func (d *Deps) mpSimilarWebFetch(ctx context.Context, domain, apiKey string) (ma
 		return nil, mpSWErr(http.StatusBadGateway, "Respons provider SimilarWeb kosong (malformed).")
 	}
 	mapped := mpMapSimilarWebAnalytics(domain, parsed)
-	// Tanpa angka kunjungan, snapshot tidak berguna untuk katalog maupun
-	// sweep. Diperlakukan sebagai kegagalan (bukan "sukses tanpa data") supaya
-	// job tercatat di tab Log DAN media tidak diulang tiap siklus 60 detik —
-	// job `failed` punya jeda 24 jam di query sweep.
-	if v, ok := mapped["visits"].(float64); !ok || v <= 0 {
-		return nil, mpSWErr(http.StatusBadGateway,
+	// Kunjungan 0 adalah jawaban sah: provider menandai domain yang tidak
+	// terindeks dengan IsSmall/angka nol. Snapshot tetap disimpan supaya
+	// sweep tidak menanyakan domain yang sama berulang kali, tetapi diberi
+	// penanda no_data agar UI bisa membedakan "0 kunjungan" dari "0 karena
+	// provider tidak punya data".
+	//
+	// Yang tetap dianggap gagal hanyalah bentuk respons yang tidak dikenali
+	// sama sekali (tidak ada field kunjungan). Statusnya 422, bukan 502:
+	// gateway tidak bermasalah, provider justru menjawab.
+	visits, ok := mapped["visits"].(float64)
+	if !ok {
+		return nil, mpSWErr(http.StatusUnprocessableEntity,
 			"Provider SimilarWeb menjawab, tetapi angka kunjungan tidak ditemukan di respons. Bentuk jawaban provider mungkin berbeda dari yang diperkirakan — jalankan \"Tes koneksi provider\" di Konfigurasi untuk melihat JSON aslinya.")
 	}
+	mapped["no_data"] = visits <= 0
 	return mapped, nil
 }
 
@@ -1584,7 +1591,7 @@ func mpSWFindVisits(root map[string]any) any {
 	for _, k := range []string{"Engagments", "Engagements", "engagements", "engagement"} {
 		eng := mpSWObject(root[k])
 		for _, vk := range []string{"Visits", "visits", "total_visits", "totalVisits"} {
-			if v := mpSWPositive(eng[vk]); v != nil {
+			if v := mpSWCountValue(eng[vk]); v != nil {
 				return v
 			}
 		}
@@ -1600,27 +1607,27 @@ func mpSWFindVisits(root map[string]any) any {
 			keys = append(keys, m)
 		}
 		sort.Strings(keys)
-		if v := mpSWPositive(months[keys[len(keys)-1]]); v != nil {
+		if v := mpSWCountValue(months[keys[len(keys)-1]]); v != nil {
 			return v
 		}
 	}
 	// Field datar di tingkat atas.
 	for _, k := range []string{"visits", "Visits", "totalVisits", "total_visits", "monthlyVisits", "monthly_visits"} {
-		if v := mpSWPositive(root[k]); v != nil {
+		if v := mpSWCountValue(root[k]); v != nil {
 			return v
 		}
 	}
 	// Objek "traffic" berisi total kunjungan atau riwayat bulanan.
 	traffic := mpSWObject(root["traffic"])
 	for _, k := range []string{"visits", "total_visits", "totalVisits", "monthly_visits"} {
-		if v := mpSWPositive(traffic[k]); v != nil {
+		if v := mpSWCountValue(traffic[k]); v != nil {
 			return v
 		}
 	}
 	if history := mpSWArray(traffic["history"]); len(history) > 0 {
 		last := mpSWObject(history[len(history)-1])
 		for _, k := range []string{"visits", "Visits", "total_visits"} {
-			if v := mpSWPositive(last[k]); v != nil {
+			if v := mpSWCountValue(last[k]); v != nil {
 				return v
 			}
 		}
@@ -1628,10 +1635,16 @@ func mpSWFindVisits(root map[string]any) any {
 	return nil
 }
 
-// mpSWPositive: angka > 0 (float64) atau nil.
-func mpSWPositive(v any) any {
+// mpSWCountValue: angka kunjungan (>= 0) atau nil bila field tidak ada /
+// tidak numerik.
+//
+// NOL DITERIMA. Provider menjawab 0 untuk domain yang tidak terindeks
+// (mis. IsSmall: true) — itu jawaban sah, bukan respons rusak. Dulu nol
+// dibuang di sini, sehingga domain tanpa data trafik dianggap gagal dan
+// admin menerima 502 padahal provider menjawab 200.
+func mpSWCountValue(v any) any {
 	n, ok := mpSWAsNumber(v).(float64)
-	if !ok || math.IsNaN(n) || math.IsInf(n, 0) || n <= 0 {
+	if !ok || math.IsNaN(n) || math.IsInf(n, 0) || n < 0 {
 		return nil
 	}
 	return n
