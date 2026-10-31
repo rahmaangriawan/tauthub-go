@@ -1230,32 +1230,31 @@
 		>
 		<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" onclick={openCreate}>
 			<Plus size={15} />{tr("Tambah media")}</button>
-	</div>
-
-	<!-- Status antrean trafik dan sebab kegagalan terakhir dipindah ke tab Log
-	     supaya tidak memakan ruang halaman kerja direktori. -->
-	<!-- Chip "Cek otomatis": memberi tahu apakah DA & trafik diperiksa sendiri oleh
-	     sistem, atau berhenti karena kredensial penyedia belum lengkap. Tanpa ini
-	     admin hanya melihat angka 0 dan tidak tahu apakah sistem bekerja. -->
-	{#if swStatus}
-		{@const autoReady = swStatus.auto_ready !== false}
-		<div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+		<!-- Chip "Cek otomatis": memberi tahu apakah DA & trafik diperiksa sendiri oleh
+		     sistem, atau berhenti karena kredensial penyedia belum lengkap. Tanpa ini
+		     admin hanya melihat angka 0 dan tidak tahu apakah sistem bekerja.
+		     Diletakkan sebaris dengan tombol Tambah media supaya tidak memakan
+		     baris tersendiri di halaman kerja. -->
+		{#if swStatus}
+			{@const autoReady = swStatus.auto_ready !== false}
 			{#if autoReady}
-				<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style="background-color: var(--success-soft, #eaf8f1); color: var(--success, #16794b);">
+				<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs" style="background-color: var(--success-soft, #eaf8f1); color: var(--success, #16794b);">
 					<CircleCheck size={13} aria-hidden="true" />
 					{tr('Cek otomatis aktif')}
 					{#if (swStatus.pending_jobs ?? 0) > 0}<span>· {tr('trafik')} {swStatus.pending_jobs} {tr('antre')}</span>{/if}
 					{#if (daStatus?.pending_jobs ?? 0) > 0}<span>· {tr('DA')} {daStatus?.pending_jobs} {tr('antre')}</span>{/if}
 				</span>
 			{:else}
-				<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style="background-color: var(--warning-soft, #fff6df); color: var(--warning, #a15c00);">
+				<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs" style="background-color: var(--warning-soft, #fff6df); color: var(--warning, #a15c00);">
 					<CircleAlert size={13} aria-hidden="true" />
 					{tr('Cek otomatis berhenti')} — {(swStatus.traffic_blocked_by || swStatus.seo_blocked_by || tr('kredensial penyedia belum lengkap')).replace(/\.$/, '')}
 					<a href="/admin/konfigurasi" style="color: var(--primary); text-decoration: underline;">{tr('Lengkapi di Konfigurasi')}</a>
 				</span>
 			{/if}
-		</div>
-	{/if}
+		{/if}
+	</div>
+
+	<!-- Status antrean trafik dan sebab kegagalan terakhir ada di tab Log. -->
 	{#if swSummary}<p class="mt-2 text-xs text-muted-foreground">{swSummary}</p>{/if}
 	{#if daSummary}<p class="mt-2 text-xs text-muted-foreground">{daSummary}</p>{/if}
 	{#if daStatus && (daStatus.pending_jobs > 0 || daStatus.stale > 0 || daStatus.failed_last_hour > 0)}
