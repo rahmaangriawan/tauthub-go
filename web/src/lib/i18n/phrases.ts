@@ -4212,8 +4212,6 @@ export const PHRASE_EN: Record<string, string> = {
 	"Pemeriksaan Cover": "Cover Check",
 	"Pengingat dikirim.": "Reminder sent.",
 	"Penyedia DA menolak permintaan": "The DA provider rejected the request",
-	"Ada aktivitas atau kegagalan pemeriksaan.": "There is check activity or a failure.",
-	"Buka tab Log": "Open the Log tab",
 	"Antrean cek DA & AI Trust": "DA & AI Trust check queue",
 	"Tidak ada baris": "No rows",
 	"baris": "rows",
