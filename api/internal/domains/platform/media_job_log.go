@@ -33,7 +33,12 @@ var mpMediaJobKinds = []string{
 // MediaJobLog: GET /v1/platform/media/job-log
 //
 // Query: status (opsional: failed|pending|running|completed|cancelled),
-// kind (opsional), limit (default 100, maks 500).
+// kind (opsional), limit (default 50, maks 200), offset (default 0).
+//
+// Paginasi disediakan di server karena tabel jobs terus bertambah: tanpa
+// offset, "limit 200" hanya menampilkan 200 baris terbaru dan riwayat lama
+// tidak bisa dijangkau sama sekali. `total` dihitung dengan filter yang sama
+// supaya UI bisa menampilkan jumlah halaman.
 func (d *Deps) MediaJobLog(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := d.adminGuard(w, r, ""); !ok {
 		return
@@ -41,7 +46,8 @@ func (d *Deps) MediaJobLog(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	statusFilter := strings.TrimSpace(q.Get("status"))
 	kindFilter := strings.TrimSpace(q.Get("kind"))
-	limit := mpClampInt(q.Get("limit"), 100, 1, 500)
+	limit := mpClampInt(q.Get("limit"), 50, 1, 200)
+	offset := mpClampInt(q.Get("offset"), 0, 0, 1<<30)
 
 	where := []string{"j.kind = ANY($1)"}
 	args := []any{mpMediaJobKinds}
@@ -55,7 +61,19 @@ func (d *Deps) MediaJobLog(w http.ResponseWriter, r *http.Request) {
 	}
 	clause := "WHERE " + strings.Join(where, " AND ")
 
-	args = append(args, limit)
+	// Total untuk filter aktif. Dihitung terpisah dari halaman agar angka
+	// "x dari y" tidak berubah hanya karena limit.
+	totalRow, err := d.queryRow(r.Context(), "SELECT COUNT(*) AS n FROM jobs j "+clause, args...)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	total := 0
+	if totalRow != nil {
+		total = totalRow.intOr("n", 0)
+	}
+
+	pageArgs := append(append([]any{}, args...), limit, offset)
 	rows, err := d.queryRows(r.Context(), `
 		SELECT j.id, j.kind, j.status, j.attempts, j.max_attempts,
 		       COALESCE(j.last_error, '') AS last_error,
@@ -67,7 +85,7 @@ func (d *Deps) MediaJobLog(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN media m ON m.id = (j.payload->>'mediaId')
 		`+clause+`
 		ORDER BY j.updated_at DESC
-		LIMIT $`+strconv.Itoa(len(args)), args...)
+		LIMIT $`+strconv.Itoa(len(args)+1)+` OFFSET $`+strconv.Itoa(len(args)+2), pageArgs...)
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -107,8 +125,11 @@ func (d *Deps) MediaJobLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": items,
-		"kinds": mpMediaJobKinds,
+		"items":  items,
+		"kinds":  mpMediaJobKinds,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
 		"summary_24h": map[string]any{
 			"failed":    summary["failed"],
 			"pending":   summary["pending"],

@@ -109,6 +109,7 @@
 	let daStatusTimer: ReturnType<typeof setTimeout> | null = null;
 	let daCancelBusy = $state(false);
 	let reviewTarget = $state<Media | null>(null);
+
 	let rejectReason = $state('');
 	let reviewBusy = $state(false);
 	let negoPrice = $state('');
@@ -791,27 +792,6 @@
 	}
 
 	/** Hentikan antrean pemeriksaan yang sedang menunggu. */
-	async function cancelQueue() {
-		if (!confirm('Hentikan antrean pemeriksaan yang sedang berjalan? Hasil yang sudah selesai tetap tersimpan.'))
-			return;
-		error = '';
-		daCancelBusy = true;
-		try {
-			const r = await platformRequest<{ cancelled: number }>('/media/seo-refresh-cancel', {
-				method: 'POST'
-			});
-			daSummary =
-				r.cancelled > 0
-					? `${r.cancelled} pemeriksaan dibatalkan. Yang sedang berjalan menyelesaikan panggilannya dulu.`
-					: 'Tidak ada antrean yang perlu dibatalkan.';
-			await load();
-			await loadDaStatus();
-		} catch (reason) {
-			error = errMessage(reason);
-		} finally {
-			daCancelBusy = false;
-		}
-	}
 
 	/**
 	 * Antrekan pemeriksaan DA + AI Trust — satu klik untuk seluruh media yang
@@ -1254,68 +1234,18 @@
 		{/if}
 	</div>
 
-	<!-- Status antrean trafik dan sebab kegagalan terakhir ada di tab Log. -->
+	<!-- Status antrean trafik, antrean DA, dan sebab kegagalan ada di tab Log.
+	     Halaman kerja hanya menyimpan satu penunjuk singkat supaya tidak ada
+	     informasi yang hilang tanpa memakan ruang tabel. -->
 	{#if swSummary}<p class="mt-2 text-xs text-muted-foreground">{swSummary}</p>{/if}
 	{#if daSummary}<p class="mt-2 text-xs text-muted-foreground">{daSummary}</p>{/if}
-	{#if daStatus && (daStatus.pending_jobs > 0 || daStatus.stale > 0 || daStatus.failed_last_hour > 0)}
-		<div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
-			{#if daStatus.pending_jobs > 0}
-				<span class="rounded-full px-2.5 py-1" style="background-color: var(--muted);">
-					{tr('Antrean')}: <strong>{daStatus.queued_jobs}</strong> {tr('menunggu')} · <strong>{daStatus.running_jobs}</strong> {tr('sedang diperiksa')}
-				</span>
-			{/if}
-			{#if daStatus.stale > 0}
-				<span
-					class="rounded-full px-2.5 py-1"
-					style="background-color: var(--muted);"
-					title={tr('Media ini belum punya skor lengkap. Pemeriksaan berjalan otomatis paling cepat sekali per hari, atau klik "Cek AI & SEO Semua".')}
-				>
-					<strong>{daStatus.stale}</strong> {tr('media belum punya skor lengkap')}
-				</span>
-			{/if}
-			{#if daStatus.da_error}
-				<span
-					class="rounded-full px-2.5 py-1"
-					style="background-color: var(--warning-soft); color: var(--warning);"
-					title={daStatus.da_error_at ? `Sejak ${fmtDateTime(daStatus.da_error_at)}` : undefined}
-				>
-					{tr('Penyedia DA menolak permintaan')}: {daStatus.da_error}
-				</span>
-			{/if}
-			{#if daStatus.failed_last_hour > 0}
-				<span class="rounded-full px-2.5 py-1" style="background-color: var(--warning-soft); color: var(--warning);" title={daStatus.last_error ?? ''}>
-					{daStatus.failed_last_hour} {tr('pemeriksaan gagal (sejam terakhir)')}
-				</span>
-			{/if}
-			{#if daStatus.pending_jobs > 0}
-				<button
-					class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs"
-					type="button"
-					disabled={daCancelBusy}
-					onclick={() => void cancelQueue()}
-					>{daCancelBusy ? tr('Menghentikan…') : tr('Batalkan antrean')}</button
-				>
-			{/if}
-			<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => { void load(); void loadDaStatus(); }}>{tr('Muat ulang')}</button>
+	{#if (daStatus && (daStatus.pending_jobs > 0 || daStatus.stale > 0 || daStatus.failed_last_hour > 0 || daStatus.da_error)) || (swStatus && swStatus.failed_last_hour > 0)}
+		<div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+			<span>{tr('Ada aktivitas atau kegagalan pemeriksaan.')}</span>
+			<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => onOpenLog?.()}>
+				{tr('Buka tab Log')}
+			</button>
 		</div>
-		{#if (daStatus.failed_items?.length ?? 0) > 0}
-			{@const failedItems = daStatus.failed_items ?? []}
-			<!-- Pesan kegagalan lengkap sekarang ada di tab Log. Di sini hanya
-			     ringkasan + tautan, supaya panel kuning berisi teks error panjang
-			     tidak lagi memakan ruang halaman kerja. -->
-			<div class="mt-2 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs" style="border-color: color-mix(in srgb, var(--warning) 35%, var(--border)); background-color: var(--warning-soft);">
-				<span class="font-semibold" style="color: var(--warning);">
-					{failedItems.length} {tr('domain gagal diperiksa (sejam terakhir)')}
-				</span>
-				<span class="text-muted-foreground">
-					{failedItems[0].media_name || failedItems[0].website_url || '—'}
-					{#if failedItems.length > 1}+{failedItems.length - 1} {tr('lainnya')}{/if}
-				</span>
-				<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => onOpenLog?.()}>
-					{tr('Lihat di tab Log')}
-				</button>
-			</div>
-		{/if}
 	{/if}
 	{#if error && !isAccessError(error)}
 		<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>

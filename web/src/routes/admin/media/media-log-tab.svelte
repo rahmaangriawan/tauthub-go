@@ -42,6 +42,21 @@
 	let items = $state<LogItem[]>([]);
 	let summary = $state<Summary>({ failed: 0, pending: 0, running: 0, completed: 0, cancelled: 0 });
 	let traffic = $state<TrafficStatus | null>(null);
+	// Ringkasan antrean DA/AI Trust — dipindah dari chip di tab Direktori.
+	type SeoStatus = {
+		pending_jobs: number;
+		queued_jobs: number;
+		running_jobs: number;
+		stale: number;
+		failed_last_hour: number;
+		last_error: string | null;
+		da_error: string | null;
+	};
+	let seo = $state<SeoStatus | null>(null);
+	let total = $state(0);
+	/** Paginasi: jumlah baris per halaman dan posisi halaman (mulai 1). */
+	const PAGE_SIZE = 50;
+	let page = $state(1);
 	let loading = $state(true);
 	let error = $state('');
 	let statusFilter = $state('');
@@ -56,25 +71,55 @@
 		if (!ready) return;
 		void statusFilter;
 		void kindFilter;
+		void page;
 		void load();
 	});
+
+	/** Ganti filter: selalu kembali ke halaman 1 supaya tidak ada halaman kosong. */
+	function setStatus(value: string) {
+		if (statusFilter === value) return;
+		statusFilter = value;
+		page = 1;
+	}
+	function setKind(value: string) {
+		if (kindFilter === value) return;
+		kindFilter = value;
+		page = 1;
+	}
+
+	const pageCount = $derived(Math.max(1, Math.ceil(total / PAGE_SIZE)));
+	const from = $derived(total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1);
+	const to = $derived(Math.min(page * PAGE_SIZE, total));
 
 	async function load() {
 		error = '';
 		loading = true;
 		try {
-			const params = new URLSearchParams({ limit: '200' });
+			const params = new URLSearchParams({
+				limit: String(PAGE_SIZE),
+				offset: String((page - 1) * PAGE_SIZE)
+			});
 			if (statusFilter) params.set('status', statusFilter);
 			if (kindFilter) params.set('kind', kindFilter);
-			const data = await platformRequest<{ items: LogItem[]; summary_24h: Summary }>(`/media/job-log?${params}`);
+			const data = await platformRequest<{
+				items: LogItem[];
+				summary_24h: Summary;
+				total: number;
+			}>(`/media/job-log?${params}`);
 			items = data.items ?? [];
 			summary = data.summary_24h ?? summary;
+			total = data.total ?? items.length;
 			// Status antrean trafik bersifat pelengkap: kegagalan endpoint ini
 			// tidak boleh menggagalkan muatan log utama.
 			try {
 				traffic = await platformRequest<TrafficStatus>('/media/similarweb-status');
 			} catch {
 				traffic = null;
+			}
+			try {
+				seo = await platformRequest<SeoStatus>('/media/seo-refresh-status');
+			} catch {
+				seo = null;
 			}
 		} catch (reason) {
 			error = errMessage(reason);
@@ -141,34 +186,56 @@
 	</div>
 {/if}
 
+{#if seo && (seo.pending_jobs > 0 || seo.stale > 0 || seo.failed_last_hour > 0 || seo.da_error)}
+	<div class="app-card mt-3 px-4 py-2.5 text-xs">
+		<p class="font-medium">{tr('Antrean cek DA & AI Trust')}</p>
+		<p class="mt-1 text-muted-foreground">
+			{seo.stale} {tr('media belum punya skor lengkap')}
+			{#if seo.pending_jobs > 0}
+				· {seo.queued_jobs} {tr('menunggu')}{seo.running_jobs
+					? `, ${seo.running_jobs} ${tr('sedang diperiksa')}`
+					: ''}
+			{/if}
+			{#if seo.failed_last_hour > 0}
+				· {seo.failed_last_hour} {tr('pemeriksaan gagal (sejam terakhir)')}
+			{/if}.
+		</p>
+		{#if seo.da_error}
+			<p class="mt-1" style="color: var(--warning);">
+				{tr('Penyedia DA menolak permintaan')}: {seo.da_error}
+			</p>
+		{/if}
+	</div>
+{/if}
+
 <div class="mt-2 flex flex-wrap items-center gap-1 text-xs">
 	<button
 		type="button"
 		class="app-btn !min-h-7 !px-2.5 !text-xs"
 		class:app-btn-primary={statusFilter === ''}
 		class:app-btn-soft={statusFilter !== ''}
-		onclick={() => (statusFilter = '')}>{tr('Semua status')}</button
+		onclick={() => setStatus('')}>{tr('Semua status')}</button
 	>
 	<button
 		type="button"
 		class="app-btn !min-h-7 !px-2.5 !text-xs"
 		class:app-btn-primary={statusFilter === 'failed'}
 		class:app-btn-soft={statusFilter !== 'failed'}
-		onclick={() => (statusFilter = 'failed')}>{tr('Gagal')}</button
+		onclick={() => setStatus('failed')}>{tr('Gagal')}</button
 	>
 	<button
 		type="button"
 		class="app-btn !min-h-7 !px-2.5 !text-xs"
 		class:app-btn-primary={statusFilter === 'completed'}
 		class:app-btn-soft={statusFilter !== 'completed'}
-		onclick={() => (statusFilter = 'completed')}>{tr('Selesai')}</button
+		onclick={() => setStatus('completed')}>{tr('Selesai')}</button
 	>
 	<button
 		type="button"
 		class="app-btn !min-h-7 !px-2.5 !text-xs"
 		class:app-btn-primary={statusFilter === 'pending'}
 		class:app-btn-soft={statusFilter !== 'pending'}
-		onclick={() => (statusFilter = 'pending')}>{tr('Menunggu')}</button
+		onclick={() => setStatus('pending')}>{tr('Menunggu')}</button
 	>
 	<span class="mx-1 text-muted-foreground">·</span>
 	<button
@@ -176,7 +243,7 @@
 		class="app-btn !min-h-7 !px-2.5 !text-xs"
 		class:app-btn-primary={kindFilter === ''}
 		class:app-btn-soft={kindFilter !== ''}
-		onclick={() => (kindFilter = '')}>{tr('Semua jenis')}</button
+		onclick={() => setKind('')}>{tr('Semua jenis')}</button
 	>
 	{#each Object.entries(KIND_LABEL) as [value, label] (value)}
 		<button
@@ -184,7 +251,7 @@
 			class="app-btn !min-h-7 !px-2.5 !text-xs"
 			class:app-btn-primary={kindFilter === value}
 			class:app-btn-soft={kindFilter !== value}
-			onclick={() => (kindFilter = value)}>{label}</button
+			onclick={() => setKind(value)}>{label}</button
 		>
 	{/each}
 </div>
@@ -257,5 +324,27 @@
 			</tbody>
 		</table>
 	</div>
-	<p class="mt-2 text-xs text-muted-foreground">{items.length} {tr('baris ditampilkan (maks 200)')}</p>
+	<div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+		<span>
+			{#if total === 0}
+				{tr('Tidak ada baris')}
+			{:else}
+				{from}–{to} {tr('dari')} {total} {tr('baris')}
+			{/if}
+		</span>
+		<div class="flex-1"></div>
+		<button
+			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+			type="button"
+			disabled={loading || page <= 1}
+			onclick={() => (page = Math.max(1, page - 1))}>{tr('Sebelumnya')}</button
+		>
+		<span class="tabular-nums">{tr('Halaman')} {page} / {pageCount}</span>
+		<button
+			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+			type="button"
+			disabled={loading || page >= pageCount}
+			onclick={() => (page = Math.min(pageCount, page + 1))}>{tr('Berikutnya')}</button
+		>
+	</div>
 {/if}
