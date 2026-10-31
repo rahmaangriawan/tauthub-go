@@ -32,7 +32,7 @@
 		type Partner
 	} from './_shared';
 
-	let { onPendingRefresh, onOpenLog }: { onPendingRefresh?: () => void; onOpenLog?: () => void } = $props();
+	let { onPendingRefresh }: { onPendingRefresh?: () => void } = $props();
 
 	const PAGE_SIZE = 20;
 
@@ -1234,19 +1234,11 @@
 		{/if}
 	</div>
 
-	<!-- Status antrean trafik, antrean DA, dan sebab kegagalan ada di tab Log.
-	     Halaman kerja hanya menyimpan satu penunjuk singkat supaya tidak ada
-	     informasi yang hilang tanpa memakan ruang tabel. -->
+	<!-- Status antrean trafik, antrean DA, dan sebab kegagalan sepenuhnya ada di
+	     tab Log. Direktori sengaja tidak menampilkan penunjuk apa pun supaya
+	     halaman kerja tetap bersih. -->
 	{#if swSummary}<p class="mt-2 text-xs text-muted-foreground">{swSummary}</p>{/if}
 	{#if daSummary}<p class="mt-2 text-xs text-muted-foreground">{daSummary}</p>{/if}
-	{#if (daStatus && (daStatus.pending_jobs > 0 || daStatus.stale > 0 || daStatus.failed_last_hour > 0 || daStatus.da_error)) || (swStatus && swStatus.failed_last_hour > 0)}
-		<div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-			<span>{tr('Ada aktivitas atau kegagalan pemeriksaan.')}</span>
-			<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => onOpenLog?.()}>
-				{tr('Buka tab Log')}
-			</button>
-		</div>
-	{/if}
 	{#if error && !isAccessError(error)}
 		<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>
 	{/if}

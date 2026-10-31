@@ -115,7 +115,7 @@
 
 	<div class="mt-4">
 		{#if tab === 'directory'}
-			<MediaDirectory onPendingRefresh={loadPendingCount} onOpenLog={() => (tab = 'log')} />
+			<MediaDirectory onPendingRefresh={loadPendingCount} />
 		{:else if tab === 'archive'}
 			<MediaArchive />
 		{:else if tab === 'pending'}
