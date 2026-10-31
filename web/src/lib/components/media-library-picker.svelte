@@ -33,8 +33,10 @@
 		mediaId,
 		articleId = null,
 		mode = 'inline',
+		multi = false,
 		defaultHeading = '',
 		onSelect,
+		onSelectMany,
 		onClose
 	}: {
 		open?: boolean;
@@ -43,8 +45,12 @@
 		mediaId: string;
 		articleId?: string | null;
 		mode?: 'cover' | 'inline';
+		/** Mode pilih-banyak: tiap kartu punya kotak centang dan tombol sisip massal. */
+		multi?: boolean;
 		defaultHeading?: string;
 		onSelect: (url: string) => void;
+		/** Dipanggil dengan seluruh URL terpilih saat pengguna menekan tombol sisip massal. */
+		onSelectMany?: (urls: string[]) => void;
 		onClose: () => void;
 	} = $props();
 
@@ -67,6 +73,9 @@
 		// Unggah manual (drag & drop, browse, paste)
 		let fileInputEl = $state<HTMLInputElement | undefined>(undefined);
 		let uploading = $state(false);
+		// Progres unggah nyata: jumlah file selesai dari total yang dipilih sekaligus.
+		let uploadDone = $state(0);
+		let uploadTotal = $state(0);
 		let uploadDragOver = $state(false);
 		let uploadError = $state('');
 		let uploadSuccess = $state('');
@@ -77,16 +86,42 @@
 		let deleteBusy = $state(false);
 		let deleteError = $state('');
 
+		// Pilih banyak (multi-select) untuk mode inline
+		let selectedIds = $state<Set<string>>(new Set());
+		const selectedImages = $derived(images.filter((img) => selectedIds.has(img.id)));
+		const allSelected = $derived(images.length > 0 && selectedIds.size === images.length);
+
+		function toggleSelect(id: string) {
+			const next = new Set(selectedIds);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			selectedIds = next;
+		}
+
+		function toggleSelectAll() {
+			selectedIds = allSelected ? new Set() : new Set(images.map((img) => img.id));
+		}
+
+		function insertSelected() {
+			if (selectedImages.length === 0) return;
+			const urls = selectedImages.map((img) => img.url);
+			if (onSelectMany) onSelectMany(urls);
+			else urls.forEach((url) => onSelect(url));
+			selectedIds = new Set();
+		}
+
 		let loadedFor = '';
 
 		$effect(() => {
 			if (!open) {
 				loadedFor = '';
+				selectedIds = new Set();
 				return;
 			}
 			const key = `${brandId}:${campaignId}:${mediaId}:${articleId ?? ''}`;
 			if (key !== loadedFor) {
 				loadedFor = key;
+				selectedIds = new Set();
 				prompt = defaultHeading || '';
 				void load();
 			}
@@ -100,10 +135,10 @@
 			};
 			const onPaste = (e: ClipboardEvent) => {
 				if (generating || uploading || deleteBusy || confirmOpen || deleteConfirmOpen) return;
-				const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'));
-				if (file) {
+				const files = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'));
+				if (files.length > 0) {
 					e.preventDefault();
-					void handleUpload(file);
+					void handleUploadMany(files);
 				}
 			};
 			window.addEventListener('keydown', onKey);
@@ -172,53 +207,89 @@
 			}
 
 			// ---------- unggah manual (drag & drop, browse, paste) ----------
-			async function handleUpload(file: File) {
-				if (uploading || !file) return;
-				if (!file.type.startsWith('image/')) {
+			/**
+			 * Unggah satu berkas ke pustaka artikel ini. Endpoint server menerima
+			 * satu file per request, jadi pemanggil yang menggabungkan hasilnya.
+			 * Melempar Error bila server menolak, supaya batch bisa melaporkannya.
+			 */
+			async function uploadOne(file: File): Promise<LibraryImage> {
+				const form = new FormData();
+				form.append('file', file);
+				form.append('media_id', mediaId);
+				if (articleId) form.append('article_id', articleId);
+				form.append('role', mode);
+
+				const res = await apiRequest(`${apiBase}/images/upload`, {
+					method: 'POST',
+					body: form
+				});
+				const data = await res.json().catch(() => null);
+				if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengunggah gambar.')));
+				if (!data?.id) throw new Error(tr('Gagal mengunggah gambar.'));
+				return data as LibraryImage;
+			}
+
+			/**
+			 * Unggah banyak gambar sekaligus. Dijalankan berurutan (bukan paralel)
+			 * supaya server tidak dibanjiri dan progres yang ditampilkan jujur.
+			 */
+			async function handleUploadMany(files: File[]) {
+				if (uploading || files.length === 0) return;
+				const valid = files.filter((f) => f.type.startsWith('image/'));
+				if (valid.length === 0) {
 					uploadError = tr('Format file tidak didukung. Unggah file gambar (PNG, JPG, WebP).');
 					return;
 				}
 				uploading = true;
+				uploadDone = 0;
+				uploadTotal = valid.length;
 				uploadError = '';
 				uploadSuccess = '';
+				const failed: string[] = [];
+				const uploaded: LibraryImage[] = [];
 				try {
-					const form = new FormData();
-					form.append('file', file);
-					form.append('media_id', mediaId);
-					if (articleId) form.append('article_id', articleId);
-					form.append('role', mode);
-
-					const res = await apiRequest(`${apiBase}/images/upload`, {
-						method: 'POST',
-						body: form
-					});
-					const data = await res.json().catch(() => null);
-					if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengunggah gambar.')));
-					if (data?.id) {
-						images = [data as LibraryImage, ...images];
-						uploadSuccess = tr('Gambar berhasil diunggah & dicrop ke 16:9.');
+					for (const file of valid) {
+						try {
+							uploaded.push(await uploadOne(file));
+						} catch (err) {
+							const name = file.name || 'file';
+							const reason = err instanceof Error ? err.message : tr('Gagal mengunggah gambar.');
+							failed.push(`${name}: ${reason}`);
+						} finally {
+							uploadDone += 1;
+						}
+					}
+					if (uploaded.length > 0) {
+						images = [...uploaded.reverse(), ...images];
+						uploadSuccess = uploaded.length === 1
+							? tr('Gambar berhasil diunggah & dicrop ke 16:9.')
+							: tr('{n} gambar berhasil diunggah & dicrop ke 16:9.').replace('{n}', String(uploaded.length));
 						setTimeout(() => {
 							uploadSuccess = '';
-						}, 3500);
+						}, 4000);
 					}
-				} catch (err) {
-					uploadError = err instanceof Error ? err.message : tr('Gagal mengunggah gambar.');
+					if (failed.length > 0) {
+						uploadError = failed.join(' · ');
+					}
 				} finally {
 					uploading = false;
+					uploadDone = 0;
+					uploadTotal = 0;
 				}
 			}
 
 			function onDropUpload(e: DragEvent) {
 				e.preventDefault();
 				uploadDragOver = false;
-				const file = e.dataTransfer?.files?.[0];
-				if (file) void handleUpload(file);
+				const files = Array.from(e.dataTransfer?.files ?? []);
+				if (files.length > 0) void handleUploadMany(files);
 			}
 
 			function onFileSelected(e: Event) {
-				const f = (e.currentTarget as HTMLInputElement).files?.[0];
-				if (f) void handleUpload(f);
-				if (fileInputEl) fileInputEl.value = '';
+				const input = e.currentTarget as HTMLInputElement;
+				const files = Array.from(input.files ?? []);
+				if (files.length > 0) void handleUploadMany(files);
+				input.value = '';
 			}
 
 			// ---------- hapus gambar dari pustaka ----------
@@ -307,13 +378,20 @@
 							bind:this={fileInputEl}
 							type="file"
 							accept="image/*"
+							multiple
 							class="hidden"
 							onchange={onFileSelected}
 						/>
 						{#if uploading}
 							<div class="flex items-center gap-2 py-1 text-xs font-semibold" style="color: var(--primary);">
 								<LoaderCircle size={18} class="animate-spin" />
-								<span>{tr('Mengunggah & menormalkan gambar (16:9)…')}</span>
+								<span>
+									{#if uploadTotal > 1}
+										{tr('Mengunggah {n} dari {m} gambar…').replace('{n}', String(Math.min(uploadDone + 1, uploadTotal))).replace('{m}', String(uploadTotal))}
+									{:else}
+										{tr('Mengunggah & menormalkan gambar (16:9)…')}
+									{/if}
+								</span>
 							</div>
 						{:else}
 							<div class="flex items-center gap-2 text-xs font-semibold text-foreground">
@@ -321,7 +399,7 @@
 								<span>{tr('Tarik & letakkan gambar ke sini, klik untuk memilih, atau tempel (Ctrl+V)')}</span>
 							</div>
 							<p class="mt-0.5 text-[11px] text-muted-foreground">
-								{tr('PNG, JPG, WebP · otomatis dicrop ke rasio 16:9 & disimpan ke pustaka artikel ini')}
+								{tr('PNG, JPG, WebP · bisa pilih beberapa sekaligus, otomatis dicrop ke rasio 16:9 & disimpan ke pustaka artikel ini')}
 							</p>
 						{/if}
 					</div>
@@ -348,14 +426,41 @@
 							<p class="mt-1 text-xs text-muted-foreground">{tr('Unggah gambar di atas atau buat gambar baru lewat kotak di bawah.')}</p>
 						</div>
 					{:else}
+						{#if multi && images.length > 0}
+							<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+								<label class="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-foreground">
+									<input
+										type="checkbox"
+										class="lg-check"
+										checked={allSelected}
+										aria-label={tr('Pilih semua')}
+										onchange={toggleSelectAll}
+									/>
+									<span>{allSelected ? tr('Batal pilih') : tr('Pilih semua')}</span>
+								</label>
+								<span class="text-[11.5px] text-muted-foreground">
+									{#if selectedIds.size > 0}
+										{tr('{n} gambar dipilih').replace('{n}', String(selectedIds.size))}
+									{:else}
+										{tr('Centang gambar yang ingin disisipkan')}
+									{/if}
+								</span>
+							</div>
+						{/if}
+
 						<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
 							{#each images as img (img.id)}
-								<div class="group relative overflow-hidden rounded-xl border text-left" style="border-color: var(--border);">
+								{@const picked = selectedIds.has(img.id)}
+								<div
+									class="group relative overflow-hidden rounded-xl border text-left transition-colors"
+									style="border-color: {multi && picked ? 'var(--primary)' : 'var(--border)'}; background-color: {multi && picked ? 'var(--accent)' : 'transparent'};"
+								>
 									<button
 										class="block w-full text-left"
 										type="button"
 										title={img.heading || img.prompt}
-										onclick={() => onSelect(img.url)}
+										aria-pressed={multi ? picked : undefined}
+										onclick={() => (multi ? toggleSelect(img.id) : onSelect(img.url))}
 									>
 										<img src={img.url} alt={img.heading || img.prompt} class="aspect-video w-full object-cover transition-transform group-hover:scale-[1.03]" />
 										<div class="flex items-center justify-between gap-1 px-2 py-1.5">
@@ -367,6 +472,24 @@
 											{/if}
 										</div>
 									</button>
+
+									{#if multi}
+										<!-- Kotak centang selalu terlihat supaya jelas kartu bisa dipilih banyak -->
+										<label
+											class="absolute left-1.5 top-1.5 flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border bg-card/95"
+											style="border-color: {picked ? 'var(--primary)' : 'var(--border)'};"
+											title={tr('Pilih gambar ini')}
+										>
+											<input
+												type="checkbox"
+												class="lg-check"
+												checked={picked}
+												aria-label={tr('Pilih gambar ini')}
+												onchange={() => toggleSelect(img.id)}
+												onclick={(e) => e.stopPropagation()}
+											/>
+										</label>
+									{/if}
 
 									<!-- Tombol Hapus Gambar -->
 									<button
@@ -385,6 +508,24 @@
 								</div>
 							{/each}
 						</div>
+
+						{#if multi && selectedIds.size > 0}
+							<!-- Bar aksi menempel di dasar area gulir: tombol sisip selalu terlihat -->
+							<div class="sticky bottom-0 -mx-5 mt-4 flex flex-wrap items-center justify-between gap-2 border-t px-5 py-3" style="border-color: var(--border); background-color: var(--card, #fff);">
+								<span class="text-xs font-semibold text-foreground">
+									{tr('{n} gambar dipilih').replace('{n}', String(selectedIds.size))}
+								</span>
+								<div class="flex items-center gap-2">
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => (selectedIds = new Set())}>
+										{tr('Batal pilih')}
+									</button>
+									<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" onclick={insertSelected}>
+										<ImageIcon size={13} />
+										{tr('Sisipkan ke artikel')}
+									</button>
+								</div>
+							</div>
+						{/if}
 					{/if}
 				</div>
 
@@ -638,3 +779,14 @@
 				</div>
 			{/if}
 		{/if}
+
+<style>
+	/* Kotak centang memakai warna aksen sistem, ukuran tetap agar mudah diklik */
+	.lg-check {
+		width: 16px;
+		height: 16px;
+		margin: 0;
+		accent-color: var(--primary);
+		cursor: pointer;
+	}
+</style>

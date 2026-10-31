@@ -929,6 +929,45 @@
 		commitHistory();
 	}
 
+	/**
+	 * Sisipkan beberapa gambar sekaligus pada posisi kursor yang tersimpan.
+	 * Semua gambar dikirim dalam satu `insertHTML`, jadi hasilnya satu langkah undo.
+	 */
+	function insertImageUrls(urls: string[]) {
+		if (!bodyEl) return;
+		const list = urls.filter((u) => typeof u === 'string' && u.trim().length > 0);
+		if (list.length === 0) return;
+		if (list.length === 1) {
+			insertImageUrl(list[0]);
+			return;
+		}
+		bodyEl.focus();
+		const sel = window.getSelection();
+		if (sel && savedRange) {
+			sel.removeAllRanges();
+			try {
+				sel.addRange(savedRange);
+			} catch {
+				/* range basi */
+			}
+		}
+		// Tanpa kursor di editor, sisipkan di akhir isi (pola yang sama dengan embed).
+		if (!sel || sel.rangeCount === 0 || !bodyEl.contains(sel.anchorNode)) {
+			const end = document.createRange();
+			end.selectNodeContents(bodyEl);
+			end.collapse(false);
+			sel?.removeAllRanges();
+			sel?.addRange(end);
+		}
+		const html = list
+			.map((url) => `<figure><img src="${escapeAttr(url)}" alt=""></figure>`)
+			.join('');
+		document.execCommand('insertHTML', false, html);
+		sync();
+		refreshToolState();
+		commitHistory();
+	}
+
 	// Tempel/tarik gambar langsung ke isi editor tetap didukung (unggah ke
 	// /assets) tanpa membuka modal.
 	/** URL polos dari clipboard, atau null bila bukan satu URL utuh. */
@@ -1706,8 +1745,13 @@
 				{mediaId}
 				{articleId}
 				mode="inline"
+				multi
 				onSelect={(url) => {
 					insertImageUrl(url);
+					mediaPickerOpen = false;
+				}}
+				onSelectMany={(urls) => {
+					insertImageUrls(urls);
 					mediaPickerOpen = false;
 				}}
 				onClose={() => (mediaPickerOpen = false)}
