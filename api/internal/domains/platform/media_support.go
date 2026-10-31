@@ -1207,13 +1207,43 @@ func mpSWAsNumber(v any) any {
 	switch t := v.(type) {
 	case float64:
 		return t
+	case int:
+		return float64(t)
+	case int64:
+		return float64(t)
+	case json.Number:
+		if f, err := t.Float64(); err == nil {
+			return f
+		}
+		return nil
 	case string:
-		cleaned := strings.NewReplacer("%", "", " ", "", ",", "").Replace(t)
+		// SimilarWeb kadang mengirim angka sebagai string berformat:
+		// "1.234.567", "12,345", "1.2M", "84.5K". Suffix K/M/B dibaca sebagai
+		// pengali supaya kunjungan tidak terbaca sebagai 1.2.
+		raw := strings.TrimSpace(t)
+		if raw == "" {
+			return nil
+		}
+		mult := 1.0
+		switch raw[len(raw)-1] {
+		case 'K', 'k':
+			mult, raw = 1_000, raw[:len(raw)-1]
+		case 'M', 'm':
+			mult, raw = 1_000_000, raw[:len(raw)-1]
+		case 'B', 'b':
+			mult, raw = 1_000_000_000, raw[:len(raw)-1]
+		}
+		cleaned := strings.NewReplacer("%", "", " ", "", ",", "").Replace(strings.TrimSpace(raw))
+		// "1.234.567" (pemisah ribuan titik) bukan angka desimal: hanya
+		// dibuang titiknya bila ada lebih dari satu titik.
+		if strings.Count(cleaned, ".") > 1 {
+			cleaned = strings.ReplaceAll(cleaned, ".", "")
+		}
 		f, err := strconv.ParseFloat(cleaned, 64)
 		if err != nil {
 			return nil
 		}
-		return f
+		return f * mult
 	}
 	return nil
 }
@@ -1411,96 +1441,68 @@ func mpSWBool(v any) any {
 	return nil
 }
 
+// Provider trafik: "Similar Web API" oleh belchiorarkad di RapidAPI
+// (https://rapidapi.com/belchiorarkad-FqvHs2EDOtP/api/similar-web-api).
+// Cukup satu kredensial: key RapidAPI lewat header x-rapidapi-key.
+//
+// Sebelumnya dipakai "Similarweb API Pro" (DataBee) yang mewajibkan key
+// RapidAPI DAN DataBee Token; di produksi token itu tidak pernah terisi dan
+// semua job trafik gagal. Kolom sealed_databee_token dibiarkan di skema (tidak
+// dibaca lagi) supaya perpindahan ini bisa dibalik tanpa migrasi.
 const (
-	mpSimilarWebHost = "similarweb-api-pro.p.rapidapi.com"
-	mpSimilarWebURL  = "https://" + mpSimilarWebHost + "/site-overview?url="
-	// country-metadata hanya untuk diagnose kredensial (ringan, tanpa domain
-	// khusus di listing), bukan untuk snapshot media.
-	mpSimilarWebDiagnoseURL = "https://" + mpSimilarWebHost + "/country-metadata?url=app.tauthub.com"
+	mpSimilarWebHost        = "similar-web-api.p.rapidapi.com"
+	mpSimilarWebProviderURL = "https://rapidapi.com/belchiorarkad-FqvHs2EDOtP/api/similar-web-api"
+	mpSimilarWebURL         = "https://" + mpSimilarWebHost + "/analyticsv1?url="
+	// Domain uji untuk "Tes koneksi provider". Dipilih domain besar yang
+	// pasti terdata, supaya jawaban 200 memperlihatkan bentuk JSON lengkap
+	// (dipakai untuk memastikan angka kunjungan terbaca).
+	mpSimilarWebDiagnoseDomain = "kompas.com"
 )
 
-// mpSimilarWebCredentials: buka pasangan kredensial provider Similarweb API
-// Pro (DataBee di RapidAPI). Dua-duanya wajib: key RapidAPI dikirim sebagai
-// X-RapidAPI-Key dan token DataBee sebagai Authorization: Bearer. Pesan
-// validasi menyebut KREDENSIAL YANG MANA yang belum tersimpan supaya admin
-// tidak menebak.
-func (d *Deps) mpSimilarWebCredentials(ctx context.Context) (string, string, *mpSimilarWebError) {
-	row, err := d.queryRow(ctx, "SELECT sealed_similarweb_api_key, sealed_databee_token FROM platform_seo_config WHERE id = 'default' LIMIT 1")
+// mpSimilarWebCredentials: buka key RapidAPI untuk provider SimilarWeb.
+func (d *Deps) mpSimilarWebCredentials(ctx context.Context) (string, *mpSimilarWebError) {
+	row, err := d.queryRow(ctx, "SELECT sealed_similarweb_api_key FROM platform_seo_config WHERE id = 'default' LIMIT 1")
 	if err != nil || row == nil {
-		return "", "", mpSWErr(http.StatusConflict, "SimilarWeb API belum dikonfigurasi oleh Admin. Isi key RapidAPI dan DataBee Token di panel Konfigurasi.")
+		return "", mpSWErr(http.StatusConflict, "SimilarWeb API belum dikonfigurasi oleh Admin. Isi key RapidAPI di kartu SimilarWeb, panel Konfigurasi.")
 	}
-	rapidSealed := row.strOr("sealed_similarweb_api_key", "")
-	databeeSealed := row.strOr("sealed_databee_token", "")
-	rapidPlain := ""
-	if rapidSealed != "" {
-		plain, uErr := d.unsealT2(rapidSealed)
-		if uErr != nil || plain == "" {
-			return "", "", mpSWErr(http.StatusConflict, "Key RapidAPI SEO tidak dapat dibuka (APP_SECRET kemungkinan berubah). Simpan ulang di panel Konfigurasi.")
-		}
-		rapidPlain = plain
+	sealed := row.strOr("sealed_similarweb_api_key", "")
+	if sealed == "" {
+		return "", mpSWErr(http.StatusConflict, "Key RapidAPI SimilarWeb belum diisi. Lengkapi di kartu SimilarWeb, panel Konfigurasi.")
 	}
-	databeePlain := ""
-	if databeeSealed != "" {
-		plain, uErr := d.unsealT2(databeeSealed)
-		if uErr != nil || plain == "" {
-			return rapidPlain, "", mpSWErr(http.StatusConflict, "DataBee Token tidak dapat dibuka (APP_SECRET kemungkinan berubah). Simpan ulang di panel Konfigurasi.")
-		}
-		databeePlain = plain
+	plain, uErr := d.unsealT2(sealed)
+	if uErr != nil || plain == "" {
+		return "", mpSWErr(http.StatusConflict, "Key RapidAPI SimilarWeb tidak dapat dibuka (APP_SECRET kemungkinan berubah). Simpan ulang di panel Konfigurasi.")
 	}
-	var missing []string
-	if rapidPlain == "" {
-		missing = append(missing, "key RapidAPI")
-	}
-	if databeePlain == "" {
-		missing = append(missing, "DataBee Token")
-	}
-	if len(missing) > 0 {
-		need := missing[0]
-		if len(missing) == 2 {
-			need = "key RapidAPI DAN DataBee Token"
-		}
-		return rapidPlain, databeePlain, mpSWErr(http.StatusConflict,
-			"Provider Similarweb API Pro mewajibkan "+need+". Provider menolak tanpa itu — lengkapi di kartu SimilarWeb, panel Konfigurasi.")
-	}
-	return rapidPlain, databeePlain, nil
+	return plain, nil
 }
 
-// mpSimilarWebHeaders: header wajib provider Similarweb API Pro (DataBee di
-// RapidAPI). DataBee token dikirim sebagai Authorization: Bearer — hanya lewat
-// header, tidak pernah masuk log/pesan pesan.
-func mpSimilarWebHeaders(apiKey, databeeToken string) map[string]string {
-	headers := map[string]string{
+// mpSimilarWebHeaders: header wajib RapidAPI. Key hanya lewat header, tidak
+// pernah masuk log atau pesan error.
+func mpSimilarWebHeaders(apiKey string) map[string]string {
+	return map[string]string{
 		"accept":          "application/json",
 		"x-rapidapi-host": mpSimilarWebHost,
 		"x-rapidapi-key":  apiKey,
 	}
-	if databeeToken != "" {
-		headers["authorization"] = "Bearer " + databeeToken
-	}
-	return headers
 }
 
-func (d *Deps) mpSimilarWebFetch(ctx context.Context, domain, apiKey, databeeToken string) (map[string]any, *mpSimilarWebError) {
+func (d *Deps) mpSimilarWebFetch(ctx context.Context, domain, apiKey string) (map[string]any, *mpSimilarWebError) {
 	target := mpSimilarWebURL + url.QueryEscape(domain)
-	status, body := mpSafeGet(ctx, target, mpSimilarWebHeaders(apiKey, databeeToken), 15*time.Second)
+	status, body := mpSafeGet(ctx, target, mpSimilarWebHeaders(apiKey), 15*time.Second)
 	if status == 0 {
 		return nil, mpSWErr(http.StatusServiceUnavailable, "Provider SimilarWeb tidak dapat dihubungi sekarang.")
 	}
 	if status < 200 || status >= 300 {
 		switch status {
 		case 401, 403:
-			// RapidAPI membuat 403 "not subscribed" untuk dua hal berbeda: key
-			// yang tidak dikenal maupun key valid yang aplikasinya belum
-			// Subscribe API SimilarWeb (kasus yang sama pernah terjadi di
-			// provider DA/PA di atas). 401 artinya kredensial ditolak mentah —
-			// bisa key RapidAPI invalid, bisa juga DataBee Token kurang/salah
-			// (listing DataBee mewajibkan Authorization Bearer).
+			// RapidAPI memakai 403 "not subscribed" baik untuk key yang tidak
+			// dikenal maupun key valid yang belum Subscribe listing ini.
 			if status == 403 && strings.Contains(body, "not subscribed") {
 				return nil, mpSWErr(http.StatusServiceUnavailable,
-					"RapidAPI menolak: \"You are not subscribed to this API.\" Buka listing SimilarWeb (similarweb-api-pro) di RapidAPI lalu Subscribe, lalu coba lagi — key tersimpan tidak perlu diganti. Bila sudah berlangganan, jalankan \"Tes koneksi provider\" di Konfigurasi untuk melihat status kredensialnya persis.")
+					"RapidAPI menolak: \"You are not subscribed to this API.\" Buka listing Similar Web API (belchiorarkad) di RapidAPI lalu Subscribe, lalu coba lagi. Key tersimpan tidak perlu diganti.")
 			}
 			return nil, mpSWErr(http.StatusServiceUnavailable,
-				"Autentikasi provider SimilarWeb ditolak (401/403). Cek dua kredensial di Konfigurasi: key RapidAPI dan DataBee Token — lalu jalankan \"Tes koneksi provider\" untuk melihat jawaban mentah provider.")
+				"Autentikasi provider SimilarWeb ditolak (401/403). Cek key RapidAPI di kartu SimilarWeb, panel Konfigurasi, lalu jalankan \"Tes koneksi provider\" untuk melihat jawaban mentah provider.")
 		case 429:
 			return nil, mpSWErr(http.StatusServiceUnavailable, "Provider SimilarWeb sedang rate-limited. Coba lagi nanti.")
 		case 404:
@@ -1513,7 +1515,126 @@ func (d *Deps) mpSimilarWebFetch(ctx context.Context, domain, apiKey, databeeTok
 	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
 		return nil, mpSWErr(http.StatusBadGateway, "Respons provider SimilarWeb kosong (malformed).")
 	}
-	return mpMapSimilarWebResponse(domain, parsed), nil
+	mapped := mpMapSimilarWebAnalytics(domain, parsed)
+	// Tanpa angka kunjungan, snapshot tidak berguna untuk katalog maupun
+	// sweep. Diperlakukan sebagai kegagalan (bukan "sukses tanpa data") supaya
+	// job tercatat di tab Log DAN media tidak diulang tiap siklus 60 detik —
+	// job `failed` punya jeda 24 jam di query sweep.
+	if v, ok := mapped["visits"].(float64); !ok || v <= 0 {
+		return nil, mpSWErr(http.StatusBadGateway,
+			"Provider SimilarWeb menjawab, tetapi angka kunjungan tidak ditemukan di respons. Bentuk jawaban provider mungkin berbeda dari yang diperkirakan — jalankan \"Tes koneksi provider\" di Konfigurasi untuk melihat JSON aslinya.")
+	}
+	return mapped, nil
+}
+
+// mpMapSimilarWebAnalytics: petakan jawaban /analyticsv1 ke bentuk insights
+// yang disimpan di media_similarweb_snapshots.
+//
+// Listing belchiorarkad tidak memuat contoh respons; tutorialnya hanya
+// menyebut objek "domain_analytics" bertipe bebas. Karena itu pemetaan ini
+// membuka pembungkus yang umum (domain_analytics / data / result) lalu mencoba
+// beberapa bentuk SimilarWeb yang dikenal. Hanya "visits" dan "snapshot_date"
+// yang dibaca kode lain (katalog, matchmaker, sweep scheduler), jadi dua
+// field itu yang dicari paling teliti. Bila bentuknya tetap tidak dikenali,
+// visits bernilai nil dan media dicoba ulang oleh sweep berikutnya.
+func mpMapSimilarWebAnalytics(domain string, payload any) map[string]any {
+	root := mpSWUnwrap(payload)
+	out := mpMapSimilarWebResponse(domain, root)
+	if v, ok := out["visits"].(float64); !ok || v <= 0 {
+		if f := mpSWFindVisits(root); f != nil {
+			out["visits"] = f
+		}
+	}
+	if out["snapshot_date"] == nil {
+		for _, k := range []string{"SnapshotDate", "snapshotDate", "snapshot_date"} {
+			if s, ok := root[k].(string); ok && len(s) >= 10 {
+				// Kolom snapshot_date bertipe date: cukup YYYY-MM-DD.
+				out["snapshot_date"] = s[:10]
+				break
+			}
+		}
+	}
+	return out
+}
+
+// mpSWUnwrap: buka pembungkus respons sampai ketemu objek data.
+func mpSWUnwrap(payload any) map[string]any {
+	root := mpSWObject(payload)
+	for i := 0; i < 3; i++ {
+		next := false
+		for _, k := range []string{"domain_analytics", "data", "result"} {
+			if inner, ok := root[k].(map[string]any); ok && len(inner) > 0 {
+				root = inner
+				next = true
+				break
+			}
+		}
+		if !next {
+			break
+		}
+	}
+	return root
+}
+
+// mpSWFindVisits: angka kunjungan bulanan dari bentuk-bentuk SimilarWeb yang
+// dikenal, urut dari yang paling spesifik.
+func mpSWFindVisits(root map[string]any) any {
+	// Bentuk SimilarWeb mentah: "Engagments" (ejaan asli SimilarWeb) atau
+	// "Engagements" berisi "Visits" (sering berupa string).
+	for _, k := range []string{"Engagments", "Engagements", "engagements", "engagement"} {
+		eng := mpSWObject(root[k])
+		for _, vk := range []string{"Visits", "visits", "total_visits", "totalVisits"} {
+			if v := mpSWPositive(eng[vk]); v != nil {
+				return v
+			}
+		}
+	}
+	// "EstimatedMonthlyVisits": {"2026-08-01": 123, ...} → ambil bulan terakhir.
+	for _, k := range []string{"EstimatedMonthlyVisits", "estimatedMonthlyVisits", "monthly_visits"} {
+		months := mpSWObject(root[k])
+		if len(months) == 0 {
+			continue
+		}
+		keys := make([]string, 0, len(months))
+		for m := range months {
+			keys = append(keys, m)
+		}
+		sort.Strings(keys)
+		if v := mpSWPositive(months[keys[len(keys)-1]]); v != nil {
+			return v
+		}
+	}
+	// Field datar di tingkat atas.
+	for _, k := range []string{"visits", "Visits", "totalVisits", "total_visits", "monthlyVisits", "monthly_visits"} {
+		if v := mpSWPositive(root[k]); v != nil {
+			return v
+		}
+	}
+	// Objek "traffic" berisi total kunjungan atau riwayat bulanan.
+	traffic := mpSWObject(root["traffic"])
+	for _, k := range []string{"visits", "total_visits", "totalVisits", "monthly_visits"} {
+		if v := mpSWPositive(traffic[k]); v != nil {
+			return v
+		}
+	}
+	if history := mpSWArray(traffic["history"]); len(history) > 0 {
+		last := mpSWObject(history[len(history)-1])
+		for _, k := range []string{"visits", "Visits", "total_visits"} {
+			if v := mpSWPositive(last[k]); v != nil {
+				return v
+			}
+		}
+	}
+	return nil
+}
+
+// mpSWPositive: angka > 0 (float64) atau nil.
+func mpSWPositive(v any) any {
+	n, ok := mpSWAsNumber(v).(float64)
+	if !ok || math.IsNaN(n) || math.IsInf(n, 0) || n <= 0 {
+		return nil
+	}
+	return n
 }
 
 const mpSimilarWebSnapshotColumns = "id, media_id, insights, snapshot_date, created_at"
@@ -1576,11 +1697,11 @@ func (d *Deps) mpCheckSimilarWebInsights(ctx context.Context, mediaID string, we
 		return d.mpSimilarWebSnapshotJSON(ptRow(ptNormalizeMap(latest)), mediaID), nil
 	}
 
-	apiKey, databeeToken, keyErr := d.mpSimilarWebCredentials(ctx)
+	apiKey, keyErr := d.mpSimilarWebCredentials(ctx)
 	if keyErr != nil {
 		return nil, keyErr
 	}
-	insights, fetchErr := d.mpSimilarWebFetch(ctx, domain, apiKey, databeeToken)
+	insights, fetchErr := d.mpSimilarWebFetch(ctx, domain, apiKey)
 	if fetchErr != nil {
 		return nil, fetchErr
 	}

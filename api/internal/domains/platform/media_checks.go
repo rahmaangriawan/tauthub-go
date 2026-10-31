@@ -18,8 +18,8 @@ import (
 // pengaman yang sebelumnya tidak ada: JANGAN meng-enqueue job bila kredensial
 // penyedianya belum lengkap. Tanpa pengaman itu, setiap siklus scheduler (60
 // detik) membuat job yang pasti gagal — pernah tercatat 184 baris `failed`
-// hanya karena DataBee Token kosong, dan tiap percobaan tetap memakan kuota
-// RapidAPI.
+// hanya karena kredensial provider trafik lama kosong, dan tiap percobaan
+// tetap memakan kuota RapidAPI.
 
 // mpCheckKind: jenis pemeriksaan yang bisa dipicu.
 type mpCheckKind int
@@ -45,20 +45,14 @@ type mpProviderReadiness struct {
 // secret (cukup tahu kolomnya terisi — membuka secret untuk sekadar cek
 // keberadaan hanya menambah kerja dan risiko).
 //
-// Penting: "kolom terisi" BUKAN berarti "bisa dipakai". Di produksi pernah
-// terjadi key RapidAPI terisi tapi langganan SimilarWeb-nya tidak aktif, dan
-// provider membalas "You are not subscribed to this API" / "rate-limited" untuk
-// SETIAP permintaan. Karena itu penolakan terakhir dari provider (yang sudah
-// dicatat mpRecordDAError) ikut dibaca di sini: selama masih dalam jendela jeda,
-// pemeriksaan dianggap tidak siap sehingga job tidak dibuat sama sekali.
+// Penting: "kolom terisi" BUKAN berarti "bisa dipakai". Penolakan provider
+// DA/PA (dicatat mpRecordDAError di last_da_error) dicatat untuk UI, tetapi
+// hanya berlaku untuk provider DA; provider trafik dinilai dari key-nya saja.
 func (d *Deps) mpCheckProviderReadiness(ctx context.Context) mpProviderReadiness {
 	var out mpProviderReadiness
 	row, err := d.queryRow(ctx, `
 		SELECT COALESCE(sealed_api_key, '')            AS seo_key,
-		       COALESCE(sealed_similarweb_api_key, '') AS rapid_key,
-		       COALESCE(sealed_databee_token, '')      AS databee,
-		       COALESCE(last_da_error, '')             AS last_da_error,
-		       (last_da_error_at > NOW() - INTERVAL '24 hours') AS da_paused
+		       COALESCE(sealed_similarweb_api_key, '') AS rapid_key
 		FROM platform_seo_config WHERE id = 'default' LIMIT 1`)
 	if err != nil || row == nil {
 		out.SeoReason = "Konfigurasi SEO platform belum ada."
@@ -75,27 +69,15 @@ func (d *Deps) mpCheckProviderReadiness(ctx context.Context) mpProviderReadiness
 		out.SeoReason = "RapidAPI SEO key belum diisi."
 	}
 
-	rapid := strings.TrimSpace(row.strOr("rapid_key", ""))
-	databee := strings.TrimSpace(row.strOr("databee", ""))
-	switch {
-	case rapid == "" && databee == "":
-		out.TrafficReason = "Key RapidAPI dan DataBee Token belum diisi."
-	case rapid == "":
-		out.TrafficReason = "Key RapidAPI belum diisi."
-	case databee == "":
-		// Kasus nyata yang membuat 184 job gagal: provider Similarweb API Pro
-		// menolak semua permintaan tanpa token ini.
-		out.TrafficReason = "DataBee Token belum diisi."
-	case row.boolOr("da_paused", false):
-		// Kredensial lengkap tetapi provider menolak permintaan terakhir
-		// (langganan tidak aktif / kuota habis / rate limit). Membuat job baru
-		// hanya akan gagal lagi dan menghabiskan kuota.
-		lastErr := strings.TrimSpace(row.strOr("last_da_error", ""))
-		if lastErr == "" {
-			lastErr = "provider menolak permintaan terakhir"
-		}
-		out.TrafficReason = lastErr
-	default:
+	// Provider trafik (Similar Web API, belchiorarkad) cukup satu key RapidAPI.
+	//
+	// last_da_error SENGAJA tidak dibaca di sini: kolom itu hanya diisi
+	// provider DA/PA (listing RapidAPI lain). Dulu penolakan provider DA ikut
+	// menghentikan cek trafik, padahal dua provider itu langganannya terpisah.
+	// Kegagalan trafik per media sudah diredam oleh cooldown 24 jam di sweep.
+	if strings.TrimSpace(row.strOr("rapid_key", "")) == "" {
+		out.TrafficReason = "Key RapidAPI SimilarWeb belum diisi."
+	} else {
 		out.Traffic = true
 	}
 	return out

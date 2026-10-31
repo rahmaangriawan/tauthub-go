@@ -1748,7 +1748,7 @@ func (d *Deps) SEOConfigGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row, err := d.queryRow(r.Context(),
-		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_databee_token, sealed_serpens_api_key, updated_at, last_da_error, last_da_error_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
+		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_serpens_api_key, updated_at, last_da_error, last_da_error_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -1786,10 +1786,14 @@ func igSEOJSON(row ptRow, host string) map[string]any {
 			"provider": "rapidapi", "host": host,
 			"provider_label": seo.ProviderLabel, "provider_url": seo.ProviderPageURL,
 			"api_key_configured": false, "api_key_hint": nil,
-			"similarweb_api_key_configured": false, "databee_token_configured": false,
-			"serpens_api_key_configured": false, "updated_at": nil,
+			"similarweb_api_key_configured": false,
+			"similarweb_provider_url":       mpSimilarWebProviderURL,
+			"similarweb_host":               mpSimilarWebHost,
+			"serpens_api_key_configured":    false, "updated_at": nil,
 		}
 	}
+	// Kredit provider trafik: similarweb_provider_url menunjuk listing RapidAPI
+	// yang benar-benar dipanggil backend, supaya admin tahu ke mana berlangganan.
 	return map[string]any{
 		"provider":                      "rapidapi",
 		"host":                          host,
@@ -1798,7 +1802,8 @@ func igSEOJSON(row ptRow, host string) map[string]any {
 		"api_key_configured":            row.has("sealed_api_key"),
 		"api_key_hint":                  ptNullableStr(row, "api_key_hint"),
 		"similarweb_api_key_configured": row.has("sealed_similarweb_api_key"),
-		"databee_token_configured":      row.has("sealed_databee_token"),
+		"similarweb_provider_url":       mpSimilarWebProviderURL,
+		"similarweb_host":               mpSimilarWebHost,
 		"serpens_api_key_configured":    row.has("sealed_serpens_api_key"),
 		"updated_at":                    row.anyOrNil("updated_at"),
 	}
@@ -1813,19 +1818,18 @@ func (d *Deps) SEOConfigPut(w http.ResponseWriter, r *http.Request) {
 	body := decodeJSON(r)
 	apiKey, hasAPIKey := strField(body, "api_key")
 	similarweb, hasSimilarweb := strField(body, "similarweb_api_key")
-	databee, hasDatabee := strField(body, "databee_token")
 	serpens, hasSerpens := strField(body, "serpens_api_key")
 	for _, pair := range []struct {
 		v   string
 		has bool
-	}{{apiKey, hasAPIKey}, {similarweb, hasSimilarweb}, {databee, hasDatabee}, {serpens, hasSerpens}} {
+	}{{apiKey, hasAPIKey}, {similarweb, hasSimilarweb}, {serpens, hasSerpens}} {
 		if pair.has && pair.v != "" && (len(pair.v) < 8 || len(pair.v) > 1000) {
 			writeErr(w, d, errUnprocessable("Payload tidak valid"))
 			return
 		}
 	}
 	existing, err := d.queryRow(r.Context(),
-		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_databee_token, sealed_serpens_api_key, updated_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
+		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_serpens_api_key, updated_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -1850,15 +1854,7 @@ func (d *Deps) SEOConfigPut(w http.ResponseWriter, r *http.Request) {
 	} else if existingRow != nil {
 		hint = existingRow.strOr("api_key_hint", "")
 	}
-	var sealedSimilarweb, sealedDatabee, sealedSerpens any
-	if hasDatabee && databee != "" {
-		s, sErr := d.sealT2(databee)
-		if sErr != nil {
-			writeErr(w, d, sErr)
-			return
-		}
-		sealedDatabee = s
-	}
+	var sealedSimilarweb, sealedSerpens any
 	if hasSimilarweb && similarweb != "" {
 		s, sErr := d.sealT2(similarweb)
 		if sErr != nil {
@@ -1876,13 +1872,12 @@ func (d *Deps) SEOConfigPut(w http.ResponseWriter, r *http.Request) {
 		sealedSerpens = s
 	}
 	if err := d.exec(r.Context(),
-		`INSERT INTO platform_seo_config (id, sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_databee_token, sealed_serpens_api_key, updated_by, updated_at)
-		 VALUES ('default', $1, $2, $3, $4, $5, $6, NOW())
+		`INSERT INTO platform_seo_config (id, sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_serpens_api_key, updated_by, updated_at)
+		 VALUES ('default', $1, $2, $3, $4, $5, NOW())
 		 ON CONFLICT (id) DO UPDATE SET
 		   sealed_api_key = COALESCE(EXCLUDED.sealed_api_key, platform_seo_config.sealed_api_key),
 		   api_key_hint = COALESCE(EXCLUDED.api_key_hint, platform_seo_config.api_key_hint),
 		   sealed_similarweb_api_key = COALESCE(EXCLUDED.sealed_similarweb_api_key, platform_seo_config.sealed_similarweb_api_key),
-		   sealed_databee_token = COALESCE(EXCLUDED.sealed_databee_token, platform_seo_config.sealed_databee_token),
 		   sealed_serpens_api_key = COALESCE(EXCLUDED.sealed_serpens_api_key, platform_seo_config.sealed_serpens_api_key),
 		   -- Key baru berarti penyedia mungkin sudah beres: buang catatan kegagalan
 		   -- supaya pemeriksaan berikutnya mencoba lagi, bukan menunggu jeda 24 jam.
@@ -1890,13 +1885,13 @@ func (d *Deps) SEOConfigPut(w http.ResponseWriter, r *http.Request) {
 		   last_da_error_at = CASE WHEN EXCLUDED.sealed_api_key IS NOT NULL THEN NULL ELSE platform_seo_config.last_da_error_at END,
 		   updated_by = EXCLUDED.updated_by,
 		   updated_at = NOW()`,
-		sealed, hint, sealedSimilarweb, sealedDatabee, sealedSerpens, user.ID); err != nil {
+		sealed, hint, sealedSimilarweb, sealedSerpens, user.ID); err != nil {
 		writeErr(w, d, err)
 		return
 	}
 	d.audit(r.Context(), user.ID, "platform.seo.configuration_updated", "platform_seo_config", "default")
 	updated, err := d.queryRow(r.Context(),
-		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_databee_token, sealed_serpens_api_key, updated_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
+		"SELECT sealed_api_key, api_key_hint, sealed_similarweb_api_key, sealed_serpens_api_key, updated_at FROM platform_seo_config WHERE id = 'default' LIMIT 1")
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -1986,13 +1981,13 @@ func swDiagnoseHint(status int, body string) string {
 	case status >= 200 && status < 300:
 		return "Key valid dan berlangganan aktif — pemeriksaan SimilarWeb siap dipakai di panel media."
 	case status == 401:
-		return "Ditolak 401: cek dua-duanya di kartu SimilarWeb — key RapidAPI (di-tempel persis dari Dashboard RapidAPI, tanpa spasi/kutip) dan DataBee Token dari hal listing DataBee. Jawaban mentah provider ada di bawah."
+		return "Ditolak 401: key RapidAPI salah atau tidak aktif. Tempel ulang key persis dari Dashboard RapidAPI (tanpa spasi/kutip) di kartu SimilarWeb. Jawaban mentah provider ada di bawah."
 	case status == 403 && strings.Contains(body, "not subscribed"):
-		return "Key tersimpan tapi RapidAPI bilang \"You are not subscribed to this API.\" — akun yang punya key ini belum berlangganan listing SimilarWeb (similarweb-api-pro). Buka listing-nya di RapidAPI, klik Subscribe (paket apa pun yang tersedia), lalu tes lagi. Key tidak perlu diganti kalau memang benar."
+		return "Key tersimpan tapi RapidAPI bilang \"You are not subscribed to this API.\" Akun pemilik key ini belum berlangganan listing Similar Web API (belchiorarkad). Buka listing-nya di RapidAPI, klik Subscribe, lalu tes lagi. Key tidak perlu diganti kalau memang benar."
 	case status == 403:
-		return "Ditolak 403: biasanya DataBee Token kurang/salah atau langganan belum aktif. Lengkapi DataBee Token di kartu SimilarWeb (dikirim sebagai Authorization: Bearer), lalu tes lagi. Jawaban mentah provider ada di bawah."
+		return "Ditolak 403: biasanya langganan listing Similar Web API (belchiorarkad) belum aktif untuk key ini. Jawaban mentah provider ada di bawah."
 	case status == 404:
-		return "Kredensial lolos — provider hanya menyebut domain uji (app.tauthub.com) tidak terdata di SimilarWeb. Media lain tetap bisa diperiksa. Anggap tes lolos."
+		return "Kredensial lolos. Provider hanya menyebut domain uji tidak terdata di SimilarWeb. Media lain tetap bisa diperiksa."
 	case status == 429:
 		return "Kuota/rate limit provider kosong untuk saat ini — tunggu lalu tes lagi."
 	case status == 402:
@@ -2011,25 +2006,39 @@ func (d *Deps) SEOSimilarWebDiagnose(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// Validasi dua kredensial dulu; bila ada yang kurang, jangan panggil
-	// provider — jelaskan mana yang belum tersimpan. Pesan validasi tidak
-	// pernah memuat nilai kredensial.
-	apiKey, databee, credsErr := d.mpSimilarWebCredentials(r.Context())
+	// Validasi key dulu; bila belum ada, jangan panggil provider. Pesan
+	// validasi tidak pernah memuat nilai kredensial.
+	apiKey, credsErr := d.mpSimilarWebCredentials(r.Context())
 	if credsErr != nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok": false, "provider_status": nil, "detail": credsErr.Message,
 		})
 		return
 	}
-	// Endpoint country-metadata dipilih untuk diagnose karena ringan; jika
-	// kredensial valid, jawaban mentah provider langsung tampil di admin.
-	status, body := mpSafeGet(r.Context(), mpSimilarWebDiagnoseURL, mpSimilarWebHeaders(apiKey, databee), 15*time.Second)
+	// Tes memakai endpoint yang sama dengan cek media (/analyticsv1), supaya
+	// admin melihat bentuk JSON aslinya dan apakah angka kunjungan terbaca.
+	// Satu tes = satu kuota request RapidAPI.
+	domain := mpSimilarWebDiagnoseDomain
+	status, body := mpSafeGet(r.Context(), mpSimilarWebURL+url.QueryEscape(domain), mpSimilarWebHeaders(apiKey), 15*time.Second)
 	detail := swDiagnoseHint(status, body)
 	v := map[string]any{
 		"ok":              status >= 200 && status < 300,
 		"provider_status": status,
 		"ket":             detail,
-		"payload_raw":     nullIfEmpty(ptTruncate(body, 800)),
+		"domain":          domain,
+		"payload_raw":     nullIfEmpty(ptTruncate(body, 3000)),
+	}
+	if status >= 200 && status < 300 {
+		var parsed any
+		if json.Unmarshal([]byte(body), &parsed) == nil {
+			mapped := mpMapSimilarWebAnalytics(domain, parsed)
+			v["visits"] = mapped["visits"]
+			v["snapshot_date"] = mapped["snapshot_date"]
+			if mapped["visits"] == nil {
+				v["ok"] = false
+				v["ket"] = "Provider menjawab 200, tetapi angka kunjungan (visits) tidak ditemukan di respons. Kirim jawaban mentah di bawah supaya pemetaannya disesuaikan."
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, v)
 }

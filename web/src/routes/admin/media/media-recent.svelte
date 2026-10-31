@@ -176,7 +176,7 @@
 			{ key: 'name', label: tr('Media'), render: mediaCell },
 			{ key: 'category', label: 'Kategori', render: categoryCell },
 			{ key: 'partner', label: tr('Mitra'), render: partnerCell },
-			{ key: 'approved', label: tr('Disetujui'), render: approvedCell }
+			{ key: 'approved', label: tr('Disetujui'), hint: tr('Media yang disetujui dari tab Pending muncul di sini selama 7 hari, lalu keluar otomatis. Tidak perlu tindakan apa pun.'), render: approvedCell }
 		]}
 		rows={rows}
 		rowKey={(row: Media) => row.id}

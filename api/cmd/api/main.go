@@ -730,6 +730,8 @@ func run() error {
 			// metriknya belum segar, plus indikator antreannya.
 			authed.Post("/platform/media/seo-refresh-all", platformDeps.MediaSEORefreshAll)
 			authed.Get("/platform/media/seo-refresh-status", platformDeps.MediaSEORefreshStatus)
+			// Riwayat job pemeriksaan media (tab "Log" di /admin/media).
+			authed.Get("/platform/media/job-log", platformDeps.MediaJobLog)
 			authed.Post("/platform/media/similarweb-bulk", platformDeps.MediaSimilarWebBulk)
 			authed.Get("/platform/media/similarweb-status", platformDeps.MediaSimilarWebStatus)
 			authed.Post("/platform/media/sync-credit-cost", platformDeps.MediaSyncCreditCost)

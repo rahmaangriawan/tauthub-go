@@ -3,12 +3,16 @@
 	// Tabel admin generik: kolom + baris + status loading/kosong + klik baris.
 	// Menjaga tampilan tabel seragam di semua halaman /admin.
 	import type { Snippet } from 'svelte';
+	import { Info } from '@lucide/svelte';
+	import Tooltip from '$lib/components/tooltip.svelte';
 
 	type Column = {
 		key: string;
 		label: string;
 		align?: 'left' | 'right' | 'center';
 		width?: string;
+		/** Keterangan tambahan: ikon info di sebelah label, isinya muncul saat hover. */
+		hint?: string;
 		render?: Snippet<[Row]>;
 	};
 
@@ -45,7 +49,26 @@
 				<tr class="text-xs text-muted-foreground">
 					{#each columns as col (col.key)}
 						<th class="px-4 py-2.5 font-medium {alignClass(col.align)}" style={col.width ? `width:${col.width};` : undefined}>
-							{col.label}
+							{#if col.hint}
+								<!-- Ikon info + tooltip. Memakai komponen tooltip bersama supaya
+								     posisinya fixed dan tidak terpotong overflow tabel. -->
+								<span class="inline-flex items-center gap-1">
+									{col.label}
+									<Tooltip content={col.hint}>
+										<button
+											type="button"
+											class="inline-flex shrink-0 items-center justify-center rounded-full"
+											style="color: var(--muted-foreground);"
+											aria-label={col.hint}
+											onclick={(e) => e.stopPropagation()}
+										>
+											<Info size={13} aria-hidden="true" />
+										</button>
+									</Tooltip>
+								</span>
+							{:else}
+								{col.label}
+							{/if}
 						</th>
 					{/each}
 				</tr>

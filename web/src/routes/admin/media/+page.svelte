@@ -20,6 +20,7 @@
 	import MediaIntelligenceTab from './media-intelligence-tab.svelte';
 	import MediaViolationsTab from './media-violations-tab.svelte';
 	import MediaSettings from './media-settings.svelte';
+	import MediaLogTab from './media-log-tab.svelte';
 
 	const PENDING_MEDIA_PATH = '/v1/platform/media?limit=1&offset=0&status=pending_review';
 
@@ -71,7 +72,12 @@
 		// Tab pelanggaran: daftar media yang punya pelanggaran aktif (ringan/berat)
 		// beserta riwayatnya, supaya admin bisa menindak tanpa mencari satu-satu.
 		{ value: 'violations', label: tr('Pelanggaran') },
-		{ value: 'settings', label: tr('Pengaturan') }
+		// Isi tab ini hanya pengaturan template Bulk Import, jadi namanya
+		// disesuaikan dengan isinya (value tetap 'settings').
+		{ value: 'settings', label: tr('Bulk Import') },
+		// Riwayat job pemeriksaan media (cek DA, trafik, verifikasi domain),
+		// dipindah dari panel kuning di atas tabel Direktori.
+		{ value: 'log', label: 'Log' }
 	]);
 </script>
 
@@ -109,7 +115,7 @@
 
 	<div class="mt-4">
 		{#if tab === 'directory'}
-			<MediaDirectory onPendingRefresh={loadPendingCount} />
+			<MediaDirectory onPendingRefresh={loadPendingCount} onOpenLog={() => (tab = 'log')} />
 		{:else if tab === 'archive'}
 			<MediaArchive />
 		{:else if tab === 'pending'}
@@ -122,6 +128,8 @@
 			<MediaViolationsTab />
 		{:else if tab === 'settings'}
 			<MediaSettings />
+		{:else if tab === 'log'}
+			<MediaLogTab />
 		{/if}
 	</div>
 </section>

@@ -107,8 +107,10 @@ selalu gagal di penyedia karena token belum diisi. Selama ini belum beres,
 menambah pemicu otomatis hanya akan menambah baris `failed` dan menghabiskan
 kuota RapidAPI.
 
-**Langkah 0 (wajib, di luar kode):** isi DataBee Token di
-`/admin/konfigurasi` → kartu SimilarWeb. Tanpa ini bagian 2 tidak ada gunanya.
+**Langkah 0 (wajib, di luar kode):** ~~isi DataBee Token~~ — **sudah tidak
+relevan**. Provider trafik diganti ke "Similar Web API" (belchiorarkad) yang
+hanya butuh satu key RapidAPI (lihat `docs/plans/similarweb-belchiorarkad.md`),
+jadi penghambat token gugur dengan sendirinya.
 
 ## Desain usulan
 
@@ -124,7 +126,7 @@ mpEnqueueMediaChecks(ctx, mediaID, reason)
   ├─ guard BARU: kredensial penyedia tersedia
   │    ├─ DA   : platform_seo_config punya sealed_similarweb_api_key
   │    │        ATAU provider DA alternatif aktif (guestpostlinks)
-  │    └─ trafik: punya key RapidAPI DAN sealed_databee_token tidak kosong
+  │    └─ trafik: punya key RapidAPI SimilarWeb (cukup satu kredensial)
   └─ enqueue media_seo_refresh + media_similarweb_refresh
 ```
 
@@ -173,7 +175,8 @@ sweep & bulk). Usul:
 Tab Direktori sudah punya indikator antrean. Tambahkan satu chip ringkas:
 
 > `Cek otomatis · DA 3 antre · Trafik 5 antre` — atau, bila kredensial kurang:
-> `Cek otomatis berhenti — DataBee Token belum diisi` + tautan ke Konfigurasi.
+> `Cek otomatis berhenti — Key RapidAPI SimilarWeb belum diisi` + tautan ke
+> Konfigurasi.
 
 Tanpa ini, "otomatis" tidak terlihat: admin tidak tahu apakah sistem bekerja
 atau diam.
@@ -187,8 +190,8 @@ atau diam.
 
 ## Urutan pengerjaan
 
-1. **[non-kode]** Isi DataBee Token di panel Konfigurasi. Tanpa ini tidak bisa
-   diverifikasi.
+1. ~~**[non-kode]** Isi DataBee Token di panel Konfigurasi.~~ Diganti: provider
+   trafik sekarang "Similar Web API" (belchiorarkad), cukup satu key RapidAPI.
 2. `mpEnqueueMediaChecks` + guard kredensial (backend).
 3. Sambungkan ke 5 titik panggil di tabel B.
 4. Kebijakan retry bertingkat (D).

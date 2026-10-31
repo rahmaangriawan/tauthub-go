@@ -1500,30 +1500,22 @@ func (d *Deps) schEnqueueMediaAiRefreshes(ctx context.Context, limit int) {
 //
 // Dipisah dari paket platform karena platform meng-import brandflow (bukan
 // sebaliknya), jadi helper tidak boleh saling memanggil. Query-nya sengaja
-// sepadan dengan platform.mpCheckProviderReadiness: key RapidAPI DAN DataBee
-// Token wajib ada, DAN provider tidak boleh sedang menolak permintaan (catatan
-// last_da_error dalam 24 jam terakhir). Tanpa pemeriksaan terakhir itu, host
-// yang langganan RapidAPI-nya tidak aktif tetap meng-enqueue job tiap siklus
-// padahal provider membalas "You are not subscribed to this API" untuk semua
-// permintaan — persis yang terjadi di produksi.
+// sepadan dengan platform.mpCheckProviderReadiness: key RapidAPI SimilarWeb
+// wajib ada.
+//
+// last_da_error tidak dibaca di sini: kolom itu milik provider DA/PA (listing
+// RapidAPI lain dengan langganan terpisah). Dulu penolakan provider DA ikut
+// menghentikan cek trafik. Kegagalan trafik per media sudah diredam oleh
+// cooldown 24 jam di query sweep di bawah.
 func (d *Deps) schTrafficProviderReady(ctx context.Context) (bool, string) {
 	row, err := d.queryRow(ctx, `
-		SELECT COALESCE(sealed_similarweb_api_key, '') AS rapid_key,
-		       COALESCE(sealed_databee_token, '')      AS databee,
-		       COALESCE(last_da_error, '')             AS last_da_error,
-		       (last_da_error_at > NOW() - INTERVAL '24 hours') AS da_paused
+		SELECT COALESCE(sealed_similarweb_api_key, '') AS rapid_key
 		FROM platform_seo_config WHERE id = 'default' LIMIT 1`)
 	if err != nil || row == nil {
 		return false, "konfigurasi SEO platform belum ada"
 	}
 	if strings.TrimSpace(row.strOr("rapid_key", "")) == "" {
-		return false, "key RapidAPI belum diisi"
-	}
-	if strings.TrimSpace(row.strOr("databee", "")) == "" {
-		return false, "DataBee Token belum diisi"
-	}
-	if row.boolOr("da_paused", false) {
-		return false, "provider menolak permintaan terakhir: " + strings.TrimSpace(row.strOr("last_da_error", ""))
+		return false, "key RapidAPI SimilarWeb belum diisi"
 	}
 	return true, ""
 }
@@ -1538,10 +1530,10 @@ func (d *Deps) schEnqueueSimilarWebChecks(ctx context.Context, limit int) {
 	if limit < 1 {
 		limit = 1
 	}
-	// Pengaman kredensial: provider Similarweb API Pro menolak SEMUA permintaan
-	// tanpa DataBee Token. Tanpa pemeriksaan ini, setiap siklus (60 detik)
-	// melahirkan job yang pasti gagal — pernah 184 baris `failed` hanya karena
-	// token kosong, dan tiap percobaan tetap memakai kuota RapidAPI.
+	// Pengaman kredensial: tanpa key RapidAPI SimilarWeb (atau saat provider
+	// sedang menolak), setiap siklus (60 detik) melahirkan job yang pasti
+	// gagal — pernah 184 baris `failed` dari provider lama, dan tiap percobaan
+	// tetap memakai kuota RapidAPI.
 	if ready, reason := d.schTrafficProviderReady(ctx); !ready {
 		// Log sekali per siklus sudah cukup berisik; cukup diamkan dan biarkan
 		// chip status di UI admin yang memberi tahu.

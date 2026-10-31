@@ -23,7 +23,8 @@
 		last_da_error?: string | null;
 		last_da_error_at?: string | null;
 		similarweb_api_key_configured?: boolean;
-		databee_token_configured?: boolean;
+		similarweb_provider_url?: string | null;
+		similarweb_host?: string | null;
 		serpens_api_key_configured?: boolean;
 	};
 	type SmtpConfig = {
@@ -181,10 +182,107 @@
 	let seoMsg = $state({ text: '', ok: false });
 	let seoBusy = $state(false);
 	let similarwebKey = $state('');
-	let databeeKey = $state('');
 	let similarwebMsg = $state({ text: '', ok: false });
 	let similarwebBusy = $state(false);
-	type SwDiag = { ok: boolean; provider_status: number | null; ket?: string | null; detail?: string | null; payload_raw?: string | null };
+	type SwDiag = {
+		ok: boolean;
+		provider_status: number | null;
+		ket?: string | null;
+		detail?: string | null;
+		payload_raw?: string | null;
+		domain?: string | null;
+		visits?: number | null;
+		snapshot_date?: string | null;
+	};
+	const SW_PROVIDER_URL = 'https://rapidapi.com/belchiorarkad-FqvHs2EDOtP/api/similar-web-api';
+
+	// Tutorial integrasi Similar Web API (Go CLI). Kode disimpan sebagai string
+	// supaya kurung kurawal tidak dibaca sebagai ekspresi Svelte.
+	const SW_TUT_INIT = `mkdir go-similarweb
+cd go-similarweb
+go mod init go-similarweb`;
+	const SW_TUT_MODEL = `package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+)
+
+// Struktur untuk menangkap response JSON
+type ApiResponse struct {
+	DomainAnalytics interface{} \`json:"domain_analytics"\`
+}
+
+// Konfigurasi API
+const (
+	BaseURL = "https://similar-web-api.p.rapidapi.com"
+	ApiKey  = "YOUR_API_KEY_DISINI" // Ganti dengan API Key Anda
+	ApiHost = "similar-web-api.p.rapidapi.com"
+)`;
+	const SW_TUT_REQUEST = `func getWebsiteAnalytics(targetDomain string) {
+	// 1. Encode URL parameter untuk keamanan
+	endpoint := fmt.Sprintf("%s/analyticsv1?url=%s", BaseURL, url.QueryEscape(targetDomain))
+
+	// 2. Buat request
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		fmt.Printf("Error creating request: %v\\n", err)
+		return
+	}
+
+	// 3. Tambahkan header wajib
+	req.Header.Add("x-rapidapi-key", ApiKey)
+	req.Header.Add("x-rapidapi-host", ApiHost)
+
+	// 4. Eksekusi request
+	client := &http.Client{}
+	res, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Error executing request: %v\\n", err)
+		return
+	}
+	defer res.Body.Close()
+
+	// 5. Baca body response
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Printf("Error reading body: %v\\n", err)
+		return
+	}
+
+	// 6. Cek status code
+	if res.StatusCode != 200 {
+		fmt.Printf("API Error: %s - %s\\n", res.Status, string(body))
+		return
+	}
+
+	// 7. Parse JSON ke struct atau cetak langsung
+	var data ApiResponse
+	if err := json.Unmarshal(body, &data); err != nil {
+		fmt.Printf("Error parsing JSON: %v\\n", err)
+		return
+	}
+
+	fmt.Printf("Berhasil mengambil data untuk: %s\\n", targetDomain)
+	fmt.Println("Hasil (Raw JSON):", string(body))
+}`;
+	const SW_TUT_MAIN = `func main() {
+	var domain string
+	fmt.Print("Masukkan nama domain (contoh: amazon.com): ")
+	fmt.Scanln(&domain)
+
+	if domain == "" {
+		fmt.Println("Domain tidak boleh kosong")
+		return
+	}
+
+	getWebsiteAnalytics(domain)
+}`;
+	const SW_TUT_OTHER = `// Contoh untuk Traffic
+endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 	let swTestBusy = $state(false);
 	let swTest = $state<SwDiag | null>(null);
 	let serpensKey = $state('');
@@ -247,13 +345,12 @@
 		similarwebMsg = { text: '', ok: false };
 		const res = await request<SeoConfig>('/seo/config', {
 			method: 'PUT',
-			body: JSON.stringify({ similarweb_api_key: similarwebKey.trim() || null, databee_token: databeeKey.trim() || null })
+			body: JSON.stringify({ similarweb_api_key: similarwebKey.trim() || null })
 		});
 		if (!res.ok) similarwebMsg = { text: res.error, ok: false };
 		else {
 			similarwebKey = '';
-			databeeKey = '';
-			similarwebMsg = { text: 'SimilarWeb API key berhasil disimpan.', ok: true };
+			similarwebMsg = { text: 'Key Similar Web API berhasil disimpan.', ok: true };
 			await loadSeo();
 		}
 		similarwebBusy = false;
@@ -899,35 +996,90 @@
 					<div class="space-y-3">
 						<div class="flex flex-wrap items-center gap-2">
 							<Globe size={18} />
-							<h2 class="text-base font-semibold">SimilarWeb Insights (RapidAPI)</h2>
+							<h2 class="text-base font-semibold">Similar Web API (RapidAPI)</h2>
 							<Badge tone={seoConfig?.similarweb_api_key_configured ? 'success' : 'warning'} label={seoConfig?.similarweb_api_key_configured ? 'Key terhubung' : tr('Belum Dikonfigurasi')} />
-							<Badge tone={seoConfig?.databee_token_configured ? 'success' : 'warning'} label={seoConfig?.databee_token_configured ? 'DataBee terhubung' : 'DataBee belum diisi'} />
 						</div>
-						<p class="text-sm text-muted-foreground">{tr("API untuk")}<strong>SimilarWeb Insights</strong>{tr("(visits, engagement, rank, top keywords) di dashboard Mitra. Provider Similarweb API Pro (DataBee) butuh DUA kredensial sekaligus: key RapidAPI DAN DataBee Token yang keduanya tersedia di halaman listingnya di RapidAPI. Kalau salah satu belum diisi, provider menolak dengan pesan autentikasi. Keduanya tidak pernah ditampilkan atau dikirim ke browser.")}</p>
+						<p class="text-sm text-muted-foreground">{tr("API untuk angka kunjungan bulanan")}<strong>SimilarWeb</strong>{tr("di Direktori Media, Katalog, dan matchmaker. Cukup satu key RapidAPI; key tidak pernah ditampilkan atau dikirim ke browser.")}</p>
+						<!-- Kredit provider: listing RapidAPI yang benar-benar dipanggil backend. -->
+						<p class="text-xs text-muted-foreground">
+							{tr('Data SimilarWeb di Tauthub diambil lewat')}
+							<a
+								class="font-medium underline underline-offset-2"
+								style="color: var(--primary);"
+								href={seoConfig?.similarweb_provider_url ?? SW_PROVIDER_URL}
+								target="_blank"
+								rel="noopener noreferrer nofollow"
+							>Similar Web API</a>
+							{tr('di RapidAPI, dikembangkan oleh')} <strong>belchiorarkad</strong>.
+							{tr('Akun RapidAPI pemilik key harus Subscribe ke listing tersebut.')}
+						</p>
+						<div class="rounded-lg border px-3 py-2 text-xs text-muted-foreground">
+							Host: <code class="rounded bg-secondary px-1">{seoConfig?.similarweb_host ?? 'similar-web-api.p.rapidapi.com'}</code>
+							· Endpoint: <code class="rounded bg-secondary px-1">/analyticsv1?url=</code>
+						</div>
+						<!-- Tutorial integrasi (Go CLI), tertutup secara default supaya kartu tetap ringkas. -->
+						<details class="rounded-lg border px-3 py-2 text-xs">
+							<summary class="cursor-pointer font-medium">{tr('Tutorial: Integrasi Similar Web API dengan Go')}</summary>
+							<div class="mt-3 space-y-3 text-muted-foreground">
+								<p>{tr('Tutorial ini memandu membuat aplikasi CLI sederhana untuk mengambil data analitik sebuah website.')}</p>
+
+								<p class="font-semibold" style="color: var(--foreground);">1. {tr('Persiapan')}</p>
+								<ul class="list-disc space-y-0.5 pl-5">
+									<li>API Key: {tr('dapatkan dari')} <a class="underline underline-offset-2" style="color: var(--primary);" href={SW_PROVIDER_URL} target="_blank" rel="noopener noreferrer nofollow">RapidAPI Similar Web API</a>.</li>
+									<li>{tr('Go terpasang di komputer')} (<code class="rounded bg-secondary px-1">go version</code>).</li>
+								</ul>
+
+								<p class="font-semibold" style="color: var(--foreground);">2. {tr('Inisialisasi project')}</p>
+								<pre class="overflow-x-auto rounded bg-secondary p-2"><code>{SW_TUT_INIT}</code></pre>
+
+								<p class="font-semibold" style="color: var(--foreground);">3. {tr('Membuat struktur data (models)')}</p>
+								<p>{tr('API mengembalikan JSON, jadi buat struct agar mudah diolah. Contoh untuk endpoint')} <code class="rounded bg-secondary px-1">/analyticsv1</code>. {tr('Buat file')} <code class="rounded bg-secondary px-1">main.go</code>:</p>
+								<pre class="overflow-x-auto rounded bg-secondary p-2"><code>{SW_TUT_MODEL}</code></pre>
+
+								<p class="font-semibold" style="color: var(--foreground);">4. {tr('Membuat fungsi request')}</p>
+								<pre class="overflow-x-auto rounded bg-secondary p-2"><code>{SW_TUT_REQUEST}</code></pre>
+
+								<p class="font-semibold" style="color: var(--foreground);">5. {tr('Fungsi main')}</p>
+								<pre class="overflow-x-auto rounded bg-secondary p-2"><code>{SW_TUT_MAIN}</code></pre>
+
+								<p class="font-semibold" style="color: var(--foreground);">6. {tr('Cara menjalankan')}</p>
+								<ul class="list-disc space-y-0.5 pl-5">
+									<li>{tr('Ganti')} <code class="rounded bg-secondary px-1">YOUR_API_KEY_DISINI</code> {tr('dengan key asli dari RapidAPI, lalu simpan.')}</li>
+									<li>{tr('Jalankan')} <code class="rounded bg-secondary px-1">go run main.go</code></li>
+								</ul>
+
+								<p class="font-semibold" style="color: var(--foreground);">{tr('Endpoint lain')}</p>
+								<p>{tr('Cukup ganti bagian endpoint di dalam kode:')}</p>
+								<pre class="overflow-x-auto rounded bg-secondary p-2"><code>{SW_TUT_OTHER}</code></pre>
+								<ul class="list-disc space-y-0.5 pl-5">
+									<li><code class="rounded bg-secondary px-1">/analyticsv1</code>: {tr('overview lengkap (Global Rank, Country Rank, Category, Traffic).')}</li>
+									<li><code class="rounded bg-secondary px-1">/domain/traffic</code>: {tr('data trafik bulanan.')}</li>
+									<li><code class="rounded bg-secondary px-1">/domain/competitors</code>: {tr('daftar website kompetitor yang serupa.')}</li>
+									<li><code class="rounded bg-secondary px-1">/domain/topkeyword</code>: {tr('kata kunci SEO yang paling banyak mendatangkan trafik.')}</li>
+									<li><code class="rounded bg-secondary px-1">/domain/engagement</code>: {tr('rata-rata durasi kunjungan dan bounce rate.')}</li>
+								</ul>
+
+								<p class="font-semibold" style="color: var(--foreground);">{tr('Error handling')}</p>
+								<ul class="list-disc space-y-0.5 pl-5">
+									<li><strong>401</strong>: {tr('API key salah atau tidak aktif.')}</li>
+									<li><strong>429</strong>: {tr('batas paket terlewati (rate limit).')}</li>
+									<li><strong>404</strong>: {tr('data domain belum tersedia di database SimilarWeb.')}</li>
+								</ul>
+							</div>
+						</details>
 						<form class="space-y-3" onsubmit={saveSimilarWeb}>
 							<label class="block">
-								<span class="text-sm font-medium">SimilarWeb RapidAPI Key</span>
+								<span class="text-sm font-medium">Similar Web API — RapidAPI Key</span>
 								<input
 									class="app-input mt-1 w-full"
 									type="password"
 									required={!seoConfig?.similarweb_api_key_configured}
 									minlength={seoConfig?.similarweb_api_key_configured ? 0 : 8}
-									placeholder={seoConfig?.similarweb_api_key_configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan SimilarWeb RapidAPI key'}
+									placeholder={seoConfig?.similarweb_api_key_configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan RapidAPI key untuk Similar Web API'}
 									bind:value={similarwebKey}
 								/>
 							</label>
-							<label class="block">
-								<span class="text-sm font-medium">DataBee Token (Authorization Bearer)</span>
-								<input
-									class="app-input mt-1 w-full"
-									type="password"
-									required={seoConfig?.similarweb_api_key_configured && !seoConfig?.databee_token_configured}
-									minlength={seoConfig?.databee_token_configured ? 0 : 4}
-									placeholder={seoConfig?.databee_token_configured ? tr('Kosongkan jika tidak diubah') : 'Masukkan DataBee token dari listing Similarweb API Pro'}
-									bind:value={databeeKey}
-								/>
-							</label>
-							<p class="text-xs text-muted-foreground">Ambil di halaman listing Similarweb API Pro di RapidAPI (publisher DataBee) — pengaturan Authorization/payload token akan membentuk header Authorization: Bearer. Wajib bersama key RapidAPI, tidak dipakai sendiri.</p>
+							<p class="text-xs text-muted-foreground">{tr('Ambil key di Dashboard RapidAPI (header')} <code class="rounded bg-secondary px-1">x-rapidapi-key</code>{tr(') setelah Subscribe ke listing Similar Web API.')}</p>
 							{#if similarwebMsg.text}
 								<div class="flex items-center gap-2 text-sm" style="color: {similarwebMsg.ok ? 'var(--success)' : 'var(--destructive)'};">
 									{#if similarwebMsg.ok}<CheckCircle2 size={15} />{:else}<TriangleAlert size={15} />{/if}
@@ -935,7 +1087,7 @@
 								</div>
 							{/if}
 							<div class="flex flex-wrap gap-2">
-								<button class="app-btn app-btn-primary" type="submit" disabled={similarwebBusy}>{similarwebBusy ? 'Menyimpan…' : tr('Simpan SimilarWeb Key')}</button>
+								<button class="app-btn app-btn-primary" type="submit" disabled={similarwebBusy}>{similarwebBusy ? 'Menyimpan…' : tr('Simpan Key')}</button>
 								<button class="app-btn app-btn-soft" type="button" onclick={testSimilarWeb} disabled={swTestBusy}>{swTestBusy ? 'Menguji…' : 'Tes koneksi provider'}</button>
 							</div>
 							{#if swTest}
@@ -948,8 +1100,20 @@
 											Provider {swTest.provider_status} — {swTest.ket ?? swTest.detail ?? ''}
 										{/if}
 									</div>
+									{#if swTest.domain}
+										<p class="text-muted-foreground">
+											{tr('Domain uji')}: <code class="rounded bg-secondary px-1">{swTest.domain}</code>
+											{#if swTest.visits != null}· {tr('Kunjungan terbaca')}: <strong>{Math.round(swTest.visits ?? 0).toLocaleString('id-ID')}</strong>{/if}
+											{#if swTest.snapshot_date}· Snapshot {swTest.snapshot_date}{/if}
+										</p>
+									{/if}
 									{#if swTest.payload_raw}
-										<p class="text-muted-foreground">Jawaban provider: <code class="rounded bg-secondary px-1 break-all">{swTest.payload_raw}</code></p>
+										<div class="text-muted-foreground">
+											<p>{tr('Jawaban provider (mentah)')}:</p>
+											<!-- JSON penuh bisa sangat panjang; dibatasi tingginya supaya
+											     kartu tidak memanjang dan tombol lain tetap terjangkau. -->
+											<pre class="mt-1 max-h-52 overflow-auto rounded bg-secondary p-2"><code class="break-all whitespace-pre-wrap">{swTest.payload_raw}</code></pre>
+										</div>
 									{/if}
 								</div>
 							{/if}

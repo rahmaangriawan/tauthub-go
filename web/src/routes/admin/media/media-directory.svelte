@@ -32,7 +32,7 @@
 		type Partner
 	} from './_shared';
 
-	let { onPendingRefresh }: { onPendingRefresh?: () => void } = $props();
+	let { onPendingRefresh, onOpenLog }: { onPendingRefresh?: () => void; onOpenLog?: () => void } = $props();
 
 	const PAGE_SIZE = 20;
 
@@ -1303,17 +1303,21 @@
 			<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => { void load(); void loadDaStatus(); }}>{tr('Muat ulang')}</button>
 		</div>
 		{#if (daStatus.failed_items?.length ?? 0) > 0}
-			<div class="mt-2 rounded-lg border px-3 py-2 text-xs" style="border-color: color-mix(in srgb, var(--warning) 35%, var(--border)); background-color: var(--warning-soft);">
-				<p class="font-semibold" style="color: var(--warning);">{tr('Domain yang gagal diperiksa (sejam terakhir)')}</p>
-				<ul class="mt-1 space-y-0.5 text-muted-foreground">
-					{#each daStatus.failed_items as f (`${f.website_url}|${f.at}`)}
-						<li>
-							<span class="font-medium" style="color: var(--foreground);">{f.media_name || f.website_url || '—'}</span>
-							{#if f.media_name && f.website_url}<span> ({f.website_url})</span>{/if}
-							<span> — {f.last_error || tr('tanpa pesan')}</span>
-						</li>
-					{/each}
-				</ul>
+			{@const failedItems = daStatus.failed_items ?? []}
+			<!-- Pesan kegagalan lengkap sekarang ada di tab Log. Di sini hanya
+			     ringkasan + tautan, supaya panel kuning berisi teks error panjang
+			     tidak lagi memakan ruang halaman kerja. -->
+			<div class="mt-2 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs" style="border-color: color-mix(in srgb, var(--warning) 35%, var(--border)); background-color: var(--warning-soft);">
+				<span class="font-semibold" style="color: var(--warning);">
+					{failedItems.length} {tr('domain gagal diperiksa (sejam terakhir)')}
+				</span>
+				<span class="text-muted-foreground">
+					{failedItems[0].media_name || failedItems[0].website_url || '—'}
+					{#if failedItems.length > 1}+{failedItems.length - 1} {tr('lainnya')}{/if}
+				</span>
+				<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs" type="button" onclick={() => onOpenLog?.()}>
+					{tr('Lihat di tab Log')}
+				</button>
 			</div>
 		{/if}
 	{/if}
