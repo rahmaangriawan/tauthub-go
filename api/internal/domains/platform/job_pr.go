@@ -197,7 +197,7 @@ func (d *Deps) PublicationPRVerifyJob(ctx context.Context, publicationID string)
 		if err := d.prSaveVerification(ctx, publicationID, campaignID, "", "unavailable", nil, nil, "no published url"); err != nil {
 			return err
 		}
-		d.prNotifyVerification(ctx, publicationID, "unavailable", nil, previousStatus)
+		d.prAttachVerificationToPublishedNotification(ctx, publicationID, "unavailable", nil, previousStatus)
 		return nil
 	}
 
@@ -206,7 +206,7 @@ func (d *Deps) PublicationPRVerifyJob(ctx context.Context, publicationID string)
 		if err := d.prSaveVerification(ctx, publicationID, campaignID, url, "unavailable", nil, nil, fetchErr); err != nil {
 			return err
 		}
-		d.prNotifyVerification(ctx, publicationID, "unavailable", nil, previousStatus)
+		d.prAttachVerificationToPublishedNotification(ctx, publicationID, "unavailable", nil, previousStatus)
 		return nil
 	}
 
@@ -217,7 +217,7 @@ func (d *Deps) PublicationPRVerifyJob(ctx context.Context, publicationID string)
 		if err := d.prSaveVerification(ctx, publicationID, campaignID, url, "failed", &zero, checks, message); err != nil {
 			return err
 		}
-		d.prNotifyVerification(ctx, publicationID, "failed", &zero, previousStatus)
+		d.prAttachVerificationToPublishedNotification(ctx, publicationID, "failed", &zero, previousStatus)
 		return nil
 	}
 	if fetchStatus < 200 || fetchStatus >= 300 {
@@ -225,7 +225,7 @@ func (d *Deps) PublicationPRVerifyJob(ctx context.Context, publicationID string)
 		if err := d.prSaveVerification(ctx, publicationID, campaignID, url, "unavailable", nil, nil, message); err != nil {
 			return err
 		}
-		d.prNotifyVerification(ctx, publicationID, "unavailable", nil, previousStatus)
+		d.prAttachVerificationToPublishedNotification(ctx, publicationID, "unavailable", nil, previousStatus)
 		return nil
 	}
 
@@ -292,7 +292,7 @@ func (d *Deps) PublicationPRVerifyJob(ctx context.Context, publicationID string)
 	if err := d.prSaveVerification(ctx, publicationID, campaignID, url, status, &score, checks, ""); err != nil {
 		return err
 	}
-	d.prNotifyVerification(ctx, publicationID, status, &score, previousStatus)
+	d.prAttachVerificationToPublishedNotification(ctx, publicationID, status, &score, previousStatus)
 
 	if campaignID != "" {
 		d.prRecalcAndNotifyScore(ctx, campaignID)
@@ -310,18 +310,22 @@ func (d *Deps) prRecalcAndNotifyScore(ctx context.Context, campaignID string) {
 	_ = d.prCalculateCampaignScore(ctx, campaignID, true, "")
 }
 
-// prNotifyVerification: beri tahu mitra pemilik media saat hasil verifikasi
-// BERUBAH (port notifyPartnerVerificationCompleted).
-func (d *Deps) prNotifyVerification(ctx context.Context, publicationID, status string, compliance *float64, previousStatus string) {
+// prAttachVerificationToPublishedNotification: hasil verifikasi URL TIDAK lagi
+// dikirim sebagai notifikasi terpisah. Satu artikel sudah mengirim notifikasi
+// "publication.published"; baris itu yang ditempeli hasil verifikasi, supaya
+// lonceng tidak menampung dua entri untuk kejadian yang sama.
+//
+// Bila notifikasi terbit tidak ditemukan (mis. publikasi lama yang dibuat
+// sebelum perilaku ini ada), hasil verifikasi tetap tersimpan di tabel
+// pr_publication_verifications dan terbaca di halaman Status Publikasi.
+func (d *Deps) prAttachVerificationToPublishedNotification(ctx context.Context, publicationID, status string, compliance *float64, previousStatus string) {
 	if previousStatus != "" && previousStatus == status {
 		return
 	}
 	row, err := d.queryRow(ctx, `
-		SELECT p.id, m.name AS media_name, d.title AS document_title,
-		       pa.id AS partner_id, pa.user_id AS partner_user_id, pa.public_id AS partner_public_id
+		SELECT pa.user_id AS partner_user_id
 		FROM publications p
 		JOIN media m ON m.id = p.media_id
-		JOIN content_documents d ON d.id = p.document_id
 		LEFT JOIN partners pa ON pa.id = m.partner_id
 		WHERE p.id = $1 LIMIT 1`, publicationID)
 	if err != nil || row == nil {
@@ -331,33 +335,35 @@ func (d *Deps) prNotifyVerification(ctx context.Context, publicationID, status s
 	if partnerUserID == "" {
 		return
 	}
-	article := row.strOr("document_title", "")
-	if article == "" {
-		article = "Artikel"
-	}
-	mediaName := row.strOr("media_name", "")
-	if mediaName == "" {
-		mediaName = "Media"
-	}
-	scoreText := ""
-	if compliance != nil {
-		scoreText = " — skor compliance " + prFormatScore(*compliance) + "/100"
-	}
+
 	labels := map[string]string{
 		"passed":      "URL terverifikasi",
 		"failed":      "URL bermasalah",
-		"unavailable": "verifikasi tidak tersedia",
+		"unavailable": "verifikasi belum bisa dijalankan",
 	}
 	label := labels[status]
 	if label == "" {
 		label = status
 	}
-	partnerLink := "/mitra/" + row.strOr("partner_public_id", row.strOr("partner_id", "")) + "/publications"
-	if err := d.exec(ctx,
-		"INSERT INTO notifications (id, user_id, type, title, body, link) VALUES (gen_random_uuid(), $1, 'pr.verification_completed', $2, $3, $4)",
-		partnerUserID, "Verifikasi URL artikel selesai",
-		"\""+article+"\" di "+mediaName+": "+label+scoreText+".", partnerLink); err != nil {
-		slog.Warn("[pr] notifikasi verifikasi gagal", "pub", publicationID, "err", err)
+	suffix := " Verifikasi tautan: " + label
+	if compliance != nil {
+		suffix += ", skor " + prFormatScore(*compliance) + "/100"
+	}
+	suffix += "."
+
+	// Hasil verifikasi lama (kalau job dijalankan ulang) dibuang dulu lewat
+	// regexp_replace, lalu hasil terbaru ditempel. LEFT(...) menjaga panjang
+	// tetap di bawah batas kolom 1000 karakter walau judul artikelnya panjang.
+	// Kolom publication_id bertipe character(36) (padding spasi), jadi
+	// dibandingkan lewat btrim agar cocok dengan UUID tanpa padding.
+	if err := d.exec(ctx, `
+		UPDATE notifications
+		SET body = LEFT(regexp_replace(COALESCE(body, ''), ' Verifikasi tautan: [^.]*\.', '', 'g'), 860) || $1
+		WHERE btrim(publication_id) = $2
+		  AND type = 'publication.published'
+		  AND user_id = $3`,
+		suffix, publicationID, partnerUserID); err != nil {
+		slog.Warn("[pr] gagal menempelkan hasil verifikasi ke notifikasi terbit", "pub", publicationID, "err", err)
 	}
 }
 
