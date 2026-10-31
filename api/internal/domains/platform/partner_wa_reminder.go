@@ -7,7 +7,6 @@ package platform
 
 import (
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/email"
@@ -110,24 +109,24 @@ func (d *Deps) AdminPartnerWAReminder(w http.ResponseWriter, r *http.Request) {
 		UserID: partnerUserID, Type: "partner.wa_required", DedupeKey: dedupeKey, Channel: "email",
 	})
 	if recipientEmail != "" && reminderDecision.Send {
-		appURL := strings.TrimRight(os.Getenv("NEXT_PUBLIC_APP_URL"), "/")
-		if appURL == "" {
-			appURL = "https://app.tauthub.com"
-		}
-		cta := appURL + link
-		html := "<p>Halo " + partnerName + ",</p>" +
-			"<p>Media Anda sudah <strong>" + ptItoa(mediaCount) + "</strong> di Tauthub, dan pesanan dari klien bisa masuk kapan saja. " +
-			"Agar tim kami bisa mengonfirmasi pesanan lebih cepat (dan menghindari pesanan yang gagal diproses), mohon lengkapi:</p>" +
-			"<ul><li>nomor WhatsApp aktif, dan</li><li>centang izin dihubungi lewat WhatsApp.</li></ul>" +
-			`<p><a href="` + cta + `">Buka Profil → Notifikasi</a></p>` +
-			"<p>Terima kasih.</p>"
+		// Isi surat memakai kerangka brand (logo + footer). Nama mitra adalah
+		// data pengguna, jadi di-escape sebelum masuk HTML.
+		body := `<p style="margin:0 0 12px;">Halo ` + email.Escape(partnerName) + `,</p>` +
+			`<p style="margin:0 0 12px;">Media Anda sudah <strong>` + ptItoa(mediaCount) + `</strong> di Tauthub, dan pesanan dari klien bisa masuk kapan saja. ` +
+			`Agar tim kami bisa mengonfirmasi pesanan lebih cepat (dan menghindari pesanan yang gagal diproses), mohon lengkapi:</p>` +
+			`<ul style="margin:0 0 12px;padding-left:18px;">` +
+			`<li style="margin:0 0 4px;">nomor WhatsApp aktif, dan</li>` +
+			`<li>centang izin dihubungi lewat WhatsApp.</li></ul>` +
+			`<p style="margin:0;">Terima kasih.</p>`
+		subject := "Lengkapi nomor WhatsApp Anda di Tauthub"
+		html := email.DetailHTML(subject, body, link, "Buka Profil → Notifikasi").HTML
 		if _, _, err := email.EnqueueEmail(r.Context(), d.Pool, email.EnqueueOptions{
 			Template:       "partner-wa-required",
 			RecipientEmail: recipientEmail,
 			UserID:         mpStrPtr(partnerUserID),
 			ReferenceID:    mpStrPtr(partnerID),
 			Event:          "partner-wa-required",
-			Subject:        "Lengkapi nomor WhatsApp Anda di Tauthub",
+			Subject:        subject,
 			HTML:           html,
 			DedupeKey:      mpStrPtr(dedupeKey),
 		}); err != nil {

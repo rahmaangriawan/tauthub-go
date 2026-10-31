@@ -28,21 +28,21 @@ type DigestItem struct {
 
 // BuildDigestBody merangkai judul dan isi email ringkasan.
 //
-// Sengaja HTML sederhana tanpa CSS eksternal dan tanpa gambar: klien email
-// memblokir keduanya, dan yang dibutuhkan hanya daftar yang bisa dibaca.
+// Isi daftar sengaja HTML sederhana (tanpa CSS eksternal), lalu dibungkus
+// kerangka brand bersama supaya email ringkasan tetap memakai logo dan footer
+// Tauthub seperti email transaksional lain.
 func BuildDigestBody(items []DigestItem) (subject, htmlBody string) {
 	if len(items) == 0 {
 		return "", ""
 	}
 	subject = fmt.Sprintf("Ringkasan notifikasi Tauthub (%d)", len(items))
 	var b strings.Builder
-	b.WriteString(`<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:14px;line-height:1.6;color:#111827">`)
 	b.WriteString(`<p style="margin:0 0 16px">Berikut kabar yang belum Anda buka di Tauthub.</p>`)
 	b.WriteString(`<ul style="margin:0;padding-left:18px">`)
 	for _, it := range items {
 		b.WriteString(`<li style="margin:0 0 12px">`)
 		if it.Link != "" {
-			b.WriteString(`<a href="` + html.EscapeString(it.Link) + `" style="color:#2b67ec;font-weight:600">` +
+			b.WriteString(`<a href="` + html.EscapeString(email.Absolutize(it.Link)) + `" style="color:#2b67ec;font-weight:600;text-decoration:none">` +
 				html.EscapeString(it.Title) + `</a>`)
 		} else {
 			b.WriteString(`<strong>` + html.EscapeString(it.Title) + `</strong>`)
@@ -52,8 +52,8 @@ func BuildDigestBody(items []DigestItem) (subject, htmlBody string) {
 		}
 		b.WriteString(`</li>`)
 	}
-	b.WriteString(`</ul></div>`)
-	return subject, b.String()
+	b.WriteString(`</ul>`)
+	return subject, email.Page(subject, "Kabar terbaru yang menunggu Anda di Tauthub.", b.String()).HTML
 }
 
 // EnqueueDigestJobs menaruh satu job pengiriman digest untuk setiap user yang
