@@ -258,16 +258,21 @@ func partnerPublicationJSON(row rowMap) map[string]any {
 	if v, ok := row.num("markup_percent"); ok {
 		markupPercent = v
 	}
-	partnerAmount := splitRevenue(clientPrice, partnerPrice, 25)
+	// Belum ada baris ledger (publikasi masih menunggu persetujuan mitra):
+	// nominal yang ditampilkan harus sudah dipotong platform, sama seperti yang
+	// nanti ditulis ke partner_earnings saat publikasi terbit. Tanpa ini mitra
+	// melihat harga penuh (Rp 10.000) padahal yang masuk saldo Rp 7.500.
+	grossAmount := splitRevenue(clientPrice, partnerPrice, pePlatformCutPercent)
+	partnerAmount := partnerNetAfterPlatformCut(grossAmount)
 	if v, ok := row.num("partner_amount"); ok {
 		partnerAmount = v
-	}
-	// gross = angka sebelum potongan platform; amount = yang diterima mitra.
-	// Baris lama tanpa gross_amount jatuh kembali ke amount (potongan 0) supaya
-	// rincian tetap masuk akal tanpa mengubah saldo historis.
-	grossAmount := partnerAmount
-	if v, ok := row.num("partner_amount_gross"); ok {
-		grossAmount = v
+		// gross = angka sebelum potongan platform; amount = yang diterima mitra.
+		// Baris lama tanpa gross_amount jatuh kembali ke amount (potongan 0)
+		// supaya rincian tetap masuk akal tanpa mengubah saldo historis.
+		grossAmount = partnerAmount
+		if g, okGross := row.num("partner_amount_gross"); okGross {
+			grossAmount = g
+		}
 	}
 
 	return map[string]any{
@@ -308,7 +313,7 @@ func partnerPublicationJSON(row rowMap) map[string]any {
 		"rss_published_at":              row.timePtr("rss_published_at"),
 		"notes":                         row.raw("notes"),
 		"rewrite_ai_count":              row.intOr("rewrite_ai_count", 0),
-		"rewrite_remain":                maxIntP(0, rewriteMaxPerPublicationPublic - row.intOr("rewrite_ai_count", 0)),
+		"rewrite_remain":                maxIntP(0, rewriteMaxPerPublicationPublic-row.intOr("rewrite_ai_count", 0)),
 		"rejection_reason":              row.raw("rejection_reason"),
 		"revision_reject_count":         row.intOr("revision_reject_count", 0),
 		"revision_reject_limit":         revisionRejectLimit,

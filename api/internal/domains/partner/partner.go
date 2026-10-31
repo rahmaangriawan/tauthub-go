@@ -454,6 +454,17 @@ func earningGross(row rowMap) float64 {
 	return row.numOr("amount")
 }
 
+// partnerNetAfterPlatformCut: penghasilan bersih mitra setelah potongan
+// platform. Rumusnya harus sama dengan peNetAfterPlatformCut di brandflow yang
+// dipakai saat ledger partner_earnings ditulis, supaya nominal yang dilihat
+// mitra sebelum menyetujui sama dengan yang nanti masuk ke saldo.
+func partnerNetAfterPlatformCut(gross float64) float64 {
+	if gross < 0 {
+		gross = 0
+	}
+	return round2(gross * (1 - pePlatformCutPercent/100))
+}
+
 // pePlatformCutPercentFor: persentase potongan yang benar-benar berlaku pada
 // satu earning. Kalau gross kosong/lebih kecil dari amount (baris historis
 // sebelum kolom gross_amount ada) hasilnya 0 — jangan mengarang potongan.
