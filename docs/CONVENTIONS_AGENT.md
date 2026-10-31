@@ -6,12 +6,16 @@
 
 ## 0. Aturan wajib
 
+> Aturan kerja umum (termasuk larangan menjalankan build/check tanpa perintah
+> user) ada di `AGENTS.md` di root repo. Baca itu dulu.
+
 1. **Jangan menebak.** Baca dulu sumber app lama di `/Users/mini/tauthub-ke-go/apps/web/src/`
    (untuk UI: `app/<area>/**/page.tsx` + `sections.tsx`; untuk API: `app/v1/**/route.ts`).
 2. **Port perilaku, bukan kira-kira.** String error, status code, urutan validasi,
    dan bentuk JSON harus sama dengan app lama.
 3. **Jangan jalankan verifikasi.** Jangan `go build`/`go vet`/`svelte-check`/`npm run build`/
    curl/test. Fokus menulis kode. Verifikasi terpusat dilakukan di akhir oleh koordinator.
+   Verifikasi hanya boleh dijalankan bila user memintanya secara eksplisit.
 4. **Jangan mengubah file milik agen lain.** Hanya sentuh file di daftar tugasmu.
 5. **Jangan `gofmt` seluruh repo.** Format hanya file yang kamu buat/ubah.
 6. **Jangan commit.** Koordinator yang commit.

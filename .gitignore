@@ -49,3 +49,9 @@ package-lock.json
 api/compat/fixtures.json
 api/compat/go-output.json
 api/compat/embed-fixtures.json
+
+# Cache skill tool (agent/Claude/Codex): berisi salinan skill pihak ketiga,
+# bukan kode aplikasi. Tiap mesin punya sendiri.
+.agents/
+.claude/
+agent/
