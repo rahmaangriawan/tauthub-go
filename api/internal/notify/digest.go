@@ -12,12 +12,16 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/email"
 )
 
-// Digest harian untuk notifikasi tier 3.
+// Digest harian untuk notifikasi yang email-nya memang ModeDigest.
 //
-// Tanpa digest, setiap event tier 3 yang kebetulan dipetakan ke email akan
-// menjadi satu email berbayar. Dengan digest, semua event tier 3 yang belum
-// dibaca dikumpulkan jadi satu email per user per hari. Kalau user sudah
-// membaca semuanya di aplikasi, tidak ada email yang keluar sama sekali.
+// Tanpa digest, setiap event yang dipetakan ke email akan menjadi satu email
+// berbayar. Dengan digest, semua event itu dikumpulkan jadi satu email per user
+// per hari. Kalau user sudah membaca semuanya di aplikasi, tidak ada email yang
+// keluar sama sekali.
+//
+// PENTING: digest hanya mengambil tipe dengan Email == ModeDigest. Tipe tier 3
+// yang Email-nya off (termasuk announcement.new) TIDAK ikut — pengumuman adalah
+// kanal in-app, bukan email.
 
 // DigestItem satu baris di dalam email ringkasan.
 type DigestItem struct {
@@ -72,10 +76,15 @@ func EnqueueDigestJobs(ctx context.Context, pool *pgxpool.Pool, now time.Time, m
 	if maxUsers < 1 {
 		maxUsers = 1
 	}
-	// Ambil kandidat: user dengan notifikasi tier 3 yang belum dibaca dan
-	// sudah berumur lebih dari minAge. Daftar tipe tier 3 diambil dari
-	// registry supaya menambah event baru tidak perlu menyunting query ini.
-	types := TierTypes(TierInfo)
+	// Ambil kandidat: user dengan notifikasi yang belum dibaca dan sudah
+	// berumur lebih dari minAge. Daftar tipe diambil dari registry, tetapi
+	// HANYA tipe yang email-nya memang ModeDigest.
+	//
+	// Sebelumnya di sini dipakai TierTypes(TierInfo) — seluruh tipe tier 3
+	// tanpa melihat mode email-nya. Akibatnya announcement.new (Email: off,
+	// in-app saja) ikut masuk email ringkasan. Tier saja tidak cukup untuk
+	// memutuskan kanal: registry tetap satu-satunya sumber kebenaran.
+	types := DigestTypes()
 	if len(types) == 0 {
 		return 0, nil
 	}
@@ -210,6 +219,40 @@ func TierTypes(tier int) []string {
 		}
 	}
 	// Urutan peta Go acak; sort supaya query plan dan log tidak berubah-ubah.
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j] < out[j-1]; j-- {
+			out[j], out[j-1] = out[j-1], out[j]
+		}
+	}
+	return out
+}
+
+// DigestTypes mengembalikan tipe yang email-nya boleh masuk ringkasan harian:
+// hanya tipe dengan Email == ModeDigest.
+//
+// Fungsi ini sengaja TERPISAH dari TierTypes. Digest adalah kanal email; tipe
+// yang Email-nya off (in-app saja) tidak boleh ikut hanya karena kebetulan
+// bertier Informasi. Itu penyebab pengumuman (announcement.new) terkirim ke
+// email pengguna: digest lama memakai TierTypes(TierInfo) tanpa membaca mode
+// email.
+//
+// Sengaja juga mengembalikan kosong bila tidak ada tipe yang didaftarkan
+// ModeDigest — lebih baik digest tidak mengirim apa pun daripada mengirim
+// event yang registry-nya bilang "jangan".
+func DigestTypes() []string {
+	out := make([]string, 0, len(policies))
+	for t, p := range policies {
+		// Pengumuman tidak pernah lewat email. Ini keputusan produk, bukan
+		// sekadar mengikuti mode: kotak pengumuman di aplikasi adalah kanal
+		// resminya. Dijaga di sini supaya menandai announcement.new sebagai
+		// ModeDigest di kemudian hari tidak diam-diam menghidupkan emailnya.
+		if strings.HasPrefix(t, "announcement.") {
+			continue
+		}
+		if p.Email == ModeDigest {
+			out = append(out, t)
+		}
+	}
 	for i := 1; i < len(out); i++ {
 		for j := i; j > 0 && out[j] < out[j-1]; j-- {
 			out[j], out[j-1] = out[j-1], out[j]
