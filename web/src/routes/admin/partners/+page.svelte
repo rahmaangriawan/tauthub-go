@@ -714,10 +714,10 @@
 		<Feedback {loading} {error} notice={chatNotice || waNotice} loadingText="Memuat partner…" />
 
 		<div class="app-card mt-4 overflow-x-auto">
-			<table class="w-full text-sm" style="min-width: 1360px;">
+			<table class="w-full text-sm" style="min-width: 1400px;">
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
-						<th class="px-4 py-2.5 font-medium">Partner</th>
+						<th class="px-4 py-2.5 font-medium min-w-[210px]">Partner</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Email")}</th>
 						<th class="px-4 py-2.5 font-medium">WA</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Email Alternatif")}</th>
@@ -743,8 +743,8 @@
 											</Tooltip>
 										{/if}
 										<p class="font-medium">{row.name ?? row.email}</p>
-										<p class="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground" title={tr('ID mitra ini bisa dicari di katalog media.')}>
-											<span>{tr('ID Mitra')}:</span>
+										<p class="mt-0.5 flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground" title={tr('ID mitra ini bisa dicari di katalog media.')}>
+											<span>{tr('ID')}:</span>
 											<code class="font-mono">{row.id.slice(0, 8)}</code>
 											<button
 												class="rounded p-0.5 hover:bg-secondary"

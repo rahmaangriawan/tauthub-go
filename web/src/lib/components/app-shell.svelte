@@ -180,6 +180,18 @@
 					title={isCollapsed ? `${tr('Perluas sidebar')} (⌘B)` : `${tr('Ciutkan sidebar')} (⌘B)`}
 					onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
 				>
+					<!-- Saat sidebar tertutup: favicon jadi tampilan default, ikon panel
+					     muncul saat hover/fokus supaya aksi perluas tetap terbaca. -->
+					{#if isCollapsed}
+						<img
+							src="/tauthub-icon.png"
+							alt=""
+							width="22"
+							height="22"
+							class="app-collapse-favicon"
+							aria-hidden="true"
+						/>
+					{/if}
 					<span class="app-collapse-icon-wrap" data-collapsed={isCollapsed ? 'true' : 'false'}>
 						{#if isCollapsed}
 							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">

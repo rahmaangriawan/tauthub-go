@@ -194,7 +194,9 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 											!pathname.startsWith('/admin/media-intelligence')
 									},
 									{ label: i18n.t.nav_admin.media_otomatis, href: '/admin/media-otomatis', active: pathname.startsWith('/admin/media-otomatis') },
-									{ label: i18n.t.nav_admin.media_intelligence, href: '/admin/media-intelligence', active: pathname.startsWith('/admin/media-intelligence') },
+									// "Media Intelligence" tidak lagi jadi submenu: isinya sudah
+									// menjadi tab Intelligence di /admin/media, dan rutenya
+									// hanya redirect ke sana. Menu terpisah jadi jalan buntu.
 									{ label: i18n.t.nav_admin.media_packages, href: '/admin/media-packages', active: pathname.startsWith('/admin/media-packages') },
 									{ label: i18n.t.nav_admin.media_standards, href: '/admin/media-standards', active: pathname.startsWith('/admin/media-standards') },
 									{ label: i18n.t.nav_admin.link_monitor, href: '/admin/link-monitor', active: pathname.startsWith('/admin/link-monitor') },
