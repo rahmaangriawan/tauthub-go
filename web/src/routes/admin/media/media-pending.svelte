@@ -3,7 +3,7 @@
 
 	// Tab Pending /admin/media — media baru menunggu review Admin (pending_review).
 	// Port MediaPendingSection di apps/web/src/app/admin/media/_sections.tsx.
-	import { Search } from '@lucide/svelte';
+	import { Search, MessageSquare } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import DataTable from '$lib/components/admin/data-table.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
@@ -35,6 +35,17 @@
 	let waConfirm = $state<Media | null>(null);
 	let rejectReason = $state('');
 	let reviewBusy = $state(false);
+
+	// Chat mitra pengaju: admin memulai percakapan lewat tiket dukungan yang
+	// sudah ada (POST /v1/platform/tickets). Tiket itu yang muncul di menu
+	// Dukungan milik mitra; mitra menerima lonceng + email + WA dari jalur
+	// balasan admin yang sama.
+	let chatTarget = $state<Media | null>(null);
+	let chatSubject = $state('');
+	let chatBody = $state('');
+	let chatBusy = $state(false);
+	let chatError = $state('');
+	let chatNotice = $state('');
 
 	let debouncedSearch = $state('');
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -141,6 +152,57 @@
 	const partnerHref = (info: { name: string; email: string | null }) =>
 		`/admin/partners?q=${encodeURIComponent(info.email || info.name)}`;
 
+	/** Buka modal chat untuk mitra pemilik media ini. */
+	function openChat(row: Media) {
+		chatTarget = row;
+		chatSubject = `Media ${row.name}`;
+		chatBody = '';
+		chatError = '';
+		chatNotice = '';
+	}
+
+	/**
+	 * Kirim pesan pembuka ke mitra lewat tiket dukungan.
+	 * Endpoint yang sama dengan tombol "Chat partner" di halaman Mitra, jadi
+	 * percakapan langsung muncul di menu Dukungan mitra dan di /admin/dukungan.
+	 */
+	async function sendChat() {
+		const target = chatTarget;
+		if (!target) return;
+		const info = partnerInfo(target);
+		if (!info.id) {
+			chatError = tr('Media ini belum terhubung ke mitra, jadi tidak ada yang bisa dihubungi.');
+			return;
+		}
+		const subject = chatSubject.trim();
+		const body = chatBody.trim();
+		chatError = '';
+		chatNotice = '';
+		if (!subject) {
+			chatError = tr('Subjek wajib diisi.');
+			return;
+		}
+		if (!body) {
+			chatError = tr('Pesan wajib diisi.');
+			return;
+		}
+		chatBusy = true;
+		try {
+			await platformRequest('/tickets', {
+				method: 'POST',
+				body: JSON.stringify({ partner_id: info.id, subject, body })
+			});
+			chatTarget = null;
+			chatSubject = '';
+			chatBody = '';
+			chatNotice = tr('Pesan terkirim ke menu Dukungan mitra.');
+		} catch (reason) {
+			chatError = errMessage(reason);
+		} finally {
+			chatBusy = false;
+		}
+	}
+
 	// Daftar perubahan mitra yang menunggu keputusan admin (migrasi 159).
 	const pendingChanges = (row: Media) => (Array.isArray(row.pending_changes) ? row.pending_changes : []);
 </script>
@@ -224,7 +286,7 @@
 {/snippet}
 
 {#snippet pendingActions(row: Media)}
-	<div class="flex gap-2">
+	<div class="flex flex-wrap gap-2">
 		<button
 			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
 			style="color: var(--success);"
@@ -240,6 +302,12 @@
 				rejectReason = '';
 				error = '';
 			}}>Tolak</button
+		>
+		<button
+			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+			title={tr('Kirim pesan ke mitra lewat tiket dukungan')}
+			disabled={chatBusy || !partnerInfo(row).id}
+			onclick={() => openChat(row)}><MessageSquare size={13} /> {tr('Chat')}</button
 		>
 	</div>
 {/snippet}
@@ -275,6 +343,9 @@
 	{#if error && !isAccessError(error)}
 		<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>
 	{/if}
+	{#if chatNotice}
+		<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--success);">{chatNotice}</div>
+	{/if}
 
 	<DataTable
 		columns={[
@@ -304,8 +375,7 @@
 {/if}
 
 {#if reviewTarget}
-	<Modal title={`Review media — ${reviewTarget.name}`} maxWidth="md" onClose={() => (reviewTarget = null)}>
-		<p class="text-sm">
+	<Modal title={`Review media — ${reviewTarget.name}`} maxWidth="md" onClose={() => (reviewTarget = null)}>		<p class="text-sm">
 			{tr('Mitra pengaju:')}
 			<strong>{partnerInfo(reviewTarget).name}</strong>{#if partnerInfo(reviewTarget).email} · <span class="text-muted-foreground">{partnerInfo(reviewTarget).email}</span>{/if}
 		</p>
@@ -330,6 +400,53 @@
 				</div>
 			</Modal>
 		{/if}
+
+	{#if chatTarget}
+		<Modal
+			title={`Chat — ${partnerInfo(chatTarget).name}`}
+			label={`Chat — ${partnerInfo(chatTarget).name}`}
+			maxWidth="md"
+			onClose={() => (chatTarget = null)}
+		>
+			<p class="text-sm text-muted-foreground">
+				{tr(
+					'Pesan ini masuk ke menu Dukungan mitra sebagai tiket. Mitra menerima notifikasi lonceng, email, dan WhatsApp — balasannya muncul di sana.'
+				)}
+			</p>
+			<p class="mt-2 text-xs text-muted-foreground">
+				{tr('Terkait media:')} <strong>{chatTarget.name}</strong>
+			</p>
+			<div class="mt-3 grid gap-1.5">
+				<span class="text-xs font-medium text-muted-foreground">{tr('Subjek')}</span>
+				<input
+					class="app-input text-sm"
+					maxlength="200"
+					bind:value={chatSubject}
+					placeholder={tr('Mis. Pertanyaan tentang media Anda')}
+					aria-label={tr('Subjek pesan')}
+				/>
+			</div>
+			<div class="mt-3 grid gap-1.5">
+				<span class="text-xs font-medium text-muted-foreground">{tr('Pesan')}</span>
+				<textarea
+					class="app-input min-h-[120px] text-sm"
+					maxlength="5000"
+					bind:value={chatBody}
+					placeholder={tr('Tulis pesan untuk mitra…')}
+					aria-label={tr('Isi pesan')}
+				></textarea>
+			</div>
+			{#if chatError}
+				<div class="mt-3 text-sm" style="color: var(--destructive);">{chatError}</div>
+			{/if}
+			{#snippet footer()}
+				<button class="app-btn app-btn-soft" type="button" disabled={chatBusy} onclick={() => (chatTarget = null)}>{tr('Batal')}</button>
+				<button class="app-btn app-btn-primary" type="button" disabled={chatBusy} onclick={() => void sendChat()}>
+					{chatBusy ? tr('Mengirim…') : tr('Kirim pesan')}
+				</button>
+			{/snippet}
+		</Modal>
+	{/if}
 
 	{#if waConfirm}
 		<Modal title={tr('Mitra belum mengisi nomor WhatsApp')} maxWidth="md" onClose={() => (waConfirm = null)}>
