@@ -205,6 +205,13 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 		orderBy = "sm.ai_trust_score DESC NULLS LAST, m.name ASC"
 	case "geo_asc":
 		orderBy = "sm.ai_trust_score ASC NULLS FIRST, m.name ASC"
+	// Trafik: kolomnya NOT NULL DEFAULT 0, jadi "terkecil" otomatis mulai dari
+	// nol — termasuk media yang belum pernah cek (0). Nama dipakai sebagai
+	// pemecah seri supaya urutan halaman stabil.
+	case "traffic_desc":
+		orderBy = "m.traffic_estimate DESC, m.name ASC"
+	case "traffic_asc":
+		orderBy = "m.traffic_estimate ASC, m.name ASC"
 	case "name_asc":
 		orderBy = "m.name ASC"
 	}

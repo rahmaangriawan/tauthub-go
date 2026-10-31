@@ -1184,6 +1184,8 @@
 				{ value: 'da_asc', label: tr('DA: terkecil → terbesar') },
 				{ value: 'geo_desc', label: tr('GEO: terbesar → terkecil') },
 				{ value: 'geo_asc', label: tr('GEO: terkecil → terbesar') },
+				{ value: 'traffic_desc', label: tr('Trafik: terbesar → terkecil') },
+				{ value: 'traffic_asc', label: tr('Trafik: terkecil → terbesar') },
 				{ value: 'name_asc', label: tr('Nama A-Z') }
 			]}
 		/>

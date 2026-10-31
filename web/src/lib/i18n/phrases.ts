@@ -2611,6 +2611,8 @@ export const PHRASE_EN: Record<string, string> = {
   "DA: terkecil → terbesar": "DA: lowest → highest",
   "GEO: terbesar → terkecil": "GEO: highest → lowest",
   "GEO: terkecil → terbesar": "GEO: lowest → highest",
+  "Trafik: terbesar → terkecil": "Traffic: highest → lowest",
+  "Trafik: terkecil → terbesar": "Traffic: lowest → highest",
   "Nama A-Z": "Name A-Z",
   "Percobaan terakhir ditolak provider": "Last attempt was rejected by the provider",
   "Domain uji": "Test domain",
