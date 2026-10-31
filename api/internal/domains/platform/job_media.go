@@ -88,7 +88,15 @@ func (d *Deps) MediaSimilarWebJob(ctx context.Context, mediaID string) error {
 		return nil
 	}
 	_, sErr := d.mpCheckSimilarWebInsights(ctx, mediaID, nrow.anyOrNil("website_url"), "scheduler", false)
-	return sErr
+	// JANGAN `return sErr` langsung: sErr bertipe *mpSimilarWebError, sehingga
+	// nil yang dikembalikan sebagai error menjadi interface non-nil. Runner
+	// menganggapnya gagal lalu memanggil Error() pada receiver nil → panic
+	// nil-pointer dan proses scheduler/worker ikut mati. Konversi eksplisit
+	// ini memastikan sukses benar-benar nil.
+	if sErr != nil {
+		return sErr
+	}
+	return nil
 }
 
 // ---------- kind: media_ai_summary ----------
