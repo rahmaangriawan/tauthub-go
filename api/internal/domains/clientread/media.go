@@ -89,7 +89,16 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 	// `WHERE media.status = 'active'`. Media arsip/nonaktif/hidden/pending_review
 	// tidak pernah tampil — baik di katalog klien maupun di The Matchmaker yang
 	// memakai endpoint yang sama.
-	clause := "WHERE media.status = 'active'"
+	//
+	// Media tanpa harga juga disembunyikan: katalog adalah daftar barang yang
+	// bisa dibeli, dan media berharga 0 tampil sebagai "Rp 0" sehingga klien
+	// mengira gratis. Penjagaan di sini adalah lapis pertama; lapis kedua ada di
+	// pembuatan publikasi/kampanye agar media lama tanpa harga pun tidak bisa
+	// dipesan lewat jalur lain.
+	// Media yang disuspend admin tidak boleh tampil di katalog: domainnya sedang
+	// bermasalah (pelanggaran). Penjagaan ini terpisah dari `status` karena
+	// suspend adalah kendali admin, sedangkan `status` sebagian dikelola mitra.
+	clause := "WHERE media.status = 'active' AND media.suspended_at IS NULL AND COALESCE(media.price, 0) > 0"
 	args := []any{}
 	addArg := func(v any) string {
 		args = append(args, v)

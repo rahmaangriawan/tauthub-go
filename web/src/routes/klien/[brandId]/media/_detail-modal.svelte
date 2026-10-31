@@ -814,9 +814,15 @@
 					<div class="detailFooterAmountCol">
 						<span class="detailFooterLabel">BIAYA PUBLIKASI</span>
 						<div class="detailFooterAmountGroup">
-							<span class="detailFooterPriceBig">
-								{idr(media.client_price ?? media.price)}
-							</span>
+							{#if (media.client_price ?? media.price ?? 0) > 0}
+								<span class="detailFooterPriceBig">
+									{idr(media.client_price ?? media.price)}
+								</span>
+							{:else}
+								<span class="detailFooterPriceBig" style="color: var(--muted-foreground); font-size: 15px;">
+									{tr('Belum ada harga')}
+								</span>
+							{/if}
 						</div>
 					</div>
 				</div>

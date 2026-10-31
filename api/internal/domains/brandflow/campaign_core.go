@@ -360,7 +360,7 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 	}
 
 	media, err := d.queryRow(ctx, `
-		SELECT m.id, m.name, m.price, m.status, m.partner_id, m.publication_mode, m.integration_type, m.auto_publish,
+		SELECT m.id, m.name, m.price, m.status, m.suspended_at, m.partner_id, m.publication_mode, m.integration_type, m.auto_publish,
 		       p.status AS partner_status, p.user_id AS partner_user_id, p.auto_publish_enabled,
 		       (SELECT client_name FROM brands WHERE id = $1) AS brand_client_name
 		FROM media m LEFT JOIN partners p ON p.id = m.partner_id
@@ -373,6 +373,19 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 	}
 	if media.strOr("status", "") != "active" {
 		return createdPublication{}, errConflict("Media is not active")
+	}
+	// Media yang disuspend admin tidak boleh menerima publikasi baru.
+	if media.has("suspended_at") {
+		return createdPublication{}, errConflict(
+			"Domain media ini sedang ditangguhkan. Publikasi baru tidak bisa dibuat sampai penangguhan dicabut admin.")
+	}
+	// Media tanpa harga tidak boleh dipesan. Tanpa penjagaan ini klien bisa
+	// memesan media berharga 0: biaya publikasinya 0 TC, artikel tetap terbit,
+	// dan mitra tidak menerima penghasilan — sementara katalog menampilkan
+	// "Rp 0" seolah gratis. Harga adalah syarat jual, bukan pelengkap.
+	if media.numOr("price") <= 0 {
+		return createdPublication{}, errConflict(
+			"Media ini belum menetapkan harga, jadi belum bisa dipesan. Silakan pilih media lain.")
 	}
 
 	existing, err := d.queryRow(ctx,

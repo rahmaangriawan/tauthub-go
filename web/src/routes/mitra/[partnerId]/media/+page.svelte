@@ -859,6 +859,14 @@
 				dialogError = tr('Pilih minimal 1 bahasa artikel.');
 				return;
 			}
+			// Harga wajib. Tanpa ini media tersimpan berharga 0 dan tampil sebagai
+			// "Rp 0" di katalog klien — klien mengira gratis, biaya publikasinya
+			// 0 TC, dan mitra tidak menerima penghasilan. Server juga menolak
+			// (422), tapi cek di sini memberi tahu mitra sebelum request dikirim.
+			if (!(Number(form.price) > 0)) {
+				dialogError = tr('Harga media wajib diisi (lebih dari 0) sebelum diajukan untuk review.');
+				return;
+			}
 			if (form.publication_mode === 'publish' && !integrasiConsent) {
 				dialogError = tr('Centang persetujuan Ketentuan Kerja Sama Mitra terlebih dahulu sebelum menyimpan media integrasi.');
 				return;
@@ -931,6 +939,12 @@
 	}
 
 	async function resubmit(m: Media) {
+		// Media tanpa harga tidak akan lolos validasi server (422). Cegah lebih awal
+		// dan arahkan mitra mengisi harganya, bukan menampilkan error mentah.
+		if (!(Number(m.price) > 0)) {
+			error = tr('Isi harga media dulu lewat tombol Edit sebelum mengajukannya kembali — media tanpa harga tidak bisa dipesan klien.');
+			return;
+		}
 		const res = await apiRequest(`/v1/partner/media/${m.id}/submit`, { method: 'POST' });
 		if (!res.ok) {
 			error = await readApiError(res, "Permintaan gagal.");
@@ -2626,15 +2640,24 @@
 									</div>
 
 									<div>
-										<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Harga Pengajuan (IDR)')}</span>
+										<span class="mb-1 block text-xs font-semibold text-slate-700">
+											{tr('Harga Pengajuan (IDR)')} <span style="color: var(--destructive, #c52b36);">*</span>
+										</span>
 										<input
 											class="app-input w-full text-sm font-semibold text-slate-800"
 											type="text"
 											inputmode="numeric"
 											placeholder="50.000"
+											aria-required="true"
+											aria-invalid={formPriceNumber > 0 ? undefined : 'true'}
 											value={form.price ? Number(form.price).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }) : ''}
 											oninput={(e) => (form.price = (e.currentTarget as HTMLInputElement).value.replace(/\D/g, ''))}
 										/>
+										{#if formPriceNumber <= 0}
+											<p class="mt-1 text-[11px]" style="color: var(--destructive, #c52b36);">
+												{tr('Harga wajib diisi. Media tanpa harga tidak akan tampil di katalog klien dan tidak bisa dipesan.')}
+											</p>
+										{/if}
 									</div>
 
 									<div class="rounded-xl border border-emerald-200/90 bg-emerald-50/50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2667,7 +2690,12 @@
 					<!-- ── Footer Tetap ── -->
 					<footer class="flex flex-none items-center justify-end gap-3 border-t border-slate-100 bg-white px-6 py-4">
 						<button class="app-btn app-btn-soft !px-5" type="button" onclick={() => (showForm = false)}>{tr('Batal')}</button>
-						<button class="app-btn app-btn-primary !px-5 font-semibold" type="submit" disabled={busy || (form.publication_mode === 'publish' && !integrasiConsent)}>
+						<button
+							class="app-btn app-btn-primary !px-5 font-semibold"
+							type="submit"
+							disabled={busy || !(formPriceNumber > 0) || (form.publication_mode === 'publish' && !integrasiConsent)}
+							title={formPriceNumber > 0 ? undefined : tr('Isi harga media dulu — media tanpa harga tidak bisa dipesan klien.')}
+						>
 							{busy ? tr('Menyimpan…') : editingId ? tr('Simpan perubahan') : tr('Tambah media')}
 						</button>
 					</footer>

@@ -339,6 +339,16 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		price = v
 	}
+	// Harga wajib. Media tanpa harga tampil di katalog klien sebagai "Rp 0" dan
+	// bisa dipesan seolah gratis — biaya publikasinya jadi 0 TC, dan klien
+	// menerima artikel tanpa pernah ditagih. Karena harga ditentukan mitra,
+	// pengajuan tanpa harga harus ditolak di sini, bukan dibiarkan masuk
+	// pending_review lalu disetujui admin tanpa angka.
+	if price <= 0 {
+		httpx.Error(w, http.StatusUnprocessableEntity,
+			"Harga media wajib diisi (lebih dari 0) sebelum diajukan untuk review.")
+		return
+	}
 	traffic := 0
 	if v, present := intField(body, "traffic_estimate"); present {
 		if v < 0 || float64(v) > 10_000_000_000 {

@@ -160,6 +160,13 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid price")
 		return
 	}
+	// Harga tidak boleh dikosongkan lewat edit. Media aktif yang harganya
+	// dihapus akan tampil "Rp 0" di katalog klien dan bisa dipesan gratis.
+	if hasPrice && price <= 0 {
+		httpx.Error(w, http.StatusUnprocessableEntity,
+			"Harga media wajib lebih dari 0. Media tanpa harga tidak bisa dipesan klien.")
+		return
+	}
 	traffic, hasTraffic := intField(body, "traffic_estimate")
 	if hasTraffic && (traffic < 0 || float64(traffic) > 10_000_000_000) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid traffic_estimate")
@@ -775,6 +782,14 @@ func (d *Deps) MediaSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	if row.strOr("status", "") != "rejected" {
 		d.writeErr(w, errConflict("Hanya media yang ditolak yang bisa diajukan ulang."))
+		return
+	}
+	// Harga wajib ada sebelum diajukan ulang. Tanpa ini media tanpa harga bisa
+	// kembali ke pending_review, disetujui, lalu tampil "Rp 0" di katalog klien
+	// dan bisa dipesan gratis (biaya publikasi 0 TC).
+	if row.numOr("price") <= 0 {
+		httpx.Error(w, http.StatusUnprocessableEntity,
+			"Harga media wajib diisi (lebih dari 0) sebelum diajukan ulang untuk review.")
 		return
 	}
 	if err := d.exec(r.Context(),

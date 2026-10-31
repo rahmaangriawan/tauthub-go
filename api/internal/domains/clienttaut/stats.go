@@ -128,11 +128,16 @@ func (d *Deps) addManualMedia(ctx context.Context, campaignID, brandID string, m
 	added := []string{}
 	skipped := []string{}
 	for _, mediaID := range mediaIDs {
-		m, err := d.queryRow(ctx, "SELECT id FROM media WHERE id = $1 AND status = 'active' LIMIT 1", mediaID)
+		// Media tanpa harga tidak boleh masuk kampanye: klien bisa memesan media
+		// "Rp 0" dari katalog, biaya publikasinya 0 TC, dan mitra tidak menerima
+		// penghasilan. Dilewati (bukan error) supaya media lain dalam pilihan
+		// tetap bisa dipakai, dan klien melihatnya di daftar "skipped".
+		m, err := d.queryRow(ctx,
+			"SELECT id, price FROM media WHERE id = $1 AND status = 'active' LIMIT 1", mediaID)
 		if err != nil {
 			return nil, err
 		}
-		if m == nil {
+		if m == nil || m.numOr("price") <= 0 {
 			skipped = append(skipped, mediaID)
 			continue
 		}

@@ -723,6 +723,13 @@
 	function toggleSelectRow(id: string, e: Event) {
 		e.stopPropagation();
 		if (archivedIds.has(id)) return; // media maintenance tidak bisa dipilih
+		// Media tanpa harga tidak bisa dipesan (server menolaknya). Mencegah di sini
+		// supaya klien tidak memilih lalu kecewa saat kampanye dibuat.
+		const row = rows.find((x) => x.id === id);
+		if (row && !((row.client_price ?? row.price ?? 0) > 0) && !selectedIds.has(id)) {
+			err = tr('Media ini belum menetapkan harga, jadi belum bisa dipesan.');
+			return;
+		}
 		const next = new Set(selectedIds);
 		if (next.has(id)) {
 			next.delete(id);
@@ -1192,6 +1199,14 @@
 	}
 
 	function proceedFromDetail(m: Media) {
+		// Media tanpa harga tidak bisa dipesan (server menolak pembuatan publikasi
+		// maupun kampanye untuk media seperti ini).
+		if (!((m.client_price ?? m.price ?? 0) > 0)) {
+			err = tr('Media ini belum menetapkan harga, jadi belum bisa dipesan.');
+			detail = null;
+			detailFromMatchmaker = false;
+			return;
+		}
 		const snap = selectedSnapshot[m.id] ?? {
 			name: domainLabel(m),
 			price: m.client_price ?? m.price ?? 0,
@@ -1805,7 +1820,11 @@
 								<td class="modernTd">
 									<div class="mediaRowCol">
 									<!-- Harga versi HP: kolom Harganya disembunyikan di layar kecil. -->
-									<span class="priceMobile">Rp {fmt(m.client_price ?? m.price ?? 0)}</span>
+									{#if (m.client_price ?? m.price ?? 0) > 0}
+										<span class="priceMobile">Rp {fmt(m.client_price ?? m.price ?? 0)}</span>
+									{:else}
+										<span class="priceMobile" style="color: var(--muted-foreground);">{tr('Belum ada harga')}</span>
+									{/if}
 										<div class="mediaTitleLine">
 											<!-- Favicon situs media (Google s2; pola sama dengan bar
 											     terpilih di bawah). Gagal memuat → dihilangkan. -->
@@ -1996,7 +2015,17 @@
 										</div>
 								</td>
 
-								<td class="modernTd"><span class="priceBoldText">Rp {fmt(m.client_price ?? m.price ?? 0)}</span></td>
+								<td class="modernTd">
+									{#if (m.client_price ?? m.price ?? 0) > 0}
+										<span class="priceBoldText">Rp {fmt(m.client_price ?? m.price ?? 0)}</span>
+									{:else}
+										<!-- Media tanpa harga tidak bisa dipesan; jangan tampilkan "Rp 0"
+										     yang terbaca sebagai gratis. -->
+										<span class="priceBoldText" style="color: var(--muted-foreground);" title={tr('Media ini belum menetapkan harga, jadi belum bisa dipesan.')}>
+											{tr('Belum ada harga')}
+										</span>
+									{/if}
+								</td>
 
 								<td class="modernTd" style="text-align:right">
 									<div class="actionBtnGroup">
