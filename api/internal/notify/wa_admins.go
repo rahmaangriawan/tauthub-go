@@ -89,8 +89,12 @@ func EnqueueAdminsWA(ctx context.Context, pool *pgxpool.Pool, opts AdminWAOption
 	}
 	var savedBody string
 	var savedEnabled bool
+	// Filter audiens wajib: tabel sekarang punya PRIMARY KEY (event, audience),
+	// jadi event yang sama bisa punya baris mitra/klien. Tanpa filter ini admin
+	// bisa terkirim teks milik audiens lain.
 	if err := pool.QueryRow(ctx,
-		"SELECT body, enabled FROM wa_templates WHERE event = $1 LIMIT 1", opts.Event).
+		"SELECT body, enabled FROM wa_templates WHERE event = $1 AND audience = $2 LIMIT 1",
+		opts.Event, AudienceAdmin).
 		Scan(&savedBody, &savedEnabled); err == nil {
 		if !savedEnabled {
 			return 0
