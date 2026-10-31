@@ -24,6 +24,11 @@ const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.public_slug, m.public_
        sm.da AS seo_da, sm.ai_trust_score AS seo_ai_trust, sm.ai_citation AS seo_ai_citation, sm.checked_at AS seo_checked_at,
        COALESCE(np.wa_number, '') AS partner_wa_number, COALESCE(np.wa_consent, FALSE) AS partner_wa_consent,
        (SELECT COUNT(*) FROM media mm WHERE mm.partner_id = m.partner_id AND mm.status <> 'hidden') AS partner_media_count,
+       (SELECT COUNT(*) FROM publications p WHERE p.media_id = m.id AND p.status = 'published') AS published_count,
+       m.suspended_at, m.suspended_reason,
+       COALESCE((SELECT v.level FROM media_violations v
+                 WHERE v.media_id = m.id AND v.revoked_at IS NULL
+                 ORDER BY v.created_at DESC LIMIT 1), 'none') AS violation_level,
        CASE
          WHEN m.integration_type = 'manual' THEN FALSE
          WHEN m.integration_type = 'custom_web' THEN COALESCE(m.custom_web_status, '') = 'connected'
@@ -176,8 +181,16 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	// Urutan skor memakai kolom yang sudah di-LEFT JOIN (sm): media tanpa skor
-	// selalu di belakang (NULLS LAST) berapa pun arahnya.
+	// Urutan skor memakai kolom yang sudah di-LEFT JOIN (sm).
+	//
+	// Arah "terkecil → terbesar" menaruh media TANPA skor di paling atas
+	// (NULLS FIRST), bukan di belakang: media yang belum punya DA adalah nilai
+	// terendah yang sebenarnya (belum diukur), dan itulah yang biasanya ingin
+	// dilihat admin saat memilih urutan ini — mereka yang perlu dicek, bukan
+	// yang sudah punya angka kecil.
+	//
+	// Arah "terbesar → terkecil" tetap NULLS LAST: media berskor tinggi dulu,
+	// media belum diukur di belakang.
 	orderBy := "m.updated_at DESC"
 	if scope == "recent" {
 		// Tab "Baru Ditambahkan": yang paling baru disetujui tampil paling atas.
@@ -187,11 +200,11 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	case "da_desc":
 		orderBy = "sm.da DESC NULLS LAST, m.name ASC"
 	case "da_asc":
-		orderBy = "sm.da ASC NULLS LAST, m.name ASC"
+		orderBy = "sm.da ASC NULLS FIRST, m.name ASC"
 	case "geo_desc":
 		orderBy = "sm.ai_trust_score DESC NULLS LAST, m.name ASC"
 	case "geo_asc":
-		orderBy = "sm.ai_trust_score ASC NULLS LAST, m.name ASC"
+		orderBy = "sm.ai_trust_score ASC NULLS FIRST, m.name ASC"
 	case "name_asc":
 		orderBy = "m.name ASC"
 	}
@@ -402,14 +415,26 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeAuditBestEffort(d, r.Context(), user.ID, "platform.media.created", "media", id)
-	// Media baru langsung dicek DA/AI Trust-nya, tidak menunggu sweep scheduler.
-	d.mpEnqueueSeoRefreshForMedia(r.Context(), id)
+	// Media baru langsung dicek DA/AI Trust dan trafiknya, tidak menunggu sweep
+	// scheduler. Keduanya lewat satu pintu supaya guard kredensial berlaku.
+	d.mpEnqueueMediaChecks(r.Context(), id, mpCheckAll, "media.created")
 	created, err := d.queryRow(r.Context(), "SELECT * FROM media WHERE id = $1 LIMIT 1", id)
 	if err != nil || created == nil {
 		writeErr(w, d, mpMediaError(err))
 		return
 	}
 	writeJSON(w, http.StatusCreated, d.mpMediaJSON(ptRow(ptNormalizeMap(created)), markup))
+}
+
+// mpSameDomain: bandingkan dua URL berdasarkan domainnya, bukan string mentah,
+// supaya "https://a.com" dan "http://www.a.com/" dianggap sama dan tidak memicu
+// pemeriksaan ulang yang tidak perlu.
+func mpSameDomain(a, b string) bool {
+	da, _ := mpDomainFromWebsite(a).(string)
+	db, _ := mpDomainFromWebsite(b).(string)
+	da = strings.ToLower(strings.TrimPrefix(da, "www."))
+	db = strings.ToLower(strings.TrimPrefix(db, "www."))
+	return da == db
 }
 
 var mpSlugRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -631,6 +656,28 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		ptNullableArgStr(pricingType, hasPricingType), mediaID); err != nil {
 		writeErr(w, d, mpMediaError(err))
 		return
+	}
+
+	// ---------- domain berubah: arsipkan angka lama, lalu periksa ulang ----------
+	// Ini kasus "domain baru" yang paling sering terlewat: media sudah ada,
+	// tapi website_url-nya diganti. Tanpa penanganan di sini, DA/PA/AI Trust dan
+	// angka trafik milik domain LAMA tetap tampil seolah milik domain baru.
+	oldWebsite := existing.strOr("website_url", "")
+	domainChanged := hasWebsite && !mpSameDomain(oldWebsite, websiteURL)
+	if domainChanged {
+		d.mpArchiveSeoMetricsForDomainChange(r.Context(), mediaID, oldWebsite, websiteURL)
+		d.mpResetTrafficForDomainChange(r.Context(), mediaID)
+		writeAuditBestEffort(d, r.Context(), user.ID, "media.domain_changed", "media", mediaID)
+	}
+	// Status menjadi aktif (termasuk pemulihan dari arsip/hidden) juga memicu
+	// pemeriksaan: media baru kembali tampil di direktori dengan data lama.
+	becameActive := hasStatus && status == "active" &&
+		existing.strOr("status", "") != "active"
+	switch {
+	case domainChanged:
+		d.mpEnqueueMediaChecks(r.Context(), mediaID, mpCheckAll, "media.domain_changed")
+	case becameActive:
+		d.mpEnqueueMediaChecks(r.Context(), mediaID, mpCheckAll, "media.activated")
 	}
 
 	// Simpan DA manual sebelum membaca ulang media, supaya nilainya ikut terlihat.
@@ -859,6 +906,14 @@ func (d *Deps) MediaReview(w http.ResponseWriter, r *http.Request) {
 	nextStatus := "rejected"
 	nextPriceStatus := "ditolak"
 	if decision == "approve" {
+		// Media tanpa harga tidak boleh disetujui: begitu berstatus active ia
+		// tampil di katalog klien sebagai "Rp 0" dan bisa dipesan, sehingga
+		// biaya publikasinya 0 TC dan klien tidak pernah ditagih.
+		if media.numOr("price") <= 0 {
+			writeErr(w, d, errUnprocessable(
+				"Media ini belum punya harga. Minta mitra mengisi harga dulu, atau tolak pengajuannya."))
+			return
+		}
 		nextStatus, nextPriceStatus = "active", "disetujui"
 	}
 	priceStatus := media.strOr("price_status", "menunggu_review")
@@ -880,8 +935,9 @@ func (d *Deps) MediaReview(w http.ResponseWriter, r *http.Request) {
 	if decision == "approve" {
 		action = "media.approved"
 		// Pengajuan mitra yang belum punya metrik (mis. website_url diisi belakangan
-		// atau pemeriksaan sebelumnya gagal) dicek saat disetujui.
-		d.mpEnqueueSeoRefreshForMedia(r.Context(), mediaID)
+		// atau pemeriksaan sebelumnya gagal) dicek saat disetujui — sekaligus
+		// trafiknya, karena media baru masuk direktori pada momen ini.
+		d.mpEnqueueMediaChecks(r.Context(), mediaID, mpCheckAll, "media.approved")
 	}
 	writeAuditBestEffort(d, r.Context(), user.ID, action, "media", mediaID)
 

@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"regexp"
@@ -303,8 +304,16 @@ func findMetrics(root any, domain string) (*float64, *float64, *float64) {
 			da := pickNumber(v, daKeys)
 			pa := pickNumber(v, paKeys)
 			if da != nil && pa != nil {
-				bestDA, bestPA = da, pa
-				spam = pickNumber(v, spamKeys)
+				// Clamp di sini, bukan di pemakai: kolom DB punya CHECK 0..100 dan
+				// beberapa penyedia mengirim -1 untuk "tidak diketahui".
+				// Nilai negatif jadi nil → domain dianggap "tidak lengkap" dan
+				// masuk daftar Missing, bukan tersimpan sebagai 0 palsu.
+				cda, cpa := clampScore(da), clampScore(pa)
+				if cda == nil || cpa == nil {
+					return
+				}
+				bestDA, bestPA = cda, cpa
+				spam = clampScore(pickNumber(v, spamKeys))
 				return
 			}
 			for _, child := range v {
@@ -340,6 +349,28 @@ func findMetrics(root any, domain string) (*float64, *float64, *float64) {
 	}
 	walk(root)
 	return bestDA, bestPA, spam
+}
+
+// clampScore: paksa nilai ke 0..100. Provider kadang mengirim -1 (tanda
+// "tidak diketahui"), persen di atas 100, atau angka pecahan; kolom DB
+// (da/pa/spam_score smallint) punya CHECK 0..100 sehingga nilai mentah
+// langsung menggagalkan INSERT dengan "violates check constraint".
+// Nilai negatif dianggap "tidak ada data" → nil, bukan 0: 0 berarti "spam
+// sangat rendah" (kabar baik), sedangkan -1 berarti "tidak diukur".
+func clampScore(v *float64) *float64 {
+	if v == nil {
+		return nil
+	}
+	f := *v
+	if f < 0 {
+		return nil
+	}
+	if f > 100 {
+		f = 100
+	}
+	f = math.Round(f)
+	out := f
+	return &out
 }
 
 func pickNumber(m map[string]any, keys []string) *float64 {

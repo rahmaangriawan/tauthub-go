@@ -334,6 +334,16 @@ func (d *Deps) mpMediaJSON(row ptRow, markupPercent float64) map[string]any {
 		"created_by":             row.anyOrNil("created_by"),
 		"created_at":             row.anyOrNil("created_at"),
 		"updated_at":             row.anyOrNil("updated_at"),
+		// Panel detail media: jumlah artikel yang sudah benar-benar terbit lewat
+		// media ini. Dihitung di query daftar (published_count).
+		"published_count": row.intOr("published_count", 0),
+		// Status penangguhan. Dipisah dari `status` karena suspend adalah kendali
+		// admin yang tidak boleh diubah mitra lewat halaman media mereka.
+		"suspended_at":     row.anyOrNil("suspended_at"),
+		"suspended_reason": row.anyOrNil("suspended_reason"),
+		"is_suspended":     row.has("suspended_at"),
+		// Tingkat pelanggaran aktif terakhir (none/ringan/berat), diisi subquery.
+		"violation_level": row.strOr("violation_level", "none"),
 	}
 	for k, v := range mpMediaPriceFields(partnerPrice, markupPercent) {
 		payload[k] = v
@@ -962,11 +972,21 @@ func (d *Deps) mpCheckAndStoreSeoMetrics(ctx context.Context, mediaID string, we
 	cited, citationChecked := mpCitationArgs(citation, cached)
 	citationOK := citation != nil && !citation.Unavailable
 
+	// Jaring pengaman terakhir sebelum menulis ke DB: kolom da/pa/spam_score
+	// bertipe smallint dengan CHECK 0..100. Penyedia bisa mengirim -1 (tanda
+	// "tidak diketahui") atau nilai persen di atas 100; tanpa normalisasi di
+	// sini seluruh INSERT gagal dengan "violates check constraint" dan media
+	// itu tidak pernah mendapat skor sama sekali.
+	metrics = mpNormalizeSeoMetrics(metrics)
+
 	if providerErr != nil && metrics["da"] == nil && metrics["pa"] == nil && metrics["spam_score"] == nil &&
 		aiTrust == nil && !citationOK {
 		return mpSeoResult{}, providerErr
 	}
 
+	// Catat domain yang diukur supaya baris ini bisa dibedakan dari domain lain
+	// bila website media berganti di kemudian hari.
+	metrics["domain"] = domain
 	if err := d.mpUpsertSeoMetrics(ctx, mediaID, metrics, aiTrust, cited, citationChecked); err != nil {
 		return mpSeoResult{}, err
 	}
@@ -1050,8 +1070,8 @@ func (d *Deps) mpUpdateAiSignals(ctx context.Context, mediaID string, aiTrust *f
 
 func (d *Deps) mpUpsertSeoMetrics(ctx context.Context, mediaID string, metrics map[string]any, aiTrust *float64, cited, checked any) error {
 	return d.exec(ctx, `
-		INSERT INTO media_seo_metrics (media_id, da, pa, spam_score, ai_trust_score, ai_citation, ai_citation_checked_at, checked_at, source, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, NOW())
+		INSERT INTO media_seo_metrics (media_id, da, pa, spam_score, ai_trust_score, ai_citation, ai_citation_checked_at, checked_at, source, domain, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, NOW())
 		ON CONFLICT (media_id) DO UPDATE SET
 		  da = COALESCE(EXCLUDED.da, media_seo_metrics.da),
 		  pa = COALESCE(EXCLUDED.pa, media_seo_metrics.pa),
@@ -1065,8 +1085,20 @@ func (d *Deps) mpUpsertSeoMetrics(ctx context.Context, mediaID string, metrics m
 		  ai_citation_checked_at = EXCLUDED.ai_citation_checked_at,
 		  checked_at = EXCLUDED.checked_at,
 		  source = EXCLUDED.source,
+		  domain = COALESCE(EXCLUDED.domain, media_seo_metrics.domain),
 		  updated_at = NOW()`,
-		mediaID, metrics["da"], metrics["pa"], metrics["spam_score"], mpFloatArg(aiTrust), cited, checked, "rapidapi-domain-metrics")
+		mediaID, metrics["da"], metrics["pa"], metrics["spam_score"], mpFloatArg(aiTrust), cited, checked, "rapidapi-domain-metrics",
+		mpDomainArg(metrics["domain"]))
+}
+
+// mpDomainArg: nilai kolom domain; string kosong menjadi NULL supaya COALESCE
+// tidak menimpa domain yang sudah tercatat dengan string kosong.
+func mpDomainArg(v any) any {
+	s, ok := v.(string)
+	if !ok || strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return strings.TrimSpace(s)
 }
 
 // mpSetManualDA: admin mengisi Domain Authority sendiri (deteksi otomatis tidak
@@ -1106,6 +1138,58 @@ func mpFloatArg(p *float64) any {
 		return nil
 	}
 	return *p
+}
+
+// mpNormalizeSeoMetrics: pastikan da/pa/spam_score selalu berada di 0..100
+// (atau nil) sebelum ditulis ke kolom smallint ber-CHECK.
+//
+// Nilai negatif dianggap "tidak ada data" → nil, bukan 0. Bedanya penting:
+// spam 0 berarti "sangat bersih", sedangkan -1 dari penyedia berarti "tidak
+// diukur" — menyimpannya sebagai 0 akan menampilkan kabar baik palsu.
+func mpNormalizeSeoMetrics(in map[string]any) map[string]any {
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	for _, key := range []string{"da", "pa", "spam_score"} {
+		out[key] = mpNormalizeScoreArg(out[key])
+	}
+	return out
+}
+
+// mpNormalizeScoreArg: terima angka dalam bentuk apa pun dari penyedia
+// (float64, int, string angka), bulatkan, lalu clamp ke 0..100.
+func mpNormalizeScoreArg(v any) any {
+	var f float64
+	switch t := v.(type) {
+	case nil:
+		return nil
+	case float64:
+		f = t
+	case float32:
+		f = float64(t)
+	case int:
+		f = float64(t)
+	case int64:
+		f = float64(t)
+	case int32:
+		f = float64(t)
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
+		if err != nil {
+			return nil
+		}
+		f = parsed
+	default:
+		return nil
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+		return nil
+	}
+	if f > 100 {
+		f = 100
+	}
+	return math.Round(f)
 }
 
 // ---------- SimilarWeb (port lib/media/similarweb.ts) ----------
@@ -2586,30 +2670,10 @@ func mpHTMLEscape(v string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;").Replace(v)
 }
 
-// mpRenderDetailEmail: parity detailTemplate + baseTemplate (bahasa Indonesia,
-// mobile-first) — HTML email dibuat lokal agar paket platform tidak bergantung
-// pada template email (yang belum punya registri media.dewan_pers di Go).
+// mpRenderDetailEmail: kartu email standar (judul + rincian + tombol) dari
+// package email, jadi logo dan footer brand tidak lagi berbeda antar-domain.
 func mpRenderDetailEmail(title string, rows [][2]string, link, linkLabel string) string {
-	var rowHTML strings.Builder
-	for _, r := range rows {
-		rowHTML.WriteString(`<tr><td style="padding:6px 0;color:#475569;font-size:13px;width:140px;">` +
-			mpHTMLEscape(r[0]) + `</td><td style="padding:6px 0;font-size:14px;color:#0f172a;">` + mpHTMLEscape(r[1]) + `</td></tr>`)
-	}
-	tableHTML := ""
-	if len(rows) > 0 {
-		tableHTML = `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:16px 0;border-collapse:collapse;">` + rowHTML.String() + `</table>`
-	}
-	linkBlock := ""
-	if link != "" {
-		linkBlock = `<p style="margin: 24px 0; text-align: center;"><a href="` + mpHTMLEscape(link) +
-			`" target="_blank" rel="noopener" style="background:#1d4ed8;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">` +
-			mpHTMLEscape(linkLabel) + `</a></p>`
-	}
-	return `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>` +
-		mpHTMLEscape(title) + `</title></head><body style="margin:0;padding:24px;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">` +
-		`<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;"><tr><td style="padding:24px;">` +
-		`<h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">` + mpHTMLEscape(title) + `</h1>` + tableHTML + linkBlock +
-		`</td></tr></table></body></html>`
+	return email.Detail(title, "", rows, link, linkLabel).HTML
 }
 
 // mpWAFollowUp: antre WhatsApp ke mitra (best-effort). Mirip routeWaNotification:
