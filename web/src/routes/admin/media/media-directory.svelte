@@ -1232,13 +1232,8 @@
 			<Plus size={15} />{tr("Tambah media")}</button>
 	</div>
 
-	{#if swStatus && (swStatus.pending_jobs > 0 || swStatus.failed_last_hour > 0)}
-		<p class="mt-2 text-xs text-muted-foreground">
-			Antrean trafik: {swStatus.pending_jobs} menunggu{swStatus.running_jobs ? `, ${swStatus.running_jobs} berjalan` : ''}
-			{swStatus.failed_last_hour ? `, ${swStatus.failed_last_hour} gagal dalam sejam` : ''}.
-			{swStatus.last_error ? `Sebab gagal terakhir: ${swStatus.last_error}` : ''}
-		</p>
-	{/if}
+	<!-- Status antrean trafik dan sebab kegagalan terakhir dipindah ke tab Log
+	     supaya tidak memakan ruang halaman kerja direktori. -->
 	<!-- Chip "Cek otomatis": memberi tahu apakah DA & trafik diperiksa sendiri oleh
 	     sistem, atau berhenti karena kredensial penyedia belum lengkap. Tanpa ini
 	     admin hanya melihat angka 0 dan tidak tahu apakah sistem bekerja. -->

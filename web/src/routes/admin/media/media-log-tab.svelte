@@ -28,8 +28,20 @@
 
 	type Summary = { failed: number; pending: number; running: number; completed: number; cancelled: number };
 
+	// Ringkasan antrean cek trafik (khusus SimilarWeb) — dulu tampil sebagai teks
+	// di atas tabel direktori dan mengganggu halaman kerja. Di sini tempatnya:
+	// satu panel kecil di atas daftar log, hanya muncul bila ada antrean atau
+	// kegagalan yang perlu diketahui.
+	type TrafficStatus = {
+		pending_jobs: number;
+		running_jobs: number;
+		failed_last_hour: number;
+		last_error: string;
+	};
+
 	let items = $state<LogItem[]>([]);
 	let summary = $state<Summary>({ failed: 0, pending: 0, running: 0, completed: 0, cancelled: 0 });
+	let traffic = $state<TrafficStatus | null>(null);
 	let loading = $state(true);
 	let error = $state('');
 	let statusFilter = $state('');
@@ -57,6 +69,13 @@
 			const data = await platformRequest<{ items: LogItem[]; summary_24h: Summary }>(`/media/job-log?${params}`);
 			items = data.items ?? [];
 			summary = data.summary_24h ?? summary;
+			// Status antrean trafik bersifat pelengkap: kegagalan endpoint ini
+			// tidak boleh menggagalkan muatan log utama.
+			try {
+				traffic = await platformRequest<TrafficStatus>('/media/similarweb-status');
+			} catch {
+				traffic = null;
+			}
 		} catch (reason) {
 			error = errMessage(reason);
 		} finally {
@@ -107,6 +126,20 @@
 		<RefreshCw size={14} class={loading ? 'animate-spin' : ''} /> {loading ? tr('Memuat…') : tr('Muat ulang')}
 	</button>
 </div>
+
+{#if traffic && (traffic.pending_jobs > 0 || traffic.failed_last_hour > 0 || traffic.last_error)}
+	<div class="app-card mt-3 px-4 py-2.5 text-xs">
+		<p class="font-medium">{tr('Antrean cek trafik (SimilarWeb)')}</p>
+		<p class="mt-1 text-muted-foreground">
+			{traffic.pending_jobs} {tr('menunggu')}{traffic.running_jobs
+				? `, ${traffic.running_jobs} ${tr('berjalan')}`
+				: ''}{traffic.failed_last_hour ? `, ${traffic.failed_last_hour} ${tr('gagal dalam sejam')}` : ''}.
+			{#if traffic.last_error}
+				<span class="block mt-1">{tr('Sebab gagal terakhir')}: {traffic.last_error}</span>
+			{/if}
+		</p>
+	</div>
+{/if}
 
 <div class="mt-2 flex flex-wrap items-center gap-1 text-xs">
 	<button
