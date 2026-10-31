@@ -371,6 +371,10 @@ func (d *Deps) MediaRestoreArchived(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		writeAuditBestEffort(d, r.Context(), user.ID, "media.restored", "media", mediaID)
+		// Media kembali tampil di direktori: pastikan DA dan trafiknya terisi.
+		// Guard di dalam helper mencegah antrean ganda dan melewati media yang
+		// penyedianya belum dikonfigurasi.
+		d.mpEnqueueMediaChecks(r.Context(), mediaID, mpCheckAll, "media.restored")
 		restored++
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"restored": restored, "total": len(archived)})
@@ -970,6 +974,11 @@ func (d *Deps) MediaSimilarWebStatus(w http.ResponseWriter, r *http.Request) {
 	if lastErrRow != nil {
 		lastError = lastErrRow.strOr("last_error", "")
 	}
+	// Kesiapan penyedia: UI memakai ini untuk membedakan "tidak ada yang perlu
+	// dicek" dari "pemeriksaan otomatis berhenti karena kredensial kurang".
+	// Tanpa penanda ini, admin hanya melihat angka 0 dan mengira sistem diam.
+	ready := d.mpCheckProviderReadiness(r.Context())
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pending_jobs":     pending,
 		"queued_jobs":      queued,
@@ -977,6 +986,12 @@ func (d *Deps) MediaSimilarWebStatus(w http.ResponseWriter, r *http.Request) {
 		"failed_last_hour": failed,
 		"stale":            stale,
 		"last_error":       lastError,
+		// auto_ready = apakah pemeriksaan otomatis bisa berjalan sekarang.
+		"auto_ready":         ready.Traffic && ready.Seo,
+		"traffic_ready":      ready.Traffic,
+		"traffic_blocked_by": ready.TrafficReason,
+		"seo_ready":          ready.Seo,
+		"seo_blocked_by":     ready.SeoReason,
 	})
 }
 

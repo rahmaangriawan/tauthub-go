@@ -34,18 +34,18 @@ import (
 
 // SchedulerResult: hitungan per langkah (parity bentuk respons runScheduler).
 type SchedulerResult struct {
-	PlanOccurrencesMaterialized int `json:"plan_occurrences_materialized"`
-	PlanOccurrencesFailed       int `json:"plan_occurrences_failed"`
-	PublicationsTriggered       int `json:"publications_triggered"`
-	PartnerRemindersSent        int `json:"partner_reminders_sent"`
-	LateApprovalNotified        int `json:"late_approval_notified"`
-	SLAExtended                 int `json:"sla_extended"`
-	SLACancelled                int `json:"sla_cancelled"`
-	ForfeitWarned               int `json:"forfeit_warned"`
-	BalanceForfeited            int `json:"balance_forfeited"`
-	MediaHealthRefreshed        int `json:"media_health_refreshed"`
-	UploadsPurged               int `json:"uploads_purged"`
-	JobsProcessed               int `json:"jobs_processed"`
+	PlanOccurrencesMaterialized int   `json:"plan_occurrences_materialized"`
+	PlanOccurrencesFailed       int   `json:"plan_occurrences_failed"`
+	PublicationsTriggered       int   `json:"publications_triggered"`
+	PartnerRemindersSent        int   `json:"partner_reminders_sent"`
+	LateApprovalNotified        int   `json:"late_approval_notified"`
+	SLAExtended                 int   `json:"sla_extended"`
+	SLACancelled                int   `json:"sla_cancelled"`
+	ForfeitWarned               int   `json:"forfeit_warned"`
+	BalanceForfeited            int   `json:"balance_forfeited"`
+	MediaHealthRefreshed        int   `json:"media_health_refreshed"`
+	UploadsPurged               int   `json:"uploads_purged"`
+	JobsProcessed               int   `json:"jobs_processed"`
 	RetentionDeleted            int64 `json:"retention_deleted"`
 	RetentionArchived           int64 `json:"retention_archived"`
 }
@@ -1201,18 +1201,18 @@ func (d *Deps) schComputeMediaHealth(ctx context.Context, mediaID string) (int, 
 		displayAvg = &v
 	}
 	breakdown := map[string]any{
-		"availability":      schZeroIf(noHistory, availability),
-		"success_rate":      schRound2If(noHistory, successRate),
-		"publish_time":      schZeroIf(noHistory, publishTime),
-		"rejection_rate":    schRound2If(noHistory, rejectionRate),
-		"operational_total": schZeroIf(noHistory, operationalTotal),
-		"quality":           schFloatArg(quality),
-		"quality_source":    qualitySource,
-		"reach":             nil,
-		"total":             int(totalScore),
-		"published":         published,
-		"rejected":          rejected,
-		"failed":            failed,
+		"availability":          schZeroIf(noHistory, availability),
+		"success_rate":          schRound2If(noHistory, successRate),
+		"publish_time":          schZeroIf(noHistory, publishTime),
+		"rejection_rate":        schRound2If(noHistory, rejectionRate),
+		"operational_total":     schZeroIf(noHistory, operationalTotal),
+		"quality":               schFloatArg(quality),
+		"quality_source":        qualitySource,
+		"reach":                 nil,
+		"total":                 int(totalScore),
+		"published":             published,
+		"rejected":              rejected,
+		"failed":                failed,
 		"avg_publish_hours":     schFloatArg(displayAvg),
 		"avg_publish_hours_raw": schFloatArg(avgPublishHours),
 	}
@@ -1496,6 +1496,38 @@ func (d *Deps) schEnqueueMediaAiRefreshes(ctx context.Context, limit int) {
 
 // ---------- 8c. similarweb check (antrean otomatis) ----------
 
+// schTrafficProviderReady: apakah provider trafik benar-benar bisa dipakai.
+//
+// Dipisah dari paket platform karena platform meng-import brandflow (bukan
+// sebaliknya), jadi helper tidak boleh saling memanggil. Query-nya sengaja
+// sepadan dengan platform.mpCheckProviderReadiness: key RapidAPI DAN DataBee
+// Token wajib ada, DAN provider tidak boleh sedang menolak permintaan (catatan
+// last_da_error dalam 24 jam terakhir). Tanpa pemeriksaan terakhir itu, host
+// yang langganan RapidAPI-nya tidak aktif tetap meng-enqueue job tiap siklus
+// padahal provider membalas "You are not subscribed to this API" untuk semua
+// permintaan — persis yang terjadi di produksi.
+func (d *Deps) schTrafficProviderReady(ctx context.Context) (bool, string) {
+	row, err := d.queryRow(ctx, `
+		SELECT COALESCE(sealed_similarweb_api_key, '') AS rapid_key,
+		       COALESCE(sealed_databee_token, '')      AS databee,
+		       COALESCE(last_da_error, '')             AS last_da_error,
+		       (last_da_error_at > NOW() - INTERVAL '24 hours') AS da_paused
+		FROM platform_seo_config WHERE id = 'default' LIMIT 1`)
+	if err != nil || row == nil {
+		return false, "konfigurasi SEO platform belum ada"
+	}
+	if strings.TrimSpace(row.strOr("rapid_key", "")) == "" {
+		return false, "key RapidAPI belum diisi"
+	}
+	if strings.TrimSpace(row.strOr("databee", "")) == "" {
+		return false, "DataBee Token belum diisi"
+	}
+	if row.boolOr("da_paused", false) {
+		return false, "provider menolak permintaan terakhir: " + strings.TrimSpace(row.strOr("last_da_error", ""))
+	}
+	return true, ""
+}
+
 // schEnqueueSimilarWebChecks: aturan pemilik produk — media aktif yang BELUM
 // pernah punya data trafik SimilarWeb otomatis masuk antrian pemeriksaan tiap
 // siklus scheduler (limit kecil per tick supaya panggilan provider tidak
@@ -1505,6 +1537,16 @@ func (d *Deps) schEnqueueMediaAiRefreshes(ctx context.Context, limit int) {
 func (d *Deps) schEnqueueSimilarWebChecks(ctx context.Context, limit int) {
 	if limit < 1 {
 		limit = 1
+	}
+	// Pengaman kredensial: provider Similarweb API Pro menolak SEMUA permintaan
+	// tanpa DataBee Token. Tanpa pemeriksaan ini, setiap siklus (60 detik)
+	// melahirkan job yang pasti gagal — pernah 184 baris `failed` hanya karena
+	// token kosong, dan tiap percobaan tetap memakai kuota RapidAPI.
+	if ready, reason := d.schTrafficProviderReady(ctx); !ready {
+		// Log sekali per siklus sudah cukup berisik; cukup diamkan dan biarkan
+		// chip status di UI admin yang memberi tahu.
+		_ = reason
+		return
 	}
 	stale, err := d.queryRows(ctx, `
 		SELECT media.id FROM media
@@ -1664,56 +1706,23 @@ func (d *Deps) schPurgeStaleUploads(ctx context.Context) int {
 
 // ---------- renderer email (parity templates/base.ts + registry.ts) ----------
 
-// schRenderLinkEmail: parity linkOnlyTemplate (judul + body teks + tautan).
+// schRenderLinkEmail: pengingat singkat (judul + paragraf + tautan).
+// Kerangka, logo, dan footer berasal dari package email supaya mitra menerima
+// tampilan yang sama dengan email auth/platform.
 func (d *Deps) schRenderLinkEmail(ctx context.Context, title, body, link, linkLabel string) (string, string) {
-	return d.schBaseEmail(title, schHTMLEscape(body), link, linkLabel)
+	rendered := email.Detail(title, body, nil, link, linkLabel)
+	return "[" + schAppName + "] " + rendered.Subject, rendered.HTML
 }
 
-// schRenderDetailEmail: parity detailTemplate (intro + tabel baris).
+// schRenderDetailEmail: intro + tabel baris rincian.
 func (d *Deps) schRenderDetailEmail(ctx context.Context, title, intro string, rows [][2]string, link, linkLabel string) (string, string) {
-	var rowHTML strings.Builder
-	for _, r := range rows {
-		rowHTML.WriteString(`<tr><td style="padding:6px 0;color:#475569;font-size:13px;width:140px;">` +
-			schHTMLEscape(r[0]) + `</td><td style="padding:6px 0;font-size:14px;color:#0f172a;">` + schHTMLEscape(r[1]) + `</td></tr>`)
-	}
-	tableHTML := ""
-	if rowHTML.Len() > 0 {
-		tableHTML = `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:16px 0;border-collapse:collapse;">` + rowHTML.String() + `</table>`
-	}
-	return d.schBaseEmail(title, schHTMLEscape(intro)+tableHTML, link, linkLabel)
+	rendered := email.Detail(title, intro, rows, link, linkLabel)
+	return "[" + schAppName + "] " + rendered.Subject, rendered.HTML
 }
 
-// schBaseEmail: parity baseTemplate — subject "[App] Title" + HTML mobile-first.
-func (d *Deps) schBaseEmail(title, bodyHTML, link, linkLabel string) (string, string) {
-	// Parity templates/base.ts: appName default "Tauthub" (bukan APP_NAME);
-	// pemanggil template di app lama tidak pernah menimpanya.
-	appName := "Tauthub"
-	appURL := "https://app.tauthub.com"
-	if base := strings.TrimSpace(d.canonicalAppBase()); base != "" {
-		appURL = base
-	}
-	contact := "support@tauthub.com"
-	logoURL := strings.TrimRight(appURL, "/") + "/tauthub-icon.png"
-
-	linkBlock := ""
-	if link != "" {
-		linkBlock = `<p style="margin: 24px 0; text-align: center;"><a href="` + schHTMLEscape(appURL+link) +
-			`" target="_blank" rel="noopener" style="background:#1d4ed8;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">` +
-			schHTMLEscape(linkLabel) + `</a></p>`
-	}
-
-	html := `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>` +
-		schHTMLEscape(title) + `</title></head><body style="margin:0;padding:24px;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">` +
-		`<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;">` +
-		`<tr><td style="padding:24px 24px 0;text-align:center;"><a href="` + schHTMLEscape(appURL) + `" style="text-decoration:none;display:inline-block;">` +
-		`<img src="` + schHTMLEscape(logoURL) + `" alt="" width="28" height="28" style="width:28px;height:28px;display:block;border:0;outline:none;" /></a></td></tr>` +
-		`<tr><td style="padding:8px 24px 24px;"><h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;">` + schHTMLEscape(title) + `</h1>` +
-		`<div style="margin:0;line-height:1.55;font-size:14px;color:#0f172a;">` + bodyHTML + `</div>` + linkBlock + `</td></tr>` +
-		`<tr><td style="padding:16px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;"><p style="margin:0;font-size:12px;color:#475569;">Email ini dikirim oleh ` +
-		schHTMLEscape(appName) + `. Jika butuh bantuan, hubungi <a href="mailto:` + schHTMLEscape(contact) + `" style="color:#1d4ed8;">` + schHTMLEscape(contact) + `</a>.</p></td></tr>` +
-		`</table></body></html>`
-	return "[" + appName + "] " + title, html
-}
+// schAppName: parity templates/base.ts — appName default "Tauthub" (bukan
+// APP_NAME); pemanggil template di app lama tidak pernah menimpanya.
+const schAppName = "Tauthub"
 
 func schHTMLEscape(v string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;").Replace(v)
