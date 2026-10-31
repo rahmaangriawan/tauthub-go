@@ -111,6 +111,13 @@ func ShouldSend(ctx context.Context, pool *pgxpool.Pool, req Request) Decision {
 
 	switch mode {
 	case ModeOff:
+		// Admin bisa menyalakan email per event dari panel Template. Override
+		// hanya berlaku untuk email; WA tetap mengikuti registry. Gate baca,
+		// dedupe, kuota, dan preferensi user tetap berlaku di bawah.
+		if req.Channel == "email" && EmailChannelOverride(ctx, pool, req.Type) {
+			mode = ModeImmediate
+			break
+		}
 		return Decision{Send: false, Reason: ReasonOff}
 	case ModeDigest:
 		return Decision{Send: false, Reason: ReasonDigest}

@@ -24,6 +24,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
@@ -105,6 +106,60 @@ func (d *Deps) notifyBrandMembers(ctx context.Context, brandID, notifType, title
 		 FROM brand_memberships bm JOIN users u ON u.id = bm.user_id
 		 WHERE bm.brand_id = $6 AND u.role <> 'admin'`,
 		notifType, title, body, link, publicationID, brandID)
+}
+
+// waBrandMembers: antrekan WA ke setiap anggota brand (klien) yang punya nomor
+// dan izin. Dipakai event publikasi supaya klien menerima kabar di portalnya
+// sendiri, terpisah dari template mitra. Best-effort.
+func (d *Deps) waBrandMembers(ctx context.Context, brandID, event, referenceID, title, link string, data map[string]string) {
+	if brandID == "" {
+		return
+	}
+	rows, err := d.queryRows(ctx,
+		`SELECT bm.user_id FROM brand_memberships bm JOIN users u ON u.id = bm.user_id
+		 WHERE bm.brand_id = $1 AND u.role <> 'admin'`, brandID)
+	if err != nil {
+		return
+	}
+	for _, row := range rows {
+		userID := row.strOr("user_id", "")
+		if userID == "" {
+			continue
+		}
+		payload := map[string]string{"judul": title}
+		for k, v := range data {
+			payload[k] = v
+		}
+		notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
+			Audience:    notify.AudienceClient,
+			Event:       event,
+			UserID:      userID,
+			ReferenceID: referenceID,
+			Data:        payload,
+			Link:        link,
+			BaseURL:     notify.BaseURL(),
+		})
+	}
+}
+
+// waPartnerUser: antrekan WA ke user mitra pemilik media. Best-effort.
+func (d *Deps) waPartnerUser(ctx context.Context, userID, event, referenceID, title, link string, data map[string]string) {
+	if userID == "" {
+		return
+	}
+	payload := map[string]string{"judul": title}
+	for k, v := range data {
+		payload[k] = v
+	}
+	notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
+		Audience:    notify.AudiencePartner,
+		Event:       event,
+		UserID:      userID,
+		ReferenceID: referenceID,
+		Data:        payload,
+		Link:        link,
+		BaseURL:     notify.BaseURL(),
+	})
 }
 
 // notifyPartner: kirim ke user mitra; false bila mitra tidak punya user.
@@ -224,6 +279,10 @@ func derefOr(p *string, fallback string) string {
 
 // publicationEventNotification: fan-out notifikasi in-app untuk event publikasi.
 // Best-effort — kegagalan notifikasi tidak boleh menggagalkan transisi status.
+//
+// Sejak template WA dipisah per audiens, event publikasi juga mengantrekan WA
+// ke mitra DAN klien dengan template masing-masing. Semua panggilan WA bersifat
+// best-effort dan tidak pernah menggagalkan transisi status.
 func (d *Deps) publicationEventNotification(ctx context.Context, publicationID, event string) {
 	ev := d.loadPublicationEventRow(ctx, publicationID)
 	if ev == nil {
@@ -248,11 +307,30 @@ func (d *Deps) publicationEventNotification(ctx context.Context, publicationID, 
 		title := "Publikasi disetujui mitra"
 		body := fmt.Sprintf("Mitra %s menyetujui %q. Artikel diantrekan untuk dikirim.", ev.MediaName, ev.DocumentTitle)
 		_ = d.notifyBrandMembers(ctx, ev.BrandID, event, title, body, &brandLink, &ev.ID)
+		// WA ke klien (audiens client) dan mitra (audiens partner) dengan
+		// template masing-masing. Judul yang dipakai adalah judul ARTIKEL,
+		// bukan judul notifikasi in-app.
+		d.waBrandMembers(ctx, ev.BrandID, event, ev.ID, ev.DocumentTitle, brandLink, map[string]string{
+			"nama": brandName, "status": "",
+		})
+		if hasPartner {
+			d.waPartnerUser(ctx, *ev.PartnerUserID, event, ev.ID, ev.DocumentTitle, partnerLink, map[string]string{
+				"nama": "", "status": "",
+			})
+		}
 	case "publication.partner_rejected":
 		reason := derefOr(ev.RejectionReason, "tanpa alasan")
 		title := "Publikasi ditolak mitra"
 		body := fmt.Sprintf("Mitra %s menolak %q — %s.", ev.MediaName, ev.DocumentTitle, reason)
 		_ = d.notifyBrandMembers(ctx, ev.BrandID, event, title, body, &brandLink, &ev.ID)
+		d.waBrandMembers(ctx, ev.BrandID, event, ev.ID, ev.DocumentTitle, brandLink, map[string]string{
+			"nama": brandName, "status": reason,
+		})
+		if hasPartner {
+			d.waPartnerUser(ctx, *ev.PartnerUserID, event, ev.ID, ev.DocumentTitle, partnerLink, map[string]string{
+				"nama": "", "status": reason,
+			})
+		}
 	case "publication.published":
 		draftDelivery := derefOr(firstStr(ev.PublishStatus, ev.PartnerMode), "draft") == "draft"
 		urlSuffix := ""
@@ -279,6 +357,19 @@ func (d *Deps) publicationEventNotification(ctx context.Context, publicationID, 
 			}
 			_ = d.createNotification(ctx, *ev.PartnerUserID, event, ptitle, pbody, &partnerLink, &ev.ID)
 		}
+		// WA hanya untuk pengiriman yang benar-benar terbit. Draf sengaja tidak
+		// dikabarkan lewat WA: klien belum punya apa pun untuk dibuka, dan satu
+		// pesan WA berbayar untuk itu hanya jadi noise.
+		if !draftDelivery {
+			d.waBrandMembers(ctx, ev.BrandID, event, ev.ID, ev.DocumentTitle, brandLink, map[string]string{
+				"nama": brandName, "status": "",
+			})
+			if hasPartner {
+				d.waPartnerUser(ctx, *ev.PartnerUserID, event, ev.ID, ev.DocumentTitle, partnerLink, map[string]string{
+					"nama": "", "status": "",
+				})
+			}
+		}
 	case "publication.failed":
 		safe := ""
 		if ev.ErrorMessage != nil && *ev.ErrorMessage != "" {
@@ -298,6 +389,14 @@ func (d *Deps) publicationEventNotification(ctx context.Context, publicationID, 
 				pbody += " " + safe
 			}
 			_ = d.createNotification(ctx, *ev.PartnerUserID, event, "Publikasi gagal", pbody, &partnerLink, &ev.ID)
+		}
+		d.waBrandMembers(ctx, ev.BrandID, event, ev.ID, ev.DocumentTitle, brandLink, map[string]string{
+			"nama": brandName, "status": safe,
+		})
+		if hasPartner {
+			d.waPartnerUser(ctx, *ev.PartnerUserID, event, ev.ID, ev.DocumentTitle, partnerLink, map[string]string{
+				"nama": "", "status": safe,
+			})
 		}
 	}
 }

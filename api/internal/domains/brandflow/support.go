@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 )
 
 // Port lib/credits/wallet.ts + lib/publication/credits.ts + lib/jobs/queue.ts
@@ -826,6 +827,53 @@ func (d *Deps) publicationPublishedNotification(ctx context.Context, publication
 			partnerLinkArg = &partnerLink
 		}
 		d.createNotification(ctx, partnerUserID, "publication.published", partnerTitle, partnerBody, partnerLinkArg, &publicationID)
+		// WA ke mitra. Draf tidak dikabarkan lewat WA: belum ada halaman terbit
+		// yang bisa dibuka, jadi pesan berbayar itu hanya jadi noise.
+		if !draftDelivery {
+			notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
+				Audience:    notify.AudiencePartner,
+				Event:       "publication.published",
+				UserID:      partnerUserID,
+				ReferenceID: publicationID,
+				Data:        map[string]string{"nama": "", "judul": article, "status": ""},
+				Link:        partnerLink,
+				BaseURL:     notify.BaseURL(),
+			})
+		}
+	}
+
+	// WA ke klien (semua anggota brand) dengan template audiens klien.
+	if !draftDelivery {
+		d.publicationWAtoBrandMembers(ctx, row.strOr("brand_id", ""), "publication.published", publicationID, article, brandLink, "")
+	}
+}
+
+// publicationWAtoBrandMembers: antrekan WA event publikasi ke setiap anggota
+// brand (klien). Best-effort; kegagalan tidak menggagalkan notifikasi in-app.
+func (d *Deps) publicationWAtoBrandMembers(ctx context.Context, brandID, event, referenceID, article, link, status string) {
+	if brandID == "" {
+		return
+	}
+	rows, err := d.queryRows(ctx,
+		`SELECT bm.user_id FROM brand_memberships bm JOIN users u ON u.id = bm.user_id
+		 WHERE bm.brand_id = $1 AND u.role <> 'admin'`, brandID)
+	if err != nil {
+		return
+	}
+	for _, row := range rows {
+		userID := row.strOr("user_id", "")
+		if userID == "" {
+			continue
+		}
+		notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
+			Audience:    notify.AudienceClient,
+			Event:       event,
+			UserID:      userID,
+			ReferenceID: referenceID,
+			Data:        map[string]string{"nama": "", "judul": article, "status": status},
+			Link:        link,
+			BaseURL:     notify.BaseURL(),
+		})
 	}
 }
 
@@ -873,7 +921,18 @@ func (d *Deps) publicationFailedNotification(ctx context.Context, publicationID 
 		}
 		d.createNotification(ctx, partnerUserID, "publication.failed", "Publikasi gagal",
 			"Artikel \""+article+"\" gagal dikirim ke media Anda ("+mediaName+")."+safeSuffix, partnerLinkArg, &publicationID)
+		notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
+			Audience:    notify.AudiencePartner,
+			Event:       "publication.failed",
+			UserID:      partnerUserID,
+			ReferenceID: publicationID,
+			Data:        map[string]string{"nama": "", "judul": article, "status": safe},
+			Link:        partnerLink,
+			BaseURL:     notify.BaseURL(),
+		})
 	}
+
+	d.publicationWAtoBrandMembers(ctx, row.strOr("brand_id", ""), "publication.failed", publicationID, article, brandLink, safe)
 }
 
 // ---------- standard check (port lib/standard/service.ts) ----------

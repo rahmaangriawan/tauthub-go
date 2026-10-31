@@ -36,28 +36,41 @@ type DigestItem struct {
 // kerangka brand bersama supaya email ringkasan tetap memakai logo dan footer
 // Tauthub seperti email transaksional lain.
 func BuildDigestBody(items []DigestItem) (subject, htmlBody string) {
+	return BuildDigestBodyStyled(email.DefaultStyle(), items)
+}
+
+// BuildDigestBodyStyled: ringkasan dengan gaya email yang diatur admin.
+func BuildDigestBodyStyled(style email.Style, items []DigestItem) (subject, htmlBody string) {
 	if len(items) == 0 {
 		return "", ""
 	}
 	subject = fmt.Sprintf("Ringkasan notifikasi Tauthub (%d)", len(items))
+	primary := style.PrimaryColor
+	if strings.TrimSpace(primary) == "" {
+		primary = "#2b67ec"
+	}
+	muted := style.MutedColor
+	if strings.TrimSpace(muted) == "" {
+		muted = "#667085"
+	}
 	var b strings.Builder
-	b.WriteString(`<p style="margin:0 0 16px">Berikut kabar yang belum Anda buka di Tauthub.</p>`)
+	b.WriteString(`<p style="margin:0 0 16px">Berikut kabar yang belum Anda buka di ` + style.BrandName + `.</p>`)
 	b.WriteString(`<ul style="margin:0;padding-left:18px">`)
 	for _, it := range items {
 		b.WriteString(`<li style="margin:0 0 12px">`)
 		if it.Link != "" {
-			b.WriteString(`<a href="` + html.EscapeString(email.Absolutize(it.Link)) + `" style="color:#2b67ec;font-weight:600;text-decoration:none">` +
+			b.WriteString(`<a href="` + html.EscapeString(email.Absolutize(it.Link)) + `" style="color:` + primary + `;font-weight:600;text-decoration:none">` +
 				html.EscapeString(it.Title) + `</a>`)
 		} else {
 			b.WriteString(`<strong>` + html.EscapeString(it.Title) + `</strong>`)
 		}
 		if it.Body != "" {
-			b.WriteString(`<div style="color:#667085">` + html.EscapeString(it.Body) + `</div>`)
+			b.WriteString(`<div style="color:` + muted + `">` + html.EscapeString(it.Body) + `</div>`)
 		}
 		b.WriteString(`</li>`)
 	}
 	b.WriteString(`</ul>`)
-	return subject, email.Page(subject, "Kabar terbaru yang menunggu Anda di Tauthub.", b.String()).HTML
+	return subject, email.PageStyled(style, subject, "Kabar terbaru yang menunggu Anda di "+style.BrandName+".", b.String()).HTML
 }
 
 // EnqueueDigestJobs menaruh satu job pengiriman digest untuk setiap user yang
@@ -156,7 +169,7 @@ func EnqueueDigestJobs(ctx context.Context, pool *pgxpool.Pool, now time.Time, m
 		if err != nil || len(items) == 0 {
 			continue
 		}
-		subject, htmlBody := BuildDigestBody(items)
+		subject, htmlBody := BuildDigestBodyStyled(email.LoadStyle(ctx, pool), items)
 		if subject == "" {
 			continue
 		}

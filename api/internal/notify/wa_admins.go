@@ -2,9 +2,12 @@ package notify
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/crypto"
 )
 
 // Notifikasi WhatsApp ke ADMIN lewat Fonnte (antrean wa_deliveries).
@@ -60,11 +63,21 @@ func EnqueueAdminsWA(ctx context.Context, pool *pgxpool.Pool, opts AdminWAOption
 	}
 	var enabled bool
 	var country string
-	var groupTarget string
+	var sealedGroup string
+	var plainGroup string
 	if err := pool.QueryRow(ctx,
-		"SELECT enabled, country_code, COALESCE(admin_group_target, '') FROM platform_wa_config WHERE id = 'default' LIMIT 1").
-		Scan(&enabled, &country, &groupTarget); err != nil || !enabled {
+		"SELECT enabled, country_code, COALESCE(sealed_admin_group_target, ''), COALESCE(admin_group_target, '') FROM platform_wa_config WHERE id = 'default' LIMIT 1").
+		Scan(&enabled, &country, &sealedGroup, &plainGroup); err != nil || !enabled {
 		return 0
+	}
+	// ID grup disimpan terenkripsi (sealed). Data lama yang masih plaintext
+	// dipakai sebagai fallback sampai dienkripsi oleh BackfillWAGroupTarget.
+	groupTarget := strings.TrimSpace(plainGroup)
+	if strings.TrimSpace(sealedGroup) != "" {
+		if plain, uErr := crypto.UnsealCompat(sealedGroup,
+			os.Getenv("CMS_ENCRYPTION_SECRET"), os.Getenv("APP_SECRET")); uErr == nil {
+			groupTarget = strings.TrimSpace(plain)
+		}
 	}
 	if country == "" {
 		country = "62"

@@ -16,6 +16,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/imageconvert"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 )
 
 // finNonAlnumRe: pembersih ekstensi file (parity replace(/[^a-z0-9]/g, "")).
@@ -1950,6 +1951,21 @@ func (d *Deps) settNotifyPartner(ctx context.Context, settlement ptRow, to, reje
 	userID := partner.strOr("user_id", "")
 	if userID != "" {
 		d.finNotifyUser(ctx, userID, notifType, title, body, link, notifType+":"+settlement.strOr("id", ""))
+		// WA ke mitra memakai template audiens mitra. Tanpa nomor/izin, atau
+		// saat template dinonaktifkan admin, pengiriman dilewati tanpa error.
+		statusText := ""
+		if to == "failed" {
+			statusText = rejectionReason
+		}
+		notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
+			Audience:    notify.AudiencePartner,
+			Event:       notifType,
+			UserID:      userID,
+			ReferenceID: settlement.strOr("id", ""),
+			Data:        map[string]string{"nama": "", "jumlah": amount, "status": statusText},
+			Link:        link,
+			BaseURL:     notify.BaseURL(),
+		})
 	}
 }
 
@@ -2603,10 +2619,24 @@ func (d *Deps) finCreditCPAForDomain(ctx context.Context, referredDomainID strin
 		userID := partner.strOr("user_id", "")
 		publicID := partner.strOr("public_id", referrerPartnerID)
 		if userID != "" {
+			refLink := "/mitra/" + publicID + "/referral"
 			d.finNotifyUser(ctx, userID, "referral.cpa.credited",
 				"CPA Rp "+finFormatThousands(int64(cpaAmount))+" dikreditkan",
 				"Domain "+rd.strOr("domain_name", "")+" approved.",
-				"/mitra/"+publicID+"/referral", "referral:cpa:"+referredDomainID)
+				refLink, "referral:cpa:"+referredDomainID)
+			notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
+				Audience:    notify.AudiencePartner,
+				Event:       "referral.cpa.credited",
+				UserID:      userID,
+				ReferenceID: referredDomainID,
+				Data: map[string]string{
+					"nama":   partner.strOr("name", ""),
+					"judul":  rd.strOr("domain_name", ""),
+					"jumlah": "Rp " + finFormatThousands(int64(cpaAmount)),
+				},
+				Link:    refLink,
+				BaseURL: notify.BaseURL(),
+			})
 		}
 	}
 }

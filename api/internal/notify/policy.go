@@ -69,42 +69,35 @@ var policies = map[string]ChannelPolicy{
 
 	// --- Tier 1: uang ---------------------------------------------------
 	//
-	// PENTING: tier 1 saat ini BELUM punya pengirim email maupun WA sama
-	// sekali. settNotifyPartner (platform/misc_finance.go) dan insert referral
-	// hanya menulis baris notifikasi in-app. Karena itu Email dan WA di sini
-	// bernilai off: registry harus mencerminkan kanal yang benar-benar ada,
-	// bukan niat yang belum diimplementasikan.
-	//
-	// Kalau nanti pengirim ditambahkan, naikkan mode-nya di sini. Gate baca,
+	// PENTING: tier 1 saat ini BELUM punya pengirim email sama sekali.
+	// settNotifyPartner (platform/misc_finance.go) dan insert referral menulis
+	// baris notifikasi in-app lalu memanggil notify.EnqueueUserWA untuk kanal
+	// WhatsApp. Karena itu Email tetap off, sedangkan WA immediate: gate baca,
 	// dedupe, dan kuota otomatis berlaku tanpa menyunting titik pemanggil.
-	"withdrawal.requested":         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierMoney},
-	"withdrawal.processing":        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierMoney},
-	"withdrawal.paid":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierMoney},
-	"withdrawal.rejected":          {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierMoney},
-	"referral.cpa.credited":        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierMoney},
+	"withdrawal.requested":         {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierMoney},
+	"withdrawal.processing":        {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierMoney},
+	"withdrawal.paid":              {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierMoney},
+	"withdrawal.rejected":          {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierMoney},
+	"referral.cpa.credited":        {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierMoney},
 	"referral.commission.credited": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierMoney},
 	"referral.commission.reversed": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierMoney},
 	"referral.domain.approved":     {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierMoney},
 	"referral.domain.rejected":     {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierMoney},
 
 	// --- Tier 2: tindakan dengan tenggat --------------------------------
-	// Sama seperti tier 1: event publikasi di bawah ini hanya menulis
-	// notifikasi in-app (partner/shared.go publicationEventNotification dan
-	// brandflow/support.go), tanpa pemanggil mpEmailFollowUp. Mode email
-	// dibiarkan off supaya registry tidak menjanjikan kanal yang tidak ada.
-	//
-	// publication.published juga di sini walau app lama mengirim email untuk
-	// event itu: port Go-nya belum punya pengirim, dan menghidupkan email
-	// tanpa pengirim hanya akan menambah janji kosong.
+	// Event publikasi hanya menulis notifikasi in-app (partner/shared.go
+	// publicationEventNotification dan brandflow/support.go), lalu memanggil
+	// notify.EnqueueUserWA untuk audiens mitra dan klien. Email tetap off
+	// karena belum ada pengirim email untuk keluarga event ini.
 	"publication.waiting_partner":    {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
 	"publication.revision_requested": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
 	"publication.url_requested":      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
-	"publication.partner_approved":   {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
-	"publication.partner_rejected":   {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
+	"publication.partner_approved":   {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
+	"publication.partner_rejected":   {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
 	"publication.client_approved":    {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
 	"publication.revision_accepted":  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
 	"publication.revision_rejected":  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
-	"publication.failed":             {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
+	"publication.failed":             {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
 	// Pengingat tenggat memakai email karena hanya jalur itu yang benar-benar
 	// hidup: scheduler brandflow mengirim email, dan belum ada pengirim WA di
 	// paket itu (pengirim WA hanya ada di paket platform, dan scheduler
@@ -115,23 +108,26 @@ var policies = map[string]ChannelPolicy{
 	// menghasilkan baris antrean yang tidak pernah dikirim siapa pun.
 	"publication.reminder":      {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
 	"publication.late_approval": {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
-	// SLA 3×24 jam persetujuan media: perpanjangan 1 hari lalu pembatalan
+	// SLA 3×24 jam persetujuan media: lewat tenggat langsung dibatalkan
 	// otomatis. Email segera supaya mitra/klien tidak ketinggalan tenggat;
 	// WA tetap off (belum ada pengirim WA di paket ini, sama seperti reminder).
-	"publication.sla_extended":  {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
 	"publication.sla_cancelled": {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
+	// Pembatalan oleh admin operasi. Email sengaja off: admin bisa
+	// menyalakannya dari panel Template bila pembatalan perlu diberitahukan
+	// lewat email juga.
+	"publication.cancelled_by_admin": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
 	// Saldo akun pasif: peringatan H-7 dan pemberitahuan setelah hangus.
 	// Email immediate supaya klien punya kesempatan memakai saldo sebelum hangus.
 	"billing.balance_forfeit_warning": {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
 	"billing.balance_forfeited":       {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
 
 	// --- Tier 3: informasi (in-app + push saja) -------------------------
-	"publication.published":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"publication.published":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},
 	"publication.link_lost":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"publication.link_replacement_requested": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"publication.auto_replaced":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.approved":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.rejected":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.approved":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},
+	"media.rejected":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},
 	"media.submitted":                        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"media.resubmitted":                      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"media.negotiated":                       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
@@ -148,8 +144,8 @@ var policies = map[string]ChannelPolicy{
 	"admin.media_submitted":      {InApp: false, Push: false, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
 	"admin.withdrawal_requested": {InApp: false, Push: false, Email: ModeOff, WA: ModeImmediate, Tier: TierMoney},
 	"admin.ticket_created":       {InApp: false, Push: false, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
-	"ticket.replied":             {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"ticket.closed":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"ticket.replied":             {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},
+	"ticket.closed":              {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},
 	"chat.message":               {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"announcement.new":           {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"vip.enabled":                {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},

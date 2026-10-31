@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -1017,87 +1018,141 @@ func (d *Deps) GSCConfigPut(w http.ResponseWriter, r *http.Request) {
 
 const igWAFonnteBase = "https://api.fonnte.com"
 
-var igWAEventLabel = map[string]string{
-	"publication.partner_approved": "Publikasi disetujui mitra",
-	"publication.partner_rejected": "Publikasi ditolak mitra",
-	"publication.published":        "Artikel terbit",
-	"publication.failed":           "Publikasi gagal",
-	"media.approved":               "Media disetujui",
-	"media.rejected":               "Media ditolak",
-	"withdrawal.requested":         "Pencairan diajukan",
-	"withdrawal.processing":        "Pencairan diproses",
-	"withdrawal.paid":              "Pencairan dibayar",
-	"withdrawal.rejected":          "Pencairan ditolak",
-	"referral.cpa.credited":        "Fee referral (CPA) masuk",
-	// Event khusus admin (WA ke nomor admin — Fonnte).
-	"admin.media_submitted":      "Admin · Pengajuan media/domain",
-	"admin.withdrawal_requested": "Admin · Penarikan dana",
-	"admin.ticket_created":       "Admin · Tiket dukungan baru",
+// Template WA sekarang dipisah per AUDIENS (mitra, klien, admin). Sumber
+// kebenaran teks bawaan, label, dan tautan pratinjau ada di paket notify
+// (notify/wa_templates.go) supaya pengirim (notify.EnqueueUserWA) dan panel
+// admin memakai teks yang sama persis.
+//
+// Pemetaan event → audiens menentukan tab mana yang menampilkan event itu.
+var igWAAudienceEvents = map[string][]string{
+	notify.AudiencePartner: {
+		"publication.partner_approved",
+		"publication.partner_rejected",
+		"publication.published",
+		"publication.failed",
+		"media.approved",
+		"media.rejected",
+		"withdrawal.requested",
+		"withdrawal.processing",
+		"withdrawal.paid",
+		"withdrawal.rejected",
+		"referral.cpa.credited",
+		"ticket.replied",
+		"ticket.closed",
+	},
+	notify.AudienceClient: {
+		"publication.partner_approved",
+		"publication.partner_rejected",
+		"publication.published",
+		"publication.failed",
+	},
+	notify.AudienceAdmin: {
+		notify.AdminEventMediaSubmitted,
+		notify.AdminEventWithdrawalRequested,
+		notify.AdminEventTicketCreated,
+	},
 }
 
-var igWADefaultTemplates = map[string]string{
-	"publication.partner_approved": "Halo {nama}, publikasi \"{judul}\" telah DISETUJUI mitra dan masuk antrean terbit.\n\nDetail: {link}",
-	"publication.partner_rejected": "Halo {nama}, publikasi \"{judul}\" ditolak.\n\nAlasan: {status}\nDetail: {link}",
-	"publication.published":        "Halo {nama}, artikel \"{judul}\" sudah TERBIT.\n\nLihat: {link}",
-	"publication.failed":           "Halo {nama}, publikasi \"{judul}\" gagal diproses.\n\nKeterangan: {status}\nDetail: {link}",
-	"media.approved":               "Halo {nama}, media Anda telah disetujui dan siap menerima order.\n\nDetail: {link}",
-	"media.rejected":               "Halo {nama}, pengajuan media Anda ditolak.\n\nCatatan: {status}\nDetail: {link}",
-	"withdrawal.requested":         "Halo {nama}, permintaan pencairan {jumlah} sudah masuk dan menunggu diproses.\n\nDetail: {link}",
-	"withdrawal.processing":        "Halo {nama}, pencairan {jumlah} sedang diproses.\n\nDetail: {link}",
-	"withdrawal.paid":              "Halo {nama}, pencairan {jumlah} sudah DIBAYAR.\n\nDetail: {link}",
-	"withdrawal.rejected":          "Halo {nama}, pencairan {jumlah} ditolak.\n\nAlasan: {status}\nDetail: {link}",
-	"referral.cpa.credited":        "Halo {nama}, fee referral {jumlah} sudah dikreditkan untuk domain {judul}.\n\nDetail: {link}",
-	"ticket.replied":               "Halo {nama}, tiket dukungan \"{judul}\" dibalas admin.\n\nBalasan: {status}\nDetail: {link}",
-	"ticket.closed":                "Halo {nama}, tiket dukungan \"{judul}\" sudah ditandai selesai.\n\nDetail: {link}",
-}
+// igWADefaultTemplates: kompatibilitas untuk pemanggil lama yang memakai peta
+// datar (audiens mitra + admin). Disusun dari registry notify.
+var igWADefaultTemplates = buildIGWADefaultTemplates()
 
-// Template khusus admin (pengajuan media, penarikan, tiket) berasal dari paket
-// notify supaya pengirim (notify.EnqueueAdminsWA) dan UI template memakai teks
-// bawaan yang sama.
-func init() {
-	for event, body := range notify.AdminWADefaultTemplates {
-		igWADefaultTemplates[event] = body
+// igWAPreviewLinks: kompatibilitas, idem.
+var igWAPreviewLinks = buildIGWAPreviewLinks()
+
+func buildIGWADefaultTemplates() map[string]string {
+	out := map[string]string{}
+	for _, audience := range notify.Audiences {
+		for event, body := range notify.WADefaultTemplates[audience] {
+			if _, exists := out[event]; !exists {
+				out[event] = body
+			}
+		}
 	}
-	for event, link := range notify.AdminWAPreviewLinks {
-		igWAPreviewLinks[event] = link
+	return out
+}
+
+func buildIGWAPreviewLinks() map[string]string {
+	out := map[string]string{}
+	for _, audience := range notify.Audiences {
+		for event, link := range notify.WAPreviewLinks[audience] {
+			if _, exists := out[event]; !exists {
+				out[event] = link
+			}
+		}
 	}
+	return out
 }
 
-var igWAPreviewLinks = map[string]string{
-	"publication.partner_approved": "https://app.tauthub.com/mitra/mitra-contoh/publications?pub=pub-contoh",
-	"publication.partner_rejected": "https://app.tauthub.com/mitra/mitra-contoh/publications?pub=pub-contoh",
-	"publication.published":        "https://app.tauthub.com/mitra/mitra-contoh/publications?pub=pub-contoh",
-	"publication.failed":           "https://app.tauthub.com/mitra/mitra-contoh/publications?pub=pub-contoh",
-	"media.approved":               "https://app.tauthub.com/mitra/mitra-contoh/media",
-	"media.rejected":               "https://app.tauthub.com/mitra/mitra-contoh/media",
-	"withdrawal.requested":         "https://app.tauthub.com/mitra/mitra-contoh/settlements",
-	"withdrawal.processing":        "https://app.tauthub.com/mitra/mitra-contoh/settlements",
-	"withdrawal.paid":              "https://app.tauthub.com/mitra/mitra-contoh/settlements",
-	"withdrawal.rejected":          "https://app.tauthub.com/mitra/mitra-contoh/settlements",
-	"referral.cpa.credited":        "https://app.tauthub.com/mitra/mitra-contoh/referral",
-	"ticket.replied":               "https://app.tauthub.com/mitra/mitra-contoh/dukungan/tiket-contoh",
-	"ticket.closed":                "https://app.tauthub.com/mitra/mitra-contoh/dukungan/tiket-contoh",
+// igWAMaskGroupID: sensor ID grup untuk tampilan — sisakan 6 digit terakhir
+// dan domain, mis. 120363430927198167@g.us → ••••198167@g.us.
+func igWAMaskGroupID(id string) string {
+	value := strings.TrimSpace(id)
+	if value == "" {
+		return ""
+	}
+	at := strings.Index(value, "@")
+	if at <= 0 {
+		return "••••"
+	}
+	local, domain := value[:at], value[at+1:]
+	if len(local) > 6 {
+		local = local[len(local)-6:]
+	}
+	return "••••" + local + "@" + domain
 }
 
-// igWAConfigJSON: token tidak pernah dikembalikan — hanya status + hint.
-func igWAConfigJSON(row ptRow) map[string]any {
+// igWAGroupTarget: ID grup admin dalam bentuk asli (untuk pengiriman).
+//
+// Sumber utamanya sealed_admin_group_target (terenkripsi seperti token).
+// admin_group_target (plaintext) hanya fallback data lama yang belum sempat
+// dienkripsi oleh BackfillWAGroupTarget. Tidak pernah dikembalikan ke klien.
+func (d *Deps) igWAGroupTarget(row ptRow) string {
 	if row == nil {
-		return map[string]any{"configured": false, "token_hint": nil, "sender_name": nil, "country_code": "62", "enabled": false, "updated_at": nil}
+		return ""
+	}
+	if sealed := strings.TrimSpace(row.strOr("sealed_admin_group_target", "")); sealed != "" {
+		if plain, err := d.unsealT2(sealed); err == nil {
+			return strings.TrimSpace(plain)
+		}
+		return ""
+	}
+	return strings.TrimSpace(row.strOr("admin_group_target", ""))
+}
+
+// igWAConfigJSON: token dan ID grup tidak pernah dikembalikan — hanya status
+// dan hint tersamar, supaya rahasia tidak pernah ada di respons API.
+func (d *Deps) igWAConfigJSON(row ptRow) map[string]any {
+	if row == nil {
+		return map[string]any{
+			"configured": false, "token_hint": nil, "sender_name": nil,
+			"country_code": "62", "enabled": false, "updated_at": nil,
+			"group_configured": false, "admin_group_target_hint": nil,
+		}
+	}
+	group := d.igWAGroupTarget(row)
+	var groupHint any
+	if group != "" {
+		groupHint = igWAMaskGroupID(group)
 	}
 	return map[string]any{
-		"configured":         row.has("sealed_token"),
-		"token_hint":         ptNullableStr(row, "token_hint"),
-		"sender_name":        ptNullableStr(row, "sender_name"),
-		"country_code":       row.strOr("country_code", "62"),
-		"admin_group_target": ptNullableStr(row, "admin_group_target"),
-		"enabled":            row.boolOr("enabled", false),
-		"updated_at":         row.anyOrNil("updated_at"),
+		"configured":              row.has("sealed_token"),
+		"token_hint":              ptNullableStr(row, "token_hint"),
+		"sender_name":             ptNullableStr(row, "sender_name"),
+		"country_code":            row.strOr("country_code", "62"),
+		"group_configured":        group != "",
+		"admin_group_target_hint": groupHint,
+		"enabled":                 row.boolOr("enabled", false),
+		"updated_at":              row.anyOrNil("updated_at"),
 	}
 }
 
 func (d *Deps) igWALoadConfigRow(ctx context.Context) (ptRow, error) {
+	// Kolom grup WAJIB ikut dipilih: admin_group_target (data lama) dan
+	// sealed_admin_group_target (data terenkripsi). igWAGroupTarget membaca
+	// keduanya; tanpa kolom ini GET /wa/config selalu mengembalikan grup kosong.
 	row, err := d.queryRow(ctx,
-		"SELECT sealed_token, token_hint, sender_name, country_code, enabled, updated_at FROM platform_wa_config WHERE id = 'default' LIMIT 1")
+		"SELECT sealed_token, token_hint, sender_name, country_code, enabled, admin_group_target, sealed_admin_group_target, updated_at FROM platform_wa_config WHERE id = 'default' LIMIT 1")
 	if err != nil {
 		return nil, err
 	}
@@ -1105,6 +1160,34 @@ func (d *Deps) igWALoadConfigRow(ctx context.Context) (ptRow, error) {
 		return nil, nil
 	}
 	return ptRow(ptNormalizeMap(row)), nil
+}
+
+// BackfillWAGroupTarget: enkripsi ID grup admin yang masih tersimpan plaintext
+// di kolom lama. Dipanggil sekali saat API start; idempoten (melewati baris
+// yang sudah punya nilai terenkripsi atau memang kosong).
+func (d *Deps) BackfillWAGroupTarget(ctx context.Context) {
+	row, err := d.queryRow(ctx, `
+		SELECT COALESCE(admin_group_target, '') AS plain,
+		       COALESCE(sealed_admin_group_target, '') AS sealed
+		FROM platform_wa_config WHERE id = 'default' LIMIT 1`)
+	if err != nil || row == nil {
+		return
+	}
+	plain := strings.TrimSpace(row.strOr("plain", ""))
+	if plain == "" || strings.TrimSpace(row.strOr("sealed", "")) != "" {
+		return
+	}
+	sealed, sErr := d.sealT2(plain)
+	if sErr != nil {
+		slog.Warn("[wa] backfill enkripsi ID grup gagal", "err", sErr)
+		return
+	}
+	if err := d.exec(ctx, `
+		UPDATE platform_wa_config
+		SET sealed_admin_group_target = $1, admin_group_target = NULL, updated_at = NOW()
+		WHERE id = 'default'`, sealed); err != nil {
+		slog.Warn("[wa] backfill simpan ID grup terenkripsi gagal", "err", err)
+	}
 }
 
 // igWASanitizeCountryCode: kode negara bersih; nomor lengkap → "62".
@@ -1139,7 +1222,7 @@ func (d *Deps) WAGatewayConfig(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, ptErr(http.StatusInternalServerError, err.Error()))
 		return
 	}
-	writeJSON(w, http.StatusOK, igWAConfigJSON(row))
+	writeJSON(w, http.StatusOK, d.igWAConfigJSON(row))
 }
 
 // WAGatewayConfigUpdate: PUT /v1/platform/wa/config
@@ -1168,15 +1251,34 @@ func (d *Deps) WAGatewayConfigUpdate(w http.ResponseWriter, r *http.Request) {
 		countryCode = &cc
 	}
 	enabled, hasEnabled := boolField(body, "enabled")
-	// Tujuan grup admin (opsional). Kosong = kembali ke fan-out per admin.
+	// Tujuan grup admin (opsional). Mengikuti pola token: field kosong =
+	// TIDAK DIUBAH. Untuk menghapus grup, klien mengirim
+	// clear_admin_group_target=true secara eksplisit.
 	groupTarget, hasGroup := strField(body, "admin_group_target")
 	groupTarget = strings.TrimSpace(groupTarget)
-	if hasGroup && groupTarget != "" {
-		// Format ID grup Fonnte: deretan angka, boleh berakhiran @g.us.
-		if len(groupTarget) > 64 || !regexp.MustCompile(`^[0-9]{8,20}(@g\.us)?$`).MatchString(groupTarget) {
+	clearGroup := false
+	if v, hasClear := boolField(body, "clear_admin_group_target"); hasClear {
+		clearGroup = v
+	}
+	// groupMode: 0 = tidak diubah, 1 = diganti, 2 = dihapus.
+	groupMode := 0
+	var sealedGroup any
+	if clearGroup {
+		groupMode = 2
+	} else if hasGroup && groupTarget != "" {
+		// Format ID grup Fonnte: deretan angka, boleh dengan sufiks pembuat
+		// (-angka, untuk grup lama), dan berakhiran @g.us.
+		if len(groupTarget) > 64 || !regexp.MustCompile(`^[0-9]{8,30}(-[0-9]+)?(@g\.us)?$`).MatchString(groupTarget) {
 			writeErr(w, d, errUnprocessable("ID grup WA tidak valid (contoh: 120363012345678901@g.us)"))
 			return
 		}
+		s, sErr := d.sealT2(groupTarget)
+		if sErr != nil {
+			writeErr(w, d, sErr)
+			return
+		}
+		sealedGroup = s
+		groupMode = 1
 	}
 
 	existing, err := d.igWALoadConfigRow(r.Context())
@@ -1213,19 +1315,20 @@ func (d *Deps) WAGatewayConfigUpdate(w http.ResponseWriter, r *http.Request) {
 		effectiveEnabled = enabled
 	}
 	if err := d.exec(r.Context(),
-		`INSERT INTO platform_wa_config (id, sealed_token, token_hint, sender_name, country_code, enabled, admin_group_target, updated_by, updated_at)
-		 VALUES ('default', $1, $2, $3, $4, $5, $8, $6, NOW())
+		`INSERT INTO platform_wa_config (id, sealed_token, token_hint, sender_name, country_code, enabled, admin_group_target, sealed_admin_group_target, updated_by, updated_at)
+		 VALUES ('default', $1, $2, $3, $4, $5, NULL, $6, $7, NOW())
 		 ON CONFLICT (id) DO UPDATE SET
 		   sealed_token = COALESCE(EXCLUDED.sealed_token, platform_wa_config.sealed_token),
 		   token_hint = COALESCE(EXCLUDED.token_hint, platform_wa_config.token_hint),
 		   sender_name = COALESCE(EXCLUDED.sender_name, platform_wa_config.sender_name),
 		   country_code = COALESCE(EXCLUDED.country_code, platform_wa_config.country_code),
 		   enabled = COALESCE(EXCLUDED.enabled, platform_wa_config.enabled),
-		   admin_group_target = CASE WHEN $7 THEN EXCLUDED.admin_group_target ELSE platform_wa_config.admin_group_target END,
+		   admin_group_target = CASE $8 WHEN 1 THEN NULL WHEN 2 THEN NULL ELSE platform_wa_config.admin_group_target END,
+		   sealed_admin_group_target = CASE $8 WHEN 1 THEN $6 WHEN 2 THEN NULL ELSE platform_wa_config.sealed_admin_group_target END,
 		   updated_by = EXCLUDED.updated_by,
 		   updated_at = NOW()`,
 		sealed, nullIfEmpty(hint), ptNullableArgStr(senderName, hasSender && senderName != ""),
-		effectiveCC, effectiveEnabled, user.ID, hasGroup, ptNullableArgStr(groupTarget, hasGroup && groupTarget != "")); err != nil {
+		effectiveCC, effectiveEnabled, sealedGroup, user.ID, groupMode); err != nil {
 		writeErr(w, d, ptErr(http.StatusInternalServerError, err.Error()))
 		return
 	}
@@ -1235,7 +1338,7 @@ func (d *Deps) WAGatewayConfigUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, ptErr(http.StatusInternalServerError, err.Error()))
 		return
 	}
-	writeJSON(w, http.StatusOK, igWAConfigJSON(row))
+	writeJSON(w, http.StatusOK, d.igWAConfigJSON(row))
 }
 
 // WADeliveries: GET /v1/platform/wa/deliveries
@@ -1384,12 +1487,54 @@ func igPeriodAndClause(periodClause []string) string {
 	return " AND " + strings.Join(periodClause, " AND ")
 }
 
+// igWAEventLabelOr: label event untuk tampilan monitoring. Monitoring tidak
+// memisahkan audiens, jadi label diambil dari audiens mana pun yang punya event
+// itu (mitra didahulukan, karena sebagian besar event adalah milik mitra).
 func igWAEventLabelOr(event string) string {
-	if label, ok := igWAEventLabel[event]; ok {
-		return label
+	for _, audience := range notify.Audiences {
+		if notify.WAKnownEvent(audience, event) {
+			return notify.WALabel(audience, event)
+		}
 	}
 	return event
 }
+
+// igWAEventWired: true bila ada kode pengirim yang benar-benar mengantrekan WA
+// untuk event ini. Dipakai panel admin untuk menandai template yang sudah
+// tersambung dan mana yang masih menunggu pengirim.
+//
+// Daftar ini sengaja eksplisit: menambah event baru di registry tanpa
+// menyambungkan pengirim akan tampil sebagai "Belum aktif", bukan diam-diam
+// terlihat berfungsi.
+var igWAEventWired = func() map[string]bool {
+	wired := map[string]bool{}
+	// Mitra: media.* dan ticket.* dikirim oleh platform (mpWAFollowUp),
+	// publication.* oleh brandflow, withdrawal.* oleh platform (settlement),
+	// referral.cpa.credited oleh job publikasi.
+	for _, event := range []string{
+		"media.approved", "media.rejected",
+		"ticket.replied", "ticket.closed",
+		"publication.partner_approved", "publication.partner_rejected",
+		"publication.published", "publication.failed",
+		"withdrawal.requested", "withdrawal.processing",
+		"withdrawal.paid", "withdrawal.rejected",
+		"referral.cpa.credited",
+	} {
+		wired[event] = true
+	}
+	// Klien: event publikasi dikirim oleh brandflow ke anggota brand.
+	for _, event := range []string{
+		"publication.partner_approved", "publication.partner_rejected",
+		"publication.published", "publication.failed",
+	} {
+		wired[event] = true
+	}
+	// Admin: semua event admin punya pengirim (notify.EnqueueAdminsWA).
+	wired[notify.AdminEventMediaSubmitted] = true
+	wired[notify.AdminEventWithdrawalRequested] = true
+	wired[notify.AdminEventTicketCreated] = true
+	return wired
+}()
 
 // igWARenderTemplate: port renderWaTemplate.
 func igWARenderTemplate(body string, data map[string]string) string {
@@ -1401,46 +1546,72 @@ func igWARenderTemplate(body string, data map[string]string) string {
 }
 
 // WATemplates: GET /v1/platform/wa/templates
+//
+// Mengembalikan seluruh template untuk SEMUA audiens sekaligus, masing-masing
+// dengan field `audience`, `audience_label`, dan `wired` (true bila ada kode
+// pengirim yang benar-benar mengantrekan WA untuk event itu). Panel admin
+// memakai `wired` untuk menandai template yang belum aktif.
 func (d *Deps) WATemplates(w http.ResponseWriter, r *http.Request) {
 	_, _, ok := d.adminGuard(w, r, "")
 	if !ok {
 		return
 	}
-	saved, err := d.queryRows(r.Context(), "SELECT event, body, enabled FROM wa_templates")
+	saved, err := d.queryRows(r.Context(), "SELECT event, audience, body, enabled FROM wa_templates")
 	if err != nil {
 		writeErr(w, d, ptErr(http.StatusInternalServerError, err.Error()))
 		return
 	}
-	savedMap := map[string]ptRow{}
+	type savedTemplate struct {
+		body    string
+		enabled bool
+	}
+	savedMap := map[string]savedTemplate{}
 	for _, raw := range saved {
 		row := ptRow(ptNormalizeMap(raw))
-		savedMap[row.strOr("event", "")] = row
+		key := row.strOr("event", "") + "|" + notify.NormalizeAudience(row.strOr("audience", ""))
+		savedMap[key] = savedTemplate{
+			body:    row.strOr("body", ""),
+			enabled: row.boolOr("enabled", true),
+		}
 	}
-	items := make([]map[string]any, 0, len(igWADefaultTemplates))
-	for event, defaultBody := range igWADefaultTemplates {
-		savedRow := savedMap[event]
-		body := defaultBody
-		enabled := true
-		customized := false
-		if savedRow != nil {
-			if strings.TrimSpace(savedRow.strOr("body", "")) != "" {
-				body = savedRow.strOr("body", "")
-				customized = true
+
+	total := 0
+	for _, audience := range notify.Audiences {
+		total += len(igWAAudienceEvents[audience])
+	}
+	items := make([]map[string]any, 0, total)
+	for _, audience := range notify.Audiences {
+		for _, event := range igWAAudienceEvents[audience] {
+			defaultBody := notify.WADefaultTemplate(audience, event)
+			if defaultBody == "" {
+				continue
 			}
-			enabled = savedRow.boolOr("enabled", true)
+			body := defaultBody
+			enabled := true
+			customized := false
+			if s, ok := savedMap[event+"|"+audience]; ok {
+				if strings.TrimSpace(s.body) != "" {
+					body = s.body
+					customized = true
+				}
+				enabled = s.enabled
+			}
+			previewLink := notify.WAPreviewLink(audience, event)
+			if previewLink == "" {
+				previewLink = "https://app.tauthub.com/"
+			}
+			preview := igWARenderTemplate(body, map[string]string{
+				"nama": "Budi", "judul": "Contoh Artikel Tauthub", "status": "contoh keterangan",
+				"jumlah": "Rp 150.000", "link": previewLink,
+			})
+			items = append(items, map[string]any{
+				"event": event, "audience": audience,
+				"audience_label": notify.AudienceLabel[audience],
+				"body":           body, "enabled": enabled, "customized": customized,
+				"label": notify.WALabel(audience, event), "default_body": defaultBody,
+				"preview": preview, "wired": igWAEventWired[event],
+			})
 		}
-		previewLink := igWAPreviewLinks[event]
-		if previewLink == "" {
-			previewLink = "https://app.tauthub.com/mitra"
-		}
-		preview := igWARenderTemplate(body, map[string]string{
-			"nama": "Budi", "judul": "Contoh Artikel Tauthub", "status": "contoh keterangan",
-			"jumlah": "Rp 150.000", "link": previewLink,
-		})
-		items = append(items, map[string]any{
-			"event": event, "body": body, "enabled": enabled, "customized": customized,
-			"label": igWAEventLabelOr(event), "default_body": defaultBody, "preview": preview,
-		})
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -1458,6 +1629,8 @@ func (d *Deps) WATemplateSave(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, errUnprocessable("Payload tidak valid"))
 		return
 	}
+	audienceRaw, _ := strField(body, "audience")
+	audience := notify.NormalizeAudience(audienceRaw)
 	messageBody, hasBody := strField(body, "body")
 	if !hasBody || len(messageBody) > 4000 {
 		writeErr(w, d, errUnprocessable("Payload tidak valid"))
@@ -1467,21 +1640,21 @@ func (d *Deps) WATemplateSave(w http.ResponseWriter, r *http.Request) {
 	if !hasEnabled {
 		enabled = true
 	}
-	if _, known := igWADefaultTemplates[event]; !known {
-		writeErr(w, d, errUnprocessable("Event tidak dikenal"))
+	if !notify.WAKnownEvent(audience, event) {
+		writeErr(w, d, errUnprocessable("Event tidak dikenal untuk audiens ini"))
 		return
 	}
 	if err := d.exec(r.Context(),
-		`INSERT INTO wa_templates (event, body, enabled, updated_by, updated_at)
-		 VALUES ($1, $2, $3, $4, NOW())
-		 ON CONFLICT (event) DO UPDATE SET
+		`INSERT INTO wa_templates (event, audience, body, enabled, updated_by, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, NOW())
+		 ON CONFLICT (event, audience) DO UPDATE SET
 		   body = EXCLUDED.body, enabled = EXCLUDED.enabled,
 		   updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
-		event, messageBody, enabled, user.ID); err != nil {
+		event, audience, messageBody, enabled, user.ID); err != nil {
 		writeErr(w, d, ptErr(http.StatusInternalServerError, err.Error()))
 		return
 	}
-	d.audit(r.Context(), user.ID, "platform.wa.template_updated", "wa_template", event)
+	d.audit(r.Context(), user.ID, "platform.wa.template_updated", "wa_template", event+":"+audience)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -1492,11 +1665,13 @@ func (d *Deps) WATemplateReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	event := strings.TrimSpace(r.URL.Query().Get("event"))
-	if _, known := igWADefaultTemplates[event]; !known || event == "" {
-		writeErr(w, d, errUnprocessable("Event tidak dikenal"))
+	audience := notify.NormalizeAudience(strings.TrimSpace(r.URL.Query().Get("audience")))
+	if event == "" || !notify.WAKnownEvent(audience, event) {
+		writeErr(w, d, errUnprocessable("Event tidak dikenal untuk audiens ini"))
 		return
 	}
-	if err := d.exec(r.Context(), "DELETE FROM wa_templates WHERE event = $1", event); err != nil {
+	if err := d.exec(r.Context(),
+		"DELETE FROM wa_templates WHERE event = $1 AND audience = $2", event, audience); err != nil {
 		writeErr(w, d, ptErr(http.StatusInternalServerError, err.Error()))
 		return
 	}
@@ -1524,6 +1699,14 @@ func (d *Deps) igWAToken(ctx context.Context) (string, error) {
 }
 
 // igWANormalizeNumber: port normalizeWaNumber.
+// igWAIsGroupTarget: true bila target adalah ID grup WhatsApp Fonnte (…@g.us).
+// ID grup tidak boleh dilewatkan igWANormalizeNumber karena mengandung karakter
+// non-angka dan akan ditolak sebagai nomor tidak valid.
+func igWAIsGroupTarget(target string) bool {
+	value := strings.TrimSpace(target)
+	return len(value) > len("@g.us") && strings.HasSuffix(strings.ToLower(value), "@g.us")
+}
+
 func igWANormalizeNumber(raw, countryCode string) string {
 	if raw == "" {
 		return ""
@@ -1677,7 +1860,10 @@ func (d *Deps) WATest(w http.ResponseWriter, r *http.Request) {
 	body := decodeJSON(r)
 	target, _ := strField(body, "target")
 	message, _ := strField(body, "message")
-	if len(target) > 30 {
+	target = strings.TrimSpace(target)
+	// ID grup Fonnte berbentuk "<angka>@g.us" dan bisa lebih panjang dari nomor
+	// telepon (grup lama menyertakan id pembuat). Batas 64 cukup untuk keduanya.
+	if len(target) > 64 {
 		writeErr(w, d, errUnprocessable("Payload tidak valid"))
 		return
 	}
@@ -1705,18 +1891,40 @@ func (d *Deps) WATest(w http.ResponseWriter, r *http.Request) {
 	if cfgRow != nil {
 		countryCode = cfgRow.strOr("country_code", "62")
 	}
+	// Uji grup tersimpan: klien tidak pernah menerima ID grup asli, jadi bila
+	// target kosong dan use_saved_group=true, ID dibuka di server.
+	if target == "" {
+		if useSaved, _ := boolField(body, "use_saved_group"); useSaved {
+			target = d.igWAGroupTarget(cfgRow)
+			if target == "" {
+				writeErr(w, d, errUnprocessable("Grup WA admin belum diatur."))
+				return
+			}
+		}
+	}
 	if target == "" {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "device": device, "detail": "Koneksi gateway berhasil."})
 		return
 	}
-	normalized := igWANormalizeNumber(target, countryCode)
-	if normalized == "" {
-		writeErr(w, d, errUnprocessable("Nomor tujuan tidak valid. Contoh: 08123456789"))
-		return
+	// Tujuan grup (…@g.us) dikirim apa adanya: igWANormalizeNumber hanya untuk
+	// nomor telepon dan akan menolak ID grup karena mengandung karakter non-angka.
+	normalized := ""
+	if igWAIsGroupTarget(target) {
+		normalized = target
+	} else {
+		normalized = igWANormalizeNumber(target, countryCode)
+		if normalized == "" {
+			writeErr(w, d, errUnprocessable("Nomor tujuan tidak valid. Contoh: 08123456789"))
+			return
+		}
 	}
 	sendMsg := message
 	if sendMsg == "" {
-		sendMsg = "Tes koneksi WA Gateway Tauthub berhasil.\n\nWaktu: " + time.Now().Format("02/01/2006 15:04:05")
+		if igWAIsGroupTarget(normalized) {
+			sendMsg = "Tes koneksi grup WhatsApp Tauthub berhasil.\n\nWaktu: " + time.Now().Format("02/01/2006 15:04:05")
+		} else {
+			sendMsg = "Tes koneksi WA Gateway Tauthub berhasil.\n\nWaktu: " + time.Now().Format("02/01/2006 15:04:05")
+		}
 	}
 	result, sendStatus, sendErr := d.igWASendMessage(r.Context(), normalized, sendMsg)
 	if sendErr != nil {
@@ -1729,7 +1937,11 @@ func (d *Deps) WATest(w http.ResponseWriter, r *http.Request) {
 	detail := "Gateway menolak: " + result.Detail
 	rowStatus := "failed"
 	if result.OK {
-		detail = "Pesan uji terkirim ke " + normalized + "."
+		if igWAIsGroupTarget(normalized) {
+			detail = "Pesan uji terkirim ke grup " + normalized + "."
+		} else {
+			detail = "Pesan uji terkirim ke " + normalized + "."
+		}
 		rowStatus = "sent"
 	}
 	d.igWALogTestSend(r.Context(), admin.ID, normalized, sendMsg, rowStatus, detail)
@@ -2398,18 +2610,24 @@ func igWAClipDetail(s string) string {
 	return s[:cut]
 }
 
-// igWATemplateBody mengambil isi template WA untuk satu event.
+// igWATemplateBody mengambil isi template WA untuk satu event milik MITRA.
 //
 // Mengembalikan allowed=false kalau admin menonaktifkan template itu, sehingga
 // pemanggil berhenti tanpa mengirim apa pun. Kalau belum ada baris di
 // wa_templates, dipakai teks bawaan supaya event lama tetap berjalan seperti
 // sebelumnya.
 func (d *Deps) igWATemplateBody(ctx context.Context, event string) (string, bool) {
+	return d.igWATemplateBodyFor(ctx, notify.AudiencePartner, event)
+}
+
+// igWATemplateBodyFor: versi sadar-audiens dari igWATemplateBody.
+func (d *Deps) igWATemplateBodyFor(ctx context.Context, audience, event string) (string, bool) {
+	audience = notify.NormalizeAudience(audience)
 	row, err := d.queryRow(ctx,
-		"SELECT body, enabled FROM wa_templates WHERE event = $1 LIMIT 1", event)
+		"SELECT body, enabled FROM wa_templates WHERE event = $1 AND audience = $2 LIMIT 1", event, audience)
 	if err != nil || row == nil {
 		// Belum dikustomisasi: pakai bawaan.
-		if body, ok := igWADefaultTemplates[event]; ok {
+		if body := notify.WADefaultTemplate(audience, event); body != "" {
 			return body, true
 		}
 		return "", false
@@ -2419,7 +2637,7 @@ func (d *Deps) igWATemplateBody(ctx context.Context, event string) (string, bool
 	}
 	body := strings.TrimSpace(row.strOr("body", ""))
 	if body == "" {
-		if def, ok := igWADefaultTemplates[event]; ok {
+		if def := notify.WADefaultTemplate(audience, event); def != "" {
 			return def, true
 		}
 		return "", false
