@@ -1506,7 +1506,7 @@ func (d *Deps) schEnqueueMediaAiRefreshes(ctx context.Context, limit int) {
 // last_da_error tidak dibaca di sini: kolom itu milik provider DA/PA (listing
 // RapidAPI lain dengan langganan terpisah). Dulu penolakan provider DA ikut
 // menghentikan cek trafik. Kegagalan trafik per media sudah diredam oleh
-// cooldown 24 jam di query sweep di bawah.
+// cooldown 1 jam di query sweep di bawah.
 func (d *Deps) schTrafficProviderReady(ctx context.Context) (bool, string) {
 	row, err := d.queryRow(ctx, `
 		SELECT COALESCE(sealed_similarweb_api_key, '') AS rapid_key
@@ -1530,6 +1530,11 @@ func (d *Deps) schTrafficProviderReady(ctx context.Context) (bool, string) {
 // Snapshot dengan kunjungan 0 tetap dihitung "sudah punya data": provider
 // menjawab 0 untuk domain yang tidak terindeks, dan mengulanginya tiap siklus
 // hanya membakar kuota RapidAPI. Pemeriksaan ulang terjadi setelah 6 bulan.
+//
+// Prioritas: media yang BELUM PERNAH dicek (tanpa snapshot) didahulukan —
+// termasuk domain yang baru ditambahkan — lalu media yang datanya basi. Job
+// yang gagal dicoba lagi setelah 1 jam, bukan 24 jam, supaya domain baru
+// tidak tertahan sehari hanya karena provider sempat rate-limited.
 func (d *Deps) schEnqueueSimilarWebChecks(ctx context.Context, limit int) {
 	if limit < 1 {
 		limit = 1
@@ -1563,7 +1568,7 @@ func (d *Deps) schEnqueueSimilarWebChecks(ctx context.Context, limit int) {
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'media_similarweb_refresh' AND j.status = 'failed'
 		      AND j.payload->>'mediaId' = media.id
-		      AND j.updated_at > NOW() - INTERVAL '24 hours'
+		      AND j.updated_at > NOW() - INTERVAL '1 hour'
 		  )
 		ORDER BY
 		  -- Media yang BELUM PERNAH dicek (tanpa snapshot) didahulukan,

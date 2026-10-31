@@ -866,6 +866,11 @@ const mpSimilarWebNeverCheckedWhere = `
 // backend masih memproses. Sekarang reply cepat: semua media kandidat masuk
 // tabel jobs (kind media_similarweb_refresh) dan scheduler/worker yang
 // melakukan panggilan provider satu per satu.
+//
+// Yang diantrekan hanya media yang BELUM PERNAH punya snapshot (lihat
+// mpSimilarWebNeverCheckedWhere). Job gagal boleh dicoba lagi lewat tombol
+// ini (dedupe hanya terhadap pending/running): klik adalah tindakan sadar
+// admin, berbeda dari sweep otomatis yang punya jeda 1 jam.
 func (d *Deps) MediaSimilarWebBulk(w http.ResponseWriter, r *http.Request) {
 	user, _, ok := d.adminGuard(w, r, "")
 	if !ok {
@@ -884,12 +889,6 @@ func (d *Deps) MediaSimilarWebBulk(w http.ResponseWriter, r *http.Request) {
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'media_similarweb_refresh' AND j.status IN ('pending','running')
 		      AND j.payload->>'mediaId' = media.id
-		  )
-		  AND NOT EXISTS (
-		    SELECT 1 FROM jobs j
-		    WHERE j.kind = 'media_similarweb_refresh' AND j.status = 'failed'
-		      AND j.payload->>'mediaId' = media.id
-		      AND j.updated_at > NOW() - INTERVAL '24 hours'
 		  )
 		ORDER BY media.updated_at ASC
 		LIMIT 200`)
