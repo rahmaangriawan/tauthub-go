@@ -739,6 +739,11 @@ func run() error {
 			authed.Get("/platform/media/{mediaId}/audit", platformDeps.MediaAudit)
 			authed.Post("/platform/media/{mediaId}/recompute-health", platformDeps.MediaRecomputeHealth)
 			authed.Post("/platform/media/{mediaId}/review", platformDeps.MediaReview)
+			// Pelanggaran + penangguhan domain (panel detail media admin).
+			authed.Get("/platform/media/{mediaId}/violations", platformDeps.MediaViolationsList)
+			authed.Post("/platform/media/{mediaId}/violations", platformDeps.MediaViolationCreate)
+			authed.Post("/platform/media/{mediaId}/suspend", platformDeps.MediaSuspend)
+			authed.Post("/platform/media/{mediaId}/unsuspend", platformDeps.MediaUnsuspend)
 			authed.Get("/platform/media/{mediaId}/seo", platformDeps.MediaSEO)
 			authed.Post("/platform/media/{mediaId}/seo", platformDeps.MediaSEO)
 			// Antrekan, bukan jalankan langsung: satu pemeriksaan butuh ~25-30

@@ -3,7 +3,8 @@
 
 	// Halaman admin Media terpadu: tab Direktori (master data), tab Arsip
 	// (media terarsip / disembunyikan dari mitra), tab Pending (menunggu review),
-	// tab Intelligence (health score), tab Pengaturan.
+	// tab Intelligence (health score), tab Pelanggaran (penindakan domain),
+	// tab Pengaturan.
 	// Port apps/web/src/app/admin/media/page.tsx.
 	//
 	// Deep-link dari notifikasi admin (`/admin/media?status=pending_review#tab-pending`)
@@ -17,6 +18,7 @@
 	import MediaPending from './media-pending.svelte';
 	import MediaRecent from './media-recent.svelte';
 	import MediaIntelligenceTab from './media-intelligence-tab.svelte';
+	import MediaViolationsTab from './media-violations-tab.svelte';
 	import MediaSettings from './media-settings.svelte';
 
 	const PENDING_MEDIA_PATH = '/v1/platform/media?limit=1&offset=0&status=pending_review';
@@ -66,6 +68,9 @@
 		{ value: 'pending', label: 'Pending' },
 		{ value: 'recent', label: tr('Baru Ditambahkan') },
 		{ value: 'intelligence', label: 'Intelligence' },
+		// Tab pelanggaran: daftar media yang punya pelanggaran aktif (ringan/berat)
+		// beserta riwayatnya, supaya admin bisa menindak tanpa mencari satu-satu.
+		{ value: 'violations', label: tr('Pelanggaran') },
 		{ value: 'settings', label: tr('Pengaturan') }
 	]);
 </script>
@@ -113,6 +118,8 @@
 			<MediaRecent />
 		{:else if tab === 'intelligence'}
 			<MediaIntelligenceTab />
+		{:else if tab === 'violations'}
+			<MediaViolationsTab />
 		{:else if tab === 'settings'}
 			<MediaSettings />
 		{/if}

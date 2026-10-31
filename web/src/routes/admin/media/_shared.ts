@@ -120,6 +120,14 @@ export type Media = {
 	seo_checked_at?: string | null;
 	/** Waktu admin menyetujui (diisi saat keputusan review = approve). */
 	reviewed_at?: string | null;
+	/** Jumlah artikel yang sudah benar-benar terbit lewat media ini. */
+	published_count?: number;
+	/** Penangguhan admin (terpisah dari `status` — tidak bisa diubah mitra). */
+	suspended_at?: string | null;
+	suspended_reason?: string | null;
+	is_suspended?: boolean;
+	/** Tingkat pelanggaran aktif: none | ringan | berat. */
+	violation_level?: 'none' | 'ringan' | 'berat';
 	created_at: string;
 	updated_at?: string | null;
 };

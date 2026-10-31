@@ -4,7 +4,7 @@
 	// Tab Direktori /admin/media — master data media (harga, kredit, tier, integrasi, partner).
 	// Port MediaDirectorySection di apps/web/src/app/admin/media/_sections.tsx.
 	import { onDestroy, onMount } from 'svelte';
-	import { ExternalLink, Plus, RefreshCw, Search } from '@lucide/svelte';
+	import { CircleAlert, CircleCheck, ExternalLink, Plus, RefreshCw, Search } from '@lucide/svelte';
 	import DataTable from '$lib/components/admin/data-table.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
@@ -20,7 +20,6 @@
 		isAccessError,
 		mountWithSession,
 		platformRequest,
-		wordCountLabel,
 		scoreTone,
 		MEDIA_INTEGRATION_TYPES_UI,
 		MEDIA_STATUSES,
@@ -58,6 +57,17 @@
 	let page = $state(1);
 	let detailAudit = $state<AuditItem[] | null>(null);
 	let detailLoading = $state(false);
+	// Panel pelanggaran + suspend di modal edit media.
+	let violations = $state<Array<{ id: string; level: string; note: string | null; created_at: string; actor_email: string | null; revoked_at: string | null }>>([]);
+	let violationsLoading = $state(false);
+	let violationOpen = $state(false);
+	let violationDraft = $state<{ level: 'ringan' | 'berat'; note: string }>({ level: 'ringan', note: '' });
+	let violationBusy = $state(false);
+	let suspendOpen = $state(false);
+	let suspendReason = $state('');
+	let suspendBusy = $state(false);
+	/** Baris yang sedang mengganti visibilitas (Publik ⇄ Hidden). */
+	let visBusyId = $state<string | null>(null);
 	let recomputing = $state<string | null>(null);
 	let syncing = $state(false);
 	let swBusyId = $state<string | null>(null);
@@ -70,6 +80,12 @@
 		failed_last_hour: number;
 		stale: number;
 		last_error: string | null;
+		/** Kesiapan penyedia — dipakai chip "Cek otomatis". */
+		auto_ready?: boolean;
+		traffic_ready?: boolean;
+		traffic_blocked_by?: string;
+		seo_ready?: boolean;
+		seo_blocked_by?: string;
 	} | null>(null);
 	let swStatusTimer: ReturnType<typeof setTimeout> | undefined;
 	let swVisits = $state<Record<string, number | null>>({});
@@ -242,6 +258,135 @@
 			.then((data) => (detailAudit = data.items ?? []))
 			.catch(() => (detailAudit = []))
 			.finally(() => (detailLoading = false));
+		void loadViolations(row.id);
+	}
+
+	/** Riwayat pelanggaran media (panel detail admin). */
+	async function loadViolations(mediaID: string) {
+		violationsLoading = true;
+		try {
+			const data = await platformRequest<{ items: typeof violations }>(`/media/${mediaID}/violations`);
+			violations = data.items ?? [];
+		} catch {
+			violations = [];
+		} finally {
+			violationsLoading = false;
+		}
+	}
+
+	/** Catat pelanggaran (ringan/berat) dengan keterangan wajib. */
+	async function saveViolation() {
+		if (!editing) return;
+		if (!violationDraft.note.trim()) {
+			error = tr('Keterangan pelanggaran wajib diisi.');
+			return;
+		}
+		violationBusy = true;
+		error = '';
+		try {
+			await platformRequest(`/media/${editing.id}/violations`, {
+				method: 'POST',
+				body: JSON.stringify({ level: violationDraft.level, note: violationDraft.note.trim() })
+			});
+			violationOpen = false;
+			violationDraft = { level: 'ringan', note: '' };
+			await loadViolations(editing.id);
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			violationBusy = false;
+		}
+	}
+
+	/** Cabut pelanggaran aktif — riwayatnya tetap tersimpan. */
+	async function revokeViolation() {
+		if (!editing) return;
+		if (!confirm(tr('Cabut status pelanggaran untuk media ini? Riwayatnya tetap tersimpan.'))) return;
+		violationBusy = true;
+		try {
+			await platformRequest(`/media/${editing.id}/violations`, {
+				method: 'POST',
+				body: JSON.stringify({ level: 'none' })
+			});
+			await loadViolations(editing.id);
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			violationBusy = false;
+		}
+	}
+
+	/**
+	 * Ganti visibilitas katalog: Publik (tampil di katalog klien) ⇄ Hidden.
+	 *
+	 * Memakai PUT /media/{id} dengan dua field sekaligus:
+	 *   - status: 'active' | 'hidden'  → menentukan tampil/tidak di katalog klien
+	 *   - public_listed: true | false   → menentukan tampil/tidak di katalog publik
+	 * Media yang baru masuk direktori selalu Publik (default kolom DB = true).
+	 */
+	async function toggleVisibility(row: Media, makePublic: boolean) {
+		visBusyId = row.id;
+		error = '';
+		try {
+			await platformRequest(`/media/${row.id}`, {
+				method: 'PUT',
+				body: JSON.stringify({
+					status: makePublic ? 'active' : 'hidden',
+					public_listed: makePublic
+				})
+			});
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			visBusyId = null;
+		}
+	}
+
+	/** Suspend domain: sembunyikan dari katalog + tolak publikasi baru. */	async function doSuspend() {
+		if (!editing) return;
+		if (!suspendReason.trim()) {
+			error = tr('Alasan penangguhan wajib diisi.');
+			return;
+		}
+		suspendBusy = true;
+		error = '';
+		try {
+			await platformRequest(`/media/${editing.id}/suspend`, {
+				method: 'POST',
+				body: JSON.stringify({ reason: suspendReason.trim() })
+			});
+			suspendOpen = false;
+			suspendReason = '';
+			await load();
+			// Baris di tabel sudah diperbarui; sinkronkan objek yang sedang diedit.
+			if (editing) {
+				const fresh = rows.find((r) => r.id === editing!.id);
+				if (fresh) editing = fresh;
+			}
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			suspendBusy = false;
+		}
+	}
+
+	async function doUnsuspend() {
+		if (!editing) return;
+		if (!confirm(tr('Cabut penangguhan domain ini? Media akan tampil lagi di katalog.'))) return;
+		suspendBusy = true;
+		try {
+			await platformRequest(`/media/${editing.id}/unsuspend`, { method: 'POST' });
+			await load();
+			const fresh = rows.find((r) => r.id === editing!.id);
+			if (fresh) editing = fresh;
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			suspendBusy = false;
+		}
 	}
 
 	function closeForm() {
@@ -249,6 +394,11 @@
 		editing = null;
 		priceConfirmOpen = false;
 		priceNote = '';
+		violationOpen = false;
+		violationDraft = { level: 'ringan', note: '' };
+		suspendOpen = false;
+		suspendReason = '';
+		violations = [];
 	}
 
 	async function doSave() {
@@ -324,6 +474,37 @@
 			await load();
 		} catch (reason) {
 			error = errMessage(reason);
+		}
+	}
+
+	/**
+	 * Buka dialog suspend untuk satu baris tabel (dari kolom Aksi).
+	 *
+	 * Dulu kolom ini berisi tombol "Nonaktifkan" yang mengubah status menjadi
+	 * 'inactive' — status yang tidak dipakai di mana pun: tidak ada media
+	 * berstatus itu, dan efeknya sama saja dengan menyembunyikan media tanpa
+	 * mencatat alasan. Sekarang diganti suspend yang alasannya wajib diisi dan
+	 * bisa dicabut.
+	 */
+	function openSuspend(row: Media) {
+		editing = row;
+		suspendReason = '';
+		suspendOpen = true;
+		error = '';
+	}
+
+	/** Cabut suspend langsung dari tabel (tanpa membuka modal edit). */
+	async function unsuspendRow(row: Media) {
+		if (!confirm(`${tr('Cabut penangguhan')} "${row.name}"? ${tr('Media akan tampil lagi di katalog.')}`)) return;
+		suspendBusy = true;
+		error = '';
+		try {
+			await platformRequest(`/media/${row.id}/unsuspend`, { method: 'POST' });
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			suspendBusy = false;
 		}
 	}
 
@@ -514,6 +695,11 @@
 				failed_last_hour: number;
 				stale: number;
 				last_error: string | null;
+				auto_ready?: boolean;
+				traffic_ready?: boolean;
+				traffic_blocked_by?: string;
+				seo_ready?: boolean;
+				seo_blocked_by?: string;
 			}>('/media/similarweb-status');
 			if ((swStatus?.pending_jobs ?? 0) > 0) {
 				if (swStatusTimer) clearTimeout(swStatusTimer);
@@ -730,10 +916,6 @@
 	{/if}
 {/snippet}
 
-{#snippet wordCountCell(row: Media)}
-	<span class="text-xs">{row.word_count_mode ? wordCountLabel(row.word_count_mode) : '—'}</span>
-{/snippet}
-
 {#snippet dewanPersCell(row: Media)}
 	{#if row.dewan_pers_verified}<Badge tone="success" label="Ya" />
 	{:else}<Badge tone="neutral" label={tr("Tidak")} />{/if}
@@ -744,20 +926,6 @@
 		<p>{idr(row.price ?? 0)}</p>
 		{#if row.price > 0}
 			<p class="text-xs text-muted-foreground">klien {idr(row.client_price ?? 0)} · {row.markup_percent ?? 15}%</p>
-		{/if}
-	</div>
-{/snippet}
-
-{#snippet creditCell(row: Media)}
-	<div class="flex flex-wrap items-center gap-1">
-		<span class="tabular-nums">{row.credit_cost}</span>
-		{#if row.price > 0 && row.credit_cost !== creditForPrice(row.price)}
-			<span
-				class="rounded-full px-2 py-0.5 text-[11px] font-medium"
-				style="background-color: var(--warning-soft); color: var(--warning);"
-				title={`Harga klien ${idr(clientPriceFor(row.price))} (dasar ${row.price.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })} + markup ${markupPercent}%) → kredit ${rp(creditForPrice(row.price))}`}
-				>→ {creditForPrice(row.price)}</span
-			>
 		{/if}
 	</div>
 {/snippet}
@@ -884,13 +1052,25 @@
 				void checkGeo(row);
 			}}>{geoBusyId === row.id ? 'Mengantrekan…' : tr('Cek GEO')}</button
 		>
-		{#if row.status === 'active'}
+		{#if row.status === 'active' && !row.is_suspended}
 			<button
 				class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+				style="color: var(--destructive);"
+				title={tr('Sembunyikan dari katalog + tolak publikasi baru, dengan alasan tercatat. Bisa dicabut kapan saja.')}
 				onclick={(e) => {
 					e.stopPropagation();
-					void updateStatus(row, 'inactive');
-				}}>Nonaktifkan</button
+					openSuspend(row);
+				}}>{tr('Suspend')}</button
+			>
+		{:else if row.is_suspended}
+			<button
+				class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+				style="color: var(--success);"
+				title={row.suspended_reason ?? undefined}
+				onclick={(e) => {
+					e.stopPropagation();
+					void unsuspendRow(row);
+				}}>{tr('Cabut suspend')}</button
 			>
 		{:else if row.status !== 'pending_review' && row.status !== 'rejected'}
 			<button
@@ -917,6 +1097,34 @@
 
 {#snippet categoryCell(row: Media)}
 	<span class="text-muted-foreground">{categoryText(row)}</span>
+{/snippet}
+
+{#snippet visibilityCell(row: Media)}
+	{@const isPublic = row.public_listed !== false && row.status !== 'hidden'}
+	<!-- Satu tombol bergeser (toggle) untuk Publik/Hidden. Saat diklik, knob
+	     bergeser dengan animasi dan label ikut berganti, jadi tidak perlu dua
+	     tombol berdampingan di kolom sempit. -->
+	<button
+		type="button"
+		class="visToggle"
+		class:visToggleOn={isPublic}
+		role="switch"
+		aria-checked={isPublic}
+		aria-label={`${tr('Visibilitas katalog')}: ${isPublic ? tr('Publik') : 'Hidden'}`}
+		title={isPublic
+			? tr('Tampil di katalog media klien. Klik untuk menyembunyikan (hidden).')
+			: tr('Disembunyikan dari katalog klien. Klik untuk menampilkan (publik).')}
+		disabled={visBusyId === row.id}
+		onclick={(e) => {
+			e.stopPropagation();
+			void toggleVisibility(row, !isPublic);
+		}}
+	>
+		<span class="visToggleTrack" aria-hidden="true">
+			<span class="visToggleKnob"></span>
+		</span>
+		<span class="visToggleLabel">{isPublic ? tr('Publik') : 'Hidden'}</span>
+	</button>
 {/snippet}
 
 {#snippet integrationCell(row: Media)}
@@ -1029,6 +1237,28 @@
 			{swStatus.last_error ? `Sebab gagal terakhir: ${swStatus.last_error}` : ''}
 		</p>
 	{/if}
+	<!-- Chip "Cek otomatis": memberi tahu apakah DA & trafik diperiksa sendiri oleh
+	     sistem, atau berhenti karena kredensial penyedia belum lengkap. Tanpa ini
+	     admin hanya melihat angka 0 dan tidak tahu apakah sistem bekerja. -->
+	{#if swStatus}
+		{@const autoReady = swStatus.auto_ready !== false}
+		<div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+			{#if autoReady}
+				<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style="background-color: var(--success-soft, #eaf8f1); color: var(--success, #16794b);">
+					<CircleCheck size={13} aria-hidden="true" />
+					{tr('Cek otomatis aktif')}
+					{#if (swStatus.pending_jobs ?? 0) > 0}<span>· {tr('trafik')} {swStatus.pending_jobs} {tr('antre')}</span>{/if}
+					{#if (daStatus?.pending_jobs ?? 0) > 0}<span>· {tr('DA')} {daStatus?.pending_jobs} {tr('antre')}</span>{/if}
+				</span>
+			{:else}
+				<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" style="background-color: var(--warning-soft, #fff6df); color: var(--warning, #a15c00);">
+					<CircleAlert size={13} aria-hidden="true" />
+					{tr('Cek otomatis berhenti')} — {(swStatus.traffic_blocked_by || swStatus.seo_blocked_by || tr('kredensial penyedia belum lengkap')).replace(/\.$/, '')}
+					<a href="/admin/konfigurasi" style="color: var(--primary); text-decoration: underline;">{tr('Lengkapi di Konfigurasi')}</a>
+				</span>
+			{/if}
+		</div>
+	{/if}
 	{#if swSummary}<p class="mt-2 text-xs text-muted-foreground">{swSummary}</p>{/if}
 	{#if daSummary}<p class="mt-2 text-xs text-muted-foreground">{daSummary}</p>{/if}
 	{#if daStatus && (daStatus.pending_jobs > 0 || daStatus.stale > 0 || daStatus.failed_last_hour > 0)}
@@ -1097,15 +1327,19 @@
 			{ key: 'name', label: tr('Media'), render: mediaCell },
 			{ key: 'category', label: 'Kategori', render: categoryCell },
 			{ key: 'publication_mode', label: tr('Mode Integrasi'), render: publicationModeCell },
-			{ key: 'word_count_mode', label: tr('Jumlah Kata'), render: wordCountCell },
+			// Kolom "Jumlah Kata" dilepas atas permintaan pemilik produk: isinya
+			// (Sesuai Permintaan Klien / rentang kata) jarang dipakai saat memindai
+			// tabel, dan masih bisa dilihat di modal edit.
 			{ key: 'dewan_pers', label: 'Dewan Pers', render: dewanPersCell },
 			{ key: 'price', label: tr('Harga'), render: priceCell },
-			{ key: 'credit', label: tr('Kredit'), render: creditCell },
 			{ key: 'traffic', label: 'Trafik', align: 'right' as const, render: trafficCell },
 			{ key: 'health', label: 'Health', render: healthCell },
 			{ key: 'ai_trust', label: 'GEO / AI Trust', render: aiTrustCell },
 			{ key: 'da', label: 'DA', align: 'center' as const, render: daCell },
 			{ key: 'integration', label: 'Integrasi', render: integrationCell },
+			// Status visibilitas: Publik (tampil di katalog klien) / Hidden.
+			// Satu tombol bergeser (toggle) supaya tidak dua tombol berdampingan.
+			{ key: 'visibility', label: 'Status', align: 'center' as const, width: '120px', render: visibilityCell },
 			{ key: 'actions', label: 'Aksi', align: 'center' as const, width: '300px', render: actionsCell }
 		]}
 		rows={rows}
@@ -1226,6 +1460,102 @@
 						? tr('Artikel dari klien langsung diterbitkan ke media tanpa persetujuan manual Mitra.')
 						: tr('Artikel dari klien masuk sebagai draft dan menunggu tindakan Mitra. Dikelola mitra lewat halaman Media mitra.')}
 				</p>
+			</div>
+
+			<!-- ── Ringkasan operasional: artikel terbit, pelanggaran, suspend ── -->
+			<div class="app-card mb-3 p-3">
+				<p class="mb-2 text-sm font-medium">{tr('Ringkasan & penindakan')}</p>
+				<div class="mb-3 grid grid-cols-3 gap-2">
+					<div class="rounded-lg px-3 py-2" style="background-color: var(--secondary);">
+						<p class="text-[11px] text-muted-foreground">{tr('Total artikel terbit')}</p>
+						<p class="text-lg font-bold tabular-nums">{editing.published_count ?? 0}</p>
+					</div>
+					<div class="rounded-lg px-3 py-2" style="background-color: var(--secondary);">
+						<p class="text-[11px] text-muted-foreground">{tr('Pelanggaran')}</p>
+						<p
+							class="text-lg font-bold"
+							style={(editing.violation_level ?? 'none') === 'berat'
+								? 'color: var(--destructive);'
+								: (editing.violation_level ?? 'none') === 'ringan'
+									? 'color: var(--warning);'
+									: 'color: var(--success);'}
+						>{(editing.violation_level ?? 'none') === 'berat'
+								? tr('Berat')
+								: (editing.violation_level ?? 'none') === 'ringan'
+									? tr('Ringan')
+									: tr('Tidak ada')}</p>
+					</div>
+					<div class="rounded-lg px-3 py-2" style="background-color: var(--secondary);">
+						<p class="text-[11px] text-muted-foreground">{tr('Status domain')}</p>
+						<p class="text-lg font-bold" style={editing.is_suspended ? 'color: var(--destructive);' : 'color: var(--success);'}>
+							{editing.is_suspended ? tr('Disuspend') : tr('Aktif')}
+						</p>
+					</div>
+				</div>
+
+				{#if editing.is_suspended}
+					<div class="mb-3 rounded-lg px-3 py-2 text-xs" style="background-color: var(--warning-soft, #fff6df); color: var(--warning, #a15c00);">
+						<strong>{tr('Domain ditangguhkan')}</strong> — {editing.suspended_reason ?? tr('tanpa alasan tercatat')}.
+						{tr('Media tidak tampil di katalog dan publikasi baru ditolak.')}
+					</div>
+				{/if}
+
+				<div class="flex flex-wrap gap-2">
+					<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => (violationOpen = true)}>
+						{tr('Catat pelanggaran')}
+					</button>
+					{#if (editing.violation_level ?? 'none') !== 'none'}
+						<button
+							class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+							type="button"
+							disabled={violationBusy}
+							onclick={() => void revokeViolation()}
+						>{violationBusy ? tr('Memproses…') : tr('Cabut pelanggaran')}</button>
+					{/if}
+					{#if editing.is_suspended}
+						<button
+							class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs"
+							type="button"
+							disabled={suspendBusy}
+							onclick={() => void doUnsuspend()}
+						>{suspendBusy ? tr('Memproses…') : tr('Cabut suspend')}</button>
+					{:else}
+						<button
+							class="app-btn !min-h-8 !px-3 !text-xs"
+							type="button"
+							style="background-color: var(--destructive); color: #fff;"
+							onclick={() => (suspendOpen = true)}
+						>{tr('Suspend domain')}</button>
+					{/if}
+				</div>
+
+				<!-- Riwayat pelanggaran -->
+				<div class="mt-3 border-t pt-2">
+					<p class="mb-1 text-xs font-medium text-muted-foreground">{tr('Riwayat pelanggaran')}</p>
+					{#if violationsLoading}
+						<p class="text-xs text-muted-foreground">{tr('Memuat…')}</p>
+					{:else if violations.length === 0}
+						<p class="text-xs text-muted-foreground">{tr('Belum ada pelanggaran tercatat.')}</p>
+					{:else}
+						<div class="max-h-32 space-y-1.5 overflow-y-auto pr-1">
+							{#each violations as v (v.id)}
+								<div class="rounded-lg border px-2.5 py-1.5 text-xs" style="border-color: var(--border);">
+									<div class="flex items-center justify-between gap-2">
+										<Badge
+											tone={v.level === 'berat' ? 'danger' : 'warning'}
+											label={v.level === 'berat' ? tr('Berat') : tr('Ringan')}
+										/>
+										<span class="text-muted-foreground">{fmtDateTime(v.created_at)}</span>
+									</div>
+									{#if v.note}<p class="mt-1 leading-snug">{v.note}</p>{/if}
+									<p class="mt-0.5 text-[11px] text-muted-foreground">
+										{v.actor_email ?? '—'}{#if v.revoked_at} · {tr('dicabut')} {fmtDateTime(v.revoked_at)}{/if}
+									</p>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
 			</div>
 
 			<div class="app-card mb-3 p-3">
@@ -1536,6 +1866,75 @@
 	</Modal>
 {/if}
 
+{#if violationOpen}
+	<Modal title={tr('Catat pelanggaran')} maxWidth="md" onClose={() => (violationOpen = false)}>
+		<p class="text-sm text-muted-foreground">
+			{tr('Catat pelanggaran untuk')}<strong>{editing?.name}</strong>. {tr('Riwayatnya tersimpan dan bisa dicabut tanpa menghapus catatan.')}
+		</p>
+		<div class="mt-3">
+			<span class="text-xs font-medium text-muted-foreground">{tr('Tingkat')}</span>
+			<div class="mt-1 flex gap-2">
+				<button
+					type="button"
+					class="app-btn !min-h-8 !px-3 !text-xs"
+					class:app-btn-primary={violationDraft.level === 'ringan'}
+					class:app-btn-soft={violationDraft.level !== 'ringan'}
+					onclick={() => (violationDraft.level = 'ringan')}>{tr('Ringan')}</button
+				>
+				<button
+					type="button"
+					class="app-btn !min-h-8 !px-3 !text-xs"
+					class:app-btn-primary={violationDraft.level === 'berat'}
+					class:app-btn-soft={violationDraft.level !== 'berat'}
+					onclick={() => (violationDraft.level = 'berat')}>{tr('Berat')}</button
+				>
+			</div>
+		</div>
+		<label class="mt-3 block">
+			<span class="text-xs font-medium text-muted-foreground">{tr('Keterangan')} *</span>
+			<textarea
+				class="app-input mt-1 w-full"
+				rows="3"
+				bind:value={violationDraft.note}
+				placeholder={tr('Contoh: Menayangkan konten judi online pada 12 Okt 2026.')}
+			></textarea>
+		</label>
+		<div class="mt-3 flex justify-end gap-2">
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (violationOpen = false)}>{tr('Batal')}</button>
+			<button class="app-btn app-btn-primary" type="button" disabled={violationBusy} onclick={() => void saveViolation()}>
+				{violationBusy ? tr('Menyimpan…') : tr('Simpan')}
+			</button>
+		</div>
+	</Modal>
+{/if}
+
+{#if suspendOpen}
+	<Modal title={tr('Suspend domain')} maxWidth="md" onClose={() => (suspendOpen = false)}>
+		<p class="text-sm text-muted-foreground">
+			{tr('Media')}<strong>{editing?.name}</strong>{tr('akan disembunyikan dari katalog klien & mitra, dan publikasi baru ditolak. Data, riwayat, dan harga tidak dihapus — penangguhan bisa dicabut kapan saja.')}
+		</p>
+		<label class="mt-3 block">
+			<span class="text-xs font-medium text-muted-foreground">{tr('Alasan penangguhan')} *</span>
+			<textarea
+				class="app-input mt-1 w-full"
+				rows="3"
+				bind:value={suspendReason}
+				placeholder={tr('Contoh: Domain terindikasi menjual tautan judi. Menunggu klarifikasi mitra.')}
+			></textarea>
+		</label>
+		<div class="mt-3 flex justify-end gap-2">
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (suspendOpen = false)}>{tr('Batal')}</button>
+			<button
+				class="app-btn"
+				type="button"
+				style="background-color: var(--destructive); color: #fff;"
+				disabled={suspendBusy}
+				onclick={() => void doSuspend()}
+			>{suspendBusy ? tr('Memproses…') : tr('Suspend domain')}</button>
+		</div>
+	</Modal>
+{/if}
+
 {#if priceConfirmOpen}
 	<Modal title="Konfirmasi perubahan harga" maxWidth="md" onClose={() => (priceConfirmOpen = false)}>
 		<p class="text-sm text-muted-foreground">{tr("Model harga media ini berubah dari")}<strong>{editing?.pricing_type === 'nego' ? 'Nego' : 'Nett'}</strong> menjadi
@@ -1617,3 +2016,79 @@
 		</div>
 	</Modal>
 {/if}
+
+<style>
+	/* Toggle Publik ⇄ Hidden. Satu kontrol bergeser (bukan dua tombol) supaya
+	   kolom Status tetap sempit, dengan transisi halus saat berpindah. */
+	.visToggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		padding: 3px 9px 3px 4px;
+		background-color: var(--muted);
+		color: var(--muted-foreground);
+		font-size: 11px;
+		font-weight: 600;
+		line-height: 1;
+		cursor: pointer;
+		transition:
+			background-color 200ms ease,
+			border-color 200ms ease,
+			color 200ms ease;
+	}
+	.visToggle:hover:not(:disabled) {
+		border-color: var(--primary);
+	}
+	.visToggle:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+	}
+	.visToggle:disabled {
+		opacity: 0.6;
+		cursor: progress;
+	}
+	.visToggleOn {
+		background-color: var(--success-soft, #eaf8f1);
+		border-color: color-mix(in srgb, var(--success, #16794b) 35%, transparent);
+		color: var(--success, #16794b);
+	}
+	.visToggleTrack {
+		position: relative;
+		display: block;
+		width: 26px;
+		height: 14px;
+		flex: 0 0 26px;
+		border-radius: 999px;
+		background-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+		transition: background-color 200ms ease;
+	}
+	.visToggleOn .visToggleTrack {
+		background-color: var(--success, #16794b);
+	}
+	.visToggleKnob {
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		width: 10px;
+		height: 10px;
+		border-radius: 999px;
+		background-color: #fff;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+		transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.visToggleOn .visToggleKnob {
+		transform: translateX(12px);
+	}
+	.visToggleLabel {
+		white-space: nowrap;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.visToggle,
+		.visToggleTrack,
+		.visToggleKnob {
+			transition: none;
+		}
+	}
+</style>
