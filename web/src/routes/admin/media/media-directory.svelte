@@ -1203,7 +1203,7 @@
 		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={syncing} onclick={syncCredits}>
 			<RefreshCw size={15} /> Sinkronkan kredit semua
 		</button>
-		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={swBulkBusy} onclick={bulkSimilarWeb} title="Antrekan pemeriksaan trafik HANYA untuk media yang kolom trafiknya masih kosong — media yang sudah punya angka dilewati; scheduler yang memprosesnya">
+		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={swBulkBusy} onclick={bulkSimilarWeb} title="Antrekan pemeriksaan trafik HANYA untuk media yang belum pernah diperiksa SimilarWeb (belum punya snapshot). Media yang sudah pernah diperiksa — termasuk hasil 0 kunjungan — dilewati; scheduler yang memproses antreannya.">
 			<RefreshCw size={15} /> {swBulkBusy ? 'Mengantrekan…' : swStatus && swStatus.pending_jobs > 0 ? `Antrean Trafik (${swStatus.pending_jobs})` : 'Antrekan Cek Trafik Semua'}
 		</button>
 		<button

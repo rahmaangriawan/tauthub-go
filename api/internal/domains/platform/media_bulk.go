@@ -828,9 +828,11 @@ func (d *Deps) MediaSEORefreshStatus(w http.ResponseWriter, r *http.Request) {
 // ---------- POST /v1/platform/media/similarweb-bulk ----------
 
 // mpSimilarWebStaleWhere: media aktif yang trafiknya perlu diperiksa —
-// belum pernah dicek ATAU snapshot terakhirnya basi (>cool down 6 bulan)
-// ATAU snapshotnya tidak punya nilai visits. Media "sudah punya data" tak
-// diusik sampai melewati jeda 6 bulan (aturan pemilik produk).
+// belum pernah dicek ATAU snapshot terakhirnya basi (>cool down 6 bulan).
+//
+// Snapshot dengan 0 kunjungan dihitung "sudah dicek": provider menjawab 0
+// untuk domain yang tidak terindeks, dan mengulanginya hanya membakar kuota.
+// Harus sepadan dengan query sweep di brandflow/scheduler.go.
 const mpSimilarWebStaleWhere = `
 			media.status = 'active'
 			  AND media.website_url IS NOT NULL AND media.website_url <> ''
@@ -839,22 +841,22 @@ const mpSimilarWebStaleWhere = `
 			    WHERE s.media_id = media.id
 			      AND s.created_at >= NOW() - INTERVAL '6 months'
 			      AND (s.insights->>'visits') IS NOT NULL
-			      AND (s.insights->>'visits')::numeric > 0
 			  )`
 
-// mpSimilarWebEmptyWhere: media aktif yang trafiknya BELUM TERISI sama sekali
-// (kolom traffic_estimate masih 0/kosong). Dipakai tombol "Antrekan Cek
-// Trafik Semua" — tombol ini hanya mengisi yang kosong; media yang sudah
-// punya angka tidak disentuh sama sekali, berapa pun umur datanya. Pemeriksaan
-// ulang berkala media berdata tetap urusan scheduler (mpSimilarWebStaleWhere).
-const mpSimilarWebEmptyWhere = `
+// mpSimilarWebNeverCheckedWhere: media aktif yang BELUM PERNAH diperiksa
+// SimilarWeb sama sekali — tidak punya satu pun snapshot.
+//
+// Dipakai tombol "Antrekan Cek Trafik Semua". Tombol ini TIDAK melihat kolom
+// traffic_estimate: media yang angkanya diketik manual (mis. 150 rb) tetapi
+// belum pernah lewat provider tetap diperiksa. Sebaliknya media yang sudah
+// punya snapshot — termasuk hasil 0 kunjungan — dilewati, berapa pun umur
+// datanya. Pemeriksaan ulang berkala (6 bulan) tetap urusan scheduler.
+const mpSimilarWebNeverCheckedWhere = `
 			media.status = 'active'
 			  AND media.website_url IS NOT NULL AND media.website_url <> ''
-			  AND (media.traffic_estimate IS NULL OR media.traffic_estimate <= 0)
 			  AND NOT EXISTS (
 			    SELECT 1 FROM media_similarweb_snapshots s
 			    WHERE s.media_id = media.id
-			      AND s.created_at > NOW() - INTERVAL '24 hours'
 			  )`
 
 // MediaSimilarWebBulk: POST /v1/platform/media/similarweb-bulk — tulis ulang
@@ -877,7 +879,7 @@ func (d *Deps) MediaSimilarWebBulk(w http.ResponseWriter, r *http.Request) {
 	stale, err := d.queryRows(r.Context(), `
 		SELECT media.id, media.name
 		FROM media
-		WHERE`+mpSimilarWebEmptyWhere+`
+		WHERE`+mpSimilarWebNeverCheckedWhere+`
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'media_similarweb_refresh' AND j.status IN ('pending','running')
@@ -912,7 +914,7 @@ func (d *Deps) MediaSimilarWebBulk(w http.ResponseWriter, r *http.Request) {
 		enqueued++
 	}
 
-	totalRow, err := d.queryRow(r.Context(), "SELECT COUNT(*) AS total FROM media WHERE"+mpSimilarWebEmptyWhere)
+	totalRow, err := d.queryRow(r.Context(), "SELECT COUNT(*) AS total FROM media WHERE"+mpSimilarWebNeverCheckedWhere)
 	if err != nil {
 		writeErr(w, d, err)
 		return

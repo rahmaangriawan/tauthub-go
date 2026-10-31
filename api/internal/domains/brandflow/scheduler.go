@@ -1565,7 +1565,15 @@ func (d *Deps) schEnqueueSimilarWebChecks(ctx context.Context, limit int) {
 		      AND j.payload->>'mediaId' = media.id
 		      AND j.updated_at > NOW() - INTERVAL '24 hours'
 		  )
-		ORDER BY media.updated_at ASC
+		ORDER BY
+		  -- Media yang BELUM PERNAH dicek (tanpa snapshot) didahulukan,
+		  -- termasuk domain yang baru ditambahkan. Di dalam kelompok itu yang
+		  -- paling baru dibuat diperiksa lebih dulu. Media yang hanya basi
+		  -- (>6 bulan) menyusul.
+		  CASE WHEN EXISTS (
+		    SELECT 1 FROM media_similarweb_snapshots s0 WHERE s0.media_id = media.id
+		  ) THEN 1 ELSE 0 END,
+		  media.created_at DESC
 		LIMIT $1`, limit)
 	if err != nil {
 		slog.Error("[scheduler] sweep similarweb gagal", "err", err)
