@@ -1394,7 +1394,7 @@ func (d *Deps) testWordPress(r *http.Request, baseURL, username, secret string) 
 	}
 	if resp.status < 200 || resp.status >= 300 {
 		return map[string]any{"status": "error",
-			"message": truncateRunes("WordPress returned "+itoa(resp.status)+": "+resp.body, 500)}
+			"message": truncateRunes(wordpressTestGuidance(resp.status, resp.body), 500)}
 	}
 	var profile map[string]any
 	if jsonUnmarshal(resp.body, &profile) != nil {

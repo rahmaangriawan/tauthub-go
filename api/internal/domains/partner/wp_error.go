@@ -55,3 +55,29 @@ func isConnResetErr(err error) bool {
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "reset by peer")
 }
+
+// wordpressTestGuidance: ubah badan error REST WordPress menjadi pesan dengan
+// langkah perbaikan, bukan dump JSON. Semua situs yang diamati membalas
+// kegagalan auth dasar dengan kode generik rest_not_logged_in — dari luar
+// tidak bisa dibedakan apakah kredensialnya salah atau header Authorization
+// disaring hosting, jadi petunjuknya mencakup keduanya. Kode aslinya tetap
+// disertakan supaya bisa didiagnosis lebih lanjut.
+func wordpressTestGuidance(status int, body string) string {
+	var parsed struct {
+		Code string `json:"code"`
+	}
+	_ = jsonUnmarshal(body, &parsed)
+	switch parsed.Code {
+	case "rest_not_logged_in":
+		return "WordPress menolak kredensial ini (rest_not_logged_in). Periksa: 1) username memang ada di situs dan ditulis benar; 2) Application Password masih aktif, buat baru di WP Admin lewat Pengguna → Profil; 3) simpan ulang koneksi lalu uji lagi. Kalau password baru pun tetap gagal, minta penyedia hosting mengizinkan header Authorization."
+	case "incorrect_password":
+		return "Application Password salah untuk username ini (incorrect_password). Buat password aplikasi baru di WP Admin (Pengguna → Profil → Application Passwords), lalu perbarui koneksi dan uji lagi."
+	case "invalid_username":
+		return "Username tidak dikenali WordPress (invalid_username). Periksa ejaan username di situs, lalu perbarui koneksi dan uji lagi."
+	case "rest_forbidden", "rest_cannot_create":
+		return "User ini tidak punya izin membuat post (rest_forbidden). Pastikan rolenya minimal Author dan Application Password dibuat untuk user tersebut."
+	case "rest_no_route":
+		return "REST API situs tidak mengenali endpoint ini (rest_no_route). Pastikan WordPress 5.6+ dan plugin keamanan tidak mematikan REST API."
+	}
+	return "WordPress menanggapi status " + itoa(status) + ": " + truncateRunes(body, 300)
+}
