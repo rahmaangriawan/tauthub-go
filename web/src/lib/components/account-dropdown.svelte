@@ -5,7 +5,7 @@
 	// dari Next.js product-shell.tsx.
 	// Menampilkan info user, link ke profil akun, alih dashboard/workspace (jika ada),
 	// link platform admin (jika admin), dan tombol Keluar (logout).
-	import { CircleUser, Building, Settings, LogOut, ChevronDown } from '@lucide/svelte';
+	import { CircleUser, Building, Settings, LogOut, ChevronsUpDown } from '@lucide/svelte';
 	import { clearSession } from '$lib/auth';
 
 	let {
@@ -75,13 +75,12 @@
 		</div>
 		<div class="app-account-info">
 			<span class="app-account-name">{user.display_name}</span>
-			<span class="app-account-email">{user.email}</span>
+			<span class="app-role-badge">{roleLabel}</span>
 		</div>
-		<span class="app-role-badge">{roleLabel}</span>
-		<ChevronDown
+		<ChevronsUpDown
 			size={14}
-			class={open ? 'shrink-0 transition-transform duration-200 rotate-180' : 'shrink-0 transition-transform duration-200'}
-			style="color: var(--sidebar-soft);"
+			class="shrink-0 transition-colors duration-200"
+			style="color: {open ? 'var(--primary)' : 'var(--sidebar-soft)'};"
 		/>
 	</button>
 

@@ -249,6 +249,16 @@
 			if (!fresh) return;
 			await load();
 			loading = false;
+			// Deep-link dari tab Blogger (Integrasi): langsung buka form tambah
+			// media dengan platform Blogger terpilih. Query dibersihkan supaya
+			// refresh tidak membuka dialog lagi.
+			if (page.url.searchParams.get('integration_type') === 'blogger') {
+				openCreate();
+				form.media_type = 'blogger';
+				form.publication_mode = 'publish';
+				form.integration_type = 'blogger';
+				history.replaceState(window.history.state, '', page.url.pathname);
+			}
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);

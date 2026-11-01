@@ -22,6 +22,7 @@
 	let blogBusy = $state(false);
 	let blogError = $state('');
 	let selectedBlogId = $state('');
+	const base = $derived(`/mitra/${page.params.partnerId}`);
 
 	onMount(() => {
 		void (async () => {
@@ -218,7 +219,10 @@
 	{:else if rows.length === 0}
 		<div class="px-4 py-8 text-center">
 			<Globe size={26} class="mx-auto" style="color: var(--muted-foreground);" />
-			<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada media platform Blogger. Pilih platform Blogger saat menambah media, lalu hubungkan di sini.")}</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada media platform Blogger. Buat dulu media dengan platform Blogger di halaman Media, setelah di-ACC Admin hubungkan di sini.")}</p>
+			<button class="app-btn app-btn-primary mx-auto mt-4" type="button" onclick={() => goto(`${base}/media?integration_type=blogger`)}>
+				{tr("Buat Media Blogger")}
+			</button>
 		</div>
 	{:else}
 		<div class="space-y-3 p-4">

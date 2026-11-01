@@ -7,49 +7,43 @@
 	// dekorasi latar, bukan navigasi yang bisa dipakai.
 	import { goto } from '$app/navigation';
 	import { tr } from '$lib/i18n/phrases';
+	import { getI18n } from '$lib/i18n/i18n.svelte';
+	import type { LucideIcon } from '@lucide/svelte';
 	import {
-		Bell, ChartBar, ChartLine, Coins, House, Megaphone, Newspaper,
-		Package, Plus, Receipt, Sparkles, UserCircle
+		ChartLine, Coins, House, Megaphone, Newspaper, Receipt, ShieldCheck
 	} from '@lucide/svelte';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
-	const GROUPS = $derived([
+	// Label nav mengikuti kamus dashboard klien yang sebenarnya supaya backdrop
+	// terbaca sebagai dashboard yang sama, bukan dashboard generik.
+	const i18n = getI18n();
+
+	type StageItem = { label: string; icon: LucideIcon; active?: boolean };
+	type StageGroup = { label: string; items: StageItem[] };
+
+	const GROUPS = $derived<StageGroup[]>([
 		{
-			label: 'KONTEN',
+			label: i18n.t.nav.group_main,
+			items: [{ label: i18n.t.nav.brand, icon: House }]
+		},
+		{
+			label: i18n.t.nav.group_workspace,
 			items: [
-				{ label: 'Overview', icon: House },
-				{ label: tr(tr('Buat Konten')), icon: Plus },
-				{ label: 'Taut Pintar', icon: Sparkles, active: true }
+				{ label: i18n.t.nav.media_catalog, icon: Newspaper },
+				{ label: i18n.t.nav.campaigns, icon: Megaphone, active: true },
+				{ label: i18n.t.nav.publications, icon: ShieldCheck }
 			]
 		},
 		{
-			label: 'DISTRIBUSI',
-			items: [
-				{ label: 'Publications', icon: Megaphone },
-				{ label: 'Media', icon: Newspaper },
-				{ label: 'Paket', icon: Package }
-			]
+			label: i18n.t.nav.group_analytics,
+			items: [{ label: i18n.t.nav.analytics, icon: ChartLine }]
 		},
 		{
-			label: 'KEUANGAN',
+			label: i18n.t.nav.group_finance,
 			items: [
-				{ label: 'Credits', icon: Coins },
-				{ label: 'Invoices', icon: Receipt }
-			]
-		},
-		{
-			label: 'ANALITIK',
-			items: [
-				{ label: 'Analytics', icon: ChartLine },
-				{ label: 'PR Calculator', icon: ChartBar }
-			]
-		},
-		{
-			label: 'PENGATURAN',
-			items: [
-				{ label: 'Profil', icon: UserCircle },
-				{ label: 'Notifikasi', icon: Bell }
+				{ label: i18n.t.nav.credits, icon: Coins },
+				{ label: i18n.t.nav.invoices, icon: Receipt }
 			]
 		}
 	]);
@@ -118,9 +112,14 @@
 		z-index: 0;
 		overflow-y: auto;
 		display: grid;
-		place-items: center;
 		padding: 24px 16px 48px;
 		background: var(--background);
+	}
+	/* Centering via margin auto (bukan place-items center): saat kartu lebih
+	   tinggi dari viewport, bagian atasnya tetap bisa di-scroll dan tidak
+	   terpotong. */
+	.stage > :global(*) {
+		margin: auto;
 	}
 	/* Dashboard palsu: selalu di belakang, tidak menerima klik. */
 	.dash {

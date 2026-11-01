@@ -80,7 +80,8 @@ func (d *Deps) CampaignReportGet(w http.ResponseWriter, r *http.Request) {
 
 	publications, err := d.queryRows(r.Context(), `
 		SELECT p.id, p.status, p.published_at, p.published_url,
-		       d.title AS document_title, m.name AS media_name, m.category AS media_category
+		       d.title AS document_title, m.name AS media_name, m.category AS media_category,
+		       p.featured_image_url
 		FROM publications p
 		JOIN content_documents d ON d.id = p.document_id
 		JOIN media m ON m.id = p.media_id
@@ -95,13 +96,14 @@ func (d *Deps) CampaignReportGet(w http.ResponseWriter, r *http.Request) {
 	pubItems := make([]map[string]any, 0, len(publications))
 	for _, p := range publications {
 		pubItems = append(pubItems, map[string]any{
-			"id":             p.raw("id"),
-			"status":         p.raw("status"),
-			"document_title": p.raw("document_title"),
-			"media_name":     p.raw("media_name"),
-			"media_category": p.raw("media_category"),
-			"published_at":   p.timePtr("published_at"),
-			"published_url":  p.raw("published_url"),
+			"id":                p.raw("id"),
+			"status":            p.raw("status"),
+			"document_title":    p.raw("document_title"),
+			"media_name":        p.raw("media_name"),
+			"media_category":    p.raw("media_category"),
+			"featured_image_url": p.raw("featured_image_url"),
+			"published_at":      p.timePtr("published_at"),
+			"published_url":     p.raw("published_url"),
 		})
 	}
 
