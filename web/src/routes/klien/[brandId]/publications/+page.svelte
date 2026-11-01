@@ -174,11 +174,10 @@
 		return c ?? { ...STATUS_FALLBACK, label: status };
 	}
 
-	// ── SLA persetujuan media (3×24 jam + 1 hari perpanjangan) ─────────
+	// ── SLA persetujuan media (3×24 jam, tanpa perpanjangan) ────────────
 	// Server tetap otoritas pembatalan; ini hanya tampilan supaya klien tahu
 	// pesanannya tidak menggantung tanpa tenggat.
 	const SLA_DAYS = 3;
-	const SLA_GRACE_DAYS = 1;
 	function slaInfo(row: { status: string; scheduled_at?: string | null; created_at?: string | null }) {
 		if (row.status !== 'waiting_partner') return null;
 		const startRaw = row.scheduled_at || row.created_at;
@@ -186,19 +185,34 @@
 		const start = new Date(startRaw).getTime();
 		if (Number.isNaN(start)) return null;
 		const deadline = start + SLA_DAYS * 86_400_000;
-		const hardStop = deadline + SLA_GRACE_DAYS * 86_400_000;
 		const now = Date.now();
-		if (now >= hardStop) {
-			return { text: tr('Melewati SLA — dibatalkan otomatis'), tone: 'danger' as const };
-		}
 		if (now >= deadline) {
-			return { text: tr('SLA lewat — perpanjangan 1 hari'), tone: 'danger' as const };
+			return { text: tr('Melewati SLA — dibatalkan otomatis'), tone: 'danger' as const };
 		}
 		const daysLeft = Math.ceil((deadline - now) / 86_400_000);
 		return {
 			text: daysLeft <= 1 ? tr('Sisa kurang dari 1 hari') : `${tr('Sisa')} ${daysLeft} ${tr('hari')}`,
 			tone: daysLeft <= 1 ? ('warning' as const) : ('muted' as const)
 		};
+	}
+
+	// Alasan pembatalan: yang dihasilkan scheduler sudah diawali
+	// "Dibatalkan otomatis:". Pembatalan manual hanya bisa dilakukan klien
+	// (mitra tidak punya route cancel — mitra hanya bisa menolak), jadi
+	// sisanya diberi label "Dibatalkan klien:".
+	function cancelParts(reason: string) {
+		const text = reason.trim();
+		if (text.startsWith('Dibatalkan otomatis:')) {
+			return { label: tr('Dibatalkan otomatis:'), body: text.slice('Dibatalkan otomatis:'.length).trim(), auto: true };
+		}
+		let body = text;
+		for (const prefix of ['Dibatalkan klien:', 'Dibatalkan manual oleh klien:', 'Dibatalkan manual:']) {
+			if (body.startsWith(prefix)) {
+				body = body.slice(prefix.length).trim();
+				break;
+			}
+		}
+		return { label: tr('Dibatalkan klien:'), body, auto: false };
 	}
 
 	// Publikasi yang sudah diterima media tetapi diterbitkan sebagai DRAF di
@@ -507,6 +521,7 @@
 					{@const cats = categoriesOf(row)}
 					{@const thumb = sameOriginAssetUrl(row.featured_image_url)}
 					{@const sla = slaInfo(row)}
+					{@const cancel = row.cancel_reason ? cancelParts(row.cancel_reason) : null}
 					<div class="flex flex-col gap-4 border-b p-4 last:border-0 md:flex-row">
 						<!-- Cover: mobile 16/9 selebar kartu dengan label status menempel
 						     di pojok kanan atas gambar; desktop thumbnail 140x88. -->
@@ -574,10 +589,23 @@
 								<p
 									class="mt-2 text-xs"
 									style="color: {sla.tone === 'danger' ? 'var(--destructive)' : sla.tone === 'warning' ? 'var(--warning)' : 'var(--muted-foreground)'};"
-									title={tr('Media punya waktu 3×24 jam untuk menyetujui. Bila lewat, ada 1 hari perpanjangan, lalu pesanan dibatalkan dan saldo dikembalikan.')}
+									title={tr('Media punya waktu 3×24 jam untuk menyetujui. Bila lewat, pesanan dibatalkan otomatis dan saldo dikembalikan.')}
 								>
 									{sla.text}
 								</p>
+							{/if}
+
+							{#if row.status === 'cancelled' && cancel}
+								<div class="mt-2 flex items-start gap-1.5 text-xs" style="color: var(--destructive);">
+									<CircleAlert size={13} class="mt-0.5 shrink-0" />
+									<div class="min-w-0">
+										<span class="font-medium">{cancel.label}</span>
+										{cancel.body}
+										{#if cancel.auto}
+											<p class="mt-0.5 text-muted-foreground">{tr('Saldo pesanan sudah dikembalikan ke Saldo Akun.')}</p>
+										{/if}
+									</div>
+								</div>
 							{/if}
 
 							{#if row.status === 'published' && row.pr_analysis}
@@ -620,6 +648,11 @@
 									</Tooltip>
 								{:else}
 									{@render statusBadge(row, badge)}
+								{/if}
+								{#if row.status === 'cancelled' && row.cancel_reason?.includes('SLA')}
+									<p class="hidden text-right text-[11px] font-medium md:block" style="color: var(--destructive);" title={row.cancel_reason}>
+										{tr('Media tidak merespons (SLA)')}
+									</p>
 								{/if}
 							</div>
 
@@ -744,6 +777,17 @@
 				<p class="border-t px-6 py-3 text-xs text-muted-foreground">
 					Verifikasi URL: <span class="font-medium" style="color: var(--foreground);">{detail.verification.status}</span>{detail.verification.compliance_score != null ? ` · skor ${detail.verification.compliance_score}/100` : ''}
 					{#if detail.verification.error_message}<span class="mt-0.5 block">{detail.verification.error_message}</span>{/if}
+				</p>
+			{/if}
+
+			{#if detail.status === 'cancelled' && detail.cancel_reason}
+				{@const cancel = cancelParts(detail.cancel_reason)}
+				<p class="border-t px-6 py-3 text-xs" style="color: var(--destructive);">
+					<span class="font-medium">{cancel.label}</span>
+					{cancel.body}
+					{#if cancel.auto}
+						<span class="mt-0.5 block text-muted-foreground">{tr('Saldo pesanan sudah dikembalikan ke Saldo Akun.')}</span>
+					{/if}
 				</p>
 			{/if}
 

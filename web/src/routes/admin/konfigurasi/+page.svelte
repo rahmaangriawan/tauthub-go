@@ -6,6 +6,7 @@
 	// Turnstile CF, Google Sign-In, Short Link, Crawlhub, Server.
 	// Semua secret tidak pernah dikembalikan server — hanya flag "sudah dikonfigurasi".
 	import { onMount } from 'svelte';
+	import { tick } from 'svelte';
 	import { CheckCircle2, Gauge, Globe, KeyRound, Mail, RefreshCw, ShieldCheck, Sparkles, TriangleAlert } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
@@ -13,6 +14,12 @@
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
+	// Panel integrasi yang dipindah ke tab: file yang sama dipakai route
+	// /admin/integrasi-gsc, /admin/ga4-configs, dan /admin/wa-gateway.
+	import GscPanel from '../integrasi-gsc/gsc-panel.svelte';
+	import Ga4Panel from '../ga4-configs/ga4-panel.svelte';
+	import WaGatewayPanel from '../wa-gateway/wa-gateway-panel.svelte';
+	import EmailTemplatesPanel from './email-templates-panel.svelte';
 
 	type SeoConfig = {
 		api_key_configured: boolean;
@@ -144,6 +151,9 @@
 		{ key: 'seo', label: 'SEO Metrics' },
 		{ key: 'pagespeed', label: 'API Pagespeed' },
 		{ key: 'smtp', label: 'Email / SMTP' },
+		{ key: 'gsc', label: 'Integrasi GSC' },
+		{ key: 'ga4', label: 'GA4 Config' },
+		{ key: 'wa', label: 'WA Gateway' },
 		{ key: 'turnstile', label: 'Turnstile CF' },
 		{ key: 'google', label: 'Google Sign-In' },
 		{ key: 'shortlink', label: 'Short Link' },
@@ -154,6 +164,40 @@
 	type TabKey = (typeof TABS)[number]['key'];
 
 	let tab = $state<TabKey>('seo');
+
+	// scrollToTab: setelah tab dirender, gulir wadah tab ke bawah header sticky
+	// supaya anchor (#smtp, #gsc, …) mendarat di judul bagian, bukan tertutup.
+	async function scrollToTab(key: string) {
+		await tick();
+		const el = document.getElementById(key);
+		if (el) el.scrollIntoView({ block: 'start' });
+	}
+
+	// Deep link juga mengenali sub-tab Email/SMTP: #smtp-config dan
+	// #smtp-template membuka tab SMTP sekaligus bagian yang dimaksud.
+	const HASH_TO_VIEW: Record<string, { tab: TabKey; smtp?: 'config' | 'templates' }> = {
+		'smtp-config': { tab: 'smtp', smtp: 'config' },
+		'smtp-template': { tab: 'smtp', smtp: 'templates' }
+	};
+
+	function selectTab(key: TabKey) {
+		tab = key;
+		// Ganti hash tanpa menumpuk riwayat: URL bisa dibagikan dan tombol
+		// Back tetap kembali ke halaman sebelumnya, bukan antar tab.
+		// Sengaja TIDAK scroll: memindah viewport tiba-tiba saat ganti tab
+		// terasa seperti halaman "melompat". Scroll hanya untuk deep link.
+		if (typeof history !== 'undefined') {
+			history.replaceState(history.state, '', `#${key}`);
+		}
+	}
+
+	function selectSmtpView(view: 'config' | 'templates') {
+		smtpView = view;
+		const hash = view === 'templates' ? 'smtp-template' : 'smtp-config';
+		if (typeof history !== 'undefined') {
+			history.replaceState(history.state, '', `#${hash}`);
+		}
+	}
 
 	// `fallback` per aksi supaya pesan errornya spesifik seperti app lama
 	// (mis. "Gagal menguji domain."), bukan generik untuk semua tab.
@@ -434,6 +478,8 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 
 	// ── Email / SMTP ───────────────────────────────────────────────────────
 	let smtp = $state<SmtpConfig | null>(null);
+	// Sub-navigasi tab Email/SMTP: form koneksi atau panel template.
+	let smtpView = $state<'config' | 'templates'>('config');
 	let smtpLoading = $state(true);
 	let smtpError = $state('');
 	let smtpBusy = $state(false);
@@ -867,6 +913,26 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 	}
 
 	onMount(() => {
+		// Deep link: /admin/konfigurasi#smtp membuka tab itu. Gulir hanya di
+		// sini (hash diubah dari luar/halaman dimuat), bukan saat klik tab,
+		// supaya pindah tab tidak membuat viewport melompat tiba-tiba.
+		const applyHash = () => {
+			const key = window.location.hash.replace(/^#/, '').trim();
+			if (!key) return;
+			const sub = HASH_TO_VIEW[key];
+			if (sub) {
+				tab = sub.tab;
+				if (sub.smtp) smtpView = sub.smtp;
+				scrollToTab(sub.tab);
+				return;
+			}
+			if (TABS.some((t) => t.key === key)) {
+				tab = key as TabKey;
+				scrollToTab(key);
+			}
+		};
+		applyHash();
+		window.addEventListener('hashchange', applyHash);
 		void (async () => {
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
@@ -884,7 +950,10 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
-		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		return () => {
+			window.removeEventListener('hashchange', applyHash);
+			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		};
 	});
 
 	const serverSourceLabel = $derived(
@@ -904,13 +973,25 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 
 	<div class="mt-4 flex flex-wrap gap-2">
 		{#each TABS as t (t.key)}
-			<button
+			<!-- Tiap tab punya anchor sendiri: #seo, #smtp, #gsc, dan seterusnya,
+			     supaya tautan langsung ke satu bagian bisa dibagikan. -->
+			<a
+				href={`#${t.key}`}
+				id={`tab-${t.key}`}
 				class="app-btn {tab === t.key ? 'app-btn-primary' : 'app-btn-soft'} !min-h-8 !px-3 !text-xs"
-				type="button"
-				onclick={() => (tab = t.key)}
-			>{t.label}</button>
+				style="text-decoration: none;"
+				aria-current={tab === t.key ? 'page' : undefined}
+				onclick={(e) => {
+					e.preventDefault();
+					selectTab(t.key);
+				}}
+			>{t.label}</a>
 		{/each}
 	</div>
+
+	<!-- Wadah isi tab: jadi target anchor (#seo, #smtp, …) dengan offset
+	     scroll supaya judul tidak tertutup header sticky. -->
+	<div id={tab} class="scroll-mt-24">
 
 	<!-- SEO Metrics -->
 	{#if tab === 'seo'}
@@ -1215,7 +1296,10 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 
 	<!-- Email / SMTP -->
 	{#if tab === 'smtp'}
-		<div class="app-card mt-3 p-4">
+		<div class="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+			<div>
+				{#if smtpView === 'config'}
+					<div class="app-card p-4">
 			{#if smtpLoading && !smtp}
 				<p class="text-sm text-muted-foreground">{tr("Memuat konfigurasi SMTP…")}</p>
 			{:else}
@@ -1337,7 +1421,45 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 					<p class="mt-3 rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">{tr("SMTP belum dikonfigurasi — Tauthub belum dapat mengirim email transactional.")}</p>
 				{/if}
 			{/if}
+					</div>
+				{:else}
+					<EmailTemplatesPanel />
+				{/if}
+			</div>
+			<aside class="app-card p-2 lg:sticky lg:top-20">
+				<nav class="flex gap-1 lg:flex-col" aria-label={tr('Bagian Email & SMTP')}>
+					<button
+						type="button"
+						class="app-btn !min-h-8 !justify-start !px-3 !text-xs"
+						class:app-btn-primary={smtpView === 'config'}
+						class:app-btn-soft={smtpView !== 'config'}
+						onclick={() => selectSmtpView('config')}>{tr('Konfigurasi')}</button
+					>
+					<button
+						type="button"
+						class="app-btn !min-h-8 !justify-start !px-3 !text-xs"
+						class:app-btn-primary={smtpView === 'templates'}
+						class:app-btn-soft={smtpView !== 'templates'}
+						onclick={() => selectSmtpView('templates')}>{tr('Template')}</button
+					>
+				</nav>
+			</aside>
 		</div>
+	{/if}
+
+	<!-- Integrasi GSC (panel yang sama dipakai route /admin/integrasi-gsc) -->
+	{#if tab === 'gsc'}
+		<GscPanel />
+	{/if}
+
+	<!-- GA4 Config (panel yang sama dipakai route /admin/ga4-configs) -->
+	{#if tab === 'ga4'}
+		<Ga4Panel />
+	{/if}
+
+	<!-- WA Gateway (panel yang sama dipakai route /admin/wa-gateway) -->
+	{#if tab === 'wa'}
+		<WaGatewayPanel />
 	{/if}
 
 	<!-- Turnstile -->
@@ -1853,4 +1975,5 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 			{/if}
 		</div>
 	{/if}
+	</div>
 </section>

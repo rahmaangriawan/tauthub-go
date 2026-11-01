@@ -6,7 +6,7 @@
 	// Port apps/web/src/app/admin/publications/[publicationId]/page.tsx.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { ArrowLeft, ExternalLink, ImagePlus, RefreshCw } from '@lucide/svelte';
+	import { ArrowLeft, Ban, ExternalLink, ImagePlus, RefreshCw } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import ExplorerFrame from '$lib/components/admin/explorer-frame.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
@@ -160,6 +160,20 @@
 		partner_approved: tr('Disetujui mitra'),
 		waiting_partner: tr('Menunggu persetujuan')
 	});
+	// Label status publikasi untuk badge: bahasa manusia, bukan nilai mentah.
+	const PUB_STATUS_LABEL: Record<string, string> = $derived({
+		pending: tr('Menunggu diproses'),
+		waiting_partner: tr('Menunggu persetujuan media'),
+		partner_approved: tr('Disetujui media'),
+		partner_rejected: tr('Ditolak media'),
+		queued: tr('Antrean'),
+		processing: tr('Diproses'),
+		published: tr('Terbit'),
+		failed: tr('Gagal'),
+		retrying: tr('Mencoba ulang'),
+		cancelled: tr('Dibatalkan'),
+		revision: tr('Perlu revisi')
+	});
 
 	const publicationId = $derived(page.params.publicationId as string);
 
@@ -175,6 +189,11 @@
 	let syncing = $state(false);
 	let syncError = $state('');
 	let syncDone = $state('');
+	let cancelOpen = $state(false);
+	let cancelReason = $state('');
+	let cancelBusy = $state(false);
+	let cancelError = $state('');
+	let cancelDone = $state('');
 
 	onMount(() => {
 		void (async () => {
@@ -279,6 +298,27 @@
 			syncing = false;
 		}
 	}
+	async function cancelPublication() {
+		cancelBusy = true;
+		cancelError = '';
+		cancelDone = '';
+		try {
+			const res = await apiRequest(`/v1/platform/operations/publications/${publicationId}/cancel`, {
+				method: 'POST',
+				body: JSON.stringify({ reason: cancelReason.trim() })
+			});
+			if (!res.ok) {
+				cancelError = await readApiError(res, 'Gagal membatalkan publikasi.');
+				return;
+			}
+			cancelOpen = false;
+			cancelDone =
+				'Publikasi dibatalkan. Kredit reservasi dikembalikan ke Saldo Akun klien, dan klien serta mitra menerima notifikasi.';
+			await load();
+		} finally {
+			cancelBusy = false;
+		}
+	}
 	const pub = $derived(data?.publication);
 	const isWordpress = $derived(pub?.media_integration_type === 'wordpress');
 </script>
@@ -289,7 +329,7 @@
 		title={pub?.document_title ?? tr('Detail publikasi')}
 		description={`Publication ${publicationId}${pub?.campaign_name ? ` · Campaign: ${pub.campaign_name}` : ''}`}
 	>
-		{#if pub}<Badge tone={STATUS_TONE[pub.status] ?? 'neutral'} value={pub.status} />{/if}
+		{#if pub}<Badge tone={STATUS_TONE[pub.status] ?? 'neutral'} value={PUB_STATUS_LABEL[pub.status] ?? pub.status} />{/if}
 		<a
 			href="/admin/publications/daftar"
 			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
@@ -332,6 +372,34 @@
 			{/if}
 			{#if retryDone}
 				<p class="mt-3 text-sm" style="color: var(--success);">{retryDone}</p>
+			{/if}
+
+			{#if pub.status !== 'published' && pub.status !== 'cancelled'}
+				<div class="mt-4 flex flex-wrap items-center gap-2">
+					<button
+						class="app-btn app-btn-soft"
+						style="color: var(--destructive);"
+						type="button"
+						disabled={cancelBusy}
+						onclick={() => {
+							cancelReason = '';
+							cancelError = '';
+							cancelDone = '';
+							cancelOpen = true;
+						}}
+					>
+						<Ban size={15} />{tr('Batalkan publikasi')}
+					</button>
+					<span class="text-xs text-muted-foreground">
+						{tr('Membatalkan pesanan dari panel operasi. Kredit reservasi dikembalikan ke Saldo Akun klien, dan klien serta mitra menerima notifikasi.')}
+					</span>
+				</div>
+			{/if}
+			{#if cancelError}
+				<p class="mt-3 text-sm" style="color: var(--destructive);">{cancelError}</p>
+			{/if}
+			{#if cancelDone}
+				<p class="mt-3 text-sm" style="color: var(--success);">{cancelDone}</p>
 			{/if}
 
 			{#if data?.job?.warning_message}
@@ -773,3 +841,57 @@
 	{/if}
 	</ExplorerFrame>
 </section>
+
+{#if cancelOpen}
+	<div class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);">
+		<button
+			type="button"
+			aria-label={tr('Tutup')}
+			tabindex="-1"
+			style="position:absolute; inset:0; border:none; background:transparent; cursor:default;"
+			onclick={() => {
+				if (!cancelBusy) cancelOpen = false;
+			}}
+		></button>
+		<dialog
+			open
+			class="app-card relative z-10 w-full max-w-md p-5"
+			aria-label={tr('Batalkan publikasi')}
+			onkeydown={(e) => {
+				if (e.key === 'Escape' && !cancelBusy) cancelOpen = false;
+			}}
+		>
+			<h2 class="text-base font-bold">{tr('Batalkan publikasi')}</h2>
+			<p class="mt-2 text-sm text-muted-foreground">
+				{tr('Publikasi ini akan dibatalkan dan kredit reservasinya dikembalikan ke Saldo Akun klien. Klien dan mitra menerima notifikasi berisi alasan di bawah.')}
+			</p>
+			<label class="mt-3 flex flex-col gap-1 text-sm">
+				{tr('Alasan (opsional)')}
+				<textarea
+					class="app-input"
+					rows="3"
+					bind:value={cancelReason}
+					maxlength={500}
+					placeholder={tr('Permintaan klien, duplikat pesanan, atau kendala operasional.')}
+				></textarea>
+			</label>
+			{#if cancelError}
+				<p class="mt-2 text-sm" style="color: var(--destructive);">{cancelError}</p>
+			{/if}
+			<div class="mt-4 flex justify-end gap-2">
+				<button class="app-btn app-btn-soft" type="button" disabled={cancelBusy} onclick={() => (cancelOpen = false)}>
+					{tr('Batal')}
+				</button>
+				<button
+					class="app-btn"
+					style="background-color: var(--destructive); color: #fff;"
+					type="button"
+					disabled={cancelBusy}
+					onclick={() => void cancelPublication()}
+				>
+					{cancelBusy ? tr('Membatalkan…') : tr('Batalkan publikasi')}
+				</button>
+			</div>
+		</dialog>
+	</div>
+{/if}

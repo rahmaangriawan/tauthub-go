@@ -2529,3 +2529,92 @@ button.selectedStepChip:disabled,
     align-items: flex-start;
   }
 }
+
+/* ── Dropdown Jenis Media (mainstream / blogger) ─────────────────────── */
+.mediaTypeBtn {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	height: 38px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--card);
+	font: inherit;
+	cursor: pointer;
+	transition: border-color 140ms ease, background-color 140ms ease;
+}
+.mediaTypeBtn:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); }
+.mediaTypeIcon { color: #64748b; flex-shrink: 0; }
+.mediaTypeTitle { font-size: 13px; font-weight: 600; color: var(--foreground); }
+.mediaTypeCaret { color: #64748b; flex-shrink: 0; }
+
+.mediaTypeBackdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	border: none;
+	background: transparent;
+	cursor: default;
+}
+.mediaTypePopover {
+	position: fixed;
+	z-index: 61;
+	width: 300px;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--card);
+	box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+}
+.mediaTypeOption {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	width: 100%;
+	padding: 10px 12px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.mediaTypeOption:hover { background: color-mix(in srgb, var(--primary) 7%, transparent); }
+.mediaTypeOptionActive { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.mediaTypeRadio {
+	width: 15px;
+	height: 15px;
+	margin-top: 2px;
+	flex-shrink: 0;
+	border: 1.5px solid #94a3b8;
+	border-radius: 50%;
+	position: relative;
+}
+.mediaTypeOptionActive .mediaTypeRadio { border-color: var(--primary); }
+.mediaTypeOptionActive .mediaTypeRadio::after {
+	content: '';
+	position: absolute;
+	inset: 2.5px;
+	border-radius: 50%;
+	background: var(--primary);
+}
+.mediaTypeOptionText { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.mediaTypeOptionTitle { font-size: 13.5px; font-weight: 600; color: var(--foreground); }
+.mediaTypeOptionSub { font-size: 11.5px; color: var(--muted-foreground); }
+
+/* ── Cakupan domain: chip kecil setelah judul media ───────────────────── */
+.domainScopeChip {
+  display: inline-flex; align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px; font-weight: 600;
+  white-space: nowrap; cursor: default;
+  background: color-mix(in srgb, #64748b 12%, transparent);
+  color: #64748b;
+  flex-shrink: 0;
+}
+.domainScopeChip.domainScopeChipSub {
+  background: color-mix(in srgb, #2b67ec 12%, transparent);
+  color: #2b67ec;
+}

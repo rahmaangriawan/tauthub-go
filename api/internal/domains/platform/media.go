@@ -99,6 +99,14 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	partnerID := strings.TrimSpace(q.Get("partner_id"))
 	integrationType := strings.TrimSpace(q.Get("integration_type"))
 	autoPublish := strings.TrimSpace(q.Get("auto_publish"))
+	// media_type: mainstream (media berita & publisher profesional) atau
+	// blogger (blog personal / media independen).
+	mediaType := strings.TrimSpace(q.Get("media_type"))
+
+	if mediaType != "" && mediaType != "mainstream" && mediaType != "blogger" {
+		writeErr(w, d, errUnprocessable("Invalid media_type filter"))
+		return
+	}
 
 	if autoPublish != "" && autoPublish != "1" && autoPublish != "0" {
 		writeErr(w, d, errUnprocessable("Invalid auto_publish filter"))
@@ -151,6 +159,9 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	}
 	if integrationType != "" {
 		where = append(where, "m.integration_type = "+next(integrationType))
+	}
+	if mediaType != "" {
+		where = append(where, "m.media_type = "+next(mediaType))
 	}
 	if autoPublish == "1" {
 		where = append(where, "m.auto_publish = TRUE")

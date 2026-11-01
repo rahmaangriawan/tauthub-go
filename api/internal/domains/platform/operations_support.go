@@ -377,6 +377,7 @@ func opPublicationListItem(row ptRow) map[string]any {
 		"partner_name":           ptNullableStr(row, "partner_name"),
 		"error_code":             ptNullableStr(row, "error_code"),
 		"error_message":          ptNullableStr(row, "error_message"),
+		"featured_image_url":     ptNullableStr(row, "featured_image_url"),
 		"variant":                variant,
 		"article_source":         row.strOr("article_source", "manual"),
 	}

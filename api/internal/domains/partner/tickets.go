@@ -210,6 +210,17 @@ func (d *Deps) createTicket(w http.ResponseWriter, r *http.Request, partner Part
 		Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": in.Subject},
 		Link: link, BaseURL: d.Cfg.PublicAppURL,
 	})
+	// Konfirmasi ke mitra: notifikasi in-app (lonceng) sekaligus bahan email
+	// lewat dispatcher (event ticket.created). Tanpa baris ini mitra tidak
+	// pernah menerima bukti tiketnya masuk, karena sebelumnya tipe yang sama
+	// hanya dikirim ke admin.
+	if partner.UserID != "" {
+		partnerLink := "/mitra/" + derefOr(partner.PublicID, partner.ID) + "/dukungan/" + ticketID
+		_ = d.exec(r.Context(),
+			`INSERT INTO notifications (id, user_id, type, title, body, link)
+			 VALUES (gen_random_uuid(), $1, 'ticket.created', $2, $3, $4)`,
+			partner.UserID, "Tiket dukungan diterima", in.Subject, partnerLink)
+	}
 	_ = d.exec(r.Context(), `
 		INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id)
 		VALUES (gen_random_uuid(), $1, 'support.ticket.created', 'support_ticket', $2)`,

@@ -327,6 +327,17 @@ func (d *Deps) createSettlement(w http.ResponseWriter, r *http.Request, partner 
 		Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "jumlah": formatIDR(net)},
 		Link: link, BaseURL: d.Cfg.PublicAppURL,
 	})
+	// Konfirmasi ke mitra bahwa pengajuan tercatat. Event yang sama dipakai
+	// dispatcher email (withdrawal.requested) supaya mitra punya bukti
+	// pengajuan tanpa harus membuka portal.
+	if partner.UserID != "" {
+		partnerLink := "/mitra/" + derefOr(partner.PublicID, partner.ID) + "/settlements"
+		_ = d.exec(r.Context(),
+			`INSERT INTO notifications (id, user_id, type, title, body, link)
+			 VALUES (gen_random_uuid(), $1, 'withdrawal.requested', $2, $3, $4)`,
+			partner.UserID, "Penarikan dana diterima",
+			"Permintaan penarikan "+formatIDR(net)+" diterima dan menunggu review Admin.", partnerLink)
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"settlement": settlementJSON(created)})
 }
 

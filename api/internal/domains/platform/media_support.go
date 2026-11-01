@@ -2735,7 +2735,30 @@ func (d *Deps) mpEmailFollowUp(ctx context.Context, event, recipientUserID, reci
 	if !hasSubject {
 		return
 	}
-	html := mpRenderDetailEmail(subject, mpEmailBodyRows(event, data), d.absoluteAppURL(data["link"]), mpEmailLinkLabel(event))
+	style := email.LoadStyle(ctx, d.Pool)
+	if data == nil {
+		data = map[string]string{}
+	}
+	if strings.TrimSpace(data["nama"]) == "" && recipientUserID != "" {
+		if nameRow, _ := d.queryRow(ctx,
+			"SELECT COALESCE(display_name, '') AS n FROM users WHERE id = $1 LIMIT 1", recipientUserID); nameRow != nil {
+			data["nama"] = nameRow.strOr("n", "")
+		}
+	}
+	tplData := map[string]string{
+		"nama":   data["nama"],
+		"judul":  mpFirstNonEmpty(data["media_name"], subject),
+		"isi":    mpFirstNonEmpty(data["status"], mpFirstNonEmpty(data["reason"], subject)),
+		"status": data["status"],
+		"jumlah": data["jumlah"],
+		"link":   d.absoluteAppURL(data["link"]),
+	}
+	html := ""
+	if s, h, ok := email.RenderEvent(ctx, d.Pool, style, email.AudiencePartner, event, tplData); ok {
+		subject, html = s, h
+	} else {
+		html = mpRenderDetailEmail(style, subject, mpEmailBodyRows(event, data), d.absoluteAppURL(data["link"]), mpEmailLinkLabel(event))
+	}
 	// Keputusan kanal diambil dari registry pusat: mode event, kelengkapan
 	// kontak, gate baca in-app, dedupe per event, dan kuota per jam. Tanpa
 	// pemeriksaan ini setiap review media menjadi satu email berbayar, walau
@@ -2808,8 +2831,18 @@ func mpHTMLEscape(v string) string {
 
 // mpRenderDetailEmail: kartu email standar (judul + rincian + tombol) dari
 // package email, jadi logo dan footer brand tidak lagi berbeda antar-domain.
-func mpRenderDetailEmail(title string, rows [][2]string, link, linkLabel string) string {
-	return email.Detail(title, "", rows, link, linkLabel).HTML
+func mpRenderDetailEmail(style email.Style, title string, rows [][2]string, link, linkLabel string) string {
+	return email.DetailStyled(style, title, "", rows, link, linkLabel).HTML
+}
+
+// mpFirstNonEmpty: nilai pertama yang tidak kosong.
+func mpFirstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // mpWAFollowUp: antre WhatsApp ke mitra (best-effort). Mirip routeWaNotification:

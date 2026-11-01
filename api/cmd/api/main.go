@@ -111,6 +111,9 @@ func run() error {
 	// Deps platform dipakai juga oleh route root (/t/{code} short link), jadi
 	// dibuat di level ini lalu dipakai ulang di dalam grup /v1.
 	platformDeps := &platformdomain.Deps{Pool: database.Pool, Cfg: cfg, Admin: &adminshared.Deps{Pool: database.Pool, Cfg: cfg}, Google: googleSvc}
+	// ID grup WA admin yang masih plaintext dari versi lama dienkripsi sekali
+	// saat start (idempoten). Tidak menggagalkan start bila tabel belum ada.
+	platformDeps.BackfillWAGroupTarget(context.Background())
 	partnerDeps := &partnerdomain.Deps{Pool: database.Pool, Cfg: cfg}
 
 	// Short link distribusi: /t/{code} → 301 ke URL tujuan sambil mencatat
@@ -156,6 +159,11 @@ func run() error {
 		v1.Post("/auth/google/complete", authDeps.GoogleComplete)
 		v1.Post("/auth/google/link", authDeps.GoogleLink)
 		v1.Post("/auth/google/exchange-session", authDeps.GoogleExchangeSession)
+
+		// Local Retrieval Worker — auth token khusus di handler (bukan JWT),
+		// di-polling komputer lokal admin untuk domain yang memblokir IP VPS.
+		v1.Get("/platform/local-worker/claim", platformDeps.LocalWorkerClaim)
+		v1.Post("/platform/local-worker/requests/{id}/result", platformDeps.LocalWorkerResult)
 
 		// Brands (fase 2) — butuh Bearer.
 		brands := &brandsdomain.Deps{Pool: database.Pool}
@@ -562,7 +570,7 @@ func run() error {
 			authed.Post("/partner/media/{mediaId}/domain-verification", partnerDeps.MediaDomainVerification)
 			authed.Post("/partner/media/{mediaId}/dewan-pers-document", partnerDeps.MediaDewanPersDocument)
 			authed.Post("/partner/media/{mediaId}/dewan-pers-verification", partnerDeps.MediaDewanPersVerification)
-		authed.Delete("/partner/media/{mediaId}/dewan-pers-verification", partnerDeps.MediaDewanPersVerificationDelete)
+			authed.Delete("/partner/media/{mediaId}/dewan-pers-verification", partnerDeps.MediaDewanPersVerificationDelete)
 			authed.Get("/partner/media/{mediaId}/seo", partnerDeps.MediaSEO)
 			authed.Post("/partner/media/{mediaId}/seo", partnerDeps.MediaSEO)
 			authed.Post("/partner/media/{mediaId}/test-publishing-api", partnerDeps.MediaTestPublishingAPI)
@@ -774,6 +782,8 @@ func run() error {
 			// Media summaries.
 			authed.Get("/platform/media-summaries", platformDeps.MediaSummariesList)
 			authed.Post("/platform/media-summaries/{mediaId}/regenerate", platformDeps.MediaSummaryRegenerate)
+			authed.Post("/platform/media-summaries/{mediaId}/draft", platformDeps.MediaSummaryAIDraft)
+			authed.Post("/platform/media-summaries/{mediaId}/manual", platformDeps.MediaSummaryManualSet)
 
 			// Operations.
 			authed.Get("/platform/operations/access", platformDeps.OperationsAccess)
@@ -801,6 +811,7 @@ func run() error {
 			authed.Get("/platform/operations/publications", platformDeps.OperationsPublications)
 			authed.Get("/platform/operations/publications/{publicationId}", platformDeps.OperationsPublicationDetail)
 			authed.Post("/platform/operations/publications/{publicationId}/retry", platformDeps.OperationsPublicationRetry)
+			authed.Post("/platform/operations/publications/{publicationId}/cancel", platformDeps.OperationsPublicationCancel)
 			authed.Post("/platform/operations/publications/{publicationId}/repair-images", platformDeps.OperationsPublicationRepairImages)
 			authed.Post("/platform/operations/publications/{publicationId}/resync-wordpress", platformDeps.OperationsPublicationResyncWordpress)
 			authed.Get("/platform/operations/running-batches", platformDeps.OperationsRunningBatches)
@@ -848,6 +859,15 @@ func run() error {
 			authed.Get("/platform/settings/email/deliveries", platformDeps.SettingsEmailDeliveries)
 			authed.Post("/platform/settings/email/test-connection", platformDeps.SettingsEmailTestConnection)
 			authed.Post("/platform/settings/email/test-send", platformDeps.SettingsEmailTestSend)
+			// Panel Template email: gaya + copy per audiens + saklar kanal.
+			authed.Get("/platform/email/style", platformDeps.EmailStyleGet)
+			authed.Put("/platform/email/style", platformDeps.EmailStylePut)
+			authed.Get("/platform/email/templates", platformDeps.EmailTemplatesList)
+			authed.Put("/platform/email/templates", platformDeps.EmailTemplateSave)
+			authed.Delete("/platform/email/templates", platformDeps.EmailTemplateReset)
+			authed.Put("/platform/email/channels", platformDeps.EmailChannelSet)
+			authed.Post("/platform/email/preview", platformDeps.EmailPreview)
+			authed.Post("/platform/email/test-send", platformDeps.EmailTemplateTestSend)
 			authed.Get("/platform/settings/pagespeed", platformDeps.SettingsPageSpeedGet)
 			authed.Put("/platform/settings/pagespeed", platformDeps.SettingsPageSpeedPut)
 			authed.Post("/platform/settings/pagespeed/test", platformDeps.SettingsPageSpeedTest)

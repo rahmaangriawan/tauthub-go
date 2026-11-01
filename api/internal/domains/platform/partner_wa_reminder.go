@@ -119,7 +119,21 @@ func (d *Deps) AdminPartnerWAReminder(w http.ResponseWriter, r *http.Request) {
 			`<li>centang izin dihubungi lewat WhatsApp.</li></ul>` +
 			`<p style="margin:0;">Terima kasih.</p>`
 		subject := "Lengkapi nomor WhatsApp Anda di Tauthub"
-		html := email.DetailHTML(subject, body, link, "Buka Profil → Notifikasi").HTML
+		style := email.LoadStyle(r.Context(), d.Pool)
+		tplData := map[string]string{
+			"nama":   partnerName,
+			"judul":  subject,
+			"isi":    "Media Anda sudah terdaftar di Tauthub, tetapi nomor WhatsApp belum lengkap. Pesanan dari klien bisa gagal dikonfirmasi tanpa nomor aktif.",
+			"status": "",
+			"jumlah": "",
+			"link":   link,
+		}
+		var html string
+		if s, h, ok := email.RenderEvent(r.Context(), d.Pool, style, email.AudiencePartner, "partner.wa_required", tplData); ok {
+			subject, html = s, h
+		} else {
+			html = email.DetailHTMLStyled(style, subject, body, link, "Buka Profil → Notifikasi").HTML
+		}
 		if _, _, err := email.EnqueueEmail(r.Context(), d.Pool, email.EnqueueOptions{
 			Template:       "partner-wa-required",
 			RecipientEmail: recipientEmail,

@@ -205,15 +205,11 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 							}
 						]
 					: []),
-				...(can('content')
-					? [
-							{ label: i18n.t.nav_admin.content_standards, href: '/admin/content-standards', icon: ClipboardList, active: pathname.startsWith('/admin/content-standards') },
-							{ label: i18n.t.nav_admin.dewan_pers, href: '/admin/dewan-pers-reviews', icon: ShieldCheck, active: pathname.startsWith('/admin/dewan-pers-reviews') },
-							{ label: i18n.t.nav_admin.knowledge_base, href: '/admin/knowledge-bases', icon: BookOpenText, active: pathname.startsWith('/admin/knowledge-bases') },
-							{ label: i18n.t.nav_admin.content_settings, href: '/admin/content-settings', icon: ClipboardList, active: pathname.startsWith('/admin/content-settings') },
-							{ label: i18n.t.nav_admin.moderations, href: '/admin/moderations', icon: ShieldCheck, active: pathname.startsWith('/admin/moderations') }
-						]
-					: []),
+					...(can('content')
+						? [
+								{ label: i18n.t.nav_admin.knowledge_base, href: '/admin/knowledge-bases', icon: BookOpenText, active: pathname.startsWith('/admin/knowledge-bases') }
+							]
+						: []),
 				...(can('publications')
 					? [
 							{
@@ -249,11 +245,27 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 								]
 							}
 						]
-					: [])
-			]
-		},
-		{
-			label: i18n.t.nav_admin.group_users,
+						: [])
+				]
+			},
+			// Standar & moderasi konten: satu kelompok sendiri supaya tidak
+			// tercampur dengan menu media dan publikasi di atasnya. Grup hanya
+			// dirender bila ada isinya, karena label grup selalu tampil.
+			...(can('content')
+				? [
+						{
+							label: i18n.t.nav_admin.group_standards,
+							items: [
+								{ label: i18n.t.nav_admin.content_standards, href: '/admin/content-standards', icon: ClipboardList, active: pathname.startsWith('/admin/content-standards') },
+								{ label: i18n.t.nav_admin.dewan_pers, href: '/admin/dewan-pers-reviews', icon: ShieldCheck, active: pathname.startsWith('/admin/dewan-pers-reviews') },
+								{ label: i18n.t.nav_admin.content_settings, href: '/admin/content-settings', icon: ClipboardList, active: pathname.startsWith('/admin/content-settings') },
+								{ label: i18n.t.nav_admin.moderations, href: '/admin/moderations', icon: ShieldCheck, active: pathname.startsWith('/admin/moderations') }
+							]
+						}
+					]
+				: []),
+			{
+				label: i18n.t.nav_admin.group_users,
 			items: [
 				...(can('users')
 					? [{ label: tr('Klien'), href: '/admin/users', icon: Users, active: pathname.startsWith('/admin/users') }]
@@ -299,12 +311,19 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 							}
 						]
 					: []),
+				// Pengumuman, notifikasi, obrolan, dan dukungan dikelompokkan sendiri
+				// sebagai KOMUNIKASI supaya tidak tercampur dengan daftar pengguna.
+				{ label: tr('Changelog'), href: '/admin/changelog', icon: ScrollText, active: pathname.startsWith('/admin/changelog') }
+			]
+		},
+		{
+			label: i18n.t.nav_admin.group_communication,
+			items: [
 				// Pengumuman terbuka untuk semua platform admin (guard backend sama).
 				{ label: tr('Kotak Pengumuman'), href: '/admin/pengumuman', icon: Megaphone, active: pathname.startsWith('/admin/pengumuman') },
 				{ label: tr('Notifikasi'), href: '/admin/notifications', icon: Bell, active: pathname.startsWith('/admin/notifications') },
 				{ label: tr('Log Obrolan'), href: '/admin/obrolan', icon: MessageCircle, active: pathname.startsWith('/admin/obrolan') },
-				{ label: tr('Dukungan'), href: '/admin/dukungan', icon: Headset, active: pathname.startsWith('/admin/dukungan'), badge: supportUnread },
-				{ label: tr('Changelog'), href: '/admin/changelog', icon: ScrollText, active: pathname.startsWith('/admin/changelog') }
+				{ label: tr('Dukungan'), href: '/admin/dukungan', icon: Headset, active: pathname.startsWith('/admin/dukungan'), badge: supportUnread }
 			]
 		},
 		{
@@ -345,32 +364,39 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 					: [])
 			]
 		},
-		{
-			label: i18n.t.nav_admin.group_ops,
-			items: [
-				...(isSuper
-					? [
-							{ label: i18n.t.nav_admin.configuration, href: '/admin/konfigurasi', icon: Settings, active: pathname.startsWith('/admin/konfigurasi') },
-							{ label: i18n.t.nav_admin.gsc, href: '/admin/integrasi-gsc', icon: Gauge, active: pathname.startsWith('/admin/integrasi-gsc') },
-							{ label: i18n.t.nav_admin.ga4, href: '/admin/ga4-configs', icon: Gauge, active: pathname.startsWith('/admin/ga4-configs') },
-							{ label: i18n.t.nav_admin.wa_gateway, href: '/admin/wa-gateway', icon: ScrollText, active: pathname.startsWith('/admin/wa-gateway') }
-						]
-					: []),
-				...(can('errors')
-					? [{ label: i18n.t.nav_admin.errors, href: '/admin/errors', icon: TriangleAlert, active: pathname.startsWith('/admin/errors') }]
-					: []),
-				// Monitoring Order pindah ke folder Publikasi (group MEDIA & KONTEN),
-				// jadi tidak lagi berdiri sendiri di bagian Operasional.
-				{ label: i18n.t.nav_admin.media_summaries, href: '/admin/media-summaries', icon: Binoculars, active: pathname.startsWith('/admin/media-summaries') },
-				...(isSuper
-					? [
-							{ label: i18n.t.nav_admin.audit_log, href: '/admin/audit-log', icon: ClipboardList, active: pathname.startsWith('/admin/audit-log') },
-							{ label: i18n.t.nav_admin.bug_reports, href: '/admin/bug-reports', icon: Bug, active: pathname.startsWith('/admin/bug-reports') },
-							{ label: i18n.t.nav_admin.operations, href: '/admin/operations', icon: Gauge, active: pathname.startsWith('/admin/operations') }
-						]
-					: [])
-			]
-		},
+			{
+				label: i18n.t.nav_admin.group_ops,
+				items: [
+					...(isSuper
+						? [
+								// Integrasi GSC, GA4 Config, dan WA Gateway pindah ke tab
+								// di /admin/konfigurasi; route lamanya tetap hidup sebagai
+								// deep link, hanya menu sidebarnya yang dihapus.
+								{ label: i18n.t.nav_admin.configuration, href: '/admin/konfigurasi', icon: Settings, active: pathname.startsWith('/admin/konfigurasi') || pathname.startsWith('/admin/integrasi-gsc') || pathname.startsWith('/admin/ga4-configs') || pathname.startsWith('/admin/wa-gateway') }
+							]
+						: [])
+				]
+			},
+			{
+				// Monitoring, laporan, dan audit: satu kelompok sendiri supaya
+				// tidak tercampur dengan menu Konfigurasi di atasnya.
+				label: i18n.t.nav_admin.group_monitoring,
+				items: [
+					...(can('errors')
+						? [{ label: i18n.t.nav_admin.errors, href: '/admin/errors', icon: TriangleAlert, active: pathname.startsWith('/admin/errors') }]
+						: []),
+					// Monitoring Order pindah ke folder Publikasi (group MEDIA & KONTEN),
+					// jadi tidak lagi berdiri sendiri di bagian Operasional.
+					{ label: i18n.t.nav_admin.media_summaries, href: '/admin/media-summaries', icon: Binoculars, active: pathname.startsWith('/admin/media-summaries') },
+					...(isSuper
+						? [
+								{ label: i18n.t.nav_admin.audit_log, href: '/admin/audit-log', icon: ClipboardList, active: pathname.startsWith('/admin/audit-log') },
+								{ label: i18n.t.nav_admin.bug_reports, href: '/admin/bug-reports', icon: Bug, active: pathname.startsWith('/admin/bug-reports') },
+								{ label: i18n.t.nav_admin.operations, href: '/admin/operations', icon: Gauge, active: pathname.startsWith('/admin/operations') }
+							]
+						: [])
+				]
+			},
 		...(isSuper
 			? [
 					{

@@ -154,6 +154,16 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 	} else if spamFilter == "high" {
 		clause += " AND sm.spam_score IS NOT NULL AND sm.spam_score > 60"
 	}
+	// Jenis media: mainstream (media berita & publisher profesional) atau
+	// blogger (blog personal / media independen). Kosong = semua.
+	mediaType := strings.TrimSpace(q.Get("media_type"))
+	if mediaType != "" && mediaType != "mainstream" && mediaType != "blogger" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid media_type filter")
+		return
+	}
+	if mediaType != "" {
+		clause += " AND media.media_type = " + addArg(mediaType)
+	}
 
 	var total int
 	_ = d.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM media "+clause, args...).Scan(&total)

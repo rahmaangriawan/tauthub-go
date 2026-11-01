@@ -20,6 +20,7 @@
 	import { wordCountLabel, normalizeWordCountMode } from '$lib/media/word-count';
 	import { normalizeLinkDurationMonths } from '$lib/media/link-duration';
 	import { mediaDistribution } from '$lib/media/distribution';
+	import { domainScope } from '$lib/media/domain-scope';
 	import { getCategoryTone } from '$lib/media/category-tone';
 	import { MEDIA_LABEL } from '../taut-pintar/_shared';
 
@@ -433,21 +434,30 @@
 						{/if}
 					</div>
 
-					<div class="detailHeaderInfo">
-						<div class="detailHeaderTitleRow">
-							<h3 class="detailTitle">{media.name}</h3>
-							{#if media.domain_verified !== false}
-								<span class="verifiedBadge" title="Domain terverifikasi">
-									<CircleCheck size={14} />
-									<span>VERIFIED</span>
-								</span>
-							{/if}
-							{#if media.dewan_pers_verified}
-								<span class="dewanPersPill" title="Terverifikasi Dewan Pers">
-									DEWAN PERS
-								</span>
-							{/if}
-						</div>
+						<div class="detailHeaderInfo">
+							<div class="detailHeaderTitleRow">
+								<h3 class="detailTitle">{media.name}</h3>
+								{#if domainScope(media.website_url)}
+									<span
+										class="domainScopeBadge"
+										class:domainScopeBadgeSub={domainScope(media.website_url) === 'subdomain'}
+										title={domainScope(media.website_url) === 'subdomain'
+											? tr('Artikel tayang di subdomain, bukan halaman utama domain.')
+											: tr('Artikel tayang di halaman utama (root domain).')}
+									>{domainScope(media.website_url) === 'subdomain' ? tr('Subdomain') : tr('Root domain')}</span>
+								{/if}
+								{#if media.domain_verified !== false}
+									<span class="verifiedBadge" title="Domain terverifikasi">
+										<CircleCheck size={14} />
+										<span>VERIFIED</span>
+									</span>
+								{/if}
+								{#if media.dewan_pers_verified}
+									<span class="dewanPersPill" title="Terverifikasi Dewan Pers">
+										DEWAN PERS
+									</span>
+								{/if}
+							</div>
 						<div class="detailCategoryRow">
 							{#if media.website_url}
 								<a
@@ -976,6 +986,23 @@
 		font-weight: 750;
 		color: #0f172a;
 		letter-spacing: -0.01em;
+	}
+	.domainScopeBadge {
+		display: inline-flex;
+		align-items: center;
+		padding: 3px 10px;
+		border-radius: 6px;
+		border: 1px solid #e2e8f0;
+		background: #f8fafc;
+		color: #64748b;
+		font-size: 11.5px;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+	}
+	.domainScopeBadge.domainScopeBadgeSub {
+		border-color: #bfdbfe;
+		background: #eff6ff;
+		color: #2563eb;
 	}
 	.verifiedBadge {
 		display: inline-flex;

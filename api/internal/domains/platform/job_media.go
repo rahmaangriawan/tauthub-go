@@ -176,6 +176,13 @@ func (d *Deps) MediaAISummaryJob(ctx context.Context, mediaID string) error {
 		return runErr
 	}
 	d.mpRecordSummaryEvent(ctx, mediaID, name, websiteURL, "success", crawled.Pages, "")
+	// Crawl VPS gagal total (semua halaman ditolak WAF / DNS) tapi ringkasan
+	// tetap tersimpan dari data mitra → minta worker lokal menarik ulang
+	// halamannya supaya kesimpulan berikutnya lebih kaya. Tanpa ini media
+	// ber-WAF agresif selamanya menyimpan ringkasan tipis.
+	if crawled.Text == "" && lcCrawlFullyBlocked(crawled.Pages) {
+		d.lcRequestLocalFetch(ctx, mediaID, name, websiteURL)
+	}
 	return nil
 }
 
@@ -251,8 +258,9 @@ const (
 )
 
 // UA bergaya browser + header lengkap: sebagian CDN (Cloudflare dsb.) menantang
-// permintaan ber-UA bot asing, terutama dari IP datacenter.
-const mjCrawlerUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 TauthubMediaSummaryBot/1.0"
+// permintaan ber-UA bot asing, terutama dari IP datacenter. Sengaja TANPA
+// akhiran "Bot"/"Tauthub…": kata "bot" di UA adalah pemicu blokir klasik WAF.
+const mjCrawlerUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
 var mjCrawlerHeaders = map[string]string{
 	"user-agent":      mjCrawlerUA,

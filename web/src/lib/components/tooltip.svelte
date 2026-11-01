@@ -12,6 +12,7 @@
 		delay = 150,
 		maxWidth = 260,
 		label,
+		block = false,
 		children
 	}: {
 		content?: string;
@@ -21,6 +22,10 @@
 		delay?: number;
 		maxWidth?: number;
 		label?: string;
+		/** true: anchor jadi block selebar induk — wajib bila anaknya teks
+		 *  truncate, karena anchor inline-flex bawaan shrink-wrap ke lebar teks
+		 *  dan membuat truncate gagal (judul meluber menimpa kolom sebelah). */
+		block?: boolean;
 		children: Snippet;
 	} = $props();
 
@@ -78,6 +83,7 @@
 <span
 	bind:this={anchor}
 	class="zs-tip-anchor"
+	class:zs-tip-anchor-block={block}
 	role="presentation"
 	aria-label={label}
 	onmouseenter={show}
@@ -110,6 +116,14 @@
 	.zs-tip-anchor {
 		display: inline-flex;
 		align-items: center;
+	}
+	/* Varian block untuk anak yang truncate: selebar induk + boleh menyusut,
+	   supaya ellipsis bekerja dan teks tidak meluber keluar anchor. */
+	.zs-tip-anchor-block {
+		display: block;
+		width: 100%;
+		min-width: 0;
+		max-width: 100%;
 	}
 	.zs-tip {
 		position: fixed;

@@ -315,6 +315,7 @@ func partnerPublicationJSON(row rowMap) map[string]any {
 		"rewrite_ai_count":              row.intOr("rewrite_ai_count", 0),
 		"rewrite_remain":                maxIntP(0, rewriteMaxPerPublicationPublic-row.intOr("rewrite_ai_count", 0)),
 		"rejection_reason":              row.raw("rejection_reason"),
+		"cancel_reason":                 row.raw("cancel_reason"),
 		"revision_reject_count":         row.intOr("revision_reject_count", 0),
 		"revision_reject_limit":         revisionRejectLimit,
 		"reviewed_by":                   row.raw("reviewed_by"),
@@ -358,10 +359,11 @@ func ptrString(s *string) any {
 
 // ---------- GET /v1/partner/publications ----------
 
-var publicationListStatuses = []string{
-	"waiting_partner", "partner_approved", "partner_rejected", "queued", "processing", "published", "failed",
-	"revision",
-}
+// publicationListStatuses: status untuk tab "Semua" (tanpa filter). Harus
+// memuat SEMUA status — sebelumnya `cancelled` (dan pending/retrying) tidak
+// ikut, sehingga pesanan yang dibatalkan otomatis oleh SLA hilang dari daftar
+// mitra dan alasannya tidak pernah terlihat.
+var publicationListStatuses = publicationStatuses
 
 // revisionRejectLimit: mitra boleh menolak revisi klien maksimal 3 kali. Setelah
 // itu hanya tombol Terima yang tersisa dan admin ikut diberi tahu.

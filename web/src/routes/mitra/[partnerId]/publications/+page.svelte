@@ -26,7 +26,7 @@
 		partner_amount_gross?: number; partner_cut_percent?: number;
 		rewrite_ai_count?: number; rewrite_remain?: number;
 		publish_status: string | null; scheduled_at: string | null; published_at: string | null;
-		published_url: string | null; remote_url: string | null; rejection_reason: string | null; notes: string | null;
+		published_url: string | null; remote_url: string | null; rejection_reason: string | null; cancel_reason?: string | null; notes: string | null;
 		verification_status: string | null; verification_compliance_score: number | null;
 		pr_sentiment: string | null; pr_message_score: number | null;
 		thumbnail_url: string | null; featured_image_url: string | null;
@@ -864,11 +864,10 @@
 	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 
-	// ── SLA persetujuan (3×24 jam + 1 hari perpanjangan) ───────────────
+	// ── SLA persetujuan (3×24 jam, tanpa perpanjangan) ──────────────────
 	// Server tetap otoritas pembatalan; ini hanya tampilan supaya media tahu
 	// sisa waktunya sebelum pesanan dibatalkan otomatis.
 	const SLA_DAYS = 3;
-	const SLA_GRACE_DAYS = 1;
 	function slaInfo(p: { status: string; scheduled_at?: string | null; created_at?: string | null }) {
 		if (p.status !== 'waiting_partner') return null;
 		const startRaw = p.scheduled_at || p.created_at;
@@ -876,15 +875,32 @@
 		const start = new Date(startRaw).getTime();
 		if (Number.isNaN(start)) return null;
 		const deadline = start + SLA_DAYS * 86_400_000;
-		const hardStop = deadline + SLA_GRACE_DAYS * 86_400_000;
 		const now = Date.now();
-		if (now >= hardStop) return { text: tr('Melewati SLA — dibatalkan otomatis'), tone: 'danger' as const };
-		if (now >= deadline) return { text: tr('SLA lewat — perpanjangan 1 hari'), tone: 'danger' as const };
+		if (now >= deadline) return { text: tr('Melewati SLA — dibatalkan otomatis'), tone: 'danger' as const };
 		const daysLeft = Math.ceil((deadline - now) / 86_400_000);
 		return {
 			text: daysLeft <= 1 ? tr('Sisa kurang dari 1 hari') : `${tr('Sisa')} ${daysLeft} ${tr('hari')}`,
 			tone: daysLeft <= 1 ? ('warning' as const) : ('muted' as const)
 		};
+	}
+
+	// Alasan pembatalan: yang dihasilkan scheduler sudah diawali
+	// "Dibatalkan otomatis:". Pembatalan manual hanya bisa dilakukan klien
+	// (mitra tidak punya route cancel — mitra hanya bisa menolak), jadi
+	// sisanya diberi label "Dibatalkan klien:".
+	function cancelParts(reason: string) {
+		const text = reason.trim();
+		if (text.startsWith('Dibatalkan otomatis:')) {
+			return { label: tr('Dibatalkan otomatis:'), body: text.slice('Dibatalkan otomatis:'.length).trim(), auto: true };
+		}
+		let body = text;
+		for (const prefix of ['Dibatalkan klien:', 'Dibatalkan manual oleh klien:', 'Dibatalkan manual:']) {
+			if (body.startsWith(prefix)) {
+				body = body.slice(prefix.length).trim();
+				break;
+			}
+		}
+		return { label: tr('Dibatalkan klien:'), body, auto: false };
 	}
 
 	// ── Rincian penghasilan (popover) ────────────────────────────────────
@@ -1456,7 +1472,7 @@
 			<p
 				class="mt-1 flex items-center gap-1 text-[11px]"
 				style="color: {sla.tone === 'danger' ? 'var(--destructive)' : sla.tone === 'warning' ? 'var(--warning)' : 'var(--muted-foreground)'};"
-				title={tr('SLA persetujuan 3×24 jam + 1 hari perpanjangan. Bila lewat, pesanan dibatalkan otomatis dan saldo klien dikembalikan.')}
+				title={tr('SLA persetujuan 3×24 jam. Bila lewat, pesanan dibatalkan otomatis dan saldo klien dikembalikan.')}
 			>
 				<CalendarClock size={11} class="shrink-0" />
 				<span>{sla.text}</span>
@@ -1470,6 +1486,10 @@
 		{/if}
 		{#if p.rejection_reason}
 			<span class="mt-1 block max-w-[220px] text-[11px]" style="color: var(--destructive);">{p.rejection_reason}</span>
+		{/if}
+		{#if p.status === 'cancelled' && p.cancel_reason}
+			{@const cancel = cancelParts(p.cancel_reason)}
+			<span class="mt-1 block max-w-[220px] text-[11px]" style="color: var(--destructive);">{cancel.label} {cancel.body}</span>
 		{/if}
 		{#if rssBadge(p.rss_import_status)}
 			<span class="mt-1 block rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid var(--primary); color: var(--primary);">{rssBadge(p.rss_import_status)}</span>
@@ -2273,6 +2293,13 @@
 						{#if detail.rejection_reason}
 							<div class="rounded-xl border border-rose-200 bg-rose-50/70 p-3.5 text-xs text-rose-700">
 								<span class="font-bold">{tr('Ditolak:')}</span> {detail.rejection_reason}
+							</div>
+						{/if}
+
+						{#if detail.status === 'cancelled' && detail.cancel_reason}
+							{@const cancel = cancelParts(detail.cancel_reason)}
+							<div class="rounded-xl border border-rose-200 bg-rose-50/70 p-3.5 text-xs text-rose-700">
+								<span class="font-bold">{cancel.label}</span> {cancel.body}
 							</div>
 						{/if}
 

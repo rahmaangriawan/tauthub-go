@@ -14,7 +14,7 @@
 	import AgentSteps from '../taut-pintar/_agent-steps.svelte';
 	import { DONE_STATUSES } from '../taut-pintar/_shared';
 	import {
-		ArrowRight, BarChart3, Bookmark, Check, CircleAlert, Clock, Database, FileText, Info, LayoutGrid,
+		ArrowRight, BarChart3, Bookmark, Check, CircleAlert, Clock, Database, FileText, Info, Layers, LayoutGrid,
 		Link as LinkIcon, Lock,
 		Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Tag, Trash2, Upload, Wallet, X, Zap,
 		ChevronLeft, ChevronRight, ChevronDown
@@ -23,6 +23,7 @@
 	import { aiTrustToneStyle } from '$lib/media/ai-trust-tone';
 	import { campaignUrlId } from '$lib/campaign-url';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
+	import { domainScope } from '$lib/media/domain-scope';
 	import { mediaDistribution } from '$lib/media/distribution';
 	import { linkPolicyBadge, isPermanentLink } from '$lib/media/link-duration';
 	import { avgPublishHours, formatSla, slaBucket, slaDurationText } from '$lib/media/sla';
@@ -77,6 +78,10 @@
 	let search = $state('');
 	let debouncedSearch = $state('');
 	let category = $state('');
+	// Jenis media: '' = semua, 'mainstream' (media berita & publisher
+	// profesional), 'blogger' (blog personal / media independen).
+	let mediaType = $state<'' | 'mainstream' | 'blogger'>('');
+	let mediaTypeOpen = $state(false);
 	let speedFilter = $state<'' | 'super' | 'fast' | 'standard'>('');
 	// Rentang harga bebas (Rupiah). Chip lama jadi preset yang mengisi input
 	// ini, jadi budget aneh seperti 700rb–1,5jt tetap bisa dicari.
@@ -237,6 +242,44 @@
 		advOpen = true;
 	}
 
+	// ── Dropdown Jenis Media (mainstream / blogger) ────────────────────
+	let mediaTypeBtn = $state<HTMLElement | null>(null);
+	let mediaTypePos = $state({ left: 0, top: 0 });
+	const mediaTypeOptions = [
+		{ value: '' as const, title: tr('Semua Media'), sub: tr('Mainstream dan blogger') },
+		{ value: 'mainstream' as const, title: tr('Media Mainstream'), sub: tr('Media berita & publisher profesional') },
+		{ value: 'blogger' as const, title: tr('Media Blogger'), sub: tr('Blog personal atau media independen') }
+	];
+
+	function openMediaType() {
+		if (mediaTypeOpen) {
+			mediaTypeOpen = false;
+			return;
+		}
+		const rect = mediaTypeBtn?.getBoundingClientRect();
+		const width = 300;
+		const left = rect
+			? Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8))
+			: 8;
+		mediaTypePos = { left, top: (rect?.bottom ?? 0) + 8 };
+		mediaTypeOpen = true;
+	}
+
+	function pickMediaType(value: '' | 'mainstream' | 'blogger') {
+		mediaType = value;
+		mediaTypeOpen = false;
+		page_ = 1;
+	}
+
+	$effect(() => {
+		if (!mediaTypeOpen) return;
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') mediaTypeOpen = false;
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	});
+
 	$effect(() => {
 		if (!advOpen) return;
 		const onKey = (event: KeyboardEvent) => {
@@ -363,6 +406,13 @@
 	// tidak sedang tampil, yang hanya menyimpan nama/website_url di snapshot).
 	const domainOf = (website: string | null | undefined, fallback: string) =>
 		(website ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim() || fallback;
+
+	// ── Cakupan domain: root vs subdomain ──────────────────────────────
+	// Logika di $lib/media/domain-scope (dipakai juga modal detail). Suffix
+	// dua-label (co.id, or.id, dll.) dihitung satu kesatuan, supaya
+	// "conference.co.id" benar terbaca ROOT, bukan subdomain dari "co.id".
+	const domainScopeLabel = (website: string | null | undefined) =>
+		domainScope(website) === 'subdomain' ? tr('Subdomain') : tr('Root domain');
 	// Favicon yang gagal dimuat jatuh ke inisial huruf (per id media).
 	let faviconFailed = $state<Record<string, boolean>>({});
 	// Rekam jejak distribusi media (jumlah artikel yang sudah terbit lewat media ini).
@@ -384,6 +434,7 @@
 		err = '';
 		const qs = new URLSearchParams({ limit: '250' });
 		if (debouncedSearch) qs.set('q', debouncedSearch);
+		if (mediaType) qs.set('media_type', mediaType);
 		const listUrl = `${apiBase}/media?${qs}`;
 		// Data lama (<=10 menit) tampil seketika, refresh di latar.
 		const cached = swrPeek<{ media?: Media[]; items?: Media[] }>(listUrl);
@@ -911,6 +962,8 @@
 				const cats = m.categories && m.categories.length ? m.categories : m.category ? [m.category] : [];
 				if (!cats.some((c) => c.toLowerCase() === category.toLowerCase())) return false;
 			}
+			// Jenis media: mainstream / blogger — nilainya dari dropdown Jenis Media.
+			if (mediaType && (m.media_type ?? '') !== mediaType) return false;
 			if (verifiedOnly && !m.domain_verified) return false;
 			if (dewanPersOnly && !m.dewan_pers_verified) return false;
 			if (speedFilter) {
@@ -1402,6 +1455,21 @@
 				<button class="modernActionBtn matchmakerBtn" type="button" onclick={() => (matchmakerOpen = true)}>
 					<span>{tr('AI Matchmaker')}</span><span class="matchmakerNew">{tr('Baru')}</span>
 				</button>
+				<!-- Jenis Media: dropdown pilihan mainstream/blogger (media_type). -->
+				<div class="modernSelectWrap toolsInlineCats">
+					<button
+						bind:this={mediaTypeBtn}
+						type="button"
+						class="mediaTypeBtn"
+						aria-expanded={mediaTypeOpen}
+						aria-haspopup="listbox"
+						onclick={openMediaType}
+					>
+						<Layers size={16} class="mediaTypeIcon" />
+						<span class="mediaTypeTitle">{tr('Jenis Media')}</span>
+						<ChevronDown size={14} class="mediaTypeCaret" />
+					</button>
+				</div>
 				<!-- Kategori desktop: satu tombol, diklik membuka dropdown-nya. -->
 				<div class="modernSelectWrap toolsInlineCats">
 					<Select
@@ -1862,9 +1930,20 @@
 												Domain terverifikasi Tauthub
 											</Tooltip.Content>
 											</Tooltip.Portal>
-										</Tooltip.Root>
-											{/if}
-											{#if m.dewan_pers_verified}
+											</Tooltip.Root>
+												{/if}
+												<!-- Cakupan domain: chip kecil setelah judul (judul truncate,
+												     jadi baris tidak penuh). Root = netral, Subdomain = biru. -->
+												{#if domainScope(m.website_url)}
+													<span
+														class="domainScopeChip"
+														class:domainScopeChipSub={domainScope(m.website_url) === 'subdomain'}
+														title={domainScope(m.website_url) === 'subdomain'
+															? tr('Artikel tayang di subdomain, bukan halaman utama domain.')
+															: tr('Artikel tayang di halaman utama (root domain).')}
+													>{domainScope(m.website_url) === 'subdomain' ? tr('Subdomain') : tr('Root')}</span>
+												{/if}
+												{#if m.dewan_pers_verified}
 												<Tooltip.Root>
 													<Tooltip.Trigger>
 														{#snippet child({ props })}
@@ -2363,6 +2442,39 @@
 			onProceed={() => (detailFromMatchmaker ? pickFromMatchmakerDetail(d) : proceedFromDetail(d))}
 		/>
 	{/if}
+
+<!-- Popover tr("Semua Kategori") — fixed agar tidak terpotong kartu tabel. -->
+{#if mediaTypeOpen}
+	<button
+		type="button"
+		class="mediaTypeBackdrop"
+		aria-label={tr('Tutup pilihan jenis media')}
+		onclick={() => (mediaTypeOpen = false)}
+	></button>
+	<div
+		class="mediaTypePopover"
+		role="listbox"
+		aria-label={tr('Jenis Media')}
+		style="left: {mediaTypePos.left}px; top: {mediaTypePos.top}px;"
+	>
+		{#each mediaTypeOptions as opt (opt.value || 'all')}
+			<button
+				type="button"
+				class="mediaTypeOption"
+				class:mediaTypeOptionActive={mediaType === opt.value}
+				role="option"
+				aria-selected={mediaType === opt.value}
+				onclick={() => pickMediaType(opt.value)}
+			>
+				<span class="mediaTypeRadio" aria-hidden="true"></span>
+				<span class="mediaTypeOptionText">
+					<span class="mediaTypeOptionTitle">{opt.title}</span>
+					<span class="mediaTypeOptionSub">{opt.sub}</span>
+				</span>
+			</button>
+		{/each}
+	</div>
+{/if}
 
 <!-- Popover tr("Semua Kategori") — fixed agar tidak terpotong kartu tabel. -->
 {#if catPopoverId}

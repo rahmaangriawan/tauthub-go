@@ -14,6 +14,8 @@ import (
 )
 
 // mpSummaryEventJSON: satu baris event tracking apa adanya (page_tried sudah jsonb).
+// ai_summary ikut dikirim supaya modal "Isi manual / AI" bisa menampilkan
+// kesimpulan yang sudah ada tanpa fetch kedua.
 func mpSummaryEventJSON(row ptRow) map[string]any {
 	return map[string]any{
 		"id":            row.anyOrNil("id"),
@@ -21,10 +23,14 @@ func mpSummaryEventJSON(row ptRow) map[string]any {
 		"media_name":    row.anyOrNil("media_name"),
 		"website_url":   row.anyOrNil("website_url"),
 		"status":        row.anyOrNil("status"),
+		"source":        row.strOr("source", "auto"),
 		"pages_tried":   row.jsonField("pages_tried"),
 		"error_message": row.anyOrNil("error_message"),
 		"attempt":       row.intOr("attempt", 0),
 		"created_at":    row.anyOrNil("created_at"),
+		"ai_summary":    row.anyOrNil("ai_summary"),
+		"ai_summary_generated_at": row.anyOrNil("ai_summary_generated_at"),
+		"media_has_summary":        row.strOr("ai_summary", "") != "",
 	}
 }
 
@@ -73,8 +79,10 @@ func (d *Deps) MediaSummariesList(w http.ResponseWriter, r *http.Request) {
 	items, err := d.queryRows(r.Context(), `
 		SELECT * FROM (
 		  SELECT DISTINCT ON (e.media_id)
-		         e.id, e.media_id, e.media_name, e.website_url, e.status, e.pages_tried, e.error_message, e.attempt, e.created_at
-		  FROM media_ai_summary_events e `+where+`
+		         e.id, e.media_id, e.media_name, e.website_url, e.status, e.pages_tried, e.error_message, e.attempt, e.created_at,
+		         e.source, m.ai_summary, m.ai_summary_generated_at
+		  FROM media_ai_summary_events e
+		  LEFT JOIN media m ON m.id = e.media_id `+where+`
 		  ORDER BY e.media_id, e.created_at DESC
 		) latest
 		ORDER BY latest.created_at DESC LIMIT $`+ptItoa(len(values)+1)+` OFFSET $`+ptItoa(len(values)+2),
@@ -180,14 +188,23 @@ func (d *Deps) MediaSummaryRegenerate(w http.ResponseWriter, r *http.Request) {
 
 // mpRecordSummaryEvent: port recordSummaryEvent — kegagalan logging dilewati.
 func (d *Deps) mpRecordSummaryEvent(ctx context.Context, mediaID, mediaName, websiteURL, status string, pages any, errorMessage string) {
+	d.mpRecordSummaryEventWithSource(ctx, mediaID, mediaName, websiteURL, status, pages, errorMessage, "auto")
+}
+
+// mpRecordSummaryEventWithSource: varian dengan penanda asal (auto/manual/ai).
+// source='auto' dipakai job crawl+AI; 'manual'/'ai' dipakai panel admin.
+func (d *Deps) mpRecordSummaryEventWithSource(ctx context.Context, mediaID, mediaName, websiteURL, status string, pages any, errorMessage string, source string) {
 	if pages == nil {
 		pages = []any{}
 	}
+	if source != "manual" && source != "ai" {
+		source = "auto"
+	}
 	if err := d.exec(ctx, `
-		INSERT INTO media_ai_summary_events (id, media_id, media_name, website_url, status, pages_tried, error_message, attempt)
-		VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+		INSERT INTO media_ai_summary_events (id, media_id, media_name, website_url, status, pages_tried, error_message, attempt, source)
+		VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)`,
 		uuid.NewString(), mediaID, nullIfEmpty(mediaName), nullIfEmpty(websiteURL), status,
-		mpJSONString(pages), mpNullableArgStrOrNil(errorMessage, errorMessage != ""), 0); err != nil {
+		mpJSONString(pages), mpNullableArgStrOrNil(errorMessage, errorMessage != ""), 0, source); err != nil {
 		d.logWarn("catat event summary gagal", mediaID, err)
 	}
 }

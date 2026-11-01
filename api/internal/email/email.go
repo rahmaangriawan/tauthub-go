@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -228,14 +229,42 @@ type SendOptions struct {
 	Event           string
 	DedupeKey       *string
 	Data            map[string]string
+	// Audience (client/partner) opsional. Bila kosong, ditentukan dari role
+	// penerima. Dipakai untuk memilih template tersimpan per audiens.
+	Audience string
 }
 
 // SendTransactionalEmail: render template → enqueue → job send_email.
 // Return (deliveryID, status).
 func SendTransactionalEmail(ctx context.Context, pool *pgxpool.Pool, opts SendOptions) (string, string, error) {
-	rendered, err := RenderTemplate(opts.Template, opts.Data)
-	if err != nil {
-		return "", "failed", err
+	style := LoadStyle(ctx, pool)
+	audience := opts.Audience
+	if audience == "" && opts.RecipientUserID != nil && *opts.RecipientUserID != "" {
+		var role, name string
+		if qErr := pool.QueryRow(ctx, "SELECT role, COALESCE(display_name, '') FROM users WHERE id = $1 LIMIT 1", *opts.RecipientUserID).Scan(&role, &name); qErr == nil {
+			audience = AudienceForRole(role)
+			if opts.Data == nil {
+				opts.Data = map[string]string{}
+			}
+			if strings.TrimSpace(opts.Data["nama"]) == "" {
+				opts.Data["nama"] = name
+			}
+		}
+	}
+	var rendered Rendered
+	var err error
+	usedStored := false
+	if audience != "" && strings.TrimSpace(opts.Event) != "" {
+		if subject, htmlBody, ok := RenderStored(ctx, pool, style, audience, opts.Event, opts.Data); ok {
+			rendered = Rendered{Subject: subject, HTML: htmlBody}
+			usedStored = true
+		}
+	}
+	if !usedStored {
+		rendered, err = RenderTemplateStyled(style, opts.Template, opts.Data)
+		if err != nil {
+			return "", "failed", err
+		}
 	}
 	id, status, err := EnqueueEmail(ctx, pool, EnqueueOptions{
 		Template: opts.Template, RecipientEmail: opts.To,
@@ -297,18 +326,24 @@ func ProcessEmailInline(ctx context.Context, pool *pgxpool.Pool, cmsSecret strin
 	return true, messageID, ""
 }
 
-// RenderTemplate: registry kecil untuk template yang sudah di-port.
+// RenderTemplate: registry kecil untuk template yang sudah di-port (gaya
+// default).
 func RenderTemplate(name string, data map[string]string) (Rendered, error) {
+	return RenderTemplateStyled(DefaultStyle(), name, data)
+}
+
+// RenderTemplateStyled: registry template bawaan dengan gaya admin.
+func RenderTemplateStyled(style Style, name string, data map[string]string) (Rendered, error) {
 	switch name {
 	case "password-reset":
-		return renderPasswordReset(data), nil
+		return renderPasswordReset(style, data), nil
 	case "password-changed":
-		return renderPasswordChanged(data), nil
+		return renderPasswordChanged(style, data), nil
 	case "account-invite":
 		// Tanpa entri ini, user yang dibuat admin tanpa password tidak pernah
 		// menerima email aktivasi: SendTransactionalEmail mengembalikan error
 		// "template not registered" dan tidak ada baris yang diantrekan.
-		return renderAccountInvite(data), nil
+		return renderAccountInvite(style, data), nil
 	default:
 		return Rendered{}, fmt.Errorf("Email template not registered: %s", name)
 	}

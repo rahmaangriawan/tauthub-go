@@ -6,6 +6,7 @@ package platform
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
+	brandflow "github.com/rahmaangriawan/tauthub-go/internal/domains/brandflow"
 	emailqueue "github.com/rahmaangriawan/tauthub-go/internal/email"
 )
 
@@ -1575,6 +1577,10 @@ const opPublicationSelectColumns = `p.id, p.order_code, p.status, p.client_price
               b.name AS brand_name, b.public_id AS brand_public_id,
               m.name AS media_name, m.integration_type AS media_integration_type,
               d.title AS document_title, c.name AS campaign_name, pa.name AS partner_name,
+              -- Thumbnail artikel: cover yang sama dengan yang dipakai sisi klien
+              -- (taut_campaign_media.featured_image_url); kolom publikasi dipakai
+              -- lebih dulu bila terisi.
+              COALESCE(p.featured_image_url, tcm.featured_image_url) AS featured_image_url,
               (SELECT pa2.error_code FROM publication_attempts pa2 WHERE pa2.publication_id = p.id ORDER BY pa2.attempt_number DESC LIMIT 1) AS error_code,
               (SELECT pa2.error_message FROM publication_attempts pa2 WHERE pa2.publication_id = p.id ORDER BY pa2.attempt_number DESC LIMIT 1) AS error_message,
               (SELECT v.angle_label FROM publication_variants v WHERE v.publication_id = p.id LIMIT 1) AS variant_angle,
@@ -1594,7 +1600,9 @@ const opPublicationFromClause = `FROM publications p
        JOIN media m ON m.id = p.media_id
        JOIN content_documents d ON d.id = p.document_id
        LEFT JOIN campaigns c ON c.id = p.campaign_id
-       LEFT JOIN partners pa ON pa.id = m.partner_id`
+       LEFT JOIN partners pa ON pa.id = m.partner_id
+       LEFT JOIN taut_campaign_media tcm ON tcm.campaign_id = p.campaign_id
+              AND tcm.media_id = p.media_id AND tcm.article_document_id = p.document_id`
 
 // OperationsPublications: GET /v1/platform/operations/publications
 func (d *Deps) OperationsPublications(w http.ResponseWriter, r *http.Request) {
@@ -1894,6 +1902,64 @@ func (d *Deps) OperationsPublicationRetry(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": "queued", "job_id": jobID})
+}
+
+// OperationsPublicationCancel: POST /v1/platform/operations/publications/{publicationId}/cancel
+//
+// Pembatalan oleh admin operasi. Memakai jalur refund yang sama dengan
+// pembatalan klien dan sweep SLA (satu tempat aturan pengembalian saldo).
+// Publikasi yang sudah terbit atau sudah batal ditolak dengan pesan jelas.
+func (d *Deps) OperationsPublicationCancel(w http.ResponseWriter, r *http.Request) {
+	admin, _, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	publicationID := chiParam(r, "publicationId")
+	body := decodeJSON(r)
+	reason, _ := strField(body, "reason")
+	reason = strings.TrimSpace(reason)
+	if runes := []rune(reason); len(runes) > 500 {
+		writeErr(w, d, errUnprocessable("Alasan pembatalan maksimal 500 karakter."))
+		return
+	}
+
+	row, err := d.queryRow(ctx, "SELECT status FROM publications WHERE id = $1 LIMIT 1", publicationID)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	if row == nil {
+		writeErr(w, d, errNotFound("Publication not found"))
+		return
+	}
+	current := row.strOr("status", "")
+	if current == "published" {
+		writeErr(w, d, errUnprocessable("Publikasi yang sudah terbit tidak bisa dibatalkan dari panel operasi."))
+		return
+	}
+	if current == "cancelled" {
+		writeErr(w, d, errConflict("Publikasi sudah dibatalkan."))
+		return
+	}
+
+	if err := brandflow.CancelPublicationAsAdmin(ctx, d.Pool, publicationID, admin.ID, reason); err != nil {
+		switch {
+		case errors.Is(err, brandflow.ErrPublicationStatusChanged):
+			writeErr(w, d, errConflict("Status publikasi berubah saat diproses. Muat ulang lalu coba lagi."))
+		case errors.Is(err, brandflow.ErrPublicationPublished):
+			writeErr(w, d, errUnprocessable("Publikasi yang sudah terbit tidak bisa dibatalkan dari panel operasi."))
+		case errors.Is(err, brandflow.ErrPublicationAlreadyCancelled):
+			writeErr(w, d, errConflict("Publikasi sudah dibatalkan."))
+		default:
+			writeErr(w, d, err)
+		}
+		return
+	}
+	d.audit(ctx, admin.ID, "publication.cancelled_by_admin", "publication", publicationID)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "status": "cancelled", "cancel_reason": reason,
+	})
 }
 
 // opPublicationRelink: inti aksi "perbaiki / sinkron ulang". Menandai ulang
