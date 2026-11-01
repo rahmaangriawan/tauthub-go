@@ -2857,6 +2857,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Pilih ulang file XLSX untuk mengonfirmasi impor.": "Reselect the XLSX file to confirm the import.",
   "Pilih website": "Select website",
   "Pilihan": "Option",
+  "Pilihan Utama": "Featured",
+  "Jelajahi Kategori": "Explore Categories",
   "Pilih…": "Select…",
   "Ya": "Yes",
   "Pintasan cepat ke modul konfigurasi dan manajemen operasional utama.": "Quick shortcuts to the main configuration and operations management modules.",

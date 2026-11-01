@@ -1477,9 +1477,16 @@
 						ariaLabel={tr('Kategori')}
 						Icon={LayoutGrid}
 						placeholder={tr('Semua Kategori')}
-						minWidth={210}
+						minWidth={300}
+						menuMaxHeight={420}
 						searchable={categories.length > 10}
 						searchPlaceholder={tr('Cari kategori…')}
+						sectioned
+						popularLimit={6}
+						menuHeaderTitle={tr('Kategori Media')}
+						menuHeaderMeta={`${fmt(rows.length)} ${tr('media')}`}
+						popularSectionLabel={tr('Pilihan Utama')}
+						exploreSectionLabel={tr('Jelajahi Kategori')}
 						onchange={() => (page_ = 1)}
 						options={[
 							{ value: '', label: tr('Semua Kategori'), count: rows.length },

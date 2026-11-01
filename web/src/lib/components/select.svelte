@@ -7,6 +7,7 @@
 	// jumlah opsional. Menu diposisikan fixed supaya tidak terpotong overflow
 	// induk (tabel/kartu), persis seperti portal Radix.
 	import type { Component, Snippet } from 'svelte';
+	import { tick } from 'svelte';
 	import { Check, ChevronDown } from '@lucide/svelte';
 
 	export type SelectOption = { value: string; label: string; description?: string; count?: number; disabled?: boolean };
@@ -30,36 +31,56 @@
 		popularLabel = 'Paling populer',
 		showAllLabel = 'Lihat semua',
 		showLessLabel = 'Tampilkan lebih sedikit',
-			card = false,
-			allOptionsLabel = '',
-			fitContent = false
-		}: {
-			value?: string;
-			options: SelectOption[];
-			ariaLabel: string;
-			placeholder?: string;
-			Icon?: Component<{ size?: number; color?: string }> | null;
-			minWidth?: number;
-			align?: 'start' | 'end';
-			menuMaxHeight?: number;
-			variant?: 'default' | 'plain';
-			disabled?: boolean;
-			/** Tampilkan kolom pencarian di dalam menu (untuk daftar panjang). */
-			searchable?: boolean;
-			searchPlaceholder?: string;
-			onchange?: (value: string, option: SelectOption | null) => void;
-			footer?: Snippet;
-			/** >0: tampilkan hanya N opsi teratas (urut populer) plus tombol "Lihat semua". */
-			popularCount?: number;
-			popularLabel?: string;
-			showAllLabel?: string;
-			showLessLabel?: string;
-			/** true: opsi mode populer dirender sebagai kartu (judul + deskripsi). */
-			card?: boolean;
-			allOptionsLabel?: string;
-			/** true: tombol trigger dan label teks menyesuaikan lebar konten (fit-content) */
-			fitContent?: boolean;
-		} = $props();
+		card = false,
+		allOptionsLabel = '',
+		fitContent = false,
+		sectioned = false,
+		popularLimit = 6,
+		menuHeaderTitle = '',
+		menuHeaderMeta = '',
+		popularSectionLabel = 'Pilihan Utama',
+		exploreSectionLabel = 'Jelajahi Kategori'
+	}: {
+		value?: string;
+		options: SelectOption[];
+		ariaLabel: string;
+		placeholder?: string;
+		Icon?: Component<{ size?: number; color?: string }> | null;
+		minWidth?: number;
+		align?: 'start' | 'end';
+		menuMaxHeight?: number;
+		variant?: 'default' | 'plain';
+		disabled?: boolean;
+		/** Tampilkan kolom pencarian di dalam menu (untuk daftar panjang). */
+		searchable?: boolean;
+		searchPlaceholder?: string;
+		onchange?: (value: string, option: SelectOption | null) => void;
+		footer?: Snippet;
+		/** >0: tampilkan hanya N opsi teratas (urut populer) plus tombol "Lihat semua". */
+		popularCount?: number;
+		popularLabel?: string;
+		showAllLabel?: string;
+		showLessLabel?: string;
+		/** true: opsi mode populer dirender sebagai kartu (judul + deskripsi). */
+		card?: boolean;
+		allOptionsLabel?: string;
+		/** true: tombol trigger dan label teks menyesuaikan lebar konten (fit-content) */
+		fitContent?: boolean;
+		/**
+		 * true: tampilkan menu bergaya katalog — header kecil, opsi reset
+		 * (value '') dipisah di atas, lalu kategori populer ("Pilihan Utama")
+		 * dan sisanya ("Jelajahi Kategori"). Dipakai dropdown kategori media.
+		 */
+		sectioned?: boolean;
+		/** Jumlah opsi yang tampil di bagian "Pilihan Utama" (sectioned). */
+		popularLimit?: number;
+		/** Judul kecil di kepala menu (sectioned). */
+		menuHeaderTitle?: string;
+		/** Metadata di kepala menu, mis. "90 media" (sectioned). */
+		menuHeaderMeta?: string;
+		popularSectionLabel?: string;
+		exploreSectionLabel?: string;
+	} = $props();
 
 	let open = $state(false);
 	let trigger = $state<HTMLButtonElement | null>(null);
@@ -82,8 +103,23 @@
 	const matches = $derived(
 		searching ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase())) : options
 	);
-	const popularMode = $derived(popularCount > 0 && !searching);
-	const visible = $derived(popularMode && !showAll ? matches.slice(0, popularCount) : matches);
+	const popularMode = $derived(!sectioned && popularCount > 0 && !searching);
+	// ── Mode katalog (sectioned) ────────────────────────────────────────
+	// Opsi reset ("Semua Kategori") memakai value '', selalu dipisah di atas.
+	const allOption = $derived(sectioned ? (options.find((o) => o.value === '') ?? null) : null);
+	const restOptions = $derived(sectioned ? options.filter((o) => o.value !== '') : options);
+	// Opsi sudah diurutkan populer oleh pemanggil, jadi potongan awalah yang populer.
+	const popularOptions = $derived(sectioned ? restOptions.slice(0, popularLimit) : []);
+	const exploreOptions = $derived(sectioned ? restOptions.slice(popularLimit) : []);
+	const visible = $derived.by(() => {
+		// Saat mencari, tampilkan hasil apa adanya (flat) supaya status
+		// "Tidak ada hasil" jujur dan urutan tetap sesuai relevansi.
+		if (searching) return matches;
+		if (sectioned) {
+			return [...(allOption ? [allOption] : []), ...popularOptions, ...exploreOptions];
+		}
+		return popularMode && !showAll ? matches.slice(0, popularCount) : matches;
+	});
 	// Kartu butuh ruang jauh lebih tinggi daripada baris biasa, jadi batasnya
 	// mengikuti tinggi layar. Ruang di atas/bawah trigger tetap jadi pembatas
 	// akhir, sehingga menu tidak pernah melewati tepi layar.
@@ -179,6 +215,10 @@
 			if (!list[next].disabled) break;
 		}
 		activeIndex = next;
+		// Navigasi panah tidak boleh menyorot item di luar area gulir.
+		void tick().then(() => {
+			menu?.querySelector<HTMLElement>(`[data-zs-index="${next}"]`)?.scrollIntoView({ block: 'nearest' });
+		});
 	}
 
 	function onTriggerKeydown(event: KeyboardEvent) {
@@ -287,99 +327,147 @@
 		bind:this={menu}
 		class="zs-select-menu"
 		class:zs-select-menu-up={placement === 'up'}
+		class:zs-select-menu-sectioned={sectioned}
 		role="listbox"
 		aria-label={ariaLabel}
 		tabindex="-1"
 		style="left: {pos.left}px; top: {menuTop}px; min-width: {pos.width}px; width: {minWidth === 0 ? 'max-content' : 'auto'}; max-width: min(92vw, {card ? '1200px' : '360px'}, calc(100vw - {pos.left}px - 8px)); max-height: {menuHeight > 0 ? `${menuHeight}px` : `${heightLimit}px`}; {placement === 'up' && menuHeight > 0 ? `height: ${menuHeight}px;` : ''}"
 		onkeydown={onMenuKeydown}
 	>
-		{#if searchable}
-			<div class="zs-select-search">
-				<input
-					bind:this={searchInput}
-					class="zs-select-search-input"
-					type="text"
-					autocomplete="off"
-					spellcheck="false"
-					placeholder={searchPlaceholder}
-					aria-label={searchPlaceholder}
-					bind:value={query}
-					oninput={onSearchInput}
-					onkeydown={onSearchKeydown}
-				/>
+		{#snippet searchBox()}
+			<input
+				bind:this={searchInput}
+				class="zs-select-search-input"
+				type="text"
+				autocomplete="off"
+				spellcheck="false"
+				placeholder={searchPlaceholder}
+				aria-label={searchPlaceholder}
+				bind:value={query}
+				oninput={onSearchInput}
+				onkeydown={onSearchKeydown}
+			/>
+		{/snippet}
+
+		{#snippet optionRow(option: SelectOption, index: number)}
+			<button
+				type="button"
+				role="option"
+				aria-selected={option.value === value}
+				class="zs-select-item"
+				class:zs-select-item-selected={option.value === value}
+				class:zs-select-item-active={index === activeIndex}
+				class:zs-select-item-all={sectioned && option.value === ''}
+				disabled={option.disabled}
+				data-zs-index={index}
+				onclick={() => pick(option)}
+				onmousemove={() => (activeIndex = index)}
+			>
+				<span class="zs-select-item-label">{option.label}</span>
+				<span class="zs-select-item-right">
+					{#if option.count != null}
+						<span class="zs-select-count" class:zs-select-count-selected={option.value === value}>
+							{option.count}
+						</span>
+					{/if}
+					{#if option.value === value}
+						<Check size={14} class="zs-select-check" />
+					{/if}
+				</span>
+			</button>
+		{/snippet}
+
+		{#if sectioned}
+			<div class="zs-select-sticky">
+				{#if menuHeaderTitle}
+					<div class="zs-select-head">
+						<span class="zs-select-head-title">{menuHeaderTitle}</span>
+						{#if menuHeaderMeta}<span class="zs-select-head-meta">{menuHeaderMeta}</span>{/if}
+					</div>
+				{/if}
+				{#if searchable}
+					<div class="zs-select-search zs-select-search-inline">{@render searchBox()}</div>
+				{/if}
 			</div>
+		{:else if searchable}
+			<div class="zs-select-search">{@render searchBox()}</div>
 		{/if}
+
 		{#if visible.length === 0}
 			<p class="zs-select-empty">{tr("Tidak ada hasil")}</p>
 		{/if}
-		{#if popularMode && !showAll && visible.length > 0}
-			<p class="zs-select-section">{popularLabel}</p>
-		{:else if popularMode && showAll && card && !searching && visible.length > popularCount}
-			<p class="zs-select-section">{allOptionsLabel || tr("Semua angle")}</p>
-		{/if}
-		{#if popularMode && card}
-			<div class="zs-select-cards">
+
+		{#if sectioned}
+			{#if searching}
 				{#each visible as option, index (option.value)}
-					<button
-						type="button"
-						role="option"
-						aria-selected={option.value === value}
-						class="zs-card"
-						class:zs-card-selected={option.value === value}
-						class:zs-card-active={index === activeIndex}
-						disabled={option.disabled}
-						onclick={() => pick(option)}
-						onmousemove={() => (activeIndex = index)}
-					>
-						<span class="zs-card-title">{option.label}</span>
-					{#if option.description}
-						<span class="zs-card-desc">{option.description}</span>
-					{/if}
-						{#if option.value === value}
-							<span class="zs-card-check"><Check size={11} /></span>
-						{/if}
-					</button>
+					{@render optionRow(option, index)}
 				{/each}
-			</div>
-		{:else}
-			{#each visible as option, index (option.value)}
-				<button
-					type="button"
-					role="option"
-					aria-selected={option.value === value}
-					class="zs-select-item"
-					class:zs-select-item-selected={option.value === value}
-					class:zs-select-item-active={index === activeIndex}
-					disabled={option.disabled}
-					onclick={() => pick(option)}
-					onmousemove={() => (activeIndex = index)}
-				>
-					<span class="zs-select-item-label">{option.label}</span>
-					<span class="zs-select-item-right">
-						{#if option.count != null}
-							<span class="zs-select-count" class:zs-select-count-selected={option.value === value}>
-								{option.count}
-							</span>
-						{/if}
-						{#if option.value === value}
-							<Check size={14} />
-						{/if}
-					</span>
-				</button>
-			{/each}
-		{/if}
-		{#if popularCount > 0 && !searching}
-			<div class="zs-select-more-wrap">
-				{#if !showAll}
-					<button type="button" class="zs-select-more" onclick={() => (showAll = true)}>
-						{showAllLabel} ({matches.length}) →
-					</button>
-				{:else if card}
-					<button type="button" class="zs-select-more" onclick={() => (showAll = false)}>
-						← {showLessLabel}
-					</button>
+			{:else}
+				{#if allOption}
+					{@render optionRow(allOption, 0)}
+					<div class="zs-select-divider"></div>
 				{/if}
-			</div>
+				{#if popularOptions.length > 0}
+					<p class="zs-select-section zs-select-section-first" role="presentation">{popularSectionLabel}</p>
+					{#each popularOptions as option, i (option.value)}
+						{@render optionRow(option, (allOption ? 1 : 0) + i)}
+					{/each}
+				{/if}
+				{#if exploreOptions.length > 0}
+					<p class="zs-select-section" role="presentation">{exploreSectionLabel}</p>
+					{#each exploreOptions as option, i (option.value)}
+						{@render optionRow(option, (allOption ? 1 : 0) + popularOptions.length + i)}
+					{/each}
+				{/if}
+			{/if}
+		{:else}
+			{#if popularMode && !showAll && visible.length > 0}
+				<p class="zs-select-section">{popularLabel}</p>
+			{:else if popularMode && showAll && card && !searching && visible.length > popularCount}
+				<p class="zs-select-section">{allOptionsLabel || tr("Semua angle")}</p>
+			{/if}
+			{#if popularMode && card}
+				<div class="zs-select-cards">
+					{#each visible as option, index (option.value)}
+						<button
+							type="button"
+							role="option"
+							aria-selected={option.value === value}
+							class="zs-card"
+							class:zs-card-selected={option.value === value}
+							class:zs-card-active={index === activeIndex}
+							disabled={option.disabled}
+							onclick={() => pick(option)}
+							onmousemove={() => (activeIndex = index)}
+						>
+							<span class="zs-card-title">{option.label}</span>
+						{#if option.description}
+							<span class="zs-card-desc">{option.description}</span>
+						{/if}
+							{#if option.value === value}
+								<span class="zs-card-check"><Check size={11} /></span>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			{:else}
+				{#each visible as option, index (option.value)}
+					{@render optionRow(option, index)}
+				{/each}
+			{/if}
+			{#if popularCount > 0 && !searching}
+				<div class="zs-select-more-wrap">
+					{#if !showAll}
+						<button type="button" class="zs-select-more" onclick={() => (showAll = true)}>
+							{showAllLabel} ({matches.length}) →
+						</button>
+					{:else if card}
+						<button type="button" class="zs-select-more" onclick={() => (showAll = false)}>
+							← {showLessLabel}
+						</button>
+					{/if}
+				</div>
+			{/if}
 		{/if}
 		{#if footer}
 			<div class="zs-select-footer">{@render footer()}</div>
@@ -746,5 +834,123 @@
 		background: #2563eb;
 		color: #ffffff;
 		box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+	}
+
+	/* ── Mode katalog (sectioned) ─────────────────────────────────────────
+	   Dropdown kategori media: header kecil + pencarian menempel, opsi reset
+	   dipisah, lalu kategori populer dan sisanya. Baris lebih lega (42px),
+	   jumlah media netral, terpilih biru muda dengan centang. */
+	.zs-select-menu-sectioned {
+		padding: 6px;
+		border-radius: 12px;
+		box-shadow:
+			0 12px 32px rgba(15, 23, 42, 0.14),
+			0 2px 6px rgba(15, 23, 42, 0.06);
+		scrollbar-width: thin;
+		scrollbar-color: #d8dee9 transparent;
+	}
+	.zs-select-menu-sectioned::-webkit-scrollbar {
+		width: 8px;
+	}
+	.zs-select-menu-sectioned::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.zs-select-menu-sectioned::-webkit-scrollbar-thumb {
+		background: #d8dee9;
+		border: 2px solid #ffffff;
+		border-radius: 999px;
+	}
+	.zs-select-menu-sectioned::-webkit-scrollbar-thumb:hover {
+		background: #b8c2d0;
+	}
+
+	/* Header + pencarian tetap di puncak saat daftar digulir. */
+	.zs-select-sticky {
+		position: sticky;
+		top: -6px;
+		z-index: 2;
+		margin: -6px -6px 6px;
+		padding: 8px 8px 6px;
+		background: #ffffff;
+		border-bottom: 1px solid #eef2f7;
+	}
+	.zs-select-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 10px;
+		padding: 0 4px 6px;
+	}
+	.zs-select-head-title {
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: 0.01em;
+		color: #0f172a;
+	}
+	.zs-select-head-meta {
+		font-size: 11px;
+		font-weight: 500;
+		color: #94a3b8;
+		white-space: nowrap;
+	}
+	.zs-select-menu-sectioned .zs-select-search-inline {
+		position: static;
+		z-index: auto;
+		margin: 0;
+		padding: 0;
+		background: transparent;
+		border-bottom: none;
+	}
+	.zs-select-menu-sectioned .zs-select-search-input {
+		height: 34px;
+		border-radius: 8px;
+	}
+
+	.zs-select-menu-sectioned .zs-select-item {
+		min-height: 42px;
+		padding: 0 12px;
+		border-radius: 8px;
+		font-size: 13px;
+	}
+	.zs-select-menu-sectioned .zs-select-item:hover,
+	.zs-select-menu-sectioned .zs-select-item-active {
+		background: #f6f8fb;
+	}
+	.zs-select-menu-sectioned .zs-select-item-selected {
+		background: #eff6ff;
+		color: #1d4ed8;
+		font-weight: 600;
+	}
+	.zs-select-menu-sectioned .zs-select-item-selected:hover,
+	.zs-select-menu-sectioned .zs-select-item-selected.zs-select-item-active {
+		background: #e6efff;
+	}
+	.zs-select-menu-sectioned .zs-select-item-right {
+		gap: 8px;
+		color: #1d4ed8;
+	}
+	.zs-select-menu-sectioned .zs-select-count {
+		font-variant-numeric: tabular-nums;
+		background: #f1f5f9;
+		color: #94a3b8;
+	}
+	.zs-select-menu-sectioned .zs-select-count-selected {
+		background: #dbeafe;
+		color: #1d4ed8;
+	}
+	/* Garis tipis antara opsi reset dan daftar kategori. */
+	.zs-select-divider {
+		height: 1px;
+		margin: 4px 6px 2px;
+		background: #eef2f7;
+	}
+	.zs-select-menu-sectioned .zs-select-section {
+		margin: 8px 8px 4px;
+		font-size: 10.5px;
+		letter-spacing: 0.05em;
+		color: #94a3b8;
+	}
+	.zs-select-section-first {
+		margin-top: 6px;
 	}
 </style>
