@@ -352,9 +352,9 @@
 	 *  `Math.abs(val % 31)` — angka palsu, jadi tidak disalin ke sini. */
 	function formatTraffic(swVisits?: number | null, est?: number | null): { text: string; source: string } {
 		const val = swVisits && swVisits > 0 ? swVisits : est && est > 0 ? est : 0;
-		// Tanpa data trafik: strip, bukan tulisan "Estimasi" yang terbaca seperti
-		// angka. Sumbernya pun dikosongkan supaya tidak ada "Via SimilarWeb" palsu.
-		if (!val) return { text: '—', source: '' };
+		// Tanpa data trafik: tulis 0 (bukan strip), dan sumber dikosongkan supaya
+		// tidak ada "Via SimilarWeb" palsu.
+		if (!val) return { text: '0', source: '' };
 		let text: string;
 		if (val >= 1_000_000) text = `± ${(val / 1_000_000).toFixed(1).replace(/\.0$/, '')}M / bulan`;
 		else if (val >= 1_000) text = `± ${Math.round(val / 1_000)} rb / bulan`;
