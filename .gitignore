@@ -55,3 +55,4 @@ api/compat/embed-fixtures.json
 .agents/
 .claude/
 agent/
+cloudflare-worker/.wrangler/
