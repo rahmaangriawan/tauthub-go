@@ -59,18 +59,11 @@ func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string
 
 	cutoff := time.Now().Add(-crawlFallbackWindowDays * 24 * time.Hour)
 	robots, robotsBlocked, robotsErr := crawlFetchRobots(ctx, origin)
-	if robotsBlocked {
-		// robots.txt sendiri ditolak WAF: jangan paksa ambil halaman situs.
-		// Wayback tetap boleh karena bukan situs medianya. Arsip kosong TIDAK
-		// dianggap "0 artikel" — itu hanya berarti tidak ada capture, bukan
-		// bukti media berhenti terbit.
-		if n, found, _ := crawlWaybackPosts(ctx, origin, cutoff); found && n > 0 {
-			return crawlFallbackResult{Articles: crawlIntPtr(n), Confidence: "estimate", Source: "wayback", Status: "ok"}
-		}
-		return crawlFallbackResult{Status: "blocked", Error: "robots.txt ditolak WAF (HTTP 403/429)"}
-	}
-
-	blockedSeen := false
+	// robots.txt 403/429 sering hanya rule WAF khusus bot, bukan kebijakan
+	// robots. Jangan berhenti di situ: endpoint terstruktur (WP API/feed/sitemap)
+	// masih bisa lolos, dan Wayback tidak lewat IP kita. Hanya homepage discovery
+	// yang dilewati saat robots tidak terbaca.
+	blockedSeen := robotsBlocked
 	lastErr := ""
 	if robotsErr != nil {
 		lastErr = robotsErr.Error()
@@ -82,7 +75,7 @@ func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string
 		blockedSeen = true
 	}
 
-	if n, found, blocked, fErr := crawlFeedPosts(ctx, origin, robots, cutoff); found {
+	if n, found, blocked, fErr := crawlFeedPosts(ctx, origin, robots, cutoff, robotsBlocked); found {
 		return crawlFallbackResult{Articles: crawlIntPtr(n), Confidence: "lower_bound", Source: "feed", Status: "ok"}
 	} else {
 		blockedSeen = blockedSeen || blocked
@@ -107,7 +100,11 @@ func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string
 	}
 
 	if blockedSeen {
-		return crawlFallbackResult{Status: "blocked", Error: "diblokir WAF/Cloudflare (HTTP 403/429)"}
+		note := "diblokir WAF (HTTP 403/429) di robots/endpoint langsung"
+		if robotsBlocked {
+			note += " — robots.txt juga ditolak"
+		}
+		return crawlFallbackResult{Status: "blocked", Error: note + "; Wayback tidak punya capture 7 hari terakhir"}
 	}
 	if lastErr != "" {
 		return crawlFallbackResult{Status: "error", Error: lastErr}
@@ -402,10 +399,12 @@ func crawlDiscoverFeed(ctx context.Context, origin string, robots crawlRobots) s
 	return ""
 }
 
-func crawlFeedPosts(ctx context.Context, origin string, robots crawlRobots, cutoff time.Time) (int, bool, bool, error) {
+func crawlFeedPosts(ctx context.Context, origin string, robots crawlRobots, cutoff time.Time, skipDiscovery bool) (int, bool, bool, error) {
 	candidates := []string{}
-	if discovered := crawlDiscoverFeed(ctx, origin, robots); discovered != "" {
-		candidates = append(candidates, discovered)
+	if !skipDiscovery {
+		if discovered := crawlDiscoverFeed(ctx, origin, robots); discovered != "" {
+			candidates = append(candidates, discovered)
+		}
 	}
 	for _, p := range []string{"/feed", "/rss.xml", "/atom.xml", "/index.xml"} {
 		candidates = append(candidates, origin+p)
