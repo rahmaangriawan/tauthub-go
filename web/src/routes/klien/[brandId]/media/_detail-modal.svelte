@@ -17,6 +17,7 @@
 		CircleAlert, X, CircleX, Tag
 	} from '@lucide/svelte';
 	import { apiRequest } from '$lib/auth';
+	import { Tooltip } from 'bits-ui';
 	import { wordCountLabel, normalizeWordCountMode } from '$lib/media/word-count';
 	import { normalizeLinkDurationMonths } from '$lib/media/link-duration';
 	import { mediaDistribution } from '$lib/media/distribution';
@@ -444,13 +445,27 @@
 										title={domainScope(media.website_url) === 'subdomain'
 											? tr('Artikel tayang di subdomain, bukan halaman utama domain.')
 											: tr('Artikel tayang di halaman utama (root domain).')}
-									>{domainScope(media.website_url) === 'subdomain' ? tr('Subdomain') : tr('Root domain')}</span>
+									>{domainScope(media.website_url) === 'subdomain' ? tr('Subdomain') : tr('Root Domain')}</span>
 								{/if}
 								{#if media.domain_verified !== false}
-									<span class="verifiedBadge" title="Domain terverifikasi">
-										<CircleCheck size={14} />
-										<span>VERIFIED</span>
-									</span>
+									<Tooltip.Provider delayDuration={0}>
+										<Tooltip.Root>
+											<Tooltip.Trigger>
+												{#snippet child({ props })}
+													<span {...props} class="verifiedBadge">
+														<CircleCheck size={14} />
+														<span>VERIFIED</span>
+													</span>
+												{/snippet}
+											</Tooltip.Trigger>
+											<Tooltip.Portal>
+												<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+													<Tooltip.Arrow class="uiTipArrow" />
+													{tr('Terverifikasi Tauthub')}
+												</Tooltip.Content>
+											</Tooltip.Portal>
+										</Tooltip.Root>
+									</Tooltip.Provider>
 								{/if}
 								{#if media.dewan_pers_verified}
 									<span class="dewanPersPill" title="Terverifikasi Dewan Pers">

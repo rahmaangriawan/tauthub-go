@@ -412,7 +412,7 @@
 	// dua-label (co.id, or.id, dll.) dihitung satu kesatuan, supaya
 	// "conference.co.id" benar terbaca ROOT, bukan subdomain dari "co.id".
 	const domainScopeLabel = (website: string | null | undefined) =>
-		domainScope(website) === 'subdomain' ? tr('Subdomain') : tr('Root domain');
+		domainScope(website) === 'subdomain' ? tr('Subdomain') : tr('Root Domain');
 	// Favicon yang gagal dimuat jatuh ke inisial huruf (per id media).
 	let faviconFailed = $state<Record<string, boolean>>({});
 	// Rekam jejak distribusi media (jumlah artikel yang sudah terbit lewat media ini).
@@ -1934,7 +1934,7 @@
 											<Tooltip.Portal>
 												<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
 												<Tooltip.Arrow class="uiTipArrow" />
-												Domain terverifikasi Tauthub
+												{tr('Terverifikasi Tauthub')}
 											</Tooltip.Content>
 											</Tooltip.Portal>
 											</Tooltip.Root>

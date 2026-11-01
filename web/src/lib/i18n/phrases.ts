@@ -3320,6 +3320,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Tersimpan.": "Saved.",
   "Terverifikasi": "Verified",
   "Terverifikasi Dewan Pers": "Press Council Verified",
+  "Terverifikasi Tauthub": "Verified by Tauthub",
   "Terverifikasi masih bisa diakses": "Verified still accessible",
   "Test Koneksi": "Test Connection",
   "Test koneksi gagal.": "Connection test failed.",
