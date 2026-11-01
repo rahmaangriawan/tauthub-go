@@ -122,7 +122,9 @@
 		sitemap: 'sitemap (tanggal modifikasi)',
 		sitemap_news: 'news sitemap (cakupan ~48 jam)',
 		feed: 'feed RSS/Atom (tanggal terbit)',
-		html_sample: 'sampel halaman listing'
+		html_sample: 'sampel halaman listing',
+		wordpress_api: 'WordPress REST API (tanggal terbit)',
+		wayback: 'Wayback CDX (perkiraan arsip)'
 	};
 	const CRAWL_CONFIDENCE_LABEL: Record<string, string> = {
 		exact: 'utuh',
@@ -132,7 +134,8 @@
 	};
 
 	function crawlEmptyReason(row: { last_crawled_at: string | null; last_status: string | null; last_error: string | null }) {
-		if (!row.last_crawled_at) return tr('Belum pernah dicrawl');
+		// Status percobaan terakhir lebih informatif daripada "belum pernah",
+		// terutama untuk situs yang selalu diblokir WAF sejak awal.
 		switch (row.last_status) {
 			case 'no_source':
 				return 'Tak ada sitemap/feed di situsnya';
@@ -142,9 +145,9 @@
 				return row.last_error ? `Gagal: ${row.last_error}` : tr('Gagal dicrawl');
 			case 'ok':
 				return 'Terbaca, jumlah artikel belum tersedia';
-			default:
-				return tr('Belum ada angka dari crawler');
 		}
+		if (!row.last_crawled_at) return tr('Belum pernah dicrawl');
+		return tr('Belum ada angka dari crawler');
 	}
 
 	const TABS = [
@@ -783,7 +786,7 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 	async function recrawlRow(row: CrawlRow) {
 		refreshingId = row.media_id;
 		monitorError = '';
-		const res = await request<{ ok: boolean }>(
+		const res = await request<{ ok: boolean; articles_7d?: number; source?: string }>(
 			'/crawlhub',
 			{
 				method: 'POST',
@@ -793,7 +796,10 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 		);
 		if (res.ok) {
 			await loadMonitor();
-			chNotice = `Permintaan crawl ulang terkirim untuk ${row.name}. Crawlhub sedang bekerja; angka muncul dalam beberapa detik sampai satu menit.`;
+			const measured = typeof res.data?.articles_7d === 'number';
+			chNotice = measured
+				? `Crawl ulang ${row.name} selesai — terdeteksi ${res.data.articles_7d} artikel 7 hari terakhir via ${CRAWL_SOURCE_LABEL[res.data.source ?? ''] ?? res.data.source ?? 'fallback'}.`
+				: `Permintaan crawl ulang terkirim untuk ${row.name}. Crawlhub sedang bekerja; angka muncul dalam beberapa detik sampai satu menit.`;
 			setTimeout(() => void loadMonitor(), 8000);
 			setTimeout(() => void loadMonitor(), 30000);
 		} else {
@@ -1899,6 +1905,9 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 													</span>
 												{:else}
 													<span class="font-bold">{row.articles_7d}</span>
+													{#if row.stale}
+														<span class="text-xs text-muted-foreground">({tr('basi')})</span>
+													{/if}
 												{/if}
 											</td>
 											<td class="px-3 py-2 text-xs">{row.source ? (CRAWL_SOURCE_LABEL[row.source] ?? row.source) : '—'}</td>

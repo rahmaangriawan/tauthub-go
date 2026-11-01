@@ -523,24 +523,56 @@ func mjHTMLToText(html string) string {
 
 // CrawlTargetSyncJob: port cabang `crawl_target_sync` di queue.ts — register
 // target + tarik status Crawlhub, lalu simpan salinannya ke crawl_targets.
-// Semua langkah ada di igChSyncCrawlTarget (misc_integrations.go); hasil
-// ok=false diterjemahkan menjadi error supaya runner me-retry dengan backoff.
+//
+// Bila Crawlhub gagal atau tidak menghasilkan angka (WAF diblokir, tidak ada
+// sitemap/feed), job mencoba mengukur langsung lewat WordPress REST API,
+// RSS/Atom, sitemap, lalu Wayback CDX (crawl_fallback.go). Hasil fallback
+// ditulis ke crawl_targets yang sama supaya modal & monitoring konsisten.
 func (d *Deps) CrawlTargetSyncJob(ctx context.Context, mediaID string) error {
 	// Legacy memeriksa media lebih dulu (media mitra + punya website_url) sebelum
 	// konfigurasi Crawlhub, jadi urutan error-nya dipertahankan di sini.
-	if _, err := d.igChMediaWebsite(ctx, mediaID); err != nil {
-		return err
-	}
-	cfg, err := d.igChLoadConfig(ctx)
+	websiteURL, err := d.igChMediaWebsite(ctx, mediaID)
 	if err != nil {
 		return err
 	}
-	if !cfg.igConfigured() {
-		return errors.New("Crawlhub belum dikonfigurasi")
+
+	var syncErr error
+	var syncArticles *int
+	cfg, cfgErr := d.igChLoadConfig(ctx)
+	if cfgErr != nil {
+		syncErr = cfgErr
+	} else if !cfg.igConfigured() {
+		syncErr = errors.New("Crawlhub belum dikonfigurasi")
+	} else {
+		outcome := d.igChSyncCrawlTarget(ctx, cfg, mediaID)
+		if outcome.OK {
+			syncArticles = crawlArticlesPtr(outcome.Articles7d)
+		} else {
+			syncErr = errors.New(outcome.Error)
+		}
 	}
-	outcome := d.igChSyncCrawlTarget(ctx, cfg, mediaID)
-	if !outcome.OK {
-		return errors.New(outcome.Error)
+
+	if syncErr == nil && syncArticles != nil {
+		return nil
+	}
+
+	// Fallback pengukuran langsung. Cara ini tidak bergantung pada Crawlhub dan
+	// tetap bisa memberi angka untuk situs yang sitemap/feed-nya tidak terdeteksi
+	// Crawlhub, atau lewat Wayback saat IP kita diblokir.
+	fb := d.crawlMeasureFallback(ctx, websiteURL)
+	if storeErr := d.crawlStoreFallback(ctx, mediaID, websiteURL, fb); storeErr != nil {
+		return fmt.Errorf("simpan hasil fallback crawl: %w", storeErr)
+	}
+	if fb.Articles != nil {
+		return nil
+	}
+	// blocked / no_source sudah tercatat di last_status — jangan diperlakukan
+	// sebagai error retry beruntun. Error jaringan tetap diteruskan.
+	if fb.Status == "error" {
+		if syncErr != nil {
+			return syncErr
+		}
+		return errors.New(fb.Error)
 	}
 	return nil
 }

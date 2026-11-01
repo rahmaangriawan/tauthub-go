@@ -139,6 +139,17 @@
 	let crawlArticles = $state<number | null>(null);
 	let crawlAt = $state<string | null>(null);
 	let crawlStale = $state(false);
+	let crawlStatus = $state<string | null>(null);
+	let crawlSource = $state<string | null>(null);
+
+	const CRAWL_SOURCE_SHORT: Record<string, string> = {
+		sitemap: 'sitemap',
+		sitemap_news: 'news sitemap',
+		feed: 'RSS/Atom',
+		html_sample: 'sampel HTML',
+		wordpress_api: 'WordPress API',
+		wayback: 'Wayback'
+	};
 	let copiedShare = $state(false);
 	let catPopoverOpen = $state(false);
 	let infoTipOpen = $state(false);
@@ -157,11 +168,15 @@
 					articles_7d?: number | null;
 					last_crawled_at?: string | null;
 					stale?: boolean;
+					last_status?: string | null;
+					source?: string | null;
 				};
 				if (!cancelled) {
 					crawlArticles = data.articles_7d ?? null;
 					crawlAt = data.last_crawled_at ?? null;
 					crawlStale = data.stale === true;
+					crawlStatus = data.last_status ?? null;
+					crawlSource = data.source ?? null;
 				}
 			} catch {
 				if (!cancelled) crawlArticles = null;
@@ -179,6 +194,19 @@
 				? { label: 'PRODUKTIF', isProductive: true }
 				: { label: 'STAGNAN', isProductive: false }
 	);
+
+	// Angka lama hanya ditampilkan sebagai "belum diperbarui"; bila penyebabnya
+	// blokir WAF / tidak ada feed, sebutkan supaya tidak disalahartikan STAGNAN.
+	const crawlStatusNote = $derived(
+		!crawlStale
+			? ''
+			: crawlStatus === 'blocked'
+				? tr('diblokir')
+				: crawlStatus === 'no_source'
+					? tr('tak ada sitemap/feed')
+					: tr('belum diperbarui')
+	);
+	const crawlSourceLabel = $derived(crawlSource ? (CRAWL_SOURCE_SHORT[crawlSource] ?? crawlSource) : '');
 
 	const score = $derived(media.health_score);
 	const healthLabel = $derived(
@@ -696,13 +724,19 @@
 									<span class="velocitySub">Rata-rata artikel terbit / minggu</span>
 									{#if crawlAt}
 										<span class="velocitySub">
-											Data per {jakartaStamp(crawlAt)}{crawlStale ? ' (belum diperbarui)' : ''}
+											Data per {jakartaStamp(crawlAt)}{crawlSourceLabel ? ` · ${crawlSourceLabel}` : ''}{crawlStatusNote ? ` (${crawlStatusNote})` : ''}
 										</span>
 									{/if}
 								</div>
 								<div class="velocityRight">
 									{#if crawlArticles == null}
-										<span class="velocityEmpty">{tr("Belum ada data crawl")}</span>
+										<span class="velocityEmpty">
+											{crawlStatus === 'blocked'
+												? tr('Diblokir situs (Cloudflare/robots)')
+												: crawlStatus === 'no_source'
+													? tr('Tak ada sitemap/feed di situsnya')
+													: tr('Belum ada data crawl')}
+										</span>
 									{:else}
 										<div class="velocityValue">
 											{crawlArticles} <span class="velocityValueUnit">artikel</span>

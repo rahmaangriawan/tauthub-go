@@ -295,6 +295,19 @@ func (d *Deps) CrawlhubAction(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, d, errUnprocessable("Payload tidak valid"))
 			return
 		}
+		// Crawl Ulang per baris: coba ukur sendiri dulu (WP API/feed/sitemap/
+		// Wayback). Untuk media yang diblokir WAF, ini sering satu-satunya jalur
+		// yang menghasilkan angka; Crawlhub baru dipanggil bila semuanya gagal.
+		if website, wErr := d.igChMediaWebsite(r.Context(), mediaID); wErr == nil {
+			fb := d.crawlMeasureFallbackWithin(r.Context(), website, crawlFallbackDrainBudget)
+			_ = d.crawlStoreFallback(r.Context(), mediaID, website, fb)
+			if fb.Articles != nil {
+				writeJSON(w, http.StatusOK, map[string]any{
+					"ok": true, "requested": true, "articles_7d": *fb.Articles, "source": fb.Source,
+				})
+				return
+			}
+		}
 		if err := d.igChRequestImmediateRecrawl(r.Context(), cfg, mediaID); err != nil {
 			writeJSON(w, http.StatusBadGateway, map[string]any{"ok": false, "error": err.Error()})
 			return
@@ -469,7 +482,7 @@ func (d *Deps) CrawlhubTargets(w http.ResponseWriter, r *http.Request) {
 		filters = append(filters, "ct.media_id IS NOT NULL")
 	}
 	if filter == "problem" {
-		filters = append(filters, "COALESCE(ct.consecutive_failures, 0) > 0")
+		filters = append(filters, "(COALESCE(ct.consecutive_failures, 0) > 0 OR ct.last_status IN ('blocked', 'error'))")
 	}
 	if filter == "stale" {
 		filters = append(filters, fmt.Sprintf("(ct.last_crawled_at IS NULL OR ct.last_crawled_at < NOW() - make_interval(days => %d))", crawlStaleDays()))
@@ -482,7 +495,7 @@ func (d *Deps) CrawlhubTargets(w http.ResponseWriter, r *http.Request) {
 	summary, err := d.queryRow(r.Context(),
 		`SELECT COUNT(*)::int AS total,
 		        COUNT(ct.media_id)::int AS registered,
-		        COUNT(*) FILTER (WHERE COALESCE(ct.consecutive_failures, 0) > 0)::int AS failed,
+		        COUNT(*) FILTER (WHERE COALESCE(ct.consecutive_failures, 0) > 0 OR ct.last_status IN ('blocked', 'error'))::int AS failed,
 		        COUNT(*) FILTER (WHERE ct.media_id IS NULL)::int AS unregistered
 		 FROM media m
 		 LEFT JOIN crawl_targets ct ON ct.media_id = m.id
@@ -498,11 +511,18 @@ func (d *Deps) CrawlhubTargets(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
+	// stale: angka dianggap basi bila lewat TTL, atau percobaan terakhir tidak
+	// menghasilkan angka (blocked/error/no_source). UI memakainya untuk menandai
+	// "(basi)" dan tidak menyimpulkan STAGNAN dari data lama.
+	staleExpr := fmt.Sprintf(
+		"(ct.last_crawled_at IS NOT NULL AND (ct.last_crawled_at < NOW() - make_interval(days => %d) OR ct.last_status IN ('blocked', 'error', 'no_source'))) AS stale",
+		crawlStaleDays(),
+	)
 	targets, err := d.queryRows(r.Context(),
 		`SELECT m.id AS media_id, m.name, m.website_url,
 		        ct.articles_7d, ct.confidence, ct.source,
 		        ct.last_crawled_at, ct.last_status, ct.consecutive_failures, ct.last_error,
-		        (ct.media_id IS NOT NULL) AS registered
+		        (ct.media_id IS NOT NULL) AS registered, `+staleExpr+`
 		 FROM media m
 		 LEFT JOIN crawl_targets ct ON ct.media_id = m.id
 		 WHERE `+where+`
@@ -623,6 +643,19 @@ func (d *Deps) igChDrainCrawlJobs(ctx context.Context, limit int) int {
 			}
 		}
 		outcome := d.igChSyncCrawlTarget(ctx, cfg, mediaID)
+		// Paritas CrawlTargetSyncJob: bila Crawlhub gagal / tidak menghasilkan
+		// angka, ukur langsung (WP API → feed → sitemap → Wayback) supaya tombol
+		// "Sinkronkan Sekarang" juga bisa mengisi media yang diblokir.
+		if !outcome.OK || crawlArticlesPtr(outcome.Articles7d) == nil {
+			if website, wErr := d.igChMediaWebsite(ctx, mediaID); wErr == nil {
+				fb := d.crawlMeasureFallbackWithin(ctx, website, crawlFallbackDrainBudget)
+				_ = d.crawlStoreFallback(ctx, mediaID, website, fb)
+				if fb.Articles != nil {
+					outcome.OK = true
+					outcome.Articles7d = *fb.Articles
+				}
+			}
+		}
 		if outcome.OK {
 			_ = d.exec(ctx, "UPDATE jobs SET status = 'completed', finished_at = NOW() WHERE id = $1", jobID)
 		} else {

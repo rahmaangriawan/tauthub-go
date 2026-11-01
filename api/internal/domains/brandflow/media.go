@@ -286,7 +286,7 @@ func (d *Deps) MediaCrawlStatus(w http.ResponseWriter, r *http.Request) {
 		ttlDays = defaultCrawlStaleDays
 	}
 	local, err := d.queryRow(r.Context(), `
-		SELECT articles_7d, confidence, source, last_crawled_at,
+		SELECT articles_7d, confidence, source, last_crawled_at, last_status, last_error,
 		       (last_crawled_at IS NOT NULL
 		        AND last_crawled_at >= NOW() - make_interval(days => $2::int)) AS fresh
 		FROM crawl_targets
@@ -296,11 +296,20 @@ func (d *Deps) MediaCrawlStatus(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
-	if local != nil && local.boolOr("fresh", false) {
+	// Angka lama hanya dianggap segar bila crawl terakhir benar-benar sukses.
+	// Baris yang terakhir diblokir/no_source tidak boleh tampil seolah STAGNAN
+	// baru — UI memakai `stale` untuk menandai "(belum diperbarui)".
+	localFreshOK := local != nil && local.boolOr("fresh", false)
+	if localFreshOK {
+		status := local.strOr("last_status", "")
+		localFreshOK = status == "" || status == "ok"
+	}
+	if localFreshOK {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"configured": true, "articles_7d": local.numPtr("articles_7d"),
 			"confidence": local.raw("confidence"), "source": local.raw("source"),
 			"last_crawled_at": local.timePtr("last_crawled_at"), "stale": false,
+			"last_status": local.raw("last_status"), "last_error": local.raw("last_error"),
 		})
 		return
 	}
@@ -312,12 +321,15 @@ func (d *Deps) MediaCrawlStatus(w http.ResponseWriter, r *http.Request) {
 		payload := map[string]any{
 			"configured": configured, "articles_7d": nil, "confidence": nil,
 			"source": nil, "last_crawled_at": nil, "stale": true,
+			"last_status": nil, "last_error": nil,
 		}
 		if local != nil {
 			payload["articles_7d"] = local.numPtr("articles_7d")
 			payload["confidence"] = local.raw("confidence")
 			payload["source"] = local.raw("source")
 			payload["last_crawled_at"] = local.timePtr("last_crawled_at")
+			payload["last_status"] = local.raw("last_status")
+			payload["last_error"] = local.raw("last_error")
 		}
 		if note != "" {
 			payload["error"] = note
@@ -357,6 +369,7 @@ func (d *Deps) MediaCrawlStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"configured": true, "articles_7d": articles, "confidence": confidence,
 		"source": source, "last_crawled_at": result["last_crawled_at"], "stale": false,
+		"last_status": "ok", "last_error": nil,
 	})
 }
 
