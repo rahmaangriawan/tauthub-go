@@ -546,7 +546,9 @@ func (d *Deps) CrawlTargetSyncJob(ctx context.Context, mediaID string) error {
 		return nil
 	}
 
-	// 2) Fallback tidak dapat angka → mintakan ke Crawlhub (register + status).
+	// 2) Fallback tidak dapat angka → sinkronkan ke Crawlhub (register + status).
+	// Kalau Crawlhub juga tidak menghasilkan angka, status rinci fallback kita
+	// ditulis ulang supaya UI tidak menampilkan alasan generik Crawlhub.
 	cfg, cfgErr := d.igChLoadConfig(ctx)
 	if cfgErr != nil {
 		return cfgErr
@@ -558,11 +560,10 @@ func (d *Deps) CrawlTargetSyncJob(ctx context.Context, mediaID string) error {
 		return nil
 	}
 	outcome := d.igChSyncCrawlTarget(ctx, cfg, mediaID)
-	if outcome.OK {
+	if outcome.OK && outcome.Articles7d != nil {
 		return nil
 	}
-	// blocked/no_source sudah tercatat — jangan retry beruntun. Error jaringan
-	// tetap diteruskan agar runner mencoba lagi.
+	_ = d.crawlStoreFallback(ctx, mediaID, websiteURL, fb)
 	if fb.Status == "error" {
 		return errors.New(fb.Error)
 	}

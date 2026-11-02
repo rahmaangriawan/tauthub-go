@@ -213,7 +213,22 @@ func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string
 		}
 	}
 
-	if robotsBlocked || wpBlocked || feedBlocked || sitemapBlocked {
+	// Probe halaman utama: bedakan blokir WAF, situs error (5xx), domain parkir,
+	// atau memang tak punya sumber — supaya alasan di UI tidak menyesatkan.
+	homeBlocked := false
+	homeCode, _, homeBody, homeErr := crawlFallbackGetSite(ctx, origin+"/")
+	if homeErr == nil {
+		switch {
+		case homeCode >= 500:
+			return crawlFallbackResult{Status: "error", Error: fmt.Sprintf("situs error (HTTP %d) — origin tidak merespons", homeCode)}
+		case crawlBlockedStatus(homeCode):
+			homeBlocked = true
+		case homeCode == http.StatusOK && strings.Contains(homeBody, "/lander"):
+			return crawlFallbackResult{Status: "no_source", Error: "situs tampak parkir/tidak aktif"}
+		}
+	}
+
+	if robotsBlocked || wpBlocked || feedBlocked || sitemapBlocked || homeBlocked {
 		parts := []string{}
 		if robotsBlocked {
 			parts = append(parts, "robots 403")
@@ -226,6 +241,9 @@ func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string
 		}
 		if sitemapBlocked {
 			parts = append(parts, "sitemap 403")
+		}
+		if homeBlocked {
+			parts = append(parts, fmt.Sprintf("homepage %d", homeCode))
 		}
 		parts = append(parts, googleNewsNote, waybackNote)
 		return crawlFallbackResult{Status: "blocked", Error: "diblokir WAF (HTTP 403/429): " + strings.Join(parts, " · ")}
