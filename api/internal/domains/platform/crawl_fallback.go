@@ -153,26 +153,6 @@ func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string
 
 func crawlIntPtr(n int) *int { return &n }
 
-// crawlArticlesPtr: hasil Crawlhub datang sebagai `any` (JSON number), jadi
-// dikonversi ke *int sekali di sini sebelum dipakai fallback.
-func crawlArticlesPtr(v any) *int {
-	switch n := v.(type) {
-	case *int:
-		return n
-	case int:
-		return crawlIntPtr(n)
-	case int64:
-		return crawlIntPtr(int(n))
-	case float64:
-		return crawlIntPtr(int(n))
-	case json.Number:
-		if i, err := n.Int64(); err == nil {
-			return crawlIntPtr(int(i))
-		}
-	}
-	return nil
-}
-
 // crawlStoreFallback: simpan hasil fallback ke salinan lokal yang dibaca modal
 // media & monitoring. Angka lama dipertahankan bila run ini tidak menghasilkan
 // angka (blocked/no_source), sama seperti kebijakan igChSyncCrawlTarget.

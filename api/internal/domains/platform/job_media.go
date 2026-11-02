@@ -536,29 +536,8 @@ func (d *Deps) CrawlTargetSyncJob(ctx context.Context, mediaID string) error {
 		return err
 	}
 
-	var syncErr error
-	var syncArticles *int
-	cfg, cfgErr := d.igChLoadConfig(ctx)
-	if cfgErr != nil {
-		syncErr = cfgErr
-	} else if !cfg.igConfigured() {
-		syncErr = errors.New("Crawlhub belum dikonfigurasi")
-	} else {
-		outcome := d.igChSyncCrawlTarget(ctx, cfg, mediaID)
-		if outcome.OK {
-			syncArticles = crawlArticlesPtr(outcome.Articles7d)
-		} else {
-			syncErr = errors.New(outcome.Error)
-		}
-	}
-
-	if syncErr == nil && syncArticles != nil {
-		return nil
-	}
-
-	// Fallback pengukuran langsung. Cara ini tidak bergantung pada Crawlhub dan
-	// tetap bisa memberi angka untuk situs yang sitemap/feed-nya tidak terdeteksi
-	// Crawlhub, atau lewat Wayback saat IP kita diblokir.
+	// 1) Ukur langsung dulu (WP API → feed → sitemap → Google News → Wayback).
+	// Ini cepat untuk media yang diblokir WAF dan tidak bergantung Crawlhub.
 	fb := d.crawlMeasureFallback(ctx, websiteURL)
 	if storeErr := d.crawlStoreFallback(ctx, mediaID, websiteURL, fb); storeErr != nil {
 		return fmt.Errorf("simpan hasil fallback crawl: %w", storeErr)
@@ -566,12 +545,25 @@ func (d *Deps) CrawlTargetSyncJob(ctx context.Context, mediaID string) error {
 	if fb.Articles != nil {
 		return nil
 	}
-	// blocked / no_source sudah tercatat di last_status — jangan diperlakukan
-	// sebagai error retry beruntun. Error jaringan tetap diteruskan.
-	if fb.Status == "error" {
-		if syncErr != nil {
-			return syncErr
+
+	// 2) Fallback tidak dapat angka → mintakan ke Crawlhub (register + status).
+	cfg, cfgErr := d.igChLoadConfig(ctx)
+	if cfgErr != nil {
+		return cfgErr
+	}
+	if !cfg.igConfigured() {
+		if fb.Status == "error" {
+			return errors.New(fb.Error)
 		}
+		return nil
+	}
+	outcome := d.igChSyncCrawlTarget(ctx, cfg, mediaID)
+	if outcome.OK {
+		return nil
+	}
+	// blocked/no_source sudah tercatat — jangan retry beruntun. Error jaringan
+	// tetap diteruskan agar runner mencoba lagi.
+	if fb.Status == "error" {
 		return errors.New(fb.Error)
 	}
 	return nil
