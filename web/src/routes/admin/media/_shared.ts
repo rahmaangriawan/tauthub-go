@@ -118,6 +118,11 @@ export type Media = {
 	word_count_mode?: string | null;
 	/** Masa berlaku tautan: 0 = permanen, >0 = bulan (default 12). */
 	link_duration_months?: number | null;
+	/** Jumlah backlink maksimal per artikel (0-3). allow_hyperlink = max_links > 0. */
+	max_links?: number | null;
+	allow_hyperlink?: boolean | null;
+	/** 'tidak_ada' (organik) atau 'ada_sponsor' (tautan Sponsored). */
+	label_sponsor?: string | null;
 	rejection_reason?: string | null;
 	seo_da?: number | null;
 	seo_ai_trust?: number | null;

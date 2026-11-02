@@ -728,6 +728,7 @@ func run() error {
 			authed.Post("/platform/media/archive-all", platformDeps.MediaArchiveAll)
 			authed.Post("/platform/media/bulk", platformDeps.MediaBulkUpsert)
 			authed.Delete("/platform/media/bulk", platformDeps.MediaBulkDelete)
+			authed.Post("/platform/media/bulk-link-kind", platformDeps.MediaBulkLinkKind)
 			authed.Get("/platform/media/dewan-pers-reviews", platformDeps.MediaDewanPersReviews)
 			authed.Post("/platform/media/dewan-pers-reviews/{reviewId}", platformDeps.MediaDewanPersReviewDecide)
 			authed.Get("/platform/media/intelligence", platformDeps.MediaIntelligence)
@@ -1021,6 +1022,7 @@ func run() error {
 
 			// Credits / invoices / packages / orders / revenue / settlements / referrals / VIP.
 			authed.Get("/platform/finance/report", platformDeps.FinanceReport)
+			authed.Get("/platform/finance/partner-payables", platformDeps.FinancePartnerPayables)
 			authed.Get("/platform/credits", platformDeps.CreditsConfigGet)
 			authed.Post("/platform/credits", platformDeps.CreditsAdjust)
 			authed.Put("/platform/credits", platformDeps.CreditsConfigPut)

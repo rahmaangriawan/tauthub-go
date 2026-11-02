@@ -654,6 +654,7 @@ func parseRewriteOutput(raw string) (map[string]string, bool) {
 // partnerAvailableIDR: parity partnerAvailableIdr — settled belum ter-settlement
 // dikurangi biaya layanan, minimal 0.
 func (d *Deps) partnerAvailableIDR(ctx context.Context, partnerID string) float64 {
+	d.releaseDuePartnerEarnings(ctx, partnerID)
 	row, _ := d.queryRow(ctx, `
 		SELECT
 		  (COALESCE((SELECT SUM(amount) FROM partner_earnings WHERE partner_id = $1 AND status = 'settled' AND settlement_id IS NULL), 0)

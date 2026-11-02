@@ -15,7 +15,7 @@
 </script>
 
 {#if total > limit}
-	<div class="mt-4 flex items-center justify-between text-sm">
+	<div class="mt-4 flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
 		<p class="text-muted-foreground"> {tr("Menampilkan")} {offset + 1}–{Math.min(offset + limit, total)} {tr("dari")} {fmt(total)} · {tr("Halaman")} {page} {tr("dari")} {pages}
 		</p>
 		<div class="flex gap-2">

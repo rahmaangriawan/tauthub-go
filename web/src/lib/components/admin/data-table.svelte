@@ -14,6 +14,8 @@
 		/** Keterangan tambahan: ikon info di sebelah label, isinya muncul saat hover. */
 		hint?: string;
 		render?: Snippet<[Row]>;
+		/** Isi header kustom (mis. checkbox pilih semua); menggantikan label. */
+		header?: Snippet;
 	};
 
 	let {
@@ -49,7 +51,9 @@
 				<tr class="text-xs text-muted-foreground">
 					{#each columns as col (col.key)}
 						<th class="px-4 py-2.5 font-medium {alignClass(col.align)}" style={col.width ? `width:${col.width};` : undefined}>
-							{#if col.hint}
+							{#if col.header}
+								{@render col.header()}
+							{:else if col.hint}
 								<!-- Ikon info + tooltip. Memakai komponen tooltip bersama supaya
 								     posisinya fixed dan tidak terpotong overflow tabel. -->
 								<span class="inline-flex items-center gap-1">

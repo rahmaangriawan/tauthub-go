@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	dbpkg "github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/imageconvert"
 	"github.com/rahmaangriawan/tauthub-go/internal/notify"
@@ -1676,7 +1677,7 @@ func (d *Deps) SettlementCreate(w http.ResponseWriter, r *http.Request) {
 // dengan yang dilihat mitra di dashboard-nya.
 func (d *Deps) finCreateSettlement(r *http.Request, partnerID string, start, end time.Time, notes any, userID string) (ptRow, error) {
 	earnings, err := d.queryRows(r.Context(),
-		"SELECT id, amount FROM partner_earnings WHERE partner_id = $1 AND status = 'pending' AND created_at >= $2 AND created_at < $3",
+		"SELECT id, amount FROM partner_earnings WHERE partner_id = $1 AND status = 'pending' AND settlement_id IS NULL AND created_at >= $2 AND created_at < $3 AND created_at <= "+dbpkg.PartnerEarningHoldCutoffSQL,
 		partnerID, start, end.Add(24*time.Hour))
 	if err != nil {
 		return nil, err
@@ -2612,7 +2613,7 @@ func (d *Deps) finCreditCPAForDomain(ctx context.Context, referredDomainID strin
 	}
 	_ = d.exec(ctx,
 		`INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_referred_domain_id)
-		 VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'settled', 'cpa', $7) ON CONFLICT (publication_id) DO NOTHING`,
+		 VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'pending', 'cpa', $7) ON CONFLICT (publication_id) DO NOTHING`,
 		uuid.NewString(), referrerPartnerID, "cpa:"+referredDomainID, mediaID, cpaAmount, cpaAmount, referredDomainID)
 	partner, err := d.queryRow(ctx, "SELECT user_id, public_id, name FROM partners WHERE id = $1 LIMIT 1", referrerPartnerID)
 	if err == nil && partner != nil {

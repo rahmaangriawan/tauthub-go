@@ -580,9 +580,19 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if articleType == "advertorial" {
 		sponsoredMedia = true
 	}
+	// Media nofollow (menerima tautan tapi hanya nofollow): tautan ditanam dengan
+	// rel="nofollow" supaya artikel tidak perlu ditolak. Sponsored tetap menang.
+	nofollowMedia := false
+	if item.has("allow_hyperlink") && item.has("max_links") {
+		ml := int(item.numOr("max_links"))
+		nofollowMedia = mediaForcesNofollow(item.boolOr("allow_hyperlink", true), &ml)
+	}
 	var primaryRel *string
 	if sponsoredMedia {
 		rel := "sponsored"
+		primaryRel = &rel
+	} else if nofollowMedia {
+		rel := "nofollow"
 		primaryRel = &rel
 	}
 
@@ -666,6 +676,8 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		relRule := "TANPA atribut rel (dofollow)."
 		if sponsoredMedia {
 			relRule = "DENGAN atribut rel=\"sponsored\" (link bersponsor)."
+		} else if nofollowMedia {
+			relRule = "DENGAN atribut rel=\"nofollow\" (media ini hanya menerima tautan nofollow)."
 		}
 		primaryObligation := ""
 		if backlinkEnabled {
@@ -996,6 +1008,8 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			var rel *string
 			if sponsoredMedia {
 				rel = strPtrValue("sponsored")
+			} else if nofollowMedia {
+				rel = strPtrValue("nofollow")
 			}
 			linkSpecs = append(linkSpecs, tautBacklinkSpec{URL: l.URL, Anchor: l.Anchor, Rel: rel, Mandatory: false, Client: true})
 		}

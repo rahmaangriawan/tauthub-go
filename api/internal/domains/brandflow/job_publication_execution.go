@@ -229,6 +229,15 @@ func (d *Deps) PublicationExecutionJob(ctx context.Context, publicationID string
 		return pePublishErr("link_policy", msg)
 	}
 
+	// Media nofollow (menerima tautan, tapi hanya nofollow): artikel tidak
+	// ditolak. Tautan keluar diberi rel="nofollow" otomatis pada HTML yang
+	// dikirim (lihat peRenderedHTML), jadi artikel yang sudah jadi tetap bisa terbit.
+	if media.has("allow_hyperlink") && mediaForcesNofollow(media.boolOr("allow_hyperlink", true), maxLinksPtr) {
+		version = peCloneRow(version)
+		version["x_force_nofollow"] = true
+		version["x_own_site"] = media.strOr("website_url", "")
+	}
+
 	// Content Safety: gerbang final publikasi — best-effort, tidak boleh
 	// mematahkan alur yang sudah ada.
 	if modErr := d.peModerationGate(ctx, publicationID, publication, document, version, startedAt); modErr != nil {
@@ -354,6 +363,10 @@ func (d *Deps) peRenderedHTML(version bsRow, publicOrigin string) (content, html
 		rendered = bsPublishMarkdown(content)
 	}
 	rendered = contentengine.NormalizeArticleHTML(bsStripH1(rendered))
+	if forced, _ := version["x_force_nofollow"].(bool); forced {
+		own, _ := version["x_own_site"].(string)
+		rendered = forceNofollowOutbound(rendered, hostSet(own))
+	}
 	return content, peAbsolutizeUploadURLs(rendered, publicOrigin, d.peAppSecret())
 }
 
@@ -2330,7 +2343,7 @@ func (d *Deps) peRecordFinance(ctx context.Context, publication, media bsRow) {
 	}
 	if basePrice <= 0 {
 		if err := d.exec(ctx,
-			"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status) VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'settled')",
+			"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status) VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'pending')",
 			newUUID(), partnerID, publication.strOr("id", ""), media.strOr("id", ""), peNetAfterPlatformCut(clientPrice), clientPrice); err != nil {
 			slog.Warn("[brandflow] partner earning gagal", "err", err)
 		}
@@ -2346,7 +2359,7 @@ func (d *Deps) peRecordFinance(ctx context.Context, publication, media bsRow) {
 	partnerAmount := peNetAfterPlatformCut(grossShare)
 	earningID := newUUID()
 	if err := d.exec(ctx,
-		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_earning_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'settled', 'publication', NULL)",
+		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_earning_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'publication', NULL)",
 		earningID, partnerID, publication.strOr("id", ""), media.strOr("id", ""), ruleID, partnerAmount, grossShare, clientPrice); err != nil {
 		slog.Warn("[brandflow] partner earning gagal", "err", err)
 		return
@@ -2548,7 +2561,7 @@ func (d *Deps) peCreditVipTransactionCommission(ctx context.Context, publication
 		return
 	}
 	_ = d.exec(ctx,
-		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_earning_id) VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'settled', 'transaction_commission', $7) ON CONFLICT (publication_id) DO NOTHING",
+		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_earning_id) VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'pending', 'transaction_commission', $7) ON CONFLICT (publication_id) DO NOTHING",
 		newUUID(), referrerPartnerID, publicationID, publication.strOr("media_id", ""), amount, clientPrice, publicationID)
 }
 

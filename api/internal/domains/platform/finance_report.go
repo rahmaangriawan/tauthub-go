@@ -73,7 +73,7 @@ WITH combined AS (
 )
 `
 
-var financeMonthShort = []string{"Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"}
+var financeMonthShort =[]string{"Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"}
 
 func finReportInt(v float64) int { return int(math.Round(v)) }
 
@@ -181,6 +181,13 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		WHERE e.status = 'pending'
 		   OR (e.status = 'settled' AND (s.id IS NULL OR s.status <> 'paid'))`)
 
+	// Siap transfer ke mitra: jumlah mitra yang punya pengajuan pencairan aktif.
+	// Nilainya (bersih setelah biaya) sama dengan settlementPending di atas.
+	partnerPayableCount, _ := d.queryRow(ctx, `
+		SELECT COUNT(DISTINCT partner_id)::int AS n
+		FROM settlements
+		WHERE status IN ('pending', 'approved', 'processing')`)
+
 	// ---------- informasi non-kas ----------
 	invoiceRow, _ := d.queryRow(ctx, `
 		SELECT COUNT(*)::int AS n, COALESCE(SUM(amount), 0) AS total
@@ -209,6 +216,8 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		"settlement_pending_count": settlementPending.intOr("n", 0),
 		"client_balance":           finReportInt(clientBalance.numOr("total")),
 		"partner_unpaid":           finReportInt(partnerUnpaid.numOr("total")),
+		"partner_payable_total":    finReportInt(settlementPending.numOr("total")),
+		"partner_payable_count":    partnerPayableCount.intOr("n", 0),
 		"invoice_paid":             finReportInt(invoiceRow.numOr("total")),
 		"invoice_paid_count":       invoiceRow.intOr("n", 0),
 		"compensation_credits":     finReportInt(compensationRow.numOr("total")),
@@ -443,4 +452,38 @@ func (d *Deps) finReportSparkline(ctx context.Context, from, to time.Time, feeCf
 	}
 
 	return map[string]any{"granularity": granularity, "points": points}, nil
+}
+
+// FinancePartnerPayables: GET /v1/platform/finance/partner-payables
+//
+// Daftar pengajuan pencairan mitra yang siap ditransfer (status pending,
+// approved, processing). `net_amount_idr` adalah nominal bersih setelah biaya
+// transfer, sama dengan yang dijumlahkan di settlement_pending laporan.
+func (d *Deps) FinancePartnerPayables(w http.ResponseWriter, r *http.Request) {
+	_, _, ok := d.adminGuard(w, r, "payments")
+	if !ok {
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	ctx := r.Context()
+
+	rows, err := d.queryRows(ctx,
+		"SELECT s.*, p.name AS partner_name, p.bank_name, p.bank_account_number, p.bank_account_name, p.payout_type AS partner_payout_type "+
+			"FROM settlements s LEFT JOIN partners p ON p.id = s.partner_id "+
+			"WHERE s.status IN ('pending', 'approved', 'processing') ORDER BY s.created_at ASC LIMIT 200")
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	cfg := d.finFeeCfg(ctx)
+	items := make([]map[string]any, 0, len(rows))
+	total := 0.0
+	for _, raw := range rows {
+		item := settJSON(ptRow(ptNormalizeMap(raw)), cfg)
+		if net, ok := item["net_amount_idr"].(float64); ok {
+			total += net
+		}
+		items = append(items, item)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"settlements": items, "total_net": finReportInt(total)})
 }

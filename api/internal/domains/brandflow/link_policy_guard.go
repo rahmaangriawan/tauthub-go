@@ -16,6 +16,64 @@ import (
 
 var reHrefAttr = regexp.MustCompile(`(?i)href\s*=\s*["']([^"']+)["']`)
 
+var (
+	reAnchorTag = regexp.MustCompile(`(?is)<a\b[^>]*>`)
+	reNofollowRelAttr   = regexp.MustCompile(`(?is)\brel\s*=\s*("([^"]*)"|'([^']*)')`)
+)
+
+// MediaForcesNofollow: pembungkus ekspor untuk domain lain (clienttaut).
+func MediaForcesNofollow(allowHyperlink bool, maxLinks *int) bool {
+	return mediaForcesNofollow(allowHyperlink, maxLinks)
+}
+
+// mediaForcesNofollow: media menerima tautan tetapi hanya sebagai nofollow
+// (allow_hyperlink = false dengan max_links > 0). Artikel TIDAK ditolak:
+// tautan keluar diberi rel="nofollow" otomatis saat ditulis dan saat terbit.
+func mediaForcesNofollow(allowHyperlink bool, maxLinks *int) bool {
+	return !allowHyperlink && maxLinks != nil && *maxLinks > 0
+}
+
+// forceNofollowOutbound: tambahkan "nofollow" ke rel setiap tautan keluar
+// (domain selain media sendiri). rel yang sudah ada (mis. sponsored) dipertahankan.
+func forceNofollowOutbound(html string, ownDomains map[string]bool) string {
+	if strings.TrimSpace(html) == "" {
+		return html
+	}
+	return reAnchorTag.ReplaceAllStringFunc(html, func(tag string) string {
+		m := reHrefAttr.FindStringSubmatch(tag)
+		if m == nil {
+			return tag
+		}
+		href := strings.TrimSpace(m[1])
+		low := strings.ToLower(href)
+		if !strings.HasPrefix(low, "http://") && !strings.HasPrefix(low, "https://") {
+			return tag
+		}
+		u, err := url.Parse(href)
+		if err != nil || u.Hostname() == "" {
+			return tag
+		}
+		host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+		if ownDomains != nil && ownDomains[host] {
+			return tag
+		}
+		if rm := reNofollowRelAttr.FindStringSubmatchIndex(tag); rm != nil {
+			value := tag[rm[2]+1 : rm[3]-1]
+			for _, token := range strings.Fields(strings.ToLower(value)) {
+				if token == "nofollow" {
+					return tag
+				}
+			}
+			return tag[:rm[2]+1] + strings.TrimSpace(value+" nofollow") + tag[rm[3]-1:]
+		}
+		end := len(tag) - 1
+		if strings.HasSuffix(tag, "/>") {
+			end = len(tag) - 2
+		}
+		return tag[:end] + ` rel="nofollow"` + tag[end:]
+	})
+}
+
 // MediaLinkCap / CountOutboundLinks / HostSet — pembungkus ekspor untuk
 // domain lain (clienttaut) yang menjalankan gatekeeper versi wizard lama.
 func MediaLinkCap(allowHyperlink bool, maxLinks *int) (int, bool) {

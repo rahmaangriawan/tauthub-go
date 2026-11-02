@@ -411,6 +411,7 @@ type financeSummary struct {
 }
 
 func (d *Deps) partnerFinanceSummary(ctx context.Context, partnerID string) financeSummary {
+	d.releaseDuePartnerEarnings(ctx, partnerID)
 	var pending, settled, paid, lifetimePublication float64
 	_ = d.Pool.QueryRow(ctx, `
 		SELECT

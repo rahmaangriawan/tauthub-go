@@ -4,7 +4,7 @@
 	// Tab Direktori /admin/media — master data media (harga, kredit, tier, integrasi, partner).
 	// Port MediaDirectorySection di apps/web/src/app/admin/media/_sections.tsx.
 	import { onDestroy, onMount } from 'svelte';
-	import { CircleAlert, CircleCheck, ExternalLink, Plus, RefreshCw, Search, ShieldCheck } from '@lucide/svelte';
+	import { CircleAlert, CircleCheck, ExternalLink, Info, Plus, RefreshCw, Search, ShieldCheck, Users } from '@lucide/svelte';
 	import DataTable from '$lib/components/admin/data-table.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
@@ -43,11 +43,26 @@
 	let loading = $state(true);
 	let createOpen = $state(false);
 	let editing = $state<Media | null>(null);
+	// Judul dialog edit: domain saja + favicon (pola sama dengan media-detail-modal);
+	// favicon gagal muat → jatuh ke inisial.
+	const editDomain = $derived(
+		(editing?.website_url ?? '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '').trim().toLowerCase()
+	);
+	let editFaviconFailed = $state(false);
+	$effect(() => {
+		void editDomain;
+		editFaviconFailed = false;
+	});
 	let busy = $state(false);
 	let selectedIds = $state<Set<string>>(new Set());
 	let bulkBusy = $state(false);
 	let bulkDeleteOpen = $state(false);
 	let bulkResult = $state<{ archived: number; blocked: Array<{ name: string; reason: string }> } | null>(null);
+	// Ubah jenis tautan massal: hanya Super Admin (server juga menegakkan).
+	let isSuperAdmin = $state(false);
+	let bulkLinkOpen = $state(false);
+	let bulkLinkKind = $state<'dofollow' | 'nofollow' | 'sponsored'>('dofollow');
+	let bulkLinkResult = $state<{ updated: number; blocked: Array<{ name: string; reason: string }> } | null>(null);
 	let tcRate = $state(1000);
 	let markupPercent = $state(15);
 	let search = $state('');
@@ -131,11 +146,32 @@
 		media_quality_notes: '',
 		seo_da: '',
 		link_duration_months: '12',
+		max_links: '1',
+		label_sponsor: 'tidak_ada',
+		allow_hyperlink: true,
 		pricing_type: 'nett' as 'nett' | 'nego',
 		// Katalog publik (data.tauthub.com) — hanya admin yang boleh mengubah.
 		public_listed: true,
 		public_slug: ''
 	});
+
+	// Jenis tautan = kombinasi label_sponsor + allow_hyperlink; jumlah backlink
+	// (max_links) diatur terpisah. Nofollow = tetap boleh pasang tautan, tapi
+	// sistem menambahkan rel nofollow otomatis (artikel tidak ditolak).
+	type LinkKind = 'dofollow' | 'nofollow' | 'sponsored';
+	const LINK_KINDS: { value: LinkKind; label: string }[] = [
+		{ value: 'dofollow', label: 'Dofollow' },
+		{ value: 'nofollow', label: 'Nofollow' },
+		{ value: 'sponsored', label: 'Sponsored' }
+	];
+	const linkKind = $derived<LinkKind>(
+		form.label_sponsor === 'ada_sponsor' ? 'sponsored' : form.allow_hyperlink ? 'dofollow' : 'nofollow'
+	);
+	function setLinkKind(kind: LinkKind) {
+		form.label_sponsor = kind === 'sponsored' ? 'ada_sponsor' : 'tidak_ada';
+		form.allow_hyperlink = kind !== 'nofollow';
+		if (Number(form.max_links) < 1) form.max_links = '1';
+	}
 
 	// Pencarian sisi server (debounced) — cari nama/slug/kategori media.
 	let debouncedSearch = $state('');
@@ -155,8 +191,30 @@
 		if (!ready) return;
 		void loadDaStatus();
 	});
+	$effect(() => {
+		if (!ready) return;
+		void (async () => {
+			try {
+				const me = await platformRequest<{ role?: string }>('/admins/me');
+				isSuperAdmin = me?.role === 'super_admin';
+			} catch {
+				isSuperAdmin = false;
+			}
+		})();
+	});
 	onDestroy(() => {
 		if (daStatusTimer) clearTimeout(daStatusTimer);
+	});
+
+	// Layout HP (< 768px): daftar jadi kartu, alat pemeriksaan dilipat.
+	let isMobile = $state(false);
+	let toolsOpen = $state(false);
+	$effect(() => {
+		const mq = window.matchMedia('(max-width: 767px)');
+		const sync = () => (isMobile = mq.matches);
+		sync();
+		mq.addEventListener('change', sync);
+		return () => mq.removeEventListener('change', sync);
 	});
 
 	$effect(() => {
@@ -235,6 +293,9 @@
 			media_quality_notes: '',
 			seo_da: '',
 			link_duration_months: '12',
+			max_links: '1',
+			label_sponsor: 'tidak_ada',
+			allow_hyperlink: true,
 			pricing_type: 'nett',
 			public_listed: true,
 			public_slug: ''
@@ -259,6 +320,9 @@
 			media_quality_notes: row.media_quality_notes ?? '',
 			seo_da: row.seo_da != null ? String(row.seo_da) : '',
 			link_duration_months: String(normalizeLinkDurationMonths(row.link_duration_months)),
+			max_links: ['0', '1', '2', '3'].includes(String(row.max_links ?? 1)) ? String(row.max_links ?? 1) : '1',
+			label_sponsor: row.label_sponsor === 'ada_sponsor' ? 'ada_sponsor' : 'tidak_ada',
+			allow_hyperlink: row.allow_hyperlink ?? Number(row.max_links ?? 1) > 0,
 			pricing_type: row.pricing_type ?? 'nett',
 			public_listed: row.public_listed !== false,
 			public_slug: row.public_slug ?? ''
@@ -445,6 +509,9 @@
 					// Kosong = hapus nilai DA (dikirim null).
 					seo_da: !editing ? undefined : form.seo_da.trim() === '' ? null : Number(form.seo_da),
 					link_duration_months: Number(form.link_duration_months),
+					max_links: Number(form.max_links),
+					label_sponsor: form.label_sponsor,
+					allow_hyperlink: form.allow_hyperlink,
 					pricing_type: form.pricing_type,
 					public_listed: form.public_listed,
 					// Slug publik hanya dikirim bila diisi; rename media tidak boleh
@@ -607,6 +674,30 @@
 			};
 			selectedIds = new Set();
 			bulkDeleteOpen = false;
+			await load();
+		} catch (reason) {
+			error = errMessage(reason);
+		} finally {
+			bulkBusy = false;
+		}
+	}
+
+	async function applyBulkLinkKind() {
+		bulkBusy = true;
+		error = '';
+		bulkLinkResult = null;
+		try {
+			const ids = [...selectedIds];
+			const result = await platformRequest<{
+				updated: number;
+				blocked: Array<{ id: string; name: string; reason: string }>;
+			}>('/media/bulk-link-kind', { method: 'POST', body: JSON.stringify({ ids, kind: bulkLinkKind }) });
+			bulkLinkResult = {
+				updated: result.updated,
+				blocked: (result.blocked ?? []).map((b) => ({ name: b.name, reason: b.reason }))
+			};
+			selectedIds = new Set();
+			bulkLinkOpen = false;
 			await load();
 		} catch (reason) {
 			error = errMessage(reason);
@@ -877,6 +968,16 @@
 	/>
 {/snippet}
 
+{#snippet selectAllHeader()}
+	<input
+		type="checkbox"
+		checked={allSelected}
+		aria-label={tr('Pilih halaman ini')}
+		title={tr('Pilih halaman ini')}
+		onchange={(e) => toggleSelectAll(e.currentTarget.checked)}
+	/>
+{/snippet}
+
 {#snippet mediaCell(row: Media)}
 	<div>
 		<div class="flex items-center gap-1">
@@ -1080,12 +1181,12 @@
 		<p class="text-sm text-muted-foreground">{tr("Akun ini tidak memiliki akses ke direktori media.")}</p>
 	</div>
 {:else}
-	<div class="mt-4 flex flex-wrap items-center gap-2">
-		<label class="app-input flex min-w-[240px] flex-1 items-center gap-2 !py-1.5">
+	<div class="mdir-toolbar mt-4 flex flex-wrap items-center gap-2">
+		<label class="app-input flex w-full items-center gap-2 !py-1.5 sm:min-w-[240px] sm:flex-1 sm:w-auto">
 			<Search size={15} class="text-muted-foreground" />
 			<input
 				class="w-full bg-transparent text-sm outline-none"
-					placeholder={tr("Cari nama, slug, kategori, atau email mitra…")}
+					placeholder={tr("Cari media, ID mitra, nama mitra, atau email mitra…")}
 				aria-label={tr("Cari media")}
 				bind:value={search}
 				oninput={() => (page = 1)}
@@ -1098,7 +1199,7 @@
 		{/if}
 		<Select
 			ariaLabel={tr("Filter status media")}
-			minWidth={170}
+			minWidth={isMobile ? 0 : 170}
 			value={statusFilter}
 			onchange={(v) => {
 				statusFilter = v;
@@ -1114,7 +1215,7 @@
 		/>
 		<Select
 			ariaLabel={tr('Urutkan media')}
-			minWidth={210}
+			minWidth={isMobile ? 0 : 210}
 			value={sortBy}
 			onchange={(v) => {
 				sortBy = v;
@@ -1131,9 +1232,9 @@
 				{ value: 'name_asc', label: tr('Nama A-Z') }
 			]}
 		/>
-		<div class="flex-1"></div>
+		<div class="hidden flex-1 sm:block"></div>
 		<Badge tone="accent" value={`${total} media`} />
-		<label class="flex items-center gap-1 text-xs text-muted-foreground">
+		<label class="mdir-pick flex items-center gap-1.5 text-xs text-muted-foreground">
 			<input type="checkbox" checked={allSelected} onchange={(e) => toggleSelectAll(e.currentTarget.checked)} />{tr("Pilih halaman ini")}</label>
 		{#if selectedIds.size > 0}
 			<button
@@ -1141,7 +1242,25 @@
 				disabled={bulkBusy}
 				onclick={() => (bulkDeleteOpen = true)}>Arsipkan {selectedIds.size} media</button
 			>
+			{#if isSuperAdmin}
+				<button
+					class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+					disabled={bulkBusy}
+					onclick={() => (bulkLinkOpen = true)}>{tr('Ubah jenis tautan')} ({selectedIds.size})</button
+				>
+			{/if}
 		{/if}
+		<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs sm:hidden" onclick={openCreate}>
+			<Plus size={15} />{tr("Tambah media")}</button>
+		<button
+			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs sm:hidden"
+			aria-expanded={toolsOpen}
+			onclick={() => (toolsOpen = !toolsOpen)}
+		>
+			{tr('Alat pemeriksaan')}
+			<span aria-hidden="true">{toolsOpen ? '▲' : '▼'}</span>
+		</button>
+		<div class="mdir-tools w-full flex-wrap gap-2 sm:contents {toolsOpen ? 'flex' : 'hidden'}">
 		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={syncing} onclick={syncCredits}>
 			<RefreshCw size={15} /> Sinkronkan kredit semua
 		</button>
@@ -1170,7 +1289,8 @@
 			title={tr('Hitung ulang DA dan AI Trust untuk seluruh media aktif, termasuk yang sudah punya skor')}
 			onclick={() => void enqueueSeoRefresh(true)}>{tr('Hitung ulang semua')}</button
 		>
-		<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" onclick={openCreate}>
+		</div>
+		<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs max-sm:hidden" onclick={openCreate}>
 			<Plus size={15} />{tr("Tambah media")}</button>
 		<!-- Chip "Cek otomatis": memberi tahu apakah DA & trafik diperiksa sendiri oleh
 		     sistem, atau berhenti karena kredensial penyedia belum lengkap. Tanpa ini
@@ -1205,9 +1325,52 @@
 		<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>
 	{/if}
 
+	{#if isMobile}
+		<!-- HP: tiap media jadi satu kartu (tabel 9 kolom tidak muat di layar sempit). -->
+		<div class="mdir-cards mt-4 space-y-3">
+			{#if loading}
+				<p class="app-card px-4 py-10 text-center text-sm text-muted-foreground">{tr("Memuat data…")}</p>
+			{:else if rows.length === 0}
+				<p class="app-card px-4 py-10 text-center text-sm text-muted-foreground">{tr("Belum ada media. Tambahkan media pertama.")}</p>
+			{:else}
+				{#each rows as row (row.id)}
+					<article class="mdir-card app-card p-3.5">
+						<div class="flex items-start gap-2">
+							<label class="mdir-check">{@render selectCell(row)}</label>
+							<div class="min-w-0 flex-1">{@render mediaCell(row)}</div>
+							<div class="shrink-0">{@render visibilityCell(row)}</div>
+						</div>
+						<dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm">
+							<div class="min-w-0">
+								<dt class="text-xs text-muted-foreground">{tr('Harga')}</dt>
+								<dd>{@render priceCell(row)}</dd>
+							</div>
+							<div class="min-w-0">
+								<dt class="text-xs text-muted-foreground">Integrasi</dt>
+								<dd>{@render integrationCell(row)}</dd>
+							</div>
+							<div class="min-w-0">
+								<dt class="text-xs text-muted-foreground">{tr('Mode Integrasi')}</dt>
+								<dd>{@render publicationModeCell(row)}</dd>
+							</div>
+							<div class="min-w-0">
+								<dt class="text-xs text-muted-foreground">Dewan Pers</dt>
+								<dd>{@render dewanPersCell(row)}</dd>
+							</div>
+							<div class="min-w-0">
+								<dt class="text-xs text-muted-foreground">{tr('Verifikasi')}</dt>
+								<dd>{@render verifyCell(row)}</dd>
+							</div>
+						</dl>
+						<div class="mdir-actions mt-3 border-t pt-3">{@render actionsCell(row)}</div>
+					</article>
+				{/each}
+			{/if}
+		</div>
+	{:else}
 	<DataTable
 		columns={[
-			{ key: 'select', label: '', width: '36px', render: selectCell },
+			{ key: 'select', label: '', width: '36px', header: selectAllHeader, render: selectCell },
 			{ key: 'name', label: tr('Media'), render: mediaCell },
 			{ key: 'domain_verified', label: tr('Verifikasi'), align: 'center' as const, width: '96px', render: verifyCell },
 			{ key: 'publication_mode', label: tr('Mode Integrasi'), render: publicationModeCell },
@@ -1231,6 +1394,7 @@
 		minWidth="1150px"
 		onRowClick={(row: Media) => openEdit(row)}
 	/>
+	{/if}
 
 	<Pagination
 		total={total}
@@ -1238,6 +1402,21 @@
 		offset={(page - 1) * PAGE_SIZE}
 		onChange={(next) => (page = next / PAGE_SIZE + 1)}
 	/>
+
+	{#if bulkLinkResult}
+		<div
+			class="app-card mt-3 px-4 py-2.5 text-sm"
+			style="color: {bulkLinkResult.blocked.length ? 'var(--warning)' : 'var(--success)'};"
+		>
+			{bulkLinkResult.updated} media {tr('jenis tautannya diubah.')}
+			{bulkLinkResult.blocked.length > 0
+				? ` Dilewati ${bulkLinkResult.blocked.length} media: ${bulkLinkResult.blocked
+						.slice(0, 3)
+						.map((b) => `${b.name} (${b.reason})`)
+						.join(', ')}${bulkLinkResult.blocked.length > 3 ? ', …' : ''}.`
+				: ''}
+		</div>
+	{/if}
 
 	{#if bulkResult}
 		<div
@@ -1255,559 +1434,678 @@
 	{/if}
 {/if}
 
+{#snippet catalogSettings()}
+<!-- Katalog publik (data.tauthub.com). Flag ini hanya untuk admin;
+     mitra tidak bisa mengubahnya. -->
+<section class={editing ? 'mw-panel space-y-3' : 'space-y-3 border-t pt-4'}>
+	<h3 class="mw-ptitle">Katalog publik</h3>
+	<label class="mw-switch-row">
+		<input type="checkbox" role="switch" class="mw-switch" bind:checked={form.public_listed} />
+		<span>
+			<strong class="mw-ink">{tr('Tampilkan di katalog publik')}</strong>
+			<span class="mw-hint !mt-0.5">
+				{tr('Media ini tampil di data.tauthub.com lengkap dengan harga publik, DA, trafik, dan kebijakan tautan. Matikan untuk menyembunyikannya tanpa mengubah status.')}
+			</span>
+		</span>
+	</label>
+	{#if editing}
+		<label class="block">
+			<span class="mw-label">{tr('Slug URL publik')}</span>
+			<span class="mw-slug">
+				<span class="mw-slug-prefix">data.tauthub.com/media/</span>
+				<input
+					class="mw-slug-input font-mono text-xs"
+					bind:value={form.public_slug}
+					placeholder={editing.public_slug ?? ''}
+				/>
+			</span>
+			<span class="mw-hint first-letter:uppercase"
+				>{tr('mengubahnya memutus tautan lama yang sudah terindeks mesin pencari.')}</span
+			>
+		</label>
+	{/if}
+</section>
+{/snippet}
+
+{#snippet partnerSettings()}
+<section class={editing ? 'mw-panel space-y-3' : 'space-y-3 border-t pt-4'}>
+	<h3 class="mw-ptitle">Mitra &amp; publish</h3>
+	<label class="block">
+		<span class="mw-label">{tr("Mitra (opsional)")}</span>
+		<Select
+			ariaLabel={tr("Mitra (opsional)")}
+			minWidth={220}
+			value={form.partner_id}
+			onchange={(v) => (form.partner_id = v)}
+			options={[
+				{ value: '', label: 'Tanpa partner' },
+				...partners.filter((p) => p.status === 'active').map((p) => ({ value: p.id, label: p.name ?? p.email }))
+			]}
+		/>
+	</label>
+
+	<label class="block">
+		<span class="mw-label">Publish defaults (JSON, opsional)</span>
+		<textarea class="app-input mt-1 w-full font-mono text-xs" rows="3" bind:value={form.publish_defaults}
+		></textarea>
+		<span class="mw-hint"
+			>{'Contoh: {"author_id": 1, "categories": ["Teknologi"], "featured_image_url": "https://…"}'}</span
+		>
+	</label>
+</section>
+{/snippet}
+
 {#if createOpen}
-	<Modal title={editing ? `Edit media — ${editing.name}` : tr('Tambah media')} maxWidth="2xl" onClose={closeForm}>
+	<Modal
+		title={editing ? editDomain || editing.name : tr('Tambah media')}
+		label={editing ? `${tr('Edit media')} ${editDomain || editing.name}` : undefined}
+		maxWidth={editing ? 'workspace' : '2xl'}
+		onClose={closeForm}
+	>
+		{#snippet titleLead()}
+			{#if editing}
+				{#if editDomain && !editFaviconFailed}
+					<img
+						class="h-8 w-8 shrink-0 rounded-lg border bg-white object-contain p-1"
+						src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(editDomain)}&sz=64`}
+						alt=""
+						width="32"
+						height="32"
+						onerror={() => (editFaviconFailed = true)}
+					/>
+				{:else}
+					<span
+						class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold"
+						style="background-color: #eef6fd; color: #2c5ead;"
+						>{(editing.name || 'M').trim().charAt(0).toUpperCase()}</span
+					>
+				{/if}
+			{/if}
+		{/snippet}
+
+		{#snippet titleExtra()}
+			{#if editing}
+				{#if editing.status === 'pending_review'}
+					<Badge tone="warning" label={tr("🟡 Menunggu Review")} />
+				{:else if editing.status === 'rejected'}
+					<span title={editing.rejection_reason ?? undefined}
+						><Badge tone="danger" label={tr("🔴 Ditolak")} /></span
+					>
+				{:else}
+					<Badge
+						tone={editing.status === 'active' ? 'success' : editing.status === 'draft' ? 'warning' : 'neutral'}
+						value={statusLabel(editing.status)}
+					/>
+				{/if}
+			{/if}
+		{/snippet}
+
+		{#snippet footer()}
+			<button type="button" class="app-btn app-btn-soft !min-h-10 !rounded-[10px] !px-5" onclick={closeForm}>{tr("Batal")}</button>
+			<button type="submit" form="media-form" class="app-btn app-btn-primary !min-h-10 !rounded-[10px] !px-5" disabled={busy}>
+				{busy ? 'Menyimpan…' : editing ? tr('Simpan perubahan') : tr('Tambah media')}
+			</button>
+		{/snippet}
+
+
 		{#if error && !isAccessError(error)}
 			<p class="mb-3 text-sm" style="color: var(--destructive);">{error}</p>
 		{/if}
+
 		{#if editing}
-			<div class="mb-3 flex flex-wrap items-center gap-4 text-sm">
-				<div class="flex items-center gap-2">
-					<span class="text-xs text-muted-foreground">Status</span>
-					{#if editing.status === 'pending_review'}
-						<Badge tone="warning" label={tr("🟡 Menunggu Review")} />
-					{:else if editing.status === 'rejected'}
-						<span title={editing.rejection_reason ?? undefined}
-							><Badge tone="danger" label={tr("🔴 Ditolak")} /></span
-						>
-					{:else}
-						<Badge
-							tone={editing.status === 'active' ? 'success' : editing.status === 'draft' ? 'warning' : 'neutral'}
-							value={statusLabel(editing.status)}
-						/>
-					{/if}
-				</div>
-				<div class="flex items-center gap-2">
-					<span class="text-xs text-muted-foreground">{tr("Mitra")}</span>
-					<span>
-						{editing.partner_id
-							? (partners.find((p) => p.id === editing?.partner_id)?.name ??
-								partners.find((p) => p.id === editing?.partner_id)?.email ??
-								'—')
-							: '—'}
-					</span>
-				</div>
-				{#if editing.status === 'rejected' && editing.rejection_reason}
-					<span class="text-xs" style="color: var(--destructive);">Alasan: {editing.rejection_reason}</span>
-				{/if}
-			</div>
 			{#if editing.partner_id}
-				<div
-					class="mb-2 rounded-lg px-3 py-2 text-xs"
-					style="background-color: var(--accent); color: var(--accent-foreground);"
-				>{tr("Media ini dikelola mitra")}<strong
-						>{partners.find((p) => p.id === editing?.partner_id)?.name ??
-							partners.find((p) => p.id === editing?.partner_id)?.email ??
-							'—'}</strong
-					>{tr("— perubahan di sini otomatis tersinkron ke dashboard mitra (dan sebaliknya).")}</div>
+				{@const partnerName =
+					partners.find((p) => p.id === editing?.partner_id)?.name ??
+					partners.find((p) => p.id === editing?.partner_id)?.email ??
+					'—'}
+				<div class="mw-sync mb-4">
+					<span class="flex items-center gap-2 whitespace-nowrap">
+						<Users size={15} />
+						<span class="text-muted-foreground">{tr("Mitra")}</span>
+						<strong class="mw-ink">{partnerName}</strong>
+					</span>
+					<span class="mw-sync-sep" aria-hidden="true"></span>
+					<span>{tr("Perubahan di sini tersinkron otomatis ke dashboard mitra, dan sebaliknya.")}</span>
+				</div>
 			{/if}
-
-			<div class="app-card mb-3 p-3">
-				<p class="mb-2 text-sm font-medium">{tr("Ringkasan media")}</p>
-				<div class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-					<div>
-						<p class="text-xs text-muted-foreground">Kategori</p>
-						<p class="font-medium">{categoryText(editing)}</p>
-					</div>
-					<div>
-						<p class="text-xs text-muted-foreground">Trafik</p>
-						<div class="flex items-center gap-2">
-							<p class="font-medium">{compactNumber(editing.traffic_estimate ?? 0)}</p>
-							<button
-								class="rounded-lg p-1 hover:bg-secondary"
-								title="Cek trafik SimilarWeb"
-								aria-label={`Cek trafik ${editing.name}`}
-								disabled={swBusyId === editing.id || swBulkBusy}
-								onclick={() => editing && void checkSimilarWeb(editing)}
-							>
-								<RefreshCw size={12} />
-							</button>
-						</div>
-						{#if swVisits[editing.id] != null}
-							<p class="text-xs" style="color: var(--primary);">
-								SW: {(swVisits[editing.id] ?? 0).toLocaleString('id-ID')}/bln
-							</p>
-						{/if}
-					</div>
-					<div>
-						<p class="text-xs text-muted-foreground">GEO / AI Trust</p>
-						{#if editing.seo_ai_trust != null}
-							<Badge tone={scoreTone(editing.seo_ai_trust)} value={`${editing.seo_ai_trust}/100`} />
-						{:else}
-							<Badge tone="neutral" label="belum diskor" />
-						{/if}
-						{#if editing.seo_checked_at}
-							<p class="mt-1 text-[11px] text-muted-foreground">{fmtDateTime(editing.seo_checked_at)}</p>
-						{/if}
-					</div>
-					<div>
-						<p class="text-xs text-muted-foreground">DA</p>
-						{#if editing.seo_da != null}
-							<Badge tone={scoreTone(editing.seo_da)} value={`${editing.seo_da}`} />
-						{:else}
-							<Badge tone="neutral" label="belum ada" />
-						{/if}
-					</div>
-					<div>
-						<p class="text-xs text-muted-foreground">{tr("Verifikasi domain")}</p>
-						{#if editing.domain_verified}
-							<p class="flex items-center gap-1.5 font-medium" style="color: var(--success);">
-								<ShieldCheck size={15} />{tr("Terverifikasi")}
-							</p>
-							{#if editing.domain_verified_at}
-								<p class="text-[11px] text-muted-foreground">{fmtDateTime(editing.domain_verified_at)}</p>
-							{/if}
-						{:else}
-							<p class="font-medium text-muted-foreground">-</p>
-							<p class="text-[11px] text-muted-foreground">{tr("Meta tag / TXT DNS belum ditemukan")}</p>
-						{/if}
-					</div>
-				</div>
-			</div>
-
-			<div class="app-card mb-3 p-3">
-				<div class="mb-2 flex items-center justify-between">
-					<p class="text-sm font-medium">{tr("Health media")}</p>
-					{#if editing.health_score != null}
-						<Badge tone={scoreTone(editing.health_score)} value={`${editing.health_score}/100`} />
-					{:else}
-						<Badge tone="neutral" label="belum diskor" />
-					{/if}
-				</div>
-				{#if editing.health_breakdown}
-					<div class="flex flex-wrap gap-4">
-						{#each [['Availability', editing.health_breakdown.availability, 15], ['Success rate', editing.health_breakdown.success_rate, 30], ['Publish time', editing.health_breakdown.publish_time, 35], ['Rejection', editing.health_breakdown.rejection_rate, 20]] as [label, value, max] (label)}
-							<div>
-								<p class="text-xs text-muted-foreground">{label}</p>
-								<p class="text-sm font-bold">{Number(value ?? 0)}/{Number(max)}</p>
-							</div>
-						{/each}
-					</div>
-				{:else}
-					<p class="text-xs text-muted-foreground">{tr("Belum ada breakdown — klik Hitung health di tabel untuk menghitung skor.")}</p>
-				{/if}
-				{#if editing.health_computed_at}
-					<p class="mt-1 text-xs text-muted-foreground">Dihitung {fmtDateTime(editing.health_computed_at)}</p>
-				{/if}
-			</div>
-
-			<div class="app-card mb-3 p-3">
-				<div class="mb-1 flex items-center gap-2">
-					<p class="text-sm font-medium">{tr("Mode Integrasi")}</p>
-					{#if (editing.publication_mode ?? 'draft') === 'publish'}
-						<Badge tone="success" label={tr("Terbit")} />
-					{:else}
-						<Badge tone="warning" label="Draf" />
-					{/if}
-				</div>
-				<p class="text-xs text-muted-foreground">
-					{(editing.publication_mode ?? 'draft') === 'publish'
-						? tr('Artikel dari klien langsung diterbitkan ke media tanpa persetujuan manual Mitra.')
-						: tr('Artikel dari klien masuk sebagai draft dan menunggu tindakan Mitra. Dikelola mitra lewat halaman Media mitra.')}
-				</p>
-			</div>
-
-			<!-- ── Ringkasan operasional: artikel terbit, pelanggaran, suspend ── -->
-			<div class="app-card mb-3 p-3">
-				<p class="mb-2 text-sm font-medium">{tr('Ringkasan & penindakan')}</p>
-				<div class="mb-3 grid grid-cols-3 gap-2">
-					<div class="rounded-lg px-3 py-2" style="background-color: var(--secondary);">
-						<p class="text-[11px] text-muted-foreground">{tr('Total artikel terbit')}</p>
-						<p class="text-lg font-bold tabular-nums">{editing.published_count ?? 0}</p>
-					</div>
-					<div class="rounded-lg px-3 py-2" style="background-color: var(--secondary);">
-						<p class="text-[11px] text-muted-foreground">{tr('Pelanggaran')}</p>
-						<p
-							class="text-lg font-bold"
-							style={(editing.violation_level ?? 'none') === 'berat'
-								? 'color: var(--destructive);'
-								: (editing.violation_level ?? 'none') === 'ringan'
-									? 'color: var(--warning);'
-									: 'color: var(--success);'}
-						>{(editing.violation_level ?? 'none') === 'berat'
-								? tr('Berat')
-								: (editing.violation_level ?? 'none') === 'ringan'
-									? tr('Ringan')
-									: tr('Tidak ada')}</p>
-					</div>
-					<div class="rounded-lg px-3 py-2" style="background-color: var(--secondary);">
-						<p class="text-[11px] text-muted-foreground">{tr('Status domain')}</p>
-						<p class="text-lg font-bold" style={editing.is_suspended ? 'color: var(--destructive);' : 'color: var(--success);'}>
-							{editing.is_suspended ? tr('Disuspend') : tr('Aktif')}
-						</p>
-					</div>
-				</div>
-
-				{#if editing.is_suspended}
-					<div class="mb-3 rounded-lg px-3 py-2 text-xs" style="background-color: var(--warning-soft, #fff6df); color: var(--warning, #a15c00);">
-						<strong>{tr('Domain ditangguhkan')}</strong> — {editing.suspended_reason ?? tr('tanpa alasan tercatat')}.
-						{tr('Media tidak tampil di katalog dan publikasi baru ditolak.')}
-					</div>
-				{/if}
-
-				<div class="flex flex-wrap gap-2">
-					<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => (violationOpen = true)}>
-						{tr('Catat pelanggaran')}
-					</button>
-					{#if (editing.violation_level ?? 'none') !== 'none'}
-						<button
-							class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
-							type="button"
-							disabled={violationBusy}
-							onclick={() => void revokeViolation()}
-						>{violationBusy ? tr('Memproses…') : tr('Cabut pelanggaran')}</button>
-					{/if}
-					{#if editing.is_suspended}
-						<button
-							class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs"
-							type="button"
-							disabled={suspendBusy}
-							onclick={() => void doUnsuspend()}
-						>{suspendBusy ? tr('Memproses…') : tr('Cabut suspend')}</button>
-					{:else}
-						<button
-							class="app-btn !min-h-8 !px-3 !text-xs"
-							type="button"
-							style="background-color: var(--destructive); color: #fff;"
-							onclick={() => (suspendOpen = true)}
-						>{tr('Suspend domain')}</button>
-					{/if}
-				</div>
-
-				<!-- Riwayat pelanggaran -->
-				<div class="mt-3 border-t pt-2">
-					<p class="mb-1 text-xs font-medium text-muted-foreground">{tr('Riwayat pelanggaran')}</p>
-					{#if violationsLoading}
-						<p class="text-xs text-muted-foreground">{tr('Memuat…')}</p>
-					{:else if violations.length === 0}
-						<p class="text-xs text-muted-foreground">{tr('Belum ada pelanggaran tercatat.')}</p>
-					{:else}
-						<div class="max-h-32 space-y-1.5 overflow-y-auto pr-1">
-							{#each violations as v (v.id)}
-								<div class="rounded-lg border px-2.5 py-1.5 text-xs" style="border-color: var(--border);">
-									<div class="flex items-center justify-between gap-2">
-										<Badge
-											tone={v.level === 'berat' ? 'danger' : 'warning'}
-											label={v.level === 'berat' ? tr('Berat') : tr('Ringan')}
-										/>
-										<span class="text-muted-foreground">{fmtDateTime(v.created_at)}</span>
-									</div>
-									{#if v.note}<p class="mt-1 leading-snug">{v.note}</p>{/if}
-									<p class="mt-0.5 text-[11px] text-muted-foreground">
-										{v.actor_email ?? '—'}{#if v.revoked_at} · {tr('dicabut')} {fmtDateTime(v.revoked_at)}{/if}
-									</p>
-								</div>
-							{/each}
-						</div>
-					{/if}
-				</div>
-			</div>
-
-			<div class="app-card mb-3 p-3">
-				<div class="mb-1 flex items-center gap-2">
-					<p class="text-sm font-medium">Verifikasi Dewan Pers</p>
-					{#if editing.dewan_pers_verified}<Badge tone="success" label="Ya" />
-					{:else}<Badge tone="neutral" label={tr("Tidak")} />{/if}
-				</div>
-				{#if editing.dewan_pers_verified}
-					<div class="space-y-1">
-						{#if editing.dewan_pers_note}<p class="text-xs">{editing.dewan_pers_note}</p>{/if}
-						{#if editing.dewan_pers_cert_no}
-							<p class="text-xs text-muted-foreground">Sertifikat: {editing.dewan_pers_cert_no}</p>
-						{/if}
-						{#if editing.dewan_pers_doc_key}
-							<a
-								class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
-								href={`/uploads/${editing.dewan_pers_doc_key}`}
-								target="_blank"
-								rel="noreferrer">{tr("Lihat dokumen")}</a
-							>
-						{:else}
-							<p class="text-xs text-muted-foreground">Tanpa dokumen bukti.</p>
-						{/if}
-					</div>
-				{:else}
-					<p class="text-xs text-muted-foreground">{tr("Belum diverifikasi. Status dikelola mitra lewat halaman Media mitra (per media/domain).")}</p>
-				{/if}
-			</div>
-
-			<div class="mb-3">
-				<p class="mb-1 text-sm font-medium text-muted-foreground">{tr("Riwayat audit")}</p>
-				{#if detailLoading}
-					<p class="text-xs text-muted-foreground">{tr("Memuat…")}</p>
-				{:else if detailAudit === null}
-					<p class="text-xs text-muted-foreground">—</p>
-				{:else if detailAudit.length === 0}
-					<p class="text-xs text-muted-foreground">{tr("Belum ada aktivitas untuk media ini.")}</p>
-				{:else}
-					<div class="max-h-36 space-y-1 overflow-y-auto pr-1">
-						{#each detailAudit as a (a.id)}
-							<div class="border-b border-slate-100 pb-1.5 last:border-0">
-								<div class="flex items-center justify-between gap-2">
-									<Badge tone={auditTone(a.action)} label={AUDIT_LABEL[a.action] ?? a.action} />
-									<span class="text-xs text-muted-foreground">{fmtDateTime(a.created_at)}</span>
-								</div>
-								{#if a.detail?.label}
-									<p class="mt-1 text-xs leading-snug">
-										<span class="font-medium">{a.detail.label}:</span>
-										<span class="text-muted-foreground">{a.detail.from || '(kosong)'}</span>
-										<span style="color: var(--primary);"> → {a.detail.to || '(kosong)'}</span>
-									</p>
-								{/if}
-								{#if a.actor_email}
-									<p class="text-[11px] text-muted-foreground">{a.actor_email}</p>
-								{/if}
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
+			{#if editing.status === 'rejected' && editing.rejection_reason}
+				<p class="mb-3 text-xs" style="color: var(--destructive);">Alasan: {editing.rejection_reason}</p>
+			{/if}
 		{/if}
 
-		<form class="space-y-3" onsubmit={onSubmit}>
-			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">{tr("Nama media")}</span>
-				<input class="app-input mt-1 w-full" required placeholder={tr("Contoh: MediaKita")} bind:value={form.name} />
-			</label>
-			<div class="grid gap-3 sm:grid-cols-2">
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">Kategori</span>
-					<input class="app-input mt-1 w-full" placeholder={tr("Teknologi")} bind:value={form.category} />
-				</label>
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">Website URL</span>
-					<input class="app-input mt-1 w-full" placeholder="https://media.com" bind:value={form.website_url} />
-				</label>
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr("Harga mitra (IDR)")}</span>
-					<input
-						class="app-input mt-1 w-full"
-						type="text"
-						inputmode="numeric"
-						value={form.price ? Number(form.price).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }) : ''}
-						oninput={(e) => (form.price = e.currentTarget.value.replace(/\D/g, ''))}
-					/>
-					<span class="mt-1 block text-xs text-muted-foreground"
-						>{tr("Base price — nominal yang menjadi hak mitra. Harga klien dihitung otomatis oleh pricing engine (ditambah markup Tauthub).")}</span
-					>
-				</label>
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr("Harga klien (IDR)")}</span>
-					<input
-						class="app-input mt-1 w-full"
-						readonly
-						value={clientPriceFor(Number(form.price) || 0).toLocaleString('id-ID')}
-					/>
-					<span class="mt-1 block text-xs text-muted-foreground"
-						>{tr("Harga mitra + markup")} {markupPercent}{tr("% (pricing engine) — kredit dihitung dari harga klien.")}</span
-					>
-				</label>
-			</div>
-
-			{#if Number(form.price) > 0}
-				<div class="rounded-lg border p-2" style="background-color: var(--secondary);">
-					<p class="mb-1 text-xs text-muted-foreground">Price breakdown</p>
-					<div class="flex justify-between text-sm">
-						<span>{tr("Harga Mitra")}</span><span>{idr(Number(form.price) || 0)}</span>
-					</div>
-					<div class="flex justify-between text-sm"><span>Markup Tauthub</span><span>{markupPercent}%</span></div>
-					<div class="flex justify-between text-sm">
-						<span>Nilai Markup</span>
-						<span>{idr(Math.max(0, clientPriceFor(Number(form.price) || 0) - (Number(form.price) || 0)))}</span>
-					</div>
-					<div class="mt-1 flex justify-between border-t pt-1 text-sm font-bold">
-						<span>{tr("Harga Klien")}</span><span>{idr(clientPriceFor(Number(form.price) || 0))}</span>
-					</div>
-				</div>
-			{/if}
-
-			<div>
-				<span class="text-xs font-medium text-muted-foreground">{tr("Model Harga")}</span>
-				<div class="mt-1 flex gap-2">
-					<button
-						type="button"
-						class="app-btn !min-h-8 !px-3 !text-xs"
-						class:app-btn-primary={form.pricing_type === 'nett'}
-						class:app-btn-soft={form.pricing_type !== 'nett'}
-						onclick={() => (form.pricing_type = 'nett')}>Nett</button
-					>
-					<button
-						type="button"
-						class="app-btn !min-h-8 !px-3 !text-xs"
-						class:app-btn-primary={form.pricing_type === 'nego'}
-						class:app-btn-soft={form.pricing_type !== 'nego'}
-						onclick={() => (form.pricing_type = 'nego')}>Nego</button
-					>
-				</div>
-				<p class="mt-1 text-xs text-muted-foreground">
-					{editing && form.pricing_type !== (editing.pricing_type ?? 'nett')
-						? tr('Perubahan model harga pada media yang sudah terbit akan dikonfirmasi dengan catatan ke mitra saat disimpan.')
-						: tr('Nett = harga tetap; Nego = harga bisa dinegosiasikan dengan klien.')}
-				</p>
-			</div>
-
-			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Biaya kredit (Rp)</span>
-				<input class="app-input mt-1 w-full" readonly value={creditForPrice(Number(form.price) || 0).toLocaleString('id-ID')} />
-				<span class="mt-1 block text-xs text-muted-foreground"
-					>{tr("Otomatis dari harga klien ÷ kurs saldo")}{tcRate ? ' (kurs aktif ×' + tcRate.toLocaleString('id-ID') + ')' : ''} — tidak diisi manual;
-					server menghitung ulang saat disimpan.</span
-				>
-			</label>
-
-			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">{tr("Estimasi trafik bulanan (untuk estimated reach)")}</span>
-				<input class="app-input mt-1 w-full" type="number" min="0" bind:value={form.traffic_estimate} />
-			</label>
-
-			<div class="grid gap-3 sm:grid-cols-2">
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr("Media tier")}</span>
-					<Select
-						ariaLabel={tr("Media tier")}
-						minWidth={200}
-						value={form.media_tier}
-						onchange={(v) => (form.media_tier = v)}
-						options={MEDIA_TIERS.map((t) => ({ value: t, label: t }))}
-					/>
-				</label>
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr("Media quality score (0-100)")}</span>
-					<input
-						class="app-input mt-1 w-full"
-						type="number"
-						min="0"
-						max="100"
-						placeholder={tr("kosong = tidak diset")}
-						bind:value={form.media_quality_score}
-					/>
-				</label>
-			</div>
-
-			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">{tr("Domain Authority (DA)")}</span>
-				<input
-					class="app-input mt-1 w-full"
-					type="text"
-					inputmode="numeric"
-					placeholder={tr("kosong = tidak diset")}
-					value={form.seo_da}
-					oninput={(e) => {
-						const digits = e.currentTarget.value.replace(/\D/g, '').slice(0, 3);
-						form.seo_da = digits === '' ? '' : String(Math.min(100, Number(digits)));
-					}}
-				/>
-				<span class="mt-1 block text-xs text-muted-foreground"
-					>{tr("Isi manual bila deteksi otomatis belum menemukan DA (angka 0-100). Kosongkan untuk menghapus.")}</span
-				>
-			</label>
-
-			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Catatan kualitas (opsional)</span>
-				<input
-					class="app-input mt-1 w-full"
-					placeholder={tr("Contoh: otoritas tinggi di sektor teknologi")}
-					bind:value={form.media_quality_notes}
-				/>
-			</label>
-
-			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">{tr("Masa berlaku tautan (backlink)")}</span>
-				<Select
-					bind:value={form.link_duration_months}
-					ariaLabel={tr("Masa berlaku tautan (backlink)")}
-					minWidth={220}
-					options={LINK_DURATION_OPTIONS.map((o) => ({ value: String(o.value), label: tr(o.label) }))}
-				/>
-				<span class="mt-1 block text-xs text-muted-foreground"
-					>{tr("Permanen bila tautan tidak pernah dilepas; atau jumlah bulan jaminan tayang. Nilai ini menentukan masa pemantauan 404 dan masa garansi klaim klien.")}</span
-				>
-			</label>
-
-			<div class="grid gap-3 sm:grid-cols-2">
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">Tipe integrasi</span>
-					<Select
-						ariaLabel="Tipe integrasi"
-						minWidth={200}
-						value={form.integration_type}
-						onchange={(v) => (form.integration_type = v)}
-						options={MEDIA_INTEGRATION_TYPES_UI.map((t) => ({ value: t, label: t }))}
-					/>
-				</label>
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">Status</span>
-					<Select
-						ariaLabel="Status"
-						minWidth={200}
-						value={form.status}
-						onchange={(v) => (form.status = v)}
-						options={MEDIA_STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))}
-					/>
-				</label>
-				</div>
-
-				<!-- Katalog publik (data.tauthub.com). Flag ini hanya untuk admin;
-				     mitra tidak bisa mengubahnya. -->
-				<div class="rounded-xl border bg-muted/30 p-3">
-					<label class="flex items-start gap-2 text-sm">
-						<input type="checkbox" class="mt-0.5" bind:checked={form.public_listed} />
-						<span>
-							<strong>{tr('Tampilkan di katalog publik')}</strong>
-							<span class="block text-xs text-muted-foreground">
-								{tr('Media ini tampil di data.tauthub.com lengkap dengan harga publik, DA, trafik, dan kebijakan tautan. Matikan untuk menyembunyikannya tanpa mengubah status.')}
-							</span>
-						</span>
+		<div class={editing ? 'grid items-start gap-5 lg:grid-cols-2' : ''}>
+			<!-- ───────────── Kolom kiri: pengaturan media ───────────── -->
+			<form id="media-form" class={editing ? 'mw-panel space-y-4' : 'space-y-4'} onsubmit={onSubmit}>
+				<section class="space-y-3">
+					<h3 class="mw-ptitle">Informasi media</h3>
+					<label class="block">
+						<span class="mw-label">{tr("Nama media")} <span style="color: var(--destructive);">*</span></span>
+						<input class="app-input mt-1 w-full" required placeholder={tr("Contoh: MediaKita")} bind:value={form.name} />
 					</label>
-					{#if editing}
-						<label class="mt-3 block">
-							<span class="text-xs font-medium text-muted-foreground">{tr('Slug URL publik')}</span>
-							<input
-								class="app-input mt-1 w-full font-mono text-xs"
-								bind:value={form.public_slug}
-								placeholder={editing.public_slug ?? ''}
-							/>
-							<span class="mt-1 block text-xs text-muted-foreground">
-								data.tauthub.com/media/<strong>{form.public_slug || '…'}</strong> — {tr('mengubahnya memutus tautan lama yang sudah terindeks mesin pencari.')}
-							</span>
+					<div class="grid gap-3 sm:grid-cols-2">
+						<label class="block">
+							<span class="mw-label">Kategori</span>
+							<input class="app-input mt-1 w-full" placeholder={tr("Teknologi")} bind:value={form.category} />
 						</label>
+						<label class="block">
+							<span class="mw-label">Website URL</span>
+							<input class="app-input mt-1 w-full" placeholder="https://media.com" bind:value={form.website_url} />
+						</label>
+					</div>
+				</section>
+
+				<section class="space-y-3 border-t pt-4">
+					<h3 class="mw-ptitle">Harga</h3>
+					<div class="grid gap-3 sm:grid-cols-2">
+						<label class="block">
+							<span class="mw-label">{tr("Harga mitra (IDR)")}</span>
+							<input
+								class="app-input mt-1 w-full"
+								type="text"
+								inputmode="numeric"
+								value={form.price ? Number(form.price).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }) : ''}
+								oninput={(e) => (form.price = e.currentTarget.value.replace(/\D/g, ''))}
+							/>
+							<span class="mw-hint"
+								>{tr("Base price — nominal yang menjadi hak mitra. Harga klien dihitung otomatis oleh pricing engine (ditambah markup Tauthub).")}</span
+							>
+						</label>
+						<label class="block">
+							<span class="mw-label">{tr("Harga klien (IDR)")}</span>
+							<input
+								class="app-input mt-1 w-full"
+								readonly
+								value={clientPriceFor(Number(form.price) || 0).toLocaleString('id-ID')}
+							/>
+							<span class="mw-hint"
+								>{tr("Harga mitra + markup")} {markupPercent}{tr("% (pricing engine) — kredit dihitung dari harga klien.")}</span
+							>
+						</label>
+					</div>
+
+					{#if Number(form.price) > 0}
+						<div class="mw-breakdown">
+							<p class="mw-label mb-2">Price breakdown</p>
+							<div class="grid grid-cols-2 gap-y-3 sm:grid-cols-4">
+								<div class="mw-bd-cell">
+									<span class="mw-bd-k">{tr("Harga Mitra")}</span>
+									<span class="mw-bd-v">{idr(Number(form.price) || 0)}</span>
+								</div>
+								<div class="mw-bd-cell">
+									<span class="mw-bd-k">Markup Tauthub</span>
+									<span class="mw-bd-v">{markupPercent}%</span>
+								</div>
+								<div class="mw-bd-cell">
+									<span class="mw-bd-k">Nilai Markup</span>
+									<span class="mw-bd-v"
+										>{idr(Math.max(0, clientPriceFor(Number(form.price) || 0) - (Number(form.price) || 0)))}</span
+									>
+								</div>
+								<div class="mw-bd-cell">
+									<span class="mw-bd-k" style="color: var(--primary);">{tr("Harga Klien")}</span>
+									<span class="mw-bd-v" style="color: var(--primary);">{idr(clientPriceFor(Number(form.price) || 0))}</span>
+								</div>
+							</div>
+						</div>
 					{/if}
+
+					<div>
+						<span class="mw-label">{tr("Model Harga")}</span>
+						<div class="mw-seg mt-1">
+							<button
+								type="button"
+								class="mw-seg-btn"
+								class:mw-seg-on={form.pricing_type === 'nett'}
+								onclick={() => (form.pricing_type = 'nett')}>Nett</button
+							>
+							<button
+								type="button"
+								class="mw-seg-btn"
+								class:mw-seg-on={form.pricing_type === 'nego'}
+								onclick={() => (form.pricing_type = 'nego')}>Nego</button
+							>
+						</div>
+						<p class="mw-hint">
+							{editing && form.pricing_type !== (editing.pricing_type ?? 'nett')
+								? tr('Perubahan model harga pada media yang sudah terbit akan dikonfirmasi dengan catatan ke mitra saat disimpan.')
+								: tr('Nett = harga tetap; Nego = harga bisa dinegosiasikan dengan klien.')}
+						</p>
+					</div>
+
+					<div class="grid gap-3 sm:grid-cols-2">
+						<label class="block">
+							<span class="mw-label">Biaya kredit (Rp)</span>
+							<input class="app-input mt-1 w-full" readonly value={creditForPrice(Number(form.price) || 0).toLocaleString('id-ID')} />
+							<span class="mw-hint"
+								>{tr("Otomatis dari harga klien ÷ kurs saldo")}{tcRate ? ' (kurs aktif ×' + tcRate.toLocaleString('id-ID') + ')' : ''} — tidak diisi manual;
+								server menghitung ulang saat disimpan.</span
+							>
+						</label>
+						<label class="block">
+							<span class="mw-label">{tr("Estimasi trafik bulanan (untuk estimated reach)")}</span>
+							<input class="app-input mt-1 w-full" type="number" min="0" bind:value={form.traffic_estimate} />
+						</label>
+					</div>
+				</section>
+
+				<section class="space-y-3 border-t pt-4">
+					<h3 class="mw-ptitle">Kualitas &amp; SEO</h3>
+					<div class="grid gap-3 sm:grid-cols-3">
+						<label class="block">
+							<span class="mw-label">{tr("Media tier")}</span>
+							<Select
+								ariaLabel={tr("Media tier")}
+								minWidth={140}
+								value={form.media_tier}
+								onchange={(v) => (form.media_tier = v)}
+								options={MEDIA_TIERS.map((t) => ({ value: t, label: t }))}
+							/>
+						</label>
+						<label class="block">
+							<span class="mw-label">{tr("Media quality score (0-100)")}</span>
+							<input
+								class="app-input mt-1 w-full"
+								type="number"
+								min="0"
+								max="100"
+								placeholder={tr("kosong = tidak diset")}
+								bind:value={form.media_quality_score}
+							/>
+						</label>
+						<label class="block">
+							<span class="mw-label">{tr("Domain Authority (DA)")}</span>
+							<input
+								class="app-input mt-1 w-full"
+								type="text"
+								inputmode="numeric"
+								placeholder={tr("kosong = tidak diset")}
+								value={form.seo_da}
+								oninput={(e) => {
+									const digits = e.currentTarget.value.replace(/\D/g, '').slice(0, 3);
+									form.seo_da = digits === '' ? '' : String(Math.min(100, Number(digits)));
+								}}
+							/>
+						</label>
+					</div>
+					<p class="mw-hint !mt-0"
+						>{tr("Isi manual bila deteksi otomatis belum menemukan DA (angka 0-100). Kosongkan untuk menghapus.")}</p
+					>
+					<label class="block">
+						<span class="mw-label">Catatan kualitas (opsional)</span>
+						<textarea
+							class="app-input mt-1 w-full"
+							rows="2"
+							placeholder={tr("Contoh: otoritas tinggi di sektor teknologi")}
+							bind:value={form.media_quality_notes}
+						></textarea>
+					</label>
+				</section>
+
+				<section class="space-y-3 border-t pt-4">
+					<h3 class="mw-ptitle">Ketentuan tautan &amp; integrasi</h3>
+					<label class="block">
+						<span class="mw-label">{tr("Masa berlaku tautan (backlink)")}</span>
+						<Select
+							bind:value={form.link_duration_months}
+							ariaLabel={tr("Masa berlaku tautan (backlink)")}
+							minWidth={220}
+							options={LINK_DURATION_OPTIONS.map((o) => ({ value: String(o.value), label: tr(o.label) }))}
+						/>
+						<span class="mw-hint"
+							>{tr("Permanen bila tautan tidak pernah dilepas; atau jumlah bulan jaminan tayang. Nilai ini menentukan masa pemantauan 404 dan masa garansi klaim klien.")}</span
+						>
+					</label>
+
+					<div>
+						<span class="mw-label">{tr('Jenis tautan')}</span>
+						<div class="mw-seg mt-1" role="group" aria-label={tr('Jenis tautan')}>
+							{#each LINK_KINDS as k (k.value)}
+								<button
+									type="button"
+									class="mw-seg-btn"
+									class:mw-seg-on={linkKind === k.value}
+									aria-pressed={linkKind === k.value}
+									onclick={() => setLinkKind(k.value)}>{k.label}</button
+								>
+							{/each}
+						</div>
+						<p class="mw-hint">
+							{linkKind === 'dofollow'
+								? tr('Dofollow: tautan biasa ke website klien. Google ikut menghitungnya untuk SEO. Artikel boleh memuat tautan sampai batas di bawah.')
+								: linkKind === 'sponsored'
+									? tr('Sponsored: tautan diberi tanda iklan atau sponsor. Artikel boleh memuat tautan sampai batas di bawah.')
+									: tr('Nofollow: tautan ke website klien tetap boleh dipasang, tapi sistem memberinya tanda nofollow otomatis. Google tidak menghitungnya untuk SEO. Artikel tidak ditolak.')}
+							{tr('Pengaturan ini sama dengan yang diatur mitra di halaman Media mitra.')}
+						</p>
+					</div>
+
+					<div class="grid gap-3 sm:grid-cols-3">
+						<label class="block">
+							<span class="mw-label">{tr('Jumlah backlink maksimal')}</span>
+							<Select
+								ariaLabel={tr('Jumlah backlink maksimal')}
+								minWidth={140}
+								value={form.max_links}
+								onchange={(v) => (form.max_links = v)}
+								options={[
+									// 0 hanya muncul untuk media lama yang diatur mitra "tanpa backlink".
+									...(form.max_links === '0' ? [{ value: '0', label: tr('0 — Tanpa backlink') }] : []),
+									{ value: '1', label: tr('1 Link (default)') },
+									{ value: '2', label: tr('2 Link') },
+									{ value: '3', label: tr('3 Link') }
+								]}
+							/>
+						</label>
+						<label class="block">
+							<span class="mw-label">Tipe integrasi</span>
+							<Select
+								ariaLabel="Tipe integrasi"
+								minWidth={140}
+								value={form.integration_type}
+								onchange={(v) => (form.integration_type = v)}
+								options={MEDIA_INTEGRATION_TYPES_UI.map((t) => ({ value: t, label: t }))}
+							/>
+						</label>
+						<label class="block">
+							<span class="mw-label">Status</span>
+							<Select
+								ariaLabel="Status"
+								minWidth={140}
+								value={form.status}
+								onchange={(v) => (form.status = v)}
+								options={MEDIA_STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))}
+							/>
+						</label>
+					</div>
+				</section>
+
+				{#if !editing}
+					{@render catalogSettings()}
+					{@render partnerSettings()}
+				{/if}
+
+				{#if error && !isAccessError(error)}
+					<p class="text-sm" style="color: var(--destructive);">{error}</p>
+				{/if}
+			</form>
+
+			<!-- ───────────── Kolom kanan: monitoring & administrasi ───────────── -->
+			{#if editing}
+				<div class="space-y-3.5">
+					{@render catalogSettings()}
+					{@render partnerSettings()}
+
+					<div class="mw-panel mw-soft">
+						<h3 class="mw-ptitle mb-3">{tr("Ringkasan media")}</h3>
+						<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+							<div class="mw-tile">
+								<p class="mw-tile-k">Kategori</p>
+								<p class="mw-tile-v">{categoryText(editing)}</p>
+							</div>
+							<div class="mw-tile">
+								<p class="mw-tile-k">Trafik</p>
+								<div class="flex items-center gap-1.5">
+									<p class="mw-tile-v">{compactNumber(editing.traffic_estimate ?? 0)}</p>
+									<button
+										class="rounded-lg p-1 hover:bg-secondary"
+										type="button"
+										title="Cek trafik SimilarWeb"
+										aria-label={`Cek trafik ${editing.name}`}
+										disabled={swBusyId === editing.id || swBulkBusy}
+										onclick={() => editing && void checkSimilarWeb(editing)}
+									>
+										<RefreshCw size={12} />
+									</button>
+								</div>
+								{#if swVisits[editing.id] != null}
+									<p class="text-[11px]" style="color: var(--primary);">
+										SW: {(swVisits[editing.id] ?? 0).toLocaleString('id-ID')}/bln
+									</p>
+								{/if}
+							</div>
+							<div class="mw-tile">
+								<p class="mw-tile-k">GEO / AI Trust</p>
+								{#if editing.seo_ai_trust != null}
+									<Badge tone={scoreTone(editing.seo_ai_trust)} value={`${editing.seo_ai_trust}/100`} />
+								{:else}
+									<Badge tone="neutral" label="belum diskor" />
+								{/if}
+							</div>
+							<div class="mw-tile">
+								<p class="mw-tile-k">DA</p>
+								{#if editing.seo_da != null}
+									<Badge tone={scoreTone(editing.seo_da)} value={`${editing.seo_da}`} />
+								{:else}
+									<Badge tone="neutral" label="belum ada" />
+								{/if}
+							</div>
+							<div class="mw-tile">
+								<p class="mw-tile-k">{tr("Verifikasi domain")}</p>
+								{#if editing.domain_verified}
+									<p class="flex items-center gap-1.5 text-sm font-semibold" style="color: var(--success);">
+										<ShieldCheck size={15} />{tr("Terverifikasi")}
+									</p>
+									{#if editing.domain_verified_at}
+										<p class="text-[11px] text-muted-foreground">{fmtDateTime(editing.domain_verified_at)}</p>
+									{/if}
+								{:else}
+									<p class="mw-tile-v text-muted-foreground">-</p>
+									<p class="text-[11px] leading-snug text-muted-foreground">{tr("Meta tag / TXT DNS belum ditemukan")}</p>
+								{/if}
+							</div>
+							<div class="mw-tile">
+								<p class="mw-tile-k">Diperiksa</p>
+								<p class="mw-tile-v">{editing.seo_checked_at ? fmtDateTime(editing.seo_checked_at) : '-'}</p>
+							</div>
+						</div>
+					</div>
+
+					<div class="mw-panel">
+						<div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+							<h3 class="mw-ptitle">{tr("Health media")}</h3>
+							{#if editing.health_computed_at}
+								<p class="text-[11px] text-muted-foreground">Dihitung {fmtDateTime(editing.health_computed_at)}</p>
+							{/if}
+						</div>
+						<div class="flex flex-wrap items-stretch gap-x-4 gap-y-3">
+							<div class="mw-health-score">
+								{#if editing.health_score != null}
+									<span class="text-3xl font-bold tabular-nums" style="color: var(--success);">{editing.health_score}</span
+									><span class="text-sm text-muted-foreground">/100</span>
+								{:else}
+									<Badge tone="neutral" label="belum diskor" />
+								{/if}
+							</div>
+							{#if editing.health_breakdown}
+								{#each [['Availability', editing.health_breakdown.availability, 15], ['Success rate', editing.health_breakdown.success_rate, 30], ['Publish time', editing.health_breakdown.publish_time, 35], ['Rejection', editing.health_breakdown.rejection_rate, 20]] as [label, value, max] (label)}
+									<div class="mw-health-cell">
+										<p class="text-[11px] text-muted-foreground">{label}</p>
+										<p class="text-base font-bold tabular-nums">{Number(value ?? 0)}/{Number(max)}</p>
+									</div>
+								{/each}
+							{/if}
+						</div>
+						{#if !editing.health_breakdown}
+							<p class="mt-2 text-xs text-muted-foreground">{tr("Belum ada breakdown — klik Hitung health di tabel untuk menghitung skor.")}</p>
+						{/if}
+					</div>
+
+					<div class="mw-panel">
+						<div class="mb-1 flex items-center justify-between gap-2">
+							<h3 class="mw-ptitle">{tr("Mode Integrasi")}</h3>
+							{#if (editing.publication_mode ?? 'draft') === 'publish'}
+								<Badge tone="success" label={tr("Terbit")} />
+							{:else}
+								<Badge tone="warning" label="Draf" />
+							{/if}
+						</div>
+						<p class="text-xs leading-relaxed text-muted-foreground">
+							{(editing.publication_mode ?? 'draft') === 'publish'
+								? tr('Artikel dari klien langsung diterbitkan ke media tanpa persetujuan manual Mitra.')
+								: tr('Artikel dari klien masuk sebagai draft dan menunggu tindakan Mitra. Dikelola mitra lewat halaman Media mitra.')}
+						</p>
+					</div>
+
+					<!-- ── Ringkasan operasional: artikel terbit, pelanggaran, suspend ── -->
+					<div class="mw-panel">
+						<h3 class="mw-ptitle mb-3">{tr('Ringkasan & penindakan')}</h3>
+						<div class="mb-3 grid grid-cols-3 gap-2">
+							<div class="mw-tile">
+								<p class="mw-tile-k">{tr('Total artikel terbit')}</p>
+								<p class="text-lg font-bold tabular-nums">{editing.published_count ?? 0}</p>
+							</div>
+							<div class="mw-tile">
+								<p class="mw-tile-k">{tr('Pelanggaran')}</p>
+								<p
+									class="text-lg font-bold"
+									style={(editing.violation_level ?? 'none') === 'berat'
+										? 'color: var(--destructive);'
+										: (editing.violation_level ?? 'none') === 'ringan'
+											? 'color: var(--warning);'
+											: 'color: var(--success);'}
+								>{(editing.violation_level ?? 'none') === 'berat'
+										? tr('Berat')
+										: (editing.violation_level ?? 'none') === 'ringan'
+											? tr('Ringan')
+											: tr('Tidak ada')}</p>
+							</div>
+							<div class="mw-tile">
+								<p class="mw-tile-k">{tr('Status domain')}</p>
+								<p class="text-lg font-bold" style={editing.is_suspended ? 'color: var(--destructive);' : 'color: var(--success);'}>
+									{editing.is_suspended ? tr('Disuspend') : tr('Aktif')}
+								</p>
+							</div>
+						</div>
+
+						{#if editing.is_suspended}
+							<div class="mb-3 rounded-lg px-3 py-2 text-xs" style="background-color: var(--warning-soft, #fff6df); color: var(--warning, #a15c00);">
+								<strong>{tr('Domain ditangguhkan')}</strong> — {editing.suspended_reason ?? tr('tanpa alasan tercatat')}.
+								{tr('Media tidak tampil di katalog dan publikasi baru ditolak.')}
+							</div>
+						{/if}
+
+						<div class="flex flex-wrap gap-2">
+							<button class="app-btn app-btn-soft !min-h-9 !px-3 !text-xs" type="button" onclick={() => (violationOpen = true)}>
+								{tr('Catat pelanggaran')}
+							</button>
+							{#if (editing.violation_level ?? 'none') !== 'none'}
+								<button
+									class="app-btn app-btn-soft !min-h-9 !px-3 !text-xs"
+									type="button"
+									disabled={violationBusy}
+									onclick={() => void revokeViolation()}
+								>{violationBusy ? tr('Memproses…') : tr('Cabut pelanggaran')}</button>
+							{/if}
+							{#if editing.is_suspended}
+								<button
+									class="app-btn app-btn-primary !min-h-9 !px-3 !text-xs"
+									type="button"
+									disabled={suspendBusy}
+									onclick={() => void doUnsuspend()}
+								>{suspendBusy ? tr('Memproses…') : tr('Cabut suspend')}</button>
+							{:else}
+								<button
+									class="app-btn !min-h-9 !px-3 !text-xs"
+									type="button"
+									style="background-color: var(--destructive); color: #fff;"
+									onclick={() => (suspendOpen = true)}
+								>{tr('Suspend domain')}</button>
+							{/if}
+						</div>
+					</div>
+
+					<!-- Riwayat pelanggaran -->
+					<div class="mw-panel">
+						<h3 class="mw-ptitle mb-2">{tr('Riwayat pelanggaran')}</h3>
+						{#if violationsLoading}
+							<p class="text-xs text-muted-foreground">{tr('Memuat…')}</p>
+						{:else if violations.length === 0}
+							<p class="mw-empty">
+								<Info size={14} />{tr('Belum ada pelanggaran tercatat.')}
+							</p>
+						{:else}
+							<div class="max-h-48 space-y-1.5 overflow-y-auto pr-1">
+								{#each violations as v (v.id)}
+									<div class="rounded-lg border px-2.5 py-1.5 text-xs" style="border-color: var(--border);">
+										<div class="flex items-center justify-between gap-2">
+											<Badge
+												tone={v.level === 'berat' ? 'danger' : 'warning'}
+												label={v.level === 'berat' ? tr('Berat') : tr('Ringan')}
+											/>
+											<span class="text-muted-foreground">{fmtDateTime(v.created_at)}</span>
+										</div>
+										{#if v.note}<p class="mt-1 leading-snug">{v.note}</p>{/if}
+										<p class="mt-0.5 text-[11px] text-muted-foreground">
+											{v.actor_email ?? '—'}{#if v.revoked_at} · {tr('dicabut')} {fmtDateTime(v.revoked_at)}{/if}
+										</p>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+
+					<div class="mw-panel">
+						<div class="mb-1 flex items-center justify-between gap-2">
+							<h3 class="mw-ptitle">Verifikasi Dewan Pers</h3>
+							{#if editing.dewan_pers_verified}<Badge tone="success" label="Ya" />
+							{:else}<Badge tone="neutral" label={tr("Tidak")} />{/if}
+						</div>
+						{#if editing.dewan_pers_verified}
+							<div class="space-y-1">
+								{#if editing.dewan_pers_note}<p class="text-xs">{editing.dewan_pers_note}</p>{/if}
+								{#if editing.dewan_pers_cert_no}
+									<p class="text-xs text-muted-foreground">Sertifikat: {editing.dewan_pers_cert_no}</p>
+								{/if}
+								{#if editing.dewan_pers_doc_key}
+									<a
+										class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+										href={`/uploads/${editing.dewan_pers_doc_key}`}
+										target="_blank"
+										rel="noreferrer">{tr("Lihat dokumen")}</a
+									>
+								{:else}
+									<p class="text-xs text-muted-foreground">Tanpa dokumen bukti.</p>
+								{/if}
+							</div>
+						{:else}
+							<p class="text-xs leading-relaxed text-muted-foreground">{tr("Belum diverifikasi. Status dikelola mitra lewat halaman Media mitra (per media/domain).")}</p>
+						{/if}
+					</div>
+
+					<div class="mw-panel">
+						<h3 class="mw-ptitle mb-2">{tr("Riwayat audit")}</h3>
+						{#if detailLoading}
+							<p class="text-xs text-muted-foreground">{tr("Memuat…")}</p>
+						{:else if detailAudit === null}
+							<p class="text-xs text-muted-foreground">—</p>
+						{:else if detailAudit.length === 0}
+							<p class="text-xs text-muted-foreground">{tr("Belum ada aktivitas untuk media ini.")}</p>
+						{:else}
+							<div class="max-h-72 overflow-y-auto pr-1">
+								{#each detailAudit as a (a.id)}
+									<div class="mw-audit-row">
+										<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
+											<Badge tone={auditTone(a.action)} label={AUDIT_LABEL[a.action] ?? a.action} />
+											<span class="text-[11px] text-muted-foreground">{fmtDateTime(a.created_at)}</span>
+										</div>
+										{#if a.detail?.label}
+											<p class="mt-1 text-xs leading-snug">
+												<span class="font-medium">{a.detail.label}:</span>
+												<span class="text-muted-foreground">{a.detail.from || '(kosong)'}</span>
+												<span style="color: var(--primary);"> → {a.detail.to || '(kosong)'}</span>
+											</p>
+										{/if}
+										{#if a.actor_email}
+											<p class="text-[11px] text-muted-foreground">{a.actor_email}</p>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
 				</div>
-
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr("Mitra (opsional)")}</span>
-				<Select
-					ariaLabel={tr("Mitra (opsional)")}
-					minWidth={220}
-					value={form.partner_id}
-					onchange={(v) => (form.partner_id = v)}
-					options={[
-						{ value: '', label: 'Tanpa partner' },
-						...partners.filter((p) => p.status === 'active').map((p) => ({ value: p.id, label: p.name ?? p.email }))
-					]}
-				/>
-			</label>
-
-			<label class="block">
-				<span class="text-xs font-medium text-muted-foreground">Publish defaults (JSON, opsional)</span>
-				<textarea class="app-input mt-1 w-full font-mono text-xs" rows="4" bind:value={form.publish_defaults}
-				></textarea>
-				<span class="mt-1 block text-xs text-muted-foreground"
-					>{'Contoh: {"author_id": 1, "categories": ["Teknologi"], "featured_image_url": "https://…"}'}</span
-				>
-			</label>
-
-			{#if error && !isAccessError(error)}
-				<p class="text-sm" style="color: var(--destructive);">{error}</p>
 			{/if}
-
-			<div class="flex justify-end gap-2 border-t pt-4">
-				<button type="button" class="app-btn app-btn-soft" onclick={closeForm}>{tr("Batal")}</button>
-				<button type="submit" class="app-btn app-btn-primary" disabled={busy}>
-					{busy ? 'Menyimpan…' : editing ? tr('Simpan perubahan') : tr('Tambah media')}
-				</button>
-			</div>
-		</form>
+		</div>
 	</Modal>
 {/if}
 
@@ -1947,6 +2245,31 @@
 	</Modal>
 {/if}
 
+{#if bulkLinkOpen}
+	<Modal title={`${tr('Ubah jenis tautan')} ${selectedIds.size} media`} maxWidth="md" onClose={() => (bulkLinkOpen = false)}>
+		<p class="text-sm text-muted-foreground">
+			{tr('Pilih jenis tautan untuk semua media yang kamu centang. Pilihan ini mengubah dua hal yang juga diatur mitra: jumlah backlink (tautan ke website klien) dan label sponsor.')}
+		</p>
+		<div class="mw-seg mt-3" role="group" aria-label={tr('Jenis tautan')}>
+			{#each LINK_KINDS as k (k.value)}
+				<button
+					type="button"
+					class="mw-seg-btn"
+					class:mw-seg-on={bulkLinkKind === k.value}
+					aria-pressed={bulkLinkKind === k.value}
+					onclick={() => (bulkLinkKind = k.value)}>{k.label}</button
+				>
+			{/each}
+		</div>
+		<div class="mt-4 flex justify-end gap-3">
+			<button class="app-btn app-btn-soft" disabled={bulkBusy} onclick={() => (bulkLinkOpen = false)}>{tr("Batal")}</button>
+			<button class="app-btn app-btn-primary" disabled={bulkBusy} onclick={applyBulkLinkKind}>
+				{bulkBusy ? 'Menyimpan…' : tr('Terapkan')}
+			</button>
+		</div>
+	</Modal>
+{/if}
+
 {#if bulkDeleteOpen}
 	<Modal title={`Arsipkan ${selectedIds.size} media?`} maxWidth="md" onClose={() => (bulkDeleteOpen = false)}>
 		<p class="text-sm">{tr("Media terpilih akan")}<strong>dipindahkan ke arsip</strong>{tr("(soft delete) — disembunyikan dari portal mitra dan klien. Media bisa dipulihkan kapan saja dari tab Arsip. Tidak ada data yang dihapus permanen.")}</p>
@@ -2034,6 +2357,316 @@
 		.visToggleTrack,
 		.visToggleKnob {
 			transition: none;
+		}
+	}
+
+	/* ── Edit media: workspace dua kolom ── */
+	.mw-ink {
+		color: #14233f;
+	}
+	.mw-panel {
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		padding: 14px 16px;
+		background-color: #fff;
+	}
+	.mw-soft {
+		background-color: #f6faff;
+	}
+	.mw-ptitle {
+		font-size: 15px;
+		font-weight: 600;
+		line-height: 1.3;
+		color: #14233f;
+	}
+	.mw-label {
+		display: block;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--muted-foreground, #5b6b82);
+	}
+	.mw-hint {
+		display: block;
+		margin-top: 4px;
+		font-size: 11.5px;
+		line-height: 1.4;
+		color: var(--muted-foreground, #5b6b82);
+	}
+	.mw-sync {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 14px;
+		padding: 10px 12px;
+		font-size: 12.5px;
+		color: #2c5ead;
+		background-color: #eef6fd;
+		border: 1px solid #c4e2f5;
+		border-radius: 10px;
+	}
+	.mw-sync-sep {
+		align-self: stretch;
+		width: 1px;
+		background-color: #c4e2f5;
+	}
+	@media (max-width: 640px) {
+		.mw-sync-sep {
+			display: none;
+		}
+	}
+	.mw-breakdown {
+		padding: 12px 14px;
+		background-color: #f1f8fe;
+		border: 1px solid #c4e2f5;
+		border-radius: 10px;
+	}
+	.mw-bd-cell {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 0 12px;
+		border-left: 1px solid #c4e2f5;
+	}
+	.mw-bd-cell:first-child {
+		padding-left: 0;
+		border-left: 0;
+	}
+	@media (max-width: 639px) {
+		.mw-bd-cell:nth-child(odd) {
+			padding-left: 0;
+			border-left: 0;
+		}
+	}
+	.mw-bd-k {
+		font-size: 11.5px;
+		color: var(--muted-foreground, #5b6b82);
+	}
+	.mw-bd-v {
+		font-size: 15px;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: #14233f;
+	}
+	.mw-seg {
+		display: inline-flex;
+		padding: 3px;
+		gap: 2px;
+		background-color: var(--secondary);
+		border: 1px solid var(--border);
+		border-radius: 10px;
+	}
+	.mw-seg-btn {
+		min-width: 76px;
+		padding: 6px 16px;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--muted-foreground, #5b6b82);
+		border-radius: 8px;
+		transition:
+			background-color 150ms ease,
+			color 150ms ease;
+	}
+	.mw-seg-btn:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: 1px;
+	}
+	.mw-seg-on {
+		color: #fff;
+		background-color: #2c5ead;
+	}
+	.mw-switch-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 12px;
+		padding: 12px 14px;
+		background-color: #f6faff;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		cursor: pointer;
+		font-size: 13.5px;
+	}
+	.mw-switch {
+		appearance: none;
+		position: relative;
+		flex: 0 0 36px;
+		width: 36px;
+		height: 20px;
+		margin-top: 1px;
+		border-radius: 999px;
+		background-color: color-mix(in srgb, var(--foreground, #111827) 22%, transparent);
+		cursor: pointer;
+		transition: background-color 180ms ease;
+	}
+	.mw-switch::after {
+		content: '';
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		width: 16px;
+		height: 16px;
+		border-radius: 999px;
+		background-color: #fff;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+		transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.mw-switch:checked {
+		background-color: #2c5ead;
+	}
+	.mw-switch:checked::after {
+		transform: translateX(16px);
+	}
+	.mw-switch:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+	}
+	.mw-slug {
+		display: flex;
+		align-items: stretch;
+		margin-top: 4px;
+		overflow: hidden;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background-color: #fff;
+	}
+	.mw-slug:focus-within {
+		border-color: var(--primary);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+	}
+	.mw-slug-prefix {
+		display: flex;
+		align-items: center;
+		padding: 0 10px;
+		font-size: 12px;
+		white-space: nowrap;
+		color: var(--muted-foreground, #5b6b82);
+		background-color: var(--secondary);
+		border-right: 1px solid var(--border);
+	}
+	.mw-slug-input {
+		flex: 1;
+		min-width: 0;
+		padding: 9px 10px;
+		background: transparent;
+		outline: none;
+	}
+	.mw-tile {
+		min-width: 0;
+		padding: 9px 11px;
+		background-color: #fff;
+		border: 1px solid #e3ecf7;
+		border-radius: 10px;
+	}
+	.mw-tile-k {
+		font-size: 11.5px;
+		color: var(--muted-foreground, #5b6b82);
+	}
+	.mw-tile-v {
+		font-size: 15px;
+		font-weight: 600;
+		color: #14233f;
+	}
+	.mw-health-score {
+		display: flex;
+		align-items: baseline;
+		gap: 2px;
+		align-self: center;
+		padding-right: 16px;
+		border-right: 1px solid var(--border);
+	}
+	.mw-health-cell {
+		padding-right: 16px;
+		border-right: 1px solid var(--border);
+	}
+	.mw-health-cell:last-child {
+		border-right: 0;
+	}
+	@media (max-width: 480px) {
+		.mw-health-score,
+		.mw-health-cell {
+			border-right: 0;
+		}
+	}
+	.mw-empty {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 12px;
+		font-size: 12.5px;
+		color: #2c5ead;
+		background-color: #eef6fd;
+		border-radius: 10px;
+	}
+	.mw-audit-row {
+		padding: 7px 0;
+		border-bottom: 1px solid #edf1f7;
+	}
+	.mw-audit-row:last-child {
+		border-bottom: 0;
+	}
+
+	/* ── Daftar media di HP ── */
+	.mdir-check {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 44px;
+		width: 44px;
+		height: 44px;
+		margin: -8px 0 0 -10px;
+		cursor: pointer;
+	}
+	.mdir-check :global(input) {
+		width: 20px;
+		height: 20px;
+	}
+	/* Toggle Publik/Hidden di kartu: tampilan ringkas (32px) tapi area sentuh
+	   tetap 44px lewat pseudo-element, jadi tidak tampak gemuk. */
+	.mdir-card :global(.visToggle) {
+		position: relative;
+		min-height: 32px;
+		gap: 8px;
+		padding: 4px 12px 4px 5px;
+		font-size: 12px;
+		line-height: 1;
+	}
+	.mdir-card :global(.visToggle)::after {
+		content: '';
+		position: absolute;
+		inset: -6px -4px;
+	}
+	.mdir-card :global(.visToggleTrack) {
+		width: 34px;
+		height: 20px;
+		flex-basis: 34px;
+	}
+	.mdir-card :global(.visToggleKnob) {
+		width: 16px;
+		height: 16px;
+	}
+	.mdir-card :global(.visToggleOn .visToggleKnob) {
+		transform: translateX(14px);
+	}
+	.mdir-actions :global(.flex-wrap) {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
+	}
+	.mdir-actions :global(.app-btn) {
+		width: 100%;
+		min-height: 44px !important;
+		justify-content: center;
+		text-align: center;
+	}
+	@media (max-width: 767px) {
+		.mdir-toolbar :global(.app-btn) {
+			min-height: 44px !important;
+		}
+		.mdir-pick {
+			min-height: 44px;
+		}
+		.mdir-pick :global(input) {
+			width: 20px;
+			height: 20px;
 		}
 	}
 </style>

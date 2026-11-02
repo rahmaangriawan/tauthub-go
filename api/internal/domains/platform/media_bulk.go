@@ -292,6 +292,77 @@ func (d *Deps) MediaBulkUpsert(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"archived": archived, "blocked": blocked})
 }
 
+// MediaBulkLinkKind: POST /v1/platform/media/bulk-link-kind — ubah jenis tautan
+// (dofollow / nofollow / sponsored) beberapa media sekaligus. Khusus Super Admin.
+// Jenis tautan = kombinasi label_sponsor + allow_hyperlink, dengan jumlah
+// backlink (max_links) dipertahankan; yang 0 dinaikkan jadi 1:
+//
+//	dofollow  → label tidak_ada,  allow_hyperlink true
+//	sponsored → label ada_sponsor, allow_hyperlink true
+//	nofollow  → label tidak_ada,  allow_hyperlink false
+//
+// Nofollow TIDAK memblokir artikel: batas jumlah tetap sama, dan tautan keluar
+// diberi rel="nofollow" otomatis saat artikel ditulis dan saat terbit.
+func (d *Deps) MediaBulkLinkKind(w http.ResponseWriter, r *http.Request) {
+	user, adminCtx, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	if !adminCtx.IsSuperAdmin() {
+		writeErr(w, d, errForbidden("Hanya Super Admin yang boleh mengubah jenis tautan secara massal."))
+		return
+	}
+	if err := d.mpWriteRate(r.Context(), "write:platform-media-bulk-link:"+user.ID); err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	body := decodeJSON(r)
+	ids, valid := mpBulkIDs(body)
+	kind, _ := strField(body, "kind")
+	if !valid || len(ids) < 1 || len(ids) > 100 || (kind != "dofollow" && kind != "nofollow" && kind != "sponsored") {
+		writeErr(w, d, errUnprocessable("Payload tidak valid."))
+		return
+	}
+
+	blocked := []mpBulkBlocked{}
+	updated := 0
+	for _, mediaID := range ids {
+		existing, err := d.mpScopedMedia(r.Context(), mediaID)
+		if err != nil {
+			blocked = append(blocked, mpBulkBlocked{ID: mediaID, Name: mediaID, Reason: "tidak ditemukan"})
+			continue
+		}
+		curMax := existing.intOr("max_links", 1)
+		curLabel := existing.strOr("label_sponsor", "tidak_ada")
+		curAllow := curMax > 0
+		if existing.has("allow_hyperlink") {
+			curAllow = existing.boolOr("allow_hyperlink", curAllow)
+		}
+		newMax, newLabel, newAllow := curMax, "tidak_ada", true
+		if newMax < 1 {
+			newMax = 1
+		}
+		switch kind {
+		case "nofollow":
+			newAllow = false
+		case "sponsored":
+			newLabel = "ada_sponsor"
+		}
+		if newMax == curMax && newLabel == curLabel && newAllow == curAllow {
+			blocked = append(blocked, mpBulkBlocked{ID: mediaID, Name: existing.strOr("name", ""), Reason: "sudah " + kind})
+			continue
+		}
+		policy := mpLinkPolicy{MaxLinks: newMax, HasMax: true, Sponsor: newLabel, HasSponsor: true, Allow: newAllow, HasAllow: true}
+		if err := d.mpApplyLinkPolicy(r.Context(), mediaID, policy); err != nil {
+			writeErr(w, d, mpMediaError(err))
+			return
+		}
+		writeAuditBestEffort(d, r.Context(), user.ID, "media.link_kind_changed", "media", mediaID)
+		updated++
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"updated": updated, "blocked": blocked})
+}
+
 // MediaBulkDelete: DELETE /v1/platform/media/bulk — hapus permanen beberapa media.
 func (d *Deps) MediaBulkDelete(w http.ResponseWriter, r *http.Request) {
 	user, _, ok := d.adminGuard(w, r, "")

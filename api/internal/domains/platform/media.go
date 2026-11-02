@@ -19,7 +19,7 @@ import (
 )
 
 // mpMediaListSelect: kolom daftar media admin (parity SELECT di route GET).
-const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.public_slug, m.public_listed, m.category, m.description, m.website_url, m.contoh_artikel_url, m.adapter_url, m.price, m.credit_cost, m.status, m.integration_type, m.partner_id, p.name AS partner_name, u.email AS partner_email, u.referred_by_partner_id, referrer.name AS referrer_name, m.publish_defaults, m.notes, m.traffic_estimate, m.media_tier, m.media_quality_score, m.media_quality_notes, m.health_score, m.health_breakdown, m.health_computed_at, m.auto_publish, m.word_count_mode, m.pending_changes, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.rejection_reason, m.reviewed_by, m.reviewed_at, m.created_by, m.created_at, m.updated_at, m.pricing_type, m.price_status, m.negotiated_price, m.link_duration_months, m.domain_verified, m.domain_verified_at,
+const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.public_slug, m.public_listed, m.category, m.description, m.website_url, m.contoh_artikel_url, m.adapter_url, m.price, m.credit_cost, m.status, m.integration_type, m.partner_id, p.name AS partner_name, u.email AS partner_email, u.referred_by_partner_id, referrer.name AS referrer_name, m.publish_defaults, m.notes, m.traffic_estimate, m.media_tier, m.media_quality_score, m.media_quality_notes, m.health_score, m.health_breakdown, m.health_computed_at, m.auto_publish, m.word_count_mode, m.pending_changes, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.rejection_reason, m.reviewed_by, m.reviewed_at, m.created_by, m.created_at, m.updated_at, m.pricing_type, m.price_status, m.negotiated_price, m.link_duration_months, m.max_links, m.allow_hyperlink, m.label_sponsor, m.domain_verified, m.domain_verified_at,
        COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv,
        sm.da AS seo_da, sm.ai_trust_score AS seo_ai_trust, sm.ai_citation AS seo_ai_citation, sm.checked_at AS seo_checked_at,
        COALESCE(np.wa_number, '') AS partner_wa_number, COALESCE(np.wa_consent, FALSE) AS partner_wa_consent,
@@ -179,7 +179,7 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	if search != "" {
 		pattern := "%" + search + "%"
 		ph := next(pattern)
-		where = append(where, "(m.name ILIKE "+ph+" OR m.slug ILIKE "+ph+" OR m.category ILIKE "+ph+" OR m.website_url ILIKE "+ph+" OR p.name ILIKE "+ph+" OR u.email ILIKE "+ph+")")
+		where = append(where, "(m.name ILIKE "+ph+" OR m.slug ILIKE "+ph+" OR m.category ILIKE "+ph+" OR m.website_url ILIKE "+ph+" OR p.name ILIKE "+ph+" OR u.email ILIKE "+ph+" OR m.partner_id::text ILIKE "+ph+")")
 	}
 	clause := ""
 	if len(where) > 0 {
@@ -409,6 +409,12 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 		linkDuration = v
 	}
 
+	newLinkPolicy, linkErr := mpParseLinkPolicy(body)
+	if linkErr != nil {
+		writeErr(w, d, linkErr)
+		return
+	}
+
 	id := uuid.NewString()
 	markup := d.mpGetMarkupPercent(r.Context())
 	clientPrice := mpComputeClientPrice(price, markup)
@@ -432,6 +438,11 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := d.mpApplyLinkPolicy(r.Context(), id, newLinkPolicy); err != nil {
+		writeErr(w, d, mpMediaError(err))
+		return
+	}
+
 	writeAuditBestEffort(d, r.Context(), user.ID, "platform.media.created", "media", id)
 	// Media baru langsung dicek DA/AI Trust dan trafiknya, tidak menunggu sweep
 	// scheduler. Keduanya lewat satu pintu supaya guard kredensial berlaku.
@@ -442,6 +453,65 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, d.mpMediaJSON(ptRow(ptNormalizeMap(created)), markup))
+}
+
+// mpParseLinkPolicy: baca max_links (0-3) dan label_sponsor dari body.
+// Hanya field yang dikirim yang dianggap berubah.
+type mpLinkPolicy struct {
+	MaxLinks   int
+	HasMax     bool
+	Sponsor    string
+	HasSponsor bool
+	// Allow = allow_hyperlink. false dengan MaxLinks > 0 berarti media menerima
+	// tautan hanya sebagai nofollow (artikel tidak ditolak, rel diberi otomatis).
+	Allow    bool
+	HasAllow bool
+}
+
+func mpParseLinkPolicy(body map[string]any) (mpLinkPolicy, error) {
+	var p mpLinkPolicy
+	p.MaxLinks, p.HasMax = intField(body, "max_links")
+	if p.HasMax && (p.MaxLinks < 0 || p.MaxLinks > 3) {
+		return mpLinkPolicy{}, errUnprocessable("Invalid max_links")
+	}
+	p.Sponsor, p.HasSponsor = strField(body, "label_sponsor")
+	if p.HasSponsor && p.Sponsor != "tidak_ada" && p.Sponsor != "ada_sponsor" {
+		return mpLinkPolicy{}, errUnprocessable("Invalid label_sponsor")
+	}
+	p.Allow, p.HasAllow = boolField(body, "allow_hyperlink")
+	return p, nil
+}
+
+// mpApplyLinkPolicy: simpan kebijakan tautan. Diperbarui terpisah dari UPDATE
+// utama agar penomoran parameter di sana tidak bergeser. allow_hyperlink
+// mengikuti max_links > 0, sama seperti di sisi mitra.
+func (d *Deps) mpApplyLinkPolicy(ctx context.Context, mediaID string, p mpLinkPolicy) error {
+	switch {
+	case p.HasMax:
+		allow := p.MaxLinks > 0
+		if p.HasAllow && p.MaxLinks > 0 {
+			allow = p.Allow
+		}
+		if err := d.exec(ctx,
+			"UPDATE media SET max_links = $1, allow_hyperlink = $2, updated_at = NOW() WHERE id = $3",
+			p.MaxLinks, allow, mediaID); err != nil {
+			return err
+		}
+	case p.HasAllow:
+		if err := d.exec(ctx,
+			"UPDATE media SET allow_hyperlink = $1, updated_at = NOW() WHERE id = $2",
+			p.Allow, mediaID); err != nil {
+			return err
+		}
+	}
+	if p.HasSponsor {
+		if err := d.exec(ctx,
+			"UPDATE media SET label_sponsor = $1, updated_at = NOW() WHERE id = $2",
+			p.Sponsor, mediaID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // mpSameDomain: bandingkan dua URL berdasarkan domainnya, bukan string mentah,
@@ -596,6 +666,13 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, errUnprocessable("Invalid link_duration_months"))
 		return
 	}
+	// Kebijakan tautan (sama dengan sisi mitra): jumlah backlink maksimal dan
+	// label sponsor. allow_hyperlink mengikuti max_links > 0.
+	linkPolicy, linkErr := mpParseLinkPolicy(body)
+	if linkErr != nil {
+		writeErr(w, d, linkErr)
+		return
+	}
 	autoPublish, hasAutoPublish := boolField(body, "auto_publish")
 	// Keterlihatan di katalog publik (data.tauthub.com) — hanya admin.
 	publicListed, hasPublicListed := boolField(body, "public_listed")
@@ -672,6 +749,10 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		ptNullableArgStr(pricingType, hasPricingType), ptNullableArgInt(linkDuration, hasLinkDuration),
 		ptNullableArgBool(publicListed, hasPublicListed), ptNullableArgStr(publicSlug, hasPublicSlug),
 		ptNullableArgStr(pricingType, hasPricingType), mediaID); err != nil {
+		writeErr(w, d, mpMediaError(err))
+		return
+	}
+	if err := d.mpApplyLinkPolicy(r.Context(), mediaID, linkPolicy); err != nil {
 		writeErr(w, d, mpMediaError(err))
 		return
 	}

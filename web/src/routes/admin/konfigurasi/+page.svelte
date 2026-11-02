@@ -604,7 +604,11 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 		tsMsg = { text: '', ok: false };
 		const res = await request('/settings/turnstile', {
 			method: 'PUT',
-			body: JSON.stringify({ site_key: tsSiteKey.trim() || null, secret_key: tsSecretKey.trim() || null, enabled: tsEnabled })
+			body: JSON.stringify({
+				...(tsSiteKey.trim() && { site_key: tsSiteKey.trim() }),
+				...(tsSecretKey.trim() && { secret_key: tsSecretKey.trim() }),
+				enabled: tsEnabled
+			})
 		});
 		if (!res.ok) tsMsg = { text: res.error, ok: false };
 		else {

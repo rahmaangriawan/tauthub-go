@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	dbpkg "github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 )
@@ -22,6 +23,7 @@ func (d *Deps) Earnings(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	d.releaseDuePartnerEarnings(r.Context(), partner.ID)
 	q := r.URL.Query()
 	status := strings.TrimSpace(q.Get("status"))
 	if status != "" && status != "pending" && status != "settled" && status != "voided" {
@@ -73,6 +75,11 @@ func (d *Deps) Earnings(w http.ResponseWriter, r *http.Request) {
 		if v, ok := row.num("rule_partner_percent"); ok {
 			rulePercent = v
 		}
+		var availableAt *time.Time
+		if created, ok := row.raw("created_at").(time.Time); ok && row.strOr("status", "") == "pending" && row.raw("settlement_id") == nil {
+			t := created.Add(partnerEarningHold)
+			availableAt = &t
+		}
 		earnings = append(earnings, map[string]any{
 			"id":                   row.raw("id"),
 			"publication_id":       row.raw("publication_id"),
@@ -91,7 +98,16 @@ func (d *Deps) Earnings(w http.ResponseWriter, r *http.Request) {
 			"status":               row.raw("status"),
 			"settlement_id":        row.raw("settlement_id"),
 			"created_at":           row.timePtr("created_at"),
+			"available_at":         availableAt,
 		})
+	}
+	var nextRelease *time.Time
+	if first, _ := d.queryRow(r.Context(),
+		"SELECT MIN(created_at) AS first FROM partner_earnings WHERE partner_id = $1 AND status = 'pending' AND settlement_id IS NULL", partner.ID); first != nil {
+		if t, ok := first.raw("first").(time.Time); ok {
+			n := t.Add(partnerEarningHold)
+			nextRelease = &n
+		}
 	}
 	w.Header().Set("Cache-Control", "private, max-age=5, stale-while-revalidate=30")
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -101,6 +117,8 @@ func (d *Deps) Earnings(w http.ResponseWriter, r *http.Request) {
 			"settled":              summary.SettledEarnings,
 			"paid_settlements":     summary.PaidSettlements,
 			"lifetime_publication": summary.LifetimePublication,
+			"next_release_at":      nextRelease,
+			"hold_hours":           dbpkg.PartnerEarningHoldHours,
 		},
 		"earnings": earnings,
 		"total":    countRow.intOr("count", 0),
@@ -206,6 +224,7 @@ func (d *Deps) createSettlement(w http.ResponseWriter, r *http.Request, partner 
 	}
 	cfg := d.getTcConfig(r)
 
+	d.releaseDuePartnerEarnings(r.Context(), partner.ID)
 	availableEarnings, err := d.queryRows(r.Context(),
 		"SELECT id, amount, created_at FROM partner_earnings WHERE partner_id = $1 AND status = 'settled' AND settlement_id IS NULL ORDER BY created_at ASC",
 		partner.ID)

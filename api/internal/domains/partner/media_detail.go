@@ -353,7 +353,11 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if hasMaxLinks {
+	// allow_hyperlink hanya disetel ulang saat media tadinya tidak menerima
+	// tautan (max_links 0) atau belum punya nilai. Selain itu dibiarkan, supaya
+	// pengaturan "hanya nofollow" dari admin tidak terhapus setiap mitra menyimpan
+	// (form mitra selalu mengirim max_links).
+	if hasMaxLinks && (existing.intOr("max_links", 1) <= 0 || !existing.has("allow_hyperlink")) {
 		if err := d.exec(r.Context(),
 			"UPDATE media SET allow_hyperlink = $1, updated_at = NOW() WHERE id = $2 AND partner_id = $3",
 			maxLinks > 0, mediaID, partner.ID); err != nil {

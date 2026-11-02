@@ -200,11 +200,15 @@
 
 	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '-');
+	// Tanggal + jam untuk waktu rilis saldo (masa tunggu dihitung dalam jam).
+	const dtTime = (v: string | null) =>
+		v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+	const holdDays = $derived(Math.round(Number(data?.summary?.hold_hours ?? 48) / 24));
 	// $derived, bukan konstanta: tr() membaca locale yang baru tersedia setelah
 	// initLocaleFromStorage() di root layout, jadi konstanta biasa akan membeku
 	// di bahasa awal dan badge tidak ikut berganti ke Inggris.
 	const statusLabel = $derived<Record<string, string>>({
-		pending: tr('Menunggu cair'), settled: tr('Siap ditarik'), voided: tr('Dibatalkan')
+		pending: tr('Masa tunggu'), settled: tr('Siap ditarik'), voided: tr('Dibatalkan')
 	});
 	// Warna badge status memakai token semantik app (bukan accent generik).
 	const statusBadge = (status: string) => {
@@ -295,6 +299,7 @@
 					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{tr("Saldo siap ditarik")}</p>
 					<p class="mt-1 text-4xl font-bold tracking-tight tabular-nums">{rp(data.summary?.settled)}</p>
 					<p class="mt-1 text-xs text-muted-foreground">{tr("Minimal penarikan")} {rp(minimumWithdraw)}</p>
+					<p class="mt-0.5 text-xs text-muted-foreground">{tr("Pendapatan baru bisa ditarik")} {holdDays} {tr("hari setelah artikel terbit.")}</p>
 				</div>
 
 				<div class="hidden h-12 w-px sm:block" style="background: var(--border);"></div>
@@ -305,8 +310,11 @@
 							<Clock size={18} style="color: var(--warning);" />
 						</span>
 						<div>
-							<p class="text-xs text-muted-foreground">{tr("Pending payout")}</p>
+							<p class="text-xs text-muted-foreground">{tr("Masa tunggu")}</p>
 							<p class="text-sm font-semibold tabular-nums">{rp(data.summary?.pending)}</p>
+							{#if data.summary?.next_release_at}
+								<p class="text-[11px] text-muted-foreground">{tr("Rilis berikutnya")} {dtTime(data.summary.next_release_at)}</p>
+							{/if}
 						</div>
 					</div>
 					<div class="flex items-center gap-2.5">
@@ -510,6 +518,9 @@
 		<span class="h-1.5 w-1.5 rounded-full" style="background: currentColor;"></span>
 		{statusLabel[e.status] ?? e.status}
 	</span>
+	{#if e.status === 'pending' && e.available_at}
+		<span class="mt-0.5 block text-[10.5px] text-muted-foreground">{tr("Bisa ditarik")} {dtTime(e.available_at)}</span>
+	{/if}
 {/snippet}
 
 {#if showWithdraw}

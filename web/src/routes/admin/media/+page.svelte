@@ -87,14 +87,16 @@
 		description={tr("Direktori = master data (harga, kredit, tier, integrasi, partner); Arsip = media diarsipkan / disembunyikan dari mitra; Intelligence = health score media.")}
 	/>
 
-	<div class="mt-4 flex flex-wrap gap-1 border-b" role="tablist">
+	<!-- HP: satu baris yang bisa digeser (tanpa menumpuk jadi dua baris);
+	     layar lapang: membungkus seperti biasa. -->
+	<div class="media-tabs mt-4 flex gap-1 overflow-x-auto border-b sm:flex-wrap sm:overflow-visible" role="tablist">
 		{#each tabs as t (t.value)}
 			<button
 				type="button"
 				id={t.value === 'pending' ? 'tab-pending' : undefined}
 				role="tab"
 				aria-selected={tab === t.value}
-				class="app-btn !min-h-8 !rounded-b-none !px-3.5 !text-sm"
+				class="app-btn !min-h-11 shrink-0 whitespace-nowrap !rounded-b-none !px-3.5 !text-sm sm:!min-h-8"
 				class:app-btn-primary={tab === t.value}
 				class:app-btn-soft={tab !== t.value}
 				onclick={() => (tab = t.value)}
@@ -133,3 +135,12 @@
 		{/if}
 	</div>
 </section>
+
+<style>
+	.media-tabs {
+		scrollbar-width: none;
+	}
+	.media-tabs::-webkit-scrollbar {
+		display: none;
+	}
+</style>

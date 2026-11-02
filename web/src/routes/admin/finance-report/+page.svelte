@@ -11,6 +11,7 @@
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
+	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import Select from '$lib/components/select.svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
@@ -43,8 +44,16 @@
 		topup_pending: number; topup_pending_count: number;
 		settlement_pending: number; settlement_pending_count: number;
 		client_balance: number; partner_unpaid: number;
+		partner_payable_total?: number; partner_payable_count?: number;
 		invoice_paid: number; invoice_paid_count: number;
 		compensation_credits: number; compensation_count: number;
+	};
+	type PayableSettlement = {
+		id: string; partner_id: string; partner_name: string | null; status: string;
+		net_amount_idr: number; total_amount: number; transfer_fee_idr: number | null;
+		payout_method: string | null; invoice_number: string | null;
+		bank_name: string | null; bank_account_number: string | null; bank_account_name: string | null;
+		created_at: string | null;
 	};
 	type Monthly = { month: string; label: string; money_in: number; money_out: number };
 	type SparkPoint = { label: string; money_in: number; money_out: number; net: number };
@@ -111,6 +120,118 @@
 	let refreshing = $state(false);
 	let exporting = $state(false);
 	let error = $state('');
+
+	// Popup "Siap transfer": pengajuan pencairan mitra yang belum ditransfer.
+	let payablesOpen = $state(false);
+	let payablesLoading = $state(false);
+	let payablesError = $state('');
+	let payables = $state<PayableSettlement[] | null>(null);
+	// Langkah transfer per pengajuan (satu yang terbuka pada satu waktu).
+	let transferId = $state<string | null>(null);
+	let transferRef = $state('');
+	let transferFile = $state<File | null>(null);
+	let transferBusy = $state(false);
+	let transferError = $state('');
+	let copiedId = $state<string | null>(null);
+
+	async function loadPayables() {
+		payablesLoading = true;
+		payablesError = '';
+		try {
+			const res = await apiRequest('/v1/platform/finance/partner-payables');
+			if (!res.ok) {
+				payablesError = res.status === 404
+					? tr('Endpoint rincian belum tersedia di API yang sedang berjalan. Restart API lalu coba lagi.')
+					: await platformError(res);
+				return;
+			}
+			const body = (await res.json()) as { settlements?: PayableSettlement[] };
+			payables = body.settlements ?? [];
+		} catch {
+			payablesError = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
+		} finally {
+			payablesLoading = false;
+		}
+	}
+
+	function openPayables() {
+		payablesOpen = true;
+		transferId = null;
+		void loadPayables();
+	}
+
+	function closePayables() {
+		payablesOpen = false;
+		transferId = null;
+		transferError = '';
+	}
+
+	function startTransfer(id: string) {
+		transferId = id;
+		transferRef = '';
+		transferFile = null;
+		transferError = '';
+	}
+
+	async function copyText(id: string, text: string | null) {
+		if (!text) return;
+		try {
+			await navigator.clipboard.writeText(text);
+			copiedId = id;
+			setTimeout(() => { if (copiedId === id) copiedId = null; }, 1500);
+		} catch {
+			/* clipboard bisa diblokir browser; nomor tetap terlihat di layar */
+		}
+	}
+
+	// Sama dengan alur di halaman Pencairan: setujui bila masih menunggu, unggah
+	// bukti (opsional), lalu tandai lunas. Aplikasi hanya mencatat; uangnya
+	// ditransfer admin sendiri lewat bank.
+	async function confirmTransfer(row: PayableSettlement) {
+		transferBusy = true;
+		transferError = '';
+		try {
+			if (row.status === 'pending') {
+				const approve = await apiRequest(`/v1/platform/settlements/${row.id}`, {
+					method: 'PUT',
+					body: JSON.stringify({ status: 'approved' })
+				});
+				if (!approve.ok) {
+					transferError = await platformError(approve);
+					return;
+				}
+			}
+			let receiptUrl: string | null = null;
+			if (transferFile) {
+				const fd = new FormData();
+				fd.append('file', transferFile);
+				const up = await apiRequest(`/v1/platform/settlements/${row.id}/receipt`, { method: 'POST', body: fd });
+				if (!up.ok) {
+					transferError = await platformError(up);
+					return;
+				}
+				receiptUrl = ((await up.json()) as { receipt_url?: string }).receipt_url ?? null;
+			}
+			const paid = await apiRequest(`/v1/platform/settlements/${row.id}`, {
+				method: 'PUT',
+				body: JSON.stringify({
+					status: 'paid',
+					payment_reference: transferRef.trim() || null,
+					receipt_url: receiptUrl
+				})
+			});
+			if (!paid.ok) {
+				transferError = await platformError(paid);
+				return;
+			}
+			transferId = null;
+			await Promise.all([loadPayables(), load(pageNum)]);
+		} catch {
+			transferError = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
+		} finally {
+			transferBusy = false;
+		}
+	}
 
 	onMount(() => {
 		void (async () => {
@@ -239,7 +360,7 @@
 
 <section>
 	<PageHeader title={tr("Keuangan Tauthub")}>
-		<button class="app-btn app-btn-soft headerBtn" type="button" disabled={refreshing} onclick={() => void load(pageNum, true)}>
+		<button class="app-btn app-btn-soft headerBtn" type="button" disabled={refreshing} onclick={() => { void load(pageNum, true); }}>
 			<RotateCw size={14} />{tr("Muat ulang")}
 		</button>
 		<button class="app-btn app-btn-primary headerBtn" type="button" disabled={exporting || loading} onclick={() => void exportCsv()}>
@@ -381,14 +502,122 @@
 				<p class="mt-2 text-xl font-semibold tabular-nums">{rp(summary.client_balance)}</p>
 				<p class="mt-1 text-[11px] text-muted-foreground">{tr("Belum terpakai")}</p>
 			</div>
-			<div class="positionCell">
-				<Tooltip content={tr("Pendapatan mitra yang sudah tercatat tetapi belum masuk pencairan yang lunas.")}>
-					<span class="text-xs text-muted-foreground">{tr("Saldo mitra")}</span>
+			<button
+				type="button"
+				class="positionCell payableCell"
+				aria-haspopup="dialog"
+				onclick={openPayables}
+			>
+				<Tooltip content={tr("Saldo yang sudah diminta mitra dan siap kamu transfer. Jumlahnya sudah dipotong biaya transfer.")}>
+					<span class="text-xs text-muted-foreground">{tr("Siap transfer ke mitra")}</span>
 				</Tooltip>
-				<p class="mt-2 text-xl font-semibold tabular-nums">{rp(summary.partner_unpaid)}</p>
-				<p class="mt-1 text-[11px] text-muted-foreground">{tr("Belum dicairkan")}</p>
-			</div>
+				<p class="payableAmount mt-2 text-xl font-semibold tabular-nums">{rp(summary.partner_payable_total ?? summary.settlement_pending)}</p>
+				<p class="mt-1 text-[11px] text-muted-foreground">
+					{fmtNum(summary.partner_payable_count ?? 0)} {tr("mitra")} ·
+					<span class="payableLink">{tr('Buka rincian')}</span>
+				</p>
+			</button>
 		</div>
+
+		{#if payablesOpen}
+			<Modal title={tr("Siap transfer ke mitra")} maxWidth="2xl" onClose={closePayables}>
+				<p class="text-sm text-muted-foreground">
+					{tr("Saldo yang diminta mitra dan belum kamu transfer. Jumlah sudah dipotong biaya transfer.")}
+				</p>
+
+				{#if payablesLoading && !payables}
+					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
+				{:else if payablesError}
+					<p class="mt-4 text-sm" style="color: var(--destructive);">{payablesError}</p>
+				{:else if payables && payables.length === 0}
+					<p class="payableEmpty mt-4">{tr("Tidak ada pengajuan yang menunggu transfer saat ini.")}</p>
+				{:else if payables}
+					<div class="payableSum mt-4">
+						<span class="text-xs text-muted-foreground">{tr("Total siap transfer")}</span>
+						<span class="payableAmount text-lg font-semibold tabular-nums">{rp(payables.reduce((sum, r) => sum + (r.net_amount_idr ?? 0), 0))}</span>
+						<span class="text-xs text-muted-foreground">· {fmtNum(payables.length)} {tr("pengajuan")}</span>
+					</div>
+
+					<ul class="mt-3 space-y-3">
+						{#each payables as row (row.id)}
+							<li class="payableCard">
+								<div class="flex flex-wrap items-start justify-between gap-3">
+									<div class="min-w-0">
+										<p class="truncate text-sm font-semibold">{row.partner_name || row.partner_id.slice(0, 8)}</p>
+										<p class="mt-0.5 text-[11px] text-muted-foreground">
+											{row.invoice_number ?? ''}{#if row.created_at} · {tr("diajukan")} {fmtDateTime(row.created_at)}{/if}
+										</p>
+									</div>
+									<div class="text-right">
+										<p class="payableAmount text-lg font-semibold tabular-nums">{rp(row.net_amount_idr)}</p>
+										<p class="text-[11px] text-muted-foreground">{tr("setelah biaya transfer")} {rp(row.transfer_fee_idr ?? 0)}</p>
+									</div>
+								</div>
+
+								<div class="payableBank mt-3">
+									<div class="min-w-0 flex-1">
+										<p class="text-[11px] text-muted-foreground">{methodLabel(row.payout_method ?? '')}{#if row.bank_name} · {row.bank_name}{/if}</p>
+										<p class="truncate text-sm font-medium tabular-nums">{row.bank_account_number ?? tr('Rekening belum diisi mitra')}</p>
+										{#if row.bank_account_name}<p class="truncate text-[11px] text-muted-foreground">{tr("a.n.")} {row.bank_account_name}</p>{/if}
+									</div>
+									{#if transferId !== row.id}
+										<div class="payableActions">
+											{#if row.bank_account_number}
+												<button type="button" class="app-btn payableCopy" onclick={() => void copyText(row.id, row.bank_account_number)}>
+													{copiedId === row.id ? tr('Tersalin') : tr('Salin nomor')}
+												</button>
+											{/if}
+											<button
+												type="button"
+												class="app-btn payablePrimary"
+												disabled={!row.bank_account_number}
+												title={row.bank_account_number ? undefined : tr('Mitra belum mengisi rekening atau e-wallet.')}
+												onclick={() => startTransfer(row.id)}
+											>{tr("Transfer")}</button>
+										</div>
+									{/if}
+								</div>
+
+								{#if transferId === row.id}
+									<div class="payableForm mt-3">
+										<p class="text-xs text-muted-foreground">
+											{tr("Transfer dulu lewat bank, lalu klik Sudah ditransfer. Aplikasi ini hanya mencatat; uangnya tidak dikirim otomatis.")}
+										</p>
+										<label class="mt-3 block">
+											<span class="text-xs font-medium text-muted-foreground">{tr("Nomor referensi transfer (opsional)")}</span>
+											<input class="app-input mt-1 w-full" bind:value={transferRef} maxlength="200" />
+										</label>
+										<label class="mt-3 block">
+											<span class="text-xs font-medium text-muted-foreground">{tr("Bukti transfer (opsional)")}</span>
+											<input
+												class="app-input mt-1 w-full"
+												type="file"
+												accept="image/*,application/pdf"
+												onchange={(e) => (transferFile = e.currentTarget.files?.[0] ?? null)}
+											/>
+										</label>
+										{#if transferError}
+											<p class="mt-3 text-sm" style="color: var(--destructive);">{transferError}</p>
+										{/if}
+										<div class="mt-3 flex flex-wrap justify-end gap-2">
+											<button type="button" class="app-btn app-btn-soft" disabled={transferBusy} onclick={() => (transferId = null)}>{tr("Batal")}</button>
+											<button type="button" class="app-btn payablePrimary" disabled={transferBusy} onclick={() => void confirmTransfer(row)}>
+												{transferBusy ? tr('Menyimpan…') : tr('Sudah ditransfer')}
+											</button>
+										</div>
+									</div>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+
+				{#snippet footer()}
+					<a class="mr-auto self-center text-xs underline underline-offset-2" style="color: var(--primary);" href="/admin/settlements">{tr("Buka halaman pencairan")}</a>
+					<button type="button" class="app-btn app-btn-soft" onclick={closePayables}>{tr("Tutup")}</button>
+				{/snippet}
+			</Modal>
+		{/if}
 
 		<!-- Tren 12 bulan -->
 		<div class="app-card mt-6 p-5">
@@ -736,6 +965,109 @@
 	}
 	.positionCell + .positionCell {
 		border-left: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+	}
+	/* Kartu "Siap transfer ke mitra": tint tipis, bukan blok biru pekat. */
+	.payableCell {
+		text-align: left;
+		cursor: pointer;
+		background-color: color-mix(in srgb, var(--primary) 10%, white);
+		transition: background-color 150ms ease;
+	}
+	.payableCell:hover {
+		background-color: color-mix(in srgb, var(--primary) 16%, white);
+	}
+	.payableCell:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: -4px;
+	}
+	.payableCell .payableAmount,
+	.payableCell .payableLink {
+		color: var(--primary);
+	}
+	.payableCell .payableLink {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.payableAmount {
+		color: var(--primary);
+	}
+	.payableLink {
+		color: var(--primary);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.payableSum {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 8px;
+		padding: 10px 14px;
+		border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+		border-radius: 10px;
+		background-color: color-mix(in srgb, var(--primary) 5%, white);
+	}
+	.payableCard {
+		padding: 14px;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background-color: #fff;
+		list-style: none;
+	}
+	.payableBank {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 12px;
+		padding: 10px 12px;
+		border-radius: 10px;
+		background-color: var(--secondary);
+	}
+	.payableActions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 8px;
+		margin-left: auto;
+	}
+	.payableCopy {
+		flex-shrink: 0;
+		min-height: 40px;
+		padding: 0 14px;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--primary);
+		border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+		border-radius: 10px;
+		background-color: #fff;
+	}
+	.payableCopy:hover {
+		background-color: color-mix(in srgb, var(--primary) 5%, white);
+	}
+	.payableForm {
+		padding: 12px;
+		border: 1px dashed color-mix(in srgb, var(--primary) 38%, transparent);
+		border-radius: 10px;
+	}
+	.payablePrimary {
+		min-height: 40px;
+		padding: 0 18px;
+		color: #fff;
+		background-color: var(--primary);
+		border-radius: 10px;
+	}
+	.payablePrimary:hover:not(:disabled) {
+		background-color: color-mix(in srgb, var(--primary) 85%, #000);
+	}
+	.payablePrimary:disabled {
+		opacity: 0.55;
+	}
+	.payableEmpty {
+		padding: 12px 14px;
+		font-size: 13px;
+		color: var(--primary);
+		border-radius: 10px;
+		background-color: color-mix(in srgb, var(--primary) 6%, white);
 	}
 	@media (max-width: 1023px) {
 		.positionGrid {
