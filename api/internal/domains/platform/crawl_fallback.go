@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -105,15 +106,18 @@ func crawlEgressGet(ctx context.Context, target string) (int, http.Header, strin
 	// tidak dibajak blockpage ISP lokal.
 	resp, err := security.SafeClient(20 * time.Second).Do(req)
 	if err != nil {
+		slog.Warn("[crawl-egress] request gagal", "target", target, "err", err)
 		return 0, nil, "", false
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, crawlFallbackBodyLimit))
 	if resp.StatusCode != http.StatusOK {
+		slog.Warn("[crawl-egress] HTTP tidak OK", "target", target, "status", resp.StatusCode)
 		return 0, nil, "", false
 	}
 	var out crawlEgressResponse
 	if json.Unmarshal(body, &out) != nil || out.Error != "" || out.Status == 0 {
+		slog.Warn("[crawl-egress] respons tidak valid", "target", target, "error", out.Error, "body", ptTruncate(string(body), 200))
 		return 0, nil, "", false
 	}
 	hdr := http.Header{}
@@ -128,11 +132,21 @@ func (d *Deps) crawlMeasureFallback(ctx context.Context, websiteURL string) craw
 	return d.crawlMeasureFallbackWithin(ctx, websiteURL, crawlFallbackBudget)
 }
 
-func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string, budget time.Duration) crawlFallbackResult {
+func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string, budget time.Duration) (res crawlFallbackResult) {
 	origin, err := crawlOrigin(websiteURL)
 	if err != nil {
 		return crawlFallbackResult{Status: "error", Error: "URL media tidak valid"}
 	}
+	defer func() {
+		attrs := []any{"origin", origin, "status", res.Status, "source", res.Source}
+		if res.Articles != nil {
+			attrs = append(attrs, "articles", *res.Articles)
+			slog.Info("[crawl-fallback] terukur", attrs...)
+		} else {
+			attrs = append(attrs, "error", res.Error)
+			slog.Warn("[crawl-fallback] gagal", attrs...)
+		}
+	}()
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 
