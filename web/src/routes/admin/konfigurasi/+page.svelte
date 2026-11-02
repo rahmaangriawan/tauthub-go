@@ -772,9 +772,17 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 	async function syncCrawlhub() {
 		syncBusy = true;
 		monitorError = '';
-		const res = await request<{ ok: boolean; enqueued: number; processed: number }>('/crawlhub/targets', { method: 'POST' }, 'Gagal menjalankan sinkronisasi.');
+		const res = await request<{ ok: boolean; enqueued: number; processed: number; measured: number; remaining: number }>(
+			'/crawlhub/targets',
+			{ method: 'POST' },
+			'Gagal menjalankan sinkronisasi.'
+		);
 		if (res.ok) {
-			chNotice = 'Sinkronisasi selesai. Target tanpa data diminta crawl ulang secepatnya.';
+			const d = res.data;
+			chNotice =
+				d.enqueued === 0
+					? 'Tidak ada media yang perlu disinkronkan — semua sudah punya angka segar.'
+					: `Sinkronisasi: ${d.enqueued} media diantrekan (belum pernah crawl / lama tidak crawl / error), ${d.processed} diproses sekarang, ${d.measured} dapat angka baru.${d.remaining > 0 ? ` ${d.remaining} sisanya diproses worker.` : ''}`;
 			await loadMonitor();
 			setTimeout(() => void loadMonitor(), 8000);
 			setTimeout(() => void loadMonitor(), 30000);

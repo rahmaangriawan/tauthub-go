@@ -1282,8 +1282,10 @@ func (d *Deps) schEnqueueCrawlTargetSyncs(ctx context.Context, limit int) {
 		  AND (
 		    ct.media_id IS NULL
 		    OR ct.last_crawled_at IS NULL
-		    OR (COALESCE(ct.consecutive_failures, 0) BETWEEN 1 AND 2
-		        AND ct.updated_at < NOW() - INTERVAL '24 hours')
+		    -- Gagal/terblokir berulang: tetap dicoba tiap 24 jam (fallback
+		    -- Google News/Wayback bisa berhasil walau endpoint situs 403).
+		    OR COALESCE(ct.consecutive_failures, 0) > 0
+		    OR ct.last_status IN ('blocked', 'error', 'no_source')
 		    -- Belum pernah dapat angka (baru terdaftar / crawl terakhir diblokir):
 		    -- cek ulang tiap hari sampai angkanya ada, jangan tunggu 7 hari.
 		    OR ct.articles_7d IS NULL

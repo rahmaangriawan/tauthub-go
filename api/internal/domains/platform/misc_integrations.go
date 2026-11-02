@@ -541,7 +541,7 @@ func (d *Deps) CrawlhubTargets(w http.ResponseWriter, r *http.Request) {
 		 FROM media m
 		 LEFT JOIN crawl_targets ct ON ct.media_id = m.id
 		 WHERE `+where+`
-		 ORDER BY ct.consecutive_failures DESC NULLS LAST, ct.last_crawled_at ASC NULLS FIRST, m.name ASC
+		 ORDER BY ct.last_crawled_at DESC NULLS LAST, m.name ASC
 		 LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		writeErr(w, d, err)
@@ -575,13 +575,23 @@ func (d *Deps) CrawlhubTargetsSync(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	enqueued, err := d.igChEnqueueCrawlTargetSyncs(r.Context(), 20)
+	// Manual sync: ambil media yang belum pernah dicrawl, lama tidak dicrawl,
+	// tidak punya angka, atau terakhir blocked/error/no_source. Cooldown 24 jam
+	// sengaja dilewati supaya tombol ini benar-benar memaksa percobaan ulang.
+	enqueued, err := d.igChEnqueueCrawlTargetSyncs(r.Context(), 50)
 	if err != nil {
 		writeErr(w, d, err)
 		return
 	}
-	processed := d.igChDrainCrawlJobs(r.Context(), 10)
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "enqueued": enqueued, "processed": processed})
+	processed, measured := d.igChDrainCrawlJobs(r.Context(), 10)
+	remaining := enqueued - processed
+	if remaining < 0 {
+		remaining = 0
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "enqueued": enqueued, "processed": processed,
+		"measured": measured, "remaining": remaining,
+	})
 }
 
 // igChEnqueueCrawlTargetSyncs: port enqueueCrawlTargetSyncs (maks limit).
@@ -603,12 +613,11 @@ func (d *Deps) igChEnqueueCrawlTargetSyncs(ctx context.Context, limit int) (int,
 		    AND (
 		      ct.media_id IS NULL
 		      OR ct.last_crawled_at IS NULL
-		      OR (COALESCE(ct.consecutive_failures, 0) BETWEEN 1 AND 2
-		          AND ct.updated_at < NOW() - INTERVAL '24 hours')
 		      OR ct.articles_7d IS NULL
+		      OR COALESCE(ct.consecutive_failures, 0) > 0
+		      OR ct.last_status IN ('blocked', 'error', 'no_source')
 		      OR ct.last_crawled_at < NOW() - make_interval(days => $1::int)
 		    )
-		    AND (ct.updated_at IS NULL OR ct.updated_at < NOW() - INTERVAL '24 hours')
 		    AND NOT EXISTS (
 		      SELECT 1 FROM jobs j
 		      WHERE j.kind = 'crawl_target_sync' AND j.status IN ('pending', 'running')
@@ -633,12 +642,14 @@ func (d *Deps) igChEnqueueCrawlTargetSyncs(ctx context.Context, limit int) (int,
 }
 
 // igChDrainCrawlJobs: proses sampai `limit` job crawl_target_sync pending.
-func (d *Deps) igChDrainCrawlJobs(ctx context.Context, limit int) int {
+// Return (processed, measured): measured = job yang menghasilkan angka baru.
+func (d *Deps) igChDrainCrawlJobs(ctx context.Context, limit int) (int, int) {
 	cfg, err := d.igChLoadConfig(ctx)
 	if err != nil || !cfg.igConfigured() {
-		return 0
+		return 0, 0
 	}
 	processed := 0
+	measured := 0
 	for i := 0; i < limit; i++ {
 		job, jErr := d.queryRow(ctx,
 			`SELECT id, payload FROM jobs WHERE kind = 'crawl_target_sync' AND status = 'pending'
@@ -657,23 +668,28 @@ func (d *Deps) igChDrainCrawlJobs(ctx context.Context, limit int) int {
 				mediaID = s
 			}
 		}
-		outcome := d.igChSyncCrawlTarget(ctx, cfg, mediaID)
-		// Paritas CrawlTargetSyncJob: bila Crawlhub gagal / tidak menghasilkan
-		// angka, ukur langsung (WP API → feed → sitemap → Wayback) supaya tombol
-		// "Sinkronkan Sekarang" juga bisa mengisi media yang diblokir.
-		if !outcome.OK || crawlArticlesPtr(outcome.Articles7d) == nil {
-			if website, wErr := d.igChMediaWebsite(ctx, mediaID); wErr == nil {
-				fb := d.crawlMeasureFallbackWithin(ctx, website, crawlFallbackDrainBudget)
-				if storeErr := d.crawlStoreFallback(ctx, mediaID, website, fb); storeErr != nil {
-					outcome.OK = false
-					outcome.Error = "gagal menyimpan hasil fallback: " + storeErr.Error()
-				} else if fb.Articles != nil {
-					outcome.OK = true
-					outcome.Articles7d = *fb.Articles
-				}
+		// Coba ukur sendiri dulu (WP API → feed → sitemap → Google News →
+		// Wayback). Untuk media yang diblokir WAF ini jalur tercepat dan sering
+		// satu-satunya yang menghasilkan angka; Crawlhub baru dipanggil bila
+		// semuanya gagal.
+		outcome := igChSyncOutcome{}
+		if website, wErr := d.igChMediaWebsite(ctx, mediaID); wErr == nil {
+			fb := d.crawlMeasureFallbackWithin(ctx, website, crawlFallbackDrainBudget)
+			if storeErr := d.crawlStoreFallback(ctx, mediaID, website, fb); storeErr != nil {
+				outcome.OK = false
+				outcome.Error = "gagal menyimpan hasil fallback: " + storeErr.Error()
+			} else if fb.Articles != nil {
+				outcome.OK = true
+				outcome.Articles7d = *fb.Articles
 			}
 		}
+		if !outcome.OK || crawlArticlesPtr(outcome.Articles7d) == nil {
+			outcome = d.igChSyncCrawlTarget(ctx, cfg, mediaID)
+		}
 		if outcome.OK {
+			if crawlArticlesPtr(outcome.Articles7d) != nil {
+				measured++
+			}
 			_ = d.exec(ctx, "UPDATE jobs SET status = 'completed', finished_at = NOW() WHERE id = $1", jobID)
 		} else {
 			_ = d.exec(ctx,
@@ -682,7 +698,7 @@ func (d *Deps) igChDrainCrawlJobs(ctx context.Context, limit int) int {
 		}
 		processed++
 	}
-	return processed
+	return processed, measured
 }
 
 // ---------- ga4-configs ----------
