@@ -93,6 +93,11 @@ export type Media = {
 	integration_type: string;
 	partner_id: string | null;
 	partner_name?: string | null;
+	/** Email akun mitra pemilik domain (users.email lewat partners.user_id). */
+	partner_email?: string | null;
+	/** true = kode verifikasi domain (meta tag di head / TXT DNS) terdeteksi. */
+	domain_verified?: boolean;
+	domain_verified_at?: string | null;
 	partner_wa_set?: boolean;
 	partner_wa_required?: boolean;
 	referred_by_partner_id?: string | null;

@@ -4,7 +4,7 @@
 	// Tab Direktori /admin/media — master data media (harga, kredit, tier, integrasi, partner).
 	// Port MediaDirectorySection di apps/web/src/app/admin/media/_sections.tsx.
 	import { onDestroy, onMount } from 'svelte';
-	import { CircleAlert, CircleCheck, ExternalLink, Plus, RefreshCw, Search } from '@lucide/svelte';
+	import { CircleAlert, CircleCheck, ExternalLink, Plus, RefreshCw, Search, ShieldCheck } from '@lucide/svelte';
 	import DataTable from '$lib/components/admin/data-table.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
@@ -166,6 +166,17 @@
 		void sortBy;
 		void page;
 		void load();
+	});
+
+	// Setelah deploy, halaman yang sudah terbuka bisa masih memegang respons
+	// lama tanpa kolom verifikasi/pemilik. Ambil ulang sekali supaya ikon
+	// Verifikasi tidak tampil "-" untuk semua media hanya karena data basi.
+	let fieldsBackfill = false;
+	$effect(() => {
+		if (!fieldsBackfill && rows.length > 0 && !('domain_verified' in rows[0])) {
+			fieldsBackfill = true;
+			void load();
+		}
 	});
 
 	async function load() {
@@ -910,69 +921,24 @@
 	</div>
 {/snippet}
 
-{#snippet trafficCell(row: Media)}
-	<div class="flex items-center justify-end gap-2">
-		<span class="text-xs">{compactNumber(row.traffic_estimate ?? 0)}</span>
-		<button
-			class="rounded-lg p-1 hover:bg-secondary"
-			title="Cek trafik SimilarWeb"
-			aria-label={`Cek trafik ${row.name}`}
-			disabled={swBusyId === row.id || swBulkBusy}
-			onclick={(e) => {
-				e.stopPropagation();
-				void checkSimilarWeb(row);
-			}}
-		>
-			<RefreshCw size={12} />
-		</button>
-	</div>
-	{#if swVisits[row.id] != null}
-		<p class="text-right text-xs" style="color: var(--primary);">
-			SW: {(swVisits[row.id] ?? 0).toLocaleString('id-ID')}/bln
-		</p>
-	{/if}
-{/snippet}
-
-{#snippet healthCell(row: Media)}
-	{#if row.health_score != null}
-		<Badge tone={scoreTone(row.health_score)} value={`${row.health_score}/100`} />
-	{:else}
-		<Badge tone="neutral" value="—" />
-	{/if}
-{/snippet}
-
-{#snippet daCell(row: Media)}
-	<span title={row.seo_checked_at ? `Terakhir dicek ${fmtDateTime(row.seo_checked_at)} · sumber: RapidAPI domain-metrics` : tr('Belum pernah dicek')}>
-		{#if row.seo_da != null}
-			<Badge tone={scoreTone(row.seo_da)} value={`${row.seo_da}`} />
-		{:else}
-			<Badge tone="neutral" value="—" />
-		{/if}
-	</span>
-{/snippet}
-
-{#snippet aiTrustCell(row: Media)}
-	<span
-		title={row.seo_ai_trust != null
-			? tr('Nilai 0-100 dari pengukuran: kecepatan halaman situs + kelengkapan data situsnya') +
-				(row.seo_checked_at ? ` · terakhir dicek ${fmtDateTime(row.seo_checked_at)}` : '')
-			: tr('Belum bisa dinilai — kecepatan situs ini belum berhasil diukur')}
-	>
-		{#if row.seo_ai_trust != null}
-			<Badge tone={scoreTone(row.seo_ai_trust)} value={`${row.seo_ai_trust}/100`} />
-		{:else}
-			<Badge tone="neutral" value="—" />
-		{/if}
-	</span>
-	{#if row.seo_da != null}
-		<p class="mt-1 text-xs text-muted-foreground" title={tr('Domain Authority: nilai otoritas domain (0-100)')}>DA {row.seo_da}</p>
-	{/if}
-	{#if row.seo_ai_citation === true}
+{#snippet verifyCell(row: Media)}
+	{#if row.domain_verified}
 		<span
-			class="mt-1 block text-xs font-semibold"
-			style="color: var(--primary);"
-			title={tr('Situs ini disebut sebagai salah satu sumber jawaban AI Google')}
-		>GEO ✓</span>
+			class="inline-flex items-center"
+			style="color: var(--success);"
+			title={row.domain_verified_at
+				? `Kode verifikasi domain ditemukan (${fmtDateTime(row.domain_verified_at)})`
+				: tr('Kode verifikasi domain ditemukan di halaman media')}
+			aria-label={tr('Domain terverifikasi')}
+		>
+			<ShieldCheck size={16} />
+		</span>
+	{:else}
+		<span
+			class="text-sm text-muted-foreground"
+			title={tr('Kode verifikasi belum ditemukan — meta tag tauthub-verification atau TXT DNS belum ada')}
+			aria-label={tr('Domain belum terverifikasi')}
+		>-</span>
 	{/if}
 {/snippet}
 
@@ -1075,10 +1041,6 @@
 	</div>
 {/snippet}
 
-{#snippet categoryCell(row: Media)}
-	<span class="text-muted-foreground">{categoryText(row)}</span>
-{/snippet}
-
 {#snippet visibilityCell(row: Media)}
 	{@const isPublic = row.public_listed !== false && row.status !== 'hidden'}
 	<!-- Satu tombol bergeser (toggle) untuk Publik/Hidden. Saat diklik, knob
@@ -1123,7 +1085,7 @@
 			<Search size={15} class="text-muted-foreground" />
 			<input
 				class="w-full bg-transparent text-sm outline-none"
-				placeholder={tr("Cari nama, slug, atau kategori…")}
+					placeholder={tr("Cari nama, slug, kategori, atau email mitra…")}
 				aria-label={tr("Cari media")}
 				bind:value={search}
 				oninput={() => (page = 1)}
@@ -1247,17 +1209,15 @@
 		columns={[
 			{ key: 'select', label: '', width: '36px', render: selectCell },
 			{ key: 'name', label: tr('Media'), render: mediaCell },
-			{ key: 'category', label: 'Kategori', render: categoryCell },
+			{ key: 'domain_verified', label: tr('Verifikasi'), align: 'center' as const, width: '96px', render: verifyCell },
 			{ key: 'publication_mode', label: tr('Mode Integrasi'), render: publicationModeCell },
 			// Kolom "Jumlah Kata" dilepas atas permintaan pemilik produk: isinya
 			// (Sesuai Permintaan Klien / rentang kata) jarang dipakai saat memindai
 			// tabel, dan masih bisa dilihat di modal edit.
 			{ key: 'dewan_pers', label: 'Dewan Pers', render: dewanPersCell },
 			{ key: 'price', label: tr('Harga'), render: priceCell },
-			{ key: 'traffic', label: 'Trafik', align: 'right' as const, render: trafficCell },
-			{ key: 'health', label: 'Health', render: healthCell },
-			{ key: 'ai_trust', label: 'GEO / AI Trust', render: aiTrustCell },
-			{ key: 'da', label: 'DA', align: 'center' as const, render: daCell },
+			// Kategori, Trafik, Health, GEO/AI Trust, dan DA dipindah ke popup
+			// detail supaya tabel cukup untuk memindai identitas & status.
 			{ key: 'integration', label: 'Integrasi', render: integrationCell },
 			// Status visibilitas: Publik (tampil di katalog klien) / Hidden.
 			// Satu tombol bergeser (toggle) supaya tidak dua tombol berdampingan.
@@ -1268,7 +1228,7 @@
 		rowKey={(row: Media) => row.id}
 		{loading}
 		empty={tr("Belum ada media. Tambahkan media pertama.")}
-		minWidth="1500px"
+		minWidth="1150px"
 		onRowClick={(row: Media) => openEdit(row)}
 	/>
 
@@ -1341,6 +1301,69 @@
 							'—'}</strong
 					>{tr("— perubahan di sini otomatis tersinkron ke dashboard mitra (dan sebaliknya).")}</div>
 			{/if}
+
+			<div class="app-card mb-3 p-3">
+				<p class="mb-2 text-sm font-medium">{tr("Ringkasan media")}</p>
+				<div class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+					<div>
+						<p class="text-xs text-muted-foreground">Kategori</p>
+						<p class="font-medium">{categoryText(editing)}</p>
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">Trafik</p>
+						<div class="flex items-center gap-2">
+							<p class="font-medium">{compactNumber(editing.traffic_estimate ?? 0)}</p>
+							<button
+								class="rounded-lg p-1 hover:bg-secondary"
+								title="Cek trafik SimilarWeb"
+								aria-label={`Cek trafik ${editing.name}`}
+								disabled={swBusyId === editing.id || swBulkBusy}
+								onclick={() => editing && void checkSimilarWeb(editing)}
+							>
+								<RefreshCw size={12} />
+							</button>
+						</div>
+						{#if swVisits[editing.id] != null}
+							<p class="text-xs" style="color: var(--primary);">
+								SW: {(swVisits[editing.id] ?? 0).toLocaleString('id-ID')}/bln
+							</p>
+						{/if}
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">GEO / AI Trust</p>
+						{#if editing.seo_ai_trust != null}
+							<Badge tone={scoreTone(editing.seo_ai_trust)} value={`${editing.seo_ai_trust}/100`} />
+						{:else}
+							<Badge tone="neutral" label="belum diskor" />
+						{/if}
+						{#if editing.seo_checked_at}
+							<p class="mt-1 text-[11px] text-muted-foreground">{fmtDateTime(editing.seo_checked_at)}</p>
+						{/if}
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">DA</p>
+						{#if editing.seo_da != null}
+							<Badge tone={scoreTone(editing.seo_da)} value={`${editing.seo_da}`} />
+						{:else}
+							<Badge tone="neutral" label="belum ada" />
+						{/if}
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">{tr("Verifikasi domain")}</p>
+						{#if editing.domain_verified}
+							<p class="flex items-center gap-1.5 font-medium" style="color: var(--success);">
+								<ShieldCheck size={15} />{tr("Terverifikasi")}
+							</p>
+							{#if editing.domain_verified_at}
+								<p class="text-[11px] text-muted-foreground">{fmtDateTime(editing.domain_verified_at)}</p>
+							{/if}
+						{:else}
+							<p class="font-medium text-muted-foreground">-</p>
+							<p class="text-[11px] text-muted-foreground">{tr("Meta tag / TXT DNS belum ditemukan")}</p>
+						{/if}
+					</div>
+				</div>
+			</div>
 
 			<div class="app-card mb-3 p-3">
 				<div class="mb-2 flex items-center justify-between">

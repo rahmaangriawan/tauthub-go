@@ -324,7 +324,7 @@
 			<Search size={15} class="text-muted-foreground" />
 			<input
 				class="w-full bg-transparent text-sm outline-none"
-				placeholder={tr("Cari nama, slug, atau kategori…")}
+				placeholder={tr("Cari nama, slug, kategori, atau email mitra…")}
 				aria-label={tr("Cari media pending")}
 				bind:value={search}
 				oninput={() => (page = 1)}
