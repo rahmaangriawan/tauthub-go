@@ -16,6 +16,8 @@ import (
 // Register mendaftarkan semua handler job yang tersedia. Aman dipanggil lebih
 // dari sekali (pendaftaran menimpa kind yang sama).
 func Register(pool *pgxpool.Pool, cfg *config.Config) {
+	// Egress Cloudflare Worker untuk fallback crawl (opsional; kosong = langsung).
+	platformdomain.ConfigureCrawlEgress(cfg.CrawlEgressURL, cfg.CrawlEgressToken)
 	BrandFlow(pool, cfg).RegisterJobs()
 	Platform(pool, cfg).RegisterMessagingJobs()
 	Platform(pool, cfg).RegisterMediaJobs()

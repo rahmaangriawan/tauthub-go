@@ -8,6 +8,7 @@
 package platform
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -59,7 +60,68 @@ var (
 	crawlWaybackLast time.Time
 	crawlNewsMu      sync.Mutex
 	crawlNewsLast    time.Time
+	crawlEgressMu    sync.RWMutex
+	crawlEgressURL   string
+	crawlEgressToken string
 )
+
+// ConfigureCrawlEgress: set Cloudflare Worker egress (dari env
+// CRAWL_EGRESS_URL/CRAWL_EGRESS_TOKEN) saat boot. Kosong = langsung.
+func ConfigureCrawlEgress(url, token string) {
+	crawlEgressMu.Lock()
+	crawlEgressURL = strings.TrimRight(strings.TrimSpace(url), "/")
+	crawlEgressToken = strings.TrimSpace(token)
+	crawlEgressMu.Unlock()
+}
+
+type crawlEgressResponse struct {
+	Status  int               `json:"status"`
+	Headers map[string]string `json:"headers"`
+	Body    string            `json:"body"`
+	Error   string            `json:"error"`
+}
+
+// crawlEgressGet: ambil URL lewat Cloudflare Worker. Dipakai untuk situs media
+// yang menolak IP datacenter. Return ok=false bila egress tidak dikonfigurasi
+// atau gagal — pemanggil lalu jatuh ke koneksi langsung.
+func crawlEgressGet(ctx context.Context, target string) (int, http.Header, string, bool) {
+	crawlEgressMu.RLock()
+	base, token := crawlEgressURL, crawlEgressToken
+	crawlEgressMu.RUnlock()
+	if base == "" || token == "" {
+		return 0, nil, "", false
+	}
+	payload, err := json.Marshal(map[string]string{"url": target})
+	if err != nil {
+		return 0, nil, "", false
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/", bytes.NewReader(payload))
+	if err != nil {
+		return 0, nil, "", false
+	}
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("x-crawl-token", token)
+	// SafeClient: resolusi DNS publik (1.1.1.1/8.8.8.8) supaya workers.dev
+	// tidak dibajak blockpage ISP lokal.
+	resp, err := security.SafeClient(20 * time.Second).Do(req)
+	if err != nil {
+		return 0, nil, "", false
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, crawlFallbackBodyLimit))
+	if resp.StatusCode != http.StatusOK {
+		return 0, nil, "", false
+	}
+	var out crawlEgressResponse
+	if json.Unmarshal(body, &out) != nil || out.Error != "" || out.Status == 0 {
+		return 0, nil, "", false
+	}
+	hdr := http.Header{}
+	for k, v := range out.Headers {
+		hdr.Set(k, v)
+	}
+	return out.Status, hdr, out.Body, true
+}
 
 // crawlMeasureFallback: ukur jumlah artikel 7 hari terakhir tanpa Crawlhub.
 func (d *Deps) crawlMeasureFallback(ctx context.Context, websiteURL string) crawlFallbackResult {
@@ -206,6 +268,16 @@ func crawlFallbackGetWith(ctx context.Context, target string, headers map[string
 	return resp.StatusCode, resp.Header, string(body), nil
 }
 
+// crawlFallbackGetSite: request ke SITUS MEDIA. Egress Cloudflare dicoba lebih
+// dulu (IP-nya biasanya tidak diblokir WAF mitra); bila egress tidak
+// dikonfigurasi/gagal, jatuh ke koneksi langsung dari server.
+func crawlFallbackGetSite(ctx context.Context, target string) (int, http.Header, string, error) {
+	if status, hdr, body, ok := crawlEgressGet(ctx, target); ok {
+		return status, hdr, body, nil
+	}
+	return crawlFallbackGet(ctx, target)
+}
+
 // crawlRetryAfter: detik dari header Retry-After, dibatasi agar tidak menahan
 // job terlalu lama. Nilai bukan angka (tanggal HTTP) diabaikan.
 func crawlRetryAfter(raw string, fallback time.Duration) time.Duration {
@@ -323,7 +395,7 @@ func crawlParseRobots(body string) crawlRobots {
 }
 
 func crawlFetchRobots(ctx context.Context, origin string) (crawlRobots, bool, error) {
-	status, _, body, err := crawlFallbackGet(ctx, origin+"/robots.txt")
+	status, _, body, err := crawlFallbackGetSite(ctx, origin+"/robots.txt")
 	if err != nil {
 		return crawlRobots{}, false, err
 	}
@@ -362,7 +434,7 @@ func crawlWPPosts(ctx context.Context, origin string, robots crawlRobots, cutoff
 		if strings.Contains(a.base, "?") {
 			sep = "&"
 		}
-		status, hdr, _, err := crawlFallbackGet(ctx, a.base+sep+q.Encode())
+		status, hdr, _, err := crawlFallbackGetSite(ctx, a.base+sep+q.Encode())
 		if err != nil {
 			continue
 		}
@@ -382,7 +454,7 @@ func crawlWPPosts(ctx context.Context, origin string, robots crawlRobots, cutoff
 		// Server tanpa header: hitung maksimal 100 post terbaru dalam rentang.
 		q.Set("per_page", "100")
 		q.Set("_fields", "date")
-		status, _, body, err := crawlFallbackGet(ctx, a.base+sep+q.Encode())
+		status, _, body, err := crawlFallbackGetSite(ctx, a.base+sep+q.Encode())
 		if err != nil || status != http.StatusOK {
 			continue
 		}
@@ -431,7 +503,7 @@ func crawlDiscoverFeed(ctx context.Context, origin string, robots crawlRobots) s
 	if !robots.allowed("/") {
 		return ""
 	}
-	status, _, body, err := crawlFallbackGet(ctx, origin+"/")
+	status, _, body, err := crawlFallbackGetSite(ctx, origin+"/")
 	if err != nil || status != http.StatusOK {
 		return ""
 	}
@@ -473,7 +545,7 @@ func crawlFeedPosts(ctx context.Context, origin string, robots crawlRobots, cuto
 		if parseErr != nil || !robots.allowed(parsed.Path) {
 			continue
 		}
-		status, _, body, err := crawlFallbackGet(ctx, target)
+		status, _, body, err := crawlFallbackGetSite(ctx, target)
 		if err != nil {
 			lastErr = err
 			continue
@@ -544,7 +616,7 @@ func crawlSitemapPosts(ctx context.Context, origin string, robots crawlRobots, c
 		if !robots.allowed(path) {
 			continue
 		}
-		status, _, body, err := crawlFallbackGet(ctx, origin+path)
+		status, _, body, err := crawlFallbackGetSite(ctx, origin+path)
 		if err != nil {
 			lastErr = err
 			continue
@@ -574,7 +646,7 @@ func crawlSitemapPosts(ctx context.Context, origin string, robots crawlRobots, c
 				if parseErr != nil || !robots.allowed(child.Path) {
 					continue
 				}
-				childStatus, _, childBody, childErr := crawlFallbackGet(ctx, loc)
+				childStatus, _, childBody, childErr := crawlFallbackGetSite(ctx, loc)
 				if childErr != nil || childStatus != http.StatusOK {
 					continue
 				}

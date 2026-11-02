@@ -13,11 +13,11 @@ import (
 // Config adalah port dari src/lib/config.server.ts (fail-fast di startup).
 // Nilai default mengikuti kontrak app lama — lihat REWRITE/01_BACKEND_GO.md §2.
 type Config struct {
-	AppEnv   string
-	AppName  string
-	Version  string
-	Port     string
-	Secret   string
+	AppEnv  string
+	AppName string
+	Version string
+	Port    string
+	Secret  string
 
 	AccessTokenMinutes  int
 	RefreshTokenMinutes int
@@ -68,6 +68,11 @@ type Config struct {
 	VAPIDSubject    string
 	// PushWorkers: jumlah pengiriman paralel di worker push (default 16).
 	PushWorkers int
+
+	// Crawl egress (Cloudflare Worker) untuk fallback Content Velocity saat IP
+	// server diblokir WAF mitra. Kosong → fallback memakai koneksi langsung.
+	CrawlEgressURL   string
+	CrawlEgressToken string
 }
 
 func Load() (*Config, error) {
@@ -87,6 +92,9 @@ func Load() (*Config, error) {
 		DBPassword:  os.Getenv("DB_PASSWORD"),
 
 		CmsEncryptionSecret: os.Getenv("CMS_ENCRYPTION_SECRET"),
+
+		CrawlEgressURL:   os.Getenv("CRAWL_EGRESS_URL"),
+		CrawlEgressToken: os.Getenv("CRAWL_EGRESS_TOKEN"),
 	}
 
 	var err error
