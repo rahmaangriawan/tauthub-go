@@ -20,6 +20,7 @@
 		scoreTone,
 		categoryText,
 		AUDIT_LABEL,
+		humanizeAuditAction,
 		auditTone,
 		type AuditItem,
 		type Breakdown
@@ -463,13 +464,13 @@
 				<p class="text-xs text-muted-foreground">{tr("Belum ada aktivitas audit untuk media ini.")}</p>
 			{:else}
 				<div class="max-h-60 space-y-2 overflow-y-auto pr-1">
-					{#each detailAudit as a (a.id)}
-						<div class="flex flex-wrap items-center justify-between gap-3">
-							<Badge tone={auditTone(a.action)} label={AUDIT_LABEL[a.action] ?? a.action} />
-							<span class="text-xs text-muted-foreground">{a.actor_email ?? '—'}</span>
-							<span class="text-xs text-muted-foreground">{fmtDateTime(a.created_at)}</span>
-						</div>
-					{/each}
+						{#each detailAudit as a (a.id)}
+							<div class="flex flex-wrap items-center justify-between gap-3">
+								<Badge tone={auditTone(a.action)} label={AUDIT_LABEL[a.action] ?? humanizeAuditAction(a.action)} />
+								<span class="text-xs text-muted-foreground">{a.actor_email ?? '—'}</span>
+								<span class="text-xs text-muted-foreground">{fmtDateTime(a.created_at)}</span>
+							</div>
+						{/each}
 				</div>
 			{/if}
 		</div>

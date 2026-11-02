@@ -2956,6 +2956,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Riwayat Transaksi": "Transaction History",
   "Riwayat attempts": "Attempts history",
   "Riwayat audit": "Audit history",
+  "belum diisi": "not filled in",
   "Riwayat auto-replacement": "Auto-replacement history",
   "Riwayat callback adaptor": "Adapter callback history",
   "Riwayat distribusi artikel terbaru untuk media Anda": "Recent article distribution history for your media",

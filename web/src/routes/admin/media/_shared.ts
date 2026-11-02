@@ -172,20 +172,83 @@ export type AuditItem = {
 };
 
 export const AUDIT_LABEL: Record<string, string> = {
-	'media.restored': 'Dipulihkan',
-	'media.archived': 'Diarsipkan',
-	'media.hidden': 'Disembunyikan dari mitra',
-	'media.deleted': 'Dihapus permanen',
-	'media.updated': 'Diperbarui',
+	// Siklus pengajuan media.
+	'media.submitted': 'Diajukan mitra',
+	'media.resubmitted': 'Diajukan ulang oleh mitra',
+	'media.approved': 'Disetujui',
+	'media.rejected': 'Ditolak',
+	'media.activated': 'Diaktifkan',
+	'media.created': 'Media dibuat',
+	'media.updated': 'Media diperbarui',
 	'media.da_updated': 'DA diperbarui manual',
-	'media.created': 'Dibuat',
-	// Perubahan konfigurasi oleh mitra (satu entri per field yang berubah).
-	'media.setting_changed': 'Pengajuan perubahan'
+	'media.deleted': 'Dihapus permanen',
+	'media.archived': 'Diarsipkan',
+	'media.restored': 'Dipulihkan',
+	'media.hidden': 'Disembunyikan dari mitra',
+	// Verifikasi domain & pemantauan.
+	'media.domain_verified': 'Domain terverifikasi',
+	'media.domain_changed': 'Domain diubah',
+	'media.domain_down': 'Domain tidak merespons',
+	'media.crawl_blocked': 'Crawler diblokir',
+	'media.suspended': 'Domain disuspend',
+	'media.unsuspended': 'Suspend dicabut',
+	'media.violation_recorded': 'Pelanggaran dicatat',
+	'media.violation_revoked': 'Pelanggaran dicabut',
+	// Pemeriksaan metrik.
+	'media.seo_metrics_checked': 'Metrik SEO diperiksa',
+	'media.seo_refresh_one': 'Cek SEO satu media',
+	'media.seo_refresh_all': 'Cek SEO semua media',
+	'media.seo_refresh_cancelled': 'Cek SEO dibatalkan',
+	'media.similarweb_checked': 'Trafik SimilarWeb diperiksa',
+	'media.similarweb_refresh_all': 'Cek SimilarWeb semua media',
+	'media.geo_checked': 'GEO/AI Trust diperiksa',
+	'media.geo_refresh_one': 'Cek GEO/AI Trust satu media',
+	// Pengaturan dan administrasi.
+	'media.setting_changed': 'Pengajuan perubahan',
+	'media.negotiated': 'Harga dinegosiasikan',
+	'media.price_confirmed': 'Harga dikonfirmasi',
+	'media.publication_mode_changed': 'Mode publikasi diubah',
+	'media.link_kind_changed': 'Jenis tautan diubah',
+	'media.standard_created': 'Standar artikel dibuat',
+	'media.standard_updated': 'Standar artikel diubah',
+	'media.standard_deleted': 'Standar artikel dihapus',
+	'media.dewan_pers_doc_uploaded': 'Dokumen Dewan Pers diunggah',
+	'media.test_connection': 'Koneksi integrasi diuji',
+	'platform.media.created': 'Media dibuat admin',
+	'platform.media_summary_regenerated': 'Ringkasan media dibuat ulang'
 };
 
+/** Aksi audit baru yang belum punya label tetap terbaca: "media.foo_bar"
+ *  menjadi "Foo bar", bukan kode mentah. */
+export function humanizeAuditAction(action: string): string {
+	const name = action
+		.replace(/^(platform\.)?media\./, '')
+		.replace(/[._]+/g, ' ')
+		.trim();
+	return name ? name.charAt(0).toUpperCase() + name.slice(1) : action;
+}
+
 export function auditTone(action: string): 'neutral' | 'accent' | 'success' | 'warning' | 'danger' {
-	if (action === 'media.restored') return 'success';
-	if (action === 'media.archived') return 'danger';
+	if (
+		action === 'media.restored' ||
+		action === 'media.approved' ||
+		action === 'media.domain_verified' ||
+		action === 'media.unsuspended' ||
+		action === 'media.activated'
+	)
+		return 'success';
+	if (
+		action === 'media.archived' ||
+		action === 'media.deleted' ||
+		action === 'media.rejected' ||
+		action === 'media.suspended' ||
+		action === 'media.violation_recorded' ||
+		action === 'media.domain_down' ||
+		action === 'media.crawl_blocked'
+	)
+		return 'danger';
+	if (action === 'media.submitted' || action === 'media.resubmitted' || action === 'media.setting_changed')
+		return 'accent';
 	return 'neutral';
 }
 

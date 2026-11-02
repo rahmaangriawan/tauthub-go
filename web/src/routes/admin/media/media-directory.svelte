@@ -26,6 +26,7 @@
 		MEDIA_TIERS,
 		categoryText,
 		AUDIT_LABEL,
+		humanizeAuditAction,
 		auditTone,
 		type AuditItem,
 		type Media,
@@ -1831,7 +1832,7 @@
 
 			<!-- ───────────── Kolom kanan: monitoring & administrasi ───────────── -->
 			{#if editing}
-				<div class="space-y-3.5">
+				<div class="space-y-3.5 lg:row-span-2">
 					{@render catalogSettings()}
 					{@render partnerSettings()}
 
@@ -2072,37 +2073,39 @@
 						{/if}
 					</div>
 
-					<div class="mw-panel">
-						<h3 class="mw-ptitle mb-2">{tr("Riwayat audit")}</h3>
-						{#if detailLoading}
-							<p class="text-xs text-muted-foreground">{tr("Memuat…")}</p>
-						{:else if detailAudit === null}
-							<p class="text-xs text-muted-foreground">—</p>
-						{:else if detailAudit.length === 0}
-							<p class="text-xs text-muted-foreground">{tr("Belum ada aktivitas untuk media ini.")}</p>
-						{:else}
-							<div class="max-h-72 overflow-y-auto pr-1">
-								{#each detailAudit as a (a.id)}
-									<div class="mw-audit-row">
-										<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
-											<Badge tone={auditTone(a.action)} label={AUDIT_LABEL[a.action] ?? a.action} />
-											<span class="text-[11px] text-muted-foreground">{fmtDateTime(a.created_at)}</span>
-										</div>
-										{#if a.detail?.label}
-											<p class="mt-1 text-xs leading-snug">
-												<span class="font-medium">{a.detail.label}:</span>
-												<span class="text-muted-foreground">{a.detail.from || '(kosong)'}</span>
-												<span style="color: var(--primary);"> → {a.detail.to || '(kosong)'}</span>
-											</p>
-										{/if}
-										{#if a.actor_email}
-											<p class="text-[11px] text-muted-foreground">{a.actor_email}</p>
-										{/if}
+				</div>
+
+				<!-- Riwayat audit: kolom kiri, tepat di bawah form. -->
+				<div class="mw-panel lg:col-start-1 lg:row-start-2">
+					<h3 class="mw-ptitle mb-2">{tr("Riwayat audit")}</h3>
+					{#if detailLoading}
+						<p class="text-xs text-muted-foreground">{tr("Memuat…")}</p>
+					{:else if detailAudit === null}
+						<p class="text-xs text-muted-foreground">—</p>
+					{:else if detailAudit.length === 0}
+						<p class="text-xs text-muted-foreground">{tr("Belum ada aktivitas untuk media ini.")}</p>
+					{:else}
+						<div class="max-h-80 space-y-1 overflow-y-auto pr-1">
+							{#each detailAudit as a (a.id)}
+								<div class="mw-audit-row">
+									<div class="flex items-center justify-between gap-3">
+										<Badge tone={auditTone(a.action)} label={AUDIT_LABEL[a.action] ?? humanizeAuditAction(a.action)} />
+										<span class="shrink-0 text-[11px] text-muted-foreground">{fmtDateTime(a.created_at)}</span>
 									</div>
-								{/each}
-							</div>
-						{/if}
-					</div>
+									{#if a.detail?.label}
+										<p class="mt-1 text-xs leading-snug">
+											<span class="font-medium">{a.detail.label}:</span>
+											<span class="text-muted-foreground">{a.detail.from || tr('belum diisi')}</span>
+											<span style="color: var(--primary);"> → {a.detail.to || tr('belum diisi')}</span>
+										</p>
+									{/if}
+									{#if a.actor_email}
+										<p class="mt-0.5 text-[11px] text-muted-foreground">{tr('oleh')} {a.actor_email}</p>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</div>
