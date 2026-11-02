@@ -296,14 +296,29 @@ func (d *Deps) CrawlhubAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Crawl Ulang per baris: coba ukur sendiri dulu (WP API/feed/sitemap/
-		// Wayback). Untuk media yang diblokir WAF, ini sering satu-satunya jalur
-		// yang menghasilkan angka; Crawlhub baru dipanggil bila semuanya gagal.
+		// Google News/Wayback). Untuk media yang diblokir WAF, ini sering
+		// satu-satunya jalur yang menghasilkan angka; Crawlhub baru dipanggil
+		// bila semuanya gagal.
 		if website, wErr := d.igChMediaWebsite(r.Context(), mediaID); wErr == nil {
 			fb := d.crawlMeasureFallbackWithin(r.Context(), website, crawlFallbackDrainBudget)
-			_ = d.crawlStoreFallback(r.Context(), mediaID, website, fb)
+			storeErr := d.crawlStoreFallback(r.Context(), mediaID, website, fb)
 			if fb.Articles != nil {
+				if storeErr != nil {
+					// Jangan pernah klaim berhasil kalau angkanya tidak tersimpan:
+					// UI akan membaca crawl_targets, bukan respons ini.
+					writeJSON(w, http.StatusInternalServerError, map[string]any{
+						"ok": false, "error": fmt.Sprintf("terukur %d artikel, tetapi gagal disimpan: %s", *fb.Articles, storeErr.Error()),
+					})
+					return
+				}
 				writeJSON(w, http.StatusOK, map[string]any{
 					"ok": true, "requested": true, "articles_7d": *fb.Articles, "source": fb.Source,
+				})
+				return
+			}
+			if storeErr != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]any{
+					"ok": false, "error": "gagal menyimpan status crawl: " + storeErr.Error(),
 				})
 				return
 			}
@@ -649,8 +664,10 @@ func (d *Deps) igChDrainCrawlJobs(ctx context.Context, limit int) int {
 		if !outcome.OK || crawlArticlesPtr(outcome.Articles7d) == nil {
 			if website, wErr := d.igChMediaWebsite(ctx, mediaID); wErr == nil {
 				fb := d.crawlMeasureFallbackWithin(ctx, website, crawlFallbackDrainBudget)
-				_ = d.crawlStoreFallback(ctx, mediaID, website, fb)
-				if fb.Articles != nil {
+				if storeErr := d.crawlStoreFallback(ctx, mediaID, website, fb); storeErr != nil {
+					outcome.OK = false
+					outcome.Error = "gagal menyimpan hasil fallback: " + storeErr.Error()
+				} else if fb.Articles != nil {
 					outcome.OK = true
 					outcome.Articles7d = *fb.Articles
 				}

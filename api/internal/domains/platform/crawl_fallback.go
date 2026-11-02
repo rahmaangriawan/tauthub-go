@@ -189,7 +189,7 @@ func (d *Deps) crawlStoreFallback(ctx context.Context, mediaID, websiteURL strin
 		INSERT INTO crawl_targets (media_id, website_url, active, articles_7d, confidence, source, last_crawled_at, last_status, consecutive_failures, last_error, updated_at)
 		VALUES ($1, $2, TRUE, $3, $4, $5,
 		        CASE WHEN $3::integer IS NOT NULL THEN NOW() ELSE NULL END,
-		        $6, CASE WHEN $6 = 'ok' THEN 0 ELSE 1 END, $7, NOW())
+		        $6::text, CASE WHEN $6::text = 'ok' THEN 0 ELSE 1 END, $7, NOW())
 		ON CONFLICT (media_id) DO UPDATE SET
 		  website_url = EXCLUDED.website_url,
 		  articles_7d = COALESCE(EXCLUDED.articles_7d, crawl_targets.articles_7d),
