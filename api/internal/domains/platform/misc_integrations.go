@@ -570,6 +570,11 @@ func (d *Deps) CrawlhubTargets(w http.ResponseWriter, r *http.Request) {
 }
 
 // CrawlhubTargetsSync: POST /v1/platform/crawlhub/targets
+//
+// Sengaja TIDAK memproses job di dalam request HTTP: fallback per media bisa
+// memakan 10–15 detik, dan 10 job sekaligus melewati timeout proxy (gejalanya
+// "Tidak dapat terhubung ke server API"). Cukup enqueue; worker
+// (`crawl_target_sync`) memproses di latar belakang dan UI memantau hasilnya.
 func (d *Deps) CrawlhubTargetsSync(w http.ResponseWriter, r *http.Request) {
 	_, _, ok := d.adminGuard(w, r, "")
 	if !ok {
@@ -583,15 +588,7 @@ func (d *Deps) CrawlhubTargetsSync(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	processed, measured := d.igChDrainCrawlJobs(r.Context(), 10)
-	remaining := enqueued - processed
-	if remaining < 0 {
-		remaining = 0
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"ok": true, "enqueued": enqueued, "processed": processed,
-		"measured": measured, "remaining": remaining,
-	})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "enqueued": enqueued})
 }
 
 // igChEnqueueCrawlTargetSyncs: port enqueueCrawlTargetSyncs (maks limit).
@@ -639,66 +636,6 @@ func (d *Deps) igChEnqueueCrawlTargetSyncs(ctx context.Context, limit int) (int,
 		enqueued++
 	}
 	return enqueued, nil
-}
-
-// igChDrainCrawlJobs: proses sampai `limit` job crawl_target_sync pending.
-// Return (processed, measured): measured = job yang menghasilkan angka baru.
-func (d *Deps) igChDrainCrawlJobs(ctx context.Context, limit int) (int, int) {
-	cfg, err := d.igChLoadConfig(ctx)
-	if err != nil || !cfg.igConfigured() {
-		return 0, 0
-	}
-	processed := 0
-	measured := 0
-	for i := 0; i < limit; i++ {
-		job, jErr := d.queryRow(ctx,
-			`SELECT id, payload FROM jobs WHERE kind = 'crawl_target_sync' AND status = 'pending'
-			 ORDER BY run_at ASC NULLS FIRST, created_at ASC LIMIT 1`)
-		if jErr != nil || job == nil {
-			break
-		}
-		jobID := job.strOr("id", "")
-		if _, cErr := d.execRows(ctx, "UPDATE jobs SET status = 'running', started_at = NOW() WHERE id = $1 AND status = 'pending'", jobID); cErr != nil {
-			break
-		}
-		payload := job.jsonField("payload")
-		mediaID := ""
-		if m, isMap := payload.(map[string]any); isMap {
-			if s, isString := m["mediaId"].(string); isString {
-				mediaID = s
-			}
-		}
-		// Coba ukur sendiri dulu (WP API → feed → sitemap → Google News →
-		// Wayback). Untuk media yang diblokir WAF ini jalur tercepat dan sering
-		// satu-satunya yang menghasilkan angka; Crawlhub baru dipanggil bila
-		// semuanya gagal.
-		outcome := igChSyncOutcome{}
-		if website, wErr := d.igChMediaWebsite(ctx, mediaID); wErr == nil {
-			fb := d.crawlMeasureFallbackWithin(ctx, website, crawlFallbackDrainBudget)
-			if storeErr := d.crawlStoreFallback(ctx, mediaID, website, fb); storeErr != nil {
-				outcome.OK = false
-				outcome.Error = "gagal menyimpan hasil fallback: " + storeErr.Error()
-			} else if fb.Articles != nil {
-				outcome.OK = true
-				outcome.Articles7d = *fb.Articles
-			}
-		}
-		if !outcome.OK || crawlArticlesPtr(outcome.Articles7d) == nil {
-			outcome = d.igChSyncCrawlTarget(ctx, cfg, mediaID)
-		}
-		if outcome.OK {
-			if crawlArticlesPtr(outcome.Articles7d) != nil {
-				measured++
-			}
-			_ = d.exec(ctx, "UPDATE jobs SET status = 'completed', finished_at = NOW() WHERE id = $1", jobID)
-		} else {
-			_ = d.exec(ctx,
-				"UPDATE jobs SET status = 'failed', last_error = $1, finished_at = NOW() WHERE id = $2",
-				ptTruncate(outcome.Error, 1000), jobID)
-		}
-		processed++
-	}
-	return processed, measured
 }
 
 // ---------- ga4-configs ----------
