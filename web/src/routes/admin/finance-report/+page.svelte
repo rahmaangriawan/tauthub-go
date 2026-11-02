@@ -6,7 +6,7 @@
 	// laba — jadi kompensasi saldo dan invoice manual ditampilkan terpisah.
 	import { onMount } from 'svelte';
 	import {
-		ArrowLeftRight, Download, RotateCcw, RotateCw, TriangleAlert
+		ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Download, Layers, RotateCcw, RotateCw, TriangleAlert
 	} from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
@@ -20,6 +20,7 @@
 	import { rp } from '$lib/credits/rupiah';
 	import { platformError, isAccessDenied, ACCESS_DENIED } from '../_platform';
 	import CashflowBars from './_cashflow-bars.svelte';
+	import KpiSparkline from './_kpi-sparkline.svelte';
 
 	type Entry = {
 		id: string;
@@ -46,8 +47,10 @@
 		compensation_credits: number; compensation_count: number;
 	};
 	type Monthly = { month: string; label: string; money_in: number; money_out: number };
+	type SparkPoint = { label: string; money_in: number; money_out: number; net: number };
 	type Report = {
 		from: string; to: string; summary: Summary; monthly: Monthly[];
+		sparkline?: { granularity: 'day' | 'month'; points: SparkPoint[] };
 		entries: Entry[]; total: number; limit: number; offset: number;
 	};
 
@@ -214,6 +217,24 @@
 		Boolean(!loading && !data && (isAccessDenied(error) || error.includes('tidak memiliki akses')))
 	);
 	const netNegative = $derived(Boolean(summary && summary.net < 0));
+	const sparkPoints = $derived(data?.sparkline?.points ?? []);
+	const sparkIn = $derived(sparkPoints.map((p) => ({ label: p.label, value: p.money_in })));
+	const sparkOut = $derived(sparkPoints.map((p) => ({ label: p.label, value: p.money_out })));
+	const sparkNet = $derived(sparkPoints.map((p) => ({ label: p.label, value: p.net })));
+	const netLabel = $derived(
+		!summary ? '' : summary.net === 0 ? tr('Seimbang') : summary.net > 0 ? tr('Surplus') : tr('Defisit')
+	);
+
+	// Kompatibilitas saat deploy: respons lama (sebelum field sparkline ada)
+	// tidak punya seri grafik. Ambil ulang sekali supaya sparkline langsung
+	// terisi tanpa perlu reload manual.
+	let sparklineBackfill = false;
+	$effect(() => {
+		if (!sparklineBackfill && data && !data.sparkline) {
+			sparklineBackfill = true;
+			void load(pageNum);
+		}
+	});
 </script>
 
 <section>
@@ -238,8 +259,8 @@
 		{/if}
 
 		<!-- Filter periode & rentang tanggal -->
-		<div class="app-card mt-5 flex flex-col gap-3 px-4 py-3.5 xl:flex-row xl:items-end xl:justify-between">
-			<div class="flex min-w-0 flex-wrap items-center gap-2 xl:pb-0.5">
+		<div class="app-card mt-5 flex flex-col gap-3 px-4 py-3.5 xl:flex-row xl:items-center xl:justify-between">
+			<div class="flex min-w-0 flex-wrap items-center gap-2">
 				<span class="shrink-0 text-xs font-medium text-muted-foreground">{tr("Periode")}</span>
 				<div class="periodScroll">
 					<div class="periodGroup" role="group" aria-label={tr("Periode laporan")}>
@@ -273,39 +294,62 @@
 		<!-- Tiga angka utama -->
 		<div class="mt-5 grid gap-4 md:grid-cols-3">
 			<article class="kpiCard kpiIn">
-				<div class="flex items-start justify-between gap-2">
-					<span class="text-[13px] font-semibold text-muted-foreground">{tr("Uang Masuk")}</span>
+				<div class="flex items-center justify-between gap-2">
+					<div class="flex min-w-0 items-center gap-2.5">
+						<span class="kpiIcon kpiIconIn"><ArrowDownLeft size={15} /></span>
+						<span class="kpiLabel">{tr("Uang Masuk")}</span>
+					</div>
 					<span class="kpiBadge kpiBadgeIn">{fmtNum(summary.money_in_count)} {tr("topup")}</span>
 				</div>
-				<p class="kpiValue mt-2.5">{rp(summary.money_in)}</p>
-				<p class="mt-auto pt-2.5 text-[11.5px] leading-relaxed text-muted-foreground">{tr("Topup klien yang sudah lunas pada periode ini.")}</p>
+				<p class="kpiValue kpiValueIn mt-3">{rp(summary.money_in)}</p>
+				<div class="mt-auto flex items-end justify-between gap-3 pt-3">
+					<p class="kpiDesc">{tr("Total top-up yang diterima pada periode ini.")}</p>
+					<KpiSparkline points={sparkIn} color="#5dae8b" />
+				</div>
 			</article>
 
 			<article class="kpiCard kpiOut">
-				<div class="flex items-start justify-between gap-2">
-					<span class="text-[13px] font-semibold text-muted-foreground">{tr("Uang Keluar")}</span>
+				<div class="flex items-center justify-between gap-2">
+					<div class="flex min-w-0 items-center gap-2.5">
+						<span class="kpiIcon kpiIconOut"><ArrowUpRight size={15} /></span>
+						<span class="kpiLabel">{tr("Uang Keluar")}</span>
+					</div>
 					<span class="kpiBadge kpiBadgeOut">{fmtNum(summary.money_out_count)} {tr("pencairan")}</span>
 				</div>
-				<p class="kpiValue mt-2.5">{rp(summary.money_out)}</p>
-				<p class="mt-auto pt-2.5 text-[11.5px] leading-relaxed text-muted-foreground">
-					{tr("Pencairan mitra yang sudah ditransfer (net setelah biaya).")}
-					{#if summary.money_out_fee > 0}
-						<span class="block">{tr("Bruto")} {rp(summary.money_out_gross)} · {tr("biaya transfer")} {rp(summary.money_out_fee)}</span>
-					{/if}
-				</p>
+				<p class="kpiValue kpiValueOut mt-3">{rp(summary.money_out)}</p>
+				<div class="mt-auto flex items-end justify-between gap-3 pt-3">
+					<p class="kpiDesc">
+						{tr("Total pencairan mitra pada periode ini.")}
+						{#if summary.money_out_fee > 0}
+							<span class="block">{tr("Bruto")} {rp(summary.money_out_gross)} · {tr("biaya transfer")} {rp(summary.money_out_fee)}</span>
+						{/if}
+					</p>
+					<KpiSparkline points={sparkOut} color="#da5c53" />
+				</div>
 			</article>
 
-			<article class="kpiCard kpiNet" class:kpiNetNegative={netNegative}>
-				<div class="flex items-start justify-between gap-2">
-					<Tooltip content={tr("Uang masuk dikurangi uang keluar pada periode ini. Ini arus kas, bukan laba.")}>
-						<span class="text-[13px] font-semibold text-muted-foreground">{tr("Arus Kas Bersih")}</span>
-					</Tooltip>
-					<span class="kpiBadge kpiBadgeNet" class:kpiBadgeNetNeg={netNegative}>{netNegative ? tr('Defisit') : tr('Surplus')}</span>
+			<article class="kpiCard kpiNet">
+				<div class="flex items-center justify-between gap-2">
+					<div class="flex min-w-0 items-center gap-2.5">
+						<span class="kpiIcon kpiIconNet"><Layers size={15} /></span>
+						<Tooltip content={tr("Uang masuk dikurangi uang keluar pada periode ini. Ini arus kas, bukan laba.")}>
+							<span class="kpiLabel">{tr("Arus Kas Bersih")}</span>
+						</Tooltip>
+					</div>
+					<span
+						class="kpiBadge"
+						class:kpiBadgeNet={summary.net > 0}
+						class:kpiBadgeNetNeg={summary.net < 0}
+						class:kpiBadgeNetZero={summary.net === 0}
+					>{netLabel}</span>
 				</div>
-				<p class="kpiValue kpiValueNet mt-2.5" class:kpiValueNegative={netNegative}>
+				<p class="kpiValue kpiValueNet mt-3">
 					{netNegative ? `− ${rp(Math.abs(summary.net))}` : rp(summary.net)}
 				</p>
-				<p class="mt-auto pt-2.5 text-[11.5px] leading-relaxed text-muted-foreground">{tr("Masuk − keluar pada periode ini.")}</p>
+				<div class="mt-auto flex items-end justify-between gap-3 pt-3">
+					<p class="kpiDesc">{tr("Selisih uang masuk dan keluar.")}</p>
+					<KpiSparkline points={sparkNet} color="var(--primary)" />
+				</div>
 			</article>
 		</div>
 
@@ -571,69 +615,111 @@
 		outline-offset: 1px;
 	}
 
-	/* KPI utama: angka sebagai fokus, tanpa ikon. Aksen warna hanya pada badge
-	   dan garis bawah tipis supaya arah arus terbaca tanpa ramai. */
+	/* KPI utama: nominal sebagai fokus, sparkline sebagai konteks tren.
+	   Warna semantik hanya pada nominal, badge, ikon, dan garis grafik. */
 	.kpiCard {
 		display: flex;
 		flex-direction: column;
-		min-height: 132px;
-		padding: 18px;
-		border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
-		border-radius: 12px;
+		min-height: 148px;
+		padding: 16px;
+		border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+		border-radius: 14px;
 		background: var(--card);
+		box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 	}
 	.kpiIn {
-		border-bottom: 2px solid color-mix(in srgb, #118c4f 42%, white);
+		background: color-mix(in srgb, #5dae8b 2%, var(--card));
+		border-color: color-mix(in srgb, #5dae8b 16%, var(--border));
 	}
 	.kpiOut {
-		border-bottom: 2px solid color-mix(in srgb, var(--destructive) 34%, white);
+		background: color-mix(in srgb, #da5c53 2%, var(--card));
+		border-color: color-mix(in srgb, #da5c53 15%, var(--border));
 	}
 	.kpiNet {
-		background: color-mix(in srgb, #118c4f 4%, var(--card));
-		border-color: color-mix(in srgb, #118c4f 22%, white);
+		background: color-mix(in srgb, var(--primary) 4%, var(--card));
+		border-color: color-mix(in srgb, var(--primary) 24%, white);
 	}
-	.kpiNetNegative {
-		background: color-mix(in srgb, var(--destructive) 4%, var(--card));
-		border-color: color-mix(in srgb, var(--destructive) 22%, white);
+	.kpiIcon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 auto;
+		width: 28px;
+		height: 28px;
+		border-radius: 9px;
+	}
+	.kpiIconIn {
+		background: color-mix(in srgb, #5dae8b 11%, white);
+		color: #5dae8b;
+	}
+	.kpiIconOut {
+		background: color-mix(in srgb, #da5c53 10%, white);
+		color: #da5c53;
+	}
+	.kpiIconNet {
+		background: var(--accent);
+		color: var(--primary);
+	}
+	.kpiLabel {
+		overflow: hidden;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--foreground);
+		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 	.kpiValue {
-		font-size: 28px;
+		font-size: 27px;
 		font-weight: 700;
 		line-height: 1.05;
 		letter-spacing: -0.02em;
 		color: var(--foreground);
 		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.kpiValueIn {
+		color: #5dae8b;
+	}
+	.kpiValueOut {
+		color: #da5c53;
 	}
 	.kpiValueNet {
-		color: #118c4f;
+		color: var(--primary);
 	}
-	.kpiValueNegative {
-		color: var(--destructive);
+	.kpiDesc {
+		min-width: 0;
+		font-size: 11.5px;
+		line-height: 1.45;
+		color: var(--muted-foreground);
 	}
 	.kpiBadge {
 		flex: 0 0 auto;
-		padding: 2px 8px;
+		padding: 3px 9px;
 		border-radius: 999px;
 		font-size: 11px;
 		font-weight: 600;
-		line-height: 1.5;
+		line-height: 1.45;
 		white-space: nowrap;
 	}
 	.kpiBadgeIn {
-		background: color-mix(in srgb, #118c4f 10%, white);
-		color: #118c4f;
+		background: color-mix(in srgb, #5dae8b 10%, white);
+		color: #5dae8b;
 	}
 	.kpiBadgeOut {
-		background: color-mix(in srgb, var(--destructive) 9%, white);
-		color: var(--destructive);
+		background: color-mix(in srgb, #da5c53 9%, white);
+		color: #da5c53;
 	}
 	.kpiBadgeNet {
-		background: color-mix(in srgb, #118c4f 10%, white);
-		color: #118c4f;
+		background: var(--accent);
+		color: var(--accent-foreground);
 	}
 	.kpiBadgeNetNeg {
-		background: color-mix(in srgb, var(--destructive) 9%, white);
-		color: var(--destructive);
+		background: color-mix(in srgb, #da5c53 9%, white);
+		color: #da5c53;
+	}
+	.kpiBadgeNetZero {
+		background: var(--secondary);
+		color: var(--muted-foreground);
 	}
 
 	/* Posisi Saat Ini: satu panel, empat kolom setara, dipisah garis tipis —

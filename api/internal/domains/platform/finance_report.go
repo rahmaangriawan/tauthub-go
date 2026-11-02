@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net/http"
@@ -261,6 +262,12 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	sparkline, err := d.finReportSparkline(ctx, fromDate, toDate, feeCfg)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+
 	// ---------- rincian arus kas ----------
 	entriesSQL := financeEntriesCTE + `
 		SELECT * FROM combined
@@ -313,14 +320,15 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"from":    fromDate.Format("2006-01-02"),
-		"to":      toDate.Format("2006-01-02"),
-		"summary": summary,
-		"monthly": monthly,
-		"entries": entries,
-		"total":   countRow.intOr("n", 0),
-		"limit":   limit,
-		"offset":  offset,
+		"from":      fromDate.Format("2006-01-02"),
+		"to":        toDate.Format("2006-01-02"),
+		"summary":   summary,
+		"monthly":   monthly,
+		"sparkline": sparkline,
+		"entries":   entries,
+		"total":     countRow.intOr("n", 0),
+		"limit":     limit,
+		"offset":    offset,
 	})
 }
 
@@ -351,4 +359,88 @@ func (d *Deps) finReportCSV(w http.ResponseWriter, rows []rowMap, toDate time.Ti
 	w.Header().Set("Content-Disposition",
 		`attachment; filename="tauthub-laporan-keuangan-`+toDate.Format("2006-01-02")+`.csv"`)
 	_, _ = w.Write([]byte(b.String()))
+}
+
+// finReportSparkline: seri ringkas untuk mini chart kartu KPI. Rentang sampai
+// 92 hari dipecah per hari; lebih panjang per bulan supaya grafiknya tidak
+// menjadi ratusan titik. Sumber angkanya sama persis dengan ringkasan di atas
+// (topup lunas dan settlement paid), bukan data contoh.
+func (d *Deps) finReportSparkline(ctx context.Context, from, to time.Time, feeCfg finFeeCfg) (map[string]any, error) {
+	days := int(to.Sub(from).Hours()/24) + 1
+	granularity := "day"
+	keyLayout := "2006-01-02"
+	pgLayout := "YYYY-MM-DD"
+	if days > 92 {
+		granularity = "month"
+		keyLayout = "2006-01"
+		pgLayout = "YYYY-MM"
+	}
+	fromTs := from
+	toExcl := to.AddDate(0, 0, 1)
+
+	inRows, err := d.queryRows(ctx, `
+		SELECT to_char(COALESCE(paid_at, created_at) AT TIME ZONE 'Asia/Jakarta', '`+pgLayout+`') AS bucket,
+		       COALESCE(SUM(amount), 0) AS total
+		FROM payment_transactions
+		WHERE purpose = 'topup' AND status = 'paid'
+		  AND COALESCE(paid_at, created_at) >= $1
+		  AND COALESCE(paid_at, created_at) < $2
+		GROUP BY 1`, fromTs, toExcl)
+	if err != nil {
+		return nil, err
+	}
+	outRows, err := d.queryRows(ctx, `
+		SELECT to_char(COALESCE(s.paid_at, s.updated_at) AT TIME ZONE 'Asia/Jakarta', '`+pgLayout+`') AS bucket,
+		       COALESCE(SUM(`+financeNetExpr+`), 0) AS total
+		FROM settlements s
+		WHERE s.status = 'paid'
+		  AND COALESCE(s.paid_at, s.updated_at) >= $1
+		  AND COALESCE(s.paid_at, s.updated_at) < $2
+		GROUP BY 1`, fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR)
+	if err != nil {
+		return nil, err
+	}
+
+	inByBucket := make(map[string]float64, len(inRows))
+	for _, row := range inRows {
+		inByBucket[row.strOr("bucket", "")] = row.numOr("total")
+	}
+	outByBucket := make(map[string]float64, len(outRows))
+	for _, row := range outRows {
+		outByBucket[row.strOr("bucket", "")] = row.numOr("total")
+	}
+
+	points := make([]map[string]any, 0, 96)
+	add := func(t time.Time) {
+		key := t.Format(keyLayout)
+		var label string
+		if granularity == "day" {
+			label = fmt.Sprintf("%d %s", t.Day(), financeMonthShort[int(t.Month())-1])
+		} else {
+			label = fmt.Sprintf("%s %02d", financeMonthShort[int(t.Month())-1], t.Year()%100)
+		}
+		in := inByBucket[key]
+		out := outByBucket[key]
+		points = append(points, map[string]any{
+			"label":     label,
+			"money_in":  finReportInt(in),
+			"money_out": finReportInt(out),
+			"net":       finReportInt(in - out),
+		})
+	}
+
+	if granularity == "day" {
+		for day := from; !day.After(to); day = day.AddDate(0, 0, 1) {
+			add(day)
+		}
+	} else {
+		cursor := time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, financeReportTZ)
+		end := time.Date(to.Year(), to.Month(), 1, 0, 0, 0, 0, financeReportTZ)
+		for !cursor.After(end) {
+			add(cursor)
+			cursor = cursor.AddDate(0, 1, 0)
+		}
+	}
+
+	return map[string]any{"granularity": granularity, "points": points}, nil
 }
