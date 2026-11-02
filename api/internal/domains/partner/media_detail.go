@@ -177,6 +177,8 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid max_links")
 		return
 	}
+	// Jenis tautan: allow_hyperlink false = nofollow (lihat media.go).
+	allowHyperlink, hasAllowHyperlink := boolField(body, "allow_hyperlink")
 	// Masa berlaku tautan: 0 = permanen, >0 = bulan.
 	linkDuration, hasLinkDuration := intField(body, "link_duration_months")
 	if hasLinkDuration && (linkDuration < 0 || linkDuration > 120) {
@@ -223,6 +225,9 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		if maxLinks != existingMax {
 			changed = true
 		}
+	}
+	if hasAllowHyperlink && allowHyperlink != existingAllowHyperlink(existing) {
+		changed = true
 	}
 	if hasLinkDuration && linkDuration != existing.intOr("link_duration_months", 12) {
 		changed = true
@@ -357,10 +362,10 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 	// tautan (max_links 0) atau belum punya nilai. Selain itu dibiarkan, supaya
 	// pengaturan "hanya nofollow" dari admin tidak terhapus setiap mitra menyimpan
 	// (form mitra selalu mengirim max_links).
-	if hasMaxLinks && (existing.intOr("max_links", 1) <= 0 || !existing.has("allow_hyperlink")) {
+	if setAllow, allowValue := partnerNextAllowHyperlink(existing, hasMaxLinks, maxLinks, hasAllowHyperlink, allowHyperlink); setAllow {
 		if err := d.exec(r.Context(),
 			"UPDATE media SET allow_hyperlink = $1, updated_at = NOW() WHERE id = $2 AND partner_id = $3",
-			maxLinks > 0, mediaID, partner.ID); err != nil {
+			allowValue, mediaID, partner.ID); err != nil {
 			d.writeErr(w, err)
 			return
 		}
@@ -563,6 +568,9 @@ func pendingChangesList(body map[string]any, existing rowMap) []mediaChange {
 	}
 	if v, ok := intField(body, "max_links"); ok {
 		add("max_links", "Batas Link", linkLimitLabel(existing.intOr("max_links", 1)), linkLimitLabel(v))
+	}
+	if v, ok := boolField(body, "allow_hyperlink"); ok {
+		add("allow_hyperlink", "Jenis Tautan", followKindLabel(existingAllowHyperlink(existing)), followKindLabel(v))
 	}
 	// Masa berlaku tautan: 0 = permanen, >0 = bulan. Inilah perubahan yang
 	// paling sering luput terlihat admin sebelum ringkasan ini diperbaiki.

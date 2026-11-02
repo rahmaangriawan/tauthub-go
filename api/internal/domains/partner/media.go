@@ -404,6 +404,12 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		maxLinks = v
 	}
+	// Jenis tautan: false = nofollow (tautan tetap boleh, rel nofollow ditambah
+	// otomatis saat ditulis dan saat terbit). Bawaan mengikuti max_links > 0.
+	allowHyperlink := maxLinks > 0
+	if v, present := boolField(body, "allow_hyperlink"); present && maxLinks > 0 {
+		allowHyperlink = v
+	}
 	// Masa berlaku tautan: 0 = permanen, >0 = bulan (bawaan permanen).
 	linkDuration := 0
 	if v, present := intField(body, "link_duration_months"); present {
@@ -470,7 +476,7 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 	if err := d.exec(r.Context(), `
 		INSERT INTO media (id, name, slug, category, media_type, description, traffic_estimate, max_links, allow_hyperlink, website_url, price, pricing_type, price_status, credit_cost, status, integration_type, partner_id, notes, publication_mode, bahasa_artikel, label_sponsor, word_count_mode, allow_embed, topik_terlarang, contoh_artikel_url, dewan_pers_verified, dewan_pers_note, dewan_pers_cert_no, created_by, link_duration_months)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'menunggu_review', $13, 'pending_review', $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
-		id, name, slug, legacyCategory, mediaType, ptrOrNil(description), traffic, maxLinks, maxLinks > 0,
+		id, name, slug, legacyCategory, mediaType, ptrOrNil(description), traffic, maxLinks, allowHyperlink,
 		ptrOrNil(websiteURL), price, pricingType, creditCost, integrationType, partner.ID, ptrOrNil(notes),
 		publicationMode, bahasaJSON, labelSponsor, wordCountMode, allowEmbed, topikJSON,
 		ptrOrNil(contohArtikel), dewanPersVerified, ptrOrNil(dewanPersNote), ptrOrNil(dewanPersCertNo), user.ID, linkDuration); err != nil {

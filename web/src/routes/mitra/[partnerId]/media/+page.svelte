@@ -24,7 +24,7 @@
 		id: string; name: string; category: string | null; categories: string[];
 		website_url: string | null; price: number; effective_price: number; client_price: number;
 		markup_percent: number; status: string; integration_type: string;
-		publication_mode: string; traffic_estimate: number; max_links: number | null;
+		publication_mode: string; traffic_estimate: number; max_links: number | null; allow_hyperlink?: boolean | null;
 		/** Masa berlaku tautan: 0 = permanen, >0 = bulan. */
 		link_duration_months?: number | null;
 		/** Izin subjudul: null = ikut tipe media. */
@@ -97,7 +97,7 @@
 		traffic_estimate: number; max_links: string; link_duration_months: string; description: string; notes: string;
 		allow_heading: string;
 		integration_type: string; publication_mode: string; bahasa_artikel: string[];
-		label_sponsor: string; word_count_mode: string; allow_embed: boolean;
+		label_sponsor: string; allow_hyperlink: boolean; word_count_mode: string; allow_embed: boolean;
 		topik_terlarang: string[]; topikQuery: string; contoh_artikel_url: string;
 	};
 	/** Pilihan dropdown: mode bawaan atau 'custom' (rentang angka sendiri). */
@@ -118,7 +118,7 @@
 		traffic_estimate: 0, max_links: '1', link_duration_months: '0', description: '', notes: '',
 		allow_heading: 'default',
 		integration_type: 'wordpress', publication_mode: 'draft',
-		bahasa_artikel: ['Indonesia'], label_sponsor: 'tidak_ada',
+		bahasa_artikel: ['Indonesia'], label_sponsor: 'tidak_ada', allow_hyperlink: true,
 		word_count_mode: 'sesuai_permintaan', allow_embed: false,
 		topik_terlarang: [], topikQuery: '', contoh_artikel_url: ''
 	});
@@ -155,10 +155,28 @@
 		JSON.stringify([
 			f.name, f.media_type, f.categories, f.website_url, f.adapter_url, f.price,
 			f.pricing_type, f.traffic_estimate, f.max_links, f.link_duration_months, f.description, f.notes,
-			f.integration_type, f.publication_mode, f.bahasa_artikel, f.label_sponsor,
+			f.integration_type, f.publication_mode, f.bahasa_artikel, f.label_sponsor, f.allow_hyperlink,
 			f.word_count_mode, customWordMin, customWordMax, f.allow_embed, f.topik_terlarang, f.contoh_artikel_url
 		]);
 	const isDirty = $derived(editingId !== null && formSnapshot !== comparableForm(form));
+
+	// Jenis tautan = kombinasi label_sponsor + allow_hyperlink. Jumlah backlink
+	// (max_links) diatur terpisah. Nofollow = tautan tetap boleh, tapi sistem
+	// menambahkan rel nofollow otomatis (artikel tidak ditolak).
+	type LinkKind = 'dofollow' | 'nofollow' | 'sponsored';
+	const LINK_KINDS: { value: LinkKind; label: string }[] = [
+		{ value: 'dofollow', label: 'Dofollow' },
+		{ value: 'nofollow', label: 'Nofollow' },
+		{ value: 'sponsored', label: 'Sponsored' }
+	];
+	const linkKind = $derived<LinkKind>(
+		form.label_sponsor === 'ada_sponsor' ? 'sponsored' : form.allow_hyperlink ? 'dofollow' : 'nofollow'
+	);
+	function setLinkKind(kind: LinkKind) {
+		form.label_sponsor = kind === 'sponsored' ? 'ada_sponsor' : 'tidak_ada';
+		form.allow_hyperlink = kind !== 'nofollow';
+		if (Number(form.max_links) < 1) form.max_links = '1';
+	}
 
 	// Saran kategori (maks 8) dari pool server, minus yang sudah dipilih.
 	const catQuery = $derived(form.categoryQuery.trim().toLowerCase());
@@ -809,6 +827,7 @@
 			publication_mode: m.publication_mode === 'publish' ? 'publish' : 'draft',
 			bahasa_artikel: m.bahasa_artikel.length ? [...m.bahasa_artikel] : ['Indonesia'],
 			label_sponsor: m.label_sponsor === 'ada_sponsor' ? 'ada_sponsor' : 'tidak_ada',
+			allow_hyperlink: m.allow_hyperlink ?? Number(m.max_links ?? 1) > 0,
 			word_count_mode: openWordCountMode(m.word_count_mode),
 			allow_embed: m.allow_embed === true,
 			allow_heading:
@@ -936,6 +955,7 @@
 				publication_mode: form.publication_mode,
 				bahasa_artikel: form.bahasa_artikel.length ? form.bahasa_artikel : ['Indonesia'],
 				label_sponsor: form.label_sponsor,
+				allow_hyperlink: form.allow_hyperlink,
 				word_count_mode: wordCountMode,
 				allow_embed: form.allow_embed,
 				// 'default' = jangan kirim, biarkan NULL (ikut tipe media).
@@ -2278,22 +2298,7 @@
 											</div>
 										</div>
 
-										<div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-											<div>
-												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Label sponsor')}</span>
-												<div>
-													<Select
-														bind:value={form.label_sponsor}
-														ariaLabel={tr('Label sponsor')}
-														minWidth={0}
-														fitContent
-														options={[
-															{ value: 'tidak_ada', label: tr('Tidak ada (tayang organik)') },
-															{ value: 'ada_sponsor', label: tr('Ada tag sponsor') }
-														]}
-													/>
-												</div>
-											</div>
+										<div class="grid grid-cols-1 gap-3.5">
 											<div>
 												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Topik terlarang')}</span>
 												{#if form.topik_terlarang.length > 0}
@@ -2600,6 +2605,27 @@
 									{/if}
 
 										<div class="space-y-3.5 pt-1">
+											<div>
+												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Jenis tautan')}</span>
+												<div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-0.5" role="group" aria-label={tr('Jenis tautan')}>
+													{#each LINK_KINDS as k (k.value)}
+														<button
+															type="button"
+															class="min-h-9 rounded-[10px] px-4 text-xs font-semibold transition-colors {linkKind === k.value ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}"
+															aria-pressed={linkKind === k.value}
+															onclick={() => setLinkKind(k.value)}>{k.label}</button
+														>
+													{/each}
+												</div>
+												<span class="mt-1 block text-xs text-muted-foreground">
+													{linkKind === 'dofollow'
+														? tr('Dofollow: tautan biasa ke website klien. Google ikut menghitungnya untuk SEO. Artikel boleh memuat tautan sampai batas di bawah.')
+														: linkKind === 'sponsored'
+															? tr('Sponsored: tautan diberi tanda iklan atau sponsor. Artikel boleh memuat tautan sampai batas di bawah.')
+															: tr('Nofollow: tautan ke website klien tetap boleh dipasang, tapi sistem memberinya tanda nofollow otomatis. Google tidak menghitungnya untuk SEO. Artikel tidak ditolak.')}
+												</span>
+											</div>
+
 											<div>
 												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Jumlah backlink yang diperbolehkan dalam artikel')}</span>
 												<div>
