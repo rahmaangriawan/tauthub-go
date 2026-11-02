@@ -30,6 +30,7 @@
 		kind: string;
 		counterparty: string;
 		reference: string;
+		external_id?: string;
 		method: string;
 		gross_amount: number;
 		fee_amount: number;
@@ -800,7 +801,7 @@
 								<td class="px-4 py-2.5">
 									<p class="font-medium">{entry.counterparty || '—'}</p>
 								</td>
-								<td class="px-4 py-2.5 font-mono text-xs text-muted-foreground">{entry.reference || '—'}</td>
+								<td class="px-4 py-2.5 font-mono text-xs text-muted-foreground" title={entry.external_id ? `${tr('ID transaksi')}: ${entry.external_id}` : undefined}>{entry.reference || '—'}</td>
 								<td class="px-4 py-2.5">{methodLabel(entry.method)}</td>
 								<td class="px-4 py-2.5 text-right">
 									<p class="font-semibold tabular-nums" style="color: {entry.direction === 'in' ? 'var(--success)' : 'var(--destructive)'};">

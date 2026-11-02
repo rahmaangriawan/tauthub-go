@@ -42,12 +42,13 @@ WITH combined AS (
 	       COALESCE(t.paid_at, t.created_at) AS occurred_at,
 	       'topup'::text AS kind,
 	       COALESCE(NULLIF(b.name, ''), b.client_name, '')::text AS counterparty,
-	       COALESCE(NULLIF(t.external_transaction_id, ''), NULLIF(t.reference, ''), '')::text AS reference,
+	       COALESCE(NULLIF(t.reference, ''), NULLIF(t.external_transaction_id, ''), '')::text AS reference,
 	       COALESCE(t.gateway_provider, '')::text AS method,
 	       t.amount::numeric AS gross_amount,
 	       0::numeric AS fee_amount,
 	       t.amount::numeric AS amount,
-	       t.status::text AS status
+	       t.status::text AS status,
+	       COALESCE(t.external_transaction_id, '')::text AS external_id
 	FROM payment_transactions t
 	LEFT JOIN brands b ON b.id = t.brand_id
 	WHERE t.purpose = 'topup' AND t.status = 'paid'
@@ -64,7 +65,8 @@ WITH combined AS (
 	       s.total_amount::numeric,
 	       ` + financeFeeExpr + `,
 	       ` + financeNetExpr + `,
-	       s.status::text
+	       s.status::text,
+	       ''::text
 	FROM settlements s
 	LEFT JOIN partners p ON p.id = s.partner_id
 	WHERE s.status = 'paid'
@@ -341,6 +343,7 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 			"kind":         row.strOr("kind", ""),
 			"counterparty": row.strOr("counterparty", ""),
 			"reference":    row.strOr("reference", ""),
+			"external_id":  row.strOr("external_id", ""),
 			"method":       row.strOr("method", ""),
 			"gross_amount": finReportInt(row.numOr("gross_amount")),
 			"fee_amount":   finReportInt(row.numOr("fee_amount")),
@@ -377,7 +380,7 @@ func (d *Deps) finReportCSV(w http.ResponseWriter, rows []rowMap, toDate time.Ti
 	var b strings.Builder
 	b.WriteString("\ufeff")
 	b.WriteString(opCSVLine([]any{"Tanggal", "Arus", "Keterangan", "Klien/Mitra", "Referensi",
-		"Metode", "Bruto (IDR)", "Biaya (IDR)", "Nominal (IDR)", "Status"}))
+		"Metode", "Bruto (IDR)", "Biaya (IDR)", "Nominal (IDR)", "Status", "ID Transaksi"}))
 	b.WriteString("\n")
 	for _, row := range rows {
 		occurred := ""
@@ -391,7 +394,7 @@ func (d *Deps) finReportCSV(w http.ResponseWriter, rows []rowMap, toDate time.Ti
 		b.WriteString(opCSVLine([]any{occurred, direction, kind,
 			row.strOr("counterparty", ""), row.strOr("reference", ""), row.strOr("method", ""),
 			finReportInt(row.numOr("gross_amount")), finReportInt(row.numOr("fee_amount")),
-			finReportInt(row.numOr("amount")), row.strOr("status", "")}))
+			finReportInt(row.numOr("amount")), row.strOr("status", ""), row.strOr("external_id", "")}))
 		b.WriteString("\n")
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")

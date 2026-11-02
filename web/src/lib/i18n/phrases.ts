@@ -3675,6 +3675,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Jenis tautan": "Link type",
   "Ubah jenis tautan": "Change link type",
   "Alat pemeriksaan": "Check tools",
+  "ID transaksi": "Transaction ID",
   "Siap transfer ke mitra": "Ready to transfer to partners",
   "Saldo yang sudah diminta mitra dan siap kamu transfer. Jumlahnya sudah dipotong biaya transfer.": "Balance partners have requested and you can transfer now. The amount is after transfer fees.",
   "Buka rincian": "Open details",
