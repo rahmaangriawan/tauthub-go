@@ -50,20 +50,23 @@ type crawlFallbackResult struct {
 const (
 	// archive.org membatasi request per IP. Job crawl memproses banyak media
 	// beruntun, jadi semua panggilan Wayback diserialkan dengan jeda minimum.
-	crawlWaybackMinGap = 3 * time.Second
+	crawlWaybackMinGap = 8 * time.Second
 	crawlWaybackUA     = "TauthubCrawler/1.0 (+https://tauthub.com; crawl@tauthub.com)"
+	// Setelah 429, istirahatkan Wayback sebentar agar tidak makin diblokir.
+	crawlWaybackCooldown = 10 * time.Minute
 	// Google News juga membatasi; jeda lebih pendek karena endpoint-nya ringan.
 	crawlNewsMinGap = 1500 * time.Millisecond
 )
 
 var (
-	crawlWaybackMu   sync.Mutex
-	crawlWaybackLast time.Time
-	crawlNewsMu      sync.Mutex
-	crawlNewsLast    time.Time
-	crawlEgressMu    sync.RWMutex
-	crawlEgressURL   string
-	crawlEgressToken string
+	crawlWaybackMu        sync.Mutex
+	crawlWaybackLast      time.Time
+	crawlWaybackCooldownT time.Time
+	crawlNewsMu           sync.Mutex
+	crawlNewsLast         time.Time
+	crawlEgressMu         sync.RWMutex
+	crawlEgressURL        string
+	crawlEgressToken      string
 )
 
 // ConfigureCrawlEgress: set Cloudflare Worker egress (dari env
@@ -198,12 +201,16 @@ func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string
 		googleNewsNote = gErr.Error()
 	}
 
+	waybackLimited := false
 	waybackNote := "Wayback tidak punya capture 7 hari"
 	if n, found, wErr := crawlWaybackPosts(ctx, origin, cutoff); found && n > 0 {
 		return crawlFallbackResult{Articles: crawlIntPtr(n), Confidence: "estimate", Source: "wayback", Status: "ok"}
 	} else if wErr != nil {
 		lastErr = wErr.Error()
 		waybackNote = wErr.Error()
+		if strings.Contains(wErr.Error(), "429") || strings.Contains(wErr.Error(), "cooldown") {
+			waybackLimited = true
+		}
 	}
 
 	if robotsBlocked || wpBlocked || feedBlocked || sitemapBlocked {
@@ -224,6 +231,11 @@ func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string
 		return crawlFallbackResult{Status: "blocked", Error: "diblokir WAF (HTTP 403/429): " + strings.Join(parts, " · ")}
 	}
 	if lastErr != "" {
+		// Wayback rate-limit bukan kegagalan situs: laporkan sebagai "tidak ada
+		// sumber" agar UI tidak menampilkan "Gagal: wayback 429" berulang.
+		if waybackLimited {
+			return crawlFallbackResult{Status: "no_source", Error: "tidak ada sitemap/feed/API yang terbaca; Wayback sedang rate-limit"}
+		}
 		return crawlFallbackResult{Status: "error", Error: lastErr}
 	}
 	return crawlFallbackResult{Status: "no_source", Error: "tidak ada sitemap/feed/API yang terbaca"}
@@ -800,6 +812,9 @@ func crawlWaybackPosts(ctx context.Context, origin string, cutoff time.Time) (in
 	// puluhan media diblokir langsung kena 429 dari archive.org.
 	crawlWaybackMu.Lock()
 	defer crawlWaybackMu.Unlock()
+	if time.Now().Before(crawlWaybackCooldownT) {
+		return 0, false, errors.New("wayback cooldown (429 sebelumnya)")
+	}
 	if !crawlWaybackLast.IsZero() {
 		if wait := crawlWaybackMinGap - time.Since(crawlWaybackLast); wait > 0 {
 			select {
@@ -825,6 +840,7 @@ func crawlWaybackPosts(ctx context.Context, origin string, cutoff time.Time) (in
 		return 0, false, err
 	}
 	if status == http.StatusTooManyRequests {
+		crawlWaybackCooldownT = time.Now().Add(crawlWaybackCooldown)
 		return 0, false, errors.New("wayback HTTP 429 (rate limit archive.org)")
 	}
 	if status != http.StatusOK {
