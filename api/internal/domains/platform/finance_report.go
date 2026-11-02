@@ -102,6 +102,36 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	}
 	fromDate := normDate(q.Get("from"), time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, financeReportTZ))
 	toDate := normDate(q.Get("to"), time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, financeReportTZ))
+
+	// Filter "Semua": mulai dari aktivitas keuangan paling awal, bukan tanggal
+	// kosong yang jauh di masa lalu — supaya ringkasan dan grafik tidak
+	// dipenuhi bulan kosong sebelum data pertama ada.
+	if strings.TrimSpace(q.Get("range")) == "all" {
+		firstRow, err := d.queryRow(ctx, `
+			SELECT MIN(occurred) AS first FROM (
+				SELECT COALESCE(paid_at, created_at) AS occurred
+				FROM payment_transactions
+				WHERE purpose = 'topup' AND status = 'paid'
+				UNION ALL
+				SELECT COALESCE(paid_at, updated_at)
+				FROM settlements
+				WHERE status IN ('pending', 'approved', 'processing', 'paid', 'failed')
+			) activity`)
+		if err != nil {
+			writeErr(w, d, err)
+			return
+		}
+		if firstRow != nil {
+			if first, ok := firstRow.raw("first").(time.Time); ok {
+				in := first.In(financeReportTZ)
+				fromDate = time.Date(in.Year(), in.Month(), in.Day(), 0, 0, 0, 0, financeReportTZ)
+			}
+		}
+		if fromDate.After(toDate) {
+			fromDate = toDate
+		}
+	}
+
 	if fromDate.After(toDate) {
 		writeErr(w, d, errUnprocessable("Rentang tanggal tidak valid"))
 		return
@@ -419,6 +449,49 @@ func (d *Deps) finReportSparkline(ctx context.Context, from, to time.Time, feeCf
 		outByBucket[row.strOr("bucket", "")] = row.numOr("total")
 	}
 
+	// Kartu "Siap transfer ke mitra" adalah stok, bukan arus: nilainya di
+	// akhir tiap bucket = settlement yang sudah diajukan sebelum batas itu dan
+	// belum dibayar (atau ditolak) pada saat itu. Waktu tutup memakai paid_at
+	// untuk yang lunas dan updated_at untuk yang ditolak; status berjalan
+	// (pending/approved/processing) tetap terbuka sampai sekarang.
+	payRows, err := d.queryRows(ctx, `
+		SELECT s.created_at,
+		       CASE
+		         WHEN s.status = 'failed' THEN s.updated_at
+		         WHEN s.status = 'paid' THEN COALESCE(s.paid_at, s.updated_at)
+		         ELSE NULL
+		       END AS closed_at,
+		       `+financeNetExpr+` AS net
+		FROM settlements s
+		WHERE s.status IN ('pending', 'approved', 'processing', 'paid', 'failed')
+		  AND s.created_at < $2
+		  AND (
+		    s.status IN ('pending', 'approved', 'processing')
+		    OR (s.status = 'failed' AND s.updated_at >= $1)
+		    OR (s.status = 'paid' AND COALESCE(s.paid_at, s.updated_at) >= $1)
+		  )`, fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR)
+	if err != nil {
+		return nil, err
+	}
+	type payableEntry struct {
+		created time.Time
+		closed  *time.Time
+		net     float64
+	}
+	payables := make([]payableEntry, 0, len(payRows))
+	for _, row := range payRows {
+		created, ok := row.raw("created_at").(time.Time)
+		if !ok {
+			continue
+		}
+		var closed *time.Time
+		if t, ok := row.raw("closed_at").(time.Time); ok {
+			closedAt := t
+			closed = &closedAt
+		}
+		payables = append(payables, payableEntry{created: created, closed: closed, net: row.numOr("net")})
+	}
+
 	points := make([]map[string]any, 0, 96)
 	add := func(t time.Time) {
 		key := t.Format(keyLayout)
@@ -430,11 +503,22 @@ func (d *Deps) finReportSparkline(ctx context.Context, from, to time.Time, feeCf
 		}
 		in := inByBucket[key]
 		out := outByBucket[key]
+		boundary := t.AddDate(0, 0, 1)
+		if granularity == "month" {
+			boundary = t.AddDate(0, 1, 0)
+		}
+		outstanding := 0.0
+		for _, p := range payables {
+			if p.created.Before(boundary) && (p.closed == nil || !p.closed.Before(boundary)) {
+				outstanding += p.net
+			}
+		}
 		points = append(points, map[string]any{
 			"label":     label,
 			"money_in":  finReportInt(in),
 			"money_out": finReportInt(out),
 			"net":       finReportInt(in - out),
+			"payable":   finReportInt(outstanding),
 		})
 	}
 

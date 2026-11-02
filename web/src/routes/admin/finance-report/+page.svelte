@@ -6,7 +6,7 @@
 	// laba — jadi kompensasi saldo dan invoice manual ditampilkan terpisah.
 	import { onMount } from 'svelte';
 	import {
-		ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Download, Layers, RotateCcw, RotateCw, TriangleAlert
+		ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Download, FileText, Layers, RotateCcw, RotateCw, TriangleAlert, Upload, Wallet, X
 	} from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
@@ -56,14 +56,14 @@
 		created_at: string | null;
 	};
 	type Monthly = { month: string; label: string; money_in: number; money_out: number };
-	type SparkPoint = { label: string; money_in: number; money_out: number; net: number };
+	type SparkPoint = { label: string; money_in: number; money_out: number; net: number; payable?: number };
 	type Report = {
 		from: string; to: string; summary: Summary; monthly: Monthly[];
 		sparkline?: { granularity: 'day' | 'month'; points: SparkPoint[] };
 		entries: Entry[]; total: number; limit: number; offset: number;
 	};
 
-	type Preset = 'bulan-ini' | 'bulan-lalu' | '7-hari' | '30-hari' | 'tahun-ini' | 'kustom';
+	type Preset = 'bulan-ini' | 'bulan-lalu' | '7-hari' | '30-hari' | 'tahun-ini' | 'semua' | 'kustom';
 
 	const PAGE_SIZE = 20;
 
@@ -87,6 +87,10 @@
 				return { from: isoLocal(new Date(year, month, today.getDate() - 29)), to: isoLocal(today) };
 			case 'tahun-ini':
 				return { from: isoLocal(new Date(year, 0, 1)), to: isoLocal(today) };
+			case 'semua':
+				// Titik awal sebenarnya ditentukan API (aktivitas paling awal);
+				// nilai ini hanya placeholder sebelum respons datang.
+				return { from: '2000-01-01', to: isoLocal(today) };
 			case 'bulan-ini':
 			case 'kustom':
 			default:
@@ -99,7 +103,8 @@
 		{ value: 'bulan-lalu', label: 'Bulan lalu' },
 		{ value: '7-hari', label: '7 hari' },
 		{ value: '30-hari', label: '30 hari' },
-		{ value: 'tahun-ini', label: 'Tahun ini' }
+		{ value: 'tahun-ini', label: 'Tahun ini' },
+		{ value: 'semua', label: 'Semua' }
 	];
 
 	const METHOD_LABEL: Record<string, string> = {
@@ -130,9 +135,59 @@
 	let transferId = $state<string | null>(null);
 	let transferRef = $state('');
 	let transferFile = $state<File | null>(null);
+	// Kotak unggah bukti transfer: tarik & lepas + pratinjau gambar. Batasnya
+	// sama dengan handler settlement receipt (gambar/PDF, maksimal 10 MB).
+	let transferFileDragOver = $state(false);
+	let transferFileError = $state('');
+	let transferPreviewUrl = $state<string | null>(null);
 	let transferBusy = $state(false);
 	let transferError = $state('');
 	let copiedId = $state<string | null>(null);
+
+	function clearTransferPreview() {
+		if (transferPreviewUrl) URL.revokeObjectURL(transferPreviewUrl);
+		transferPreviewUrl = null;
+	}
+
+	const TRANSFER_FILE_MAX = 10 * 1024 * 1024;
+
+	function fmtBytes(n: number) {
+		return n >= 1024 * 1024
+			? `${(n / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`
+			: `${Math.max(1, Math.round(n / 1024))} KB`;
+	}
+
+	/** Validasi di klien supaya admin tidak menunggu unggahan ditolak server. */
+	function pickTransferFile(file: File | null) {
+		transferFileError = '';
+		if (!file) return;
+		const isPDF = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+		const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name);
+		if (!isPDF && !isImage) {
+			transferFileError = tr('Format file harus berupa gambar (JPG/PNG) atau PDF.');
+			return;
+		}
+		if (file.size > TRANSFER_FILE_MAX) {
+			transferFileError = tr('Ukuran file maksimal 10 MB.');
+			return;
+		}
+		clearTransferPreview();
+		transferFile = file;
+		transferPreviewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+	}
+
+	function resetTransferFile() {
+		transferFile = null;
+		transferFileDragOver = false;
+		transferFileError = '';
+		clearTransferPreview();
+	}
+
+	function cancelTransfer() {
+		transferId = null;
+		transferError = '';
+		resetTransferFile();
+	}
 
 	async function loadPayables() {
 		payablesLoading = true;
@@ -164,13 +219,14 @@
 		payablesOpen = false;
 		transferId = null;
 		transferError = '';
+		resetTransferFile();
 	}
 
 	function startTransfer(id: string) {
 		transferId = id;
 		transferRef = '';
-		transferFile = null;
 		transferError = '';
+		resetTransferFile();
 	}
 
 	async function copyText(id: string, text: string | null) {
@@ -225,6 +281,7 @@
 				return;
 			}
 			transferId = null;
+			resetTransferFile();
 			await Promise.all([loadPayables(), load(pageNum)]);
 		} catch {
 			transferError = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
@@ -253,6 +310,7 @@
 			...extra
 		});
 		if (direction) params.set('type', direction);
+		if (preset === 'semua') params.set('range', 'all');
 		return params;
 	}
 
@@ -272,6 +330,12 @@
 				return;
 			}
 			data = await res.json();
+			// "Semua" dimulai dari transaksi paling awal; API mengembalikan
+			// rentang efektifnya supaya date picker ikut menampilkan itu.
+			if (preset === 'semua' && data && data.from && data.to) {
+				from = data.from;
+				to = data.to;
+			}
 			pageNum = targetPage;
 		} catch {
 			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
@@ -342,16 +406,18 @@
 	const sparkIn = $derived(sparkPoints.map((p) => ({ label: p.label, value: p.money_in })));
 	const sparkOut = $derived(sparkPoints.map((p) => ({ label: p.label, value: p.money_out })));
 	const sparkNet = $derived(sparkPoints.map((p) => ({ label: p.label, value: p.net })));
+	const sparkPayable = $derived(sparkPoints.map((p) => ({ label: p.label, value: p.payable ?? 0 })));
 	const netLabel = $derived(
 		!summary ? '' : summary.net === 0 ? tr('Seimbang') : summary.net > 0 ? tr('Surplus') : tr('Defisit')
 	);
 
-	// Kompatibilitas saat deploy: respons lama (sebelum field sparkline ada)
-	// tidak punya seri grafik. Ambil ulang sekali supaya sparkline langsung
+	// Kompatibilitas saat deploy: respons lama (sebelum field sparkline/payable
+	// ada) tidak punya seri grafik. Ambil ulang sekali supaya sparkline langsung
 	// terisi tanpa perlu reload manual.
 	let sparklineBackfill = false;
 	$effect(() => {
-		if (!sparklineBackfill && data && !data.sparkline) {
+		const stale = data && (!data.sparkline || data.sparkline.points.some((p) => p.payable === undefined));
+		if (!sparklineBackfill && stale) {
 			sparklineBackfill = true;
 			void load(pageNum);
 		}
@@ -412,8 +478,8 @@
 			</div>
 		</div>
 
-		<!-- Tiga angka utama -->
-		<div class="mt-5 grid gap-4 md:grid-cols-3">
+		<!-- Empat angka utama -->
+		<div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 			<article class="kpiCard kpiIn">
 				<div class="flex items-center justify-between gap-2">
 					<div class="flex min-w-0 items-center gap-2.5">
@@ -472,50 +538,22 @@
 					<KpiSparkline points={sparkNet} color="var(--primary)" />
 				</div>
 			</article>
-		</div>
 
-		<!-- Konteks posisi berjalan -->
-		<div class="mt-6 flex flex-wrap items-center gap-2.5">
-			<h2 class="text-base font-semibold">{tr("Posisi Saat Ini")}</h2>
-			<span class="h-4 w-px" style="background-color: var(--border);"></span>
-			<span class="text-xs text-muted-foreground">{tr("Tidak mengikuti filter periode.")}</span>
-		</div>
-		<div class="app-card positionGrid mt-3">
-			<div class="positionCell">
-				<Tooltip content={tr("Topup yang sudah dibuat klien tetapi belum lunas.")}>
-					<span class="text-xs text-muted-foreground">{tr("Menunggu topup")}</span>
-				</Tooltip>
-				<p class="mt-2 text-xl font-semibold tabular-nums">{rp(summary.topup_pending)}</p>
-				<p class="mt-1 text-[11px] text-muted-foreground">{fmtNum(summary.topup_pending_count)} {tr("transaksi")}</p>
-			</div>
-			<div class="positionCell">
-				<Tooltip content={tr("Pencairan mitra yang sudah diajukan tetapi belum ditransfer.")}>
-					<span class="text-xs text-muted-foreground">{tr("Menunggu pencairan")}</span>
-				</Tooltip>
-				<p class="mt-2 text-xl font-semibold tabular-nums">{rp(summary.settlement_pending)}</p>
-				<p class="mt-1 text-[11px] text-muted-foreground">{fmtNum(summary.settlement_pending_count)} {tr("pengajuan")}</p>
-			</div>
-			<div class="positionCell">
-				<Tooltip content={tr("Saldo klien yang masih bisa dipakai. Belum menjadi pendapatan, jadi dicatat sebagai kewajiban.")}>
-					<span class="text-xs text-muted-foreground">{tr("Saldo klien")}</span>
-				</Tooltip>
-				<p class="mt-2 text-xl font-semibold tabular-nums">{rp(summary.client_balance)}</p>
-				<p class="mt-1 text-[11px] text-muted-foreground">{tr("Belum terpakai")}</p>
-			</div>
-			<button
-				type="button"
-				class="positionCell payableCell"
-				aria-haspopup="dialog"
-				onclick={openPayables}
-			>
-				<Tooltip content={tr("Saldo yang sudah diminta mitra dan siap kamu transfer. Jumlahnya sudah dipotong biaya transfer.")}>
-					<span class="text-xs text-muted-foreground">{tr("Siap transfer ke mitra")}</span>
-				</Tooltip>
-				<p class="payableAmount mt-2 text-xl font-semibold tabular-nums">{rp(summary.partner_payable_total ?? summary.settlement_pending)}</p>
-				<p class="mt-1 text-[11px] text-muted-foreground">
-					{fmtNum(summary.partner_payable_count ?? 0)} {tr("mitra")} ·
-					<span class="payableLink">{tr('Buka rincian')}</span>
-				</p>
+			<button type="button" class="kpiCard kpiPayable" aria-haspopup="dialog" onclick={openPayables}>
+				<div class="flex items-center justify-between gap-2">
+					<div class="flex min-w-0 items-center gap-2.5">
+						<span class="kpiIcon kpiIconPayable"><Wallet size={15} /></span>
+						<Tooltip content={tr("Saldo yang sudah diminta mitra dan siap kamu transfer. Jumlahnya sudah dipotong biaya transfer.")}>
+							<span class="kpiLabel">{tr("Siap transfer ke mitra")}</span>
+						</Tooltip>
+					</div>
+					<span class="kpiBadge kpiBadgePayable">{fmtNum(summary.partner_payable_count ?? 0)} {tr("mitra")}</span>
+				</div>
+				<p class="kpiValue kpiValuePayable mt-3">{rp(summary.partner_payable_total ?? summary.settlement_pending)}</p>
+				<div class="mt-auto flex items-end justify-between gap-3 pt-3">
+					<p class="kpiDesc">{tr("Posisi saat ini")} · <span class="payableLink">{tr('Buka rincian')}</span></p>
+					<KpiSparkline points={sparkPayable} color="#ff933e" />
+				</div>
 			</button>
 		</div>
 
@@ -587,20 +625,87 @@
 											<span class="text-xs font-medium text-muted-foreground">{tr("Nomor referensi transfer (opsional)")}</span>
 											<input class="app-input mt-1 w-full" bind:value={transferRef} maxlength="200" />
 										</label>
-										<label class="mt-3 block">
+										<div class="mt-3">
 											<span class="text-xs font-medium text-muted-foreground">{tr("Bukti transfer (opsional)")}</span>
-											<input
-												class="app-input mt-1 w-full"
-												type="file"
-												accept="image/*,application/pdf"
-												onchange={(e) => (transferFile = e.currentTarget.files?.[0] ?? null)}
-											/>
-										</label>
+											<label
+												class="transferDrop mt-1"
+												style="border-color: {transferFileDragOver ? 'var(--primary)' : 'var(--border)'}; background: {transferFileDragOver
+													? 'var(--accent)'
+													: 'transparent'};"
+												ondragover={(e) => {
+													e.preventDefault();
+													transferFileDragOver = true;
+												}}
+												ondragleave={() => (transferFileDragOver = false)}
+												ondrop={(e) => {
+													e.preventDefault();
+													transferFileDragOver = false;
+													pickTransferFile(e.dataTransfer?.files?.[0] ?? null);
+												}}
+											>
+												{#if transferFile && transferPreviewUrl}
+													<img src={transferPreviewUrl} alt={transferFile.name} class="transferPreviewImg" />
+													<div class="transferPreviewMeta">
+														<span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+															{transferFile.name} · {fmtBytes(transferFile.size)} · {tr('Klik untuk mengganti')}
+														</span>
+														<button
+															type="button"
+															class="app-btn app-btn-soft shrink-0 !min-h-7 !px-2.5 !text-xs"
+															onclick={(e) => {
+																e.preventDefault();
+																e.stopPropagation();
+																resetTransferFile();
+															}}
+														><X size={13} /> {tr('Hapus')}</button>
+													</div>
+												{:else if transferFile}
+													<div class="flex w-full items-center gap-3 text-left">
+														<span class="transferFileIcon"><FileText size={18} /></span>
+														<div class="min-w-0 flex-1">
+															<span class="block truncate text-sm font-medium">{transferFile.name}</span>
+															<span class="text-xs text-muted-foreground">
+																{fmtBytes(transferFile.size)} · {tr('Klik untuk mengganti')}
+															</span>
+														</div>
+														<button
+															type="button"
+															class="app-btn app-btn-soft shrink-0 !min-h-7 !px-2.5 !text-xs"
+															onclick={(e) => {
+																e.preventDefault();
+																e.stopPropagation();
+																resetTransferFile();
+															}}
+														><X size={13} /> {tr('Hapus')}</button>
+													</div>
+												{:else}
+													<Upload size={20} class="text-muted-foreground" />
+													<span class="text-sm font-medium">{tr('Tarik & lepas bukti transfer di sini')}</span>
+													<span class="text-xs text-muted-foreground">
+														{tr('atau klik untuk memilih berkas · gambar atau PDF, maksimal 10 MB')}
+													</span>
+												{/if}
+												<input
+													class="sr-only"
+													type="file"
+													accept="image/*,application/pdf"
+													onchange={(e) => {
+														const input = e.currentTarget as HTMLInputElement;
+														pickTransferFile(input.files?.[0] ?? null);
+														// Kosongkan agar berkas yang sama bisa dipilih ulang.
+														input.value = '';
+													}}
+												/>
+											</label>
+											{#if transferFileError}
+												<span class="mt-1 block text-xs" style="color: var(--destructive);">{transferFileError}</span>
+											{/if}
+										</div>
 										{#if transferError}
 											<p class="mt-3 text-sm" style="color: var(--destructive);">{transferError}</p>
 										{/if}
 										<div class="mt-3 flex flex-wrap justify-end gap-2">
-											<button type="button" class="app-btn app-btn-soft" disabled={transferBusy} onclick={() => (transferId = null)}>{tr("Batal")}</button>
+											<button type="button" class="app-btn app-btn-soft" disabled={transferBusy} onclick={cancelTransfer}>{tr("Batal")}</button>
 											<button type="button" class="app-btn payablePrimary" disabled={transferBusy} onclick={() => void confirmTransfer(row)}>
 												{transferBusy ? tr('Menyimpan…') : tr('Sudah ditransfer')}
 											</button>
@@ -950,44 +1055,38 @@
 		background: var(--secondary);
 		color: var(--muted-foreground);
 	}
-
-	/* Posisi Saat Ini: satu panel, empat kolom setara, dipisah garis tipis —
-	   bukan empat card terpisah. */
-	.positionGrid {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		overflow: hidden;
-		border-radius: 12px;
-		box-shadow: none;
-	}
-	.positionCell {
-		padding: 18px 20px;
-	}
-	.positionCell + .positionCell {
-		border-left: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
-	}
-	/* Kartu "Siap transfer ke mitra": tint tipis, bukan blok biru pekat. */
-	.payableCell {
+	/* Kartu "Siap transfer ke mitra": tint tipis oranye dan seluruh kartu bisa
+	   diklik untuk membuka rincian pengajuan. */
+	.kpiPayable {
 		text-align: left;
 		cursor: pointer;
-		background-color: color-mix(in srgb, var(--primary) 10%, white);
-		transition: background-color 150ms ease;
+		background: color-mix(in srgb, #ff933e 6%, var(--card));
+		border-color: color-mix(in srgb, #ff933e 26%, var(--border));
+		transition: background-color 150ms ease, border-color 150ms ease;
 	}
-	.payableCell:hover {
-		background-color: color-mix(in srgb, var(--primary) 16%, white);
+	.kpiPayable:hover {
+		background: color-mix(in srgb, #ff933e 10%, var(--card));
+		border-color: color-mix(in srgb, #ff933e 40%, var(--border));
 	}
-	.payableCell:focus-visible {
-		outline: 2px solid var(--primary);
-		outline-offset: -4px;
+	.kpiPayable:focus-visible {
+		outline: 2px solid #ff933e;
+		outline-offset: 2px;
 	}
-	.payableCell .payableAmount,
-	.payableCell .payableLink {
-		color: var(--primary);
+	.kpiIconPayable {
+		background: color-mix(in srgb, #ff933e 14%, white);
+		color: #e07f22;
 	}
-	.payableCell .payableLink {
-		text-decoration: underline;
-		text-underline-offset: 2px;
+	.kpiValuePayable {
+		color: #ff933e;
 	}
+	.kpiBadgePayable {
+		background: color-mix(in srgb, #ff933e 12%, white);
+		color: #d97a1f;
+	}
+	.kpiPayable .payableLink {
+		color: #d97a1f;
+	}
+
 	.payableAmount {
 		color: var(--primary);
 	}
@@ -1049,6 +1148,48 @@
 		border: 1px dashed color-mix(in srgb, var(--primary) 38%, transparent);
 		border-radius: 10px;
 	}
+	.transferDrop {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		padding: 16px;
+		text-align: center;
+		cursor: pointer;
+		border: 1px dashed var(--border);
+		border-radius: 12px;
+		transition: border-color 150ms ease, background-color 150ms ease;
+	}
+	.transferDrop:focus-within {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+	}
+	.transferPreviewImg {
+		width: 100%;
+		max-height: 170px;
+		object-fit: contain;
+		border-radius: 8px;
+		background-color: #fff;
+	}
+	.transferPreviewMeta {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		text-align: left;
+	}
+	.transferFileIcon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 40px;
+		height: 40px;
+		border-radius: 8px;
+		color: var(--primary);
+		background-color: color-mix(in srgb, var(--primary) 12%, var(--card));
+	}
 	.payablePrimary {
 		min-height: 40px;
 		padding: 0 18px;
@@ -1068,29 +1209,5 @@
 		color: var(--primary);
 		border-radius: 10px;
 		background-color: color-mix(in srgb, var(--primary) 6%, white);
-	}
-	@media (max-width: 1023px) {
-		.positionGrid {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
-		.positionCell:nth-child(3) {
-			border-left: 0;
-		}
-		.positionCell:nth-child(3),
-		.positionCell:nth-child(4) {
-			border-top: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
-		}
-	}
-	@media (max-width: 639px) {
-		.positionGrid {
-			grid-template-columns: 1fr;
-		}
-		.positionCell {
-			border-left: 0 !important;
-			padding: 14px 16px;
-		}
-		.positionCell + .positionCell {
-			border-top: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
-		}
 	}
 </style>
