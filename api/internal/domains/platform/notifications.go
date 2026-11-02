@@ -15,12 +15,20 @@ import (
 // plumNotificationJSON: bentuk JSON yang sama dengan endpoint klien/mitra agar
 // komponen daftar bisa dipakai ulang.
 func plumNotificationJSON(row rowMap) map[string]any {
+	var link any = row.raw("link")
+	// Notifikasi Secure Direct lama hanya membawa ?q=<email>; arahkan ke tab
+	// "Pengajuan Secure Direct" tanpa harus mengubah baris di DB.
+	if row.strOr("type", "") == "secure_direct.requested" {
+		if s := row.strOr("link", ""); strings.HasPrefix(s, "/admin/partners?q=") {
+			link = "/admin/partners?tab=secure-direct&q=" + strings.TrimPrefix(s, "/admin/partners?q=")
+		}
+	}
 	return map[string]any{
 		"id":             row.strOr("id", ""),
 		"type":           row.strOr("type", ""),
 		"title":          row.strOr("title", ""),
 		"body":           row.raw("body"),
-		"link":           row.raw("link"),
+		"link":           link,
 		"publication_id": row.raw("publication_id"),
 		"read_at":        row.timePtr("read_at"),
 		"expired_at":     row.timePtr("expired_at"),

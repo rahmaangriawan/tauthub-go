@@ -2,6 +2,7 @@ package partner
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -97,7 +98,7 @@ func (d *Deps) SecureDirectRequestCreate(w http.ResponseWriter, r *http.Request)
 		}
 		title := "Pengajuan Secure Direct baru: " + name
 		body := name + " mengajukan fitur Secure Direct (terbit otomatis). Buka halaman Mitra, lalu lewat menu titik-tiga pilih 'Izinkan mode otomatis'."
-		link := "/admin/partners?q=" + detail.strOr("email", "")
+		link := "/admin/partners?tab=secure-direct&q=" + url.QueryEscape(detail.strOr("email", ""))
 		d.notifyPlatformAdmins(r.Context(), "secure_direct.requested", title, body, &link)
 	}
 	w.Header().Set("Cache-Control", "no-store")

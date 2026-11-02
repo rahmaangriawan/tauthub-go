@@ -79,7 +79,7 @@
 	let filterHasMedia = $state('');
 	let filterAutoPublish = $state('');
 	// Tab khusus pengajuan Secure Direct: filter status pengajuan terakhir mitra.
-	let sdTab = $state<'all' | 'pending'>('all');
+	let sdTab = $state<'all' | 'pending'>(page.url.searchParams.get('tab') === 'secure-direct' ? 'pending' : 'all');
 	let sdPendingTotal = $state(0);
 	let pageNum = $state(1);
 	let exporting = $state(false);
