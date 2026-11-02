@@ -52,7 +52,10 @@ log "2/4 migrasi DB (additive — toleran duplikat, tidak pernah drop)"
 as_user "set -a; . '$APP_DIR/.env'; set +a; cd '$APP_DIR/api' && ./bin/migrate up"
 
 log "3/4 build web (SvelteKit adapter-node)"
-as_user "cd '$APP_DIR/web' && bun install --frozen-lockfile && bun run build"
+# Build ke build.next lalu tukar atomik: node yang masih jalan tetap melayani
+# build lama yang utuh sampai restart, bukan file yang sedang ditulis ulang.
+as_user "cd '$APP_DIR/web' && rm -rf build.next && bun install --frozen-lockfile && SVELTE_BUILD_OUT=build.next bun run build \
+  && rm -rf build.prev && { [ -d build ] && mv build build.prev || true; } && mv build.next build && rm -rf build.prev"
 
 log "4/4 restart service"
 $SUDO systemctl restart "${UNIT_PREFIX}-api" "${UNIT_PREFIX}-web" "${UNIT_PREFIX}-scheduler" "${UNIT_PREFIX}-worker"

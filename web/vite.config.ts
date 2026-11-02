@@ -15,7 +15,10 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter()
+			// deploy.sh membangun ke folder sementara lalu menukarnya, supaya node
+			// yang sedang jalan tidak melayani file build yang setengah tertulis
+			// (nginx: "upstream prematurely closed" pada /_app/version.json).
+			adapter: adapter({ out: process.env.SVELTE_BUILD_OUT || 'build' })
 		})
 	],
 	server: {
