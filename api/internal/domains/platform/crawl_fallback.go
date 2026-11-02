@@ -73,6 +73,7 @@ func ConfigureCrawlEgress(url, token string) {
 	crawlEgressURL = strings.TrimRight(strings.TrimSpace(url), "/")
 	crawlEgressToken = strings.TrimSpace(token)
 	crawlEgressMu.Unlock()
+	slog.Info("[crawl-egress] konfigurasi", "url_set", crawlEgressURL != "", "token_set", crawlEgressToken != "")
 }
 
 type crawlEgressResponse struct {
@@ -90,6 +91,7 @@ func crawlEgressGet(ctx context.Context, target string) (int, http.Header, strin
 	base, token := crawlEgressURL, crawlEgressToken
 	crawlEgressMu.RUnlock()
 	if base == "" || token == "" {
+		slog.Warn("[crawl-egress] belum dikonfigurasi", "url_set", base != "", "token_set", token != "")
 		return 0, nil, "", false
 	}
 	payload, err := json.Marshal(map[string]string{"url": target})
@@ -102,9 +104,9 @@ func crawlEgressGet(ctx context.Context, target string) (int, http.Header, strin
 	}
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("x-crawl-token", token)
-	// SafeClient: resolusi DNS publik (1.1.1.1/8.8.8.8) supaya workers.dev
-	// tidak dibajak blockpage ISP lokal.
-	resp, err := security.SafeClient(20 * time.Second).Do(req)
+	// URL egress dikonfigurasi operator (bukan input pengguna), jadi boleh
+	// loopback (SSH reverse tunnel 127.0.0.1:8787) tanpa guard SSRF.
+	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
 	if err != nil {
 		slog.Warn("[crawl-egress] request gagal", "target", target, "err", err)
 		return 0, nil, "", false
@@ -287,8 +289,10 @@ func crawlFallbackGetWith(ctx context.Context, target string, headers map[string
 // dikonfigurasi/gagal, jatuh ke koneksi langsung dari server.
 func crawlFallbackGetSite(ctx context.Context, target string) (int, http.Header, string, error) {
 	if status, hdr, body, ok := crawlEgressGet(ctx, target); ok {
+		slog.Debug("[crawl-egress] dipakai", "target", target, "status", status)
 		return status, hdr, body, nil
 	}
+	slog.Debug("[crawl-egress] langsung", "target", target)
 	return crawlFallbackGet(ctx, target)
 }
 

@@ -1,3 +1,9 @@
 name = "tauthub-crawl-egress"
 main = "crawl-egress.js"
 compatibility_date = "2024-09-01"
+
+# Jalankan Worker sedekat mungkin dengan origin (situs media), bukan di colo
+# pemanggil. Egress IP dari colo pemanggil (VPS Tencent) sering diblokir WAF
+# mitra; Smart Placement memindahkan eksekusi ke lokasi yang lebih diterima.
+[placement]
+mode = "smart"
