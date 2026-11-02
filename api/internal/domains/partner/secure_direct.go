@@ -98,7 +98,7 @@ func (d *Deps) SecureDirectRequestCreate(w http.ResponseWriter, r *http.Request)
 		}
 		title := "Pengajuan Secure Direct baru: " + name
 		body := name + " mengajukan fitur Secure Direct (terbit otomatis). Buka halaman Mitra, lalu lewat menu titik-tiga pilih 'Izinkan mode otomatis'."
-		link := "/admin/partners?tab=secure-direct&q=" + url.QueryEscape(detail.strOr("email", ""))
+		link := "/admin/partners?tab=secure-direct&q=" + url.QueryEscape(detail.strOr("email", "")) + "#secure-direct"
 		d.notifyPlatformAdmins(r.Context(), "secure_direct.requested", title, body, &link)
 	}
 	w.Header().Set("Cache-Control", "no-store")

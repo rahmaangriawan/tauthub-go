@@ -79,7 +79,15 @@
 	let filterHasMedia = $state('');
 	let filterAutoPublish = $state('');
 	// Tab khusus pengajuan Secure Direct: filter status pengajuan terakhir mitra.
-	let sdTab = $state<'all' | 'pending'>(page.url.searchParams.get('tab') === 'secure-direct' ? 'pending' : 'all');
+	// Deep link notifikasi: ?tab=secure-direct atau #secure-direct membuka tab ini.
+	const wantsSecureDirectTab = (url: URL) =>
+		url.searchParams.get('tab') === 'secure-direct' || url.hash === '#secure-direct';
+	let sdTab = $state<'all' | 'pending'>(wantsSecureDirectTab(page.url) ? 'pending' : 'all');
+	// Navigasi di dalam aplikasi (klik notifikasi saat halaman ini sudah
+	// terbuka) tidak me-mount ulang komponen, jadi URL dipantau terus.
+	$effect(() => {
+		if (wantsSecureDirectTab(page.url) && sdTab !== 'pending') setSdTab('pending');
+	});
 	let sdPendingTotal = $state(0);
 	let pageNum = $state(1);
 	let exporting = $state(false);
@@ -621,6 +629,7 @@
 		</button>
 		<button
 			type="button"
+			id="secure-direct"
 			role="tab"
 			aria-selected={sdTab === 'pending'}
 			class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors {sdTab === 'pending' ? 'text-white' : 'text-muted-foreground hover:bg-secondary'}"

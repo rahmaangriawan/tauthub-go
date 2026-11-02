@@ -1490,6 +1490,11 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 			link = "/admin/pengumuman"
 		} else if stored := strings.TrimSpace(row.strOr("link", "")); strings.HasPrefix(stored, "/admin/") {
 			link = stored
+			// Pengajuan Secure Direct lama hanya membawa ?q=<email>: arahkan ke
+			// tab "Pengajuan Secure Direct" tanpa mengubah baris di DB.
+			if notifType == "secure_direct.requested" && strings.HasPrefix(stored, "/admin/partners?q=") {
+				link = "/admin/partners?tab=secure-direct&q=" + strings.TrimPrefix(stored, "/admin/partners?q=") + "#secure-direct"
+			}
 		}
 		items = append(items, opNotifItem{
 			ID: "ntf-" + row.strOr("id", ""), Type: notifType,
