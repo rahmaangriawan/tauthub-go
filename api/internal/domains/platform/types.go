@@ -207,6 +207,25 @@ func (d *Deps) adminGuard(w http.ResponseWriter, r *http.Request, permission str
 	return d.Admin.Require(w, r, permission)
 }
 
+// SuperAdminOnly: middleware chi untuk rute yang hanya boleh dipakai Super Admin
+// (konfigurasi platform, audit log, bug report, error). Dipasang di router lewat
+// `authed.With(platformDeps.SuperAdminOnly)`, jadi satu tempat dan tidak ada
+// handler yang bisa terlewat. Admin biasa mendapat 403; non-admin tetap 404
+// seperti guard lainnya.
+func (d *Deps) SuperAdminOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, ctx, ok := d.Admin.Require(w, r, "")
+		if !ok {
+			return
+		}
+		if !ctx.IsSuperAdmin() {
+			httpx.Error(w, http.StatusForbidden, "Hanya Super Admin yang boleh membuka ini.")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // audit: catat audit_logs (best-effort; kegagalan tidak menggagalkan aksi).
 func (d *Deps) audit(ctx context.Context, actorUserID, action, targetType, targetID string) {
 	if err := d.exec(ctx,
