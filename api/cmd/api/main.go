@@ -1020,6 +1020,7 @@ func run() error {
 			authed.Get("/platform/seo/similarweb-diagnose", platformDeps.SEOSimilarWebDiagnose)
 
 			// Credits / invoices / packages / orders / revenue / settlements / referrals / VIP.
+			authed.Get("/platform/finance/report", platformDeps.FinanceReport)
 			authed.Get("/platform/credits", platformDeps.CreditsConfigGet)
 			authed.Post("/platform/credits", platformDeps.CreditsAdjust)
 			authed.Put("/platform/credits", platformDeps.CreditsConfigPut)

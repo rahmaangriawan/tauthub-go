@@ -63,11 +63,7 @@ export function isCampaignDone(status?: string | null): boolean {
 
 /* ─── Berita acara ────────────────────────────────────────────────────── */
 
-export const MEDIA_LABEL: Record<string, string> = {
-	blogger: 'Blogger',
-	mainstream: 'Mainstream',
-	kombinasi: 'Kombinasi'
-};
+export { MEDIA_LABEL } from '$lib/media/labels';
 export const BUDGET_LABEL: Record<string, string> = {
 	efisien: 'Efisien',
 	optimal: 'Optimal',
@@ -444,7 +440,7 @@ export function fmtTrafficFull(n: number | null): string {
 
 /** Singkatan trafik untuk bottom bar (1.2M / 500rb). */
 export function fmtTrafficShort(n: number | null): string {
-	if (n == null || n <= 0) return '—';
+	if (n == null || n <= 0) return '0';
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}k`;
 	if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
 	return String(n);
@@ -455,7 +451,9 @@ export function formatTraffic(
 	est?: number | null
 ): { text: string; trend: { isUp: boolean; val: number } | null; source: string } {
 	const val = swVisits && swVisits > 0 ? swVisits : est && est > 0 ? est : 0;
-	if (!val) return { text: 'Estimasi', trend: null, source: 'Via SimilarWeb' };
+	// Tanpa data trafik: tulis 0 (bukan strip), sumber dikosongkan supaya tidak
+	// ada label "Via SimilarWeb" yang menyesatkan.
+	if (!val) return { text: '0', trend: null, source: '' };
 	let text = '';
 	if (val >= 1_000_000) text = `± ${(val / 1_000_000).toFixed(1).replace(/\.0$/, '')}M / bulan`;
 	else if (val >= 1_000) text = `± ${Math.round(val / 1_000)} rb / bulan`;

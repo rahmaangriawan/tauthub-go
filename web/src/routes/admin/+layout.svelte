@@ -330,6 +330,9 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			label: i18n.t.nav_admin.group_monetization,
 			items: [
 				...(can('payments')
+					? [{ label: i18n.t.nav_admin.finance_report, href: '/admin/finance-report', icon: ChartBar, active: pathname.startsWith('/admin/finance-report') }]
+					: []),
+				...(can('payments')
 					? [
 							{
 								label: tr('Payments & Invoice'),

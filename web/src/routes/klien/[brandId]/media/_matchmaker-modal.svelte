@@ -274,7 +274,7 @@
 		return money(n);
 	};
 	const trafficFmt = (n: number) => {
-		if (!n || n <= 0) return '—';
+		if (!n || n <= 0) return '0';
 		if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + ' jt';
 		if (n >= 1_000) return Math.round(n / 1_000) + ' rb';
 		return n.toLocaleString('id-ID');

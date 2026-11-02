@@ -15,6 +15,7 @@
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { normalizeLinkDurationMonths } from '$lib/media/link-duration';
 	import { WORD_COUNT_MODES, parseCustomWordCount, formatCustomWordCount } from '$lib/media/word-count';
+	import MediaTransparency from './_transparency.svelte';
 
 	const partnerId = $derived(page.params.partnerId as string);
 	const base = $derived(`/mitra/${getPartnerUrlId() || partnerId}`);
@@ -44,6 +45,14 @@
 		seo_da: number | null; seo_pa: number | null; seo_spam_score: number | null; seo_checked_at: string | null;
 		has_connection: boolean; custom_web_status: string | null; blogger_status: string | null;
 		rejection_reason: string | null; domain_verified: boolean;
+		// Metrik katalog klien — dipakai tab Transparansi Data.
+		media_tier: string | null; media_quality_score: number | null;
+		seo_ai_trust: number | null; seo_ai_citation: boolean | null;
+		sw_visits: number | null; sw_snapshot_date: string | null;
+		rating_avg: number | null; rating_count: number | null;
+		health_computed_at: string | null; published_count: number | null;
+		articles_7d: number | null; crawl_source: string | null;
+		crawl_last_crawled_at: string | null; crawl_last_status: string | null; crawl_stale: boolean;
 	};
 
 	let items = $state<Media[]>([]);
@@ -62,6 +71,9 @@
 	// true hanya setelah request daftar media berhasil. Dipakai untuk menahan
 	// teks jumlah media agar tidak sempat menampilkan "0 media" saat memuat.
 	let mediaLoaded = $state(false);
+	// Mode tampilan: kelola (tabel/form saat ini) atau transparansi (metrik
+	// read-only yang sama dengan yang dilihat klien).
+	let viewMode = $state<'manage' | 'transparency'>('manage');
 
 	// Satu-satunya sumber kebenaran untuk UI "impor terkunci". Hanya bernilai
 	// true kalau request daftar media SUDAH selesai DAN server menyatakan belum
@@ -275,10 +287,21 @@
 		};
 	});
 
+	function setViewMode(mode: 'manage' | 'transparency') {
+		if (viewMode === mode) return;
+		viewMode = mode;
+		// Muat ulang dengan cakupan berbeda (50 per halaman vs semua media).
+		void load();
+	}
+
 	async function load() {
+		// Tab Transparansi memuat semua media sekaligus (maks. 500) supaya
+		// paginasi 10 baris di dalamnya mencakup seluruh daftar, bukan hanya
+		// halaman server yang sedang aktif di tab Kelola.
+		const allForTransparency = viewMode === 'transparency';
 		const params = new URLSearchParams({
-			limit: String(PAGE_SIZE),
-			offset: String((pageNo - 1) * PAGE_SIZE)
+			limit: String(allForTransparency ? 500 : PAGE_SIZE),
+			offset: String(allForTransparency ? 0 : (pageNo - 1) * PAGE_SIZE)
 		});
 		if (statusFilter) params.set('status', statusFilter);
 		// "Semua status" pada UI berarti tanpa arsip (label app lama); tanpa ini
@@ -1099,14 +1122,15 @@
 
 
 <section>
-	<header class="flex flex-wrap items-start justify-between gap-3">
-		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{tr("Daftar Media")}</h1>
+	<header class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+		<div class="min-w-0">
+			<h1 class="text-[21px] font-semibold leading-tight tracking-tight">{tr("Daftar Media")}</h1>
 			{#if mediaLoaded}
-				<p class="mt-1 text-sm text-muted-foreground">{items.length} {tr("media terdaftar pada akun mitra Anda.")}</p>
+				<p class="mt-1 text-[13px] text-muted-foreground">{total} {tr("media terdaftar pada akun mitra Anda.")}</p>
 			{/if}
 		</div>
-		<div class="flex flex-wrap gap-2">
+		{#if viewMode === 'manage'}
+		<div class="flex flex-wrap items-center gap-2">
 			{#if bulkUnlocked === true}
 				<button class="app-btn app-btn-soft" type="button" onclick={() => void openImportDialog()}>
 					<Upload size={15} /> Impor XLSX
@@ -1140,9 +1164,27 @@
 			{/if}
 			<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={15} />{tr("Tambah Media")}</button>
 		</div>
+		{/if}
 	</header>
 
-	{#if bulkLocked}
+	<div class="viewTabs" role="tablist" aria-label={tr('Mode tampilan media')}>
+		<button
+			class="viewTab"
+			type="button"
+			role="tab"
+			aria-selected={viewMode === 'manage'}
+			onclick={() => setViewMode('manage')}>{tr('Kelola Media')}</button
+		>
+		<button
+			class="viewTab"
+			type="button"
+			role="tab"
+			aria-selected={viewMode === 'transparency'}
+			onclick={() => setViewMode('transparency')}>{tr('Transparansi Data')}</button
+		>
+	</div>
+
+	{#if viewMode === 'manage' && bulkLocked}
 		<div class="app-card mt-3 flex items-start gap-3 px-4 py-3 text-sm">
 			<ShieldCheck size={18} class="mt-0.5 shrink-0" style="color: var(--primary);" />
 			<div>
@@ -1388,7 +1430,7 @@
 	</div>
 {/if}
 
-	<form class="app-card mt-4 flex flex-wrap items-center gap-2 p-3" onsubmit={(e) => e.preventDefault()}>
+	<form class="app-card mt-3 flex flex-wrap items-center gap-2 p-3" onsubmit={(e) => e.preventDefault()}>
 		<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
 			<Search size={15} class="text-muted-foreground" />
 			<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama media atau domain…")} bind:value={q} />
@@ -1422,6 +1464,7 @@
 		/>
 	</form>
 
+	{#if viewMode === 'manage'}
 	{#if loading}
 		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat media…")}</p>
 	{:else if filtered.length === 0}
@@ -1654,6 +1697,9 @@
 				<button class="app-btn app-btn-soft" type="button" disabled={pageNo * PAGE_SIZE >= total} onclick={() => { pageNo = pageNo + 1; }}>{tr('Berikutnya')}</button>
 			</div>
 		</div>
+	{/if}
+	{:else}
+		<MediaTransparency items={filtered} {loading} />
 	{/if}
 </section>
 
@@ -2937,6 +2983,78 @@
 {/if}
 
 <style>
+	/* Underline tabs "Kelola Media | Transparansi Data": tab terbaca sebagai
+	   navigasi halaman, bukan tombol CTA. Indikator aktif menempel pada garis
+	   divider supaya menyatu dengan konten di bawahnya. */
+	.viewTabs {
+		display: flex;
+		align-items: stretch;
+		gap: 26px;
+		margin-top: 14px;
+		border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+		overflow-x: auto;
+		overflow-y: hidden;
+		scrollbar-width: none;
+		-webkit-overflow-scrolling: touch;
+	}
+	.viewTabs::-webkit-scrollbar {
+		display: none;
+	}
+	.viewTab {
+		appearance: none;
+		position: relative;
+		flex: 0 0 auto;
+		margin-bottom: -1px;
+		padding: 13px 2px 12px;
+		border: 0;
+		background: transparent;
+		color: var(--muted-foreground);
+		font: inherit;
+		font-size: 14px;
+		font-weight: 500;
+		line-height: 1.2;
+		white-space: nowrap;
+		cursor: pointer;
+		transition: color 0.18s ease;
+	}
+	.viewTab::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 2px;
+		border-radius: 2px 2px 0 0;
+		background: var(--primary);
+		transform: scaleX(0);
+		transform-origin: left center;
+		transition: transform 0.18s ease;
+	}
+	.viewTab:hover {
+		color: var(--primary);
+	}
+	.viewTab[aria-selected='true'] {
+		color: var(--primary);
+		font-weight: 600;
+	}
+	.viewTab[aria-selected='true']::after {
+		transform: scaleX(1);
+	}
+	.viewTab:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+		border-radius: 4px;
+	}
+	@media (max-width: 767px) {
+		.viewTabs {
+			gap: 24px;
+		}
+		.viewTab {
+			min-height: 44px;
+			padding: 12px 0;
+		}
+	}
+
 	/* Kontrol baris dipakai bersama tabel (desktop) dan kartu (mobile). Di layar
 		sentuh (<768px) target ketuknya dijamin minimal 44px; desktop tidak berubah. */
 	@media (max-width: 767px) {

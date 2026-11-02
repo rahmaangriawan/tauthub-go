@@ -24,6 +24,17 @@ const mediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.media_type, 
                  m.category
                ) AS categories_csv,
                sm.da AS seo_da, sm.pa AS seo_pa, sm.spam_score AS seo_spam_score, sm.checked_at AS seo_checked_at,
+               sm.ai_trust_score AS seo_ai_trust, sm.ai_citation AS seo_ai_citation, sm.ai_citation_checked_at,
+               m.health_computed_at, m.media_tier, m.media_quality_score,
+               (SELECT ROUND(AVG(r.rating)::numeric, 1)::float8 FROM media_ratings r
+                  WHERE r.media_id = m.id) AS rating_avg,
+               (SELECT COUNT(*)::int FROM media_ratings r
+                  WHERE r.media_id = m.id) AS rating_count,
+               sw.visits AS sw_visits, sw.created_at AS sw_snapshot_date,
+               ct.articles_7d, ct.confidence AS crawl_confidence, ct.source AS crawl_source,
+               ct.last_crawled_at, ct.last_status,
+               (ct.last_crawled_at IS NOT NULL
+                AND ct.last_crawled_at >= NOW() - make_interval(days => 7)) AS crawl_fresh,
               EXISTS (
                 SELECT 1 FROM cms_connections c
                 WHERE c.partner_id = m.partner_id
@@ -39,7 +50,12 @@ const mediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.media_type, 
                 WHERE p2.media_id = m.id AND p2.status = 'published') AS total_terbit,
               (SELECT COALESCE(SUM(p2.client_price), 0) FROM publications p2
                 WHERE p2.media_id = m.id AND p2.status = 'published') AS total_harga
-        FROM media m LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id`
+        FROM media m
+        LEFT JOIN media_seo_metrics sm ON sm.media_id = m.id
+        LEFT JOIN LATERAL (SELECT CASE WHEN s.insights->>'visits' ~ '^-?[0-9]+([.][0-9]+)?$'
+                                       THEN ((s.insights->>'visits')::numeric)::bigint END AS visits, s.created_at
+                           FROM media_similarweb_snapshots s WHERE s.media_id = m.id ORDER BY s.created_at DESC LIMIT 1) sw ON TRUE
+        LEFT JOIN crawl_targets ct ON ct.media_id = m.id`
 
 // categoriesArray: kategori media dari CSV (pemisah E'\u0001'), dengan
 // pemisahan tambahan pada koma untuk data lama yang menyimpan beberapa
@@ -73,6 +89,11 @@ func (d *Deps) mediaJSON(r *http.Request, row rowMap, markupPercent float64) map
 	}
 	breakdown := breakdownFor(effectivePrice, markupPercent)
 	dp := d.dewanPersStatusFor(r.Context(), row.strOr("id", ""))
+	// Content Velocity dari salinan crawl lokal. Angka hanya dianggap segar bila
+	// crawl terakhir <7 hari DAN statusnya ok — sama dengan aturan modal klien.
+	crawlFresh := row.boolOr("crawl_fresh", false)
+	crawlLastStatus := row.strOr("last_status", "")
+	crawlStale := !(crawlFresh && (crawlLastStatus == "" || crawlLastStatus == "ok"))
 
 	payload := map[string]any{
 		"id":                            row.raw("id"),
@@ -133,6 +154,24 @@ func (d *Deps) mediaJSON(r *http.Request, row rowMap, markupPercent float64) map
 		"seo_pa":                        row.raw("seo_pa"),
 		"seo_spam_score":                row.raw("seo_spam_score"),
 		"seo_checked_at":                row.timePtr("seo_checked_at"),
+		// Metrik yang sama dengan yang dilihat klien di katalog (tab Transparansi).
+		"seo_ai_trust":                  row.numPtr("seo_ai_trust"),
+		"seo_ai_citation":               row.boolPtr("seo_ai_citation"),
+		"seo_ai_citation_checked_at":    row.timePtr("seo_ai_citation_checked_at"),
+		"sw_visits":                     row.numPtr("sw_visits"),
+		"sw_snapshot_date":              row.timePtr("sw_snapshot_date"),
+		"rating_avg":                    row.numPtr("rating_avg"),
+		"rating_count":                  row.numPtr("rating_count"),
+		"health_computed_at":            row.timePtr("health_computed_at"),
+		"media_tier":                    row.raw("media_tier"),
+		"media_quality_score":           row.numPtr("media_quality_score"),
+		"published_count":               row.numOr("total_terbit"),
+		"articles_7d":                   row.numPtr("articles_7d"),
+		"crawl_confidence":              row.raw("crawl_confidence"),
+		"crawl_source":                  row.raw("crawl_source"),
+		"crawl_last_crawled_at":         row.timePtr("last_crawled_at"),
+		"crawl_last_status":             row.raw("last_status"),
+		"crawl_stale":                   crawlStale,
 		"status":                        row.raw("status"),
 		"integration_type":              row.raw("integration_type"),
 		"has_connection":                row.boolOr("has_connection", false),

@@ -27,6 +27,7 @@
 	import { mediaDistribution } from '$lib/media/distribution';
 	import { linkPolicyBadge, isPermanentLink } from '$lib/media/link-duration';
 	import { avgPublishHours, formatSla, slaBucket, slaDurationText } from '$lib/media/sla';
+	import { formatTraffic } from '$lib/media/traffic';
 	import { seededShuffle, randomShuffleSeed } from '$lib/media/shuffle';
 	import { apiRequest, ensureValidSession, readApiError, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
@@ -348,19 +349,8 @@
 	const SELECTED_KEY = 'tauthub_client_selected_media';
 
 	// ── Helper parity media-section.tsx ────────────────────────────────
-	/** Estimasi trafik. CATATAN: tren ↑/↓ di app lama DIREKAYASA dari
-	 *  `Math.abs(val % 31)` — angka palsu, jadi tidak disalin ke sini. */
-	function formatTraffic(swVisits?: number | null, est?: number | null): { text: string; source: string } {
-		const val = swVisits && swVisits > 0 ? swVisits : est && est > 0 ? est : 0;
-		// Tanpa data trafik: tulis 0 (bukan strip), dan sumber dikosongkan supaya
-		// tidak ada "Via SimilarWeb" palsu.
-		if (!val) return { text: '0', source: '' };
-		let text: string;
-		if (val >= 1_000_000) text = `± ${(val / 1_000_000).toFixed(1).replace(/\.0$/, '')}M / bulan`;
-		else if (val >= 1_000) text = `± ${Math.round(val / 1_000)} rb / bulan`;
-		else text = `± ${val.toLocaleString('id-ID')} / bulan`;
-		return { text, source: 'Via SimilarWeb' };
-	}
+	// Estimasi trafik ada di $lib/media/traffic.ts supaya angka & formatnya
+	// identik dengan tab Transparansi mitra.
 
 	// SLA waktu terbit = rata-rata waktu penerbitan NYATA media
 	// (health_breakdown.avg_publish_hours), bukan taksiran dari tipe integrasi.
