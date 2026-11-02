@@ -124,6 +124,7 @@
 		feed: 'feed RSS/Atom (tanggal terbit)',
 		html_sample: 'sampel halaman listing',
 		wordpress_api: 'WordPress REST API (tanggal terbit)',
+		google_news: 'Google News RSS (indeks)',
 		wayback: 'Wayback CDX (perkiraan arsip)'
 	};
 	const CRAWL_CONFIDENCE_LABEL: Record<string, string> = {

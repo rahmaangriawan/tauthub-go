@@ -148,6 +148,7 @@
 		feed: 'RSS/Atom',
 		html_sample: 'sampel HTML',
 		wordpress_api: 'WordPress API',
+		google_news: 'Google News',
 		wayback: 'Wayback'
 	};
 	let copiedShare = $state(false);

@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
@@ -44,6 +45,22 @@ type crawlFallbackResult struct {
 	Error  string
 }
 
+const (
+	// archive.org membatasi request per IP. Job crawl memproses banyak media
+	// beruntun, jadi semua panggilan Wayback diserialkan dengan jeda minimum.
+	crawlWaybackMinGap = 3 * time.Second
+	crawlWaybackUA     = "TauthubCrawler/1.0 (+https://tauthub.com; crawl@tauthub.com)"
+	// Google News juga membatasi; jeda lebih pendek karena endpoint-nya ringan.
+	crawlNewsMinGap = 1500 * time.Millisecond
+)
+
+var (
+	crawlWaybackMu   sync.Mutex
+	crawlWaybackLast time.Time
+	crawlNewsMu      sync.Mutex
+	crawlNewsLast    time.Time
+)
+
 // crawlMeasureFallback: ukur jumlah artikel 7 hari terakhir tanpa Crawlhub.
 func (d *Deps) crawlMeasureFallback(ctx context.Context, websiteURL string) crawlFallbackResult {
 	return d.crawlMeasureFallbackWithin(ctx, websiteURL, crawlFallbackBudget)
@@ -63,7 +80,7 @@ func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string
 	// robots. Jangan berhenti di situ: endpoint terstruktur (WP API/feed/sitemap)
 	// masih bisa lolos, dan Wayback tidak lewat IP kita. Hanya homepage discovery
 	// yang dilewati saat robots tidak terbaca.
-	blockedSeen := robotsBlocked
+	wpBlocked, feedBlocked, sitemapBlocked := false, false, false
 	lastErr := ""
 	if robotsErr != nil {
 		lastErr = robotsErr.Error()
@@ -71,14 +88,14 @@ func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string
 
 	if n, conf, found, blocked := crawlWPPosts(ctx, origin, robots, cutoff); found {
 		return crawlFallbackResult{Articles: crawlIntPtr(n), Confidence: conf, Source: "wordpress_api", Status: "ok"}
-	} else if blocked {
-		blockedSeen = true
+	} else {
+		wpBlocked = blocked
 	}
 
 	if n, found, blocked, fErr := crawlFeedPosts(ctx, origin, robots, cutoff, robotsBlocked); found {
 		return crawlFallbackResult{Articles: crawlIntPtr(n), Confidence: "lower_bound", Source: "feed", Status: "ok"}
 	} else {
-		blockedSeen = blockedSeen || blocked
+		feedBlocked = blocked
 		if fErr != nil {
 			lastErr = fErr.Error()
 		}
@@ -87,24 +104,46 @@ func (d *Deps) crawlMeasureFallbackWithin(ctx context.Context, websiteURL string
 	if n, found, blocked, sErr := crawlSitemapPosts(ctx, origin, robots, cutoff); found {
 		return crawlFallbackResult{Articles: crawlIntPtr(n), Confidence: "estimate", Source: "sitemap", Status: "ok"}
 	} else {
-		blockedSeen = blockedSeen || blocked
+		sitemapBlocked = blocked
 		if sErr != nil {
 			lastErr = sErr.Error()
 		}
 	}
 
+	// Google News RSS: index pihak ketiga, tidak lewat IP kita, jadi tetap
+	// terbaca untuk situs berita yang diblokir WAF.
+	googleNewsNote := "Google News tidak punya artikel 7 hari"
+	if n, found, gErr := crawlGoogleNewsPosts(ctx, origin, cutoff); found {
+		return crawlFallbackResult{Articles: crawlIntPtr(n), Confidence: "estimate", Source: "google_news", Status: "ok"}
+	} else if gErr != nil {
+		lastErr = gErr.Error()
+		googleNewsNote = gErr.Error()
+	}
+
+	waybackNote := "Wayback tidak punya capture 7 hari"
 	if n, found, wErr := crawlWaybackPosts(ctx, origin, cutoff); found && n > 0 {
 		return crawlFallbackResult{Articles: crawlIntPtr(n), Confidence: "estimate", Source: "wayback", Status: "ok"}
 	} else if wErr != nil {
 		lastErr = wErr.Error()
+		waybackNote = wErr.Error()
 	}
 
-	if blockedSeen {
-		note := "diblokir WAF (HTTP 403/429) di robots/endpoint langsung"
+	if robotsBlocked || wpBlocked || feedBlocked || sitemapBlocked {
+		parts := []string{}
 		if robotsBlocked {
-			note += " — robots.txt juga ditolak"
+			parts = append(parts, "robots 403")
 		}
-		return crawlFallbackResult{Status: "blocked", Error: note + "; Wayback tidak punya capture 7 hari terakhir"}
+		if wpBlocked {
+			parts = append(parts, "WP API 403")
+		}
+		if feedBlocked {
+			parts = append(parts, "feed 403")
+		}
+		if sitemapBlocked {
+			parts = append(parts, "sitemap 403")
+		}
+		parts = append(parts, googleNewsNote, waybackNote)
+		return crawlFallbackResult{Status: "blocked", Error: "diblokir WAF (HTTP 403/429): " + strings.Join(parts, " · ")}
 	}
 	if lastErr != "" {
 		return crawlFallbackResult{Status: "error", Error: lastErr}
@@ -150,7 +189,7 @@ func (d *Deps) crawlStoreFallback(ctx context.Context, mediaID, websiteURL strin
 		INSERT INTO crawl_targets (media_id, website_url, active, articles_7d, confidence, source, last_crawled_at, last_status, consecutive_failures, last_error, updated_at)
 		VALUES ($1, $2, TRUE, $3, $4, $5,
 		        CASE WHEN $3::integer IS NOT NULL THEN NOW() ELSE NULL END,
-		        $6, 0, $7, NOW())
+		        $6, CASE WHEN $6 = 'ok' THEN 0 ELSE 1 END, $7, NOW())
 		ON CONFLICT (media_id) DO UPDATE SET
 		  website_url = EXCLUDED.website_url,
 		  articles_7d = COALESCE(EXCLUDED.articles_7d, crawl_targets.articles_7d),
@@ -158,7 +197,10 @@ func (d *Deps) crawlStoreFallback(ctx context.Context, mediaID, websiteURL strin
 		  source = COALESCE(EXCLUDED.source, crawl_targets.source),
 		  last_crawled_at = CASE WHEN EXCLUDED.articles_7d IS NOT NULL THEN NOW() ELSE crawl_targets.last_crawled_at END,
 		  last_status = EXCLUDED.last_status,
-		  consecutive_failures = 0,
+		  consecutive_failures = CASE
+		    WHEN EXCLUDED.last_status = 'ok' THEN 0
+		    ELSE crawl_targets.consecutive_failures + 1
+		  END,
 		  last_error = EXCLUDED.last_error,
 		  updated_at = NOW()`,
 		mediaID, websiteURL, articles, nullIfEmpty(fb.Confidence), nullIfEmpty(fb.Source), fb.Status, lastErr)
@@ -171,13 +213,34 @@ func crawlBlockedStatus(status int) bool {
 // ---------- HTTP + robots ----------
 
 func crawlFallbackGet(ctx context.Context, target string) (int, http.Header, string, error) {
-	resp, err := security.Get(ctx, target, mjCrawlerHeaders, crawlFallbackReqTimeout)
+	return crawlFallbackGetWith(ctx, target, mjCrawlerHeaders)
+}
+
+func crawlFallbackGetWith(ctx context.Context, target string, headers map[string]string) (int, http.Header, string, error) {
+	resp, err := security.Get(ctx, target, headers, crawlFallbackReqTimeout)
 	if err != nil {
 		return 0, nil, "", err
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, crawlFallbackBodyLimit))
 	return resp.StatusCode, resp.Header, string(body), nil
+}
+
+// crawlRetryAfter: detik dari header Retry-After, dibatasi agar tidak menahan
+// job terlalu lama. Nilai bukan angka (tanggal HTTP) diabaikan.
+func crawlRetryAfter(raw string, fallback time.Duration) time.Duration {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback
+	}
+	secs, err := strconv.Atoi(raw)
+	if err != nil || secs <= 0 {
+		return fallback
+	}
+	if secs > 10 {
+		secs = 10
+	}
+	return time.Duration(secs) * time.Second
 }
 
 func crawlOrigin(raw string) (string, error) {
@@ -197,6 +260,14 @@ func crawlOrigin(raw string) (string, error) {
 		scheme = "https"
 	}
 	return scheme + "://" + u.Host, nil
+}
+
+func crawlHost(origin string) string {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 }
 
 func crawlResolve(origin, href string) string {
@@ -566,6 +637,68 @@ func crawlCountSitemapURLs(doc crawlSitemapDoc, cutoff time.Time) (int, int) {
 	return count, dated
 }
 
+// ---------- Google News RSS (index pihak ketiga) ----------
+
+// crawlGoogleNewsPosts: hitung item Google News untuk `site:<host>` dalam 7
+// hari. Feed ini diambil dari Google, bukan dari situs media, jadi tidak kena
+// WAF/Cloudflare mitra. Cocok untuk media berita; blog yang tidak terindeks
+// akan menghasilkan 0 dan fallback lanjut ke Wayback.
+func crawlGoogleNewsPosts(ctx context.Context, origin string, cutoff time.Time) (int, bool, error) {
+	host := crawlHost(origin)
+	if host == "" {
+		return 0, false, errors.New("host kosong")
+	}
+	q := url.Values{}
+	q.Set("q", "site:"+host)
+	q.Set("hl", "id")
+	q.Set("gl", "ID")
+	q.Set("ceid", "ID:id")
+	target := "https://news.google.com/rss/search?" + q.Encode()
+	headers := map[string]string{
+		"user-agent": crawlWaybackUA,
+		"accept":     "application/rss+xml,application/atom+xml,application/xml,text/xml",
+	}
+
+	crawlNewsMu.Lock()
+	defer crawlNewsMu.Unlock()
+	if !crawlNewsLast.IsZero() {
+		if wait := crawlNewsMinGap - time.Since(crawlNewsLast); wait > 0 {
+			select {
+			case <-time.After(wait):
+			case <-ctx.Done():
+				return 0, false, ctx.Err()
+			}
+		}
+	}
+	status, hdr, body, err := crawlFallbackGetWith(ctx, target, headers)
+	if err == nil && status == http.StatusTooManyRequests {
+		wait := crawlRetryAfter(hdr.Get("Retry-After"), 3*time.Second)
+		select {
+		case <-time.After(wait):
+			status, _, body, err = crawlFallbackGetWith(ctx, target, headers)
+		case <-ctx.Done():
+			err = ctx.Err()
+		}
+	}
+	crawlNewsLast = time.Now()
+	if err != nil {
+		return 0, false, err
+	}
+	if status == http.StatusTooManyRequests {
+		return 0, false, errors.New("google news HTTP 429")
+	}
+	if status != http.StatusOK {
+		return 0, false, fmt.Errorf("google news HTTP %d", status)
+	}
+	count, ok := crawlCountFeed(body, cutoff)
+	if !ok || count == 0 {
+		// 0/format tak dikenal bukan bukti media stagnan; biarkan Wayback
+		// menjadi penentu terakhir.
+		return 0, false, nil
+	}
+	return count, true, nil
+}
+
 // ---------- Wayback CDX (tidak terkena blokir situs) ----------
 
 func crawlWaybackPosts(ctx context.Context, origin string, cutoff time.Time) (int, bool, error) {
@@ -587,10 +720,42 @@ func crawlWaybackPosts(ctx context.Context, origin string, cutoff time.Time) (in
 	q.Add("filter", "mimetype:text/html")
 	q.Set("collapse", "urlkey")
 	q.Set("limit", "2000")
+	target := "https://web.archive.org/cdx/search/cdx?" + q.Encode()
+	headers := map[string]string{
+		"user-agent": crawlWaybackUA,
+		"accept":     "application/json",
+	}
 
-	status, _, body, err := crawlFallbackGet(ctx, "https://web.archive.org/cdx/search/cdx?"+q.Encode())
+	// Serialkan seluruh panggilan Wayback + jeda minimum. Tanpa ini, satu sweep
+	// puluhan media diblokir langsung kena 429 dari archive.org.
+	crawlWaybackMu.Lock()
+	defer crawlWaybackMu.Unlock()
+	if !crawlWaybackLast.IsZero() {
+		if wait := crawlWaybackMinGap - time.Since(crawlWaybackLast); wait > 0 {
+			select {
+			case <-time.After(wait):
+			case <-ctx.Done():
+				return 0, false, ctx.Err()
+			}
+		}
+	}
+
+	status, hdr, body, err := crawlFallbackGetWith(ctx, target, headers)
+	if err == nil && status == http.StatusTooManyRequests {
+		wait := crawlRetryAfter(hdr.Get("Retry-After"), 4*time.Second)
+		select {
+		case <-time.After(wait):
+			status, _, body, err = crawlFallbackGetWith(ctx, target, headers)
+		case <-ctx.Done():
+			err = ctx.Err()
+		}
+	}
+	crawlWaybackLast = time.Now()
 	if err != nil {
 		return 0, false, err
+	}
+	if status == http.StatusTooManyRequests {
+		return 0, false, errors.New("wayback HTTP 429 (rate limit archive.org)")
 	}
 	if status != http.StatusOK {
 		return 0, false, fmt.Errorf("wayback HTTP %d", status)
