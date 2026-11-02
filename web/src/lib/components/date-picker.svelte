@@ -112,15 +112,15 @@
 						</Calendar.GridHead>
 						<Calendar.GridBody>
 							{#each months as month}
-								<Calendar.GridRow>
-									{#each month.weeks as week}
+								{#each month.weeks as week}
+									<Calendar.GridRow class="zdate-row">
 										{#each week as day}
 											<Calendar.Cell date={day} month={month.value} class="zdate-cell">
 												<Calendar.Day class="zdate-day" />
 											</Calendar.Cell>
 										{/each}
-									{/each}
-								</Calendar.GridRow>
+									</Calendar.GridRow>
+								{/each}
 							{/each}
 						</Calendar.GridBody>
 					</Calendar.Grid>
@@ -177,6 +177,7 @@
 
 	:global(.zdate-content) {
 		z-index: 50;
+		width: 276px;
 		padding: 12px;
 		border: 1px solid var(--border);
 		border-radius: 12px;
@@ -224,6 +225,7 @@
 
 	:global(.zdate-grid) {
 		width: 100%;
+		table-layout: fixed;
 		border-collapse: collapse;
 	}
 	:global(.zdate-cell) {
