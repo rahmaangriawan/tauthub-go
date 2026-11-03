@@ -5,7 +5,7 @@
 	// filter praktis (status/kontak/media/mode otomatis), ekspor kontak CSV,
 	// popup media & pengajuan harga, review dokumen Dewan Pers, pengaturan VIP
 	// (VVIP & VIP Reguler), gerbang izin mode otomatis, dan hapus partner.
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import {
 		ArrowUpRight, Check, Copy, Download, Ellipsis, FileText, Image as ImageIcon,
@@ -86,7 +86,9 @@
 	// Navigasi di dalam aplikasi (klik notifikasi saat halaman ini sudah
 	// terbuka) tidak me-mount ulang komponen, jadi URL dipantau terus.
 	$effect(() => {
-		if (wantsSecureDirectTab(page.url) && sdTab !== 'pending') setSdTab('pending');
+		// Hanya bereaksi pada perubahan URL; sdTab dibaca di luar pelacakan supaya
+		// klik "Semua mitra" tidak dipaksa balik ke tab pengajuan oleh query tab.
+		if (wantsSecureDirectTab(page.url)) untrack(() => setSdTab('pending'));
 	});
 	let sdPendingTotal = $state(0);
 	let pageNum = $state(1);
