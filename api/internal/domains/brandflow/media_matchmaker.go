@@ -39,19 +39,23 @@ const (
 )
 
 type mmCriteria struct {
-	Objective            string   `json:"objective"`
-	Audience             string   `json:"audience"`
-	Categories           []string `json:"categories"`
-	MediaTypes           []string `json:"media_types"`
-	Count                int      `json:"count"`
-	BudgetTotal          float64  `json:"budget_total"`
-	BudgetMin            float64  `json:"budget_min"`
-	BudgetMax            float64  `json:"budget_max"`
-	MinDA                int      `json:"min_da"`
-	MinAITrust           int      `json:"min_ai_trust"`
-	MinTraffic           int64    `json:"min_traffic"`
-	RequireHyperlink     bool     `json:"require_hyperlink"`
-	RequirePermanentLink bool     `json:"require_permanent_link"`
+	Objective  string   `json:"objective"`
+	Audience   string   `json:"audience"`
+	Categories []string `json:"categories"`
+	MediaTypes []string `json:"media_types"`
+	Count      int      `json:"count"`
+	// CountExplicit: klien menyebut jumlah media. Bila tidak, budget_total
+	// dibaca sebagai plafon untuk BEBERAPA media — satu media tidak boleh
+	// menghabiskannya sendirian (lihat mmPerMediaCap).
+	CountExplicit        bool    `json:"count_explicit,omitempty"`
+	BudgetTotal          float64 `json:"budget_total"`
+	BudgetMin            float64 `json:"budget_min"`
+	BudgetMax            float64 `json:"budget_max"`
+	MinDA                int     `json:"min_da"`
+	MinAITrust           int     `json:"min_ai_trust"`
+	MinTraffic           int64   `json:"min_traffic"`
+	RequireHyperlink     bool    `json:"require_hyperlink"`
+	RequirePermanentLink bool    `json:"require_permanent_link"`
 	// Syarat artikel dari brief. 0 = tidak disebut klien.
 	MinWords      int      `json:"min_words"`
 	MinBacklinks  int      `json:"min_backlinks"`
@@ -532,7 +536,11 @@ func mmApplyAgentPicks(list []mmCandidate, picks map[string]string, crit mmCrite
 
 	total := 0.0
 	picked := make([]int, 0, len(idx))
+	priceCap := mmPerMediaCap(crit)
 	for _, i := range idx {
+		if priceCap > 0 && list[i].ClientPrice > priceCap {
+			continue
+		}
 		if crit.BudgetTotal > 0 && total+list[i].ClientPrice > crit.BudgetTotal {
 			continue
 		}
@@ -542,10 +550,17 @@ func mmApplyAgentPicks(list []mmCandidate, picks map[string]string, crit mmCrite
 	// Budget sempit tapi masih ada ruang: isi sisa slot dengan skor tertinggi
 	// yang terjangkau supaya paket tidak setengah kosong gara-gara urutan AI.
 	if len(picked) < crit.Count {
-		sort.SliceStable(idx, func(a, b int) bool { return list[idx[a]].Score > list[idx[b]].Score })
-		for _, i := range idx {
+		all := make([]int, 0, len(list))
+		for i := range list {
+			all = append(all, i)
+		}
+		sort.SliceStable(all, func(a, b int) bool { return list[all[a]].Score > list[all[b]].Score })
+		for _, i := range all {
 			if len(picked) >= crit.Count {
 				break
+			}
+			if priceCap > 0 && list[i].ClientPrice > priceCap {
+				continue
 			}
 			inPicked := false
 			for _, p := range picked {
@@ -594,9 +609,17 @@ func mmSelectMaterial(crit mmCriteria, briefSummary string, list []mmCandidate) 
 	}
 	b.WriteString("\n\nKriteria: jumlah media=")
 	b.WriteString(itoa(crit.Count))
+	if !crit.CountExplicit {
+		b.WriteString(" (maksimum; klien tidak menyebut jumlah)")
+	}
 	if crit.BudgetTotal > 0 {
 		b.WriteString(", budget_total=Rp")
 		b.WriteString(bsIntlIDR(crit.BudgetTotal))
+		if cap := mmPerMediaCap(crit); cap > 0 {
+			b.WriteString(" — anggaran ini untuk BEBERAPA media sekaligus: pilih minimal 2 media yang totalnya ≤ budget, dan jangan memilih satu media berharga lebih dari Rp")
+			b.WriteString(bsIntlIDR(cap))
+			b.WriteString(" (separuh anggaran)")
+		}
 	}
 	if len(crit.Categories) > 0 {
 		b.WriteString(", kategori=")
@@ -961,6 +984,7 @@ func mmNormalizeCriteria(crit mmCriteria, catalogCats []string) (mmCriteria, []s
 	crit.Audience = mmClip(crit.Audience, 300)
 	crit.Notes = mmClip(crit.Notes, 500)
 
+	crit.CountExplicit = crit.Count > 0
 	if crit.Count <= 0 {
 		crit.Count = mmDefaultCount
 	}
@@ -1445,6 +1469,18 @@ func mmComposition(list []mmCandidate) map[string]any {
 	return map[string]any{"total": total, "items": items}
 }
 
+// mmPerMediaCap: batas harga satu media saat anggaran total disebut tanpa
+// jumlah media. "Budget 200rb" berarti klien ingin BEBERAPA media yang
+// totalnya ≤ 200rb, bukan satu media seharga tepat 200rb. Tanpa batas ini,
+// urutan skor bisa memilih satu media yang menghabiskan seluruh anggaran
+// (kasus nyata: Hangout.id Rp200.000 dari anggaran Rp200.000). 0 = tanpa batas.
+func mmPerMediaCap(crit mmCriteria) float64 {
+	if crit.BudgetTotal <= 0 || crit.CountExplicit {
+		return 0
+	}
+	return crit.BudgetTotal / 2
+}
+
 func mmBuildPackage(list []mmCandidate, crit mmCriteria) ([]int, []string) {
 	idx := make([]int, len(list))
 	for i := range list {
@@ -1456,6 +1492,7 @@ func mmBuildPackage(list []mmCandidate, crit mmCriteria) ([]int, []string) {
 	pickedSet := map[int]bool{}
 	total := 0.0
 	perCat := map[string]int{}
+	priceCap := mmPerMediaCap(crit)
 
 	take := func(ignoreCap bool) {
 		for _, i := range idx {
@@ -1470,6 +1507,9 @@ func mmBuildPackage(list []mmCandidate, crit mmCriteria) ([]int, []string) {
 			if !ignoreCap && perCat[cat] >= mmMaxPerCategory {
 				continue
 			}
+			if !ignoreCap && priceCap > 0 && c.ClientPrice > priceCap {
+				continue
+			}
 			if crit.BudgetTotal > 0 && total+c.ClientPrice > crit.BudgetTotal {
 				continue
 			}
@@ -1480,8 +1520,9 @@ func mmBuildPackage(list []mmCandidate, crit mmCriteria) ([]int, []string) {
 		}
 	}
 	take(false)
-	if len(picked) < crit.Count {
-		// Longgarkan batas per kategori dulu sebelum menyerah pada budget.
+	if len(picked) == 0 {
+		// Tidak ada media di bawah separuh anggaran: longgarkan batas per
+		// kategori dan per media daripada mengembalikan paket kosong.
 		take(true)
 	}
 	for _, i := range picked {
