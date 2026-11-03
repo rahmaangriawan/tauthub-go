@@ -1398,7 +1398,7 @@ func (d *Deps) OperationsNotifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pendingMedia, err := d.queryRow(ctx,
-		"SELECT COUNT(*) AS count, MAX(updated_at) AS updated_at FROM media WHERE status = 'pending_review'")
+		"SELECT COUNT(*) AS count, MAX(updated_at) AS updated_at FROM media WHERE status = 'pending_review' OR (status = 'active' AND pending_values IS NOT NULL)")
 	if err != nil {
 		writeErr(w, d, err)
 		return

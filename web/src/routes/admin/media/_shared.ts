@@ -82,6 +82,9 @@ export type Media = {
 	category: string | null;
 	categories?: string[];
 	pending_changes?: PendingChange[] | null;
+	/** true = media aktif, perubahan mitra diparkir menunggu admin (data live tetap tayang). */
+	has_pending_values?: boolean;
+	pending_requested_at?: string | null;
 	website_url: string | null;
 	contoh_artikel_url?: string | null;
 	price: number;

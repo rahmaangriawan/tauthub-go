@@ -40,6 +40,8 @@ type SchedulerResult struct {
 	PartnerRemindersSent        int   `json:"partner_reminders_sent"`
 	LateApprovalNotified        int   `json:"late_approval_notified"`
 	SLACancelled                int   `json:"sla_cancelled"`
+	MediaChangesReminded        int   `json:"media_changes_reminded"`
+	MediaChangesExpired         int   `json:"media_changes_expired"`
 	ForfeitWarned               int   `json:"forfeit_warned"`
 	BalanceForfeited            int   `json:"balance_forfeited"`
 	MediaHealthRefreshed        int   `json:"media_health_refreshed"`
@@ -58,6 +60,8 @@ func (r SchedulerResult) toMap() map[string]any {
 		"partner_reminders_sent":        r.PartnerRemindersSent,
 		"late_approval_notified":        r.LateApprovalNotified,
 		"sla_cancelled":                 r.SLACancelled,
+		"media_changes_reminded":        r.MediaChangesReminded,
+		"media_changes_expired":         r.MediaChangesExpired,
 		"forfeit_warned":                r.ForfeitWarned,
 		"balance_forfeited":             r.BalanceForfeited,
 		"media_health_refreshed":        r.MediaHealthRefreshed,
@@ -103,6 +107,9 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	// 4. SLA 3×24 jam persetujuan media: lewat tenggat langsung dibatalkan
 	//    otomatis + saldo dikembalikan (tanpa masa perpanjangan).
 	res.SLACancelled = d.schSweepPublicationSLA(ctx, schMinInt(maxJobs, 20))
+
+	// 4a. Perubahan media yang diparkir mitra: pengingat admin 24 jam, batal 48 jam.
+	res.MediaChangesReminded, res.MediaChangesExpired = d.schSweepMediaPendingChanges(ctx, schMinInt(maxJobs, 20))
 
 	// 4b. Saldo akun pasif: peringatan H-7 lalu penghangusan (final, tercatat).
 	res.ForfeitWarned, res.BalanceForfeited = d.schSweepDormantBalances(ctx, schMinInt(maxJobs, 20))

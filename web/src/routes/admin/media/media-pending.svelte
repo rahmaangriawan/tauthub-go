@@ -205,6 +205,11 @@
 
 	// Daftar perubahan mitra yang menunggu keputusan admin (migrasi 159).
 	const pendingChanges = (row: Media) => (Array.isArray(row.pending_changes) ? row.pending_changes : []);
+
+	// Perubahan yang diparkir: media aktif tetap tayang dengan data lama. Pengajuan
+	// yang lewat 24 jam diberi warna peringatan; di jam ke-48 sistem membatalkannya.
+	const pendingAgeHours = (row: Media) =>
+		row.pending_requested_at ? (Date.now() - new Date(row.pending_requested_at).getTime()) / 3_600_000 : 0;
 </script>
 
 {#snippet mediaCell(row: Media)}
@@ -212,6 +217,14 @@
 		<div>
 			<p class="font-medium">{row.name}</p>
 			<p class="text-xs text-muted-foreground">{row.slug ?? row.id.slice(0, 8)}</p>
+			{#if row.status === 'active' && row.has_pending_values}
+				<p class="mt-1 text-xs" style="color: {pendingAgeHours(row) >= 24 ? 'var(--destructive)' : 'var(--success)'};">
+					{tr('Tetap tayang · perubahan menunggu')}
+					{#if row.pending_requested_at}· {fmtDateTime(row.pending_requested_at)}{/if}
+				</p>
+			{:else if row.status === 'pending_review'}
+				<p class="mt-1 text-xs" style="color: var(--warning);">{tr('Disembunyikan sampai disetujui')}</p>
+			{/if}
 		</div>
 	</div>
 {/snippet}

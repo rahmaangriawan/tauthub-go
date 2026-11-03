@@ -5,13 +5,12 @@
 	// sudah terbit di situs media mitra masih bisa dibuka.
 	// Port apps/web/src/app/admin/link-monitor/page.tsx.
 	import { onMount } from 'svelte';
-	import { RefreshCw, Search, Unlink } from '@lucide/svelte';
+	import { RefreshCw, Search, Unlink, Info, ExternalLink, Check, X } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
-	import DataTable from '$lib/components/admin/data-table.svelte';
-	import Badge from '$lib/components/admin/badge.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import Select from '$lib/components/select.svelte';
+	import Tooltip from '$lib/components/tooltip.svelte';
 	import { fmtDateTime } from '$lib/admin-format';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
@@ -57,15 +56,8 @@
 		limit: number;
 		offset: number;
 	}
-	interface CheckResult {
-		ok: boolean;
-		queued_publications: number;
-		queued_domains: number;
-		total: number;
-		capped: boolean;
-	}
 
-	/** Badge status link artikel — merah hanya untuk hilang nyata (404/410). */
+	/** Status link artikel — merah hanya untuk hilang nyata (404/410). */
 	function linkMeta(state: string | null): {
 		label: string;
 		tone: 'neutral' | 'success' | 'warning' | 'danger';
@@ -77,11 +69,11 @@
 					label: 'Hilang (404)',
 					tone: 'danger',
 					title:
-						'Halaman artikel sudah tidak ada di situs media (404/410). Tekan Ganti Artikel untuk membuat pengganti di media lain.'
+						'Halaman artikel sudah tidak ada di situs media (404/410). Tekan Ganti artikel untuk membuat pengganti di media lain.'
 				};
 			case 'unreachable':
 				return {
-					label: 'Tak Terjangkau',
+					label: 'Tak terjangkau',
 					tone: 'warning',
 					title:
 						'Situs media menolak akses atau sedang error. Belum tentu hilang, jadi tidak dihitung sebagai artikel hilang.'
@@ -95,29 +87,29 @@
 					title: tr('Publikasi ini belum punya URL, jadi halamannya belum bisa diperiksa.')
 				};
 			default:
-				return { label: tr('Belum Dicek'), tone: 'neutral', title: tr('Halaman artikel belum pernah diperiksa.') };
+				return { label: tr('Belum dicek'), tone: 'neutral', title: tr('Halaman artikel belum pernah diperiksa.') };
 		}
 	}
 
-	/** Badge kesehatan domain mitra (media.domain_health). */
+	/** Status kesehatan domain mitra (media.domain_health). */
 	function domainMeta(health: string): { label: string; tone: 'neutral' | 'success' | 'warning' | 'danger'; title: string } {
 		switch (health) {
 			case 'unreachable':
 				return {
-					label: 'Tak Terjangkau',
+					label: 'Mati',
 					tone: 'danger',
 					title: 'Situs mitra tidak bisa dihubungi, sehingga artikel yang terbit di sana ikut tidak bisa dibuka.'
 				};
 			case 'token_missing':
 				return {
-					label: 'Token Hilang',
+					label: 'Token hilang',
 					tone: 'warning',
 					title: 'Situs mitra hidup, tetapi penanda verifikasi domain tidak ditemukan lagi di halamannya.'
 				};
 			case 'live':
 				return { label: 'Hidup', tone: 'success', title: tr('Situs mitra bisa dihubungi dan penanda verifikasi domain ditemukan.') };
 			default:
-				return { label: tr('Belum Dicek'), tone: 'neutral', title: 'Situs mitra ini belum pernah diperiksa.' };
+				return { label: tr('Belum dicek'), tone: 'neutral', title: 'Situs mitra ini belum pernah diperiksa.' };
 		}
 	}
 
@@ -156,6 +148,8 @@
 	let noteDomain = $state('');
 	let noteOwner = $state('');
 	let rejectReason = $state('');
+	// Konfirmasi pengembalian saldo: panel di dalam halaman, bukan confirm().
+	let refundPanelFor = $state<string | null>(null);
 
 	const openClaimCount = $derived(claims.filter((c) => c.status !== 'refunded' && c.status !== 'rejected').length);
 
@@ -167,8 +161,7 @@
 	const claimTone = (s: string): 'success' | 'warning' | 'danger' | 'neutral' =>
 		s === 'refunded' ? 'success' : s === 'rejected' ? 'neutral' : 'warning';
 	const fmtDay = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '—');
-	const fmtRp = (n: number | null) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;
-	const detectionLabel = (c: ClaimRow) =>
+	const fmtRp = (n: number | null) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;	const detectionLabel = (c: ClaimRow) =>
 		c.detection_state === 'link_removed' ? tr('Tautan dihapus')
 		: c.detection_state === 'gone' ? tr('Hilang (404)')
 		: c.link_state ?? '—';
@@ -176,9 +169,11 @@
 	function toggleClaim(c: ClaimRow) {
 		if (openClaim === c.id) {
 			openClaim = null;
+			refundPanelFor = null;
 			return;
 		}
 		openClaim = c.id;
+		refundPanelFor = null;
 		noteDomain = c.domain_check_note ?? '';
 		noteOwner = c.owner_contact_note ?? '';
 		rejectReason = '';
@@ -209,7 +204,6 @@
 	}
 
 	async function refundClaim(c: ClaimRow) {
-		if (!confirm(`Kembalikan saldo untuk klaim ${c.brand_name ?? ''} - ${c.media_name ?? ''}? Tindakan ini mengurangi pemasukan Tauthub dan tidak bisa dibatalkan.`)) return;
 		claimBusy = c.id;
 		error = '';
 		notice = '';
@@ -224,6 +218,7 @@
 				return;
 			}
 			notice = `Saldo dikembalikan ${fmtRp(data?.refund_idr ?? 0)} ke akun klien.`;
+			refundPanelFor = null;
 			await load();
 		} finally {
 			claimBusy = null;
@@ -319,7 +314,7 @@
 				error = await readApiError(res, 'Permintaan gagal.');
 				return;
 			}
-			const result = (await res.json()) as CheckResult;
+			const result = await res.json();
 			if (result.total === 0) {
 				notice =
 					'Tidak ada pengecekan baru yang diantrekan — semua artikel dan domain masih dalam masa berlaku cek 7 hari.';
@@ -352,225 +347,146 @@
 		}
 	}
 
-	const metrics = $derived([
-		{ label: 'Artikel Dipantau', value: summary?.watched ?? 0, color: undefined },
-		{ label: 'Tayang', value: summary?.live ?? 0, color: 'var(--success)' },
-		{
-			label: 'Hilang (404)',
-			value: summary?.gone ?? 0,
-			color: (summary?.gone ?? 0) > 0 ? 'var(--destructive)' : 'var(--muted-foreground)'
-		},
-		{
-			label: 'Tak Terjangkau',
-			value: summary?.unreachable ?? 0,
-			color: (summary?.unreachable ?? 0) > 0 ? 'var(--warning)' : 'var(--muted-foreground)'
-		},
-		{
-			label: 'Domain Mati',
-			value: summary?.domains_down ?? 0,
-			color: (summary?.domains_down ?? 0) > 0 ? 'var(--destructive)' : 'var(--muted-foreground)'
-		},
-		{ label: tr('Domain Belum Dicek'), value: summary?.domains_unknown ?? 0, color: undefined }
+	// Empat angka ringkasan: dua tentang artikel, dua tentang domain.
+	const articleStats = $derived([
+		{ label: tr('Dipantau'), value: summary?.watched ?? 0, tone: 'neutral' as const },
+		{ label: tr('Tayang'), value: summary?.live ?? 0, tone: 'ok' as const },
+		{ label: tr('Hilang'), value: summary?.gone ?? 0, tone: 'danger' as const },
+		{ label: tr('Tak terjangkau'), value: summary?.unreachable ?? 0, tone: 'warn' as const }
+	]);
+	const domainStats = $derived([
+		{ label: tr('Domain mati'), value: summary?.domains_down ?? 0, tone: 'danger' as const },
+		{ label: tr('Belum dicek'), value: summary?.domains_unknown ?? 0, tone: 'neutral' as const }
 	]);
 
 	const visiblePubs = $derived(pubs.items.slice((pubsPage - 1) * PAGE_SIZE, pubsPage * PAGE_SIZE));
 	const visibleDomains = $derived(domains.items.slice((domainsPage - 1) * PAGE_SIZE, domainsPage * PAGE_SIZE));
 	const websiteHref = (url: string | null) =>
 		url ? (/^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`) : '';
+	const hostOf = (url: string | null) => {
+		if (!url) return '';
+		try {
+			return new URL(url).hostname.replace(/^www\./, '');
+		} catch {
+			return url;
+		}
+	};
+	const hasFilter = $derived(Boolean(stateFilter || search.trim() || healthFilter));
 </script>
 
-{#snippet articleCell(item: PublicationItem)}
-	<div>
-		<p class="font-medium">{item.document_title ?? 'Tanpa judul'}</p>
-		<p class="text-xs text-muted-foreground">{item.brand_name ?? '—'}</p>
-	</div>
-{/snippet}
-
-{#snippet articleMediaCell(item: PublicationItem)}
-	<div>
-		<p>{item.media_name ?? '—'}</p>
-		<p class="text-xs text-muted-foreground">{item.partner_name ?? 'Tanpa mitra'}</p>
-	</div>
-{/snippet}
-
-{#snippet urlCell(item: PublicationItem)}
-	<div>
-		{#if item.published_url}
-			<a
-				class="truncate text-xs"
-				style="color: var(--primary); max-width: 260px; display: block;"
-				href={item.published_url}
-				target="_blank"
-				rel="noreferrer noopener"
-				title={item.published_url}>{item.published_url}</a
-			>
-		{:else}
-			<span class="text-xs text-muted-foreground">—</span>
-		{/if}
-		{#if item.http_status != null}
-			<p class="text-xs text-muted-foreground">HTTP {item.http_status}</p>
-		{/if}
-	</div>
-{/snippet}
-
-{#snippet linkStatusCell(item: PublicationItem)}
-	{@const meta = linkMeta(item.state)}
-	<div class="max-w-[280px]">
-		<span title={meta.title}><Badge tone={meta.tone} label={meta.label} /></span>
-		{#if item.error_message}
-			<p class="mt-1 truncate text-xs text-muted-foreground" title={item.error_message}>{item.error_message}</p>
-		{/if}
-	</div>
-{/snippet}
-
-{#snippet failuresCell(item: PublicationItem)}
-	<span class="tabular-nums">{item.consecutive_failures ?? 0}x</span>
-{/snippet}
-
-{#snippet lastCheckedCell(item: PublicationItem)}
-	<div>
-		<p class="text-xs">{fmtDateTime(item.last_checked_at)}</p>
-		{#if item.first_detected_gone_at}
-			<p class="text-xs" style="color: var(--destructive);">Sejak {fmtDateTime(item.first_detected_gone_at)}</p>
-		{/if}
-	</div>
-{/snippet}
-
-{#snippet replaceCell(item: PublicationItem)}
-	<div class="text-right">
-		<button
-			class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
-			style="color: var(--destructive);"
-			disabled={busyId !== null || item.state !== 'gone'}
-			title={item.state === 'gone'
-				? 'Buat publikasi pengganti ke media alternatif'
-				: tr('Hanya artikel berstatus hilang (404) yang bisa diganti')}
-			onclick={() => void replaceArticle(item.id)}
-			>{busyId === item.id ? 'Memproses…' : tr('Ganti Artikel')}</button
-		>
-	</div>
-{/snippet}
-
-{#snippet domainNameCell(item: DomainItem)}
-	<div>
-		<p class="font-medium">{item.name ?? 'Tanpa nama'}</p>
-		<p class="text-xs text-muted-foreground">
-			{item.domain_verified === true || item.domain_verified === 1
-				? 'Domain terverifikasi'
-				: 'Domain belum terverifikasi'}
-		</p>
-	</div>
-{/snippet}
-
-{#snippet websiteCell(item: DomainItem)}
-	{#if item.website_url}
-		<a
-			class="text-xs"
-			style="color: var(--primary);"
-			href={websiteHref(item.website_url)}
-			target="_blank"
-			rel="noreferrer noopener"
-			title={item.website_url}>{item.website_url}</a
-		>
-	{:else}
-		<span class="text-xs text-muted-foreground">Website belum diisi</span>
-	{/if}
-{/snippet}
-
-{#snippet domainHealthCell(item: DomainItem)}
-	{@const meta = domainMeta(item.domain_health)}
-	<span title={meta.title}><Badge tone={meta.tone} label={meta.label} /></span>
-{/snippet}
-
-{#snippet domainCheckedCell(item: DomainItem)}
-	<span class="text-xs">{fmtDateTime(item.domain_last_checked_at)}</span>
-{/snippet}
-
-{#snippet domainFailCell(item: DomainItem)}
-	<span class="tabular-nums">{item.domain_check_fail_count ?? 0}x</span>
-{/snippet}
-
-{#snippet domainPartnerCell(item: DomainItem)}
-	<span>{item.partner_name ?? '—'}</span>
-{/snippet}
-
 <section>
-	<PageHeader
-		title="Link Guardian"
-		description={tr("Halaman ini menjaga garansi tayang setiap artikel: sistem memeriksa apakah artikel yang sudah terbit di situs media mitra masih bisa dibuka selama masa garansi medianya (12 bulan, atau tanpa batas bila medianya menjamin tautan permanen). Kalau ada halaman yang hilang, artikel itu ditandai di baris daftar supaya bisa segera diganti di media lain. Pengecekan ulang berjalan otomatis tiap 7 hari dan bisa diantrekan manual lewat tombol Cek Sekarang.")}
-	>
-		<Badge
-			tone={(summary?.gone ?? 0) > 0 ? 'danger' : 'success'}
-			label={`${summary?.gone ?? 0} artikel hilang`}
-		/>
+	<PageHeader title="Link Guardian">
+		{#if (summary?.gone ?? 0) > 0}
+			<span class="alert-chip">
+				<span class="dot" aria-hidden="true"></span>
+				{summary?.gone} {tr('artikel hilang')}
+			</span>
+		{/if}
 		<button class="app-btn app-btn-primary" onclick={checkNow} disabled={checking}>
-			<RefreshCw size={15} /> {checking ? 'Mengantrekan…' : 'Cek Sekarang'}
+			<RefreshCw size={15} strokeWidth={1.5} />
+			{checking ? tr('Mengantrekan…') : tr('Cek sekarang')}
 		</button>
 	</PageHeader>
 
-	<Feedback {loading} {error} {notice} />
-
-	<div class="mt-4 flex flex-wrap gap-3">
-		{#each metrics as metric (metric.label)}
-			<div class="app-card min-w-[140px] flex-1 p-3">
-				<p class="text-xs font-bold uppercase tracking-wide text-muted-foreground">{metric.label}</p>
-				<p class="text-2xl font-bold" style={metric.color ? `color: ${metric.color};` : undefined}>{metric.value}</p>
-			</div>
-		{/each}
+	<div class="mt-2">
+		<Tooltip
+			content={tr('Pengecekan ulang berjalan otomatis tiap 7 hari. Artikel dipantau selama masa garansi medianya: 12 bulan sejak terbit, atau tanpa batas bila medianya menjamin tautan permanen.')}
+			side="bottom"
+			align="start"
+			maxWidth={340}
+		>
+			<button class="info-line" type="button">
+				<Info size={13} strokeWidth={1.5} />
+				<span>{tr('Cara kerja pemeriksaan')}</span>
+			</button>
+		</Tooltip>
 	</div>
 
-	<div class="mt-4 flex flex-wrap gap-1 border-b" role="tablist">
-		<button
-			type="button"
-			class="app-btn !min-h-8 !rounded-b-none !px-3.5 !text-sm"
-			class:app-btn-primary={tab === 'articles'}
-			class:app-btn-soft={tab !== 'articles'}
-			onclick={() => (tab = 'articles')}>Artikel Hilang ({pubs.items.length})</button
-		>
-		<button
-			type="button"
-			class="app-btn !min-h-8 !rounded-b-none !px-3.5 !text-sm"
-			class:app-btn-primary={tab === 'domains'}
-			class:app-btn-soft={tab !== 'domains'}
-			onclick={() => (tab = 'domains')}>{tr("Domain Mitra (")}{domains.items.length})</button
-		>
-		<button
-			type="button"
-			class="app-btn !min-h-8 !rounded-b-none !px-3.5 !text-sm"
-			class:app-btn-primary={tab === 'claims'}
-			class:app-btn-soft={tab !== 'claims'}
-			onclick={() => (tab = 'claims')}>{tr("Klaim Garansi")}{openClaimCount > 0 ? ` (${openClaimCount})` : ''}</button
-		>
+	<Feedback {loading} {error} {notice} />
+
+	<!-- Angka ringkas: artikel di kiri, domain di kanan -->
+	<div class="stats mt-5">
+		<div class="stat-group">
+			<span class="stat-heading">{tr('Artikel')}</span>
+			<div class="stat-row">
+				{#each articleStats as s (s.label)}
+					<div class="stat">
+						<span class="stat-label">{s.label}</span>
+						<span class="stat-value" data-tone={s.value === 0 ? 'zero' : s.tone}>{s.value}</span>
+					</div>
+				{/each}
+			</div>
+		</div>
+		<div class="stat-group">
+			<span class="stat-heading">{tr('Domain mitra')}</span>
+			<div class="stat-row">
+				{#each domainStats as s (s.label)}
+					<div class="stat">
+						<span class="stat-label">{s.label}</span>
+						<span class="stat-value" data-tone={s.value === 0 ? 'zero' : s.tone}>{s.value}</span>
+					</div>
+				{/each}
+			</div>
+		</div>
+	</div>
+
+	<div class="-mx-1 mt-6 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist">
+		{#each [
+			['articles', tr('Artikel bermasalah'), pubs.items.length],
+			['domains', tr('Domain mitra'), domains.items.length],
+			['claims', tr('Klaim garansi'), openClaimCount]
+		] as [key, label, count] (key)}
+			<button
+				class="tab"
+				data-active={tab === key}
+				role="tab"
+				aria-selected={tab === key}
+				type="button"
+				onclick={() => (tab = key as typeof tab)}
+			>
+				{label}
+				<span class="tab-count tabular-nums">{count}</span>
+			</button>
+		{/each}
 	</div>
 
 	<div class="pt-4">
 		{#if tab === 'claims'}
-			<div class="app-card mb-3 px-4 py-2.5 text-sm text-muted-foreground">{tr("Klaim garansi dari klien. Periksa kondisi domain, hubungi pemilik domain, lalu kembalikan saldo bila masalahnya tidak bisa diselesaikan. Kelayakan (masih dalam masa garansi media — 12 bulan atau permanen, media terverifikasi, dan kerusakan 404 atau tautan dicabut) sudah diperiksa server.")}</div>
-
 			{#if claims.length === 0}
-				<div class="app-card px-6 py-10 text-center text-sm text-muted-foreground">{tr("Belum ada klaim masuk.")}</div>
+				<div class="empty">
+					<p class="text-sm text-muted-foreground">{tr('Belum ada klaim masuk.')}</p>
+				</div>
 			{:else}
+				<p class="mb-3 text-xs text-muted-foreground">
+					{tr('Kelayakan sudah diperiksa server: masih dalam masa garansi media, media terverifikasi, dan kerusakan 404 atau tautan dicabut.')}
+				</p>
 				<div class="flex flex-col gap-2">
 					{#each claims as c (c.id)}
-						<div
-							class="app-card p-3"
-							style={highlightClaim === c.id ? 'border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);' : ''}
-						>
-							<div class="flex flex-wrap items-start justify-between gap-2">
+						<div class="app-card p-4" data-highlight={highlightClaim === c.id}>
+							<div class="flex flex-wrap items-start justify-between gap-3">
 								<div class="min-w-0">
-									<p class="text-sm font-semibold">{c.brand_name ?? tr('Brand')} · {c.media_name ?? tr('Media')}</p>
+									<p class="truncate text-sm font-medium">
+										{c.brand_name ?? tr('Brand')} <span class="text-muted-foreground">·</span> {c.media_name ?? tr('Media')}
+									</p>
 									{#if c.published_url}
-										<a class="break-all text-xs" style="color: var(--primary);" href={c.published_url} target="_blank" rel="noreferrer">{c.published_url}</a>
+										<a
+											class="link-sm max-w-full break-all"
+											href={c.published_url}
+											target="_blank"
+											rel="noreferrer">{hostOf(c.published_url)} <ExternalLink size={11} strokeWidth={1.5} /></a
+										>
 									{/if}
-									<p class="mt-0.5 text-xs text-muted-foreground">
-										{tr('Tayang')} {fmtDay(c.published_at)} · {tr('Deteksi:')} {detectionLabel(c)}
-										{#if c.anchor_expected} · {tr('Anchor:')} {c.anchor_expected}{/if}
-										{#if c.refund_tc} · {tr('Dikembalikan')} {fmtRp(c.refund_idr)}{/if}
+									<p class="meta-line">
+										<span>{tr('Tayang')} {fmtDay(c.published_at)}</span>
+										<span aria-hidden="true">·</span>
+										<span>{detectionLabel(c)}</span>
+										{#if c.anchor_expected}<span aria-hidden="true">·</span><span class="truncate">anchor {c.anchor_expected}</span>{/if}
+										{#if c.refund_tc}<span aria-hidden="true">·</span><span>{fmtRp(c.refund_idr)}</span>{/if}
 									</p>
 								</div>
 								<div class="flex flex-none items-center gap-2">
-									<Badge tone={claimTone(c.status)} label={CLAIM_STATUS_LABEL[c.status] ?? c.status} />
-									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => toggleClaim(c)}>
+									<span class="status-pill" data-tone={claimTone(c.status)}>{CLAIM_STATUS_LABEL[c.status] ?? c.status}</span>
+									<button class="btn-quiet" type="button" onclick={() => toggleClaim(c)}>
 										{openClaim === c.id ? tr('Tutup') : tr('Proses')}
 									</button>
 								</div>
@@ -581,56 +497,87 @@
 							{/if}
 
 							{#if openClaim === c.id}
-								<div class="mt-3 grid gap-2 sm:grid-cols-2">
-									<label class="flex flex-col gap-1 text-xs">
-										<span class="font-medium text-muted-foreground">{tr('Hasil cek kondisi domain')}</span>
+								<div class="mt-3 grid gap-3 sm:grid-cols-2">
+									<label class="block">
+										<span class="field-label">{tr('Hasil cek kondisi domain')}</span>
 										<textarea class="app-input w-full" rows="2" bind:value={noteDomain}></textarea>
 									</label>
-									<label class="flex flex-col gap-1 text-xs">
-										<span class="font-medium text-muted-foreground">{tr('Catatan menghubungi pemilik domain')}</span>
+									<label class="block">
+										<span class="field-label">{tr('Catatan menghubungi pemilik domain')}</span>
 										<textarea class="app-input w-full" rows="2" bind:value={noteOwner}></textarea>
 									</label>
 								</div>
 								{#if c.status !== 'refunded' && c.status !== 'rejected'}
-									<label class="mt-2 flex flex-col gap-1 text-xs">
-										<span class="font-medium text-muted-foreground">{tr('Alasan penolakan (wajib bila klaim ditolak)')}</span>
+									<label class="mt-3 block">
+										<span class="field-label">{tr('Alasan penolakan, wajib bila klaim ditolak')}</span>
 										<input class="app-input w-full" bind:value={rejectReason} />
 									</label>
 									<div class="mt-3 flex flex-wrap justify-end gap-2">
-										<button class="app-btn app-btn-soft" type="button" disabled={claimBusy === c.id} onclick={() => void saveClaimStep(c)}>{tr('Simpan langkah')}</button>
-										<button class="app-btn app-btn-soft" style="color: var(--destructive);" type="button" disabled={claimBusy === c.id} onclick={() => void rejectClaim(c)}>{tr('Tolak klaim')}</button>
+										<button class="app-btn app-btn-soft" type="button" disabled={claimBusy === c.id} onclick={() => void saveClaimStep(c)}>
+											{tr('Simpan langkah')}
+										</button>
+										<button class="btn-quiet" style="color: var(--destructive);" type="button" disabled={claimBusy === c.id} onclick={() => void rejectClaim(c)}>
+											{tr('Tolak klaim')}
+										</button>
 										<button
 											class="app-btn app-btn-primary"
 											type="button"
 											disabled={claimBusy === c.id || !c.eligible}
 											title={c.eligible ? tr('Kembalikan saldo senilai pembelian artikel ini') : (c.ineligible_reason ?? '')}
-											onclick={() => void refundClaim(c)}
+											onclick={() => (refundPanelFor = refundPanelFor === c.id ? null : c.id)}
 										>
-											{claimBusy === c.id ? tr('Memproses…') : tr('Kembalikan Saldo')}
+											{tr('Kembalikan saldo')}
 										</button>
 									</div>
+
+									<!-- Konfirmasi di dalam halaman; tidak bisa dibatalkan, jadi
+									     nominal dan tujuan ditulis lengkap sebelum admin menekan. -->
+									{#if refundPanelFor === c.id}
+										<div class="refund-panel mt-3">
+											<div class="min-w-0 flex-1">
+												<p class="text-sm font-medium">{tr('Kembalikan saldo klien?')}</p>
+												<p class="mt-1 text-xs text-muted-foreground">
+													{c.brand_name ?? tr('Brand')} · {c.media_name ?? tr('Media')}
+													{#if c.refund_idr}<span class="tabular-nums"> · {fmtRp(c.refund_idr)}</span>{/if}
+												</p>
+												<p class="mt-1 text-xs text-muted-foreground">
+													{tr('Tindakan ini mengurangi pemasukan Tauthub dan tidak bisa dibatalkan.')}
+												</p>
+											</div>
+											<div class="flex flex-none items-center gap-2">
+												<button class="btn-quiet" type="button" onclick={() => (refundPanelFor = null)}>{tr('Batal')}</button>
+												<button
+													class="app-btn app-btn-primary"
+													type="button"
+													disabled={claimBusy === c.id}
+													onclick={() => void refundClaim(c)}
+												>
+													{claimBusy === c.id ? tr('Memproses…') : tr('Ya, kembalikan')}
+												</button>
+											</div>
+										</div>
+									{/if}
 								{/if}
 							{/if}
 						</div>
 					{/each}
 				</div>
 			{/if}
-		{/if}
-		{#if tab === 'articles'}
-			<div class="app-card mb-3 px-4 py-2.5 text-sm text-muted-foreground">{tr("Sistem membuka halaman artikel di situs media mitra untuk memastikan halamannya masih bisa diakses. Kalau halaman tidak ditemukan (Hilang 404), tekan tombol Ganti Artikel pada baris tersebut untuk membuat artikel pengganti di media lain. Status Tak Terjangkau tidak dihitung sebagai artikel hilang, karena situsnya mungkin hanya sedang memblokir akses atau mati sementara.")}</div>
-
-			<form class="mb-3 flex flex-wrap items-center gap-2" onsubmit={(e) => e.preventDefault()}>
-				<label class="app-input flex w-[280px] items-center gap-2 !py-1.5">
-					<Search size={14} class="text-muted-foreground" />
+		{:else if tab === 'articles'}
+			<form class="mb-4 flex flex-wrap items-center gap-2" onsubmit={(e) => e.preventDefault()}>
+				<label class="search-box">
+					<Search size={15} strokeWidth={1.5} class="shrink-0 text-muted-foreground" />
 					<input
 						class="w-full bg-transparent text-sm outline-none"
-						placeholder={tr("Cari judul, media, mitra, atau URL…")}
+						name="q"
+						aria-label={tr('Cari artikel')}
+						placeholder={tr('Cari judul, media, mitra, atau URL')}
 						bind:value={search}
 					/>
 				</label>
 				<Select
-					ariaLabel="Filter status artikel"
-					minWidth={300}
+					ariaLabel={tr('Filter status artikel')}
+					minWidth={260}
 					value={stateFilter}
 					onchange={(v) => {
 						stateFilter = v;
@@ -639,91 +586,142 @@
 						void load();
 					}}
 					options={[
-						{ value: '', label: 'Bermasalah (Hilang + Tak Terjangkau)' },
-						{ value: 'gone', label: tr('Hilang (404) — halaman sudah tidak ada') },
-						{ value: 'unreachable', label: tr('Tak Terjangkau — situs menolak akses atau sedang error') },
-						{ value: 'live', label: tr('Tayang — artikel masih bisa diakses') },
-						{ value: 'no_url', label: 'Tanpa URL' }
+						{ value: '', label: tr('Bermasalah: hilang dan tak terjangkau') },
+						{ value: 'gone', label: tr('Hilang (404)') },
+						{ value: 'unreachable', label: tr('Tak terjangkau') },
+						{ value: 'live', label: tr('Tayang') },
+						{ value: 'no_url', label: tr('Tanpa URL') }
 					]}
 				/>
-				<button
-					type="submit"
-					class="app-btn app-btn-soft"
-					onclick={() => {
-						pubsPage = 1;
-						void load();
-					}}>Terapkan</button
-				>
-				<button
-					type="button"
-					class="app-btn app-btn-soft"
-					onclick={() => {
-						search = '';
-						stateFilter = '';
-						notice = '';
-						pubsPage = 1;
-						void load();
-					}}>Reset</button
-				>
+				{#if hasFilter}
+					<button
+						type="button"
+						class="btn-quiet"
+						onclick={() => {
+							search = '';
+							stateFilter = '';
+							notice = '';
+							pubsPage = 1;
+							void load();
+						}}>{tr('Hapus filter')}</button
+					>
+				{/if}
 			</form>
 
 			{#if loading}
-				<p class="text-sm text-muted-foreground">{tr("Memuat data…")}</p>
+				<p class="text-sm text-muted-foreground">{tr('Memuat data…')}</p>
 			{:else if pubs.items.length === 0}
-				<div class="app-card px-6 py-10 text-center">
-					<Unlink size={28} class="mx-auto" />
+				<div class="empty">
+					<Unlink size={18} strokeWidth={1.5} class="text-muted-foreground" />
 					<p class="mt-2 text-sm text-muted-foreground">
 						{stateFilter || search.trim()
-							? tr('Tidak ada artikel yang cocok dengan filter ini. Kosongkan filter atau jalankan Cek Sekarang untuk memperbarui data.')
-							: `Tidak ada artikel hilang atau tak terjangkau. ${summary?.watched ?? 0} artikel sedang dipantau — pengecekan ulang otomatis berjalan tiap 7 hari.`}
+							? tr('Tidak ada artikel yang cocok dengan filter ini.')
+							: tr('Tidak ada artikel hilang atau tak terjangkau.')}
 					</p>
 				</div>
 			{:else}
-				<div class="hidden lg:block">
-				<DataTable
-					columns={[
-						{ key: 'article', label: 'Artikel', render: articleCell },
-						{ key: 'media', label: tr('Media'), render: articleMediaCell },
-						{ key: 'url', label: 'URL', render: urlCell },
-						{ key: 'status', label: 'Status', render: linkStatusCell },
-						{ key: 'failures', label: tr('Gagal Berturut'), render: failuresCell },
-						{ key: 'checked', label: 'Terakhir Dicek', render: lastCheckedCell },
-						{ key: 'actions', label: '', align: 'right' as const, render: replaceCell }
-					]}
-					rows={visiblePubs}
-					rowKey={(item: PublicationItem) => item.id}
-					{loading}
-					empty={tr("Tidak ada artikel yang cocok dengan filter ini.")}
-					minWidth="1200px"
-				/>
+				<!-- Tabel desktop -->
+				<div class="app-card hidden overflow-x-auto lg:block">
+					<table class="data">
+						<thead>
+							<tr>
+								<th class="c-art">{tr('Artikel')}</th>
+								<th class="c-media">{tr('Media')}</th>
+								<th class="c-url">URL</th>
+								<th class="c-status">{tr('Status')}</th>
+								<th class="c-fail">{tr('Gagal')}</th>
+								<th class="c-checked">{tr('Terakhir dicek')}</th>
+								<th class="c-act"></th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each visiblePubs as item (item.id)}
+								{@const meta = linkMeta(item.state)}
+								<tr>
+									<td class="c-art">
+										<span class="block text-sm font-medium" title={item.document_title ?? ''}>{item.document_title ?? tr('Tanpa judul')}</span>
+										<span class="block truncate text-xs text-muted-foreground">{item.brand_name ?? '—'}</span>
+									</td>
+									<td class="c-media">
+										<span class="block truncate text-sm">{item.media_name ?? '—'}</span>
+										<span class="block truncate text-xs text-muted-foreground">{item.partner_name ?? tr('Tanpa mitra')}</span>
+									</td>
+									<td class="c-url">
+										{#if item.published_url}
+											<a class="link-sm max-w-full" href={item.published_url} target="_blank" rel="noreferrer noopener" title={item.published_url}>
+												<span class="truncate">{hostOf(item.published_url)}</span>
+												<ExternalLink size={11} strokeWidth={1.5} />
+											</a>
+										{:else}
+											<span class="text-xs text-muted-foreground">—</span>
+										{/if}
+										{#if item.http_status != null}
+											<span class="block text-xs tabular-nums text-muted-foreground">HTTP {item.http_status}</span>
+										{/if}
+									</td>
+									<td class="c-status">
+										<span class="status-pill" data-tone={meta.tone} title={meta.title}>{meta.label}</span>
+										{#if item.error_message}
+											<span class="mt-1 block truncate text-xs text-muted-foreground" title={item.error_message}>{item.error_message}</span>
+										{/if}
+									</td>
+									<td class="c-fail tabular-nums" data-dim={(item.consecutive_failures ?? 0) === 0}>{item.consecutive_failures ?? 0}x</td>
+									<td class="c-checked">
+										<span class="block text-xs leading-5">{fmtDateTime(item.last_checked_at)}</span>
+										{#if item.first_detected_gone_at}
+											<span class="mt-0.5 block text-xs text-muted-foreground">{tr('sejak')} {fmtDay(item.first_detected_gone_at)}</span>
+										{/if}
+									</td>
+									<td class="c-act">
+										<button
+											class="btn-replace"
+											disabled={busyId !== null || item.state !== 'gone'}
+											title={item.state === 'gone'
+												? tr('Buat publikasi pengganti ke media alternatif')
+												: tr('Hanya artikel berstatus hilang (404) yang bisa diganti')}
+											onclick={() => void replaceArticle(item.id)}
+										>
+											{busyId === item.id ? tr('Memproses…') : tr('Ganti')}
+										</button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
 				</div>
-				<!-- Kartu ringkas untuk layar kecil (parity varian mobile halaman lama). -->
-				<div class="mt-3 grid gap-3 lg:hidden">
+
+				<!-- Kartu untuk layar kecil -->
+				<div class="grid gap-3 lg:hidden">
 					{#each visiblePubs as item (item.id)}
 						{@const m = linkMeta(item.state)}
 						<div class="app-card p-4">
-							<p class="font-medium">{item.document_title ?? 'Tanpa judul'}</p>
-							<p class="text-xs text-muted-foreground">{item.brand_name ?? '—'}</p>
-							<div class="mt-3 space-y-1.5 text-sm">
-								<p class="text-xs"><span class="text-muted-foreground">{tr("Media:")}</span> {item.media_name ?? '—'}{item.partner_name ? ` · ${item.partner_name}` : ''}</p>
-								<p class="break-all text-xs"><span class="text-muted-foreground">URL:</span> {item.published_url ?? '—'}</p>
-								<p class="text-xs"><span class="text-muted-foreground">HTTP:</span> {item.http_status != null ? String(item.http_status) : '—'}</p>
-								<p><span title={m.title}><Badge tone={m.tone} label={m.label} /></span></p>
-								{#if item.error_message}<p class="text-xs"><span class="text-muted-foreground">Keterangan:</span> {item.error_message}</p>{/if}
-								<p class="text-xs"><span class="text-muted-foreground">{tr("Gagal berturut:")}</span> {item.consecutive_failures ?? 0}x</p>
-								<p class="text-xs"><span class="text-muted-foreground">Terakhir dicek:</span> {fmtDateTime(item.last_checked_at)}</p>
-								{#if item.first_detected_gone_at}<p class="text-xs"><span class="text-muted-foreground">Sejak hilang:</span> {fmtDateTime(item.first_detected_gone_at)}</p>{/if}
+							<div class="flex items-start justify-between gap-3">
+								<p class="text-sm font-medium">{item.document_title ?? tr('Tanpa judul')}</p>
+								<span class="status-pill shrink-0" data-tone={m.tone}>{m.label}</span>
+							</div>
+							<p class="mt-1 text-xs text-muted-foreground">
+								{item.media_name ?? '—'} · {item.brand_name ?? '—'}
+							</p>
+							{#if item.published_url}
+								<a class="link-sm mt-3 block break-all" href={item.published_url} target="_blank" rel="noreferrer noopener">{item.published_url}</a>
+							{/if}
+							<div class="meta-line mt-2">
+								{#if item.http_status != null}<span class="tabular-nums">HTTP {item.http_status}</span><span aria-hidden="true">·</span>{/if}
+								<span class="tabular-nums">{item.consecutive_failures ?? 0}x {tr('gagal')}</span>
+								<span aria-hidden="true">·</span>
+								<span>{fmtDateTime(item.last_checked_at)}</span>
 							</div>
 							<button
-								class="app-btn app-btn-soft mt-3 !min-h-7 !px-2.5 !text-xs"
-								style="color: var(--destructive);"
+								class="btn-replace mt-3"
 								disabled={busyId !== null || item.state !== 'gone'}
 								onclick={() => void replaceArticle(item.id)}
-								>{busyId === item.id ? 'Memproses…' : tr('Ganti Artikel')}</button
 							>
+								{busyId === item.id ? tr('Memproses…') : tr('Ganti artikel')}
+							</button>
 						</div>
 					{/each}
 				</div>
+
 				<Pagination
 					total={pubs.items.length}
 					limit={PAGE_SIZE}
@@ -731,16 +729,16 @@
 					onChange={(next) => (pubsPage = next / PAGE_SIZE + 1)}
 				/>
 				{#if pubs.total > pubs.items.length}
-					<p class="mt-2 text-xs text-muted-foreground"> {tr("Menampilkan")} {pubs.items.length} {tr("dari total")} {pubs.total} {tr("artikel bermasalah. Persempit dengan filter untuk melihat sisanya.")} </p>
+					<p class="mt-2 text-xs text-muted-foreground">
+						{tr('Menampilkan')} {pubs.items.length} {tr('dari total')} {pubs.total} {tr('artikel. Persempit dengan filter untuk melihat sisanya.')}
+					</p>
 				{/if}
 			{/if}
 		{:else}
-			<div class="app-card mb-3 px-4 py-2.5 text-sm text-muted-foreground">{tr("Bagian ini memeriksa apakah situs media mitra masih bisa dihubungi sama sekali. Domain yang mati penting karena semua artikel yang terbit di sana jadi tidak bisa dibuka, jadi perlu segera ditangani.")}</div>
-
-			<form class="mb-3 flex flex-wrap items-center gap-2" onsubmit={(e) => e.preventDefault()}>
+			<form class="mb-4 flex flex-wrap items-center gap-2" onsubmit={(e) => e.preventDefault()}>
 				<Select
-					ariaLabel="Filter kesehatan domain"
-					minWidth={300}
+					ariaLabel={tr('Filter kesehatan domain')}
+					minWidth={260}
 					value={healthFilter}
 					onchange={(v) => {
 						healthFilter = v;
@@ -749,71 +747,106 @@
 						void load();
 					}}
 					options={[
-						{ value: '', label: tr('Perlu perhatian (Mati + Belum Dicek)') },
-						{ value: 'unreachable', label: tr('Domain mati — situs tidak bisa dihubungi') },
+						{ value: '', label: tr('Perlu perhatian: mati dan belum dicek') },
+						{ value: 'unreachable', label: tr('Domain mati') },
 						{ value: 'unknown', label: tr('Belum dicek') },
-						{ value: 'token_missing', label: 'Token verifikasi hilang — situs hidup, tapi penanda verifikasi tidak ditemukan' },
-						{ value: 'live', label: 'Hidup' }
+						{ value: 'token_missing', label: tr('Token verifikasi hilang') },
+						{ value: 'live', label: tr('Hidup') }
 					]}
 				/>
-				<button
-					type="button"
-					class="app-btn app-btn-soft"
-					onclick={() => {
-						healthFilter = '';
-						notice = '';
-						domainsPage = 1;
-						void load();
-					}}>Reset</button
-				>
+				{#if healthFilter}
+					<button
+						type="button"
+						class="btn-quiet"
+						onclick={() => {
+							healthFilter = '';
+							notice = '';
+							domainsPage = 1;
+							void load();
+						}}>{tr('Hapus filter')}</button
+					>
+				{/if}
 			</form>
 
 			{#if loading}
-				<p class="text-sm text-muted-foreground">{tr("Memuat data…")}</p>
+				<p class="text-sm text-muted-foreground">{tr('Memuat data…')}</p>
 			{:else if domains.items.length === 0}
-				<div class="app-card px-6 py-10 text-center">
-					<Unlink size={28} class="mx-auto" />
+				<div class="empty">
+					<Unlink size={18} strokeWidth={1.5} class="text-muted-foreground" />
 					<p class="mt-2 text-sm text-muted-foreground">
 						{healthFilter
-							? tr('Tidak ada domain mitra dengan status kesehatan yang dipilih. Kosongkan filter atau jalankan Cek Sekarang untuk memperbarui data.')
-							: tr('Tidak ada domain mitra yang mati atau belum dicek. Pengecekan ulang otomatis berjalan tiap 7 hari untuk semua media mitra yang punya website.')}
+							? tr('Tidak ada domain dengan status kesehatan yang dipilih.')
+							: tr('Tidak ada domain mitra yang mati atau belum dicek.')}
 					</p>
 				</div>
 			{:else}
-				<div class="hidden lg:block">
-				<DataTable
-					columns={[
-						{ key: 'media', label: tr('Media'), render: domainNameCell },
-						{ key: 'partner', label: tr('Mitra'), render: domainPartnerCell },
-						{ key: 'website', label: 'Website', render: websiteCell },
-						{ key: 'status', label: 'Status', render: domainHealthCell },
-						{ key: 'checked', label: 'Terakhir Dicek', render: domainCheckedCell },
-						{ key: 'fail', label: tr('Gagal'), render: domainFailCell }
-					]}
-					rows={visibleDomains}
-					rowKey={(item: DomainItem) => item.media_id}
-					{loading}
-					empty={tr("Tidak ada domain mitra dengan status kesehatan yang dipilih.")}
-					minWidth="1000px"
-				/>
+				<div class="app-card hidden overflow-x-auto lg:block">
+					<table class="data">
+						<thead>
+							<tr>
+								<th class="c-media">{tr('Media')}</th>
+								<th class="c-partner">{tr('Mitra')}</th>
+								<th class="c-url">{tr('Website')}</th>
+								<th class="c-status">{tr('Status')}</th>
+								<th class="c-checked">{tr('Terakhir dicek')}</th>
+								<th class="c-fail">{tr('Gagal')}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each visibleDomains as item (item.media_id)}
+								{@const meta = domainMeta(item.domain_health)}
+								<tr>
+									<td class="c-media">
+										<span class="block truncate text-sm font-medium">{item.name ?? tr('Tanpa nama')}</span>
+										<span class="block text-xs text-muted-foreground">
+											{item.domain_verified === true || item.domain_verified === 1 ? tr('Terverifikasi') : tr('Belum terverifikasi')}
+										</span>
+									</td>
+									<td class="c-partner">
+										<span class="block truncate text-sm">{item.partner_name ?? '—'}</span>
+									</td>
+									<td class="c-url">
+										{#if item.website_url}
+											<a class="link-sm max-w-full" href={websiteHref(item.website_url)} target="_blank" rel="noreferrer noopener" title={item.website_url}>
+												<span class="truncate">{hostOf(item.website_url)}</span>
+												<ExternalLink size={11} strokeWidth={1.5} />
+											</a>
+										{:else}
+											<span class="text-xs text-muted-foreground">{tr('Belum diisi')}</span>
+										{/if}
+									</td>
+									<td class="c-status">
+										<span class="status-pill" data-tone={meta.tone} title={meta.title}>{meta.label}</span>
+									</td>
+									<td class="c-checked"><span class="text-xs">{fmtDateTime(item.domain_last_checked_at)}</span></td>
+									<td class="c-fail tabular-nums" data-dim={(item.domain_check_fail_count ?? 0) === 0}>{item.domain_check_fail_count ?? 0}x</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
 				</div>
-				<!-- Kartu ringkas untuk layar kecil (parity varian mobile halaman lama). -->
-				<div class="mt-3 grid gap-3 lg:hidden">
+
+				<div class="grid gap-3 lg:hidden">
 					{#each visibleDomains as item (item.media_id)}
 						{@const m = domainMeta(item.domain_health)}
 						<div class="app-card p-4">
-							<p class="font-medium">{item.name ?? 'Tanpa nama'}</p>
-							<p class="text-xs text-muted-foreground">{item.domain_verified === true || item.domain_verified === 1 ? 'Domain terverifikasi' : 'Domain belum terverifikasi'}</p>
-							<div class="mt-3 space-y-1.5 text-sm">
-								<p class="text-xs"><span class="text-muted-foreground">{tr("Mitra:")}</span> {item.partner_name ?? '—'}</p>
-								<p class="break-all text-xs"><span class="text-muted-foreground">Website:</span> {item.website_url ?? 'Website belum diisi'}</p>
-								<p><span title={m.title}><Badge tone={m.tone} label={m.label} /></span></p>
-								<p class="text-xs"><span class="text-muted-foreground">Terakhir dicek:</span> {fmtDateTime(item.domain_last_checked_at)}</p>
-								<p class="text-xs"><span class="text-muted-foreground">{tr("Gagal:")}</span> {item.domain_check_fail_count ?? 0}x</p>
+							<div class="flex items-start justify-between gap-3">
+								<p class="text-sm font-medium">{item.name ?? tr('Tanpa nama')}</p>
+								<span class="status-pill shrink-0" data-tone={m.tone}>{m.label}</span>
+							</div>
+							<p class="mt-1 text-xs text-muted-foreground">{item.partner_name ?? '—'}</p>
+							{#if item.website_url}
+								<a class="link-sm mt-3 block break-all" href={websiteHref(item.website_url)} target="_blank" rel="noreferrer noopener">{item.website_url}</a>
+							{/if}
+							<div class="meta-line mt-2">
+								<span class="tabular-nums">{item.domain_check_fail_count ?? 0}x {tr('gagal')}</span>
+								<span aria-hidden="true">·</span>
+								<span>{fmtDateTime(item.domain_last_checked_at)}</span>
 							</div>
 						</div>
 					{/each}
 				</div>
+
 				<Pagination
 					total={domains.items.length}
 					limit={PAGE_SIZE}
@@ -821,11 +854,293 @@
 					onChange={(next) => (domainsPage = next / PAGE_SIZE + 1)}
 				/>
 				{#if domains.total > domains.items.length}
-					<p class="mt-2 text-xs text-muted-foreground"> {tr("Menampilkan")} {domains.items.length} {tr("dari total")} {domains.total} {tr("domain. Persempit dengan filter untuk melihat sisanya.")} </p>
+					<p class="mt-2 text-xs text-muted-foreground">
+						{tr('Menampilkan')} {domains.items.length} {tr('dari total')} {domains.total} {tr('domain. Persempit dengan filter untuk melihat sisanya.')}
+					</p>
 				{/if}
 			{/if}
 		{/if}
 	</div>
-
-	<p class="mt-4 text-xs text-muted-foreground">{tr("Artikel dipantau selama masa garansi medianya: 12 bulan sejak terbit, atau tanpa batas bila medianya menjamin tautan permanen. Status Hilang (404) berarti halaman sudah tidak ada dan bisa diganti ke media lain; Tak Terjangkau berarti situs menolak akses atau sedang error dan tidak dianggap hilang.")}</p>
 </section>
+
+<style>
+	/* ── Chip peringatan di header ── */
+	.alert-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border-radius: 6px;
+		padding: 2px 8px;
+		background-color: var(--destructive-soft, #fdecee);
+		color: var(--destructive);
+		font-size: 12px;
+		font-weight: 500;
+		white-space: nowrap;
+	}
+	.dot {
+		display: inline-block;
+		width: 6px;
+		height: 6px;
+		border-radius: 999px;
+		background-color: currentColor;
+	}
+
+	/* ── Baris info ── */
+	.info-line {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		color: var(--muted-foreground);
+		font-size: 12px;
+		line-height: 18px;
+		transition: color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.info-line:hover { color: var(--foreground); }
+	.info-line:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+
+	/* ── Angka ringkas ── */
+	.stats {
+		display: grid;
+		gap: 16px;
+	}
+	@media (min-width: 900px) {
+		.stats { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+	}
+	.stat-group {
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background-color: var(--card);
+		padding: 12px 16px 14px;
+		min-width: 0;
+	}
+	.stat-heading {
+		display: block;
+		color: var(--muted-foreground);
+		font-size: 11px;
+		line-height: 16px;
+	}
+	.stat-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px 28px;
+		margin-top: 6px;
+	}
+	.stat { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+	.stat-label { color: var(--muted-foreground); font-size: 12px; white-space: nowrap; }
+	.stat-value {
+		color: var(--foreground);
+		font-size: 20px;
+		font-weight: 500;
+		line-height: 24px;
+		font-variant-numeric: tabular-nums;
+	}
+	.stat-value[data-tone='zero'] { color: var(--muted-foreground); }
+	.stat-value[data-tone='ok'] { color: var(--success); }
+	.stat-value[data-tone='danger'] { color: var(--destructive); }
+	.stat-value[data-tone='warn'] { color: var(--warning); }
+
+	/* ── Tab ── */
+	.tab {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		flex: 0 0 auto;
+		min-height: 32px;
+		border-radius: 8px;
+		padding: 0 12px;
+		color: var(--muted-foreground);
+		font-size: 13px;
+		font-weight: 500;
+		white-space: nowrap;
+		transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1), color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	/* Tab aktif: biru aksen dengan teks putih — satu-satunya warna di baris ini */
+	.tab:hover { background-color: var(--secondary); color: var(--foreground); }
+	.tab[data-active='true'] {
+		background-color: var(--primary);
+		color: var(--primary-foreground);
+		font-weight: 500;
+	}
+	.tab[data-active='true']:hover { background-color: var(--primary); color: var(--primary-foreground); }
+	.tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+	.tab-count {
+		border-radius: 4px;
+		padding: 0 5px;
+		background-color: color-mix(in srgb, var(--foreground) 7%, transparent);
+		color: var(--muted-foreground);
+		font-size: 11px;
+		line-height: 16px;
+	}
+	.tab[data-active='true'] .tab-count {
+		background-color: color-mix(in srgb, var(--primary-foreground) 22%, transparent);
+		color: var(--primary-foreground);
+	}
+
+	/* ── Pencarian ── */
+	.search-box {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		gap: 8px;
+		min-width: 220px;
+		max-width: 380px;
+		min-height: 34px;
+		border: 1px solid var(--input);
+		border-radius: var(--radius-control);
+		padding: 0 12px;
+		background-color: var(--card);
+	}
+	.search-box:focus-within {
+		border-color: var(--ring);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent);
+	}
+
+	/* ── Tabel ── */
+	.data {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 13px;
+		table-layout: fixed;
+	}
+	.data thead th {
+		padding: 10px 12px;
+		border-bottom: 1px solid var(--border);
+		color: var(--muted-foreground);
+		font-size: 11px;
+		font-weight: 500;
+		text-align: left;
+		white-space: nowrap;
+	}
+	.data tbody td {
+		padding: 10px 12px;
+		vertical-align: top;
+		min-width: 0;
+		overflow: hidden;
+	}
+	.data tbody tr + tr td { border-top: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent); }
+	.data tbody tr:hover td { background-color: color-mix(in srgb, var(--secondary) 55%, transparent); }
+
+	.c-art { width: 29%; }
+	.c-media { width: 17%; }
+	.c-partner { width: 16%; }
+	.c-url { width: 16%; }
+	.c-status { width: 108px; }
+	.c-fail { width: 60px; text-align: right !important; }
+	.c-checked { width: 140px; }
+	.c-act { width: 88px; text-align: right !important; }
+
+	.data thead th.c-fail,
+	.data thead th.c-act { text-align: right; }
+	.data td[data-dim='true'] { color: var(--muted-foreground); }
+
+	.meta-line {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 4px 6px;
+		margin-top: 4px;
+		color: var(--muted-foreground);
+		font-size: 11px;
+		line-height: 16px;
+	}
+
+	/* ── Chip status ── */
+	.status-pill {
+		display: inline-flex;
+		align-items: center;
+		border-radius: 5px;
+		padding: 1px 7px;
+		font-size: 11px;
+		font-weight: 500;
+		line-height: 18px;
+		white-space: nowrap;
+	}
+	.status-pill[data-tone='success'] { background-color: var(--success-soft); color: var(--success); }
+	.status-pill[data-tone='warning'] { background-color: var(--warning-soft); color: var(--warning); }
+	.status-pill[data-tone='danger'] { background-color: var(--destructive-soft, #fdecee); color: var(--destructive); }
+	.status-pill[data-tone='neutral'] { background-color: var(--secondary); color: var(--muted-foreground); }
+
+	/* ── Tautan ── */
+	.link-sm {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		color: var(--primary);
+		font-size: 12px;
+		line-height: 18px;
+		text-decoration: none;
+		overflow: hidden;
+	}
+	.link-sm:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+	/* ── Tombol kecil ── */
+	.btn-quiet {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 28px;
+		border: 1px solid var(--border);
+		border-radius: 7px;
+		padding: 0 10px;
+		background-color: var(--card);
+		color: var(--foreground);
+		font-size: 12px;
+		font-weight: 500;
+		white-space: nowrap;
+		transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.btn-quiet:hover { background-color: var(--secondary); }
+	.btn-quiet:disabled { opacity: 0.5; cursor: not-allowed; }
+
+	.btn-replace {
+		min-height: 28px;
+		border: 1px solid var(--border);
+		border-radius: 7px;
+		padding: 0 10px;
+		background-color: var(--card);
+		color: var(--destructive);
+		font-size: 12px;
+		font-weight: 500;
+		white-space: nowrap;
+		transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.btn-replace:hover:not(:disabled) { background-color: var(--destructive-soft, #fdecee); }
+	.btn-replace:disabled { color: var(--muted-foreground); opacity: 0.5; cursor: not-allowed; }
+
+	/* ── Penanda & kosong ── */
+	.app-card[data-highlight='true'] {
+		border-color: var(--primary);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+	}
+	.empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		border: 1px dashed var(--border);
+		border-radius: var(--radius);
+		padding: 40px 16px;
+		text-align: center;
+	}
+
+	/* ── Panel konfirmasi refund ── */
+	.refund-panel {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 12px;
+		border: 1px solid color-mix(in srgb, var(--destructive) 24%, var(--border));
+		border-left: 3px solid var(--destructive);
+		border-radius: 8px;
+		padding: 12px 14px;
+		background-color: color-mix(in srgb, var(--destructive-soft, #fdecee) 45%, var(--card));
+	}
+
+	/* ── Field ── */
+	.field-label {
+		display: block;
+		margin-bottom: 4px;
+		color: var(--muted-foreground);
+		font-size: 12px;
+		font-weight: 500;
+	}
+</style>

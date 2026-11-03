@@ -10,14 +10,13 @@
 	import { goto } from '$app/navigation';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
-	import Badge from '$lib/components/admin/badge.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import Select from '$lib/components/select.svelte';
 	import MultilineText from '$lib/components/multiline-text.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
-	import { Send, ArrowDown, ArrowUpDown } from '@lucide/svelte';
+	import { Send, ArrowDown, ArrowUpDown, Search, Inbox, CheckCircle } from '@lucide/svelte';
 
 	type TicketStatus = 'buka' | 'diproses' | 'selesai';
 	type Ticket = {
@@ -42,11 +41,6 @@
 		diproses: tr('Diproses'),
 		selesai: tr('Selesai')
 	});
-	const STATUS_TONES: Record<TicketStatus, 'warning' | 'accent' | 'success'> = {
-		buka: 'warning',
-		diproses: 'accent',
-		selesai: 'success'
-	};
 	const PRIORITY_LABELS = $derived<Record<string, string>>({ rendah: tr('Rendah'), normal: tr('Normal'), tinggi: tr('Tinggi') });
 	const CATEGORY_LABELS = $derived<Record<string, string>>({
 		teknis: tr('Teknis'),
@@ -61,6 +55,9 @@
 	let error = $state('');
 	let rows = $state<Ticket[]>([]);
 	let total = $state(0);
+	// Hitungan per status untuk ringkasan berwarna: dari server (bukan dari
+	// 20 baris halaman aktif), supaya angkanya tetap benar saat difilter/paginasi.
+	let counts = $state<{ buka: number; diproses: number; selesai: number } | null>(null);
 	let status = $state<string>('');
 	let priority = $state<string>('');
 	// Urutan kolom Prioritas: default tinggi→rendah (dari API), klik header
@@ -131,7 +128,10 @@
 		qs.set('limit', String(PAGE_SIZE));
 		qs.set('offset', String((pageNo - 1) * PAGE_SIZE));
 		try {
-			const res = await apiRequest(`/v1/platform/tickets?${qs.toString()}`);
+			const [res] = await Promise.all([
+				apiRequest(`/v1/platform/tickets?${qs.toString()}`),
+				loadCounts()
+			]);
 			if (!res.ok) {
 				const msg = await readApiError(res, 'Permintaan platform gagal.');
 				error = msg === 'Resource not found' ? 'Akses platform administrator tidak tersedia.' : msg;
@@ -145,6 +145,25 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	// Tiga panggilan ringan: total per status, tanpa filter aktif.
+	async function loadCounts() {
+		const one = async (s: TicketStatus) => {
+			const r = await apiRequest(`/v1/platform/tickets?limit=1&status=${s}`);
+			if (!r.ok) return 0;
+			const d = await r.json();
+			return Number(d.total) || 0;
+		};
+		const [buka, diproses, selesai] = await Promise.all([one('buka'), one('diproses'), one('selesai')]);
+		counts = { buka, diproses, selesai };
+	}
+
+	/** Klik kartu ringkasan = saring tabel ke status itu (klik dua kali = semua). */
+	function filterByStatus(s: TicketStatus) {
+		status = status === s ? '' : s;
+		pageNo = 1;
+		void load();
 	}
 
 	async function openDetail(ticket: Ticket) {
@@ -219,9 +238,7 @@
 </script>
 
 <section>
-	<PageHeader title={tr('Dukungan')} description={tr('Tiket dukungan dari mitra. Balasan dikirim ke lonceng, email, dan WhatsApp mitra.')}>
-		<Badge tone="accent" label={`${total} tiket`} />
-	</PageHeader>
+	<PageHeader title={tr('Dukungan')} description={tr('Tiket dukungan dari mitra. Balasan dikirim ke lonceng, email, dan WhatsApp mitra.')} />
 
 	<Feedback {loading} {error} loadingText={tr('Memuat tiket…')} />
 
@@ -230,13 +247,70 @@
 			<p class="text-sm text-muted-foreground">{tr('Akun ini tidak memiliki akses ke tiket dukungan.')}</p>
 		</div>
 	{:else}
-		<div class="mt-4 flex flex-wrap items-center gap-3">
-			<input
-				class="app-input w-full max-w-md"
-				placeholder={tr('Cari subjek atau nama mitra…')}
-				value={query}
-				oninput={(e) => onQueryInput((e.currentTarget as HTMLInputElement).value)}
-			/>
+		<!-- Ringkasan per status: satu warna per keadaan, sekaligus filter -->
+		<div class="summary mt-5">
+			<button
+				class="sum-card"
+				data-tone="buka"
+				data-zero={!(counts?.['buka'] ?? 0)}
+				data-active={status === 'buka'}
+				type="button"
+				aria-pressed={status === 'buka'}
+				onclick={() => filterByStatus('buka')}
+			>
+				<span class="sum-top">
+					<span class="sum-dot" aria-hidden="true"></span>
+					<span class="sum-label">{tr('Belum dijawab')}</span>
+				</span>
+				<span class="sum-value tabular-nums">{counts?.buka ?? '—'}</span>
+				<span class="sum-hint">{tr('menunggu balasan admin')}</span>
+			</button>
+			<button
+				class="sum-card"
+				data-tone="diproses"
+				data-zero={!(counts?.['diproses'] ?? 0)}
+				data-active={status === 'diproses'}
+				type="button"
+				aria-pressed={status === 'diproses'}
+				onclick={() => filterByStatus('diproses')}
+			>
+				<span class="sum-top">
+					<span class="sum-dot" aria-hidden="true"></span>
+					<span class="sum-label">{tr('Sedang ditangani')}</span>
+				</span>
+				<span class="sum-value tabular-nums">{counts?.diproses ?? '—'}</span>
+				<span class="sum-hint">{tr('sudah dibalas, belum ditutup')}</span>
+			</button>
+			<button
+				class="sum-card"
+				data-tone="selesai"
+				data-zero={!(counts?.['selesai'] ?? 0)}
+				data-active={status === 'selesai'}
+				type="button"
+				aria-pressed={status === 'selesai'}
+				onclick={() => filterByStatus('selesai')}
+			>
+				<span class="sum-top">
+					<span class="sum-dot" aria-hidden="true"></span>
+					<span class="sum-label">{tr('Selesai')}</span>
+				</span>
+				<span class="sum-value tabular-nums">{counts?.selesai ?? '—'}</span>
+				<span class="sum-hint">{tr('sudah ditutup')}</span>
+			</button>
+		</div>
+
+		<div class="mt-5 flex flex-wrap items-center gap-2">
+			<label class="search-box">
+				<Search size={15} strokeWidth={1.5} class="shrink-0 text-muted-foreground" />
+				<input
+					class="w-full bg-transparent text-sm outline-none"
+					name="q"
+					aria-label={tr('Cari tiket')}
+					placeholder={tr('Cari subjek atau nama mitra')}
+					value={query}
+					oninput={(e) => onQueryInput((e.currentTarget as HTMLInputElement).value)}
+				/>
+			</label>
 			<Select
 				ariaLabel={tr('Filter status')}
 				minWidth={170}
@@ -269,58 +343,88 @@
 					{ value: 'rendah', label: PRIORITY_LABELS.rendah }
 				]}
 			/>
+			{#if !loading}
+				<span class="ml-auto text-xs tabular-nums text-muted-foreground">{total} {tr('tiket')}</span>
+			{/if}
 		</div>
 
-		<div class="app-card mt-4 overflow-x-auto">
-			<table class="w-full text-sm" style="min-width: 940px;">
+		<div class="app-card mt-3 overflow-x-auto">
+			<table class="data">
 				<thead>
-					<tr class="text-xs text-muted-foreground">
-						<th class="px-4 py-2.5 text-left font-medium">{tr('Status')}</th>
-						<th class="px-4 py-2.5 text-left font-medium">{tr('Subjek')}</th>
-						<th class="px-4 py-2.5 text-left font-medium">{tr('Mitra')}</th>
-						<th class="px-4 py-2.5 text-left font-medium">{tr('Kategori')}</th>
-						<th class="px-4 py-2.5 text-left font-medium" aria-sort={priorityDesc ? 'ascending' : 'descending'}>
-							<button
-								class="inline-flex items-center gap-1 font-medium hover:text-foreground"
-								type="button"
-								onclick={togglePrioritySort}
-								aria-label={priorityDesc ? tr('Urutkan prioritas dari yang tertinggi') : tr('Urutkan prioritas dari yang terendah')}
-							>
+					<tr>
+						<th class="c-status">{tr('Status')}</th>
+						<th class="c-subject">{tr('Subjek')}</th>
+						<th class="c-partner">{tr('Mitra')}</th>
+						<th class="c-cat">{tr('Kategori')}</th>
+						<th class="c-prio" aria-sort={priorityDesc ? 'ascending' : 'descending'}>
+							<button class="sort-btn" type="button" onclick={togglePrioritySort} aria-label={priorityDesc ? tr('Urutkan prioritas dari yang tertinggi') : tr('Urutkan prioritas dari yang terendah')}>
 								{tr('Prioritas')}
-								{#if priorityDesc}<ArrowDown size={12} strokeWidth={2.4} />{:else}<ArrowUpDown size={12} strokeWidth={2.4} />{/if}
+								{#if priorityDesc}<ArrowDown size={12} strokeWidth={1.5} />{:else}<ArrowUpDown size={12} strokeWidth={1.5} />{/if}
 							</button>
 						</th>
-						<th class="px-4 py-2.5 text-left font-medium">{tr('Pesan terakhir')}</th>
-						<th class="px-4 py-2.5 text-left font-medium">{tr('Aksi')}</th>
+						<th class="c-last">{tr('Pesan terakhir')}</th>
+						<th class="c-act"></th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each rows as t (t.id)}
-						<tr class="border-t">
-							<td class="px-4 py-2.5"><Badge tone={STATUS_TONES[t.status]} label={STATUS_LABELS[t.status]} /></td>
-							<td class="px-4 py-2.5">
-								<button class="text-left font-medium hover:underline" type="button" onclick={() => void openDetail(t)}>
-									{t.subject}
-									{#if t.unread > 0}<span class="ml-1.5 rounded-full px-1.5 text-[10px] font-bold text-white" style="background-color: var(--destructive, #e11d48);">{t.unread}</span>{/if}
+						<tr>
+							<td class="c-status">
+								<span class="status-pill" data-tone={t.status}>
+									<span class="pill-dot" aria-hidden="true"></span>
+									{STATUS_LABELS[t.status]}
+								</span>
+							</td>
+							<td class="c-subject">
+								<button class="subject-btn" type="button" onclick={() => void openDetail(t)}>
+									<span class="truncate">{t.subject}</span>
+									{#if t.unread > 0}<span class="unread" aria-label="{t.unread} pesan belum dibaca">{t.unread}</span>{/if}
 								</button>
-								<p class="text-[11px] text-muted-foreground">#{t.code}</p>
+								<span class="block text-xs text-muted-foreground">#{t.code}</span>
 							</td>
-							<td class="px-4 py-2.5">{t.partner_name || '-'}</td>
-							<td class="px-4 py-2.5 text-muted-foreground">{CATEGORY_LABELS[t.category] ?? t.category}</td>
-							<td class="px-4 py-2.5 text-muted-foreground">{PRIORITY_LABELS[t.priority] ?? t.priority}</td>
-							<td class="px-4 py-2.5 text-muted-foreground">
-								<p>{preview(t.last_body) || '-'}</p>
-								<p class="text-[11px]">{fmtDateTime(t.last_message_at)}</p>
+							<td class="c-partner"><span class="truncate">{t.partner_name || '—'}</span></td>
+							<td class="c-cat"><span class="cat-chip">{CATEGORY_LABELS[t.category] ?? t.category}</span></td>
+							<td class="c-prio">
+								<span class="prio" data-prio={t.priority}>{PRIORITY_LABELS[t.priority] ?? t.priority}</span>
 							</td>
-							<td class="px-4 py-2.5">
-								<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => void openDetail(t)}>{tr('Buka')}</button>
+							<td class="c-last">
+								<span class="block truncate text-muted-foreground">{preview(t.last_body) || '—'}</span>
+								<span class="block text-xs text-muted-foreground">
+									{t.last_message_by === 'admin' ? tr('admin') : t.partner_name || tr('mitra')}
+									<span aria-hidden="true"> · </span>{fmtDateTime(t.last_message_at)}
+								</span>
+							</td>
+							<td class="c-act">
+								<button class="btn-open" type="button" onclick={() => void openDetail(t)}>{tr('Buka')}</button>
 							</td>
 						</tr>
 					{/each}
 				</tbody>
 			</table>
 			{#if !loading && rows.length === 0}
-				<p class="px-4 py-12 text-center text-sm text-muted-foreground">{tr('Tidak ada tiket pada filter ini.')}</p>
+				<div class="empty">
+					<Inbox size={18} strokeWidth={1.5} class="text-muted-foreground" />
+					<p class="mt-2 text-sm text-muted-foreground">{tr('Tidak ada tiket pada filter ini.')}</p>
+					{#if status || priority || query.trim()}
+						<button
+							class="mt-3 text-xs font-medium text-primary hover:underline"
+							type="button"
+							onclick={() => {
+								status = '';
+								priority = '';
+								query = '';
+								pageNo = 1;
+								void load();
+							}}>{tr('Hapus filter')}</button
+						>
+					{/if}
+				</div>
+			{:else if !loading && status === '' && (counts?.buka ?? 0) === 0 && (counts?.diproses ?? 0) === 0}
+				<!-- Penutup: tidak ada yang perlu dikerjakan, jadi tabel tidak berakhir kosong -->
+				<div class="footer-note">
+					<CheckCircle size={15} strokeWidth={1.5} />
+					<span>{tr('Semua tiket sudah ditangani')}</span>
+				</div>
 			{/if}
 		</div>
 		<Pagination total={total} limit={PAGE_SIZE} offset={(pageNo - 1) * PAGE_SIZE} onChange={(next) => { pageNo = next / PAGE_SIZE + 1; void load(); }} />
@@ -331,9 +435,12 @@
 	<Modal title={[detail.code ? `#${detail.code}` : '', detail.subject].filter(Boolean).join(' · ')} label={tr('Detail tiket dukungan')} maxWidth="xl" onClose={() => (detail = null)}>
 		<div class="space-y-3">
 			<div class="flex flex-wrap items-center gap-2">
-				<Badge tone={STATUS_TONES[detail.status]} label={STATUS_LABELS[detail.status]} />
-				<Badge tone="neutral" label={CATEGORY_LABELS[detail.category] ?? detail.category} />
-				<Badge tone={detail.priority === 'tinggi' ? 'danger' : 'neutral'} label={PRIORITY_LABELS[detail.priority] ?? detail.priority} />
+				<span class="status-pill" data-tone={detail.status}>
+					<span class="pill-dot" aria-hidden="true"></span>
+					{STATUS_LABELS[detail.status]}
+				</span>
+				<span class="cat-chip">{CATEGORY_LABELS[detail.category] ?? detail.category}</span>
+				<span class="prio" data-prio={detail.priority}>{PRIORITY_LABELS[detail.priority] ?? detail.priority}</span>
 				<span class="text-xs text-muted-foreground">{tr('Dibuat')} {fmtDateTime(detail.created_at)}</span>
 			</div>
 			<p class="text-sm">
@@ -390,3 +497,243 @@
 		{/snippet}
 	</Modal>
 {/if}
+
+<style>
+	/* ── Ringkasan status: satu warna per keadaan ── */
+	.summary {
+		display: grid;
+		gap: 12px;
+	}
+	@media (min-width: 720px) {
+		.summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	}
+	.sum-card {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 14px 16px;
+		background-color: var(--card);
+		text-align: left;
+		transition:
+			background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+			border-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.sum-card:hover { background-color: var(--secondary); }
+	.sum-card:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+	.sum-top { display: inline-flex; align-items: center; gap: 6px; }
+	.sum-dot {
+		display: inline-block;
+		width: 6px;
+		height: 6px;
+		border-radius: 999px;
+		background-color: var(--muted-foreground);
+	}
+	.sum-label { color: var(--muted-foreground); font-size: 12px; line-height: 18px; }
+	.sum-value {
+		font-size: 26px;
+		font-weight: 500;
+		line-height: 32px;
+		color: var(--foreground);
+	}
+	.sum-hint { color: var(--muted-foreground); font-size: 11px; line-height: 16px; }
+
+	/* Warna per status — hanya saat jumlahnya > 0, supaya angka nol tidak berteriak */
+	.sum-card[data-tone='buka'] .sum-dot { background-color: var(--warning); }
+	.sum-card[data-tone='diproses'] .sum-dot { background-color: var(--primary); }
+	.sum-card[data-tone='selesai'] .sum-dot { background-color: var(--success); }
+
+	.sum-card[data-tone='buka']:not([data-zero='true']) .sum-value { color: var(--warning); }
+	.sum-card[data-tone='diproses']:not([data-zero='true']) .sum-value { color: var(--primary); }
+	.sum-card[data-tone='selesai']:not([data-zero='true']) .sum-value { color: var(--success); }
+
+	.sum-card[data-tone='buka'][data-zero='true'] .sum-value,
+	.sum-card[data-tone='diproses'][data-zero='true'] .sum-value,
+	.sum-card[data-tone='selesai'][data-zero='true'] .sum-value { color: var(--muted-foreground); }
+
+	.sum-card[data-tone='buka'] { background-color: color-mix(in srgb, var(--warning-soft) 60%, var(--card)); border-color: color-mix(in srgb, var(--warning) 22%, var(--border)); }
+	.sum-card[data-tone='diproses'] { background-color: color-mix(in srgb, var(--accent) 70%, var(--card)); border-color: color-mix(in srgb, var(--primary) 20%, var(--border)); }
+	.sum-card[data-tone='selesai'] { background-color: color-mix(in srgb, var(--success-soft) 70%, var(--card)); border-color: color-mix(in srgb, var(--success) 20%, var(--border)); }
+	.sum-card[data-active='true'] {
+		border-color: var(--foreground);
+		box-shadow: inset 0 0 0 1px var(--foreground);
+	}
+
+	/* ── Pencarian ── */
+	.search-box {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		gap: 8px;
+		min-width: 220px;
+		max-width: 380px;
+		min-height: 34px;
+		border: 1px solid var(--input);
+		border-radius: var(--radius-control);
+		padding: 0 12px;
+		background-color: var(--card);
+	}
+	.search-box:focus-within {
+		border-color: var(--ring);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent);
+	}
+
+	/* ── Tabel ── */
+	.data {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 13px;
+		table-layout: fixed;
+	}
+	.data thead th {
+		padding: 10px 12px;
+		border-bottom: 1px solid var(--border);
+		color: var(--muted-foreground);
+		font-size: 11px;
+		font-weight: 500;
+		text-align: left;
+		white-space: nowrap;
+	}
+	.data tbody td {
+		padding: 10px 12px;
+		vertical-align: middle;
+		min-width: 0;
+		overflow: hidden;
+	}
+	.data tbody tr + tr td { border-top: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent); }
+	.data tbody tr:hover td { background-color: color-mix(in srgb, var(--secondary) 55%, transparent); }
+
+	.c-status { width: 116px; }
+	.c-subject { width: 22%; }
+	.c-partner { width: 13%; }
+	.c-cat { width: 116px; }
+	.c-prio { width: 88px; }
+	.c-last { width: 27%; }
+	.c-act { width: 68px; text-align: right !important; }
+	.data thead th.c-act { text-align: right; }
+
+	.sort-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		color: inherit;
+		font-size: inherit;
+		font-weight: 500;
+		transition: color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.sort-btn:hover { color: var(--foreground); }
+	.sort-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+
+	/* ── Chip status ── */
+	.status-pill {
+		display: inline-flex;
+		align-items: center;
+		border-radius: 5px;
+		padding: 1px 7px;
+		font-size: 11px;
+		font-weight: 500;
+		line-height: 18px;
+		white-space: nowrap;
+	}
+	.pill-dot {
+		display: inline-block;
+		width: 5px;
+		height: 5px;
+		border-radius: 999px;
+		margin-right: 6px;
+		background-color: currentColor;
+	}
+	.status-pill[data-tone='buka'] { background-color: var(--warning-soft); color: var(--warning); }
+	.status-pill[data-tone='diproses'] { background-color: var(--accent); color: var(--accent-foreground); }
+	.status-pill[data-tone='selesai'] { background-color: var(--success-soft); color: var(--success); }
+
+	/* ── Prioritas & kategori ── */
+	.prio {
+		display: inline-flex;
+		align-items: center;
+		border-radius: 5px;
+		padding: 1px 7px;
+		font-size: 11px;
+		font-weight: 500;
+		line-height: 18px;
+		white-space: nowrap;
+	}
+	.prio[data-prio='tinggi'] { background-color: var(--destructive-soft, #fdecee); color: var(--destructive); }
+	.prio[data-prio='normal'] { background-color: var(--secondary); color: var(--foreground); }
+	.prio[data-prio='rendah'] { background-color: var(--secondary); color: var(--muted-foreground); }
+
+	.cat-chip {
+		display: inline-block;
+		max-width: 100%;
+		border-radius: 5px;
+		padding: 1px 7px;
+		background-color: var(--secondary);
+		color: var(--muted-foreground);
+		font-size: 11px;
+		line-height: 18px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	/* ── Subjek ── */
+	.subject-btn {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
+		min-width: 0;
+		color: var(--foreground);
+		font-size: 13px;
+		font-weight: 500;
+		text-align: left;
+	}
+	.subject-btn:hover .truncate { text-decoration: underline; text-underline-offset: 2px; }
+	.subject-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+	.unread {
+		flex: 0 0 auto;
+		min-width: 16px;
+		border-radius: 999px;
+		padding: 0 4px;
+		background-color: var(--destructive);
+		color: #fff;
+		font-size: 10px;
+		font-weight: 500;
+		line-height: 16px;
+		text-align: center;
+	}
+
+	.btn-open {
+		min-height: 28px;
+		border: 1px solid var(--border);
+		border-radius: 7px;
+		padding: 0 10px;
+		background-color: var(--card);
+		color: var(--foreground);
+		font-size: 12px;
+		font-weight: 500;
+		transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.btn-open:hover { background-color: var(--secondary); }
+
+	/* ── Kosong & penutup ── */
+	.empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 40px 16px;
+		text-align: center;
+	}
+	.footer-note {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		border-top: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+		padding: 12px 16px;
+		color: var(--success);
+		font-size: 12px;
+	}
+</style>

@@ -45,6 +45,10 @@
 		seo_da: number | null; seo_pa: number | null; seo_spam_score: number | null; seo_checked_at: string | null;
 		has_connection: boolean; custom_web_status: string | null; blogger_status: string | null;
 		rejection_reason: string | null; domain_verified: boolean;
+		// Perubahan yang diparkir menunggu admin: media tetap tayang dengan data live.
+		pending_changes?: { field: string; label: string; from: string | null; to: string | null }[] | null;
+		pending_values?: Record<string, unknown> | null;
+		pending_requested_at?: string | null;
 		// Metrik katalog klien — dipakai tab Transparansi Data.
 		media_tier: string | null; media_quality_score: number | null;
 		seo_ai_trust: number | null; seo_ai_citation: boolean | null;
@@ -159,6 +163,23 @@
 			f.word_count_mode, customWordMin, customWordMax, f.allow_embed, f.topik_terlarang, f.contoh_artikel_url
 		]);
 	const isDirty = $derived(editingId !== null && formSnapshot !== comparableForm(form));
+
+	// Perubahan pada media aktif hanya menyembunyikan media bila menyentuh
+	// identitas aset / jalur pesanan, atau menurunkan harga jauh (indikasi salah
+	// ketik). Aturan ini harus sama dengan MediaUpdate di API.
+	const editHidesMedia = $derived.by(() => {
+		const live = editingRow;
+		if (!live || live.status !== 'active') return true;
+		const livePrice = Number(live.price) || 0;
+		return (
+			form.media_type !== (live.media_type === 'blogger' ? 'blogger' : 'mainstream') ||
+			form.website_url.trim() !== (live.website_url ?? '') ||
+			form.adapter_url.trim() !== (live.adapter_url ?? '') ||
+			form.integration_type !== (live.integration_type || 'manual') ||
+			form.publication_mode !== (live.publication_mode === 'publish' ? 'publish' : 'draft') ||
+			(livePrice > 0 && Number(form.price) > 0 && Number(form.price) < livePrice * 0.5)
+		);
+	});
 
 	// Jenis tautan = kombinasi label_sponsor + allow_hyperlink. Jumlah backlink
 	// (max_links) diatur terpisah. Nofollow = tautan tetap boleh, tapi sistem
@@ -836,6 +857,26 @@
 			topikQuery: '',
 			contoh_artikel_url: m.contoh_artikel_url ?? ''
 		};
+		// Pengajuan yang masih menunggu admin ditampilkan di form (bukan nilai live),
+		// supaya menyimpan lagi tidak membatalkannya tanpa sengaja.
+		const pv = m.pending_values ?? {};
+		if (typeof pv.name === 'string') form.name = pv.name;
+		if (Array.isArray(pv.categories)) form.categories = [...(pv.categories as string[])];
+		if (typeof pv.description === 'string') form.description = pv.description;
+		if (typeof pv.notes === 'string') form.notes = pv.notes;
+		if (typeof pv.price === 'number') form.price = String(pv.price);
+		if (typeof pv.pricing_type === 'string') form.pricing_type = pv.pricing_type;
+		if (typeof pv.traffic_estimate === 'number') form.traffic_estimate = pv.traffic_estimate;
+		if (typeof pv.max_links === 'number') form.max_links = String(pv.max_links);
+		if (typeof pv.link_duration_months === 'number') {
+			form.link_duration_months = String(normalizeLinkDurationMonths(pv.link_duration_months));
+		}
+		if (typeof pv.label_sponsor === 'string') {
+			form.label_sponsor = pv.label_sponsor === 'ada_sponsor' ? 'ada_sponsor' : 'tidak_ada';
+		}
+		if (typeof pv.allow_hyperlink === 'boolean') form.allow_hyperlink = pv.allow_hyperlink;
+		if (Array.isArray(pv.bahasa_artikel)) form.bahasa_artikel = [...(pv.bahasa_artikel as string[])];
+		if (Array.isArray(pv.topik_terlarang)) form.topik_terlarang = [...(pv.topik_terlarang as string[])];
 		const custom = parseCustomWordCount(m.word_count_mode);
 		customWordMin = String(custom?.min ?? 500);
 		customWordMax = String(custom?.max ?? 1000);
@@ -972,8 +1013,12 @@
 				dialogError = await readApiError(res, 'Permintaan gagal.');
 				return;
 			}
+			const saved = (await res.json().catch(() => null)) as Media | null;
 			showForm = false;
-			notice = editingId ? 'Media diperbarui.' : tr('Media diajukan untuk review admin.');
+			const parked = editingId && saved?.status === 'active' && saved.pending_values && Object.keys(saved.pending_values).length > 0;
+			notice = parked
+				? tr('Perubahan tersimpan dan menunggu persetujuan Admin (maksimal 2×24 jam). Media tetap tayang dengan data lama selama menunggu.')
+				: editingId ? 'Media diperbarui.' : tr('Media diajukan untuk review admin.');
 			await load();
 		} finally {
 			busy = false;
@@ -2040,6 +2085,13 @@
 	<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
 		{statusLabel[m.status] ?? m.status}
 	</span>
+	{#if m.status === 'active' && m.pending_values && Object.keys(m.pending_values).length > 0}
+		<span
+			class="mt-1 block text-[11px]"
+			style="color: var(--warning);"
+			title={(m.pending_changes ?? []).map((c) => `${c.label}: ${c.from ?? '-'} → ${c.to ?? '-'}`).join('\n')}
+		>{tr('Perubahan menunggu persetujuan')}</span>
+	{/if}
 {/snippet}
 
 {#snippet pendingBadge(m: Media)}
@@ -2796,11 +2848,19 @@
 	>
 		<dialog open class="app-card my-8 w-full max-w-[520px] p-5" aria-label={tr('Konfirmasi perubahan media')} onclick={(e) => e.stopPropagation()}>
 			<h2 class="text-lg font-semibold">{tr('Konfirmasi perubahan media')}</h2>
-			<p class="mt-2 text-sm text-muted-foreground">{tr('Perubahan ini akan memengaruhi visibilitas media Anda di sisi Klien.')}</p>
-			<div class="mt-3 flex items-start gap-2 rounded-lg p-3 text-sm" style="background: var(--warning-soft); color: var(--warning);">
-				<TriangleAlert size={16} class="mt-0.5 shrink-0" />
-				<span>{tr('Setelah disimpan, media akan berstatus')} <strong>{tr('Menunggu Review Admin')}</strong>. {tr('Media tetap tersimpan, tetapi sementara tampil abu-abu dan tidak dapat dipilih Klien sampai Admin menyetujui perubahan.')}</span>
-			</div>
+			{#if editHidesMedia}
+				<p class="mt-2 text-sm text-muted-foreground">{tr('Perubahan ini akan memengaruhi visibilitas media Anda di sisi Klien.')}</p>
+				<div class="mt-3 flex items-start gap-2 rounded-lg p-3 text-sm" style="background: var(--warning-soft); color: var(--warning);">
+					<TriangleAlert size={16} class="mt-0.5 shrink-0" />
+					<span>{tr('Setelah disimpan, media akan berstatus')} <strong>{tr('Menunggu Review Admin')}</strong>. {tr('Media tetap tersimpan, tetapi sementara tampil abu-abu dan tidak dapat dipilih Klien sampai Admin menyetujui perubahan.')}</span>
+				</div>
+			{:else}
+				<p class="mt-2 text-sm text-muted-foreground">{tr('Perubahan ini perlu disetujui Admin sebelum berlaku.')}</p>
+				<div class="mt-3 flex items-start gap-2 rounded-lg p-3 text-sm" style="background: var(--success-soft); color: var(--success);">
+					<Info size={16} class="mt-0.5 shrink-0" />
+					<span>{tr('Media Anda')} <strong>{tr('tetap tayang')}</strong> {tr('dengan harga dan ketentuan yang berlaku sekarang. Pesanan yang masuk selama menunggu memakai data lama. Jika belum direview dalam 2×24 jam, pengajuan dibatalkan otomatis.')}</span>
+				</div>
+			{/if}
 			<div class="mt-4 flex justify-end gap-2">
 				<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => (editConfirmOpen = false)}>{tr('Batal')}</button>
 				<button

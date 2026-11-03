@@ -391,9 +391,8 @@ dialog.app-card {
     color: var(--sidebar-soft);
     font-size: 11px;
     line-height: 16px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-weight: 500;
+    letter-spacing: 0;
     white-space: nowrap;
     opacity: 1;
     transform: translateX(0);

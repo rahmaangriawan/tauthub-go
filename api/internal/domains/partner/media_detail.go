@@ -199,7 +199,7 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 	if hasCategory && category != existing.strOr("category", "") {
 		changed = true
 	}
-	if hasCategories {
+	if hasCategories && strings.Join(categories, "\x01") != strings.Join(categoriesArray(existing), "\x01") {
 		changed = true
 	}
 	if hasMediaType && mediaType != existing.strOr("media_type", "mainstream") {
@@ -258,7 +258,46 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isRestoringArchived := existing.strOr("status", "") == "archived"
-	requiresReview := existing.strOr("status", "") == "active" && changed
+	isActive := existing.strOr("status", "") == "active"
+
+	// Perubahan yang menyentuh identitas aset, jalur pesanan, atau berpotensi
+	// salah ketik harga (turun jauh) tetap menyembunyikan media sampai admin
+	// menyetujui. Selain itu nilai barunya hanya diparkir di pending_values:
+	// baris live (harga, ketentuan) tetap dipakai klien sampai admin memutuskan.
+	sensitive := isRestoringArchived ||
+		(hasStatus && status != existing.strOr("status", "")) ||
+		(hasMediaType && mediaType != existing.strOr("media_type", "mainstream")) ||
+		(hasWebsiteURL && websiteURL != existing.strOr("website_url", "")) ||
+		(hasAdapterURL && adapterURL != existing.strOr("adapter_url", "")) ||
+		(hasIntegrationType && integrationType != existing.strOr("integration_type", "")) ||
+		(hasPublicationMode && publicationMode != existing.strOr("publication_mode", "draft")) ||
+		(hasPrice && existing.numOr("price") > 0 && price < existing.numOr("price")*mediaPriceDropReviewRatio)
+	deferMode := isActive && !sensitive
+	requiresReview := isActive && changed && sensitive
+
+	origHasPrice, origHasPricingType := hasPrice, hasPricingType
+	pendingSet := map[string]any{}
+	pendingClear := []string{}
+	if deferMode {
+		// Nilai yang berbeda dari live diparkir; yang sama dengan live berarti
+		// mitra membatalkan pengajuan field itu. Flag has* dimatikan supaya UPDATE
+		// di bawah membiarkan kolom live apa adanya.
+		parkValue(pendingSet, &pendingClear, "name", &hasName, name, existing.strOr("name", ""))
+		parkValue(pendingSet, &pendingClear, "category", &hasCategory, category, existing.strOr("category", ""))
+		parkValue(pendingSet, &pendingClear, "description", &hasDescription, description, existing.strOr("description", ""))
+		parkValue(pendingSet, &pendingClear, "notes", &hasNotes, notes, existing.strOr("notes", ""))
+		parkValue(pendingSet, &pendingClear, "price", &hasPrice, price, existing.numOr("price"))
+		parkValue(pendingSet, &pendingClear, "pricing_type", &hasPricingType, pricingType, existing.strOr("pricing_type", "nett"))
+		parkValue(pendingSet, &pendingClear, "traffic_estimate", &hasTraffic, traffic, existing.intOr("traffic_estimate", 0))
+		parkValue(pendingSet, &pendingClear, "max_links", &hasMaxLinks, maxLinks, existing.intOr("max_links", 1))
+		parkValue(pendingSet, &pendingClear, "allow_hyperlink", &hasAllowHyperlink, allowHyperlink, existingAllowHyperlink(existing))
+		parkValue(pendingSet, &pendingClear, "link_duration_months", &hasLinkDuration, linkDuration, existing.intOr("link_duration_months", 12))
+		parkValue(pendingSet, &pendingClear, "label_sponsor", &hasLabelSponsor, labelSponsor, existing.strOr("label_sponsor", "tidak_ada"))
+		parkValue(pendingSet, &pendingClear, "dewan_pers_doc_key", &hasDewanPersDocKey, dewanPersDocKey, existing.strOr("dewan_pers_doc_key", ""))
+		parkList(pendingSet, &pendingClear, "categories", &hasCategories, categories, categoriesArray(existing))
+		parkList(pendingSet, &pendingClear, "bahasa_artikel", &hasBahasa, bahasa, existing.parseJSONArray("bahasa_artikel"))
+		parkList(pendingSet, &pendingClear, "topik_terlarang", &hasTopik, topik, existing.parseJSONArray("topik_terlarang"))
+	}
 	var nextStatus any
 	switch {
 	case isRestoringArchived:
@@ -408,17 +447,26 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 	// Satu sumber kebenaran: daftar perubahan dipakai untuk snapshot review
 	// (media.pending_changes) sekaligus riwayat permanen di audit_logs.
 	changes := pendingChangesList(body, existing)
-	pending := any(nil)
-	if len(changes) > 0 {
-		if b, err := json.Marshal(changes); err == nil {
-			pending = string(b)
+	if deferMode {
+		if err := d.persistParkedChanges(r.Context(), mediaID, partner.ID, changes, pendingSet, pendingClear); err != nil {
+			d.writeErr(w, err)
+			return
 		}
-	}
-	if err := d.exec(r.Context(),
-		"UPDATE media SET pending_changes = $1::jsonb, updated_at = NOW() WHERE id = $2 AND partner_id = $3",
-		pending, mediaID, partner.ID); err != nil {
-		d.writeErr(w, err)
-		return
+	} else {
+		pending := any(nil)
+		if len(changes) > 0 {
+			if b, err := json.Marshal(changes); err == nil {
+				pending = string(b)
+			}
+		}
+		// Jalur review penuh menggantikan pengajuan yang sempat diparkir.
+		if err := d.exec(r.Context(),
+			`UPDATE media SET pending_changes = $1::jsonb, pending_values = NULL, pending_requested_at = NULL,
+			        pending_reminded_at = NULL, updated_at = NOW() WHERE id = $2 AND partner_id = $3`,
+			pending, mediaID, partner.ID); err != nil {
+			d.writeErr(w, err)
+			return
+		}
 	}
 	// Riwayat: satu entri audit per field yang berubah, lengkap dengan
 	// before/after, supaya admin bisa menelusuri "apa yang diajukan mitra"
@@ -439,22 +487,28 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if hasPrice || hasPricingType {
+	_, priceParked := pendingSet["price"]
+	_, pricingTypeParked := pendingSet["pricing_type"]
+	if (!deferMode && (origHasPrice || origHasPricingType)) || priceParked || pricingTypeParked {
 		toPrice := any(existing.numOr("price"))
-		if hasPrice {
+		if origHasPrice {
 			toPrice = price
 		}
 		toPricingType := existing.strOr("pricing_type", "nett")
-		if hasPricingType {
+		if origHasPricingType {
 			toPricingType = pricingType
+		}
+		fromStatus := existing.strOr("price_status", "menunggu_review")
+		toStatus, note := fromStatus, "Edit media oleh mitra"
+		if priceParked || pricingTypeParked {
+			toStatus, note = "menunggu_review", "Pengajuan harga mitra (menunggu admin, harga live belum berubah)"
 		}
 		_ = d.exec(r.Context(),
 			`INSERT INTO media_price_history (id, media_id, actor_id, from_price, to_price, from_pricing_type, to_pricing_type, from_price_status, to_price_status, note)
 			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 			mediaID, user.ID, existing.numPtr("price"), toPrice,
 			existing.strOr("pricing_type", "nett"), toPricingType,
-			existing.strOr("price_status", "menunggu_review"), existing.strOr("price_status", "menunggu_review"),
-			"Edit media oleh mitra")
+			fromStatus, toStatus, note)
 	}
 
 	switch {
@@ -463,6 +517,18 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		link := "/admin/media?status=pending_review#tab-pending"
 		d.notifyPlatformAdmins(r.Context(), "media.submitted", "Media baru menunggu persetujuan",
 			`Media "`+existing.strOr("name", "")+`" diedit dan kembali ke review Admin.`, &link)
+	case deferMode && len(pendingSet) > 0:
+		// Media tetap tayang dengan data live; admin diberi tahu ada perubahan
+		// yang menunggu keputusan. Tipe notifikasi dipakai ulang (ada constraint).
+		d.auditLog(r.Context(), user.ID, "media.change_requested", "media", mediaID)
+		link := "/admin/media?status=pending_review#tab-pending"
+		d.notifyPlatformAdmins(r.Context(), "media.submitted", "Perubahan media menunggu persetujuan",
+			`Media "`+existing.strOr("name", "")+`" mengajukan perubahan. Media tetap tayang dengan data lama sampai direview.`, &link)
+		notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
+			Event: notify.AdminEventMediaSubmitted, ReferenceID: mediaID,
+			Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": existing.strOr("name", "") + " (perubahan)"},
+			Link: link, BaseURL: d.Cfg.PublicAppURL,
+		})
 	case hasStatus && status == "active":
 		d.auditLog(r.Context(), user.ID, "media.restored", "media", mediaID)
 	default:
@@ -475,6 +541,87 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, d.mediaJSON(r, updated, markup))
+}
+
+// mediaPriceDropReviewRatio: harga baru di bawah rasio ini dari harga live
+// dianggap berisiko salah ketik (mis. nol hilang) dan tetap lewat review penuh.
+const mediaPriceDropReviewRatio = 0.5
+
+// parkValue: field yang dikirim dan berbeda dari live masuk set pending; yang
+// sama dengan live berarti pengajuan field itu dibatalkan (clear). Flag has
+// dimatikan supaya UPDATE media membiarkan kolom live.
+func parkValue[T comparable](set map[string]any, clear *[]string, key string, has *bool, val, cur T) {
+	if !*has {
+		return
+	}
+	if val != cur {
+		set[key] = val
+	} else {
+		*clear = append(*clear, key)
+	}
+	*has = false
+}
+
+// parkList: padanan parkValue untuk daftar string.
+func parkList(set map[string]any, clear *[]string, key string, has *bool, val, cur []string) {
+	if !*has {
+		return
+	}
+	if marshalJSONArr(val) != marshalJSONArr(cur) {
+		set[key] = val
+	} else {
+		*clear = append(*clear, key)
+	}
+	*has = false
+}
+
+// persistParkedChanges: gabungkan pengajuan baru ke pending_values/pending_changes
+// (pengajuan field lain yang belum diputus admin tetap ada). Tanpa tanda
+// pengajuan tersisa, penanda SLA ikut dibersihkan.
+func (d *Deps) persistParkedChanges(ctx context.Context, mediaID, partnerID string, changes []mediaChange, set map[string]any, clear []string) error {
+	if len(set) == 0 && len(clear) == 0 {
+		return nil
+	}
+	remove := append([]string{}, clear...)
+	parked := make([]mediaChange, 0, len(changes))
+	for k := range set {
+		remove = append(remove, k)
+	}
+	for _, c := range changes {
+		if _, ok := set[c.Field]; ok {
+			parked = append(parked, c)
+		}
+	}
+	setJSON, err := json.Marshal(set)
+	if err != nil {
+		return err
+	}
+	changesJSON, err := json.Marshal(parked)
+	if err != nil {
+		return err
+	}
+	if err := d.exec(ctx, `
+		UPDATE media SET
+		  pending_values = NULLIF((COALESCE(pending_values, '{}'::jsonb) - $1::text[]) || $2::jsonb, '{}'::jsonb),
+		  pending_changes = NULLIF((
+		    SELECT COALESCE(jsonb_agg(s.v), '[]'::jsonb) FROM (
+		      SELECT o.value AS v FROM jsonb_array_elements(COALESCE(media.pending_changes, '[]'::jsonb)) o
+		       WHERE NOT (o.value->>'field' = ANY($1::text[]))
+		      UNION ALL
+		      SELECT n.value AS v FROM jsonb_array_elements($3::jsonb) n
+		    ) s), '[]'::jsonb),
+		  pending_requested_at = CASE WHEN $4::boolean THEN NOW() ELSE pending_requested_at END,
+		  pending_reminded_at = CASE WHEN $4::boolean THEN NULL ELSE pending_reminded_at END,
+		  updated_at = NOW()
+		WHERE id = $5 AND partner_id = $6`,
+		remove, string(setJSON), string(changesJSON), len(set) > 0, mediaID, partnerID); err != nil {
+		return err
+	}
+	return d.exec(ctx, `
+		UPDATE media SET pending_changes = NULL, pending_requested_at = NULL, pending_reminded_at = NULL
+		WHERE id = $1 AND pending_values IS NULL
+		  AND (pending_changes IS NOT NULL OR pending_requested_at IS NOT NULL OR pending_reminded_at IS NOT NULL)`,
+		mediaID)
 }
 
 // nullIfUnset: nil saat field tidak dikirim (parity COALESCE($n, kolom)).
