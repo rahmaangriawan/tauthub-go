@@ -1,0 +1,2629 @@
+/* Port setia media-intelligence.module.css — hanya kelas yang dipakai
+   section katalog media (nilai disalin apa adanya; var Radix dipetakan ke token tema). */
+.actionBtnGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.advFilterApplyBtn {
+  height: 42px;
+  padding: 0 22px;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.advFilterApplyBtn:hover {
+  background: #1d4ed8;
+}
+.advFilterCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  width: 440px;
+  max-width: 92vw;
+}
+.advFilterChipsGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.advFilterChipsGroupEqual {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.advFilterChip {
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid #dfe7f3;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.advFilterChip:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+.advFilterChip:focus-visible {
+  outline: 2px solid #bfdbfe;
+  outline-offset: 2px;
+}
+.advFilterChipActive {
+  background: #eff6ff !important;
+  border-color: #2563eb !important;
+  color: #1d4ed8 !important;
+  font-weight: 600 !important;
+}
+.advFilterFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+.advFilterHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.advFilterBody {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 20px;
+  padding: 18px 20px 20px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.advFilterTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+.advFilterTitleIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  flex: none;
+}
+.advFilterCloseBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.advFilterCloseBtn:hover { background: #e2e8f0; color: #0f172a; }
+.advFilterCloseBtn:focus-visible { outline: 2px solid #bfdbfe; outline-offset: 2px; }
+.advFilterResetLink {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 6px;
+  border-radius: 8px;
+}
+.advFilterResetLink:hover { color: #1d4ed8; background: #eff6ff; }
+.advFilterResetLink:focus-visible { outline: 2px solid #bfdbfe; outline-offset: 2px; }
+.advFilterResetBtn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: all 0.12s ease;
+}
+.advFilterResetBtn:hover {
+  color: #ef4444;
+  background: #fef2f2;
+}
+.advFilterSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.advFilterSectionHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #2563eb;
+}
+.advFilterToggleRow {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.aiCitationBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  /* Biru platform (--primary), bukan tiruan pucatnya: centang putih di atas
+     biru tegas supaya langsung terbaca sebagai tanda terverifikasi. */
+  color: var(--primary-foreground, #fff);
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  /* Hanya berisi ikon centang. Kotaknya dibuat persegi lalu dibulatkan penuh:
+     dengan padding asimetris (5px kiri-kanan, 3px atas-bawah) bentuknya jadi
+     stadion, bukan lingkaran. */
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: help;
+}
+/* Kolom GEO hanya menampilkan skor AI Trust; badge "AI Cited" sudah tidak
+   dipakai di tabel ini. */
+.bookmarkActionBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.12s ease;
+}
+.bookmarkActionBtn svg {
+  transition: fill 0.12s ease;
+}
+.bookmarkActionBtn:hover {
+  color: #2563eb;
+  background: #eff6ff;
+}
+.bookmarkActionBtn:hover svg,
+.bookmarkActionBtn:hover svg path,
+.bookmarkActionBtnActive svg,
+.bookmarkActionBtnActive svg path {
+  fill: currentColor;
+}
+.bookmarkActionBtnActive {
+  color: #2563eb !important;
+  background: #eff6ff;
+}
+.bookmarkActionBtnActive:hover {
+  color: #1d4ed8 !important;
+  background: #dbeafe;
+}
+.bookmarkCardItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--gray-a5, #e2e8f0);
+  border-radius: 10px;
+  background: var(--card);
+  transition: all 0.12s ease;
+}
+.bookmarkCardItem:hover {
+  border-color: #bfdbfe;
+  background: #f8faff;
+}
+.bookmarkCardLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.bookmarkCardMeta {
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bookmarkCardPrice {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: right;
+  white-space: nowrap;
+}
+.bookmarkCardRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.bookmarkCardTitle {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bookmarkFilterBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1d4ed8;
+  font-weight: 500;
+}
+.bookmarkPopupList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 55vh;
+  overflow-y: auto;
+  margin-top: 12px;
+  padding-right: 4px;
+}
+.bookmarkRemoveBtn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+.bookmarkRemoveBtn:hover {
+  color: #ef4444;
+  background: #fef2f2;
+}
+.campaignDialogBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
+  font-weight: 600;
+}
+.campaignDialogBtn svg {
+  display: block;
+  flex: none;
+}
+.categoryBadgeGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+/* Badge Kategori: B2B SaaS Corporate Bold */
+.categoryPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  color: #1e293b;
+  transition: opacity 0.12s ease;
+}
+
+/* Palette kategori kustom (22 warna aktif + cadangan untuk kategori baru):
+   2373F4, 578EF5, 65D0F4, F2F7A0, 006199, 8ACFF8, F4EB6C, FFD444, 2196F3,
+   FF7F3E, AC87C5, 756AB6, 3F979B, 91D8E4, 570A57, 42DEE1, F18A9B, FFB480,
+   A26EA1, FFCEF3, C9FDD7, 6892D5 */
+.categoryPill--cobalt   { background: color-mix(in srgb, #2373F4 16%, #ffffff); border-color: color-mix(in srgb, #2373F4 48%, #ffffff); color: color-mix(in srgb, #2373F4 85%, #0f172a); }
+.categoryPill--blue     { background: color-mix(in srgb, #578EF5 18%, #ffffff); border-color: color-mix(in srgb, #578EF5 52%, #ffffff); color: color-mix(in srgb, #578EF5 80%, #0f172a); }
+.categoryPill--sky      { background: color-mix(in srgb, #65D0F4 26%, #ffffff); border-color: color-mix(in srgb, #65D0F4 68%, #ffffff); color: color-mix(in srgb, #65D0F4 55%, #0c4a6e); }
+.categoryPill--lime     { background: color-mix(in srgb, #F2F7A0 48%, #ffffff); border-color: color-mix(in srgb, #F2F7A0 85%, #a3b13b); color: #4d5908; }
+.categoryPill--navy     { background: color-mix(in srgb, #006199 15%, #ffffff); border-color: color-mix(in srgb, #006199 45%, #ffffff); color: #006199; }
+.categoryPill--cyan     { background: color-mix(in srgb, #8ACFF8 30%, #ffffff); border-color: color-mix(in srgb, #8ACFF8 75%, #ffffff); color: #0b5583; }
+.categoryPill--gold     { background: color-mix(in srgb, #F4EB6C 42%, #ffffff); border-color: color-mix(in srgb, #F4EB6C 85%, #b8a814); color: #5c5300; }
+.categoryPill--amber    { background: color-mix(in srgb, #FFD444 32%, #ffffff); border-color: color-mix(in srgb, #FFD444 75%, #d49b00); color: #6e4e00; }
+.categoryPill--slate    { background: color-mix(in srgb, #2196F3 16%, #ffffff); border-color: color-mix(in srgb, #2196F3 48%, #ffffff); color: #0d5ca1; }
+.categoryPill--orange   { background: color-mix(in srgb, #FF7F3E 18%, #ffffff); border-color: color-mix(in srgb, #FF7F3E 52%, #ffffff); color: #b5450b; }
+.categoryPill--purple   { background: color-mix(in srgb, #AC87C5 22%, #ffffff); border-color: color-mix(in srgb, #AC87C5 58%, #ffffff); color: #5e3b76; }
+.categoryPill--indigo   { background: color-mix(in srgb, #756AB6 18%, #ffffff); border-color: color-mix(in srgb, #756AB6 50%, #ffffff); color: #483d82; }
+.categoryPill--teal     { background: color-mix(in srgb, #3F979B 18%, #ffffff); border-color: color-mix(in srgb, #3F979B 52%, #ffffff); color: #216063; }
+.categoryPill--stone    { background: color-mix(in srgb, #91D8E4 34%, #ffffff); border-color: color-mix(in srgb, #91D8E4 78%, #5ba6b3); color: #195661; }
+.categoryPill--burgundy { background: color-mix(in srgb, #570A57 14%, #ffffff); border-color: color-mix(in srgb, #570A57 42%, #ffffff); color: #570A57; }
+.categoryPill--emerald  { background: color-mix(in srgb, #42DEE1 26%, #ffffff); border-color: color-mix(in srgb, #42DEE1 68%, #22999b); color: #0d5f61; }
+.categoryPill--rose     { background: color-mix(in srgb, #F18A9B 22%, #ffffff); border-color: color-mix(in srgb, #F18A9B 58%, #ffffff); color: #9c2b40; }
+.categoryPill--coral    { background: color-mix(in srgb, #FFB480 30%, #ffffff); border-color: color-mix(in srgb, #FFB480 72%, #d97a3a); color: #873e0b; }
+.categoryPill--fuchsia  { background: color-mix(in srgb, #A26EA1 20%, #ffffff); border-color: color-mix(in srgb, #A26EA1 54%, #ffffff); color: #663865; }
+.categoryPill--pink     { background: color-mix(in srgb, #FFCEF3 45%, #ffffff); border-color: color-mix(in srgb, #FFCEF3 88%, #c97ab5); color: #7a2966; }
+.categoryPill--green    { background: color-mix(in srgb, #C9FDD7 48%, #ffffff); border-color: color-mix(in srgb, #C9FDD7 88%, #5bbd76); color: #17612c; }
+.categoryPill--violet   { background: color-mix(in srgb, #6892D5 20%, #ffffff); border-color: color-mix(in srgb, #6892D5 54%, #ffffff); color: #2b508c; }
+.categoryPill--charcoal { background: color-mix(in srgb, #F4EB6C 36%, #ffffff); border-color: color-mix(in srgb, #F4EB6C 80%, #b8a814); color: #5c5300; }
+.categoryPill--red      { background: color-mix(in srgb, #2373F4 16%, #ffffff); border-color: color-mix(in srgb, #2373F4 48%, #ffffff); color: color-mix(in srgb, #2373F4 85%, #0f172a); }
+
+/* Badge +N untuk kategori tambahan: badge netral charcoal dengan kontras jelas */
+.categoryPlusTag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 7px;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+/* Badge +N yang bisa diklik (tombol) — membuka popover semua kategori. */
+button.categoryPlusTag {
+  cursor: pointer;
+  border: 1px solid #cbd5e1;
+  font: inherit;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+button.categoryPlusTag:hover {
+  background: #334155;
+  border-color: #1e293b;
+  color: #ffffff;
+}
+button.categoryPlusTag:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+/* Popover mengambang (parity Radix Popover.Content di app lama): fixed supaya
+   tidak ikut terpotong overflow:hidden .modernCard, dengan animasi masuk. */
+.categoryPopover {
+  position: fixed;
+  z-index: 1200;
+  max-width: 280px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  animation: categoryPopoverIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top left;
+}
+.categoryPopoverBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1190;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+@keyframes categoryPopoverIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+/* Varian "buka ke atas": popover diposisikan dari titik atas elemen lalu digeser
+   penuh ke atas. Animasi masuknya IKUT memuat translateY(-100%) supaya tidak
+   tampil di bawah dulu lalu melompat naik. */
+.categoryPopoverUp {
+  transform: translateY(-100%);
+  transform-origin: bottom left;
+  animation-name: categoryPopoverInUp;
+}
+@keyframes categoryPopoverInUp {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-100% - 4px)) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-100%) scale(1);
+  }
+}
+.categoryPopoverTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+.categoryPopoverList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* Wadah halaman katalog. Namanya sengaja bukan "container": utility
+   "container" bawaan Tailwind memasang max-width per breakpoint sehingga
+   konten berhenti jauh dari tepi kanan di layar lebar. */
+.katalogMedia {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: none;
+}
+.dewanPersTick { color: #059669; }
+.emptyState {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 13.5px;
+}
+.errorBanner {
+  border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  color: var(--destructive);
+  font-size: 13px;
+}
+.filterCountBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: 2px;
+}
+.floatingBookmarkBtn {
+  position: fixed;
+  bottom: 24px;
+  right: 28px;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 10px 14px;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  box-shadow: 0 10px 25px -3px rgba(37, 99, 235, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: floatPopIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.floatingBookmarkBtn:hover {
+  background: #1d4ed8;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px -3px rgba(37, 99, 235, 0.5), 0 6px 10px -2px rgba(0, 0, 0, 0.08);
+}
+.floatingBookmarkCounter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #2563eb;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+.mediaDomainLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #64748b;
+  text-decoration: none;
+  transition: color 0.12s ease;
+}
+.mediaDomainLink:hover {
+  color: #2563eb;
+}
+.mediaHeading {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+}
+/* Nama media = domain: halaman media klik → detail, matchmaker masih tautan ke situs. */
+a.mediaHeading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #0f172a;
+  text-decoration: none;
+}
+a.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
+a.mediaHeading svg { flex-shrink: 0; }
+button.mediaHeading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
+.mediaMetaLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #64748b;
+}
+.mediaRowCol {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 180px;
+}
+.mediaTitleLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mediaFavicon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: #f1f5f9;
+}
+.modernActionsGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.modernCard {
+  background: var(--card);
+  border: 1px solid var(--gray-a5, #e2e8f0);
+  border-radius: 12px;
+  /* Bukan scroll container: kalau di-clip, header tabel yang sticky tidak bisa
+     menempel ke halaman (hanya menempel ke kartu yang ikut tergulir). */
+  overflow: visible;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+.modernCheckbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  accent-color: #2563eb;
+}
+.modernFilterBtn {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--gray-a6, #e2e8f0);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--gray-11, #334155);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.modernFilterBtn:hover {
+  background: var(--gray-a2, #f8fafc);
+  border-color: var(--gray-a8, #cbd5e1);
+  color: var(--gray-12, #0f172a);
+}
+.modernFilterBtnActive {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: #2563eb !important;
+}
+.modernFilterBtnActive {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: #2563eb !important;
+}
+.modernPaginationBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: #ffffff;
+  border-top: 1px solid #f1f5f9;
+}
+.modernPaginationControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.modernPaginationInfo {
+  font-size: 13px;
+  color: #64748b;
+}
+.modernSearchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--gray-9, #94a3b8);
+  pointer-events: none;
+}
+.modernSearchInput {
+  width: 100%;
+  height: 38px;
+  padding: 0 14px 0 38px;
+  border: 1px solid var(--gray-a6, #e2e8f0);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--gray-12, #0f172a);
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.modernSearchInput::placeholder {
+  color: var(--gray-9, #94a3b8);
+}
+.modernSearchInput:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+.modernSearchWrap {
+  position: relative;
+  flex: 1 1 260px;
+  /* Lebar minimum supaya search tidak pernah kolaps di bawah grup alat. */
+  min-width: 220px;
+}
+.modernTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+.modernTd {
+  padding: 14px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+  color: #1e293b;
+}
+.modernTh {
+  padding: 13px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+  user-select: none;
+  /* Header kolom menempel tepat di bawah header aplikasi (app-utility-bar,
+     tingginya 64px) saat daftar media digulir. Latar wajib solid supaya baris
+     tak tembus; garis bawah dipindah ke inset shadow karena border-collapse:
+     collapse sering tidak menggambar border pada sel sticky. */
+  position: sticky;
+  top: 64px;
+  z-index: 10;
+  box-shadow: inset 0 -1px 0 #e2e8f0;
+}
+
+/* Header aplikasi menyusut jadi 60px di layar kecil (lihat .app-content di app.css). */
+@media (max-width: 768px) {
+  .modernTh {
+    top: 60px;
+  }
+}
+.modernThSortable {
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.modernThSortable:hover {
+  color: #0f172a;
+}
+.modernThSortable {
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.modernThSortable:hover {
+  color: #0f172a;
+}
+.modernTopBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  /* Boleh membungkus: pada lebar desktop sempit (laptop Windows 1366px dengan
+     scaling 125% + scrollbar ≈ 1050px) grup alat tidak muat di samping search.
+     Dengan nowrap, search menyusut ke 0 lalu inputnya menutupi tombol AI
+     Matchmaker sehingga klik di bagian kirinya jatuh ke input. */
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--gray-a5, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+.modernTr {
+  transition: background-color 0.12s ease;
+}
+.modernTr:hover {
+  background: #f8fafc;
+}
+.pageNavBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.pageNavBtn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+.pageNavBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.pageNavBtnActive {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+.pageNavBtnActive {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+.pageSizeSelector {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+.pageSizeSelect {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12.5px;
+  cursor: pointer;
+  outline: none;
+}
+.pageSizeSelector {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+.priceBoldText {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+.releaseBadgeFast {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  width: fit-content;
+}
+.releaseBadgeStandard {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  width: fit-content;
+}
+.releaseBadgeSuper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  background: #ecfdf5;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  width: fit-content;
+}
+.releaseStack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 110px;
+}
+/* SLA waktu terbit: angka hasil ukur nyata media, ditampilkan netral
+   (bukan badge warna) supaya tidak terbaca sebagai klaim kategori. */
+.slaPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Rating kecepatan terbit dari klien tidak lagi tampil di tabel; nilainya
+   ada di modal "Lihat Detail" (samping AI Trust Score). */
+.releaseTimeSub {
+  font-size: 11px;
+  color: #64748b;
+  padding-left: 2px;
+}
+.sampleDocLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 1.1;
+  transition: text-decoration 0.12s ease;
+}
+.sampleDocLink:hover {
+  text-decoration: underline;
+}
+.scoreBoxPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 32px;
+  padding: 0 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+/* Badge AI Trust: warna latar/teks/border diisi inline oleh aiTrustToneStyle()
+   (makin tinggi skor makin kuat hijaunya); kelas ini hanya menegaskan bobot. */
+.aiTrustPill {
+  font-weight: 800;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.selectedBarDivider {
+  width: 1px;
+  height: 34px;
+  background: #e2e8f0;
+  margin: 0 24px;
+  flex-shrink: 0;
+}
+.selectedBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.selectedBarRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.selectedBottomBar {
+  position: fixed;
+  bottom: 0;
+  left: var(--sidebar-width, 264px);
+  right: 0;
+  z-index: 95;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.08);
+  padding: 14px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  animation: slideUpBar 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.selectedCancelBtn {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+.selectedCancelBtn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+.selectedCreateBtn {
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.selectedCreateBtn:hover {
+  background: #1e293b;
+  transform: translateY(-1px);
+}
+.selectedExportBtn {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.12s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.selectedExportBtn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+.selectedStatCreditVal {
+  font-size: 13px;
+  font-weight: 400;
+  color: #64748b;
+  white-space: nowrap;
+}
+.selectedStatDomainVal {
+  font-size: 17.5px;
+  font-weight: 750;
+  color: #2563eb;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.selectedStatItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Kartu "MEDIA TERPILIH" bisa diklik: buka popover daftar media yang dipilih. */
+.selectedStatClickable { position: relative; }
+.selectedStatBtn {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.14s ease;
+}
+.selectedStatBtn:hover { background: #f1f5f9; }
+.selectedStatBtn.active { background: #e8eefc; }
+
+/* Favicon stack media terpilih: logo bertumpuk (overlap ~13px) dengan cincin
+   putih, teks jumlah media di kanannya. Maks 4 logo asli + "+N". */
+.selectedStatFaviconRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.selectedStatFavicons {
+  display: inline-flex;
+  align-items: center;
+  padding-left: 4px;
+}
+.selectedStatFavicon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  margin-left: -13px;
+  border-radius: 999px;
+  border: 2px solid #ffffff;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  color: #475569;
+  animation: faviconStackIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.selectedStatFavicon:first-child { margin-left: 0; }
+.selectedStatFavicon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.selectedStatFaviconFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #eef2f7;
+}
+.selectedStatFaviconMore {
+  background: #eef4ff;
+  color: #2563eb;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+.selectedStatTextCol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.selectedStatTextCol .selectedStatDomainVal {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+.selectedStatSub {
+  font-size: 12.5px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+@keyframes faviconStackIn {
+  from { opacity: 0; transform: scale(0.82); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (max-width: 900px) {
+  .selectedStatFavicon { width: 32px; height: 32px; flex-basis: 32px; margin-left: -11px; font-size: 12px; }
+  .selectedStatFaviconMore { font-size: 11px; }
+  .selectedStatFavicons { padding-left: 3px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .selectedStatFavicon { animation: none; }
+}
+.selectedListBackdrop { position: fixed; inset: 0; z-index: 96; cursor: default; }
+.selectedListPop {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  z-index: 97;
+  width: 320px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+  animation: selectedListIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes selectedListIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.selectedListHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px 8px;
+  border-bottom: 1px solid #eef2f7;
+}
+.selectedListTitle { font-size: 12.5px; font-weight: 700; color: #0f172a; }
+.selectedListReset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.selectedListReset:hover { background: #fee2e2; color: #dc2626; }
+.selectedListActions { display: inline-flex; align-items: center; gap: 2px; }
+.selectedListClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.selectedListClose:hover { background: #f1f5f9; color: #0f172a; }
+.selectedListItems {
+  overflow-y: auto;
+  padding: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Scrollbar ramping disamakan dengan daftar lain di aplikasi. */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.selectedListItems::-webkit-scrollbar { width: 6px; }
+.selectedListItems::-webkit-scrollbar-track { background: transparent; }
+.selectedListItems::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+.selectedListItems::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.selectedListRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: 8px;
+  transition: background-color 0.12s ease;
+}
+.selectedListRow:hover { background: #f8fafc; }
+.selectedListRowFavicon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+}
+.selectedListRowFavicon img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.selectedListRowName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: #334155;
+}
+.selectedListRowPrice { flex-shrink: 0; font-size: 12px; font-weight: 600; color: #0f172a; white-space: nowrap; }
+.selectedListRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.selectedListRemove:hover { background: #fee2e2; color: #dc2626; }
+.selectedListFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 2px -10px -10px;
+  padding: 10px 16px;
+  border-top: 1px solid #eef2f7;
+  border-radius: 0 0 14px 14px;
+  background: #f6f8fc;
+  font-size: 12.5px;
+  color: #64748b;
+}
+.selectedListFoot strong { color: #0f172a; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) {
+  .selectedListPop { animation: none; }
+}
+.selectedStatLabel {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+/* Indikator tahap alur kampanye di header (muncul saat media dipilih). */
+.selectedStepsTrack {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: stepsTrackEnter 340ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+@keyframes stepsTrackEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .selectedStepsTrack {
+    animation: none;
+  }
+}
+.selectedStepChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 400;  padding: 5px 14px 5px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--card, #fff);
+  color: var(--muted-foreground, #94a3b8);
+  white-space: nowrap;
+}
+/* Bulatan nomor/centang di dalam pil, sama seperti pil tahap di The Writer. */
+.selectedStepNum {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--muted, #eef2f8);
+  color: var(--muted-foreground, #94a3b8);
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+/* Langkah yang sudah dilewati: bulatan hijau bercentang. */
+.selectedStepChipDone .selectedStepNum {
+  background: var(--success, #16a34a);
+  color: #ffffff;
+}
+.selectedStepChipDone {
+  border-color: var(--border, #e2e8f0);
+  color: var(--muted-foreground, #94a3b8);
+}
+/* Langkah aktif saat ini: bingkai biru, bulatan nomor biru (primary), teks tebal. */
+.selectedStepChipActive {
+  border-color: var(--primary);
+  color: var(--foreground);
+  font-weight: 700;
+}
+.selectedStepChipActive .selectedStepNum {
+  background: var(--primary);
+  color: var(--primary-foreground, #ffffff);
+}
+button.selectedStepChip,
+.selectedStepChipClickable {
+  cursor: pointer;
+  outline: none;
+  font: inherit;
+  font-size: 12.5px;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+button.selectedStepChip:hover:not(:disabled),
+.selectedStepChipClickable:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--accent, #eef4ff);
+}
+button.selectedStepChip:hover:not(:disabled) .selectedStepNum,
+.selectedStepChipClickable:hover:not(:disabled) .selectedStepNum {
+  background: var(--primary);
+  color: var(--primary-foreground, #ffffff);
+}
+button.selectedStepChip:focus-visible,
+.selectedStepChipClickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+button.selectedStepChip:disabled,
+.selectedStepChipClickable:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+/* Mobile: label tahap ("Katalog Media", "Penyedia Konten") disembunyikan —
+   tinggal bulatan nomornya, supaya header tidak berjejal. */
+@media (max-width: 767px) {
+  .selectedStepChipLabel { display: none; }
+  .selectedStepChip { gap: 0; padding-right: 5px; }
+}
+/* Field modal: dropdown Profiler pas dengan teks isinya (fit-content). */
+.modalField .zs-select-trigger {
+  width: fit-content;
+  max-width: 100%;
+}
+.modalField .zs-select-label {
+  max-width: 260px;
+}
+/* Ajakan melengkapi Profiler: teks saja, tanpa kotak, supaya tetap minimalis. */
+.profilerInviteBtn {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.profilerInviteBtn:hover {
+  color: var(--primary-hover, var(--primary));
+}
+.selectedStatPriceGroup {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.selectedStatPriceVal {
+  font-size: 18.5px;
+  font-weight: 750;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.skeletonLine {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--muted);
+}
+.skeletonList {
+  display: flex;
+  flex-direction: column;
+}
+.skeletonRow {
+  height: 52px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
+.skeletonRow:last-child {
+  border-bottom: none;
+}
+.tableWrap {
+  /* TIDAK memakai overflow sendiri: halaman yang menggulir (seperti biasa),
+     sehingga toolbar pencarian ikut tergulir hilang, sementara header kolom
+     tetap menempel di bawah header aplikasi. */
+  overflow: visible;
+  width: 100%;
+}
+.trafficMainVal {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.trafficSourceText {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.trafficStack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 110px;
+}
+.trafficTrendGreen {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: #16a34a;
+  font-weight: 700;
+  font-size: 11px;
+  margin-left: 6px;
+}
+.trafficTrendRed {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: #dc2626;
+  font-weight: 700;
+  font-size: 11px;
+  margin-left: 6px;
+}
+.viewDetailBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #2563eb;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.viewDetailBtn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+/* ── Tambahan: kontrol & state yang di app lama memakai komponen Radix
+   (DropdownMenu/Popover/Dialog/Spinner) — di sini versi native dengan
+   metrik & warna yang sama, plus kelas pembungkus state. ─────────────── */
+
+.modernSelectWrap { position: relative; display: inline-flex; align-items: center; }
+.modernSelect {
+  height: 38px; padding: 0 12px; border: 1px solid #e2e8f0; border-radius: 8px;
+  background: var(--card); color: #0f172a; font-size: 13px; font-weight: 500;
+  outline: none; cursor: pointer; max-width: 220px;
+}
+.modernSelect:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+
+.modernActionBtn {
+  display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px;
+  border: 1px solid #e2e8f0; border-radius: 8px; background: var(--card);
+  color: #334155; font-size: 13px; font-weight: 500; cursor: pointer;
+  outline: none; transition: all .12s ease; white-space: nowrap;
+}
+.modernActionBtn:hover { border-color: #cbd5e1; background: #f8fafc; }
+.modernActionBtnActive { background: #2563eb !important; border-color: #2563eb !important; color: #fff !important; font-weight: 600 !important; }
+.modernActionBadge {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
+  padding: 0 5px; border-radius: 999px; background: #eff6ff; color: #2563eb;
+  font-size: 11px; font-weight: 700;
+}
+.modernActionBtnActive .modernActionBadge { background: rgba(255,255,255,.25); color: #fff; }
+
+/* AI Matchmaker: aksi AI di toolbar katalog, diberi tint supaya beda dari
+   tombol alat biasa tanpa mengubah tinggi toolbar. */
+.matchmakerBtn { border-color: #c7d2fe; background: #eef2ff; color: #3730a3; font-weight: 600; }
+.matchmakerBtn:hover { border-color: #a5b4fc; background: #e0e7ff; color: #312e81; }
+/* Pil "Baru" di samping label — penanda fitur baru ala mockup. */
+.matchmakerNew {
+  margin-left: 2px; padding: 2px 8px; border-radius: 999px;
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
+  line-height: 1.2; text-transform: none; white-space: nowrap;
+}
+.matchmakerBtn:hover .matchmakerNew { background: linear-gradient(135deg, #7c3aed, #5b21b6); }
+
+/* Panel filter lanjutan mengambang (parity Radix Popover.Content align="end"
+   sideOffset={8}): fixed supaya tidak menggeser layout tabel di bawahnya. */
+.advFilterPanel {
+  position: fixed;
+  z-index: 1100;
+  width: 440px;
+  max-width: calc(100vw - 16px);
+  display: flex;
+  flex-direction: column;
+}
+.advFilterBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1090;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+.advFilterPanel .advFilterCard {
+  background: var(--card); border: 1px solid #dfe7f3; border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 18px 44px rgba(15,23,42,.16);
+  max-height: 100%;
+  animation: advFilterIn .12s cubic-bezier(.16,1,.3,1);
+  transform-origin: top right;
+}
+@keyframes advFilterIn {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.advFilterSectionLabel {
+  font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #64748b;
+}
+.advFilterToggle {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-size: 14px; color: #334155; cursor: pointer; user-select: none;
+  padding: 2px 0;
+}
+.advFilterToggle input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin: 0;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+.advFilterToggle input:hover { border-color: #94a3b8; }
+.advFilterToggle input:checked {
+  background: #2563eb url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / 13px 13px no-repeat;
+  border-color: #2563eb;
+}
+.advFilterToggle input:focus-visible { outline: 2px solid #bfdbfe; outline-offset: 2px; }
+.advFilterToggleCompact { font-size: 12.5px; color: #64748b; }
+/* Slider Minimum DA: baris rapat dengan nilai di kanan agar lebar trek stabil. */
+.advFilterSliderRow { display: flex; align-items: center; gap: 12px; }
+.advFilterRange {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+.advFilterRange::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, #2563eb var(--pct, 0%), #e2e8f0 var(--pct, 0%));
+}
+.advFilterRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(15,23,42,.28);
+  cursor: grab;
+}
+.advFilterRange::-webkit-slider-thumb:active { cursor: grabbing; }
+.advFilterRange::-moz-range-track { height: 6px; border-radius: 999px; background: #e2e8f0; }
+.advFilterRange::-moz-range-progress { height: 6px; border-radius: 999px; background: #2563eb; }
+.advFilterRange::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(15,23,42,.28);
+  cursor: grab;
+}
+.advFilterRange:focus-visible { outline: 2px solid #bfdbfe; outline-offset: 4px; border-radius: 999px; }
+.advFilterRangeValue {
+  flex: none; min-width: 64px; text-align: right; font-size: 13px; font-weight: 600;
+  color: #475569; font-variant-numeric: tabular-nums;
+}
+
+.activeFilterBanner {
+  display: flex; align-items: center; justify-content: space-between; padding: 8px 14px;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px;
+  color: #334155; font-weight: 500;
+}
+.bookmarkBannerClear {
+  background: transparent; border: none; color: #2563eb; font-size: 12.5px; font-weight: 600;
+  cursor: pointer; padding: 4px 8px; border-radius: 6px;
+}
+.bookmarkBannerClear:hover { background: #eff6ff; }
+
+.modernThSortable { cursor: pointer; }
+.modernThSortable:hover { color: #2563eb; }
+.thWithInfo { display: inline-flex; align-items: center; gap: 5px; }
+.infoDot { display: inline-flex; align-items: center; color: #94a3b8; cursor: help; }
+/* Isi tooltip kaya (waktu rilis): baris bertumpuk dengan label berwarna. */
+.tipStack { display: flex; flex-direction: column; gap: 4px; }
+.tipStack strong { margin-bottom: 2px; }
+
+.mediaMetaLine { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #64748b; }
+.domainLink { display: inline-flex; align-items: center; gap: 3px; color: #2563eb; text-decoration: none; font-weight: 500; }
+.domainLink:hover { text-decoration: underline; }
+.verifiedTick { display: inline-flex; align-items: center; flex-shrink: 0; }
+/* Indikator rekam jejak (daftar media): titik kecil di antara tautan "Sample"
+   dan sisa baris — jumlah artikel muncul sebagai tooltip saat hover, jadi
+   tidak ada teks permanen yang memakan ruang. Biru = sudah ada distribusi,
+   abu = belum. */
+.distDot {
+  display: inline-block; flex-shrink: 0;
+  width: 7px; height: 7px; border-radius: 999px;
+  background: #2b67ec;
+}
+.distDot.distDotMuted { background: #cbd5e1; }
+
+/* Trigger tooltip (daftar media): titik + jumlah artikel terlihat;
+   keterangan lengkap baru muncul saat hover. */
+.distCount {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; color: #2b67ec;
+  white-space: nowrap; cursor: default;
+}
+.distCountMuted { color: #64748b; font-weight: 500; }
+
+/* Kebijakan tautan media di baris katalog: kuota backlink + masa berlakunya
+   ("2 Dofollow • Permanen" / "1 Nofollow • 12 Bln SLA"). */
+.linkPolicyPill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 7px; border-radius: 999px;
+  border: 1px solid #dbe4f5; background: #f5f8ff;
+  font-size: 10.5px; font-weight: 600; line-height: 1.5;
+  color: #2b67ec; white-space: nowrap; cursor: default;
+}
+.linkPolicyPill svg { flex-shrink: 0; }
+.linkPolicyPillPermanent { border-color: #cfe9d8; background: #f2fbf5; color: #17794a; }
+
+/* Badge versi teks — masih dipakai halaman matchmaker. */
+.distBadge {
+  display: inline-flex; align-items: center;
+  padding: 1px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 600; line-height: 1.1;
+  background: #eef4ff; color: #2b67ec;
+  white-space: nowrap;
+}
+.distBadgeMuted { background: #f1f5f9; color: #64748b; font-weight: 500; }
+.mutedDash { color: #94a3b8; }
+
+.skeletonRow { display: flex; align-items: center; gap: 16px; padding: 18px 16px; border-bottom: 1px solid #f1f5f9; }
+.skeletonLine { height: 12px; border-radius: 6px; background: var(--muted); animation: mediaPulse 1.4s ease-in-out infinite; }
+@keyframes mediaPulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
+
+.paginationBtns { display: flex; align-items: center; gap: 10px; }
+.paginationBtn {
+  display: inline-flex; align-items: center; gap: 5px; height: 34px; padding: 0 12px;
+  border: 1px solid #e2e8f0; border-radius: 8px; background: var(--card); color: #334155;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.paginationBtn:hover:not(:disabled) { background: #f8fafc; }
+.paginationBtn:disabled { opacity: .5; cursor: not-allowed; }
+.paginationPage { font-size: 13px; color: #64748b; white-space: nowrap; }
+
+.modalOverlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.45); }
+.modalCard {
+  background: var(--card); border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px 26px;
+  width: 100%; max-width: 530px; max-height: 88vh; overflow-y: auto; color: #0f172a;
+}
+.campaignModalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.modalHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.modalTitle { display: inline-flex; align-items: center; gap: 8px; font-size: 16.5px; font-weight: 700; margin: 0; }
+.modalClose { background: transparent; border: none; color: #64748b; cursor: pointer; padding: 6px; border-radius: 8px; display: inline-flex; }
+.modalClose:hover { background: #f1f5f9; color: #0f172a; }
+.modalHint { font-size: 13px; color: #64748b; margin: 0; line-height: 1.5; }
+.modalTextarea {
+  width: 100%; border: 1px solid #e2e8f0; border-radius: 9px; padding: 11px 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+  background: #f8fafc; color: #0f172a; outline: none; resize: vertical;
+}
+.modalTextarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+.modalField { display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; font-weight: 550; color: #1e293b; }
+.modalError { font-size: 12.5px; color: #dc2626; margin: -10px 0 0; }
+.modalFooter { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+.bookmarkList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
+.bookmarkRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid #f1f5f9; border-radius: 8px; }
+.bookmarkName { font-size: 13px; font-weight: 500; color: #0f172a; }
+.bookmarkRemove { background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
+.bookmarkRemove:hover { color: #dc2626; background: #fef2f2; }
+
+/* Bar seleksi menempel di kanan sidebar (lebar sidebar klien 264px). */
+@media (min-width: 1024px) { .selectedBottomBar { left: 264px; } }
+
+/* ── Fly-to-campaign: chip animasi + highlight baris + pulse tombol ────── */
+.flyLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  pointer-events: none;
+  overflow: hidden;
+}
+.flyChip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #1d4ed8;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(29, 78, 216, 0.35);
+  will-change: transform, opacity;
+}
+.flyChip svg {
+  flex: none;
+}
+/* Varian chip bookmark (ikon saja, hijau-biru aksen utama). */
+.flyChipBookmark {
+  padding: 6px;
+  background: #2563eb;
+}
+/* Pop singkat pada ikon bookmark sumber: membesar lalu kembali + jadi filled. */
+.bookmarkActionBtn.bookmarkPop svg {
+  animation: bookmarkPop 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  fill: #2563eb;
+  stroke: #2563eb;
+}
+@keyframes bookmarkPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+/* Pulse tombol Bookmark di toolbar saat chip tiba. Di HP tombol tujuan adalah
+   corong alat katalog (tombol Bookmark ada di dalam panel yang tertutup), jadi
+   kelas yang sama juga berlaku untuk .modernToolsBtn. */
+.modernActionBtn.bookmarkPulse,
+.modernToolsBtn.bookmarkPulse {
+  animation: bookmarkPulse 480ms ease-out;
+}
+@keyframes bookmarkPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+  45% { transform: scale(1.06); }
+  70% { box-shadow: 0 0 0 9px rgba(37, 99, 235, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bookmarkActionBtn.bookmarkPop svg,
+  .modernActionBtn.bookmarkPulse,
+  .modernToolsBtn.bookmarkPulse {
+    animation: none;
+  }
+}
+/* Baris yang baru dipilih: highlight biru halus ~360 ms. */
+.modernTr.rowJustSelected > td {
+  animation: rowSelectFlash 360ms ease-out;
+}
+@keyframes rowSelectFlash {
+  0% { background-color: rgba(37, 99, 235, 0.16); }
+  100% { background-color: transparent; }
+}
+/* Pulse pada tombol Kampanye saat chip tiba. */
+.selectedCreateBtn.barPulse,
+.selectedBottomBar.barPulse .selectedCreateBtn {
+  animation: createBtnPulse 560ms ease-out;
+}
+@keyframes createBtnPulse {
+  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); }
+  70% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modernTr.rowJustSelected > td,
+  .selectedBottomBar.barPulse .selectedCreateBtn {
+    animation: none;
+  }
+}
+
+/* ── Modal detail media (port media-detail-modal.tsx) ─────────────────── */
+.detailCard {
+  background: var(--card); border: 1px solid #e2e8f0; border-radius: 16px;
+  width: 100%; max-width: 1200px; max-height: 92vh; overflow-y: auto;
+  color: #0f172a; box-shadow: 0 24px 64px rgba(15,23,42,.18);
+}
+.detailHeader {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 20px 24px; border-bottom: 1px solid #f1f5f9;
+}
+.detailIdentity { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.detailAvatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 46px; height: 46px; border-radius: 12px; background: #eff6ff; color: #2563eb;
+  font-size: 19px; font-weight: 750;
+}
+.detailNameLine { display: flex; align-items: center; gap: 7px; }
+.detailName { font-size: 20px; font-weight: 750; letter-spacing: -.02em; margin: 0; line-height: 1.2; }
+.detailMetaLine { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: #64748b; margin-top: 4px; }
+.detailTier { padding: 2px 8px; background: #f1f5f9; border-radius: 6px; font-size: 11.5px; font-weight: 600; color: #334155; }
+.detailHeaderActions { display: flex; align-items: center; gap: 8px; flex: none; }
+
+.detailMetrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-bottom: 1px solid #f1f5f9; }
+.detailMetric { display: flex; flex-direction: column; gap: 3px; padding: 16px 24px; border-right: 1px solid #f1f5f9; }
+.detailMetric:last-child { border-right: none; }
+.detailMetricLabel { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; }
+.detailMetricValue { font-size: 19px; font-weight: 750; letter-spacing: -.02em; color: #0f172a; }
+.detailMetricSub { font-size: 11.5px; color: #94a3b8; }
+
+.detailGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 20px 24px; }
+.detailCol { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.detailHero {
+  border-radius: 14px; padding: 20px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+}
+.detailHeroEyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; opacity: .85; }
+.detailHeroTitle { font-size: 18px; font-weight: 750; margin: 6px 0 6px; letter-spacing: -.02em; }
+.detailHeroDesc { font-size: 13px; line-height: 1.55; margin: 0; opacity: .92; }
+.detailHeroChips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.detailHeroChip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px;
+  background: rgba(255,255,255,.16); border-radius: 999px; font-size: 11.5px; font-weight: 600;
+}
+
+.detailPanel { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: var(--card); }
+.detailPanelHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.detailPanelTitle { font-size: 13.5px; font-weight: 700; color: #0f172a; }
+.detailPanelSub { font-size: 11.5px; color: #94a3b8; }
+.detailPanelEmpty { font-size: 12.5px; color: #64748b; margin: 0; }
+.detailPanelFoot {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 12px; padding-top: 11px; border-top: 1px solid #f1f5f9;
+  font-size: 12.5px; color: #64748b;
+}
+.detailPanelFoot strong { font-size: 14px; color: #0f172a; }
+
+.perfGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.perfCard { display: flex; flex-direction: column; gap: 3px; padding: 11px 13px; border: 1px solid #f1f5f9; border-radius: 9px; background: #f8fafc; }
+.perfLabel { font-size: 11px; font-weight: 600; color: #64748b; }
+.perfValue { font-size: 16px; font-weight: 750; color: #0f172a; font-variant-numeric: tabular-nums; }
+
+.paramList { display: flex; flex-direction: column; gap: 0; margin: 0; }
+.paramRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid #f8fafc; }
+.paramRow:last-child { border-bottom: none; }
+.paramRow dt { font-size: 12.5px; color: #64748b; flex: none; }
+.paramRow dd { font-size: 12.5px; font-weight: 600; color: #0f172a; margin: 0; text-align: right; }
+.paramNote { font-weight: 400; color: #94a3b8; }
+
+.topikWrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.topikChip { padding: 4px 10px; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 6px; font-size: 11.5px; font-weight: 600; }
+.gatekeeperNote { margin: 10px 0 0; font-size: 12px; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 11px; }
+.detailDesc { font-size: 12.5px; line-height: 1.6; color: #475569; margin: 0; white-space: pre-line; }
+
+.detailFooter {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  padding: 18px 24px; border-top: 1px solid #f1f5f9; background: #f8fafc;
+  border-radius: 0 0 16px 16px;
+}
+.detailCost { display: flex; align-items: center; gap: 12px; }
+.detailCostIcon {
+  display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+  border-radius: 10px; background: #eff6ff; color: #2563eb;
+}
+.detailCostLabel { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; }
+.detailCostValues { display: flex; align-items: baseline; gap: 8px; }
+.detailCostPrice { font-size: 19px; font-weight: 750; letter-spacing: -.02em; color: #0f172a; }
+.detailCostCredit { font-size: 12.5px; color: #64748b; }
+.detailFooterActions { display: flex; align-items: center; gap: 10px; }
+.detailAiNote { display: flex; align-items: center; gap: 6px; margin: 0; padding: 10px 24px 16px; font-size: 12px; color: #7c3aed; }
+
+@media (max-width: 1000px) {
+  .detailGrid { grid-template-columns: 1fr; }
+  .detailMetrics { grid-template-columns: 1fr; }
+  .detailMetric { border-right: none; border-bottom: 1px solid #f1f5f9; }
+}
+
+/* Area unggah file pada modal impor (parity app lama: kotak putus-putus). */
+.importDrop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  width: 100%; padding: 16px 14px; margin-bottom: 12px;
+  border: 1.5px dashed #cbd5e1; border-radius: 10px; background: #f8fafc;
+  color: #2563eb; cursor: pointer; transition: border-color .15s ease;
+}
+.importDrop:hover { border-color: #2563eb; }
+.importDropTitle { font-size: 13px; font-weight: 600; color: #1e293b; }
+.importDropSub { font-size: 11.5px; color: #64748b; }
+.importDivider { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
+.importDivider::before, .importDivider::after { content: ''; height: 1px; flex: 1; background: #e2e8f0; }
+.importDivider span { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; }
+
+.reqMark { color: #dc2626; font-weight: 700; }
+.bannerStrong { font-weight: 600; color: #0f172a; }
+
+/* Panel tooltip bits-ui (port Radix untuk Svelte) yang dipakai halaman katalog.
+   Posisinya fixed supaya tidak terpotong overflow-x milik .tableWrap. */
+.uiTipArrow {
+  color: #0f172a;
+}
+.uiTip {
+  z-index: 1300;
+  /* Batas lebar panel; teks boleh membungkus sampai batas ini. */
+  max-width: 320px;
+  padding: 8px 11px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.28);
+  /* Panel bisa berada di dalam <th>/<td> yang mewarisi nowrap + uppercase +
+     letter-spacing; semuanya dinetralkan supaya teks terbaca utuh. */
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+/* Aturan lama (≤1024) tetap berlaku untuk tabel lain yang memakai kelas
+   sama di luar halaman ini (mis. matchmaker) — jadi perilakunya tidak berubah. */
+@media (max-width: 1024px) {
+  .modernTable th:nth-child(5), .modernTable td:nth-child(5),
+  .modernTable th:nth-child(6), .modernTable td:nth-child(6),
+  .modernTable th:nth-child(7), .modernTable td:nth-child(7) {
+    display: none;
+  }
+}
+
+/* Katalog media: sembunyikan DA/AI Trust/AI Cited sampai 1279px. Di
+   1025-1279 lebar konten (±470-750px setelah sidebar) tidak cukup untuk 10
+   kolom — sebelumnya semua kolom tampil dan tabel meluber hingga seluruh
+   halaman ikut menggulir. Tujuh kolom sisanya memakai seluruh lebar konten
+   secara proporsional (auto layout + sel membungkus dari aturan global
+   `main table` di app.css), tanpa scroll horizontal. */
+@media (max-width: 1279px) {
+  .katalogMedia .modernTable th:nth-child(5), .katalogMedia .modernTable td:nth-child(5),
+  .katalogMedia .modernTable th:nth-child(6), .katalogMedia .modernTable td:nth-child(6),
+  .katalogMedia .modernTable th:nth-child(7), .katalogMedia .modernTable td:nth-child(7) {
+    display: none;
+  }
+}
+
+/* Tablet (769-1279px): tujuh kolom tersisa butuh ±950px (header kolom
+   nowrap) sementara konten hanya ±470-750px — jadi gulir horizontal terjadi
+   DI DALAM kartu tabel, bukan melar seluruh halaman. Sticky header kolom
+   dikorbankan hanya di rentang ini; mobile (≤768) tetap overflow: visible
+   agar header kolom menempel, dan desktop (≥1280) tidak tersentuh. */
+@media (min-width: 769px) and (max-width: 1279px) {
+  .katalogMedia .tableWrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Header kolom sticky menempel ke bawah bar aplikasi, bukan ke tepi kartu.
+     Saat halaman belum digulir itu membuat kepala tabel tampil 65px di bawah
+     tepi atas kartu. Di rentang ini header tidak perlu sticky: kartu tabel
+     sudah menggulir sendiri. */
+  .katalogMedia .modernTable thead th {
+    position: static;
+  }
+}
+
+/* Desktop 1280–1439: sepuluh kolom dipadatkan agar muat di kartu ±945px tanpa
+   gulir horizontal dan tanpa menghilangkan kolom. Padding sel 14px → 8px dan
+   jarak tombol aksi 8px → 6px. Overflow tabel tetap visible supaya sticky
+   header kolom tidak terputus. */
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .katalogMedia .modernTable th,
+  .katalogMedia .modernTable td {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .katalogMedia .actionBtnGroup { gap: 6px; }
+}
+
+@media (max-width: 768px) {
+  /* Sisakan: checkbox, Nama Media, Harga, Aksi. */
+  .modernTable th:nth-child(3), .modernTable td:nth-child(3),
+  .modernTable th:nth-child(4), .modernTable td:nth-child(4),
+  .modernTable th:nth-child(8), .modernTable td:nth-child(8) {
+    display: none;
+  }
+  /* Header kolom wajib tetap sticky di mobile: container tidak boleh overflow-x: auto agar sticky tidak batal. */
+  .tableWrap { overflow: visible; width: 100%; }
+  .modernCard { overflow: visible; }
+  .modernTh {
+    position: sticky;
+    /* Offset mengikuti tinggi topbar yang sebenarnya (di-set JS; fallback 60px). */
+    top: var(--media-sticky-top, 60px);
+    z-index: 20;
+    padding: 11px 10px;
+    background: #f8fafc;
+    box-shadow: inset 0 -1px 0 #e2e8f0;
+  }
+  .modernTd { padding: 12px 10px; }
+  .modernTopBar { gap: 8px; padding: 10px; }
+  .modernSearchWrap { min-width: 0; flex: 1 1 auto; }
+  /* Jarak tombol aksi tidak dirapatkan di HP: 6px membuat tombol Detail
+     berdempetan dengan ikon bookmark di sebelahnya. */
+  .actionBtnGroup { gap: 8px; }
+
+  /* Paginasi di HP: baris info dan baris tombol sama-sama di tengah. Dibiarkan
+     rata kiri, keduanya terlihat menggantung di sisi kiri kartu. */
+  .modernPaginationBar { justify-content: center; text-align: center; row-gap: 10px; }
+  .paginationBtns { width: 100%; justify-content: center; }
+
+  /* Bar seleksi: sidebar disembunyikan (<768px) → menempel penuh & membungkus. */
+  .selectedBottomBar { left: 0; padding: 12px 14px; flex-wrap: wrap; gap: 10px 16px; }
+  .selectedBarLeft { flex-wrap: wrap; gap: 8px 16px; }
+  .selectedBarRight { flex-wrap: wrap; }
+  .selectedBarDivider { display: none; }
+}
+
+@media (max-width: 480px) {
+  .modernTd { padding: 11px 8px; }
+  .modernTh { padding: 10px 8px; }
+  .selectedBottomBar { padding: 10px 12px; }
+  .selectedBarRight { width: 100%; }
+  .selectedExportBtn, .selectedCreateBtn { flex: 1; justify-content: center; }
+}
+
+/* ── Alat katalog versi DESKTOP: tampil langsung di toolbar, bukan panel kanan.
+   Corong + panel kanan hanya dipakai di layar sempit (dipilih lewat matchMedia
+   di +page.svelte, jadi tidak ada CSS dua-render di sini). ─────────────────── */
+.catalogToolsInline {
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: none;
+  /* Tanpa batas ini grupnya selebar isinya dan meluber keluar kartu (Bookmark
+     terpotong) begitu toolbar lebih sempit dari ±850px. */
+  max-width: 100%;
+  margin-left: auto;
+}
+.catalogToolsInline .toolsInlineCats { flex: none; }
+/* Kategori duduk tepat di samping Filter — dulu aksinya didorong ke kanan
+   (margin-left:auto) sehingga jaraknya berjauhan. */
+.catalogToolsInline .toolsInlineActions {
+  display: flex; align-items: center; gap: 8px; flex: none;
+}
+
+/* ── Alat katalog: tombol corong di samping search + panel kanan (MOBILE) ── */
+.modernToolsWrap { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+.modernToolsBtn {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px; width: 38px; height: 38px; flex: none;
+  border: 1px solid var(--gray-a6, #e2e8f0); border-radius: 10px;
+  background: var(--card); color: #334155; cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.modernToolsBtn:hover { background: #f8fafc; border-color: #cbd5e1; color: #0f172a; }
+.modernToolsBtnActive { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+/* Panel alat: lega, tombol tersusun 2 kolom. */
+.toolsPanel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+  padding-top: 4px;
+}
+.toolsPanel .modernSelectWrap { grid-column: 1 / -1; }
+.toolsPanelLabel {
+  display: block; margin-bottom: 8px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: #94a3b8;
+}
+.toolsPanel .modernActionBtn {
+  width: 100%; min-height: 44px; justify-content: center;
+  padding: 0 12px; gap: 8px;
+}
+/* Impor List + Bookmark berdampingan dalam satu baris (2 kolom). */
+@media (max-width: 380px) {
+  .toolsPanel { grid-template-columns: 1fr; gap: 12px; }
+}
+@media (max-width: 768px) {
+  .modernSearchWrap { flex: 1 1 auto; }
+  .modernToolsWrap { flex: none; }
+}
+
+/* Label tombol detail: versi panjang di layar lebar, versi pendek di HP. */
+.vdShort { display: none; }
+@media (max-width: 768px) {
+  .vdFull { display: none; }
+  .vdShort { display: inline; }
+}
+
+/* Harga: kolomnya disembunyikan di HP, nilainya dipindah ke bawah nama media.
+   Kolom Harga adalah kolom ke-8 sejak AI Trust dan AI Cited digabung jadi satu
+   kolom (10 → 9 kolom). Dulu ada aturan tambahan nth-child(9) yang menunjuk
+   Harga saat tabel masih 10 kolom; setelah penggabungan nomor itu bergeser ke
+   kolom Aksi, sehingga bookmark dan tombol Detail ikut hilang di HP. */
+.priceMobile { display: none; }
+@media (max-width: 768px) {
+  /* Di HP: grid 2 kolom — nama domain di kiri, badge Dewan Pers di kanan
+     (sebaris dengan centang verifikasi), lalu harga dan meta selebar penuh. */
+  .mediaRowCol {
+    display: grid;
+    /* Kolom Aksi (bookmark + Detail) sekarang ikut tampil di HP, jadi kolom
+       nama harus boleh menyusut. min-width 180px hanya relevan di layar lebar. */
+    min-width: 0;
+    /* Nama domain dan badge Dewan Pers berdempetan di kiri (bukan ditarik ke
+       ujung kanan kolom), kolom sisa menyerap kelegaan. */
+    grid-template-columns: minmax(0, max-content) max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 4px 6px;
+  }
+  .mediaRowCol .mediaTitleLine { grid-column: 1; order: 1; min-width: 0; }
+  .priceMobile {
+    display: block; grid-column: 1 / -1; order: 3; margin-top: 0;
+    font-size: 12px; font-weight: 500; color: #64748b;
+  }
+  .mediaRowCol .mediaMetaLine { grid-column: 1 / -1; order: 4; }
+}
+
+/* ── Panel alat (mobile): kategori radio, expand, filter lanjutan inline ── */
+.catRadioLabel { grid-column: 1 / -1; margin-bottom: -8px; }
+.catRadioGroup { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.catRadio {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 34px; padding: 0 12px;
+  border: 1px solid #e2e8f0; border-radius: 999px;
+  background: var(--card); color: #334155;
+  font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.catRadio:hover { border-color: #cbd5e1; background: #f8fafc; }
+.catRadioActive { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+.catRadioCount { font-size: 11px; font-weight: 700; color: #94a3b8; }
+.catRadioActive .catRadioCount { color: #2563eb; }
+.catExpandBtn {
+  align-self: center; padding: 0; border: 0; background: none;
+  color: var(--primary); font-size: 12px; font-weight: 600;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+
+/* Layar sangat sempit (≤379px): rapatkan padding sel dan tombol Aksi supaya
+   empat kolom yang tersisa (checkbox, Nama Media, Harga, Aksi) tidak memaksa
+   tabel melebar keluar viewport. Kolom nama media tidak lagi dikunci 180px
+   (min-width di .mediaRowCol) dan domain/meta boleh membungkus. */
+@media (max-width: 379px) {
+  .modernTh, .modernTd { padding: 10px 6px; }
+  /* Jarak antar tombol aksi tetap lega (8px) — yang dirapatkan hanya padding
+     sel dan padding dalam tombol, bukan jarak antar kontrol. */
+  .actionBtnGroup { gap: 8px; }
+  .viewDetailBtn { padding: 6px 8px; gap: 3px; }
+  .mediaRowCol { min-width: 0; grid-template-columns: minmax(0, 1fr) max-content; }
+  .mediaHeading { white-space: normal; overflow-wrap: anywhere; }
+  .mediaMetaLine { overflow-wrap: anywhere; }
+  /* Bar paginasi: biarkan membungkus (info + tombol) alih-alih melebar keluar. */
+  .modernPaginationBar { flex-wrap: wrap; gap: 8px; }
+  .paginationBtns { flex-wrap: wrap; }
+}
+.advFilterInline {
+  grid-column: 1 / -1; margin-top: 4px;
+  padding: 14px 0 0; border-top: 1px solid #f1f5f9;
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+/* ── Bar aksi bawah (mobile): ringkas, ringkasan + tombol utama penuh ────── */
+.selectedBarMobile { display: none; align-items: center; gap: 10px; min-width: 0; }
+/* Tumpukan favicon kini tombol: membuka popover daftar media terpilih. */
+.selectedBarMobileIcons {
+  display: inline-flex; align-items: center; flex: 0 0 auto;
+  padding: 0; border: none; background: none; cursor: pointer;
+  border-radius: 999px;
+  transition: opacity 0.14s ease;
+}
+.selectedBarMobileIcons:hover { opacity: 0.85; }
+.selectedBarMobileIcons:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.selectedBarAvatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; margin-right: -12px;
+  border-radius: 50%; border: 2px solid var(--card, #fff);
+  background: var(--accent, #eef4ff); color: var(--primary);
+  font-size: 14px; font-weight: 800;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+.selectedBarAvatar img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.selectedBarAvatarMore { background: #0f172a; color: #fff; margin-right: 0; }
+/* Avatar ditumpuk dengan margin negatif; tanpa ini avatar TERAKHIR ikut
+   menarik teks di kanannya sehingga judul pilihan tertimpa favicon saat
+   pilihan hanya 1–3 (belum ada chip +N yang me-reset margin). */
+.selectedBarMobileIcons .selectedBarAvatar:last-child { margin-right: 0; }
+/* Dua baris ringkasan (jumlah media + total) butuh jarak: dengan line-height
+   1.25 keduanya hampir menempel. */
+.selectedBarMobileText { display: flex; flex-direction: column; gap: 3px; line-height: 1.3; min-width: 0; }
+.selectedBarMobileText strong { font-size: 13px; }
+.selectedBarMobileText span { font-size: 12px; color: var(--muted-foreground); }
+
+@media (max-width: 767px) {
+  .selectedBottomBar {
+    flex-direction: column; align-items: stretch; gap: 10px;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  /* Stat desktop diganti ringkasan mobile (node tahap sudah dipindah ke header). */
+  .selectedBarStats { display: none; }
+  .selectedBarMobile { display: flex; }
+  /* Popover daftar media ikut lebar bar dan tidak boleh melebihi layar. */
+  .selectedBarMobile .selectedListPop { left: 0; right: 0; width: auto; max-height: min(320px, 55dvh); }
+  .selectedBarRight { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; }
+  /* Mobile: cukup tombol utama — Batal & Ekspor Proposal disembunyikan
+     (fungsinya tetap tersedia di desktop). */
+  .selectedCancelBtn, .selectedExportBtn { display: none; }
+  .selectedCreateBtn { grid-column: 1 / -1; justify-content: center; min-height: 46px; }
+}
+
+/* ── Ringkasan Kampanye (mobile): bottom sheet 90dvh + footer menempel ───── */
+.campaignHandle { display: none; }
+
+@media (max-width: 767px) {
+  .campaignCard {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; margin: 0;
+    width: 100%; max-width: none; max-height: 90dvh;
+    border-radius: 16px 16px 0 0; overflow: hidden;
+    display: flex; flex-direction: column;
+    animation: campaignSheetUp 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .campaignHandle {
+    display: block; flex: 0 0 auto;
+    width: 40px; height: 4px; margin: 8px auto 2px;
+    border-radius: 999px; background: var(--border, #e2e8f0);
+  }
+  .campaignModalForm { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+  /* Konten utama menggulir sendiri; footer tombol tetap di bawah panel. */
+  .campaignBody { overflow-y: auto; flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+  .campaignFooter {
+    position: sticky; bottom: 0; z-index: 2;
+    background: var(--card, #fff);
+    border-top: 1px solid var(--border, #e2e8f0);
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+}
+@keyframes campaignSheetUp {
+  from { transform: translateY(18px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .campaignCard { animation: none; }
+}
+
+/* Badge kecukupan saldo di kartu ringkasan kampanye. */
+.campaignBalanceBadge {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-top: 10px; padding: 10px 12px;
+  border-radius: 10px; font-size: 12.5px; line-height: 1.45;
+}
+.campaignBalanceBadge :global(svg) { flex: 0 0 auto; margin-top: 1px; }
+.campaignBalanceBadgeOk {
+  border: 1px solid color-mix(in srgb, var(--success, #16a34a) 35%, transparent);
+  background: var(--success-soft, #ecfdf3);
+  color: var(--success, #166534);
+}
+.campaignBalanceBadgeOk strong { display: block; font-weight: 700; }
+.campaignBalanceBadgeOk em { font-style: normal; color: color-mix(in srgb, var(--success, #16a34a) 78%, #0f172a); }
+.campaignBalanceBadgeLow {
+  border: 1px solid var(--warning, #f59e0b);
+  background: var(--warning-soft, #fffbeb);
+  color: var(--warning, #b45309);
+}
+.campaignBalanceBadgeLow a { font-weight: 700; color: inherit; text-decoration: underline; }
+
+/* ── Bar aksi mobile: kartu membulat, ringkasan + expand, tombol navy ────── */
+.selectedBarMobile { position: relative; width: 100%; }
+/* Desktop: stat item kembali sebaris horizontal (dulu ada di .selectedBarLeft).
+   Ditulis sebagai min-width supaya TIDAK menimpa aturan sembunyikan di mobile. */
+@media (min-width: 768px) {
+  .selectedBarStats { display: flex; align-items: center; gap: 0; }
+}
+
+.selectedBarMobileRow { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; }
+.selectedBarToggle {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border: 1px solid var(--border, #e2e8f0); border-radius: 9px;
+  background: transparent; color: var(--muted-foreground);
+  cursor: pointer; transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
+}
+.selectedBarToggle:hover { background: var(--secondary, #f1f5f9); }
+
+/* Hapus pilihan: ikon saja, merah, di kiri tombol ringkasan. margin-left:auto
+   ada di tombol ini supaya pasangan tombol tetap menempel di kanan baris. */
+.selectedBarClear {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border: 1px solid color-mix(in srgb, var(--destructive, #c52b36) 30%, transparent);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--destructive, #c52b36);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.selectedBarClear:hover {
+  background: color-mix(in srgb, var(--destructive, #c52b36) 10%, transparent);
+  border-color: color-mix(in srgb, var(--destructive, #c52b36) 55%, transparent);
+}
+
+
+
+@media (max-width: 767px) {
+  /* Panel mengambang: kartu membulat, border tipis + shadow lembut. */
+  .selectedBottomBar {
+    left: 10px; right: 10px; bottom: 10px; border-radius: 16px;
+    border: 1px solid var(--border, #e2e8f0);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.14);
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  .selectedCreateBtn {
+    min-height: 50px; border-radius: 12px;
+    background: #0f172a; color: #fff; font-weight: 650; gap: 8px;
+  }
+  .selectedCreateBtn:hover:not(:disabled) { background: #16233c; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .selectedBarToggle { transition: none; }
+}
+
+/* ── Ringkasan Kampanye (mobile): jarak antarbagian yang konsisten ───────── */
+@media (max-width: 767px) {
+  /* Badan sheet: satu kolom dengan jarak seragam, padding horizontal lega. */
+  .campaignBody {
+    display: flex; flex-direction: column; gap: 14px;
+    padding: 6px 8px 8px;
+  }
+  .campaignBody .modalHeader { padding: 0; margin: 0; }
+  .campaignBody .modalField { margin: 0; }
+  .campaignBody .modalField > span:first-child { margin-bottom: 6px; display: block; }
+  .campaignSummary { display: flex; flex-direction: column; gap: 0; padding: 4px 0; }
+  .campaignBalanceBadge { margin-top: 0; }
+  .dupWarn { margin: 0; }
+  /* Footer aksi: tombol utama menempel di dasar sheet. */
+  .campaignFooter {
+    display: flex; gap: 10px;
+    padding: 12px 8px calc(4px + env(safe-area-inset-bottom, 0px));
+  }
+  .campaignFooter .advFilterApplyBtn { flex: 1 1 auto; min-height: 46px; }
+  .campaignFooter .advFilterResetBtn { flex: 0 0 auto; min-width: 96px; min-height: 46px; }
+}
+
+/* Tombol aksi di banner (mis. "Bersihkan pilihan") jangan sampai teksnya
+   terpotong/wrap dua baris — utamakan tetap satu baris. */
+.bookmarkBannerClear { white-space: nowrap; flex: 0 0 auto; }
+.restoredSelectionBar { flex-wrap: nowrap; align-items: center; gap: 10px; }
+.restoredSelectionBar > span:first-child { min-width: 0; }
+
+/* Mobile: tombol bookmark TETAP tampil di kiri tombol Detail (dulu disembunyikan). */
+@media (max-width: 768px) {
+  .modernTable .actionBtnGroup .bookmarkActionBtn { display: inline-flex; }
+}
+
+/* Angka filter aktif di tombol corong: badge kecil di pojok kanan atas,
+   bukan menempel di samping ikon. */
+.modernToolsBtn .modernActionBadge {
+  position: absolute; top: -5px; right: -5px;
+  min-width: 17px; height: 17px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; border: 2px solid var(--card, #fff);
+  font-size: 10px; line-height: 1; font-weight: 800;
+}
+
+/* Rentang harga min–max di panel Filter Lanjutan. */
+.priceRangeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.priceRangeInput {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #dfe7f3;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.priceRangeInput::placeholder { color: #94a3b8; }
+.priceRangeInput:hover { border-color: #cbd5e1; }
+.priceRangeInput:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.priceRangeDash {
+  flex: none;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+/* Panel sempit: preset dan SLA ditumpuk supaya label tidak terpotong. */
+@media (max-width: 420px) {
+  .advFilterChipsGroupEqual {
+    grid-template-columns: 1fr;
+  }
+  .advFilterToggleRow {
+    gap: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ── Dropdown Jenis Media (mainstream / blogger) ─────────────────────── */
+.mediaTypeBtn {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	height: 38px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--card);
+	font: inherit;
+	cursor: pointer;
+	transition: border-color 140ms ease, background-color 140ms ease;
+}
+.mediaTypeBtn:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); }
+.mediaTypeIcon { color: #64748b; flex-shrink: 0; }
+.mediaTypeTitle { font-size: 13px; font-weight: 600; color: var(--foreground); }
+.mediaTypeCaret { color: #64748b; flex-shrink: 0; }
+
+.mediaTypeBackdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	border: none;
+	background: transparent;
+	cursor: default;
+}
+.mediaTypePopover {
+	position: fixed;
+	z-index: 61;
+	width: 300px;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--card);
+	box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+}
+.mediaTypeOption {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	width: 100%;
+	padding: 10px 12px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.mediaTypeOption:hover { background: color-mix(in srgb, var(--primary) 7%, transparent); }
+.mediaTypeOptionActive { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.mediaTypeRadio {
+	width: 15px;
+	height: 15px;
+	margin-top: 2px;
+	flex-shrink: 0;
+	border: 1.5px solid #94a3b8;
+	border-radius: 50%;
+	position: relative;
+}
+.mediaTypeOptionActive .mediaTypeRadio { border-color: var(--primary); }
+.mediaTypeOptionActive .mediaTypeRadio::after {
+	content: '';
+	position: absolute;
+	inset: 2.5px;
+	border-radius: 50%;
+	background: var(--primary);
+}
+.mediaTypeOptionText { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.mediaTypeOptionTitle { font-size: 13.5px; font-weight: 600; color: var(--foreground); }
+.mediaTypeOptionSub { font-size: 11.5px; color: var(--muted-foreground); }
+
+/* ── Cakupan domain: chip kecil setelah judul media ───────────────────── */
+.domainScopeChip {
+  display: inline-flex; align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px; font-weight: 600;
+  white-space: nowrap; cursor: default;
+  background: color-mix(in srgb, #64748b 12%, transparent);
+  color: #64748b;
+  flex-shrink: 0;
+}
+.domainScopeChip.domainScopeChipSub {
+  background: color-mix(in srgb, #2b67ec 12%, transparent);
+  color: #2b67ec;
+}

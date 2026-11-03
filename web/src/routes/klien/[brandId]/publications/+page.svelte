@@ -12,7 +12,7 @@
 	import { sameOriginAssetUrl } from '$lib/media/cover';
 	import { goto } from '$app/navigation';
 	import {
-		Calendar, ChartLine, CircleAlert, CircleCheck, Coins, ExternalLink, FileText, Image as ImageIcon, LoaderCircle, MessageCircle, RotateCcw, Search, X
+		Calendar, ChartLine, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, Coins, ExternalLink, FileText, Image as ImageIcon, LoaderCircle, MessageCircle, RotateCcw, Search, X
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -151,15 +151,15 @@
 	// cancelled, revision. Sebelumnya lima di antaranya tidak punya label
 	// sehingga klien melihat string mentah ("waiting_partner") di badge.
 	const PUB_STATUS_CONFIG: Record<string, { label: string; dot: string; text: string; bg: string }> = {
-		published: { label: 'Published', dot: 'var(--success)', text: 'var(--success)', bg: 'var(--success-soft)' },
-		completed: { label: 'Completed', dot: 'var(--success)', text: 'var(--success)', bg: 'var(--success-soft)' },
-		processing: { label: 'Processing', dot: 'var(--warning)', text: 'var(--warning)', bg: 'var(--warning-soft)' },
-		queued: { label: 'Queued', dot: 'var(--warning)', text: 'var(--warning)', bg: 'var(--warning-soft)' },
-		scheduled: { label: 'Scheduled', dot: 'var(--primary)', text: 'var(--primary)', bg: 'var(--accent)' },
-		failed: { label: 'Failed', dot: 'var(--destructive)', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)' },
-		rejected: { label: 'Rejected', dot: 'var(--destructive)', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)' },
-		draft: { label: 'Draft', dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' },
-		cancelled: { label: 'Cancelled', dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' },
+		published: { label: tr('Terbit'), dot: 'var(--success)', text: 'var(--success)', bg: 'var(--success-soft)' },
+		completed: { label: tr('Selesai'), dot: 'var(--success)', text: 'var(--success)', bg: 'var(--success-soft)' },
+		processing: { label: tr('Diproses'), dot: 'var(--warning)', text: 'var(--warning)', bg: 'var(--warning-soft)' },
+		queued: { label: tr('Dalam antrean'), dot: 'var(--warning)', text: 'var(--warning)', bg: 'var(--warning-soft)' },
+		scheduled: { label: tr('Terjadwal'), dot: 'var(--primary)', text: 'var(--primary)', bg: 'var(--accent)' },
+		failed: { label: tr('Gagal'), dot: 'var(--destructive)', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)' },
+		rejected: { label: tr('Ditolak'), dot: 'var(--destructive)', text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)' },
+		draft: { label: tr('Draf'), dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' },
+		cancelled: { label: tr('Dibatalkan'), dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' },
 		revision: { label: tr('Perlu Revisi'), dot: 'var(--warning)', text: 'var(--warning)', bg: 'var(--warning-soft)' },
 		// Status perantara yang sebelumnya tampil sebagai string mentah.
 		pending: { label: tr('Menunggu diproses'), dot: 'var(--muted-foreground)', text: 'var(--muted-foreground)', bg: 'var(--muted)' },
@@ -400,7 +400,7 @@
      draf di website mitra, badge dibungkus tooltip penjelas. -->
 {#snippet statusBadge(row: Pub, cfg: { label: string; dot: string; text: string; bg: string })}
 	<span
-		class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold capitalize"
+		class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
 		style="color: {cfg.text}; background-color: {cfg.bg};"
 	>
 		<span class="h-1.5 w-1.5 rounded-full {IN_FLIGHT.includes(row.status) ? 'animate-pulse' : ''}" style="background-color: {cfg.dot};"></span>
@@ -411,24 +411,23 @@
 <section>
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--primary);">PUBLICATIONS</p>
-			<h1 class="mt-1 text-2xl font-semibold tracking-tight">{tr("Publikasi")}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
+			<h1 class="pub-h1">{tr("Publikasi")}</h1>
+			<p class="pub-sub">
 				{view === 'publications'
-					? tr('Artikel approved yang dikirim ke media — queue worker (Phase 2) atau persetujuan partner (Phase 3).')
+					? tr('Artikel yang sudah disetujui dan dikirim ke media, lengkap dengan status terbitnya')
 					: tr('Jadwal mengirim media ke Mitra sesuai pengaturan — hanya distribusi ke Mitra, waktu terbit aktual dikelola Mitra.')}
 			</p>
 		</div>
-		<div class="inline-flex rounded-lg border p-0.5" style="background-color: var(--muted);">
+		<div class="pub-tabs">
 			<button
-				class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
-				style={view === 'publications' ? 'background-color: var(--card); color: var(--foreground);' : 'color: var(--muted-foreground);'}
+				class="pub-tab"
+				class:pub-tab-on={view === 'publications'}
 				type="button"
 				onclick={() => (view = 'publications')}
 			>{tr("Publikasi")}</button>
 			<button
-				class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
-				style={view === 'plans' ? 'background-color: var(--card); color: var(--foreground);' : 'color: var(--muted-foreground);'}
+				class="pub-tab"
+				class:pub-tab-on={view === 'plans'}
 				type="button"
 				onclick={() => (view = 'plans')}
 			>{tr("Jadwal Terjadwal")}</button>
@@ -437,7 +436,7 @@
 
 	{#if view === 'publications'}
 		<!-- Toolbar filter -->
-		<div class="app-card mt-4 flex flex-wrap items-center gap-3 p-3">
+		<div class="app-card mt-6 flex flex-wrap items-center gap-3 p-4">
 			<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
 				<Search size={15} class="text-muted-foreground" />
 				<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari artikel, media, atau kategori…")} bind:value={query} />
@@ -449,14 +448,14 @@
 				minWidth={150}
 				options={[
 					{ value: '', label: tr('Semua Status') },
-					{ value: 'waiting_partner', label: 'waiting_partner' },
-					{ value: 'revision', label: tr('Perlu Revisi') },
-					{ value: 'published', label: 'Published' },
-					{ value: 'queued', label: 'Queued' },
-					{ value: 'processing', label: 'Processing' },
-					{ value: 'pending_review', label: 'pending_review' },
-					{ value: 'failed', label: 'Failed' },
-					{ value: 'cancelled', label: 'Cancelled' }
+					{ value: 'waiting_partner', label: statusCfg('waiting_partner').label },
+						{ value: 'revision', label: statusCfg('revision').label },
+						{ value: 'published', label: statusCfg('published').label },
+						{ value: 'queued', label: statusCfg('queued').label },
+						{ value: 'processing', label: statusCfg('processing').label },
+						{ value: 'pending_review', label: tr('Menunggu review') },
+						{ value: 'failed', label: statusCfg('failed').label },
+						{ value: 'cancelled', label: statusCfg('cancelled').label }
 				]}
 			/>
 			<Select
@@ -486,10 +485,10 @@
 				align="end"
 				onchange={(v) => (sortOrder = v as 'newest' | 'oldest' | 'price_desc' | 'price_asc')}
 				options={[
-					{ value: 'newest', label: '⇅ Terbaru' },
-					{ value: 'oldest', label: '⇅ Terlama' },
-					{ value: 'price_desc', label: tr('⇅ Harga Tertinggi') },
-					{ value: 'price_asc', label: tr('⇅ Harga Terendah') }
+					{ value: 'newest', label: tr('Terbaru') },
+					{ value: 'oldest', label: tr('Terlama') },
+					{ value: 'price_desc', label: tr('Harga tertinggi') },
+					{ value: 'price_asc', label: tr('Harga terendah') }
 				]}
 			/>
 		</div>
@@ -522,7 +521,7 @@
 					{@const thumb = sameOriginAssetUrl(row.featured_image_url)}
 					{@const sla = slaInfo(row)}
 					{@const cancel = row.cancel_reason ? cancelParts(row.cancel_reason) : null}
-					<div class="flex flex-col gap-4 border-b p-4 last:border-0 md:flex-row">
+					<div class="flex flex-col gap-4 border-b p-5 last:border-0 md:flex-row">
 						<!-- Cover: mobile 16/9 selebar kartu dengan label status menempel
 						     di pojok kanan atas gambar; desktop thumbnail 140x88. -->
 						<div class="relative w-full shrink-0 md:h-[88px] md:w-[140px]">
@@ -560,9 +559,9 @@
 							<div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 								<span>{fmtDate(row.created_at)}</span>
 								{#if row.order_code}
-									<span class="rounded px-1.5 py-0.5 font-medium" style="background-color: var(--muted); color: var(--foreground);" title="Nomor order publikasi ini">{row.order_code}</span>
+									<span class="pub-chip pub-chip-code" title="Nomor order publikasi ini">{row.order_code}</span>
 								{/if}
-								<span>{tr("Media:")}<span style="color: var(--foreground);">{row.media_name ?? tr('Media Mitra')}</span></span>
+								<span>{tr("Media:")} <span style="color: var(--foreground);">{row.media_name ?? tr('Media Mitra')}</span></span>
 								<span>{tcLabel(row.client_price, rateIdr)}</span>
 								{#if row.published_url}
 									<a class="inline-flex items-center gap-1" style="color: var(--primary);" href={row.published_url} target="_blank" rel="noreferrer">{tr("Lihat Artikel")}<ExternalLink size={13} />
@@ -573,16 +572,16 @@
 							{#if cats.length > 0}
 								<div class="mt-2 flex flex-wrap items-center gap-1.5">
 									{#each cats.slice(0, 2) as c (c)}
-										<span class="rounded px-2 py-0.5 text-xs font-medium" style="background-color: var(--muted);">{c}</span>
+										<span class="pub-chip pub-chip-cat">{c}</span>
 									{/each}
 									{#if cats.length > 2}
-										<span class="rounded px-2 py-0.5 text-xs font-medium" style="background-color: var(--muted);" title={`Kategori: ${cats.join(', ')}`}>+{cats.length - 2}</span>
+										<span class="pub-chip pub-chip-cat" title={`Kategori: ${cats.join(', ')}`}>+{cats.length - 2}</span>
 									{/if}
 								</div>
 							{/if}
 
 							{#if row.media_status === 'archived'}
-								<p class="mt-2 text-xs" style="color: var(--warning);">{tr("⚠ Media mitra diarsipkan — permintaan tidak akan lanjut sampai media dipulihkan mitra.")}</p>
+								<p class="mt-2 flex items-start gap-1.5 text-xs" style="color: var(--warning);"><CircleAlert size={14} strokeWidth={1.5} class="mt-0.5 shrink-0" />{tr("Media mitra diarsipkan — permintaan tidak akan lanjut sampai media dipulihkan mitra.")}</p>
 							{/if}
 
 							{#if sla}
@@ -612,18 +611,17 @@
 								<div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
 									{#if row.pr_analysis.sentiment}
 										<Tooltip content={tr('Nada pemberitaan artikel hasil analisis otomatis setelah terbit: positif, netral, atau negatif. Dipakai untuk mengukur kesan artikel yang sudah tayang di media.')} maxWidth={300}>
-											<span class="rounded px-2 py-0.5" style="background-color: var(--muted);">Sentiment {SENTIMENT_LABEL[row.pr_analysis.sentiment.sentiment] ?? row.pr_analysis.sentiment.sentiment}</span>
+											<span class="pub-chip pub-chip-{row.pr_analysis.sentiment.sentiment === 'positive' ? 'ok' : row.pr_analysis.sentiment.sentiment === 'negative' ? 'bad' : 'cat'}">Sentimen {SENTIMENT_LABEL[row.pr_analysis.sentiment.sentiment] ?? row.pr_analysis.sentiment.sentiment}</span>
 										</Tooltip>
 									{/if}
 									{#if row.pr_analysis.verification}
 										<Tooltip content={tr('Verifikasi otomatis tautan artikel: URL bisa diakses, judul dan brand muncul di halaman, konten ter-publish, dan domain sesuai media. Tiap check bernilai 20 poin, lulus bila skor mencapai 60. ✓ lulus, ✗ gagal, • belum bisa diperiksa.')} maxWidth={320}>
 											<span
-												class="rounded px-2 py-0.5"
-												style={row.pr_analysis.verification.status === 'passed'
-													? 'background-color: var(--success-soft); color: var(--success);'
+												class="pub-chip {row.pr_analysis.verification.status === 'passed'
+													? 'pub-chip-ok'
 													: row.pr_analysis.verification.status === 'failed'
-														? 'background-color: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive);'
-														: 'background-color: var(--warning-soft); color: var(--warning);'}
+														? 'pub-chip-bad'
+														: 'pub-chip-warn'}"
 											>
 												URL {row.pr_analysis.verification.status === 'passed' ? '✓' : row.pr_analysis.verification.status === 'failed' ? '✗' : '•'}{row.pr_analysis.verification.compliance_score != null ? ` ${row.pr_analysis.verification.compliance_score}/100` : ''}
 											</span>
@@ -631,7 +629,7 @@
 									{/if}
 									{#if row.pr_analysis.message?.score != null}
 										<Tooltip content={tr('Persentase pesan utama kampanye yang tersampaikan di artikel, diperiksa otomatis setelah terbit. Skor rendah berarti sebagian pesan penting belum masuk ke tulisan.')} maxWidth={300}>
-											<span class="rounded px-2 py-0.5" style="background-color: var(--muted);">Message {row.pr_analysis.message.score}/100</span>
+											<span class="pub-chip pub-chip-cat">Pesan {row.pr_analysis.message.score}/100</span>
 										</Tooltip>
 									{/if}
 								</div>
@@ -639,7 +637,7 @@
 						</div>
 
 						<!-- Sisi kanan -->
-						<div class="flex shrink-0 flex-col items-end gap-2 md:w-[230px]">
+						<div class="flex shrink-0 flex-col items-end gap-2 md:w-[288px]">
 							<!-- Label status desktop (mobile: pojok kanan atas kartu). -->
 							<div class="hidden md:block">
 								{#if draftVis}
@@ -650,7 +648,7 @@
 									{@render statusBadge(row, badge)}
 								{/if}
 								{#if row.status === 'cancelled' && row.cancel_reason?.includes('SLA')}
-									<p class="hidden text-right text-[11px] font-medium md:block" style="color: var(--destructive);" title={row.cancel_reason}>
+									<p class="hidden text-right text-xs font-medium md:block" style="color: var(--destructive);" title={row.cancel_reason}>
 										{tr('Media tidak merespons (SLA)')}
 									</p>
 								{/if}
@@ -667,39 +665,39 @@
 
 							<div class="flex w-full flex-wrap items-center justify-end gap-1.5 md:w-auto">
 								{#if CANCELLABLE.has(row.status)}
-									<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none" style="color: var(--destructive);" type="button" onclick={() => { cancelTarget = row; cancelReason = ''; }}>
+									<button class="app-btn app-btn-soft pub-btn flex-1 md:flex-none" style="color: var(--destructive);" type="button" onclick={() => { cancelTarget = row; cancelReason = ''; }}>
 										Batalkan
 									</button>
 								{/if}
 								{#if row.status === 'failed'}
-									<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none" type="button" onclick={() => void retryPublication(row.id)}>
-										<RotateCcw size={13} /> Retry
+									<button class="app-btn app-btn-soft pub-btn flex-1 md:flex-none" type="button" onclick={() => void retryPublication(row.id)}>
+										<RotateCcw size={14} strokeWidth={1.5} /> Coba lagi
 									</button>
 								{/if}
 								{#if RESETTABLE.has(row.status)}
 									<!-- Mobile: baris sendiri, lebar penuh, di atas Detail/Tracking. -->
 									<button
-										class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs w-full md:w-auto md:flex-none"
+										class="app-btn app-btn-soft pub-btn w-full md:w-auto md:flex-none"
 										type="button"
 										title={tr("Kembalikan ke tahap persetujuan mitra (tombol setuju muncul lagi)")}
 										onclick={() => (confirmReset = row)}
 									>{tr("Kembalikan ke Persetujuan")}</button>
 								{/if}
-								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none" type="button" onclick={() => void openDetail(row)}>
+								<button class="app-btn pub-btn pub-btn-main flex-1 md:flex-none" type="button" onclick={() => void openDetail(row)}>
 									{detailBusy ? tr('Memuat…') : tr('Detail')}
 								</button>
 								{#if campaignChatHref(row.campaign_id)}
 									<a
-										class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none"
+										class="app-btn app-btn-soft pub-btn flex-1 md:flex-none"
 										style="text-decoration: none;"
 										href={campaignChatHref(row.campaign_id)}
 										title={tr('Buka percakapan kampanye dengan mitra')}
 									>
-										<MessageCircle size={13} /> Chat
+										<MessageCircle size={14} strokeWidth={1.5} /> Chat
 									</a>
 								{/if}
-								<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-xs flex-1 md:flex-none" type="button" onclick={() => void openTracking(row)}>
-									<ChartLine size={14} /> Tracking
+								<button class="app-btn app-btn-soft pub-btn flex-1 md:flex-none" type="button" onclick={() => void openTracking(row)}>
+									<ChartLine size={14} strokeWidth={1.5} /> Tracking
 								</button>
 							</div>
 						</div>
@@ -713,9 +711,9 @@
 					<span class="text-sm text-muted-foreground"> {tr("Menampilkan")} {(pageNum - 1) * pageSize + 1}–{Math.min(pageNum * pageSize, total)} {tr("dari")} {total}
 					</span>
 					<div class="flex items-center gap-2">
-						<button class="app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs" type="button" disabled={pageNum <= 1 || loading} onclick={() => { pageNum -= 1; void load(); }}>‹ Sebelumnya</button>
+						<button class="app-btn app-btn-soft pub-btn" type="button" disabled={pageNum <= 1 || loading} onclick={() => { pageNum -= 1; void load(); }}><ChevronLeft size={14} strokeWidth={1.5} />{tr("Sebelumnya")}</button>
 						<span class="text-sm text-muted-foreground">{pageNum} / {totalPages}</span>
-						<button class="app-btn app-btn-soft !min-h-8 !px-2.5 !text-xs" type="button" disabled={pageNum >= totalPages || loading} onclick={() => { pageNum += 1; void load(); }}>Berikutnya ›</button>
+						<button class="app-btn app-btn-soft pub-btn" type="button" disabled={pageNum >= totalPages || loading} onclick={() => { pageNum += 1; void load(); }}>{tr("Berikutnya")}<ChevronRight size={14} strokeWidth={1.5} /></button>
 					</div>
 				</div>
 			{/if}
@@ -911,5 +909,28 @@
 	   app lama) supaya judul panjang membungkus ke baris berikutnya. Dengan
 	   `truncate` sebagai elemen inline, ellipsis tidak pernah aktif dan teks
 	   justru meluber keluar kartu. */
-	.pub-title { display: inline-block; max-width: 100%; word-break: break-word; }
+	.pub-title { display: inline-block; max-width: 100%; word-break: break-word; font-weight: 500; font-size: 16px; line-height: 24px; }
+	.pub-title:hover { color: var(--accent-foreground); }
+
+	.pub-h1 { font-size: 28px; line-height: 32px; font-weight: 500; }
+	.pub-sub { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+
+	/* Tab Publikasi / Jadwal: yang aktif memakai aksen merek, bukan sekadar kartu putih. */
+	.pub-tabs { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 12px; background-color: var(--muted); }
+	.pub-tab { padding: 6px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--muted-foreground); transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1), color 120ms cubic-bezier(0.22, 1, 0.36, 1); }
+	.pub-tab:hover { color: var(--foreground); }
+	.pub-tab-on { background-color: var(--card); color: var(--accent-foreground); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
+
+	/* Chip metadata: warna mengikuti arti (hijau lulus/positif, merah gagal/negatif,
+	   kuning perlu perhatian, biru kategori), bukan abu-abu seragam. */
+	.pub-chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 12px; line-height: 16px; font-weight: 500; }
+	.pub-chip-cat { background-color: var(--accent); color: var(--accent-foreground); }
+	.pub-chip-code { background-color: var(--muted); color: var(--foreground); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+	.pub-chip-ok { background-color: var(--success-soft); color: var(--success); }
+	.pub-chip-warn { background-color: var(--warning-soft); color: var(--warning); }
+	.pub-chip-bad { background-color: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive); }
+
+	.pub-btn { min-height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; }
+	.pub-btn-main { background-color: var(--accent); color: var(--accent-foreground); }
+	.pub-btn-main:hover:not(:disabled) { background-color: color-mix(in srgb, var(--accent-foreground) 14%, var(--accent)); }
 </style>

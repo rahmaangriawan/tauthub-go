@@ -7,14 +7,14 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Archive, ArrowRight, Check, Clock, FileText, LoaderCircle, Plus, RotateCcw, Search, Share2, Trash, X, Zap } from '@lucide/svelte';
+	import { Archive, ArrowRight, Check, ChevronLeft, ChevronRight, Clock, FileText, LoaderCircle, Plus, RotateCcw, Search, Share2, Trash, X, Zap } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { campaignUrlId } from '$lib/campaign-url';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
 	import ProfilerGateModal from '$lib/components/profiler-gate-modal.svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
-	import { STAGE_LABEL, STAGE_TONE, STATUS_OPTIONS, statusAccent } from '../taut-pintar/_shared';
+	import { STAGE_LABEL, STAGE_TONE, STATUS_OPTIONS } from '../taut-pintar/_shared';
 	import { tcToRp } from '$lib/credits/rupiah';
 
 	const brandId = $derived(page.params.brandId as string);
@@ -281,17 +281,15 @@
 					? 'background-color: var(--accent); color: var(--accent-foreground);'
 					: 'background-color: var(--muted); color: var(--muted-foreground);';
 
-	const accentColor = (a: string) =>
-		a === 'success' ? 'var(--success)' : a === 'warning' ? 'var(--warning)' : a === 'accent' ? 'var(--primary)' : 'var(--border)';
 </script>
 
-<section>
-	<header class="flex flex-wrap items-center justify-between gap-3">
+<section class="cmp">
+	<header class="cmp-head">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{tr("Manajemen Kampanye")}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola semua kampanye distribusi konten Anda di satu tempat.")}</p>
+			<h1 class="cmp-h1">{tr("Manajemen Kampanye")}</h1>
+			<p class="cmp-sub">{tr("Kelola semua kampanye distribusi konten Anda di satu tempat.")}</p>
 		</div>
-		<div class="flex flex-wrap items-center justify-end gap-2">
+		<div class="cmp-head-actions">
 			<!-- Tombol Profiler: buka popup gerbang (Chat Brief / Instan Brief)
 			     tanpa meninggalkan halaman kampanye dulu. -->
 			<button class="app-btn app-btn-soft profilerBtn" type="button" disabled={busy} title={tr('Buka Taut Brief')} onclick={() => (profilerGateOpen = true)}>
@@ -299,7 +297,7 @@
 				<span class="profilerAiBadge">AI</span>
 			</button>
 			<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={toggleArchiveView}>
-				{#if showArchive}<RotateCcw size={16} />{:else}<Archive size={16} />{/if}
+				{#if showArchive}<RotateCcw size={16} strokeWidth={1.5} />{:else}<Archive size={16} strokeWidth={1.5} />{/if}
 				{showArchive ? tr('Kembali ke Daftar') : tr('Arsip')}
 			</button>
 			<!-- SEMENTARA: popup create ditimpa redirect ke katalog media; kembalikan ke (createOpen = true) saat fitur siap.
@@ -311,7 +309,7 @@
 		</div>
 	</header>
 
-	<div class="app-card mt-4 flex flex-wrap items-center gap-2 p-3">
+	<div class="app-card cmp-filter">
 		<Select
 			bind:value={statusFilter}
 			ariaLabel="Status kampanye"
@@ -319,8 +317,8 @@
 			onchange={() => (pageNum = 1)}
 			options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
 		/>
-		<label class="app-input flex min-w-[200px] flex-1 items-center gap-2 !py-1.5">
-			<Search size={15} class="text-muted-foreground" />
+		<label class="app-input cmp-search">
+			<Search size={16} strokeWidth={1.5} class="text-muted-foreground" />
 			<input
 				class="w-full bg-transparent text-sm outline-none"
 				placeholder={tr("Cari nama kampanye…")}
@@ -341,7 +339,7 @@
 	{/if}
 
 	{#if filteredList.length === 0}
-		<div class="app-card mt-4 px-6 py-10 text-center">
+		<div class="app-card mt-6 px-6 py-10 text-center">
 			<p class="text-sm text-muted-foreground">
 				{showArchive
 					? tr('Arsip kosong.')
@@ -351,84 +349,89 @@
 			</p>
 		</div>
 	{:else}
-		<div class="mt-4 grid gap-[14px] sm:grid-cols-2 xl:grid-cols-3">
+		<div class="cmp-grid">
 			{#each filteredList as c (c.id)}
-				{@const accent = statusAccent(c.taut_status, c.stats.published_media)}
 				{@const totalMedia = Math.max(c.stats.articles, c.stats.published_media)}
-				<div class="app-card flex flex-col" style="padding: 18px 20px 14px; border-radius: 14px; border-left: 3px solid {accentColor(accent)};">
-					<div class="flex flex-wrap items-center justify-between gap-2">
-						<div class="flex flex-wrap items-center gap-2">
-							<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={badgeStyle('accent')}>{c.entry_mode === 'kilat' ? 'KILAT' : 'DIBANTU AI'}</span>
-							<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={badgeStyle(c.stats.published_media > 0 ? 'success' : (STAGE_TONE[c.taut_status ?? 'draft'] ?? 'muted'))}>
-								{(STAGE_LABEL[c.taut_status ?? 'draft'] ?? c.taut_status ?? 'Draft').toUpperCase()}
+				{@const tone = c.stats.published_media > 0 ? 'success' : (STAGE_TONE[c.taut_status ?? 'draft'] ?? 'muted')}
+				{@const pct = totalMedia > 0 ? Math.min(100, Math.round((c.stats.published_media / totalMedia) * 100)) : 0}
+				<div class="cmp-card">
+					<div class="cmp-card-top">
+						<div class="cmp-tags">
+							<span class="cmp-pill cmp-pill-accent">{c.entry_mode === 'kilat' ? 'Kilat' : 'Dibantu AI'}</span>
+							<span class="cmp-pill cmp-pill-{tone}">
+								<i class="cmp-dot"></i>{STAGE_LABEL[c.taut_status ?? 'draft'] ?? c.taut_status ?? 'Draft'}
 							</span>
 							{#if (c.taut_round ?? 1) > 1}
-								<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={badgeStyle('muted')}>{tr('Putaran')} {c.taut_round}</span>
+								<span class="cmp-pill cmp-pill-muted">{tr('Putaran')} {c.taut_round}</span>
 							{/if}
 						</div>
-						<div class="flex items-center gap-2">
-							{#if c.created_at}
-								<span class="text-[11px] text-muted-foreground">{tr('Dibuat:')} {new Date(c.created_at).toLocaleDateString(i18n.locale === 'en' ? 'en-GB' : 'id-ID')}</span>
-							{/if}
-							{#if !showArchive}
-								<div class="flex gap-1">
-										{#if c.taut_status === 'submitted' || c.taut_status === 'scheduled'}
-											<Tooltip content={tr('Tambah Putaran')}>
-												<button
-													class="rounded-lg p-1.5 hover:bg-secondary"
-													type="button"
-													aria-label={tr('Tambah Putaran')}
-													disabled={rowBusyId === c.id}
-													onclick={() => void addRound(c)}
-												>
-													{#if rowBusyId === c.id}<LoaderCircle size={14} class="animate-spin" />{:else}<Plus size={14} />{/if}
-												</button>
-											</Tooltip>
-										{/if}
-										<Tooltip content={tr("Berita acara & share")}>
-											<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Berita acara & share")} onclick={() => void openShare(c.id)}>
-												<Share2 size={14} />
-											</button>
-										</Tooltip>
-										<Tooltip content={tr("Hapus ke arsip")}>
-											<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Hapus ke arsip")} disabled={rowBusyId === c.id} onclick={() => void archiveCampaign(c.id)}>
-												<Archive size={14} />
-											</button>
-										</Tooltip>
-								</div>
-							{/if}
-						</div>
+						{#if !showArchive}
+							<div class="cmp-actions">
+								{#if c.taut_status === 'submitted' || c.taut_status === 'scheduled'}
+									<Tooltip content={tr('Tambah Putaran')}>
+										<button
+											class="cmp-icon-btn"
+											type="button"
+											aria-label={tr('Tambah Putaran')}
+											disabled={rowBusyId === c.id}
+											onclick={() => void addRound(c)}
+										>
+											{#if rowBusyId === c.id}<LoaderCircle size={16} strokeWidth={1.5} class="animate-spin" />{:else}<Plus size={16} strokeWidth={1.5} />{/if}
+										</button>
+									</Tooltip>
+								{/if}
+								<Tooltip content={tr("Berita acara & share")}>
+									<button class="cmp-icon-btn" type="button" aria-label={tr("Berita acara & share")} onclick={() => void openShare(c.id)}>
+										<Share2 size={16} strokeWidth={1.5} />
+									</button>
+								</Tooltip>
+								<Tooltip content={tr("Hapus ke arsip")}>
+									<button class="cmp-icon-btn" type="button" aria-label={tr("Hapus ke arsip")} disabled={rowBusyId === c.id} onclick={() => void archiveCampaign(c.id)}>
+										<Archive size={16} strokeWidth={1.5} />
+									</button>
+								</Tooltip>
+							</div>
+						{/if}
 					</div>
 
-					<p class="mt-3 truncate font-semibold">{c.name}</p>
-					<p class="mt-1 text-xs text-muted-foreground">
+					<p class="cmp-name" title={c.name}>{c.name}</p>
+					<p class="cmp-desc">
 						{c.media_type
 							? `Tipe media: ${c.media_type} · Strategi anggaran: ${c.budget_strategy ?? '-'} · Mulai ${c.starts_at ? new Date(c.starts_at).toLocaleDateString('id-ID') : '-'}`
 							: tr('Kampanye distribusi konten PR otomatis.')}
 					</p>
+					{#if c.created_at}
+						<p class="cmp-date">{tr('Dibuat:')} {new Date(c.created_at).toLocaleDateString(i18n.locale === 'en' ? 'en-GB' : 'id-ID')}</p>
+					{/if}
 
-					<div class="mt-3 flex flex-wrap items-end justify-between gap-3 border-t pt-3">
+					<div class="cmp-stats">
 						<div>
-							<p class="text-[10px] font-semibold tracking-wide text-muted-foreground">ANGGARAN TERSERAP</p>
-							<p class="text-sm font-semibold tabular-nums">{tcToRp(c.stats.tc_used, rateIdr)}</p>
+							<p class="cmp-stat-label">Anggaran terserap</p>
+							<p class="cmp-stat-value">{tcToRp(c.stats.tc_used, rateIdr)}</p>
 						</div>
 						<div>
-							<p class="text-[10px] font-semibold tracking-wide text-muted-foreground">PROGRES MEDIA</p>
-							<p class="text-sm font-semibold tabular-nums">
+							<p class="cmp-stat-label">Progres media</p>
+							<p class="cmp-stat-value">
 								<span style="color: {c.stats.published_media > 0 ? 'var(--success)' : 'inherit'};">{c.stats.published_media} {tr("Terbit")}</span>
-								{' / '}{totalMedia} {tr("Total")} </p>
+								{' / '}{totalMedia} {tr("Total")}</p>
 						</div>
-						<button class="ml-auto inline-flex items-center gap-1 text-sm font-medium" type="button" style="color: var(--primary);" onclick={() => handleContinue(c)}>{tr("Buka Kampanye")}<ArrowRight size={14} />
+					</div>
+					<div class="cmp-bar" role="img" aria-label="{c.stats.published_media} {tr('Terbit')} / {totalMedia} {tr('Total')}">
+						<span class="cmp-bar-fill" style="width: {pct}%;"></span>
+					</div>
+
+					<div class="cmp-foot">
+						<button class="cmp-open" type="button" onclick={() => handleContinue(c)}>{tr("Buka Kampanye")}<ArrowRight size={16} strokeWidth={1.5} />
 						</button>
 					</div>
 
 					{#if showArchive}
-						<div class="mt-3 flex gap-2 border-t pt-3">
+						<div class="cmp-archive">
 							<button class="app-btn app-btn-primary flex-1" type="button" disabled={rowBusyId === c.id} onclick={() => void archiveAction(c.id, 'restore')}>
-								<Clock size={14} /> Pulihkan
+								<Clock size={16} strokeWidth={1.5} /> Pulihkan
 							</button>
 							<button class="app-btn app-btn-soft" type="button" aria-label={tr("Hapus permanen")} disabled={rowBusyId === c.id} onclick={() => void archiveAction(c.id, 'purge')}>
-								<Trash size={14} />
+								<Trash size={16} strokeWidth={1.5} />
 							</button>
 						</div>
 					{/if}
@@ -437,15 +440,15 @@
 		</div>
 
 		{#if totalPages > 1 || loading}
-			<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
-				<p class="text-xs text-muted-foreground">{loading ? tr('Memuat…') : `${total} kampanye`}</p>
+			<div class="cmp-pager">
+				<p class="cmp-meta">{loading ? tr('Memuat…') : `${total} kampanye`}</p>
 				<div class="flex items-center gap-2">
-					<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label={tr("Halaman sebelumnya")} disabled={pageNum <= 1 || loading} onclick={() => { pageNum = Math.max(1, pageNum - 1); void loadList(); }}>
-						‹
+					<button class="app-btn app-btn-soft cmp-pager-btn" type="button" aria-label={tr("Halaman sebelumnya")} disabled={pageNum <= 1 || loading} onclick={() => { pageNum = Math.max(1, pageNum - 1); void loadList(); }}>
+						<ChevronLeft size={16} strokeWidth={1.5} />
 					</button>
-					<span class="text-xs text-muted-foreground">{tr("Halaman")} {pageNum} {tr("dari")} {totalPages}</span>
-					<button class="app-btn app-btn-soft !min-h-8 !px-3" type="button" aria-label={tr("Halaman berikutnya")} disabled={pageNum >= totalPages || loading} onclick={() => { pageNum = Math.min(totalPages, pageNum + 1); void loadList(); }}>
-						›
+					<span class="cmp-meta">{tr("Halaman")} {pageNum} {tr("dari")} {totalPages}</span>
+					<button class="app-btn app-btn-soft cmp-pager-btn" type="button" aria-label={tr("Halaman berikutnya")} disabled={pageNum >= totalPages || loading} onclick={() => { pageNum = Math.min(totalPages, pageNum + 1); void loadList(); }}>
+						<ChevronRight size={16} strokeWidth={1.5} />
 					</button>
 				</div>
 			</div>
@@ -604,14 +607,77 @@
 />
 
 <style>
+	/* Daftar kampanye: ritme 4px, satu aksen merek (biru) untuk tindakan, warna status
+	   hanya pada pil tahap dan bilah progres. Isi kartu tidak berubah. */
+	.cmp-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+	.cmp-h1 { font-size: 28px; line-height: 32px; font-weight: 500; }
+	.cmp-sub { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+	.cmp-head-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+	.cmp-head-actions :global(.app-btn) { font-weight: 500; }
+
+	.cmp-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 24px; padding: 12px 16px; }
+	.cmp-search { display: flex; min-width: 200px; flex: 1; align-items: center; gap: 8px; padding-top: 6px; padding-bottom: 6px; }
+
+	.cmp-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 16px; }
+	@media (min-width: 640px) { .cmp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+	@media (min-width: 1280px) { .cmp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+	.cmp-card {
+		display: flex; flex-direction: column; padding: 20px; border: 1px solid var(--border); border-radius: 16px; background-color: var(--card);
+		transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.cmp-card:hover { border-color: color-mix(in srgb, var(--primary) 32%, var(--border)); box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06); }
+	/* Tombol ikon tetap di kanan atas; hanya pil yang membungkus ke baris kedua.
+	   Dengan flex-wrap di sini, "Putaran 2" turun bersama tombol dan menempel. */
+	.cmp-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+	.cmp-tags { display: flex; min-width: 0; flex: 1; flex-wrap: wrap; align-items: center; gap: 8px; }
+	.cmp-actions { display: flex; flex-shrink: 0; align-items: center; gap: 4px; margin: -6px -8px 0 0; }
+
+	.cmp-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 9999px; font-size: 12px; line-height: 16px; font-weight: 500; }
+	.cmp-pill-accent { background-color: var(--accent); color: var(--accent-foreground); }
+	.cmp-pill-success { background-color: var(--success-soft); color: var(--success); }
+	.cmp-pill-warning { background-color: var(--warning-soft); color: var(--warning); }
+	.cmp-pill-muted { background-color: var(--muted); color: var(--muted-foreground); }
+	.cmp-dot { display: inline-block; width: 6px; height: 6px; border-radius: 9999px; background-color: currentColor; }
+
+	.cmp-icon-btn {
+		display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 8px; color: var(--muted-foreground);
+		transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1), color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.cmp-icon-btn:hover:not(:disabled) { background-color: var(--accent); color: var(--accent-foreground); }
+	.cmp-icon-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+	.cmp-icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+	.cmp-name { margin-top: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; line-height: 24px; font-weight: 500; }
+	.cmp-desc { margin-top: 4px; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+	.cmp-date { margin-top: 4px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+
+	.cmp-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+	.cmp-stat-label { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+	.cmp-stat-value { margin-top: 4px; font-size: 15px; line-height: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+	.cmp-bar { height: 6px; margin-top: 12px; overflow: hidden; border-radius: 9999px; background-color: var(--muted); }
+	.cmp-bar-fill { display: block; height: 100%; border-radius: 9999px; background-color: var(--success); }
+
+	.cmp-foot { display: flex; justify-content: flex-end; margin-top: auto; padding-top: 16px; }
+	.cmp-open {
+		display: inline-flex; align-items: center; gap: 6px; padding: 6px 4px 6px 12px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--accent-foreground);
+		transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.cmp-open:hover { background-color: var(--accent); }
+	.cmp-open:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+	.cmp-archive { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+	.cmp-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 24px; }
+	.cmp-meta { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+	.cmp-pager-btn { min-height: 32px; padding: 0 12px; }
 	/* Tombol Profiler: badge AI saja (tanpa ikon garis generik). */
 	.profilerAiBadge {
 		display: inline-flex;
 		align-items: center;
 		background: var(--primary, #2b67ec);
 		color: #fff;
-		font-size: 10.5px;
-		font-weight: 700;
+		font-size: 11px;
+		font-weight: 600;
 		letter-spacing: 0.02em;
 		padding: 2px 8px;
 		border-radius: 999px;

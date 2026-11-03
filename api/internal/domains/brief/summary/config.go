@@ -37,6 +37,24 @@ func (c *AgentConfig) Configured() bool {
 
 func agentEntityID(agent string) string { return "taut_brief_agent_" + agent }
 
+// defaultMaxTokens: batas output saat kolom max_tokens kosong. Tanpa batas,
+// OpenRouter memakai maksimum model (Gemini Flash Lite: 65.535) dan menahan
+// kredit sebesar itu di muka — saldo yang tinggal tipis langsung ditolak 402
+// walau jawabannya hanya butuh ~2.000 token. Angka ≈ 2× output terbesar yang
+// pernah tercatat di taut_brief_runs (Nov 2026): matchmaker 4.260, entitas
+// 2.889, select 750, racik 880, berkas 687. Admin tetap bisa menimpanya.
+func defaultMaxTokens(agent string) int {
+	switch agent {
+	case AgentMatchmaker:
+		return 8192
+	case AgentEntity, AgentFile:
+		return 4096
+	case AgentMatchmakerSelect, AgentRacik:
+		return 2048
+	}
+	return 4096
+}
+
 // LoadAgentConfig membaca config agent; bagian kosong diisi dari config Taut
 // Brief. Tidak pernah error untuk tabel yang belum ada — dianggap belum
 // dikonfigurasi.
@@ -103,6 +121,10 @@ func LoadAgentConfig(ctx context.Context, pool *pgxpool.Pool, appSecret, agent s
 			}
 			cfg.Inherited = inherited
 		}
+	}
+	if cfg.MaxTokens == nil || *cfg.MaxTokens <= 0 {
+		n := defaultMaxTokens(agent)
+		cfg.MaxTokens = &n
 	}
 	return cfg
 }

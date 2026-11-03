@@ -1,5 +1,10 @@
 /* Port setia media-intelligence.module.css — hanya kelas yang dipakai
-   section katalog media (nilai disalin apa adanya; var Radix dipetakan ke token tema). */
+   section katalog media (nilai disalin apa adanya; var Radix dipetakan ke token tema).
+
+   Tampilan dirapikan Nov 2026 (hanya CSS, markup +page.svelte tidak berubah):
+   header tabel sentence case, bobot 400–500, ukuran teks minimal 12px, warna
+   dari token tema, aksen hanya biru merek. UI lama tersimpan utuh di
+   media.legacy.css — untuk kembali: cp media.legacy.css media.css */
 .actionBtnGroup {
   display: flex;
   align-items: center;
@@ -203,20 +208,22 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  color: #94a3b8;
-  padding: 4px;
+  color: var(--muted-foreground);
+  width: 32px;
+  height: 32px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  transition: all 0.12s ease;
+  border-radius: 8px;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
 .bookmarkActionBtn svg {
   transition: fill 0.12s ease;
 }
 .bookmarkActionBtn:hover {
-  color: #2563eb;
-  background: #eff6ff;
+  color: var(--accent-foreground);
+  background: var(--accent);
 }
 .bookmarkActionBtn:hover svg,
 .bookmarkActionBtn:hover svg path,
@@ -225,12 +232,12 @@
   fill: currentColor;
 }
 .bookmarkActionBtnActive {
-  color: #2563eb !important;
-  background: #eff6ff;
+  color: var(--accent-foreground) !important;
+  background: var(--accent);
 }
 .bookmarkActionBtnActive:hover {
-  color: #1d4ed8 !important;
-  background: #dbeafe;
+  color: var(--accent-foreground) !important;
+  background: color-mix(in srgb, var(--primary) 16%, var(--card));
 }
 .bookmarkCardItem {
   display: flex;
@@ -341,16 +348,16 @@
 .categoryPill {
   display: inline-flex;
   align-items: center;
-  padding: 4px 9px;
+  padding: 2px 10px;
   border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: 0.01em;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0;
   white-space: nowrap;
-  border: 1px solid #cbd5e1;
-  background: #f1f5f9;
-  color: #1e293b;
+  border: 0;
+  background: var(--muted);
+  color: var(--foreground);
   transition: opacity 0.12s ease;
 }
 
@@ -358,56 +365,56 @@
    2373F4, 578EF5, 65D0F4, F2F7A0, 006199, 8ACFF8, F4EB6C, FFD444, 2196F3,
    FF7F3E, AC87C5, 756AB6, 3F979B, 91D8E4, 570A57, 42DEE1, F18A9B, FFB480,
    A26EA1, FFCEF3, C9FDD7, 6892D5 */
-.categoryPill--cobalt   { background: color-mix(in srgb, #2373F4 16%, #ffffff); border-color: color-mix(in srgb, #2373F4 48%, #ffffff); color: color-mix(in srgb, #2373F4 85%, #0f172a); }
-.categoryPill--blue     { background: color-mix(in srgb, #578EF5 18%, #ffffff); border-color: color-mix(in srgb, #578EF5 52%, #ffffff); color: color-mix(in srgb, #578EF5 80%, #0f172a); }
-.categoryPill--sky      { background: color-mix(in srgb, #65D0F4 26%, #ffffff); border-color: color-mix(in srgb, #65D0F4 68%, #ffffff); color: color-mix(in srgb, #65D0F4 55%, #0c4a6e); }
-.categoryPill--lime     { background: color-mix(in srgb, #F2F7A0 48%, #ffffff); border-color: color-mix(in srgb, #F2F7A0 85%, #a3b13b); color: #4d5908; }
-.categoryPill--navy     { background: color-mix(in srgb, #006199 15%, #ffffff); border-color: color-mix(in srgb, #006199 45%, #ffffff); color: #006199; }
-.categoryPill--cyan     { background: color-mix(in srgb, #8ACFF8 30%, #ffffff); border-color: color-mix(in srgb, #8ACFF8 75%, #ffffff); color: #0b5583; }
-.categoryPill--gold     { background: color-mix(in srgb, #F4EB6C 42%, #ffffff); border-color: color-mix(in srgb, #F4EB6C 85%, #b8a814); color: #5c5300; }
-.categoryPill--amber    { background: color-mix(in srgb, #FFD444 32%, #ffffff); border-color: color-mix(in srgb, #FFD444 75%, #d49b00); color: #6e4e00; }
-.categoryPill--slate    { background: color-mix(in srgb, #2196F3 16%, #ffffff); border-color: color-mix(in srgb, #2196F3 48%, #ffffff); color: #0d5ca1; }
-.categoryPill--orange   { background: color-mix(in srgb, #FF7F3E 18%, #ffffff); border-color: color-mix(in srgb, #FF7F3E 52%, #ffffff); color: #b5450b; }
-.categoryPill--purple   { background: color-mix(in srgb, #AC87C5 22%, #ffffff); border-color: color-mix(in srgb, #AC87C5 58%, #ffffff); color: #5e3b76; }
-.categoryPill--indigo   { background: color-mix(in srgb, #756AB6 18%, #ffffff); border-color: color-mix(in srgb, #756AB6 50%, #ffffff); color: #483d82; }
-.categoryPill--teal     { background: color-mix(in srgb, #3F979B 18%, #ffffff); border-color: color-mix(in srgb, #3F979B 52%, #ffffff); color: #216063; }
-.categoryPill--stone    { background: color-mix(in srgb, #91D8E4 34%, #ffffff); border-color: color-mix(in srgb, #91D8E4 78%, #5ba6b3); color: #195661; }
-.categoryPill--burgundy { background: color-mix(in srgb, #570A57 14%, #ffffff); border-color: color-mix(in srgb, #570A57 42%, #ffffff); color: #570A57; }
-.categoryPill--emerald  { background: color-mix(in srgb, #42DEE1 26%, #ffffff); border-color: color-mix(in srgb, #42DEE1 68%, #22999b); color: #0d5f61; }
-.categoryPill--rose     { background: color-mix(in srgb, #F18A9B 22%, #ffffff); border-color: color-mix(in srgb, #F18A9B 58%, #ffffff); color: #9c2b40; }
-.categoryPill--coral    { background: color-mix(in srgb, #FFB480 30%, #ffffff); border-color: color-mix(in srgb, #FFB480 72%, #d97a3a); color: #873e0b; }
-.categoryPill--fuchsia  { background: color-mix(in srgb, #A26EA1 20%, #ffffff); border-color: color-mix(in srgb, #A26EA1 54%, #ffffff); color: #663865; }
-.categoryPill--pink     { background: color-mix(in srgb, #FFCEF3 45%, #ffffff); border-color: color-mix(in srgb, #FFCEF3 88%, #c97ab5); color: #7a2966; }
-.categoryPill--green    { background: color-mix(in srgb, #C9FDD7 48%, #ffffff); border-color: color-mix(in srgb, #C9FDD7 88%, #5bbd76); color: #17612c; }
-.categoryPill--violet   { background: color-mix(in srgb, #6892D5 20%, #ffffff); border-color: color-mix(in srgb, #6892D5 54%, #ffffff); color: #2b508c; }
-.categoryPill--charcoal { background: color-mix(in srgb, #F4EB6C 36%, #ffffff); border-color: color-mix(in srgb, #F4EB6C 80%, #b8a814); color: #5c5300; }
-.categoryPill--red      { background: color-mix(in srgb, #2373F4 16%, #ffffff); border-color: color-mix(in srgb, #2373F4 48%, #ffffff); color: color-mix(in srgb, #2373F4 85%, #0f172a); }
+.categoryPill--cobalt   { background: color-mix(in srgb, #2373F4 16%, #ffffff);  color: color-mix(in srgb, #2373F4 85%, #0f172a); }
+.categoryPill--blue     { background: color-mix(in srgb, #578EF5 18%, #ffffff);  color: color-mix(in srgb, #578EF5 80%, #0f172a); }
+.categoryPill--sky      { background: color-mix(in srgb, #65D0F4 26%, #ffffff);  color: color-mix(in srgb, #65D0F4 55%, #0c4a6e); }
+.categoryPill--lime     { background: color-mix(in srgb, #F2F7A0 48%, #ffffff);  color: #4d5908; }
+.categoryPill--navy     { background: color-mix(in srgb, #006199 15%, #ffffff);  color: #006199; }
+.categoryPill--cyan     { background: color-mix(in srgb, #8ACFF8 30%, #ffffff);  color: #0b5583; }
+.categoryPill--gold     { background: color-mix(in srgb, #F4EB6C 42%, #ffffff);  color: #5c5300; }
+.categoryPill--amber    { background: color-mix(in srgb, #FFD444 32%, #ffffff);  color: #6e4e00; }
+.categoryPill--slate    { background: color-mix(in srgb, #2196F3 16%, #ffffff);  color: #0d5ca1; }
+.categoryPill--orange   { background: color-mix(in srgb, #FF7F3E 18%, #ffffff);  color: #b5450b; }
+.categoryPill--purple   { background: color-mix(in srgb, #AC87C5 22%, #ffffff);  color: #5e3b76; }
+.categoryPill--indigo   { background: color-mix(in srgb, #756AB6 18%, #ffffff);  color: #483d82; }
+.categoryPill--teal     { background: color-mix(in srgb, #3F979B 18%, #ffffff);  color: #216063; }
+.categoryPill--stone    { background: color-mix(in srgb, #91D8E4 34%, #ffffff);  color: #195661; }
+.categoryPill--burgundy { background: color-mix(in srgb, #570A57 14%, #ffffff);  color: #570A57; }
+.categoryPill--emerald  { background: color-mix(in srgb, #42DEE1 26%, #ffffff);  color: #0d5f61; }
+.categoryPill--rose     { background: color-mix(in srgb, #F18A9B 22%, #ffffff);  color: #9c2b40; }
+.categoryPill--coral    { background: color-mix(in srgb, #FFB480 30%, #ffffff);  color: #873e0b; }
+.categoryPill--fuchsia  { background: color-mix(in srgb, #A26EA1 20%, #ffffff);  color: #663865; }
+.categoryPill--pink     { background: color-mix(in srgb, #FFCEF3 45%, #ffffff);  color: #7a2966; }
+.categoryPill--green    { background: color-mix(in srgb, #C9FDD7 48%, #ffffff);  color: #17612c; }
+.categoryPill--violet   { background: color-mix(in srgb, #6892D5 20%, #ffffff);  color: #2b508c; }
+.categoryPill--charcoal { background: color-mix(in srgb, #F4EB6C 36%, #ffffff);  color: #5c5300; }
+.categoryPill--red      { background: color-mix(in srgb, #2373F4 16%, #ffffff);  color: color-mix(in srgb, #2373F4 85%, #0f172a); }
 
 /* Badge +N untuk kategori tambahan: badge netral charcoal dengan kontras jelas */
 .categoryPlusTag {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px 7px;
-  background: #e2e8f0;
-  border: 1px solid #cbd5e1;
-  color: #0f172a;
+  padding: 2px 8px;
+  background: var(--muted);
+  border: 1px solid transparent;
+  color: var(--muted-foreground);
   border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.2;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
 }
 /* Badge +N yang bisa diklik (tombol) — membuka popover semua kategori. */
 button.categoryPlusTag {
   cursor: pointer;
-  border: 1px solid #cbd5e1;
+  border: 1px solid transparent;
   font: inherit;
   transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 button.categoryPlusTag:hover {
-  background: #334155;
-  border-color: #1e293b;
-  color: #ffffff;
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-foreground);
 }
 button.categoryPlusTag:focus-visible {
   outline: 2px solid #2563eb;
@@ -568,10 +575,10 @@ button.categoryPlusTag:focus-visible {
   color: #2563eb;
 }
 .mediaHeading {
-  font-size: 14.5px;
-  font-weight: 700;
-  color: #0f172a;
-  line-height: 1.3;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--foreground);
+  line-height: 20px;
 }
 /* Nama media = domain: halaman media klik → detail, matchmaker masih tautan ke situs. */
 a.mediaHeading {
@@ -581,7 +588,7 @@ a.mediaHeading {
   color: #0f172a;
   text-decoration: none;
 }
-a.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
+a.mediaHeading:hover { color: var(--accent-foreground); text-decoration: underline; }
 a.mediaHeading svg { flex-shrink: 0; }
 button.mediaHeading {
   display: inline-flex;
@@ -594,7 +601,7 @@ button.mediaHeading {
   cursor: pointer;
   text-align: left;
 }
-button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
+button.mediaHeading:hover { color: var(--accent-foreground); text-decoration: underline; }
 .mediaMetaLine {
   display: flex;
   align-items: center;
@@ -606,7 +613,7 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 .mediaRowCol {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 180px;
 }
 .mediaTitleLine {
@@ -640,9 +647,9 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border);
   cursor: pointer;
-  accent-color: #2563eb;
+  accent-color: var(--primary);
 }
 .modernFilterBtn {
   height: 38px;
@@ -682,9 +689,9 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 14px 18px;
-  background: #ffffff;
-  border-top: 1px solid #f1f5f9;
+  padding: 12px 16px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
 }
 .modernPaginationControls {
   display: flex;
@@ -692,8 +699,10 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   gap: 6px;
 }
 .modernPaginationInfo {
-  font-size: 13px;
-  color: #64748b;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
 }
 .modernSearchIcon {
   position: absolute;
@@ -719,8 +728,8 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   color: var(--gray-9, #94a3b8);
 }
 .modernSearchInput:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
 }
 .modernSearchWrap {
   position: relative;
@@ -735,20 +744,21 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   font-size: 13px;
 }
 .modernTd {
-  padding: 14px 14px;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
   vertical-align: middle;
-  color: #1e293b;
+  color: var(--foreground);
 }
 .modernTh {
-  padding: 13px 14px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #64748b;
+  padding: 12px 16px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted-foreground);
   background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
   white-space: nowrap;
   user-select: none;
   /* Header kolom menempel tepat di bawah header aplikasi (app-utility-bar,
@@ -801,7 +811,7 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   transition: background-color 0.12s ease;
 }
 .modernTr:hover {
-  background: #f8fafc;
+  background: color-mix(in srgb, var(--foreground) 3%, transparent);
 }
 .pageNavBtn {
   display: inline-flex;
@@ -817,7 +827,7 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 .pageNavBtn:hover:not(:disabled) {
   background: #f8fafc;
@@ -828,16 +838,16 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   cursor: not-allowed;
 }
 .pageNavBtnActive {
-  background: #2563eb !important;
-  border-color: #2563eb !important;
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
   color: #ffffff !important;
-  font-weight: 700 !important;
+  font-weight: 500 !important;
 }
 .pageNavBtnActive {
-  background: #2563eb !important;
-  border-color: #2563eb !important;
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
   color: #ffffff !important;
-  font-weight: 700 !important;
+  font-weight: 500 !important;
 }
 .pageSizeSelector {
   display: inline-flex;
@@ -868,9 +878,11 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 }
 .priceBoldText {
   font-size: 14px;
-  font-weight: 700;
-  color: #0f172a;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--foreground);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .releaseBadgeFast {
   display: inline-flex;
@@ -922,14 +934,16 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 .slaPill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  border: 1px solid #e2e8f0;
+  gap: 6px;
+  padding: 2px 10px;
+  border: 0;
   border-radius: 999px;
-  background: #f8fafc;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #334155;
+  background: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: help;
 }
@@ -945,11 +959,11 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #2563eb;
+  color: var(--accent-foreground);
   text-decoration: none;
   font-weight: 500;
-  font-size: 11px;
-  line-height: 1.1;
+  font-size: 12px;
+  line-height: 16px;
   transition: text-decoration 0.12s ease;
 }
 .sampleDocLink:hover {
@@ -962,18 +976,18 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   min-width: 40px;
   height: 32px;
   padding: 0 8px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 700;
-  color: #1e293b;
+  font-weight: 500;
+  color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
 /* Badge AI Trust: warna latar/teks/border diisi inline oleh aiTrustToneStyle()
    (makin tinggi skor makin kuat hijaunya); kelas ini hanya menegaskan bobot. */
 .aiTrustPill {
-  font-weight: 800;
+  font-weight: 500;
   transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .selectedBarDivider {
@@ -1508,13 +1522,16 @@ button.selectedStepChip:disabled,
   width: 100%;
 }
 .trafficMainVal {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: #0f172a;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
 }
 .trafficSourceText {
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
 }
 .trafficStack {
   display: flex;
@@ -1543,23 +1560,25 @@ button.selectedStepChip:disabled,
 .viewDetailBtn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #2563eb;
-  font-size: 12.5px;
-  font-weight: 600;
-  padding: 6px 12px;
+  gap: 6px;
+  height: 32px;
+  background: var(--accent);
+  border: 1px solid transparent;
+  color: var(--accent-foreground);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 0 12px;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
   white-space: nowrap;
 }
 .viewDetailBtn:hover {
-  background: #dbeafe;
-  border-color: #93c5fd;
-  color: #1d4ed8;
+  background: color-mix(in srgb, var(--primary) 16%, var(--card));
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+  color: var(--accent-foreground);
 }
+.viewDetailBtn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 
 /* ── Tambahan: kontrol & state yang di app lama memakai komponen Radix
    (DropdownMenu/Popover/Dialog/Spinner) — di sini versi native dengan
@@ -1574,32 +1593,33 @@ button.selectedStepChip:disabled,
 .modernSelect:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
 
 .modernActionBtn {
-  display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px;
-  border: 1px solid #e2e8f0; border-radius: 8px; background: var(--card);
-  color: #334155; font-size: 13px; font-weight: 500; cursor: pointer;
-  outline: none; transition: all .12s ease; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px;
+  border: 1px solid var(--border); border-radius: 9px; background: var(--card);
+  color: var(--foreground); font-size: 13px; font-weight: 500; cursor: pointer;
+  outline: none; transition: background-color .12s ease, border-color .12s ease, color .12s ease; white-space: nowrap;
 }
-.modernActionBtn:hover { border-color: #cbd5e1; background: #f8fafc; }
-.modernActionBtnActive { background: #2563eb !important; border-color: #2563eb !important; color: #fff !important; font-weight: 600 !important; }
+.modernActionBtn:hover { border-color: color-mix(in srgb, var(--primary) 35%, var(--border)); background: var(--secondary); }
+.modernActionBtn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.modernActionBtnActive { background: var(--primary) !important; border-color: var(--primary) !important; color: #fff !important; font-weight: 500 !important; }
 .modernActionBadge {
-  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
-  padding: 0 5px; border-radius: 999px; background: #eff6ff; color: #2563eb;
-  font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px;
+  padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--accent-foreground);
+  font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums;
 }
 .modernActionBtnActive .modernActionBadge { background: rgba(255,255,255,.25); color: #fff; }
 
 /* AI Matchmaker: aksi AI di toolbar katalog, diberi tint supaya beda dari
    tombol alat biasa tanpa mengubah tinggi toolbar. */
-.matchmakerBtn { border-color: #c7d2fe; background: #eef2ff; color: #3730a3; font-weight: 600; }
-.matchmakerBtn:hover { border-color: #a5b4fc; background: #e0e7ff; color: #312e81; }
+.matchmakerBtn { border-color: color-mix(in srgb, var(--primary) 30%, var(--border)); background: var(--accent); color: var(--accent-foreground); font-weight: 500; }
+.matchmakerBtn:hover { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, var(--card)); color: var(--accent-foreground); }
 /* Pil "Baru" di samping label — penanda fitur baru ala mockup. */
 .matchmakerNew {
   margin-left: 2px; padding: 2px 8px; border-radius: 999px;
-  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-  color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
-  line-height: 1.2; text-transform: none; white-space: nowrap;
+  background: var(--primary);
+  color: #fff; font-size: 11px; font-weight: 500; letter-spacing: 0.01em;
+  line-height: 16px; text-transform: none; white-space: nowrap;
 }
-.matchmakerBtn:hover .matchmakerNew { background: linear-gradient(135deg, #7c3aed, #5b21b6); }
+.matchmakerBtn:hover .matchmakerNew { background: var(--primary); }
 
 /* Panel filter lanjutan mengambang (parity Radix Popover.Content align="end"
    sideOffset={8}): fixed supaya tidak menggeser layout tabel di bawahnya. */
@@ -1718,9 +1738,9 @@ button.selectedStepChip:disabled,
 .bookmarkBannerClear:hover { background: #eff6ff; }
 
 .modernThSortable { cursor: pointer; }
-.modernThSortable:hover { color: #2563eb; }
+.modernThSortable:hover { color: var(--foreground); }
 .thWithInfo { display: inline-flex; align-items: center; gap: 5px; }
-.infoDot { display: inline-flex; align-items: center; color: #94a3b8; cursor: help; }
+.infoDot { display: inline-flex; align-items: center; color: var(--muted-foreground); cursor: help; }
 /* Isi tooltip kaya (waktu rilis): baris bertumpuk dengan label berwarna. */
 .tipStack { display: flex; flex-direction: column; gap: 4px; }
 .tipStack strong { margin-bottom: 2px; }
@@ -1738,28 +1758,28 @@ button.selectedStepChip:disabled,
   width: 7px; height: 7px; border-radius: 999px;
   background: #2b67ec;
 }
-.distDot.distDotMuted { background: #cbd5e1; }
+.distDot.distDotMuted { background: var(--border); }
 
 /* Trigger tooltip (daftar media): titik + jumlah artikel terlihat;
    keterangan lengkap baru muncul saat hover. */
 .distCount {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 11px; font-weight: 600; color: #2b67ec;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; line-height: 16px; font-weight: 500; color: var(--accent-foreground);
   white-space: nowrap; cursor: default;
 }
-.distCountMuted { color: #64748b; font-weight: 500; }
+.distCountMuted { color: var(--muted-foreground); font-weight: 400; }
 
 /* Kebijakan tautan media di baris katalog: kuota backlink + masa berlakunya
    ("2 Dofollow • Permanen" / "1 Nofollow • 12 Bln SLA"). */
 .linkPolicyPill {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 1px 7px; border-radius: 999px;
-  border: 1px solid #dbe4f5; background: #f5f8ff;
-  font-size: 10.5px; font-weight: 600; line-height: 1.5;
-  color: #2b67ec; white-space: nowrap; cursor: default;
+  padding: 2px 8px; border-radius: 999px;
+  border: 0; background: var(--accent);
+  font-size: 12px; font-weight: 500; line-height: 16px;
+  color: var(--accent-foreground); white-space: nowrap; cursor: default;
 }
 .linkPolicyPill svg { flex-shrink: 0; }
-.linkPolicyPillPermanent { border-color: #cfe9d8; background: #f2fbf5; color: #17794a; }
+.linkPolicyPillPermanent { background: var(--success-soft); color: var(--success); }
 
 /* Badge versi teks — masih dipakai halaman matchmaker. */
 .distBadge {
@@ -1784,7 +1804,7 @@ button.selectedStepChip:disabled,
 }
 .paginationBtn:hover:not(:disabled) { background: #f8fafc; }
 .paginationBtn:disabled { opacity: .5; cursor: not-allowed; }
-.paginationPage { font-size: 13px; color: #64748b; white-space: nowrap; }
+.paginationPage { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .modalOverlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.45); }
 .modalCard {
@@ -2555,7 +2575,7 @@ button.selectedStepChip:disabled,
 }
 .mediaTypeBtn:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); }
 .mediaTypeIcon { color: #64748b; flex-shrink: 0; }
-.mediaTypeTitle { font-size: 13px; font-weight: 600; color: var(--foreground); }
+.mediaTypeTitle { font-size: 13px; font-weight: 500; color: var(--foreground); }
 .mediaTypeCaret { color: #64748b; flex-shrink: 0; }
 
 .mediaTypeBackdrop {
@@ -2609,21 +2629,21 @@ button.selectedStepChip:disabled,
 	background: var(--primary);
 }
 .mediaTypeOptionText { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.mediaTypeOptionTitle { font-size: 13.5px; font-weight: 600; color: var(--foreground); }
-.mediaTypeOptionSub { font-size: 11.5px; color: var(--muted-foreground); }
+.mediaTypeOptionTitle { font-size: 14px; font-weight: 500; color: var(--foreground); }
+.mediaTypeOptionSub { font-size: 12px; color: var(--muted-foreground); }
 
 /* ── Cakupan domain: chip kecil setelah judul media ───────────────────── */
 .domainScopeChip {
   display: inline-flex; align-items: center;
-  padding: 1px 7px;
+  padding: 1px 8px;
   border-radius: 999px;
-  font-size: 10px; font-weight: 600;
+  font-size: 11px; line-height: 16px; font-weight: 500;
   white-space: nowrap; cursor: default;
-  background: color-mix(in srgb, #64748b 12%, transparent);
-  color: #64748b;
+  background: var(--muted);
+  color: var(--muted-foreground);
   flex-shrink: 0;
 }
 .domainScopeChip.domainScopeChipSub {
-  background: color-mix(in srgb, #2b67ec 12%, transparent);
-  color: #2b67ec;
+  background: var(--accent);
+  color: var(--accent-foreground);
 }

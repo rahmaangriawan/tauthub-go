@@ -99,11 +99,26 @@ func (d *Deps) Credits(w http.ResponseWriter, r *http.Request) {
 	ledger := []map[string]any{}
 	lRows, lErr := d.Pool.Query(r.Context(), `
 		SELECT e.id, e.ref_type, e.ref_id, e.amount_tc, e.balance_after_tc, e.rate_idr, e.amount_idr, e.reason,
-		       d.title, m.name, p.status, e.created_at
+		       COALESCE(d.title, td.title), COALESCE(m.name, tm.name), p.status, e.created_at
 		FROM credit_ledger_entries e
 		LEFT JOIN publications p ON p.id = e.ref_id
 		LEFT JOIN content_documents d ON d.id = p.document_id
 		LEFT JOIN media m ON m.id = p.media_id
+		-- Entri penulisan/gambar AI (ref_id "taut-writer:{kampanye}:{media}", dst.)
+		-- belum punya publikasi, jadi judulnya diambil dari artikel kampanye itu
+		-- supaya klien tahu biaya ini untuk artikel yang mana.
+		LEFT JOIN LATERAL (
+			SELECT cd.title
+			FROM taut_campaign_media tcm
+			JOIN content_documents cd ON cd.id = tcm.article_document_id
+			WHERE e.ref_id ~ '^(taut-writer|taut-writer-regen|ai-image):'
+			  AND tcm.campaign_id::text = split_part(e.ref_id, ':', 2)
+			  AND tcm.media_id::text = split_part(e.ref_id, ':', 3)
+			ORDER BY (tcm.status = 'selected') DESC, tcm.created_at DESC
+			LIMIT 1
+		) td ON TRUE
+		LEFT JOIN media tm ON e.ref_id ~ '^(taut-writer|taut-writer-regen|ai-image):'
+		                  AND tm.id::text = split_part(e.ref_id, ':', 3)
 		WHERE e.brand_id = $1`+campaignWhere+`
 		ORDER BY e.created_at DESC LIMIT $2 OFFSET $3`, ledgerArgs...)
 	if lErr == nil {

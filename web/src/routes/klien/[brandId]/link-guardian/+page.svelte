@@ -9,7 +9,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import {
-		Activity, ArrowDownUp, ArrowUp, CircleAlert, CircleCheck, ExternalLink, Filter as FilterIcon,
+		Activity, ArrowDownUp, ArrowUp, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ExternalLink, Filter as FilterIcon,
 		Image as ImageIcon, Info, LoaderCircle, RefreshCw, RotateCcw, Search, TriangleAlert
 	} from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
@@ -302,16 +302,16 @@
 	/** Status deteksi gabungan: kondisi URL artikel + tautan DI DALAM artikel. */
 	function detectionMeta(item: Item): { label: string; text: string; bg: string; dot: string } {
 		if (item.state === 'gone') {
-			return { label: tr('HILANG (404)'), text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
+			return { label: tr('Hilang (404)'), text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
 		}
 		if (item.in_article_state === 'removed') {
-			return { label: tr('TAUTAN DIHAPUS'), text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
+			return { label: tr('Tautan dihapus'), text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
 		}
 		if (item.state === 'unreachable') {
-			return { label: tr('TAK TERJANGKAU'), text: 'var(--warning)', bg: 'var(--warning-soft)', dot: 'var(--warning)' };
+			return { label: tr('Tak terjangkau'), text: 'var(--warning)', bg: 'var(--warning-soft)', dot: 'var(--warning)' };
 		}
 		if (item.state === 'live') {
-			return { label: tr('200 OK (AMAN)'), text: 'var(--success)', bg: 'var(--success-soft)', dot: 'var(--success)' };
+			return { label: tr('200 OK (aman)'), text: 'var(--success)', bg: 'var(--success-soft)', dot: 'var(--success)' };
 		}
 		return { label: tr('Belum ada URL'), text: 'var(--muted-foreground)', bg: 'var(--muted)', dot: 'var(--muted-foreground)' };
 	}
@@ -484,15 +484,7 @@
 				pill: watched > 0 ? '100%' : '0%',
 				hint: tr('Dalam masa garansi aktif'),
 				icon: Activity,
-				stroke: '#2C5EAD',
-				gradTop: '#2C5EAD',
-				gradBottom: '#C4E2F5',
-				cardBg: 'linear-gradient(180deg, rgba(44, 94, 173, 0.045) 0%, rgba(196, 226, 245, 0.14) 100%)',
-				cardBorder: 'rgba(44, 94, 173, 0.16)',
-				iconBg: 'rgba(44, 94, 173, 0.12)',
-				iconColor: '#2C5EAD',
-				pillBg: 'rgba(44, 94, 173, 0.12)',
-				pillColor: '#2C5EAD',
+				tone: 'accent',
 				waveLine: watchedWave.line,
 				waveArea: watchedWave.area,
 				chartTitle: `${tr('Akumulasi artikel dipantau berdasarkan tanggal tayang')} (${watched})`,
@@ -506,15 +498,7 @@
 				pill: pctOfWatched(live, watched),
 				hint: tr('Halaman & Tautan aktif (200 OK)'),
 				icon: CircleCheck,
-				stroke: '#1591DC',
-				gradTop: '#1591DC',
-				gradBottom: '#C4E2F5',
-				cardBg: 'linear-gradient(180deg, rgba(21, 145, 220, 0.05) 0%, rgba(196, 226, 245, 0.18) 100%)',
-				cardBorder: 'rgba(21, 145, 220, 0.18)',
-				iconBg: 'rgba(21, 145, 220, 0.13)',
-				iconColor: '#1591DC',
-				pillBg: 'rgba(21, 145, 220, 0.14)',
-				pillColor: '#1591DC',
+				tone: 'success',
 				waveLine: liveWave.line,
 				waveArea: liveWave.area,
 				chartTitle: `${tr('Akumulasi artikel tayang & aman')} (${live})`,
@@ -528,15 +512,7 @@
 				pill: pctOfWatched(unreachable, watched),
 				hint: tr('Sistem keamanan media memblokir bot'),
 				icon: CircleAlert,
-				stroke: '#4BB8FA',
-				gradTop: '#4BB8FA',
-				gradBottom: '#C4E2F5',
-				cardBg: 'linear-gradient(180deg, rgba(75, 184, 250, 0.065) 0%, rgba(196, 226, 245, 0.22) 100%)',
-				cardBorder: 'rgba(75, 184, 250, 0.26)',
-				iconBg: 'rgba(75, 184, 250, 0.18)',
-				iconColor: '#1591DC',
-				pillBg: 'rgba(75, 184, 250, 0.22)',
-				pillColor: '#2C5EAD',
+				tone: 'warning',
 				waveLine: unreachableWave.line,
 				waveArea: unreachableWave.area,
 				chartTitle: `${tr('Akumulasi artikel tak terjangkau')} (${unreachable})`,
@@ -549,16 +525,8 @@
 				value: gone,
 				pill: pctOfWatched(gone, watched),
 				hint: tr('404 atau Tautan dihapus (SLA Klaim)'),
-				icon: CircleAlert,
-				stroke: '#2C5EAD',
-				gradTop: '#4BB8FA',
-				gradBottom: '#C4E2F5',
-				cardBg: 'linear-gradient(180deg, rgba(196, 226, 245, 0.28) 0%, rgba(196, 226, 245, 0.10) 100%)',
-				cardBorder: '#C4E2F5',
-				iconBg: '#C4E2F5',
-				iconColor: '#2C5EAD',
-				pillBg: '#C4E2F5',
-				pillColor: '#2C5EAD',
+				icon: TriangleAlert,
+				tone: 'danger',
 				waveLine: goneWave.line,
 				waveArea: goneWave.area,
 				chartTitle: `${tr('Akumulasi artikel bermasalah 404 / tautan dihapus')} (${gone})`,
@@ -577,7 +545,7 @@
 />
 
 <section>
-	<div class="app-card lg-overview-panel">
+	<div class="lg-overview-panel">
 		<header class="lg-header">
 			<div class="min-w-0 lg-header-copy">
 				<h1 class="lg-title">{tr("Link Guardian")}</h1>
@@ -589,7 +557,7 @@
 			<div class="lg-sync">
 				<div class="lg-sync-actions">
 					<button
-						class="lg-crawl"
+						class="app-btn app-btn-primary lg-crawl"
 						type="button"
 						disabled={crawling || summary?.manual_check_available === false}
 						title={summary?.manual_check_available === false
@@ -597,12 +565,13 @@
 							: tr('Antrekan pengecekan tautan sekarang')}
 						onclick={() => void crawlNow()}
 					>
-						<RefreshCw size={14} class={crawling ? 'animate-spin' : ''} />
+						<RefreshCw size={16} strokeWidth={1.5} class={crawling ? 'animate-spin' : ''} />
 						<span>{crawling ? tr('Mengantrekan…') : tr('Crawl Sekarang')}</span>
 					</button>
-					<span class="lg-manual-note"><Info size={13} /> {tr('Cek Manual Maks. 1x Sehari')}</span>
+					<span class="lg-manual-note"><Info size={14} strokeWidth={1.5} /> {tr('Cek Manual Maks. 1x Sehari')}</span>
 				</div>
 				<p class="lg-sync-time">
+					<span class="lg-sync-dot" aria-hidden="true"></span>
 					{tr('Terakhir sinkronisasi:')} <span class="lg-sync-value">{syncLabel(summary?.last_checked_at)}</span>
 				</p>
 			</div>
@@ -611,32 +580,23 @@
 		<!-- 4 kartu statistik -->
 		<div class="lg-cards">
 			{#each statCards as c (c.key)}
-				<div
-					class="lg-card"
-					style="--card-bg: {c.cardBg}; --card-border: {c.cardBorder}; --tone: {c.stroke};"
-				>
+				<div class="lg-card lg-card-{c.tone}">
 					<div class="lg-card-top">
-						<div class="lg-card-icon" style="background-color: {c.iconBg}; color: {c.iconColor};">
-							<c.icon size={20} strokeWidth={2.1} />
+						<div class="lg-card-icon">
+							<c.icon size={18} strokeWidth={1.5} />
 						</div>
 						<div class="lg-card-body">
 							<p class="lg-card-label">
 								<span>{c.label}</span>
 								{#if c.info}
 									<Tooltip content={c.info} label={c.info} maxWidth={280}>
-										<span class="lg-card-info"><Info size={12} /></span>
+										<span class="lg-card-info"><Info size={14} strokeWidth={1.5} /></span>
 									</Tooltip>
 								{/if}
 							</p>
 							<div class="lg-card-metric">
 								<p class="lg-card-value">{c.value}</p>
-								<span
-									class="lg-card-pill"
-									style="background-color: {c.pillBg}; color: {c.pillColor};"
-									title={tr('Proporsi dari total artikel yang dipantau')}
-								>
-									{c.pill}
-								</span>
+								<span class="lg-card-pill" title={tr('Proporsi dari total artikel yang dipantau')}>{c.pill}</span>
 							</div>
 							<p class="lg-card-hint" class:lg-card-hint-strong={c.strong}>{c.hint}</p>
 						</div>
@@ -650,18 +610,12 @@
 							aria-label={c.chartTitle}
 						>
 							<title>{c.chartTitle}</title>
-							<defs>
-								<linearGradient id={`lg-grad-${c.key}`} x1="0" y1="0" x2="0" y2="1">
-									<stop offset="0%" stop-color={c.gradTop} stop-opacity="0.28" />
-									<stop offset="100%" stop-color={c.gradBottom} stop-opacity="0.03" />
-								</linearGradient>
-							</defs>
-							<path d={c.waveArea} fill={`url(#lg-grad-${c.key})`} />
+							<path d={c.waveArea} class="lg-spark-area" />
 							<path
 								d={c.waveLine}
 								fill="none"
-								stroke={c.stroke}
-								stroke-width="2.2"
+								class="lg-spark-line"
+								stroke-width="2"
 								stroke-linecap="round"
 								stroke-linejoin="round"
 								vector-effect="non-scaling-stroke"
@@ -687,7 +641,7 @@
 		<!-- Toolbar: pencarian lebar, dropdown status, lalu tombol Filter -->
 		<div class="app-card lg-toolbar">
 			<label class="lg-search">
-				<Search size={15} class="text-muted-foreground" />
+				<Search size={16} strokeWidth={1.5} class="text-muted-foreground" />
 				<input
 					class="w-full bg-transparent text-sm outline-none"
 					placeholder={tr("Cari artikel, media, atau URL…")}
@@ -719,7 +673,7 @@
 					aria-controls="lg-filter-panel"
 					onclick={(e) => { e.stopPropagation(); filterOpen = !filterOpen; }}
 				>
-					<FilterIcon size={14} /> {tr('Filter')}
+					<FilterIcon size={16} strokeWidth={1.5} /> {tr('Filter')}
 					{#if advancedFilterCount > 0}<span class="lg-filter-count">{advancedFilterCount}</span>{/if}
 				</button>
 				{#if filterOpen}
@@ -755,7 +709,7 @@
 							/>
 						</div>
 						<div class="lg-pop-actions">
-							<button class="lg-pop-reset" type="button" onclick={resetFilters}><RotateCcw size={13} /> {tr('Reset filter')}</button>
+							<button class="lg-pop-reset" type="button" onclick={resetFilters}><RotateCcw size={14} strokeWidth={1.5} /> {tr('Reset filter')}</button>
 							<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" onclick={closeFilterPanel}>{tr('Terapkan')}</button>
 						</div>
 					</div>
@@ -793,7 +747,7 @@
 							<tr>
 								<th class="lg-th lg-th-left" aria-sort={sortKey === 'title' ? (sortAsc ? 'ascending' : 'descending') : 'none'}>
 									<button class="lg-th-btn" type="button" onclick={toggleTitleSort} aria-label={tr('Urutkan berdasarkan judul')}>
-										<span>{tr('Informasi Artikel & Tautan')}</span><ArrowDownUp size={12} strokeWidth={2.4} />
+										<span>{tr('Informasi Artikel & Tautan')}</span><ArrowDownUp size={14} strokeWidth={1.5} />
 									</button>
 								</th>
 								<th class="lg-th lg-th-left">{tr('Publisher')}</th>
@@ -802,7 +756,7 @@
 								<th class="lg-th lg-th-left" aria-sort={sortKey === 'updated' ? (dateDesc ? 'descending' : 'ascending') : 'none'}>
 									<button class="lg-th-btn" type="button" onclick={toggleDateSort} aria-label={sortKey === 'updated' && !dateDesc ? tr('Urutkan dari yang terbaru') : tr('Urutkan dari yang terlama')}>
 										<span>{tr('Waktu Cek')}</span>
-										{#if sortKey === 'updated' && !dateDesc}<ArrowUp size={12} strokeWidth={2.4} />{:else}<ArrowDownUp size={12} strokeWidth={2.4} />{/if}
+										{#if sortKey === 'updated' && !dateDesc}<ArrowUp size={14} strokeWidth={1.5} />{:else}<ArrowDownUp size={14} strokeWidth={1.5} />{/if}
 									</button>
 								</th>
 								<th class="lg-th lg-th-right">{tr('Aksi Garansi')}</th>
@@ -827,13 +781,13 @@
 												/>
 											{:else}
 												<span class="lg-thumb lg-thumb-empty" title={item.document_title ?? undefined}>
-													<ImageIcon size={15} />
+													<ImageIcon size={16} strokeWidth={1.5} />
 												</span>
 											{/if}
 											<div class="min-w-0">
 												{#if item.published_url}
 													<a class="lg-url" href={item.published_url} target="_blank" rel="noreferrer" title={item.published_url}>
-														<span class="truncate">{item.published_url}</span><ExternalLink size={11} />
+														<span class="truncate">{item.published_url}</span><ExternalLink size={12} strokeWidth={1.5} />
 													</a>
 												{/if}
 												<p class="lg-doctitle">{item.document_title ?? tr('Tanpa judul')}</p>
@@ -849,9 +803,9 @@
 									</td>
 									<td class="linkmon-cell lg-cell" data-label={tr('Status Verifikasi')}>
 										{#if item.domain_verified}
-											<span class="lg-verified"><CircleCheck size={11} strokeWidth={2.6} /> VERIFIED</span>
+											<span class="lg-verified"><CircleCheck size={14} strokeWidth={1.5} /> {tr('Terverifikasi')}</span>
 										{:else}
-											<span class="lg-unverified"><CircleAlert size={11} strokeWidth={2.6} /> UNVERIFIED</span>
+											<span class="lg-unverified"><CircleAlert size={14} strokeWidth={1.5} /> {tr('Belum terverifikasi')}</span>
 										{/if}
 									</td>
 									<td class="linkmon-cell lg-cell" data-label={tr('Status Deteksi')}>
@@ -879,11 +833,11 @@
 									<td class="linkmon-cell lg-cell lg-cell-action" data-label={tr('Aksi Garansi')}>
 										{#if cs === 'claimable'}
 											<button class="lg-claim" type="button" disabled={claimingId !== null} onclick={() => void submitClaim(item)}>
-												{#if claimingId === item.id}<LoaderCircle size={12} class="animate-spin" />{:else}<TriangleAlert size={12} />{/if}
+												{#if claimingId === item.id}<LoaderCircle size={14} class="animate-spin" />{:else}<TriangleAlert size={14} strokeWidth={1.5} />{/if}
 												{claimingId === item.id ? tr('Mengirim…') : tr('Ajukan Klaim')}
 											</button>
 										{:else if cs === 'refunded'}
-											<span class="lg-claim-done"><CircleCheck size={12} /> {claimStatusLabel[item.claim_status ?? ''] ?? tr('Dana dikembalikan')}</span>
+											<span class="lg-claim-done"><CircleCheck size={14} strokeWidth={1.5} /> {claimStatusLabel[item.claim_status ?? ''] ?? tr('Dana dikembalikan')}</span>
 										{:else if cs === 'processing'}
 											<span class="lg-claim-progress">{claimStatusLabel[item.claim_status ?? ''] ?? tr('Diproses')}</span>
 										{:else if cs === 'expired'}
@@ -901,7 +855,7 @@
 
 				<!-- Footer paginasi -->
 				<div class="lg-pagination">
-					<span class="text-[12.5px] text-muted-foreground">{tr("Menampilkan")} {startItem}–{endItem} {tr("dari")} {total} artikel</span>
+					<span class="lg-meta">{tr("Menampilkan")} {startItem}–{endItem} {tr("dari")} {total} artikel</span>
 					<div class="flex flex-wrap items-center gap-2">
 						<Select
 							value={String(pageSize)}
@@ -915,12 +869,12 @@
 								{ value: '50', label: tr('50 per halaman') }
 							]}
 						/>
-						<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={currentPage <= 1 || loading} onclick={() => { offset = Math.max(0, (currentPage - 2) * pageSize); }}>
-							‹ Sebelumnya
+						<button class="app-btn app-btn-soft lg-pager-btn" type="button" disabled={currentPage <= 1 || loading} onclick={() => { offset = Math.max(0, (currentPage - 2) * pageSize); }}>
+							<ChevronLeft size={16} strokeWidth={1.5} />{tr("Sebelumnya")}
 						</button>
-						<span class="text-[12.5px] tabular-nums text-muted-foreground">{currentPage} / {totalPages}</span>
-						<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={currentPage >= totalPages || loading} onclick={() => { offset = currentPage * pageSize; }}>
-							Berikutnya ›
+						<span class="lg-meta tabular-nums">{currentPage} / {totalPages}</span>
+						<button class="app-btn app-btn-soft lg-pager-btn" type="button" disabled={currentPage >= totalPages || loading} onclick={() => { offset = currentPage * pageSize; }}>
+							{tr("Berikutnya")}<ChevronRight size={16} strokeWidth={1.5} />
 						</button>
 					</div>
 				</div>
@@ -930,197 +884,67 @@
 </section>
 
 <style>
-	/* ── Panel Utama (Header + 4 Kartu Statistik menyatu ala SimilarWeb) ── */
-	.lg-overview-panel {
-		padding: 22px 24px;
-		border-radius: 20px;
-		border: 1px solid color-mix(in srgb, #C4E2F5 70%, var(--border));
-		background: var(--card, #ffffff);
-		box-shadow: 0 6px 28px -10px rgba(44, 94, 173, 0.08);
-	}
+	/* ── Panel atas: header + 4 kartu statistik. Permukaan netral; warna hanya
+	   pada kartu sesuai artinya (biru dipantau, hijau aman, kuning tak
+	   terjangkau, merah bermasalah) dan pada tombol utama. ── */
+	.lg-overview-panel { display: flex; flex-direction: column; gap: 24px; }
 
-	/* ── Header ─────────────────────────────────────────────────────────── */
-	.lg-header {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 16px;
-	}
+	.lg-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; }
 	.lg-header-copy { flex: 1 1 480px; }
-	.lg-title {
-		font-size: 22px;
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		line-height: 1.25;
-		color: var(--foreground);
-	}
-	.lg-sub {
-		margin-top: 4px;
-		max-width: 66ch;
-		font-size: 13.5px;
-		line-height: 1.55;
-		color: var(--muted-foreground);
-	}
-	.lg-sub strong { color: var(--foreground); font-weight: 600; }
-	.lg-sub .lg-sub-accent { color: #1591DC; font-weight: 600; }
+	.lg-title { font-size: 28px; line-height: 32px; font-weight: 500; color: var(--foreground); }
+	.lg-sub { margin-top: 4px; max-width: 66ch; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+	.lg-sub .lg-sub-accent { color: var(--accent-foreground); font-weight: 500; }
 
-	/* Sisi kanan header: tombol aksi berbingkai + badge info sejajar, waktu sinkron di bawah. */
-	.lg-sync {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 8px;
-	}
-	.lg-sync-actions {
-		display: flex;
-		flex-wrap: nowrap;
-		align-items: center;
-		gap: 8px;
-	}
-	.lg-crawl {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		min-height: 36px;
-		padding: 6px 14px;
-		border-radius: 10px;
-		border: 1px solid #C4E2F5;
-		background-color: #ffffff;
-		color: #2C5EAD;
-		font-size: 13px;
-		font-weight: 600;
-		white-space: nowrap;
-		box-shadow: 0 1px 2px rgba(44, 94, 173, 0.06);
-		transition: background-color 140ms ease, border-color 140ms ease, transform 120ms ease;
-	}
-	.lg-crawl :global(svg) { color: #1591DC; }
-	.lg-crawl:hover:not(:disabled) {
-		background-color: color-mix(in srgb, #C4E2F5 28%, #ffffff);
-		border-color: #4BB8FA;
-	}
-	.lg-crawl:disabled { opacity: 0.55; cursor: not-allowed; }
+	.lg-sync { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+	.lg-sync-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; }
+	.lg-crawl { font-weight: 500; white-space: nowrap; }
 	.lg-manual-note {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		min-height: 36px;
-		padding: 6px 12px;
-		border-radius: 10px;
-		font-size: 12.5px;
-		font-weight: 600;
-		white-space: nowrap;
-		color: #2C5EAD;
-		background-color: color-mix(in srgb, #C4E2F5 42%, #ffffff);
-		border: 1px solid color-mix(in srgb, #4BB8FA 35%, #C4E2F5);
+		display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 9px;
+		font-size: 13px; font-weight: 500; white-space: nowrap; color: var(--accent-foreground); background-color: var(--accent);
 	}
-	.lg-manual-note :global(svg) { color: #1591DC; flex-shrink: 0; }
-	.lg-sync-time { font-size: 11.5px; color: var(--muted-foreground); }
-	.lg-sync-value { font-weight: 600; color: #2C5EAD; }
+	.lg-manual-note :global(svg) { flex-shrink: 0; }
+	.lg-sync-time { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+	.lg-sync-dot { width: 8px; height: 8px; border-radius: 9999px; background-color: var(--success); }
+	.lg-sync-value { font-weight: 500; color: var(--foreground); }
 
-	/* ── Kartu ringkasan: kotak ikon kiri, angka + pill, hint, wave di dasar ── */
-	.lg-cards {
-		margin-top: 20px;
-		display: grid;
-		gap: 14px;
-		grid-template-columns: 1fr;
-	}
+	.lg-cards { display: grid; gap: 16px; grid-template-columns: 1fr; }
 	@media (min-width: 640px) { .lg-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 	@media (min-width: 1280px) { .lg-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 	.lg-card {
-		display: flex;
-		flex-direction: column;
-		justify-content: space-between;
-		padding: 16px 18px 12px;
-		border-radius: 16px;
-		border: 1px solid var(--card-border, #C4E2F5);
-		background: var(--card-bg, rgba(196, 226, 245, 0.14));
-		transition: transform 150ms ease, box-shadow 150ms ease;
+		display: flex; flex-direction: column; justify-content: space-between; gap: 12px; padding: 20px;
+		border-radius: 16px; border: 1px solid var(--border); background-color: var(--card);
+		transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
-	.lg-card:hover {
-		transform: translateY(-1px);
-		box-shadow: 0 6px 18px -8px rgba(21, 145, 220, 0.18);
-	}
-	.lg-card-top {
-		display: flex;
-		align-items: flex-start;
-		gap: 14px;
-		min-width: 0;
-	}
+	.lg-card:hover { border-color: color-mix(in srgb, var(--tone) 40%, var(--border)); box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06); }
+	.lg-card-accent  { --tone: var(--accent-foreground); --tone-soft: var(--accent); }
+	.lg-card-success { --tone: var(--success); --tone-soft: var(--success-soft); }
+	.lg-card-warning { --tone: var(--warning); --tone-soft: var(--warning-soft); }
+	.lg-card-danger  { --tone: var(--destructive); --tone-soft: color-mix(in srgb, var(--destructive) 10%, var(--card)); }
+
+	.lg-card-top { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
 	.lg-card-icon {
-		width: 44px;
-		height: 44px;
-		flex: 0 0 44px;
-		border-radius: 12px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
+		display: flex; width: 40px; height: 40px; flex: 0 0 40px; align-items: center; justify-content: center;
+		border-radius: 12px; background-color: var(--tone-soft); color: var(--tone);
 	}
-	.lg-card-body {
-		min-width: 0;
-		flex: 1 1 auto;
-	}
-	.lg-card-label {
-		display: inline-flex;
-		align-items: center;
-		gap: 5px;
-		font-size: 13px;
-		font-weight: 600;
-		line-height: 1.3;
-		color: var(--foreground);
-	}
-	.lg-card-info { display: inline-flex; color: #1591DC; }
-	.lg-card-metric {
-		margin-top: 6px;
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 8px;
-	}
-	.lg-card-value {
-		font-size: 28px;
-		font-weight: 800;
-		line-height: 1.1;
-		letter-spacing: -0.025em;
-		font-variant-numeric: tabular-nums;
-		color: var(--foreground);
-	}
+	.lg-card-body { min-width: 0; flex: 1 1 auto; }
+	.lg-card-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+	.lg-card-info { display: inline-flex; color: var(--muted-foreground); }
+	.lg-card-metric { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+	.lg-card-value { font-size: 32px; line-height: 40px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--foreground); }
 	.lg-card-pill {
-		display: inline-flex;
-		align-items: center;
-		gap: 3px;
-		padding: 2.5px 8px;
-		border-radius: 999px;
-		font-size: 11.5px;
-		font-weight: 700;
-		font-variant-numeric: tabular-nums;
-		line-height: 1.2;
+		display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 12px; line-height: 16px;
+		font-weight: 500; font-variant-numeric: tabular-nums; background-color: var(--tone-soft); color: var(--tone);
 	}
-	.lg-card-hint {
-		margin-top: 6px;
-		font-size: 12px;
-		line-height: 1.35;
-		color: var(--muted-foreground);
-	}
-	.lg-card-hint-strong {
-		color: #2C5EAD;
-		font-weight: 600;
-	}
-	.lg-card-chart {
-		margin-top: 12px;
-		width: 100%;
-		height: 42px;
-	}
-	.lg-spark-svg {
-		width: 100%;
-		height: 100%;
-		display: block;
-		overflow: visible;
-	}
+	.lg-card-hint { margin-top: 4px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+	.lg-card-hint-strong { color: var(--tone); font-weight: 500; }
+	.lg-card-chart { width: 100%; height: 40px; }
+	.lg-spark-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+	.lg-spark-area { fill: var(--tone); opacity: 0.12; }
+	.lg-spark-line { stroke: var(--tone); }
 
 	/* ── Toolbar: pencarian lebar, status, tombol Filter ───────────────── */
-	.lg-toolbar { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; }
+	.lg-toolbar { margin-top: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; }
 	.lg-search { display: flex; align-items: center; gap: 8px; flex: 1 1 320px; min-width: 220px; padding: 5px 2px; }
 	.lg-divider { width: 1px; height: 24px; flex: none; background-color: var(--border); }
 	/* Select di dalam toolbar tampil tanpa kotak sendiri: kartu toolbar yang jadi wadahnya. */
@@ -1147,10 +971,7 @@
 		background-color: var(--card); box-shadow: var(--shadow-md);
 	}
 	.lg-pop-field { display: flex; flex-direction: column; gap: 4px; }
-	.lg-pop-label {
-		font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
-		text-transform: uppercase; color: var(--muted-foreground);
-	}
+		.lg-pop-label { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
 	.lg-pop-actions {
 		display: flex; align-items: center; justify-content: space-between; gap: 8px;
 		border-top: 1px solid var(--border); padding-top: 10px;
@@ -1197,75 +1018,70 @@
 	.lg-list-card .lg-claim-muted { white-space: nowrap; }
 
 
-	.lg-th {
-		padding: 9px 16px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
-		text-transform: uppercase; color: var(--muted-foreground);
-		border-bottom: 1px solid var(--border); background-color: transparent;
+		.lg-th {
+		padding: 12px 16px; font-size: 12px; line-height: 16px; font-weight: 400; color: var(--muted-foreground);
+		border-bottom: 1px solid var(--border); background-color: color-mix(in srgb, var(--foreground) 2%, transparent);
 	}
 	.lg-th-left { text-align: left; }
 	.lg-th-right { text-align: right; }
-	.lg-th-btn {
-		display: inline-flex; align-items: center; gap: 5px;
-		font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit;
-	}
+		.lg-th-btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; color: inherit; }
 	.lg-th-btn:hover { color: var(--foreground); }
 
 	.lg-row { border-bottom: 1px solid var(--border); transition: background-color 120ms ease; }
 	.lg-row:last-child { border-bottom: 0; }
 	.lg-row:hover { background-color: color-mix(in srgb, var(--secondary) 55%, transparent); }
-	.lg-cell { padding: 11px 16px; vertical-align: top; }
+	.lg-cell { padding: 16px; vertical-align: top; }
 	.lg-cell-action { text-align: right; }
 
-	.lg-article { display: flex; align-items: center; gap: 10px; min-width: 0; }
-	.lg-thumb { width: 56px; height: 38px; flex: none; border-radius: 6px; object-fit: cover; }
+	.lg-article { display: flex; align-items: center; gap: 12px; min-width: 0; }
+	.lg-thumb { width: 56px; height: 40px; flex: none; border-radius: 8px; object-fit: cover; }
 	.lg-thumb-empty {
 		display: flex; align-items: center; justify-content: center;
 		background-color: var(--muted); color: var(--muted-foreground);
 	}
-	.lg-url {
+		.lg-url {
 		display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
-		font-size: 12.5px; font-weight: 500; color: var(--primary);
+		font-size: 13px; line-height: 20px; font-weight: 500; color: var(--accent-foreground);
 	}
 	.lg-url span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 	.lg-url:hover span { text-decoration: underline; }
 	.lg-doctitle {
-		margin-top: 2px; font-size: 11.5px; line-height: 1.35; color: var(--muted-foreground);
+		margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--muted-foreground);
 		display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
 		-webkit-box-orient: vertical; overflow: hidden; word-break: break-word;
 	}
 
-	.lg-media { font-size: 13.5px; font-weight: 500; }
-	.lg-media-sub { margin-top: 1px; font-size: 11.5px; color: var(--muted-foreground); }
+	.lg-media { font-size: 14px; line-height: 20px; font-weight: 500; }
+	.lg-media-sub { margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
 
-	.lg-badge {
-		display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
-		padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+		.lg-badge {
+		display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+		padding: 2px 10px; border-radius: 9999px; font-size: 12px; line-height: 16px; font-weight: 500;
 		white-space: nowrap;
 	}
 	.lg-badge-dot { width: 6px; height: 6px; flex: none; border-radius: 999px; }
 
-	.lg-time { font-size: 12.5px; }
-	.lg-time-rel { margin-top: 1px; font-size: 11.5px; color: var(--muted-foreground); }
+	.lg-time { font-size: 14px; line-height: 20px; }
+	.lg-time-rel { margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
 
-	.lg-noaction { font-size: 12.5px; color: var(--muted-foreground); }
+	.lg-noaction { font-size: 14px; color: var(--muted-foreground); }
 
 	/* Kolom tambahan ala dashboard garansi: anchor, status verifikasi, aksi klaim. */
-	.lg-anchor { margin-top: 2px; font-size: 11.5px; color: var(--muted-foreground); }
-	.lg-anchor strong { color: var(--foreground); font-weight: 600; }
+	.lg-anchor { margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+	.lg-anchor strong { color: var(--foreground); font-weight: 500; }
 
-	.lg-verified,
+		.lg-verified,
 	.lg-unverified {
-		display: inline-flex; align-items: center; gap: 4px;
-		padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 700;
-		letter-spacing: 0.04em; border: 1px solid transparent;
+		display: inline-flex; align-items: center; gap: 6px;
+		padding: 2px 10px; border-radius: 6px; font-size: 12px; line-height: 16px; font-weight: 500;
 	}
-	.lg-verified { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 35%, transparent); }
-	.lg-unverified { color: var(--muted-foreground); border-color: var(--border); }
+	.lg-verified { color: var(--accent-foreground); background-color: var(--accent); }
+	.lg-unverified { color: var(--muted-foreground); background-color: var(--muted); }
 
 	.lg-claim {
 		display: inline-flex; align-items: center; gap: 5px;
-		min-height: 28px; padding: 0 10px; border-radius: var(--radius-button, 9px);
-		font-size: 12px; font-weight: 600; white-space: nowrap;
+				min-height: 32px; padding: 0 12px; border-radius: 8px;
+		font-size: 13px; font-weight: 500; white-space: nowrap;
 		color: var(--destructive); border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
 		background-color: color-mix(in srgb, var(--destructive) 8%, transparent);
 		transition: background-color 120ms ease;
@@ -1273,18 +1089,20 @@
 	.lg-claim:hover:not(:disabled) { background-color: color-mix(in srgb, var(--destructive) 15%, transparent); }
 	.lg-claim:disabled { opacity: .6; }
 
-	.lg-claim-done { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--success); }
-	.lg-claim-progress { font-size: 11.5px; font-weight: 500; color: var(--warning); }
-	.lg-claim-muted {
-		display: inline-block; padding: 3px 8px; border-radius: 6px;
-		font-size: 10.5px; font-weight: 600; color: var(--muted-foreground);
+	.lg-claim-done { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--success); }
+	.lg-claim-progress { font-size: 13px; font-weight: 500; color: var(--warning); }
+		.lg-claim-muted {
+		display: inline-block; padding: 2px 10px; border-radius: 6px;
+		font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted-foreground);
 		background-color: var(--muted);
 	}
 
 	.lg-pagination {
 		display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-		gap: 10px; border-top: 1px solid var(--border); padding: 10px 14px;
+				gap: 8px; border-top: 1px solid var(--border); padding: 12px 16px;
 	}
+	.lg-meta { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+	.lg-pager-btn { min-height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; }
 
 	/* Toolbar menumpuk di layar sempit supaya kontrol tidak terpotong. */
 	@media (max-width: 900px) {
@@ -1316,17 +1134,15 @@
 			content: attr(data-label);
 			display: block;
 			margin-bottom: 3px;
-			color: var(--muted-foreground);
-			font-size: 10px;
-			font-weight: 700;
-			letter-spacing: 0.06em;
-			text-transform: uppercase;
+						color: var(--muted-foreground);
+			font-size: 12px;
+			line-height: 16px;
 		}
 	}
 
 		/* ── Mobile: jarak dirapikan supaya tidak berdesakan/bertumpuk ─────────── */
 		@media (max-width: 700px) {
-			.lg-overview-panel { padding: 16px 14px; border-radius: 16px; }
+			.lg-overview-panel { gap: 16px; }
 			/* Header: subjudul penuh, blok sinkronisasi turun ke baris sendiri. */
 			.lg-header { gap: 10px; }
 			/* Baris: tombol Crawl + catatan manual berdampingan, waktu sinkronisasi di bawah. */
@@ -1345,14 +1161,12 @@
 				flex: 1 1 0; min-width: 0;
 				white-space: normal; line-height: 1.25;
 			}
-			.lg-sync-time { font-size: 11px; }
-			.lg-manual-note { font-size: 10.5px; line-height: 1.3; }
+						.lg-manual-note { font-size: 12px; line-height: 16px; }
 
 			/* Kartu ringkasan: satu kolom, jarak seragam. */
-			.lg-cards { margin-top: 14px; gap: 10px; }
-			.lg-card { padding: 14px 14px 10px; }
-			.lg-card-value { font-size: 24px; }
-			.lg-card-hint { margin-top: 4px; }
+						.lg-cards { gap: 12px; }
+			.lg-card { padding: 16px; }
+			.lg-card-value { font-size: 28px; line-height: 36px; }
 
 		/* Toolbar: pencarian + filter status + tombol filter dalam SATU baris.
 		   Tombol filter hanya ikon (teksnya disembunyikan) supaya muat. Saat
@@ -1371,10 +1185,8 @@
 		.lg-cell + .lg-cell { margin-top: 10px; }
 		.linkmon-cell[data-label]::before { margin-bottom: 2px; }
 	}
-	@media (max-width: 420px) {
-		.lg-card { padding: 11px 12px; }
-		.lg-row { padding: 12px 10px; }
-		.lg-card-value { font-size: 24px; }
+		@media (max-width: 420px) {
+		.lg-row { padding: 12px; }
 	}
 
 	/* ── Kartu artikel (mobile): grid 2 kolom, grup rapi, tanpa overflow ─────

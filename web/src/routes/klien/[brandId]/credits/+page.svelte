@@ -5,7 +5,7 @@
 	// credits app lama). Termasuk aksi Top Up dan laporan topup gagal.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { ChevronLeft, ChevronRight, Clock, Coins, Lock, Wallet, Plus, TriangleAlert, X, Flag } from '@lucide/svelte';
+	import { ChevronLeft, ChevronRight, Coins, FileText, Lock, Plus, Wallet, X, Flag } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, readApiError, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
@@ -243,6 +243,30 @@
 
 	const fmt = (n: number) => n.toLocaleString('id-ID');
 
+	// Komposisi dana: tersedia / tertahan / terpakai dari angka wallet yang sama
+	// dengan tiga kartu, supaya bilah di kartu utama membaca porsi, bukan data baru.
+	const split = $derived.by(() => {
+		const w = data?.wallet;
+		const total = w ? w.available_tc + w.reserved_tc + w.captured_tc : 0;
+		const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
+		return {
+			total,
+			available: pct(w?.available_tc ?? 0),
+			reserved: pct(w?.reserved_tc ?? 0),
+			captured: pct(w?.captured_tc ?? 0)
+		};
+	});
+
+	// Penanda kampanye: warna dipilih dari nama (stabil antar muat ulang) di
+	// antara lima rona lembut, agar baris mudah dibedakan saat memindai.
+	const TILE_HUES = [214, 168, 32, 340, 262];
+	const tileHue = (name: string) => {
+		let h = 0;
+		for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 997;
+		return TILE_HUES[h % TILE_HUES.length];
+	};
+	const tileInitial = (name: string) => (name.trim().charAt(0) || '·').toUpperCase();
+
 	// Tanggal mutasi ditampilkan WIB (format sama dengan halaman Taut Pintar).
 	const jakartaDisplay = (iso: string | null) =>
 		iso
@@ -279,7 +303,7 @@
 		return tr(REF_TYPE_LABEL[e.ref_type] ?? 'Mutasi saldo');
 	}
 
-	type LedgerRow = { tone: 'in' | 'out' | 'hold'; sign: string; amount: string; label: string; sub: string | null };
+	type LedgerRow = { tone: 'in' | 'out' | 'hold'; sign: string; amount: string; label: string; title: string | null };
 
 	// ================== ATURAN ARAH MUTASI — BACA SEBELUM MENGUBAH ==================
 	// Warna & tanda mengikuti ARTI uangnya, bukan tanda mentah amount_tc:
@@ -295,13 +319,13 @@
 	function ledgerRow(e: LedgerEntry, fallbackRate: number): LedgerRow {
 		const rate = e.rate_idr && e.rate_idr > 0 ? e.rate_idr : fallbackRate;
 		const amount = tcToRp(Math.abs(e.amount_tc), rate);
-		const sub = [e.document_title, e.media_name].filter(Boolean).join(' · ') || null;
+		const title = e.document_title?.trim() || null;
 		const label = ledgerLabel(e);
-		if (e.ref_type === 'reserve') return { tone: 'hold', sign: '', amount, label, sub };
+		if (e.ref_type === 'reserve') return { tone: 'hold', sign: '', amount, label, title };
 		const outgoing = e.ref_type === 'capture' || e.ref_type === 'refund' || e.amount_tc < 0;
 		return outgoing
-			? { tone: 'out', sign: '−', amount, label, sub }
-			: { tone: 'in', sign: '+', amount, label, sub };
+			? { tone: 'out', sign: '−', amount, label, title }
+			: { tone: 'in', sign: '+', amount, label, title };
 	}
 
 	// Rentang grup yang sedang tampil untuk teks "Menampilkan X–Y dari N".
@@ -321,32 +345,33 @@
 
 <PageTitle title={tr("Saldo")} />
 
-<section>
-	<header class="flex flex-wrap items-start justify-between gap-3">
+<section class="bal">
+	<header class="bal-head">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{tr("Saldo")}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Saldo rupiah untuk eksekusi publikasi.")}</p>
+			<h1 class="bal-title">{tr("Saldo")}</h1>
+			<p class="bal-sub">{tr("Saldo rupiah untuk eksekusi publikasi")}</p>
 		</div>
-		<div class="flex flex-wrap items-center gap-2">
+		<div class="bal-actions">
 			<button class="app-btn app-btn-soft" type="button" onclick={openReport}>
-				<Flag size={15} />{tr("Laporkan Topup Gagal")}</button>
+				<Flag size={16} strokeWidth={1.5} />{tr("Laporkan Topup Gagal")}</button>
 			<button class="app-btn app-btn-primary" type="button" onclick={openTopUp}>
-				<Plus size={15} />{tr("Top Up Saldo")}</button>
+				<Plus size={16} strokeWidth={1.5} />{tr("Top Up Saldo")}</button>
 		</div>
 	</header>
 
 	{#if loading}
-		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat saldo…")}</p>
+		<p class="bal-sub bal-block">{tr("Memuat saldo…")}</p>
 	{:else if data}
 		{#if pendingTopups.length > 0}
-			<div class="app-card mt-4 flex flex-wrap items-center justify-between gap-3 border-l-4 p-4" style="border-left-color: var(--warning);">
+			<div class="app-card bal-pend bal-block">
 				<div>
-					<p class="text-sm font-medium">
+					<p class="bal-pend-title">
+						<span class="bal-dot" aria-hidden="true"></span>
 						{pendingTopups.length === 1
 							? tr("Ada pembayaran top up yang belum selesai")
 							: `${pendingTopups.length} ${tr("tagihan top up menunggu pembayaran")}`}
 					</p>
-					<p class="text-xs text-muted-foreground">
+					<p class="bal-meta">
 						{tr("Total tagihan menunggu pembayaran")} Rp {fmt(pendingTotalIdr)} · {tr("belum masuk saldo sampai pembayaran selesai")}
 					</p>
 				</div>
@@ -356,64 +381,67 @@
 			</div>
 		{/if}
 
-		<div class="mt-4 grid gap-3 sm:grid-cols-3">
-			<div class="app-card flex items-center gap-3 p-4">
-				<Wallet size={18} style="color: var(--primary);" />
+		<div class="bal-stats bal-block">
+			<div class="app-card bal-stat bal-stat-lead">
+				<div class="bal-lead-top">
+					<p class="bal-label">{tr("Saldo tersedia")}</p>
+					<Wallet size={18} strokeWidth={1.5} />
+				</div>
+				<p class="bal-figure bal-figure-lead"><span class="bal-cur">Rp</span>{fmt(data.wallet.available_tc * rateIdr)}</p>
+				{#if pendingTotalIdr > 0}
+					<p class="bal-lead-note">+ Rp {fmt(pendingTotalIdr)} {tr("menunggu pembayaran")}</p>
+				{/if}
+				{#if split.total > 0}
+					<div class="bal-split" role="img" aria-label="{tr('Tersedia')} {Math.round(split.available)}%, {tr('Tertahan')} {Math.round(split.reserved)}%, {tr('Terpakai')} {Math.round(split.captured)}%">
+						<span class="bal-split-a" style="width: {split.available}%"></span>
+						<span class="bal-split-r" style="width: {split.reserved}%"></span>
+						<span class="bal-split-c" style="width: {split.captured}%"></span>
+					</div>
+					<p class="bal-split-key">
+						<span><i class="bal-key bal-split-a"></i>{tr("Tersedia")} {Math.round(split.available)}%</span>
+						<span><i class="bal-key bal-split-r"></i>{tr("Tertahan")} {Math.round(split.reserved)}%</span>
+						<span><i class="bal-key bal-split-c"></i>{tr("Terpakai")} {Math.round(split.captured)}%</span>
+					</p>
+				{/if}
+			</div>
+			<div class="app-card bal-stat bal-stat-side">
+				<span class="bal-icon bal-icon-hold"><Lock size={18} strokeWidth={1.5} /></span>
 				<div>
-					<p class="text-xs text-muted-foreground">{tr("Saldo tersedia")}</p>
-					<p class="text-2xl font-bold tabular-nums">Rp {fmt(data.wallet.available_tc * rateIdr)}</p>
-					{#if pendingTotalIdr > 0}
-						<p class="mt-0.5 text-[11px] font-medium" style="color: var(--warning);">
-							+ Rp {fmt(pendingTotalIdr)} {tr("menunggu pembayaran")}
-						</p>
-					{/if}
+					<p class="bal-label">{tr("Tertahan")}</p>
+					<p class="bal-figure"><span class="bal-cur">Rp</span>{fmt(data.wallet.reserved_tc * rateIdr)}</p>
 				</div>
 			</div>
-			<div class="app-card flex items-center gap-3 p-4">
-				<Lock size={18} style="color: var(--warning);" />
+			<div class="app-card bal-stat bal-stat-side">
+				<span class="bal-icon bal-icon-used"><Coins size={18} strokeWidth={1.5} /></span>
 				<div>
-					<p class="text-xs text-muted-foreground">{tr("Tertahan")}</p>
-					<p class="text-2xl font-bold tabular-nums">Rp {fmt(data.wallet.reserved_tc * rateIdr)}</p>
-				</div>
-			</div>
-			<div class="app-card flex items-center gap-3 p-4">
-				<Coins size={18} style="color: var(--success);" />
-				<div>
-					<p class="text-xs text-muted-foreground">{tr("Total terpakai")}</p>
-					<p class="text-2xl font-bold tabular-nums">Rp {fmt(data.wallet.captured_tc * rateIdr)}</p>
+					<p class="bal-label">{tr("Total terpakai")}</p>
+					<p class="bal-figure"><span class="bal-cur">Rp</span>{fmt(data.wallet.captured_tc * rateIdr)}</p>
 				</div>
 			</div>
 		</div>
 
-
-		<div class="app-card mt-4">
-			<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+		<div class="app-card bal-ledger bal-block">
+			<div class="bal-ledger-head">
 				<div>
-					<h2 class="text-sm font-semibold">{tr("Riwayat penggunaan saldo")}</h2>
-					<p class="mt-0.5 text-[11px] text-muted-foreground">{tr("Dikelompokkan per kampanye — klik untuk melihat rinciannya.")}</p>
+					<h2 class="bal-h2">{tr("Riwayat penggunaan saldo")}</h2>
+					<p class="bal-meta">{tr("Dikelompokkan per kampanye — klik untuk melihat rinciannya")}</p>
 				</div>
-				<span class="text-xs text-muted-foreground">{fmt(data.ledger_groups_total)} {tr("kampanye")}</span>
+				<span class="bal-meta">{fmt(data.ledger_groups_total)} {tr("kampanye")}</span>
 			</div>
 
 			{#if pendingTopups.length > 0}
-				<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style="background-color: var(--warning-soft);">
-					<span class="flex min-w-0 items-center gap-2">
-						<Clock size={14} class="shrink-0" style="color: var(--warning);" />
-						<span class="min-w-0">
-							<span class="block text-sm font-medium" style="color: var(--warning);">
-								{tr("menunggu pembayaran")} · {pendingTopups.length} {tr("tagihan")}
-							</span>
-							<span class="mt-0.5 block text-xs text-muted-foreground">
-								{tr("belum masuk saldo sampai pembayaran selesai")}
-							</span>
-						</span>
+				<div class="bal-ledger-pend">
+					<span class="bal-dot" aria-hidden="true"></span>
+					<span class="bal-ledger-pend-text">
+						<span class="bal-row-title">{tr("menunggu pembayaran")} · {pendingTopups.length} {tr("tagihan")}</span>
+						<span class="bal-meta">{tr("belum masuk saldo sampai pembayaran selesai")}</span>
 					</span>
-					<span class="shrink-0 text-sm font-semibold tabular-nums" style="color: var(--warning);">+Rp {fmt(pendingTotalIdr)}</span>
+					<span class="bal-amt">+Rp {fmt(pendingTotalIdr)}</span>
 				</div>
 			{/if}
 
 			{#if data.ledger_groups.length === 0}
-				<p class="px-4 py-6 text-sm text-muted-foreground">
+				<p class="bal-empty">
 					{tr("Belum ada mutasi saldo. Top up atau publikasi artikel untuk melihat riwayat.")}
 				</p>
 			{:else}
@@ -422,37 +450,34 @@
 						{@const key = g.campaign_id || 'none'}
 						{@const detail = groupDetail[key]}
 						{@const open = openGroup === key}
-						<li class="border-b last:border-b-0">
-							<button
-								class="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-secondary/50"
-								type="button"
-								aria-expanded={open}
-								onclick={() => toggleGroup(g)}
-							>
-								<span class="flex min-w-0 items-center gap-2">
-									<ChevronRight size={14} class="shrink-0 text-muted-foreground transition-transform {open ? 'rotate-90' : ''}" />
-									<span class="min-w-0">
-										<span class="block truncate text-sm font-medium">
+						<li class="bal-item">
+							<button class="bal-row" type="button" aria-expanded={open} onclick={() => toggleGroup(g)}>
+								<span class="bal-row-main">
+									<ChevronRight size={16} strokeWidth={1.5} class="bal-chev {open ? 'bal-chev-open' : ''}" />
+									{#if g.campaign_id}
+										<span class="bal-tile" style="--h: {tileHue(g.campaign_name || g.campaign_id)}">{tileInitial(g.campaign_name || '·')}</span>
+									{:else}
+										<span class="bal-tile bal-tile-in"><Wallet size={16} strokeWidth={1.5} /></span>
+									{/if}
+									<span class="bal-row-text">
+										<span class="bal-row-title">
 											{g.campaign_name || tr("Lainnya — top up & penyesuaian saldo")}
 										</span>
-										<span class="mt-0.5 block text-xs text-muted-foreground">
+										<span class="bal-meta">
 											{g.entries} {tr("transaksi")} · {jakartaDisplay(g.last_at)}
 										</span>
 									</span>
 								</span>
-								<span class="shrink-0 text-right">
+								<span class="bal-row-side">
 									{#if g.campaign_id}
-										<span class="block text-sm font-semibold tabular-nums" style="color: {g.spent_tc > 0 ? 'var(--destructive)' : 'var(--muted-foreground)'};">
+										<span class="bal-amt" class:bal-amt-out={g.spent_tc > 0} class:bal-amt-muted={g.spent_tc <= 0}>
 											{g.spent_tc > 0 ? `−${tcToRp(g.spent_tc, rateIdr)}` : tcToRp(0, rateIdr)}
 										</span>
 										{#if g.held_tc > 0}
-											<span class="mt-0.5 block text-[11px] text-muted-foreground">{tcToRp(g.held_tc, rateIdr)} {tr("ditahan")}</span>
+											<span class="bal-meta">{tcToRp(g.held_tc, rateIdr)} {tr("ditahan")}</span>
 										{/if}
 									{:else}
-										<span
-											class="block text-sm font-semibold tabular-nums"
-											style="color: {g.net_tc > 0 ? 'var(--success)' : g.net_tc < 0 ? 'var(--destructive)' : 'var(--muted-foreground)'};"
-										>
+										<span class="bal-amt" class:bal-amt-in={g.net_tc > 0} class:bal-amt-out={g.net_tc < 0} class:bal-amt-muted={g.net_tc === 0}>
 											{g.net_tc > 0 ? '+' : g.net_tc < 0 ? '−' : ''}{tcToRp(Math.abs(g.net_tc), rateIdr)}
 										</span>
 									{/if}
@@ -460,41 +485,36 @@
 							</button>
 
 							{#if open}
-								<div class="border-t bg-secondary/20 px-4 py-3">
+								<div class="bal-detail">
 									{#if !detail || detail.loading}
-										<p class="text-xs text-muted-foreground">{tr("Memuat rincian…")}</p>
+										<p class="bal-meta">{tr("Memuat rincian…")}</p>
 									{:else if detail.entries.length === 0}
-										<p class="text-xs text-muted-foreground">{tr("Tidak ada rincian untuk grup ini.")}</p>
+										<p class="bal-meta">{tr("Tidak ada rincian untuk grup ini.")}</p>
 									{:else}
 										<div class="overflow-x-auto">
-											<table class="w-full text-sm">
+											<table class="bal-table">
 												<thead>
-													<tr class="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-														<th class="py-1.5 pr-4 font-semibold">{tr("Tanggal")}</th>
-														<th class="py-1.5 pr-4 font-semibold">{tr("Keterangan")}</th>
-														<th class="py-1.5 text-right font-semibold">{tr("Nominal")}</th>
+													<tr>
+														<th>{tr("Tanggal")}</th>
+														<th>{tr("Keterangan")}</th>
+														<th class="bal-th-end">{tr("Nominal")}</th>
 													</tr>
 												</thead>
 												<tbody>
 													{#each detail.entries as e (e.id)}
 														{@const row = ledgerRow(e, rateIdr)}
-														<tr class="border-t border-border/60">
-															<td class="whitespace-nowrap py-2 pr-4 text-xs text-muted-foreground">{jakartaDisplay(e.created_at)}</td>
-															<td class="py-2 pr-4">
-																<p class="font-medium">{row.label}</p>
-																{#if row.sub}
-																	<p class="mt-0.5 max-w-[420px] truncate text-xs text-muted-foreground">{row.sub}</p>
+														<tr>
+															<td class="bal-td-date">{jakartaDisplay(e.created_at)}</td>
+															<td>
+																<p class="bal-row-title">{row.label}</p>
+																{#if row.title}
+																	<p class="bal-art" title={row.title}><FileText size={14} strokeWidth={1.5} />{row.title}</p>
 																{/if}
 															</td>
-															<td
-																class="whitespace-nowrap py-2 text-right font-semibold tabular-nums"
-																style="color: {row.tone === 'in'
-																	? 'var(--success)'
-																	: row.tone === 'out'
-																		? 'var(--destructive)'
-																		: 'var(--muted-foreground)'};"
-															>
-																{row.sign}{row.amount}
+															<td class="bal-td-amt">
+																<span class="bal-amt" class:bal-amt-in={row.tone === 'in'} class:bal-amt-out={row.tone === 'out'} class:bal-amt-muted={row.tone === 'hold'}>
+																	{row.sign}{row.amount}
+																</span>
 															</td>
 														</tr>
 													{/each}
@@ -502,7 +522,7 @@
 											</table>
 										</div>
 										{#if detail.total > detail.entries.length}
-											<p class="mt-2 text-[11px] text-muted-foreground">
+											<p class="bal-meta bal-detail-note">
 												{tr("Menampilkan")} {detail.entries.length} {tr("entri terbaru dari")} {fmt(detail.total)}.
 											</p>
 										{/if}
@@ -513,26 +533,26 @@
 					{/each}
 				</ul>
 
-				<div class="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5">
-					<span class="text-xs text-muted-foreground">
+				<div class="bal-foot">
+					<span class="bal-meta">
 						{tr("Menampilkan")} {ledgerFrom}–{ledgerTo} {tr("dari")} {fmt(data.ledger_groups_total)} {tr("kampanye")}
 					</span>
-					<div class="flex gap-2">
+					<div class="bal-pager">
 						<button
-							class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+							class="app-btn app-btn-soft bal-pager-btn"
 							type="button"
 							disabled={!ledgerHasPrev || loading}
 							onclick={() => ledgerPage(-LEDGER_PAGE_SIZE)}
 						>
-							<ChevronLeft size={13} />{tr("Sebelumnya")}
+							<ChevronLeft size={16} strokeWidth={1.5} />{tr("Sebelumnya")}
 						</button>
 						<button
-							class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
+							class="app-btn app-btn-soft bal-pager-btn"
 							type="button"
 							disabled={!ledgerHasNext || loading}
 							onclick={() => ledgerPage(LEDGER_PAGE_SIZE)}
 						>
-							{tr("Berikutnya")}<ChevronRight size={13} />
+							{tr("Berikutnya")}<ChevronRight size={16} strokeWidth={1.5} />
 						</button>
 					</div>
 				</div>
@@ -559,7 +579,7 @@
 		<dialog open class="rp-dialog" aria-label={tr("Laporkan Topup Gagal")} onclick={(e) => e.stopPropagation()}>
 			<div class="flex items-start justify-between gap-3">
 				<div>
-					<h2 class="text-lg font-semibold">{tr("Laporkan Topup Gagal")}</h2>
+					<h2 class="text-lg font-medium">{tr("Laporkan Topup Gagal")}</h2>
 					<p class="mt-1 text-xs text-muted-foreground">{tr("Pembayaran sukses tapi saldo belum masuk? Laporan akan diverifikasi admin Tauthub, lalu saldo ditambahkan manual setelah disetujui.")}</p>
 				</div>
 				<button class="rounded-lg p-1.5 hover:bg-secondary" type="button" aria-label={tr("Tutup")} onclick={() => (reportOpen = false)}>
@@ -586,7 +606,7 @@
 					<textarea class="app-input" rows="3" placeholder={tr("cth: Sudah bayar via QRIS tapi saldo tidak bertambah setelah 30 menit")} bind:value={reportDesc}></textarea>
 				</label>
 
-				<div class="flex justify-end gap-2 border-t pt-3">
+				<div class="flex justify-end gap-2 border-t pt-4">
 					<button class="app-btn app-btn-soft" type="button" onclick={() => (reportOpen = false)}>{tr("Batal")}</button>
 					<button class="app-btn app-btn-primary" type="button" disabled={reportBusy} onclick={() => void submitReport()}>
 						{reportBusy ? 'Mengirim…' : tr('Kirim Laporan')}
@@ -598,6 +618,110 @@
 {/if}
 
 <style>
+	/* Halaman Saldo: ritme 4px, angka tabular. Warna nominal mengikuti arah uang:
+	   merah = keluar, hijau = masuk, abu-abu = dana tertahan (belum terpakai). */
+	.bal { display: flex; flex-direction: column; }
+	.bal-block { margin-top: 24px; }
+
+	.bal-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+	.bal-title { font-size: 28px; line-height: 32px; font-weight: 500; }
+	.bal-sub { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+	.bal-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+	.bal-actions :global(.app-btn) { font-weight: 500; }
+
+	.bal-meta { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+	.bal-label { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+	.bal-h2 { font-size: 15px; line-height: 20px; font-weight: 500; }
+	.bal-dot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 9999px; background-color: var(--warning); }
+
+	/* Tagihan yang belum selesai: satu-satunya blok yang meminta tindakan. */
+	.bal-pend { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; }
+	.bal-pend-title { display: flex; align-items: center; font-size: 14px; line-height: 20px; font-weight: 500; }
+	.bal-pend .bal-meta { margin-top: 4px; }
+
+	/* Tiga angka: yang pertama paling lebar, supaya saldo tersedia terbaca lebih dulu. */
+	/* Tiga angka: kartu pertama adalah momen halaman, objek biru brand dengan bilah
+	   komposisi dana. Dua lainnya putih dengan penanda warna sesuai segmen bilah. */
+	.bal-stats { display: grid; grid-template-columns: 1fr; gap: 16px; }
+	@media (min-width: 640px) { .bal-stats { grid-template-columns: 5fr 3fr; grid-template-rows: auto auto; } .bal-stat-lead { grid-row: span 2; } }
+	.bal-stat { display: flex; flex-direction: column; gap: 4px; padding: 20px 24px; }
+	.bal-stat-side { flex-direction: row; align-items: center; gap: 16px; }
+	.bal-figure { font-size: 28px; line-height: 36px; font-weight: 500; font-variant-numeric: tabular-nums; }
+	.bal-figure-lead { font-size: 40px; line-height: 48px; }
+	.bal-cur { margin-right: 6px; font-size: 14px; font-weight: 400; color: var(--muted-foreground); }
+
+	.bal-stat-lead {
+		justify-content: space-between; gap: 8px; padding: 24px; color: #fff; border-color: transparent;
+		background: linear-gradient(155deg, #3b77f2 0%, #2b67ec 45%, #1d4fc7 100%);
+		box-shadow: 0 8px 24px rgba(43, 103, 236, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+	}
+	.bal-stat-lead .bal-label, .bal-stat-lead .bal-cur { color: rgba(255, 255, 255, 0.78); }
+	.bal-lead-top { display: flex; align-items: center; justify-content: space-between; color: rgba(255, 255, 255, 0.78); }
+	.bal-lead-note { font-size: 13px; line-height: 20px; color: rgba(255, 255, 255, 0.85); }
+	.bal-split { display: flex; height: 8px; margin-top: 16px; overflow: hidden; border-radius: 9999px; background: rgba(255, 255, 255, 0.16); }
+	.bal-split span { display: block; height: 100%; }
+	.bal-split-a { background: #fff; }
+	.bal-split-r { background: #ffc857; }
+	.bal-split-c { background: rgba(255, 255, 255, 0.42); }
+	.bal-split-key { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; line-height: 16px; color: rgba(255, 255, 255, 0.85); }
+	.bal-split-key span { display: inline-flex; align-items: center; gap: 6px; }
+	.bal-key { display: inline-block; width: 8px; height: 8px; border-radius: 9999px; }
+
+	.bal-icon { display: inline-flex; width: 40px; height: 40px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 12px; }
+	.bal-icon-hold { background: #fff4d6; color: #9a6700; }
+	.bal-icon-used { background: #e8efff; color: #2b67ec; }
+
+	.bal-ledger { padding: 0; }
+	.bal-ledger-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 16px 24px; border-bottom: 1px solid var(--border); }
+	.bal-ledger-head .bal-meta:first-child, .bal-ledger-head div .bal-meta { margin-top: 2px; }
+	.bal-ledger-pend { display: flex; align-items: center; gap: 0; padding: 12px 24px; border-bottom: 1px solid var(--border); }
+	.bal-ledger-pend-text { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+	.bal-empty { padding: 24px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+
+	.bal-item { border-bottom: 1px solid var(--border); }
+	.bal-item:last-child { border-bottom: 0; }
+	.bal-row {
+		display: flex; width: 100%; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+		padding: 12px 24px; text-align: left; transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.bal-row:hover { background-color: color-mix(in srgb, var(--foreground) 3%, transparent); }
+	.bal-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+	.bal-row-main { display: flex; min-width: 0; align-items: center; gap: 12px; }
+	.bal-row-text { display: flex; min-width: 0; flex-direction: column; }
+	.bal-row-title { font-size: 14px; line-height: 20px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.bal-row-side { display: flex; flex-shrink: 0; flex-direction: column; align-items: flex-end; }
+	:global(.bal-chev) { flex-shrink: 0; color: var(--muted-foreground); transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1); }
+	:global(.bal-chev-open) { transform: rotate(90deg); }
+
+	.bal-tile {
+		display: inline-flex; width: 32px; height: 32px; flex-shrink: 0; align-items: center; justify-content: center;
+		border-radius: 10px; font-size: 14px; font-weight: 500;
+		background: hsl(var(--h) 85% 94%); color: hsl(var(--h) 60% 32%);
+	}
+	.bal-tile-in { background: #e3f6ec; color: #17803d; }
+
+	.bal-amt { font-size: 14px; line-height: 20px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+	.bal-amt-in { color: var(--success); }
+	.bal-amt-out { color: var(--destructive); }
+	.bal-amt-muted { color: var(--muted-foreground); }
+
+	.bal-detail { padding: 12px 24px 16px 84px; border-top: 1px solid var(--border); background-color: color-mix(in srgb, var(--foreground) 2%, transparent); }
+	.bal-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+	.bal-table th { padding: 4px 16px 8px 0; font-size: 12px; line-height: 16px; font-weight: 400; text-align: left; color: var(--muted-foreground); }
+	.bal-table th.bal-th-end { padding-right: 0; text-align: right; }
+	.bal-table td { padding: 8px 16px 8px 0; border-top: 1px solid var(--border); vertical-align: top; }
+	.bal-td-date { white-space: nowrap; font-size: 12px; line-height: 20px; color: var(--muted-foreground); }
+	.bal-td-amt { padding-right: 0; text-align: right; }
+	/* Judul artikel di bawah keterangan: dibuat terbaca (bukan meta redup) supaya
+	   klien langsung ingat biaya ini untuk artikel yang mana. */
+	.bal-art { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; font-size: 13px; line-height: 20px; color: var(--accent-foreground); }
+	.bal-art :global(svg) { flex-shrink: 0; margin-top: 3px; }
+	.bal-detail-note { margin-top: 8px; }
+
+	.bal-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 24px; border-top: 1px solid var(--border); }
+	.bal-pager { display: flex; gap: 8px; }
+	.bal-pager-btn { min-height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; }
+
 	.rp-overlay {
 		position: fixed;
 		inset: 0;
@@ -615,8 +739,8 @@
 		max-width: 480px;
 		margin: auto;
 		border: 1px solid var(--border);
-		border-radius: 14px;
-		padding: 18px 20px;
+		border-radius: 16px;
+		padding: 24px;
 		background-color: var(--card);
 		color: var(--foreground);
 		box-shadow: var(--shadow-md);
