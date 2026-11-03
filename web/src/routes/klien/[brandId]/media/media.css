@@ -724,8 +724,9 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
 }
 .modernSearchWrap {
   position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 1 1 260px;
+  /* Lebar minimum supaya search tidak pernah kolaps di bawah grup alat. */
+  min-width: 220px;
 }
 .modernTable {
   width: 100%;
@@ -785,7 +786,11 @@ button.mediaHeading:hover { color: #2563eb; text-decoration: underline; }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  flex-wrap: nowrap;
+  /* Boleh membungkus: pada lebar desktop sempit (laptop Windows 1366px dengan
+     scaling 125% + scrollbar ≈ 1050px) grup alat tidak muat di samping search.
+     Dengan nowrap, search menyusut ke 0 lalu inputnya menutupi tombol AI
+     Matchmaker sehingga klik di bagian kirinya jatuh ke input. */
+  flex-wrap: wrap;
   padding: 10px 14px;
   background: var(--card);
   border: 1px solid var(--gray-a5, #e2e8f0);
@@ -2151,8 +2156,12 @@ button.selectedStepChip:disabled,
    di +page.svelte, jadi tidak ada CSS dua-render di sini). ─────────────────── */
 .catalogToolsInline {
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   flex: none;
+  /* Tanpa batas ini grupnya selebar isinya dan meluber keluar kartu (Bookmark
+     terpotong) begitu toolbar lebih sempit dari ±850px. */
+  max-width: 100%;
   margin-left: auto;
 }
 .catalogToolsInline .toolsInlineCats { flex: none; }
