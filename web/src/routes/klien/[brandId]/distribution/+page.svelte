@@ -90,8 +90,8 @@
 
 <section>
 	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">Overview Distribusi</h1>
-		<p class="mt-1 text-sm text-muted-foreground">{tr("Ringkasan publikasi, performa, dan nilai media 30 hari terakhir.")}</p>
+		<h1 class="page-title">Overview Distribusi</h1>
+		<p class="page-desc">{tr("Ringkasan publikasi, performa, dan nilai media 30 hari terakhir.")}</p>
 	</header>
 
 	{#if error}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>{/if}

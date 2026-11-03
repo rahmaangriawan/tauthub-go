@@ -104,9 +104,9 @@
 	<div class="app-card lg-overview-panel">
 		<header class="lg-header">
 			<div class="min-w-0">
-				<h1 class="text-2xl font-semibold tracking-tight">{title}</h1>
+				<h1 class="page-title">{title}</h1>
 				{#if subtitle}
-					<p class="lg-sub mt-1 text-sm text-muted-foreground">{subtitle}</p>
+					<p class="page-desc lg-sub">{subtitle}</p>
 				{/if}
 			</div>
 			{#if headerRight}

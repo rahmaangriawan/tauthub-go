@@ -164,9 +164,9 @@
 	<!-- Judul dan tombol berbagi satu baris (juga di HP); keterangan mengambil
 	     satu baris penuh di bawahnya. -->
 	<header class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-		<h1 class="text-2xl font-semibold tracking-tight">{tr('Dukungan')}</h1>
+		<h1 class="page-title">{tr('Dukungan')}</h1>
 		<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={15} /> {tr('Buat tiket')}</button>
-		<p class="w-full text-sm text-muted-foreground">
+		<p class="page-desc w-full">
 			{tr('Buat tiket untuk masalah teknis, pembayaran, atau publikasi. Admin membalas di tiket yang sama.')}
 		</p>
 	</header>

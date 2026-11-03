@@ -286,8 +286,8 @@
 <section class="cmp">
 	<header class="cmp-head">
 		<div>
-			<h1 class="cmp-h1">{tr("Manajemen Kampanye")}</h1>
-			<p class="cmp-sub">{tr("Kelola semua kampanye distribusi konten Anda di satu tempat.")}</p>
+			<h1 class="page-title">{tr("Manajemen Kampanye")}</h1>
+			<p class="page-desc">{tr("Kelola semua kampanye distribusi konten Anda di satu tempat.")}</p>
 		</div>
 		<div class="cmp-head-actions">
 			<!-- Tombol Profiler: buka popup gerbang (Chat Brief / Instan Brief)
@@ -610,8 +610,6 @@
 	/* Daftar kampanye: ritme 4px, satu aksen merek (biru) untuk tindakan, warna status
 	   hanya pada pil tahap dan bilah progres. Isi kartu tidak berubah. */
 	.cmp-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
-	.cmp-h1 { font-size: 28px; line-height: 32px; font-weight: 500; }
-	.cmp-sub { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
 	.cmp-head-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 	.cmp-head-actions :global(.app-btn) { font-weight: 500; }
 

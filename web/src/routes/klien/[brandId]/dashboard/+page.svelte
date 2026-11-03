@@ -449,8 +449,8 @@
 <section>
 	<header>
 		<p class="text-[11px] font-semibold tracking-wide text-muted-foreground">CONTENT INTAKE</p>
-		<h1 class="mt-1 text-2xl font-semibold tracking-tight">{tr("Buat konten baru")}</h1>
-		<p class="mt-1 text-sm text-muted-foreground">{tr("Ceritakan dulu apa yang Anda miliki — bahan, artikel, atau belum ada apa-apa. Tauthub menyesuaikan pertanyaan, menilai kelengkapan, lalu mengantar Anda ke AI Writer.")}</p>
+		<h1 class="page-title mt-1">{tr("Buat konten baru")}</h1>
+		<p class="page-desc">{tr("Ceritakan dulu apa yang Anda miliki — bahan, artikel, atau belum ada apa-apa. Tauthub menyesuaikan pertanyaan, menilai kelengkapan, lalu mengantar Anda ke AI Writer.")}</p>
 	</header>
 
 	{#if loading}

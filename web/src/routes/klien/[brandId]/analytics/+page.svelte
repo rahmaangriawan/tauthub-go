@@ -11,8 +11,8 @@
 <section>
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Analisis Kinerja</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Event keterbacaan artikel per hari dari pelacakan publikasi.")}</p>
+			<h1 class="page-title">Analisis Kinerja</h1>
+			<p class="page-desc">{tr("Event keterbacaan artikel per hari dari pelacakan publikasi.")}</p>
 		</div>
 	</header>
 

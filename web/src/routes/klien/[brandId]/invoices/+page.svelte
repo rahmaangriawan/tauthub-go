@@ -60,8 +60,8 @@
 <section>
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Invoice & Pajak</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{total} {tr("invoice tercatat untuk brand ini.")}</p>
+			<h1 class="page-title">Invoice & Pajak</h1>
+			<p class="page-desc">{total} {tr("invoice tercatat untuk brand ini.")}</p>
 		</div>
 		<Select
 			bind:value={status}

@@ -109,9 +109,9 @@
 <section>
 	<div class="flex items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Ringkasan platform</h1>
+			<h1 class="page-title">Ringkasan platform</h1>
 			{#if loaded && summary}
-				<p class="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+				<p class="page-desc flex items-center gap-2">
 					<span class="live-dot" aria-hidden="true"></span>
 					<span>{tr('Terhubung')}</span>
 					<span aria-hidden="true">·</span>

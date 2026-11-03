@@ -302,8 +302,8 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">VIP Dashboard</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Ringkasan affiliate, dual-wallet, dan domain referral Anda.")}</p>
+			<h1 class="page-title">VIP Dashboard</h1>
+			<p class="page-desc">{tr("Ringkasan affiliate, dual-wallet, dan domain referral Anda.")}</p>
 		</div>
 			<div class="flex items-center gap-2">
 				{#if vip}

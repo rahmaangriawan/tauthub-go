@@ -103,8 +103,8 @@
 
 <section>
 	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">{tr('Akses Crawler')}</h1>
-		<p class="mt-1 text-sm text-muted-foreground">{tr("Kredensial per website agar crawler Tauthub dapat memeriksa konten tanpa diblokir WAF.")}</p>
+		<h1 class="page-title">{tr('Akses Crawler')}</h1>
+		<p class="page-desc">{tr("Kredensial per website agar crawler Tauthub dapat memeriksa konten tanpa diblokir WAF.")}</p>
 	</header>
 
 	{#if notice}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--success);">{notice}</div>{/if}

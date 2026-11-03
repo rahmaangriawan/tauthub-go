@@ -132,8 +132,8 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">RSS Feeds</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Pasang URL feed di website Anda, lalu klik 'Sudah dipasang' agar Tauthub memverifikasi. Setelah terverifikasi, artikel klien otomatis muncul di feed Anda.")}</p>
+			<h1 class="page-title">RSS Feeds</h1>
+			<p class="page-desc">{tr("Pasang URL feed di website Anda, lalu klik 'Sudah dipasang' agar Tauthub memverifikasi. Setelah terverifikasi, artikel klien otomatis muncul di feed Anda.")}</p>
 		</div>
 		<span class="rounded-full px-2.5 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{feeds.length} feed</span>
 	</header>

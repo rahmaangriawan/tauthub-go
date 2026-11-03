@@ -102,8 +102,8 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{tr('Referral')}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{hint}</p>
+			<h1 class="page-title">{tr('Referral')}</h1>
+			<p class="page-desc">{hint}</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			{#if isVip}

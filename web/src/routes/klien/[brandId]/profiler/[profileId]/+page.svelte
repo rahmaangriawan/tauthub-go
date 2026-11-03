@@ -2776,7 +2776,7 @@
 			<div class="flex flex-col gap-3 px-4 pt-4 pb-3 md:px-6 xl:flex-row xl:items-start xl:justify-between">
 				<div class="min-w-0">
 					<div class="flex min-w-0 items-center gap-2.5">
-						<h1 class="truncate text-2xl font-semibold tracking-tight">{tr('Brand Brief & Entity Builder')}</h1>
+						<h1 class="page-title truncate">{tr('Brand Brief & Entity Builder')}</h1>
 						<span class="flex-shrink-0 rounded border px-2 py-0.5 text-[10px] font-bold" style="background: var(--accent); border-color: color-mix(in srgb, var(--primary) 25%, transparent); color: var(--accent-foreground);">Beta</span>
 					</div>
 					{#if !headerCollapsed}

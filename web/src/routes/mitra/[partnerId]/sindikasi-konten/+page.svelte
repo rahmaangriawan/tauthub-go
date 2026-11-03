@@ -58,8 +58,8 @@
 
 <section>
 	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">{tr('Sindikasi Konten')}</h1>
-		<p class="mt-1 text-sm text-muted-foreground">{tr("Sindikasi Konten menyalurkan artikel mitra melalui RSS feed ke mitra lain atau publisher eksternal.")}</p>
+		<h1 class="page-title">{tr('Sindikasi Konten')}</h1>
+		<p class="page-desc">{tr("Sindikasi Konten menyalurkan artikel mitra melalui RSS feed ke mitra lain atau publisher eksternal.")}</p>
 	</header>
 
 	<div class="app-card mt-3 p-4">

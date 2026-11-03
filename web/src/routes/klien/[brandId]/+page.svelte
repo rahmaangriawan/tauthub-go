@@ -662,10 +662,10 @@
 		z-index: 2;
 	}
 		.heroTitle {
-			font-size: clamp(20px, 2.2vw, 28px);
-			font-weight: 750;
-			line-height: 1.25;
-			letter-spacing: -0.02em;
+			font-size: 28px;
+			font-weight: 500;
+			line-height: 32px;
+			letter-spacing: 0;
 			color: #ffffff;
 			margin: 0 0 8px;
 			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
@@ -692,7 +692,7 @@
 		}
 		.heroSubtitle {
 			font-size: 14px;
-			line-height: 1.6;
+			line-height: 20px;
 			color: rgba(255, 255, 255, 0.92);
 			margin: 0 0 20px;
 			max-width: 500px;

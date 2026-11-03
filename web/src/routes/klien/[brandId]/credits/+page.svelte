@@ -348,8 +348,8 @@
 <section class="bal">
 	<header class="bal-head">
 		<div>
-			<h1 class="bal-title">{tr("Saldo")}</h1>
-			<p class="bal-sub">{tr("Saldo rupiah untuk eksekusi publikasi")}</p>
+			<h1 class="page-title">{tr("Saldo")}</h1>
+			<p class="page-desc">{tr("Saldo rupiah untuk eksekusi publikasi")}</p>
 		</div>
 		<div class="bal-actions">
 			<button class="app-btn app-btn-soft" type="button" onclick={openReport}>
@@ -624,7 +624,6 @@
 	.bal-block { margin-top: 24px; }
 
 	.bal-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
-	.bal-title { font-size: 28px; line-height: 32px; font-weight: 500; }
 	.bal-sub { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
 	.bal-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 	.bal-actions :global(.app-btn) { font-weight: 500; }

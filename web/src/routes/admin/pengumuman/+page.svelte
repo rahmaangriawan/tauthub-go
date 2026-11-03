@@ -126,8 +126,8 @@
 
 <section>
 	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">{tr("Kotak Pengumuman")}</h1>
-		<p class="mt-1 text-sm text-muted-foreground">{tr("Tulis pengumuman yang tampil di kotak pengumuman seluruh pengguna klien dan mitra.")}</p>
+		<h1 class="page-title">{tr("Kotak Pengumuman")}</h1>
+		<p class="page-desc">{tr("Tulis pengumuman yang tampil di kotak pengumuman seluruh pengguna klien dan mitra.")}</p>
 	</header>
 
 	{#if notice}<p class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--success);">{notice}</p>{/if}

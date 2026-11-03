@@ -240,8 +240,8 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{tr("Penghasilan")}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Saldo mitra bertambah saat artikel terbit di media Anda.")}</p>
+			<h1 class="page-title">{tr("Penghasilan")}</h1>
+			<p class="page-desc">{tr("Saldo mitra bertambah saat artikel terbit di media Anda.")}</p>
 		</div>
 		<!-- Cadangan aksi penarikan saat ringkasan saldo gagal dimuat. -->
 		{#if !loading && !data}

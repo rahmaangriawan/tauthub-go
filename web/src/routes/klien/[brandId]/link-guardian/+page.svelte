@@ -548,8 +548,8 @@
 	<div class="lg-overview-panel">
 		<header class="lg-header">
 			<div class="min-w-0 lg-header-copy">
-				<h1 class="lg-title">{tr("Link Guardian")}</h1>
-				<p class="lg-sub">
+				<h1 class="page-title">{tr("Link Guardian")}</h1>
+				<p class="page-desc lg-sub">
 					{tr('Pemantauan berkala atas status tayang artikel dan keutuhan backlink klien. Garansi mengikuti SLA tiap publisher (12 bulan atau permanen sejak tanggal terbit) dan berlaku khusus pada')}
 					<strong class="lg-sub-accent">{tr('Media Terverifikasi')}</strong>.
 				</p>
@@ -891,8 +891,7 @@
 
 	.lg-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; }
 	.lg-header-copy { flex: 1 1 480px; }
-	.lg-title { font-size: 28px; line-height: 32px; font-weight: 500; color: var(--foreground); }
-	.lg-sub { margin-top: 4px; max-width: 66ch; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+	.lg-sub { max-width: 66ch; }
 	.lg-sub .lg-sub-accent { color: var(--accent-foreground); font-weight: 500; }
 
 	.lg-sync { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }

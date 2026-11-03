@@ -411,8 +411,8 @@
 <section>
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="pub-h1">{tr("Publikasi")}</h1>
-			<p class="pub-sub">
+			<h1 class="page-title">{tr("Publikasi")}</h1>
+			<p class="page-desc">
 				{view === 'publications'
 					? tr('Artikel yang sudah disetujui dan dikirim ke media, lengkap dengan status terbitnya')
 					: tr('Jadwal mengirim media ke Mitra sesuai pengaturan — hanya distribusi ke Mitra, waktu terbit aktual dikelola Mitra.')}
@@ -912,8 +912,6 @@
 	.pub-title { display: inline-block; max-width: 100%; word-break: break-word; font-weight: 500; font-size: 16px; line-height: 24px; }
 	.pub-title:hover { color: var(--accent-foreground); }
 
-	.pub-h1 { font-size: 28px; line-height: 32px; font-weight: 500; }
-	.pub-sub { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
 
 	/* Tab Publikasi / Jadwal: yang aktif memakai aksen merek, bukan sekadar kartu putih. */
 	.pub-tabs { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 12px; background-color: var(--muted); }

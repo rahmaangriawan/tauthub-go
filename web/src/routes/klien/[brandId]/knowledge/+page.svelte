@@ -238,8 +238,8 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola konten, artikel lama, dan sumber eksternal yang dipakai Tauthub saat menjawab atau menulis.")}</p>
+			<h1 class="page-title">Knowledge Base</h1>
+			<p class="page-desc">{tr("Kelola konten, artikel lama, dan sumber eksternal yang dipakai Tauthub saat menjawab atau menulis.")}</p>
 		</div>
 		<button class="app-btn app-btn-primary" type="button" onclick={() => (showDialog = true)}><Plus size={14} /> Collection</button>
 	</header>

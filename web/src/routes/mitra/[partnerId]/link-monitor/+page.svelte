@@ -125,8 +125,8 @@
 
 <section>
 	<header>
-		<h1 class="lm-h1">{tr('Link Guardian')}</h1>
-		<p class="lm-sub">{tr("Pantau tautan artikel yang hilang dan kesehatan domain media Anda.")}</p>
+		<h1 class="page-title">{tr('Link Guardian')}</h1>
+		<p class="page-desc">{tr("Pantau tautan artikel yang hilang dan kesehatan domain media Anda.")}</p>
 	</header>
 
 	{#if loading}
@@ -424,7 +424,6 @@
 	/* Link Guardian mitra: panel ringkasan + tabel, ritme 4px, bobot 400–500.
 	   Warna hanya untuk arti: hijau aman · kuning tak terjangkau · merah hilang.
 	   UI lama: +page.legacy.svelte.txt (salin ke +page.svelte untuk rollback). */
-	.lm-h1 { font-size: 28px; line-height: 32px; font-weight: 500; }
 	.lm-sub { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
 	.lm-label { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
 	.lm-meta { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }

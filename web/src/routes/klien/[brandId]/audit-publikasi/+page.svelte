@@ -12,8 +12,8 @@
 
 <section>
 	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">{tr("Audit Publikasi")}</h1>
-		<p class="mt-1 text-sm text-muted-foreground">{tr("Rekap kepatuhan artikel terbit: link hidup, hilang, atau tidak terjangkau.")}</p>
+		<h1 class="page-title">{tr("Audit Publikasi")}</h1>
+		<p class="page-desc">{tr("Rekap kepatuhan artikel terbit: link hidup, hilang, atau tidak terjangkau.")}</p>
 	</header>
 
 	<!-- Fitur belum dirilis — panel Coming Soon menggantikan isi (parity

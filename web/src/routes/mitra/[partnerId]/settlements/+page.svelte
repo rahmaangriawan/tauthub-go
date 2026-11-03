@@ -119,8 +119,8 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{tr('Invoice & Penarikan')}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
+			<h1 class="page-title">{tr('Invoice & Penarikan')}</h1>
+			<p class="page-desc">
 				{tr("Daftar invoice penarikan dana, status pencairan, dan bukti transfer dari Tauthub.")}
 				{tr("Minimal penarikan")} {rp(data?.minimum_withdraw_idr ?? 0)}.
 			</p>

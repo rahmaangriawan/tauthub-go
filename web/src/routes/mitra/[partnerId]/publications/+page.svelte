@@ -1165,8 +1165,8 @@
 
 <section>
 	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">{tr("Publikasi")}</h1>
-		<p class="mt-1 text-sm text-muted-foreground">{total} {tr("permintaan artikel pada media Anda.")}</p>
+		<h1 class="page-title">{tr("Publikasi")}</h1>
+		<p class="page-desc">{total} {tr("permintaan artikel pada media Anda.")}</p>
 	</header>
 
 	{#if notice}<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--success);">{notice}</div>{/if}

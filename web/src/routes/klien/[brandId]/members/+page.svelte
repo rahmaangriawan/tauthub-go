@@ -131,8 +131,8 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Member Brand</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola siapa saja yang punya akses ke brand ini beserta perannya.")}</p>
+			<h1 class="page-title">Member Brand</h1>
+			<p class="page-desc">{tr("Kelola siapa saja yang punya akses ke brand ini beserta perannya.")}</p>
 		</div>
 		<button class="app-btn app-btn-primary" type="button" onclick={() => { showAdd = !showAdd; error = ''; }}>
 			<UserPlus size={15} />{tr("Tambah Member")}</button>

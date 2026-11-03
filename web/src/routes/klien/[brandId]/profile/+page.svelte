@@ -212,8 +212,8 @@
 
 <section>
 	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">{tr("Profil & Akun")}</h1>
-		<p class="mt-1 text-sm text-muted-foreground">{tr("Kelola identitas akun, preferensi notifikasi, dan keamanan.")}</p>
+		<h1 class="page-title">{tr("Profil & Akun")}</h1>
+		<p class="page-desc">{tr("Kelola identitas akun, preferensi notifikasi, dan keamanan.")}</p>
 	</header>
 
 	{#if msg}<p class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--success);">{msg}</p>{/if}

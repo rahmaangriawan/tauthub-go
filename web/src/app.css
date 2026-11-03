@@ -1088,3 +1088,24 @@ dialog.app-card {
   text-align: left;
   color: var(--muted-foreground);
 }
+
+/* ── Judul & deskripsi halaman: SATU sumber untuk dashboard klien, mitra, admin ──
+   Dipakai <h1 class="page-title"> dan <p class="page-desc"> (admin lewat
+   PageHeader). Sengaja di luar @layer supaya menang atas utilitas Tailwind
+   yang masih tersisa di halaman lama. Jangan beri ukuran/bobot lain di halaman. */
+.page-title {
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--foreground);
+}
+.page-desc {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+@media (max-width: 640px) {
+  .page-title { font-size: 24px; line-height: 28px; }
+}

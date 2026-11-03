@@ -1199,9 +1199,9 @@
 <section>
 	<header class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
 		<div class="min-w-0">
-			<h1 class="md-h1">{tr("Daftar Media")}</h1>
+			<h1 class="page-title">{tr("Daftar Media")}</h1>
 			{#if mediaLoaded}
-				<p class="md-sub">{total} {tr("media terdaftar pada akun mitra Anda.")}</p>
+				<p class="page-desc">{total} {tr("media terdaftar pada akun mitra Anda.")}</p>
 			{/if}
 		</div>
 		{#if viewMode === 'manage'}
@@ -3087,8 +3087,6 @@
 	/* ── Daftar Media: ritme 4px, bobot 400–500, warna hanya untuk arti ──────
 	   Status: hijau aktif · kuning menunggu review · merah ditolak · abu nonaktif.
 	   UI lama tersimpan di +page.legacy.svelte.txt (salin ke +page.svelte). */
-	.md-h1 { font-size: 28px; line-height: 32px; font-weight: 500; }
-	.md-sub { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
 	.md-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 24px; padding: 12px 16px; }
 
 	.md-th {

@@ -93,8 +93,8 @@
 <section>
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Usage</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Pemakaian token AI brand ini dari model_usage_events.</p>
+			<h1 class="page-title">Usage</h1>
+			<p class="page-desc">Pemakaian token AI brand ini dari model_usage_events.</p>
 		</div>
 		<div class="flex gap-1 rounded-lg border p-1" style="border-color: var(--border);">
 			{#each [7, 30, 90] as d (d)}

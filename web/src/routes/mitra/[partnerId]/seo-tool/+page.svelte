@@ -305,8 +305,8 @@
 
 <section>
 	<header>
-		<h1 class="text-2xl font-semibold tracking-tight">{tr('Tool SEO')}</h1>
-		<p class="mt-1 text-sm text-muted-foreground">{tr("Analisis kualitas dan performa website media Anda.")}</p>
+		<h1 class="page-title">{tr('Tool SEO')}</h1>
+		<p class="page-desc">{tr("Analisis kualitas dan performa website media Anda.")}</p>
 	</header>
 
 	<div class="mt-4 flex gap-2 border-b" style="border-color: var(--border);">

@@ -234,8 +234,8 @@
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<p class="text-[11px] font-semibold tracking-wide text-muted-foreground">NOTIFICATIONS</p>
-			<h1 class="mt-1 text-2xl font-semibold tracking-tight">Notifikasi</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Riwayat pemberitahuan persetujuan mitra dan penerbitan artikel Anda.")}</p>
+			<h1 class="page-title mt-1">Notifikasi</h1>
+			<p class="page-desc">{tr("Riwayat pemberitahuan persetujuan mitra dan penerbitan artikel Anda.")}</p>
 		</div>
 		{#if gUnread + aUnread > 0}
 			<button class="app-btn app-btn-soft" type="button" onclick={() => void readAll()}>

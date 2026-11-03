@@ -131,9 +131,9 @@
 <PageTitle title="Profil" />
 
 <main class="px-4 py-8">
-	<h1 class="text-2xl font-semibold tracking-tight">Profil</h1>
+	<h1 class="page-title">Profil</h1>
 	{#if user}
-		<p class="mt-1 text-sm text-muted-foreground">{user.email} · <span class="uppercase">{user.role}</span></p>
+		<p class="page-desc">{user.email} · <span class="uppercase">{user.role}</span></p>
 		<button class="mt-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent" onclick={rename}>{tr("Ubah nama tampilan")}</button>
 
 		<section class="app-card mt-8 p-4">

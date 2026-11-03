@@ -22,8 +22,8 @@
 	<!-- Di HP judul halaman disembunyikan supaya kartu percakapan memakai seluruh
 	     tinggi layar, seperti aplikasi chat. -->
 	<div class="mb-4 hidden shrink-0 lg:block">
-		<h1 class="text-xl font-bold text-slate-900">{tr('Pesan')}</h1>
-		<p class="mt-1 text-[13px] text-muted-foreground">
+		<h1 class="page-title">{tr('Pesan')}</h1>
+		<p class="page-desc">
 			{tr('Obrolan langsung dengan mitra per artikel.')}
 		</p>
 	</div>

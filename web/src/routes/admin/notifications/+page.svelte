@@ -211,8 +211,8 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{tr('Notifikasi')}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
+			<h1 class="page-title">{tr('Notifikasi')}</h1>
+			<p class="page-desc">
 				{tr('Riwayat pemberitahuan operasional, publikasi, dan pengumuman untuk akun admin ini.')}
 			</p>
 		</div>

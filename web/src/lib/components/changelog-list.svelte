@@ -136,8 +136,8 @@
 <section class="mx-auto w-full max-w-3xl">
 	<header class="flex flex-wrap items-center justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{tr('Apa yang Baru')}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
+			<h1 class="page-title">{tr('Apa yang Baru')}</h1>
+			<p class="page-desc">
 				{tr('Ringkasan perubahan Tauthub — fitur baru, perbaikan, dan peningkatan performa.')}
 			</p>
 		</div>

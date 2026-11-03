@@ -258,8 +258,8 @@
 <section>
 	<header class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">{tr('Notifikasi')}</h1>
-			<p class="mt-1 text-sm text-muted-foreground">{gUnread + aUnread} {tr("notifikasi belum dibaca")}.</p>
+			<h1 class="page-title">{tr('Notifikasi')}</h1>
+			<p class="page-desc">{gUnread + aUnread} {tr("notifikasi belum dibaca")}.</p>
 		</div>
 		<button class="app-btn app-btn-soft" disabled={busy} onclick={markAll}><Check size={15} /> {tr("Tandai semua dibaca")}</button>
 	</header>

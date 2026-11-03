@@ -18,8 +18,8 @@
 
 <header class="flex flex-wrap items-start justify-between gap-3">
 	<div>
-		<h1 class="text-2xl font-semibold tracking-tight">{title}</h1>
-		{#if description}<p class="mt-1 text-sm text-muted-foreground">{description}</p>{/if}
+		<h1 class="page-title">{title}</h1>
+		{#if description}<p class="page-desc">{description}</p>{/if}
 	</div>
 	{#if children}
 		<div class="flex flex-wrap gap-2">{@render children()}</div>
