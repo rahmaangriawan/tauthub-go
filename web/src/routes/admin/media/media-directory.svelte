@@ -957,6 +957,10 @@
 
 	const allSelected = $derived(rows.length > 0 && rows.every((row) => selectedIds.has(row.id)));
 	const showAccessState = $derived(rows.length === 0 && isAccessError(error));
+
+	function domainOf(url: string): string {
+		try { return new URL(url).hostname; } catch { return url; }
+	}
 </script>
 
 {#snippet selectCell(row: Media)}
@@ -980,33 +984,47 @@
 {/snippet}
 
 {#snippet mediaCell(row: Media)}
-	<div>
-		<div class="flex items-center gap-1">
-			<p class="font-medium">{row.name}</p>
-			{#if row.partner_id}<Badge tone="accent" value="Mitra" />{/if}
-			{#if row.public_listed === false}<Badge tone="neutral" label={tr('Tidak publik')} />{/if}
-		</div>
-		<p class="text-xs text-muted-foreground">{row.slug ?? row.id.slice(0, 8)}</p>
-		{#if row.contoh_artikel_url}
-			<a
-				class="mt-1 inline-flex items-center gap-1 text-xs"
-				style="color: var(--primary);"
-				href={row.contoh_artikel_url}
-				target="_blank"
-				rel="noreferrer nofollow"
-			>
-				Contoh artikel <ExternalLink size={11} />
-			</a>
+	<div class="flex items-center gap-2">
+		{#if row.website_url}
+			<img
+				src="https://www.google.com/s2/favicons?domain={encodeURIComponent(row.website_url)}&sz=16"
+				alt=""
+				class="h-4 w-4 shrink-0 rounded-[2px]"
+				loading="lazy"
+			/>
+		{:else}
+			<span class="h-4 w-4 shrink-0 rounded-[2px] bg-muted"></span>
 		{/if}
+		<div class="flex min-w-0 flex-col gap-0.5">
+			<div class="flex items-center gap-1">
+				<span class="truncate text-sm font-medium">{row.website_url ? domainOf(row.website_url) : (row.slug ?? row.id.slice(0, 8))}</span>
+				{#if row.partner_id}<Badge tone="accent" value="Mitra" />{/if}
+			</div>
+			{#if row.partner_id}
+				<!-- Tautan "Kontak" diberi border tipis supaya terbaca sebagai tombol
+				     kecil, bukan teks biasa yang menempel di bawah domain. -->
+				<a
+					href="/admin/partners?partner_id={row.partner_id}"
+					class="w-fit rounded border px-1.5 py-px text-[11px] font-medium leading-4 transition-colors hover:bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]"
+					style="color: var(--primary); border-color: color-mix(in srgb, var(--primary) 35%, transparent);"
+					onclick={(e) => e.stopPropagation()}
+				>Kontak</a>
+			{/if}
+		</div>
 	</div>
 {/snippet}
 
-{#snippet publicationModeCell(row: Media)}
-	{#if (row.publication_mode ?? 'draft') === 'publish'}
-		<Badge tone="success" label={tr("Terbit")} />
-	{:else}
-		<Badge tone="warning" label="Draf" />
-	{/if}
+{#snippet integrationModeCell(row: Media)}
+	<div class="flex flex-col items-start gap-1">
+		{#if row.integration_type && row.integration_type !== 'manual'}
+			<Badge tone="success" label="API" />
+		{:else}
+			<Badge tone="warning" label="Manual" />
+		{/if}
+		{#if row.auto_publish}
+			<span class="text-[10px] text-muted-foreground leading-none">Secure Direct</span>
+		{/if}
+	</div>
 {/snippet}
 
 {#snippet dewanPersCell(row: Media)}
@@ -1352,7 +1370,7 @@
 							</div>
 							<div class="min-w-0">
 								<dt class="text-xs text-muted-foreground">{tr('Mode Integrasi')}</dt>
-								<dd>{@render publicationModeCell(row)}</dd>
+								<dd>{@render integrationModeCell(row)}</dd>
 							</div>
 							<div class="min-w-0">
 								<dt class="text-xs text-muted-foreground">Dewan Pers</dt>
@@ -1374,7 +1392,7 @@
 			{ key: 'select', label: '', width: '36px', header: selectAllHeader, render: selectCell },
 			{ key: 'name', label: tr('Media'), render: mediaCell },
 			{ key: 'domain_verified', label: tr('Verifikasi'), align: 'center' as const, width: '96px', render: verifyCell },
-			{ key: 'publication_mode', label: tr('Mode Integrasi'), render: publicationModeCell },
+			{ key: 'publication_mode', label: tr('Mode Integrasi'), width: '110px', render: integrationModeCell },
 			// Kolom "Jumlah Kata" dilepas atas permintaan pemilik produk: isinya
 			// (Sesuai Permintaan Klien / rentang kata) jarang dipakai saat memindai
 			// tabel, dan masih bisa dilihat di modal edit.

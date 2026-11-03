@@ -164,6 +164,18 @@
 				debouncedSearch = q;
 			}
 			await load();
+			// Tombol "Kontak" di /admin/media menautkan ke sini dengan ?partner_id=<id>.
+			const pid = new URLSearchParams(window.location.search).get('partner_id')?.trim() ?? '';
+			if (pid) {
+				const match = rows.find((r) => r.id === pid);
+				if (match) {
+					void openMedia(match);
+				} else {
+					const res = await apiRequest(`/v1/platform/partners/${encodeURIComponent(pid)}`);
+					if (res.ok) void openMedia(await res.json());
+				}
+				history.replaceState(null, '', window.location.pathname);
+			}
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);

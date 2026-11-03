@@ -115,6 +115,7 @@ export type Media = {
 	dewan_pers_cert_no?: string | null;
 	dewan_pers_doc_key?: string | null;
 	publication_mode?: string;
+	auto_publish?: boolean;
 	word_count_mode?: string | null;
 	/** Masa berlaku tautan: 0 = permanen, >0 = bulan (default 12). */
 	link_duration_months?: number | null;
