@@ -140,7 +140,7 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case scope == "archive":
-		where = append(where, "m.status IN ('archived', 'hidden')")
+		where = append(where, "m.status = 'archived'")
 	case scope == "recent":
 		// Media yang baru disetujui: status aktif DAN disetujui dalam jendela
 		// recentDays. reviewed_at diisi saat admin menekan Setujui, jadi ini
@@ -148,14 +148,15 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 		// menyimpan draf berhari-hari sebelum diajukan).
 		where = append(where, "m.status = 'active' AND m.reviewed_at IS NOT NULL AND m.reviewed_at >= NOW() - make_interval(days => "+next(recentDays)+")")
 	case scope == "all":
-		where = append(where, "m.status <> 'hidden'")
+		// hidden tetap tampil di daftar (hanya tidak muncul di katalog klien).
+		where = append(where, "TRUE")
 	case status == "pending_review":
 		// Tab Pending juga memuat media aktif yang perubahannya menunggu admin.
 		where = append(where, "(m.status = 'pending_review' OR (m.status = 'active' AND m.pending_values IS NOT NULL))")
 	case status != "":
 		where = append(where, "m.status = "+next(status))
 	default:
-		where = append(where, "m.status <> 'archived' AND m.status <> 'hidden' AND m.status <> 'pending_review'")
+		where = append(where, "m.status <> 'archived' AND m.status <> 'pending_review'")
 	}
 	if partnerID != "" {
 		where = append(where, "m.partner_id = "+next(partnerID))
