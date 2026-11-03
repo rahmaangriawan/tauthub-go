@@ -705,20 +705,23 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 						<span class="mmCounter">{brief.length}/{BRIEF_MAX}</span>
 					</div>
 
-					<!-- Pilihan manual jenis media & kategori. Boleh lebih dari satu;
-					     pilihan di sini menimpa hasil interpretasi AI. -->
+					<!-- Jenis media WAJIB dipilih sebelum Ringkas Brief: pilihan ini
+					     menimpa hasil interpretasi AI, dan tanpa pilihan AI harus menebak
+					     mainstream/blogger dari brief yang jarang menyebutnya. -->
 					<div class="mmPickers">
+						<span class="mmPickerLabel">{tr('Jenis media')}<span class="mmRequired" aria-hidden="true">*</span></span>
 						<div class="mmPickerWrap">
 							<button
 								class="mmPickerBtn"
 								class:mmPickerBtnOn={pickedTypes.length > 0}
+								class:mmPickerBtnNeeded={pickedTypes.length === 0 && brief.trim().length >= MIN_ANALYZE_CHARS}
 								type="button"
 								aria-haspopup="listbox"
 								aria-expanded={openPicker === 'types'}
 								onclick={() => (openPicker = openPicker === 'types' ? null : 'types')}
 							>
 								<Layers size={14} />
-								<span class="mmPickerText">{pickerLabel(pickedTypes, typeLabel, tr('Jenis media'))}</span>
+								<span class="mmPickerText">{pickerLabel(pickedTypes, typeLabel, tr('Pilih jenis media'))}</span>
 								{#if pickedTypes.length > 1}<span class="mmPickerCount">{pickedTypes.length}</span>{/if}
 							</button>
 							{#if openPicker === 'types'}
@@ -758,13 +761,16 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 						<button
 							class="mmBtnPrimary mmSummarize"
 							type="button"
-							disabled={analyzing || brief.trim().length < MIN_ANALYZE_CHARS}
+							disabled={analyzing || brief.trim().length < MIN_ANALYZE_CHARS || pickedTypes.length === 0}
+							title={pickedTypes.length === 0 ? tr('Pilih jenis media dulu') : undefined}
 							onclick={() => void analyze(brief.trim())}
 						>
 							{#if analyzing}<span class="mmSpin"><LoaderCircle size={15} /></span>{:else}<Sparkles size={15} />{/if}
 							{analyzing ? tr('Meringkas…') : interpretation ? tr('Ringkas ulang') : tr('Ringkas Brief')}
 						</button>
-						{#if interpretation && brief.trim() !== lastAnalyzed}
+						{#if pickedTypes.length === 0 && brief.trim().length >= MIN_ANALYZE_CHARS}
+							<span class="mmStaleHint">{tr('Pilih jenis media dulu sebelum meringkas brief.')}</span>
+						{:else if interpretation && brief.trim() !== lastAnalyzed}
 							<span class="mmStaleHint">{tr('Brief berubah — ringkas ulang untuk memperbarui.')}</span>
 						{/if}
 					</div>
@@ -1425,6 +1431,9 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		position: relative;
 		min-width: 0;
 	}
+	.mmPickerLabel { display: inline-flex; align-items: center; gap: 2px; margin-right: 8px; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+	.mmRequired { color: var(--destructive); }
+	.mmPickerBtnNeeded { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent); }
 	.mmPickerBtn {
 		display: inline-flex;
 		align-items: center;
