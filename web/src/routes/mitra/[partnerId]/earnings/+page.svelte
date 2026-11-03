@@ -7,7 +7,7 @@
 	// (payout_type) + biaya transfer dari tc_config, dan guard rekening.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { Banknote, Calendar, Check, Clock, Coins, FileText, Landmark, Search, Wallet, X } from '@lucide/svelte';
+	import { Banknote, Calendar, Check, ChevronLeft, ChevronRight, Clock, Coins, FileText, Landmark, Search, Wallet, X } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -292,77 +292,66 @@
 	{#if loading}
 		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat penghasilan…")}</p>
 	{:else if data}
-		<!-- Focal point: saldo siap ditarik + aksi utama penarikan, layout horizontal compact -->
-		<div class="app-card mt-4 p-5">
-			<div class="flex flex-wrap items-center gap-x-8 gap-y-5">
+		<!-- Saldo siap ditarik = momen halaman: kartu biru merek dengan aksi Tarik Saldo.
+		     Di sampingnya dua angka pendukung, warna ikon mengikuti arti (kuning masa
+		     tunggu, hijau sudah dibayar). -->
+		<div class="earn-top">
+			<div class="earn-lead">
+				<p class="earn-lead-label">{tr("Saldo siap ditarik")}</p>
+				<p class="earn-lead-amount">{rp(data.summary?.settled)}</p>
+				<div class="earn-lead-meta">
+					<p>{tr("Minimal penarikan")} {rp(minimumWithdraw)}</p>
+					<p>{tr("Pendapatan baru bisa ditarik")} {holdDays} {tr("hari setelah artikel terbit.")}</p>
+				</div>
+				<button class="earn-withdraw" disabled={!hasPayoutAccount} onclick={() => openWithdrawal()}>
+					<Banknote size={16} strokeWidth={1.5} />{tr("Tarik Saldo")}
+				</button>
+			</div>
+
+			<div class="app-card earn-stat">
+				<span class="earn-icon earn-icon-wait"><Clock size={18} strokeWidth={1.5} /></span>
 				<div class="min-w-0">
-					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{tr("Saldo siap ditarik")}</p>
-					<p class="mt-1 text-4xl font-bold tracking-tight tabular-nums">{rp(data.summary?.settled)}</p>
-					<p class="mt-1 text-xs text-muted-foreground">{tr("Minimal penarikan")} {rp(minimumWithdraw)}</p>
-					<p class="mt-0.5 text-xs text-muted-foreground">{tr("Pendapatan baru bisa ditarik")} {holdDays} {tr("hari setelah artikel terbit.")}</p>
+					<p class="earn-stat-label">{tr("Masa tunggu")}</p>
+					<p class="earn-stat-value">{rp(data.summary?.pending)}</p>
+					{#if data.summary?.next_release_at}
+						<p class="earn-stat-sub">{tr("Rilis berikutnya")} {dtTime(data.summary.next_release_at)}</p>
+					{/if}
 				</div>
-
-				<div class="hidden h-12 w-px sm:block" style="background: var(--border);"></div>
-
-				<div class="flex items-center gap-5">
-					<div class="flex items-center gap-2.5">
-						<span class="flex h-10 w-10 items-center justify-center rounded-lg" style="background: var(--warning-soft);">
-							<Clock size={18} style="color: var(--warning);" />
-						</span>
-						<div>
-							<p class="text-xs text-muted-foreground">{tr("Masa tunggu")}</p>
-							<p class="text-sm font-semibold tabular-nums">{rp(data.summary?.pending)}</p>
-							{#if data.summary?.next_release_at}
-								<p class="text-[11px] text-muted-foreground">{tr("Rilis berikutnya")} {dtTime(data.summary.next_release_at)}</p>
-							{/if}
-						</div>
-					</div>
-					<div class="flex items-center gap-2.5">
-						<span class="flex h-10 w-10 items-center justify-center rounded-lg" style="background: var(--success-soft);">
-							<Coins size={18} style="color: var(--success);" />
-						</span>
-						<div>
-							<p class="text-xs text-muted-foreground">{tr("Total sudah dibayar")}</p>
-							<p class="text-sm font-semibold tabular-nums">{rp(data.summary?.paid_settlements)}</p>
-						</div>
-					</div>
-				</div>
-
-				<div class="flex shrink-0 flex-col items-end gap-1 md:ml-auto">
-					<button class="app-btn app-btn-primary min-h-11 px-5" disabled={!hasPayoutAccount} onclick={() => openWithdrawal()}>
-						<Banknote size={16} />{tr("Tarik Saldo")}
-					</button>
+			</div>
+			<div class="app-card earn-stat">
+				<span class="earn-icon earn-icon-paid"><Coins size={18} strokeWidth={1.5} /></span>
+				<div class="min-w-0">
+					<p class="earn-stat-label">{tr("Total sudah dibayar")}</p>
+					<p class="earn-stat-value">{rp(data.summary?.paid_settlements)}</p>
 				</div>
 			</div>
 		</div>
 
 		<!-- Info bar: ketentuan biaya penarikan (nilai dari konfigurasi admin) -->
-		<div class="app-card mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-			<span class="flex h-9 w-9 flex-none items-center justify-center rounded-lg" style="background: var(--accent);">
-				<Landmark size={16} style="color: var(--primary);" />
-			</span>
+		<div class="app-card earn-fee">
+			<span class="earn-icon earn-icon-fee"><Landmark size={18} strokeWidth={1.5} /></span>
 			<!-- Tarif diletakkan di bawah pernyataan "ditanggung mitra" supaya kalimat
 			     pokoknya terbaca lebih dulu, rinciannya jadi keterangan. -->
 			<div class="min-w-0">
-				<p class="text-sm font-medium" style="color: var(--primary);">{tr("Biaya ditanggung mitra.")}</p>
-				<p class="mt-0.5 text-xs text-muted-foreground">
+				<p class="earn-fee-title">{tr("Biaya ditanggung mitra.")}</p>
+				<p class="earn-fee-sub">
 					{tr("Biaya transfer")}: {tr("Bank")} {rp(withdrawFee)} · {tr("E-Wallet")} {ewalletFeePct}%
 				</p>
 			</div>
-			<p class="ml-auto text-xs text-muted-foreground">
+			<p class="earn-fee-note">
 				{tr("Pembayaran diproses tim Tauthub setelah review Admin dan setiap pengajuan dibuatkan invoice otomatis.")}
 			</p>
 		</div>
 
 		<div class="app-card mt-4 overflow-hidden">
-			<div class="flex flex-wrap items-end justify-between gap-3 border-b px-5 py-4">
+			<div class="earn-head">
 				<div>
-					<h2 class="text-lg font-bold tracking-tight">{tr("Riwayat Penghasilan")}</h2>
-					<p class="mt-0.5 text-xs text-muted-foreground">{tr("Daftar artikel yang sudah menghasilkan dan bisa ditarik.")}</p>
+					<h2 class="earn-h2">{tr("Riwayat Penghasilan")}</h2>
+					<p class="earn-meta mt-1">{tr("Daftar artikel yang sudah menghasilkan dan bisa ditarik.")}</p>
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
 					<label class="relative block">
-						<Search size={14} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+						<Search size={16} strokeWidth={1.5} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
 						<input class="app-input w-64 max-md:w-full pl-9" placeholder={tr("Cari artikel, media, atau domain...")} bind:value={search} />
 					</label>
 					<Select
@@ -392,33 +381,33 @@
 				<!-- Desktop/tablet: tabel asli. Wrapper-nya yang menggulir lokal
 				     bila kolom butuh lebih banyak ruang (lihat blok <style>). -->
 				<div class="earn-table-wrap hidden md:block">
-					<table class="w-full text-sm">
+					<table class="earn-table">
 						<thead>
-							<tr class="text-left text-xs text-muted-foreground">
-								<th class="px-5 py-2.5 font-medium">{tr("Artikel")}</th>
-								<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
-								<th class="px-4 py-2.5 text-right font-medium">{tr("Nilai Diterima")}</th>
-								<th class="px-4 py-2.5 font-medium">{tr("Status")}</th>
-								<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
+							<tr>
+								<th class="earn-th earn-th-first">{tr("Artikel")}</th>
+								<th class="earn-th">{tr("Media")}</th>
+								<th class="earn-th earn-th-end">{tr("Nilai Diterima")}</th>
+								<th class="earn-th">{tr("Status")}</th>
+								<th class="earn-th">{tr("Tanggal")}</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each filteredRows as e (e.id)}
-								<tr class="border-t">
-									<td class="px-5 py-2.5">
+								<tr class="earn-tr">
+									<td class="earn-td earn-td-first">
 										<div class="flex items-center gap-2.5">
 											{@render earnDocIcon()}
-											<span class="max-w-[320px] truncate" title={e.document_title ?? ''}>{e.document_title ?? '-'}</span>
+											<span class="earn-title" title={e.document_title ?? ''}>{e.document_title ?? '-'}</span>
 										</div>
 									</td>
-									<td class="px-4 py-2.5">
+									<td class="earn-td">
 										{@render earnMediaCell(e)}
 									</td>
-									<td class="px-4 py-2.5 text-right font-semibold tabular-nums" style="color: var(--success);">+{rp(e.amount)}</td>
-									<td class="px-4 py-2.5">
+									<td class="earn-td earn-amt">+{rp(e.amount)}</td>
+									<td class="earn-td">
 										{@render earnStatusBadge(e)}
 									</td>
-									<td class="whitespace-nowrap px-4 py-2.5 text-xs text-muted-foreground">{dt(e.created_at)}</td>
+									<td class="earn-td earn-date">{dt(e.created_at)}</td>
 								</tr>
 							{/each}
 						</tbody>
@@ -443,7 +432,7 @@
 							<dl class="mt-2.5 flex items-center justify-between gap-3 border-t pt-2.5" style="border-color: var(--border);">
 								<div class="min-w-0 flex-1">{@render earnMediaCell(e)}</div>
 								<div class="min-w-0 shrink-0 text-right">
-									<dt class="text-[11px] text-muted-foreground">{tr("Nilai Diterima")}</dt>
+									<dt class="text-xs text-muted-foreground">{tr("Nilai Diterima")}</dt>
 									<dd class="mt-0.5 text-[15px] font-semibold tabular-nums" style="color: var(--success);">+{rp(e.amount)}</dd>
 								</div>
 							</dl>
@@ -456,25 +445,24 @@
 					{/each}
 				</div>
 			{/if}
-			<div class="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3">
-				<p class="text-xs text-muted-foreground">
+			<div class="earn-pager">
+				<p class="earn-meta">
 					{tr("Menampilkan")} {filteredRows.length} {tr("dari")} {earningsTotal} {tr("data")}
 				</p>
 				<div class="flex items-center gap-2">
 					<button
-						class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+						class="app-btn app-btn-soft earn-pager-btn"
 						disabled={offset === 0 || loading}
 						onclick={() => changeOffset(offset - PAGE_SIZE)}
-					>‹ {tr("Sebelumnya")}</button>
+					><ChevronLeft size={16} strokeWidth={1.5} />{tr("Sebelumnya")}</button>
 					<span
-						class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg text-xs font-semibold"
-						style="background: var(--primary); color: var(--primary-foreground);"
+						class="earn-page-now"
 					>{Math.floor(offset / PAGE_SIZE) + 1}</span>
 					<button
-						class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+						class="app-btn app-btn-soft earn-pager-btn"
 						disabled={offset + PAGE_SIZE >= earningsTotal || loading}
 						onclick={() => changeOffset(offset + PAGE_SIZE)}
-					>{tr("Berikutnya")} ›</button>
+					>{tr("Berikutnya")}<ChevronRight size={16} strokeWidth={1.5} /></button>
 				</div>
 			</div>
 		</div>
@@ -482,15 +470,13 @@
 </section>
 
 {#snippet earnDocIcon()}
-	<span class="flex h-8 w-8 flex-none items-center justify-center rounded-md" style="background: var(--accent);">
-		<FileText size={14} style="color: var(--primary);" />
-	</span>
+	<span class="earn-doc"><FileText size={16} strokeWidth={1.5} /></span>
 {/snippet}
 
 {#snippet earnMediaCell(e: any)}
 	{@const domain = mediaDomain(e.media_website_url)}
 	<div class="flex min-w-0 items-center gap-2">
-		<span class="flex h-7 w-7 flex-none items-center justify-center overflow-hidden rounded-full text-[11px] font-semibold" style="background: var(--muted); color: var(--muted-foreground);">
+		<span class="earn-fav" style="background: var(--muted); color: var(--muted-foreground);">
 			{#if domain && !faviconFailed[e.id]}
 				<img
 					src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`}
@@ -505,17 +491,17 @@
 			{/if}
 		</span>
 		<span class="min-w-0 leading-tight">
-			<span class="block truncate text-muted-foreground" title={e.media_name ?? ''}>{e.media_name ?? '-'}</span>
+			<span class="earn-media" title={e.media_name ?? ''}>{e.media_name ?? '-'}</span>
 			{#if e.media_type}
-				<span class="block truncate text-[10.5px] font-medium capitalize text-muted-foreground/80">{e.media_type}</span>
+				<span class="earn-media-sub">{e.media_type}</span>
 			{/if}
 		</span>
 	</div>
 {/snippet}
 
 {#snippet earnStatusBadge(e: any)}
-	<span class="inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium" style={statusBadge(e.status)}>
-		<span class="h-1.5 w-1.5 rounded-full" style="background: currentColor;"></span>
+	<span class="earn-status" style={statusBadge(e.status)}>
+		<span class="earn-status-dot"></span>
 		{statusLabel[e.status] ?? e.status}
 	</span>
 	{#if e.status === 'pending' && e.available_at}
@@ -673,15 +659,15 @@
 							<Landmark size={17} strokeWidth={2} />
 						</span>
 						<div class="min-w-0 flex-1">
-							<p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{tr("Tujuan penarikan")}</p>
+							<p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">{tr("Tujuan penarikan")}</p>
 							<p class="mt-0.5 truncate text-[13.5px] font-semibold" style="color: var(--foreground);">{partner?.bank_name || tr('Bank')}</p>
 							<p class="mt-0.5 truncate text-xs tabular-nums text-muted-foreground">
 								{maskedAccountNumber}{#if partner?.bank_account_name} · {partner.bank_account_name}{/if}
 							</p>
 						</div>
 						<div class="flex shrink-0 flex-col items-end gap-1">
-							<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--secondary); color: var(--accent-foreground);">{tr("Dari Profil")}</span>
-							<p class="text-[11px] text-muted-foreground">{tr("Ubah di Profil")}</p>
+							<span class="rounded-full px-2 py-0.5 text-xs font-medium" style="background-color: var(--secondary); color: var(--accent-foreground);">{tr("Dari Profil")}</span>
+							<p class="text-xs text-muted-foreground">{tr("Ubah di Profil")}</p>
 						</div>
 					</div>
 				{:else}
@@ -714,6 +700,72 @@
 {/if}
 
 <style>
+	/* Penghasilan mitra: ritme 4px, bobot 400–500. Biru merek = saldo & aksi;
+	   hijau = uang masuk/sudah dibayar; kuning = masa tunggu.
+	   UI lama: +page.legacy.svelte.txt (salin ke +page.svelte untuk rollback). */
+	.earn-meta { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+
+	.earn-top { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 24px; }
+	@media (min-width: 768px) { .earn-top { grid-template-columns: 5fr 3fr; grid-template-rows: 1fr 1fr; } .earn-lead { grid-row: span 2; } }
+
+	.earn-lead {
+		display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 24px; border-radius: 16px; color: #fff;
+		background: linear-gradient(155deg, #3b77f2 0%, #2b67ec 45%, #1d4fc7 100%);
+		box-shadow: 0 8px 24px rgba(43, 103, 236, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+	}
+	.earn-lead-label { font-size: 13px; line-height: 20px; color: rgba(255, 255, 255, 0.78); }
+	.earn-lead-amount { font-size: 40px; line-height: 48px; font-weight: 500; font-variant-numeric: tabular-nums; }
+	.earn-lead-meta { margin-top: 4px; font-size: 12px; line-height: 16px; color: rgba(255, 255, 255, 0.85); }
+	.earn-lead-meta p + p { margin-top: 2px; }
+	.earn-withdraw {
+		display: inline-flex; width: fit-content; align-items: center; gap: 8px; height: 40px; margin-top: 16px; padding: 0 20px; border-radius: 10px;
+		background: #fff; color: #1d4fc7; font-size: 14px; font-weight: 500;
+		transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1), opacity 120ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.earn-withdraw:hover:not(:disabled) { background: #eef4ff; }
+	.earn-withdraw:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+	.earn-withdraw:disabled { opacity: 0.6; cursor: not-allowed; }
+
+	.earn-stat { display: flex; align-items: center; gap: 16px; padding: 20px 24px; }
+	.earn-stat-label { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+	.earn-stat-value { font-size: 24px; line-height: 32px; font-weight: 500; font-variant-numeric: tabular-nums; }
+	.earn-stat-sub { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+
+	.earn-icon { display: inline-flex; width: 40px; height: 40px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 12px; }
+	.earn-icon-wait { background-color: var(--warning-soft); color: var(--warning); }
+	.earn-icon-paid { background-color: var(--success-soft); color: var(--success); }
+	.earn-icon-fee { background-color: var(--accent); color: var(--accent-foreground); }
+
+	.earn-fee { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 16px; padding: 16px 24px; }
+	.earn-fee-title { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--accent-foreground); }
+	.earn-fee-sub { margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+	.earn-fee-note { margin-left: auto; max-width: 480px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+
+	.earn-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 16px 24px; border-bottom: 1px solid var(--border); }
+	.earn-h2 { font-size: 16px; line-height: 24px; font-weight: 500; }
+
+	.earn-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+	.earn-th { padding: 12px 16px; font-size: 12px; line-height: 16px; font-weight: 400; text-align: left; white-space: nowrap; color: var(--muted-foreground); background-color: color-mix(in srgb, var(--foreground) 2%, transparent); border-bottom: 1px solid var(--border); }
+	.earn-th-first, .earn-td-first { padding-left: 24px; }
+	.earn-th-end { text-align: right; }
+	.earn-tr { border-top: 1px solid var(--border); transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1); }
+	.earn-tr:hover { background-color: color-mix(in srgb, var(--foreground) 3%, transparent); }
+	.earn-td { padding: 12px 16px; vertical-align: middle; }
+	.earn-amt { text-align: right; white-space: nowrap; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--success); }
+	.earn-date { white-space: nowrap; font-size: 13px; color: var(--muted-foreground); }
+	.earn-title { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+	.earn-doc { display: inline-flex; width: 32px; height: 32px; flex: none; align-items: center; justify-content: center; border-radius: 8px; background-color: var(--accent); color: var(--accent-foreground); }
+	.earn-fav { display: inline-flex; width: 28px; height: 28px; flex: none; align-items: center; justify-content: center; overflow: hidden; border-radius: 9999px; background: var(--muted); color: var(--muted-foreground); font-size: 12px; font-weight: 500; }
+	.earn-fav :global(img) { width: 100%; height: 100%; object-fit: cover; }
+	.earn-media { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; }
+	.earn-media-sub { display: block; font-size: 12px; line-height: 16px; text-transform: capitalize; color: var(--muted-foreground); }
+	.earn-status { display: inline-flex; width: fit-content; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 9999px; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap; }
+	.earn-status-dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
+
+	.earn-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 24px; border-top: 1px solid var(--border); }
+	.earn-pager-btn { min-height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; }
+	.earn-page-now { display: inline-flex; height: 32px; min-width: 32px; align-items: center; justify-content: center; border-radius: 8px; background: var(--primary); color: var(--primary-foreground); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+
 	/* Tabel Earnings Details: di bawah 1400px area konten menyempit karena
 	   sidebar, sehingga enam kolom tidak muat nyaman (di 768px tinggi header
 	   kolom sampai 100px) dan di 1280px tabel terpotong overflow-hidden kartu.
