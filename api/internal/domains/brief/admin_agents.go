@@ -184,9 +184,12 @@ func (d *Deps) TautBriefAgentConfigTest(w http.ResponseWriter, r *http.Request) 
 	if timeout <= 0 || timeout > 60*time.Second {
 		timeout = 60 * time.Second
 	}
+	// Balasan uji hanya "OK"; batas kecil supaya OpenRouter tidak menahan
+	// kredit sebesar maksimum model (65.535 token) dan menolak 402 saat saldo tipis.
+	testMax := 64
 	client := &ai.ChatClient{
 		BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Model: cfg.Model,
-		Temperature: 0, Timeout: timeout,
+		Temperature: 0, Timeout: timeout, MaxTokens: &testMax,
 	}
 	res, err := client.CompleteMessages(r.Context(), []ai.ChatMessage{
 		{Role: "system", Content: "Balas hanya dengan kata OK."},

@@ -208,9 +208,12 @@ func (d *Deps) TautBriefConfigTest(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	// Balasan uji hanya {"ok":true}; batas kecil supaya OpenRouter tidak
+	// menahan kredit sebesar maksimum model dan menolak 402 saat saldo tipis.
+	testMax := 64
 	client := &ai.ChatClient{
 		BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Model: cfg.Model,
-		Temperature: 0, Timeout: 60 * time.Second,
+		Temperature: 0, Timeout: 60 * time.Second, MaxTokens: &testMax,
 	}
 	probeMsgs := []ai.ChatMessage{
 		{Role: "system", Content: "Balas hanya dengan JSON."},
