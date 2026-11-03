@@ -867,15 +867,16 @@
 							</td>
 							<td class="px-4 py-3">
 								<button
-									class="rounded-lg p-1.5 hover:bg-secondary"
+									class="relative rounded-lg p-1.5 hover:bg-secondary"
 									type="button"
 									aria-label={`Aksi untuk ${row.name ?? row.email}`}
+									title={row.secure_direct_status === 'pending' ? tr('Ada pengajuan Secure Direct') : undefined}
 									onclick={(e) => {
 										const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
 										menuPos = { top: rect.bottom + 4, right: window.innerWidth - rect.right };
 										openMenu = openMenu === row.id ? null : row.id;
 									}}
-								><Ellipsis size={19} /></button>
+								><Ellipsis size={19} />{#if row.secure_direct_status === 'pending'}<span class="absolute right-0.5 top-0.5 size-2.5 rounded-full border-2 border-white" style="background: var(--destructive);" aria-hidden="true"></span>{/if}</button>
 								{#if openMenu === row.id}
 									<div class="fixed inset-0 z-40" role="presentation" onclick={() => (openMenu = null)}></div>
 									<div
@@ -902,7 +903,8 @@
 												</button>
 											{/if}
 											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; autoPublishTarget = row; }}>
-												{row.auto_publish_enabled ? 'Cabut izin mode otomatis' : 'Izinkan mode otomatis'}
+												{row.auto_publish_enabled ? 'Cabut Secure Direct' : 'Aktifkan Secure Direct'}
+												{#if row.secure_direct_status === 'pending' && !row.auto_publish_enabled}<span class="ml-auto size-2 rounded-full" style="background: var(--destructive);" aria-hidden="true"></span>{/if}
 											</button>
 											{#if row.status === 'active'}
 												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void setStatus(row, 'inactive'); }}>Nonaktifkan</button>
@@ -1345,7 +1347,7 @@
 
 {#if autoPublishTarget}
 	<Modal
-		title={autoPublishTarget?.auto_publish_enabled ? 'Cabut izin mode otomatis?' : 'Izinkan mode otomatis?'}
+		title={autoPublishTarget?.auto_publish_enabled ? 'Cabut Secure Direct?' : 'Aktifkan Secure Direct?'}
 		label="Konfirmasi izin mode otomatis"
 		maxWidth="md"
 		onClose={() => { if (busyId === null) autoPublishTarget = null; }}
@@ -1361,7 +1363,7 @@
 				type="button"
 				disabled={busyId !== null}
 				onclick={() => { if (autoPublishTarget) void setAutoPublish(autoPublishTarget, !autoPublishTarget?.auto_publish_enabled); }}
-			>{autoPublishTarget?.auto_publish_enabled ? 'Cabut izin' : 'Izinkan'}</button>
+			>{autoPublishTarget?.auto_publish_enabled ? 'Cabut' : 'Aktifkan'}</button>
 		{/snippet}
 	</Modal>
 {/if}

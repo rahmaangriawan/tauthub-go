@@ -980,6 +980,8 @@
 	}
 </script>
 
+<svelte:window onclick={() => (toolsOpen = false)} />
+
 {#snippet selectCell(row: Media)}
 	<input
 		type="checkbox"
@@ -1272,7 +1274,11 @@
 		<Badge tone="accent" value={`${total} media`} />
 		<label class="mdir-pick flex items-center gap-1.5 text-xs text-muted-foreground">
 			<input type="checkbox" checked={allSelected} onchange={(e) => toggleSelectAll(e.currentTarget.checked)} />{tr("Pilih halaman ini")}</label>
+	</div>
+
+	<div class="mdir-actionbar mt-2 flex flex-wrap items-center gap-2">
 		{#if selectedIds.size > 0}
+			<span class="text-xs font-medium">{selectedIds.size} {tr('dipilih')}</span>
 			<button
 				class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
 				disabled={bulkBusy}
@@ -1285,54 +1291,43 @@
 					onclick={() => (bulkLinkOpen = true)}>{tr('Ubah jenis tautan')} ({selectedIds.size})</button
 				>
 			{/if}
+		{:else}
+			<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" onclick={openCreate}>
+				<Plus size={15} />{tr("Tambah media")}</button>
+			<div class="mdir-maint relative">
+				<button
+					class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+					aria-haspopup="menu"
+					aria-expanded={toolsOpen}
+					onclick={(e) => { e.stopPropagation(); toolsOpen = !toolsOpen; }}
+				>
+					<RefreshCw size={15} />{tr('Pemeliharaan')}
+					<span aria-hidden="true">{toolsOpen ? '▲' : '▼'}</span>
+				</button>
+				{#if toolsOpen}
+					<div class="mdir-menu" role="menu" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && (toolsOpen = false)}>
+						<button role="menuitem" disabled={syncing} onclick={() => { toolsOpen = false; void syncCredits(); }}>
+							{tr('Sinkronkan kredit semua')}
+						</button>
+						<button role="menuitem" disabled={swBulkBusy} onclick={() => { toolsOpen = false; void bulkSimilarWeb(); }} title="Antrekan pemeriksaan trafik HANYA untuk media yang belum pernah diperiksa SimilarWeb (belum punya snapshot). Media yang sudah pernah diperiksa — termasuk hasil 0 kunjungan — dilewati; scheduler yang memproses antreannya.">
+							{swBulkBusy ? 'Mengantrekan…' : swStatus && swStatus.pending_jobs > 0 ? `Antrean Trafik (${swStatus.pending_jobs})` : 'Antrekan Cek Trafik Semua'}
+						</button>
+						<button role="menuitem" disabled={daBulkBusy} title={tr('Cek DA dan AI Trust untuk seluruh media yang belum punya skor; yang sudah dicek dilewati')} onclick={() => { toolsOpen = false; void enqueueSeoRefresh(); }}>
+							{daBulkBusy ? 'Mengantrekan…' : tr('Cek AI & SEO Semua')}
+						</button>
+						<button role="menuitem" disabled={daBulkBusy} title={tr('Cek DA untuk semua media yang nilai DA-nya belum ada (DA dan AI Trust diambil pada pemeriksaan yang sama)')} onclick={() => { toolsOpen = false; void enqueueSeoRefresh(false, true); }}>
+							{tr('Cek DA semua')}
+						</button>
+						<button role="menuitem" disabled={daBulkBusy} title={tr('Hitung ulang DA dan AI Trust untuk seluruh media aktif, termasuk yang sudah punya skor')} onclick={() => { toolsOpen = false; void enqueueSeoRefresh(true); }}>
+							{tr('Hitung ulang semua')}
+						</button>
+					</div>
+				{/if}
+			</div>
 		{/if}
-		<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs sm:hidden" onclick={openCreate}>
-			<Plus size={15} />{tr("Tambah media")}</button>
-		<button
-			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs sm:hidden"
-			aria-expanded={toolsOpen}
-			onclick={() => (toolsOpen = !toolsOpen)}
-		>
-			{tr('Alat pemeriksaan')}
-			<span aria-hidden="true">{toolsOpen ? '▲' : '▼'}</span>
-		</button>
-		<div class="mdir-tools w-full flex-wrap gap-2 sm:contents {toolsOpen ? 'flex' : 'hidden'}">
-		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={syncing} onclick={syncCredits}>
-			<RefreshCw size={15} /> Sinkronkan kredit semua
-		</button>
-		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" disabled={swBulkBusy} onclick={bulkSimilarWeb} title="Antrekan pemeriksaan trafik HANYA untuk media yang belum pernah diperiksa SimilarWeb (belum punya snapshot). Media yang sudah pernah diperiksa — termasuk hasil 0 kunjungan — dilewati; scheduler yang memproses antreannya.">
-			<RefreshCw size={15} /> {swBulkBusy ? 'Mengantrekan…' : swStatus && swStatus.pending_jobs > 0 ? `Antrean Trafik (${swStatus.pending_jobs})` : 'Antrekan Cek Trafik Semua'}
-		</button>
-		<button
-			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
-			disabled={daBulkBusy}
-			title={tr('Cek DA dan AI Trust untuk seluruh media yang belum punya skor; yang sudah dicek dilewati')}
-			onclick={() => void enqueueSeoRefresh()}
-		>
-			<RefreshCw size={15} /> {daBulkBusy ? 'Mengantrekan…' : tr('Cek AI & SEO Semua')}
-		</button>
-		<button
-			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
-			disabled={daBulkBusy}
-			title={tr('Cek DA untuk semua media yang nilai DA-nya belum ada (DA dan AI Trust diambil pada pemeriksaan yang sama)')}
-			onclick={() => void enqueueSeoRefresh(false, true)}
-		>
-			<RefreshCw size={15} /> {tr('Cek DA semua')}
-		</button>
-		<button
-			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
-			disabled={daBulkBusy}
-			title={tr('Hitung ulang DA dan AI Trust untuk seluruh media aktif, termasuk yang sudah punya skor')}
-			onclick={() => void enqueueSeoRefresh(true)}>{tr('Hitung ulang semua')}</button
-		>
-		</div>
-		<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs max-sm:hidden" onclick={openCreate}>
-			<Plus size={15} />{tr("Tambah media")}</button>
+		<div class="flex-1"></div>
 		<!-- Chip "Cek otomatis": memberi tahu apakah DA & trafik diperiksa sendiri oleh
-		     sistem, atau berhenti karena kredensial penyedia belum lengkap. Tanpa ini
-		     admin hanya melihat angka 0 dan tidak tahu apakah sistem bekerja.
-		     Diletakkan sebaris dengan tombol Tambah media supaya tidak memakan
-		     baris tersendiri di halaman kerja. -->
+		     sistem, atau berhenti karena kredensial penyedia belum lengkap. -->
 		{#if swStatus}
 			{@const autoReady = swStatus.auto_ready !== false}
 			{#if autoReady}
@@ -2717,8 +2712,36 @@
 		justify-content: center;
 		text-align: center;
 	}
+	.mdir-menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 0;
+		z-index: 30;
+		min-width: 240px;
+		padding: 4px;
+		display: flex;
+		flex-direction: column;
+		background: var(--card, #fff);
+		border: 1px solid var(--border, #dfe5ef);
+		border-radius: 10px;
+		box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+	}
+	.mdir-menu button {
+		text-align: left;
+		padding: 8px 12px;
+		font-size: 13px;
+		border-radius: 6px;
+		color: var(--foreground);
+	}
+	.mdir-menu button:hover:not(:disabled) {
+		background: var(--muted, #f1f4f9);
+	}
+	.mdir-menu button:disabled {
+		opacity: 0.5;
+	}
 	@media (max-width: 767px) {
-		.mdir-toolbar :global(.app-btn) {
+		.mdir-toolbar :global(.app-btn),
+		.mdir-actionbar :global(.app-btn) {
 			min-height: 44px !important;
 		}
 		.mdir-pick {
