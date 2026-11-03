@@ -709,7 +709,6 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 					     menimpa hasil interpretasi AI, dan tanpa pilihan AI harus menebak
 					     mainstream/blogger dari brief yang jarang menyebutnya. -->
 					<div class="mmPickers">
-						<span class="mmPickerLabel">{tr('Jenis media')}<span class="mmRequired" aria-hidden="true">*</span></span>
 						<div class="mmPickerWrap">
 							<button
 								class="mmPickerBtn"
@@ -1431,8 +1430,6 @@ Produk yang dibahas: Ravencare Men Facial Wash Daily Clean, Oil Control Moisturi
 		position: relative;
 		min-width: 0;
 	}
-	.mmPickerLabel { display: inline-flex; align-items: center; gap: 2px; margin-right: 8px; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
-	.mmRequired { color: var(--destructive); }
 	.mmPickerBtnNeeded { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent); }
 	.mmPickerBtn {
 		display: inline-flex;
