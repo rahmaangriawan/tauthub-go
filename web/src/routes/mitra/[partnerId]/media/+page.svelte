@@ -8,6 +8,16 @@
 	import { page } from '$app/state';
 	import { Building2, Check, ChevronRight, CircleAlert, CircleDollarSign, Clock, Copy, ExternalLink, FileText, Info, Layers, Link, Link2, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Tag, Trash2, TriangleAlert, Upload, Wallet, X, Zap } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
+	import MediaFavicon from './_favicon.svelte';
+
+	// Host domain untuk favicon di kolom Media (kosong bila URL tidak valid).
+	const faviconHost = (url: string | null | undefined) => {
+		try {
+			return new URL(url ?? '').hostname;
+		} catch {
+			return '';
+		}
+	};
 	import { Tooltip } from 'bits-ui';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -1189,16 +1199,16 @@
 <section>
 	<header class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
 		<div class="min-w-0">
-			<h1 class="text-[21px] font-semibold leading-tight tracking-tight">{tr("Daftar Media")}</h1>
+			<h1 class="md-h1">{tr("Daftar Media")}</h1>
 			{#if mediaLoaded}
-				<p class="mt-1 text-[13px] text-muted-foreground">{total} {tr("media terdaftar pada akun mitra Anda.")}</p>
+				<p class="md-sub">{total} {tr("media terdaftar pada akun mitra Anda.")}</p>
 			{/if}
 		</div>
 		{#if viewMode === 'manage'}
 		<div class="flex flex-wrap items-center gap-2">
 			{#if bulkUnlocked === true}
 				<button class="app-btn app-btn-soft" type="button" onclick={() => void openImportDialog()}>
-					<Upload size={15} /> Impor XLSX
+					<Upload size={16} strokeWidth={1.5} /> Impor XLSX
 				</button>
 			{:else if bulkLocked}
 				<button
@@ -1207,13 +1217,13 @@
 					disabled
 					title={tr('Impor massal terbuka setelah media pertama Anda disetujui admin dan domainnya terverifikasi.')}
 				>
-					<Lock size={15} /> Impor XLSX
+					<Lock size={16} strokeWidth={1.5} /> Impor XLSX
 				</button>
 			{:else}
 				<!-- Status verifikasi belum diketahui (load pertama belum selesai):
 					placeholder tanpa ikon kunci supaya tidak terlihat seperti "terkunci". -->
 				<button class="app-btn app-btn-soft" type="button" disabled aria-busy="true">
-					<Upload size={15} /> Impor XLSX
+					<Upload size={16} strokeWidth={1.5} /> Impor XLSX
 				</button>
 			{/if}
 			{#if mediaLoaded && !autoPublishEnabled}
@@ -1223,11 +1233,11 @@
 					onclick={openSecureDirectDialog}
 					title={sdStatus === 'pending' ? tr('Pengajuan Secure Direct kamu sedang menunggu persetujuan admin Tauthub.') : tr('Ajukan pemakaian mode terbit otomatis untuk akun mitra kamu.')}
 				>
-					<Zap size={15} /> {tr('Ajukan Secure Direct')}
+					<Zap size={16} strokeWidth={1.5} /> {tr('Ajukan Secure Direct')}
 					{#if sdStatus === 'pending'}<span class="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none" style="background: var(--warning-soft); color: var(--warning);">●</span>{/if}
 				</button>
 			{/if}
-			<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={15} />{tr("Tambah Media")}</button>
+			<button class="app-btn app-btn-primary" onclick={openCreate}><Plus size={16} strokeWidth={1.5} />{tr("Tambah Media")}</button>
 		</div>
 		{/if}
 	</header>
@@ -1495,9 +1505,9 @@
 	</div>
 {/if}
 
-	<form class="app-card mt-3 flex flex-wrap items-center gap-2 p-3" onsubmit={(e) => e.preventDefault()}>
+	<form class="app-card md-filter" onsubmit={(e) => e.preventDefault()}>
 		<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
-			<Search size={15} class="text-muted-foreground" />
+			<Search size={16} strokeWidth={1.5} class="text-muted-foreground" />
 			<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama media atau domain…")} bind:value={q} />
 		</label>
 		<Select
@@ -1543,11 +1553,11 @@
 		<div class="app-card mt-4 hidden overflow-x-auto md:block">
 			<table class="w-full text-sm">
 				<thead>
-					<tr class="text-left text-xs text-muted-foreground">
-						<th class="px-4 py-2.5 font-medium">{tr("Media")}</th>
-						<th class="px-4 py-2.5 font-medium">{tr('Verifikasi Kepemilikan')}</th>
-						<th class="px-4 py-2.5 font-medium">{tr('Kategori')}</th>
-						<th class="px-4 py-2.5 font-medium">
+					<tr>
+						<th class="md-th">{tr("Media")}</th>
+						<th class="md-th">{tr('Verifikasi Kepemilikan')}</th>
+						<th class="md-th">{tr('Kategori')}</th>
+						<th class="md-th">
 							<span class="inline-flex items-center gap-1">
 								{tr("Mode Integrasi")}
 								<Tooltip.Provider delayDuration={0}>
@@ -1560,7 +1570,7 @@
 													class="inline-flex cursor-help items-center text-muted-foreground"
 													aria-label={modeColumnHint()}
 												>
-													<CircleAlert size={12} />
+													<CircleAlert size={14} strokeWidth={1.5} />
 												</button>
 											{/snippet}
 										</Tooltip.Trigger>
@@ -1574,10 +1584,10 @@
 								</Tooltip.Provider>
 							</span>
 						</th>
-						<th class="px-4 py-2.5 font-medium">{tr('Harga')}</th>
-						<th class="px-4 py-2.5 font-medium">{tr('Kualitas')}</th>
-						<th class="px-4 py-2.5 font-medium">DA</th>
-						<th class="px-4 py-2.5 font-medium">
+						<th class="md-th">{tr('Harga')}</th>
+						<th class="md-th">{tr('Kualitas')}</th>
+						<th class="md-th">DA</th>
+						<th class="md-th">
 							<span class="inline-flex items-center gap-1">
 								Platform
 								<Tooltip.Provider delayDuration={0}>
@@ -1590,7 +1600,7 @@
 													class="inline-flex cursor-help items-center text-muted-foreground"
 													aria-label={platformColumnHint()}
 												>
-													<CircleAlert size={12} />
+													<CircleAlert size={14} strokeWidth={1.5} />
 												</button>
 											{/snippet}
 										</Tooltip.Trigger>
@@ -1604,67 +1614,72 @@
 								</Tooltip.Provider>
 							</span>
 						</th>
-						<th class="px-4 py-2.5 font-medium">Status</th>
-						<th class="px-4 py-2.5 font-medium">{tr('Menunggu')}</th>
-						<th class="px-4 py-2.5 text-right font-medium">{tr('Aksi')}</th>
+						<th class="md-th">Status</th>
+						<th class="md-th">{tr('Menunggu')}</th>
+						<th class="md-th md-th-end">{tr('Aksi')}</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each filtered as m (m.id)}
-						<tr class="border-t align-top">
-							<td class="px-4 py-2.5 text-left">
-								<div class="flex flex-wrap items-center gap-1.5">
-										{#if m.website_url}
-											<a class="font-medium hover:underline" href={m.website_url} target="_blank" rel="noreferrer">
-												{mediaDomainLabel(m.website_url, m.name)}
-											</a>
-										{:else}
-										<span class="font-medium">{m.name}</span>
-									{/if}
-								</div>
-								{@render contohLink(m)}
+						<tr class="md-tr">
+							<td class="md-td">
+								<div class="md-name">
+<span class="md-fav"><MediaFavicon domain={faviconHost(m.website_url)} size={18} /></span>
+<div class="min-w-0">
+<div class="flex flex-wrap items-center gap-1.5">
+{#if m.website_url}
+<a class="md-domain" href={m.website_url} target="_blank" rel="noreferrer">
+{mediaDomainLabel(m.website_url, m.name)}
+</a>
+{:else}
+<span class="md-domain">{m.name}</span>
+{/if}
+</div>
+{@render contohLink(m)}
+</div>
+</div>
 							</td>
-							<td class="px-4 py-2.5">
+							<td class="md-td">
 								{@render verifCell(m)}
 							</td>
-							<td class="px-4 py-2.5">
+							<td class="md-td">
 								{@render categoryCell(m)}
 							</td>
-								<td class="px-4 py-2.5">
+								<td class="md-td">
 									<div class="flex flex-col items-start gap-1">
 										{@render modeBadge(m)}
 										{@render autoPublish(m, true)}
 									</div>
 								</td>
-							<td class="px-4 py-2.5 tabular-nums">
+							<td class="md-td md-num">
 								{@render priceCell(m)}
 							</td>
-							<td class="px-4 py-2.5">
+							<td class="md-td">
 								{#if m.health_score != null}
-									<span class="text-xs font-medium tabular-nums" title={JSON.stringify(m.health_breakdown ?? {})}>{m.health_score}</span>
+									<span class="md-score" title={JSON.stringify(m.health_breakdown ?? {})}>{m.health_score}</span>
 								{:else}
-									<span class="text-[11px] text-muted-foreground">{tr('Belum dihitung')}</span>
+									<span class="text-xs text-muted-foreground">{tr('Belum dihitung')}</span>
 								{/if}
 							</td>
-							<td class="px-4 py-2.5">
+							<td class="md-td">
 								{#if m.seo_da != null}
-									<span class="text-xs tabular-nums">{m.seo_da}</span>
+									<span class="md-score">{m.seo_da}</span>
 								{:else}
-									<span class="text-[11px] text-muted-foreground">—</span>
+									<span class="text-xs text-muted-foreground">—</span>
 								{/if}
 							</td>
-							<td class="px-4 py-2.5">
-								<span class="text-xs">{platLabel(m)}</span>
+							<td class="md-td">
+								<span class="md-plat">{platLabel(m)}</span>
 								{@render connectionStatus(m)}
 							</td>
-							<td class="px-4 py-2.5">
+							<td class="md-td">
 								{@render statusBadges(m)}
 								{@render statusRejection(m)}
 							</td>
-							<td class="px-4 py-2.5">
+							<td class="md-td">
 								{@render pendingBadge(m)}
 							</td>
-							<td class="px-4 py-2.5 text-right">
+							<td class="md-td md-td-end">
 								{@render rowActions(m)}
 							</td>
 						</tr>
@@ -1695,7 +1710,7 @@
 							{#if m.categories.length}
 								<div class="mt-1.5 flex flex-wrap gap-1">
 									{#each m.categories as c (c)}
-										<span class="rounded px-1.5 py-0.5 text-[10px] font-medium" style="background: var(--muted); color: var(--muted-foreground);">{c}</span>
+										<span class="rounded px-1.5 py-0.5 text-xs font-medium" style="background: var(--muted); color: var(--muted-foreground);">{c}</span>
 									{/each}
 								</div>
 							{/if}
@@ -1710,25 +1725,25 @@
 					<!-- B. Informasi utama -->
 					<dl class="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-3">
 						<div class="min-w-0">
-							<dt class="text-[11px] text-muted-foreground">{tr('Harga')}</dt>
+							<dt class="text-xs text-muted-foreground">{tr('Harga')}</dt>
 							<dd class="mt-0.5 text-[13px] font-semibold tabular-nums">{@render priceCell(m)}</dd>
 						</div>
 						<div class="min-w-0">
-							<dt class="text-[11px] text-muted-foreground">{tr('Kualitas')}</dt>
+							<dt class="text-xs text-muted-foreground">{tr('Kualitas')}</dt>
 							<dd class="mt-0.5 text-[13px] font-semibold tabular-nums">
 								{#if m.health_score != null}
 									<span title={JSON.stringify(m.health_breakdown ?? {})}>{m.health_score}</span>
 								{:else}
-									<span class="text-[11px] font-normal text-muted-foreground">{tr('Belum dihitung')}</span>
+									<span class="text-xs font-normal text-muted-foreground">{tr('Belum dihitung')}</span>
 								{/if}
 							</dd>
 						</div>
 						<div class="min-w-0">
-							<dt class="text-[11px] text-muted-foreground">DA</dt>
+							<dt class="text-xs text-muted-foreground">DA</dt>
 							<dd class="mt-0.5 text-[13px] font-semibold tabular-nums">{#if m.seo_da != null}{m.seo_da}{:else}<span class="font-normal text-muted-foreground">—</span>{/if}</dd>
 						</div>
 						<div class="min-w-0">
-							<dt class="text-[11px] text-muted-foreground">Platform</dt>
+							<dt class="text-xs text-muted-foreground">Platform</dt>
 							<dd class="mt-0.5 text-[13px] font-semibold">{platLabel(m)}</dd>
 							<div class="font-normal">{@render connectionStatus(m)}</div>
 						</div>
@@ -1738,11 +1753,11 @@
 					<div class="mt-3.5 border-t pt-3.5" style="border-color: var(--border);">
 						<dl class="grid grid-cols-2 gap-x-3 gap-y-3">
 							<div class="min-w-0">
-								<dt class="text-[11px] text-muted-foreground">{tr('Verifikasi Kepemilikan')}</dt>
+								<dt class="text-xs text-muted-foreground">{tr('Verifikasi Kepemilikan')}</dt>
 								<dd class="mt-1">{@render verifCell(m)}</dd>
 							</div>
 							<div class="min-w-0">
-								<dt class="text-[11px] text-muted-foreground">{tr('Mode Integrasi')}</dt>
+								<dt class="text-xs text-muted-foreground">{tr('Mode Integrasi')}</dt>
 								<dd class="mt-1">{@render modeBadge(m)}</dd>
 							</div>
 							{#if autoPublishEnabled}
@@ -1770,9 +1785,9 @@
 
 {#snippet contohLink(m: Media)}
 	{#if m.contoh_artikel_url}
-		<a class="mt-0.5 inline-flex w-fit items-center justify-start gap-1 text-left text-xs" style="color: var(--primary);" href={m.contoh_artikel_url} target="_blank" rel="noreferrer">{tr('Contoh artikel')} <ExternalLink size={10} /></a>
+		<a class="mt-0.5 inline-flex w-fit items-center justify-start gap-1 whitespace-nowrap text-left text-xs" style="color: var(--primary);" href={m.contoh_artikel_url} target="_blank" rel="noreferrer">{tr('Contoh artikel')} <ExternalLink size={10} /></a>
 	{:else}
-		<button type="button" class="media-contoh mt-0.5 inline-flex w-fit items-center justify-start gap-1 text-left text-[11px]" style="color: var(--primary);" onclick={() => openContoh(m)}>
+		<button type="button" class="media-contoh mt-0.5 inline-flex w-fit items-center justify-start gap-1 whitespace-nowrap text-left text-xs" style="color: var(--primary);" onclick={() => openContoh(m)}>
 			<Plus size={11} /> {tr('Tambah contoh artikel')}
 		</button>
 	{/if}
@@ -1781,7 +1796,7 @@
 {#snippet domainVerify(m: Media)}
 	{#if m.domain_verified}
 		<span
-			class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+			class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
 			style="background: var(--accent); color: var(--accent-foreground);"
 			title={tr('Kepemilikan domain terverifikasi')}
 		>
@@ -1802,16 +1817,16 @@
 	<!-- Badge menunjukkan JENIS integrasinya: 'publish' = jalur API situs mitra
 	(WordPress/Blogger/Custom/sites API key), sisanya mitra menempel sendiri. -->
 	{#if (m.publication_mode ?? 'draft') === 'publish'}
-		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--success-soft, #e8f7ee); color: var(--success);">{tr('API')}</span>
+		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style="background-color: var(--success-soft, #e8f7ee); color: var(--success);">{tr('API')}</span>
 	{:else}
-		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">{tr('Manual')}</span>
+		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style="background-color: var(--warning-soft, #fdf3e3); color: var(--warning);">{tr('Manual')}</span>
 	{/if}
 {/snippet}
 
 {#snippet autoPublish(m: Media, showLabel: boolean)}
 	{#if autoPublishEnabled}
 		<div class="flex items-center gap-1">
-			<label class="media-auto-label inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+			<label class="media-auto-label inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
 				<input
 					type="checkbox"
 					class="media-auto-check"
@@ -1855,7 +1870,7 @@
 	{@const cut = priceCut(m.price)}
 	<div class="relative flex justify-start">
 		<button
-			class="inline-flex items-center gap-1 text-left tabular-nums underline-offset-2 hover:underline"
+			class="md-price"
 			aria-haspopup="dialog"
 			aria-expanded={openPriceID === m.id}
 			title={tr('Lihat rincian penghasilan')}
@@ -1879,7 +1894,7 @@
 				onclick={(e) => e.stopPropagation()}
 				onkeydown={(e) => { if (e.key === 'Escape') openPriceID = null; }}
 			>
-				<p class="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Rincian penghasilan')}</p>
+				<p class="mb-2 text-xs font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Rincian penghasilan')}</p>
 				<dl class="space-y-1.5 text-[13px] tabular-nums">
 					<div class="flex items-center justify-between gap-3">
 						<dt class="text-muted-foreground">{tr('Harga diajukan')}</dt>
@@ -1904,14 +1919,14 @@
 {#snippet categoryCell(m: Media)}
 	<div class="relative flex justify-start">
 		<button
-			class="inline-flex max-w-[150px] items-center gap-1 truncate text-left text-[13px] text-muted-foreground underline-offset-2 hover:underline"
+			class="md-cat"
 			aria-haspopup="dialog"
 			aria-expanded={openCatID === m.id}
 			title={tr('Kelola kategori')}
 			onclick={(e) => { e.stopPropagation(); if (openCatID === m.id) { openCatID = null; } else { openCats(m); } }}
 		>
 			<span class="truncate">{m.categories.join(', ') || '—'}</span>
-			<Pencil size={11} class="shrink-0" />
+			<Pencil size={12} strokeWidth={1.5} class="md-cat-icon shrink-0" />
 		</button>
 		{#if openCatID === m.id}
 			<div
@@ -1928,7 +1943,7 @@
 				onclick={(e) => e.stopPropagation()}
 				onkeydown={(e) => { if (e.key === 'Escape') openCatID = null; }}
 			>
-				<p class="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Kelola Kategori')}</p>
+				<p class="mb-2 text-xs font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Kelola Kategori')}</p>
 				<div class="flex flex-wrap gap-1.5">
 					{#each catDraft as c (c)}
 						<span class="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs" style="border-color: var(--border); color: var(--foreground);">
@@ -1965,7 +1980,7 @@
 					<p class="mt-2 text-[12px]" style="color: var(--destructive);">{catError}</p>
 				{/if}
 				<div class="mt-3 flex items-center justify-between gap-2 border-t pt-2.5" style="border-color: var(--border);">
-					<span class="text-[11px] text-muted-foreground">{catDraft.length}/20</span>
+					<span class="text-xs text-muted-foreground">{catDraft.length}/20</span>
 					<div class="flex items-center gap-2">
 						<button type="button" class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" onclick={() => (openCatID = null)}>{tr('Batal')}</button>
 						<button type="button" class="app-btn app-btn-primary !min-h-7 !px-2.5 !text-xs" disabled={catBusy || catDraft.length === 0} onclick={() => void saveCat(m)}>
@@ -2028,7 +2043,7 @@
 						{:else}
 							<span
 								class="inline-flex h-5 w-5 items-center justify-center rounded-full"
-								style="background: color-mix(in srgb, var(--destructive) 14%, transparent); color: var(--destructive);"
+								style="background: var(--muted); color: var(--muted-foreground);"
 							>
 								<X size={12} />
 							</span>
@@ -2058,11 +2073,11 @@
 			<Check size={13} />
 		</span>
 	{:else if m.dewan_pers_status === 'pending' || m.dewan_pers_status === 'rejected' || m.dewan_pers_status === 'conflict'}
-		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium" style="border: 1px solid {dpBadge(m.dewan_pers_status).tone}; color: {dpBadge(m.dewan_pers_status).tone};">{dpBadge(m.dewan_pers_status).label}</span>
+		<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style="border: 1px solid {dpBadge(m.dewan_pers_status).tone}; color: {dpBadge(m.dewan_pers_status).tone};">{dpBadge(m.dewan_pers_status).label}</span>
 		{:else}
 			<span
 				class="inline-flex h-5 w-5 items-center justify-center rounded-full"
-				style="background: color-mix(in srgb, var(--destructive) 14%, transparent); color: var(--destructive);"
+				style="background: var(--muted); color: var(--muted-foreground);"
 				role="img"
 				title={tr('Tanpa Dewan Pers')}
 				aria-label={tr('Tanpa Dewan Pers')}
@@ -2071,23 +2086,23 @@
 			</span>
 		{/if}
 	{#if m.dewan_pers_status === 'rejected' && m.dewan_pers_rejection_reason}
-		<span class="mt-1 block max-w-[180px] text-[11px]" style="color: var(--destructive);">{m.dewan_pers_rejection_reason}</span>
+		<span class="mt-1 block max-w-[180px] text-xs" style="color: var(--destructive);">{m.dewan_pers_rejection_reason}</span>
 	{/if}
 {/snippet}
 
 {#snippet connectionStatus(m: Media)}
 	{#if (m.integration_type === 'blogger' && m.blogger_status !== 'connected') || (m.integration_type === 'custom_web' && m.custom_web_status !== 'connected')}
-		<span class="mt-0.5 block text-[11px]" style="color: var(--destructive);">{tr('Belum terhubung')}</span>
+		<span class="mt-0.5 block text-xs" style="color: var(--destructive);">{tr('Belum terhubung')}</span>
 	{/if}
 {/snippet}
 
 {#snippet statusBadges(m: Media)}
-	<span class="rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
+	<span class="md-status md-status-{m.status}">
 		{statusLabel[m.status] ?? m.status}
 	</span>
 	{#if m.status === 'active' && m.pending_values && Object.keys(m.pending_values).length > 0}
 		<span
-			class="mt-1 block text-[11px]"
+			class="mt-1 block text-xs"
 			style="color: var(--warning);"
 			title={(m.pending_changes ?? []).map((c) => `${c.label}: ${c.from ?? '-'} → ${c.to ?? '-'}`).join('\n')}
 		>{tr('Perubahan menunggu persetujuan')}</span>
@@ -2104,7 +2119,7 @@
 						<a
 							{...props}
 							href={`${base}/publications?media=${encodeURIComponent(m.id)}&tab=waiting`}
-							class="rounded-full px-2 py-0.5 text-[11px] font-medium underline-offset-2 hover:underline"
+							class="whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium underline-offset-2 hover:underline"
 							style="border: 0; background-color: var(--warning-soft, #fdf3e3); color: var(--warning);"
 						>
 							{m.pending_publications} {tr('menunggu')}
@@ -2120,20 +2135,20 @@
 			</Tooltip.Root>
 		</Tooltip.Provider>
 	{:else}
-		<span class="text-[11px] text-muted-foreground">0 {tr('menunggu')}</span>
+		<span class="whitespace-nowrap text-xs text-muted-foreground">0 {tr('menunggu')}</span>
 	{/if}
 {/snippet}
 
 {#snippet statusRejection(m: Media)}
 	{#if m.status === 'rejected' && m.rejection_reason}
-		<span class="mt-1 block max-w-[200px] text-[11px]" style="color: var(--destructive);">{tr('Alasan')}: {m.rejection_reason}</span>
+		<span class="mt-1 block max-w-[200px] text-xs" style="color: var(--destructive);">{tr('Alasan')}: {m.rejection_reason}</span>
 	{/if}
 {/snippet}
 
 {#snippet rowActions(m: Media)}
 	{#if m.status === 'archived'}
 		<div class="flex items-center justify-end gap-2">
-			<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--muted); color: var(--muted-foreground);">{tr('Terarsip')}</span>
+			<span class="rounded-full px-2 py-0.5 text-xs" style="background: var(--muted); color: var(--muted-foreground);">{tr('Terarsip')}</span>
 			<button class="media-restore app-btn app-btn-soft !px-2.5 !text-xs" onclick={() => restore(m)}><RotateCcw size={13} /> {tr('Pulihkan')}</button>
 		</div>
 	{:else}
@@ -3069,6 +3084,62 @@
 {/if}
 
 <style>
+	/* ── Daftar Media: ritme 4px, bobot 400–500, warna hanya untuk arti ──────
+	   Status: hijau aktif · kuning menunggu review · merah ditolak · abu nonaktif.
+	   UI lama tersimpan di +page.legacy.svelte.txt (salin ke +page.svelte). */
+	.md-h1 { font-size: 28px; line-height: 32px; font-weight: 500; }
+	.md-sub { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+	.md-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 24px; padding: 12px 16px; }
+
+	.md-th {
+		padding: 12px; font-size: 12px; line-height: 16px; font-weight: 400; text-align: left; vertical-align: bottom;
+		color: var(--muted-foreground); background-color: color-mix(in srgb, var(--foreground) 2%, transparent);
+		border-bottom: 1px solid var(--border);
+	}
+	.md-th-end { text-align: right; }
+	.md-tr { border-top: 1px solid var(--border); transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1); }
+	.md-tr:first-child { border-top: 0; }
+	.md-tr:hover { background-color: color-mix(in srgb, var(--foreground) 3%, transparent); }
+	.md-td { padding: 12px; vertical-align: middle; }
+	.md-td-end { text-align: right; }
+	.md-num { font-variant-numeric: tabular-nums; }
+
+	.md-name { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+	.md-fav { display: inline-flex; margin-top: 1px; }
+	.md-domain { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--foreground); }
+	a.md-domain:hover { color: var(--accent-foreground); text-decoration: underline; }
+
+	.md-score {
+		display: inline-flex; min-width: 36px; height: 28px; align-items: center; justify-content: center; padding: 0 8px;
+		border: 1px solid var(--border); border-radius: 8px; background-color: var(--card);
+		font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums;
+	}
+	.md-plat { font-size: 13px; line-height: 20px; }
+
+	.md-cat {
+		display: inline-flex; max-width: 168px; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 6px;
+		background-color: var(--muted); color: var(--foreground); font-size: 13px; line-height: 20px; text-align: left;
+		transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.md-cat:hover { background-color: var(--accent); color: var(--accent-foreground); }
+	.md-cat :global(.md-cat-icon) { color: var(--muted-foreground); }
+	.md-cat:hover :global(.md-cat-icon) { color: var(--accent-foreground); }
+
+	.md-price {
+		display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; text-align: left;
+		font-size: 14px; line-height: 20px; font-weight: 500; font-variant-numeric: tabular-nums;
+	}
+	.md-price:hover { color: var(--accent-foreground); }
+	.md-price :global(svg) { color: var(--muted-foreground); }
+
+	.md-status {
+		display: inline-flex; white-space: nowrap; align-items: center; padding: 2px 10px; border-radius: 9999px;
+		font-size: 12px; line-height: 16px; font-weight: 500;
+		background-color: var(--muted); color: var(--muted-foreground);
+	}
+	.md-status-active { background-color: var(--success-soft); color: var(--success); }
+	.md-status-pending_review { background-color: var(--warning-soft); color: var(--warning); }
+	.md-status-rejected { background-color: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive); }
 	/* Underline tabs "Kelola Media | Transparansi Data": tab terbaca sebagai
 	   navigasi halaman, bukan tombol CTA. Indikator aktif menempel pada garis
 	   divider supaya menyatu dengan konten di bawahnya. */
