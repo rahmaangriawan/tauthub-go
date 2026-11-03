@@ -759,7 +759,7 @@
 									<UsersRound size={16} class="shrink-0 text-muted-foreground" />
 									<div>
 										{#if row.secure_direct_status === 'pending'}
-											<Tooltip content={tr('Mengajukan Secure Direct — gunakan menu titik-tiga untuk mengizinkan mode otomatis.')}>
+											<Tooltip content={tr('Mengajukan Secure Direct — gunakan menu titik-tiga untuk mengaktifkan Secure Direct.')}>
 												<Badge label={tr('Pengajuan Secure Direct')} tone="warning" />
 											</Tooltip>
 										{/if}
