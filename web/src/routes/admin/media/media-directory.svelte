@@ -4,7 +4,7 @@
 	// Tab Direktori /admin/media — master data media (harga, kredit, tier, integrasi, partner).
 	// Port MediaDirectorySection di apps/web/src/app/admin/media/_sections.tsx.
 	import { onDestroy, onMount } from 'svelte';
-	import { CircleAlert, CircleCheck, ExternalLink, Info, Plus, RefreshCw, Search, ShieldCheck, Users } from '@lucide/svelte';
+	import { CircleAlert, CircleCheck, ExternalLink, Info, Pencil, Plus, RefreshCw, Search, ShieldCheck, Users } from '@lucide/svelte';
 	import DataTable from '$lib/components/admin/data-table.svelte';
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
@@ -44,6 +44,8 @@
 	let loading = $state(true);
 	let createOpen = $state(false);
 	let editing = $state<Media | null>(null);
+	let daEditing = $state(false);
+	let daInput = $state('');
 	// Judul dialog edit: domain saja + favicon (pola sama dengan media-detail-modal);
 	// favicon gagal muat → jatuh ke inisial.
 	const editDomain = $derived(
@@ -466,9 +468,24 @@
 		}
 	}
 
+	async function saveDaManual() {
+		if (!editing) return;
+		const val = daInput.trim();
+		const da = val === '' ? null : Number(val);
+		if (val !== '' && (isNaN(da!) || da! < 0 || da! > 100)) return;
+		await platformRequest(`/media/${editing.id}`, {
+			method: 'PUT',
+			body: JSON.stringify({ seo_da: da })
+		});
+		editing = { ...editing, seo_da: da };
+		daEditing = false;
+		void load();
+	}
+
 	function closeForm() {
 		createOpen = false;
 		editing = null;
+		daEditing = false;
 		priceConfirmOpen = false;
 		priceNote = '';
 		violationOpen = false;
@@ -1016,7 +1033,7 @@
 
 {#snippet integrationModeCell(row: Media)}
 	<div class="flex flex-col items-start gap-1">
-		{#if row.integration_type && row.integration_type !== 'manual'}
+		{#if (row.publication_mode ?? 'draft') === 'publish'}
 			<Badge tone="success" label="API" />
 		{:else}
 			<Badge tone="warning" label="Manual" />
@@ -1891,8 +1908,30 @@
 								{/if}
 							</div>
 							<div class="mw-tile">
-								<p class="mw-tile-k">DA</p>
-								{#if editing.seo_da != null}
+								<p class="mw-tile-k flex items-center gap-1">DA
+									{#if !daEditing}
+										<button
+											type="button"
+											class="text-muted-foreground hover:text-foreground"
+											onclick={() => { daInput = editing?.seo_da != null ? String(editing.seo_da) : ''; daEditing = true; }}
+											title="Edit DA manual"
+										><Pencil size={11} /></button>
+									{/if}
+								</p>
+								{#if daEditing}
+									<div class="flex items-center gap-1">
+										<input
+											type="number"
+											min="0"
+											max="100"
+											class="h-6 w-14 rounded border px-1.5 text-xs"
+											bind:value={daInput}
+											onkeydown={(e) => { if (e.key === 'Enter') void saveDaManual(); if (e.key === 'Escape') daEditing = false; }}
+											onblur={() => void saveDaManual()}
+											autofocus
+										/>
+									</div>
+								{:else if editing.seo_da != null}
 									<Badge tone={scoreTone(editing.seo_da)} value={`${editing.seo_da}`} />
 								{:else}
 									<Badge tone="neutral" label="belum ada" />
