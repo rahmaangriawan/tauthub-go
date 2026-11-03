@@ -361,13 +361,66 @@ func (d *Deps) mmInterpretBrief(ctx context.Context, brandRow brandsdomain.Brand
 	d.logMatchmakerRun(ctx, summary.AgentMatchmaker, brandRow.ID, agentCfg.Model, material, result.Content,
 		result.InputTokens, result.OutputTokens, time.Since(startedAt), nil)
 
+	crit, ctxNotes := mmApplyBriefContext(parsed.Criteria, brief)
 	interp := &mmInterpretation{
 		Summary:     mmClip(parsed.Summary, 400),
 		Provenance:  mmNormalizeProvenance(parsed.Provenance),
-		Assumptions: mmClipList(parsed.Assumptions, 8, 240),
+		Assumptions: mmClipList(append(ctxNotes, parsed.Assumptions...), 8, 240),
 		Unknowns:    mmClipList(parsed.Unknowns, 8, 240),
 	}
-	return parsed.Criteria, interp, 0, ""
+	return crit, interp, 0, ""
+}
+
+// Frasa yang menandakan angka anggaran milik SATU media, bukan total kampanye.
+var mmPerMediaPhrases = []string{
+	"per media", "permedia", "/media", "per-media", "setiap media", "tiap media",
+	"per artikel", "per placement", "per situs", "per publikasi", "harga media", "harga per",
+	"masing-masing media", "masing masing media",
+}
+
+// Frasa yang menegaskan angka anggaran adalah total kampanye.
+var mmTotalPhrases = []string{"total", "semua media", "seluruh", "keseluruhan", "all in", "all-in"}
+
+// mmApplyBriefContext: failsafe deterministik di atas hasil model. Model
+// kadang membaca "butuh media budget 200k" sebagai budget_max=200000 (plafon
+// per media) padahal maksud klien adalah anggaran total — hasilnya paket
+// sampai 8×200rb. Server membaca ulang kalimat briefnya: bila tidak ada frasa
+// per-media, angka itu milik total kampanye. Sebaliknya, bila klien jelas
+// menulis "per media" dan model justru mengisi budget_total tanpa count,
+// angka itu dipindah ke plafon per media. Catatan dikembalikan sebagai
+// assumptions supaya klien melihat cara angka itu dibaca.
+func mmApplyBriefContext(crit mmCriteria, brief string) (mmCriteria, []string) {
+	notes := []string{}
+	text := strings.ToLower(brief)
+	hasPerMedia := false
+	for _, p := range mmPerMediaPhrases {
+		if strings.Contains(text, p) {
+			hasPerMedia = true
+			break
+		}
+	}
+	hasTotal := false
+	for _, p := range mmTotalPhrases {
+		if strings.Contains(text, p) {
+			hasTotal = true
+			break
+		}
+	}
+
+	switch {
+	case crit.BudgetTotal <= 0 && crit.BudgetMax > 0 && !hasPerMedia:
+		// "budget 200k" tanpa "per media" → total kampanye.
+		crit.BudgetTotal = crit.BudgetMax
+		crit.BudgetMax = 0
+		crit.BudgetMin = 0
+		notes = append(notes, "Anggaran Rp"+bsIntlIDR(crit.BudgetTotal)+" dibaca sebagai total kampanye, bukan harga per media — media dipilih sampai totalnya tidak melebihi angka itu.")
+	case crit.BudgetTotal > 0 && crit.BudgetMax <= 0 && crit.Count <= 0 && hasPerMedia && !hasTotal:
+		// "maksimal 200k per media" tanpa total/jumlah → plafon per media.
+		crit.BudgetMax = crit.BudgetTotal
+		crit.BudgetTotal = 0
+		notes = append(notes, "Rp"+bsIntlIDR(crit.BudgetMax)+" dibaca sebagai batas harga per media sesuai kata \"per media\" di brief.")
+	}
+	return crit, notes
 }
 
 // mmAgentSelect: agent kedua yang memilih paket dari kandidat katalog nyata
