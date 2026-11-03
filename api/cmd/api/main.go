@@ -847,12 +847,14 @@ func run() error {
 			authed.Get("/platform/partners/{partnerId}/vip", platformDeps.PartnerVipGet)
 			authed.Put("/platform/partners/{partnerId}/vip", platformDeps.PartnerVipUpdate)
 
-			// Payments (admin).
-			authed.Get("/platform/payments/gateways", platformDeps.PaymentsGateways)
-			authed.Post("/platform/payments/gateways", platformDeps.PaymentGatewaySave)
-			authed.Post("/platform/payments/gateways/{gatewayId}/activate", platformDeps.PaymentGatewayActivate)
-			authed.Post("/platform/payments/gateways/{gatewayId}/test", platformDeps.PaymentGatewayTest)
-			authed.Get("/platform/payments/transactions", platformDeps.PaymentTransactions)
+			// Payments (admin). Super Admin saja: konfigurasi gateway berisi
+			// kredensial payment provider (server key, secret), jadi tidak
+			// dibuka untuk admin biasa meski punya permission "payments".
+			authed.With(platformDeps.SuperAdminOnly).Get("/platform/payments/gateways", platformDeps.PaymentsGateways)
+			authed.With(platformDeps.SuperAdminOnly).Post("/platform/payments/gateways", platformDeps.PaymentGatewaySave)
+			authed.With(platformDeps.SuperAdminOnly).Post("/platform/payments/gateways/{gatewayId}/activate", platformDeps.PaymentGatewayActivate)
+			authed.With(platformDeps.SuperAdminOnly).Post("/platform/payments/gateways/{gatewayId}/test", platformDeps.PaymentGatewayTest)
+			authed.With(platformDeps.SuperAdminOnly).Get("/platform/payments/transactions", platformDeps.PaymentTransactions)
 
 			// Settings.
 			authed.With(platformDeps.SuperAdminOnly).Get("/platform/settings/email", platformDeps.SettingsEmailGet)
@@ -1026,16 +1028,20 @@ func run() error {
 			authed.Get("/platform/credits", platformDeps.CreditsConfigGet)
 			authed.Post("/platform/credits", platformDeps.CreditsAdjust)
 			authed.Put("/platform/credits", platformDeps.CreditsConfigPut)
-			authed.Get("/platform/invoices", platformDeps.InvoicesList)
-			authed.Post("/platform/invoices", platformDeps.InvoiceCreate)
-			authed.Get("/platform/invoices/{invoiceId}", platformDeps.InvoiceGet)
-			authed.Put("/platform/invoices/{invoiceId}", platformDeps.InvoiceUpdate)
-			authed.Delete("/platform/invoices/{invoiceId}", platformDeps.InvoiceVoid)
-			authed.Get("/platform/packages", platformDeps.CreditPackagesList)
-			authed.Post("/platform/packages", platformDeps.CreditPackageCreate)
-			authed.Get("/platform/packages/{packageId}", platformDeps.CreditPackageGet)
-			authed.Put("/platform/packages/{packageId}", platformDeps.CreditPackageUpdate)
-			authed.Delete("/platform/packages/{packageId}", platformDeps.CreditPackageRevoke)
+			// Invoice & paket kredit: Super Admin saja. Sebelumnya
+			// /platform/packages bahkan tidak memeriksa permission sama sekali
+			// (cukup "admin"), jadi admin biasa bisa membaca seluruh daftar
+			// paket lewat API walau menunya tidak dipakai.
+			authed.With(platformDeps.SuperAdminOnly).Get("/platform/invoices", platformDeps.InvoicesList)
+			authed.With(platformDeps.SuperAdminOnly).Post("/platform/invoices", platformDeps.InvoiceCreate)
+			authed.With(platformDeps.SuperAdminOnly).Get("/platform/invoices/{invoiceId}", platformDeps.InvoiceGet)
+			authed.With(platformDeps.SuperAdminOnly).Put("/platform/invoices/{invoiceId}", platformDeps.InvoiceUpdate)
+			authed.With(platformDeps.SuperAdminOnly).Delete("/platform/invoices/{invoiceId}", platformDeps.InvoiceVoid)
+			authed.With(platformDeps.SuperAdminOnly).Get("/platform/packages", platformDeps.CreditPackagesList)
+			authed.With(platformDeps.SuperAdminOnly).Post("/platform/packages", platformDeps.CreditPackageCreate)
+			authed.With(platformDeps.SuperAdminOnly).Get("/platform/packages/{packageId}", platformDeps.CreditPackageGet)
+			authed.With(platformDeps.SuperAdminOnly).Put("/platform/packages/{packageId}", platformDeps.CreditPackageUpdate)
+			authed.With(platformDeps.SuperAdminOnly).Delete("/platform/packages/{packageId}", platformDeps.CreditPackageRevoke)
 			authed.Get("/platform/orders", platformDeps.OrdersList)
 			authed.Get("/platform/orders/campaigns", platformDeps.OrdersCampaignsList)
 			authed.Get("/platform/orders/campaigns/{campaignId}", platformDeps.OrdersCampaignDetail)

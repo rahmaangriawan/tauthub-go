@@ -13,7 +13,7 @@
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime, fmtRp, fmtNum } from '$lib/admin-format';
 	import { rp } from '$lib/credits/rupiah';
-	import { platformError } from '../_platform';
+	import { platformError, isAccessDenied } from '../_platform';
 
 	type CredentialField = { key: string; label: string; secret?: boolean; required?: boolean; placeholder?: string };
 	type Gateway = {
@@ -154,7 +154,7 @@
 	}
 
 	const activeProvider = $derived(gateways.find((g) => g.is_active)?.provider ?? null);
-	const denied = $derived(Boolean(!loading && gateways.length === 0 && error.includes('Akses platform')));
+	const denied = $derived(Boolean(!loading && gateways.length === 0 && isAccessDenied(error)));
 </script>
 
 <section>

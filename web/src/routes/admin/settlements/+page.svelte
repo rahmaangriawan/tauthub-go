@@ -8,7 +8,8 @@
 	// (setelah potongan transfer) agar sama dengan yang diterima mitra; detail
 	// memuat rekening mitra untuk transfer manual.
 	import { onMount } from 'svelte';
-	import { Landmark, TriangleAlert, Wallet } from '@lucide/svelte';
+	import { Landmark, TriangleAlert } from '@lucide/svelte';
+	import SettlementIcon from '$lib/components/icons/settlement-icon.svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
@@ -284,7 +285,7 @@
 		description="Payout ke partner: create meng-agregasi earnings pending dalam periode dan menguncinya (Phase 6)."
 	>
 		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{fmtNum(total)} settlement</span>
-		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><Wallet size={16} />{tr("Buat settlement")}</button>
+		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><SettlementIcon size={16} />{tr("Buat settlement")}</button>
 	</PageHeader>
 
 	{#if denied}
@@ -344,7 +345,7 @@
 						<tr class="border-t">
 							<td class="px-4 py-2.5">
 								<div class="flex items-center gap-2">
-									<Wallet size={16} class="shrink-0 text-muted-foreground" />
+									<SettlementIcon size={16} class="shrink-0 text-muted-foreground" />
 									<div>
 										<p class="font-medium">{row.partner_name ?? row.partner_id.slice(0, 8)}</p>
 										<p class="text-xs text-muted-foreground">{row.id.slice(0, 8)}</p>
@@ -407,7 +408,7 @@
 			</table>
 			{#if !loading && rows.length === 0}
 				<div class="flex flex-col items-center px-4 py-12 text-center">
-					<Wallet size={26} class="text-muted-foreground" />
+					<SettlementIcon size={26} class="text-muted-foreground" />
 					<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada settlement.")}</p>
 				</div>
 			{/if}

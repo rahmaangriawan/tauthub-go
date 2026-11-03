@@ -15,6 +15,8 @@
 		Gauge, Gift, Headset, House, Megaphone, MessageCircle, Newspaper, PenTool, Percent, Receipt, ScrollText,
 		Settings, ShieldCheck, Sparkle, TriangleAlert, Users, Wallet, Zap
 	} from '@lucide/svelte';
+	import FinanceReportIcon from '$lib/components/icons/finance-report-icon.svelte';
+	import SettlementIcon from '$lib/components/icons/settlement-icon.svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AppShell from '$lib/components/app-shell.svelte';
 import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
@@ -330,9 +332,16 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			label: i18n.t.nav_admin.group_monetization,
 			items: [
 				...(can('payments')
-					? [{ label: i18n.t.nav_admin.finance_report, href: '/admin/finance-report', icon: ChartBar, active: pathname.startsWith('/admin/finance-report') }]
+					// Ikon uang (bukan grafik batang): ChartBar sudah dipakai menu
+					// "PR & Analitik" di grup lain, jadi laporan keuangan tampak
+					// kembar dengan menu itu di sidebar.
+					? [{ label: i18n.t.nav_admin.finance_report, href: '/admin/finance-report', icon: FinanceReportIcon, active: pathname.startsWith('/admin/finance-report') }]
 					: []),
-				...(can('payments')
+				// Payments & Invoice dan Packages khusus Super Admin: isinya
+				// kredensial payment gateway dan harga paket kredit. Menu lain di
+				// grup ini (Keuangan, Revenue Shares, Saldo, Settlements) tetap
+				// mengikuti permission masing-masing.
+				...(isSuper
 					? [
 							{
 								label: tr('Payments & Invoice'),
@@ -343,10 +352,14 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 									{ label: i18n.t.nav_admin.payments, href: '/admin/payments', active: pathname.startsWith('/admin/payments') },
 									{ label: i18n.t.nav_admin.invoices, href: '/admin/invoices', active: pathname.startsWith('/admin/invoices') }
 								]
-							},
-							{ label: i18n.t.nav_admin.revenue_shares, href: '/admin/revenue-shares', icon: Percent, active: pathname.startsWith('/admin/revenue-shares') },
-							{ label: i18n.t.nav_admin.packages, href: '/admin/packages', icon: Coins, active: pathname.startsWith('/admin/packages') }
+							}
 						]
+					: []),
+				...(can('payments')
+					? [{ label: i18n.t.nav_admin.revenue_shares, href: '/admin/revenue-shares', icon: Percent, active: pathname.startsWith('/admin/revenue-shares') }]
+					: []),
+				...(isSuper
+					? [{ label: i18n.t.nav_admin.packages, href: '/admin/packages', icon: Coins, active: pathname.startsWith('/admin/packages') }]
 					: []),
 				...(can('topup')
 					? [
@@ -363,7 +376,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 						]
 					: []),
 				...(can('settlements')
-					? [{ label: i18n.t.nav_admin.settlements, href: '/admin/settlements', icon: Wallet, active: pathname.startsWith('/admin/settlements') }]
+					? [{ label: i18n.t.nav_admin.settlements, href: '/admin/settlements', icon: SettlementIcon, active: pathname.startsWith('/admin/settlements') }]
 					: [])
 			]
 		},
