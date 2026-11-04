@@ -180,9 +180,11 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 		v := mpClampInt(geoMinRaw, 0, 0, 100)
 		where = append(where, "sm.ai_trust_score >= "+next(v))
 	}
+	searchPH := ""
 	if search != "" {
 		pattern := "%" + search + "%"
 		ph := next(pattern)
+		searchPH = ph
 		where = append(where, "(m.name ILIKE "+ph+" OR m.slug ILIKE "+ph+" OR m.category ILIKE "+ph+" OR m.website_url ILIKE "+ph+" OR p.name ILIKE "+ph+" OR u.email ILIKE "+ph+" OR m.partner_id::text ILIKE "+ph+")")
 	}
 	clause := ""
@@ -211,6 +213,15 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 		// Tab "Baru Ditambahkan": yang paling baru disetujui tampil paling atas.
 		orderBy = "m.reviewed_at DESC, m.name ASC"
 	}
+	// Pencarian juga mencocokkan nama/email pemilik. Bila nama mitra sama dengan
+	// domainnya (mis. mitra bernama "Cirebonbagus.id"), seluruh media mitra itu
+	// ikut cocok dan media yang dicari bisa terdorong ke halaman terakhir.
+	// Karena itu hasil yang cocok pada media itu sendiri (nama/slug/domain)
+	// diurutkan lebih dulu; urutan pilihan admin (sort) tetap dihormati.
+	searchRank := ""
+	if searchPH != "" && sortBy == "" {
+		searchRank = "(CASE WHEN m.name ILIKE " + searchPH + " OR m.slug ILIKE " + searchPH + " OR m.website_url ILIKE " + searchPH + " THEN 0 ELSE 1 END), "
+	}
 	switch sortBy {
 	case "da_desc":
 		orderBy = "sm.da DESC NULLS LAST, m.name ASC"
@@ -232,7 +243,7 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	}
 	pageArgs := append(append([]any{}, args...), limit, offset)
 	items, err := d.queryRows(r.Context(),
-		mpMediaListSelect+" "+clause+" ORDER BY "+orderBy+" LIMIT $"+ptItoa(len(args)+1)+" OFFSET $"+ptItoa(len(args)+2),
+		mpMediaListSelect+" "+clause+" ORDER BY "+searchRank+orderBy+" LIMIT $"+ptItoa(len(args)+1)+" OFFSET $"+ptItoa(len(args)+2),
 		pageArgs...)
 	if err != nil {
 		writeErr(w, d, err)

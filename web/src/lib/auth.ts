@@ -260,11 +260,22 @@ export async function apiRequest(
 		}
 		// Mutasi sukses membatalkan cache daftar client (SWR) supaya tidak basi.
 		if (method !== 'GET' && response.ok) swrClear();
-		if (shouldToast)
-			showToast(
-				response.ok ? mutationMessage(method) : 'Gagal menyimpan perubahan.',
-				response.ok ? 'success' : 'error'
-			);
+		if (shouldToast) {
+			let failMessage = 'Gagal menyimpan perubahan.';
+			if (!response.ok) {
+				// Error terstruktur (ada `code`) memang ditulis server untuk dibaca
+				// pengguna, mis. wa_required; tampilkan alasannya, bukan pesan umum.
+				try {
+					const body = (await response.clone().json()) as { code?: unknown; detail?: unknown };
+					if (typeof body.code === 'string' && typeof body.detail === 'string' && body.detail.length <= 240) {
+						failMessage = body.detail;
+					}
+				} catch {
+					/* bukan JSON: pakai pesan umum */
+				}
+			}
+			showToast(response.ok ? mutationMessage(method) : failMessage, response.ok ? 'success' : 'error');
+		}
 		return response;
 	} finally {
 		window.clearTimeout(timeout);

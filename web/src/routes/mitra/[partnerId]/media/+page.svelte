@@ -159,6 +159,14 @@
 	});
 	let integrasiConsent = $state(false);
 	let dialogError = $state('');
+	// Error 422 `wa_required`: tampilkan tautan langsung ke pengisian nomor WhatsApp.
+	let dialogErrorWA = $state(false);
+	// Isi form yang bisa digulir: error di atasnya harus terlihat walau mitra sedang
+	// berada di dasar form saat menekan tombol simpan.
+	let formBodyEl = $state<HTMLDivElement | null>(null);
+	$effect(() => {
+		if (dialogError && formBodyEl) formBodyEl.scrollTo({ top: 0, behavior: 'smooth' });
+	});
 	let editConfirmOpen = $state(false);
 	/** Snapshot form saat openEdit — pembanding dirty sederhana. */
 	let formSnapshot = $state('');
@@ -831,6 +839,7 @@
 			editingId = null;
 			editingRow = null;
 			dialogError = '';
+			dialogErrorWA = false;
 			integrasiConsent = false;
 			confirmDeleteContoh = false;
 			aiSummaryStatus = null;
@@ -844,6 +853,7 @@
 			editingId = m.id;
 			editingRow = m;
 			dialogError = '';
+			dialogErrorWA = false;
 			confirmDeleteContoh = false;
 		// Preset persetujuan integrasi: media mode integrasi dianggap sudah
 		// menyetujui ketentuan saat dialog dibuka (parity app lama).
@@ -958,6 +968,7 @@
 	async function submitMedia() {
 		busy = true;
 		dialogError = '';
+		dialogErrorWA = false;
 		try {
 			const cats = Array.from(new Set(form.categories.map((c) => c.trim()).filter(Boolean)));
 			if (!form.name.trim()) {
@@ -1031,6 +1042,8 @@
 				? await apiRequest(`/v1/partner/media/${editingId}`, { method: 'PUT', body: JSON.stringify(payload) })
 				: await apiRequest('/v1/partner/media', { method: 'POST', body: JSON.stringify(payload) });
 			if (!res.ok) {
+				const errBody = (await res.clone().json().catch(() => null)) as { code?: string } | null;
+				dialogErrorWA = errBody?.code === 'wa_required';
 				dialogError = await readApiError(res, 'Permintaan gagal.');
 				return;
 			}
@@ -2250,11 +2263,11 @@
 
 				<!-- ── Form Body Scrollable ── -->
 				<form class="flex min-h-0 flex-1 flex-col overflow-hidden" onsubmit={saveMedia}>
-					<div class="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-6 bg-slate-50/40">
+					<div bind:this={formBodyEl} class="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-6 bg-slate-50/40">
 						{#if dialogError}
 							<div class="mb-5 flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-700" role="alert">
 								<TriangleAlert size={15} class="mt-0.5 shrink-0" />
-								<span>{dialogError}</span>
+								<span>{dialogError}{#if dialogErrorWA} <a class="font-semibold underline" href={`${base}/profile`}>{tr('Isi nomor WhatsApp sekarang')}</a>{/if}</span>
 							</div>
 						{/if}
 
