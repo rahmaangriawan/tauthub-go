@@ -1604,7 +1604,7 @@
 	{:else}
 		<!-- Desktop: tabel asli, tidak diubah (≥768px). -->
 		<div class="app-card mt-4 hidden overflow-x-auto md:block">
-			<table class="w-full text-sm">
+			<table class="w-full min-w-[1200px] text-sm">
 				<thead>
 					<tr>
 						<th class="md-th">{tr("Media")}</th>
@@ -3158,7 +3158,7 @@
 	.md-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 24px; padding: 12px 16px; }
 
 	.md-th {
-		padding: 12px; font-size: 12px; line-height: 16px; font-weight: 400; text-align: left; vertical-align: bottom;
+		padding: 12px; font-size: 12px; line-height: 16px; font-weight: 400; text-align: left; vertical-align: bottom; white-space: nowrap;
 		color: var(--muted-foreground); background-color: color-mix(in srgb, var(--foreground) 2%, transparent);
 		border-bottom: 1px solid var(--border);
 	}
