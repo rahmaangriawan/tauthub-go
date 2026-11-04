@@ -849,7 +849,7 @@
 
 	/** Tooltip header kolom Mode Integrasi: siapa yang menerbitkan artikel. */
 	const modeColumnHint = () =>
-		tr('Siapa yang menerbitkan artikel. API = di-push otomatis ke situs mitra lewat WordPress/Blogger/Custom/API key; Manual = mitra menempel artikelnya sendiri lalu mengirim URL artikelnya.');
+		tr('Siapa yang menerbitkan artikel. API = di-push otomatis ke situs mitra lewat WordPress/Blogspot/Custom/API key; Manual = mitra menempel artikelnya sendiri lalu mengirim URL artikelnya.');
 
 	const statusLabel: Record<string, string> = $derived({
 		waiting_partner: tr('Menunggu persetujuan'), partner_approved: tr('Disetujui'), partner_rejected: tr('Ditolak'),
@@ -926,7 +926,7 @@
 		: { label: tr('Manual'), tone: 'var(--warning)' };
 	const mediaHost = (u: string | null) => (u ?? '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
 	const integrationLabel: Record<string, string> = $derived({
-		wordpress: 'WordPress', blogger: 'Blogger', custom_web: 'Custom Web', tulisio_api: 'Tulisio API', manual: tr('Manual')
+		wordpress: 'WordPress', blogger: 'Blogspot', custom_web: 'Custom Web', tulisio_api: 'Tulisio API', manual: tr('Manual')
 	});
 	const isManualRow = (p: Pub) => (p.media_publication_mode ?? 'draft') !== 'publish';
 	const pendingUrl = (p: Pub) => p.status === 'partner_approved' && isManualRow(p) && !p.published_url;

@@ -133,7 +133,7 @@
 		website_url: '', adapter_url: '', price: '', pricing_type: 'nett',
 		traffic_estimate: 0, max_links: '1', link_duration_months: '0', description: '', notes: '',
 		allow_heading: 'default',
-		integration_type: 'wordpress', publication_mode: 'draft',
+		integration_type: 'manual', publication_mode: 'draft',
 		bahasa_artikel: ['Indonesia'], label_sponsor: 'tidak_ada', allow_hyperlink: true, link_rel: 'dofollow',
 		word_count_mode: 'sesuai_permintaan', allow_embed: false,
 		topik_terlarang: [], topikQuery: '', contoh_artikel_url: ''
@@ -489,7 +489,7 @@
 			case 'custom_web':
 				return 'Web Custom';
 			case 'blogger':
-				return 'Blogger';
+				return 'Blogspot';
 			case 'tulisio_api':
 				return 'Tulisio API';
 			case 'rss':
@@ -505,10 +505,10 @@
 
 	/** Tooltip header kolom Mode Integrasi: siapa yang menuntaskan penerbitan. */
 	const modeColumnHint = () =>
-		tr('Siapa yang menerbitkan artikel. API = di-push otomatis ke situs mitra lewat WordPress/Blogger/Custom/API key; Manual = mitra menempel artikelnya sendiri lalu mengirim URL artikelnya.');
+		tr('Siapa yang menerbitkan artikel. API = di-push otomatis ke situs mitra lewat WordPress/Blogspot/Custom/API key; Manual = mitra menempel artikelnya sendiri lalu mengirim URL artikelnya.');
 
 	/** Tooltip header kolom Platform: platform yang dipakai media. */
-	const platformColumnHint = () => tr('Platform yang digunakan media, WordPress, Blogger, Emdash, API');
+	const platformColumnHint = () => tr('Platform yang digunakan media, WordPress, Blogspot, Emdash, API');
 
 	/** Tooltip centang Secure Direct: apa akibatnya dan kapan dipakai. */
 	const autoPublishHint = () =>
@@ -1010,7 +1010,8 @@
 			link_duration_months: Number(form.link_duration_months),
 				description: form.description.trim() || null,
 				notes: form.notes.trim() || null,
-				integration_type: form.integration_type,
+				// Mode Manual tidak punya kanal integrasi; jangan kirim platform sisa form.
+				integration_type: form.publication_mode === 'publish' ? form.integration_type : 'manual',
 				publication_mode: form.publication_mode,
 				bahasa_artikel: form.bahasa_artikel.length ? form.bahasa_artikel : ['Indonesia'],				label_sponsor: form.label_sponsor,
 				allow_hyperlink: form.allow_hyperlink,
@@ -2635,14 +2636,17 @@
 									<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
 										{#each [
 											{ v: 'draft', label: tr('Manual'), helper: 'Mitra copy-paste artikel ke web-nya sendiri dan input URL publikasi di artikel klien. Status jadi Terbit otomatis saat URL dikirim.' },
-											{ v: 'publish', label: tr('API'), helper: 'Artikel di-push otomatis ke WordPress/Blogger/Custom Web. Status jadi Terbit otomatis setelah klik ACC.' }
+											{ v: 'publish', label: tr('API'), helper: 'Artikel di-push otomatis ke WordPress/Blogspot/Custom Web. Status jadi Terbit otomatis setelah klik ACC.' }
 										] as opt (opt.v)}
 											{@const active = form.publication_mode === opt.v}
 											<button
 												type="button"
 												class="rounded-xl border p-3.5 text-left transition cursor-pointer flex flex-col justify-between"
 												style="border-color: {active ? 'var(--primary)' : 'var(--border)'}; background: {active ? 'var(--accent)' : 'var(--card)'};"
-												onclick={() => (form.publication_mode = opt.v)}
+												onclick={() => {
+													form.publication_mode = opt.v;
+													if (opt.v === 'publish' && form.integration_type === 'manual') form.integration_type = 'wordpress';
+												}}
 											>
 												<div>
 													<div class="flex items-center gap-2 mb-1.5">
@@ -2662,10 +2666,10 @@
 											<div class="text-xs font-semibold text-slate-700">{tr('Platform Tujuan')}</div>
 											<div class="flex flex-wrap items-center gap-2">
 												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'wordpress'} class:app-btn-soft={form.integration_type !== 'wordpress'} onclick={() => (form.integration_type = 'wordpress')}>WordPress</button>
-												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'blogger'} class:app-btn-soft={form.integration_type !== 'blogger'} onclick={() => (form.integration_type = 'blogger')}>Blogger</button>
+												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'blogger'} class:app-btn-soft={form.integration_type !== 'blogger'} onclick={() => (form.integration_type = 'blogger')}>Blogspot</button>
 												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'custom_web'} class:app-btn-soft={form.integration_type !== 'custom_web'} onclick={() => (form.integration_type = 'custom_web')}>Custom Web</button>
 												<span class="text-xs text-muted-foreground">
-													{form.integration_type === 'wordpress' ? tr('Butuh koneksi WordPress') : form.integration_type === 'blogger' ? tr('Butuh koneksi Blogger') : tr('Butuh endpoint API')}
+													{form.integration_type === 'wordpress' ? tr('Butuh koneksi WordPress') : form.integration_type === 'blogger' ? tr('Butuh koneksi Blogspot') : tr('Butuh endpoint API')}
 												</span>
 											</div>
 											{#if form.integration_type === 'wordpress'}
@@ -2676,7 +2680,7 @@
 											{:else if form.integration_type === 'blogger'}
 												<div class="flex items-start gap-2 rounded-xl p-3 text-xs bg-blue-50 text-blue-800 border border-blue-100">
 													<Info size={14} class="mt-0.5 shrink-0 text-blue-600" />
-													<span>{tr('Hubungkan akun Google dan pilih blog di halaman')} <a class="underline font-semibold" href={`${base}/blogger`}>{tr('Blogger')}</a> {tr('setelah media ini disetujui Admin.')}</span>
+													<span>{tr('Hubungkan akun Google dan pilih blog di halaman')} <a class="underline font-semibold" href={`${base}/blogger`}>{tr('Blogspot')}</a> {tr('setelah media ini disetujui Admin.')}</span>
 												</div>
 											{:else if form.integration_type === 'custom_web'}
 												<div class="flex items-start gap-2 rounded-xl p-3 text-xs bg-amber-50 text-amber-800 border border-amber-200/70">

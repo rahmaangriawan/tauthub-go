@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
 
-	// Tab Blogger — port BloggerSection app lama
+	// Tab Blogspot — port BloggerSection app lama
 	// (app/mitra/[partnerId]/[[...section]]/sections.tsx baris ~2824): hubungkan
-	// akun Google media Blogger, pilih blog tujuan, uji koneksi, putuskan.
+	// akun Google media Blogspot, pilih blog tujuan, uji koneksi, putuskan.
 	// OAuth return dari /api/blogger/callback mendarat di sini sebagai
 	// ?blogger_connected=1&media=<id>#blogger → langsung buka pemilih blog.
 	import { onMount } from 'svelte';
@@ -59,7 +59,7 @@
 		if (connected !== '1' || !mediaId) return;
 		const target = rows.find((m) => m.id === mediaId);
 		if (target && !target.blogger_blog_id) {
-			notice = tr('Kredensial Blogger tersimpan. Pilih blog untuk melanjutkan.');
+			notice = tr('Kredensial Blogspot tersimpan. Pilih blog untuk melanjutkan.');
 			await openBlogPicker(target);
 		} else if (target?.blogger_blog_id) {
 			notice = `Blog "${target.blogger_blog_name ?? ''}" sudah terhubung.`;
@@ -77,7 +77,7 @@
 		try {
 			const res = await apiRequest('/v1/partner/media?limit=500');
 			if (!res.ok) {
-				error = await readApiError(res, tr('Gagal memuat media Blogger.'));
+				error = await readApiError(res, tr('Gagal memuat media Blogspot.'));
 				return;
 			}
 			const all = (await res.json()).media ?? [];
@@ -95,12 +95,12 @@
 		try {
 			const res = await apiRequest(`/v1/partner/media/${item.id}/blogger/connect`);
 			if (!res.ok) {
-				error = await readApiError(res, tr('Tidak dapat memulai koneksi Blogger.'));
+				error = await readApiError(res, tr('Tidak dapat memulai koneksi Blogspot.'));
 				return;
 			}
 			const result = await res.json();
 			if (result.url) window.location.href = result.url;
-			else error = tr('Tidak dapat memulai koneksi Blogger.');
+			else error = tr('Tidak dapat memulai koneksi Blogspot.');
 		} finally {
 			busyId = null;
 		}
@@ -141,7 +141,7 @@
 				return;
 			}
 			pickTarget = null;
-			notice = `Blog "${blog?.name ?? ''}" dipilih. Koneksi Blogger aktif.`;
+			notice = `Blog "${blog?.name ?? ''}" dipilih. Koneksi Blogspot aktif.`;
 			await load();
 		} finally {
 			blogBusy = false;
@@ -155,7 +155,7 @@
 		try {
 			const res = await apiRequest(`/v1/partner/media/${item.id}/blogger/test-connection`, { method: 'POST' });
 			if (!res.ok) {
-				error = await readApiError(res, tr('Uji koneksi Blogger gagal.'));
+				error = await readApiError(res, tr('Uji koneksi Blogspot gagal.'));
 				return;
 			}
 			const result = await res.json();
@@ -167,17 +167,17 @@
 	}
 
 	async function disconnect(item: any) {
-		if (!confirm(`Putuskan koneksi Blogger untuk "${item.name}"? Artikel berikutnya tidak akan terkirim.`)) return;
+		if (!confirm(`Putuskan koneksi Blogspot untuk "${item.name}"? Artikel berikutnya tidak akan terkirim.`)) return;
 		busyId = item.id;
 		error = '';
 		notice = '';
 		try {
 			const res = await apiRequest(`/v1/partner/media/${item.id}/blogger`, { method: 'DELETE' });
 			if (!res.ok) {
-				error = await readApiError(res, tr('Gagal memutuskan koneksi Blogger.'));
+				error = await readApiError(res, tr('Gagal memutuskan koneksi Blogspot.'));
 				return;
 			}
-			notice = tr('Koneksi Blogger diputuskan.');
+			notice = tr('Koneksi Blogspot diputuskan.');
 			await load();
 		} finally {
 			busyId = null;
@@ -202,8 +202,8 @@
 <div class="app-card int-card overflow-hidden">
 	<div class="int-card__head int-card__head--split">
 		<div>
-			<h2 class="int-card__title">Blogger <span class="int-card__caption">{rows.length} media</span></h2>
-			<p class="int-card__desc">{tr('Hubungkan akun Google media Anda dan pilih blog tujuan; artikel klien terkirim otomatis ke Blogger sebagai draf atau terbit')}</p>
+			<h2 class="int-card__title">Blogspot <span class="int-card__caption">{rows.length} media</span></h2>
+			<p class="int-card__desc">{tr('Hubungkan akun Google media Anda dan pilih blog tujuan; artikel klien terkirim otomatis ke Blogspot sebagai draf atau terbit')}</p>
 		</div>
 	</div>
 
@@ -211,12 +211,12 @@
 	{#if notice}<p class="int-msg int-msg--ok" style="padding-top: 12px;">{notice}</p>{/if}
 
 	{#if loading && rows.length === 0}
-		<p class="int-empty">{tr('Memuat Blogger…')}</p>
+		<p class="int-empty">{tr('Memuat Blogspot…')}</p>
 	{:else if rows.length === 0}
 		<div class="int-empty">
-			<p>{tr('Belum ada media berplatform Blogger. Buat media dengan platform Blogger di halaman Media; setelah disetujui admin, hubungkan di sini')}</p>
+			<p>{tr('Belum ada media berplatform Blogspot. Buat media dengan platform Blogspot di halaman Media; setelah disetujui admin, hubungkan di sini')}</p>
 			<button class="app-btn app-btn-primary int-btn" type="button" onclick={() => goto(`${base}/media?integration_type=blogger`)}>
-				{tr('Buat media Blogger')}
+				{tr('Buat media Blogspot')}
 			</button>
 		</div>
 	{:else}
@@ -239,7 +239,7 @@
 					<div class="int-item__actions">
 						{#if !item.blogger_connected}
 							<button class="app-btn app-btn-primary int-btn" type="button" disabled={busyId === item.id} onclick={() => connect(item)}>
-								{busyId === item.id ? tr('Menghubungkan…') : tr('Hubungkan Blogger')}
+								{busyId === item.id ? tr('Menghubungkan…') : tr('Hubungkan Blogspot')}
 							</button>
 						{:else}
 							<button class="app-btn app-btn-soft int-btn" type="button" disabled={busyId === item.id} onclick={() => openBlogPicker(item)}>{tr('Ganti blog')}</button>

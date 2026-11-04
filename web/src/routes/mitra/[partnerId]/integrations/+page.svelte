@@ -41,7 +41,7 @@
 		['terms', 'Syarat & Ketentuan'],
 		['wordpress', 'WordPress'],
 		['web-custom', 'Web Custom'],
-		['blogger', 'Blogger']
+		['blogger', 'Blogspot']
 	];
 
 	function hashTab(): TabKey {
@@ -154,7 +154,7 @@
 	<header class="int-header">
 		<div>
 			<h1 class="page-title">{tr('Integrasi')}</h1>
-			<p class="page-desc">{tr('Sambungkan website media Anda agar artikel klien terkirim otomatis lewat WordPress, website custom, atau Blogger')}</p>
+			<p class="page-desc">{tr('Sambungkan website media Anda agar artikel klien terkirim otomatis lewat WordPress, website custom, atau Blogspot')}</p>
 		</div>
 		{#if !terms.loading}
 			{#if accepted}
@@ -205,14 +205,14 @@
 			{/each}
 		</div>
 		{#if !accepted}
-			<p class="int-tabs-hint">{tr('Tab WordPress, Web Custom, dan Blogger terbuka setelah Syarat & Ketentuan disetujui')}</p>
+			<p class="int-tabs-hint">{tr('Tab WordPress, Web Custom, dan Blogspot terbuka setelah Syarat & Ketentuan disetujui')}</p>
 		{/if}
 
 		{#if tab === 'terms'}
 			<div class="app-card int-terms">
 				<h2 class="int-card-title">{tr('Syarat & Ketentuan Integrasi')}</h2>
 				<div class="int-terms__body">
-					<p>{tr('Dengan menyetujui, Anda memberi Tauthub izin mengirim artikel klien ke akun/website media Anda melalui kanal yang Anda hubungkan di halaman ini (WordPress, Web Custom, atau Blogger).')}</p>
+					<p>{tr('Dengan menyetujui, Anda memberi Tauthub izin mengirim artikel klien ke akun/website media Anda melalui kanal yang Anda hubungkan di halaman ini (WordPress, Web Custom, atau Blogspot).')}</p>
 					<p>{tr('Anda bertanggung jawab memastikan kredensial yang dimasukkan valid dan akun yang terhubung milik media Anda. Tauthub tidak pernah mengubah artikel yang sudah terbit tanpa tindakan Anda.')}</p>
 					<p>{tr('Persetujuan ini dicatat waktunya dan dapat dicabut dengan memutus koneksi di tab terkait.')}</p>
 				</div>
@@ -251,7 +251,7 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
 		<dialog open class="app-card w-full max-w-sm p-6" aria-label={tr('Konfirmasi persetujuan')}>
 			<h2 class="text-base font-medium">{tr('Setujui Syarat & Ketentuan?')}</h2>
-			<p class="mt-2 text-sm text-muted-foreground">{tr('Setelah disetujui, tab WordPress, Web Custom, dan Blogger akan terbuka.')}</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr('Setelah disetujui, tab WordPress, Web Custom, dan Blogspot akan terbuka.')}</p>
 			<div class="mt-6 flex justify-end gap-2">
 				<button class="app-btn app-btn-soft int-btn" onclick={() => (confirmOpen = false)}>{tr('Batal')}</button>
 				<button class="app-btn app-btn-primary int-btn" disabled={terms.busy} onclick={acceptTerms}>{tr('Ya, setujui')}</button>
