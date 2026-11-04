@@ -1,0 +1,396 @@
+/* Gaya bersama halaman Integrasi mitra (tab WordPress, Web Custom, Blogger).
+   Diimpor dari +page.svelte dan komponen tab, jadi global. Semua nilai pada
+   grid 4px; warna hanya dari token app; status dibawa titik (_status.svelte). */
+
+.int-card {
+	margin-top: 24px;
+}
+.int-card__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px 16px;
+	padding: 20px 20px 16px;
+}
+.int-card__head--split {
+	border-bottom: 1px solid var(--border);
+}
+.int-card__title {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	font-size: 16px;
+	line-height: 24px;
+	font-weight: 500;
+	color: var(--foreground);
+}
+.int-card__caption {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 12px;
+	line-height: 16px;
+	font-variant-numeric: tabular-nums;
+	color: var(--muted-foreground);
+}
+.int-card__desc {
+	margin-top: 4px;
+	max-width: 640px;
+	font-size: 13px;
+	line-height: 20px;
+	color: var(--muted-foreground);
+}
+.int-card__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.int-card__body {
+	padding: 0 20px 20px;
+}
+
+.int-btn {
+	min-height: 36px;
+	padding: 0 14px;
+	font-size: 13px;
+	font-weight: 500;
+	gap: 8px;
+}
+.int-btn--danger {
+	color: var(--destructive);
+}
+@media (max-width: 767px) {
+	.int-btn {
+		min-height: 44px;
+	}
+}
+
+.int-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	line-height: 16px;
+	font-weight: 500;
+	color: var(--primary);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	text-decoration-color: color-mix(in srgb, var(--primary) 40%, transparent);
+}
+.int-link:hover {
+	text-decoration-color: var(--primary);
+}
+
+.int-msg {
+	padding: 0 20px 12px;
+	font-size: 13px;
+	line-height: 20px;
+}
+.int-msg--error {
+	color: var(--destructive);
+}
+.int-msg--ok {
+	color: var(--success);
+}
+
+.int-empty {
+	padding: 40px 20px;
+	text-align: center;
+	font-size: 14px;
+	line-height: 20px;
+	color: var(--muted-foreground);
+}
+.int-empty p {
+	max-width: 440px;
+	margin: 0 auto;
+}
+.int-empty .app-btn {
+	margin-top: 16px;
+}
+
+/* Tabel koneksi/kunci */
+.int-table {
+	width: 100%;
+	font-size: 14px;
+	line-height: 20px;
+}
+.int-table th {
+	padding: 10px 20px;
+	text-align: left;
+	font-size: 12px;
+	line-height: 16px;
+	font-weight: 500;
+	color: var(--muted-foreground);
+	border-bottom: 1px solid var(--border);
+}
+.int-table td {
+	padding: 12px 20px;
+	vertical-align: top;
+	border-top: 1px solid var(--border);
+}
+.int-table tr:first-child td {
+	border-top: 0;
+}
+.int-table th.is-right,
+.int-table td.is-right {
+	text-align: right;
+}
+.int-table__sub {
+	margin-top: 2px;
+	font-size: 12px;
+	line-height: 16px;
+	color: var(--muted-foreground);
+}
+.int-table__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.int-mono {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 12px;
+	line-height: 16px;
+	color: var(--muted-foreground);
+	overflow-wrap: anywhere;
+}
+.int-meta {
+	font-size: 12px;
+	line-height: 16px;
+	color: var(--muted-foreground);
+}
+
+/* Daftar item per media (Custom Web, Blogger) dan kartu mobile */
+.int-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 0 20px 20px;
+}
+.int-item {
+	padding: 16px;
+	border: 1px solid var(--border);
+	border-radius: calc(var(--radius) - 4px);
+}
+.int-item__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 16px;
+}
+.int-item__name {
+	font-size: 14px;
+	line-height: 20px;
+	font-weight: 500;
+	color: var(--foreground);
+	overflow-wrap: anywhere;
+}
+.int-item__meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 16px;
+}
+.int-item__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 16px;
+}
+.int-item__note {
+	margin-top: 12px;
+	font-size: 13px;
+	line-height: 20px;
+	color: var(--muted-foreground);
+}
+
+/* Form */
+.int-form {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+.int-field {
+	display: block;
+}
+.int-field__label {
+	display: block;
+	margin-bottom: 6px;
+	font-size: 13px;
+	line-height: 16px;
+	font-weight: 500;
+	color: var(--foreground);
+}
+.int-field__hint {
+	display: block;
+	margin-top: 6px;
+	font-size: 12px;
+	line-height: 16px;
+	color: var(--muted-foreground);
+}
+.int-field--locked {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-height: 40px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-control);
+	background: var(--secondary);
+	font-size: 14px;
+	color: var(--foreground);
+}
+.int-form__foot {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding-top: 16px;
+	border-top: 1px solid var(--border);
+}
+
+/* Langkah bernomor (cara ambil Application Password) */
+.int-steps {
+	margin-top: 12px;
+	padding: 12px 16px;
+	border: 1px solid var(--border);
+	border-radius: calc(var(--radius-control) - 2px);
+}
+.int-steps__title {
+	font-size: 12px;
+	line-height: 16px;
+	font-weight: 500;
+	color: var(--foreground);
+}
+.int-steps ol {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 8px;
+}
+.int-steps li {
+	display: flex;
+	gap: 10px;
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--muted-foreground);
+}
+.int-steps li > span:first-child {
+	flex: 0 0 16px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+/* Kartu kredensial baru: hanya tampil sekali, ditandai garis warning */
+.int-reveal {
+	margin: 0 20px 16px;
+	padding: 16px;
+	border: 1px solid var(--warning);
+	border-radius: calc(var(--radius) - 4px);
+}
+.int-reveal__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+.int-reveal__title {
+	font-size: 14px;
+	line-height: 20px;
+	font-weight: 500;
+	color: var(--warning);
+}
+.int-reveal__row {
+	display: flex;
+	gap: 8px;
+}
+.int-reveal__row .app-input {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 12px;
+}
+
+/* Paginasi */
+.int-pager {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 16px;
+	padding: 12px 20px;
+	border-top: 1px solid var(--border);
+	font-size: 12px;
+	line-height: 16px;
+	color: var(--muted-foreground);
+	font-variant-numeric: tabular-nums;
+}
+.int-pager__nav {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.int-pager .app-btn {
+	min-height: 32px;
+	padding: 0 10px;
+	font-size: 12px;
+	font-weight: 500;
+}
+
+/* Dialog */
+.int-dialog__title {
+	font-size: 16px;
+	line-height: 24px;
+	font-weight: 500;
+}
+.int-dialog__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+.int-docs {
+	margin-top: 12px;
+	max-height: 60vh;
+	overflow: auto;
+	white-space: pre-wrap;
+	padding: 16px;
+	border: 1px solid var(--border);
+	border-radius: calc(var(--radius) - 4px);
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 12px;
+	line-height: 20px;
+}
+
+/* Pilihan blog (radio buatan) */
+.int-choice {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	width: 100%;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-control);
+	text-align: left;
+	transition: background-color 160ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.int-choice:hover {
+	background: var(--secondary);
+}
+.int-choice--selected {
+	border-color: var(--primary);
+	background: color-mix(in srgb, var(--primary) 6%, var(--card));
+}
+.int-choice__radio {
+	flex: 0 0 16px;
+	width: 16px;
+	height: 16px;
+	margin-top: 2px;
+	border: 1.5px solid var(--border);
+	border-radius: 8px;
+}
+.int-choice--selected .int-choice__radio {
+	border-color: var(--primary);
+	background: radial-gradient(circle, var(--primary) 0 4px, transparent 4.5px);
+}

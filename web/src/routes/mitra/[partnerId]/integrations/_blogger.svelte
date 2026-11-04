@@ -9,8 +9,11 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Globe, Newspaper, RefreshCw, Unplug, X } from '@lucide/svelte';
+	import { X } from '@lucide/svelte';
+	import Status from './_status.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+
+	let { onchange }: { onchange?: () => void } = $props();
 
 	let rows = $state<any[]>([]);
 	let loading = $state(true);
@@ -81,6 +84,7 @@
 			rows = all.filter((m: any) => m.integration_type === 'blogger' && m.status !== 'hidden');
 		} finally {
 			loading = false;
+			onchange?.();
 		}
 	}
 
@@ -151,7 +155,7 @@
 		try {
 			const res = await apiRequest(`/v1/partner/media/${item.id}/blogger/test-connection`, { method: 'POST' });
 			if (!res.ok) {
-				error = await readApiError(res, 'Uji koneksi Blogger gagal.');
+				error = await readApiError(res, tr('Uji koneksi Blogger gagal.'));
 				return;
 			}
 			const result = await res.json();
@@ -173,110 +177,93 @@
 				error = await readApiError(res, tr('Gagal memutuskan koneksi Blogger.'));
 				return;
 			}
-			notice = 'Koneksi Blogger diputuskan.';
+			notice = tr('Koneksi Blogger diputuskan.');
 			await load();
 		} finally {
 			busyId = null;
 		}
 	}
 
+	const statusTone = (status: string): 'ok' | 'error' | 'warn' | 'idle' =>
+		status === 'connected' ? 'ok' : status === 'failed' ? 'error' : status === 'testing' ? 'warn' : 'idle';
 	const statusLabel = (status: string) =>
 		status === 'connected'
-			? '✓ Terhubung'
+			? tr('Terhubung')
 			: status === 'failed'
-				? '✕ Koneksi gagal'
+				? tr('Koneksi gagal')
 				: status === 'testing'
-					? 'Menguji…'
+					? tr('Menguji…')
 					: tr('Belum terhubung');
-	const statusColor = (status: string) =>
-		status === 'connected'
-			? 'var(--success)'
-			: status === 'failed'
-				? 'var(--destructive)'
-				: status === 'testing'
-					? 'var(--warning)'
-					: 'var(--muted-foreground)';
 
 	const dt = (v: string | null) =>
 		v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 </script>
 
-<div class="app-card mt-4">
-	<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-		<div class="flex items-center gap-2">
-			<Newspaper size={16} />
-			<h2 class="text-sm font-semibold">Blogger</h2>
-			<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--secondary); color: var(--muted-foreground);">{rows.length} media</span>
+<div class="app-card int-card overflow-hidden">
+	<div class="int-card__head int-card__head--split">
+		<div>
+			<h2 class="int-card__title">Blogger <span class="int-card__caption">{rows.length} media</span></h2>
+			<p class="int-card__desc">{tr('Hubungkan akun Google media Anda dan pilih blog tujuan; artikel klien terkirim otomatis ke Blogger sebagai draf atau terbit')}</p>
 		</div>
 	</div>
-	<p class="px-4 pt-3 text-xs text-muted-foreground">{tr("Hubungkan akun Google Anda, pilih blog, lalu artikel dari klien terkirim otomatis ke Blogger (draft atau terbit).")}</p>
 
-	{#if error}<p class="px-4 pt-2 text-sm" style="color: var(--destructive);">{error}</p>{/if}
-	{#if notice}<p class="px-4 pt-2 text-sm" style="color: var(--success);">{notice}</p>{/if}
+	{#if error}<p class="int-msg int-msg--error" style="padding-top: 12px;">{error}</p>{/if}
+	{#if notice}<p class="int-msg int-msg--ok" style="padding-top: 12px;">{notice}</p>{/if}
 
 	{#if loading && rows.length === 0}
-		<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Memuat Blogger…")}</p>
+		<p class="int-empty">{tr('Memuat Blogger…')}</p>
 	{:else if rows.length === 0}
-		<div class="px-4 py-8 text-center">
-			<Globe size={26} class="mx-auto" style="color: var(--muted-foreground);" />
-			<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada media platform Blogger. Buat dulu media dengan platform Blogger di halaman Media, setelah di-ACC Admin hubungkan di sini.")}</p>
-			<button class="app-btn app-btn-primary mx-auto mt-4" type="button" onclick={() => goto(`${base}/media?integration_type=blogger`)}>
-				{tr("Buat Media Blogger")}
+		<div class="int-empty">
+			<p>{tr('Belum ada media berplatform Blogger. Buat media dengan platform Blogger di halaman Media; setelah disetujui admin, hubungkan di sini')}</p>
+			<button class="app-btn app-btn-primary int-btn" type="button" onclick={() => goto(`${base}/media?integration_type=blogger`)}>
+				{tr('Buat media Blogger')}
 			</button>
 		</div>
 	{:else}
-		<div class="space-y-3 p-4">
+		<div class="int-list" style="padding-top: 20px;">
 			{#each rows as item (item.id)}
-				<div class="rounded-lg border p-3">
-					<div class="flex flex-wrap items-center justify-between gap-2">
-						<div class="flex items-center gap-2">
-							<Newspaper size={15} />
-							<p class="text-sm font-bold">{item.name}</p>
-						</div>
-						<div class="flex flex-wrap items-center gap-2">
-							<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--secondary); color: {statusColor(item.blogger_status)};">{statusLabel(item.blogger_status)}</span>
+				<div class="int-item">
+					<div class="int-item__head">
+						<p class="int-item__name">{item.name}</p>
+						<div class="int-item__meta">
+							<Status tone={statusTone(item.blogger_status)} label={statusLabel(item.blogger_status)} />
 							{#if item.blogger_blog_name}
-								<span class="text-sm font-medium">Blog: {item.blogger_blog_name}</span>
+								<span class="text-sm">{item.blogger_blog_name}</span>
 							{/if}
 							{#if item.blogger_last_test_at}
-								<span class="text-xs text-muted-foreground">Terakhir dicek: {dt(item.blogger_last_test_at)}</span>
+								<span class="int-meta">{tr('Dicek')} {dt(item.blogger_last_test_at)}</span>
 							{/if}
 						</div>
 					</div>
 
-					<div class="mt-3 flex flex-wrap items-center gap-2">
+					<div class="int-item__actions">
 						{#if !item.blogger_connected}
-							<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="button" disabled={busyId === item.id} onclick={() => connect(item)}>
-								{busyId === item.id ? 'Menghubungkan…' : 'Hubungkan Blogger'}
+							<button class="app-btn app-btn-primary int-btn" type="button" disabled={busyId === item.id} onclick={() => connect(item)}>
+								{busyId === item.id ? tr('Menghubungkan…') : tr('Hubungkan Blogger')}
 							</button>
 						{:else}
-							<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={busyId === item.id} onclick={() => openBlogPicker(item)}>{tr('Ganti Blog')}</button>
+							<button class="app-btn app-btn-soft int-btn" type="button" disabled={busyId === item.id} onclick={() => openBlogPicker(item)}>{tr('Ganti blog')}</button>
 							<button
-								class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+								class="app-btn app-btn-soft int-btn"
 								type="button"
 								disabled={busyId === item.id || !item.blogger_blog_id}
 								onclick={() => testConnection(item)}
-							>{busyId === item.id ? 'Menguji…' : 'Test Connection'}</button>
-							<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={busyId === item.id} onclick={() => connect(item)}>
-								<RefreshCw size={12} /> {tr('Hubungkan Ulang')}
-							</button>
-							<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" style="color: var(--destructive);" disabled={busyId === item.id} onclick={() => disconnect(item)}>
-								<Unplug size={12} /> Putuskan
-							</button>
+							>{busyId === item.id ? tr('Menguji…') : tr('Uji koneksi')}</button>
+							<button class="app-btn app-btn-soft int-btn" type="button" disabled={busyId === item.id} onclick={() => connect(item)}>{tr('Hubungkan ulang')}</button>
+							<button class="app-btn app-btn-soft int-btn int-btn--danger" type="button" disabled={busyId === item.id} onclick={() => disconnect(item)}>{tr('Putuskan')}</button>
 						{/if}
 					</div>
 
 					{#if item.blogger_last_test_message && item.blogger_status === 'failed'}
-						<p class="mt-2 text-xs" style="color: var(--destructive);">{item.blogger_last_test_message}</p>
+						<p class="int-item__note" style="color: var(--destructive);">{item.blogger_last_test_message}</p>
 					{/if}
 					{#if item.blogger_connected}
-						<p class="mt-2 text-xs text-muted-foreground">
-							{tr('Gambar artikel disimpan ke Google Drive mitra, jadi gambarnya tidak bergantung pada server Tauthub. Klik Hubungkan Ulang bila artikel terbit dengan gambar dari tautan Tauthub.')}
+						<p class="int-item__note">
+							{tr('Gambar artikel disimpan ke Google Drive mitra sehingga tidak bergantung pada server Tauthub. Hubungkan ulang bila artikel terbit dengan gambar dari tautan Tauthub')}
 						</p>
 					{/if}
 					{#if !item.blogger_blog_id && item.blogger_connected}
-						<p class="mt-2 text-xs text-muted-foreground">
-							Kredensial tersimpan — pilih tombol <strong>{tr('Ganti Blog')}</strong>{tr("untuk menyelesaikan koneksi.")}</p>
+						<p class="int-item__note">{tr('Kredensial tersimpan. Pilih Ganti blog untuk menyelesaikan koneksi')}</p>
 					{/if}
 				</div>
 			{/each}
@@ -286,16 +273,16 @@
 
 {#if pickTarget}
 	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
-		<dialog open class="app-card w-full max-w-md p-5" aria-label={tr("Pilih Blog Blogger")}>
-			<div class="flex flex-wrap items-center justify-between gap-2">
-				<h2 class="text-lg font-semibold">{tr("Pilih Blog Blogger")}</h2>
-				<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => (pickTarget = null)}><X size={12} />{tr("Batal")}</button>
+		<dialog open class="app-card w-full max-w-md p-6" aria-label={tr('Pilih blog')}>
+			<div class="int-dialog__head">
+				<h2 class="int-dialog__title">{tr('Pilih blog')}</h2>
+				<button class="app-btn app-btn-soft int-btn" type="button" onclick={() => (pickTarget = null)}><X size={14} strokeWidth={1.5} />{tr('Tutup')}</button>
 			</div>
-			<p class="mt-1 text-sm text-muted-foreground">{tr("Pilih blog untuk media \"")}{pickTarget.name}".</p>
+			<p class="mt-1 text-sm text-muted-foreground">{tr('Blog tujuan untuk media')} {pickTarget.name}</p>
 
-			<div class="mt-3 space-y-2">
+			<div class="mt-4 flex flex-col gap-2">
 				{#if blogBusy}
-					<p class="text-sm text-muted-foreground">{tr("Memuat daftar blog…")}</p>
+					<p class="text-sm text-muted-foreground">{tr('Memuat daftar blog…')}</p>
 				{/if}
 				{#if blogError}
 					<p class="text-sm" style="color: var(--destructive);">{blogError}</p>
@@ -303,28 +290,27 @@
 				{#if !blogBusy && blogs.length > 0}
 					{#each blogs as b (b.id)}
 						<button
-							class="flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left"
+							class="int-choice"
+							class:int-choice--selected={selectedBlogId === b.id}
 							type="button"
-							style="border-color: {selectedBlogId === b.id ? 'var(--accent)' : 'var(--border)'}; background: {selectedBlogId === b.id ? 'var(--secondary)' : 'transparent'};"
+							role="radio"
+							aria-checked={selectedBlogId === b.id}
 							onclick={() => (selectedBlogId = b.id)}
 						>
-							<span
-								class="mt-1 inline-block h-3.5 w-3.5 shrink-0 rounded-full border"
-								style="border-color: {selectedBlogId === b.id ? 'var(--accent)' : 'var(--border)'}; background: {selectedBlogId === b.id ? 'var(--accent)' : 'transparent'};"
-							></span>
+							<span class="int-choice__radio" aria-hidden="true"></span>
 							<span class="min-w-0">
-								<span class="block text-sm font-medium">{b.name || '(tanpa nama)'}</span>
-								{#if b.url}<span class="block truncate text-xs text-muted-foreground">{b.url}</span>{/if}
+								<span class="block text-sm font-medium">{b.name || tr('(tanpa nama)')}</span>
+								{#if b.url}<span class="int-mono block truncate">{b.url}</span>{/if}
 							</span>
 						</button>
 					{/each}
 				{/if}
 			</div>
 
-			<div class="mt-4 flex justify-end gap-2 border-t pt-3">
-				<button class="app-btn app-btn-soft" type="button" onclick={() => (pickTarget = null)}>{tr("Batal")}</button>
-				<button class="app-btn app-btn-primary" type="button" disabled={blogBusy || !selectedBlogId} onclick={saveBlog}>
-					{blogBusy ? 'Menyimpan…' : 'Gunakan Blog Ini'}
+			<div class="int-form__foot mt-6">
+				<button class="app-btn app-btn-soft int-btn" type="button" onclick={() => (pickTarget = null)}>{tr('Batal')}</button>
+				<button class="app-btn app-btn-primary int-btn" type="button" disabled={blogBusy || !selectedBlogId} onclick={saveBlog}>
+					{blogBusy ? tr('Menyimpan…') : tr('Gunakan blog ini')}
 				</button>
 			</div>
 		</dialog>

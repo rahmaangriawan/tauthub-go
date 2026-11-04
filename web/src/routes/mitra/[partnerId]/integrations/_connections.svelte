@@ -5,14 +5,17 @@
 	// (app/mitra/[partnerId]/[[...section]]/sections.tsx). Provider terkunci ke
 	// WordPress REST API; daftar media diambil dari media mitra ber-website_url.
 	import { onMount } from 'svelte';
-	import { Info, Plug, Plus, Trash2 } from '@lucide/svelte';
+	import { Plus } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
-	import { apiRequest, readApiError, authErrorMessage, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import Status from './_status.svelte';
+	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+
+	let { onchange }: { onchange?: () => void } = $props();
 
 	const APP_PASSWORD_STEPS = [
-		'Login ke wp-admin situs Anda, contoh: https://situs-media.example/wp-admin',
+		'Masuk ke wp-admin situs Anda, contoh: https://situs-media.example/wp-admin',
 		'Buka menu Pengguna → Profil',
-		'Scroll ke bawah ke bagian Application Passwords',
+		'Gulir ke bagian Application Passwords',
 		'Isi nama aplikasi (contoh: "Tauthub"), klik Add New Application Password',
 		'Salin password yang muncul (format xxxx xxxx xxxx xxxx xxxx xxxx), hanya ditampilkan sekali',
 		'Tempel di kolom Application Password di atas'
@@ -71,6 +74,7 @@
 			}
 		} finally {
 			loading = false;
+			onchange?.();
 		}
 	}
 
@@ -113,7 +117,7 @@
 		testingId = row.id;
 		try {
 			const res = await apiRequest(`/v1/partner/cms-connections/${row.id}/test`, { method: 'POST' }, 30_000);
-			if (!res.ok) error = await readApiError(res, 'Uji koneksi gagal.');
+			if (!res.ok) error = await readApiError(res, tr('Uji koneksi gagal.'));
 			await load();
 		} finally {
 			testingId = null;
@@ -141,117 +145,110 @@
 		await load();
 	}
 
-	/** Warna hasil test koneksi terakhir (dipakai tabel & kartu mobile). */
+	// Satu bahasa status: titik + label Indonesia, bukan nilai mentah API.
+	const statusTone = (row: any): 'ok' | 'error' | 'idle' =>
+		row.status !== 'active' ? 'idle' : row.last_test_status === 'ok' ? 'ok' : row.last_test_status === 'error' ? 'error' : 'idle';
+	const statusLabel = (row: any) =>
+		row.status !== 'active'
+			? tr('Dicabut')
+			: row.last_test_status === 'ok'
+				? tr('Terhubung')
+				: row.last_test_status === 'error'
+					? tr('Gagal')
+					: tr('Belum diuji');
 	const testTone = (row: any) =>
 		row.last_test_status === 'ok' ? 'var(--success)' : row.last_test_status === 'error' ? 'var(--destructive)' : 'var(--muted-foreground)';
 </script>
 
-<div class="app-card mt-4 overflow-x-auto">
-	<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-		<div class="flex items-center gap-2">
-			<Plug size={16} />
-			<h2 class="text-sm font-semibold">Koneksi ({rows.length})</h2>
+<div class="app-card int-card overflow-hidden">
+	<div class="int-card__head int-card__head--split">
+		<div>
+			<h2 class="int-card__title">{tr('Koneksi WordPress')} <span class="int-card__caption">{rows.length}</span></h2>
+			<p class="int-card__desc">{tr('Artikel untuk media Anda yang berplatform WordPress dikirim lewat koneksi ini memakai Application Password, bukan koneksi brand klien')}</p>
 		</div>
-		<button class="conn-add app-btn app-btn-soft !px-3 !text-xs" onclick={() => (createOpen = true)}><Plus size={13} />{tr("Tambah koneksi")}</button>
+		<button class="app-btn app-btn-primary int-btn" type="button" onclick={() => (createOpen = true)}><Plus size={16} strokeWidth={1.5} />{tr('Tambah koneksi')}</button>
 	</div>
 
-	<p class="px-4 pt-3 text-xs text-muted-foreground">{tr("Koneksi WordPress / Web Custom milik partner. Publikasi ke media Anda yang ber-integrasi WordPress dikirim lewat koneksi ini, bukan koneksi brand klien.")}</p>
-
-	{#if error}<p class="px-4 pt-2 text-sm" style="color: var(--destructive);">{error}</p>{/if}
+	{#if error}<p class="int-msg int-msg--error" style="padding-top: 12px;">{error}</p>{/if}
 
 	{#if loading && rows.length === 0}
-		<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Memuat koneksi…")}</p>
+		<p class="int-empty">{tr('Memuat koneksi…')}</p>
 	{:else if rows.length === 0}
-		<p class="px-4 py-8 text-center text-sm text-muted-foreground">{tr("Belum ada koneksi. Tambahkan koneksi WordPress untuk media ber-integrasi WordPress.")}</p>
+		<div class="int-empty">
+			<p>{tr('Belum ada koneksi. Tambahkan koneksi WordPress untuk media berplatform WordPress')}</p>
+		</div>
 	{:else}
-			<!-- Desktop: tabel asli, tidak diubah (≥768px). -->
-			<div class="hidden md:block">
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="text-left text-xs text-muted-foreground">
-							<th class="px-4 py-2.5 font-medium">{tr('Koneksi')}</th>
-							<th class="px-4 py-2.5 font-medium">Provider</th>
-							<th class="px-4 py-2.5 font-medium">Endpoint</th>
-							<th class="px-4 py-2.5 font-medium">Status</th>
-							<th class="px-4 py-2.5 font-medium">{tr('Test terakhir')}</th>
-							<th class="px-4 py-2.5 text-right font-medium">{tr('Aksi')}</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each visibleRows as row (row.id)}
-							<tr class="border-t">
-								<td class="px-4 py-2.5">
-									<p class="font-medium">{row.name}</p>
-									<p class="text-xs text-muted-foreground">{row.username ?? String(row.id).slice(0, 8)}</p>
-								</td>
-								<td class="px-4 py-2.5">
-									{@render connProviderBadge(row)}
-								</td>
-								<td class="max-w-[220px] break-words px-4 py-2.5 font-mono text-[11px] text-muted-foreground">{row.base_url}</td>
-								<td class="px-4 py-2.5">
-									{@render connStatusBadge(row)}
-								</td>
-								<td class="px-4 py-2.5 text-xs" style="color: {testTone(row)};">
-									{row.last_test_message ?? tr('Belum diuji')}
-								</td>
-								<td class="px-4 py-2.5">
-									<div class="flex justify-end gap-2">
-										{@render connActionButtons(row)}
-									</div>
-								</td>
-							</tr>
-						{/each}
-						</tbody>
-					</table>
-			</div>
-
-			<!-- Mobile: setiap koneksi menjadi kartu vertikal (<768px). Pesan error
-				membungkus normal (break-words) tanpa melebarkan kartu; aksi Test dan
-				Cabut berbagi satu baris selebar kartu. -->
-			<div class="flex flex-col gap-2.5 px-4 pb-4 pt-3 md:hidden">
-				{#each visibleRows as row (row.id)}
-					<article class="app-card p-3.5">
-						<!-- A. Header: nama koneksi + identitas -->
-						<div class="min-w-0">
-							<h3 class="break-words text-[15px] font-semibold leading-snug">{row.name}</h3>
-							<p class="mt-0.5 text-xs text-muted-foreground">{row.username ?? String(row.id).slice(0, 8)}</p>
-						</div>
-						<!-- Badge provider + status -->
-						<div class="mt-2 flex flex-wrap items-center gap-1.5">
-							{@render connProviderBadge(row)}
-							{@render connStatusBadge(row)}
-						</div>
-						<!-- B. Endpoint & hasil test terakhir -->
-						<dl class="mt-3 flex flex-col gap-2.5 border-t pt-3" style="border-color: var(--border);">
-							<div class="min-w-0">
-								<dt class="text-[11px] text-muted-foreground">Endpoint</dt>
-								<dd class="mt-0.5 min-w-0 break-words font-mono text-[11px] text-muted-foreground">{row.base_url}</dd>
-							</div>
-							{#if row.last_test_message}
-								<div class="min-w-0">
-									<dt class="text-[11px] text-muted-foreground">{tr('Test terakhir')}</dt>
-									<dd class="mt-0.5 min-w-0 break-words text-xs leading-relaxed" style="color: {testTone(row)};">{row.last_test_message}</dd>
+		<!-- Desktop (≥768px): tabel -->
+		<div class="hidden md:block">
+			<table class="int-table">
+				<thead>
+					<tr>
+						<th>{tr('Koneksi')}</th>
+						<th>Endpoint</th>
+						<th>Status</th>
+						<th>{tr('Uji terakhir')}</th>
+						<th class="is-right">{tr('Aksi')}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each visibleRows as row (row.id)}
+						<tr>
+							<td>
+								<p class="font-medium">{row.name}</p>
+								<p class="int-table__sub">{row.username ?? String(row.id).slice(0, 8)}</p>
+							</td>
+							<td class="max-w-[260px]"><span class="int-mono">{row.base_url}</span></td>
+							<td><Status tone={statusTone(row)} label={statusLabel(row)} /></td>
+							<td class="max-w-[280px]"><span class="int-meta line-clamp-3" style="color: {testTone(row)};" title={row.last_test_message ?? ''}>{row.last_test_message ?? tr('Belum diuji')}</span></td>
+							<td>
+								<div class="int-table__actions">
+									{@render connActionButtons(row)}
 								</div>
-							{/if}
-						</dl>
-						<!-- D. Aksi -->
-						<div class="mt-3 grid grid-cols-2 gap-2">
-							{@render connActionButtons(row)}
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+
+		<!-- Mobile (<768px): kartu per koneksi -->
+		<div class="int-list md:hidden">
+			{#each visibleRows as row (row.id)}
+				<article class="int-item">
+					<div class="int-item__head">
+						<div class="min-w-0">
+							<p class="int-item__name">{row.name}</p>
+							<p class="int-meta">{row.username ?? String(row.id).slice(0, 8)}</p>
 						</div>
-					</article>
-				{/each}
-			</div>
-		{/if}
+						<Status tone={statusTone(row)} label={statusLabel(row)} />
+					</div>
+					<dl class="mt-3 flex flex-col gap-2">
+						<div>
+							<dt class="int-meta">Endpoint</dt>
+							<dd class="int-mono" style="color: var(--foreground);">{row.base_url}</dd>
+						</div>
+						{#if row.last_test_message}
+							<div>
+								<dt class="int-meta">{tr('Uji terakhir')}</dt>
+								<dd class="text-[13px] leading-5" style="color: {testTone(row)};">{row.last_test_message}</dd>
+							</div>
+						{/if}
+					</dl>
+					<div class="int-item__actions grid grid-cols-2">
+						{@render connActionButtons(row)}
+					</div>
+				</article>
+			{/each}
+		</div>
+	{/if}
 
 	{#if rows.length > PAGE_SIZE}
-		<div class="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
-			<p class="text-xs text-muted-foreground">
-				{tr("Menampilkan")} {(pageNumber - 1) * PAGE_SIZE + 1}–{Math.min(pageNumber * PAGE_SIZE, rows.length)} {tr("dari")} {rows.length}
-			</p>
-			<div class="flex items-center gap-2">
-				<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" disabled={pageNumber <= 1} onclick={() => goToPage(pageNumber - 1)}>‹ {tr("Sebelumnya")}</button>
-				<p class="text-xs text-muted-foreground">{tr("Halaman")} {pageNumber} {tr("dari")} {totalPages}</p>
-				<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" disabled={pageNumber >= totalPages} onclick={() => goToPage(pageNumber + 1)}>{tr("Berikutnya")} ›</button>
+		<div class="int-pager">
+			<span>{(pageNumber - 1) * PAGE_SIZE + 1}–{Math.min(pageNumber * PAGE_SIZE, rows.length)} {tr('dari')} {rows.length}</span>
+			<div class="int-pager__nav">
+				<button class="app-btn app-btn-soft" disabled={pageNumber <= 1} onclick={() => goToPage(pageNumber - 1)}>{tr('Sebelumnya')}</button>
+				<span>{pageNumber} / {totalPages}</span>
+				<button class="app-btn app-btn-soft" disabled={pageNumber >= totalPages} onclick={() => goToPage(pageNumber + 1)}>{tr('Berikutnya')}</button>
 			</div>
 		</div>
 	{/if}
@@ -259,24 +256,23 @@
 
 {#if createOpen}
 	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
-		<dialog open class="app-card w-full max-w-lg p-5" aria-label={tr("Tambah koneksi")}>
-			<h2 class="text-lg font-semibold">{tr("Tambah koneksi")}</h2>
+		<dialog open class="app-card w-full max-w-lg p-6" aria-label={tr('Tambah koneksi')}>
+			<h2 class="int-dialog__title">{tr('Tambah koneksi WordPress')}</h2>
 			{#if error}<p class="mt-2 text-sm" style="color: var(--destructive);">{error}</p>{/if}
-			<form class="mt-4 space-y-3" onsubmit={create}>
-				<div>
-					<span class="text-xs font-medium text-muted-foreground">Provider</span>
-					<div class="mt-1 flex items-center gap-2 rounded-lg border px-3 py-2">
-						<Plug size={15} />
-						<span class="text-sm font-medium">WordPress REST API</span>
-						<span class="ml-auto rounded-full px-2 py-0.5 text-[11px]" style="background: var(--secondary); color: var(--muted-foreground);">{tr('Terkunci')}</span>
+			<form class="int-form mt-5" onsubmit={create}>
+				<div class="int-field">
+					<span class="int-field__label">Provider</span>
+					<div class="int-field--locked">
+						<span>WordPress REST API</span>
+						<span class="int-meta">{tr('Terkunci')}</span>
 					</div>
-					<p class="mt-1 text-[11px] text-muted-foreground">{tr("Provider terkunci ke WordPress REST API, koneksi media mitra hanya mendukung WordPress.")}</p>
+					<span class="int-field__hint">{tr('Koneksi media mitra hanya mendukung WordPress')}</span>
 				</div>
 
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr("Pilih media")}</span>
+				<label class="int-field">
+					<span class="int-field__label">{tr('Media')}</span>
 					<Select
-						ariaLabel={tr("Pilih media")}
+						ariaLabel={tr('Pilih media')}
 						placeholder={mediaOptions.length > 0 ? tr('Pilih media yang akan dikoneksikan') : tr('Belum ada media dengan website URL')}
 						minWidth={260}
 						value={form.website_id}
@@ -290,84 +286,57 @@
 							...mediaOptions.map((media) => ({ value: media.id, label: `${media.name} (${media.website_url})` }))
 						]}
 					/>
-					<p class="mt-1 text-[11px] text-muted-foreground">{tr("Daftar diambil dari Media Anda. URL WordPress terisi otomatis.")}</p>
+					<span class="int-field__hint">{tr('Diambil dari daftar media Anda; URL WordPress terisi otomatis')}</span>
 				</label>
 
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr("Nama koneksi")}</span>
-					<input class="app-input mt-1 w-full" required placeholder={tr("Nama koneksi")} bind:value={form.name} />
+				<label class="int-field">
+					<span class="int-field__label">{tr('Nama koneksi')}</span>
+					<input class="app-input" required placeholder={tr('Nama koneksi')} bind:value={form.name} />
 				</label>
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr('URL WordPress')}</span>
-					<input class="app-input mt-1 w-full" required readonly placeholder={tr("Pilih media terlebih dahulu")} bind:value={form.base_url} />
+				<label class="int-field">
+					<span class="int-field__label">{tr('URL WordPress')}</span>
+					<input class="app-input" required readonly placeholder={tr('Pilih media terlebih dahulu')} bind:value={form.base_url} />
 				</label>
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr('Username / email WordPress')}</span>
-					<input class="app-input mt-1 w-full" required bind:value={form.username} />
+				<label class="int-field">
+					<span class="int-field__label">{tr('Username atau email WordPress')}</span>
+					<input class="app-input" required bind:value={form.username} />
 				</label>
-				<label class="block">
-					<span class="text-xs font-medium text-muted-foreground">{tr("Application Password")}</span>
+				<label class="int-field">
+					<span class="int-field__label">Application Password</span>
 					<input
-						class="app-input mt-1 w-full"
+						class="app-input"
 						required
 						type="password"
 						placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
 						value={form.application_password}
 						oninput={(e) => (form.application_password = e.currentTarget.value.replace(/\s+/g, ''))}
 					/>
-					<div class="mt-2 rounded-lg border p-3">
-						<p class="flex items-center gap-1 text-[11px] font-medium"><Info size={13} />{tr("Cara Ambil Application Password")}</p>
-						<ol class="mt-2 space-y-1.5">
+					<div class="int-steps">
+						<p class="int-steps__title">{tr('Cara mengambil Application Password')}</p>
+						<ol>
 							{#each APP_PASSWORD_STEPS as step, i (i)}
-								<li class="flex gap-2 text-[11px] leading-relaxed">
-									<span class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white" style="background: var(--primary);">{i + 1}</span>
-									<span>{step}</span>
-								</li>
+								<li><span>{i + 1}</span><span>{step}</span></li>
 							{/each}
 						</ol>
 					</div>
 				</label>
 
-				<div class="flex justify-end gap-2 border-t pt-3">
-					<button class="app-btn app-btn-soft" type="button" onclick={() => (createOpen = false)}>{tr("Batal")}</button>
-					<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{tr("Simpan koneksi")}</button>
+				<div class="int-form__foot">
+					<button class="app-btn app-btn-soft int-btn" type="button" onclick={() => (createOpen = false)}>{tr('Batal')}</button>
+					<button class="app-btn app-btn-primary int-btn" type="submit" disabled={busy}>{tr('Simpan koneksi')}</button>
 				</div>
 			</form>
 		</dialog>
 	</div>
 {/if}
 
-{#snippet connProviderBadge(row: any)}
-	<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--secondary); color: var(--muted-foreground);">{row.provider}</span>
-{/snippet}
-
-{#snippet connStatusBadge(row: any)}
-	<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: {row.status === 'active' ? 'var(--success-soft)' : 'var(--secondary)'}; color: {row.status === 'active' ? 'var(--success)' : 'var(--muted-foreground)'};">{row.status}</span>
-{/snippet}
-
 {#snippet connActionButtons(row: any)}
 	{#if row.status === 'active'}
-		<button class="conn-btn app-btn app-btn-soft !px-2.5 !text-xs" disabled={testingId !== null} onclick={() => test(row)}>
-			{testingId === row.id ? 'Menguji…' : 'Test'}
+		<button class="app-btn app-btn-soft int-btn" disabled={testingId !== null} onclick={() => test(row)}>
+			{testingId === row.id ? tr('Menguji…') : tr('Uji koneksi')}
 		</button>
-		<button class="conn-btn app-btn app-btn-soft !px-2.5 !text-xs" style="color: var(--destructive);" onclick={() => revoke(row)}>{tr('Cabut')}</button>
+		<button class="app-btn app-btn-soft int-btn int-btn--danger" onclick={() => revoke(row)}>{tr('Cabut')}</button>
 	{:else}
-		<button class="conn-btn app-btn app-btn-soft !px-2.5 !text-xs" style="color: var(--destructive);" onclick={() => removeConnection(row)}>
-			<Trash2 size={12} />{tr("Hapus")}</button>
+		<button class="app-btn app-btn-soft int-btn int-btn--danger" onclick={() => removeConnection(row)}>{tr('Hapus')}</button>
 	{/if}
 {/snippet}
-
-<style>
-	/* Kontrol koneksi dipakai bersama tabel (desktop) dan kartu (mobile). Di
-		layar sentuh (<768px) target ketuknya diperbesar; desktop tidak berubah. */
-	.conn-add,
-	.conn-btn {
-		min-height: 32px;
-	}
-	@media (max-width: 767px) {
-		.conn-add,
-		.conn-btn {
-			min-height: 44px;
-		}
-	}
-</style>
