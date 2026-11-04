@@ -246,7 +246,8 @@
 		</div>
 
 		<!-- Mobile (<768px): kartu per koneksi -->
-		<div class="int-list md:hidden">
+		<div class="md:hidden">
+		<div class="int-list">
 			{#each visibleRows as row (row.id)}
 				<article class="int-item" id="int-conn-{row.id}" class:int-item--highlight={row.id === highlightConnId}>
 					<div class="int-item__head">
@@ -273,6 +274,7 @@
 					</div>
 				</article>
 			{/each}
+		</div>
 		</div>
 	{/if}
 
