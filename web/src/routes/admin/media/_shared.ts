@@ -123,8 +123,9 @@ export type Media = {
 	/** Masa berlaku tautan: 0 = permanen, >0 = bulan (default 12). */
 	link_duration_months?: number | null;
 	/** Jumlah backlink maksimal per artikel (0-3). allow_hyperlink = max_links > 0. */
-	max_links?: number | null;
-	allow_hyperlink?: boolean | null;
+	max_links?: number | null;	allow_hyperlink?: boolean | null;
+	/** Rel tautan: dofollow | nofollow | sponsored (terpisah dari label_sponsor). */
+	link_rel?: string | null;
 	/** 'tidak_ada' (organik) atau 'ada_sponsor' (tautan Sponsored). */
 	label_sponsor?: string | null;
 	rejection_reason?: string | null;

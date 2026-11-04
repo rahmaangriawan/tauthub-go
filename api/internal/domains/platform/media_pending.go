@@ -159,6 +159,9 @@ func (d *Deps) mpApplyParkedChanges(ctx context.Context, mediaID, adminID string
 	if v, ok := str("label_sponsor"); ok {
 		add("label_sponsor", v)
 	}
+	if v, ok := str("link_rel"); ok && (v == "dofollow" || v == "nofollow" || v == "sponsored") {
+		add("link_rel", v)
+	}
 	if v, ok := str("dewan_pers_doc_key"); ok {
 		if v == "" {
 			sets = append(sets, "dewan_pers_doc_key = NULL")

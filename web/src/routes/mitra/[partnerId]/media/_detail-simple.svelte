@@ -142,7 +142,7 @@
 			? tr('Maks. 2 tautan')
 			: media.max_links === 0
 				? tr('Tanpa tautan keluar')
-				: `${media.max_links} ${tr('tautan')} ${media.allow_hyperlink === false ? 'Nofollow' : 'Dofollow'}`
+				: `${media.max_links} ${tr('tautan')} ${media.link_rel === 'sponsored' ? 'Sponsored' : media.link_rel === 'nofollow' || media.allow_hyperlink === false ? 'Nofollow' : 'Dofollow'}`
 	);
 	const embedText = $derived(media.allow_embed ? tr('Diizinkan') : tr('Tidak diizinkan'));
 	const sponsorText = $derived(

@@ -179,6 +179,16 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	// Jenis tautan: allow_hyperlink false = nofollow (lihat media.go).
 	allowHyperlink, hasAllowHyperlink := boolField(body, "allow_hyperlink")
+	// Rel tautan (dofollow/nofollow/sponsored). Bila dikirim, allow_hyperlink
+	// mengikutinya (nofollow = false) supaya matchmaker & guard tautan konsisten.
+	linkRel, hasLinkRel := strField(body, "link_rel")
+	if hasLinkRel && !validLinkRel(linkRel) {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid link_rel")
+		return
+	}
+	if hasLinkRel {
+		allowHyperlink, hasAllowHyperlink = linkRel != "nofollow", true
+	}
 	// Masa berlaku tautan: 0 = permanen, >0 = bulan.
 	linkDuration, hasLinkDuration := intField(body, "link_duration_months")
 	if hasLinkDuration && (linkDuration < 0 || linkDuration > 120) {
@@ -227,6 +237,9 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if hasAllowHyperlink && allowHyperlink != existingAllowHyperlink(existing) {
+		changed = true
+	}
+	if hasLinkRel && linkRel != existingLinkRel(existing) {
 		changed = true
 	}
 	if hasLinkDuration && linkDuration != existing.intOr("link_duration_months", 12) {
@@ -291,6 +304,7 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		parkValue(pendingSet, &pendingClear, "traffic_estimate", &hasTraffic, traffic, existing.intOr("traffic_estimate", 0))
 		parkValue(pendingSet, &pendingClear, "max_links", &hasMaxLinks, maxLinks, existing.intOr("max_links", 1))
 		parkValue(pendingSet, &pendingClear, "allow_hyperlink", &hasAllowHyperlink, allowHyperlink, existingAllowHyperlink(existing))
+		parkValue(pendingSet, &pendingClear, "link_rel", &hasLinkRel, linkRel, existingLinkRel(existing))
 		parkValue(pendingSet, &pendingClear, "link_duration_months", &hasLinkDuration, linkDuration, existing.intOr("link_duration_months", 12))
 		parkValue(pendingSet, &pendingClear, "label_sponsor", &hasLabelSponsor, labelSponsor, existing.strOr("label_sponsor", "tidak_ada"))
 		parkValue(pendingSet, &pendingClear, "dewan_pers_doc_key", &hasDewanPersDocKey, dewanPersDocKey, existing.strOr("dewan_pers_doc_key", ""))
@@ -405,6 +419,14 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		if err := d.exec(r.Context(),
 			"UPDATE media SET allow_hyperlink = $1, updated_at = NOW() WHERE id = $2 AND partner_id = $3",
 			allowValue, mediaID, partner.ID); err != nil {
+			d.writeErr(w, err)
+			return
+		}
+	}
+	if hasLinkRel {
+		if err := d.exec(r.Context(),
+			"UPDATE media SET link_rel = $1, updated_at = NOW() WHERE id = $2 AND partner_id = $3",
+			linkRel, mediaID, partner.ID); err != nil {
 			d.writeErr(w, err)
 			return
 		}
@@ -716,7 +738,9 @@ func pendingChangesList(body map[string]any, existing rowMap) []mediaChange {
 	if v, ok := intField(body, "max_links"); ok {
 		add("max_links", "Batas Link", linkLimitLabel(existing.intOr("max_links", 1)), linkLimitLabel(v))
 	}
-	if v, ok := boolField(body, "allow_hyperlink"); ok {
+	if v, ok := strField(body, "link_rel"); ok && validLinkRel(v) {
+		add("link_rel", "Jenis Tautan", linkRelLabel(existingLinkRel(existing)), linkRelLabel(v))
+	} else if v, ok := boolField(body, "allow_hyperlink"); ok {
 		add("allow_hyperlink", "Jenis Tautan", followKindLabel(existingAllowHyperlink(existing)), followKindLabel(v))
 	}
 	// Masa berlaku tautan: 0 = permanen, >0 = bulan. Inilah perubahan yang

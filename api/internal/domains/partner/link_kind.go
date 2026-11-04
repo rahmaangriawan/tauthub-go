@@ -32,3 +32,31 @@ func partnerNextAllowHyperlink(existing rowMap, hasMax bool, maxLinks int, hasAl
 	}
 	return false, false
 }
+
+// Rel tautan (media.link_rel): dofollow | nofollow | sponsored. Terpisah dari
+// label_sponsor (label/disclosure di artikel). Baris lama tanpa link_rel
+// diturunkan dari label_sponsor + allow_hyperlink (sama dengan backfill 304).
+func validLinkRel(v string) bool { return v == "dofollow" || v == "nofollow" || v == "sponsored" }
+
+func existingLinkRel(existing rowMap) string {
+	if v := existing.strOr("link_rel", ""); validLinkRel(v) {
+		return v
+	}
+	if existing.strOr("label_sponsor", "tidak_ada") == "ada_sponsor" {
+		return "sponsored"
+	}
+	if !existingAllowHyperlink(existing) {
+		return "nofollow"
+	}
+	return "dofollow"
+}
+
+func linkRelLabel(v string) string {
+	switch v {
+	case "nofollow":
+		return "Nofollow"
+	case "sponsored":
+		return "rel=sponsored"
+	}
+	return "Dofollow"
+}

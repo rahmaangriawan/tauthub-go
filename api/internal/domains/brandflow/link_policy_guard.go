@@ -154,3 +154,19 @@ func hostSet(urls ...string) map[string]bool {
 	}
 	return out
 }
+
+// mediaLinkRel: media.link_rel (dofollow|nofollow|sponsored). Baris lama tanpa
+// nilai diturunkan dari label_sponsor/allow_hyperlink, sama dengan migrasi 304.
+func mediaLinkRel(item bsRow) string {
+	switch v := item.strOr("link_rel", ""); v {
+	case "dofollow", "nofollow", "sponsored":
+		return v
+	}
+	if item.strOr("label_sponsor", "tidak_ada") == "ada_sponsor" {
+		return "sponsored"
+	}
+	if item.has("allow_hyperlink") && !item.boolOr("allow_hyperlink", true) {
+		return "nofollow"
+	}
+	return "dofollow"
+}

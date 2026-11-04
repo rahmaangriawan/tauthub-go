@@ -78,7 +78,7 @@ func (d *Deps) generateWriterArticle(ctx context.Context, campaignID, brandID, u
 
 	item, err := d.queryRow(ctx,
 		`SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.regen_count, m.media_type, m.category, m.website_url,
-		        m.allow_hyperlink, m.max_links, m.label_sponsor, m.word_count_mode, m.topik_terlarang, m.bahasa_artikel
+		        m.allow_hyperlink, m.max_links, m.label_sponsor, m.link_rel, m.word_count_mode, m.topik_terlarang, m.bahasa_artikel
 		 FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		 WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 AND tcm.status = 'selected' LIMIT 1`,
 		campaignID, mediaID)
@@ -147,10 +147,23 @@ func (d *Deps) generateWriterArticle(ctx context.Context, campaignID, brandID, u
 		}
 		linkCap = cap
 	}
-	sponsoredMedia := item.strOr("label_sponsor", "tidak_ada") == "ada_sponsor"
+	// Rel tautan ikut media.link_rel; baris lama tanpa nilai: label sponsor → sponsored.
+	linkRel := item.strOr("link_rel", "")
+	if linkRel != "dofollow" && linkRel != "nofollow" && linkRel != "sponsored" {
+		linkRel = "dofollow"
+		if item.strOr("label_sponsor", "tidak_ada") == "ada_sponsor" {
+			linkRel = "sponsored"
+		} else if item.has("allow_hyperlink") && !item.boolOr("allow_hyperlink", true) {
+			linkRel = "nofollow"
+		}
+	}
+	sponsoredMedia := linkRel == "sponsored"
 	var primaryRel *string
 	if sponsoredMedia {
 		rel := "sponsored"
+		primaryRel = &rel
+	} else if linkRel == "nofollow" {
+		rel := "nofollow"
 		primaryRel = &rel
 	}
 

@@ -328,6 +328,7 @@ func (d *Deps) mpMediaJSON(row ptRow, markupPercent float64) map[string]any {
 		"link_duration_months":   row.intOr("link_duration_months", 12),
 		"max_links":              row.intOr("max_links", 1),
 		"allow_hyperlink":        row.boolOr("allow_hyperlink", true),
+		"link_rel":               mpLinkRel(row),
 		"label_sponsor":          row.strOr("label_sponsor", "tidak_ada"),
 		"dewan_pers_verified":    row.boolOr("dewan_pers_verified", false),
 		"dewan_pers_note":        row.anyOrNil("dewan_pers_note"),
@@ -3035,4 +3036,20 @@ func mpStrArg(row ptRow, key string) *string {
 		return &s
 	}
 	return nil
+}
+
+// mpLinkRel: media.link_rel, diturunkan dari label_sponsor/allow_hyperlink
+// untuk baris lama (sama dengan backfill migrasi 304).
+func mpLinkRel(row rowMap) string {
+	switch v := row.strOr("link_rel", ""); v {
+	case "dofollow", "nofollow", "sponsored":
+		return v
+	}
+	if row.strOr("label_sponsor", "tidak_ada") == "ada_sponsor" {
+		return "sponsored"
+	}
+	if !row.boolOr("allow_hyperlink", true) {
+		return "nofollow"
+	}
+	return "dofollow"
 }

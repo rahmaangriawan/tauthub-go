@@ -207,12 +207,15 @@
 	const linkDurationText = $derived(
 		permanentLink ? tr('Permanen — tautan tidak pernah dilepas') : `${linkDurationMonths} ${tr('Bulan')} · ${tr('kebijakan media')}`
 	);
+	// Rel tautan terpisah dari label sponsor: media bisa "organik" tapi rel=sponsored.
+	const linkRelLabel = $derived(
+		media.link_rel === 'sponsored' ? 'Sponsored' : media.link_rel === 'nofollow' || media.allow_hyperlink === false ? 'Nofollow' : 'Dofollow'
+	);
 	const linkPolicy = $derived(
 		maxLinksCount == null
 			? 'Maks. 2 Dofollow'
 			: maxLinksCount === 0
-				? tr('Tidak Ada (Tanpa Link)')
-				: `Maks. ${maxLinksCount} ${media.allow_hyperlink ? 'Dofollow' : 'Nofollow'}`
+				? tr('Tidak Ada (Tanpa Link)')				: `Maks. ${maxLinksCount} ${linkRelLabel}`
 	);
 
 	const wordCountNote = $derived.by(() => {
@@ -230,11 +233,9 @@
 	const sponsorText = $derived(isOrganic ? tr('✓ Tidak Ada (Organik)') : 'Ada Label Sponsor / Adv');
 
 	const bahasaFlag: Record<string, string> = { Indonesia: '🇮🇩', Inggris: '🇬🇧', China: '🇨🇳', Arab: '🇸🇦' };
-	const bahasaText = $derived(
-		(media.bahasa_artikel?.length ? media.bahasa_artikel : ['Indonesia'])
-			.map((b) => `${bahasaFlag[b] ?? ''} ${b}`.trim())
-			.join(' · ')
-	);
+	const bahasaList = $derived(media.bahasa_artikel?.length ? media.bahasa_artikel : ['Indonesia']);
+	const bahasaText = $derived(bahasaList.join(', '));
+	const bahasaFlags = $derived(bahasaList.map((b) => bahasaFlag[b] ?? b).join(' '));
 	const isDirectPublish = $derived(media.publication_mode === 'publish');
 	const initialLetter = $derived((media.name || 'M').trim().charAt(0).toUpperCase());
 	// Favicon langsung dari website media (layanan favicon publik Google);
@@ -783,7 +784,7 @@
 										<Languages size={18} class="paramRowIcon" />
 										<span>{tr("Bahasa Artikel")}</span>
 									</div>
-									<span class="paramValueBold">{bahasaText}</span>
+									<span class="paramValueBold" title={bahasaText} style="font-size: 18px; line-height: 1;">{bahasaFlags}</span>
 								</div>
 
 								<div class="paramItemRow">

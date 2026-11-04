@@ -382,7 +382,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.regen_count, tcm.angle_slug,
 		       m.media_type, m.category, m.website_url, m.allow_hyperlink, m.max_links,
 		       m.allow_heading,
-		       m.label_sponsor, m.word_count_mode, m.topik_terlarang, m.bahasa_artikel,
+		       m.label_sponsor, m.link_rel, m.word_count_mode, m.topik_terlarang, m.bahasa_artikel,
 		       COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv
 		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
 		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 AND tcm.slot = $3 AND tcm.status = 'selected' LIMIT 1`,
@@ -573,7 +573,10 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	if articleType == "editorial" {
 		allowsLink = false
 	}
-	sponsoredMedia := item.strOr("label_sponsor", "tidak_ada") == "ada_sponsor"
+	// Rel tautan ikut media.link_rel (terpisah dari label sponsor di artikel).
+	// Baris lama tanpa link_rel: label sponsor → sponsored (perilaku sebelumnya).
+	linkRel := mediaLinkRel(item)
+	sponsoredMedia := linkRel == "sponsored"
 	// Advertorial = sponsored content: paksa rel="sponsored" pada setiap tautan
 	// yang ditanam (backlink kampanye maupun tautan yang diminta klien), sejalan
 	// dengan master prompt advertorial. Tautan tetap hanya ditanam bila ada.
@@ -582,10 +585,10 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 	// Media nofollow (menerima tautan tapi hanya nofollow): tautan ditanam dengan
 	// rel="nofollow" supaya artikel tidak perlu ditolak. Sponsored tetap menang.
-	nofollowMedia := false
+	nofollowMedia := linkRel == "nofollow"
 	if item.has("allow_hyperlink") && item.has("max_links") {
 		ml := int(item.numOr("max_links"))
-		nofollowMedia = mediaForcesNofollow(item.boolOr("allow_hyperlink", true), &ml)
+		nofollowMedia = nofollowMedia || mediaForcesNofollow(item.boolOr("allow_hyperlink", true), &ml)
 	}
 	var primaryRel *string
 	if sponsoredMedia {

@@ -56,8 +56,9 @@ export type MediaDetailItem = {
 	status?: string | null;
 	label_sponsor?: string | null;
 	topik_terlarang?: string[] | null;
-	max_links?: number | null;
-	allow_hyperlink?: boolean | null;
+	max_links?: number | null;	allow_hyperlink?: boolean | null;
+	/** Rel tautan: dofollow | nofollow | sponsored. */
+	link_rel?: string | null;
 	link_duration_months?: number | null;
 	image_required?: boolean | null;
 	publication_mode?: string | null;

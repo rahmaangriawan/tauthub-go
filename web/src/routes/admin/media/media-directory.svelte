@@ -149,31 +149,38 @@
 		media_quality_notes: '',
 		seo_da: '',
 		link_duration_months: '12',
-		max_links: '1',
-		label_sponsor: 'tidak_ada',
+		max_links: '1',		label_sponsor: 'tidak_ada',
 		allow_hyperlink: true,
+		link_rel: 'dofollow',
 		pricing_type: 'nett' as 'nett' | 'nego',
 		// Katalog publik (data.tauthub.com) — hanya admin yang boleh mengubah.
 		public_listed: true,
 		public_slug: ''
-	});
-
-	// Jenis tautan = kombinasi label_sponsor + allow_hyperlink; jumlah backlink
-	// (max_links) diatur terpisah. Nofollow = tetap boleh pasang tautan, tapi
-	// sistem menambahkan rel nofollow otomatis (artikel tidak ditolak).
+	});	// Jenis tautan = rel pada tautan (link_rel), TERPISAH dari label sponsor di
+	// artikel (label_sponsor). Jumlah backlink (max_links) diatur terpisah.
+	// Nofollow = tetap boleh pasang tautan, sistem menambahkan rel nofollow otomatis.
 	type LinkKind = 'dofollow' | 'nofollow' | 'sponsored';
 	const LINK_KINDS: { value: LinkKind; label: string }[] = [
 		{ value: 'dofollow', label: 'Dofollow' },
 		{ value: 'nofollow', label: 'Nofollow' },
-		{ value: 'sponsored', label: 'Sponsored' }
+		{ value: 'sponsored', label: 'rel=sponsored' }
 	];
 	const linkKind = $derived<LinkKind>(
-		form.label_sponsor === 'ada_sponsor' ? 'sponsored' : form.allow_hyperlink ? 'dofollow' : 'nofollow'
+		form.link_rel === 'sponsored' ? 'sponsored' : form.link_rel === 'nofollow' ? 'nofollow' : 'dofollow'
 	);
 	function setLinkKind(kind: LinkKind) {
-		form.label_sponsor = kind === 'sponsored' ? 'ada_sponsor' : 'tidak_ada';
+		form.link_rel = kind;
 		form.allow_hyperlink = kind !== 'nofollow';
 		if (Number(form.max_links) < 1) form.max_links = '1';
+	}
+	const SPONSOR_LABELS: { value: 'tidak_ada' | 'ada_sponsor'; label: string }[] = [
+		{ value: 'tidak_ada', label: 'Tidak ada (organik)' },
+		{ value: 'ada_sponsor', label: 'Ada label sponsor' }
+	];
+	function linkRelOf(row: { link_rel?: string | null; allow_hyperlink?: boolean | null; label_sponsor?: string | null }): string {
+		if (row.link_rel === 'sponsored' || row.link_rel === 'nofollow' || row.link_rel === 'dofollow') return row.link_rel;
+		if (row.label_sponsor === 'ada_sponsor') return 'sponsored';
+		return row.allow_hyperlink === false ? 'nofollow' : 'dofollow';
 	}
 
 	// Pencarian sisi server (debounced) — cari nama/slug/kategori media.
@@ -296,9 +303,9 @@
 			media_quality_notes: '',
 			seo_da: '',
 			link_duration_months: '12',
-			max_links: '1',
-			label_sponsor: 'tidak_ada',
+			max_links: '1',			label_sponsor: 'tidak_ada',
 			allow_hyperlink: true,
+			link_rel: 'dofollow',
 			pricing_type: 'nett',
 			public_listed: true,
 			public_slug: ''
@@ -323,9 +330,9 @@
 			media_quality_notes: row.media_quality_notes ?? '',
 			seo_da: row.seo_da != null ? String(row.seo_da) : '',
 			link_duration_months: String(normalizeLinkDurationMonths(row.link_duration_months)),
-			max_links: ['0', '1', '2', '3'].includes(String(row.max_links ?? 1)) ? String(row.max_links ?? 1) : '1',
-			label_sponsor: row.label_sponsor === 'ada_sponsor' ? 'ada_sponsor' : 'tidak_ada',
+			max_links: ['0', '1', '2', '3'].includes(String(row.max_links ?? 1)) ? String(row.max_links ?? 1) : '1',			label_sponsor: row.label_sponsor === 'ada_sponsor' ? 'ada_sponsor' : 'tidak_ada',
 			allow_hyperlink: row.allow_hyperlink ?? Number(row.max_links ?? 1) > 0,
+			link_rel: linkRelOf(row),
 			pricing_type: row.pricing_type ?? 'nett',
 			public_listed: row.public_listed !== false,
 			public_slug: row.public_slug ?? ''
@@ -527,9 +534,9 @@
 					// Kosong = hapus nilai DA (dikirim null).
 					seo_da: !editing ? undefined : form.seo_da.trim() === '' ? null : Number(form.seo_da),
 					link_duration_months: Number(form.link_duration_months),
-					max_links: Number(form.max_links),
-					label_sponsor: form.label_sponsor,
+					max_links: Number(form.max_links),					label_sponsor: form.label_sponsor,
 					allow_hyperlink: form.allow_hyperlink,
+					link_rel: form.link_rel,
 					pricing_type: form.pricing_type,
 					public_listed: form.public_listed,
 					// Slug publik hanya dikirim bila diisi; rename media tidak boleh
@@ -1785,7 +1792,21 @@
 						<span class="mw-hint"
 							>{tr("Permanen bila tautan tidak pernah dilepas; atau jumlah bulan jaminan tayang. Nilai ini menentukan masa pemantauan 404 dan masa garansi klaim klien.")}</span
 						>
-					</label>
+					</label>					<div>
+						<span class="mw-label">{tr('Label sponsor pada artikel')}</span>
+						<div class="mw-seg mt-1" role="group" aria-label={tr('Label sponsor pada artikel')}>
+							{#each SPONSOR_LABELS as k (k.value)}
+								<button
+									type="button"
+									class="mw-seg-btn"
+									class:mw-seg-on={form.label_sponsor === k.value}
+									aria-pressed={form.label_sponsor === k.value}
+									onclick={() => (form.label_sponsor = k.value)}>{tr(k.label)}</button
+								>
+							{/each}
+						</div>
+						<p class="mw-hint">{tr('Tanda sponsor/advertorial yang terlihat pembaca di artikel. Tidak mengubah atribut rel pada tautan.')}</p>
+					</div>
 
 					<div>
 						<span class="mw-label">{tr('Jenis tautan')}</span>
@@ -1802,9 +1823,8 @@
 						</div>
 						<p class="mw-hint">
 							{linkKind === 'dofollow'
-								? tr('Dofollow: tautan biasa ke website klien. Google ikut menghitungnya untuk SEO. Artikel boleh memuat tautan sampai batas di bawah.')
-								: linkKind === 'sponsored'
-									? tr('Sponsored: tautan diberi tanda iklan atau sponsor. Artikel boleh memuat tautan sampai batas di bawah.')
+								? tr('Dofollow: tautan biasa ke website klien. Google ikut menghitungnya untuk SEO. Artikel boleh memuat tautan sampai batas di bawah.')								: linkKind === 'sponsored'
+									? tr('rel=sponsored: tautan diberi atribut rel="sponsored" (tautan berbayar menurut Google). Terpisah dari label sponsor di artikel.')
 									: tr('Nofollow: tautan ke website klien tetap boleh dipasang, tapi sistem memberinya tanda nofollow otomatis. Google tidak menghitungnya untuk SEO. Artikel tidak ditolak.')}
 							{tr('Pengaturan ini sama dengan yang diatur mitra di halaman Media mitra.')}
 						</p>
@@ -2302,8 +2322,7 @@
 
 {#if bulkLinkOpen}
 	<Modal title={`${tr('Ubah jenis tautan')} ${selectedIds.size} media`} maxWidth="md" onClose={() => (bulkLinkOpen = false)}>
-		<p class="text-sm text-muted-foreground">
-			{tr('Pilih jenis tautan untuk semua media yang kamu centang. Pilihan ini mengubah dua hal yang juga diatur mitra: jumlah backlink (tautan ke website klien) dan label sponsor.')}
+		<p class="text-sm text-muted-foreground">			{tr('Pilih jenis tautan (rel) untuk semua media yang kamu centang. Label sponsor di artikel tidak ikut berubah; aturlah per media bila perlu.')}
 		</p>
 		<div class="mw-seg mt-3" role="group" aria-label={tr('Jenis tautan')}>
 			{#each LINK_KINDS as k (k.value)}

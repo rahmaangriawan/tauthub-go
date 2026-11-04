@@ -54,12 +54,19 @@ export function linkDurationLong(value: unknown): string {
 export function linkPolicyBadge(input: {
 	max_links?: number | null;
 	allow_hyperlink?: boolean | null;
+	/** Rel tautan (dofollow | nofollow | sponsored); terpisah dari label sponsor. */
+	link_rel?: string | null;
 	link_duration_months?: number | null;
 }): string {
 	const duration = linkDurationBadge(input.link_duration_months);
 	const max = input.max_links;
 	if (max === 0) return 'Tanpa backlink';
 	if (max === null || max === undefined) return `Backlink • ${duration}`;
-	const kind = input.allow_hyperlink === false ? 'Nofollow' : 'Dofollow';
+	const kind =
+		input.link_rel === 'sponsored'
+			? 'Sponsored'
+			: input.link_rel === 'nofollow' || input.allow_hyperlink === false
+				? 'Nofollow'
+				: 'Dofollow';
 	return `${max} ${kind} • ${duration}`;
 }

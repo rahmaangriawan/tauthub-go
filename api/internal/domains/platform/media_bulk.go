@@ -294,12 +294,9 @@ func (d *Deps) MediaBulkUpsert(w http.ResponseWriter, r *http.Request) {
 
 // MediaBulkLinkKind: POST /v1/platform/media/bulk-link-kind — ubah jenis tautan
 // (dofollow / nofollow / sponsored) beberapa media sekaligus. Khusus Super Admin.
-// Jenis tautan = kombinasi label_sponsor + allow_hyperlink, dengan jumlah
-// backlink (max_links) dipertahankan; yang 0 dinaikkan jadi 1:
-//
-//	dofollow  → label tidak_ada,  allow_hyperlink true
-//	sponsored → label ada_sponsor, allow_hyperlink true
-//	nofollow  → label tidak_ada,  allow_hyperlink false
+// Jenis tautan = media.link_rel (rel pada tautan); label sponsor di artikel
+// (label_sponsor) TIDAK disentuh karena itu pengaturan terpisah. allow_hyperlink
+// mengikuti (nofollow = false); max_links dipertahankan, yang 0 dinaikkan jadi 1.
 //
 // Nofollow TIDAK memblokir artikel: batas jumlah tetap sama, dan tautan keluar
 // diberi rel="nofollow" otomatis saat artikel ditulis dan saat terbit.
@@ -333,26 +330,16 @@ func (d *Deps) MediaBulkLinkKind(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		curMax := existing.intOr("max_links", 1)
-		curLabel := existing.strOr("label_sponsor", "tidak_ada")
-		curAllow := curMax > 0
-		if existing.has("allow_hyperlink") {
-			curAllow = existing.boolOr("allow_hyperlink", curAllow)
-		}
-		newMax, newLabel, newAllow := curMax, "tidak_ada", true
+		curRel := mpLinkRel(existing)
+		newMax := curMax
 		if newMax < 1 {
 			newMax = 1
 		}
-		switch kind {
-		case "nofollow":
-			newAllow = false
-		case "sponsored":
-			newLabel = "ada_sponsor"
-		}
-		if newMax == curMax && newLabel == curLabel && newAllow == curAllow {
+		if newMax == curMax && curRel == kind {
 			blocked = append(blocked, mpBulkBlocked{ID: mediaID, Name: existing.strOr("name", ""), Reason: "sudah " + kind})
 			continue
 		}
-		policy := mpLinkPolicy{MaxLinks: newMax, HasMax: true, Sponsor: newLabel, HasSponsor: true, Allow: newAllow, HasAllow: true}
+		policy := mpLinkPolicy{MaxLinks: newMax, HasMax: true, LinkRel: kind, HasLinkRel: true, Allow: kind != "nofollow", HasAllow: true}
 		if err := d.mpApplyLinkPolicy(r.Context(), mediaID, policy); err != nil {
 			writeErr(w, d, mpMediaError(err))
 			return

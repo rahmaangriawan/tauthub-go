@@ -60,8 +60,7 @@
 		rating_avg?: number | null; rating_count?: number | null;
 		partner_id?: string | null; partner_public_id?: string | null; partner_name?: string | null;
 		gsc_connected?: boolean; image_required?: boolean | null;
-		label_sponsor?: string | null; topik_terlarang?: string[];
-		max_links?: number | null; allow_hyperlink?: boolean | null;
+		label_sponsor?: string | null; topik_terlarang?: string[];		max_links?: number | null; allow_hyperlink?: boolean | null; link_rel?: string | null;
 		link_duration_months?: number | null;
 		publication_mode?: string | null; auto_publish?: boolean | null; word_count_mode?: string | null;
 		allow_embed?: boolean; pricing_type_raw?: string | null;

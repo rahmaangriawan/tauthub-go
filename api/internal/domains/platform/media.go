@@ -19,7 +19,7 @@ import (
 )
 
 // mpMediaListSelect: kolom daftar media admin (parity SELECT di route GET).
-const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.public_slug, m.public_listed, m.category, m.description, m.website_url, m.contoh_artikel_url, m.adapter_url, m.price, m.credit_cost, m.status, m.integration_type, m.publication_mode, m.partner_id, p.name AS partner_name, u.email AS partner_email, u.referred_by_partner_id, referrer.name AS referrer_name, m.publish_defaults, m.notes, m.traffic_estimate, m.media_tier, m.media_quality_score, m.media_quality_notes, m.health_score, m.health_breakdown, m.health_computed_at, m.auto_publish, m.word_count_mode, m.pending_changes, (m.pending_values IS NOT NULL) AS has_pending_values, m.pending_requested_at, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.rejection_reason, m.reviewed_by, m.reviewed_at, m.created_by, m.created_at, m.updated_at, m.pricing_type, m.price_status, m.negotiated_price, m.link_duration_months, m.max_links, m.allow_hyperlink, m.label_sponsor, m.domain_verified, m.domain_verified_at,
+const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.public_slug, m.public_listed, m.category, m.description, m.website_url, m.contoh_artikel_url, m.adapter_url, m.price, m.credit_cost, m.status, m.integration_type, m.publication_mode, m.partner_id, p.name AS partner_name, u.email AS partner_email, u.referred_by_partner_id, referrer.name AS referrer_name, m.publish_defaults, m.notes, m.traffic_estimate, m.media_tier, m.media_quality_score, m.media_quality_notes, m.health_score, m.health_breakdown, m.health_computed_at, m.auto_publish, m.word_count_mode, m.pending_changes, (m.pending_values IS NOT NULL) AS has_pending_values, m.pending_requested_at, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.rejection_reason, m.reviewed_by, m.reviewed_at, m.created_by, m.created_at, m.updated_at, m.pricing_type, m.price_status, m.negotiated_price, m.link_duration_months, m.max_links, m.allow_hyperlink, m.link_rel, m.label_sponsor, m.domain_verified, m.domain_verified_at,
        COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv,
        sm.da AS seo_da, sm.ai_trust_score AS seo_ai_trust, sm.ai_citation AS seo_ai_citation, sm.checked_at AS seo_checked_at,
        COALESCE(np.wa_number, '') AS partner_wa_number, COALESCE(np.wa_consent, FALSE) AS partner_wa_consent,
@@ -470,6 +470,9 @@ type mpLinkPolicy struct {
 	// tautan hanya sebagai nofollow (artikel tidak ditolak, rel diberi otomatis).
 	Allow    bool
 	HasAllow bool
+	// Rel tautan (dofollow|nofollow|sponsored); nofollow menyinkronkan Allow=false.
+	LinkRel    string
+	HasLinkRel bool
 }
 
 func mpParseLinkPolicy(body map[string]any) (mpLinkPolicy, error) {
@@ -483,6 +486,13 @@ func mpParseLinkPolicy(body map[string]any) (mpLinkPolicy, error) {
 		return mpLinkPolicy{}, errUnprocessable("Invalid label_sponsor")
 	}
 	p.Allow, p.HasAllow = boolField(body, "allow_hyperlink")
+	p.LinkRel, p.HasLinkRel = strField(body, "link_rel")
+	if p.HasLinkRel {
+		if p.LinkRel != "dofollow" && p.LinkRel != "nofollow" && p.LinkRel != "sponsored" {
+			return mpLinkPolicy{}, errUnprocessable("Invalid link_rel")
+		}
+		p.Allow, p.HasAllow = p.LinkRel != "nofollow", true
+	}
 	return p, nil
 }
 
@@ -512,6 +522,13 @@ func (d *Deps) mpApplyLinkPolicy(ctx context.Context, mediaID string, p mpLinkPo
 		if err := d.exec(ctx,
 			"UPDATE media SET label_sponsor = $1, updated_at = NOW() WHERE id = $2",
 			p.Sponsor, mediaID); err != nil {
+			return err
+		}
+	}
+	if p.HasLinkRel {
+		if err := d.exec(ctx,
+			"UPDATE media SET link_rel = $1, updated_at = NOW() WHERE id = $2",
+			p.LinkRel, mediaID); err != nil {
 			return err
 		}
 	}
