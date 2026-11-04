@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
+	import { mediaPlatform } from '$lib/media/platform';
 
 	// Daftar Media mitra — port section "Daftar Media" portal mitra:
 	// daftar + filter status, tambah media, edit, arsip, dan impor massal XLSX
@@ -33,7 +34,7 @@
 	type Media = {
 		id: string; name: string; category: string | null; categories: string[];
 		website_url: string | null; price: number; effective_price: number; client_price: number;
-		markup_percent: number; status: string; integration_type: string;
+		markup_percent: number; status: string; integration_type: string; website_platform?: string | null;
 		publication_mode: string; traffic_estimate: number; max_links: number | null; allow_hyperlink?: boolean | null;
 		/** Rel tautan: dofollow | nofollow | sponsored (terpisah dari label_sponsor). */
 		link_rel?: string | null;
@@ -499,7 +500,8 @@
 			case 'emdash':
 				return 'EmDash';
 			default:
-				return tr('Manual');
+				// Manual: tampilkan platform situs hasil deteksi (WordPress/Blogspot/Custom).
+				return mediaPlatform(m);
 		}
 	};
 

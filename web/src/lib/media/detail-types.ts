@@ -27,6 +27,7 @@ export type MediaDetailItem = {
 	markup_percent?: number | null;
 	credit_cost?: number;
 	integration_type: string;
+	website_platform?: string | null;
 	traffic_estimate: number;
 	media_tier: string | null;
 	media_type?: string | null;

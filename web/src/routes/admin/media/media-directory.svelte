@@ -11,6 +11,7 @@
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import Select from '$lib/components/select.svelte';
 	import { LINK_DURATION_OPTIONS, normalizeLinkDurationMonths } from '$lib/media/link-duration';
+	import { mediaPlatform } from '$lib/media/platform';
 	import { fmtDateTime, statusLabel } from '$lib/admin-format';
 	import { rp } from '$lib/credits/rupiah';
 	import {
@@ -1216,7 +1217,7 @@
 {/snippet}
 
 {#snippet integrationCell(row: Media)}
-	<Badge tone="neutral" value={row.integration_type} />
+	<span class="text-sm">{mediaPlatform(row)}</span>
 {/snippet}
 
 {#if loading && rows.length === 0 && !error}
@@ -1384,7 +1385,7 @@
 								<dd>{@render priceCell(row)}</dd>
 							</div>
 							<div class="min-w-0">
-								<dt class="text-xs text-muted-foreground">Integrasi</dt>
+								<dt class="text-xs text-muted-foreground">Platform</dt>
 								<dd>{@render integrationCell(row)}</dd>
 							</div>
 							<div class="min-w-0">
@@ -1419,7 +1420,7 @@
 			{ key: 'price', label: tr('Harga'), render: priceCell },
 			// Kategori, Trafik, Health, GEO/AI Trust, dan DA dipindah ke popup
 			// detail supaya tabel cukup untuk memindai identitas & status.
-			{ key: 'integration', label: 'Integrasi', render: integrationCell },
+			{ key: 'integration', label: 'Platform', render: integrationCell },
 			// Status visibilitas: Publik (tampil di katalog klien) / Hidden.
 			// Satu tombol bergeser (toggle) supaya tidak dua tombol berdampingan.
 			{ key: 'visibility', label: 'Status', align: 'center' as const, width: '120px', render: visibilityCell },

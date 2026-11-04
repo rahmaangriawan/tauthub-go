@@ -43,6 +43,7 @@ type SchedulerResult struct {
 	MediaChangesReminded        int   `json:"media_changes_reminded"`
 	MediaChangesExpired         int   `json:"media_changes_expired"`
 	RegistrationEmailsBlocked   int   `json:"registration_emails_blocked"`
+	SitePlatformsDetected       int   `json:"site_platforms_detected"`
 	ForfeitWarned               int   `json:"forfeit_warned"`
 	BalanceForfeited            int   `json:"balance_forfeited"`
 	MediaHealthRefreshed        int   `json:"media_health_refreshed"`
@@ -64,6 +65,7 @@ func (r SchedulerResult) toMap() map[string]any {
 		"media_changes_reminded":        r.MediaChangesReminded,
 		"media_changes_expired":         r.MediaChangesExpired,
 		"registration_emails_blocked":   r.RegistrationEmailsBlocked,
+		"site_platforms_detected":       r.SitePlatformsDetected,
 		"forfeit_warned":                r.ForfeitWarned,
 		"balance_forfeited":             r.BalanceForfeited,
 		"media_health_refreshed":        r.MediaHealthRefreshed,
@@ -115,6 +117,9 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 
 	// 4a'. OTP pendaftaran yang tidak dijawab 48 jam: email diblokir dari pendaftaran.
 	res.RegistrationEmailsBlocked = d.schSweepUnansweredEmailCodes(ctx, schMinInt(maxJobs, 50))
+
+	// 4a''. Platform website media (WordPress/Blogspot/Custom) yang belum terdeteksi.
+	res.SitePlatformsDetected = d.schSweepSitePlatforms(ctx, schMinInt(maxJobs, 6))
 
 	// 4b. Saldo akun pasif: peringatan H-7 lalu penghangusan (final, tercatat).
 	res.ForfeitWarned, res.BalanceForfeited = d.schSweepDormantBalances(ctx, schMinInt(maxJobs, 20))

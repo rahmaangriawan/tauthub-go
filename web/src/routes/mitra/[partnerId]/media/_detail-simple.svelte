@@ -4,6 +4,7 @@
 	// grid metrik, lalu tabel ketentuan publikasi. Semua nilai tetap dari data
 	// media yang sama; hanya presentasinya yang diubah.
 	import { tr } from '$lib/i18n/phrases';
+	import { mediaPlatform } from '$lib/media/platform';
 	import { onMount } from 'svelte';
 	import {
 		Ban,
@@ -155,8 +156,7 @@
 					? tr('Boleh (bawaan media blog)')
 					: tr('Tanpa subjudul (bawaan media berita)')
 	);
-	const INTEGRATION_NAME: Record<string, string> = { wordpress: 'WordPress', blogger: 'Blogspot', custom_web: 'Custom', manual: 'Manual' };
-	const platformText = $derived(INTEGRATION_NAME[media.integration_type ?? 'manual'] ?? media.integration_type ?? 'Manual');
+	const platformText = $derived(mediaPlatform(media));
 	const sampleUrl = $derived((media.contoh_artikel_url ?? '').trim());
 	const sponsorText = $derived(
 		!media.label_sponsor || media.label_sponsor === 'tidak_ada'

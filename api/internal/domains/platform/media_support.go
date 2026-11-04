@@ -307,6 +307,7 @@ func (d *Deps) mpMediaJSON(row ptRow, markupPercent float64) map[string]any {
 		"price_status":           row.anyOrNil("price_status"),
 		"negotiated_price":       row.numPtr("negotiated_price"),
 		"integration_type":       row.anyOrNil("integration_type"),
+		"website_platform":       row.anyOrNil("website_platform"),
 		"partner_id":             row.anyOrNil("partner_id"),
 		"partner_name":           row.anyOrNil("partner_name"),
 		"partner_email":          row.anyOrNil("partner_email"),

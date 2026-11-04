@@ -176,7 +176,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		       media.health_computed_at, media.auto_publish, dewan_pers_verified, dewan_pers_note, dewan_pers_cert_no,
 		       domain_verified, media.status, media.created_at, media.media_type, media.bahasa_artikel,
 		       media.label_sponsor, media.topik_terlarang, media.max_links, media.allow_hyperlink,
-		       media.link_duration_months, media.link_rel,
+		       media.link_duration_months, media.link_rel, media.website_platform,
 		       media.publication_mode, media.word_count_mode, media.allow_embed, media.allow_heading, media.pricing_type, media.price_status,
 		       COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l
 		                 JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = media.id), media.category) AS categories_csv,
@@ -234,6 +234,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 		var healthComputedAt *time.Time
 		var autoPublish, dewanPersVerified, domainVerified, allowHyperlink, allowEmbed bool
 		var allowHeading *bool
+	var websitePlatform *string
 		var createdAt time.Time
 		var mediaType, bahasaArtikel, labelSponsor, topikTerlarang, publicationMode, wordCountMode, pricingType, priceStatus *string
 		var maxLinks *int
@@ -256,7 +257,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			&healthComputedAt, &autoPublish, &dewanPersVerified, &dewanPersNote, &dewanPersCertNo,
 			&domainVerified, &status, &createdAt, &mediaType, &bahasaArtikel,
 			&labelSponsor, &topikTerlarang, &maxLinks, &allowHyperlink,
-			&linkDurationMonths, &linkRel,
+			&linkDurationMonths, &linkRel, &websitePlatform,
 			&publicationMode, &wordCountMode, &allowEmbed, &allowHeading, &pricingType, &priceStatus,
 			&categoriesCSV, &seoDA, &seoPA, &seoSpam, &seoCheckedAt, &seoAITrust, &seoAICitation,
 			&standardImageRequired, &partnerID, &partnerPublicID, &partnerName, &gscConnected, &swVisits, &swSnapshotDate, &publishedCount,
@@ -303,7 +304,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 			"link_rel": clientLinkRel(linkRel, labelSponsor, allowHyperlink),
 			"link_duration_months": linkDurationMonths,
 			"publication_mode": publicationMode, "word_count_mode": wordCountMode, "allow_embed": allowEmbed,
-			"allow_heading": allowHeading,
+			"allow_heading": allowHeading, "website_platform": websitePlatform,
 			"pricing_type": pricingType, "price_status": priceStatus,
 			"categories":     categories,
 			"markup_percent": pricing["markup_percent"],
@@ -409,6 +410,7 @@ func (d *Deps) MediaDetail(w http.ResponseWriter, r *http.Request) {
 	var linkDurationMonths int
 	var linkRel *string
 	var allowHeading *bool
+	var websitePlatform, detailIntegrationType *string
 	var publicationMode, wordCountMode *string
 	var labelSponsor, topikTerlarang *string
 	var dewanPersVerified, domainVerified bool
@@ -417,12 +419,12 @@ func (d *Deps) MediaDetail(w http.ResponseWriter, r *http.Request) {
 		SELECT id, name, status, category, description, website_url, price, credit_cost, traffic_estimate,
 		       media_tier, max_links, allow_hyperlink, link_duration_months, publication_mode, word_count_mode, media_type,
 		       label_sponsor, topik_terlarang, dewan_pers_verified, dewan_pers_note, dewan_pers_cert_no, domain_verified,
-		       link_rel, allow_heading
+		       link_rel, allow_heading, website_platform, integration_type
 		FROM media WHERE id = $1 AND status = 'active'
 		  AND EXISTS (SELECT 1 FROM partners pa WHERE pa.id = media.partner_id AND pa.status = 'active') LIMIT 1`, mediaID).
 		Scan(&id, &name, &status, &category, &description, &websiteURL, &price, &creditCost, &trafficEstimate,
 			&mediaTier, &maxLinks, &allowHyperlink, &linkDurationMonths, &publicationMode, &wordCountMode, &mediaType,
-			&labelSponsor, &topikTerlarang, &dewanPersVerified, &dewanPersNote, &dewanPersCertNo, &domainVerified, &linkRel, &allowHeading)
+			&labelSponsor, &topikTerlarang, &dewanPersVerified, &dewanPersNote, &dewanPersCertNo, &domainVerified, &linkRel, &allowHeading, &websitePlatform, &detailIntegrationType)
 	if err != nil {
 		httpx.Error(w, http.StatusNotFound, "Media tidak ditemukan")
 		return
@@ -435,6 +437,8 @@ func (d *Deps) MediaDetail(w http.ResponseWriter, r *http.Request) {
 		"allow_hyperlink": allowHyperlink, "link_duration_months": linkDurationMonths,
 		"link_rel":        clientLinkRel(linkRel, labelSponsor, allowHyperlink),
 		"allow_heading":   allowHeading,
+		"website_platform": websitePlatform,
+		"integration_type": detailIntegrationType,
 		"publication_mode": publicationMode, "word_count_mode": wordCountMode,
 		"media_type": mediaType, "label_sponsor": labelSponsor, "topik_terlarang": parseTopikTerlarang(topikTerlarang),
 		"dewan_pers_verified": dewanPersVerified, "dewan_pers_note": dewanPersNote, "dewan_pers_cert_no": dewanPersCertNo,

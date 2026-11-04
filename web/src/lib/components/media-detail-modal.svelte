@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
+	import { mediaPlatform } from '$lib/media/platform';
 
 	// Modal detail media — port 1:1 dari media-detail-modal.tsx & media-intelligence.module.css.
 	// Layout: header (avatar inisial, domain, verified, dewan pers, tombol aksi)
@@ -247,9 +248,8 @@
 					? tr('Boleh (bawaan media blog)')
 					: tr('Tanpa subjudul (bawaan media berita)')
 	);
-	// Platform media; mode publikasi (draf/terbit) sudah ada di kartu Jalur Publikasi.
-	const INTEGRATION_NAME: Record<string, string> = { wordpress: 'WordPress', blogger: 'Blogspot', custom_web: 'Custom', manual: 'Manual' };
-	const platformText = $derived(INTEGRATION_NAME[media.integration_type ?? 'manual'] ?? media.integration_type ?? 'Manual');
+	// Platform situs media; mode publikasi (draf/terbit) sudah ada di kartu Jalur Publikasi.
+	const platformText = $derived(mediaPlatform(media));
 	const sampleUrl = $derived((media.contoh_artikel_url ?? '').trim());
 	const initialLetter = $derived((media.name || 'M').trim().charAt(0).toUpperCase());
 	// Favicon langsung dari website media (layanan favicon publik Google);
