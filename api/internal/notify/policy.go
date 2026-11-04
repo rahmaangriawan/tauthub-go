@@ -138,6 +138,7 @@ var policies = map[string]ChannelPolicy{
 	"media.dewan_pers.rejected":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"media.domain_down":                      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"media.crawl_blocked":                    {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.integration_missing":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"ticket.created":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	// --- Khusus admin: WA langsung (Fonnte) ------------------------------
 	// Bukan notifikasi in-app (event aslinya di atas sudah punya), melainkan

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/catutil"
+	dbpkg "github.com/rahmaangriawan/tauthub-go/internal/db"
 )
 
 // campaign_core.go: port _campaign.ts + lib/campaign/report.ts +
@@ -360,9 +361,10 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 	}
 
 	media, err := d.queryRow(ctx, `
-		SELECT m.id, m.name, m.price, m.status, m.suspended_at, m.partner_id, m.publication_mode, m.integration_type, m.auto_publish,
+		SELECT m.id, m.name, m.price, m.status, m.suspended_at, m.partner_id, m.publication_mode, m.integration_type, m.auto_publish, m.website_url,
 		       p.status AS partner_status, p.user_id AS partner_user_id, p.auto_publish_enabled,
-		       (SELECT client_name FROM brands WHERE id = $1) AS brand_client_name
+		       (SELECT client_name FROM brands WHERE id = $1) AS brand_client_name,
+		       `+dbpkg.MediaIntegrationReadySQL("m")+` AS integration_ready
 		FROM media m LEFT JOIN partners p ON p.id = m.partner_id
 		WHERE m.id = $2 LIMIT 1`, in.BrandID, in.MediaID)
 	if err != nil {
@@ -387,6 +389,11 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 		return createdPublication{}, errConflict(
 			"Media ini belum menetapkan harga, jadi belum bisa dipesan. Silakan pilih media lain.")
 	}
+	// Media non-manual tanpa koneksi aktif disembunyikan dari katalog; order
+	// lewat URL lama / API tetap ditolak di sini, bukan gagal di worker.
+	if !media.boolOr("integration_ready", true) {
+		return createdPublication{}, errConflict(dbpkg.MediaNotReadyMessage)
+	}
 
 	existing, err := d.queryRow(ctx,
 		"SELECT id FROM publications WHERE document_id = $1 AND media_id = $2 LIMIT 1", in.DocumentID, in.MediaID)
@@ -405,9 +412,8 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 		if media.strOr("integration_type", "manual") == "webhook" {
 			provider = "webhook"
 		}
-		bound, err := d.queryRow(ctx,
-			"SELECT id FROM cms_connections WHERE partner_id = $1 AND provider = $2 AND status = 'active' AND website_id = $3 LIMIT 1",
-			partnerID, provider, in.MediaID)
+		bound, err := d.queryRow(ctx, dbpkg.CMSConnectionForMediaSQL,
+			partnerID, provider, in.MediaID, media.strOr("website_url", ""))
 		if err != nil {
 			return createdPublication{}, err
 		}

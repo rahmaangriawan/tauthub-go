@@ -41,6 +41,7 @@ type SchedulerResult struct {
 	LateApprovalNotified        int   `json:"late_approval_notified"`
 	SLACancelled                int   `json:"sla_cancelled"`
 	MediaChangesReminded        int   `json:"media_changes_reminded"`
+	MediaIntegrationMissingSent int   `json:"media_integration_missing_sent"`
 	MediaChangesExpired         int   `json:"media_changes_expired"`
 	RegistrationEmailsBlocked   int   `json:"registration_emails_blocked"`
 	SitePlatformsDetected       int   `json:"site_platforms_detected"`
@@ -56,23 +57,24 @@ type SchedulerResult struct {
 // toMap: bentuk respons JSON (parity nama field snake_case app lama).
 func (r SchedulerResult) toMap() map[string]any {
 	return map[string]any{
-		"plan_occurrences_materialized": r.PlanOccurrencesMaterialized,
-		"plan_occurrences_failed":       r.PlanOccurrencesFailed,
-		"publications_triggered":        r.PublicationsTriggered,
-		"partner_reminders_sent":        r.PartnerRemindersSent,
-		"late_approval_notified":        r.LateApprovalNotified,
-		"sla_cancelled":                 r.SLACancelled,
-		"media_changes_reminded":        r.MediaChangesReminded,
-		"media_changes_expired":         r.MediaChangesExpired,
-		"registration_emails_blocked":   r.RegistrationEmailsBlocked,
-		"site_platforms_detected":       r.SitePlatformsDetected,
-		"forfeit_warned":                r.ForfeitWarned,
-		"balance_forfeited":             r.BalanceForfeited,
-		"media_health_refreshed":        r.MediaHealthRefreshed,
-		"uploads_purged":                r.UploadsPurged,
-		"jobs_processed":                r.JobsProcessed,
-		"retention_deleted":             r.RetentionDeleted,
-		"retention_archived":            r.RetentionArchived,
+		"plan_occurrences_materialized":  r.PlanOccurrencesMaterialized,
+		"plan_occurrences_failed":        r.PlanOccurrencesFailed,
+		"publications_triggered":         r.PublicationsTriggered,
+		"partner_reminders_sent":         r.PartnerRemindersSent,
+		"late_approval_notified":         r.LateApprovalNotified,
+		"sla_cancelled":                  r.SLACancelled,
+		"media_changes_reminded":         r.MediaChangesReminded,
+		"media_integration_missing_sent": r.MediaIntegrationMissingSent,
+		"media_changes_expired":          r.MediaChangesExpired,
+		"registration_emails_blocked":    r.RegistrationEmailsBlocked,
+		"site_platforms_detected":        r.SitePlatformsDetected,
+		"forfeit_warned":                 r.ForfeitWarned,
+		"balance_forfeited":              r.BalanceForfeited,
+		"media_health_refreshed":         r.MediaHealthRefreshed,
+		"uploads_purged":                 r.UploadsPurged,
+		"jobs_processed":                 r.JobsProcessed,
+		"retention_deleted":              r.RetentionDeleted,
+		"retention_archived":             r.RetentionArchived,
 	}
 }
 
@@ -114,6 +116,10 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 
 	// 4a. Perubahan media yang diparkir mitra: pengingat admin 24 jam, batal 48 jam.
 	res.MediaChangesReminded, res.MediaChangesExpired = d.schSweepMediaPendingChanges(ctx, schMinInt(maxJobs, 20))
+
+	// 4a-bis. Media non-manual tanpa koneksi: sembunyi dari katalog, mitra
+	//         diberi tahu sekali per media.
+	res.MediaIntegrationMissingSent = d.schSweepMediaIntegrationMissing(ctx, schMinInt(maxJobs, 20))
 
 	// 4a'. OTP pendaftaran yang tidak dijawab 48 jam: email diblokir dari pendaftaran.
 	res.RegistrationEmailsBlocked = d.schSweepUnansweredEmailCodes(ctx, schMinInt(maxJobs, 50))

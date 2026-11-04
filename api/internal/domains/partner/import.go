@@ -881,7 +881,7 @@ func (d *Deps) MediaImport(w http.ResponseWriter, r *http.Request) {
 		}
 		link := "/admin/media?status=pending_review#tab-pending"
 		d.notifyPlatformAdmins(r.Context(), "media.submitted", "Media baru menunggu review",
-			`Mitra mengajukan media "`+row.Parsed.Name+`" (bulk import) untuk direview.`, &link)
+			`Mitra mengajukan `+mediaLabel(row.Parsed.Name, website)+` (bulk import) untuk direview.`, &link)
 		results = append(results, map[string]any{
 			"rowNumber": row.RowNumber, "id": id, "name": row.Parsed.Name, "status": "pending_review",
 		})

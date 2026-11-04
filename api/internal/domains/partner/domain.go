@@ -32,6 +32,18 @@ func domainFromWebsite(website string) any {
 	return host
 }
 
+// mediaLabel: nama tampil media di notifikasi admin. Domain (tanpa www) bila
+// ada, supaya admin langsung tahu situs mana; nama media hanya cadangan.
+func mediaLabel(name, websiteURL string) string {
+	if host, ok := domainFromWebsite(websiteURL).(string); ok && host != "" {
+		return host
+	}
+	if n := strings.TrimSpace(name); n != "" {
+		return n
+	}
+	return "media"
+}
+
 func ensureScheme(raw string) string {
 	if strings.Contains(raw, "://") {
 		return raw

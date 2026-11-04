@@ -26,6 +26,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	dbpkg "github.com/rahmaangriawan/tauthub-go/internal/db"
 	"time"
 
 	"github.com/google/uuid"
@@ -2473,8 +2475,9 @@ func (d *Deps) mpCreatePublicationRecord(ctx context.Context, in mpCreatePublica
 	}
 
 	media, err := d.queryRow(ctx, `
-		SELECT m.id, m.name, m.price, m.status, m.partner_id, m.publication_mode, m.integration_type, m.auto_publish,
-		       p.status AS partner_status, p.user_id AS partner_user_id, p.auto_publish_enabled
+		SELECT m.id, m.name, m.price, m.status, m.partner_id, m.publication_mode, m.integration_type, m.auto_publish, m.website_url,
+		       p.status AS partner_status, p.user_id AS partner_user_id, p.auto_publish_enabled,
+		       `+dbpkg.MediaIntegrationReadySQL("m")+` AS integration_ready
 		FROM media m LEFT JOIN partners p ON p.id = m.partner_id
 		WHERE m.id = $1 LIMIT 1`, in.MediaID)
 	if err != nil {
@@ -2486,6 +2489,9 @@ func (d *Deps) mpCreatePublicationRecord(ctx context.Context, in mpCreatePublica
 	mrow := ptRow(ptNormalizeMap(media))
 	if mrow.strOr("status", "") != "active" {
 		return "", errConflict("Media is not active")
+	}
+	if !mrow.boolOr("integration_ready", true) {
+		return "", errConflict(dbpkg.MediaNotReadyMessage)
 	}
 
 	existing, err := d.queryRow(ctx, "SELECT id FROM publications WHERE document_id = $1 AND media_id = $2 LIMIT 1", in.DocumentID, in.MediaID)
@@ -2504,9 +2510,8 @@ func (d *Deps) mpCreatePublicationRecord(ctx context.Context, in mpCreatePublica
 		if mrow.strOr("integration_type", "manual") == "webhook" {
 			provider = "webhook"
 		}
-		bound, _ := d.queryRow(ctx,
-			"SELECT id FROM cms_connections WHERE partner_id = $1 AND provider = $2 AND status = 'active' AND website_id = $3 LIMIT 1",
-			mrow.anyOrNil("partner_id"), provider, in.MediaID)
+		bound, _ := d.queryRow(ctx, dbpkg.CMSConnectionForMediaSQL,
+			mrow.anyOrNil("partner_id"), provider, in.MediaID, mrow.strOr("website_url", ""))
 		if bound != nil {
 			connectionID = ptRow(ptNormalizeMap(bound)).anyOrNil("id")
 		}

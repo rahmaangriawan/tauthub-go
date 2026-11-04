@@ -71,6 +71,8 @@
 	let markupPercent = $state(15);
 	let search = $state('');
 	let statusFilter = $state('');
+	// Integrasi API: '' semua, 'connected', 'not_connected' (media non-manual).
+	let integrationFilter = $state('');
 	// Urutan skor (0-100). Filter minimum DA/GEO sudah dihapus.
 	let sortBy = $state('');
 	let page = $state(1);
@@ -232,6 +234,7 @@
 		if (!ready) return;
 		void debouncedSearch;
 		void statusFilter;
+		void integrationFilter;
 		void sortBy;
 		void page;
 		void load();
@@ -258,6 +261,7 @@
 			});
 			if (debouncedSearch) params.set('search', debouncedSearch);
 		if (statusFilter) params.set('status', statusFilter);
+		if (integrationFilter) params.set('integration', integrationFilter);
 		if (sortBy) params.set('sort', sortBy);
 			const [mediaData, partnerData, creditsData, pricingData] = await Promise.all([
 				platformRequest<{ media: Media[]; total: number }>(`/media?${params}`),
@@ -1051,6 +1055,10 @@
 		{#if row.auto_publish}
 			<span class="text-[10px] text-muted-foreground leading-none">Secure Direct</span>
 		{/if}
+		{#if row.integration_type !== 'manual' && row.integration_connected === false}
+			<!-- Media non-manual tanpa koneksi disembunyikan dari katalog klien. -->
+			<span class="text-[10px] leading-none" style="color: var(--destructive);">{tr('Belum terhubung')}</span>
+		{/if}
 	</div>
 {/snippet}
 
@@ -1257,6 +1265,20 @@
 				{ value: 'inactive', label: tr('Nonaktif') },
 				{ value: 'draft', label: 'Draf' },
 				{ value: 'archived', label: tr('Arsip') }
+			]}
+		/>
+		<Select
+			ariaLabel={tr('Filter integrasi API')}
+			minWidth={isMobile ? 0 : 190}
+			value={integrationFilter}
+			onchange={(v) => {
+				integrationFilter = v;
+				page = 1;
+			}}
+			options={[
+				{ value: '', label: tr('Integrasi API: semua') },
+				{ value: 'connected', label: tr('Terhubung') },
+				{ value: 'not_connected', label: tr('Belum terhubung') }
 			]}
 		/>
 		<Select

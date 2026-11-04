@@ -1,6 +1,7 @@
 package partner
 
 import (
+	dbpkg "github.com/rahmaangriawan/tauthub-go/internal/db"
 	"context"
 	"encoding/json"
 	"math"
@@ -17,7 +18,7 @@ import (
 
 // ---------- media JSON (port mediaJson di partner/media/route.ts) ----------
 
-const mediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.media_type, m.description, m.traffic_estimate, m.health_score, m.health_breakdown, m.website_url, m.adapter_url, m.custom_web_endpoint_url, m.custom_web_api_key_sealed, m.custom_web_status, m.custom_web_last_test_at, m.custom_web_last_test_message, m.blogger_credentials_sealed, m.blogger_blog_id, m.blogger_blog_name, m.blogger_status, m.blogger_last_test_at, m.blogger_last_test_message, m.price, m.pricing_type, m.price_status, m.negotiated_price, m.status,
+var mediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.media_type, m.description, m.traffic_estimate, m.health_score, m.health_breakdown, m.website_url, m.adapter_url, m.custom_web_endpoint_url, m.custom_web_api_key_sealed, m.custom_web_status, m.custom_web_last_test_at, m.custom_web_last_test_message, m.blogger_credentials_sealed, m.blogger_blog_id, m.blogger_blog_name, m.blogger_status, m.blogger_last_test_at, m.blogger_last_test_message, m.price, m.pricing_type, m.price_status, m.negotiated_price, m.status,
                m.integration_type, m.website_platform, m.notes, m.publication_mode, m.bahasa_artikel, m.label_sponsor, m.word_count_mode, m.allow_embed, m.topik_terlarang, m.contoh_artikel_url, m.max_links, m.allow_hyperlink, m.link_rel, m.allow_heading, m.link_duration_months, m.auto_publish, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.domain_verified, m.domain_verified_at, m.rejection_reason, m.reviewed_at, m.created_at, m.updated_at, m.ai_summary, m.ai_summary_generated_at,
                m.pending_changes, m.pending_values, m.pending_requested_at,
                COALESCE(
@@ -36,15 +37,10 @@ const mediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.media_type, 
                ct.last_crawled_at, ct.last_status,
                (ct.last_crawled_at IS NOT NULL
                 AND ct.last_crawled_at >= NOW() - make_interval(days => 7)) AS crawl_fresh,
-              EXISTS (
-                SELECT 1 FROM cms_connections c
-                WHERE c.partner_id = m.partner_id
-                  AND c.provider = m.integration_type
-                  AND c.status = 'active'
-                  AND m.website_url IS NOT NULL
-                  AND regexp_replace(lower(split_part(split_part(c.base_url, '://', 2), '/', 1)), '^www\.', '')
-                    = regexp_replace(lower(split_part(split_part(m.website_url, '://', 2), '/', 1)), '^www\.', '')
-              ) AS has_connection,
+              ` + dbpkg.MediaIntegrationConnectedSQL("m") + ` AS has_connection,
+              ` + dbpkg.MediaIntegrationReadySQL("m") + ` AS integration_ready,
+              ` + dbpkg.MediaCatalogVisibleSQL("m") + ` AS catalog_visible,
+              m.suspended_at,
               (SELECT COUNT(*) FROM publications p
                 WHERE p.media_id = m.id AND p.status IN ('pending', 'waiting_partner')) AS pending_publications,
               (SELECT COUNT(*) FROM publications p2
@@ -181,6 +177,10 @@ func (d *Deps) mediaJSON(r *http.Request, row rowMap, markupPercent float64) map
 		"integration_type":              row.raw("integration_type"),
 		"website_platform":              row.raw("website_platform"),
 		"has_connection":                row.boolOr("has_connection", false),
+		// Tampil di katalog klien atau tidak, plus alasannya (ikon mata di Daftar Media).
+		"integration_ready":             row.boolOr("integration_ready", true),
+		"catalog_visible":               row.boolOr("catalog_visible", false),
+		"catalog_hidden_reason":         partnerCatalogHiddenReason(row),
 		"auto_publish":                  row.boolOr("auto_publish", false),
 		"notes":                         row.raw("notes"),
 		"total_terbit":                  row.numOr("total_terbit"),
@@ -529,12 +529,12 @@ func (d *Deps) MediaCreate(w http.ResponseWriter, r *http.Request) {
 	d.enqueueSeoRefreshForMedia(r.Context(), id)
 	link := "/admin/media?status=pending_review#tab-pending"
 	d.notifyPlatformAdmins(r.Context(), "media.submitted", "Media baru menunggu review",
-		`Mitra mengajukan media "`+name+`" untuk direview.`, &link)
+		`Mitra mengajukan `+mediaLabel(name, websiteURL)+` untuk direview.`, &link)
 	// WA ke admin (Fonnte): pengajuan media/domain tidak boleh menunggu admin
 	// membuka dashboard.
 	notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
 		Event: notify.AdminEventMediaSubmitted, ReferenceID: id,
-		Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": name},
+		Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": mediaLabel(name, websiteURL)},
 		Link: link, BaseURL: d.Cfg.PublicAppURL,
 	})
 
@@ -607,4 +607,23 @@ func (d *Deps) persistMediaDomainCurated(r *http.Request, mediaID, userID, websi
 		"UPDATE media SET updated_at = NOW() WHERE id = $1", mediaID); err != nil {
 		return
 	}
+}
+
+// partnerCatalogHiddenReason: kenapa media tidak tampil di katalog klien.
+// Urutan mengikuti apa yang paling dulu harus dibereskan mitra. NULL = tampil.
+func partnerCatalogHiddenReason(row rowMap) any {
+	if row.boolOr("catalog_visible", false) {
+		return nil
+	}
+	switch {
+	case row.strOr("status", "") != "active":
+		return "inactive"
+	case row.has("suspended_at"):
+		return "suspended"
+	case row.numOr("price") <= 0:
+		return "no_price"
+	case !row.boolOr("integration_ready", true):
+		return "not_connected"
+	}
+	return "partner_inactive"
 }

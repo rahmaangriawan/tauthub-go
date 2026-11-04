@@ -593,9 +593,11 @@ func (d *Deps) DomainVerifyJob(ctx context.Context, mediaID string) error {
 	// Kabari admin saat domain PERTAMA kali jatuh (transisi -> unreachable),
 	// bukan tiap siklus. Best-effort.
 	if status, _ := result["status"].(string); status == "unreachable" && previousHealth != "unreachable" {
-		label := before.strOr("name", "")
-		if label == "" {
-			label = before.strOr("website_url", "")
+		label := before.strOr("website_url", "")
+		if host := prHostOf(label); host != "" {
+			label = host
+		} else if label == "" {
+			label = before.strOr("name", "")
 		}
 		website := before.strOr("website_url", "")
 		failCount, _ := result["fail_count"].(int)

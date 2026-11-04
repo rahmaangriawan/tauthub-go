@@ -3,8 +3,28 @@ package brandflow
 import (
 	"context"
 	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 )
+
+// mediaLabelOf: nama tampil media di notifikasi admin, yaitu domain tanpa www
+// bila ada, nama media hanya cadangan.
+func mediaLabelOf(name, websiteURL string) string {
+	raw := strings.TrimSpace(websiteURL)
+	if raw != "" {
+		if !strings.Contains(raw, "://") {
+			raw = "https://" + raw
+		}
+		if u, err := url.Parse(raw); err == nil && u.Hostname() != "" {
+			return strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+		}
+	}
+	if n := strings.TrimSpace(name); n != "" {
+		return n
+	}
+	return "media"
+}
 
 // Perubahan media yang diparkir mitra (media.pending_values, lihat
 // partner.MediaUpdate) tidak boleh menggantung: admin diingatkan setelah
@@ -69,7 +89,7 @@ func (d *Deps) schSweepMediaPendingChanges(ctx context.Context, limit int) (remi
 		    AND pending_requested_at < NOW() - make_interval(secs => $1)
 		  ORDER BY pending_requested_at
 		  LIMIT $2 FOR UPDATE SKIP LOCKED)
-		RETURNING id, name`, mediaChangeRemindAfter.Seconds(), limit)
+		RETURNING id, name, website_url`, mediaChangeRemindAfter.Seconds(), limit)
 	if err != nil {
 		slog.Error("[scheduler] sweep pengajuan perubahan media (pengingat) gagal", "err", err)
 	}
@@ -77,7 +97,7 @@ func (d *Deps) schSweepMediaPendingChanges(ctx context.Context, limit int) (remi
 	for _, row := range remindRows {
 		reminded++
 		d.notifyPlatformAdmins(ctx, "media.submitted", "Perubahan media belum direview",
-			`Perubahan media "`+row.strOr("name", "Media")+`" sudah menunggu lebih dari 24 jam dan akan dibatalkan otomatis pada jam ke-48.`, &link)
+			`Perubahan `+mediaLabelOf(row.strOr("name", "Media"), row.strOr("website_url", ""))+` sudah menunggu lebih dari 24 jam dan akan dibatalkan otomatis pada jam ke-48.`, &link)
 	}
 	return reminded, expired
 }

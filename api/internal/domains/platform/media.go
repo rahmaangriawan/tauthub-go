@@ -9,6 +9,7 @@ package platform
 // jadi guard di sini memakai permission "" (cukup admin) agar perilakunya sama.
 
 import (
+	dbpkg "github.com/rahmaangriawan/tauthub-go/internal/db"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -19,7 +20,7 @@ import (
 )
 
 // mpMediaListSelect: kolom daftar media admin (parity SELECT di route GET).
-const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.public_slug, m.public_listed, m.category, m.description, m.website_url, m.contoh_artikel_url, m.adapter_url, m.price, m.credit_cost, m.status, m.integration_type, m.publication_mode, m.partner_id, p.name AS partner_name, u.email AS partner_email, u.referred_by_partner_id, referrer.name AS referrer_name, m.publish_defaults, m.notes, m.traffic_estimate, m.media_tier, m.media_quality_score, m.media_quality_notes, m.health_score, m.health_breakdown, m.health_computed_at, m.auto_publish, m.word_count_mode, m.pending_changes, (m.pending_values IS NOT NULL) AS has_pending_values, m.pending_requested_at, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.rejection_reason, m.reviewed_by, m.reviewed_at, m.created_by, m.created_at, m.updated_at, m.pricing_type, m.price_status, m.negotiated_price, m.link_duration_months, m.max_links, m.allow_hyperlink, m.link_rel, m.website_platform, m.label_sponsor, m.domain_verified, m.domain_verified_at,
+var mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.public_slug, m.public_listed, m.category, m.description, m.website_url, m.contoh_artikel_url, m.adapter_url, m.price, m.credit_cost, m.status, m.integration_type, m.publication_mode, m.partner_id, p.name AS partner_name, u.email AS partner_email, u.referred_by_partner_id, referrer.name AS referrer_name, m.publish_defaults, m.notes, m.traffic_estimate, m.media_tier, m.media_quality_score, m.media_quality_notes, m.health_score, m.health_breakdown, m.health_computed_at, m.auto_publish, m.word_count_mode, m.pending_changes, (m.pending_values IS NOT NULL) AS has_pending_values, m.pending_requested_at, m.dewan_pers_verified, m.dewan_pers_note, m.dewan_pers_cert_no, m.dewan_pers_doc_key, m.rejection_reason, m.reviewed_by, m.reviewed_at, m.created_by, m.created_at, m.updated_at, m.pricing_type, m.price_status, m.negotiated_price, m.link_duration_months, m.max_links, m.allow_hyperlink, m.link_rel, m.website_platform, m.label_sponsor, m.domain_verified, m.domain_verified_at,
        COALESCE((SELECT string_agg(c.name, E'\u0001' ORDER BY c.name) FROM media_category_links l JOIN media_categories c ON c.id = l.category_id WHERE l.media_id = m.id), m.category) AS categories_csv,
        sm.da AS seo_da, sm.ai_trust_score AS seo_ai_trust, sm.ai_citation AS seo_ai_citation, sm.checked_at AS seo_checked_at,
        COALESCE(np.wa_number, '') AS partner_wa_number, COALESCE(np.wa_consent, FALSE) AS partner_wa_consent,
@@ -29,21 +30,7 @@ const mpMediaListSelect = `SELECT m.id, m.name, m.slug, m.public_slug, m.public_
        COALESCE((SELECT v.level FROM media_violations v
                  WHERE v.media_id = m.id AND v.revoked_at IS NULL
                  ORDER BY v.created_at DESC LIMIT 1), 'none') AS violation_level,
-       CASE
-         WHEN m.integration_type = 'manual' THEN FALSE
-         WHEN m.integration_type = 'custom_web' THEN COALESCE(m.custom_web_status, '') = 'connected'
-         WHEN m.integration_type = 'blogger' THEN COALESCE(m.blogger_status, '') = 'connected'
-         WHEN m.integration_type = 'tulisio_api' THEN COALESCE(NULLIF(TRIM(m.adapter_url), ''), '') <> ''
-         ELSE EXISTS (
-           SELECT 1 FROM cms_connections c
-           WHERE c.partner_id = m.partner_id
-             AND c.provider = m.integration_type
-             AND c.status = 'active'
-             AND m.website_url IS NOT NULL
-             AND regexp_replace(lower(split_part(split_part(c.base_url, '://', 2), '/', 1)), '^www\.', '')
-               = regexp_replace(lower(split_part(split_part(m.website_url, '://', 2), '/', 1)), '^www\.', '')
-         )
-       END AS integration_connected
+       ` + dbpkg.MediaIntegrationConnectedSQL("m") + ` AS integration_connected
 FROM media m
 LEFT JOIN partners p ON p.id = m.partner_id
 LEFT JOIN users u ON u.id = p.user_id
@@ -98,6 +85,9 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	scope := strings.TrimSpace(q.Get("scope"))
 	partnerID := strings.TrimSpace(q.Get("partner_id"))
 	integrationType := strings.TrimSpace(q.Get("integration_type"))
+	// integration: connected | not_connected — media non-manual dengan/tanpa
+	// koneksi aktif (definisi sama dengan katalog klien dan daftar mitra).
+	integration := strings.TrimSpace(q.Get("integration"))
 	autoPublish := strings.TrimSpace(q.Get("auto_publish"))
 	// media_type: mainstream (media berita & publisher profesional) atau
 	// blogger (blog personal / media independen).
@@ -108,6 +98,10 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if integration != "" && integration != "connected" && integration != "not_connected" {
+		writeErr(w, d, errUnprocessable("Invalid integration filter"))
+		return
+	}
 	if autoPublish != "" && autoPublish != "1" && autoPublish != "0" {
 		writeErr(w, d, errUnprocessable("Invalid auto_publish filter"))
 		return
@@ -137,6 +131,12 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	next := func(v any) string {
 		args = append(args, v)
 		return "$" + ptItoa(len(args))
+	}
+	switch integration {
+	case "connected":
+		where = append(where, "m.integration_type <> 'manual' AND ("+dbpkg.MediaIntegrationConnectedSQL("m")+")")
+	case "not_connected":
+		where = append(where, "m.integration_type <> 'manual' AND NOT ("+dbpkg.MediaIntegrationConnectedSQL("m")+")")
 	}
 	switch {
 	case scope == "archive":

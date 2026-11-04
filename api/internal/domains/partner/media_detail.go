@@ -23,7 +23,7 @@ import (
 )
 
 // mediaDetailSelect: kolom media untuk GET/PUT detail (parity ownedMedia).
-const mediaDetailSelect = mediaListSelect
+var mediaDetailSelect = mediaListSelect
 
 // ownedMedia: parity ownedMedia(partnerId, mediaId) → 404 "Media tidak ditemukan".
 func (d *Deps) ownedMedia(r *http.Request, partnerID, mediaID, notFoundMsg string) (rowMap, error) {
@@ -538,17 +538,17 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		d.auditLog(r.Context(), user.ID, "media.submitted", "media", mediaID)
 		link := "/admin/media?status=pending_review#tab-pending"
 		d.notifyPlatformAdmins(r.Context(), "media.submitted", "Media baru menunggu persetujuan",
-			`Media "`+existing.strOr("name", "")+`" diedit dan kembali ke review Admin.`, &link)
+			mediaLabel(existing.strOr("name", ""), existing.strOr("website_url", ""))+` diedit dan kembali ke review Admin.`, &link)
 	case deferMode && len(pendingSet) > 0:
 		// Media tetap tayang dengan data live; admin diberi tahu ada perubahan
 		// yang menunggu keputusan. Tipe notifikasi dipakai ulang (ada constraint).
 		d.auditLog(r.Context(), user.ID, "media.change_requested", "media", mediaID)
 		link := "/admin/media?status=pending_review#tab-pending"
 		d.notifyPlatformAdmins(r.Context(), "media.submitted", "Perubahan media menunggu persetujuan",
-			`Media "`+existing.strOr("name", "")+`" mengajukan perubahan. Media tetap tayang dengan data lama sampai direview.`, &link)
+			mediaLabel(existing.strOr("name", ""), existing.strOr("website_url", ""))+` mengajukan perubahan. Media tetap tayang dengan data lama sampai direview.`, &link)
 		notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
 			Event: notify.AdminEventMediaSubmitted, ReferenceID: mediaID,
-			Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": existing.strOr("name", "") + " (perubahan)"},
+			Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": mediaLabel(existing.strOr("name", ""), existing.strOr("website_url", "")) + " (perubahan)"},
 			Link: link, BaseURL: d.Cfg.PublicAppURL,
 		})
 	case hasStatus && status == "active":
@@ -984,10 +984,10 @@ func (d *Deps) MediaSubmit(w http.ResponseWriter, r *http.Request) {
 	d.auditLog(r.Context(), user.ID, "media.resubmitted", "media", mediaID)
 	link := "/admin/media?status=pending_review#tab-pending"
 	d.notifyPlatformAdmins(r.Context(), "media.resubmitted", "Media diajukan ulang",
-		`Media "`+row.strOr("name", "")+`" diajukan ulang oleh Mitra untuk direview.`, &link)
+		mediaLabel(row.strOr("name", ""), row.strOr("website_url", ""))+` diajukan ulang oleh Mitra untuk direview.`, &link)
 	notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
 		Event: notify.AdminEventMediaSubmitted, ReferenceID: mediaID,
-		Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": row.strOr("name", "") + " (diajukan ulang)"},
+		Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": mediaLabel(row.strOr("name", ""), row.strOr("website_url", "")) + " (diajukan ulang)"},
 		Link: link, BaseURL: d.Cfg.PublicAppURL,
 	})
 
@@ -1457,7 +1457,7 @@ func (d *Deps) MediaDewanPersVerification(w http.ResponseWriter, r *http.Request
 	}
 	mediaID := chiParam(r, "mediaId")
 	media, err := d.queryRow(r.Context(),
-		"SELECT id, name, partner_id, status FROM media WHERE id = $1 AND partner_id = $2 AND status <> 'hidden' LIMIT 1",
+		"SELECT id, name, website_url, partner_id, status FROM media WHERE id = $1 AND partner_id = $2 AND status <> 'hidden' LIMIT 1",
 		mediaID, partner.ID)
 	if err != nil {
 		d.writeErr(w, err)
@@ -1481,10 +1481,10 @@ func (d *Deps) MediaDewanPersVerification(w http.ResponseWriter, r *http.Request
 	if result.Conflict {
 		link := "/admin/dewan-pers-reviews?status=conflict"
 		d.notifyPlatformAdmins(r.Context(), "media.dewan_pers.submitted", "Konflik nomor sertifikat Dewan Pers",
-			`Media "`+media.strOr("name", "")+`" mengajukan sertifikat yang sudah dipakai media lain.`, &link)
+			mediaLabel(media.strOr("name", ""), media.strOr("website_url", ""))+` mengajukan sertifikat yang sudah dipakai media lain.`, &link)
 		notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
 			Event: notify.AdminEventMediaSubmitted, ReferenceID: mediaID + ":dewan_pers",
-			Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": media.strOr("name", "") + " — konflik sertifikat Dewan Pers"},
+			Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": mediaLabel(media.strOr("name", ""), media.strOr("website_url", "")) + " — konflik sertifikat Dewan Pers"},
 			Link: link, BaseURL: d.Cfg.PublicAppURL,
 		})
 		httpx.Error(w, http.StatusConflict, "Nomor sertifikat ini sudah digunakan oleh media lain dan memerlukan pemeriksaan Admin.")
@@ -1497,10 +1497,10 @@ func (d *Deps) MediaDewanPersVerification(w http.ResponseWriter, r *http.Request
 	if !result.AlreadyVerified {
 		link := "/admin/dewan-pers-reviews?status=pending"
 		d.notifyPlatformAdmins(r.Context(), "media.dewan_pers.submitted", "Verifikasi Dewan Pers menunggu review",
-			`Media "`+media.strOr("name", "")+`" mengajukan sertifikat `+cert+`.`, &link)
+			mediaLabel(media.strOr("name", ""), media.strOr("website_url", ""))+` mengajukan sertifikat `+cert+`.`, &link)
 		notify.EnqueueAdminsWA(r.Context(), d.Pool, notify.AdminWAOptions{
 			Event: notify.AdminEventMediaSubmitted, ReferenceID: mediaID + ":dewan_pers",
-			Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": media.strOr("name", "") + " — verifikasi Dewan Pers"},
+			Data: map[string]string{"nama": derefOr(partner.Name, "Mitra"), "judul": mediaLabel(media.strOr("name", ""), media.strOr("website_url", "")) + " — verifikasi Dewan Pers"},
 			Link: link, BaseURL: d.Cfg.PublicAppURL,
 		})
 	}
