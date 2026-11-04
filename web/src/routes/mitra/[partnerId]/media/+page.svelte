@@ -2256,19 +2256,19 @@
 						{/if}
 
 						<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-							<!-- ════════ KOLOM KIRI (7 cols ~58%) ════════ -->
-							<div class="lg:col-span-7 space-y-5">
-								<!-- 1. Informasi media -->
-								<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
-									<div class="flex items-center gap-3">
-										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
-											<FileText size={18} />
-										</div>
-										<div>
-											<h3 class="text-sm font-bold text-slate-900">{tr('Informasi media')}</h3>
-											<p class="text-xs text-muted-foreground">{tr('Informasi dasar media yang digunakan untuk publikasi artikel.')}</p>
-										</div>
+						<!-- ════════ KOLOM KIRI (7 cols ~58%) ════════ -->
+						<div class="lg:col-span-7 space-y-5">
+							<!-- 1. Identitas media -->
+							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
+								<div class="flex items-center gap-3">
+									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+										<Building2 size={18} />
 									</div>
+									<div>
+										<h3 class="text-sm font-bold text-slate-900"><span class="mr-1.5 text-xs font-semibold text-muted-foreground tabular-nums">1</span>{tr('Identitas media')}</h3>
+										<p class="text-xs text-muted-foreground">{tr('Yang dilihat klien di katalog: nama, domain, jenis, kategori, dan contoh artikel.')}</p>
+									</div>
+								</div>
 
 									<div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
 										<label class="block">
@@ -2288,6 +2288,32 @@
 										</label>
 									</div>
 
+								<div class="text-xs font-semibold text-slate-700 pt-1">{tr('Jenis media')}</div>
+									<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
+										{#each [
+											{ v: 'blogger', label: 'Media Blogger', desc: 'Blog personal / Blogger yang digunakan sebagai media publikasi.' },
+											{ v: 'mainstream', label: 'Media Mainstream', desc: 'Media berita / publisher profesional.' }
+										] as opt (opt.v)}
+											{@const active = form.media_type === opt.v}
+											<button
+												type="button"
+												class="rounded-xl border p-3.5 text-left transition cursor-pointer flex flex-col justify-between"
+												style="border-color: {active ? 'var(--primary)' : 'var(--border)'}; background: {active ? 'var(--accent)' : 'var(--card)'};"
+												onclick={() => (form.media_type = opt.v)}
+											>
+												<div>
+													<div class="flex items-center gap-2 mb-1.5">
+														<span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors" style="border-color: {active ? 'var(--primary)' : 'var(--muted-foreground)'};">
+															{#if active}<span class="h-2 w-2 rounded-full" style="background: var(--primary);"></span>{/if}
+														</span>
+														<span class="text-sm font-bold text-slate-900">{tr(opt.label)}</span>
+													</div>
+													<p class="text-xs text-muted-foreground leading-snug">{tr(opt.desc)}</p>
+												</div>
+											</button>
+										{/each}
+									</div>
+
 										<div>
 											<span class="mb-1.5 block text-xs font-semibold text-slate-700">{tr('Bahasa artikel')}</span>
 											<div class="flex flex-wrap gap-4 pt-0.5">
@@ -2299,6 +2325,154 @@
 												{/each}
 											</div>
 										</div>
+
+								<div class="text-xs font-semibold text-slate-700 pt-1">{tr('Kategori media')}</div>
+									{#if form.categories.length > 0}
+										<div class="flex flex-wrap gap-1.5 pt-1">
+											{#each form.categories as c (c)}
+												<span class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200/70">
+													{c}
+													<button type="button" aria-label={`${tr('Hapus')} ${c}`} class="cursor-pointer hover:text-blue-900 font-bold leading-none" onclick={() => removeFormCategory(c)}>×</button>
+												</span>
+											{/each}
+										</div>
+									{/if}
+
+									<div class="flex flex-wrap items-stretch gap-2">
+										<div class="relative min-w-0 flex-1 basis-full sm:basis-0">
+											<Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+											<input
+												class="app-input w-full pl-8 text-xs sm:text-sm"
+												placeholder={tr('Cari kategori…')}
+												bind:value={form.categoryQuery}
+												onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFormCategory(form.categoryQuery); } }}
+											/>
+										</div>
+										<button type="button" class="app-btn app-btn-soft shrink-0 !text-xs !px-3 font-medium whitespace-nowrap w-full sm:w-auto" onclick={() => addFormCategory(form.categoryQuery)}>＋ {tr('Tambah kategori')}</button>
+									</div>
+
+									{#if form.categories.length >= 20}
+										<div class="text-xs font-medium text-amber-600">{tr('Maksimal 20 kategori per media.')}</div>
+									{:else if catSuggestions.length > 0 || (catQuery && !catPool.some((c) => c.toLowerCase() === catQuery))}
+										<div class="flex flex-wrap gap-1.5 pt-0.5">
+											{#each catSuggestions as c (c)}
+												<button type="button" class="rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors" onclick={() => addFormCategory(c)}>＋ {c}</button>
+											{/each}
+											{#if catQuery && !catPool.some((c) => c.toLowerCase() === catQuery)}
+												<button
+													type="button"
+													class="rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+													style="background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);"
+													disabled={form.categories.some((c) => c.trim().toLowerCase() === catQuery)}
+													onclick={() => addFormCategory(form.categoryQuery.trim())}
+												>＋ {tr('Buat kategori baru')} "{form.categoryQuery.trim()}"</button>
+											{/if}
+										</div>
+									{/if}
+
+								<div class="text-xs font-semibold text-slate-700 pt-1">{tr('Contoh artikel')}</div>
+									{#if form.contoh_artikel_url}
+										<div class="rounded-xl border border-slate-200/90 bg-slate-50/70 p-3.5 flex flex-wrap items-center justify-between gap-3">
+											<div class="flex items-center gap-2.5 min-w-0 flex-1">
+												<span class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70 shrink-0">
+													<Check size={12} /> {tr('Tersedia')}
+												</span>
+												<a href={form.contoh_artikel_url} target="_blank" rel="noreferrer" class="truncate text-xs sm:text-sm font-medium text-blue-600 hover:underline inline-flex items-center gap-1">
+													<span class="truncate">{form.contoh_artikel_url}</span>
+													<ExternalLink size={12} class="shrink-0" />
+												</a>
+											</div>
+												<div class="flex items-center gap-1.5 shrink-0">
+													<button type="button" class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs font-medium" onclick={openContohFromForm}><Pencil size={12} /> {tr('Ganti')}</button>
+													<div class="relative inline-block">
+														<button
+															type="button"
+															class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs font-medium text-rose-600 hover:text-rose-700"
+															onclick={() => (confirmDeleteContoh = !confirmDeleteContoh)}
+														>
+															<X size={12} /> {tr('Hapus')}
+														</button>
+
+														{#if confirmDeleteContoh}
+															<!-- Backdrop transparan untuk click outside -->
+															<button
+																type="button"
+																class="fixed inset-0 z-40 cursor-default bg-transparent"
+																aria-label={tr('Tutup')}
+																onclick={() => (confirmDeleteContoh = false)}
+															></button>
+
+															<!-- Popover konfirmasi -->
+															<div
+																class="absolute right-0 bottom-full mb-1.5 z-50 w-64 rounded-xl border border-slate-200/90 bg-white p-3 shadow-xl text-left"
+																style="box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15);"
+															>
+																<div class="flex items-start gap-2.5">
+																	<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600 border border-rose-100">
+																		<Trash2 size={13} />
+																	</div>
+																	<div>
+																		<p class="text-xs font-bold text-slate-900">{tr('Hapus contoh artikel?')}</p>
+																		<p class="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+																			{tr('Tautan contoh artikel yang tersimpan akan dikosongkan.')}
+																		</p>
+																	</div>
+																</div>
+																<div class="mt-2.5 flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100">
+																	<button
+																		type="button"
+																		class="app-btn app-btn-soft !min-h-6 !px-2 !text-[11px]"
+																		onclick={() => (confirmDeleteContoh = false)}
+																	>
+																		{tr('Batal')}
+																	</button>
+																	<button
+																		type="button"
+																		class="app-btn !min-h-6 !px-2.5 !text-[11px] bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-sm transition-colors"
+																		onclick={() => {
+																			form.contoh_artikel_url = '';
+																			confirmDeleteContoh = false;
+																		}}
+																	>
+																		{tr('Ya, hapus')}
+																	</button>
+																</div>
+															</div>
+														{/if}
+													</div>
+												</div>
+										</div>
+									{:else}
+										<button
+											type="button"
+											class="w-full rounded-xl border border-slate-200/80 bg-slate-50/60 hover:bg-slate-50 p-3.5 transition flex items-center justify-between group cursor-pointer text-left"
+											onclick={openContohFromForm}
+										>
+											<div class="flex items-center gap-2.5">
+												<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 border border-blue-100/40">
+													<Link2 size={15} />
+												</div>
+												<span class="text-sm font-semibold text-slate-800">{tr('Tambah contoh artikel')}</span>
+											</div>
+											<ChevronRight size={16} class="text-slate-400 group-hover:text-slate-600 transition-colors" />
+										</button>
+									{/if}
+									<p class="text-[11px] text-muted-foreground leading-relaxed pt-0.5">
+										{tr('Pastikan contoh artikel yang Anda input, terbebas dari perjanjian NDA, Tauthub mendorong mitra media untuk menjaga kerasahasiaan kerjasama dengan klien.')}
+									</p>
+							</section>
+
+							<!-- 2. Ketentuan redaksi -->
+							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
+								<div class="flex items-center gap-3">
+									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+										<FileText size={18} />
+									</div>
+									<div>
+										<h3 class="text-sm font-bold text-slate-900"><span class="mr-1.5 text-xs font-semibold text-muted-foreground tabular-nums">2</span>{tr('Ketentuan redaksi')}</h3>
+										<p class="text-xs text-muted-foreground">{tr('Aturan naskah yang diterima media ini.')}</p>
+									</div>
+								</div>
 
 											<div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
 												<div>
@@ -2397,222 +2571,164 @@
 												</div>
 											</div>
 										</div>
-								</section>
 
-								<!-- 2. Kategori media -->
-								<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-3.5 shadow-sm">
-									<div class="flex items-center gap-3">
-										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
-											<Tag size={18} />
-										</div>
-										<div>
-											<h3 class="text-sm font-bold text-slate-900">{tr('Kategori media')}</h3>
-											<p class="text-xs text-muted-foreground">{tr('Tambahkan satu atau beberapa kategori yang tersedia di media ini. Kategori akan digunakan sebagai filter di Dashboard Klien.')}</p>
-										</div>
-									</div>
-
-									{#if form.categories.length > 0}
-										<div class="flex flex-wrap gap-1.5 pt-1">
-											{#each form.categories as c (c)}
-												<span class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200/70">
-													{c}
-													<button type="button" aria-label={`${tr('Hapus')} ${c}`} class="cursor-pointer hover:text-blue-900 font-bold leading-none" onclick={() => removeFormCategory(c)}>×</button>
-												</span>
-											{/each}
-										</div>
-									{/if}
-
-									<div class="flex flex-wrap items-stretch gap-2">
-										<div class="relative min-w-0 flex-1 basis-full sm:basis-0">
-											<Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-											<input
-												class="app-input w-full pl-8 text-xs sm:text-sm"
-												placeholder={tr('Cari kategori…')}
-												bind:value={form.categoryQuery}
-												onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFormCategory(form.categoryQuery); } }}
-											/>
-										</div>
-										<button type="button" class="app-btn app-btn-soft shrink-0 !text-xs !px-3 font-medium whitespace-nowrap w-full sm:w-auto" onclick={() => addFormCategory(form.categoryQuery)}>＋ {tr('Tambah kategori')}</button>
-									</div>
-
-									{#if form.categories.length >= 20}
-										<div class="text-xs font-medium text-amber-600">{tr('Maksimal 20 kategori per media.')}</div>
-									{:else if catSuggestions.length > 0 || (catQuery && !catPool.some((c) => c.toLowerCase() === catQuery))}
-										<div class="flex flex-wrap gap-1.5 pt-0.5">
-											{#each catSuggestions as c (c)}
-												<button type="button" class="rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors" onclick={() => addFormCategory(c)}>＋ {c}</button>
-											{/each}
-											{#if catQuery && !catPool.some((c) => c.toLowerCase() === catQuery)}
-												<button
-													type="button"
-													class="rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-													style="background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary);"
-													disabled={form.categories.some((c) => c.trim().toLowerCase() === catQuery)}
-													onclick={() => addFormCategory(form.categoryQuery.trim())}
-												>＋ {tr('Buat kategori baru')} "{form.categoryQuery.trim()}"</button>
-											{/if}
-										</div>
-									{/if}
-								</section>
-
-								<!-- 3. Contoh artikel -->
-								<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-3 shadow-sm">
-									<div class="flex items-center gap-3">
-										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
-											<FileText size={18} />
-										</div>
-										<div>
-											<h3 class="text-sm font-bold text-slate-900">{tr('Contoh artikel')}</h3>
-											<p class="text-xs text-muted-foreground">{tr('Tunjukkan satu artikel asli dari media Anda. Pembeli memakainya untuk melihat layout, ukuran font, peletakan gambar, dan penempatan backlink.')}</p>
-										</div>
-									</div>
-
-									{#if form.contoh_artikel_url}
-										<div class="rounded-xl border border-slate-200/90 bg-slate-50/70 p-3.5 flex flex-wrap items-center justify-between gap-3">
-											<div class="flex items-center gap-2.5 min-w-0 flex-1">
-												<span class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70 shrink-0">
-													<Check size={12} /> {tr('Tersedia')}
-												</span>
-												<a href={form.contoh_artikel_url} target="_blank" rel="noreferrer" class="truncate text-xs sm:text-sm font-medium text-blue-600 hover:underline inline-flex items-center gap-1">
-													<span class="truncate">{form.contoh_artikel_url}</span>
-													<ExternalLink size={12} class="shrink-0" />
-												</a>
-											</div>
-												<div class="flex items-center gap-1.5 shrink-0">
-													<button type="button" class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs font-medium" onclick={openContohFromForm}><Pencil size={12} /> {tr('Ganti')}</button>
-													<div class="relative inline-block">
+								<div class="space-y-3.5">
+											<div>
+												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Label sponsor pada artikel')}</span>
+												<div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-0.5" role="group" aria-label={tr('Label sponsor pada artikel')}>
+													{#each SPONSOR_LABELS as k (k.value)}
 														<button
 															type="button"
-															class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs font-medium text-rose-600 hover:text-rose-700"
-															onclick={() => (confirmDeleteContoh = !confirmDeleteContoh)}
+															class="min-h-9 rounded-[10px] px-4 text-xs font-semibold transition-colors {form.label_sponsor === k.value ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}"
+															aria-pressed={form.label_sponsor === k.value}
+															onclick={() => (form.label_sponsor = k.value)}>{tr(k.label)}</button
 														>
-															<X size={12} /> {tr('Hapus')}
-														</button>
+													{/each}
+												</div>
+												<span class="mt-1 block text-xs text-muted-foreground">
+													{form.label_sponsor === 'ada_sponsor'
+														? tr('Artikel tayang dengan tanda sponsor/advertorial (label terlihat pembaca). Klien melihat "Ada Label Sponsor / Adv".')
+														: tr('Artikel tayang seperti artikel biasa tanpa tanda sponsor. Klien melihat "Tidak Ada (Organik)". Ini tidak mengubah atribut rel pada tautan.')}
+												</span>
+											</div>
+								</div>
 
-														{#if confirmDeleteContoh}
-															<!-- Backdrop transparan untuk click outside -->
-															<button
-																type="button"
-																class="fixed inset-0 z-40 cursor-default bg-transparent"
-																aria-label={tr('Tutup')}
-																onclick={() => (confirmDeleteContoh = false)}
-															></button>
+								<div class="space-y-3.5">
+											<div>
+												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Subjudul (H2/H3) dalam artikel')}</span>
+												<div>
+													<Select
+														bind:value={form.allow_heading}
+														ariaLabel={tr('Izin subjudul dalam artikel')}
+														minWidth={0}
+														fitContent
+														options={[
+															{ value: 'default', label: tr('Ikut bawaan tipe media') },
+															{ value: 'yes', label: tr('Boleh memakai subjudul') },
+															{ value: 'no', label: tr('Tanpa subjudul') }
+														]}
+													/>
+												</div>
+												<span class="mt-1 block text-xs text-muted-foreground">{tr('Bawaan: media blog boleh memakai subjudul, media berita tidak. Pilih "Boleh" bila media berita Anda menerima artikel dengan subjudul.')}</span>
+											</div>
+								</div>
+							</section>
 
-															<!-- Popover konfirmasi -->
-															<div
-																class="absolute right-0 bottom-full mb-1.5 z-50 w-64 rounded-xl border border-slate-200/90 bg-white p-3 shadow-xl text-left"
-																style="box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15);"
-															>
-																<div class="flex items-start gap-2.5">
-																	<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600 border border-rose-100">
-																		<Trash2 size={13} />
-																	</div>
-																	<div>
-																		<p class="text-xs font-bold text-slate-900">{tr('Hapus contoh artikel?')}</p>
-																		<p class="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-																			{tr('Tautan contoh artikel yang tersimpan akan dikosongkan.')}
-																		</p>
-																	</div>
-																</div>
-																<div class="mt-2.5 flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100">
-																	<button
-																		type="button"
-																		class="app-btn app-btn-soft !min-h-6 !px-2 !text-[11px]"
-																		onclick={() => (confirmDeleteContoh = false)}
-																	>
-																		{tr('Batal')}
-																	</button>
-																	<button
-																		type="button"
-																		class="app-btn !min-h-6 !px-2.5 !text-[11px] bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-sm transition-colors"
-																		onclick={() => {
-																			form.contoh_artikel_url = '';
-																			confirmDeleteContoh = false;
-																		}}
-																	>
-																		{tr('Ya, hapus')}
-																	</button>
-																</div>
-															</div>
-														{/if}
+							<!-- 3. Backlink & SEO -->
+							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
+								<div class="flex items-center gap-3">
+									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+										<Link2 size={18} />
+									</div>
+									<div>
+										<h3 class="text-sm font-bold text-slate-900"><span class="mr-1.5 text-xs font-semibold text-muted-foreground tabular-nums">3</span>{tr('Backlink & SEO')}</h3>
+										<p class="text-xs text-muted-foreground">{tr('Ketentuan tautan keluar yang dicari tim SEO klien.')}</p>
+									</div>
+								</div>
+
+								<div class="space-y-3.5">
+											<div>
+												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Jenis tautan')}</span>
+												<div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-0.5" role="group" aria-label={tr('Jenis tautan')}>
+													{#each LINK_KINDS as k (k.value)}
+														<button
+															type="button"
+															class="min-h-9 rounded-[10px] px-4 text-xs font-semibold transition-colors {linkKind === k.value ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}"
+															aria-pressed={linkKind === k.value}
+															onclick={() => setLinkKind(k.value)}>{k.label}</button
+														>
+													{/each}
+												</div>
+												<span class="mt-1 block text-xs text-muted-foreground">
+													{linkKind === 'dofollow'
+														? tr('Dofollow: tautan biasa ke website klien. Google ikut menghitungnya untuk SEO. Artikel boleh memuat tautan sampai batas di bawah.')														: linkKind === 'sponsored'
+															? tr('rel=sponsored: tautan diberi atribut rel="sponsored" (tautan berbayar menurut Google). Terpisah dari label sponsor di artikel. Artikel boleh memuat tautan sampai batas di bawah.')
+															: tr('Nofollow: tautan ke website klien tetap boleh dipasang, tapi sistem memberinya tanda nofollow otomatis. Google tidak menghitungnya untuk SEO. Artikel tidak ditolak.')}
+												</span>
+											</div>
+
+											<div>
+												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Jumlah backlink yang diperbolehkan dalam artikel')}</span>
+												<div>
+													<Select
+														bind:value={form.max_links}
+														ariaLabel={tr('Jumlah backlink yang diperbolehkan dalam artikel')}
+														minWidth={0}
+														fitContent
+														options={[
+															{ value: '0', label: tr('0 — Tanpa backlink') },
+															{ value: '1', label: tr('1 Link (default)') },
+															{ value: '2', label: tr('2 Link') },
+															{ value: '3', label: tr('3 Link') }
+														]}
+													/>
+												</div>
+												<span class="mt-1 block text-xs text-muted-foreground">{tr('Jumlah maksimal backlink yang boleh ditanam dalam satu artikel di media ini. Default 1; pilih 0 bila artikel tidak boleh memuat backlink.')}</span>
+											</div>
+
+										<div>
+											<span class="mb-1.5 block text-xs font-semibold text-slate-700">{tr('Masa berlaku tautan (backlink)')}</span>
+											<div class="inline-flex w-full rounded-xl border border-slate-200 bg-slate-100/70 p-1">
+												<button
+													type="button"
+													class="flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all {linkDurationPermanent ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60' : 'text-muted-foreground hover:text-slate-800'}"
+													aria-pressed={linkDurationPermanent}
+													onclick={() => (form.link_duration_months = '0')}
+												>{tr('Permanen')}</button>
+												<button
+													type="button"
+													class="flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all {!linkDurationPermanent ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60' : 'text-muted-foreground hover:text-slate-800'}"
+													aria-pressed={!linkDurationPermanent}
+													onclick={() => { if (linkDurationPermanent) form.link_duration_months = '12'; }}
+												>{tr('Jangka Waktu')}</button>
+											</div>
+
+											{#if linkDurationPermanent}
+												<div class="mt-2.5 rounded-xl border border-blue-100 bg-blue-50/50 p-3 flex items-start gap-2.5">
+													<Info size={16} class="text-blue-600 shrink-0 mt-0.5" />
+													<p class="text-xs leading-relaxed text-blue-900 font-medium">
+														{tr('Tautan tetap tayang terus — tidak pernah dilepas dan tidak ada masa kedaluwarsanya. Klien tidak perlu khawatir tautannya hilang sendiri.')}
+													</p>
+												</div>
+											{:else}
+												<div class="mt-2.5 rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-2">
+													<div class="flex items-start gap-2.5">
+														<Info size={16} class="text-blue-600 shrink-0 mt-0.5" />
+														<p class="text-xs leading-relaxed text-blue-900 font-medium">
+															{tr('Klien akan memprioritaskan website yang memberikan garansi hyperlink tayang permanen')}
+														</p>
+													</div>
+													<div class="space-y-1.5 pl-6 pt-1">
+														{#each linkDurationChoices as months (months)}
+															<label class="flex cursor-pointer items-center gap-2 text-xs text-slate-700">
+																<input type="radio" name="link-duration-months" value={String(months)} bind:group={form.link_duration_months} class="h-3.5 w-3.5 text-primary focus:ring-primary/20" />
+																<span>{months === 12 ? tr('12 Bulan') : `${months} ${tr('Bulan')}`}</span>
+															</label>
+														{/each}
 													</div>
 												</div>
+											{/if}
 										</div>
-									{:else}
-										<button
-											type="button"
-											class="w-full rounded-xl border border-slate-200/80 bg-slate-50/60 hover:bg-slate-50 p-3.5 transition flex items-center justify-between group cursor-pointer text-left"
-											onclick={openContohFromForm}
-										>
-											<div class="flex items-center gap-2.5">
-												<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 border border-blue-100/40">
-													<Link2 size={15} />
-												</div>
-												<span class="text-sm font-semibold text-slate-800">{tr('Tambah contoh artikel')}</span>
-											</div>
-											<ChevronRight size={16} class="text-slate-400 group-hover:text-slate-600 transition-colors" />
-										</button>
-									{/if}
-									<p class="text-[11px] text-muted-foreground leading-relaxed pt-0.5">
-										{tr('Pastikan contoh artikel yang Anda input, terbebas dari perjanjian NDA, Tauthub mendorong mitra media untuk menjaga kerasahasiaan kerjasama dengan klien.')}
-									</p>
-								</section>
+								</div>
+							</section>
 
 								<!-- Kesimpulan Website: di HP bagian ini dipindah ke paling bawah form. -->
 								<div class="hidden lg:block">{@render summarySection()}</div>
-							</div>
+						</div>
 
-							<!-- ════════ KOLOM KANAN (5 cols ~42%) ════════ -->
-							<div class="lg:col-span-5 space-y-5">
-								<!-- 1. Jenis media -->
-								<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-3.5 shadow-sm">
-									<div class="flex items-center gap-3">
-										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
-											<Building2 size={18} />
-										</div>
-										<div>
-											<h3 class="text-sm font-bold text-slate-900">{tr('Jenis media')}</h3>
-											<p class="text-xs text-muted-foreground">{tr('Pilih jenis media — bukan kategori. Kategori ada di bagian Kategori media.')}</p>
-										</div>
+						<!-- ════════ KOLOM KANAN (5 cols ~42%) ════════ -->
+						<div class="lg:col-span-5 space-y-5">
+							<!-- 4. Integrasi & publikasi -->
+							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
+								<div class="flex items-center gap-3">
+									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+										<Layers size={18} />
 									</div>
-
-									<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
-										{#each [
-											{ v: 'blogger', label: 'Media Blogger', desc: 'Blog personal / Blogger yang digunakan sebagai media publikasi.' },
-											{ v: 'mainstream', label: 'Media Mainstream', desc: 'Media berita / publisher profesional.' }
-										] as opt (opt.v)}
-											{@const active = form.media_type === opt.v}
-											<button
-												type="button"
-												class="rounded-xl border p-3.5 text-left transition cursor-pointer flex flex-col justify-between"
-												style="border-color: {active ? 'var(--primary)' : 'var(--border)'}; background: {active ? 'var(--accent)' : 'var(--card)'};"
-												onclick={() => (form.media_type = opt.v)}
-											>
-												<div>
-													<div class="flex items-center gap-2 mb-1.5">
-														<span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors" style="border-color: {active ? 'var(--primary)' : 'var(--muted-foreground)'};">
-															{#if active}<span class="h-2 w-2 rounded-full" style="background: var(--primary);"></span>{/if}
-														</span>
-														<span class="text-sm font-bold text-slate-900">{tr(opt.label)}</span>
-													</div>
-													<p class="text-xs text-muted-foreground leading-snug">{tr(opt.desc)}</p>
-												</div>
-											</button>
-										{/each}
+									<div>
+										<h3 class="text-sm font-bold text-slate-900"><span class="mr-1.5 text-xs font-semibold text-muted-foreground tabular-nums">4</span>{tr('Integrasi & publikasi')}</h3>
+										<p class="text-xs text-muted-foreground">{tr('Cara naskah masuk ke media: manual atau lewat API.')}</p>
 									</div>
-								</section>
-
-								<!-- 2. Platform & integrasi -->
-								<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
-									<div class="flex items-center gap-3">
-										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
-											<Layers size={18} />
-										</div>
-										<div>
-											<h3 class="text-sm font-bold text-slate-900">{tr('Platform & integrasi')}</h3>
-											<p class="text-xs text-muted-foreground">{tr('Pilih metode integrasi untuk pengiriman artikel.')}</p>
-										</div>
-									</div>
+								</div>
 
 									<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
 										{#each [
@@ -2677,129 +2793,10 @@
 												</label>
 											</div>
 										</div>
-									{/if}										<div class="space-y-3.5 pt-1">
-											<div>
-												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Label sponsor pada artikel')}</span>
-												<div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-0.5" role="group" aria-label={tr('Label sponsor pada artikel')}>
-													{#each SPONSOR_LABELS as k (k.value)}
-														<button
-															type="button"
-															class="min-h-9 rounded-[10px] px-4 text-xs font-semibold transition-colors {form.label_sponsor === k.value ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}"
-															aria-pressed={form.label_sponsor === k.value}
-															onclick={() => (form.label_sponsor = k.value)}>{tr(k.label)}</button
-														>
-													{/each}
-												</div>
-												<span class="mt-1 block text-xs text-muted-foreground">
-													{form.label_sponsor === 'ada_sponsor'
-														? tr('Artikel tayang dengan tanda sponsor/advertorial (label terlihat pembaca). Klien melihat "Ada Label Sponsor / Adv".')
-														: tr('Artikel tayang seperti artikel biasa tanpa tanda sponsor. Klien melihat "Tidak Ada (Organik)". Ini tidak mengubah atribut rel pada tautan.')}
-												</span>
-											</div>
+									{/if}
+							</section>
 
-											<div>
-												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Jenis tautan')}</span>
-												<div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-0.5" role="group" aria-label={tr('Jenis tautan')}>
-													{#each LINK_KINDS as k (k.value)}
-														<button
-															type="button"
-															class="min-h-9 rounded-[10px] px-4 text-xs font-semibold transition-colors {linkKind === k.value ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}"
-															aria-pressed={linkKind === k.value}
-															onclick={() => setLinkKind(k.value)}>{k.label}</button
-														>
-													{/each}
-												</div>
-												<span class="mt-1 block text-xs text-muted-foreground">
-													{linkKind === 'dofollow'
-														? tr('Dofollow: tautan biasa ke website klien. Google ikut menghitungnya untuk SEO. Artikel boleh memuat tautan sampai batas di bawah.')														: linkKind === 'sponsored'
-															? tr('rel=sponsored: tautan diberi atribut rel="sponsored" (tautan berbayar menurut Google). Terpisah dari label sponsor di artikel. Artikel boleh memuat tautan sampai batas di bawah.')
-															: tr('Nofollow: tautan ke website klien tetap boleh dipasang, tapi sistem memberinya tanda nofollow otomatis. Google tidak menghitungnya untuk SEO. Artikel tidak ditolak.')}
-												</span>
-											</div>
-
-											<div>
-												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Jumlah backlink yang diperbolehkan dalam artikel')}</span>
-												<div>
-													<Select
-														bind:value={form.max_links}
-														ariaLabel={tr('Jumlah backlink yang diperbolehkan dalam artikel')}
-														minWidth={0}
-														fitContent
-														options={[
-															{ value: '0', label: tr('0 — Tanpa backlink') },
-															{ value: '1', label: tr('1 Link (default)') },
-															{ value: '2', label: tr('2 Link') },
-															{ value: '3', label: tr('3 Link') }
-														]}
-													/>
-												</div>
-												<span class="mt-1 block text-xs text-muted-foreground">{tr('Jumlah maksimal backlink yang boleh ditanam dalam satu artikel di media ini. Default 1; pilih 0 bila artikel tidak boleh memuat backlink.')}</span>
-											</div>
-
-											<div>
-												<span class="mb-1 block text-xs font-semibold text-slate-700">{tr('Subjudul (H2/H3) dalam artikel')}</span>
-												<div>
-													<Select
-														bind:value={form.allow_heading}
-														ariaLabel={tr('Izin subjudul dalam artikel')}
-														minWidth={0}
-														fitContent
-														options={[
-															{ value: 'default', label: tr('Ikut bawaan tipe media') },
-															{ value: 'yes', label: tr('Boleh memakai subjudul') },
-															{ value: 'no', label: tr('Tanpa subjudul') }
-														]}
-													/>
-												</div>
-												<span class="mt-1 block text-xs text-muted-foreground">{tr('Bawaan: media blog boleh memakai subjudul, media berita tidak. Pilih "Boleh" bila media berita Anda menerima artikel dengan subjudul.')}</span>
-											</div>
-
-										<div>
-											<span class="mb-1.5 block text-xs font-semibold text-slate-700">{tr('Masa berlaku tautan (backlink)')}</span>
-											<div class="inline-flex w-full rounded-xl border border-slate-200 bg-slate-100/70 p-1">
-												<button
-													type="button"
-													class="flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all {linkDurationPermanent ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60' : 'text-muted-foreground hover:text-slate-800'}"
-													aria-pressed={linkDurationPermanent}
-													onclick={() => (form.link_duration_months = '0')}
-												>{tr('Permanen')}</button>
-												<button
-													type="button"
-													class="flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all {!linkDurationPermanent ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60' : 'text-muted-foreground hover:text-slate-800'}"
-													aria-pressed={!linkDurationPermanent}
-													onclick={() => { if (linkDurationPermanent) form.link_duration_months = '12'; }}
-												>{tr('Jangka Waktu')}</button>
-											</div>
-
-											{#if linkDurationPermanent}
-												<div class="mt-2.5 rounded-xl border border-blue-100 bg-blue-50/50 p-3 flex items-start gap-2.5">
-													<Info size={16} class="text-blue-600 shrink-0 mt-0.5" />
-													<p class="text-xs leading-relaxed text-blue-900 font-medium">
-														{tr('Tautan tetap tayang terus — tidak pernah dilepas dan tidak ada masa kedaluwarsanya. Klien tidak perlu khawatir tautannya hilang sendiri.')}
-													</p>
-												</div>
-											{:else}
-												<div class="mt-2.5 rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-2">
-													<div class="flex items-start gap-2.5">
-														<Info size={16} class="text-blue-600 shrink-0 mt-0.5" />
-														<p class="text-xs leading-relaxed text-blue-900 font-medium">
-															{tr('Klien akan memprioritaskan website yang memberikan garansi hyperlink tayang permanen')}
-														</p>
-													</div>
-													<div class="space-y-1.5 pl-6 pt-1">
-														{#each linkDurationChoices as months (months)}
-															<label class="flex cursor-pointer items-center gap-2 text-xs text-slate-700">
-																<input type="radio" name="link-duration-months" value={String(months)} bind:group={form.link_duration_months} class="h-3.5 w-3.5 text-primary focus:ring-primary/20" />
-																<span>{months === 12 ? tr('12 Bulan') : `${months} ${tr('Bulan')}`}</span>
-															</label>
-														{/each}
-													</div>
-												</div>
-											{/if}
-										</div>
-									</div>
-								</section>
-
+							<!-- 5. Harga & kerja sama -->
 								<!-- 3. Harga & model kerja sama -->
 								<section class="rounded-2xl border border-emerald-200/80 bg-white p-5 space-y-4 shadow-sm">
 									<div class="flex items-center gap-3">
@@ -2807,7 +2804,7 @@
 											<Wallet size={18} />
 										</div>
 										<div>
-											<h3 class="text-sm font-bold text-slate-900">{tr('Harga & model kerja sama')}</h3>
+											<h3 class="text-sm font-bold text-slate-900"><span class="mr-1.5 text-xs font-semibold text-muted-foreground tabular-nums">5</span>{tr('Harga & kerja sama')}</h3>
 											<p class="text-xs text-muted-foreground">{tr('Harga dan kesepakatan untuk kerja sama publikasi.')}</p>
 										</div>
 									</div>
@@ -2855,7 +2852,7 @@
 										</div>
 									</div>
 								</section>
-							</div>
+						</div>
 							<div class="lg:hidden">{@render summarySection()}</div>
 						</div>
 					</div>
