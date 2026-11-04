@@ -1042,12 +1042,14 @@ var igWAAudienceEvents = map[string][]string{
 		"referral.cpa.credited",
 		"ticket.replied",
 		"ticket.closed",
+		"security.login",
 	},
 	notify.AudienceClient: {
 		"publication.partner_approved",
 		"publication.partner_rejected",
 		"publication.published",
 		"publication.failed",
+		"security.login",
 	},
 	notify.AudienceAdmin: {
 		notify.AdminEventMediaSubmitted,
@@ -1606,7 +1608,8 @@ func (d *Deps) WATemplates(w http.ResponseWriter, r *http.Request) {
 			if previewLink == "" {
 				previewLink = "https://app.tauthub.com/"
 			}
-			preview := igWARenderTemplate(body, map[string]string{				"nama": "Budi", "judul": "Contoh Artikel Tauthub", "status": "contoh keterangan",
+			preview := igWARenderTemplate(body, map[string]string{
+				"nama": "Budi", "judul": "Contoh Artikel Tauthub", "status": "contoh keterangan",
 				"jumlah": "Rp 150.000", "link": previewLink,
 				"ip": "182.253.45.117", "waktu": "Rabu, 04 Nov 2026 02:21 WIB",
 				"browser": "Chrome 130", "platform": "Windows",
