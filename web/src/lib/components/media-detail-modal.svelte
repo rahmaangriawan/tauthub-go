@@ -236,7 +236,6 @@
 	const bahasaList = $derived(media.bahasa_artikel?.length ? media.bahasa_artikel : ['Indonesia']);
 	const bahasaText = $derived(bahasaList.join(', '));
 	const bahasaFlags = $derived(bahasaList.map((b) => bahasaFlag[b] ?? b).join(' '));
-	const isDirectPublish = $derived(media.publication_mode === 'publish');
 
 	// Subjudul (H2/H3): null = ikut bawaan tipe media (blog boleh, berita tidak).
 	const headingText = $derived(
@@ -248,16 +247,9 @@
 					? tr('Boleh (bawaan media blog)')
 					: tr('Tanpa subjudul (bawaan media berita)')
 	);
-	// Jalur pengiriman naskah ke media: manual (mitra pasang sendiri) atau API per platform.
-	const INTEGRATION_NAME: Record<string, string> = { wordpress: 'WordPress', blogger: 'Blogger', custom_web: 'Custom Web' };
-	const deliveryVia = $derived(
-		!media.integration_type || media.integration_type === 'manual'
-			? tr('Manual (mitra pasang sendiri)')
-			: `API ${INTEGRATION_NAME[media.integration_type] ?? media.integration_type}`
-	);
-	const deliveryText = $derived(
-		`${isDirectPublish ? tr('Langsung Terbit (otomatis)') : tr('Draf (diterbitkan oleh media)')} · ${deliveryVia}`
-	);
+	// Platform media; mode publikasi (draf/terbit) sudah ada di kartu Jalur Publikasi.
+	const INTEGRATION_NAME: Record<string, string> = { wordpress: 'WordPress', blogger: 'Blogspot', custom_web: 'Custom', manual: 'Manual' };
+	const platformText = $derived(INTEGRATION_NAME[media.integration_type ?? 'manual'] ?? media.integration_type ?? 'Manual');
 	const sampleUrl = $derived((media.contoh_artikel_url ?? '').trim());
 	const initialLetter = $derived((media.name || 'M').trim().charAt(0).toUpperCase());
 	// Favicon langsung dari website media (layanan favicon publik Google);
@@ -384,10 +376,7 @@
 						label: tr('Support Embed (Video/Maps)'),
 						value: media.allow_embed ? tr('Diizinkan') : tr('Tidak Diizinkan')
 					},
-					{
-						label: tr('Mode Pengiriman'),
-						value: deliveryText
-					},
+					{ label: tr('Platform'), value: platformText },
 					...(sampleUrl ? [{ label: tr('Contoh Artikel'), value: sampleUrl }] : [])
 				],
 				gatekeeper: gatekeeperList,
@@ -835,9 +824,9 @@
 								<div class="paramItemRow">
 									<div class="paramItemLeftGroup">
 										<Share2 size={18} class="paramRowIcon" />
-										<span>{tr("Mode Pengiriman")}</span>
+										<span>{tr('Platform')}</span>
 									</div>
-									<span class="paramValueBold" style="text-align: right;">{deliveryText}</span>
+									<span class="paramValueBold" style="text-align: right;">{platformText}</span>
 								</div>
 
 								{#if sampleUrl}

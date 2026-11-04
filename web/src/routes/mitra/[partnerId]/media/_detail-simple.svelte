@@ -155,14 +155,8 @@
 					? tr('Boleh (bawaan media blog)')
 					: tr('Tanpa subjudul (bawaan media berita)')
 	);
-	const INTEGRATION_NAME: Record<string, string> = { wordpress: 'WordPress', blogger: 'Blogger', custom_web: 'Custom Web' };
-	const deliveryText = $derived(
-		`${media.publication_mode === 'publish' ? tr('Langsung Terbit (otomatis)') : tr('Draf (diterbitkan oleh media)')} · ${
-			!media.integration_type || media.integration_type === 'manual'
-				? tr('Manual (mitra pasang sendiri)')
-				: `API ${INTEGRATION_NAME[media.integration_type] ?? media.integration_type}`
-		}`
-	);
+	const INTEGRATION_NAME: Record<string, string> = { wordpress: 'WordPress', blogger: 'Blogspot', custom_web: 'Custom', manual: 'Manual' };
+	const platformText = $derived(INTEGRATION_NAME[media.integration_type ?? 'manual'] ?? media.integration_type ?? 'Manual');
 	const sampleUrl = $derived((media.contoh_artikel_url ?? '').trim());
 	const sponsorText = $derived(
 		!media.label_sponsor || media.label_sponsor === 'tidak_ada'
@@ -336,8 +330,8 @@
 						<dd>{embedText}</dd>
 					</div>
 					<div class="term">
-						<dt><Layers size={16} />{tr('Mode pengiriman')}</dt>
-						<dd>{deliveryText}</dd>
+						<dt><Layers size={16} />{tr('Platform')}</dt>
+						<dd>{platformText}</dd>
 					</div>
 					{#if sampleUrl}
 						<div class="term">
