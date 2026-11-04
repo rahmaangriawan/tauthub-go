@@ -3661,6 +3661,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Klik untuk menampilkan lagi.": "Click to show again.",
   "Klik untuk menghubungkan di Integrasi.": "Click to connect in Integrations.",
   "Klik untuk mengisi harga.": "Click to set the price.",
+  "Klik untuk melihat koneksinya di Integrasi.": "Click to view its connection in Integrations.",
   "Gagal mengubah tampilan di katalog klien.": "Could not change the client catalog visibility.",
   "disembunyikan dari katalog klien. Order yang sudah berjalan tidak terpengaruh.": "hidden from the client catalog. Orders already in progress are not affected.",
   "tampil lagi di katalog klien.": "is shown in the client catalog again.",

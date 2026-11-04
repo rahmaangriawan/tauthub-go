@@ -4,7 +4,7 @@
 	// Tab WordPress (Koneksi CMS) — port ConnectionsSection app lama
 	// (app/mitra/[partnerId]/[[...section]]/sections.tsx). Provider terkunci ke
 	// WordPress REST API; daftar media diambil dari media mitra ber-website_url.
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { Plus } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import Status from './_status.svelte';
@@ -15,6 +15,10 @@
 	// Deep link dari Daftar Media (?media=<id>): dialog Tambah koneksi terbuka
 	// dengan media itu terpilih. Catatan tampil bila media belum punya website URL.
 	let highlightNote = $state('');
+	// Baris koneksi yang disorot (media sudah punya koneksi).
+	let highlightConnId = $state('');
+	let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+	const hostOf = (u: string) => (u ?? '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0].toLowerCase();
 
 	const APP_PASSWORD_STEPS = [
 		'Masuk ke wp-admin situs Anda, contoh: https://situs-media.example/wp-admin',
@@ -52,18 +56,34 @@
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
 			await load();
-			applyHighlight();
+			await applyHighlight();
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
-		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		return () => {
+			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+			clearTimeout(highlightTimer);
+		};
 	});
 
-	function applyHighlight() {
+	async function applyHighlight() {
 		const id = highlight;
 		if (!id) return;
 		onhighlighted?.();
-		if (mediaOptions.some((m) => m.id === id)) pickMedia(id);
+		const media = mediaOptions.find((m) => m.id === id);
+		// Sudah ada koneksi aktif untuk domain media ini: sorot barisnya.
+		const host = media ? hostOf(media.website_url) : '';
+		const conn = host ? rows.find((r) => r.status === 'active' && (r.website_id === id || hostOf(r.base_url) === host)) : null;
+		if (conn) {
+			const idx = rows.findIndex((r) => r.id === conn.id);
+			if (idx >= 0) goToPage(Math.floor(idx / PAGE_SIZE) + 1);
+			highlightConnId = conn.id;
+			await tick();
+			document.getElementById(`int-conn-${conn.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+			highlightTimer = setTimeout(() => (highlightConnId = ''), 3200);
+			return;
+		}
+		if (media) pickMedia(id);
 		else highlightNote = tr('Media ini belum punya website URL. Isi dulu di Daftar Media, lalu sambungkan di sini.');
 		createOpen = true;
 	}
@@ -206,7 +226,7 @@
 				</thead>
 				<tbody>
 					{#each visibleRows as row (row.id)}
-						<tr>
+						<tr id="int-conn-{row.id}" class:int-tr--highlight={row.id === highlightConnId}>
 							<td>
 								<p class="font-medium">{row.name}</p>
 								<p class="int-table__sub">{row.username ?? String(row.id).slice(0, 8)}</p>
@@ -228,7 +248,7 @@
 		<!-- Mobile (<768px): kartu per koneksi -->
 		<div class="int-list md:hidden">
 			{#each visibleRows as row (row.id)}
-				<article class="int-item">
+				<article class="int-item" id="int-conn-{row.id}" class:int-item--highlight={row.id === highlightConnId}>
 					<div class="int-item__head">
 						<div class="min-w-0">
 							<p class="int-item__name">{row.name}</p>

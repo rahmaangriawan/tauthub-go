@@ -417,3 +417,19 @@
 		animation: none;
 	}
 }
+
+/* Baris tabel koneksi yang disorot (deep link dari Daftar Media). */
+.int-tr--highlight > td {
+	animation: int-highlight-row 3s ease-out forwards;
+}
+@keyframes int-highlight-row {
+	0%,
+	60% {
+		background-color: color-mix(in srgb, var(--primary) 10%, var(--card));
+		box-shadow: inset 0 2px 0 var(--primary), inset 0 -2px 0 var(--primary);
+	}
+	100% {
+		background-color: transparent;
+		box-shadow: none;
+	}
+}

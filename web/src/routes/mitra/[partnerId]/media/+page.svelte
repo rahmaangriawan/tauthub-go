@@ -606,6 +606,10 @@
 	}
 	/** Tautan ke tab Integrasi yang sesuai, dengan media disorot di sana. */
 	const integrationHref = (m: Media) => `${base}/integrations#${integrationTarget(m).anchor}?media=${m.id}`;
+	/** Media mode API: klik mata selalu menuju Integrasi, medianya disorot di sana. */
+	const eyeGoesToIntegration = (m: Media) =>
+		!m.catalog_visible && m.catalog_hidden_reason !== 'partner_hidden' && m.catalog_hidden_reason !== 'no_price' &&
+		(m.publication_mode === 'publish' || m.catalog_hidden_reason === 'not_connected');
 	/** Petunjuk aksi di tooltip mata (kosong bila hanya informasi). */
 	function eyeHint(m: Media): string {
 		if (m.catalog_visible) return tr('Klik untuk menyembunyikan dari katalog klien.');
@@ -613,7 +617,7 @@
 			case 'partner_hidden': return tr('Klik untuk menampilkan lagi.');
 			case 'not_connected': return tr('Klik untuk menghubungkan di Integrasi.');
 			case 'no_price': return tr('Klik untuk mengisi harga.');
-			default: return '';
+			default: return eyeGoesToIntegration(m) ? tr('Klik untuk melihat koneksinya di Integrasi.') : '';
 		}
 	}
 	let eyeBusyId = $state<string | null>(null);
@@ -655,8 +659,15 @@
 				openEdit(m);
 				break;
 			default:
-				// Menunggu review, ditolak, ditangguhkan, dsb.: tidak ada yang bisa dibereskan
-				// dari sini, tapi klik tetap menjelaskan alasannya (juga di layar sentuh).
+				if (eyeGoesToIntegration(m)) {
+					// Media mode API yang menunggu review/ditolak: tetap bawa ke Integrasi
+					// supaya koneksinya bisa disiapkan atau dicek lebih dulu.
+					showToast(hiddenReasonText(m), 'info');
+					await goto(integrationHref(m));
+					break;
+				}
+				// Media manual yang menunggu review/ditolak/ditangguhkan: tidak ada yang
+				// bisa dibereskan dari sini, tapi klik tetap menjelaskan alasannya.
 				showToast(hiddenReasonText(m), 'info');
 		}
 	}
