@@ -2,7 +2,7 @@
 	import { tr } from '$lib/i18n/phrases';
 
 	// Port components/toast-host.tsx — satu toast, kanan-bawah, auto tutup 3,5s.
-	import { CheckCircle, XCircle, X } from '@lucide/svelte';
+	import { CheckCircle, Info, XCircle, X } from '@lucide/svelte';
 	import { TOAST_EVENT, type ToastDetail } from '$lib/auth';
 
 	let toast = $state<ToastDetail | null>(null);
@@ -16,9 +16,11 @@
 			const detail = (event as CustomEvent<ToastDetail>).detail;
 			const seq = ++toastSeq;
 			toast = detail;
+			// Pesan panjang (alasan, penjelasan) diberi waktu baca lebih lama.
+			const ms = Math.min(8000, Math.max(3500, detail.message.length * 60));
 			window.setTimeout(() => {
 				if (toastSeq === seq) toast = null;
-			}, 3500);
+			}, ms);
 		};
 		window.addEventListener(TOAST_EVENT, onToast);
 		return () => window.removeEventListener(TOAST_EVENT, onToast);
@@ -33,6 +35,8 @@
 	>
 		{#if toast.type === 'success'}
 			<CheckCircle size={19} class="text-emerald-600" />
+		{:else if toast.type === 'info'}
+			<Info size={19} class="text-muted-foreground" />
 		{:else}
 			<XCircle size={19} class="text-red-600" />
 		{/if}

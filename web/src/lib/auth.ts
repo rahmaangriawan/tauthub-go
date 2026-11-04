@@ -117,7 +117,7 @@ export function clearSession() {
 export const USER_UPDATED_EVENT = 'ai-writer:user-updated';
 export const TOAST_EVENT = 'ai-writer:toast';
 export const AUTH_EXPIRED_EVENT = 'ai-writer:auth-expired';
-export type ToastDetail = { type: 'success' | 'error'; message: string };
+export type ToastDetail = { type: 'success' | 'error' | 'info'; message: string };
 
 function expireSession() {
 	clearSession();

@@ -22,7 +22,7 @@
 	};
 	import { Tooltip } from 'bits-ui';
 	import { getPartnerUrlId } from '$lib/partner-url.svelte';
-	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import { apiRequest, readApiError, ensureValidSession, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import { normalizeLinkDurationMonths } from '$lib/media/link-duration';
@@ -584,7 +584,16 @@
 			case 'not_connected':
 				return tr('Disembunyikan dari katalog klien: situs belum tersambung ke') + ' ' + integrationTarget(m).platform + '.';
 			case 'inactive':
-				return tr('Disembunyikan dari katalog klien: media belum aktif.');
+				switch (m.status) {
+					case 'pending_review':
+						return tr('Disembunyikan dari katalog klien: media menunggu review admin, tampil otomatis setelah disetujui.');
+					case 'rejected':
+						return tr('Disembunyikan dari katalog klien: media ditolak admin. Perbaiki lewat Edit lalu ajukan ulang.');
+					case 'archived':
+						return tr('Disembunyikan dari katalog klien: media diarsipkan.');
+					default:
+						return tr('Disembunyikan dari katalog klien: media belum aktif.');
+				}
 			case 'suspended':
 				return tr('Disembunyikan dari katalog klien: media sedang ditangguhkan admin.');
 			case 'no_price':
@@ -597,11 +606,6 @@
 	}
 	/** Tautan ke tab Integrasi yang sesuai, dengan media disorot di sana. */
 	const integrationHref = (m: Media) => `${base}/integrations#${integrationTarget(m).anchor}?media=${m.id}`;
-	/** Apakah klik pada mata punya aksi untuk media ini. */
-	function eyeActionable(m: Media): boolean {
-		if (m.catalog_visible) return true;
-		return m.catalog_hidden_reason === 'partner_hidden' || m.catalog_hidden_reason === 'not_connected' || m.catalog_hidden_reason === 'no_price';
-	}
 	/** Petunjuk aksi di tooltip mata (kosong bila hanya informasi). */
 	function eyeHint(m: Media): string {
 		if (m.catalog_visible) return tr('Klik untuk menyembunyikan dari katalog klien.');
@@ -650,6 +654,10 @@
 			case 'no_price':
 				openEdit(m);
 				break;
+			default:
+				// Menunggu review, ditolak, ditangguhkan, dsb.: tidak ada yang bisa dibereskan
+				// dari sini, tapi klik tetap menjelaskan alasannya (juga di layar sentuh).
+				showToast(hiddenReasonText(m), 'info');
 		}
 	}
 	/** Media aktif yang disembunyikan hanya karena belum tersambung. */
@@ -1693,10 +1701,9 @@
 				<EyeOff size={16} class="mt-0.5 shrink-0" style="color: var(--warning);" />
 				<p class="text-sm">
 					<span class="font-medium">{notConnected.length} {tr('media disembunyikan dari katalog klien')}</span>
-					<span class="text-muted-foreground"> · {tr('situsnya belum tersambung, jadi klien belum bisa memesan. Hubungkan di menu Integrasi, media otomatis tampil lagi.')}</span>
+					<span class="text-muted-foreground"> · {tr('situsnya belum tersambung, jadi klien belum bisa memesan. Klik ikon mata di barisnya untuk menyambungkan.')}</span>
 				</p>
 			</div>
-			<a class="app-btn app-btn-soft shrink-0" href={integrationHref(notConnected[0])}><Plug size={14} /> {tr('Hubungkan di Integrasi')}</a>
 		</div>
 	{/if}
 	{#if loading}
@@ -2268,12 +2275,11 @@
 					<button
 						{...props}
 						type="button"
-						class="md-eye"
-						class:md-eye-action={eyeActionable(m)}
+						class="md-eye md-eye-action"
 						style="color: {m.catalog_visible ? 'var(--success)' : 'var(--muted-foreground)'};"
 						aria-label={(m.catalog_visible ? tr('Tampil di katalog klien') : hiddenReasonText(m)) + ' ' + eyeHint(m)}
 						disabled={eyeBusyId === m.id}
-						onclick={() => { if (eyeActionable(m)) void onEyeClick(m); }}
+						onclick={() => void onEyeClick(m)}
 					>
 						{#if m.catalog_visible}<Eye size={15} strokeWidth={1.75} />{:else}<EyeOff size={15} strokeWidth={1.75} />{/if}
 					</button>
