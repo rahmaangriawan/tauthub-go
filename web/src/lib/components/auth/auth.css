@@ -746,29 +746,8 @@
 }
 .auth-tip-row b { font-weight: 600; }
 
-/* Verifikasi email (OTP) saat daftar: email terkunci + tombol kirim ulang. */
-.auth-static {
-	display: flex; align-items: center; justify-content: space-between; gap: 10px;
-	min-height: 44px; padding: 0 14px; border: 1px solid #e3e7ed; border-radius: 10px;
-	background: #f9fafb; font-size: 14px; color: var(--auth-text, #111827);
-}
-.auth-static span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.auth-static .auth-link { flex: none; font-size: 12.5px; }
-.auth-static--ok { border-color: #bfe3cc; background: #f1faf4; color: #1f6b3b; }
-.auth-static--ok svg { flex: none; }
+/* Panel kode OTP saat daftar: satu kolom kode besar + baris kirim ulang. */
+.auth-input--code { font-size: 22px; letter-spacing: 8px; text-align: center; font-variant-numeric: tabular-nums; }
 .auth-resend { margin: 0; font-size: 12.5px; color: var(--auth-muted); }
 .auth-resend .auth-link { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
 .auth-resend .auth-link:disabled { color: var(--auth-muted); cursor: default; text-decoration: none; }
-.auth-input--code { font-size: 22px; letter-spacing: 8px; text-align: center; font-variant-numeric: tabular-nums; }
-.auth-otp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: stretch; }
-.auth-otp-row .auth-static { min-width: 0; }
-.auth-otp-row .auth-input--code { width: 148px; font-size: 18px; letter-spacing: 6px; }
-.auth-otp-btn {
-	min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--auth-primary);
-	background: var(--auth-primary); color: #fff; font: inherit; font-size: 13.5px; font-weight: 600;
-	cursor: pointer; white-space: nowrap;
-}
-.auth-otp-btn:hover:not(:disabled) { filter: brightness(1.05); }
-.auth-otp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.auth-otp-btn:focus-visible { outline: 2px solid var(--auth-primary); outline-offset: 2px; }
-@media (max-width: 420px) { .auth-otp-row { grid-template-columns: 1fr; } .auth-otp-row .auth-input--code { width: 100%; } }
