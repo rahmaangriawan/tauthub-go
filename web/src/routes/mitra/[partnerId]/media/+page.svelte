@@ -7,6 +7,7 @@
 	// (pratinjau → konfirmasi, parity alur bulk import app lama).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import { Building2, Check, ChevronRight, CircleAlert, CircleDollarSign, Clock, Copy, ExternalLink, Eye, EyeOff, FileText, Info, Layers, Link, Link2, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Tag, Trash2, TriangleAlert, Upload, Wallet, X, Zap } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import MediaFavicon from './_favicon.svelte';
@@ -57,8 +58,8 @@
 		health_score: number | null; health_breakdown: Record<string, unknown> | null;
 		seo_da: number | null; seo_pa: number | null; seo_spam_score: number | null; seo_checked_at: string | null;
 		has_connection: boolean; custom_web_status: string | null; blogger_status: string | null;
-		/** Tampil di katalog klien atau tidak; alasan: not_connected | inactive | suspended | no_price | partner_inactive. */
-		integration_ready: boolean; catalog_visible: boolean; catalog_hidden_reason: string | null;
+		/** Tampil di katalog klien atau tidak; alasan: not_connected | partner_hidden | inactive | suspended | no_price | partner_inactive. */
+		integration_ready: boolean; catalog_visible: boolean; catalog_hidden_reason: string | null; partner_hidden: boolean;
 		rejection_reason: string | null; domain_verified: boolean;
 		// Perubahan yang diparkir menunggu admin: media tetap tayang dengan data live.
 		pending_changes?: { field: string; label: string; from: string | null; to: string | null }[] | null;
@@ -572,7 +573,7 @@
 				return { platform: 'Blogspot', anchor: 'blogger' };
 			case 'custom_web':
 			case 'tulisio_api':
-				return { platform: 'Custom Web', anchor: 'custom' };
+				return { platform: 'Custom Web', anchor: 'web-custom' };
 			default:
 				return { platform: 'WordPress', anchor: 'wordpress' };
 		}
@@ -588,8 +589,67 @@
 				return tr('Disembunyikan dari katalog klien: media sedang ditangguhkan admin.');
 			case 'no_price':
 				return tr('Disembunyikan dari katalog klien: harga belum diisi.');
+			case 'partner_hidden':
+				return tr('Disembunyikan dari katalog klien oleh Anda.');
 			default:
 				return tr('Disembunyikan dari katalog klien.');
+		}
+	}
+	/** Tautan ke tab Integrasi yang sesuai, dengan media disorot di sana. */
+	const integrationHref = (m: Media) => `${base}/integrations#${integrationTarget(m).anchor}?media=${m.id}`;
+	/** Apakah klik pada mata punya aksi untuk media ini. */
+	function eyeActionable(m: Media): boolean {
+		if (m.catalog_visible) return true;
+		return m.catalog_hidden_reason === 'partner_hidden' || m.catalog_hidden_reason === 'not_connected' || m.catalog_hidden_reason === 'no_price';
+	}
+	/** Petunjuk aksi di tooltip mata (kosong bila hanya informasi). */
+	function eyeHint(m: Media): string {
+		if (m.catalog_visible) return tr('Klik untuk menyembunyikan dari katalog klien.');
+		switch (m.catalog_hidden_reason) {
+			case 'partner_hidden': return tr('Klik untuk menampilkan lagi.');
+			case 'not_connected': return tr('Klik untuk menghubungkan di Integrasi.');
+			case 'no_price': return tr('Klik untuk mengisi harga.');
+			default: return '';
+		}
+	}
+	let eyeBusyId = $state<string | null>(null);
+	/** Sembunyikan / tampilkan media sendiri (berlaku langsung, order berjalan tidak terpengaruh). */
+	async function setPartnerHidden(m: Media, hidden: boolean) {
+		eyeBusyId = m.id;
+		error = '';
+		try {
+			const res = await apiRequest(`/v1/partner/media/${m.id}/catalog-visibility`, { method: 'POST', body: JSON.stringify({ hidden }) });
+			if (!res.ok) {
+				error = await readApiError(res, tr('Gagal mengubah tampilan di katalog klien.'));
+				return;
+			}
+			const updated = (await res.json()) as Media;
+			items = items.map((it) => (it.id === m.id ? { ...it, ...updated } : it));
+			notice = hidden
+				? `"${m.name}" ${tr('disembunyikan dari katalog klien. Order yang sudah berjalan tidak terpengaruh.')}`
+				: `"${m.name}" ${tr('tampil lagi di katalog klien.')}`;
+		} finally {
+			eyeBusyId = null;
+		}
+	}
+	/** Klik ikon mata: sembunyikan/tampilkan, atau menuju hal yang perlu dibereskan. */
+	async function onEyeClick(m: Media) {
+		if (eyeBusyId) return;
+		if (m.catalog_visible) {
+			if (!confirm(`${tr('Sembunyikan')} "${m.name}" ${tr('dari katalog klien? Order yang sudah berjalan tidak terpengaruh.')}`)) return;
+			await setPartnerHidden(m, true);
+			return;
+		}
+		switch (m.catalog_hidden_reason) {
+			case 'partner_hidden':
+				await setPartnerHidden(m, false);
+				break;
+			case 'not_connected':
+				await goto(integrationHref(m));
+				break;
+			case 'no_price':
+				openEdit(m);
+				break;
 		}
 	}
 	/** Media aktif yang disembunyikan hanya karena belum tersambung. */
@@ -1636,7 +1696,7 @@
 					<span class="text-muted-foreground"> · {tr('situsnya belum tersambung, jadi klien belum bisa memesan. Hubungkan di menu Integrasi, media otomatis tampil lagi.')}</span>
 				</p>
 			</div>
-			<a class="app-btn app-btn-soft shrink-0" href={`/mitra/${partnerId}/integrations#${integrationTarget(notConnected[0]).anchor}`}><Plug size={14} /> {tr('Hubungkan di Integrasi')}</a>
+			<a class="app-btn app-btn-soft shrink-0" href={integrationHref(notConnected[0])}><Plug size={14} /> {tr('Hubungkan di Integrasi')}</a>
 		</div>
 	{/if}
 	{#if loading}
@@ -2209,8 +2269,11 @@
 						{...props}
 						type="button"
 						class="md-eye"
+						class:md-eye-action={eyeActionable(m)}
 						style="color: {m.catalog_visible ? 'var(--success)' : 'var(--muted-foreground)'};"
-						aria-label={m.catalog_visible ? tr('Tampil di katalog klien') : hiddenReasonText(m)}
+						aria-label={(m.catalog_visible ? tr('Tampil di katalog klien') : hiddenReasonText(m)) + ' ' + eyeHint(m)}
+						disabled={eyeBusyId === m.id}
+						onclick={() => { if (eyeActionable(m)) void onEyeClick(m); }}
 					>
 						{#if m.catalog_visible}<Eye size={15} strokeWidth={1.75} />{:else}<EyeOff size={15} strokeWidth={1.75} />{/if}
 					</button>
@@ -2223,9 +2286,9 @@
 						{tr('Tampil di katalog klien')}
 					{:else}
 						{hiddenReasonText(m)}
-						{#if m.catalog_hidden_reason === 'not_connected'}
-							<a class="md-eye-link" href={`/mitra/${partnerId}/integrations#${integrationTarget(m).anchor}`}>{tr('Hubungkan di Integrasi')}</a>
-						{/if}
+					{/if}
+					{#if eyeHint(m)}
+						<span class="md-eye-link">{eyeHint(m)}</span>
 					{/if}
 				</Tooltip.Content>
 			</Tooltip.Portal>
@@ -3258,8 +3321,10 @@
 	.md-fav { display: inline-flex; margin-top: 1px; }
 	.md-domain { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--foreground); }
 	.md-eye { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; }
-	.md-eye:hover { background: var(--muted); }
-	.md-eye-link { display: block; margin-top: 4px; text-decoration: underline; }
+	.md-eye:disabled { opacity: 0.5; }
+	.md-eye-action { cursor: pointer; }
+	.md-eye-action:hover { background: var(--muted); }
+	.md-eye-link { display: block; margin-top: 4px; opacity: 0.8; }
 	a.md-domain:hover { color: var(--accent-foreground); text-decoration: underline; }
 
 	.md-score {

@@ -1059,6 +1059,10 @@
 			<!-- Media non-manual tanpa koneksi disembunyikan dari katalog klien. -->
 			<span class="text-[10px] leading-none" style="color: var(--destructive);">{tr('Belum terhubung')}</span>
 		{/if}
+		{#if row.partner_hidden}
+			<!-- Mitra menyembunyikan sendiri dari katalog klien; bukan keputusan admin. -->
+			<span class="text-[10px] text-muted-foreground leading-none">{tr('Disembunyikan mitra')}</span>
+		{/if}
 	</div>
 {/snippet}
 

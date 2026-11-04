@@ -6,14 +6,18 @@
 	// akun Google media Blogspot, pilih blog tujuan, uji koneksi, putuskan.
 	// OAuth return dari /api/blogger/callback mendarat di sini sebagai
 	// ?blogger_connected=1&media=<id>#blogger → langsung buka pemilih blog.
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { X } from '@lucide/svelte';
 	import Status from './_status.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
-	let { onchange }: { onchange?: () => void } = $props();
+	let { onchange, highlight = '', onhighlighted }: { onchange?: () => void; highlight?: string; onhighlighted?: () => void } = $props();
+
+	// Media yang disorot setelah deep link dari Daftar Media (?media=<id>).
+	let highlightActive = $state('');
+	let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 
 	let rows = $state<any[]>([]);
 	let loading = $state(true);
@@ -33,11 +37,26 @@
 			if (!fresh) return;
 			await load();
 			await handleOAuthReturn();
+			await applyHighlight();
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
-		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		return () => {
+			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+			clearTimeout(highlightTimer);
+		};
 	});
+
+	async function applyHighlight() {
+		const id = highlight;
+		if (!id) return;
+		onhighlighted?.();
+		if (!rows.some((r) => r.id === id)) return;
+		highlightActive = id;
+		await tick();
+		document.getElementById(`int-media-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		highlightTimer = setTimeout(() => (highlightActive = ''), 3200);
+	}
 
 	// Setelah callback OAuth → buka pemilih blog untuk media tersebut, lalu bersihkan
 	// query agar reload tidak membuka picker lagi (parity effect app lama).
@@ -222,7 +241,7 @@
 	{:else}
 		<div class="int-list" style="padding-top: 20px;">
 			{#each rows as item (item.id)}
-				<div class="int-item">
+				<div class="int-item" id="int-media-{item.id}" class:int-item--highlight={item.id === highlightActive}>
 					<div class="int-item__head">
 						<p class="int-item__name">{item.name}</p>
 						<div class="int-item__meta">

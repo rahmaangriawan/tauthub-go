@@ -394,3 +394,26 @@
 	border-color: var(--primary);
 	background: radial-gradient(circle, var(--primary) 0 4px, transparent 4.5px);
 }
+
+/* Media yang disorot setelah deep link dari Daftar Media (ikon mata). */
+.int-item--highlight {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+	animation: int-highlight-fade 3s ease-out forwards;
+}
+@keyframes int-highlight-fade {
+	0%,
+	60% {
+		outline-color: var(--primary);
+		background-color: color-mix(in srgb, var(--primary) 6%, var(--card));
+	}
+	100% {
+		outline-color: transparent;
+		background-color: transparent;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.int-item--highlight {
+		animation: none;
+	}
+}

@@ -10,7 +10,11 @@
 	import Status from './_status.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
-	let { onchange }: { onchange?: () => void } = $props();
+	let { onchange, highlight = '', onhighlighted }: { onchange?: () => void; highlight?: string; onhighlighted?: () => void } = $props();
+
+	// Deep link dari Daftar Media (?media=<id>): dialog Tambah koneksi terbuka
+	// dengan media itu terpilih. Catatan tampil bila media belum punya website URL.
+	let highlightNote = $state('');
 
 	const APP_PASSWORD_STEPS = [
 		'Masuk ke wp-admin situs Anda, contoh: https://situs-media.example/wp-admin',
@@ -48,11 +52,21 @@
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
 			await load();
+			applyHighlight();
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 	});
+
+	function applyHighlight() {
+		const id = highlight;
+		if (!id) return;
+		onhighlighted?.();
+		if (mediaOptions.some((m) => m.id === id)) pickMedia(id);
+		else highlightNote = tr('Media ini belum punya website URL. Isi dulu di Daftar Media, lalu sambungkan di sini.');
+		createOpen = true;
+	}
 
 	async function load() {
 		loading = true;
@@ -258,6 +272,7 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
 		<dialog open class="app-card w-full max-w-lg p-6" aria-label={tr('Tambah koneksi')}>
 			<h2 class="int-dialog__title">{tr('Tambah koneksi WordPress')}</h2>
+			{#if highlightNote}<p class="int-field__hint" style="color: var(--warning);">{highlightNote}</p>{/if}
 			{#if error}<p class="mt-2 text-sm" style="color: var(--destructive);">{error}</p>{/if}
 			<form class="int-form mt-5" onsubmit={create}>
 				<div class="int-field">
@@ -322,7 +337,7 @@
 				</label>
 
 				<div class="int-form__foot">
-					<button class="app-btn app-btn-soft int-btn" type="button" onclick={() => (createOpen = false)}>{tr('Batal')}</button>
+					<button class="app-btn app-btn-soft int-btn" type="button" onclick={() => { createOpen = false; highlightNote = ''; }}>{tr('Batal')}</button>
 					<button class="app-btn app-btn-primary int-btn" type="submit" disabled={busy}>{tr('Simpan koneksi')}</button>
 				</div>
 			</form>

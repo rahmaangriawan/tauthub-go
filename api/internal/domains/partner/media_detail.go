@@ -38,6 +38,58 @@ func (d *Deps) ownedMedia(r *http.Request, partnerID, mediaID, notFoundMsg strin
 	return row, nil
 }
 
+// ---------- POST /v1/partner/media/{mediaId}/catalog-visibility ----------
+
+// MediaCatalogVisibility: mitra menyembunyikan / menampilkan lagi medianya di
+// katalog klien (media.partner_hidden). Berlaku langsung tanpa review admin
+// karena hanya mengurangi exposure media milik mitra sendiri; order yang sudah
+// berjalan tidak terpengaruh. Apakah media benar-benar tampil tetap ditentukan
+// rumus tunggal db.MediaCatalogVisibleSQL (status, suspend, harga, koneksi).
+func (d *Deps) MediaCatalogVisibility(w http.ResponseWriter, r *http.Request) {
+	user, partner, ok := d.auth(w, r)
+	if !ok {
+		return
+	}
+	mediaID := chiParam(r, "mediaId")
+	if err := d.checkAuthRateReq(r, "partner-media-visibility:"+user.ID, 30); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	hidden, present := boolField(decodeJSON(r), "hidden")
+	if !present {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Field hidden (true atau false) wajib diisi")
+		return
+	}
+	if _, err := d.ownedMedia(r, partner.ID, mediaID, "Media tidak ditemukan"); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if err := d.exec(r.Context(),
+		"UPDATE media SET partner_hidden = $1, updated_at = NOW() WHERE id = $2 AND partner_id = $3",
+		hidden, mediaID, partner.ID); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	action := "media.partner_shown"
+	if hidden {
+		action = "media.partner_hidden"
+	}
+	d.auditLog(r.Context(), user.ID, action, "media", mediaID)
+
+	// Balas dengan bentuk baris daftar (catalog_visible, alasan, dst.) supaya
+	// Daftar Media langsung menampilkan keadaan terbaru.
+	row, err := d.queryRow(r.Context(), mediaListSelect+" WHERE m.id = $1 LIMIT 1", mediaID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if row == nil {
+		d.writeErr(w, errNotFound("Media tidak ditemukan"))
+		return
+	}
+	writeJSON(w, http.StatusOK, d.mediaJSON(r, row, d.getMarkupPercent(r.Context())))
+}
+
 // ---------- GET/PUT/DELETE /v1/partner/media/{mediaId} ----------
 
 func (d *Deps) MediaGet(w http.ResponseWriter, r *http.Request) {

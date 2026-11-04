@@ -5,13 +5,17 @@
 	// (app/mitra/[partnerId]/[[...section]]/sections.tsx baris ~471): kunci API
 	// publishing media Tulisio API + konfigurasi Custom Web Publishing
 	// (Publisher Protocol v1) per media.
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { Check, Copy, Plus, X } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import Status from './_status.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
-	let { onchange }: { onchange?: () => void } = $props();
+	let { onchange, highlight = '', onhighlighted }: { onchange?: () => void; highlight?: string; onhighlighted?: () => void } = $props();
+
+	// Media yang disorot setelah deep link dari Daftar Media (?media=<id>).
+	let highlightActive = $state('');
+	let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 
 	const PAGE_SIZE = 20;
 
@@ -45,11 +49,26 @@
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
 			await load();
+			await applyHighlight();
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
-		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+		return () => {
+			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+			clearTimeout(highlightTimer);
+		};
 	});
+
+	async function applyHighlight() {
+		const id = highlight;
+		if (!id) return;
+		onhighlighted?.();
+		if (!customWebMedia.some((m) => m.id === id)) return;
+		highlightActive = id;
+		await tick();
+		document.getElementById(`int-media-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		highlightTimer = setTimeout(() => (highlightActive = ''), 3200);
+	}
 
 	async function load() {
 		loading = true;
@@ -405,7 +424,7 @@
 			{#each customWebMedia as item (item.id)}
 				{@const formValue = customWebForms[item.id] ?? { endpoint_url: item.custom_web_endpoint_url ?? '', api_key: '' }}
 				{@const notice = customWebNotice[item.id]}
-				<div class="int-item">
+				<div class="int-item" id="int-media-{item.id}" class:int-item--highlight={item.id === highlightActive}>
 					<div class="int-item__head">
 						<p class="int-item__name">{item.name}</p>
 						<div class="int-item__meta">

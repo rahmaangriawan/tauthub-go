@@ -40,7 +40,7 @@ var mediaListSelect = `SELECT m.id, m.name, m.slug, m.category, m.media_type, m.
               ` + dbpkg.MediaIntegrationConnectedSQL("m") + ` AS has_connection,
               ` + dbpkg.MediaIntegrationReadySQL("m") + ` AS integration_ready,
               ` + dbpkg.MediaCatalogVisibleSQL("m") + ` AS catalog_visible,
-              m.suspended_at,
+              m.suspended_at, m.partner_hidden,
               (SELECT COUNT(*) FROM publications p
                 WHERE p.media_id = m.id AND p.status IN ('pending', 'waiting_partner')) AS pending_publications,
               (SELECT COUNT(*) FROM publications p2
@@ -181,6 +181,7 @@ func (d *Deps) mediaJSON(r *http.Request, row rowMap, markupPercent float64) map
 		"integration_ready":             row.boolOr("integration_ready", true),
 		"catalog_visible":               row.boolOr("catalog_visible", false),
 		"catalog_hidden_reason":         partnerCatalogHiddenReason(row),
+		"partner_hidden":                row.boolOr("partner_hidden", false),
 		"auto_publish":                  row.boolOr("auto_publish", false),
 		"notes":                         row.raw("notes"),
 		"total_terbit":                  row.numOr("total_terbit"),
@@ -624,6 +625,9 @@ func partnerCatalogHiddenReason(row rowMap) any {
 		return "no_price"
 	case !row.boolOr("integration_ready", true):
 		return "not_connected"
+	case row.boolOr("partner_hidden", false):
+		// Disembunyikan sendiri oleh mitra; ia bisa menampilkannya lagi.
+		return "partner_hidden"
 	}
 	return "partner_inactive"
 }

@@ -563,6 +563,7 @@ func run() error {
 			authed.Put("/partner/media/{mediaId}", partnerDeps.MediaUpdate)
 			authed.Delete("/partner/media/{mediaId}", partnerDeps.MediaDelete)
 			authed.Post("/partner/media/{mediaId}/submit", partnerDeps.MediaSubmit)
+			authed.Post("/partner/media/{mediaId}/catalog-visibility", partnerDeps.MediaCatalogVisibility)
 			authed.Patch("/partner/media/{mediaId}/category", partnerDeps.MediaCategory)
 			authed.Get("/partner/media/{mediaId}/negotiation", partnerDeps.MediaNegotiation)
 			authed.Post("/partner/media/{mediaId}/negotiation", partnerDeps.MediaNegotiation)

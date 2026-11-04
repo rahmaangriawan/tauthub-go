@@ -310,6 +310,7 @@ func (d *Deps) mpMediaJSON(row ptRow, markupPercent float64) map[string]any {
 		"negotiated_price":       row.numPtr("negotiated_price"),
 		"integration_type":       row.anyOrNil("integration_type"),
 		"website_platform":       row.anyOrNil("website_platform"),
+		"partner_hidden":         row.boolOr("partner_hidden", false),
 		"partner_id":             row.anyOrNil("partner_id"),
 		"partner_name":           row.anyOrNil("partner_name"),
 		"partner_email":          row.anyOrNil("partner_email"),
@@ -2477,6 +2478,7 @@ func (d *Deps) mpCreatePublicationRecord(ctx context.Context, in mpCreatePublica
 	media, err := d.queryRow(ctx, `
 		SELECT m.id, m.name, m.price, m.status, m.partner_id, m.publication_mode, m.integration_type, m.auto_publish, m.website_url,
 		       p.status AS partner_status, p.user_id AS partner_user_id, p.auto_publish_enabled,
+		       m.partner_hidden,
 		       `+dbpkg.MediaIntegrationReadySQL("m")+` AS integration_ready
 		FROM media m LEFT JOIN partners p ON p.id = m.partner_id
 		WHERE m.id = $1 LIMIT 1`, in.MediaID)
@@ -2492,6 +2494,9 @@ func (d *Deps) mpCreatePublicationRecord(ctx context.Context, in mpCreatePublica
 	}
 	if !mrow.boolOr("integration_ready", true) {
 		return "", errConflict(dbpkg.MediaNotReadyMessage)
+	}
+	if mrow.boolOr("partner_hidden", false) {
+		return "", errConflict(dbpkg.MediaHiddenByPartnerMessage)
 	}
 
 	existing, err := d.queryRow(ctx, "SELECT id FROM publications WHERE document_id = $1 AND media_id = $2 LIMIT 1", in.DocumentID, in.MediaID)

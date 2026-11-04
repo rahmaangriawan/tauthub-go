@@ -99,7 +99,7 @@ func (d *Deps) MediaCatalog(w http.ResponseWriter, r *http.Request) {
 	// Media yang disuspend admin tidak boleh tampil di katalog: domainnya sedang
 	// bermasalah (pelanggaran). Penjagaan ini terpisah dari `status` karena
 	// suspend adalah kendali admin, sedangkan `status` sebagian dikelola mitra.
-	clause := "WHERE media.status = 'active' AND media.suspended_at IS NULL AND COALESCE(media.price, 0) > 0 AND EXISTS (SELECT 1 FROM partners pa WHERE pa.id = media.partner_id AND pa.status = 'active') AND " + dbpkg.MediaIntegrationReadySQL("media")
+	clause := "WHERE media.status = 'active' AND media.suspended_at IS NULL AND COALESCE(media.price, 0) > 0 AND NOT media.partner_hidden AND EXISTS (SELECT 1 FROM partners pa WHERE pa.id = media.partner_id AND pa.status = 'active') AND " + dbpkg.MediaIntegrationReadySQL("media")
 	args := []any{}
 	addArg := func(v any) string {
 		args = append(args, v)
@@ -421,7 +421,7 @@ func (d *Deps) MediaDetail(w http.ResponseWriter, r *http.Request) {
 		       media_tier, max_links, allow_hyperlink, link_duration_months, publication_mode, word_count_mode, media_type,
 		       label_sponsor, topik_terlarang, dewan_pers_verified, dewan_pers_note, dewan_pers_cert_no, domain_verified,
 		       link_rel, allow_heading, website_platform, integration_type
-		FROM media WHERE id = $1 AND status = 'active'
+		FROM media WHERE id = $1 AND status = 'active' AND NOT partner_hidden
 		  AND EXISTS (SELECT 1 FROM partners pa WHERE pa.id = media.partner_id AND pa.status = 'active')
 		  AND `+dbpkg.MediaIntegrationReadySQL("media")+` LIMIT 1`, mediaID).
 		Scan(&id, &name, &status, &category, &description, &websiteURL, &price, &creditCost, &trafficEstimate,

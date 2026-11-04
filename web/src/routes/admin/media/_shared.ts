@@ -120,6 +120,8 @@ export type Media = {
 	publication_mode?: string;
 	/** Non-manual: koneksi API aktif ada. false = disembunyikan dari katalog klien. */
 	integration_connected?: boolean;
+	/** Mitra menyembunyikan media ini dari katalog klien (bisa ia tampilkan lagi sendiri). */
+	partner_hidden?: boolean;
 	auto_publish?: boolean;
 	word_count_mode?: string | null;
 	/** Masa berlaku tautan: 0 = permanen, >0 = bulan (default 12). */

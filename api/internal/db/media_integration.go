@@ -39,12 +39,18 @@ func MediaIntegrationReadySQL(alias string) string {
 
 // MediaCatalogVisibleSQL: media tampil di katalog klien. Syaratnya sama
 // dengan WHERE katalog clientread: aktif, tidak ditangguhkan, berharga,
-// mitra aktif, dan siap dari sisi integrasi.
+// mitra aktif, tidak disembunyikan mitranya, dan siap dari sisi integrasi.
 func MediaCatalogVisibleSQL(alias string) string {
 	return "(" + alias + ".status = 'active' AND " + alias + ".suspended_at IS NULL AND COALESCE(" + alias + ".price, 0) > 0" +
+		" AND NOT " + alias + ".partner_hidden" +
 		" AND EXISTS (SELECT 1 FROM partners mcp WHERE mcp.id = " + alias + ".partner_id AND mcp.status = 'active')" +
 		" AND " + MediaIntegrationReadySQL(alias) + ")"
 }
+
+// MediaHiddenByPartnerMessage: pesan 409 saat klien memesan media yang sedang
+// disembunyikan mitranya (URL lama / API tetap dijaga, sama seperti
+// MediaNotReadyMessage).
+const MediaHiddenByPartnerMessage = "Media ini sedang disembunyikan mitranya dari katalog, jadi belum bisa dipesan. Silakan pilih media lain."
 
 // MediaNotReadyMessage: pesan 409 saat klien memesan media yang belum
 // tersambung (katalog menyembunyikannya, tapi URL lama / API tetap dijaga).

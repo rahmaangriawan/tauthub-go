@@ -167,6 +167,7 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 		SELECT m.id, m.name, m.price, m.status, m.partner_id, m.publication_mode, m.integration_type, m.auto_publish, m.website_url,
 		       p.status AS partner_status, p.user_id AS partner_user_id, p.auto_publish_enabled,
 		       (SELECT client_name FROM brands WHERE id = $1) AS brand_client_name,
+		       m.partner_hidden,
 		       `+dbpkg.MediaIntegrationReadySQL("m")+` AS integration_ready
 		FROM media m LEFT JOIN partners p ON p.id = m.partner_id
 		WHERE m.id = $2 LIMIT 1`, in.BrandID, in.MediaID)
@@ -181,6 +182,9 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 	}
 	if !media.boolOr("integration_ready", true) {
 		return createdPublicationRecord{}, errConflict(dbpkg.MediaNotReadyMessage)
+	}
+	if media.boolOr("partner_hidden", false) {
+		return createdPublicationRecord{}, errConflict(dbpkg.MediaHiddenByPartnerMessage)
 	}
 
 	existing, err := d.queryRow(ctx,

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/ai"
+	dbpkg "github.com/rahmaangriawan/tauthub-go/internal/db"
 	brandsdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brands"
 	"github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -816,8 +817,10 @@ func (d *Deps) mmQueryCandidates(ctx context.Context, crit mmCriteria, hard bool
 		args = append(args, v)
 		return "$" + strconv.Itoa(len(args))
 	}
-	// Aturan yang sama dengan katalog klien: hanya media aktif.
-	where := "WHERE media.status = 'active' AND EXISTS (SELECT 1 FROM partners pa WHERE pa.id = media.partner_id AND pa.status = 'active')"
+	// Aturan yang sama dengan katalog klien: media aktif, tidak ditangguhkan,
+	// berharga, tidak disembunyikan mitranya, dan siap dari sisi integrasi.
+	// Tanpa ini AI bisa merekomendasikan media yang ternyata tidak bisa dipesan.
+	where := "WHERE media.status = 'active' AND media.suspended_at IS NULL AND COALESCE(media.price, 0) > 0 AND NOT media.partner_hidden AND EXISTS (SELECT 1 FROM partners pa WHERE pa.id = media.partner_id AND pa.status = 'active') AND " + dbpkg.MediaIntegrationReadySQL("media")
 
 	if len(crit.Categories) > 0 {
 		ors := make([]string, 0, len(crit.Categories))

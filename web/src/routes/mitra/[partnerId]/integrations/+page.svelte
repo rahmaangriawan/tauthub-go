@@ -27,6 +27,11 @@
 	let termsChecked = $state(false);
 	let confirmOpen = $state(false);
 
+	// Deep link dari Daftar Media (ikon mata): #blogger?media=<id> menyorot media
+	// itu di tab yang sesuai. `highlightTab` mencegah id dipakai tab lain.
+	let highlightId = $state('');
+	let highlightTab = $state<TabKey>('terms');
+
 	// Ringkasan per kanal untuk bar tab: jumlah koneksi/media dan titik status.
 	// Dimuat sekali, ringan; detailnya tetap dimuat oleh masing-masing tab.
 	let meta = $state<Record<Exclude<TabKey, 'terms'>, ChannelMeta | null>>({
@@ -52,6 +57,18 @@
 		return 'terms';
 	}
 
+	function hashMedia(): string {
+		const q = page.url.hash.split('?')[1];
+		return q ? (new URLSearchParams(q).get('media') ?? '') : '';
+	}
+
+	/** Dipanggil tab setelah menyorot: id dilepas dan ?media= dibersihkan dari URL. */
+	function clearHighlight() {
+		highlightId = '';
+		const hash = highlightTab === 'terms' ? '' : `#${highlightTab}`;
+		history.replaceState(null, '', `${page.url.pathname}${page.url.search}${hash}`);
+	}
+
 	onMount(() => {
 		void (async () => {
 			const fresh = await ensureValidSession();
@@ -69,6 +86,11 @@
 		if (terms.loading) return;
 		const requested = hashTab();
 		tab = !accepted && requested !== 'terms' ? 'terms' : requested;
+		const media = hashMedia();
+		if (media) {
+			highlightId = media;
+			highlightTab = requested;
+		}
 	});
 
 	async function loadTerms() {
@@ -239,11 +261,11 @@
 				{/if}
 			</div>
 		{:else if tab === 'wordpress'}
-			<Connections onchange={loadMeta} />
+			<Connections onchange={loadMeta} highlight={highlightTab === 'wordpress' ? highlightId : ''} onhighlighted={clearHighlight} />
 		{:else if tab === 'web-custom'}
-			<PublishingApi onchange={loadMeta} />
+			<PublishingApi onchange={loadMeta} highlight={highlightTab === 'web-custom' ? highlightId : ''} onhighlighted={clearHighlight} />
 		{:else}
-			<Blogger onchange={loadMeta} />
+			<Blogger onchange={loadMeta} highlight={highlightTab === 'blogger' ? highlightId : ''} onhighlighted={clearHighlight} />
 		{/if}
 	{/if}
 </section>
