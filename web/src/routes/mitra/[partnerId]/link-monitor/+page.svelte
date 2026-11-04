@@ -301,8 +301,8 @@
 					{tr('Menampilkan')} {publications.length} {tr('dari')} {total} {tr('tautan')}
 				</span>
 				<div class="flex gap-2">
-					<button class="app-btn app-btn-soft lm-pager-btn" type="button" disabled={pageNo <= 1} onclick={() => { pageNo = Math.max(1, pageNo - 1); }}>{tr('Sebelumnya')}</button>
-					<button class="app-btn app-btn-soft lm-pager-btn" type="button" disabled={pageNo * PAGE_SIZE >= total} onclick={() => { pageNo = pageNo + 1; }}>{tr('Berikutnya')}</button>
+					<button class="app-btn app-btn-soft lm-pager-btn" type="button" disabled={pageNo <= 1} onclick={() => { pageNo = Math.max(1, pageNo - 1); void loadPublications(); }}>{tr('Sebelumnya')}</button>
+					<button class="app-btn app-btn-soft lm-pager-btn" type="button" disabled={pageNo * PAGE_SIZE >= total} onclick={() => { pageNo = pageNo + 1; void loadPublications(); }}>{tr('Berikutnya')}</button>
 				</div>
 			</div>
 		{:else}

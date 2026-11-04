@@ -262,6 +262,17 @@ func (d *Deps) MediaList(w http.ResponseWriter, r *http.Request) {
 	} else if dewanPers == "no" {
 		clauses = append(clauses, "m.dewan_pers_verified = FALSE")
 	}
+	// Pencarian nama/domain di server: daftar dipaginasi, jadi mencari hanya di
+	// halaman yang sedang termuat membuat media di halaman lain "tidak ada".
+	if search := strings.TrimSpace(q.Get("search")); search != "" {
+		if runes := []rune(search); len(runes) > 100 {
+			search = string(runes[:100])
+		}
+		like := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(search)
+		args = append(args, "%"+like+"%")
+		ph := "$" + itoa(len(args))
+		clauses = append(clauses, "(m.name ILIKE "+ph+" OR m.slug ILIKE "+ph+" OR m.website_url ILIKE "+ph+")")
+	}
 	where := "WHERE " + strings.Join(clauses, " AND ")
 
 	countRow, err := d.queryRow(r.Context(), "SELECT COUNT(*) AS count FROM media m "+where, args...)

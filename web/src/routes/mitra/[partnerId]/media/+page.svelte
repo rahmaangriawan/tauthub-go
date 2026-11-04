@@ -102,6 +102,28 @@
 	let error = $state('');
 	let notice = $state('');
 	let q = $state('');
+	// Total media akun tanpa pencarian/filter: dipakai judul halaman, supaya tidak
+	// ikut mengecil saat mitra mencari sesuatu.
+	let accountTotal = $state(0);
+	// Penanda permintaan terbaru: respons lama (mis. saat mengetik cepat) tidak boleh menimpa yang baru.
+	let loadSeq = 0;
+	// Pencarian dilakukan di server (daftar dipaginasi 50 per halaman).
+	let searchTimer: ReturnType<typeof setTimeout> | null = null;
+	function onSearchInput() {
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => {
+			pageNo = 1;
+			void load();
+		}, 300);
+	}
+	function goToPage(next: number) {
+		pageNo = Math.max(1, next);
+		void load();
+	}
+	function resetToFirstPage() {
+		pageNo = 1;
+		void load();
+	}
 	let statusFilter = $state('');
 	let dewanFilter = $state('');
 
@@ -347,6 +369,7 @@
 		window.addEventListener('scroll', onViewportChange, true);
 		window.addEventListener('resize', onViewportChange);
 		return () => {
+			if (searchTimer) clearTimeout(searchTimer);
 			window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 			window.removeEventListener('scroll', onViewportChange, true);
 			window.removeEventListener('resize', onViewportChange);
@@ -360,7 +383,8 @@
 		void load();
 	}
 
-	async function load() {
+	async function load(): Promise<void> {
+		const seq = ++loadSeq;
 		// Tab Transparansi memuat semua media sekaligus (maks. 500) supaya
 		// paginasi 10 baris di dalamnya mencakup seluruh daftar, bukan hanya
 		// halaman server yang sedang aktif di tab Kelola.
@@ -374,7 +398,10 @@
 		// media yang diarsipkan ikut tampil di daftar utama.
 		else params.set('exclude_archived', 'true');
 		if (dewanFilter) params.set('dewan_pers', dewanFilter);
+		const searchTerm = q.trim();
+		if (searchTerm) params.set('search', searchTerm);
 		const res = await apiRequest(`/v1/partner/media?${params}`);
+		if (seq !== loadSeq) return;
 		if (!res.ok) {
 			// Gagal memuat: status verifikasi tetap "belum diketahui" (bukan
 			// "belum terverifikasi"), supaya banner tidak muncul karena error.
@@ -383,8 +410,15 @@
 		}
 		error = '';
 		const data = await res.json();
+		if (seq !== loadSeq) return;
 		items = data.media ?? [];
 		total = data.total ?? items.length;
+		if (!searchTerm && !statusFilter && !dewanFilter) accountTotal = total;
+		// Halaman terakhir baru saja kosong (mis. item terakhirnya diarsipkan): mundur.
+		if (!allForTransparency && items.length === 0 && pageNo > 1 && total > 0) {
+			pageNo = Math.ceil(total / PAGE_SIZE);
+			return load();
+		}
 		categories = data.categories ?? [];
 		autoPublishEnabled = Boolean(data.auto_publish_enabled);
 		// Baru di sini status verifikasi domain dianggap diketahui.
@@ -827,13 +861,8 @@
 		}
 	}
 
-	const filtered = $derived(
-		items.filter((m) => {
-			if (!q.trim()) return true;
-			const term = q.trim().toLowerCase();
-			return m.name.toLowerCase().includes(term) || (m.website_url ?? '').toLowerCase().includes(term);
-		})
-	);
+	// Pencarian sudah disaring server (name/slug/website_url), jadi daftar = item termuat.
+	const filtered = $derived(items);
 
 		function openCreate() {
 			editingId = null;
@@ -1225,7 +1254,7 @@
 		<div class="min-w-0">
 			<h1 class="page-title">{tr("Daftar Media")}</h1>
 			{#if mediaLoaded}
-				<p class="page-desc">{total} {tr("media terdaftar pada akun mitra Anda.")}</p>
+				<p class="page-desc">{accountTotal || total} {tr("media terdaftar pada akun mitra Anda.")}</p>
 			{/if}
 		</div>
 		{#if viewMode === 'manage'}
@@ -1532,14 +1561,14 @@
 	<form class="app-card md-filter" onsubmit={(e) => e.preventDefault()}>
 		<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
 			<Search size={16} strokeWidth={1.5} class="text-muted-foreground" />
-			<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama media atau domain…")} bind:value={q} />
+			<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama media atau domain…")} bind:value={q} oninput={onSearchInput} />
 		</label>
 		<Select
 			bind:value={statusFilter}
 			ariaLabel={tr("Status media")}
 			placeholder={tr("Semua status (tanpa arsip)")}
 			align="end"
-			onchange={load}
+			onchange={resetToFirstPage}
 			options={[
 				{ value: '', label: tr('Semua status (tanpa arsip)') },
 				{ value: 'active', label: tr('Aktif') },
@@ -1554,7 +1583,7 @@
 			ariaLabel={tr("Status Dewan Pers")}
 			placeholder={tr("Semua status Dewan Pers")}
 			align="end"
-			onchange={load}
+			onchange={resetToFirstPage}
 			options={[
 				{ value: '', label: tr('Semua status Dewan Pers') },
 				{ value: 'yes', label: tr('Terverifikasi Dewan Pers') },
@@ -1797,8 +1826,8 @@
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 			<span class="text-xs text-muted-foreground">{tr('Menampilkan')} {items.length} {tr('dari')} {total} {tr('media')}</span>
 			<div class="flex gap-2">
-				<button class="app-btn app-btn-soft" type="button" disabled={pageNo <= 1} onclick={() => { pageNo = Math.max(1, pageNo - 1); }}>{tr('Sebelumnya')}</button>
-				<button class="app-btn app-btn-soft" type="button" disabled={pageNo * PAGE_SIZE >= total} onclick={() => { pageNo = pageNo + 1; }}>{tr('Berikutnya')}</button>
+				<button class="app-btn app-btn-soft" type="button" disabled={pageNo <= 1} onclick={() => goToPage(pageNo - 1)}>{tr('Sebelumnya')}</button>
+				<button class="app-btn app-btn-soft" type="button" disabled={pageNo * PAGE_SIZE >= total} onclick={() => goToPage(pageNo + 1)}>{tr('Berikutnya')}</button>
 			</div>
 		</div>
 	{/if}
