@@ -7,7 +7,7 @@
 	// (pratinjau → konfirmasi, parity alur bulk import app lama).
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { Building2, Check, ChevronRight, CircleAlert, CircleDollarSign, Clock, Copy, ExternalLink, FileText, Info, Layers, Link, Link2, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Tag, Trash2, TriangleAlert, Upload, Wallet, X, Zap } from '@lucide/svelte';
+	import { Building2, Check, ChevronRight, CircleAlert, CircleDollarSign, Clock, Copy, ExternalLink, Eye, EyeOff, FileText, Info, Layers, Link, Link2, Lock, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, ShieldCheck, Tag, Trash2, TriangleAlert, Upload, Wallet, X, Zap } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import MediaFavicon from './_favicon.svelte';
 
@@ -57,6 +57,8 @@
 		health_score: number | null; health_breakdown: Record<string, unknown> | null;
 		seo_da: number | null; seo_pa: number | null; seo_spam_score: number | null; seo_checked_at: string | null;
 		has_connection: boolean; custom_web_status: string | null; blogger_status: string | null;
+		/** Tampil di katalog klien atau tidak; alasan: not_connected | inactive | suspended | no_price | partner_inactive. */
+		integration_ready: boolean; catalog_visible: boolean; catalog_hidden_reason: string | null;
 		rejection_reason: string | null; domain_verified: boolean;
 		// Perubahan yang diparkir menunggu admin: media tetap tayang dengan data live.
 		pending_changes?: { field: string; label: string; from: string | null; to: string | null }[] | null;
@@ -561,6 +563,37 @@
 	/** Tooltip lencana "N menunggu": artikel klien yang butuh konfirmasi mitra. */
 	const pendingHint = () =>
 		tr('Ada artikel dari klien yang menunggu konfirmasi Anda. Buka menu Publikasi untuk menyetujui atau menolaknya.');
+
+	// ── Ikon mata: tampil / disembunyikan dari katalog klien ───────────────
+	/** Nama platform dan anchor tab Integrasi untuk media non-manual. */
+	function integrationTarget(m: Media): { platform: string; anchor: string } {
+		switch (m.integration_type) {
+			case 'blogger':
+				return { platform: 'Blogspot', anchor: 'blogger' };
+			case 'custom_web':
+			case 'tulisio_api':
+				return { platform: 'Custom Web', anchor: 'custom' };
+			default:
+				return { platform: 'WordPress', anchor: 'wordpress' };
+		}
+	}
+	/** Alasan media tidak tampil di katalog klien, dalam bahasa mitra. */
+	function hiddenReasonText(m: Media): string {
+		switch (m.catalog_hidden_reason) {
+			case 'not_connected':
+				return tr('Disembunyikan dari katalog klien: situs belum tersambung ke') + ' ' + integrationTarget(m).platform + '.';
+			case 'inactive':
+				return tr('Disembunyikan dari katalog klien: media belum aktif.');
+			case 'suspended':
+				return tr('Disembunyikan dari katalog klien: media sedang ditangguhkan admin.');
+			case 'no_price':
+				return tr('Disembunyikan dari katalog klien: harga belum diisi.');
+			default:
+				return tr('Disembunyikan dari katalog klien.');
+		}
+	}
+	/** Media aktif yang disembunyikan hanya karena belum tersambung. */
+	const notConnected = $derived(items.filter((m) => m.catalog_hidden_reason === 'not_connected'));
 
 	// ── Menu aksi titik-tiga (parity app lama) ────────────────────────────
 	let openMenu = $state<string | null>(null);
@@ -1593,6 +1626,19 @@
 	</form>
 
 	{#if viewMode === 'manage'}
+	{#if !loading && notConnected.length > 0}
+		<!-- Media yang disembunyikan dari katalog klien karena belum tersambung. -->
+		<div class="app-card mt-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3" style="border-color: var(--warning); background-color: var(--warning-soft);" role="status">
+			<div class="flex min-w-0 items-start gap-2.5">
+				<EyeOff size={16} class="mt-0.5 shrink-0" style="color: var(--warning);" />
+				<p class="text-sm">
+					<span class="font-medium">{notConnected.length} {tr('media disembunyikan dari katalog klien')}</span>
+					<span class="text-muted-foreground"> · {tr('situsnya belum tersambung, jadi klien belum bisa memesan. Hubungkan di menu Integrasi, media otomatis tampil lagi.')}</span>
+				</p>
+			</div>
+			<a class="app-btn app-btn-soft shrink-0" href={`/mitra/${partnerId}/integrations#${integrationTarget(notConnected[0]).anchor}`}><Plug size={14} /> {tr('Hubungkan di Integrasi')}</a>
+		</div>
+	{/if}
 	{#if loading}
 		<p class="mt-6 text-sm text-muted-foreground">{tr("Memuat media…")}</p>
 	{:else if filtered.length === 0}
@@ -1687,6 +1733,7 @@
 {:else}
 <span class="md-domain">{m.name}</span>
 {/if}
+{@render catalogEye(m)}
 </div>
 {@render contohLink(m)}
 </div>
@@ -1757,6 +1804,7 @@
 								{:else}
 									<span class="break-words text-[15px] font-semibold leading-snug">{m.name}</span>
 								{/if}
+								{@render catalogEye(m)}
 								{@render statusBadges(m)}
 								{@render pendingBadge(m)}
 							</div>
@@ -2144,9 +2192,45 @@
 {/snippet}
 
 {#snippet connectionStatus(m: Media)}
-	{#if (m.integration_type === 'blogger' && m.blogger_status !== 'connected') || (m.integration_type === 'custom_web' && m.custom_web_status !== 'connected')}
+	{#if m.integration_type !== 'manual' && !m.integration_ready}
 		<span class="mt-0.5 block text-xs" style="color: var(--destructive);">{tr('Belum terhubung')}</span>
 	{/if}
+{/snippet}
+
+{#snippet catalogEye(m: Media)}
+	<!-- Mata hijau: tampil di katalog klien. Mata dicoret abu-abu: disembunyikan,
+	     tooltip menjelaskan sebabnya; untuk media belum tersambung ada tautan
+	     langsung ke tab Integrasi yang sesuai. Tooltip bits-ui bisa di-tap. -->
+	<Tooltip.Provider delayDuration={0}>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				{#snippet child({ props })}
+					<button
+						{...props}
+						type="button"
+						class="md-eye"
+						style="color: {m.catalog_visible ? 'var(--success)' : 'var(--muted-foreground)'};"
+						aria-label={m.catalog_visible ? tr('Tampil di katalog klien') : hiddenReasonText(m)}
+					>
+						{#if m.catalog_visible}<Eye size={15} strokeWidth={1.75} />{:else}<EyeOff size={15} strokeWidth={1.75} />{/if}
+					</button>
+				{/snippet}
+			</Tooltip.Trigger>
+			<Tooltip.Portal>
+				<Tooltip.Content class="uiTip" strategy="fixed" sideOffset={4}>
+					<Tooltip.Arrow class="uiTipArrow" />
+					{#if m.catalog_visible}
+						{tr('Tampil di katalog klien')}
+					{:else}
+						{hiddenReasonText(m)}
+						{#if m.catalog_hidden_reason === 'not_connected'}
+							<a class="md-eye-link" href={`/mitra/${partnerId}/integrations#${integrationTarget(m).anchor}`}>{tr('Hubungkan di Integrasi')}</a>
+						{/if}
+					{/if}
+				</Tooltip.Content>
+			</Tooltip.Portal>
+		</Tooltip.Root>
+	</Tooltip.Provider>
 {/snippet}
 
 {#snippet statusBadges(m: Media)}
@@ -3173,6 +3257,9 @@
 	.md-name { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
 	.md-fav { display: inline-flex; margin-top: 1px; }
 	.md-domain { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--foreground); }
+	.md-eye { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; }
+	.md-eye:hover { background: var(--muted); }
+	.md-eye-link { display: block; margin-top: 4px; text-decoration: underline; }
 	a.md-domain:hover { color: var(--accent-foreground); text-decoration: underline; }
 
 	.md-score {
@@ -3183,10 +3270,11 @@
 	.md-plat { font-size: 13px; line-height: 20px; }
 
 	.md-cat {
-		display: inline-flex; max-width: 168px; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 6px;
+		display: inline-flex; max-width: 168px; min-width: 120px; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 6px; white-space: nowrap;
 		background-color: var(--muted); color: var(--foreground); font-size: 13px; line-height: 20px; text-align: left;
 		transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
+	.md-cat > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.md-cat:hover { background-color: var(--accent); color: var(--accent-foreground); }
 	.md-cat :global(.md-cat-icon) { color: var(--muted-foreground); }
 	.md-cat:hover :global(.md-cat-icon) { color: var(--accent-foreground); }
