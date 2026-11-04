@@ -1668,7 +1668,7 @@
 							</span>
 						</th>
 						<th class="md-th">Status</th>
-						<th class="md-th">{tr('Menunggu')}</th>
+						<th class="md-th">{tr('Order')}</th>
 						<th class="md-th md-th-end">{tr('Aksi')}</th>
 					</tr>
 				</thead>
