@@ -215,6 +215,7 @@
 					<p>{tr('Dengan menyetujui, Anda memberi Tauthub izin mengirim artikel klien ke akun/website media Anda melalui kanal yang Anda hubungkan di halaman ini (WordPress, Web Custom, atau Blogspot).')}</p>
 					<p>{tr('Anda bertanggung jawab memastikan kredensial yang dimasukkan valid dan akun yang terhubung milik media Anda. Tauthub tidak pernah mengubah artikel yang sudah terbit tanpa tindakan Anda.')}</p>
 					<p>{tr('Persetujuan ini dicatat waktunya dan dapat dicabut dengan memutus koneksi di tab terkait.')}</p>
+					<p>{tr('Akses ke media Anda di Tauthub hanya boleh diberikan kepada anggota dengan peran penulis atau maksimal editor. Peran yang lebih tinggi tidak diperbolehkan untuk mengelola media.')}</p>
 				</div>
 
 				{#if accepted}
