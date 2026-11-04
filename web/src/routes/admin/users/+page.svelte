@@ -124,6 +124,7 @@
 			loading = false;
 			void loadTotals();
 			void loadBlocks();
+			void loadDomains();
 			const me = await apiRequest('/v1/platform/admins/me');
 			if (me.ok) {
 				const data = await me.json();
@@ -214,6 +215,90 @@
 		if (res.ok) blocks = blocks.filter((b) => b.email !== email);
 		else blocksError = await platformError(res);
 		unblocking = null;
+	}
+
+	// Domain email yang diblokir dari pendaftaran (temp-mail) + batas akun
+	// Google/Workspace per domain per hari.
+	type BlockedDomain = { domain: string; reason: string; created_at: string | null };
+	let domains = $state<BlockedDomain[]>([]);
+	let builtinCount = $state(0);
+	let domainPerDay = $state(3);
+	let domainPerDayInput = $state('3');
+	let domainsError = $state('');
+	let domainsNotice = $state('');
+	let newDomain = $state('');
+	let newDomainReason = $state('manual');
+	let domainBusy = $state(false);
+	let domainsLoaded = $state(false);
+
+	async function loadDomains() {
+		domainsError = '';
+		const res = await apiRequest('/v1/platform/operations/blocked-domains');
+		if (!res.ok) return;
+		const data = (await res.json()) as { items?: BlockedDomain[]; builtin_count?: number; domain_per_day?: number };
+		domains = data.items ?? [];
+		builtinCount = data.builtin_count ?? 0;
+		domainPerDay = data.domain_per_day ?? 3;
+		domainPerDayInput = String(domainPerDay);
+		domainsLoaded = true;
+	}
+
+	async function addDomain(e: SubmitEvent) {
+		e.preventDefault();
+		if (domainBusy || !newDomain.trim()) return;
+		domainBusy = true;
+		domainsError = '';
+		domainsNotice = '';
+		const res = await apiRequest('/v1/platform/operations/blocked-domains', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ domain: newDomain.trim(), reason: newDomainReason })
+		});
+		if (res.ok) {
+			newDomain = '';
+			await loadDomains();
+			domainsNotice = tr('Domain ditambahkan ke daftar blokir.');
+		} else {
+			domainsError = await platformError(res);
+		}
+		domainBusy = false;
+	}
+
+	async function removeDomain(domain: string) {
+		domainBusy = true;
+		domainsError = '';
+		domainsNotice = '';
+		const res = await apiRequest('/v1/platform/operations/blocked-domains', {
+			method: 'DELETE',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ domain })
+		});
+		if (res.ok) domains = domains.filter((d) => d.domain !== domain);
+		else domainsError = await platformError(res);
+		domainBusy = false;
+	}
+
+	async function saveDomainPerDay() {
+		const n = Number(domainPerDayInput);
+		if (!Number.isInteger(n) || n < 1 || n > 50) {
+			domainsError = tr('Batas per domain harus bilangan bulat 1–50.');
+			return;
+		}
+		domainBusy = true;
+		domainsError = '';
+		domainsNotice = '';
+		const res = await apiRequest('/v1/platform/operations/registration-guard', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ domain_per_day: n })
+		});
+		if (res.ok) {
+			domainPerDay = n;
+			domainsNotice = tr('Batas per domain disimpan.');
+		} else {
+			domainsError = await platformError(res);
+		}
+		domainBusy = false;
 	}
 
 	function submitSearch(e: SubmitEvent) {
@@ -761,6 +846,59 @@
 					{/each}
 				</tbody>
 			</table>
+		</div>
+	{/if}
+
+	{#if domainsLoaded}
+		<div class="app-card mt-6 overflow-x-auto">
+			<div class="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3" style="border-color: var(--border);">
+				<div>
+					<h2 class="text-sm font-medium">{tr('Domain email diblokir')}</h2>
+					<p class="mt-0.5 text-xs text-muted-foreground">
+						{tr('Pendaftaran email dan Google dari domain ini ditolak. Daftar temp-mail bawaan aktif:')}
+						<span class="tabular-nums">{fmtNum(builtinCount)}</span> {tr('domain')}.
+					</p>
+				</div>
+				<form class="flex items-center gap-2" onsubmit={(e) => { e.preventDefault(); void saveDomainPerDay(); }}>
+					<label class="text-xs text-muted-foreground" for="domain-per-day">{tr('Batas akun Google per domain/hari')}</label>
+					<input id="domain-per-day" class="app-input !min-h-8 w-16 !px-2 !py-1 text-center text-xs tabular-nums" type="number" min="1" max="50" bind:value={domainPerDayInput} />
+					<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="submit" disabled={domainBusy || domainPerDayInput === String(domainPerDay)}>{tr('Simpan')}</button>
+				</form>
+			</div>
+			<form class="flex flex-wrap items-center gap-2 px-4 py-3" onsubmit={addDomain}>
+				<input class="app-input !min-h-8 min-w-[220px] flex-1 !py-1 text-sm" type="text" placeholder="tempmail.io" bind:value={newDomain} aria-label={tr('Domain yang diblokir')} />
+				<Select ariaLabel={tr('Alasan')} minWidth={140} value={newDomainReason} onchange={(v) => (newDomainReason = v)}
+					options={[{ value: 'manual', label: tr('Manual') }, { value: 'disposable', label: 'Temp-mail' }, { value: 'abuse', label: tr('Penyalahgunaan') }]} />
+				<button class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs" type="submit" disabled={domainBusy || !newDomain.trim()}>{tr('Tambah')}</button>
+			</form>
+			{#if domainsError}<p class="px-4 pb-2 text-xs" style="color: var(--destructive);">{domainsError}</p>{/if}
+			{#if domainsNotice}<p class="px-4 pb-2 text-xs" style="color: var(--success, #15803d);">{domainsNotice}</p>{/if}
+			{#if domains.length > 0}
+				<table class="admin-table w-full text-sm">
+					<thead>
+						<tr class="text-left text-xs text-muted-foreground">
+							<th class="px-4 py-2.5 font-medium">Domain</th>
+							<th class="px-4 py-2.5 font-medium">{tr('Alasan')}</th>
+							<th class="px-4 py-2.5 font-medium">{tr('Ditambahkan')}</th>
+							<th class="px-4 py-2.5 text-right font-medium">Aksi</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each domains as d (d.domain)}
+							<tr class="border-t">
+								<td class="px-4 py-2.5 font-mono text-xs">{d.domain}</td>
+								<td class="px-4 py-2.5 text-xs text-muted-foreground">{d.reason}</td>
+								<td class="px-4 py-2.5 text-xs text-muted-foreground">{d.created_at ? fmtDate(d.created_at) : '—'}</td>
+								<td class="px-4 py-2.5 text-right">
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={domainBusy} onclick={() => void removeDomain(d.domain)}>{tr('Hapus')}</button>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			{:else}
+				<p class="px-4 pb-4 text-xs text-muted-foreground">{tr('Belum ada domain tambahan dari admin.')}</p>
+			{/if}
 		</div>
 	{/if}
 </section>

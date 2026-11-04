@@ -13,7 +13,7 @@
 	import {
 		Calendar, ChartBar, Check, CircleCheck, Clock, Download, FileText,
 		Settings, Server, Image as ImageIcon, Info, Link as LinkIcon, Share2,
-		CircleAlert, X, CircleX, Tag
+		CircleAlert, X, CircleX, Tag, Languages
 	} from '@lucide/svelte';
 	import { apiRequest } from '$lib/auth';
 	import { Tooltip } from 'bits-ui';
@@ -228,6 +228,13 @@
 
 	const isOrganic = $derived(media.label_sponsor !== 'ada_sponsor');
 	const sponsorText = $derived(isOrganic ? tr('✓ Tidak Ada (Organik)') : 'Ada Label Sponsor / Adv');
+
+	const bahasaFlag: Record<string, string> = { Indonesia: '🇮🇩', Inggris: '🇬🇧', China: '🇨🇳', Arab: '🇸🇦' };
+	const bahasaText = $derived(
+		(media.bahasa_artikel?.length ? media.bahasa_artikel : ['Indonesia'])
+			.map((b) => `${bahasaFlag[b] ?? ''} ${b}`.trim())
+			.join(' · ')
+	);
 	const isDirectPublish = $derived(media.publication_mode === 'publish');
 	const initialLetter = $derived((media.name || 'M').trim().charAt(0).toUpperCase());
 	// Favicon langsung dari website media (layanan favicon publik Google);
@@ -348,6 +355,7 @@
 					},
 					{ label: tr('Batas Tautan Keluar'), value: linkPolicy },
 					{ label: tr('Panjang Artikel'), value: wordCountLabel(media.word_count_mode) },
+					{ label: tr('Bahasa Artikel'), value: bahasaText },
 					{
 						label: tr('Support Embed (Video/Maps)'),
 						value: media.allow_embed ? tr('Diizinkan') : tr('Tidak Diizinkan')
@@ -768,6 +776,14 @@
 											<div class="paramValueMuted" style="font-size: 11px;">{wordCountNote}</div>
 										{/if}
 									</div>
+								</div>
+
+								<div class="paramItemRow">
+									<div class="paramItemLeftGroup">
+										<Languages size={18} class="paramRowIcon" />
+										<span>{tr("Bahasa Artikel")}</span>
+									</div>
+									<span class="paramValueBold">{bahasaText}</span>
 								</div>
 
 								<div class="paramItemRow">

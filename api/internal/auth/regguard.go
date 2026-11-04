@@ -74,6 +74,18 @@ type guardSignals struct {
 	IPRegistrations30d         int
 	DeviceRegistrations30d     int
 	DistinctEmailHashes7d      int
+	// DomainRegistrations24h: pendaftaran (termasuk percobaan Google yang
+	// ditolak) dari domain email yang sama dalam 24 jam. 0 untuk Gmail.
+	DomainRegistrations24h int
+}
+
+// CountDomainRegistrations24h: hitungan per domain untuk batas Workspace massal.
+func CountDomainRegistrations24h(ctx context.Context, pool *pgxpool.Pool, domain string) int {
+	var n int
+	_ = pool.QueryRow(ctx,
+		"SELECT COUNT(*)::int FROM registration_history WHERE domain = $1 AND registered_at > NOW() - INTERVAL '24 hours'",
+		strings.ToLower(domain)).Scan(&n)
+	return n
 }
 
 // QuerySignals: 4 kueri velocity/identitas, best-effort → nol sinyal saat gagal.
@@ -173,9 +185,15 @@ func evaluateGuardInner(ctx context.Context, pool *pgxpool.Pool, pepper string, 
 	}
 
 	cfg := LoadGuardConfig(ctx, pool)
-	emailInfo := AnalyzeEmail(input.Email)
+	emailInfo := AnalyzeEmailCtx(ctx, pool, input.Email)
 	reasons := []string{}
 	score := 0
+
+	// Google tanpa email_verified: identitasnya tidak bisa dipercaya → blokir.
+	if input.Source == "google" && !input.GoogleVerified {
+		return GuardDecision{Decision: GuardBlock, RiskScore: cfg.Thresholds.Block, RiskLevel: "high",
+			ReasonCodes: []string{"GOOGLE_EMAIL_UNVERIFIED"}, Confidence: 1}, nil
+	}
 
 	// Domain disposable selalu blokir (aturan keras).
 	if emailInfo.IsDisposable {
@@ -206,6 +224,17 @@ func evaluateGuardInner(ctx context.Context, pool *pgxpool.Pool, pepper string, 
 		googleSubHash = HashSignal(input.GoogleSub, pepper)
 	}
 	signals := QuerySignals(ctx, pool, emailHash, googleSubHash, input.IPHash, input.DeviceHash)
+	if !emailInfo.IsGmail && emailInfo.Domain != "" {
+		signals.DomainRegistrations24h = CountDomainRegistrations24h(ctx, pool, emailInfo.Domain)
+	}
+
+	// Batas per domain non-Gmail (Workspace custom domain bisa dibuat massal):
+	// melewati rate_limits.domain_per_day → minimal review (ditolak di jalur
+	// pendaftaran baru). Dihitung sebelum skor lain supaya tidak bisa "ditebus".
+	if cfg.RateLimits.DomainPerDay > 0 && signals.DomainRegistrations24h >= cfg.RateLimits.DomainPerDay {
+		reasons = append(reasons, "DOMAIN_MANY_REGISTRATIONS")
+		score += cfg.Thresholds.Review
+	}
 
 	// Domain tanpa MX — hanya untuk sumber Google.
 	if input.Source == "google" && !emailInfo.IsGmail && emailInfo.Domain != "" {

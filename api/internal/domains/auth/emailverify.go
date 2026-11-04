@@ -23,6 +23,7 @@ import (
 
 const emailCodeMsgInvalid = "Kode salah atau sudah kedaluwarsa. Minta kode baru bila perlu."
 const emailTicketMsgInvalid = "Verifikasi email belum selesai atau sudah kedaluwarsa. Minta kode baru."
+const disposableEmailMsg = "Email sementara (temp-mail) tidak bisa dipakai untuk mendaftar. Gunakan alamat Gmail Anda."
 
 func (d *Deps) RequestRegisterCode(w http.ResponseWriter, r *http.Request) {
 	okResp := func(retryAfter int) {
@@ -43,6 +44,19 @@ func (d *Deps) RequestRegisterCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := authRequestIp(r)
+
+	// Aturan domain diputuskan sebelum ada kode yang dibuat/dikirim: temp-mail
+	// ditolak terang-terangan, non-Gmail diarahkan ke admin (sama seperti guard
+	// di /auth/register, hanya lebih awal supaya tidak menunggu kode percuma).
+	emailInfo := auth.AnalyzeEmailCtx(r.Context(), d.Pool, email)
+	if emailInfo.IsDisposable {
+		httpx.Error(w, http.StatusUnprocessableEntity, disposableEmailMsg)
+		return
+	}
+	if !emailInfo.IsGmail {
+		httpx.Error(w, http.StatusUnprocessableEntity, auth.AdminRequiredMessage)
+		return
+	}
 
 	// Per IP tegas (429) supaya UI bisa memberi tahu; per email diam-diam.
 	if err := auth.CheckAuthRate(r.Context(), d.Pool, "regcode:ip:"+orUnknown(ip), 5); err != nil {
@@ -144,6 +158,10 @@ func (d *Deps) VerifyRegisterCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := authRequestIp(r)
+	if auth.IsDisposableDomain(r.Context(), d.Pool, auth.AnalyzeEmail(email).Domain) {
+		httpx.Error(w, http.StatusUnprocessableEntity, disposableEmailMsg)
+		return
+	}
 	if err := auth.CheckAuthRate(r.Context(), d.Pool, "regverify:ip:"+orUnknown(ip), 20); err != nil {
 		writeRateErr(w, err)
 		return

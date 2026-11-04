@@ -158,12 +158,15 @@ func (d *Deps) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		DeviceHash:     auth.HashSignal(auth.RequestDeviceSignal(r.Header.Get("user-agent"), deviceID), d.Cfg.CmsEncryptionSecret),
 		Source:         "google",
 	})
-	if guard.Decision == auth.GuardBlock || guard.Decision == auth.GuardReview {
+	// Pendaftaran Google baru hanya lolos bila guard benar-benar allow: review,
+	// verify, dan admin_required sama-sama ditolak (tidak diam-diam buat akun).
+	if guard.Decision != auth.GuardAllow {
 		detail := map[string]any{"reason_codes": guard.ReasonCodes, "risk_score": guard.RiskScore, "risk_level": guard.RiskLevel, "source": "google"}
 		detailJSON, _ := json.Marshal(detail)
 		_, _ = d.Pool.Exec(r.Context(),
 			"INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id, ip_address, user_agent, detail) VALUES ($1, NULL, 'registration_blocked', 'registration', $2, $3, $4, $5::jsonb)",
 			uuid.NewString(), deviceID, nullIfEmpty(authRequestIp(r)), nullIfEmpty(r.Header.Get("user-agent")), string(detailJSON))
+		d.recordGoogleAttempt(r, profile.Email, profile.Sub, guard, "BLOCKED")
 		googleFailRedirect(w, r, "registration_unavailable")
 		return
 	}
@@ -228,7 +231,8 @@ func (d *Deps) GoogleComplete(w http.ResponseWriter, r *http.Request) {
 		Email: email, GoogleSub: sub, GoogleHD: hd, GoogleVerified: emailVerified == "1",
 		IPHash: ipHash, DeviceHash: deviceHash, ReferralCode: body.ReferralCode, Source: "google",
 	})
-	if guard.Decision == auth.GuardBlock || guard.Decision == auth.GuardReview {
+	if guard.Decision != auth.GuardAllow {
+		d.recordGoogleAttempt(r, email, sub, guard, "BLOCKED")
 		httpx.Error(w, http.StatusForbidden, auth.GenericBlockMessage)
 		return
 	}
@@ -307,6 +311,27 @@ func (d *Deps) GoogleComplete(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("[google/complete] session issued", "user", userID, "role", role)
 	d.issueSession(w, r, userID, SessionUser{ID: userID, Email: email, Role: role, DisplayName: &displayName}, http.StatusCreated)
+}
+
+// recordGoogleAttempt: percobaan daftar Google yang ditolak ikut dicatat ke
+// registration_history (tanpa user_id) supaya batas per domain menghitung
+// percobaan, bukan hanya akun yang berhasil dibuat.
+func (d *Deps) recordGoogleAttempt(r *http.Request, email, sub string, guard auth.GuardDecision, tag string) {
+	deviceID := readCookie(r, regDeviceCookie)
+	domain := ""
+	if at := strings.LastIndex(email, "@"); at != -1 {
+		domain = strings.ToLower(email[at+1:])
+	}
+	auth.RecordRegistration(r.Context(), d.Pool, auth.RegistrationHistoryEntry{
+		Source:        "google",
+		EmailHash:     auth.HashSignal(strings.ToLower(email), d.Cfg.CmsEncryptionSecret),
+		GoogleSubHash: auth.HashSignal(sub, d.Cfg.CmsEncryptionSecret),
+		IPHash:        auth.HashSignal(orUnknown(authRequestIp(r)), d.Cfg.CmsEncryptionSecret),
+		DeviceHash:    auth.HashSignal(auth.RequestDeviceSignal(r.Header.Get("user-agent"), deviceID), d.Cfg.CmsEncryptionSecret),
+		Domain:        &domain,
+		RiskScore:     guard.RiskScore, RiskLevel: guard.RiskLevel,
+		ReasonCodes:   append([]string{tag}, guard.ReasonCodes...),
+	})
 }
 
 // GoogleLink: POST — hubungkan Google ke akun password existing (wajib password).

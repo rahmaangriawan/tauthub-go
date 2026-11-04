@@ -199,9 +199,17 @@ type GuardThresholds struct {
 	Critical int
 }
 
+// GuardRateLimits: bagian rate_limits dari registration_guard_config yang
+// dipakai guard. DomainPerDay membatasi pendaftaran per domain email non-Gmail
+// dalam 24 jam (Workspace massal).
+type GuardRateLimits struct {
+	DomainPerDay int
+}
+
 type GuardConfig struct {
 	Scores     GuardScores
 	Thresholds GuardThresholds
+	RateLimits GuardRateLimits
 }
 
 func defaultGuardConfig() GuardConfig {
@@ -213,6 +221,7 @@ func defaultGuardConfig() GuardConfig {
 			ReferralDeviceMatch: 40, ReferralIPMatch: 25, ReferralBurst: 20,
 		},
 		Thresholds: GuardThresholds{Verify: 30, Review: 60, Block: 80, Critical: 110},
+		RateLimits: GuardRateLimits{DomainPerDay: 3},
 	}
 }
 
@@ -241,8 +250,11 @@ func LoadGuardConfig(ctx context.Context, pool *pgxpool.Pool) GuardConfig {
 	if err == nil {
 		var s map[string]float64
 		var t map[string]float64
+		var rl map[string]float64
 		_ = json.Unmarshal(scores, &s)
 		_ = json.Unmarshal(thresholds, &t)
+		_ = json.Unmarshal(rateLimits, &rl)
+		applyNumbers(rl, map[string]*int{"domain_per_day": &cfg.RateLimits.DomainPerDay})
 		applyNumbers(s, map[string]*int{
 			"disposable": &cfg.Scores.Disposable, "known_abusive_domain": &cfg.Scores.KnownAbusiveDomain,
 			"very_new_domain": &cfg.Scores.VeryNewDomain, "workspace": &cfg.Scores.Workspace,
@@ -261,6 +273,13 @@ func LoadGuardConfig(ctx context.Context, pool *pgxpool.Pool) GuardConfig {
 	}
 	guardCfgCache = &guardConfigCache{cfg: cfg, expiresAt: time.Now().Add(60 * time.Second)}
 	return cfg
+}
+
+// InvalidateGuardConfigCache: dipanggil setelah admin mengubah konfigurasi.
+func InvalidateGuardConfigCache() {
+	guardCfgMu.Lock()
+	guardCfgCache = nil
+	guardCfgMu.Unlock()
 }
 
 func applyNumbers(src map[string]float64, dst map[string]*int) {
