@@ -621,6 +621,8 @@
 		}
 	}
 	let eyeBusyId = $state<string | null>(null);
+	/** Media yang menunggu konfirmasi sembunyikan (dialog dalam halaman, bukan confirm() browser). */
+	let hideConfirm = $state<Media | null>(null);
 	/** Sembunyikan / tampilkan media sendiri (berlaku langsung, order berjalan tidak terpengaruh). */
 	async function setPartnerHidden(m: Media, hidden: boolean) {
 		eyeBusyId = m.id;
@@ -644,8 +646,7 @@
 	async function onEyeClick(m: Media) {
 		if (eyeBusyId) return;
 		if (m.catalog_visible) {
-			if (!confirm(`${tr('Sembunyikan')} "${m.name}" ${tr('dari katalog klien? Order yang sudah berjalan tidak terpengaruh.')}`)) return;
-			await setPartnerHidden(m, true);
+			hideConfirm = m;
 			return;
 		}
 		switch (m.catalog_hidden_reason) {
@@ -3082,6 +3083,30 @@
 					</footer>
 				</form>
 			</dialog>
+	</div>
+{/if}
+
+{#if hideConfirm}
+	{@const target = hideConfirm}
+	<div
+		class="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto p-4"
+		style="background-color: rgba(0,0,0,.45);"
+		role="presentation"
+		onclick={() => { if (!eyeBusyId) hideConfirm = null; }}
+		onkeydown={(e) => { if (e.key === 'Escape' && !eyeBusyId) hideConfirm = null; }}
+	>
+		<dialog open class="app-card my-8 w-full max-w-[460px] p-5" aria-label={tr('Sembunyikan dari katalog klien')} onclick={(e) => e.stopPropagation()}>
+			<h2 class="text-lg font-semibold">{tr('Sembunyikan dari katalog klien?')}</h2>
+			<p class="mt-2 text-sm text-muted-foreground">
+				<strong>{target.name}</strong> {tr('tidak akan tampil dan tidak bisa dipesan klien baru. Order yang sudah berjalan tidak terpengaruh. Anda bisa menampilkannya lagi kapan saja lewat ikon mata.')}
+			</p>
+			<div class="mt-5 flex justify-end gap-2">
+				<button class="app-btn app-btn-soft" type="button" disabled={eyeBusyId !== null} onclick={() => (hideConfirm = null)}>{tr('Batal')}</button>
+				<button class="app-btn app-btn-primary" type="button" disabled={eyeBusyId !== null} onclick={async () => { await setPartnerHidden(target, true); hideConfirm = null; }}>
+					{eyeBusyId ? tr('Menyimpan…') : tr('Sembunyikan')}
+				</button>
+			</div>
+		</dialog>
 	</div>
 {/if}
 
