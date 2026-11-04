@@ -238,6 +238,7 @@
 					<p>{tr('Anda bertanggung jawab memastikan kredensial yang dimasukkan valid dan akun yang terhubung milik media Anda. Tauthub tidak pernah mengubah artikel yang sudah terbit tanpa tindakan Anda.')}</p>
 					<p>{tr('Persetujuan ini dicatat waktunya dan dapat dicabut dengan memutus koneksi di tab terkait.')}</p>
 					<p>{tr('Akses ke media Anda di Tauthub hanya boleh diberikan kepada anggota dengan peran penulis atau maksimal editor. Peran yang lebih tinggi tidak diperbolehkan untuk mengelola media.')}</p>
+					<p>{tr('Untuk koneksi WordPress, akun yang Anda hubungkan sebaiknya berperan Editor. Akun berperan Penulis tetap bisa menerbitkan artikel, tetapi tidak bisa membuat kategori baru di WordPress. Jika kategori artikel belum ada di situs Anda, artikel akan terbit di kategori bawaan (Uncategorized). Anda bisa membuat kategorinya sendiri sekali saja di WordPress, atau menaikkan peran akun menjadi Editor agar kategori terbuat otomatis.')}</p>
 				</div>
 
 				{#if accepted}
