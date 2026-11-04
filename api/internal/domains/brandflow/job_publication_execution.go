@@ -1399,12 +1399,13 @@ func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media
 	}
 	tagNames := peNameList(defaults["tags"])
 	if len(categoryNames) > 0 && (!hasResolved || needsCategories) {
-		ids := peIntListAny(peResolveTermIDs(ctx, baseURL, headers, categoryNames, "categories", create))
+		ids, failures := peResolveTermIDsDetail(ctx, baseURL, headers, categoryNames, "categories", create)
 		if len(ids) > 0 {
-			resolved["categories"] = ids
-		} else if skipCategories := false; !skipCategories {
+			resolved["categories"] = peIntListAny(ids)
+		}
+		if len(failures) > 0 {
 			d.peRecordWarning(ctx, jobID, []string{
-				"Kategori (" + strings.Join(categoryNames, ", ") + ") tidak berhasil dipetakan di WordPress, artikel bisa terbit tanpa kategori.",
+				peCategoryWarning(failures, connection.strOr("username", ""), len(ids) == 0),
 			})
 		}
 	}
@@ -1524,32 +1525,125 @@ func peResolveTermIDs(ctx context.Context, baseURL string, headers map[string]st
 	})
 }
 
+// peTermFailure: satu term yang gagal dipetakan, beserta alasan yang bisa
+// ditindaklanjuti operator/mitra. Forbidden = WordPress menolak membuat term
+// (akun koneksi tidak punya kemampuan manage_categories, biasanya peran Penulis).
+type peTermFailure struct {
+	Name      string
+	Reason    string
+	Forbidden bool
+}
+
 // peResolveOneTerm: resolve satu nama — search, lalu POST create bila
 // diizinkan. 0 berarti tidak ditemukan/gagal dibuat (dilewati tanpa error).
 func peResolveOneTerm(ctx context.Context, baseURL string, headers map[string]string, taxonomy, name string, create bool) int {
+	id, _ := peResolveOneTermDetail(ctx, baseURL, headers, taxonomy, name, create)
+	return id
+}
+
+// peResolveOneTermDetail: seperti peResolveOneTerm, tetapi kegagalan dibawa
+// pulang dengan alasannya. Balasan `term_exists` (term sudah ada dengan slug
+// yang sama tetapi tidak terbaca oleh ?search=) dipakai langsung lewat
+// data.term_id, bukan dihitung gagal.
+func peResolveOneTermDetail(ctx context.Context, baseURL string, headers map[string]string, taxonomy, name string, create bool) (int, *peTermFailure) {
 	if id, found := peFindTermID(ctx, baseURL, headers, taxonomy, name); found {
-		return id
+		return id, nil
 	}
 	if !create {
 		slog.Warn("[brandflow] term WordPress belum ditemukan — dilewati", "taxonomy", taxonomy, "name", name)
-		return 0
+		return 0, &peTermFailure{Name: name, Reason: "belum ada di WordPress dan pembuatan otomatis dimatikan (term_action=search_only)"}
 	}
 	raw, err := json.Marshal(map[string]any{"name": name})
 	if err != nil {
-		return 0
+		return 0, &peTermFailure{Name: name, Reason: err.Error()}
 	}
 	status, text, err := peFetchWPJSON(ctx, baseURL, headers, "wp/v2/"+taxonomy, http.MethodPost, string(raw))
-	if err != nil || status < 200 || status >= 300 {
-		slog.Warn("[brandflow] create term WordPress gagal", "taxonomy", taxonomy, "name", name)
-		return 0
+	if err != nil {
+		slog.Warn("[brandflow] create term WordPress gagal", "taxonomy", taxonomy, "name", name, "err", err)
+		return 0, &peTermFailure{Name: name, Reason: truncateString(err.Error(), 160)}
 	}
-	var created map[string]any
-	if json.Unmarshal([]byte(text), &created) == nil {
-		if id := int(peNumFromAny(created["id"])); id > 0 {
-			return id
+	if status >= 200 && status < 300 {
+		var created map[string]any
+		if json.Unmarshal([]byte(text), &created) == nil {
+			if id := int(peNumFromAny(created["id"])); id > 0 {
+				return id, nil
+			}
+		}
+		return 0, &peTermFailure{Name: name, Reason: "WordPress membalas tanpa id term"}
+	}
+	var wpErr struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Data    struct {
+			Status int `json:"status"`
+			TermID any `json:"term_id"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal([]byte(text), &wpErr)
+	if wpErr.Code == "term_exists" {
+		if id := int(peNumFromAny(wpErr.Data.TermID)); id > 0 {
+			return id, nil
 		}
 	}
-	return 0
+	slog.Warn("[brandflow] create term WordPress gagal", "taxonomy", taxonomy, "name", name,
+		"status", status, "code", wpErr.Code, "message", truncateString(wpErr.Message, 200))
+	forbidden := status == http.StatusUnauthorized || status == http.StatusForbidden || wpErr.Code == "rest_cannot_create"
+	reason := strings.TrimSpace(wpErr.Message)
+	if reason == "" {
+		reason = "HTTP " + strconv.Itoa(status)
+	}
+	return 0, &peTermFailure{Name: name, Reason: truncateString(reason, 160), Forbidden: forbidden}
+}
+
+// peResolveTermIDsDetail: peResolveTermIDs plus daftar term yang gagal
+// (nama unik, urutan kemunculan) untuk disusun jadi peringatan.
+func peResolveTermIDsDetail(ctx context.Context, baseURL string, headers map[string]string, names []string, taxonomy string, create bool) ([]int, []peTermFailure) {
+	var failures []peTermFailure
+	ids := pePlanTermResolution(names, func(name string) int {
+		id, failure := peResolveOneTermDetail(ctx, baseURL, headers, taxonomy, name, create)
+		if failure != nil {
+			failures = append(failures, *failure)
+		}
+		return id
+	})
+	return ids, failures
+}
+
+// peCategoryWarning: kalimat peringatan kategori yang menyebut sebab dan
+// langkah perbaikannya. Kasus paling umum: akun koneksi berperan Penulis,
+// yang boleh menulis post tetapi tidak boleh membuat kategori baru.
+func peCategoryWarning(failures []peTermFailure, username string, noneMapped bool) string {
+	names := make([]string, 0, len(failures))
+	forbidden := false
+	reasons := make([]string, 0, len(failures))
+	for _, f := range failures {
+		names = append(names, `"`+f.Name+`"`)
+		if f.Forbidden {
+			forbidden = true
+		}
+		if f.Reason != "" {
+			reasons = append(reasons, f.Reason)
+		}
+	}
+	label := "Kategori " + strings.Join(names, ", ")
+	tail := "Artikel tetap terbit tanpa kategori tersebut."
+	if noneMapped {
+		tail = "Artikel terbit di kategori bawaan WordPress."
+	}
+	account := "akun koneksi"
+	if username != "" {
+		account = `akun koneksi "` + username + `"`
+	}
+	if forbidden {
+		return label + " belum ada di WordPress dan " + account + " tidak punya izin membuat kategori (peran Penulis). " +
+			tail + " Minta mitra membuat kategori itu di WordPress atau menaikkan peran akun ke Editor, lalu klik \"Sinkron ulang gambar & kategori\"."
+	}
+	detail := ""
+	if len(reasons) > 0 {
+		detail = " (" + strings.Join(reasons, "; ") + ")"
+	}
+	return label + " tidak berhasil dipetakan di WordPress" + detail + ". " + tail +
+		" Setelah kategori tersedia, klik \"Sinkron ulang gambar & kategori\"."
 }
 
 // peTermDedupeSlots: untuk tiap posisi nama, indeks kemunculan PERTAMA nama
@@ -2204,7 +2298,27 @@ func (d *Deps) peRecordWarning(ctx context.Context, jobID string, lines []string
 	if jobID == "" || len(lines) == 0 {
 		return
 	}
-	message := truncateString(strings.Join(lines, " | "), 500)
+	// Peringatan yang sudah tercatat pada job ini dipertahankan (kategori lalu
+	// gambar, misalnya), dengan baris identik tidak diulang saat job dicoba lagi.
+	existing := ""
+	if row, err := d.queryRow(ctx, "SELECT warning_message FROM publication_jobs WHERE id = $1", jobID); err == nil && row != nil {
+		existing = strings.TrimSpace(row.strOr("warning_message", ""))
+	}
+	merged := make([]string, 0, len(lines)+4)
+	seen := map[string]bool{}
+	for _, line := range strings.Split(existing, " | ") {
+		if line = strings.TrimSpace(line); line != "" && !seen[line] {
+			seen[line] = true
+			merged = append(merged, line)
+		}
+	}
+	for _, line := range lines {
+		if line = strings.TrimSpace(line); line != "" && !seen[line] {
+			seen[line] = true
+			merged = append(merged, line)
+		}
+	}
+	message := truncateString(strings.Join(merged, " | "), 500)
 	if err := d.exec(ctx, "UPDATE publication_jobs SET warning_message = $1 WHERE id = $2", message, jobID); err != nil {
 		slog.Warn("[brandflow] gagal mencatat warning publikasi", "job", jobID, "err", err)
 	}

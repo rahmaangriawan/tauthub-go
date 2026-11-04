@@ -404,7 +404,8 @@ func (d *Deps) bsTestWordPress(ctx context.Context, conn bsRow) (string, string)
 		Slug string `json:"slug"`
 		Name string `json:"name"`
 		Cap  *struct {
-			EditPosts bool `json:"edit_posts"`
+			EditPosts        bool `json:"edit_posts"`
+			ManageCategories bool `json:"manage_categories"`
 		} `json:"capabilities"`
 	}
 	if err := json.Unmarshal([]byte(body), &profile); err != nil {
@@ -419,6 +420,9 @@ func (d *Deps) bsTestWordPress(ctx context.Context, conn bsRow) (string, string)
 	}
 	if profile.Cap == nil || !profile.Cap.EditPosts {
 		return "error", truncateString(fmt.Sprintf("WordPress authenticated as %s, but edit_posts is denied", who), 500)
+	}
+	if !profile.Cap.ManageCategories {
+		return "ok", fmt.Sprintf("Connected as %s with post creation permission. Akun ini tidak bisa membuat kategori baru (peran Penulis), artikel hanya masuk kategori yang sudah ada", who)
 	}
 	return "ok", fmt.Sprintf("Connected as %s with post creation permission", who)
 }

@@ -3892,8 +3892,9 @@ export const PHRASE_EN: Record<string, string> = {
   "Tidak ada peringatan pengiriman.": "No delivery warnings.",
   "Unggah ulang gambar artikel ke media mitra dan pasang gambar utama pada post yang sudah terbit (post mitra diperbarui, bukan dibuat baru).":
     "Re-upload the article images to the partner media library and set the featured image on the already-published post (the partner post is updated, not duplicated).",
-  "Artikel tetap terbit, tetapi ada bagian yang tidak sempurna — misalnya gambar gagal diunggah ke media mitra. Buka detail publikasi untuk memperbaiki gambarnya.":
-    "The article was still published, but something was incomplete — for example images failed to upload to the partner media library. Open the publication detail to repair its images.",
+  "Artikel tetap terbit, tetapi ada bagian yang tidak sempurna — misalnya gambar gagal diunggah atau kategori tidak bisa dibuat di media mitra. Buka detail publikasi untuk menyinkronkan ulang gambar dan kategorinya.":
+    "The article was still published, but something was incomplete — for example images failed to upload or a category could not be created on the partner site. Open the publication detail to resync its images and categories.",
+  "Buka publikasi": "Open publication",
 	"Profiler": "Profiler",
 	"Profiler Baru": "New Profiler",
 	"Cari Profiler…": "Search Profiler…",

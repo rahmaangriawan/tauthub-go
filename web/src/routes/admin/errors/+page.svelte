@@ -341,7 +341,7 @@
 		<div class="app-card mt-4 p-4">
 			<h2 class="text-sm font-semibold">{tr('Peringatan pengiriman')}</h2>
 			<p class="mt-1 text-xs text-muted-foreground">
-				{tr('Artikel tetap terbit, tetapi ada bagian yang tidak sempurna — misalnya gambar gagal diunggah ke media mitra. Buka detail publikasi untuk memperbaiki gambarnya.')}
+				{tr('Artikel tetap terbit, tetapi ada bagian yang tidak sempurna — misalnya gambar gagal diunggah atau kategori tidak bisa dibuat di media mitra. Buka detail publikasi untuk menyinkronkan ulang gambar dan kategorinya.')}
 			</p>
 			<div class="mt-2 overflow-x-auto">
 				<table class="w-full text-sm" style="min-width: 900px;">
@@ -366,7 +366,7 @@
 										<a
 											class="text-xs underline"
 											style="color: var(--primary);"
-											href="/admin/publications/{row.publication_id}">{tr('Perbaiki gambar')}</a>
+											href="/admin/publications/{row.publication_id}">{tr('Buka publikasi')}</a>
 									{/if}
 								</td>
 							</tr>

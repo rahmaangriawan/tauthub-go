@@ -1407,6 +1407,12 @@ func (d *Deps) testWordPress(r *http.Request, baseURL, username, secret string) 
 			"message": "WordPress authenticated as " + label + ", but edit_posts is denied"}
 	}
 	label := firstStringField(profile, "slug", "name", "username")
+	if capabilities["manage_categories"] != true {
+		// Peran Penulis boleh menulis post tetapi tidak boleh membuat kategori:
+		// kategori rilis yang belum ada di situs mitra tidak akan terpasang.
+		return map[string]any{"status": "ok",
+			"message": "Connected as " + label + " with post creation permission. Akun ini tidak bisa membuat kategori baru (peran Penulis), artikel hanya masuk kategori yang sudah ada"}
+	}
 	return map[string]any{"status": "ok",
 		"message": "Connected as " + label + " with post creation permission"}
 }
