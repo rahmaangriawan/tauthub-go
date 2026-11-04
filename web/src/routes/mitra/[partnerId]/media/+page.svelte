@@ -2258,14 +2258,14 @@
 						<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 						<!-- ════════ KOLOM KIRI (7 cols ~58%) ════════ -->
 						<div class="lg:col-span-7 space-y-5">
-							<!-- 1. Identitas media -->
+							<!-- Identitas media -->
 							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
 								<div class="flex items-center gap-3">
 									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
 										<Building2 size={18} />
 									</div>
 									<div>
-										<h3 class="text-sm font-bold text-slate-900"><span class="mr-1.5 text-xs font-semibold text-muted-foreground tabular-nums">1</span>{tr('Identitas media')}</h3>
+										<h3 class="text-sm font-bold text-slate-900">{tr('Identitas media')}</h3>
 										<p class="text-xs text-muted-foreground">{tr('Yang dilihat klien di katalog: nama, domain, jenis, kategori, dan contoh artikel.')}</p>
 									</div>
 								</div>
@@ -2462,14 +2462,14 @@
 									</p>
 							</section>
 
-							<!-- 2. Ketentuan redaksi -->
+							<!-- Ketentuan redaksi -->
 							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
 								<div class="flex items-center gap-3">
 									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
 										<FileText size={18} />
 									</div>
 									<div>
-										<h3 class="text-sm font-bold text-slate-900"><span class="mr-1.5 text-xs font-semibold text-muted-foreground tabular-nums">2</span>{tr('Ketentuan redaksi')}</h3>
+										<h3 class="text-sm font-bold text-slate-900">{tr('Ketentuan redaksi')}</h3>
 										<p class="text-xs text-muted-foreground">{tr('Aturan naskah yang diterima media ini.')}</p>
 									</div>
 								</div>
@@ -2614,14 +2614,98 @@
 								</div>
 							</section>
 
-							<!-- 3. Backlink & SEO -->
+<!-- Kesimpulan Website: di HP bagian ini dipindah ke paling bawah form. -->
+								<div class="hidden lg:block">{@render summarySection()}</div>
+						</div>
+
+						<!-- ════════ KOLOM KANAN (5 cols ~42%) ════════ -->
+						<div class="lg:col-span-5 space-y-5">
+							<!-- Integrasi & publikasi -->
+							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
+								<div class="flex items-center gap-3">
+									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
+										<Layers size={18} />
+									</div>
+									<div>
+										<h3 class="text-sm font-bold text-slate-900">{tr('Integrasi & publikasi')}</h3>
+										<p class="text-xs text-muted-foreground">{tr('Cara naskah masuk ke media: manual atau lewat API.')}</p>
+									</div>
+								</div>
+
+									<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
+										{#each [
+											{ v: 'draft', label: tr('Manual'), helper: 'Mitra copy-paste artikel ke web-nya sendiri dan input URL publikasi di artikel klien. Status jadi Terbit otomatis saat URL dikirim.' },
+											{ v: 'publish', label: tr('API'), helper: 'Artikel di-push otomatis ke WordPress/Blogger/Custom Web. Status jadi Terbit otomatis setelah klik ACC.' }
+										] as opt (opt.v)}
+											{@const active = form.publication_mode === opt.v}
+											<button
+												type="button"
+												class="rounded-xl border p-3.5 text-left transition cursor-pointer flex flex-col justify-between"
+												style="border-color: {active ? 'var(--primary)' : 'var(--border)'}; background: {active ? 'var(--accent)' : 'var(--card)'};"
+												onclick={() => (form.publication_mode = opt.v)}
+											>
+												<div>
+													<div class="flex items-center gap-2 mb-1.5">
+														<span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors" style="border-color: {active ? 'var(--primary)' : 'var(--muted-foreground)'};">
+															{#if active}<span class="h-2 w-2 rounded-full" style="background: var(--primary);"></span>{/if}
+														</span>
+														<span class="text-sm font-bold text-slate-900">{tr(opt.label)}</span>
+													</div>
+													<p class="text-xs text-muted-foreground leading-snug">{tr(opt.helper)}</p>
+												</div>
+											</button>
+										{/each}
+									</div>
+
+									{#if form.publication_mode === 'publish'}
+										<div class="space-y-2.5 pt-1">
+											<div class="text-xs font-semibold text-slate-700">{tr('Platform Tujuan')}</div>
+											<div class="flex flex-wrap items-center gap-2">
+												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'wordpress'} class:app-btn-soft={form.integration_type !== 'wordpress'} onclick={() => (form.integration_type = 'wordpress')}>WordPress</button>
+												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'blogger'} class:app-btn-soft={form.integration_type !== 'blogger'} onclick={() => (form.integration_type = 'blogger')}>Blogger</button>
+												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'custom_web'} class:app-btn-soft={form.integration_type !== 'custom_web'} onclick={() => (form.integration_type = 'custom_web')}>Custom Web</button>
+												<span class="text-xs text-muted-foreground">
+													{form.integration_type === 'wordpress' ? tr('Butuh koneksi WordPress') : form.integration_type === 'blogger' ? tr('Butuh koneksi Blogger') : tr('Butuh endpoint API')}
+												</span>
+											</div>
+											{#if form.integration_type === 'wordpress'}
+												<div class="flex items-start gap-2 rounded-xl p-3 text-xs bg-blue-50 text-blue-800 border border-blue-100">
+													<Info size={14} class="mt-0.5 shrink-0 text-blue-600" />
+													<span>{tr('Domain perlu di-ACC Admin terlebih dahulu, setelah disetujui silakan koneksikan di halaman')} <a class="underline font-semibold" href={`${base}/connections`}>{tr('WordPress')}</a>.</span>
+												</div>
+											{:else if form.integration_type === 'blogger'}
+												<div class="flex items-start gap-2 rounded-xl p-3 text-xs bg-blue-50 text-blue-800 border border-blue-100">
+													<Info size={14} class="mt-0.5 shrink-0 text-blue-600" />
+													<span>{tr('Hubungkan akun Google dan pilih blog di halaman')} <a class="underline font-semibold" href={`${base}/blogger`}>{tr('Blogger')}</a> {tr('setelah media ini disetujui Admin.')}</span>
+												</div>
+											{:else if form.integration_type === 'custom_web'}
+												<div class="flex items-start gap-2 rounded-xl p-3 text-xs bg-amber-50 text-amber-800 border border-amber-200/70">
+													<TriangleAlert size={14} class="mt-0.5 shrink-0 text-amber-600" />
+													<span>{tr('Endpoint URL, API Key, dan Test Connection diatur di halaman')} <a class="underline font-semibold" href={`${base}/publishing-api`}>{tr('Web Custom')}</a> {tr('setelah media ini disetujui Admin.')}</span>
+												</div>
+											{/if}
+											<div class="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
+												<label class="flex cursor-pointer items-start gap-2 text-xs text-slate-700">
+													<input type="checkbox" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20" checked={integrasiConsent} onchange={(e) => (integrasiConsent = (e.currentTarget as HTMLInputElement).checked)} />
+													<span>
+														{tr('Saya telah membaca dan menyetujui')}
+														<a href="https://tauthub.com/kerja-sama-mitra/" target="_blank" rel="noreferrer" class="underline font-semibold text-primary">{tr('Ketentuan Kerja Sama Mitra')}</a>
+														{tr('untuk mode integrasi. Wajib dicentang sebelum media dapat disimpan.')}
+													</span>
+												</label>
+											</div>
+										</div>
+									{/if}
+							</section>
+
+							<!-- Backlink & SEO (kolom kanan, di bawah Integrasi) -->
 							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
 								<div class="flex items-center gap-3">
 									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
 										<Link2 size={18} />
 									</div>
 									<div>
-										<h3 class="text-sm font-bold text-slate-900"><span class="mr-1.5 text-xs font-semibold text-muted-foreground tabular-nums">3</span>{tr('Backlink & SEO')}</h3>
+										<h3 class="text-sm font-bold text-slate-900">{tr('Backlink & SEO')}</h3>
 										<p class="text-xs text-muted-foreground">{tr('Ketentuan tautan keluar yang dicari tim SEO klien.')}</p>
 									</div>
 								</div>
@@ -2712,99 +2796,14 @@
 								</div>
 							</section>
 
-								<!-- Kesimpulan Website: di HP bagian ini dipindah ke paling bawah form. -->
-								<div class="hidden lg:block">{@render summarySection()}</div>
-						</div>
-
-						<!-- ════════ KOLOM KANAN (5 cols ~42%) ════════ -->
-						<div class="lg:col-span-5 space-y-5">
-							<!-- 4. Integrasi & publikasi -->
-							<section class="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-4 shadow-sm">
-								<div class="flex items-center gap-3">
-									<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/50">
-										<Layers size={18} />
-									</div>
-									<div>
-										<h3 class="text-sm font-bold text-slate-900"><span class="mr-1.5 text-xs font-semibold text-muted-foreground tabular-nums">4</span>{tr('Integrasi & publikasi')}</h3>
-										<p class="text-xs text-muted-foreground">{tr('Cara naskah masuk ke media: manual atau lewat API.')}</p>
-									</div>
-								</div>
-
-									<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
-										{#each [
-											{ v: 'draft', label: tr('Manual'), helper: 'Mitra copy-paste artikel ke web-nya sendiri dan input URL publikasi di artikel klien. Status jadi Terbit otomatis saat URL dikirim.' },
-											{ v: 'publish', label: tr('API'), helper: 'Artikel di-push otomatis ke WordPress/Blogger/Custom Web. Status jadi Terbit otomatis setelah klik ACC.' }
-										] as opt (opt.v)}
-											{@const active = form.publication_mode === opt.v}
-											<button
-												type="button"
-												class="rounded-xl border p-3.5 text-left transition cursor-pointer flex flex-col justify-between"
-												style="border-color: {active ? 'var(--primary)' : 'var(--border)'}; background: {active ? 'var(--accent)' : 'var(--card)'};"
-												onclick={() => (form.publication_mode = opt.v)}
-											>
-												<div>
-													<div class="flex items-center gap-2 mb-1.5">
-														<span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors" style="border-color: {active ? 'var(--primary)' : 'var(--muted-foreground)'};">
-															{#if active}<span class="h-2 w-2 rounded-full" style="background: var(--primary);"></span>{/if}
-														</span>
-														<span class="text-sm font-bold text-slate-900">{tr(opt.label)}</span>
-													</div>
-													<p class="text-xs text-muted-foreground leading-snug">{tr(opt.helper)}</p>
-												</div>
-											</button>
-										{/each}
-									</div>
-
-									{#if form.publication_mode === 'publish'}
-										<div class="space-y-2.5 pt-1">
-											<div class="text-xs font-semibold text-slate-700">{tr('Platform Tujuan')}</div>
-											<div class="flex flex-wrap items-center gap-2">
-												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'wordpress'} class:app-btn-soft={form.integration_type !== 'wordpress'} onclick={() => (form.integration_type = 'wordpress')}>WordPress</button>
-												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'blogger'} class:app-btn-soft={form.integration_type !== 'blogger'} onclick={() => (form.integration_type = 'blogger')}>Blogger</button>
-												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'custom_web'} class:app-btn-soft={form.integration_type !== 'custom_web'} onclick={() => (form.integration_type = 'custom_web')}>Custom Web</button>
-												<span class="text-xs text-muted-foreground">
-													{form.integration_type === 'wordpress' ? tr('Butuh koneksi WordPress') : form.integration_type === 'blogger' ? tr('Butuh koneksi Blogger') : tr('Butuh endpoint API')}
-												</span>
-											</div>
-											{#if form.integration_type === 'wordpress'}
-												<div class="flex items-start gap-2 rounded-xl p-3 text-xs bg-blue-50 text-blue-800 border border-blue-100">
-													<Info size={14} class="mt-0.5 shrink-0 text-blue-600" />
-													<span>{tr('Domain perlu di-ACC Admin terlebih dahulu, setelah disetujui silakan koneksikan di halaman')} <a class="underline font-semibold" href={`${base}/connections`}>{tr('WordPress')}</a>.</span>
-												</div>
-											{:else if form.integration_type === 'blogger'}
-												<div class="flex items-start gap-2 rounded-xl p-3 text-xs bg-blue-50 text-blue-800 border border-blue-100">
-													<Info size={14} class="mt-0.5 shrink-0 text-blue-600" />
-													<span>{tr('Hubungkan akun Google dan pilih blog di halaman')} <a class="underline font-semibold" href={`${base}/blogger`}>{tr('Blogger')}</a> {tr('setelah media ini disetujui Admin.')}</span>
-												</div>
-											{:else if form.integration_type === 'custom_web'}
-												<div class="flex items-start gap-2 rounded-xl p-3 text-xs bg-amber-50 text-amber-800 border border-amber-200/70">
-													<TriangleAlert size={14} class="mt-0.5 shrink-0 text-amber-600" />
-													<span>{tr('Endpoint URL, API Key, dan Test Connection diatur di halaman')} <a class="underline font-semibold" href={`${base}/publishing-api`}>{tr('Web Custom')}</a> {tr('setelah media ini disetujui Admin.')}</span>
-												</div>
-											{/if}
-											<div class="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
-												<label class="flex cursor-pointer items-start gap-2 text-xs text-slate-700">
-													<input type="checkbox" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20" checked={integrasiConsent} onchange={(e) => (integrasiConsent = (e.currentTarget as HTMLInputElement).checked)} />
-													<span>
-														{tr('Saya telah membaca dan menyetujui')}
-														<a href="https://tauthub.com/kerja-sama-mitra/" target="_blank" rel="noreferrer" class="underline font-semibold text-primary">{tr('Ketentuan Kerja Sama Mitra')}</a>
-														{tr('untuk mode integrasi. Wajib dicentang sebelum media dapat disimpan.')}
-													</span>
-												</label>
-											</div>
-										</div>
-									{/if}
-							</section>
-
-							<!-- 5. Harga & kerja sama -->
-								<!-- 3. Harga & model kerja sama -->
+							<!-- Harga & kerja sama -->
 								<section class="rounded-2xl border border-emerald-200/80 bg-white p-5 space-y-4 shadow-sm">
 									<div class="flex items-center gap-3">
 										<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100/50">
 											<Wallet size={18} />
 										</div>
 										<div>
-											<h3 class="text-sm font-bold text-slate-900"><span class="mr-1.5 text-xs font-semibold text-muted-foreground tabular-nums">5</span>{tr('Harga & kerja sama')}</h3>
+											<h3 class="text-sm font-bold text-slate-900">{tr('Harga & kerja sama')}</h3>
 											<p class="text-xs text-muted-foreground">{tr('Harga dan kesepakatan untuk kerja sama publikasi.')}</p>
 										</div>
 									</div>
