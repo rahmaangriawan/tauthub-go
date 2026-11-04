@@ -745,3 +745,18 @@
   transform: translateX(-50%) translateY(0);
 }
 .auth-tip-row b { font-weight: 600; }
+
+/* Verifikasi email (OTP) saat daftar: email terkunci + tombol kirim ulang. */
+.auth-static {
+	display: flex; align-items: center; justify-content: space-between; gap: 10px;
+	min-height: 44px; padding: 0 14px; border: 1px solid #e3e7ed; border-radius: 10px;
+	background: #f9fafb; font-size: 14px; color: var(--auth-text, #111827);
+}
+.auth-static span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.auth-static .auth-link { flex: none; font-size: 12.5px; }
+.auth-static--ok { border-color: #bfe3cc; background: #f1faf4; color: #1f6b3b; }
+.auth-static--ok svg { flex: none; }
+.auth-resend { margin: 0; font-size: 12.5px; color: var(--auth-muted); }
+.auth-resend .auth-link { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.auth-resend .auth-link:disabled { color: var(--auth-muted); cursor: default; text-decoration: none; }
+.auth-input--code { font-size: 22px; letter-spacing: 8px; text-align: center; font-variant-numeric: tabular-nums; }

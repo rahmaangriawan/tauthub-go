@@ -123,6 +123,7 @@
 			await load();
 			loading = false;
 			void loadTotals();
+			void loadBlocks();
 			const me = await apiRequest('/v1/platform/admins/me');
 			if (me.ok) {
 				const data = await me.json();
@@ -183,6 +184,37 @@
 			}
 		}
 	});
+
+	// Email yang diblokir dari pendaftaran karena OTP tidak dijawab 48 jam.
+	type RegBlock = { email: string; reason: string; blocked_at: string | null };
+	let blocks = $state<RegBlock[]>([]);
+	let blocksError = $state('');
+	let unblocking = $state<string | null>(null);
+
+	async function loadBlocks() {
+		blocksError = '';
+		const res = await apiRequest('/v1/platform/operations/registration-blocks');
+		if (!res.ok) {
+			// Akun tanpa akses platform: kartu disembunyikan saja.
+			blocks = [];
+			return;
+		}
+		const data = (await res.json()) as { items?: RegBlock[] };
+		blocks = data.items ?? [];
+	}
+
+	async function unblock(email: string) {
+		unblocking = email;
+		blocksError = '';
+		const res = await apiRequest('/v1/platform/operations/registration-blocks', {
+			method: 'DELETE',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ email })
+		});
+		if (res.ok) blocks = blocks.filter((b) => b.email !== email);
+		else blocksError = await platformError(res);
+		unblocking = null;
+	}
 
 	function submitSearch(e: SubmitEvent) {
 		e.preventDefault();
@@ -694,6 +726,41 @@
 					onChange={(next) => (pageNum = Math.floor(next / PAGE_SIZE) + 1)}
 				/>
 			</div>
+		</div>
+	{/if}
+
+	{#if blocks.length > 0}
+		<div class="app-card mt-6 overflow-x-auto">
+			<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style="border-color: var(--border);">
+				<div>
+					<h2 class="text-sm font-medium">{tr('Email diblokir dari pendaftaran')}</h2>
+					<p class="mt-0.5 text-xs text-muted-foreground">{tr('Meminta kode verifikasi tetapi tidak menyelesaikannya dalam 2×24 jam. Buka blokir bila pemiliknya memang orang asli.')}</p>
+				</div>
+				<span class="text-xs text-muted-foreground tabular-nums">{fmtNum(blocks.length)} {tr('email')}</span>
+			</div>
+			{#if blocksError}<p class="px-4 pt-3 text-xs" style="color: var(--destructive);">{blocksError}</p>{/if}
+			<table class="admin-table w-full text-sm">
+				<thead>
+					<tr class="text-left text-xs text-muted-foreground">
+						<th class="px-4 py-2.5 font-medium">Email</th>
+						<th class="px-4 py-2.5 font-medium">{tr('Diblokir')}</th>
+						<th class="px-4 py-2.5 text-right font-medium">Aksi</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each blocks as b (b.email)}
+						<tr class="border-t">
+							<td class="px-4 py-2.5 font-mono text-xs">{b.email}</td>
+							<td class="px-4 py-2.5 text-xs text-muted-foreground">{b.blocked_at ? fmtDate(b.blocked_at) : '—'}</td>
+							<td class="px-4 py-2.5 text-right">
+								<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={unblocking === b.email} onclick={() => void unblock(b.email)}>
+									{unblocking === b.email ? tr('Membuka…') : tr('Buka blokir')}
+								</button>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
 		</div>
 	{/if}
 </section>

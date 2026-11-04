@@ -66,6 +66,8 @@ var policies = map[string]ChannelPolicy{
 	"security.password_changed":     {InApp: false, Push: false, Email: ModeImmediate, WA: ModeOff, Tier: TierSecurity},
 	"security.account_invite":       {InApp: false, Push: false, Email: ModeImmediate, WA: ModeOff, Tier: TierSecurity},
 	"security.admin_password_reset": {InApp: false, Push: false, Email: ModeImmediate, WA: ModeOff, Tier: TierSecurity},
+	// Notifikasi login: email + WA pada setiap login berhasil.
+	"security.login": {InApp: false, Push: false, Email: ModeImmediate, WA: ModeImmediate, Tier: TierSecurity},
 
 	// --- Tier 1: uang ---------------------------------------------------
 	//

@@ -1,6 +1,7 @@
 package authdomain
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -98,6 +99,11 @@ func (d *Deps) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !u.IsActive {
+		if d.isSuspendedPartner(r.Context(), u.ID) {
+			d.auditLogin(r, &u.ID, email, false, ip, "suspended")
+			httpx.Error(w, http.StatusForbidden, suspendedMessage)
+			return
+		}
 		d.auditLogin(r, &u.ID, email, false, ip, "inactive")
 		httpx.Error(w, http.StatusUnauthorized, "Invalid email or password")
 		return
@@ -148,6 +154,18 @@ func (d *Deps) Login(w http.ResponseWriter, r *http.Request) {
 	d.issueSession(w, r, u.ID, SessionUser{
 		ID: u.ID, Email: u.Email, Role: u.Role, DisplayName: u.DisplayName, CreatedAt: &u.CreatedAt,
 	}, http.StatusOK)
+}
+
+// suspendedMessage: akun mitra ditangguhkan admin (partners.status = inactive).
+const suspendedMessage = "Akun Anda ditangguhkan. Hubungi care@tauthub.com."
+
+// isSuspendedPartner: user nonaktif yang partnernya berstatus inactive →
+// pesan "ditangguhkan" (bukan "email/password salah").
+func (d *Deps) isSuspendedPartner(ctx context.Context, userID string) bool {
+	var one int
+	err := d.Pool.QueryRow(ctx,
+		"SELECT 1 FROM partners WHERE user_id = $1 AND status = 'inactive' LIMIT 1", userID).Scan(&one)
+	return err == nil
 }
 
 func writeRateErr(w http.ResponseWriter, err error) {

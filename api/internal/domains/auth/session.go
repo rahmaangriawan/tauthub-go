@@ -60,13 +60,18 @@ func (d *Deps) issueSession(w http.ResponseWriter, r *http.Request, userID strin
 	}
 	d.Auth.InvalidateAuthCache(userID)
 	sessionID := uuid.NewString()
+	ip := authRequestIp(r)
+	ua := r.UserAgent()
 	if _, err := d.Pool.Exec(ctx,
-		"INSERT INTO user_sessions (id, user_id, refresh_jti, expires_at, revoked, created_at) VALUES ($1, $2, $3, $4, FALSE, NOW())",
-		sessionID, userID, pair.RefreshJTI, sessionExpires,
+		"INSERT INTO user_sessions (id, user_id, refresh_jti, expires_at, revoked, created_at, ip, user_agent) VALUES ($1, $2, $3, $4, FALSE, NOW(), $5, $6)",
+		sessionID, userID, pair.RefreshJTI, sessionExpires, nullIfEmpty(ip), nullIfEmpty(ua),
 	); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, httpx.Scrub500(d.Cfg.AppEnv, err.Error()))
 		return
 	}
+	// Notifikasi "login baru" (email + WA) pada setiap sesi yang terbit:
+	// password, 2FA, dan Google semuanya lewat sini. Best-effort di latar.
+	go d.notifyLogin(sessionID, user, ip, ua, time.Now())
 	tokenPairResponse(w, d.Cfg, pair, user, status)
 }
 

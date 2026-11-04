@@ -396,7 +396,15 @@ func (d *Deps) GoogleExchangeSession(w http.ResponseWriter, r *http.Request) {
 	err := d.Pool.QueryRow(r.Context(),
 		"SELECT id, email, display_name, role, is_active, approved_at FROM users WHERE id = $1 LIMIT 1",
 		uid).Scan(&id, &email, &displayName, &role, &isActive, &approvedAt)
-	if err != nil || !isActive {
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, "Akun tidak ditemukan atau dinonaktifkan.")
+		return
+	}
+	if !isActive {
+		if d.isSuspendedPartner(r.Context(), id) {
+			httpx.Error(w, http.StatusForbidden, suspendedMessage)
+			return
+		}
 		httpx.Error(w, http.StatusNotFound, "Akun tidak ditemukan atau dinonaktifkan.")
 		return
 	}

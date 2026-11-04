@@ -2,6 +2,7 @@ package authdomain
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -20,6 +21,9 @@ import (
 const regDeviceCookie = "reg_device"
 const regDeviceMaxAge = 60 * 60 * 24 * 365
 
+// errEmailTicket: tiket verifikasi email tidak sah/kedaluwarsa saat diklaim di tx.
+var errEmailTicket = errors.New("email ticket invalid")
+
 type registerBody struct {
 	Email           string  `json:"email"`
 	Password        string  `json:"password"`
@@ -28,6 +32,10 @@ type registerBody struct {
 	PartnerCategory *string `json:"partner_category"`
 	ReferralCode    *string `json:"referral_code"`
 	TurnstileToken  *string `json:"turnstile_token"`
+	// EmailTicket: hasil /auth/register/verify-code. Wajib — email harus
+	// diverifikasi sebelum akun dibuat. Pendaftaran Google lewat GoogleComplete
+	// (bukan handler ini) dan tidak memerlukannya.
+	EmailTicket string `json:"email_ticket"`
 }
 
 func readCookie(r *http.Request, name string) string {
@@ -113,6 +121,10 @@ func (d *Deps) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := auth.CheckRate(r.Context(), d.Pool, "register:email:"+email, 5, 3600); err != nil {
 		writeRateErr(w, err)
+		return
+	}
+	if strings.TrimSpace(body.EmailTicket) == "" || auth.IsRegistrationEmailBlocked(r.Context(), d.Pool, email) {
+		httpx.Error(w, http.StatusUnprocessableEntity, emailTicketMsgInvalid)
 		return
 	}
 
@@ -219,6 +231,11 @@ func (d *Deps) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	txErr := db.WithPoolTx(r.Context(), d.Pool, func(tx pgx.Tx) error {
+		// Tiket dihanguskan di sini, bukan di awal handler: bila INSERT gagal
+		// (mis. gangguan sementara), tiket masih bisa dipakai ulang.
+		if !auth.ClaimEmailTicket(r.Context(), tx, d.Cfg.Secret, email, body.EmailTicket) {
+			return errEmailTicket
+		}
 		if _, err := tx.Exec(r.Context(),
 			"INSERT INTO users (id, email, password_hash, display_name, role, registration_source, is_active, approved_at, created_at) VALUES ($1, $2, $3, $4, $5, 'public', TRUE, NOW(), NOW())",
 			userID, email, passwordHash, displayName, role); err != nil {
@@ -238,6 +255,10 @@ func (d *Deps) Register(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if txErr != nil {
+		if txErr == errEmailTicket {
+			httpx.Error(w, http.StatusUnprocessableEntity, emailTicketMsgInvalid)
+			return
+		}
 		if strings.Contains(strings.ToLower(txErr.Error()), "duplicate key") {
 			// race email unik → perlakukan seperti existing (parity anti-enumerasi)
 			d.setRegDeviceCookie(w, deviceID)

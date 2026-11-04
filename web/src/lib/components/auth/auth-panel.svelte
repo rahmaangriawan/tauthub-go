@@ -43,13 +43,26 @@
 	let success = $state('');
 
 	// Error per-field: hanya untuk validasi klien (brief §12: pesan dekat field).
-	let fieldErrors = $state<{ displayName?: string; email?: string; password?: string }>({});
-
-	// 2FA step-2
+	let fieldErrors = $state<{ displayName?: string; email?: string; password?: string }>({});	// 2FA step-2
 	let challenge = $state<string | null>(null);
 	let twoFactorCode = $state('');
 
-	// Turnstile (parity: token single-use, reset + render ulang setiap dipakai).
+	// Daftar lewat email: email → kode OTP 6 digit → nama/password. Akun baru
+	// dibuat setelah kode benar; tiketnya dibawa ke /v1/auth/register.
+	type RegStep = 'email' | 'code' | 'details';
+	let regStep = $state<RegStep>('email');
+	let otpCode = $state('');
+	let emailTicket = $state('');
+	let verifiedEmail = $state('');
+	let resendAt = $state(0);
+	let nowTick = $state(Date.now());
+	$effect(() => {
+		if (mode !== 'register' || regStep !== 'code') return;
+		const t = setInterval(() => (nowTick = Date.now()), 1000);
+		return () => clearInterval(t);
+	});
+	const resendLeft = $derived(Math.max(0, Math.ceil((resendAt - nowTick) / 1000)));
+// Turnstile (parity: token single-use, reset + render ulang setiap dipakai).
 	let turnstileEnabled = $state(false);
 	let turnstileSiteKey = $state('');
 	let turnstileToken = $state('');
@@ -57,6 +70,11 @@
 	let verified = $state(false);
 
 	let googleBusy = $state(false);
+
+	// Turnstile hanya menjaga langkah yang mengirim sesuatu ke publik: login dan
+	// minta/kirim-ulang kode. Verifikasi kode dan form akhir tidak memerlukannya.
+	const needsTurnstile = $derived(turnstileEnabled && !challenge && (mode === 'login' || regStep !== 'details'));
+	const turnstileBlocks = $derived(turnstileEnabled && !turnstileToken && !challenge && (mode === 'login' || regStep === 'email'));
 
 	const home = (r?: string) => resolveHomeRoute(r);
 
@@ -80,14 +98,89 @@
 	$effect(() => {
 		if (modeParam === 'register') mode = 'register';
 		else if (modeParam === 'login') mode = 'login';
+	});	// /register-role mengembalikan ke sini saat tiket OTP kedaluwarsa.
+	$effect(() => {
+		if (page.url.searchParams.get('otp') === 'expired') {
+			mode = 'register';
+			error = tr('Verifikasi email kedaluwarsa. Minta kode baru.');
+		}
 	});
+
+	function changeEmail() {
+		regStep = 'email';
+		otpCode = '';
+		emailTicket = '';
+		verifiedEmail = '';
+		success = '';
+		error = '';
+		fieldErrors = {};
+		resetTurnstile();
+	}
+
+	async function requestCode() {
+		const target = email.trim().toLowerCase();
+		const res = await fetch('/v1/auth/register/request-code', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ email: target, turnstile_token: turnstileToken || undefined })
+		});
+		if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengirim kode. Coba lagi.')));
+		const data = (await res.json()) as { retry_after?: number };
+		regStep = 'code';
+		otpCode = '';
+		fieldErrors = {};
+		resendAt = Date.now() + (data.retry_after ?? 60) * 1000;
+		success = `${tr('Kode verifikasi dikirim ke')} ${target}. ${tr('Cek kotak masuk dan folder spam.')}`;
+		resetTurnstile();
+	}
+
+	async function resendCode() {
+		if (busy || resendLeft > 0) return;
+		if (turnstileEnabled && !turnstileToken) {
+			error = tr('Selesaikan verifikasi keamanan untuk melanjutkan.');
+			return;
+		}
+		busy = true;
+		error = '';
+		try {
+			await requestCode();
+		} catch (reason) {
+			error = authErrorMessage(reason);
+			resetTurnstile();
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function verifyCode() {
+		const code = otpCode.trim();
+		if (!/^\d{6}$/.test(code)) {
+			error = tr('Kode harus 6 digit.');
+			return;
+		}
+		const res = await fetch('/v1/auth/register/verify-code', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ email: email.trim().toLowerCase(), code })
+		});
+		if (!res.ok) throw new Error(await readApiError(res, tr('Kode salah atau sudah kedaluwarsa.')));
+		const data = (await res.json()) as { ticket?: string };
+		if (!data.ticket) throw new Error(tr('Kode salah atau sudah kedaluwarsa.'));
+		emailTicket = data.ticket;
+		verifiedEmail = email.trim().toLowerCase();
+		regStep = 'details';
+		success = '';
+	}
 
 	function switchMode(next: Mode) {
 		if (mode === next) return;
 		mode = next;
 		error = '';
-		success = '';
-		fieldErrors = {};
+		success = '';		fieldErrors = {};
+		regStep = 'email';
+		otpCode = '';
+		emailTicket = '';
+		verifiedEmail = '';
 		// Jangan biarkan token Turnstile bekas dipakai ulang.
 		turnstileToken = '';
 		verified = false;
@@ -111,27 +204,34 @@
 
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
-		if (busy) return;
-
-		// Guard Turnstile: token wajib sebelum submit (parity legacy).
-		if (turnstileEnabled && !turnstileToken) {
+		if (busy) return;		// Guard Turnstile: token wajib sebelum submit (parity legacy).
+		if (turnstileBlocks) {
 			error = tr('Selesaikan verifikasi keamanan untuk melanjutkan.');
 			return;
 		}
-		if (mode === 'register' && !validateRegister()) return;
+		if (mode === 'register' && regStep === 'details' && !validateRegister()) return;
 
 		busy = true;
 		error = '';
-		success = '';
+		if (!(mode === 'register' && regStep === 'code')) success = '';
 		try {
 			if (mode === 'register') {
-				await doRegister();
+				if (regStep === 'email') await requestCode();
+				else if (regStep === 'code') await verifyCode();
+				else await doRegister();
 				return;
 			}
 			await doLogin();
 		} catch (reason) {
 			const message = authErrorMessage(reason);
-			applyServerError(message);
+			if (message.includes('Verifikasi email')) {
+				// Tiket OTP kedaluwarsa saat mengisi form: minta kode baru.
+				emailTicket = '';
+				regStep = 'code';
+				error = tr('Verifikasi email kedaluwarsa. Minta kode baru.');
+			} else {
+				applyServerError(message);
+			}
 			resetTurnstile();
 		} finally {
 			busy = false;
@@ -161,7 +261,8 @@
 				display_name: displayName.trim(),
 				email: email.trim().toLowerCase(),
 				password,
-				turnstile_token: turnstileToken
+				turnstile_token: '',
+				email_ticket: emailTicket
 			};
 			try {
 				sessionStorage.setItem('tauthub_reg_draft', JSON.stringify(draft));
@@ -170,7 +271,7 @@
 				// lebih baik daripada pendaftaran macet.
 				const payload: Record<string, unknown> = {
 					email: draft.email, password: draft.password, display_name: draft.display_name,
-					role: 'client', turnstile_token: draft.turnstile_token
+					role: 'client', email_ticket: draft.email_ticket
 				};
 				await postRegister(payload);
 				return;
@@ -193,7 +294,8 @@
 			// App lama tidak lagi menanyakan kategori media; nilai tetap 'lainnya'
 			// karena backend mewajibkannya untuk peran Mitra.
 			partner_category: lockedRole === 'partner' ? 'lainnya' : undefined,
-			turnstile_token: turnstileToken
+			// Turnstile sudah dipakai saat minta kode; /register memeriksa tiket OTP.
+			email_ticket: emailTicket
 		};
 		await postRegister(payload);
 	}
@@ -338,10 +440,13 @@
 </h1>
 <p class="auth-subtitle">
 	{challenge
-		? tr('Masukkan kode 6 digit dari aplikasi autentikator Anda.')
-		: mode === 'login'
+		? tr('Masukkan kode 6 digit dari aplikasi autentikator Anda.')		: mode === 'login'
 			? tr('Masuk untuk melanjutkan pekerjaan brand Anda.')
-			: tr('Daftar untuk membuat brand pertama Anda.')}
+			: regStep === 'code'
+				? tr('Masukkan 6 digit kode dari email Anda.')
+				: regStep === 'email'
+					? tr('Kami kirim kode 6 digit ke email Anda untuk memastikan email itu aktif.')
+					: tr('Daftar untuk membuat brand pertama Anda.')}
 </p>
 
 {#if !challenge}
@@ -401,8 +506,7 @@
 				required
 			/>
 		</label>
-	{:else}
-		{#if mode === 'register'}
+	{:else}		{#if mode === 'register' && regStep === 'details'}
 			<label class="auth-field">
 				<span class="auth-label">{tr("Nama atau perusahaan")}</span>
 				<input
@@ -421,24 +525,59 @@
 				{/if}
 			</label>
 
-		{/if}
-
-		<label class="auth-field">
-			<span class="auth-label">{tr("Email")}</span>
-			<input
-				class="auth-input"
-				type="email"
-				bind:value={email}
-				placeholder={tr("nama@perusahaan.com")}
-				autocomplete="email"
-				aria-invalid={fieldErrors.email ? 'true' : undefined}
-				required
-			/>
-			{#if fieldErrors.email}
-				<p class="auth-field-error"><CircleAlert size={13} />{fieldErrors.email}</p>
-			{/if}
-		</label>
-
+		{/if}		{#if mode === 'login' || regStep === 'email'}
+			<label class="auth-field">
+				<span class="auth-label">{tr("Email")}</span>
+				<input
+					class="auth-input"
+					type="email"
+					bind:value={email}
+					placeholder={tr("nama@perusahaan.com")}
+					autocomplete="email"
+					aria-invalid={fieldErrors.email ? 'true' : undefined}
+					required
+				/>
+				{#if fieldErrors.email}
+					<p class="auth-field-error"><CircleAlert size={13} />{fieldErrors.email}</p>
+				{/if}
+			</label>
+		{:else if regStep === 'code'}
+			<div class="auth-field">
+				<span class="auth-label">{tr("Email")}</span>
+				<div class="auth-static">
+					<span>{email.trim().toLowerCase()}</span>
+					<button type="button" class="auth-link" onclick={changeEmail}>{tr('Ubah email')}</button>
+				</div>
+			</div>
+			<label class="auth-field">
+				<span class="auth-label">{tr("Kode verifikasi")}</span>
+				<input
+					class="auth-input auth-input--code"
+					type="text"
+					inputmode="numeric"
+					autocomplete="one-time-code"
+					maxlength={6}
+					pattern="[0-9]{6}"
+					bind:value={otpCode}
+					placeholder="000000"
+					required
+				/>
+			</label>
+			<p class="auth-resend">
+				{tr('Belum menerima kode?')}
+				<button type="button" class="auth-link" disabled={busy || resendLeft > 0} onclick={resendCode}>
+					{tr('Kirim ulang kode')}{resendLeft > 0 ? ` (${resendLeft}s)` : ''}
+				</button>
+			</p>
+		{:else}
+			<div class="auth-field">
+				<span class="auth-label">{tr("Email")}</span>
+				<div class="auth-static auth-static--ok">
+					<span><Check size={14} /> {verifiedEmail} · {tr('Email terverifikasi')}</span>
+					<button type="button" class="auth-link" onclick={changeEmail}>{tr('Ubah email')}</button>
+				</div>
+			</div>
+		{/if}		{#if mode === 'login' || regStep === 'details'}
 		<div class="auth-field" class:auth-field--span={mode === 'register' && !lockedRole}>
 			<div class="auth-field-head">
 				<label class="auth-label" for="auth-password">{tr("Password")}</label>
@@ -469,15 +608,13 @@
 				>
 					{#if showPassword}<EyeOff size={16} />{:else}<Eye size={16} />{/if}
 				</button>
-			</span>
-			{#if fieldErrors.password}
+			</span>			{#if fieldErrors.password}
 				<p class="auth-field-error"><CircleAlert size={13} />{fieldErrors.password}</p>
 			{/if}
 		</div>
-
-			<!-- Welcome Gate: peran dipilih di /register-role setelah form; radios ini
-     tersisa hanya untuk halaman peran terkunci (/register/klien, /register/mitra). -->
-		{#if mode === 'register' && lockedRole}
+		{/if}
+<!-- Welcome Gate: peran dipilih di /register-role setelah form; radios ini
+     tersisa hanya untuk halaman peran terkunci (/register/klien, /register/mitra). -->		{#if mode === 'register' && lockedRole && regStep === 'details'}
 			<div class="auth-field">
 				<span class="auth-label">{tr("Daftar sebagai")}<!-- Tooltip penjelas peran: muncul saat hover DAN focus agar dapat
 					     diakses keyboard (parity Tooltip app lama pada label ini). -->
@@ -533,8 +670,7 @@
 		<p class="auth-verify-ok" role="status"><Check size={15} />{success}</p>
 	{/if}
 
-	<!-- Verifikasi keamanan Cloudflare (brief §4-§5). -->
-	{#if turnstileEnabled && !challenge}
+	<!-- Verifikasi keamanan Cloudflare (brief §4-§5). -->	{#if needsTurnstile}
 		<div class="auth-verify">
 			{#if verified && turnstileToken}
 				<div class="auth-verify-ok" role="status">
@@ -562,8 +698,7 @@
 
 	<button
 		type="submit"
-		class="auth-cta"
-		disabled={busy || (turnstileEnabled && !turnstileToken && !challenge)}
+		class="auth-cta"		disabled={busy || turnstileBlocks}
 	>
 		{#if busy}<span class="auth-spinner" aria-hidden="true"></span>{/if}
 		{busy
@@ -571,12 +706,20 @@
 				? 'Memverifikasi…'
 				: mode === 'login'
 					? 'Memproses…'
-					: 'Mendaftarkan…'
+					: regStep === 'email'
+						? tr('Mengirim kode…')
+						: regStep === 'code'
+							? 'Memverifikasi…'
+							: 'Mendaftarkan…'
 			: challenge
 				? tr('Verifikasi & masuk')
 				: mode === 'login'
 					? tr('Masuk')
-					: tr('Daftar')}
+					: regStep === 'email'
+						? tr('Kirim kode')
+						: regStep === 'code'
+							? tr('Verifikasi kode')
+							: tr('Daftar')}
 	</button>
 </form>
 

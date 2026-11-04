@@ -59,7 +59,7 @@
 		ditolak: tr('Ditolak'), final: 'Final'
 	});
 	const MEDIA_STATUS_LABEL: Record<string, string> = $derived({
-		active: tr('Aktif'), inactive: tr('Nonaktif'), draft: 'Draf', pending_review: 'Pending',
+		active: tr('Aktif'), inactive: tr('Suspend'), draft: 'Draf', pending_review: 'Pending',
 		rejected: tr('Ditolak'), archived: tr('Arsip'), hidden: 'Disembunyikan'
 	});
 	const idr = (n: unknown) => `Rp ${Number(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
@@ -101,6 +101,8 @@
 	let form = $state({ email: '', name: '', status: 'active' });
 	// Hapus partner
 	let deleting = $state<Partner | null>(null);
+	// Suspend akun mitra: konfirmasi dulu — mengunci login dan menyembunyikan medianya dari katalog.
+	let suspendTarget = $state<Partner | null>(null);
 	// Aksi baris
 	let openMenu = $state<string | null>(null);
 	let menuPos = $state({ top: 0, right: 0 });
@@ -674,7 +676,7 @@
 			options={[
 				{ value: '', label: tr('Semua status') },
 				{ value: 'active', label: tr('Aktif') },
-				{ value: 'inactive', label: tr('Nonaktif') }
+				{ value: 'inactive', label: tr('Suspend') }
 			]}
 		/>
 		<Select
@@ -749,7 +751,6 @@
 						<th class="px-4 py-2.5 font-medium">Dewan Pers</th>
 						<th class="px-4 py-2.5 font-medium">VIP</th>
 						<th class="px-4 py-2.5 font-medium">Status</th>
-						<th class="px-4 py-2.5 font-medium">{tr("Chat")}</th>
 						<th class="px-4 py-2.5 font-medium">Aksi</th>
 					</tr>
 				</thead>
@@ -854,20 +855,15 @@
 									<Badge label="-" tone="neutral" />
 								{/if}
 							</td>
-							<td class="px-4 py-3"><Badge label={row.status} tone={row.status === 'active' ? 'success' : 'neutral'} /></td>
-							<td class="px-4 py-3">
-								<Tooltip content={tr('Kirim pesan ke mitra lewat tiket dukungan.')}>
-									<button
-										class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-secondary"
-										type="button"
-										aria-label={`${tr('Chat')} ${row.name ?? row.email}`}
-										onclick={() => openChat(row)}
-									>
-										<MessageSquare size={14} /> {tr('Chat')}
-									</button>
-								</Tooltip>
-							</td>
-							<td class="px-4 py-3">
+							<td class="px-4 py-3"><Badge label={row.status === 'active' ? tr('Aktif') : tr('Suspend')} tone={row.status === 'active' ? 'success' : 'danger'} /></td>
+							<td class="px-4 py-3 whitespace-nowrap">
+								<button
+									class="rounded-lg p-1.5 hover:bg-secondary"
+									type="button"
+									aria-label={`${tr('Chat')} ${row.name ?? row.email}`}
+									title={tr('Kirim pesan ke mitra lewat tiket dukungan.')}
+									onclick={() => openChat(row)}
+								><MessageSquare size={17} /></button>
 								<button
 									class="relative rounded-lg p-1.5 hover:bg-secondary"
 									type="button"
@@ -909,9 +905,9 @@
 												{#if row.secure_direct_status === 'pending' && !row.auto_publish_enabled}<span class="ml-auto size-2 rounded-full" style="background: var(--destructive);" aria-hidden="true"></span>{/if}
 											</button>
 											{#if row.status === 'active'}
-												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void setStatus(row, 'inactive'); }}>Nonaktifkan</button>
+												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" style="color: var(--destructive);" onclick={() => { openMenu = null; suspendTarget = row; }}>{tr('Suspend akun')}</button>
 											{:else}
-												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void setStatus(row, 'active'); }}>Aktifkan</button>
+												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void setStatus(row, 'active'); }}>{tr('Aktifkan kembali')}</button>
 											{/if}
 											<div class="my-1 border-t"></div>
 											<button
@@ -965,8 +961,8 @@
 					value={form.status}
 					onchange={(v) => (form.status = v)}
 					options={[
-						{ value: 'active', label: 'active' },
-						{ value: 'inactive', label: 'inactive' }
+						{ value: 'active', label: tr('Aktif') },
+						{ value: 'inactive', label: tr('Suspend') }
 					]}
 				/>
 			</label>
@@ -1344,6 +1340,18 @@
 				</div>
 			{/if}
 		</div>
+	</Modal>
+{/if}
+
+{#if suspendTarget}
+	<Modal title={tr('Suspend akun mitra?')} label={tr('Konfirmasi suspend')} maxWidth="md" onClose={() => (suspendTarget = null)}>
+		<p class="text-sm text-muted-foreground">
+			<strong>{suspendTarget.name ?? suspendTarget.email}</strong> {tr('tidak bisa masuk, sesi yang sedang berjalan diputus, dan semua medianya tidak tampil di katalog klien sampai diaktifkan kembali.')}
+		</p>
+		{#snippet footer()}
+			<button class="app-btn app-btn-soft" type="button" onclick={() => (suspendTarget = null)}>{tr('Batal')}</button>
+			<button class="app-btn app-btn-danger" type="button" onclick={() => { const t = suspendTarget; suspendTarget = null; if (t) void setStatus(t, 'inactive'); }}>{tr('Suspend')}</button>
+		{/snippet}
 	</Modal>
 {/if}
 

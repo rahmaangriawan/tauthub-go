@@ -817,7 +817,7 @@ func (d *Deps) mmQueryCandidates(ctx context.Context, crit mmCriteria, hard bool
 		return "$" + strconv.Itoa(len(args))
 	}
 	// Aturan yang sama dengan katalog klien: hanya media aktif.
-	where := "WHERE media.status = 'active'"
+	where := "WHERE media.status = 'active' AND EXISTS (SELECT 1 FROM partners pa WHERE pa.id = media.partner_id AND pa.status = 'active')"
 
 	if len(crit.Categories) > 0 {
 		ors := make([]string, 0, len(crit.Categories))

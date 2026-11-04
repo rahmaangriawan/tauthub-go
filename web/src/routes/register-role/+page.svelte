@@ -22,6 +22,8 @@
 		email: string;
 		password: string;
 		turnstile_token: string;
+		// Tiket dari /v1/auth/register/verify-code: email sudah diverifikasi OTP.
+		email_ticket: string;
 	};
 
 	const ROLE_ALIAS: Record<string, Role> = {
@@ -150,12 +152,14 @@
 			const raw = sessionStorage.getItem('tauthub_reg_draft');
 			if (raw?.trim()) {
 				const parsed = JSON.parse(raw) as RegDraft;
-				if (parsed?.email && parsed?.password) {
+				// Draf tanpa tiket verifikasi email tidak bisa dipakai (/register menolaknya).
+				if (parsed?.email && parsed?.password && parsed?.email_ticket) {
 					draft = {
 						display_name: String(parsed.display_name ?? '').slice(0, 120),
 						email: String(parsed.email).slice(0, 320).toLowerCase(),
 						password: String(parsed.password),
-						turnstile_token: String(parsed.turnstile_token ?? '')
+						turnstile_token: String(parsed.turnstile_token ?? ''),
+						email_ticket: String(parsed.email_ticket)
 					};
 					kind = 'email';
 					return;
@@ -182,7 +186,9 @@
 					// App lama tidak lagi menanyakan kategori media; backend mewajibkan
 					// 'lainnya' untuk peran Mitra.
 					partner_category: roleChoice === 'partner' ? 'lainnya' : undefined,
-					turnstile_token: draft.turnstile_token
+					// Email sudah lolos OTP (Turnstile dipakai saat minta kode): /register
+					// cukup menerima tiketnya tanpa token Turnstile.
+					email_ticket: draft.email_ticket
 				};
 				const ref = referralCode();
 				const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -190,14 +196,20 @@
 					payload.referral_code = ref;
 					headers['x-referral-code'] = ref;
 				}
-				if (gateTurnstileEnabled) payload.turnstile_token = gateToken || draft.turnstile_token;
 				const res = await fetch('/v1/auth/register', {
 					method: 'POST',
 					headers,
 					body: JSON.stringify(payload)
 				});
 				if (!res.ok) {
-					error = await readApiError(res, tr('Pendaftaran gagal. Periksa isian lalu coba lagi.'));
+					const message = await readApiError(res, tr('Pendaftaran gagal. Periksa isian lalu coba lagi.'));
+					if (message.includes('Verifikasi email')) {
+						// Tiket OTP kedaluwarsa (15 menit): ulangi dari form daftar.
+						clearDraft();
+						await goto('/login?mode=register&otp=expired', { replaceState: true });
+						return;
+					}
+					error = message;
 					busy = false;
 					return;
 				}

@@ -144,6 +144,9 @@ func run() error {
 		v1.Post("/auth/refresh", authDeps.Refresh)
 		v1.Post("/auth/logout", authDeps.Logout)
 		v1.Post("/auth/register", authDeps.Register)
+		// OTP email sebelum akun dibuat (wajib untuk pendaftaran email).
+		v1.Post("/auth/register/request-code", authDeps.RequestRegisterCode)
+		v1.Post("/auth/register/verify-code", authDeps.VerifyRegisterCode)
 		v1.Post("/auth/forgot-password", authDeps.ForgotPassword)
 		// Gate SSR non-rotasi (SvelteKit +layout.server): verifikasi refresh_token
 		// tanpa rotasi sesi, kembalikan role/admin/partner/membership.
@@ -826,6 +829,8 @@ func run() error {
 			authed.Put("/platform/operations/users/{userId}/password", platformDeps.OperationsUserPassword)
 			authed.Put("/platform/operations/users/{userId}/role", platformDeps.OperationsUserRole)
 			authed.Put("/platform/operations/users/{userId}/status", platformDeps.OperationsUserStatus)
+			authed.Get("/platform/operations/registration-blocks", platformDeps.RegistrationBlocksList)
+			authed.Delete("/platform/operations/registration-blocks", platformDeps.RegistrationBlockRemove)
 			authed.Get("/platform/operations/variant-batches", platformDeps.OperationsVariantBatches)
 			authed.Get("/platform/operations/variant-batches/{batchId}", platformDeps.OperationsVariantBatchDetail)
 			authed.Post("/platform/operations/variant-batches/{batchId}/retry", platformDeps.OperationsVariantBatchRetry)

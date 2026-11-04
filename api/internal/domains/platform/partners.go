@@ -408,7 +408,8 @@ func (d *Deps) PartnerUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	partnerID := chiParam(r, "partnerId")
-	if _, err := d.mpScopedPartner(r.Context(), partnerID); err != nil {
+	prev, err := d.mpScopedPartner(r.Context(), partnerID)
+	if err != nil {
 		writeErr(w, d, mpPartnerError(err))
 		return
 	}
@@ -465,12 +466,35 @@ func (d *Deps) PartnerUpdate(w http.ResponseWriter, r *http.Request) {
 	if hasAutoPublish && autoPublishEnabled {
 		d.closeSecureDirectRequestOnApproval(r.Context(), partnerID, user.ID)
 	}
+	// Suspend: partners.status 'inactive' bukan sekadar label — akun user ikut
+	// dikunci (is_active) dan sesi berjalan diputus. Media mitra tidak diubah
+	// statusnya; katalog klien dan matchmaker menyaring lewat partners.status.
+	if hasStatus && status != prev.strOr("status", "") {
+		d.applyPartnerSuspension(r.Context(), user.ID, partnerID, prev.strOr("user_id", ""), status == "inactive")
+	}
 	updated, err := d.mpScopedPartner(r.Context(), partnerID)
 	if err != nil {
 		writeErr(w, d, mpPartnerError(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, mpPartnerJSON(updated))
+}
+
+// applyPartnerSuspension: kunci/buka akun user di balik partner + putus sesi
+// saat suspend. Best-effort; status partner sendiri sudah tersimpan.
+func (d *Deps) applyPartnerSuspension(ctx context.Context, adminID, partnerID, userID string, suspend bool) {
+	if userID == "" {
+		return
+	}
+	action := "partner.unsuspended"
+	if suspend {
+		action = "partner.suspended"
+		_ = d.exec(ctx, "UPDATE users SET is_active = FALSE WHERE id = $1", userID)
+		_ = d.exec(ctx, "UPDATE user_sessions SET revoked = TRUE WHERE user_id = $1 AND revoked = FALSE", userID)
+	} else {
+		_ = d.exec(ctx, "UPDATE users SET is_active = TRUE, approved_at = COALESCE(approved_at, NOW()) WHERE id = $1", userID)
+	}
+	writeAuditBestEffort(d, ctx, adminID, action, "partner", partnerID)
 }
 
 // closeSecureDirectRequestOnApproval: bila partner punya pengajuan Secure

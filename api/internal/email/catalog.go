@@ -48,6 +48,10 @@ type TemplateEvent struct {
 
 var catalogVariables = []string{"{nama}", "{judul}", "{isi}", "{status}", "{jumlah}", "{link}", "{brand}"}
 
+// Variabel khusus event keamanan: kode OTP pendaftaran dan detail perangkat
+// login. Dipakai entri security.email_verification dan security.login.
+var securityVariables = append(append([]string{}, catalogVariables...), "{kode}", "{ip}", "{waktu}", "{browser}", "{platform}")
+
 // ---------- potongan HTML ----------
 
 func pg(text string) string {
@@ -90,7 +94,37 @@ var (
 		cta("Atur password"),
 		muted("Bila tautan kedaluwarsa, minta admin mengirim ulang undangan."),
 	)
+
+	// Kode OTP pendaftaran: {nama} belum ada (akun belum dibuat), pemanggil
+	// mengisinya "Sahabat Tauthub".
+	bodyAuthEmailVerification = body(
+		pg("Gunakan kode berikut untuk melanjutkan pendaftaran akun Tauthub Anda:"),
+		pg(`<b style="font-size:26px;letter-spacing:6px;">{kode}</b>`),
+		pg("Kode berlaku 10 menit dan hanya bisa dipakai satu kali."),
+		muted("Bila Anda tidak mendaftar di Tauthub, abaikan email ini."),
+	)
+
+	bodyAuthAccountExists = body(
+		pg("Seseorang mencoba mendaftar dengan email ini, tetapi email ini sudah punya akun Tauthub."),
+		pg("Masuk memakai akun yang ada. Bila lupa kata sandi, pakai \"Lupa password\" di halaman masuk."),
+		cta("Masuk ke Tauthub"),
+		muted("Bila bukan Anda yang mencoba mendaftar, abaikan email ini."),
+	)
+
+	bodyAuthLoginAlert = body(
+		pg("Kami mendeteksi bahwa Anda berhasil login dengan perangkat berikut:"),
+		pg("IP Address: {ip}<br>Tanggal dan Waktu: {waktu}<br>Web Browser: {browser}<br>Platform: {platform}"),
+		pg("Jika ini adalah Anda, abaikan pesan ini. Jika bukan Anda, silakan hubungi kami di"),
+		pg("WA : care@tauthub.com<br>Email : +62 851-2466-5015"),
+	)
 )
+
+// securityEntry: seperti authEntry, dengan variabel tambahan kode/perangkat.
+func securityEntry(audience, event, label, subject, html string) TemplateEvent {
+	e := authEntry(audience, event, label, subject, html)
+	e.Variables = securityVariables
+	return e
+}
 
 func entry(audience, event, label, subject, html string, sender SenderMode) TemplateEvent {
 	return TemplateEvent{
@@ -117,6 +151,9 @@ var catalog = []TemplateEvent{
 	authEntry(AudienceClient, "security.password_reset", "Reset password", "Reset password Tauthub", bodyAuthReset),
 	authEntry(AudienceClient, "security.password_changed", "Password diubah", "Password Tauthub Anda telah diubah", bodyAuthChanged),
 	authEntry(AudienceClient, "security.account_invite", "Undangan akun", "Aktifkan akun Tauthub Anda", bodyAuthInvite),
+	securityEntry(AudienceClient, "security.email_verification", "Kode verifikasi pendaftaran", "Kode verifikasi Tauthub: {kode}", bodyAuthEmailVerification),
+	securityEntry(AudienceClient, "security.account_exists", "Email sudah terdaftar", "Email ini sudah punya akun Tauthub", bodyAuthAccountExists),
+	securityEntry(AudienceClient, "security.login", "Notifikasi login", "Login baru ke akun Tauthub Anda", bodyAuthLoginAlert),
 
 	genericEntry(AudienceClient, "publication.published", "Artikel terbit", "Artikel Anda sudah terbit",
 		body(
@@ -222,6 +259,7 @@ var catalog = []TemplateEvent{
 	authEntry(AudiencePartner, "security.password_reset", "Reset password", "Reset password Tauthub", bodyAuthReset),
 	authEntry(AudiencePartner, "security.password_changed", "Password diubah", "Password Tauthub Anda telah diubah", bodyAuthChanged),
 	authEntry(AudiencePartner, "security.account_invite", "Undangan akun", "Aktifkan akun Tauthub Anda", bodyAuthInvite),
+	securityEntry(AudiencePartner, "security.login", "Notifikasi login", "Login baru ke akun Tauthub Anda", bodyAuthLoginAlert),
 
 	directEntry(AudiencePartner, "media.approved", "Media disetujui", "Media {judul} telah disetujui",
 		body(
