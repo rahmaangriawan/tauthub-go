@@ -832,6 +832,7 @@ func run() error {
 			authed.Get("/platform/operations/registration-blocks", platformDeps.RegistrationBlocksList)
 			authed.Delete("/platform/operations/registration-blocks", platformDeps.RegistrationBlockRemove)
 			authed.Get("/platform/operations/blocked-domains", platformDeps.BlockedDomainsList)
+			authed.Get("/platform/operations/blocked-domains/builtin", platformDeps.BuiltinDisposableDomains)
 			authed.Post("/platform/operations/blocked-domains", platformDeps.BlockedDomainAdd)
 			authed.Delete("/platform/operations/blocked-domains", platformDeps.BlockedDomainRemove)
 			authed.Get("/platform/operations/registration-guard", platformDeps.RegistrationGuardLimits)

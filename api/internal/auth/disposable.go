@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	_ "embed"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -57,6 +58,51 @@ func builtinDisposable() map[string]struct{} {
 
 // BuiltinDisposableCount: jumlah domain bawaan (ditampilkan di panel admin).
 func BuiltinDisposableCount() int { return len(builtinDisposable()) }
+
+var (
+	builtinSortedOnce sync.Once
+	builtinSorted     []string
+)
+
+// BuiltinDisposableList: daftar domain temp-mail bawaan (urut abjad) untuk
+// panel admin. q = potongan teks (kosong = semua); dikembalikan satu halaman
+// beserta total yang cocok.
+func BuiltinDisposableList(q string, limit, offset int) (items []string, total int) {
+	builtinSortedOnce.Do(func() {
+		m := builtinDisposable()
+		builtinSorted = make([]string, 0, len(m))
+		for d := range m {
+			builtinSorted = append(builtinSorted, d)
+		}
+		sort.Strings(builtinSorted)
+	})
+	q = strings.ToLower(strings.TrimSpace(q))
+	src := builtinSorted
+	if q != "" {
+		filtered := make([]string, 0, 64)
+		for _, d := range builtinSorted {
+			if strings.Contains(d, q) {
+				filtered = append(filtered, d)
+			}
+		}
+		src = filtered
+	}
+	total = len(src)
+	if offset < 0 {
+		offset = 0
+	}
+	if limit < 1 {
+		limit = 100
+	}
+	if offset >= total {
+		return []string{}, total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return src[offset:end], total
+}
 
 // adminBlockedDomains: isi tabel blocked_email_domains, cache 60 detik.
 func adminBlockedDomains(ctx context.Context, pool *pgxpool.Pool) map[string]struct{} {

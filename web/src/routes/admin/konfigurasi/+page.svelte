@@ -20,6 +20,7 @@
 	import Ga4Panel from '../ga4-configs/ga4-panel.svelte';
 	import WaGatewayPanel from '../wa-gateway/wa-gateway-panel.svelte';
 	import EmailTemplatesPanel from './email-templates-panel.svelte';
+	import DomainBlocksPanel from './domain-blocks-panel.svelte';
 
 	type SeoConfig = {
 		api_key_configured: boolean;
@@ -158,6 +159,7 @@
 		{ key: 'gsc', label: 'Integrasi GSC' },
 		{ key: 'ga4', label: 'GA4 Config' },
 		{ key: 'wa', label: 'WA Gateway' },
+		{ key: 'domain', label: 'Domain Email' },
 		{ key: 'turnstile', label: 'Turnstile CF' },
 		{ key: 'google', label: 'Google Sign-In' },
 		{ key: 'shortlink', label: 'Short Link' },
@@ -1484,6 +1486,10 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 	{/if}
 
 	<!-- Turnstile -->
+	{#if tab === 'domain'}
+		<div class="mt-4"><DomainBlocksPanel /></div>
+	{/if}
+
 	{#if tab === 'turnstile'}
 		<div class="app-card mt-3 p-4">
 			{#if tsLoading && !turnstile}

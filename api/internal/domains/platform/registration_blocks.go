@@ -92,6 +92,19 @@ func (d *Deps) BlockedDomainsList(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// BuiltinDisposableDomains: GET /v1/platform/operations/blocked-domains/builtin
+// ?q=&limit=&offset= — daftar temp-mail bawaan (hanya baca), bisa dicari.
+func (d *Deps) BuiltinDisposableDomains(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := d.adminGuard(w, r, ""); !ok {
+		return
+	}
+	q := r.URL.Query()
+	limit := mpClampInt(q.Get("limit"), 100, 1, 500)
+	offset := mpClampInt(q.Get("offset"), 0, 0, 1<<30)
+	items, total := auth.BuiltinDisposableList(q.Get("q"), limit, offset)
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+}
+
 // BlockedDomainAdd: POST /v1/platform/operations/blocked-domains {domain, reason?}
 func (d *Deps) BlockedDomainAdd(w http.ResponseWriter, r *http.Request) {
 	admin, _, ok := d.adminGuard(w, r, "")
