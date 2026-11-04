@@ -272,7 +272,7 @@
 
 	// Pricing engine (server = sumber kebenaran; preview ini hanya bantuan UX):
 	// client_price = harga mitra × (1 + markup/100); kredit dari CLIENT price.
-	const clientPriceFor = (base: number) => Math.round(base * (1 + (markupPercent || 15) / 100));
+	const clientPriceFor = (base: number) => Math.round(base * (1 + (Number.isFinite(markupPercent) ? markupPercent : 0) / 100));
 	const creditForPrice = (price: number) => {
 		const client = clientPriceFor(price);
 		return client > 0 ? Math.max(1, Math.ceil(client / (tcRate || 1000))) : 0;
