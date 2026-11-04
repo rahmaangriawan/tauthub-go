@@ -145,6 +145,25 @@
 				: `${media.max_links} ${tr('tautan')} ${media.link_rel === 'sponsored' ? 'Sponsored' : media.link_rel === 'nofollow' || media.allow_hyperlink === false ? 'Nofollow' : 'Dofollow'}`
 	);
 	const embedText = $derived(media.allow_embed ? tr('Diizinkan') : tr('Tidak diizinkan'));
+	// Sama persis dengan yang dilihat klien di detail media (media-detail-modal).
+	const headingText = $derived(
+		media.allow_heading === true
+			? tr('Boleh memakai subjudul')
+			: media.allow_heading === false
+				? tr('Tanpa subjudul')
+				: media.media_type === 'blogger'
+					? tr('Boleh (bawaan media blog)')
+					: tr('Tanpa subjudul (bawaan media berita)')
+	);
+	const INTEGRATION_NAME: Record<string, string> = { wordpress: 'WordPress', blogger: 'Blogger', custom_web: 'Custom Web' };
+	const deliveryText = $derived(
+		`${media.publication_mode === 'publish' ? tr('Langsung Terbit (otomatis)') : tr('Draf (diterbitkan oleh media)')} · ${
+			!media.integration_type || media.integration_type === 'manual'
+				? tr('Manual (mitra pasang sendiri)')
+				: `API ${INTEGRATION_NAME[media.integration_type] ?? media.integration_type}`
+		}`
+	);
+	const sampleUrl = $derived((media.contoh_artikel_url ?? '').trim());
 	const sponsorText = $derived(
 		!media.label_sponsor || media.label_sponsor === 'tidak_ada'
 			? tr('Organik, tanpa label')
@@ -309,9 +328,23 @@
 						<dd>{wordCountLabel(media.word_count_mode)}</dd>
 					</div>
 					<div class="term">
+						<dt><FileText size={16} />{tr('Subjudul (H2/H3)')}</dt>
+						<dd>{headingText}</dd>
+					</div>
+					<div class="term">
 						<dt><SquarePlay size={16} />{tr('Embed video/maps')}</dt>
 						<dd>{embedText}</dd>
 					</div>
+					<div class="term">
+						<dt><Layers size={16} />{tr('Mode pengiriman')}</dt>
+						<dd>{deliveryText}</dd>
+					</div>
+					{#if sampleUrl}
+						<div class="term">
+							<dt><Link2 size={16} />{tr('Contoh artikel')}</dt>
+							<dd><a href={sampleUrl} target="_blank" rel="noreferrer noopener">{tr('Lihat contoh')} ↗</a></dd>
+						</div>
+					{/if}
 					<div class="term">
 						<dt><Tag size={16} />{tr('Label sponsor')}</dt>
 						<dd>{sponsorText}</dd>

@@ -13,7 +13,7 @@
 	import {
 		Calendar, ChartBar, Check, CircleCheck, Clock, Download, FileText,
 		Settings, Server, Image as ImageIcon, Info, Link as LinkIcon, Share2,
-		CircleAlert, X, CircleX, Tag, Languages
+		CircleAlert, X, CircleX, Tag, Languages, Heading, ExternalLink
 	} from '@lucide/svelte';
 	import { apiRequest } from '$lib/auth';
 	import { Tooltip } from 'bits-ui';
@@ -237,6 +237,28 @@
 	const bahasaText = $derived(bahasaList.join(', '));
 	const bahasaFlags = $derived(bahasaList.map((b) => bahasaFlag[b] ?? b).join(' '));
 	const isDirectPublish = $derived(media.publication_mode === 'publish');
+
+	// Subjudul (H2/H3): null = ikut bawaan tipe media (blog boleh, berita tidak).
+	const headingText = $derived(
+		media.allow_heading === true
+			? tr('Boleh memakai subjudul')
+			: media.allow_heading === false
+				? tr('Tanpa subjudul')
+				: media.media_type === 'blogger'
+					? tr('Boleh (bawaan media blog)')
+					: tr('Tanpa subjudul (bawaan media berita)')
+	);
+	// Jalur pengiriman naskah ke media: manual (mitra pasang sendiri) atau API per platform.
+	const INTEGRATION_NAME: Record<string, string> = { wordpress: 'WordPress', blogger: 'Blogger', custom_web: 'Custom Web' };
+	const deliveryVia = $derived(
+		!media.integration_type || media.integration_type === 'manual'
+			? tr('Manual (mitra pasang sendiri)')
+			: `API ${INTEGRATION_NAME[media.integration_type] ?? media.integration_type}`
+	);
+	const deliveryText = $derived(
+		`${isDirectPublish ? tr('Langsung Terbit (otomatis)') : tr('Draf (diterbitkan oleh media)')} · ${deliveryVia}`
+	);
+	const sampleUrl = $derived((media.contoh_artikel_url ?? '').trim());
 	const initialLetter = $derived((media.name || 'M').trim().charAt(0).toUpperCase());
 	// Favicon langsung dari website media (layanan favicon publik Google);
 	// gagal muat → jatuh ke inisial huruf.
@@ -356,6 +378,7 @@
 					},
 					{ label: tr('Batas Tautan Keluar'), value: linkPolicy },
 					{ label: tr('Panjang Artikel'), value: wordCountLabel(media.word_count_mode) },
+					{ label: tr('Subjudul (H2/H3)'), value: headingText },
 					{ label: tr('Bahasa Artikel'), value: bahasaText },
 					{
 						label: tr('Support Embed (Video/Maps)'),
@@ -363,10 +386,9 @@
 					},
 					{
 						label: tr('Mode Pengiriman'),
-						value: isDirectPublish
-							? tr('Langsung Terbit (otomatis, tanpa langkah terbit manual di media)')
-							: tr('Draf (diterbitkan oleh media)')
-					}
+						value: deliveryText
+					},
+					...(sampleUrl ? [{ label: tr('Contoh Artikel'), value: sampleUrl }] : [])
 				],
 				gatekeeper: gatekeeperList,
 				priceText: idr(media.client_price ?? media.price),
@@ -781,6 +803,14 @@
 
 								<div class="paramItemRow">
 									<div class="paramItemLeftGroup">
+										<Heading size={18} class="paramRowIcon" />
+										<span>{tr("Subjudul (H2/H3)")}</span>
+									</div>
+									<span class="paramValueBold">{headingText}</span>
+								</div>
+
+								<div class="paramItemRow">
+									<div class="paramItemLeftGroup">
 										<Languages size={18} class="paramRowIcon" />
 										<span>{tr("Bahasa Artikel")}</span>
 									</div>
@@ -801,6 +831,24 @@
 										<span class="paramValueMuted">{tr("Tidak Diizinkan")}</span>
 									{/if}
 								</div>
+
+								<div class="paramItemRow">
+									<div class="paramItemLeftGroup">
+										<Share2 size={18} class="paramRowIcon" />
+										<span>{tr("Mode Pengiriman")}</span>
+									</div>
+									<span class="paramValueBold" style="text-align: right;">{deliveryText}</span>
+								</div>
+
+								{#if sampleUrl}
+									<div class="paramItemRow">
+										<div class="paramItemLeftGroup">
+											<ExternalLink size={18} class="paramRowIcon" />
+											<span>{tr("Contoh Artikel")}</span>
+										</div>
+										<a class="paramValueBold" href={sampleUrl} target="_blank" rel="noreferrer noopener" style="color: var(--primary); text-decoration: none;">{tr("Lihat contoh")} ↗</a>
+									</div>
+								{/if}
 
 								<!-- Rekam jejak distribusi. Di HP baris ini pindah dari
 								     strip metrik ke sini supaya strip tidak penuh digeser. -->

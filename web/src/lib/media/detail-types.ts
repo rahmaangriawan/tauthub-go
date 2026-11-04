@@ -64,6 +64,8 @@ export type MediaDetailItem = {
 	publication_mode?: string | null;
 	word_count_mode?: string | null;
 	allow_embed?: boolean | null;
+	/** Izin subjudul H2/H3: null = ikut bawaan tipe media. */
+	allow_heading?: boolean | null;
 	auto_publish?: boolean | null;
 	price_status?: string | null;
 	created_at?: string | null;
