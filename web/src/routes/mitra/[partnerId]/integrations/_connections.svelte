@@ -203,6 +203,8 @@
 		<button class="app-btn app-btn-primary int-btn" type="button" onclick={() => (createOpen = true)}><Plus size={16} strokeWidth={1.5} />{tr('Tambah koneksi')}</button>
 	</div>
 
+	<p class="px-5 py-4 text-[13px] leading-5 text-muted-foreground" style="border-bottom: 1px solid var(--border);">{tr('Untuk koneksi WordPress, akun yang Anda hubungkan sebaiknya berperan Editor. Akun berperan Penulis tetap bisa menerbitkan artikel, tetapi tidak bisa membuat kategori baru di WordPress. Jika kategori artikel belum ada di situs Anda, artikel akan terbit di kategori bawaan (Uncategorized). Anda bisa membuat kategorinya sendiri sekali saja di WordPress, atau menaikkan peran akun menjadi Editor agar kategori terbuat otomatis.')}</p>
+
 	{#if error}<p class="int-msg int-msg--error" style="padding-top: 12px;">{error}</p>{/if}
 
 	{#if loading && rows.length === 0}
