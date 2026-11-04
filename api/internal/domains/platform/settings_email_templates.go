@@ -371,12 +371,21 @@ func emailSampleData(audience, event string) map[string]string {
 		"link":   link,
 	}
 
-	switch {
-	case strings.HasPrefix(event, "security."):
+	switch {	case strings.HasPrefix(event, "security."):
 		s["judul"] = "Keamanan akun Tauthub"
 		s["isi"] = "Permintaan perubahan keamanan akun diterima."
 		s["status"] = ""
 		s["link"] = "/login"
+		// Variabel khusus event keamanan: kode OTP pendaftaran dan detail
+		// perangkat untuk notifikasi login.
+		s["kode"] = "482916"
+		s["ip"] = "182.253.45.117"
+		s["waktu"] = "Rabu, 04 Nov 2026 02:21 WIB"
+		s["browser"] = "Chrome 130"
+		s["platform"] = "Windows"
+		if event == "security.email_verification" {
+			s["nama"] = "Sahabat Tauthub"
+		}
 
 	case strings.HasPrefix(event, "withdrawal."):
 		s["judul"] = "Penarikan dana"

@@ -153,8 +153,11 @@
 		return text
 			.replace(/\{nama\}/g, 'Budi')
 			.replace(/\{judul\}/g, 'Contoh Artikel Tauthub')
-			.replace(/\{status\}/g, 'contoh keterangan')
-			.replace(/\{jumlah\}/g, 'Rp 150.000')
+			.replace(/\{status\}/g, 'contoh keterangan')			.replace(/\{jumlah\}/g, 'Rp 150.000')
+			.replace(/\{ip\}/g, '182.253.45.117')
+			.replace(/\{waktu\}/g, 'Rabu, 04 Nov 2026 02:21 WIB')
+			.replace(/\{browser\}/g, 'Chrome 130')
+			.replace(/\{platform\}/g, 'Windows')
 			.replace(/\{link\}/g, 'https://app.tauthub.com/mitra/mitra-contoh/publications?pub=pub-contoh');
 	}
 
@@ -479,8 +482,9 @@
 						</div>
 
 						<div class="app-card px-4 py-2.5 text-xs" style="color: var(--muted-foreground);">{tr("Variabel yang bisa dipakai:")}<strong>{'{nama}'}</strong> nama penerima, <strong>{'{judul}'}</strong> judul artikel/domain,
-							<strong>{'{status}'}</strong> keterangan/alasan, <strong>{'{jumlah}'}</strong> nominal rupiah,
-							<strong>{'{link}'}</strong> tautan dashboard.
+							<strong>{'{status}'}</strong> keterangan/alasan, <strong>{'{jumlah}'}</strong> nominal rupiah,							<strong>{'{link}'}</strong> tautan dashboard. {tr('Khusus Notifikasi login:')}
+							<strong>{'{ip}'}</strong> {tr('alamat IP')}, <strong>{'{waktu}'}</strong> {tr('tanggal dan jam (WIB)')},
+							<strong>{'{browser}'}</strong> {tr('browser')}, <strong>{'{platform}'}</strong> {tr('sistem operasi/perangkat')}.
 						</div>
 						<div class="app-card px-4 py-2.5 text-xs" style="color: var(--accent-foreground);">
 							{tr('Setiap audiens punya template sendiri untuk event yang sama. Mitra menerima tautan ke portal /mitra, klien ke portal /klien, dan admin ke panel /admin.')}
