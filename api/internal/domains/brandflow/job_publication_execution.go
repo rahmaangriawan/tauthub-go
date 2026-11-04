@@ -1407,6 +1407,7 @@ func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media
 			d.peRecordWarning(ctx, jobID, []string{
 				peCategoryWarning(failures, connection.strOr("username", ""), len(ids) == 0),
 			})
+			d.peNotifyPartnerCategoryDenied(ctx, media, connection, failures)
 		}
 	}
 	if !hasResolved && len(tagNames) > 0 {
@@ -1607,6 +1608,56 @@ func peResolveTermIDsDetail(ctx context.Context, baseURL string, headers map[str
 		return id
 	})
 	return ids, failures
+}
+
+// peNotifyPartnerCategoryDenied: beri tahu mitra (notifikasi in-app, bahasa
+// awam) bahwa akun WordPress yang dihubungkan tidak boleh membuat kategori,
+// lengkap dengan tautan ke tab WordPress media itu. Dikirim paling sering
+// sekali per media per 14 hari agar tiap artikel baru tidak membanjiri.
+func (d *Deps) peNotifyPartnerCategoryDenied(ctx context.Context, media, connection bsRow, failures []peTermFailure) {
+	forbidden := make([]string, 0, len(failures))
+	for _, f := range failures {
+		if f.Forbidden {
+			forbidden = append(forbidden, f.Name)
+		}
+	}
+	mediaID := media.strOr("id", "")
+	partnerID := media.strOr("partner_id", "")
+	if len(forbidden) == 0 || mediaID == "" || partnerID == "" {
+		return
+	}
+	partner, err := d.queryRow(ctx, "SELECT user_id, public_id FROM partners WHERE id = $1", partnerID)
+	if err != nil || partner == nil || partner.strOr("user_id", "") == "" {
+		return
+	}
+	userID := partner.strOr("user_id", "")
+	dedupe := "media.wp_category_denied:" + mediaID
+	recent, err := d.queryRow(ctx,
+		"SELECT 1 AS found FROM notifications WHERE user_id = $1 AND dedupe_key = $2 AND created_at > NOW() - INTERVAL '14 days' LIMIT 1",
+		userID, dedupe)
+	if err != nil || recent != nil {
+		return
+	}
+	label := mediaLabelOf(media.strOr("name", ""), media.strOr("website_url", ""))
+	link := "/mitra/integrations#wordpress?media=" + mediaID
+	if pid := partner.strOr("public_id", ""); pid != "" {
+		link = "/mitra/" + pid + "/integrations#wordpress?media=" + mediaID
+	}
+	account := "akun WordPress yang Anda hubungkan"
+	if u := strings.TrimSpace(connection.strOr("username", "")); u != "" {
+		account = `akun WordPress "` + u + `" yang Anda hubungkan`
+	}
+	title := "Kategori artikel belum bisa dibuat di " + label
+	body := "Artikel di " + label + " sudah terbit, tetapi kategori \"" + strings.Join(forbidden, "\", \"") +
+		"\" belum ada di situs Anda dan " + account + " tidak diizinkan membuat kategori baru (perannya Penulis). " +
+		"Agar kategori terbuat otomatis, ubah peran akun itu menjadi Editor di WordPress (menu Pengguna), atau buat kategorinya sendiri sekali saja di WordPress. " +
+		"Setelah itu pengiriman berikutnya akan masuk ke kategori yang benar."
+	if err := d.exec(ctx, `
+		INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key)
+		VALUES (gen_random_uuid(), $1, 'media.wp_category_denied', $2, $3, $4, $5)`,
+		userID, title, truncateString(body, 1000), link, dedupe); err != nil {
+		slog.Warn("[brandflow] notifikasi kategori ditolak WordPress gagal", "media", mediaID, "err", err)
+	}
 }
 
 // peCategoryWarning: kalimat peringatan kategori yang menyebut sebab dan
