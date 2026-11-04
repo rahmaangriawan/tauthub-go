@@ -3377,7 +3377,7 @@
 	.md-plat { font-size: 13px; line-height: 20px; }
 
 	.md-cat {
-		display: inline-flex; max-width: 168px; min-width: 120px; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 6px; white-space: nowrap;
+		display: inline-flex; width: fit-content; max-width: 168px; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 6px; white-space: nowrap;
 		background-color: var(--muted); color: var(--foreground); font-size: 13px; line-height: 20px; text-align: left;
 		transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
