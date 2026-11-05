@@ -1609,7 +1609,7 @@ func (d *Deps) WATemplates(w http.ResponseWriter, r *http.Request) {
 				previewLink = "https://app.tauthub.com/"
 			}
 			preview := igWARenderTemplate(body, map[string]string{
-				"nama": "Budi", "judul": "Contoh Artikel Tauthub", "status": "contoh keterangan",
+				"nama": "Budi", "judul": "Contoh Artikel Tauthub", "status": "contoh keterangan", "media": "contohmedia.com",
 				"jumlah": "Rp 150.000", "link": previewLink,
 				"ip": "182.253.45.117", "waktu": "Rabu, 04 Nov 2026 02:21 WIB",
 				"browser": "Chrome 130", "platform": "Windows",

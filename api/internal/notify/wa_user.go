@@ -81,6 +81,20 @@ func EnqueueUserWA(ctx context.Context, pool *pgxpool.Pool, opts UserWAOptions) 
 	if link != "" && strings.HasPrefix(link, "/") && opts.BaseURL != "" {
 		link = strings.TrimRight(opts.BaseURL, "/") + link
 	}
+	// {nama} yang tidak diisi pemanggil dilengkapi dari nama tampil penerima,
+	// supaya pesan tidak terbaca "Halo , ...".
+	if strings.TrimSpace(opts.Data["nama"]) == "" {
+		var name string
+		_ = pool.QueryRow(ctx, "SELECT COALESCE(NULLIF(TRIM(display_name), ''), '') FROM users WHERE id = $1 LIMIT 1", opts.UserID).Scan(&name)
+		if name != "" {
+			data := make(map[string]string, len(opts.Data)+1)
+			for k, v := range opts.Data {
+				data[k] = v
+			}
+			data["nama"] = name
+			opts.Data = data
+		}
+	}
 	rendered := body
 	for k, v := range opts.Data {
 		rendered = strings.ReplaceAll(rendered, "{"+k+"}", v)

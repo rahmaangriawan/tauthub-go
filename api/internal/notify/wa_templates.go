@@ -33,7 +33,7 @@ var WADefaultTemplates = map[string]map[string]string{
 	AudiencePartner: {
 		"publication.partner_approved": "Halo {nama}, publikasi \"{judul}\" telah DISETUJUI mitra dan masuk antrean terbit.\n\nDetail: {link}",
 		"publication.partner_rejected": "Halo {nama}, publikasi \"{judul}\" ditolak.\n\nAlasan: {status}\nDetail: {link}",
-		"publication.published":        "Halo {nama}, artikel \"{judul}\" sudah TERBIT.\n\nLihat: {link}",
+		"publication.published":        "Halo {nama}, artikel \"{judul}\" sudah TERBIT di {media}.\n\nLihat: {link}",
 		"publication.failed":           "Halo {nama}, publikasi \"{judul}\" gagal diproses.\n\nKeterangan: {status}\nDetail: {link}",
 		"media.approved":               "Halo {nama}, media Anda telah disetujui dan siap menerima order.\n\nDetail: {link}",
 		"media.rejected":               "Halo {nama}, pengajuan media Anda ditolak.\n\nCatatan: {status}\nDetail: {link}",
@@ -49,7 +49,7 @@ var WADefaultTemplates = map[string]map[string]string{
 	AudienceClient: {
 		"publication.partner_approved": "Halo {nama}, media \"{judul}\" sudah menyetujui artikel Anda dan sedang diantrekan untuk terbit.\n\nDetail: {link}",
 		"publication.partner_rejected": "Halo {nama}, media menolak artikel \"{judul}\".\n\nAlasan: {status}\nDetail: {link}",
-		"publication.published":        "Halo {nama}, artikel \"{judul}\" sudah TERBIT dan tautannya aktif.\n\nLihat: {link}",
+		"publication.published":        "Halo {nama}, artikel \"{judul}\" sudah TERBIT di {media} dan tautannya aktif.\n\nLihat: {link}",
 		"publication.failed":           "Halo {nama}, artikel \"{judul}\" gagal diterbitkan.\n\nKeterangan: {status}\nDetail: {link}",
 		"security.login":               "Halo {nama}, kami mendeteksi bahwa Anda berhasil login dengan perangkat berikut :\n\nIP Address: {ip}\nTanggal dan Waktu: {waktu}\nWeb Browser: {browser}\nPlatform: {platform}\n\nJika ini adalah Anda, abaikan pesan ini, jika bukan Anda silakan hubungi kami di\n\nWA : care@tauthub.com\nEmail : +62 851-2466-5015",
 	},

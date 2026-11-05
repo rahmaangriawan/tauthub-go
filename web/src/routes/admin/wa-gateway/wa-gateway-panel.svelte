@@ -481,7 +481,7 @@
 							{/each}
 						</div>
 
-						<div class="app-card px-4 py-2.5 text-xs" style="color: var(--muted-foreground);">{tr("Variabel yang bisa dipakai:")}<strong>{'{nama}'}</strong> nama penerima, <strong>{'{judul}'}</strong> judul artikel/domain,
+						<div class="app-card px-4 py-2.5 text-xs" style="color: var(--muted-foreground);">{tr("Variabel yang bisa dipakai:")}<strong>{'{nama}'}</strong> nama penerima, <strong>{'{judul}'}</strong> judul artikel/domain, <strong>{'{media}'}</strong> nama media penerbit (event publikasi),
 							<strong>{'{status}'}</strong> keterangan/alasan, <strong>{'{jumlah}'}</strong> nominal rupiah,							<strong>{'{link}'}</strong> tautan dashboard. {tr('Khusus Notifikasi login:')}
 							<strong>{'{ip}'}</strong> {tr('alamat IP')}, <strong>{'{waktu}'}</strong> {tr('tanggal dan jam (WIB)')},
 							<strong>{'{browser}'}</strong> {tr('browser')}, <strong>{'{platform}'}</strong> {tr('sistem operasi/perangkat')}.

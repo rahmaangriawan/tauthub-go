@@ -835,7 +835,7 @@ func (d *Deps) publicationPublishedNotification(ctx context.Context, publication
 				Event:       "publication.published",
 				UserID:      partnerUserID,
 				ReferenceID: publicationID,
-				Data:        map[string]string{"nama": "", "judul": article, "status": ""},
+				Data:        map[string]string{"nama": "", "judul": article, "status": "", "media": mediaName},
 				Link:        partnerLink,
 				BaseURL:     notify.BaseURL(),
 			})
@@ -844,13 +844,13 @@ func (d *Deps) publicationPublishedNotification(ctx context.Context, publication
 
 	// WA ke klien (semua anggota brand) dengan template audiens klien.
 	if !draftDelivery {
-		d.publicationWAtoBrandMembers(ctx, row.strOr("brand_id", ""), "publication.published", publicationID, article, brandLink, "")
+		d.publicationWAtoBrandMembers(ctx, row.strOr("brand_id", ""), "publication.published", publicationID, article, mediaName, brandLink, "")
 	}
 }
 
 // publicationWAtoBrandMembers: antrekan WA event publikasi ke setiap anggota
 // brand (klien). Best-effort; kegagalan tidak menggagalkan notifikasi in-app.
-func (d *Deps) publicationWAtoBrandMembers(ctx context.Context, brandID, event, referenceID, article, link, status string) {
+func (d *Deps) publicationWAtoBrandMembers(ctx context.Context, brandID, event, referenceID, article, mediaName, link, status string) {
 	if brandID == "" {
 		return
 	}
@@ -870,7 +870,7 @@ func (d *Deps) publicationWAtoBrandMembers(ctx context.Context, brandID, event, 
 			Event:       event,
 			UserID:      userID,
 			ReferenceID: referenceID,
-			Data:        map[string]string{"nama": "", "judul": article, "status": status},
+			Data:        map[string]string{"nama": "", "judul": article, "status": status, "media": mediaName},
 			Link:        link,
 			BaseURL:     notify.BaseURL(),
 		})
@@ -926,13 +926,13 @@ func (d *Deps) publicationFailedNotification(ctx context.Context, publicationID 
 			Event:       "publication.failed",
 			UserID:      partnerUserID,
 			ReferenceID: publicationID,
-			Data:        map[string]string{"nama": "", "judul": article, "status": safe},
+			Data:        map[string]string{"nama": "", "judul": article, "status": safe, "media": mediaName},
 			Link:        partnerLink,
 			BaseURL:     notify.BaseURL(),
 		})
 	}
 
-	d.publicationWAtoBrandMembers(ctx, row.strOr("brand_id", ""), "publication.failed", publicationID, article, brandLink, safe)
+	d.publicationWAtoBrandMembers(ctx, row.strOr("brand_id", ""), "publication.failed", publicationID, article, mediaName, brandLink, safe)
 }
 
 // ---------- standard check (port lib/standard/service.ts) ----------
