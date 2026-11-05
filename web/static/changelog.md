@@ -19,6 +19,76 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.6.0 — 2026-11-05
+
+### Fitur
+- **Daftar akun lebih aman lewat kode OTP email**: kode verifikasi dikirim sebelum akun dibuat, email sementara (temp-mail) ditolak, dan kamu mendapat notifikasi setiap ada login baru ke akunmu.
+- **Halaman Integrasi mitra didesain ulang** dengan tab WordPress, Web Custom, dan Blogspot yang lebih rapi. Tes koneksi WordPress kini memberi petunjuk perbaikan yang jelas, dan ada catatan bahwa akun WordPress berperan Penulis tidak bisa membuat kategori baru (gunakan peran Editor).
+- **Ikon mata di Daftar Media jadi saklar**: mitra bisa menyembunyikan atau menampilkan media dari katalog klien. Untuk media yang belum tersambung, klik ikon mata membawa langsung ke halaman Integrasi dengan media itu disorot.
+- **Kolom Platform di Daftar Media**: WordPress, Blogspot, atau Custom terdeteksi otomatis dari website media.
+- **Form Tambah/Edit media dikelompokkan jadi 5 bagian** agar lebih mudah diisi, dengan pilihan jenis tautan Dofollow, Nofollow, atau Sponsored.
+- **Pencarian dan halaman di Daftar Media mitra** kini bekerja untuk semua media, bukan hanya yang tampil di halaman pertama.
+- **Matchmaker lebih paham brief**: wajib memilih jenis media, membaca konteks anggaran dari kalimat brief, dan anggaran tanpa jumlah media dianggap paket beberapa media.
+- **Redesain halaman klien dan mitra**: Saldo, Publikasi, Kampanye, dan Link Guardian di sisi klien; Penghasilan, Link Guardian, dan Daftar Media di sisi mitra; serta halaman Profil & Akun klien. Judul dan deskripsi halaman kini seragam.
+- **WA artikel terbit** kini menyebut nama media ("sudah TERBIT di nama media") dan sapaannya memakai nama penerima.
+- **Mitra diberi tahu** bila akun WordPress yang terhubung tidak bisa membuat kategori, lengkap dengan cara mengatasinya.
+
+### Perbaikan
+- **Notifikasi WhatsApp yang sebelumnya tertahan di antrean** kini terkirim lagi, termasuk notifikasi login.
+- **Mode Manual** tidak lagi tersimpan sebagai WordPress.
+- **Gagal menambah media kini ada alasannya**, misalnya nomor WA wajib diisi, bukan lagi sekadar "Gagal menyimpan perubahan".
+- **Perubahan kecil oleh mitra** (yang tidak sensitif) tidak lagi menyembunyikan media dari katalog.
+- **Tampilan Daftar Media mitra** dirapikan: tabel tidak berantakan di layar sedang, label kategori selebar isinya, dan kolom "Menunggu" diganti "Order".
+- **Kartu koneksi WordPress** tidak lagi tampil dobel di desktop maupun HP.
+- **Tombol AI Matchmaker di katalog** tidak lagi tertutup kolom pencarian di lebar layar sekitar 1050px.
+- **Harga klien di pratinjau media** kini mengikuti markup 0%.
+
+## v0.5.9 — 2026-11-02
+
+### Fitur
+- **Persetujuan media dibatasi 3×24 jam**: bila media tidak merespons, publikasi otomatis dibatalkan dan saldo kembali ke klien.
+- **Putaran baru kampanye di Taut Pintar** beserta perbaikan alur kampanye klien.
+- **Pustaka gambar**: unggah banyak gambar sekaligus, lalu pilih beberapa untuk disisipkan ke artikel.
+- **Email dari Tauthub kini seragam**: satu kerangka dengan logo untuk semua email transaksional.
+- **Template WhatsApp dipisah per penerima** (mitra, klien, admin), dan WA kini juga dikirim untuk artikel terbit, pencairan, dan referral.
+- **Katalog media lebih lengkap**: jenis media dan root domain/subdomain, penanda verifikasi, dropdown kategori yang didesain ulang, serta trafik kosong ditulis 0 bukan strip.
+- **Content Velocity** media kini terisi lebih banyak, termasuk untuk situs yang memblokir pemeriksa kami, lewat jalur cadangan (WordPress API, feed, sitemap, Google News).
+- **Redesain kartu Link Guardian dan Mitra**, palet warna kategori, dan sidebar yang bisa dilipat.
+- **Panduan Penghasilan mitra**: arahan arsip penarikan, tombol ke halaman invoice, nomor invoice penarikan 6 karakter, dan tarif transfer dijelaskan sebagai keterangan.
+
+### Perbaikan
+- **Kredit ditagih sebelum artikel diproses dan dikembalikan bila gagal**, jadi saldo tidak terpotong untuk proses yang tidak selesai.
+- **Media tanpa harga ditolak** di semua pintu, sehingga tidak ada lagi pesanan dengan harga nol.
+- **Notifikasi artikel terbit tidak ganda lagi**: hasil verifikasi URL digabung ke satu notifikasi.
+- **Penghasilan mitra sebelum disetujui** kini sudah dipotong platform 25%, sama seperti setelah disetujui.
+- **Sidebar**: scrollbar menempel di tepi, submenu tidak terpotong, dan label grup tidak lagi terjepit.
+
+## v0.5.8 — 2026-10-30
+
+### Fitur
+- **Dua pintu masuk Brief**: Chat Brief (ngobrol dengan AI) dan Instan Brief (isi template atau unggah dokumen). Form Profil Brand juga bisa disimpan sekaligus tanpa AI.
+- **Matchmaker membedakan anggaran total dan anggaran per media**, dan rekomendasi alternatif tidak lagi melewati batas anggaran.
+- **Katalog media publik** dapat dilihat di data.tauthub.com tanpa login.
+- **Tiket Dukungan untuk mitra**, lengkap dengan badge jumlah tiket yang belum dibaca.
+- **Taut Pintar**: satu domain boleh memuat beberapa artikel, semua artikel satu media bisa dibuat dalam satu dialog, konteks kampanye cukup diisi sekali dengan usulan topik, dan artikel bisa dihapus satu per satu. Ringkasan Distribusi kini berupa kartu dengan 10 media per halaman.
+- **Tampilan HP diperbarui**: kartu media dan aksi artikel di Taut Pintar, daftar media terpilih di katalog (dengan favicon), serta obrolan yang kini satu kartu dengan laci info media.
+- **Masuk langsung ke brand terakhir** yang kamu buka, tanpa halaman pemilih brand.
+- **Pengelola Naskah**: tombol Analisis QC sendiri, penghitung link dan gambar di kepala naskah, Generate, Tulis Sendiri, dan QC berjalan per artikel, serta menu klik kanan pada tautan di editor.
+- **Beri Rating media** langsung dari halaman klien.
+- **Untuk mitra**: pratinjau artikel terjadwal, jadwal terbit di daftar publikasi, penjelasan status Antrean dan Secure Direct, sampul artikel, favicon media di baris penghasilan, serta pengajuan Dewan Pers yang bisa dicabut.
+- **Izin subjudul per media**: mitra menentukan apakah artikelnya boleh memakai subjudul.
+- **Pendaftaran langsung masuk dashboard**, dengan form dua kolom di layar lebar.
+
+### Perbaikan
+- **Hasil tulisan AI lebih tertib**: satu artikel tidak lagi membahas dua brand, isi artikel tidak dibuka dengan judul, struktur mengikuti angle yang dipilih, dan tautan klien dipastikan benar-benar tertanam di paragraf yang relevan.
+- **Pencarian media** tidak lagi mencocokkan nama pemilik, dan media tanpa data trafik menampilkan strip.
+- **Pengingat saldo** hanya dikirim ke akun klien, bukan mitra.
+- **Dokumen yang sama bisa diunggah ulang** tanpa dianggap gagal dibaca.
+- **Celah akses data** pada hasil profiler dan unduhan file sudah ditutup.
+
+### Performa
+- **Verdict QC lebih cepat**: hasilnya tampil lebih dulu, sementara penulisan ulang menyusul di latar belakang.
+
 ## v0.5.7 — 2026-10-25
 
 ### Fitur
