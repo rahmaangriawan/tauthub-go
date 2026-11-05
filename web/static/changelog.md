@@ -32,20 +32,6 @@ Catatan:
 - **Redesain halaman klien dan mitra**: Saldo, Publikasi, Kampanye, dan Link Guardian di sisi klien; Penghasilan, Link Guardian, dan Daftar Media di sisi mitra; serta halaman Profil & Akun klien. Judul dan deskripsi halaman kini seragam.
 - **WA artikel terbit** kini menyebut nama media ("sudah TERBIT di nama media") dan sapaannya memakai nama penerima.
 - **Mitra diberi tahu** bila akun WordPress yang terhubung tidak bisa membuat kategori, lengkap dengan cara mengatasinya.
-
-### Perbaikan
-- **Notifikasi WhatsApp yang sebelumnya tertahan di antrean** kini terkirim lagi, termasuk notifikasi login.
-- **Mode Manual** tidak lagi tersimpan sebagai WordPress.
-- **Gagal menambah media kini ada alasannya**, misalnya nomor WA wajib diisi, bukan lagi sekadar "Gagal menyimpan perubahan".
-- **Perubahan kecil oleh mitra** (yang tidak sensitif) tidak lagi menyembunyikan media dari katalog.
-- **Tampilan Daftar Media mitra** dirapikan: tabel tidak berantakan di layar sedang, label kategori selebar isinya, dan kolom "Menunggu" diganti "Order".
-- **Kartu koneksi WordPress** tidak lagi tampil dobel di desktop maupun HP.
-- **Tombol AI Matchmaker di katalog** tidak lagi tertutup kolom pencarian di lebar layar sekitar 1050px.
-- **Harga klien di pratinjau media** kini mengikuti markup 0%.
-
-## v0.5.9 — 2026-11-02
-
-### Fitur
 - **Persetujuan media dibatasi 3×24 jam**: bila media tidak merespons, publikasi otomatis dibatalkan dan saldo kembali ke klien.
 - **Putaran baru kampanye di Taut Pintar** beserta perbaikan alur kampanye klien.
 - **Pustaka gambar**: unggah banyak gambar sekaligus, lalu pilih beberapa untuk disisipkan ke artikel.
@@ -55,17 +41,6 @@ Catatan:
 - **Content Velocity** media kini terisi lebih banyak, termasuk untuk situs yang memblokir pemeriksa kami, lewat jalur cadangan (WordPress API, feed, sitemap, Google News).
 - **Redesain kartu Link Guardian dan Mitra**, palet warna kategori, dan sidebar yang bisa dilipat.
 - **Panduan Penghasilan mitra**: arahan arsip penarikan, tombol ke halaman invoice, nomor invoice penarikan 6 karakter, dan tarif transfer dijelaskan sebagai keterangan.
-
-### Perbaikan
-- **Kredit ditagih sebelum artikel diproses dan dikembalikan bila gagal**, jadi saldo tidak terpotong untuk proses yang tidak selesai.
-- **Media tanpa harga ditolak** di semua pintu, sehingga tidak ada lagi pesanan dengan harga nol.
-- **Notifikasi artikel terbit tidak ganda lagi**: hasil verifikasi URL digabung ke satu notifikasi.
-- **Penghasilan mitra sebelum disetujui** kini sudah dipotong platform 25%, sama seperti setelah disetujui.
-- **Sidebar**: scrollbar menempel di tepi, submenu tidak terpotong, dan label grup tidak lagi terjepit.
-
-## v0.5.8 — 2026-10-30
-
-### Fitur
 - **Dua pintu masuk Brief**: Chat Brief (ngobrol dengan AI) dan Instan Brief (isi template atau unggah dokumen). Form Profil Brand juga bisa disimpan sekaligus tanpa AI.
 - **Matchmaker membedakan anggaran total dan anggaran per media**, dan rekomendasi alternatif tidak lagi melewati batas anggaran.
 - **Katalog media publik** dapat dilihat di data.tauthub.com tanpa login.
@@ -80,6 +55,19 @@ Catatan:
 - **Pendaftaran langsung masuk dashboard**, dengan form dua kolom di layar lebar.
 
 ### Perbaikan
+- **Notifikasi WhatsApp yang sebelumnya tertahan di antrean** kini terkirim lagi, termasuk notifikasi login.
+- **Mode Manual** tidak lagi tersimpan sebagai WordPress.
+- **Gagal menambah media kini ada alasannya**, misalnya nomor WA wajib diisi, bukan lagi sekadar "Gagal menyimpan perubahan".
+- **Perubahan kecil oleh mitra** (yang tidak sensitif) tidak lagi menyembunyikan media dari katalog.
+- **Tampilan Daftar Media mitra** dirapikan: tabel tidak berantakan di layar sedang, label kategori selebar isinya, dan kolom "Menunggu" diganti "Order".
+- **Kartu koneksi WordPress** tidak lagi tampil dobel di desktop maupun HP.
+- **Tombol AI Matchmaker di katalog** tidak lagi tertutup kolom pencarian di lebar layar sekitar 1050px.
+- **Harga klien di pratinjau media** kini mengikuti markup 0%.
+- **Kredit ditagih sebelum artikel diproses dan dikembalikan bila gagal**, jadi saldo tidak terpotong untuk proses yang tidak selesai.
+- **Media tanpa harga ditolak** di semua pintu, sehingga tidak ada lagi pesanan dengan harga nol.
+- **Notifikasi artikel terbit tidak ganda lagi**: hasil verifikasi URL digabung ke satu notifikasi.
+- **Penghasilan mitra sebelum disetujui** kini sudah dipotong platform 25%, sama seperti setelah disetujui.
+- **Sidebar**: scrollbar menempel di tepi, submenu tidak terpotong, dan label grup tidak lagi terjepit.
 - **Hasil tulisan AI lebih tertib**: satu artikel tidak lagi membahas dua brand, isi artikel tidak dibuka dengan judul, struktur mengikuti angle yang dipilih, dan tautan klien dipastikan benar-benar tertanam di paragraf yang relevan.
 - **Pencarian media** tidak lagi mencocokkan nama pemilik, dan media tanpa data trafik menampilkan strip.
 - **Pengingat saldo** hanya dikirim ke akun klien, bukan mitra.
