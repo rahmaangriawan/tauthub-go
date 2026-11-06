@@ -315,6 +315,7 @@
 			case 'publication.published':
 				return CircleCheck;
 			case 'publication.waiting_partner':
+			case 'publication.draft_sent':
 				return Clock;
 			case 'publication.failed':
 				return TriangleAlert;
@@ -332,7 +333,7 @@
 	}
 	function activityIconStyle(type: string): string {
 		if (type === 'publication.published') return 'background: var(--success-soft); color: var(--success);';
-		if (type === 'publication.waiting_partner' || type === 'publication.revision_requested')
+		if (type === 'publication.waiting_partner' || type === 'publication.revision_requested' || type === 'publication.draft_sent')
 			return 'background: var(--warning-soft); color: var(--warning);';
 		if (type === 'publication.failed' || type === 'publication.partner_rejected')
 			return 'background: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive);';

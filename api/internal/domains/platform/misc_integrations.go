@@ -1032,6 +1032,7 @@ var igWAAudienceEvents = map[string][]string{
 		"publication.partner_approved",
 		"publication.partner_rejected",
 		"publication.published",
+		"publication.draft_sent",
 		"publication.failed",
 		"media.approved",
 		"media.rejected",
@@ -1048,6 +1049,7 @@ var igWAAudienceEvents = map[string][]string{
 		"publication.partner_approved",
 		"publication.partner_rejected",
 		"publication.published",
+		"publication.draft_sent",
 		"publication.failed",
 		"security.login",
 	},
@@ -1520,7 +1522,7 @@ var igWAEventWired = func() map[string]bool {
 		"media.approved", "media.rejected",
 		"ticket.replied", "ticket.closed",
 		"publication.partner_approved", "publication.partner_rejected",
-		"publication.published", "publication.failed",
+		"publication.published", "publication.failed", "publication.draft_sent",
 		"withdrawal.requested", "withdrawal.processing",
 		"withdrawal.paid", "withdrawal.rejected",		"referral.cpa.credited",
 		// Notifikasi login: dikirim authdomain.notifyLogin di setiap sesi baru
@@ -1532,7 +1534,7 @@ var igWAEventWired = func() map[string]bool {
 	// Klien: event publikasi dikirim oleh brandflow ke anggota brand.
 	for _, event := range []string{
 		"publication.partner_approved", "publication.partner_rejected",
-		"publication.published", "publication.failed",
+		"publication.published", "publication.failed", "publication.draft_sent",
 		"security.login",
 	} {
 		wired[event] = true

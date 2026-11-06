@@ -115,7 +115,7 @@ var (
 		pg("Kami mendeteksi bahwa Anda berhasil login dengan perangkat berikut:"),
 		pg("IP Address: {ip}<br>Tanggal dan Waktu: {waktu}<br>Web Browser: {browser}<br>Platform: {platform}"),
 		pg("Jika ini adalah Anda, abaikan pesan ini. Jika bukan Anda, silakan hubungi kami di"),
-		pg("WA : care@tauthub.com<br>Email : +62 851-2466-5015"),
+		pg("WA : +62 851-2466-5015<br>Email : care@tauthub.com"),
 	)
 )
 
@@ -160,6 +160,13 @@ var catalog = []TemplateEvent{
 			pg("Pesanan publikasi Anda sudah tayang di media yang dipilih."),
 			pg("{isi}"),
 			pg("Buka halaman Publikasi untuk melihat tautan artikel dan status tayangnya."),
+			cta("Lihat publikasi"),
+		)),
+	genericEntry(AudienceClient, "publication.draft_sent", "Artikel terkirim sebagai draf", "Artikel Anda terkirim sebagai draf",
+		body(
+			pg("Artikel Anda sudah sampai di situs media sebagai draf dan belum tayang."),
+			pg("{isi}"),
+			pg("Media akan meninjau lalu menerbitkannya. Anda akan mendapat kabar lagi begitu artikelnya tayang."),
 			cta("Lihat publikasi"),
 		)),
 	genericEntry(AudienceClient, "publication.failed", "Publikasi gagal", "Publikasi artikel gagal",
@@ -325,6 +332,13 @@ var catalog = []TemplateEvent{
 			pg("{isi}"),
 			pg("Buka detail pesanan untuk melihat media baru, harga, dan status penerbitannya."),
 			cta("Buka detail pesanan"),
+		)),
+	genericEntry(AudiencePartner, "publication.draft_sent", "Artikel baru menunggu review", "Artikel baru menunggu review Anda",
+		body(
+			pg("Ada artikel dari klien yang sudah dikirim ke situs media Anda sebagai draf."),
+			pg("{isi}"),
+			pg("Artikel belum tayang. Tinjau lalu terbitkan dari situs Anda, atau buka halaman Publikasi untuk detailnya."),
+			cta("Buka publikasi"),
 		)),
 	genericEntry(AudiencePartner, "publication.waiting_partner", "Menunggu persetujuan Anda", "Pesanan baru menunggu persetujuan",
 		body(

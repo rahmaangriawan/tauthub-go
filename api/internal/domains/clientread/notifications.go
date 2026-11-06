@@ -223,7 +223,7 @@ func (d *Deps) BrandNotificationRead(w http.ResponseWriter, r *http.Request) {
 
 // publicationUnreadTypes: notifikasi yang layak jadi tanda merah di menu Status
 // Publikasi — mitra menyetujui (acc) atau artikel terbit.
-const publicationUnreadTypes = "('publication.partner_approved','publication.published')"
+const publicationUnreadTypes = "('publication.partner_approved','publication.published','publication.draft_sent')"
 
 // BrandPublicationUnread: GET menghitung notifikasi publikasi belum dibaca milik
 // user; POST menandai semuanya dibaca (dipanggil saat klien membuka halaman

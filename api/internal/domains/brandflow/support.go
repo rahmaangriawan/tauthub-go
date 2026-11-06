@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
+	emailqueue "github.com/rahmaangriawan/tauthub-go/internal/email"
 	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 )
 
@@ -809,7 +810,12 @@ func (d *Deps) publicationPublishedNotification(ctx context.Context, publication
 		title = "Artikel terkirim sebagai draf"
 		body = "\"" + article + "\" berhasil dikirim ke " + mediaName + " sebagai DRAFT dan menunggu tindakan Anda untuk diterbitkan." + urlSuffix
 	}
-	d.notifyBrandMembersOnPub(ctx, row.strOr("brand_id", ""), "publication.published", title, body, &brandLink, publicationID)
+	// Draf punya tipe sendiri supaya email/WA klien tidak menyebutnya "terbit".
+	clientEvent := "publication.published"
+	if draftDelivery {
+		clientEvent = "publication.draft_sent"
+	}
+	d.notifyBrandMembersOnPub(ctx, row.strOr("brand_id", ""), clientEvent, title, body, &brandLink, publicationID)
 
 	if partnerUserID := row.strOr("partner_user_id", ""); partnerUserID != "" {
 		partnerLink := ""
@@ -826,39 +832,53 @@ func (d *Deps) publicationPublishedNotification(ctx context.Context, publication
 		if partnerLink != "" {
 			partnerLinkArg = &partnerLink
 		}
-		d.createNotification(ctx, partnerUserID, "publication.published", partnerTitle, partnerBody, partnerLinkArg, &publicationID)
-		// WA ke mitra. Draf tidak dikabarkan lewat WA: belum ada halaman terbit
-		// yang bisa dibuka, jadi pesan berbayar itu hanya jadi noise.
-		if !draftDelivery {
-			notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
-				Audience:    notify.AudiencePartner,
-				Event:       "publication.published",
-				UserID:      partnerUserID,
-				ReferenceID: publicationID,
-				Data:        map[string]string{"nama": "", "judul": article, "status": "", "media": mediaName},
-				Link:        partnerLink,
-				BaseURL:     notify.BaseURL(),
-			})
+		partnerEvent := "publication.published"
+		if draftDelivery {
+			partnerEvent = "publication.draft_sent"
 		}
+		d.createNotification(ctx, partnerUserID, partnerEvent, partnerTitle, partnerBody, partnerLinkArg, &publicationID)
+		// WA ke mitra: terbit atau draf yang menunggu tindakan mitra.
+		notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
+			Audience:    notify.AudiencePartner,
+			Event:       partnerEvent,
+			UserID:      partnerUserID,
+			ReferenceID: publicationID,
+			Data:        map[string]string{"nama": "", "judul": article, "status": "", "media": mediaName},
+			Link:        partnerLink,
+			BaseURL:     notify.BaseURL(),
+		})
 	}
 
 	// WA ke klien (semua anggota brand) dengan template audiens klien.
-	if !draftDelivery {
-		d.publicationWAtoBrandMembers(ctx, row.strOr("brand_id", ""), "publication.published", publicationID, article, mediaName, brandLink, "")
-	}
+	d.publicationWAtoBrandMembers(ctx, row.strOr("brand_id", ""), clientEvent, publicationID, article, mediaName, brandLink, "")
 	// Laporan ke tim admin (grup WA / admin ber-nomor) dengan tautan halaman admin:
 	// artikel terbit, atau terkirim sebagai draf dan menunggu mitra.
 	adminEvent := notify.AdminEventPublicationPublished
 	if draftDelivery {
 		adminEvent = notify.AdminEventPublicationDraft
 	}
+	adminLink := "/admin/publications/" + publicationID
 	notify.EnqueueAdminsWA(ctx, d.Pool, notify.AdminWAOptions{
 		Event:       adminEvent,
 		ReferenceID: publicationID,
 		Data:        map[string]string{"nama": brandName, "judul": article, "media": mediaName},
-		Link:        "/admin/publications/" + publicationID,
+		Link:        adminLink,
 		BaseURL:     notify.BaseURL(),
 	})
+	// Email ke admin hanya untuk draf (artikel terbit cukup lewat WA grup).
+	if draftDelivery {
+		emailqueue.EnqueueAdminNotice(ctx, d.Pool, emailqueue.AdminNoticeOptions{
+			Template:    "admin-publication-draft",
+			Event:       "admin.publication_draft",
+			ReferenceID: publicationID,
+			Subject:     "Artikel terkirim sebagai draf",
+			Paragraphs: []string{
+				"\"" + article + "\" dari " + brandName + " sudah dikirim ke " + mediaName + " sebagai draf dan menunggu mitra menerbitkannya.",
+			},
+			Link:     adminLink,
+			CTALabel: "Cek di admin",
+		})
+	}
 }
 
 // publicationWAtoBrandMembers: antrekan WA event publikasi ke setiap anggota

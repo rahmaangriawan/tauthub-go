@@ -348,6 +348,7 @@ var emailTemplateNames = map[string]string{
 	"publication.late_approval":   "Persetujuan pesanan terlambat",
 	"publication.waiting_partner": "Pesanan baru menunggu persetujuan",
 	"publication.published":       "Artikel terbit",
+	"admin-publication-draft":     "Artikel terkirim sebagai draf (admin)",
 }
 
 // emailTemplateLabel: nama jenis email yang mudah dipahami. Template berawalan
