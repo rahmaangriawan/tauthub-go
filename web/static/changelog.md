@@ -31,6 +31,7 @@ Catatan:
 - **Matchmaker lebih paham brief**: wajib memilih jenis media, membaca konteks anggaran dari kalimat brief, dan anggaran tanpa jumlah media dianggap paket beberapa media.
 - **Redesain halaman klien dan mitra**: Saldo, Publikasi, Kampanye, dan Link Guardian di sisi klien; Penghasilan, Link Guardian, dan Daftar Media di sisi mitra; serta halaman Profil & Akun klien. Judul dan deskripsi halaman kini seragam.
 - **WA artikel terbit** kini menyebut nama media ("sudah TERBIT di nama media") dan sapaannya memakai nama penerima.
+- **Tab EmDash di halaman Integrasi mitra**: media yang memakai EmDash kini bisa disambungkan dengan token akses pribadi. Artikel dikirim lengkap dengan judul, deskripsi meta, isi, cover, dan gambar. Gambar dipindahkan ke media library situs Anda, bukan sekadar tautan ke Tauthub.
 - **Mitra diberi tahu** bila akun WordPress yang terhubung tidak bisa membuat kategori, lengkap dengan cara mengatasinya.
 - **Persetujuan media dibatasi 3×24 jam**: bila media tidak merespons, publikasi otomatis dibatalkan dan saldo kembali ke klien.
 - **Putaran baru kampanye di Taut Pintar** beserta perbaikan alur kampanye klien.
