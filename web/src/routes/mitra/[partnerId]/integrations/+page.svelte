@@ -61,14 +61,15 @@
 		'web-custom': false,
 		blogger: false
 	});
-	const TABS = $derived(
-		ALL_TABS.filter(([key]) => {
-			if (key === 'terms') return true;
-			const anyUsed = used.wordpress || used.emdash || used['web-custom'] || used.blogger;
-			return used[key] || (!anyUsed && key === 'wordpress');
-		})
-	);
-	const channelTabs = $derived(TABS.filter(([key]) => key !== 'terms'));
+	const TABS = ALL_TABS;
+	// Semua tab selalu tampil; tab platform yang belum dipilih satu pun media
+	// mitra dinonaktifkan (abu-abu, tidak bisa diklik).
+	function tabEnabled(key: TabKey): boolean {
+		if (key === 'terms') return true;
+		const anyUsed = used.wordpress || used.emdash || used['web-custom'] || used.blogger;
+		return used[key] || (!anyUsed && key === 'wordpress');
+	}
+	const channelTabs = $derived(TABS.filter(([key]) => key !== 'terms' && tabEnabled(key)));
 	const firstChannel = $derived<TabKey>(channelTabs[0]?.[0] ?? 'terms');
 
 	function hashTab(): TabKey {
@@ -76,7 +77,7 @@
 		// jadi potong di '?' sebelum dibandingkan — parity app lama.
 		const h = page.url.hash.replace(/^#/, '').split('?')[0];
 		if (h === 'wordpress' || h === 'emdash' || h === 'web-custom' || h === 'blogger') {
-			return TABS.some(([key]) => key === h) ? h : 'terms';
+			return tabEnabled(h) ? h : 'terms';
 		}
 		return 'terms';
 	}
@@ -196,6 +197,7 @@
 
 	function selectTab(value: TabKey) {
 		if (!accepted && value !== 'terms') return;
+		if (!tabEnabled(value)) return;
 		tab = value;
 		const hash = value === 'terms' ? '' : `#${value}`;
 		// Hash dipakai agar deep-link lama (/connections, /publishing-api, /blogger)
@@ -246,21 +248,22 @@
 		<div class="int-tabs" role="tablist" aria-label={tr('Kanal integrasi')}>
 			{#each TABS as [value, label] (value)}
 				{@const locked = !accepted && value !== 'terms'}
+				{@const unused = value !== 'terms' && !tabEnabled(value)}
 				{@const m = value === 'terms' ? null : meta[value]}
 				<button
 					class="int-tab"
 					class:int-tab--active={tab === value}
-					class:int-tab--locked={locked}
+					class:int-tab--locked={locked || unused}
 					role="tab"
 					aria-selected={tab === value}
-					aria-disabled={locked}
-					title={locked ? tr('Setujui Syarat & Ketentuan dulu') : undefined}
+					aria-disabled={locked || unused}
+					title={locked ? tr('Setujui Syarat & Ketentuan dulu') : unused ? tr('Belum ada media Anda yang memakai platform ini. Pilih platform ini saat menambah atau mengedit media.') : undefined}
 					onclick={() => selectTab(value)}
 				>
 					<span class="int-tab__label">{label}</span>
 					{#if locked}
 						<Lock size={14} strokeWidth={1.5} aria-hidden="true" />
-					{:else if m}
+					{:else if m && !unused}
 						<span class="int-tab__meta">
 							<span class="int-tab__count">{m.count}</span>
 							<Status tone={m.tone} size="xs" />
