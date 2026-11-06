@@ -3,8 +3,8 @@
 
 	// Port app/mitra/[partnerId]/[[...section]]/integrations-section.tsx.
 	// Halaman Integrasi mitra = 4 tab dengan gerbang Syarat & Ketentuan:
-	//   terms → wordpress (Koneksi CMS) · web-custom (Publishing API) · blogger.
-	// Tab bisa di-deep-link lewat hash (#wordpress / #web-custom / #blogger) —
+	//   terms → wordpress (Koneksi CMS) · emdash · web-custom (Publishing API) · blogger.
+	// Tab bisa di-deep-link lewat hash (#wordpress / #emdash / #web-custom / #blogger) —
 	// itulah tujuan redirect section lama /connections, /publishing-api, /blogger
 	// (lihat page.tsx app lama).
 	import { onMount } from 'svelte';
@@ -18,7 +18,7 @@
 	import PageTitle from '$lib/components/page-title.svelte';
 	import './integrations.css';
 
-	type TabKey = 'terms' | 'wordpress' | 'web-custom' | 'blogger';
+	type TabKey = 'terms' | 'wordpress' | 'emdash' | 'web-custom' | 'blogger';
 	type Tone = 'ok' | 'error' | 'warn' | 'idle';
 	type ChannelMeta = { count: number; tone: Tone };
 
@@ -36,6 +36,7 @@
 	// Dimuat sekali, ringan; detailnya tetap dimuat oleh masing-masing tab.
 	let meta = $state<Record<Exclude<TabKey, 'terms'>, ChannelMeta | null>>({
 		wordpress: null,
+		emdash: null,
 		'web-custom': null,
 		blogger: null
 	});
@@ -45,6 +46,7 @@
 	const TABS: Array<[TabKey, string]> = [
 		['terms', 'Syarat & Ketentuan'],
 		['wordpress', 'WordPress'],
+		['emdash', 'EmDash'],
 		['web-custom', 'Web Custom'],
 		['blogger', 'Blogspot']
 	];
@@ -53,7 +55,7 @@
 		// Hash bisa membawa query (callback OAuth Blogger: #blogger?blogger_connected=1&media=…),
 		// jadi potong di '?' sebelum dibandingkan — parity app lama.
 		const h = page.url.hash.replace(/^#/, '').split('?')[0];
-		if (h === 'wordpress' || h === 'web-custom' || h === 'blogger') return h;
+		if (h === 'wordpress' || h === 'emdash' || h === 'web-custom' || h === 'blogger') return h;
 		return 'terms';
 	}
 
@@ -122,9 +124,15 @@
 		if (connRes.ok) {
 			const rows: any[] = (await connRes.json()).connections ?? [];
 			const active = rows.filter((r) => r.status === 'active');
+			const wpActive = active.filter((r) => r.provider !== 'emdash');
+			const emdashActive = active.filter((r) => r.provider === 'emdash');
 			meta.wordpress = {
-				count: active.length,
-				tone: toneOf(active.map((r) => r.last_test_status ?? ''), 'ok')
+				count: wpActive.length,
+				tone: toneOf(wpActive.map((r) => r.last_test_status ?? ''), 'ok')
+			};
+			meta.emdash = {
+				count: emdashActive.length,
+				tone: toneOf(emdashActive.map((r) => r.last_test_status ?? ''), 'ok')
 			};
 		}
 		if (mediaRes.ok) {
@@ -176,7 +184,7 @@
 	<header class="int-header">
 		<div>
 			<h1 class="page-title">{tr('Integrasi')}</h1>
-			<p class="page-desc">{tr('Sambungkan website media Anda agar artikel klien terkirim otomatis lewat WordPress, website custom, atau Blogspot')}</p>
+			<p class="page-desc">{tr('Sambungkan website media Anda agar artikel klien terkirim otomatis lewat WordPress, EmDash, website custom, atau Blogspot')}</p>
 		</div>
 		{#if !terms.loading}
 			{#if accepted}
@@ -227,14 +235,14 @@
 			{/each}
 		</div>
 		{#if !accepted}
-			<p class="int-tabs-hint">{tr('Tab WordPress, Web Custom, dan Blogspot terbuka setelah Syarat & Ketentuan disetujui')}</p>
+			<p class="int-tabs-hint">{tr('Tab WordPress, EmDash, Web Custom, dan Blogspot terbuka setelah Syarat & Ketentuan disetujui')}</p>
 		{/if}
 
 		{#if tab === 'terms'}
 			<div class="app-card int-terms">
 				<h2 class="int-card-title">{tr('Syarat & Ketentuan Integrasi')}</h2>
 				<div class="int-terms__body">
-					<p>{tr('Dengan menyetujui, Anda memberi Tauthub izin mengirim artikel klien ke akun/website media Anda melalui kanal yang Anda hubungkan di halaman ini (WordPress, Web Custom, atau Blogspot).')}</p>
+					<p>{tr('Dengan menyetujui, Anda memberi Tauthub izin mengirim artikel klien ke akun/website media Anda melalui kanal yang Anda hubungkan di halaman ini (WordPress, EmDash, Web Custom, atau Blogspot).')}</p>
 					<p>{tr('Anda bertanggung jawab memastikan kredensial yang dimasukkan valid dan akun yang terhubung milik media Anda. Tauthub tidak pernah mengubah artikel yang sudah terbit tanpa tindakan Anda.')}</p>
 					<p>{tr('Persetujuan ini dicatat waktunya dan dapat dicabut dengan memutus koneksi di tab terkait.')}</p>
 					<p>{tr('Akses ke media Anda di Tauthub hanya boleh diberikan kepada anggota dengan peran penulis atau maksimal editor. Peran yang lebih tinggi tidak diperbolehkan untuk mengelola media.')}</p>
@@ -261,7 +269,9 @@
 				{/if}
 			</div>
 		{:else if tab === 'wordpress'}
-			<Connections onchange={loadMeta} highlight={highlightTab === 'wordpress' ? highlightId : ''} onhighlighted={clearHighlight} />
+			<Connections provider="wordpress" onchange={loadMeta} highlight={highlightTab === 'wordpress' ? highlightId : ''} onhighlighted={clearHighlight} />
+		{:else if tab === 'emdash'}
+			<Connections provider="emdash" onchange={loadMeta} highlight={highlightTab === 'emdash' ? highlightId : ''} onhighlighted={clearHighlight} />
 		{:else if tab === 'web-custom'}
 			<PublishingApi onchange={loadMeta} highlight={highlightTab === 'web-custom' ? highlightId : ''} onhighlighted={clearHighlight} />
 		{:else}
@@ -274,7 +284,7 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
 		<dialog open class="app-card w-full max-w-sm p-6" aria-label={tr('Konfirmasi persetujuan')}>
 			<h2 class="text-base font-medium">{tr('Setujui Syarat & Ketentuan?')}</h2>
-			<p class="mt-2 text-sm text-muted-foreground">{tr('Setelah disetujui, tab WordPress, Web Custom, dan Blogspot akan terbuka.')}</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr('Setelah disetujui, tab WordPress, EmDash, Web Custom, dan Blogspot akan terbuka.')}</p>
 			<div class="mt-6 flex justify-end gap-2">
 				<button class="app-btn app-btn-soft int-btn" onclick={() => (confirmOpen = false)}>{tr('Batal')}</button>
 				<button class="app-btn app-btn-primary int-btn" disabled={terms.busy} onclick={acceptTerms}>{tr('Ya, setujui')}</button>

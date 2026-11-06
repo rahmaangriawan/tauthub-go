@@ -1,16 +1,24 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
 
-	// Tab WordPress (Koneksi CMS) — port ConnectionsSection app lama
-	// (app/mitra/[partnerId]/[[...section]]/sections.tsx). Provider terkunci ke
-	// WordPress REST API; daftar media diambil dari media mitra ber-website_url.
+	// Tab WordPress dan EmDash (Koneksi CMS) — port ConnectionsSection app lama
+	// (app/mitra/[partnerId]/[[...section]]/sections.tsx). Satu komponen untuk
+	// dua provider (prop provider); daftar media diambil dari media mitra
+	// ber-website_url.
 	import { onMount, tick } from 'svelte';
 	import { Plus } from '@lucide/svelte';
 	import Select from '$lib/components/select.svelte';
 	import Status from './_status.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
-	let { onchange, highlight = '', onhighlighted }: { onchange?: () => void; highlight?: string; onhighlighted?: () => void } = $props();
+	let {
+		provider = 'wordpress',
+		onchange,
+		highlight = '',
+		onhighlighted
+	}: { provider?: 'wordpress' | 'emdash'; onchange?: () => void; highlight?: string; onhighlighted?: () => void } = $props();
+	const isEmdash = $derived(provider === 'emdash');
+	const providerLabel = $derived(isEmdash ? 'EmDash' : 'WordPress');
 
 	// Deep link dari Daftar Media (?media=<id>): dialog Tambah koneksi terbuka
 	// dengan media itu terpilih. Catatan tampil bila media belum punya website URL.
@@ -19,6 +27,14 @@
 	let highlightConnId = $state('');
 	let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 	const hostOf = (u: string) => (u ?? '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0].toLowerCase();
+
+	const EMDASH_TOKEN_STEPS = [
+		'Masuk ke panel admin situs EmDash Anda',
+		'Buka pengaturan akun lalu bagian Personal Access Token (token akses pribadi)',
+		'Buat token baru dengan nama "Tauthub" dan centang izin media:write serta content:write',
+		'Salin token yang muncul (diawali ec_pat_), hanya ditampilkan sekali',
+		'Tempel di kolom Access Token di atas'
+	];
 
 	const APP_PASSWORD_STEPS = [
 		'Masuk ke wp-admin situs Anda, contoh: https://situs-media.example/wp-admin',
@@ -42,7 +58,7 @@
 	let busy = $state(false);
 	let testingId = $state<string | null>(null);
 	let createOpen = $state(false);
-	let form = $state({ website_id: '', name: '', base_url: '', username: '', application_password: '' });
+	let form = $state({ website_id: '', name: '', base_url: '', username: '', application_password: '', access_token: '' });
 
 	const totalPages = $derived(Math.max(1, Math.ceil(rows.length / PAGE_SIZE)));
 	const visibleRows = $derived(rows.slice((pageNumber - 1) * PAGE_SIZE, pageNumber * PAGE_SIZE));
@@ -97,7 +113,9 @@
 				apiRequest('/v1/partner/media?limit=500&offset=0')
 			]);
 			if (connRes.ok) {
-				rows = (await connRes.json()).connections ?? [];
+				// Endpoint mengembalikan semua provider; tiap tab hanya menampilkan miliknya.
+				const all: any[] = (await connRes.json()).connections ?? [];
+				rows = all.filter((r) => (isEmdash ? r.provider === 'emdash' : r.provider !== 'emdash'));
 				goToPage(pageNumber);
 			} else {
 				error = await readApiError(connRes, tr('Gagal memuat koneksi.'));
@@ -116,7 +134,7 @@
 		const media = mediaOptions.find((item) => item.id === id);
 		form.website_id = id;
 		if (media?.website_url) form.base_url = media.website_url;
-		if (!form.name.trim() && media) form.name = `${media.name} WordPress`;
+		if (!form.name.trim() && media) form.name = `${media.name} ${providerLabel}`;
 	}
 
 	async function create(e: SubmitEvent) {
@@ -124,22 +142,30 @@
 		busy = true;
 		error = '';
 		try {
-			// Provider terkunci: koneksi media mitra hanya mendukung WordPress.
-			const body: Record<string, unknown> = {
-				provider: 'wordpress',
-				website_id: form.website_id || null,
-				name: form.name.trim(),
-				base_url: form.base_url.trim(),
-				username: form.username.trim() || null,
-				application_password: form.application_password
-			};
+			// Provider terkunci per tab: WordPress (Application Password) atau EmDash (token).
+			const body: Record<string, unknown> = isEmdash
+				? {
+						provider: 'emdash',
+						website_id: form.website_id || null,
+						name: form.name.trim(),
+						base_url: form.base_url.trim(),
+						secret: form.access_token.trim()
+					}
+				: {
+						provider: 'wordpress',
+						website_id: form.website_id || null,
+						name: form.name.trim(),
+						base_url: form.base_url.trim(),
+						username: form.username.trim() || null,
+						application_password: form.application_password
+					};
 			const res = await apiRequest('/v1/partner/cms-connections', { method: 'POST', body: JSON.stringify(body) });
 			if (!res.ok) {
 				error = await readApiError(res, tr('Gagal menyimpan koneksi.'));
 				return;
 			}
 			createOpen = false;
-			form = { website_id: '', name: '', base_url: '', username: '', application_password: '' };
+			form = { website_id: '', name: '', base_url: '', username: '', application_password: '', access_token: '' };
 			await load();
 		} finally {
 			busy = false;
@@ -197,13 +223,17 @@
 <div class="app-card int-card overflow-hidden">
 	<div class="int-card__head int-card__head--split">
 		<div>
-			<h2 class="int-card__title">{tr('Koneksi WordPress')} <span class="int-card__caption">{rows.length}</span></h2>
-			<p class="int-card__desc">{tr('Artikel untuk media Anda yang berplatform WordPress dikirim lewat koneksi ini memakai Application Password, bukan koneksi brand klien')}</p>
+			<h2 class="int-card__title">{isEmdash ? tr('Koneksi EmDash') : tr('Koneksi WordPress')} <span class="int-card__caption">{rows.length}</span></h2>
+			<p class="int-card__desc">{isEmdash
+				? tr('Artikel untuk media Anda yang berplatform EmDash dikirim lewat koneksi ini memakai token akses pribadi. Judul, deskripsi meta, isi, cover, dan gambar artikel ikut dipindahkan ke media library situs Anda')
+				: tr('Artikel untuk media Anda yang berplatform WordPress dikirim lewat koneksi ini memakai Application Password, bukan koneksi brand klien')}</p>
 		</div>
 		<button class="app-btn app-btn-primary int-btn" type="button" onclick={() => (createOpen = true)}><Plus size={16} strokeWidth={1.5} />{tr('Tambah koneksi')}</button>
 	</div>
 
+	{#if !isEmdash}
 	<p class="px-5 py-4 text-[13px] leading-5 text-muted-foreground" style="border-bottom: 1px solid var(--border);">{tr('Untuk koneksi WordPress, akun yang Anda hubungkan sebaiknya berperan Editor. Akun berperan Penulis tetap bisa menerbitkan artikel, tetapi tidak bisa membuat kategori baru di WordPress. Jika kategori artikel belum ada di situs Anda, artikel akan terbit di kategori bawaan (Uncategorized). Anda bisa membuat kategorinya sendiri sekali saja di WordPress, atau menaikkan peran akun menjadi Editor agar kategori terbuat otomatis.')}</p>
+	{/if}
 
 	{#if error}<p class="int-msg int-msg--error" style="padding-top: 12px;">{error}</p>{/if}
 
@@ -211,7 +241,7 @@
 		<p class="int-empty">{tr('Memuat koneksi…')}</p>
 	{:else if rows.length === 0}
 		<div class="int-empty">
-			<p>{tr('Belum ada koneksi. Tambahkan koneksi WordPress untuk media berplatform WordPress')}</p>
+			<p>{isEmdash ? tr('Belum ada koneksi. Tambahkan koneksi EmDash untuk media berplatform EmDash') : tr('Belum ada koneksi. Tambahkan koneksi WordPress untuk media berplatform WordPress')}</p>
 		</div>
 	{:else}
 		<!-- Desktop (≥768px): tabel -->
@@ -231,7 +261,7 @@
 						<tr id="int-conn-{row.id}" class:int-tr--highlight={row.id === highlightConnId}>
 							<td>
 								<p class="font-medium">{row.name}</p>
-								<p class="int-table__sub">{row.username ?? String(row.id).slice(0, 8)}</p>
+								<p class="int-table__sub">{isEmdash ? String(row.id).slice(0, 8) : (row.username ?? String(row.id).slice(0, 8))}</p>
 							</td>
 							<td class="max-w-[260px]"><span class="int-mono">{row.base_url}</span></td>
 							<td><Status tone={statusTone(row)} label={statusLabel(row)} /></td>
@@ -255,7 +285,7 @@
 					<div class="int-item__head">
 						<div class="min-w-0">
 							<p class="int-item__name">{row.name}</p>
-							<p class="int-meta">{row.username ?? String(row.id).slice(0, 8)}</p>
+							<p class="int-meta">{isEmdash ? String(row.id).slice(0, 8) : (row.username ?? String(row.id).slice(0, 8))}</p>
 						</div>
 						<Status tone={statusTone(row)} label={statusLabel(row)} />
 					</div>
@@ -295,17 +325,17 @@
 {#if createOpen}
 	<div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
 		<dialog open class="app-card w-full max-w-lg p-6" aria-label={tr('Tambah koneksi')}>
-			<h2 class="int-dialog__title">{tr('Tambah koneksi WordPress')}</h2>
+			<h2 class="int-dialog__title">{isEmdash ? tr('Tambah koneksi EmDash') : tr('Tambah koneksi WordPress')}</h2>
 			{#if highlightNote}<p class="int-field__hint" style="color: var(--warning);">{highlightNote}</p>{/if}
 			{#if error}<p class="mt-2 text-sm" style="color: var(--destructive);">{error}</p>{/if}
 			<form class="int-form mt-5" onsubmit={create}>
 				<div class="int-field">
 					<span class="int-field__label">Provider</span>
 					<div class="int-field--locked">
-						<span>WordPress REST API</span>
+						<span>{isEmdash ? 'EmDash REST API' : 'WordPress REST API'}</span>
 						<span class="int-meta">{tr('Terkunci')}</span>
 					</div>
-					<span class="int-field__hint">{tr('Koneksi media mitra hanya mendukung WordPress')}</span>
+					<span class="int-field__hint">{isEmdash ? tr('Tab ini khusus koneksi EmDash') : tr('Koneksi media mitra hanya mendukung WordPress')}</span>
 				</div>
 
 				<label class="int-field">
@@ -325,7 +355,7 @@
 							...mediaOptions.map((media) => ({ value: media.id, label: `${media.name} (${media.website_url})` }))
 						]}
 					/>
-					<span class="int-field__hint">{tr('Diambil dari daftar media Anda; URL WordPress terisi otomatis')}</span>
+					<span class="int-field__hint">{isEmdash ? tr('Diambil dari daftar media Anda; URL EmDash terisi otomatis') : tr('Diambil dari daftar media Anda; URL WordPress terisi otomatis')}</span>
 				</label>
 
 				<label class="int-field">
@@ -333,9 +363,31 @@
 					<input class="app-input" required placeholder={tr('Nama koneksi')} bind:value={form.name} />
 				</label>
 				<label class="int-field">
-					<span class="int-field__label">{tr('URL WordPress')}</span>
+					<span class="int-field__label">{isEmdash ? tr('URL EmDash') : tr('URL WordPress')}</span>
 					<input class="app-input" required readonly placeholder={tr('Pilih media terlebih dahulu')} bind:value={form.base_url} />
 				</label>
+				{#if isEmdash}
+					<label class="int-field">
+						<span class="int-field__label">Access Token</span>
+						<input
+							class="app-input"
+							required
+							type="password"
+							minlength="16"
+							placeholder="ec_pat_…"
+							value={form.access_token}
+							oninput={(e) => (form.access_token = e.currentTarget.value.replace(/\s+/g, ''))}
+						/>
+						<div class="int-steps">
+							<p class="int-steps__title">{tr('Cara membuat Access Token')}</p>
+							<ol>
+								{#each EMDASH_TOKEN_STEPS as step, i (i)}
+									<li><span>{i + 1}</span><span>{step}</span></li>
+								{/each}
+							</ol>
+						</div>
+					</label>
+				{:else}
 				<label class="int-field">
 					<span class="int-field__label">{tr('Username atau email WordPress')}</span>
 					<input class="app-input" required bind:value={form.username} />
@@ -359,6 +411,7 @@
 						</ol>
 					</div>
 				</label>
+				{/if}
 
 				<div class="int-form__foot">
 					<button class="app-btn app-btn-soft int-btn" type="button" onclick={() => { createOpen = false; highlightNote = ''; }}>{tr('Batal')}</button>

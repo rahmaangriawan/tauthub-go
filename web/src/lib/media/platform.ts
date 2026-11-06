@@ -1,10 +1,11 @@
-// Platform website media: WordPress / Blogspot / Custom.
+// Platform website media: WordPress / EmDash / Blogspot / Custom.
 // Media yang artikelnya dikirim lewat API memakai kanalnya (integration_type);
 // media Manual memakai hasil deteksi website_platform. Belum terdeteksi → '—'.
 type PlatformSource = { integration_type?: string | null; website_platform?: string | null };
 
 const NAMES: Record<string, string> = {
 	wordpress: 'WordPress',
+	emdash: 'EmDash',
 	blogger: 'Blogspot',
 	blogspot: 'Blogspot',
 	custom_web: 'Custom',

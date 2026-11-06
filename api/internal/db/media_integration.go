@@ -37,6 +37,17 @@ func MediaIntegrationReadySQL(alias string) string {
 	return "(" + alias + ".integration_type = 'manual' OR (" + MediaIntegrationConnectedSQL(alias) + "))"
 }
 
+// CMSProviderForIntegration: nilai cms_connections.provider yang dipakai untuk
+// tipe integrasi media. Semua tipe di luar webhook dan emdash memakai koneksi
+// WordPress.
+func CMSProviderForIntegration(integrationType string) string {
+	switch integrationType {
+	case "webhook", "emdash":
+		return integrationType
+	}
+	return "wordpress"
+}
+
 // MediaCatalogVisibleSQL: media tampil di katalog klien. Syaratnya sama
 // dengan WHERE katalog clientread: aktif, tidak ditangguhkan, berharga,
 // mitra aktif, tidak disembunyikan mitranya, dan siap dari sisi integrasi.

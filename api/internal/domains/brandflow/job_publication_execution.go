@@ -22,6 +22,7 @@ import (
 
 	contentengine "github.com/rahmaangriawan/tauthub-go/internal/content"
 	"github.com/rahmaangriawan/tauthub-go/internal/crypto"
+	dbpkg "github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
@@ -1196,10 +1197,7 @@ func (d *Deps) peRunCMS(ctx context.Context, publication, media, document, versi
 		connection = found
 	}
 
-	provider := "wordpress"
-	if integrationType == "webhook" {
-		provider = "webhook"
-	}
+	provider := dbpkg.CMSProviderForIntegration(integrationType)
 	if connection == nil {
 		if mediaPartnerID != "" {
 			bound, err := d.queryRow(ctx,

@@ -414,10 +414,7 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 	connectionID := in.ConnectionID
 	partnerID := media.strOr("partner_id", "")
 	if connectionID == nil && partnerID != "" {
-		provider := "wordpress"
-		if media.strOr("integration_type", "manual") == "webhook" {
-			provider = "webhook"
-		}
+		provider := dbpkg.CMSProviderForIntegration(media.strOr("integration_type", "manual"))
 		bound, err := d.queryRow(ctx, dbpkg.CMSConnectionForMediaSQL,
 			partnerID, provider, in.MediaID, media.strOr("website_url", ""))
 		if err != nil {

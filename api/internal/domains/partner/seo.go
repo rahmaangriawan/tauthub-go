@@ -1134,7 +1134,7 @@ func (d *Deps) CMSConnections(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid name")
 		return
 	}
-	if provider != "wordpress" && provider != "webhook" {
+	if provider != "wordpress" && provider != "webhook" && provider != "emdash" {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid provider")
 		return
 	}
@@ -1152,7 +1152,11 @@ func (d *Deps) CMSConnections(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if !hasSecret || len(secret) < 16 || len(secret) > 500 {
-		httpx.Error(w, http.StatusUnprocessableEntity, "secret is required for webhook connections")
+		if provider == "emdash" {
+			httpx.Error(w, http.StatusUnprocessableEntity, "Access Token EmDash wajib diisi (token pribadi dari admin EmDash)")
+		} else {
+			httpx.Error(w, http.StatusUnprocessableEntity, "secret is required for webhook connections")
+		}
 		return
 	}
 	cleanBaseURL := strings.TrimRight(baseURL, "/")
@@ -1160,11 +1164,11 @@ func (d *Deps) CMSConnections(w http.ResponseWriter, r *http.Request) {
 	dupSQL := ""
 	dupArgs := []any{partner.ID}
 	if hasWebsiteID && websiteID != "" {
-		dupSQL = "partner_id = $1 AND website_id = $2 AND provider = 'wordpress' AND status = 'active'"
-		dupArgs = append(dupArgs, websiteID)
+		dupSQL = "partner_id = $1 AND website_id = $2 AND provider = $3 AND status = 'active'"
+		dupArgs = append(dupArgs, websiteID, provider)
 	} else {
-		dupSQL = "partner_id = $1 AND base_url = $2 AND provider = 'wordpress' AND status = 'active'"
-		dupArgs = append(dupArgs, cleanBaseURL)
+		dupSQL = "partner_id = $1 AND base_url = $2 AND provider = $3 AND status = 'active'"
+		dupArgs = append(dupArgs, cleanBaseURL, provider)
 	}
 	existing, err := d.queryRow(r.Context(),
 		"SELECT id FROM cms_connections WHERE "+dupSQL+" LIMIT 1", dupArgs...)
@@ -1173,7 +1177,13 @@ func (d *Deps) CMSConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if existing != nil {
-		httpx.Error(w, http.StatusConflict, "Koneksi WordPress untuk website atau URL ini sudah aktif")
+		label := "WordPress"
+		if provider == "emdash" {
+			label = "EmDash"
+		} else if provider == "webhook" {
+			label = "Webhook"
+		}
+		httpx.Error(w, http.StatusConflict, "Koneksi "+label+" untuk website atau URL ini sudah aktif")
 		return
 	}
 
@@ -1345,7 +1355,7 @@ func (d *Deps) CMSConnectionTest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusUnprocessableEntity, payload)
 }
 
-// testCMSConnection: parity testConnection (wordpress/webhook).
+// testCMSConnection: parity testConnection (wordpress/webhook) + emdash.
 func (d *Deps) testCMSConnection(r *http.Request, conn rowMap) map[string]any {
 	secret, secretErr := d.connectionSecret(conn)
 	if secretErr != nil {
@@ -1354,6 +1364,9 @@ func (d *Deps) testCMSConnection(r *http.Request, conn rowMap) map[string]any {
 	baseURL := conn.strOr("base_url", "")
 	if conn.strOr("provider", "wordpress") == "webhook" {
 		return d.testWebhook(r, baseURL, secret)
+	}
+	if conn.strOr("provider", "wordpress") == "emdash" {
+		return d.testEmdash(r, baseURL, secret)
 	}
 	return d.testWordPress(r, baseURL, conn.strOr("username", ""), secret)
 }
@@ -1415,6 +1428,45 @@ func (d *Deps) testWordPress(r *http.Request, baseURL, username, secret string) 
 	}
 	return map[string]any{"status": "ok",
 		"message": "Connected as " + label + " with post creation permission"}
+}
+
+// testEmdash: uji koneksi EmDash — GET /_emdash/api/media?limit=1 dengan token
+// pribadi. Envelope sukses { success: true, data }, gagal { success: false,
+// error: { code, message } }. Menjelaskan sebab gagal dalam bahasa mitra.
+func (d *Deps) testEmdash(r *http.Request, baseURL, secret string) map[string]any {
+	target := strings.TrimRight(strings.TrimSpace(baseURL), "/") + "/_emdash/api/media?limit=1"
+	headers := map[string]string{
+		"Authorization": "Bearer " + strings.TrimSpace(secret),
+		"Accept":        "application/json",
+	}
+	resp, err := wpRequest(r.Context(), target, http.MethodGet, headers, "", 20*time.Second)
+	if err != nil {
+		return map[string]any{"status": "error", "message": truncateRunes(describeWordPressNetErr(err, target), 500)}
+	}
+	var env struct {
+		Success bool `json:"success"`
+		Error   *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	parsed := jsonUnmarshal(resp.body, &env) == nil
+	if resp.status >= 200 && resp.status < 300 && parsed && env.Success {
+		return map[string]any{"status": "ok",
+			"message": "Terhubung ke EmDash. Pastikan token punya izin media:write dan content:write agar artikel dan gambarnya bisa dikirim"}
+	}
+	switch {
+	case resp.status == http.StatusUnauthorized || resp.status == http.StatusForbidden:
+		return map[string]any{"status": "error",
+			"message": "EmDash menolak token ini. Buat token pribadi baru di admin EmDash dengan izin media:write dan content:write, lalu perbarui koneksi dan uji lagi"}
+	case resp.status == http.StatusNotFound || !parsed:
+		return map[string]any{"status": "error",
+			"message": "Alamat ini tidak terbaca sebagai situs EmDash (" + itoa(resp.status) + "). Periksa kembali alamat situs dan pastikan EmDash sudah terpasang di sana"}
+	}
+	if env.Error != nil && env.Error.Message != "" {
+		return map[string]any{"status": "error", "message": truncateRunes("EmDash membalas: "+env.Error.Message, 500)}
+	}
+	return map[string]any{"status": "error", "message": "EmDash membalas " + itoa(resp.status) + ": " + truncateRunes(resp.body, 200)}
 }
 
 func firstStringField(m map[string]any, keys ...string) string {

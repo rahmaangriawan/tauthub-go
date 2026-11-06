@@ -2511,10 +2511,7 @@ func (d *Deps) mpCreatePublicationRecord(ctx context.Context, in mpCreatePublica
 	if in.ConnectionID != "" {
 		connectionID = in.ConnectionID
 	} else if mrow.has("partner_id") {
-		provider := "wordpress"
-		if mrow.strOr("integration_type", "manual") == "webhook" {
-			provider = "webhook"
-		}
+		provider := dbpkg.CMSProviderForIntegration(mrow.strOr("integration_type", "manual"))
 		bound, _ := d.queryRow(ctx, dbpkg.CMSConnectionForMediaSQL,
 			mrow.anyOrNil("partner_id"), provider, in.MediaID, mrow.strOr("website_url", ""))
 		if bound != nil {

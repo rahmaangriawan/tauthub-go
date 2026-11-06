@@ -198,10 +198,7 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 
 	// Snapshot target koneksi saat pembuatan (partner media).
 	partnerID := media.strOr("partner_id", "")
-	provider := "wordpress"
-	if media.strOr("integration_type", "manual") == "webhook" {
-		provider = "webhook"
-	}
+	provider := dbpkg.CMSProviderForIntegration(media.strOr("integration_type", "manual"))
 	var connectionID any
 	if partnerID != "" {
 		bound, err := d.queryRow(ctx, dbpkg.CMSConnectionForMediaSQL,

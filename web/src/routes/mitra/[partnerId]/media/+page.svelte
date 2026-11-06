@@ -571,6 +571,8 @@
 		switch (m.integration_type) {
 			case 'blogger':
 				return { platform: 'Blogspot', anchor: 'blogger' };
+			case 'emdash':
+				return { platform: 'EmDash', anchor: 'emdash' };
 			case 'custom_web':
 			case 'tulisio_api':
 				return { platform: 'Custom Web', anchor: 'web-custom' };
@@ -2875,16 +2877,22 @@
 											<div class="text-xs font-semibold text-slate-700">{tr('Platform Tujuan')}</div>
 											<div class="flex flex-wrap items-center gap-2">
 												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'wordpress'} class:app-btn-soft={form.integration_type !== 'wordpress'} onclick={() => (form.integration_type = 'wordpress')}>WordPress</button>
+												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'emdash'} class:app-btn-soft={form.integration_type !== 'emdash'} onclick={() => (form.integration_type = 'emdash')}>EmDash</button>
 												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'blogger'} class:app-btn-soft={form.integration_type !== 'blogger'} onclick={() => (form.integration_type = 'blogger')}>Blogspot</button>
 												<button type="button" class="app-btn !min-h-7 !px-2.5 !text-xs font-medium" class:app-btn-primary={form.integration_type === 'custom_web'} class:app-btn-soft={form.integration_type !== 'custom_web'} onclick={() => (form.integration_type = 'custom_web')}>Custom Web</button>
 												<span class="text-xs text-muted-foreground">
-													{form.integration_type === 'wordpress' ? tr('Butuh koneksi WordPress') : form.integration_type === 'blogger' ? tr('Butuh koneksi Blogspot') : tr('Butuh endpoint API')}
+													{form.integration_type === 'wordpress' ? tr('Butuh koneksi WordPress') : form.integration_type === 'emdash' ? tr('Butuh koneksi EmDash') : form.integration_type === 'blogger' ? tr('Butuh koneksi Blogspot') : tr('Butuh endpoint API')}
 												</span>
 											</div>
 											{#if form.integration_type === 'wordpress'}
 												<div class="flex items-start gap-2 rounded-xl p-3 text-xs bg-blue-50 text-blue-800 border border-blue-100">
 													<Info size={14} class="mt-0.5 shrink-0 text-blue-600" />
 													<span>{tr('Domain perlu di-ACC Admin terlebih dahulu, setelah disetujui silakan koneksikan di halaman')} <a class="underline font-semibold" href={`${base}/connections`}>{tr('WordPress')}</a>.</span>
+												</div>
+											{:else if form.integration_type === 'emdash'}
+												<div class="flex items-start gap-2 rounded-xl p-3 text-xs bg-blue-50 text-blue-800 border border-blue-100">
+													<Info size={14} class="mt-0.5 shrink-0 text-blue-600" />
+													<span>{tr('Domain perlu di-ACC Admin terlebih dahulu, setelah disetujui buat token akses di admin EmDash lalu koneksikan di halaman')} <a class="underline font-semibold" href={`${base}/integrations#emdash`}>{tr('EmDash')}</a>.</span>
 												</div>
 											{:else if form.integration_type === 'blogger'}
 												<div class="flex items-start gap-2 rounded-xl p-3 text-xs bg-blue-50 text-blue-800 border border-blue-100">
