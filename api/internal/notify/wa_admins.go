@@ -26,21 +26,26 @@ const (
 	AdminEventMediaSubmitted      = "admin.media_submitted"
 	AdminEventWithdrawalRequested = "admin.withdrawal_requested"
 	AdminEventTicketCreated       = "admin.ticket_created"
+	// Laporan artikel terbit untuk tim admin (grup WA bila diisi), dengan tautan
+	// halaman admin, bukan tautan mitra.
+	AdminEventPublicationPublished = "admin.publication_published"
 )
 
 // AdminWADefaultTemplates: template bawaan event admin (satu sumber; platform
 // menggabungkan peta ini ke daftar template di halaman WA Gateway).
 var AdminWADefaultTemplates = map[string]string{
-	AdminEventMediaSubmitted:      "📥 *Pengajuan media baru*\n{nama} mengajukan \"{judul}\".\n\nReview: {link}",
-	AdminEventWithdrawalRequested: "💸 *Penarikan dana baru*\n{nama} mengajukan pencairan {jumlah}.\n\nReview: {link}",
-	AdminEventTicketCreated:       "🎫 *Tiket dukungan baru*\n{nama}: {judul}\n\nBuka: {link}",
+	AdminEventMediaSubmitted:       "📥 *Pengajuan media baru*\n{nama} mengajukan \"{judul}\".\n\nReview: {link}",
+	AdminEventWithdrawalRequested:  "💸 *Penarikan dana baru*\n{nama} mengajukan pencairan {jumlah}.\n\nReview: {link}",
+	AdminEventTicketCreated:        "🎫 *Tiket dukungan baru*\n{nama}: {judul}\n\nBuka: {link}",
+	AdminEventPublicationPublished: "✅ *Artikel terbit*\n\"{judul}\" dari {nama} sudah TERBIT di {media}.\n\nCek di admin: {link}",
 }
 
 // AdminWAPreviewLinks: contoh tautan untuk pratinjau template di admin.
 var AdminWAPreviewLinks = map[string]string{
-	AdminEventMediaSubmitted:      "https://app.tauthub.com/admin/media?status=pending_review",
-	AdminEventWithdrawalRequested: "https://app.tauthub.com/admin/settlements",
-	AdminEventTicketCreated:       "https://app.tauthub.com/admin/dukungan",
+	AdminEventMediaSubmitted:       "https://app.tauthub.com/admin/media?status=pending_review",
+	AdminEventWithdrawalRequested:  "https://app.tauthub.com/admin/settlements",
+	AdminEventTicketCreated:        "https://app.tauthub.com/admin/dukungan",
+	AdminEventPublicationPublished: "https://app.tauthub.com/admin/publications/pub-contoh",
 }
 
 // AdminWAOptions: satu kejadian yang perlu dikabarkan ke admin via WA.

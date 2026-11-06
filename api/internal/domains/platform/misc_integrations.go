@@ -1541,6 +1541,7 @@ var igWAEventWired = func() map[string]bool {
 	wired[notify.AdminEventMediaSubmitted] = true
 	wired[notify.AdminEventWithdrawalRequested] = true
 	wired[notify.AdminEventTicketCreated] = true
+	wired[notify.AdminEventPublicationPublished] = true
 	return wired
 }()
 

@@ -845,6 +845,14 @@ func (d *Deps) publicationPublishedNotification(ctx context.Context, publication
 	// WA ke klien (semua anggota brand) dengan template audiens klien.
 	if !draftDelivery {
 		d.publicationWAtoBrandMembers(ctx, row.strOr("brand_id", ""), "publication.published", publicationID, article, mediaName, brandLink, "")
+		// Laporan ke tim admin (grup WA / admin ber-nomor) dengan tautan halaman admin.
+		notify.EnqueueAdminsWA(ctx, d.Pool, notify.AdminWAOptions{
+			Event:       notify.AdminEventPublicationPublished,
+			ReferenceID: publicationID,
+			Data:        map[string]string{"nama": brandName, "judul": article, "media": mediaName},
+			Link:        "/admin/publications/" + publicationID,
+			BaseURL:     notify.BaseURL(),
+		})
 	}
 }
 

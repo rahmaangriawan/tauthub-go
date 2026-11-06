@@ -108,9 +108,10 @@ var WALabels = map[string]map[string]string{
 		"security.login":               "Notifikasi login",
 	},
 	AudienceAdmin: {
-		AdminEventMediaSubmitted:      "Admin · Pengajuan media/domain",
-		AdminEventWithdrawalRequested: "Admin · Penarikan dana",
-		AdminEventTicketCreated:       "Admin · Tiket dukungan baru",
+		AdminEventMediaSubmitted:       "Admin · Pengajuan media/domain",
+		AdminEventWithdrawalRequested:  "Admin · Penarikan dana",
+		AdminEventTicketCreated:        "Admin · Tiket dukungan baru",
+		AdminEventPublicationPublished: "Admin · Artikel terbit",
 	},
 }
 
