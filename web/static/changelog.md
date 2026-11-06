@@ -24,6 +24,7 @@ Catatan:
 ### Fitur
 - **Daftar akun lebih aman lewat kode OTP email**: kode verifikasi dikirim sebelum akun dibuat, email sementara (temp-mail) ditolak, dan kamu mendapat notifikasi setiap ada login baru ke akunmu.
 - **Halaman Integrasi mitra didesain ulang** dengan tab WordPress, Web Custom, dan Blogspot yang lebih rapi. Tes koneksi WordPress kini memberi petunjuk perbaikan yang jelas, dan ada catatan bahwa akun WordPress berperan Penulis tidak bisa membuat kategori baru (gunakan peran Editor).
+- **Tab Integrasi menyesuaikan platform media Anda**: tab WordPress, EmDash, Web Custom, dan Blogspot yang belum dipakai media mana pun tampil abu-abu dan tidak bisa diklik, jadi mitra langsung tahu kanal mana yang relevan.
 - **Ikon mata di Daftar Media jadi saklar**: mitra bisa menyembunyikan atau menampilkan media dari katalog klien. Untuk media yang belum tersambung, klik ikon mata membawa langsung ke halaman Integrasi dengan media itu disorot.
 - **Kolom Platform di Daftar Media**: WordPress, Blogspot, atau Custom terdeteksi otomatis dari website media.
 - **Form Tambah/Edit media dikelompokkan jadi 5 bagian** agar lebih mudah diisi, dengan pilihan jenis tautan Dofollow, Nofollow, atau Sponsored.
