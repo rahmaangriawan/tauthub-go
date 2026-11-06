@@ -43,28 +43,35 @@ func (d *Deps) notifyLogin(sessionID string, user SessionUser, ip, ua string, at
 		"platform": platform,
 	}
 
-	uid := user.ID
-	deliveryID, status, err := emailqueue.SendTransactionalEmail(ctx, d.Pool, emailqueue.SendOptions{
-		Template:        "login-alert",
-		To:              user.Email,
-		RecipientUserID: &uid,
-		ReferenceID:     &sessionID,
-		Event:           "security.login",
-		DedupeKey:       strPtr("login:" + sessionID),
-		Data:            data,
-		Audience:        emailqueue.AudienceForRole(user.Role),
-	})
-	if err != nil {
-		slog.Warn("[auth] email notifikasi login gagal diantrekan", "err", err, "user", user.ID)
-	} else if status == "queued" && deliveryID != "" {
-		emailqueue.ProcessEmailInline(ctx, d.Pool, d.Cfg.CmsEncryptionSecret, deliveryID)
+	// Akun admin: informasi login hanya lewat WA (nomor diisi di halaman Admins),
+	// email tidak dikirim.
+	if user.Role != "admin" {
+		uid := user.ID
+		deliveryID, status, err := emailqueue.SendTransactionalEmail(ctx, d.Pool, emailqueue.SendOptions{
+			Template:        "login-alert",
+			To:              user.Email,
+			RecipientUserID: &uid,
+			ReferenceID:     &sessionID,
+			Event:           "security.login",
+			DedupeKey:       strPtr("login:" + sessionID),
+			Data:            data,
+			Audience:        emailqueue.AudienceForRole(user.Role),
+		})
+		if err != nil {
+			slog.Warn("[auth] email notifikasi login gagal diantrekan", "err", err, "user", user.ID)
+		} else if status == "queued" && deliveryID != "" {
+			emailqueue.ProcessEmailInline(ctx, d.Pool, d.Cfg.CmsEncryptionSecret, deliveryID)
+		}
 	}
 
 	audience := notify.AudienceClient
-	if user.Role == "partner" {
+	switch user.Role {
+	case "partner":
 		audience = notify.AudiencePartner
+	case "admin":
+		audience = notify.AudienceAdmin
 	}
-	if user.Role == "client" || user.Role == "partner" {
+	if user.Role == "client" || user.Role == "partner" || user.Role == "admin" {
 		notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
 			Audience: audience, Event: "security.login", UserID: user.ID,
 			ReferenceID: sessionID, Data: data,

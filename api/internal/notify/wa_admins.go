@@ -182,6 +182,9 @@ func EnqueueAdminsWA(ctx context.Context, pool *pgxpool.Pool, opts AdminWAOption
 
 // normalizeWANumber: salinan aturan platform.igWANormalizeNumber (paket notify
 // tidak boleh mengimpor domain platform — arah dependensinya sebaliknya).
+// NormalizeWANumber: bentuk angka internasional untuk nomor WA, atau "" bila tidak sah.
+func NormalizeWANumber(raw, countryCode string) string { return normalizeWANumber(raw, countryCode) }
+
 func normalizeWANumber(raw, countryCode string) string {
 	if raw == "" {
 		return ""

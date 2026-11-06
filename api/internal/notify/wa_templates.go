@@ -44,14 +44,14 @@ var WADefaultTemplates = map[string]map[string]string{
 		"referral.cpa.credited":        "Halo {nama}, fee referral {jumlah} sudah dikreditkan untuk domain {judul}.\n\nDetail: {link}",
 		"ticket.replied":               "Halo {nama}, tiket dukungan \"{judul}\" dibalas admin.\n\nBalasan: {status}\nDetail: {link}",
 		"ticket.closed":                "Halo {nama}, tiket dukungan \"{judul}\" sudah ditandai selesai.\n\nDetail: {link}",
-		"security.login":               "Halo {nama}, kami mendeteksi bahwa Anda berhasil login dengan perangkat berikut :\n\nIP Address: {ip}\nTanggal dan Waktu: {waktu}\nWeb Browser: {browser}\nPlatform: {platform}\n\nJika ini adalah Anda, abaikan pesan ini, jika bukan Anda silakan hubungi kami di\n\nWA : care@tauthub.com\nEmail : +62 851-2466-5015",
+		"security.login":               "Halo {nama}, kami mendeteksi bahwa Anda berhasil login dengan perangkat berikut :\n\nIP Address: {ip}\nTanggal dan Waktu: {waktu}\nWeb Browser: {browser}\nPlatform: {platform}\n\nJika ini adalah Anda, abaikan pesan ini, jika bukan Anda silakan hubungi kami di\n\nWA : +62 851-2466-5015\nEmail : care@tauthub.com",
 	},
 	AudienceClient: {
 		"publication.partner_approved": "Halo {nama}, media \"{judul}\" sudah menyetujui artikel Anda dan sedang diantrekan untuk terbit.\n\nDetail: {link}",
 		"publication.partner_rejected": "Halo {nama}, media menolak artikel \"{judul}\".\n\nAlasan: {status}\nDetail: {link}",
 		"publication.published":        "Halo {nama}, artikel \"{judul}\" sudah TERBIT di {media} dan tautannya aktif.\n\nLihat: {link}",
 		"publication.failed":           "Halo {nama}, artikel \"{judul}\" gagal diterbitkan.\n\nKeterangan: {status}\nDetail: {link}",
-		"security.login":               "Halo {nama}, kami mendeteksi bahwa Anda berhasil login dengan perangkat berikut :\n\nIP Address: {ip}\nTanggal dan Waktu: {waktu}\nWeb Browser: {browser}\nPlatform: {platform}\n\nJika ini adalah Anda, abaikan pesan ini, jika bukan Anda silakan hubungi kami di\n\nWA : care@tauthub.com\nEmail : +62 851-2466-5015",
+		"security.login":               "Halo {nama}, kami mendeteksi bahwa Anda berhasil login dengan perangkat berikut :\n\nIP Address: {ip}\nTanggal dan Waktu: {waktu}\nWeb Browser: {browser}\nPlatform: {platform}\n\nJika ini adalah Anda, abaikan pesan ini, jika bukan Anda silakan hubungi kami di\n\nWA : +62 851-2466-5015\nEmail : care@tauthub.com",
 	},
 	AudienceAdmin: {},
 }
@@ -123,6 +123,10 @@ func init() {
 	for event, link := range AdminWAPreviewLinks {
 		WAPreviewLinks[AudienceAdmin][event] = link
 	}
+	// Informasi login admin dikirim hanya lewat WA (tanpa email); teksnya sama
+	// dengan notifikasi login mitra/klien.
+	WADefaultTemplates[AudienceAdmin]["security.login"] = WADefaultTemplates[AudiencePartner]["security.login"]
+	WALabels[AudienceAdmin]["security.login"] = "Admin · Notifikasi login"
 }
 
 // WADefaultTemplate: teks bawaan untuk (audiens, event). Kosong bila event itu

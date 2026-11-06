@@ -6,7 +6,7 @@
 	// punya route `/admin/admins`; menu baru di shell memisahkan daftar admin
 	// dari matriks role, jadi halaman ini fokus pada direktori + tambah admin.
 	import { onMount } from 'svelte';
-	import { Plus, ShieldCheck, Trash, TriangleAlert } from '@lucide/svelte';
+	import { MessageCircle, Plus, ShieldCheck, Trash, TriangleAlert } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
@@ -19,6 +19,7 @@
 	type AdminRow = {
 		user_id: string; email: string; display_name: string; is_active: boolean;
 		role: AdminRole; permissions: Record<string, boolean>; created_at: string;
+		wa_number?: string; wa_consent?: boolean;
 	};
 
 	const PERMISSION_KEYS = [
@@ -56,6 +57,35 @@
 	let draftRole = $state<AdminRole>('admin');
 	let draftPerms = $state<Record<string, boolean>>(emptyPermissions());
 	let deleting = $state<AdminRow | null>(null);
+	let waTarget = $state<AdminRow | null>(null);
+	let waDraft = $state('');
+	let waError = $state('');
+
+	function openWa(admin: AdminRow) {
+		waTarget = admin;
+		waDraft = admin.wa_number ?? '';
+		waError = '';
+	}
+
+	async function saveWa(e: SubmitEvent) {
+		e.preventDefault();
+		if (!waTarget) return;
+		busy = true;
+		waError = '';
+		const res = await apiRequest(`/v1/platform/admins/${waTarget.user_id}/wa-number`, {
+			method: 'PUT',
+			body: JSON.stringify({ wa_number: waDraft })
+		});
+		if (!res.ok) {
+			waError = await platformError(res);
+			busy = false;
+			return;
+		}
+		const updated: AdminRow = await res.json();
+		rows = rows.map((item) => (item.user_id === updated.user_id ? updated : item));
+		waTarget = null;
+		busy = false;
+	}
 	let currentUserId = $state('');
 
 	onMount(() => {
@@ -138,12 +168,13 @@
 	{:else}
 		<Feedback {loading} {error} loadingText="Memuat daftar admin…" />
 		<div class="app-card mt-4 overflow-x-auto">
-			<table class="w-full text-sm" style="min-width: 820px;">
+			<table class="w-full text-sm" style="min-width: 960px;">
 				<thead>
 					<tr class="text-left text-xs text-muted-foreground">
 						<th class="px-4 py-2.5 font-medium">Admin</th>
 						<th class="px-4 py-2.5 font-medium">Role</th>
 						<th class="px-4 py-2.5 font-medium">Hak Akses</th>
+						<th class="px-4 py-2.5 font-medium">WhatsApp</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Dibuat")}</th>
 						<th class="px-4 py-2.5"></th>
 					</tr>
@@ -173,6 +204,14 @@
 										{PERMISSION_KEYS.filter((key) => admin.permissions[key]).map((key) => PERMISSION_LABELS[key]).join(', ') || tr('Belum ada hak akses.')}
 									</p>
 									<a class="text-xs" style="color: var(--primary);" href="/admin/roles">Atur di Role & Akses →</a>
+								{/if}
+							</td>
+							<td class="px-4 py-2.5">
+								{#if admin.wa_number}
+									<p class="text-xs tabular-nums">+{admin.wa_number}</p>
+									<button class="text-xs" style="color: var(--primary);" type="button" onclick={() => openWa(admin)}>{tr('Ubah nomor')}</button>
+								{:else}
+									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => openWa(admin)}><MessageCircle size={14} />{tr('Tambahkan nomor WA')}</button>
 								{/if}
 							</td>
 							<td class="px-4 py-2.5 text-xs text-muted-foreground">{fmtDate(admin.created_at)}</td>
@@ -240,6 +279,28 @@
 			<div class="mt-1 flex justify-end gap-2 border-t pt-4">
 				<button class="app-btn app-btn-soft" type="button" onclick={() => (dialogOpen = false)}>{tr("Batal")}</button>
 				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Tambah admin')}</button>
+			</div>
+		</form>
+	</Modal>
+{/if}
+
+{#if waTarget}
+	<Modal title={tr("Nomor WhatsApp admin")} label={tr("Nomor WhatsApp admin")} maxWidth="md" onClose={() => (waTarget = null)}>
+		<p class="text-sm text-muted-foreground">
+			{tr('Nomor ini dipakai khusus untuk mengirim informasi login ke WhatsApp')} {waTarget.display_name || waTarget.email}. {tr('Email tidak dikirim.')}
+		</p>
+		<form class="mt-4 flex flex-col gap-3" onsubmit={saveWa}>
+			<label class="block">
+				<span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr('Nomor WhatsApp')}</span>
+				<input class="app-input w-full" type="tel" inputmode="tel" placeholder="0812 3456 7890" bind:value={waDraft} />
+				<span class="mt-1 block text-xs text-muted-foreground">{tr('Kosongkan lalu simpan untuk menghapus nomor.')}</span>
+			</label>
+			{#if waError}
+				<div class="flex items-start gap-2 text-sm" style="color: var(--destructive);"><TriangleAlert size={16} class="mt-0.5 shrink-0" />{waError}</div>
+			{/if}
+			<div class="mt-1 flex justify-end gap-2 border-t pt-4">
+				<button class="app-btn app-btn-soft" type="button" onclick={() => (waTarget = null)}>{tr('Batal')}</button>
+				<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Simpan')}</button>
 			</div>
 		</form>
 	</Modal>

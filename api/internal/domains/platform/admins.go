@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"sort"
@@ -9,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/adminshared"
+	"github.com/rahmaangriawan/tauthub-go/internal/notify"
 )
 
 // Modul admins: port app/v1/platform/admins/**.
@@ -20,9 +22,11 @@ import (
 // modul platform lain yang berbagi package.
 
 const admListSQL = `SELECT pa.user_id, pa.role, pa.permissions, pa.created_at,
-       u.email, u.display_name, u.is_active
+       u.email, u.display_name, u.is_active,
+       np.wa_number, COALESCE(np.wa_consent, false) AS wa_consent
 FROM platform_admins pa
-JOIN users u ON u.id = pa.user_id`
+JOIN users u ON u.id = pa.user_id
+LEFT JOIN notification_preferences np ON np.user_id = pa.user_id`
 
 // admGenericError: parity adminError untuk kegagalan non-duplikat. Dibiarkan
 // error biasa supaya WriteErr men-scrub pesan di production (parity apiError).
@@ -45,6 +49,8 @@ func admAdminJSON(row rowMap) map[string]any {
 		"email":        row.strOr("email", ""),
 		"display_name": row.strOr("display_name", ""),
 		"is_active":    row.boolOr("is_active", false),
+		"wa_number":    row.strOr("wa_number", ""),
+		"wa_consent":   row.boolOr("wa_consent", false),
 	}
 }
 
@@ -466,4 +472,70 @@ func (d *Deps) AdminsDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	d.audit(r.Context(), user.ID, "platform.admin.revoked", "user", adminID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// AdminsWANumber: PUT /v1/platform/admins/{adminId}/wa-number
+// Mengisi/mengganti/menghapus nomor WhatsApp admin. Nomor itu hanya dipakai
+// untuk mengirim informasi login admin lewat WA (email tidak dikirim).
+func (d *Deps) AdminsWANumber(w http.ResponseWriter, r *http.Request) {
+	user, ctx, ok := d.adminGuard(w, r, "")
+	if !ok {
+		return
+	}
+	if !ctx.IsSuperAdmin() {
+		writeErr(w, d, errNotFound("Resource not found"))
+		return
+	}
+	adminID := chiParam(r, "adminId")
+	target, err := d.queryRow(r.Context(), "SELECT user_id FROM platform_admins WHERE user_id = $1 LIMIT 1", adminID)
+	if err != nil {
+		writeErr(w, d, admGenericError)
+		return
+	}
+	if target == nil {
+		writeErr(w, d, errNotFound("Admin tidak ditemukan."))
+		return
+	}
+	var body struct {
+		WaNumber string `json:"wa_number"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, d, errUnprocessable("Payload tidak valid"))
+		return
+	}
+	raw := strings.TrimSpace(body.WaNumber)
+	var number any
+	consent := false
+	if raw != "" {
+		country := "62"
+		if row, qerr := d.queryRow(r.Context(), "SELECT country_code FROM platform_wa_config WHERE id = 'default' LIMIT 1"); qerr == nil && row != nil {
+			country = row.strOr("country_code", "62")
+		}
+		normalized := notify.NormalizeWANumber(raw, country)
+		if normalized == "" {
+			writeErr(w, d, errUnprocessable("Nomor WA tidak valid. Contoh: 0812 3456 7890"))
+			return
+		}
+		number = normalized
+		consent = true
+	}
+	if err := d.exec(r.Context(), `
+		INSERT INTO notification_preferences (user_id, wa_number, wa_consent, created_at, updated_at)
+		VALUES ($1, $2, $3, NOW(), NOW())
+		ON CONFLICT (user_id) DO UPDATE SET wa_number = EXCLUDED.wa_number, wa_consent = EXCLUDED.wa_consent, updated_at = NOW()`,
+		adminID, number, consent); err != nil {
+		writeErr(w, d, admGenericError)
+		return
+	}
+	action := "platform.admin.wa_set"
+	if number == nil {
+		action = "platform.admin.wa_cleared"
+	}
+	d.audit(r.Context(), user.ID, action, "user", adminID)
+	row, err := d.queryRow(r.Context(), admListSQL+" WHERE pa.user_id = $1 LIMIT 1", adminID)
+	if err != nil || row == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		return
+	}
+	writeJSON(w, http.StatusOK, admAdminJSON(row))
 }

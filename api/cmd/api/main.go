@@ -682,6 +682,7 @@ func run() error {
 			authed.Post("/platform/admins", platformDeps.AdminsCreate)
 			authed.Get("/platform/admins/me", platformDeps.AdminsMe)
 			authed.Patch("/platform/admins/{adminId}", platformDeps.AdminsUpdate)
+			authed.Put("/platform/admins/{adminId}/wa-number", platformDeps.AdminsWANumber)
 			authed.Delete("/platform/admins/{adminId}", platformDeps.AdminsDelete)
 
 			// Riwayat notifikasi admin (per user admin yang login).
