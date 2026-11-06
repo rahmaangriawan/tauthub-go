@@ -21,6 +21,7 @@
 	import WaGatewayPanel from '../wa-gateway/wa-gateway-panel.svelte';
 	import EmailTemplatesPanel from './email-templates-panel.svelte';
 	import DomainBlocksPanel from './domain-blocks-panel.svelte';
+	import EmailLogPanel from './email-log-panel.svelte';
 
 	type SeoConfig = {
 		api_key_configured: boolean;
@@ -156,6 +157,7 @@
 		{ key: 'seo', label: 'SEO Metrics' },
 		{ key: 'pagespeed', label: 'API Pagespeed' },
 		{ key: 'smtp', label: 'Email / SMTP' },
+		{ key: 'email-log', label: 'Log Email' },
 		{ key: 'gsc', label: 'Integrasi GSC' },
 		{ key: 'ga4', label: 'GA4 Config' },
 		{ key: 'wa', label: 'WA Gateway' },
@@ -1486,6 +1488,10 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 	{/if}
 
 	<!-- Turnstile -->
+	{#if tab === 'email-log'}
+		<EmailLogPanel />
+	{/if}
+
 	{#if tab === 'domain'}
 		<div class="mt-4"><DomainBlocksPanel /></div>
 	{/if}

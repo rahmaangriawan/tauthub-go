@@ -224,33 +224,82 @@ func (d *Deps) SettingsEmailDeliveries(w http.ResponseWriter, r *http.Request) {
 	limit := clampInt(q.Get("limit"), 50, 1, 200)
 	offset := clampInt(q.Get("offset"), 0, 0, 1<<30)
 	status := strings.TrimSpace(q.Get("status"))
+	template := strings.TrimSpace(q.Get("template"))
+	search := strings.TrimSpace(q.Get("q"))
+	role := strings.TrimSpace(q.Get("role"))
 
-	where := ""
+	// Peran penerima: dari user_id bila ada, kalau tidak dicocokkan lewat alamat email.
+	const from = ` FROM email_deliveries d
+		LEFT JOIN users u ON u.id = d.user_id
+		LEFT JOIN users ue ON d.user_id IS NULL AND lower(ue.email) = lower(d.recipient_email) `
+	const roleExpr = "COALESCE(u.role, ue.role)"
+
+	conds := []string{}
 	params := []any{}
+	add := func(cond string, v any) {
+		params = append(params, v)
+		conds = append(conds, strings.ReplaceAll(cond, "?", "$"+ptItoa(len(params))))
+	}
 	if status != "" && aiContains([]string{"queued", "sending", "sent", "failed", "rate_limited", "skipped"}, status) {
-		where = "WHERE status = $1"
-		params = append(params, status)
+		add("d.status = ?", status)
 	}
-	// LIMIT/OFFSET memakai placeholder setelah param filter.
+	if template != "" {
+		add("d.template = ?", template)
+	}
+	if search != "" {
+		add("d.recipient_email ILIKE ?", "%"+search+"%")
+	}
+	if role == "client" || role == "partner" {
+		add(roleExpr+" = ?", role)
+	}
+	where := ""
+	if len(conds) > 0 {
+		where = " WHERE " + strings.Join(conds, " AND ")
+	}
+
 	limitIdx := len(params) + 1
-	sql := `SELECT id, template, recipient_email, user_id, reference_id, event, status, attempts, max_attempts, next_attempt_at, provider, provider_message_id, error_code, error_message, sent_at, created_at
-		FROM email_deliveries ` + where + ` ORDER BY created_at DESC LIMIT $` + ptItoa(limitIdx) + ` OFFSET $` + ptItoa(limitIdx+1)
-	items, err := d.queryRows(r.Context(), sql, append(params, limit, offset)...)
+	sql := `SELECT d.id, d.template, d.recipient_email, d.user_id, d.reference_id, d.event, d.status, d.attempts, d.max_attempts,
+		d.next_attempt_at, d.provider, d.provider_message_id, d.error_code, d.error_message, d.sent_at, d.created_at,
+		` + roleExpr + ` AS recipient_role, COALESCE(u.display_name, ue.display_name) AS recipient_name` + from + where +
+		` ORDER BY d.created_at DESC LIMIT $` + ptItoa(limitIdx) + ` OFFSET $` + ptItoa(limitIdx+1)
+	items, err := d.queryRows(r.Context(), sql, append(append([]any{}, params...), limit, offset)...)
 	if err != nil {
 		writeErr(w, d, err)
 		return
 	}
-	countRow, err := d.queryRow(r.Context(), "SELECT COUNT(*) AS count FROM email_deliveries "+where, params...)
+	countRow, err := d.queryRow(r.Context(), "SELECT COUNT(*) AS count"+from+where, params...)
 	if err != nil {
 		writeErr(w, d, err)
 		return
 	}
+	// Ringkasan status dan daftar jenis email (tanpa filter) untuk kartu dan dropdown.
+	summaryRows, err := d.queryRows(r.Context(), "SELECT status, COUNT(*) AS count FROM email_deliveries GROUP BY status")
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	summary := map[string]int{}
+	for _, row := range summaryRows {
+		summary[row.strOr("status", "")] = row.intOr("count", 0)
+	}
+	templateRows, err := d.queryRows(r.Context(), "SELECT template, COUNT(*) AS count FROM email_deliveries GROUP BY template ORDER BY count DESC, template")
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	templates := make([]map[string]any, 0, len(templateRows))
+	for _, row := range templateRows {
+		templates = append(templates, map[string]any{"template": row.strOr("template", ""), "count": row.intOr("count", 0)})
+	}
+
 	out := make([]map[string]any, 0, len(items))
 	for _, row := range items {
 		out = append(out, map[string]any{
 			"id":                  row.strOr("id", ""),
 			"template":            row.strOr("template", ""),
 			"recipient_email":     row.strOr("recipient_email", ""),
+			"recipient_role":      ptNullableStr(row, "recipient_role"),
+			"recipient_name":      ptNullableStr(row, "recipient_name"),
 			"user_id":             ptNullableStr(row, "user_id"),
 			"reference_id":        ptNullableStr(row, "reference_id"),
 			"event":               ptNullableStr(row, "event"),
@@ -272,6 +321,7 @@ func (d *Deps) SettingsEmailDeliveries(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"items": out, "total": total, "limit": limit, "offset": offset,
+		"summary": summary, "templates": templates,
 	})
 }
 

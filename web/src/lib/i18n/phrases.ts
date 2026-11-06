@@ -9,6 +9,20 @@
 import { getLocale } from './i18n.svelte';
 
 export const PHRASE_EN: Record<string, string> = {
+  "Log pengiriman email": "Email delivery log",
+  "Email yang dikirim sistem ke mitra dan klien. Email gagal menampilkan sebab dari server email.": "Emails the system sent to partners and clients. Failed emails show the reason reported by the email server.",
+  "Cari alamat email": "Search email address",
+  "Semua jenis email": "All email types",
+  "Semua penerima": "All recipients",
+  "Jenis email": "Email type",
+  "Percobaan": "Attempts",
+  "Tidak ada email yang cocok dengan filter ini.": "No emails match these filters.",
+  "Terkirim": "Sent",
+  "Antre": "Queued",
+  "Dilewati": "Skipped",
+  "Mengirim": "Sending",
+  "Ditahan batas kirim": "Held by rate limit",
+  "Waktu": "Time",
   "Belum ada media Anda yang memakai platform ini. Pilih platform ini saat menambah atau mengedit media.": "None of your media uses this platform yet. Choose it when adding or editing media.",
   "Tab kanal integrasi terbuka setelah Syarat & Ketentuan disetujui": "The integration channel tabs open once the Terms & Conditions are accepted",
   "Setelah disetujui, tab kanal integrasi untuk media Anda akan terbuka.": "Once approved, the integration channel tabs for your media will open.",
