@@ -9,6 +9,7 @@
 import { getLocale } from './i18n.svelte';
 
 export const PHRASE_EN: Record<string, string> = {
+  "Log Email": "Email log",
   "Log pengiriman email": "Email delivery log",
   "Email yang dikirim sistem ke mitra dan klien. Email gagal menampilkan sebab dari server email.": "Emails the system sent to partners and clients. Failed emails show the reason reported by the email server.",
   "Cari alamat email": "Search email address",

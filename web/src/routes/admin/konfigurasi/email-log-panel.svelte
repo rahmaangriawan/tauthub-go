@@ -15,6 +15,8 @@
 	type Item = {
 		id: string;
 		template: string;
+		template_label: string;
+		subject: string | null;
 		recipient_email: string;
 		recipient_role: string | null;
 		recipient_name: string | null;
@@ -33,7 +35,7 @@
 	let total = $state(0);
 	let offset = $state(0);
 	let summary = $state<Record<string, number>>({});
-	let templates = $state<Array<{ template: string; count: number }>>([]);
+	let templates = $state<Array<{ template: string; label: string; count: number }>>([]);
 	let status = $state('');
 	let template = $state('');
 	let role = $state('');
@@ -99,7 +101,7 @@
 	const queuedCount = $derived((summary.queued ?? 0) + (summary.sending ?? 0) + (summary.rate_limited ?? 0));
 </script>
 
-<div class="mt-4 flex flex-col gap-4">
+<div class="flex flex-col gap-4">
 	<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
 		{#each [['sent', 'Terkirim', summary.sent ?? 0, 'sent'], ['failed', 'Gagal', summary.failed ?? 0, 'failed'], ['queued', 'Antre', queuedCount, 'queued'], ['skipped', 'Dilewati', summary.skipped ?? 0, 'skipped']] as [key, label, count, filterValue] (key)}
 			<button
@@ -158,7 +160,7 @@
 					template = v;
 					refilter();
 				}}
-				options={[{ value: '', label: tr('Semua jenis email') }, ...templates.map((t) => ({ value: t.template, label: `${t.template} (${fmtNum(t.count)})` }))]}
+				options={[{ value: '', label: tr('Semua jenis email') }, ...templates.map((t) => ({ value: t.template, label: `${t.label} (${fmtNum(t.count)})` }))]}
 			/>
 			<Select
 				ariaLabel={tr('Penerima')}
@@ -197,7 +199,11 @@
 								<p class="text-xs">{row.recipient_email}</p>
 								<p class="text-[11px] text-muted-foreground">{roleLabel(row.recipient_role)}{row.recipient_name ? ` · ${row.recipient_name}` : ''}</p>
 							</td>
-							<td class="px-5 py-2.5 font-mono text-xs">{row.template}</td>
+							<td class="max-w-[280px] px-5 py-2.5">
+								<p class="text-xs font-medium">{row.template_label}</p>
+								{#if row.subject}<p class="text-[11px] text-muted-foreground">{tr('Subjek')}: {row.subject}</p>{/if}
+								<p class="font-mono text-[10px] text-muted-foreground/70">{row.template}</p>
+							</td>
 							<td class="px-5 py-2.5"><Badge tone={statusTone(row.status)} label={tr(STATUS_LABEL[row.status] ?? row.status)} /></td>
 							<td class="max-w-[360px] px-5 py-2.5 text-xs text-muted-foreground">
 								{#if row.error_message}

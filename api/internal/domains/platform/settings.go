@@ -259,7 +259,7 @@ func (d *Deps) SettingsEmailDeliveries(w http.ResponseWriter, r *http.Request) {
 
 	limitIdx := len(params) + 1
 	sql := `SELECT d.id, d.template, d.recipient_email, d.user_id, d.reference_id, d.event, d.status, d.attempts, d.max_attempts,
-		d.next_attempt_at, d.provider, d.provider_message_id, d.error_code, d.error_message, d.sent_at, d.created_at,
+		d.next_attempt_at, d.provider, d.provider_message_id, d.error_code, d.error_message, d.sent_at, d.created_at, d.subject,
 		` + roleExpr + ` AS recipient_role, COALESCE(u.display_name, ue.display_name) AS recipient_name` + from + where +
 		` ORDER BY d.created_at DESC LIMIT $` + ptItoa(limitIdx) + ` OFFSET $` + ptItoa(limitIdx+1)
 	items, err := d.queryRows(r.Context(), sql, append(append([]any{}, params...), limit, offset)...)
@@ -289,7 +289,11 @@ func (d *Deps) SettingsEmailDeliveries(w http.ResponseWriter, r *http.Request) {
 	}
 	templates := make([]map[string]any, 0, len(templateRows))
 	for _, row := range templateRows {
-		templates = append(templates, map[string]any{"template": row.strOr("template", ""), "count": row.intOr("count", 0)})
+		templates = append(templates, map[string]any{
+			"template": row.strOr("template", ""),
+			"label":    emailTemplateLabel(row.strOr("template", ""), ""),
+			"count":    row.intOr("count", 0),
+		})
 	}
 
 	out := make([]map[string]any, 0, len(items))
@@ -297,6 +301,8 @@ func (d *Deps) SettingsEmailDeliveries(w http.ResponseWriter, r *http.Request) {
 		out = append(out, map[string]any{
 			"id":                  row.strOr("id", ""),
 			"template":            row.strOr("template", ""),
+			"template_label":      emailTemplateLabel(row.strOr("template", ""), row.strOr("recipient_role", "")),
+			"subject":             ptNullableStr(row, "subject"),
 			"recipient_email":     row.strOr("recipient_email", ""),
 			"recipient_role":      ptNullableStr(row, "recipient_role"),
 			"recipient_name":      ptNullableStr(row, "recipient_name"),
@@ -323,6 +329,48 @@ func (d *Deps) SettingsEmailDeliveries(w http.ResponseWriter, r *http.Request) {
 		"items": out, "total": total, "limit": limit, "offset": offset,
 		"summary": summary, "templates": templates,
 	})
+}
+
+// emailTemplateNames: nama awam untuk jenis email di luar katalog template.
+var emailTemplateNames = map[string]string{
+	"login-alert":                 "Peringatan login baru",
+	"password-reset":              "Reset password",
+	"password-changed":            "Password diubah",
+	"account-invite":              "Undangan akun",
+	"account-exists-notice":       "Pemberitahuan akun sudah terdaftar",
+	"email-verification-code":     "Kode verifikasi pendaftaran",
+	"notify-digest":               "Ringkasan notifikasi",
+	"media.approved":              "Media disetujui admin",
+	"media.rejected":              "Media ditolak admin",
+	"media.negotiated":            "Harga media dinegosiasi",
+	"media.domain_down":           "Domain media bermasalah",
+	"publication.reminder":        "Pengingat persetujuan pesanan",
+	"publication.late_approval":   "Persetujuan pesanan terlambat",
+	"publication.waiting_partner": "Pesanan baru menunggu persetujuan",
+	"publication.published":       "Artikel terbit",
+}
+
+// emailTemplateLabel: nama jenis email yang mudah dipahami. Template berawalan
+// "email-template:" memakai label katalog (audiens dari peran penerima, atau
+// salah satu bila tidak diketahui); lainnya dari emailTemplateNames.
+func emailTemplateLabel(template, role string) string {
+	const prefix = "email-template:"
+	if event, ok := strings.CutPrefix(template, prefix); ok {
+		audiences := []string{email.AudienceForRole(role)}
+		if audiences[0] == "" {
+			audiences = []string{email.AudienceClient, email.AudiencePartner}
+		}
+		for _, aud := range audiences {
+			if entry, found := email.CatalogEvent(aud, event); found {
+				return entry.Label
+			}
+		}
+		return event
+	}
+	if name, ok := emailTemplateNames[template]; ok {
+		return name
+	}
+	return template
 }
 
 // SettingsEmailTestConnection: POST /v1/platform/settings/email/test-connection

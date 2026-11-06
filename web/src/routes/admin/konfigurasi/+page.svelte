@@ -157,7 +157,6 @@
 		{ key: 'seo', label: 'SEO Metrics' },
 		{ key: 'pagespeed', label: 'API Pagespeed' },
 		{ key: 'smtp', label: 'Email / SMTP' },
-		{ key: 'email-log', label: 'Log Email' },
 		{ key: 'gsc', label: 'Integrasi GSC' },
 		{ key: 'ga4', label: 'GA4 Config' },
 		{ key: 'wa', label: 'WA Gateway' },
@@ -183,9 +182,10 @@
 
 	// Deep link juga mengenali sub-tab Email/SMTP: #smtp-config dan
 	// #smtp-template membuka tab SMTP sekaligus bagian yang dimaksud.
-	const HASH_TO_VIEW: Record<string, { tab: TabKey; smtp?: 'config' | 'templates' }> = {
+	const HASH_TO_VIEW: Record<string, { tab: TabKey; smtp?: 'config' | 'templates' | 'log' }> = {
 		'smtp-config': { tab: 'smtp', smtp: 'config' },
-		'smtp-template': { tab: 'smtp', smtp: 'templates' }
+		'smtp-template': { tab: 'smtp', smtp: 'templates' },
+		'smtp-log': { tab: 'smtp', smtp: 'log' }
 	};
 
 	function selectTab(key: TabKey) {
@@ -199,9 +199,9 @@
 		}
 	}
 
-	function selectSmtpView(view: 'config' | 'templates') {
+	function selectSmtpView(view: 'config' | 'templates' | 'log') {
 		smtpView = view;
-		const hash = view === 'templates' ? 'smtp-template' : 'smtp-config';
+		const hash = view === 'templates' ? 'smtp-template' : view === 'log' ? 'smtp-log' : 'smtp-config';
 		if (typeof history !== 'undefined') {
 			history.replaceState(history.state, '', `#${hash}`);
 		}
@@ -487,7 +487,7 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 	// ── Email / SMTP ───────────────────────────────────────────────────────
 	let smtp = $state<SmtpConfig | null>(null);
 	// Sub-navigasi tab Email/SMTP: form koneksi atau panel template.
-	let smtpView = $state<'config' | 'templates'>('config');
+	let smtpView = $state<'config' | 'templates' | 'log'>('config');
 	let smtpLoading = $state(true);
 	let smtpError = $state('');
 	let smtpBusy = $state(false);
@@ -1447,6 +1447,8 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 				{/if}
 			{/if}
 					</div>
+				{:else if smtpView === 'log'}
+					<EmailLogPanel />
 				{:else}
 					<EmailTemplatesPanel />
 				{/if}
@@ -1466,6 +1468,13 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 						class:app-btn-primary={smtpView === 'templates'}
 						class:app-btn-soft={smtpView !== 'templates'}
 						onclick={() => selectSmtpView('templates')}>{tr('Template')}</button
+					>
+					<button
+						type="button"
+						class="app-btn !min-h-8 !justify-start !px-3 !text-xs"
+						class:app-btn-primary={smtpView === 'log'}
+						class:app-btn-soft={smtpView !== 'log'}
+						onclick={() => selectSmtpView('log')}>{tr('Log Email')}</button
 					>
 				</nav>
 			</aside>
@@ -1488,10 +1497,6 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 	{/if}
 
 	<!-- Turnstile -->
-	{#if tab === 'email-log'}
-		<EmailLogPanel />
-	{/if}
-
 	{#if tab === 'domain'}
 		<div class="mt-4"><DomainBlocksPanel /></div>
 	{/if}
