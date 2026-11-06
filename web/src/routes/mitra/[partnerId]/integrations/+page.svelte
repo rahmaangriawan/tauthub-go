@@ -7,7 +7,7 @@
 	// Tab bisa di-deep-link lewat hash (#wordpress / #emdash / #web-custom / #blogger) —
 	// itulah tujuan redirect section lama /connections, /publishing-api, /blogger
 	// (lihat page.tsx app lama).
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { Check, Lock } from '@lucide/svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -108,13 +108,19 @@
 	// terlarang jatuh kembali ke "terms" (parity effect app lama).
 	$effect(() => {
 		if (terms.loading || !metaLoaded) return;
-		const requested = hashTab();
-		tab = !accepted && requested !== 'terms' ? 'terms' : requested;
-		const media = hashMedia();
-		if (media) {
-			highlightId = media;
-			highlightTab = requested;
-		}
+		// untrack: efek ini hanya menyinkronkan tab dari hash saat status syarat
+		// atau ringkasan pertama selesai dimuat. Tanpa ini, setiap loadMeta (dipanggil
+		// tab anak setelah memuat) membuat daftar tab baru dan efek mengembalikan tab
+		// ke hash lama sehingga klik tab seperti tidak bekerja.
+		untrack(() => {
+			const requested = hashTab();
+			tab = !accepted && requested !== 'terms' ? 'terms' : requested;
+			const media = hashMedia();
+			if (media) {
+				highlightId = media;
+				highlightTab = requested;
+			}
+		});
 	});
 
 	async function loadTerms() {
