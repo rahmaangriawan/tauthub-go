@@ -29,6 +29,8 @@ const (
 	// Laporan artikel terbit untuk tim admin (grup WA bila diisi), dengan tautan
 	// halaman admin, bukan tautan mitra.
 	AdminEventPublicationPublished = "admin.publication_published"
+	// Artikel sampai ke situs mitra sebagai draf (belum tayang).
+	AdminEventPublicationDraft = "admin.publication_draft"
 )
 
 // AdminWADefaultTemplates: template bawaan event admin (satu sumber; platform
@@ -37,6 +39,7 @@ var AdminWADefaultTemplates = map[string]string{
 	AdminEventMediaSubmitted:       "📥 *Pengajuan media baru*\n{nama} mengajukan \"{judul}\".\n\nReview: {link}",
 	AdminEventWithdrawalRequested:  "💸 *Penarikan dana baru*\n{nama} mengajukan pencairan {jumlah}.\n\nReview: {link}",
 	AdminEventTicketCreated:        "🎫 *Tiket dukungan baru*\n{nama}: {judul}\n\nBuka: {link}",
+	AdminEventPublicationDraft:     "📝 *Artikel terkirim sebagai draf*\n\"{judul}\" dari {nama} dikirim ke {media} sebagai DRAF, menunggu mitra menerbitkannya.\n\nCek di admin: {link}",
 	AdminEventPublicationPublished: "✅ *Artikel terbit*\n\"{judul}\" dari {nama} sudah TERBIT di {media}.\n\nCek di admin: {link}",
 }
 
@@ -46,6 +49,7 @@ var AdminWAPreviewLinks = map[string]string{
 	AdminEventWithdrawalRequested:  "https://app.tauthub.com/admin/settlements",
 	AdminEventTicketCreated:        "https://app.tauthub.com/admin/dukungan",
 	AdminEventPublicationPublished: "https://app.tauthub.com/admin/publications/pub-contoh",
+	AdminEventPublicationDraft:     "https://app.tauthub.com/admin/publications/pub-contoh",
 }
 
 // AdminWAOptions: satu kejadian yang perlu dikabarkan ke admin via WA.

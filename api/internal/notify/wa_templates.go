@@ -112,6 +112,7 @@ var WALabels = map[string]map[string]string{
 		AdminEventWithdrawalRequested:  "Admin · Penarikan dana",
 		AdminEventTicketCreated:        "Admin · Tiket dukungan baru",
 		AdminEventPublicationPublished: "Admin · Artikel terbit",
+		AdminEventPublicationDraft:     "Admin · Artikel terkirim sebagai draf",
 	},
 }
 
