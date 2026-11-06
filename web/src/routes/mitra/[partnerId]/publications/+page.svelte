@@ -222,6 +222,9 @@
 			// dihitung sudah dibaca (angka hilang), publikasi lain menyalakannya lagi.
 			void markPubSeen();
 			void refreshPubsUnreadNow();
+			// Tautan dari notifikasi WA/lonceng: ?pub=<id> langsung membuka detail publikasinya.
+			const deepPub = page.url.searchParams.get('pub');
+			if (deepPub) void openFromLink(deepPub);
 		})();
 			const onExpired = () => (window.location.href = '/login');
 			window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -317,6 +320,20 @@
 			error = await readApiError(res, tr('Gagal memuat detail publikasi.'));
 		}
 		detailLoading = false;
+	}
+
+	async function openFromLink(id: string) {
+		const res = await apiRequest(`/v1/partner/publications/${id}`);
+		if (!res.ok) {
+			error = await readApiError(res, tr('Publikasi tidak ditemukan atau bukan milik akun ini.'));
+			return;
+		}
+		const data = await res.json();
+		await openDetail({ ...(data as any), id } as Pub);
+		// Hapus ?pub= dari URL supaya muat ulang tidak membuka ulang dan tautan tetap bersih.
+		const url = new URL(window.location.href);
+		url.searchParams.delete('pub');
+		history.replaceState(history.state, '', url);
 	}
 
 	function closeDetail() {

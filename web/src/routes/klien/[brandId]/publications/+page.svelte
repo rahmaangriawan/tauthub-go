@@ -103,6 +103,14 @@
 			// Halaman Status Publikasi dibuka = notifikasi publikasi (di-acc /
 			// terbit) sudah terbaca → padamkan badge merah di sidebar.
 			void markPublicationUnreadRead();
+			// Tautan dari notifikasi WA/lonceng: ?pub=<id> langsung membuka detail publikasinya.
+			const deepPub = page.url.searchParams.get('pub');
+			if (deepPub) {
+				await openDetail({ id: deepPub } as Pub);
+				const url = new URL(window.location.href);
+				url.searchParams.delete('pub');
+				history.replaceState(history.state, '', url);
+			}
 		})();
 		const onExpired = () => void goto('/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);

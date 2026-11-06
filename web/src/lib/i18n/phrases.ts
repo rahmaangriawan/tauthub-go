@@ -9,6 +9,7 @@
 import { getLocale } from './i18n.svelte';
 
 export const PHRASE_EN: Record<string, string> = {
+  "Publikasi tidak ditemukan atau bukan milik akun ini.": "Publication not found or it does not belong to this account.",
   "Kosongkan lalu simpan untuk menghapus nomor.": "Leave it empty and save to remove the number.",
   "Email tidak dikirim.": "No email is sent.",
   "Nomor ini dipakai khusus untuk mengirim informasi login ke WhatsApp": "This number is used only to send login information to the WhatsApp of",
