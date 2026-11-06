@@ -43,7 +43,7 @@
 
 	const accepted = $derived(Boolean(terms.acceptedAt));
 
-	const TABS: Array<[TabKey, string]> = [
+	const ALL_TABS: Array<[TabKey, string]> = [
 		['terms', 'Syarat & Ketentuan'],
 		['wordpress', 'WordPress'],
 		['emdash', 'EmDash'],
@@ -51,11 +51,33 @@
 		['blogger', 'Blogspot']
 	];
 
+	// Tab kanal hanya muncul untuk platform yang dipakai mitra: ada media dengan
+	// platform itu, atau (WordPress/EmDash) sudah punya koneksi. Mitra yang belum
+	// memilih platform apa pun tetap melihat WordPress supaya halaman tidak kosong.
+	let metaLoaded = $state(false);
+	let used = $state<Record<Exclude<TabKey, 'terms'>, boolean>>({
+		wordpress: false,
+		emdash: false,
+		'web-custom': false,
+		blogger: false
+	});
+	const TABS = $derived(
+		ALL_TABS.filter(([key]) => {
+			if (key === 'terms') return true;
+			const anyUsed = used.wordpress || used.emdash || used['web-custom'] || used.blogger;
+			return used[key] || (!anyUsed && key === 'wordpress');
+		})
+	);
+	const channelTabs = $derived(TABS.filter(([key]) => key !== 'terms'));
+	const firstChannel = $derived<TabKey>(channelTabs[0]?.[0] ?? 'terms');
+
 	function hashTab(): TabKey {
 		// Hash bisa membawa query (callback OAuth Blogger: #blogger?blogger_connected=1&media=…),
 		// jadi potong di '?' sebelum dibandingkan — parity app lama.
 		const h = page.url.hash.replace(/^#/, '').split('?')[0];
-		if (h === 'wordpress' || h === 'emdash' || h === 'web-custom' || h === 'blogger') return h;
+		if (h === 'wordpress' || h === 'emdash' || h === 'web-custom' || h === 'blogger') {
+			return TABS.some(([key]) => key === h) ? h : 'terms';
+		}
 		return 'terms';
 	}
 
@@ -85,7 +107,7 @@
 	// Sinkronkan tab aktif dengan hash setelah status syarat diketahui — tab
 	// terlarang jatuh kembali ke "terms" (parity effect app lama).
 	$effect(() => {
-		if (terms.loading) return;
+		if (terms.loading || !metaLoaded) return;
 		const requested = hashTab();
 		tab = !accepted && requested !== 'terms' ? 'terms' : requested;
 		const media = hashMedia();
@@ -134,14 +156,21 @@
 				count: emdashActive.length,
 				tone: toneOf(emdashActive.map((r) => r.last_test_status ?? ''), 'ok')
 			};
+			used.wordpress = wpActive.length > 0;
+			used.emdash = emdashActive.length > 0;
 		}
 		if (mediaRes.ok) {
 			const all: any[] = (await mediaRes.json()).media ?? [];
+			used.wordpress = used.wordpress || all.some((m) => m.integration_type === 'wordpress');
+			used.emdash = used.emdash || all.some((m) => m.integration_type === 'emdash');
+			used['web-custom'] = all.some((m) => m.integration_type === 'custom_web' || m.integration_type === 'tulisio_api');
+			used.blogger = all.some((m) => m.integration_type === 'blogger');
 			const custom = all.filter((m) => m.integration_type === 'custom_web' && m.status !== 'hidden');
 			const blogger = all.filter((m) => m.integration_type === 'blogger' && m.status !== 'hidden');
 			meta['web-custom'] = { count: custom.length, tone: toneOf(custom.map((m) => m.custom_web_status ?? ''), 'connected') };
 			meta.blogger = { count: blogger.length, tone: toneOf(blogger.map((m) => m.blogger_status ?? ''), 'connected') };
 		}
+		metaLoaded = true;
 	}
 
 	async function acceptTerms() {
@@ -156,7 +185,7 @@
 			return;
 		}
 		await loadTerms();
-		selectTab('wordpress');
+		selectTab(firstChannel);
 	}
 
 	function selectTab(value: TabKey) {
@@ -205,7 +234,7 @@
 		<div class="app-card int-error">{terms.error}</div>
 	{/if}
 
-	{#if terms.loading}
+	{#if terms.loading || !metaLoaded}
 		<p class="int-loading">{tr('Memuat…')}</p>
 	{:else}
 		<div class="int-tabs" role="tablist" aria-label={tr('Kanal integrasi')}>
@@ -235,7 +264,7 @@
 			{/each}
 		</div>
 		{#if !accepted}
-			<p class="int-tabs-hint">{tr('Tab WordPress, EmDash, Web Custom, dan Blogspot terbuka setelah Syarat & Ketentuan disetujui')}</p>
+			<p class="int-tabs-hint">{tr('Tab kanal integrasi terbuka setelah Syarat & Ketentuan disetujui')}</p>
 		{/if}
 
 		{#if tab === 'terms'}
@@ -254,7 +283,7 @@
 							<Check size={16} strokeWidth={1.5} aria-hidden="true" />
 							{tr('Disetujui pada')} {acceptedLong}
 						</p>
-						<button class="app-btn app-btn-soft int-btn" type="button" onclick={() => selectTab('wordpress')}>{tr('Buka kanal WordPress')}</button>
+						<button class="app-btn app-btn-soft int-btn" type="button" onclick={() => selectTab(firstChannel)}>{tr('Buka kanal')} {channelTabs[0]?.[1] ?? ''}</button>
 					</div>
 				{:else}
 					<div class="int-terms__foot int-terms__foot--consent">
@@ -284,7 +313,7 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation">
 		<dialog open class="app-card w-full max-w-sm p-6" aria-label={tr('Konfirmasi persetujuan')}>
 			<h2 class="text-base font-medium">{tr('Setujui Syarat & Ketentuan?')}</h2>
-			<p class="mt-2 text-sm text-muted-foreground">{tr('Setelah disetujui, tab WordPress, EmDash, Web Custom, dan Blogspot akan terbuka.')}</p>
+			<p class="mt-2 text-sm text-muted-foreground">{tr('Setelah disetujui, tab kanal integrasi untuk media Anda akan terbuka.')}</p>
 			<div class="mt-6 flex justify-end gap-2">
 				<button class="app-btn app-btn-soft int-btn" onclick={() => (confirmOpen = false)}>{tr('Batal')}</button>
 				<button class="app-btn app-btn-primary int-btn" disabled={terms.busy} onclick={acceptTerms}>{tr('Ya, setujui')}</button>

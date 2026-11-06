@@ -9,6 +9,9 @@
 import { getLocale } from './i18n.svelte';
 
 export const PHRASE_EN: Record<string, string> = {
+  "Tab kanal integrasi terbuka setelah Syarat & Ketentuan disetujui": "The integration channel tabs open once the Terms & Conditions are accepted",
+  "Setelah disetujui, tab kanal integrasi untuk media Anda akan terbuka.": "Once approved, the integration channel tabs for your media will open.",
+  "Buka kanal": "Open channel",
   "Butuh koneksi EmDash": "Requires an EmDash connection",
   "EmDash": "EmDash",
   "Koneksi EmDash": "EmDash connection",
