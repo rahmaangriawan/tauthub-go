@@ -305,28 +305,15 @@
 					</div>
 				</div>
 				<div class="heroVisual">
-					<div class="heroWallet">
-						<img src="/images/wallet-distribusi.webp" alt="" class="heroWalletImg" width="96" height="100" />
-						<div class="heroWalletBody">
-							<span class="heroWalletLabel">{i18n.t.dashboard.available_balance}</span>
-							<div class="heroWalletValueRow">
-								<span class="heroWalletValue">{fmt(available)}</span>
-								<span class="heroWalletUnit">{i18n.t.common.credits}</span>
-							</div>
-							<span class="heroWalletNote">{i18n.t.dashboard.reserved_credit}: {fmt(reserved)}</span>
+					<div class="heroSecurityCard">
+						<div class="securityShieldCircle">
+							<ShieldCheck size={20} strokeWidth={2.2} color="#34d399" />
 						</div>
-						<button
-							type="button"
-							class="heroWalletBtn"
-							onclick={() => {
-								topUpPayment = null;
-								topUpError = '';
-								topUpOpen = true;
-							}}
-						>
-							<Coins size={16} strokeWidth={2.2} />
-							<span>{i18n.t.dashboard.topup}</span>
-						</button>
+						<div class="securityTextWrap">
+							<span class="securityTitle">{i18n.t.dashboard.security_title}</span>
+							<span class="securityFigure">100%</span>
+							<span class="securityCaption">{i18n.t.dashboard.security_passed}</span>
+						</div>
 					</div>
 				</div>
 		</section>
@@ -662,7 +649,7 @@
 	.hero {
 	position: relative;
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) 340px;
+	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: center;
 	gap: 32px;
 	min-height: 248px;
@@ -796,16 +783,14 @@
 	.heroVisual {
 		position: relative;
 		z-index: 2;
+		display: flex;
 	}
-	.heroWallet {
-		display: grid;
-		grid-template-columns: 96px minmax(0, 1fr);
-		grid-template-areas:
-			'img body'
-			'btn btn';
-		align-items: center;
-		column-gap: 16px;
-		row-gap: 16px;
+	.heroSecurityCard {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 16px;
+		width: 208px;
 		padding: 20px;
 		border-radius: 16px;
 		background: rgba(255, 255, 255, 0.12);
@@ -814,85 +799,39 @@
 		-webkit-backdrop-filter: blur(16px);
 		box-shadow: 0 12px 32px rgba(10, 14, 60, 0.28);
 	}
-	.heroWalletImg {
-		grid-area: img;
-		width: 96px;
-		height: auto;
-		filter: drop-shadow(0 10px 18px rgba(10, 14, 60, 0.35));
+	.securityShieldCircle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		background: rgba(255, 255, 255, 0.14);
+		border: 1px solid rgba(255, 255, 255, 0.26);
 	}
-	.heroWalletBody {
-		grid-area: body;
+	.securityTextWrap {
 		display: flex;
 		flex-direction: column;
-		min-width: 0;
 	}
-	.heroWalletLabel {
+	.securityTitle {
 		font-size: 13px;
 		line-height: 20px;
+		font-weight: 500;
 		color: rgba(255, 255, 255, 0.78);
 	}
-	.heroWalletValueRow {
-		display: flex;
-		align-items: baseline;
-		gap: 8px;
-		min-width: 0;
-	}
-	.heroWalletValue {
-		font-size: 30px;
-		line-height: 36px;
+	.securityFigure {
+		font-size: 36px;
+		line-height: 44px;
 		font-weight: 600;
 		letter-spacing: -0.02em;
 		color: #ffffff;
 		font-variant-numeric: tabular-nums;
 	}
-	.heroWalletUnit {
+	.securityCaption {
 		font-size: 13px;
-		font-weight: 500;
+		line-height: 20px;
 		color: rgba(255, 255, 255, 0.78);
 	}
-	.heroWalletNote {
-		margin-top: 2px;
-		font-size: 12px;
-		line-height: 16px;
-		color: rgba(255, 255, 255, 0.72);
-		font-variant-numeric: tabular-nums;
-	}
-	.heroWalletBtn {
-		grid-area: btn;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 8px;
-		min-height: 40px;
-		padding: 0 16px;
-		border: none;
-		border-radius: 9px;
-		background: #ffffff;
-		color: var(--primary);
-		font: inherit;
-		font-size: 14px;
-		font-weight: 600;
-		cursor: pointer;
-		touch-action: manipulation;
-		transition:
-			transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
-			background-color 0.18s ease,
-			box-shadow 0.18s ease;
-	}
-	.heroWalletBtn:hover {
-		background: #eef2ff;
-		transform: translateY(-1px);
-		box-shadow: 0 8px 20px rgba(27, 103, 254, 0.22);
-	}
-	.heroWalletBtn:active {
-		transform: none;
-		box-shadow: none;
-	}
-	.heroWalletBtn:focus-visible {
-		outline: 2px solid #ffffff;
-		outline-offset: 2px;
-	}
-
 
 	/* Metric Grid */
 	.metricGrid {
@@ -1505,6 +1444,9 @@
 			min-height: 0;
 			padding: 28px;
 		}
+		.heroVisual {
+			justify-content: flex-start;
+		}
 		.metricGrid {
 				grid-template-columns: repeat(2, minmax(0, 1fr));
 			}
@@ -1544,23 +1486,37 @@
 				min-height: 44px;
 				justify-content: center;
 			}
-			.heroWallet {
-				grid-template-columns: 72px minmax(0, 1fr);
-				padding: 16px;
-				column-gap: 12px;
-				row-gap: 12px;
+			.heroVisual {
+				display: block;
 			}
-			.heroWalletImg {
-				width: 72px;
+			.heroSecurityCard {
+				flex-direction: row;
+				align-items: center;
+				gap: 12px;
+				width: 100%;
+				padding: 12px 16px;
+				border-radius: 14px;
 			}
-			.heroWalletValue {
-				font-size: 26px;
-				line-height: 32px;
+			.securityShieldCircle {
+				width: 36px;
+				height: 36px;
+				flex-shrink: 0;
 			}
-			.heroWalletBtn {
-				min-height: 44px;
+			.securityTextWrap {
+				flex-direction: row;
+				flex-wrap: wrap;
+				align-items: baseline;
+				column-gap: 8px;
 			}
-
+			.securityTitle {
+				width: 100%;
+				font-size: 12px;
+				line-height: 16px;
+			}
+			.securityFigure {
+				font-size: 22px;
+				line-height: 28px;
+			}
 
 			.metricGrid {
 				grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1753,8 +1709,7 @@
 			animation: none;
 		}
 		.heroCTA,
-		.heroCTAGhost,
-		.heroWalletBtn {
+		.heroCTAGhost {
 		transition: none;
 		}
 		.hero {
