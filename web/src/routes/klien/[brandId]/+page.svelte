@@ -351,7 +351,11 @@
 				<div class="metricValueRow">
 					<span class="metricValue">{fmt(reach)}</span>
 				</div>
-				<span class="metricDescReach">
+				<span
+					class="metricDesc metricDelta"
+					class:metricDeltaUp={reachDelta?.startsWith('up')}
+					class:metricDeltaDown={reachDelta?.startsWith('down')}
+				>
 					{reachDelta === null
 						? '—'
 						: reachDelta === 'flat'
@@ -459,7 +463,7 @@
 							<span>{tr("Biaya")}</span>
 						</div>
 							{#each pubs as r (r.id)}
-								<div class="queueRow">
+								<a class="queueRow" href={`${fallbackBase}/publications?pub=${r.id}`}>
 									<div class="queueCell queueCellTitle font-medium">
 										<span class="truncate block">{r.document_title || '—'}</span>
 									</div>
@@ -473,7 +477,7 @@
 										<Coins size={13} class="queueCoinIcon" />
 										<span>{tcLabel(r.client_price ?? 0, tcConfig?.rate_idr ?? wallet?.rate_idr ?? 1000)}</span>
 									</div>
-								</div>
+								</a>
 							{/each}
 					</div>
 				{/if}
@@ -648,8 +652,8 @@
 		justify-content: space-between;
 		gap: 24px;
 		overflow: hidden;
-		border-radius: 18px;
-		padding: 32px 36px;
+		border-radius: 16px;
+		padding: 32px;
 		background-image: url('/images/dashboard-hero.webp');
 		background-size: cover;
 		background-position: center right;
@@ -663,9 +667,9 @@
 	}
 		.heroTitle {
 			font-size: 28px;
-			font-weight: 500;
-			line-height: 32px;
-			letter-spacing: 0;
+			font-weight: 600;
+			line-height: 36px;
+			letter-spacing: -0.01em;
 			color: #ffffff;
 			margin: 0 0 8px;
 			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
@@ -711,9 +715,9 @@
 			padding: 10px 16px;
 			min-height: 44px;
 			font-size: 14px;
-			font-weight: 700;
+			font-weight: 600;
 			background: #ffffff;
-			color: #1b67fe;
+			color: var(--primary);
 			border: none;
 			cursor: pointer;
 			touch-action: manipulation;
@@ -739,7 +743,7 @@
 			padding: 10px 16px;
 			min-height: 44px;
 			font-size: 14px;
-			font-weight: 700;
+			font-weight: 600;
 			background: rgba(255, 255, 255, 0.18);
 			color: #ffffff;
 			border: 1px solid rgba(255, 255, 255, 0.3);
@@ -781,7 +785,7 @@
 		backdrop-filter: blur(16px);
 		-webkit-backdrop-filter: blur(16px);
 		border: 1px solid rgba(255, 255, 255, 0.28);
-		border-radius: 20px;
+		border-radius: 16px;
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 	}
 	.securityShieldCircle {
@@ -803,17 +807,15 @@
 		}
 		.securityTitle {
 			color: rgba(255, 255, 255, 0.85);
-			letter-spacing: 0.08em;
-			text-transform: uppercase;
-			font-size: 11px;
-			font-weight: 700;
+			font-size: 12px;
+			font-weight: 500;
 			margin-bottom: 4px;
 			display: block;
 		}
 		.securityValue {
 			color: #ffffff;
 			font-size: 15px;
-			font-weight: 700;
+			font-weight: 600;
 			line-height: 1.2;
 			display: block;
 		}
@@ -836,27 +838,9 @@
 			box-shadow 0.18s ease;
 		overflow: hidden;
 	}
-	.metricCard::after {
-		content: '';
-		position: absolute;
-		top: 0;
-		right: 0;
-		bottom: 0;
-		width: 4px;
-		background: #f59e0b;
-		opacity: 0;
-		transform: scaleY(0.4);
-		transition:
-			opacity 0.18s ease,
-			transform 0.18s ease;
-	}
 	.metricCard:hover {
 		transform: translateY(-2px);
 		box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-	}
-	.metricCard:hover::after {
-		opacity: 1;
-		transform: scaleY(1);
 	}
 	.metricHeader {
 		display: flex;
@@ -866,12 +850,11 @@
 	}
 	.metricTitle {
 		color: var(--muted-foreground);
-		font-size: 11px;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-	}
-	.metricIcon {
+		font-size: 13px;
+		font-weight: 500;
+		line-height: 20px;
+		}
+		.metricIcon {
 		width: 30px;
 		height: 30px;
 		border-radius: 999px;
@@ -881,8 +864,8 @@
 		flex-shrink: 0;
 	}
 	.iconBlue {
-		background: #eef4ff;
-		color: #1b67fe;
+		background: var(--accent);
+		color: var(--primary);
 	}
 	.metricValueRow {
 		display: flex;
@@ -890,9 +873,10 @@
 		gap: 8px;
 	}
 	.metricValue {
-		font-size: 24px;
-		font-weight: 750;
-		line-height: 1.2;
+	font-size: 26px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	line-height: 32px;
 		font-variant-numeric: tabular-nums;
 	}
 	.metricUnit {
@@ -906,13 +890,11 @@
 		line-height: 1.45;
 		color: var(--muted-foreground);
 	}
-	.metricDescReach {
-		margin-top: 8px;
-		display: block;
-		font-size: 12px;
-		line-height: 1.45;
-		color: #059669;
-		font-weight: 600;
+	.metricDeltaUp {
+	color: var(--success);
+	}
+	.metricDeltaDown {
+	color: var(--destructive);
 	}
 
 	/* Insights + Finance */
@@ -927,11 +909,10 @@
 		display: flex;
 		align-items: center;
 		gap: 20px;
-		border-radius: 20px;
+		border-radius: 16px;
 		border: 1px solid var(--border);
-		background: radial-gradient(700px 260px at 92% 0%, rgba(124, 58, 237, 0.06), transparent 60%),
-			var(--card);
-		padding: 22px 28px;
+		background: var(--card);
+		padding: 24px 28px;
 		overflow: hidden;
 	}
 	.insights::before {
@@ -956,7 +937,7 @@
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
-		background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+		background: var(--primary);
 	}
 	.insightsContent {
 		flex: 1;
@@ -971,19 +952,19 @@
 	}
 	.insightsTitle {
 		margin: 0;
-		font-size: 15px;
-		font-weight: 700;
-	}
-	.insightsBadge {
+		font-size: 16px;
+		font-weight: 600;
+		}
+		.insightsBadge {
 		display: inline-flex;
 		align-items: center;
 		border-radius: 999px;
 		padding: 1px 8px;
-		font-size: 10px;
-		font-weight: 700;
-		background: #faf5ff;
-		color: #7e22ce;
-	}
+		font-size: 11px;
+		font-weight: 500;
+		background: var(--accent);
+		color: var(--accent-foreground);
+		}
 	.insightsRolling {
 		position: relative;
 		min-height: 44px;
@@ -1023,7 +1004,7 @@
 		border: 1px solid var(--border);
 		border-radius: 16px;
 		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-		padding: 28px 26px;
+		padding: 24px;
 		background: var(--card);
 		display: flex;
 		flex-direction: column;
@@ -1041,8 +1022,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		background: #eef4ff;
-		color: #1b67fe;
+		background: var(--accent);
+		color: var(--primary);
 	}
 	.financeSubheader {
 		display: flex;
@@ -1060,9 +1041,10 @@
 		gap: 8px;
 	}
 	.financeValue {
-		font-size: 24px;
-		font-weight: 750;
-		line-height: 1.2;
+	font-size: 26px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	line-height: 32px;
 		font-variant-numeric: tabular-nums;
 	}
 	.financeUnit {
@@ -1104,14 +1086,15 @@
 		align-items: start;
 	}
 	.sectionTitle {
-		font-size: 15px;
-		font-weight: 700;
+	font-size: 16px;
+	line-height: 24px;
+	font-weight: 600;
 		color: var(--foreground);
 		margin: 0 0 12px;
 	}
 	.queueTable {
-		border: 1px solid var(--border);
-		border-radius: 14px;
+	border: 1px solid var(--border);
+	border-radius: 16px;
 		overflow: hidden;
 		background: var(--card);
 	}
@@ -1119,21 +1102,32 @@
 	.queueRow {
 		display: grid;
 		grid-template-columns: 2fr 1.4fr 1.2fr 0.8fr;
-		gap: 12px;
+		gap: 16px;
 		align-items: center;
-		padding: 12px 16px;
-		font-size: 13px;
-	}
-	.queueHeader {
+		padding: 12px 20px;
+		font-size: 14px;
+		}
+		.queueHeader {
 		background: var(--muted);
 		border-bottom: 1px solid var(--border);
-		font-size: 11px;
-		font-weight: 700;
+		font-size: 12px;
+		font-weight: 500;
 		color: var(--muted-foreground);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-	}
-	.queueRow + .queueRow {
+		}
+		.queueRow {
+			min-height: 52px;
+			color: var(--foreground);
+			text-decoration: none;
+			transition: background-color 0.16s ease;
+		}
+		.queueRow:hover {
+			background: var(--sidebar-hover, #f6f8fc);
+		}
+		.queueRow:focus-visible {
+			outline: 2px solid var(--ring);
+			outline-offset: -2px;
+		}
+		.queueRow + .queueRow {
 		border-top: 1px solid var(--border);
 	}
 		.queueCell {
@@ -1150,7 +1144,7 @@
 		}
 		.emptyCard {
 		border: 1px dashed var(--border);
-		border-radius: 14px;
+		border-radius: 16px;
 		padding: 24px;
 		text-align: center;
 		color: var(--muted-foreground);
@@ -1165,8 +1159,9 @@
 		gap: 6px;
 		border-radius: 999px;
 		padding: 2px 8px;
-		font-size: 11.5px;
-		font-weight: 600;
+		font-size: 12px;
+		line-height: 18px;
+		font-weight: 500;
 		white-space: nowrap;
 	}
 	.badge-green {
@@ -1224,7 +1219,7 @@
 		border: 1px solid var(--border);
 		border-radius: 16px;
 		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-		padding: 28px 26px;
+		padding: 24px;
 		background: var(--card);
 	}
 	.helpHeader {
@@ -1240,8 +1235,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		background: #eef4ff;
-		color: #1b67fe;
+		background: var(--accent);
+		color: var(--primary);
 	}
 	.helpList {
 		display: flex;
@@ -1273,8 +1268,8 @@
 		background-color: var(--secondary);
 	}
 	.ghostLinkHelp:hover :global(.helpArrow) {
-		transform: translateX(3px);
-		color: #1b67fe;
+		transform: translateX(2px);
+		color: var(--primary);
 	}
 	.helpItemIcon {
 		width: 36px;
@@ -1284,16 +1279,16 @@
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
-		background: #eef4ff;
-		color: #1b67fe;
+		background: var(--accent);
+		color: var(--primary);
 	}
 	.helpItemContent {
 		flex: 1;
 		min-width: 0;
 	}
 	.helpItemTitle {
-		font-size: 14px;
-		font-weight: 600;
+	font-size: 14px;
+	font-weight: 500;
 		color: var(--foreground);
 		line-height: 1.3;
 	}
@@ -1516,8 +1511,7 @@
 				margin-bottom: 6px;
 			}
 			.metricTitle {
-				font-size: 10px;
-				letter-spacing: 0.02em;
+				font-size: 12px;
 			}
 			.metricIcon {
 				width: 26px;
@@ -1533,8 +1527,7 @@
 			.metricUnit {
 				font-size: 11px;
 			}
-			.metricDesc,
-			.metricDescReach {
+			.metricDesc {
 				font-size: 11px;
 				margin-top: 4px;
 				line-height: 1.35;
