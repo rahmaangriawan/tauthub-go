@@ -18,8 +18,13 @@
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import HelpModal from '$lib/components/help-modal.svelte';
-	import FloatingPaths from '$lib/components/floating-paths.svelte';
-	
+	import GradientWave from '$lib/components/gradient-wave.svelte';
+	import { STAGE_LABEL, STAGE_TONE, DONE_STATUSES } from './taut-pintar/_shared';
+
+	// Palet brand untuk latar hero, dijaga di nada menengah supaya teks putih
+	// tetap terbaca di mana pun gelombangnya lewat: navy, royal, biru brand, biru langit.
+	const HERO_WAVE = ['#0b1b4a', '#1d4ed8', '#2b67ec', '#6aa5ff'];
+		
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
 	const fallbackBase = $derived(`/klien/${brandUrl}`);
@@ -84,12 +89,31 @@
 	const welcomeText = $derived(
 		i18n.t.dashboard.welcome.replace('{name}', userName || 'User').replace(WAVE_EMOJI, '')
 	);
+	// Kata terakhir dan emoji dibungkus satu kelompok tanpa putus baris, supaya
+	// emoji tidak jatuh sendirian di baris kedua saat sapaan membungkus.
+	const welcomeParts = $derived.by(() => {
+		const text = welcomeText.trimEnd();
+		const cut = text.lastIndexOf(' ');
+		return cut === -1
+			? { head: '', tail: text }
+			: { head: text.slice(0, cut + 1), tail: text.slice(cut + 1) };
+	});
 	let wallet = $state<Wallet | null>(null);
 	let tcConfig = $state<{ rate_idr: number; topup_packages: Pkg[] } | null>(null);
 	let reports = $state<{ reach: number; clicks: number } | null>(null);
 	let prevReports = $state<{ reach: number; clicks: number } | null>(null);
 	let pubs = $state<PubRow[]>([]);
 	let pubsTotal = $state(0);
+	// Kampanye Taut Pintar: sumber yang sama dengan menu Kampanye, jadi angkanya
+	// selalu cocok dengan daftar di sana.
+	type HeroCampaign = {
+		id: string;
+		public_id: string | null;
+		name: string;
+		taut_status: string | null;
+		stats?: { articles: number; published_media: number; tc_used: number } | null;
+	};
+	let campaigns = $state<HeroCampaign[]>([]);
 	let loading = $state(true);
 
 	// Popup "Buat Kampanye"
@@ -108,7 +132,7 @@
 
 	async function load() {
 		try {
-			const [creditsRes, pubsRes, reportsRes, prevRes] = await Promise.all([
+			const [creditsRes, pubsRes, reportsRes, prevRes, campRes] = await Promise.all([
 				apiRequest(`/v1/brands/${brandId}/credits?limit=1`),
 				apiRequest(`/v1/brands/${brandId}/publications?limit=6`),
 				apiRequest(
@@ -116,7 +140,8 @@
 				),
 				apiRequest(
 					`/v1/brands/${brandId}/reports?from=${lastMonthRange().from.toISOString()}&to=${lastMonthRange().to.toISOString()}`
-				)
+				),
+				apiRequest(`/v1/brands/${brandId}/taut/campaigns?page=1`)
 			]);
 			if (creditsRes.ok) {
 				const cd = await creditsRes.json();
@@ -138,6 +163,10 @@
 					reach: pd.summary?.estimated_reach ?? 0,
 					clicks: pd.summary?.outbound_clicks ?? 0
 				};
+			}
+			if (campRes.ok) {
+				const cd = await campRes.json();
+				campaigns = cd.campaigns ?? [];
 			}
 			const session = getStoredSession();
 			if (session?.user?.display_name) userName = session.user.display_name;
@@ -167,6 +196,19 @@
 	const reach = $derived(reports?.reach ?? 0);
 	const clicks = $derived(reports?.clicks ?? 0);
 	const prevReach = $derived(prevReports?.reach ?? 0);
+	// Kartu hero: kampanye yang masih dikerjakan; kalau semuanya sudah final,
+	// kampanye terbaru. Progres = media terbit dari total media (rumus daftar Kampanye).
+	const heroCampaign = $derived(
+		campaigns.find((c) => !DONE_STATUSES.has(c.taut_status ?? 'draft')) ?? campaigns[0] ?? null
+	);
+	const heroRunning = $derived(!!heroCampaign && !DONE_STATUSES.has(heroCampaign.taut_status ?? 'draft'));
+	const heroPublished = $derived(heroCampaign?.stats?.published_media ?? 0);
+	const heroTotal = $derived(
+		Math.max(heroCampaign?.stats?.articles ?? 0, heroCampaign?.stats?.published_media ?? 0)
+	);
+	const heroPct = $derived(heroTotal > 0 ? Math.min(100, Math.round((heroPublished / heroTotal) * 100)) : 0);
+	const heroStage = $derived(heroCampaign?.taut_status ?? 'draft');
+	const heroTone = $derived(heroPublished > 0 ? 'success' : (STAGE_TONE[heroStage] ?? 'muted'));
 
 	const reachDelta = $derived.by(() => {
 		if (prevReach <= 0) return null;
@@ -282,13 +324,12 @@
 {:else}
 	<div class="wrap">
 		<!-- ── HERO ─────────────────────────────────────────────────────── -->
-		<section class="hero heroLight">
-			<FloatingPaths position={1} />
-			<FloatingPaths position={-1} />
-			<div class="heroFade" aria-hidden="true"></div>
+		<section class="hero heroBlend">
+			<GradientWave colors={HERO_WAVE} />
+			<div class="heroScrim" aria-hidden="true"></div>
 			<div class="heroContent">
 					<h1 class="heroTitle">
-						{welcomeText}<span class="heroWave">{WAVE_EMOJI}</span>
+						{welcomeParts.head}<span class="heroNoWrap">{welcomeParts.tail} <span class="heroWave">{WAVE_EMOJI}</span></span>
 					</h1>
 					<p class="heroSubtitle">{i18n.t.dashboard.subtitle}</p>
 					<div class="heroBtns">
@@ -309,16 +350,39 @@
 					</div>
 				</div>
 				<div class="heroVisual">
-					<div class="heroSecurityCard">
-						<div class="securityShieldCircle">
-							<ShieldCheck size={20} strokeWidth={2.2} color="#34d399" />
+					{#if heroCampaign}
+						<a class="heroCampaign" href={`${fallbackBase}/taut-pintar/${campaignUrlId(heroCampaign)}`}>
+							<span class="heroCampaignTop">
+								<span class="heroCampaignLabel">{heroRunning ? tr('Kampanye berjalan') : tr('Kampanye terakhir')}</span>
+								<span class="heroCampaignStage">
+									<i class="heroCampaignDot heroCampaignDot-{heroTone}"></i>{STAGE_LABEL[heroStage] ?? heroStage}
+								</span>
+							</span>
+							<span class="heroCampaignName" title={heroCampaign.name}>{heroCampaign.name}</span>
+							{#if heroTotal > 0}
+								<span class="heroCampaignNumbers">
+									<span class="heroCampaignFigure">{heroPublished}<span class="heroCampaignOf"> / {heroTotal}</span></span>
+									<span class="heroCampaignCaption">{tr('media terbit')}</span>
+								</span>
+								<span
+									class="heroCampaignBar"
+									role="img"
+									aria-label="{heroPublished} {tr('Terbit')} / {heroTotal} {tr('Total')}"
+								>
+									<span class="heroCampaignBarFill" class:heroCampaignBarFillDone={heroPct === 100} style="width: {heroPct}%"></span>
+								</span>
+							{:else}
+								<span class="heroCampaignCaption">{tr('Belum ada media dipilih')}</span>
+							{/if}
+							<span class="heroCampaignOpen">{tr('Buka Kampanye')}<ArrowRight size={14} strokeWidth={2} /></span>
+						</a>
+					{:else}
+						<div class="heroCampaign heroCampaignEmpty">
+							<span class="heroCampaignLabel">{tr('Kampanye')}</span>
+							<span class="heroCampaignName">{tr('Belum ada kampanye')}</span>
+							<span class="heroCampaignCaption">{tr('Kampanye yang Anda buat tampil di sini, lengkap dengan progres medianya.')}</span>
 						</div>
-						<div class="securityTextWrap">
-							<span class="securityTitle">{i18n.t.dashboard.security_title}</span>
-							<span class="securityFigure">100%</span>
-							<span class="securityCaption">{i18n.t.dashboard.security_passed}</span>
-						</div>
-					</div>
+					{/if}
 				</div>
 		</section>
 
@@ -691,6 +755,9 @@
 		}
 		/* Lambaian tangan: hanya emoji yang bergerak, dengan jeda di antara
 		   lambaian supaya tidak terus bergoyang. */
+		.heroNoWrap {
+			white-space: nowrap;
+		}
 		.heroWave {
 			display: inline-block;
 			transform-origin: 72% 82%;
@@ -786,122 +853,189 @@
 		z-index: 2;
 		display: flex;
 	}
-	.heroSecurityCard {
+	/* Kartu kaca di kanan hero: progres kampanye. */
+	.heroCampaign {
 		display: flex;
 		flex-direction: column;
-		align-items: flex-start;
-		gap: 16px;
-		width: 208px;
-		padding: 20px;
+		gap: 8px;
+		width: 264px;
+		padding: 16px 18px;
 		border-radius: 16px;
-		background: rgba(7, 20, 64, 0.42);
-		border: 1px solid rgba(255, 255, 255, 0.22);
+		background: rgba(240, 246, 255, 0.78);
+		border: 1px solid rgba(255, 255, 255, 0.9);
 		backdrop-filter: blur(16px);
 		-webkit-backdrop-filter: blur(16px);
 		box-shadow:
-			inset 0 1px 0 rgba(255, 255, 255, 0.16),
-			0 12px 32px rgba(3, 10, 40, 0.35);
+			inset 0 1px 0 rgba(255, 255, 255, 0.8),
+			0 12px 32px rgba(11, 27, 74, 0.22);
+		color: #0b1b4a;
+		text-decoration: none;
+		transition:
+			transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+			box-shadow 0.18s ease;
 	}
-	.securityShieldCircle {
+	a.heroCampaign:hover {
+		transform: translateY(-2px);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.8),
+			0 16px 36px rgba(11, 27, 74, 0.3);
+	}
+	a.heroCampaign:focus-visible {
+		outline: 2px solid #ffffff;
+		outline-offset: 2px;
+	}
+	.heroCampaignTop {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
-		background: rgba(255, 255, 255, 0.14);
-		border: 1px solid rgba(255, 255, 255, 0.26);
+		justify-content: space-between;
+		gap: 8px;
 	}
-	.securityTextWrap {
-		display: flex;
-		flex-direction: column;
-	}
-	.securityTitle {
+	.heroCampaignLabel {
 		font-size: 13px;
 		line-height: 20px;
 		font-weight: 500;
-		color: rgba(255, 255, 255, 0.78);
+		color: rgba(11, 27, 74, 0.68);
 	}
-	.securityFigure {
-		font-size: 36px;
-		line-height: 44px;
+	.heroCampaignStage {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		line-height: 18px;
+		font-weight: 500;
+		color: rgba(11, 27, 74, 0.78);
+		white-space: nowrap;
+	}
+	.heroCampaignDot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--muted-foreground);
+	}
+	.heroCampaignDot-accent {
+		background: var(--primary);
+	}
+	.heroCampaignDot-success {
+		background: var(--success);
+	}
+	.heroCampaignDot-warning {
+		background: var(--warning);
+	}
+	.heroCampaignName {
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		font-size: 15px;
+		line-height: 20px;
+		font-weight: 600;
+		color: #0b1b4a;
+	}
+	.heroCampaignNumbers {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		margin-top: 4px;
+	}
+	.heroCampaignFigure {
+		font-size: 28px;
+		line-height: 32px;
 		font-weight: 600;
 		letter-spacing: -0.02em;
-		color: #ffffff;
 		font-variant-numeric: tabular-nums;
+		color: #0b1b4a;
 	}
-	.securityCaption {
+	.heroCampaignOf {
+		font-size: 16px;
+		font-weight: 500;
+		letter-spacing: 0;
+		color: rgba(11, 27, 74, 0.55);
+	}
+	.heroCampaignCaption {
 		font-size: 13px;
 		line-height: 20px;
-		color: rgba(255, 255, 255, 0.78);
+		color: rgba(11, 27, 74, 0.68);
+	}
+	.heroCampaignBar {
+		display: block;
+		height: 6px;
+		border-radius: 999px;
+		background: rgba(11, 27, 74, 0.1);
+		overflow: hidden;
+	}
+	.heroCampaignBarFill {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--primary);
+		transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+	.heroCampaignBarFillDone {
+		background: var(--success);
+	}
+	.heroCampaignOpen {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		margin-top: 2px;
+		font-size: 13px;
+		line-height: 20px;
+		font-weight: 500;
+		color: var(--primary);
+	}
+	.heroCampaignEmpty {
+		gap: 4px;
 	}
 
-	/* Hero varian cerah: langit siang, teks navy, kartu kaca putih */
-	.heroLight {
-		--fp-color: var(--primary);
-		background: var(--card);
-		border-color: var(--border);
-		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-	}
-	/* Kiri tenang untuk teks, garis makin jelas ke kanan di balik kartu. */
-	.heroFade {
+	/* Lapisan gelap di kiri: teks putih tetap terbaca di atas gelombang terang. */
+	.heroScrim {
 		position: absolute;
 		inset: 0;
 		z-index: 1;
 		pointer-events: none;
 		background: linear-gradient(
 			to right,
-			var(--card) 0%,
-			rgba(255, 255, 255, 0.82) 34%,
-			rgba(255, 255, 255, 0) 64%
+			rgba(11, 27, 74, 0.5) 0%,
+			rgba(11, 27, 74, 0.3) 45%,
+			rgba(11, 27, 74, 0) 72%
 		);
 	}
-	.heroLight .heroTitle {
-		color: #0b1b4a;
-		text-shadow: none;
+
+	/* Hero varian blend: 4 warna FeralUI (indigo gelap kiri untuk teks putih,
+	   lagoon/misted sky kanan untuk kartu kaca terang). */
+	.heroBlend {
+		background-color: #0b1b4a;
+		border-color: rgba(11, 27, 74, 0.18);
+		box-shadow: 0 4px 20px rgba(11, 27, 74, 0.14);
 	}
-	.heroLight .heroSubtitle {
-		color: rgba(11, 27, 74, 0.78);
-		text-shadow: none;
-	}
-	.heroLight .heroCTA {
-		background: var(--primary);
+	.heroBlend .heroTitle {
 		color: #ffffff;
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 	}
-	.heroLight .heroCTA:hover {
-		background: color-mix(in srgb, var(--primary) 88%, black);
-		box-shadow: 0 8px 20px rgba(43, 103, 236, 0.3);
+	.heroBlend .heroSubtitle {
+		color: rgba(255, 255, 255, 0.86);
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
 	}
-	.heroLight .heroCTAGhost {
-		background: rgba(255, 255, 255, 0.72);
+	.heroBlend .heroCTA {
+		background: #ffffff;
 		color: #0b1b4a;
-		border-color: rgba(43, 103, 236, 0.28);
 	}
-	.heroLight .heroCTAGhost:hover {
-		background: rgba(255, 255, 255, 0.92);
-		border-color: rgba(43, 103, 236, 0.5);
-		box-shadow: 0 8px 20px rgba(24, 64, 160, 0.16);
+	.heroBlend .heroCTA:hover {
+		background: #eef2ff;
+		box-shadow: 0 8px 20px rgba(11, 27, 74, 0.28);
 	}
-	.heroLight .heroSecurityCard {
-		background: rgba(255, 255, 255, 0.78);
-		border-color: var(--border);
-		box-shadow:
-			inset 0 1px 0 rgba(255, 255, 255, 0.8),
-			0 12px 32px rgba(24, 64, 160, 0.12);
+	.heroBlend .heroCTAGhost {
+		background: rgba(255, 255, 255, 0.16);
+		color: #ffffff;
+		border-color: rgba(255, 255, 255, 0.32);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
 	}
-	.heroLight .securityShieldCircle {
-		background: rgba(22, 121, 75, 0.1);
-		border-color: rgba(22, 121, 75, 0.28);
-	}
-	.heroLight .securityShieldCircle :global(svg) {
-		stroke: var(--success);
-	}
-	.heroLight .securityTitle,
-	.heroLight .securityCaption {
-		color: rgba(11, 27, 74, 0.68);
-	}
-	.heroLight .securityFigure {
-		color: #0b1b4a;
+	.heroBlend .heroCTAGhost:hover {
+		background: rgba(255, 255, 255, 0.26);
+		border-color: rgba(255, 255, 255, 0.55);
+		box-shadow: 0 8px 20px rgba(16, 24, 40, 0.18);
 	}
 
 	/* Metric Grid */
@@ -1514,6 +1648,8 @@
 			grid-template-columns: 1fr;
 			min-height: 0;
 			padding: 28px;
+			/* Satu kolom: sisi indigo gelap di balik teks, bukan lagoon terang. */
+			background-position: left center;
 		}
 		.heroVisual {
 			justify-content: flex-start;
@@ -1536,13 +1672,8 @@
 			padding: 20px 16px;
 			gap: 16px;
 			}
-			.heroFade {
-				background: linear-gradient(
-					to bottom,
-					var(--card) 0%,
-					rgba(255, 255, 255, 0.7) 45%,
-					rgba(255, 255, 255, 0) 100%
-				);
+			.heroScrim {
+				background: linear-gradient(to bottom, rgba(11, 27, 74, 0.45) 0%, rgba(11, 27, 74, 0.3) 100%);
 			}
 			.heroTitle {
 			font-size: clamp(22px, 6vw, 26px);
@@ -1568,32 +1699,14 @@
 			.heroVisual {
 				display: block;
 			}
-			.heroSecurityCard {
-				flex-direction: row;
-				align-items: center;
-				gap: 12px;
+			.heroCampaign {
 				width: 100%;
-				padding: 12px 16px;
+				box-sizing: border-box;
+				padding: 14px 16px;
 				border-radius: 14px;
 			}
-			.securityShieldCircle {
-				width: 36px;
-				height: 36px;
-				flex-shrink: 0;
-			}
-			.securityTextWrap {
-				flex-direction: row;
-				flex-wrap: wrap;
-				align-items: baseline;
-				column-gap: 8px;
-			}
-			.securityTitle {
-				width: 100%;
-				font-size: 12px;
-				line-height: 16px;
-			}
-			.securityFigure {
-				font-size: 22px;
+			.heroCampaignFigure {
+				font-size: 24px;
 				line-height: 28px;
 			}
 
@@ -1788,7 +1901,9 @@
 			animation: none;
 		}
 		.heroCTA,
-		.heroCTAGhost {
+		.heroCTAGhost,
+		.heroCampaign,
+		.heroCampaignBarFill {
 		transition: none;
 		}
 		.hero {

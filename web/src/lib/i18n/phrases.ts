@@ -9,6 +9,12 @@
 import { getLocale } from './i18n.svelte';
 
 export const PHRASE_EN: Record<string, string> = {
+  "Kampanye berjalan": "Active campaign",
+  "Kampanye terakhir": "Latest campaign",
+  "media terbit": "media published",
+  "Belum ada kampanye": "No campaigns yet",
+  "Belum ada media dipilih": "No media selected yet",
+  "Kampanye yang Anda buat tampil di sini, lengkap dengan progres medianya.": "Campaigns you create appear here, with their media progress.",
   "Publikasi tidak ditemukan atau bukan milik akun ini.": "Publication not found or it does not belong to this account.",
   "Kosongkan lalu simpan untuk menghapus nomor.": "Leave it empty and save to remove the number.",
   "Email tidak dikirim.": "No email is sent.",
