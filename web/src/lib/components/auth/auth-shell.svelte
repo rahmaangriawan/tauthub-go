@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
 
-	// Shell authentication split-screen — panel kiri foto penuh, panel kanan
-	// form. Panel kiri murni visual dan disembunyikan di mobile (logo di atas form).
+	// Shell authentication split-screen — panel kiri visual (garis mengalir
+	// ala blok "Login 3" Hirael, versi terang), panel kanan form. Panel kiri
+	// murni dekoratif dan disembunyikan di mobile (logo pindah ke atas form).
 	import type { Snippet } from 'svelte';
+	import FloatingPaths from './floating-paths.svelte';
 
 	let { children }: { children: Snippet } = $props();
 </script>
@@ -11,19 +13,15 @@
 <div class="auth">
 	<aside class="auth-marketing">
 		<div class="auth-media">
-			<img
-				src="/img/auth-hero.webp"
-				alt=""
-				aria-hidden="true"
-				class="auth-marketing-photo"
-				decoding="async"
-			/>
+			<FloatingPaths position={1} />
+			<FloatingPaths position={-1} />
+			<div class="auth-media-fade" aria-hidden="true"></div>
 
-			<a class="auth-brand" href="/login" aria-label="Tauthub">
+			<a class="auth-brand auth-enter" href="/login" aria-label="Tauthub">
 				<img src="/tauthub-logo.webp" alt="Tauthub" width="130" height="34" class="auth-brand-logo" />
 			</a>
 
-			<div class="auth-media-copy">
+			<div class="auth-media-copy auth-enter" style="--i: 4">
 				<h2>{tr("Semua Publikasi, Satu Kendali.")}</h2>
 				<p>{tr("Pantau proses distribusi dan status artikel tanpa berpindah platform.")}</p>
 			</div>
