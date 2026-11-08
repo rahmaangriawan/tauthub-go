@@ -5,6 +5,9 @@ import { defineConfig } from 'vite';
 
 declare const process: { env: Record<string, string | undefined> };
 
+// API_TARGET memungkinkan dev di port lain (mis. API_TARGET=http://localhost:8081).
+const apiTarget = process.env.API_TARGET || 'http://localhost:8080';
+
 export default defineConfig({
 	plugins: [
 		tailwindcss(),
@@ -27,16 +30,16 @@ export default defineConfig({
 		// Dev di 3001 supaya tidak bentrok dengan app lama (Next.js :3000).
 		// Produksi: nginx melayani web ini di 3000 dan mem-proxy /v1, /uploads,
 		// /t, /feed ke API Go :8080 (REWRITE/02_FRONTEND_SVELTE.md §9).
-		port: 3001,
+		port: Number(process.env.WEB_PORT) || 3001,
 		// Uji routing dua host secara lokal: curl -H "Host: data.tauthub.com" ...
 		// (Vite menolak Host tak dikenal secara bawaan.)
 		allowedHosts: ['data.tauthub.com', 'app.tauthub.com', '.tauthub.com'],
 		proxy: {
-			'/v1': 'http://localhost:8080',
-			'/healthz': 'http://localhost:8080',
-			'/uploads': 'http://localhost:8080',
-			'/t': 'http://localhost:8080',
-			'/feed': 'http://localhost:8080'
+			'/v1': apiTarget,
+			'/healthz': apiTarget,
+			'/uploads': apiTarget,
+			'/t': apiTarget,
+			'/feed': apiTarget
 		}
 	},
 	ssr: {
