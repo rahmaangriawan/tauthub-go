@@ -305,14 +305,28 @@
 					</div>
 				</div>
 				<div class="heroVisual">
-					<div class="heroSecurityCard">
-						<div class="securityShieldCircle">
-							<ShieldCheck size={24} strokeWidth={2.4} color="#34d399" />
+					<div class="heroWallet">
+						<img src="/images/wallet-distribusi.webp" alt="" class="heroWalletImg" width="96" height="100" />
+						<div class="heroWalletBody">
+							<span class="heroWalletLabel">{i18n.t.dashboard.available_balance}</span>
+							<div class="heroWalletValueRow">
+								<span class="heroWalletValue">{fmt(available)}</span>
+								<span class="heroWalletUnit">{i18n.t.common.credits}</span>
+							</div>
+							<span class="heroWalletNote">{i18n.t.dashboard.reserved_credit}: {fmt(reserved)}</span>
 						</div>
-						<div class="securityTextWrap">
-							<span class="securityTitle">{i18n.t.dashboard.security_title}</span>
-							<span class="securityValue">100% {i18n.t.dashboard.security_passed}</span>
-						</div>
+						<button
+							type="button"
+							class="heroWalletBtn"
+							onclick={() => {
+								topUpPayment = null;
+								topUpError = '';
+								topUpOpen = true;
+							}}
+						>
+							<Coins size={16} strokeWidth={2.2} />
+							<span>{i18n.t.dashboard.topup}</span>
+						</button>
 					</div>
 				</div>
 		</section>
@@ -646,14 +660,16 @@
 
 	/* Hero */
 	.hero {
-		position: relative;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 24px;
-		overflow: hidden;
-		border-radius: 16px;
-		padding: 32px;
+	position: relative;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 340px;
+	align-items: center;
+	gap: 32px;
+	min-height: 248px;
+	overflow: hidden;
+	border-radius: 16px;
+	padding: 36px 40px;
+	animation: heroIn 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 		background-image: url('/images/dashboard-hero.webp');
 		background-size: cover;
 		background-position: center right;
@@ -661,14 +677,24 @@
 		box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
 	}
 	.heroContent {
-		max-width: 680px;
-		position: relative;
-		z-index: 2;
+	max-width: 620px;
+	position: relative;
+	z-index: 2;
+	}
+	@keyframes heroIn {
+		from {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
 	}
 		.heroTitle {
-			font-size: 28px;
+			font-size: 30px;
 			font-weight: 600;
-			line-height: 36px;
+			line-height: 38px;
 			letter-spacing: -0.01em;
 			color: #ffffff;
 			margin: 0 0 8px;
@@ -696,10 +722,10 @@
 		}
 		.heroSubtitle {
 			font-size: 14px;
-			line-height: 20px;
-			color: rgba(255, 255, 255, 0.92);
-			margin: 0 0 20px;
-			max-width: 500px;
+			line-height: 22px;
+			color: rgba(255, 255, 255, 0.88);
+			margin: 0 0 24px;
+			max-width: 520px;
 			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 		}
 		.heroBtns {
@@ -768,57 +794,105 @@
 	}
 
 	.heroVisual {
-		flex: 0 0 auto;
-		display: flex;
-		align-items: center;
-		justify-content: center;
+		position: relative;
+		z-index: 2;
 	}
-	.heroSecurityCard {
-		display: flex;
-		flex-direction: column;
+	.heroWallet {
+		display: grid;
+		grid-template-columns: 96px minmax(0, 1fr);
+		grid-template-areas:
+			'img body'
+			'btn btn';
 		align-items: center;
-		justify-content: center;
-		text-align: center;
-		width: 170px;
-		padding: 22px 16px;
-		background: rgba(255, 255, 255, 0.15);
+		column-gap: 16px;
+		row-gap: 16px;
+		padding: 20px;
+		border-radius: 16px;
+		background: rgba(255, 255, 255, 0.12);
+		border: 1px solid rgba(255, 255, 255, 0.24);
 		backdrop-filter: blur(16px);
 		-webkit-backdrop-filter: blur(16px);
-		border: 1px solid rgba(255, 255, 255, 0.28);
-		border-radius: 16px;
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+		box-shadow: 0 12px 32px rgba(10, 14, 60, 0.28);
 	}
-	.securityShieldCircle {
-		width: 52px;
-		height: 52px;
-		border-radius: 50%;
-		background: rgba(255, 255, 255, 0.18);
-		border: 1px solid rgba(255, 255, 255, 0.3);
+	.heroWalletImg {
+		grid-area: img;
+		width: 96px;
+		height: auto;
+		filter: drop-shadow(0 10px 18px rgba(10, 14, 60, 0.35));
+	}
+	.heroWalletBody {
+		grid-area: body;
 		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.heroWalletLabel {
+		font-size: 13px;
+		line-height: 20px;
+		color: rgba(255, 255, 255, 0.78);
+	}
+	.heroWalletValueRow {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		min-width: 0;
+	}
+	.heroWalletValue {
+		font-size: 30px;
+		line-height: 36px;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		color: #ffffff;
+		font-variant-numeric: tabular-nums;
+	}
+	.heroWalletUnit {
+		font-size: 13px;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.78);
+	}
+	.heroWalletNote {
+		margin-top: 2px;
+		font-size: 12px;
+		line-height: 16px;
+		color: rgba(255, 255, 255, 0.72);
+		font-variant-numeric: tabular-nums;
+	}
+	.heroWalletBtn {
+		grid-area: btn;
+		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		margin-bottom: 12px;
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
-		}
-		.securityTextWrap {
-			display: flex;
-			flex-direction: column;
-		}
-		.securityTitle {
-			color: rgba(255, 255, 255, 0.85);
-			font-size: 12px;
-			font-weight: 500;
-			margin-bottom: 4px;
-			display: block;
-		}
-		.securityValue {
-			color: #ffffff;
-			font-size: 15px;
-			font-weight: 600;
-			line-height: 1.2;
-			display: block;
-		}
+		gap: 8px;
+		min-height: 40px;
+		padding: 0 16px;
+		border: none;
+		border-radius: 9px;
+		background: #ffffff;
+		color: var(--primary);
+		font: inherit;
+		font-size: 14px;
+		font-weight: 600;
+		cursor: pointer;
+		touch-action: manipulation;
+		transition:
+			transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+			background-color 0.18s ease,
+			box-shadow 0.18s ease;
+	}
+	.heroWalletBtn:hover {
+		background: #eef2ff;
+		transform: translateY(-1px);
+		box-shadow: 0 8px 20px rgba(27, 103, 254, 0.22);
+	}
+	.heroWalletBtn:active {
+		transform: none;
+		box-shadow: none;
+	}
+	.heroWalletBtn:focus-visible {
+		outline: 2px solid #ffffff;
+		outline-offset: 2px;
+	}
+
 
 	/* Metric Grid */
 	.metricGrid {
@@ -1426,7 +1500,12 @@
 
 		/* Responsive */
 		@media (max-width: 1024px) {
-			.metricGrid {
+		.hero {
+			grid-template-columns: 1fr;
+			min-height: 0;
+			padding: 28px;
+		}
+		.metricGrid {
 				grid-template-columns: repeat(2, minmax(0, 1fr));
 			}
 			.twoCol {
@@ -1441,14 +1520,11 @@
 				gap: 16px;
 			}
 			.hero {
-				flex-direction: column;
-				align-items: flex-start;
-				padding: 20px 16px;
-				gap: 16px;
-				border-radius: 16px;
+			padding: 20px 16px;
+			gap: 16px;
 			}
 			.heroTitle {
-				font-size: clamp(18px, 5.5vw, 24px);
+			font-size: clamp(22px, 6vw, 26px);
 				line-height: 1.25;
 				margin-bottom: 6px;
 			}
@@ -1468,36 +1544,23 @@
 				min-height: 44px;
 				justify-content: center;
 			}
-			.heroVisual {
-				width: 100%;
+			.heroWallet {
+				grid-template-columns: 72px minmax(0, 1fr);
+				padding: 16px;
+				column-gap: 12px;
+				row-gap: 12px;
 			}
-			.heroSecurityCard {
-				width: 100%;
-				flex-direction: row;
-				align-items: center;
-				justify-content: flex-start;
-				text-align: left;
-				gap: 12px;
-				padding: 10px 14px;
-				border-radius: 14px;
+			.heroWalletImg {
+				width: 72px;
 			}
-			.securityShieldCircle {
-				width: 36px;
-				height: 36px;
-				margin-bottom: 0;
-				flex-shrink: 0;
+			.heroWalletValue {
+				font-size: 26px;
+				line-height: 32px;
 			}
-			.securityShieldCircle :global(svg) {
-				width: 18px;
-				height: 18px;
+			.heroWalletBtn {
+				min-height: 44px;
 			}
-			.securityTitle {
-				font-size: 10px;
-				margin-bottom: 1px;
-			}
-			.securityValue {
-				font-size: 13.5px;
-			}
+
 
 			.metricGrid {
 				grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1690,8 +1753,12 @@
 			animation: none;
 		}
 		.heroCTA,
-		.heroCTAGhost {
-			transition: none;
+		.heroCTAGhost,
+		.heroWalletBtn {
+		transition: none;
+		}
+		.hero {
+		animation: none;
 		}
 	}
 </style>
