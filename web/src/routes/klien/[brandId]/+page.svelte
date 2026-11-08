@@ -18,6 +18,7 @@
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import HelpModal from '$lib/components/help-modal.svelte';
+	import FloatingPaths from '$lib/components/floating-paths.svelte';
 	
 	const brandId = $derived(page.params.brandId as string);
 	const brandUrl = $derived(getBrandUrlId() || brandId);
@@ -281,7 +282,10 @@
 {:else}
 	<div class="wrap">
 		<!-- ── HERO ─────────────────────────────────────────────────────── -->
-		<section class="hero">
+		<section class="hero heroLight">
+			<FloatingPaths position={1} />
+			<FloatingPaths position={-1} />
+			<div class="heroFade" aria-hidden="true"></div>
 			<div class="heroContent">
 					<h1 class="heroTitle">
 						{welcomeText}<span class="heroWave">{WAVE_EMOJI}</span>
@@ -657,9 +661,6 @@
 	border-radius: 16px;
 	padding: 36px 40px;
 	animation: heroIn 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-		background-image: url('/images/dashboard-hero.webp');
-		background-size: cover;
-		background-position: center right;
 		border: 1px solid var(--border);
 		box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
 	}
@@ -793,11 +794,13 @@
 		width: 208px;
 		padding: 20px;
 		border-radius: 16px;
-		background: rgba(255, 255, 255, 0.12);
-		border: 1px solid rgba(255, 255, 255, 0.24);
+		background: rgba(7, 20, 64, 0.42);
+		border: 1px solid rgba(255, 255, 255, 0.22);
 		backdrop-filter: blur(16px);
 		-webkit-backdrop-filter: blur(16px);
-		box-shadow: 0 12px 32px rgba(10, 14, 60, 0.28);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.16),
+			0 12px 32px rgba(3, 10, 40, 0.35);
 	}
 	.securityShieldCircle {
 		display: flex;
@@ -831,6 +834,74 @@
 		font-size: 13px;
 		line-height: 20px;
 		color: rgba(255, 255, 255, 0.78);
+	}
+
+	/* Hero varian cerah: langit siang, teks navy, kartu kaca putih */
+	.heroLight {
+		--fp-color: var(--primary);
+		background: var(--card);
+		border-color: var(--border);
+		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+	}
+	/* Kiri tenang untuk teks, garis makin jelas ke kanan di balik kartu. */
+	.heroFade {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		pointer-events: none;
+		background: linear-gradient(
+			to right,
+			var(--card) 0%,
+			rgba(255, 255, 255, 0.82) 34%,
+			rgba(255, 255, 255, 0) 64%
+		);
+	}
+	.heroLight .heroTitle {
+		color: #0b1b4a;
+		text-shadow: none;
+	}
+	.heroLight .heroSubtitle {
+		color: rgba(11, 27, 74, 0.78);
+		text-shadow: none;
+	}
+	.heroLight .heroCTA {
+		background: var(--primary);
+		color: #ffffff;
+	}
+	.heroLight .heroCTA:hover {
+		background: color-mix(in srgb, var(--primary) 88%, black);
+		box-shadow: 0 8px 20px rgba(43, 103, 236, 0.3);
+	}
+	.heroLight .heroCTAGhost {
+		background: rgba(255, 255, 255, 0.72);
+		color: #0b1b4a;
+		border-color: rgba(43, 103, 236, 0.28);
+	}
+	.heroLight .heroCTAGhost:hover {
+		background: rgba(255, 255, 255, 0.92);
+		border-color: rgba(43, 103, 236, 0.5);
+		box-shadow: 0 8px 20px rgba(24, 64, 160, 0.16);
+	}
+	.heroLight .heroSecurityCard {
+		background: rgba(255, 255, 255, 0.78);
+		border-color: var(--border);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.8),
+			0 12px 32px rgba(24, 64, 160, 0.12);
+	}
+	.heroLight .securityShieldCircle {
+		background: rgba(22, 121, 75, 0.1);
+		border-color: rgba(22, 121, 75, 0.28);
+	}
+	.heroLight .securityShieldCircle :global(svg) {
+		stroke: var(--success);
+	}
+	.heroLight .securityTitle,
+	.heroLight .securityCaption {
+		color: rgba(11, 27, 74, 0.68);
+	}
+	.heroLight .securityFigure {
+		color: #0b1b4a;
 	}
 
 	/* Metric Grid */
@@ -1464,6 +1535,14 @@
 			.hero {
 			padding: 20px 16px;
 			gap: 16px;
+			}
+			.heroFade {
+				background: linear-gradient(
+					to bottom,
+					var(--card) 0%,
+					rgba(255, 255, 255, 0.7) 45%,
+					rgba(255, 255, 255, 0) 100%
+				);
 			}
 			.heroTitle {
 			font-size: clamp(22px, 6vw, 26px);

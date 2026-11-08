@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Garis-garis mengalir untuk panel kiri halaman auth. Port dari blok
+	// Garis-garis mengalir (panel kiri halaman auth, hero beranda). Port dari blok
 	// "Login 3" Hirael (MIT, Mohammad Shehadeh), yang di sana memakai
 	// motion/react; di sini animasinya CSS murni: pathLength="1" menormalkan
 	// panjang tiap path jadi 1 unit, lalu stroke-dasharray/-dashoffset
@@ -52,7 +52,8 @@
 		display: block;
 		width: 100%;
 		height: 100%;
-		color: var(--auth-primary, #2563eb);
+		/* Warna garis: --fp-color dari pemakai, kalau tidak ada pakai biru auth. */
+		color: var(--fp-color, var(--auth-primary, #2563eb));
 		opacity: 0.6;
 	}
 	.fp-path {

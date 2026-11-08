@@ -5,7 +5,7 @@
 	// ala blok "Login 3" Hirael, versi terang), panel kanan form. Panel kiri
 	// murni dekoratif dan disembunyikan di mobile (logo pindah ke atas form).
 	import type { Snippet } from 'svelte';
-	import FloatingPaths from './floating-paths.svelte';
+	import FloatingPaths from '$lib/components/floating-paths.svelte';
 
 	let { children }: { children: Snippet } = $props();
 </script>
