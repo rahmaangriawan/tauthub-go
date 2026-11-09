@@ -1,22 +1,22 @@
 # Entitas
 
-> Tab Entitas menampilkan data brand yang sudah tersimpan di brief, dikelompokkan dalam empat kartu, beserta persentase kelengkapan isian wajib. Tab ini hanya untuk membaca. Untuk mengisi atau mengubah data, gunakan Copilot Chat atau formulir Instan Brief.
+> Tab Entitas menampilkan data brand yang sudah tersimpan di brief, dalam empat kartu, beserta persentase kelengkapan isian wajib. Tab ini hanya untuk dibaca. Untuk mengisi atau mengubah data, pakai Copilot Chat atau formulir Instan Brief.
 
-**Lokasi:** menu **Kampanye** › **Profiler** › pilih gerbang › tab **Entitas**
+**Lokasi:** menu **Kampanye** › **Profiler** › pilih pintu masuk › tab **Entitas**
 
 **Untuk:** Klien. Semua peran dapat melihat tab ini.
 
 ## Gambaran singkat
 
-Di tab ini brand Anda dilihat sebagai satu "entitas": sosok dengan nama resmi, kategori, fakta, dan aturan yang harus sama di setiap artikel. Kartu pertama menyebut datanya sebagai data resmi yang dipakai sistem pencarian dan AI untuk mengenali brand.
+Di tab ini, brand Anda dilihat sebagai satu entitas. Entitas artinya satu sosok yang jelas, dengan nama resmi, kategori, fakta, dan aturan yang harus sama di setiap artikel. Brief artinya catatan tertulis tentang brand Anda. Kartu pertama menyebut datanya sebagai data resmi yang dipakai sistem pencarian dan AI untuk mengenali brand.
 
-Tab **Entitas** diperbarui otomatis saat Tubi mengisi data di **Copilot Chat**, dan setelah Anda menyimpan formulir di **Instan Brief**. Lencana tab menampilkan persentase kelengkapan: hijau pada 100%, kuning di bawahnya.
+Tab **Entitas** diperbarui otomatis saat Tubi mengisi data di **Copilot Chat**, dan setelah Anda menyimpan formulir di **Instan Brief**. Lencana tab menampilkan persentase kelengkapan: hijau pada 100%, kuning kalau di bawahnya.
 
 ## Yang tampil di layar
 
 ### Kartu kelengkapan
 
-Kartu di bagian paling atas berisi bilah progres dan teks berbentuk "X / Y field wajib terisi · Z sumber dibaca". X adalah jumlah isian wajib yang sudah terisi, Y adalah total isian wajib, dan Z adalah jumlah sumber (dokumen dan tautan) yang tercatat untuk brief ini. Lencana persentase ada di sisi kanan. Jika semua isian wajib sudah terisi tetapi isian opsional masih ada yang kosong, teks bertambah "· N field opsional masih kosong" dan muncul tautan **Lengkapi field opsional lewat Copilot →**.
+Kartu paling atas berisi bilah progres dan teks berbentuk "X / Y field wajib terisi · Z sumber dibaca". X adalah jumlah isian wajib yang sudah terisi. Y adalah total isian wajib. Z adalah jumlah sumber (dokumen dan tautan) yang tercatat untuk brief ini. Lencana persentase ada di sisi kanan. Kalau semua isian wajib sudah terisi tetapi masih ada isian opsional yang kosong, teks bertambah "· N field opsional masih kosong". Lalu muncul tautan **Lengkapi field opsional lewat Copilot →**.
 
 ### Empat kartu isi
 
@@ -36,7 +36,7 @@ Kartu di bagian paling atas berisi bilah progres dan teks berbentuk "X / Y field
 | **Deskripsi resmi** | **Deskripsi resmi** |
 | **Teks "Tentang [brand]"** | **Boilerplate "Tentang brand"** |
 | **PILAR NARASI UTAMA** | **Klaim yang boleh dipakai** |
-| **LARANGAN KERAS** | **Aturan klaim dan batasan penulisan**, **Kata atau frasa yang harus dihindari**, dan isian sejenis dari gaya penulisan bila ada |
+| **LARANGAN KERAS** | **Aturan klaim dan batasan penulisan**, **Kata atau frasa yang harus dihindari**, dan isian sejenis dari gaya penulisan kalau ada |
 | **Fakta resmi** | **Fakta resmi** |
 | **Keunggulan unik (USP)**, **Fakta penting yang wajib dipertahankan**, **Wilayah operasional**, **Website resmi** | Isian tambahan yang diisi lewat Copilot Chat |
 | **Target Pertanyaan AI** | **Target pertanyaan di mesin pencari AI** |
@@ -45,7 +45,7 @@ Nama kolom formulir ada di [Instan Brief: Profil Brand](04-instan-brief-profil-b
 
 ### Keadaan kosong
 
-Kartu atau baris yang belum terisi menampilkan teks miring seperti **Belum diisi. Lengkapi lewat obrolan Copilot.**, **Belum ada. Lengkapi lewat obrolan Copilot.**, atau **Belum ada pertanyaan target. Lengkapi lewat obrolan Copilot.** Isi lewat [Copilot Chat](03-copilot-chat.md) atau formulir **Instan Brief**.
+Kartu atau baris yang belum terisi menampilkan teks miring seperti **Belum diisi. Lengkapi lewat obrolan Copilot.**, **Belum ada. Lengkapi lewat obrolan Copilot.**, atau **Belum ada pertanyaan target. Lengkapi lewat obrolan Copilot.** Isilah lewat [Copilot Chat](03-copilot-chat.md) atau formulir **Instan Brief**.
 
 ## Cara menggunakan
 
@@ -53,15 +53,15 @@ Kartu atau baris yang belum terisi menampilkan teks miring seperti **Belum diisi
 
 1. Buka tab **Entitas**.
 2. Baca kartu kelengkapan di bagian atas untuk melihat berapa isian wajib yang sudah terisi.
-3. Telusuri empat kartu. Periksa terutama angka, tahun, dan klaim.
-4. Jika ada yang salah atau kosong, perbaiki lewat **Copilot Chat** atau **Instan Brief**.
+3. Baca keempat kartu satu per satu. Periksa terutama angka, tahun, dan klaim.
+4. Kalau ada yang salah atau kosong, perbaiki lewat **Copilot Chat** atau **Instan Brief**.
 
 ### Cara melengkapi isian opsional lewat Copilot
 
 1. Pastikan persentase sudah 100% dan teks **N field opsional masih kosong** tampil.
 2. Klik **Lengkapi field opsional lewat Copilot →**.
-3. Tauthub berpindah ke tab **Copilot Chat** dan mengirim pesan atas nama Anda. Pesan itu meminta Tubi menawarkan isian untuk isian opsional yang masih kosong, paling banyak sepuluh, dimulai dari Keunggulan (USP) dan Fakta penting. Pesan itu tampil di percakapan.
-4. Jawab tawaran Tubi dengan memakai, mengubah, atau melewatinya.
+3. Tauthub pindah ke tab **Copilot Chat** dan mengirim pesan atas nama Anda. Pesan itu meminta Tubi, asisten AI, menawarkan isian untuk isian opsional yang masih kosong, paling banyak sepuluh, dimulai dari Keunggulan (USP) dan Fakta penting. Pesan itu tampil di obrolan.
+4. Tanggapi tawaran Tubi: pakai, ubah, atau lewati.
 
 ## Persentase dan artinya
 
@@ -69,7 +69,7 @@ Kartu atau baris yang belum terisi menampilkan teks miring seperti **Belum diisi
 |---|---|
 | Lencana hijau 100% | Semua isian wajib sudah terisi. |
 | Lencana kuning di bawah 100% | Masih ada isian wajib yang kosong. |
-| **N field opsional masih kosong** | Ada isian opsional, misalnya keunggulan, fakta penting, gaya penulisan, atau pedoman konten, yang belum terisi. Isian ini tidak dihitung dalam persentase. |
+| **N field opsional masih kosong** | Ada isian opsional yang belum terisi, misalnya keunggulan, fakta penting, gaya penulisan, atau pedoman konten. Isian ini tidak dihitung dalam persentase. |
 | **Sinyal Siap** | Pertanyaan target sudah tersimpan sebagai isian yang terisi atau terkonfirmasi. |
 | **Belum terverifikasi** | Pertanyaan tampil, tetapi isiannya belum berstatus terisi atau terkonfirmasi. |
 
@@ -77,9 +77,9 @@ Kartu atau baris yang belum terisi menampilkan teks miring seperti **Belum diisi
 
 - Tab ini tidak punya kolom atau tombol untuk mengedit.
 - Angka 100% hanya berarti isian wajib sudah terisi. Isian opsional tidak dihitung, jadi Keunggulan atau Fakta penting bisa saja masih kosong.
-- Daftar isian wajib ditentukan tim Tauthub dan bisa berubah.
+- Tim Tauthub yang menentukan daftar isian wajib, dan daftar itu bisa berubah.
 - Tab ini tidak menampilkan semua isian. **Nama alternatif atau alias**, **Kanal resmi**, **Keyword prioritas dan URL target**, serta isian gaya penulisan dan pedoman konten tidak tampil di sini. Isinya tersimpan dan ikut menjadi bahan [Ringkasan brief](08-ringkasan-brief.md).
-- Teks yang ditulis satu per baris tampil sebagai butir terpisah di **PILAR NARASI UTAMA**, **LARANGAN KERAS**, dan daftar pertanyaan. Teks yang dipisah titik koma tampil dalam satu butir. Tulis satu item per baris bila ingin butir terpisah.
+- Teks yang ditulis satu per baris tampil sebagai butir terpisah di **PILAR NARASI UTAMA**, **LARANGAN KERAS**, dan daftar pertanyaan. Teks yang dipisah titik koma tampil dalam satu butir. Tulis satu item per baris kalau Anda ingin butir terpisah.
 - Anda tidak perlu menekan **Simpan Draf** di bagian atas halaman agar data tampil di tab ini.
 
 ## Pertanyaan yang sering diajukan
@@ -88,7 +88,7 @@ Kartu atau baris yang belum terisi menampilkan teks miring seperti **Belum diisi
 Mengunggah dokumen tidak mengisi tab ini. Minta Tubi membaca dokumen di **Copilot Chat**, atau isi formulir **Instan Brief**.
 
 **Persentase sudah 100%, tetapi Keunggulan unik masih kosong. Apakah ada yang salah?**
-Tidak. Keunggulan unik termasuk isian opsional. Klik **Lengkapi field opsional lewat Copilot →** bila ingin mengisinya.
+Tidak. Keunggulan unik termasuk isian opsional. Klik **Lengkapi field opsional lewat Copilot →** kalau Anda ingin mengisinya.
 
 **Bisakah saya mengedit langsung di tab Entitas?**
 Tidak. Ubah data lewat **Copilot Chat** atau **Instan Brief**.

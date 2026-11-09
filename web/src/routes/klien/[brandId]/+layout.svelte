@@ -11,7 +11,7 @@
 	import { page } from '$app/state';
 	import {
 		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, MessageCircle, Newspaper, Receipt,
-		ScrollText, ShieldCheck, TriangleAlert, UserCircle
+		BookOpen, ScrollText, ShieldCheck, TriangleAlert, UserCircle
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { swr } from '$lib/swr-cache.svelte';
@@ -277,8 +277,14 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			label: i18n.t.nav.group_settings,
 			items: [
 				{ label: i18n.t.nav.profile, href: `${base}/profile`, icon: UserCircle, active: isActive(`${base}/profile`) },
-				{ label: i18n.t.nav.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`), badge: chatUnread.count },
-				{ label: i18n.t.nav.changelog, href: `${base}/changelog`, icon: ScrollText, active: isActive(`${base}/changelog`) }
+				{ label: i18n.t.nav.chat, href: `${base}/chat`, icon: MessageCircle, active: isActive(`${base}/chat`), badge: chatUnread.count }
+			]
+		},
+		{
+			label: tr('Sistem'),
+			items: [
+				{ label: i18n.t.nav.changelog, href: `${base}/changelog`, icon: ScrollText, active: isActive(`${base}/changelog`) },
+				{ label: tr('Dokumentasi'), href: '/dokumentasi', icon: BookOpen, active: false, external: true }
 			]
 		}
 	]);

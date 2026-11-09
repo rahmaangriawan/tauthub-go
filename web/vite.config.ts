@@ -31,6 +31,8 @@ export default defineConfig({
 		// Produksi: nginx melayani web ini di 3000 dan mem-proxy /v1, /uploads,
 		// /t, /feed ke API Go :8080 (REWRITE/02_FRONTEND_SVELTE.md §9).
 		port: Number(process.env.WEB_PORT) || 3001,
+		// Halaman /dokumentasi membaca ../Dokumentasi/*.md (di luar folder web).
+		fs: { allow: ['..'] },
 		// Uji routing dua host secara lokal: curl -H "Host: data.tauthub.com" ...
 		// (Vite menolak Host tak dikenal secara bawaan.)
 		allowedHosts: ['data.tauthub.com', 'app.tauthub.com', '.tauthub.com'],

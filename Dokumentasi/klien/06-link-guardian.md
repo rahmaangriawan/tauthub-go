@@ -1,10 +1,10 @@
 # Link Guardian
 
-> Pemantau berkala yang memeriksa apakah artikel terbit Anda masih bisa dibuka dan apakah tautan ke situs Anda masih ada di dalamnya. Bila artikel hilang atau tautan dihapus, Anda dapat mengajukan klaim garansi.
+> Alat yang memeriksa artikel terbit Anda secara berkala. Ia melihat apakah artikel masih bisa dibuka dan apakah tautan ke situs Anda masih ada di dalamnya. Bila artikel hilang atau tautan dihapus, Anda bisa mengajukan klaim garansi.
 
 **Lokasi:** menu **Link Guardian** (grup **RUANG KERJA**)
 
-**Untuk:** Klien. Semua peran brand dapat melihat halaman. **Crawl Sekarang** dan **Ajukan Klaim** memerlukan peran **Writer** ke atas.
+**Untuk:** Klien. Semua peran di brand bisa melihat halaman ini. Untuk **Crawl Sekarang** dan **Ajukan Klaim**, peran Anda harus **Writer** atau lebih tinggi.
 
 ## Gambaran singkat
 
@@ -13,62 +13,62 @@ Link Guardian memeriksa dua hal pada setiap artikel yang sudah terbit:
 1. **Halaman artikel**: apakah alamatnya masih bisa dibuka.
 2. **Tautan di dalam artikel**: apakah tautan ke situs Anda masih ada di isi artikel.
 
-Yang dipantau hanya artikel berstatus **Terbit** yang punya tautan terbit, masih dalam masa garansi media, dan bukan draf. Artikel yang dikirim sebagai draf mulai dipantau setelah mitra mempublikasikannya.
+Yang diperiksa hanya artikel berstatus **Terbit** yang punya alamat terbit, masih dalam masa garansi media, dan bukan draf (naskah yang belum tayang). Artikel yang dikirim sebagai draf baru diperiksa setelah mitra mempublikasikannya.
 
-Tauthub memeriksa artikel secara otomatis sekitar sebulan sekali. Anda juga dapat memicu pengecekan sendiri, maksimal sekali sehari.
+Tauthub memeriksa artikel sendiri sekitar sebulan sekali. Anda juga bisa meminta pemeriksaan sendiri, paling banyak sekali sehari.
 
-Garansi berlaku khusus pada **Media Terverifikasi**, yaitu media yang kepemilikan domainnya sudah diverifikasi Tauthub. Di [Katalog Media](02-katalog-media/README.md), media seperti itu bertanda centang biru "Domain Terverifikasi" dan dapat difilter lewat **Domain terverifikasi**.
+Garansi hanya berlaku untuk **Media Terverifikasi**. Ini media yang kepemilikan domain (alamat situs)-nya sudah dipastikan oleh Tauthub. Di [Katalog Media](02-katalog-media/README.md), media seperti itu bertanda centang biru "Domain Terverifikasi". Anda bisa menyaringnya lewat **Domain terverifikasi**.
 
-Lama garansi berbeda untuk tiap media: **Permanen**, atau sekian bulan sejak tanggal terbit. Badge kebijakan tautan pada baris media di Katalog Media menunjukkannya, misalnya **2 Dofollow • 12 Bln SLA**. Setelah masa garansi habis, artikel keluar dari halaman ini.
+Lama garansi beda-beda untuk tiap media: **Permanen**, atau sekian bulan sejak tanggal terbit. Label kebijakan tautan di baris media pada Katalog Media menunjukkannya, misalnya **2 Dofollow • 12 Bln SLA**. SLA di sini berarti lama garansi. Setelah masa garansi habis, artikel hilang dari halaman ini.
 
 ## Yang tampil di layar
 
 ### Bagian atas
 
-- Tombol **Crawl Sekarang** untuk mengantre pengecekan manual.
-- Keterangan **Cek Manual Maks. 1x Sehari**.
-- **Terakhir sinkronisasi**, misalnya "Hari ini, 08:30 WIB", yaitu waktu pengecekan terbaru atas artikel Anda.
+- Tombol **Crawl Sekarang** untuk memasukkan permintaan pemeriksaan manual ke antrean.
+- Tulisan **Cek Manual Maks. 1x Sehari**.
+- **Terakhir sinkronisasi**, misalnya "Hari ini, 08:30 WIB". Ini waktu pemeriksaan terbaru atas artikel Anda.
 
 ### Empat kartu
 
 | Kartu | Isi |
 |---|---|
-| **Total Dipantau** | Jumlah artikel yang dipantau ("Dalam masa garansi aktif") |
+| **Total Dipantau** | Jumlah artikel yang diperiksa ("Dalam masa garansi aktif") |
 | **Tayang & Aman** | Halaman masih bisa dibuka (200 OK) |
 | **Tak Terjangkau** | Situs menolak akses atau sedang bermasalah. Keterangannya "Sistem keamanan media memblokir bot" |
-| **Bermasalah** | Artikel 404 ("404 atau Tautan dihapus (SLA Klaim)") |
+| **Bermasalah** | Artikel tidak ditemukan atau 404 ("404 atau Tautan dihapus (SLA Klaim)") |
 
-Setiap kartu memuat angka dan persentase dari **Total Dipantau**. Grafik gelombang kecil adalah ilustrasi kecenderungan. Acuan Anda adalah angka dan persentasenya.
+Setiap kartu memuat angka dan persen dari **Total Dipantau**. Grafik gelombang kecil hanya hiasan arah kecenderungan. Pegangan Anda adalah angka dan persennya.
 
-> **Catatan:** angka kartu mengikuti status halaman. Artikel yang halamannya masih tayang tetapi tautan Anda sudah dihapus dihitung pada **Tayang & Aman**. Artikel itu tetap tampil merah sebagai **Tautan dihapus** di tabel dan dapat diklaim.
+> **Catatan:** angka di kartu mengikuti status halaman. Bila halaman artikel masih tayang tetapi tautan Anda sudah dihapus, artikel itu masuk hitungan **Tayang & Aman**. Di tabel, artikel itu tetap tampil merah sebagai **Tautan dihapus**, dan Anda bisa mengklaimnya.
 
 ### Pencarian dan filter
 
-- Kolom pencarian ("Cari artikel, media, atau URL…") mencari judul artikel, nama media, dan URL. Tekan **Enter** untuk menjalankannya.
-- Pilihan status: **Semua Status**, **Bermasalah saja (SLA Klaim)**, **Tak Terjangkau**, **Tayang & Aman**, dan **Belum ada URL**. **Bermasalah saja (SLA Klaim)** menampilkan artikel **Hilang (404)**.
-- Tombol **Filter** membuka panel berisi **Media**, **Tanggal** (tanggal tayang: **7 Hari Terakhir**, **30 Hari Terakhir**, **3 Bulan Terakhir**), **Reset filter**, dan **Terapkan**. Pilihan berlaku langsung. **Terapkan** hanya menutup panel. Angka kecil pada tombol menunjukkan jumlah filter aktif.
-- Pilihan **Media** hanya berisi media pada halaman yang sedang terbuka.
+- Kolom pencarian ("Cari artikel, media, atau URL…") mencari judul artikel, nama media, dan alamat. Tekan **Enter** untuk mulai mencari.
+- Pilihan status: **Semua Status**, **Bermasalah saja (SLA Klaim)**, **Tak Terjangkau**, **Tayang & Aman**, dan **Belum ada URL**. Pilihan **Bermasalah saja (SLA Klaim)** menampilkan artikel **Hilang (404)**.
+- Tombol **Filter** membuka panel berisi **Media**, **Tanggal** (tanggal tayang: **7 Hari Terakhir**, **30 Hari Terakhir**, **3 Bulan Terakhir**), **Reset filter**, dan **Terapkan**. Pilihan Anda langsung berlaku. **Terapkan** hanya menutup panel. Angka kecil di tombol menunjukkan jumlah filter yang aktif.
+- Pilihan **Media** hanya berisi media yang ada di halaman yang sedang terbuka.
 
 ### Tabel artikel
 
 | Kolom | Isi |
 |---|---|
-| **Informasi Artikel & Tautan** | Gambar mini, alamat artikel (klik untuk membuka di tab baru), judul, dan "Anchor:" bila diketahui |
+| **Informasi Artikel & Tautan** | Gambar kecil, alamat artikel (klik untuk membuka di tab baru), judul, dan "Anchor:" bila diketahui. Anchor adalah kata yang diklik untuk menuju situs Anda |
 | **Publisher** | Nama media dan **Tgl Tayang** |
 | **Status Verifikasi** | **Terverifikasi** atau **Belum terverifikasi** |
-| **Status Deteksi** | Hasil pengecekan (tabel di bawah) |
+| **Status Deteksi** | Hasil pemeriksaan (lihat tabel di bawah) |
 | **Waktu Cek** | Waktu relatif ("3 hari yang lalu") dan tanggal lengkap, atau "Belum pernah" |
 | **Aksi Garansi** | Tombol atau status klaim |
 
-Klik judul kolom **Informasi Artikel & Tautan** atau **Waktu Cek** untuk mengurutkan. Pengurutan hanya berlaku pada halaman terbuka. Secara bawaan baris diurutkan menurut judul dari Z ke A.
+Klik judul kolom **Informasi Artikel & Tautan** atau **Waktu Cek** untuk mengurutkan. Urutan hanya berlaku di halaman yang terbuka. Tanpa Anda ubah, baris berurutan menurut judul dari Z ke A.
 
-Di bawah tabel ada keterangan "Menampilkan 1–10 dari N artikel", pilihan **10 per halaman**, **20 per halaman**, atau **50 per halaman**, serta tombol **Sebelumnya** dan **Berikutnya**.
+Di bawah tabel ada tulisan "Menampilkan 1–10 dari N artikel", pilihan **10 per halaman**, **20 per halaman**, atau **50 per halaman**, serta tombol **Sebelumnya** dan **Berikutnya**.
 
-Bila daftar kosong, tampil "Tidak ada masalah pada artikel Anda". Pesan yang sama muncul bila belum ada artikel yang dipantau atau filter tidak menemukan hasil.
+Bila daftar kosong, layar menulis "Tidak ada masalah pada artikel Anda". Tulisan yang sama juga muncul bila belum ada artikel yang diperiksa, atau filter tidak menemukan hasil.
 
 ### Tampilan di HP
 
-Pada layar sempit, tabel berubah menjadi kartu per artikel. Tiap bagian diberi label sendiri, sehingga tidak perlu menggeser ke samping. Kartu ringkasan tersusun ke bawah. Bilah pencarian menempel di bawah bilah atas saat Anda menggulir, dan tombol **Filter** hanya berupa ikon.
+Di layar sempit, tabel berubah menjadi satu kartu untuk tiap artikel. Setiap bagian punya label sendiri, jadi Anda tidak perlu menggeser ke samping. Kartu ringkasan tersusun ke bawah. Bilah pencarian menempel di bawah bilah atas saat Anda menggulir. Tombol **Filter** hanya berupa ikon.
 
 ## Status dan artinya
 
@@ -76,26 +76,26 @@ Pada layar sempit, tabel berubah menjadi kartu per artikel. Tiap bagian diberi l
 
 | Status | Artinya | Langkah Anda berikutnya |
 |---|---|---|
-| **200 OK (aman)** | Halaman artikel bisa dibuka | Tidak ada tindakan |
-| **Hilang (404)** | Halaman tidak ditemukan di alamatnya (HTTP 404 atau 410). Penyebab umum: artikel dihapus atau ditarik, atau alamatnya berubah | Buka alamatnya untuk memastikan. Ajukan klaim bila memenuhi syarat |
-| **Tautan dihapus** | Halaman masih tayang, tetapi tautan ke situs Anda tidak ditemukan lagi di isi artikel | Periksa artikel. Ajukan klaim bila memenuhi syarat |
-| **Tak terjangkau** | Situs menolak akses atau sedang bermasalah, atau memberi respons lain yang bukan tayang, 404, maupun 410. Belum tentu hilang | Buka alamatnya sendiri. Tunggu pengecekan berikutnya |
-| **Belum ada URL** | Belum ada hasil pengecekan atau URL terbit yang bisa dicek. Artikel yang baru terbit dan belum pernah diperiksa juga tampil begini | Tunggu pengecekan berikutnya atau klik **Crawl Sekarang** |
+| **200 OK (aman)** | Halaman artikel bisa dibuka | Tidak perlu berbuat apa pun |
+| **Hilang (404)** | Halaman tidak ada di alamatnya (HTTP 404 atau 410, yaitu kode "halaman tidak ditemukan"). Sebabnya biasanya artikel dihapus atau ditarik, atau alamatnya berganti | Buka alamatnya untuk memastikan. Ajukan klaim bila memenuhi syarat |
+| **Tautan dihapus** | Halaman masih tayang, tetapi tautan ke situs Anda sudah tidak ada di isi artikel | Periksa artikelnya. Ajukan klaim bila memenuhi syarat |
+| **Tak terjangkau** | Situs menolak akses atau sedang bermasalah, atau memberi jawaban lain yang bukan tayang, 404, maupun 410. Artikel belum tentu hilang | Buka alamatnya sendiri. Tunggu pemeriksaan berikutnya |
+| **Belum ada URL** | Belum ada hasil pemeriksaan, atau belum ada alamat terbit yang bisa diperiksa. Artikel yang baru terbit dan belum pernah diperiksa juga tampil begini | Tunggu pemeriksaan berikutnya atau klik **Crawl Sekarang** |
 
-Teks kecil **Isi artikel belum bisa diperiksa** di bawah status berarti Tauthub belum dapat membaca isi halaman atau artikel tidak memuat tautan acuan. Arahkan penunjuk ke teks itu untuk melihat alasannya.
+Tulisan kecil **Isi artikel belum bisa diperiksa** di bawah status berarti Tauthub belum bisa membaca isi halaman, atau artikel tidak punya tautan acuan. Arahkan penunjuk ke tulisan itu untuk melihat alasannya.
 
 ### Aksi Garansi
 
 | Tampilan | Artinya |
 |---|---|
 | Tombol **Ajukan Klaim** | Artikel **Hilang (404)** atau **Tautan dihapus**, media terverifikasi, masih dalam garansi, dan belum ada klaim |
-| **Klaim diajukan** | Klaim masuk dan menunggu tim Tauthub |
-| **Sedang diperiksa** | Tim memeriksa kondisi domain |
-| **Menghubungi pemilik domain** | Tim menghubungi pemilik media |
-| **Dana dikembalikan** | Klaim disetujui. Nilai pembelian artikel dikembalikan ke **Saldo** |
+| **Klaim diajukan** | Klaim sudah masuk dan menunggu tim Tauthub |
+| **Sedang diperiksa** | Tim sedang memeriksa kondisi domain |
+| **Menghubungi pemilik domain** | Tim sedang menghubungi pemilik media |
+| **Dana dikembalikan** | Klaim disetujui. Nilai pembelian artikel kembali ke **Saldo** |
 | **Klaim ditolak** | Klaim ditolak. Tidak ada tombol lanjutan |
 | **Tidak Digaransi** | Media belum terverifikasi |
-| Tanda — | Tidak ada tindakan karena artikel sehat |
+| Tanda strip | Tidak ada tindakan karena artikel sehat |
 
 ## Cara menggunakan
 
@@ -103,65 +103,65 @@ Teks kecil **Isi artikel belum bisa diperiksa** di bawah status berarti Tauthub 
 
 1. Buka menu **Link Guardian**.
 2. Baca empat kartu di bagian atas.
-3. Cari artikel yang bertanda merah atau kuning pada kolom **Status Deteksi**.
+3. Cari artikel yang bertanda merah atau kuning di kolom **Status Deteksi**.
 4. Klik alamat artikel untuk membukanya dan memastikan sendiri.
 
-### Cara menjalankan pengecekan manual
+### Cara menjalankan pemeriksaan manual
 
 1. Klik **Crawl Sekarang**. Tombol berubah menjadi **Mengantrekan…**.
 2. Baca pesan hijau di atas tabel, misalnya "Antrean pengecekan dibuat: 12 artikel."
-3. Muat ulang halaman setelah beberapa saat untuk melihat hasilnya.
+3. Beberapa saat kemudian, muat ulang halaman untuk melihat hasilnya.
 
-Setelah satu pengecekan manual, tombol nonaktif selama 24 jam. Arahkan penunjuk ke tombol untuk melihat kapan Anda bisa mencoba lagi. Jatah harian hanya terpakai bila ada artikel yang benar-benar diantrekan. Sekali tekan memeriksa paling banyak 200 artikel, dan sisanya menyusul pada siklus otomatis berikutnya. Bila semua artikel baru saja diperiksa, tampil "Semua artikel baru saja diperiksa, belum ada yang perlu dicek ulang."
+Setelah satu pemeriksaan manual, tombol mati selama 24 jam. Arahkan penunjuk ke tombol untuk melihat kapan Anda bisa mencoba lagi. Jatah harian hanya terpakai bila ada artikel yang benar-benar masuk antrean. Sekali tekan, paling banyak 200 artikel diperiksa. Sisanya menyusul pada pemeriksaan otomatis berikutnya. Bila semua artikel baru saja diperiksa, layar menulis "Semua artikel baru saja diperiksa, belum ada yang perlu dicek ulang."
 
 ### Cara mencari dan menyaring artikel
 
-1. Ketik kata kunci pada kolom pencarian, lalu tekan **Enter**.
-2. Pilih status pada daftar di sebelahnya.
+1. Ketik kata kunci di kolom pencarian, lalu tekan **Enter**.
+2. Pilih status di daftar sebelahnya.
 3. Klik **Filter** untuk memilih **Media** atau **Tanggal**.
 4. Klik **Reset filter** untuk mengembalikan semua pilihan.
 
 ### Cara mengajukan klaim garansi
 
-1. Temukan artikel berstatus **Hilang (404)** atau **Tautan dihapus**. Filter **Bermasalah saja (SLA Klaim)** hanya menampilkan yang **Hilang (404)**, jadi gunakan daftar penuh untuk **Tautan dihapus**.
+1. Cari artikel berstatus **Hilang (404)** atau **Tautan dihapus**. Filter **Bermasalah saja (SLA Klaim)** hanya menampilkan yang **Hilang (404)**. Jadi, pakai daftar lengkap untuk mencari **Tautan dihapus**.
 2. Pastikan kolom **Status Verifikasi** menunjukkan **Terverifikasi**.
-3. Klik **Ajukan Klaim** pada kolom **Aksi Garansi**. Tombol berubah menjadi **Mengirim…**.
+3. Klik **Ajukan Klaim** di kolom **Aksi Garansi**. Tombol berubah menjadi **Mengirim…**.
 4. Baca pesan "Klaim diajukan. Tim Tauthub akan memeriksa kondisi tautan dan menindaklanjuti."
 5. Pantau kolom **Aksi Garansi**. Muat ulang halaman untuk melihat status terbaru.
 
-Tim Tauthub memeriksa kondisi domain dan menghubungi pemilik media. Bila masalah tidak dapat diselesaikan, tim mengembalikan saldo senilai pembelian artikel itu. Saat pengembalian, sistem memeriksa ulang bahwa artikel masih dalam masa garansi, media terverifikasi, dan artikel benar-benar 404 atau tautannya dicabut. Setiap artikel hanya punya satu klaim.
+Tim Tauthub memeriksa kondisi domain dan menghubungi pemilik media. Bila masalah tidak bisa diselesaikan, tim mengembalikan saldo sebesar harga pembelian artikel itu. Saat mengembalikan, sistem memeriksa lagi tiga hal: artikel masih dalam masa garansi, media terverifikasi, dan artikel memang 404 atau tautannya sudah dicabut. Setiap artikel hanya punya satu klaim.
 
 ## Aturan dan batasan
 
 - Artikel yang sudah lewat masa garansi tidak tampil.
-- Klaim hanya dapat diajukan untuk **Hilang (404)** atau **Tautan dihapus**. Status **Tak terjangkau** tidak dapat diklaim.
-- Klaim yang ditolak tidak bisa diajukan ulang dari halaman ini.
-- Hasil pengecekan hanya tampil di halaman ini, dan halaman tidak memperbarui diri. Buka halaman secara berkala dan muat ulang untuk melihat hasil terbaru.
+- Klaim hanya bisa diajukan untuk **Hilang (404)** atau **Tautan dihapus**. Status **Tak terjangkau** tidak bisa diklaim.
+- Klaim yang ditolak tidak bisa diajukan lagi dari halaman ini.
+- Hasil pemeriksaan hanya tampil di halaman ini, dan halaman tidak berubah sendiri. Buka halaman secara berkala dan muat ulang untuk melihat hasil terbaru.
 
 ## Pesan galat yang umum
 
 | Pesan | Penyebab dan cara mengatasi |
 |---|---|
-| "Halaman tidak dapat dimuat" | Data gagal diambil, misalnya karena koneksi terputus. Klik **Coba lagi**. |
+| "Halaman tidak dapat dimuat" | Data gagal diambil, misalnya karena koneksi putus. Klik **Coba lagi**. |
 | "Gagal memuat daftar artikel." | Daftar gagal dimuat. Klik **Coba lagi** di bawah pesan. |
-| "Pengecekan manual dibatasi 1x sehari. Coba lagi nanti." | Jatah harian sudah terpakai. Tunggu 24 jam sejak pengecekan manual terakhir. |
+| "Pengecekan manual dibatasi 1x sehari. Coba lagi nanti." | Jatah harian sudah terpakai. Tunggu 24 jam sejak pemeriksaan manual terakhir. |
 | "Gagal mengantrekan pengecekan." atau "Gagal mengajukan klaim." | Permintaan gagal diproses. Coba lagi beberapa saat kemudian. |
-| "Brand not found" | Peran Anda belum **Writer**, sehingga **Crawl Sekarang** dan **Ajukan Klaim** ditolak. Minta admin brand menaikkan peran Anda. |
+| "Brand not found" | Peran Anda belum **Writer**, jadi **Crawl Sekarang** dan **Ajukan Klaim** ditolak. Minta admin brand menaikkan peran Anda. |
 
-Selama satu klaim sedang dikirim, tombol **Ajukan Klaim** di baris lain nonaktif sementara.
+Selama satu klaim sedang dikirim, tombol **Ajukan Klaim** di baris lain mati sementara.
 
 ## Pertanyaan yang sering diajukan
 
 **Apakah Tak terjangkau berarti artikel hilang?**
-Belum tentu. Sistem keamanan sebagian media memblokir pengecek otomatis. Buka alamat artikel sendiri untuk memastikan.
+Belum tentu. Sistem keamanan sebagian media memblokir pemeriksa otomatis. Buka alamat artikel sendiri untuk memastikan.
 
 **Mengapa artikel saya tidak ada di daftar?**
-Artikel mungkin masih draf di situs mitra, belum punya tautan terbit, atau sudah lewat masa garansi media.
+Artikel mungkin masih draf di situs mitra, belum punya alamat terbit, atau sudah lewat masa garansi media.
 
 **Mengapa tombol Ajukan Klaim tidak muncul?**
-Tombol hanya muncul untuk artikel bermasalah pada media terverifikasi yang masih dalam garansi dan belum pernah diklaim.
+Tombol hanya muncul untuk artikel bermasalah di media terverifikasi yang masih dalam garansi dan belum pernah diklaim.
 
-**Di mana saya melihat hasil pemeriksaan lain, seperti sentimen artikel?**
+**Di mana saya melihat hasil pemeriksaan lain, seperti nada berita artikel?**
 Di [Status Publikasi](05-status-publikasi.md), pada baris publikasi yang sudah terbit.
 
 ## Lihat juga

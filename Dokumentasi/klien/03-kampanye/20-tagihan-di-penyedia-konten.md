@@ -1,81 +1,81 @@
 # Tagihan di Penyedia Konten
 
-> Bar bawah Penyedia Konten menampilkan TOTAL TAGIHAN AKHIR kampanye beserta rinciannya. Halaman ini menjelaskan isi angka itu, kapan saldo Anda dipotong, dan apa yang perlu dilakukan bila saldo kurang.
+> Di bar bawah Penyedia Konten ada kotak TOTAL TAGIHAN AKHIR. Halaman ini menjelaskan isi angka itu, kapan saldo Anda berkurang, dan apa yang harus dilakukan bila saldo kurang.
 
 **Lokasi:** menu **Kampanye** › pilih kampanye › **Penyedia Konten** › kotak **TOTAL TAGIHAN AKHIR** di bar bawah
 **Untuk:** Klien dengan peran Writer atau lebih tinggi pada brand
 
 ## Gambaran singkat
 
-Biaya sebuah kampanye terdiri dari tiga komponen:
+Biaya sebuah kampanye terdiri dari tiga bagian:
 
-- **Biaya media**: harga penempatan artikel di tiap media.
-- **Biaya penulisan AI**: dikenakan setiap kali The Writer menulis atau menulis ulang sebuah artikel.
-- **Biaya gambar AI**: dikenakan untuk setiap gambar yang dibuat dengan AI.
+- **Biaya media**: harga untuk memasang artikel di tiap media.
+- **Biaya penulisan AI**: Anda bayar setiap kali The Writer (penulis otomatis dari Tauthub) menulis atau menulis ulang satu artikel. AI adalah program komputer yang bisa menulis sendiri.
+- **Biaya gambar AI**: Anda bayar untuk setiap gambar yang dibuat oleh AI.
 
-Artikel yang Anda tulis atau unggah sendiri tidak dikenai biaya penulisan AI, sehingga baris penulisan tetap kosong bila Anda tidak memakai AI. Biaya media tetap berlaku untuk semua artikel. Nilai tampil dalam rupiah. Besar tarif penulisan dan gambar ditetapkan oleh tim Tauthub dan dapat berubah, jadi lihat angka terbaru di layar.
+Bila Anda menulis atau mengunggah artikel sendiri, Anda tidak membayar biaya penulisan AI. Baris penulisan akan tetap kosong. Biaya media tetap berlaku untuk semua artikel. Semua angka tampil dalam rupiah. Tim Tauthub yang menentukan tarif penulisan dan gambar, dan tarif itu bisa berubah. Jadi lihat angka terbaru di layar.
 
 ## Yang tampil di layar
 
 ### Kotak TOTAL TAGIHAN AKHIR
 
-Kotak ini berada di sisi kiri bar bawah. Angka di dalamnya adalah jumlah biaya media, penulisan AI, dan gambar AI. Biaya penulisan dan gambar dihitung dari jumlah proses yang sudah ditagih, dikalikan tarif yang berlaku sekarang.
+Kotak ini ada di sisi kiri bar bawah. Angkanya adalah jumlah dari biaya media, penulisan AI, dan gambar AI. Untuk penulisan dan gambar, Tauthub menghitung jumlah proses yang sudah ditagih, lalu mengalikannya dengan tarif yang berlaku sekarang.
 
-Saat total berubah, sebuah chip kecil melayang di atas angka lalu memudar. Chip hijau seperti "+Rp…" menandakan kenaikan, misalnya setelah artikel AI selesai ditulis. Chip merah seperti "-Rp…" menandakan penurunan, misalnya setelah media dilepas dari kampanye. Chip tidak muncul saat halaman pertama kali dimuat.
+Saat total berubah, sebuah label kecil melayang di atas angka lalu memudar. Label hijau seperti "+Rp…" berarti total naik, misalnya setelah artikel AI selesai ditulis. Label merah seperti "-Rp…" berarti total turun, misalnya setelah Anda melepas media dari kampanye. Label tidak muncul saat halaman baru dibuka.
 
 ### Rincian biaya
 
-Arahkan kursor ke kotak total untuk membuka popover **Rincian biaya**. Klik kotak itu untuk menahan popover tetap terbuka, lalu klik di luar popover untuk menutupnya. Di HP, ketuk kotak untuk membuka dan menutup.
+Arahkan kursor ke kotak total untuk membuka jendela kecil **Rincian biaya**. Klik kotak itu supaya jendelanya tetap terbuka. Klik di luar jendela untuk menutupnya. Di HP, ketuk kotak untuk membuka dan menutup.
 
 | Baris | Isi |
 |---|---|
-| **Biaya media** | Jumlah artikel dan total biaya penempatannya |
+| **Biaya media** | Jumlah artikel dan total biaya pemasangannya |
 | **Biaya penulisan AI** | Jumlah penulisan yang sudah ditagih, ditulis "N × tarif". Bila belum ada, tertulis "belum memakai AI" |
 | **Biaya gambar AI** | Jumlah gambar yang sudah ditagih, ditulis "N × tarif" |
-| **TOTAL TAGIHAN AKHIR** | Jumlah ketiga baris di atas |
+| **TOTAL TAGIHAN AKHIR** | Jumlah dari tiga baris di atas |
 
-Pada baris penulisan, keterangan seperti "(5 artikel + 2 tulis ulang)" berarti ada 5 penulisan yang ditagih, dan 2 di antaranya adalah tulis ulang. Angka pertama sudah mencakup tulis ulang.
+Pada baris penulisan, keterangan seperti "(5 artikel + 2 tulis ulang)" berarti ada 5 penulisan yang ditagih. Dua di antaranya adalah tulis ulang. Angka pertama sudah termasuk tulis ulang.
 
 ## Kapan saldo dipotong
 
 | Aksi | Saat saldo dipotong | Bila gagal |
 |---|---|---|
 | Menulis artikel baru dengan AI | Setelah artikel selesai ditulis | Tidak ditagih |
-| Menulis ulang artikel dengan AI | Di awal proses | Tidak dikembalikan otomatis; mengulang upaya yang sama tidak dipotong lagi |
-| Membuat gambar dengan AI | Setelah gambar jadi; saldo dicek lebih dulu | Tidak ditagih |
-| Menerbitkan kampanye | Biaya media ditahan dari saldo tersedia saat Anda klik **Terbitkan** | Dikembalikan bila publikasi dibatalkan atau ditolak |
-| Artikel tayang di media | Biaya media yang ditahan dipotong permanen | Lihat [Ringkasan dan distribusi](06-ringkasan-distribusi.md) |
+| Menulis ulang artikel dengan AI | Di awal proses | Tidak dikembalikan otomatis. Bila Anda mengulang upaya yang sama, saldo tidak dipotong lagi |
+| Membuat gambar dengan AI | Setelah gambar jadi. Tauthub mengecek saldo lebih dulu | Tidak ditagih |
+| Menerbitkan kampanye | Biaya media ditahan dari saldo tersedia saat Anda klik **Terbitkan** | Dikembalikan bila penerbitan dibatalkan atau ditolak |
+| Artikel tayang di media | Biaya media yang ditahan dipotong untuk selamanya | Lihat [Ringkasan dan distribusi](06-ringkasan-distribusi.md) |
 
 Aksi berikut tidak memotong saldo:
 
-- **Tulis Sendiri**, termasuk unggah dokumen dan tempel teks (perapian dokumen oleh AI juga gratis)
+- **Tulis Sendiri**, termasuk unggah dokumen dan tempel teks. Bila AI hanya merapikan dokumen Anda, itu juga gratis.
 - **Racik Instruksi dari Anchor** dan **Isi topik dari konteks**
 - **Analisis QC**, **Cek Validasi**, dan penulisan ulang otomatis setelah QC
-- unggah gambar sendiri ke cover maupun **Pustaka Gambar AI**
+- Unggah gambar sendiri, baik untuk cover maupun **Pustaka Gambar AI**
 
-> **Penting:** Penulisan ulang dengan AI menimpa naskah sebelumnya dan versi lama tidak bisa dikembalikan. Pastikan Anda ingin menulis ulang sebelum mengklik tombol buat draf.
+> **Penting:** Penulisan ulang dengan AI menimpa naskah sebelumnya. Naskah lama tidak bisa dikembalikan. Pastikan Anda memang ingin menulis ulang sebelum klik tombol buat draf.
 
 ## Cara memeriksa tagihan sebelum menerbitkan
 
 1. Buka **Rincian biaya** di bar bawah.
-2. Lihat baris **Biaya media**. Angka ini ditahan dari saldo saat kampanye diterbitkan.
+2. Lihat baris **Biaya media**. Angka ini akan ditahan dari saldo saat Anda menerbitkan kampanye.
 3. Buka menu **Saldo** dan bandingkan dengan saldo tersedia. Lihat juga [Saldo dan top up](../08-saldo-dan-top-up.md).
-4. Bila saldo kurang, lakukan **Top Up** lebih dulu.
+4. Bila saldo kurang, lakukan **Top Up** dulu.
 
-Media dengan beberapa artikel dihitung per artikel. Empat artikel di satu media berarti empat kali harga media itu.
+Tauthub menghitung biaya media per artikel. Empat artikel di satu media berarti empat kali harga media itu.
 
 ## Saldo tidak cukup
 
-Pesan berikut dapat muncul pada tahap berbeda:
+Pesan berikut bisa muncul di tahap yang berbeda:
 
 | Pesan | Tahap | Langkah Anda |
 |---|---|---|
 | "Saldo kredit tidak cukup untuk generate (butuh …, tersedia …)" | Menulis atau menulis ulang artikel | Top up saldo, lalu ulangi |
 | "Saldo kredit tidak cukup untuk generate gambar…" | Membuat gambar AI | Top up saldo, lalu ulangi |
-| "Saldo tidak mencukupi untuk membuat gambar. Silakan top up terlebih dahulu." | Dialog konfirmasi gambar; tombol konfirmasi nonaktif | Top up saldo, lalu buka dialog lagi |
-| **Saldo Tidak Cukup**: "Distribusi butuh Rp…, saldo tersedia Rp…" | Menerbitkan kampanye | Klik **Top Up Saldo**, lalu buka **Ringkasan** untuk memeriksa status publikasi |
+| "Saldo tidak mencukupi untuk membuat gambar. Silakan top up terlebih dahulu." | Kotak konfirmasi gambar. Tombol konfirmasi tidak bisa diklik | Top up saldo, lalu buka kotak konfirmasi lagi |
+| **Saldo Tidak Cukup**: "Distribusi butuh Rp…, saldo tersedia Rp…" | Menerbitkan kampanye | Klik **Top Up Saldo**, lalu buka **Ringkasan** untuk melihat status penerbitan |
 
-Angka dalam dua pesan pertama memakai satuan kredit, bukan rupiah. Anda tidak perlu menghitungnya: pesan itu berarti saldo belum cukup. Saldo di halaman **Saldo** tampil dalam rupiah, dan biaya yang ditahan untuk publikasi ditandai "ditahan".
+Dua pesan pertama memakai satuan kredit, bukan rupiah. Anda tidak perlu menghitungnya. Pesan itu hanya berarti saldo belum cukup. Saldo di halaman **Saldo** tampil dalam rupiah. Biaya yang ditahan untuk penerbitan diberi tanda "ditahan".
 
 ## Pertanyaan yang sering diajukan
 
@@ -83,10 +83,10 @@ Angka dalam dua pesan pertama memakai satuan kredit, bukan rupiah. Anda tidak pe
 Artikel yang Anda tulis atau unggah sendiri tidak dihitung sebagai penulisan AI.
 
 **Kenapa total bertambah setelah saya membuat gambar otomatis?**
-Setiap gambar AI ditagih saat dibuat, lalu angka total diperbarui tanpa memuat ulang halaman.
+Setiap gambar AI ditagih saat jadi. Angka total lalu berubah sendiri tanpa Anda membuka ulang halaman.
 
 **Bisakah saya menutup Pengelola Naskah saat AI sedang menulis?**
-Tidak. Tombol tutup dan **Batal** hanya menampilkan peringatan sampai draf selesai. Proses berjalan sampai selesai.
+Tidak. Tombol tutup dan **Batal** hanya menampilkan peringatan sampai draf selesai. AI terus bekerja sampai selesai.
 
 ## Lihat juga
 

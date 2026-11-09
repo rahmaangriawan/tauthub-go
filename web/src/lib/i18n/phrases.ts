@@ -1642,6 +1642,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Dokumen sertifikat (PDF/JPG, opsional)": "Certificate document (PDF/JPG, optional)",
   "Dokumen siap diproses oleh AI.": "The document is ready to be processed by AI.",
   "Dokumen verifikasi yang diunggah mitra. Tandai terverifikasi agar mitra dapat menambahkan media.": "Verification documents uploaded by the partner. Mark as verified so the partner can add media.",
+  "Dokumentasi": "Documentation",
   "Dokumentasi API": "API Documentation",
   "Domain Authority (DA)": "Domain Authority (DA)",
   "Domain Belum Dicek": "Domain Not Yet Checked",

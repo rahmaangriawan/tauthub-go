@@ -61,6 +61,7 @@ const APP_ONLY_PREFIXES = [
 	'/payments',
 	'/berita-acara',
 	'/docs',
+	'/dokumentasi',
 	'/blogger-pick-blog'
 ];
 

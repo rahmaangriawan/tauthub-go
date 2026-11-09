@@ -23,6 +23,8 @@
 			children?: Array<{ label: string; href: string; active: boolean; badge?: number | null }>;
 		/** Badge angka (merah) di kanan label — mis. jumlah pesan belum dibaca. */
 		badge?: number | null;
+		/** Buka di tab baru (mis. halaman dokumentasi di luar dashboard). */
+		external?: boolean;
 	};
 	export type ShellNavGroup = { label: string; items: ShellNavItem[] };
 
@@ -242,6 +244,8 @@
 				{#each group.items as item (item.href + item.label)}
 					<a
 						href={item.href}
+						target={item.external ? '_blank' : undefined}
+						rel={item.external ? 'noopener' : undefined}
 						class="app-sidebar-link"
 						data-active={item.active ? 'true' : 'false'}
 						data-tooltip={isCollapsed ? item.label : undefined}

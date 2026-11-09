@@ -102,6 +102,8 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 3. `rsync` ke `~/tauthub-sync/` lalu `sudo rsync` ke
    `/home/tauthub/htdocs/app.tauthub.com/` (exclude `.env`, `api/.data/`,
    `web/build/`, `web/node_modules/`).
+   Folder `Dokumentasi/` HARUS ikut terkirim: halaman publik `/dokumentasi`
+   dibangun dari `Dokumentasi/**/*.md` saat `bun run build` di server.
 4. `./bin/migrate up` sebagai user `tauthub`.
 5. Build web di server: `bun install --frozen-lockfile && bun run build`.
 6. `systemctl restart tauthub-api tauthub-web tauthub-scheduler tauthub-worker`.

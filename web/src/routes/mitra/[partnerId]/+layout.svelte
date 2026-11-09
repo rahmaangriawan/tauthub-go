@@ -13,7 +13,7 @@
 	import { page } from '$app/state';
 		import {
 			ChevronDown, Coins, Gauge, Gift, Headset, House, Link2, MessageCircle, Newspaper, PlugZap,
-			Receipt, ScrollText, Server, Settings, ShieldCheck, TriangleAlert,
+			BookOpen, Receipt, ScrollText, Server, Settings, ShieldCheck, TriangleAlert,
 			UserCircle, Wallet
 		} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -188,7 +188,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			// dipisah supaya grup Pengaturan tetap fokus.
 			label: tr('Sistem'),
 			items: [
-				{ label: i18n.t.nav_partner.changelog, href: `${base}/changelog`, icon: ScrollText, active: isActive(`${base}/changelog`) }
+				{ label: i18n.t.nav_partner.changelog, href: `${base}/changelog`, icon: ScrollText, active: isActive(`${base}/changelog`) },
+				{ label: tr('Dokumentasi'), href: '/dokumentasi', icon: BookOpen, active: false, external: true }
 			]
 		}
 	]);

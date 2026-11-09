@@ -12,6 +12,8 @@ Disallow: /admin
 Disallow: /klien
 Disallow: /mitra
 Disallow: /berita-acara/
+
+Sitemap: https://app.tauthub.com/dokumentasi/sitemap.xml
 `;
 
 export const GET: RequestHandler = async ({ url }) => {
