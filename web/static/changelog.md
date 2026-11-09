@@ -19,6 +19,12 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.6.1 — 2026-11-09
+
+### Fitur
+- **Halaman Dokumentasi untuk klien dan mitra**: panduan lengkap dari mendaftar sampai artikel terbit, ditulis dengan bahasa yang mudah dipahami. Bisa dibuka tanpa login di app.tauthub.com/dokumentasi, lengkap dengan pencarian dan pertanyaan yang sering diajukan. Menunya juga ada di sidebar dashboard klien dan mitra, di bawah grup Sistem.
+- **Gambar buatan AI kini boleh memuat satu teks pendek**: cover dan gambar isi bisa memuat satu kata kunci atau judul singkat (maksimal 7 kata), supaya gambar tidak hambar dan tidak penuh tulisan yang salah eja.
+
 ## v0.6.0 — 2026-11-05
 
 ### Fitur

@@ -783,8 +783,8 @@ details[open] > summary .dk-chev {
 }
 .dk-quick a {
 	display: flex;
-	flex-direction: column;
-	gap: 4px;
+	align-items: center;
+	gap: 14px;
 	height: 100%;
 	padding: 14px 16px;
 	border: 1px solid var(--dk-line);
@@ -796,6 +796,23 @@ details[open] > summary .dk-chev {
 .dk-quick a:hover {
 	border-color: var(--dk-primary);
 }
+.dk-quick-icon {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 10px;
+	background: var(--accent, #eef4ff);
+	color: var(--dk-primary);
+}
+.dk-quick-text {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
 .dk-quick-title {
 	font-size: 14.5px;
 	font-weight: 500;
@@ -804,15 +821,6 @@ details[open] > summary .dk-chev {
 	font-size: 13px;
 	color: var(--dk-muted);
 	line-height: 1.45;
-}
-.dk-dev {
-	margin: 32px 0 0;
-	text-align: center;
-	font-size: 14px;
-	color: var(--dk-muted);
-}
-.dk-dev a {
-	color: var(--dk-primary);
 }
 
 /* ---------- footer ---------- */
@@ -1032,4 +1040,59 @@ details[open] > summary .dk-chev {
 	.dk-anchor {
 		display: none;
 	}
+}
+
+/* ---------- scrollbar khusus (sama dengan .custom-scrollbar di app.css) ---------- */
+
+html:has(.dk-page),
+.dk-sidebar,
+.dk-toc,
+.dk-search-body,
+.dk-table,
+.dk-prose pre {
+	scrollbar-width: thin;
+	scrollbar-color: #cbd5e1 transparent;
+}
+html:has(.dk-page)::-webkit-scrollbar,
+.dk-sidebar::-webkit-scrollbar,
+.dk-toc::-webkit-scrollbar,
+.dk-search-body::-webkit-scrollbar,
+.dk-table::-webkit-scrollbar,
+.dk-prose pre::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+html:has(.dk-page)::-webkit-scrollbar-track,
+.dk-sidebar::-webkit-scrollbar-track,
+.dk-toc::-webkit-scrollbar-track,
+.dk-search-body::-webkit-scrollbar-track,
+.dk-table::-webkit-scrollbar-track,
+.dk-prose pre::-webkit-scrollbar-track {
+	background: transparent;
+}
+html:has(.dk-page)::-webkit-scrollbar-thumb,
+.dk-sidebar::-webkit-scrollbar-thumb,
+.dk-toc::-webkit-scrollbar-thumb,
+.dk-search-body::-webkit-scrollbar-thumb,
+.dk-table::-webkit-scrollbar-thumb,
+.dk-prose pre::-webkit-scrollbar-thumb {
+	background: #cbd5e1;
+	border-radius: 9999px;
+}
+html:has(.dk-page)::-webkit-scrollbar-thumb:hover,
+.dk-sidebar::-webkit-scrollbar-thumb:hover,
+.dk-toc::-webkit-scrollbar-thumb:hover,
+.dk-search-body::-webkit-scrollbar-thumb:hover,
+.dk-table::-webkit-scrollbar-thumb:hover,
+.dk-prose pre::-webkit-scrollbar-thumb:hover {
+	background: #94a3b8;
+}
+.dk-prose pre::-webkit-scrollbar-thumb {
+	background: #4b5563;
+}
+.dk-prose pre::-webkit-scrollbar-thumb:hover {
+	background: #6b7280;
+}
+.dk-prose pre {
+	scrollbar-color: #4b5563 transparent;
 }

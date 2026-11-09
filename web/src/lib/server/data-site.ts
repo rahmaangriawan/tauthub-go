@@ -60,7 +60,6 @@ const APP_ONLY_PREFIXES = [
 	'/reset-password',
 	'/payments',
 	'/berita-acara',
-	'/docs',
 	'/dokumentasi',
 	'/blogger-pick-blog'
 ];

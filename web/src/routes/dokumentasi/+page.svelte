@@ -1,9 +1,18 @@
 <script lang="ts">
-	import { ArrowRight, Search } from '@lucide/svelte';
+	import { ArrowRight, BookText, PlugZap, Search, Send, ShieldCheck, UserPlus, Wallet } from '@lucide/svelte';
 	import { searchUi } from '$lib/docs/search-state.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	const icons = {
+		'user-plus': UserPlus,
+		wallet: Wallet,
+		send: Send,
+		plug: PlugZap,
+		shield: ShieldCheck,
+		book: BookText
+	} as const;
 </script>
 
 <main class="dk-home">
@@ -40,18 +49,20 @@
 		<h2 id="quick-title">Sering dibuka</h2>
 		<ul>
 			{#each data.quick as q (q.url)}
+				{@const Icon = icons[q.icon as keyof typeof icons]}
 				<li>
 					<a href={q.url}>
-						<span class="dk-quick-title">{q.title}</span>
-						<span class="dk-quick-note">{q.note}</span>
+						<span class="dk-quick-icon" aria-hidden="true">
+							<Icon size={18} strokeWidth={1.5} />
+						</span>
+						<span class="dk-quick-text">
+							<span class="dk-quick-title">{q.title}</span>
+							<span class="dk-quick-note">{q.note}</span>
+						</span>
 					</a>
 				</li>
 			{/each}
 		</ul>
 	</section>
 
-	<p class="dk-dev">
-		Pengembang? Lihat <a href="/docs">dokumentasi API Web Custom</a>, atau
-		<a href={data.start.umum}>panduan umum</a> untuk istilah dan akun.
-	</p>
 </main>
