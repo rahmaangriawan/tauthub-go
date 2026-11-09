@@ -70,21 +70,34 @@ func imageSizeFor(role string) string {
 	return "1920x1080"
 }
 
-// imageRolePromptRules: aturan teks yang ditempel ke setiap prompt gambar.
+// imageTextRules: aturan teks yang ditempel ke setiap prompt gambar.
 //
-// Provider gambar cenderung MENULISKAN teks prompt ke dalam gambar — judul
-// artikel, subjudul H2, bahkan cuplikan paragraf — sehingga hasilnya terlihat
-// seperti slide presentasi, bukan ilustrasi editorial. Aturannya dibedakan:
-//   - cover: tanpa teks sama sekali. Judul artikel sudah tampil di halaman;
-//     menuliskannya lagi di gambar hanya membuat cover berantakan.
-//   - inline: teks seminimal mungkin. Teks hanya boleh bila gambarnya memang
-//     visualisasi data (grafik/infografis/diagram), dan sebatas label, angka,
-//     serta sumbu yang dibutuhkan untuk membaca data itu.
+// Provider gambar cenderung MENULISKAN seluruh prompt ke dalam gambar: judul
+// artikel, subjudul H2, bahkan cuplikan paragraf, sehingga hasilnya seperti
+// slide presentasi yang penuh tulisan dan hurufnya sering salah eja. Sebaliknya
+// gambar tanpa teks sama sekali terasa hambar. Kebijakannya: boleh ada SATU teks
+// pendek yang penting saja (kata kunci, judul, atau subjudul), maksimal
+// 7 kata, sama untuk cover dan gambar isi.
+const imageTextRules = "\n\nEditorial illustration. TEXT RULES: include at most ONE short text element in the image, " +
+	"a keyword, title, or subtitle taken from the subject above, maximum 7 words in total (fewer is better). " +
+	"Write it in the same language as the subject. Choose only the single most important keyword or phrase; " +
+	"never copy the whole prompt or the whole headline into the image. " +
+	"Spell every word exactly right and render it large, crisp, and easy to read, placed on a calm area of the composition. " +
+	"No paragraphs, no full sentences, no captions, no body text, no slogans, no logos, no watermarks, no URLs, no UI labels. " +
+	"If no short phrase fits naturally, render no text at all."
+
+// imageInlineChartRule: tambahan untuk gambar isi, karena grafik/infografis/
+// diagram butuh angka dan label sumbu agar bisa dibaca.
+const imageInlineChartRule = " Exception: if the image is a data visualization (chart, graph, infographic, or diagram), " +
+	"it may also carry the minimal numbers and axis labels needed to read the data, and a heading still obeys the 7-word limit."
+
+// imageRolePromptRules: aturan teks per role. Cover memakai aturan dasar saja;
+// gambar isi (dan role tak dikenal) menambah pengecualian visualisasi data.
 func imageRolePromptRules(role string) string {
 	if role == "cover" {
-		return "\n\nEditorial illustration. STRICT: render NO text of any kind — no words, letters, numbers, captions, headlines, titles, logos, watermarks, or UI labels. Communicate the idea only through imagery, composition, and color."
+		return imageTextRules
 	}
-	return "\n\nEditorial illustration with MINIMAL text: no headlines, no paragraphs, no slogans, no logos, no watermarks. Text is allowed ONLY when the image is a data visualization (chart, graph, infographic, or diagram), and then only the short labels, values, and axis text needed to read the data."
+	return imageTextRules + imageInlineChartRule
 }
 
 // imagePromptWithRoleRules: prompt akhir yang dikirim ke provider gambar.

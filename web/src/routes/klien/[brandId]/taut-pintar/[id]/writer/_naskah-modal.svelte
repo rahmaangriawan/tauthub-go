@@ -609,8 +609,9 @@
 	/** Buat gambar utama dari judul artikel (role: cover). */
 	async function generateCoverFor(prompt: string): Promise<string> {
 		// Judul saja tidak memberi model banyak konteks visual — bingkai dulu
-		// sebagai ilustrasi editorial cerita ini. Aturan "tanpa teks" untuk cover
-		// ditempel server (imageRolePromptRules di internal/ai/image.go).
+		// sebagai ilustrasi editorial cerita ini. Aturan teks gambar (satu
+		// kata kunci/judul pendek, maks 7 kata) ditempel server
+		// (imageRolePromptRules di internal/ai/image.go).
 		const visual = `Editorial illustration for a news article about: ${prompt}. Wide 16:9 composition, focus on the subject and mood of the story.`;
 		const res = await apiRequest(
 			`${apiBase}/images/generate`,
