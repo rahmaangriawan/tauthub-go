@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Katalog media klien — port setia media-section.tsx (Next.js).
@@ -1965,7 +1966,7 @@
 											<div class="mediaMetaLine">
 												{#if m.contoh_artikel_url}
 													<a
-														href={m.contoh_artikel_url}
+														href={safeHref(m.contoh_artikel_url)}
 														target="_blank"
 														rel="noreferrer nofollow"
 														class="sampleDocLink"

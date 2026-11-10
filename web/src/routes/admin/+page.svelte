@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Dashboard admin — control plane: status operasional, feed publikasi media,
@@ -198,7 +199,7 @@
 								{#if pub.published_url}
 									<a
 										class="app-link-sm shrink-0"
-										href={pub.published_url}
+										href={safeHref(pub.published_url)}
 										target="_blank"
 										rel="noopener noreferrer"
 										title={hostOf(pub.published_url)}

@@ -22,10 +22,16 @@ const API_URL = env.API_URL ?? 'http://localhost:8080';
 /** Catat klik referral; true bila kode dikenal partner. Kegagalan jaringan = false. */
 async function recordClick(ref: string, request: Request, clientAddress: string): Promise<boolean> {
 	// Fingerprint backend = ip|ua, jadi kirim IP & UA browser — bukan IP web server.
-	const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-	const ip = forwarded || request.headers.get('x-real-ip') || clientAddress;
+	// Web hanya mendengarkan 127.0.0.1 di belakang nginx, yang menimpa X-Real-IP
+	// dengan $remote_addr; pakai itu. getClientAddress() jadi cadangan karena
+	// tanpa ADDRESS_HEADER di unit web ia hanya mengembalikan peer proxy
+	// (127.0.0.1), yang menyatukan semua pengunjung ke satu bucket.
+	const ip = request.headers.get('x-real-ip')?.trim() || clientAddress;
 	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-	if (ip) headers['x-forwarded-for'] = ip;
+	if (ip) {
+		headers['x-forwarded-for'] = ip;
+		headers['x-real-ip'] = ip;
+	}
 	const ua = request.headers.get('user-agent');
 	if (ua) headers['user-agent'] = ua;
 

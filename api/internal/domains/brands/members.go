@@ -119,6 +119,21 @@ func (d *Deps) MembersCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Paritas dengan MemberUpdate/MemberDelete: aktor non-owner (admin) tidak
+	// boleh memberi peran admin dan tidak boleh menimpa peran efektif owner/admin
+	// milik target (peran dari workspace) dengan baris eksplisit berperan rendah.
+	if row.Role != "owner" {
+		if body.Role == "admin" {
+			httpx.Error(w, http.StatusForbidden, "Only the owner can manage admins")
+			return
+		}
+		if _, effRole, effErr := EffectiveRole(r.Context(), d.Pool, row.ID, userID); effErr == nil &&
+			(effRole == "owner" || effRole == "admin") {
+			httpx.Error(w, http.StatusForbidden, "Only the owner can manage admins")
+			return
+		}
+	}
+
 	var membershipID string
 	txErr := d.WithTxMember(r.Context(), row.ID, user.ID, userID, body.Role, &membershipID)
 	if txErr != nil {

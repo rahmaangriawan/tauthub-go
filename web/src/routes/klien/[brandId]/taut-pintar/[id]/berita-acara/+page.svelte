@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Berita acara kampanye Taut Pintar — dokumen siap cetak.
@@ -180,7 +181,7 @@
 									<td class="border-b px-2 py-2 break-all">
 										{r.published_at ? `${fmtDateWib(r.published_at)} WIB · ` : ''}
 										{#if r.published_url}
-											<a style="color: var(--primary);" href={r.published_url}>{r.published_url}</a>
+											<a style="color: var(--primary);" href={safeHref(r.published_url)}>{r.published_url}</a>
 										{:else}-{/if}
 									</td>
 								</tr>

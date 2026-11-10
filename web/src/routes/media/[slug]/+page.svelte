@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { page } from '$app/state';
 	import { env } from '$env/dynamic/public';
 	import Tooltip from '$lib/components/tooltip.svelte';
@@ -39,7 +40,7 @@
 						{#if m.domain}
 							<div class="pub-detail-domain">
 								{#if m.website_url}
-									<a href={m.website_url} target="_blank" rel="nofollow noopener noreferrer">{m.domain}</a>
+									<a href={safeHref(m.website_url)} target="_blank" rel="nofollow noopener noreferrer">{m.domain}</a>
 								{:else}
 									{m.domain}
 								{/if}
@@ -180,7 +181,7 @@
 						{/if}
 						{#if m.website_url}
 							<a
-								href={m.website_url}
+								href={safeHref(m.website_url)}
 								class="pub-btn pub-btn-ghost"
 								target="_blank"
 								rel="nofollow noopener noreferrer">Kunjungi {m.domain || 'situs media'}</a

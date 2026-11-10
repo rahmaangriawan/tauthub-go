@@ -175,6 +175,17 @@ func (d *Deps) MediaUpdate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid status")
 		return
 	}
+	// Mitra hanya boleh menggeser status antara active dan inactive pada media
+	// yang sudah disetujui admin. Baris pending_review/draft/rejected hanya
+	// pindah lewat keputusan admin (MediaReview); mengirim status yang sama
+	// dengan yang tersimpan tetap diterima (no-op).
+	switch cur := existing.strOr("status", ""); cur {
+	case "pending_review", "draft", "rejected":
+		if hasStatus && status != cur {
+			d.writeErr(w, errConflict("Status media ini hanya bisa diubah setelah disetujui Admin."))
+			return
+		}
+	}
 	integrationType, hasIntegrationType := strField(body, "integration_type")
 	if hasIntegrationType && !validIntegrationType(integrationType) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid integration_type")

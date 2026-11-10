@@ -16,6 +16,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/config"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/security"
 	"github.com/rahmaangriawan/tauthub-go/internal/webpush"
 )
 
@@ -34,7 +35,11 @@ func New(pool *pgxpool.Pool, cfg *config.Config) *Deps {
 		slog.Warn("[push] VAPID_PRIVATE_KEY kosong — Web Push nonaktif")
 		return d
 	}
-	c, err := webpush.NewClient(cfg.VAPIDPrivateKey, cfg.VAPIDSubject, &http.Client{Timeout: 15 * time.Second})
+	// Endpoint langganan diisi pengguna: pakai SafeClient (tolak IP privat/loopback
+	// saat dial) dan jangan ikuti redirect.
+	hc := security.SafeClient(15 * time.Second)
+	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	c, err := webpush.NewClient(cfg.VAPIDPrivateKey, cfg.VAPIDSubject, hc)
 	if err != nil {
 		slog.Error("[push] kunci VAPID tidak valid — Web Push nonaktif", "err", err)
 		return d

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/content"
 )
 
@@ -242,10 +244,7 @@ func (d *Deps) PublishingFeedJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Deps) logFeedAccess(ctx context.Context, feedID string, r *http.Request, status int) {
-	ip := strings.TrimSpace(strings.Split(r.Header.Get("x-forwarded-for"), ",")[0])
-	if ip == "" {
-		ip = strings.TrimSpace(r.Header.Get("x-real-ip"))
-	}
+	ip := auth.RequestIp(r.Header)
 	ua := truncateBytesStr(r.Header.Get("user-agent"), 300)
 	if err := d.exec(ctx, `
 		INSERT INTO rss_access_logs (id, feed_id, ip_address, user_agent, status)
@@ -355,11 +354,24 @@ func (d *Deps) PublishingCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if payload.URL != "" {
+		// Validator sama dengan penulis sibling (partner PublicationURL): http(s),
+		// maks 1000 karakter, tanpa karakter kontrol; hanya untuk publikasi
+		// berstatus published/partner_approved.
+		if !safePublishedURL(payload.URL) {
+			writeErr(w, d, errUnprocessable("url harus URL http(s) yang valid (maks 1000 karakter)"))
+			return
+		}
+		if st := publication.strOr("status", ""); st != "published" && st != "partner_approved" {
+			writeErr(w, d, errConflict("URL hanya dapat dilaporkan untuk publikasi berstatus published atau partner_approved"))
+			return
+		}
 		if err := d.exec(ctx, "UPDATE publications SET published_url = $1, updated_at = NOW() WHERE id = $2",
 			payload.URL, payload.PublicationID); err != nil {
 			writeErr(w, d, err)
 			return
 		}
+		// Verifikasi ulang URL baru (sama seperti penulis sibling).
+		d.mpEnqueueJobBestEffort(ctx, "pr_verify", map[string]any{"publicationId": payload.PublicationID}, 2)
 	}
 	d.recordCallbackLog(ctx, key.strOr("id", ""), payload.PublicationID, "accepted", payload.Status, r, "")
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -370,8 +382,28 @@ func (d *Deps) PublishingCallback(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// safePublishedURL: URL http(s) berhost, maks 1000 karakter, tanpa karakter kontrol.
+func safePublishedURL(raw string) bool {
+	if raw == "" || len(raw) > 1000 {
+		return false
+	}
+	for _, c := range raw {
+		if c < 0x20 || c == 0x7f {
+			return false
+		}
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return false
+	}
+	return u.Host != ""
+}
+
 func (d *Deps) recordCallbackLog(ctx context.Context, keyID, publicationID, outcome, status string, r *http.Request, errMsg string) {
-	ip := strings.TrimSpace(strings.Split(r.Header.Get("x-forwarded-for"), ",")[0])
+	ip := auth.RequestIp(r.Header)
 	if err := d.exec(ctx, `
 		INSERT INTO publishing_callback_logs (id, api_key_id, publication_id, outcome, reported_status, ip_address, user_agent, error_message)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -392,10 +424,7 @@ var trackingEventTypes = []string{
 // TrackingEventCreate: catat event tracking artikel (publik, rate limit per IP).
 func (d *Deps) TrackingEventCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ip := strings.TrimSpace(strings.Split(r.Header.Get("x-forwarded-for"), ",")[0])
-	if ip == "" {
-		ip = strings.TrimSpace(r.Header.Get("x-real-ip"))
-	}
+	ip := auth.RequestIp(r.Header)
 	if ip != "" {
 		recent, _ := d.queryRow(ctx,
 			"SELECT COUNT(*)::int AS count FROM tracking_events WHERE ip_address = $1 AND created_at > NOW() - INTERVAL '60 seconds'", ip)
@@ -569,12 +598,9 @@ func (d *Deps) TrackingRedirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, destination, http.StatusMovedPermanently)
 }
 
-// trackingClientIP: IP pengirim event (x-forwarded-for lalu x-real-ip).
+// trackingClientIP: IP pengirim event (x-real-ip dari proxy, bukan XFF kiri).
 func trackingClientIP(r *http.Request) string {
-	if fwd := strings.TrimSpace(strings.Split(r.Header.Get("x-forwarded-for"), ",")[0]); fwd != "" {
-		return fwd
-	}
-	return strings.TrimSpace(r.Header.Get("x-real-ip"))
+	return auth.RequestIp(r.Header)
 }
 
 // ---------- helper kecil ----------

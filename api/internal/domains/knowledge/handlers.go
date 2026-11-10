@@ -412,6 +412,18 @@ func (d *Deps) SitemapCrawl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	collectionID, _ := coll["id"].(string)
+	// Satu crawl aktif per brand: konsumer antrean dipakai bersama semua tenant.
+	var active int
+	if err := d.Pool.QueryRow(r.Context(),
+		"SELECT count(*) FROM knowledge_crawl_runs WHERE brand_id = $1 AND status IN ('pending','running') AND created_at > NOW() - INTERVAL '30 minutes'",
+		brandID).Scan(&active); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if active > 0 {
+		httpx.Error(w, http.StatusConflict, "Masih ada crawl sitemap yang berjalan untuk brand ini. Tunggu sampai selesai.")
+		return
+	}
 	runID, err := CreateCrawlRun(r.Context(), d.Pool, brandID, collectionID, body.SitemapURL, maxPages)
 	if err != nil {
 		writeErr(w, err)

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	// Profil media versi mitra (read-only). Tampilan mengikuti referensi
 	// "Modern Media Profile": header identitas + aksen gelombang biru lembut,
 	// grid metrik, lalu tabel ketentuan publikasi. Semua nilai tetap dari data
@@ -207,7 +208,7 @@
 					<h2 id="mitra-media-title">{media.name}</h2>
 					<p class="sub">
 						{#if media.website_url}
-							<a class="site" href={media.website_url} target="_blank" rel="noreferrer">
+							<a class="site" href={safeHref(media.website_url)} target="_blank" rel="noreferrer">
 								{domainText}<ExternalLink size={13} />
 							</a>
 						{:else}

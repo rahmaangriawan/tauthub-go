@@ -806,7 +806,8 @@ func (d *Deps) operationsBrandContentSettingsPut(w http.ResponseWriter, r *http.
 
 // OperationsCreditAdjustment: POST /v1/platform/operations/credit-adjustment
 func (d *Deps) OperationsCreditAdjustment(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := d.adminGuard(w, r, "")
+	// Mengubah saldo wallet: wajib izin topup, sama dengan CreditsAdjust.
+	user, _, ok := d.adminGuard(w, r, "topup")
 	if !ok {
 		return
 	}
@@ -952,7 +953,8 @@ func (d *Deps) OperationsCreditReports(w http.ResponseWriter, r *http.Request) {
 
 // OperationsCreditReportReview: POST /v1/platform/operations/credit-reports/{reportId}/review
 func (d *Deps) OperationsCreditReportReview(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := d.adminGuard(w, r, "")
+	// Persetujuan laporan kredit mengkredit wallet: wajib izin topup.
+	user, _, ok := d.adminGuard(w, r, "topup")
 	if !ok {
 		return
 	}
@@ -1889,6 +1891,24 @@ func (d *Deps) OperationsPublicationRetry(w http.ResponseWriter, r *http.Request
 	if current != "failed" && current != "retrying" {
 		writeErr(w, d, errConflict(fmt.Sprintf("Publication is not retryable (current status: %s)", current)))
 		return
+	}
+	// Gagal permanen melepas reservasi kredit klien. Mengantrekan ulang tanpa
+	// reservasi membuat artikel terbit tanpa tagihan sementara pendapatan mitra
+	// tetap dibukukan, jadi tolak sampai klien menahan kredit ulang lewat retry
+	// di sisi brand (yang mengecek saldo dan menahan ulang secara atomik).
+	if ledger, lerr := d.queryRow(ctx, `
+		SELECT COALESCE(SUM(amount_tc), 0)::int AS net,
+		       COALESCE(SUM(CASE WHEN ref_type = 'reserve' THEN 1 ELSE 0 END), 0)::int AS reserves
+		FROM credit_ledger_entries
+		WHERE ref_id = $1 AND ref_type IN ('reserve','release','capture')`, publicationID); lerr != nil {
+		writeErr(w, d, lerr)
+		return
+	} else if ledger != nil {
+		lr := ptRow(ptNormalizeMap(ledger))
+		if lr.intOr("reserves", 0) > 0 && lr.intOr("net", 0) >= 0 {
+			writeErr(w, d, errConflict("Kredit klien untuk publikasi ini sudah dikembalikan; minta klien menjalankan retry dari brand agar kredit ditahan ulang."))
+			return
+		}
 	}
 	if err := d.opTransitionPublication(ctx, publicationID, "queued"); err != nil {
 		writeErr(w, d, err)

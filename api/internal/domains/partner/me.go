@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -102,7 +103,7 @@ func (d *Deps) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Deps) MeUpdate(w http.ResponseWriter, r *http.Request) {
-	_, partner, ok := d.auth(w, r)
+	user, partner, ok := d.auth(w, r)
 	if !ok {
 		return
 	}
@@ -141,6 +142,47 @@ func (d *Deps) MeUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if accountName, present := strField(body, "bank_account_name"); present {
 		addSet("bank_account_name", ptrOrNil(accountName))
+	}
+	// Tujuan payout hanya boleh berubah dengan konfirmasi password, dan tidak
+	// saat masih ada penarikan berjalan: admin membaca rekening langsung dari
+	// baris mitra, jadi mengubahnya akan mengalihkan settlement yang menunggu.
+	_, hasType := strField(body, "payout_type")
+	_, hasBank := strField(body, "bank_name")
+	_, hasNumber := strField(body, "bank_account_number")
+	_, hasHolder := strField(body, "bank_account_name")
+	if hasType || hasBank || hasNumber || hasHolder {
+		cur, curErr := d.queryRow(r.Context(),
+			"SELECT payout_type, bank_name, bank_account_number, bank_account_name FROM partners WHERE id = $1 LIMIT 1", partner.ID)
+		if curErr != nil || cur == nil {
+			httpx.Error(w, http.StatusInternalServerError, "Gagal membaca pengaturan payout.")
+			return
+		}
+		differs := func(field, key string, present bool) bool {
+			if !present {
+				return false
+			}
+			v, _ := strField(body, key)
+			return strings.TrimSpace(v) != strings.TrimSpace(cur.strOr(field, ""))
+		}
+		if differs("payout_type", "payout_type", hasType) || differs("bank_name", "bank_name", hasBank) ||
+			differs("bank_account_number", "bank_account_number", hasNumber) || differs("bank_account_name", "bank_account_name", hasHolder) {
+			pw, _ := strField(body, "current_password")
+			if pw == "" {
+				httpx.Error(w, http.StatusUnprocessableEntity, "Password wajib diisi untuk mengubah rekening penarikan.")
+				return
+			}
+			var hash string
+			if err := d.Pool.QueryRow(r.Context(), "SELECT password_hash FROM users WHERE id = $1 LIMIT 1", user.ID).Scan(&hash); err != nil || !auth.VerifyPassword(pw, hash) {
+				httpx.Error(w, http.StatusUnauthorized, "Password salah.")
+				return
+			}
+			busy, _ := d.queryRow(r.Context(),
+				"SELECT id FROM settlements WHERE partner_id = $1 AND status IN ('pending','approved','processing') LIMIT 1", partner.ID)
+			if busy != nil {
+				httpx.Error(w, http.StatusConflict, "Rekening tidak bisa diubah selama masih ada penarikan yang diproses. Tunggu sampai selesai.")
+				return
+			}
+		}
 	}
 	// Mitra hanya boleh MEMATIKAN RSS (pengaktifan hanya oleh Admin).
 	if rssEnabled, present := boolField(body, "rss_enabled"); present {

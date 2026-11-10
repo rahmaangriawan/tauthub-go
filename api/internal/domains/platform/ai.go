@@ -334,6 +334,29 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
+		// Kunci tersimpan tidak boleh ikut terkirim ke host baru: ganti host
+		// base_url / image_base_url hanya sah kalau kunci disuplai ulang di
+		// request yang sama (api_key, atau image_api_key untuk host gambar).
+		aiHostOf := func(raw string) string {
+			u, pErr := url.Parse(strings.TrimSpace(raw))
+			if pErr != nil {
+				return ""
+			}
+			return strings.ToLower(u.Host)
+		}
+		oldBase, _ := existing.str("base_url")
+		if aiHostOf(oldBase) != aiHostOf(*base) && !(hasAPIKey && apiKey != "") {
+			writeErr(w, d, errBadRequest("Mengganti host Base URL wajib menyertakan API key baru"))
+			return
+		}
+		if newImg, _ := imageBaseVal.(string); newImg != "" {
+			oldImg, _ := existing.str("image_base_url")
+			if aiHostOf(oldImg) != aiHostOf(newImg) &&
+				!(hasAPIKey && apiKey != "") && !(hasImageKey && imageAPIKey != "") {
+				writeErr(w, d, errBadRequest("Mengganti host Image Base URL wajib menyertakan API key baru"))
+				return
+			}
+		}
 		query := "UPDATE platform_ai_configuration SET base_url = $1, default_model = $2, economy_model = $3, premium_model = $4, image_base_url = $5, image_model = $6, updated_by = $7"
 		params := []any{*base, dm, econ, prem, imageBaseVal, imageModelVal, user.ID}
 		next := 8

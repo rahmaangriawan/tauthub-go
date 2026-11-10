@@ -1,6 +1,8 @@
 package brandflow
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -36,7 +38,7 @@ func (d *Deps) saveUpload(storageKey string, data []byte) error {
 }
 
 // uploadKeyFrom: nama berkas ramah-SEO dari petunjuk teks (judul artikel,
-// prompt AI, atau nama asli berkas) + sufiks hash pendek, lalu -2/-3/... bila
+// prompt AI, atau nama asli berkas) + sufiks acak, lalu -2/-3/... bila
 // nama sudah ada di disk. Slug kosong (mis. nama non-latin) → "berkas".
 func (d *Deps) uploadKeyFrom(hint, ext string) string {
 	slug := slugifyPlain(hint)
@@ -46,10 +48,14 @@ func (d *Deps) uploadKeyFrom(hint, ext string) string {
 	if slug == "" {
 		slug = "berkas"
 	}
-	suffix := strconv.FormatUint(uint64(fnv32(hint)), 16)
-	if len(suffix) < 8 {
-		suffix = "00000000"[:8-len(suffix)] + suffix
+	// Sufiks acak (64 bit, crypto/rand), bukan hash dari petunjuk: nama berkas
+	// yang bisa dihitung dari nama asli membuat unggahan tenant lain dapat
+	// ditebak dan nama bentrok menjadi oracle keberadaan berkas.
+	var rnd [8]byte
+	if _, err := rand.Read(rnd[:]); err != nil {
+		return newUUID() + "." + ext
 	}
+	suffix := hex.EncodeToString(rnd[:])
 	base := slug + "-" + suffix
 	key := base + "." + ext
 	for n := 2; n < 1000; n++ {

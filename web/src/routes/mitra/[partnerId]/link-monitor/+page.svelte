@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Pelacak 404 mitra — port section "Pelacak 404": ringkasan tautan diawasi,
@@ -402,7 +403,7 @@
 
 {#snippet pubUrlCell(p: any)}
 	{#if p.published_url}
-		<a class="lm-url" href={p.published_url} target="_blank" rel="noreferrer">
+		<a class="lm-url" href={safeHref(p.published_url)} target="_blank" rel="noreferrer">
 			<span class="truncate">{p.published_url.replace(/^https?:\/\//, '').slice(0, 42)}</span> <ExternalLink size={12} strokeWidth={1.5} />
 		</a>
 	{:else}<span class="lm-date">{tr('URL belum ada')}</span>{/if}

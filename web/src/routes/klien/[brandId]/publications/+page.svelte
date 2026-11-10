@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Status Publikasi klien — port PublicationsSection (distribution.tsx).
@@ -572,7 +573,7 @@
 								<span>{tr("Media:")} <span style="color: var(--foreground);">{row.media_name ?? tr('Media Mitra')}</span></span>
 								<span>{tcLabel(row.client_price, rateIdr)}</span>
 								{#if row.published_url}
-									<a class="inline-flex items-center gap-1" style="color: var(--primary);" href={row.published_url} target="_blank" rel="noreferrer">{tr("Lihat Artikel")}<ExternalLink size={13} />
+									<a class="inline-flex items-center gap-1" style="color: var(--primary);" href={safeHref(row.published_url)} target="_blank" rel="noreferrer">{tr("Lihat Artikel")}<ExternalLink size={13} />
 									</a>
 								{/if}
 							</div>
@@ -799,7 +800,7 @@
 
 			{#if detail.published_url}
 				<div class="border-t px-6 py-3">
-					<a class="inline-flex items-center gap-1.5 text-sm font-medium hover:underline" style="color: var(--primary);" href={detail.published_url} target="_blank" rel="noreferrer">
+					<a class="inline-flex items-center gap-1.5 text-sm font-medium hover:underline" style="color: var(--primary);" href={safeHref(detail.published_url)} target="_blank" rel="noreferrer">
 						<ExternalLink size={14} />
 						{tr("Buka artikel terbit")}
 					</a>

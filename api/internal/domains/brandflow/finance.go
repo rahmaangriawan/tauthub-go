@@ -1613,6 +1613,12 @@ func (d *Deps) bsCreatePayment(ctx context.Context, input bsPaymentInput) (bsRow
 			input.BrandID, key)
 		if existing != nil {
 			if existing.strOr("status", "") == "failed" && !existing.has("payment_url") {
+				// Kunci idempotensi terikat pada jumlah awal: kredit dihitung dari
+				// amount tersimpan, sedangkan gateway menagih input baru. Beda
+				// jumlah = bayar kecil, dapat kredit besar.
+				if round2(existing.numOr("amount")) != round2(input.Amount) {
+					return nil, errConflict("Idempotency key sudah dipakai untuk jumlah lain. Gunakan key baru untuk top-up dengan jumlah berbeda.")
+				}
 				return d.bsAttemptGatewayPayment(ctx, input, active, existing.strOr("id", ""), key)
 			}
 			return existing, nil

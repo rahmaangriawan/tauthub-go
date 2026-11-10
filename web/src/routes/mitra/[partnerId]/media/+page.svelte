@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 	import { mediaPlatform } from '$lib/media/platform';
 
@@ -1808,7 +1809,7 @@
 <div class="min-w-0">
 <div class="flex flex-wrap items-center gap-1.5">
 {#if m.website_url}
-<a class="md-domain" href={m.website_url} target="_blank" rel="noreferrer">
+<a class="md-domain" href={safeHref(m.website_url)} target="_blank" rel="noreferrer">
 {mediaDomainLabel(m.website_url, m.name)}
 </a>
 {:else}
@@ -1881,7 +1882,7 @@
 						<div class="min-w-0">
 							<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
 								{#if m.website_url}
-									<a class="break-words text-[15px] font-semibold leading-snug hover:underline" href={m.website_url} target="_blank" rel="noreferrer">{mediaDomainLabel(m.website_url, m.name)}</a>
+									<a class="break-words text-[15px] font-semibold leading-snug hover:underline" href={safeHref(m.website_url)} target="_blank" rel="noreferrer">{mediaDomainLabel(m.website_url, m.name)}</a>
 								{:else}
 									<span class="break-words text-[15px] font-semibold leading-snug">{m.name}</span>
 								{/if}
@@ -1967,7 +1968,7 @@
 
 {#snippet contohLink(m: Media)}
 	{#if m.contoh_artikel_url}
-		<a class="mt-0.5 inline-flex w-fit items-center justify-start gap-1 whitespace-nowrap text-left text-xs" style="color: var(--primary);" href={m.contoh_artikel_url} target="_blank" rel="noreferrer">{tr('Contoh artikel')} <ExternalLink size={10} /></a>
+		<a class="mt-0.5 inline-flex w-fit items-center justify-start gap-1 whitespace-nowrap text-left text-xs" style="color: var(--primary);" href={safeHref(m.contoh_artikel_url)} target="_blank" rel="noreferrer">{tr('Contoh artikel')} <ExternalLink size={10} /></a>
 	{:else}
 		<button type="button" class="media-contoh mt-0.5 inline-flex w-fit items-center justify-start gap-1 whitespace-nowrap text-left text-xs" style="color: var(--primary);" onclick={() => openContoh(m)}>
 			<Plus size={11} /> {tr('Tambah contoh artikel')}
@@ -2492,7 +2493,7 @@
 											<div class="relative">
 												<input class="app-input w-full pr-8 text-sm" type="url" placeholder="https://medianasional.example" bind:value={form.website_url} />
 												{#if form.website_url}
-													<a href={form.website_url} target="_blank" rel="noreferrer" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors p-0.5" title={tr('Buka tautan')}>
+													<a href={safeHref(form.website_url)} target="_blank" rel="noreferrer" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors p-0.5" title={tr('Buka tautan')}>
 														<ExternalLink size={13} />
 													</a>
 												{/if}
@@ -2589,7 +2590,7 @@
 												<span class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70 shrink-0">
 													<Check size={12} /> {tr('Tersedia')}
 												</span>
-												<a href={form.contoh_artikel_url} target="_blank" rel="noreferrer" class="truncate text-xs sm:text-sm font-medium text-blue-600 hover:underline inline-flex items-center gap-1">
+												<a href={safeHref(form.contoh_artikel_url)} target="_blank" rel="noreferrer" class="truncate text-xs sm:text-sm font-medium text-blue-600 hover:underline inline-flex items-center gap-1">
 													<span class="truncate">{form.contoh_artikel_url}</span>
 													<ExternalLink size={12} class="shrink-0" />
 												</a>

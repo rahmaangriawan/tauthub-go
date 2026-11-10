@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Detail satu order kampanye (CAM-) di Monitoring Order: daftar media
@@ -181,7 +182,7 @@
 									<span class="text-xs text-muted-foreground">Belum dibuat</span>
 								{/if}
 								{#if row.published_url}
-									<a class="mt-1 flex items-center gap-1 text-xs" style="color: var(--success);" href={row.published_url} target="_blank" rel="noopener noreferrer">
+									<a class="mt-1 flex items-center gap-1 text-xs" style="color: var(--success);" href={safeHref(row.published_url)} target="_blank" rel="noopener noreferrer">
 										<ExternalLink size={12} />{tr("URL terbit")}
 									</a>
 								{/if}

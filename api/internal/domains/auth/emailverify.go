@@ -75,15 +75,17 @@ func (d *Deps) RequestRegisterCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Turnstile: endpoint ini yang mengirim email, jadi gate bot ada di sini.
+	turnstileToken := ""
 	if body.TurnstileToken != nil {
-		if err := d.Turnstile.RequireToken(r.Context(), *body.TurnstileToken, ip); err != nil {
-			if te, ok := err.(*auth.TurnstileError); ok {
-				httpx.Error(w, http.StatusForbidden, te.Message)
-				return
-			}
-			httpx.Error(w, http.StatusInternalServerError, httpx.Scrub500(d.Cfg.AppEnv, err.Error()))
+		turnstileToken = *body.TurnstileToken
+	}
+	if err := d.Turnstile.RequireToken(r.Context(), turnstileToken, ip); err != nil {
+		if te, ok := err.(*auth.TurnstileError); ok {
+			httpx.Error(w, http.StatusForbidden, te.Message)
 			return
 		}
+		httpx.Error(w, http.StatusInternalServerError, httpx.Scrub500(d.Cfg.AppEnv, err.Error()))
+		return
 	}
 
 	if auth.IsRegistrationEmailBlocked(r.Context(), d.Pool, email) {

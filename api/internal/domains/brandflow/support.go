@@ -324,6 +324,91 @@ func (d *Deps) reserveCredit(ctx context.Context, brandID, publicationID string,
 	return tc, nil
 }
 
+// reserveCycleSuffix: siklus reservasi publikasi. Siklus pertama memakai kunci
+// polos (`release:{id}` / `capture:{id}`, kompatibel dengan data lama); siklus
+// berikutnya (setelah retry yang menahan kredit ulang) diberi akhiran `:{n}`
+// supaya release/capture tidak tertolak oleh kunci siklus sebelumnya.
+func reserveCycleSuffix(ctx context.Context, tx pgx.Tx, publicationID string) string {
+	var n int
+	if err := tx.QueryRow(ctx,
+		"SELECT COUNT(*)::int FROM credit_ledger_entries WHERE ref_id = $1 AND ref_type = 'reserve'",
+		publicationID).Scan(&n); err != nil || n <= 1 {
+		return ""
+	}
+	return ":" + itoa(n)
+}
+
+// reacquireReservation: dipakai retry publikasi yang gagal. Saat gagal permanen
+// worker melepas reservasi (release +N); mengantrekan ulang tanpa menahan kredit
+// lagi membuat artikel terbit tanpa tagihan. Fungsi ini menahan ulang jumlah
+// reservasi terakhir secara atomik (kunci `reserve:{id}:{n}`), dengan baris
+// wallet dikunci sehingga dua retry paralel hanya menahan satu kali.
+//
+// Mengembalikan (true, nil) bila reservasi baru dibuat, (false, nil) bila tidak
+// perlu (reservasi masih berjalan, atau publikasi tidak memakai wallet TC), dan
+// insufficientCreditsError bila saldo kurang.
+func (d *Deps) reacquireReservation(ctx context.Context, brandID, publicationID, userID string) (bool, error) {
+	rate := d.getTcConfig(ctx).RateIDR
+	applied := false
+	err := db.WithPoolTx(ctx, d.Pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "INSERT INTO credit_wallets (brand_id) VALUES ($1) ON CONFLICT (brand_id) DO NOTHING", brandID); err != nil {
+			return err
+		}
+		var lockedAvail int
+		if err := tx.QueryRow(ctx, "SELECT available_tc FROM credit_wallets WHERE brand_id = $1 FOR UPDATE", brandID).Scan(&lockedAvail); err != nil {
+			return err
+		}
+		var net, captured int
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(SUM(amount_tc), 0)::int,
+			       COALESCE(SUM(CASE WHEN ref_type = 'capture' THEN 1 ELSE 0 END), 0)::int
+			FROM credit_ledger_entries
+			WHERE brand_id = $1 AND ref_id = $2 AND ref_type IN ('reserve','release','capture')`,
+			brandID, publicationID).Scan(&net, &captured); err != nil {
+			return err
+		}
+		if net < 0 || captured > 0 {
+			return nil // masih ter-reserve, atau sudah ditagih
+		}
+		var reserveCount, lastReserve int
+		if err := tx.QueryRow(ctx, `
+			SELECT COUNT(*)::int,
+			       COALESCE((SELECT -amount_tc FROM credit_ledger_entries
+			                  WHERE brand_id = $1 AND ref_id = $2 AND ref_type = 'reserve'
+			                  ORDER BY created_at DESC LIMIT 1), 0)::int
+			FROM credit_ledger_entries
+			WHERE brand_id = $1 AND ref_id = $2 AND ref_type = 'reserve'`,
+			brandID, publicationID).Scan(&reserveCount, &lastReserve); err != nil {
+			return err
+		}
+		if reserveCount == 0 || lastReserve <= 0 {
+			return nil // tidak pernah memakai reservasi wallet
+		}
+		if lockedAvail < lastReserve {
+			return &insufficientCreditsError{Needed: lastReserve, Available: lockedAvail}
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE credit_wallets SET available_tc = available_tc - $1, reserved_tc = reserved_tc + $1, updated_at = NOW()
+			WHERE brand_id = $2`, lastReserve, brandID); err != nil {
+			return err
+		}
+		var available, reserved, capturedTC int
+		if err := tx.QueryRow(ctx,
+			"SELECT available_tc, reserved_tc, captured_tc FROM credit_wallets WHERE brand_id = $1", brandID).
+			Scan(&available, &reserved, &capturedTC); err != nil {
+			return err
+		}
+		applied = true
+		return insertLedger(ctx, tx, ledgerEntry{
+			BrandID: brandID, RefType: "reserve", RefID: publicationID, AmountTC: -lastReserve,
+			BalanceAfterTC: available + reserved + capturedTC, RateIDR: rate, AmountIDR: lastReserve * rate,
+			Reason:         "Reservasi kredit ulang (retry publikasi)",
+			IdempotencyKey: "reserve:" + publicationID + ":" + itoa(reserveCount+1), CreatedBy: userID,
+		})
+	})
+	return applied, err
+}
+
 // releaseCredit: reserved → available (publikasi batal/ditolak). Idempoten.
 func (d *Deps) releaseCredit(ctx context.Context, brandID, publicationID, userID string) int {
 	outstanding := d.outstandingForPublication(ctx, brandID, publicationID)
@@ -333,7 +418,7 @@ func (d *Deps) releaseCredit(ctx context.Context, brandID, publicationID, userID
 	rate := d.getTcConfig(ctx).RateIDR
 	applied := false
 	err := db.WithPoolTx(ctx, d.Pool, func(tx pgx.Tx) error {
-		key := "release:" + publicationID
+		key := "release:" + publicationID + reserveCycleSuffix(ctx, tx, publicationID)
 		var exists int
 		if err := tx.QueryRow(ctx, "SELECT 1 FROM credit_ledger_entries WHERE idempotency_key = $1 LIMIT 1", key).Scan(&exists); err == nil {
 			return nil
@@ -371,7 +456,7 @@ func (d *Deps) captureCredit(ctx context.Context, brandID, publicationID, userID
 	rate := d.getTcConfig(ctx).RateIDR
 	applied := false
 	err := db.WithPoolTx(ctx, d.Pool, func(tx pgx.Tx) error {
-		key := "capture:" + publicationID
+		key := "capture:" + publicationID + reserveCycleSuffix(ctx, tx, publicationID)
 		var exists int
 		if err := tx.QueryRow(ctx, "SELECT 1 FROM credit_ledger_entries WHERE idempotency_key = $1 LIMIT 1", key).Scan(&exists); err == nil {
 			return nil

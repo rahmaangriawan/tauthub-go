@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 	import { mediaPlatform } from '$lib/media/platform';
 
@@ -487,7 +488,7 @@
 							{#if media.website_url}
 								<a
 									class="detailDomainText"
-									href={media.website_url}
+									href={safeHref(media.website_url)}
 									target="_blank"
 									rel="noreferrer"
 									title={`Buka ${media.website_url}`}

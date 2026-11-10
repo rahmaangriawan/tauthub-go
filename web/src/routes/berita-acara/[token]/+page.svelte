@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Port app/berita-acara/[token]/page.tsx — dokumen berita acara kampanye
@@ -166,7 +167,7 @@
 											</p>
 											<div class="docPubActions">
 												{#if pub.published_url}
-													<a class="docPubLink" href={pub.published_url} target="_blank" rel="noreferrer">{tr("Lihat terbit")}</a>
+													<a class="docPubLink" href={safeHref(pub.published_url)} target="_blank" rel="noreferrer">{tr("Lihat terbit")}</a>
 												{/if}
 												<span
 													class="docBadge"

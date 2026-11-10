@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Agent 2: The Matchmaker — kurasi media & alokasi anggaran.
@@ -627,7 +628,7 @@
 								{#if m.contoh_artikel_url || dist.known}
 									<div class="mediaMetaLine">
 										{#if m.contoh_artikel_url}
-											<a class="sampleDocLink" href={m.contoh_artikel_url} target="_blank" rel="noreferrer nofollow" onclick={(e) => e.stopPropagation()}><FileText size={13} /><span>Sample</span></a>
+											<a class="sampleDocLink" href={safeHref(m.contoh_artikel_url)} target="_blank" rel="noreferrer nofollow" onclick={(e) => e.stopPropagation()}><FileText size={13} /><span>Sample</span></a>
 										{/if}
 										{#if dist.known}
 											<span

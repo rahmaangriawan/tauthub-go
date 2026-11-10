@@ -30,6 +30,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
 // Subscription: data langganan dari PushManager.subscribe() di browser.
@@ -108,8 +110,12 @@ func NewClient(privateB64, subject string, httpClient *http.Client) (*Client, er
 		return nil, fmt.Errorf("webpush: subject VAPID harus mailto: atau https: (dapat %q)", subject)
 	}
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 15 * time.Second}
+		httpClient = security.SafeClient(15 * time.Second)
 	}
+	// Endpoint berasal dari pengguna: redirect tidak pernah diikuti.
+	hc := *httpClient
+	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	httpClient = &hc
 	pub := elliptic.Marshal(curve, x, y) //nolint:staticcheck
 	return &Client{priv: priv, pubB64: b64u(pub), subject: subject, http: httpClient, tokens: map[string]cachedToken{}}, nil
 }

@@ -124,17 +124,20 @@ func CheckWriteRate(ctx context.Context, pool *pgxpool.Pool, bucket string, defa
 	return CheckRate(ctx, pool, bucket, defaultPerMinute, 60)
 }
 
-// RequestIp: x-forwarded-for (first) → x-real-ip.
+// RequestIp: x-real-ip (di-set proxy dari $remote_addr) → entri x-forwarded-for
+// PALING KANAN (ditambahkan proxy tepercaya) → RemoteAddr. Entri paling kiri XFF
+// dikendalikan klien, jadi tidak dipakai.
 func RequestIp(header http.Header) string {
+	if xri := strings.TrimSpace(header.Get("x-real-ip")); xri != "" {
+		return xri
+	}
 	if xff := header.Get("x-forwarded-for"); xff != "" {
-		for _, part := range strings.Split(xff, ",") {
-			if p := strings.TrimSpace(part); p != "" {
+		parts := strings.Split(xff, ",")
+		for i := len(parts) - 1; i >= 0; i-- {
+			if p := strings.TrimSpace(parts[i]); p != "" {
 				return p
 			}
 		}
-	}
-	if xri := header.Get("x-real-ip"); xri != "" {
-		return xri
 	}
 	return ""
 }

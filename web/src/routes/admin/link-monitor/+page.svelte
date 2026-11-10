@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Pelacak 404 — menjaga garansi tayang 12 bulan: memeriksa apakah artikel yang
@@ -471,7 +472,7 @@
 									{#if c.published_url}
 										<a
 											class="link-sm max-w-full break-all"
-											href={c.published_url}
+											href={safeHref(c.published_url)}
 											target="_blank"
 											rel="noreferrer">{hostOf(c.published_url)} <ExternalLink size={11} strokeWidth={1.5} /></a
 										>
@@ -648,7 +649,7 @@
 									</td>
 									<td class="c-url">
 										{#if item.published_url}
-											<a class="link-sm max-w-full" href={item.published_url} target="_blank" rel="noreferrer noopener" title={item.published_url}>
+											<a class="link-sm max-w-full" href={safeHref(item.published_url)} target="_blank" rel="noreferrer noopener" title={item.published_url}>
 												<span class="truncate">{hostOf(item.published_url)}</span>
 												<ExternalLink size={11} strokeWidth={1.5} />
 											</a>
@@ -703,7 +704,7 @@
 								{item.media_name ?? '—'} · {item.brand_name ?? '—'}
 							</p>
 							{#if item.published_url}
-								<a class="link-sm mt-3 block break-all" href={item.published_url} target="_blank" rel="noreferrer noopener">{item.published_url}</a>
+								<a class="link-sm mt-3 block break-all" href={safeHref(item.published_url)} target="_blank" rel="noreferrer noopener">{item.published_url}</a>
 							{/if}
 							<div class="meta-line mt-2">
 								{#if item.http_status != null}<span class="tabular-nums">HTTP {item.http_status}</span><span aria-hidden="true">·</span>{/if}

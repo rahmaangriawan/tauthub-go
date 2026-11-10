@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	dbpkg "github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -287,14 +288,6 @@ func (d *Deps) createSettlement(w http.ResponseWriter, r *http.Request, partner 
 	invoiceNumber := d.newInvoiceNumber(r.Context())
 
 	id := uuid.NewString()
-	if err := d.exec(r.Context(), `
-		INSERT INTO settlements (id, partner_id, period_start, period_end, status, total_amount, payout_method, transfer_fee_idr, net_amount_idr, invoice_number, notes, created_by)
-		VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11)`,
-		id, partner.ID, firstDate.Format("2006-01-02"), lastDate.Format("2006-01-02"), gross, payoutMethod, fee, net,
-		invoiceNumber, ptrOrNil(bankNotes), actorID(user)); err != nil {
-		d.writeErr(w, err)
-		return
-	}
 
 	// Kunci earning dari yang TERBARU supaya earning tertua yang sudah
 	// "membiayai" service charge tidak ikut terkunci.
@@ -321,18 +314,50 @@ func (d *Deps) createSettlement(w http.ResponseWriter, r *http.Request, partner 
 		httpx.Error(w, http.StatusBadRequest, "Saldo tidak dapat ditutup dengan earning utuh — pilih nominal lain.")
 		return
 	}
-	if len(earningIDs) > 0 {
+
+	// Pengajuan + klaim earning dalam SATU transaksi. Baris mitra dikunci supaya
+	// dua pengajuan bersamaan diserialkan, dan klaim memakai predikat
+	// `settlement_id IS NULL` dengan cek rows-affected: bila ada earning yang
+	// sudah diklaim pengajuan lain, seluruh transaksi dibatalkan.
+	errClaimRace := fmt.Errorf("earning sudah diklaim pengajuan lain")
+	txErr := dbpkg.WithPoolTx(r.Context(), d.Pool, func(tx pgx.Tx) error {
+		var lockedPartner string
+		if err := tx.QueryRow(r.Context(), "SELECT id FROM partners WHERE id = $1 FOR UPDATE", partner.ID).Scan(&lockedPartner); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(r.Context(), `
+			INSERT INTO settlements (id, partner_id, period_start, period_end, status, total_amount, payout_method, transfer_fee_idr, net_amount_idr, invoice_number, notes, created_by)
+			VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11)`,
+			id, partner.ID, firstDate.Format("2006-01-02"), lastDate.Format("2006-01-02"), gross, payoutMethod, fee, net,
+			invoiceNumber, ptrOrNil(bankNotes), actorID(user)); err != nil {
+			return err
+		}
+		if len(earningIDs) == 0 {
+			return nil
+		}
 		ph := make([]string, len(earningIDs))
-		args := []any{id}
+		args := []any{id, partner.ID}
 		for i, eid := range earningIDs {
 			args = append(args, eid)
-			ph[i] = "$" + itoa(i+2)
+			ph[i] = "$" + itoa(i+3)
 		}
-		if err := d.exec(r.Context(),
-			"UPDATE partner_earnings SET settlement_id = $1 WHERE id IN ("+strings.Join(ph, ",")+")", args...); err != nil {
-			d.writeErr(w, err)
+		tag, err := tx.Exec(r.Context(),
+			"UPDATE partner_earnings SET settlement_id = $1 WHERE partner_id = $2 AND status = 'settled' AND settlement_id IS NULL AND id IN ("+strings.Join(ph, ",")+")", args...)
+		if err != nil {
+			return err
+		}
+		if int(tag.RowsAffected()) != len(earningIDs) {
+			return errClaimRace
+		}
+		return nil
+	})
+	if txErr != nil {
+		if txErr == errClaimRace {
+			httpx.Error(w, http.StatusConflict, "Saldo berubah karena pengajuan lain sedang diproses. Muat ulang dan coba lagi.")
 			return
 		}
+		d.writeErr(w, txErr)
+		return
 	}
 
 	created, err := d.queryRow(r.Context(), "SELECT * FROM settlements WHERE id = $1 LIMIT 1", id)

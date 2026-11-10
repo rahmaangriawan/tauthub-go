@@ -115,6 +115,38 @@ func (d *Deps) transitionPublicationWith(ctx context.Context, publicationID, to 
 	return d.exec(ctx, sql, args...)
 }
 
+// transitionPublicationIf: seperti transitionPublicationWith tetapi
+// mengembalikan apakah UPDATE benar-benar mengubah baris. Wajib dipakai bila
+// setelah transisi ada efek samping saldo yang tidak boleh jalan ganda/salah.
+func (d *Deps) transitionPublicationIf(ctx context.Context, publicationID, to string, extra map[string]any) (bool, error) {
+	row, err := d.queryRow(ctx, "SELECT status FROM publications WHERE id = $1 LIMIT 1", publicationID)
+	if err != nil {
+		return false, err
+	}
+	if row == nil {
+		return false, errNotFound("Publication not found")
+	}
+	current := row.strOr("status", "")
+	if err := assertTransition(current, to); err != nil {
+		return false, err
+	}
+	sets := []string{"status = $1"}
+	args := []any{to}
+	i := 2
+	for col, val := range extra {
+		sets = append(sets, col+" = $"+itoa(i))
+		args = append(args, val)
+		i++
+	}
+	args = append(args, publicationID, current)
+	sql := "UPDATE publications SET " + strings.Join(sets, ", ") + ", updated_at = NOW() WHERE id = $" + itoa(i) + " AND status = $" + itoa(i+1)
+	n, err := d.execRows(ctx, sql, args...)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 // recordPublicationAttempt: port recordPublicationAttempt — attempt_number
 // dihitung di dalam INSERT (MAX+1) supaya retry bersamaan tidak duplikat.
 func (d *Deps) recordPublicationAttempt(ctx context.Context, publicationID, status string, errorCode, errorMessage *string, startedAt, completedAt time.Time) error {
@@ -856,10 +888,15 @@ func (d *Deps) PublicationReject(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, err)
 		return
 	}
-	if err := d.transitionPublicationWith(r.Context(), publicationID, "partner_rejected", map[string]any{
+	moved, err := d.transitionPublicationIf(r.Context(), publicationID, "partner_rejected", map[string]any{
 		"rejection_reason": reason, "reviewed_by": user.ID, "reviewed_at": time.Now(),
-	}); err != nil {
+	})
+	if err != nil {
 		d.writeErr(w, err)
+		return
+	}
+	if !moved {
+		d.writeErr(w, &publicationStateError{"Status publikasi berubah; muat ulang dan coba lagi."})
 		return
 	}
 	d.auditLog(r.Context(), user.ID, "publication.partner_rejected", "publication", publicationID)
@@ -888,7 +925,7 @@ func (d *Deps) PublicationURL(w http.ResponseWriter, r *http.Request) {
 	}
 	body := decodeJSON(r)
 	publishedURL, present := strField(body, "published_url")
-	if !present || !isHTTPURL(publishedURL) || len(publishedURL) > 1000 {
+	if !present || !isHTTPURL(publishedURL) || len(publishedURL) > 1000 || strings.ContainsAny(publishedURL, "\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f") {
 		httpx.Error(w, http.StatusUnprocessableEntity, "published_url harus URL http(s) yang valid")
 		return
 	}

@@ -260,21 +260,46 @@ func (r *Runner) processOnce(ctx context.Context, workerID, kind string, exclude
 	}
 
 	runErr := runHandler(ctx, h, *job)
+	// Pembukuan status memakai konteks baru: konteks job bisa sudah lewat
+	// deadline-nya, dan UPDATE dengan konteks kedaluwarsa akan gagal sehingga
+	// baris tertahan di 'running'.
+	bctx, bcancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer bcancel()
 	if runErr != nil {
-		if err := r.MarkFailed(ctx, *job, runErr.Error(), workerID); err != nil {
+		if err := r.MarkFailed(bctx, *job, runErr.Error(), workerID); err != nil {
 			return job, err
 		}
 		return job, nil
 	}
-	if err := r.MarkCompleted(ctx, job.ID, workerID); err != nil {
+	if err := r.MarkCompleted(bctx, job.ID, workerID); err != nil {
 		return job, err
 	}
 	return job, nil
 }
 
-// runHandler: jalankan handler dengan pemulihan panic supaya satu job rusak
-// tidak mematikan proses worker.
+// Batas waktu per kind: konsumer antrean umum berurutan dan dipakai bersama
+// semua tenant, jadi satu job tidak boleh menahannya tanpa batas. Default
+// sedikit di bawah ambang ReapStuck (10 menit) agar job yang kena deadline
+// tidak diklaim ganda oleh reaper.
+const defaultJobTimeout = 9 * time.Minute
+
+var kindTimeouts = map[string]time.Duration{
+	"sitemap_crawl": 5 * time.Minute,
+}
+
+// JobTimeout: batas waktu eksekusi handler untuk kind tertentu.
+func JobTimeout(kind string) time.Duration {
+	if d, ok := kindTimeouts[kind]; ok {
+		return d
+	}
+	return defaultJobTimeout
+}
+
+// runHandler: jalankan handler dengan deadline per kind dan pemulihan panic
+// supaya satu job rusak/lambat tidak mematikan atau menahan proses worker.
 func runHandler(ctx context.Context, h Handler, job JobRow) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, JobTimeout(job.Kind))
+	defer cancel()
 	defer func() {
 		if rec := recover(); rec != nil {
 			err = fmt.Errorf("panic saat memproses job %s: %v", job.Kind, rec)

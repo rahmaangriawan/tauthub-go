@@ -19,6 +19,65 @@ func (d *Deps) TwoFactorSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Re-auth: password wajib; bila 2FA sudah aktif, wajib juga kode TOTP/recovery
+	// saat ini, supaya sesi curian tak bisa mengganti/mematikan faktor kedua.
+	if err := auth.CheckAuthRate(r.Context(), d.Pool, "2fa-setup:"+user.ID, 5); err != nil {
+		httpx.Error(w, http.StatusTooManyRequests, "Terlalu banyak percobaan. Tunggu satu menit.")
+		return
+	}
+	var body struct {
+		Password string `json:"password"`
+		Code     string `json:"code"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if body.Password == "" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Password wajib diisi untuk setup 2FA.")
+		return
+	}
+	var passwordHash string
+	var curSecret *string
+	var curEnabled bool
+	var curRecovery []byte
+	if err := d.Pool.QueryRow(r.Context(),
+		"SELECT password_hash, two_factor_secret, two_factor_enabled, two_factor_recovery_codes FROM users WHERE id = $1 LIMIT 1",
+		user.ID).Scan(&passwordHash, &curSecret, &curEnabled, &curRecovery); err != nil {
+		httpx.Error(w, http.StatusNotFound, "User not found")
+		return
+	}
+	if !auth.VerifyPassword(body.Password, passwordHash) {
+		httpx.Error(w, http.StatusUnauthorized, "Password salah.")
+		return
+	}
+	if curEnabled {
+		code := trim(body.Code)
+		okCode := false
+		if code == "" {
+			httpx.Error(w, http.StatusUnprocessableEntity, "Kode 2FA saat ini wajib diisi.")
+			return
+		}
+		if curSecret != nil {
+			if s, err := crypto.UnsealV3(*curSecret, d.Cfg.Secret, user.ID); err == nil && auth.VerifyTotp(s, code) {
+				okCode = true
+			}
+		}
+		if !okCode && len(curRecovery) > 0 {
+			var hashes []string
+			if json.Unmarshal(curRecovery, &hashes) == nil {
+				h := auth.HashRecoveryCode(code)
+				for _, x := range hashes {
+					if x == h {
+						okCode = true
+						break
+					}
+				}
+			}
+		}
+		if !okCode {
+			httpx.Error(w, http.StatusUnauthorized, "Kode verifikasi salah. Coba lagi.")
+			return
+		}
+	}
+
 	secret, err := auth.GenerateTotpSecret(20)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, httpx.Scrub500(d.Cfg.AppEnv, err.Error()))

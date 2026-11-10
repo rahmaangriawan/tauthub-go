@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Detail publikasi admin — riwayat attempts, job delivery, payload, callback
@@ -506,7 +507,7 @@
 					<div class="mt-3">
 						<p class="text-xs text-muted-foreground">URL terbit</p>
 						<a
-							href={pub.published_url}
+							href={safeHref(pub.published_url)}
 							target="_blank"
 							rel="noreferrer"
 							class="text-xs font-semibold"
@@ -695,7 +696,7 @@
 								{#if data!.replaced_by.published_url}
 									<p class="mt-1 text-xs">
 										<a
-											href={data!.replaced_by.published_url}
+											href={safeHref(data!.replaced_by.published_url)}
 											target="_blank"
 											rel="noreferrer"
 											style="color: var(--primary);">{data!.replaced_by.published_url}

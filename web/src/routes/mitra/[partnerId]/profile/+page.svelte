@@ -352,6 +352,18 @@
 			return;
 		}
 		const storedBankName = payoutType === 'ewallet' ? ewalletName : bankName === 'Bank Lainnya' ? customBankName.trim() : bankName;
+		// Mengubah tujuan payout butuh konfirmasi password (sesi curian tidak bisa mengalihkan dana).
+		const changed =
+			payoutType !== (partner?.payout_type === 'ewallet' ? 'ewallet' : 'bank') ||
+			storedBankName.trim() !== String(partner?.bank_name ?? '').trim() ||
+			bankAccountNumber.trim() !== String(partner?.bank_account_number ?? '').trim() ||
+			bankAccountName.trim() !== String(partner?.bank_account_name ?? '').trim();
+		let currentPassword = '';
+		if (changed) {
+			const entered = window.prompt(tr('Konfirmasi password untuk mengubah rekening penarikan:'));
+			if (!entered) return;
+			currentPassword = entered;
+		}
 		withdrawBusy = true;
 		withdrawError = '';
 		withdrawNotice = '';
@@ -362,7 +374,8 @@
 					payout_type: payoutType,
 					bank_name: storedBankName.trim(),
 					bank_account_number: bankAccountNumber.trim(),
-					bank_account_name: bankAccountName.trim()
+					bank_account_name: bankAccountName.trim(),
+					...(currentPassword ? { current_password: currentPassword } : {})
 				})
 			});
 			if (!res.ok) {
@@ -468,11 +481,13 @@
 	}
 
 	async function startTwoFaSetup() {
+		const password = window.prompt(tr('Konfirmasi password untuk setup 2FA:'));
+		if (!password) return;
 		twoFa.busy = true;
 		twoFa.error = '';
 		twoFa.notice = '';
 		try {
-			const res = await apiRequest('/v1/auth/2fa/setup', { method: 'POST' });
+			const res = await apiRequest('/v1/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ password }) });
 			const data = await res.json().catch(() => null);
 			if (!res.ok || !data) {
 				twoFa.error = data ? await readApiError(res, "Permintaan gagal.") : tr('Permintaan gagal.');

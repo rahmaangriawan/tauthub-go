@@ -177,8 +177,10 @@
 	}
 
 	async function startTwoFactor() {
+		const password = window.prompt(tr('Konfirmasi password untuk setup 2FA:'));
+		if (!password) return;
 		await withBusy(async () => {
-			const res = await apiRequest('/v1/auth/2fa/setup', { method: 'POST' });
+			const res = await apiRequest('/v1/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ password }) });
 			if (res.ok) {
 				const d = await res.json();
 				twoFactorSecret = d.secret;

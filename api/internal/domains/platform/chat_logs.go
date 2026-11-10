@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -203,13 +204,8 @@ func (d *Deps) recordChatAudit(r *http.Request, adminID, threadID string) {
 // chatAuditIP: IP klien dari reverse-proxy (X-Forwarded-For → X-Real-IP →
 // RemoteAddr).
 func chatAuditIP(r *http.Request) string {
-	if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
-		if first := strings.TrimSpace(strings.Split(xf, ",")[0]); first != "" {
-			return first
-		}
-	}
-	if xr := strings.TrimSpace(r.Header.Get("X-Real-IP")); xr != "" {
-		return xr
+	if ip := auth.RequestIp(r.Header); ip != "" {
+		return ip
 	}
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return host

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 	import { sameOriginAssetUrl } from '$lib/media/cover';
 
@@ -786,7 +787,7 @@
 											{/if}
 											<div class="min-w-0">
 												{#if item.published_url}
-													<a class="lg-url" href={item.published_url} target="_blank" rel="noreferrer" title={item.published_url}>
+													<a class="lg-url" href={safeHref(item.published_url)} target="_blank" rel="noreferrer" title={item.published_url}>
 														<span class="truncate">{item.published_url}</span><ExternalLink size={12} strokeWidth={1.5} />
 													</a>
 												{/if}

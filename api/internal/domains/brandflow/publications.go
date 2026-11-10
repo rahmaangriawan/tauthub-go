@@ -487,9 +487,20 @@ func (d *Deps) PublicationCancel(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, errNotFound("Publication not found"))
 		return
 	}
+	// Selama processing worker sudah memegang payload dan bisa mendorong artikel
+	// ke CMS mitra; membatalkan + refund di titik itu = artikel live tanpa tagihan.
+	if row.strOr("status", "") == "processing" {
+		d.writeErr(w, errConflict("Publikasi sedang diproses dan belum bisa dibatalkan; coba lagi setelah selesai."))
+		return
+	}
 	extra := map[string]any{"cancel_reason": reason}
-	if err := d.transitionPublicationWith(r.Context(), publicationID, "cancelled", extra); err != nil {
+	moved, err := d.transitionPublicationIf(r.Context(), publicationID, "cancelled", extra)
+	if err != nil {
 		d.writeErr(w, err)
+		return
+	}
+	if !moved {
+		d.writeErr(w, errConflict("Status publikasi berubah saat dibatalkan; muat ulang dan coba lagi."))
 		return
 	}
 	d.settleCancelledPublication(r.Context(), brandRow.ID, publicationID, user.ID, "publication.cancelled")
@@ -592,7 +603,25 @@ func (d *Deps) PublicationRetry(w http.ResponseWriter, r *http.Request) {
 		d.writeErr(w, errNotFound("Publication not found"))
 		return
 	}
+	// Gagal permanen melepas reservasi kredit; tahan ulang SEBELUM mengantrekan,
+	// atau tolak (saldo kurang) agar artikel tidak terbit tanpa tagihan.
+	reacquired := false
+	if st := row.strOr("status", ""); st == "failed" || st == "retrying" {
+		reacquired, err = d.reacquireReservation(r.Context(), brandRow.ID, publicationID, user.ID)
+		if err != nil {
+			var ic *insufficientCreditsError
+			if asInsufficient(err, &ic) {
+				writeCreditError(w, ic.Needed, ic.Available)
+				return
+			}
+			d.writeErr(w, err)
+			return
+		}
+	}
 	if err := d.transitionPublication(r.Context(), publicationID, "queued"); err != nil {
+		if reacquired {
+			d.releaseCredit(r.Context(), brandRow.ID, publicationID, user.ID)
+		}
 		d.writeErr(w, err)
 		return
 	}
@@ -695,9 +724,35 @@ func (d *Deps) PublicationResetApproval(w http.ResponseWriter, r *http.Request) 
 		httpx.Error(w, http.StatusConflict, "Status "+currentStatus+" tidak bisa di-reset ke persetujuan.")
 		return
 	}
-	if err := d.exec(r.Context(),
-		"UPDATE publications SET status = 'waiting_partner', updated_at = NOW() WHERE id = $1", publicationID); err != nil {
-		d.writeErr(w, err)
+	// failed/retrying/cancelled sudah melepas reservasi kredit; tahan ulang dulu
+	// (atau tolak bila saldo kurang), kalau tidak publikasi terbit tanpa tagihan
+	// sementara penghasilan mitra tetap dicatat.
+	reacquired := false
+	if currentStatus == "failed" || currentStatus == "retrying" || currentStatus == "cancelled" {
+		reacquired, err = d.reacquireReservation(r.Context(), brandRow.ID, publicationID, user.ID)
+		if err != nil {
+			var ic *insufficientCreditsError
+			if asInsufficient(err, &ic) {
+				writeCreditError(w, ic.Needed, ic.Available)
+				return
+			}
+			d.writeErr(w, err)
+			return
+		}
+	}
+	// Tulis hanya bila status masih sama dengan yang dibaca (cegah balapan).
+	affected, err := d.execRows(r.Context(),
+		"UPDATE publications SET status = 'waiting_partner', updated_at = NOW() WHERE id = $1 AND brand_id = $2 AND status = $3",
+		publicationID, brandRow.ID, currentStatus)
+	if err != nil || affected != 1 {
+		if reacquired {
+			d.releaseCredit(r.Context(), brandRow.ID, publicationID, user.ID)
+		}
+		if err != nil {
+			d.writeErr(w, err)
+			return
+		}
+		httpx.Error(w, http.StatusConflict, "Status publikasi berubah. Muat ulang lalu coba lagi.")
 		return
 	}
 	d.publicationWaitingPartnerNotification(r.Context(), publicationID)

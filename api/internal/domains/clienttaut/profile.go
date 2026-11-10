@@ -67,7 +67,7 @@ func (d *Deps) TautProfilePut(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID, err := d.brandID(r, user.ID, "viewer")
+	brandID, err := d.brandID(r, user.ID, "writer")
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -127,7 +127,7 @@ func (d *Deps) TautProfileAnalyzeLegacy(w http.ResponseWriter, r *http.Request) 
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID, err := d.brandID(r, user.ID, "viewer")
+	brandID, err := d.brandID(r, user.ID, "writer")
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -794,7 +794,7 @@ func (d *Deps) TautAnglePick(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID, err := d.brandID(r, user.ID, "viewer")
+	brandID, err := d.brandID(r, user.ID, "writer")
 	if err != nil {
 		d.writeErr(w, err)
 		return

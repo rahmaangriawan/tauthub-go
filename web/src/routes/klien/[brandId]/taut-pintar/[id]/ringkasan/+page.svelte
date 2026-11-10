@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Ringkasan pasca-Gatekeeper — laporan distribusi kampanye Taut Pintar.
@@ -725,7 +726,7 @@
 					{tr("Terbit")}
 					{#if m.publish.url}
 						<a
-							href={m.publish.url}
+							href={safeHref(m.publish.url)}
 							target="_blank"
 							rel="noreferrer"
 							class="text-emerald-600 transition-colors hover:text-emerald-700"

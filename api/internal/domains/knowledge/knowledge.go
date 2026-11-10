@@ -594,6 +594,10 @@ func CrawlSitemap(ctx context.Context, pool *pgxpool.Pool, runID, brandID, colle
 	UpdateCrawlRun(ctx, pool, runID, CrawlRunUpdate{Status: &running, TotalURLs: &totalFound, Processed: intPtr(0)})
 
 	for _, pageURL := range selected {
+		// Deadline job (konsumer antrean dipakai bersama): berhenti begitu lewat.
+		if cerr := ctx.Err(); cerr != nil {
+			return totalFound, len(queuedIDs), skipped, failed, cerr
+		}
 		origin := originByPage[pageURL]
 		var originPtr *string
 		if origin != "" {
@@ -799,22 +803,30 @@ func ProcessSitemapCrawlJob(ctx context.Context, pool *pgxpool.Pool, payload []b
 		return err
 	}
 
-	_, _, _, _, crawlErr := CrawlSitemap(ctx, pool, p.RunID, p.BrandID, p.CollectionID, p.SitemapURL, p.MaxPages, p.UserID)
+	// Deadline total crawl; pembukuan di bawah memakai konteks baru supaya baris
+	// tidak tertahan 'running' saat deadline lewat.
+	crawlCtx, cancelCrawl := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancelCrawl()
+	_, _, _, _, crawlErr := CrawlSitemap(crawlCtx, pool, p.RunID, p.BrandID, p.CollectionID, p.SitemapURL, p.MaxPages, p.UserID)
+	bctx, bcancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer bcancel()
 	if crawlErr == nil {
-		_, _ = pool.Exec(ctx,
+		_, _ = pool.Exec(bctx,
 			"UPDATE jobs SET status = 'completed', updated_at = NOW() WHERE id = $1", jobID)
 		return nil
 	}
+	failedStatus := "failed"
+	UpdateCrawlRun(bctx, pool, p.RunID, CrawlRunUpdate{Status: &failedStatus, ErrorMessage: strPtr(truncateStr(crawlErr.Error(), 500))})
 
 	// Parity markFailed: backoff 1 menit * 2^attempts, dead-letter setelah max.
 	var attempts, maxAttempts int
-	_ = pool.QueryRow(ctx, "SELECT attempts, max_attempts FROM jobs WHERE id = $1", jobID).Scan(&attempts, &maxAttempts)
+	_ = pool.QueryRow(bctx, "SELECT attempts, max_attempts FROM jobs WHERE id = $1", jobID).Scan(&attempts, &maxAttempts)
 	status := "failed"
 	if attempts >= maxAttempts {
 		status = "dead_letter"
 	}
 	// Parity queue.ts: backoff 1 menit * 2^attempts (menit dibulatkan).
-	_, _ = pool.Exec(ctx, `
+	_, _ = pool.Exec(bctx, `
 		UPDATE jobs SET status = $1, last_error = $2,
 		  run_at = NOW() + make_interval(mins => LEAST($3::int, 30))
 		WHERE id = $4`,

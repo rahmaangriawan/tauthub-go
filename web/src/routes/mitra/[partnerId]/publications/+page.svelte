@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Publikasi mitra — port section "Publikasi": daftar permintaan artikel per
@@ -2032,7 +2033,7 @@
 											<p class="text-xs text-muted-foreground">{tr('Situs media')}</p>
 											{#if detail.media_website_url}
 												<a
-													href={detail.media_website_url}
+													href={safeHref(detail.media_website_url)}
 													target="_blank"
 													rel="noreferrer"
 													class="text-sm font-semibold text-blue-600 hover:underline mt-0.5 inline-flex items-center gap-1 truncate max-w-full"

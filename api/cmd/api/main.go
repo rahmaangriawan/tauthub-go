@@ -714,11 +714,11 @@ func run() error {
 
 			// AI.
 			authed.Get("/platform/ai/configuration", platformDeps.AIConfigurationGet)
-			authed.Put("/platform/ai/configuration", platformDeps.AIConfigurationPut)
+			authed.With(platformDeps.SuperAdminOnly).Put("/platform/ai/configuration", platformDeps.AIConfigurationPut)
 			authed.Get("/platform/ai/models", platformDeps.AIModelsList)
 			authed.Get("/platform/ai/models/{modelId}/knowledge", platformDeps.AIModelKnowledgeGet)
-			authed.Put("/platform/ai/models/{modelId}/knowledge", platformDeps.AIModelKnowledgePut)
-			authed.Delete("/platform/ai/models/{modelId}/knowledge", platformDeps.AIModelKnowledgeDelete)
+			authed.With(platformDeps.SuperAdminOnly).Put("/platform/ai/models/{modelId}/knowledge", platformDeps.AIModelKnowledgePut)
+			authed.With(platformDeps.SuperAdminOnly).Delete("/platform/ai/models/{modelId}/knowledge", platformDeps.AIModelKnowledgeDelete)
 			authed.Post("/platform/ai/probe", platformDeps.AIProbe)
 			authed.Get("/platform/ai/status", platformDeps.AIStatus)
 			authed.Post("/platform/ai/test-generation", platformDeps.AITestGeneration)

@@ -160,7 +160,7 @@ func (d *Deps) TautCampaignValidatePost(w http.ResponseWriter, r *http.Request) 
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID, err := d.brandID(r, user.ID, "viewer")
+	brandID, err := d.brandID(r, user.ID, "writer")
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -214,7 +214,7 @@ func (d *Deps) TautCampaignSchedule(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandID, err := d.brandID(r, user.ID, "viewer")
+	brandID, err := d.brandID(r, user.ID, "writer")
 	if err != nil {
 		d.writeErr(w, err)
 		return

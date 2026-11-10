@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeHref } from '$lib/safe-url';
 	import { tr } from '$lib/i18n/phrases';
 
 	// Obrolan klien ↔ mitra: satu komponen untuk dua portal (klien & mitra),
@@ -698,7 +699,7 @@
 				{#if t.website_url}
 					<a
 						class="block truncate text-[13.5px] font-bold text-slate-900 hover:underline"
-						href={t.website_url}
+						href={safeHref(t.website_url)}
 						target="_blank"
 						rel="noreferrer"
 					>{capFirst(cleanDomain(t.website_url, t.media_name))}</a>
@@ -763,7 +764,7 @@
 			<p class="mt-1 text-[11.5px] text-slate-500">{tr('Status terbit')}: <span class="font-semibold capitalize">{t.pub_status}</span></p>
 		{/if}
 		{#if t.pub_url}
-			<a class="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-blue-600 hover:underline" href={t.pub_url} target="_blank" rel="noreferrer">
+			<a class="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-blue-600 hover:underline" href={safeHref(t.pub_url)} target="_blank" rel="noreferrer">
 				<ExternalLink size={12} />{tr('Buka artikel di situs mitra')}
 			</a>
 		{/if}

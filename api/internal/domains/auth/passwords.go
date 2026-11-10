@@ -162,6 +162,16 @@ func (d *Deps) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Satu keputusan: bila email reset sudah terkirim/antre dalam jendela dedupe
+	// 10 menit, jangan rotasi token (link yang sudah dikirim tetap berlaku).
+	var recentID string
+	if err := d.Pool.QueryRow(r.Context(),
+		"SELECT id FROM email_deliveries WHERE template = 'password-reset' AND user_id = $1 AND dedupe_key = $2 AND created_at > NOW() - INTERVAL '10 minutes' LIMIT 1",
+		userID, "password_reset:"+userID).Scan(&recentID); err == nil {
+		ok()
+		return
+	}
+
 	rawToken, err := auth.CreateResetToken(r.Context(), d.Pool, userID, 10)
 	if err != nil {
 		ok()

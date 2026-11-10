@@ -1283,7 +1283,7 @@ func (d *Deps) RevenueSharesList(w http.ResponseWriter, r *http.Request) {
 
 // RevenueShareCreate: POST /v1/platform/revenue-shares
 func (d *Deps) RevenueShareCreate(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := d.adminGuard(w, r, "")
+	user, _, ok := d.adminGuard(w, r, "payments")
 	if !ok {
 		return
 	}
@@ -1386,7 +1386,7 @@ func (d *Deps) RevenueShareGet(w http.ResponseWriter, r *http.Request) {
 
 // RevenueShareUpdate: PUT /v1/platform/revenue-shares/{ruleId}
 func (d *Deps) RevenueShareUpdate(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := d.adminGuard(w, r, "")
+	user, _, ok := d.adminGuard(w, r, "payments")
 	if !ok {
 		return
 	}
@@ -1454,7 +1454,7 @@ func finNullableAnyFloat(v float64, has bool) any {
 
 // RevenueShareArchive: DELETE /v1/platform/revenue-shares/{ruleId} (soft).
 func (d *Deps) RevenueShareArchive(w http.ResponseWriter, r *http.Request) {
-	user, _, ok := d.adminGuard(w, r, "")
+	user, _, ok := d.adminGuard(w, r, "payments")
 	if !ok {
 		return
 	}
@@ -1743,72 +1743,111 @@ var settTransitions = map[string][]string{
 	"approved":   {"processing", "paid", "failed"},
 	"processing": {"paid", "failed"},
 	"paid":       {},
-	"failed":     {"pending"},
+	// failed bersifat final: earning-nya sudah dilepas ke saldo mitra, jadi
+	// dibuka kembali = klaim ganda atas dana yang sama. Mitra mengajukan baru.
+	"failed": {},
 }
 
 // finTransitionSettlement: port finTransitionSettlement (books payout on paid).
+//
+// Seluruh transisi berjalan dalam satu transaksi dengan baris settlement
+// dikunci (FOR UPDATE): status ditulis hanya bila masih sama dengan status
+// yang dibaca (cek rows-affected), payout hanya dibukukan bila transisi ke
+// paid benar-benar terjadi, dan transisi ke status yang sama adalah no-op.
 func (d *Deps) finTransitionSettlement(r *http.Request, settlementID, to, userID string) (ptRow, error) {
-	settlement, err := d.queryRow(r.Context(), "SELECT * FROM settlements WHERE id = $1 LIMIT 1", settlementID)
-	if err != nil {
-		return nil, err
-	}
-	if settlement == nil {
-		return nil, errConflict("Settlement not found")
-	}
-	current := settlement.strOr("status", "")
-	if current != to && !ptContains(settTransitions[current], to) {
-		return nil, errConflict(fmt.Sprintf("Settlement cannot transition from %s to %s", current, to))
-	}
-	if to == "paid" {
-		payout := settlement.numOr("total_amount")
-		// Baris lama buatan admin belum bere fee/net: isikan sekarang (aturan
-		// sama dengan jalur mitra) supaya jumlah payout = jumlah yang
-		// diterima mitra (setelah potongan transfer).
-		if settlement.raw("net_amount_idr") == nil {
-			cfg := d.finFeeCfg(r.Context())
-			method := settlement.strOr("payout_method", "bank")
-			fee := cfg.bankIDR
-			if strings.EqualFold(method, "ewallet") {
-				fee = round2(payout * cfg.ewalletPct / 100)
+	ctx := r.Context()
+	txErr := d.ptWithTx(ctx, func(tx *ptTx) error {
+		rows, err := tx.queryRows("SELECT * FROM settlements WHERE id = $1 LIMIT 1 FOR UPDATE", settlementID)
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return errConflict("Settlement not found")
+		}
+		settlement := rows[0]
+		current := settlement.strOr("status", "")
+		if current == to {
+			return nil // no-op: tidak ada payout/pelepasan earning kedua
+		}
+		if !ptContains(settTransitions[current], to) {
+			return errConflict(fmt.Sprintf("Settlement cannot transition from %s to %s", current, to))
+		}
+		if to == "paid" {
+			payout := settlement.numOr("total_amount")
+			// Earning yang terlampir wajib menutup jumlah yang dibayarkan; kalau
+			// sudah dilepas/diklaim ulang, jangan bayar dari saldo kosong.
+			sumRows, err := tx.queryRows(
+				"SELECT COALESCE(SUM(amount), 0) AS total FROM partner_earnings WHERE settlement_id = $1", settlementID)
+			if err != nil {
+				return err
 			}
-			net := round2(payout - fee)
-			if net < 0 {
-				net = 0
+			attached := 0.0
+			if len(sumRows) > 0 {
+				attached = sumRows[0].numOr("total")
 			}
-			if err := d.exec(r.Context(),
-				"UPDATE settlements SET payout_method = $2, transfer_fee_idr = $3, net_amount_idr = $4 WHERE id = $1",
-				settlementID, method, fee, net); err != nil {
-				return nil, err
+			if round2(attached) < round2(payout) {
+				return errConflict("Earning yang terlampir pada settlement tidak menutup jumlah pembayaran; payout ditolak.")
 			}
-			payout = net
-		} else {
-			payout = settlement.numOr("net_amount_idr")
+			// Baris lama buatan admin belum bere fee/net: isikan sekarang (aturan
+			// sama dengan jalur mitra) supaya jumlah payout = jumlah yang
+			// diterima mitra (setelah potongan transfer).
+			if settlement.raw("net_amount_idr") == nil {
+				cfg := d.finFeeCfg(ctx)
+				method := settlement.strOr("payout_method", "bank")
+				fee := cfg.bankIDR
+				if strings.EqualFold(method, "ewallet") {
+					fee = round2(payout * cfg.ewalletPct / 100)
+				}
+				net := round2(payout - fee)
+				if net < 0 {
+					net = 0
+				}
+				if err := tx.exec(
+					"UPDATE settlements SET payout_method = $2, transfer_fee_idr = $3, net_amount_idr = $4 WHERE id = $1",
+					settlementID, method, fee, net); err != nil {
+					return err
+				}
+				payout = net
+			} else {
+				payout = settlement.numOr("net_amount_idr")
+			}
+			tag, err := tx.tx.Exec(ctx,
+				"UPDATE settlements SET status = 'paid', paid_at = NOW(), updated_at = NOW() WHERE id = $1 AND status = $2", settlementID, current)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() != 1 {
+				return errConflict("Settlement status changed concurrently")
+			}
+			if payout > 0 {
+				if err := tx.exec(
+					"INSERT INTO transactions (id, partner_id, amount, type, created_by) VALUES ($1, $2, $3, 'settlement.payout', $4)",
+					uuid.NewString(), settlement.strOr("partner_id", ""), -payout, userID); err != nil {
+					return err
+				}
+			}
+			return nil
 		}
-		if err := d.exec(r.Context(),
-			"UPDATE settlements SET status = 'paid', paid_at = NOW(), updated_at = NOW() WHERE id = $1", settlementID); err != nil {
-			return nil, err
+		tag, err := tx.tx.Exec(ctx,
+			"UPDATE settlements SET status = $1, updated_at = NOW() WHERE id = $2 AND status = $3", to, settlementID, current)
+		if err != nil {
+			return err
 		}
-		if payout > 0 {
-			if err := d.exec(r.Context(),
-				"INSERT INTO transactions (id, partner_id, amount, type, created_by) VALUES ($1, $2, $3, 'settlement.payout', $4)",
-				uuid.NewString(), settlement.strOr("partner_id", ""), -payout, userID); err != nil {
-				return nil, err
+		if tag.RowsAffected() != 1 {
+			return errConflict("Settlement status changed concurrently")
+		}
+		if to == "failed" {
+			if err := tx.exec(
+				"UPDATE partner_earnings SET status = 'pending', settlement_id = NULL WHERE settlement_id = $1", settlementID); err != nil {
+				return err
 			}
 		}
-	} else if to == "failed" {
-		if err := d.exec(r.Context(), "UPDATE settlements SET status = 'failed', updated_at = NOW() WHERE id = $1", settlementID); err != nil {
-			return nil, err
-		}
-		if err := d.exec(r.Context(),
-			"UPDATE partner_earnings SET status = 'pending', settlement_id = NULL WHERE settlement_id = $1", settlementID); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := d.exec(r.Context(), "UPDATE settlements SET status = $1, updated_at = NOW() WHERE id = $2", to, settlementID); err != nil {
-			return nil, err
-		}
+		return nil
+	})
+	if txErr != nil {
+		return nil, txErr
 	}
-	updated, err := d.queryRow(r.Context(), "SELECT * FROM settlements WHERE id = $1 LIMIT 1", settlementID)
+	updated, err := d.queryRow(ctx, "SELECT * FROM settlements WHERE id = $1 LIMIT 1", settlementID)
 	if err != nil || updated == nil {
 		return nil, err
 	}
