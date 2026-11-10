@@ -498,6 +498,9 @@
 				body: JSON.stringify({ seo_da: da })
 			});
 			editing = { ...editing, seo_da: da };
+			// Kolom DA di form utama harus ikut berubah; kalau tidak, tombol Simpan
+			// dialog mengirim seo_da lama (kosong = null) dan menghapus nilai ini.
+			form.seo_da = da == null ? '' : String(da);
 			daEditing = false;
 			error = '';
 			void load();
