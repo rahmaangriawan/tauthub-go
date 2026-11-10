@@ -480,18 +480,32 @@
 		}
 	}
 
+	let daSaving = false;
 	async function saveDaManual() {
-		if (!editing) return;
-		const val = daInput.trim();
+		if (!editing || daSaving) return;
+		// <input type="number"> + bind:value menghasilkan number (bukan string),
+		// jadi daInput.trim() langsung melempar error dan DA tidak pernah tersimpan.
+		const val = String(daInput ?? '').trim();
 		const da = val === '' ? null : Number(val);
-		if (val !== '' && (isNaN(da!) || da! < 0 || da! > 100)) return;
-		await platformRequest(`/media/${editing.id}`, {
-			method: 'PUT',
-			body: JSON.stringify({ seo_da: da })
-		});
-		editing = { ...editing, seo_da: da };
-		daEditing = false;
-		void load();
+		if (val !== '' && (!Number.isInteger(da) || da! < 0 || da! > 100)) {
+			error = tr('DA harus bilangan bulat 0-100.');
+			return;
+		}
+		daSaving = true;
+		try {
+			await platformRequest(`/media/${editing.id}`, {
+				method: 'PUT',
+				body: JSON.stringify({ seo_da: da })
+			});
+			editing = { ...editing, seo_da: da };
+			daEditing = false;
+			error = '';
+			void load();
+		} catch (reason) {
+			error = errMessage(reason, tr('Gagal menyimpan DA.'));
+		} finally {
+			daSaving = false;
+		}
 	}
 
 	function closeForm() {
