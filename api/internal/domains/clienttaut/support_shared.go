@@ -44,6 +44,21 @@ func (d *Deps) loadTautCampaignRow(ctx context.Context, campaignID, brandID stri
 	return row, nil
 }
 
+// requireCampaignInBrand: 404 bila campaign tidak ada atau bukan milik brand.
+// queryRow mengembalikan (nil, nil) saat tidak ada baris, jadi hasilnya wajib
+// dicek, bukan hanya err.
+func (d *Deps) requireCampaignInBrand(ctx context.Context, campaignID, brandID string) error {
+	row, err := d.queryRow(ctx,
+		"SELECT id FROM campaigns WHERE id = $1 AND brand_id = $2 AND deleted_at IS NULL LIMIT 1", campaignID, brandID)
+	if err != nil {
+		return err
+	}
+	if row == nil {
+		return errNotFound("Kampanye tidak ditemukan")
+	}
+	return nil
+}
+
 // decodeJSONBody: body JSON → map (kosong bila gagal) — dipakai handler yang
 // menerima objek opsional.
 func decodeJSONBody(raw []byte) map[string]any {

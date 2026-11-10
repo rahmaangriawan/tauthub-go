@@ -73,8 +73,7 @@ func (d *Deps) TautProfilePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	campaignID := chiParam(r, "campaignId")
-	if _, err := d.queryRow(r.Context(),
-		"SELECT id FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandID); err != nil {
+	if err := d.requireCampaignInBrand(r.Context(), campaignID, brandID); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -93,15 +92,15 @@ func (d *Deps) TautProfilePut(w http.ResponseWriter, r *http.Request) {
 		`UPDATE campaigns SET business_profile = $1::jsonb, category_input = $2::jsonb, editorial_standard_snapshot = $3::jsonb,
 		   hyperlink_config = $4::jsonb, trigger_keywords = $5, spokepersons = $6::jsonb,
 		   taut_status = CASE WHEN taut_status = 'draft' THEN 'profiling' ELSE taut_status END, updated_at = NOW()
-		 WHERE id = $7`,
+		 WHERE id = $7 AND brand_id = $8`,
 		jsonString(value.BusinessProfile), jsonString(value.CategoryInput), jsonString(value.MaterialsJSON()),
-		jsonString(value.HyperlinkConfig), pqTextArray(value.TriggerKeywords), jsonString(value.Spokepersons), campaignID); err != nil {
+		jsonString(value.HyperlinkConfig), pqTextArray(value.TriggerKeywords), jsonString(value.Spokepersons), campaignID, brandID); err != nil {
 		d.writeErr(w, err)
 		return
 	}
 
 	updated, err := d.queryRow(r.Context(),
-		"SELECT taut_status, profiler_summary FROM campaigns WHERE id = $1 LIMIT 1", campaignID)
+		"SELECT taut_status, profiler_summary FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandID)
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -801,8 +800,7 @@ func (d *Deps) TautAnglePick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	campaignID := chiParam(r, "campaignId")
-	if _, err := d.queryRow(r.Context(),
-		"SELECT id FROM campaigns WHERE id = $1 AND brand_id = $2 LIMIT 1", campaignID, brandID); err != nil {
+	if err := d.requireCampaignInBrand(r.Context(), campaignID, brandID); err != nil {
 		d.writeErr(w, err)
 		return
 	}

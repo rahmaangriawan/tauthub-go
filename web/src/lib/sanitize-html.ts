@@ -27,6 +27,18 @@ const FORBID_TAGS = new Set([
 
 const URL_ATTRS = new Set(['href', 'src', 'xlink:href', 'action', 'formaction']);
 
+// Atribut iframe yang dipertahankan. Selain ini (terutama `srcdoc`, yang
+// menimpa `src` dan berjalan di origin halaman kalau sandbox memuat
+// allow-same-origin) selalu dibuang.
+const IFRAME_ALLOWED_ATTRS = new Set(['src', 'width', 'height', 'title', 'allow']);
+
+// Skema URL dibaca setelah spasi dan karakter kontrol dibuang, karena browser
+// mengabaikan tab/newline di dalam skema ("java\tscript:" tetap javascript:).
+function normalizeUrlValue(value: string): string {
+	// eslint-disable-next-line no-control-regex
+	return value.replace(/[\u0000-\u0020\u007f-\u009f\u200b-\u200d\ufeff]+/g, '').toLowerCase();
+}
+
 function isAllowedEmbedSrc(src: string | null): boolean {
 	if (!src) return false;
 	let url: URL;
@@ -55,7 +67,11 @@ export function sanitizeHtml(html: string): string {
 				el.remove();
 				continue;
 			}
-			// Paksa atribut pengaman — markup iframe tidak dipercaya dari input.
+			// Buang semua atribut di luar allowlist (termasuk srcdoc dan on*),
+			// lalu paksa atribut pengaman — markup iframe tidak dipercaya.
+			for (const attr of Array.from(el.attributes)) {
+				if (!IFRAME_ALLOWED_ATTRS.has(attr.name.toLowerCase())) el.removeAttribute(attr.name);
+			}
 			el.setAttribute('loading', 'lazy');
 			el.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
 			el.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
@@ -69,8 +85,8 @@ export function sanitizeHtml(html: string): string {
 				continue;
 			}
 			if (URL_ATTRS.has(name)) {
-				const value = (attr.value ?? '').trim().toLowerCase();
-				if (value.startsWith('javascript:')) el.removeAttribute(attr.name);
+				const value = normalizeUrlValue(attr.value ?? '');
+				if (value.startsWith('javascript:') || value.startsWith('vbscript:')) el.removeAttribute(attr.name);
 				else if (value.startsWith('data:') && !value.startsWith('data:image/')) el.removeAttribute(attr.name);
 			}
 		}

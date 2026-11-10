@@ -166,6 +166,10 @@ func (d *Deps) TautCampaignValidatePost(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	campaignID := chiParam(r, "campaignId")
+	if err := d.requireCampaignInBrand(r.Context(), campaignID, brandID); err != nil {
+		d.writeErr(w, err)
+		return
+	}
 	body, err := requireJSONObject(r)
 	if err != nil {
 		d.writeErr(w, err)
@@ -216,6 +220,10 @@ func (d *Deps) TautCampaignSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	campaignID := chiParam(r, "campaignId")
+	if err := d.requireCampaignInBrand(r.Context(), campaignID, brandID); err != nil {
+		d.writeErr(w, err)
+		return
+	}
 	body, err := requireJSONObject(r)
 	if err != nil {
 		d.writeErr(w, err)
@@ -389,6 +397,10 @@ func (d *Deps) TautPlacementPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	campaignID := chiParam(r, "campaignId")
+	if err := d.requireCampaignInBrand(r.Context(), campaignID, brandID); err != nil {
+		d.writeErr(w, err)
+		return
+	}
 	body, err := requireJSONObject(r)
 	if err != nil {
 		d.writeErr(w, err)
