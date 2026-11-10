@@ -2724,7 +2724,7 @@ func (d *Deps) peCreditVipTransactionCommission(ctx context.Context, publication
 		return
 	}
 	_ = d.exec(ctx,
-		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_earning_id) VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'pending', 'transaction_commission', $7) ON CONFLICT (publication_id) DO NOTHING",
+		"INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_earning_id) VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'pending', 'transaction_commission', $7) ON CONFLICT (publication_id, kind) DO NOTHING",
 		newUUID(), referrerPartnerID, publicationID, publication.strOr("media_id", ""), amount, clientPrice, publicationID)
 }
 

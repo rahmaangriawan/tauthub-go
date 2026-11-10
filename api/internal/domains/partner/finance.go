@@ -33,7 +33,9 @@ func (d *Deps) Earnings(w http.ResponseWriter, r *http.Request) {
 	limit := clampInt(q.Get("limit"), 50, 1, 500)
 	offset := clampInt(q.Get("offset"), 0, 0, 1<<30)
 
-	clause := "WHERE e.partner_id = $1"
+	// Daftar ini per publikasi (join media dan dokumen); CPA, referral, dan
+	// komisi transaksi punya halaman sendiri.
+	clause := "WHERE e.partner_id = $1 AND e.kind = 'publication'"
 	baseArgs := []any{partner.ID}
 	if status != "" {
 		clause += " AND e.status = $2"

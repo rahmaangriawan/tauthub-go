@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -2608,13 +2609,19 @@ func (d *Deps) finCreditCPAForDomain(ctx context.Context, referredDomainID strin
 	if mediaID == "" {
 		mediaID = referredDomainID
 	}
+	// Earning ditulis dulu, baru domain ditandai lunas. Kalau insert gagal,
+	// domain tetap belum lunas dan bisa dicoba lagi; kunci unik
+	// (publication_id, kind) mencegah CPA ganda untuk domain yang sama.
+	if err := d.exec(ctx,
+		`INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_referred_domain_id)
+		 VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'pending', 'cpa', $7) ON CONFLICT (publication_id, kind) DO NOTHING`,
+		uuid.NewString(), referrerPartnerID, "cpa:"+referredDomainID, mediaID, cpaAmount, cpaAmount, referredDomainID); err != nil {
+		slog.Warn("[finance] CPA earning gagal", "domain", referredDomainID, "err", err)
+		return
+	}
 	if err := d.exec(ctx, "UPDATE referred_domains SET cpa_paid = true, cpa_amount = $1 WHERE id = $2 AND cpa_paid = false", cpaAmount, referredDomainID); err != nil {
 		return
 	}
-	_ = d.exec(ctx,
-		`INSERT INTO partner_earnings (id, partner_id, publication_id, media_id, rule_id, amount, gross_amount, client_price, status, kind, source_referred_domain_id)
-		 VALUES ($1, $2, $3, $4, NULL, $5, $5, $6, 'pending', 'cpa', $7) ON CONFLICT (publication_id) DO NOTHING`,
-		uuid.NewString(), referrerPartnerID, "cpa:"+referredDomainID, mediaID, cpaAmount, cpaAmount, referredDomainID)
 	partner, err := d.queryRow(ctx, "SELECT user_id, public_id, name FROM partners WHERE id = $1 LIMIT 1", referrerPartnerID)
 	if err == nil && partner != nil {
 		userID := partner.strOr("user_id", "")
