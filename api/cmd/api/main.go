@@ -350,6 +350,8 @@ func run() error {
 			authed.Get("/brands/{brandId}/media/{mediaId}", clientRead.MediaDetail)
 			authed.Get("/brands/{brandId}/campaigns", clientRead.Campaigns)
 			authed.Get("/brands/{brandId}/link-monitor", clientRead.LinkMonitor)
+			authed.Get("/brands/{brandId}/performance", brandFlowDeps.PerformanceOverview)
+			authed.Get("/brands/{brandId}/campaigns/{campaignId}/performance", resolveCampaign(brandFlowDeps.CampaignPerformance))
 			authed.Get("/brands/{brandId}/analytics", clientRead.Analytics)
 			authed.Get("/brands/{brandId}/credits", clientRead.Credits)
 			authed.Get("/brands/{brandId}/invoices", clientRead.Invoices)
