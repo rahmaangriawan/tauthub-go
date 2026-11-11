@@ -89,6 +89,18 @@
 		<p class="page-desc">{tr('Susun rencana artikel beberapa minggu sekali jalan. Setujui sekali, lalu tiap minggu kampanye draf dibuat untuk Anda.')}</p>
 	</header>
 
+	<details class="app-card rc-how">
+		<summary>{tr('Cara kerja')}</summary>
+		<ol>
+			<li>{tr('Isi brief, anggaran total, jumlah minggu, dan artikel per minggu. Kategori media boleh dikosongkan.')}</li>
+			<li>{tr('Sistem memilih media yang muat di anggaran dan mengusulkan topik untuk tiap artikel dari brief Anda.')}</li>
+			<li>{tr('Tinjau rencananya. Anda bisa mengganti media atau topik per baris, lalu setujui sekali.')}</li>
+			<li>{tr('Tiap minggu sistem membuat kampanye draf berisi media dan topik itu, lalu memberi tahu Anda.')}</li>
+			<li>{tr('Anda menulis, memeriksa mutu, dan mendistribusikan sendiri. Saldo baru terpotong saat distribusi.')}</li>
+		</ol>
+		<p class="rc-muted">{tr('Biaya di rencana adalah perkiraan dari harga media hari ini. Bila media tidak bisa dipesan lagi, barisnya ditandai perlu perhatian dan Anda diberi tahu.')}</p>
+	</details>
+
 	{#if error}<div class="app-card rc-error" role="alert">{error}</div>{/if}
 
 	<form class="app-card rc-form" onsubmit={(e) => { e.preventDefault(); void create(); }}>
@@ -144,6 +156,9 @@
 </section>
 
 <style>
+	.rc-how { padding: 12px 20px; margin-top: 16px; }
+	.rc-how summary { cursor: pointer; font-size: 14px; font-weight: 600; }
+	.rc-how ol { margin: 12px 0 8px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 20px; }
 	.rc { display: flex; flex-direction: column; gap: 24px; }
 	.rc-error { padding: 12px 16px; font-size: 14px; border-color: var(--destructive); color: var(--destructive); }
 	.rc-loading { padding: 20px; text-align: center; font-size: 14px; color: var(--muted-foreground); }
