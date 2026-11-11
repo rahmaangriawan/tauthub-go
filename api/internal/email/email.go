@@ -344,6 +344,8 @@ func RenderTemplateStyled(style Style, name string, data map[string]string) (Ren
 		// menerima email aktivasi: SendTransactionalEmail mengembalikan error
 		// "template not registered" dan tidak ada baris yang diantrekan.
 		return renderAccountInvite(style, data), nil
+	case "brand-invitation":
+		return renderBrandInvitation(style, data), nil
 	case "email-verification-code":
 		return renderEmailVerificationCode(style, data), nil
 	case "account-exists-notice":

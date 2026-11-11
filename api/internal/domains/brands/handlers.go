@@ -21,7 +21,11 @@ import (
 // Handler fase 2 — port route.ts [brandId]/*: urutan cek, status code,
 // audit, dan Cache-Control dipertahankan.
 
-type Deps struct{ Pool *pgxpool.Pool }
+type Deps struct {
+	Pool *pgxpool.Pool
+	// PublicAppURL: dasar tautan di email undangan; kosong memakai produksi.
+	PublicAppURL string
+}
 
 type pgxTx = pgx.Tx
 

@@ -1244,6 +1244,22 @@ func (d *Deps) TautGatekeeperDistribute(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Persetujuan belanja: di atas ambang brand, pemesan non-admin menunggu
+	// persetujuan dulu. Dicek sebelum status atau saldo disentuh.
+	approval, err := d.approvalGate(r.Context(), brandRow.ID, campaignID, user.ID, brandRow.Role, gate.TotalCostTC)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if approval.Blocked {
+		writeNoStore(w, http.StatusConflict, map[string]any{
+			"code": approval.Code, "approval_id": approval.RequestID,
+			"cost_tc": gate.TotalCostTC, "threshold_tc": approval.Threshold,
+			"detail": "Biaya kampanye melebihi ambang persetujuan brand. Pengajuan sudah dikirim ke admin atau owner; cek statusnya di menu Persetujuan.",
+		})
+		return
+	}
+
 	// Hanya slot yang belum punya publikasi. Slot putaran lama yang sudah
 	// terbit/siap terbit tidak perlu diikutkan lagi: artikelnya sudah
 	// didistribusikan pada putaran sebelumnya.
@@ -1400,6 +1416,7 @@ func (d *Deps) TautGatekeeperDistribute(w http.ResponseWriter, r *http.Request) 
 		d.writeErr(w, err)
 		return
 	}
+	d.approvalConsume(r.Context(), approval.ApprovalID)
 	writeNoStore(w, http.StatusOK, map[string]any{"ok": true, "taut_status": "scheduled", "publications": publishedCount})
 }
 

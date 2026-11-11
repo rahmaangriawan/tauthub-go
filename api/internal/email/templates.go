@@ -72,6 +72,24 @@ func renderAccountInvite(style Style, data map[string]string) Rendered {
 	)
 }
 
+// renderBrandInvitation: undangan bergabung ke brand untuk email yang belum
+// punya akun. Tautan membawa token sekali pakai; peran terlihat di baris rincian.
+func renderBrandInvitation(style Style, data map[string]string) Rendered {
+	inviter := strings.TrimSpace(data["inviter"])
+	if inviter == "" {
+		inviter = "Seorang admin"
+	}
+	brand := strings.TrimSpace(data["brand"])
+	return DetailStyled(
+		style,
+		"Undangan bergabung ke "+brand+" di Tauthub",
+		inviter+" mengundang Anda bergabung ke brand "+brand+". Buka tautan di bawah, daftar atau masuk memakai email ini, lalu terima undangan. Tautan berlaku 7 hari.",
+		[][2]string{{"Brand", brand}, {"Peran", data["role"]}},
+		data["link"],
+		"Terima undangan",
+	)
+}
+
 // renderEmailVerificationCode: kode OTP pendaftaran (sebelum akun dibuat).
 // Kode ditampilkan besar dan berjarak supaya mudah disalin dari ponsel.
 func renderEmailVerificationCode(style Style, data map[string]string) Rendered {

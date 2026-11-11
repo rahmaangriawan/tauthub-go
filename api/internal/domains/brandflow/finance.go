@@ -33,7 +33,7 @@ func (d *Deps) CreditsTopupLookup(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "finance")
 	if err != nil {
 		d.writeErr(w, err)
 		return
@@ -101,7 +101,7 @@ func (d *Deps) CreditsTopupCreate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "finance")
 	if err != nil {
 		d.writeErr(w, err)
 		return

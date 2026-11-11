@@ -19,7 +19,7 @@ import (
 // ---------- RBAC (port auth/rbac.ts) ----------
 
 var roleRank = map[string]int{
-	"viewer": 10, "reviewer": 20, "writer": 30, "strategist": 40, "admin": 50, "owner": 60,
+	"viewer": 10, "reviewer": 20, "finance": 25, "writer": 30, "strategist": 40, "admin": 50, "owner": 60,
 }
 
 type BrandRole = string

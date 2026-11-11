@@ -103,19 +103,26 @@ func (d *Deps) MembersCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email := lowerStr(body.Email)
-	validRole := map[string]bool{"admin": true, "strategist": true, "writer": true, "reviewer": true, "viewer": true}
+	validRole := map[string]bool{"admin": true, "strategist": true, "writer": true, "finance": true, "reviewer": true, "viewer": true}
 	if !validRole[body.Role] {
-		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid enum value. Expected 'admin' | 'strategist' | 'writer' | 'reviewer' | 'viewer'")
+		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid enum value. Expected 'admin' | 'strategist' | 'writer' | 'finance' | 'reviewer' | 'viewer'")
 		return
 	}
-	_ = email
+
+	// Aktor non-owner (admin) tidak boleh memberi peran admin.
+	if row.Role != "owner" && body.Role == "admin" {
+		httpx.Error(w, http.StatusForbidden, "Only the owner can manage admins")
+		return
+	}
 
 	var userID, userEmail, displayName string
 	err = d.Pool.QueryRow(r.Context(),
 		"SELECT id, email, display_name FROM users WHERE email = $1 LIMIT 1", email).
 		Scan(&userID, &userEmail, &displayName)
 	if err != nil {
-		httpx.Error(w, http.StatusNotFound, "Registered user not found")
+		// Email belum terdaftar: kirim undangan. Peran terpasang pada undangan
+		// dan baru berlaku saat penerima masuk memakai email yang sama.
+		d.inviteByEmail(w, r, row, user.ID, email, body.Role)
 		return
 	}
 
@@ -195,9 +202,9 @@ func (d *Deps) MemberUpdate(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid Input")
 		return
 	}
-	validRole := map[string]bool{"admin": true, "strategist": true, "writer": true, "reviewer": true, "viewer": true}
+	validRole := map[string]bool{"admin": true, "strategist": true, "writer": true, "finance": true, "reviewer": true, "viewer": true}
 	if !validRole[body.Role] {
-		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid enum value. Expected 'admin' | 'strategist' | 'writer' | 'reviewer' | 'viewer'")
+		httpx.Error(w, http.StatusUnprocessableEntity, "Invalid enum value. Expected 'admin' | 'strategist' | 'writer' | 'finance' | 'reviewer' | 'viewer'")
 		return
 	}
 

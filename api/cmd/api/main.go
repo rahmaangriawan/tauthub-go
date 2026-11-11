@@ -182,7 +182,7 @@ func run() error {
 		v1.Post("/platform/local-worker/requests/{id}/result", platformDeps.LocalWorkerResult)
 
 		// Brands (fase 2) — butuh Bearer.
-		brands := &brandsdomain.Deps{Pool: database.Pool}
+		brands := &brandsdomain.Deps{Pool: database.Pool, PublicAppURL: cfg.PublicAppURL}
 		knowledge := &knowledgedomain.Deps{Pool: database.Pool}
 		profilerDeps := &profilerdomain.Deps{Pool: database.Pool}
 		workspaceDeps := &workspacedomain.Deps{Pool: database.Pool}
@@ -261,6 +261,9 @@ func run() error {
 			authed.Get("/brands/{brandId}/members", brands.MembersList)
 			authed.Post("/brands/{brandId}/members", brands.MembersCreate)
 			authed.Put("/brands/{brandId}/members/{membershipId}", brands.MemberUpdate)
+			authed.Get("/brands/{brandId}/invitations", brands.InvitationsList)
+			authed.Delete("/brands/{brandId}/invitations/{invitationId}", brands.InvitationRevoke)
+			authed.Post("/invitations/{token}/accept", brands.InvitationAccept)
 			authed.Delete("/brands/{brandId}/members/{membershipId}", brands.MemberDelete)
 
 			// Knowledge (fase 3).
@@ -358,6 +361,11 @@ func run() error {
 			authed.Get("/brands/{brandId}/credits/topup", brandFlowDeps.CreditsTopupLookup)
 			authed.Post("/brands/{brandId}/credits/topup", brandFlowDeps.CreditsTopupCreate)
 			authed.Post("/brands/{brandId}/link-monitor/request-replacement", brandFlowDeps.LinkMonitorRequestReplacement)
+			authed.Get("/brands/{brandId}/approval-policy", brandFlowDeps.ApprovalPolicyGet)
+			authed.Put("/brands/{brandId}/approval-policy", brandFlowDeps.ApprovalPolicyPut)
+			authed.Get("/brands/{brandId}/approvals", brandFlowDeps.ApprovalsList)
+			authed.Post("/brands/{brandId}/approvals/{approvalId}/decide", brandFlowDeps.ApprovalDecide)
+			authed.Post("/brands/{brandId}/approvals/{approvalId}/cancel", brandFlowDeps.ApprovalCancel)
 			authed.Get("/brands/{brandId}/billing-profile", brandFlowDeps.BillingProfileGet)
 			authed.Put("/brands/{brandId}/billing-profile", brandFlowDeps.BillingProfilePut)
 			authed.Post("/brands/{brandId}/link-monitor/guarantee/choose", brandFlowDeps.LinkGuaranteeChoose)
@@ -538,6 +546,8 @@ func run() error {
 		// Berita acara kampanye by token share — PUBLIK (tautan dibagikan ke
 		// pihak ketiga), parity app/v1/campaign-reports/[token].
 		v1.Get("/campaign-reports/{token}", clientRead.CampaignReportGet)
+		// Pratinjau undangan anggota brand (tanpa login; token acak sekali pakai).
+		v1.Get("/invitations/{token}", brands.InvitationPreview)
 
 		// ---------- Katalog media PUBLIK (/v1/public/*) — data.tauthub.com ----------
 		// Tanpa autentikasi; hanya media active + public_listed yang tampil.

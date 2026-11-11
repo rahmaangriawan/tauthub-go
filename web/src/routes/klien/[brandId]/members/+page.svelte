@@ -23,12 +23,16 @@
 		{ value: 'admin', label: 'Admin' },
 		{ value: 'strategist', label: 'Strategist' },
 		{ value: 'writer', label: 'Writer' },
+		{ value: 'finance', label: 'Finance' },
 		{ value: 'reviewer', label: 'Reviewer' },
 		{ value: 'viewer', label: 'Viewer' }
 	];
 	const roleLabel = (role: string) => ROLES.find((r) => r.value === role)?.label ?? role;
 
+	type Invitation = { id: string; email: string; role: string; expires_at: string; expired: boolean };
+
 	let members = $state<Member[]>([]);
+	let invitations = $state<Invitation[]>([]);
 	let loading = $state(true);
 	let busy = $state(false);
 	let error = $state('');
@@ -57,6 +61,26 @@
 			return;
 		}
 		members = await res.json();
+		const inv = await apiRequest(`/v1/brands/${brandId}/invitations`);
+		invitations = inv.ok ? await inv.json() : [];
+	}
+
+	async function revokeInvitation(inv: Invitation) {
+		if (!confirm(`Cabut undangan untuk ${inv.email}?`)) return;
+		busy = true;
+		error = '';
+		notice = '';
+		try {
+			const res = await apiRequest(`/v1/brands/${brandId}/invitations/${inv.id}`, { method: 'DELETE' });
+			if (!res.ok) {
+				error = await readApiError(res, tr('Gagal mencabut undangan.'));
+				return;
+			}
+			notice = `Undangan untuk ${inv.email} dicabut.`;
+			await load();
+		} finally {
+			busy = false;
+		}
 	}
 
 	async function addMember(e: SubmitEvent) {
@@ -71,6 +95,16 @@
 			});
 			if (!res.ok) {
 				error = await readApiError(res, tr('Gagal menambah member.'));
+				return;
+			}
+			if (res.status === 202) {
+				const inv = (await res.json()) as { email: string; role: string; email_sent: boolean };
+				notice = inv.email_sent
+					? `Undangan dikirim ke ${inv.email} sebagai ${roleLabel(inv.role)}. Berlaku 7 hari.`
+					: `Undangan untuk ${inv.email} dibuat, tetapi email belum terkirim. Undang ulang beberapa saat lagi.`;
+				form = { email: '', role: 'viewer' };
+				showAdd = false;
+				await load();
 				return;
 			}
 			const created = (await res.json()) as Member;
@@ -144,7 +178,7 @@
 	{#if showAdd}
 		<form class="app-card mt-4 p-4" onsubmit={addMember}>
 			<h2 class="text-sm font-semibold">{tr("Tambah member")}</h2>
-			<p class="mt-0.5 text-xs text-muted-foreground">{tr("Masukkan email akun Tauthub yang sudah terdaftar. Role menentukan hak akses di workspace brand ini.")}</p>
+			<p class="mt-0.5 text-xs text-muted-foreground">{tr("Akun yang sudah terdaftar langsung ditambahkan. Email yang belum punya akun menerima undangan berlaku 7 hari. Finance bisa melihat saldo, top-up, dan invoice, tetapi tidak bisa membuat kampanye.")}</p>
 			<div class="mt-3 grid gap-3 sm:grid-cols-2">
 				<label class="block">
 					<span class="text-xs font-medium text-muted-foreground">{tr("Email pengguna")}</span>
@@ -234,6 +268,28 @@
 			</table>
 		{/if}
 	</div>
+
+	{#if invitations.length > 0}
+		<div class="app-card mt-4 overflow-x-auto">
+			<h2 class="px-4 pt-3 text-sm font-semibold">{tr("Undangan menunggu")}</h2>
+			<table class="mt-2 w-full text-sm">
+				<tbody>
+					{#each invitations as inv (inv.id)}
+						<tr class="border-t">
+							<td class="memb-email px-4 py-2.5">{inv.email}</td>
+							<td class="px-4 py-2.5 text-muted-foreground">{roleLabel(inv.role)}</td>
+							<td class="memb-added px-4 py-2.5 text-muted-foreground">
+								{inv.expired ? tr('Kedaluwarsa') : `${tr('Berlaku sampai')} ${dt(inv.expires_at)}`}
+							</td>
+							<td class="px-4 py-2.5 text-right">
+								<button class="app-btn app-btn-soft" type="button" disabled={busy} onclick={() => void revokeInvitation(inv)}>{tr("Cabut")}</button>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{/if}
 
 	<p class="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
 		<Check size={13} style="color: var(--success);" />{tr("Hanya admin brand yang dapat mengubah role dan menghapus member.")}</p>
