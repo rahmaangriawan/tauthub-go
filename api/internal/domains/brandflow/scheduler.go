@@ -173,6 +173,7 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	d.schEnqueueCrawlTargetSyncs(ctx, 5)
 	d.schEnqueuePublicationLinkChecks(ctx, 20)
 	d.schEnqueueGSCSnapshots(ctx, 10)
+	d.schEnqueuePlanItems(ctx, 20)
 	d.schEnqueueMediaAiRefreshes(ctx, 20)
 	// Media aktif tanpa data trafik SimilarWeb otomatis masuk antrean; media
 	// berdata dijeda 6 bulan (lihat schEnqueueSimilarWebChecks).
@@ -1412,6 +1413,36 @@ func (d *Deps) schSweepSellerTrafficDrop(ctx context.Context, limit int) int {
 		sent++
 	}
 	return sent
+}
+
+// ---------- Rencana Bulanan ----------
+
+// schEnqueuePlanItems: artikel rencana yang sudah disetujui dan tanggal jalannya
+// tiba (menurut waktu Jakarta) diantre sebagai job plan_item_run, diproses paket
+// clienttaut. Dedupe job pending/running; job itu sendiri idempoten per item.
+func (d *Deps) schEnqueuePlanItems(ctx context.Context, limit int) {
+	rows, err := d.queryRows(ctx, `
+		SELECT i.id FROM content_plan_items i
+		JOIN content_plans p ON p.id = i.plan_id
+		WHERE p.status IN ('approved', 'running') AND i.status = 'pending'
+		  AND i.run_on <= (NOW() AT TIME ZONE 'Asia/Jakarta')::date
+		  AND NOT EXISTS (
+		    SELECT 1 FROM jobs j
+		    WHERE j.kind = 'plan_item_run' AND j.payload->>'itemId' = i.id
+		      AND (j.status IN ('pending', 'running') OR j.created_at > NOW() - INTERVAL '1 hour')
+		  )
+		ORDER BY i.run_on, i.id
+		LIMIT $1`, limit)
+	if err != nil {
+		slog.Error("[scheduler] sweep rencana bulanan gagal", "err", err)
+		return
+	}
+	for _, row := range rows {
+		id := row.strOr("id", "")
+		if _, err := d.enqueueJobAt(ctx, "plan_item_run", map[string]any{"itemId": id}, nil, 2); err != nil {
+			slog.Warn("[scheduler] enqueue artikel rencana gagal", "item", id, "err", err)
+		}
+	}
 }
 
 // ---------- 8c-bis. snapshot Search Console mingguan ----------

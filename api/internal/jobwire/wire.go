@@ -9,6 +9,7 @@ import (
 	brandflowdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brandflow"
 	briefdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/brief"
 	briefsummary "github.com/rahmaangriawan/tauthub-go/internal/domains/brief/summary"
+	clienttautdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/clienttaut"
 	partnerdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/partner"
 	platformdomain "github.com/rahmaangriawan/tauthub-go/internal/domains/platform"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
@@ -21,6 +22,7 @@ func Register(pool *pgxpool.Pool, cfg *config.Config) {
 	platformdomain.ConfigureCrawlEgress(cfg.CrawlEgressURL, cfg.CrawlEgressToken)
 	BrandFlow(pool, cfg).RegisterJobs()
 	(&partnerdomain.Deps{Pool: pool, Cfg: cfg}).RegisterJobs()
+	(&clienttautdomain.Deps{Pool: pool, Cfg: cfg}).RegisterJobs()
 	Platform(pool, cfg).RegisterMessagingJobs()
 	Platform(pool, cfg).RegisterMediaJobs()
 	Platform(pool, cfg).RegisterPRJobs()

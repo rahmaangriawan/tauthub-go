@@ -27,6 +27,7 @@ Menu di sisi kiri Dashboard Klien dikelompokkan seperti tabel di bawah. Kolom **
 | KEUANGAN | **Invoice & Pajak** | Daftar invoice (tagihan resmi) brand Anda | [Invoice dan Pajak](09-invoice-dan-pajak.md) |
 | PENGATURAN | **Profil & Akun** | Data akun, pengaturan notifikasi, dan keamanan | [Profil dan Akun](10-profil-dan-akun.md) |
 | PENGATURAN | **Pesan** | Mengobrol dengan Mitra tentang tiap artikel | [Pesan](11-pesan.md) |
+| RUANG KERJA | **Rencana Bulanan** | Rencana artikel beberapa minggu dari brief dan anggaran, disetujui sekali | [Rencana Bulanan](14-rencana-bulanan.md) |
 | PENGATURAN | **Apa yang Baru** | Catatan fitur baru dan perbaikan | [Apa yang Baru](13-apa-yang-baru.md) |
 
 Beberapa fitur tidak punya menu sendiri:

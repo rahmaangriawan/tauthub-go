@@ -134,6 +134,10 @@ var policies = map[string]ChannelPolicy{
 	// Pusat Penjual: order hampir kedaluwarsa butuh tindakan hari ini (WA segera);
 	// penurunan trafik cukup informasi supaya WhatsApp tidak berisik.
 	// Saldo menipis: info (in-app dan push). Email menunggu template di catalog.
+	// Rencana Bulanan: info untuk klien (in-app dan push).
+	"plan.week_ready":            {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"plan.needs_attention":       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"plan.renewal_draft":         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"billing.balance_low":        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"seller.order_expiring":      {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
 	"seller.traffic_drop":        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},

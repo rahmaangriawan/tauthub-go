@@ -501,6 +501,13 @@ func run() error {
 			// postingan berikutnya di waktu lain.
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/rounds", resolveCampaign(tautDeps.TautCampaignNewRound))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/duplicate", resolveCampaign(tautDeps.TautCampaignDuplicate))
+			authed.Get("/brands/{brandId}/taut/plans", tautDeps.PlansList)
+			authed.Post("/brands/{brandId}/taut/plans", tautDeps.PlanCreate)
+			authed.Get("/brands/{brandId}/taut/plans/{planId}", tautDeps.PlanGet)
+			authed.Patch("/brands/{brandId}/taut/plans/{planId}", tautDeps.PlanUpdate)
+			authed.Patch("/brands/{brandId}/taut/plans/{planId}/items/{itemId}", tautDeps.PlanItemUpdate)
+			authed.Post("/brands/{brandId}/taut/plans/{planId}/approve", tautDeps.PlanApprove)
+			authed.Post("/brands/{brandId}/taut/plans/{planId}/cancel", tautDeps.PlanCancel)
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/validate", resolveCampaign(tautDeps.TautCampaignValidateGet))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/validate", resolveCampaign(tautDeps.TautCampaignValidatePost))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/schedule", resolveCampaign(tautDeps.TautCampaignSchedule))
