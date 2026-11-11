@@ -1,18 +1,28 @@
 # Analisis Kinerja dan Audit Publikasi
 
-> Dua menu di grup ANALITIK & PELAPORAN yang saat ini berstatus Coming Soon (segera hadir). Keduanya belum bisa dipakai dan belum menampilkan data.
+> **Analisis Kinerja** menunjukkan berapa klik yang datang dari artikel ke situs Anda, per kampanye. **Audit Publikasi** masih berstatus Coming Soon (segera hadir).
 
 **Lokasi:** menu **Analisis Kinerja** dan menu **Audit Publikasi** (grup **ANALITIK & PELAPORAN**)
 
 **Untuk:** Klien
 
-## Gambaran singkat
-
-Kedua menu sudah ada di sidebar (daftar menu di sisi layar) Dashboard Klien. Bila Anda membukanya, yang tampil hanya judul, satu kalimat penjelasan, dan panel **Coming Soon**. Panel itu memberi tahu bahwa fitur sedang disiapkan. Tidak ada filter, tombol, atau data yang bisa Anda pakai. Layar juga tidak menyebut kapan fitur ini jadi.
-
 ## Analisis Kinerja
 
-Penjelasan di layar berbunyi "Event keterbacaan artikel per hari dari pelacakan publikasi." Artinya kira-kira, jumlah pembaca artikel tiap hari. Panel **Coming Soon** menyebut rencananya, yaitu laporan hasil artikel per media dan per kampanye. Fitur ini akan segera tersedia di Tauthub.
+Halaman ini menampilkan klik dari semua kampanye dalam 30 hari terakhir, lalu daftar kampanye dengan **Klik**, **Pengunjung**, jumlah artikel terbit, dan grafik kecil klik per hari. Kampanye dengan klik terbanyak ada di atas. Klik satu kampanye untuk melihat rinciannya:
+
+- **Klik per hari** selama 30 hari.
+- **Perangkat** (komputer, ponsel, tablet) dan **Asal kunjungan** (langsung, mesin pencari, media sosial, situs lain), dalam persen.
+- **Kondisi tautan di artikel**: berapa artikel terbit yang tautannya sehat, dengan tautan ke [Link Guardian](06-link-guardian.md).
+
+Angka yang sama muncul di [berita acara](03-kampanye/README.md) yang Anda bagikan, dalam bentuk ringkas (total klik, pengunjung, dan grafik harian). Berita acara publik tidak memuat data sesi, alamat IP, atau asal kunjungan.
+
+### Cara angka dihitung
+
+- Yang dihitung hanya klik pada **tautan pendek kampanye**. Artikel yang tidak memakai tautan pendek itu tidak menghasilkan klik di sini.
+- Klik dari bot dan pratinjau tautan (misalnya saat tautan dibagikan di WhatsApp) tidak dihitung. Jumlahnya ditulis di rincian kampanye.
+- Satu pengunjung dihitung **sekali per hari**, supaya muat ulang halaman tidak menggandakan angka.
+- Klik per media dan per negara belum tersedia, karena tautan pendek berlaku untuk seluruh kampanye.
+- Klik dari pelacak lama yang tidak terhubung ke kampanye tidak ikut dihitung.
 
 ## Audit Publikasi
 

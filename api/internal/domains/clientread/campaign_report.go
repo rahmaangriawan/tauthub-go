@@ -7,6 +7,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
+	"github.com/rahmaangriawan/tauthub-go/internal/impact"
 )
 
 // CampaignReportGet: GET /v1/campaign-reports/{token} — data berita acara
@@ -36,7 +37,7 @@ func (d *Deps) CampaignReportGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	share, err := d.queryRow(r.Context(), `
-		SELECT s.id AS share_id, c.id, c.name, c.description, c.status, c.starts_at, c.ends_at, c.created_at,
+		SELECT s.id AS share_id, s.brand_id, c.id, c.name, c.description, c.status, c.starts_at, c.ends_at, c.created_at,
 		       b.name AS brand_name
 		FROM campaign_report_shares s
 		JOIN campaigns c ON c.id = s.campaign_id
@@ -134,7 +135,20 @@ func (d *Deps) CampaignReportGet(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Klik dari tautan pendek kampanye, agregat saja: tanpa sesi, IP, atau
+	// rujukan mentah karena laporan ini publik. Hitungan sama dengan halaman
+	// Analisis Kinerja klien (paket impact).
+	clicks := map[string]any{"available": false}
+	if events, truncated, cErr := impact.Load(r.Context(), d.Pool, share.strOr("brand_id", ""), campaignID, time.Now().AddDate(0, 0, -30)); cErr == nil {
+		st := impact.Aggregate(events, 30, time.Now())
+		clicks = map[string]any{
+			"available": true, "days": 30, "clicks": st.Counted, "visitors": st.Visitors,
+			"daily": st.Daily, "truncated": truncated,
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
+		"clicks": clicks,
 		"campaign": map[string]any{
 			"id":          campaignID,
 			"name":        share.strOr("name", ""),

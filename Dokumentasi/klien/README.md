@@ -22,7 +22,7 @@ Menu di sisi kiri Dashboard Klien dikelompokkan seperti tabel di bawah. Kolom **
 | RUANG KERJA | **Kampanye** | Membuat dan mengatur kampanye, menyiapkan artikel, dan mengirimkannya | [Kampanye](03-kampanye/README.md) |
 | RUANG KERJA | **Status Publikasi** | Memantau tiap artikel yang sudah Anda kirim ke media | [Status Publikasi](05-status-publikasi.md) |
 | RUANG KERJA | **Link Guardian** | Memantau apakah artikel sudah terbit dan tautannya masih utuh | [Link Guardian](06-link-guardian.md) |
-| ANALITIK & PELAPORAN | **Analisis Kinerja**, **Audit Publikasi** | Belum tersedia (segera hadir) | [Analisis dan audit](07-analisis-dan-audit.md) |
+| ANALITIK & PELAPORAN | **Analisis Kinerja**, **Audit Publikasi** | Analisis Kinerja tersedia, Audit Publikasi segera hadir | [Analisis dan audit](07-analisis-dan-audit.md) |
 | KEUANGAN | **Saldo** | Saldo, Top Up, dan riwayat pemakaian | [Saldo dan Top Up](08-saldo-dan-top-up.md) |
 | KEUANGAN | **Invoice & Pajak** | Daftar invoice (tagihan resmi) brand Anda | [Invoice dan Pajak](09-invoice-dan-pajak.md) |
 | PENGATURAN | **Profil & Akun** | Data akun, pengaturan notifikasi, dan keamanan | [Profil dan Akun](10-profil-dan-akun.md) |

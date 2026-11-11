@@ -109,6 +109,17 @@
 		return out;
 	}
 
+	// Klik dari tautan pendek kampanye (agregat, 30 hari). Bot dan pratinjau tautan
+	// sudah dibuang di server; tidak ada data sesi atau IP di laporan publik.
+	function clickBars(daily: { day: string; clicks: number }[]) {
+		const max = Math.max(1, ...daily.map((d) => d.clicks));
+		const w = 300 / Math.max(daily.length, 1);
+		return daily.map((d, i) => {
+			const h = d.clicks > 0 ? Math.max(3, (d.clicks / max) * 36) : 1;
+			return { x: i * w + 1, y: 40 - h, w: Math.max(w - 2, 1), h, d };
+		});
+	}
+
 	function print() {
 		window.print();
 	}
@@ -176,6 +187,20 @@
 						<span class="docStatValue">{nominal(report.summary.tc_used)}</span>
 					</div>
 				</div>
+
+				{#if report.clicks?.available && report.clicks.clicks > 0}
+					<section class="docSection">
+						<h2 class="docSectionTitle">{tr("Klik dari artikel")}</h2>
+						<p class="docSectionBody">
+							<strong>{report.clicks.clicks.toLocaleString('id-ID')}</strong> {tr("klik dari")} {report.clicks.visitors.toLocaleString('id-ID')} {tr("pengunjung dalam 30 hari terakhir.")}
+						</p>
+						<svg class="docClicks" viewBox="0 0 300 40" preserveAspectRatio="none" role="img" aria-label={tr("Klik per hari")}>
+							{#each clickBars(report.clicks.daily) as b (b.d.day)}
+								<rect x={b.x} y={b.y} width={b.w} height={b.h} rx="1"><title>{b.d.day}: {b.d.clicks}</title></rect>
+							{/each}
+						</svg>
+					</section>
+				{/if}
 
 				<section class="docSection">
 					<h2 class="docSectionTitle">{tr("Media yang menerbitkan")}</h2>
@@ -518,6 +543,16 @@
 	.docProof-warn {
 		color: var(--destructive);
 		font-weight: 600;
+	}
+	.docClicks {
+		display: block;
+		width: 100%;
+		height: 48px;
+		margin-top: 8px;
+	}
+	.docClicks rect {
+		fill: var(--primary);
+		opacity: 0.85;
 	}
 	.docFootnote {
 		margin-top: 24px;
