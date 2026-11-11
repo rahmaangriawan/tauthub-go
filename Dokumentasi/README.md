@@ -43,7 +43,6 @@ Terakhir diperbarui: 8 November 2026.
 | [Profil dan Akun](klien/10-profil-dan-akun.md) | Data akun, pengaturan notifikasi, dan keamanan |
 | [Pesan](klien/11-pesan.md) | Mengobrol dengan Mitra tentang tiap artikel |
 | [Notifikasi](klien/12-notifikasi.md) | Lonceng dan halaman riwayat notifikasi |
-| [Rencana Bulanan](klien/14-rencana-bulanan.md) | Menyusun artikel beberapa minggu dari brief dan anggaran, disetujui sekali |
 | [Apa yang Baru](klien/13-apa-yang-baru.md) | Catatan perubahan terbaru |
 
 ### Dashboard Mitra

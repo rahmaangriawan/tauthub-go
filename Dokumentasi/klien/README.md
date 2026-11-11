@@ -27,7 +27,6 @@ Menu di sisi kiri Dashboard Klien dikelompokkan seperti tabel di bawah. Kolom **
 | KEUANGAN | **Invoice & Pajak** | Daftar invoice (tagihan resmi) brand Anda | [Invoice dan Pajak](09-invoice-dan-pajak.md) |
 | PENGATURAN | **Profil & Akun** | Data akun, pengaturan notifikasi, dan keamanan | [Profil dan Akun](10-profil-dan-akun.md) |
 | PENGATURAN | **Pesan** | Mengobrol dengan Mitra tentang tiap artikel | [Pesan](11-pesan.md) |
-| RUANG KERJA | **Rencana Bulanan** | Rencana artikel beberapa minggu dari brief dan anggaran, disetujui sekali | [Rencana Bulanan](14-rencana-bulanan.md) |
 | PENGATURAN | **Tim dan undangan** | Mengundang anggota lewat email, peran finance | [Tim dan undangan](15-tim-dan-undangan.md) |
 | KREDIT | **Bonus top up** | Paket berbonus dan kode promo | [Bonus top up](16-bonus-top-up.md) |
 | PENGATURAN | **Apa yang Baru** | Catatan fitur baru dan perbaikan | [Apa yang Baru](13-apa-yang-baru.md) |
