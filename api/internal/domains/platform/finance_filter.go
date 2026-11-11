@@ -80,60 +80,76 @@ func (f finFilterCtx) partnerArr() []string {
 	return f.partnerIDs
 }
 
-// finBalancesAsOf: posisi (available_tc, reserved_tc) agregat semua brand yang
-// tidak dikecualikan pada titik waktu `asOf`.
+// finDeposits: posisi saldo klien pada satu titik waktu, dipecah menurut
+// sumber uangnya.
+type finDeposits struct {
+	realAvailable int64 // bagian available yang ditopang topup asli (titipan nyata)
+	adjusted      int64 // sisa available: penyesuaian manual / bonus / kompensasi
+	reserved      int64 // dana tertahan (escrow), apa pun sumbernya
+}
+
+// finDepositsAsOf: saldo semua brand yang tidak dikecualikan pada `asOf`.
 //
-// Titik tolaknya selalu `credit_wallets` hari ini (otoritatif), lalu mutasi
-// ledger SETELAH asOf dibalik. Ledger sendiri tidak lengkap (ada saldo yang
-// diubah tanpa entri), jadi menjumlah ledger dari nol akan meleset; berangkat
-// dari wallet membuat posisi hari ini selalu tepat dan posisi lampau hanya
-// bergantung pada mutasi di antaranya.
+// Titik tolaknya `credit_wallets` hari ini (otoritatif), lalu mutasi ledger
+// SETELAH asOf dibalik per brand. Ledger sendiri tidak lengkap, jadi menjumlah
+// dari nol akan meleset.
+//
+// Pemisahan nyata vs penyesuaian, per brand: saldo dianggap "nyata" sebesar
+// total topup production brand itu sampai asOf, dibatasi saldo yang tersisa.
+// Artinya saldo penyesuaian dianggap terpakai lebih dulu — pilihan konservatif
+// supaya uang yang wajib ada di rekening tidak terhitung kurang. Dana tertahan
+// mengambil jatah nyata lebih dulu sebelum available.
 //
 // Konvensi tanda amount_tc (lihat insertLedger di clienttaut/brandflow):
 //   topup/refund/adjustment/release : bertanda, mengubah available
 //   reserve (negatif)               : available turun, reserved naik
 //   capture positif                 : reserved -> captured
 //   capture negatif                 : available -> captured (tanpa reserve)
-func (d *Deps) finBalancesAsOf(ctx context.Context, asOf time.Time, excl finFilterCtx) (available, reserved int64, err error) {
-	row, qErr := d.queryRow(ctx, `
-		SELECT COALESCE(SUM(available_tc), 0) AS available,
-		       COALESCE(SUM(reserved_tc), 0)  AS reserved
-		FROM credit_wallets
-		WHERE brand_id::text != ALL($1::text[])`, excl.brandArr())
-	if qErr != nil {
-		return 0, 0, qErr
+func (d *Deps) finDepositsAsOf(ctx context.Context, asOf time.Time, excl finFilterCtx) (finDeposits, error) {
+	row, err := d.queryRow(ctx, `
+		WITH w AS (
+		  SELECT brand_id::text AS id, available_tc AS a, reserved_tc AS r
+		  FROM credit_wallets
+		  WHERE brand_id::text != ALL($1::text[])
+		), dl AS (
+		  SELECT brand_id::text AS id,
+		    SUM(CASE
+		      WHEN ref_type IN ('topup','refund','adjustment','reserve','release') THEN amount_tc
+		      WHEN ref_type = 'capture' AND amount_tc < 0 THEN amount_tc
+		      ELSE 0 END) AS da,
+		    SUM(CASE
+		      WHEN ref_type IN ('reserve','release') THEN -amount_tc
+		      WHEN ref_type = 'capture' AND amount_tc > 0 THEN -amount_tc
+		      ELSE 0 END) AS dr
+		  FROM credit_ledger_entries
+		  WHERE created_at > $2
+		  GROUP BY 1
+		), tp AS (
+		  SELECT t.brand_id::text AS id, SUM(t.amount) AS real_in
+		  FROM payment_transactions t
+		  WHERE `+financeRealTopupCond+`
+		    AND COALESCE(t.paid_at, t.created_at) <= $2
+		  GROUP BY 1
+		), b AS (
+		  SELECT GREATEST(w.a - COALESCE(dl.da, 0), 0) AS a,
+		         GREATEST(w.r - COALESCE(dl.dr, 0), 0) AS r,
+		         COALESCE(tp.real_in, 0) AS real_in
+		  FROM w LEFT JOIN dl USING (id) LEFT JOIN tp USING (id)
+		)
+		SELECT COALESCE(SUM(a), 0) AS available,
+		       COALESCE(SUM(r), 0) AS reserved,
+		       COALESCE(SUM(LEAST(a, GREATEST(LEAST(a + r, real_in) - r, 0))), 0) AS real_available
+		FROM b`, excl.brandArr(), asOf)
+	if err != nil {
+		return finDeposits{}, err
 	}
-	available = int64(math.Round(row.numOr("available")))
-	reserved = int64(math.Round(row.numOr("reserved")))
-	if asOf.After(time.Now().Add(-time.Minute)) {
-		return available, reserved, nil
-	}
-
-	after, qErr := d.queryRow(ctx, `
-		SELECT
-		  COALESCE(SUM(CASE
-		    WHEN ref_type IN ('topup','refund','adjustment','reserve','release') THEN amount_tc
-		    WHEN ref_type = 'capture' AND amount_tc < 0 THEN amount_tc
-		    ELSE 0 END), 0) AS available,
-		  COALESCE(SUM(CASE
-		    WHEN ref_type IN ('reserve','release') THEN -amount_tc
-		    WHEN ref_type = 'capture' AND amount_tc > 0 THEN -amount_tc
-		    ELSE 0 END), 0) AS reserved
-		FROM credit_ledger_entries
-		WHERE created_at > $1
-		  AND brand_id::text != ALL($2::text[])`, asOf, excl.brandArr())
-	if qErr != nil {
-		return 0, 0, qErr
-	}
-	available -= int64(math.Round(after.numOr("available")))
-	reserved -= int64(math.Round(after.numOr("reserved")))
-	if available < 0 {
-		available = 0
-	}
-	if reserved < 0 {
-		reserved = 0
-	}
-	return available, reserved, nil
+	available := int64(math.Round(row.numOr("available")))
+	real := int64(math.Round(row.numOr("real_available")))
+	return finDeposits{
+		realAvailable: real,
+		adjusted:      available - real,
+		reserved:      int64(math.Round(row.numOr("reserved"))),
+	}, nil
 }
 
 // finPartnerUnpaidAsOf: komisi mitra yang BELUM dibayar pada titik `asOf`.

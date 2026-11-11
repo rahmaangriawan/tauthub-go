@@ -30,6 +30,8 @@ func (d *Deps) FinanceClientDepositsDetail(w http.ResponseWriter, r *http.Reques
 		        COALESCE(b.ownership_type, '') AS ownership_type,
 		        w.available_tc,
 		        w.reserved_tc,
+		        COALESCE((SELECT SUM(t.amount) FROM payment_transactions t
+		                   WHERE t.brand_id = w.brand_id AND `+financeRealTopupCond+`), 0) AS real_in,
 		        MAX(le.created_at)        AS last_activity_at,
 		        COALESCE(u.email, '')     AS owner_email,
 		        COALESCE(u.display_name, '') AS owner_name
@@ -50,7 +52,7 @@ func (d *Deps) FinanceClientDepositsDetail(w http.ResponseWriter, r *http.Reques
 	}
 
 	entries := make([]map[string]any, 0, len(rows))
-	var totalAvailable, totalReserved int64
+	var totalAvailable, totalReserved, totalReal int64
 	for _, row := range rows {
 		last, _ := row.raw("last_activity_at").(time.Time)
 		var lastStr any
@@ -61,6 +63,12 @@ func (d *Deps) FinanceClientDepositsDetail(w http.ResponseWriter, r *http.Reques
 		reserved := int64(row.intOr("reserved_tc", 0))
 		totalAvailable += available
 		totalReserved += reserved
+		// Aturan yang sama dengan finDepositsAsOf: jatah nyata dibatasi topup
+		// asli, dana tertahan mengambilnya lebih dulu.
+		realIn := int64(math.Round(row.numOr("real_in")))
+		realTotal := min(available+reserved, realIn)
+		realAvail := min(available, max(realTotal-reserved, 0))
+		totalReal += realAvail
 		entries = append(entries, map[string]any{
 			"brand_id":         row.strOr("brand_id", ""),
 			"brand_name":       row.strOr("brand_name", ""),
@@ -69,6 +77,9 @@ func (d *Deps) FinanceClientDepositsDetail(w http.ResponseWriter, r *http.Reques
 			"available_tc":     available,
 			"reserved_tc":      reserved,
 			"total_tc":         available + reserved,
+			"real_in":          realIn,
+			"real_tc":          realAvail,
+			"adjusted_tc":      available - realAvail,
 			"last_activity_at": lastStr,
 			"owner_email":      row.strOr("owner_email", ""),
 			"owner_name":       row.strOr("owner_name", ""),
@@ -80,6 +91,8 @@ func (d *Deps) FinanceClientDepositsDetail(w http.ResponseWriter, r *http.Reques
 		"entries":         entries,
 		"total":           len(entries),
 		"total_available": totalAvailable,
+		"total_real":      totalReal,
+		"total_adjusted":  totalAvailable - totalReal,
 		"total_reserved":  totalReserved,
 	})
 }

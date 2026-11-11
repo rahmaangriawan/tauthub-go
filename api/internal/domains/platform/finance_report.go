@@ -237,7 +237,7 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	// berdampak ke 5 KPI balance-sheet, bukan cuma arus kas.
 	asOf := toDate.Add(24*time.Hour - time.Second)
 
-	availableAt, reservedAt, err := d.finBalancesAsOf(ctx, asOf, excl)
+	deposits, err := d.finDepositsAsOf(ctx, asOf, excl)
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -289,8 +289,11 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		WHERE status = 'approved'
 		  AND reviewed_at >= $1 AND reviewed_at < $2`, fromTs, toExcl)
 
-	clientAvailable := availableAt
-	clientReserved := reservedAt
+	// Titipan nyata = bagian saldo yang ditopang topup asli. Saldo hasil
+	// penyesuaian manual dipisah dan TIDAK masuk hitungan wajib-ada.
+	clientAvailable := deposits.realAvailable
+	clientAdjusted := deposits.adjusted
+	clientReserved := deposits.reserved
 	partnerUnpaidInt := partnerUnpaidAt
 	cashRequired := clientAvailable + clientReserved + partnerUnpaidInt + profitAvailable
 
@@ -310,8 +313,9 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		"settlement_pending_count": settlementPending.intOr("n", 0),
 		// client_balance (total titipan) dipertahankan untuk kompatibilitas
 		// kartu "Dana klien" lama. Pecahan ada di dua field berikut:
-		"client_balance":           clientAvailable + clientReserved,
-		"client_available":         clientAvailable, // Dana Titipan Klien
+		"client_balance":           clientAvailable + clientAdjusted + clientReserved,
+		"client_available":         clientAvailable, // Dana Titipan Klien (uang nyata)
+		"client_adjusted":          clientAdjusted,  // Saldo Penyesuaian (bukan uang nyata)
 		"client_reserved":          clientReserved,  // Dana Tertahan (Escrow)
 		"partner_unpaid":           partnerUnpaidInt,
 		"partner_payable_total":    finReportInt(settlementPending.numOr("total")),

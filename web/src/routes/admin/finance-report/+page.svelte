@@ -52,7 +52,8 @@
 		compensation_credits: number; compensation_count: number;
 		// Posisi keuangan (balance sheet): hadir di API baru. Opsional supaya
 		// halaman tetap aman ketika binary API belum di-restart.
-		client_available?: number;             // Dana Titipan Klien
+		client_available?: number;             // Dana Titipan Klien (uang nyata)
+		client_adjusted?: number;              // Saldo Penyesuaian (bukan uang nyata)
 		client_reserved?: number;              // Dana Tertahan (Escrow)
 		tauthub_revenue_gross?: number;        // 25% × GMV publikasi terbit (kotor)
 		tauthub_withdrawn?: number;            // sudah dicatat tertarik admin
@@ -82,6 +83,7 @@
 	type ClientDeposit = {
 		brand_id: string; brand_name: string; client_name: string; ownership_type: string;
 		available_tc: number; reserved_tc: number; total_tc: number;
+		real_in?: number; real_tc?: number; adjusted_tc?: number;
 		last_activity_at: string | null; owner_email: string; owner_name: string;
 	};
 	type EscrowItem = {
@@ -651,20 +653,39 @@
 				</div>
 				<span class="text-[11px] text-muted-foreground tabular-nums">{from} → {to}</span>
 			</div>
-			<div class="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+			<div class="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 				<!-- 1. Dana Titipan Klien -->
 				<article class="kpiCard kpiPosLiab">
 					<div class="flex items-center justify-between gap-2">
 						<div class="flex min-w-0 items-center gap-2.5">
 							<span class="kpiIcon kpiIconPosLiab"><Users size={15} /></span>
-							<Tooltip content={tr("Saldo kredit klien yang belum dibelanjakan. Secara hukum ini milik klien — dilarang dipakai operasional.")}>
+							<Tooltip content={tr("Saldo klien yang ditopang topup asli lewat gateway. Secara hukum ini milik klien — dilarang dipakai operasional.")}>
 								<span class="kpiLabel">{tr("Dana Titipan Klien")}</span>
 							</Tooltip>
 						</div>
 						<span class="kpiBadge kpiBadgePosLiab">{tr("Liabilitas")}</span>
 					</div>
 					<p class="kpiValue kpiValuePosLiab mt-3">{rp(summary.client_available ?? 0)}</p>
-					<p class="kpiDesc mt-2">{tr("Available credit semua brand. Hak milik klien.")}</p>
+					<p class="kpiDesc mt-2">{tr("Bagian saldo klien yang berasal dari topup asli.")}</p>
+					<button type="button" class="kpiDetailLink mt-2" onclick={() => openDeposits('available')}>
+						{tr("Lihat milik siapa saja")} →
+					</button>
+				</article>
+
+				<!-- 1b. Saldo Penyesuaian: kredit dari penyesuaian manual / bonus /
+				     kompensasi. Bukan uang yang masuk, jadi tidak ikut wajib-ada. -->
+				<article class="kpiCard kpiPosAdj">
+					<div class="flex items-center justify-between gap-2">
+						<div class="flex min-w-0 items-center gap-2.5">
+							<span class="kpiIcon kpiIconPosAdj"><Users size={15} /></span>
+							<Tooltip content={tr("Saldo klien yang tidak ditopang topup asli: penyesuaian manual admin, bonus, atau kompensasi. Per klien, saldo penyesuaian dianggap terpakai lebih dulu.")}>
+								<span class="kpiLabel">{tr("Saldo Penyesuaian")}</span>
+							</Tooltip>
+						</div>
+						<span class="kpiBadge kpiBadgePosAdj">{tr("Bukan uang nyata")}</span>
+					</div>
+					<p class="kpiValue kpiValuePosAdj mt-3">{rp(summary.client_adjusted ?? 0)}</p>
+					<p class="kpiDesc mt-2">{tr("Tidak dihitung di Saldo Rek. Wajib Ada.")}</p>
 					<button type="button" class="kpiDetailLink mt-2" onclick={() => openDeposits('available')}>
 						{tr("Lihat milik siapa saja")} →
 					</button>
@@ -743,7 +764,7 @@
 						<span class="kpiBadge kpiBadgePosCash">{tr("Rek. Escrow")}</span>
 					</div>
 					<p class="kpiValue kpiValuePosCash mt-3">{rp(summary.cash_required_in_bank ?? 0)}</p>
-					<p class="kpiDesc mt-2">{tr("Titipan + Escrow + Utang Mitra + Profit belum ditarik.")}</p>
+					<p class="kpiDesc mt-2">{tr("Titipan nyata + Escrow + Utang Mitra + Profit belum ditarik.")}</p>
 					<button type="button" class="kpiDetailLink mt-2" onclick={() => (cashOpen = true)}>
 						{tr("Lihat breakdown")} →
 					</button>
@@ -1161,7 +1182,7 @@
 				onClose={() => (depositsOpen = false)}
 			>
 				<p class="text-sm text-muted-foreground">
-					{tr("Saldo kredit semua brand yang masih > 0, diurutkan dari terbesar. Available = bebas dipakai klien; Reserved = terkunci untuk order yang sedang dikerjakan.")}
+					{tr("Saldo kredit semua brand yang masih > 0, diurutkan dari terbesar. Titipan nyata = bagian saldo yang ditopang topup asli; Penyesuaian = sisanya (manual/bonus); Reserved = terkunci untuk order berjalan.")}
 				</p>
 				{#if depositsLoading && depositsEntries === null}
 					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
@@ -1171,14 +1192,16 @@
 					<p class="mt-4 text-sm text-muted-foreground">{tr("Tidak ada brand dengan saldo > 0.")}</p>
 				{:else if depositsEntries}
 					<div class="mt-4 overflow-x-auto">
-						<table class="w-full text-sm" style="min-width: 640px;">
+						<table class="w-full text-sm" style="min-width: 820px;">
 							<thead>
 								<tr class="text-left text-xs text-muted-foreground">
 									<th class="px-2 py-2 font-medium">{tr("Brand")}</th>
 									<th class="px-2 py-2 font-medium">{tr("Klien / Pemilik")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Available")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Topup asli")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Titipan nyata")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Penyesuaian")}</th>
 									<th class="px-2 py-2 text-right font-medium">{tr("Reserved")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Total")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Total saldo")}</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -1194,7 +1217,9 @@
 												<p class="text-[11px] text-muted-foreground">{row.owner_email}</p>
 											{/if}
 										</td>
-										<td class="px-2 py-2 text-right tabular-nums" class:font-semibold={depositsScope === 'available'}>{rp(row.available_tc)}</td>
+										<td class="px-2 py-2 text-right tabular-nums text-muted-foreground">{rp(row.real_in ?? 0)}</td>
+										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: #2563eb;">{rp(row.real_tc ?? 0)}</td>
+										<td class="px-2 py-2 text-right tabular-nums">{rp(row.adjusted_tc ?? row.available_tc)}</td>
 										<td class="px-2 py-2 text-right tabular-nums text-muted-foreground" class:font-semibold={depositsScope === 'reserved'}>{rp(row.reserved_tc)}</td>
 										<td class="px-2 py-2 text-right tabular-nums">{rp(row.total_tc)}</td>
 									</tr>
@@ -1418,7 +1443,7 @@
 				</p>
 				<div class="mt-4 space-y-2">
 					<div class="flex items-center justify-between rounded-lg border px-3 py-2">
-						<span class="text-sm">{tr("Dana Titipan Klien (Available)")}</span>
+						<span class="text-sm">{tr("Dana Titipan Klien (uang nyata)")}</span>
 						<span class="text-sm font-semibold tabular-nums">{rp(summary.client_available ?? 0)}</span>
 					</div>
 					<div class="flex items-center justify-between rounded-lg border px-3 py-2">
@@ -1614,6 +1639,20 @@
 	.kpiBadgePosLiab {
 		background: color-mix(in srgb, #3b82f6 10%, white);
 		color: #1d4ed8;
+	}
+	/* 1b. Saldo Penyesuaian — netral, sengaja tidak menonjol */
+	.kpiPosAdj {
+		background: color-mix(in srgb, var(--muted-foreground) 3%, var(--card));
+		border-style: dashed;
+	}
+	.kpiIconPosAdj {
+		background: var(--secondary);
+		color: var(--muted-foreground);
+	}
+	.kpiValuePosAdj { color: var(--muted-foreground); }
+	.kpiBadgePosAdj {
+		background: var(--secondary);
+		color: var(--muted-foreground);
 	}
 	/* 2. Hak Mitra Belum Cair — oranye utang */
 	.kpiPosDebt {
