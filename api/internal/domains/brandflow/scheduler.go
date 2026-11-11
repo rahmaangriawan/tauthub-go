@@ -1265,10 +1265,10 @@ func (d *Deps) schSweepBalanceLow(ctx context.Context, limit int) int {
 		dedupe := "billing.balance_low:" + brandID + ":" + month
 		n, err := d.execRows(ctx, `
 			INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key)
-			SELECT gen_random_uuid(), bm.user_id, 'billing.balance_low', 'Saldo hampir habis', $2, $3, $4
+			SELECT gen_random_uuid(), bm.user_id, 'billing.balance_low', 'Saldo hampir habis', $2, $3, $4::text
 			FROM brand_memberships bm JOIN users u ON u.id = bm.user_id
 			WHERE bm.brand_id = $1 AND bm.role IN ('owner', 'admin', 'writer') AND u.role <> 'admin'
-			  AND NOT EXISTS (SELECT 1 FROM notifications x WHERE x.user_id = bm.user_id AND x.dedupe_key = $4)`,
+			  AND NOT EXISTS (SELECT 1 FROM notifications x WHERE x.user_id = bm.user_id AND x.dedupe_key = $4::text)`,
 			brandID, body, link, dedupe)
 		if err != nil {
 			slog.Warn("[scheduler] notifikasi saldo menipis gagal", "brand", brandID, "err", err)
