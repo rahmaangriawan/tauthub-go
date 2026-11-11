@@ -17,6 +17,13 @@ func (d *Deps) RegisterJobs() {
 		}
 		return d.PublicationExecutionJob(ctx, pubID, job.Attempts, job.MaxAttempts)
 	})
+	jobs.Register("publication_finance", func(ctx context.Context, job jobs.JobRow) error {
+		pubID, _ := job.Payload["publicationId"].(string)
+		if pubID == "" {
+			return fmt.Errorf("payload publicationId kosong")
+		}
+		return d.PublicationFinanceJob(ctx, pubID)
+	})
 	jobs.Register("publication_variant_generation", func(ctx context.Context, job jobs.JobRow) error {
 		return d.PublicationVariantGenerationJob(ctx, job.Payload)
 	})

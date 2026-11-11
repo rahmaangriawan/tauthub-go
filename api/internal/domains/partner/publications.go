@@ -958,6 +958,11 @@ func (d *Deps) PublicationURL(w http.ResponseWriter, r *http.Request) {
 			d.writeErr(w, err)
 			return
 		}
+		// Tanggal terbit, transaksi, dan penghasilan mitra dikerjakan job di
+		// paket brandflow. Tanpa ini publikasi manual tidak pernah masuk keuangan.
+		if _, err := d.enqueueJob(r.Context(), "publication_finance", map[string]any{"publicationId": publicationID}, 3); err != nil {
+			d.auditLog(r.Context(), user.ID, "publication.finance_enqueue_failed", "publication", publicationID)
+		}
 	} else {
 		d.enqueueJobBestEffort(r.Context(), "pr_verify", map[string]any{"publicationId": publicationID}, 2)
 	}
