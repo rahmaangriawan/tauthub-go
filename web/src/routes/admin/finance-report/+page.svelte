@@ -747,99 +747,101 @@
 			</div>
 		{/if}
 
-		<!-- Tren 12 bulan: Top Up vs GMV (omzet publikasi) vs Pencairan Mitra -->
-		<div class="app-card mt-6 p-5">
-			<div class="flex flex-wrap items-center justify-between gap-2">
-				<h2 class="text-base font-semibold">{tr("Top Up vs GMV vs Pencairan — 12 Bulan Terakhir")}</h2>
-				<span class="text-xs text-muted-foreground">{tr("Selalu 12 bulan terakhir. Klik satu bulan untuk memfilter periode.")}</span>
+		<!-- Tren 12 bulan: top up, GMV, dan pencairan mitra -->
+		<div class="app-card mt-6 overflow-hidden">
+			<div class="finCardHead">
+				<div>
+					<h2 class="finTitle">{tr("Top up, GMV, dan pencairan")}</h2>
+					<p class="finSub">
+						{tr("12 bulan terakhir. Klik satu bulan untuk memfilter periode. GMV adalah nilai publikasi terbit; selisihnya dengan top up adalah saldo klien yang belum terpakai.")}
+					</p>
+				</div>
 			</div>
-			<p class="mt-1 text-xs text-muted-foreground">
-				{tr("GMV = total nilai publikasi terbit (omzet riil), bukan sekadar uang masuk. Beda besar GMV vs Top Up menunjukkan saldo klien yang belum terpakai.")}
-			</p>
-			<div class="mt-4">
+			<div class="finCardBody">
 				<CashflowBars rows={monthly} onSelect={selectMonth} />
 			</div>
 		</div>
 
-		<!-- Saldo Klien Mengendap >= 90 hari -->
-		<div class="app-card mt-5 p-5">
-			<div class="flex flex-wrap items-center justify-between gap-2">
+		<!-- Saldo klien mengendap >= 90 hari -->
+		<div class="app-card mt-5 overflow-hidden">
+			<div class="finCardHead">
 				<div>
-					<h2 class="text-base font-semibold">{tr("Saldo Klien Mengendap ≥ 90 Hari")}</h2>
-					<p class="mt-1 text-xs text-muted-foreground">
-						{tr("Brand dengan saldo kredit > 0 dan tidak ada aktivitas wallet sejak 90 hari terakhir. Hubungi untuk follow-up agar saldonya terpakai.")}
+					<h2 class="finTitle">{tr("Saldo klien mengendap ≥ 90 hari")}</h2>
+					<p class="finSub">
+						{tr("Brand yang masih punya saldo tetapi tidak ada aktivitas wallet selama 90 hari. Hubungi agar saldonya terpakai.")}
 					</p>
 				</div>
+				{#if dormant && dormant.length > 0}
+					<Badge label={`${fmtNum(dormant.length)} ${tr('brand')}`} tone="warning" />
+				{/if}
 			</div>
-			{#if dormantError}
-				<p class="mt-3 text-sm" style="color: var(--destructive);">{dormantError}</p>
-			{:else if dormant === null}
-				<p class="mt-3 text-sm text-muted-foreground">{tr("Memuat…")}</p>
-			{:else if dormant.length === 0}
-				<div class="mt-3 rounded-lg border border-dashed p-6 text-center">
-					<p class="text-sm text-muted-foreground">{tr("Tidak ada saldo klien yang mengendap ≥ 90 hari.")}</p>
-				</div>
-			{:else}
-				<div class="mt-3 overflow-x-auto">
-					<table class="w-full text-sm" style="min-width: 760px;">
-						<thead>
-							<tr class="text-left text-xs text-muted-foreground">
-								<th class="px-3 py-2 font-medium">{tr("Brand")}</th>
-								<th class="px-3 py-2 font-medium">{tr("Klien / Pemilik")}</th>
-								<th class="px-3 py-2 text-right font-medium">{tr("Available")}</th>
-								<th class="px-3 py-2 text-right font-medium">{tr("Reserved")}</th>
-								<th class="px-3 py-2 text-right font-medium">{tr("Total")}</th>
-								<th class="px-3 py-2 text-right font-medium">{tr("Terakhir Aktif")}</th>
-								<th class="px-3 py-2 font-medium">{tr("Aksi")}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each dormant as row (row.brand_id)}
-								<tr class="border-t">
-									<td class="px-3 py-2">
-										<p class="font-medium">{row.brand_name}</p>
-										<p class="text-[11px] text-muted-foreground">{row.ownership_type === 'client' ? tr('Klien') : tr('Internal')}</p>
-									</td>
-									<td class="px-3 py-2">
-										<p>{row.client_name || row.owner_name || '—'}</p>
-										{#if row.owner_email}
-											<p class="text-[11px] text-muted-foreground">{row.owner_email}</p>
-										{/if}
-									</td>
-									<td class="px-3 py-2 text-right tabular-nums">{rp(row.available_tc)}</td>
-									<td class="px-3 py-2 text-right tabular-nums text-muted-foreground">{rp(row.reserved_tc)}</td>
-									<td class="px-3 py-2 text-right tabular-nums font-semibold">{rp(row.total_tc)}</td>
-									<td class="px-3 py-2 text-right text-xs text-muted-foreground">
-										{#if row.last_activity_at}
-											{fmtDateTime(row.last_activity_at)}
-											<span class="block text-[10px]">({row.days_dormant} {tr("hari")})</span>
-										{:else}
-											{tr("Belum pernah")}
-										{/if}
-									</td>
-									<td class="px-3 py-2">
-										{#if row.owner_email}
-											<a
-												class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
-												href={`mailto:${row.owner_email}?subject=${encodeURIComponent(tr('Follow-up saldo kredit Tauthub'))}`}
-											>{tr("Follow up")}</a>
-										{:else}
-											<span class="text-[11px] text-muted-foreground">—</span>
-										{/if}
-									</td>
+			<div class="finCardBody">
+				{#if dormantError}
+					<p class="text-sm" style="color: var(--destructive);">{dormantError}</p>
+				{:else if dormant === null}
+					<p class="text-sm text-muted-foreground">{tr("Memuat…")}</p>
+				{:else if dormant.length === 0}
+					<div class="finEmpty">{tr("Tidak ada saldo klien yang mengendap ≥ 90 hari.")}</div>
+				{:else}
+					<div class="finTableWrap">
+						<table class="finTable" style="min-width: 800px;">
+							<thead>
+								<tr class="text-left">
+									<th>{tr("Brand")}</th>
+									<th>{tr("Klien / pemilik")}</th>
+									<th class="num">{tr("Available")}</th>
+									<th class="num">{tr("Reserved")}</th>
+									<th class="num">{tr("Total")}</th>
+									<th class="num">{tr("Terakhir aktif")}</th>
+									<th></th>
 								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/if}
+							</thead>
+							<tbody>
+								{#each dormant as row (row.brand_id)}
+									<tr>
+										<td>
+											<p class="font-medium">{row.brand_name}</p>
+											<p class="finMuted">{row.ownership_type === 'client' ? tr('Klien') : tr('Internal')}</p>
+										</td>
+										<td>
+											<p>{row.client_name || row.owner_name || '—'}</p>
+											{#if row.owner_email}<p class="finMuted">{row.owner_email}</p>{/if}
+										</td>
+										<td class="num">{rp(row.available_tc)}</td>
+										<td class="num" style="color: var(--muted-foreground);">{rp(row.reserved_tc)}</td>
+										<td class="num font-semibold">{rp(row.total_tc)}</td>
+										<td class="num">
+											{#if row.last_activity_at}
+												{fmtDateTime(row.last_activity_at)}
+												<span class="finMuted block">{row.days_dormant} {tr("hari lalu")}</span>
+											{:else}
+												<span class="finMuted">{tr("Belum pernah")}</span>
+											{/if}
+										</td>
+										<td class="num">
+											{#if row.owner_email}
+												<a
+													class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+													href={`mailto:${row.owner_email}?subject=${encodeURIComponent(tr('Follow-up saldo kredit Tauthub'))}`}
+												>{tr("Follow up")}</a>
+											{:else}
+												<span class="finMuted">—</span>
+											{/if}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+			</div>
 		</div>
 
 		<!-- Rincian -->
-		<div class="app-card mt-5">
+		<div class="app-card mt-5 overflow-hidden">
 			<div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
 				<div class="flex flex-wrap items-center gap-2">
-					<h2 class="text-base font-semibold">{tr("Rincian Arus Kas")}</h2>
+					<h2 class="finTitle">{tr("Rincian arus kas")}</h2>
 					<span class="rounded-full px-2.5 py-0.5 text-[11px] font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">
 						{fmtNum(data.total)} {tr("baris")}
 					</span>
@@ -890,18 +892,30 @@
 				</div>
 			</div>
 
-			<!-- Ringkasan top up nyata pada periode: untuk dicocokkan dengan
-			     halaman Payments di gateway (Total Amount / Total Fees / Net). -->
-			<div class="flex flex-wrap items-center gap-x-5 gap-y-1 border-b px-4 py-2.5 text-xs text-muted-foreground">
-				<span>{tr("Top up diterima")}: <strong class="tabular-nums text-foreground">{fmtNum(summary.money_in_count)}</strong> {tr("transaksi")}</span>
-				<span>{tr("Bruto")}: <strong class="tabular-nums text-foreground">{rp(summary.money_in)}</strong></span>
-				<span>{tr("Fee gateway")}: <strong class="tabular-nums text-foreground">{rp(summary.money_in_fee ?? 0)}</strong></span>
-				<span>{tr("Net masuk wallet gateway")}: <strong class="tabular-nums" style="color: var(--success);">{rp(summary.money_in_net ?? summary.money_in)}</strong></span>
-				<span>{tr("Sandbox dan akun uji tidak dihitung.")}</span>
+			<!-- Ringkasan top up nyata pada periode, untuk dicocokkan dengan halaman
+			     Payments di gateway (Total Amount, Total Fees, Net). -->
+			<div class="finStats finStatsBleed">
+				<div class="finStat">
+					<span class="finStatLabel">{tr("Top up diterima")}</span>
+					<span class="finStatValue">{fmtNum(summary.money_in_count)} <small>{tr("transaksi")}</small></span>
+				</div>
+				<div class="finStat">
+					<span class="finStatLabel">{tr("Bruto")}</span>
+					<span class="finStatValue">{rp(summary.money_in)}</span>
+				</div>
+				<div class="finStat">
+					<span class="finStatLabel">{tr("Fee gateway")}</span>
+					<span class="finStatValue">− {rp(summary.money_in_fee ?? 0)}</span>
+				</div>
+				<div class="finStat">
+					<span class="finStatLabel">{tr("Net masuk wallet gateway")}</span>
+					<span class="finStatValue" style="color: var(--success);">{rp(summary.money_in_net ?? summary.money_in)}</span>
+				</div>
 			</div>
+			<p class="finFootnote">{tr("Sandbox dan akun uji tidak dihitung.")}</p>
 
 			<div class="overflow-x-auto">
-				<table class="w-full text-sm" style="min-width: 1100px;">
+				<table class="finTable" style="min-width: 1100px;">
 					<thead>
 						<tr class="text-left text-xs text-muted-foreground">
 							<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
@@ -926,14 +940,14 @@
 									/>
 								</td>
 								<td class="px-4 py-2.5">
-						{#if entry.kind === 'admin_withdrawal'}
-							{tr('Penarikan Profit Admin')}
-						{:else if entry.direction === 'in'}
-							{tr('Top Up Saldo')}
-						{:else}
-							{tr('Pencairan Mitra')}
-						{/if}
-					</td>
+									{#if entry.kind === 'admin_withdrawal'}
+										{tr('Penarikan Profit Admin')}
+									{:else if entry.direction === 'in'}
+										{tr('Top Up Saldo')}
+									{:else}
+										{tr('Pencairan Mitra')}
+									{/if}
+								</td>
 								<td class="px-4 py-2.5">
 									<p class="font-medium">{entry.counterparty || '—'}</p>
 								</td>
@@ -982,160 +996,168 @@
 			</p>
 		{/if}
 
-		<!-- Tarik Profit Admin: pencatatan pemindahan uang dari rek. escrow ke
-		     rek. operasional. Aplikasi tidak mengirim uang; hanya mencatat. -->
-		<div class="app-card mt-5 p-5">
-			<div class="flex flex-wrap items-start justify-between gap-3">
+		<!-- Tarik profit admin: pencatatan pemindahan uang dari rekening escrow ke
+		     rekening operasional. Aplikasi tidak mengirim uang; hanya mencatat. -->
+		<div class="app-card mt-5 overflow-hidden">
+			<div class="finCardHead">
 				<div>
-					<h2 class="text-base font-semibold">{tr("Tarik Profit Admin")}</h2>
-					<p class="mt-1 text-xs text-muted-foreground">
-						{tr("Catat setiap kali Anda memindahkan profit dari rekening escrow ke rekening operasional. Transfer uang tetap Anda lakukan sendiri lewat m-banking.")}
+					<h2 class="finTitle">{tr("Tarik profit admin")}</h2>
+					<p class="finSub">
+						{tr("Catat setiap kali Anda memindahkan profit dari rekening escrow ke rekening operasional. Transfer tetap lewat m-banking; aplikasi hanya mencatat.")}
 					</p>
 				</div>
-				<button
-					type="button"
-					class="app-btn app-btn-primary"
-					disabled={profitAvailable <= 0}
-					onclick={openWithdraw}
-				>{tr("Catat Penarikan")}</button>
+				<button type="button" class="app-btn app-btn-primary" disabled={profitAvailable <= 0} onclick={openWithdraw}>
+					{tr("Catat penarikan")}
+				</button>
 			</div>
-			<div class="mt-4 grid gap-3 sm:grid-cols-3">
-				<div class="rounded-lg border px-3 py-2.5">
-					<p class="text-[11px] text-muted-foreground">{tr("Profit kotor seumur hidup")}</p>
-					<p class="mt-0.5 text-lg font-semibold tabular-nums">{rp(profitGross)}</p>
-				</div>
-				<div class="rounded-lg border px-3 py-2.5">
-					<p class="text-[11px] text-muted-foreground">{tr("Sudah ditarik")}</p>
-					<p class="mt-0.5 text-lg font-semibold tabular-nums">{rp(profitWithdrawn)}</p>
-				</div>
-				<div class="rounded-lg border px-3 py-2.5" style="background-color: var(--success-soft);">
-					<p class="text-[11px] text-muted-foreground">{tr("Tersedia untuk ditarik")}</p>
-					<p class="mt-0.5 text-lg font-semibold tabular-nums" style="color: var(--success);">{rp(profitAvailable)}</p>
-				</div>
-			</div>
-
-			{#if withdrawalsError}
-				<p class="mt-3 text-sm" style="color: var(--destructive);">{withdrawalsError}</p>
-			{/if}
-
-			{#if withdrawalsLoading && withdrawals.length === 0}
-				<p class="mt-3 text-sm text-muted-foreground">{tr("Memuat riwayat…")}</p>
-			{:else if withdrawals.length === 0}
-				<div class="mt-4 rounded-lg border border-dashed p-6 text-center">
-					<p class="text-sm text-muted-foreground">{tr("Belum ada penarikan profit yang tercatat.")}</p>
-				</div>
-			{:else}
-				<div class="mt-4 overflow-x-auto">
-					<table class="w-full text-sm" style="min-width: 820px;">
-						<thead>
-							<tr class="text-left text-xs text-muted-foreground">
-								<th class="px-3 py-2 font-medium">{tr("Tanggal")}</th>
-								<th class="px-3 py-2 text-right font-medium">{tr("Jumlah")}</th>
-								<th class="px-3 py-2 font-medium">{tr("Dari → Ke")}</th>
-								<th class="px-3 py-2 font-medium">{tr("Referensi")}</th>
-								<th class="px-3 py-2 font-medium">{tr("Dicatat")}</th>
-								<th class="px-3 py-2 font-medium">{tr("Status")}</th>
-								<th class="px-3 py-2 font-medium">{tr("Aksi")}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each withdrawals as row (row.id)}
-								<tr class="border-t">
-									<td class="whitespace-nowrap px-3 py-2 text-muted-foreground">{fmtDateTime(row.created_at)}</td>
-									<td class="px-3 py-2 text-right tabular-nums font-semibold" style="color: {row.status === 'void' ? 'var(--muted-foreground)' : 'var(--success)'};">
-										{row.status === 'void' ? '' : '− '}{rp(row.amount)}
-									</td>
-									<td class="px-3 py-2 text-xs">
-										{#if row.bank_from || row.bank_to}
-											<p>{row.bank_from || '—'} <span class="text-muted-foreground">→</span> {row.bank_to || '—'}</p>
-										{:else}
-											<span class="text-muted-foreground">—</span>
-										{/if}
-										{#if row.note}
-											<p class="text-[11px] text-muted-foreground">{row.note}</p>
-										{/if}
-									</td>
-									<td class="px-3 py-2 font-mono text-xs text-muted-foreground">{row.reference || '—'}</td>
-									<td class="px-3 py-2 text-xs">{row.created_by_name || '—'}</td>
-									<td class="px-3 py-2">
-										<Badge
-											label={row.status === 'void' ? tr('Dibatalkan') : tr('Tercatat')}
-											tone={row.status === 'void' ? 'neutral' : 'success'}
-										/>
-										{#if row.status === 'void' && row.void_reason}
-											<p class="mt-0.5 text-[11px] text-muted-foreground">{row.void_reason}</p>
-										{/if}
-									</td>
-									<td class="px-3 py-2">
-										{#if row.status === 'paid'}
-											<button
-												type="button"
-												class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs"
-												onclick={() => void voidWithdrawal(row)}
-											>{tr("Batalkan")}</button>
-										{:else}
-											<span class="text-[11px] text-muted-foreground">—</span>
-										{/if}
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-
-				{#if withdrawalsTotal > WITHDRAW_PAGE_SIZE}
-					<div class="mt-3">
-						<Pagination
-							total={withdrawalsTotal}
-							limit={WITHDRAW_PAGE_SIZE}
-							offset={(withdrawalsPage - 1) * WITHDRAW_PAGE_SIZE}
-							onChange={(next) => void loadWithdrawals(Math.floor(next / WITHDRAW_PAGE_SIZE) + 1)}
-						/>
+			<div class="finCardBody">
+				<div class="finStats">
+					<div class="finStat">
+						<span class="finStatLabel">{tr("Pendapatan kotor")}</span>
+						<span class="finStatValue">{rp(profitGross)}</span>
 					</div>
+					<div class="finStat">
+						<span class="finStatLabel">{tr("Sudah ditarik atau dicairkan")}</span>
+						<span class="finStatValue">{rp(profitWithdrawn)}</span>
+					</div>
+					<div class="finStat finStatKey">
+						<span class="finStatLabel">{tr("Tersedia untuk ditarik")}</span>
+						<span class="finStatValue" style="color: var(--success);">{rp(profitAvailable)}</span>
+					</div>
+				</div>
+
+				{#if withdrawalsError}
+					<p class="mt-4 text-sm" style="color: var(--destructive);">{withdrawalsError}</p>
 				{/if}
-			{/if}
+
+				{#if withdrawalsLoading && withdrawals.length === 0}
+					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat riwayat…")}</p>
+				{:else if withdrawals.length === 0}
+					<div class="finEmpty mt-4">{tr("Belum ada penarikan profit yang tercatat.")}</div>
+				{:else}
+					<div class="finTableWrap mt-4">
+						<table class="finTable" style="min-width: 860px;">
+							<thead>
+								<tr class="text-left">
+									<th>{tr("Tanggal")}</th>
+									<th class="num">{tr("Jumlah")}</th>
+									<th>{tr("Dari → ke")}</th>
+									<th>{tr("Referensi")}</th>
+									<th>{tr("Dicatat oleh")}</th>
+									<th>{tr("Status")}</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each withdrawals as row (row.id)}
+									<tr>
+										<td class="finMuted whitespace-nowrap">{fmtDateTime(row.created_at)}</td>
+										<td class="num font-semibold" style="color: {row.status === 'void' ? 'var(--muted-foreground)' : 'var(--foreground)'};">
+											{row.status === 'void' ? '' : '− '}{rp(row.amount)}
+										</td>
+										<td>
+											{#if row.bank_from || row.bank_to}
+												<p>{row.bank_from || '—'} <span class="finMuted">→</span> {row.bank_to || '—'}</p>
+											{:else}
+												<span class="finMuted">—</span>
+											{/if}
+											{#if row.note}<p class="finMuted">{row.note}</p>{/if}
+										</td>
+										<td class="font-mono finMuted">{row.reference || '—'}</td>
+										<td>{row.created_by_name || '—'}</td>
+										<td>
+											<Badge
+												label={row.status === 'void' ? tr('Dibatalkan') : tr('Tercatat')}
+												tone={row.status === 'void' ? 'neutral' : 'success'}
+											/>
+											{#if row.status === 'void' && row.void_reason}
+												<p class="finMuted mt-1">{row.void_reason}</p>
+											{/if}
+										</td>
+										<td class="num">
+											{#if row.status === 'paid'}
+												<button
+													type="button"
+													class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"
+													onclick={() => void voidWithdrawal(row)}
+												>{tr("Batalkan")}</button>
+											{/if}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+
+					{#if withdrawalsTotal > WITHDRAW_PAGE_SIZE}
+						<div class="mt-3">
+							<Pagination
+								total={withdrawalsTotal}
+								limit={WITHDRAW_PAGE_SIZE}
+								offset={(withdrawalsPage - 1) * WITHDRAW_PAGE_SIZE}
+								onChange={(next) => void loadWithdrawals(Math.floor(next / WITHDRAW_PAGE_SIZE) + 1)}
+							/>
+						</div>
+					{/if}
+				{/if}
+			</div>
 		</div>
 
+		<!-- ============ Modal: catat penarikan profit ============ -->
 		{#if withdrawOpen}
-			<Modal title={tr("Catat Penarikan Profit")} maxWidth="lg" onClose={closeWithdraw}>
-				<p class="text-sm text-muted-foreground">
-					{tr("Masukkan nominal yang Anda transfer dari rekening escrow ke rekening operasional. Aplikasi hanya mencatat; uangnya ditransfer sendiri lewat m-banking.")}
+			<Modal title={tr("Catat penarikan profit")} maxWidth="lg" onClose={closeWithdraw}>
+				<p class="finLead">
+					{tr("Catat nominal yang Anda transfer dari rekening escrow ke rekening operasional. Aplikasi hanya mencatat; uangnya ditransfer sendiri lewat m-banking.")}
 				</p>
-				<div class="mt-4 grid gap-3">
-					<label class="block">
-						<span class="text-xs font-medium text-muted-foreground">{tr("Jumlah (Rupiah)")}</span>
-						<input
-							class="app-input mt-1 w-full tabular-nums"
-							inputmode="numeric"
-							placeholder="0"
-							value={withdrawAmount}
-							oninput={onWithdrawAmountInput}
-						/>
-						<span class="mt-1 block text-[11px] text-muted-foreground">
-							{tr("Maksimal")}: {rp(profitAvailable)}
+				<div class="finStats mt-4">
+					<div class="finStat finStatKey">
+						<span class="finStatLabel">{tr("Tersedia untuk ditarik")}</span>
+						<span class="finStatValue" style="color: var(--success);">{rp(profitAvailable)}</span>
+					</div>
+					<div class="finStat">
+						<span class="finStatLabel">{tr("Sudah ditarik atau dicairkan")}</span>
+						<span class="finStatValue">{rp(profitWithdrawn)}</span>
+					</div>
+				</div>
+				<div class="mt-5 grid gap-4">
+					<label class="finField">
+						<span class="finFieldLabel">{tr("Jumlah (Rupiah)")}</span>
+						<span class="finInputRow">
+							<input
+								class="app-input w-full tabular-nums"
+								inputmode="numeric"
+								placeholder="0"
+								value={withdrawAmount}
+								oninput={onWithdrawAmountInput}
+							/>
+							<button
+								type="button"
+								class="app-btn app-btn-soft shrink-0"
+								onclick={() => (withdrawAmount = profitAvailable.toLocaleString('id-ID'))}
+							>{tr("Pakai semua")}</button>
 						</span>
 					</label>
-					<div class="grid gap-3 sm:grid-cols-2">
-						<label class="block">
-							<span class="text-xs font-medium text-muted-foreground">{tr("Rekening Asal (Escrow)")}</span>
-							<input class="app-input mt-1 w-full" bind:value={withdrawBankFrom} maxlength="200" placeholder="BCA 1234567890" />
+					<div class="grid gap-4 sm:grid-cols-2">
+						<label class="finField">
+							<span class="finFieldLabel">{tr("Rekening asal (escrow)")}</span>
+							<input class="app-input w-full" bind:value={withdrawBankFrom} maxlength="200" placeholder="BCA 1234567890" />
 						</label>
-						<label class="block">
-							<span class="text-xs font-medium text-muted-foreground">{tr("Rekening Tujuan (Operasional)")}</span>
-							<input class="app-input mt-1 w-full" bind:value={withdrawBankTo} maxlength="200" placeholder="BCA 9876543210" />
+						<label class="finField">
+							<span class="finFieldLabel">{tr("Rekening tujuan (operasional)")}</span>
+							<input class="app-input w-full" bind:value={withdrawBankTo} maxlength="200" placeholder="BCA 9876543210" />
 						</label>
 					</div>
-					<label class="block">
-						<span class="text-xs font-medium text-muted-foreground">{tr("Nomor Referensi Transfer (opsional)")}</span>
-						<input class="app-input mt-1 w-full" bind:value={withdrawRef} maxlength="200" />
+					<label class="finField">
+						<span class="finFieldLabel">{tr("Nomor referensi transfer")} <span class="finOptional">{tr("opsional")}</span></span>
+						<input class="app-input w-full" bind:value={withdrawRef} maxlength="200" />
 					</label>
-					<label class="block">
-						<span class="text-xs font-medium text-muted-foreground">{tr("Catatan (opsional)")}</span>
-						<textarea class="app-input mt-1 w-full" rows="2" bind:value={withdrawNote} maxlength="2000"></textarea>
+					<label class="finField">
+						<span class="finFieldLabel">{tr("Catatan")} <span class="finOptional">{tr("opsional")}</span></span>
+						<textarea class="app-input w-full" rows="2" bind:value={withdrawNote} maxlength="2000"></textarea>
 					</label>
 				</div>
 				{#if withdrawError}
-					<p class="mt-3 text-sm" style="color: var(--destructive);">{withdrawError}</p>
+					<p class="mt-4 text-sm" style="color: var(--destructive);">{withdrawError}</p>
 				{/if}
 				{#snippet footer()}
 					<button type="button" class="app-btn app-btn-soft" disabled={withdrawBusy} onclick={closeWithdraw}>{tr("Batal")}</button>
@@ -1146,54 +1168,75 @@
 			</Modal>
 		{/if}
 
-		<!-- ============ Modal: Rincian Dana Titipan + Escrow per brand ============ -->
+		<!-- ============ Modal: saldo klien per brand ============ -->
 		{#if depositsOpen}
 			<Modal
-				title={depositsScope === 'reserved' ? tr('Dana Tertahan — per Brand') : tr('Dana Titipan Klien — per Brand')}
+				title={depositsScope === 'reserved' ? tr('Dana tertahan per brand') : tr('Saldo klien per brand')}
 				maxWidth="workspace"
 				onClose={() => (depositsOpen = false)}
 			>
-				<p class="text-sm text-muted-foreground">
-					{tr("Saldo kredit semua brand yang masih > 0, diurutkan dari terbesar. Titipan nyata = bagian saldo yang ditopang topup asli; Penyesuaian = sisanya (manual/bonus); Reserved = terkunci untuk order berjalan.")}
+				<p class="finLead">
+					{tr("Semua brand yang masih punya saldo, dari yang terbesar. Titipan nyata ditopang topup asli lewat gateway; penyesuaian adalah sisanya (manual atau bonus); reserved terkunci untuk order berjalan.")}
 				</p>
 				{#if depositsLoading && depositsEntries === null}
-					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
+					<p class="mt-5 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
 				{:else if depositsError}
-					<p class="mt-4 text-sm" style="color: var(--destructive);">{depositsError}</p>
+					<p class="mt-5 text-sm" style="color: var(--destructive);">{depositsError}</p>
 				{:else if depositsEntries && depositsEntries.length === 0}
-					<p class="mt-4 text-sm text-muted-foreground">{tr("Tidak ada brand dengan saldo > 0.")}</p>
+					<div class="finEmpty mt-5">{tr("Tidak ada brand dengan saldo.")}</div>
 				{:else if depositsEntries}
-					<div class="mt-4 overflow-x-auto">
-						<table class="w-full text-sm" style="min-width: 820px;">
+					{@const sumReal = depositsEntries.reduce((a, r) => a + (r.real_tc ?? 0), 0)}
+					{@const sumAdj = depositsEntries.reduce((a, r) => a + (r.adjusted_tc ?? r.available_tc), 0)}
+					{@const sumRes = depositsEntries.reduce((a, r) => a + r.reserved_tc, 0)}
+					<div class="finStats mt-5">
+						<div class="finStat">
+							<span class="finStatLabel">{tr("Brand bersaldo")}</span>
+							<span class="finStatValue">{fmtNum(depositsEntries.length)}</span>
+						</div>
+						<div class="finStat finStatKey">
+							<span class="finStatLabel">{tr("Titipan nyata")}</span>
+							<span class="finStatValue">{rp(sumReal)}</span>
+						</div>
+						<div class="finStat">
+							<span class="finStatLabel">{tr("Penyesuaian")}</span>
+							<span class="finStatValue">{rp(sumAdj)}</span>
+						</div>
+						<div class="finStat">
+							<span class="finStatLabel">{tr("Reserved")}</span>
+							<span class="finStatValue">{rp(sumRes)}</span>
+						</div>
+					</div>
+					<div class="finTableWrap mt-4">
+						<table class="finTable" style="min-width: 980px;">
 							<thead>
-								<tr class="text-left text-xs text-muted-foreground">
-									<th class="px-2 py-2 font-medium">{tr("Brand")}</th>
-									<th class="px-2 py-2 font-medium">{tr("Klien / Pemilik")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Topup asli")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Titipan nyata")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Penyesuaian")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Reserved")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Total saldo")}</th>
+								<tr class="text-left">
+									<th>{tr("Brand")}</th>
+									<th>{tr("Klien / pemilik")}</th>
+									<th class="num">{tr("Topup asli")}</th>
+									<th class="num">{tr("Titipan nyata")}</th>
+									<th class="num">{tr("Penyesuaian")}</th>
+									<th class="num">{tr("Reserved")}</th>
+									<th class="num">{tr("Total saldo")}</th>
+									<th class="num">{tr("Terakhir aktif")}</th>
 								</tr>
 							</thead>
 							<tbody>
 								{#each depositsEntries as row (row.brand_id)}
-									<tr class="border-t">
-										<td class="px-2 py-2">
+									<tr>
+										<td>
 											<p class="font-medium">{row.brand_name}</p>
-											<p class="text-[11px] text-muted-foreground">{row.ownership_type === 'client' ? tr('Klien') : tr('Internal')}</p>
+											<p class="finMuted">{row.ownership_type === 'client' ? tr('Klien') : tr('Internal')}</p>
 										</td>
-										<td class="px-2 py-2">
+										<td>
 											<p>{row.client_name || row.owner_name || '—'}</p>
-											{#if row.owner_email}
-												<p class="text-[11px] text-muted-foreground">{row.owner_email}</p>
-											{/if}
+											{#if row.owner_email}<p class="finMuted">{row.owner_email}</p>{/if}
 										</td>
-										<td class="px-2 py-2 text-right tabular-nums text-muted-foreground">{rp(row.real_in ?? 0)}</td>
-										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: var(--foreground);">{rp(row.real_tc ?? 0)}</td>
-										<td class="px-2 py-2 text-right tabular-nums">{rp(row.adjusted_tc ?? row.available_tc)}</td>
-										<td class="px-2 py-2 text-right tabular-nums text-muted-foreground" class:font-semibold={depositsScope === 'reserved'}>{rp(row.reserved_tc)}</td>
-										<td class="px-2 py-2 text-right tabular-nums">{rp(row.total_tc)}</td>
+										<td class="num" style="color: var(--muted-foreground);">{rp(row.real_in ?? 0)}</td>
+										<td class="num font-semibold">{rp(row.real_tc ?? 0)}</td>
+										<td class="num">{rp(row.adjusted_tc ?? row.available_tc)}</td>
+										<td class="num" style="color: var(--muted-foreground);">{rp(row.reserved_tc)}</td>
+										<td class="num">{rp(row.total_tc)}</td>
+										<td class="num finMuted">{row.last_activity_at ? fmtDateTime(row.last_activity_at) : '—'}</td>
 									</tr>
 								{/each}
 							</tbody>
@@ -1206,51 +1249,54 @@
 			</Modal>
 		{/if}
 
-		<!-- ============ Modal: Dana Tertahan (Escrow) per publikasi ============ -->
+		<!-- ============ Modal: dana tertahan (escrow) per publikasi ============ -->
 		{#if escrowOpen}
-			<Modal title={tr("Dana Tertahan (Escrow) — per Publikasi")} maxWidth="workspace" onClose={() => (escrowOpen = false)}>
-				<p class="text-sm text-muted-foreground">
-					{tr("Publikasi yang belum terbit atau belum dibatalkan. Client price di sini menjelaskan ORDER MANA yang mengunci reserved credit klien.")}
+			<Modal title={tr("Dana tertahan per publikasi")} maxWidth="workspace" onClose={() => (escrowOpen = false)}>
+				<p class="finLead">
+					{tr("Publikasi yang belum terbit atau belum dibatalkan. Daftar ini menjelaskan order mana yang mengunci kredit klien.")}
 				</p>
 				{#if escrowLoading && escrowEntries === null}
-					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
+					<p class="mt-5 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
 				{:else if escrowError}
-					<p class="mt-4 text-sm" style="color: var(--destructive);">{escrowError}</p>
+					<p class="mt-5 text-sm" style="color: var(--destructive);">{escrowError}</p>
 				{:else if escrowEntries && escrowEntries.length === 0}
-					<p class="mt-4 text-sm text-muted-foreground">{tr("Tidak ada order escrow aktif saat ini.")}</p>
+					<div class="finEmpty mt-5">{tr("Tidak ada order escrow aktif saat ini.")}</div>
 				{:else if escrowEntries}
-					<p class="mt-3 text-xs text-muted-foreground">
-						{tr("Total nilai order escrow")}:
-						<span class="font-semibold tabular-nums">{rp(escrowTotalPrice)}</span>
-						· {fmtNum(escrowEntries.length)} {tr("order")}
-					</p>
-					<div class="mt-3 overflow-x-auto">
-						<table class="w-full text-sm" style="min-width: 760px;">
+					<div class="finStats mt-5">
+						<div class="finStat">
+							<span class="finStatLabel">{tr("Order tertahan")}</span>
+							<span class="finStatValue">{fmtNum(escrowEntries.length)}</span>
+						</div>
+						<div class="finStat finStatKey">
+							<span class="finStatLabel">{tr("Nilai harga list")}</span>
+							<span class="finStatValue">{rp(escrowTotalPrice)}</span>
+						</div>
+					</div>
+					<div class="finTableWrap mt-4">
+						<table class="finTable" style="min-width: 820px;">
 							<thead>
-								<tr class="text-left text-xs text-muted-foreground">
-									<th class="px-2 py-2 font-medium">{tr("Dibuat")}</th>
-									<th class="px-2 py-2 font-medium">{tr("Brand")}</th>
-									<th class="px-2 py-2 font-medium">{tr("Media / Mitra")}</th>
-									<th class="px-2 py-2 font-medium">{tr("Status")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Client Price")}</th>
+								<tr class="text-left">
+									<th>{tr("Dibuat")}</th>
+									<th>{tr("Brand")}</th>
+									<th>{tr("Media / mitra")}</th>
+									<th>{tr("Status")}</th>
+									<th class="num">{tr("Harga list")}</th>
 								</tr>
 							</thead>
 							<tbody>
 								{#each escrowEntries as row (row.publication_id)}
-									<tr class="border-t">
-										<td class="whitespace-nowrap px-2 py-2 text-xs text-muted-foreground">{fmtDateTime(row.created_at)}</td>
-										<td class="px-2 py-2">
+									<tr>
+										<td class="finMuted whitespace-nowrap">{fmtDateTime(row.created_at)}</td>
+										<td>
 											<p class="font-medium">{row.brand_name}</p>
-											{#if row.client_name}<p class="text-[11px] text-muted-foreground">{row.client_name}</p>{/if}
+											{#if row.client_name}<p class="finMuted">{row.client_name}</p>{/if}
 										</td>
-										<td class="px-2 py-2">
+										<td>
 											<p>{row.media_name || '—'}</p>
-											{#if row.partner_name}<p class="text-[11px] text-muted-foreground">{row.partner_name}</p>{/if}
+											{#if row.partner_name}<p class="finMuted">{row.partner_name}</p>{/if}
 										</td>
-										<td class="px-2 py-2">
-											<Badge label={tr(pubStatusLabel(row.status))} tone={row.status === 'processing' ? 'accent' : 'neutral'} />
-										</td>
-										<td class="px-2 py-2 text-right tabular-nums font-semibold">{rp(row.client_price)}</td>
+										<td><Badge label={tr(pubStatusLabel(row.status))} tone={row.status === 'processing' ? 'accent' : 'neutral'} /></td>
+										<td class="num font-semibold">{rp(row.client_price)}</td>
 									</tr>
 								{/each}
 							</tbody>
@@ -1263,49 +1309,67 @@
 			</Modal>
 		{/if}
 
-		<!-- ============ Modal: Hak Mitra Belum Cair per mitra ============ -->
+		<!-- ============ Modal: hak mitra belum cair per mitra ============ -->
 		{#if unpaidOpen}
-			<Modal title={tr("Hak Mitra Belum Cair — per Mitra")} maxWidth="workspace" onClose={() => (unpaidOpen = false)}>
-				<p class="text-sm text-muted-foreground">
-					{tr("Breakdown utang ke mitra per partner: pending (belum masuk settlement) vs settled-belum-dibayar (sudah masuk settlement tapi belum ditransfer).")}
+			<Modal title={tr("Hak mitra belum cair per mitra")} maxWidth="workspace" onClose={() => (unpaidOpen = false)}>
+				<p class="finLead">
+					{tr("Utang ke mitra, dipecah per partner. Pending belum masuk settlement; settled belum dibayar sudah masuk settlement tetapi belum ditransfer.")}
 				</p>
 				{#if unpaidLoading && unpaidEntries === null}
-					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
+					<p class="mt-5 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
 				{:else if unpaidError}
-					<p class="mt-4 text-sm" style="color: var(--destructive);">{unpaidError}</p>
+					<p class="mt-5 text-sm" style="color: var(--destructive);">{unpaidError}</p>
 				{:else if unpaidEntries && unpaidEntries.length === 0}
-					<p class="mt-4 text-sm text-muted-foreground">{tr("Tidak ada utang ke mitra saat ini.")}</p>
+					<div class="finEmpty mt-5">{tr("Tidak ada utang ke mitra saat ini.")}</div>
 				{:else if unpaidEntries}
-					<div class="mt-4 overflow-x-auto">
-						<table class="w-full text-sm" style="min-width: 760px;">
+					{@const sumPending = unpaidEntries.reduce((a, r) => a + r.amount_pending, 0)}
+					{@const sumSettled = unpaidEntries.reduce((a, r) => a + r.amount_settled_unpaid, 0)}
+					<div class="finStats mt-5">
+						<div class="finStat">
+							<span class="finStatLabel">{tr("Mitra")}</span>
+							<span class="finStatValue">{fmtNum(unpaidEntries.length)}</span>
+						</div>
+						<div class="finStat">
+							<span class="finStatLabel">{tr("Pending")}</span>
+							<span class="finStatValue">{rp(sumPending)}</span>
+						</div>
+						<div class="finStat">
+							<span class="finStatLabel">{tr("Settled belum dibayar")}</span>
+							<span class="finStatValue">{rp(sumSettled)}</span>
+						</div>
+						<div class="finStat finStatKey">
+							<span class="finStatLabel">{tr("Total")}</span>
+							<span class="finStatValue">{rp(sumPending + sumSettled)}</span>
+						</div>
+					</div>
+					<div class="finTableWrap mt-4">
+						<table class="finTable" style="min-width: 820px;">
 							<thead>
-								<tr class="text-left text-xs text-muted-foreground">
-									<th class="px-2 py-2 font-medium">{tr("Mitra")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Pending")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Settled belum dibayar")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Total")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Earning terakhir")}</th>
+								<tr class="text-left">
+									<th>{tr("Mitra")}</th>
+									<th class="num">{tr("Pending")}</th>
+									<th class="num">{tr("Settled belum dibayar")}</th>
+									<th class="num">{tr("Total")}</th>
+									<th class="num">{tr("Penghasilan terakhir")}</th>
 								</tr>
 							</thead>
 							<tbody>
 								{#each unpaidEntries as row (row.partner_id)}
-									<tr class="border-t">
-										<td class="px-2 py-2">
+									<tr>
+										<td>
 											<p class="font-medium">{row.partner_name || row.partner_id.slice(0, 8)}</p>
-											{#if row.partner_email}<p class="text-[11px] text-muted-foreground">{row.partner_email}</p>{/if}
+											{#if row.partner_email}<p class="finMuted">{row.partner_email}</p>{/if}
 										</td>
-										<td class="px-2 py-2 text-right tabular-nums">
+										<td class="num">
 											{rp(row.amount_pending)}
-											<p class="text-[10px] text-muted-foreground">{fmtNum(row.count_pending)} earning</p>
+											<span class="finMuted block">{fmtNum(row.count_pending)} {tr("penghasilan")}</span>
 										</td>
-										<td class="px-2 py-2 text-right tabular-nums">
+										<td class="num">
 											{rp(row.amount_settled_unpaid)}
-											<p class="text-[10px] text-muted-foreground">{fmtNum(row.count_settled_unpaid)} earning</p>
+											<span class="finMuted block">{fmtNum(row.count_settled_unpaid)} {tr("penghasilan")}</span>
 										</td>
-										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: var(--foreground);">{rp(row.total)}</td>
-										<td class="px-2 py-2 text-right text-xs text-muted-foreground">
-											{row.last_earning_at ? fmtDateTime(row.last_earning_at) : '—'}
-										</td>
+										<td class="num font-semibold">{rp(row.total)}</td>
+										<td class="num finMuted">{row.last_earning_at ? fmtDateTime(row.last_earning_at) : '—'}</td>
 									</tr>
 								{/each}
 							</tbody>
@@ -1319,111 +1383,112 @@
 			</Modal>
 		{/if}
 
-		<!-- ============ Modal: Profit Bersih Tauthub — breakdown per publikasi ============ -->
+		<!-- ============ Modal: profit bersih Tauthub per publikasi ============ -->
 		{#if profitOpen}
-			<Modal title={tr("Profit Bersih Tauthub — per Publikasi")} maxWidth="workspace" onClose={() => (profitOpen = false)}>
-				<p class="text-sm text-muted-foreground">
-					{tr("Pendapatan Tauthub dihitung dari uang yang benar-benar diterima: kredit yang dibayar klien untuk publikasi, dikurangi penghasilan mitra luar. Penghasilan mitra internal (akun milik Tauthub sendiri) tidak dikurangkan karena itu uang Tauthub. Rincian di bawah: 100 publikasi terbaru.")}
+			<Modal title={tr("Profit bersih Tauthub per publikasi")} maxWidth="workspace" onClose={() => (profitOpen = false)}>
+				<p class="finLead">
+					{tr("Pendapatan Tauthub dihitung dari uang yang benar-benar diterima: kredit yang dibayar klien untuk publikasi, dikurangi penghasilan mitra luar. Penghasilan mitra internal (akun milik Tauthub sendiri) tidak dikurangkan karena itu uang Tauthub.")}
 				</p>
 				{#if profitLoading && profitEntries === null}
-					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
+					<p class="mt-5 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
 				{:else if profitError}
-					<p class="mt-4 text-sm" style="color: var(--destructive);">{profitError}</p>
+					<p class="mt-5 text-sm" style="color: var(--destructive);">{profitError}</p>
 				{:else if profitEntries && profitEntries.length === 0}
-					<p class="mt-4 text-sm text-muted-foreground">{tr("Belum ada publikasi terbit.")}</p>
+					<div class="finEmpty mt-5">{tr("Belum ada publikasi terbit.")}</div>
 				{:else if profitEntries}
-					<p class="mt-3 text-xs text-muted-foreground">
-						{tr("Total publikasi terbit")}: <span class="font-semibold">{fmtNum(profitTotalCount)}</span>
-						</p>
 					{#if profitTotals}
 						{@const pt = profitTotals}
-						<div class="mt-3 max-w-xl space-y-1.5 text-sm">
-							<div class="flex justify-between"><span>{tr("Dari order mitra luar (kredit dibayar − bagian mitra)")}</span><span class="tabular-nums">{rp(pt.commission)}</span></div>
-							<div class="flex justify-between"><span>{tr("Dari order mitra internal")}</span><span class="tabular-nums">{rp(pt.internal)}</span></div>
-							<div class="flex justify-between"><span>{tr("Pemakaian kredit non-publikasi (AI, potongan manual)")}</span><span class="tabular-nums">{rp(pt.non_publication)}</span></div>
-							<div class="flex justify-between"><span>{tr("Fee gateway")}</span><span class="tabular-nums">− {rp(pt.gateway_fee)}</span></div>
-							<div class="flex justify-between border-t pt-1.5 font-semibold"><span>{tr("Pendapatan kotor")}</span><span class="tabular-nums">{rp(pt.gross)}</span></div>
-							<div class="flex justify-between"><span>{tr("Sudah ditarik atau dicairkan")}</span><span class="tabular-nums">− {rp(pt.withdrawn)}</span></div>
-							<div class="flex justify-between border-t pt-1.5 font-semibold" style="color: var(--success);"><span>{tr("Profit Bersih tersedia")}</span><span class="tabular-nums">{rp(pt.available)}</span></div>
-						</div>
+						<dl class="finStatement mt-5">
+							<div><dt>{tr("Dari order mitra luar (kredit dibayar − bagian mitra)")}</dt><dd>{rp(pt.commission)}</dd></div>
+							<div><dt>{tr("Dari order mitra internal")}</dt><dd>{rp(pt.internal)}</dd></div>
+							<div><dt>{tr("Pemakaian kredit non-publikasi (AI, potongan manual)")}</dt><dd>{rp(pt.non_publication)}</dd></div>
+							<div><dt>{tr("Fee gateway")}</dt><dd>− {rp(pt.gateway_fee)}</dd></div>
+							<div class="sub"><dt>{tr("Pendapatan kotor")}</dt><dd>{rp(pt.gross)}</dd></div>
+							<div><dt>{tr("Sudah ditarik atau dicairkan")}</dt><dd>− {rp(pt.withdrawn)}</dd></div>
+							<div class="total"><dt>{tr("Profit bersih tersedia")}</dt><dd style="color: var(--success);">{rp(pt.available)}</dd></div>
+						</dl>
 					{/if}
+
 					{#if profitMonthly.length > 0}
-						<div class="mt-3 overflow-x-auto">
-							<table class="w-full text-xs" style="min-width: 520px;">
+						<h3 class="finSection">{tr("Per bulan")}</h3>
+						<div class="finTableWrap mt-2">
+							<table class="finTable" style="min-width: 560px;">
 								<thead>
-									<tr class="text-left text-muted-foreground">
-										<th class="px-2 py-1 font-medium">{tr("Bulan")}</th>
-										<th class="px-2 py-1 text-right font-medium">{tr("Harga list")}</th>
-										<th class="px-2 py-1 text-right font-medium">{tr("Dibayar klien")}</th>
-										<th class="px-2 py-1 text-right font-medium">{tr("Pendapatan Tauthub")}</th>
-										<th class="px-2 py-1 text-right font-medium">{tr("Jumlah terbit")}</th>
+									<tr class="text-left">
+										<th>{tr("Bulan")}</th>
+										<th class="num">{tr("Harga list")}</th>
+										<th class="num">{tr("Dibayar klien")}</th>
+										<th class="num">{tr("Pendapatan Tauthub")}</th>
+										<th class="num">{tr("Terbit")}</th>
 									</tr>
 								</thead>
 								<tbody>
 									{#each profitMonthly as m (m.month)}
-										<tr class="border-t">
-											<td class="px-2 py-1">{m.month}</td>
-											<td class="px-2 py-1 text-right tabular-nums">{rp(m.gmv)}</td>
-											<td class="px-2 py-1 text-right tabular-nums">{rp(m.credit)}</td>
-											<td class="px-2 py-1 text-right tabular-nums font-semibold" style="color: var(--success);">{rp(m.revenue)}</td>
-											<td class="px-2 py-1 text-right tabular-nums">{fmtNum(m.count)}</td>
+										<tr>
+											<td>{m.month}</td>
+											<td class="num" style="color: var(--muted-foreground);">{rp(m.gmv)}</td>
+											<td class="num">{rp(m.credit)}</td>
+											<td class="num font-semibold">{rp(m.revenue)}</td>
+											<td class="num">{fmtNum(m.count)}</td>
 										</tr>
 									{/each}
 								</tbody>
 							</table>
 						</div>
 					{/if}
-					<p class="mt-5 text-xs font-semibold text-muted-foreground">{tr("100 publikasi terbaru:")}</p>
-					<div class="mt-2 overflow-x-auto">
-						<table class="w-full text-sm" style="min-width: 980px;">
+
+					<h3 class="finSection">
+						{tr("100 publikasi terbaru")}
+						<span class="finMuted">· {fmtNum(profitTotalCount)} {tr("publikasi terbit")}</span>
+					</h3>
+					<div class="finTableWrap mt-2">
+						<table class="finTable" style="min-width: 1020px;">
 							<thead>
-								<tr class="text-left text-xs text-muted-foreground">
-									<th class="px-2 py-2 font-medium">{tr("Terbit")}</th>
-									<th class="px-2 py-2 font-medium">{tr("Brand")}</th>
-									<th class="px-2 py-2 font-medium">{tr("Media / Mitra")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Harga list")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Dibayar klien")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Bagian mitra")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Pendapatan Tauthub")}</th>
-									<th class="px-2 py-2 font-medium">{tr("Tautan")}</th>
+								<tr class="text-left">
+									<th>{tr("Terbit")}</th>
+									<th>{tr("Brand")}</th>
+									<th>{tr("Media / mitra")}</th>
+									<th class="num">{tr("Harga list")}</th>
+									<th class="num">{tr("Dibayar klien")}</th>
+									<th class="num">{tr("Bagian mitra")}</th>
+									<th class="num">{tr("Pendapatan Tauthub")}</th>
+									<th></th>
 								</tr>
 							</thead>
 							<tbody>
 								{#each profitEntries as row (row.publication_id)}
-									<tr class="border-t">
-										<td class="whitespace-nowrap px-2 py-2 text-xs text-muted-foreground">{row.published_at ? fmtDateTime(row.published_at) : '—'}</td>
-										<td class="px-2 py-2">
+									<tr>
+										<td class="finMuted whitespace-nowrap">{row.published_at ? fmtDateTime(row.published_at) : '—'}</td>
+										<td>
 											<p class="font-medium">{row.brand_name}</p>
-											{#if row.client_name}<p class="text-[11px] text-muted-foreground">{row.client_name}</p>{/if}
+											{#if row.client_name}<p class="finMuted">{row.client_name}</p>{/if}
 										</td>
-										<td class="px-2 py-2">
+										<td>
 											<p>{row.media_name || '—'}</p>
-											{#if row.partner_name}<p class="text-[11px] text-muted-foreground">{row.partner_name}</p>{/if}
+											{#if row.partner_name}<p class="finMuted">{row.partner_name}</p>{/if}
 										</td>
-										<td class="px-2 py-2 text-right tabular-nums text-muted-foreground">{rp(row.client_price)}</td>
-										<td class="px-2 py-2 text-right tabular-nums">{rp(row.credit)}</td>
-										<td class="px-2 py-2 text-right tabular-nums">
+										<td class="num" style="color: var(--muted-foreground);">{rp(row.client_price)}</td>
+										<td class="num">{rp(row.credit)}</td>
+										<td class="num">
 											{#if row.partner_outside > 0}
 												{rp(row.partner_outside)}
 											{:else if row.internal_share > 0}
-												<span class="text-[11px] text-muted-foreground">{tr("mitra internal")}</span>
+												<span class="finMuted">{tr("mitra internal")}</span>
 											{:else}
-												—
+												<span class="finMuted">—</span>
 											{/if}
 										</td>
-										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: {row.revenue < 0 ? 'var(--destructive)' : 'var(--success)'};">
+										<td class="num font-semibold" style="color: {row.revenue < 0 ? 'var(--destructive)' : 'var(--foreground)'};">
 											{row.revenue < 0 ? '− ' : ''}{rp(Math.abs(row.revenue))}
 											{#if row.internal_share > 0}
-												<p class="text-[10px] font-normal text-muted-foreground">{tr("termasuk porsi mitra")} {rp(row.internal_share)}</p>
+												<span class="finMuted block font-normal">{tr("termasuk porsi mitra")} {rp(row.internal_share)}</span>
 											{/if}
 										</td>
-										<td class="px-2 py-2">
+										<td class="num">
 											{#if row.published_url}
 												<a class="inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={row.published_url} target="_blank" rel="noopener noreferrer">
 													<ExternalLink size={12} /> {tr("Buka")}
 												</a>
-											{:else}
-												<span class="text-[11px] text-muted-foreground">—</span>
 											{/if}
 										</td>
 									</tr>
@@ -1438,110 +1503,90 @@
 			</Modal>
 		{/if}
 
-		<!-- ============ Modal: Saldo Rek. Wajib Ada — breakdown rumus ============ -->
+		<!-- ============ Modal: rekonsiliasi saldo rekening wajib ada ============ -->
 		{#if cashOpen}
-			<Modal title={tr("Saldo Rekening Wajib Ada — Breakdown")} maxWidth="2xl" onClose={() => (cashOpen = false)}>
-				<p class="text-sm text-muted-foreground">
-					{tr("Angka pembanding dengan saldo bank fisik. Jika saldo rekening escrow kurang dari ini, berarti ada uang milik orang lain yang terpakai operasional.")}
+			<Modal title={tr("Rekonsiliasi saldo rekening")} maxWidth="4xl" onClose={() => (cashOpen = false)}>
+				<p class="finLead">
+					{tr("Angka pembanding dengan saldo bank fisik. Kalau saldo rekening escrow kurang dari angka wajib ada, ada uang milik orang lain yang terpakai operasional.")}
 				</p>
-				<div class="mt-4 space-y-2">
-					<div class="flex items-center justify-between rounded-lg border px-3 py-2">
-						<span class="text-sm">{tr("Dana Titipan Klien (uang nyata)")}</span>
-						<span class="text-sm font-semibold tabular-nums">{rp(summary.client_available ?? 0)}</span>
-					</div>
-					<div class="flex items-center justify-between rounded-lg border px-3 py-2">
-						<span class="text-sm">{tr("Dana Tertahan (Escrow / Reserved)")}</span>
-						<span class="text-sm font-semibold tabular-nums">{rp(summary.client_reserved ?? 0)}</span>
-					</div>
-					<div class="flex items-center justify-between rounded-lg border px-3 py-2">
-						<span class="text-sm">{tr("Hak Mitra Belum Cair")}</span>
-						<span class="text-sm font-semibold tabular-nums">{rp(summary.partner_unpaid ?? 0)}</span>
-					</div>
-					<div class="flex items-center justify-between rounded-lg border px-3 py-2">
-						<span class="text-sm">{tr("Profit Bersih Tauthub (belum ditarik, termasuk mitra internal)")}</span>
-						<span class="text-sm font-semibold tabular-nums">{rp(summary.tauthub_available_to_withdraw ?? 0)}</span>
-					</div>
-					<div class="mt-2 flex items-center justify-between rounded-lg px-3 py-3" style="background-color: color-mix(in srgb, var(--primary) 7%, var(--card)); border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));">
-						<span class="text-sm font-semibold">{tr("Total yang Wajib Ada di Rekening")}</span>
-						<span class="text-lg font-bold tabular-nums" style="color: var(--foreground);">{rp(summary.cash_required_in_bank ?? 0)}</span>
-					</div>
-				</div>
+				<dl class="finStatement mt-4">
+					<div><dt>{tr("Dana titipan klien (uang nyata)")}</dt><dd>{rp(summary.client_available ?? 0)}</dd></div>
+					<div><dt>{tr("Hak mitra belum cair")}</dt><dd>{rp(summary.partner_unpaid ?? 0)}</dd></div>
+					<div><dt>{tr("Profit bersih Tauthub (belum ditarik, termasuk mitra internal)")}</dt><dd>{rp(summary.tauthub_available_to_withdraw ?? 0)}</dd></div>
+					<div><dt>{tr("Dana tertahan (escrow)")}</dt><dd>{rp(summary.client_reserved ?? 0)}</dd></div>
+					<div class="total"><dt>{tr("Total wajib ada di rekening")}</dt><dd>{rp(summary.cash_required_in_bank ?? 0)}</dd></div>
+				</dl>
 
 				{#if summary.reconciliation}
 					{@const rc = summary.reconciliation}
-					<h3 class="mt-6 text-sm font-semibold">{tr("Cocokkan dengan saldo gateway")}</h3>
-					<p class="mt-1 text-xs text-muted-foreground">
-						{tr("Kumulatif sampai tanggal akhir rentang, tidak bergantung pada filter periode. Pencairan mitra yang dibayar lewat gateway belum dikurangkan, jadi cocokkan angka ini dengan saldo di halaman gateway.")}
+					<h3 class="finSection">{tr("Cocokkan dengan saldo gateway")}</h3>
+					<p class="finLead mt-1">
+						{tr("Kumulatif sampai tanggal akhir rentang, tidak bergantung pada filter periode. Pencairan mitra yang dibayar lewat gateway belum dikurangkan, jadi cocokkan dengan saldo di halaman gateway.")}
 					</p>
-					<div class="mt-3 space-y-2">
-						<div class="flex items-center justify-between rounded-lg border px-3 py-2">
-							<span class="text-sm">
-								{tr("Perkiraan saldo gateway")}
-								<span class="block text-[11px] text-muted-foreground">
-									{tr("Net topup production")} {rp(rc.gateway_in_net)}
-									({tr("bruto")} {rp(rc.gateway_in_gross)} − {tr("fee")} {rp(rc.gateway_fee)})
-									{#if rc.admin_withdrawn > 0}− {tr("penarikan profit")} {rp(rc.admin_withdrawn)}{/if}
-								</span>
-							</span>
-							<span class="text-sm font-semibold tabular-nums">{rp(rc.gateway_balance_est)}</span>
+					<div class="finStats mt-3">
+						<div class="finStat">
+							<span class="finStatLabel">{tr("Saldo gateway (perkiraan)")}</span>
+							<span class="finStatValue">{rp(rc.gateway_balance_est)}</span>
+							<span class="finMuted">{tr("Net topup")} {rp(rc.gateway_in_net)}{#if rc.admin_withdrawn > 0} − {tr("penarikan")} {rp(rc.admin_withdrawn)}{/if}</span>
 						</div>
-						<div class="flex items-center justify-between rounded-lg border px-3 py-2">
-							<span class="text-sm">{tr("Wajib ada (kumulatif)")}</span>
-							<span class="text-sm font-semibold tabular-nums">{rp(rc.required)}</span>
+						<div class="finStat">
+							<span class="finStatLabel">{tr("Wajib ada, kumulatif")}</span>
+							<span class="finStatValue">{rp(rc.required)}</span>
 						</div>
-						<div class="flex items-center justify-between rounded-lg px-3 py-3" style="background-color: color-mix(in srgb, var(--success) 7%, var(--card)); border: 1px solid color-mix(in srgb, var(--success) 25%, var(--border));">
-							<span class="text-sm font-semibold">{tr("Selisih: uang di gateway di luar kewajiban")}</span>
-							<span class="text-lg font-bold tabular-nums" style="color: var(--success);">{rp(rc.gap)}</span>
+						<div class="finStat finStatKey">
+							<span class="finStatLabel">{tr("Selisih")}</span>
+							<span class="finStatValue">{rc.gap < 0 ? '− ' : ''}{rp(Math.abs(rc.gap))}</span>
 						</div>
 					</div>
 
-					<p class="mt-4 text-xs font-semibold text-muted-foreground">{tr("Isi selisih:")}</p>
-					<div class="mt-2 overflow-x-auto">
-						<table class="w-full text-sm" style="min-width: 520px;">
+					<h3 class="finSection">{tr("Isi selisih")}</h3>
+					<div class="finTableWrap mt-2">
+						<table class="finTable" style="min-width: 520px;">
 							<tbody>
 								{#each rc.components as c (c.key)}
-									<tr class="border-t">
-										<td class="px-2 py-2">
+									<tr>
+										<td>
 											<p class="font-medium">{tr(c.label)}</p>
-											<p class="text-[11px] text-muted-foreground">{tr(c.note)}</p>
+											<p class="finMuted">{tr(c.note)}</p>
 										</td>
-										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: {c.amount < 0 ? 'var(--destructive)' : 'inherit'};">
+										<td class="num font-semibold" style="color: {c.amount < 0 ? 'var(--destructive)' : 'var(--foreground)'};">
 											{c.amount < 0 ? '− ' : ''}{rp(Math.abs(c.amount))}
 										</td>
 									</tr>
 								{/each}
-								<tr class="border-t">
-									<td class="px-2 py-2 font-semibold">{tr("Total")}</td>
-									<td class="px-2 py-2 text-right tabular-nums font-bold">{rp(rc.gap)}</td>
+								<tr class="finTotalRow">
+									<td class="font-semibold">{tr("Total")}</td>
+									<td class="num font-semibold">{rc.gap < 0 ? '− ' : ''}{rp(Math.abs(rc.gap))}</td>
 								</tr>
 							</tbody>
 						</table>
 					</div>
 
 					{#if rc.orphan_publications.length > 0}
-						<p class="mt-5 text-xs font-semibold text-muted-foreground">
-							{tr("Publikasi terbit tanpa catatan penghasilan mitra")} ({fmtNum(rc.orphan_count)}):
-						</p>
-						<p class="mt-1 text-[11px] text-muted-foreground">
+						<h3 class="finSection">
+							{tr("Publikasi terbit tanpa catatan penghasilan mitra")}
+							<span class="finMuted">· {fmtNum(rc.orphan_count)}</span>
+						</h3>
+						<p class="finLead mt-1">
 							{tr("Kredit dari publikasi ini dihitung seluruhnya sebagai pendapatan Tauthub sampai penghasilan mitranya dicatat.")}
 						</p>
-						<div class="mt-2 overflow-x-auto">
-							<table class="w-full text-sm" style="min-width: 520px;">
+						<div class="finTableWrap mt-2">
+							<table class="finTable" style="min-width: 560px;">
 								<thead>
-									<tr class="text-left text-xs text-muted-foreground">
-										<th class="px-2 py-1.5 font-medium">{tr("Media")}</th>
-										<th class="px-2 py-1.5 font-medium">{tr("Mitra")}</th>
-										<th class="px-2 py-1.5 text-right font-medium">{tr("Harga")}</th>
-										<th class="px-2 py-1.5 text-right font-medium">{tr("Kredit terpakai")}</th>
+									<tr class="text-left">
+										<th>{tr("Media")}</th>
+										<th>{tr("Mitra")}</th>
+										<th class="num">{tr("Harga")}</th>
+										<th class="num">{tr("Kredit terpakai")}</th>
 									</tr>
 								</thead>
 								<tbody>
 									{#each rc.orphan_publications as o, i (i)}
-										<tr class="border-t">
-											<td class="px-2 py-1.5">{o.media || '—'}</td>
-											<td class="px-2 py-1.5">{o.partner || '—'}</td>
-											<td class="px-2 py-1.5 text-right tabular-nums">{rp(o.client_price)}</td>
-											<td class="px-2 py-1.5 text-right tabular-nums">{rp(o.credit)}</td>
+										<tr>
+											<td>{o.media || '—'}</td>
+											<td>{o.partner || '—'}</td>
+											<td class="num" style="color: var(--muted-foreground);">{rp(o.client_price)}</td>
+											<td class="num font-semibold">{rp(o.credit)}</td>
 										</tr>
 									{/each}
 								</tbody>
@@ -1793,6 +1838,226 @@
 		}
 		.finRow:hover :global(.finChev) {
 			transform: none;
+		}
+	}
+
+	/* ===== Kerangka bersama kartu, statistik, tabel, dan formulir ===== */
+	.finCardHead {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px 20px;
+		padding: 20px 24px 16px;
+	}
+	.finCardBody {
+		padding: 0 24px 24px;
+	}
+	.finTitle {
+		font-size: 15px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		color: var(--foreground);
+	}
+	.finSub {
+		margin-top: 4px;
+		max-width: 70ch;
+		font-size: 12.5px;
+		line-height: 1.55;
+		color: var(--muted-foreground);
+	}
+	.finLead {
+		max-width: 72ch;
+		font-size: 13px;
+		line-height: 1.6;
+		color: var(--muted-foreground);
+	}
+	.finSection {
+		margin-top: 28px;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--foreground);
+	}
+	.finMuted {
+		font-size: 12px;
+		color: var(--muted-foreground);
+	}
+	.finOptional {
+		margin-left: 4px;
+		font-weight: 400;
+		color: var(--muted-foreground);
+	}
+	.finFootnote {
+		padding: 8px 24px;
+		border-bottom: 1px solid var(--border);
+		font-size: 11.5px;
+		color: var(--muted-foreground);
+	}
+	.finEmpty {
+		padding: 28px 16px;
+		border: 1px dashed var(--border);
+		border-radius: 10px;
+		text-align: center;
+		font-size: 13px;
+		color: var(--muted-foreground);
+	}
+
+	/* Deretan angka kunci: satu garis tipis antar angka, tanpa kotak bertumpuk. */
+	.finStats {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1px;
+		overflow: hidden;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: var(--border);
+	}
+	.finStatsBleed {
+		border-width: 1px 0;
+		border-radius: 0;
+	}
+	.finStat {
+		display: flex;
+		flex: 1 1 170px;
+		flex-direction: column;
+		gap: 4px;
+		padding: 14px 18px;
+		background: var(--card);
+	}
+	.finStatKey {
+		background: color-mix(in srgb, var(--primary) 4%, var(--card));
+	}
+	.finStatLabel {
+		font-size: 12px;
+		color: var(--muted-foreground);
+	}
+	.finStatValue {
+		font-size: 19px;
+		font-weight: 600;
+		letter-spacing: -0.015em;
+		font-variant-numeric: tabular-nums;
+		color: var(--foreground);
+	}
+	.finStatValue small {
+		font-size: 12px;
+		font-weight: 400;
+		letter-spacing: 0;
+		color: var(--muted-foreground);
+	}
+
+	/* Tabel: kepala huruf kecil kapital, baris lapang, angka rata kanan. */
+	.finTableWrap {
+		overflow-x: auto;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+	}
+	.finTable {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 13px;
+	}
+	.finTable th {
+		padding: 10px 14px;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		white-space: nowrap;
+		color: var(--muted-foreground);
+		background: color-mix(in srgb, var(--secondary) 55%, var(--card));
+	}
+	.finTable td {
+		padding: 12px 14px;
+		vertical-align: top;
+	}
+	.finTable tbody tr {
+		border-top: 1px solid var(--border);
+		transition: background-color 0.15s ease;
+	}
+	.finTable tbody tr:first-child {
+		border-top: 0;
+	}
+	.finTable tbody tr:hover {
+		background: color-mix(in srgb, var(--primary) 4%, transparent);
+	}
+	.finTable .num {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.finTable .finTotalRow {
+		background: color-mix(in srgb, var(--secondary) 55%, var(--card));
+	}
+
+	/* Laporan bertingkat: label di kiri, angka di kanan. */
+	.finStatement {
+		max-width: 680px;
+	}
+	.finStatement > div {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 24px;
+		padding: 10px 0;
+		border-top: 1px solid var(--border);
+		font-size: 13px;
+	}
+	.finStatement > div:first-child {
+		border-top: 0;
+	}
+	.finStatement dt {
+		color: var(--muted-foreground);
+	}
+	.finStatement dd {
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+		color: var(--foreground);
+	}
+	.finStatement .sub dt {
+		font-weight: 600;
+		color: var(--foreground);
+	}
+	.finStatement .total {
+		border-top: 1px solid var(--foreground);
+	}
+	.finStatement .total dt {
+		font-weight: 600;
+		color: var(--foreground);
+	}
+	.finStatement .total dd {
+		font-size: 17px;
+	}
+
+	/* Formulir di modal. */
+	.finField {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.finFieldLabel {
+		font-size: 12.5px;
+		font-weight: 600;
+		color: var(--foreground);
+	}
+	.finInputRow {
+		display: flex;
+		gap: 8px;
+	}
+	@media (max-width: 640px) {
+		.finCardHead {
+			padding: 16px 16px 12px;
+		}
+		.finCardBody {
+			padding: 0 16px 16px;
+		}
+		.finFootnote {
+			padding: 8px 16px;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.finTable tbody tr {
+			transition: none;
 		}
 	}
 </style>
