@@ -22,6 +22,7 @@
 	import { rp } from '$lib/credits/rupiah';
 	import { platformError, isAccessDenied, ACCESS_DENIED } from '../_platform';
 	import CashflowBars from './_cashflow-bars.svelte';
+	import ListSearch from './_list-search.svelte';
 
 	type Entry = {
 		id: string;
@@ -244,6 +245,26 @@
 
 	let cashOpen = $state(false);
 
+	// Daftar di modal: 10 baris per halaman dengan kotak cari. Saldo klien,
+	// escrow, dan hak mitra dicari di sisi klien (datanya sudah termuat);
+	// daftar profit dicari di server karena jumlah publikasinya terus bertambah.
+	const LIST_PAGE = 10;
+	const fold = (v: unknown) =>
+		String(v ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+	const hit = (q: string, ...fields: unknown[]) => {
+		const needle = fold(q).trim();
+		return !needle || fields.some((f) => fold(f).includes(needle));
+	};
+	let depositsQuery = $state('');
+	let depositsPage = $state(1);
+	let escrowQuery = $state('');
+	let escrowPage = $state(1);
+	let unpaidQuery = $state('');
+	let unpaidPage = $state(1);
+	let profitQuery = $state('');
+	let profitPage = $state(1);
+	let profitSearchTimer: ReturnType<typeof setTimeout> | undefined;
+
 
 	onMount(() => {
 		void (async () => {
@@ -371,7 +392,7 @@
 		depositsLoading = true;
 		depositsError = '';
 		try {
-			const res = await apiRequest('/v1/platform/finance/client-deposits-detail?limit=300');
+			const res = await apiRequest('/v1/platform/finance/client-deposits-detail?limit=1000');
 			if (!res.ok) {
 				depositsError = res.status === 404
 					? tr('Endpoint rincian saldo klien belum tersedia. Restart API lalu coba lagi.')
@@ -387,6 +408,8 @@
 		}
 	}
 	function openDeposits(scope: 'available' | 'reserved') {
+		depositsQuery = '';
+		depositsPage = 1;
 		depositsScope = scope;
 		depositsOpen = true;
 		if (depositsEntries === null) void loadDeposits();
@@ -396,7 +419,7 @@
 		escrowLoading = true;
 		escrowError = '';
 		try {
-			const res = await apiRequest('/v1/platform/finance/escrow-detail?limit=300');
+			const res = await apiRequest('/v1/platform/finance/escrow-detail?limit=1000');
 			if (!res.ok) {
 				escrowError = res.status === 404
 					? tr('Endpoint rincian escrow belum tersedia. Restart API lalu coba lagi.')
@@ -413,6 +436,8 @@
 		}
 	}
 	function openEscrow() {
+		escrowQuery = '';
+		escrowPage = 1;
 		escrowOpen = true;
 		if (escrowEntries === null) void loadEscrow();
 	}
@@ -421,7 +446,7 @@
 		unpaidLoading = true;
 		unpaidError = '';
 		try {
-			const res = await apiRequest('/v1/platform/finance/partner-unpaid-detail?limit=500');
+			const res = await apiRequest('/v1/platform/finance/partner-unpaid-detail?limit=1000');
 			if (!res.ok) {
 				unpaidError = res.status === 404
 					? tr('Endpoint rincian hak mitra belum tersedia. Restart API lalu coba lagi.')
@@ -437,16 +462,24 @@
 		}
 	}
 	function openPartnerUnpaid() {
+		unpaidQuery = '';
+		unpaidPage = 1;
 		unpaidOpen = true;
 		if (unpaidEntries === null) void loadPartnerUnpaid();
 	}
 
-	async function loadProfit() {
+	async function loadProfit(page = 1) {
 		profitLoading = true;
 		profitError = '';
 		try {
 			// Ikut filter periode utama supaya modal profit konsisten dengan KPI card.
-			const params = new URLSearchParams({ limit: '100', from, to });
+			const params = new URLSearchParams({
+				limit: String(LIST_PAGE),
+				offset: String((page - 1) * LIST_PAGE),
+				from,
+				to
+			});
+			if (profitQuery.trim()) params.set('q', profitQuery.trim());
 			const res = await apiRequest(`/v1/platform/finance/profit-breakdown?${params.toString()}`);
 			if (!res.ok) {
 				profitError = res.status === 404
@@ -462,6 +495,7 @@
 			profitTotalCount = body.total ?? 0;
 			profitMonthly = body.monthly ?? [];
 			profitTotals = body.totals ?? null;
+			profitPage = page;
 		} catch {
 			profitError = tr('Tidak dapat terhubung ke server API.');
 		} finally {
@@ -470,8 +504,14 @@
 	}
 	function openProfit() {
 		profitOpen = true;
+		profitQuery = '';
+		profitPage = 1;
 		// Selalu reload: filter periode mungkin sudah berubah sejak modal terakhir dibuka.
-		void loadProfit();
+		void loadProfit(1);
+	}
+	function onProfitSearch() {
+		clearTimeout(profitSearchTimer);
+		profitSearchTimer = setTimeout(() => void loadProfit(1), 300);
 	}
 
 	// Label status publikasi untuk tabel escrow (statusnya internal, perlu ID friendly).
@@ -484,6 +524,21 @@
 		retrying: 'Coba ulang',
 	};
 	const pubStatusLabel = (s: string) => PUB_STATUS_LABEL[s] ?? s;
+
+	const depositsFiltered = $derived(
+		(depositsEntries ?? []).filter((r) => hit(depositsQuery, r.brand_name, r.client_name, r.owner_name, r.owner_email))
+	);
+	const depositsRows = $derived(depositsFiltered.slice((depositsPage - 1) * LIST_PAGE, depositsPage * LIST_PAGE));
+	const escrowFiltered = $derived(
+		(escrowEntries ?? []).filter((r) =>
+			hit(escrowQuery, r.brand_name, r.client_name, r.media_name, r.partner_name, pubStatusLabel(r.status))
+		)
+	);
+	const escrowRows = $derived(escrowFiltered.slice((escrowPage - 1) * LIST_PAGE, escrowPage * LIST_PAGE));
+	const unpaidFiltered = $derived(
+		(unpaidEntries ?? []).filter((r) => hit(unpaidQuery, r.partner_name, r.partner_email))
+	);
+	const unpaidRows = $derived(unpaidFiltered.slice((unpaidPage - 1) * LIST_PAGE, unpaidPage * LIST_PAGE));
 
 	async function voidWithdrawal(row: AdminWithdrawal) {
 		const reason = window.prompt(tr('Alasan pembatalan (opsional):'), '');
@@ -1229,6 +1284,13 @@
 						<div><dt>{tr("Dari admin")}</dt><dd>{tr("Saldo hadiah atau koreksi dari admin, bukan uang yang dimasukkan klien. Tidak dihitung sebagai uang yang wajib ada.")}</dd></div>
 						<div><dt>{tr("Lagi dikunci")}</dt><dd>{tr("Saldo yang disisihkan untuk pesanan yang belum selesai.")}</dd></div>
 					</dl>
+					<div class="finToolbar">
+						<ListSearch bind:value={depositsQuery} placeholder={tr("Cari brand, klien, atau email")} onchange={() => (depositsPage = 1)} />
+						<span class="finMuted">
+							{#if depositsQuery.trim()}{fmtNum(depositsFiltered.length)} {tr("dari")} {fmtNum(depositsEntries.length)} {tr("klien")}{:else}{fmtNum(depositsEntries.length)} {tr("klien")}{/if}
+						</span>
+					</div>
+					{#if depositsFiltered.length > 0}
 					<div class="finTableWrap mt-4">
 						<table class="finTable" style="min-width: 980px;">
 							<thead>
@@ -1244,7 +1306,7 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each depositsEntries as row (row.brand_id)}
+								{#each depositsRows as row (row.brand_id)}
 									<tr>
 										<td>
 											<p class="font-medium">{row.brand_name}</p>
@@ -1265,6 +1327,19 @@
 							</tbody>
 						</table>
 					</div>
+					{:else}
+						<div class="finEmpty mt-3">{tr("Tidak ada hasil untuk")} “{depositsQuery}”.</div>
+					{/if}
+					{#if depositsFiltered.length > LIST_PAGE}
+						<div class="mt-3">
+							<Pagination
+								total={depositsFiltered.length}
+								limit={LIST_PAGE}
+								offset={(depositsPage - 1) * LIST_PAGE}
+								onChange={(next) => (depositsPage = Math.floor(next / LIST_PAGE) + 1)}
+							/>
+						</div>
+					{/if}
 				{/if}
 				{#snippet footer()}
 					<button type="button" class="app-btn app-btn-soft" onclick={() => (depositsOpen = false)}>{tr("Tutup")}</button>
@@ -1295,6 +1370,13 @@
 							<span class="finStatValue">{rp(escrowTotalPrice)}</span>
 						</div>
 					</div>
+					<div class="finToolbar">
+						<ListSearch bind:value={escrowQuery} placeholder={tr("Cari brand, media, mitra, atau status")} onchange={() => (escrowPage = 1)} />
+						<span class="finMuted">
+							{#if escrowQuery.trim()}{fmtNum(escrowFiltered.length)} {tr("dari")} {fmtNum(escrowEntries.length)} {tr("order")}{:else}{fmtNum(escrowEntries.length)} {tr("order")}{/if}
+						</span>
+					</div>
+					{#if escrowFiltered.length > 0}
 					<div class="finTableWrap mt-4">
 						<table class="finTable" style="min-width: 820px;">
 							<thead>
@@ -1307,7 +1389,7 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each escrowEntries as row (row.publication_id)}
+								{#each escrowRows as row (row.publication_id)}
 									<tr>
 										<td class="finMuted whitespace-nowrap">{fmtDateTime(row.created_at)}</td>
 										<td>
@@ -1325,6 +1407,19 @@
 							</tbody>
 						</table>
 					</div>
+					{:else}
+						<div class="finEmpty mt-3">{tr("Tidak ada hasil untuk")} “{escrowQuery}”.</div>
+					{/if}
+					{#if escrowFiltered.length > LIST_PAGE}
+						<div class="mt-3">
+							<Pagination
+								total={escrowFiltered.length}
+								limit={LIST_PAGE}
+								offset={(escrowPage - 1) * LIST_PAGE}
+								onChange={(next) => (escrowPage = Math.floor(next / LIST_PAGE) + 1)}
+							/>
+						</div>
+					{/if}
 				{/if}
 				{#snippet footer()}
 					<button type="button" class="app-btn app-btn-soft" onclick={() => (escrowOpen = false)}>{tr("Tutup")}</button>
@@ -1365,6 +1460,13 @@
 							<span class="finStatValue">{rp(sumPending + sumSettled)}</span>
 						</div>
 					</div>
+					<div class="finToolbar">
+						<ListSearch bind:value={unpaidQuery} placeholder={tr("Cari nama atau email mitra")} onchange={() => (unpaidPage = 1)} />
+						<span class="finMuted">
+							{#if unpaidQuery.trim()}{fmtNum(unpaidFiltered.length)} {tr("dari")} {fmtNum(unpaidEntries.length)} {tr("mitra")}{:else}{fmtNum(unpaidEntries.length)} {tr("mitra")}{/if}
+						</span>
+					</div>
+					{#if unpaidFiltered.length > 0}
 					<div class="finTableWrap mt-4">
 						<table class="finTable" style="min-width: 820px;">
 							<thead>
@@ -1377,7 +1479,7 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each unpaidEntries as row (row.partner_id)}
+								{#each unpaidRows as row (row.partner_id)}
 									<tr>
 										<td>
 											<p class="font-medium">{row.partner_name || row.partner_id.slice(0, 8)}</p>
@@ -1398,6 +1500,19 @@
 							</tbody>
 						</table>
 					</div>
+					{:else}
+						<div class="finEmpty mt-3">{tr("Tidak ada hasil untuk")} “{unpaidQuery}”.</div>
+					{/if}
+					{#if unpaidFiltered.length > LIST_PAGE}
+						<div class="mt-3">
+							<Pagination
+								total={unpaidFiltered.length}
+								limit={LIST_PAGE}
+								offset={(unpaidPage - 1) * LIST_PAGE}
+								onChange={(next) => (unpaidPage = Math.floor(next / LIST_PAGE) + 1)}
+							/>
+						</div>
+					{/if}
 				{/if}
 				{#snippet footer()}
 					<a class="mr-auto self-center text-xs underline underline-offset-2" style="color: var(--primary);" href="/admin/settlements">{tr("Kelola pencairan mitra")}</a>
@@ -1416,7 +1531,7 @@
 					<p class="mt-5 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
 				{:else if profitError}
 					<p class="mt-5 text-sm" style="color: var(--destructive);">{profitError}</p>
-				{:else if profitEntries && profitEntries.length === 0}
+				{:else if profitEntries && profitEntries.length === 0 && profitQuery.trim() === ''}
 					<div class="finEmpty mt-5">{tr("Belum ada publikasi terbit.")}</div>
 				{:else if profitEntries}
 					{#if profitTotals}
@@ -1460,11 +1575,13 @@
 						</div>
 					{/if}
 
-					<h3 class="finSection">
-						{tr("100 publikasi terbaru")}
-						<span class="finMuted">· {fmtNum(profitTotalCount)} {tr("publikasi terbit")}</span>
-					</h3>
-					<div class="finTableWrap mt-2">
+					<h3 class="finSection">{tr("Publikasi terbit")}</h3>
+					<div class="finToolbar">
+						<ListSearch bind:value={profitQuery} placeholder={tr("Cari brand, klien, media, atau mitra")} onchange={onProfitSearch} />
+						<span class="finMuted">{fmtNum(profitTotalCount)} {profitQuery.trim() ? tr("hasil") : tr("publikasi")}</span>
+					</div>
+					{#if profitEntries.length > 0}
+					<div class="finTableWrap">
 						<table class="finTable" style="min-width: 1020px;">
 							<thead>
 								<tr class="text-left">
@@ -1519,6 +1636,19 @@
 							</tbody>
 						</table>
 					</div>
+					{:else}
+						<div class="finEmpty mt-3">{tr("Tidak ada hasil untuk")} “{profitQuery}”.</div>
+					{/if}
+					{#if profitTotalCount > LIST_PAGE}
+						<div class="mt-3">
+							<Pagination
+								total={profitTotalCount}
+								limit={LIST_PAGE}
+								offset={(profitPage - 1) * LIST_PAGE}
+								onChange={(next) => void loadProfit(Math.floor(next / LIST_PAGE) + 1)}
+							/>
+						</div>
+					{/if}
 				{/if}
 				{#snippet footer()}
 					<button type="button" class="app-btn app-btn-soft" onclick={() => (profitOpen = false)}>{tr("Tutup")}</button>
@@ -2157,5 +2287,14 @@
 		font-size: 12px;
 		line-height: 1.55;
 		color: var(--muted-foreground);
+	}
+
+	.finToolbar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px 16px;
+		margin: 16px 0 12px;
 	}
 </style>

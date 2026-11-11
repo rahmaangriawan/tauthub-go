@@ -292,12 +292,41 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pencarian opsional (q) pada nama brand, klien, media, atau mitra. Karakter
+	// khusus LIKE di-escape supaya "%" dan "_" dicari apa adanya.
+	searchPattern := ""
+	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
+		if len(q) > 80 {
+			q = q[:80]
+		}
+		searchPattern = "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q) + "%"
+	}
+	searchSQL := func(param string) string {
+		return ` AND (b.name ILIKE ` + param + ` OR COALESCE(b.client_name, '') ILIKE ` + param +
+			` OR COALESCE(m.name, '') ILIKE ` + param + ` OR COALESCE(pt.name, '') ILIKE ` + param + `)`
+	}
+
 	countArgs := []any{excl.brandArr(), rangeFrom, rangeToExcl}
+	countSearch := ""
+	if searchPattern != "" {
+		countArgs = append(countArgs, searchPattern)
+		countSearch = searchSQL("$4")
+	}
 	countRow, _ := d.queryRow(r.Context(),
 		`SELECT COUNT(*)::int AS n FROM publications p
+		 JOIN brands b ON b.id = p.brand_id
+		 LEFT JOIN media m ON m.id = p.media_id
+		 LEFT JOIN partners pt ON pt.id = m.partner_id
 		 WHERE p.status = 'published' AND p.published_at IS NOT NULL
 		   AND p.brand_id::text != ALL($1::text[])
-		   AND p.published_at >= $2 AND p.published_at < $3`, countArgs...)
+		   AND p.published_at >= $2 AND p.published_at < $3`+countSearch, countArgs...)
+
+	listArgs := []any{excl.brandArr(), excl.internalArr(), limit, offset, rangeFrom, rangeToExcl}
+	listSearch := ""
+	if searchPattern != "" {
+		listArgs = append(listArgs, searchPattern)
+		listSearch = searchSQL("$7")
+	}
 
 	rows, err := d.queryRows(r.Context(),
 		`SELECT p.id::text              AS publication_id,
@@ -322,9 +351,9 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 		   LEFT JOIN partners pt ON pt.id = m.partner_id
 		  WHERE p.status = 'published' AND p.published_at IS NOT NULL
 		    AND p.brand_id::text != ALL($1::text[])
-		    AND p.published_at >= $5 AND p.published_at < $6
+		    AND p.published_at >= $5 AND p.published_at < $6`+listSearch+`
 		  ORDER BY p.published_at DESC, p.client_price DESC
-		  LIMIT $3 OFFSET $4`, excl.brandArr(), excl.internalArr(), limit, offset, rangeFrom, rangeToExcl)
+		  LIMIT $3 OFFSET $4`, listArgs...)
 	if err != nil {
 		writeErr(w, d, err)
 		return
