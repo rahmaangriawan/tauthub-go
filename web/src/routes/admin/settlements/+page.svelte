@@ -1,4 +1,18 @@
 <script lang="ts">
+	// Salin ke clipboard dengan umpan balik singkat pada ikon.
+	let copiedKey = $state<string | null>(null);
+	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+	async function copyValue(key: string, value: string) {
+		if (!value) return;
+		try {
+			await navigator.clipboard.writeText(value);
+			copiedKey = key;
+			clearTimeout(copiedTimer);
+			copiedTimer = setTimeout(() => (copiedKey = null), 1500);
+		} catch {
+			copiedKey = null;
+		}
+	}
 	import { tr } from '$lib/i18n/phrases';
 
 	// Settlement — port app/admin/settlements/page.tsx: payout ke partner.
@@ -8,7 +22,7 @@
 	// (setelah potongan transfer) agar sama dengan yang diterima mitra; detail
 	// memuat rekening mitra untuk transfer manual.
 	import { onMount } from 'svelte';
-	import { Landmark, TriangleAlert } from '@lucide/svelte';
+	import { Check, Copy, Landmark, TriangleAlert } from '@lucide/svelte';
 	import SettlementIcon from '$lib/components/icons/settlement-icon.svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
@@ -570,7 +584,18 @@
 						<p class="text-xs font-medium text-muted-foreground">Bank</p>
 						<p class="font-medium">{d.bank_name ?? '—'}</p>
 						<p class="text-xs font-medium text-muted-foreground">Nomor</p>
-						<p class="font-bold tabular-nums text-base" >{d.bank_account_number}</p>
+						<div class="flex items-center gap-2">
+							<p class="font-bold tabular-nums text-base">{d.bank_account_number}</p>
+							<button
+								type="button"
+								class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+								aria-label="Salin nomor rekening"
+								title={copiedKey === 'account' ? 'Tersalin' : 'Salin nomor rekening'}
+								onclick={() => void copyValue('account', String(d.bank_account_number ?? ''))}
+							>
+								{#if copiedKey === 'account'}<Check size={14} />{:else}<Copy size={14} />{/if}
+							</button>
+						</div>
 						<p class="text-xs font-medium text-muted-foreground">Nama Pemilik</p>
 						<p class="font-medium">{d.bank_account_name ?? '—'}</p>
 					</div>
