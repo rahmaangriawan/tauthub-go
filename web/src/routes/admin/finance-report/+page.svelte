@@ -1141,7 +1141,7 @@
 		{#if depositsOpen}
 			<Modal
 				title={depositsScope === 'reserved' ? tr('Dana Tertahan — per Brand') : tr('Dana Titipan Klien — per Brand')}
-				maxWidth="2xl"
+				maxWidth="workspace"
 				onClose={() => (depositsOpen = false)}
 			>
 				<p class="text-sm text-muted-foreground">
@@ -1195,7 +1195,7 @@
 
 		<!-- ============ Modal: Dana Tertahan (Escrow) per publikasi ============ -->
 		{#if escrowOpen}
-			<Modal title={tr("Dana Tertahan (Escrow) — per Publikasi")} maxWidth="2xl" onClose={() => (escrowOpen = false)}>
+			<Modal title={tr("Dana Tertahan (Escrow) — per Publikasi")} maxWidth="workspace" onClose={() => (escrowOpen = false)}>
 				<p class="text-sm text-muted-foreground">
 					{tr("Publikasi yang belum terbit atau belum dibatalkan. Client price di sini menjelaskan ORDER MANA yang mengunci reserved credit klien.")}
 				</p>
@@ -1252,7 +1252,7 @@
 
 		<!-- ============ Modal: Hak Mitra Belum Cair per mitra ============ -->
 		{#if unpaidOpen}
-			<Modal title={tr("Hak Mitra Belum Cair — per Mitra")} maxWidth="2xl" onClose={() => (unpaidOpen = false)}>
+			<Modal title={tr("Hak Mitra Belum Cair — per Mitra")} maxWidth="workspace" onClose={() => (unpaidOpen = false)}>
 				<p class="text-sm text-muted-foreground">
 					{tr("Breakdown utang ke mitra per partner: pending (belum masuk settlement) vs settled-belum-dibayar (sudah masuk settlement tapi belum ditransfer).")}
 				</p>
@@ -1308,7 +1308,7 @@
 
 		<!-- ============ Modal: Profit Bersih Tauthub — breakdown per publikasi ============ -->
 		{#if profitOpen}
-			<Modal title={tr("Profit Bersih Tauthub — per Publikasi")} maxWidth="2xl" onClose={() => (profitOpen = false)}>
+			<Modal title={tr("Profit Bersih Tauthub — per Publikasi")} maxWidth="workspace" onClose={() => (profitOpen = false)}>
 				<p class="text-sm text-muted-foreground">
 					{tr("Komisi = 25% × client_price per publikasi terbit. Top 100 publikasi, diurutkan dari harga tertinggi.")}
 				</p>
