@@ -8,7 +8,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { ArrowRight, LoaderCircle } from '@lucide/svelte';
+	import { ArrowRight, LoaderCircle, Sparkles } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -57,6 +57,26 @@
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 	});
 
+	let assisting = $state(false);
+	let assistError = $state('');
+	async function assistBrief() {
+		assistError = '';
+		assisting = true;
+		try {
+			const res = await apiRequest(`/v1/brands/${brandId}/taut/plans/brief-assist`, {
+				method: 'POST',
+				body: JSON.stringify({ brief })
+			});
+			if (!res.ok) {
+				assistError = await readApiError(res, tr('Gagal merapikan brief.'));
+				return;
+			}
+			const j = await res.json();
+			brief = String(j.brief ?? '');
+		} finally {
+			assisting = false;
+		}
+	}
 	const PER_WEEK_MAX = 3;
 	let perWeekMode = $state<'preset' | 'custom'>('preset');
 	let perWeekInput = $state('');
@@ -119,6 +139,14 @@
 					placeholder={tr('Apa yang dijual, untuk siapa, dan pesan utamanya.')}></textarea>
 				<span class="rc-hint">{brief.trim().length}/3000 · {tr('minimal 20 karakter')}</span>
 			</label>
+			<div class="rc-ai">
+				<button type="button" class="app-btn app-btn-soft rc-ai-btn" disabled={assisting || brief.trim().length < 5} onclick={() => void assistBrief()}>
+					{#if assisting}<LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
+					{tr('Rapikan dengan AI')}
+				</button>
+				<span class="rc-hint">{tr('Tulis catatan singkat, lalu AI menyusunnya jadi brief lengkap. Anda tetap bisa mengedit hasilnya.')}</span>
+				{#if assistError}<span class="rc-bad">{assistError}</span>{/if}
+			</div>
 
 			<div class="rc-split">
 				<label class="rc-field">{tr('Anggaran total (Rp)')}
@@ -234,6 +262,8 @@
 	.rc-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted-foreground); }
 	.rc-perweek { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 8px; align-items: center; }
 	.rc-custom { height: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+	.rc-ai { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: -8px; }
+	.rc-ai-btn { min-height: 36px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 	.rc-btn { align-self: flex-start; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; }
 	.rc-how { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
 	.rc-how ol { list-style: none; margin: 0; padding: 0; counter-reset: step; display: flex; flex-direction: column; gap: 18px; }

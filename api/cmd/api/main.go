@@ -507,6 +507,7 @@ func run() error {
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/duplicate", resolveCampaign(tautDeps.TautCampaignDuplicate))
 			authed.Get("/brands/{brandId}/taut/plans", tautDeps.PlansList)
 			authed.Post("/brands/{brandId}/taut/plans", tautDeps.PlanCreate)
+			authed.Post("/brands/{brandId}/taut/plans/brief-assist", tautDeps.PlanBriefAssist)
 			authed.Get("/brands/{brandId}/taut/plans/{planId}", tautDeps.PlanGet)
 			authed.Patch("/brands/{brandId}/taut/plans/{planId}", tautDeps.PlanUpdate)
 			authed.Patch("/brands/{brandId}/taut/plans/{planId}/items/{itemId}", tautDeps.PlanItemUpdate)
