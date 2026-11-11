@@ -163,12 +163,9 @@
 			</div>
 
 			<div class="rc-split">
-				<label class="rc-field">{tr('Anggaran total (Rp)')}
-					<span class="rc-money">
-						<span class="rc-prefix">Rp</span>
-						<input class="app-input" inputmode="numeric" bind:value={budget} placeholder="1.000.000" />
-					</span>
-					<span class="rc-hint">{tr('Minimal Rp50.000')}</span>
+				<label class="rc-field">{tr('Anggaran total')}
+					<input class="app-input" inputmode="numeric" bind:value={budget} placeholder="1.000.000" />
+					<span class="rc-hint">{tr('Minimal 50.000')}</span>
 				</label>
 				<label class="rc-field">{tr('Kategori media (opsional)')}
 					<input class="app-input" bind:value={category} maxlength="120" placeholder={tr('mis. Ekonomi')} />
@@ -201,8 +198,7 @@
 
 			<dl class="rc-sum">
 				<div><dt>{tr('Total artikel')}</dt><dd>{totalArticles}</dd></div>
-				<div><dt>{tr('Anggaran per artikel')}</dt><dd>{budgetIdr > 0 ? `Rp${fmt(Math.floor(budgetIdr / totalArticles))}` : '-'}</dd></div>
-				<div><dt>{tr('Setara')}</dt><dd>{budgetIdr > 0 ? `${fmt(Math.floor(budgetIdr / rate))} TC` : '-'}</dd></div>
+				<div><dt>{tr('Anggaran per artikel')}</dt><dd>{budgetIdr > 0 ? fmt(Math.floor(budgetIdr / totalArticles)) : '-'}</dd></div>
 			</dl>
 
 			{#if createError}<p class="rc-bad">{createError}</p>{/if}
@@ -259,14 +255,11 @@
 	.rc-hint { font-size: 12px; line-height: 16px; font-weight: 400; color: var(--muted-foreground); }
 	.rc-bad { font-size: 13px; color: var(--destructive); }
 	.rc-ok { font-size: 13px; color: var(--success); }
-	.rc-money { position: relative; display: block; }
-	.rc-money :global(input) { width: 100%; padding-left: 38px; }
-	.rc-prefix { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--muted-foreground); pointer-events: none; }
 	.rc-seg { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
 	.rc-seg button { flex: 1; min-width: 0; height: 36px; border-radius: 7px; font-size: 13px; font-weight: 500; color: var(--muted-foreground); transition: background-color 140ms ease, color 140ms ease; }
 	.rc-seg button:hover { background: var(--secondary); }
 	.rc-seg button.on { background: var(--primary); color: #fff; }
-	.rc-sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 0; }
+	.rc-sum { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 0; }
 	.rc-sum div { padding: 12px 16px; display: flex; flex-direction: column; gap: 2px; }
 	.rc-sum div + div { border-left: 1px solid var(--border); }
 	.rc-sum dt { font-size: 12px; color: var(--muted-foreground); }
