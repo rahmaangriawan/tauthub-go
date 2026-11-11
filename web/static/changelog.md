@@ -27,7 +27,6 @@ Catatan:
 - **Analisis Kinerja**: ringkasan hasil tiap kampanye, berisi artikel yang sudah terbit, media yang dipakai, kondisi tautan, dan status garansi. Bisa dilihat per kampanye atau untuk semua kampanye brand.
 - **Profil penagihan**: simpan nama perusahaan, NPWP, dan alamat penagihan sekali saja. Top up berfaktur otomatis memakai data itu, termasuk nomor PO kalau kamu punya.
 - **Invoice otomatis berPDF**: setelah top up berfaktur lunas, invoice terbit sendiri dan bisa diunduh sebagai PDF di halaman Invoice & Pajak.
-- **Undang anggota tim lewat email**: admin brand bisa mengundang orang yang belum punya akun Tauthub. Undangan berlaku 7 hari dan hanya bisa diterima dengan email yang diundang.
 - **Peran Finance untuk tim keuangan**: anggota berperan Finance bisa melihat saldo, melakukan top up, dan mengelola invoice, tanpa bisa membuat atau mendistribusikan kampanye.
 - **Bonus top up dan kode promo**: paket tertentu memberi bonus saldo, dan kode promo bisa dipakai sekali per brand. Bonus tercatat sebagai baris tersendiri di riwayat saldo.
 - **Bukti tayang dan garansi tautan**: Link Guardian mencatat bukti tayang dan memberi garansi tautan secara otomatis. Berita acara publik memuat ringkasannya.
