@@ -87,7 +87,7 @@
 	};
 
 	const fmt = (n: number) => (n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-	const rp = (tc: number) => `Rp ${fmt(tc * (plan?.rate_idr ?? 1000))}`;
+	const rp = (tc: number) => fmt(tc * (plan?.rate_idr ?? 1000));
 	const statusLabel: Record<string, string> = { draft: 'Draf', approved: 'Disetujui', running: 'Berjalan', done: 'Selesai', cancelled: 'Dibatalkan' };
 	const itemLabel: Record<string, string> = { pending: 'Menunggu', running: 'Dibuat…', ready: 'Siap ditulis', needs_attention: 'Perlu perhatian', skipped: 'Dilewati' };
 	const draft = $derived(plan?.status === 'draft');
@@ -116,10 +116,19 @@
 			{/if}
 		</header>
 
-		<dl class="pd-tiles">
-			<div class="app-card pd-tile"><dt>{tr('Anggaran')}</dt><dd>Rp {fmt(plan.budget_idr)}</dd></div>
-			<div class="app-card pd-tile"><dt>{tr('Perkiraan biaya rencana')}</dt><dd class:pd-bad={plan.est_total_tc * plan.rate_idr > plan.budget_idr}>{rp(plan.est_total_tc)}</dd></div>
-			<div class="app-card pd-tile"><dt>{tr('Artikel')}</dt><dd>{plan.items.filter((i) => i.status !== 'skipped').length}</dd></div>
+		<dl class="app-card pd-summary">
+			<div class="pd-budget">
+				<dt>{tr('Anggaran')}</dt>
+				<dd>{fmt(plan.budget_idr)}</dd>
+			</div>
+			<div>
+				<dt>{tr('Perkiraan biaya rencana')}</dt>
+				<dd class:pd-bad={plan.est_total_tc * plan.rate_idr > plan.budget_idr}>{rp(plan.est_total_tc)}</dd>
+			</div>
+			<div>
+				<dt>{tr('Artikel')}</dt>
+				<dd>{plan.items.filter((i) => i.status !== 'skipped').length}</dd>
+			</div>
 		</dl>
 		<p class="pd-muted">{tr('Perkiraan memakai harga media hari ini, termasuk biaya tulis. Saldo baru terpotong saat Anda menulis dan mendistribusikan tiap artikel.')}</p>
 
@@ -177,16 +186,18 @@
 	.pd-back { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; align-self: flex-start; font-size: 13px; font-weight: 500; color: var(--primary); text-decoration: none; }
 	.pd-back:hover { text-decoration: underline; }
 	.pd-error { padding: 12px 16px; font-size: 14px; border-color: var(--destructive); color: var(--destructive); }
-	.pd-notice { padding: 12px 16px; font-size: 14px; border-color: var(--success); background: var(--success-soft); color: var(--success); }
+	.pd-notice { padding: 12px 16px; font-size: 14px; border-color: var(--success); color: var(--success); }
 	.pd-loading { padding: 20px; text-align: center; font-size: 14px; color: var(--muted-foreground); }
 	.pd-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
 	.pd-btn { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; }
-	.pd-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-	.pd-tile { padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; }
-	.pd-tile dt { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
-	.pd-tile dd { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.01em; color: var(--foreground); font-variant-numeric: tabular-nums; }
+	.pd-summary { padding: 0; display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 0.6fr); }
+	.pd-summary > div { padding: 20px 24px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+	.pd-summary > div + div { border-left: 1px solid var(--border); }
+	.pd-summary dt { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+	.pd-summary dd { font-size: 16px; line-height: 24px; font-weight: 500; color: var(--foreground); font-variant-numeric: tabular-nums; }
+	.pd-budget dd { font-size: 28px; line-height: 36px; }
 	.pd-muted { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
-	.pd-bad { color: var(--destructive) !important; font-size: 13px; }
+	.pd-bad { color: var(--destructive); font-size: 13px; }
 	.pd-empty { padding: 20px; }
 	.pd-list { padding: 0; list-style: none; overflow: hidden; }
 	.pd-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 16px; padding: 16px 20px; align-items: start; }
@@ -196,8 +207,8 @@
 	.pd-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 	.pd-media { font-size: 14px; font-weight: 600; color: var(--foreground); }
 	.pd-topic { font-size: 14px; line-height: 22px; color: var(--foreground); word-break: break-word; }
-	.pd-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-	.pd-chip { padding: 4px 12px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted-foreground); background: var(--muted); }
+	.pd-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-variant-numeric: tabular-nums; }
+	.pd-chip { padding: 2px 8px; border-radius: 6px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted-foreground); background: var(--muted); }
 	.pd-chip-bad { color: var(--destructive); background: color-mix(in srgb, var(--destructive) 12%, transparent); }
 	.pd-link { display: inline-flex; align-items: center; min-height: 32px; font-size: 13px; font-weight: 500; color: var(--primary); text-decoration: none; }
 	.pd-link:hover { text-decoration: underline; }
@@ -206,7 +217,8 @@
 	.pd-check input { margin-top: 4px; width: 18px; height: 18px; }
 	.pd-check small { display: block; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
 	@media (max-width: 760px) {
-		.pd-tiles { grid-template-columns: 1fr; }
+		.pd-summary { grid-template-columns: 1fr; }
+		.pd-summary > div + div { border-left: 0; border-top: 1px solid var(--border); }
 		.pd-row { grid-template-columns: 1fr; gap: 8px; }
 		.pd-side { align-items: flex-start; flex-direction: row; flex-wrap: wrap; align-items: center; }
 	}
