@@ -27,17 +27,17 @@
 	<div class="min-w-[640px]">
 		<div class="mb-3 flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs text-muted-foreground">
 			<span class="flex items-center gap-1.5">
-				<span class="h-2.5 w-2.5 rounded-sm" style="background-color: #3b82f6;"></span>
+				<span class="h-2.5 w-2.5 rounded-sm" style="background-color: var(--s1);"></span>
 				{tr("Top Up masuk")}
 			</span>
 			{#if hasGMV}
 				<span class="flex items-center gap-1.5">
-					<span class="h-2.5 w-2.5 rounded-sm" style="background-color: #10b981;"></span>
+					<span class="h-2.5 w-2.5 rounded-sm" style="background-color: var(--s3);"></span>
 					{tr("GMV publikasi terbit")}
 				</span>
 			{/if}
 			<span class="flex items-center gap-1.5">
-				<span class="h-2.5 w-2.5 rounded-sm" style="background-color: #f97316;"></span>
+				<span class="h-2.5 w-2.5 rounded-sm" style="background-color: var(--s2);"></span>
 				{tr("Pencairan mitra")}
 			</span>
 		</div>
@@ -54,17 +54,17 @@
 					<div class="flex flex-1 items-end justify-center gap-0.5 px-1">
 						<span
 							class="w-1/4 max-w-3 rounded-t-sm"
-							style="height: {pct(row.money_in)}%; background-color: #3b82f6; opacity: {row.money_in > 0 ? 1 : 0.15};"
+							style="height: {pct(row.money_in)}%; background-color: var(--s1); opacity: {row.money_in > 0 ? 1 : 0.15};"
 						></span>
 						{#if hasGMV}
 							<span
 								class="w-1/4 max-w-3 rounded-t-sm"
-								style="height: {pct(row.gmv ?? 0)}%; background-color: #10b981; opacity: {(row.gmv ?? 0) > 0 ? 1 : 0.15};"
+								style="height: {pct(row.gmv ?? 0)}%; background-color: var(--s3); opacity: {(row.gmv ?? 0) > 0 ? 1 : 0.15};"
 							></span>
 						{/if}
 						<span
 							class="w-1/4 max-w-3 rounded-t-sm"
-							style="height: {pct(row.money_out)}%; background-color: #f97316; opacity: {row.money_out > 0 ? 1 : 0.15};"
+							style="height: {pct(row.money_out)}%; background-color: var(--s2); opacity: {row.money_out > 0 ? 1 : 0.15};"
 						></span>
 					</div>
 				</button>

@@ -7,8 +7,7 @@
 	// Tauthub); tetap ada chart Top Up vs GMV vs Pencairan untuk tren.
 	import { onMount } from 'svelte';
 	import {
-		ArrowLeftRight, Download, ExternalLink, Handshake, Landmark, Lock,
-		PiggyBank, RotateCcw, RotateCw, TriangleAlert, Users
+		ArrowLeftRight, ChevronRight, Download, ExternalLink, RotateCcw, RotateCw, TriangleAlert
 	} from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
@@ -604,7 +603,7 @@
 
 </script>
 
-<section>
+<section class="fin">
 	<PageHeader title={tr("Keuangan Tauthub")}>
 		<button class="app-btn app-btn-soft headerBtn" type="button" disabled={refreshing} onclick={() => { void load(pageNum, true); }}>
 			<RotateCw size={14} />{tr("Muat ulang")}
@@ -658,145 +657,95 @@
 			</div>
 		</div>
 
-		<!-- Posisi Keuangan: 5 KPI balance-sheet, MENGIKUTI filter periode
-		     di atas. Dana Titipan + Escrow + Hak Mitra = posisi pada tanggal
-		     akhir rentang. Profit = akumulasi dalam rentang.
-		     Akun internal farihcoid@ dan wantek@ dikecualikan dari semua
-		     perhitungan di sisi backend. -->
+		<!-- Posisi keuangan sebagai satu neraca: angka wajib-ada, komposisinya,
+		     dan pencocokan dengan saldo gateway. Mengikuti filter periode di atas;
+		     akun internal dikecualikan di backend. -->
 		{#if summary.client_available !== undefined}
-			<div class="mt-5 flex items-end justify-between gap-3">
-				<div>
-					<h2 class="text-base font-semibold">{tr("Posisi Keuangan — per Periode")}</h2>
-					<p class="text-xs text-muted-foreground">
-						{tr("Posisi pada tanggal akhir rentang; profit dihitung akumulasi dalam rentang. Akun internal dikecualikan.")}
-					</p>
+			{@const total = summary.cash_required_in_bank ?? 0}
+			{@const parts = [
+				{ key: 'titipan', label: tr('Dana titipan klien'), hint: tr('Saldo klien dari topup asli. Milik klien, bukan uang Tauthub.'), value: summary.client_available ?? 0, color: 'var(--s1)', open: () => openDeposits('available') },
+				{ key: 'mitra', label: tr('Hak mitra belum cair'), hint: tr('Penghasilan mitra yang belum ditransfer.'), value: summary.partner_unpaid ?? 0, color: 'var(--s2)', open: openPartnerUnpaid },
+				{ key: 'profit', label: tr('Profit bersih Tauthub'), hint: tr('Uang yang benar-benar diterima Tauthub dan boleh ditarik.'), value: summary.tauthub_available_to_withdraw ?? 0, color: 'var(--s3)', open: openProfit },
+				{ key: 'escrow', label: tr('Dana tertahan (escrow)'), hint: tr('Terkunci untuk order yang sedang dikerjakan mitra.'), value: summary.client_reserved ?? 0, color: 'var(--s4)', open: openEscrow }
+			]}
+			{@const rc = summary.reconciliation}
+			<div class="app-card mt-5 grid overflow-hidden xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+				<div class="p-5 sm:p-6">
+					<div class="flex flex-wrap items-baseline justify-between gap-2">
+						<h2 class="text-sm font-semibold text-muted-foreground">{tr("Wajib ada di rekening")}</h2>
+						<span class="text-[11px] tabular-nums text-muted-foreground">{from} → {to}</span>
+					</div>
+					<p class="finHero mt-2">{rp(total)}</p>
+
+					<div class="finBar mt-5" role="img" aria-label={tr("Komposisi uang yang wajib ada di rekening")}>
+						{#each parts as part (part.key)}
+							{#if part.value > 0}
+								<span class="finSeg" style="flex-grow: {part.value}; background-color: {part.color};" title={`${part.label}: ${rp(part.value)}`}></span>
+							{/if}
+						{/each}
+					</div>
+
+					<div class="mt-4">
+						{#each parts as part (part.key)}
+							<button type="button" class="finRow" onclick={part.open}>
+								<span class="finSwatch" style="background-color: {part.color};"></span>
+								<span class="min-w-0">
+									<span class="block text-sm font-medium">{part.label}</span>
+									<span class="block truncate text-xs text-muted-foreground">{part.hint}</span>
+								</span>
+								<span class="text-xs tabular-nums text-muted-foreground">{total > 0 ? Math.round((part.value / total) * 100) : 0}%</span>
+								<span class="finAmount">{rp(part.value)}</span>
+								<ChevronRight size={15} class="finChev" />
+							</button>
+						{/each}
+					</div>
+
+					{#if (summary.client_adjusted ?? 0) > 0}
+						<button type="button" class="finNote mt-3" onclick={() => openDeposits('available')}>
+							{tr("Saldo penyesuaian")} {rp(summary.client_adjusted ?? 0)} · {tr("bukan uang nyata, tidak dihitung")}
+						</button>
+					{/if}
 				</div>
-				<span class="text-[11px] text-muted-foreground tabular-nums">{from} → {to}</span>
+
+				<div class="finSide p-5 sm:p-6">
+					<h2 class="text-sm font-semibold text-muted-foreground">{tr("Cocokkan dengan gateway")}</h2>
+					{#if rc}
+						{@const unexplained = rc.components.find((c) => c.key === 'other')?.amount ?? 0}
+						<dl class="mt-4 space-y-3">
+							<div class="flex items-baseline justify-between gap-3">
+								<dt class="text-sm">{tr("Saldo gateway (perkiraan)")}</dt>
+								<dd class="text-base font-semibold tabular-nums">{rp(rc.gateway_balance_est)}</dd>
+							</div>
+							<div class="flex items-baseline justify-between gap-3">
+								<dt class="text-sm">{tr("Wajib ada, kumulatif")}</dt>
+								<dd class="text-base font-semibold tabular-nums">{rp(rc.required)}</dd>
+							</div>
+							<div class="flex items-baseline justify-between gap-3 border-t pt-3">
+								<dt class="text-sm font-semibold">{tr("Selisih")}</dt>
+								<dd class="text-xl font-semibold tabular-nums">{rc.gap < 0 ? '− ' : ''}{rp(Math.abs(rc.gap))}</dd>
+							</div>
+						</dl>
+						<div class="mt-4 flex flex-wrap items-center gap-2">
+							<Badge
+								label={unexplained === 0 ? tr('Selisih terjelaskan') : tr('Ada selisih belum tercatat')}
+								tone={unexplained === 0 ? 'success' : 'warning'}
+							/>
+							{#if rc.orphan_count > 0}
+								<Badge label={`${fmtNum(rc.orphan_count)} ${tr('publikasi tanpa penghasilan')}`} tone="warning" />
+							{/if}
+						</div>
+						<p class="mt-3 text-xs text-muted-foreground">
+							{tr("Net topup production")} {rp(rc.gateway_in_net)} · {tr("fee gateway")} {rp(rc.gateway_fee)}
+						</p>
+					{:else}
+						<p class="mt-4 text-sm text-muted-foreground">{tr("Data rekonsiliasi belum tersedia.")}</p>
+					{/if}
+					<button type="button" class="app-btn app-btn-soft mt-5 w-full" onclick={() => (cashOpen = true)}>
+						{tr("Lihat rekonsiliasi")}
+					</button>
+				</div>
 			</div>
-			<div class="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-				<!-- 1. Dana Titipan Klien -->
-				<article class="kpiCard kpiPosLiab">
-					<div class="flex items-center justify-between gap-2">
-						<div class="flex min-w-0 items-center gap-2.5">
-							<span class="kpiIcon kpiIconPosLiab"><Users size={15} /></span>
-							<Tooltip content={tr("Saldo klien yang ditopang topup asli lewat gateway. Secara hukum ini milik klien — dilarang dipakai operasional.")}>
-								<span class="kpiLabel">{tr("Dana Titipan Klien")}</span>
-							</Tooltip>
-						</div>
-						<span class="kpiBadge kpiBadgePosLiab">{tr("Liabilitas")}</span>
-					</div>
-					<p class="kpiValue kpiValuePosLiab mt-3">{rp(summary.client_available ?? 0)}</p>
-					<p class="kpiDesc mt-2">{tr("Bagian saldo klien yang berasal dari topup asli.")}</p>
-					<button type="button" class="kpiDetailLink mt-2" onclick={() => openDeposits('available')}>
-						{tr("Lihat milik siapa saja")} →
-					</button>
-				</article>
-
-				<!-- 1b. Saldo Penyesuaian: kredit dari penyesuaian manual / bonus /
-				     kompensasi. Bukan uang yang masuk, jadi tidak ikut wajib-ada. -->
-				<article class="kpiCard kpiPosAdj">
-					<div class="flex items-center justify-between gap-2">
-						<div class="flex min-w-0 items-center gap-2.5">
-							<span class="kpiIcon kpiIconPosAdj"><Users size={15} /></span>
-							<Tooltip content={tr("Saldo klien yang tidak ditopang topup asli: penyesuaian manual admin, bonus, atau kompensasi. Per klien, saldo penyesuaian dianggap terpakai lebih dulu.")}>
-								<span class="kpiLabel">{tr("Saldo Penyesuaian")}</span>
-							</Tooltip>
-						</div>
-						<span class="kpiBadge kpiBadgePosAdj">{tr("Bukan uang nyata")}</span>
-					</div>
-					<p class="kpiValue kpiValuePosAdj mt-3">{rp(summary.client_adjusted ?? 0)}</p>
-					<p class="kpiDesc mt-2">{tr("Tidak dihitung di Saldo Rek. Wajib Ada.")}</p>
-					<button type="button" class="kpiDetailLink mt-2" onclick={() => openDeposits('available')}>
-						{tr("Lihat milik siapa saja")} →
-					</button>
-				</article>
-
-				<!-- 2. Hak Mitra Belum Cair -->
-				<article class="kpiCard kpiPosDebt">
-					<div class="flex items-center justify-between gap-2">
-						<div class="flex min-w-0 items-center gap-2.5">
-							<span class="kpiIcon kpiIconPosDebt"><Handshake size={15} /></span>
-							<Tooltip content={tr("Komisi mitra media yang sudah jadi hak mereka tetapi belum ditransfer. Siap mereka tarik kapan saja.")}>
-								<span class="kpiLabel">{tr("Hak Mitra Belum Cair")}</span>
-							</Tooltip>
-						</div>
-						<span class="kpiBadge kpiBadgePosDebt">{tr("Utang")}</span>
-					</div>
-					<p class="kpiValue kpiValuePosDebt mt-3">{rp(summary.partner_unpaid ?? 0)}</p>
-					<p class="kpiDesc mt-2">{tr("Earning mitra pending + settled yang belum dibayar.")}</p>
-					<button type="button" class="kpiDetailLink mt-2" onclick={openPartnerUnpaid}>
-						{tr("Lihat per mitra")} →
-					</button>
-				</article>
-
-				<!-- 3. Dana Tertahan (Escrow) -->
-				<article class="kpiCard kpiPosEscrow">
-					<div class="flex items-center justify-between gap-2">
-						<div class="flex min-w-0 items-center gap-2.5">
-							<span class="kpiIcon kpiIconPosEscrow"><Lock size={15} /></span>
-							<Tooltip content={tr("Saldo klien yang dicadangkan untuk order yang sedang dikerjakan mitra. Terkunci sampai publikasi terbit atau dibatalkan.")}>
-								<span class="kpiLabel">{tr("Dana Tertahan (Escrow)")}</span>
-							</Tooltip>
-						</div>
-						<span class="kpiBadge kpiBadgePosEscrow">{tr("Terkunci")}</span>
-					</div>
-					<p class="kpiValue kpiValuePosEscrow mt-3">{rp(summary.client_reserved ?? 0)}</p>
-					<p class="kpiDesc mt-2">{tr("Reserved credit untuk order in-progress.")}</p>
-					<button type="button" class="kpiDetailLink mt-2" onclick={openEscrow}>
-						{tr("Lihat per order")} →
-					</button>
-				</article>
-
-				<!-- 4. Profit Bersih Tauthub -->
-				<article class="kpiCard kpiPosProfit">
-					<div class="flex items-center justify-between gap-2">
-						<div class="flex min-w-0 items-center gap-2.5">
-							<span class="kpiIcon kpiIconPosProfit"><PiggyBank size={15} /></span>
-							<Tooltip content={tr("Uang yang benar-benar diterima Tauthub: kredit publikasi yang dibayar klien dikurangi bagian mitra, ditambah pemakaian kredit non-publikasi (AI, potongan manual), dikurangi fee gateway, lalu dikurangi yang sudah ditarik atau dicairkan. Hanya ini yang sah Anda tarik ke rekening operasional.")}>
-								<span class="kpiLabel">{tr("Profit Bersih Tauthub")}</span>
-							</Tooltip>
-						</div>
-						<button
-							type="button"
-							class="kpiBadge kpiBadgePosProfit kpiBadgeAction"
-							onclick={openWithdraw}
-							disabled={(summary.tauthub_available_to_withdraw ?? 0) <= 0}
-						>{tr("Tarik")} →</button>
-					</div>
-					<p class="kpiValue kpiValuePosProfit mt-3">{rp(summary.tauthub_available_to_withdraw ?? 0)}</p>
-					<p class="kpiDesc mt-2">
-						{tr("Kotor")}: {rp(summary.tauthub_revenue_gross ?? 0)} · {tr("sudah ditarik")}: {rp(summary.tauthub_withdrawn ?? 0)}
-						<span class="block">
-							{tr("Komisi")} {rp(summary.tauthub_commission_gross ?? 0)} + {tr("mitra internal")} {rp(summary.tauthub_internal_gross ?? 0)}
-							+ {tr("non-publikasi")} {rp(summary.tauthub_nonpublication ?? 0)} − {tr("fee")} {rp(summary.tauthub_gateway_fee ?? 0)}
-						</span>
-					</p>
-					<button type="button" class="kpiDetailLink mt-2" onclick={openProfit}>
-						{tr("Lihat per publikasi")} →
-					</button>
-				</article>
-
-				<!-- 5. Saldo Rekening Wajib Ada -->
-				<article class="kpiCard kpiPosCash">
-					<div class="flex items-center justify-between gap-2">
-						<div class="flex min-w-0 items-center gap-2.5">
-							<span class="kpiIcon kpiIconPosCash"><Landmark size={15} /></span>
-							<Tooltip content={tr("Jumlah uang fisik yang WAJIB ada di rekening escrow. Jika saldo bank kurang dari ini, berarti ada dana titipan yang terpakai operasional.")}>
-								<span class="kpiLabel">{tr("Saldo Rek. Wajib Ada")}</span>
-							</Tooltip>
-						</div>
-						<span class="kpiBadge kpiBadgePosCash">{tr("Rek. Escrow")}</span>
-					</div>
-					<p class="kpiValue kpiValuePosCash mt-3">{rp(summary.cash_required_in_bank ?? 0)}</p>
-					<p class="kpiDesc mt-2">{tr("Titipan nyata + Escrow + Utang Mitra + Profit belum ditarik.")}</p>
-					<button type="button" class="kpiDetailLink mt-2" onclick={() => (cashOpen = true)}>
-						{tr("Lihat breakdown")} →
-					</button>
-				</article>
-			</div>
-
 		{/if}
-
 
 		<!-- Tren 12 bulan: Top Up vs GMV (omzet publikasi) vs Pencairan Mitra -->
 		<div class="app-card mt-6 p-5">
@@ -1059,9 +1008,9 @@
 					<p class="text-[11px] text-muted-foreground">{tr("Sudah ditarik")}</p>
 					<p class="mt-0.5 text-lg font-semibold tabular-nums">{rp(profitWithdrawn)}</p>
 				</div>
-				<div class="rounded-lg border px-3 py-2.5" style="background-color: color-mix(in srgb, #10b981 5%, var(--card));">
+				<div class="rounded-lg border px-3 py-2.5" style="background-color: var(--success-soft);">
 					<p class="text-[11px] text-muted-foreground">{tr("Tersedia untuk ditarik")}</p>
-					<p class="mt-0.5 text-lg font-semibold tabular-nums" style="color: #059669;">{rp(profitAvailable)}</p>
+					<p class="mt-0.5 text-lg font-semibold tabular-nums" style="color: var(--success);">{rp(profitAvailable)}</p>
 				</div>
 			</div>
 
@@ -1093,7 +1042,7 @@
 							{#each withdrawals as row (row.id)}
 								<tr class="border-t">
 									<td class="whitespace-nowrap px-3 py-2 text-muted-foreground">{fmtDateTime(row.created_at)}</td>
-									<td class="px-3 py-2 text-right tabular-nums font-semibold" style="color: {row.status === 'void' ? 'var(--muted-foreground)' : '#059669'};">
+									<td class="px-3 py-2 text-right tabular-nums font-semibold" style="color: {row.status === 'void' ? 'var(--muted-foreground)' : 'var(--success)'};">
 										{row.status === 'void' ? '' : '− '}{rp(row.amount)}
 									</td>
 									<td class="px-3 py-2 text-xs">
@@ -1241,7 +1190,7 @@
 											{/if}
 										</td>
 										<td class="px-2 py-2 text-right tabular-nums text-muted-foreground">{rp(row.real_in ?? 0)}</td>
-										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: #2563eb;">{rp(row.real_tc ?? 0)}</td>
+										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: var(--foreground);">{rp(row.real_tc ?? 0)}</td>
 										<td class="px-2 py-2 text-right tabular-nums">{rp(row.adjusted_tc ?? row.available_tc)}</td>
 										<td class="px-2 py-2 text-right tabular-nums text-muted-foreground" class:font-semibold={depositsScope === 'reserved'}>{rp(row.reserved_tc)}</td>
 										<td class="px-2 py-2 text-right tabular-nums">{rp(row.total_tc)}</td>
@@ -1353,7 +1302,7 @@
 											{rp(row.amount_settled_unpaid)}
 											<p class="text-[10px] text-muted-foreground">{fmtNum(row.count_settled_unpaid)} earning</p>
 										</td>
-										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: #ea580c;">{rp(row.total)}</td>
+										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: var(--foreground);">{rp(row.total)}</td>
 										<td class="px-2 py-2 text-right text-xs text-muted-foreground">
 											{row.last_earning_at ? fmtDateTime(row.last_earning_at) : '—'}
 										</td>
@@ -1395,7 +1344,7 @@
 							<div class="flex justify-between"><span>{tr("Fee gateway")}</span><span class="tabular-nums">− {rp(pt.gateway_fee)}</span></div>
 							<div class="flex justify-between border-t pt-1.5 font-semibold"><span>{tr("Pendapatan kotor")}</span><span class="tabular-nums">{rp(pt.gross)}</span></div>
 							<div class="flex justify-between"><span>{tr("Sudah ditarik atau dicairkan")}</span><span class="tabular-nums">− {rp(pt.withdrawn)}</span></div>
-							<div class="flex justify-between border-t pt-1.5 font-semibold" style="color: #059669;"><span>{tr("Profit Bersih tersedia")}</span><span class="tabular-nums">{rp(pt.available)}</span></div>
+							<div class="flex justify-between border-t pt-1.5 font-semibold" style="color: var(--success);"><span>{tr("Profit Bersih tersedia")}</span><span class="tabular-nums">{rp(pt.available)}</span></div>
 						</div>
 					{/if}
 					{#if profitMonthly.length > 0}
@@ -1416,7 +1365,7 @@
 											<td class="px-2 py-1">{m.month}</td>
 											<td class="px-2 py-1 text-right tabular-nums">{rp(m.gmv)}</td>
 											<td class="px-2 py-1 text-right tabular-nums">{rp(m.credit)}</td>
-											<td class="px-2 py-1 text-right tabular-nums font-semibold" style="color: #059669;">{rp(m.revenue)}</td>
+											<td class="px-2 py-1 text-right tabular-nums font-semibold" style="color: var(--success);">{rp(m.revenue)}</td>
 											<td class="px-2 py-1 text-right tabular-nums">{fmtNum(m.count)}</td>
 										</tr>
 									{/each}
@@ -1462,7 +1411,7 @@
 												—
 											{/if}
 										</td>
-										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: {row.revenue < 0 ? 'var(--destructive)' : '#059669'};">
+										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: {row.revenue < 0 ? 'var(--destructive)' : 'var(--success)'};">
 											{row.revenue < 0 ? '− ' : ''}{rp(Math.abs(row.revenue))}
 											{#if row.internal_share > 0}
 												<p class="text-[10px] font-normal text-muted-foreground">{tr("termasuk porsi mitra")} {rp(row.internal_share)}</p>
@@ -1512,9 +1461,9 @@
 						<span class="text-sm">{tr("Profit Bersih Tauthub (belum ditarik, termasuk mitra internal)")}</span>
 						<span class="text-sm font-semibold tabular-nums">{rp(summary.tauthub_available_to_withdraw ?? 0)}</span>
 					</div>
-					<div class="mt-2 flex items-center justify-between rounded-lg px-3 py-3" style="background-color: color-mix(in srgb, #8b5cf6 7%, var(--card)); border: 1px solid color-mix(in srgb, #8b5cf6 25%, var(--border));">
+					<div class="mt-2 flex items-center justify-between rounded-lg px-3 py-3" style="background-color: color-mix(in srgb, var(--primary) 7%, var(--card)); border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));">
 						<span class="text-sm font-semibold">{tr("Total yang Wajib Ada di Rekening")}</span>
-						<span class="text-lg font-bold tabular-nums" style="color: #7c3aed;">{rp(summary.cash_required_in_bank ?? 0)}</span>
+						<span class="text-lg font-bold tabular-nums" style="color: var(--foreground);">{rp(summary.cash_required_in_bank ?? 0)}</span>
 					</div>
 				</div>
 
@@ -1540,9 +1489,9 @@
 							<span class="text-sm">{tr("Wajib ada (kumulatif)")}</span>
 							<span class="text-sm font-semibold tabular-nums">{rp(rc.required)}</span>
 						</div>
-						<div class="flex items-center justify-between rounded-lg px-3 py-3" style="background-color: color-mix(in srgb, #10b981 7%, var(--card)); border: 1px solid color-mix(in srgb, #10b981 25%, var(--border));">
+						<div class="flex items-center justify-between rounded-lg px-3 py-3" style="background-color: color-mix(in srgb, var(--success) 7%, var(--card)); border: 1px solid color-mix(in srgb, var(--success) 25%, var(--border));">
 							<span class="text-sm font-semibold">{tr("Selisih: uang di gateway di luar kewajiban")}</span>
-							<span class="text-lg font-bold tabular-nums" style="color: #059669;">{rp(rc.gap)}</span>
+							<span class="text-lg font-bold tabular-nums" style="color: var(--success);">{rp(rc.gap)}</span>
 						</div>
 					</div>
 
@@ -1709,180 +1658,141 @@
 
 	/* KPI utama: nominal sebagai fokus, sparkline sebagai konteks tren.
 	   Warna semantik hanya pada nominal, badge, ikon, dan garis grafik. */
-	.kpiCard {
-		display: flex;
-		flex-direction: column;
-		min-height: 148px;
-		padding: 16px;
-		border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
-		border-radius: 14px;
-		background: var(--card);
-		box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+	/* Warna seri data (komposisi neraca + grafik). Empat hue kategorikal yang
+	   sudah divalidasi untuk permukaan terang dan gelap; teks tetap memakai
+	   token teks, warna hanya di tanda (batang, swatch). */
+	.fin {
+		--s1: #2a78d6;
+		--s2: #eb6834;
+		--s3: #1baf7a;
+		--s4: #eda100;
 	}
-	.kpiIcon {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		flex: 0 0 auto;
-		width: 28px;
-		height: 28px;
-		border-radius: 9px;
+	:global(.dark) .fin {
+		--s1: #3987e5;
+		--s2: #d95926;
+		--s3: #199e70;
+		--s4: #c98500;
 	}
-	.kpiLabel {
-		overflow: hidden;
-		font-size: 13px;
-		font-weight: 600;
-		color: var(--foreground);
-		white-space: nowrap;
-		text-overflow: ellipsis;
-	}
-	.kpiValue {
-		font-size: 27px;
+
+	.finHero {
+		font-size: clamp(30px, 4vw, 42px);
 		font-weight: 700;
 		line-height: 1.05;
-		letter-spacing: -0.02em;
-		color: var(--foreground);
+		letter-spacing: -0.025em;
 		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
+		color: var(--foreground);
 	}
-	.kpiDesc {
-		min-width: 0;
-		font-size: 11.5px;
-		line-height: 1.45;
-		color: var(--muted-foreground);
+	.finBar {
+		display: flex;
+		gap: 2px;
+		height: 12px;
 	}
-	.kpiBadge {
-		flex: 0 0 auto;
-		padding: 3px 9px;
-		border-radius: 999px;
-		font-size: 11px;
-		font-weight: 600;
-		line-height: 1.45;
-		white-space: nowrap;
+	.finSeg {
+		min-width: 4px;
+		border-radius: 2px;
 	}
-	/* ===== Posisi Keuangan (balance sheet view) =====
-	   Lima warna khas supaya mudah dipindai; semua pakai color-mix dengan
-	   token tema biar otomatis beradaptasi di light/dark. */
-	/* 1. Dana Titipan Klien — biru info */
-	.kpiPosLiab {
-		background: color-mix(in srgb, #3b82f6 3%, var(--card));
-		border-color: color-mix(in srgb, #3b82f6 18%, var(--border));
+	.finSeg:first-child {
+		border-top-left-radius: 4px;
+		border-bottom-left-radius: 4px;
 	}
-	.kpiIconPosLiab {
-		background: color-mix(in srgb, #3b82f6 12%, white);
-		color: #2563eb;
+	.finSeg:last-child {
+		border-top-right-radius: 4px;
+		border-bottom-right-radius: 4px;
 	}
-	.kpiValuePosLiab { color: #2563eb; }
-	.kpiBadgePosLiab {
-		background: color-mix(in srgb, #3b82f6 10%, white);
-		color: #1d4ed8;
-	}
-	/* 1b. Saldo Penyesuaian — netral, sengaja tidak menonjol */
-	.kpiPosAdj {
-		background: color-mix(in srgb, var(--muted-foreground) 3%, var(--card));
-		border-style: dashed;
-	}
-	.kpiIconPosAdj {
-		background: var(--secondary);
-		color: var(--muted-foreground);
-	}
-	.kpiValuePosAdj { color: var(--muted-foreground); }
-	.kpiBadgePosAdj {
-		background: var(--secondary);
-		color: var(--muted-foreground);
-	}
-	/* 2. Hak Mitra Belum Cair — oranye utang */
-	.kpiPosDebt {
-		background: color-mix(in srgb, #f97316 3%, var(--card));
-		border-color: color-mix(in srgb, #f97316 20%, var(--border));
-	}
-	.kpiIconPosDebt {
-		background: color-mix(in srgb, #f97316 12%, white);
-		color: #ea580c;
-	}
-	.kpiValuePosDebt { color: #ea580c; }
-	.kpiBadgePosDebt {
-		background: color-mix(in srgb, #f97316 11%, white);
-		color: #c2410c;
-	}
-	/* 3. Dana Tertahan Escrow — kuning/amber */
-	.kpiPosEscrow {
-		background: color-mix(in srgb, #eab308 3%, var(--card));
-		border-color: color-mix(in srgb, #eab308 18%, var(--border));
-	}
-	.kpiIconPosEscrow {
-		background: color-mix(in srgb, #eab308 14%, white);
-		color: #a16207;
-	}
-	.kpiValuePosEscrow { color: #a16207; }
-	.kpiBadgePosEscrow {
-		background: color-mix(in srgb, #eab308 13%, white);
-		color: #854d0e;
-	}
-	/* 4. Profit Bersih Tauthub — hijau sah */
-	.kpiPosProfit {
-		background: color-mix(in srgb, #10b981 3%, var(--card));
-		border-color: color-mix(in srgb, #10b981 20%, var(--border));
-	}
-	.kpiIconPosProfit {
-		background: color-mix(in srgb, #10b981 13%, white);
-		color: #059669;
-	}
-	.kpiValuePosProfit { color: #059669; }
-	.kpiBadgePosProfit {
-		background: color-mix(in srgb, #10b981 12%, white);
-		color: #047857;
-	}
-	/* 5. Saldo Rekening Wajib Ada — ungu aksen */
-	.kpiPosCash {
-		background: color-mix(in srgb, #8b5cf6 4%, var(--card));
-		border-color: color-mix(in srgb, #8b5cf6 22%, var(--border));
-	}
-	.kpiIconPosCash {
-		background: color-mix(in srgb, #8b5cf6 13%, white);
-		color: #7c3aed;
-	}
-	.kpiValuePosCash { color: #7c3aed; }
-	.kpiBadgePosCash {
-		background: color-mix(in srgb, #8b5cf6 12%, white);
-		color: #6d28d9;
-	}
-	/* Link "Lihat rincian →" di tiap kartu posisi keuangan. Tombol tipis supaya
-	   tidak bersaing dengan angka utama. */
-	.kpiDetailLink {
-		align-self: flex-start;
-		padding: 2px 0;
-		background: transparent;
+	.finRow {
+		appearance: none;
+		display: grid;
+		grid-template-columns: 10px minmax(0, 1fr) auto auto 16px;
+		align-items: center;
+		gap: 12px;
+		width: 100%;
+		min-height: 52px;
+		padding: 8px;
 		border: 0;
+		border-top: 1px solid var(--border);
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		text-align: left;
 		cursor: pointer;
-		font-size: 11.5px;
-		font-weight: 500;
-		color: var(--muted-foreground);
-		text-decoration: underline;
-		text-underline-offset: 3px;
-		transition: color 120ms ease;
+		transition: background-color 0.15s ease;
 	}
-	.kpiDetailLink:hover {
-		color: var(--primary);
+	.finRow:hover {
+		background: color-mix(in srgb, var(--primary) 5%, transparent);
 	}
-	.kpiDetailLink:focus-visible {
+	.finRow:active {
+		background: color-mix(in srgb, var(--primary) 9%, transparent);
+	}
+	.finRow:focus-visible,
+	.finNote:focus-visible {
 		outline: 2px solid var(--primary);
-		outline-offset: 2px;
+		outline-offset: -2px;
+		border-radius: 6px;
+	}
+	.finSwatch {
+		width: 10px;
+		height: 10px;
 		border-radius: 3px;
 	}
-
-	/* Badge interaktif (tombol kecil di kartu Profit). */
-	.kpiBadgeAction {
+	.finAmount {
+		min-width: 104px;
+		font-size: 14px;
+		font-weight: 600;
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+	.finRow :global(.finChev) {
+		color: var(--muted-foreground);
+		transition: transform 0.15s ease, color 0.15s ease;
+	}
+	.finRow:hover :global(.finChev) {
+		color: var(--primary);
+		transform: translateX(2px);
+	}
+	.finNote {
+		appearance: none;
+		padding: 0;
 		border: 0;
+		background: transparent;
+		font: inherit;
+		font-size: 12px;
+		color: var(--muted-foreground);
+		text-align: left;
+		text-decoration: underline;
+		text-underline-offset: 3px;
 		cursor: pointer;
-		transition: background-color 120ms ease;
 	}
-	.kpiBadgeAction:hover:not(:disabled) {
-		background: color-mix(in srgb, #10b981 20%, white);
+	.finNote:hover {
+		color: var(--primary);
 	}
-	.kpiBadgeAction:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
+	.finSide {
+		border-top: 1px solid var(--border);
+		background: color-mix(in srgb, var(--secondary) 45%, var(--card));
 	}
-
-	</style>
+	@media (min-width: 1280px) {
+		.finSide {
+			border-top: 0;
+			border-left: 1px solid var(--border);
+		}
+	}
+	@media (max-width: 520px) {
+		.finRow {
+			grid-template-columns: 10px minmax(0, 1fr) auto 16px;
+		}
+		.finRow > span:nth-child(3) {
+			display: none;
+		}
+		.finAmount {
+			min-width: 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.finRow,
+		.finRow :global(.finChev) {
+			transition: none;
+		}
+		.finRow:hover :global(.finChev) {
+			transform: none;
+		}
+	}
+</style>
