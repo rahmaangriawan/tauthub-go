@@ -252,6 +252,11 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
+	recon, err := d.finGatewayRecon(ctx, asOf, toExcl, excl, deposits, partnerUnpaidAt)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
 
 	// ---------- posisi berjalan (tidak dibatasi rentang) ----------
 	topupPending, _ := d.queryRow(ctx, `
@@ -326,6 +331,7 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		"tauthub_available_to_withdraw": profitAvailable,
 		// Jumlah fisik yang wajib ada di rekening escrow.
 		"cash_required_in_bank":   cashRequired,
+		"reconciliation":          recon,
 		"invoice_paid":             finReportInt(invoiceRow.numOr("total")),
 		"invoice_paid_count":       invoiceRow.intOr("n", 0),
 		"compensation_credits":     finReportInt(compensationRow.numOr("total")),

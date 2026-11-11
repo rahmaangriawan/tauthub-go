@@ -204,12 +204,15 @@ func (d *Deps) FinancePartnerUnpaidDetail(w http.ResponseWriter, r *http.Request
 		  WHERE (e.status = 'pending'
 		     OR (e.status = 'settled' AND (s.id IS NULL OR s.status <> 'paid')))
 		    AND e.partner_id::text != ALL($2::text[])
+		    AND NOT EXISTS (
+		      SELECT 1 FROM publications pb
+		      WHERE pb.id = e.publication_id AND pb.brand_id::text = ANY($3::text[]))
 		  GROUP BY pt.id, pt.name, u.email
 		  ORDER BY (COALESCE(SUM(CASE WHEN e.status = 'pending' THEN e.amount ELSE 0 END), 0)
 		          + COALESCE(SUM(CASE WHEN e.status = 'settled'
 		                             AND (s.status IS NULL OR s.status <> 'paid')
 		                            THEN e.amount ELSE 0 END), 0)) DESC
-		  LIMIT $1`, limit, excl.partnerArr())
+		  LIMIT $1`, limit, excl.partnerArr(), excl.brandArr())
 	if err != nil {
 		writeErr(w, d, err)
 		return

@@ -38,6 +38,13 @@
 		amount: number;
 		status: string;
 	};
+	type Recon = {
+		gateway_in_gross: number; gateway_fee: number; gateway_in_net: number;
+		admin_withdrawn: number; gateway_balance_est: number; required: number; gap: number;
+		components: Array<{ key: string; label: string; amount: number; note: string }>;
+		orphan_count: number;
+		orphan_publications: Array<{ media: string; partner: string; client_price: number; credit: number }>;
+	};
 	type Summary = {
 		money_in: number; money_in_count: number;
 		money_in_fee?: number; money_in_net?: number;
@@ -59,6 +66,7 @@
 		tauthub_withdrawn?: number;            // sudah dicatat tertarik admin
 		tauthub_available_to_withdraw?: number;// Profit Bersih siap ditarik
 		cash_required_in_bank?: number;        // jumlah uang fisik wajib ada di rekening
+		reconciliation?: Recon;                // pencocokan dengan saldo gateway
 	};
 	type Monthly = { month: string; label: string; money_in: number; money_out: number; gmv?: number };
 	type DormantBrand = {
@@ -1437,7 +1445,7 @@
 
 		<!-- ============ Modal: Saldo Rek. Wajib Ada — breakdown rumus ============ -->
 		{#if cashOpen}
-			<Modal title={tr("Saldo Rekening Wajib Ada — Breakdown")} maxWidth="lg" onClose={() => (cashOpen = false)}>
+			<Modal title={tr("Saldo Rekening Wajib Ada — Breakdown")} maxWidth="2xl" onClose={() => (cashOpen = false)}>
 				<p class="text-sm text-muted-foreground">
 					{tr("Angka pembanding dengan saldo bank fisik. Jika saldo rekening escrow kurang dari ini, berarti ada uang milik orang lain yang terpakai operasional.")}
 				</p>
@@ -1463,6 +1471,86 @@
 						<span class="text-lg font-bold tabular-nums" style="color: #7c3aed;">{rp(summary.cash_required_in_bank ?? 0)}</span>
 					</div>
 				</div>
+
+				{#if summary.reconciliation}
+					{@const rc = summary.reconciliation}
+					<h3 class="mt-6 text-sm font-semibold">{tr("Cocokkan dengan saldo gateway")}</h3>
+					<p class="mt-1 text-xs text-muted-foreground">
+						{tr("Kumulatif sampai tanggal akhir rentang, tidak bergantung pada filter periode. Pencairan mitra yang dibayar lewat gateway belum dikurangkan, jadi cocokkan angka ini dengan saldo di halaman gateway.")}
+					</p>
+					<div class="mt-3 space-y-2">
+						<div class="flex items-center justify-between rounded-lg border px-3 py-2">
+							<span class="text-sm">
+								{tr("Perkiraan saldo gateway")}
+								<span class="block text-[11px] text-muted-foreground">
+									{tr("Net topup production")} {rp(rc.gateway_in_net)}
+									({tr("bruto")} {rp(rc.gateway_in_gross)} − {tr("fee")} {rp(rc.gateway_fee)})
+									{#if rc.admin_withdrawn > 0}− {tr("penarikan profit")} {rp(rc.admin_withdrawn)}{/if}
+								</span>
+							</span>
+							<span class="text-sm font-semibold tabular-nums">{rp(rc.gateway_balance_est)}</span>
+						</div>
+						<div class="flex items-center justify-between rounded-lg border px-3 py-2">
+							<span class="text-sm">{tr("Wajib ada (kumulatif)")}</span>
+							<span class="text-sm font-semibold tabular-nums">{rp(rc.required)}</span>
+						</div>
+						<div class="flex items-center justify-between rounded-lg px-3 py-3" style="background-color: color-mix(in srgb, #10b981 7%, var(--card)); border: 1px solid color-mix(in srgb, #10b981 25%, var(--border));">
+							<span class="text-sm font-semibold">{tr("Selisih: uang di gateway di luar kewajiban")}</span>
+							<span class="text-lg font-bold tabular-nums" style="color: #059669;">{rp(rc.gap)}</span>
+						</div>
+					</div>
+
+					<p class="mt-4 text-xs font-semibold text-muted-foreground">{tr("Isi selisih:")}</p>
+					<div class="mt-2 overflow-x-auto">
+						<table class="w-full text-sm" style="min-width: 520px;">
+							<tbody>
+								{#each rc.components as c (c.key)}
+									<tr class="border-t">
+										<td class="px-2 py-2">
+											<p class="font-medium">{tr(c.label)}</p>
+											<p class="text-[11px] text-muted-foreground">{tr(c.note)}</p>
+										</td>
+										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: {c.amount < 0 ? 'var(--destructive)' : 'inherit'};">
+											{c.amount < 0 ? '− ' : ''}{rp(Math.abs(c.amount))}
+										</td>
+									</tr>
+								{/each}
+								<tr class="border-t">
+									<td class="px-2 py-2 font-semibold">{tr("Total")}</td>
+									<td class="px-2 py-2 text-right tabular-nums font-bold">{rp(rc.gap)}</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+
+					{#if rc.orphan_publications.length > 0}
+						<p class="mt-5 text-xs font-semibold text-muted-foreground">
+							{tr("Publikasi terbit tanpa catatan penghasilan mitra")} ({fmtNum(rc.orphan_count)}):
+						</p>
+						<div class="mt-2 overflow-x-auto">
+							<table class="w-full text-sm" style="min-width: 520px;">
+								<thead>
+									<tr class="text-left text-xs text-muted-foreground">
+										<th class="px-2 py-1.5 font-medium">{tr("Media")}</th>
+										<th class="px-2 py-1.5 font-medium">{tr("Mitra")}</th>
+										<th class="px-2 py-1.5 text-right font-medium">{tr("Harga")}</th>
+										<th class="px-2 py-1.5 text-right font-medium">{tr("Kredit terpakai")}</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each rc.orphan_publications as o, i (i)}
+										<tr class="border-t">
+											<td class="px-2 py-1.5">{o.media || '—'}</td>
+											<td class="px-2 py-1.5">{o.partner || '—'}</td>
+											<td class="px-2 py-1.5 text-right tabular-nums">{rp(o.client_price)}</td>
+											<td class="px-2 py-1.5 text-right tabular-nums">{rp(o.credit)}</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{/if}
+				{/if}
 				{#snippet footer()}
 					<button type="button" class="app-btn app-btn-soft" onclick={() => (cashOpen = false)}>{tr("Tutup")}</button>
 				{/snippet}

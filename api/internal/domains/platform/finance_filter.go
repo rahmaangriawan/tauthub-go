@@ -153,7 +153,8 @@ func (d *Deps) finDepositsAsOf(ctx context.Context, asOf time.Time, excl finFilt
 }
 
 // finPartnerUnpaidAsOf: komisi mitra yang BELUM dibayar pada titik `asOf`.
-// Best-effort: earning yang dibuat <= asOf dan status sekarang bukan
+// Earning dari order brand yang dikecualikan (akun uji) tidak dihitung: tidak
+// ada uang gateway di baliknya. Best-effort: earning yang dibuat <= asOf dan status sekarang bukan
 // "sudah dibayar sebelum asOf". Earning voided belakangan tetap tidak dihitung
 // (approksimasi — audit log untuk status historis tidak tersedia).
 func (d *Deps) finPartnerUnpaidAsOf(ctx context.Context, asOf time.Time, excl finFilterCtx) (int64, error) {
@@ -164,13 +165,16 @@ func (d *Deps) finPartnerUnpaidAsOf(ctx context.Context, asOf time.Time, excl fi
 		WHERE e.created_at <= $1
 		  AND e.status IN ('pending','settled')
 		  AND e.partner_id::text != ALL($2::text[])
+		  AND NOT EXISTS (
+		    SELECT 1 FROM publications pb
+		    WHERE pb.id = e.publication_id AND pb.brand_id::text = ANY($3::text[]))
 		  AND NOT (
 		    e.status = 'settled'
 		    AND s.id IS NOT NULL
 		    AND s.status = 'paid'
 		    AND s.paid_at IS NOT NULL
 		    AND s.paid_at <= $1
-		  )`, asOf, excl.partnerArr())
+		  )`, asOf, excl.partnerArr(), excl.brandArr())
 	if err != nil {
 		return 0, err
 	}
