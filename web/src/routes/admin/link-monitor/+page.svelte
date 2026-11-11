@@ -152,19 +152,22 @@
 	// Konfirmasi pengembalian saldo: panel di dalam halaman, bukan confirm().
 	let refundPanelFor = $state<string | null>(null);
 
-	const openClaimCount = $derived(claims.filter((c) => c.status !== 'refunded' && c.status !== 'rejected').length);
+	const claimDone = (st: string) => st === 'refunded' || st === 'rejected' || st === 'replaced';
+	const openClaimCount = $derived(claims.filter((c) => !claimDone(c.status)).length);
 
 	const CLAIM_STATUS_LABEL: Record<string, string> = $derived({
 		submitted: tr('Menunggu diperiksa'), checking: tr('Sedang diperiksa'),
 		contacted: tr('Menghubungi pemilik domain'), refunded: tr('Dana dikembalikan'),
-		rejected: tr('Ditolak')
+		rejected: tr('Ditolak'), replaced: tr('Artikel pengganti dibuat')
 	});
 	const claimTone = (s: string): 'success' | 'warning' | 'danger' | 'neutral' =>
-		s === 'refunded' ? 'success' : s === 'rejected' ? 'neutral' : 'warning';
+		s === 'refunded' || s === 'replaced' ? 'success' : s === 'rejected' ? 'neutral' : 'warning';
 	const fmtDay = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '—');
 	const fmtRp = (n: number | null) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;	const detectionLabel = (c: ClaimRow) =>
 		c.detection_state === 'link_removed' ? tr('Tautan dihapus')
 		: c.detection_state === 'gone' ? tr('Hilang (404)')
+		: c.detection_state === 'noindex' ? tr('Noindex')
+		: c.detection_state === 'rel_changed' ? tr('Atribut tautan berubah')
 		: c.link_state ?? '—';
 
 	function toggleClaim(c: ClaimRow) {
@@ -493,7 +496,7 @@
 								</div>
 							</div>
 
-							{#if !c.eligible && c.status !== 'refunded' && c.status !== 'rejected'}
+							{#if !c.eligible && !claimDone(c.status)}
 								<p class="mt-2 text-xs" style="color: var(--warning);">{tr('Tidak bisa diklaim:')} {c.ineligible_reason}</p>
 							{/if}
 
@@ -508,7 +511,7 @@
 										<textarea class="app-input w-full" rows="2" bind:value={noteOwner}></textarea>
 									</label>
 								</div>
-								{#if c.status !== 'refunded' && c.status !== 'rejected'}
+								{#if !claimDone(c.status)}
 									<label class="mt-3 block">
 										<span class="field-label">{tr('Alasan penolakan, wajib bila klaim ditolak')}</span>
 										<input class="app-input w-full" bind:value={rejectReason} />

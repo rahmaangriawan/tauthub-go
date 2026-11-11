@@ -397,8 +397,10 @@ func (d *Deps) LinkMonitorRequestReplacement(w http.ResponseWriter, r *http.Requ
 		INSERT INTO link_guardian_claims
 		  (id, publication_id, brand_id, status, detection_state, anchor_expected, created_by)
 		SELECT $4, $1, $2, 'submitted',
-		       CASE WHEN lc.in_article_state = 'removed' THEN 'link_removed'
-		            WHEN lc.state = 'gone' THEN 'gone' END,
+		       CASE WHEN lc.state = 'gone' THEN 'gone'
+		            WHEN lc.in_article_state = 'removed' THEN 'link_removed'
+		            WHEN lc.noindex_state = 'noindex' THEN 'noindex'
+		            WHEN lc.rel_state = 'changed' THEN 'rel_changed' END,
 		       lc.in_article_anchor, $3
 		  FROM (SELECT 1) AS x
 		  LEFT JOIN publication_link_checks lc ON lc.publication_id = $1

@@ -2373,6 +2373,29 @@ func (d *Deps) mpRunAutoReplace(ctx context.Context, pub ptRow, publicationID st
 		return map[string]any{"replaced": false, "skipped_reason": "auto-replace limit reached"}
 	}
 
+	created, candidate, reason := d.mpCreateReplacementPublication(ctx, pub, publicationID)
+	if created == "" {
+		return map[string]any{"replaced": false, "skipped_reason": reason}
+	}
+	link := "/klien/" + brandID + "/publications"
+	d.mpNotifyBrandMembers(ctx, brandID, "publication.auto_replaced", "Artikel dialihkan ke media pengganti",
+		"Setelah artikel di "+pub.strOr("media_name", "media")+" tidak bisa diakses lagi, \""+pub.strOr("document_title", "Artikel")+"\" otomatis dialihkan ke "+candidate.Name+" untuk diproses ulang.", &link)
+	return map[string]any{
+		"replaced":       true,
+		"publication_id": created,
+		"media_id":       candidate.ID,
+		"media_name":     candidate.Name,
+	}
+}
+
+// mpCreateReplacementPublication: pilih media pengganti yang belum dipakai
+// artikel ini (kategori sama, harga tidak melebihi harga asli) lalu buat
+// publikasi baru yang menggantikan publikasi lama (replaces_id). Mengembalikan
+// id publikasi baru dan media terpilih, atau id kosong beserta alasan. Tidak
+// memeriksa pengaturan auto-replace brand dan tidak mengirim notifikasi:
+// pemanggil yang menentukan keduanya (auto-replace 404 dan garansi tautan).
+func (d *Deps) mpCreateReplacementPublication(ctx context.Context, pub ptRow, publicationID string) (string, mpMediaRecommendation, string) {
+	brandID := pub.strOr("brand_id", "")
 	documentID := pub.strOr("document_id", "")
 	exclude := map[string]bool{}
 	original, _ := d.queryRow(ctx, "SELECT media_id FROM publications WHERE id = $1 LIMIT 1", publicationID)
@@ -2396,7 +2419,7 @@ func (d *Deps) mpRunAutoReplace(ctx context.Context, pub ptRow, publicationID st
 	}
 	candidates, err := d.mpRecommendMedia(ctx, pub.strOr("media_category", ""), budget, 10, exclude)
 	if err != nil || len(candidates) == 0 {
-		return map[string]any{"replaced": false, "skipped_reason": "no alternative media"}
+		return "", mpMediaRecommendation{}, "no alternative media"
 	}
 	for _, candidate := range candidates {
 		created, createErr := d.mpCreatePublicationRecord(ctx, mpCreatePublicationInput{
@@ -2415,17 +2438,9 @@ func (d *Deps) mpRunAutoReplace(ctx context.Context, pub ptRow, publicationID st
 			INSERT INTO audit_logs (id, brand_id, actor_user_id, action, target_type, target_id)
 			VALUES (gen_random_uuid(), $1, $2, 'publication.auto_replaced', 'publication', $3)`,
 			brandID, mpNullable(pub.strPtrSafe("created_by")), publicationID)
-		link := "/klien/" + brandID + "/publications"
-		d.mpNotifyBrandMembers(ctx, brandID, "publication.auto_replaced", "Artikel dialihkan ke media pengganti",
-			"Setelah artikel di "+pub.strOr("media_name", "media")+" tidak bisa diakses lagi, \""+pub.strOr("document_title", "Artikel")+"\" otomatis dialihkan ke "+candidate.Name+" untuk diproses ulang.", &link)
-		return map[string]any{
-			"replaced":       true,
-			"publication_id": created,
-			"media_id":       candidate.ID,
-			"media_name":     candidate.Name,
-		}
+		return created, candidate, ""
 	}
-	return map[string]any{"replaced": false, "skipped_reason": "no candidate passed the editorial check"}
+	return "", mpMediaRecommendation{}, "no candidate passed the editorial check"
 }
 
 func (m ptRow) strPtrSafe(key string) *string {

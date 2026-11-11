@@ -231,7 +231,17 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 		       c.in_article_checked_at, c.in_article_error,
 		       COALESCE(m.domain_verified, FALSE) AS domain_verified,
 		       `+db.LinkWarrantySQL("p", "m")+` AS in_warranty,
-		       g.id AS claim_id, g.status AS claim_status, g.refund_idr, g.refund_tc
+		       g.id AS claim_id, g.status AS claim_status, g.refund_idr, g.refund_tc,
+
+		       c.rel_value, c.rel_state, c.noindex_state, c.violation_kind, c.violation_streak,
+
+		       g.detection_state, g.client_choice, COALESCE(g.auto_detected, FALSE) AS claim_auto,
+
+		       m.link_duration_months, m.link_rel,
+
+		       CASE WHEN COALESCE(m.link_duration_months, 12) = 0 THEN NULL
+
+		            ELSE p.published_at + make_interval(months => COALESCE(m.link_duration_months, 12)) END AS warranty_until
 		FROM publications p
 		LEFT JOIN publication_link_checks c ON c.publication_id = p.id
 		LEFT JOIN link_guardian_claims g ON g.publication_id = p.id
@@ -257,12 +267,20 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 		var domainVerified, inWarranty bool
 		var claimID, claimStatus *string
 		var refundIDR, refundTC *int
+		var relValue, relState, noindexState, violationKind *string
+		var claimDetection, claimChoice, linkRel *string
+		var claimAuto bool
+		var linkDurationMonths, violationStreak *int
+		var warrantyUntil *time.Time
 		if rowsQ.Scan(&id, &documentID, &mediaID, &publishedURL, &publishedAt, &title, &mediaName,
 			&state, &lastCheckedAt, &httpStatus, &consecutiveFailures, &lastError,
 			&finalURL, &firstGoneAt,
 			&inArticleState, &inArticleAnchor, &inArticleFound, &inArticleCheckedAt, &inArticleError,
 			&domainVerified, &inWarranty,
-			&claimID, &claimStatus, &refundIDR, &refundTC) == nil {
+			&claimID, &claimStatus, &refundIDR, &refundTC,
+				&relValue, &relState, &noindexState, &violationKind, &violationStreak,
+				&claimDetection, &claimChoice, &claimAuto,
+				&linkDurationMonths, &linkRel, &warrantyUntil) == nil {
 			items = append(items, map[string]any{
 				"id": id, "document_id": documentID, "media_id": mediaID,
 				"published_url": publishedURL, "published_at": tsOrNil(publishedAt),
@@ -283,6 +301,12 @@ func (d *Deps) LinkMonitor(w http.ResponseWriter, r *http.Request) {
 				"claim_status": claimStatus,
 				"refund_idr":   refundIDR,
 				"refund_tc":    refundTC,
+				// Bukti tayang dan garansi: atribut rel, noindex, jenis pelanggaran,
+				// pilihan klien, dan batas masa garansi (null = permanen).
+				"rel_value": relValue, "rel_state": relState, "noindex_state": noindexState,
+				"violation_kind": violationKind, "violation_streak": violationStreak, "claim_detection": claimDetection,
+				"claim_choice": claimChoice, "claim_auto": claimAuto, "link_rel": linkRel,
+				"link_duration_months": linkDurationMonths, "warranty_until": tsOrNil(warrantyUntil),
 			})
 		}
 	}

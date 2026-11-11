@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
+	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
 
@@ -81,10 +82,22 @@ func (d *Deps) CampaignReportGet(w http.ResponseWriter, r *http.Request) {
 	publications, err := d.queryRows(r.Context(), `
 		SELECT p.id, p.status, p.published_at, p.published_url,
 		       d.title AS document_title, m.name AS media_name, m.category AS media_category,
-		       p.featured_image_url
+		       p.featured_image_url,
+		       lc.state AS link_state, lc.last_checked_at, lc.rel_value, lc.rel_state, lc.noindex_state,
+		       lc.in_article_state,
+		       (SELECT COUNT(*) FROM publication_link_snapshots sn WHERE sn.publication_id = p.id)::int AS snapshot_count,
+		       (SELECT sn.checked_at FROM publication_link_snapshots sn
+		         WHERE sn.publication_id = p.id AND sn.kind = 'publish' LIMIT 1) AS baseline_at,
+		       m.link_rel, m.link_duration_months,
+		       CASE WHEN COALESCE(m.link_duration_months, 12) = 0 THEN NULL
+		            ELSE p.published_at + make_interval(months => COALESCE(m.link_duration_months, 12)) END AS warranty_until,
+		       `+db.LinkWarrantySQL("p", "m")+` AS in_warranty,
+		       g.status AS claim_status
 		FROM publications p
 		JOIN content_documents d ON d.id = p.document_id
 		JOIN media m ON m.id = p.media_id
+		LEFT JOIN publication_link_checks lc ON lc.publication_id = p.id
+		LEFT JOIN link_guardian_claims g ON g.publication_id = p.id
 		WHERE p.campaign_id = $1 AND p.status <> 'cancelled'
 		ORDER BY p.published_at DESC NULLS LAST, p.created_at DESC
 		LIMIT 200`, campaignID)
@@ -104,6 +117,20 @@ func (d *Deps) CampaignReportGet(w http.ResponseWriter, r *http.Request) {
 			"featured_image_url": p.raw("featured_image_url"),
 			"published_at":      p.timePtr("published_at"),
 			"published_url":     p.raw("published_url"),
+			// Bukti tayang: kondisi tautan menurut pemantauan Tauthub.
+			"link_state":         p.raw("link_state"),
+			"in_article_state":   p.raw("in_article_state"),
+			"last_checked_at":    p.timePtr("last_checked_at"),
+			"baseline_at":        p.timePtr("baseline_at"),
+			"snapshot_count":     p.intOr("snapshot_count", 0),
+			"rel_value":          p.raw("rel_value"),
+			"rel_state":          p.raw("rel_state"),
+			"noindex_state":      p.raw("noindex_state"),
+			"link_rel":           p.raw("link_rel"),
+			"link_duration_months": p.raw("link_duration_months"),
+			"warranty_until":     p.timePtr("warranty_until"),
+			"in_warranty":        p.raw("in_warranty") == true,
+			"claim_status":       p.raw("claim_status"),
 		})
 	}
 

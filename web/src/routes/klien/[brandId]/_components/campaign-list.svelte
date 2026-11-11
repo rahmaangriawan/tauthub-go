@@ -59,6 +59,7 @@
 	let shareToken = $state('');
 	let shareLoading = $state(false);
 	let shareError = $state('');
+let revoking = $state(false);
 
 	// Popup buat kampanye.
 	let createOpen = $state(false);
@@ -193,6 +194,26 @@
 			shareError = reason instanceof Error ? reason.message : String(reason);
 		} finally {
 			shareLoading = false;
+		}
+	}
+
+	// Cabut tautan berita acara: halaman publiknya langsung 404. Membagikan lagi
+	// membuat token baru, token lama tetap mati.
+	async function revokeShare() {
+		if (!shareFor || revoking) return;
+		if (!window.confirm(tr('Cabut tautan ini? Siapa pun yang memegangnya tidak bisa membuka laporan lagi.'))) return;
+		revoking = true;
+		shareError = '';
+		try {
+			const res = await apiRequest(`/v1/brands/${brandId}/campaigns/${shareFor.id}/report/share`, { method: 'DELETE' });
+			const j = await res.json().catch(() => ({}));
+			if (!res.ok) throw new Error(j.detail ?? tr('Gagal mencabut tautan.'));
+			shareToken = '';
+			copied = false;
+		} catch (reason) {
+			shareError = reason instanceof Error ? reason.message : String(reason);
+		} finally {
+			revoking = false;
 		}
 	}
 
@@ -524,6 +545,9 @@
 							{#if copied}<Check size={15} />{/if}
 							{copied ? tr('Tersalin') : tr('Salin')}
 						</button>
+						<button class="app-btn app-btn-soft shareRevokeBtn" type="button" disabled={revoking} onclick={() => void revokeShare()}>
+							{#if revoking}<LoaderCircle size={14} class="animate-spin" />{/if} {tr('Cabut')}
+						</button>
 					</div>
 				{:else}
 					<button class="app-btn app-btn-soft mt-2" type="button" disabled={shareLoading} onclick={() => void openShare(shareFor!.id)}>
@@ -852,6 +876,11 @@
 		flex: 0 0 auto;
 		height: 44px;
 		min-width: 96px;
+	}
+	.shareRevokeBtn {
+		flex: 0 0 auto;
+		height: 44px;
+		color: var(--destructive);
 	}
 	@media (max-width: 640px) {
 		.shareModal {

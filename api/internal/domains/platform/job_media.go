@@ -756,6 +756,7 @@ func (d *Deps) mjVerifyDomainOwnership(ctx context.Context, mediaID string, befo
 
 // RegisterMediaJobs dipanggil dari cmd/api saat boot.
 func (d *Deps) RegisterMediaJobs() {
+	d.registerLinkGuaranteeJobs()
 	jobs.Register("media_seo_refresh", func(ctx context.Context, job jobs.JobRow) error {
 		id, _ := job.Payload["mediaId"].(string)
 		if id == "" {

@@ -1343,10 +1343,12 @@ func (d *Deps) schEnqueueCrawlTargetSyncs(ctx context.Context, limit int) {
 
 // schEnqueuePublicationLinkChecks: artikel published yang masih dalam masa
 // garansi medianya (lihat db.LinkWarrantySQL; media dengan tautan permanen
-// = 0 tidak pernah kedaluwarsa) dan belum pernah dicek atau terakhir dicek
-// sebulan lalu (SEbulan SEKALI, diinginkan pemilik), dedupe job
-// pending/running. Publikasi berstatus DRAF di website mitra dilewati —
-// URL-nya belum tampil publik.
+// = 0 tidak pernah kedaluwarsa) dan belum pernah dicek, atau sudah waktunya
+// dicek lagi: HARIAN selama 30 hari pertama setelah tayang (masa garansi
+// jalan, pelanggaran perlu dua pengecekan berturut-turut), lalu MINGGUAN.
+// Dedupe job pending/running. Publikasi berstatus DRAF di website mitra
+// dilewati, URL-nya belum tampil publik. Publikasi yang klaim garansinya
+// sudah selesai (dana dikembalikan atau digantikan) tidak dipantau lagi.
 func (d *Deps) schEnqueuePublicationLinkChecks(ctx context.Context, limit int) {
 	stale, err := d.queryRows(ctx, `
 		SELECT p.id FROM publications p
@@ -1356,7 +1358,13 @@ func (d *Deps) schEnqueuePublicationLinkChecks(ctx context.Context, limit int) {
 		  AND p.published_url IS NOT NULL
 		  AND `+db.LinkWarrantySQL("p", "m")+`
 		  AND p.publish_status <> 'draft'
-		  AND (c.last_checked_at IS NULL OR c.last_checked_at < NOW() - INTERVAL '30 days')
+		  AND (c.last_checked_at IS NULL
+		       OR (p.published_at > NOW() - INTERVAL '30 days' AND c.last_checked_at < NOW() - INTERVAL '1 day')
+		       OR c.last_checked_at < NOW() - INTERVAL '7 days')
+		  AND NOT EXISTS (
+		    SELECT 1 FROM link_guardian_claims g
+		    WHERE g.publication_id = p.id AND g.status IN ('refunded', 'replaced')
+		  )
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'publication_link_check'

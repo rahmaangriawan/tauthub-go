@@ -129,18 +129,24 @@ var policies = map[string]ChannelPolicy{
 	"publication.link_lost":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"publication.link_replacement_requested": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"publication.auto_replaced":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.approved":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},
-	"media.rejected":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},
-	"media.submitted":                        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.resubmitted":                      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.negotiated":                       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.dewan_pers.submitted":             {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.dewan_pers.approved":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.dewan_pers.rejected":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.domain_down":                      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.crawl_blocked":                    {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"media.integration_missing":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"ticket.created":                         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	// Garansi tautan: klien harus memilih pengganti atau kredit, jadi tier
+	// batas waktu (tidak tersenyap). Hasilnya dan pembatalan penghasilan mitra
+	// cukup informasi.
+	"publication.guarantee_triggered": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
+	"publication.guarantee_update":    {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"partner.guarantee_reversed":      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.approved":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},
+	"media.rejected":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},
+	"media.submitted":                 {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.resubmitted":               {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.negotiated":                {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.dewan_pers.submitted":      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.dewan_pers.approved":       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.dewan_pers.rejected":       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.domain_down":               {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.crawl_blocked":             {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"media.integration_missing":       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"ticket.created":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	// --- Khusus admin: WA langsung (Fonnte) ------------------------------
 	// Bukan notifikasi in-app (event aslinya di atas sudah punya), melainkan
 	// kanal WA ke nomor admin agar pengajuan media, penarikan dana, dan tiket

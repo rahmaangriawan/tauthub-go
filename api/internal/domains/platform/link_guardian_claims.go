@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
 )
@@ -34,7 +34,7 @@ func (d *Deps) LinkGuardianClaimsList(w http.ResponseWriter, r *http.Request) {
 	args := []any{}
 	clause := ""
 	if status != "" {
-		if !ptContains([]string{"submitted", "checking", "contacted", "refunded", "rejected"}, status) {
+		if !ptContains([]string{"submitted", "checking", "contacted", "refunded", "rejected", "replaced"}, status) {
 			writeErr(w, d, errUnprocessable("status klaim tidak dikenal"))
 			return
 		}
@@ -48,7 +48,9 @@ func (d *Deps) LinkGuardianClaimsList(w http.ResponseWriter, r *http.Request) {
 		       p.published_at, p.published_url, p.client_price,
 		       m.name AS media_name, COALESCE(m.domain_verified, FALSE) AS domain_verified,
 		       b.name AS brand_name,
-		       lc.state AS link_state, lc.in_article_state, lc.last_checked_at,
+		       lc.state AS link_state, lc.in_article_state, lc.rel_state, lc.noindex_state,
+		       lc.violation_kind, lc.violation_streak, lc.last_checked_at,
+		       c.auto_detected, c.client_choice, c.client_chosen_at,
 		       m.link_duration_months AS link_duration_months,
 		       `+db.LinkWarrantySQL("p", "m")+` AS in_warranty
 		FROM link_guardian_claims c
@@ -91,6 +93,11 @@ func (d *Deps) LinkGuardianClaimsList(w http.ResponseWriter, r *http.Request) {
 			"in_warranty":        row.boolOr("in_warranty", false),
 			"link_state":         ptNullableStr(row, "link_state"),
 			"in_article_state":   ptNullableStr(row, "in_article_state"),
+			"rel_state":          ptNullableStr(row, "rel_state"),
+			"noindex_state":      ptNullableStr(row, "noindex_state"),
+			"auto_detected":      row.boolOr("auto_detected", false),
+			"client_choice":      ptNullableStr(row, "client_choice"),
+			"client_chosen_at":   row.timePtr("client_chosen_at"),
 			"last_checked_at":    row.timePtr("last_checked_at"),
 			"eligible":           reason == "",
 			"ineligible_reason":  reason,
@@ -139,6 +146,21 @@ func (d *Deps) LinkGuardianClaimStep(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, errUnprocessable("Klaim tidak ditemukan atau sudah selesai diproses."))
 		return
 	}
+	if info, _ := d.queryRow(r.Context(), `
+		SELECT c.brand_id, m.name AS media_name
+		FROM link_guardian_claims c
+		JOIN publications p ON p.id = c.publication_id
+		LEFT JOIN media m ON m.id = p.media_id
+		WHERE c.id = $1 LIMIT 1`, claimID); info != nil {
+		progress := "Tim Tauthub sedang memeriksa kondisi domain"
+		if status == "contacted" {
+			progress = "Tim Tauthub sudah menghubungi pemilik domain"
+		}
+		link := "/klien/" + info.strOr("brand_id", "") + "/link-guardian"
+		d.mpNotifyBrandMembers(r.Context(), info.strOr("brand_id", ""), "publication.guarantee_update",
+			"Klaim garansi tautan diproses",
+			progress+" "+info.strOr("media_name", "media")+" untuk klaim garansi Anda.", &link)
+	}
 	d.audit(r.Context(), user.ID, "platform.link_guardian.claim_step", "link_guardian_claim", claimID)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": status})
 }
@@ -158,7 +180,9 @@ func (d *Deps) LinkGuardianClaimRefund(w http.ResponseWriter, r *http.Request) {
 	claim, err := d.queryRow(r.Context(), `
 		SELECT c.id, c.publication_id, c.brand_id, c.status,
 		       COALESCE(m.domain_verified, FALSE) AS domain_verified,
-		       lc.state AS link_state, lc.in_article_state,
+		       m.partner_id, m.name AS media_name,
+		       lc.state AS link_state, lc.in_article_state, lc.rel_state, lc.noindex_state,
+		       lc.violation_kind, lc.violation_streak,
 		       m.link_duration_months AS link_duration_months,
 		       `+db.LinkWarrantySQL("p", "m")+` AS in_warranty
 		FROM link_guardian_claims c
@@ -171,7 +195,7 @@ func (d *Deps) LinkGuardianClaimRefund(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch claim.strOr("status", "") {
-	case "refunded", "rejected":
+	case "refunded", "rejected", "replaced":
 		writeErr(w, d, errUnprocessable("Klaim ini sudah selesai diproses."))
 		return
 	}
@@ -182,24 +206,34 @@ func (d *Deps) LinkGuardianClaimRefund(w http.ResponseWriter, r *http.Request) {
 
 	brandID := claim.strOr("brand_id", "")
 	publicationID := claim.strOr("publication_id", "")
-	tc, idr, err := d.lgRefundCapturedCredit(r.Context(), brandID, publicationID, user.ID)
-	if err != nil {
+	var tc, idr int
+	var reversal db.PartnerEarningReversal
+	if err := db.WithPoolTx(r.Context(), d.Pool, func(tx pgx.Tx) error {
+		var rErr error
+		tc, idr, rErr = db.RefundCapturedCreditTx(r.Context(), tx, brandID, publicationID, user.ID)
+		if rErr != nil {
+			return rErr
+		}
+		if tc <= 0 {
+			return errUnprocessable("Tidak ada kredit yang bisa dikembalikan untuk artikel ini.")
+		}
+		if reversal, rErr = db.ReversePartnerEarningTx(r.Context(), tx, publicationID); rErr != nil {
+			return rErr
+		}
+		_, rErr = tx.Exec(r.Context(), `
+			UPDATE link_guardian_claims
+			SET status = 'refunded', refund_tc = $1, refund_idr = $2, refunded_at = NOW(),
+			    resolution_note = COALESCE(NULLIF($3, ''), resolution_note),
+			    updated_by = $4, updated_at = NOW()
+			WHERE id = $5`, tc, idr, strings.TrimSpace(resolutionNote), user.ID, claimID)
+		return rErr
+	}); err != nil {
 		writeErr(w, d, err)
 		return
 	}
-	if tc <= 0 {
-		writeErr(w, d, errUnprocessable("Tidak ada kredit yang bisa dikembalikan untuk artikel ini."))
-		return
-	}
-	if _, err := d.execRows(r.Context(), `
-		UPDATE link_guardian_claims
-		SET status = 'refunded', refund_tc = $1, refund_idr = $2, refunded_at = NOW(),
-		    resolution_note = COALESCE(NULLIF($3, ''), resolution_note),
-		    updated_by = $4, updated_at = NOW()
-		WHERE id = $5`, tc, idr, strings.TrimSpace(resolutionNote), user.ID, claimID); err != nil {
-		writeErr(w, d, err)
-		return
-	}
+	d.lgNotifyOutcome(r.Context(), brandID, claim.strOr("partner_id", ""), claim.strOr("media_name", ""), reversal,
+		"Kredit dikembalikan: garansi tautan",
+		fmt.Sprintf("%d TC dikembalikan ke saldo Anda karena tautan artikel di %s tidak bertahan sesuai garansi.", tc, claim.strOr("media_name", "media")))
 	d.audit(r.Context(), user.ID, "platform.link_guardian.refund", "link_guardian_claim", claimID)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "refund_tc": tc, "refund_idr": idr})
 }
@@ -231,6 +265,17 @@ func (d *Deps) LinkGuardianClaimReject(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, errUnprocessable("Klaim tidak ditemukan atau sudah selesai diproses."))
 		return
 	}
+	if info, _ := d.queryRow(r.Context(), `
+		SELECT c.brand_id, c.rejection_reason, m.name AS media_name
+		FROM link_guardian_claims c
+		JOIN publications p ON p.id = c.publication_id
+		LEFT JOIN media m ON m.id = p.media_id
+		WHERE c.id = $1 LIMIT 1`, claimID); info != nil {
+		link := "/klien/" + info.strOr("brand_id", "") + "/link-guardian"
+		d.mpNotifyBrandMembers(r.Context(), info.strOr("brand_id", ""), "publication.guarantee_update",
+			"Klaim garansi tautan ditolak",
+			"Klaim untuk artikel di "+info.strOr("media_name", "media")+" ditolak: "+reason, &link)
+	}
 	d.audit(r.Context(), user.ID, "platform.link_guardian.reject", "link_guardian_claim", claimID)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
@@ -246,64 +291,26 @@ func (d *Deps) lgEligibilityReason(row rowMap) string {
 	if !row.boolOr("domain_verified", false) {
 		return "Artikel ini diterbitkan di media yang belum terverifikasi, jadi tidak masuk garansi."
 	}
-	broken := row.strOr("link_state", "") == "gone" || row.strOr("in_article_state", "") == "removed"
-	if !broken {
-		return "Artikel masih sehat: tidak ada 404 maupun tautan yang dicabut."
+	if db.LinkViolationActive(row.strOr("link_state", ""), row.strOr("in_article_state", ""),
+		row.strOr("rel_state", ""), row.strOr("noindex_state", ""),
+		row.strOr("violation_kind", ""), row.intOr("violation_streak", 0)) == "" {
+		return "Artikel masih sehat: tidak ada 404, tautan dicabut, noindex, maupun perubahan atribut tautan."
 	}
 	return ""
 }
 
-// lgRefundCapturedCredit: pindahkan kredit yang sudah tercapture kembali ke
-// saldo tersedia dan catat di ledger sebagai pengembalian (amount negatif,
-// sehingga pemasukan Tauthub ikut turun). Idempoten per publikasi.
-func (d *Deps) lgRefundCapturedCredit(ctx context.Context, brandID, publicationID, userID string) (int, int, error) {
-	row, err := d.queryRow(ctx, `
-		SELECT COALESCE(SUM(amount_tc) FILTER (WHERE ref_type = 'capture'), 0)::int AS captured,
-		       COALESCE(SUM(-amount_tc) FILTER (WHERE ref_type = 'refund'), 0)::int  AS refunded
-		FROM credit_ledger_entries
-		WHERE ref_id = $1 AND brand_id = $2`, publicationID, brandID)
-	if err != nil {
-		return 0, 0, err
+// lgNotifyOutcome: beri tahu klien hasil garansi dan, bila penghasilan mitra
+// dibatalkan atau dipotong, beri tahu mitranya juga. Best-effort.
+func (d *Deps) lgNotifyOutcome(ctx context.Context, brandID, partnerID, mediaName string, reversal db.PartnerEarningReversal, title, body string) {
+	link := "/klien/" + brandID + "/link-guardian"
+	d.mpNotifyBrandMembers(ctx, brandID, "publication.guarantee_update", title, body, &link)
+	if partnerID == "" || reversal.Action == "none" || reversal.Action == "" {
+		return
 	}
-	outstanding := row.intOr("captured", 0) - row.intOr("refunded", 0)
-	if outstanding <= 0 {
-		return 0, 0, nil
+	partnerLink := "/mitra"
+	msg := "Penghasilan artikel di " + mediaName + " dibatalkan karena tautan tidak bertahan sesuai garansi."
+	if reversal.Action == "charged" {
+		msg = "Penghasilan artikel di " + mediaName + " sudah ditarik, jadi nilainya dipotong dari saldo Anda berikutnya karena tautan tidak bertahan sesuai garansi."
 	}
-	rate := d.finTCConfig(ctx).RateIDR
-	key := "guardian-refund:" + publicationID
-	refundTC, refundIDR := 0, 0
-	err = d.ptWithTx(ctx, func(tx *ptTx) error {
-		exists, err := tx.queryRows("SELECT 1 FROM credit_ledger_entries WHERE idempotency_key = $1 LIMIT 1", key)
-		if err != nil {
-			return err
-		}
-		if len(exists) > 0 {
-			return nil
-		}
-		updated, err := tx.queryRows(`
-			UPDATE credit_wallets
-			SET captured_tc = GREATEST(captured_tc - $1, 0), available_tc = available_tc + $1, updated_at = NOW()
-			WHERE brand_id = $2
-			RETURNING available_tc, reserved_tc, captured_tc`, outstanding, brandID)
-		if err != nil {
-			return err
-		}
-		if len(updated) == 0 {
-			return fmt.Errorf("Dompet kredit brand tidak ditemukan.")
-		}
-		total := int(updated[0].numOr("available_tc")) + int(updated[0].numOr("reserved_tc")) + int(updated[0].numOr("captured_tc"))
-		if err := tx.exec(
-			`INSERT INTO credit_ledger_entries (id, brand_id, ref_type, ref_id, amount_tc, balance_after_tc, rate_idr, amount_idr, reason, idempotency_key, created_by)
-			 VALUES ($1, $2, 'refund', $3, $4, $5, $6, $7, $8, $9, $10)`,
-			uuid.NewString(), brandID, publicationID, -outstanding, total, rate, -(outstanding * rate),
-			"Pengembalian saldo klaim Link Guardian (garansi tayang)", key, userID); err != nil {
-			return err
-		}
-		refundTC, refundIDR = outstanding, outstanding*rate
-		return nil
-	})
-	if err != nil {
-		return 0, 0, err
-	}
-	return refundTC, refundIDR, nil
+	d.mpNotifyPartner(ctx, partnerID, "partner.guarantee_reversed", "Penghasilan artikel dibatalkan", msg, &partnerLink)
 }

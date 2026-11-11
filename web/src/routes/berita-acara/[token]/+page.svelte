@@ -57,6 +57,58 @@
 				? 'var(--destructive)'
 				: 'var(--warning)';
 
+	// Bukti tayang: hanya fakta dari pemantauan Tauthub. Teksnya "dipantau", bukan
+	// "dijamin selamanya": garansi punya batas waktu dan syarat (lihat warranty_until).
+	type Proof = { text: string; tone: 'ok' | 'warn' | 'muted' };
+	function proofLines(pub: any): Proof[] {
+		if (pub.status !== 'published') return [];
+		const out: Proof[] = [];
+		if (!pub.last_checked_at) {
+			out.push({ text: tr('Belum diperiksa: pemeriksaan pertama berjalan otomatis.'), tone: 'muted' });
+		} else {
+			const when = fmtDateTime(pub.last_checked_at);
+			if (pub.link_state === 'live') {
+				out.push({ text: `${tr('Artikel bisa dibuka')} · ${tr('diperiksa')} ${when}`, tone: 'ok' });
+			} else if (pub.link_state === 'gone') {
+				out.push({ text: `${tr('Artikel tidak ditemukan lagi')} · ${tr('diperiksa')} ${when}`, tone: 'warn' });
+			} else {
+				out.push({ text: `${tr('Situs media sedang tidak terjangkau')} · ${tr('diperiksa')} ${when}`, tone: 'muted' });
+			}
+			if (pub.in_article_state === 'present') {
+				out.push({ text: tr('Tautan di dalam artikel masih ada'), tone: 'ok' });
+			} else if (pub.in_article_state === 'removed') {
+				out.push({ text: tr('Tautan di dalam artikel tidak ditemukan'), tone: 'warn' });
+			}
+			if (pub.rel_state === 'ok' || pub.rel_state === 'changed') {
+				const rel = pub.rel_value ? String(pub.rel_value) : 'dofollow';
+				out.push({
+					text: `${tr('Atribut tautan')}: ${rel}`,
+					tone: pub.rel_state === 'changed' ? 'warn' : 'ok'
+				});
+			}
+			if (pub.noindex_state === 'ok') {
+				out.push({ text: tr('Tidak ada tanda noindex'), tone: 'ok' });
+			} else if (pub.noindex_state === 'noindex') {
+				out.push({ text: tr('Artikel ditandai noindex'), tone: 'warn' });
+			}
+		}
+		if (pub.claim_status === 'refunded') {
+			out.push({ text: tr('Garansi dipakai: kredit dikembalikan ke klien'), tone: 'muted' });
+		} else if (pub.claim_status === 'replaced') {
+			out.push({ text: tr('Garansi dipakai: artikel dibuatkan ulang di media lain'), tone: 'muted' });
+		} else if (pub.in_warranty) {
+			out.push({
+				text: pub.warranty_until
+					? `${tr('Garansi tautan dipantau sampai')} ${fmtDate(pub.warranty_until)}`
+					: tr('Garansi tautan dipantau tanpa batas waktu (media berlisensi permanen)'),
+				tone: 'ok'
+			});
+		} else {
+			out.push({ text: tr('Masa garansi tautan sudah berakhir'), tone: 'muted' });
+		}
+		return out;
+	}
+
 	function print() {
 		window.print();
 	}
@@ -174,7 +226,16 @@
 													style="background: color-mix(in srgb, {pubTone(pub.status)} 12%, transparent); color: {pubTone(pub.status)};"
 												>{statusLabel(pub.status)}</span>
 											</div>
-										</div>
+										{#each [proofLines(pub)] as proof}
+											{#if proof.length > 0}
+												<ul class="docProof" aria-label={tr('Bukti tayang')}>
+													{#each proof as line}
+														<li class="docProofLine docProof-{line.tone}">{line.text}</li>
+													{/each}
+												</ul>
+											{/if}
+										{/each}
+</div>
 									</div>
 								</li>
 							{/each}
@@ -184,6 +245,7 @@
 
 				<p class="docFootnote">{tr("Dokumen berita acara digenerate otomatis dari data kampanye Tauthub pada")} {fmtDateTime(report.generated_at)} WIB.
 					Saldo terpakai mencakup biaya pembuatan dan distribusi konten kampanye ini (rupiah).
+					 Bukti tayang berisi hasil pemantauan otomatis Tauthub pada waktu yang tertera, bukan jaminan kondisi sesudahnya.
 				</p>
 			</article>
 		{/if}
@@ -436,6 +498,26 @@
 	}
 	.docPubLink:hover {
 		text-decoration: underline;
+	}
+	.docProof {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 14px;
+		margin-top: 8px;
+		padding: 0;
+		list-style: none;
+	}
+	.docProofLine {
+		font-size: 12px;
+		line-height: 1.5;
+		color: var(--muted-foreground);
+	}
+	.docProof-ok {
+		color: var(--success);
+	}
+	.docProof-warn {
+		color: var(--destructive);
+		font-weight: 600;
 	}
 	.docFootnote {
 		margin-top: 24px;

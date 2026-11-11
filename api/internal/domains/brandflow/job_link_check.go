@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/rahmaangriawan/tauthub-go/internal/db"
 	"github.com/rahmaangriawan/tauthub-go/internal/security"
 )
 
@@ -28,7 +32,7 @@ const (
 
 // LinkFailureThreshold: gagal berturut-turut sebelum dianggap masalah nyata.
 // Sekali gagal bisa cuma jaringan berkedip.
-const LinkFailureThreshold = 2
+const LinkFailureThreshold = db.LinkViolationThreshold
 
 const linkFetchTimeout = 15 * time.Second
 
@@ -78,7 +82,7 @@ type linkCheckResult struct {
 func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string) error {
 	pub, err := d.queryRow(ctx, `
 		SELECT p.id, p.brand_id, p.media_id, p.document_id, p.published_url, p.publish_status,
-		       m.name AS media_name, m.partner_id,
+		       m.name AS media_name, m.partner_id, m.link_rel,
 		       d.title AS document_title
 		FROM publications p
 		JOIN media m ON m.id = p.media_id
@@ -92,16 +96,20 @@ func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string
 	}
 
 	previous, err := d.queryRow(ctx,
-		"SELECT state, consecutive_failures, first_detected_gone_at FROM publication_link_checks WHERE publication_id = $1 LIMIT 1", publicationID)
+		"SELECT state, consecutive_failures, first_detected_gone_at, violation_streak, violation_kind FROM publication_link_checks WHERE publication_id = $1 LIMIT 1", publicationID)
 	if err != nil {
 		return err
 	}
 	previousState := LinkState("")
 	previousFailures := 0
+	previousStreak := 0
+	previousViolation := ""
 	var firstDetected *time.Time
 	if previous != nil {
 		previousState = LinkState(previous.strOr("state", ""))
 		previousFailures = previous.intOr("consecutive_failures", 0)
+		previousStreak = previous.intOr("violation_streak", 0)
+		previousViolation = previous.strOr("violation_kind", "")
 		if t := previous.timePtr("first_detected_gone_at"); t != nil {
 			if parsed, ok := parseISOTime(t); ok {
 				firstDetected = &parsed
@@ -123,6 +131,7 @@ func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string
 	var finalURL string
 	var errorMessage string
 	liveHTML := ""
+	var xRobots []string
 	if resp, fErr := security.Get(ctx, url, linkCrawlerHeaders, linkFetchTimeout); fErr != nil {
 		// Timeout / DNS gagal / diblokir SSRF guard — bukan bukti artikel hilang.
 		msg := fErr.Error()
@@ -142,6 +151,7 @@ func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string
 		// Isi halaman dibaca (terbatas) HANYA untuk mencari tautan di dalam
 		// artikel; halaman 404/410 tidak perlu diunduh isinya.
 		if code >= 200 && code < 300 {
+			xRobots = resp.Header.Values("X-Robots-Tag")
 			if body, rErr := io.ReadAll(io.LimitReader(resp.Body, inArticleMaxHTML)); rErr == nil {
 				liveHTML = string(body)
 			}
@@ -179,14 +189,47 @@ func (d *Deps) PublicationLinkCheckJob(ctx context.Context, publicationID string
 		inArticle = d.checkInArticleLinks(ctx, pub.strOr("document_id", ""), liveHTML)
 	}
 
+	// Sinyal tambahan: atribut rel tautan utama dan direktif noindex. Hanya
+	// dinilai bila artikel terbaca (state live).
+	signals := linkSignals{}
+	if state == LinkLive {
+		signals = d.checkLinkSignals(ctx, pub.strOr("document_id", ""), liveHTML, xRobots, pub.strOr("link_rel", "dofollow"))
+	}
+
+	// Pelanggaran garansi dihitung berturut-turut. Pengecekan yang tidak
+	// berinformasi (situs tak terjangkau, halaman diblokir WAF) tidak menambah
+	// maupun mereset hitungan, supaya jaringan berkedip tidak menghapus catatan
+	// dan tidak pula menuduh media.
+	violation := db.LinkViolationKind(string(state), inArticle.State, signals.RelState, signals.NoindexState)
+	informative := state == LinkGone ||
+		(state == LinkLive && (signals.NoindexState != "unknown" || inArticle.State == "present" || inArticle.State == "removed"))
+	streak, violationKind := previousStreak, previousViolation
+	if informative {
+		if violation != "" {
+			streak, violationKind = previousStreak+1, violation
+		} else {
+			streak, violationKind = 0, ""
+		}
+	}
+
 	if err := d.saveLinkCheck(ctx, publicationID, linkCheckStateInput{
 		URL: url, FinalURL: finalURL, HTTPStatus: httpStatus, State: state,
 		Failures: failures, FirstDetected: firstDetectedGoneAt, ErrorMessage: errorMessage,
 		InArticleState: inArticle.State, InArticleAnchor: inArticle.Anchor,
 		InArticleFound: inArticle.Found, InArticleChecked: inArticle.CheckedAt,
 		InArticleErrorMsg: inArticle.ErrMsg,
+		RelValue:          signals.Rel, RelState: signals.RelState,
+		RobotsValue: signals.Robots, NoindexState: signals.NoindexState,
+		ViolationStreak: streak, ViolationKind: violationKind,
 	}); err != nil {
 		return err
+	}
+
+	if informative {
+		d.recordLinkSnapshot(ctx, publicationID, state, httpStatus, inArticle, signals, violation)
+	}
+	if violationKind != "" && streak >= LinkFailureThreshold {
+		d.openGuaranteeClaim(ctx, pub, violationKind, inArticle.Anchor)
 	}
 
 	wasProblem := previousState == LinkGone || previousState == LinkUnreachable
@@ -211,6 +254,13 @@ type linkCheckStateInput struct {
 	InArticleFound    int
 	InArticleChecked  *time.Time
 	InArticleErrorMsg string
+	// Sinyal rel/noindex dan hitungan pelanggaran garansi (lihat db.LinkViolationKind).
+	RelValue        string
+	RelState        string
+	RobotsValue     string
+	NoindexState    string
+	ViolationStreak int
+	ViolationKind   string
 }
 
 // saveLinkCheck: upsert hasil pengecekan (parity saveCheck).
@@ -220,8 +270,9 @@ func (d *Deps) saveLinkCheck(ctx context.Context, publicationID string, in linkC
 		  (publication_id, url, final_url, http_status, state, consecutive_failures,
 		   first_detected_gone_at, last_checked_at, error_message,
 		   in_article_state, in_article_anchor, in_article_found, in_article_checked_at, in_article_error,
+		   rel_value, rel_state, robots_value, noindex_state, violation_streak, violation_kind,
 		   created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, $10, $11, $12, $13, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW(), NOW())
 		ON CONFLICT (publication_id) DO UPDATE SET
 		  url = EXCLUDED.url,
 		  final_url = EXCLUDED.final_url,
@@ -236,11 +287,133 @@ func (d *Deps) saveLinkCheck(ctx context.Context, publicationID string, in linkC
 		  in_article_found = EXCLUDED.in_article_found,
 		  in_article_checked_at = EXCLUDED.in_article_checked_at,
 		  in_article_error = EXCLUDED.in_article_error,
+		  rel_value = EXCLUDED.rel_value,
+		  rel_state = EXCLUDED.rel_state,
+		  robots_value = EXCLUDED.robots_value,
+		  noindex_state = EXCLUDED.noindex_state,
+		  violation_streak = EXCLUDED.violation_streak,
+		  violation_kind = EXCLUDED.violation_kind,
 		  updated_at = NOW()`,
 		publicationID, nullIfEmpty(in.URL), nullIfEmpty(in.FinalURL), in.HTTPStatus, string(in.State),
 		in.Failures, in.FirstDetected, nullIfEmpty(in.ErrorMessage),
 		nullIfEmpty(in.InArticleState), nullIfEmpty(in.InArticleAnchor), in.InArticleFound,
-		in.InArticleChecked, nullIfEmpty(in.InArticleErrorMsg))
+		in.InArticleChecked, nullIfEmpty(in.InArticleErrorMsg),
+		nullIfEmpty(in.RelValue), nullIfEmpty(in.RelState), nullIfEmpty(in.RobotsValue), nullIfEmpty(in.NoindexState),
+		in.ViolationStreak, nullIfEmpty(in.ViolationKind))
+}
+
+// recordLinkSnapshot: tulis riwayat kondisi tautan. Baseline kind='publish'
+// disimpan sekali, dari pengecekan pertama yang sehat. Baris kind='check'
+// ditulis bila kondisinya berbeda dari catatan terakhir atau sudah seminggu
+// tanpa catatan, supaya tabel tidak membengkak oleh pengecekan harian yang
+// hasilnya sama. Best-effort: kegagalan tidak menggagalkan pengecekan.
+func (d *Deps) recordLinkSnapshot(ctx context.Context, publicationID string, state LinkState, httpStatus *int,
+	inArticle inArticleResult, sig linkSignals, violation string) {
+	insert := func(kind string) error {
+		return d.exec(ctx, `
+			INSERT INTO publication_link_snapshots
+			  (publication_id, kind, href, anchor, rel, robots_meta, x_robots_tag, http_status,
+			   link_state, in_article_state, rel_state, noindex_state, checked_at)
+			VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8, $9, $10, $11, NOW())
+			ON CONFLICT DO NOTHING`,
+			publicationID, kind, nullIfEmpty(sig.Href), nullIfEmpty(firstNonEmpty(sig.Anchor, inArticle.Anchor)),
+			nullIfEmpty(sig.Rel), nullIfEmpty(sig.Robots), httpStatus, string(state),
+			nullIfEmpty(inArticle.State), nullIfEmpty(sig.RelState), nullIfEmpty(sig.NoindexState))
+	}
+
+	if state == LinkLive && violation == "" {
+		baseline, err := d.queryRow(ctx,
+			"SELECT 1 AS one FROM publication_link_snapshots WHERE publication_id = $1 AND kind = 'publish' LIMIT 1", publicationID)
+		if err == nil && baseline == nil {
+			if err := insert("publish"); err != nil {
+				slog.Warn("[link-check] simpan baseline gagal", "publication", publicationID, "err", err)
+			}
+			return
+		}
+	}
+
+	last, err := d.queryRow(ctx, `
+		SELECT link_state, in_article_state, rel, rel_state, noindex_state,
+		       (checked_at < NOW() - INTERVAL '7 days') AS stale
+		FROM publication_link_snapshots
+		WHERE publication_id = $1 ORDER BY checked_at DESC, id DESC LIMIT 1`, publicationID)
+	if err != nil {
+		return
+	}
+	if last != nil &&
+		!last.boolOr("stale", false) &&
+		last.strOr("link_state", "") == string(state) &&
+		last.strOr("in_article_state", "") == inArticle.State &&
+		last.strOr("rel", "") == sig.Rel &&
+		last.strOr("rel_state", "") == sig.RelState &&
+		last.strOr("noindex_state", "") == sig.NoindexState {
+		return
+	}
+	if err := insert("check"); err != nil {
+		slog.Warn("[link-check] simpan snapshot gagal", "publication", publicationID, "err", err)
+	}
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// openGuaranteeClaim: buka klaim garansi otomatis setelah pelanggaran terdeteksi
+// pada dua pengecekan berturut-turut. Hanya untuk artikel yang masih dalam masa
+// garansi media dan medianya terverifikasi (syarat yang sama dengan refund
+// admin). Satu klaim per publikasi (UNIQUE), jadi pengecekan berikutnya tidak
+// membuka klaim baru dan pemberitahuan hanya terkirim sekali.
+func (d *Deps) openGuaranteeClaim(ctx context.Context, pub bsRow, kind, anchor string) {
+	publicationID := pub.strOr("id", "")
+	claimID := uuid.NewString()
+	created, err := d.queryRow(ctx, `
+		INSERT INTO link_guardian_claims
+		  (id, publication_id, brand_id, status, detection_state, anchor_expected, auto_detected)
+		SELECT $1, p.id, p.brand_id, 'submitted', $3, NULLIF($4, ''), TRUE
+		FROM publications p
+		JOIN media m ON m.id = p.media_id
+		WHERE p.id = $2
+		  AND COALESCE(m.domain_verified, FALSE)
+		  AND `+db.LinkWarrantySQL("p", "m")+`
+		ON CONFLICT (publication_id) DO NOTHING
+		RETURNING id`, claimID, publicationID, kind, anchor)
+	if err != nil {
+		slog.Warn("[link-check] buka klaim garansi gagal", "publication", publicationID, "err", err)
+		return
+	}
+	if created == nil {
+		return
+	}
+
+	title := pub.strOr("document_title", "")
+	if title == "" {
+		title = "Artikel"
+	}
+	mediaName := pub.strOr("media_name", "")
+	if mediaName == "" {
+		mediaName = "media mitra"
+	}
+	reason := db.LinkViolationLabel(kind)
+	brandID := pub.strOr("brand_id", "")
+
+	clientBody := title + " di " + mediaName + ": " + reason + ". Garansi tayang Anda aktif. Pilih artikel pengganti di media lain atau kredit kembali ke saldo."
+	clientLink := "/klien/" + brandID + "/link-guardian?publication=" + publicationID
+	d.notifyBrandMembersOnPub(ctx, brandID, "publication.guarantee_triggered", "Garansi tautan aktif: "+title, clientBody, &clientLink, publicationID)
+
+	adminLink := "/admin/link-monitor?claim=" + claimID
+	d.notifyPlatformAdmins(ctx, "publication.guarantee_triggered", "Garansi tautan terpicu: "+title,
+		title+" di "+mediaName+": "+reason+". Klaim dibuka otomatis, klien memilih pengganti atau kredit.", &adminLink)
+
+	// Untuk 404 mitra sudah diberi tahu lewat alertLinkLost; jenis lain belum.
+	if partnerID := pub.strOr("partner_id", ""); partnerID != "" && kind != "gone" {
+		d.notifyPartnerLinkLost(ctx, partnerID, "Perbaiki tautan: "+title,
+			title+" di "+mediaName+": "+reason+". Jika tidak dipulihkan, penghasilan artikel ini dibatalkan.")
+	}
 }
 
 // alertLinkLost: beri tahu admin, brand member, dan mitra bahwa artikel tidak

@@ -34,6 +34,11 @@
 		in_article_checked_at?: string | null; in_article_error?: string | null;
 		domain_verified?: boolean | null; in_warranty?: boolean | null;
 		claim_id?: string | null; claim_status?: string | null;
+		// Bukti tayang dan garansi (sisi server: db.LinkViolationKind).
+		rel_value?: string | null; rel_state?: string | null; noindex_state?: string | null;
+		violation_kind?: string | null; violation_streak?: number | null; claim_detection?: string | null; claim_choice?: string | null;
+		claim_auto?: boolean | null; link_rel?: string | null; link_duration_months?: number | null;
+		warranty_until?: string | null;
 		refund_idr?: number | null; refund_tc?: number | null;
 	};
 	type Summary = {
@@ -80,6 +85,8 @@
 	let ready = false;
 	let error = $state('');
 	let claimingId = $state<string | null>(null);
+	// Pilihan garansi yang sedang dikirim: '<publicationId>:<credit|replacement>'.
+	let choosingKey = $state<string | null>(null);
 	let crawling = $state(false);
 	let notice = $state('');
 	let imgError = $state<Record<string, boolean>>({});
@@ -308,6 +315,12 @@
 		if (item.in_article_state === 'removed') {
 			return { label: tr('Tautan dihapus'), text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
 		}
+		if (item.noindex_state === 'noindex') {
+			return { label: tr('Noindex'), text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
+		}
+		if (item.rel_state === 'changed') {
+			return { label: tr('Atribut tautan berubah'), text: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)', dot: 'var(--destructive)' };
+		}
 		if (item.state === 'unreachable') {
 			return { label: tr('Tak terjangkau'), text: 'var(--warning)', bg: 'var(--warning-soft)', dot: 'var(--warning)' };
 		}
@@ -322,18 +335,38 @@
 	 * menang atas kelayakan, lalu garansi habis, lalu media tak terverifikasi,
 	 * baru tombol klaim muncul saat artikelnya benar-benar rusak.
 	 */
-	function claimState(item: Item): 'refunded' | 'processing' | 'expired' | 'not_covered' | 'none' | 'claimable' {
+	function claimState(
+		item: Item
+	): 'refunded' | 'replaced' | 'choose' | 'replacing' | 'processing' | 'expired' | 'not_covered' | 'none' | 'claimable' {
 		if (item.claim_status === 'refunded') return 'refunded';
-		if (item.claim_status) return 'processing';
+		if (item.claim_status === 'replaced') return 'replaced';
+		if (item.claim_status === 'rejected') return 'processing';
+		if (item.claim_status) {
+			if (item.claim_choice === 'replacement') return 'replacing';
+			// Klaim terbuka dan pelanggaran masih ada: klien memilih sendiri remedinya.
+			return isBroken(item) ? 'choose' : 'processing';
+		}
 		if (item.in_warranty === false) return 'expired';
 		if (item.domain_verified === false) return 'not_covered';
-		const broken = item.state === 'gone' || item.in_article_state === 'removed';
-		return broken ? 'claimable' : 'none';
+		return isBroken(item) ? 'claimable' : 'none';
+	}
+
+	/** Pelanggaran terbaca pada pengecekan terakhir (sama dengan db.LinkViolationKind di server). */
+	function isBroken(item: Item): boolean {
+		return (
+			item.state === 'gone' ||
+			item.in_article_state === 'removed' ||
+			item.noindex_state === 'noindex' ||
+			item.rel_state === 'changed' ||
+			// Bukti yang sudah terkumpul bertahan walau pengecekan terbaru tak terjangkau.
+			(Boolean(item.violation_kind) && (item.violation_streak ?? 0) >= 2)
+		);
 	}
 
 	const claimStatusLabel: Record<string, string> = $derived({
 		submitted: tr('Klaim diajukan'), checking: tr('Sedang diperiksa'),
 		contacted: tr('Menghubungi pemilik domain'), refunded: tr('Dana dikembalikan'),
+		replaced: tr('Artikel pengganti dibuat'),
 		rejected: tr('Klaim ditolak')
 	});
 
@@ -358,6 +391,52 @@
 		} finally {
 			claimingId = null;
 		}
+	}
+
+	/**
+	 * Pilih remedi garansi untuk artikel yang tautannya bermasalah: kredit kembali
+	 * ke saldo (tidak bisa dibatalkan) atau artikel dibuatkan ulang di media lain.
+	 * Kelayakan dinilai ulang di server.
+	 */
+	async function chooseGuarantee(item: Item, choice: 'credit' | 'replacement') {
+		const confirmText =
+			choice === 'credit'
+				? tr('Kembalikan kredit artikel ini ke saldo Anda? Artikel tidak akan diganti dan pilihan ini tidak bisa dibatalkan.')
+				: tr('Buatkan artikel pengganti di media lain? Tanpa biaya tambahan, dan pilihan ini tidak bisa dibatalkan.');
+		if (!window.confirm(confirmText)) return;
+		choosingKey = `${item.id}:${choice}`;
+		error = '';
+		notice = '';
+		try {
+			const res = await apiRequest(`${apiBase}/link-monitor/guarantee/choose`, {
+				method: 'POST',
+				body: JSON.stringify({ publicationId: item.id, choice })
+			});
+			if (!res.ok) {
+				error = await readApiError(res, tr('Gagal memproses garansi.'));
+				return;
+			}
+			notice =
+				choice === 'credit'
+					? tr('Kredit dikembalikan ke saldo Anda.')
+					: tr('Permintaan artikel pengganti diterima. Kami mencarikan media yang cocok dan memberi kabar lewat notifikasi.');
+			await load(true);
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : tr('Gagal memproses garansi.');
+		} finally {
+			choosingKey = null;
+		}
+	}
+
+	/** Keterangan masa garansi per artikel (kosong bila tidak relevan). */
+	function warrantyNote(item: Item): string {
+		if (item.claim_status === 'refunded' || item.claim_status === 'replaced') return '';
+		if (item.in_warranty === false) return '';
+		if (item.warranty_until) {
+			return `${tr('Garansi sampai')} ${new Date(item.warranty_until).toLocaleDateString('id-ID', { dateStyle: 'long' })}`;
+		}
+		if (item.link_duration_months === 0) return tr('Garansi tanpa batas waktu');
+		return '';
 	}
 
 	const DAY_MS = 86_400_000;
@@ -826,6 +905,14 @@
 										{#if item.in_article_state === 'unknown' && item.in_article_error}
 											<p class="lg-time-rel" title={item.in_article_error}>{tr('Isi artikel belum bisa diperiksa')}</p>
 										{/if}
+										{#if item.rel_state === 'ok' || item.rel_state === 'changed'}
+											<p class="lg-sub-note" class:lg-sub-warn={item.rel_state === 'changed'}>
+												{tr('Atribut tautan')}: {item.rel_value || 'dofollow'}
+											</p>
+										{/if}
+										{#if warrantyNote(item)}
+											<p class="lg-sub-note">{warrantyNote(item)}</p>
+										{/if}
 									</td>
 									<td class="linkmon-cell lg-cell" data-label={tr('Waktu Cek')}>
 										<p class="lg-time">{formatRelativeTime(item.last_checked_at)}</p>
@@ -837,7 +924,23 @@
 												{#if claimingId === item.id}<LoaderCircle size={14} class="animate-spin" />{:else}<TriangleAlert size={14} strokeWidth={1.5} />{/if}
 												{claimingId === item.id ? tr('Mengirim…') : tr('Ajukan Klaim')}
 											</button>
-										{:else if cs === 'refunded'}
+										{:else if cs === 'choose'}
+												<div class="lg-choice">
+													<p class="lg-choice-title">{tr('Garansi aktif: pilih penyelesaian')}</p>
+													<button class="lg-choice-btn" type="button" disabled={choosingKey !== null} onclick={() => void chooseGuarantee(item, 'replacement')}>
+														{#if choosingKey === `${item.id}:replacement`}<LoaderCircle size={14} class="animate-spin" />{/if}
+														{tr('Artikel pengganti')}
+													</button>
+													<button class="lg-choice-btn" type="button" disabled={choosingKey !== null} onclick={() => void chooseGuarantee(item, 'credit')}>
+														{#if choosingKey === `${item.id}:credit`}<LoaderCircle size={14} class="animate-spin" />{/if}
+														{tr('Kredit kembali')}
+													</button>
+												</div>
+											{:else if cs === 'replacing'}
+												<span class="lg-claim-progress">{tr('Mencarikan media pengganti')}</span>
+											{:else if cs === 'replaced'}
+												<span class="lg-claim-done"><CircleCheck size={14} strokeWidth={1.5} /> {tr('Artikel pengganti dibuat')}</span>
+											{:else if cs === 'refunded'}
 											<span class="lg-claim-done"><CircleCheck size={14} strokeWidth={1.5} /> {claimStatusLabel[item.claim_status ?? ''] ?? tr('Dana dikembalikan')}</span>
 										{:else if cs === 'processing'}
 											<span class="lg-claim-progress">{claimStatusLabel[item.claim_status ?? ''] ?? tr('Diproses')}</span>
@@ -1091,6 +1194,20 @@
 
 	.lg-claim-done { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--success); }
 	.lg-claim-progress { font-size: 13px; font-weight: 500; color: var(--warning); }
+	.lg-choice { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 150px; }
+	.lg-choice-title { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--destructive); }
+	.lg-choice-btn {
+		display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+		min-height: 40px; padding: 0 12px; border-radius: 8px;
+		font-size: 13px; font-weight: 600; white-space: nowrap;
+		color: var(--primary); border: 1px solid color-mix(in srgb, var(--primary) 40%, transparent);
+		background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+		transition: background-color 120ms ease;
+	}
+	.lg-choice-btn:hover:not(:disabled) { background-color: color-mix(in srgb, var(--primary) 15%, transparent); }
+	.lg-choice-btn:disabled { opacity: .6; }
+	.lg-sub-note { margin-top: 3px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+	.lg-sub-warn { color: var(--destructive); font-weight: 600; }
 		.lg-claim-muted {
 		display: inline-block; padding: 2px 10px; border-radius: 6px;
 		font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted-foreground);

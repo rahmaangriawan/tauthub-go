@@ -36,10 +36,12 @@ import (
 // inArticleMaxHTML: batas isi halaman yang dibaca untuk mencari tautan.
 const inArticleMaxHTML = 1 << 20 // 1 MiB
 
-// pageLink: satu tautan pada halaman (href absolut + teks anchor-nya).
+// pageLink: satu tautan pada halaman (href absolut + teks anchor-nya + nilai
+// atribut rel apa adanya, huruf kecil, kosong bila tidak ada).
 type pageLink struct {
 	URL    string
 	Anchor string
+	Rel    string
 }
 
 // inArticleResult: hasil pemeriksaan tautan dalam artikel.
@@ -52,32 +54,216 @@ type inArticleResult struct {
 }
 
 var (
-	// Menangkap <a ... href="...">teks</a>, termasuk href bertanda kutip tunggal.
-	linkTagRe = regexp.MustCompile(`(?is)<a\b[^>]*?href\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>(.*?)</a>`)
-	tagRe     = regexp.MustCompile(`(?s)<[^>]*>`)
-	spaceRe   = regexp.MustCompile(`\s+`)
+	// Menangkap <a ...atribut...>teks</a>; href dan rel dibaca terpisah dari
+	// atribut supaya urutan atributnya tidak berpengaruh.
+	linkTagRe  = regexp.MustCompile(`(?is)<a\b([^>]*)>(.*?)</a>`)
+	hrefAttrRe = regexp.MustCompile(`(?is)\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+	relAttrRe  = regexp.MustCompile(`(?is)\brel\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+	tagRe      = regexp.MustCompile(`(?s)<[^>]*>`)
+	spaceRe    = regexp.MustCompile(`\s+`)
+
+	// <meta name="robots|googlebot" content="..."> dalam urutan atribut apa pun.
+	metaTagRe     = regexp.MustCompile(`(?is)<meta\b[^>]*>`)
+	metaNameRe    = regexp.MustCompile(`(?is)\bname\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+	metaContentRe = regexp.MustCompile(`(?is)\bcontent\s*=\s*(?:"([^"]*)"|'([^']*)')`)
 )
 
+// attrValue: nilai atribut dari dua grup tangkap (kutip ganda / tunggal).
+func attrValue(m []string) string {
+	if len(m) < 3 {
+		return ""
+	}
+	if m[1] != "" {
+		return m[1]
+	}
+	return m[2]
+}
+
 // extractPageLinks: tautan absolut http(s) pada HTML beserta anchor yang sudah
-// dibersihkan dari tag dan entitas.
+// dibersihkan dari tag dan entitas, dan atribut rel-nya.
 func extractPageLinks(pageHTML string) []pageLink {
 	if pageHTML == "" {
 		return nil
 	}
 	out := make([]pageLink, 0, 32)
 	for _, m := range linkTagRe.FindAllStringSubmatch(pageHTML, -1) {
-		href := m[1]
-		if href == "" {
-			href = m[2]
+		hm := hrefAttrRe.FindStringSubmatch(m[1])
+		if hm == nil {
+			continue
 		}
-		href = strings.TrimSpace(html.UnescapeString(href))
+		href := strings.TrimSpace(html.UnescapeString(attrValue(hm)))
 		if !strings.HasPrefix(href, "http://") && !strings.HasPrefix(href, "https://") {
 			continue
 		}
-		anchor := strings.TrimSpace(spaceRe.ReplaceAllString(html.UnescapeString(tagRe.ReplaceAllString(m[3], " ")), " "))
-		out = append(out, pageLink{URL: href, Anchor: anchor})
+		rel := ""
+		if rm := relAttrRe.FindStringSubmatch(m[1]); rm != nil {
+			rel = strings.ToLower(strings.TrimSpace(spaceRe.ReplaceAllString(html.UnescapeString(attrValue(rm)), " ")))
+		}
+		anchor := strings.TrimSpace(spaceRe.ReplaceAllString(html.UnescapeString(tagRe.ReplaceAllString(m[2], " ")), " "))
+		out = append(out, pageLink{URL: href, Anchor: anchor, Rel: rel})
 	}
 	return out
+}
+
+// pageRobotsMeta: gabungan isi <meta name="robots"> dan <meta name="googlebot">
+// (huruf kecil, dipisah koma). Kosong bila halaman tidak punya meta robots.
+func pageRobotsMeta(pageHTML string) string {
+	if pageHTML == "" {
+		return ""
+	}
+	parts := []string{}
+	for _, tag := range metaTagRe.FindAllString(pageHTML, -1) {
+		nm := metaNameRe.FindStringSubmatch(tag)
+		if nm == nil {
+			continue
+		}
+		name := strings.ToLower(strings.TrimSpace(attrValue(nm)))
+		if name != "robots" && name != "googlebot" {
+			continue
+		}
+		cm := metaContentRe.FindStringSubmatch(tag)
+		if cm == nil {
+			continue
+		}
+		content := strings.ToLower(strings.TrimSpace(html.UnescapeString(attrValue(cm))))
+		if content != "" {
+			parts = append(parts, content)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// xRobotsGoogleDirectives: isi header X-Robots-Tag yang berlaku untuk Google.
+// Nilai berawalan nama bot lain ("bingbot: noindex") diabaikan; "googlebot:"
+// dan nilai tanpa awalan dipakai. "unavailable_after: <tanggal>" adalah
+// direktif, bukan nama bot.
+func xRobotsGoogleDirectives(values []string) string {
+	parts := []string{}
+	for _, raw := range values {
+		v := strings.ToLower(strings.TrimSpace(raw))
+		if v == "" {
+			continue
+		}
+		if i := strings.IndexByte(v, ':'); i > 0 {
+			prefix := strings.TrimSpace(v[:i])
+			if prefix != "unavailable_after" && !strings.ContainsAny(prefix, " ,") {
+				if prefix != "googlebot" && prefix != "google" {
+					continue
+				}
+				v = strings.TrimSpace(v[i+1:])
+			}
+		}
+		if v != "" {
+			parts = append(parts, v)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// robotsHasNoindex: direktif "noindex" atau "none" (= noindex + nofollow).
+func robotsHasNoindex(directives string) bool {
+	if directives == "" {
+		return false
+	}
+	for _, tok := range strings.FieldsFunc(directives, func(r rune) bool { return r == ',' || r == ' ' }) {
+		if tok == "noindex" || tok == "none" {
+			return true
+		}
+	}
+	return false
+}
+
+// relTokens: token atribut rel (huruf kecil).
+func relTokens(rel string) []string {
+	return strings.Fields(strings.ToLower(rel))
+}
+
+// relIsDofollow: tautan tidak membawa nofollow, sponsored, maupun ugc.
+func relIsDofollow(rel string) bool {
+	for _, t := range relTokens(rel) {
+		if t == "nofollow" || t == "sponsored" || t == "ugc" {
+			return false
+		}
+	}
+	return true
+}
+
+// linkSignals: sinyal tambahan dari halaman artikel di luar status HTTP dan
+// ada/tidaknya tautan: atribut rel tautan utama dan direktif noindex.
+type linkSignals struct {
+	Href         string
+	Anchor       string
+	Rel          string
+	RelState     string // 'ok' | 'changed' | 'unknown' | "" (belum dinilai)
+	Robots       string // gabungan meta robots dan X-Robots-Tag
+	NoindexState string // 'ok' | 'noindex' | 'unknown' | "" (belum dinilai)
+}
+
+// evaluateLinkSignals: nilai rel tautan utama (tautan luar pertama di dokumen)
+// terhadap rel yang dijanjikan media, dan cari direktif noindex.
+//
+// Konservatif seperti pemeriksaan tautan: halaman tidak terbaca atau tautan
+// utama tidak ditemukan berarti 'unknown', bukan pelanggaran. Janji rel hanya
+// ditegakkan untuk media 'dofollow'; media nofollow/sponsored tidak menjanjikan
+// apa pun soal rel, jadi relnya hanya dicatat.
+func evaluateLinkSignals(expected []pageLink, liveHTML string, xRobots []string, promisedRel string) linkSignals {
+	sig := linkSignals{RelState: "unknown", NoindexState: "unknown"}
+
+	pageReadable := strings.TrimSpace(liveHTML) != ""
+	headerRobots := xRobotsGoogleDirectives(xRobots)
+	metaRobots := pageRobotsMeta(liveHTML)
+	sig.Robots = strings.Trim(strings.Join(nonEmpty(metaRobots, headerRobots), ", "), ", ")
+
+	switch {
+	case robotsHasNoindex(metaRobots) || robotsHasNoindex(headerRobots):
+		sig.NoindexState = "noindex"
+	case pageReadable:
+		sig.NoindexState = "ok"
+	}
+
+	if len(expected) == 0 || !pageReadable {
+		return sig
+	}
+	primary := expected[0]
+	sig.Anchor = primary.Anchor
+	found := extractPageLinks(liveHTML)
+	var match *pageLink
+	for i := range found {
+		if normLinkURL(found[i].URL) == normLinkURL(primary.URL) || normLinkPath(found[i].URL) == normLinkPath(primary.URL) {
+			match = &found[i]
+			break
+		}
+	}
+	if match == nil {
+		return sig
+	}
+	sig.Href = match.URL
+	sig.Rel = match.Rel
+	if promisedRel == "dofollow" && !relIsDofollow(match.Rel) {
+		sig.RelState = "changed"
+	} else {
+		sig.RelState = "ok"
+	}
+	return sig
+}
+
+func nonEmpty(vals ...string) []string {
+	out := make([]string, 0, len(vals))
+	for _, v := range vals {
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// checkLinkSignals: baca tautan acuan dokumen lalu nilai sinyal halaman.
+func (d *Deps) checkLinkSignals(ctx context.Context, documentID, liveHTML string, xRobots []string, promisedRel string) linkSignals {
+	var expected []pageLink
+	if strings.TrimSpace(documentID) != "" {
+		expected = expectedLinksFromDocument(d.documentHTML(ctx, documentID))
+	}
+	return evaluateLinkSignals(expected, liveHTML, xRobots, promisedRel)
 }
 
 // normLinkURL: bentuk pembanding. Fragmen dibuang dan garis miring di ujung

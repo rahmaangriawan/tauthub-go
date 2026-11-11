@@ -344,6 +344,18 @@ func (d *Deps) CampaignReportShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := randomToken()
+	// Tautan yang pernah dicabut dipakai ulang dengan token baru (satu baris per
+	// kampanye, uq_campaign_report_campaign); token lama tetap mati.
+	if revived, err := d.execRows(r.Context(),
+		"UPDATE campaign_report_shares SET token = $1, revoked_at = NULL, created_by = $2, updated_at = NOW() WHERE campaign_id = $3 AND revoked_at IS NOT NULL",
+		token, user.ID, campaignID); err != nil {
+		d.writeErr(w, err)
+		return
+	} else if revived > 0 {
+		d.audit(r.Context(), brandRow.ID, user.ID, "campaign.report_shared", "campaign", campaignID)
+		writeJSON(w, http.StatusCreated, map[string]any{"token": token, "share_path": "/berita-acara/" + token})
+		return
+	}
 	if err := d.exec(r.Context(),
 		"INSERT INTO campaign_report_shares (id, campaign_id, brand_id, token, created_by) VALUES ($1, $2, $3, $4, $5)",
 		uuid.NewString(), campaignID, brandRow.ID, token, user.ID); err != nil {
@@ -352,6 +364,34 @@ func (d *Deps) CampaignReportShare(w http.ResponseWriter, r *http.Request) {
 	}
 	d.audit(r.Context(), brandRow.ID, user.ID, "campaign.report_shared", "campaign", campaignID)
 	writeJSON(w, http.StatusCreated, map[string]any{"token": token, "share_path": "/berita-acara/" + token})
+}
+
+// CampaignReportRevoke: DELETE /v1/brands/{brandId}/campaigns/{campaignId}/report/share
+// Mencabut tautan berita acara publik: halaman /berita-acara/{token} langsung
+// 404. Membagikan lagi membuat token baru.
+func (d *Deps) CampaignReportRevoke(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "admin")
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	campaign, err := d.scopedCampaign(r.Context(), brandRow.ID, chiParam(r, "campaignId"))
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	campaignID := campaign.strOr("id", "")
+	revoked, err := d.execRows(r.Context(),
+		"UPDATE campaign_report_shares SET revoked_at = NOW(), updated_at = NOW() WHERE campaign_id = $1 AND revoked_at IS NULL", campaignID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if revoked > 0 {
+		d.audit(r.Context(), brandRow.ID, user.ID, "campaign.report_revoked", "campaign", campaignID)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "revoked": revoked > 0})
 }
 
 // ---------- validasi kecil ----------

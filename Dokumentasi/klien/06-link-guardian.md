@@ -8,14 +8,18 @@
 
 ## Gambaran singkat
 
-Link Guardian memeriksa dua hal pada setiap artikel yang sudah terbit:
+Link Guardian memeriksa empat hal pada setiap artikel yang sudah terbit:
 
 1. **Halaman artikel**: apakah alamatnya masih bisa dibuka.
 2. **Tautan di dalam artikel**: apakah tautan ke situs Anda masih ada di isi artikel.
+3. **Atribut tautan**: apakah tautan utama masih sesuai kebijakan media. Untuk media yang menjanjikan **Dofollow**, tautan yang berubah menjadi nofollow, sponsored, atau ugc dihitung sebagai perubahan.
+4. **Noindex**: apakah artikel ditandai agar tidak muncul di Google.
 
 Yang diperiksa hanya artikel berstatus **Terbit** yang punya alamat terbit, masih dalam masa garansi media, dan bukan draf (naskah yang belum tayang). Artikel yang dikirim sebagai draf baru diperiksa setelah mitra mempublikasikannya.
 
-Tauthub memeriksa artikel sendiri sekitar sebulan sekali. Anda juga bisa meminta pemeriksaan sendiri, paling banyak sekali sehari.
+Tauthub memeriksa artikel sendiri setiap hari selama 30 hari pertama setelah terbit, lalu seminggu sekali selama masa garansi. Anda juga bisa meminta pemeriksaan sendiri, paling banyak sekali sehari.
+
+Garansi berjalan otomatis. Bila masalah terbaca pada dua pemeriksaan berturut-turut, Tauthub membuka klaim untuk Anda dan memberi tahu lewat notifikasi. Anda tidak perlu mengajukannya.
 
 Garansi hanya berlaku untuk **Media Terverifikasi**. Ini media yang kepemilikan domain (alamat situs)-nya sudah dipastikan oleh Tauthub. Di [Katalog Media](02-katalog-media/README.md), media seperti itu bertanda centang biru "Domain Terverifikasi". Anda bisa menyaringnya lewat **Domain terverifikasi**.
 
@@ -79,6 +83,8 @@ Di layar sempit, tabel berubah menjadi satu kartu untuk tiap artikel. Setiap bag
 | **200 OK (aman)** | Halaman artikel bisa dibuka | Tidak perlu berbuat apa pun |
 | **Hilang (404)** | Halaman tidak ada di alamatnya (HTTP 404 atau 410, yaitu kode "halaman tidak ditemukan"). Sebabnya biasanya artikel dihapus atau ditarik, atau alamatnya berganti | Buka alamatnya untuk memastikan. Ajukan klaim bila memenuhi syarat |
 | **Tautan dihapus** | Halaman masih tayang, tetapi tautan ke situs Anda sudah tidak ada di isi artikel | Periksa artikelnya. Ajukan klaim bila memenuhi syarat |
+| **Noindex** | Halaman tayang, tetapi ditandai noindex sehingga tidak muncul di Google | Minta mitra menghapus tanda itu, atau pilih penyelesaian garansi |
+| **Atribut tautan berubah** | Media menjanjikan Dofollow, tetapi tautan sekarang nofollow, sponsored, atau ugc | Pilih penyelesaian garansi |
 | **Tak terjangkau** | Situs menolak akses atau sedang bermasalah, atau memberi jawaban lain yang bukan tayang, 404, maupun 410. Artikel belum tentu hilang | Buka alamatnya sendiri. Tunggu pemeriksaan berikutnya |
 | **Belum ada URL** | Belum ada hasil pemeriksaan, atau belum ada alamat terbit yang bisa diperiksa. Artikel yang baru terbit dan belum pernah diperiksa juga tampil begini | Tunggu pemeriksaan berikutnya atau klik **Crawl Sekarang** |
 
@@ -88,6 +94,9 @@ Tulisan kecil **Isi artikel belum bisa diperiksa** di bawah status berarti Tauth
 
 | Tampilan | Artinya |
 |---|---|
+| **Garansi aktif: pilih penyelesaian** | Masalah terbaca dua kali berturut-turut dan klaim sudah dibuka otomatis. Pilih **Artikel pengganti** atau **Kredit kembali** |
+| **Mencarikan media pengganti** | Anda memilih artikel pengganti dan Tauthub sedang mencarikan media |
+| **Artikel pengganti dibuat** | Artikel dibuatkan ulang di media lain tanpa biaya tambahan |
 | Tombol **Ajukan Klaim** | Artikel **Hilang (404)** atau **Tautan dihapus**, media terverifikasi, masih dalam garansi, dan belum ada klaim |
 | **Klaim diajukan** | Klaim sudah masuk dan menunggu tim Tauthub |
 | **Sedang diperiksa** | Tim sedang memeriksa kondisi domain |
@@ -120,6 +129,15 @@ Setelah satu pemeriksaan manual, tombol mati selama 24 jam. Arahkan penunjuk ke 
 2. Pilih status di daftar sebelahnya.
 3. Klik **Filter** untuk memilih **Media** atau **Tanggal**.
 4. Klik **Reset filter** untuk mengembalikan semua pilihan.
+
+### Cara memilih penyelesaian garansi
+
+1. Buka notifikasi **Garansi tautan aktif**, atau buka menu **Link Guardian**.
+2. Cari artikel dengan tulisan **Garansi aktif: pilih penyelesaian** di kolom **Aksi Garansi**.
+3. Klik **Artikel pengganti** bila Anda tetap ingin artikelnya tayang. Tauthub memilih media lain yang cocok dengan harga tidak lebih tinggi dari pembelian awal. Atau klik **Kredit kembali** bila Anda lebih suka dananya kembali ke **Saldo**.
+4. Konfirmasi pilihan Anda. Pilihan tidak bisa dibatalkan dan hanya bisa dibuat satu kali per artikel.
+
+Bila tidak ada media pengganti yang cocok, Anda diberi tahu dan bisa memilih **Kredit kembali**. Penghasilan mitra atas artikel yang bermasalah dibatalkan, jadi Tauthub tidak membayar artikel yang tidak bertahan.
 
 ### Cara mengajukan klaim garansi
 

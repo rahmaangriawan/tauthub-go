@@ -23,7 +23,7 @@ Sebuah artikel ikut dipantau kalau semua syarat ini terpenuhi:
 
 ### Kapan pemeriksaan berjalan
 
-- **Artikel:** pemeriksaan pertama berjalan tak lama setelah artikel terbit. Setelah itu pemeriksaan diulang kira-kira setiap 30 hari.
+- **Artikel:** pemeriksaan pertama berjalan tak lama setelah artikel terbit. Setelah itu pemeriksaan diulang setiap hari selama 30 hari pertama, lalu seminggu sekali selama masa garansi media. Selain tautan, Tauthub memeriksa atribut tautan (rel) dan tanda noindex.
 - **Domain media:** diperiksa kira-kira seminggu sekali, selama media punya alamat website.
 - **Pemeriksaan tambahan:** Klien pemilik artikel bisa menjalankannya dari Link Guardian mereka (paling banyak sekali sehari). Tim Tauthub juga bisa menjalankannya. Di Dashboard Mitra tidak ada tombol pemeriksaan manual.
 - **Cara memeriksa:** pemeriksa membuka alamat artikel dengan identitas peramban yang memuat nama `TauthubLinkCheckBot`. Pemeriksa menunggu paling lama 15 detik, dan mengikuti pengalihan (redirect, yaitu alamat yang melempar ke alamat lain) sampai 5 kali. Yang dinilai adalah halaman akhirnya.
@@ -159,7 +159,7 @@ Daftar bawaan hanya memuat artikel bermasalah. Ubah **Status tautan** ke **Semua
 Firewall atau CDN situs mungkin menolak permintaan dari server Tauthub. Izinkan User-Agent yang memuat `TauthubLinkCheckBot`, lalu tunggu pemeriksaan berikutnya.
 
 **Kapan status berubah setelah saya memperbaiki artikel?**
-Pada pemeriksaan berikutnya, kira-kira setiap 30 hari untuk tiap artikel. Klien atau tim Tauthub bisa menjalankan pemeriksaan tambahan yang lebih cepat. Anda tidak bisa memicunya dari Dashboard Mitra.
+Pada pemeriksaan berikutnya: setiap hari selama 30 hari pertama setelah terbit, lalu seminggu sekali. Klien atau tim Tauthub bisa menjalankan pemeriksaan tambahan yang lebih cepat. Anda tidak bisa memicunya dari Dashboard Mitra.
 
 **Apakah halaman ini memengaruhi Penghasilan saya?**
 Halaman ini hanya menampilkan data. Kalau Anda ingin tahu status klaim Klien atau dampaknya, hubungi [Dukungan](12-dukungan.md).
@@ -172,3 +172,7 @@ Halaman ini hanya menampilkan data. Kalau Anda ingin tahu status klaim Klien ata
 - [Integrasi](13-integrasi/README.md): menyambungkan website agar artikel terkirim otomatis.
 - [Link Guardian sisi Klien](../klien/06-link-guardian.md)
 - [Dukungan](12-dukungan.md)
+
+## Garansi tautan dan penghasilan Anda
+
+Bila tautan artikel bermasalah pada dua pemeriksaan berturut-turut (artikel hilang, tautan dicabut, noindex, atau Dofollow berubah), klien bisa memilih artikel pengganti atau kredit kembali. Pada kedua pilihan itu penghasilan artikel tersebut dibatalkan. Bila penghasilannya belum ditarik, statusnya menjadi dibatalkan. Bila sudah ditarik, nilainya dipotong dari saldo Anda berikutnya. Anda menerima notifikasi lebih dulu, jadi pulihkan tautannya secepat mungkin.
