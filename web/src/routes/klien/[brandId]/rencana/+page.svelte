@@ -57,6 +57,7 @@
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 	});
 
+	const totalArticles = $derived(weeks * perWeek);
 	const budgetIdr = $derived(parseInt(budget.replace(/\D/g, '') || '0', 10));
 	const fmt = (n: number) => (n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
 	const statusLabel: Record<string, string> = { draft: 'Draf', approved: 'Disetujui', running: 'Berjalan', done: 'Selesai', cancelled: 'Dibatalkan' };
@@ -89,48 +90,73 @@
 		<p class="page-desc">{tr('Susun rencana artikel beberapa minggu sekali jalan. Setujui sekali, lalu tiap minggu kampanye draf dibuat untuk Anda.')}</p>
 	</header>
 
-	<details class="app-card rc-how">
-		<summary>{tr('Cara kerja')}</summary>
-		<ol>
-			<li>{tr('Isi brief, anggaran total, jumlah minggu, dan artikel per minggu. Kategori media boleh dikosongkan.')}</li>
-			<li>{tr('Sistem memilih media yang muat di anggaran dan mengusulkan topik untuk tiap artikel dari brief Anda.')}</li>
-			<li>{tr('Tinjau rencananya. Anda bisa mengganti media atau topik per baris, lalu setujui sekali.')}</li>
-			<li>{tr('Tiap minggu sistem membuat kampanye draf berisi media dan topik itu, lalu memberi tahu Anda.')}</li>
-			<li>{tr('Anda menulis, memeriksa mutu, dan mendistribusikan sendiri. Saldo baru terpotong saat distribusi.')}</li>
-		</ol>
-		<p class="rc-muted">{tr('Biaya di rencana adalah perkiraan dari harga media hari ini. Bila media tidak bisa dipesan lagi, barisnya ditandai perlu perhatian dan Anda diberi tahu.')}</p>
-	</details>
-
 	{#if error}<div class="app-card rc-error" role="alert">{error}</div>{/if}
 
-	<form class="app-card rc-form" onsubmit={(e) => { e.preventDefault(); void create(); }}>
-		<h2 class="rc-h2">{tr('Rencana baru')}</h2>
-		<label class="rc-field">{tr('Brief')}
-			<textarea class="app-input" rows="4" bind:value={brief} maxlength="3000"
-				placeholder={tr('Apa yang dijual, untuk siapa, dan pesan utamanya.')}></textarea>
-		</label>
-		<div class="rc-grid">
-			<label class="rc-field">{tr('Anggaran total (Rp)')}
-				<input class="app-input" inputmode="numeric" bind:value={budget} placeholder="1.000.000" />
+	<div class="rc-top">
+		<form class="app-card rc-form" onsubmit={(e) => { e.preventDefault(); void create(); }}>
+			<h2 class="rc-h2">{tr('Rencana baru')}</h2>
+			<label class="rc-field">{tr('Brief')}
+				<textarea class="app-input" rows="5" bind:value={brief} maxlength="3000"
+					placeholder={tr('Apa yang dijual, untuk siapa, dan pesan utamanya.')}></textarea>
+				<span class="rc-hint">{brief.trim().length}/3000 · {tr('minimal 20 karakter')}</span>
 			</label>
-			<label class="rc-field">{tr('Jumlah minggu')}
-				<select class="app-input" bind:value={weeks}>{#each [1, 2, 3, 4, 5, 6, 7, 8] as n (n)}<option value={n}>{n}</option>{/each}</select>
-			</label>
-			<label class="rc-field">{tr('Artikel per minggu')}
-				<select class="app-input" bind:value={perWeek}>{#each [1, 2, 3] as n (n)}<option value={n}>{n}</option>{/each}</select>
-			</label>
-			<label class="rc-field">{tr('Kategori media (opsional)')}
-				<input class="app-input" bind:value={category} maxlength="120" placeholder={tr('mis. Ekonomi')} />
-			</label>
-		</div>
-		<p class="rc-muted">{tr('Biaya adalah perkiraan dari harga media hari ini. Saldo baru terpotong saat Anda menulis dan mendistribusikan tiap artikel.')}
-			{#if budgetIdr > 0}{tr('Anggaran setara')} {fmt(Math.floor(budgetIdr / rate))} TC.{/if}</p>
-		{#if createError}<p class="rc-bad">{createError}</p>{/if}
-		<button class="app-btn app-btn-primary rc-btn" type="submit" disabled={creating || brief.trim().length < 20 || budgetIdr < 50000}>
-			{#if creating}<LoaderCircle size={15} class="animate-spin" />{/if}
-			{tr('Susun rencana')}
-		</button>
-	</form>
+
+			<div class="rc-split">
+				<label class="rc-field">{tr('Anggaran total (Rp)')}
+					<span class="rc-money">
+						<span class="rc-prefix">Rp</span>
+						<input class="app-input" inputmode="numeric" bind:value={budget} placeholder="1.000.000" />
+					</span>
+					<span class="rc-hint">{tr('Minimal Rp50.000')}</span>
+				</label>
+				<label class="rc-field">{tr('Kategori media (opsional)')}
+					<input class="app-input" bind:value={category} maxlength="120" placeholder={tr('mis. Ekonomi')} />
+				</label>
+			</div>
+
+			<div class="rc-split">
+				<div class="rc-field" role="group" aria-label={tr('Jumlah minggu')}>
+					{tr('Jumlah minggu')}
+					<div class="rc-seg">
+						{#each [1, 2, 3, 4, 5, 6, 7, 8] as n (n)}
+							<button type="button" aria-pressed={weeks === n} class:on={weeks === n} onclick={() => (weeks = n)}>{n}</button>
+						{/each}
+					</div>
+				</div>
+				<div class="rc-field" role="group" aria-label={tr('Artikel per minggu')}>
+					{tr('Artikel per minggu')}
+					<div class="rc-seg">
+						{#each [1, 2, 3] as n (n)}
+							<button type="button" aria-pressed={perWeek === n} class:on={perWeek === n} onclick={() => (perWeek = n)}>{n}</button>
+						{/each}
+					</div>
+				</div>
+			</div>
+
+			<dl class="rc-sum">
+				<div><dt>{tr('Total artikel')}</dt><dd>{totalArticles}</dd></div>
+				<div><dt>{tr('Anggaran per artikel')}</dt><dd>{budgetIdr > 0 ? `Rp${fmt(Math.floor(budgetIdr / totalArticles))}` : '-'}</dd></div>
+				<div><dt>{tr('Setara')}</dt><dd>{budgetIdr > 0 ? `${fmt(Math.floor(budgetIdr / rate))} TC` : '-'}</dd></div>
+			</dl>
+
+			{#if createError}<p class="rc-bad">{createError}</p>{/if}
+			<button class="app-btn app-btn-primary rc-btn" type="submit" disabled={creating || brief.trim().length < 20 || budgetIdr < 50000}>
+				{#if creating}<LoaderCircle size={15} class="animate-spin" />{/if}
+				{tr('Susun rencana')}
+			</button>
+		</form>
+
+		<aside class="app-card rc-how" aria-labelledby="rc-how-h">
+			<h2 id="rc-how-h" class="rc-h2">{tr('Cara kerja')}</h2>
+			<ol>
+				<li><b>{tr('Susun')}</b><span>{tr('Sistem memilih media yang muat di anggaran dan mengusulkan topik tiap artikel dari brief Anda.')}</span></li>
+				<li><b>{tr('Tinjau')}</b><span>{tr('Ganti media atau topik per baris, lalu setujui sekali.')}</span></li>
+				<li><b>{tr('Draf tiap minggu')}</b><span>{tr('Tiap minggu sistem membuat kampanye draf dan memberi tahu Anda.')}</span></li>
+				<li><b>{tr('Tulis dan distribusikan')}</b><span>{tr('Anda menulis, memeriksa mutu, dan mendistribusikan sendiri. Saldo baru terpotong saat distribusi.')}</span></li>
+			</ol>
+			<p class="rc-hint">{tr('Biaya adalah perkiraan dari harga media hari ini. Bila media tidak bisa dipesan lagi, barisnya ditandai perlu perhatian.')}</p>
+		</aside>
+	</div>
 
 	{#if loading}
 		<div class="app-card rc-loading">{tr('Memuat rencana…')}</div>
@@ -156,19 +182,36 @@
 </section>
 
 <style>
-	.rc-how { padding: 12px 20px; margin-top: 16px; }
-	.rc-how summary { cursor: pointer; font-size: 14px; font-weight: 600; }
-	.rc-how ol { margin: 12px 0 8px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 20px; }
 	.rc { display: flex; flex-direction: column; gap: 24px; }
+	.rc-top { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
 	.rc-error { padding: 12px 16px; font-size: 14px; border-color: var(--destructive); color: var(--destructive); }
 	.rc-loading { padding: 20px; text-align: center; font-size: 14px; color: var(--muted-foreground); }
-	.rc-form { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-	.rc-h2 { font-size: 18px; line-height: 24px; font-weight: 600; color: var(--foreground); }
-	.rc-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted-foreground); }
-	.rc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-	.rc-muted { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+	.rc-form { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+	.rc-h2 { font-size: 16px; line-height: 24px; font-weight: 600; color: var(--foreground); }
+	.rc-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; color: var(--foreground); }
+	.rc-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+	.rc-hint { font-size: 12px; line-height: 16px; font-weight: 400; color: var(--muted-foreground); }
 	.rc-bad { font-size: 13px; color: var(--destructive); }
+	.rc-money { position: relative; display: block; }
+	.rc-money :global(input) { width: 100%; padding-left: 38px; }
+	.rc-prefix { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--muted-foreground); pointer-events: none; }
+	.rc-seg { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
+	.rc-seg button { flex: 1; min-width: 0; height: 36px; border-radius: 7px; font-size: 13px; font-weight: 500; color: var(--muted-foreground); transition: background-color 140ms ease, color 140ms ease; }
+	.rc-seg button:hover { background: var(--secondary); }
+	.rc-seg button.on { background: var(--primary); color: #fff; }
+	.rc-sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 0; }
+	.rc-sum div { padding: 12px 16px; display: flex; flex-direction: column; gap: 2px; }
+	.rc-sum div + div { border-left: 1px solid var(--border); }
+	.rc-sum dt { font-size: 12px; color: var(--muted-foreground); }
+	.rc-sum dd { margin: 0; font-size: 18px; line-height: 26px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--foreground); }
 	.rc-btn { align-self: flex-start; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; }
+	.rc-how { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+	.rc-how ol { list-style: none; margin: 0; padding: 0; counter-reset: step; display: flex; flex-direction: column; gap: 18px; }
+	.rc-how li { position: relative; display: flex; flex-direction: column; gap: 2px; padding-left: 36px; counter-increment: step; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+	.rc-how li b { font-size: 14px; font-weight: 600; color: var(--foreground); }
+	.rc-how li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--foreground); }
+	.rc-how li + li::after { content: ''; position: absolute; left: 12px; top: -16px; height: 14px; width: 1px; background: var(--border); }
+	.rc-muted { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
 	.rc-list { padding: 0; list-style: none; overflow: hidden; margin-top: 12px; }
 	.rc-list li + li { border-top: 1px solid var(--border); }
 	.rc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 16px; padding: 16px 20px; color: inherit; text-decoration: none; transition: background-color 140ms ease; }
@@ -178,7 +221,7 @@
 	.rc-meta { font-size: 13px; color: var(--muted-foreground); }
 	:global(.rc-arrow) { color: var(--muted-foreground); transition: transform 140ms ease; }
 	.rc-row:hover :global(.rc-arrow) { transform: translateX(4px); }
-	@media (max-width: 860px) { .rc-grid { grid-template-columns: 1fr 1fr; } }
-	@media (max-width: 560px) { .rc-grid { grid-template-columns: 1fr; } .rc-row { grid-template-columns: minmax(0, 1fr) auto; } .rc-meta { grid-column: 1 / -1; } }
-	@media (prefers-reduced-motion: reduce) { .rc-row, :global(.rc-arrow) { transition: none; } }
+	@media (max-width: 1100px) { .rc-top { grid-template-columns: 1fr; } }
+	@media (max-width: 560px) { .rc-split { grid-template-columns: 1fr; } .rc-form, .rc-how { padding: 16px; } .rc-sum { grid-template-columns: 1fr; } .rc-sum div + div { border-left: 0; border-top: 1px solid var(--border); } .rc-row { grid-template-columns: minmax(0, 1fr) auto; } .rc-meta { grid-column: 1 / -1; } }
+	@media (prefers-reduced-motion: reduce) { .rc-row, .rc-seg button, :global(.rc-arrow) { transition: none; } }
 </style>
