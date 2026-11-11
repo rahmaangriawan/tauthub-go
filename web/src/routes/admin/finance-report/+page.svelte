@@ -424,7 +424,9 @@
 		profitLoading = true;
 		profitError = '';
 		try {
-			const res = await apiRequest('/v1/platform/finance/profit-breakdown?limit=100');
+			// Ikut filter periode utama supaya modal profit konsisten dengan KPI card.
+			const params = new URLSearchParams({ limit: '100', from, to });
+			const res = await apiRequest(`/v1/platform/finance/profit-breakdown?${params.toString()}`);
 			if (!res.ok) {
 				profitError = res.status === 404
 					? tr('Endpoint rincian profit belum tersedia. Restart API lalu coba lagi.')
@@ -446,7 +448,8 @@
 	}
 	function openProfit() {
 		profitOpen = true;
-		if (profitEntries === null) void loadProfit();
+		// Selalu reload: filter periode mungkin sudah berubah sejak modal terakhir dibuka.
+		void loadProfit();
 	}
 
 	// Label status publikasi untuk tabel escrow (statusnya internal, perlu ID friendly).
@@ -599,19 +602,53 @@
 			<div class="app-card mt-3 px-4 py-2.5 text-sm" style="color: var(--destructive);">{error}</div>
 		{/if}
 
-		<!-- Posisi Keuangan Saat Ini: cara pandang balance-sheet.
-		     Pisahkan uang titipan klien, utang mitra, dana escrow, dan
-		     profit sah Tauthub — supaya owner tahu apa yang WAJIB ADA di
-		     rekening vs apa yang BOLEH ditarik ke operasional. Snapshot
-		     real-time: tidak mengikuti filter periode. -->
+		<!-- Filter periode & rentang tanggal untuk chart + tabel rincian -->
+		<div class="app-card mt-6 flex flex-col gap-3 px-4 py-3.5 xl:flex-row xl:items-center xl:justify-between">
+			<div class="flex min-w-0 flex-wrap items-center gap-2">
+				<span class="shrink-0 text-xs font-medium text-muted-foreground">{tr("Periode")}</span>
+				<div class="periodScroll">
+					<div class="periodGroup" role="group" aria-label={tr("Periode laporan")}>
+						{#each PRESETS as item (item.value)}
+							<button
+								class="periodBtn"
+								class:periodActive={preset === item.value}
+								type="button"
+								aria-pressed={preset === item.value}
+								onclick={() => applyPreset(item.value)}
+							>{tr(item.label)}</button>
+						{/each}
+					</div>
+				</div>
+			</div>
+			<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end xl:border-l xl:pl-4">
+				<label class="flex w-full flex-col gap-1 sm:w-auto sm:min-w-[168px] sm:flex-none">
+					<span class="text-[11px] font-medium text-muted-foreground">{tr("Dari tanggal")}</span>
+					<DatePicker bind:value={from} max={to} ariaLabel={tr("Dari tanggal")} onchange={onDateChange} />
+				</label>
+				<label class="flex w-full flex-col gap-1 sm:w-auto sm:min-w-[168px] sm:flex-none">
+					<span class="text-[11px] font-medium text-muted-foreground">{tr("Sampai tanggal")}</span>
+					<DatePicker bind:value={to} min={from} ariaLabel={tr("Sampai tanggal")} onchange={onDateChange} />
+				</label>
+				<button class="resetBtn w-full sm:w-auto" type="button" onclick={resetFilters}>
+					<RotateCcw size={13} />{tr("Reset filter")}
+				</button>
+			</div>
+		</div>
+
+		<!-- Posisi Keuangan: 5 KPI balance-sheet, MENGIKUTI filter periode
+		     di atas. Dana Titipan + Escrow + Hak Mitra = posisi pada tanggal
+		     akhir rentang. Profit = akumulasi dalam rentang.
+		     Akun internal farihcoid@ dan wantek@ dikecualikan dari semua
+		     perhitungan di sisi backend. -->
 		{#if summary.client_available !== undefined}
 			<div class="mt-5 flex items-end justify-between gap-3">
 				<div>
-					<h2 class="text-base font-semibold">{tr("Posisi Keuangan Saat Ini")}</h2>
+					<h2 class="text-base font-semibold">{tr("Posisi Keuangan — per Periode")}</h2>
 					<p class="text-xs text-muted-foreground">
-						{tr("Snapshot real-time. Pisahkan uang yang bukan hak Tauthub dari profit yang boleh ditarik.")}
+						{tr("Posisi pada tanggal akhir rentang; profit dihitung akumulasi dalam rentang. Akun internal dikecualikan.")}
 					</p>
 				</div>
+				<span class="text-[11px] text-muted-foreground tabular-nums">{from} → {to}</span>
 			</div>
 			<div class="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
 				<!-- 1. Dana Titipan Klien -->
@@ -714,38 +751,6 @@
 
 		{/if}
 
-		<!-- Filter periode & rentang tanggal untuk chart + tabel rincian -->
-		<div class="app-card mt-6 flex flex-col gap-3 px-4 py-3.5 xl:flex-row xl:items-center xl:justify-between">
-			<div class="flex min-w-0 flex-wrap items-center gap-2">
-				<span class="shrink-0 text-xs font-medium text-muted-foreground">{tr("Periode")}</span>
-				<div class="periodScroll">
-					<div class="periodGroup" role="group" aria-label={tr("Periode laporan")}>
-						{#each PRESETS as item (item.value)}
-							<button
-								class="periodBtn"
-								class:periodActive={preset === item.value}
-								type="button"
-								aria-pressed={preset === item.value}
-								onclick={() => applyPreset(item.value)}
-							>{tr(item.label)}</button>
-						{/each}
-					</div>
-				</div>
-			</div>
-			<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end xl:border-l xl:pl-4">
-				<label class="flex w-full flex-col gap-1 sm:w-auto sm:min-w-[168px] sm:flex-none">
-					<span class="text-[11px] font-medium text-muted-foreground">{tr("Dari tanggal")}</span>
-					<DatePicker bind:value={from} max={to} ariaLabel={tr("Dari tanggal")} onchange={onDateChange} />
-				</label>
-				<label class="flex w-full flex-col gap-1 sm:w-auto sm:min-w-[168px] sm:flex-none">
-					<span class="text-[11px] font-medium text-muted-foreground">{tr("Sampai tanggal")}</span>
-					<DatePicker bind:value={to} min={from} ariaLabel={tr("Sampai tanggal")} onchange={onDateChange} />
-				</label>
-				<button class="resetBtn w-full sm:w-auto" type="button" onclick={resetFilters}>
-					<RotateCcw size={13} />{tr("Reset filter")}
-				</button>
-			</div>
-		</div>
 
 		<!-- Tren 12 bulan: Top Up vs GMV (omzet publikasi) vs Pencairan Mitra -->
 		<div class="app-card mt-6 p-5">

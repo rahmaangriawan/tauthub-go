@@ -216,9 +216,23 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	moneyIn := inRow.numOr("total")
 	moneyOut := outRow.numOr("net")
 
-	// Posisi profit Tauthub (gross 25% × GMV publikasi terbit, dikurangi yang
-	// sudah tercatat tertarik lewat admin_profit_withdrawals).
-	profitGross, profitWithdrawn, profitAvailable, err := d.adminProfitPosition(ctx)
+	// Konteks exclude akun internal/dev + reconstruction wallet AS-OF tanggal
+	// akhir rentang (toDate 23:59). Dashboard owner meminta filter tanggal
+	// berdampak ke 5 KPI balance-sheet, bukan cuma arus kas.
+	excl := d.finLoadFilter(ctx)
+	asOf := toDate.Add(24*time.Hour - time.Second)
+
+	availableAt, reservedAt, err := d.finBalancesAsOf(ctx, asOf, excl)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	partnerUnpaidAt, err := d.finPartnerUnpaidAsOf(ctx, asOf, excl)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+	profitGross, profitWithdrawn, profitAvailable, err := d.finProfitInRange(ctx, fromTs, toExcl, excl)
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -238,20 +252,6 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		       END), 0) AS total
 		FROM settlements s
 		WHERE s.status IN ('pending', 'approved', 'processing')`, feeCfg.ewalletPct, feeCfg.bankIDR)
-	// Liabilitas klien = saldo yang belum terpakai. captured tidak dihitung:
-	// uang itu sudah menjadi biaya publikasi/AI (pendapatan), bukan kewajiban.
-	// available dan reserved dipecah supaya dashboard bisa menampilkan "Dana
-	// Titipan Klien" dan "Dana Tertahan (Escrow)" terpisah.
-	clientBalance, _ := d.queryRow(ctx, `
-		SELECT COALESCE(SUM(available_tc), 0) AS available,
-		       COALESCE(SUM(reserved_tc), 0) AS reserved
-		FROM credit_wallets`)
-	partnerUnpaid, _ := d.queryRow(ctx, `
-		SELECT COALESCE(SUM(e.amount), 0) AS total
-		FROM partner_earnings e
-		LEFT JOIN settlements s ON s.id = e.settlement_id
-		WHERE e.status = 'pending'
-		   OR (e.status = 'settled' AND (s.id IS NULL OR s.status <> 'paid'))`)
 
 	// Siap transfer ke mitra: jumlah mitra yang punya pengajuan pencairan aktif.
 	// Nilainya (bersih setelah biaya) sama dengan settlementPending di atas.
@@ -274,11 +274,10 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		WHERE status = 'approved'
 		  AND reviewed_at >= $1 AND reviewed_at < $2`, fromTs, toExcl)
 
-	clientAvailable := finReportInt(clientBalance.numOr("available"))
-	clientReserved := finReportInt(clientBalance.numOr("reserved"))
-	partnerUnpaidInt := finReportInt(partnerUnpaid.numOr("total"))
-	cashRequired := int64(clientAvailable) + int64(clientReserved) +
-		int64(partnerUnpaidInt) + profitAvailable
+	clientAvailable := availableAt
+	clientReserved := reservedAt
+	partnerUnpaidInt := partnerUnpaidAt
+	cashRequired := clientAvailable + clientReserved + partnerUnpaidInt + profitAvailable
 
 	summary := map[string]any{
 		"money_in":                 finReportInt(moneyIn),

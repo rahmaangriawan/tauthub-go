@@ -3,6 +3,7 @@ package platform
 import (
 	"math"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -20,6 +21,7 @@ func (d *Deps) FinanceClientDepositsDetail(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	limit := clampInt(r.URL.Query().Get("limit"), 200, 1, 1000)
+	excl := d.finLoadFilter(r.Context())
 
 	rows, err := d.queryRows(r.Context(),
 		`SELECT w.brand_id::text         AS brand_id,
@@ -37,10 +39,11 @@ func (d *Deps) FinanceClientDepositsDetail(w http.ResponseWriter, r *http.Reques
 		   LEFT JOIN users u       ON u.id = b.created_by
 		  WHERE (w.available_tc + w.reserved_tc) > 0
 		    AND b.deleted_at IS NULL
+		    AND w.brand_id::text != ALL($2::text[])
 		  GROUP BY w.brand_id, b.name, b.client_name, b.ownership_type,
 		           w.available_tc, w.reserved_tc, u.email, u.display_name
 		  ORDER BY (w.available_tc + w.reserved_tc) DESC
-		  LIMIT $1`, limit)
+		  LIMIT $1`, limit, excl.brandArr())
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -93,6 +96,7 @@ func (d *Deps) FinanceEscrowDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit := clampInt(r.URL.Query().Get("limit"), 200, 1, 1000)
+	excl := d.finLoadFilter(r.Context())
 
 	rows, err := d.queryRows(r.Context(),
 		`SELECT p.id::text              AS publication_id,
@@ -114,8 +118,9 @@ func (d *Deps) FinanceEscrowDetail(w http.ResponseWriter, r *http.Request) {
 		   LEFT JOIN partners pt ON pt.id = m.partner_id
 		  WHERE p.status IN ('pending','waiting_partner','partner_approved',
 		                     'queued','processing','retrying')
+		    AND p.brand_id::text != ALL($2::text[])
 		  ORDER BY p.created_at DESC
-		  LIMIT $1`, limit)
+		  LIMIT $1`, limit, excl.brandArr())
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -163,6 +168,7 @@ func (d *Deps) FinancePartnerUnpaidDetail(w http.ResponseWriter, r *http.Request
 		return
 	}
 	limit := clampInt(r.URL.Query().Get("limit"), 300, 1, 1000)
+	excl := d.finLoadFilter(r.Context())
 
 	rows, err := d.queryRows(r.Context(),
 		`SELECT pt.id::text          AS partner_id,
@@ -182,14 +188,15 @@ func (d *Deps) FinancePartnerUnpaidDetail(w http.ResponseWriter, r *http.Request
 		   JOIN partners pt ON pt.id = e.partner_id
 		   LEFT JOIN users u ON u.id = pt.user_id
 		   LEFT JOIN settlements s ON s.id = e.settlement_id
-		  WHERE e.status = 'pending'
-		     OR (e.status = 'settled' AND (s.id IS NULL OR s.status <> 'paid'))
+		  WHERE (e.status = 'pending'
+		     OR (e.status = 'settled' AND (s.id IS NULL OR s.status <> 'paid')))
+		    AND e.partner_id::text != ALL($2::text[])
 		  GROUP BY pt.id, pt.name, u.email
 		  ORDER BY (COALESCE(SUM(CASE WHEN e.status = 'pending' THEN e.amount ELSE 0 END), 0)
 		          + COALESCE(SUM(CASE WHEN e.status = 'settled'
 		                             AND (s.status IS NULL OR s.status <> 'paid')
 		                            THEN e.amount ELSE 0 END), 0)) DESC
-		  LIMIT $1`, limit)
+		  LIMIT $1`, limit, excl.partnerArr())
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -240,12 +247,41 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 	}
 	limit := clampInt(r.URL.Query().Get("limit"), 100, 1, 500)
 	offset := clampInt(r.URL.Query().Get("offset"), 0, 0, 1<<30)
+	excl := d.finLoadFilter(r.Context())
 
-	countRow, _ := d.queryRow(r.Context(),
-		`SELECT COUNT(*)::int AS n FROM publications WHERE status = 'published'`)
+	// Range filter opsional (from/to) — default: seumur hidup.
+	fromStr := strings.TrimSpace(r.URL.Query().Get("from"))
+	toStr := strings.TrimSpace(r.URL.Query().Get("to"))
+	var rangeFrom, rangeToExcl time.Time
+	useRange := false
+	if fromStr != "" && toStr != "" && len(fromStr) >= 10 && len(toStr) >= 10 {
+		if fT, err1 := time.Parse("2006-01-02", fromStr[:10]); err1 == nil {
+			if tT, err2 := time.Parse("2006-01-02", toStr[:10]); err2 == nil {
+				rangeFrom = fT
+				rangeToExcl = tT.AddDate(0, 0, 1)
+				useRange = true
+			}
+		}
+	}
 
-	rows, err := d.queryRows(r.Context(),
-		`SELECT p.id::text              AS publication_id,
+	// Build count query.
+	var countRow rowMap
+	if useRange {
+		countRow, _ = d.queryRow(r.Context(),
+			`SELECT COUNT(*)::int AS n FROM publications p
+			 WHERE p.status = 'published'
+			   AND p.brand_id::text != ALL($1::text[])
+			   AND p.published_at >= $2 AND p.published_at < $3`,
+			excl.brandArr(), rangeFrom, rangeToExcl)
+	} else {
+		countRow, _ = d.queryRow(r.Context(),
+			`SELECT COUNT(*)::int AS n FROM publications p
+			 WHERE p.status = 'published'
+			   AND p.brand_id::text != ALL($1::text[])`, excl.brandArr())
+	}
+
+	// Build list query.
+	baseSQL := `SELECT p.id::text              AS publication_id,
 		        p.client_price,
 		        ROUND(p.client_price * 0.25) AS commission,
 		        p.published_at,
@@ -259,8 +295,23 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 		   LEFT JOIN media m   ON m.id = p.media_id
 		   LEFT JOIN partners pt ON pt.id = m.partner_id
 		  WHERE p.status = 'published'
-		  ORDER BY p.client_price DESC, p.published_at DESC
-		  LIMIT $1 OFFSET $2`, limit, offset)
+		    AND p.brand_id::text != ALL($1::text[])`
+	var (
+		rows []rowMap
+		err  error
+	)
+	if useRange {
+		rows, err = d.queryRows(r.Context(),
+			baseSQL+` AND p.published_at >= $4 AND p.published_at < $5
+			  ORDER BY p.client_price DESC, p.published_at DESC
+			  LIMIT $2 OFFSET $3`,
+			excl.brandArr(), limit, offset, rangeFrom, rangeToExcl)
+	} else {
+		rows, err = d.queryRows(r.Context(),
+			baseSQL+`
+			  ORDER BY p.client_price DESC, p.published_at DESC
+			  LIMIT $2 OFFSET $3`, excl.brandArr(), limit, offset)
+	}
 	if err != nil {
 		writeErr(w, d, err)
 		return
