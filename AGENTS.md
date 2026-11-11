@@ -109,3 +109,38 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 6. `systemctl restart tauthub-api tauthub-web tauthub-scheduler tauthub-worker`.
 7. Verifikasi: `systemctl is-active` keempatnya, `healthz` 200, dan halaman
    publik merespons. Jangan lapor "selesai" tanpa bukti ini.
+
+## 5. Pencarian kode dan file: pakai XERJ, bukan grep
+
+**Wajib:** setiap kali mencari file, simbol, atau tempat sebuah perilaku berada,
+pakai MCP XERJ (`xerj_search`, `xerj_code_search`, `xerj_hybrid_search`).
+**Jangan pakai `grep`, `rg`, atau `find`** untuk pencarian itu.
+
+- Index `go2-*` untuk repo ini (`/Users/mini/tauthub-go`). Index `go-*` lama sudah
+  usang dan tidak dipakai lagi; jangan dicari dengan prefix itu.
+- Mulai dari `xerj_map` kalau belum tahu field indeksnya.
+- Buka hanya file yang ditunjuk hasil, lalu kutip `path:line` dari hit.
+- Kalau XERJ gagal atau hasilnya kosong, laporkan ke user dulu. Jangan diam-diam
+  beralih ke grep.
+- Index adalah snapshot. Setelah perubahan besar, user yang memutuskan kapan
+  refresh. Rebuild terisolasi: `~/.local/bin/xerj autoindex /Users/mini/tauthub-go
+  --prefix go2 --state-dir /Users/mini/.xerj/autoindex/go2-state --no-graph --yes`.
+
+## 6. Aturan teks di gambar AI (master prompt)
+
+Aturan ini ditempel server di `api/internal/ai/image.go` (`imageTextRules`) ke
+setiap prompt gambar: cover, gambar isi artikel, dan pustaka gambar.
+
+- Gambar boleh memuat **satu** teks pendek yang penting saja: kata kunci, judul,
+  atau subjudul, **maksimal 7 kata**. Lebih sedikit lebih baik.
+- Pilih satu frasa paling penting dari subjek. Jangan salin seluruh prompt atau
+  judul utuh ke dalam gambar.
+- Teks dalam bahasa yang sama dengan subjek, ejaan benar, besar dan jelas, di
+  area komposisi yang lengang.
+- Dilarang: paragraf, kalimat utuh, caption, slogan, logo, watermark, URL, dan
+  label UI. Kalau tidak ada frasa pendek yang cocok, gambar dibuat tanpa teks.
+- Pengecualian hanya untuk gambar isi yang berupa grafik, infografis, atau
+  diagram: boleh memuat angka dan label sumbu seperlunya, dan judulnya tetap
+  maksimal 7 kata.
+- Jangan mengembalikan aturan lama ("tanpa teks sama sekali"). Kalau mengubah
+  aturan ini, perbarui juga `internal/ai/image_prompt_test.go`.
