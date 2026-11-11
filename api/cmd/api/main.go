@@ -498,6 +498,7 @@ func run() error {
 			// Putaran baru: pakai ulang kampanye yang sudah terdistribusi untuk
 			// postingan berikutnya di waktu lain.
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/rounds", resolveCampaign(tautDeps.TautCampaignNewRound))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/duplicate", resolveCampaign(tautDeps.TautCampaignDuplicate))
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/validate", resolveCampaign(tautDeps.TautCampaignValidateGet))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/validate", resolveCampaign(tautDeps.TautCampaignValidatePost))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/schedule", resolveCampaign(tautDeps.TautCampaignSchedule))

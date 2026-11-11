@@ -34,7 +34,7 @@ Filter adalah pilihan untuk menyaring daftar.
 Setiap kartu menampilkan:
 
 - **Label dan tahap** di kiri atas. Label **Kilat** menandai kampanye Kilat. Kampanye lain berlabel **Dibantu AI**. Di sebelahnya ada pil tahap, misalnya **Placement**. Bila kampanye sudah masuk putaran kedua atau lebih, ada juga pil **Putaran 2**. Pil tahap berwarna hijau begitu ada artikel yang terbit.
-- **Ikon aksi** di kanan atas: **Tambah Putaran** (hanya pada kampanye **Terkirim** atau **Terjadwal**), **Berita acara & share**, dan **Hapus ke arsip**. Ikon aksi tidak tampil di tampilan arsip.
+- **Ikon aksi** di kanan atas: **Tambah Putaran** (hanya pada kampanye **Terkirim** atau **Terjadwal**), **Ulangi kampanye** (semua kampanye selain draf), **Berita acara & share**, dan **Hapus ke arsip**. Ikon aksi tidak tampil di tampilan arsip.
 - **Nama kampanye.** Nama yang panjang dipotong. Arahkan kursor untuk melihat nama lengkapnya.
 - **Keterangan singkat.** Kampanye baru menampilkan "Kampanye distribusi konten PR otomatis." Kampanye lama yang punya jenis media menampilkan "Tipe media: … · Strategi anggaran: … · Mulai …".
 - **Dibuat:** tanggal kampanye dibuat.
@@ -169,6 +169,14 @@ Tidak. Kampanye yang sudah selesai hanya bisa dilihat. Pakai **Tambah Putaran** 
 
 **Ke mana kampanye yang saya hapus?**
 Ke **Arsip**. Dari sana Anda bisa memulihkannya atau menghapusnya permanen.
+
+## Mengulangi kampanye
+
+Klik ikon **Ulangi kampanye** untuk membuat kampanye draf baru dari kampanye lama. Yang disalin: media yang sama (satu artikel per media), Profiler, ringkasan strategi, dan pengaturan tautan. Yang tidak disalin: artikel, jadwal, dan pesanan. Nama kampanye baru memakai nama lama ditambah "(ulang)".
+
+- Saldo tidak terpakai saat Anda mengulang. Biaya baru dihitung saat Anda menyusun topik dan mendistribusikan, dengan harga media hari ini. Harga, biaya layanan, dan kurs bisa sudah berubah sejak kampanye pertama.
+- Media yang sekarang tidak bisa dipesan (nonaktif, disembunyikan mitra, belum tersambung, atau tanpa harga) dilewati. Layar memberi tahu berapa media yang dilewati.
+- Beda dengan **Tambah Putaran**: putaran menambah tagihan ke kampanye yang sama, sedangkan mengulang membuat kampanye terpisah dengan nomor order sendiri.
 
 ## Lihat juga
 

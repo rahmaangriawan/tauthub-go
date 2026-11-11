@@ -109,6 +109,7 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	// 4. SLA 3×24 jam persetujuan media: lewat tenggat langsung dibatalkan
 	//    otomatis + saldo dikembalikan (tanpa masa perpanjangan).
 	d.schSweepSellerOrderExpiring(ctx, schMinInt(maxJobs, 20))
+	d.schSweepBalanceLow(ctx, schMinInt(maxJobs, 20))
 	d.schSweepSellerTrafficDrop(ctx, schMinInt(maxJobs, 20))
 	res.SLACancelled = d.schSweepPublicationSLA(ctx, schMinInt(maxJobs, 20))
 
@@ -1222,6 +1223,62 @@ func (d *Deps) schEnqueuePublicationLinkChecks(ctx context.Context, limit int) {
 			slog.Warn("[scheduler] enqueue link check gagal", "id", publicationID, "err", err)
 		}
 	}
+}
+
+// ---------- Pengingat saldo menipis ----------
+
+// schSweepBalanceLow: brand yang masih aktif memesan (ada capture kredit dalam 30
+// hari terakhir) tetapi saldo tersedianya kurang dari rata-rata biaya lima
+// pesanan terakhirnya diberi tahu sekali sebulan lewat in-app dan push. Hanya
+// anggota yang bisa mengisi saldo (owner, admin, writer) yang diberi tahu.
+// Pesan menyebut angka saldo dan rata-rata pesanan, tanpa tenggat palsu.
+func (d *Deps) schSweepBalanceLow(ctx context.Context, limit int) int {
+	if limit < 1 {
+		return 0
+	}
+	rows, err := d.queryRows(ctx, `
+		WITH recent AS (
+		  SELECT brand_id, ABS(amount_tc) AS tc,
+		         ROW_NUMBER() OVER (PARTITION BY brand_id ORDER BY created_at DESC) AS rn
+		  FROM credit_ledger_entries
+		  WHERE ref_type = 'capture' AND created_at > NOW() - INTERVAL '30 days'
+		)
+		SELECT w.brand_id, w.available_tc, ROUND(AVG(r.tc))::int AS avg_tc
+		FROM credit_wallets w
+		JOIN recent r ON r.brand_id = w.brand_id AND r.rn <= 5
+		GROUP BY w.brand_id, w.available_tc
+		HAVING AVG(r.tc) > 0 AND w.available_tc < AVG(r.tc)
+		ORDER BY w.brand_id
+		LIMIT $1`, limit)
+	if err != nil {
+		slog.Error("[scheduler] sweep saldo menipis gagal", "err", err)
+		return 0
+	}
+	month := time.Now().Format("2006-01")
+	sent := 0
+	for _, row := range rows {
+		brandID := row.strOr("brand_id", "")
+		available, avg := row.intOr("available_tc", 0), row.intOr("avg_tc", 0)
+		body := "Saldo Anda tinggal " + itoa(available) + " TC, kurang dari rata-rata satu pesanan terakhir (" + itoa(avg) +
+			" TC). Isi saldo agar kampanye berikutnya bisa langsung dikirim."
+		link := "/klien/" + brandID + "/credits"
+		dedupe := "billing.balance_low:" + brandID + ":" + month
+		n, err := d.execRows(ctx, `
+			INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key)
+			SELECT gen_random_uuid(), bm.user_id, 'billing.balance_low', 'Saldo hampir habis', $2, $3, $4
+			FROM brand_memberships bm JOIN users u ON u.id = bm.user_id
+			WHERE bm.brand_id = $1 AND bm.role IN ('owner', 'admin', 'writer') AND u.role <> 'admin'
+			  AND NOT EXISTS (SELECT 1 FROM notifications x WHERE x.user_id = bm.user_id AND x.dedupe_key = $4)`,
+			brandID, body, link, dedupe)
+		if err != nil {
+			slog.Warn("[scheduler] notifikasi saldo menipis gagal", "brand", brandID, "err", err)
+			continue
+		}
+		if n > 0 {
+			sent++
+		}
+	}
+	return sent
 }
 
 // ---------- Peringatan Pusat Penjual ----------

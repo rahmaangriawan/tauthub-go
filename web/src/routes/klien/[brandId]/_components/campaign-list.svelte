@@ -7,7 +7,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Archive, ArrowRight, Check, ChevronLeft, ChevronRight, Clock, FileText, LoaderCircle, Plus, RotateCcw, Search, Share2, Trash, X, Zap } from '@lucide/svelte';
+	import { Archive, ArrowRight, Check, ChevronLeft, ChevronRight, Clock, FileText, LoaderCircle, Plus, RotateCcw, Search, Share2, Trash, X, Zap, Copy } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { campaignUrlId } from '$lib/campaign-url';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -141,6 +141,28 @@ let revoking = $state(false);
 			const res = await apiRequest(`/v1/brands/${brandId}/taut/campaigns/${c.id}/rounds`, { method: 'POST' });
 			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menambah putaran baru.')));
 			await goto(`/klien/${brandUrl}/media?campaign=${campaignUrlId(c)}`);
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : String(reason);
+		} finally {
+			rowBusyId = '';
+		}
+	}
+
+	// Ulangi kampanye: draf baru dengan media yang sama; klien menulis topik baru.
+	// Media yang kini tidak bisa dipesan dilewati dan disebut. Tidak ada saldo
+	// yang terpakai sampai klien mendistribusikan sendiri.
+	async function duplicateCampaign(c: Campaign) {
+		if (rowBusyId) return;
+		rowBusyId = c.id;
+		error = '';
+		try {
+			const res = await apiRequest(`/v1/brands/${brandId}/taut/campaigns/${c.id}/duplicate`, { method: 'POST' });
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengulangi kampanye.')));
+			const data = await res.json();
+			if (Array.isArray(data.unavailable) && data.unavailable.length > 0) {
+				window.alert(`${data.unavailable.length} ${tr('media dilewati karena sekarang tidak bisa dipesan.')}`);
+			}
+			await goto(`/klien/${brandUrl}/taut-pintar/${campaignUrlId(data)}`);
 		} catch (reason) {
 			error = reason instanceof Error ? reason.message : String(reason);
 		} finally {
@@ -398,6 +420,13 @@ let revoking = $state(false);
 											onclick={() => void addRound(c)}
 										>
 											{#if rowBusyId === c.id}<LoaderCircle size={16} strokeWidth={1.5} class="animate-spin" />{:else}<Plus size={16} strokeWidth={1.5} />{/if}
+										</button>
+									</Tooltip>
+								{/if}
+								{#if c.taut_status && c.taut_status !== 'draft'}
+									<Tooltip content={tr('Ulangi kampanye')}>
+										<button class="cmp-icon-btn" type="button" aria-label={tr('Ulangi kampanye')} disabled={rowBusyId === c.id} onclick={() => void duplicateCampaign(c)}>
+											<Copy size={16} strokeWidth={1.5} />
 										</button>
 									</Tooltip>
 								{/if}
