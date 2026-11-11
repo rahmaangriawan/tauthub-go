@@ -57,7 +57,25 @@
 		return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
 	});
 
+	const PER_WEEK_MAX = 3;
+	let perWeekMode = $state<'preset' | 'custom'>('preset');
+	let perWeekInput = $state('');
+	const perWeekValidCustom = $derived(/^\d+$/.test(perWeekInput) && Number(perWeekInput) >= 1 && Number(perWeekInput) <= PER_WEEK_MAX);
+	const perWeekValid = $derived(perWeekMode === 'preset' || perWeekValidCustom);
+	const perWeekError = $derived(perWeekMode === 'custom' && !perWeekValidCustom ? tr('Isi angka bulat 1 sampai 3.') : '');
 	const totalArticles = $derived(weeks * perWeek);
+
+	function setPreset(n: number) {
+		perWeekMode = 'preset';
+		perWeek = n;
+	}
+	function onCustomInput(raw: string) {
+		perWeekInput = raw.trim();
+		if (/^\d+$/.test(perWeekInput)) {
+			const n = Number(perWeekInput);
+			if (n >= 1 && n <= PER_WEEK_MAX) perWeek = n;
+		}
+	}
 	const budgetIdr = $derived(parseInt(budget.replace(/\D/g, '') || '0', 10));
 	const fmt = (n: number) => (n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
 	const statusLabel: Record<string, string> = { draft: 'Draf', approved: 'Disetujui', running: 'Berjalan', done: 'Selesai', cancelled: 'Dibatalkan' };
@@ -115,21 +133,28 @@
 			</div>
 
 			<div class="rc-split">
-				<div class="rc-field" role="group" aria-label={tr('Jumlah minggu')}>
-					{tr('Jumlah minggu')}
-					<div class="rc-seg">
-						{#each [1, 2, 3, 4, 5, 6, 7, 8] as n (n)}
-							<button type="button" aria-pressed={weeks === n} class:on={weeks === n} onclick={() => (weeks = n)}>{n}</button>
-						{/each}
-					</div>
+				<div class="rc-field">
+					<span class="rc-row-top">{tr('Jumlah minggu')} <b class="rc-val">{weeks} {tr('minggu')}</b></span>
+					<input class="rc-range" type="range" min="1" max="8" step="1" value={weeks}
+						oninput={(e) => (weeks = Number((e.currentTarget as HTMLInputElement).value))}
+						aria-label={tr('Jumlah minggu')} />
+					<span class="rc-scale"><span>1</span><span>8</span></span>
 				</div>
 				<div class="rc-field" role="group" aria-label={tr('Artikel per minggu')}>
-					{tr('Artikel per minggu')}
-					<div class="rc-seg">
-						{#each [1, 2, 3] as n (n)}
-							<button type="button" aria-pressed={perWeek === n} class:on={perWeek === n} onclick={() => (perWeek = n)}>{n}</button>
-						{/each}
+					<span class="rc-row-top">{tr('Artikel per minggu')}</span>
+					<div class="rc-perweek">
+						<div class="rc-seg">
+							<button type="button" aria-pressed={perWeekMode === 'preset' && perWeek === 1} class:on={perWeekMode === 'preset' && perWeek === 1} onclick={() => setPreset(1)}>1</button>
+							<button type="button" aria-pressed={perWeekMode === 'preset' && perWeek === 2} class:on={perWeekMode === 'preset' && perWeek === 2} onclick={() => setPreset(2)}>2</button>
+							<button type="button" aria-pressed={perWeekMode === 'custom'} class:on={perWeekMode === 'custom'} onclick={() => (perWeekMode = 'custom')}>{tr('Lainnya')}</button>
+						</div>
+						{#if perWeekMode === 'custom'}
+							<input class="app-input rc-custom" type="number" inputmode="numeric" min="1" max={PER_WEEK_MAX} step="1"
+								placeholder="1–{PER_WEEK_MAX}" value={perWeekInput} aria-invalid={!!perWeekError}
+								oninput={(e) => onCustomInput((e.currentTarget as HTMLInputElement).value)} />
+						{/if}
 					</div>
+					{#if perWeekError}<span class="rc-bad">{perWeekError}</span>{/if}
 				</div>
 			</div>
 
@@ -140,7 +165,7 @@
 			</dl>
 
 			{#if createError}<p class="rc-bad">{createError}</p>{/if}
-			<button class="app-btn app-btn-primary rc-btn" type="submit" disabled={creating || brief.trim().length < 20 || budgetIdr < 50000}>
+			<button class="app-btn app-btn-primary rc-btn" type="submit" disabled={creating || brief.trim().length < 20 || budgetIdr < 50000 || !perWeekValid}>
 				{#if creating}<LoaderCircle size={15} class="animate-spin" />{/if}
 				{tr('Susun rencana')}
 			</button>
@@ -204,6 +229,12 @@
 	.rc-sum div + div { border-left: 1px solid var(--border); }
 	.rc-sum dt { font-size: 12px; color: var(--muted-foreground); }
 	.rc-sum dd { margin: 0; font-size: 18px; line-height: 26px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--foreground); }
+	.rc-row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 500; color: var(--foreground); }
+	.rc-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--primary); }
+	.rc-range { width: 100%; accent-color: var(--primary); margin: 6px 0 0; }
+	.rc-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted-foreground); }
+	.rc-perweek { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; align-items: center; }
+	.rc-custom { height: 44px; text-align: center; font-variant-numeric: tabular-nums; }
 	.rc-btn { align-self: flex-start; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; }
 	.rc-how { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
 	.rc-how ol { list-style: none; margin: 0; padding: 0; counter-reset: step; display: flex; flex-direction: column; gap: 18px; }

@@ -3707,6 +3707,7 @@ export const PHRASE_EN: Record<string, string> = {
   "Jenis tautan": "Link type",
   "Ubah jenis tautan": "Change link type",
   "Alat pemeriksaan": "Check tools",
+  "Isi angka bulat 1 sampai 3.": "Enter a whole number from 1 to 3.",
   "minimal 20 karakter": "minimum 20 characters",
   "Minimal Rp50.000": "Minimum Rp50,000",
   "Total artikel": "Total articles",
