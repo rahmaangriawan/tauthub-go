@@ -62,7 +62,9 @@
 		client_available?: number;             // Dana Titipan Klien (uang nyata)
 		client_adjusted?: number;              // Saldo Penyesuaian (bukan uang nyata)
 		client_reserved?: number;              // Dana Tertahan (Escrow)
-		tauthub_revenue_gross?: number;        // 25% × GMV publikasi terbit (kotor)
+		tauthub_revenue_gross?: number;        // pendapatan Tauthub kotor (komisi 25% + porsi mitra internal)
+		tauthub_commission_gross?: number;     // komisi 25% dari harga publikasi terbit
+		tauthub_internal_gross?: number;       // porsi mitra internal (akun milik Tauthub)
 		tauthub_withdrawn?: number;            // sudah dicatat tertarik admin
 		tauthub_available_to_withdraw?: number;// Profit Bersih siap ditarik
 		cash_required_in_bank?: number;        // jumlah uang fisik wajib ada di rekening
@@ -108,7 +110,7 @@
 		last_earning_at: string | null;
 	};
 	type ProfitItem = {
-		publication_id: string; client_price: number; commission: number;
+		publication_id: string; client_price: number; commission: number; internal_share?: number;
 		published_at: string | null; published_url: string;
 		brand_name: string; client_name: string; media_name: string; partner_name: string;
 	};
@@ -740,7 +742,7 @@
 					<div class="flex items-center justify-between gap-2">
 						<div class="flex min-w-0 items-center gap-2.5">
 							<span class="kpiIcon kpiIconPosProfit"><PiggyBank size={15} /></span>
-							<Tooltip content={tr("25% × GMV publikasi terbit, dikurangi yang sudah dicatat tertarik. Hanya ini yang sah Anda tarik ke rekening operasional.")}>
+							<Tooltip content={tr("Komisi 25% dari harga publikasi terbit, ditambah penghasilan mitra internal (akun milik Tauthub sendiri), dikurangi yang sudah ditarik atau dicairkan. Hanya ini yang sah Anda tarik ke rekening operasional.")}>
 								<span class="kpiLabel">{tr("Profit Bersih Tauthub")}</span>
 							</Tooltip>
 						</div>
@@ -754,6 +756,9 @@
 					<p class="kpiValue kpiValuePosProfit mt-3">{rp(summary.tauthub_available_to_withdraw ?? 0)}</p>
 					<p class="kpiDesc mt-2">
 						{tr("Kotor")}: {rp(summary.tauthub_revenue_gross ?? 0)} · {tr("sudah ditarik")}: {rp(summary.tauthub_withdrawn ?? 0)}
+						{#if (summary.tauthub_internal_gross ?? 0) > 0}
+							<span class="block">{tr("Komisi")} {rp(summary.tauthub_commission_gross ?? 0)} + {tr("mitra internal")} {rp(summary.tauthub_internal_gross ?? 0)}</span>
+						{/if}
 					</p>
 					<button type="button" class="kpiDetailLink mt-2" onclick={openProfit}>
 						{tr("Lihat per publikasi")} →
@@ -1359,7 +1364,7 @@
 		{#if profitOpen}
 			<Modal title={tr("Profit Bersih Tauthub — per Publikasi")} maxWidth="workspace" onClose={() => (profitOpen = false)}>
 				<p class="text-sm text-muted-foreground">
-					{tr("Komisi = 25% × client_price per publikasi terbit. Top 100 publikasi, diurutkan dari harga tertinggi.")}
+					{tr("Pendapatan Tauthub = komisi 25% dari harga publikasi terbit. Untuk mitra internal (akun milik Tauthub sendiri), porsi mitra 75% ikut dihitung. Top 100 publikasi, diurutkan dari harga tertinggi.")}
 				</p>
 				{#if profitLoading && profitEntries === null}
 					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
@@ -1378,7 +1383,7 @@
 									<tr class="text-left text-muted-foreground">
 										<th class="px-2 py-1 font-medium">{tr("Bulan")}</th>
 										<th class="px-2 py-1 text-right font-medium">{tr("GMV")}</th>
-										<th class="px-2 py-1 text-right font-medium">{tr("Komisi 25%")}</th>
+										<th class="px-2 py-1 text-right font-medium">{tr("Pendapatan Tauthub")}</th>
 										<th class="px-2 py-1 text-right font-medium">{tr("Jumlah terbit")}</th>
 									</tr>
 								</thead>
@@ -1404,7 +1409,7 @@
 									<th class="px-2 py-2 font-medium">{tr("Brand")}</th>
 									<th class="px-2 py-2 font-medium">{tr("Media / Mitra")}</th>
 									<th class="px-2 py-2 text-right font-medium">{tr("Client Price")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Komisi 25%")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Pendapatan Tauthub")}</th>
 									<th class="px-2 py-2 font-medium">{tr("Tautan")}</th>
 								</tr>
 							</thead>
@@ -1421,7 +1426,12 @@
 											{#if row.partner_name}<p class="text-[11px] text-muted-foreground">{row.partner_name}</p>{/if}
 										</td>
 										<td class="px-2 py-2 text-right tabular-nums">{rp(row.client_price)}</td>
-										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: #059669;">{rp(row.commission)}</td>
+										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: #059669;">
+											{rp(row.commission)}
+											{#if (row.internal_share ?? 0) > 0}
+												<p class="text-[10px] font-normal text-muted-foreground">25% + {tr("mitra internal")} {rp(row.internal_share ?? 0)}</p>
+											{/if}
+										</td>
 										<td class="px-2 py-2">
 											{#if row.published_url}
 												<a class="inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={row.published_url} target="_blank" rel="noopener noreferrer">
@@ -1463,7 +1473,7 @@
 						<span class="text-sm font-semibold tabular-nums">{rp(summary.partner_unpaid ?? 0)}</span>
 					</div>
 					<div class="flex items-center justify-between rounded-lg border px-3 py-2">
-						<span class="text-sm">{tr("Profit Bersih Tauthub (belum ditarik)")}</span>
+						<span class="text-sm">{tr("Profit Bersih Tauthub (belum ditarik, termasuk mitra internal)")}</span>
 						<span class="text-sm font-semibold tabular-nums">{rp(summary.tauthub_available_to_withdraw ?? 0)}</span>
 					</div>
 					<div class="mt-2 flex items-center justify-between rounded-lg px-3 py-3" style="background-color: color-mix(in srgb, #8b5cf6 7%, var(--card)); border: 1px solid color-mix(in srgb, #8b5cf6 25%, var(--border));">

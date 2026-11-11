@@ -251,11 +251,19 @@ func (d *Deps) FinancePartnerUnpaidDetail(w http.ResponseWriter, r *http.Request
 	})
 }
 
+// finInternalShareJoin: porsi mitra internal per publikasi (placeholder @INT@
+// diganti nomor parameter array ID mitra internal).
+const finInternalShareJoin = `LEFT JOIN LATERAL (
+	SELECT SUM(e.amount) AS amount FROM partner_earnings e
+	WHERE e.publication_id = p.id AND e.kind = 'publication' AND e.status <> 'voided'
+	  AND e.partner_id::text = ANY(@INT@::text[])) ie ON true`
+
 // FinanceProfitBreakdown: GET /v1/platform/finance/profit-breakdown
 //
-// Top publikasi pembentuk Profit Bersih Tauthub: komisi = client_price × 25%
-// per publikasi 'published'. Paginasi dan sort desc dari komisi, supaya admin
-// bisa cek top kontributor. Juga ringkasan agregat per bulan (12 bulan).
+// Pendapatan Tauthub per publikasi terbit: komisi 25% dari harga, ditambah
+// porsi mitra bila mitranya akun internal (milik Tauthub sendiri). Diurutkan
+// dari harga terbesar, plus ringkasan 12 bulan. Brand yang dikecualikan tidak
+// dihitung, sama seperti kartu Profit Bersih.
 func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 	_, _, ok := d.adminGuard(w, r, "payments")
 	if !ok {
@@ -265,7 +273,7 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 	offset := clampInt(r.URL.Query().Get("offset"), 0, 0, 1<<30)
 	excl := d.finLoadFilter(r.Context())
 
-	// Range filter opsional (from/to) — default: seumur hidup.
+	// Range filter opsional (from/to), default seumur hidup.
 	fromStr := strings.TrimSpace(r.URL.Query().Get("from"))
 	toStr := strings.TrimSpace(r.URL.Query().Get("to"))
 	var rangeFrom, rangeToExcl time.Time
@@ -280,26 +288,27 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build count query.
-	var countRow rowMap
+	countArgs := []any{excl.brandArr()}
+	countRange := ""
 	if useRange {
-		countRow, _ = d.queryRow(r.Context(),
-			`SELECT COUNT(*)::int AS n FROM publications p
-			 WHERE p.status = 'published'
-			   AND p.brand_id::text != ALL($1::text[])
-			   AND p.published_at >= $2 AND p.published_at < $3`,
-			excl.brandArr(), rangeFrom, rangeToExcl)
-	} else {
-		countRow, _ = d.queryRow(r.Context(),
-			`SELECT COUNT(*)::int AS n FROM publications p
-			 WHERE p.status = 'published'
-			   AND p.brand_id::text != ALL($1::text[])`, excl.brandArr())
+		countArgs = append(countArgs, rangeFrom, rangeToExcl)
+		countRange = " AND p.published_at >= $2 AND p.published_at < $3"
 	}
+	countRow, _ := d.queryRow(r.Context(),
+		`SELECT COUNT(*)::int AS n FROM publications p
+		 WHERE p.status = 'published' AND p.brand_id::text != ALL($1::text[])`+countRange, countArgs...)
 
-	// Build list query.
-	baseSQL := `SELECT p.id::text              AS publication_id,
+	listArgs := []any{excl.brandArr(), excl.internalArr(), limit, offset}
+	listRange := ""
+	if useRange {
+		listArgs = append(listArgs, rangeFrom, rangeToExcl)
+		listRange = " AND p.published_at >= $5 AND p.published_at < $6"
+	}
+	rows, err := d.queryRows(r.Context(),
+		`SELECT p.id::text              AS publication_id,
 		        p.client_price,
-		        ROUND(p.client_price * 0.25) AS commission,
+		        ROUND(p.client_price * 0.25) + COALESCE(ie.amount, 0) AS commission,
+		        COALESCE(ie.amount, 0)   AS internal_share,
 		        p.published_at,
 		        p.published_url,
 		        b.name                   AS brand_name,
@@ -310,24 +319,11 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 		   JOIN brands b   ON b.id = p.brand_id
 		   LEFT JOIN media m   ON m.id = p.media_id
 		   LEFT JOIN partners pt ON pt.id = m.partner_id
+		   `+strings.ReplaceAll(finInternalShareJoin, "@INT@", "$2")+`
 		  WHERE p.status = 'published'
-		    AND p.brand_id::text != ALL($1::text[])`
-	var (
-		rows []rowMap
-		err  error
-	)
-	if useRange {
-		rows, err = d.queryRows(r.Context(),
-			baseSQL+` AND p.published_at >= $4 AND p.published_at < $5
-			  ORDER BY p.client_price DESC, p.published_at DESC
-			  LIMIT $2 OFFSET $3`,
-			excl.brandArr(), limit, offset, rangeFrom, rangeToExcl)
-	} else {
-		rows, err = d.queryRows(r.Context(),
-			baseSQL+`
-			  ORDER BY p.client_price DESC, p.published_at DESC
-			  LIMIT $2 OFFSET $3`, excl.brandArr(), limit, offset)
-	}
+		    AND p.brand_id::text != ALL($1::text[])`+listRange+`
+		  ORDER BY p.client_price DESC, p.published_at DESC
+		  LIMIT $3 OFFSET $4`, listArgs...)
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -344,6 +340,7 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 			"publication_id": row.strOr("publication_id", ""),
 			"client_price":   finReportInt(row.numOr("client_price")),
 			"commission":     finReportInt(row.numOr("commission")),
+			"internal_share": finReportInt(row.numOr("internal_share")),
 			"published_at":   publishedStr,
 			"published_url":  row.strOr("published_url", ""),
 			"brand_name":     row.strOr("brand_name", ""),
@@ -353,19 +350,21 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Ringkasan per bulan (12 bulan terakhir) — konsisten dengan chart utama.
+	// Ringkasan per bulan (12 bulan terakhir), konsisten dengan chart utama.
 	now := time.Now()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -11, 0)
 	monthEnd := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, 1, 0)
 	monthRows, _ := d.queryRows(r.Context(),
-		`SELECT to_char(published_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM') AS month,
-		        COALESCE(SUM(client_price), 0)             AS gmv,
-		        COALESCE(ROUND(SUM(client_price) * 0.25), 0) AS commission,
-		        COUNT(*)                                     AS count
-		   FROM publications
-		  WHERE status = 'published' AND published_at IS NOT NULL
-		    AND published_at >= $1 AND published_at < $2
-		  GROUP BY 1 ORDER BY 1`, monthStart, monthEnd)
+		`SELECT to_char(p.published_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM') AS month,
+		        COALESCE(SUM(p.client_price), 0) AS gmv,
+		        COALESCE(ROUND(SUM(p.client_price) * 0.25), 0) + COALESCE(SUM(ie.amount), 0) AS commission,
+		        COUNT(*) AS count
+		   FROM publications p
+		   `+strings.ReplaceAll(finInternalShareJoin, "@INT@", "$4")+`
+		  WHERE p.status = 'published' AND p.published_at IS NOT NULL
+		    AND p.published_at >= $1 AND p.published_at < $2
+		    AND p.brand_id::text != ALL($3::text[])
+		  GROUP BY 1 ORDER BY 1`, monthStart, monthEnd, excl.brandArr(), excl.internalArr())
 
 	monthly := make([]map[string]any, 0, len(monthRows))
 	for _, row := range monthRows {
@@ -379,10 +378,10 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"entries":          entries,
-		"total":            countRow.intOr("n", 0),
-		"limit":            limit,
-		"offset":           offset,
-		"monthly":          monthly,
+		"entries": entries,
+		"total":   countRow.intOr("n", 0),
+		"limit":   limit,
+		"offset":  offset,
+		"monthly": monthly,
 	})
 }

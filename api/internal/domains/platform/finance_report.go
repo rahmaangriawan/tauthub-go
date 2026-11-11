@@ -247,7 +247,7 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	profitGross, profitWithdrawn, profitAvailable, err := d.finProfitInRange(ctx, fromTs, toExcl, excl)
+	profit, err := d.finProfitInRange(ctx, fromTs, toExcl, excl)
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -300,7 +300,7 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	clientAdjusted := deposits.adjusted
 	clientReserved := deposits.reserved
 	partnerUnpaidInt := partnerUnpaidAt
-	cashRequired := clientAvailable + clientReserved + partnerUnpaidInt + profitAvailable
+	cashRequired := clientAvailable + clientReserved + partnerUnpaidInt + profit.available
 
 	summary := map[string]any{
 		"money_in":                 finReportInt(moneyIn),
@@ -326,9 +326,11 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		"partner_payable_total":    finReportInt(settlementPending.numOr("total")),
 		"partner_payable_count":    partnerPayableCount.intOr("n", 0),
 		// Profit Tauthub (kotor 25% × GMV publikasi terbit, tanpa potong fee).
-		"tauthub_revenue_gross":        profitGross,
-		"tauthub_withdrawn":            profitWithdrawn,
-		"tauthub_available_to_withdraw": profitAvailable,
+		"tauthub_revenue_gross":        profit.gross,
+		"tauthub_commission_gross":     profit.commission,
+		"tauthub_internal_gross":       profit.internal,
+		"tauthub_withdrawn":            profit.withdrawn,
+		"tauthub_available_to_withdraw": profit.available,
 		// Jumlah fisik yang wajib ada di rekening escrow.
 		"cash_required_in_bank":   cashRequired,
 		"reconciliation":          recon,

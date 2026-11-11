@@ -24,17 +24,27 @@ var finExcludedUserEmails = []string{
 	"smoke.test@example.com",   // akun klien smoke-test (exclude transaksi)
 }
 
+// finInternalPartnerEmails: akun mitra milik Tauthub sendiri. Penghasilannya
+// bukan utang ke pihak lain, jadi tidak masuk Hak Mitra Belum Cair (akunnya
+// juga ada di daftar pengecualian di atas), melainkan dihitung sebagai
+// pendapatan Tauthub di profit. Untuk order mitra ini, Tauthub memegang 100%
+// dari yang dibayar klien: komisi 25% ditambah porsi mitra 75%.
+var finInternalPartnerEmails = []string{
+	"mitra@tauthub.com",
+}
+
 // finFilterCtx: ID yang dikecualikan, dihitung sekali per request.
 type finFilterCtx struct {
-	brandIDs   []string
-	partnerIDs []string
+	brandIDs           []string
+	partnerIDs         []string
+	internalPartnerIDs []string
 }
 
 // finLoadFilter: resolve email yang dikecualikan ke list brand_id + partner_id.
 // Dipakai di semua agregasi finansial. Gagalnya non-fatal — kembalikan slice
 // kosong supaya laporan tetap jalan (tanpa exclusion).
 func (d *Deps) finLoadFilter(ctx context.Context) finFilterCtx {
-	out := finFilterCtx{brandIDs: []string{}, partnerIDs: []string{}}
+	out := finFilterCtx{brandIDs: []string{}, partnerIDs: []string{}, internalPartnerIDs: []string{}}
 	if len(finExcludedUserEmails) == 0 {
 		return out
 	}
@@ -62,6 +72,18 @@ func (d *Deps) finLoadFilter(ctx context.Context) finFilterCtx {
 			}
 		}
 	}
+
+	internalRows, err := d.queryRows(ctx, `
+		SELECT pt.id::text AS id
+		FROM partners pt JOIN users u ON u.id = pt.user_id
+		WHERE u.email = ANY($1::text[])`, finInternalPartnerEmails)
+	if err == nil {
+		for _, row := range internalRows {
+			if id := row.strOr("id", ""); id != "" {
+				out.internalPartnerIDs = append(out.internalPartnerIDs, id)
+			}
+		}
+	}
 	return out
 }
 
@@ -78,6 +100,12 @@ func (f finFilterCtx) partnerArr() []string {
 		return []string{}
 	}
 	return f.partnerIDs
+}
+func (f finFilterCtx) internalArr() []string {
+	if f.internalPartnerIDs == nil {
+		return []string{}
+	}
+	return f.internalPartnerIDs
 }
 
 // finDeposits: posisi saldo klien pada satu titik waktu, dipecah menurut
@@ -181,37 +209,67 @@ func (d *Deps) finPartnerUnpaidAsOf(ctx context.Context, asOf time.Time, excl fi
 	return int64(math.Round(row.numOr("total"))), nil
 }
 
-// finProfitInRange: profit Tauthub (gross 25% × GMV) dari publikasi
-// `published_at` dalam [from, to) + pencatatan penarikan admin pada rentang
-// yang sama. Brand yang dikecualikan tidak dihitung.
-//
-// Range konvensi: from inklusif, to eksklusif (sudah di-+1 hari oleh caller).
-func (d *Deps) finProfitInRange(ctx context.Context, from, toExcl time.Time, excl finFilterCtx) (gross, withdrawn, available int64, err error) {
-	row, qErr := d.queryRow(ctx, `
-		SELECT COALESCE(ROUND(SUM(client_price) * 0.25), 0)::bigint AS gross,
-		       COALESCE(COUNT(*), 0) AS count
+// finProfit: pendapatan Tauthub pada satu rentang.
+type finProfit struct {
+	commission     int64 // komisi 25% dari harga publikasi terbit
+	internal       int64 // porsi mitra internal (akun milik Tauthub), ikut jadi pendapatan
+	gross          int64 // commission + internal
+	internalPaid   int64 // bagian internal yang sudah dicairkan (settlement paid)
+	adminWithdrawn int64 // penarikan profit yang tercatat di admin_profit_withdrawals
+	withdrawn      int64 // adminWithdrawn + internalPaid
+	available      int64 // gross - withdrawn, tidak negatif
+}
+
+// finProfitInRange: pendapatan Tauthub dari publikasi `published_at` dalam
+// [from, toExcl). Brand yang dikecualikan tidak dihitung. Rumusnya:
+//   komisi 25% dari harga semua publikasi terbit
+//   + porsi mitra untuk mitra internal (Tauthub memegang 100% order itu)
+//   - penarikan profit tercatat - porsi internal yang sudah dicairkan
+func (d *Deps) finProfitInRange(ctx context.Context, from, toExcl time.Time, excl finFilterCtx) (finProfit, error) {
+	var pr finProfit
+	row, err := d.queryRow(ctx, `
+		SELECT COALESCE(ROUND(SUM(client_price) * 0.25), 0)::bigint AS commission
 		FROM publications
 		WHERE status = 'published'
 		  AND published_at IS NOT NULL
 		  AND published_at >= $1 AND published_at < $2
 		  AND brand_id::text != ALL($3::text[])`, from, toExcl, excl.brandArr())
-	if qErr != nil {
-		return 0, 0, 0, qErr
+	if err != nil {
+		return pr, err
 	}
-	gross = int64(math.Round(row.numOr("gross")))
+	pr.commission = int64(math.Round(row.numOr("commission")))
 
-	wdRow, qErr := d.queryRow(ctx, `
+	in, err := d.queryRow(ctx, `
+		SELECT COALESCE(SUM(e.amount), 0) AS gross,
+		       COALESCE(SUM(e.amount) FILTER (WHERE s.status = 'paid'), 0) AS paid
+		FROM partner_earnings e
+		JOIN publications p ON p.id = e.publication_id
+		LEFT JOIN settlements s ON s.id = e.settlement_id
+		WHERE e.kind = 'publication' AND e.status <> 'voided'
+		  AND e.partner_id::text = ANY($3::text[])
+		  AND p.status = 'published' AND p.published_at IS NOT NULL
+		  AND p.published_at >= $1 AND p.published_at < $2
+		  AND p.brand_id::text != ALL($4::text[])`, from, toExcl, excl.internalArr(), excl.brandArr())
+	if err != nil {
+		return pr, err
+	}
+	pr.internal = int64(math.Round(in.numOr("gross")))
+	pr.internalPaid = int64(math.Round(in.numOr("paid")))
+	pr.gross = pr.commission + pr.internal
+
+	wd, err := d.queryRow(ctx, `
 		SELECT COALESCE(SUM(amount), 0)::bigint AS total
 		FROM admin_profit_withdrawals
 		WHERE status = 'paid'
 		  AND created_at >= $1 AND created_at < $2`, from, toExcl)
-	if qErr != nil {
-		return gross, 0, gross, qErr
+	if err != nil {
+		return pr, err
 	}
-	withdrawn = int64(math.Round(wdRow.numOr("total")))
-	available = gross - withdrawn
-	if available < 0 {
-		available = 0
+	pr.adminWithdrawn = int64(math.Round(wd.numOr("total")))
+	pr.withdrawn = pr.adminWithdrawn + pr.internalPaid
+	pr.available = pr.gross - pr.withdrawn
+	if pr.available < 0 {
+		pr.available = 0
 	}
-	return
+	return pr, nil
 }

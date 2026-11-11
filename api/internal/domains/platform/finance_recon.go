@@ -47,26 +47,15 @@ func (d *Deps) finGatewayRecon(ctx context.Context, asOf, toExcl time.Time, excl
 	fee := int64(math.Round(inRow.numOr("fee")))
 	net := gross - fee
 
-	_, withdrawn, profitAvail, err := d.finProfitInRange(ctx, time.Time{}, toExcl, excl)
+	pr, err := d.finProfitInRange(ctx, time.Time{}, toExcl, excl)
 	if err != nil {
 		return nil, err
 	}
 
-	required := dep.realAvailable + dep.reserved + partnerUnpaid + profitAvail
-	balance := net - withdrawn
+	required := dep.realAvailable + dep.reserved + partnerUnpaid + pr.available
+	balance := net - pr.adminWithdrawn
 	gap := balance - required
 
-	exclPartner, err := d.queryRow(ctx, `
-		SELECT COALESCE(SUM(e.amount), 0) AS v
-		FROM partner_earnings e
-		JOIN publications p ON p.id = e.publication_id
-		WHERE e.kind = 'publication' AND e.status <> 'voided'
-		  AND e.created_at <= $1
-		  AND e.partner_id::text = ANY($2::text[])
-		  AND p.brand_id::text != ALL($3::text[])`, asOf, excl.partnerArr(), excl.brandArr())
-	if err != nil {
-		return nil, err
-	}
 	nonPub, err := d.queryRow(ctx, `
 		SELECT COALESCE(-SUM(amount_tc) FILTER (WHERE ref_type = 'capture' AND amount_tc < 0), 0)
 		     + COALESCE(-SUM(amount_tc) FILTER (WHERE ref_type = 'adjustment'), 0) AS v
@@ -90,10 +79,10 @@ func (d *Deps) finGatewayRecon(ctx context.Context, asOf, toExcl time.Time, excl
 		return nil, err
 	}
 
-	aExcl := int64(math.Round(exclPartner.numOr("v")))
+	aInternalPaid := pr.internalPaid
 	bNonPub := int64(math.Round(nonPub.numOr("v")))
 	cOrphan := int64(math.Round(orphanSum.numOr("v")))
-	residual := gap - aExcl - bNonPub - cOrphan + fee
+	residual := gap - aInternalPaid - bNonPub - cOrphan + fee
 
 	orphans := make([]map[string]any, 0, len(orphanRows))
 	for _, row := range orphanRows {
@@ -109,13 +98,13 @@ func (d *Deps) finGatewayRecon(ctx context.Context, asOf, toExcl time.Time, excl
 		"gateway_in_gross":    gross,
 		"gateway_fee":         fee,
 		"gateway_in_net":      net,
-		"admin_withdrawn":     withdrawn,
+		"admin_withdrawn":     pr.adminWithdrawn,
 		"gateway_balance_est": balance,
 		"required":            required,
 		"gap":                 gap,
 		"components": []map[string]any{
-			{"key": "excluded_partner", "label": "Penghasilan mitra yang dikecualikan", "amount": aExcl,
-				"note": "Akun mitra internal yang dikecualikan. Uangnya masih ada di gateway."},
+			{"key": "internal_paid", "label": "Pencairan mitra internal yang sudah dibayar", "amount": aInternalPaid,
+				"note": "Dihitung sebagai penarikan profit, tetapi saldo gateway tidak berkurang karena dibayar dari luar gateway."},
 			{"key": "non_publication", "label": "Pemakaian kredit non-publikasi", "amount": bNonPub,
 				"note": "AI dan potongan saldo manual. Pendapatan Tauthub yang belum masuk hitungan profit."},
 			{"key": "orphan_publications", "label": "Publikasi terbit tanpa catatan penghasilan", "amount": cOrphan,

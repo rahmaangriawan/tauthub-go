@@ -18,35 +18,15 @@ import (
 // (rumus sederhana sesuai brainstorming owner — tidak dikurangi fee transfer
 // atau fee gateway; fee ditampilkan terpisah di dashboard).
 
-// adminProfitGrossSQL: ekspresi SUM(client_price) * 0.25 di SQL, dibulatkan ke
-// integer rupiah. Dipakai di dashboard dan validasi jumlah tarik.
-const adminProfitGrossSQL = `
-	COALESCE((SELECT ROUND(SUM(client_price) * 0.25)
-	          FROM publications
-	          WHERE status = 'published'), 0)`
-
-// adminProfitWithdrawnSQL: total yang sudah tercatat tertarik (status='paid').
-const adminProfitWithdrawnSQL = `
-	COALESCE((SELECT SUM(amount)
-	          FROM admin_profit_withdrawals
-	          WHERE status = 'paid'), 0)`
-
-// adminProfitPosition: ringkasan gross / withdrawn / available untuk satu
-// snapshot; dipanggil FinanceReport dan validasi POST withdraw.
+// adminProfitPosition: posisi profit seumur hidup (gross / sudah ditarik /
+// tersedia) dengan rumus dan pengecualian yang sama persis dengan kartu Profit
+// Bersih di dashboard. Dipakai daftar penarikan dan validasi POST withdraw.
 func (d *Deps) adminProfitPosition(ctx context.Context) (gross, withdrawn, available int64, err error) {
-	row, err := d.queryRow(ctx, `SELECT
-		`+adminProfitGrossSQL+`::bigint AS gross,
-		`+adminProfitWithdrawnSQL+`::bigint AS withdrawn`)
+	pr, err := d.finProfitInRange(ctx, time.Time{}, time.Now().Add(time.Minute), d.finLoadFilter(ctx))
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	gross = int64(math.Round(row.numOr("gross")))
-	withdrawn = int64(math.Round(row.numOr("withdrawn")))
-	available = gross - withdrawn
-	if available < 0 {
-		available = 0
-	}
-	return gross, withdrawn, available, nil
+	return pr.gross, pr.withdrawn, pr.available, nil
 }
 
 // adminProfitJSON: bentuk JSON satu baris withdrawal (seragam list/create).
