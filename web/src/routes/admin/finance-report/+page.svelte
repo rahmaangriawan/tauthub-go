@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { tr } from '$lib/i18n/phrases';
 
-	// Laporan keuangan: uang masuk dari topup klien yang lunas vs uang keluar
-	// untuk pencairan mitra yang sudah ditransfer. Fokusnya arus kas — bukan
-	// laba — jadi kompensasi saldo dan invoice manual ditampilkan terpisah.
+	// Dashboard keuangan admin — fokus balance-sheet (posisi uang milik siapa)
+	// + kemampuan drill-down ke detail per KPI. Pandangan arus kas periode
+	// sengaja dihilangkan (menyesatkan: mencampur titipan klien dgn omzet
+	// Tauthub); tetap ada chart Top Up vs GMV vs Pencairan untuk tren.
 	import { onMount } from 'svelte';
 	import {
-		ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Download, FileText, Handshake,
-		Landmark, Layers, Lock, PiggyBank, RotateCcw, RotateCw, TrendingUp,
-		TriangleAlert, Upload, Users, Wallet, X
+		ArrowLeftRight, Download, ExternalLink, Handshake, Landmark, Lock,
+		PiggyBank, RotateCcw, RotateCw, TriangleAlert, Users
 	} from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
@@ -23,7 +23,6 @@
 	import { rp } from '$lib/credits/rupiah';
 	import { platformError, isAccessDenied, ACCESS_DENIED } from '../_platform';
 	import CashflowBars from './_cashflow-bars.svelte';
-	import KpiSparkline from './_kpi-sparkline.svelte';
 
 	type Entry = {
 		id: string;
@@ -59,15 +58,7 @@
 		tauthub_available_to_withdraw?: number;// Profit Bersih siap ditarik
 		cash_required_in_bank?: number;        // jumlah uang fisik wajib ada di rekening
 	};
-	type PayableSettlement = {
-		id: string; partner_id: string; partner_name: string | null; status: string;
-		net_amount_idr: number; total_amount: number; transfer_fee_idr: number | null;
-		payout_method: string | null; invoice_number: string | null;
-		bank_name: string | null; bank_account_number: string | null; bank_account_name: string | null;
-		created_at: string | null;
-	};
 	type Monthly = { month: string; label: string; money_in: number; money_out: number; gmv?: number };
-	type SparkPoint = { label: string; money_in: number; money_out: number; net: number; payable?: number };
 	type DormantBrand = {
 		brand_id: string; brand_name: string; client_name: string; ownership_type: string;
 		available_tc: number; reserved_tc: number; total_tc: number;
@@ -85,9 +76,33 @@
 		entries: AdminWithdrawal[]; total: number; limit: number; offset: number;
 		profit_gross: number; profit_withdrawn: number; profit_available: number;
 	};
+
+	// Detail breakdown per KPI balance-sheet (modal pop-up).
+	type ClientDeposit = {
+		brand_id: string; brand_name: string; client_name: string; ownership_type: string;
+		available_tc: number; reserved_tc: number; total_tc: number;
+		last_activity_at: string | null; owner_email: string; owner_name: string;
+	};
+	type EscrowItem = {
+		publication_id: string; status: string;
+		client_price: number; partner_price: number; created_at: string;
+		brand_id: string; brand_name: string; client_name: string;
+		media_id: string; media_name: string;
+		partner_id: string; partner_name: string;
+	};
+	type PartnerUnpaid = {
+		partner_id: string; partner_name: string; partner_email: string;
+		amount_pending: number; amount_settled_unpaid: number; total: number;
+		count_pending: number; count_settled_unpaid: number;
+		last_earning_at: string | null;
+	};
+	type ProfitItem = {
+		publication_id: string; client_price: number; commission: number;
+		published_at: string | null; published_url: string;
+		brand_name: string; client_name: string; media_name: string; partner_name: string;
+	};
 	type Report = {
 		from: string; to: string; summary: Summary; monthly: Monthly[];
-		sparkline?: { granularity: 'day' | 'month'; points: SparkPoint[] };
 		entries: Entry[]; total: number; limit: number; offset: number;
 	};
 
@@ -181,169 +196,33 @@
 
 	const WITHDRAW_PAGE_SIZE = 10;
 
-	// Popup "Siap transfer": pengajuan pencairan mitra yang belum ditransfer.
-	let payablesOpen = $state(false);
-	let payablesLoading = $state(false);
-	let payablesError = $state('');
-	let payables = $state<PayableSettlement[] | null>(null);
-	// Langkah transfer per pengajuan (satu yang terbuka pada satu waktu).
-	let transferId = $state<string | null>(null);
-	let transferRef = $state('');
-	let transferFile = $state<File | null>(null);
-	// Kotak unggah bukti transfer: tarik & lepas + pratinjau gambar. Batasnya
-	// sama dengan handler settlement receipt (gambar/PDF, maksimal 10 MB).
-	let transferFileDragOver = $state(false);
-	let transferFileError = $state('');
-	let transferPreviewUrl = $state<string | null>(null);
-	let transferBusy = $state(false);
-	let transferError = $state('');
-	let copiedId = $state<string | null>(null);
+	// Modal rincian per KPI balance-sheet.
+	let depositsOpen = $state(false);
+	let depositsScope = $state<'available' | 'reserved'>('available');
+	let depositsLoading = $state(false);
+	let depositsError = $state('');
+	let depositsEntries = $state<ClientDeposit[] | null>(null);
 
-	function clearTransferPreview() {
-		if (transferPreviewUrl) URL.revokeObjectURL(transferPreviewUrl);
-		transferPreviewUrl = null;
-	}
+	let escrowOpen = $state(false);
+	let escrowLoading = $state(false);
+	let escrowError = $state('');
+	let escrowEntries = $state<EscrowItem[] | null>(null);
+	let escrowTotalPrice = $state(0);
 
-	const TRANSFER_FILE_MAX = 10 * 1024 * 1024;
+	let unpaidOpen = $state(false);
+	let unpaidLoading = $state(false);
+	let unpaidError = $state('');
+	let unpaidEntries = $state<PartnerUnpaid[] | null>(null);
 
-	function fmtBytes(n: number) {
-		return n >= 1024 * 1024
-			? `${(n / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`
-			: `${Math.max(1, Math.round(n / 1024))} KB`;
-	}
+	let profitOpen = $state(false);
+	let profitLoading = $state(false);
+	let profitError = $state('');
+	let profitEntries = $state<ProfitItem[] | null>(null);
+	let profitTotalCount = $state(0);
+	let profitMonthly = $state<Array<{ month: string; gmv: number; commission: number; count: number }>>([]);
 
-	/** Validasi di klien supaya admin tidak menunggu unggahan ditolak server. */
-	function pickTransferFile(file: File | null) {
-		transferFileError = '';
-		if (!file) return;
-		const isPDF = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-		const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name);
-		if (!isPDF && !isImage) {
-			transferFileError = tr('Format file harus berupa gambar (JPG/PNG) atau PDF.');
-			return;
-		}
-		if (file.size > TRANSFER_FILE_MAX) {
-			transferFileError = tr('Ukuran file maksimal 10 MB.');
-			return;
-		}
-		clearTransferPreview();
-		transferFile = file;
-		transferPreviewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
-	}
+	let cashOpen = $state(false);
 
-	function resetTransferFile() {
-		transferFile = null;
-		transferFileDragOver = false;
-		transferFileError = '';
-		clearTransferPreview();
-	}
-
-	function cancelTransfer() {
-		transferId = null;
-		transferError = '';
-		resetTransferFile();
-	}
-
-	async function loadPayables() {
-		payablesLoading = true;
-		payablesError = '';
-		try {
-			const res = await apiRequest('/v1/platform/finance/partner-payables');
-			if (!res.ok) {
-				payablesError = res.status === 404
-					? tr('Endpoint rincian belum tersedia di API yang sedang berjalan. Restart API lalu coba lagi.')
-					: await platformError(res);
-				return;
-			}
-			const body = (await res.json()) as { settlements?: PayableSettlement[] };
-			payables = body.settlements ?? [];
-		} catch {
-			payablesError = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
-		} finally {
-			payablesLoading = false;
-		}
-	}
-
-	function openPayables() {
-		payablesOpen = true;
-		transferId = null;
-		void loadPayables();
-	}
-
-	function closePayables() {
-		payablesOpen = false;
-		transferId = null;
-		transferError = '';
-		resetTransferFile();
-	}
-
-	function startTransfer(id: string) {
-		transferId = id;
-		transferRef = '';
-		transferError = '';
-		resetTransferFile();
-	}
-
-	async function copyText(id: string, text: string | null) {
-		if (!text) return;
-		try {
-			await navigator.clipboard.writeText(text);
-			copiedId = id;
-			setTimeout(() => { if (copiedId === id) copiedId = null; }, 1500);
-		} catch {
-			/* clipboard bisa diblokir browser; nomor tetap terlihat di layar */
-		}
-	}
-
-	// Sama dengan alur di halaman Pencairan: setujui bila masih menunggu, unggah
-	// bukti (opsional), lalu tandai lunas. Aplikasi hanya mencatat; uangnya
-	// ditransfer admin sendiri lewat bank.
-	async function confirmTransfer(row: PayableSettlement) {
-		transferBusy = true;
-		transferError = '';
-		try {
-			if (row.status === 'pending') {
-				const approve = await apiRequest(`/v1/platform/settlements/${row.id}`, {
-					method: 'PUT',
-					body: JSON.stringify({ status: 'approved' })
-				});
-				if (!approve.ok) {
-					transferError = await platformError(approve);
-					return;
-				}
-			}
-			let receiptUrl: string | null = null;
-			if (transferFile) {
-				const fd = new FormData();
-				fd.append('file', transferFile);
-				const up = await apiRequest(`/v1/platform/settlements/${row.id}/receipt`, { method: 'POST', body: fd });
-				if (!up.ok) {
-					transferError = await platformError(up);
-					return;
-				}
-				receiptUrl = ((await up.json()) as { receipt_url?: string }).receipt_url ?? null;
-			}
-			const paid = await apiRequest(`/v1/platform/settlements/${row.id}`, {
-				method: 'PUT',
-				body: JSON.stringify({
-					status: 'paid',
-					payment_reference: transferRef.trim() || null,
-					receipt_url: receiptUrl
-				})
-			});
-			if (!paid.ok) {
-				transferError = await platformError(paid);
-				return;
-			}
-			transferId = null;
-			resetTransferFile();
-			await Promise.all([loadPayables(), load(pageNum)]);
-		} catch {
-			transferError = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
-		} finally {
-			transferBusy = false;
-		}
-	}
 
 	onMount(() => {
 		void (async () => {
@@ -467,6 +346,120 @@
 		}
 	}
 
+	async function loadDeposits() {
+		depositsLoading = true;
+		depositsError = '';
+		try {
+			const res = await apiRequest('/v1/platform/finance/client-deposits-detail?limit=300');
+			if (!res.ok) {
+				depositsError = res.status === 404
+					? tr('Endpoint rincian saldo klien belum tersedia. Restart API lalu coba lagi.')
+					: await platformError(res);
+				return;
+			}
+			const body = (await res.json()) as { entries?: ClientDeposit[] };
+			depositsEntries = body.entries ?? [];
+		} catch {
+			depositsError = tr('Tidak dapat terhubung ke server API.');
+		} finally {
+			depositsLoading = false;
+		}
+	}
+	function openDeposits(scope: 'available' | 'reserved') {
+		depositsScope = scope;
+		depositsOpen = true;
+		if (depositsEntries === null) void loadDeposits();
+	}
+
+	async function loadEscrow() {
+		escrowLoading = true;
+		escrowError = '';
+		try {
+			const res = await apiRequest('/v1/platform/finance/escrow-detail?limit=300');
+			if (!res.ok) {
+				escrowError = res.status === 404
+					? tr('Endpoint rincian escrow belum tersedia. Restart API lalu coba lagi.')
+					: await platformError(res);
+				return;
+			}
+			const body = (await res.json()) as { entries?: EscrowItem[]; total_client_price?: number };
+			escrowEntries = body.entries ?? [];
+			escrowTotalPrice = body.total_client_price ?? 0;
+		} catch {
+			escrowError = tr('Tidak dapat terhubung ke server API.');
+		} finally {
+			escrowLoading = false;
+		}
+	}
+	function openEscrow() {
+		escrowOpen = true;
+		if (escrowEntries === null) void loadEscrow();
+	}
+
+	async function loadPartnerUnpaid() {
+		unpaidLoading = true;
+		unpaidError = '';
+		try {
+			const res = await apiRequest('/v1/platform/finance/partner-unpaid-detail?limit=500');
+			if (!res.ok) {
+				unpaidError = res.status === 404
+					? tr('Endpoint rincian hak mitra belum tersedia. Restart API lalu coba lagi.')
+					: await platformError(res);
+				return;
+			}
+			const body = (await res.json()) as { entries?: PartnerUnpaid[] };
+			unpaidEntries = body.entries ?? [];
+		} catch {
+			unpaidError = tr('Tidak dapat terhubung ke server API.');
+		} finally {
+			unpaidLoading = false;
+		}
+	}
+	function openPartnerUnpaid() {
+		unpaidOpen = true;
+		if (unpaidEntries === null) void loadPartnerUnpaid();
+	}
+
+	async function loadProfit() {
+		profitLoading = true;
+		profitError = '';
+		try {
+			const res = await apiRequest('/v1/platform/finance/profit-breakdown?limit=100');
+			if (!res.ok) {
+				profitError = res.status === 404
+					? tr('Endpoint rincian profit belum tersedia. Restart API lalu coba lagi.')
+					: await platformError(res);
+				return;
+			}
+			const body = (await res.json()) as {
+				entries?: ProfitItem[]; total?: number;
+				monthly?: Array<{ month: string; gmv: number; commission: number; count: number }>;
+			};
+			profitEntries = body.entries ?? [];
+			profitTotalCount = body.total ?? 0;
+			profitMonthly = body.monthly ?? [];
+		} catch {
+			profitError = tr('Tidak dapat terhubung ke server API.');
+		} finally {
+			profitLoading = false;
+		}
+	}
+	function openProfit() {
+		profitOpen = true;
+		if (profitEntries === null) void loadProfit();
+	}
+
+	// Label status publikasi untuk tabel escrow (statusnya internal, perlu ID friendly).
+	const PUB_STATUS_LABEL: Record<string, string> = {
+		pending: 'Menunggu review',
+		waiting_partner: 'Menunggu mitra',
+		partner_approved: 'Disetujui mitra',
+		queued: 'Dalam antrean',
+		processing: 'Sedang tayang',
+		retrying: 'Coba ulang',
+	};
+	const pubStatusLabel = (s: string) => PUB_STATUS_LABEL[s] ?? s;
+
 	async function voidWithdrawal(row: AdminWithdrawal) {
 		const reason = window.prompt(tr('Alasan pembatalan (opsional):'), '');
 		if (reason === null) return;
@@ -579,27 +572,10 @@
 	const denied = $derived(
 		Boolean(!loading && !data && (isAccessDenied(error) || error.includes('tidak memiliki akses')))
 	);
-	const netNegative = $derived(Boolean(summary && summary.net < 0));
-	const sparkPoints = $derived(data?.sparkline?.points ?? []);
-	const sparkIn = $derived(sparkPoints.map((p) => ({ label: p.label, value: p.money_in })));
-	const sparkOut = $derived(sparkPoints.map((p) => ({ label: p.label, value: p.money_out })));
-	const sparkNet = $derived(sparkPoints.map((p) => ({ label: p.label, value: p.net })));
-	const sparkPayable = $derived(sparkPoints.map((p) => ({ label: p.label, value: p.payable ?? 0 })));
 	const netLabel = $derived(
 		!summary ? '' : summary.net === 0 ? tr('Seimbang') : summary.net > 0 ? tr('Surplus') : tr('Defisit')
 	);
 
-	// Kompatibilitas saat deploy: respons lama (sebelum field sparkline/payable
-	// ada) tidak punya seri grafik. Ambil ulang sekali supaya sparkline langsung
-	// terisi tanpa perlu reload manual.
-	let sparklineBackfill = false;
-	$effect(() => {
-		const stale = data && (!data.sparkline || data.sparkline.points.some((p) => p.payable === undefined));
-		if (!sparklineBackfill && stale) {
-			sparklineBackfill = true;
-			void load(pageNum);
-		}
-	});
 </script>
 
 <section>
@@ -651,6 +627,9 @@
 					</div>
 					<p class="kpiValue kpiValuePosLiab mt-3">{rp(summary.client_available ?? 0)}</p>
 					<p class="kpiDesc mt-2">{tr("Available credit semua brand. Hak milik klien.")}</p>
+					<button type="button" class="kpiDetailLink mt-2" onclick={() => openDeposits('available')}>
+						{tr("Lihat milik siapa saja")} →
+					</button>
 				</article>
 
 				<!-- 2. Hak Mitra Belum Cair -->
@@ -666,6 +645,9 @@
 					</div>
 					<p class="kpiValue kpiValuePosDebt mt-3">{rp(summary.partner_unpaid ?? 0)}</p>
 					<p class="kpiDesc mt-2">{tr("Earning mitra pending + settled yang belum dibayar.")}</p>
+					<button type="button" class="kpiDetailLink mt-2" onclick={openPartnerUnpaid}>
+						{tr("Lihat per mitra")} →
+					</button>
 				</article>
 
 				<!-- 3. Dana Tertahan (Escrow) -->
@@ -681,6 +663,9 @@
 					</div>
 					<p class="kpiValue kpiValuePosEscrow mt-3">{rp(summary.client_reserved ?? 0)}</p>
 					<p class="kpiDesc mt-2">{tr("Reserved credit untuk order in-progress.")}</p>
+					<button type="button" class="kpiDetailLink mt-2" onclick={openEscrow}>
+						{tr("Lihat per order")} →
+					</button>
 				</article>
 
 				<!-- 4. Profit Bersih Tauthub -->
@@ -703,6 +688,9 @@
 					<p class="kpiDesc mt-2">
 						{tr("Kotor")}: {rp(summary.tauthub_revenue_gross ?? 0)} · {tr("sudah ditarik")}: {rp(summary.tauthub_withdrawn ?? 0)}
 					</p>
+					<button type="button" class="kpiDetailLink mt-2" onclick={openProfit}>
+						{tr("Lihat per publikasi")} →
+					</button>
 				</article>
 
 				<!-- 5. Saldo Rekening Wajib Ada -->
@@ -718,19 +706,16 @@
 					</div>
 					<p class="kpiValue kpiValuePosCash mt-3">{rp(summary.cash_required_in_bank ?? 0)}</p>
 					<p class="kpiDesc mt-2">{tr("Titipan + Escrow + Utang Mitra + Profit belum ditarik.")}</p>
+					<button type="button" class="kpiDetailLink mt-2" onclick={() => (cashOpen = true)}>
+						{tr("Lihat breakdown")} →
+					</button>
 				</article>
 			</div>
 
-			<div class="mt-6 flex items-end justify-between gap-3">
-				<div>
-					<h2 class="text-base font-semibold">{tr("Arus Kas Periode")}</h2>
-					<p class="text-xs text-muted-foreground">{tr("Uang fisik yang masuk dan keluar pada rentang tanggal yang dipilih di bawah.")}</p>
-				</div>
-			</div>
 		{/if}
 
-		<!-- Filter periode & rentang tanggal -->
-		<div class="app-card mt-3 flex flex-col gap-3 px-4 py-3.5 xl:flex-row xl:items-center xl:justify-between">
+		<!-- Filter periode & rentang tanggal untuk chart + tabel rincian -->
+		<div class="app-card mt-6 flex flex-col gap-3 px-4 py-3.5 xl:flex-row xl:items-center xl:justify-between">
 			<div class="flex min-w-0 flex-wrap items-center gap-2">
 				<span class="shrink-0 text-xs font-medium text-muted-foreground">{tr("Periode")}</span>
 				<div class="periodScroll">
@@ -761,252 +746,6 @@
 				</button>
 			</div>
 		</div>
-
-		<!-- Empat angka utama -->
-		<div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-			<article class="kpiCard kpiIn">
-				<div class="flex items-center justify-between gap-2">
-					<div class="flex min-w-0 items-center gap-2.5">
-						<span class="kpiIcon kpiIconIn"><ArrowDownLeft size={15} /></span>
-						<span class="kpiLabel">{tr("Uang Masuk")}</span>
-					</div>
-					<span class="kpiBadge kpiBadgeIn">{fmtNum(summary.money_in_count)} {tr("topup")}</span>
-				</div>
-				<p class="kpiValue kpiValueIn mt-3">{rp(summary.money_in)}</p>
-				<div class="mt-auto flex items-end justify-between gap-3 pt-3">
-					<p class="kpiDesc">{tr("Total top-up yang diterima pada periode ini.")}</p>
-					<KpiSparkline points={sparkIn} color="#5dae8b" />
-				</div>
-			</article>
-
-			<article class="kpiCard kpiOut">
-				<div class="flex items-center justify-between gap-2">
-					<div class="flex min-w-0 items-center gap-2.5">
-						<span class="kpiIcon kpiIconOut"><ArrowUpRight size={15} /></span>
-						<span class="kpiLabel">{tr("Uang Keluar")}</span>
-					</div>
-					<span class="kpiBadge kpiBadgeOut">{fmtNum(summary.money_out_count)} {tr("pencairan")}</span>
-				</div>
-				<p class="kpiValue kpiValueOut mt-3">{rp(summary.money_out)}</p>
-				<div class="mt-auto flex items-end justify-between gap-3 pt-3">
-					<p class="kpiDesc">
-						{tr("Total pencairan mitra pada periode ini.")}
-						{#if summary.money_out_fee > 0}
-							<span class="block">{tr("Bruto")} {rp(summary.money_out_gross)} · {tr("biaya transfer")} {rp(summary.money_out_fee)}</span>
-						{/if}
-					</p>
-					<KpiSparkline points={sparkOut} color="#da5c53" />
-				</div>
-			</article>
-
-			<article class="kpiCard kpiNet">
-				<div class="flex items-center justify-between gap-2">
-					<div class="flex min-w-0 items-center gap-2.5">
-						<span class="kpiIcon kpiIconNet"><Layers size={15} /></span>
-						<Tooltip content={tr("Uang masuk dikurangi uang keluar pada periode ini. Ini arus kas, bukan laba.")}>
-							<span class="kpiLabel">{tr("Arus Kas Bersih")}</span>
-						</Tooltip>
-					</div>
-					<span
-						class="kpiBadge"
-						class:kpiBadgeNet={summary.net > 0}
-						class:kpiBadgeNetNeg={summary.net < 0}
-						class:kpiBadgeNetZero={summary.net === 0}
-					>{netLabel}</span>
-				</div>
-				<p class="kpiValue kpiValueNet mt-3">
-					{netNegative ? `− ${rp(Math.abs(summary.net))}` : rp(summary.net)}
-				</p>
-				<div class="mt-auto flex items-end justify-between gap-3 pt-3">
-					<p class="kpiDesc">{tr("Selisih uang masuk dan keluar.")}</p>
-					<KpiSparkline points={sparkNet} color="var(--primary)" />
-				</div>
-			</article>
-
-			<button type="button" class="kpiCard kpiPayable" aria-haspopup="dialog" onclick={openPayables}>
-				<div class="flex items-center justify-between gap-2">
-					<div class="flex min-w-0 items-center gap-2.5">
-						<span class="kpiIcon kpiIconPayable"><Wallet size={15} /></span>
-						<Tooltip content={tr("Saldo yang sudah diminta mitra dan siap kamu transfer. Jumlahnya sudah dipotong biaya transfer.")}>
-							<span class="kpiLabel">{tr("Siap transfer ke mitra")}</span>
-						</Tooltip>
-					</div>
-					<span class="kpiBadge kpiBadgePayable">{fmtNum(summary.partner_payable_count ?? 0)} {tr("mitra")}</span>
-				</div>
-				<p class="kpiValue kpiValuePayable mt-3">{rp(summary.partner_payable_total ?? summary.settlement_pending)}</p>
-				<div class="mt-auto flex items-end justify-between gap-3 pt-3">
-					<p class="kpiDesc">{tr("Posisi saat ini")} · <span class="payableLink">{tr('Buka rincian')}</span></p>
-					<KpiSparkline points={sparkPayable} color="#ff933e" />
-				</div>
-			</button>
-		</div>
-
-		{#if payablesOpen}
-			<Modal title={tr("Siap transfer ke mitra")} maxWidth="2xl" onClose={closePayables}>
-				<p class="text-sm text-muted-foreground">
-					{tr("Saldo yang diminta mitra dan belum kamu transfer. Jumlah sudah dipotong biaya transfer.")}
-				</p>
-
-				{#if payablesLoading && !payables}
-					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
-				{:else if payablesError}
-					<p class="mt-4 text-sm" style="color: var(--destructive);">{payablesError}</p>
-				{:else if payables && payables.length === 0}
-					<p class="payableEmpty mt-4">{tr("Tidak ada pengajuan yang menunggu transfer saat ini.")}</p>
-				{:else if payables}
-					<div class="payableSum mt-4">
-						<span class="text-xs text-muted-foreground">{tr("Total siap transfer")}</span>
-						<span class="payableAmount text-lg font-semibold tabular-nums">{rp(payables.reduce((sum, r) => sum + (r.net_amount_idr ?? 0), 0))}</span>
-						<span class="text-xs text-muted-foreground">· {fmtNum(payables.length)} {tr("pengajuan")}</span>
-					</div>
-
-					<ul class="mt-3 space-y-3">
-						{#each payables as row (row.id)}
-							<li class="payableCard">
-								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div class="min-w-0">
-										<p class="truncate text-sm font-semibold">{row.partner_name || row.partner_id.slice(0, 8)}</p>
-										<p class="mt-0.5 text-[11px] text-muted-foreground">
-											{row.invoice_number ?? ''}{#if row.created_at} · {tr("diajukan")} {fmtDateTime(row.created_at)}{/if}
-										</p>
-									</div>
-									<div class="text-right">
-										<p class="payableAmount text-lg font-semibold tabular-nums">{rp(row.net_amount_idr)}</p>
-										<p class="text-[11px] text-muted-foreground">{tr("setelah biaya transfer")} {rp(row.transfer_fee_idr ?? 0)}</p>
-									</div>
-								</div>
-
-								<div class="payableBank mt-3">
-									<div class="min-w-0 flex-1">
-										<p class="text-[11px] text-muted-foreground">{methodLabel(row.payout_method ?? '')}{#if row.bank_name} · {row.bank_name}{/if}</p>
-										<p class="truncate text-sm font-medium tabular-nums">{row.bank_account_number ?? tr('Rekening belum diisi mitra')}</p>
-										{#if row.bank_account_name}<p class="truncate text-[11px] text-muted-foreground">{tr("a.n.")} {row.bank_account_name}</p>{/if}
-									</div>
-									{#if transferId !== row.id}
-										<div class="payableActions">
-											{#if row.bank_account_number}
-												<button type="button" class="app-btn payableCopy" onclick={() => void copyText(row.id, row.bank_account_number)}>
-													{copiedId === row.id ? tr('Tersalin') : tr('Salin nomor')}
-												</button>
-											{/if}
-											<button
-												type="button"
-												class="app-btn payablePrimary"
-												disabled={!row.bank_account_number}
-												title={row.bank_account_number ? undefined : tr('Mitra belum mengisi rekening atau e-wallet.')}
-												onclick={() => startTransfer(row.id)}
-											>{tr("Transfer")}</button>
-										</div>
-									{/if}
-								</div>
-
-								{#if transferId === row.id}
-									<div class="payableForm mt-3">
-										<p class="text-xs text-muted-foreground">
-											{tr("Transfer dulu lewat bank, lalu klik Sudah ditransfer. Aplikasi ini hanya mencatat; uangnya tidak dikirim otomatis.")}
-										</p>
-										<label class="mt-3 block">
-											<span class="text-xs font-medium text-muted-foreground">{tr("Nomor referensi transfer (opsional)")}</span>
-											<input class="app-input mt-1 w-full" bind:value={transferRef} maxlength="200" />
-										</label>
-										<div class="mt-3">
-											<span class="text-xs font-medium text-muted-foreground">{tr("Bukti transfer (opsional)")}</span>
-											<label
-												class="transferDrop mt-1"
-												style="border-color: {transferFileDragOver ? 'var(--primary)' : 'var(--border)'}; background: {transferFileDragOver
-													? 'var(--accent)'
-													: 'transparent'};"
-												ondragover={(e) => {
-													e.preventDefault();
-													transferFileDragOver = true;
-												}}
-												ondragleave={() => (transferFileDragOver = false)}
-												ondrop={(e) => {
-													e.preventDefault();
-													transferFileDragOver = false;
-													pickTransferFile(e.dataTransfer?.files?.[0] ?? null);
-												}}
-											>
-												{#if transferFile && transferPreviewUrl}
-													<img src={transferPreviewUrl} alt={transferFile.name} class="transferPreviewImg" />
-													<div class="transferPreviewMeta">
-														<span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-															{transferFile.name} · {fmtBytes(transferFile.size)} · {tr('Klik untuk mengganti')}
-														</span>
-														<button
-															type="button"
-															class="app-btn app-btn-soft shrink-0 !min-h-7 !px-2.5 !text-xs"
-															onclick={(e) => {
-																e.preventDefault();
-																e.stopPropagation();
-																resetTransferFile();
-															}}
-														><X size={13} /> {tr('Hapus')}</button>
-													</div>
-												{:else if transferFile}
-													<div class="flex w-full items-center gap-3 text-left">
-														<span class="transferFileIcon"><FileText size={18} /></span>
-														<div class="min-w-0 flex-1">
-															<span class="block truncate text-sm font-medium">{transferFile.name}</span>
-															<span class="text-xs text-muted-foreground">
-																{fmtBytes(transferFile.size)} · {tr('Klik untuk mengganti')}
-															</span>
-														</div>
-														<button
-															type="button"
-															class="app-btn app-btn-soft shrink-0 !min-h-7 !px-2.5 !text-xs"
-															onclick={(e) => {
-																e.preventDefault();
-																e.stopPropagation();
-																resetTransferFile();
-															}}
-														><X size={13} /> {tr('Hapus')}</button>
-													</div>
-												{:else}
-													<Upload size={20} class="text-muted-foreground" />
-													<span class="text-sm font-medium">{tr('Tarik & lepas bukti transfer di sini')}</span>
-													<span class="text-xs text-muted-foreground">
-														{tr('atau klik untuk memilih berkas · gambar atau PDF, maksimal 10 MB')}
-													</span>
-												{/if}
-												<input
-													class="sr-only"
-													type="file"
-													accept="image/*,application/pdf"
-													onchange={(e) => {
-														const input = e.currentTarget as HTMLInputElement;
-														pickTransferFile(input.files?.[0] ?? null);
-														// Kosongkan agar berkas yang sama bisa dipilih ulang.
-														input.value = '';
-													}}
-												/>
-											</label>
-											{#if transferFileError}
-												<span class="mt-1 block text-xs" style="color: var(--destructive);">{transferFileError}</span>
-											{/if}
-										</div>
-										{#if transferError}
-											<p class="mt-3 text-sm" style="color: var(--destructive);">{transferError}</p>
-										{/if}
-										<div class="mt-3 flex flex-wrap justify-end gap-2">
-											<button type="button" class="app-btn app-btn-soft" disabled={transferBusy} onclick={cancelTransfer}>{tr("Batal")}</button>
-											<button type="button" class="app-btn payablePrimary" disabled={transferBusy} onclick={() => void confirmTransfer(row)}>
-												{transferBusy ? tr('Menyimpan…') : tr('Sudah ditransfer')}
-											</button>
-										</div>
-									</div>
-								{/if}
-							</li>
-						{/each}
-					</ul>
-				{/if}
-
-				{#snippet footer()}
-					<a class="mr-auto self-center text-xs underline underline-offset-2" style="color: var(--primary);" href="/admin/settlements">{tr("Buka halaman pencairan")}</a>
-					<button type="button" class="app-btn app-btn-soft" onclick={closePayables}>{tr("Tutup")}</button>
-				{/snippet}
-			</Modal>
-		{/if}
 
 		<!-- Tren 12 bulan: Top Up vs GMV (omzet publikasi) vs Pencairan Mitra -->
 		<div class="app-card mt-6 p-5">
@@ -1397,6 +1136,297 @@
 				{/snippet}
 			</Modal>
 		{/if}
+
+		<!-- ============ Modal: Rincian Dana Titipan + Escrow per brand ============ -->
+		{#if depositsOpen}
+			<Modal
+				title={depositsScope === 'reserved' ? tr('Dana Tertahan — per Brand') : tr('Dana Titipan Klien — per Brand')}
+				maxWidth="2xl"
+				onClose={() => (depositsOpen = false)}
+			>
+				<p class="text-sm text-muted-foreground">
+					{tr("Saldo kredit semua brand yang masih > 0, diurutkan dari terbesar. Available = bebas dipakai klien; Reserved = terkunci untuk order yang sedang dikerjakan.")}
+				</p>
+				{#if depositsLoading && depositsEntries === null}
+					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
+				{:else if depositsError}
+					<p class="mt-4 text-sm" style="color: var(--destructive);">{depositsError}</p>
+				{:else if depositsEntries && depositsEntries.length === 0}
+					<p class="mt-4 text-sm text-muted-foreground">{tr("Tidak ada brand dengan saldo > 0.")}</p>
+				{:else if depositsEntries}
+					<div class="mt-4 overflow-x-auto">
+						<table class="w-full text-sm" style="min-width: 640px;">
+							<thead>
+								<tr class="text-left text-xs text-muted-foreground">
+									<th class="px-2 py-2 font-medium">{tr("Brand")}</th>
+									<th class="px-2 py-2 font-medium">{tr("Klien / Pemilik")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Available")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Reserved")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Total")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each depositsEntries as row (row.brand_id)}
+									<tr class="border-t">
+										<td class="px-2 py-2">
+											<p class="font-medium">{row.brand_name}</p>
+											<p class="text-[11px] text-muted-foreground">{row.ownership_type === 'client' ? tr('Klien') : tr('Internal')}</p>
+										</td>
+										<td class="px-2 py-2">
+											<p>{row.client_name || row.owner_name || '—'}</p>
+											{#if row.owner_email}
+												<p class="text-[11px] text-muted-foreground">{row.owner_email}</p>
+											{/if}
+										</td>
+										<td class="px-2 py-2 text-right tabular-nums" class:font-semibold={depositsScope === 'available'}>{rp(row.available_tc)}</td>
+										<td class="px-2 py-2 text-right tabular-nums text-muted-foreground" class:font-semibold={depositsScope === 'reserved'}>{rp(row.reserved_tc)}</td>
+										<td class="px-2 py-2 text-right tabular-nums">{rp(row.total_tc)}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+				{#snippet footer()}
+					<button type="button" class="app-btn app-btn-soft" onclick={() => (depositsOpen = false)}>{tr("Tutup")}</button>
+				{/snippet}
+			</Modal>
+		{/if}
+
+		<!-- ============ Modal: Dana Tertahan (Escrow) per publikasi ============ -->
+		{#if escrowOpen}
+			<Modal title={tr("Dana Tertahan (Escrow) — per Publikasi")} maxWidth="2xl" onClose={() => (escrowOpen = false)}>
+				<p class="text-sm text-muted-foreground">
+					{tr("Publikasi yang belum terbit atau belum dibatalkan. Client price di sini menjelaskan ORDER MANA yang mengunci reserved credit klien.")}
+				</p>
+				{#if escrowLoading && escrowEntries === null}
+					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
+				{:else if escrowError}
+					<p class="mt-4 text-sm" style="color: var(--destructive);">{escrowError}</p>
+				{:else if escrowEntries && escrowEntries.length === 0}
+					<p class="mt-4 text-sm text-muted-foreground">{tr("Tidak ada order escrow aktif saat ini.")}</p>
+				{:else if escrowEntries}
+					<p class="mt-3 text-xs text-muted-foreground">
+						{tr("Total nilai order escrow")}:
+						<span class="font-semibold tabular-nums">{rp(escrowTotalPrice)}</span>
+						· {fmtNum(escrowEntries.length)} {tr("order")}
+					</p>
+					<div class="mt-3 overflow-x-auto">
+						<table class="w-full text-sm" style="min-width: 760px;">
+							<thead>
+								<tr class="text-left text-xs text-muted-foreground">
+									<th class="px-2 py-2 font-medium">{tr("Dibuat")}</th>
+									<th class="px-2 py-2 font-medium">{tr("Brand")}</th>
+									<th class="px-2 py-2 font-medium">{tr("Media / Mitra")}</th>
+									<th class="px-2 py-2 font-medium">{tr("Status")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Client Price")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each escrowEntries as row (row.publication_id)}
+									<tr class="border-t">
+										<td class="whitespace-nowrap px-2 py-2 text-xs text-muted-foreground">{fmtDateTime(row.created_at)}</td>
+										<td class="px-2 py-2">
+											<p class="font-medium">{row.brand_name}</p>
+											{#if row.client_name}<p class="text-[11px] text-muted-foreground">{row.client_name}</p>{/if}
+										</td>
+										<td class="px-2 py-2">
+											<p>{row.media_name || '—'}</p>
+											{#if row.partner_name}<p class="text-[11px] text-muted-foreground">{row.partner_name}</p>{/if}
+										</td>
+										<td class="px-2 py-2">
+											<Badge label={tr(pubStatusLabel(row.status))} tone={row.status === 'processing' ? 'accent' : 'neutral'} />
+										</td>
+										<td class="px-2 py-2 text-right tabular-nums font-semibold">{rp(row.client_price)}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+				{#snippet footer()}
+					<button type="button" class="app-btn app-btn-soft" onclick={() => (escrowOpen = false)}>{tr("Tutup")}</button>
+				{/snippet}
+			</Modal>
+		{/if}
+
+		<!-- ============ Modal: Hak Mitra Belum Cair per mitra ============ -->
+		{#if unpaidOpen}
+			<Modal title={tr("Hak Mitra Belum Cair — per Mitra")} maxWidth="2xl" onClose={() => (unpaidOpen = false)}>
+				<p class="text-sm text-muted-foreground">
+					{tr("Breakdown utang ke mitra per partner: pending (belum masuk settlement) vs settled-belum-dibayar (sudah masuk settlement tapi belum ditransfer).")}
+				</p>
+				{#if unpaidLoading && unpaidEntries === null}
+					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
+				{:else if unpaidError}
+					<p class="mt-4 text-sm" style="color: var(--destructive);">{unpaidError}</p>
+				{:else if unpaidEntries && unpaidEntries.length === 0}
+					<p class="mt-4 text-sm text-muted-foreground">{tr("Tidak ada utang ke mitra saat ini.")}</p>
+				{:else if unpaidEntries}
+					<div class="mt-4 overflow-x-auto">
+						<table class="w-full text-sm" style="min-width: 760px;">
+							<thead>
+								<tr class="text-left text-xs text-muted-foreground">
+									<th class="px-2 py-2 font-medium">{tr("Mitra")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Pending")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Settled belum dibayar")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Total")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Earning terakhir")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each unpaidEntries as row (row.partner_id)}
+									<tr class="border-t">
+										<td class="px-2 py-2">
+											<p class="font-medium">{row.partner_name || row.partner_id.slice(0, 8)}</p>
+											{#if row.partner_email}<p class="text-[11px] text-muted-foreground">{row.partner_email}</p>{/if}
+										</td>
+										<td class="px-2 py-2 text-right tabular-nums">
+											{rp(row.amount_pending)}
+											<p class="text-[10px] text-muted-foreground">{fmtNum(row.count_pending)} earning</p>
+										</td>
+										<td class="px-2 py-2 text-right tabular-nums">
+											{rp(row.amount_settled_unpaid)}
+											<p class="text-[10px] text-muted-foreground">{fmtNum(row.count_settled_unpaid)} earning</p>
+										</td>
+										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: #ea580c;">{rp(row.total)}</td>
+										<td class="px-2 py-2 text-right text-xs text-muted-foreground">
+											{row.last_earning_at ? fmtDateTime(row.last_earning_at) : '—'}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+				{#snippet footer()}
+					<a class="mr-auto self-center text-xs underline underline-offset-2" style="color: var(--primary);" href="/admin/settlements">{tr("Kelola pencairan mitra")}</a>
+					<button type="button" class="app-btn app-btn-soft" onclick={() => (unpaidOpen = false)}>{tr("Tutup")}</button>
+				{/snippet}
+			</Modal>
+		{/if}
+
+		<!-- ============ Modal: Profit Bersih Tauthub — breakdown per publikasi ============ -->
+		{#if profitOpen}
+			<Modal title={tr("Profit Bersih Tauthub — per Publikasi")} maxWidth="2xl" onClose={() => (profitOpen = false)}>
+				<p class="text-sm text-muted-foreground">
+					{tr("Komisi = 25% × client_price per publikasi terbit. Top 100 publikasi, diurutkan dari harga tertinggi.")}
+				</p>
+				{#if profitLoading && profitEntries === null}
+					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
+				{:else if profitError}
+					<p class="mt-4 text-sm" style="color: var(--destructive);">{profitError}</p>
+				{:else if profitEntries && profitEntries.length === 0}
+					<p class="mt-4 text-sm text-muted-foreground">{tr("Belum ada publikasi terbit.")}</p>
+				{:else if profitEntries}
+					<p class="mt-3 text-xs text-muted-foreground">
+						{tr("Total publikasi terbit")}: <span class="font-semibold">{fmtNum(profitTotalCount)}</span>
+					</p>
+					{#if profitMonthly.length > 0}
+						<div class="mt-3 overflow-x-auto">
+							<table class="w-full text-xs" style="min-width: 520px;">
+								<thead>
+									<tr class="text-left text-muted-foreground">
+										<th class="px-2 py-1 font-medium">{tr("Bulan")}</th>
+										<th class="px-2 py-1 text-right font-medium">{tr("GMV")}</th>
+										<th class="px-2 py-1 text-right font-medium">{tr("Komisi 25%")}</th>
+										<th class="px-2 py-1 text-right font-medium">{tr("Jumlah terbit")}</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each profitMonthly as m (m.month)}
+										<tr class="border-t">
+											<td class="px-2 py-1">{m.month}</td>
+											<td class="px-2 py-1 text-right tabular-nums">{rp(m.gmv)}</td>
+											<td class="px-2 py-1 text-right tabular-nums font-semibold" style="color: #059669;">{rp(m.commission)}</td>
+											<td class="px-2 py-1 text-right tabular-nums">{fmtNum(m.count)}</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{/if}
+					<p class="mt-5 text-xs font-semibold text-muted-foreground">{tr("Top 100 publikasi (per client price):")}</p>
+					<div class="mt-2 overflow-x-auto">
+						<table class="w-full text-sm" style="min-width: 760px;">
+							<thead>
+								<tr class="text-left text-xs text-muted-foreground">
+									<th class="px-2 py-2 font-medium">{tr("Terbit")}</th>
+									<th class="px-2 py-2 font-medium">{tr("Brand")}</th>
+									<th class="px-2 py-2 font-medium">{tr("Media / Mitra")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Client Price")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Komisi 25%")}</th>
+									<th class="px-2 py-2 font-medium">{tr("Tautan")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each profitEntries as row (row.publication_id)}
+									<tr class="border-t">
+										<td class="whitespace-nowrap px-2 py-2 text-xs text-muted-foreground">{row.published_at ? fmtDateTime(row.published_at) : '—'}</td>
+										<td class="px-2 py-2">
+											<p class="font-medium">{row.brand_name}</p>
+											{#if row.client_name}<p class="text-[11px] text-muted-foreground">{row.client_name}</p>{/if}
+										</td>
+										<td class="px-2 py-2">
+											<p>{row.media_name || '—'}</p>
+											{#if row.partner_name}<p class="text-[11px] text-muted-foreground">{row.partner_name}</p>{/if}
+										</td>
+										<td class="px-2 py-2 text-right tabular-nums">{rp(row.client_price)}</td>
+										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: #059669;">{rp(row.commission)}</td>
+										<td class="px-2 py-2">
+											{#if row.published_url}
+												<a class="inline-flex items-center gap-1 text-xs" style="color: var(--primary);" href={row.published_url} target="_blank" rel="noopener noreferrer">
+													<ExternalLink size={12} /> {tr("Buka")}
+												</a>
+											{:else}
+												<span class="text-[11px] text-muted-foreground">—</span>
+											{/if}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+				{#snippet footer()}
+					<button type="button" class="app-btn app-btn-soft" onclick={() => (profitOpen = false)}>{tr("Tutup")}</button>
+				{/snippet}
+			</Modal>
+		{/if}
+
+		<!-- ============ Modal: Saldo Rek. Wajib Ada — breakdown rumus ============ -->
+		{#if cashOpen}
+			<Modal title={tr("Saldo Rekening Wajib Ada — Breakdown")} maxWidth="lg" onClose={() => (cashOpen = false)}>
+				<p class="text-sm text-muted-foreground">
+					{tr("Angka pembanding dengan saldo bank fisik. Jika saldo rekening escrow kurang dari ini, berarti ada uang milik orang lain yang terpakai operasional.")}
+				</p>
+				<div class="mt-4 space-y-2">
+					<div class="flex items-center justify-between rounded-lg border px-3 py-2">
+						<span class="text-sm">{tr("Dana Titipan Klien (Available)")}</span>
+						<span class="text-sm font-semibold tabular-nums">{rp(summary.client_available ?? 0)}</span>
+					</div>
+					<div class="flex items-center justify-between rounded-lg border px-3 py-2">
+						<span class="text-sm">{tr("Dana Tertahan (Escrow / Reserved)")}</span>
+						<span class="text-sm font-semibold tabular-nums">{rp(summary.client_reserved ?? 0)}</span>
+					</div>
+					<div class="flex items-center justify-between rounded-lg border px-3 py-2">
+						<span class="text-sm">{tr("Hak Mitra Belum Cair")}</span>
+						<span class="text-sm font-semibold tabular-nums">{rp(summary.partner_unpaid ?? 0)}</span>
+					</div>
+					<div class="flex items-center justify-between rounded-lg border px-3 py-2">
+						<span class="text-sm">{tr("Profit Bersih Tauthub (belum ditarik)")}</span>
+						<span class="text-sm font-semibold tabular-nums">{rp(summary.tauthub_available_to_withdraw ?? 0)}</span>
+					</div>
+					<div class="mt-2 flex items-center justify-between rounded-lg px-3 py-3" style="background-color: color-mix(in srgb, #8b5cf6 7%, var(--card)); border: 1px solid color-mix(in srgb, #8b5cf6 25%, var(--border));">
+						<span class="text-sm font-semibold">{tr("Total yang Wajib Ada di Rekening")}</span>
+						<span class="text-lg font-bold tabular-nums" style="color: #7c3aed;">{rp(summary.cash_required_in_bank ?? 0)}</span>
+					</div>
+				</div>
+				{#snippet footer()}
+					<button type="button" class="app-btn app-btn-soft" onclick={() => (cashOpen = false)}>{tr("Tutup")}</button>
+				{/snippet}
+			</Modal>
+		{/if}
 	{:else if error}
 		<div class="app-card mt-6 px-6 py-10 text-center">
 			<TriangleAlert size={26} class="mx-auto text-muted-foreground" />
@@ -1511,18 +1541,6 @@
 		background: var(--card);
 		box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 	}
-	.kpiIn {
-		background: color-mix(in srgb, #5dae8b 2%, var(--card));
-		border-color: color-mix(in srgb, #5dae8b 16%, var(--border));
-	}
-	.kpiOut {
-		background: color-mix(in srgb, #da5c53 2%, var(--card));
-		border-color: color-mix(in srgb, #da5c53 15%, var(--border));
-	}
-	.kpiNet {
-		background: color-mix(in srgb, var(--primary) 4%, var(--card));
-		border-color: color-mix(in srgb, var(--primary) 24%, white);
-	}
 	.kpiIcon {
 		display: inline-flex;
 		align-items: center;
@@ -1531,18 +1549,6 @@
 		width: 28px;
 		height: 28px;
 		border-radius: 9px;
-	}
-	.kpiIconIn {
-		background: color-mix(in srgb, #5dae8b 11%, white);
-		color: #5dae8b;
-	}
-	.kpiIconOut {
-		background: color-mix(in srgb, #da5c53 10%, white);
-		color: #da5c53;
-	}
-	.kpiIconNet {
-		background: var(--accent);
-		color: var(--primary);
 	}
 	.kpiLabel {
 		overflow: hidden;
@@ -1561,15 +1567,6 @@
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}
-	.kpiValueIn {
-		color: #5dae8b;
-	}
-	.kpiValueOut {
-		color: #da5c53;
-	}
-	.kpiValueNet {
-		color: var(--primary);
-	}
 	.kpiDesc {
 		min-width: 0;
 		font-size: 11.5px;
@@ -1585,58 +1582,6 @@
 		line-height: 1.45;
 		white-space: nowrap;
 	}
-	.kpiBadgeIn {
-		background: color-mix(in srgb, #5dae8b 10%, white);
-		color: #5dae8b;
-	}
-	.kpiBadgeOut {
-		background: color-mix(in srgb, #da5c53 9%, white);
-		color: #da5c53;
-	}
-	.kpiBadgeNet {
-		background: var(--accent);
-		color: var(--accent-foreground);
-	}
-	.kpiBadgeNetNeg {
-		background: color-mix(in srgb, #da5c53 9%, white);
-		color: #da5c53;
-	}
-	.kpiBadgeNetZero {
-		background: var(--secondary);
-		color: var(--muted-foreground);
-	}
-	/* Kartu "Siap transfer ke mitra": tint tipis oranye dan seluruh kartu bisa
-	   diklik untuk membuka rincian pengajuan. */
-	.kpiPayable {
-		text-align: left;
-		cursor: pointer;
-		background: color-mix(in srgb, #ff933e 6%, var(--card));
-		border-color: color-mix(in srgb, #ff933e 26%, var(--border));
-		transition: background-color 150ms ease, border-color 150ms ease;
-	}
-	.kpiPayable:hover {
-		background: color-mix(in srgb, #ff933e 10%, var(--card));
-		border-color: color-mix(in srgb, #ff933e 40%, var(--border));
-	}
-	.kpiPayable:focus-visible {
-		outline: 2px solid #ff933e;
-		outline-offset: 2px;
-	}
-	.kpiIconPayable {
-		background: color-mix(in srgb, #ff933e 14%, white);
-		color: #e07f22;
-	}
-	.kpiValuePayable {
-		color: #ff933e;
-	}
-	.kpiBadgePayable {
-		background: color-mix(in srgb, #ff933e 12%, white);
-		color: #d97a1f;
-	}
-	.kpiPayable .payableLink {
-		color: #d97a1f;
-	}
-
 	/* ===== Posisi Keuangan (balance sheet view) =====
 	   Lima warna khas supaya mudah dipindai; semua pakai color-mix dengan
 	   token tema biar otomatis beradaptasi di light/dark. */
@@ -1710,6 +1655,30 @@
 		background: color-mix(in srgb, #8b5cf6 12%, white);
 		color: #6d28d9;
 	}
+	/* Link "Lihat rincian →" di tiap kartu posisi keuangan. Tombol tipis supaya
+	   tidak bersaing dengan angka utama. */
+	.kpiDetailLink {
+		align-self: flex-start;
+		padding: 2px 0;
+		background: transparent;
+		border: 0;
+		cursor: pointer;
+		font-size: 11.5px;
+		font-weight: 500;
+		color: var(--muted-foreground);
+		text-decoration: underline;
+		text-underline-offset: 3px;
+		transition: color 120ms ease;
+	}
+	.kpiDetailLink:hover {
+		color: var(--primary);
+	}
+	.kpiDetailLink:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+		border-radius: 3px;
+	}
+
 	/* Badge interaktif (tombol kecil di kartu Profit). */
 	.kpiBadgeAction {
 		border: 0;
@@ -1724,127 +1693,4 @@
 		cursor: not-allowed;
 	}
 
-	.payableAmount {
-		color: var(--primary);
-	}
-	.payableLink {
-		color: var(--primary);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-	}
-	.payableSum {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		gap: 8px;
-		padding: 10px 14px;
-		border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
-		border-radius: 10px;
-		background-color: color-mix(in srgb, var(--primary) 5%, white);
-	}
-	.payableCard {
-		padding: 14px;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background-color: #fff;
-		list-style: none;
-	}
-	.payableBank {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 12px;
-		padding: 10px 12px;
-		border-radius: 10px;
-		background-color: var(--secondary);
-	}
-	.payableActions {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 8px;
-		margin-left: auto;
-	}
-	.payableCopy {
-		flex-shrink: 0;
-		min-height: 40px;
-		padding: 0 14px;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--primary);
-		border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
-		border-radius: 10px;
-		background-color: #fff;
-	}
-	.payableCopy:hover {
-		background-color: color-mix(in srgb, var(--primary) 5%, white);
-	}
-	.payableForm {
-		padding: 12px;
-		border: 1px dashed color-mix(in srgb, var(--primary) 38%, transparent);
-		border-radius: 10px;
-	}
-	.transferDrop {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 6px;
-		padding: 16px;
-		text-align: center;
-		cursor: pointer;
-		border: 1px dashed var(--border);
-		border-radius: 12px;
-		transition: border-color 150ms ease, background-color 150ms ease;
-	}
-	.transferDrop:focus-within {
-		outline: 2px solid var(--primary);
-		outline-offset: 2px;
-	}
-	.transferPreviewImg {
-		width: 100%;
-		max-height: 170px;
-		object-fit: contain;
-		border-radius: 8px;
-		background-color: #fff;
-	}
-	.transferPreviewMeta {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		text-align: left;
-	}
-	.transferFileIcon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-		width: 40px;
-		height: 40px;
-		border-radius: 8px;
-		color: var(--primary);
-		background-color: color-mix(in srgb, var(--primary) 12%, var(--card));
-	}
-	.payablePrimary {
-		min-height: 40px;
-		padding: 0 18px;
-		color: #fff;
-		background-color: var(--primary);
-		border-radius: 10px;
-	}
-	.payablePrimary:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--primary) 85%, #000);
-	}
-	.payablePrimary:disabled {
-		opacity: 0.55;
-	}
-	.payableEmpty {
-		padding: 12px 14px;
-		font-size: 13px;
-		color: var(--primary);
-		border-radius: 10px;
-		background-color: color-mix(in srgb, var(--primary) 6%, white);
-	}
-</style>
+	</style>
