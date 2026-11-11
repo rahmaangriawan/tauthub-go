@@ -941,7 +941,7 @@
 			</div>
 
 			<div class="overflow-x-auto">
-				<table class="w-full text-sm" style="min-width: 920px;">
+				<table class="w-full text-sm" style="min-width: 1100px;">
 					<thead>
 						<tr class="text-left text-xs text-muted-foreground">
 							<th class="px-4 py-2.5 font-medium">{tr("Tanggal")}</th>
@@ -950,7 +950,9 @@
 							<th class="px-4 py-2.5 font-medium">{tr("Klien / Mitra")}</th>
 							<th class="px-4 py-2.5 font-medium">{tr("Referensi")}</th>
 							<th class="px-4 py-2.5 font-medium">{tr("Metode")}</th>
-							<th class="px-4 py-2.5 text-right font-medium">{tr("Nominal")}</th>
+							<th class="px-4 py-2.5 text-right font-medium">{tr("Bruto")}</th>
+							<th class="px-4 py-2.5 text-right font-medium">{tr("Fee")}</th>
+							<th class="px-4 py-2.5 text-right font-medium">{tr("Net")}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -977,15 +979,12 @@
 								</td>
 								<td class="px-4 py-2.5 font-mono text-xs text-muted-foreground" title={entry.external_id ? `${tr('ID transaksi')}: ${entry.external_id}` : undefined}>{entry.reference || '—'}</td>
 								<td class="px-4 py-2.5">{methodLabel(entry.method)}</td>
-								<td class="px-4 py-2.5 text-right">
-									<p class="font-semibold tabular-nums" style="color: {entry.direction === 'in' ? 'var(--success)' : 'var(--destructive)'};">
-										{entry.direction === 'in' ? '+' : '−'} {rp(entry.amount)}
-									</p>
-									{#if entry.fee_amount > 0}
-										<p class="text-[11px] text-muted-foreground tabular-nums">
-											{tr("bruto")} {rp(entry.gross_amount)} · {tr("biaya")} {rp(entry.fee_amount)}
-										</p>
-									{/if}
+								<td class="px-4 py-2.5 text-right tabular-nums">{rp(entry.gross_amount)}</td>
+								<td class="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+									{entry.fee_amount > 0 ? `− ${rp(entry.fee_amount)}` : '—'}
+								</td>
+								<td class="px-4 py-2.5 text-right font-semibold tabular-nums" style="color: {entry.direction === 'in' ? 'var(--success)' : 'var(--destructive)'};">
+									{entry.direction === 'in' ? '+' : '−'} {rp(entry.amount)}
 								</td>
 							</tr>
 						{/each}
