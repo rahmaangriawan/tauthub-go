@@ -59,8 +59,10 @@
 
 	let assisting = $state(false);
 	let assistError = $state('');
+	let filled = $state('');
 	async function assistBrief() {
 		assistError = '';
+		filled = '';
 		assisting = true;
 		try {
 			const res = await apiRequest(`/v1/brands/${brandId}/taut/plans/brief-assist`, {
@@ -73,6 +75,17 @@
 			}
 			const j = await res.json();
 			brief = String(j.brief ?? '');
+			if ([1, 2, 3, 4, 5, 6, 7, 8].includes(Number(j.weeks))) weeks = Number(j.weeks);
+			if ([1, 2, 3].includes(Number(j.per_week))) {
+				perWeekMode = 'preset';
+				perWeek = Number(j.per_week);
+				perWeekInput = '';
+			}
+			if (j.category) category = String(j.category);
+			if (Number(j.budget_idr) > 0) budget = fmt(Number(j.budget_idr));
+			filled = j.budget_source === 'estimate'
+				? tr('Anggaran adalah estimasi dari media yang tersedia. Silakan sesuaikan.')
+				: tr('AI mengisi brief, jumlah minggu, dan artikel per minggu. Periksa lagi sebelum menyusun.');
 		} finally {
 			assisting = false;
 		}
@@ -142,10 +155,11 @@
 			<div class="rc-ai">
 				<button type="button" class="app-btn app-btn-soft rc-ai-btn" disabled={assisting || brief.trim().length < 5} onclick={() => void assistBrief()}>
 					{#if assisting}<LoaderCircle size={15} class="animate-spin" />{:else}<Sparkles size={15} />{/if}
-					{tr('Rapikan dengan AI')}
+					{tr('Isi dengan AI')}
 				</button>
-				<span class="rc-hint">{tr('Tulis catatan singkat, lalu AI menyusunnya jadi brief lengkap. Anda tetap bisa mengedit hasilnya.')}</span>
+				<span class="rc-hint">{tr('Tulis catatan singkat. AI menyusun brief, kategori, jumlah minggu, artikel per minggu, dan anggaran. Semuanya bisa diedit.')}</span>
 				{#if assistError}<span class="rc-bad">{assistError}</span>{/if}
+				{#if filled}<span class="rc-ok">{filled}</span>{/if}
 			</div>
 
 			<div class="rc-split">
@@ -244,6 +258,7 @@
 	.rc-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 	.rc-hint { font-size: 12px; line-height: 16px; font-weight: 400; color: var(--muted-foreground); }
 	.rc-bad { font-size: 13px; color: var(--destructive); }
+	.rc-ok { font-size: 13px; color: var(--success); }
 	.rc-money { position: relative; display: block; }
 	.rc-money :global(input) { width: 100%; padding-left: 38px; }
 	.rc-prefix { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--muted-foreground); pointer-events: none; }
