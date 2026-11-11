@@ -116,7 +116,11 @@ func finParseTopupPackages(v any) []map[string]any {
 		if !tcOK || !idrOK || tc <= 0 || idr <= 0 {
 			continue
 		}
-		out = append(out, map[string]any{"tc": tc, "idr": idr})
+		pkg := map[string]any{"tc": tc, "idr": idr}
+		if bonus, ok := finNumInt(obj["bonus_tc"]); ok && bonus > 0 {
+			pkg["bonus_tc"] = bonus
+		}
+		out = append(out, pkg)
 	}
 	return out
 }
@@ -237,7 +241,18 @@ func (d *Deps) CreditsConfigPut(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, d, errUnprocessable(fmt.Sprintf("Paket %d TC × rate %d = Rp%d, bukan Rp%d", tc, rateIDR, tc*rateIDR, idr)))
 			return
 		}
-		normalized = append(normalized, map[string]any{"tc": tc, "idr": idr})
+		pkg := map[string]any{"tc": tc, "idr": idr}
+		if rawBonus, has := obj["bonus_tc"]; has && rawBonus != nil {
+			bonus, bonusOK := finNumInt(rawBonus)
+			if !bonusOK || bonus < 0 || bonus > tc {
+				writeErr(w, d, errUnprocessable(fmt.Sprintf("Bonus paket %d TC harus 0 sampai %d TC", tc, tc)))
+				return
+			}
+			if bonus > 0 {
+				pkg["bonus_tc"] = bonus
+			}
+		}
+		normalized = append(normalized, pkg)
 	}
 	if err := d.exec(r.Context(), "UPDATE tc_config SET rate_idr = $1, updated_by = $2, updated_at = NOW() WHERE id = 1", rateIDR, user.ID); err != nil {
 		writeErr(w, d, err)

@@ -43,6 +43,63 @@
 	// satu baris kalau suatu saat perlu koreksi saldo manual.
 	const SHOW_ADMIN_TOOLS = false;
 
+	type PromoCode = {
+		code: string; bonus_tc: number; min_topup_tc: number; max_uses: number | null;
+		used_count: number; valid_until: string | null; active: boolean; note: string | null;
+	};
+	let promos = $state<PromoCode[]>([]);
+	let promoForm = $state({ code: '', bonus_tc: '', min_topup_tc: '', max_uses: '', valid_until: '', note: '' });
+	let promoBusy = $state(false);
+
+	async function loadPromos() {
+		const res = await apiRequest('/v1/platform/promo-codes');
+		if (res.ok) promos = (await res.json()).codes ?? [];
+	}
+
+	async function createPromo(e: SubmitEvent) {
+		e.preventDefault();
+		promoBusy = true;
+		error = '';
+		notice = '';
+		try {
+			const f = promoForm;
+			const res = await apiRequest('/v1/platform/promo-codes', {
+				method: 'POST',
+				body: JSON.stringify({
+					code: f.code,
+					bonus_tc: Number(f.bonus_tc),
+					min_topup_tc: f.min_topup_tc ? Number(f.min_topup_tc) : undefined,
+					max_uses: f.max_uses ? Number(f.max_uses) : undefined,
+					valid_until: f.valid_until || undefined,
+					note: f.note || undefined
+				})
+			});
+			if (!res.ok) {
+				error = await platformError(res);
+				return;
+			}
+			notice = `Kode ${f.code.toUpperCase()} dibuat.`;
+			promoForm = { code: '', bonus_tc: '', min_topup_tc: '', max_uses: '', valid_until: '', note: '' };
+			await loadPromos();
+		} finally {
+			promoBusy = false;
+		}
+	}
+
+	async function togglePromo(p: PromoCode) {
+		promoBusy = true;
+		try {
+			const res = await apiRequest(`/v1/platform/promo-codes/${encodeURIComponent(p.code)}`, {
+				method: 'PUT',
+				body: JSON.stringify({ active: !p.active })
+			});
+			if (!res.ok) error = await platformError(res);
+			await loadPromos();
+		} finally {
+			promoBusy = false;
+		}
+	}
+
 	let wallets = $state<WalletRow[]>([]);
 	let config = $state<TcConfig | null>(null);
 	let error = $state('');
@@ -86,11 +143,14 @@
 			wallets = data.wallets ?? [];
 			config = data.tc_config;
 			rate = String(data.tc_config.rate_idr);
-			packages = (data.tc_config.topup_packages ?? []).map((p: { tc: number; idr: number }) => `${p.tc}:${p.idr}`).join(',');
+			packages = (data.tc_config.topup_packages ?? [])
+				.map((p: { tc: number; idr: number; bonus_tc?: number }) => `${p.tc}:${p.idr}${p.bonus_tc ? ':' + p.bonus_tc : ''}`)
+				.join(',');
 		} else {
 			error = await platformError(res);
 		}
 		loading = false;
+		void loadPromos();
 	}
 
 	async function saveConfig() {
@@ -99,8 +159,8 @@
 		notice = '';
 		const rateIdr = Number(rate);
 		const topupPackages = packages.split(',').map((part) => {
-			const [tc, idrAmt] = part.split(':').map((s) => Number(s.trim()));
-			return { tc, idr: idrAmt };
+			const [tc, idrAmt, bonus] = part.split(':').map((s) => Number(s.trim()));
+			return bonus ? { tc, idr: idrAmt, bonus_tc: bonus } : { tc, idr: idrAmt };
 		});
 		const res = await apiRequest('/v1/platform/credits', {
 			method: 'PUT',
@@ -158,6 +218,47 @@
 	{:else}
 		<Feedback {loading} {error} {notice} loadingText="Memuat Tauthub Credit…" />
 
+		<div class="app-card mt-4 p-5">
+			<h2 class="text-sm font-semibold">Kode promo top up</h2>
+			<p class="mt-1 text-xs text-muted-foreground">Bonus TC tetap yang masuk sebagai baris ledger terpisah setelah pembayaran lunas. Tidak mengubah nominal pembayaran atau faktur. Satu brand hanya sekali per kode.</p>
+			<form class="mt-3 flex flex-wrap items-end gap-3" onsubmit={createPromo}>
+				<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">Kode</span>
+					<input class="app-input !w-[160px]" required maxlength="40" bind:value={promoForm.code} /></label>
+				<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">Bonus (TC)</span>
+					<input class="app-input !w-[110px]" type="number" min="1" required bind:value={promoForm.bonus_tc} /></label>
+				<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">Minimal top up (TC)</span>
+					<input class="app-input !w-[140px]" type="number" min="1" bind:value={promoForm.min_topup_tc} /></label>
+				<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">Batas pakai</span>
+					<input class="app-input !w-[110px]" type="number" min="1" placeholder="tanpa batas" bind:value={promoForm.max_uses} /></label>
+				<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">Berlaku sampai</span>
+					<input class="app-input !w-[160px]" type="date" bind:value={promoForm.valid_until} /></label>
+				<button class="app-btn app-btn-primary" type="submit" disabled={promoBusy || !promoForm.code || !promoForm.bonus_tc}>Buat kode</button>
+			</form>
+			{#if promos.length > 0}
+				<table class="mt-4 w-full text-sm">
+					<thead><tr class="border-b text-left text-[11px] text-muted-foreground">
+						<th class="py-2 font-semibold">KODE</th><th class="py-2 font-semibold">BONUS</th>
+						<th class="py-2 font-semibold">MIN. TOP UP</th><th class="py-2 font-semibold">TERPAKAI</th>
+						<th class="py-2 font-semibold">BERLAKU</th><th class="py-2 text-right font-semibold">AKSI</th>
+					</tr></thead>
+					<tbody>
+						{#each promos as p (p.code)}
+							<tr class="border-b last:border-0">
+								<td class="py-2 font-medium">{p.code}</td>
+								<td class="py-2">{p.bonus_tc} TC</td>
+								<td class="py-2">{p.min_topup_tc} TC</td>
+								<td class="py-2">{p.used_count}{p.max_uses ? ` / ${p.max_uses}` : ''}</td>
+								<td class="py-2 text-muted-foreground">{p.active ? (p.valid_until ? `s.d. ${new Date(p.valid_until).toLocaleDateString('id-ID')}` : 'Aktif') : 'Nonaktif'}</td>
+								<td class="py-2 text-right">
+									<button class="app-btn app-btn-soft" type="button" disabled={promoBusy} onclick={() => void togglePromo(p)}>{p.active ? 'Nonaktifkan' : 'Aktifkan'}</button>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			{/if}
+		</div>
+
 		{#if SHOW_ADMIN_TOOLS}
 			<div class="app-card mt-4 p-5">
 				<h2 class="text-sm font-semibold">Konfigurasi Denominasi</h2>
@@ -168,7 +269,7 @@
 						<input class="app-input !w-[140px]" type="number" min="1" value={rate} oninput={(e) => (rate = (e.currentTarget as HTMLInputElement).value)} />
 					</label>
 					<label class="block">
-						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Paket Top Up (tc:idr, pisahkan koma — contoh 500:500000,1000:1000000)</span>
+						<span class="mb-1 block text-xs font-semibold text-muted-foreground">Paket Top Up (tc:idr atau tc:idr:bonus, pisahkan koma — contoh 500:500000,1000:1000000:50)</span>
 						<input class="app-input !w-[380px]" bind:value={packages} />
 					</label>
 					<button class="app-btn app-btn-primary" type="button" disabled={busy} onclick={() => void saveConfig()}>{tr("Simpan konfigurasi")}</button>

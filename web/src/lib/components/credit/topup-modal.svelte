@@ -6,10 +6,12 @@
 	// ringkasan tagihan, lalu CTA membuat pembayaran lewat gateway aktif.
 	import { X, ExternalLink, CheckCircle, Info, TriangleAlert, ChevronDown } from '@lucide/svelte';
 	import type { TopUpInvoiceData } from '$lib/credits/topup-client';
+	import { apiRequest, readApiError } from '$lib/auth';
 
 	let {
 		rateIdr = 1000,
 		packages = [],
+		apiBase = '',
 		busy = false,
 		error = '',
 		payment = null,
@@ -19,19 +21,21 @@
 		onClose
 	}: {
 		rateIdr?: number;
-		packages?: Array<{ tc: number; idr: number }>;
+		packages?: Array<{ tc: number; idr: number; bonus_tc?: number }>;
+		// /v1/brands/{id}: dipakai memeriksa kode promo. Kosong = kolom promo disembunyikan.
+		apiBase?: string;
 		busy?: boolean;
 		error?: string;
 		payment?: { payment_url: string | null; amount_idr: number; tc: number } | null;
 		// Profil penagihan brand: hanya mengisi kolom, tidak menyalakan faktur (faktur menambah PPN 11%).
 		initialInvoice?: TopUpInvoiceData | null;
-		onSelectPackage: (tc: number, invoice?: TopUpInvoiceData | null) => void;
+		onSelectPackage: (tc: number, invoice?: TopUpInvoiceData | null, promoCode?: string | null) => void;
 		onResetPayment: () => void;
 		onClose?: () => void;
 	} = $props();
 
 	// Fallback sama dengan app lama bila admin belum mengisi paket di tc_config.
-	const DEFAULT_PACKAGES = [
+	const DEFAULT_PACKAGES: Array<{ tc: number; idr: number; bonus_tc?: number }> = [
 		{ tc: 10, idr: 10000 },
 		{ tc: 100, idr: 100000 },
 		{ tc: 1000, idr: 1000000 }
@@ -59,6 +63,36 @@
 		}
 	});
 	let invoiceError = $state('');
+
+	// Kode promo: bonus TC tetap, dicatat terpisah dari nominal pembayaran.
+	let promoOpen = $state(false);
+	let promoInput = $state('');
+	let promoApplied = $state<{ code: string; bonus_tc: number } | null>(null);
+	let promoError = $state('');
+	let promoBusy = $state(false);
+	const packageBonus = $derived(effectivePackages.find((p) => p.tc === selectedPreset && !showCustomInput)?.bonus_tc ?? 0);
+	const totalBonus = $derived(packageBonus + (promoApplied?.bonus_tc ?? 0));
+
+	async function applyPromo() {
+		const code = promoInput.trim().toUpperCase();
+		if (!code || effectiveTc < 1) {
+			promoError = tr('Pilih nominal dulu, lalu isi kode promo.');
+			return;
+		}
+		promoBusy = true;
+		promoError = '';
+		try {
+			const res = await apiRequest(`${apiBase}/credits/promo?code=${encodeURIComponent(code)}&tc=${effectiveTc}`);
+			if (!res.ok) {
+				promoApplied = null;
+				promoError = await readApiError(res, tr('Kode promo tidak bisa dipakai.'));
+				return;
+			}
+			promoApplied = await res.json();
+		} finally {
+			promoBusy = false;
+		}
+	}
 	let showCustomInput = $state(false);
 	let customInputEl = $state<HTMLInputElement | null>(null);
 
@@ -115,10 +149,10 @@
 				return;
 			}
 			invoiceError = '';
-			onSelectPackage(tc, invoice);
+			onSelectPackage(tc, invoice, promoApplied?.code ?? null);
 			return;
 		}
-		onSelectPackage(tc, null);
+		onSelectPackage(tc, null, promoApplied?.code ?? null);
 	}
 
 	function handleCta() {
@@ -206,6 +240,7 @@
 								aria-hidden="true"
 							/>
 							<span class="tu-preset-price">{fmtIDR(pkg.idr)}</span>
+							{#if pkg.bonus_tc}<span class="tu-bonus">+{pkg.bonus_tc} TC bonus</span>{/if}
 						</button>
 					{/each}
 					<button
@@ -313,11 +348,27 @@
 				{/if}
 			</div>
 
+			{#if apiBase}
+				<div class="tu-promo">
+					{#if !promoOpen && !promoApplied}
+						<button type="button" class="tu-promo-link" onclick={() => (promoOpen = true)}>{tr("Punya kode promo?")}</button>
+					{:else}
+						<div class="tu-custom-row">
+							<input class="tu-input" placeholder={tr("Kode promo")} maxlength="40" bind:value={promoInput} disabled={promoBusy || busy} />
+							<button type="button" class="tu-btn-secondary" disabled={promoBusy || busy || !promoInput.trim()} onclick={applyPromo}>{tr("Pakai")}</button>
+						</div>
+						{#if promoApplied}<span class="tu-hint">{promoApplied.code}: +{promoApplied.bonus_tc} TC bonus</span>{/if}
+						{#if promoError}<span class="tu-invalid">{promoError}</span>{/if}
+					{/if}
+				</div>
+			{/if}
+
 			<div class="tu-billing">
 				<div class="tu-billing-left">
 					<span class="tu-label">{tr("Ringkasan Tagihan")}</span>
 					<div class="tu-row"><span>{tr("Subtotal")}</span><span>{fmtIDR(subtotal)}</span></div>
 					<div class="tu-row"><span>PPN 11%</span><span>{fmtIDR(ppn)}</span></div>
+					{#if totalBonus > 0}<div class="tu-row"><span>{tr("Bonus saldo")}</span><span>+{totalBonus} TC</span></div>{/if}
 					<div class="tu-divider"></div>
 					<div class="tu-row tu-row-total"><span>{tr("Total Pembayaran")}</span><span>{fmtIDR(total)}</span></div>
 					<p class="tu-hint">{tr("Belum termasuk biaya gateway")}</p>
@@ -489,6 +540,9 @@
 	.tu-custom-calc { color: var(--primary); font-variant-numeric: tabular-nums; }
 	.tu-invalid { color: var(--destructive); font-size: 11.5px; font-weight: 500; }
 
+	.tu-bonus { font-size: 11px; color: var(--success); font-weight: 600; }
+	.tu-promo { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; }
+	.tu-promo-link { align-self: flex-start; font-size: 13px; color: var(--primary); text-decoration: underline; background: none; border: 0; padding: 0; cursor: pointer; }
 	.tu-invoice {
 		display: flex;
 		flex-direction: column;

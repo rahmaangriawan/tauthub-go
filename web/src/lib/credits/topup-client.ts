@@ -13,16 +13,16 @@ export async function submitTopUp(
 	apiBase: string,
 	tc: number,
 	idempotencyKey: string,
-	invoice?: TopUpInvoiceData | null
+	invoice?: TopUpInvoiceData | null,
+	promoCode?: string | null
 ): Promise<TopUpResult> {
 	try {
+		const payload: Record<string, unknown> = { tc, idempotency_key: idempotencyKey };
+		if (invoice) payload.note = JSON.stringify(invoice);
+		if (promoCode) payload.promo_code = promoCode;
 		const res = await apiRequest(`${apiBase}/credits/topup`, {
 			method: 'POST',
-			body: JSON.stringify(
-				invoice
-					? { tc, note: JSON.stringify(invoice), idempotency_key: idempotencyKey }
-					: { tc, idempotency_key: idempotencyKey }
-			)
+			body: JSON.stringify(payload)
 		});
 		if (!res.ok) throw new Error(await readApiError(res, 'Gagal membuat pembayaran.'));
 		const data = (await res.json()) as {

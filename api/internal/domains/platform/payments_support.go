@@ -622,6 +622,7 @@ type payTopUpOutcome struct {
 	TC        int
 	RateIDR   int
 	Duplicate bool
+	BonusTC   int
 }
 
 // payPostTopUpOnTx: port postTopUpOnConn — kredit dompet TC idempoten
@@ -659,7 +660,8 @@ func (d *Deps) payPostTopUpOnTx(ctx context.Context, tx pgx.Tx, brandID, userID,
 		return payTopUpOutcome{}, err
 	}
 	d.payCreateTopupInvoiceOnTx(ctx, tx, brandID, userID, paymentTxID, amountIDR, tc)
-	return payTopUpOutcome{TC: tc, RateIDR: rate}, nil
+	bonus := d.payGrantBonusesOnTx(ctx, tx, brandID, userID, paymentTxID, tc, rate)
+	return payTopUpOutcome{TC: tc, RateIDR: rate, BonusTC: bonus}, nil
 }
 
 // payCreateTopupInvoiceOnTx: invoice otomatis untuk top-up yang meminta faktur

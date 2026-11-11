@@ -31,7 +31,7 @@
 	const i18n = $derived(getI18n());
 
 	type Wallet = { available_tc: number; reserved_tc: number; captured_tc: number; rate_idr: number };
-	type Pkg = { tc: number; idr: number };
+	type Pkg = { tc: number; idr: number; bonus_tc?: number };
 	type PubRow = {
 		id: string;
 		document_title: string;
@@ -254,13 +254,13 @@
 		}
 	}
 
-	async function handleTopup(tc: number, invoice?: TopUpInvoiceData | null) {
+	async function handleTopup(tc: number, invoice?: TopUpInvoiceData | null, promoCode?: string | null) {
 		topUpBusy = true;
 		topUpError = '';
 		topUpPayment = null;
 		const key = topUpKey || (topUpKey = crypto.randomUUID());
 		try {
-			const result = await submitTopUp(`/v1/brands/${brandId}`, tc, key, invoice);
+			const result = await submitTopUp(`/v1/brands/${brandId}`, tc, key, invoice, promoCode);
 			if (result.status === 'paid') {
 				topUpKey = crypto.randomUUID();
 				showToast(tr('Top Up berhasil! Saldo telah diperbarui.'), 'success');
@@ -699,7 +699,8 @@
 		busy={topUpBusy}
 		error={topUpError}
 		payment={topUpPayment}
-		onSelectPackage={(tc, invoice) => void handleTopup(tc, invoice)}
+		apiBase={`/v1/brands/${brandId}`}
+		onSelectPackage={(tc, invoice, promo) => void handleTopup(tc, invoice, promo)}
 		onResetPayment={() => (topUpPayment = null)}
 		onClose={() => (topUpOpen = false)}
 	/>

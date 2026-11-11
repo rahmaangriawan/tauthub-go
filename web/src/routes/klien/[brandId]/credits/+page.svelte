@@ -44,7 +44,7 @@
 		pending_payments: Array<{ id: string; payment_url: string | null; amount_idr: number; tc: number | null; status: string; created_at: string }>;
 		balance: { total: number; used: number; remaining: number; package_count: number };
 		wallet: { available_tc: number; reserved_tc: number; captured_tc: number; total_tc: number; rate_idr: number; available_idr: number };
-		tc_config: { rate_idr: number; topup_packages: Array<{ tc?: number; idr?: number; price_idr?: number; label?: string }> };
+		tc_config: { rate_idr: number; topup_packages: Array<{ bonus_tc?: number; tc?: number; idr?: number; price_idr?: number; label?: string }> };
 		ledger: LedgerEntry[];
 		ledger_total: number;
 		ledger_groups: LedgerGroup[];
@@ -66,7 +66,7 @@
 	// memakai price_idr. Keduanya diterima agar modal selalu punya nominal.
 	const packages = $derived(
 		(data?.tc_config.topup_packages ?? [])
-			.map((p) => ({ tc: Number(p.tc ?? 0), idr: Number(p.idr ?? p.price_idr ?? 0) }))
+			.map((p) => ({ tc: Number(p.tc ?? 0), idr: Number(p.idr ?? p.price_idr ?? 0), bonus_tc: Number(p.bonus_tc ?? 0) || undefined }))
 			.filter((p) => p.tc > 0 && p.idr > 0)
 	);
 	const rateIdr = $derived(data?.tc_config.rate_idr ?? data?.wallet.rate_idr ?? 1000);
@@ -161,12 +161,12 @@
 		if (!topupKey) topupKey = crypto.randomUUID();
 	}
 
-	async function startTopUp(tc: number, invoice?: TopUpInvoiceData | null) {
+	async function startTopUp(tc: number, invoice?: TopUpInvoiceData | null, promoCode?: string | null) {
 		topupBusy = true;
 		topupError = '';
 		if (!topupKey) topupKey = crypto.randomUUID();
 		try {
-			const result = await submitTopUp(`/v1/brands/${brandId}`, tc, topupKey, invoice);
+			const result = await submitTopUp(`/v1/brands/${brandId}`, tc, topupKey, invoice, promoCode);
 			if (result.status === 'paid') {
 				topupKey = crypto.randomUUID();
 				topupPayment = null;
@@ -283,6 +283,7 @@
 	// Label human-readable saat `reason` kosong/berisi string mesin.
 	const REF_TYPE_LABEL: Record<string, string> = {
 		topup: 'Top Up Saldo',
+		bonus: 'Bonus saldo',
 		reserve: 'Dana ditahan untuk publikasi',
 		release: 'Dana ditahan dikembalikan',
 		capture: 'Kredit publikasi ditagihkan (artikel terbit)',
@@ -565,6 +566,7 @@
 	<TopUpModal
 		{rateIdr}
 		packages={packages}
+		apiBase={`/v1/brands/${brandId}`}
 		busy={topupBusy}
 		error={topupError}
 		payment={topupPayment}

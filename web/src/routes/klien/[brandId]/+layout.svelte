@@ -128,7 +128,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	let topupError = $state('');
 	let topupPayment = $state<{ payment_url: string | null; amount_idr: number; tc: number } | null>(null);
 	let topupRate = $state(1000);
-	let topupPackages = $state<Array<{ tc: number; idr: number }>>([]);
+	let topupPackages = $state<Array<{ tc: number; idr: number; bonus_tc?: number }>>([]);
 	// Satu intent = satu idempotency key; key dipertahankan saat retry dan hanya
 	// di-reset setelah intent selesai/batal (parity credit-pill.tsx).
 	let topupKey = '';
@@ -184,12 +184,12 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		}
 	}
 
-	async function startTopUp(tc: number, invoice?: TopUpInvoiceData | null) {
+	async function startTopUp(tc: number, invoice?: TopUpInvoiceData | null, promoCode?: string | null) {
 		topupBusy = true;
 		topupError = '';
 		if (!topupKey) topupKey = crypto.randomUUID();
 		try {
-			const result = await submitTopUp(`/v1/brands/${brandId}`, tc, topupKey, invoice);
+			const result = await submitTopUp(`/v1/brands/${brandId}`, tc, topupKey, invoice, promoCode);
 			if (result.status === 'paid') {
 				topupKey = crypto.randomUUID();
 				topupPayment = null;
@@ -346,6 +346,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		<TopUpModal
 			rateIdr={topupRate}
 			packages={topupPackages}
+			apiBase={`/v1/brands/${brandId}`}
 			busy={topupBusy}
 			error={topupError}
 			payment={topupPayment}

@@ -142,7 +142,7 @@ func (d *Deps) finDepositsAsOf(ctx context.Context, asOf time.Time, excl finFilt
 		), dl AS (
 		  SELECT brand_id::text AS id,
 		    SUM(CASE
-		      WHEN ref_type IN ('topup','refund','adjustment','reserve','release') THEN amount_tc
+		      WHEN ref_type IN ('topup','bonus','refund','adjustment','reserve','release') THEN amount_tc
 		      WHEN ref_type = 'capture' AND amount_tc < 0 THEN amount_tc
 		      ELSE 0 END) AS da,
 		    SUM(CASE

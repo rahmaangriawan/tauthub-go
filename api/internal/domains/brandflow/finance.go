@@ -195,6 +195,17 @@ func (d *Deps) CreditsTopupCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	promoCode := ""
+	if raw, ok := body["promo_code"].(string); ok {
+		promoCode = normalizePromoCode(raw)
+	}
+	if promoCode != "" {
+		if _, msg := d.checkPromo(r.Context(), brandID, promoCode, tc); msg != "" {
+			httpx.Error(w, http.StatusUnprocessableEntity, msg)
+			return
+		}
+	}
+
 	config := d.getTcConfig(r.Context())
 	rateIDR := config.RateIDR
 	amountIDR := tc * rateIDR
@@ -223,6 +234,11 @@ func (d *Deps) CreditsTopupCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		d.writeErr(w, createErr)
 		return
+	}
+	if promoCode != "" {
+		if txID := transaction.strOr("id", ""); txID != "" {
+			_ = d.exec(r.Context(), "UPDATE payment_transactions SET promo_code = $2 WHERE id = $1", txID, promoCode)
+		}
 	}
 	d.audit(r.Context(), brandID, user.ID, "brand.credits.topup_requested", "brand", brandID)
 	writeJSON(w, http.StatusOK, map[string]any{

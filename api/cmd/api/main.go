@@ -361,6 +361,7 @@ func run() error {
 			authed.Get("/brands/{brandId}/credits/topup", brandFlowDeps.CreditsTopupLookup)
 			authed.Post("/brands/{brandId}/credits/topup", brandFlowDeps.CreditsTopupCreate)
 			authed.Post("/brands/{brandId}/link-monitor/request-replacement", brandFlowDeps.LinkMonitorRequestReplacement)
+			authed.Get("/brands/{brandId}/credits/promo", brandFlowDeps.CreditsPromoCheck)
 			authed.Get("/brands/{brandId}/approval-policy", brandFlowDeps.ApprovalPolicyGet)
 			authed.Put("/brands/{brandId}/approval-policy", brandFlowDeps.ApprovalPolicyPut)
 			authed.Get("/brands/{brandId}/approvals", brandFlowDeps.ApprovalsList)
@@ -1099,6 +1100,9 @@ func run() error {
 			authed.Get("/platform/credits", platformDeps.CreditsConfigGet)
 			authed.Post("/platform/credits", platformDeps.CreditsAdjust)
 			authed.Put("/platform/credits", platformDeps.CreditsConfigPut)
+			authed.Get("/platform/promo-codes", platformDeps.PromoCodesList)
+			authed.Post("/platform/promo-codes", platformDeps.PromoCodesCreate)
+			authed.Put("/platform/promo-codes/{code}", platformDeps.PromoCodesSetActive)
 			// Invoice & paket kredit: Super Admin saja. Sebelumnya
 			// /platform/packages bahkan tidak memeriksa permission sama sekali
 			// (cukup "admin"), jadi admin biasa bisa membaca seluruh daftar
