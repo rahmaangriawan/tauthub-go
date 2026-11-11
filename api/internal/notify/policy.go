@@ -138,8 +138,6 @@ var policies = map[string]ChannelPolicy{
 	"plan.week_ready":            {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"plan.needs_attention":       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"plan.renewal_draft":         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
-	"approval.requested":         {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
-	"approval.decided":           {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"billing.balance_low":        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"seller.order_expiring":      {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
 	"seller.traffic_drop":        {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},

@@ -22,38 +22,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_brand_invitations_open
   ON public.brand_invitations (brand_id, lower(email))
   WHERE accepted_at IS NULL AND revoked_at IS NULL;
 
-CREATE TABLE IF NOT EXISTS public.approval_policies (
-  brand_id character(36) PRIMARY KEY REFERENCES public.brands(id) ON DELETE CASCADE,
-  enabled boolean NOT NULL DEFAULT FALSE,
-  threshold_tc integer NOT NULL CHECK (threshold_tc > 0),
-  updated_by character(36) REFERENCES public.users(id),
-  updated_at timestamptz NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.campaign_approvals (
-  id character(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  brand_id character(36) NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
-  campaign_id character(36) NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
-  requested_by character(36) NOT NULL REFERENCES public.users(id),
-  cost_tc integer NOT NULL,
-  status varchar(12) NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'approved', 'rejected', 'used', 'cancelled')),
-  decided_by character(36) REFERENCES public.users(id),
-  decided_at timestamptz,
-  decision_note text,
-  expires_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_campaign_approvals_brand_status
-  ON public.campaign_approvals (brand_id, status, created_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_campaign_approvals_pending
-  ON public.campaign_approvals (campaign_id) WHERE status = 'pending';
-
-
 ALTER TABLE public.notifications DROP CONSTRAINT IF EXISTS ck_notifications_type;
 ALTER TABLE public.notifications ADD CONSTRAINT ck_notifications_type
   CHECK (((type)::text = ANY ((ARRAY[
-    'announcement.new', 'approval.decided', 'approval.requested', 'billing.balance_forfeited', 'billing.balance_forfeit_warning',
+    'announcement.new', 'billing.balance_forfeited', 'billing.balance_forfeit_warning',
     'billing.balance_low', 'billing.topup_needed', 'changelog.new', 'chat.message',
     'media.approved', 'media.crawl_blocked', 'media.dewan_pers.approved',
     'media.dewan_pers.rejected', 'media.dewan_pers.submitted', 'media.domain_down',

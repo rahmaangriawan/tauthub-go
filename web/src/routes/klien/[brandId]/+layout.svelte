@@ -11,7 +11,7 @@
 	import { page } from '$app/state';
 	import {
 		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, MessageCircle, Newspaper, Receipt,
-		BookOpen, ScrollText, ShieldCheck, TriangleAlert, UserCircle, CalendarDays, ClipboardCheck } from '@lucide/svelte';
+		BookOpen, ScrollText, ShieldCheck, TriangleAlert, UserCircle, CalendarDays } from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { swr } from '$lib/swr-cache.svelte';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
@@ -261,7 +261,6 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 					active: isActive(`${base}/campaigns`) || isActive(`${base}/profiler`)
 				},
 				{ label: tr('Rencana Bulanan'), href: `${base}/rencana`, icon: CalendarDays, active: isActive(`${base}/rencana`) },
-				{ label: tr('Persetujuan'), href: `${base}/persetujuan`, icon: ClipboardCheck, active: isActive(`${base}/persetujuan`) },
 				{
 					label: i18n.t.nav.publications,
 					href: `${base}/publications`,
